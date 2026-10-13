@@ -1,0 +1,26 @@
+ue-mcp.local.yml
+
+# Unreal generated / build output
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# Content is not versioned in this repository yet (large binary assets)
+Content/
+Plugins/*/Content/
+
+# IDE / solution files (regenerated from the .uproject)
+.vs/
+.idea/
+*.sln
+*.slnx
+*.VC.db
+*.opensdf
+*.sdf
+*.suo
+
+# Local Claude Code settings and tooling
+.claude/
