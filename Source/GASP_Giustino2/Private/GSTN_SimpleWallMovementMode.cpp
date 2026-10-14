@@ -4,6 +4,7 @@
 #include "GSTN_SimpleWallMovementMode.h"
 
 #include "DrawDebugHelpers.h"
+#include "GSTN_WallMovementDebug.h"
 #include "Engine/NetSerialization.h"
 #include "Engine/World.h"
 #include "MoveLibrary/MovementRecord.h"
@@ -38,6 +39,37 @@ namespace GSTNWall
 	static float ExpAlpha(float Sharpness, float Step)
 	{
 		return 1.f - FMath::Exp(-Sharpness * Step);
+	}
+
+	/**
+	 * Whether the capsule fits on a new wall met at an inside corner: turned to face it and placed at WallGap from it,
+	 * it must not overlap anything. Rejects faces narrower than the capsule (small steps, slanted niches), which would
+	 * otherwise be accepted as walls and leave the capsule wedged half-rotated between the two surfaces.
+	 */
+	static bool CanFitOnWall(const FMovingComponentSet& MovingComps, const FQuat& CurrentQuat, const FVector& NewNormal,
+		const FVector& ContactPoint, float Radius, float HalfHeight, float WallGap)
+	{
+		const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
+		const UPrimitiveComponent* UpdatedPrimitive = MovingComps.UpdatedPrimitive.Get();
+		if (!UpdatedComponent || !UpdatedPrimitive)
+		{
+			return false;
+		}
+
+		FVector Up = FVector::VectorPlaneProject(CurrentQuat.GetUpVector(), NewNormal).GetSafeNormal();
+		if (Up.IsNearlyZero())
+		{
+			Up = FVector::VectorPlaneProject(CurrentQuat.GetForwardVector(), NewNormal).GetSafeNormal();
+		}
+		const FQuat TestQuat = FRotationMatrix::MakeFromXZ(-NewNormal, Up).ToQuat();
+
+		FVector TestLocation = UpdatedComponent->GetComponentLocation();
+		TestLocation += NewNormal * ((Radius + WallGap) - FVector::DotProduct(TestLocation - ContactPoint, NewNormal));
+
+		constexpr float FitTestShrink = 1.f;
+		const FCollisionShape TestShape = FCollisionShape::MakeCapsule(FMath::Max(Radius - FitTestShrink, 1.f), FMath::Max(HalfHeight - FitTestShrink, 1.f));
+		return !UMovementUtils::OverlapTest(UpdatedComponent, UpdatedPrimitive, TestLocation, TestQuat,
+			UpdatedPrimitive->GetCollisionObjectType(), TestShape, UpdatedComponent->GetOwner());
 	}
 }
 
@@ -104,6 +136,8 @@ UGSTN_SimpleWallMovementMode::UGSTN_SimpleWallMovementMode(const FObjectInitiali
 	: Super(ObjectInitializer)
 {
 	bSupportsAsync = false;
+	NoWallModeName = DefaultModeNames::Falling;
+	FloorModeName = DefaultModeNames::Walking;
 }
 
 void UGSTN_SimpleWallMovementMode::OnRegistered(const FName ModeName, const FMoverSimContext& SimContext)
@@ -158,10 +192,15 @@ void UGSTN_SimpleWallMovementMode::GenerateMove_Implementation(const FMoverSimCo
 	const FVector WallIntent = MapInputToWall(CharacterInputs, Orientation, WallNormal, GravityUp);
 	const FVector TargetVelocity = ComputeTargetVelocity(WallIntent, Orientation, WallNormal, GravityUp);
 
-	// Prior velocity was already transported onto the wall at the end of last tick; project again in case the state came from elsewhere
-	const FVector PriorVelocity = GSTNWall::ProjectOnPlaneKeepLength(StartingSyncState->GetVelocity_WorldSpace(), WallNormal);
+	// Prior velocity was already transported onto the wall at the end of last tick; project again in case the state came from elsewhere.
+	// Plain projection (not length-preserving): a velocity coming from another mode, mostly into the wall, must not turn into full speed along it
+	const FVector PriorVelocity = FVector::VectorPlaneProject(StartingSyncState->GetVelocity_WorldSpace(), WallNormal);
 
 	OutProposedMove.LinearVelocity = ComputeWallVelocity(PriorVelocity, TargetVelocity, DeltaSeconds);
+
+	GSTN_WALL_LOG(1, TEXT("GEN startVel=%s prior=%s intent=%s target=%s out=%s ctrlYaw=%.1f"),
+		*GSTNWallDebug::Vec(StartingSyncState->GetVelocity_WorldSpace()), *GSTNWallDebug::Vec(PriorVelocity), *GSTNWallDebug::Vec(WallIntent), *GSTNWallDebug::Vec(TargetVelocity),
+		*GSTNWallDebug::Vec(OutProposedMove.LinearVelocity), CharacterInputs ? CharacterInputs->ControlRotation.Yaw : 0.f);
 	OutProposedMove.DirectionIntent = WallIntent;
 	OutProposedMove.bHasDirIntent = !WallIntent.IsNearlyZero();
 	// Orientation on a wall is dictated by geometry, not by input: it's resolved in SimulationTick
@@ -170,12 +209,32 @@ void UGSTN_SimpleWallMovementMode::GenerateMove_Implementation(const FMoverSimCo
 
 FVector UGSTN_SimpleWallMovementMode::MapInputToWall(const FCharacterDefaultInputs* Inputs, const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp) const
 {
+#if GSTN_WALL_DEBUG
+	// gstn.Wall.DebugInput: drive the mode without a keyboard (see GSTN_WallMovementDebug.h)
+	FVector DebugValue;
+	const GSTNWallDebug::EInputOverride DebugOverride = GSTNWallDebug::GetInputOverride(DebugValue);
+	if (DebugOverride == GSTNWallDebug::EInputOverride::World)
+	{
+		return FVector::VectorPlaneProject(DebugValue, WallNormal).GetClampedToMaxSize(1.f);
+	}
+#endif
+
 	if (!Inputs)
 	{
 		return FVector::ZeroVector;
 	}
 
 	FVector Input = UMovementUtils::ComputeDirectionIntent(Inputs->GetMoveInput_WorldSpace(), Inputs->GetMoveInputType(), MaxSpeed);
+
+#if GSTN_WALL_DEBUG
+	if (DebugOverride == GSTNWallDebug::EInputOverride::Stick)
+	{
+		const FVector CamForward = FVector::VectorPlaneProject(Inputs->ControlRotation.Vector(), GravityUp).GetSafeNormal();
+		const FVector CamRight = FVector::CrossProduct(GravityUp, CamForward);
+		Input = CamRight * DebugValue.X + CamForward * DebugValue.Y;
+	}
+#endif
+
 	Input = Input.GetClampedToMaxSize(1.f);
 	if (Input.IsNearlyZero())
 	{
@@ -188,20 +247,20 @@ FVector UGSTN_SimpleWallMovementMode::MapInputToWall(const FCharacterDefaultInpu
 	// Fallback for degenerate cases: plain projection onto the wall plane
 	const FVector ProjectedInput = FVector::VectorPlaneProject(Input, WallNormal).GetClampedToMaxSize(1.f);
 
+	// Recover the stick input (camera space) from the world input. The world input is the stick rotated by the camera yaw:
+	// interpreting it in world space would make the same key mean a different wall direction as the capsule turns around corners
+	const FQuat ControlQuat = Inputs->ControlRotation.Quaternion();
+	const FVector CamForwardFlat = FVector::VectorPlaneProject(ControlQuat.GetForwardVector(), GravityUp).GetSafeNormal();
+	if (CamForwardFlat.IsNearlyZero())
+	{
+		return ProjectedInput;
+	}
+	const FVector CamRightFlat = FVector::CrossProduct(GravityUp, CamForwardFlat);
+	const float StickRight = FVector::DotProduct(Input, CamRightFlat);
+	const float StickForward = FVector::DotProduct(Input, CamForwardFlat);
+
 	if (InputMapping == EGSTN_WallInputMapping::CameraRelative)
 	{
-		const FQuat ControlQuat = Inputs->ControlRotation.Quaternion();
-		const FVector CamForwardFlat = FVector::VectorPlaneProject(ControlQuat.GetForwardVector(), GravityUp).GetSafeNormal();
-		if (CamForwardFlat.IsNearlyZero())
-		{
-			return ProjectedInput;
-		}
-		const FVector CamRightFlat = FVector::CrossProduct(GravityUp, CamForwardFlat);
-
-		// Recover the stick input (camera space) from the world input
-		const float StickRight = FVector::DotProduct(Input, CamRightFlat);
-		const float StickForward = FVector::DotProduct(Input, CamForwardFlat);
-
 		// "Screen up" on the wall: Forward+Up of the camera projected on the plane. Walls in front -> camera up, ceilings -> camera forward
 		FVector ScreenUp = FVector::VectorPlaneProject(ControlQuat.GetForwardVector() + ControlQuat.GetUpVector(), WallNormal).GetSafeNormal();
 		if (ScreenUp.IsNearlyZero())
@@ -213,20 +272,9 @@ FVector UGSTN_SimpleWallMovementMode::MapInputToWall(const FCharacterDefaultInpu
 		return (ScreenRight * StickRight + ScreenUp * StickForward).GetClampedToMaxSize(1.f);
 	}
 
-	// SurfaceRelative: read input in a horizontal frame built from the capsule's right axis.
-	// Capsule right stays horizontal-ish on walls (upright bias) and is always horizontal on ceilings, so this is continuous everywhere.
-	FVector RightFlat = FVector::VectorPlaneProject(TangentRight, GravityUp);
-	if (RightFlat.SizeSquared() < FMath::Square(0.1f))
-	{
-		return ProjectedInput;
-	}
-	RightFlat.Normalize();
-	const FVector ForwardFlat = FVector::CrossProduct(RightFlat, GravityUp);
-
-	const float InputRight = FVector::DotProduct(Input, RightFlat);
-	const float InputForward = FVector::DotProduct(Input, ForwardFlat);
-
-	return (TangentRight * InputRight + TangentUp * InputForward).GetClampedToMaxSize(1.f);
+	// SurfaceRelative: the stick drives the capsule's own frame on the wall (right = sideways, forward = up the wall).
+	// Independent of where the capsule faces in the world, so the same key keeps the same meaning around every corner
+	return (TangentRight * StickRight + TangentUp * StickForward).GetClampedToMaxSize(1.f);
 }
 
 FVector UGSTN_SimpleWallMovementMode::ComputeTargetVelocity(const FVector& WallIntent, const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp) const
@@ -276,6 +324,38 @@ bool UGSTN_SimpleWallMovementMode::IsValidWallNormal(const FVector& Normal, cons
 {
 	const float AngleDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Normal, GravityUp), -1.f, 1.f)));
 	return AngleDeg >= MinSurfaceAngle && AngleDeg <= MaxSurfaceAngle;
+}
+
+bool UGSTN_SimpleWallMovementMode::IsHitOnValidWall(const UWorld* World, const FHitResult& Hit, const FVector& GravityUp, ECollisionChannel Channel,
+	const FCollisionQueryParams& QueryParams, const FCollisionResponseParams& ResponseParams) const
+{
+	if (!IsValidWallNormal(Hit.Normal, GravityUp) || !IsValidWallNormal(Hit.ImpactNormal, GravityUp))
+	{
+		return false;
+	}
+
+	// Face contact: the sweep normal is the face normal, nothing else to check
+	constexpr float EdgeCosThreshold = 0.9994f; // ~2 degrees
+	if (FVector::DotProduct(Hit.Normal, Hit.ImpactNormal) >= EdgeCosThreshold || !World)
+	{
+		return true;
+	}
+
+	// Edge contact: ImpactNormal is only one of the two faces. Step just past the edge, into the reported face, which lands
+	// on the plane of the other face, and line trace it from outside along the rounded normal to read its real normal
+	constexpr float StepPastEdge = 2.f;
+	constexpr float TraceHalfLength = 10.f;
+	const FVector Target = Hit.ImpactPoint - Hit.ImpactNormal * StepPastEdge;
+
+	FHitResult FaceHit;
+	if (World->LineTraceSingleByChannel(FaceHit, Target + Hit.Normal * TraceHalfLength, Target - Hit.Normal * TraceHalfLength,
+		Channel, QueryParams, ResponseParams) && !FaceHit.bStartPenetrating)
+	{
+		return IsValidWallNormal(FaceHit.ImpactNormal, GravityUp);
+	}
+
+	// Other face not found (e.g. a vertex): trust the reported face, which is a valid wall
+	return true;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -335,6 +415,16 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 	const int32 NumSubsteps = FMath::Clamp(FMath::CeilToInt(TotalDistance / SubstepLength), 1, MaxSubsteps);
 	const float SubDeltaSeconds = DeltaSeconds / NumSubsteps;
 
+	const UWorld* World = UpdatedComponent->GetWorld();
+	const ECollisionChannel CollisionChannel = UpdatedPrimitive->GetCollisionObjectType();
+	FCollisionQueryParams EdgeQueryParams(SCENE_QUERY_STAT(GSTN_WallEdgeCheck), false, UpdatedComponent->GetOwner());
+	FCollisionResponseParams EdgeResponseParams;
+	UMovementUtils::InitCollisionParams(UpdatedPrimitive, EdgeQueryParams, EdgeResponseParams);
+
+	// Mode switch decided during the substeps, with the simulation time it leaves unused
+	FName NextModeName = NAME_None;
+	float UnusedSeconds = 0.f;
+
 	for (int32 SubstepIdx = 0; SubstepIdx < NumSubsteps && DeltaSeconds > 0.f; ++SubstepIdx)
 	{
 		// 1. Translate along the wall tangent ------------------------------------------------
@@ -354,10 +444,24 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 
 				// Moving into another climbable surface = inside corner. Feed it to the probe as a strong candidate
 				const float CornerAngle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Hit.Normal, WallNormal), -1.f, 1.f)));
-				const bool bIsConcaveCorner = IsValidWallNormal(Hit.Normal, GravityUp)
-					&& FVector::DotProduct(SubDelta, Hit.Normal) < 0.f
+				const bool bIsConcaveCorner = FVector::DotProduct(SubDelta, Hit.Normal) < 0.f
 					&& CornerAngle > NormalDeadzoneAngle
-					&& CornerAngle <= MaxConcaveAngle;
+					&& CornerAngle <= MaxConcaveAngle
+					&& IsHitOnValidWall(World, Hit, GravityUp, CollisionChannel, EdgeQueryParams, EdgeResponseParams)
+					&& GSTNWall::CanFitOnWall(MovingComps, CurrentQuat, Hit.Normal, Hit.ImpactPoint, CapsuleRadius, CapsuleHalfHeight, WallGap);
+
+				// Moving down into a surface flatter than a wall = landing on a floor
+				const bool bIsFloor = !bIsConcaveCorner
+					&& FVector::DotProduct(Hit.ImpactNormal, GravityUp) >= FMath::Cos(FMath::DegreesToRadians(MinSurfaceAngle))
+					&& FVector::DotProduct(SubDelta, GravityUp) < 0.f;
+
+				if (bIsFloor && !FloorModeName.IsNone())
+				{
+					NextModeName = FloorModeName;
+					UnusedSeconds = (1.f - Hit.Time) * SubDeltaSeconds + (NumSubsteps - SubstepIdx - 1) * SubDeltaSeconds;
+					Velocity = FVector::VectorPlaneProject(Velocity, GravityUp);
+					break;
+				}
 
 				if (bIsConcaveCorner)
 				{
@@ -386,14 +490,35 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 		{
 			bHasWall = false;
 			TimeWithoutWall += SubDeltaSeconds;
+			GSTN_WALL_LOG(1, TEXT("[%d/%d] NO WALL loc=%s vel=%s wallN=%s t=%.3f"),
+				SubstepIdx, NumSubsteps, *GSTNWallDebug::Vec(UpdatedComponent->GetComponentLocation()), *GSTNWallDebug::Vec(Velocity), *GSTNWallDebug::Vec(WallNormal), TimeWithoutWall);
+
+			if (TimeWithoutWall >= NoWallGraceTime && !NoWallModeName.IsNone())
+			{
+				NextModeName = NoWallModeName;
+				UnusedSeconds = (NumSubsteps - SubstepIdx - 1) * SubDeltaSeconds;
+				break;
+			}
 			continue;
 		}
 
-		// 4. Soft deadzone: tiny normal changes (surface noise) are mostly ignored, big ones pass through untouched
+		// 4. Soft deadzone: tiny normal changes (surface noise) are mostly ignored, big ones pass through untouched.
+		//    Then rate-limit: a probe sample appearing or vanishing must not snap the movement plane in a single step.
+		//    At rest the normal is frozen once the wall has been acquired: wedged between two surfaces (inside corners, props
+		//    against the wall) normal -> orientation/adhesion -> position -> probes is a feedback loop that can oscillate on its
+		//    own, and with no movement there is nothing new to sense anyway. Probes keep running to detect losing the wall.
 		const FVector PrevWallNormal = WallNormal;
+		const bool bAtRest = !Params.ProposedMove.bHasDirIntent && Velocity.SizeSquared() < FMath::Square(1.f);
+		const bool bHadWall = bHasWall;
+		if (!(bAtRest && bHadWall))
 		{
 			const float ChangeDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Probe.Normal, WallNormal), -1.f, 1.f)));
-			const float Blend = (NormalDeadzoneAngle > 0.f) ? FMath::Square(FMath::Clamp(ChangeDeg / NormalDeadzoneAngle, 0.f, 1.f)) : 1.f;
+			float Blend = (NormalDeadzoneAngle > 0.f) ? FMath::Square(FMath::Clamp(ChangeDeg / NormalDeadzoneAngle, 0.f, 1.f)) : 1.f;
+			const float MaxStepDeg = MaxNormalChangeRate * SubDeltaSeconds;
+			if (MaxNormalChangeRate > 0.f && ChangeDeg * Blend > MaxStepDeg)
+			{
+				Blend = MaxStepDeg / ChangeDeg;
+			}
 			const FQuat NormalDelta = FQuat::FindBetweenNormals(WallNormal, Probe.Normal);
 			WallNormal = FQuat::Slerp(FQuat::Identity, NormalDelta, Blend).RotateVector(WallNormal).GetSafeNormal();
 		}
@@ -423,7 +548,13 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 		}
 
 		// 7. Adhesion -----------------------------------------------------------------------
+		[[maybe_unused]] const FVector PreAdhereLoc = UpdatedComponent->GetComponentLocation();
 		AdhereToWall(MovingComps, CurrentQuat, WallNormal, GravityUp, SubDeltaSeconds, MoveRecord);
+
+		GSTN_WALL_LOG(1, TEXT("[%d/%d] loc=%s rot=%s vel=%s probeN=%s wallN=%s concave=%d adhere=%s up=%s"),
+			SubstepIdx, NumSubsteps, *GSTNWallDebug::Vec(UpdatedComponent->GetComponentLocation()), *CurrentQuat.Rotator().ToCompactString(),
+			*GSTNWallDebug::Vec(Velocity), *GSTNWallDebug::Vec(Probe.Normal), *GSTNWallDebug::Vec(WallNormal), ConcaveHitNormal.IsNearlyZero() ? 0 : 1,
+			*GSTNWallDebug::Vec(UpdatedComponent->GetComponentLocation() - PreAdhereLoc), *GSTNWallDebug::Vec(CurrentQuat.GetUpVector()));
 
 		// 8. Parallel-transport the velocity onto the new plane: same speed, direction carried around the corner
 		if (!Velocity.IsNearlyZero())
@@ -455,15 +586,23 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 	OutputWallState.bHasWall = bHasWall;
 	OutputWallState.TimeWithoutWall = TimeWithoutWall;
 
+	if (!NextModeName.IsNone())
+	{
+		OutputState.MovementEndState.NextModeName = NextModeName;
+		OutputState.MovementEndState.RemainingMs = FMath::Clamp(UnusedSeconds * 1000.f, 0.f, Params.TimeStep.StepMs);
+		GSTN_WALL_LOG(1, TEXT("-> switching to %s (remaining %.1f ms)"),
+			*NextModeName.ToString(), OutputState.MovementEndState.RemainingMs);
+	}
+
 #if ENABLE_DRAW_DEBUG
 	if (bDrawDebug && IsInGameThread())
 	{
-		const UWorld* World = UpdatedComponent->GetWorld();
+		const UWorld* InWorld = UpdatedComponent->GetWorld();
 		const FVector Loc = UpdatedComponent->GetComponentLocation();
-		DrawDebugCapsule(World, Loc, CapsuleHalfHeight, CapsuleRadius, FinalQuat, bHasWall ? FColor::Green : FColor::Red, false, -1.f, 0, 0.5f);
-		DrawDebugDirectionalArrow(World, WallContactPoint, WallContactPoint + WallNormal * 40.f, 8.f, FColor::Cyan, false, -1.f, 0, 1.f);
-		DrawDebugDirectionalArrow(World, Loc, Loc + FinalQuat.GetUpVector() * 50.f, 8.f, FColor::Blue, false, -1.f, 0, 1.f);
-		DrawDebugDirectionalArrow(World, Loc, Loc + Velocity * 0.25f, 8.f, FColor::Yellow, false, -1.f, 0, 1.f);
+		DrawDebugCapsule(InWorld, Loc, CapsuleHalfHeight, CapsuleRadius, FinalQuat, bHasWall ? FColor::Green : FColor::Red, false, -1.f, 0, 0.5f);
+		DrawDebugDirectionalArrow(InWorld, WallContactPoint, WallContactPoint + WallNormal * 40.f, 8.f, FColor::Cyan, false, -1.f, 0, 1.f);
+		DrawDebugDirectionalArrow(InWorld, Loc, Loc + FinalQuat.GetUpVector() * 50.f, 8.f, FColor::Blue, false, -1.f, 0, 1.f);
+		DrawDebugDirectionalArrow(InWorld, Loc, Loc + Velocity * 0.25f, 8.f, FColor::Yellow, false, -1.f, 0, 1.f);
 	}
 #endif
 }
@@ -546,6 +685,8 @@ FQuat UGSTN_SimpleWallMovementMode::ApplyRotationAroundPivot(const FMovingCompon
 			MoveRecord.LockRelevancy(false);
 			UMovementUtils::TrySafeMoveUpdatedComponent(MovingComps, CandidateLocation - Location, CandidateQuat, false, Hit, ETeleportType::None, MoveRecord);
 			MoveRecord.UnlockRelevancy();
+			GSTN_WALL_LOG(2, TEXT("   rotate frac=%.2f angle=%.2fdeg shift=%s pivot=%s"),
+				Fraction, FMath::RadiansToDegrees(FromQuat.AngularDistance(CandidateQuat)), *GSTNWallDebug::Vec(CandidateLocation - Location), *GSTNWallDebug::Vec(Pivot));
 			return CandidateQuat;
 		}
 	}
@@ -614,21 +755,28 @@ bool UGSTN_SimpleWallMovementMode::ProbeWall(const FMovingComponentSet& MovingCo
 		const FVector End = Start - WallNormal * ProbeReach;
 
 		FHitResult Hit;
-		if (!World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, Channel, ProbeShape, QueryParams, ResponseParams)
-			|| Hit.bStartPenetrating)
+		const bool bProbeHit = World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, Channel, ProbeShape, QueryParams, ResponseParams);
+		[[maybe_unused]] const int32 ProbeIdx = UE_PTRDIFF_TO_INT32(&Origin - Origins);
+		GSTN_WALL_LOG(2, TEXT("   probe%d hit=%d pen=%d N=%s IN=%s P=%s t=%.2f actor=%s"),
+			ProbeIdx, bProbeHit ? 1 : 0, Hit.bStartPenetrating ? 1 : 0, *GSTNWallDebug::Vec(Hit.Normal), *GSTNWallDebug::Vec(Hit.ImpactNormal), *GSTNWallDebug::Vec(Hit.ImpactPoint),
+			Hit.Time, *GetNameSafe(Hit.GetActor()));
+		if (!bProbeHit || Hit.bStartPenetrating)
 		{
 			continue;
 		}
 
 		const float Alignment = FVector::DotProduct(Hit.Normal, WallNormal);
-		if (Alignment < CosMaxDeviation || !IsValidWallNormal(Hit.Normal, GravityUp))
+		if (Alignment < CosMaxDeviation || !IsHitOnValidWall(World, Hit, GravityUp, Channel, QueryParams, ResponseParams))
 		{
+			GSTN_WALL_LOG(2, TEXT("   probe%d rejected (align=%.2f)"), ProbeIdx, Alignment);
 			continue;
 		}
 
-		// Closer hits and hits agreeing with the current wall dominate; outliers fade out instead of popping
+		// Closer hits and hits agreeing with the current wall dominate. Agreement must reach zero exactly at the rejection
+		// threshold: the probe direction follows the filtered normal, so a sample with a sizeable weight right at the cutoff
+		// appears/disappears as the normal moves, snapping it back and forth (a self-sustained oscillation, even at rest)
 		const float Proximity = 1.f - 0.5f * Hit.Time;
-		const float Agreement = 0.5f + 0.5f * Alignment;
+		const float Agreement = FMath::Square(FMath::Clamp((Alignment - CosMaxDeviation) / FMath::Max(1.f - CosMaxDeviation, UE_KINDA_SMALL_NUMBER), 0.f, 1.f));
 		AddSample(Hit.Normal, Hit.ImpactPoint, Origin.Weight * Proximity * Agreement, true);
 
 #if ENABLE_DRAW_DEBUG
@@ -657,9 +805,10 @@ bool UGSTN_SimpleWallMovementMode::ProbeWall(const FMovingComponentSet& MovingCo
 		FHitResult Hit;
 		if (World->SweepSingleByChannel(Hit, Center, End, FQuat::Identity, Channel, ProbeShape, QueryParams, ResponseParams)
 			&& !Hit.bStartPenetrating
-			&& IsValidWallNormal(Hit.Normal, GravityUp)
 			&& FVector::DotProduct(Hit.Normal, MoveDir) < -0.1f
-			&& FVector::DotProduct(Hit.Normal, WallNormal) >= CosMaxConcave)
+			&& FVector::DotProduct(Hit.Normal, WallNormal) >= CosMaxConcave
+			&& IsHitOnValidWall(World, Hit, GravityUp, Channel, QueryParams, ResponseParams)
+			&& GSTNWall::CanFitOnWall(MovingComps, Orientation, Hit.Normal, Hit.ImpactPoint, Radius, HalfHeight, WallGap))
 		{
 			const float Closeness = 1.f - FMath::Clamp((Hit.Distance - ContactDistance) / LookaheadDistance, 0.f, 1.f);
 			AddSample(Hit.Normal, Hit.ImpactPoint, 1.5f * FMath::Square(Closeness), !bHasAlongWallContact);
@@ -712,7 +861,8 @@ bool UGSTN_SimpleWallMovementMode::ProbeConvexWrap(const FMovingComponentSet& Mo
 
 	auto Accept = [&](const FHitResult& Hit) -> bool
 	{
-		if (Hit.bStartPenetrating || !IsValidWallNormal(Hit.Normal, GravityUp) || FVector::DotProduct(Hit.Normal, WallNormal) < CosMaxConvex)
+		if (Hit.bStartPenetrating || FVector::DotProduct(Hit.Normal, WallNormal) < CosMaxConvex
+			|| !IsHitOnValidWall(World, Hit, GravityUp, Channel, QueryParams, ResponseParams))
 		{
 			return false;
 		}
@@ -768,19 +918,21 @@ void UGSTN_SimpleWallMovementMode::AdhereToWall(const FMovingComponentSet& Movin
 		return;
 	}
 
-	FVector Correction;
 	if (Hit.bStartPenetrating)
 	{
-		// Push out along the wall normal; TrySafeMove resolves the penetration
-		Correction = WallNormal * WallGap;
+		// Already overlapping something, possibly not the wall itself (e.g. a slanted face behind an inside corner).
+		// Resolve along the real penetration direction: pushing along the wall normal would not free the capsule and,
+		// repeated every step, ratchets it away from the wall until it is lost
+		MoveRecord.LockRelevancy(false);
+		UMovementUtils::TryMoveToResolvePenetration(MovingComps, MOVECOMP_NoFlags, UMovementUtils::ComputePenetrationAdjustment(Hit), Hit, Orientation, MoveRecord);
+		MoveRecord.UnlockRelevancy();
+		return;
 	}
-	else
-	{
-		const float Error = Hit.Distance - WallGap; // > 0: too far, < 0: too close
-		// Asymmetric: pushing out is instant (collision safety), pulling in is rate-limited (no pops on bumpy walls)
-		const float Step = (Error > 0.f) ? FMath::Min(Error, MaxAdhesionSpeed * DeltaSeconds) : Error;
-		Correction = -WallNormal * Step;
-	}
+
+	const float Error = Hit.Distance - WallGap; // > 0: too far, < 0: too close
+	// Asymmetric: pushing out is instant (collision safety), pulling in is rate-limited (no pops on bumpy walls)
+	const float Step = (Error > 0.f) ? FMath::Min(Error, MaxAdhesionSpeed * DeltaSeconds) : Error;
+	const FVector Correction = -WallNormal * Step;
 
 	if (Correction.IsNearlyZero(0.01f))
 	{
