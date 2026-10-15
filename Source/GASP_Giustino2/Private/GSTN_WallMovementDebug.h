@@ -14,6 +14,10 @@
  *   gstn.Wall.DebugInput "X Y Z"      Replace the wall intent with a world-space vector projected on the wall plane
  *   gstn.Wall.DebugInput "stick R F"  Simulate a camera-relative stick, fed through the real input mapping like the player's keys
  *   gstn.Wall.DebugInput ""           Back to real input
+ *   gstn.Wall.Launch X Y Z [Add]      Set (or add) the pawn velocity through Mover's ApplyVelocity effect
+ *   gstn.Wall.Jump                    Simulate one jump press (wall jump)
+ *   gstn.Wall.Detach 1|0              Hold/release the detach button (the GASP pawn overwrites the crouch intent every tick)
+ *   gstn.Wall.ResetMemory             UGSTN_WallMovementLibrary::ResetWallMemory (forget the last wall / height cap)
  */
 
 #ifndef GSTN_WALL_DEBUG
@@ -43,6 +47,12 @@ namespace GSTNWallDebug
 
 	/** Compact vector formatting for log lines */
 	FString Vec(const FVector& V);
+
+	/** True once after gstn.Wall.Jump */
+	bool ConsumeJumpRequest();
+
+	/** True while gstn.Wall.Detach 1 */
+	bool IsDetachHeld();
 }
 
 #define GSTN_WALL_LOG(Level, Format, ...) UE_CLOG(GSTNWallDebug::GetLogLevel() >= (Level), LogGSTNWall, Log, Format, ##__VA_ARGS__)

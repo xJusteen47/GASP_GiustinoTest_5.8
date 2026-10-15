@@ -29,9 +29,267 @@ enum class EGSTN_WallInputMapping : uint8
 	CameraRelative,
 };
 
+/** How the capsule rotation reacts when the wall it is attached to (a dynamic movement base) rotates. */
+UENUM(BlueprintType)
+enum class EGSTN_WallBaseRotation : uint8
+{
+	/** The capsule rotates exactly with the base */
+	Follow,
+	/**
+	 * Follows the base except for the roll around the wall normal: a wall spinning around an axis through its face
+	 * (e.g. a turning wheel seen from the front) carries the character along without turning it upside down
+	 */
+	FollowExceptRoll,
+	/** Moves with the base, but the orientation is left to the wall logic alone */
+	Ignore,
+};
+
 /**
- * Wall-attachment state, carried in the Mover sync state so it is predicted, rolled back and replicated
- * together with the rest of the simulation. Movement modes must not keep per-frame state on the UObject itself.
+ * Horizontal (sideways along the wall, perpendicular to gravity) movement on a wall. Same model as the
+ * CharacterMovementComponent: Friction steers the velocity while there is input, braking (proportional + constant)
+ * slows it down without input, and a stop speed snaps tiny residual speeds to zero.
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallHorizontalMovement
+{
+	GENERATED_BODY()
+
+	/** Target speed with full stick input (cm/s) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float MaxSpeed = 160.f;
+
+	/** Acceleration toward the target speed while there is input (cm/s^2) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	float Acceleration = 900.f;
+
+	/**
+	 * Friction while there is input (1/s): how fast a velocity going the "wrong" way is turned toward the input direction.
+	 * High = snappy reversals, low = slippery, momentum carries on
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0"))
+	float Friction = 8.f;
+
+	/** Braking without input, proportional to the speed (1/s). Never reaches zero on its own: see StopSpeed */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0"))
+	float BrakingFriction = 0.f;
+
+	/** Constant braking without input, and when above the target speed (cm/s^2) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	float BrakingDeceleration = 1400.f;
+
+	/** Absolute speed limit along this axis, whatever the source (momentum, entry, bases). 0 = none */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float TerminalSpeed = 0.f;
+
+	/** Without input, speeds below this snap to zero (consistent stops even with very low braking) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float StopSpeed = 5.f;
+};
+
+/** Vertical (along gravity projected on the wall) movement on a wall. Same model as the horizontal one, split up/down */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallVerticalMovement
+{
+	GENERATED_BODY()
+
+	/** Target speed with full stick input upward (cm/s). 0 = no climbing up */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float MaxUpSpeed = 160.f;
+
+	/** Target speed with full stick input downward (cm/s). 0 = no climbing down */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float MaxDownSpeed = 160.f;
+
+	/** Acceleration toward the target speed while there is input (cm/s^2) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	float Acceleration = 900.f;
+
+	/** Friction while there is input (1/s), see the horizontal one */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0"))
+	float Friction = 8.f;
+
+	/** Braking without input, proportional to the speed (1/s). On a WallSlide this acts as wall friction against gravity */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0"))
+	float BrakingFriction = 0.f;
+
+	/** Constant braking without input, and when above the target speed (cm/s^2) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	float BrakingDeceleration = 1400.f;
+
+	/** Absolute upward speed limit, whatever the source (entry momentum, bases). 0 = none */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float TerminalUpSpeed = 0.f;
+
+	/** Absolute downward speed limit, e.g. the max wall-slide speed. 0 = none */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float TerminalDownSpeed = 0.f;
+
+	/** Without input, speeds below this snap to zero (applied before gravity, so it never stops a slide) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float StopSpeed = 5.f;
+};
+
+/**
+ * Skid: a sharp brake when the stick is pushed against a fast horizontal movement (e.g. moving right, pushing left).
+ * While skidding, acceleration toward the input is suspended and the character brakes hard; then it turns around.
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallSkid
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	bool bEnableSkid = true;
+
+	/** Horizontal speed needed to start a skid (cm/s) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s", EditCondition = "bEnableSkid"))
+	float MinSpeed = 150.f;
+
+	/** Minimum stick strength (0-1) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ClampMax = "1", EditCondition = "bEnableSkid"))
+	float MinInputStrength = 0.5f;
+
+	/**
+	 * dot(input direction, horizontal velocity direction) must be at or below this to start: -1 = exactly opposite only,
+	 * 0 = anything not pushing along the movement. A diagonal stick counts only for its opposing part
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "-1", ClampMax = "0", EditCondition = "bEnableSkid"))
+	float InputDotThreshold = -0.5f;
+
+	/** Hysteresis: an ongoing skid keeps going while the dot stays below InputDotThreshold + this */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ClampMax = "1", EditCondition = "bEnableSkid"))
+	float ExitDotMargin = 0.25f;
+
+	/** Braking while skidding (cm/s^2) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s^2", EditCondition = "bEnableSkid"))
+	float Deceleration = 3000.f;
+
+	/** The skid ends below this horizontal speed, and normal acceleration takes over in the new direction */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s", EditCondition = "bEnableSkid"))
+	float EndSpeed = 20.f;
+};
+
+/** What happens to the incoming velocity when the mode starts (e.g. grabbing a wall while falling) */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallEntryMomentum
+{
+	GENERATED_BODY()
+
+	/** Fraction of the horizontal (along the wall) incoming speed kept */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0"))
+	float HorizontalScale = 1.f;
+
+	/** Fraction of the vertical incoming speed kept (e.g. 0 = every grab starts still) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0"))
+	float VerticalScale = 1.f;
+
+	/** Upward speed is clamped to this on entry. Negative = no clamp, 0 = no upward momentum */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ForceUnits = "cm/s"))
+	float MaxUpSpeed = -1.f;
+
+	/** Downward speed is clamped to this on entry. Negative = no clamp */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ForceUnits = "cm/s"))
+	float MaxDownSpeed = -1.f;
+};
+
+/** Ways to let go of the wall on purpose. Each one can be enabled on its own */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallDetach
+{
+	GENERATED_BODY()
+
+	/** Detach by holding the stick away from the wall for PullAwayDelay */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	bool bDetachByPullingAway = false;
+
+	/**
+	 * How much the (camera-relative, flattened) stick must point away from the wall: dot(input, horizontal wall normal).
+	 * 1 = straight away only, 0.3 = any clearly outward direction
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ClampMax = "1", EditCondition = "bDetachByPullingAway"))
+	float PullAwayInputDot = 0.5f;
+
+	/** How long the stick must be held away (s). 0 = instant */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "s", EditCondition = "bDetachByPullingAway"))
+	float PullAwayDelay = 0.2f;
+
+	/**
+	 * Detach when the detach button is pressed: FGSTN_WallInputs::bWantsToDetach in the input collection, or
+	 * (see bUseCrouchAsDetachButton) the CharacterMover crouch intent
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	bool bDetachByButton = false;
+
+	/**
+	 * Without FGSTN_WallInputs in the input collection, use the CharacterMover crouch intent as the detach button.
+	 * Works out of the box but is read from the component, so it is not predicted/replicated like a real input
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (EditCondition = "bDetachByButton"))
+	bool bUseCrouchAsDetachButton = true;
+
+	/** Mode to switch to when detaching */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	FName DetachModeName;
+};
+
+/** Provisional wall jump: jump pressed on the wall -> launch away from it into JumpModeName */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallJump
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	bool bEnableWallJump = false;
+
+	/** Speed along the wall normal (cm/s) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s", EditCondition = "bEnableWallJump"))
+	float AwaySpeed = 600.f;
+
+	/** Speed along gravity-up (cm/s) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", ForceUnits = "cm/s", EditCondition = "bEnableWallJump"))
+	float UpSpeed = 700.f;
+
+	/** Fraction of the current horizontal wall velocity kept */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ClampMin = "0", EditCondition = "bEnableWallJump"))
+	float HorizontalMomentumScale = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (EditCondition = "bEnableWallJump"))
+	FName JumpModeName;
+};
+
+/**
+ * Optional input struct for wall modes. Add it to the input collection when producing input (e.g. in OnProduceInput)
+ * to drive wall-specific actions through Mover's predicted, replicated input path.
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallInputs : public FMoverDataStructBase
+{
+	GENERATED_BODY()
+
+	/** Let go of the wall (see FGSTN_WallDetach::bDetachByButton) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mover|Wall")
+	bool bWantsToDetach = false;
+
+	virtual FMoverDataStructBase* Clone() const override { return new FGSTN_WallInputs(*this); }
+	virtual bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess) override;
+	virtual UScriptStruct* GetScriptStruct() const override { return StaticStruct(); }
+	virtual void ToString(FAnsiStringBuilderBase& Out) const override;
+};
+
+template<>
+struct TStructOpsTypeTraits<FGSTN_WallInputs> : public TStructOpsTypeTraitsBase2<FGSTN_WallInputs>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithCopy = true
+	};
+};
+
+/**
+ * Wall state, carried in the Mover sync state so it is predicted, rolled back and replicated together with the rest
+ * of the simulation. Movement modes must not keep per-frame state on the UObject itself.
+ * It stays in the collection after leaving the wall: the "wall memory" fields are what entry transitions read.
  */
 USTRUCT(BlueprintType)
 struct GASP_GIUSTINO2_API FGSTN_WallMovementSyncState : public FMoverDataStructBase
@@ -50,9 +308,35 @@ struct GASP_GIUSTINO2_API FGSTN_WallMovementSyncState : public FMoverDataStructB
 	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
 	bool bHasWall = false;
 
-	/** Seconds since we last had a valid wall. Intended for future transitions (e.g. drop to Falling after a grace time). */
+	/** Seconds since we last had a valid wall */
 	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
 	float TimeWithoutWall = 0.f;
+
+	/** True while skidding (hard brake against the movement). Meant for animation */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	bool bIsSkidding = false;
+
+	/** Time the stick has been held away from the wall (detach by pulling away) */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	float PullAwayTime = 0.f;
+
+	// ---- Wall memory: last wall touched, kept after leaving it (re-entry rules, height cap)
+
+	/** True once the character has been on a wall (until the memory is reset) */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	bool bHasWallMemory = false;
+
+	/** Filtered normal of the last wall */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	FVector LastWallNormal = FVector::ZeroVector;
+
+	/** Height (location along gravity-up) on the last tick spent on a wall */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	float LastWallHeight = 0.f;
+
+	/** Simulation time (ms) of the last tick spent on a wall */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	double LastWallTimeMs = 0.0;
 
 	virtual FMoverDataStructBase* Clone() const override;
 	virtual bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess) override;
@@ -72,17 +356,49 @@ struct TStructOpsTypeTraits<FGSTN_WallMovementSyncState> : public TStructOpsType
 	};
 };
 
+/** Wall found by an entry transition, handed to the wall mode through the sim blackboard so it starts aligned to it */
+struct FGSTN_WallEntryInfo
+{
+	FVector Normal = FVector::ZeroVector;
+	FVector Point = FVector::ZeroVector;
+};
+
+/** Dynamic wall the character rides, stored on the sim blackboard between ticks */
+struct FGSTN_WallBaseInfo
+{
+	TWeakObjectPtr<UPrimitiveComponent> Base;
+	FName BoneName = NAME_None;
+	FVector BaseLocation = FVector::ZeroVector;
+	FQuat BaseRotation = FQuat::Identity;
+	/** Character location in the base's frame */
+	FVector LocalPosition = FVector::ZeroVector;
+};
+
 /** Result of a multi-probe wall query */
 struct FGSTN_WallProbeResult
 {
 	FVector Normal = FVector::ZeroVector;
 	FVector ContactPoint = FVector::ZeroVector;
+	/** Component of the strongest along-wall sample: the wall's movement base candidate */
+	TWeakObjectPtr<UPrimitiveComponent> Component;
+	FName BoneName = NAME_None;
 	bool bValid = false;
 };
 
+namespace GSTNWallBlackboard
+{
+	/** FGSTN_WallEntryInfo written by entry transitions, consumed by the mode's Activate */
+	extern GASP_GIUSTINO2_API const FName EntryInfo;
+	/** FGSTN_WallBaseInfo of the dynamic wall being ridden */
+	extern GASP_GIUSTINO2_API const FName BaseInfo;
+	/** double: sim time (ms) of the last manual wall memory reset. Walls left before it are forgotten (no height cap) */
+	extern GASP_GIUSTINO2_API const FName MemoryResetTimeMs;
+}
+
 /**
  * Basic wall movement: free, accelerated movement on arbitrary surfaces (walls, overhangs, ceilings),
- * wrapping around convex and concave corners. Meant to be the base for Climbing / WallSliding modes.
+ * wrapping around convex and concave corners. Base for Climbing / WallSliding modes. Works with any gravity
+ * direction (the capsule keeps upright relative to it) and on moving/rotating walls (dynamic movement bases).
  *
  * Three separate quantities, each with its own settings category:
  *  - Raw probe normal   ("Surface Detection"): what the probes measure this substep. Noisy, can jump at edges
@@ -92,7 +408,10 @@ struct FGSTN_WallProbeResult
  *                       but never feeds back into the movement plane
  *  Position against the wall is a fourth, independent concern ("Adhesion").
  *
- * Per substep:
+ * Velocity is split on the wall plane into a horizontal and a vertical axis relative to gravity (capsule axes on
+ * ceilings, where gravity has no direction along the surface), each with its own speed/friction/braking/terminal speed.
+ *
+ * Per tick: ride the movement base, handle wall jump / detach, then per substep:
  *  1. Sweep the capsule along the wall tangent (slide on blocking hits; a blocking wall the capsule fits on becomes a
  *     concave-corner candidate; moving down into a floor switches to FloorModeName)
  *  2. Probe the wall with several sphere sweeps (center/top/bottom + lookahead) and blend their normals (spatial filter).
@@ -112,6 +431,8 @@ class GASP_GIUSTINO2_API UGSTN_SimpleWallMovementMode : public UGSTN_MovementMod
 public:
 	UGSTN_SimpleWallMovementMode(const FObjectInitializer& ObjectInitializer);
 
+	virtual void PostLoad() override;
+
 	virtual void OnRegistered(const FName ModeName, const FMoverSimContext& SimContext) override;
 	virtual void Activate(const FMoverEventContext& Context, FName PrevModeName, const FMoverSimContext& SimContext, const FMoverTickStartData& StartState, FMoverSyncState* OutSyncState, FMoverAuxStateContext* OutAuxState) override;
 
@@ -121,29 +442,17 @@ public:
 	// ---------------------------------------------------------------- Movement
 	// Velocity inside the movement plane (the filtered wall normal). None of these touch the normal or the capsule rotation.
 
-	/** Max speed along the wall (cm/s) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement", meta = (ClampMin = "0", ForceUnits = "cm/s"))
-	float MaxSpeed = 160.f;
+	/** Sideways along the wall (perpendicular to gravity) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement")
+	FGSTN_WallHorizontalMovement Horizontal;
 
-	/** Acceleration toward the input velocity (cm/s^2) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
-	float Acceleration = 900.f;
+	/** Up/down along the wall (gravity projected on the wall) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement")
+	FGSTN_WallVerticalMovement Vertical;
 
-	/** Deceleration with no input, when over max speed, or when reversing (cm/s^2) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
-	float Deceleration = 1400.f;
-
-	/** Speed scale when moving "up" in the capsule frame (stick forward). 0 = no climbing up */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement", meta = (ClampMin = "0"))
-	float UpSpeedScale = 1.f;
-
-	/** Speed scale when moving "down" in the capsule frame (stick back). 0 = no climbing down */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement", meta = (ClampMin = "0"))
-	float DownSpeedScale = 1.f;
-
-	/** Speed scale when moving sideways (stick left/right) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement", meta = (ClampMin = "0"))
-	float LateralSpeedScale = 1.f;
+	/** Hard brake when pushing against a fast horizontal movement */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement")
+	FGSTN_WallSkid Skid;
 
 	/** How the stick is turned into a direction on the wall. See EGSTN_WallInputMapping */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement")
@@ -156,6 +465,46 @@ public:
 	/** Upper bound on substeps per tick (cost cap). If hit, substeps get longer than MaxSubstepDistance */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement", meta = (ClampMin = "1", ClampMax = "16"))
 	int32 MaxSubsteps = 4;
+
+	// ---------------------------------------------------------------- Entry / Exit
+
+	/** What happens to the incoming velocity when the mode starts */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Entry and Exit")
+	FGSTN_WallEntryMomentum EntryMomentum;
+
+	/** Ways to let go of the wall on purpose */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Entry and Exit")
+	FGSTN_WallDetach Detach;
+
+	/** Provisional wall jump */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Entry and Exit")
+	FGSTN_WallJump WallJump;
+
+	/** Mode to switch to after losing the wall for longer than NoWallGraceTime. None = stay in this mode */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Entry and Exit")
+	FName NoWallModeName;
+
+	/** How long the wall can be missing (e.g. while wrapping an edge) before leaving the mode */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Entry and Exit", meta = (ClampMin = "0", ForceUnits = "s"))
+	float NoWallGraceTime = 0.15f;
+
+	/** Mode to switch to when moving down into a floor (a surface below MinSurfaceAngle). None = stay in this mode */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Entry and Exit")
+	FName FloorModeName;
+
+	// ---------------------------------------------------------------- Movement Bases
+
+	/** Ride moving/rotating walls (dynamic movement bases) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement Bases")
+	bool bUseMovementBases = true;
+
+	/** [Rotation] How the capsule follows a rotating wall */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement Bases", meta = (EditCondition = "bUseMovementBases"))
+	EGSTN_WallBaseRotation BaseRotation = EGSTN_WallBaseRotation::FollowExceptRoll;
+
+	/** When leaving the wall, add the wall's own velocity at the contact point (momentum from a moving platform) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement Bases", meta = (EditCondition = "bUseMovementBases"))
+	bool bAddBaseVelocityOnExit = true;
 
 	// ---------------------------------------------------------------- Surface Detection
 	// What the probes accept and where they look. Output: the RAW PROBE NORMAL (and contact point) of this substep.
@@ -247,20 +596,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Adhesion", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float MaxAdhesionSpeed = 400.f;
 
-	// ---------------------------------------------------------------- Transitions
-
-	/** Mode to switch to after losing the wall for longer than NoWallGraceTime. None = stay in this mode */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Transitions")
-	FName NoWallModeName;
-
-	/** How long the wall can be missing (e.g. while wrapping an edge) before leaving the mode */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Transitions", meta = (ClampMin = "0", ForceUnits = "s"))
-	float NoWallGraceTime = 0.15f;
-
-	/** Mode to switch to when moving down into a floor (a surface below MinSurfaceAngle). None = stay in this mode */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Transitions")
-	FName FloorModeName;
-
 	// ---------------------------------------------------------------- Orientation
 	// Capsule rotation chasing the filtered normal. Rotation only: none of these change the movement plane, so they can be
 	// tuned for looks/animation without affecting where the character goes.
@@ -280,7 +615,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Orientation", meta = (ClampMin = "0", ForceUnits = "deg/s"))
 	float MaxRotationRate = 720.f;
 
-	/** [Rotation] How fast the capsule up re-aligns with gravity-up on walls (roll around the wall normal, 1/s). Fades out to 0 on ceilings */
+	/**
+	 * [Rotation] How fast the capsule up re-aligns with gravity-up on walls (roll around the wall normal, 1/s). Works with any
+	 * gravity direction. Fades out to 0 on ceilings
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Orientation", meta = (ClampMin = "0"))
 	float UprightSharpness = 6.f;
 
@@ -299,14 +637,30 @@ public:
 	bool bDrawDebug = false;
 
 protected:
+	// ---------------------------------------------------------------- Velocity model (override points)
+
 	/** Maps character input to a wall-tangent intent vector (length <= 1) */
 	virtual FVector MapInputToWall(const FCharacterDefaultInputs* Inputs, const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp) const;
 
-	/** Turns a wall-tangent intent into a target velocity. Override to add e.g. gravity sliding or stamina-based speed */
-	virtual FVector ComputeTargetVelocity(const FVector& WallIntent, const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp) const;
+	/**
+	 * Extra acceleration along the vertical wall axis (positive = up), e.g. gravity sliding.
+	 * @param VerticalSpeed        current speed along the vertical axis (positive = up)
+	 * @param GravityAlongWall     gravity acceleration projected on the vertical axis (negative = pulls down)
+	 * Base: none, the character clings to the wall
+	 */
+	virtual float GetVerticalForce(float VerticalSpeed, float GravityAlongWall) const { return 0.f; }
 
-	/** Accelerates PriorVelocity toward TargetVelocity in the wall plane */
-	virtual FVector ComputeWallVelocity(const FVector& PriorVelocity, const FVector& TargetVelocity, float DeltaSeconds) const;
+	/** Horizontal/vertical axes of the wall plane: gravity-relative on walls, capsule-relative on ceilings */
+	void GetWallAxes(const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp, FVector& OutHorizontal, FVector& OutVertical) const;
+
+	/** Whether the move starting from StartState is a skid (deterministic: used by both GenerateMove and SimulationTick) */
+	bool ComputeSkid(bool bWasSkidding, const FVector& Intent, float HorizontalSpeed, const FVector& HorizontalAxis) const;
+
+	/** One axis of the CMC-style velocity model */
+	static float UpdateAxisSpeed(float Speed, float TargetSpeed, float Acceleration, float Friction, float BrakingFriction,
+		float BrakingDeceleration, float StopSpeed, float DeltaSeconds);
+
+	// ---------------------------------------------------------------- Sensing / pose
 
 	/** Whether a surface with this normal is a wall we can stay on */
 	virtual bool IsValidWallNormal(const FVector& Normal, const FVector& GravityUp) const;
@@ -334,10 +688,34 @@ protected:
 	/** Keeps the capsule at WallGap from the wall */
 	void AdhereToWall(const FMovingComponentSet& MovingComps, const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp, float DeltaSeconds, FMovementRecord& MoveRecord) const;
 
+	/** Moves/rotates the capsule, the wall normal and the velocity with the dynamic wall it is riding */
+	void ApplyMovementBase(const FMovingComponentSet& MovingComps, FVector& InOutWallNormal, FVector& InOutVelocity, FMovementRecord& MoveRecord) const;
+
+	/** Stores (or clears) the dynamic wall to ride next tick */
+	void CaptureMovementBase(const FMovingComponentSet& MovingComps, const FGSTN_WallProbeResult& Probe, bool bOnWall) const;
+
+	/** Whether the detach button is held (FGSTN_WallInputs, or the CharacterMover crouch intent as a fallback) */
+	bool IsDetachButtonPressed(const FMoverTickStartData& StartState) const;
+
 	/** Tangent basis of the wall plane, aligned with the capsule's heading */
 	static void GetWallTangentBasis(const FQuat& Orientation, const FVector& WallNormal, FVector& OutTangentUp, FVector& OutTangentRight);
 
 	void GetCapsuleSize(const UPrimitiveComponent* Primitive, float& OutRadius, float& OutHalfHeight) const;
 
 	FName RegisteredModeName = NAME_None;
+
+private:
+	// ---- Legacy settings (before the horizontal/vertical split). Not editable: only loaded from old assets and migrated in PostLoad
+	UPROPERTY()
+	float MaxSpeed = 160.f;
+	UPROPERTY()
+	float Acceleration = 900.f;
+	UPROPERTY()
+	float Deceleration = 1400.f;
+	UPROPERTY()
+	float UpSpeedScale = 1.f;
+	UPROPERTY()
+	float DownSpeedScale = 1.f;
+	UPROPERTY()
+	float LateralSpeedScale = 1.f;
 };

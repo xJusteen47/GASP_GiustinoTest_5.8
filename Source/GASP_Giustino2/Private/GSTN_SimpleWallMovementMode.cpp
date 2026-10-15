@@ -5,8 +5,10 @@
 
 #include "DrawDebugHelpers.h"
 #include "GSTN_WallMovementDebug.h"
+#include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "Engine/NetSerialization.h"
 #include "Engine/World.h"
+#include "MoveLibrary/BasedMovementUtils.h"
 #include "MoveLibrary/MovementRecord.h"
 #include "MoveLibrary/MovementUtils.h"
 #include "MoverComponent.h"
@@ -15,8 +17,21 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_SimpleWallMovementMode)
 
+namespace GSTNWallBlackboard
+{
+	const FName EntryInfo = TEXT("GSTN_WallEntryInfo");
+	const FName BaseInfo = TEXT("GSTN_WallBaseInfo");
+	const FName MemoryResetTimeMs = TEXT("GSTN_WallMemoryResetTimeMs");
+}
+
 namespace GSTNWall
 {
+	/** Constant-rate move of a scalar toward a target, never overshooting */
+	static float MoveTowards(float Value, float Target, float MaxStep)
+	{
+		return (Value < Target) ? FMath::Min(Value + MaxStep, Target) : FMath::Max(Value - MaxStep, Target);
+	}
+
 	// Shrink applied to the capsule when validating a rotated pose, so resting contact with the wall doesn't count as overlap
 	constexpr float OverlapTestShrink = 0.5f;
 
@@ -74,6 +89,28 @@ namespace GSTNWall
 }
 
 // ------------------------------------------------------------------------------------------------
+// FGSTN_WallInputs
+// ------------------------------------------------------------------------------------------------
+
+bool FGSTN_WallInputs::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	Super::NetSerialize(Ar, Map, bOutSuccess);
+
+	uint8 bDetachBit = bWantsToDetach ? 1 : 0;
+	Ar.SerializeBits(&bDetachBit, 1);
+	bWantsToDetach = (bDetachBit != 0);
+
+	bOutSuccess = true;
+	return true;
+}
+
+void FGSTN_WallInputs::ToString(FAnsiStringBuilderBase& Out) const
+{
+	Super::ToString(Out);
+	Out.Appendf("WantsToDetach: %d\n", bWantsToDetach ? 1 : 0);
+}
+
+// ------------------------------------------------------------------------------------------------
 // FGSTN_WallMovementSyncState
 // ------------------------------------------------------------------------------------------------
 
@@ -86,13 +123,23 @@ bool FGSTN_WallMovementSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, b
 {
 	Super::NetSerialize(Ar, Map, bOutSuccess);
 
-	uint8 bHasWallBit = bHasWall ? 1 : 0;
-	Ar.SerializeBits(&bHasWallBit, 1);
-	bHasWall = (bHasWallBit != 0);
+	uint8 Flags = (bHasWall ? 1 : 0) | (bIsSkidding ? 2 : 0) | (bHasWallMemory ? 4 : 0);
+	Ar.SerializeBits(&Flags, 3);
+	bHasWall = (Flags & 1) != 0;
+	bIsSkidding = (Flags & 2) != 0;
+	bHasWallMemory = (Flags & 4) != 0;
 
 	SerializeFixedVector<1, 16>(WallNormal, Ar);
 	SerializePackedVector<100, 30>(WallContactPoint, Ar);
 	Ar << TimeWithoutWall;
+	Ar << PullAwayTime;
+
+	if (bHasWallMemory)
+	{
+		SerializeFixedVector<1, 16>(LastWallNormal, Ar);
+		Ar << LastWallHeight;
+		Ar << LastWallTimeMs;
+	}
 
 	bOutSuccess = true;
 	return true;
@@ -102,9 +149,13 @@ void FGSTN_WallMovementSyncState::ToString(FAnsiStringBuilderBase& Out) const
 {
 	Super::ToString(Out);
 
-	Out.Appendf("HasWall: %d  TimeWithoutWall: %.2f\n", bHasWall ? 1 : 0, TimeWithoutWall);
+	Out.Appendf("HasWall: %d  TimeWithoutWall: %.2f  Skidding: %d  PullAway: %.2f\n", bHasWall ? 1 : 0, TimeWithoutWall, bIsSkidding ? 1 : 0, PullAwayTime);
 	Out.Appendf("WallNormal: X=%.3f Y=%.3f Z=%.3f\n", WallNormal.X, WallNormal.Y, WallNormal.Z);
 	Out.Appendf("WallContact: X=%.2f Y=%.2f Z=%.2f\n", WallContactPoint.X, WallContactPoint.Y, WallContactPoint.Z);
+	if (bHasWallMemory)
+	{
+		Out.Appendf("LastWall: N=(%.2f %.2f %.2f) H=%.1f T=%.0fms\n", LastWallNormal.X, LastWallNormal.Y, LastWallNormal.Z, LastWallHeight, LastWallTimeMs);
+	}
 }
 
 bool FGSTN_WallMovementSyncState::ShouldReconcile(const FMoverDataStructBase& AuthorityState) const
@@ -126,6 +177,12 @@ void FGSTN_WallMovementSyncState::Interpolate(const FMoverDataStructBase& From, 
 	WallContactPoint = FMath::Lerp(FromState.WallContactPoint, ToState.WallContactPoint, Pct);
 	TimeWithoutWall = FMath::Lerp(FromState.TimeWithoutWall, ToState.TimeWithoutWall, Pct);
 	bHasWall = ToState.bHasWall;
+	bIsSkidding = ToState.bIsSkidding;
+	PullAwayTime = ToState.PullAwayTime;
+	bHasWallMemory = ToState.bHasWallMemory;
+	LastWallNormal = ToState.LastWallNormal;
+	LastWallHeight = ToState.LastWallHeight;
+	LastWallTimeMs = ToState.LastWallTimeMs;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -138,12 +195,59 @@ UGSTN_SimpleWallMovementMode::UGSTN_SimpleWallMovementMode(const FObjectInitiali
 	bSupportsAsync = false;
 	NoWallModeName = DefaultModeNames::Falling;
 	FloorModeName = DefaultModeNames::Walking;
+	Detach.DetachModeName = DefaultModeNames::Falling;
+	WallJump.JumpModeName = DefaultModeNames::Falling;
+}
+
+void UGSTN_SimpleWallMovementMode::PostLoad()
+{
+	Super::PostLoad();
+
+	// Assets saved before the horizontal/vertical split carry MaxSpeed/Acceleration/Deceleration/*SpeedScale. If any differs
+	// from its old default it was set on purpose: rebuild the new settings from them, then reset them so this runs once.
+	const UGSTN_SimpleWallMovementMode* Defaults = GetDefault<UGSTN_SimpleWallMovementMode>();
+	const bool bHasLegacyValues = !FMath::IsNearlyEqual(MaxSpeed, Defaults->MaxSpeed)
+		|| !FMath::IsNearlyEqual(Acceleration, Defaults->Acceleration)
+		|| !FMath::IsNearlyEqual(Deceleration, Defaults->Deceleration)
+		|| !FMath::IsNearlyEqual(UpSpeedScale, Defaults->UpSpeedScale)
+		|| !FMath::IsNearlyEqual(DownSpeedScale, Defaults->DownSpeedScale)
+		|| !FMath::IsNearlyEqual(LateralSpeedScale, Defaults->LateralSpeedScale);
+
+	if (bHasLegacyValues && this != Defaults)
+	{
+		Horizontal.MaxSpeed = MaxSpeed * LateralSpeedScale;
+		Horizontal.Acceleration = Acceleration;
+		Horizontal.BrakingDeceleration = Deceleration;
+
+		Vertical.MaxUpSpeed = MaxSpeed * UpSpeedScale;
+		Vertical.MaxDownSpeed = MaxSpeed * DownSpeedScale;
+		Vertical.Acceleration = Acceleration;
+		Vertical.BrakingDeceleration = Deceleration;
+
+		MaxSpeed = Defaults->MaxSpeed;
+		Acceleration = Defaults->Acceleration;
+		Deceleration = Defaults->Deceleration;
+		UpSpeedScale = Defaults->UpSpeedScale;
+		DownSpeedScale = Defaults->DownSpeedScale;
+		LateralSpeedScale = Defaults->LateralSpeedScale;
+	}
 }
 
 void UGSTN_SimpleWallMovementMode::OnRegistered(const FName ModeName, const FMoverSimContext& SimContext)
 {
 	Super::OnRegistered(ModeName, SimContext);
 	RegisteredModeName = ModeName;
+
+	// Mover drops every sync state struct that isn't persistent as soon as a mode that doesn't write it runs (Falling,
+	// Walking...). The wall memory must outlive the wall mode, so the entry transition can read it in the air
+	if (UMoverComponent* MoverComp = GetMoverComponent())
+	{
+		UScriptStruct* WallStateType = FGSTN_WallMovementSyncState::StaticStruct();
+		if (!MoverComp->PersistentSyncStateDataTypes.ContainsByPredicate([WallStateType](const FMoverDataPersistence& Entry) { return Entry.RequiredType == WallStateType; }))
+		{
+			MoverComp->PersistentSyncStateDataTypes.Add(FMoverDataPersistence(WallStateType, true));
+		}
+	}
 }
 
 void UGSTN_SimpleWallMovementMode::Activate(const FMoverEventContext& Context, FName PrevModeName, const FMoverSimContext& SimContext, const FMoverTickStartData& StartState, FMoverSyncState* OutSyncState, FMoverAuxStateContext* OutAuxState)
@@ -155,19 +259,67 @@ void UGSTN_SimpleWallMovementMode::Activate(const FMoverEventContext& Context, F
 		return;
 	}
 
-	// Reset wall state: until the first probe succeeds we assume the wall is in front of the capsule.
-	// Entry transitions (Climbing etc.) are expected to orient the character toward the wall before activating.
-	FVector Forward = FVector::ForwardVector;
-	if (const FMoverDefaultSyncState* DefaultSync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>())
+	const UMoverComponent* MoverComp = GetMoverComponent();
+	UMoverBlackboard* SimBlackboard = MoverComp ? MoverComp->GetSimBlackboard_Mutable() : nullptr;
+	const FVector GravityUp = MoverComp ? MoverComp->GetUpDirection() : FVector::UpVector;
+
+	// Starting wall: the one an entry transition found, else assume it is in front of the capsule until the first probe
+	FVector WallNormal = FVector::ZeroVector;
+	FVector WallPoint = FVector::ZeroVector;
+	FGSTN_WallEntryInfo EntryInfo;
+	if (SimBlackboard && SimBlackboard->TryGet(GSTNWallBlackboard::EntryInfo, EntryInfo) && !EntryInfo.Normal.IsNearlyZero())
 	{
-		Forward = DefaultSync->GetOrientation_WorldSpace().Vector();
+		WallNormal = EntryInfo.Normal.GetSafeNormal();
+		WallPoint = EntryInfo.Point;
+	}
+	if (SimBlackboard)
+	{
+		SimBlackboard->Invalidate(GSTNWallBlackboard::EntryInfo);
+		SimBlackboard->Invalidate(GSTNWallBlackboard::BaseInfo);
 	}
 
+	FMoverDefaultSyncState* DefaultSync = OutSyncState->SyncStateCollection.FindMutableDataByType<FMoverDefaultSyncState>();
+	if (WallNormal.IsNearlyZero())
+	{
+		const FVector Forward = DefaultSync ? DefaultSync->GetOrientation_WorldSpace().Vector() : FVector::ForwardVector;
+		WallNormal = -Forward;
+	}
+
+	// Entry momentum: split the incoming velocity on the starting wall's axes, scale and clamp each part
+	if (DefaultSync)
+	{
+		const FQuat Orientation = DefaultSync->GetOrientation_WorldSpace().Quaternion();
+		FVector HorizontalAxis, VerticalAxis;
+		GetWallAxes(Orientation, WallNormal, GravityUp, HorizontalAxis, VerticalAxis);
+
+		const FVector InVelocity = DefaultSync->GetVelocity_WorldSpace();
+		const float HorizontalSpeed = FVector::DotProduct(InVelocity, HorizontalAxis) * EntryMomentum.HorizontalScale;
+		float VerticalSpeed = FVector::DotProduct(InVelocity, VerticalAxis) * EntryMomentum.VerticalScale;
+		if (EntryMomentum.MaxUpSpeed >= 0.f)
+		{
+			VerticalSpeed = FMath::Min(VerticalSpeed, EntryMomentum.MaxUpSpeed);
+		}
+		if (EntryMomentum.MaxDownSpeed >= 0.f)
+		{
+			VerticalSpeed = FMath::Max(VerticalSpeed, -EntryMomentum.MaxDownSpeed);
+		}
+
+		const FVector NewVelocity = HorizontalAxis * HorizontalSpeed + VerticalAxis * VerticalSpeed;
+		DefaultSync->SetTransforms_WorldSpace(DefaultSync->GetLocation_WorldSpace(), DefaultSync->GetOrientation_WorldSpace(),
+			NewVelocity, DefaultSync->GetAngularVelocityDegrees_WorldSpace(), nullptr);
+
+		GSTN_WALL_LOG(1, TEXT("ACTIVATE from %s wallN=%s inVel=%s -> vel=%s"), *PrevModeName.ToString(),
+			*GSTNWallDebug::Vec(WallNormal), *GSTNWallDebug::Vec(InVelocity), *GSTNWallDebug::Vec(NewVelocity));
+	}
+
+	// Per-attachment state is reset; the wall memory (last wall, height cap) is kept on purpose
 	FGSTN_WallMovementSyncState& WallState = OutSyncState->SyncStateCollection.FindOrAddMutableDataByType<FGSTN_WallMovementSyncState>();
-	WallState.WallNormal = -Forward;
-	WallState.WallContactPoint = FVector::ZeroVector;
+	WallState.WallNormal = WallNormal;
+	WallState.WallContactPoint = WallPoint;
 	WallState.bHasWall = false;
 	WallState.TimeWithoutWall = 0.f;
+	WallState.bIsSkidding = false;
+	WallState.PullAwayTime = 0.f;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -190,17 +342,59 @@ void UGSTN_SimpleWallMovementMode::GenerateMove_Implementation(const FMoverSimCo
 	const FVector WallNormal = (WallState && !WallState->WallNormal.IsNearlyZero()) ? WallState->WallNormal : -Orientation.GetForwardVector();
 
 	const FVector WallIntent = MapInputToWall(CharacterInputs, Orientation, WallNormal, GravityUp);
-	const FVector TargetVelocity = ComputeTargetVelocity(WallIntent, Orientation, WallNormal, GravityUp);
 
 	// Prior velocity was already transported onto the wall at the end of last tick; project again in case the state came from elsewhere.
 	// Plain projection (not length-preserving): a velocity coming from another mode, mostly into the wall, must not turn into full speed along it
 	const FVector PriorVelocity = FVector::VectorPlaneProject(StartingSyncState->GetVelocity_WorldSpace(), WallNormal);
 
-	OutProposedMove.LinearVelocity = ComputeWallVelocity(PriorVelocity, TargetVelocity, DeltaSeconds);
+	// Split everything on the gravity-relative axes of the wall plane: each axis has its own speeds, friction and braking
+	FVector HorizontalAxis, VerticalAxis;
+	GetWallAxes(Orientation, WallNormal, GravityUp, HorizontalAxis, VerticalAxis);
 
-	GSTN_WALL_LOG(1, TEXT("GEN startVel=%s prior=%s intent=%s target=%s out=%s ctrlYaw=%.1f"),
-		*GSTNWallDebug::Vec(StartingSyncState->GetVelocity_WorldSpace()), *GSTNWallDebug::Vec(PriorVelocity), *GSTNWallDebug::Vec(WallIntent), *GSTNWallDebug::Vec(TargetVelocity),
-		*GSTNWallDebug::Vec(OutProposedMove.LinearVelocity), CharacterInputs ? CharacterInputs->ControlRotation.Yaw : 0.f);
+	float HorizontalSpeed = FVector::DotProduct(PriorVelocity, HorizontalAxis);
+	float VerticalSpeed = FVector::DotProduct(PriorVelocity, VerticalAxis);
+	const float HorizontalInput = FVector::DotProduct(WallIntent, HorizontalAxis);
+	const float VerticalInput = FVector::DotProduct(WallIntent, VerticalAxis);
+
+	// Horizontal: skid (hard brake against the movement) or the normal model
+	const bool bWasSkidding = WallState && WallState->bIsSkidding;
+	if (ComputeSkid(bWasSkidding, WallIntent, HorizontalSpeed, HorizontalAxis))
+	{
+		HorizontalSpeed = GSTNWall::MoveTowards(HorizontalSpeed, 0.f, Skid.Deceleration * DeltaSeconds);
+	}
+	else
+	{
+		HorizontalSpeed = UpdateAxisSpeed(HorizontalSpeed, HorizontalInput * Horizontal.MaxSpeed, Horizontal.Acceleration, Horizontal.Friction,
+			Horizontal.BrakingFriction, Horizontal.BrakingDeceleration, Horizontal.StopSpeed, DeltaSeconds);
+	}
+
+	// Vertical: the normal model, then extra forces (gravity on a wall slide) after the stop snap so it never blocks a slide
+	const float VerticalTarget = VerticalInput * ((VerticalInput >= 0.f) ? Vertical.MaxUpSpeed : Vertical.MaxDownSpeed);
+	VerticalSpeed = UpdateAxisSpeed(VerticalSpeed, VerticalTarget, Vertical.Acceleration, Vertical.Friction,
+		Vertical.BrakingFriction, Vertical.BrakingDeceleration, Vertical.StopSpeed, DeltaSeconds);
+
+	const float GravityAlongWall = FVector::DotProduct(MoverComp->GetGravityAcceleration(), VerticalAxis);
+	VerticalSpeed += GetVerticalForce(VerticalSpeed, GravityAlongWall) * DeltaSeconds;
+
+	// Terminal speeds: absolute limits whatever the source
+	if (Horizontal.TerminalSpeed > 0.f)
+	{
+		HorizontalSpeed = FMath::Clamp(HorizontalSpeed, -Horizontal.TerminalSpeed, Horizontal.TerminalSpeed);
+	}
+	if (Vertical.TerminalUpSpeed > 0.f)
+	{
+		VerticalSpeed = FMath::Min(VerticalSpeed, Vertical.TerminalUpSpeed);
+	}
+	if (Vertical.TerminalDownSpeed > 0.f)
+	{
+		VerticalSpeed = FMath::Max(VerticalSpeed, -Vertical.TerminalDownSpeed);
+	}
+
+	OutProposedMove.LinearVelocity = HorizontalAxis * HorizontalSpeed + VerticalAxis * VerticalSpeed;
+
+	GSTN_WALL_LOG(1, TEXT("GEN prior=%s intent=(h %.2f v %.2f) out=(h %.1f v %.1f) skid=%d gAlong=%.0f"),
+		*GSTNWallDebug::Vec(PriorVelocity), HorizontalInput, VerticalInput, HorizontalSpeed, VerticalSpeed,
+		ComputeSkid(bWasSkidding, WallIntent, FVector::DotProduct(PriorVelocity, HorizontalAxis), HorizontalAxis) ? 1 : 0, GravityAlongWall);
 	OutProposedMove.DirectionIntent = WallIntent;
 	OutProposedMove.bHasDirIntent = !WallIntent.IsNearlyZero();
 	// Orientation on a wall is dictated by geometry, not by input: it's resolved in SimulationTick
@@ -224,7 +418,7 @@ FVector UGSTN_SimpleWallMovementMode::MapInputToWall(const FCharacterDefaultInpu
 		return FVector::ZeroVector;
 	}
 
-	FVector Input = UMovementUtils::ComputeDirectionIntent(Inputs->GetMoveInput_WorldSpace(), Inputs->GetMoveInputType(), MaxSpeed);
+	FVector Input = UMovementUtils::ComputeDirectionIntent(Inputs->GetMoveInput_WorldSpace(), Inputs->GetMoveInputType(), FMath::Max(Horizontal.MaxSpeed, 1.f));
 
 #if GSTN_WALL_DEBUG
 	if (DebugOverride == GSTNWallDebug::EInputOverride::Stick)
@@ -277,47 +471,80 @@ FVector UGSTN_SimpleWallMovementMode::MapInputToWall(const FCharacterDefaultInpu
 	return (TangentRight * StickRight + TangentUp * StickForward).GetClampedToMaxSize(1.f);
 }
 
-FVector UGSTN_SimpleWallMovementMode::ComputeTargetVelocity(const FVector& WallIntent, const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp) const
+void UGSTN_SimpleWallMovementMode::GetWallAxes(const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp, FVector& OutHorizontal, FVector& OutVertical) const
 {
-	FVector TangentUp, TangentRight;
-	GetWallTangentBasis(Orientation, WallNormal, TangentUp, TangentRight);
-
-	const float UpAmount = FVector::DotProduct(WallIntent, TangentUp);
-	const float RightAmount = FVector::DotProduct(WallIntent, TangentRight);
-	const float VerticalScale = (UpAmount >= 0.f) ? UpSpeedScale : DownSpeedScale;
-
-	return (TangentUp * UpAmount * VerticalScale + TangentRight * RightAmount * LateralSpeedScale) * MaxSpeed;
+	// Vertical = gravity-up projected on the wall: the axis gravity slides along and the capsule keeps upright to.
+	// On (near) ceilings it vanishes, so fall back to the capsule's own up on the surface
+	const FVector GravityTangent = FVector::VectorPlaneProject(GravityUp, WallNormal);
+	constexpr float MinVerticality = 0.1f;
+	if (GravityTangent.SizeSquared() > FMath::Square(MinVerticality))
+	{
+		OutVertical = GravityTangent.GetSafeNormal();
+	}
+	else
+	{
+		FVector TangentRight;
+		GetWallTangentBasis(Orientation, WallNormal, OutVertical, TangentRight);
+	}
+	// Same convention as the capsule tangent basis (right = normal ^ up)
+	OutHorizontal = FVector::CrossProduct(WallNormal, OutVertical);
 }
 
-FVector UGSTN_SimpleWallMovementMode::ComputeWallVelocity(const FVector& PriorVelocity, const FVector& TargetVelocity, float DeltaSeconds) const
+bool UGSTN_SimpleWallMovementMode::ComputeSkid(bool bWasSkidding, const FVector& Intent, float HorizontalSpeed, const FVector& HorizontalAxis) const
+{
+	if (!Skid.bEnableSkid)
+	{
+		return false;
+	}
+
+	const float Speed = FMath::Abs(HorizontalSpeed);
+	const float InputStrength = Intent.Size();
+	if (Speed <= UE_KINDA_SMALL_NUMBER || InputStrength < Skid.MinInputStrength)
+	{
+		return false;
+	}
+
+	// How much the stick opposes the horizontal movement: -1 = straight against it. A diagonal counts only for its opposing part
+	const float Dot = (FVector::DotProduct(Intent, HorizontalAxis) / InputStrength) * FMath::Sign(HorizontalSpeed);
+
+	return bWasSkidding
+		? (Speed > Skid.EndSpeed && Dot <= Skid.InputDotThreshold + Skid.ExitDotMargin)
+		: (Speed >= Skid.MinSpeed && Dot <= Skid.InputDotThreshold);
+}
+
+float UGSTN_SimpleWallMovementMode::UpdateAxisSpeed(float Speed, float TargetSpeed, float InAcceleration, float Friction, float BrakingFriction,
+	float BrakingDeceleration, float StopSpeed, float DeltaSeconds)
 {
 	if (DeltaSeconds <= 0.f)
 	{
-		return PriorVelocity;
+		return Speed;
 	}
 
-	// Constant-rate "move towards" in the plane: no overshoot, smooth curves when changing direction
-	float Rate = Acceleration;
-	if (TargetVelocity.IsNearlyZero()
-		|| FVector::DotProduct(PriorVelocity, TargetVelocity) < 0.f
-		|| PriorVelocity.SizeSquared() > TargetVelocity.SizeSquared())
+	if (FMath::Abs(TargetSpeed) > UE_KINDA_SMALL_NUMBER)
 	{
-		// No input, reversing, or over the target speed -> brake with deceleration
-		Rate = FMath::Max(Acceleration, Deceleration);
-		if (TargetVelocity.IsNearlyZero())
+		// With input (CharacterMovementComponent style): friction turns the velocity toward the input direction,
+		// then acceleration brings it to the target speed. Above the target speed (e.g. entry momentum) it brakes back to it
+		const float Direction = FMath::Sign(TargetSpeed);
+		const float TargetMagnitude = FMath::Abs(TargetSpeed);
+
+		Speed -= (Speed - Direction * FMath::Abs(Speed)) * FMath::Min(DeltaSeconds * Friction, 1.f);
+
+		float SpeedAlong = Speed * Direction;
+		if (SpeedAlong < TargetMagnitude)
 		{
-			Rate = Deceleration;
+			SpeedAlong = FMath::Min(SpeedAlong + InAcceleration * DeltaSeconds, TargetMagnitude);
 		}
+		else
+		{
+			SpeedAlong = FMath::Max(SpeedAlong - (BrakingFriction * SpeedAlong + BrakingDeceleration) * DeltaSeconds, TargetMagnitude);
+		}
+		return SpeedAlong * Direction;
 	}
 
-	const FVector Diff = TargetVelocity - PriorVelocity;
-	const float MaxStep = Rate * DeltaSeconds;
-	const float DiffSize = Diff.Size();
-	if (DiffSize <= MaxStep || DiffSize <= UE_KINDA_SMALL_NUMBER)
-	{
-		return TargetVelocity;
-	}
-	return PriorVelocity + Diff * (MaxStep / DiffSize);
+	// No input: proportional + constant braking toward zero, then snap tiny residuals (proportional braking alone never reaches 0)
+	const float Magnitude = FMath::Abs(Speed);
+	const float Braked = FMath::Max(Magnitude - (BrakingFriction * Magnitude + BrakingDeceleration) * DeltaSeconds, 0.f);
+	return (Braked < StopSpeed) ? 0.f : Braked * FMath::Sign(Speed);
 }
 
 bool UGSTN_SimpleWallMovementMode::IsValidWallNormal(const FVector& Normal, const FVector& GravityUp) const
@@ -396,15 +623,93 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 
 	const FVector GravityUp = MoverComp->GetUpDirection();
 	const FQuat StartQuat = UpdatedComponent->GetComponentQuat();
-	FQuat CurrentQuat = StartQuat;
 
 	FVector WallNormal = (StartWallState && !StartWallState->WallNormal.IsNearlyZero()) ? StartWallState->WallNormal : -StartQuat.GetForwardVector();
 	FVector WallContactPoint = StartWallState ? StartWallState->WallContactPoint : FVector::ZeroVector;
 	bool bHasWall = StartWallState ? StartWallState->bHasWall : false;
 	float TimeWithoutWall = StartWallState ? StartWallState->TimeWithoutWall : 0.f;
+	float PullAwayTime = StartWallState ? StartWallState->PullAwayTime : 0.f;
+
+	// Skid state, re-derived from the same start data GenerateMove used, so both agree
+	bool bIsSkidding = false;
+	{
+		const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>();
+		const FQuat SyncOrientation = StartingSyncState->GetOrientation_WorldSpace().Quaternion();
+		FVector HorizontalAxis, VerticalAxis;
+		GetWallAxes(SyncOrientation, WallNormal, GravityUp, HorizontalAxis, VerticalAxis);
+		const FVector Intent = MapInputToWall(Inputs, SyncOrientation, WallNormal, GravityUp);
+		const float PriorHorizontalSpeed = FVector::DotProduct(StartingSyncState->GetVelocity_WorldSpace(), HorizontalAxis);
+		bIsSkidding = ComputeSkid(StartWallState && StartWallState->bIsSkidding, Intent, PriorHorizontalSpeed, HorizontalAxis);
+	}
 
 	FVector Velocity = Params.ProposedMove.LinearVelocity;
 	OutputSyncState.MoveDirectionIntent = Params.ProposedMove.bHasDirIntent ? Params.ProposedMove.DirectionIntent : FVector::ZeroVector;
+
+	// Ride the dynamic wall: move/rotate with it before anything else, carrying the movement plane and the velocity along
+	if (bUseMovementBases)
+	{
+		ApplyMovementBase(MovingComps, WallNormal, Velocity, MoveRecord);
+	}
+	FQuat CurrentQuat = UpdatedComponent->GetComponentQuat();
+
+	// Mode switch decided this tick, with the simulation time it leaves unused
+	FName NextModeName = NAME_None;
+	float UnusedSeconds = 0.f;
+
+	// Leaving on purpose: wall jump, detach button, stick held away from the wall
+	{
+		const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>();
+
+		bool bJumpPressed = Inputs && Inputs->bIsJumpJustPressed;
+#if GSTN_WALL_DEBUG
+		bJumpPressed |= GSTNWallDebug::ConsumeJumpRequest();
+#endif
+		if (WallJump.bEnableWallJump && !WallJump.JumpModeName.IsNone() && bJumpPressed)
+		{
+			FVector HorizontalAxis, VerticalAxis;
+			GetWallAxes(CurrentQuat, WallNormal, GravityUp, HorizontalAxis, VerticalAxis);
+			Velocity = WallNormal * WallJump.AwaySpeed + GravityUp * WallJump.UpSpeed
+				+ HorizontalAxis * FVector::DotProduct(Velocity, HorizontalAxis) * WallJump.HorizontalMomentumScale;
+			NextModeName = WallJump.JumpModeName;
+			UnusedSeconds = DeltaSeconds;
+			GSTN_WALL_LOG(1, TEXT("WALL JUMP vel=%s"), *GSTNWallDebug::Vec(Velocity));
+		}
+		else if (Detach.bDetachByButton && !Detach.DetachModeName.IsNone() && IsDetachButtonPressed(StartState))
+		{
+			NextModeName = Detach.DetachModeName;
+			UnusedSeconds = DeltaSeconds;
+			GSTN_WALL_LOG(1, TEXT("DETACH (button)"));
+		}
+		else if (Detach.bDetachByPullingAway && !Detach.DetachModeName.IsNone() && Inputs)
+		{
+			// Raw stick direction in the world, flattened on the gravity plane, against the wall's horizontal outward direction
+			FVector MoveInput = Inputs->GetMoveInput_WorldSpace();
+#if GSTN_WALL_DEBUG
+			FVector DebugValue;
+			if (GSTNWallDebug::GetInputOverride(DebugValue) == GSTNWallDebug::EInputOverride::Stick)
+			{
+				const FVector CamForward = FVector::VectorPlaneProject(Inputs->ControlRotation.Vector(), GravityUp).GetSafeNormal();
+				MoveInput = FVector::CrossProduct(GravityUp, CamForward) * DebugValue.X + CamForward * DebugValue.Y;
+			}
+#endif
+			const FVector FlatInput = FVector::VectorPlaneProject(MoveInput, GravityUp).GetClampedToMaxSize(1.f);
+			const FVector FlatNormal = FVector::VectorPlaneProject(WallNormal, GravityUp).GetSafeNormal();
+			const bool bPullingAway = !FlatNormal.IsNearlyZero() && FVector::DotProduct(FlatInput, FlatNormal) >= Detach.PullAwayInputDot;
+
+			PullAwayTime = bPullingAway ? PullAwayTime + DeltaSeconds : 0.f;
+			if (bPullingAway && PullAwayTime >= Detach.PullAwayDelay)
+			{
+				NextModeName = Detach.DetachModeName;
+				UnusedSeconds = DeltaSeconds;
+				GSTN_WALL_LOG(1, TEXT("DETACH (pulled away %.2fs)"), PullAwayTime);
+			}
+		}
+		else
+		{
+			PullAwayTime = 0.f;
+		}
+	}
+	const bool bLeavingNow = !NextModeName.IsNone();
 
 	float CapsuleRadius, CapsuleHalfHeight;
 	GetCapsuleSize(UpdatedPrimitive, CapsuleRadius, CapsuleHalfHeight);
@@ -412,8 +717,8 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 	// Substepping: corners must be sensed every few centimetres or fast movement skips past them
 	const float SubstepLength = (MaxSubstepDistance > 0.f) ? MaxSubstepDistance : FMath::Max(CapsuleRadius * 0.5f, 1.f);
 	const float TotalDistance = Velocity.Size() * DeltaSeconds;
-	const int32 NumSubsteps = FMath::Clamp(FMath::CeilToInt(TotalDistance / SubstepLength), 1, MaxSubsteps);
-	const float SubDeltaSeconds = DeltaSeconds / NumSubsteps;
+	const int32 NumSubsteps = bLeavingNow ? 0 : FMath::Clamp(FMath::CeilToInt(TotalDistance / SubstepLength), 1, MaxSubsteps);
+	const float SubDeltaSeconds = (NumSubsteps > 0) ? DeltaSeconds / NumSubsteps : 0.f;
 
 	const UWorld* World = UpdatedComponent->GetWorld();
 	const ECollisionChannel CollisionChannel = UpdatedPrimitive->GetCollisionObjectType();
@@ -421,9 +726,8 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 	FCollisionResponseParams EdgeResponseParams;
 	UMovementUtils::InitCollisionParams(UpdatedPrimitive, EdgeQueryParams, EdgeResponseParams);
 
-	// Mode switch decided during the substeps, with the simulation time it leaves unused
-	FName NextModeName = NAME_None;
-	float UnusedSeconds = 0.f;
+	// Last successful probe: its component is the movement base candidate for next tick
+	FGSTN_WallProbeResult LastProbe;
 
 	for (int32 SubstepIdx = 0; SubstepIdx < NumSubsteps && DeltaSeconds > 0.f; ++SubstepIdx)
 	{
@@ -523,6 +827,7 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 			WallNormal = FQuat::Slerp(FQuat::Identity, NormalDelta, Blend).RotateVector(WallNormal).GetSafeNormal();
 		}
 		WallContactPoint = Probe.ContactPoint;
+		LastProbe = Probe;
 		bHasWall = true;
 		TimeWithoutWall = 0.f;
 
@@ -563,6 +868,42 @@ void UGSTN_SimpleWallMovementMode::SimulationTick_Implementation(const FSimulati
 			Velocity = GSTNWall::ProjectOnPlaneKeepLength(Transported, WallNormal);
 		}
 	}
+
+	// Movement base -----------------------------------------------------------------------------
+	if (!NextModeName.IsNone())
+	{
+		// Leaving: carry the moving wall's own velocity at the contact point, then forget the base
+		if (UMoverBlackboard* SimBlackboard = MoverComp->GetSimBlackboard_Mutable())
+		{
+			FGSTN_WallBaseInfo BaseInfo;
+			FVector BaseVelocity;
+			if (bUseMovementBases && bAddBaseVelocityOnExit && SimBlackboard->TryGet(GSTNWallBlackboard::BaseInfo, BaseInfo) && BaseInfo.Base.IsValid()
+				&& UBasedMovementUtils::GetMovementBaseVelocityAtPoint(BaseInfo.Base.Get(), UpdatedComponent->GetComponentLocation(), BaseVelocity))
+			{
+				Velocity += BaseVelocity;
+			}
+			SimBlackboard->Invalidate(GSTNWallBlackboard::BaseInfo);
+		}
+	}
+	else
+	{
+		CaptureMovementBase(MovingComps, LastProbe, bUseMovementBases && bHasWall);
+	}
+
+	// Wall memory: the last wall and the height on it, read by entry transitions (re-entry rules, height cap) --------
+	OutputWallState.bHasWallMemory = StartWallState && StartWallState->bHasWallMemory;
+	OutputWallState.LastWallNormal = StartWallState ? StartWallState->LastWallNormal : FVector::ZeroVector;
+	OutputWallState.LastWallHeight = StartWallState ? StartWallState->LastWallHeight : 0.f;
+	OutputWallState.LastWallTimeMs = StartWallState ? StartWallState->LastWallTimeMs : 0.0;
+	if (bHasWall || bLeavingNow)
+	{
+		OutputWallState.bHasWallMemory = true;
+		OutputWallState.LastWallNormal = WallNormal;
+		OutputWallState.LastWallHeight = FVector::DotProduct(UpdatedComponent->GetComponentLocation(), GravityUp);
+		OutputWallState.LastWallTimeMs = Params.TimeStep.BaseSimTimeMs + Params.TimeStep.StepMs;
+	}
+	OutputWallState.bIsSkidding = bIsSkidding && NextModeName.IsNone();
+	OutputWallState.PullAwayTime = PullAwayTime;
 
 	// Final state ------------------------------------------------------------------------------
 	const FQuat FinalQuat = UpdatedComponent->GetComponentQuat();
@@ -640,7 +981,7 @@ FQuat UGSTN_SimpleWallMovementMode::ComputeTargetOrientation(const FQuat& Curren
 	if (bAlignHeadingToMovementOnCeilings && FVector::DotProduct(WallNormal, GravityUp) < 0.f)
 	{
 		const FVector MoveDir = FVector::VectorPlaneProject(Velocity, WallNormal).GetSafeNormal();
-		const float SpeedFactor = FMath::Clamp(Velocity.Size() / FMath::Max(MaxSpeed * 0.5f, 1.f), 0.f, 1.f);
+		const float SpeedFactor = FMath::Clamp(Velocity.Size() / FMath::Max(Horizontal.MaxSpeed * 0.5f, 1.f), 0.f, 1.f);
 		const float CeilingFactor = 1.f - Verticality;
 		if (!MoveDir.IsNearlyZero() && SpeedFactor > 0.f)
 		{
@@ -723,8 +1064,11 @@ bool UGSTN_SimpleWallMovementMode::ProbeWall(const FMovingComponentSet& MovingCo
 	FVector PointSum = FVector::ZeroVector;
 	float WeightSum = 0.f;
 	float PointWeightSum = 0.f;
+	float BestSampleWeight = 0.f;
+	OutResult.Component = nullptr;
+	OutResult.BoneName = NAME_None;
 
-	auto AddSample = [&](const FVector& Normal, const FVector& Point, float Weight, bool bContributesToContact)
+	auto AddSample =[&](const FVector& Normal, const FVector& Point, float Weight, bool bContributesToContact)
 	{
 		NormalSum += Normal * Weight;
 		WeightSum += Weight;
@@ -777,7 +1121,16 @@ bool UGSTN_SimpleWallMovementMode::ProbeWall(const FMovingComponentSet& MovingCo
 		// appears/disappears as the normal moves, snapping it back and forth (a self-sustained oscillation, even at rest)
 		const float Proximity = 1.f - 0.5f * Hit.Time;
 		const float Agreement = FMath::Square(FMath::Clamp((Alignment - CosMaxDeviation) / FMath::Max(1.f - CosMaxDeviation, UE_KINDA_SMALL_NUMBER), 0.f, 1.f));
-		AddSample(Hit.Normal, Hit.ImpactPoint, Origin.Weight * Proximity * Agreement, true);
+		const float SampleWeight = Origin.Weight * Proximity * Agreement;
+		AddSample(Hit.Normal, Hit.ImpactPoint, SampleWeight, true);
+
+		// The strongest along-wall sample names the wall component: the movement base candidate
+		if (SampleWeight > BestSampleWeight)
+		{
+			BestSampleWeight = SampleWeight;
+			OutResult.Component = Hit.GetComponent();
+			OutResult.BoneName = Hit.BoneName;
+		}
 
 #if ENABLE_DRAW_DEBUG
 		if (bDrawDebug && IsInGameThread())
@@ -868,6 +1221,8 @@ bool UGSTN_SimpleWallMovementMode::ProbeConvexWrap(const FMovingComponentSet& Mo
 		}
 		OutResult.Normal = Hit.Normal;
 		OutResult.ContactPoint = Hit.ImpactPoint;
+		OutResult.Component = Hit.GetComponent();
+		OutResult.BoneName = Hit.BoneName;
 		OutResult.bValid = true;
 		return true;
 	};
@@ -943,6 +1298,135 @@ void UGSTN_SimpleWallMovementMode::AdhereToWall(const FMovingComponentSet& Movin
 	MoveRecord.LockRelevancy(false);
 	UMovementUtils::TrySafeMoveUpdatedComponent(MovingComps, Correction, Orientation, true, MoveHit, ETeleportType::None, MoveRecord);
 	MoveRecord.UnlockRelevancy();
+}
+
+// ------------------------------------------------------------------------------------------------
+// Movement bases
+// ------------------------------------------------------------------------------------------------
+// Mover's own based movement (ApplyMovementBaseChange + its based tick) forces the pawn upright by flattening its forward
+// on the gravity plane, which would wreck the orientation on a wall. So the wall is ridden here instead, once per sim
+// tick: the base is NOT put in FMoverDefaultSyncState (that would switch Mover's based tick on), it lives on the sim
+// blackboard as the base transform plus the character's position in the base's frame.
+
+void UGSTN_SimpleWallMovementMode::ApplyMovementBase(const FMovingComponentSet& MovingComps, FVector& InOutWallNormal, FVector& InOutVelocity, FMovementRecord& MoveRecord) const
+{
+	const UMoverComponent* MoverComp = GetMoverComponent();
+	USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
+	UMoverBlackboard* SimBlackboard = MoverComp ? MoverComp->GetSimBlackboard_Mutable() : nullptr;
+	if (!UpdatedComponent || !SimBlackboard)
+	{
+		return;
+	}
+
+	FGSTN_WallBaseInfo BaseInfo;
+	if (!SimBlackboard->TryGet(GSTNWallBlackboard::BaseInfo, BaseInfo) || !BaseInfo.Base.IsValid())
+	{
+		return;
+	}
+
+	FVector BaseLocation;
+	FQuat BaseQuat;
+	if (!UBasedMovementUtils::GetMovementBaseTransform(BaseInfo.Base.Get(), BaseInfo.BoneName, BaseLocation, BaseQuat))
+	{
+		return;
+	}
+
+	// Rigid motion of the base since last tick
+	const FQuat DeltaRotation = BaseQuat * BaseInfo.BaseRotation.Inverse();
+	const FVector TargetLocation = BaseLocation + BaseQuat.RotateVector(BaseInfo.LocalPosition);
+	const FVector Delta = TargetLocation - UpdatedComponent->GetComponentLocation();
+	if (Delta.IsNearlyZero(0.01f) && DeltaRotation.Equals(FQuat::Identity, 1e-6f))
+	{
+		return;
+	}
+
+	// The wall (movement plane) and the velocity relative to it rotate with the base, always
+	InOutWallNormal = DeltaRotation.RotateVector(InOutWallNormal).GetSafeNormal();
+	InOutVelocity = DeltaRotation.RotateVector(InOutVelocity);
+
+	// The capsule follows according to BaseRotation
+	const FQuat CurrentQuat = UpdatedComponent->GetComponentQuat();
+	FQuat NewQuat = CurrentQuat;
+	switch (BaseRotation)
+	{
+	case EGSTN_WallBaseRotation::Follow:
+		NewQuat = DeltaRotation * CurrentQuat;
+		break;
+	case EGSTN_WallBaseRotation::FollowExceptRoll:
+	{
+		// Drop the twist around the (rotated) wall normal: the part that would roll the character over on the wall.
+		// The swing still turns it with the wall; the upright bias then keeps it level to gravity
+		FQuat Swing, Twist;
+		DeltaRotation.ToSwingTwist(InOutWallNormal, Swing, Twist);
+		NewQuat = Swing * CurrentQuat;
+		break;
+	}
+	case EGSTN_WallBaseRotation::Ignore:
+	default:
+		break;
+	}
+
+	// Not swept: the pose is rigid relative to the wall, which has already moved. Anything else it overlaps is resolved by adhesion
+	FHitResult Hit(1.f);
+	MoveRecord.LockRelevancy(false);
+	UMovementUtils::TrySafeMoveUpdatedComponent(MovingComps, Delta, NewQuat.GetNormalized(), false, Hit, ETeleportType::None, MoveRecord);
+	MoveRecord.UnlockRelevancy();
+
+	GSTN_WALL_LOG(1, TEXT("BASE %s delta=%s rot=%.2fdeg"), *GetNameSafe(BaseInfo.Base.Get()), *GSTNWallDebug::Vec(Delta),
+		FMath::RadiansToDegrees(DeltaRotation.GetAngle()));
+}
+
+void UGSTN_SimpleWallMovementMode::CaptureMovementBase(const FMovingComponentSet& MovingComps, const FGSTN_WallProbeResult& Probe, bool bOnWall) const
+{
+	const UMoverComponent* MoverComp = GetMoverComponent();
+	const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
+	UMoverBlackboard* SimBlackboard = MoverComp ? MoverComp->GetSimBlackboard_Mutable() : nullptr;
+	if (!UpdatedComponent || !SimBlackboard)
+	{
+		return;
+	}
+
+	UPrimitiveComponent* Base = Probe.Component.Get();
+	FVector BaseLocation;
+	FQuat BaseQuat;
+	if (!bOnWall || !Base || !UBasedMovementUtils::IsADynamicBase(Base)
+		|| !UBasedMovementUtils::GetMovementBaseTransform(Base, Probe.BoneName, BaseLocation, BaseQuat))
+	{
+		SimBlackboard->Invalidate(GSTNWallBlackboard::BaseInfo);
+		return;
+	}
+
+	FGSTN_WallBaseInfo BaseInfo;
+	BaseInfo.Base = Base;
+	BaseInfo.BoneName = Probe.BoneName;
+	BaseInfo.BaseLocation = BaseLocation;
+	BaseInfo.BaseRotation = BaseQuat;
+	BaseInfo.LocalPosition = BaseQuat.UnrotateVector(UpdatedComponent->GetComponentLocation() - BaseLocation);
+	SimBlackboard->Set(GSTNWallBlackboard::BaseInfo, BaseInfo);
+}
+
+bool UGSTN_SimpleWallMovementMode::IsDetachButtonPressed(const FMoverTickStartData& StartState) const
+{
+#if GSTN_WALL_DEBUG
+	if (GSTNWallDebug::IsDetachHeld())
+	{
+		return true;
+	}
+#endif
+	if (const FGSTN_WallInputs* WallInputs = StartState.InputCmd.InputCollection.FindDataByType<FGSTN_WallInputs>())
+	{
+		return WallInputs->bWantsToDetach;
+	}
+
+	// Fallback: the CharacterMover crouch intent. Read from the component, so it is not part of the predicted input
+	if (Detach.bUseCrouchAsDetachButton)
+	{
+		if (const UCharacterMoverComponent* CharacterMover = Cast<UCharacterMoverComponent>(GetMoverComponent()))
+		{
+			return CharacterMover->GetCrouchIntent();
+		}
+	}
+	return false;
 }
 
 // ------------------------------------------------------------------------------------------------
