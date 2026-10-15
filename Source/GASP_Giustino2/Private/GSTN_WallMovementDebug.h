@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 
 /**
- * Debug tooling for UGSTN_SimpleWallMovementMode, compiled out of Shipping builds (or set GSTN_WALL_DEBUG=0).
+ * Debug tooling for the wall movement modes (UGSTN_WallMovementModeBase and subclasses), compiled out of Shipping builds (or set GSTN_WALL_DEBUG=0).
  * Built to drive and inspect the mode from the console / an MCP client, without a keyboard:
  *
  *   gstn.Wall.Enter [ModeName]        Queue a movement mode (default WallSliding) on every player pawn in PIE/game worlds

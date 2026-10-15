@@ -5,7 +5,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTagAssetInterface.h"
-#include "GSTN_SimpleWallMovementMode.h"
+#include "GSTN_WallMovementModeBase.h"
 #include "GSTN_WallMovementDebug.h"
 #include "MoveLibrary/MovementUtils.h"
 #include "MoveLibrary/MoverBlackboard.h"

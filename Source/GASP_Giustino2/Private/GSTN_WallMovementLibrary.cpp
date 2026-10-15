@@ -2,7 +2,7 @@
 
 #include "GSTN_WallMovementLibrary.h"
 
-#include "GSTN_SimpleWallMovementMode.h"
+#include "GSTN_WallMovementModeBase.h"
 #include "GSTN_WallMovementDebug.h"
 #include "MoveLibrary/MoverBlackboard.h"
 #include "MoverComponent.h"
