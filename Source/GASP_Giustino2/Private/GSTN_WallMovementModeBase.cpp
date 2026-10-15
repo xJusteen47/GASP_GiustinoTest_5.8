@@ -632,6 +632,29 @@ void UGSTN_WallMovementModeBase::SimulationTick_Implementation(const FSimulation
 	}
 	FQuat CurrentQuat = UpdatedComponent->GetComponentQuat();
 
+	// Facing away from the wall (e.g. grabbing it with the back): the target orientation would be a turn of more than 90 deg,
+	// that the shortest-arc transport can take around any axis (the capsule tumbles) and that, applied around the wall
+	// contact, swings the capsule through the wall. Turn the heading first, around the capsule's own axis and center: the
+	// capsule is symmetric around it, so this never changes its collision. The usual smoothing handles what is left (tilt)
+	{
+		const FVector CapsuleUp = CurrentQuat.GetUpVector();
+		const FVector Forward = FVector::VectorPlaneProject(CurrentQuat.GetForwardVector(), CapsuleUp).GetSafeNormal();
+		const FVector TowardWall = FVector::VectorPlaneProject(-WallNormal, CapsuleUp).GetSafeNormal();
+		if (!Forward.IsNearlyZero() && !TowardWall.IsNearlyZero() && FVector::DotProduct(Forward, TowardWall) < 0.f)
+		{
+			const float HeadingAngle = FMath::Atan2(FVector::DotProduct(FVector::CrossProduct(Forward, TowardWall), CapsuleUp),
+				FVector::DotProduct(Forward, TowardWall));
+			const FQuat HeadingQuat = (FQuat(CapsuleUp, HeadingAngle) * CurrentQuat).GetNormalized();
+
+			FHitResult Hit(1.f);
+			MoveRecord.LockRelevancy(false);
+			UMovementUtils::TrySafeMoveUpdatedComponent(MovingComps, FVector::ZeroVector, HeadingQuat, false, Hit, ETeleportType::None, MoveRecord);
+			MoveRecord.UnlockRelevancy();
+			GSTN_WALL_LOG(1, TEXT("HEADING turn %.1fdeg (facing away from the wall)"), FMath::RadiansToDegrees(HeadingAngle));
+			CurrentQuat = UpdatedComponent->GetComponentQuat();
+		}
+	}
+
 	// Mode switch decided this tick, with the simulation time it leaves unused
 	FName NextModeName = NAME_None;
 	float UnusedSeconds = 0.f;
