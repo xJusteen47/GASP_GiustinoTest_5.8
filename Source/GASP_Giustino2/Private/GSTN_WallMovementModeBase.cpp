@@ -163,8 +163,9 @@ bool FGSTN_WallMovementSyncState::ShouldReconcile(const FMoverDataStructBase& Au
 	const FGSTN_WallMovementSyncState& Authority = static_cast<const FGSTN_WallMovementSyncState&>(AuthorityState);
 	constexpr float NormalCosTolerance = 0.996f; // ~5 degrees
 
+	// Only compare normals while on a wall: off-wall both normals are zero and their dot product (0) would always mismatch.
 	return bHasWall != Authority.bHasWall
-		|| FVector::DotProduct(WallNormal, Authority.WallNormal) < NormalCosTolerance;
+		|| (bHasWall && FVector::DotProduct(WallNormal, Authority.WallNormal) < NormalCosTolerance);
 }
 
 void FGSTN_WallMovementSyncState::Interpolate(const FMoverDataStructBase& From, const FMoverDataStructBase& To, float Pct)

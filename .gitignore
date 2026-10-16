@@ -24,3 +24,8 @@ Plugins/*/Content/
 
 # Local Claude Code settings and tooling
 .claude/
+
+# Nested plugin folders (Plugins/GASNPP/*, Plugins/EngineOverrides/*)
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+Plugins/**/Content/
