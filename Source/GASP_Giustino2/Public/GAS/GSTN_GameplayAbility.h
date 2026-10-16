@@ -8,6 +8,7 @@
 
 class UMoverComponent;
 class UCharacterMoverComponent;
+class UGSTN_MoverSimStateTracker;
 
 /**
  * Base of the project's gameplay abilities.
@@ -18,6 +19,9 @@ class UCharacterMoverComponent;
  *
  * Abilities drive movement through Mover's queued moves (layered moves, instant movement effects), usually from a
  * gameplay effect with UApplyMoveGameplayEffectComponent, never by setting the character state directly.
+ *
+ * To read the movement state (mode, on ground...) from the simulation use GetMoverSimState, not the Mover component's own
+ * queries: those return the game frame state, which is wrong while re-simulating (see UGSTN_MoverSimStateTracker).
  */
 UCLASS(Abstract)
 class GASP_GIUSTINO2_API UGSTN_GameplayAbility : public UNpGameplayAbility
@@ -33,8 +37,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ability|Movement")
 	UCharacterMoverComponent* GetCharacterMoverFromActorInfo() const;
 
+	virtual void OnAvatarSet(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
+
 protected:
 	static UMoverComponent* GetMoverComponent(const FGameplayAbilityActorInfo* ActorInfo);
+
+	/** Mover's simulation state as of the last simulated frame. Null if the avatar has no Mover component */
+	static const UGSTN_MoverSimStateTracker* GetMoverSimState(const FGameplayAbilityActorInfo* ActorInfo);
 
 	/** Adds an input action activation trigger. Constructor only (uses ConstructorHelpers) */
 	void AddActivationInput(const TCHAR* InputActionPath, ETriggerEvent TriggerEvent = ETriggerEvent::Started);

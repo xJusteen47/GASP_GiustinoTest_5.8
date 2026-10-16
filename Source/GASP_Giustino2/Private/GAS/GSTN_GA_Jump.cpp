@@ -2,6 +2,8 @@
 
 #include "GAS/GSTN_GA_Jump.h"
 #include "GAS/GSTN_AbilityTags.h"
+#include "GAS/GSTN_MoverSimStateTracker.h"
+#include "MoverTypes.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "DefaultMovementSet/InstantMovementEffects/BasicInstantMovementEffects.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
@@ -52,9 +54,10 @@ bool UGSTN_GA_Jump::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 
 	if (bRequireGround)
 	{
-		// The ability system ticks before Mover: this is the movement state at the end of the previous frame
-		const UCharacterMoverComponent* CharacterMover = Cast<UCharacterMoverComponent>(GetMoverComponent(ActorInfo));
-		if (!CharacterMover || !CharacterMover->CanActorJump())
+		// The ability system ticks before Mover: this is the movement state at the end of the previous frame. Same test as
+		// UCharacterMoverComponent::CanActorJump (on ground), on the simulation state so it also holds while re-simulating
+		const UGSTN_MoverSimStateTracker* MoverState = GetMoverSimState(ActorInfo);
+		if (!MoverState || !MoverState->HasGameplayTag(Mover_IsOnGround, true))
 		{
 			return false;
 		}

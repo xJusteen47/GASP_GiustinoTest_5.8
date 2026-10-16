@@ -346,3 +346,15 @@ def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=220
     if _steer['handle'] is not None:
         unreal.unregister_slate_post_tick_callback(_steer['handle'])
     _steer['handle'] = unreal.register_slate_post_tick_callback(tick)
+
+
+def scenario_server_dash(client=1, player_key='P256'):
+    """Client walks forward; the server applies two dashes the client did not predict.
+    Each must cost the owning client about one rollback (not a chain over the whole dash)."""
+    steps = [
+        (0.0, lambda: ('move', hold(client, 'move', (0, 1, 0)))),
+        (1.0, lambda: ('server dash 1', server_apply(player_key, 'GSTN_GE_Dash'))),
+        (2.5, lambda: ('server dash 2', server_apply(player_key, 'GSTN_GE_Dash'))),
+        (3.5, lambda: ('stop', release(client, 'move'))),
+    ]
+    run_timeline(steps)

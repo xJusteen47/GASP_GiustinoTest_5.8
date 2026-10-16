@@ -17,6 +17,12 @@ void USimpleWalkingMode::OnRegistered(const FName ModeName, const FMoverSimConte
 
 	URollbackBlackboard::EntrySettings DidGenerateMoveEntrySettings = URollbackBlackboardLibrary::MakeSingleFrameEntrySettings();
 	DidGenerateMoveEntrySettings.PersistencePolicy = EBlackboardPersistencePolicy::ThroughNextFrame;
+	// GAS-NPP fork: keep one value per frame for as many frames as a rollback can rewind (Network Prediction's 64 frame buffer).
+	// With the 2 slots of a single entry, any rollback deeper than one frame invalidates the entry, so the first re-simulated frame
+	// sees "no move generated last frame" and smooth walking modes reset their spring state. Harmless at steady speed, but during a
+	// layered move (e.g. a dash) it makes the re-simulation diverge from the server again and again (chain of reconciles).
+	DidGenerateMoveEntrySettings.SizingPolicy = EBlackboardSizingPolicy::FixedDeclaredSize;
+	DidGenerateMoveEntrySettings.FixedSize = 64;
 
 	SimContext.Blackboard.CreateEntry<bool>(DidGenerateMoveEntry, DidGenerateMoveEntrySettings);
 }

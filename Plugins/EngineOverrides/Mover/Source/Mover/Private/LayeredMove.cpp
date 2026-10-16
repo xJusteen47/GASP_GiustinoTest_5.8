@@ -12,10 +12,19 @@ const double LayeredMove_InvalidTime = -UE_BIG_NUMBER;
 
 void FLayeredMoveFinishVelocitySettings::NetSerialize(FArchive& Ar)
 {
-	uint8 bHasFinishVelocitySettings = Ar.IsSaving() ? 0 : (FinishVelocityMode == ELayeredMoveFinishVelocityMode::MaintainLastRootMotionVelocity);
+	// GAS-NPP fork: the flag was never set when saving, so the finish velocity settings never reached the clients and a
+	// replicated move (e.g. one the server applied on its own) ended with ClampVelocity/SetVelocity on the server only.
+	uint8 bHasFinishVelocitySettings = Ar.IsSaving() ? (FinishVelocityMode != ELayeredMoveFinishVelocityMode::MaintainLastRootMotionVelocity) : 0;
 	Ar.SerializeBits(&bHasFinishVelocitySettings, 1);
 
-	if (bHasFinishVelocitySettings)
+	if (!bHasFinishVelocitySettings)
+	{
+		if (Ar.IsLoading())
+		{
+			FinishVelocityMode = ELayeredMoveFinishVelocityMode::MaintainLastRootMotionVelocity;
+		}
+	}
+	else
 	{
 		uint8 FinishVelocityModeAsU8 = (uint8)(FinishVelocityMode);
 		Ar << FinishVelocityModeAsU8;

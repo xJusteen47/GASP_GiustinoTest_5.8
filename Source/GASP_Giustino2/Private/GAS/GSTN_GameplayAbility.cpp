@@ -1,6 +1,7 @@
 // Gameplay Ability System setup (GAS-NPP fork).
 
 #include "GAS/GSTN_GameplayAbility.h"
+#include "GAS/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "InputAction.h"
@@ -17,6 +18,19 @@ UMoverComponent* UGSTN_GameplayAbility::GetMoverComponent(const FGameplayAbility
 {
 	const AActor* Avatar = ActorInfo ? ActorInfo->AvatarActor.Get() : nullptr;
 	return Avatar ? Avatar->FindComponentByClass<UMoverComponent>() : nullptr;
+}
+
+const UGSTN_MoverSimStateTracker* UGSTN_GameplayAbility::GetMoverSimState(const FGameplayAbilityActorInfo* ActorInfo)
+{
+	return UGSTN_MoverSimStateTracker::FindOrAdd(GetMoverComponent(ActorInfo));
+}
+
+void UGSTN_GameplayAbility::OnAvatarSet(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec)
+{
+	Super::OnAvatarSet(ActorInfo, Spec);
+
+	// Start tracking before the first simulation frame that uses it
+	GetMoverSimState(ActorInfo);
 }
 
 UMoverComponent* UGSTN_GameplayAbility::GetMoverComponentFromActorInfo() const

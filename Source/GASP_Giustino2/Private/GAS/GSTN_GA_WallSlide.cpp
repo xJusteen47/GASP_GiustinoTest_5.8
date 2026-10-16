@@ -2,7 +2,7 @@
 
 #include "GAS/GSTN_GA_WallSlide.h"
 #include "GAS/GSTN_AbilityTags.h"
-#include "MoverComponent.h"
+#include "GAS/GSTN_MoverSimStateTracker.h"
 
 UGSTN_GA_WallSlide::UGSTN_GA_WallSlide(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -48,6 +48,7 @@ void UGSTN_GA_WallSlide::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep
 
 bool UGSTN_GA_WallSlide::IsMoverInWallMode() const
 {
-	const UMoverComponent* Mover = GetMoverComponentFromActorInfo();
-	return Mover && WallModeNames.Contains(Mover->GetMovementModeName());
+	// The simulation state, not the Mover component's game frame state: right while re-simulating too
+	const UGSTN_MoverSimStateTracker* MoverState = GetMoverSimState(GetCurrentActorInfo());
+	return MoverState && WallModeNames.Contains(MoverState->GetMovementModeName());
 }
