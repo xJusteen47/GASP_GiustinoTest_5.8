@@ -29,3 +29,5 @@ Plugins/*/Content/
 Plugins/**/Binaries/
 Plugins/**/Intermediate/
 Plugins/**/Content/
+
+__pycache__/

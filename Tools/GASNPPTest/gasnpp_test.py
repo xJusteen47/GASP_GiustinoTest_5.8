@@ -220,3 +220,129 @@ def scenario_accounting(client=2, player_key='P257'):
         (3.1, lambda: ('force reconcile', force_reconcile(client, 8))),
     ]
     run_timeline(steps)
+
+
+# ------------------------------------------------------------------------------------------------ GA_Jump / GA_WallSlide
+WALL_SLIDING_TAG = 'State.Movement.WallSliding'
+
+
+def _has_tag(actor, tag_name):
+    asc = actor.get_component_by_class(unreal.NpAbilitySystemComponent)
+    tag = unreal.GameplayTag()
+    tag.import_text(f'(TagName="{tag_name}")')
+    return bool(asc) and asc.get_gameplay_tag_count(tag) > 0
+
+
+def _local_pawn(client_index):
+    pc = unreal.GameplayStatics.get_player_controller(worlds()[client_index], 0)
+    return pc, (pc.get_controlled_pawn() if pc else None)
+
+
+def _steer_value(client_index, target):
+    """IA_Move value (right, forward) that walks the client's pawn toward target (camera relative, from the control yaw)."""
+    import math
+    pc, pawn = _local_pawn(client_index)
+    loc = pawn.get_actor_location()
+    dx, dy = target[0] - loc.x, target[1] - loc.y
+    n = max((dx * dx + dy * dy) ** 0.5, 1e-3)
+    dx, dy = dx / n, dy / n
+    yaw = math.radians(pc.get_control_rotation().yaw)
+    fwd, right = (math.cos(yaw), math.sin(yaw)), (-math.sin(yaw), math.cos(yaw))
+    return (dx * right[0] + dy * right[1], dx * fwd[0] + dy * fwd[1], 0)
+
+
+_mode_log = {'handle': None, 'events': [], 'last': {}, 'start': 0.0}
+
+
+def start_mode_log():
+    """Records, for every pawn in every PIE world, each change of Mover mode or of the WallSliding tag."""
+    stop_mode_log()
+    _mode_log.update(events=[], last={}, start=time.time())
+
+    def tick(_dt):
+        t = time.time() - _mode_log['start']
+        for i, w in enumerate(worlds()):
+            for n, c in comps(w).items():
+                a = c.get_owner()
+                mover = a.get_component_by_class(unreal.CharacterMoverComponent)
+                state = (str(mover.get_movement_mode_name()), _has_tag(a, WALL_SLIDING_TAG))
+                key = (i, n)
+                if _mode_log['last'].get(key) != state:
+                    _mode_log['last'][key] = state
+                    loc = a.get_actor_location()
+                    _mode_log['events'].append(f'{t:6.2f}s w{i} {n} {state[0]}{" +WallSliding" if state[1] else ""} z={loc.z:.0f}')
+
+    _mode_log['handle'] = unreal.register_slate_post_tick_callback(tick)
+
+
+def stop_mode_log():
+    if _mode_log['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(_mode_log['handle'])
+        _mode_log['handle'] = None
+    return '\n'.join(_mode_log['events'])
+
+
+_steer = {'handle': None}
+
+
+def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=220.0, wall_time=0.7, ground_jump_first=True):
+    """Ground jump in place, then walk to the wall (face at x=wall_x, normal -X), jump at it, hold into it, wall jump.
+    Steering re-aims the move input every tick. Run start_mode_log() first and read stop_mode_log() + report() after."""
+    ia_move = unreal.load_asset(IA['move'])
+    target = (wall_x + 200.0, wall_y)
+    st = {'phase': 'ground_jump' if ground_jump_first else 'walk', 't0': time.time(), 'log': []}
+
+    def note(msg):
+        st['log'].append(f"{time.time() - st['t0']:.2f}s {msg}")
+
+    def tick(_dt):
+        try:
+            now = time.time() - st['t0']
+            pc, pawn = _local_pawn(client)
+            comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
+            mode = str(pawn.get_component_by_class(unreal.CharacterMoverComponent).get_movement_mode_name())
+            if st['phase'] == 'ground_jump':
+                if now > 0.3:
+                    note(f'ground jump press={press(client, "jump")} mode={mode}')
+                    st.update(phase='ground_wait', t1=now)
+            elif st['phase'] == 'ground_wait':
+                if now - st['t1'] > 1.5:
+                    note(f'ground jump done mode={mode}')
+                    st['phase'] = 'walk'
+            elif st['phase'] == 'walk':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, target)))
+                if wall_x - pawn.get_actor_location().x < jump_distance and mode == 'Walking':
+                    note(f'jump at wall press={press(client, "jump")} x={pawn.get_actor_location().x:.0f}')
+                    st.update(phase='air', t1=now)
+            elif st['phase'] == 'air':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, target)))
+                if mode == 'WallSliding':
+                    note(f'on wall tag={_has_tag(pawn, WALL_SLIDING_TAG)}')
+                    st.update(phase='wall', t1=now)
+                elif now - st['t1'] > 2.0:
+                    note(f'never reached the wall, mode={mode}')
+                    st['phase'] = 'done'
+            elif st['phase'] == 'wall':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, target)))
+                if now - st['t1'] > wall_time:
+                    # Away from the wall: the wall jump pushes off it
+                    comp.stop_holding_input(ia_move)
+                    note(f'wall jump press={press(client, "jump")} mode={mode} tag={_has_tag(pawn, WALL_SLIDING_TAG)}')
+                    st.update(phase='after', t1=now)
+            elif st['phase'] == 'after':
+                if now - st['t1'] > 2.0:
+                    note(f'end mode={mode} tag={_has_tag(pawn, WALL_SLIDING_TAG)}')
+                    st['phase'] = 'done'
+            if st['phase'] == 'done':
+                comp.stop_holding_input(ia_move)
+                unreal.unregister_slate_post_tick_callback(_steer['handle'])
+                _steer['handle'] = None
+                unreal.log('GASNPP jump/wall: ' + ' | '.join(st['log']))
+        except Exception as e:
+            unreal.unregister_slate_post_tick_callback(_steer['handle'])
+            _steer['handle'] = None
+            unreal.log_error(f'GASNPP jump/wall error: {e} | ' + ' | '.join(st['log']))
+
+    if _steer['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(_steer['handle'])
+    _steer['handle'] = unreal.register_slate_post_tick_callback(tick)
