@@ -960,6 +960,9 @@ void UNpAbilitySystemComponent::InternalSimulationTick(const FAbilitySystemTimeS
 	{
 		LatestCachedTimeStep = TimeStep;
 	}
+
+	OnSimulationPreTick.Broadcast(TimeStep);
+
 	//Send Input Events
 	HandleSimTickInputActionsEvents(TickStartData.InputCmd);
 

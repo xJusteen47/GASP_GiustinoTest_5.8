@@ -44,6 +44,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnProducInputEvent);
 DECLARE_MULTICAST_DELEGATE_OneParam(FSyncedMontageEvent, UAnimMontage*);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnSyncedTargetSet, const FSyncedTarget&, const FSyncedTarget&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnAbilityInputActionEvent,const UInputAction* , const ETriggerEvent&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnAbilitySimulationPreTick, const FAbilitySystemTimeStep&);
 
 using AbilitySystemStateTypes = TNetworkPredictionStateTypes<FAbilitySimInputCmd, FAbilitySimSyncState, FAbilitySimAuxState>;
 
@@ -117,6 +118,13 @@ class ABILITYSYSTEMSIMULATION_API UNpAbilitySystemComponent : public UAbilitySys
 	TArray<TSubclassOf<UGameplayEffect>> DefaultEffects;
 	
 	FOnAbilityInputActionEvent OnInputActionEvent;
+
+	/**
+	 * Broadcast at the start of every simulation tick (also re-simulated ones), after the time step is cached and before
+	 * input events and abilities tick. Lets another simulation that ticks earlier in the frame drive this ability system
+	 * from inside its own tick (activate, cancel, pause the montage...), with the right frame and time
+	 */
+	FOnAbilitySimulationPreTick OnSimulationPreTick;
 
 	ENetRole GetCachedSimNetRole() const;
 
