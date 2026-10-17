@@ -8,6 +8,7 @@
 #include "GSTN_WallEntryTransition.generated.h"
 
 struct FHitResult;
+struct FMoverSyncState;
 
 /** Whether the wall can be grabbed while still going up */
 UENUM(BlueprintType)
@@ -139,8 +140,11 @@ public:
 	FGameplayTagContainer MemoryResetTags;
 
 protected:
-	/** Whether any MemoryResetTags is present on the Mover component or its owner */
-	bool HasMemoryResetTag() const;
+	/**
+	 * Whether any MemoryResetTags is present in the simulated state (Mover's own tags) or on the owner. Owner tags are
+	 * game-thread state: predicted only if their source (e.g. the GAS-NPP ability system) ticks before Mover
+	 */
+	bool HasMemoryResetTag(const FMoverSyncState& SyncState) const;
 
 	/** A grabbable wall found by FindEntryWall */
 	struct FEntryCandidate

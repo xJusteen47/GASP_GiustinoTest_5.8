@@ -44,7 +44,7 @@ void UGSTN_WallEntryTransition::Trigger_Implementation(const FSimulationTickPara
 	}
 }
 
-bool UGSTN_WallEntryTransition::HasMemoryResetTag() const
+bool UGSTN_WallEntryTransition::HasMemoryResetTag(const FMoverSyncState& SyncState) const
 {
 	if (MemoryResetTags.IsEmpty())
 	{
@@ -57,10 +57,11 @@ bool UGSTN_WallEntryTransition::HasMemoryResetTag() const
 		return false;
 	}
 
-	// Mover's own tags: active mode, layered moves, movement modifiers
+	// Mover's own tags: active mode, layered moves, movement modifiers. Read from the simulated state, not the component's
+	// game frame state, so a re-simulation sees the tags of the frame being re-simulated
 	for (const FGameplayTag& Tag : MemoryResetTags)
 	{
-		if (MoverComp->HasGameplayTag(Tag, false))
+		if (MoverComp->HasGameplayTagInState(SyncState, Tag, false))
 		{
 			return true;
 		}
@@ -194,7 +195,7 @@ bool UGSTN_WallEntryTransition::FindEntryWall(const FSimulationTickParams& Param
 	// by going through a reset mode (landing), by a reset tag, or manually (UGSTN_WallMovementLibrary::ResetWallMemory)
 	const FGSTN_WallMovementSyncState* WallState = Params.StartState.SyncState.SyncStateCollection.FindDataByType<FGSTN_WallMovementSyncState>();
 	UMoverBlackboard* SimBlackboard = MoverComp->GetSimBlackboard_Mutable();
-	if (SimBlackboard && HasMemoryResetTag())
+	if (SimBlackboard && HasMemoryResetTag(Params.StartState.SyncState))
 	{
 		// Recorded as a time, so the reset outlives the tag
 		SimBlackboard->Set(GSTNWallBlackboard::MemoryResetTimeMs, NowMs);
