@@ -143,7 +143,8 @@ re-fires tag delegates and `MonitoredTagChanged` is not guarded); cancels are ex
 |---|---|---|
 | `HeldButtons` | uint32 | Held at sample time. |
 | `PressedButtons` | uint32 | Pressed since the previous sample: a tap shorter than one frame is not lost. |
-| `StickX`, `StickY` | int8 | Move stick **already rotated onto the movement plane** (camera yaw applied at production, world XY), quantized to [-127, 127]. *(M2)* |
+| `StickX`, `StickY` | int8 | Move stick **as on the controller** (raw, +Y up), quantized to [-127, 127]. *(M2)* |
+| `CameraYaw` | uint8 | Control-rotation yaw at sample time, 256 steps. The simulation derives the world-plane stick from it, so every direction space is available deterministically. *(M2)* |
 | `ForcedSlot` | uint16 | 0 = none. Lets AI/scripts request a slot without synthesising inputs. *(M2)* |
 
 Exists today with the first two fields (M0). Serialized packed.
@@ -158,15 +159,26 @@ Test scripting (`SetScriptedButtons`, `TapScriptedButtons`) exists on the compon
 ### 6.3 Directions in 3D (*Decision*)
 
 - Default direction of a move is the **character's facing**; the stick on the movement plane overrides it.
-- `FGSTN_DirectionClassifier` (pure, Core) turns the stick into a **facing-relative 8-way direction** plus a **zone**:
-  `Neutral` (dead zone) → `Aim` (light tilt: aims a "standing" attack without making it directional) → `Tilt`
-  (directional). A **flick** flag marks entering `Tilt` from `Neutral`/`Aim` within `FlickFrames` (smash inputs).
+- **"Down/up" are not stick directions**: the down/up variants of the main attacks use the **crouch button held** as a
+  modifier (section 9.1). The stick only expresses directions on the movement plane.
+- `FGSTN_DirectionClassifier` (pure, Core) classifies the stick every frame in **three spaces**, each as an 8-way
+  direction (`Up, UpRight, Right, ... , Neutral`):
+  - **`Facing`**: relative to the character (Up = forward, Down = back). For inputs like "towards / away from where I
+    look".
+  - **`Stick`**: the **physical stick on the controller** (Up = pushed up), independent of character and camera — the
+    "global" stick direction (*Decision*, confirmed with the user). For spins, codes (supers) and any input that must
+    not change when the character or the camera turns.
+  - **`World`**: absolute level axes (Up = a configured world yaw). Optional, for fixed-camera or side-view sections.
+  - Separately from these categories, the **world-plane direction** of the stick (stick rotated by the camera yaw) is
+    what aims attacks (`AimPolicy`): "where the stick points on screen" becomes a world direction.
+- Plus a **zone** from the magnitude, the same in every space: `Neutral` (dead zone) → `Aim` (light tilt: aims a
+  "standing" attack without making it directional) → `Tilt` (directional). A **flick** flag marks entering `Tilt` from
+  `Neutral`/`Aim` within `FlickFrames` (smash inputs). The world yaw (256 steps) is kept for aiming.
 - Facing comes from Mover's simulated state at end of F-1. The project's `UGSTN_MoverSimStateTracker` is project code:
-  in M2 move an equivalent into `GSTNCombatNP` (the project then uses the plugin's).
-- Whether "up/down" are stick directions or modifier buttons is a slot design choice: the classifier only knows
-  Forward/Back/Left/Right and diagonals.
+  in M2 it moves into `GSTNCombatNP` (the project then uses the plugin's).
 - Each move has an `AimPolicy` (`KeepFacing | SnapToStick | SnapIfAimOrTilt`, max turn angle, last frame turning is
-  allowed); rotation goes through Mover, not the actor.
+  allowed): a directional attack goes **towards the stick's world direction**; rotation goes through Mover, not the
+  actor.
 
 ### 6.4 History (*Decision*, in sync state)
 
@@ -174,7 +186,9 @@ The review showed the history cannot be rebuilt from inputs alone (the server fi
 corrected state), so a **compact event log is part of the combat sync state**:
 
 - `ButtonEvents`: ring of the last 16 events `{Frame, Button, bRelease, bConsumed}`.
-- `DirectionEvents`: ring of the last 16 direction changes `{Frame, Direction, Zone, bFlick}`.
+- `DirectionEvents`: ring of the last 16 direction changes `{Frame, StickDir, FacingDir, WorldDir, Zone, bFlick,
+  WorldYaw}` — a new event when any of the three directions or the zone changes (turning the character or camera with
+  the stick held adds one event per 45° sector).
 - Current held mask (the `PrevHeldButtons` of M0).
 - Serialized with frames as **saturated deltas** from the current frame (uint8: events older than 255 frames are
   irrelevant and dropped).
@@ -189,8 +203,10 @@ Exact layout in the M1 specification.
   `SimultaneityFrames` of tolerance, and `MaxGapFrames` to the next step.
 - Conditions are `TInstancedStruct<FGSTN_InputCondition>` (structs, not UObjects: no GC, deterministic, cheap to
   evaluate). New conditions = new structs deriving from the base.
-- Standard conditions: `Press`, `Release` (negative edge), `Hold`, `Direction`, `Motion` (direction sequence with
-  leniency, e.g. back→forward), `Chord`, `Charge`, `Mash`, `AnyOf`. Later: `Custom` (const Blueprint class).
+- Standard conditions: `Press`, `Release` (negative edge), `Hold` (also "modifier held", e.g. crouch), `Direction`
+  (with a space and a zone range: "stick neutral" or "tilted"), `Motion` (direction sequence with leniency, e.g.
+  back→forward), `Spin` (a rotation of N degrees starting **anywhere**, e.g. a 360° stick spin), `Chord`, `Charge`,
+  `Mash`, `AnyOf`. Direction-based conditions choose their space (6.3). Later: `Custom` (const Blueprint class).
 - The **matcher** searches backward from the terminal step (bounded backtracking over the rings) and returns the anchor
   of every step plus the button events it used (for consumption).
 - Every condition reports a **specificity** (automatic priority) and a **canonical input** (the minimal input that
@@ -229,6 +245,29 @@ matches **and** can execute is requested; (4) consume the button events it used.
   through every other slot's matcher. Same priority and both match → **error** (ambiguous). A higher-priority slot
   always matches another slot's canonical input → **warning** (shadowed slot).
 - Project contexts: Mover tags (`Mover_IsOnGround`...) and `State.Movement.WallSliding` → wall attacks.
+
+### 9.1 Standard slot set (*Decision*)
+
+The main input types, shipped by the plugin as the standard set (names are slot names; the Smash Bros. analogue is
+only a reference for the role):
+
+| Slot | Analogue | Pattern (one step, `Press(Attack)` anchors) | Aim policy |
+|---|---|---|---|
+| `Attack.Neutral` | jab | `Direction(Facing, any, MaxZone = Aim)` | `SnapIfAimOrTilt` (a light tilt aims it) |
+| `Attack.Directional` | side tilt | `Direction(Facing, any of the 8, MinZone = Tilt)` | `SnapToStick` (the move goes where the stick points) |
+| `Attack.CrouchNeutral` | up tilt | `Hold(Crouch, 0)` + `Direction(Facing, any, MaxZone = Aim)` | `SnapIfAimOrTilt` |
+| `Attack.CrouchDirectional` | down tilt | `Hold(Crouch, 0)` + `Direction(Facing, any of the 8, MinZone = Tilt)` | `SnapToStick` |
+
+- In 3D "side" means **any** tilted direction, the attack turning towards it; slots that care about forward vs back
+  relative to the character use a `Facing` mask (e.g. `FacingForward`) instead of "any of the 8".
+- The crouch versions win over the plain ones by automatic priority (one more condition); a crouch press up to
+  `SimultaneityFrames` after the attack press still counts. The crouch button is both a movement input (Mover stance)
+  and a combat modifier: slots read the **button held state from the history**, not Mover's crouch tag (which arrives a
+  frame later and can be blocked).
+- The same four slots exist for the special button (`Special.*`) and with an airborne context (`Air.*`); smash
+  variants add `bRequireFlick`. EX versions are the same patterns with the EX chord (10.3).
+- Spin- or code-based inputs (supers, special moves) use the `Stick` space so they do not depend on where the
+  character faces.
 
 ## 10. Kits, weapons, supers, meters, loadouts, skins
 

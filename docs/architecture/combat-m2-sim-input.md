@@ -58,10 +58,11 @@ in case a saved object references it.
 |---|---|---|
 | `HeldButtons` | uint32 | Held state of each configured button's `UInputAction` at sample time. |
 | `PressedButtons` | uint32 | Bits set by the action's `Started` event since the last sample (taps). |
-| `StickX`, `StickY` | int8 | Move action value (2D) rotated by the controller's control-rotation yaw onto world XY, clamped to the unit circle, × 127, rounded. |
+| `StickX`, `StickY` | int8 | Move action value (2D) **as on the controller** (+Y up), clamped to the unit circle, × 127, rounded. |
+| `CameraYaw` | uint8 | Controller control-rotation yaw, 256 steps (≈ 1.4°). |
 | `ForcedSlot` | uint16 | 0 = none, else 1 + index into the binding set. Set by the AI source. |
 
-`NetSerialize`: packed masks; stick as two bytes; `ForcedSlot` behind a 1-bit flag.
+`NetSerialize`: packed masks; stick and camera yaw as three bytes; `ForcedSlot` behind a 1-bit flag.
 
 **Sync state (`FGSTN_CombatSyncState`)** — fields after M2:
 
@@ -100,7 +101,8 @@ tracker (`GetSyncState()`), owner gameplay tags from the ASC (at priority 47 the
 after a rollback restore).
 
 1. **Sample**: `Held = Cmd.HeldButtons`; `Pressed = (Held & ~History.Held) | Cmd.PressedButtons`;
-   `Released = History.Held & ~Held`; stick → `FGSTN_DirectionClassifier::Classify` with the facing yaw.
+   `Released = History.Held & ~Held`; stick → `FGSTN_DirectionClassifier::Classify(raw stick, Cmd.CameraYaw, facing
+   yaw)`, giving the `Stick`, `Facing` and `World` directions (combat.md §6.3).
 2. **Append** the sample to `History` (M1 rules).
 3. **Watched tags**: compute the current mask from the owner's tags (section 6); `TagsAdded` = bits set now and not in
    `WatchedTagMask`; store the new mask.
@@ -156,20 +158,27 @@ validator over its slots and checks every ability class is set. The component pr
   - `scenario_combat_motion`: back → forward flick + button activates the "motion" binding, plain button activates the
     "button" binding; forced reconcile placed inside the motion.
   - `scenario_combat_chord`: A then B within the grace window → chord binding; A alone → A binding after the grace.
+  - `scenario_combat_main_inputs`: the four standard attack slots (combat.md §9.1) bound to four distinguishable test
+    abilities: neutral, light tilt (aim zone, must give the neutral one), tilt, crouch + neutral, crouch + tilt, and
+    crouch pressed 2 frames after the attack; the camera rotated 90° between runs must not change the results.
+  - `scenario_combat_spin`: a 360° stick spin started from two different directions, then the button.
   - Each with lag 60/15 ms, with and without 2 % loss.
 - Test content on `BP_GASNPP_TestCharacter` (**tell the user before editing; back up to `Saved/Backups/GAS`**): a test
-  input config (dash, buff and two extra test buttons), a test binding set with: dash on button, buff on chord, dash on
-  motion (a second test ability class if needed so results are distinguishable), and a test reset rule.
+  input config (attack, special, crouch, dash, buff), a test binding set with: the four standard attack slots, dash on
+  a button, buff on a chord, a motion slot, a spin slot (test ability classes so results are distinguishable), and a
+  test reset rule. The crouch button must also be mapped for movement if the test character crouches; otherwise only
+  the combat modifier matters for the test.
 
 ## 9. Acceptance criteria
 
 1. Builds; M1 tests still pass; `GSTNCombatCore` still has no GAS/NP/Mover dependency.
-2. The three scenarios are clean as defined in section 8, including forced reconciles across a buffered press, a
+2. The scenarios of section 8 are clean as defined there, including forced reconciles across a buffered press, a
    motion in progress and a chord grace window.
 3. Existing `scenario_abilities` and `scenario_forced_rollback` stay clean; wall code unchanged in behaviour (the
    tracker move is mechanical).
-4. Sync state size: history serialized ≤ 70 bytes worst case, ≤ 4 bytes for an idle pawn after 255 frames (measure with
-   `np` traces or a temporary log of `NetSerialize` byte counts).
+4. Sync state size: history serialized ≤ 100 bytes worst case (16 button events × 2 bytes + 16 direction events × 4
+   bytes + header), ≤ 4 bytes for an idle pawn after 255 frames (measure with a temporary log of `NetSerialize` byte
+   counts).
 5. combat.md and testing.md updated; CLAUDE.md table lists the tracker's new location.
 
 ## 10. Risks and notes
