@@ -206,7 +206,10 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		}
 	}
 
-	if (Frame == Sync->HitstopStartFrame)
+	// Paused on every hitstop frame with a montage (also one started during the hitstop), resumed on the first frame after.
+	// The pause flag only exists with a montage: it is not replicated otherwise
+	float MontageTime = 0.f;
+	if (Sync->IsInHitstop(Frame) && AbilitySystem->GetPlayingSyncedMontage(MontageTime))
 	{
 		AbilitySystem->PauseCurrentSyncedMontage();
 	}
