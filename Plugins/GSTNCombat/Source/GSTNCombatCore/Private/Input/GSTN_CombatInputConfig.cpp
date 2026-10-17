@@ -23,6 +23,18 @@ uint32 UGSTN_CombatInputConfig::GetButtonMask(const FGameplayTag& ButtonTag) con
 	return Index == INDEX_NONE ? 0u : (1u << Index);
 }
 
+FGSTN_ButtonMap UGSTN_CombatInputConfig::MakeButtonMap() const
+{
+	TArray<FGameplayTag, TInlineAllocator<MaxButtons>> Tags;
+	for (const FGSTN_CombatButtonDef& Button : Buttons)
+	{
+		Tags.Add(Button.Tag);
+	}
+	// A config over the limit is reported by IsDataValid; bind only the bits that exist.
+	Tags.SetNum(FMath::Min(Tags.Num(), MaxButtons));
+	return FGSTN_ButtonMap(Tags);
+}
+
 #if WITH_EDITOR
 EDataValidationResult UGSTN_CombatInputConfig::IsDataValid(FDataValidationContext& Context) const
 {

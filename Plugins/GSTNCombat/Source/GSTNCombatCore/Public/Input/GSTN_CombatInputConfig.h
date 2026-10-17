@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
+#include "Input/GSTN_ButtonMap.h"
 #include "GSTN_CombatInputConfig.generated.h"
 
 class UInputAction;
@@ -47,6 +48,9 @@ public:
 
 	/** Bit mask of a button, 0 if the config does not have it */
 	uint32 GetButtonMask(const FGameplayTag& ButtonTag) const;
+
+	/** The tag -> bit lookup the pattern matcher binds slot data to this config with */
+	FGSTN_ButtonMap MakeButtonMap() const;
 
 	/** The buttons, in bit order */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Input")

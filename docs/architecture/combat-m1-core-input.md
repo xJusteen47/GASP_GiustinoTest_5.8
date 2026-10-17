@@ -214,6 +214,36 @@ Algorithm:
    An event used by a later step cannot be reused by an earlier one.
 4. Bound: at most 16 candidates per step, depth = step count; abort and fail past 4096 evaluations (assert in dev).
 
+*Implementation notes (M1.4):*
+
+- **Buttons are bound through `FGSTN_ButtonMap`** (tag -> bit, built by `UGSTN_CombatInputConfig::MakeButtonMap()` or
+  `FGSTN_ButtonMap::MakeStandard()`), passed in `FGSTN_MatchParams::Buttons` and looked up at evaluation (at most 32 integer
+  compares per reference), instead of resolving conditions in place when a slot set is bound: the same slot data serves
+  every config and nothing mutates shared assets. A compiled form can come with the M3 table if profiling asks. Unknown
+  tag = mask 0 = the condition never holds (the validator reports it through `GetReferencedButtons`).
+- **Condition interface** adds `IsDirectionCondition()` (judged at the execution frame under `AtExecution`) and
+  `GetReferencedButtons()`; `AppendCanonicalInput(Script, Map, Frame)` takes the map to turn tags into masks. Conditions are
+  built with `TInstancedStruct<>::Make<T>(value)` (the unqualified `Make(value)` overload slices to the base type).
+- **Step anchor**: the *first anchor-capable* condition of `AllOf` is the anchor (`FindAnchorIndex`); a step needs at least
+  one (the spec said exactly one). Any other anchor-capable condition (a `Spin` next to the `Press`) must have its own
+  reference event within `SimultaneityFrames` of the anchor. Anchor conditions list candidates newest first: a candidate made
+  of button events is passed by excluding its events, a stick based one by moving the search limit one frame back.
+- **Terminal buffer rule** applies to the anchor frame of any terminal condition (a motion alone fires within
+  `BufferFrames` of its end); the hold buffer only to terminal presses (`TerminalPressSlot`: the newest press of a press,
+  chord or mash). `Release` conditions use unconsumed releases only.
+- **Hold** is "down at some frame of `[anchor - Sim, anchor + Sim]` (not after Now) for at least `MinFrames` at that
+  frame"; a button is down from its press frame up to, not including, its release frame, so a tap is never down.
+- **Direction** is "in the set and zone range at some frame of the same window"; the flick flag only on its own frame.
+- **Motion** elements are *entered* at the first stick event of a run satisfying them; gaps and the total are measured
+  between entries; neutral elements ignore `MinZone`. **Spin** merges consecutive stick events with the same sector, a
+  stick event below `MinZone` or neutral breaks the chain. **Charge** gains `Space` (default Facing) and `MinZone`
+  (default Tilt); its run lasts until the first stick event outside the set, and a run still going counts as released
+  "in the future". Defaults: motion 12/30 frames, spin 30 frames, charge 30 frames held / 8 released.
+- **AnyOf** used as an anchor reports the newest candidate among its children (first child on a tie), not simply the first
+  child that holds, so candidate enumeration stays newest first.
+- `FGSTN_MatchParams::FromSettings`, `FGSTN_InputMatcher::GetAge` (paused frames between the event and now excluded) and
+  `FGSTN_InputPattern::IsStructurallyValid` are part of the API; an invalid pattern never matches.
+
 **Reset rules (`FGSTN_BufferResetRule`)** — base fields `uint32 ButtonMask` (0 = all). Interface
 `bool ShouldFlush(const FGSTN_BufferFrameEvents& Events, const FGSTN_InputHistory& H, int32 Now) const`.
 `FGSTN_BufferFrameEvents { FGameplayTagContainer EventTags; FGameplayTagContainer TagsAdded; }` is filled by the

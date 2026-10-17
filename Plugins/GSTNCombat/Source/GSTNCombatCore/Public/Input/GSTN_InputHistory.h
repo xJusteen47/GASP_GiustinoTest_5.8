@@ -104,6 +104,13 @@ struct GSTNCOMBATCORE_API FGSTN_InputHistory
 	 */
 	bool IsHeldContinuouslySince(int32 Button, int32 PressFrame) const;
 
+	/**
+	 * Whether the button is down during Frame, and how long it had been (Frame minus the frame of its press). A button is
+	 * down from its press frame up to, not including, its release frame, so a tap is never down. OutHeldFrames is MAX_int32
+	 * when the press is older than the history. Used by Hold conditions.
+	 */
+	bool IsButtonHeldAt(int32 Button, int32 Frame, int32& OutHeldFrames) const;
+
 	// ---- Stick events
 
 	int32 GetNumDirectionEvents() const { return DirectionCount; }

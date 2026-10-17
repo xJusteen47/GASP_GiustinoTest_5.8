@@ -113,6 +113,36 @@ bool FGSTN_InputHistory::IsHeldContinuouslySince(int32 Button, int32 PressFrame)
 	return true;
 }
 
+bool FGSTN_InputHistory::IsButtonHeldAt(int32 Button, int32 Frame, int32& OutHeldFrames) const
+{
+	// Newest first: events after Frame are skipped (the oldest of them tells how the button was before), the first event
+	// at or before Frame gives the state.
+	const FGSTN_ButtonEvent* OldestLater = nullptr;
+	for (int32 Age = 0; Age < ButtonCount; ++Age)
+	{
+		const FGSTN_ButtonEvent& Event = ButtonEvents[GetButtonSlot(Age)];
+		if (Event.Button != Button)
+		{
+			continue;
+		}
+		if (Event.Frame > Frame)
+		{
+			OldestLater = &Event;
+			continue;
+		}
+		OutHeldFrames = Frame - Event.Frame;
+		return Event.bRelease == 0;
+	}
+
+	OutHeldFrames = MAX_int32;
+	if (OldestLater)
+	{
+		// Nothing before Frame in the ring: a later release means the button was already down.
+		return OldestLater->bRelease != 0;
+	}
+	return (HeldButtons & (1u << Button)) != 0;
+}
+
 FGSTN_StickSample FGSTN_InputHistory::GetStickAt(int32 Frame) const
 {
 	if (Frame >= Current.Frame)
