@@ -3,6 +3,10 @@
 Part of the combat design ([combat.md](combat.md)): read §5, §10, §11 there, and the M1/M2 specifications. Section
 numbers below are local to this file.
 
+> **Revision 2026-10-18:** cancel windows, customisations and move-set keys use **command tags**; moves get a
+> **startup override window** with deferred commit (combat.md §8.3); new authoritative events. Slot categories are
+> gone (the command tag hierarchy replaces them).
+
 ## 1. Scope
 
 **Goal:** a character spawns with a loadout (primary kit + support weapon + supers + skin). Its stats come from the kit
@@ -59,12 +63,19 @@ Public/
 `UGSTN_MoveTrackMoveCreator`, `FGSTN_SetFacingEffect` (if Mover has no rotation-only instant effect), and the combat
 tick logic of section 7.
 
+## 3b. Settings additions (`UGSTN_CombatInputSettings`, Core)
+
+`DefaultOverrideFramesByTier (TMap<FGameplayTag, int32>)` — startup override window per command tier root, e.g.
+`Command.Attack` 2 (jab-like moves set 1 on the move), `Command.Strong` 2, `Command.Special` 2, `Command.Movement.Jump`
+= the jump squat length (set by the jump move). Looked up like the tiers (nearest configured ancestor).
+
 ## 4. Native tags (`GSTN_CombatTags.h`, `UE_DECLARE_GAMEPLAY_TAG_EXTERN`)
 
 `Combat.State.Busy` (in a move before its first actionable frame), `Combat.State.InMove`, `Combat.State.SuperInput`,
-`Combat.State.CancelWindow` (+ `.Category.<X>` children generated from categories are **not** native: cancel windows
-are evaluated in the combat tick, the tag is only informative); `Combat.Slot.Category.Normal/Special/Aerial/Defensive/
-Super/WeaponSwitch/Jump/Movement`; `Combat.Weapon.Role.Primary/Support`; `Combat.SetByCaller.MeterCost`, `Combat.SetByCaller.Stat.*`
+`Combat.State.CancelWindow`, `Combat.State.OverrideWindow` (informative: windows are evaluated in the combat tick);
+standard command tags beyond M1's: `Command.Movement.Jump`, `.AirJump`, `.FastFall`, `.Dash`, `Command.Weapon.Switch
+.Next/.Previous/.Index<N>`, `Command.Super.Slot<N>`; `Combat.Weapon.Role.Primary/Support`; asset tag roots `Move.`,
+`Weapon.`, `Kit.`, `Super.`; event tags `Combat.Event.MoveFinished/WeaponSwitched/SuperUsed`; `Combat.SetByCaller.MeterCost`, `Combat.SetByCaller.Stat.*`
 (one per movement attribute); `Combat.BufferEvent.MoveActivated/Landed/WeaponSwitched`. One-line comment each on who
 grants/reads it.
 
@@ -111,13 +122,16 @@ tuning), so the project jump and the plugin jump agree on height.
 | `CostEffect` + `MeterCosts` | `UGSTN_GE_MeterCost` with SetByCaller per meter attribute; any other GAS cost/cooldown as usual on the ability class. |
 | `AimPolicy` | `KeepFacing / SnapToStick / SnapIfAimOrTilt`, `MaxTurnDegrees`, `TurnUntilFrame`. |
 | `Tracks` | `TArray<TInstancedStruct<FGSTN_MoveTrack>>`. |
-| `Categories` | Tags the move counts as for cancel rules (`Combat.Slot.Category.*`); default from its slot. |
+| `MoveTags` | Asset tags (`Move.<Weapon>.<Name>`...), carried by events. |
+| `OverrideFrames` | Startup override window (combat.md §8.3); -1 = the default of its command tier in the settings (`DefaultOverrideFramesByTier`), 0 = none. |
+| `OverrideInto` | `FGameplayTagQuery` on command tags; empty = "any command of a higher tier". Ground attacks add `Command.Movement.Jump` (attack cancel); the jump squat adds the up-shaped attack/special commands. |
+| `DeferredCommitFrame` | Derived = `OverrideFrames`. Validation: no hitbox, event, movement track, projectile or cost before it. |
 | `BufferResetRules` | Appended while the move runs. |
 
 Track structs in M3 (base `FGSTN_MoveTrack { int32 StartFrame; int32 EndFrame; }`):
 
-- `CancelWindow { FGameplayTagContainer IntoCategories; TArray<FName> IntoSlots; ECancelCondition Condition
-  (Always/OnHit/OnBlock/OnWhiff); bool bJumpCancel; }` — OnHit/OnBlock evaluate false until M4 (hit confirm).
+- `CancelWindow { FGameplayTagQuery IntoCommands; ECancelCondition Condition (Always/OnHit/OnBlock/OnWhiff); }` —
+  e.g. `IntoCommands = Command.Special | Command.Movement.Jump`; OnHit/OnBlock evaluate false until M4 (hit confirm).
 - `Movement { UCurveVector* VelocityCurve (local space, cm/s over move frames); float GravityScale; bool bLockFacing;
   EGSTN_MoveMixMode MixMode (Additive/Override) }`.
 - `Tags { FGameplayTagContainer Tags; }` — projected by the combat model while inside the window (combat.md §5.4).
@@ -154,16 +168,21 @@ state's frame (older ones are dead).
    buffer event `WeaponSwitched`.
 4. **Candidates**: compiled table entries whose source is the kit, the active weapon, or a super slot; filtered by
    `LoadoutRevision` gate (section 7.7).
-5. **Can act?** `Actionable` → every candidate. `InMove` before `FirstActionableFrame` → only candidates allowed by a
-   cancel window open at the current move frame (`IntoCategories` ∩ entry categories, or `IntoSlots` contains the
-   slot name; `bJumpCancel` allows entries in `Combat.Slot.Category.Jump`). `InMove` at or after
-   `FirstActionableFrame` → every candidate (the remaining frames are interruptible recovery; the new move replaces
-   the old one).
+5. **Can act?** `Actionable` → every candidate. `InMove` inside the **startup override window** (move frame <
+   `OverrideFrames`) → candidates matching `OverrideInto` (default: higher tier than the current move's command);
+   the winner **replaces** the move: the current GA_Move is re-triggered with the new entry, its deferred effects never
+   happened, the facing it set is kept. `InMove` before `FirstActionableFrame` → candidates matching an open cancel
+   window's `IntoCommands`. `InMove` at or after `FirstActionableFrame` → every candidate (interruptible recovery).
+   Candidates are passed to the M1 resolver, so press groups, tiers and loser consumption apply unchanged.
 6. **Resolve** (M1 resolver, `CanExecute` = ASC `CanActivateAbility` of the entry's ability incl. cost).
 7. **Execute**: for a move entry → `ActionState = InMove`, `ActiveTableIndex`, `MoveStartFrame = F`,
    `MovePausedFrames = 0`, requests `ActivateEntry` and `SetFacing` (from `AimPolicy` and the sample's stick); for a
    plain-ability entry → request `ActivateEntry` only (no move state).
-8. **Tag projection**: `Combat.State.InMove`, `Busy` (frame < FAF), move `Tags` windows, `CancelWindow`.
+8. **Deferred commit**: on the frame the move reaches `DeferredCommitFrame`, request `CommitMove` (cost commit in the
+   ASC pre-tick) and start the tracks. Only committed or completed things become outbox events (`MoveFinished`,
+   `WeaponSwitched`, `SuperUsed`); a replaced move publishes nothing.
+9. **Tag projection**: `Combat.State.InMove`, `Busy` (frame < FAF), move `Tags` windows, `CancelWindow`,
+   `OverrideWindow`.
 
 ### 7.3 ASC pre-tick execution
 
@@ -194,8 +213,8 @@ which samples the curve at `ElapsedFrames` (its own counter in Mover's sync stat
 
 ### 7.6 Weapon switch
 
-A switch move is an ordinary move with a `WeaponSwitch` track, bound in the **kit** move set to switch slots
-(`Combat.Slot.Category.WeaponSwitch`). Next/previous by default; `Index` for one-slot-per-weapon schemes. Switch-in/out
+A switch move is an ordinary move with a `WeaponSwitch` track, bound in the **kit** move set to the switch commands
+(`Command.Weapon.Switch.*`). Next/previous by default; `Index` for one-slot-per-weapon schemes. Switch-in/out
 montages via the move's montage; per-weapon anim layer linked in `FinalizeFrame` from `ActiveWeaponIndex`
 (presentation only).
 
@@ -221,7 +240,8 @@ montages via the move's montage; per-weapon anim layer linked in `FinalizeFrame`
   Airborne without a jump (walked off a ledge) → `Falling`.
 - **`UGSTN_GA_PlatformJump`** (plugin, `GSTNCombatNP`): bound in the kit move set to the jump slot (`Press(Jump)`,
   grounded context) and to the air jump slot (`Press(Jump)`, airborne context, requires `AirJumpsUsed <
-  AirJumpCount`). It is a move: `JumpSquatFrames` of startup (phase `Squat`, cancellable into specified categories),
+  AirJumpCount`). It is a move: `JumpSquatFrames` of startup (phase `Squat`; its startup override window covers the whole squat with `OverrideInto` = the up-shaped attack and
+  special commands, as Smash's jump-cancel up smash / up special),
   then at take-off the combat model sets `Rising`, `JumpStartFrame`, `JumpPressEvent`, and requests the impulse GE
   (`FJumpImpulseEffect` through a move creator, upward speed = `JumpVelocity` or `AirJumpVelocity`). Air jumps
   increment `AirJumpsUsed` and reset `bJumpCut` and `bFastFalling`.
@@ -244,14 +264,15 @@ montages via the move's montage; per-weapon anim layer linked in `FinalizeFrame`
 (default 1)`; `AllowedSupers (FGameplayTagQuery)`; `CompatibleSkins (FGameplayTagQuery)`; `HurtboxSet` (M4);
 `LocomotionAnimLayer`.
 
-**`FGSTN_MoveBinding`**: `{ FGSTN_InputSlotEntry Slot; TObjectPtr<UGSTN_MoveDefinition> Move; TSubclassOf<
-UGameplayAbility> Ability (if no move); int32 PriorityOverride; int32 BufferFramesOverride; }` — exactly one of
-`Move`/`Ability`.
+**`FGSTN_MoveBinding`**: `{ FGameplayTag Command (the key); FGSTN_InputSlotEntry SlotOverride (optional: empty =
+the standard command set's slot for `Command`, which is how weapons fill the 24 standard commands); TObjectPtr<
+UGSTN_MoveDefinition> Move; TSubclassOf<UGameplayAbility> Ability (if no move); int32 PriorityOffset; int32
+BufferFramesOverride; }` — exactly one of `Move`/`Ability`; a non-standard command needs `SlotOverride`.
 
 **`UGSTN_WeaponDefinition`**: `DisplayName`, `WeaponTags` (incl. role), `ParentWeapon`, `MoveSet`,
-`AllowedAlternatives (TMap<FName SlotName, TArray<UGSTN_MoveDefinition*>>)`, `StatsEffect` +
+`AllowedAlternatives (TMap<FGameplayTag Command, TArray<UGSTN_MoveDefinition*>>)`, `StatsEffect` +
 `FGSTN_WeaponStatModifiers`, `PassivesWhileActive`, `Tuning`, `Parameters (TMap<FGameplayTag, float>)`,
-`AnimLayer`, `VisualActor`. Move set inheritance: parent first, child entries with the same slot name replace.
+`AnimLayer`, `VisualActor`. Move set inheritance: parent first, child entries with the same command tag replace.
 
 **`UGSTN_SuperDefinition`**: `Move`, `SuperTags`, `MeterCost`, `InputCode (FGSTN_InputPattern)`, `Requirements
 (FGameplayTagRequirements on the owner)`.
@@ -262,7 +283,7 @@ super slot); `CodeEntry (FGSTN_InputSlotSpec template: the hold/release frame ar
 
 **`FGSTN_LoadoutData`**: `PrimaryKit (FPrimaryAssetId)`, `AdditionalWeapons (TArray<FPrimaryAssetId>)`,
 `Supers (TArray<FPrimaryAssetId>, size = SuperSlotCount, empty allowed)`, `SlotCustomisations (TArray<{WeaponIndex,
-SlotName, AlternativeMove}>)`, `DesignerValues (TMap<FGameplayTag, FGSTN_LoadoutValue>)`, `Skin (FPrimaryAssetId)`.
+Command, AlternativeMove}>)`, `DesignerValues (TMap<FGameplayTag, FGSTN_LoadoutValue>)`, `Skin (FPrimaryAssetId)`.
 `NetSerialize` and `Serialize` (save game) both supported.
 
 **`UGSTN_LoadoutRules`** (default implementation, replaceable class in project settings): kit exists; additional
@@ -274,8 +295,8 @@ is a warning). Returns `TArray<FText>` errors for UI.
 
 `Compile(const FGSTN_LoadoutData&, const UGSTN_PrimaryKitDefinition&, weapons, supers) → table` with entries
 `{ FGSTN_InputSlotSpec Slot (copied); EGSTN_EntrySource Source (Kit/Weapon/Super); uint8 SourceIndex; Move or Ability;
-int32 EffectivePriority; FGameplayTagContainer Categories; }` and `Revision`. Order: kit entries, then weapon 0..N,
-then super slots 0..M; inside each by slot name. Customisations replace the move of the named slot. The same table
+FGSTN_CommandPriority Priority; }` and `Revision`. Order: kit entries, then weapon 0..N, then super slots 0..M; inside
+each by command tag name. Customisations replace the move bound to the command. The same table
 feeds the resolver (entries filtered by source per frame) and the grant list (unique ability classes).
 
 ## 10. Loadout component, application, save
@@ -315,6 +336,12 @@ weapon):
 - `scenario_air_jump_fastfall`: ground jump, air jumps up to `AirJumpCount` (the next one refused), fast fall after the
   apex (fall speed reaches `FastFallSpeed`), landing resets the count.
 - `scenario_dash`: dash flick, dash cancelled into jump, momentum per `MomentumMode`.
+- `scenario_startup_override`: attack then special 1 frame later → the special replaces the attack (no attack cost
+  paid, no attack event); attack then jump within the window → short-hop aerial (attack cancel); directional attack
+  turning the character, then jump + opposite stick within the window → back aerial with the new facing (instant back
+  air); attack then special 3 frames later (outside the window) → no replacement, the special is buffered; attack and
+  special within the window with a combo command bound → the combo; jump squat → up-shaped special replaces it; a
+  forced reconcile inside each window.
 
 Automation tests (Core/GAS, pure): table compile order and customisation; loadout rules (each rule positive/negative);
 super code slot building; save game round trip.

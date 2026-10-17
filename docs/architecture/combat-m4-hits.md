@@ -3,6 +3,9 @@
 Part of the combat design ([combat.md](combat.md)): read §5.3, §12 and §15 there, and the M1–M3 specifications.
 Section numbers below are local to this file.
 
+> **Revision 2026-10-18:** hits publish authoritative events (`Combat.Event.HitLanded`, `HitReceived`, `KO`) through
+> the outbox of combat.md §5.6 / M2 §7b, tagged with command, move, hit type and relationship.
+
 ## 1. Scope
 
 **Goal:** moves hit. Hitboxes from move tracks overlap hurtboxes; the attacker predicts its own hitstop and

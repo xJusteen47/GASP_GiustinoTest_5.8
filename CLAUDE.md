@@ -25,7 +25,7 @@ Headers carry long doc comments that explain intent and invariants: read the hea
 - Every project type is prefixed `GSTN_` (`UGSTN_`, `FGSTN_`, `EGSTN_`); export macro is `GASP_GIUSTINO2_API`.
 - Public headers in `Public/<Area>/`, implementations in `Private/<Area>/`; includes are module-relative (`"GAS/GSTN_GameplayAbility.h"`).
 - Comments explain *why* and the simulation constraints, in English, at the density of the existing headers. No restating the code.
-- Gameplay tags are native (`UE_DECLARE_GAMEPLAY_TAG_EXTERN` in `GAS/GSTN_AbilityTags.h`), not ini-defined.
+- Gameplay tags are native (`UE_DECLARE_GAMEPLAY_TAG_EXTERN` in `GAS/GSTN_AbilityTags.h`), not ini-defined. One exception: designer-made combat command tags live in `Config/Tags/GSTNCombatCommands.ini` (combat.md §9).
 - Tuning values are `UPROPERTY(EditAnywhere/EditDefaultsOnly)` grouped by `Category = "Area|Section"` with `meta = (ClampMin, ForceUnits)`.
 - Tunable data goes in small `USTRUCT`s (see `GSTN_WallMovementTypes.h`), not as loose floats on the mode.
 - Stateless math/queries go in `UBlueprintFunctionLibrary` classes (`*Utils`), not in the mode classes.

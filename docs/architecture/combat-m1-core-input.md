@@ -4,6 +4,10 @@ Part of the combat design ([combat.md](combat.md)): read sections 5–9 there fi
 build in M1, how it is tested and when it is done. Section numbers below are local to this file; "combat.md §N" points
 to the architecture.
 
+> **Revision 2026-10-18** (after M1.1 was committed): slots are identified by **command tags**, the resolver uses
+> **tiers, press groups and loser consumption**, chord grace is off by default (startup override in M3 replaces it).
+> Affects M1.2 onwards: settings, slot spec, resolver, validation, standard set, tests. See combat.md §8.2, §8.3, §9.
+
 ## 1. Scope
 
 In: module `GSTNCombatCore`, every pure type and algorithm of combat.md §6.3, §6.4, §7, §8, §9; developer settings; slot
@@ -35,7 +39,9 @@ Plugins/GSTNCombat/Source/GSTNCombatCore/
     Input/GSTN_SlotResolver.h         FGSTN_SlotResolver, FGSTN_SlotResolution
     Input/GSTN_InputSlotValidation.h  UGSTN_InputSlotValidation (BlueprintFunctionLibrary, stateless)
     Input/GSTN_InputScript.h          FGSTN_InputScript: builds histories from the notation of section 4 (tests, validator, debug)
-    Input/GSTN_CombatInputTags.h      native tags of the standard buttons: Input.Combat.Button.Attack/Special/Crouch/Shield/Jump
+    Input/GSTN_CombatInputTags.h      native tags of the standard buttons: Input.Combat.Button.Attack/Strong/Special/Crouch/Shield/Jump
+    Input/GSTN_CombatCommandTags.h    native standard command tags (combat.md §9.1): Command.Attack/Strong/Special.<Shape>,
+                                      Command.Air.*, Command.Combo.AttackSpecial.<Shape>, Combat.Context.Airborne
     Input/GSTN_StandardSlots.h        UGSTN_StandardSlots::Build(): the standard slot set of combat.md §9.1 in code
                                       (tests use it; an editor action creates the asset from it)
   Private/
@@ -69,7 +75,12 @@ determinism constraints, tuning as `UPROPERTY(EditAnywhere/EditDefaultsOnly)` wi
 | `DefaultBufferFrames` | 8 | Time buffer. |
 | `bHoldBufferByDefault` | true | Hold buffer for slots that do not override it. |
 | `MaxHoldBufferFrames` | 0 | 0 = unlimited while held. |
-| `ChordGraceFrames` | 3 | Single-button wait when a chord could complete. |
+| `SimultaneousFrames` | 2 | Presses within this many frames of the newest terminal press form one press group (combat.md §8.2). |
+| `BufferConflictPolicy` | `MostRecent` | Which press group competes: `MostRecent`, `HighestPriority` (all groups, priority only), `Oldest`. |
+| `CommandTiers` | `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400 | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
+| `ExclusiveButtons` | Attack, Strong, Special | Button tags whose presses in the winner's press group are consumed with it. |
+| `bChordGraceByDefault` | false | Legacy wait before single-button commands (combat.md §8.3); off because the startup override handles chords. |
+| `ChordGraceFrames` | 3 | Only used when chord grace is on. |
 | `DefaultSimultaneityFrames` | 3 | Tolerance inside a step (e.g. direction vs press). |
 | `StickDeadZone` / `AimZone` | 0.2 / 0.5 | Normalised magnitude thresholds: below dead = Neutral, below aim = Aim, else Tilt. |
 | `FlickFrames` | 3 | Max frames from Neutral/Aim to Tilt for a flick. |
@@ -83,8 +94,8 @@ Values are designer defaults, to be tuned in M2 playtests.
 `{ FGameplayTag Tag; TObjectPtr<UInputAction> Action; }`. The array index is the bit. `IsDataValid`: ≤ 32 entries,
 unique tags, unique actions. `FindButtonIndex(Tag)`. Conditions reference buttons **by tag** and are resolved to bits
 when a slot set is bound to a config (unknown tag → validation error), so slot sets are reusable across configs.
-Standard tags (native, `GSTN_CombatInputTags.h`): `Input.Combat.Button.Attack`, `.Special`, `.Crouch`, `.Shield`,
-`.Jump`; projects add their own.
+Standard tags (native, `GSTN_CombatInputTags.h`): `Input.Combat.Button.Attack`, `.Strong`, `.Special`, `.Crouch`,
+`.Shield`, `.Jump`; projects add their own.
 
 **Sample (`FGSTN_InputSample`)** — what one frame provides to the history:
 `int32 Frame; uint32 Held; uint32 Pressed; uint32 Released; EGSTN_StickDirection StickDir, FacingDir, WorldDir;
@@ -185,29 +196,41 @@ rule lists concatenate global → weapon → move.
 
 **Slots (`GSTN_InputSlot.h`)**
 
-- `FGSTN_InputSlotSpec { FName SlotName (unique within a set; referenced by cancel windows and customisations in M3); FGSTN_InputPattern Pattern; FGameplayTagRequirements Context; int32 Priority
-  = 0 (0 = automatic); FGameplayTagContainer Categories; int32 BufferFramesOverride = -1;
-  EGSTN_OverrideBool HoldBuffer = Default; EGSTN_DirectionPolicy DirectionPolicy = AtPress;
-  bool bFallThroughWhenUnavailable = false; bool bWaitForChords = true; }` + `GetEffectivePriority()`.
+- `FGSTN_InputSlotSpec { FGameplayTag Command (meta = Categories="Command"; unique within a set; the slot's identity
+  everywhere: bindings, cancel windows, AI, events); FGSTN_InputPattern Pattern; FGameplayTagRequirements Context;
+  int32 PriorityOffset = 0; int32 BufferFramesOverride = -1; EGSTN_OverrideBool HoldBuffer = Default;
+  EGSTN_OverrideBool ChordGrace = Default; EGSTN_DirectionPolicy DirectionPolicy = AtPress;
+  bool bFallThroughWhenUnavailable = false; }`.
+- `FGSTN_CommandPriority { int32 Tier; int32 Specificity; int32 Offset; }` with lexicographic `operator<`;
+  `GetPriority(const UGSTN_CombatInputSettings&)` on the spec. No single summed number: a higher tier always wins.
 - `UGSTN_InputSlotAsset : UPrimaryDataAsset { FGSTN_InputSlotSpec Spec; }` (primary type `GSTN_InputSlot`).
 - `UGSTN_InputSlotSet : UDataAsset { TArray<FGSTN_InputSlotEntry> Slots; }` where an entry is either an asset reference
   or an inline spec. `IsDataValid` runs the validator.
 
 **Resolver (`FGSTN_SlotResolver`)** — `static FGSTN_SlotResolution Resolve(TConstArrayView<const FGSTN_InputSlotSpec*>
 Slots, const FGSTN_InputHistory&, const FGameplayTagContainer& OwnerTags, int32 Now, const UGSTN_CombatInputSettings&,
-TFunctionRef<bool(int32 SlotIndex)> CanExecute)`. Result `{ int32 SlotIndex = INDEX_NONE; FGSTN_PatternMatch Match;
-bool bDeferredForChord; }`. Steps: sort indices by effective priority descending (stable on input order); skip slots
-whose `Context` fails; match with the slot's params and the current reserved mask; if matched and `CanExecute` → done;
-if matched and not executable → reserve its terminal press unless `bFallThroughWhenUnavailable`; chord grace: before
-accepting a single-press slot, if a higher-priority slot with a `Chord` containing that button has a partial match
-(the other buttons not pressed yet) and `Now - press < ChordGraceFrames`, return `bDeferredForChord` with no slot. The
-caller consumes `Match.UsedButtonEvents` on activation (M2 does it in the sync state).
+TFunctionRef<bool(int32 SlotIndex)> CanExecute)`. The caller passes only the candidate slots allowed right now (M2:
+all when actionable; M3: those allowed by a cancel window or the startup override query). Result `{ int32 SlotIndex =
+INDEX_NONE; FGSTN_PatternMatch Match; TArray<uint8, TInlineAllocator<8>> EventsToConsume; bool bDeferredForChord; }`.
+Steps (combat.md §8.2):
+
+1. Match every candidate whose `Context` holds (each with its own buffer params; reserved events excluded).
+2. **Press group**: with `MostRecent`, find the newest terminal press among the matches; keep only matches whose
+   terminal press is within `SimultaneousFrames` of it (`Oldest`: mirror; `HighestPriority`: keep all).
+3. Order the kept matches by `FGSTN_CommandPriority` descending, ties by slot order (the validator reports real ties).
+4. Walk them: `CanExecute` → winner. Not executable → reserve its terminal press (later candidates sharing it are
+   dropped) unless `bFallThroughWhenUnavailable`.
+5. Chord grace, only for slots where it is on: before accepting a single-press winner, if a higher-priority slot with a
+   `Chord` containing that button has a partial match and the press is younger than `ChordGraceFrames`, return
+   `bDeferredForChord` with no slot.
+6. `EventsToConsume` = the winner's `UsedButtonEvents` + the unconsumed presses inside the winner's press group whose
+   button is in `ExclusiveButtons` (the losers). The caller consumes them on activation (M2: in the sync state).
 
 **Validation (`UGSTN_InputSlotValidation`)** — `FindConflicts(Slots) → TArray<FGSTN_SlotConflict {A, B, Kind
 (Ambiguous | Shadowed), Message}>`: build each slot's canonical script (`FGSTN_InputScript` from
 `AppendCanonicalInput`), run the resolver over every other slot on that history (context ignored, unless both contexts
-are provably disjoint: one requires a tag the other forbids). Equal priority + match → Ambiguous (error); higher
-priority always matching → Shadowed (warning).
+are provably disjoint: one requires a tag the other forbids). Both match and their `FGSTN_CommandPriority` is equal →
+Ambiguous (error); a higher priority always matching → Shadowed (warning); duplicate command tags in one set → error.
 
 ## 4. Input notation (`FGSTN_InputScript`)
 
@@ -233,9 +256,9 @@ Used by tests, the validator and later the input display. Space-separated tokens
 | Classifier | Dead/aim/tilt thresholds exactly at and around the limits; the same raw stick with camera 0° and 90° gives the same `Stick` direction and different `World` directions; facing 90° maps the stick correctly in `Facing` space; turning the character while holding the stick adds one event per sector; flick within `FlickFrames`, none when slower; quantized input classified identically to its float. |
 | Conditions | One positive and one negative case per condition and field (window edges inclusive, consumed press ignored, reserved press ignored, negative edge needs the minimum hold, motion with noise between elements passes, motion over `MaxTotalFrames` fails, chord outside `WithinFrames` fails, charge released too early fails, mash count; `Hold` with `MinFrames = 0` matches a modifier pressed up to `SimultaneityFrames` after the anchor press; `Direction` with `MaxZone = Aim` rejects a tilt; `Spin` clockwise and counter-clockwise from every starting sector, with one skipped sector, fails at 315°, fails when slower than `MaxFrames`, `Either` accepts both senses). |
 | Buffer | Press at `Now - BufferFrames` matches, at `-BufferFrames-1` fails, matches again when a paused window covers the extra frame; held press matches past the window (`bViaHoldBuffer`), fails after release, fails past `MaxHoldBufferFrames`; `AtPress` vs `AtExecution` give different results when the direction changes after the press. |
-| Resolver | Motion+A beats Dir+A beats A on one history; a consumed press does not fire again next frame; unavailable higher slot reserves the press (no lower slot fires) and with `bFallThroughWhenUnavailable` the lower one fires; context filtering; chord grace defers then resolves A+B, and resolves A alone after `ChordGraceFrames`. |
+| Resolver | Motion+A beats Dir+A beats A on one history; a consumed press does not fire again next frame; unavailable higher slot reserves the press (no lower slot fires) and with `bFallThroughWhenUnavailable` the lower one fires; context filtering. **Priority:** Attack and Special on the same frame → special (tier); Special 1 frame after Attack (within `SimultaneousFrames`) → special; Attack 4 frames after Special with `MostRecent` → attack, with `HighestPriority` → special; Attack+Special chord command beats both singles in the same group; a crouch-directional attack loses to a neutral special (tier before specificity); after the winner, the losing attack press is consumed (nothing fires next frame); a non-exclusive button (e.g. Jump) in the same group is not consumed. **Chord grace** (turned on for one slot): defers, then resolves A+B, or A alone after `ChordGraceFrames`; off by default. |
 | Reset | `OnEvent` flushes only masked buttons; `AfterIdleFrames`; a flush ends hold buffering. |
-| Standard slots | With the standard attack slots of combat.md §9.1 on scripted histories: stick neutral + A → neutral attack; light tilt (aim zone) + A → neutral attack (aimed); tilt + A → directional attack; crouch held + neutral + A → crouch neutral; crouch held + tilt + A → crouch directional; crouch pressed 2 frames after A → still the crouch version; the validator reports no conflicts on the set. |
+| Standard slots | With the standard command set of combat.md §9.1 (24 commands + one chord command) on scripted histories, for each family: stick neutral + A → neutral attack; light tilt (aim zone) + A → neutral attack (aimed); tilt + A → directional attack; crouch held + neutral + A → crouch neutral; crouch held + tilt + A → crouch directional; crouch pressed 2 frames after A → still the crouch version; airborne context selects the `Command.Air.*` ones; the validator reports no conflicts on the set. |
 | Validation | Two identical patterns with equal priority → Ambiguous; A vs Dir+A → no conflict (different priority) and A not reported shadowed; a slot fully covered by a higher one → Shadowed; disjoint contexts → no conflict. |
 | Determinism | Same script resolved twice → identical results; copy the history mid-script, resolve the rest on both copies → identical (rollback stand-in). |
 

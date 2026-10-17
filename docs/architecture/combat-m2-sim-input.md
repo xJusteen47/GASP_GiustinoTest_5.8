@@ -4,6 +4,9 @@ Part of the combat design ([combat.md](combat.md)): read §5 (simulation archite
 and [combat-m1-core-input.md](combat-m1-core-input.md), whose types this milestone wires into the combat NP model.
 Section numbers below are local to this file.
 
+> **Revision 2026-10-18:** bindings and AI requests use **command tags**; the resolver result includes the losers to
+> consume; the M2 part of the **authoritative event stream** (combat.md §5.6) is added. See combat.md §8.2, §9.
+
 ## 1. Scope
 
 **Goal:** a player or an AI enters a pattern (button, direction, motion, chord...) and the slot it matches activates
@@ -12,10 +15,11 @@ M0 spike's "button *i* → ability *i*" mapping.
 
 In:
 
-- Combat sync state gets the M1 history and classifier state; the command gets the stick and `ForcedSlot`.
+- Combat sync state gets the M1 history and classifier state; the command gets the stick, the camera yaw and
+  `ForcedCommand`.
 - Player and AI input sources.
 - `UGSTN_MoverSimStateTracker` moved from the project into `GSTNCombatNP`.
-- Slot binding set (slot → ability class) on the combat component; resolver run every frame; requests executed in the
+- Command binding set (command tag → ability class) on the combat component; resolver run every frame; requests executed in the
   ASC pre-tick.
 - Reset rule events produced by the combat model; watched-tag mask for `OnTagAdded` and contexts.
 - Debug output, harness extensions, docs.
@@ -60,9 +64,9 @@ in case a saved object references it.
 | `PressedButtons` | uint32 | Bits set by the action's `Started` event since the last sample (taps). |
 | `StickX`, `StickY` | int8 | Move action value (2D) **as on the controller** (+Y up), clamped to the unit circle, × 127, rounded. |
 | `CameraYaw` | uint8 | Controller control-rotation yaw, 256 steps (≈ 1.4°). |
-| `ForcedSlot` | uint16 | 0 = none, else 1 + index into the binding set. Set by the AI source. |
+| `ForcedCommand` | uint16 | 0 = none, else 1 + index of the command in the binding set (sorted by tag name, so the index is the same on every machine). Set by the AI source. |
 
-`NetSerialize`: packed masks; stick and camera yaw as three bytes; `ForcedSlot` behind a 1-bit flag.
+`NetSerialize`: packed masks; stick and camera yaw as three bytes; `ForcedCommand` behind a 1-bit flag.
 
 **Sync state (`FGSTN_CombatSyncState`)** — fields after M2:
 
@@ -89,7 +93,7 @@ history in the M1 notation (it ends up in `np.PrintReconciles` logs, which is ho
   pending taps; held bits and the stick come from `UEnhancedPlayerInput::GetActionValue` at production time. This
   reads injected input too, so the harness's `hold()`/`press()` (which inject through Enhanced Input) drive it.
 - **`UGSTN_AICombatInputSource`**: `SetHeld(Mask)`, `Tap(Mask)`, `SetStick(FVector2D WorldPlane)`,
-  `RequestSlot(SlotName)` (sets `ForcedSlot` for one command). Exposed to Blueprint; BT/StateTree tasks wrapping them
+  `RequestCommand(FGameplayTag Command)` (sets `ForcedCommand` for one input frame). Exposed to Blueprint; BT/StateTree tasks wrapping them
   are a thin follow-up, not required for M2 acceptance.
 - Mapping contexts: button actions must be mapped in a context the player has (e.g. `IMC_Sandbox`); they do **not** need
   to be in `AbilitySystemMappingContexts` (the fork's ability input is not involved).
@@ -113,12 +117,13 @@ after a rollback restore).
    binding set's rules.
 5. **Actionable**: the owner has none of `BlockingTags` (component property, default `Combat.State.Busy`,
    `Combat.State.Hitstun`); M3 replaces this with the move/cancel-window logic. Not actionable → skip to 8.
-6. **Resolve**: `ForcedSlot` set and valid → that binding (still subject to `CanExecute`); else
+6. **Resolve**: `ForcedCommand` set and valid → that binding (still subject to `CanExecute`); else
    `FGSTN_SlotResolver::Resolve` over the binding set's slots with the owner tags, `CanExecute(i)` = the binding's
    ability has a spec on the ASC and `CanActivateAbility(Spec.Handle, ActorInfo)` returns true (const query on end-of-F-1
    state; the ASC re-checks at execution).
-7. **Request**: on success set `RequestedBinding = i + 1`, `RequestFrame = F`, `LastActivatedFrame = F`, and consume
-   `Match.UsedButtonEvents` in `History`.
+7. **Request**: on success set `RequestedBinding = i + 1`, `RequestFrame = F`, `LastActivatedFrame = F`, consume
+   `Resolution.EventsToConsume` in `History` (the winner's events and the losers of its press group), and append a
+   `CommandExecuted` entry to the component's **event outbox** (section 7b).
 8. **Debug hitstop** (M0 behaviour) if the debug button is pressed.
 
 ASC pre-tick (`HandleAbilitySimulationPreTick`, unchanged rule): `RequestFrame == TimeStep.ServerFrame` → find the spec
@@ -138,12 +143,29 @@ tag name when the binding set is assigned (deterministic on every machine), max 
 The mask is only for "added this frame" detection. Slot contexts are evaluated against the owner's full end-of-F-1 tag
 container (exact, and already rolled back by the ASC).
 
-## 7. Slot binding set
+## 7. Command binding set
 
 `UGSTN_CombatSlotBindingSet` (DataAsset): `Slots: TArray<FGSTN_CombatSlotBinding>`, each `{ FGSTN_InputSlotEntry Slot
-(asset or inline, M1); TSubclassOf<UGameplayAbility> Ability; }`, plus `ResetRules`. `IsDataValid` runs the M1
+(asset or inline, M1; its command tag is the binding's key); TSubclassOf<UGameplayAbility> Ability; }`, plus
+`ResetRules`. At runtime the bindings are sorted by command tag name (deterministic index for requests and
+`ForcedCommand`). `IsDataValid` runs the M1
 validator over its slots and checks every ability class is set. The component property `SlotBindings` replaces M0's
 `ButtonAbilities`; M3 replaces the binding set by the compiled loadout table (same resolver call).
+
+## 7b. Authoritative events (combat.md §5.6)
+
+- `UGSTN_CombatEventSubsystem` (world subsystem, in `GSTNCombatCore`: it only needs tags and actors) with
+  `Broadcast` and `Listen(FGameplayTagQuery)`; event struct as in combat.md §5.6. Native event tags
+  `Combat.Event.CommandExecuted` (+ the later ones declared now, unused until their milestone).
+- The combat tick writes events to a **per-component outbox** (a plain array, not sync state) unconditionally —
+  deterministic, no role branch in the simulation. Outside the simulation, after the NP tick (`FinalizeFrame`), the
+  component **drains the outbox only on the authority** and broadcasts; on other roles it just clears it. The server
+  never re-simulates, so each event is published exactly once.
+- `CommandExecuted` tags: the command tag, the owner's context tags at that frame (from the watched/owner tags), the
+  binding's ability class tags. Instigator = the pawn.
+- Test: a Blueprint-free C++ listener in the harness component counts `CommandExecuted` per command on the server;
+  `GetStateSnapshot()` exposes the counts; scenarios check them against the expected number of activations, including
+  runs with forced reconciles (the count must not grow on re-simulation).
 
 ## 8. Debug and harness
 

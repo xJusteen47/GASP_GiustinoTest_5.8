@@ -82,8 +82,9 @@ set, input config), add `!Plugins/GSTNCombat/Content/` and its LFS rules first.
 | History | Compact, rolled-back log of recent button and direction events (sync state). |
 | Condition | One test on the history (press, direction, motion...). |
 | Pattern | Ordered steps of conditions = one input combination. |
-| Slot | Pattern + context + priority + categories. Identifies "which input" (e.g. *Attack + Back, grounded*). |
-| Binding | Slot → move or any GAS ability, inside a weapon or a character move set. |
+| Command tag | Gameplay tag naming a command (`Command.Attack.Directional`, `Command.Special.CrouchNeutral`...). The identity of a slot everywhere outside input matching: bindings, cancel windows, AI, UI, events, quests. |
+| Slot | Pattern + context + priority, identified by its command tag. Says *how* a command is input (e.g. *Attack + tilt, grounded*). |
+| Binding | Command tag → move or any GAS ability, inside a weapon or a character move set. |
 | Move | Data asset with frame data and tracks, executed by a generic GAS ability. |
 | Weapon | Set of bindings, stat modifiers while active, passives, tuning, visuals. Role: primary or support. |
 | Primary kit | Character class: primary weapon, base stats, kit move set (weapon-independent), meters, super slot count, allowed weapons and supers. |
@@ -140,6 +141,24 @@ re-fires tag delegates and `MonitoredTagChanged` is not guarded); cancels are ex
 3. Prefer **end-frame stamps over countdowns**: an idle entity's state then does not change frame to frame (cheap
    delta serialization, section 15).
 4. Every sync state field is in `NetSerialize`, `ShouldReconcile`, `ToString` and `Interpolate`.
+
+### 5.6 Authoritative combat events (*Decision*)
+
+Simulation code re-runs on the client during re-simulation, so anything that must count once (quests, achievements,
+statistics, analytics, kill feed) must not listen to simulation callbacks. The combat model publishes **authoritative
+events** only where they cannot be rolled back: on the server, from `FinalizeFrame`-time state that the server
+produced.
+
+- `UGSTN_CombatEventSubsystem` (world subsystem, server): `Broadcast(const FGSTN_CombatEvent&)` and
+  `Listen(FGameplayTagQuery, delegate)`. An event is `{ FGameplayTag EventType; FGameplayTagContainer Tags; int32
+  Frame; TWeakObjectPtr<AActor> Instigator, Target; float Magnitude; }`.
+- `Tags` carries everything a listener may filter on: command tag, move tag, weapon/kit tags, relationship, link role,
+  context tags (airborne, on wall...). Example quest: "10 × `EventType = Combat.Event.CommandExecuted` with
+  `Command.Attack.CrouchDirectional` and `Weapon.Role.Support` and `Combat.Context.Airborne`".
+- Event types: `Combat.Event.CommandExecuted` (M2), `MoveFinished`, `WeaponSwitched`, `SuperUsed` (M3), `HitLanded`,
+  `HitReceived`, `KO` (M4), `LinkFormed/Broken`, `PairMove` (M6–M7).
+- Clients that need feedback (UI flashes, tutorial prompts) use replicated results or predicted presentation, never
+  these events. A client-side mirror can be added later from replicated server events if a feature needs it.
 
 ## 6. Input
 
@@ -215,63 +234,132 @@ Exact layout in the M1 specification.
   `Mash`, `AnyOf`. Direction-based conditions choose their space (6.3). Later: `Custom` (const Blueprint class).
 - The **matcher** searches backward from the terminal step (bounded backtracking over the rings) and returns the anchor
   of every step plus the button events it used (for consumption).
-- Every condition reports a **specificity** (automatic priority) and a **canonical input** (the minimal input that
-  satisfies it), used by the conflict validator.
+- Every condition reports a **specificity** (third priority criterion, 8.2) and a **canonical input** (the minimal
+  input that satisfies it), used by the conflict validator.
 
-## 8. Buffer
+## 8. Buffer, priority and startup override
 
 Per frame, in the combat tick: (1) append this frame's events to the history; (2) apply the **reset rules**; (3) if
-the character is actionable or a **cancel window** is open, evaluate candidate slots by priority, and the first that
-matches **and** can execute is requested; (4) consume the button events it used.
+the character is actionable, a **cancel window** is open, or the current move is inside its **startup override
+window** (8.3), resolve the candidate commands (8.2) and request the winner; (4) consume the button events it used
+and the losers of its simultaneous group.
 
-- **Time buffer**: the terminal press is valid if unconsumed and `Now - PressFrame <= BufferFrames`.
+### 8.1 Buffering
+
+- **Time buffer**: the terminal press is valid if unconsumed and its age (frames since the press, hitstop frames
+  excluded) ≤ `BufferFrames`.
 - **Hold buffer**: also valid past the window while the button has been held **continuously** since that press, up to
   `MaxHoldBufferFrames` (0 = unlimited). Per slot: on/off.
 - **Direction policy** per slot: `AtPress` (directions checked at the anchor) or `AtExecution` (checked at the frame the
   move comes out).
-- **Consumption**: one press triggers at most one move.
-- **Unavailable higher slot**: if a slot matches but cannot execute (cooldown, blocked), its terminal press is
-  **reserved** for this frame so lower slots cannot steal it, unless the slot sets `bFallThroughWhenUnavailable`.
-- **Chord grace**: a single-button slot waits up to `ChordGraceFrames` when a higher-priority chord slot containing
-  that button could still complete, so A and A+B do not steal each other's input. Adds latency; per-slot opt-out.
+- **Consumption**: one press triggers at most one command.
 - **Reset rules** = list of `TInstancedStruct<FGSTN_BufferResetRule>` at global → weapon → move level: on a frame event
   (hit received, move activated, landed, hit confirmed, state entered), on tag added, after N idle frames, custom.
   Each flushes all or some buttons (marks their presses consumed, which also ends their hold buffer).
 - Defaults in `UGSTN_CombatInputSettings` (DeveloperSettings); overrides per slot and per move.
 
-## 9. Slots and conflicts
+### 8.2 Priority between commands (*Decision*)
 
-- `FGSTN_InputSlotSpec`: pattern + **context requirements** (`FGameplayTagRequirements` on the character's tags:
-  grounded, airborne, on wall...) + priority (0 = automatic from specificity) + **category tags**
-  (`Combat.Slot.Category.Normal/Special/Aerial/Defensive`) used by cancel rules + buffer overrides.
+Several commands can match on the same frame (attack and special pressed together, a buffered attack and a newer
+special, crouch variants...). The resolver orders them deterministically:
+
+1. **Press group, most recent first** (`BufferConflictPolicy = MostRecent`, configurable to `HighestPriority` or
+   `Oldest`). The terminal presses of the matching commands are grouped: presses within `SimultaneousFrames` (default
+   2) of the newest one form the newest group. Only commands anchored in that group compete; older presses lose (a
+   player who pressed attack and then changed their mind and pressed special gets the special).
+2. **Tier** of the command, from the command tag root, configured in the settings (`CommandTiers`: tag → tier), e.g.
+   `Command.Super` 400 > `Command.Special` 300 > `Command.Strong` 200 > `Command.Attack` 100, movement and defensive
+   roots as the game needs. Attack and special pressed together → the special, as in Smash.
+3. **Specificity** of the pattern (automatic): inside a tier, crouch + direction > crouch + neutral > direction >
+   neutral; a chord command (attack + special) beats each single button.
+4. **Manual offset** on the slot, for the rare case the rules above do not express.
+
+Then, in that order: the first command whose context holds and that **can execute** wins. A command that matches but
+cannot execute **reserves** its terminal press for this frame (lower commands cannot steal it) unless it sets
+`bFallThroughWhenUnavailable` (EX versions without meter fall through to the normal version).
+
+**Losers are consumed**: when a command wins, the unconsumed presses of its press group whose buttons are in the
+settings' `ExclusiveButtons` (default attack, strong, special, super) are consumed too, so the losing attack does not
+come out a few frames later from the buffer.
+
+The validator reports the conflicts these rules leave: same tier, same specificity, same press group possible,
+overlapping contexts.
+
+### 8.3 Startup override window (*Decision*, Smash-style interrupts)
+
+Smash Ultimate lets the first frames of a move be replaced: jabs can be cancelled into a jump within 1 frame, tilts and
+smashes within 2 (attack cancel into a short-hop aerial; with a forward tilt turning the character first, this gives
+the "instant back air"), and the jump squat can be interrupted by up smash or up special. The window never overlaps an
+active hitbox. Generalised here:
+
+- Every move has a **startup override window** of `OverrideFrames` from its first frame (default per command tier in
+  the settings, e.g. jab-like 1, other attacks and specials 2; per-move override; 0 disables).
+- Inside the window the resolver runs although the character is in a move. A command may **replace** the move if it
+  matches the move's `OverrideInto` query on command tags: by default "any command of a higher tier", plus explicit
+  entries (jump from ground attacks = attack cancel; up attack / up special from the jump squat).
+- **The replaced move leaves no trace except its turn**: its cost is committed, its events fired, its movement and
+  hitboxes started only from the end of the window (`DeferredCommitFrame`); the validator forbids anything earlier.
+  The replacing move keeps the facing the first one set, which is how the instant back air falls out naturally.
+- **Chords without input delay**: attack pressed → the attack starts at once; special pressed within the window → the
+  attack + special command (higher specificity and tier) replaces it. No command waits for a possible second button.
+  For that, chord-capable commands need `OverrideFrames ≥ SimultaneousFrames`. The old **chord grace** (wait before
+  starting a single-button command) stays as an option, off by default, for moves that must not show even one frame
+  before a chord.
+- Presentation: remote proxies may show 1–2 frames of the replaced move before the switch (as in Smash); montages
+  use a short blend-in.
+
+## 9. Command tags, slots and conflicts
+
+- **Command tags** (*Decision*): every slot is identified by a gameplay tag under `Command.` (hierarchical:
+  `Command.Attack.Neutral`, `Command.Special.CrouchDirectional`, `Command.Air.Strong.Neutral`, `Command.Movement.Dash`,
+  `Command.Super.Slot1`, `Command.Link.Mount`...). The tag, not the input, is what the rest of the game refers to:
+  bindings (command → move), cancel windows and override windows (tag queries), loadout customisations, AI requests
+  (`RequestCommand(Tag)`), UI and tutorials, events and quests (5.6). Changing how a command is input touches only
+  its slot.
+- The hierarchy replaces the former slot categories: "cancel into `Command.Special`" accepts every special; tiers
+  (8.2) are assigned to roots.
+- **Buttons** keep their own tags (`Input.Combat.Button.*`, as Lyra's input tags); bits and indices exist only inside
+  the simulation and on the wire.
+- Moves, weapons, kits, supers and hit types carry asset tags too (`Move.*`, `Weapon.*`, `Kit.*`, `Super.*`,
+  `Combat.HitType.*`), so events and queries can filter on them.
+- `FGSTN_InputSlotSpec`: command tag + pattern + **context requirements** (`FGameplayTagRequirements` on the character's
+  tags: grounded, airborne, on wall, link role...) + manual priority offset + buffer and override overrides.
 - `UGSTN_InputSlotAsset` (PrimaryDataAsset) wraps one spec for sharing; `UGSTN_InputSlotSet` lists slots (the plugin
-  ships a standard set); weapons may also declare **inline slots**. A new slot = a new asset or inline entry: no code,
-  no new tags.
-- **Conflict validation** (`IsDataValid` on slot sets, later weapons and loadouts): every slot's canonical input is run
-  through every other slot's matcher. Same priority and both match → **error** (ambiguous). A higher-priority slot
-  always matches another slot's canonical input → **warning** (shadowed slot).
+  ships a standard set); weapons may also declare **inline slots**. A new command = a new tag + a slot (asset or
+  inline entry), no code.
+- **Tag sources** (exception to the project's "native tags only" rule, *Decision*): the plugin's standard command,
+  button and event tags are native; game-specific commands created by designers live in a dedicated tag ini
+  (`Config/Tags/GSTNCombatCommands.ini`) so they need no code. Everything else stays native.
+- **Conflict validation** (`IsDataValid` on slot sets, later weapons, kits and loadouts): every slot's canonical input is
+  run through every other slot's matcher. Conflicts the priority rules (8.2) do not resolve → **error**
+  (ambiguous); a higher-priority slot always matching another slot's canonical input → **warning** (shadowed). Two
+  slots with the same command tag in one set → error.
 - Project contexts: Mover tags (`Mover_IsOnGround`...) and `State.Movement.WallSliding` → wall attacks.
 
-### 9.1 Standard slot set (*Decision*)
+### 9.1 Standard command set (*Decision*)
 
-The main input types, shipped by the plugin as the standard set (names are slot names; the Smash Bros. analogue is
-only a reference for the role):
+Three families (normal attack, strong attack, special) × grounded/airborne × four input shapes, all anchored by the
+family's button press (one step):
 
-| Slot | Analogue | Pattern (one step, `Press(Attack)` anchors) | Aim policy |
+| Shape | Analogue (Smash, reference only) | Extra conditions | Aim policy |
 |---|---|---|---|
-| `Attack.Neutral` | jab | `Direction(Facing, any, MaxZone = Aim)` | `SnapIfAimOrTilt` (a light tilt aims it) |
-| `Attack.Directional` | side tilt | `Direction(Facing, any of the 8, MinZone = Tilt)` | `SnapToStick` (the move goes where the stick points) |
-| `Attack.CrouchNeutral` | up tilt | `Hold(Crouch, 0)` + `Direction(Facing, any, MaxZone = Aim)` | `SnapIfAimOrTilt` |
-| `Attack.CrouchDirectional` | down tilt | `Hold(Crouch, 0)` + `Direction(Facing, any of the 8, MinZone = Tilt)` | `SnapToStick` |
+| `Neutral` | jab / neutral special | `Direction(Facing, any, MaxZone = Aim)` | `SnapIfAimOrTilt` (a light tilt aims it) |
+| `Directional` | side tilt / side special | `Direction(Facing, any of the 8, MinZone = Tilt)` | `SnapToStick` (the move goes where the stick points) |
+| `CrouchNeutral` | up tilt / up special | `Hold(Crouch, 0)` + `Direction(Facing, any, MaxZone = Aim)` | `SnapIfAimOrTilt` |
+| `CrouchDirectional` | down tilt / down special | `Hold(Crouch, 0)` + `Direction(Facing, any of the 8, MinZone = Tilt)` | `SnapToStick` |
 
-- In 3D "side" means **any** tilted direction, the attack turning towards it; slots that care about forward vs back
+Command tags: `Command.Attack.<Shape>`, `Command.Strong.<Shape>`, `Command.Special.<Shape>` grounded and
+`Command.Air.Attack.<Shape>`, `Command.Air.Strong.<Shape>`, `Command.Air.Special.<Shape>` airborne (context
+`Combat.Context.Airborne`); 24 commands. Plus chord commands (e.g. `Command.Combo.AttackSpecial.<Shape>`: `Chord(Attack,
+Special)` + the shape's conditions, higher tier), supers (10.4), movement (11b) and link commands (12b).
+
+- In 3D "side" means **any** tilted direction, the attack turning towards it; commands that care about forward vs back
   relative to the character use a `Facing` mask (e.g. `FacingForward`) instead of "any of the 8".
-- The crouch versions win over the plain ones by automatic priority (one more condition); a crouch press up to
-  `SimultaneityFrames` after the attack press still counts. The crouch button is both a movement input (Mover stance)
-  and a combat modifier: slots read the **button held state from the history**, not Mover's crouch tag (which arrives a
-  frame later and can be blocked).
-- The same four slots exist for the special button (`Special.*`) and with an airborne context (`Air.*`); smash
-  variants add `bRequireFlick`. EX versions are the same patterns with the EX chord (10.3).
+- Crouch versions win over plain ones by specificity; a crouch press up to `SimultaneityFrames` after the attack press
+  still counts. The crouch button is both a movement input (Mover stance) and a combat modifier: slots read the
+  **button held state from the history**, not Mover's crouch tag (a frame late, and blockable).
+- Strong attacks: a strong button by default (the family is a separate tier); a flick-based variant (`bRequireFlick`)
+  is available to kits that prefer smash-style strong attacks.
 - Spin- or code-based inputs (supers, special moves) use the `Stick` space so they do not depend on where the
   character faces.
 
@@ -303,7 +391,7 @@ FGSTN_LoadoutData (what a player owns and saves)
   (a GE class + SetByCaller values, 10.2), passives while active, `FGSTN_WeaponTuning` + `Parameters`
   (SetByCaller for its moves), switch-in/out moves, visuals and anim layer (cosmetic).
 - **`UGSTN_SuperDefinition`** (PrimaryDataAsset, `GSTN_Super`): the super move (a move definition or ability), meter
-  cost, category tags, `InputCode` (used only by the per-super input scheme), optional cooldown, kit/weapon
+  cost, super tags (`Super.*`), `InputCode` (used only by the per-super input scheme), optional cooldown, kit/weapon
   restrictions (tag requirements).
 - **Precedence** when the same slot is bound twice: super slots are separate slots; between kit and active weapon the
   **weapon wins**; the validator reports any remaining overlap.
@@ -346,8 +434,9 @@ FGSTN_LoadoutData (what a player owns and saves)
 - The loadout fills `SuperSlotCount` super slots (kit-defined, e.g. 3) from the kit's `AllowedSupers`.
 - Input is still open, so the kit picks a **super input scheme**:
   - `FixedSlots`: `UGSTN_SuperInputScheme` defines one slot spec per super slot (e.g. hold a modifier + direction);
-    super slot *i* triggers whatever super the loadout put there.
-  - `PerSuperCode` (stratagem style): each super's `InputCode` pattern is its slot (e.g. hold the super button, then a
+    super slot *i* (command `Command.Super.Slot<i>`) triggers whatever super the loadout put there.
+  - `PerSuperCode` (stratagem style): each super's `InputCode` pattern is its slot (command = the super's own tag
+    under `Command.Super`) (e.g. hold the super button, then a
     direction sequence, then release). Expressible with the standard conditions (`Hold` + `Motion` + `Release`).
   - While a code is being entered the scheme may grant `Combat.State.SuperInput` (a context tag other slots and
     movement can react to).
@@ -359,8 +448,8 @@ FGSTN_LoadoutData (what a player owns and saves)
 ### 10.5 Compiled table, switching, revision
 
 - **Compiled table**: when a loadout is applied (server, not predicted, replicated) the bindings of the kit, **all**
-  weapons and the supers are compiled in deterministic order (source: kit, weapon index, super slot; then priority,
-  asset path) and their abilities granted. Each entry knows its source, so the resolver only considers the kit, the
+  weapons and the supers are compiled in deterministic order (source: kit, weapon index, super slot; then
+  command tag name) and their abilities granted. Each entry knows its source, so the resolver only considers the kit, the
   **active** weapon and the supers.
 - **Weapon switching** is a kit move (`UGSTN_GA_WeaponSwitch`, a move with frame data): at its swap frame the combat
   model sets `ActiveWeaponIndex` and requests the stat GE swap. Predicted and rollback-safe; switch slots are ordinary
@@ -392,12 +481,15 @@ FGSTN_LoadoutData (what a player owns and saves)
   `FirstActionableFrame`, montage + section (played with `PlaySyncedMontage`; root motion → Mover), `AbilityClass`
   (default `UGSTN_GA_Move`, subclass for special moves), cost and cooldown through standard GAS settings, `AimPolicy`.
 - **Tracks** = `TArray<TInstancedStruct<FGSTN_MoveTrack>>`, extensible: `Hitbox`, `HurtboxModifier`
-  (intangible/invincible/armor), `CancelWindow` (into categories/slots, condition OnHit/OnBlock/OnWhiff/Always,
+  (intangible/invincible/armor), `CancelWindow` (into a command tag query, condition OnHit/OnBlock/OnWhiff/Always,
   jump-cancel), `Movement` (velocity curves, gravity, facing lock → one queued layered move via GE), `Tags`, `Event`
   (gameplay event / projectile / cue at frame N), `Charge` (loop while held), `LandingLag`/auto-cancel for aerials,
   buffer overrides.
-- **`UGSTN_GA_Move`**: the GAS shell (tags, cost, cooldown, block/cancel, cues, `CommitAbility`). No timers of its own:
-  reads frame and state from the combat component; ends when the move ends or is interrupted.
+- **Startup override** (8.3): `OverrideFrames`, `OverrideInto` (command tag query), `DeferredCommitFrame` (= the end
+  of the window): cost, events, movement and hitboxes start there. Cancel windows also target command tag queries.
+- **`UGSTN_GA_Move`**: the GAS shell (tags, cost, cooldown, block/cancel, cues, `CommitAbility` at the deferred commit
+  frame). No timers of its own: reads frame and state from the combat component; ends when the move ends, is
+  interrupted or is replaced.
 - The move frame lives in the combat sync state (`MoveStartFrame` + hitstop-paused frames), so hitstop freezes it.
 - Animation: the move frame is the truth; the synced montage follows (same tick, paused in hitstop). GASP keeps motion
   matching for locomotion, moves use the montage slot; anim layer per weapon; GAS cues for VFX/SFX.
@@ -436,7 +528,7 @@ FGSTN_LoadoutData (what a player owns and saves)
 
 ### Movement moves
 
-- Movement options are **moves in the kit move set** (category `Combat.Slot.Category.Movement`), so they get frame
+- Movement options are **moves in the kit move set** (command tags under `Command.Movement`), so they get frame
   data, buffering, cancel windows, meter costs and weapon-independence for free: dash/run start (ground flick), air
   dash or directional air dodge, roll, spot dodge, air jumps, fast fall.
 - What they need beyond attacks: movement track options (`MomentumMode`: keep / reset / blend the current velocity;
@@ -614,6 +706,7 @@ unless a design needs prediction.
 - Wall modes: the "movement locked" extension point (12.6); wall stats through the stats modifier pattern (10.2).
 - The project's attribute sets stay separate from the plugin's (`UGSTN_MovementAttributeSet`, `UGSTN_MeterAttributeSet`,
   `UGSTN_CombatAttributeSet`); the test attribute set remains test content.
+- Game command tags in `Config/Tags/GSTNCombatCommands.ini` (9); CLAUDE.md's tag rule gets this exception.
 - Docs: this file; a future skill `add-gstn-move`.
 
 ## 17. M0 results (risk spike, 2026-10-17)
