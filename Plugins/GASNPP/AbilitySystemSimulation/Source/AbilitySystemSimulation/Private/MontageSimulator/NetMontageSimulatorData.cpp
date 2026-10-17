@@ -813,7 +813,9 @@ bool FMontageSimSyncState::ShouldReconcile(const FMontageSimSyncState& Authority
 	const bool NotSamePlayRate = !FMath::IsNearlyEqual(MontagePlayRate , AuthorityState.MontagePlayRate, 0.01f);
 	const bool NotSameRootMotionScale = !FMath::IsNearlyEqual(RootMotionScale , AuthorityState.RootMotionScale, 0.01f);
 	const bool DiffNotifiesData = NotifySyncStates.ShouldReconcile(AuthorityState.NotifySyncStates);
-	const bool NotSamePause = bIsPaused != AuthorityState.bIsPaused;
+	// NetSerialize only sends the pause flag with a montage (it reads back false otherwise): a pause without a montage
+	// must not count, or it mismatches the authority on every frame
+	const bool NotSamePause = Montage && bIsPaused != AuthorityState.bIsPaused;
 	
 	UE_NP_TRACE_RECONCILE(NotSameMontage, "Different Montage:");
 	UE_NP_TRACE_RECONCILE(NotSamePause, "Different Montage Pause State:");
