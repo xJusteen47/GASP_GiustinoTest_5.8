@@ -1,4 +1,4 @@
-# Combat M5–M8 — Editor, defence, minions, stock GAS (outline specifications)
+# Combat M5–M9 — Editor, defence and links, piggyback, minions, stock GAS (outline specifications)
 
 Part of the combat design ([combat.md](combat.md)). These milestones depend on results of M1–M4 (spike outcomes,
 performance numbers, designer feedback), so they are specified at the level of goals, components, decisions and open
@@ -28,7 +28,7 @@ tests, acceptance) in its own file, reusing this outline.
 - Acceptance outline: a designer builds a three-hit jab string with a baked-socket hitbox, cancel windows and an EX
   version only in the editor; validation flags a deliberately conflicting slot.
 
-## M6 — Defence (shield, parry, tech, SDI, grabs)
+## M6 — Defence and links (shield, parry, tech, SDI, link system, grabs)
 
 **Goal:** the defensive half of the platform-fighter ruleset, adapted to 3D and PvE.
 
@@ -43,17 +43,43 @@ tests, acceptance) in its own file, reusing this outline.
   contact (history lookup) → tech in place / roll (moves); anti-mash lockout after a tech press (`TechLockoutFrames`)
   without tech. Wall tech uses the project's wall detection (`UGSTN_WallQueryUtils`), read through the tracker.
 - **SDI** tuning and **DI** curves per game mode (rules asset).
-- **Grabs**: start with the spike from combat.md §12.7 (grabbed local player following an interpolated grabber).
-  Candidate designs to compare in the spike: (a) server-authoritative grab with the victim's client fully corrected each
-  frame while grabbed (simple, laggy); (b) the grabbed character's Mover follows the grabber's predicted socket
-  transform sent through the victim's own correction stream (smoother, more complex); (c) during a grab the grabber's
-  client also forward-predicts the victim as a local entity (requires ForwardPredict LOD for that pair — probably not
-  supported by the ASC on proxies). Then implement `Grab` hit type, link state on both sides, "Grabbed" Mover mode,
-  throw slots active only while grabbing, pummel, grab break by mash (the `Mash` condition).
+- **Link system** (combat.md §12b), built here because grabs need it and M7 reuses it:
+  - Start with a **link spike**: two players, one links to the other through the server, the linked one parks its
+    simulated transform and follows the partner's socket (the parked-transform approach of §12b); measure corrections
+    on both clients while the partner moves, with forced reconciles. Compare with the alternative where the follower's
+    Mover follows the partner's socket transform as seen locally (expect constant corrections). Record in combat.md §17.
+  - `FGSTN_LinkState` in the combat sync state, link requests and accept/refuse through the inbox, role tag projection,
+    parked movement mode (`UGSTN_LinkedMovementMode`, shared by grabbed and rider), exit placement by the server,
+    link breaking rules (hits, distance, death, timeouts), debug draw of links.
+- **Grabs**: `Grab` hit type creates a grabber/grabbed link; throw slots in the grabber role; pummel; grab break by
+  mash (the `Mash` condition); grab immunity frames after release.
 - *Open:* shield and parry inputs in 3D PvE (always-available block vs limited shield); how supers interact with
   shields (unblockable flag per super).
 
-## M7 — Minions (40+ enemies)
+## M7 — Piggyback and pair moves
+
+**Goal:** a player rides a teammate; carrier and rider each have their own role-only actions; pair moves combine both.
+
+- **Mount link** on the M6 link system: mount move with an `Interaction.Mount` volume (allies only), carrier-side
+  `LinkRequest` resolution step (kit permission, not linked, not in hitstun, `Weight` ≤ `MaxCarryWeight`), predicted on
+  the rider's side, server-confirmed.
+- **Rider**: parked transform, presentation attached to the carrier's mount socket (per kit: `MountSocket`, offset),
+  rider-only slot set (context `Combat.Link.Role.Rider`): its own attacks aimed with its own stick, dismount, pair
+  move triggers. Hurtboxes and hitbox `Root` space from the carrier's socket transform.
+- **Carrier**: normal movement and a carrier-only slot set (context `Combat.Link.Role.Carrier`): drop, throw rider,
+  pair move triggers; kit flags for moves disallowed while carrying; `GE_CarryLoad` scaled by the rider's weight.
+- **Pair moves**: `UGSTN_PairMoveDefinition` (initiator role, both moves, start offset, link outcome); partner move
+  started through the link inbox; at least two reference pair moves: carrier throws the rider (rider launched as a
+  projectile-like move with its own hitboxes), rider boost-jumps off the carrier.
+- **Hits while mounted**: rules for shielding angles and link breaking per role; meter and damage attribution for
+  pair moves (both players credited, configurable).
+- **Animation**: carrier and rider anim layers for the mounted state (kit-provided), IK hands/feet optional.
+- *Open:* mount/dismount inputs; whether two riders or chains are allowed (default no); whether enemies can be mounted
+  (would be a different link type).
+- Acceptance outline: two clients with 60/15 ms and 2 % loss mount, move, attack from the rider, throw the rider,
+  boost jump, dismount; corrections only at link changes and partner-side pair-move starts; harness snapshots equal.
+
+## M8 — Minions (40+ enemies)
 
 **Goal:** dozens of simple enemies with the same moves, hitboxes and knockback, at a fraction of the cost of a fighter.
 
@@ -71,7 +97,7 @@ tests, acceptance) in its own file, reusing this outline.
   minion per second.
 - Promotion to fighter (elite/boss) = swap to the full combat component on spawn.
 
-## M8 — Stock GAS adapter (optional)
+## M9 — Stock GAS adapter (optional)
 
 **Goal:** use Core + GAS modules in a project with stock GAS (no Network Prediction).
 
@@ -84,4 +110,4 @@ tests, acceptance) in its own file, reusing this outline.
 
 ## Later — Held and thrown objects
 
-See combat.md §13b. Expand into a milestone after M6 (it reuses grabs' attach logic and projectile hitboxes).
+See combat.md §13b. Expand into a milestone after M7 (a `Held` link on the M6 link system, plus projectile hitboxes).

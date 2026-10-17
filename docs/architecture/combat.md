@@ -22,6 +22,10 @@ items are listed where they apply.
   style; the input scheme is still open, so the design supports several).
 - **Loadout** = primary kit + additional weapons + chosen supers + customisations and designer values; saved and
   replicated.
+- **Movement moves** beyond walking: dash/run, air jumps, fast fall, dodges, and a **variable-height jump**
+  (continuous, not just short/full hop) with **independent rise and fall gravity**.
+- **Piggyback** ("a cavalluccio"): a player rides on a teammate. **Pair moves** need both, some actions are only for the
+  rider, some only for the carrier. Input still open; the function must be designed in from the start.
 - Later, not designed yet: picking up and throwing objects of different sizes (section 13b).
 - Platform-fighter rules in 3D: hitstun, hitstop, knockback, DI on the movement plane, SDI, tech, shield, parry, grab.
   Also PvE, so these get tuned for 3D and for many enemies.
@@ -87,6 +91,8 @@ set, input config), add `!Plugins/GSTNCombat/Content/` and its LFS rules first.
 | Meter | Resource attribute (EX, super...) gained in combat and spent as GAS cost. |
 | Skin | Cosmetic look, outside the simulation, compatible with kits by tags. |
 | Loadout | Primary kit + additional weapons + supers + customisations + designer values. |
+| Link | Authoritative relation between two entities with a role each: grab (grabber/grabbed), mount (carrier/rider), later held object. |
+| Pair move | Move involving both linked entities: the initiator's move plus a partner move started through the link. |
 
 ## 5. Simulation architecture
 
@@ -396,6 +402,49 @@ FGSTN_LoadoutData (what a player owns and saves)
 - Animation: the move frame is the truth; the synced montage follows (same tick, paused in hitstop). GASP keeps motion
   matching for locomotion, moves use the montage slot; anim layer per weapon; GAS cues for VFX/SFX.
 
+## 11b. Jump and movement moves
+
+### Variable jump (*Decision*)
+
+- Jump height is **continuous**: it depends on how long the jump button stays held, anywhere between a minimum hop
+  and the full jump, not two fixed stages.
+- Physics as three gravity phases plus caps, all **movement attributes** (10.2) so kits, weapons and effects tune them:
+
+  | Attribute | Phase |
+  |---|---|
+  | `JumpVelocity` | Initial upward speed. |
+  | `JumpRiseGravityScale` | Rising **while the jump button is held** (and for at most `MaxJumpHoldFrames`). |
+  | `JumpCutGravityScale` | Rising after the button is released (or after `MaxJumpHoldFrames`): cuts the jump short. |
+  | `FallGravityScale` | Descending (independent from rising). |
+  | `MaxFallSpeed`, `FastFallSpeed`, `FastFallGravityScale` | Terminal speeds and fast-fall. |
+  | `MinJumpHoldFrames` | Frames before a release starts cutting (the minimum hop). |
+  | `AirJumpCount`, `AirJumpVelocity` | Multi-jump. |
+  | `JumpSquatFrames` | Ground startup before take-off (0 = immediate). |
+
+- **Jump state lives in the combat sync state** (`JumpPhase`, `JumpStartFrame`, `bJumpCut`, `AirJumpsUsed`,
+  `bFastFalling`); "held" is read from the input history (the jump press still held continuously), so it is
+  rollback-safe and buffered like any input.
+- **Gravity reaches Mover through the stats modifier** (10.2): in `OnPreMovement` it picks the phase's gravity scale
+  from the combat state of the same frame (the combat model ticks before Mover) and rewrites Mover's gravity override
+  and fall-speed caps. Mover's gravity override is a component field, not rolled back, which is why it is rewritten
+  every simulated frame.
+- The jump itself is a kit move: `UGSTN_GA_PlatformJump` (plugin) — jump squat frames, impulse from `JumpVelocity`,
+  air jumps from `AirJumpCount`, buffered and cancel-window aware like every slot. Wall jumps stay in the project's
+  wall modes; the project's `GA_Jump` remains for characters without a combat kit.
+- Fast fall input: *Open*. Default proposal: crouch pressed while airborne and past the apex (crouch already means
+  "down" in the slot set, 9.1).
+
+### Movement moves
+
+- Movement options are **moves in the kit move set** (category `Combat.Slot.Category.Movement`), so they get frame
+  data, buffering, cancel windows, meter costs and weapon-independence for free: dash/run start (ground flick), air
+  dash or directional air dodge, roll, spot dodge, air jumps, fast fall.
+- What they need beyond attacks: movement track options (`MomentumMode`: keep / reset / blend the current velocity;
+  `bCancelOnLand`; landing lag), intangibility windows (`HurtboxModifier`, so dodges arrive with the hit system), and
+  for continuous states (run) a move that loops while a condition holds (`Charge` track pattern).
+- Mover modes stay the place for continuous locomotion (walking, falling, wall modes); moves only layer velocity on top
+  or override it for their frames.
+
 ## 12. Hits
 
 ### 12.1 Hitboxes and hurtboxes
@@ -460,9 +509,62 @@ timers — added by subclass/extension point, per wall-movement.md rules.
   player costs a rollback of about RTT/16 ms frames** (budget it).
 - `UGSTN_HitPresentationComponent` plays flash/sparks/visual freeze on the interpolated victim immediately on the
   attacker's client (essential in PvE), cancelled if not confirmed.
-- **Grabs**: a `Grab` hitbox links grabber and grabbed in both states (authoritative); the grabbed follows the grabber's
-  socket in a "Grabbed" Mover mode; throws are slots active only while grabbing. Risk: a grabbed local player follows a
-  grabber interpolated ~100 ms in the past → constant corrections. **Needs its own spike before building.**
+- **Grabs** are links (12b): a `Grab` hitbox creates a grabber/grabbed link; throws are slots active only for the
+  grabber role. **Needs the link spike before building.**
+
+## 12b. Links: piggyback, grabs, held objects (*Decision*: one system)
+
+A **link** is a relation between two entities, each with a role: `Combat.Link.Mount` (carrier / rider),
+`Combat.Link.Grab` (grabber / grabbed), later `Combat.Link.Held` (holder / object). One system serves all three.
+
+### State and authority
+
+- Each entity's combat sync state has `FGSTN_LinkState { LinkType; Role; PartnerId; LinkFrame; LinkSerial; }`.
+- Links are **created and broken by the server** only, through the same inbox mechanism as hits (12.4): the request
+  reaches the partner at F+1, the partner's resolution step accepts or refuses, both states are written. On clients
+  the partner learns it through a correction (about one rollback, like a hit).
+- The initiator may **predict its own side** when the link type allows it (mount: yes, so mounting a teammate feels
+  immediate; grab: per design). A refused prediction is corrected.
+- Role tags are projected (5.4): `Combat.Link.Role.Rider`, `.Carrier`, `.Grabber`, `.Grabbed`. **Role-only actions are
+  plain slots with a context on those tags** (rider-only attacks, carrier-only throws): no special code.
+
+### Piggyback (mount)
+
+- **Mounting**: the rider's mount move has an interaction volume (a hitbox with hit type
+  `Combat.HitType.Interaction.Mount`, relationship `Ally` only). The carrier's pipeline step `LinkRequest` accepts if
+  its kit allows being mounted, it is not already linked, not in hitstun, and the rider's `Weight` ≤ its
+  `MaxCarryWeight` attribute. Input for mount/dismount: *Open* (standard set reserves `Link.Mount`, `Link.Dismount`
+  with no default pattern; the kit sets them).
+- **Carrier**: moves normally and controls movement; carries the rider's weight as a GE while linked
+  (`GE_CarryLoad`: speed/jump modifiers scaled by the rider's weight) and gets the carrier context tag; kit flags decide
+  which carrier moves remain allowed.
+- **Rider**: action state `Riding`; its Mover goes to a `UGSTN_RidingMovementMode` that does not move it (collision
+  with the carrier off). Its **simulated transform is parked**: everything positional while riding (presentation
+  attach, hurtboxes, hitbox `Root` space, aim origin) derives from the **carrier's** transform at the mount socket, as
+  known on that machine (server: authoritative; carrier's client: predicted; rider's client: interpolated). This avoids
+  a rider that constantly mispredicts its own position against an interpolated carrier. The rider keeps its own
+  camera and stick; its stick aims its moves.
+- **Dismount**: rider input, carrier action (drop/throw), configured hits (`bHitBreaksLink` per role), death,
+  distance safety. The server picks the exit position and teleports the rider (one correction).
+- **Hits while mounted**: both keep hurtboxes; rules decide whether the carrier shields the rider from some angles
+  and which role's hitstun breaks the link.
+
+### Pair moves
+
+- `UGSTN_PairMoveDefinition`: initiator role, initiator move, partner move, `PartnerStartOffsetFrames`, link outcome
+  (keep / break / swap roles), requirements on both.
+- The initiator executes its move predicted; the **partner move starts through the link inbox** on the server (the
+  partner's client is corrected). Design pair moves so the partner's part tolerates that delay: the partner is
+  launched, thrown, boosted or plays a reaction (e.g. carrier throws the rider, rider jumps off the carrier for a boosted
+  jump).
+- *Open:* if playtests show the partner delay is too visible on the partner's screen, the next step is forward
+  predicting the partner on the initiator's client during a pair move (needs ForwardPredict LOD for that pair; the fork's
+  ASC does not run on simulated proxies today, section 2 fact 5).
+
+### Grabs and held objects
+
+Grabs (M6) are links with the hostile relationship and the grabbed playing the parked role (follows the grabber's
+socket); throws are grabber-role slots. Held objects (13b) are links whose partner is a server-simulated object.
 
 ## 13. Many enemies (40+)
 
@@ -478,8 +580,8 @@ Two paths with the same Core logic:
 
 ## 13b. Held and thrown objects (later, not designed)
 
-Requirement noted, out of scope until after M6. Constraints already known, so the earlier milestones do not close
-the door: a held object is combat state of the holder (`HeldObject` id + size class), the object's own simulation is
+Requirement noted, out of scope until after M7. Constraints already known, so the earlier milestones do not close
+the door: holding is a link (12b, `Combat.Link.Held`) with an object size class, the object's own simulation is
 suspended while held; throwing is a move whose `Projectile`-space hitbox becomes the object's; object size classes
 select the hold/throw move set (a kit or weapon move set keyed by size tag). Objects are minion-like (server-simulated)
 unless a design needs prediction.
@@ -504,8 +606,9 @@ unless a design needs prediction.
 - `SandboxCharacter_Mover`: `UGSTN_CombatSimComponent`, hurtbox component, player input source;
   `UGSTN_LoadoutComponent` on the PlayerState. **Shared Blueprints: tell the user before editing**; prefer
   `Tools/GAS/setup_gas_assets.py` (extended) or the editor MCP.
-- `GA_Jump` bound to a slot for buffered jump and jump-cancel (its `ActivationInputs` removed at the same time, or it
-  would activate twice); existing abilities otherwise unchanged.
+- Combat characters jump with the plugin's `UGSTN_GA_PlatformJump` bound to a kit slot (variable jump, 11b); the
+  project's `GA_Jump` stays for characters without a kit (remove its `ActivationInputs` on any character that has
+  both, or it would activate twice). Wall jumps stay in the wall modes.
 - `UGSTN_MoverSimStateTracker` moves from the project into `GSTNCombatNP` (it is generic Mover code the plugin needs
   for facing and Mover tags); the project module then depends on `GSTNCombatNP` (M2).
 - Wall modes: the "movement locked" extension point (12.6); wall stats through the stats modifier pattern (10.2).
@@ -549,10 +652,11 @@ where the implementation differs. Milestones are sequential: each spec assumes t
 | M0 | Risk spike | **Done** (section 17). | — |
 | M1 | Core input layer | `GSTNCombatCore`: samples, classifier, history, conditions, matcher, buffer, reset rules, slots, validation, Automation tests. | [combat-m1-core-input.md](combat-m1-core-input.md) |
 | M2 | Input in the simulation | History and classifier state in the combat sync state, stick + `ForcedSlot` in the command, player/AI input sources, Mover state reader moved into the plugin, slot bindings → activation of any GAS ability, harness scenarios. | [combat-m2-sim-input.md](combat-m2-sim-input.md) |
-| M3 | Moves, kits, weapons, loadouts | `GSTNCombatGAS`, attributes (stats, meters), stats → Mover modifier, `UGSTN_GA_Move` with synced montage, cancel windows, movement track, primary kit, support weapon and predicted switch, EX moves, supers, compiled table, `LoadoutRevision`, loadout component and save, skins. | [combat-m3-moves-kits.md](combat-m3-moves-kits.md) |
-| M4 | Hits | Hurtboxes, hitboxes, snapshot, inbox, resolution pipeline, damage and meter gain, hitstop (Mover freeze, wall lock), hitstun/knockback/DI, teams and variants, lag compensation, hit presentation. | [combat-m4-hits.md](combat-m4-hits.md) |
-| M5 | Editor | Move editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m8.md](combat-m5-m8.md) |
-| M6 | Defence | Shield, parry, tech, SDI; grab spike then grabs/throws. | [combat-m5-m8.md](combat-m5-m8.md) |
-| M7 | Minions | Server subsystem, LOD, compact replication. | [combat-m5-m8.md](combat-m5-m8.md) |
-| M8 | Stock GAS adapter | Optional. | [combat-m5-m8.md](combat-m5-m8.md) |
+| M3 | Moves, kits, weapons, loadouts, jump | `GSTNCombatGAS`, attributes (stats, meters), stats → Mover modifier (incl. jump gravity phases), `UGSTN_GA_Move` with synced montage, cancel windows, movement track, variable jump, air jumps, fast fall, dash, primary kit, support weapon and predicted switch, EX moves, supers, compiled table, `LoadoutRevision`, loadout component and save, skins. | [combat-m3-moves-kits.md](combat-m3-moves-kits.md) |
+| M4 | Hits | Hurtboxes, hitboxes, snapshot, inbox, resolution pipeline, damage and meter gain, hitstop (Mover freeze, wall lock), hitstun/knockback/DI, teams and variants, lag compensation, hit presentation, dodges (intangibility). | [combat-m4-hits.md](combat-m4-hits.md) |
+| M5 | Editor | Move editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m9.md](combat-m5-m9.md) |
+| M6 | Defence and links | Shield, parry, tech, SDI; link system spike, links, grabs/throws. | [combat-m5-m9.md](combat-m5-m9.md) |
+| M7 | Piggyback and pair moves | Mount link, riding mode, role-only slots, carry load, pair moves. | [combat-m5-m9.md](combat-m5-m9.md) |
+| M8 | Minions | Server subsystem, LOD, compact replication. | [combat-m5-m9.md](combat-m5-m9.md) |
+| M9 | Stock GAS adapter | Optional. | [combat-m5-m9.md](combat-m5-m9.md) |
 

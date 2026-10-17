@@ -1,4 +1,4 @@
-# Combat M3 — Moves, kits, weapons, meters, supers, loadouts (implementation specification)
+# Combat M3 — Moves, kits, weapons, meters, supers, loadouts, jump (implementation specification)
 
 Part of the combat design ([combat.md](combat.md)): read §5, §10, §11 there, and the M1/M2 specifications. Section
 numbers below are local to this file.
@@ -8,7 +8,9 @@ numbers below are local to this file.
 **Goal:** a character spawns with a loadout (primary kit + support weapon + supers + skin). Its stats come from the kit
 and change with the active weapon; slots of the kit, the active weapon and the super slots execute **moves** with frame
 data, synced montages, movement and cancel windows; EX moves and supers spend meter; switching weapon is a predicted
-move. All rollback-safe. No hits yet (M4): hitbox tracks exist only as data.
+move. The character jumps with a **variable-height jump** (independent rise/fall gravity), air jumps, fast falls and
+dashes as kit moves (combat.md §11b). All rollback-safe. No hits yet (M4): hitbox tracks exist only as data; dodges
+come with intangibility in M4.
 
 Out: hit detection and everything in combat.md §12 (M4); the move editor (M5, M3 authors moves in the details panel);
 defensive moves (M6).
@@ -19,8 +21,9 @@ defensive moves (M6).
    application) — confirm how the fork brings them to the owning client (sync state correction vs replication), that
    no reconcile storm follows, and that `FindAbilitySpecFromClass` works on the client afterwards.
 2. **Stats modifier**: a permanent Mover movement modifier rewriting `UCommonLegacyMovementSettings::MaxSpeed` from an
-   attribute in `OnPreMovement`; an infinite GE changes the attribute; forced reconcile across the change; server and
-   client positions equal. If the shared settings object turns out to be shared between Mover instances, fall back to
+   attribute in `OnPreMovement`, and Mover's gravity override (`SetGravityOverride`) from a gravity scale; an infinite GE
+   changes the attributes; forced reconciles across the change and across a jump's apex; server and client positions
+   equal. If the shared settings object turns out to be shared between Mover instances, fall back to
    per-mode `MaxSpeedOverride` (exists on `SimpleWalkingMode`) or project-side mode subclasses.
 
 Record the results in combat.md §17 before continuing.
@@ -61,15 +64,18 @@ tick logic of section 7.
 `Combat.State.Busy` (in a move before its first actionable frame), `Combat.State.InMove`, `Combat.State.SuperInput`,
 `Combat.State.CancelWindow` (+ `.Category.<X>` children generated from categories are **not** native: cancel windows
 are evaluated in the combat tick, the tag is only informative); `Combat.Slot.Category.Normal/Special/Aerial/Defensive/
-Super/WeaponSwitch/Jump`; `Combat.Weapon.Role.Primary/Support`; `Combat.SetByCaller.MeterCost`, `Combat.SetByCaller.Stat.*`
+Super/WeaponSwitch/Jump/Movement`; `Combat.Weapon.Role.Primary/Support`; `Combat.SetByCaller.MeterCost`, `Combat.SetByCaller.Stat.*`
 (one per movement attribute); `Combat.BufferEvent.MoveActivated/Landed/WeaponSwitched`. One-line comment each on who
 grants/reads it.
 
 ## 5. Attributes and stats
 
-**`UGSTN_MovementAttributeSet`**: `WalkSpeed`, `Acceleration`, `Braking`, `GroundFriction`, `AirControl`,
-`JumpVelocity`, `GravityScale`, `MaxFallSpeed`, `Weight`. Clamped in `PreAttributeChange` (≥ 0; `GravityScale`
-≥ 0.05). Modified only by GEs.
+**`UGSTN_MovementAttributeSet`**: `WalkSpeed`, `Acceleration`, `Braking`, `GroundFriction`, `AirControl`, `Weight`,
+`MaxCarryWeight` (used from M7), and the jump set of combat.md §11b: `JumpVelocity`, `JumpRiseGravityScale`,
+`JumpCutGravityScale`, `FallGravityScale`, `MaxFallSpeed`, `FastFallSpeed`, `FastFallGravityScale`,
+`MinJumpHoldFrames`, `MaxJumpHoldFrames`, `AirJumpCount`, `AirJumpVelocity`, `JumpSquatFrames` (frame counts stored as
+floats, rounded down when read). Clamped in `PreAttributeChange` (≥ 0; gravity scales ≥ 0.05). Modified only by
+GEs.
 
 **`UGSTN_MeterAttributeSet`**: `ExMeter`, `ExMeterMax`, `SuperMeter`, `SuperMeterMax`; current values clamped to
 [0, Max]. Bars = value / `PointsPerBar` (kit data); UI only.
@@ -85,11 +91,15 @@ active, removed when it stops (section 7.6). The primary weapon's is applied at 
 **`FGSTN_StatsMovementModifier`** (`GSTNCombatNP`, `FMovementModifierBase`): queued once by the combat component at
 BeginPlay on the authority and the autonomous client (it lives in Mover's sync state, so a correction restores it).
 `OnPreMovement`: read the owner ASC's current movement attributes, write `UCommonLegacyMovementSettings` (`MaxSpeed`,
-`Acceleration`, `Deceleration`, `GroundFriction`, `AirControl`, `MaxFallSpeed` / `TerminalVelocity` equivalent) and the
-Mover gravity scale if exposed per frame (otherwise gravity via the falling mode's settings). Never ends.
+`Acceleration`, `Deceleration`, `GroundFriction`, `AirControl`, the terminal fall speed) and **the gravity override**:
+world gravity × the scale of the current jump phase, read from the combat sync state of the same frame (7.8) —
+`JumpRiseGravityScale` while rising with the jump held (within `MaxJumpHoldFrames`), `JumpCutGravityScale` while rising
+after release, `FallGravityScale` while descending, `FastFallGravityScale` and `FastFallSpeed` while fast falling.
+Never ends. Also used outside jumps (falling off a ledge = fall phase).
 
-**Jump**: `UGSTN_JumpImpulseMoveCreator` (project) reads `JumpVelocity` from the ASC when the effect makes its move;
-fallback to its current tuning when the attribute set is absent (projects without the plugin's sets).
+**Jump**: combat characters use the plugin's `UGSTN_GA_PlatformJump` (7.8). The project's
+`UGSTN_JumpImpulseMoveCreator` also reads `JumpVelocity` when the attribute set is present (fallback to its current
+tuning), so the project jump and the plugin jump agree on height.
 
 ## 6. Move definition (`UGSTN_MoveDefinition`, `GSTN_Move`)
 
@@ -199,6 +209,32 @@ montages via the move's montage; per-weapon anim layer linked in `FinalizeFrame`
 - The combat tick **makes requests only if `State.LoadoutRevision == LocalTable.Revision`**; otherwise it still runs
   history and buffer (the presses stay buffered until the table arrives).
 
+### 7.8 Jump and movement moves
+
+- **Sync state**: `EGSTN_JumpPhase JumpPhase` (None / Squat / Rising / Falling), `int32 JumpStartFrame`,
+  `int16 JumpPressEvent` (the history button event that started it), `bool bJumpCut`, `uint8 AirJumpsUsed`,
+  `bool bFastFalling`.
+- **Per frame** (combat tick, after the move clock): read Mover's mode and vertical velocity at end of F-1 from the
+  tracker. Grounded → `JumpPhase = None`, `AirJumpsUsed = 0`, `bFastFalling = false`. Rising and (the jump press is no
+  longer held, or `F - JumpStartFrame ≥ MaxJumpHoldFrames`) and `F - JumpStartFrame ≥ MinJumpHoldFrames` →
+  `bJumpCut = true`. Vertical velocity ≤ 0 → `Falling`. Fast-fall slot matched while falling → `bFastFalling = true`.
+  Airborne without a jump (walked off a ledge) → `Falling`.
+- **`UGSTN_GA_PlatformJump`** (plugin, `GSTNCombatNP`): bound in the kit move set to the jump slot (`Press(Jump)`,
+  grounded context) and to the air jump slot (`Press(Jump)`, airborne context, requires `AirJumpsUsed <
+  AirJumpCount`). It is a move: `JumpSquatFrames` of startup (phase `Squat`, cancellable into specified categories),
+  then at take-off the combat model sets `Rising`, `JumpStartFrame`, `JumpPressEvent`, and requests the impulse GE
+  (`FJumpImpulseEffect` through a move creator, upward speed = `JumpVelocity` or `AirJumpVelocity`). Air jumps
+  increment `AirJumpsUsed` and reset `bJumpCut` and `bFastFalling`.
+- The gravity phase itself is applied by the stats modifier (section 5), which reads `JumpPhase`, `bJumpCut` and
+  `bFastFalling` from the combat component's sync state for this frame.
+- **Fast fall**: a kit slot (default proposal: `Press(Crouch)` with an airborne context and `JumpPhase = Falling`;
+  combat.md §11b keeps the input open) bound to a zero-frame move that sets `bFastFalling`.
+- **Dash**: a kit move on a flick slot (`Direction(Stick or Facing, any, MinZone = Tilt, bRequireFlick)`, grounded)
+  with a movement track (`MomentumMode`, see 6) and a cancel window into run/jump; run is a looping move while the
+  stick stays tilted (Charge-style track) or plain walking with the kit's run speed — decide in implementation by feel.
+- Movement track options added for movement moves: `MomentumMode` (Keep / Reset / Blend over N frames),
+  `bCancelOnLand`, `LandingLagFrames`.
+
 ## 8. Kits, weapons, supers, loadout (data)
 
 **`UGSTN_PrimaryKitDefinition`**: `DisplayName`, `Icon`, `KitTags`; `PrimaryWeapon`; `Stats (FGSTN_KitStats)`;
@@ -273,6 +309,12 @@ weapon):
 - `scenario_super_code`: enter each super's code; wrong code does nothing; forced reconcile mid-code.
 - `scenario_loadout_change`: server applies another loadout between lives; revision gate (no predicted activation
   until `OnRep`), no reconcile storm.
+- `scenario_variable_jump`: jumps holding the button 0, 4, 8, 16 frames and the maximum: peak heights strictly
+  increase and match between server and client (within 1 cm); forced reconcile at the apex and right after the
+  release; a jump buffered during landing lag comes out on the first actionable frame.
+- `scenario_air_jump_fastfall`: ground jump, air jumps up to `AirJumpCount` (the next one refused), fast fall after the
+  apex (fall speed reaches `FastFallSpeed`), landing resets the count.
+- `scenario_dash`: dash flick, dash cancelled into jump, momentum per `MomentumMode`.
 
 Automation tests (Core/GAS, pure): table compile order and customisation; loadout rules (each rule positive/negative);
 super code slot building; save game round trip.
@@ -281,7 +323,8 @@ super code slot building; save game round trip.
 
 1. Spikes of section 2 recorded; all scenarios of section 11 clean with 60/15 ms and 2 % loss.
 2. M1/M2 tests and scenarios still clean.
-3. Speeds with the support weapon match the configured stats on server and client (harness measurement).
+3. Speeds with the support weapon match the configured stats on server and client (harness measurement); jump
+   heights are continuous in the hold time and identical on server and client.
 4. A designer can author a kit, a weapon, a move with montage, movement and cancel window, an EX move and a super
    without code (verify by building the test content from the details panels only).
 5. combat.md updated (stats and revision sections reflect what was built).

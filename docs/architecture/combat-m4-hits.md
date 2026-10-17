@@ -10,7 +10,11 @@ hit-confirm (cancel windows OnHit/OnBlock become live); the victim, on the machi
 through the pipeline: damage, meter, knockback with DI, hitstun, tumble, hitstop with a real freeze (also on walls).
 Teams and friendly-fire variants. Lag compensation for remote attackers. Hit presentation on interpolated victims.
 
-Out: shield, parry, grabs, tech, SDI tuning beyond the basic displacement (M6); minions (M7); editor gizmos (M5).
+Also in: **dodges** (roll, spot dodge, air dodge — the movement moves of combat.md §11b whose `HurtboxModifier`
+windows make them intangible), now that intangibility exists.
+
+Out: shield, parry, links and grabs, tech, SDI tuning beyond the basic displacement (M6); piggyback (M7); minions
+(M8); editor gizmos (M5).
 
 ## 2. Spikes first (record results in combat.md §17)
 
