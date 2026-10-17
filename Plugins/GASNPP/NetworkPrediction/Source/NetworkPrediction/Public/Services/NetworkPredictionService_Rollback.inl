@@ -169,6 +169,12 @@ public:
 				TInstanceFrameState<ModelDef>& Frames = DataStore->Frames.GetByIndexChecked(ClientRecvData.FramesIdx);
 				typename TInstanceFrameState<ModelDef>::FFrame& LocalFrameData = Frames.Buffer[ServiceStep.LocalInputFrame];
 
+				// Point the view at the restored frame, as if that frame had just been ticked normally. The view is otherwise only
+				// updated by DoTick, so until an instance's own resim tick it still describes the newest frame from before the
+				// rollback: code that calls into it from another simulation that ticks earlier (or from RestoreFrame itself), e.g.
+				// queueing a Mover layered move or applying a gameplay effect, would stamp it with the wrong frame and time.
+				RestoreViewToFrame(InstanceData, LocalFrameData, Frames.Buffer[ServiceStep.LocalInputFrame - 1], Step);
+
 				FNetworkPredictionDriver<ModelDef>::RestoreFrame(InstanceData.Info.Driver, LocalFrameData.SyncState.Get(), LocalFrameData.AuxState.Get());
 			}
 		}
@@ -187,6 +193,23 @@ public:
 	}	
 
 private:
+
+	using FrameDataType = typename TInstanceFrameState<ModelDef>::FFrame;
+
+	// Same values DoTick leaves in the view after ticking RestoredFrame: Step is the first resim step, which takes
+	// RestoredFrame as input, so the frame and start time that produced it are one step earlier
+	static void RestoreViewToFrame(TInstanceData<ModelDef>& InstanceData, FrameDataType& RestoredFrame, const FrameDataType& PreviousFrame, const FNetSimTimeStep& Step)
+	{
+		FNetworkPredictionStateView* View = InstanceData.Info.View;
+		if (!View)
+		{
+			return;
+		}
+
+		View->UpdateView(Step.Frame - 1, Step.TotalSimulationTime - Step.StepMS, &RestoredFrame.InputCmd, &RestoredFrame.SyncState, &RestoredFrame.AuxState);
+		View->UpdateInterpolationTime(&RestoredFrame.InterpolationTimeMS);
+		View->LatestInterpTimeMS = PreviousFrame.InterpolationTimeMS;
+	}
 
 	template<bool FlushCorrection>
 	void ApplyCorrection(const int32 LocalInputFrame, const int32 Offset)
