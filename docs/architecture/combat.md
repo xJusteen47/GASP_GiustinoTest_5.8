@@ -3,8 +3,9 @@
 Design document for a fighting-game / platform-fighter combat layer on top of GAS, simulated by Network Prediction
 (the GAS-NPP fork, see [gas-npp.md](gas-npp.md)). Source: `Plugins/GSTNCombat/`.
 
-Status (2026-10-17): **M0 (risk spike) done and verified**, M1 specified at the end of this document, everything else
-is design. Sections marked *Decision* are settled; *Open* items are listed where they apply.
+Status (2026-10-17): **M0 (risk spike) done and verified**; everything else is design. This file is the architecture;
+each milestone has its own implementation specification (section 18). Sections marked *Decision* are settled; *Open*
+items are listed where they apply.
 
 ## 1. Goals
 
@@ -13,7 +14,15 @@ is design. Sections marked *Decision* are settled; *Open* items are listed where
   in Super Smash Bros. Ultimate), standard buffer resets plus designer-defined ones.
 - **Weapons** made of modular **moves** bound to **input slots** (e.g. Attack + Back). New slots for non-standard
   combinations are created without code and are checked against the other slots for conflicts.
-- **Loadouts**: several weapons, customisations and designer values, saved and replicated.
+- **Primary kit**: the character's "class" (as in a class-based MMO): a primary weapon plus base stats (speed, jump
+  height...) and kit-wide moves. Independent of the look (**skins** are cosmetic and combine freely).
+- **Additional weapons** (for now one support weapon) the character switches to; each changes some of the stats.
+- **Meters** (EX bars) spent by EX moves, supers and other abilities.
+- **Supers** independent of the current weapon, chosen separately and placed in dedicated slots (Helldivers stratagem
+  style; the input scheme is still open, so the design supports several).
+- **Loadout** = primary kit + additional weapons + chosen supers + customisations and designer values; saved and
+  replicated.
+- Later, not designed yet: picking up and throwing objects of different sizes (section 13b).
 - Platform-fighter rules in 3D: hitstun, hitstop, knockback, DI on the movement plane, SDI, tech, shield, parry, grab.
   Also PvE, so these get tuned for 3D and for many enemies.
 - Hitboxes that do not depend only on the skeleton, authored easily by designers.
@@ -22,7 +31,8 @@ is design. Sections marked *Decision* are settled; *Open* items are listed where
 *Decisions taken with the user:* engine-agnostic **Core** + **NPP adapter** (a stock-GAS adapter may come later);
 hitboxes on a **frame-data timeline in the move asset**; the time unit is the **NPP fixed-tick frame**; knockback model
 **pluggable, Smash-like by default**; players and AI use **the same pipeline**; **no lock-on**; friendly fire per game
-mode, with **per-relationship hit variants**; scale target **40+ enemies** at once.
+mode, with **per-relationship hit variants**; scale target **40+ enemies** at once; **loadout = primary kit + additional
+weapons + super slots**, skins separate; stats are GAS attributes, weapons modify them while active.
 
 ## 2. Constraints from the fork (verified in code)
 
@@ -71,8 +81,12 @@ set, input config), add `!Plugins/GSTNCombat/Content/` and its LFS rules first.
 | Slot | Pattern + context + priority + categories. Identifies "which input" (e.g. *Attack + Back, grounded*). |
 | Binding | Slot → move or any GAS ability, inside a weapon or a character move set. |
 | Move | Data asset with frame data and tracks, executed by a generic GAS ability. |
-| Weapon | Set of bindings, passives, tuning, visuals. |
-| Loadout | Weapons + customisations + designer values. |
+| Weapon | Set of bindings, stat modifiers while active, passives, tuning, visuals. Role: primary or support. |
+| Primary kit | Character class: primary weapon, base stats, kit move set (weapon-independent), meters, super slot count, allowed weapons and supers. |
+| Super | Weapon-independent move placed in a super slot of the loadout. |
+| Meter | Resource attribute (EX, super...) gained in combat and spent as GAS cost. |
+| Skin | Cosmetic look, outside the simulation, compatible with kits by tags. |
+| Loadout | Primary kit + additional weapons + supers + customisations + designer values. |
 
 ## 5. Simulation architecture
 
@@ -216,30 +230,116 @@ matches **and** can execute is requested; (4) consume the button events it used.
   always matches another slot's canonical input → **warning** (shadowed slot).
 - Project contexts: Mover tags (`Mover_IsOnGround`...) and `State.Movement.WallSliding` → wall attacks.
 
-## 10. Weapons, move sets, loadouts
+## 10. Kits, weapons, supers, meters, loadouts, skins
 
-- **Binding**: slot → **move** or **any GAS ability class** (e.g. `GA_Jump` → buffered jump and jump-cancel for free).
-- **`UGSTN_WeaponDefinition`** (PrimaryDataAsset): `MoveSet` (bindings + buffer/priority overrides),
-  `AllowedAlternatives` per slot (customisation), `ParentWeapon` (inherits and overrides the move set), passive
-  abilities and stat GEs, `FGSTN_WeaponTuning` + `Parameters: TMap<FGameplayTag, float>` (passed as SetByCaller),
-  visuals and anim layer (cosmetic).
-- A **character move set** independent of weapons (shield, dodge, grab, jump) is merged with the active weapon's
-  (the weapon wins on the same slot).
-- **Compiled table**: when a loadout is applied (server, not predicted, replicated) the bindings of **all** its weapons
-  are compiled in deterministic order (weapon index, priority, asset path) and their abilities granted. In-game weapon
-  switching is then just `ActiveWeaponIndex` in the combat sync state: predicted and rollback-safe.
+### 10.1 Data model
+
+```
+FGSTN_LoadoutData (what a player owns and saves)
+ ├ PrimaryKit ──────────► UGSTN_PrimaryKitDefinition  "class": base stats, kit move set, meters, rules
+ │                          └ PrimaryWeapon ─► UGSTN_WeaponDefinition (Role = Primary)
+ ├ AdditionalWeapons[] ─► UGSTN_WeaponDefinition (Role = Support; for now 1)
+ ├ Supers[SuperSlotCount] ► UGSTN_SuperDefinition  (weapon independent)
+ ├ SlotCustomisations      per weapon: slot → allowed alternative move
+ ├ DesignerValues          TMap<FGameplayTag, FGSTN_LoadoutValue>
+ └ Skin ────────────────► UGSTN_SkinDefinition  (cosmetic, outside the simulation)
+```
+
+- **Binding**: slot → **move** or **any GAS ability class** (e.g. `GA_Jump` → buffered jump and jump-cancel for free),
+  with optional buffer/priority overrides and a meter cost.
+- **`UGSTN_PrimaryKitDefinition`** (PrimaryDataAsset, primary type `GSTN_PrimaryKit`): display data; `PrimaryWeapon`;
+  **base stats** `FGSTN_KitStats` (applied as the attribute init GE, section 10.2); **kit move set** (bindings that do
+  not depend on the weapon: jump, dodge, shield, grab, weapon switch); passive abilities; **meter setup**
+  (`FGSTN_MeterSetup` per meter: max bars, points per bar, gain rules); `SuperSlotCount` and the super input scheme
+  (10.4); `AllowedAdditionalWeapons` and `AllowedSupers` (tag queries on the weapon/super asset tags);
+  `CompatibleSkins` (tag query); hurtbox set; locomotion anim layer.
+- **`UGSTN_WeaponDefinition`** (PrimaryDataAsset, `GSTN_Weapon`): `Role` (Primary/Support tag), `MoveSet`,
+  `AllowedAlternatives` per slot, `ParentWeapon` (inherits and overrides the move set), **stat modifiers while active**
+  (a GE class + SetByCaller values, 10.2), passives while active, `FGSTN_WeaponTuning` + `Parameters`
+  (SetByCaller for its moves), switch-in/out moves, visuals and anim layer (cosmetic).
+- **`UGSTN_SuperDefinition`** (PrimaryDataAsset, `GSTN_Super`): the super move (a move definition or ability), meter
+  cost, category tags, `InputCode` (used only by the per-super input scheme), optional cooldown, kit/weapon
+  restrictions (tag requirements).
+- **Precedence** when the same slot is bound twice: super slots are separate slots; between kit and active weapon the
+  **weapon wins**; the validator reports any remaining overlap.
+
+### 10.2 Stats (*Decision*)
+
+- Stats are **GAS attributes** (`UGSTN_MovementAttributeSet`: walk speed, acceleration, braking, ground friction, air
+  control, jump velocity, gravity scale, max fall speed, weight; extendable), so they are predicted and rolled back
+  with the ASC state, modified only by GEs, and visible to every system.
+- Kit base stats = the kit's attribute init GE. Each weapon's stat modifiers = an **infinite GE applied while the
+  weapon is active** (added/removed by the combat model's requests when the active weapon changes, inside the ASC
+  tick). Buffs and debuffs stack as ordinary GEs.
+- **Mover reads them through a permanent movement modifier** `FGSTN_StatsMovementModifier` (queued once at spawn).
+  Mover's stock modes read `UCommonLegacyMovementSettings`, a shared settings object that is not rolled back (the stock
+  stance modifier writes it on start/end). The stats modifier instead **rewrites those settings in `OnPreMovement` of
+  every simulated frame** from the ASC's current attribute values. The ASC ticks before Mover in the same frame, also
+  in re-simulation, so Mover always sees the values of the frame it simulates; nothing depends on state outside the
+  sync states.
+- Jump height: `UGSTN_JumpImpulseMoveCreator` reads the jump velocity attribute. Project wall modes read their own
+  tuning structs; any wall stat that must vary goes through the same modifier pattern later.
+- *Verify in M3:* the modifier's writes during re-simulation (harness: weapon switch + forced reconcile, speeds
+  compared server/client).
+
+### 10.3 Meters (EX bars)
+
+- **`UGSTN_MeterAttributeSet`**: `ExMeter`, `ExMeterMax`, `SuperMeter`, `SuperMeterMax` (two generic meters; the kit
+  names them and sets bars × points per bar). A kit that needs more meters adds an attribute set; the meter API refers
+  to meters by `FGameplayAttribute`, so no code assumes two.
+- **Spending** = standard GAS cost: `UGSTN_GE_MeterCost` (instant, SetByCaller `Combat.SetByCaller.MeterCost`) set as
+  the move ability's cost; `CanActivateAbility` checks it as usual, so the resolver's `CanExecute` rejects an
+  unaffordable EX move.
+- **Gaining** = GEs applied by the hit pipeline (on hit dealt, hit taken, blocked, whiff) with rates from the kit's
+  `FGSTN_MeterSetup`, plus optional passive regen GEs.
+- **EX moves** are ordinary slots with a more specific pattern (e.g. special + extra button, or a chord) bound to the
+  EX version with a meter cost, and `bFallThroughWhenUnavailable = true`: without meter the normal version comes out.
+- UI reads the attributes (replicated with the ASC state; interpolated on proxies).
+
+### 10.4 Supers (weapon independent)
+
+- The loadout fills `SuperSlotCount` super slots (kit-defined, e.g. 3) from the kit's `AllowedSupers`.
+- Input is still open, so the kit picks a **super input scheme**:
+  - `FixedSlots`: `UGSTN_SuperInputScheme` defines one slot spec per super slot (e.g. hold a modifier + direction);
+    super slot *i* triggers whatever super the loadout put there.
+  - `PerSuperCode` (stratagem style): each super's `InputCode` pattern is its slot (e.g. hold the super button, then a
+    direction sequence, then release). Expressible with the standard conditions (`Hold` + `Motion` + `Release`).
+  - While a code is being entered the scheme may grant `Combat.State.SuperInput` (a context tag other slots and
+    movement can react to).
+- Super slots are compiled with the kit and weapon slots and validated together **at loadout validation time**
+  (conflicts between the chosen codes are a loadout error, reported to the player's UI).
+- Supers are available regardless of the active weapon unless their own requirements say otherwise; cost from the
+  super meter.
+
+### 10.5 Compiled table, switching, revision
+
+- **Compiled table**: when a loadout is applied (server, not predicted, replicated) the bindings of the kit, **all**
+  weapons and the supers are compiled in deterministic order (source: kit, weapon index, super slot; then priority,
+  asset path) and their abilities granted. Each entry knows its source, so the resolver only considers the kit, the
+  **active** weapon and the supers.
+- **Weapon switching** is a kit move (`UGSTN_GA_WeaponSwitch`, a move with frame data): at its swap frame the combat
+  model sets `ActiveWeaponIndex` and requests the stat GE swap. Predicted and rollback-safe; switch slots are ordinary
+  slots (cycle, or one per weapon).
 - **No `SourceObject` on specs** (*Decision*): a few `UGSTN_GA_Move` specs, the move index lives in the combat sync
   state. `SourceObject` replication breaks when the asset is not loaded on the client, and per-move specs on every AI
   inflate the ASC state.
 - **`LoadoutRevision`** in the combat sync state: no predicted activation while client and server revisions differ
   (the table is replicated outside NPP).
-- **`UGSTN_LoadoutDefinition`** (designer preset) and **`FGSTN_LoadoutData`** (runtime, serialisable): weapons by
-  PrimaryAssetId, slot → allowed-alternative remaps, designer values `TMap<FGameplayTag, FGSTN_LoadoutValue>`
-  (float/int/bool/tag), cosmetics.
+
+### 10.6 Loadout lifecycle and skins
+
+- **`UGSTN_LoadoutDefinition`** (designer preset, `GSTN_Loadout`) and **`FGSTN_LoadoutData`** (runtime, serialisable,
+  references by PrimaryAssetId).
 - **`UGSTN_LoadoutComponent`** on the PlayerState (survives respawn): `ServerRequestLoadout` validated by
-  `UGSTN_LoadoutRules`, replicated data, applies to the pawn (specs, attribute init GE, compiled table, new revision).
-- **`UGSTN_LoadoutSubsystem`** (LocalPlayer) + `USaveGame` for saving and loading. Asset Manager primary types:
-  `GSTN_Weapon`, `GSTN_Move`, `GSTN_InputSlot`, `GSTN_Loadout`.
+  `UGSTN_LoadoutRules` (kit allows the weapons and supers, slot customisations are allowed alternatives, super codes do
+  not conflict), replicated data, applied to the pawn on possession or respawn: specs, kit init GE, primary weapon stat
+  GE, meters, compiled table, new revision. Changing the loadout mid-life is not predicted.
+- **`UGSTN_LoadoutSubsystem`** (LocalPlayer) + `USaveGame` for saving and loading.
+- **`UGSTN_SkinDefinition`** (`GSTN_Skin`): mesh, materials, anim class, VFX overrides, tags for kit compatibility.
+  Chosen per player, replicated on the PlayerState, applied by a cosmetic component; never read by the simulation
+  (hurtboxes come from the kit, not the skin mesh).
+- Asset Manager primary types: `GSTN_PrimaryKit`, `GSTN_Weapon`, `GSTN_Super`, `GSTN_Move`, `GSTN_InputSlot`,
+  `GSTN_Loadout`, `GSTN_Skin`.
 
 ## 11. Moves
 
@@ -337,12 +437,20 @@ Two paths with the same Core logic:
   players go to the player's inbox (server), so a correction on the player's client.
 - Promoting a minion to fighter = swapping the component.
 
+## 13b. Held and thrown objects (later, not designed)
+
+Requirement noted, out of scope until after M6. Constraints already known, so the earlier milestones do not close
+the door: a held object is combat state of the holder (`HeldObject` id + size class), the object's own simulation is
+suspended while held; throwing is a move whose `Projectile`-space hitbox becomes the object's; object size classes
+select the hold/throw move set (a kit or weapon move set keyed by size tag). Objects are minion-like (server-simulated)
+unless a design needs prediction.
+
 ## 14. Editor and debug
 
 - Move asset editor: preview viewport, frame timeline (ruler, frame stepping), one row per track, hitbox gizmos,
   `FGSTN_HitData` details, "Bake sockets" button.
 - `IsDataValid`: frame ranges, overlapping windows, slot conflicts (section 9).
-- CVars `gstn.Combat.Debug.Hitboxes/Hurtboxes/Buffer`, input display widget (notation of section 19.4, frames),
+- CVars `gstn.Combat.Debug.Hitboxes/Hurtboxes/Buffer`, input display widget (notation of [combat-m1-core-input.md](combat-m1-core-input.md) §4, frames),
   Gameplay Debugger category, NP Insights traces of the combat state.
 
 ## 15. Bandwidth
@@ -357,8 +465,13 @@ Two paths with the same Core logic:
 - `SandboxCharacter_Mover`: `UGSTN_CombatSimComponent`, hurtbox component, player input source;
   `UGSTN_LoadoutComponent` on the PlayerState. **Shared Blueprints: tell the user before editing**; prefer
   `Tools/GAS/setup_gas_assets.py` (extended) or the editor MCP.
-- `GA_Jump` bound to a slot for buffered jump and jump-cancel; existing abilities otherwise unchanged.
-- Wall modes: the "movement locked" extension point (12.6).
+- `GA_Jump` bound to a slot for buffered jump and jump-cancel (its `ActivationInputs` removed at the same time, or it
+  would activate twice); existing abilities otherwise unchanged.
+- `UGSTN_MoverSimStateTracker` moves from the project into `GSTNCombatNP` (it is generic Mover code the plugin needs
+  for facing and Mover tags); the project module then depends on `GSTNCombatNP` (M2).
+- Wall modes: the "movement locked" extension point (12.6); wall stats through the stats modifier pattern (10.2).
+- The project's attribute sets stay separate from the plugin's (`UGSTN_MovementAttributeSet`, `UGSTN_MeterAttributeSet`,
+  `UGSTN_CombatAttributeSet`); the test attribute set remains test content.
 - Docs: this file; a future skill `add-gstn-move`.
 
 ## 17. M0 results (risk spike, 2026-10-17)
@@ -389,248 +502,18 @@ Not verified yet: hitstop with a montage actually playing; Mover freeze; anythin
 
 ## 18. Roadmap
 
-| # | Milestone | Content |
-|---|---|---|
-| M0 | Risk spike | **Done** (section 17). |
-| M1 | Core input layer | `GSTNCombatCore`: samples, classifier, history, conditions, matcher, buffer, reset rules, slots, validation, Automation tests. **Specified below.** |
-| M2 | Input in the simulation | History in `FGSTN_CombatSyncState`, stick + `ForcedSlot` in the command, input sources (player/AI), Mover state reader in the plugin, slot set → activation of any GAS ability (buffered jump), harness scenarios. |
-| M3 | Moves, weapons, loadouts | `GSTNCombatGAS`, `UGSTN_GA_Move`, synced montage, cancel windows, movement track, compiled table, predicted weapon switch, `LoadoutRevision`, save/load. |
-| M4 | Hits | Hurtboxes, hitboxes, snapshot, inbox, damage, hitstop (Mover freeze, wall lock), hitstun/knockback/DI, lag compensation, presentation, teams and variants. |
-| M5 | Editor | Move editor, socket baking, validators UI, debug draw, input display. |
-| M6 | Defence | Shield, parry, tech, SDI; grab spike then grabs/throws. |
-| M7 | Minions | Server subsystem, LOD, compact replication. |
-| M8 | Stock GAS adapter | Optional. |
+Each milestone ends with a build, its tests and the harness run clean (testing.md), and with this document updated
+where the implementation differs. Milestones are sequential: each spec assumes the previous ones are merged.
 
-## 19. M1 specification — Core input layer
-
-### 19.1 Scope
-
-In: module `GSTNCombatCore`, every pure type and algorithm of sections 6.3, 6.4, 7, 8, 9; developer settings; slot
-assets and validation; Automation tests. Out: NP integration and input command changes (M2), Enhanced Input sources
-(M2), moves/weapons (M3), editor UI (M5). Nothing in `GSTNCombatNP` or the project changes in M1, except adding the
-module to `GSTNCombat.uplugin`.
-
-**Hard constraint:** `GSTNCombatCore` must not depend on GameplayAbilities, AbilitySystemSimulation,
-NetworkPrediction or Mover. Every function is deterministic: integer frames, no wall-clock time, no randomness, no
-iteration over unordered containers.
-
-### 19.2 Files
-
-```
-Plugins/GSTNCombat/Source/GSTNCombatCore/
-  GSTNCombatCore.Build.cs
-  Public/
-    GSTN_CombatCoreTypes.h            enums: EGSTN_StickDirection, EGSTN_StickZone, EGSTN_DirectionPolicy; direction masks
-    Input/GSTN_CombatInputSettings.h  UGSTN_CombatInputSettings (UDeveloperSettings, config=Game)
-    Input/GSTN_CombatInputConfig.h    UGSTN_CombatInputConfig (DataAsset): button list
-    Input/GSTN_InputSample.h          FGSTN_InputSample, FGSTN_StickSample
-    Input/GSTN_DirectionClassifier.h  FGSTN_DirectionClassifier + FGSTN_ClassifierState
-    Input/GSTN_InputHistory.h         FGSTN_ButtonEvent, FGSTN_DirectionEvent, FGSTN_InputHistory
-    Input/GSTN_InputConditions.h      FGSTN_InputCondition base + standard conditions
-    Input/GSTN_InputPattern.h         FGSTN_InputStep, FGSTN_InputPattern, FGSTN_PatternMatch
-    Input/GSTN_InputMatcher.h         FGSTN_InputMatcher (pattern matching + buffer rules)
-    Input/GSTN_BufferResetRules.h     FGSTN_BufferResetRule base + standard rules, FGSTN_BufferFrameEvents
-    Input/GSTN_InputSlot.h            FGSTN_InputSlotSpec, UGSTN_InputSlotAsset, UGSTN_InputSlotSet
-    Input/GSTN_SlotResolver.h         FGSTN_SlotResolver, FGSTN_SlotResolution
-    Input/GSTN_InputSlotValidation.h  UGSTN_InputSlotValidation (BlueprintFunctionLibrary, stateless)
-    Input/GSTN_InputScript.h          FGSTN_InputScript: builds histories from the notation of 19.4 (tests, validator, debug)
-  Private/
-    GSTNCombatCoreModule.cpp
-    Input/*.cpp
-    Tests/GSTN_InputTests_*.cpp       WITH_DEV_AUTOMATION_TESTS
-```
-
-Conventions from CLAUDE.md apply (prefix, export macro `GSTNCOMBATCORE_API`, header doc comments explaining intent and
-determinism constraints, tuning as `UPROPERTY(EditAnywhere/EditDefaultsOnly)` with `Category = "Area|Section"`,
-`ClampMin`).
-
-### 19.3 Types
-
-**Enums (`GSTN_CombatCoreTypes.h`)**
-
-- `EGSTN_StickDirection : uint8` — `Neutral, Forward, ForwardRight, Right, BackRight, Back, BackLeft, Left,
-  ForwardLeft` (facing-relative). `FGSTN_DirectionMask` = uint16 bitmask over these (with helpers for "any forward",
-  "any back"...).
-- `EGSTN_StickZone : uint8` — `Neutral, Aim, Tilt` (ordered: comparisons "at least Tilt" are valid).
-- `EGSTN_DirectionPolicy : uint8` — `AtPress, AtExecution`.
-- `EGSTN_OverrideBool : uint8` — `Default, On, Off` (per-slot override of a settings default).
-
-**Settings (`UGSTN_CombatInputSettings`, Project Settings > Plugins > GSTN Combat Input)**
-
-| Property | Default | Meaning |
-|---|---|---|
-| `DefaultBufferFrames` | 8 | Time buffer. |
-| `bHoldBufferByDefault` | true | Hold buffer for slots that do not override it. |
-| `MaxHoldBufferFrames` | 0 | 0 = unlimited while held. |
-| `ChordGraceFrames` | 3 | Single-button wait when a chord could complete. |
-| `DefaultSimultaneityFrames` | 3 | Tolerance inside a step (e.g. direction vs press). |
-| `StickDeadZone` / `AimZone` | 0.2 / 0.5 | Normalised magnitude thresholds: below dead = Neutral, below aim = Aim, else Tilt. |
-| `FlickFrames` | 3 | Max frames from Neutral/Aim to Tilt for a flick. |
-| `DiagonalHalfAngle` | 22.5° | Sector half-width for diagonals (8 equal sectors by default). |
-| `DefaultResetRules` | (empty) | Global reset rules. |
-
-Values are designer defaults, to be tuned in M2 playtests.
-
-**Input config (`UGSTN_CombatInputConfig`)** — `Buttons: TArray<FGSTN_CombatButtonDef>`, max 32; each
-`{ FGameplayTag Tag; TObjectPtr<UInputAction> Action; }`. The array index is the bit. `IsDataValid`: ≤ 32 entries,
-unique tags, unique actions. `FindButtonIndex(Tag)`.
-
-**Sample (`FGSTN_InputSample`)** — what one frame provides to the history:
-`int32 Frame; uint32 Held; uint32 Pressed; uint32 Released; EGSTN_StickDirection Direction; EGSTN_StickZone Zone;
-bool bFlick;`. Built in M2 from the command + classifier; in M1 by `FGSTN_InputScript` and tests.
-`Pressed` includes taps (`Cmd.PressedButtons`) and held edges; a button both pressed and released inside one frame
-produces a press then a release event on the same frame.
-
-**Classifier (`FGSTN_DirectionClassifier`)** — pure static `Classify(FVector2D PlaneStick, float FacingYawDeg,
-const FGSTN_ClassifierState& Prev, int32 Frame, const UGSTN_CombatInputSettings& S, FGSTN_ClassifierState& Out)`
-→ direction, zone, flick. `FGSTN_ClassifierState { EGSTN_StickZone Zone; int32 LastLowZoneFrame; }` lives in the sync
-state in M2 (it is needed to detect flicks after a rollback). Stick is rotated by `-FacingYaw` so +X = Forward,
-+Y = Right. Quantized input (int8) is converted to [-1, 1] before classification so client and server classify the
-same values.
-
-**History (`FGSTN_InputHistory`)**
-
-```
-FGSTN_ButtonEvent    { int32 Frame; uint8 Button : 5; uint8 bRelease : 1; uint8 bConsumed : 1; }
-FGSTN_DirectionEvent { int32 Frame; EGSTN_StickDirection Direction; EGSTN_StickZone Zone; bool bFlick; }
-FGSTN_InputHistory {
-  TStaticArray<FGSTN_ButtonEvent, 16> ButtonEvents;   + uint8 ButtonHead, ButtonCount
-  TStaticArray<FGSTN_DirectionEvent, 16> DirectionEvents; + uint8 DirectionHead, DirectionCount
-  uint32 HeldButtons;
-  FGSTN_DirectionEvent Current;   // direction/zone at the newest frame (also when unchanged)
-}
-```
-
-Operations: `Append(const FGSTN_InputSample&)` (press events in button index order, then releases; a direction event
-only when direction or zone changes or a flick happens); iteration newest → oldest; `GetDirectionAt(Frame)` (last
-direction event with `Frame <= F`); `IsHeldContinuouslySince(Button, Frame, Now)` (no release event of that button
-after the press at `Frame` and the bit is in `HeldButtons`); `Consume(EventIndex)`; `FlushPresses(Mask, UpToFrame)`.
-`NetSerialize(FArchive&, int32 CurrentFrame)`: counts + per event `uint8 delta = min(Current - Frame, 255)` + payload;
-events with delta 255 are dropped on read. `operator==` for `ShouldReconcile`. Ring overflow drops the oldest.
-
-**Conditions (`FGSTN_InputCondition`, USTRUCT base, `TInstancedStruct` elements)**
-
-Virtual interface (all const):
-
-- `bool Matches(const FGSTN_ConditionContext& Ctx, int32 AnchorFrame, FGSTN_ConditionResult& Out) const` — does the
-  condition hold with its reference event at or before `AnchorFrame` and no earlier than `Ctx.EarliestFrame`? `Out`
-  gets the matched frame and the button event indices used.
-- `bool IsAnchorCondition() const` — true for conditions that produce a frame (Press, Release, Chord, Motion end,
-  Mash): one per step anchors it; others (Direction, Hold, Charge) are checked relative to the anchor within
-  `SimultaneityFrames`.
-- `int32 GetSpecificity() const`.
-- `void AppendCanonicalInput(FGSTN_InputScript& Script, int32& Frame) const`.
-
-| Condition | Fields | Holds when | Specificity |
+| # | Milestone | Content | Specification |
 |---|---|---|---|
-| `Press` | `ButtonMask` (any of) | An **unconsumed, unreserved** press of a button in the mask. | 10 |
-| `Release` | `Button`, `MinHeldFrames` | A release of `Button` whose press was held ≥ `MinHeldFrames` (negative edge). | 10 |
-| `Hold` | `Button`, `MinFrames` | `Button` held continuously for ≥ `MinFrames` ending at the anchor. | 5 |
-| `Direction` | `Directions` mask, `MinZone`, `bRequireFlick` | Direction at the anchor (± simultaneity) is in the mask with zone ≥ `MinZone` (and flick if required). | 5, +3 if `MinZone = Tilt`, +2 if flick |
-| `Motion` | `Sequence: TArray<FGSTN_DirectionMask>`, `MaxFramesBetween`, `MaxTotalFrames`, `MinZone` | Direction events matching the sequence in order, gaps ≤ `MaxFramesBetween`, whole motion ≤ `MaxTotalFrames`; other events in between are allowed (leniency). Anchor = frame of the last element. | 5 per element |
-| `Chord` | `ButtonMask` (all of), `WithinFrames` | Unconsumed presses of every button in the mask, all within `WithinFrames` of each other. Anchor = newest. | 10 per button |
-| `Charge` | `Directions` mask, `MinFrames`, `MaxReleaseFrames` | Direction in the mask held for ≥ `MinFrames`, left no more than `MaxReleaseFrames` before the anchor. | 15 |
-| `Mash` | `Button`, `Count`, `WithinFrames` | `Count` unconsumed presses of `Button` within `WithinFrames`. | 5 × Count |
-| `AnyOf` | `Conditions` (instanced) | Any child holds (first in order wins). | max of children |
+| M0 | Risk spike | **Done** (section 17). | — |
+| M1 | Core input layer | `GSTNCombatCore`: samples, classifier, history, conditions, matcher, buffer, reset rules, slots, validation, Automation tests. | [combat-m1-core-input.md](combat-m1-core-input.md) |
+| M2 | Input in the simulation | History and classifier state in the combat sync state, stick + `ForcedSlot` in the command, player/AI input sources, Mover state reader moved into the plugin, slot bindings → activation of any GAS ability, harness scenarios. | [combat-m2-sim-input.md](combat-m2-sim-input.md) |
+| M3 | Moves, kits, weapons, loadouts | `GSTNCombatGAS`, attributes (stats, meters), stats → Mover modifier, `UGSTN_GA_Move` with synced montage, cancel windows, movement track, primary kit, support weapon and predicted switch, EX moves, supers, compiled table, `LoadoutRevision`, loadout component and save, skins. | [combat-m3-moves-kits.md](combat-m3-moves-kits.md) |
+| M4 | Hits | Hurtboxes, hitboxes, snapshot, inbox, resolution pipeline, damage and meter gain, hitstop (Mover freeze, wall lock), hitstun/knockback/DI, teams and variants, lag compensation, hit presentation. | [combat-m4-hits.md](combat-m4-hits.md) |
+| M5 | Editor | Move editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m8.md](combat-m5-m8.md) |
+| M6 | Defence | Shield, parry, tech, SDI; grab spike then grabs/throws. | [combat-m5-m8.md](combat-m5-m8.md) |
+| M7 | Minions | Server subsystem, LOD, compact replication. | [combat-m5-m8.md](combat-m5-m8.md) |
+| M8 | Stock GAS adapter | Optional. | [combat-m5-m8.md](combat-m5-m8.md) |
 
-**Pattern (`FGSTN_InputPattern`)** — `Steps: TArray<FGSTN_InputStep>`; `FGSTN_InputStep { TArray<TInstancedStruct<
-FGSTN_InputCondition>> AllOf; int32 SimultaneityFrames = -1 (= settings); int32 MaxGapFrames = 15 (to the next step);
-}`. Validation: each step has exactly one anchor condition; at least one step. `GetSpecificity()` = sum of conditions.
-`FGSTN_PatternMatch { TArray<int32, TInlineAllocator<4>> StepAnchors; TArray<uint8, TInlineAllocator<8>>
-UsedButtonEvents; int32 TerminalPressEvent = INDEX_NONE; bool bViaHoldBuffer; }`.
-
-**Matcher (`FGSTN_InputMatcher`)** — `static bool Match(const FGSTN_InputPattern&, const FGSTN_InputHistory&,
-const FGSTN_MatchParams&, FGSTN_PatternMatch& Out)`. `FGSTN_MatchParams { int32 Now; int32 BufferFrames; bool
-bHoldBuffer; int32 MaxHoldBufferFrames; EGSTN_DirectionPolicy DirectionPolicy; int32 DefaultSimultaneityFrames;
-uint32 ReservedEvents (bitmask over the 16 button events); }`. Algorithm:
-
-1. Terminal step: candidate anchors newest first, restricted to `[Now - BufferFrames, Now]`; if `bHoldBuffer`, also
-   older presses that are still held continuously (and within `MaxHoldBufferFrames` when non-zero) — then
-   `bViaHoldBuffer = true`.
-2. With `DirectionPolicy = AtExecution`, non-anchor direction conditions of the terminal step are evaluated at `Now`
-   instead of the anchor.
-3. Each earlier step searches `[Anchor(next) - MaxGapFrames, Anchor(next)]`, newest first; backtrack on failure.
-   An event used by a later step cannot be reused by an earlier one.
-4. Bound: at most 16 candidates per step, depth = step count; abort and fail past 4096 evaluations (assert in dev).
-
-**Reset rules (`FGSTN_BufferResetRule`)** — base fields `uint32 ButtonMask` (0 = all). Interface
-`bool ShouldFlush(const FGSTN_BufferFrameEvents& Events, const FGSTN_InputHistory& H, int32 Now) const`.
-`FGSTN_BufferFrameEvents { FGameplayTagContainer EventTags; FGameplayTagContainer TagsAdded; }` is filled by the
-caller (M2: from combat events and ASC tags; M1: tests). Standard rules: `OnEvent(EventTag)`, `OnTagAdded(Tag)`,
-`AfterIdleFrames(Frames)` (no button or direction event for `Frames`). Flush = `FlushPresses(Mask, Now)`, which ends
-time and hold buffering of those presses. `ApplyResetRules(History, Rules, Events, Now)` is a static pure function;
-rule lists concatenate global → weapon → move.
-
-**Slots (`GSTN_InputSlot.h`)**
-
-- `FGSTN_InputSlotSpec { FName DebugName; FGSTN_InputPattern Pattern; FGameplayTagRequirements Context; int32 Priority
-  = 0 (0 = automatic); FGameplayTagContainer Categories; int32 BufferFramesOverride = -1;
-  EGSTN_OverrideBool HoldBuffer = Default; EGSTN_DirectionPolicy DirectionPolicy = AtPress;
-  bool bFallThroughWhenUnavailable = false; bool bWaitForChords = true; }` + `GetEffectivePriority()`.
-- `UGSTN_InputSlotAsset : UPrimaryDataAsset { FGSTN_InputSlotSpec Spec; }` (primary type `GSTN_InputSlot`).
-- `UGSTN_InputSlotSet : UDataAsset { TArray<FGSTN_InputSlotEntry> Slots; }` where an entry is either an asset reference
-  or an inline spec. `IsDataValid` runs the validator.
-
-**Resolver (`FGSTN_SlotResolver`)** — `static FGSTN_SlotResolution Resolve(TConstArrayView<const FGSTN_InputSlotSpec*>
-Slots, const FGSTN_InputHistory&, const FGameplayTagContainer& OwnerTags, int32 Now, const UGSTN_CombatInputSettings&,
-TFunctionRef<bool(int32 SlotIndex)> CanExecute)`. Result `{ int32 SlotIndex = INDEX_NONE; FGSTN_PatternMatch Match;
-bool bDeferredForChord; }`. Steps: sort indices by effective priority descending (stable on input order); skip slots
-whose `Context` fails; match with the slot's params and the current reserved mask; if matched and `CanExecute` → done;
-if matched and not executable → reserve its terminal press unless `bFallThroughWhenUnavailable`; chord grace: before
-accepting a single-press slot, if a higher-priority slot with a `Chord` containing that button has a partial match
-(the other buttons not pressed yet) and `Now - press < ChordGraceFrames`, return `bDeferredForChord` with no slot. The
-caller consumes `Match.UsedButtonEvents` on activation (M2 does it in the sync state).
-
-**Validation (`UGSTN_InputSlotValidation`)** — `FindConflicts(Slots) → TArray<FGSTN_SlotConflict {A, B, Kind
-(Ambiguous | Shadowed), Message}>`: build each slot's canonical script (`FGSTN_InputScript` from
-`AppendCanonicalInput`), run the resolver over every other slot on that history (context ignored, unless both contexts
-are provably disjoint: one requires a tag the other forbids). Equal priority + match → Ambiguous (error); higher
-priority always matching → Shadowed (warning).
-
-### 19.4 Input notation (`FGSTN_InputScript`)
-
-Used by tests, the validator and later the input display. Space-separated tokens `<frame>:<item>`:
-
-- Buttons by index or config tag name: `+A` press, `-A` release, `*A` tap (press and release on the same frame).
-- Directions, top-down numpad **relative to facing**: `8` forward, `2` back, `4` left, `6` right, `7 9 1 3` diagonals,
-  `5` neutral; zone suffix `a` (aim) or `t` (tilt, default); `!` flick. Example: `0:2t 6:8t! 7:+A` = back, then flick
-  forward and press A.
-- `Build(const FString&, FGSTN_InputHistory&, int32& OutLastFrame)` fails loudly on syntax errors.
-- *Open:* confirm this notation with the designers (it differs from the 2D fighting-game convention where 6 = forward).
-
-### 19.5 Tests (Automation, names `GSTNCombat.Core.Input.<Area>.<Case>`)
-
-| Area | Cases (expected result) |
-|---|---|
-| History | Ring overflow keeps the newest 16; serialize → deserialize equality; events older than 255 frames dropped; same-frame press+release recorded in order; `GetDirectionAt` returns the last change at or before the frame. |
-| Classifier | Dead/aim/tilt thresholds exactly at and around the limits; facing 90° maps world stick correctly to Forward/Right; flick within `FlickFrames`, none when slower; quantized int8 input classified identically to its float. |
-| Conditions | One positive and one negative case per condition and field (window edges inclusive, consumed press ignored, reserved press ignored, negative edge needs the minimum hold, motion with noise between elements passes, motion over `MaxTotalFrames` fails, chord outside `WithinFrames` fails, charge released too early fails, mash count). |
-| Buffer | Press at `Now - BufferFrames` matches, at `-BufferFrames-1` fails; held press matches past the window (`bViaHoldBuffer`), fails after release, fails past `MaxHoldBufferFrames`; `AtPress` vs `AtExecution` give different results when the direction changes after the press. |
-| Resolver | Motion+A beats Dir+A beats A on one history; a consumed press does not fire again next frame; unavailable higher slot reserves the press (no lower slot fires) and with `bFallThroughWhenUnavailable` the lower one fires; context filtering; chord grace defers then resolves A+B, and resolves A alone after `ChordGraceFrames`. |
-| Reset | `OnEvent` flushes only masked buttons; `AfterIdleFrames`; a flush ends hold buffering. |
-| Validation | Two identical patterns with equal priority → Ambiguous; A vs Dir+A → no conflict (different priority) and A not reported shadowed; a slot fully covered by a higher one → Shadowed; disjoint contexts → no conflict. |
-| Determinism | Same script resolved twice → identical results; copy the history mid-script, resolve the rest on both copies → identical (rollback stand-in). |
-
-Run headless:
-`UnrealEditor-Cmd.exe "<project>/GASP_Giustino2.uproject" -ExecCmds="Automation RunTests GSTNCombat.Core;Quit" -unattended -nullrhi -nopause -log`
-(or the Session Frontend). Add the command to testing.md.
-
-### 19.6 Acceptance criteria
-
-1. The project builds (Development Editor) with `GSTNCombatCore` listed in `GSTNCombat.uplugin`; Core's Build.cs has
-   none of the forbidden dependencies (19.1).
-2. All tests of 19.5 pass headless.
-3. Every public type has a header doc comment on intent and determinism, at the density of the existing headers.
-4. A standard slot set can be authored in the editor with the condition structs (instanced struct pickers work) and
-   `IsDataValid` reports conflicts. (Plugin content needs the `.gitignore` exception of section 3; until then create it
-   under `/Game/GAS/` and tell the user.)
-5. This document is updated where implementation differs (types, defaults), and testing.md gets the test command.
-
-### 19.7 Notes for the implementer
-
-- Keep the history and every result type POD-like and small: in M2 they are copied every frame into the sync state.
-- Never iterate `TMap`/`TSet` in matching; never use floats in frame logic (the classifier converts once).
-- The resolver will be called every frame for every fighter: avoid allocations in the hot path (inline allocators,
-  static arrays).
-- No changes to `GSTNCombatNP` or project code in M1; the spike keeps working as is until M2 replaces its
-  button→ability mapping with the resolver.
