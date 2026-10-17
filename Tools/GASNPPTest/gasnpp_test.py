@@ -400,6 +400,30 @@ def scenario_server_dash(client=1, player_key='P256'):
     run_timeline(steps)
 
 
+# ------------------------------------------------------------------------------------------------ combat (GSTNCombat)
+def combat_tap(client_index, mask):
+    """One-frame press of the combat buttons in `mask` (bit i = button i of the pawn's GSTN_CombatSimComponent)."""
+    _, pawn = _local_pawn(client_index)
+    pawn.get_component_by_class(unreal.GSTN_CombatSimComponent).tap_scripted_buttons(mask)
+    return True
+
+
+def scenario_combat_spike(client=1):
+    """Combat model spike on BP_GASNPP_TestCharacter (button 0 -> test dash, button 1 -> hitstop window):
+    the combat model asks the ability system for the dash, also across forced re-simulations.
+    Clean = server/client state equal and no reconciles besides the forced ones (np.PrintReconciles 1 to check)."""
+    steps = [
+        (0.0, lambda: ('move', hold(client, 'move', (0, 1, 0)))),
+        (1.0, lambda: ('combat dash', combat_tap(client, 1))),
+        (1.1, lambda: ('force reconcile across the request frame', force_reconcile(client, 15))),
+        (1.6, lambda: ('hitstop', combat_tap(client, 2))),
+        (1.7, lambda: ('force reconcile during hitstop', force_reconcile(client, 10))),
+        (3.4, lambda: ('combat dash after cooldown', combat_tap(client, 1))),
+        (4.0, lambda: ('stop', release(client, 'move'))),
+    ]
+    run_timeline(steps)
+
+
 # ------------------------------------------------------------------------------------------------ visual smoothness
 _smooth = {'handle': None}
 

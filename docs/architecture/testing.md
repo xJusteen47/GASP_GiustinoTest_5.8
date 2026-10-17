@@ -32,4 +32,5 @@ m.setup_editor(False)         # after Stop: restore GM_Sandbox and throttling
 
 - Changed an ability, tag, effect or anything in the ability tick: run `scenario_abilities` and `scenario_forced_rollback` with lag/jitter/loss on.
 - Changed a wall mode or transition, or Mover sync/aux state: run `scenario_jump_wall` (ground jump, grab the wall, wall slide), `scenario_server_correction` on the wall, and `force_reconcile_on_mode` while in the wall mode.
+- Changed the combat model (`Plugins/GSTNCombat`): run `scenario_combat_spike` (combat button 0 -> test dash, button 1 -> hitstop window, forced reconciles across both) with lag/jitter/loss; `combat_tap(client, mask)` sends a one-frame press. Turn on `np.PrintReconciles 1` in every world: the harness rollback counter counts each rollback twice, the log shows which ones were forced.
 - Other helpers: `start_mode_log` / `stop_mode_log` (mode transitions), `measure_smoothness` (visual smoothing of the simulated pawn), `server_apply` / `server_remove` (apply or remove an effect on the server), `scenario_server_dash`.
