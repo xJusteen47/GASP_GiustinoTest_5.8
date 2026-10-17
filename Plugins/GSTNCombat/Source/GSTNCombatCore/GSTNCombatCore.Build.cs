@@ -14,7 +14,11 @@ public class GSTNCombatCore : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
-			"GameplayTags"
+			"GameplayTags",
+			"DeveloperSettings"
 		});
+
+		// Only for UInputAction references in the input config; the Core never reads input itself.
+		PrivateDependencyModuleNames.Add("EnhancedInput");
 	}
 }

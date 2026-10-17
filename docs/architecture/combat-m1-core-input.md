@@ -62,7 +62,10 @@ determinism constraints, tuning as `UPROPERTY(EditAnywhere/EditDefaultsOnly)` wi
   meaning depends on the space it was classified in: in `Facing` space Up = forward of the character, Down = back; in
   `Stick` space Up = stick pushed up (away from the camera); in `World` space Up = the settings' world reference yaw.
   `FGSTN_DirectionMask` = uint16 bitmask over these, with helpers (`AnyTilted` = the 8 non-neutral directions,
-  `FacingForward` = Up|UpLeft|UpRight, ...).
+  `FacingForward` = Up|UpLeft|UpRight, ...). `EGSTN_StickDirection` is a `Bitflags` enum (bit = 1 << value), so
+  condition properties holding a direction set are `int32` with `Bitmask` metadata and edit as a checklist; helpers are in
+  `namespace GSTN_DirectionMasks`. `EGSTN_BufferConflictPolicy` (`MostRecent, HighestPriority, Oldest`) lives with the
+  other enums.
 - `EGSTN_DirectionSpace : uint8` — `Facing, Stick, World` (combat.md §6.3).
 - `EGSTN_StickZone : uint8` — `Neutral, Aim, Tilt` (ordered: comparisons "at least Tilt" are valid).
 - `EGSTN_DirectionPolicy : uint8` — `AtPress, AtExecution`.
@@ -77,7 +80,7 @@ determinism constraints, tuning as `UPROPERTY(EditAnywhere/EditDefaultsOnly)` wi
 | `MaxHoldBufferFrames` | 0 | 0 = unlimited while held. |
 | `SimultaneousFrames` | 2 | Presses within this many frames of the newest terminal press form one press group (combat.md §8.2). |
 | `BufferConflictPolicy` | `MostRecent` | Which press group competes: `MostRecent`, `HighestPriority` (all groups, priority only), `Oldest`. |
-| `CommandTiers` | `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400 | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
+| `CommandTiers` | `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400, and the airborne roots `Command.Air.Attack/Strong/Special` with the same values as their grounded twins (they are not under the grounded roots) | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
 | `ExclusiveButtons` | Attack, Strong, Special | Button tags whose presses in the winner's press group are consumed with it. |
 | `bChordGraceByDefault` | false | Legacy wait before single-button commands (combat.md §8.3); off because the startup override handles chords. |
 | `ChordGraceFrames` | 3 | Only used when chord grace is on. |
@@ -108,8 +111,13 @@ float FacingYawDeg, const FGSTN_ClassifierState& Prev, int32 Frame, const UGSTN_
 FGSTN_ClassifierState& Out)` → the three directions, zone, flick, world yaw. `RawStick` is the stick as on the
 controller (+Y up); the world-plane stick is `RawStick` rotated by the camera yaw; the facing-relative stick is the
 world stick rotated by `-FacingYaw`. Zone and flick come from the magnitude, identical in every space.
-`FGSTN_ClassifierState { EGSTN_StickZone Zone; int32 LastLowZoneFrame; }` lives in the sync state in M2 (needed to
-detect flicks after a rollback). Quantized input (int8 stick, uint8 camera yaw) is converted back before
+`FGSTN_ClassifierState { EGSTN_StickZone Zone; int32 LastNeutralFrame; }` lives in the sync state in M2 (needed to
+detect flicks after a rollback). A flick is the frame the stick enters `Tilt` with `Frame - LastNeutralFrame <=
+FlickFrames`, i.e. it left `Neutral` no more than `FlickFrames` ago (tracking the last frame in *any* low zone would
+make every entry into `Tilt` a flick). The classifier returns an `FGSTN_StickSample` (defined in `GSTN_InputSample.h`
+together with the per-frame sample, M1.3) and the new state through an out parameter. Angles are degrees, 0 = up,
+clockwise; a boundary angle belongs to the cardinal direction. Helpers: `QuantizeStickAxis/DequantizeStickAxis`
+(127 = 1), `QuantizeYaw/DequantizeYaw` (256 steps). Quantized input (int8 stick, uint8 camera yaw) is converted back before
 classification so client and server classify the same values.
 
 **History (`FGSTN_InputHistory`)**
