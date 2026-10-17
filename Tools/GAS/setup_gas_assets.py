@@ -13,6 +13,11 @@
 #  3. (opt-in) SandboxCharacter_Mover: the Falling mode's GSTN_WallEntryTransition becomes a GSTN_AbilityWallEntryTransition with
 #     the same settings. Pawns without an ability system behave as before (bAllowWithoutAbilitySystem).
 # The two Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
+#
+# Current layout (2026-10-17, set by hand from the editor, not by this script): the NpAbilitySystem (GA_Jump, GA_WallSlide)
+# and the GSTN_AbilityInputComponent live on SandboxCharacter_Mover. BP_GASNPP_TestCharacter only overrides the inherited
+# ability system (adds the test Dash/Buff, GSTN_TestAttributeSet, GSTN_GE_StaminaRegen) and keeps GSTN_GASNPPTestComponent.
+# Step 2 finds those inherited components and leaves them as they are.
 import os, shutil, re
 import unreal
 

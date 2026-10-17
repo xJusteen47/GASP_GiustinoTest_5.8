@@ -348,6 +348,46 @@ def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=220
     _steer['handle'] = unreal.register_slate_post_tick_callback(tick)
 
 
+_force_on_mode = {'handle': None, 'log': []}
+
+
+def force_reconcile_on_mode(client=1, mode='WallSliding', extra_frames=15):
+    """Forces a reconcile on the client while its pawn is in `mode` (e.g. on the wall, with GA_WallSlide active): the
+    re-simulation must activate the ability again on the same frame. Read _force_on_mode['log'] after.
+
+    np.ForceReconcile is one global cvar: under "Run Under One Process" the first client world that runs its rollback
+    service takes it, which is not always `client`. It is set again every frame until `client`'s rollback counter goes
+    up, so the other client may get an extra reconcile too."""
+    _force_on_mode['log'] = []
+    st = {'start_rb': None}
+
+    def tick(_dt):
+        try:
+            comp = local_comp(worlds()[client])
+            _, pawn = _local_pawn(client)
+            in_mode = pawn and str(pawn.get_component_by_class(unreal.CharacterMoverComponent).get_movement_mode_name()) == mode
+            if st['start_rb'] is not None and comp.get_editor_property('rollback_count') > st['start_rb']:
+                _force_on_mode['log'].append(f"c{client} reconciled (rollbacks {st['start_rb']} -> {comp.get_editor_property('rollback_count')})")
+            elif in_mode:
+                if st['start_rb'] is None:
+                    st['start_rb'] = comp.get_editor_property('rollback_count')
+                    _force_on_mode['log'].append(f'reconcile requested in {mode} tag={_has_tag(pawn, WALL_SLIDING_TAG)}')
+                force_reconcile(client, extra_frames)
+                return
+            elif st['start_rb'] is None:
+                return
+            else:
+                _force_on_mode['log'].append(f'c{client} left {mode} before reconciling')
+        except Exception as e:
+            _force_on_mode['log'].append(f'ERROR {e}')
+        unreal.unregister_slate_post_tick_callback(_force_on_mode['handle'])
+        _force_on_mode['handle'] = None
+
+    if _force_on_mode['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(_force_on_mode['handle'])
+    _force_on_mode['handle'] = unreal.register_slate_post_tick_callback(tick)
+
+
 def scenario_server_dash(client=1, player_key='P256'):
     """Client walks forward; the server applies two dashes the client did not predict.
     Each must cost the owning client about one rollback (not a chain over the whole dash)."""
