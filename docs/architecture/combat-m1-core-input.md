@@ -284,6 +284,27 @@ Steps (combat.md §8.2):
 6. `EventsToConsume` = the winner's `UsedButtonEvents` + the unconsumed presses inside the winner's press group whose
    button is in `ExclusiveButtons` (the losers). The caller consumes them on activation (M2: in the sync state).
 
+*Implementation notes (M1.5):*
+
+- **`Context` is an `FGSTN_TagRequirements { RequireTags, IgnoreTags }`** (defined in `GSTN_InputSlot.h`), not
+  `FGameplayTagRequirements`: that type lives in the GameplayAbilities module, which the Core must not depend on. Same
+  semantics (all required present, none ignored present).
+- **Reset rules**: a rule's button filter is a tag container (empty = all buttons, bound through the button map);
+  `FGSTN_BufferResetRules::Apply(History, Buttons, Rules, Events, Now)` is applied once per list (global, then weapon, then
+  move). `AfterIdleFrames` counts from the newest button or stick event. Rules also report `GetWatchedTags()` (the tags the
+  owner must track for `OnTagAdded`, M2 section 6).
+- **Resolver**: `Resolve(Slots, History, FGSTN_ResolveParams, Settings, CanExecute)`; the params carry the button map,
+  the owner tags, `Now` and the optional hitstop window. Slots that match are ranked by `FGSTN_CommandPriority`; the press
+  group is the matches whose terminal frame is within `SimultaneousFrames` of the newest (`Oldest`: of the oldest);
+  `CanExecute` is called at most once per slot and only for slots that matched. A slot that cannot execute reserves its
+  terminal press and the slots below it are matched again without it (so they may still use an older press). Consumption:
+  the winner's events plus every unconsumed press of an exclusive button within `SimultaneousFrames` of the group frame
+  (the winner's own frame with `HighestPriority`). Chord grace defers only a winner whose terminal anchor is a plain `Press`,
+  whose slot has the grace on, whose press is younger than `ChordGraceFrames`, when a higher ranked slot in context ends in
+  a `Chord` with that button and has not matched.
+- `UGSTN_InputSlotSet::GetSpecs()` gives the specs in order for the resolver and the validator (`IsDataValid` arrives
+  with the validator in M1.6).
+
 **Validation (`UGSTN_InputSlotValidation`)** — `FindConflicts(Slots) → TArray<FGSTN_SlotConflict {A, B, Kind
 (Ambiguous | Shadowed), Message}>`: build each slot's canonical script (`FGSTN_InputScript` from
 `AppendCanonicalInput`), run the resolver over every other slot on that history (context ignored, unless both contexts
