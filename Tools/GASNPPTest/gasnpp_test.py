@@ -358,3 +358,59 @@ def scenario_server_dash(client=1, player_key='P256'):
         (3.5, lambda: ('stop', release(client, 'move'))),
     ]
     run_timeline(steps)
+
+
+# ------------------------------------------------------------------------------------------------ visual smoothness
+_smooth = {'handle': None}
+
+
+def measure_smoothness(seconds=3.0, world_index=0, settle=1.0):
+    """Walks the local player forward and records, every rendered frame, the mesh and camera positions.
+    Reports the per-frame speed variation (stddev / mean, in %): ~0 is smooth, large values mean steps (stutter).
+    world_index: the PIE world with the local player. Result in the log ('GASNPP smoothness')."""
+    import statistics
+    w = worlds()[world_index]
+    pc = unreal.GameplayStatics.get_player_controller(w, 0)
+    pawn = pc.get_controlled_pawn()
+    mesh = pawn.get_component_by_class(unreal.SkeletalMeshComponent)
+    cam = pc.player_camera_manager
+    ia = unreal.load_asset(IA['move'])
+    forward = unreal.Vector(0.0, 1.0, 0.0)
+    test_comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
+    if test_comp:
+        # Test pawn: its component injects through this player's own input subsystem
+        test_comp.start_holding_input(ia, forward)
+        inject = lambda: None
+    else:
+        # Python has no local player subsystem getter: take the live instance (single local player only, e.g. standalone).
+        # InputActionValue can't be built from Python either: inject the vector every frame
+        sub = next(s for s in unreal.ObjectIterator(unreal.EnhancedInputLocalPlayerSubsystem) if not s.get_name().startswith('Default__'))
+        inject = lambda: sub.inject_input_vector_for_action(ia, forward, [], [])
+    st = {'t0': time.time(), 'samples': []}
+
+    def tick(dt):
+        t = time.time() - st['t0']
+        inject()
+        if t > settle:
+            st['samples'].append((dt, mesh.get_world_location(), cam.get_camera_location()))
+        if t > settle + seconds:
+            unreal.unregister_slate_post_tick_callback(_smooth['handle'])
+            _smooth['handle'] = None
+            if test_comp:
+                test_comp.stop_holding_input(ia)
+            out = []
+            for k, name in ((1, 'mesh'), (2, 'camera')):
+                speeds = []
+                for (dt0, *a), (dt1, *b) in zip(st['samples'], st['samples'][1:]):
+                    p0, p1 = a[k - 1], b[k - 1]
+                    d = ((p1.x - p0.x) ** 2 + (p1.y - p0.y) ** 2) ** 0.5
+                    speeds.append(d / max(dt1, 1e-4))
+                m = statistics.mean(speeds)
+                out.append(f'{name}: mean {m:.0f} cm/s, variation {100 * statistics.pstdev(speeds) / max(m, 1e-3):.1f}%, '
+                           f'frames with no movement {sum(1 for s in speeds if s < 0.05 * m)}/{len(speeds)}')
+            fps = len(st['samples']) / seconds
+            unreal.log(f'GASNPP smoothness ({fps:.0f} fps): ' + ' | '.join(out))
+
+    if _smooth['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(_smooth['handle'])
+    _smooth['handle'] = unreal.register_slate_post_tick_callback(tick)
