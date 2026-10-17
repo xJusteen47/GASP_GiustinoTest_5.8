@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 
 /**
- * Debug tooling for the wall movement modes (UGSTN_WallMovementModeBase and subclasses), compiled out of Shipping builds (or set GSTN_WALL_DEBUG=0).
+ * Debug tooling for the wall movement modes (UGSTN_WallMovementModeBase and subclasses, UGSTN_WallEntryTransition), compiled out of Shipping builds (or set GSTN_WALL_DEBUG=0).
  * Built to drive and inspect the mode from the console / an MCP client, without a keyboard:
  *
  *   gstn.Wall.Enter [ModeName]        Queue a movement mode (default WallSliding) on every player pawn in PIE/game worlds
@@ -44,6 +44,12 @@ namespace GSTNWallDebug
 
 	/** Parses gstn.Wall.DebugInput */
 	EInputOverride GetInputOverride(FVector& OutValue);
+
+	/**
+	 * gstn.Wall.DebugInput "stick R F": replaces InOutMoveInput with the simulated stick, turned into a camera-relative
+	 * world move input like the player's keys. Returns false (input untouched) without a stick override
+	 */
+	bool OverrideMoveInput(const FRotator& ControlRotation, const FVector& GravityUp, FVector& InOutMoveInput);
 
 	/** Compact vector formatting for log lines */
 	FString Vec(const FVector& V);

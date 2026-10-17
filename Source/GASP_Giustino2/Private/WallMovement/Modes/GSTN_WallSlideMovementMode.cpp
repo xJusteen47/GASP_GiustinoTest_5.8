@@ -1,6 +1,9 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "GSTN_WallSlideMovementMode.h"
+#include "WallMovement/Modes/GSTN_WallSlideMovementMode.h"
+
+#include "MoverComponent.h"
+#include "WallMovement/GSTN_WallMovementDebug.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallSlideMovementMode)
 
@@ -10,7 +13,6 @@ UGSTN_WallSlideMovementMode::UGSTN_WallSlideMovementMode(const FObjectInitialize
 	// Defaults tuned on SandboxCharacter_Mover
 	Horizontal.Friction = 3.f;
 	Horizontal.BrakingDeceleration = 0.f;
-	Skid.bEnableSkid = false;
 	InputMapping = EGSTN_WallInputMapping::CameraRelative;
 
 	WallJump.bEnableWallJump = true;
@@ -25,7 +27,7 @@ UGSTN_WallSlideMovementMode::UGSTN_WallSlideMovementMode(const FObjectInitialize
 
 FGSTN_WallVerticalMovement UGSTN_WallSlideMovementMode::GetVerticalMovement() const
 {
-	// No stick input on this axis: it only brakes (wall friction, never a stop snap that would block the slide), then gravity
+	// Never a stop snap here: it would block the slide
 	FGSTN_WallVerticalMovement Movement = Super::GetVerticalMovement();
 	Movement.BrakingFriction = Slide.Friction;
 	Movement.TerminalUpSpeed = Slide.TerminalUpSpeed;
@@ -33,9 +35,14 @@ FGSTN_WallVerticalMovement UGSTN_WallSlideMovementMode::GetVerticalMovement() co
 	return Movement;
 }
 
-float UGSTN_WallSlideMovementMode::GetVerticalForce(float VerticalSpeed, float GravityAlongWall) const
+float UGSTN_WallSlideMovementMode::ComputeVerticalSpeed(const FGSTN_WallMovementPlane& Plane, const FVector& WallIntent, float VerticalSpeed, float DeltaSeconds) const
 {
-	// GravityAlongWall is negative (pulls down the wall). Moving up = decelerating, moving down = accelerating
-	const float Scale = (VerticalSpeed > 0.f) ? Slide.AscendingGravityScale : Slide.DescendingGravityScale;
-	return GravityAlongWall * Scale;
+	VerticalSpeed = Super::ComputeVerticalSpeed(Plane, WallIntent, VerticalSpeed, DeltaSeconds);
+
+	// Gravity projected on the vertical axis is negative (pulls down the wall). Moving up = decelerating, moving down = accelerating
+	const float GravityAlongWall = FVector::DotProduct(GetMoverComponent()->GetGravityAcceleration(), Plane.VerticalAxis);
+	const float GravityScale = (VerticalSpeed > 0.f) ? Slide.AscendingGravityScale : Slide.DescendingGravityScale;
+	GSTN_WALL_LOG(2, TEXT("GEN slide gAlong=%.0f scale=%.2f"), GravityAlongWall, GravityScale);
+
+	return VerticalSpeed + GravityAlongWall * GravityScale * DeltaSeconds;
 }

@@ -1,17 +1,18 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "GSTN_WallEntryTransition.h"
+#include "WallMovement/Transitions/GSTN_WallEntryTransition.h"
 
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTagAssetInterface.h"
-#include "GSTN_WallMovementModeBase.h"
-#include "GSTN_WallMovementDebug.h"
 #include "MoveLibrary/MovementUtils.h"
 #include "MoveLibrary/MoverBlackboard.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
+#include "WallMovement/GSTN_WallMovementDebug.h"
+#include "WallMovement/GSTN_WallMovementTypes.h"
+#include "WallMovement/MoveLibrary/GSTN_WallQueryUtils.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallEntryTransition)
 
@@ -105,8 +106,7 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 
 	// The face hit (not the capsule's rounded normal) must be a grabbable surface facing the movement
 	const FVector FaceNormal = OutHit.ImpactNormal;
-	const float AngleDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(FaceNormal, GravityUp), -1.f, 1.f)));
-	if (AngleDeg < MinSurfaceAngle || AngleDeg > MaxSurfaceAngle || FVector::DotProduct(Direction, FaceNormal) >= -0.1f)
+	if (!UGSTN_WallQueryUtils::IsValidWallNormal(FaceNormal, GravityUp, MinSurfaceAngle, MaxSurfaceAngle) || FVector::DotProduct(Direction, FaceNormal) >= -0.1f)
 	{
 		return false;
 	}
@@ -164,11 +164,9 @@ bool UGSTN_WallEntryTransition::FindEntryWall(const FSimulationTickParams& Param
 	const FCharacterDefaultInputs* Inputs = Params.StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>();
 	FVector MoveInput = Inputs ? Inputs->GetMoveInput_WorldSpace() : FVector::ZeroVector;
 #if GSTN_WALL_DEBUG
-	FVector DebugValue;
-	if (Inputs && GSTNWallDebug::GetInputOverride(DebugValue) == GSTNWallDebug::EInputOverride::Stick)
+	if (Inputs)
 	{
-		const FVector CamForward = FVector::VectorPlaneProject(Inputs->ControlRotation.Vector(), GravityUp).GetSafeNormal();
-		MoveInput = FVector::CrossProduct(GravityUp, CamForward) * DebugValue.X + CamForward * DebugValue.Y;
+		GSTNWallDebug::OverrideMoveInput(Inputs->ControlRotation, GravityUp, MoveInput);
 	}
 #endif
 	const FVector FlatInput = FVector::VectorPlaneProject(MoveInput, GravityUp).GetClampedToMaxSize(1.f);

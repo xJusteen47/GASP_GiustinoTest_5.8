@@ -1,11 +1,11 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "GSTN_WallMovementLibrary.h"
+#include "WallMovement/MoveLibrary/GSTN_WallMovementLibrary.h"
 
-#include "GSTN_WallMovementModeBase.h"
-#include "GSTN_WallMovementDebug.h"
 #include "MoveLibrary/MoverBlackboard.h"
 #include "MoverComponent.h"
+#include "WallMovement/GSTN_WallMovementDebug.h"
+#include "WallMovement/GSTN_WallMovementTypes.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallMovementLibrary)
 

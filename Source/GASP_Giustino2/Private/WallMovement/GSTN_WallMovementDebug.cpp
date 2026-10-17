@@ -1,6 +1,6 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "GSTN_WallMovementDebug.h"
+#include "WallMovement/GSTN_WallMovementDebug.h"
 
 #if GSTN_WALL_DEBUG
 
@@ -9,7 +9,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
-#include "GSTN_WallMovementLibrary.h"
+#include "WallMovement/MoveLibrary/GSTN_WallMovementLibrary.h"
 #include "HAL/IConsoleManager.h"
 #include "MoverComponent.h"
 
@@ -149,6 +149,19 @@ namespace GSTNWallDebug
 			return EInputOverride::World;
 		}
 		return EInputOverride::None;
+	}
+
+	bool OverrideMoveInput(const FRotator& ControlRotation, const FVector& GravityUp, FVector& InOutMoveInput)
+	{
+		FVector DebugValue;
+		if (GetInputOverride(DebugValue) != EInputOverride::Stick)
+		{
+			return false;
+		}
+		const FVector CamForward = FVector::VectorPlaneProject(ControlRotation.Vector(), GravityUp).GetSafeNormal();
+		const FVector CamRight = FVector::CrossProduct(GravityUp, CamForward);
+		InOutMoveInput = CamRight * DebugValue.X + CamForward * DebugValue.Y;
+		return true;
 	}
 
 	FString Vec(const FVector& V)

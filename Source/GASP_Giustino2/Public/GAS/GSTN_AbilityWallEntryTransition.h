@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GSTN_WallEntryTransition.h"
+#include "WallMovement/Transitions/GSTN_WallEntryTransition.h"
 #include "GameplayAbilitySpecHandle.h"
 #include "GSTN_AbilityWallEntryTransition.generated.h"
 

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GSTN_WallMovementModeBase.h"
+#include "WallMovement/Modes/GSTN_ControlledWallMovementMode.h"
 #include "GSTN_WallSlideMovementMode.generated.h"
 
 /** Vertical motion of a wall slide: no stick input, only gravity along the wall, wall friction and speed limits */
@@ -40,7 +40,7 @@ struct GASP_GIUSTINO2_API FGSTN_WallSlideVertical
  * slide slower and any gravity direction works. The stick only moves the character sideways.
  */
 UCLASS(Blueprintable, BlueprintType)
-class GASP_GIUSTINO2_API UGSTN_WallSlideMovementMode : public UGSTN_WallMovementModeBase
+class GASP_GIUSTINO2_API UGSTN_WallSlideMovementMode : public UGSTN_ControlledWallMovementMode
 {
 	GENERATED_BODY()
 
@@ -52,6 +52,9 @@ public:
 	FGSTN_WallSlideVertical Slide;
 
 protected:
+	/** No stick input on the vertical axis: it only brakes (wall friction) and is clamped by the slide's terminal speeds */
 	virtual FGSTN_WallVerticalMovement GetVerticalMovement() const override;
-	virtual float GetVerticalForce(float VerticalSpeed, float GravityAlongWall) const override;
+
+	/** Base vertical model, then gravity along the wall (after the braking, so it never blocks a slide) */
+	virtual float ComputeVerticalSpeed(const FGSTN_WallMovementPlane& Plane, const FVector& WallIntent, float VerticalSpeed, float DeltaSeconds) const override;
 };

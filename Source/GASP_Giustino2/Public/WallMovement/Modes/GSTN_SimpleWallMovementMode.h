@@ -3,21 +3,20 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GSTN_WallMovementModeBase.h"
+#include "WallMovement/Modes/GSTN_SkiddingWallMovementMode.h"
 #include "GSTN_SimpleWallMovementMode.generated.h"
 
 /**
  * Free wall movement (climbing): the stick drives both the horizontal and the vertical axis of the wall, and the
- * character clings to it (no gravity along the wall). Works on overhangs and ceilings.
+ * character clings to it (no gravity along the wall). Works on overhangs and ceilings, where the capsule heading can
+ * follow the movement direction.
  */
 UCLASS(Blueprintable, BlueprintType)
-class GASP_GIUSTINO2_API UGSTN_SimpleWallMovementMode : public UGSTN_WallMovementModeBase
+class GASP_GIUSTINO2_API UGSTN_SimpleWallMovementMode : public UGSTN_SkiddingWallMovementMode
 {
 	GENERATED_BODY()
 
 public:
-	UGSTN_SimpleWallMovementMode(const FObjectInitializer& ObjectInitializer);
-
 	virtual void PostLoad() override;
 
 	/** Up/down along the wall (gravity projected on the wall), driven by the stick */
@@ -34,7 +33,9 @@ public:
 
 protected:
 	virtual FGSTN_WallVerticalMovement GetVerticalMovement() const override { return Vertical; }
-	virtual float GetCeilingHeadingSharpness() const override { return bAlignHeadingToMovementOnCeilings ? CeilingHeadingSharpness : 0.f; }
+
+	/** Base target up, plus the ceiling heading: where the upright bias fades, turn toward the movement direction instead */
+	virtual FVector ComputeTargetUp(const FQuat& CurrentQuat, const FVector& WallNormal, const FVector& GravityUp, const FVector& Velocity, float DeltaSeconds) const override;
 
 private:
 	// ---- Legacy settings (before the horizontal/vertical split). Not editable: only loaded from old assets and migrated in PostLoad
