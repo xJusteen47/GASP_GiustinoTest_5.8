@@ -25,16 +25,7 @@ namespace
 
 	FGSTN_MatchParams MakeMatchParams(const FGSTN_ResolveParams& Params, const UGSTN_CombatInputSettings& Settings, const FGSTN_InputSlotSpec& Spec, uint32 Reserved)
 	{
-		FGSTN_MatchParams Result = FGSTN_MatchParams::FromSettings(Settings, *Params.Buttons, Params.Now);
-		if (Spec.BufferFramesOverride >= 0)
-		{
-			Result.BufferFrames = Spec.BufferFramesOverride;
-		}
-		if (Spec.HoldBuffer != EGSTN_OverrideBool::Default)
-		{
-			Result.bHoldBuffer = Spec.HoldBuffer == EGSTN_OverrideBool::On;
-		}
-		Result.DirectionPolicy = Spec.DirectionPolicy;
+		FGSTN_MatchParams Result = Spec.MakeMatchParams(Settings, *Params.Buttons, Params.Now);
 		Result.ReservedEvents = Reserved;
 		Result.PausedStart = Params.PausedStart;
 		Result.PausedEnd = Params.PausedEnd;

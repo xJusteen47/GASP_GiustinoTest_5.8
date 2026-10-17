@@ -6,6 +6,7 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "GSTN_CombatCoreTypes.h"
+#include "Input/GSTN_InputMatcher.h"
 #include "Input/GSTN_InputPattern.h"
 #include "GSTN_InputSlot.generated.h"
 
@@ -125,6 +126,9 @@ struct GSTNCOMBATCORE_API FGSTN_InputSlotSpec
 
 	/** Whether the slot waits for chords, with the settings' default applied */
 	bool UsesChordGrace(const UGSTN_CombatInputSettings& Settings) const;
+
+	/** Matcher params of this slot at frame Now: the settings' buffer defaults with the slot's overrides applied */
+	FGSTN_MatchParams MakeMatchParams(const UGSTN_CombatInputSettings& Settings, const FGSTN_ButtonMap& Buttons, int32 Now) const;
 };
 
 /** A slot shared as an asset (Asset Manager type GSTN_InputSlot). */
@@ -173,4 +177,13 @@ public:
 
 	/** The specs in order, for the resolver and the validator */
 	void GetSpecs(TArray<const FGSTN_InputSlotSpec*>& OutSpecs) const;
+
+#if WITH_EDITOR
+	/** Reports the findings of UGSTN_InputSlotValidation: ambiguous and duplicate slots as errors, shadowed ones as warnings */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+
+	/** Replaces the slots with the plugin's standard command set (combat.md section 9.1), to start from or to look at */
+	UFUNCTION(CallInEditor, Category = "Slots")
+	void FillWithStandardSlots();
+#endif
 };

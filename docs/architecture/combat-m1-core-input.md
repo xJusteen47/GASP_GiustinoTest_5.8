@@ -311,6 +311,25 @@ Steps (combat.md §8.2):
 are provably disjoint: one requires a tag the other forbids). Both match and their `FGSTN_CommandPriority` is equal →
 Ambiguous (error); a higher priority always matching → Shadowed (warning); duplicate command tags in one set → error.
 
+*Implementation notes (M1.6):*
+
+- **Validator**: `FindConflicts(Slots, Settings)` (and an overload for a set asset) returns `FGSTN_SlotConflict { SlotA, SlotB,
+  Kind, Message }` with kinds `Ambiguous` (error), `Shadowed` (warning, `SlotA` is the shadowed slot), `DuplicateCommand`
+  (error) and `InvalidSlot` (error: no command tag, malformed pattern, canonical input that cannot be played). It matches
+  each slot's canonical input against the other slots' patterns **with the matcher** (not the resolver: reservation and press
+  groups do not matter for a static check), with each slot's own buffer overrides, comparing `FGSTN_CommandPriority`.
+  Buttons get bits from the set's own button tags sorted by name, so no input config is needed. Only canonical inputs are
+  explored: it cannot find a conflict that no canonical input reaches.
+- **`UGSTN_InputSlotSet::IsDataValid`** reports the findings (errors invalidate, shadows warn). A `CallInEditor` button
+  **Fill With Standard Slots** replaces the slots with `UGSTN_StandardSlots::Build()` so a designer can start from or inspect
+  the standard set; plugin content is git-ignored (combat.md section 3), so such assets are test content until the
+  exception is added.
+- **`UGSTN_StandardSlots::Build()`** returns the 24 family commands (per family: grounded then airborne, each Neutral,
+  Directional, CrouchNeutral, CrouchDirectional) and the 4 chord commands. Grounded slots forbid
+  `Combat.Context.Airborne`, airborne ones require it (provably disjoint contexts); crouch is `Hold(Crouch, 0)`, so a crouch
+  press up to the simultaneity tolerance after the attack press still selects the crouch version. Priorities in a tier:
+  Neutral 15 < Directional 18 < CrouchNeutral 20 < CrouchDirectional 23 (chords: +10 on each).
+
 ## 4. Input notation (`FGSTN_InputScript`)
 
 Used by tests, the validator and later the input display. Space-separated tokens `<frame>:<item>`:
