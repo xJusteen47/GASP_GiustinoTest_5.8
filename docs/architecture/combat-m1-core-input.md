@@ -142,6 +142,26 @@ after the press at `Frame` and the bit is in `HeldButtons`); `Consume(EventIndex
 `NetSerialize(FArchive&, int32 CurrentFrame)`: counts + per event `uint8 delta = min(Current - Frame, 255)` + payload;
 events with delta 255 are dropped on read. `operator==` for `ShouldReconcile`. Ring overflow drops the oldest.
 
+*Implementation notes (M1.3):*
+
+- `FGSTN_DirectionEvent` is `{ int32 Frame; FGSTN_StickSample Stick; }` (the sample type holds the three directions, zone,
+  flick and world yaw, so the event and the per-frame sample share it). Events are addressed by **slot** (physical ring
+  position 0..15, stable while the event lives): the matcher's `UsedButtonEvents` and `ReservedEvents` use slots;
+  `GetButtonSlot(Age)` converts from age (0 = newest).
+- Events older than 254 frames are dropped by `Append` itself (so serializing with 8-bit deltas loses nothing and an idle
+  state does not change). The newest stick event is the current stick state, so it is never dropped: it keeps living with
+  `Frame = AncientFrame`. Consequence: a hold buffer cannot outlive 254 frames even with `MaxHoldBufferFrames = 0`.
+- `IsHeldContinuouslySince(Button, PressFrame)` has no `Now` parameter (the held mask is the latest frame's).
+  `GetStickAt(Frame)` returns the stick state at a frame (flick flag only on its own frame); `GetDirectionAt` is its
+  per-space shorthand.
+- Wire format: `[buttonCount][directionCount | flags][held, packed]([worldYaw])([frame])` then newest-first events, 2 bytes
+  per button event and 4 per stick event. The stick of the latest frame is rebuilt from the newest stick event (plus the
+  world yaw byte). Idle: 3 bytes; both rings full: exactly 100 bytes (measured by `History.SerializedSize`). `NetSerialize`
+  takes the frame to write deltas from; `NetSerializeParams` carries no frame, so **M2 must provide one** (e.g. a sync
+  state field that stays equal to the latest appended frame, or serialize relative to a frame the state already has).
+- `Append` records presses from `Sample.Pressed` and releases from `Sample.Released` as given. A tap shorter than a frame
+  is a press and a release of the same frame, so M2 builds `Released = (History.Held | Pressed) & ~Held`.
+
 **Conditions (`FGSTN_InputCondition`, USTRUCT base, `TInstancedStruct` elements)**
 
 Virtual interface (all const):
@@ -253,7 +273,17 @@ Used by tests, the validator and later the input display. Space-separated tokens
   derived exactly as in the game.
 - Example: `0:face=90 0:4t 6:6t! 7:+A` = stick left, then flick right and press A, with the character turned 90° from
   the camera.
-- `Build(const FString&, FGSTN_InputHistory&, int32& OutLastFrame)` fails loudly on syntax errors.
+- A trailing `!` makes the stick token a flick **for the real classifier**: the stick is released on the previous frame
+  (a `!` at frame 0, or on a neutral stick, is an error), so the flag in the history comes from `FlickFrames`, not from
+  the notation.
+- `FGSTN_InputScript` is a value: `Parse` adds events, `Advance(History, Settings, UntilFrame)` plays frames up to a
+  frame and continues where it stopped (copying the script forks the session, the rollback stand-in of the determinism
+  tests); `Build(Notation, Settings, History, LastFrame)` is parse + play to the last token. Buttons resolve by letter
+  (`A` = bit 0), `#n`, or the last part of the tag name through the script's button tags (default: the six standard
+  buttons in that order). `Describe(History, MaxEvents)` prints a history in this notation (stick events as numpad key +
+  zone letter, `!` for a flick, `?` for a frame too old to know); M2's `ToString` uses it.
+- `Build(const FString&, FGSTN_InputHistory&, int32& OutLastFrame)` fails loudly on syntax errors and impossible
+  sequences (pressing a held button, releasing a released one): it logs an error and returns false.
 - The input display (M5) shows the same notation, with the facing-relative direction as a secondary line.
 
 ## 5. Tests (Automation, names `GSTNCombat.Core.Input.<Area>.<Case>`)

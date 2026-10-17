@@ -47,9 +47,38 @@ struct FGSTN_StickSample
 		}
 	}
 
+	/** Same directions and zone (the aim heading and the flick flag are not part of a direction change) */
+	bool HasSameDirections(const FGSTN_StickSample& Other) const
+	{
+		return StickDir == Other.StickDir && FacingDir == Other.FacingDir && WorldDir == Other.WorldDir && Zone == Other.Zone;
+	}
+
 	bool operator==(const FGSTN_StickSample& Other) const
 	{
-		return StickDir == Other.StickDir && FacingDir == Other.FacingDir && WorldDir == Other.WorldDir
-			&& Zone == Other.Zone && bFlick == Other.bFlick && WorldYaw == Other.WorldYaw;
+		return HasSameDirections(Other) && bFlick == Other.bFlick && WorldYaw == Other.WorldYaw;
 	}
+};
+
+/**
+ * What the combat tick sees for one frame: the button masks and the classified stick. The history is fed with exactly
+ * one sample per simulated frame. Built in the simulation from the input command and the direction classifier (M2), and
+ * by FGSTN_InputScript in tests, the validator and debug tools.
+ *
+ * Pressed includes taps shorter than a frame (a button can be in Pressed and Released of the same frame and in neither
+ * Held): the history records the press and then the release on that frame.
+ */
+struct FGSTN_InputSample
+{
+	int32 Frame = INDEX_NONE;
+
+	/** Buttons held at the end of the frame (bit i = button i of the input config) */
+	uint32 Held = 0;
+
+	/** Buttons that went down during the frame, taps included */
+	uint32 Pressed = 0;
+
+	/** Buttons that went up during the frame */
+	uint32 Released = 0;
+
+	FGSTN_StickSample Stick;
 };

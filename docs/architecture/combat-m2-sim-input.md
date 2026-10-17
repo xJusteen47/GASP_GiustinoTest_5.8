@@ -105,7 +105,7 @@ tracker (`GetSyncState()`), owner gameplay tags from the ASC (at priority 47 the
 after a rollback restore).
 
 1. **Sample**: `Held = Cmd.HeldButtons`; `Pressed = (Held & ~History.Held) | Cmd.PressedButtons`;
-   `Released = History.Held & ~Held`; stick → `FGSTN_DirectionClassifier::Classify(raw stick, Cmd.CameraYaw, facing
+   `Released = (History.Held | Pressed) & ~Held` (a tap shorter than a frame is released the frame it is pressed); stick → `FGSTN_DirectionClassifier::Classify(raw stick, Cmd.CameraYaw, facing
    yaw)`, giving the `Stick`, `Facing` and `World` directions (combat.md §6.3).
 2. **Append** the sample to `History` (M1 rules).
 3. **Watched tags**: compute the current mask from the owner's tags (section 6); `TagsAdded` = bits set now and not in
