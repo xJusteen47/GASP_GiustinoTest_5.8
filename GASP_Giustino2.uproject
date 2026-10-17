@@ -132,6 +132,10 @@
 		{
 			"Name": "AllToolsets",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

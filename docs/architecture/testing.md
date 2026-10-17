@@ -1,6 +1,16 @@
 # Testing the GAS + NPP + Mover integration
 
-There are no automation tests; verification is a PIE network harness.
+Two layers: Automation tests for the pure combat logic (`GSTNCombatCore`), and a PIE network harness for everything simulated.
+
+## Automation tests (`GSTNCombat.Core.*`)
+
+Pure, deterministic tests of `Plugins/GSTNCombat/Source/GSTNCombatCore` (input history, classifier, matcher, slots). Run them in the editor (Session Frontend > Automation, filter `GSTNCombat`) or headless with the editor closed:
+
+```
+"C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "<project>\GASP_Giustino2.uproject" -ExecCmds="Automation RunTests GSTNCombat.Core;Quit" -unattended -nullrhi -nopause -log
+```
+
+The result is in `Saved/Logs/GASP_Giustino2.log` (search `Test Completed`). Test names are `GSTNCombat.Core.<Area>.<Case>`; sources are in `Private/Tests/`.
 
 ## C++ side (`GASNPPTest/`)
 
