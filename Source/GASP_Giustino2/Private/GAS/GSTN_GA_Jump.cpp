@@ -2,7 +2,7 @@
 
 #include "GAS/GSTN_GA_Jump.h"
 #include "GAS/GSTN_AbilityTags.h"
-#include "GAS/GSTN_MoverSimStateTracker.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverTypes.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "DefaultMovementSet/InstantMovementEffects/BasicInstantMovementEffects.h"

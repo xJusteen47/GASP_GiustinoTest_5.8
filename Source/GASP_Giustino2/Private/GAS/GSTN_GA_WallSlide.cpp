@@ -2,7 +2,7 @@
 
 #include "GAS/GSTN_GA_WallSlide.h"
 #include "GAS/GSTN_AbilityTags.h"
-#include "GAS/GSTN_MoverSimStateTracker.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 
 UGSTN_GA_WallSlide::UGSTN_GA_WallSlide(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)

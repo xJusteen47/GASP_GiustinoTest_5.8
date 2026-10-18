@@ -26,7 +26,7 @@ namespace
 	};
 
 	template<typename T>
-	FCondition MakeCondition(const T& Condition)
+	FCondition MakeInstance(const T& Condition)
 	{
 		return FCondition::Make<T>(Condition);
 	}
@@ -35,7 +35,7 @@ namespace
 	{
 		FGSTN_InputCondition_Press Condition;
 		Condition.Buttons.AddTag(Button);
-		return MakeCondition(Condition);
+		return MakeInstance(Condition);
 	}
 
 	FCondition MakeCrouchHeld()
@@ -43,7 +43,7 @@ namespace
 		FGSTN_InputCondition_Hold Condition;
 		Condition.Button = GSTNInputTags::Button_Crouch.GetTag();
 		Condition.MinFrames = 0;
-		return MakeCondition(Condition);
+		return MakeInstance(Condition);
 	}
 
 	/** Standing: any stick, as long as it is not pushed all the way. Tilted: any direction, pushed all the way */
@@ -54,7 +54,7 @@ namespace
 		Condition.Directions = bTilted ? GSTN_DirectionMasks::AnyTilted : GSTN_DirectionMasks::All;
 		Condition.MinZone = bTilted ? EGSTN_StickZone::Tilt : EGSTN_StickZone::Neutral;
 		Condition.MaxZone = bTilted ? EGSTN_StickZone::Tilt : EGSTN_StickZone::Aim;
-		return MakeCondition(Condition);
+		return MakeInstance(Condition);
 	}
 
 	FGSTN_InputSlotSpec MakeSlot(const FGameplayTag& Command, FCondition Anchor, EShape Shape, bool bAirborne)
@@ -119,7 +119,7 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 		Chord.Buttons.AddTag(GSTNInputTags::Button_Attack.GetTag());
 		Chord.Buttons.AddTag(GSTNInputTags::Button_Special.GetTag());
 		Chord.WithinFrames = 2;
-		Slots.Add(MakeSlot(Combos[Shape]->GetTag(), MakeCondition(Chord), static_cast<EShape>(Shape), false));
+		Slots.Add(MakeSlot(Combos[Shape]->GetTag(), MakeInstance(Chord), static_cast<EShape>(Shape), false));
 	}
 	return Slots;
 }

@@ -32,7 +32,8 @@ m.setup_editor(False)         # after Stop: restore GM_Sandbox and throttling
 ```
 
 - `force_reconcile_on_mode`: forces a reconcile while the client pawn is in a given mode (e.g. on the wall with `GA_WallSlide` active). `np.ForceReconcile` is one global cvar under "Run Under One Process", so it is set again every frame until the target client's rollback counter increases.
-- A clean run = server and client snapshots equal after the scenario and **no reconciles that were not forced**. Unexpected reconciles almost always mean simulation reads state that is not rolled back (see the rules in gas-npp.md).
+- A clean run = server and client snapshots equal after the scenario and **no reconciles that were not forced**, with one known exception (below). Unexpected reconciles almost always mean simulation reads state that is not rolled back (see the rules in gas-npp.md).
+- **Known exception (frame-offset resyncs).** In PIE "Run Under One Process" Network Prediction re-maps the client's frames to the server's every few seconds (log: `ReconcileFromInputOffset Old Offset X, New Offset Y`), also with no network emulation, and the client's simulation time jumps with it. An idle pawn then mismatches on the period timer of a periodic effect (`GSTN_GE_StaminaRegen`: "Current period Time MS" 0.242 vs 0.140), a moving one on Mover. That is not a bug of the code under test: judge by `mark_log()` before the scenario and `report_reconciles(mark)` after it: `unexplained` (state-mismatch reconciles **not** on the frame of an offset change) must be 0, `forced` counts the `np.ForceReconcile` ones. Pre-existing in the fork (it is not tied to the combat model or the tracker); remove this paragraph when the offset resyncs are fixed.
 
 ## Asset setup script
 

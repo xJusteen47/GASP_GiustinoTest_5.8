@@ -27,7 +27,7 @@ Fixed tick: **ability system first, then Mover**.
 | `UGSTN_GA_Jump` | Ground jump. Applies `UGSTN_GE_Jump` whose `UGSTN_JumpImpulseMoveCreator` queues Mover's jump impulse. Turns off `UCharacterMoverComponent` built-in jump on the avatar (`bTakeOverMoverJump`). |
 | `UGSTN_GA_WallSlide` | "Being on a wall". No input. Owns `State.Movement.WallSliding`; ends when Mover leaves `WallModeNames`. Movement itself stays in the wall modes. |
 | `UGSTN_AbilityWallEntryTransition` | Mover transition (Falling -> wall mode) that grabs a wall only if an ability with `AbilityTags` is granted and `CanActivate`, then activates it. |
-| `UGSTN_MoverSimStateTracker` | Component (FindOrAdd on the Mover owner). Mirrors Mover's sync state per simulated/rolled-back frame. |
+| `UGSTN_MoverSimStateTracker` | Component (FindOrAdd on the Mover owner). Mirrors Mover's sync state per simulated/rolled-back frame. Lives in the GSTNCombat plugin (`GSTNCombatNP/Mover/`, include `"Mover/GSTN_MoverSimStateTracker.h"`) because the combat model needs it too; the project module depends on `GSTNCombatNP`. |
 | `UGSTN_AbilityInputComponent` | Binds the local player's Enhanced Input to the pawn's `UNpAbilitySystemComponent` once controlled. |
 | `GSTNAbilityTags::*` | Native tags: `Ability.Movement.Jump`, `Ability.Movement.WallSlide`, `State.Movement.WallSliding`, `State.Movement.WallSlideBlocked`, `State.Movement.JumpBlocked`. |
 

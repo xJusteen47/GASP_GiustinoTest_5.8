@@ -10,9 +10,9 @@ Read the linked docs only when the task touches that area. Do not read the whole
 | Area | Path | Doc |
 |---|---|---|
 | Project C++ | `Source/GASP_Giustino2/{Public,Private}/` | this file |
-| Abilities, tags, sim-state tracker, ability input | `.../GAS/` | [gas-npp.md](docs/architecture/gas-npp.md) |
+| Abilities, tags, ability input | `.../GAS/` | [gas-npp.md](docs/architecture/gas-npp.md) |
 | Wall movement modes, transitions, math/query libs | `.../WallMovement/` | [wall-movement.md](docs/architecture/wall-movement.md) |
-| Combat plugin (input buffer, slots, moves, hits; own NP model) | `Plugins/GSTNCombat/` | [combat.md](docs/architecture/combat.md) |
+| Combat plugin (input buffer, slots, moves, hits; own NP model) and the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`, `GSTNCombatNP/Mover/`) | `Plugins/GSTNCombat/` | [combat.md](docs/architecture/combat.md), [gas-npp.md](docs/architecture/gas-npp.md) |
 | Network test harness (C++ side) | `.../GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | Editor Python tooling | `Tools/GAS/`, `Tools/GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | GAS-NPP plugin forks (GameplayAbilities, NetworkPrediction, AbilitySystemSimulation...) | `Plugins/GASNPP/` | [gas-npp.md](docs/architecture/gas-npp.md) |

@@ -1,4 +1,4 @@
-// Gameplay Ability System setup (GAS-NPP fork).
+// Mover state tracking for simulation code (GAS-NPP fork).
 
 #pragma once
 
@@ -23,7 +23,7 @@ class UMoverComponent;
  * Created on demand (FindOrAdd) on the Mover component's owner. Not replicated.
  */
 UCLASS(ClassGroup = (AbilitySystem))
-class GASP_GIUSTINO2_API UGSTN_MoverSimStateTracker : public UActorComponent
+class GSTNCOMBATNP_API UGSTN_MoverSimStateTracker : public UActorComponent
 {
 	GENERATED_BODY()
 

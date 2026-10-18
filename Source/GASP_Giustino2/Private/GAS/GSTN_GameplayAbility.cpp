@@ -1,7 +1,7 @@
 // Gameplay Ability System setup (GAS-NPP fork).
 
 #include "GAS/GSTN_GameplayAbility.h"
-#include "GAS/GSTN_MoverSimStateTracker.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "InputAction.h"

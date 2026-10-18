@@ -17,7 +17,8 @@ public class GSTNCombatNP : ModuleRules
 			"GameplayAbilities",
 			"AbilitySystemSimulation",
 			"NetworkPrediction",
-			"NetCore"
+			"NetCore",
+			"Mover"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

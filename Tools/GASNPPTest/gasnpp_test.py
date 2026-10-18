@@ -400,6 +400,53 @@ def scenario_server_dash(client=1, player_key='P256'):
     run_timeline(steps)
 
 
+# ------------------------------------------------------------------------------------------------ reconcile log check
+# Network Prediction resynchronises the client's frame offset now and then (log: "ReconcileFromInputOffset Old Offset X, New
+# Offset Y", every few seconds in PIE "Run Under One Process", also with no network emulation). The client's simulation
+# time jumps with it, so a state mismatch on that frame is expected (an idle pawn shows it in the period timer of a periodic
+# effect). A run is clean when no "Sync/Aux mismatch" reconcile happens outside the frames of an offset change; forced
+# reconciles (np.ForceReconcile) are counted apart. Remove the exception when the offset resyncs are fixed in the fork.
+import os, re
+
+_LOG_LINE = re.compile(r'^(\[\d{4}\.\d\d\.\d\d-\d\d\.\d\d\.\d\d:\d+\]\[\s*\d+\])(\w+): (?:(\w+): )?(.*)$')
+
+
+def _log_path():
+    return os.path.join(unreal.Paths.project_log_dir(), unreal.SystemLibrary.get_game_name() + '.log')
+
+
+def mark_log():
+    """Byte position of the end of the editor log: pass it to report_reconciles() to look only at what follows."""
+    return os.path.getsize(_log_path())
+
+
+def report_reconciles(since=0):
+    """Reconciles in the editor log after `since` (see mark_log): returns a dict and logs a summary.
+    unexplained = state mismatches not on the frame of an offset change (the number that must be 0)."""
+    with open(_log_path(), 'rb') as f:
+        f.seek(since)
+        text = f.read().decode('utf-8', errors='replace')
+    offset_frames, mismatches, forced = set(), [], 0
+    for line in text.splitlines():
+        m = _LOG_LINE.match(line)
+        if not m:
+            continue
+        stamp, category, _verbosity, message = m.groups()
+        if category != 'LogNetworkPrediction':
+            continue
+        if message.startswith('ReconcileFromInputOffset'):
+            offset_frames.add(stamp)
+        elif message.startswith('Reconcile required due to Sync/Aux mismatch'):
+            mismatches.append((stamp, message))
+        elif 'ForceReconcile' in message and message.startswith('Reconcile activated'):
+            forced += 1
+    unexplained = [x for x in mismatches if x[0] not in offset_frames]
+    result = {'offset_changes': len(offset_frames), 'mismatches': len(mismatches), 'on_offset_frames': len(mismatches) - len(unexplained),
+              'unexplained': len(unexplained), 'forced': forced, 'unexplained_lines': [x[1] for x in unexplained[:5]]}
+    unreal.log('GASNPP reconciles: ' + json.dumps(result))
+    return result
+
+
 # ------------------------------------------------------------------------------------------------ combat (GSTNCombat)
 def combat_tap(client_index, mask):
     """One-frame press of the combat buttons in `mask` (bit i = button i of the pawn's GSTN_CombatSimComponent)."""

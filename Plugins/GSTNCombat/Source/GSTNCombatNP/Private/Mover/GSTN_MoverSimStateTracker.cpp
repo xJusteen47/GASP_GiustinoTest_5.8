@@ -1,6 +1,6 @@
-// Gameplay Ability System setup (GAS-NPP fork).
+// Mover state tracking for simulation code (GAS-NPP fork).
 
-#include "GAS/GSTN_MoverSimStateTracker.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
 #include "GameFramework/Actor.h"
 
