@@ -327,6 +327,38 @@ struct FNetworkPredictionDriverBase
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------------
+	//	PrepareRepeatedInput
+	//
+	//	The server has no input from the controlling client for a fixed tick (starved, or the frame was lost in transit) and reuses
+	//	the last one it has. Edge-triggered data in that input (a "just pressed" event) already acted on the frame it came from:
+	//	clear it here so one press does not act twice, and keep the held state.
+	//	Optional, as a member of the input type: void FMyInputCmd::PrepareRepeatedInput().
+	// -----------------------------------------------------------------------------------------------------------------------------------
+
+	static void PrepareRepeatedInput(InputType* InputCmd)
+	{
+		CallPrepareRepeatedInputMemberFunc(InputCmd);
+	}
+
+	struct CPrepareRepeatedInputMemberFuncable
+	{
+		template <typename InInputType, typename...>
+		auto Requires(InInputType* InputCmd) -> decltype(InputCmd->PrepareRepeatedInput());
+	};
+
+	static constexpr bool HasPrepareRepeatedInput = TModels_V<CPrepareRepeatedInputMemberFuncable, InputType>;
+
+	template<bool HasFunc=HasPrepareRepeatedInput>
+	static typename TEnableIf<HasFunc>::Type CallPrepareRepeatedInputMemberFunc(InputType* InputCmd)
+	{
+		npCheckSlow(InputCmd);
+		InputCmd->PrepareRepeatedInput();
+	}
+
+	template<bool HasFunc=HasPrepareRepeatedInput>
+	static typename TEnableIf<!HasFunc>::Type CallPrepareRepeatedInputMemberFunc(InputType* InputCmd) { }
+
+	// -----------------------------------------------------------------------------------------------------------------------------------
 	//	FinalizeFrame
 	//
 	//	Called every engine frame to push the final result of the NetworkPrediction system to the driver

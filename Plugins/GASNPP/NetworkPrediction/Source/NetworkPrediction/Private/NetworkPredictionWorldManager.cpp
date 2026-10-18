@@ -2,6 +2,7 @@
 
 #include "NetworkPredictionWorldManager.h"
 #include "Engine/Engine.h"
+#include "Engine/NetConnection.h"
 #include "PBDRigidsSolver.h"
 #include "ChaosSolversModule.h"
 #include "NetworkPredictionLagCompensation.h"
@@ -386,6 +387,7 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 		TRACE_CPUPROFILER_EVENT_SCOPE(NetworkPrediction::FixedTick);
 
 		FixedTickState.UnspentTimeMS += fEngineFrameDeltaTimeMS;
+		const int32 FirstFrameThisUpdate = FixedTickState.PendingFrame;
 
 		while ((FixedTickState.UnspentTimeMS + KINDA_SMALL_NUMBER) >= FixedTickState.TimeDilationState.FixedStepDilatedTimeMS)
 		{
@@ -408,12 +410,14 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 			UE_NP_TRACE_PUSH_INPUT_FRAME(ServerInputFrame);
 			if (Services.FixedInputRemote.Array.Num() > 0)
 			{
+				// Both counts must fit the input ring, which also holds the frame being consumed
+				const int32 MaxBufferedInputs = NpFixedTickServerInputBufferSize - 1;
+				const int32 DesiredBufferedInputs = FMath::Clamp(Settings.FixedTickDesiredBufferedInputCount, 0, MaxBufferedInputs);
 				for (UNetworkPredictionPlayerControllerComponent*& InputHandler : RPCHandlers)
 				{
-					//ToDo : This Is Hard Coded 32 Needs to fix it
 					if (IsValid(InputHandler))
 					{
-						InputHandler->AdvanceLastConsumedFrame(32);
+						InputHandler->AdvanceLastConsumedFrame(DesiredBufferedInputs, MaxBufferedInputs);
 					}
 				}
 
@@ -455,36 +459,12 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 					RegisteredComp->CaptureStateAndAddToHistory(ServiceStep.EndTotalSimulationTime);
 				}
 			}
-			
-			{
-				TRACE_CPUPROFILER_EVENT_SCOPE(NetworkPrediction::CallServerRPC);
-				// send multiple RPC for each input command.
-				// since we are sending inputs for all simulation together this is better than sending all in 1 RPC
-				
-				if (Services.FixedServerRPC.Array.Num() > 0)
-				{
-					const int32 NumInputToSend = FMath::Max(Settings.FixedTickInputSendCount,1);
-					const int32 StartFrame = FMath::Max(FixedTickState.PendingFrame - NumInputToSend ,0);
-					// PendingFrame doesn't have an input written yet, so don't send its contents
-					for (int32 i = StartFrame; i < FixedTickState.PendingFrame; i++)
-					{
-						for (TUniquePtr<IFixedServerRPCService>& Ptr : Services.FixedServerRPC.Array)
-						{
-							Ptr->AddInputToHandler(i);
-						}
-						for (UNetworkPredictionPlayerControllerComponent*& InputHandler : RPCHandlers)
-						{
-							InputHandler->SendServerRpc(i);
-							// we only need to send acked frames once
-							if (FixedTickState.LocalAckedFrames.IDsToAckedFrames.Num() > 0)
-							{
-								InputHandler->SendAckedFrames(FSerializedAckedFrames(FixedTickState.LocalAckedFrames));
-							}
-						}
-						FixedTickState.LocalAckedFrames.IDsToAckedFrames.Reset();
-					}
-				}
-			}
+		}
+
+		// Once per engine frame, after all the fixed ticks it ran
+		if (Services.FixedServerRPC.Array.Num() > 0)
+		{
+			SendFixedTickInputsToServer(FixedTickState.PendingFrame > FirstFrameThisUpdate);
 		}
 	}
 
@@ -749,6 +729,77 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 		{
 			Ptr->CallServerRPC(DeltaTimeSeconds);
 		}
+	}
+}
+
+void UNetworkPredictionWorldManager::SendFixedTickInputsToServer(const bool bTickedThisFrame)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE(NetworkPrediction::CallServerRPC);
+
+	// PendingFrame doesn't have an input written yet, so don't send its contents
+	const int32 EndFrame = FixedTickState.PendingFrame;
+	const int32 NumInputToSend = FMath::Max(Settings.FixedTickInputSendCount, 1);
+	// Older inputs are of no use: the server would skip them (AdvanceLastConsumedFrame), and the local frame buffer has
+	// already overwritten some of them
+	const int32 MaxBacklog = NpFixedTickServerInputBufferSize - 1;
+
+	int32 StartFrame = EndFrame;
+	for (UNetworkPredictionPlayerControllerComponent* InputHandler : RPCHandlers)
+	{
+		if (!IsValid(InputHandler))
+		{
+			continue;
+		}
+		int32& NextFrame = InputHandler->NextInputFrameToSend;
+		NextFrame = NextFrame == INDEX_NONE ? FMath::Max(EndFrame - 1, 0) : FMath::Clamp(NextFrame, EndFrame - MaxBacklog, EndFrame);
+		const bool bSendRedundantCopies = bTickedThisFrame && EndFrame - NextFrame <= NumInputToSend;
+		StartFrame = FMath::Min(StartFrame, bSendRedundantCopies ? FMath::Min(NextFrame, EndFrame - NumInputToSend) : NextFrame);
+	}
+	StartFrame = FMath::Max(StartFrame, 0);
+
+	for (int32 Frame = StartFrame; Frame < EndFrame; ++Frame)
+	{
+		for (TUniquePtr<IFixedServerRPCService>& Ptr : Services.FixedServerRPC.Array)
+		{
+			Ptr->AddInputToHandler(Frame);
+		}
+		for (UNetworkPredictionPlayerControllerComponent* InputHandler : RPCHandlers)
+		{
+			if (!IsValid(InputHandler))
+			{
+				continue;
+			}
+			int32& NextFrame = InputHandler->NextInputFrameToSend;
+			const bool bSendRedundantCopies = bTickedThisFrame && EndFrame - NextFrame <= NumInputToSend;
+			const bool bNewFrame = Frame == NextFrame;
+			const bool bRedundantCopy = bSendRedundantCopies && Frame < NextFrame && Frame >= EndFrame - NumInputToSend;
+			const UNetConnection* NetConnection = InputHandler->GetNetConnection();
+			if ((bNewFrame || bRedundantCopy) && NetConnection && NetConnection->IsNetReady())
+			{
+				InputHandler->SendServerRpc(Frame);
+				if (bNewFrame)
+				{
+					++NextFrame;
+				}
+			}
+			else
+			{
+				InputHandler->DiscardInputsToSend();
+			}
+		}
+	}
+
+	// we only need to send acked frames once
+	if (FixedTickState.LocalAckedFrames.IDsToAckedFrames.Num() > 0)
+	{
+		for (UNetworkPredictionPlayerControllerComponent* InputHandler : RPCHandlers)
+		{
+			if (IsValid(InputHandler))
+			{
+				InputHandler->SendAckedFrames(FSerializedAckedFrames(FixedTickState.LocalAckedFrames));
+			}
+		}
+		FixedTickState.LocalAckedFrames.IDsToAckedFrames.Reset();
 	}
 }
 

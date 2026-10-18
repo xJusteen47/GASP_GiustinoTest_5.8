@@ -3,6 +3,7 @@
 
 #include "NetworkPredictionPlayerControllerComponent.h"
 
+#include "NetworkPredictionLog.h"
 #include "NetworkPredictionWorldManager.h"
 
 
@@ -143,24 +144,31 @@ void UNetworkPredictionPlayerControllerComponent::OnRep_TimeDilation()
 }
 
 
-void UNetworkPredictionPlayerControllerComponent::AdvanceLastConsumedFrame(const int32& MaxBufferSize)
+void UNetworkPredictionPlayerControllerComponent::AdvanceLastConsumedFrame(const int32 DesiredBufferedInputs, const int32 MaxBufferedInputs)
 {
 	if (LastReceivedFrame == INDEX_NONE)
 	{
 		return;
 	}
-	if (LastConsumedFrame >= LastReceivedFrame)
+
+	const int32 NumBufferedInputs = LastReceivedFrame - LastConsumedFrame;
+	if (LastConsumedFrame == INDEX_NONE || NumBufferedInputs > MaxBufferedInputs)
 	{
-		//ToDo Log input starvation.
-		LastConsumedFrame = FMath::Max(LastReceivedFrame - 2,0);
+		if (LastConsumedFrame != INDEX_NONE)
+		{
+			UE_LOG(LogNetworkPrediction, Warning, TEXT("%s: %d buffered client inputs, more than the %d the server keeps. Skipping %d client frames."),
+				*GetNameSafe(GetOwner()), NumBufferedInputs, MaxBufferedInputs, NumBufferedInputs - DesiredBufferedInputs);
+		}
+		LastConsumedFrame = FMath::Max(LastReceivedFrame - DesiredBufferedInputs, 0);
 		return;
 	}
-	if (LastReceivedFrame - LastConsumedFrame > FMath::Max(2,MaxBufferSize))
+
+	// Starved: hold, see the header
+	if (NumBufferedInputs <= 0)
 	{
-		//ToDo Log Buffer Overflow
-		LastConsumedFrame = LastReceivedFrame - 7;
 		return;
 	}
+
 	LastConsumedFrame++;
 }
 

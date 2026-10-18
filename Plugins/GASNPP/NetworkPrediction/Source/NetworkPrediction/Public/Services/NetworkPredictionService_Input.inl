@@ -169,14 +169,19 @@ public:
 			
 				UE_NP_TRACE_SIM(Instance.TraceID);
 				TServerRecvData_Fixed<ModelDef>& ServerRecvData = DataStore->ServerRecv.GetByIndexChecked(Instance.ServerRecvIdx);
-				for (int32 DroppedFrame = RPCHandler->LastReceivedFrame+1; DroppedFrame < ClientFrame; ++DroppedFrame)
+				// Only the frames still in the ring matter. Before the client's first input there is no gap, just the start of the
+				// stream, which the server enters DesiredBufferedInputs deep: those few frames get the default input.
+				const bool bStreamStarted = RPCHandler->LastReceivedFrame != INDEX_NONE;
+				const int32 FirstDroppedFrame = FMath::Max3(RPCHandler->LastReceivedFrame + 1, ClientFrame - ServerRecvData.InputBuffer.Capacity() + 1, 1);
+				for (int32 DroppedFrame = FirstDroppedFrame; DroppedFrame < ClientFrame; ++DroppedFrame)
 				{
-					UE_NP_TRACE_SYSTEM_FAULT("Gap in input stream detected on server. Client frames involved: LastConsumedFrame: %d LastRecvFrame: %d. DroppedFrame: %d", ServerRecvData.LastConsumedFrame, ServerRecvData.LastRecvFrame, DroppedFrame);
-					if (DroppedFrame > 0)
+					if (bStreamStarted)
 					{
-						// FixedTick can't skip frames like independent, so copy previous input
-						ServerRecvData.InputBuffer[DroppedFrame] = ServerRecvData.InputBuffer[DroppedFrame-1];
+						UE_NP_TRACE_SYSTEM_FAULT("Gap in input stream detected on server. Client frames involved: LastConsumedFrame: %d LastRecvFrame: %d. DroppedFrame: %d", ServerRecvData.LastConsumedFrame, ServerRecvData.LastRecvFrame, DroppedFrame);
 					}
+					// FixedTick can't skip frames like independent, so copy previous input
+					ServerRecvData.InputBuffer[DroppedFrame] = ServerRecvData.InputBuffer[DroppedFrame-1];
+					FNetworkPredictionDriver<ModelDef>::PrepareRepeatedInput(ServerRecvData.InputBuffer[DroppedFrame].Value.Get());
 				}
 			
 				FNetworkPredictionDriver<ModelDef>::NetSerialize(ServerRecvData.InputBuffer[ClientFrame].Value, Params); // 2. InputCmd
@@ -225,9 +230,15 @@ public:
 				continue;
 			}
 			
-			// Consume next InputCmd
+			// Consume next InputCmd. The RPC handler holds its frame while starved (AdvanceLastConsumedFrame): the same input is
+			// then used again, without its edge-triggered data.
+			const bool bRepeatedInput = ServerRecvData.LastConsumedFrame == InstanceData.Info.RPCHandler->LastConsumedFrame;
 			ServerRecvData.LastConsumedFrame = InstanceData.Info.RPCHandler->LastConsumedFrame;
 			ServerRecvData.InputBuffer[InstanceData.Info.RPCHandler->LastConsumedFrame].Value.CopyTo((InputType*)InstanceData.Info.View->PendingInputCmd);
+			if (bRepeatedInput)
+			{
+				FNetworkPredictionDriver<ModelDef>::PrepareRepeatedInput((InputType*)InstanceData.Info.View->PendingInputCmd);
+			}
 			if (InstanceData.Info.View->InterpolationTimeMS)
 			{
 				*InstanceData.Info.View->InterpolationTimeMS = ServerRecvData.InputBuffer[InstanceData.Info.RPCHandler->LastConsumedFrame].Key;

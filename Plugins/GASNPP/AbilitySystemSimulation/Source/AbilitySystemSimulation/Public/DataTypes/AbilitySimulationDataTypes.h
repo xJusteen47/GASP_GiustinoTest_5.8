@@ -194,6 +194,15 @@ struct ABILITYSYSTEMSIMULATION_API FAbilityInputActionState
 		bCompleted = false;
 	}
 
+	// Clears the events that only hold for the frame they were produced on. Ongoing carries over.
+	void ClearOneShotEvents()
+	{
+		bTriggered = false;
+		bStarted = false;
+		bCanceled = false;
+		bCompleted = false;
+	}
+
 };
 
 USTRUCT(BlueprintType)
@@ -238,6 +247,16 @@ public:
 	void NetSerialize(const FNetSerializeParams& P);
 
 	void ToString(FAnsiStringBuilderBase& Out) const;
+
+	// Network Prediction hook: the server reuses this input for a frame the client's input did not reach it in time for.
+	// The one-shot action events already fired on their own frame, so only Ongoing is repeated.
+	void PrepareRepeatedInput()
+	{
+		for (FAbilityInputActionState& ActionState : InputActionStates)
+		{
+			ActionState.ClearOneShotEvents();
+		}
+	}
 };
 
 // Auxiliary state that is input into the simulation (changes rarely)

@@ -54,8 +54,25 @@ public:
 	int32 LastReceivedFrame = INDEX_NONE;
 	int32 LastConsumedFrame = INDEX_NONE;
 	float InterpolationTimeMS = 0.0f;
-	void AdvanceLastConsumedFrame(const int32& MaxBufferSize);
+
+	/**
+	 * Picks the client input frame the server consumes this fixed tick (once per tick, before the remote input services).
+	 * The client's frame offset is ServerFrame - LastConsumedFrame - 1, so every tick that does not consume exactly one new
+	 * input moves it and costs the client a ReconcileFromInputOffset. Hence:
+	 * - starved (nothing new received): hold LastConsumedFrame. The input services repeat that input, edge-triggered data
+	 *   cleared (PrepareRepeatedInput), so no input is replayed and the offset grows by one per starved tick, once per hitch.
+	 * - the excess buffered by a client's catch-up after a hitch is consumed normally and drained by time dilation, which
+	 *   keeps the offset as it is.
+	 * - only when the client is more than MaxBufferedInputs ahead (the input ring has overwritten unconsumed inputs), or on the
+	 *   first input, skip to DesiredBufferedInputs behind the newest input.
+	 */
+	void AdvanceLastConsumedFrame(const int32 DesiredBufferedInputs, const int32 MaxBufferedInputs);
 	void AddInputToSend(const int32& ID, const uint32& DataSize , const TArray<uint8>& Data);
+	// Drops the inputs added for a frame that is not sent this engine frame (see SendServerRpc)
+	void DiscardInputsToSend() { InputsToSend.Reset(); }
+
+	// Client: oldest local input frame not yet sent to the server, see UNetworkPredictionWorldManager::SendFixedTickInputsToServer
+	int32 NextInputFrameToSend = INDEX_NONE;
 
 	// Register by ID directly
 	void RegisterInputReceiver(int32 ID, TFunction<void(

@@ -122,6 +122,12 @@ struct TClientRecvData
 	ENetRole NetRole = ROLE_None;
 };
 
+// Size of the ring in which the server keeps a remote client's fixed tick inputs (power of two). It bounds how far the client
+// may get ahead of the server's consumption (UNetworkPredictionPlayerControllerComponent::AdvanceLastConsumedFrame): any
+// further and the ring has overwritten inputs not consumed yet. After a hitch the client's catch-up ticks pile up here and
+// time dilation drains them; 64 frames (~1 s at 62.5 Hz) lets a hitch that long recover without skipping inputs.
+inline constexpr int32 NpFixedTickServerInputBufferSize = 64;
+
 // Data the server receives from a fixed ticking AP client
 template<typename ModelDef=FNetworkPredictionModelDef>
 struct TServerRecvData_Fixed
@@ -141,7 +147,7 @@ struct TServerRecvData_Fixed
 	int32 ID = INDEX_NONE;
 
 	TServerRecvData_Fixed()
-		: InputBuffer(32) {} // fixme
+		: InputBuffer(NpFixedTickServerInputBufferSize) {}
 };
 
 // Data the server receives from an independent ticking AP client

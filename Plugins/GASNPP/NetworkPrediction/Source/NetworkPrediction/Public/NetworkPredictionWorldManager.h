@@ -146,6 +146,17 @@ private:
 	void ReconcileSimulationsPostNetworkUpdate_Internal();
 	void BeginNewSimulationFrame_Internal(float InDeltaSeconds);
 
+	/**
+	 * Client: sends the fixed tick input frames to the server, once per engine frame. Each frame goes in its own unreliable
+	 * RPC, and the net driver silently drops unreliable RPCs on a saturated connection (UNetDriver::ProcessRemoteFunction),
+	 * which the server can only fill with copies of older inputs. So a new frame is sent only when the connection can take it,
+	 * otherwise it waits for the next engine frame (UNetworkPredictionPlayerControllerComponent::NextInputFrameToSend), in
+	 * order; the FixedTickInputSendCount - 1 redundant copies of older frames (for packet loss) are sent only while there is
+	 * no such backlog, and once per fixed tick (not on engine frames that ran none). After a hitch the catch-up frames then
+	 * reach the server within a few engine frames, none lost.
+	 */
+	void SendFixedTickInputsToServer(const bool bTickedThisFrame);
+
 	FDelegateHandle PreTickDispatchHandle;
 	FDelegateHandle PostTickDispatchHandle;
 	FDelegateHandle PreWorldActorTickHandle;

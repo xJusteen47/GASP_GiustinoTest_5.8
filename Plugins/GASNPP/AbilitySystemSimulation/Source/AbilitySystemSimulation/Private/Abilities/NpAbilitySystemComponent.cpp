@@ -588,10 +588,7 @@ void UNpAbilitySystemComponent::ClearOneShotInputStates()
 {
 	for (TPair<const UInputAction*,FAbilityInputActionState>& Pair : LocalInputActionStates)
 	{
-		Pair.Value.bStarted = false;
-		Pair.Value.bTriggered = false;
-		Pair.Value.bCanceled = false;
-		Pair.Value.bCompleted = false;
+		Pair.Value.ClearOneShotEvents();
 	}
 }
 bool UNpAbilitySystemComponent::BindInputActionsFromContext(const UInputMappingContext* InputContext)

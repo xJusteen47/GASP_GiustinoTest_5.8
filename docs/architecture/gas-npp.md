@@ -41,6 +41,7 @@ Fixed tick: **ability system first, then Mover**.
 6. Attribute changes only through gameplay effects.
 7. Cooldown and cost are the standard `UGameplayAbility` settings; set them on a Blueprint child, not in C++ constants.
 8. Instancing: `InstancedPerActor` unless there is a reason. With it, variables are **not reset on end**: reset them in `EndAbility` (or use sync vars).
+9. An NP input type with edge-triggered data (a "just pressed" bit) implements `void PrepareRepeatedInput()`: clear the edges, keep the held state. When a client's input does not reach the server in time (starved, or lost), the server repeats the last input it has, and this keeps one press from acting twice. `FAbilitySimInputCmd` has it; the combat input (`PressedButtons`) and Mover's input (`bIsJumpJustPressed`) do not yet.
 
 ## Where the Blueprints are
 
