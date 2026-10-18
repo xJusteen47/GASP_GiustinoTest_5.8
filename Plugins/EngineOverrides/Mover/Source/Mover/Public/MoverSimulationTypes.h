@@ -218,6 +218,11 @@ struct FMoverInputCmdContext
 	{
 		InputCollection.Empty();
 	}
+
+	// GAS-NPP fork: called by the forked Network Prediction when the server reuses this input for a frame the client's
+	// input did not reach it in time for (FNetworkPredictionDriver::PrepareRepeatedInput). Clears the edge-triggered data
+	// of the known input structs so one press does not act twice; held and continuous data carry over.
+	MOVER_API void PrepareRepeatedInput();
 };
 
 

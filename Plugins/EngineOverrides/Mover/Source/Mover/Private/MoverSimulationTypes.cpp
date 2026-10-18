@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "MoverSimulationTypes.h"
+#include "MoverDataModelTypes.h"
 #include "MoverGameplayTagLog.h"
 #include "GameFramework/GameStateBase.h"
 
@@ -26,6 +27,19 @@ namespace CommonBlackboard
 	const FName TimeSinceSupported = TEXT("TimeSinceSupported");
 
 	const FName LastModeChangeRecord = TEXT("LastModeChangeRecord");
+}
+
+// GAS-NPP fork: see the declaration. Only FCharacterDefaultInputs has edges among the engine's input structs (the AI, motion
+// warping and Blueprint data are continuous or opaque); a project input struct with a "just pressed" bit is cleared here too.
+void FMoverInputCmdContext::PrepareRepeatedInput()
+{
+	if (FCharacterDefaultInputs* CharacterInputs = InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
+	{
+		CharacterInputs->bIsJumpJustPressed = false;
+		// A one-shot request in the engine's own producers (MoverExamplesCharacter's fly toggle): repeated, it could pull
+		// the actor back into a mode it has left since. A producer that holds it every frame only loses one frame of it
+		CharacterInputs->SuggestedMovementMode = NAME_None;
+	}
 }
 
 UScriptStruct* FMoverSimulationEventData::GetScriptStruct() const
