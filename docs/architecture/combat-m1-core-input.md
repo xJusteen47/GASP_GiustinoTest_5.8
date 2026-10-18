@@ -8,6 +8,11 @@ to the architecture.
 > **tiers, press groups and loser consumption**, chord grace is off by default (startup override in M3 replaces it).
 > Affects M1.2 onwards: settings, slot spec, resolver, validation, standard set, tests. See combat.md §8.2, §8.3, §9.
 
+> **Revision 2026-10-18 (M1.7, context-free commands):** slots lose their `Context`; commands are the same in every
+> context and **bindings** carry the requirements (combat.md §9, §9.2). The standard set becomes 12 commands + 4 chords
+> (no `Command.Air.*`), the airborne tier roots go away, and the Core gains the pure binding selection and binding
+> validation helpers (section 3, "Bindings"). Implemented as increment M1.7, after M1.6 and before M2.2.
+
 ## 1. Scope
 
 In: module `GSTNCombatCore`, every pure type and algorithm of combat.md §6.3, §6.4, §7, §8, §9; developer settings; slot
@@ -41,7 +46,8 @@ Plugins/GSTNCombat/Source/GSTNCombatCore/
     Input/GSTN_InputScript.h          FGSTN_InputScript: builds histories from the notation of section 4 (tests, validator, debug)
     Input/GSTN_CombatInputTags.h      native tags of the standard buttons: Input.Combat.Button.Attack/Strong/Special/Crouch/Shield/Jump
     Input/GSTN_CombatCommandTags.h    native standard command tags (combat.md §9.1): Command.Attack/Strong/Special.<Shape>,
-                                      Command.Air.*, Command.Combo.AttackSpecial.<Shape>, Combat.Context.Airborne
+                                      Command.Combo.AttackSpecial.<Shape>; context tags Combat.Context.Grounded/
+                                      Airborne/OnWall (projected by the combat model in M2, read by bindings)
     Input/GSTN_StandardSlots.h        UGSTN_StandardSlots::Build(): the standard slot set of combat.md §9.1 in code
                                       (tests use it; an editor action creates the asset from it)
   Private/
@@ -80,7 +86,7 @@ determinism constraints, tuning as `UPROPERTY(EditAnywhere/EditDefaultsOnly)` wi
 | `MaxHoldBufferFrames` | 0 | 0 = unlimited while held. |
 | `SimultaneousFrames` | 2 | Presses within this many frames of the newest terminal press form one press group (combat.md §8.2). |
 | `BufferConflictPolicy` | `MostRecent` | Which press group competes: `MostRecent`, `HighestPriority` (all groups, priority only), `Oldest`. |
-| `CommandTiers` | `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400, and the airborne roots `Command.Air.Attack/Strong/Special` with the same values as their grounded twins (they are not under the grounded roots) | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
+| `CommandTiers` | `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400 | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
 | `ExclusiveButtons` | Attack, Strong, Special | Button tags whose presses in the winner's press group are consumed with it. |
 | `bChordGraceByDefault` | false | Legacy wait before single-button commands (combat.md §8.3); off because the startup override handles chords. |
 | `ChordGraceFrames` | 3 | Only used when chord grace is on. |
@@ -255,8 +261,7 @@ rule lists concatenate global → weapon → move.
 **Slots (`GSTN_InputSlot.h`)**
 
 - `FGSTN_InputSlotSpec { FGameplayTag Command (meta = Categories="Command"; unique within a set; the slot's identity
-  everywhere: bindings, cancel windows, AI, events); FGSTN_InputPattern Pattern; FGameplayTagRequirements Context;
-  int32 PriorityOffset = 0; int32 BufferFramesOverride = -1; EGSTN_OverrideBool HoldBuffer = Default;
+  everywhere: bindings, cancel windows, AI, events); FGSTN_InputPattern Pattern; int32 PriorityOffset = 0; int32 BufferFramesOverride = -1; EGSTN_OverrideBool HoldBuffer = Default;
   EGSTN_OverrideBool ChordGrace = Default; EGSTN_DirectionPolicy DirectionPolicy = AtPress;
   bool bFallThroughWhenUnavailable = false; }`.
 - `FGSTN_CommandPriority { int32 Tier; int32 Specificity; int32 Offset; }` with lexicographic `operator<`;
@@ -272,7 +277,8 @@ all when actionable; M3: those allowed by a cancel window or the startup overrid
 INDEX_NONE; FGSTN_PatternMatch Match; TArray<uint8, TInlineAllocator<8>> EventsToConsume; bool bDeferredForChord; }`.
 Steps (combat.md §8.2):
 
-1. Match every candidate whose `Context` holds (each with its own buffer params; reserved events excluded).
+1. Match every candidate (each with its own buffer params; reserved events excluded). Context plays no part in matching:
+   it is inside `CanExecute` (the caller checks the command's bindings, combat.md §9.2).
 2. **Press group**: with `MostRecent`, find the newest terminal press among the matches; keep only matches whose
    terminal press is within `SimultaneousFrames` of it (`Oldest`: mirror; `HighestPriority`: keep all).
 3. Order the kept matches by `FGSTN_CommandPriority` descending, ties by slot order (the validator reports real ties).
@@ -286,29 +292,30 @@ Steps (combat.md §8.2):
 
 *Implementation notes (M1.5):*
 
-- **`Context` is an `FGSTN_TagRequirements { RequireTags, IgnoreTags }`** (defined in `GSTN_InputSlot.h`), not
-  `FGameplayTagRequirements`: that type lives in the GameplayAbilities module, which the Core must not depend on. Same
-  semantics (all required present, none ignored present).
+- **`FGSTN_TagRequirements { RequireTags, IgnoreTags }`** (defined in `GSTN_InputSlot.h`, moved to
+  `GSTN_CommandBindings.h` in M1.7) replaces `FGameplayTagRequirements`, which lives in the GameplayAbilities module the
+  Core must not depend on. Same semantics (all required present, none ignored present). Since M1.7 it is used by
+  bindings, not slots.
 - **Reset rules**: a rule's button filter is a tag container (empty = all buttons, bound through the button map);
   `FGSTN_BufferResetRules::Apply(History, Buttons, Rules, Events, Now)` is applied once per list (global, then weapon, then
   move). `AfterIdleFrames` counts from the newest button or stick event. Rules also report `GetWatchedTags()` (the tags the
   owner must track for `OnTagAdded`, M2 section 6).
 - **Resolver**: `Resolve(Slots, History, FGSTN_ResolveParams, Settings, CanExecute)`; the params carry the button map,
-  the owner tags, `Now` and the optional hitstop window. Slots that match are ranked by `FGSTN_CommandPriority`; the press
+  `Now` and the optional hitstop window (the owner tags go away in M1.7: only `CanExecute` needs the context). Slots that match are ranked by `FGSTN_CommandPriority`; the press
   group is the matches whose terminal frame is within `SimultaneousFrames` of the newest (`Oldest`: of the oldest);
   `CanExecute` is called at most once per slot and only for slots that matched. A slot that cannot execute reserves its
   terminal press and the slots below it are matched again without it (so they may still use an older press). Consumption:
   the winner's events plus every unconsumed press of an exclusive button within `SimultaneousFrames` of the group frame
   (the winner's own frame with `HighestPriority`). Chord grace defers only a winner whose terminal anchor is a plain `Press`,
-  whose slot has the grace on, whose press is younger than `ChordGraceFrames`, when a higher ranked slot in context ends in
-  a `Chord` with that button and has not matched.
+  whose slot has the grace on, whose press is younger than `ChordGraceFrames`, when a higher ranked slot ends in a `Chord`
+  with that button and has not matched (since M1.7 without a context test).
 - `UGSTN_InputSlotSet::GetSpecs()` gives the specs in order for the resolver and the validator (`IsDataValid` arrives
   with the validator in M1.6).
 
 **Validation (`UGSTN_InputSlotValidation`)** — `FindConflicts(Slots) → TArray<FGSTN_SlotConflict {A, B, Kind
 (Ambiguous | Shadowed), Message}>`: build each slot's canonical script (`FGSTN_InputScript` from
-`AppendCanonicalInput`), run the resolver over every other slot on that history (context ignored, unless both contexts
-are provably disjoint: one requires a tag the other forbids). Both match and their `FGSTN_CommandPriority` is equal →
+`AppendCanonicalInput`), run the matcher of every other slot on that history (slots have no context since M1.7).
+Both match and their `FGSTN_CommandPriority` is equal →
 Ambiguous (error); a higher priority always matching → Shadowed (warning); duplicate command tags in one set → error.
 
 *Implementation notes (M1.6):*
@@ -324,11 +331,22 @@ Ambiguous (error); a higher priority always matching → Shadowed (warning); dup
   **Fill With Standard Slots** replaces the slots with `UGSTN_StandardSlots::Build()` so a designer can start from or inspect
   the standard set; plugin content is git-ignored (combat.md section 3), so such assets are test content until the
   exception is added.
-- **`UGSTN_StandardSlots::Build()`** returns the 24 family commands (per family: grounded then airborne, each Neutral,
-  Directional, CrouchNeutral, CrouchDirectional) and the 4 chord commands. Grounded slots forbid
-  `Combat.Context.Airborne`, airborne ones require it (provably disjoint contexts); crouch is `Hold(Crouch, 0)`, so a crouch
+- **`UGSTN_StandardSlots::Build()`** returns the 12 family commands (per family: Neutral, Directional, CrouchNeutral,
+  CrouchDirectional) and the 4 chord commands (M1.7; before it, 24 with airborne copies). Crouch is `Hold(Crouch, 0)`, so a crouch
   press up to the simultaneity tolerance after the attack press still selects the crouch version. Priorities in a tier:
   Neutral 15 < Directional 18 < CrouchNeutral 20 < CrouchDirectional 23 (chords: +10 on each).
+
+**Bindings (`GSTN_CommandBindings.h`, added in M1.7)** — the pure part of combat.md §9.2, shared by M2's binding set and
+M3's move sets:
+
+- `FGSTN_TagRequirements` (moved here) with `IsSatisfiedBy(const FGameplayTagContainer&)`, `GetRequiredCount()` and
+  `CanHoldTogether(const FGSTN_TagRequirements& Other)` (false when one requires a tag the other ignores).
+- `UGSTN_CommandBindingUtils::SelectBinding(TConstArrayView<const FGSTN_TagRequirements*> Candidates, const
+  FGameplayTagContainer& Context) → int32`: index of the satisfied candidate with the most required tags, first one on a
+  tie, `INDEX_NONE` when none is satisfied. No allocation.
+- `UGSTN_CommandBindingUtils::FindBindingConflicts(TConstArrayView<FGSTN_BindingKey { FGameplayTag Command;
+  const FGSTN_TagRequirements* Requirements; }>) → TArray<FGSTN_BindingConflict>`: same command, `CanHoldTogether`, same
+  required count → `Ambiguous` error.
 
 ## 4. Input notation (`FGSTN_InputScript`)
 
@@ -366,7 +384,8 @@ Used by tests, the validator and later the input display. Space-separated tokens
 | Buffer | Press at `Now - BufferFrames` matches, at `-BufferFrames-1` fails, matches again when a paused window covers the extra frame; held press matches past the window (`bViaHoldBuffer`), fails after release, fails past `MaxHoldBufferFrames`; `AtPress` vs `AtExecution` give different results when the direction changes after the press. |
 | Resolver | Motion+A beats Dir+A beats A on one history; a consumed press does not fire again next frame; unavailable higher slot reserves the press (no lower slot fires) and with `bFallThroughWhenUnavailable` the lower one fires; context filtering. **Priority:** Attack and Special on the same frame → special (tier); Special 1 frame after Attack (within `SimultaneousFrames`) → special; Attack 4 frames after Special with `MostRecent` → attack, with `HighestPriority` → special; Attack+Special chord command beats both singles in the same group; a crouch-directional attack loses to a neutral special (tier before specificity); after the winner, the losing attack press is consumed (nothing fires next frame); a non-exclusive button (e.g. Jump) in the same group is not consumed. **Chord grace** (turned on for one slot): defers, then resolves A+B, or A alone after `ChordGraceFrames`; off by default. |
 | Reset | `OnEvent` flushes only masked buttons; `AfterIdleFrames`; a flush ends hold buffering. |
-| Standard slots | With the standard command set of combat.md §9.1 (24 commands + one chord command) on scripted histories, for each family: stick neutral + A → neutral attack; light tilt (aim zone) + A → neutral attack (aimed); tilt + A → directional attack; crouch held + neutral + A → crouch neutral; crouch held + tilt + A → crouch directional; crouch pressed 2 frames after A → still the crouch version; airborne context selects the `Command.Air.*` ones; the validator reports no conflicts on the set. |
+| Standard slots | With the standard command set of combat.md §9.1 (12 commands + 4 chord commands) on scripted histories, for each family: stick neutral + A → neutral attack; light tilt (aim zone) + A → neutral attack (aimed); tilt + A → directional attack; crouch held + neutral + A → crouch neutral; crouch held + tilt + A → crouch directional; crouch pressed 2 frames after A → still the crouch version; the result does not depend on any context; the validator reports no conflicts on the set. |
+| Bindings (M1.7) | `SelectBinding`: grounded vs airborne requirements pick by context; an on-wall binding (Airborne + OnWall) beats the airborne one; nothing satisfied → `INDEX_NONE`; equal required counts → first. `FindBindingConflicts`: two airborne bindings of one command → Ambiguous; grounded vs airborne (one ignores what the other requires) → none; different commands → none. |
 | Validation | Two identical patterns with equal priority → Ambiguous; A vs Dir+A → no conflict (different priority) and A not reported shadowed; a slot fully covered by a higher one → Shadowed; disjoint contexts → no conflict. |
 | Determinism | Same script resolved twice → identical results; copy the history mid-script, resolve the rest on both copies → identical (rollback stand-in). |
 

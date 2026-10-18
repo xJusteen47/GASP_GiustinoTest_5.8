@@ -64,9 +64,9 @@ tests, acceptance) in its own file, reusing this outline.
   `LinkRequest` resolution step (kit permission, not linked, not in hitstun, `Weight` ≤ `MaxCarryWeight`), predicted on
   the rider's side, server-confirmed.
 - **Rider**: parked transform, presentation attached to the carrier's mount socket (per kit: `MountSocket`, offset),
-  rider-only slot set (context `Combat.Link.Role.Rider`): its own attacks aimed with its own stick, dismount, pair
+  rider-only bindings (requirement `Combat.Link.Role.Rider` on the usual commands): its own attacks aimed with its own stick, dismount, pair
   move triggers. Hurtboxes and hitbox `Root` space from the carrier's socket transform.
-- **Carrier**: normal movement and a carrier-only slot set (context `Combat.Link.Role.Carrier`): drop, throw rider,
+- **Carrier**: normal movement and carrier-only bindings (requirement `Combat.Link.Role.Carrier`): drop, throw rider,
   pair move triggers; kit flags for moves disallowed while carrying; `GE_CarryLoad` scaled by the rider's weight.
 - **Pair moves**: `UGSTN_PairMoveDefinition` (initiator role, both moves, start offset, link outcome); partner move
   started through the link inbox; at least two reference pair moves: carrier throws the rider (rider launched as a

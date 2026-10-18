@@ -83,8 +83,8 @@ set, input config), add `!Plugins/GSTNCombat/Content/` and its LFS rules first.
 | Condition | One test on the history (press, direction, motion...). |
 | Pattern | Ordered steps of conditions = one input combination. |
 | Command tag | Gameplay tag naming a command (`Command.Attack.Directional`, `Command.Special.CrouchNeutral`...). The identity of a slot everywhere outside input matching: bindings, cancel windows, AI, UI, events, quests. |
-| Slot | Pattern + context + priority, identified by its command tag. Says *how* a command is input (e.g. *Attack + tilt, grounded*). |
-| Binding | Command tag → move or any GAS ability, inside a weapon or a character move set. |
+| Slot | Pattern + priority, identified by its command tag. Says only *how* a command is input (e.g. *Attack + tilt*); independent of context. |
+| Binding | Command tag + context requirements → move or any GAS ability, inside a weapon or a kit move set. One command can have several bindings (grounded, airborne, on wall...). |
 | Move | Data asset with frame data and tracks, executed by a generic GAS ability. |
 | Weapon | Set of bindings, stat modifiers while active, passives, tuning, visuals. Role: primary or support. |
 | Primary kit | Character class: primary weapon, base stats, kit move set (weapon-independent), meters, super slot count, allowed weapons and supers. |
@@ -274,7 +274,8 @@ special, crouch variants...). The resolver orders them deterministically:
    neutral; a chord command (attack + special) beats each single button.
 4. **Manual offset** on the slot, for the rare case the rules above do not express.
 
-Then, in that order: the first command whose context holds and that **can execute** wins. A command that matches but
+Then, in that order: the first command that **can execute** wins — it has a binding whose context requirements hold
+right now (9.2) and that binding's ability can activate. A command that matches but
 cannot execute **reserves** its terminal press for this frame (lower commands cannot steal it) unless it sets
 `bFallThroughWhenUnavailable` (EX versions without meter fall through to the normal version).
 
@@ -282,8 +283,8 @@ cannot execute **reserves** its terminal press for this frame (lower commands ca
 settings' `ExclusiveButtons` (default attack, strong, special, super) are consumed too, so the losing attack does not
 come out a few frames later from the buffer.
 
-The validator reports the conflicts these rules leave: same tier, same specificity, same press group possible,
-overlapping contexts.
+The validator reports the conflicts these rules leave: same tier, same specificity, same press group possible.
+Context overlaps are a binding question (9.2).
 
 ### 8.3 Startup override window (*Decision*, Smash-style interrupts)
 
@@ -311,7 +312,7 @@ active hitbox. Generalised here:
 ## 9. Command tags, slots and conflicts
 
 - **Command tags** (*Decision*): every slot is identified by a gameplay tag under `Command.` (hierarchical:
-  `Command.Attack.Neutral`, `Command.Special.CrouchDirectional`, `Command.Air.Strong.Neutral`, `Command.Movement.Dash`,
+  `Command.Attack.Neutral`, `Command.Special.CrouchDirectional`, `Command.Strong.Directional`, `Command.Movement.Dash`,
   `Command.Super.Slot1`, `Command.Link.Mount`...). The tag, not the input, is what the rest of the game refers to:
   bindings (command → move), cancel windows and override windows (tag queries), loadout customisations, AI requests
   (`RequestCommand(Tag)`), UI and tutorials, events and quests (5.6). Changing how a command is input touches only
@@ -322,8 +323,10 @@ active hitbox. Generalised here:
   the simulation and on the wire.
 - Moves, weapons, kits, supers and hit types carry asset tags too (`Move.*`, `Weapon.*`, `Kit.*`, `Super.*`,
   `Combat.HitType.*`), so events and queries can filter on them.
-- `FGSTN_InputSlotSpec`: command tag + pattern + **context requirements** (`FGameplayTagRequirements` on the character's
-  tags: grounded, airborne, on wall, link role...) + manual priority offset + buffer and override overrides.
+- **Commands are context-free** (*Decision*): a command is an input decorated with meaning ("attack with the stick
+  neutral"), the same in the air, on the ground or on a wall. Whether the character is airborne decides which **binding**
+  of the command runs (9.2), never which command was input.
+- `FGSTN_InputSlotSpec`: command tag + pattern + manual priority offset + buffer and override overrides. No context.
 - `UGSTN_InputSlotAsset` (PrimaryDataAsset) wraps one spec for sharing; `UGSTN_InputSlotSet` lists slots (the plugin
   ships a standard set); weapons may also declare **inline slots**. A new command = a new tag + a slot (asset or
   inline entry), no code.
@@ -334,12 +337,10 @@ active hitbox. Generalised here:
   run through every other slot's matcher. Conflicts the priority rules (8.2) do not resolve → **error**
   (ambiguous); a higher-priority slot always matching another slot's canonical input → **warning** (shadowed). Two
   slots with the same command tag in one set → error.
-- Project contexts: Mover tags (`Mover_IsOnGround`...) and `State.Movement.WallSliding` → wall attacks.
-
 ### 9.1 Standard command set (*Decision*)
 
-Three families (normal attack, strong attack, special) × grounded/airborne × four input shapes, all anchored by the
-family's button press (one step):
+Three families (normal attack, strong attack, special) × four input shapes, all anchored by the family's button press
+(one step). The same commands serve the ground and the air (bindings decide, 9.2):
 
 | Shape | Analogue (Smash, reference only) | Extra conditions | Aim policy |
 |---|---|---|---|
@@ -348,10 +349,10 @@ family's button press (one step):
 | `CrouchNeutral` | up tilt / up special | `Hold(Crouch, 0)` + `Direction(Facing, any, MaxZone = Aim)` | `SnapIfAimOrTilt` |
 | `CrouchDirectional` | down tilt / down special | `Hold(Crouch, 0)` + `Direction(Facing, any of the 8, MinZone = Tilt)` | `SnapToStick` |
 
-Command tags: `Command.Attack.<Shape>`, `Command.Strong.<Shape>`, `Command.Special.<Shape>` grounded and
-`Command.Air.Attack.<Shape>`, `Command.Air.Strong.<Shape>`, `Command.Air.Special.<Shape>` airborne (context
-`Combat.Context.Airborne`); 24 commands. Plus chord commands (e.g. `Command.Combo.AttackSpecial.<Shape>`: `Chord(Attack,
-Special)` + the shape's conditions, higher tier), supers (10.4), movement (11b) and link commands (12b).
+Command tags: `Command.Attack.<Shape>`, `Command.Strong.<Shape>`, `Command.Special.<Shape>`: 12 commands. Plus chord
+commands (`Command.Combo.AttackSpecial.<Shape>`: `Chord(Attack, Special)` + the shape's conditions, higher tier),
+supers (10.4), movement (11b) and link commands (12b). A kit typically binds each of them twice (grounded and
+airborne), e.g. `Command.Attack.Neutral` → jab on the ground, neutral air in the air.
 
 - In 3D "side" means **any** tilted direction, the attack turning towards it; commands that care about forward vs back
   relative to the character use a `Facing` mask (e.g. `FacingForward`) instead of "any of the 8".
@@ -362,6 +363,23 @@ Special)` + the shape's conditions, higher tier), supers (10.4), movement (11b) 
   is available to kits that prefer smash-style strong attacks.
 - Spin- or code-based inputs (supers, special moves) use the `Stick` space so they do not depend on where the
   character faces.
+
+### 9.2 Bindings and context (*Decision*)
+
+- A binding is `{ Command; Requirements; Move or Ability }`. `Requirements` (`FGSTN_TagRequirements`: required and
+  ignored tags, a Core type with the semantics of `FGameplayTagRequirements`) is checked against the character's
+  **context tags** of the frame: the owner's gameplay tags (end of F-1, rolled back), Mover's simulated tags (tracker),
+  and context tags the combat model projects from them so bindings never depend on Mover tag names:
+  `Combat.Context.Grounded`, `.Airborne`, `.OnWall`, plus link roles (`Combat.Link.Role.*`) and states
+  (`Combat.State.*`).
+- **Selection**: among a command's bindings whose requirements hold, the one with the most required tags wins (an
+  on-wall binding requiring `Airborne` + `OnWall` beats an airborne one); a tie is a validation error. No binding holds →
+  the command cannot execute this frame (8.2: its press is reserved, or the next command gets it with
+  `bFallThroughWhenUnavailable`).
+- **Validation** of a move set: two bindings of the same command whose requirements can hold together and have the same
+  number of required tags → error; a command with no binding at all in a set that declares it → warning.
+- Role-only actions (rider, carrier), weapon-only, state-only (while charging, while shielding) are all just binding
+  requirements; no command is duplicated for them.
 
 ## 10. Kits, weapons, supers, meters, loadouts, skins
 
@@ -378,8 +396,8 @@ FGSTN_LoadoutData (what a player owns and saves)
  └ Skin ────────────────► UGSTN_SkinDefinition  (cosmetic, outside the simulation)
 ```
 
-- **Binding**: slot → **move** or **any GAS ability class** (e.g. `GA_Jump` → buffered jump and jump-cancel for free),
-  with optional buffer/priority overrides and a meter cost.
+- **Binding**: command + context requirements → **move** or **any GAS ability class** (e.g. `GA_Jump` → buffered jump
+  and jump-cancel for free), with optional buffer/priority overrides and a meter cost (9.2).
 - **`UGSTN_PrimaryKitDefinition`** (PrimaryDataAsset, primary type `GSTN_PrimaryKit`): display data; `PrimaryWeapon`;
   **base stats** `FGSTN_KitStats` (applied as the attribute init GE, section 10.2); **kit move set** (bindings that do
   not depend on the weapon: jump, dodge, shield, grab, weapon switch); passive abilities; **meter setup**
@@ -618,7 +636,8 @@ A **link** is a relation between two entities, each with a role: `Combat.Link.Mo
 - The initiator may **predict its own side** when the link type allows it (mount: yes, so mounting a teammate feels
   immediate; grab: per design). A refused prediction is corrected.
 - Role tags are projected (5.4): `Combat.Link.Role.Rider`, `.Carrier`, `.Grabber`, `.Grabbed`. **Role-only actions are
-  plain slots with a context on those tags** (rider-only attacks, carrier-only throws): no special code.
+  plain bindings with requirements on those tags** (rider-only attacks, carrier-only throws): no special code, no new
+  commands.
 
 ### Piggyback (mount)
 
@@ -749,7 +768,7 @@ where the implementation differs. Milestones are sequential: each spec assumes t
 | M4 | Hits | Hurtboxes, hitboxes, snapshot, inbox, resolution pipeline, damage and meter gain, hitstop (Mover freeze, wall lock), hitstun/knockback/DI, teams and variants, lag compensation, hit presentation, dodges (intangibility). | [combat-m4-hits.md](combat-m4-hits.md) |
 | M5 | Editor | Move editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M6 | Defence and links | Shield, parry, tech, SDI; link system spike, links, grabs/throws. | [combat-m5-m9.md](combat-m5-m9.md) |
-| M7 | Piggyback and pair moves | Mount link, riding mode, role-only slots, carry load, pair moves. | [combat-m5-m9.md](combat-m5-m9.md) |
+| M7 | Piggyback and pair moves | Mount link, riding mode, role-only bindings, carry load, pair moves. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M8 | Minions | Server subsystem, LOD, compact replication. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M9 | Stock GAS adapter | Optional. | [combat-m5-m9.md](combat-m5-m9.md) |
 

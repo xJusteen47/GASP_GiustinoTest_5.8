@@ -7,6 +7,9 @@ numbers below are local to this file.
 > **startup override window** with deferred commit (combat.md §8.3); new authoritative events. Slot categories are
 > gone (the command tag hierarchy replaces them).
 
+> **Revision 2026-10-18 (context-free commands):** move bindings carry `Requirements` (combat.md §9.2); jump, air jump,
+> fast fall and dash are one command each with context-dependent bindings.
+
 ## 1. Scope
 
 **Goal:** a character spawns with a loadout (primary kit + support weapon + supers + skin). Its stats come from the kit
@@ -238,8 +241,8 @@ montages via the move's montage; per-weapon anim layer linked in `FinalizeFrame`
   longer held, or `F - JumpStartFrame ≥ MaxJumpHoldFrames`) and `F - JumpStartFrame ≥ MinJumpHoldFrames` →
   `bJumpCut = true`. Vertical velocity ≤ 0 → `Falling`. Fast-fall slot matched while falling → `bFastFalling = true`.
   Airborne without a jump (walked off a ledge) → `Falling`.
-- **`UGSTN_GA_PlatformJump`** (plugin, `GSTNCombatNP`): bound in the kit move set to the jump slot (`Press(Jump)`,
-  grounded context) and to the air jump slot (`Press(Jump)`, airborne context, requires `AirJumpsUsed <
+- **`UGSTN_GA_PlatformJump`** (plugin, `GSTNCombatNP`): `Command.Movement.Jump` (`Press(Jump)`) has two kit bindings,
+  requirements `Grounded` → ground jump and `Airborne` → air jump (its ability also checks `AirJumpsUsed <
   AirJumpCount`). It is a move: `JumpSquatFrames` of startup (phase `Squat`; its startup override window covers the whole squat with `OverrideInto` = the up-shaped attack and
   special commands, as Smash's jump-cancel up smash / up special),
   then at take-off the combat model sets `Rising`, `JumpStartFrame`, `JumpPressEvent`, and requests the impulse GE
@@ -247,9 +250,11 @@ montages via the move's montage; per-weapon anim layer linked in `FinalizeFrame`
   increment `AirJumpsUsed` and reset `bJumpCut` and `bFastFalling`.
 - The gravity phase itself is applied by the stats modifier (section 5), which reads `JumpPhase`, `bJumpCut` and
   `bFastFalling` from the combat component's sync state for this frame.
-- **Fast fall**: a kit slot (default proposal: `Press(Crouch)` with an airborne context and `JumpPhase = Falling`;
-  combat.md §11b keeps the input open) bound to a zero-frame move that sets `bFastFalling`.
-- **Dash**: a kit move on a flick slot (`Direction(Stick or Facing, any, MinZone = Tilt, bRequireFlick)`, grounded)
+- **Fast fall**: `Command.Movement.FastFall` (default proposal: `Press(Crouch)`; combat.md §11b keeps the input open)
+  with one binding, requirements `Airborne` + `Combat.State.Falling` (projected from `JumpPhase`), to a zero-frame move
+  that sets `bFastFalling`.
+- **Dash**: `Command.Movement.Dash` on a flick input (`Direction(Stick or Facing, any, MinZone = Tilt, bRequireFlick)`),
+  bound with requirements `Grounded`
   with a movement track (`MomentumMode`, see 6) and a cancel window into run/jump; run is a looping move while the
   stick stays tilted (Charge-style track) or plain walking with the kit's run speed — decide in implementation by feel.
 - Movement track options added for movement moves: `MomentumMode` (Keep / Reset / Blend over N frames),
@@ -264,7 +269,9 @@ montages via the move's montage; per-weapon anim layer linked in `FinalizeFrame`
 (default 1)`; `AllowedSupers (FGameplayTagQuery)`; `CompatibleSkins (FGameplayTagQuery)`; `HurtboxSet` (M4);
 `LocomotionAnimLayer`.
 
-**`FGSTN_MoveBinding`**: `{ FGameplayTag Command (the key); FGSTN_InputSlotEntry SlotOverride (optional: empty =
+**`FGSTN_MoveBinding`**: `{ FGameplayTag Command (the key); FGSTN_TagRequirements Requirements (combat.md §9.2: e.g.
+`Grounded` for the jab, `Airborne` for the neutral air, both on `Command.Attack.Neutral`); FGSTN_InputSlotEntry
+SlotOverride (optional: empty =
 the standard command set's slot for `Command`, which is how weapons fill the 24 standard commands); TObjectPtr<
 UGSTN_MoveDefinition> Move; TSubclassOf<UGameplayAbility> Ability (if no move); int32 PriorityOffset; int32
 BufferFramesOverride; }` — exactly one of `Move`/`Ability`; a non-standard command needs `SlotOverride`.

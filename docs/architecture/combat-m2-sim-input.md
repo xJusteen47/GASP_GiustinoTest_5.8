@@ -7,6 +7,10 @@ Section numbers below are local to this file.
 > **Revision 2026-10-18:** bindings and AI requests use **command tags**; the resolver result includes the losers to
 > consume; the M2 part of the **authoritative event stream** (combat.md §5.6) is added. See combat.md §8.2, §9.
 
+> **Revision 2026-10-18 (context-free commands):** commands carry no context; the binding set holds bindings
+> `{Command, Requirements, Ability}` and picks one per frame from the **context tags** (section 6). See combat.md §9.2
+> and M1 "Bindings".
+
 ## 1. Scope
 
 **Goal:** a player or an AI enters a pattern (button, direction, motion, chord...) and the slot it matches activates
@@ -21,7 +25,7 @@ In:
 - `UGSTN_MoverSimStateTracker` moved from the project into `GSTNCombatNP`.
 - Command binding set (command tag → ability class) on the combat component; resolver run every frame; requests executed in the
   ASC pre-tick.
-- Reset rule events produced by the combat model; watched-tag mask for `OnTagAdded` and contexts.
+- Reset rule events produced by the combat model; watched-tag mask for `OnTagAdded`; context tags for bindings.
 - Debug output, harness extensions, docs.
 
 Out: moves, weapons, kits (M3); hits (M4). The hitstop test window of M0 stays as a debug feature until M4 replaces it.
@@ -117,8 +121,9 @@ after a rollback restore).
    binding set's rules.
 5. **Actionable**: the owner has none of `BlockingTags` (component property, default `Combat.State.Busy`,
    `Combat.State.Hitstun`); M3 replaces this with the move/cancel-window logic. Not actionable → skip to 8.
-6. **Resolve**: `ForcedCommand` set and valid → that binding (still subject to `CanExecute`); else
-   `FGSTN_SlotResolver::Resolve` over the binding set's slots with the owner tags, `CanExecute(i)` = the binding's
+6. **Resolve**: `ForcedCommand` set and valid → that command (still subject to `CanExecute`); else
+   `FGSTN_SlotResolver::Resolve` over the binding set's slots (one per command), `CanExecute(i)` = `SelectBinding` over
+   command *i*'s bindings with this frame's context tags (section 6) finds a binding, and that binding's
    ability has a spec on the ASC and `CanActivateAbility(Spec.Handle, ActorInfo)` returns true (const query on end-of-F-1
    state; the ASC re-checks at execution).
 7. **Request**: on success set `RequestedBinding = i + 1`, `RequestFrame = F`, `LastActivatedFrame = F`, consume
@@ -138,17 +143,24 @@ next combat tick reads) — noted as *Open*.
 
 ## 6. Watched tags
 
-The union of tags referenced by the binding set's slot contexts and reset rules (`OnTagAdded`), collected and sorted by
-tag name when the binding set is assigned (deterministic on every machine), max 64 (`IsDataValid` error beyond).
-The mask is only for "added this frame" detection. Slot contexts are evaluated against the owner's full end-of-F-1 tag
-container (exact, and already rolled back by the ASC).
+The union of tags referenced by the reset rules (`OnTagAdded`), collected and sorted by tag name when the binding set is
+assigned (deterministic on every machine), max 64 (`IsDataValid` error beyond). The mask is only for "added this frame"
+detection.
+
+**Context tags** (for binding requirements, built once per combat tick): the owner's full end-of-F-1 gameplay tag
+container (exact, already rolled back by the ASC) + Mover's simulated tags from the tracker + the projected context
+tags `Combat.Context.Grounded` / `.Airborne` (from the tracker's movement mode: walking-like modes = grounded, falling
+and wall modes = airborne) and `.OnWall` (project wall modes, configured as a list of mode names on the component).
+The projected context tags are also applied to the ASC (combat.md §5.4) so abilities and UI see the same context.
 
 ## 7. Command binding set
 
-`UGSTN_CombatSlotBindingSet` (DataAsset): `Slots: TArray<FGSTN_CombatSlotBinding>`, each `{ FGSTN_InputSlotEntry Slot
-(asset or inline, M1; its command tag is the binding's key); TSubclassOf<UGameplayAbility> Ability; }`, plus
-`ResetRules`. At runtime the bindings are sorted by command tag name (deterministic index for requests and
-`ForcedCommand`). `IsDataValid` runs the M1
+`UGSTN_CombatSlotBindingSet` (DataAsset): `Slots: TArray<FGSTN_InputSlotEntry>` (the commands' input definitions; empty
+entries can reference the standard set), `Bindings: TArray<FGSTN_CombatSlotBinding { FGameplayTag Command;
+FGSTN_TagRequirements Requirements; TSubclassOf<UGameplayAbility> Ability; }>`, plus `ResetRules`. At runtime commands
+are sorted by tag name (deterministic index for `ForcedCommand`) and bindings by (command, declaration order); the
+request stores the **binding** index chosen by `SelectBinding`. `IsDataValid`: the M1 slot validator, the M1
+`FindBindingConflicts`, every binding's command has a slot, every ability class set. `IsDataValid` runs the M1
 validator over its slots and checks every ability class is set. The component property `SlotBindings` replaces M0's
 `ButtonAbilities`; M3 replaces the binding set by the compiled loadout table (same resolver call).
 
@@ -185,10 +197,13 @@ validator over its slots and checks every ability class is set. The component pr
     crouch pressed 2 frames after the attack; the camera rotated 90° between runs must not change the results.
   - `scenario_combat_spin`: a 360° stick spin started from two different directions, then the button.
   - Each with lag 60/15 ms, with and without 2 % loss.
+  - `scenario_combat_context`: the same `Command.Attack.Neutral` input on the ground and in the air (after a jump)
+    activates the grounded and the airborne binding; a command without an airborne binding does nothing in the air
+    and does not steal the press from a fall-through command.
 - Test content on `BP_GASNPP_TestCharacter` (**tell the user before editing; back up to `Saved/Backups/GAS`**): a test
-  input config (attack, special, crouch, dash, buff), a test binding set with: the four standard attack slots, dash on
-  a button, buff on a chord, a motion slot, a spin slot (test ability classes so results are distinguishable), and a
-  test reset rule. The crouch button must also be mapped for movement if the test character crouches; otherwise only
+  input config (attack, special, crouch, dash, buff), a test binding set with: the four standard attack commands bound
+  grounded and airborne, dash on a button, buff on a chord, a motion command, a spin command (test ability classes so
+  results are distinguishable), and a test reset rule. The crouch button must also be mapped for movement if the test character crouches; otherwise only
   the combat modifier matters for the test.
 
 ## 9. Acceptance criteria
