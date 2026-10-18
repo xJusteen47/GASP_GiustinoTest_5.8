@@ -82,21 +82,21 @@ bool FGSTN_ResolverUnavailableTest::RunTest(const FString& Parameters)
 	const auto OnlyTheSecond = [](int32 Index) { return Index == 1; };
 
 	// The higher command cannot execute: it keeps its press, nothing below it fires.
-	TestEqual(TEXT("the plain command cannot steal the press"), ResolveSlots(Slots, History, *Settings, FGameplayTagContainer(), OnlyTheSecond).SlotIndex, static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("the plain command cannot steal the press"), ResolveSlots(Slots, History, *Settings, OnlyTheSecond).SlotIndex, static_cast<int32>(INDEX_NONE));
 
 	// With fall through, the plain command takes over.
 	Slots[0].bFallThroughWhenUnavailable = true;
-	TestEqual(TEXT("fall through"), ResolveSlots(Slots, History, *Settings, FGameplayTagContainer(), OnlyTheSecond).SlotIndex, 1);
+	TestEqual(TEXT("fall through"), ResolveSlots(Slots, History, *Settings, OnlyTheSecond).SlotIndex, 1);
 
 	// And when the higher command can execute, it wins.
 	TestEqual(TEXT("available"), ResolveSlots(Slots, History, *Settings).SlotIndex, 0);
 
 	// CanExecute is asked once per slot, never for a slot that did not match.
 	TArray<int32> Asked;
-	ResolveSlots(Slots, PlayTo(*this, TEXT("5:+C"), *Settings), *Settings, FGameplayTagContainer(), [&Asked](int32 Index) { Asked.Add(Index); return true; });
+	ResolveSlots(Slots, PlayTo(*this, TEXT("5:+C"), *Settings), *Settings, [&Asked](int32 Index) { Asked.Add(Index); return true; });
 	TestEqual(TEXT("no slot matched, nobody asked"), Asked.Num(), 0);
 	Asked.Reset();
-	ResolveSlots(Slots, History, *Settings, FGameplayTagContainer(), [&Asked](int32 Index) { Asked.Add(Index); return false; });
+	ResolveSlots(Slots, History, *Settings, [&Asked](int32 Index) { Asked.Add(Index); return false; });
 	TestEqual(TEXT("both asked once"), Asked.Num(), 2);
 	return true;
 }
@@ -109,7 +109,7 @@ bool FGSTN_ResolverReservationTest::RunTest(const FString& Parameters)
 	const FGSTN_InputHistory History = PlayTo(*this, TEXT("4:*A 5:*A"), *Settings);
 	const TArray<FGSTN_InputSlotSpec> Slots = { Slot(GSTNCommandTags::Special_Neutral, Pattern({ Press(Attack()) })), AttackNeutral() };
 
-	const FGSTN_SlotResolution Resolution = ResolveSlots(Slots, History, *Settings, FGameplayTagContainer(), [](int32 Index) { return Index == 1; });
+	const FGSTN_SlotResolution Resolution = ResolveSlots(Slots, History, *Settings, [](int32 Index) { return Index == 1; });
 	TestEqual(TEXT("the lower slot uses the older press"), Resolution.SlotIndex, 1);
 	if (Resolution.SlotIndex == 1)
 	{
@@ -118,26 +118,35 @@ bool FGSTN_ResolverReservationTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ResolverContextTest, "GSTNCombat.Core.Input.Resolver.Context", GSTN_CORE_TEST_FLAGS)
-bool FGSTN_ResolverContextTest::RunTest(const FString& Parameters)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ResolverBindingContextTest, "GSTNCombat.Core.Input.Resolver.ContextThroughBindings", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ResolverBindingContextTest::RunTest(const FString& Parameters)
 {
+	// Slots have no context: whether a command can start here is CanExecute's business, answered from its bindings.
 	const TStrongObjectPtr<UGSTN_CombatInputSettings> Settings = MakeSettings();
-	const FGSTN_InputHistory History = PlayTo(*this, TEXT("5:+A"), *Settings);
+	const TArray<FGSTN_InputSlotSpec> Slots = { AttackNeutral(), SpecialNeutral() };
 
-	FGSTN_InputSlotSpec Air = Slot(GSTNCommandTags::Air_Attack_Neutral, Pattern({ Press(Attack()) }));
-	Air.Context.RequireTags.AddTag(GSTNCommandTags::Context_Airborne.GetTag());
-	FGSTN_InputSlotSpec Ground = AttackNeutral();
-	Ground.Context.IgnoreTags.AddTag(GSTNCommandTags::Context_Airborne.GetTag());
-	const TArray<FGSTN_InputSlotSpec> Slots = { Air, Ground };
+	// The attack has a grounded binding only, the special an airborne one only.
+	FGSTN_TagRequirements AttackBinding;
+	AttackBinding.RequireTags.AddTag(GSTNCommandTags::Context_Grounded.GetTag());
+	FGSTN_TagRequirements SpecialBinding;
+	SpecialBinding.RequireTags.AddTag(GSTNCommandTags::Context_Airborne.GetTag());
+	const FGSTN_TagRequirements* Bindings[] = { &AttackBinding, &SpecialBinding };
 
-	FGameplayTagContainer Airborne;
-	Airborne.AddTag(GSTNCommandTags::Context_Airborne.GetTag());
-	TestEqual(TEXT("grounded picks the ground slot"), ResolveSlots(Slots, History, *Settings).SlotIndex, 1);
-	TestEqual(TEXT("airborne picks the air slot"), ResolveSlots(Slots, History, *Settings, Airborne).SlotIndex, 0);
+	const auto Resolve = [&](const FGameplayTag& Context, const TCHAR* Notation)
+	{
+		FGameplayTagContainer ContextTags;
+		ContextTags.AddTag(Context);
+		return ResolveSlots(Slots, PlayTo(*this, Notation, *Settings), *Settings, [&](int32 Index) { return Bindings[Index]->IsSatisfiedBy(ContextTags); }).SlotIndex;
+	};
+	const FGameplayTag Grounded = GSTNCommandTags::Context_Grounded.GetTag();
+	const FGameplayTag Airborne = GSTNCommandTags::Context_Airborne.GetTag();
 
-	// An airborne character with only a ground slot has nothing to fire.
-	const TArray<FGSTN_InputSlotSpec> GroundOnly = { Ground };
-	TestEqual(TEXT("airborne with a ground only slot"), ResolveSlots(GroundOnly, History, *Settings, Airborne).SlotIndex, static_cast<int32>(INDEX_NONE));
+	// Pressed together the special wins by tier, but it has no binding on the ground: it keeps its press and the attack,
+	// whose press is not the special's, goes ahead.
+	TestEqual(TEXT("grounded: the special has no binding, the attack comes out"), Resolve(Grounded, TEXT("5:+A 5:+C")), 0);
+	TestEqual(TEXT("airborne: the special comes out"), Resolve(Airborne, TEXT("5:+A 5:+C")), 1);
+	TestEqual(TEXT("airborne: the attack alone has no binding"), Resolve(Airborne, TEXT("5:+A")), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("grounded: the attack alone"), Resolve(Grounded, TEXT("5:+A")), 0);
 	return true;
 }
 

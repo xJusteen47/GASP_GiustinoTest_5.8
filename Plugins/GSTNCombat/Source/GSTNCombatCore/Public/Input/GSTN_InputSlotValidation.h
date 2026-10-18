@@ -55,8 +55,7 @@ struct GSTNCOMBATCORE_API FGSTN_SlotConflict
  *
  * Every slot's canonical input (the minimal input that satisfies its pattern, built by the conditions themselves) is
  * played into a history and matched against every other slot. If another slot matches it too with the same rank the pair
- * is ambiguous; if it matches with a higher rank, the first slot is shadowed. Slots whose contexts cannot hold together
- * (one requires a tag the other forbids) are not compared. Buttons get arbitrary bits for the check (the set's button tags
+ * is ambiguous; if it matches with a higher rank, the first slot is shadowed. Slots have no context (bindings do: GSTN_CommandBindings.h). Buttons get arbitrary bits for the check (the set's button tags
  * sorted by name), so no input config is needed: sets are reusable across configs.
  *
  * It looks at canonical inputs only: slots that conflict on an input no canonical input reaches are not found.
@@ -72,7 +71,4 @@ public:
 
 	/** Convenience for a set asset */
 	static TArray<FGSTN_SlotConflict> FindConflicts(const UGSTN_InputSlotSet& Set, const UGSTN_CombatInputSettings& Settings);
-
-	/** True if no slot of A's context can be active together with a slot of B's: one requires a tag the other forbids */
-	static bool AreContextsDisjoint(const FGSTN_TagRequirements& A, const FGSTN_TagRequirements& B);
 };

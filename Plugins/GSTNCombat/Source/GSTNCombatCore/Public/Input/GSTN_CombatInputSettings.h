@@ -70,8 +70,7 @@ public:
 	/**
 	 * Tier per command tag root: a higher tier always beats a lower one, whatever the pattern specificity (an attack
 	 * and a special pressed together give the special). A command takes the tier of its nearest listed ancestor; a tag
-	 * with no listed ancestor is tier 0. The airborne roots (Command.Air.*) are not under the grounded ones, so they are
-	 * listed too
+	 * with no listed ancestor is tier 0
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat Input|Priority", meta = (Categories = "Command"))
 	TMap<FGameplayTag, int32> CommandTiers;

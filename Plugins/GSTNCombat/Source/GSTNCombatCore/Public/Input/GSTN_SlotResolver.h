@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameplayTagContainer.h"
 #include "Input/GSTN_InputMatcher.h"
 #include "Input/GSTN_InputSlot.h"
 
@@ -16,9 +15,6 @@ struct GSTNCOMBATCORE_API FGSTN_ResolveParams
 {
 	/** Tag -> bit lookup of the character's input config */
 	const FGSTN_ButtonMap* Buttons = nullptr;
-
-	/** Gameplay tags of the character at the end of the previous frame: the slots' contexts are tested against them */
-	const FGameplayTagContainer* OwnerTags = nullptr;
 
 	/** The frame being simulated */
 	int32 Now = 0;
@@ -50,7 +46,7 @@ struct FGSTN_SlotResolution
 /**
  * Chooses which command a history triggers this frame (combat.md sections 8.2 and 8.3).
  *
- * Steps: every slot whose context holds is matched with its own buffer rules; only the press group around the newest
+ * Steps: every slot is matched with its own buffer rules; only the press group around the newest
  * press competes (older buffered presses lose, as a player who changed their mind expects); the competitors are ordered by
  * tier, pattern specificity and manual offset; the first that can execute wins. A slot that matches but cannot execute
  * reserves its press so lower slots cannot steal it, unless it falls through. A single-button command can wait a few
@@ -58,7 +54,9 @@ struct FGSTN_SlotResolution
  *
  * Pure: it reads the history and writes only its result; the caller consumes the events and requests the command.
  * Deterministic for the same history, slot order and settings. The caller passes only the slots allowed right now (all
- * when the character is actionable; those a cancel or override window allows during a move).
+ * when the character is actionable; those a cancel or override window allows during a move). Context plays no part in
+ * matching: a command is the same input everywhere, and whether it can start in this context (does it have a binding
+ * whose requirements hold?) is what CanExecute answers.
  */
 struct GSTNCOMBATCORE_API FGSTN_SlotResolver
 {

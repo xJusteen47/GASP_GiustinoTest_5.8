@@ -17,14 +17,6 @@ namespace
 		CrouchDirectional,
 	};
 
-	/** The command tags of one family, per shape */
-	struct FFamily
-	{
-		const FNativeGameplayTag& Button;
-		const FNativeGameplayTag* Grounded[4];
-		const FNativeGameplayTag* Airborne[4];
-	};
-
 	template<typename T>
 	FCondition MakeInstance(const T& Condition)
 	{
@@ -57,7 +49,7 @@ namespace
 		return MakeInstance(Condition);
 	}
 
-	FGSTN_InputSlotSpec MakeSlot(const FGameplayTag& Command, FCondition Anchor, EShape Shape, bool bAirborne)
+	FGSTN_InputSlotSpec MakeSlot(const FGameplayTag& Command, FCondition Anchor, EShape Shape)
 	{
 		FGSTN_InputSlotSpec Spec;
 		Spec.Command = Command;
@@ -70,15 +62,6 @@ namespace
 		}
 		Step.AllOf.Add(MakeStick(Shape == EShape::Directional || Shape == EShape::CrouchDirectional));
 		Spec.Pattern.Steps.Add(MoveTemp(Step));
-
-		if (bAirborne)
-		{
-			Spec.Context.RequireTags.AddTag(GSTNCommandTags::Context_Airborne.GetTag());
-		}
-		else
-		{
-			Spec.Context.IgnoreTags.AddTag(GSTNCommandTags::Context_Airborne.GetTag());
-		}
 		return Spec;
 	}
 }
@@ -86,16 +69,16 @@ namespace
 TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 {
 	using namespace GSTNCommandTags;
+
+	struct FFamily
+	{
+		const FNativeGameplayTag& Button;
+		const FNativeGameplayTag* Commands[4];
+	};
 	const FFamily Families[] = {
-		{ GSTNInputTags::Button_Attack,
-			{ &Attack_Neutral, &Attack_Directional, &Attack_CrouchNeutral, &Attack_CrouchDirectional },
-			{ &Air_Attack_Neutral, &Air_Attack_Directional, &Air_Attack_CrouchNeutral, &Air_Attack_CrouchDirectional } },
-		{ GSTNInputTags::Button_Strong,
-			{ &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional },
-			{ &Air_Strong_Neutral, &Air_Strong_Directional, &Air_Strong_CrouchNeutral, &Air_Strong_CrouchDirectional } },
-		{ GSTNInputTags::Button_Special,
-			{ &Special_Neutral, &Special_Directional, &Special_CrouchNeutral, &Special_CrouchDirectional },
-			{ &Air_Special_Neutral, &Air_Special_Directional, &Air_Special_CrouchNeutral, &Air_Special_CrouchDirectional } },
+		{ GSTNInputTags::Button_Attack, { &Attack_Neutral, &Attack_Directional, &Attack_CrouchNeutral, &Attack_CrouchDirectional } },
+		{ GSTNInputTags::Button_Strong, { &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional } },
+		{ GSTNInputTags::Button_Special, { &Special_Neutral, &Special_Directional, &Special_CrouchNeutral, &Special_CrouchDirectional } },
 	};
 	const FNativeGameplayTag* Combos[] = { &Combo_AttackSpecial_Neutral, &Combo_AttackSpecial_Directional,
 		&Combo_AttackSpecial_CrouchNeutral, &Combo_AttackSpecial_CrouchDirectional };
@@ -103,13 +86,9 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 	TArray<FGSTN_InputSlotSpec> Slots;
 	for (const FFamily& Family : Families)
 	{
-		for (const bool bAirborne : { false, true })
+		for (int32 Shape = 0; Shape < 4; ++Shape)
 		{
-			for (int32 Shape = 0; Shape < 4; ++Shape)
-			{
-				const FNativeGameplayTag& Command = bAirborne ? *Family.Airborne[Shape] : *Family.Grounded[Shape];
-				Slots.Add(MakeSlot(Command.GetTag(), MakePress(Family.Button.GetTag()), static_cast<EShape>(Shape), bAirborne));
-			}
+			Slots.Add(MakeSlot(Family.Commands[Shape]->GetTag(), MakePress(Family.Button.GetTag()), static_cast<EShape>(Shape)));
 		}
 	}
 
@@ -119,7 +98,7 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 		Chord.Buttons.AddTag(GSTNInputTags::Button_Attack.GetTag());
 		Chord.Buttons.AddTag(GSTNInputTags::Button_Special.GetTag());
 		Chord.WithinFrames = 2;
-		Slots.Add(MakeSlot(Combos[Shape]->GetTag(), MakeInstance(Chord), static_cast<EShape>(Shape), false));
+		Slots.Add(MakeSlot(Combos[Shape]->GetTag(), MakeInstance(Chord), static_cast<EShape>(Shape)));
 	}
 	return Slots;
 }

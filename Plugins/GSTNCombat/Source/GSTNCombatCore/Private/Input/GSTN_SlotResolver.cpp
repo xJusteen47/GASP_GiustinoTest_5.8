@@ -32,12 +32,6 @@ namespace
 		return Result;
 	}
 
-	bool IsContextMet(const FGSTN_InputSlotSpec& Spec, const FGSTN_ResolveParams& Params)
-	{
-		static const FGameplayTagContainer NoTags;
-		return Spec.Context.RequirementsMet(Params.OwnerTags ? *Params.OwnerTags : NoTags);
-	}
-
 	uint32 SlotsToMask(const TArray<uint8, TInlineAllocator<8>>& Slots)
 	{
 		uint32 Mask = 0;
@@ -84,11 +78,11 @@ namespace
 			return false;
 		}
 
-		// A slot of higher rank, in context, that ends in a chord containing this button and has not matched (yet).
+		// A slot of higher rank that ends in a chord containing this button and has not matched (yet).
 		for (int32 Index = 0; Index < Slots.Num(); ++Index)
 		{
 			const FGSTN_InputSlotSpec* Other = Slots[Index];
-			if (!Other || Index == Winner.Index || !IsContextMet(*Other, Params) || !(Winner.Priority < Other->GetPriority(Settings)))
+			if (!Other || Index == Winner.Index || !(Winner.Priority < Other->GetPriority(Settings)))
 			{
 				continue;
 			}
@@ -117,7 +111,7 @@ FGSTN_SlotResolution FGSTN_SlotResolver::Resolve(TConstArrayView<const FGSTN_Inp
 	for (int32 Index = 0; Index < Slots.Num(); ++Index)
 	{
 		const FGSTN_InputSlotSpec* Spec = Slots[Index];
-		if (!Spec || !IsContextMet(*Spec, Params))
+		if (!Spec)
 		{
 			continue;
 		}

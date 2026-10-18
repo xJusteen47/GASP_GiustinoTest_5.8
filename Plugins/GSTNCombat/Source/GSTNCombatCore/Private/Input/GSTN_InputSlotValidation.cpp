@@ -35,11 +35,6 @@ namespace
 	}
 }
 
-bool UGSTN_InputSlotValidation::AreContextsDisjoint(const FGSTN_TagRequirements& A, const FGSTN_TagRequirements& B)
-{
-	return A.RequireTags.HasAny(B.IgnoreTags) || B.RequireTags.HasAny(A.IgnoreTags);
-}
-
 TArray<FGSTN_SlotConflict> UGSTN_InputSlotValidation::FindConflicts(const UGSTN_InputSlotSet& Set, const UGSTN_CombatInputSettings& Settings)
 {
 	TArray<const FGSTN_InputSlotSpec*> Specs;
@@ -130,7 +125,7 @@ TArray<FGSTN_SlotConflict> UGSTN_InputSlotValidation::FindConflicts(TConstArrayV
 		}
 		for (int32 B = 0; B < Slots.Num(); ++B)
 		{
-			if (B == A || !Slots[B]->Pattern.IsStructurallyValid() || AreContextsDisjoint(Slots[A]->Context, Slots[B]->Context))
+			if (B == A || !Slots[B]->Pattern.IsStructurallyValid())
 			{
 				continue;
 			}

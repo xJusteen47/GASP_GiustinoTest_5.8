@@ -97,34 +97,6 @@ bool FGSTN_ValidationShadowedTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ValidationContextTest, "GSTNCombat.Core.Input.Validation.DisjointContexts", GSTN_CORE_TEST_FLAGS)
-bool FGSTN_ValidationContextTest::RunTest(const FString& Parameters)
-{
-	const TStrongObjectPtr<UGSTN_CombatInputSettings> Settings = MakeSettings();
-	const FGameplayTag Airborne = GSTNCommandTags::Context_Airborne.GetTag();
-
-	TArray<FGSTN_InputSlotSpec> Slots = {
-		Slot(GSTNCommandTags::Attack_Neutral, Pattern({ Press(Attack()) })),
-		Slot(GSTNCommandTags::Air_Attack_Neutral, Pattern({ Press(Attack()) })),
-	};
-	TestEqual(TEXT("overlapping contexts conflict"), Validate(Slots, *Settings).Num(), 1);
-
-	Slots[0].Context.IgnoreTags.AddTag(Airborne);
-	Slots[1].Context.RequireTags.AddTag(Airborne);
-	TestEqual(TEXT("ground vs air do not conflict"), Validate(Slots, *Settings).Num(), 0);
-
-	// One side's requirement alone is enough.
-	Slots[0].Context.IgnoreTags.Reset();
-	Slots[0].Context.RequireTags.AddTag(GSTNCommandTags::Context_Airborne.GetTag());
-	Slots[1].Context.RequireTags.Reset();
-	Slots[1].Context.IgnoreTags.AddTag(Airborne);
-	TestEqual(TEXT("require vs ignore the other way round"), Validate(Slots, *Settings).Num(), 0);
-
-	TestTrue(TEXT("helper: disjoint"), UGSTN_InputSlotValidation::AreContextsDisjoint(Slots[0].Context, Slots[1].Context));
-	TestFalse(TEXT("helper: empty contexts overlap"), UGSTN_InputSlotValidation::AreContextsDisjoint(FGSTN_TagRequirements(), FGSTN_TagRequirements()));
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ValidationInvalidTest, "GSTNCombat.Core.Input.Validation.InvalidSlots", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_ValidationInvalidTest::RunTest(const FString& Parameters)
 {
@@ -161,7 +133,7 @@ bool FGSTN_ValidationSlotSetTest::RunTest(const FString& Parameters)
 
 #if WITH_EDITOR
 	Set->FillWithStandardSlots();
-	TestEqual(TEXT("the standard set has 28 slots"), Set->Slots.Num(), 28);
+	TestEqual(TEXT("the standard set has 16 slots"), Set->Slots.Num(), 16);
 	{
 		FDataValidationContext Context;
 		TestTrue(TEXT("the standard set is valid"), Set->IsDataValid(Context) == EDataValidationResult::Valid);

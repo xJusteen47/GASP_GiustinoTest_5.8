@@ -9,6 +9,7 @@
 #include "Input/GSTN_BufferResetRules.h"
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatInputSettings.h"
+#include "Input/GSTN_CommandBindings.h"
 #include "Input/GSTN_CombatInputTags.h"
 #include "Input/GSTN_InputConditions.h"
 #include "Input/GSTN_InputHistory.h"
@@ -50,11 +51,8 @@ namespace GSTNTest
 		Settings->WorldReferenceYaw = 0.f;
 		Settings->CommandTiers.Empty();
 		Settings->CommandTiers.Add(GSTNCommandTags::Attack, 100);
-		Settings->CommandTiers.Add(GSTNCommandTags::Air_Attack, 100);
 		Settings->CommandTiers.Add(GSTNCommandTags::Strong, 200);
-		Settings->CommandTiers.Add(GSTNCommandTags::Air_Strong, 200);
 		Settings->CommandTiers.Add(GSTNCommandTags::Special, 300);
-		Settings->CommandTiers.Add(GSTNCommandTags::Air_Special, 300);
 		Settings->CommandTiers.Add(GSTNCommandTags::Combo, 350);
 		Settings->CommandTiers.Add(GSTNCommandTags::Super, 400);
 		Settings->ExclusiveButtons = { GSTNInputTags::Button_Attack.GetTag(), GSTNInputTags::Button_Strong.GetTag(), GSTNInputTags::Button_Special.GetTag() };
@@ -224,7 +222,7 @@ namespace GSTNTest
 
 	/** Resolves with the standard buttons at the history's latest frame; every command can execute unless CanExecute says otherwise */
 	inline FGSTN_SlotResolution ResolveSlots(const TArray<FGSTN_InputSlotSpec>& Slots, const FGSTN_InputHistory& History,
-		const UGSTN_CombatInputSettings& Settings, const FGameplayTagContainer& OwnerTags = FGameplayTagContainer(),
+		const UGSTN_CombatInputSettings& Settings,
 		TFunctionRef<bool(int32)> CanExecute = [](int32) { return true; })
 	{
 		static const FGSTN_ButtonMap Map = FGSTN_ButtonMap::MakeStandard();
@@ -235,7 +233,6 @@ namespace GSTNTest
 		}
 		FGSTN_ResolveParams Params;
 		Params.Buttons = &Map;
-		Params.OwnerTags = &OwnerTags;
 		Params.Now = History.GetLatestFrame();
 		return FGSTN_SlotResolver::Resolve(Pointers, History, Params, Settings, CanExecute);
 	}

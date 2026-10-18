@@ -8,14 +8,10 @@ UGSTN_CombatInputSettings::UGSTN_CombatInputSettings()
 {
 	CategoryName = TEXT("Plugins");
 
-	// One tier per family, in increasing precedence. Airborne roots mirror the grounded ones: a tag is looked up through
-	// its ancestors only, and "Command.Air.Attack" is not under "Command.Attack".
+	// One tier per family, in increasing precedence; a command takes the tier of its root.
 	CommandTiers.Add(GSTNCommandTags::Attack, 100);
-	CommandTiers.Add(GSTNCommandTags::Air_Attack, 100);
 	CommandTiers.Add(GSTNCommandTags::Strong, 200);
-	CommandTiers.Add(GSTNCommandTags::Air_Strong, 200);
 	CommandTiers.Add(GSTNCommandTags::Special, 300);
-	CommandTiers.Add(GSTNCommandTags::Air_Special, 300);
 	CommandTiers.Add(GSTNCommandTags::Combo, 350);
 	CommandTiers.Add(GSTNCommandTags::Super, 400);
 

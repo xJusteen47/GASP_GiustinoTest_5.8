@@ -38,12 +38,13 @@ bool FGSTN_NativeTagsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("strong button tag"), GSTNInputTags::Button_Strong.GetTag().IsValid());
 	TestTrue(TEXT("crouch button tag"), GSTNInputTags::Button_Crouch.GetTag().IsValid());
 
-	TestEqual(TEXT("command tag name"), GSTNCommandTags::Air_Strong_CrouchDirectional.GetTag().GetTagName(), FName(TEXT("Command.Air.Strong.CrouchDirectional")));
-	TestTrue(TEXT("airborne context"), GSTNCommandTags::Context_Airborne.GetTag().IsValid());
+	TestEqual(TEXT("command tag name"), GSTNCommandTags::Strong_CrouchDirectional.GetTag().GetTagName(), FName(TEXT("Command.Strong.CrouchDirectional")));
+	TestEqual(TEXT("grounded context"), GSTNCommandTags::Context_Grounded.GetTag().GetTagName(), FName(TEXT("Combat.Context.Grounded")));
+	TestEqual(TEXT("airborne context"), GSTNCommandTags::Context_Airborne.GetTag().GetTagName(), FName(TEXT("Combat.Context.Airborne")));
+	TestEqual(TEXT("on wall context"), GSTNCommandTags::Context_OnWall.GetTag().GetTagName(), FName(TEXT("Combat.Context.OnWall")));
 	TestTrue(TEXT("attack neutral is under the attack root"),
 		GSTNCommandTags::Attack_Neutral.GetTag().MatchesTag(GSTNCommandTags::Attack.GetTag()));
-	TestFalse(TEXT("airborne attack is not under the grounded attack root"),
-		GSTNCommandTags::Air_Attack_Neutral.GetTag().MatchesTag(GSTNCommandTags::Attack.GetTag()));
+	TestFalse(TEXT("a context tag is not a command"), GSTNCommandTags::Context_Airborne.GetTag().MatchesTag(GSTNCommandTags::Attack.GetTag()));
 	TestTrue(TEXT("combo command"), GSTNCommandTags::Combo_AttackSpecial_CrouchNeutral.GetTag().MatchesTag(GSTNCommandTags::Combo.GetTag()));
 	return true;
 }
@@ -62,7 +63,6 @@ bool FGSTN_SettingsTiersTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("special leaf"), Settings->GetCommandTier(GSTNCommandTags::Special_Directional), 300);
 	TestEqual(TEXT("the nearest listed ancestor wins"), Settings->GetCommandTier(GSTNCommandTags::Attack_CrouchDirectional), 250);
 	TestEqual(TEXT("an unlisted root is tier 0"), Settings->GetCommandTier(GSTNCommandTags::Strong_Neutral), 0);
-	TestEqual(TEXT("airborne is not under the grounded root"), Settings->GetCommandTier(GSTNCommandTags::Air_Attack_Neutral), 0);
 	TestEqual(TEXT("an unrelated tag is tier 0"), Settings->GetCommandTier(GSTNCommandTags::Context_Airborne), 0);
 	TestEqual(TEXT("an invalid tag is tier 0"), Settings->GetCommandTier(FGameplayTag()), 0);
 	return true;
@@ -77,8 +77,6 @@ bool FGSTN_SettingsDefaultsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("special beats strong beats attack"),
 		Settings.GetCommandTier(GSTNCommandTags::Special_Neutral) > Settings.GetCommandTier(GSTNCommandTags::Strong_Neutral)
 		&& Settings.GetCommandTier(GSTNCommandTags::Strong_Neutral) > Settings.GetCommandTier(GSTNCommandTags::Attack_Neutral));
-	TestEqual(TEXT("airborne has the tier of its grounded twin"),
-		Settings.GetCommandTier(GSTNCommandTags::Air_Special_Neutral), Settings.GetCommandTier(GSTNCommandTags::Special_Neutral));
 	TestTrue(TEXT("combo beats special"),
 		Settings.GetCommandTier(GSTNCommandTags::Combo_AttackSpecial_Neutral) > Settings.GetCommandTier(GSTNCommandTags::Special_Neutral));
 	TestTrue(TEXT("attack buttons are exclusive"), Settings.ExclusiveButtons.Contains(GSTNInputTags::Button_Attack.GetTag()));

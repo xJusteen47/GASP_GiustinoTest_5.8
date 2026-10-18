@@ -48,6 +48,7 @@ Plugins/GSTNCombat/Source/GSTNCombatCore/
     Input/GSTN_CombatCommandTags.h    native standard command tags (combat.md §9.1): Command.Attack/Strong/Special.<Shape>,
                                       Command.Combo.AttackSpecial.<Shape>; context tags Combat.Context.Grounded/
                                       Airborne/OnWall (projected by the combat model in M2, read by bindings)
+    Input/GSTN_CommandBindings.h      FGSTN_TagRequirements, UGSTN_CommandBindingUtils::SelectBinding / FindBindingConflicts (M1.7)
     Input/GSTN_StandardSlots.h        UGSTN_StandardSlots::Build(): the standard slot set of combat.md §9.1 in code
                                       (tests use it; an editor action creates the asset from it)
   Private/
@@ -348,6 +349,20 @@ M3's move sets:
   const FGSTN_TagRequirements* Requirements; }>) → TArray<FGSTN_BindingConflict>`: same command, `CanHoldTogether`, same
   required count → `Ambiguous` error.
 
+*Implementation notes (M1.7):*
+
+- `FGSTN_TagRequirements` moved to `GSTN_CommandBindings.h` (reflected, editable); `IsSatisfiedBy`, `GetRequiredCount` and
+  `CanHoldTogether` are inline. `FGSTN_InputSlotSpec::Context`, `FGSTN_ResolveParams::OwnerTags`, the resolver's context test
+  and `UGSTN_InputSlotValidation::AreContextsDisjoint` are gone; the validator compares slots by input and rank only.
+- `SelectBinding` takes pointers to the requirements of the candidates (the binding set builds that view without
+  copying); `FindBindingConflicts` takes `FGSTN_BindingKey { Command, Requirements }` and returns `FGSTN_BindingConflict
+  { BindingA, BindingB, Message }`. Bindings without a valid command are skipped (their owner reports them).
+- Native tags: `Combat.Context.Grounded/Airborne/OnWall` next to the command tags; `Command.Air.*` and the airborne tier
+  roots are removed. Standard set: 12 + 4 commands, `CommandTiers` default = Attack 100, Strong 200, Special 300,
+  Combo 350, Super 400.
+- Linking note: the project module lists `GSTNCombatCore` itself next to `GSTNCombatNP`: the linker does not take the
+  Core import library from the plugin's public dependency.
+
 ## 4. Input notation (`FGSTN_InputScript`)
 
 Used by tests, the validator and later the input display. Space-separated tokens `<frame>:<item>`:
@@ -386,7 +401,7 @@ Used by tests, the validator and later the input display. Space-separated tokens
 | Reset | `OnEvent` flushes only masked buttons; `AfterIdleFrames`; a flush ends hold buffering. |
 | Standard slots | With the standard command set of combat.md §9.1 (12 commands + 4 chord commands) on scripted histories, for each family: stick neutral + A → neutral attack; light tilt (aim zone) + A → neutral attack (aimed); tilt + A → directional attack; crouch held + neutral + A → crouch neutral; crouch held + tilt + A → crouch directional; crouch pressed 2 frames after A → still the crouch version; the result does not depend on any context; the validator reports no conflicts on the set. |
 | Bindings (M1.7) | `SelectBinding`: grounded vs airborne requirements pick by context; an on-wall binding (Airborne + OnWall) beats the airborne one; nothing satisfied → `INDEX_NONE`; equal required counts → first. `FindBindingConflicts`: two airborne bindings of one command → Ambiguous; grounded vs airborne (one ignores what the other requires) → none; different commands → none. |
-| Validation | Two identical patterns with equal priority → Ambiguous; A vs Dir+A → no conflict (different priority) and A not reported shadowed; a slot fully covered by a higher one → Shadowed; disjoint contexts → no conflict. |
+| Validation | Two identical patterns with equal priority → Ambiguous; A vs Dir+A → no conflict (different priority) and A not reported shadowed; a slot fully covered by a higher one → Shadowed; the same command tag twice → DuplicateCommand; a slot without command or without anchor → InvalidSlot. (Slots have no context since M1.7.) |
 | Determinism | Same script resolved twice → identical results; copy the history mid-script, resolve the rest on both copies → identical (rollback stand-in). |
 
 Run headless:
