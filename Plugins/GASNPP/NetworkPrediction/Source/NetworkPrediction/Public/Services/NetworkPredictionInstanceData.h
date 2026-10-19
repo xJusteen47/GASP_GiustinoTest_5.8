@@ -66,6 +66,11 @@ struct TInstanceData
 	ENetworkPredictionService ServiceMask = ENetworkPredictionService::None;
 };
 
+// Frames of history each instance keeps (ring indexed by frame number). It bounds the deepest rollback (see
+// TFixedRollbackService::QueryRollback) and the oldest frame the server may use as a delta serialization base:
+// 64 frames are ~1 s at 62.5 Hz.
+inline constexpr int32 NpInstanceFrameBufferSize = 64;
+
 // Frame data that instances with StateTypes will have.
 template<typename ModelDef=FNetworkPredictionModelDef>
 struct TInstanceFrameState
@@ -86,7 +91,7 @@ struct TInstanceFrameState
 	TNetworkPredictionBuffer<FFrame> Buffer;
 
 	TInstanceFrameState()
-		: Buffer(64) { } // fixme
+		: Buffer(NpInstanceFrameBufferSize) { }
 };
 
 // Data the client receives from the server

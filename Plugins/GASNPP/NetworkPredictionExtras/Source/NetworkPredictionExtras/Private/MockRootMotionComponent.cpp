@@ -278,7 +278,7 @@ UMockRootMotionSource* UMockRootMotionComponent::ResolveRootMotionSource(int32 I
 	{
 		// No parameters: this implies no instantiation/CDO 
 		// (are we sure? Should there be a virtual here? What if we have a no parameter but internal state having source?)
-		RootMotionSourceCache.Instance = Cast<UMockRootMotionSource>(ClassObj->GetDefaultObject(false));
+		RootMotionSourceCache.Instance = Cast<UMockRootMotionSource>(ClassObj->GetDefaultObject());
 	}
 	else
 	{

@@ -83,6 +83,33 @@ public:
 			UE_NP_TRACE_SIM(ClientRecvData.TraceID);
 			
 			const int32 LocalFrame = ClientRecvData.ServerFrame - Offset;
+
+			// GAS-NPP fork: the frame ring only holds the last Capacity frames. A state older than that (round trip longer than
+			// the history, a long hitch) would be compared with, and rolled back into, a slot that already holds a newer frame,
+			// and the re-simulation would wrap over its own inputs. There is nothing valid to correct against: drop it, the
+			// next update is newer.
+			const int32 HistoryFrames = Frames.Buffer.Capacity() - 1;
+			if (LocalFrame < 0 || TickState->PendingFrame - LocalFrame > HistoryFrames)
+			{
+				// Every update of every instance hits this while the round trip exceeds the history: one line per second
+				static double LastWarningSeconds = 0.0;
+				static int32 SuppressedWarnings = 0;
+				const double NowSeconds = FPlatformTime::Seconds();
+				if (NowSeconds - LastWarningSeconds >= 1.0)
+				{
+					UE_LOGF(LogNetworkPrediction, Warning, "Ignoring server state for local frame %d: older than the %d frames of local history (PendingFrame %d, Offset %d). %d more since the last warning",
+						LocalFrame, HistoryFrames, TickState->PendingFrame, Offset, SuppressedWarnings);
+					LastWarningSeconds = NowSeconds;
+					SuppressedWarnings = 0;
+				}
+				else
+				{
+					++SuppressedWarnings;
+				}
+				DataStore->ClientRecvBitMask[ClientRecvIdx] = false;
+				continue;
+			}
+
 			typename TInstanceFrameState<ModelDef>::FFrame& LocalFrameData = Frames.Buffer[LocalFrame];
 
 			TInstanceData<ModelDef>& InstanceData = DataStore->Instances.GetByIndexChecked(ClientRecvData.InstanceIdx);
@@ -93,7 +120,8 @@ public:
 			{
 				UE_NP_TRACE_SHOULD_RECONCILE(ClientRecvData.TraceID);
 				bDoRollback = true;
-				RollbackFrame = LocalFrame - FMath::Max(0, NetworkPredictionCVars::ForceReconcileExtraFrames());
+				// Same bound for the extra frames of a forced rollback
+				RollbackFrame = FMath::Max(LocalFrame - FMath::Max(0, NetworkPredictionCVars::ForceReconcileExtraFrames()), TickState->PendingFrame - HistoryFrames);
 
 				if (NetworkPredictionCVars::PrintReconciles())
 				{				

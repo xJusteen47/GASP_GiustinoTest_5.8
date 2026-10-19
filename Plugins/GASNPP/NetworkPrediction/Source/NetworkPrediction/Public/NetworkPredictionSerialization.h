@@ -91,6 +91,22 @@ struct FNetworkPredictionSerialization
 	}
 };
 
+// GAS-NPP fork: client side of delta serialization. Each received update saves its state as a possible delta base, and the
+// saved states were only dropped when a delta update arrived. The server uses a base only within NpInstanceFrameBufferSize
+// frames of its own frame, so anything older can never be used: drop it, otherwise the map gains one full state copy per
+// update whenever the server sends full updates (acks lost to packet loss or bandwidth saturation, np.ToggleDeltaSerialize 0).
+template<typename ClientRecvDataType>
+void PruneUnusableAckedFrames(ClientRecvDataType& ClientRecvState, const int32 ServerFrame)
+{
+	const int32 OldestUsableBase = ServerFrame - NpInstanceFrameBufferSize;
+	for (auto It = ClientRecvState.AckedFrames.CreateIterator(); It; ++It)
+	{
+		if (It.Key() < OldestUsableBase)
+		{
+			It.RemoveCurrent();
+		}
+	}
+}
 
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -514,6 +530,8 @@ public:
 			
 			uint32& AckedFrame = TickState->LocalAckedFrames.IDsToAckedFrames.FindOrAdd(ClientRecvState.ID);
 			AckedFrame = ServerFrame;
+
+			PruneUnusableAckedFrames(ClientRecvState, ServerFrame);
 		}
 		
 		InstanceData.CueDispatcher->NetRecvSavedCues(P.Ar, true, ServerFrame, 0); // 7. NetSimCues
@@ -807,6 +825,8 @@ public:
 			ClientRecvState.SyncState.CopyTo(AckedFrameData.SyncState);
 			ClientRecvState.AuxState.CopyTo(AckedFrameData.AuxState);
 			ClientRecvState.InputCmd.CopyTo(AckedFrameData.InputCmd);
+
+			PruneUnusableAckedFrames(ClientRecvState, ClientRecvState.ServerFrame);
 		}
 		npEnsureSlow(ClientRecvState.InstanceIdx >= 0);
 		TInstanceData<ModelDef>& InstanceData = DataStore->Instances.GetByIndexChecked(ClientRecvState.InstanceIdx);
