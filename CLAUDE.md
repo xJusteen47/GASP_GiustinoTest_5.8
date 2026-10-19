@@ -12,7 +12,8 @@ Read the linked docs only when the task touches that area. Do not read the whole
 | Project C++ | `Source/GASP_Giustino2/{Public,Private}/` | this file |
 | Abilities, tags, ability input | `.../GAS/` | [gas-npp.md](docs/architecture/gas-npp.md) |
 | Wall movement modes, transitions, math/query libs | `.../WallMovement/` | [wall-movement.md](docs/architecture/wall-movement.md) |
-| Combat plugin (input buffer, slots, moves, hits; own NP model) and the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`, `GSTNCombatNP/Mover/`) | `Plugins/GSTNCombat/` | [combat.md](docs/architecture/combat.md), [gas-npp.md](docs/architecture/gas-npp.md) |
+| Input plugin (commands, buffer, priority, bindings; embeddable NP input simulation) and the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`, `GSTNInputNP/Mover/`) | `Plugins/GSTNInput/` | [input.md](docs/architecture/input.md) |
+| Combat plugin (default command set, combat abilities, hits; own NP model) | `Plugins/GSTNCombat/` | [combat.md](docs/architecture/combat.md), [gas-npp.md](docs/architecture/gas-npp.md) |
 | Network test harness (C++ side) | `.../GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | Editor Python tooling | `Tools/GAS/`, `Tools/GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | GAS-NPP plugin forks (GameplayAbilities, NetworkPrediction, AbilitySystemSimulation...) | `Plugins/GASNPP/` | [gas-npp.md](docs/architecture/gas-npp.md) |
@@ -25,7 +26,7 @@ Headers carry long doc comments that explain intent and invariants: read the hea
 - Every project type is prefixed `GSTN_` (`UGSTN_`, `FGSTN_`, `EGSTN_`); export macro is `GASP_GIUSTINO2_API`.
 - Public headers in `Public/<Area>/`, implementations in `Private/<Area>/`; includes are module-relative (`"GAS/GSTN_GameplayAbility.h"`).
 - Comments explain *why* and the simulation constraints, in English, at the density of the existing headers. No restating the code.
-- Gameplay tags are native (`UE_DECLARE_GAMEPLAY_TAG_EXTERN` in `GAS/GSTN_AbilityTags.h`), not ini-defined. One exception: designer-made combat command tags live in `Config/Tags/GSTNCombatCommands.ini` (combat.md §9).
+- Gameplay tags are native (`UE_DECLARE_GAMEPLAY_TAG_EXTERN` in `GAS/GSTN_AbilityTags.h`), not ini-defined. One exception: designer-made input tags (buttons, commands and their lock tags) live in `Config/Tags/GSTNCommands.ini` (input.md §3.1).
 - Tuning values are `UPROPERTY(EditAnywhere/EditDefaultsOnly)` grouped by `Category = "Area|Section"` with `meta = (ClampMin, ForceUnits)`.
 - Tunable data goes in small `USTRUCT`s (see `GSTN_WallMovementTypes.h`), not as loose floats on the mode.
 - Stateless math/queries go in `UBlueprintFunctionLibrary` classes (`*Utils`), not in the mode classes.

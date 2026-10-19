@@ -6,6 +6,9 @@ Section numbers below are local to this file.
 > **Revision 2026-10-18:** hits publish authoritative events (`Combat.Event.HitLanded`, `HitReceived`, `KO`) through
 > the outbox of combat.md §5.6 / M2 §7b, tagged with command, move, hit type and relationship.
 
+> **Revision 2026-10-19 (combat abilities):** "move" in this file means a **timeline ability**
+> (`UGSTN_GA_BaseCombat` and its timeline, combat.md §11); type names follow M3.
+
 ## 1. Scope
 
 **Goal:** moves hit. Hitboxes from move tracks overlap hurtboxes; the attacker predicts its own hitstop and
@@ -28,6 +31,9 @@ Out: shield, parry, links and grabs, tech, SDI tuning beyond the basic displacem
    `UMoverComponent::HasGameplayTag` sources: modes, layered moves, modifiers); if layered moves cannot carry tags, the
    freeze also queues a `FGSTN_FrozenModifier` that does.
 3. **Hitstop with a montage playing**: the M0 pause path with a real montage, forced reconcile in the window.
+4. **Interpolation buffer**: lower `FixedTickInterpolationBufferedMS` (100 ms today) step by step under 60/15 ms and
+   2 % loss and keep the smallest value without visible stutter of interpolated proxies (spike S-FP showed this buffer
+   is most of the delay of remote actions, combat.md §12.7). Record it in combat.md §17.
 
 ## 3. Core types (`GSTNCombatCore`)
 
@@ -45,17 +51,17 @@ AttackerHitstopMultiplier; float ShieldDamage; int32 Priority; FGameplayTag HitT
 Projectile/Unblockable); TArray<TSubclassOf<UGameplayEffect>> ExtraEffects (applied to victim); FGameplayTag CueTag;
 FInstancedStruct CustomData; }`.
 
-**Hitbox** — `FGSTN_HitboxTrack : FGSTN_MoveTrack { TArray<FGSTN_HitboxSpec> Hitboxes; }`, `FGSTN_HitboxSpec {
+**Hitbox** — `FGSTN_HitboxTrack : FGSTN_TimelineTrack { TArray<FGSTN_HitboxSpec> Hitboxes; }`, `FGSTN_HitboxSpec {
 FGSTN_HitShape Shape; EGSTN_HitboxSpace Space (Root/BakedSocket/WorldAtMoveStart/Projectile); FName Socket;
 TArray<FGSTN_HitboxKey> Keys (frame, offset, rotation, scale; linear interpolation); uint8 HitGroup; bool
 bSweepBetweenFrames; FGSTN_HitData Data; TMap<FGameplayTag, FGSTN_HitVariant> RelationshipVariants; }`.
 `FGSTN_HitVariant { bool bIgnore; float ShapeScale = 1; FGSTN_HitDataOverride Override (per-field optional values and
-multipliers); }`. `BakedSocket` uses `UGSTN_MoveDefinition::BakedSockets (TMap<FName, TArray<FTransform>>)` — one
+multipliers); }`. `BakedSocket` uses `FGSTN_CombatTimelineData::BakedSockets (TMap<FName, TArray<FTransform>>)` — one
 root-relative transform per frame, written by the M5 baking tool; in M4 a Python helper bakes them (section 10).
 
 **Hurtboxes** — `UGSTN_HurtboxSetDefinition { TArray<FGSTN_Hurtbox { FName Name; FName Bone; FGSTN_HitShape Shape
 (root-relative, baked from the reference pose); FGameplayTagContainer Tags (e.g. Combat.Hurtbox.Head) }> }`.
-`FGSTN_HurtboxModifierTrack : FGSTN_MoveTrack { EGSTN_HurtState State (Normal/Intangible/Invincible/Armor); float
+`FGSTN_HurtboxModifierTrack : FGSTN_TimelineTrack { EGSTN_HurtState State (Normal/Intangible/Invincible/Armor); float
 ArmorThreshold; TArray<FName> AffectedHurtboxes (empty = all); TArray<FGSTN_HitShape> ShapeOverrides; }`.
 Intangible = not hit at all; Invincible = hit registers (attacker hitstop, confirm) but no damage/knockback/hitstun;
 Armor = no knockback/hitstun below the threshold, damage applies.
@@ -122,7 +128,7 @@ replicated by asset reference).
 3. **Relationship** first (resolver: self / same team = Ally / `FGenericTeamId::NoTeam` = Neutral / else Enemy), then
    `HittableRelationships` and `bFriendlyFire`, then the variant (`bIgnore`, `ShapeScale`).
 4. Overlap (swept if flagged) against the target's hurtboxes with its overrides; `Intangible` skipped.
-5. **Hit groups**: `HitTargets` ring in the combat sync state (8 entries `{ EntityId, MoveStartFrame, HitGroup }`) — a
+5. **Hit groups**: `HitTargets` ring in the combat sync state (8 entries `{ EntityId, TimelineStartFrame, HitGroup }`) — a
    target is hit once per group per move execution.
 6. For each new hit: record it; **predict own consequences**: hit-confirm flags (`OnHit`, or `OnBlock` when the
    snapshot says the victim is shielding — always false until M6), attacker hitstop window from the knockback model's
@@ -140,7 +146,7 @@ replicated by asset reference).
   `ActionState = Hitstun` (or `Tumble`), `HitstopStartFrame = F`, `HitstopEndFrame = F + HitstopFrames`,
   `HitstunEndFrame = HitstopEndFrame + HitstunFrames`, `PendingLaunch` (quantized velocity), cancel of the current move
   (`ActiveTableIndex = INDEX_NONE`; GA_Move ends itself), requests: damage GE, extra GEs, cue, freeze move (duration =
-  hitstop), buffer event `Combat.BufferEvent.HitReceived`, gameplay event `Combat.Event.Hit.Received` (reaction
+  hitstop), buffer event `Input.BufferEvent.HitReceived`, gameplay event `Combat.Event.Hit.Received` (reaction
   abilities may listen; they must not set combat state).
 - **Hitstop end** (frame `HitstopEndFrame`): DI from this frame's stick → `ApplyDI` → request knockback move
   (`FGSTN_LayeredMove_Knockback { Velocity; float DecayPerFrame; float GravityScale; int32 ElapsedFrames; }`, forcing
@@ -217,6 +223,10 @@ stored). Idle cost stays ~0 thanks to end-frame stamps.
 
 - Victim latency in PvE (interpolated enemies react ~RTT/2 + interpolation delay later): presentation must carry the
   feel; measure in spike 2.1 with presentation on.
+- Forward prediction of attackers (combat.md §12.7) stays off in M4. Keep the victim inbox able to be drained on the
+  owning client later (no server-only assumptions inside the resolution steps besides where the instance ticks), and
+  log in spike 2.1 how many hits on the local player arrive as corrections: that number decides a later forward
+  prediction milestone.
 - Snapshot invalidation relies on `RestoreFrame` being called for every combat instance on rollback (true for the fixed
   rollback service, combat.md §2 fact 8); assert it in development builds.
 - Swept overlaps multiply query cost; keep them opt-in per hitbox.

@@ -5,11 +5,15 @@ performance numbers, designer feedback), so they are specified at the level of g
 questions. **Before starting one, expand it to the level of the M1–M4 specifications** (files, types, algorithms,
 tests, acceptance) in its own file, reusing this outline.
 
+> **Revision 2026-10-19 (combat abilities):** "move" in this file means a **timeline ability**
+> (`UGSTN_GA_BaseCombat` and its timeline, combat.md §11); type names follow M3.
+
 ## M5 — Editor tooling (`GSTNCombatEditor`)
 
 **Goal:** designers create moves visually, without editing frame numbers in a details panel.
 
-- **Move asset editor** (`FAssetEditorToolkit` for `UGSTN_MoveDefinition`):
+- **Timeline editor** (`FAssetEditorToolkit` for `UGSTN_CombatTimeline`; the same widgets edit the inline timeline of a
+  `UGSTN_GA_BaseCombat` Blueprint):
   - Preview scene with the kit's preview mesh (skin chosen in the toolbar), the move's montage evaluated at the
     selected frame, hurtboxes and hitboxes drawn.
   - **Frame timeline**: ruler in frames (and ms), playhead with frame stepping (`,` `.`), one row per track, windows as

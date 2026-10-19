@@ -1,16 +1,16 @@
 # Testing the GAS + NPP + Mover integration
 
-Two layers: Automation tests for the pure combat logic (`GSTNCombatCore`), and a PIE network harness for everything simulated.
+Two layers: Automation tests for the pure input and combat logic (`GSTNInputCore`, `GSTNCombatCore`), and a PIE network harness for everything simulated.
 
-## Automation tests (`GSTNCombat.Core.*`)
+## Automation tests (`GSTNInput.Core.*`, `GSTNCombat.Core.*`)
 
-Pure, deterministic tests of `Plugins/GSTNCombat/Source/GSTNCombatCore` (input history, classifier, matcher, slots). Run them in the editor (Session Frontend > Automation, filter `GSTNCombat`) or headless with the editor closed:
+Pure, deterministic tests. `GSTNInput.Core.*` (input history, classifier, matcher, slots, resolver) live in `Plugins/GSTNInput/Source/GSTNInputCore/Private/Tests/`; `GSTNCombat.Core.*` (the standard command set) in `Plugins/GSTNCombat/Source/GSTNCombatCore`. Run them in the editor (Session Frontend > Automation, filter `GSTNInput` or `GSTNCombat`) or headless with the editor closed (the command runs both prefixes):
 
 ```
-"C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "<project>\GASP_Giustino2.uproject" -ExecCmds="Automation RunTests GSTNCombat.Core;Quit" -unattended -nullrhi -nopause -log
+"C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "<project>\GASP_Giustino2.uproject" -ExecCmds="Automation RunTests GSTNInput;Automation RunTests GSTNCombat;Quit" -unattended -nullrhi -nopause -log
 ```
 
-The result is in `Saved/Logs/GASP_Giustino2.log` (search `Test Completed`). Test names are `GSTNCombat.Core.<Area>.<Case>`; sources are in `Private/Tests/`.
+The result is in `Saved/Logs/GASP_Giustino2.log` (search `Test Completed`). Test names are `GSTNInput.Core.<Area>.<Case>` and `GSTNCombat.Core.<Area>.<Case>`; sources are in `Private/Tests/`.
 
 ## C++ side (`GASNPPTest/`)
 
