@@ -21,7 +21,7 @@
  * on a wall: bindings pick the move by context. The crouch version outranks the plain one by pattern specificity, the
  * chord by tier.
  *
- * The same builder serves the tests, the validator and the editor action that creates a set asset from it, so the code and
+ * The same builder serves the tests, the validator and FillSlotSet, which creates a set asset from it, so the code and
  * the data cannot drift apart.
  */
 UCLASS()
@@ -32,4 +32,9 @@ class GSTNCOMBATCORE_API UGSTN_StandardSlots : public UBlueprintFunctionLibrary
 public:
 	/** The 12 family commands (per family: Neutral, Directional, CrouchNeutral, CrouchDirectional) followed by the 4 chord commands */
 	static TArray<FGSTN_InputSlotSpec> Build();
+
+#if WITH_EDITOR
+	/** Replaces the slots of a set asset with the standard command set, to start from or to look at (was an editor button on the set) */
+	static void FillSlotSet(UGSTN_InputSlotSet& Set);
+#endif
 };

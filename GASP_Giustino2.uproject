@@ -134,6 +134,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombat",
 			"Enabled": true
 		}

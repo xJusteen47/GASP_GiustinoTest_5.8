@@ -11,7 +11,7 @@
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
-#include "Input/GSTN_CombatInputSettings.h"
+#include "Input/GSTN_InputSettings.h"
 #include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputScript.h"
 #include "InputAction.h"
@@ -223,7 +223,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	const int32 Frame = TimeStep.Frame;
 	const FGSTN_CombatInputCmd& Cmd = *Input.Cmd;
-	const UGSTN_CombatInputSettings& Settings = UGSTN_CombatInputSettings::Get();
+	const UGSTN_InputSettings& Settings = UGSTN_InputSettings::Get();
 
 	// This frame's sample: the buttons (a tap shorter than a frame is released on the frame it is pressed) and the stick
 	// classified in every direction space with the facing the Mover had at the end of the previous frame.

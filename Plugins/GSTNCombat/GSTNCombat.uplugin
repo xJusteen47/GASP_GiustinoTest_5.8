@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Combat",
-	"Description": "Fighting-game style input, buffering, moves and hit system for GAS, simulated by Network Prediction (GAS-NPP fork).",
+	"Description": "Fighting-game style combat: moves and hit system for GAS, simulated by Network Prediction (GAS-NPP fork).",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -27,6 +27,10 @@
 		}
 	],
 	"Plugins": [
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
 		{
 			"Name": "GameplayAbilities",
 			"Enabled": true

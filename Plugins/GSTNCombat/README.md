@@ -14,14 +14,18 @@ decisions and the reasons.
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNCombatCore` | exists | Pure, deterministic logic with no GAS and no Network Prediction: the stick direction classifier, input history, buttons, the pattern grammar (`FGSTN_InputPattern`, conditions), the matcher, buffer reset rules, slots, the slot resolver, the command bindings and the default command set. Covered by Automation tests (`GSTNCombat.Core.*`). |
+| `GSTNCombatCore` | exists | Combat content built on `GSTNInputCore`, pure and deterministic (no GAS, no Network Prediction): the standard button tags (`Input.Button.Attack`...), the standard command tags and the default command set (`UGSTN_StandardSlots`). Covered by Automation tests (`GSTNCombat.Core.*`). |
 | `GSTNCombatNP` | exists | The adapter to the Network Prediction fork: the combat NP model (`UGSTN_CombatSimComponent`, sync/aux state, input command) and the Mover sim-state tracker. Everything that touches the ability system goes through here. |
 | `GSTNCombatGAS` | planned | Native tags, attribute set, damage effect and execution, weapons and loadouts. |
 | `GSTNCombatEditor` | planned | Timeline editor, slot conflict validator UI, debug drawing. |
 
-Per input.md the generic input code (history, matcher, bindings...) is to move into a separate `GSTNInput` plugin; until
-that split happens it lives in `GSTNCombatCore`. The rule that decides what stays here: anything about *fighting*
-(standard buttons, command tags, default slots, hits) is combat, anything about *input in general* is input.
+The generic input code (history, classifier, pattern grammar, matcher, buffer, slots, resolver, bindings, settings) lives in
+the [GSTNInput](../GSTNInput/README.md) plugin, which this one depends on (`GSTNCombatCore` -> `GSTNInputCore`). The rule
+that decides what stays here: anything about *fighting* (standard buttons, command tags, default slots, hits) is combat,
+anything about *input in general* is input. The combat priority tiers and exclusive buttons are values in the project's
+`Config/DefaultGame.ini` (section `[/Script/GSTNInputCore.GSTN_InputSettings]`), not defaults of the input plugin.
+Until step S2 of input.md, the Network Prediction side of the input (input command, sync state, sources, Mover tracker)
+still lives in `GSTNCombatNP`.
 
 ## How a frame flows
 
@@ -48,58 +52,20 @@ state in the sync/aux state (rules in [gas-npp.md](../../docs/architecture/gas-n
 
 ## How to extend it
 
-All examples are in `GSTNCombatCore` and are testable without a world: add an Automation test next to the existing ones
-(`Private/Tests/GSTN_InputTests_*.cpp`, helpers in `GSTN_TestUtils.h`).
+The generic extension points (a new input condition, slot, binding or buffer reset rule) are described in the
+[GSTNInput README](../GSTNInput/README.md). What is specific to combat:
 
-### A new input condition
+- **A new standard command**: add its tag to `GSTN_CombatCommandTags` (and give its root a tier in
+  `Config/DefaultGame.ini` if it is a new root), add the slot in `UGSTN_StandardSlots::Build`, then update the
+  `GSTNCombat.Core.StandardSlots.*` tests (they check the shapes, the chords and that the validator finds no conflicts).
+- **A new standard button**: add its tag to `GSTN_CombatButtonTags` and to the project's input config; add it to
+  `ExclusiveButtons` if its presses compete with attacks for one move.
 
-Conditions are structs held in the steps of a pattern; they only see the history, the button map and frame numbers.
-Derive from `FGSTN_InputCondition` (`Public/Input/GSTN_InputConditions.h`):
-
-```cpp
-USTRUCT(BlueprintType, meta = (DisplayName = "Held Both"))
-struct GSTNCOMBATCORE_API FGSTN_InputCondition_HeldBoth : public FGSTN_InputCondition
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Condition")
-	FGameplayTag ButtonA;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Condition")
-	FGameplayTag ButtonB;
-
-	virtual bool Matches(const FGSTN_ConditionContext& Ctx, int32 AnchorFrame, FGSTN_ConditionResult& Out) const override;
-	virtual int32 GetSpecificity() const override { return 2; }
-	virtual void GetReferencedButtons(FGameplayTagContainer& OutButtons) const override;
-};
-```
-
-Decide whether it is an *anchor* (it produces a frame: `IsAnchorCondition`) or a check relative to the anchor. Override
-`AppendCanonicalInput` so the slot validator and the tests can build the smallest input that satisfies it. Keep
-`Matches` allocation free and pure.
-
-### A new slot (a command)
-
-A slot ties a command tag to a pattern, a priority and a direction policy (`FGSTN_InputSlotSpec`, `GSTN_InputSlot.h`).
-Slots live in `UGSTN_InputSlotAsset` / `UGSTN_InputSlotSet` data assets; the default set is built by
-`UGSTN_StandardSlots`. To add one: create the command tag (`GSTN_CombatCommandTags`), add the slot to a set, then run
-the slot validator (`GSTN_InputSlotValidation`), which reports slots that shadow or conflict with each other.
-
-### A new binding
-
-Bindings say which command a context runs (`GSTN_CommandBindings.h`, `FGSTN_TagRequirements` for the conditions on the
-owner's tags). A command without a binding is never a candidate. `UGSTN_CommandBindingUtils` resolves bindings and
-detects conflicts between them.
-
-### A new buffer reset rule
-
-Rules flush buffered presses when something happens (`GSTN_BufferResetRules.h`). Derive from `FGSTN_BufferResetRule`,
-override `ShouldFlush` and, if the rule watches tags, `GetWatchedTags`. Existing examples: `OnEvent` (a combat-model event
-such as a hit received) and `OnTagAdded`. Rules are listed at global, weapon and move level and applied in that order.
+Tests are in `Source/GSTNCombatCore/Private/Tests/` with the helpers of `GSTN_CombatTestUtils.h`.
 
 ## Conventions
 
-- Types are prefixed `GSTN_` (`UGSTN_`, `FGSTN_`, `EGSTN_`); export macros are `GSTNCOMBATCORE_API` / `GSTNCOMBATNP_API`.
+- Types are prefixed `GSTN_` (`UGSTN_`, `FGSTN_`, `EGSTN_`); export macros are `GSTNCOMBATCORE_API` / `GSTNCOMBATNP_API` (`GSTNINPUTCORE_API` for the input plugin).
 - Public headers in `Public/<Area>/`, implementations in `Private/<Area>/`.
 - Comments explain *why* and the simulation constraints. Headers document the intent of a class: read the header before
   the `.cpp`.
@@ -108,7 +74,7 @@ such as a hit received) and `OnTagAdded`. Rules are listed at global, weapon and
 ## Testing
 
 - Pure logic: Automation tests `GSTNCombat.Core.*` (Session Frontend > Automation, or
-  `UnrealEditor-Cmd GASP_Giustino2.uproject -ExecCmds="Automation RunTests GSTNCombat; Quit"`).
+  `UnrealEditor-Cmd GASP_Giustino2.uproject -ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit"`).
 - Network behaviour: the PIE harness `Tools/GASNPPTest/gasnpp_test.py` (dedicated server + 2 clients), scenario
   `combat_spike`. See [testing.md](../../docs/architecture/testing.md).
 
@@ -119,5 +85,5 @@ such as a hit received) and `OnTagAdded`. Rules are listed at global, weapon and
 [combat-m2-sim-input.md](../../docs/architecture/combat-m2-sim-input.md) ·
 [combat-m3-moves-kits.md](../../docs/architecture/combat-m3-moves-kits.md) ·
 [combat-m4-hits.md](../../docs/architecture/combat-m4-hits.md) ·
-[input.md](../../docs/architecture/input.md) · [gas-npp.md](../../docs/architecture/gas-npp.md) ·
+[input.md](../../docs/architecture/input.md) · [GSTNInput README](../GSTNInput/README.md) · [gas-npp.md](../../docs/architecture/gas-npp.md) ·
 [PATCHES.md](../GASNPP/PATCHES.md)

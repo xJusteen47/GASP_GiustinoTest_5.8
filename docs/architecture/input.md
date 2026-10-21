@@ -10,7 +10,7 @@ plugin owns, what it leaves to its host, and how the code moves out of `GSTNComb
 itself (classifier, history, grammar, buffer, priority, bindings) is specified in combat.md §6–§9 and in the M1/M2
 specifications; their rules do not change, only where the code lives and some names.
 
-Status (2026-10-19): *Decision*, design only. The code is still in `GSTNCombatCore/Input/` and `GSTNCombatNP`.
+Status (2026-10-22): step S1 is **done**: `GSTNInputCore` exists with the generic M1 code (section 8 lists what differs from the plan). Priority criteria (S1b), `GSTNInputNP` and the rest of M2 (S2) are still design; the NP code is in `GSTNCombatNP`.
 
 ## 1. Goals
 
@@ -73,8 +73,13 @@ Every type keeps its behaviour, tests and header comments. Renames:
 | `UGSTN_CombatEventSubsystem`, `FGSTN_CombatEvent` (planned in M2 §7b) | `UGSTN_SimEventSubsystem`, `FGSTN_SimEvent` (same API) |
 
 Stay in `GSTNCombatCore` (combat content built on the input core): the six standard button tags (now
-`Input.Button.Attack/Strong/Special/Crouch/Shield/Jump`, in `GSTN_CombatButtonTags.h`), `GSTN_CombatCommandTags.h`
-without the context tags, `UGSTN_StandardSlots` (the default fighting-game command set, combat.md §9.1) and its tests.
+`Input.Button.Attack/Strong/Special/Crouch/Shield/Jump`, in `GSTN_CombatButtonTags.h`, namespace `GSTNCombatButtonTags` so
+it does not clash with the generic `GSTNInputTags`), `GSTN_CombatCommandTags.h` without the context tags (`GSTNCommandTags`),
+`UGSTN_StandardSlots` (the default fighting-game command set, combat.md §9.1) and its tests.
+
+As implemented in S1 (differences from the plan above): `FGSTN_InputButtonDef` has not yet gained `MoveAction` and
+`bSendCameraAim` (they land with the NP sources in S2); the generic native tags are in `GSTN_InputTags.h` as declared in
+section 3, except that the per-root lock tags are not declared yet (S2c).
 
 ### 4.1 Priority criteria (*Decision*, 2026-10-19)
 
@@ -102,12 +107,18 @@ Generic code that names combat content today, to be cleaned in the move:
   (Attack 100, Strong 200, Special 300, Combo 350, Super 400) and exclusive buttons (Attack, Strong, Special) go into the
   project's `Config/DefaultGame.ini` section `[/Script/GSTNInputCore.GSTN_InputSettings]`; combat.md §8.2 lists them
   as the recommended values.
-- **`FGSTN_ButtonMap`** builds only from an input config (no hard-coded six-button order).
-- **`FGSTN_InputScript`**: the button letters are a parameter (no default to the combat buttons). Tests pass their own.
+- **`FGSTN_ButtonMap`** builds only from an input config (no hard-coded six-button order): `MakeStandard()` is gone.
+- **`FGSTN_InputScript`**: the button letters are a parameter (no default to the combat buttons): the default constructor is
+  gone, the constructor and the static `Build` take the button tags. Tests pass their own.
+- **`UGSTN_InputSlotSet`** no longer has the `FillWithStandardSlots` editor button (it needed the combat set):
+  `UGSTN_StandardSlots::FillSlotSet(Set)` does the same from code, in `GSTNCombatCore`.
 - **Tag pickers**: `meta = (Categories = "Input.Button")` and `"Input.BufferEvent"` instead of the combat roots.
-- **Tests**: generic tests use test-only native tags (`Input.Button.Test.A`… declared in the test utilities under
-  `WITH_DEV_AUTOMATION_TESTS`), renamed `GSTNInput.Core.Input.*`. `StandardSlots`, the native-tag test of the combat
-  tags and the settings test of the combat defaults move to `GSTNCombatCore` as `GSTNCombat.Core.*`.
+- **Tests**: generic tests use test-only native tags (`Input.Button.Test.Attack`… and `Command.Test.Attack.Neutral`…,
+  declared in `Private/Tests/GSTN_TestTags.h` under `WITH_DEV_AUTOMATION_TESTS`), renamed `GSTNInput.Core.Input.*`.
+  `StandardSlots`, the slot-set asset test (it builds the standard set), the native-tag test of the combat tags and the
+  settings test of the combat defaults move to `GSTNCombatCore` as `GSTNCombat.Core.*`, with their own helpers
+  (`GSTN_CombatTestUtils.h`). The combat defaults test reads `Config/DefaultGame.ini`, so it also checks that the values
+  parse.
 - Comments that cite combat.md sections keep citing them (the rules live there) but say "combat.md" explicitly.
 
 ## 5. `GSTNInputNP`
@@ -179,7 +190,7 @@ hits, kits, loadouts. The combat component embeds `FGSTN_InputSimState` in its s
 
 The split is mostly moving files and renaming; M2's NP code is half written, so the sooner the better.
 
-**Step S1 — `GSTNInputCore`** (one commit, builds and tests green):
+**Step S1 — `GSTNInputCore`** (*done* 2026-10-22; one commit, builds and tests green):
 
 1. Create `Plugins/GSTNInput/GSTNInput.uplugin` and module `GSTNInputCore` (Build.cs as section 2, module class, log).
    Enable the plugin in `GASP_Giustino2.uproject`.
@@ -188,8 +199,10 @@ The split is mostly moving files and renaming; M2's NP code is half written, so 
 3. `GSTNCombatCore` keeps `GSTN_CombatButtonTags`, `GSTN_CombatCommandTags`, `UGSTN_StandardSlots` and their tests; it
    depends on `GSTNInputCore`; `GSTNCombat.uplugin` declares the `GSTNInput` plugin dependency.
 4. Add the combat values to `Config/DefaultGame.ini` (section 4).
-5. Build; run `Automation RunTests GSTNInput` and `GSTNCombat`: the 58 existing tests all pass, split between the two
-   prefixes (count them in the commit message).
+5. Build; run `Automation RunTests GSTNInput` and `GSTNCombat`: all the existing tests pass, split between the two
+   prefixes. The plan said 58; the suite had 63 tests before the move, and after it 56 are `GSTNInput.Core.*` and 7 are
+   `GSTNCombat.Core.*`. Run both prefixes with one command, `Automation RunTests GSTNInput+GSTNCombat`: two
+   `RunTests` in one `-ExecCmds` can drop the second.
 
 **Step S1b — priority criteria** (one commit, after S1): section 4.1. With the default list every existing resolver,
 validation and standard-set test passes unchanged; new tests: the list reordered (specificity before tier) changes the

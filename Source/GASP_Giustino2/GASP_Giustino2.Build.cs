@@ -8,7 +8,7 @@ public class GASP_Giustino2 : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "Mover", "GameplayTags", "NetCore", "GameplayAbilities", "AbilitySystemSimulation", "GSTNCombatNP", "GSTNCombatCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "Mover", "GameplayTags", "NetCore", "GameplayAbilities", "AbilitySystemSimulation", "GSTNCombatNP", "GSTNCombatCore", "GSTNInputCore" });
 
 		// GAS + Network Prediction (GAS-NPP fork) test harness
 		PrivateDependencyModuleNames.AddRange(new string[] { "GameplayTasks", "NetworkPrediction", "EnhancedInput", "Json" });

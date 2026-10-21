@@ -1,8 +1,8 @@
 using UnrealBuildTool;
 
-// Engine-agnostic combat logic: input samples, history, direction classifier, pattern matcher, buffer and slots.
-// Everything here is pure and deterministic, so it must never depend on GameplayAbilities, AbilitySystemSimulation,
-// NetworkPrediction or Mover (the simulation adapter lives in GSTNCombatNP).
+// Combat content built on the input core: the standard button and command tags and the default fighting-game command
+// set. Pure and deterministic like the input core, so it must never depend on GameplayAbilities,
+// AbilitySystemSimulation, NetworkPrediction or Mover (the simulation adapter lives in GSTNCombatNP).
 public class GSTNCombatCore : ModuleRules
 {
 	public GSTNCombatCore(ReadOnlyTargetRules Target) : base(Target)
@@ -15,10 +15,7 @@ public class GSTNCombatCore : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
-			"DeveloperSettings"
+			"GSTNInputCore"
 		});
-
-		// Only for UInputAction references in the input config; the Core never reads input itself.
-		PrivateDependencyModuleNames.Add("EnhancedInput");
 	}
 }

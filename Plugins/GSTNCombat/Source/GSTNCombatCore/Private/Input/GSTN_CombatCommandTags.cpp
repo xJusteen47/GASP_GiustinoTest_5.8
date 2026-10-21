@@ -25,7 +25,4 @@ namespace GSTNCommandTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_Directional, "Command.Combo.AttackSpecial.Directional", "Attack + special chord, stick tilted");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_CrouchNeutral, "Command.Combo.AttackSpecial.CrouchNeutral", "Attack + special chord, crouch held, stick neutral or lightly tilted");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_CrouchDirectional, "Command.Combo.AttackSpecial.CrouchDirectional", "Attack + special chord, crouch held, stick tilted");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_Grounded, "Combat.Context.Grounded", "The character is on the ground");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_Airborne, "Combat.Context.Airborne", "The character is in the air (falling or rising, not on a wall)");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_OnWall, "Combat.Context.OnWall", "The character is in a wall movement mode; with Airborne it identifies wall bindings");
 }

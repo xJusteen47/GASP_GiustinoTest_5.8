@@ -8,9 +8,9 @@
  * Native tags of the standard commands (combat.md section 9.1). A command is an input combination identified by a tag
  * under "Command."; bindings, cancel windows, AI requests and events refer to the tag, never to the input, so changing
  * how a command is entered touches only its slot. A command is the same on the ground, in the air or on a wall: which
- * move it starts depends on the context tags below, checked by the bindings (section 9.2). Roots carry the priority tier
- * (UGSTN_CombatInputSettings::CommandTiers). Game-specific commands made by designers live in
- * Config/Tags/GSTNCombatCommands.ini instead.
+ * move it starts depends on the Input.Context.* tags (GSTNInputTags), checked by the bindings (section 9.2). Roots carry the priority tier
+ * (UGSTN_InputSettings::CommandTiers). Game-specific commands made by designers live in
+ * Config/Tags/GSTNCommands.ini instead.
  */
 namespace GSTNCommandTags
 {
@@ -82,15 +82,4 @@ namespace GSTNCommandTags
 
 	/** Attack + special chord, crouch held, stick tilted */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combo_AttackSpecial_CrouchDirectional);
-
-	// Context tags the combat model projects from the owner's and Mover's state each frame (M2), for bindings to require
-
-	/** The character is on the ground */
-	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_Grounded);
-
-	/** The character is in the air (falling or rising, not on a wall) */
-	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_Airborne);
-
-	/** The character is in a wall movement mode; with Airborne it identifies wall bindings */
-	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_OnWall);
 }
