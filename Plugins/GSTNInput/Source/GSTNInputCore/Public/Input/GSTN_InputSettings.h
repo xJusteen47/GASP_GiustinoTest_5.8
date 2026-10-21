@@ -6,6 +6,8 @@
 #include "Engine/DeveloperSettings.h"
 #include "GameplayTagContainer.h"
 #include "GSTN_InputCoreTypes.h"
+#include "Input/GSTN_PriorityCriteria.h"
+#include "StructUtils/InstancedStruct.h"
 #include "GSTN_InputSettings.generated.h"
 
 /**
@@ -32,6 +34,9 @@ public:
 	 * is. Walks the tag hierarchy upwards, so it never iterates the map and gives the same answer on every machine.
 	 */
 	int32 GetCommandTier(const FGameplayTag& Command) const;
+
+	/** The default list: Tier, Specificity, ManualOffset */
+	static TArray<TInstancedStruct<FGSTN_PriorityCriterion>> MakeDefaultPriorityCriteria();
 
 	// ---- Buffer
 
@@ -66,6 +71,16 @@ public:
 	/** Which buffered presses compete when several commands match at once */
 	UPROPERTY(Config, EditAnywhere, Category = "Input|Priority")
 	EGSTN_BufferConflictPolicy BufferConflictPolicy = EGSTN_BufferConflictPolicy::MostRecent;
+
+	/**
+	 * How commands that match at once are ranked: the criteria in order, the first one a command scores higher on wins and
+	 * the next ones only break ties (equal on all: the slot order). The default, Tier then Specificity then ManualOffset,
+	 * gives "a special beats an attack, then the more demanding pattern, then the slot's offset". Reorder or remove entries
+	 * to change that; an empty list ranks by slot order alone. At most GSTNPriority::MaxCriteria (8) entries count. Scored once per
+	 * slot, so it must be identical on every machine of a match like any other setting the simulation reads
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Input|Priority", meta = (ExcludeBaseStruct))
+	TArray<TInstancedStruct<FGSTN_PriorityCriterion>> PriorityCriteria;
 
 	/**
 	 * Tier per command tag root: a higher tier always beats a lower one, whatever the pattern specificity (an attack

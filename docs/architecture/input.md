@@ -10,7 +10,7 @@ plugin owns, what it leaves to its host, and how the code moves out of `GSTNComb
 itself (classifier, history, grammar, buffer, priority, bindings) is specified in combat.md §6–§9 and in the M1/M2
 specifications; their rules do not change, only where the code lives and some names.
 
-Status (2026-10-22): step S1 is **done**: `GSTNInputCore` exists with the generic M1 code (section 8 lists what differs from the plan). Priority criteria (S1b), `GSTNInputNP` and the rest of M2 (S2) are still design; the NP code is in `GSTNCombatNP`.
+Status (2026-10-22): step S1 is **done**: `GSTNInputCore` exists with the generic M1 code (section 8 lists what differs from the plan). Step S1b (priority criteria, section 4.1) is **done**. `GSTNInputNP` and the rest of M2 (S2) are still design; the NP code is in `GSTNCombatNP`.
 
 ## 1. Goals
 
@@ -81,7 +81,7 @@ As implemented in S1 (differences from the plan above): `FGSTN_InputButtonDef` h
 `bSendCameraAim` (they land with the NP sources in S2); the generic native tags are in `GSTN_InputTags.h` as declared in
 section 3, except that the per-root lock tags are not declared yet (S2c).
 
-### 4.1 Priority criteria (*Decision*, 2026-10-19)
+### 4.1 Priority criteria (*Decision*, 2026-10-19; implemented in S1b, 2026-10-22)
 
 The order "tier → specificity → manual offset" of combat.md §8.2 is no longer hard-coded: it is the **default list of
 priority criteria**, and both the order and the criteria are configurable.
@@ -98,6 +98,14 @@ priority criteria**, and both the order and the criteria are configurable.
   compared lexicographically; ties still go to slot order. It is computed once per slot when a slot set or table is
   built (criteria must not depend on the frame), so the resolver's hot path does not change, and the loser consumption
   and the conflict validator keep comparing priorities as today.
+- **As implemented** (`GSTN_PriorityCriteria.h`): `FGSTN_PriorityContext` holds the slot spec, its pattern and the settings (references, valid for
+  the call). The three built-ins are `FGSTN_PriorityCriterion_Tier`, `_Specificity` and `_ManualOffset`.
+  `UGSTN_InputSettings::MakeDefaultPriorityCriteria()` builds the default list and the constructor uses it, so a project
+  with no ini entry behaves as before. `FGSTN_InputSlotSpec::GetPriority` scores the first `GSTNPriority::MaxCriteria` (8)
+  entries; an entry left empty in the editor scores 0 so every slot has one score per listed criterion. `FGSTN_CommandPriority::Compare`
+  reads a shorter vector as zero padded, which keeps the order total. The `Tier`, `Specificity` and `Offset` fields are gone:
+  code that read them reads `Scores[i]` instead. Scoring is not cached yet: the resolver still calls `GetPriority` per
+  candidate per frame (cheap, no allocation); a per-slot-set cache is a later optimisation, not a behaviour change.
 - **Frame-dependent ordering** (which press is newer) stays in the press-group stage, configured by
   `BufferConflictPolicy` and `SimultaneousFrames`; it runs before the criteria, as now.
 
@@ -204,7 +212,7 @@ The split is mostly moving files and renaming; M2's NP code is half written, so 
    `GSTNCombat.Core.*`. Run both prefixes with one command, `Automation RunTests GSTNInput+GSTNCombat`: two
    `RunTests` in one `-ExecCmds` can drop the second.
 
-**Step S1b — priority criteria** (one commit, after S1): section 4.1. With the default list every existing resolver,
+**Step S1b — priority criteria** (done; one commit, after S1): section 4.1. With the default list every existing resolver,
 validation and standard-set test passes unchanged; new tests: the list reordered (specificity before tier) changes the
 winner of a chord-versus-higher-tier case, a test-only criterion struct changes a result, an empty list falls back to slot
 order.

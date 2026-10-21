@@ -49,6 +49,7 @@ namespace GSTNTest
 		Settings->FlickFrames = 3;
 		Settings->DiagonalHalfAngle = 22.5f;
 		Settings->WorldReferenceYaw = 0.f;
+		Settings->PriorityCriteria = UGSTN_InputSettings::MakeDefaultPriorityCriteria();
 		Settings->CommandTiers.Empty();
 		Settings->CommandTiers.Add(GSTNTestTags::Attack, 100);
 		Settings->CommandTiers.Add(GSTNTestTags::Strong, 200);

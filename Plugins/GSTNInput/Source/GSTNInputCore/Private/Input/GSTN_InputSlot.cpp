@@ -7,10 +7,18 @@
 
 FGSTN_CommandPriority FGSTN_InputSlotSpec::GetPriority(const UGSTN_InputSettings& Settings) const
 {
+	const FGSTN_PriorityContext Context{ *this, Pattern, Settings };
 	FGSTN_CommandPriority Priority;
-	Priority.Tier = Settings.GetCommandTier(Command);
-	Priority.Specificity = Pattern.GetSpecificity();
-	Priority.Offset = PriorityOffset;
+	for (const TInstancedStruct<FGSTN_PriorityCriterion>& Criterion : Settings.PriorityCriteria)
+	{
+		if (Priority.Scores.Num() == GSTNPriority::MaxCriteria)
+		{
+			break;
+		}
+		// An entry left empty in the editor scores 0, so every slot keeps one score per listed criterion.
+		const FGSTN_PriorityCriterion* Instance = Criterion.GetPtr<FGSTN_PriorityCriterion>();
+		Priority.Scores.Add(Instance ? Instance->Score(Context) : 0);
+	}
 	return Priority;
 }
 

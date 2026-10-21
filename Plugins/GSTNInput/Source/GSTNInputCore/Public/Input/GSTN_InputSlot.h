@@ -8,43 +8,42 @@
 #include "GSTN_InputCoreTypes.h"
 #include "Input/GSTN_InputMatcher.h"
 #include "Input/GSTN_InputPattern.h"
+#include "Input/GSTN_PriorityCriteria.h"
 #include "GSTN_InputSlot.generated.h"
 
 class UGSTN_InputSettings;
 
 /**
- * The rank of a command when several match at once (combat.md section 8.2), compared field by field: a higher tier always
- * wins whatever the pattern, then the more demanding pattern, then the manual offset. Deliberately not one summed number,
- * which would let a lot of specificity outweigh a tier.
+ * The rank of a command when several match at once (input.md section 4.1): the score of each criterion of
+ * UGSTN_InputSettings::PriorityCriteria, in the list's order, compared lexicographically. With the default list a higher
+ * tier always wins whatever the pattern, then the more demanding pattern, then the manual offset. Deliberately not one
+ * summed number, which would let a lot of specificity outweigh a tier.
  */
 struct FGSTN_CommandPriority
 {
-	/** From the command tag root through the settings: special above attack */
-	int32 Tier = 0;
+	using FScores = TArray<int32, TInlineAllocator<GSTNPriority::MaxCriteria>>;
 
-	/** Sum of the pattern's conditions: crouch + direction above direction above bare button */
-	int32 Specificity = 0;
+	/** One score per criterion, first criterion first. Empty when the list is empty: every command ties */
+	FScores Scores;
 
-	/** Manual tie breaker of the slot */
-	int32 Offset = 0;
-
-	bool operator==(const FGSTN_CommandPriority& Other) const
+	/** Three-way comparison; a shorter vector counts as padded with zeros so the order stays total */
+	int32 Compare(const FGSTN_CommandPriority& Other) const
 	{
-		return Tier == Other.Tier && Specificity == Other.Specificity && Offset == Other.Offset;
+		const int32 Count = FMath::Max(Scores.Num(), Other.Scores.Num());
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const int32 Mine = Scores.IsValidIndex(Index) ? Scores[Index] : 0;
+			const int32 Theirs = Other.Scores.IsValidIndex(Index) ? Other.Scores[Index] : 0;
+			if (Mine != Theirs)
+			{
+				return Mine < Theirs ? -1 : 1;
+			}
+		}
+		return 0;
 	}
 
-	bool operator<(const FGSTN_CommandPriority& Other) const
-	{
-		if (Tier != Other.Tier)
-		{
-			return Tier < Other.Tier;
-		}
-		if (Specificity != Other.Specificity)
-		{
-			return Specificity < Other.Specificity;
-		}
-		return Offset < Other.Offset;
-	}
+	bool operator==(const FGSTN_CommandPriority& Other) const { return Compare(Other) == 0; }
+	bool operator<(const FGSTN_CommandPriority& Other) const { return Compare(Other) < 0; }
 };
 
 /**

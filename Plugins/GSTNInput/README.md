@@ -30,6 +30,7 @@ data the game provides; the combat plugin provides a fighting-game set.
 3. **Set the project settings** (Project Settings > Plugins > GSTN Input, stored in `Config/DefaultGame.ini` under
    `[/Script/GSTNInputCore.GSTN_InputSettings]`): buffer lengths, stick zones, and the two lists that start empty,
    `CommandTiers` (priority tier per command root) and `ExclusiveButtons` (buttons whose presses compete for one move).
+   `PriorityCriteria` is the ordered list that ranks commands matching at once (default Tier, Specificity, ManualOffset).
 4. **Define slots** (`UGSTN_InputSlotAsset` / `UGSTN_InputSlotSet`): a command tag plus the pattern that triggers it, then
    run the slot validator, which reports slots that shadow or conflict with each other.
 
@@ -65,6 +66,28 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition_HeldBoth : public FGSTN_InputCondi
 Decide whether it is an *anchor* (it produces a frame: `IsAnchorCondition`) or a check relative to the anchor. Override
 `AppendCanonicalInput` so the slot validator and the tests can build the smallest input that satisfies it. Keep `Matches`
 allocation free and pure.
+
+### A new priority criterion
+
+When several commands match at once, they are ranked by the criteria of `UGSTN_InputSettings::PriorityCriteria`, in
+order: the first criterion a command scores higher on wins, the next ones only break ties, and equal on all goes to slot
+order. Derive from `FGSTN_PriorityCriterion` (`Public/Input/GSTN_PriorityCriteria.h`) and override `Score`, which sees
+the slot, its pattern and the settings (never the frame):
+
+```cpp
+USTRUCT(BlueprintType, meta = (DisplayName = "Chords First"))
+struct FGame_PriorityCriterion_ChordsFirst : public FGSTN_PriorityCriterion
+{
+	GENERATED_BODY()
+
+	virtual int32 Score(const FGSTN_PriorityContext& Context) const override;
+};
+```
+
+Then add it to the list in Project Settings > GSTN Input, or in code with `TInstancedStruct<FGSTN_PriorityCriterion>::Make<...>()`.
+Reorder or remove the built-ins (`Tier`, `Specificity`, `ManualOffset`) the same way; at most 8 entries count. `Score`
+must be pure and identical on every machine: it is the same kind of setting as the buffer lengths. See
+`Private/Tests/GSTN_InputTests_Priority.cpp` for examples.
 
 ### A new slot (a command)
 
