@@ -31,14 +31,14 @@ instead of M6-specific fields. (Section 5.1's fields live in these plugins as ex
 
 | Plugin / module | Contents | May depend on | Must NOT depend on it |
 |---|---|---|---|
-| `GSTNCombat` / `GSTNCombatCore`, `GSTNCombatGAS`, `GSTNCombatNP` (existing) | **Extension surface added by M6** (generic, no defence or link knowledge): `FGSTN_SyncFragment` (instanced-struct fragments in the combat sync state, each with `NetSerialize`/`ShouldReconcile`/`Interpolate`/`ToString`, registered by type id, absent = zero bytes); `IGSTN_CombatTickExtension` (hooks at fixed points of the §5.2 order: after inbox drain, after clocks, before candidates, tag projection); `FGSTN_InboxEntry` as an open `FInstancedStruct` payload with a handler registry (the `Hit` kind stays here); `PostToInbox`; pipeline steps already data (`UGSTN_CombatRules::Pipeline`); `UGSTN_TimelineTrack` kinds registered by extensions; snapshot extension data (`FGSTN_SnapshotExtension`); `UGSTN_HitData::ExtensionData` (`FInstancedStruct`, carries `LinkType`, `LinkFilter`, `bParryable`...) | as today | `GSTNDefence`, `GSTNLink` |
+| `GSTNCombat` / `GSTNCombatCore`, `GSTNCombatGAS`, `GSTNCombatNP` (existing) | **Extension surface added by M6** (generic, no defence or link knowledge): `FGSTN_SyncFragment` (instanced-struct fragments in the combat sync state, each with `NetSerialize`/`ShouldReconcile`/`Interpolate`/`ToString`, registered by type id, absent = zero bytes); `IGSTN_CombatTickExtension` (hooks at fixed points of the §5.2 order: after inbox drain, after clocks, before candidates, tag projection); `FGSTN_InboxEntry` as an open `FInstancedStruct` payload with a handler registry (the `Hit` kind stays here); `PostToInbox`; pipeline steps already data (`UGSTN_CombatRules::Pipeline`); `UGSTN_TimelineTrack` kinds registered by extensions; snapshot extension data (`FGSTN_SnapshotExtension`); `UGSTN_HitData::ExtensionData` (`FInstancedStruct`, carries `LinkType`, `LinkFilter`, `bParryable`...); `FGSTN_EntityRef` (neutral entity reference, `GSTNCombatCore`, §7.0) | as today | `GSTNDefence`, `GSTNLink` |
 | `GSTNDefence` / `GSTNDefenceCore` (pure) | `FGSTN_ShieldRules/ParryRules/TechRules/DIRules/SDIRules`, `UGSTN_DefenceRules`, `UGSTN_DefenceMath`, `UGSTN_SDIMath`, `FGSTN_HoldWindowTrack` data, `FGSTN_Curve1D` | Core, GameplayTags, **GSTNInputCore**, **GSTNCombatCore** | GAS, NP, `GSTNLink` |
 | `GSTNDefence` / `GSTNDefenceGAS` | `UGSTN_DefenceAttributeSet`, `UGSTN_GA_Shield`, `UGSTN_GA_Tech`, GEs, defence native tags | GSTNDefenceCore, GSTNCombatGAS, GameplayAbilities | NP, `GSTNLink` |
 | `GSTNDefence` / `GSTNDefenceNP` | defence sync fragment, pipeline steps `Parry`/`Shield`, tech state machine, `FGSTN_TumbleContactModifier`, SDI/DI wiring, `Punish` inbox kind, snapshot extension | GSTNDefenceGAS, GSTNCombatNP | `GSTNLink` (it only *reacts* to `Combat.State.*` and the generic `Linked` tag, §1c) |
-| `GSTNLink` / `GSTNLinkCore` (pure) | `UGSTN_LinkTypeDefinition`, `FGSTN_LinkBreakRules`, `FGSTN_MashRule`, `FGSTN_GrabRules`, `UGSTN_LinkExitPlacer` + `IGSTN_ExitCollisionQuery`, `FGSTN_LinkOutcomeTrack` data, mash/break evaluators, `FGSTN_LinkState` as a value type | Core, GameplayTags, GSTNInputCore, GSTNCombatCore | GAS, NP, `GSTNDefence` |
-| `GSTNLink` / `GSTNLinkGAS` | link native tags, `UGSTN_LinkRegistry`, link requirement checks on tags | GSTNLinkCore, GSTNCombatGAS | NP, `GSTNDefence` |
+| `GSTNLink` / `GSTNLinkCore` (pure) | `UGSTN_LinkTypeDefinition`, `FGSTN_LinkBreakRules`, `FGSTN_MashRule`, `FGSTN_GrabRules`, `UGSTN_LinkExitPlacer` + `IGSTN_ExitCollisionQuery`, `FGSTN_LinkOutcomeTrack` data, mash/break evaluators, `FGSTN_LinkState`/`FGSTN_LinkActions` as value types, `UGSTN_LinkRule` (per-link-type request rule, §7.0), `IGSTN_LinkHost` (what a link needs from its host; implemented by the NP module and by the `FGSTN_FakeLinkHost` test double) | Core, GameplayTags, GSTNInputCore, GSTNCombatCore | GAS, NP, `GSTNDefence` |
+| `GSTNLink` / `GSTNLinkGAS` | link native tags (§1c), `UGSTN_LinkRegistry` (open registry, §7.0), link requirement checks on tags | GSTNLinkCore, GSTNCombatGAS | NP, `GSTNDefence` |
 | `GSTNLink` / `GSTNLinkNP` | link sync fragment, `LinkRequest`/`GrabImmunity`/`LinkBreakOnHit` steps, `UGSTN_LinkedMovementMode` + modifier + transition, `UGSTN_LinkWatchdog`, `UGSTN_LinkPresentationComponent`, link inbox kinds, debug draw | GSTNLinkGAS, GSTNCombatNP, Mover | `GSTNDefence` |
-| (M7) `GSTNPiggyback`; (later) `GSTNHeld` | mount link type, pair moves; held objects | `GSTNLink` (+ `GSTNCombat`) | each other |
+| (M7) `GSTNPiggyback`; (M10) `GSTNHeld` | mount link type, pair moves; held objects. They register link types, rules and actions into `GSTNLink` (§7.0) and declare their own link/role tags (§1c) | `GSTNLink` (+ `GSTNCombat`) | each other |
 
 - **Cross-plugin coupling goes through tags and data, not types.** Grab hits ignore shields because the `Shield` step
   (in `GSTNDefence`) skips hit types whose asset says `bBlockable = false`; `GSTNLink` sets that on its hit types.
@@ -86,16 +86,22 @@ combat tick** under `Combat.State.*` (combat.md §5.4) and nothing else grants t
 | `Combat.State.Tech.Lockout` | native | GSTNDefenceGAS | Tech press ignored (anti-mash); UI/AI | projected while `F < TechLockoutEndFrame` |
 | `Combat.Mover.Tumble` | native | GSTNDefenceNP | Mover tag carried by the tumble/contact modifier | modifier add/remove |
 | `Combat.Mover.Linked` | native | GSTNLinkNP | Mover tag carried by the linked modifier; triggers `UGSTN_LinkedModeTransition` | modifier add/remove on link start/end |
-| `Combat.Link.Linked` | native | GSTNLinkGAS | Entity is in any link | projected from `Link.Role != 0` |
+| `Combat.Link.Linked` | native | GSTNLinkGAS | Entity is in any `Body`-channel link | projected from the body `Link.Role != 0` |
 | `Combat.Link.Pending` | native | GSTNLinkGAS | Predicted link awaiting response | projected |
-| `Combat.Link.Type.Grab` (`.Mount`, `.Held` declared by M7/later plugins) | native | GSTNLinkGAS (Grab); M7/Held plugins own theirs | Link type identity (also on events) | on definition assets, event tags |
-| `Combat.Link.Role.Grabber` / `.Grabbed` (`.Carrier/.Rider`: M7) | native | GSTNLinkGAS | Role for binding requirements and `ActivationBlockedTags` | projected from `Link.Role` |
+| `Combat.Link.Type.Grab` | native | GSTNLinkGAS | Link type identity (also on events) | on definition assets, event tags |
+| `Combat.Link.Type.Mount`, `Combat.Link.Type.Ride` (reserved) | native | `GSTNPiggyback` (M7) | Link type of piggyback | same |
+| `Combat.Link.Type.Held`, `Combat.Link.Type.Minion` (reserved) | native | `GSTNHeld` (M10) / `GSTNMinion` (M8, later) | Link type holder-object / grabbed minion | same |
+| `Combat.Link.Role.Grabber` / `.Grabbed` | native | GSTNLinkGAS | Role for binding requirements and `ActivationBlockedTags` | projected from `Link.Role` |
+| `Combat.Link.Role.Carrier` / `.Rider` | native | `GSTNPiggyback` (M7) | Roles of the mount link | projected from `Link.Role` |
+| `Combat.Link.Role.Holder` / `.HeldObject` | native | `GSTNHeld` (M10) | Roles of the held link (objects have no ASC: `HeldObject` only in events and rules) | `Holder` projected from `Link.Role`; `HeldObject` never a loose tag |
+| `Combat.Link.BreakReason.*` | native | GSTNLinkGAS (generic: `Timeout Distance OwnDeath PartnerDeath Hit PartnerState Escape Release Throw Forced`); each plugin its own (M7: `Dismount Drop Outcome CarrierHit RiderHit KO Removed Teleport`) | Reason carried by `LinkBroken`; wire form is the registry's reason index (§7.1) | emitter of the break |
+| `Combat.Lock.Link` | native | GSTNLinkGAS | Prevents an entity from accepting a link request (read, never projected) | abilities/GEs (ordinary counts) |
 | `Combat.HitType.Grab` / `.Throw` / `.Pummel` | native | GSTNLinkGAS | Hit types (skip shield/parry; throw validates link) | on `FGSTN_HitData` |
 | `Combat.HitType.Normal/Unblockable/Projectile` | native (exist, M4) | GSTNCombatGAS | unchanged | — |
 | `Combat.Immunity.Grab` | native | GSTNLinkGAS | Cannot be grabbed (bosses, mid-link) | kits, GEs (ordinary counts); checked by `LinkRequest`; granting it mid-link breaks the link |
 | `Combat.Immunity.Parry` / `.Shield` | native | GSTNDefenceGAS | Attack cannot be parried / blocked (victim- or ability-side) | kits, abilities, GEs |
 | `Command.Defence.Shield` | native (standard set) | GSTNDefenceCore | Shield command (`Hold(Shield)`) | slot set |
-| `Command.Link.Grab` / `.Pummel` / `.Release` / `.Throw.Forward` `.Back` `.Up` `.Down` | native (standard set) | GSTNLinkCore | Grab and grabber-role commands (`Command.Link.Mount/Dismount` reserved by M3, owned by M7) | slot set |
+| `Command.Link.Grab` / `.Pummel` / `.Release` / `.Throw.Forward` `.Back` `.Up` `.Down` | native (standard set) | GSTNLinkCore | Grab and grabber-role commands (`Command.Link.Mount/Dismount/Drop` are declared, as ini, by `GSTNPiggyback`; `Pickup/Drop` of held objects by `GSTNHeld`) | slot set |
 | `Input.Lock.Command.Defence`, `Input.Lock.Command.Link` | native | GSTNDefenceCore / GSTNLinkCore | Lock a command family | abilities/GEs (ordinary counts) |
 | `Combat.Event.Blocked/Parried/ShieldBroken/Teched/KnockedDown` | native | GSTNDefenceGAS | Authoritative events (§5.6 combat.md, server outbox) | published by the combat model |
 | `Combat.Event.LinkFormed/LinkBroken/Throw/GrabEscaped` | native | GSTNLinkGAS | Same | published by the watchdog/pipeline |
@@ -138,7 +144,7 @@ declaration, so each plugin builds and runs alone.
 4. **Mash through rollback.** `Mash` presses of the grabbed counted from history, forced reconcile in the middle of the
    mash: escape frame must equal on server and client.
 
-## 3. Core types (`GSTNCombatCore`, pure, unit tested)
+## 3. Core types (`GSTNDefenceCore` / `GSTNLinkCore`, pure, unit tested)
 
 **Defence rules** — `UGSTN_DefenceRules` (DataAsset, referenced by `UGSTN_CombatRules::Defence`, selected per game
 mode like the rest of the rules):
@@ -196,7 +202,7 @@ bAccepted; uint8 LinkSerial; uint8 LinkTypeIndex; }`, `LinkCommand { Kind (Break
 FTransform Exit; FVector ExitVelocity; }`. `PostToInbox(TargetId, Entry)` is called from any combat tick and does
 nothing where the target's instance does not drain inboxes (same rule as hit delivery, combat.md §12.4).
 
-## 4. GAS side (`GSTNCombatGAS`)
+## 4. GAS side (`GSTNDefenceGAS` / `GSTNLinkGAS`)
 
 - **`UGSTN_DefenceAttributeSet`**: `ShieldHealth`, `MaxShieldHealth`, `ShieldRegenRate`, `ShieldDrainRate`,
   `IncomingShieldDamageMultiplier`, `GrabResistance` (scales mash length), `TechSkill` is *not* an attribute (rules
@@ -224,18 +230,18 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
 - Native tags added (`GSTN_CombatTags.h`; one-line comment each on who grants/reads it):
   - States (projected): `Combat.State.Shielding`, `.ShieldStun`, `.ShieldBroken`, `.ParryWindow`, `.ParryRecovery`,
     `.Parried` (attacker punished), `.Teching`, `.Knockdown`, `.Tech.Lockout`.
-  - Links: `Combat.Link.Linked`, `Combat.Link.Type.Grab` (`.Mount` reserved), `Combat.Link.Role.Grabber/Grabbed`
-    (`Rider/Carrier` declared by M7), `Combat.Link.Pending`.
+  - Links: `Combat.Link.Linked`, `Combat.Link.Type.Grab`, `Combat.Link.Role.Grabber/Grabbed`
+    (`Rider/Carrier`: `GSTNPiggyback`; `Holder/HeldObject`: `GSTNHeld`), `Combat.Link.Pending`.
   - Mover: `Combat.Mover.Linked`, `Combat.Mover.Tumble`.
   - Hit types: `Combat.HitType.Grab/Throw/Pummel`.
   - Immunity (granted by kits/bosses/GEs, read by rules): `Combat.Immunity.Grab`, `.Parry` (cannot be parried), `.Shield`.
   - Commands (`Command.` root, standard slot set; patterns in §8): `Command.Defence.Shield`, `Command.Link.Grab`,
-    `.Pummel`, `.Throw.Forward/.Back/.Up/.Down`, `.Release` (`Link.Mount/.Dismount` already reserved by M3/M7).
+    `.Pummel`, `.Throw.Forward/.Back/.Up/.Down`, `.Release` (`Link.Mount/.Dismount` are `GSTNPiggyback`'s).
   - Events: `Combat.Event.Blocked`, `.Parried`, `.ShieldBroken`, `.Teched`, `.KnockedDown`, `.LinkFormed`, `.LinkBroken`,
     `.Throw`, `.GrabEscaped` (outbox, tagged with hit type, relationship, link type, roles; §5.6 combat.md).
   - SetByCaller: `Combat.SetByCaller.ShieldDamage`.
 
-## 5. Combat model: sync state and per-frame rules (`GSTNCombatNP`)
+## 5. Combat model: sync state and per-frame rules (`GSTNDefenceNP` / `GSTNLinkNP` over `GSTNCombatNP`)
 
 ### 5.1 Sync state additions (table; idle values cost ~0 bits)
 
@@ -358,14 +364,60 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
 - Because the press is read from the history, a forced reconcile or re-simulation reproduces the same decision; no timer
   other than frame stamps exists.
 
-## 7. Link system (`GSTNCombatNP` + Core)
+## 7. Link system (`GSTNLink`: `GSTNLinkCore` + `GSTNLinkNP`)
 
-### 7.1 State (`FGSTN_LinkState`, in the combat sync state)
+### 7.0 Requirements from the plugins built on links (M7, M10, M8)
 
-`uint8 LinkTypeIndex` (0 = none), `uint8 Role` (index into the definition's two roles), `int16 PartnerId` (NP
-proxy id), `uint8 Serial` (incremented per link formation, distinguishes old and new links), `int32 LinkFrame`,
-`int32 EndFrame` (`MaxFrames` timeout and mash-adjusted; 0 = none), `uint8 Flags { Predicted, PendingBreak, BreakReason
-(3 bits) }`. **Rollback behaviour:** it is ordinary sync state, restored with the model. The *inbox* entries that form
+M6 owns the link system and its tag subtree `Combat.Link.*` (modularity-and-tags.md §4.2). `GSTNPiggyback`, `GSTNHeld` and
+later `GSTNMinion` add link behaviour only through the generic points below; none of them edits `GSTNLink` or `GSTNCombat`, and
+`GSTNLink` names none of them. Each point has a do-nothing default.
+
+1. **Entity reference.** `FGSTN_EntityRef { uint8 Kind; uint16 Id; uint8 Serial }` (4 bytes, `GSTNCombatCore`, with
+   `operator==` and a null value) replaces the NP proxy id as `PartnerId`, because a link partner may be a fighter, a minion or an
+   object. `Kind` 0 is `Fighter` (`Id` = NP proxy id); other kind ids are small integers allocated in the central id registry
+   file (the same one as the sync fragment type ids, modularity-and-tags.md §5b) and declared by the plugin that owns them
+   (`Minion` by `GSTNMinion`, `Object` by `GSTNHeld`). `Serial` guards against slot reuse (minions: low bits of the handle
+   generation, M8). Pipeline internals keep their `int32` entity id; the ref is the sync-state and link form.
+2. **Link channels.** Each entity has two channels, `Body` (grab, mount: parks the entity, `Combat.Link.Linked`, the only channel
+   that enters `UGSTN_LinkedMovementMode`) and `Hand` (held objects: never parks, never blocks the holder's actions by itself).
+   `FGSTN_LinkState` exists once per channel; `UGSTN_LinkTypeDefinition::Channel` selects it. A type's role tags project from its
+   channel's state. Which type may coexist with which is data on the definition (`TArray<FGameplayTag> ForbiddenWithBody`): a
+   mount allows a `Hand` link (a rider can hold and throw), a grab does not.
+3. **Open link-type registry.** `UGSTN_LinkRegistry` (`GSTNLinkGAS`) is built from every `UGSTN_LinkTypeDefinition` found by the
+   asset manager, whichever plugin ships it (type tag, role tags, channel, break rules, parked flag, socket, exit placer); the wire
+   index is assigned from a stable table. A plugin adds a type by shipping a definition asset and declaring its tags; a definition
+   whose tags are not registered (plugin missing) is reported by `IsDataValid` and skipped. Generic break reasons are listed in §1c;
+   a plugin appends its own to the registry's reason table.
+4. **Link rules.** `UGSTN_LinkRule` (abstract, `EditInlineNew`, const, deterministic; `GSTNLinkCore`): `Evaluate(FGSTN_LinkRequestContext&)`
+   returns Accept or Refuse(reason). Rules are referenced by the link type definition and run by the `LinkRequest` step on the
+   target side (grab rules are `FGSTN_GrabRules` behind the same interface). A plugin's rule is its own subclass (M7:
+   `UGSTN_LinkRule_Mount`).
+5. **Link actions and partner moves.** A generic block `FGSTN_LinkActions { uint16 LastRefusedSerial; int32 RefusedFrame; int32
+   CooldownEndFrame; Active { int16 Id; int32 StartFrame }; PendingStart { int32 Frame; int16 Id }; Exit { int32 Frame; position, yaw,
+   velocity, flags } }` in the link fragment, `LinkCommand`/link inbox payloads gain a generic `Id`/`TargetFrame` (`PartnerMove`), and
+   `UGSTN_LinkActionProvider` (registered per link type) resolves `Id` to what plays on each side. Generic request types
+   `EnterLinked`, `ExitLink`, `ApplyLinkEffect`, `RemoveLinkEffect`, `LaunchLinked` extend M3's request array (4 to 6 slots).
+   Hitbox flags `bInteractionPickNearest` and `bAffectsLinkPartner` are part of `FGSTN_HitData` (M4). Piggyback's meanings of
+   `Payload` (carry load), `Id` (pair move index) and `CooldownEndFrame` (remount cooldown) are M7's.
+6. **Exit placement.** `UGSTN_LinkExitPlacer` + `IGSTN_ExitCollisionQuery` (§7.7) is the only exit helper; M7's mount placer is
+   `Placer_Mount`, a subclass registered by the plugin (M7 does not add `UGSTN_LinkUtils`).
+7. **Snapshot.** The anchor substitution for parked roles is done by `GSTNLinkNP`'s snapshot extension (`FGSTN_SnapshotExtension`,
+   modularity-and-tags.md §5b); a plugin supplies socket and offset through the link definition, and its own per-entity data
+   (M7: weight, carry limit) as a further `FGSTN_SnapshotExtension`.
+8. **Test double.** `IGSTN_LinkHost` and `FGSTN_FakeLinkHost` (holds link states, executes requests synchronously, no NP) are
+   in `GSTNLinkCore`, so `GSTNHeld.GAS.*` and `GSTNPiggyback.Core.*` tests run without NP.
+
+Tag ownership summary (the full table is §1c): `GSTNLink` declares `Combat.Link.Linked/Pending`, `Type.Grab`, `Role.Grabber/Grabbed`,
+the generic `BreakReason`s, `Combat.Lock.Link`, `Combat.HitType.Grab/Throw/Pummel`, `Combat.Immunity.Grab`; `GSTNPiggyback` declares
+`Type.Mount`, `Role.Carrier/Rider`; `GSTNHeld` declares `Type.Held`, `Role.Holder/HeldObject`. `GSTNCombat` declares no link tag.
+
+### 7.1 State (`FGSTN_LinkState`, a `GSTNLink` sync fragment, one per channel)
+
+`uint8 LinkTypeIndex` (0 = none), `uint8 Role` (index into the definition's two roles), `uint8 Phase` (None/Pending/Active/Exiting),
+`FGSTN_EntityRef PartnerId` (§7.0), `uint8 Serial` (incremented per link formation, distinguishes old and new links), `int32 LinkFrame`,
+`int32 EndFrame` (`MaxFrames` timeout and mash-adjusted; 0 = none), `uint8 Flags { Predicted, PendingBreak }`, `uint8 BreakReason`
+(registry reason index), `uint8 Payload` (type-specific, e.g. carry load), `int16 LocalYawQ` (anchor-relative facing). One such
+state per link **channel** (§7.0). **Rollback behaviour:** it is ordinary sync state, restored with the model. The *inbox* entries that form
 or break a link are not (they re-arrive from re-simulated senders), and a restored older state with `Serial` lower than
 a newer inbox entry's simply processes the entry again (idempotent: an entry whose `Serial` is already applied or
 older is ignored). A predicted link whose `LinkResponse` never comes (refused) is cleared after `RequestTimeoutFrames`
@@ -391,7 +443,7 @@ older is ignored). A predicted link whose `LinkResponse` never comes (refused) i
 
 ### 7.3 Parked movement mode and presentation
 
-- **`UGSTN_LinkedMovementMode`** (`UBaseMovementMode`, plugin module `GSTNCombatNP`, shared by grabbed and rider):
+- **`UGSTN_LinkedMovementMode`** (`UBaseMovementMode`, module `GSTNLinkNP`, shared by grabbed, rider and any other parked role):
   zero velocity, no ground snap, no gravity, no collision response, does not read input; keeps the capsule at its
   last real position (this is the **parked transform**: stable on every machine). Entered by
   `FGSTN_LinkedModifier` (queued once, carries the Mover tag `Combat.Mover.Linked`) through
@@ -510,7 +562,7 @@ from the state's frame, so an idle fighter costs ≈ 0 in delta mode (combat.md 
 | Stuns (shieldstun, parry recovery, break, punish) | 4 × 4 + 1 = 17 B | 0 | ~4 B |
 | Tech + knockdown (lockout, last press, end, type, knockdown end) | 17 B | 0 | ~6 B |
 | Grab immunity | 4 B | 0 | ~2 B |
-| `FGSTN_LinkState` (type 1, role 1, partner 2, serial 1, linkFrame 4, endFrame 4, flags 1) | 14 B | 1 bit | ~9 B |
+| `FGSTN_LinkState` per channel (type 1, role 1, phase 1, partner `FGSTN_EntityRef` 4, serial 1, linkFrame 4, endFrame 4, flags 1, reason 1, payload 1, localYawQ 2; body + hand = 2 channels) | 21 B per channel | 1 bit | ~9 B |
 | `MashProcessedFrame`, SDI extras | 9 B | 0 | ~3 B |
 | **Total** | **~78 B** | **~1–2 B** | **~20–25 B** |
 
@@ -581,7 +633,7 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
 - **A new link type** (e.g. held object, carry): create a `UGSTN_LinkTypeDefinition` (tag, two roles, parked flag, socket,
   break rules, placer), add its role tags and, if it needs commands, slots with `Combat.Link.Role.*` requirements;
   `UGSTN_LinkRegistry` assigns the wire index automatically. Formation is a hit type + `LinkRequest` requirements; extra
-  semantics (carry load, pair moves) are M7's `UGSTN_LinkRequestPolicy` subclass on the target side. No change to the
+  semantics (carry load, pair moves) are a `UGSTN_LinkRule` subclass and link actions registered by the plugin (§7.0; M7). No change to the
   watchdog or the mode.
 - **A new defensive pipeline step**: subclass `UGSTN_HitResolutionStep`, write only to the context, add it to
   `UGSTN_CombatRules::Pipeline` at the right position (§9), add its pure decision to `UGSTN_DefenceMath` if the attacker

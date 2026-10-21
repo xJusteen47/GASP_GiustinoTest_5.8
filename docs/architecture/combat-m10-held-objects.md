@@ -23,19 +23,21 @@ durability, **M10c** catching and deflecting, **M10d** minions as objects. Each 
 
 ## 2. Assumptions about M6, M7, M8 (revise when those specs land)
 
-1. `FGSTN_LinkState { LinkType; Role; PartnerId; LinkFrame; LinkSerial }` in the combat sync state, link creation by the
-   server through the inbox and a `LinkRequest` resolution step, role tags projected (combat.md §12b). **Request to the M6
-   author:** `PartnerId` should be an **`FGSTN_EntityRef { uint8 Kind (Fighter, Minion, Object); uint16 Id; uint8 Serial }`**
-   (4 bytes) from day one, because an NP proxy id cannot name objects or minions.
-2. **Link channels** (*Proposal* to M6): an entity has a *body* channel (grab, mount) and a *hand* channel (`Held`), so a
-   rider can hold and throw an object. If M6 ships a single link per entity, M10 falls back to the rule "any body link
-   forbids `Held`" (matrix in section 12).
+1. **Link model of M6 (§7.0, M6 owns it, M10's requests are folded in there).** `FGSTN_LinkState` (per channel: `LinkTypeIndex`, `Role`, `Phase`,
+   `PartnerId`, `Serial`, `LinkFrame`, `EndFrame`, `Flags`, `BreakReason`, `Payload`) is a sync fragment of `GSTNLink`; link creation by the
+   server through the inbox and a `LinkRequest` step that runs the type's `UGSTN_LinkRule`; role tags projected (combat.md §12b).
+   `PartnerId` is an **`FGSTN_EntityRef { uint8 Kind; uint16 Id; uint8 Serial }`** (4 bytes, `GSTNCombatCore`); `GSTNHeld` declares the
+   `Object` kind id (and `GSTNMinion` the `Minion` kind) in the central id registry.
+2. **Link channels** (M6 §7.0 item 2): an entity has a *body* channel (grab, mount) and a *hand* channel (`Held`), so a rider can hold
+   and throw an object. Coexistence is data on the link type definition (`ForbiddenWithBody`); the matrix of section 12 is its
+   content for the types known today.
 3. Links can be broken by rules (`bHitBreaksLink` per role, distance, death) and a link-owned action blocks conflicting ones.
-4. M6 provides a **neutral registry** for link types: `FGSTN_LinkTypeDefinition` (tags, role tags, break rules, parked-mode
-   flag) registered by tag, so a plugin can add a type without editing GSTNCombat. If it does not, M10.0 adds it (small).
-5. M7 provides role-only bindings through requirement tags and `GE_CarryLoad`-style load scaled by partner weight.
-6. M8 provides `UGSTN_MinionCombatSubsystem` and a frame source (combat.md §13) usable as the model for the object subsystem;
-   minions have no NP id.
+4. M6's **open link-type registry** (`UGSTN_LinkRegistry`, M6 §7.0 item 3): `Held` is a `UGSTN_LinkTypeDefinition` asset shipped by
+   `GSTNHeldGAS` (tags, role tags, channel `Hand`, break rules, no parked role on the holder), registered by tag with no edit to
+   `GSTNLink` or `GSTNCombat`. `FGSTN_LinkTypeDefinition` of the earlier draft is that asset.
+5. Role-only bindings are generic (requirement tags on kit bindings, M3). Load scaled by partner weight follows the pattern of M7's `UGSTN_GE_CarryLoad`, but `GSTNHeld` ships its own `GE_HoldLoad` and never depends on `GSTNPiggyback`.
+6. M8 provides `UGSTN_MinionCombatSubsystem` and `IGSTN_HittableProvider` (the snapshot seam) usable as the model for the object subsystem;
+   minions have no NP id (`FGSTN_EntityRef` kind `Minion`).
 7. M4's `EGSTN_HitboxSpace::Projectile` exists and is declared "owned by the projectile system (later)": M10 supplies it.
 
 ## 3. Spikes first (record results in combat.md §17)
@@ -53,21 +55,21 @@ durability, **M10c** catching and deflecting, **M10d** minions as objects. Each 
 
 ## 4. Plugin and module boundaries
 
-Held objects are optional and self-contained: a **new plugin `GSTNHeld`** on top of `GSTNCombat` (which owns the link system).
+Held objects are optional and self-contained: a **new plugin `GSTNHeld`** on top of `GSTNCombat` and `GSTNLink` (M6 owns the link system and `Combat.Link.*`; M6 §7.0 holds the requirements of this milestone).
 
 | Module | Contents | Allowed dependencies | Forbidden |
 |---|---|---|---|
-| `GSTNHeldCore` (Runtime) | Pure, deterministic: `FGSTN_BallisticSegment`, `UGSTN_ProjectileMath`, `FGSTN_ProjectileStepper`, object/size/kind enums, `FGSTN_ThrownDamageProfile`, throw-direction math, `IGSTN_WorldQuery` (sweeps) | Core, CoreUObject, GameplayTags, `GSTNCombatCore` | GAS, NP, Mover, Engine physics, anything `*NP`/`*Stock*` |
-| `GSTNHeldGAS` (Runtime) | `UGSTN_ObjectDefinition`, `UGSTN_ObjectComponent`, `UGSTN_ObjectSubsystem`, projectile pool and actors, resolution steps (`HeldLinkRequest`, `Catch`, `ProjectileImpact`), damage/impact GEs, cue tags, `FGSTN_ProjectileTrack`, link type definition for `Held` | HeldCore, `GSTNCombatGAS`, GameplayAbilities (same name in both worlds), GameplayTasks | NP, Mover, adapters |
-| `GSTNHeldNP` (Runtime) | Executes the `Projectile` track and `ReleaseLink` events from the NP combat model, writes `FGSTN_LinkState` for `Held`, ghost projectile and handover, `GE_HoldLoad` application, NP frame source for the object subsystem | HeldGAS, `GSTNCombatNP` | `*StockGAS` |
+| `GSTNHeldCore` (Runtime) | Pure, deterministic: `FGSTN_BallisticSegment`, `UGSTN_ProjectileMath`, `FGSTN_ProjectileStepper`, object/size/kind enums, `FGSTN_ThrownDamageProfile`, throw-direction math, `IGSTN_WorldQuery` (sweeps) | Core, CoreUObject, GameplayTags, `GSTNCombatCore`, `GSTNLinkCore` | GAS, NP, Mover, Engine physics, anything `*NP`/`*Stock*` |
+| `GSTNHeldGAS` (Runtime) | `UGSTN_ObjectDefinition`, `UGSTN_ObjectComponent`, `UGSTN_ObjectSubsystem`, projectile pool and actors, resolution steps (`HeldLinkRequest`, `Catch`, `ProjectileImpact`), damage/impact GEs, cue tags, `FGSTN_ProjectileTrack`, link type definition for `Held` | HeldCore, `GSTNCombatGAS`, `GSTNLinkGAS`, GameplayAbilities (same name in both worlds), GameplayTasks | NP, Mover, adapters |
+| `GSTNHeldNP` (Runtime) | Executes the `Projectile` track and `ReleaseLink` events from the NP combat model, writes `FGSTN_LinkState` for `Held`, ghost projectile and handover, `GE_HoldLoad` application, NP frame source for the object subsystem | HeldGAS, `GSTNCombatNP`, `GSTNLinkNP` | `*StockGAS` |
 | `GSTNHeldStockGAS` (Runtime, with M9) | Same for the stock adapter | HeldGAS, `GSTNCombatStockGAS` | `*NP` |
 | `GSTNHeldEditor` (Editor, with M5) | Object definition preview, projectile arc preview in the timeline editor | HeldGAS, `GSTNCombatEditor` | runtime modules importing it |
 
-- **What must not depend on `GSTNHeld`:** every `GSTNCombat*` and `GSTNInput*` module, the neutral M9 check
+- **What must not depend on `GSTNHeld`:** every `GSTNCombat*`, `GSTNLink*`, `GSTNDefence*`, `GSTNPiggyback*`, `GSTNMinion*` and `GSTNInput*` module, the neutral M9 check
   (`module_rules.json` of combat-m9 §4 gets the `GSTNHeld*` rows and a rule "no neutral module includes `GSTNHeld`").
-- **Neutral hooks that GSTNCombat must provide** (M10.0, additions to M4/M6, each small): the link-type registry (assumption 4);
+- **Neutral hooks that `GSTNLink` and `GSTNCombat` must provide**: the open link-type registry, `FGSTN_EntityRef`, link channels and `IGSTN_LinkHost` (all M6 §7.0, not M10 work); and, as M10.0 additions to M4, each small:
   `IGSTN_ProjectileHitboxProvider` in `GSTNCombatCore` (positions/velocities of projectiles owned by a thrower, queried by the
-  M4 attacker step for `Space = Projectile`); `IGSTN_FrameSource` (NP frame or stock step, shared with M8);
+  M4 attacker step for `Space = Projectile`); `IGSTN_FrameSource` (NP frame or stock step; M8 may reuse it);
   `IGSTN_HitInboxTarget` (victim inbox, adapter-neutral). Without `GSTNHeld` these have no implementers and cost nothing.
 - **Enable/disable:** removing `GSTNHeld` from the `.uproject` leaves Core/GAS/adapters compiling and running; kits may keep
   held-role bindings, which are inert (no link of that type is ever created) and flagged by `IsDataValid` as "Held plugin
@@ -82,14 +84,14 @@ Held objects are optional and self-contained: a **new plugin `GSTNHeld`** on top
 
 Per CLAUDE.md: native tags (`UE_DECLARE_GAMEPLAY_TAG_EXTERN`) except designer-extensible families, which live in ini. One
 CLAUDE.md exception is added for **object type tags** (designer-made, like commands): `Plugins/GSTNHeld/Config/Tags/GSTNHeldTypes.ini`.
-Ownership rule: the **link vocabulary** (type and role tags) is declared in `GSTNCombat` so data referencing it loads without
-`GSTNHeld`; everything specific to objects is declared in `GSTNHeld*`.
+Ownership rule: `Combat.Link.*` belongs to `GSTNLink` (M6 §1c); the tags of the `Held` link type and its roles are declared by the plugin that
+owns the type, `GSTNHeld`, like `GSTNPiggyback` does for `Mount`. Data referencing them is validated by `IsDataValid` ("Held plugin absent").
 
 | Tag | Declared by | Meaning | Added / removed by |
 |---|---|---|---|
-| `Combat.Link.Held` | `GSTNCombatCore` (with the other link types, M6) | Link type holder ↔ object | Link request step (server) |
-| `Combat.Link.Role.Holder` | `GSTNCombatCore` | Role tag of the carrier; requirement of throw/drop bindings | Projected (combat.md §5.4) from `FGSTN_LinkState` |
-| `Combat.Link.Role.HeldObject` | `GSTNCombatCore` | Role of the object side (objects have no ASC; used in events and rules) | Event/rule data only, never a loose tag |
+| `Combat.Link.Type.Held` | `GSTNHeldCore` (link types are declared by their plugin, M6 §1c) | Link type holder ↔ object | Link request step (server) |
+| `Combat.Link.Role.Holder` | `GSTNHeldCore` | Role tag of the carrier; requirement of throw/drop bindings | Projected (combat.md §5.4) from `FGSTN_LinkState` |
+| `Combat.Link.Role.HeldObject` | `GSTNHeldCore` | Role of the object side (objects have no ASC; used in events and rules) | Event/rule data only, never a loose tag |
 | `Command.Link.Pickup`, `Command.Link.Drop` | `GSTNHeld` ini `GSTNHeldCommands.ini` (designer family, CLAUDE.md input-tag exception) | Commands (slots with no default pattern, a kit sets them) | Kit bindings; the lock tags `Input.Lock.Command.Link[.Pickup]` come with the family |
 | `Combat.Held.Size.Light` / `.Medium` / `.Heavy` / `.Huge` | `GSTNHeldCore` (native) | Size class: selects bindings, carry load, allowed actions | Object definition (static); projected on the holder as `Combat.Held.Carrying.<size>` |
 | `Combat.Held.Carrying` (root) and `.Light/.Medium/.Heavy/.Huge` | `GSTNHeldCore` | Holder state: carries an object of that size | Projected from the link (adapter), absolute counts; removed on link end |
@@ -97,7 +99,7 @@ Ownership rule: the **link vocabulary** (type and role tags) is declared in `GST
 | `Held.Type.*` (e.g. `Held.Type.Crate`, `.Barrel`, `.Bat`) | `GSTNHeld` ini | Designer object types; identity in events, quests, cues, kit allow lists | Designers |
 | `Combat.Weapon.Role.Held` | `GSTNHeldCore` | Third weapon role (beside Primary/Support, M3): a weapon granted by holding | Object definition (`HeldWeapon`) |
 | `Combat.HitType.Interaction.Pickup`, `.Catch` | `GSTNHeldCore` | Interaction hitbox types (like `.Mount`, combat.md §12b) | Timeline hitboxes of pickup/catch abilities |
-| `Combat.HitType.Projectile` | `GSTNCombatCore` (M4 already names it) | Hit type of projectile hitboxes | Projectile hitbox spec |
+| `Combat.HitType.Projectile` | `GSTNCombatGAS` (M4 already names it; combat tags live in `GSTN_CombatTags.h`, M3 §3) | Hit type of projectile hitboxes | Projectile hitbox spec |
 | `Combat.Source.Thrown`, `Combat.Source.Projectile` | `GSTNHeldCore` | Credit tags in hit/KO events (thrown object vs launched projectile) | Added by the impact step to the event tags |
 | `Combat.State.CatchWindow` | `GSTNHeldCore` | Victim may catch a matching object now | Granted by the catch ability's timeline `Tags` track (window), never by code |
 | `Combat.State.Throwing` | `GSTNHeldCore` | Throw ability between start and release (blocks drop/pickup, fumble rule) | `ActivationOwnedTags` of the throw ability |
@@ -122,7 +124,7 @@ Reused unchanged: `Combat.Relationship.*`, `Combat.Event.Hit.*`, `Combat.State.H
   **precompiled** into the loadout table for every weapon in the kit's `AllowedHeldWeapons`, selected by a sync variable
   from the link's object type, so it never recompiles in the simulation (M3 compiled table, `LoadoutRevision` unaffected).
   `HeldCharges` is spent by uses; at 0 the object breaks or turns into a `Light` prop.
-- **Props:** size classes decide carry load (`GE_HoldLoad`: speed/jump scaled by `Weight`, reuses the M7 carry-load GE class),
+- **Props:** size classes decide carry load (`GE_HoldLoad`: speed/jump scaled by `Weight`, same pattern as M7's carry-load GE, own class),
   allowed commands while carrying (`FGSTN_HoldRules` per size: `Light` allows everything, `Medium` blocks shield and
   air-attacks, `Heavy` allows walk, drop, throw only, `Huge` needs `MaxCarryWeight` and slow walk).
 - **Minions** (M10d): `Kind.Minion` is not a definition but a *state* of an M8 minion: a `Grab` hitbox creates a link whose
@@ -306,7 +308,7 @@ which is all that replicates.
 
 ## 17. Risks
 
-- **Link model not ready** (`FGSTN_EntityRef`, hand channel, registry): M10 depends on M6 decisions; negotiate before M6 is built.
+- **Link model not ready** (`FGSTN_EntityRef`, hand channel, registry are M6 §7.0 requirements): M10 depends on M6 being built with them; if M6 ships without them, M10.0 adds them to `GSTNLink` as a small M6 follow-up, never to `GSTNHeld`.
 - **Hand attach jitter on interpolated holders:** spike 2; fallback is attaching at the root with a baked per-animation offset.
 - **Throw feel when the server disagrees** (interrupted, refused): ghost fades; acceptable if rare, measured in spike 1.
 - **Analytic motion vs complex geometry:** bounces on slopes and stairs produce odd rolls; mitigation: simple impact behaviours first, `Stick`

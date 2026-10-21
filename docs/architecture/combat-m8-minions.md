@@ -178,12 +178,12 @@ ever granted as a loose tag on a minion**; "who adds" means who writes it into e
 | `Command.Minion.<Name>` (e.g. `Attack.Swing`) | **ini** | `GSTNMinion.ini` | Command tags selecting a move of a minion's `Moves` list; **never** placed in a player binding set or slot (the input conflict validator ignores `Command.Minion`) | Designers; the brain requests them |
 | `Combat.State.Hitstop`, `.Hitstun`, `.Tumble`, `.Intangible` (existing M2–M4) | native | `GSTNCombatGAS` | Reused unchanged in `FGSTN_HitVictimView::Tags` so pipeline steps are shared | Minion batch fills the view per hit, from store fields (`Launched` and `Knockdown` map to `Tumble`) |
 | `GameplayCue.Minion.Hit/Death/Spawn` | native | `GSTNMinionRuntime` | Default cues played locally on puppets through `UGameplayCueManager` (no ASC) | Presentation subsystem on `HitCounter` change/state change; hits' own `CueTag` takes precedence |
-| `Combat.Link.Minion` | reserved, **not declared in M8** | future | Link type for grabbing/mounting minions (section 14) | — |
+| `Combat.Link.Type.Minion` | reserved, **not declared in M8** | future (`GSTNMinion` when built; `Combat.Link.*` is owned by `GSTNLink`, M6 §1c) | Link type for grabbing/mounting minions (section 14); the partner is an `FGSTN_EntityRef` of kind `Minion` (M6 §7.0) | — |
 
 No new lock, set-by-caller or hit-type tags are needed; relationships (`Combat.Relationship.*`), team (`FGenericTeamId`) and hit
 types are reused.
 
-**Entity ids.** Minions use `EntityId = MinionEntityBase | Handle.Index` with `MinionEntityBase = 0x40000000`
+**Entity ids.** The `Minion` kind id of `EGSTN_EntityKind` (= `FGSTN_EntityRef::Kind`, `Fighter` = 0, M6 §7.0) is declared by `GSTNMinion`; in a sync state or link a minion is `FGSTN_EntityRef{Minion, Handle.Index, low 8 bits of Handle.Generation}`. Inside the hit pipeline minions use `EntityId = MinionEntityBase | Handle.Index` with `MinionEntityBase = 0x40000000`
 (*Proposal*: NP proxy ids never reach it; the `HitTargets` ring and the inbox treat it as an opaque id;
 `UGSTN_CombatWorldSubsystem::FindEntity` dispatches on the bit). A 16-bit generation is checked on delivery so a hit
 stamped for a recycled slot is dropped.
@@ -510,7 +510,7 @@ M4 §12.7); this is the number to budget:
   tag to a store-level status (timer stamp + tick), still no ASC; ignored in v1.
 - **New movement backend**: implement `IGSTN_MinionMovementBackend`, add the enum value; flying types are the first user.
 - **Shield/grab/mount on minions** (M6/M7 follow-ups): grabs and mounts of minions need a different link type
-  (`Combat.Link.Minion`, the minion's store slot as parked entity); shields use the `FGSTN_HitVictimView` shield fields and the
+  (`Combat.Link.Type.Minion`, the minion's store slot as parked entity, referenced by `FGSTN_EntityRef{Kind = Minion}`; needs `GSTNLink`, M6 §7.0); shields use the `FGSTN_HitVictimView` shield fields and the
   M6 step. Not designed here.
 - Related: promotion is the only supported way to give a minion prediction, GAS effects or loadouts.
 

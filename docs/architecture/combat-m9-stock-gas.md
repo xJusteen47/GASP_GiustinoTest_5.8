@@ -113,11 +113,11 @@ that file the canary cannot load, so **the plugin split of section 5b is part of
 | `GSTNInput` | `GSTNInputCore` | Engine core, GameplayTags, EnhancedInput (UInputAction refs) | NP, Mover, AbilitySystemSimulation, GSTNCombat, every adapter |
 | `GSTNInputNP` (new plugin; module moves out of `GSTNInput`) | `GSTNInputNP` | GSTNInput, GameplayAbilities (fork), AbilitySystemSimulation, NetworkPrediction, Mover | GSTNCombat, any `*StockGAS` |
 | `GSTNInputStockGAS` (new) | `GSTNInputStockGAS` | GSTNInput, GameplayAbilities (stock), EnhancedInput | NP, Mover, AbilitySystemSimulation, any `*NP`, GSTNCombat |
-| `GSTNCombat` | `GSTNCombatCore`, `GSTNCombatGAS`, `GSTNCombatEditor` | GSTNInput, GameplayAbilities (same name in both worlds), GameplayTasks | NP, Mover, AbilitySystemSimulation, every adapter and every later feature plugin (`GSTNHeld`...) |
+| `GSTNCombat` | `GSTNCombatCore`, `GSTNCombatGAS` | GSTNInput, GameplayAbilities (same name in both worlds), GameplayTasks | NP, Mover, AbilitySystemSimulation, every adapter and every later feature plugin (`GSTNHeld`...) |
 | `GSTNCombatNP` (new plugin; the module exists today inside `GSTNCombat`) | `GSTNCombatNP` | GSTNCombat, GSTNInputNP, AbilitySystemSimulation, NetworkPrediction, Mover | any `*StockGAS` |
 | `GSTNCombatStockGAS` (new) | `GSTNCombatStockGAS` | GSTNCombat, GSTNInputStockGAS, GameplayAbilities, NetCore | NP, Mover, AbilitySystemSimulation, any `*NP` |
 
-What may depend on an adapter: only the game project and feature-plugin adapter modules (`GSTNHeldNP`, ...), never a neutral module.
+What may depend on an adapter: only the game project and feature-plugin adapter modules (`GSTNHeldNP`, ...), never a neutral module. Editor and debug tooling are separate plugins (`GSTNCombatEditor`, `GSTNCombatDebug`, M5 §3b), not modules of `GSTNCombat`; optional feature plugins (`GSTNDefence`, `GSTNLink`, `GSTNMinion`, ...) keep their `*NP` modules inside their plugin (M6 §1b, M8 §4b); whether they also get stock adapters is not decided here (modularity-and-tags.md §3.6, open question M9).
 
 - *Enable/disable independently:* a project enables `GSTNCombat` + exactly one adapter pair (NP or Stock). Both adapters
   enabled in one project is **unsupported** and fails at startup with a clear log: both define `UGSTN_GA_Base`
@@ -126,7 +126,7 @@ What may depend on an adapter: only the game project and feature-plugin adapter 
   canary project without any adapter; each adapter pair loads on its own engine configuration (fork project / canary).
 - Moving `GSTNCombatNP` and `GSTNInputNP` into their own plugins is a refactor of `.uplugin` files and redirects only (C++
   module names do not change); done as M9.0 step 0, before the extraction, and valid even if M9 is never built.
-- Later plugins (`GSTNHeld`, see M10) depend on `GSTNCombat` only and ship adapter modules like this table.
+- Later plugins (`GSTNHeld`, see M10) depend on `GSTNCombat` and `GSTNLink` (M6 owns the link system) only and ship adapter modules like this table; a stock adapter for `GSTNLink` is not designed here (open question M9).
 
 ## 6. GAS side (`GSTNCombatStockGAS`)
 

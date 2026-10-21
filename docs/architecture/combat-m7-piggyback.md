@@ -4,15 +4,13 @@ Part of the combat design ([combat.md](combat.md)); **ships as its own plugin `G
 specifications, and the M6 specification (links). Expands the M7 outline of [combat-m5-m9.md](combat-m5-m9.md).
 Section numbers below are local to this file. "Move" means a timeline ability (`UGSTN_GA_BaseCombat`, combat.md §11).
 
-> **M6 assumptions** (the M6 specification was written in parallel; reconcile when it lands, and fix the names here if
-> they differ): (A1) `FGSTN_LinkState { LinkType; Role; PartnerId; LinkFrame; LinkSerial }` exists in the combat sync state
-> and is part of the per-step snapshot of every entity; (A2) `UGSTN_LinkedMovementMode` (parked, no collision, no
-> velocity) with the Mover tag `Combat.Mover.Linked` and a combat request that enters it; (A3) a **link inbox** on the
-> combat component (frame-stamped, drained like the hit inbox of M4 §7) carrying link requests (`Break`, `PartnerMove`
-> are used here), and a `LinkRequest` hit-resolution step that dispatches by hit type to link rules; (A4) a server-side
-> exit placement helper (`UGSTN_LinkUtils::FindExitPlacement`) that sweeps the capsule over candidate positions; (A5)
-> role tags `Combat.Link.Role.*` projected by M6 (5.4) and the link spike result of M6 (parked transform is viable).
-> If A3 has no rule interface, M7 introduces `UGSTN_LinkRule` (section 3) and M6's grab uses it.
+> **M6 contract** (the M6 specification owns the link system; names below are M6's, [combat-m6-defence-links.md](combat-m6-defence-links.md)
+> §1b, §1c, §7.0): `FGSTN_LinkState { LinkTypeIndex; Role; Phase; PartnerId (FGSTN_EntityRef); Serial; LinkFrame; EndFrame; Flags;
+> BreakReason; Payload; LocalYawQ }` as a `GSTNLink` sync fragment per channel (M7 uses the `Body` channel); `UGSTN_LinkedMovementMode`
+> with the Mover tag `Combat.Mover.Linked` (`GSTNLinkNP`); link inbox kinds (`LinkResponse`, `LinkCommand`, plus the generic
+> `PartnerMove`) drained like the hit inbox of M4 §7; a `LinkRequest` step that runs the `UGSTN_LinkRule` of the link type;
+> `UGSTN_LinkExitPlacer` + `IGSTN_ExitCollisionQuery` for exit placement; `UGSTN_LinkRegistry` for the link type; the link tags of
+> M6 §1c. M7 declares `Combat.Link.Type.Mount` and `Combat.Link.Role.Carrier/Rider` itself (section 11).
 
 ## 1. Scope
 
@@ -49,38 +47,39 @@ the partner of a pair move (combat.md §12b *Open*, kept as a decision gate in s
 
 | Module | Type | Contents | Depends on |
 |---|---|---|---|
-| `GSTNPiggybackCore` | Runtime | section 3 (pure types, `UGSTN_MountUtils`), tags header | `GSTNCombatCore` (types, tag requirements) |
-| `GSTNPiggybackRuntime` | Runtime | sections 4, 5: abilities, `UGSTN_PairMoveDefinition/Set/Registry`, `UGSTN_GE_CarryLoad`, `UGSTN_LinkRule_Mount`, `UGSTN_HitStep_MountHit`, presentation component, kit extension | `GSTNPiggybackCore`, `GSTNCombatGAS`, `GSTNCombatNP`, `GSTNInputCore` |
+| `GSTNPiggybackCore` | Runtime | section 3 (pure types, `UGSTN_MountUtils`), tags header | `GSTNCombatCore`, `GSTNLinkCore` (types, tag requirements) |
+| `GSTNPiggybackRuntime` | Runtime | sections 4, 5: abilities, `UGSTN_PairMoveDefinition/Set/Registry`, `UGSTN_GE_CarryLoad`, `UGSTN_LinkRule_Mount`, `UGSTN_HitStep_MountHit`, presentation component, kit extension | `GSTNPiggybackCore`, `GSTNLinkGAS`, `GSTNLinkNP`, `GSTNCombatGAS`, `GSTNCombatNP`, `GSTNInputCore` |
 | `GSTNPiggybackEditor` | Editor | pair-move asset factory/validators, `Debug.Anchor` panel | `GSTNPiggybackRuntime`, `GSTNCombatEditor` (M5; optional) |
 | `GSTNPiggybackTests` | Developer | Automation tests and harness content | all of the above |
 
-Allowed dependencies: only downwards as listed. **Must not depend on piggyback**: `GSTNCombat*`, `GSTNInput*`, the project
+Allowed dependencies: only downwards as listed. **Must not depend on piggyback**: `GSTNCombat*`, `GSTNLink*`, `GSTNDefence*`, `GSTNInput*`, the project
 module `GASP_Giustino2` core code (the project may add a thin integration module, `GASP_Giustino2Piggyback`, for camera
-anchor and perception: the only place that references both). `GSTNPiggyback.uplugin` lists `GSTNCombat` as a required plugin;
+anchor and perception: the only place that references both). `GSTNPiggyback.uplugin` lists `GSTNLink` and `GSTNCombat` as required plugins;
 nothing lists `GSTNPiggyback`. Type names in sections 3-5 keep the `GSTN_` prefix; files live in the modules above.
 
-**Host extension points required** (small changes in `GSTNCombat`, specified and reviewed with M6; none contains
-piggyback names): (1) **link rules** registered per link type tag (`UGSTN_LinkRule`, A3) and a `LinkRequest` step that
-dispatches to them; (2) **kit extensions**: `UGSTN_PrimaryKitDefinition::Extensions (TArray<UGSTN_KitExtension*>
-Instanced, soft classes)` read by the loadout compiler through `UGSTN_KitExtension::Compile(FGSTN_CompileContext&)` (here:
-carrier profile, pair-move registry entries, disallowed-command compilation, anim layers); (3) **rules extensions**
-(`UGSTN_CombatRulesExtension` list on `UGSTN_CombatRules`); (4) **pipeline steps** and **snapshot contributors**
-(`IGSTN_SnapshotContributor`: per-entity `Weight`/`MaxCarryWeight`; the anchor substitution for parked roles is generic
-in M6, M7 only supplies socket and offset); (5) the generic `FGSTN_LinkState`/`FGSTN_LinkActions` fields, 6 request slots
-(section 10) and the generic request types `EnterLinked`, `ExitLink`, `ApplyLinkEffect`, `RemoveLinkEffect`,
-`LaunchLinked`; (6) a **partner move** primitive in the link inbox (`PartnerMove{Id, TargetFrame}`) that calls a registered
-`UGSTN_LinkActionProvider` (the pair-move registry implements it); (7) hitbox flags `bInteractionPickNearest`,
-`bAffectsLinkPartner`. Each has a do-nothing default, so the host builds and runs with no piggyback code present.
+**Extension points used** (all exist in `GSTNCombat` / `GSTNLink` through M6, none contains piggyback names; if M6 lacks one, it is
+added to M6 as a requirement, never to piggyback): (1) **link type, rule and actions** registered into `GSTNLink` (M6 §7.0): a
+`UGSTN_LinkTypeDefinition` for `Combat.Link.Type.Mount`, `UGSTN_LinkRule_Mount` (a `UGSTN_LinkRule`) run by the `LinkRequest` step, and a
+`UGSTN_LinkActionProvider` (the pair-move registry implements it) resolving the generic `PartnerMove{Id, TargetFrame}` inbox payload;
+(2) **kit extensions**: `UGSTN_PrimaryKitDefinition::Extensions` is the `TArray<FInstancedStruct>` of base struct `FGSTN_KitExtension`
+(modularity-and-tags.md §5b), compiled by the loadout compiler through `FGSTN_KitExtension::Compile(FGSTN_CompileContext&) const`
+(here: carrier profile, pair-move registry entries, disallowed-command compilation, anim layers); (3) **rules extensions**: an
+`FGSTN_RulesExtension` entry on `UGSTN_CombatRules` (here `FGSTN_MountRules`); (4) **pipeline steps** (`UGSTN_HitStep_MountHit`) and
+**snapshot extensions** (`FGSTN_SnapshotExtension`: per-entity `Weight`/`MaxCarryWeight`; the anchor substitution for parked roles is
+generic in `GSTNLinkNP`, M7 only supplies socket and offset); (5) the generic `FGSTN_LinkState`/`FGSTN_LinkActions` fields, the 6 request
+slots (section 10) and the generic request types `EnterLinked`, `ExitLink`, `ApplyLinkEffect`, `RemoveLinkEffect`, `LaunchLinked`
+(M6 §7.0, item 5); (6) hitbox flags `bInteractionPickNearest`, `bAffectsLinkPartner` (M4/M6). Each has a do-nothing default, so the host
+builds and runs with no piggyback code present.
 
 **Enable/disable independently**: enabled or not in the `.uproject`. Disabled: no tags, `Command.Link.Mount` has no binding
 (an unbound command is legal, 8.2), kits whose extension class cannot load warn and drop it, grabs and all other M6 features are
-unaffected. Enabled: per game mode through the `FGSTN_MountRules` rules extension (absent = every mount refused) and per
+unaffected (`GSTNLink` without piggyback is the M6 configuration). Enabled: per game mode through the `FGSTN_MountRules` rules extension (absent = every mount refused) and per
 kit through `CarrierProfile`/`RiderProfile`.
 
 **Isolation tests**: (a) host build with the plugin disabled: M1-M6 Automation tests and scenarios unchanged (CI job
 without the plugin); (b) `GSTNPiggybackCore` tests need no world or ASC; (c) `GSTNPiggybackTests` uses a minimal test kit and
 the host's link-test fixtures (fake snapshots, fake link inbox), no project content; (d) the section 9 scenarios run with
-only host + plugin content on a stock test level; (e) a CI script in `Tools/` checks that `GSTNCombat*` and `GSTNInput*`
+only host + plugin content on a stock test level; (e) a CI script in `Tools/` checks that `GSTNCombat*`, `GSTNLink*` and `GSTNInput*`
 contain no include or module reference to `GSTNPiggyback*`.
 
 ## 3. Core types (`GSTNPiggybackCore`, no UObject dependencies beyond data)
@@ -94,7 +93,7 @@ ratio. `FGSTN_RiderProfile { bool bCanRide; FName RiderPoseSocketHands/Feet (IK,
 (rider facing relative to the carrier, default 360 = free); }`. Both live on the primary kit (`UGSTN_PrimaryKitDefinition`
 gets `CarrierProfile`, `RiderProfile`).
 
-**`FGSTN_MountRules`** (a `UGSTN_CombatRulesExtension` entry on `UGSTN_CombatRules`, per game mode, 2b): `bAllyOnly = true`; `PendingFrames = 2` (rider's pending
+**`FGSTN_MountRules`** (an `FGSTN_RulesExtension` entry on `UGSTN_CombatRules`, per game mode, 2b): `bAllyOnly = true`; `PendingFrames = 2` (rider's pending
 phase, 6.2); `CarrierBreakKnockback` (a hit on the carrier whose computed knockback exceeds it breaks the link; default
 = tumble threshold); `RiderBreakKnockback` (same for the rider; default = 2 × carrier's); `RiderHitstunScale = 0.5`,
 `RiderKnockbackScale = 0` below the break threshold (the rider flinches and takes damage, is not launched);
@@ -111,9 +110,9 @@ frame, e.g. respawn); `PendingTimeoutFrames = 20` (server safety); `DefaultCredi
   MaxCarryWeight` (equal allowed).
 - `ComputeCarryRatio(RiderWeight, MaxCarryWeight) → uint8 (0..255)`, clamped; `ComposeAnchor(CarrierTransform, SocketLocal,
   MountOffset, LocalYawDeg) → FTransform`; `ExitCandidates(Anchor, CarrierFacing, EGSTN_ExitMode) → TArray<FTransform>`
-  (ordered, fed to the M6 sweep helper A4); `SplitCredit(Share, Amount)`.
-- `UGSTN_LinkRule` (abstract, EditInlineNew, const; only if M6 lacks it): `Evaluate(FGSTN_LinkRequestContext&)` → Accept /
-  Refuse(reason). `UGSTN_LinkRule_Mount` (GSTNCombatNP) wraps `EvaluateEligibility`.
+  (ordered, fed to M6's `UGSTN_LinkExitPlacer`); `SplitCredit(Share, Amount)`.
+- `UGSTN_LinkRule_Mount` (`GSTNPiggybackRuntime`; derives from M6's `UGSTN_LinkRule`, whose `Evaluate(FGSTN_LinkRequestContext&)` returns
+  Accept / Refuse(reason)) wraps `EvaluateEligibility`.
 
 **Pair move** — `EGSTN_PairRole { Carrier, Rider }`, `EGSTN_LinkOutcome { Keep, Break, SwapRoles }`, `EGSTN_PairCredit {
 OwnerOnly, InitiatorAndOwner, Split }`, `EGSTN_PairPartnerMode { Cooperative (partner cannot refuse; partner hit does not
@@ -154,7 +153,7 @@ cancel its part), Interruptible }`. The definition itself is a UObject (section 
 - **Kit additions**: `CarrierProfile`, `RiderProfile`, `PairMoves (UGSTN_PairMoveSet)`, `CarrierAnimLayer`,
   `RiderAnimLayer` (M3 `AnimLayer` pattern), role bindings in the usual `KitBindings` (section 7).
 
-## 5. NP side additions (`GSTNPiggybackRuntime`, on `GSTNCombatNP`)
+## 5. NP side additions (`GSTNPiggybackRuntime`, on `GSTNCombatNP` and `GSTNLinkNP`)
 
 - **Snapshot entity** (M4 §5) gains: `FGSTN_LinkState Link`, `Weight`, `MaxCarryWeight`, `RemountCooldownEndFrame`,
   `ActivePairIdx`, and the **anchor substitution**: when the snapshot is built, an entity whose link is Active in a
@@ -236,7 +235,7 @@ unavailable while it holds (7).
   Velocity (int16 × 3, cm/s / 4); Flags }` to the rider's state and `ExitLink`/`LaunchLinked` runs in the ASC pre-tick:
   teleport to `Position` (a Mover instant move through a GE), clear parked mode (Falling), launch with
   `FGSTN_LayeredMove_Knockback` (M4 §7; no hitstun unless set). `Position` = first free candidate of `ExitCandidates`
-  (A4 sweep), or the anchor itself for launches.
+  (`UGSTN_LinkExitPlacer`, M6 §7.7), or the anchor itself for launches.
 - **Who computes it**: *rider-initiated* exits (dismount, boost jump) are **predicted by the rider's client** from its
   local anchor and carrier velocity, and the rider's server-side tick computes the same `PendingExit` from the
   anchor of the carrier **rewound to the rider's view time** (always on for riders, independent of
@@ -369,14 +368,12 @@ server timeout of Pending (`PendingTimeoutFrames`); carrier entering a Mover mod
 
 ## 10. Sync state additions
 
-The combat sync state belongs to the host, so M7 adds no piggyback-specific struct to it. Host prerequisites (raised with
-M6, section 2b): `FGSTN_LinkState` (M6) carries a generic `uint8 Phase (None/Pending/Active/Exiting)`, a `uint8 Payload` and
-`int16 LocalYawQ` (anchor-relative facing: grabs use it too); the combat state carries a generic **link-action block**
-`FGSTN_LinkActions { uint16 LastRefusedSerial; int32 RefusedFrame; int32 CooldownEndFrame; FGSTN_ActiveLinkAction {
-int16 Id; int32 StartFrame; } Active; FGSTN_PendingLinkAction { int32 Frame; int16 Id; } PendingStart; FGSTN_PendingExit {
-int32 Frame; FVector_NetQuantize10 Position; int16 YawQ; int16 Velocity[3]; uint8 Flags; } Exit; }`. Piggyback's meanings:
-`Payload` = `CarryLoadQ`, `Id` = `PairIdx`, `CooldownEndFrame` = remount cooldown. Link inbox entries gain a generic
-`Id`/`TargetFrame` payload (`PartnerMove`). Request array 4 → 6 and five request types (section 5) are host changes too.
+M7 adds no piggyback-specific struct to the combat sync state. It uses the generic link state of M6 §7.1/§7.0: `FGSTN_LinkState` (Body
+channel) with `Phase` (None/Pending/Active/Exiting), `Payload` and `LocalYawQ` (anchor-relative facing; grabs use it too), and the generic
+link-action block `FGSTN_LinkActions` (M6 §7.0 item 5: `LastRefusedSerial`, `RefusedFrame`, `CooldownEndFrame`, `Active{Id, StartFrame}`,
+`PendingStart{Frame, Id}`, `Exit{Frame, position, yaw, velocity, flags}`), both inside the `GSTNLink` sync fragment. Piggyback's meanings:
+`Payload` = `CarryLoadQ`, `Id` = `PairIdx`, `CooldownEndFrame` = remount cooldown. Link inbox entries carry the generic `Id`/`TargetFrame`
+payload (`PartnerMove`). The request array 4 → 6 and the five request types (section 5) are M6 changes too (§7.0 item 5).
 All fields are end-frame stamps or empty while idle (an unlinked entity's delta stays zero); every field in
 `NetSerialize`, `ShouldReconcile`, `ToString`, `Interpolate`; `Phase` and `Role` compared exactly, positions with the
 existing quantization tolerance. The carry load and the pair move's ability travel in the existing ASC state.
@@ -386,26 +383,26 @@ existing quantization tolerance. The carry load and the pair move's ability trav
 Convention (CLAUDE.md, combat.md §9): tags are **native** (`UE_DECLARE_GAMEPLAY_TAG_EXTERN` in the owning module's tag header,
 `GSTNPiggybackCore/Public/GSTN_PiggybackTags.h`), except designer-made input tags, which live in the plugin's own
 `Plugins/GSTNPiggyback/Config/Tags/GSTNPiggybackCommands.ini`. A tag is owned by the plugin that declares it; other plugins
-may *use* a tag by name only through data, never include the header. "Host" = `GSTNCombat` (M6 declares the link tags).
+may *use* a tag by name only through data, never include the header. "Link" = `GSTNLink` (M6 declares the generic link tags; `GSTNCombat` declares none).
 
 | Tag | Kind | Owner | Meaning | Added/removed by |
 |---|---|---|---|---|
-| `Combat.Link.Mount` | native | host (M6) | link type of piggyback | link state (`LinkType`), not a gameplay tag on actors |
-| `Combat.Link.Role.Carrier` / `.Rider` | native | host (M6) | role context tags | projected by the combat tick (absolute counts, 5.4) while the link is Active |
+| `Combat.Link.Type.Mount` | native | piggyback | link type of piggyback | link state (`LinkType`), not a gameplay tag on actors |
+| `Combat.Link.Role.Carrier` / `.Rider` | native | piggyback | role context tags | projected by the combat tick (absolute counts, 5.4) while the link is Active |
 | `Combat.HitType.Interaction.Mount` | native | piggyback | interaction hitbox type that creates a mount request | hitbox data of `UGSTN_GA_Mount`; no actor tag |
 | `Combat.State.Riding` | native | piggyback | rider's phase Active | projected by the combat tick (5.4), cleared on any break |
 | `Combat.State.Carrying` | native | piggyback | carrier carries a rider | granted by `UGSTN_GE_CarryLoad` (ordinary GE tag), removed with it |
 | `Combat.State.MountPending` | native | piggyback | rider's 2-frame pending phase (cosmetics, locks) | projected by the combat tick |
-| `Combat.Lock.Link` | native | piggyback | prevents a carrier from accepting a mount | granted by abilities/GEs with ordinary counts (11.4 lock rule) |
+| `Combat.Lock.Link` | native | Link (M6) | prevents a carrier from accepting a mount (read here, declared by `GSTNLink`) | granted by abilities/GEs with ordinary counts (11.4 lock rule) |
 | `Combat.PairMove.ThrowRider` / `.BoostJump` | native | piggyback | pair move identities (events, quests, validation) | definition data; carried in events |
-| `Combat.Mover.Linked` | native | host (M6) | parked mode tag | Mover mode (A2) |
-| `Combat.Event.Link.Mounted` / `.Broken` / `.MountRefused` | native | piggyback (`Broken` also host) | authoritative events (5.6); `Broken` carries a reason tag below | server outbox |
+| `Combat.Mover.Linked` | native | Link (`GSTNLinkNP`, M6) | parked mode tag | Mover mode |
+| `Combat.Event.Link.Mounted` / `.Broken` / `.MountRefused` | native | piggyback (`Broken`: `GSTNLink`, M6) | authoritative events (5.6); `Broken` carries a reason tag below | server outbox |
 | `Combat.Event.PairMove.Started` / `.Aborted` | native | piggyback | pair-move events | server outbox |
-| `Combat.Link.BreakReason.{Dismount,Drop,Throw,Outcome,CarrierHit,RiderHit,KO,Removed,Teleport,Timeout}` | native | piggyback (generic ones host) | reason on `Broken` | emitter of the break |
+| `Combat.Link.BreakReason.{Dismount,Drop,Throw,Outcome,CarrierHit,RiderHit,KO,Removed,Teleport,Timeout}` | native | piggyback (its own: `Dismount Drop Outcome CarrierHit RiderHit KO Removed Teleport`; the generic ones `Timeout Distance Hit Escape Release Throw Forced...` are `GSTNLink`'s, M6 §1c) | reason on `Broken` | emitter of the break |
 | `Combat.Link.Credit.Partner` | native | piggyback | event tag: credited partner present | attribution in `HitLanded`/`KO` events |
 | `Combat.SetByCaller.CarryLoad.Ratio` | native | piggyback | SetByCaller of the carry load GE | `ApplyLinkEffect` request |
 | `Input.Button.Interact` | ini | piggyback | designer button tag | input config |
-| `Command.Link.Mount` / `.Dismount` / `.Drop` | ini | piggyback (the first two reserved by host) | slots of the Interact button | slot asset, bindings (7) |
+| `Command.Link.Mount` / `.Dismount` / `.Drop` | ini | piggyback | slots of the Interact button | slot asset, bindings (7) |
 
 Rules: no `AbilityTriggers` or tag-event listeners on projected tags (5.4); `Combat.Lock.Link` is the only lock-style tag
 and is read, never projected; all `Combat.State.*` above are removed by the same projection that adds them, so a break
@@ -417,9 +414,9 @@ cannot leave one behind (test: every break reason in section 8 ends with none of
 - **Inputs**: one `Interact` button, three role-resolved meanings (7). Alternative if the pad has no spare button: Mount
   and Dismount on a `Hold(Special)` slot; only slots change.
 - **Two riders / chains**: no. One rider per carrier (`LinkType == None` is a mount condition), a rider cannot carry. The
-  data model allows more later (`PartnerId` is per link; a list would be M6 work).
-- **Mounting enemies**: no; `Combat.Link.Mount` is allies only. A mountable enemy is a different link type
-  (`Combat.Link.Ride`) with its own rule and a server-side carrier, because minions (M8) have no NP model.
+  data model allows more later (`PartnerId` is per link and channel; a list would be M6 work).
+- **Mounting enemies**: no; `Combat.Link.Type.Mount` is allies only. A mountable enemy is a different link type
+  (`Combat.Link.Type.Ride`) with its own rule and a server-side carrier, because minions (M8) have no NP model.
 - **Chain of command on hits**: rider flinch only below thresholds (6.7), defaults chosen to keep the rider active.
 
 ## 13. Acceptance criteria
@@ -464,4 +461,4 @@ place for prediction and resolution).
   frame (5.4, M6): add an assert in development builds.
 - **Carry load and Mover**: the stats modifier rewrites settings every frame; a weight change at accept must show on the
   carrier on the same frame on server and client (harness: speed compared at accept).
-- Dependence on the unfinished M6 spike and names (assumptions A1–A5).
+- Dependence on the unfinished M6 spike and on M6 §7.0 (link channels, registry, rules, actions).

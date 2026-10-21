@@ -99,11 +99,11 @@ PC has it. The tables below show **both**: "in repo" is what I read, "on owner's
 | `GSTNCombat` | `GSTNCombatCore` (Runtime) | in repo | public Core, CoreUObject, Engine, GameplayTags, DeveloperSettings; private EnhancedInput. Target: + GSTNInputCore |
 | `GSTNCombat` | `GSTNCombatNP` (Runtime) | in repo | public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, NetCore, Mover; private EnhancedInput. Target: + GSTNInputNP |
 | `GSTNCombat` | `GSTNCombatGAS` | planned (M3) | Core, GameplayAbilities, GameplayTasks (combat-m3 §), no NP, no Mover |
-| `GSTNCombat` | `GSTNCombatEditor` | planned; M5 spec moves it to its own plugin | see combat-m5-editor §3b |
-| `GSTNCombatEditor`, `GSTNCombatDebug` | Editor / Runtime (no Shipping) | planned (M5 spec) | `GSTNCombat`, `GSTNInput`, GameplayDebugger |
+| `GSTNCombatEditor`, `GSTNCombatDebug` | each its own plugin and module: Editor / Runtime (no Shipping) | planned (M5 §3b; they are not modules of `GSTNCombat`) | `GSTNCombat`, `GSTNInput`, GameplayDebugger (Debug); the editor loads Debug dynamically, no link |
 | `GSTNDefence` (`...Core`, `...GAS`, `...NP`), `GSTNLink` (same three) | Runtime | planned (M6 spec) | see combat-m6 §1b |
-| `GSTNPiggyback`, `GSTNHeld` | Runtime | planned (M7, later) | `GSTNLink` + `GSTNCombat` |
-| `GSTNMinion` | Runtime | planned (M8; a separate plugin, its module was drafted as `GSTNCombatMinion`) | Core/GAS/NP of combat, StateTree, Navigation |
+| `GSTNPiggyback` (`...Core`, `...Runtime`, `...Editor`, `...Tests`) | Runtime / Editor / Developer | planned (M7) | `GSTNLink` + `GSTNCombat` |
+| `GSTNHeld` (`...Core`, `...GAS`, `...NP`, `...StockGAS`, `...Editor`) | Runtime / Editor | planned (M10) | `GSTNLink` + `GSTNCombat` |
+| `GSTNMinion` (`...Core`, `...Runtime`, `...Mover`, `...Editor`) | Runtime / Editor | planned (M8; a separate plugin, never a module of `GSTNCombat`) | `GSTNCombat` (Core/GAS/NP), StateTree, Navigation |
 | `GASP_Giustino2` (project) | `GASP_Giustino2` (Runtime) | in repo | public: Core, CoreUObject, Engine, InputCore, Mover, GameplayTags, NetCore, GameplayAbilities, AbilitySystemSimulation, **GSTNCombatNP, GSTNCombatCore**; private: GameplayTasks, NetworkPrediction, EnhancedInput, Json |
 
 `GSTNCombat.uplugin` lists plugin dependencies GameplayAbilities, AbilitySystemSimulation, NetworkPrediction,
@@ -312,14 +312,14 @@ before any plugin ships content (already noted for combat).
 | Abilities base, attributes, kits, weapons, loadouts (M3) | `GSTNCombat` (`GSTNCombatGAS`, `GSTNCombatNP`) | L3 | with combat |
 | Combat NP model, hit pipeline, hitstop, knockback (M2, M4) | `GSTNCombat` (`GSTNCombatNP`; pure rules in `Core`) | L3 | with combat |
 | Wall movement modes, wall abilities, jump | new `GSTNMovement` (move out of project) | L3 | plugin enable; wall modes are Mover modes added by pawn data |
-| Timeline editor, validators, socket baking (M5) | `GSTNCombatEditor` | L3b editor | plugin enable (editor only) |
-| Input display, gameplay debugger, trace (M5) | `GSTNCombatDebug` | L3b runtime, no Shipping | optional |
+| Timeline editor, validators, socket baking (M5) | `GSTNCombatEditor` (own plugin, M5 §3b) | L3b editor | plugin enable (editor only); loads Debug dynamically if present |
+| Input display, gameplay debugger, trace (M5) | `GSTNCombatDebug` (own plugin, M5 §3b) | L3b runtime, no Shipping | optional |
 | Shield, parry, tech, SDI (M6) | `GSTNDefence` (Core, GAS, NP) | L3b | optional plugin; kit data decides use |
-| Links, grabs, throws (M6) | `GSTNLink` (Core, GAS, NP) | L3b | optional plugin |
+| Links, grabs, throws (M6); owns `Combat.Link.*`, entity refs, link channels, link-type registry (M6 §7.0) | `GSTNLink` (Core, GAS, NP) | L3b | optional plugin |
 | Piggyback, pair moves (M7) | `GSTNPiggyback` | L4 on `GSTNLink` | Game Feature or optional plugin |
-| Minions (M8) | `GSTNMinion` (M8 spec names the plugin `GSTNMinion`; it must not be a module of `GSTNCombat`, to keep combat free of StateTree/Navigation) | L3b/L4 | optional; per mode |
-| Stock GAS adapter (M9, optional) | `GSTNCombatStockGAS` replaces only `GSTNCombatNP` | L3 | alternative module set |
-| Held / thrown objects (later) | `GSTNHeld` | L4 on `GSTNLink` | Game Feature |
+| Minions (M8) | `GSTNMinion` (*Decision* of M8 §4b, kept here: a separate plugin, not `GSTNCombatMinion`, so combat stays free of StateTree/Navigation and each plugin is workable alone) | L4 | optional; per mode |
+| Stock GAS adapter (M9, optional) | `GSTNCombatStockGAS` replaces only `GSTNCombatNP`. **Proposal** (M9 §5b): both adapters become their own plugins (`GSTNCombatNP`, `GSTNInputNP`, `GSTNCombatStockGAS`, `GSTNInputStockGAS`), so `GSTNCombat` = Core + GAS and builds with neither NPP nor Mover; module names do not change | L3 | alternative plugin set, exactly one per project |
+| Held / thrown objects (M10) | `GSTNHeld` (Core, GAS, NP, StockGAS, Editor) | L4 on `GSTNLink` | Game Feature |
 | Game modes (co-op PvE waves, training) | `GSTNMode_*` Game Feature plugins + experience assets | L4 | experience |
 | Shared helpers (tag lint, message channels, base settings) | `GSTNCore` (**Proposal**, optional: only if two plugins need the same helper) | L2 | always on |
 | Test harness (`GASNPPTest`) | project today; **Proposal**: `GSTNTestKit` developer plugin (`Type: Developer`/`DeveloperTool`) | dev | excluded from Shipping |
@@ -369,11 +369,14 @@ Existing names are kept unless listed in 4.3.
 | `Combat.State.*` | `Busy InTimeline Hitstop Hitstun Tumble CancelWindow OverrideWindow SuperInput Falling Shielding Carrying Riding` | `GSTNCombat` (state-projection rules); extension plugins declare their own leaves (`Shielding` -> `GSTNDefence`) | native, **projected**, never granted by others |
 | `Combat.Event.*` | `HitLanded Hit.Received Blocked Parried LinkFormed` | each emitter's plugin; envelope in `GSTNCombat` | native |
 | `Combat.HitType.*`, `Combat.Hurtbox.*`, `Combat.Relationship.*` | `Normal Grab Throw`, `Head Torso`, `Ally Enemy` | `GSTNCombat` (Link adds `Grab Throw Pummel`) | native |
-| `Combat.Lock.*` | `Movement`, `Link` | `GSTNCombat`; Link its own | native |
+| `Combat.Lock.*` | `Movement`, `Link` | `GSTNCombat` (`Movement`); `GSTNLink` (`Link`) | native |
 | `Combat.Immunity.*` | `Grab`, `Parry`, `Shield` | the plugin whose mechanic it gates | native |
-| `Combat.Link.*` | `Type.Grab Type.Mount Role.Carrier Pending Linked` | `GSTNLink` (Mount: `GSTNPiggyback`) | native |
+| `Combat.Link.*` | `Linked Pending`, `Type.Grab`, `Role.Grabber Role.Grabbed`, `BreakReason.*`; `Type.Mount Role.Carrier Role.Rider`; `Type.Held Role.Holder Role.HeldObject` | root and generic leaves: `GSTNLink`; a link type's own type, role and reason leaves: the plugin that owns the type (`GSTNPiggyback`: Mount; `GSTNHeld`: Held; `GSTNMinion`: Minion, later). `GSTNCombat` declares none | native |
 | `Combat.Mover.*` | `Frozen Tumble Linked` | emitting NP module | native |
-| `Combat.Entity.*`, `Combat.PairMove.*`, `Combat.Ability.*`, `Combat.SetByCaller.*` | `Minion Fighter`, `ThrowRider`, `Timeline`, `Damage` | owning plugin | native |
+| `Combat.Entity.*`, `Combat.PairMove.*`, `Combat.Ability.*`, `Combat.SetByCaller.*` | `Minion Fighter`, `ThrowRider`, `Timeline`, `Damage` | owning plugin (`Fighter`: `GSTNCombat`; `Minion`: `GSTNMinion`; `PairMove`: `GSTNPiggyback`) | native |
+| `Combat.Capability.*`, `Combat.Net.*` | adapter capabilities (`Rollback`, `LagCompensation`, ...); stock adapter payload keys (M9) | `GSTNCombat` (`Capability`, granted by the adapter that has it); `GSTNCombatStockGAS` (`Net`) | native |
+| `Combat.Held.*`, `Combat.Source.*`, `Held.Type.*` | size, kind, carrying state of held objects; thrown/projectile credit; designer object types (M10) | `GSTNHeld` (`Held.Type.*`: ini) | native + ini |
+| `Minion.*`, `Command.Minion.*` | `Minion.State`, `Minion.LOD`, `Minion.Type.<Name>`; minion-only commands, never in a player binding set (M8) | `GSTNMinion` | native + ini |
 | `Weapon.*`, `Kit.*`, `Super.*`, `Loadout.*`, `Skin.*` | identity tags on assets | `GSTNCombat` roots, game content via ini | ini mostly |
 | `Ability.*` | `Ability.Movement.Jump`, `Ability.Combat.*` (identity of abilities) | owner of the ability | native |
 | `Status.*` | `Status.Burning`, `Status.Stunned` (gameplay-effect statuses) | `GSTNCombat` roots; game content | ini |
@@ -385,6 +388,12 @@ Existing names are kept unless listed in 4.3.
 | `Experience.*`, `Feature.*` | `Experience.Mode.CoopWaves`, `Feature.Piggyback` | project / experience plugin; features declare theirs | ini |
 | `Test.*` | harness only | `GSTNTestKit` / project test content | native in a test module, **not** exported from the project's public headers |
 | `Foley.*`, `MotionMatching.*`, `SmartObject.*`, `StateTree.*`, `Abilities.*` | sample content | Epic sample; do not touch | ini (`DefaultGameplayTags.ini`) |
+
+**Open subtrees.** For `Combat.State.*`, `Combat.Event.*`, `Combat.HitType.*`, `Combat.Weapon.Role.*`, `Combat.Immunity.*`,
+`Combat.SetByCaller.*`, `Input.BufferEvent.*` and `Combat.Link.*`, the root owner declares the framework leaves and the plugin that
+introduces a mechanic declares its own leaves (documented in its spec, e.g. `Combat.State.Shielding` in `GSTNDefence`,
+`Combat.HitType.Interaction.Mount` in `GSTNPiggyback`, `Combat.Weapon.Role.Held` in `GSTNHeld`). Rule 1 of 4.1 still holds for
+every other root: one owner, and two plugins never declare the same leaf.
 
 ### 4.3 Migration items for existing tags (nothing renamed without being listed)
 
@@ -515,9 +524,10 @@ without defence, piggyback on link" true (combat-m6 §1b, m7, m8). The surface i
 | **Tick extensions** (`IGSTN_CombatTickExtension`) | Hooks at fixed points of the combat tick order (after inbox drain, after clocks, before candidates, tag projection); `BlocksActions` style queries. | Called in registration order = plugin load order is **not** deterministic across machines: order is by an explicit `Priority` int in the registration, ties broken by type id. Hooks must obey the simulation rules of gas-npp.md. |
 | **Inbox handler registry** (`FGSTN_InboxEntry` with open `FInstancedStruct` payload) | A new message kind (parry punish, link request) and its handler; `PostToInbox`. | Entries are processed in a deterministic order (frame, source id, sequence). Payload size counts toward the snapshot/inbox budget; keep to a few integers. Unhandled kind (plugin missing on one side) = dropped with a log and a validation error in the rules asset. |
 | **Pipeline steps** (`UGSTN_CombatRules::Pipeline` lists steps by class) | A step class (`Parry`, `Shield`, `LinkRequest`). | Order is data in the rules asset, where both plugins' steps meet; a step from a missing plugin is reported by `IsDataValid` and skipped. |
-| **Asset extensions** (`ExtensionData` on hit data, `FGSTN_KitExtension` list on kits, instanced-struct extension array on rules assets) | Feature data (link type on a hit, a kit's shield data, M7 carry rules). | Data only; unknown struct types (plugin disabled) are ignored on load with a warning. Never add a feature-specific UPROPERTY to a framework asset. |
+| **Asset extensions** (`ExtensionData` on hit data, `TArray<FInstancedStruct>` of base struct `FGSTN_KitExtension` on kits, `TArray<FInstancedStruct>` of base struct `FGSTN_RulesExtension` on `UGSTN_CombatRules`) | Feature data (link type on a hit, a kit's shield data, M7 carry rules). | Data only; unknown struct types (plugin disabled) are ignored on load with a warning. Never add a feature-specific UPROPERTY to a framework asset. |
 | **Snapshot contributors** (`IGSTN_HittableProvider::AppendSnapshotEntities`, `FGSTN_SnapshotExtension`) | Extra entities (minions) or per-entity extension data in the hit snapshot. | Contributors append in a deterministic order; extension data is POD sized per entity, counted in the lag-compensation history memory. |
-| **Link rules** (generic hooks in the link host: rule objects, `IGSTN_ExitCollisionQuery`) | Mount/grab/carry rules and exit placement. | Pure functions where possible, tested in `*Core`. |
+| **Link extension points** (in `GSTNLink`, not in `GSTNCombat`, combat-m6 §7.0: `UGSTN_LinkTypeDefinition` registered in the open `UGSTN_LinkRegistry`, `UGSTN_LinkRule`, `UGSTN_LinkActionProvider`, `UGSTN_LinkExitPlacer` + `IGSTN_ExitCollisionQuery`, link channels Body/Hand, `IGSTN_LinkHost`) | A link type (mount, held, later minion), its request rule, its pair/partner actions and exit placement. | Pure functions where possible, tested in `*Core`. Plugins that add link types depend on `GSTNLink`, never the reverse. |
+| **Entity reference** (`FGSTN_EntityRef { Kind, Id, Serial }`, `GSTNCombatCore`) | Names a fighter, minion or object in sync state and links. `Kind` ids are allocated in the same central registry file as fragment type ids; `Fighter` = 0 is built in. | 4 bytes; no pointers, no tags by name. |
 | **Timeline track kinds** | Extra `UGSTN_TimelineTrack` types and their evaluators. | Evaluators live in `*Core` or `*GAS` of the plugin; unknown tracks are validation errors. |
 | **Victim read-model** (`FGSTN_HitVictimView`, M4) | A generic, read-only description of "what can be hit and how" so hit resolution does not care whether the victim is a fighter, a minion or a held object. | Plain struct, no GAS type. |
 

@@ -73,23 +73,19 @@ Documento di riferimento: docs/architecture/modularity-and-tags.md.
     Perché conta: risparmia banda ma richiede che server e client abbiano lo stesso insieme di plugin e tag.
     Ipotesi nella specifica: più tardi, quando l'insieme dei plugin è stabile.
 
-13. I minion (M8) devono essere un plugin separato (GSTNMinion) o un modulo di GSTNCombat?
-    Perché conta: nel secondo caso il combat dipende da StateTree e Navigation.
-    Ipotesi nella specifica: plugin separato, opzionale.
+13. Quali tag possono creare i designer da soli (comandi, bottoni, stati, cue, tipi di minion, tipi di oggetto) senza C++?
+    Perché conta: definisce cosa va in file ini per plugin e cosa resta nativo; vale come eccezione di CLAUDE.md per gli ini dei plugin (comandi di piggyback, tipi di minion, tipi di oggetto tenuto) e sostituisce le domande analoghe per singola milestone.
+    Ipotesi nella specifica: comandi, bottoni, identità di kit/arma/super, status, cue, `Minion.Type.*`, `Held.Type.*` in ini del plugin proprietario; tutto ciò che il codice legge è nativo, dichiarato dal plugin proprietario (anche i tag standard di difesa e link).
 
-14. Quali tag possono creare i designer da soli (comandi, bottoni, stati, cue) senza C++?
-    Perché conta: definisce cosa va in file ini per plugin e cosa resta nativo.
-    Ipotesi nella specifica: comandi, bottoni, identità di kit/arma/super, status e cue in ini; tutto ciò che il codice legge è nativo.
-
-15. Vuoi una mappa di test minima e un test automatico per ogni plugin, e una build CI con ciascun plugin opzionale disattivato?
+14. Vuoi una mappa di test minima e un test automatico per ogni plugin, e una build CI con ciascun plugin opzionale disattivato?
     Perché conta: è l'unico modo di dimostrare che "ogni plugin funziona da solo"; ha un costo di manutenzione.
     Ipotesi nella specifica: sì per i plugin opzionali e per i moduli NP; i moduli Core con soli test Automation.
 
-16. Il punto di estensione del combat (frammenti di stato, hook di tick, registro dell'inbox) va costruito una volta sola prima di M6, anche se ritarda M3/M4?
+15. Il punto di estensione del combat (frammenti di stato, hook di tick, registro dell'inbox) va costruito una volta sola prima di M6, anche se ritarda M3/M4?
     Perché conta: cambia il formato di rete dello stato; farlo dopo costringe a rifare serializzazione e test.
     Ipotesi nella specifica: sì, con test propri, e M3 prepara già i punti (sezione 8.5).
 
-17. La documentazione per plugin (README) va tenuta in inglese come il resto, e con quale livello di dettaglio?
+16. La documentazione per plugin (README) va tenuta in inglese come il resto, e con quale livello di dettaglio?
     Perché conta: ogni plugin deve avere docs leggibili da una persona; lo standard fissa il lavoro per ogni nuovo plugin.
     Ipotesi nella specifica: inglese, README breve + documento di architettura in docs/architecture/.
 
@@ -371,17 +367,17 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 
 ### Plugin, modularità e tag
 
-19. Va bene dividere in due plugin opzionali (`GSTNDefence` e `GSTNLink`) e aggiungere a `GSTNCombat` una superficie di estensione generica (frammenti di stato, handler della inbox)?
-   Perché conta: è un lavoro preliminare sul cuore del sync state di combattimento, ma permette di usare ogni plugin da solo e di far dipendere M7 e i futuri oggetti tenuti solo da Link.
-   Ipotesi nella specifica: sì, con Link separato; Piggyback (M7) e Held come plugin ulteriori che dipendono da Link.
+19. Va bene dividere in due plugin opzionali (`GSTNDefence` e `GSTNLink`), con `GSTNLink` proprietario di tutto il sistema di link e del sottoalbero `Combat.Link.*`? (La superficie di estensione di `GSTNCombat` è la domanda generale 15.)
+   Perché conta: permette di usare ogni plugin da solo e di far dipendere M7 (piggyback) e M10 (oggetti tenuti) solo da Link, senza campi di link in `GSTNCombat`.
+   Ipotesi nella specifica: sì, con Link separato; Piggyback (M7) e Held (M10) come plugin ulteriori che dipendono da Link.
 
-20. Vuoi che i plugin opzionali siano abilitati per progetto (uplugin) o anche per modalità di gioco (regole che omettono i passi)?
-   Perché conta: cambia se la pipeline deve tollerare passi mancanti e se servono due livelli di configurazione.
-   Ipotesi nella specifica: plugin per progetto, e per modalità l'elenco dei passi della pipeline nell'asset regole; un passo di un plugin assente viene saltato con un avviso.
+20. Va bene che M6 includa già i requisiti dei plugin successivi (§7.0: riferimento a entità `FGSTN_EntityRef` da 4 byte al posto dell'id NP, due canali di link corpo/mano, registro aperto dei tipi di link), anche se M6 usa solo il canale corpo e solo partner combattenti? *Proposal*
+   Perché conta: M10 (oggetti e minion come partner, un rider che tiene un oggetto) non è realizzabile senza questi tre punti; aggiungerli dopo cambia il formato di rete dello stato di link.
+   Ipotesi nella specifica: sì, costo circa 7 byte per entità in più nel caso peggiore e nessun costo da inattivo.
 
-21. I tag standard di difesa e link (comandi, stati, tipi di colpo) devono essere nativi, come per i comandi base, lasciando nell'ini solo i comandi creati dai designer?
-   Perché conta: i tag nativi richiedono ricompilare per aggiungerne, quelli ini no ma sono meno controllati.
-   Ipotesi nella specifica: nativi, ciascuno dichiarato dal plugin proprietario; un plugin legge i tag dell'altro solo per nome, mai con extern.
+21. I tag dei tipi di link e dei ruoli (`Combat.Link.Type.*`, `Combat.Link.Role.*`) vanno dichiarati dal plugin che possiede il tipo (Grab in `GSTNLink`, Mount in `GSTNPiggyback`, Held in `GSTNHeld`) o tutti in `GSTNLink`? *Proposal*
+   Perché conta: nel primo caso un dato che cita `Combat.Link.Role.Holder` non si carica senza `GSTNHeld` (lo segnala `IsDataValid`); nel secondo `GSTNLink` conosce i nomi dei plugin successivi.
+   Ipotesi nella specifica: dichiarati dal plugin proprietario del tipo; `GSTNLink` dichiara solo quelli generici.
 
 ---
 
@@ -453,13 +449,9 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
     Ipotesi nella specifica: il link si rompe sul server, il rider viene posizionato accanto al carrier (o all'ancora) e riprende il controllo.
 
 ### Modularità
-19. Va bene che il piggyback sia un plugin separato e opzionale (`GSTNPiggyback`) che richiede piccoli punti di estensione nel plugin di combattimento, anche se questo ritarda un po' M6?
-    Perché conta: costringe a rendere generico il sistema di link (kit, regole, snapshot, richieste) invece di cablare il piggyback.
-    Ipotesi nella specifica: sì, il plugin combat non dipende mai dal piggyback e funziona identico con il plugin disattivato.
-20. I tag dei comandi/bottoni (Interact, Command.Link.*) devono stare in un ini del plugin per permettere ai designer di aggiungerne senza codice, mentre tutti gli altri restano nativi?
-    Perché conta: segue la regola del repo ma sposta un'eccezione dentro il plugin.
-    Ipotesi nella specifica: sì, ini nel plugin (`GSTNPiggybackCommands.ini`), il resto nativo nel header del plugin.
-
+19. Va bene che il piggyback sia un plugin separato e opzionale (`GSTNPiggyback`) che dipende da `GSTNLink` (M6) e usa solo i suoi punti di estensione (tipo di link, regola, azioni, §7.0 di M6), anche se questo ritarda un po' M6?
+    Perché conta: costringe a rendere generico il sistema di link (kit, regole, snapshot, richieste) invece di cablare il piggyback (e `GSTNCombat` non contiene alcun campo di link).
+    Ipotesi nella specifica: sì, né `GSTNCombat` né `GSTNLink` dipendono mai dal piggyback e funziona identico con il plugin disattivato.
 ---
 
 ## M8 Minion: domande al responsabile del progetto
@@ -498,71 +490,63 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
    Perché conta: richiede di alzare l'anello `HitTargets` e influisce sul costo delle query.
    Ipotesi nella specifica: si, anello portato a 16 voci.
 
-8. I minion si fanno male tra loro (attacchi ad area dei nemici, friendly fire tra minion)?
-   Perché conta: attivare minion contro minion rende molto piu costose le query (oggi i minion testano solo i combattenti).
-   Ipotesi nella specifica: no, i minion ignorano gli altri minion.
-
-9. Quanti minion possono attaccare lo stesso giocatore nello stesso momento?
+8. Quanti minion possono attaccare lo stesso giocatore nello stesso momento?
    Perché conta: ogni colpo subito costringe il client del giocatore a un rollback; il limite e anche una scelta di difficolta e leggibilita.
    Ipotesi nella specifica: massimo 4 con sistema di token.
 
 ### Reazione e "feel"
 
-10. Quanta latenza e accettabile tra il colpo del giocatore e la reazione visibile del minion (flash/hitstop subito, reazione vera dopo circa 150-250 ms)?
+9. Quanta latenza e accettabile tra il colpo del giocatore e la reazione visibile del minion (flash/hitstop subito, reazione vera dopo circa 150-250 ms)?
     Perché conta: i minion sono interpolati, quindi la reazione autoritativa arriva in ritardo; il feeling dipende dalla presentazione locale.
     Ipotesi nella specifica: flash e pausa immediati sul client dell'attaccante, reazione dopo periodo di replica piu buffer di interpolazione.
 
-11. Il giocatore deve poter "sentire" un colpo mancato solo perche il minion si e mosso (lag compensation) o preferisci un colpo equo rispetto a cio che vede?
+10. Il giocatore deve poter "sentire" un colpo mancato solo perche il minion si e mosso (lag compensation) o preferisci un colpo equo rispetto a cio che vede?
     Perché conta: la compensazione puo far prendere colpi "dopo essere scappati" ai bersagli ma e essenziale per il PvE reattivo.
     Ipotesi nella specifica: compensazione attiva sui minion con massimo 250 ms, come per i giocatori.
 
 ### Elite, boss e flusso di gioco
 
-12. Quando e come un minion diventa elite/boss (script, vita bassa, evento)? Torna mai a minion?
+11. Quando e come un minion diventa elite/boss (script, vita bassa, evento)? Torna mai a minion?
     Perché conta: la promozione e un'entita di rete completa (costosa); il limite e le regole cambiano il budget.
     Ipotesi nella specifica: promozione solo da script/Blueprint, senza ritorno, massimo 4 combattenti promossi alla volta.
 
-13. Come arrivano i minion: ondate a tempo, spawner fissi, spawn continuo? Quanti respawn per partita?
+12. Come arrivano i minion: ondate a tempo, spawner fissi, spawn continuo? Quanti respawn per partita?
     Perché conta: determina limite di spawn per frame, pool e picchi di banda all'ingresso.
     Ipotesi nella specifica: ondate con spawner e data asset, 4 spawn per frame.
 
-14. Cosa succede alla morte: cadavere, ragdoll, drop, punteggio? I cadaveri contano per il limite?
+13. Cosa succede alla morte: cadavere, ragdoll, drop, punteggio? I cadaveri contano per il limite?
     Perché conta: i cadaveri occupano slot e banda; il ragdoll e solo estetico e non replicato.
     Ipotesi nella specifica: animazione di morte, cadavere breve (secondi), ragdoll solo cosmetico sul client.
 
 ### Giocatori, piattaforme, prestazioni
 
-15. Quanti giocatori per partita co-op (2? 4? di piu) e il server dedicato su quale hardware (vCPU cloud, macchina propria)?
+14. Quanti giocatori per partita co-op (2? 4? di piu) e il server dedicato su quale hardware (vCPU cloud, macchina propria)?
     Perché conta: il costo server cresce con i giocatori (query e rollback) e il budget in ms dipende dalla macchina.
     Ipotesi nella specifica: fino a 4 giocatori, server paragonabile al PC di sviluppo; da confermare con la misura.
 
-16. Piattaforme client e requisiti minimi (PC solo? console? 60 fps?), e quanti minion visibili devono girare a 60 fps?
+15. Piattaforme client e requisiti minimi (PC solo? console? 60 fps?), e quanti minion visibili devono girare a 60 fps?
     Perché conta: il costo delle animazioni dei burattini puo superare quello del server e impone LOD e condivisione animazioni.
     Ipotesi nella specifica: PC, 60 fps, obiettivo 3 ms di game thread per 60 burattini.
 
-17. Priorita tra quantita di nemici, precisione dei colpi (feel) e risparmio di banda se non si possono avere tutti e tre?
+16. Priorita tra quantita di nemici, precisione dei colpi (feel) e risparmio di banda se non si possono avere tutti e tre?
     Perché conta: guida le scelte dei compromessi (frequenza di replica, LOD, token) quando i budget sforano.
     Ipotesi nella specifica: prima precisione dell'hit con i nemici vicini, poi quantita, banda per ultima (cap 8 KB/s a 40 minion).
 
 ### IA, movimento, mondo
 
-18. Quanto deve essere "intelligente" il comportamento (inseguire e attaccare, aggirare, formazioni, coordinamento, evitare burroni)? Chi la scrive: tu in StateTree?
+17. Quanto deve essere "intelligente" il comportamento (inseguire e attaccare, aggirare, formazioni, coordinamento, evitare burroni)? Chi la scrive: tu in StateTree?
     Perché conta: M8 offre solo un aggancio (intent, token, task base); un'IA ricca e lavoro a parte.
     Ipotesi nella specifica: StateTree scritto dal designer; percorsi con navmesh a bassa frequenza, nessun coordinamento oltre ai token.
 
-19. I minion devono usare il movimento a muro del progetto (wall run, wall slide) o solo terreno, scale e pendii? I giocatori li spingono (collisione con la capsula del giocatore)?
+18. I minion devono usare il movimento a muro del progetto (wall run, wall slide) o solo terreno, scale e pendii? I giocatori li spingono (collisione con la capsula del giocatore)?
     Perché conta: wall e spinta richiedono Mover (costoso) invece del movimento leggero.
     Ipotesi nella specifica: solo terreno e scale; separazione tra minion; nessuna spinta dei giocatori sui minion.
 
 ### Modularita e tag
 
-20. Il plugin dei minion deve poter essere disattivato in un progetto che usa solo i combattenti, e deve essere riutilizzabile in altri progetti senza il progetto GASP?
+19. Il plugin dei minion deve poter essere disattivato in un progetto che usa solo i combattenti, e deve essere riutilizzabile in altri progetti senza il progetto GASP?
     Perché conta: stabilisce quanto vincolare le dipendenze (nessuna verso il modulo di progetto) e dove stanno i contenuti di esempio.
     Ipotesi nella specifica: plugin `GSTNMinion` separato che dipende solo da `GSTNCombat`; il resto del progetto non lo conosce.
-
-21. Per i tag progettati dai designer (tipi di minion `Minion.Type.*`, comandi `Command.Minion.*`) va bene usare un file ini come per i comandi di input, estendendo l'eccezione di CLAUDE.md?
-    Perché conta: la regola attuale dice tag nativi; i designer non possono aggiungere tipi senza ricompilare se restano nativi.
-    Ipotesi nella specifica: ini per questi due soli gruppi, tutti gli altri nativi.
 
 ---
 
@@ -584,53 +568,49 @@ Riferimento: `docs/architecture/combat-m9-stock-gas.md`. Servono soprattutto a d
    Perché conta: il passaggio a GAS standard non migliora quel problema, lo peggiora.
    Ipotesi nella specifica: M9 non è una cura per il feel delle botte subite.
 
-4. Il confine "Core e GAS non dipendono da NP" va fatto rispettare in modo bloccante (CI, hook di commit, errore di build) già adesso?
-   Perché conta: costa poco ora e molto dopo; blocca però commit e build se qualcuno lo viola.
-   Ipotesi nella specifica: sì, quattro livelli automatici, bloccanti per le milestone.
-
-5. Va bene dividere i plugin (GSTNCombatNP, GSTNInputNP in plugin propri) anche se M9 non verrà mai fatto?
-   Perché conta: è un refactoring dei file `.uplugin` e dei redirect, ma rende ogni plugin utilizzabile da solo.
+4. Va bene dividere i plugin (`GSTNCombatNP`, `GSTNInputNP` in plugin propri, e gli adattatori standard in `GSTNCombatStockGAS` e `GSTNInputStockGAS`) anche se M9 non verrà mai fatto? *Proposal* (modularity-and-tags.md §3.6 la recepisce)
+   Perché conta: è un refactoring dei file `.uplugin` e dei redirect, ma rende ogni plugin utilizzabile da solo. Il confine "Core e GAS non dipendono da NP" è fatto rispettare in modo bloccante (domanda generale 6).
    Ipotesi nella specifica: sì, è il primo passo (M9.0) ed è utile in ogni caso.
 
 ### Funzioni che possono peggiorare
 
-6. Parry e tech con finestre di pochi frame (sotto i 5) sono essenziali anche con latenze di 100 ms o più?
+5. Parry e tech con finestre di pochi frame (sotto i 5) sono essenziali anche con latenze di 100 ms o più?
    Perché conta: senza rollback queste finestre sono giudicate all'arrivo del pacchetto e possono diventare ingiuste.
    Ipotesi nella specifica: accettabile solo in PvE co-op; finestre più larghe per l'adattatore standard.
 
-7. Accetti che la reazione di chi subisce un colpo arrivi in ritardo di circa RTT/2 con uno scatto di posizione (nessuna previsione della vittima)?
+6. Accetti che la reazione di chi subisce un colpo arrivi in ritardo di circa RTT/2 con uno scatto di posizione (nessuna previsione della vittima)?
    Perché conta: è la differenza più visibile tra i due adattatori.
    Ipotesi nella specifica: sì, mascherata da presentazione (lampo, camera shake) e da una breve fusione della mesh.
 
-8. Con GAS standard i giocatori che si afferrano o si montano (M6/M7) perdono il controllo preciso della propria posizione: va bene?
+7. Con GAS standard i giocatori che si afferrano o si montano (M6/M7) perdono il controllo preciso della propria posizione: va bene?
    Perché conta: cambia il feel di presa e cavalcata rispetto al fork.
    Ipotesi nella specifica: sì, posizione guidata dal server, prevista solo la richiesta di montaggio tramite chiave di previsione.
 
-9. È accettabile che un colpo previsto dall'attaccante venga annullato in rari casi (hitstop e cancel su colpo "disfatti" dopo la risposta del server)?
+8. È accettabile che un colpo previsto dall'attaccante venga annullato in rari casi (hitstop e cancel su colpo "disfatti" dopo la risposta del server)?
    Perché conta: sul fork l'attaccante è esatto; qui ogni mancata conferma si vede.
    Ipotesi nella specifica: sì, con identificativi di colpo e hitstop previsto breve.
 
-10. Per i cancel (annullare una mossa in un'altra) il server deve fidarsi del frame dichiarato dal client entro ±2 frame, o essere più severo contro i cheat?
+9. Per i cancel (annullare una mossa in un'altra) il server deve fidarsi del frame dichiarato dal client entro ±2 frame, o essere più severo contro i cheat?
     Perché conta: fiducia contro robustezza ai jitter; il gioco è PvE co-op, ma potrebbe cambiare.
     Ipotesi nella specifica: fiducia con tolleranza ±2 e rivalidazione del pattern di input spenta in co-op.
 
-11. Il gioco ha server dedicati e quanti giocatori per partita (massimo)?
-    Perché conta: dimensiona banda dell'input (circa 0,6 kB/s per giocatore attivo) e la cronologia di lag compensation.
-    Ipotesi nella specifica: server dedicato, fino a 4 giocatori e 40+ nemici.
-
 ### Contenuti e strumenti
 
-12. Wall modes e salto di piattaforma restano solo NP: va bene che l'adattatore standard non li fornisca (movimento tramite CMC)?
+10. Wall modes e salto di piattaforma restano solo NP: va bene che l'adattatore standard non li fornisca (movimento tramite CMC)?
     Perché conta: il tuo movimento caratteristico non esisterebbe nel progetto standard.
     Ipotesi nella specifica: sì, fuori dall'ambito; chi usa l'adattatore fornisce un ponte di movimento.
 
-13. Serve poter passare gli stessi Blueprint di abilità da un adattatore all'altro (strumento di reparenting), o basta riscriverli?
+11. Serve poter passare gli stessi Blueprint di abilità da un adattatore all'altro (strumento di reparenting), o basta riscriverli?
     Perché conta: stesso nome di classe in due moduli rompe i Blueprint; i redirect e lo strumento costano tempo.
     Ipotesi nella specifica: sì, redirect più script Python; i data asset non servono modifiche.
 
-14. Quanto sei disposto a mantenere un secondo progetto "canarino" (solo plugin neutri, senza fork) in CI?
+12. Quanto sei disposto a mantenere un secondo progetto "canarino" (solo plugin neutri, senza fork) in CI?
     Perché conta: è l'unico test vero che non ci siano dipendenze nascoste; costa manutenzione.
     Ipotesi nella specifica: sì, build settimanale e prima di ogni release.
+
+13. I plugin opzionali di funzionalità (`GSTNDefence`, `GSTNLink`, `GSTNHeld`) devono avere ciascuno un modulo per l'adattatore standard, oppure restano solo NP finché M9 non si fa? *Proposal*
+    Perché conta: ogni plugin con un modulo `*NP` dipende dal plugin adattatore NP; senza moduli per l'adattatore standard, usare GAS standard significa rinunciare a difesa, link e oggetti tenuti.
+    Ipotesi nella specifica: restano solo NP (`*NP` dentro il plugin, M6 §1b e M10 §4); gli adattatori standard dei plugin di funzionalità si decidono se M9 parte.
 
 ---
 
@@ -718,10 +698,6 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
     Perché conta: dimensiona pool, banda e budget del server.
     Ipotesi nella specifica: 32 proiettili attivi, oggetti a riposo dormienti; respawn per definizione.
 
-19. Va bene che i tag dei tipi di oggetto (`Held.Type.*`) siano definiti in un file ini dentro il plugin, come i comandi, invece che nativi?
-    Perché conta: eccezione alla regola di CLAUDE.md "tag nativi" per rendere i designer autonomi.
-    Ipotesi nella specifica: sì, ini per tipi e comandi, nativi per tutto il resto.
-
-20. Va bene che gli oggetti tenuti siano un plugin separato (`GSTNHeld`) che si può rimuovere senza toccare il resto?
-    Perché conta: impone hook neutri in GSTNCombat (registro dei tipi di link, interfacce) ma garantisce modularità.
-    Ipotesi nella specifica: sì; i tag del vocabolario dei link restano in GSTNCombat così i dati si caricano anche senza il plugin.
+19. Va bene che gli oggetti tenuti siano un plugin separato (`GSTNHeld`, che dipende da `GSTNCombat` e `GSTNLink`) che si può rimuovere senza toccare il resto?
+    Perché conta: M10 usa il registro aperto dei tipi di link, `FGSTN_EntityRef` e il canale mano di M6 (§7.0), non hook propri in `GSTNCombat`; la modularità resta garantita.
+    Ipotesi nella specifica: sì; i tag `Combat.Link.Type.Held` e dei ruoli Holder/HeldObject li dichiara `GSTNHeld` (domanda M6.21), così `GSTNCombat` e `GSTNLink` non lo conoscono.

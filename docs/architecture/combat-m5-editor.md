@@ -159,7 +159,7 @@ tags with `UE_DECLARE_GAMEPLAY_TAG_EXTERN` in the owning plugin; ini only for de
 
 | Tag | Declared by | Meaning, who adds/removes |
 |---|---|---|
-| `Combat.Hurtbox.Head`, `.Torso`, `.Arm`, `.Leg`, `.Hand`, `.Foot` | `GSTNCombatCore` (`GSTN_CombatHitTags.h`; M4 may already declare `Head`, reuse) | Hurtbox classification (M4 `FGSTN_Hurtbox::Tags`). The Physics Asset generator suggests them from bone names (mapping in editor settings); designers add more in their own ini. Side (left/right) is not a tag: it is the bone name, used by mirroring. Never granted to an actor. |
+| `Combat.Hurtbox.Head`, `.Torso`, `.Arm`, `.Leg`, `.Hand`, `.Foot` | `GSTNCombatGAS` (`GSTN_CombatTags.h`, the combat tag header of M3 §3; M4 may already declare `Head`, reuse) | Hurtbox classification (M4 `FGSTN_Hurtbox::Tags`). The Physics Asset generator suggests them from bone names (mapping in editor settings); designers add more in their own ini. Side (left/right) is not a tag: it is the bone name, used by mirroring. Never granted to an actor. |
 | `Test.Combat.Editor.*` (test events/tags for editor test content) | `Config/Tags/GSTNCombatEditorTest.ini` of the project's test content | Test assets only; not part of the plugins. |
 
 Tags the tooling **reads** (owned by others, validated here): `Command.*` and `Input.Lock.Command.*` (M1/M3: cancel window
