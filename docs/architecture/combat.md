@@ -231,8 +231,8 @@ Test scripting (`SetScriptedButtons`, `TapScriptedButtons`) exists on the compon
 - Plus a **zone** from the magnitude, the same in every space: `Neutral` (dead zone) → `Aim` (light tilt: aims a
   "standing" attack without making it directional) → `Tilt` (directional). A **flick** flag marks entering `Tilt` from
   `Neutral`/`Aim` within `FlickFrames` (smash inputs). The world yaw (256 steps) is kept for aiming.
-- Facing comes from Mover's simulated state at end of F-1. The project's `UGSTN_MoverSimStateTracker` is project code:
-  in M2 it moves into the input plugin (`GSTNInputNP/Mover/`; the project then uses the plugin's).
+- Facing comes from Mover's simulated state at end of F-1. `UGSTN_MoverSimStateTracker` lives in the
+  input plugin (`GSTNInputNP/Mover/`; the project uses the plugin's).
 - Each timeline ability has an `AimPolicy` (`KeepFacing | SnapToStick | SnapIfAimOrTilt | Camera`, max turn angle,
   last frame turning is allowed): a directional attack goes **towards the stick's world direction**; `Camera` turns to
   the camera's aim (11.6); rotation goes through Mover, not the actor.

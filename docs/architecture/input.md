@@ -10,7 +10,7 @@ plugin owns, what it leaves to its host, and how the code moves out of `GSTNComb
 itself (classifier, history, grammar, buffer, priority, bindings) is specified in combat.md §6–§9 and in the M1/M2
 specifications; their rules do not change, only where the code lives and some names.
 
-Status (2026-10-22): step S1 is **done**: `GSTNInputCore` exists with the generic M1 code (section 8 lists what differs from the plan). Step S1b (priority criteria, section 4.1) is **done**. `GSTNInputNP` and the rest of M2 (S2) are still design; the NP code is in `GSTNCombatNP`.
+Status (2026-10-22): step S1 is **done**: `GSTNInputCore` exists with the generic M1 code (section 8 lists what differs from the plan). Step S1b (priority criteria, section 4.1) is **done**. Step S2a is **done**: the module `GSTNInputNP` exists with `FGSTN_InputCmd`, `FGSTN_InputSimState` and the Mover tracker. The rest of M2 (S2b-S2e: simulator, host interface, binding set, sources, context providers, lock, component) is still design; the NP side of the combat input (`UGSTN_CombatSimComponent`) is still in `GSTNCombatNP`, embedding the moved types.
 
 ## 1. Goals
 
@@ -157,7 +157,7 @@ Generic code that names combat content today, to be cleaned in the move:
   `AppendContextTags(FGameplayTagContainer&)`, `AppendFrameEvents(...)`, all from end-of-F-1 state.
   **`UGSTN_MoverInputContextProvider`** (default): facing and Mover tags from the tracker, `Input.Context.Grounded`
   / `.Airborne` / `.OnWall` from configurable mode-name lists, `Input.BufferEvent.Landed`.
-- **`UGSTN_MoverSimStateTracker`** moves here (`GSTNInputNP/Mover/`, same class name and API).
+- **`UGSTN_MoverSimStateTracker`** lives here (`GSTNInputNP/Mover/`, same class name and API; moved in S2a).
 - **`IGSTN_InputSource`** (was `IGSTN_CombatInputSource`), **`UGSTN_PlayerInputSource`**, **`UGSTN_AIInputSource`**:
   as M2 §4, reading buttons and the stick action from the `UGSTN_InputConfig`.
 
@@ -217,6 +217,8 @@ validation and standard-set test passes unchanged; new tests: the list reordered
 winner of a chord-versus-higher-tier case, a test-only criterion struct changes a result, an empty list falls back to slot
 order.
 
+**Step S2a — the module `GSTNInputNP`** (done, no behaviour change): `FGSTN_CombatInputCmd` became `FGSTN_InputCmd` and the history, classifier, watched-tag mask, request and `LastActivatedFrame` of `FGSTN_CombatSyncState` became `FGSTN_InputSimState` (`Public/Simulation/GSTN_InputSimTypes.h`); the combat sync state embeds it as `Input` and keeps the hitstop window. The wire format and the reconcile checks are unchanged. The request fields keep their M0 names (`RequestedAction`; `RequestedBinding` and `RequestButton` come with S2b/S2c). The tracker moved with `git mv` and exports `GSTNINPUTNP_API`. `GSTNCombatNP` and the project module depend on `GSTNInputNP`.
+
 **Step S2 — `GSTNInputNP`**: the rest of M2 lands in `GSTNInputNP` instead of `GSTNCombatNP` (updated M2 spec):
 `FGSTN_InputCmd` (move the working-copy fields of `FGSTN_CombatInputCmd`), `FGSTN_InputSimState` (move `History`,
 `Classifier`, `WatchedTagMask`, `LastActivatedFrame` and the request out of `FGSTN_CombatSyncState`), simulator, host
@@ -224,7 +226,7 @@ interface, sources, context provider, binding set, tracker move, standalone comp
 embeds them. The combat component's `MoveAction`/`ButtonActions` move to the input config: **tell the user before
 re-setting them on `BP_GASNPP_TestCharacter`**.
 
-Redirects in `Config/DefaultEngine.ini`:
+Redirects in `Config/DefaultEngine.ini` (added in S2a):
 
 - Tracker: both old names → `/Script/GSTNInputNP.GSTN_MoverSimStateTracker` (update the existing entry, add one from
   `/Script/GSTNCombatNP.GSTN_MoverSimStateTracker`).

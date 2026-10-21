@@ -23,7 +23,7 @@ class UMoverComponent;
  * Created on demand (FindOrAdd) on the Mover component's owner. Not replicated.
  */
 UCLASS(ClassGroup = (AbilitySystem))
-class GSTNCOMBATNP_API UGSTN_MoverSimStateTracker : public UActorComponent
+class GSTNINPUTNP_API UGSTN_MoverSimStateTracker : public UActorComponent
 {
 	GENERATED_BODY()
 

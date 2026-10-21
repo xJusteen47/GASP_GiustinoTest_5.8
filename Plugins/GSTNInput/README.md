@@ -5,7 +5,7 @@ motion, chord, charge, hold, release, mash, spin), time and hold buffering, rese
 command to GameplayAbility bindings with context requirements. Meant to be simulated and rolled back by Network
 Prediction (the GAS-NPP fork in `Plugins/GASNPP`), but the logic itself does not need it.
 
-Status: **experimental (0.1)**. Only `GSTNInputCore` exists. The design, including what is planned, lives in
+Status: **experimental (0.1)**. `GSTNInputCore` and the first part of `GSTNInputNP` exist. The design, including what is planned, lives in
 [docs/architecture/input.md](../../docs/architecture/input.md); the combat plugin ([GSTNCombat](../GSTNCombat/README.md))
 is built on top of this one. This README is the map; the documents hold the decisions and the reasons.
 
@@ -14,7 +14,7 @@ is built on top of this one. This README is the map; the documents hold the deci
 | Module | State | What it is |
 |---|---|---|
 | `GSTNInputCore` | exists | Pure, deterministic logic with no GAS, no Network Prediction and no Mover: input samples, the stick direction classifier, the input history, the pattern grammar (`FGSTN_InputPattern`, conditions), the matcher, buffer reset rules, slots, the slot resolver, slot validation, command bindings, the button map, the input config and the project settings. Automation tests `GSTNInput.Core.*`. |
-| `GSTNInputNP` | planned | The adapter to the Network Prediction fork: input command and sim state, simulator, input sources, the Mover sim-state tracker, the standalone input component. Today this code is in `GSTNCombatNP` and moves here in step S2. |
+| `GSTNInputNP` | exists (partial) | The adapter to the Network Prediction fork. Today: `FGSTN_InputCmd` (the NP input type) and `FGSTN_InputSimState` (the input part of a host's sync state) in `Simulation/GSTN_InputSimTypes.h`, and `UGSTN_MoverSimStateTracker` in `Mover/`. Planned (step S2b onwards): simulator, host interface, binding set, input sources, context providers, the standalone input component. |
 
 The plugin has no game vocabulary: no "attack", "crouch" or combat tags. Buttons, commands and their priority tiers are
 data the game provides; the combat plugin provides a fighting-game set.
@@ -100,6 +100,32 @@ Bindings say which command a context runs (`GSTN_CommandBindings.h`, `FGSTN_TagR
 owner's tags). A command without a binding is never a candidate. `UGSTN_CommandBindingUtils` resolves bindings and
 detects conflicts between them.
 
+### Embedding the input simulation in a model
+
+`GSTNInputNP` does not own a Network Prediction model; a host model embeds its pieces (the combat plugin's
+`UGSTN_CombatSimComponent` is the first host). Use `FGSTN_InputCmd` as the model's input type and put an
+`FGSTN_InputSimState` member in its sync state, forwarding the three calls:
+
+```cpp
+struct FGame_SyncState
+{
+	FGSTN_InputSimState Input;
+
+	void NetSerialize(const FNetSerializeParams& P) { Input.NetSerialize(P.Ar); }
+	bool ShouldReconcile(const FGame_SyncState& Auth) const { Input.ShouldReconcile(Auth.Input); return false; }
+	void ToString(FAnsiStringBuilderBase& Out) const { Input.ToString(Out); Out.Append("\n"); }
+};
+```
+
+Add your own fields after the embedded member and serialize them there. Everything that touches this state must be
+deterministic and rollback-safe (gas-npp.md). Module dependencies: `GSTNInputNP` in the host's `Build.cs`.
+
+### The Mover sim-state tracker
+
+`UGSTN_MoverSimStateTracker::FindOrAdd(MoverComponent)` gives simulation code the Mover state of the frame being
+(re)simulated; never read the Mover component's own queries from the fixed tick (gas-npp.md). Include
+`"Mover/GSTN_MoverSimStateTracker.h"` and depend on `GSTNInputNP`.
+
 ### A new buffer reset rule
 
 Rules flush buffered presses when something happens (`GSTN_BufferResetRules.h`). Derive from `FGSTN_BufferResetRule`,
@@ -109,7 +135,7 @@ order.
 
 ## Conventions
 
-- Types are prefixed `GSTN_` (`UGSTN_`, `FGSTN_`, `EGSTN_`); export macro `GSTNINPUTCORE_API`; log category
+- Types are prefixed `GSTN_` (`UGSTN_`, `FGSTN_`, `EGSTN_`); export macros `GSTNINPUTCORE_API` and `GSTNINPUTNP_API`; log category
   `LogGSTNInput`.
 - Public headers in `Public/<Area>/`, implementations in `Private/<Area>/`.
 - Comments explain *why* and the simulation constraints. Headers document the intent of a class: read the header before

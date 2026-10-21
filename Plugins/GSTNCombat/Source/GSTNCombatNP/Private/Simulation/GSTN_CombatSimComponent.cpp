@@ -139,7 +139,7 @@ void UGSTN_CombatSimComponent::InitializeSimulationState(FGSTN_CombatSyncState* 
 	}
 }
 
-void UGSTN_CombatSimComponent::ProduceInput(const int32 DeltaTimeMS, FGSTN_CombatInputCmd* Cmd)
+void UGSTN_CombatSimComponent::ProduceInput(const int32 DeltaTimeMS, FGSTN_InputCmd* Cmd)
 {
 	Cmd->HeldButtons = bUseScriptedButtons ? ScriptedButtons : SampleHeldButtons();
 	Cmd->PressedButtons = PendingTaps;
@@ -176,7 +176,7 @@ uint32 UGSTN_CombatSimComponent::SampleHeldButtons() const
 	return Held;
 }
 
-void UGSTN_CombatSimComponent::SampleStick(FGSTN_CombatInputCmd& Cmd) const
+void UGSTN_CombatSimComponent::SampleStick(FGSTN_InputCmd& Cmd) const
 {
 	const UEnhancedPlayerInput* PlayerInput = GetPlayerInput();
 	if (!PlayerInput)
@@ -222,12 +222,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	OutSync = InSync;
 
 	const int32 Frame = TimeStep.Frame;
-	const FGSTN_CombatInputCmd& Cmd = *Input.Cmd;
+	const FGSTN_InputCmd& Cmd = *Input.Cmd;
 	const UGSTN_InputSettings& Settings = UGSTN_InputSettings::Get();
 
 	// This frame's sample: the buttons (a tap shorter than a frame is released on the frame it is pressed) and the stick
 	// classified in every direction space with the facing the Mover had at the end of the previous frame.
-	const uint32 PrevHeld = InSync.History.GetHeldButtons();
+	const uint32 PrevHeld = InSync.Input.History.GetHeldButtons();
 	FGSTN_InputSample Sample;
 	Sample.Frame = Frame;
 	Sample.Held = Cmd.HeldButtons;
@@ -235,8 +235,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Sample.Released = (PrevHeld | Sample.Pressed) & ~Cmd.HeldButtons;
 	Sample.Stick = FGSTN_DirectionClassifier::Classify(
 		FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY)),
-		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), GetSimulatedFacingYaw(), InSync.Classifier, Frame, Settings, OutSync.Classifier);
-	OutSync.History.Append(Sample);
+		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), GetSimulatedFacingYaw(), InSync.Input.Classifier, Frame, Settings, OutSync.Input.Classifier);
+	OutSync.Input.History.Append(Sample);
 
 	const uint32 Pressed = Sample.Pressed;
 
@@ -251,8 +251,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		if ((Pressed & (1u << Index)) && ButtonAbilities[Index])
 		{
-			OutSync.RequestedAction = static_cast<uint8>(Index + 1);
-			OutSync.RequestFrame = Frame;
+			OutSync.Input.RequestedAction = static_cast<uint8>(Index + 1);
+			OutSync.Input.RequestFrame = Frame;
 			break;
 		}
 	}
@@ -271,8 +271,8 @@ FString UGSTN_CombatSimComponent::GetDebugString(int32 MaxEvents) const
 	{
 		return TEXT("(no combat state)");
 	}
-	return FString::Printf(TEXT("%s\nheld 0x%x  frame %d  request %d@%d"), *FGSTN_InputScript::Describe(Sync->History, MaxEvents),
-		Sync->History.GetHeldButtons(), Sync->History.GetLatestFrame(), Sync->RequestedAction, Sync->RequestFrame);
+	return FString::Printf(TEXT("%s\nheld 0x%x  frame %d  request %d@%d"), *FGSTN_InputScript::Describe(Sync->Input.History, MaxEvents),
+		Sync->Input.History.GetHeldButtons(), Sync->Input.History.GetLatestFrame(), Sync->Input.RequestedAction, Sync->Input.RequestFrame);
 }
 
 void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -306,9 +306,9 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 
 	const int32 Frame = TimeStep.ServerFrame;
 
-	if (Sync->RequestFrame == Frame && ButtonAbilities.IsValidIndex(Sync->RequestedAction - 1))
+	if (Sync->Input.RequestFrame == Frame && ButtonAbilities.IsValidIndex(Sync->Input.RequestedAction - 1))
 	{
-		if (const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(ButtonAbilities[Sync->RequestedAction - 1]))
+		if (const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(ButtonAbilities[Sync->Input.RequestedAction - 1]))
 		{
 			AbilitySystem->TryActivateAbility(Spec->Handle);
 		}

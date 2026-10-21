@@ -15,7 +15,7 @@ decisions and the reasons.
 | Module | State | What it is |
 |---|---|---|
 | `GSTNCombatCore` | exists | Combat content built on `GSTNInputCore`, pure and deterministic (no GAS, no Network Prediction): the standard button tags (`Input.Button.Attack`...), the standard command tags and the default command set (`UGSTN_StandardSlots`). Covered by Automation tests (`GSTNCombat.Core.*`). |
-| `GSTNCombatNP` | exists | The adapter to the Network Prediction fork: the combat NP model (`UGSTN_CombatSimComponent`, sync/aux state, input command) and the Mover sim-state tracker. Everything that touches the ability system goes through here. |
+| `GSTNCombatNP` | exists | The adapter to the Network Prediction fork: the combat NP model (`UGSTN_CombatSimComponent`, sync/aux state), which embeds the input command and input sim state of `GSTNInputNP`. Everything that touches the ability system goes through here. |
 | `GSTNCombatGAS` | planned | Native tags, attribute set, damage effect and execution, weapons and loadouts. |
 | `GSTNCombatEditor` | planned | Timeline editor, slot conflict validator UI, debug drawing. |
 
@@ -24,8 +24,8 @@ the [GSTNInput](../GSTNInput/README.md) plugin, which this one depends on (`GSTN
 that decides what stays here: anything about *fighting* (standard buttons, command tags, default slots, hits) is combat,
 anything about *input in general* is input. The combat priority tiers and exclusive buttons are values in the project's
 `Config/DefaultGame.ini` (section `[/Script/GSTNInputCore.GSTN_InputSettings]`), not defaults of the input plugin.
-Until step S2 of input.md, the Network Prediction side of the input (input command, sync state, sources, Mover tracker)
-still lives in `GSTNCombatNP`.
+The input command, the input sim state and the Mover tracker live in `GSTNInputNP` (step S2a of input.md); the rest of the
+Network Prediction side of the input (simulator, sources, binding set) is still to come (S2b onwards).
 
 ## How a frame flows
 

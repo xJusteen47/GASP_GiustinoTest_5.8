@@ -15,6 +15,7 @@ public class GSTNCombatNP : ModuleRules
 			"Engine",
 			"GameplayTags",
 			"GSTNInputCore",
+			"GSTNInputNP",
 			"GSTNCombatCore",
 			"GameplayAbilities",
 			"AbilitySystemSimulation",

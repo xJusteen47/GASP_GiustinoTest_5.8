@@ -48,7 +48,7 @@ public:
 
 	// Network Prediction driver and simulation
 	void InitializeSimulationState(FGSTN_CombatSyncState* Sync, FGSTN_CombatAuxState* Aux);
-	void ProduceInput(const int32 DeltaTimeMS, FGSTN_CombatInputCmd* Cmd);
+	void ProduceInput(const int32 DeltaTimeMS, FGSTN_InputCmd* Cmd);
 	void SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_CombatStateTypes>& Input, const TNetSimOutput<FGSTN_CombatStateTypes>& Output);
 	void FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux);
 
@@ -102,7 +102,7 @@ private:
 	/** Enhanced Input state of the local player, null when this machine does not control the pawn */
 	const UEnhancedPlayerInput* GetPlayerInput() const;
 	uint32 SampleHeldButtons() const;
-	void SampleStick(FGSTN_CombatInputCmd& Cmd) const;
+	void SampleStick(FGSTN_InputCmd& Cmd) const;
 
 	/** Yaw the character faces at the end of the previous frame, from the Mover tracker */
 	float GetSimulatedFacingYaw() const;
