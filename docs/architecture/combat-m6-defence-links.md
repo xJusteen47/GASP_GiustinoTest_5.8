@@ -1,0 +1,609 @@
+# Combat M6 — Defence and links (implementation specification)
+
+Part of the combat design ([combat.md](combat.md)): read §5.2–5.6, §9, §12, §12b, §17 there, the outline in
+[combat-m5-m9.md](combat-m5-m9.md), and the M1–M4 specifications; M6 extends the M4 pipeline, inbox, hitstun and DI
+([combat-m4-hits.md](combat-m4-hits.md)). Section numbers below are local to this file. Items marked *Proposal*
+resolve an *Open* question of the outline and are for the user to confirm; the matching questions are in
+[open-questions-m4-m10.md](open-questions-m4-m10.md) (section M6).
+
+> **Conventions:** "move" means a **timeline ability** (`UGSTN_GA_BaseCombat`, combat.md §11). Frames are NPP fixed-tick
+> frames (62.5 Hz). "End of F-1" is the state the combat tick reads (combat.md §5.2). All new timers are **frame stamps**
+> in the combat sync state (combat.md §5.5), never GE durations.
+
+## 1. Scope
+
+**Goal:** the defensive half of the platform-fighter ruleset in 3D, plus the generic link system that grabs use now and
+piggyback (M7) and held objects (later) reuse. In: shield (directional, `ShieldHealth`, shieldstun, break), parry, tech
+(ground, wall, roll) with anti-mash lockout, knockdown, SDI/DI rules asset, the link system (spike, state, request/
+accept, parked movement mode, watchdog, exit placement, break rules, debug draw), grabs (grab, pummel, throws,
+mash break, immunity), and the harness/tests for all of it.
+
+Out: mount/dismount, carry load, pair moves, riding animation (M7); minions as defenders or grabbers (M8); editor UI
+for the new tracks (M5 gets them later through the generic track widgets); get-up attacks beyond one neutral get-up
+(*Proposal* in §13); reflecting projectiles (field reserved, §3).
+
+## 1b. Plugin and module boundaries
+
+**Rule (project owner):** each plugin must be usable on its own. M6 therefore adds **two optional plugins** beside
+`GSTNCombat`, both depending on it and never the reverse, and gives `GSTNCombat` a small generic extension surface
+instead of M6-specific fields. (Section 5.1's fields live in these plugins as extension fragments; the table there says
+*what*, this section says *where*.)
+
+| Plugin / module | Contents | May depend on | Must NOT depend on it |
+|---|---|---|---|
+| `GSTNCombat` / `GSTNCombatCore`, `GSTNCombatGAS`, `GSTNCombatNP` (existing) | **Extension surface added by M6** (generic, no defence or link knowledge): `FGSTN_SyncFragment` (instanced-struct fragments in the combat sync state, each with `NetSerialize`/`ShouldReconcile`/`Interpolate`/`ToString`, registered by type id, absent = zero bytes); `IGSTN_CombatTickExtension` (hooks at fixed points of the §5.2 order: after inbox drain, after clocks, before candidates, tag projection); `FGSTN_InboxEntry` as an open `FInstancedStruct` payload with a handler registry (the `Hit` kind stays here); `PostToInbox`; pipeline steps already data (`UGSTN_CombatRules::Pipeline`); `UGSTN_TimelineTrack` kinds registered by extensions; snapshot extension data (`FGSTN_SnapshotExtension`); `UGSTN_HitData::ExtensionData` (`FInstancedStruct`, carries `LinkType`, `LinkFilter`, `bParryable`...) | as today | `GSTNDefence`, `GSTNLink` |
+| `GSTNDefence` / `GSTNDefenceCore` (pure) | `FGSTN_ShieldRules/ParryRules/TechRules/DIRules/SDIRules`, `UGSTN_DefenceRules`, `UGSTN_DefenceMath`, `UGSTN_SDIMath`, `FGSTN_HoldWindowTrack` data, `FGSTN_Curve1D` | Core, GameplayTags, **GSTNInputCore**, **GSTNCombatCore** | GAS, NP, `GSTNLink` |
+| `GSTNDefence` / `GSTNDefenceGAS` | `UGSTN_DefenceAttributeSet`, `UGSTN_GA_Shield`, `UGSTN_GA_Tech`, GEs, defence native tags | GSTNDefenceCore, GSTNCombatGAS, GameplayAbilities | NP, `GSTNLink` |
+| `GSTNDefence` / `GSTNDefenceNP` | defence sync fragment, pipeline steps `Parry`/`Shield`, tech state machine, `FGSTN_TumbleContactModifier`, SDI/DI wiring, `Punish` inbox kind, snapshot extension | GSTNDefenceGAS, GSTNCombatNP | `GSTNLink` (it only *reacts* to `Combat.State.*` and the generic `Linked` tag, §1c) |
+| `GSTNLink` / `GSTNLinkCore` (pure) | `UGSTN_LinkTypeDefinition`, `FGSTN_LinkBreakRules`, `FGSTN_MashRule`, `FGSTN_GrabRules`, `UGSTN_LinkExitPlacer` + `IGSTN_ExitCollisionQuery`, `FGSTN_LinkOutcomeTrack` data, mash/break evaluators, `FGSTN_LinkState` as a value type | Core, GameplayTags, GSTNInputCore, GSTNCombatCore | GAS, NP, `GSTNDefence` |
+| `GSTNLink` / `GSTNLinkGAS` | link native tags, `UGSTN_LinkRegistry`, link requirement checks on tags | GSTNLinkCore, GSTNCombatGAS | NP, `GSTNDefence` |
+| `GSTNLink` / `GSTNLinkNP` | link sync fragment, `LinkRequest`/`GrabImmunity`/`LinkBreakOnHit` steps, `UGSTN_LinkedMovementMode` + modifier + transition, `UGSTN_LinkWatchdog`, `UGSTN_LinkPresentationComponent`, link inbox kinds, debug draw | GSTNLinkGAS, GSTNCombatNP, Mover | `GSTNDefence` |
+| (M7) `GSTNPiggyback`; (later) `GSTNHeld` | mount link type, pair moves; held objects | `GSTNLink` (+ `GSTNCombat`) | each other |
+
+- **Cross-plugin coupling goes through tags and data, not types.** Grab hits ignore shields because the `Shield` step
+  (in `GSTNDefence`) skips hit types whose asset says `bBlockable = false`; `GSTNLink` sets that on its hit types.
+  Defence reads "can this victim act" from the generic `Combat.State.*` tags and from `GSTNCombat`'s can-act rule (which
+  the link fragment feeds through `IGSTN_CombatTickExtension::BlocksActions`). Neither knows the other's classes.
+  A grab-while-shielding rule is data in `UGSTN_CombatRules` (step order), where both plugins' steps meet.
+- **Enable/disable independently**: each plugin is a separate `.uplugin` with `"EnabledByDefault": false`, listed as a
+  dependency of the *game's* plugin list only when wanted; `GSTNCombat` loads and runs with neither (the hit pipeline of
+  M4 is unchanged). With only `GSTNDefence`, grabs do not exist; with only `GSTNLink`, no shield or tech exists and
+  `Tumble` simply ends in M4's `Actionable`. `UGSTN_CombatRules::Pipeline` lists steps by class: a step class from a
+  missing plugin is reported by the rules asset's `IsDataValid` (and skipped with a log) rather than crashing.
+  Sync fragments of a disabled plugin are not registered, so the combat state shrinks to M4's size.
+- **Kit/content independence**: defence and link assets are standalone data assets referenced from kits through the
+  generic `FGSTN_KitExtension` list (`FInstancedStruct`; M3 kit gains it as part of the extension surface), so a kit
+  without a shield simply has no entry.
+- **Isolated tests**: `GSTNDefence.Core.*` and `GSTNLink.Core.*` Automation tests run with only that plugin plus
+  `GSTNCombatCore` loaded (no GAS, no NP, no world), exactly the Core test convention of testing.md; fake contexts and a
+  fake `IGSTN_ExitCollisionQuery`. The NP modules are exercised by the harness scenarios of §11 grouped per plugin
+  (`scenario_defence_*`, `scenario_link_*`): a run with `GSTNLink` disabled must keep every defence scenario clean and
+  vice versa. A CI check greps module `.Build.cs` files: Core/GAS modules must not list NP modules, and no module of one
+  optional plugin may list a module of the other.
+- **Prerequisite work in `GSTNCombat` (first task of the milestone, before any M6 feature):** the extension surface
+  above, with its own Automation tests (fragment serialization round trip with zero, one and two fragments; handler
+  registry; absent-fragment bytes = 0) and `scenario_combat_spike` + M4 scenarios re-run clean. Tell the user: it
+  touches the combat sync state's serialization.
+
+## 1c. Gameplay tags
+
+Policy (CLAUDE.md, combat.md §9): tags are **native** (`UE_DECLARE_GAMEPLAY_TAG_EXTERN` in the owning plugin's
+`*Tags.h`, defined in its `.cpp`, one header per module family); **ini** (`Config/Tags/GSTNCommands.ini`) only for
+designer-made input tags (buttons, commands, their lock tags) — the plugin's *standard* command and button tags are
+native. "Adds/removes" names who changes the tag at runtime; projected state tags are **absolute counts set by the
+combat tick** under `Combat.State.*` (combat.md §5.4) and nothing else grants them.
+
+| Tag | Source | Owner (declares) | Meaning | Added / removed by |
+|---|---|---|---|---|
+| `Input.Button.Shield` | native (exists, M1) | GSTNCombatCore | Shield/tech button | input config |
+| `Combat.State.Shielding` | native | GSTNDefenceGAS | Shield raised (after startup) | projected by defence tick, removed on release/stun/break |
+| `Combat.State.ShieldStun` | native | GSTNDefenceGAS | Stalled by a blocked hit | projected until `ShieldStunEndFrame` |
+| `Combat.State.ShieldBroken` | native | GSTNDefenceGAS | Long stun after shield break | projected until `BreakEndFrame` |
+| `Combat.State.ParryWindow` | native | GSTNDefenceGAS | Parry window open | projected for the window |
+| `Combat.State.ParryRecovery` | native | GSTNDefenceGAS | Defender's short post-parry recovery | projected |
+| `Combat.State.Parried` | native | GSTNDefenceGAS | Attacker punished by a parry | projected until `PunishEndFrame` |
+| `Combat.State.Teching` / `.Knockdown` | native | GSTNDefenceGAS | Tech animation / knocked down | projected |
+| `Combat.State.Tech.Lockout` | native | GSTNDefenceGAS | Tech press ignored (anti-mash); UI/AI | projected while `F < TechLockoutEndFrame` |
+| `Combat.Mover.Tumble` | native | GSTNDefenceNP | Mover tag carried by the tumble/contact modifier | modifier add/remove |
+| `Combat.Mover.Linked` | native | GSTNLinkNP | Mover tag carried by the linked modifier; triggers `UGSTN_LinkedModeTransition` | modifier add/remove on link start/end |
+| `Combat.Link.Linked` | native | GSTNLinkGAS | Entity is in any link | projected from `Link.Role != 0` |
+| `Combat.Link.Pending` | native | GSTNLinkGAS | Predicted link awaiting response | projected |
+| `Combat.Link.Type.Grab` (`.Mount`, `.Held` declared by M7/later plugins) | native | GSTNLinkGAS (Grab); M7/Held plugins own theirs | Link type identity (also on events) | on definition assets, event tags |
+| `Combat.Link.Role.Grabber` / `.Grabbed` (`.Carrier/.Rider`: M7) | native | GSTNLinkGAS | Role for binding requirements and `ActivationBlockedTags` | projected from `Link.Role` |
+| `Combat.HitType.Grab` / `.Throw` / `.Pummel` | native | GSTNLinkGAS | Hit types (skip shield/parry; throw validates link) | on `FGSTN_HitData` |
+| `Combat.HitType.Normal/Unblockable/Projectile` | native (exist, M4) | GSTNCombatGAS | unchanged | — |
+| `Combat.Immunity.Grab` | native | GSTNLinkGAS | Cannot be grabbed (bosses, mid-link) | kits, GEs (ordinary counts); checked by `LinkRequest`; granting it mid-link breaks the link |
+| `Combat.Immunity.Parry` / `.Shield` | native | GSTNDefenceGAS | Attack cannot be parried / blocked (victim- or ability-side) | kits, abilities, GEs |
+| `Command.Defence.Shield` | native (standard set) | GSTNDefenceCore | Shield command (`Hold(Shield)`) | slot set |
+| `Command.Link.Grab` / `.Pummel` / `.Release` / `.Throw.Forward` `.Back` `.Up` `.Down` | native (standard set) | GSTNLinkCore | Grab and grabber-role commands (`Command.Link.Mount/Dismount` reserved by M3, owned by M7) | slot set |
+| `Input.Lock.Command.Defence`, `Input.Lock.Command.Link` | native | GSTNDefenceCore / GSTNLinkCore | Lock a command family | abilities/GEs (ordinary counts) |
+| `Combat.Event.Blocked/Parried/ShieldBroken/Teched/KnockedDown` | native | GSTNDefenceGAS | Authoritative events (§5.6 combat.md, server outbox) | published by the combat model |
+| `Combat.Event.LinkFormed/LinkBroken/Throw/GrabEscaped` | native | GSTNLinkGAS | Same | published by the watchdog/pipeline |
+| `Combat.SetByCaller.ShieldDamage` | native | GSTNDefenceGAS | GE magnitude key | set by the damage code |
+| `Combat.Relationship.*`, `Combat.Hurtbox.*` | native (exist) | GSTNCombatGAS | unchanged | — |
+
+Designer-made commands (new throws, a second shield) go in the ini; a game that wants a different shield *button* adds
+`Input.Button.*` there. Tag hierarchy rule: a plugin declares only tags under its own roots (`Combat.Link.*`,
+`Combat.Immunity.Grab` for Link; `Combat.State.Shield*/Parry*/Tech*`, `Combat.Immunity.Parry/Shield` for Defence), and
+reads the other plugin's tags by *name through `FGameplayTag::RequestGameplayTag(…, false)`*, never by an extern
+declaration, so each plugin builds and runs alone.
+
+## 2. Spikes first (record results in combat.md §17)
+
+1. **Link spike (decides §7).** Two clients + dedicated server at 60/15 ms and 2 % loss. Client A (grabber) walks,
+   dashes and circles; client B is linked through a server-side test command (no hit pipeline yet).
+   - **Variant P (parked)**: B enters `UGSTN_LinkedMovementMode` (zero velocity, no collision with A); B's presentation
+     and hurtbox transform derive from A's socket as known on each machine (server: authoritative; A's client:
+     predicted; B's client: A interpolated).
+   - **Variant F (follow)**: B's Mover is driven each tick to A's socket transform as B's machine sees it (A
+     interpolated on B's client).
+   - **Measure** (harness `scenario_link_spike`, 20 s of A moving, plus forced reconciles on B and on A inside the
+     link): `np.PrintReconciles` count per client; B's rollbacks per second; presentation error of B's mesh against the
+     server's socket transform (p50/p95/max, in cm) sampled on B's client and on A's client; extra bytes per second on
+     B's sync state.
+   - **Pass for P**: zero unforced reconciles on B and on A during the walk; exactly one correction at link start and
+     one at link end per client; presentation error p95 ≤ 10 cm on A's client and ≤ 25 cm on B's (interpolation lag of
+     A's transform, not of B's), max ≤ 60 cm; forced reconciles inside the link converge in ≤ 2 frames to equal state.
+   - **Expected for F**: ≥ 1 unforced reconcile per second on B (constant mispredicts against an interpolated target).
+     Record the number even if P passes; F is the fallback only if P fails the thresholds, in which case §7 is
+     redesigned (stop and tell the user).
+   - Also record: whether Mover can be forced into a mode by a queued modifier carrying a tag (reuse spike 2.2 of M4),
+     and whether the `FinalizeFrame`-time watchdog (§7.6) sees both entities' state of frame F on the server.
+2. **Tumble contact probe.** A Mover modifier probes ground/wall during Tumble (`UGSTN_WallQueryUtils`) and writes a
+   contact record in Mover's sync state; check that the combat tick reads it through `UGSTN_MoverSimStateTracker` at end
+   of F-1 with no reconciles, and that the Tumble → Walking transition on landing is visible one frame later (rule 5 of
+   CLAUDE.md). Decides the one-frame tech latency of §6.
+3. **Reverse delivery.** Parry: victim's resolution at F+1 posts a `Punish` entry to the attacker's inbox on the
+   server; measure the attacker client's rollbacks per parry (expect 1) and the visible delay of the attacker's stun.
+4. **Mash through rollback.** `Mash` presses of the grabbed counted from history, forced reconcile in the middle of the
+   mash: escape frame must equal on server and client.
+
+## 3. Core types (`GSTNCombatCore`, pure, unit tested)
+
+**Defence rules** — `UGSTN_DefenceRules` (DataAsset, referenced by `UGSTN_CombatRules::Defence`, selected per game
+mode like the rest of the rules):
+
+| Struct | Fields |
+|---|---|
+| `FGSTN_ShieldRules` | `ArcDegrees` (default 140; 360 = bubble), `ElevationLimitDeg` (90 = any), `TurnRateDegPerFrame` (0 = facing locked at press), `StartupFrames`, `ReleaseFrames`, `DrainPerFrame`, `RegenPerFrame`, `RegenDelayFrames`, `ShieldStunBase`, `ShieldStunPerDamage`, `MaxShieldStun`, `ShieldHitstopMultiplier`, `PushbackSpeed` (cm/s) and `PushbackFrames`, `BreakStunFrames`, `BreakLaunch` (cm/s up), `RecoverFractionAfterBreak`, `IncomingShieldDamageScaleByRelationship` (map, lets PvE enemies chip less/more) |
+| `FGSTN_ParryRules` | `WindowFrames` (default 5), `ReopenLockoutFrames` (shield re-press within this of the last release gets no window), `DefenderRecoveryFrames`, `HitstopFrames`, `AttackerStunFrames` (by hit class: `TMap<tag, int32>`, default entry), `bParryableProjectiles`, `bReflectProjectiles` (reserved, not implemented), `MeterGain` |
+| `FGSTN_TechRules` | `WindowFrames` (default 20 before contact), `LockoutFrames` (default 40 after a press), `LateFrames` (0), `bTechInHitstunNotTumble` (false), `InPlaceFrames`, `RollFrames`, `RollDistance`, `WallTechFrames`, `bAllowWallTech`, `KnockdownFrames`, `NoTechKnockdownBonusFrames`, `IntangibleFrames` (the moves' own `HurtboxModifier` windows win; this is only the fallback) |
+| `FGSTN_DIRules` | `MaxDIDegrees`, `StrengthCurve` (`FGSTN_Curve1D`: stick magnitude → factor, piecewise linear, quantized points, no engine curve in Core), `MinKnockbackForDI`, `ScaleByVictimTag` (`TMap<FGameplayTag, float>`: bosses 0), `bDIOnPlaneOnly` (true, as decided) |
+| `FGSTN_SDIRules` | `DistanceCm`, `MaxPerHit`, `MinZone` (Tilt), `RequireNewDirectionEvent` (true: a held direction does not repeat), `MinFramesBetween`, `bScaleByHitstopFrames`, `ScaleByVictimTag` |
+| `FGSTN_GrabRules` | `Requirements` (`FGSTN_TagRequirements` on the victim, default ignore `Combat.State.Hitstun/.Tumble/.Knockdown/.ShieldBroken`, `Combat.Link.Linked`, `Combat.Immunity.Grab`, `Combat.State.Intangible`), `ImmunityFramesAfterRelease`, `ImmunityFramesAfterThrow`, `Mash` (`FGSTN_MashRule`), `PummelFreeFrames`, `bGrabBeatsShield` (true) |
+| `FGSTN_MashRule` | `ButtonMask` + `bCountFlicks` (Tilt direction events count), `BaseFrames`, `FramesPerDamagePercent`, `MinFrames`, `MaxFrames`, `ReducePerPress` (frames), `ResistanceAttribute` scaling |
+
+**Math** — `UGSTN_DefenceMath` (stateless, doubles, identical on every machine):
+`IsInShieldArc(ShieldYawDeg, Rules, HitSourceDirOnPlane, HitSourceElevationDeg)`;
+`ShieldValueAt(const FGSTN_ShieldValue&, int32 Frame, const FGSTN_ShieldRates&)` (analytic, §5);
+`EvaluateTech(const FGSTN_TechState&, history view, contact frame, Rules) → {bSuccess, PressFrame}`;
+`EvaluateParryWindow(PressFrame, HitFrame, ReleaseFrame, Rules)`; `MashProgress(...)`.
+`UGSTN_HitMathUtils::ApplyDI` gains the rules overload (`ApplyDI(Launch, StickOnPlane, KnockbackMagnitude, VictimTags,
+const FGSTN_DIRules&)`): M4's signature stays as a wrapper. `UGSTN_SDIMath::NextDisplacement(...)`.
+
+**Hit data additions** (`FGSTN_HitData`, M4 type extended; defaults keep M4 content valid): `bParryable` (true),
+`bBlockable` (derived: false for `Unblockable`/`Grab`/`Throw`), `bDisableDI`, `EGSTN_LinkFilter LinkFilter (Any /
+LinkedPartnerOnly / ExcludeLinkedPartner)` (pummel hits only the partner; sweeps by a grabber ignore the partner),
+`FGameplayTag LinkType` (for `Grab` hits: which link to create), `ShieldDamage` keeps its meaning (0 = derive from
+`Damage × ShieldDamagePerDamage`, a `FGSTN_ShieldRules` field).
+New hit types (native tags): `Combat.HitType.Grab`, `.Throw`, `.Pummel`.
+
+**Timeline tracks** (Core, `FGSTN_TimelineTrack` children, M3 mechanisms): `FGSTN_HoldWindowTrack { int32 StartFrame,
+EndFrame; FGameplayTag HoldButton; bool bEndOnZeroShield; }` — while inside the window and the button is held (history
+`Hold`), the timeline frame stalls (`TimelinePausedFrames++`, the combat clock does **not** pause, unlike hitstop);
+used by shield and reusable for any held move. `FGSTN_LinkOutcomeTrack { TArray<FGSTN_LinkOutcomeKey { int32 Frame;
+EGSTN_LinkOutcome Outcome (Release/Throw/KeepLink/SwapRoles); FGSTN_HitData ThrowHit; FName ExitPlacement; }> }` — the
+grabber's throw/release moment (§8).
+
+**Links** — `UGSTN_LinkTypeDefinition` (PrimaryDataAsset, type `GSTN_LinkType`): `FGameplayTag LinkType`, roles
+(`FGSTN_LinkRoleDef { FGameplayTag RoleTag; bool bParked; FName SocketOnPartner; FTransform SocketOffset; bool
+bCollisionWithPartner; }` × 2), `FGSTN_LinkBreakRules Break`, `ExitPlacement` (class), `RequestRequirements`,
+`bInitiatorPredicts`, `MaxFrames`, `DebugColor`. `UGSTN_LinkRegistry` (subsystem, built from the definitions on
+loadout/rules load, like the timeline registry of M3 §9): `LinkType tag ↔ uint8 index` (the wire form).
+`FGSTN_LinkBreakRules { float MaxDistanceCm; int32 MaxFrames; TArray<FGSTN_RoleHitBreak { role tag; float
+MinKnockbackToBreak; bool bPartnerHitsBreak; }> HitBreaks; bool bBreakOnPartnerDeath/OwnDeath; FGSTN_TagRequirements
+PartnerMustNot (e.g. Hitstun of the carrier); }`.
+`UGSTN_LinkExitPlacer` (abstract, EditInlineNew, const, deterministic): `Place(const FGSTN_ExitQuery&) →
+FGSTN_ExitResult { FTransform Transform; FVector Velocity; bool bValid }`; queries the world through a
+`IGSTN_ExitCollisionQuery` interface (capsule sweep), so tests use a fake. Default `Placer_Ring`: candidates in a
+fixed order (type-specific preferred direction, then 8 directions at `Radius`, then above), first collision-free
+capsule wins, fallback = partner's position + up.
+
+**Inbox types** — M4's hit entry becomes one alternative of `FGSTN_InboxEntry { EGSTN_InboxType Type (Hit, Punish,
+LinkResponse, LinkCommand); int32 Frame; int32 SenderId; payload }`; drained in (Frame, SenderId, type, order) order;
+rollback trimming unchanged (§6.3). Payloads: `Punish { Kind (Parried, ShieldBroke…); int32 Frames; }`, `LinkResponse {
+bAccepted; uint8 LinkSerial; uint8 LinkTypeIndex; }`, `LinkCommand { Kind (Break, Place); uint8 LinkSerial; Reason;
+FTransform Exit; FVector ExitVelocity; }`. `PostToInbox(TargetId, Entry)` is called from any combat tick and does
+nothing where the target's instance does not drain inboxes (same rule as hit delivery, combat.md §12.4).
+
+## 4. GAS side (`GSTNCombatGAS`)
+
+- **`UGSTN_DefenceAttributeSet`**: `ShieldHealth`, `MaxShieldHealth`, `ShieldRegenRate`, `ShieldDrainRate`,
+  `IncomingShieldDamageMultiplier`, `GrabResistance` (scales mash length), `TechSkill` is *not* an attribute (rules
+  only). Clamped in `PreAttributeChange` (`ShieldHealth` in [0, Max]). **Authority split (*Proposal*)**: the
+  per-frame value lives in the combat sync state (analytic, §5) so an idle or shielding player costs no per-frame GE
+  and no attribute churn; the `ShieldHealth` attribute is a **mirror** written by a sparse request (shield raised,
+  released, blocked hit, break, every 16 frames while changing) for UI, AI and effects, and `Max*`/rates are read from
+  the attributes by the model. UI that needs smoothness calls `UGSTN_CombatSimComponent::GetShieldValue(Frame)`.
+  Effects that must change the shield value (pickups) use `UGSTN_GE_ShieldRestore`, which the combat model sees as a
+  request-with-attribute-delta on its next tick (reads the mirror's base-value change against the last mirrored value).
+- **`UGSTN_GA_Shield`** (child of `UGSTN_GA_BaseCombat`): timeline = startup frames, one `HoldWindowTrack` (button
+  `Input.Button.Shield`, `bEndOnZeroShield`), release frames; cancel windows inside the hold window into jump, dodge,
+  `Command.Link.Grab` and attacks (shield-drop and jump-out come from standard M3 cancel windows, no new code).
+  Tags granted on activation: none (state tags are projected, combat.md §5.4).
+- **`UGSTN_GA_Tech`** (timeline ability, kit-assigned per tech type through `FGSTN_TechSet` on the kit: InPlace, RollLeft,
+  RollRight, WallTech, WallJumpTech): started by a **Forced** `ActivateEntry` request from the model (ActiveSource
+  `Forced`, M3). Intangibility = its `HurtboxModifier` window. Roll/wall movement = its movement track.
+- **`UGSTN_GA_Knockdown`/get-up** (*Proposal*: one neutral get-up ability with intangible frames, started the same way;
+  further get-ups later).
+- **`UGSTN_GA_LinkedHold`** (grabbed side presentation and tags): not an ability; the grabbed's reaction is state +
+  Mover mode + the role's animation layer chosen by kit (`FGSTN_KitLinkAnims`, per role tag). Abilities of the
+  grabbed are blocked by `ActivationBlockedTags` `Combat.Link.Role.Grabbed` (set in the base ability defaults).
+- **GEs**: `UGSTN_GE_ShieldDamage` (instant, SetByCaller `Combat.SetByCaller.ShieldDamage`, only the mirror, §3 above),
+  `UGSTN_GE_GrabImmunity` is **not** a GE (frame stamp, §5); `UGSTN_GE_ShieldBreak` (cosmetic tags/cues only).
+- Native tags added (`GSTN_CombatTags.h`; one-line comment each on who grants/reads it):
+  - States (projected): `Combat.State.Shielding`, `.ShieldStun`, `.ShieldBroken`, `.ParryWindow`, `.ParryRecovery`,
+    `.Parried` (attacker punished), `.Teching`, `.Knockdown`, `.Tech.Lockout`.
+  - Links: `Combat.Link.Linked`, `Combat.Link.Type.Grab` (`.Mount` reserved), `Combat.Link.Role.Grabber/Grabbed`
+    (`Rider/Carrier` declared by M7), `Combat.Link.Pending`.
+  - Mover: `Combat.Mover.Linked`, `Combat.Mover.Tumble`.
+  - Hit types: `Combat.HitType.Grab/Throw/Pummel`.
+  - Immunity (granted by kits/bosses/GEs, read by rules): `Combat.Immunity.Grab`, `.Parry` (cannot be parried), `.Shield`.
+  - Commands (`Command.` root, standard slot set; patterns in §8): `Command.Defence.Shield`, `Command.Link.Grab`,
+    `.Pummel`, `.Throw.Forward/.Back/.Up/.Down`, `.Release` (`Link.Mount/.Dismount` already reserved by M3/M7).
+  - Events: `Combat.Event.Blocked`, `.Parried`, `.ShieldBroken`, `.Teched`, `.KnockedDown`, `.LinkFormed`, `.LinkBroken`,
+    `.Throw`, `.GrabEscaped` (outbox, tagged with hit type, relationship, link type, roles; §5.6 combat.md).
+  - SetByCaller: `Combat.SetByCaller.ShieldDamage`.
+
+## 5. Combat model: sync state and per-frame rules (`GSTNCombatNP`)
+
+### 5.1 Sync state additions (table; idle values cost ~0 bits)
+
+| Field | Purpose |
+|---|---|
+| `int16 ShieldValue`, `int32 ShieldStampFrame`, `uint8 ShieldFlags` | Analytic shield: value at `ShieldStampFrame` in 1/4 points; flags = `Raised`, `Breaking`. Re-stamped at every change event. |
+| `int32 ShieldPressFrame`, `int32 ShieldReleaseFrame`, `uint16 ShieldYawQ` | Press frame defines the parry window; release frame regen delay and `ReopenLockout`; yaw quantized 360/65536. |
+| `int32 ShieldStunEndFrame`, `int32 ParryRecoveryEndFrame`, `int32 BreakEndFrame` | Stuns by end-frame stamps. |
+| `int32 TechLockoutEndFrame`, `int32 LastTechPressFrame`, `int32 TechEndFrame`, `uint8 TechType` | Tech state machine (§6). |
+| `int32 KnockdownEndFrame` | Knockdown after a missed tech. |
+| `int32 GrabImmunityEndFrame` | Grab immunity stamp. |
+| `FGSTN_LinkState Link` | §7.1. |
+| `int32 MashProcessedFrame` | Last history frame counted by the mash rule (grabbed). |
+| `int32 PunishEndFrame`, `uint8 PunishKind` | Attacker parry-stun etc. |
+| `uint8 SDIUsed`, `int32 LastSDIFrame` | M4's `SDICount` extended. |
+
+`EGSTN_ActionState` gains `ShieldStun`, `ShieldBroken`, `Knockdown`, `Teching`, `Punished`, `Linked` (M4 had
+`Actionable`, `InTimeline`, `Hitstun`, `Tumble`). All fields in `NetSerialize`/`ShouldReconcile`/`ToString`/
+`Interpolate` (combat.md §5.5 rule 4). Sizes in §10.
+
+### 5.2 Per-frame order (extends M3 §7.2; new steps in bold)
+
+1. M2/M3 steps 1–2 (sample, history, watched tags, reset rules, timeline clock; hold stall of `HoldWindowTrack` is part
+   of the clock step: `TimelinePausedFrames++` while inside the window and held and not `ShieldStun`).
+2. **Inbox drain** (M4 §7, now all types): `Hit` → pipeline (§6.3 below); `Punish` → `ActionState = Punished` until
+   `PunishEndFrame`, cancel timeline, hitstop; `LinkResponse`, `LinkCommand` → §7.
+3. **Defence clocks**: `ShieldStunEndFrame` reached → clear; break end → shield value = `RecoverFractionAfterBreak`,
+   state `Actionable`; `KnockdownEndFrame`/`TechEndFrame` reached → `Actionable` (a get-up ability may be requested);
+   `PunishEndFrame` reached → `Actionable`; shield drain/regen is analytic (no per-frame work).
+4. **Tech** (§6) when `Tumble`: process new tech presses, evaluate contact.
+5. **Link tick** (§7.4): mash, role-input flags, request timeouts.
+6. M3 steps 3–10 (adoption … tag projection) unchanged, but candidates are filtered by `Combat.Link.Role.Grabbed`
+   (no candidates) and by `ShieldStun`/`ShieldBroken`/`Punished`/`Knockdown` (cannot act).
+7. Tag projection adds the §4 state tags; role tags from `Link.Role`.
+
+### 5.3 Shield: algorithms
+
+- **Raise**: command `Command.Defence.Shield` = `Hold(Shield, 0)` anchored by the button press; binding requires
+  `Input.Context.Grounded` (*Proposal*: no air shield, no wall shield; air defence is dodge). Execute as any timeline:
+  `ShieldPressFrame = F`, `ShieldYawQ` from the aim policy (`SnapToStick` if tilted, else facing), `ShieldFlags.Raised`
+  from the end of startup (`StartupFrames`) — hits during startup are normal hits. If `ShieldValue ≤ 0`,
+  `Breaking`, or `F < ReopenLockout` → the command cannot execute (binding availability: a lock tag
+  `Combat.State.Tech.Lockout` is *not* reused; the model refuses through `CanExecute`).
+- **Value**: `ShieldValueAt(F)` = while `Raised`: `max(0, V0 − Drain × (F − Stamp))`; after release: `V0` until
+  `ShieldReleaseFrame + RegenDelayFrames`, then `min(Max, V0 + Regen × (F − that))`. `Drain`/`Regen`/`Max` read from
+  `UGSTN_DefenceAttributeSet` at end of F-1; a change of rates re-stamps on the next event (documented approximation).
+  Zero value while held → `bEndOnZeroShield` ends the hold window (timeline proceeds to release; no break, only a
+  forced drop with `ReleaseFrames`).
+- **Turn**: while held and `TurnRateDegPerFrame > 0`, `ShieldYawQ` moves toward the stick yaw by at most that rate.
+- **Directional arc** (`IsInShieldArc`): `Dir` = victim position (end of F-1) → hit source, projected on the movement
+  plane (world up; shield is grounded-only, so the plane is horizontal). Source = `FGSTN_InboxEntry::HitLocation`; for
+  `Projectile` hits with `|HitboxVelocity| > 50` the source direction is `−HitboxVelocity`. If `|Dir2D| < 1 cm` (hit
+  from straight above/below) it counts as inside when the elevation limit allows. Angle = `acos(dot(Facing2D, Dir2D))`;
+  inside iff ≤ `ArcDegrees / 2` and elevation (`atan2(|dz|, |Dir2D|)`) ≤ `ElevationLimitDeg`. Boundary inclusive.
+- **Pipeline step `Shield`** (§6.3): conditions: victim `Raised` at the hit's `Frame` (not at resolution frame, so the
+  F+1 delay does not change the outcome), `bBlockable`, in arc, relationship `Enemy` or `Neutral` (ally hits resolve by
+  their variant; a variant may set blockable). Outcome: `bBlocked`; shield damage = `HitData.ShieldDamage` (or derived)
+  × victim `IncomingShieldDamageMultiplier` × `IncomingShieldDamageScaleByRelationship`; value re-stamped lower;
+  shieldstun frames = `min(Max, Base + PerDamage × Damage)`, `ShieldStunEndFrame = HitstopEnd + that`; no damage, no
+  knockback, no hitstun; optional `PushbackSpeed` as `FGSTN_LayeredMove_Knockback` over `PushbackFrames` **on the victim
+  along the hit direction, no tumble**; hitstop both sides = knockback model hitstop × `ShieldHitstopMultiplier`;
+  meter gain per rules (defender small). If the new value ≤ 0 → **break**: `ActionState = ShieldBroken`,
+  `BreakEndFrame = F + BreakStunFrames`, `ShieldFlags.Breaking`, `BreakLaunch` up, `Punish` entry not sent, event
+  `ShieldBroken`. The attacker predicts `OnBlock` from the snapshot with the same pure function (§6.2); a prediction the
+  server disagrees with is a normal correction.
+- **Shield and grabs/supers**: `Grab`/`Throw` ignore shield (`bGrabBeatsShield`). Supers: hit type `Unblockable` only on
+  hits the designer marks (*Proposal*: super finishers unblockable, setup hits blockable and parry-able, shield damage ×
+  tuned so a full bar-shield breaks in 2 hits).
+- **Prediction**: the shielding player predicts raise, hold, release. The block outcome arrives as a victim correction
+  (one rollback, as any hit, M4 §12.7); presentation (spark, shield flash) is predicted on the attacker's machine from
+  the predicted `OnBlock`.
+
+### 5.4 Parry
+
+- **Window**: `[ShieldPressFrame, ShieldPressFrame + WindowFrames)` (startup frames count as part of it) and only if
+  `ShieldPressFrame − ShieldReleaseFrame(previous) ≥ ReopenLockoutFrames`. Evaluated at the hit's stamped `Frame`.
+  `Combat.State.ParryWindow` projected for the window (UI, AI reads).
+- **Pipeline step `Parry`** (before `Shield`): window open, `bParryable`, not `Combat.Immunity.Parry`, in arc **or**
+  within a (wider, `ParryArcDegrees` = shield arc by default) arc → hit nullified: no damage, shield value untouched,
+  both hitstop `ParryHitstopFrames`, victim `ParryRecoveryEndFrame = HitstopEnd + DefenderRecoveryFrames`
+  (actionable early; cancel into any command — the reward), meter gain, event `Parried`, and an outgoing entry
+  `Punish{Parried, AttackerStunFrames[HitClass]}` to the **attacker's inbox** (reverse delivery, §2.3 spike).
+- The attacker consumes it at F+2 (victim resolved at F+1): `ActionState = Punished`, current timeline cancelled,
+  stun through `PunishEndFrame`. The attacker predicted hitstop only (snapshot window test, same pure function), so
+  the stun arrives as one correction. Projectiles: parried hit is simply nullified (reflect later).
+
+### 5.5 SDI/DI (rules asset)
+
+- **DI**: at `HitstopEndFrame`, `ApplyDI(Launch, Stick, KnockbackMagnitude, VictimTags, DIRules)`: stick magnitude →
+  `StrengthCurve`, × `ScaleByVictimTag`, rotation = `MaxDIDegrees × Strength × perpendicular component`; skipped when
+  knockback < `MinKnockbackForDI` or `HitData.bDisableDI`. Vertical component unchanged (decided).
+- **SDI** (during hitstop): each **new direction event** (history) with zone ≥ `MinZone`, at least `MinFramesBetween`
+  after `LastSDIFrame`, `SDIUsed < MaxPerHit` → instant movement effect of `DistanceCm` (× hitstop scale) along the
+  stick on the plane; `SDIUsed++`. The move is requested through a GE (instant, swept by Mover collision), so a wall
+  or ledge stops it. Not allowed while armored (`bSDIAllowedWhenArmored`, default false) or on throws.
+- Both rule sets are per game mode (rules asset), so PvE can scale DI/SDI by victim tag (bosses ignore them).
+
+## 6. Tech and knockdown
+
+- **Contact record**: `FGSTN_TumbleContactModifier` (`FMovementModifierBase`, queued with the hitstun knockback while
+  `Tumble`) probes in `OnPostMovement`: ground contact (grounded flag, impact normal and speed) and wall contact (the
+  project's `UGSTN_WallQueryUtils` multi-probe, no wall mode entry) and writes `FGSTN_TumbleContactSyncState {
+  EContactKind; FVector NormalQ; int16 ImpactSpeedQ; int32 ContactFrame; }` into Mover's sync state. The combat tick
+  reads it from the tracker at end of F-1, so the earliest reaction is **one frame after the contact** (accepted; the
+  window counts presses up to that frame, §6 algorithm). Wall modes cannot capture a tumbling entity: transitions are
+  blocked by `Combat.State.Tumble` (`UGSTN_AbilityWallEntryTransition` already requires the wall ability).
+- **Algorithm** (combat tick, `ActionState == Tumble`, frames after `HitstopEndFrame`):
+  1. For each tech-button (`Input.Button.Shield`) press event in the history newer than `LastTechPressFrame` and not
+     before `HitstopEndFrame`: if `press < TechLockoutEndFrame` → ignored (mash penalty: it does **not** extend the
+     lockout); else `LastTechPressFrame = press; TechLockoutEndFrame = press + LockoutFrames`.
+  2. If the contact record is new (`ContactFrame > LastHandledContact`, state) at frame `c`: success iff
+     `LastTechPressFrame` valid and `0 ≤ c − LastTechPressFrame ≤ WindowFrames` (`+ LateFrames` for a press after).
+     Success → `ActionState = Teching`, `TechType` from the stick at `c` (neutral = InPlace, left/right relative to the
+     contact normal's tangent = roll, wall contact = WallTech, stick away from wall = WallJumpTech), `TechEndFrame`, request
+     `ActivateEntry(UGSTN_GA_Tech[type])` (Forced), `TechLockoutEndFrame = 0`, event `Teched`, buffer event.
+     Failure → ground: `ActionState = Knockdown`, `KnockdownEndFrame = c + KnockdownFrames (+ NoTechBonus)` and bounce
+     velocity applied by request; wall: bounce off (reflect velocity, remain `Tumble`).
+  3. Hitstun without tumble (`bTechInHitstunNotTumble` false): presses are ignored and do **not** start a lockout.
+- **Lockout display**: `Combat.State.Tech.Lockout` is projected while `F < TechLockoutEndFrame` (UI/AI).
+- Because the press is read from the history, a forced reconcile or re-simulation reproduces the same decision; no timer
+  other than frame stamps exists.
+
+## 7. Link system (`GSTNCombatNP` + Core)
+
+### 7.1 State (`FGSTN_LinkState`, in the combat sync state)
+
+`uint8 LinkTypeIndex` (0 = none), `uint8 Role` (index into the definition's two roles), `int16 PartnerId` (NP
+proxy id), `uint8 Serial` (incremented per link formation, distinguishes old and new links), `int32 LinkFrame`,
+`int32 EndFrame` (`MaxFrames` timeout and mash-adjusted; 0 = none), `uint8 Flags { Predicted, PendingBreak, BreakReason
+(3 bits) }`. **Rollback behaviour:** it is ordinary sync state, restored with the model. The *inbox* entries that form
+or break a link are not (they re-arrive from re-simulated senders), and a restored older state with `Serial` lower than
+a newer inbox entry's simply processes the entry again (idempotent: an entry whose `Serial` is already applied or
+older is ignored). A predicted link whose `LinkResponse` never comes (refused) is cleared after `RequestTimeoutFrames`
+(default 12) by the link tick.
+
+### 7.2 Formation (request/accept through the inbox, combat.md §12b)
+
+1. Initiator's hitbox (HitType `Grab`, `LinkType` in `HitData`) overlaps the target: a normal hit delivery (M4 §6),
+   with `bInitiatorPredicts` → initiator's own side: **hitstop + `Link.Flags.Predicted` only** for grabs (*Proposal*: no
+   predicted role change for grabs, only for mount in M7; the grab confirm feel comes from hitstop and presentation).
+2. Victim (server) resolution at F+1: `GrabImmunity` step → `LinkRequest` step: `FGSTN_GrabRules::Requirements`, target
+   not `Linked`, `F ≥ GrabImmunityEndFrame`, link type requirements. Accepted → target `Link = {type, role 2, partner =
+   attacker, Serial = max(own, attacker's snapshot Serial) + 1, LinkFrame = F+1 }`, `ActionState = Linked`, request
+   the mode switch (§7.3), cancel timeline, entry `LinkResponse{accepted}` to the initiator. Refused → `LinkResponse
+   {refused}` (nothing else happens: the grab whiffs without hitstop on the victim).
+3. Initiator at F+2 consumes the response: role 1, `Link` written (`Serial` from the response), cancels its predicted
+   state, opens the grabber's cancel window into `Command.Link.*` slots (a `LinkEstablished` buffer event). Both
+   entities' `Combat.Link.*` tags project from `Role`. During F+1 the grabbed is parked while the grabber has no role
+   yet: parked placement derives from the partner's transform and the definition, **not from the partner's role**.
+4. Simultaneous grabs on one victim: the first entry in drain order wins; the others get refused (target `Linked`).
+   Grabber grabbing a grabber, chains: refused by the requirements.
+5. Events `LinkFormed` (server outbox, M2 §7b) when the response is sent.
+
+### 7.3 Parked movement mode and presentation
+
+- **`UGSTN_LinkedMovementMode`** (`UBaseMovementMode`, plugin module `GSTNCombatNP`, shared by grabbed and rider):
+  zero velocity, no ground snap, no gravity, no collision response, does not read input; keeps the capsule at its
+  last real position (this is the **parked transform**: stable on every machine). Entered by
+  `FGSTN_LinkedModifier` (queued once, carries the Mover tag `Combat.Mover.Linked`) through
+  `UGSTN_LinkedModeTransition` (a `UBaseMovementModeTransition` on that tag); left by the same transition when the
+  modifier ends (`LinkCommand{Break/Place}` requests its removal and a teleport, §7.7). Spike 2.1 confirms the mechanism.
+- **Derived transforms**: `UGSTN_LinkPresentationComponent` (on pawns) exposes `GetLinkedTransform()` = partner's
+  transform on **this machine** × partner socket (`FGSTN_LinkRoleDef::SocketOnPartner`, root-relative baked socket if
+  `BakedSocket`, else a live socket from the anim instance for presentation only) × offset. Used by: mesh attachment
+  (the mesh component is attached to the partner's mesh socket; the capsule is not), the per-step snapshot (hurtbox
+  transforms of a parked entity), camera target (the player's camera follows `GetLinkedTransform`, **a project camera
+  change: tell the user**), aim origin. Hit queries of a linked entity use the baked socket (deterministic), never the
+  live mesh. On a client that does not simulate the partner the partner is interpolated, and so is the parked entity's
+  derived transform, which is the intended trade (spike 2.1).
+- Collision between the two capsules is ignored while linked (`bCollisionWithPartner` false), restored at exit.
+
+### 7.4 Link tick (per entity, step 5 of §5.2)
+
+- Grabbed: `Mash` (§8) updates `EndFrame`; reaching `EndFrame` sets `Flags.PendingBreak`, reason `Escape`.
+- Role inputs: grabber commands come from normal bindings with requirement `Combat.Link.Role.Grabber`; the **release**
+  command (`Command.Link.Release`) sets `PendingBreak`, reason `Release`.
+- Predicted link without response past the timeout → cleared.
+- Nothing in the tick moves another entity or writes its state.
+
+### 7.5 Break rules (evaluated by the watchdog and the pipeline, §7.6)
+
+Reasons: `Timeout` (`F − LinkFrame ≥ MaxFrames`), `Distance` (partner distance from the expected socket >
+`MaxDistanceCm`), `OwnDeath`, `PartnerDeath`, `Hit` (`HitBreaks` per role, `MinKnockbackToBreak`; **hits from the
+partner never break unless `bPartnerHitsBreak`**, so pummel keeps the link), `PartnerState` (e.g. grabber enters
+hitstun/tumble/knockdown/`ShieldBroken`/`Punished`: grabbed released, grabber loses the role), `Escape`, `Release`,
+`Throw`, `Forced` (game code, cutscene, `Combat.Immunity.Grab` granted mid-link).
+
+### 7.6 `UGSTN_LinkWatchdog` (server world subsystem; the only break authority)
+
+Runs on the server after all NP instances of frame F have ticked (from the `FinalizeFrame`-time publication point,
+combat.md §5.6; spike 2.1 verifies both states are visible). It reads each combat component's **finalized state of
+F** and, for every link (`Serial`-matched pair): evaluates the break rules, honours `PendingBreak` flags, and detects
+**orphans** (one side has a link whose partner's state lacks it, after a 3-frame formation grace). On a break it asks the
+`UGSTN_LinkExitPlacer` for each side and posts `LinkCommand{Break, Serial, Reason, Exit, ExitVelocity}` stamped F to
+**both** inboxes; they are consumed at F+1 (both sides clear `Link` the same frame, `ActionState = Actionable` or the
+reason's state, mode transition out, teleport request with the exit transform). Entries whose `Serial` does not match the
+current link are ignored. Pipeline-caused breaks (hit, death) set `PendingBreak` and are handled the same way, so there
+is **one** break path. Events `LinkBroken` (reason) and, for escapes, `GrabEscaped`, come from here. Break latency:
+2 frames after the cause; clients see it as one correction.
+
+### 7.7 Exit placement
+
+`ExitPlacement` of the link type (and, for throws, the outcome key's `FName`) selects a placer: `Placer_Ring` (release,
+escape: ahead of the former partner), `Placer_AtSocket` (throws: launch from the grabber's socket, velocity from the
+knockback of the throw hit instead), `Placer_Mount` (M7). The placer sweeps the victim capsule against the world (server
+only, through `IGSTN_ExitCollisionQuery`), never ends inside geometry, and is deterministic for equal inputs. The result
+travels in `LinkCommand`; the teleport is a Mover instant move through a GE (the existing rule: no direct state writes).
+
+## 8. Grabs, pummel, throws, mash, immunity
+
+- **Grab command**: `Command.Link.Grab` = `Chord(Attack, Shield)` (grounded binding: the standing grab; airborne binding
+  absent by default, *Proposal*) — tier above `Command.Attack`. The grab move's timeline has a hitbox of HitType `Grab`
+  and `LinkType = Combat.Link.Type.Grab`; it also opens a cancel window `OnHit` (= link established) into the grabber
+  slots.
+- **Grabber slots** (bindings with requirement `Combat.Link.Role.Grabber`; one slot set, `UGSTN_StandardSlots` extended):
+  `Command.Link.Pummel` = `Press(Attack)` with a neutral stick; `Command.Link.Throw.Forward/.Back` = `Press(Attack)`
+  or `Press(Strong)` + `Direction(Facing, forward/back, MinZone = Tilt)`; `.Up` = `Press(Strong)` + neutral stick,
+  `.Down` = `Press(Attack)` + `Hold(Crouch)` (*Proposal*, all rebindable data). Release: `Command.Link.Release` =
+  `Press(Shield)`.
+- **Pummel**: a short timeline whose hitbox has `LinkFilter = LinkedPartnerOnly`, HitType `Pummel`; it resolves through the
+  pipeline (damage, meter) but `bPartnerHitsBreak` is false and no hitstun/knockback is applied (`Pummel` skips the
+  knockback step: HitData with `FixedKnockback = 0` and a flag `bNoReaction`); `PummelFreeFrames` after formation block it
+  (no instant mash). Grabbed's mash `EndFrame` is **not** reduced by pummels.
+- **Throw**: the throw timeline has an `FGSTN_LinkOutcomeTrack` key at the release frame: the grabber's model posts a
+  `Hit` entry (HitType `Throw`, `ThrowHit` data, attacker yaw) to the partner's inbox (**a direct hit, no hitbox
+  overlap**), clears its own `Link` at that frame (outcome `Throw`), sets `GrabImmunityEndFrame`-for-partner through the
+  `LinkCommand{Break}` (§7.6, watchdog sees the grabber side gone → orphan). Victim pipeline for `Throw`: `LinkRequest`
+  step validates `Serial`/partner, skips `Parry` and `Shield`, runs `ComputeKnockback` (DI disabled unless
+  `!bDisableDI`), `ApplyDamage`, `Hitstop`, and the victim leaves `Linked` for `Hitstun`/`Tumble` through the same break
+  command. Throw damage, knockback and meter credit use the same events (`HitLanded`/`HitReceived`, `Throw`).
+- **Mash**: grabbed side, link tick: unconsumed presses of `ButtonMask` (and Tilt flicks) in the history newer than
+  `MashProcessedFrame` each reduce `EndFrame` by `ReducePerPress`; initial `EndFrame = LinkFrame +
+  clamp(BaseFrames + FramesPerDamagePercent × DamagePercent, Min, Max) × GrabResistance`-scaling. The M1 `Mash`
+  condition is **not** used for this (it is a command matcher); the model reads raw press events so no slot fires while
+  `Linked` (the grabbed has no candidates). Presses never reduce below the escape frame being already past.
+- **Immunity**: `GrabImmunityEndFrame = Frame + ImmunityFramesAfterRelease/AfterThrow` set on the victim when its link
+  ends; pipeline step `GrabImmunity` (before `LinkRequest`) ignores `Grab` hits then (hit does not register, no
+  hitstop). Also set on the *grabber* briefly after a throw (`GrabberCooldown`, a rules field), to stop instant
+  regrabs on bosses.
+- **PvE**: bosses/minions use `Combat.Immunity.Grab` (refused at `LinkRequest`); enemies that grab players use the same
+  hitbox and pipeline (player is `Linked`, mash applies, throws are their timeline's outcome keys); AI input source
+  sends `Command.Link.*` through `RequestCommand`.
+
+## 9. Resolution pipeline (M4 §3 extended; order is normative)
+
+1. `TeamFilter` (M4)
+2. `HurtState` (M4): intangible → `Stop`; invincible/armor set flags on the context.
+3. **`GrabImmunity`** — `Grab` hits against an immune victim → `Stop` (no registration).
+4. **`LinkRequest`** — `Grab`: gate and form (§7.2) → `Stop` (a grab does no damage); `Throw`/`Pummel`: validate the
+   partner link and `Serial`, else `Stop`; other hit types → `Continue`.
+5. **`Parry`** (§5.4) → on success `Stop`.
+6. **`Shield`** (§5.3) → on block `Stop` after its own hitstop/meter work (it does not call `ComputeKnockback`).
+7. `ComputeKnockback`, `ApplyDamage`, `Hitstop`, `MeterGain` (M4, unchanged)
+8. **`LinkBreakOnHit`** — if the victim is `Linked` and the hit qualifies (§7.5) → `PendingBreak`.
+9. **`Tumble/Tech`** bookkeeping: a launch with tumble sets `Combat.Mover.Tumble` and queues the contact modifier.
+
+The context gains: `bGrab`, `bThrow`, `Link` info, `OutgoingEntries` (reverse deliveries applied after the pipeline),
+`bBlocked`, `bParried` (M4 had them as placeholders, now written), `ShieldDamageApplied`. Steps stay `const`, pure over
+their inputs, and **never read live components** (combat.md §5.3). The `Shield`/`Parry` steps and the attacker's
+prediction call the same `UGSTN_DefenceMath` functions on the snapshot (which now carries `bShielding`, `ShieldYaw`,
+`ParryWindowEndFrame`, `Link.Role`, `GrabImmunityEnd`, `Immunity tags` per entity), so a disagreement means only that the
+victim's state really differs.
+
+## 10. Sync state additions: byte estimates
+
+Raw widths (quantization as above); serialization writes defaults as one bit and frame stamps as variable-length deltas
+from the state's frame, so an idle fighter costs ≈ 0 in delta mode (combat.md §15).
+
+| Group | Raw (worst case) | Typical idle | Typical active |
+|---|---|---|---|
+| Shield (`ShieldValue` 2, stamp 4, flags 1, press 4, release 4, yaw 2) | 17 B | ~1 B | ~8 B |
+| Stuns (shieldstun, parry recovery, break, punish) | 4 × 4 + 1 = 17 B | 0 | ~4 B |
+| Tech + knockdown (lockout, last press, end, type, knockdown end) | 17 B | 0 | ~6 B |
+| Grab immunity | 4 B | 0 | ~2 B |
+| `FGSTN_LinkState` (type 1, role 1, partner 2, serial 1, linkFrame 4, endFrame 4, flags 1) | 14 B | 1 bit | ~9 B |
+| `MashProcessedFrame`, SDI extras | 9 B | 0 | ~3 B |
+| **Total** | **~78 B** | **~1–2 B** | **~20–25 B** |
+
+Inbox entries are **not** sync state (component memory, trimmed on rollback, M4 §7). Network bytes while linked: the
+link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 40 B/s/entity while a link is held.
+
+## 11. Content, tools, harness
+
+- Test content: `GSTN_Kit_TestDefence` additions on the test character: shield move (`GA_Shield` with a hold window),
+  grab move, pummel, four throws (forward and down enough for tests), tech set (InPlace, Roll, WallTech), knockdown
+  get-up; defence rules asset `DA_DefenceRules_Test` with short numbers (shield 100, drain 0.4/frame, parry window 5,
+  tech window 20, lockout 40, grab base 90 frames). A Python helper builds them like M3/M4 content.
+- Debug: `gstn.Combat.Debug.Shield 1` (arc wedge, value bar, parry window colour), `...Links 1` (line between partners,
+  socket gizmo, serial, remaining frames), `...Tech 1` (window/lockout bar), Gameplay Debugger additions.
+- **Harness scenarios** (`gasnpp_test.py`; 60/15 ms with and without 2 % loss; clean = snapshots equal, no unexplained
+  reconciles, plus the expected one per hit/grab on the victim's client):
+  `scenario_link_spike` (§2.1), `scenario_shield_block` (c1 jabs c2 shielding: blocked, shield value down, shieldstun
+  frames, no knockback, c1 `OnBlock` cancel), `scenario_shield_arc` (hit from behind passes through; edge angles),
+  `scenario_shield_break` (repeated hits: break, stun, recover), `scenario_parry` (shield pressed 3 frames before the hit:
+  nullified, c1 `Punished`, c1 rollbacks = 1; press 6 frames before: plain block), `scenario_tech_ground` (press at
+  c−3 teches in place; c−25 no tech; two presses: lockout), `scenario_tech_wall`, `scenario_sdi` (rules asset values),
+  `scenario_grab_throw` (c1 grabs, three pummels, throws forward; all states equal), `scenario_grab_mash` (c2 scripted
+  presses: escapes on the predicted frame, forced reconcile mid-mash), `scenario_link_break_distance` (server moves the
+  grabber away; and kill of either side), `scenario_grab_immunity` (regrab refused for N frames), `scenario_link_rollback`
+  (forced reconciles on each client inside a link, over formation and over break frames). New harness helpers:
+  `place_pair(distance, facing)`, `link_snapshot()`, `server_post_link_command(...)`.
+- **Automation tests** (`GSTNCombat.Core.Defence.*`, `.Link.*`): shield arc at boundary/behind/above, projectile source
+  direction, analytic shield value (drain, regen delay, clamp, rate change re-stamp), parry window edges and reopen
+  lockout, tech state machine on fake histories (press in window, early press with lockout, mash during lockout does not
+  extend, late press, hitstop-excluded presses, contact same frame as press), DI curve and `ScaleByVictimTag`, SDI limiter
+  (new event only, min frames, max per hit), mash progress and cap, pipeline order with fake contexts (every hit type ×
+  every state), inbox ordering of all four types and rollback trimming, `FGSTN_LinkState` round trip of
+  `NetSerialize`/`ShouldReconcile`/`Interpolate`, serial idempotence (stale `LinkCommand` ignored), link registry
+  indices stable, break rules evaluator, exit placer with a fake collision world (blocked candidates, fallback), hold
+  window stall (clock vs combat clock).
+
+## 12. Acceptance criteria
+
+1. Spikes recorded in combat.md §17 with the §2.1 pass/fail result; if P failed, work stops and the user decides.
+2. Scenarios of §11 clean; M1–M4 tests and scenarios (`scenario_hit_*`, `scenario_combat_spike`) still clean.
+3. Blocked hit: no damage or knockback, shield value and stun equal on server and both clients; a hit from outside the
+   arc deals normal damage.
+4. A parry costs the attacker's client one rollback; a parry vs block is decided by the hit's frame, not by resolution
+   latency (press at hit−4 vs hit−6 verified).
+5. Tech: press inside the window techs, outside misses, lockout verified; wall tech works on a wall mode wall;
+   identical decisions after forced reconciles.
+6. Link: formation, parked follow, throw and escape; link adds no unforced reconciles while the grabber moves; breaks only
+   through the watchdog; grabbed cannot act; immunity enforced.
+7. A new link type or defensive step is addable following §14 without touching the model's tick.
+8. Core and GAS modules acquire no NP dependency (checked as in M4); combat.md §12, §12b, §17 and testing.md updated.
+
+## 13. Resolution of the outline's open questions (*Proposal*, user decides)
+
+- **Shield/parry inputs in 3D PvE** — *Proposal*: one **limited** shield (a `ShieldHealth` pool that drains while held,
+  regenerates after a delay, breaks into a long stun), **directional** (140° default arc on the movement plane), on the
+  Shield button, grounded only; parry = the first 5 frames of the press (no separate button), with a re-press lockout so
+  holding-and-releasing is not a free parry. An always-available block is rejected (removes risk in co-op fights). PvE
+  rule via `IncomingShieldDamageScaleByRelationship` and `Combat.Immunity.Parry` on bosses' signature attacks.
+- **Supers vs shields** — *Proposal*: `Unblockable` is a per-hit flag (`HitType`), not per super; super finishers are
+  unblockable, setup hits blockable with a large `ShieldDamage`; supers stay parryable unless the hit also carries
+  `bParryable = false`.
+- **Added by this spec** (smaller decisions, same status): no air or wall shield; shield facing locked at press (turn rate 0)
+  with a data hook; grabs are not predicted beyond hitstop; knockdown with one neutral get-up; tech uses the Shield button
+  and needs `Tumble`, not plain hitstun; a grab beats shield and cannot be parried.
+
+## 14. How to extend
+
+- **A new link type** (e.g. held object, carry): create a `UGSTN_LinkTypeDefinition` (tag, two roles, parked flag, socket,
+  break rules, placer), add its role tags and, if it needs commands, slots with `Combat.Link.Role.*` requirements;
+  `UGSTN_LinkRegistry` assigns the wire index automatically. Formation is a hit type + `LinkRequest` requirements; extra
+  semantics (carry load, pair moves) are M7's `UGSTN_LinkRequestPolicy` subclass on the target side. No change to the
+  watchdog or the mode.
+- **A new defensive pipeline step**: subclass `UGSTN_HitResolutionStep`, write only to the context, add it to
+  `UGSTN_CombatRules::Pipeline` at the right position (§9), add its pure decision to `UGSTN_DefenceMath` if the attacker
+  must predict it, a state stamp in the sync state (all four serialization places) and a snapshot field, and tests with fake
+  contexts. Reverse effects use `OutgoingEntries`.
+- **A new tech type or get-up**: a timeline ability in the kit's `FGSTN_TechSet` + a `TechType` selector rule; no model change.
+- **A new break reason**: an enum value and a rule in `FGSTN_LinkBreakRules`, evaluated in the watchdog.
+- **New inbox entry kinds**: payload struct + handler in step 2 of §5.2; remember rollback trimming and `Serial` idempotence.
+
+## 15. Risks
+
+- **Parked approach quality** (§2.1): if presentation error on the observer exceeds the thresholds, the fallback is
+  forward-predicting the partner of a link only, which needs fork patches (combat.md §12.7); decide with numbers.
+- **Watchdog frame visibility**: it assumes the server finalizes all instances of frame F before it runs and that
+  re-simulation never happens on the server. If an NP id order effect appears, post breaks one frame later (stamp F+1).
+- **Break latency of two frames** and the one-frame tech latency are visible in fast play; measure in the harness and
+  tune windows (`WindowFrames`) rather than the model.
+- **Camera follows the derived transform** (touches project camera code and the hitstop wall lock interplay): ask before
+  editing; Blueprints changed only with notice (CLAUDE.md).
+- **Shield mirror drift**: attribute and sync value can diverge if a GE edits `ShieldHealth` directly; use
+  `UGSTN_GE_ShieldRestore` and add a development-build assert comparing both at event frames.
+- **Server-only inbox types on the client**: `Punish`, `LinkResponse`, `LinkCommand` never exist on the owning client; any
+  logic assuming them locally is a bug. Local split-screen drains them (M4 note) and is tested by one scenario variant.
+- **Mash fairness and PvE bosses grabbing players**: `MaxFrames` caps; co-op rescue (teammate hit frees the player) is a rule
+  to confirm (question list).
