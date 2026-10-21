@@ -97,6 +97,20 @@ def run_timeline(steps):
     _timeline['handle'] = unreal.register_slate_post_tick_callback(tick)
 
 
+def _combat_history(c):
+    """The history string with every frame older than FGSTN_InputHistory::MaxEventAge (254) written as '?'.
+    The wire format sends 8-bit frame deltas, so a client receives such an event (the current stick, kept forever) as
+    AncientFrame ('?') while the server still holds the real frame: same logical history, different strings."""
+    latest = c.get('historyFrame')
+    items = []
+    for item in c['history'].split():
+        frame, sep, rest = item.partition(':')
+        if sep and latest is not None and frame.lstrip('-').isdigit() and latest - int(frame) > 254:
+            frame = '?'
+        items.append(frame + sep + rest)
+    return ' '.join(items)
+
+
 def _diff(a, b, pos_tol=2.0):
     d = []
     la, lb = a['location'], b['location']
@@ -111,6 +125,12 @@ def _diff(a, b, pos_tol=2.0):
             d.append(f'{k} {v}!={bv}')
     if sorted(a.get('tags', [])) != sorted(b.get('tags', [])):
         d.append(f"tags {a.get('tags')}!={b.get('tags')}")
+    # Combat input history (newest 8 events): only where both sides run the combat model, not on simulated proxies
+    ca, cb = a.get('combat'), b.get('combat')
+    if ca and cb and b.get('simTicks', 0) > 0 and a.get('simTicks', 0) > 0:
+        ha, hb = _combat_history(ca), _combat_history(cb)
+        if ha != hb:
+            d.append(f"combat history '{ha}'!='{hb}'")
     return d
 
 

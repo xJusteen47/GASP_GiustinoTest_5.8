@@ -14,6 +14,7 @@ public class GSTNCombatNP : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
+			"GSTNCombatCore",
 			"GameplayAbilities",
 			"AbilitySystemSimulation",
 			"NetworkPrediction",

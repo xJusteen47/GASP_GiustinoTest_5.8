@@ -4,7 +4,9 @@
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "Abilities/NpAbilitySystemComponent.h"
+#include "Input/GSTN_InputScript.h"
 #include "MoverComponent.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
@@ -228,6 +230,20 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 		}
 		Json->SetObjectField(TEXT("cooldowns"), Cooldowns);
 		Json->SetBoolField(TEXT("abilityResimulating"), AbilitySystem->IsReSimulating());
+	}
+
+	if (const UGSTN_CombatSimComponent* Combat = Owner->FindComponentByClass<UGSTN_CombatSimComponent>())
+	{
+		if (const FGSTN_CombatSyncState* CombatState = Combat->GetSyncState())
+		{
+			// The input history in notation, oldest first: server and client must show the same newest events
+			TSharedRef<FJsonObject> CombatJson = MakeShared<FJsonObject>();
+			CombatJson->SetStringField(TEXT("history"), FGSTN_InputScript::Describe(CombatState->History, 8));
+			CombatJson->SetNumberField(TEXT("heldButtons"), CombatState->History.GetHeldButtons());
+			CombatJson->SetNumberField(TEXT("historyFrame"), CombatState->History.GetLatestFrame());
+			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->RequestedAction), MakeShared<FJsonValueNumber>(CombatState->RequestFrame) });
+			Json->SetObjectField(TEXT("combat"), CombatJson);
+		}
 	}
 
 	FString Out;

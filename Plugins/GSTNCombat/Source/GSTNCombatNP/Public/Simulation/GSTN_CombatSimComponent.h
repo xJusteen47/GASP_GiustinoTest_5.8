@@ -9,7 +9,9 @@
 #include "GSTN_CombatSimComponent.generated.h"
 
 class UGameplayAbility;
+class UGSTN_MoverSimStateTracker;
 class UInputAction;
+class UEnhancedPlayerInput;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
 
@@ -25,8 +27,10 @@ struct FAbilitySystemTimeStep;
  * ability system's OnSimulationPreTick, i.e. inside the ability system's own tick, where the fork has the right frame,
  * time and rollback bookkeeping. Nothing else writes into the combat state during a frame.
  *
- * Current scope (risk spike): buttons sampled from Enhanced Input or scripted by tests, a press of button i activates
- * ButtonAbilities[i], a press of HitstopTestButton opens a hitstop window that pauses the synced montage.
+ * Every tick the command (buttons, raw stick, camera yaw) is classified against the facing the Mover tracker knows for the
+ * end of the previous frame and appended to the input history in the sync state. Still the risk spike's behaviour on top:
+ * a press of button i activates ButtonAbilities[i], a press of HitstopTestButton opens a hitstop window that pauses the
+ * synced montage; slots and the buffer replace the button mapping next.
  *
  * Add it to a pawn that also has a UNpAbilitySystemComponent. Replicated; interpolated simulated proxies do not tick it.
  */
@@ -40,6 +44,7 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	// Network Prediction driver and simulation
 	void InitializeSimulationState(FGSTN_CombatSyncState* Sync, FGSTN_CombatAuxState* Aux);
@@ -64,9 +69,20 @@ public:
 	/** Latest simulated (or interpolated) combat state */
 	const FGSTN_CombatSyncState* GetSyncState() const;
 
+	/**
+	 * The input history in the notation of FGSTN_InputScript (oldest first, newest at the end), the held buttons and the
+	 * last ability request. For the debug display, logs and the network test harness
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetDebugString(int32 MaxEvents = 8) const;
+
 	/** Logical buttons, bit i of the input = ButtonActions[i]. At most 32 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
 	TArray<TObjectPtr<UInputAction>> ButtonActions;
+
+	/** The 2D move action, read as the stick on the controller (+Y up). Unset = the stick is always neutral */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
+	TObjectPtr<UInputAction> MoveAction;
 
 	/** Ability activated by a press of button i (spike: one ability per button, no slots or buffering yet) */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike")
@@ -83,13 +99,22 @@ protected:
 	virtual void InitializeNetworkPredictionProxy() override;
 
 private:
+	/** Enhanced Input state of the local player, null when this machine does not control the pawn */
+	const UEnhancedPlayerInput* GetPlayerInput() const;
 	uint32 SampleHeldButtons() const;
+	void SampleStick(FGSTN_CombatInputCmd& Cmd) const;
+
+	/** Yaw the character faces at the end of the previous frame, from the Mover tracker */
+	float GetSimulatedFacingYaw() const;
 
 	void BindAbilitySystem();
 	void HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_MoverSimStateTracker> MoverTracker;
 
 	FDelegateHandle PreTickHandle;
 

@@ -1,7 +1,7 @@
 # Sets up the assets for the project's gameplay abilities (GAS-NPP). Idempotent: running it again changes nothing.
 #
 # Run from the editor Python console:
-#   import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_gas_assets as s; s.run()   # wall_transition=True for step 3
+#   import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_gas_assets as s; s.run()   # wall_transition=True for step 3, combat_input=True for step 4
 # or headless (editor closed):
 #   UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GAS/setup_gas_assets.py [--wall-transition]"
 #
@@ -12,7 +12,8 @@
 #     GSTN_AbilityInputComponent (binds the ability input actions for the local player).
 #  3. (opt-in) SandboxCharacter_Mover: the Falling mode's GSTN_WallEntryTransition becomes a GSTN_AbilityWallEntryTransition with
 #     the same settings. Pawns without an ability system behave as before (bAllowWithoutAbilitySystem).
-# The two Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
+#  4. (opt-in) BP_GASNPP_TestCharacter: the GSTN_CombatSimComponent reads the stick from IA_Move (MoveAction).
+# The Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
 #
 # Current layout (2026-10-17, set by hand from the editor, not by this script): the NpAbilitySystem (GA_Jump, GA_WallSlide)
 # and the GSTN_AbilityInputComponent live on SandboxCharacter_Mover. BP_GASNPP_TestCharacter only overrides the inherited
@@ -27,6 +28,7 @@ IA_JUMP = '/Game/Input/IA_Jump'
 TEST_CHAR = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
 SANDBOX_CHAR = '/Game/Blueprints/SandboxCharacter_Mover'
 FALLING_MODE = 'Falling'
+IA_MOVE = '/Game/Input/IA_Move'
 
 subobjects = unreal.get_engine_subsystem(unreal.SubobjectDataSubsystem)
 sdl = unreal.SubobjectDataBlueprintFunctionLibrary
@@ -175,16 +177,38 @@ def setup_wall_transition():
     return changed
 
 
-def run(wall_transition=False):
-    """Step 3 changes a movement asset owned by the movement work: opt-in."""
+# ------------------------------------------------------------------------------------------------ 4. combat input
+
+def setup_combat_input():
+    """The combat component samples the stick of the local player from this action (the classifier needs the raw stick)."""
+    bp = unreal.load_asset(TEST_CHAR)
+    move = unreal.load_asset(IA_MOVE)
+    combat = next((obj for _, obj in blueprint_components(bp) if isinstance(obj, unreal.GSTN_CombatSimComponent)), None)
+    if not combat or not move:
+        log(f'ERROR: GSTN_CombatSimComponent or {IA_MOVE} not found')
+        return False
+    if combat.get_editor_property('move_action') == move:
+        return False
+    backup(TEST_CHAR)
+    combat.set_editor_property('move_action', move)
+    log('GSTN_CombatSimComponent.MoveAction = IA_Move')
+    unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+    unreal.EditorAssetLibrary.save_loaded_asset(bp)
+    return True
+
+
+def run(wall_transition=False, combat_input=False):
+    """Step 3 changes a movement asset owned by the movement work and step 4 the combat test character: opt-in."""
     log(f'mapping context changed: {setup_mapping_context()}')
     log(f'test character changed: {setup_test_character()}')
     if wall_transition:
         log(f'wall transition changed: {setup_wall_transition()}')
     else:
         log('wall transition skipped (run(wall_transition=True) or --wall-transition)')
+    if combat_input:
+        log(f'combat input changed: {setup_combat_input()}')
 
 
 if __name__ == '__main__':
     import sys
-    run(wall_transition='--wall-transition' in sys.argv)
+    run(wall_transition='--wall-transition' in sys.argv, combat_input='--combat-input' in sys.argv)
