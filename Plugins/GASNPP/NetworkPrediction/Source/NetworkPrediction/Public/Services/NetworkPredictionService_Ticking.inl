@@ -4,10 +4,19 @@
 
 // HEADER_UNIT_SKIP - Not included directly
 
+#include "NetworkPredictionCVars.h"
+#include "NetworkPredictionDriver.h"
 #include "NetworkPredictionInstanceData.h"
 #include "NetworkPredictionTickState.h"
 #include "NetworkPredictionTrace.h"
 #include "NetworkPredictionUtil.h"
+
+namespace NetworkPredictionCVars
+{
+	// Spike S-FP: a forward-predicted simulated proxy has no input service, so Tick_Internal repeats the last received input
+	// verbatim. Without this, edge-triggered data ("just pressed") acts again on every repeated frame. Off by default.
+	NETSIM_DEVCVAR_SHIPCONST_INT(SPPrepareRepeatedInput, 0, "np.Spike.SPPrepareRepeatedInput", "Spike S-FP. 1: forward-predicted simulated proxies call PrepareRepeatedInput on the input they repeat into the next frame (clears edge-triggered data). 0: repeat the input verbatim.");
+}
 
 // Common util used by the ticking services. Might make sense to move to FNetworkPredictionDriverBase if needed elsewhere
 template<typename ModelDef>
@@ -140,6 +149,15 @@ protected:
 			if (!bIsResim || Instance.NetRole == ROLE_SimulatedProxy)
 			{
 				OutputFrameData.InputCmd = InputFrameData.InputCmd;
+
+				// Spike S-FP: the copy above is a repeat of the last input received from the server (the frame that carries a
+				// real received input is overwritten by the head copy / ApplyCorrection). Clear its edge-triggered data like
+				// the server's remote input service does for a starved tick, so a press is not acted on again every frame.
+				// Done on resim as well so the replay stays identical to the original tick.
+				if (Instance.NetRole == ROLE_SimulatedProxy && NetworkPredictionCVars::SPPrepareRepeatedInput() != 0)
+				{
+					FNetworkPredictionDriver<ModelDef>::PrepareRepeatedInput(OutputFrameData.InputCmd.Get());
+				}
 			}
 			
 			TTickUtil<ModelDef>::DoTick(Instance, InputFrameData, OutputFrameData, Step, EndTime, GetTickContext<bIsResim>(Instance.NetRole));

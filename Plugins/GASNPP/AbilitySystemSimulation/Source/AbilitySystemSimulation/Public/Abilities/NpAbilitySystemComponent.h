@@ -128,6 +128,14 @@ class ABILITYSYSTEMSIMULATION_API UNpAbilitySystemComponent : public UAbilitySys
 
 	ENetRole GetCachedSimNetRole() const;
 
+	/**
+	 * Spike S-FP: true when this ability system belongs to a simulated proxy that is being forward-predicted AND we are inside its
+	 * own simulation tick (so also inside re-simulation). Only then may the role guards that reject simulated proxies let a locally
+	 * decided ability activation / effect application through: a simulation tick is deterministic and replayable, an activation
+	 * from gameplay code outside it is not. Gated by the cvar np.Spike.SPPredictActivation (default 0, i.e. always false).
+	 */
+	bool CanPredictAsSimulatedProxy() const;
+
 
 
 
@@ -670,6 +678,8 @@ private:
 	TObjectPtr<AController> CachedOwningController = nullptr;
 	AController* TryGetOwningController();
 	bool bIsRestoringFrame = false;
+	// Spike S-FP: true for the whole of InternalSimulationTick, see CanPredictAsSimulatedProxy.
+	bool bInSimulationTick = false;
 	UPROPERTY()
 	TWeakObjectPtr<UNetworkPredictionWorldManager> CachedManager = nullptr;
 	FAbilitySystemTimeStep LatestCachedTimeStep;

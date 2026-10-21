@@ -3,6 +3,7 @@
 #include "NetworkPredictionWorldManager.h"
 #include "Engine/Engine.h"
 #include "Engine/NetConnection.h"
+#include "HAL/PlatformTime.h"
 #include "PBDRigidsSolver.h"
 #include "ChaosSolversModule.h"
 #include "NetworkPredictionLagCompensation.h"
@@ -16,6 +17,12 @@
 
 
 NETSIM_DEVCVAR_SHIPCONST_INT(ToggleLagCompensationDebug, 0, "np.DrawLagCompensationDebug", "Toggle Lag Compensation Debug , 1 : Enabled , 0 : Disabled");
+
+// Spike S-FP: measures what the re-simulation of rolled back frames costs, to size the extra cost of forward-predicting more entities.
+namespace NetworkPredictionCVars
+{
+	NETSIM_DEVCVAR_SHIPCONST_INT(SpikeLogResimCost, 0, "np.Spike.LogResimCost", "Spike S-FP. 1: on clients, accumulate wall time and frame count of rollback re-simulations and log one SpikeResim line every 5 seconds. 0: off.");
+}
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(NetworkPredictionWorldManager)
 
@@ -303,6 +310,11 @@ void UNetworkPredictionWorldManager::ReconcileSimulationsPostNetworkUpdate_Inter
 			
 			bool bFirstStep = true;
 
+			// Spike S-FP: time the whole re-simulation loop (every subscribed model, so it includes the extra cost of each
+			// forward-predicted proxy). Read once so the window stays consistent if the cvar flips mid-rollback.
+			const bool bSpikeLogResim = NetworkPredictionCVars::SpikeLogResimCost() != 0;
+			const double SpikeResimStartSeconds = bSpikeLogResim ? FPlatformTime::Seconds() : 0.0;
+
 			// Do rollback as necessary
 			for (int32 Frame=RollbackFrame; Frame < EndFrame; ++Frame)
 			{
@@ -328,6 +340,13 @@ void UNetworkPredictionWorldManager::ReconcileSimulationsPostNetworkUpdate_Inter
 				bFirstStep = false;
 			}
 			FixedTickState.PendingFrame = EndFrame;
+
+			if (bSpikeLogResim)
+			{
+				SpikeResimStats.TotalSeconds += FPlatformTime::Seconds() - SpikeResimStartSeconds;
+				SpikeResimStats.Rollbacks++;
+				SpikeResimStats.Frames += NumFrames;
+			}
 		}
 		else if (RollbackFrame == FixedTickState.PendingFrame)
 		{
@@ -342,6 +361,27 @@ void UNetworkPredictionWorldManager::ReconcileSimulationsPostNetworkUpdate_Inter
 		{
 			// Most likely we haven't had a confirmed frame yet so our local frame -> server mapping hasn't been set yet
 			UE_LOG(LogNetworkPrediction, Log, TEXT("RollbackFrame %d AHEAD of PendingFrame %d... Offset: %d"), RollbackFrame, FixedTickState.PendingFrame, FixedTickState.Offset);
+		}
+	}
+
+	// Spike S-FP: flushed here rather than inside the rollback block so a window without any rollback still logs a
+	// "rollbacks=0" line, which is the baseline to compare against.
+	if (NetworkPredictionCVars::SpikeLogResimCost() != 0)
+	{
+		const double SpikeNow = FPlatformTime::Seconds();
+		if (SpikeResimStats.WindowStartSeconds == 0.0)
+		{
+			SpikeResimStats.WindowStartSeconds = SpikeNow;
+		}
+		else if (SpikeNow - SpikeResimStats.WindowStartSeconds >= 5.0)
+		{
+			const double TotalMs = SpikeResimStats.TotalSeconds * 1000.0;
+			const double MsPerFrame = SpikeResimStats.Frames > 0 ? TotalMs / SpikeResimStats.Frames : 0.0;
+			// The world is appended after the fixed part of the line so the line stays parseable by prefix; two PIE clients log from one process.
+			UE_LOG(LogNetworkPrediction, Display, TEXT("SpikeResim: rollbacks=%d frames=%d totalMs=%.2f msPerFrame=%.3f world=%s"),
+				SpikeResimStats.Rollbacks, SpikeResimStats.Frames, TotalMs, MsPerFrame, *GetNameSafe(GetWorld()));
+			SpikeResimStats = FSpikeResimStats();
+			SpikeResimStats.WindowStartSeconds = SpikeNow;
 		}
 	}
 

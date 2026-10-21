@@ -173,6 +173,17 @@ private:
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnHandleDeferredServiceConfig, UNetworkPredictionWorldManager*);
 	FOnHandleDeferredServiceConfig DeferredServiceConfigDelegate;
 	bool bLockServices = false; // Services are locked and we can't
+
+	// Spike S-FP: resim cost accumulated by np.Spike.LogResimCost. Per manager (= per client world) so that two PIE clients
+	// in one process are not mixed.
+	struct FSpikeResimStats
+	{
+		double WindowStartSeconds = 0.0;
+		double TotalSeconds = 0.0;
+		int32 Rollbacks = 0;
+		int32 Frames = 0;
+	};
+	FSpikeResimStats SpikeResimStats;
 	
 	// ---------------------------------------
 

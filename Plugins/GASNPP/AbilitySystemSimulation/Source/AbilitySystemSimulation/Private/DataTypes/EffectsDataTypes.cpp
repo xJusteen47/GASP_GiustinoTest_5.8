@@ -5,6 +5,7 @@
 
 #include "GameplayEffect.h"
 #include "NetworkPredictionReplicationProxy.h"
+#include "HAL/IConsoleManager.h"
 
 #pragma region Synced data for captured attributes
 bool FCapturedAttributesSyncData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
@@ -719,7 +720,12 @@ bool FAttributeSyncData::NetSerialize(const FNetSerializeParams& P)
 {
 
 	// we don't serialize the base value to the sim proxies
-	if (P.ReplicationTarget == EReplicationProxyTarget::SimulatedProxy)
+	// Spike S-FP: a forward-predicted proxy simulates the attribute set and compares its base value with the server's in
+	// ShouldReconcile; without the base it reconciles on every update. The cvar must have the same value on server and
+	// client (it changes the wire format): fine in single-process PIE, not for real builds.
+	static IConsoleVariable* SpikeSendBaseCVar = IConsoleManager::Get().RegisterConsoleVariable(TEXT("np.Spike.SPSendAttributeBase"), 0,
+		TEXT("Spike S-FP. 1: also send attribute base values to simulated proxies (forward prediction). Same value needed on both ends."), ECVF_Cheat);
+	if (P.ReplicationTarget == EReplicationProxyTarget::SimulatedProxy && SpikeSendBaseCVar->GetInt() == 0)
 	{
 		P.Ar << CurrentValue;
 		return true;

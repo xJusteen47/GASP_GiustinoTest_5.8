@@ -269,7 +269,21 @@ void UNpGameplayAbility::StartAbilityRollback(const FActiveAbilityInstanceData& 
 #pragma region UGameplay Ability Overrides
 bool UNpGameplayAbility::ShouldActivateAbility(ENetRole Role) const
 {
-	return Role != ROLE_SimulatedProxy;
+	if (Role == ROLE_SimulatedProxy)
+	{
+		// Spike S-FP: let a forward-predicted proxy pass while its own simulation tick is running. Without current actor info
+		// (CDO / not yet granted) there is no ASC to ask, so keep the original behaviour. The member is read directly because
+		// GetCurrentActorInfo() ensures when called on the CDO, which CanActivateAbility may do.
+		if (const FGameplayAbilityActorInfo* ActorInfo = CurrentActorInfo)
+		{
+			if (const UNpAbilitySystemComponent* NpASC = Cast<UNpAbilitySystemComponent>(ActorInfo->AbilitySystemComponent.Get()))
+			{
+				return NpASC->CanPredictAsSimulatedProxy();
+			}
+		}
+		return false;
+	}
+	return true;
 }
 
 void UNpGameplayAbility::CancelAbility(const FGameplayAbilitySpecHandle Handle,

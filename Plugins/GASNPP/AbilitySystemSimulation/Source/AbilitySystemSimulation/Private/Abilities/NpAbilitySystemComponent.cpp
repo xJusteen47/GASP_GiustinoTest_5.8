@@ -24,6 +24,14 @@
 #include "MontageSimulator/NetMontageSimulator.h"
 #include "Net/UnrealNetwork.h"
 #include "ProjectilesSimulator/SyncedProjectileBase.h"
+#include "HAL/IConsoleManager.h"
+
+// Spike S-FP: lets a forward-predicted simulated proxy start abilities / apply effects from inside its own simulation tick.
+// Read through UNpAbilitySystemComponent::CanPredictAsSimulatedProxy (also from NpGameplayAbility.cpp).
+static TAutoConsoleVariable<int32> CVarSpikeSPPredictActivation(
+	TEXT("np.Spike.SPPredictActivation"), 0,
+	TEXT("Spike S-FP. 1: a simulated proxy that is forward-predicted may activate abilities and apply effects to itself from inside its own simulation tick (and re-simulation). 0: simulated proxies only get server-decided activations through RestoreFrame."),
+	ECVF_Cheat);
 
 
 #define LOCTEXT_NAMESPACE "NpAbilitySystemComponent"
@@ -164,6 +172,15 @@ UAnimMontage* UNpAbilitySystemComponent::GetPlayingSyncedMontage(float& CurrentT
 ENetRole UNpAbilitySystemComponent::GetCachedSimNetRole() const
 {
 	return NetworkPredictionProxy.GetCachedNetRole();
+}
+
+bool UNpAbilitySystemComponent::CanPredictAsSimulatedProxy() const
+{
+	// The cached NP role (not the avatar's) is what decides whether NP forward-predicts this instance. bInSimulationTick keeps
+	// gameplay code outside the tick (input handlers, BP events, replication callbacks) out: only the deterministic tick may decide.
+	return CVarSpikeSPPredictActivation.GetValueOnAnyThread() != 0
+		&& NetworkPredictionProxy.GetCachedNetRole() == ROLE_SimulatedProxy
+		&& bInSimulationTick;
 }
 
 void UNpAbilitySystemComponent::PlaySyncedMontage(UAnimMontage* AnimMontage, float StartTime, float PlayRate, FName SectionName, float InRootMotionScale)
@@ -951,7 +968,9 @@ float UNpAbilitySystemComponent::GetCurrentSimulationTimeMS() const
 void UNpAbilitySystemComponent::InternalSimulationTick(const FAbilitySystemTimeStep& TimeStep,const FAbilitySystemTickStartData& TickStartData
                                                        , FAbilitySystemTickEndData& TickEndData)
 {
-	
+	// Spike S-FP: scoped so the flag is restored on every exit path, a stale true would let non-simulation code activate abilities on a proxy.
+	TGuardValue<bool> InSimulationTickGuard(bInSimulationTick, true);
+
 	CurrentCachedTimeStep = TimeStep;
 	if (TimeStep.ServerFrame > LatestCachedTimeStep.ServerFrame || TimeStep.BaseSimTimeMs > LatestCachedTimeStep.BaseSimTimeMs)
 	{
@@ -1310,7 +1329,8 @@ FActiveGameplayEffectHandle UNpAbilitySystemComponent::ApplyGameplayEffectSpecTo
 		const ENetRole NetMode = ActorInfo->AvatarActor->GetLocalRole();
 
 		// This should only come from button presses/local instigation (AI, etc).
-		if (NetMode == ROLE_SimulatedProxy)
+		// Spike S-FP: a forward-predicted proxy may apply effects to itself from inside its own simulation tick.
+		if (NetMode == ROLE_SimulatedProxy && !CanPredictAsSimulatedProxy())
 		{
 			return FActiveGameplayEffectHandle();;
 		}
@@ -2133,7 +2153,8 @@ bool UNpAbilitySystemComponent::TryActivateAbility(FGameplayAbilitySpecHandle Ab
 	const ENetRole NetMode = ActorInfo->AvatarActor->GetLocalRole();
 
 	// This should only come from button presses/local instigation (AI, etc).
-	if (NetMode == ROLE_SimulatedProxy)
+	// Spike S-FP: a forward-predicted proxy may start abilities from inside its own simulation tick (the combat sim does).
+	if (NetMode == ROLE_SimulatedProxy && !CanPredictAsSimulatedProxy())
 	{
 		return false;
 	}
@@ -2197,11 +2218,12 @@ bool UNpAbilitySystemComponent::InternalTryActivateAbility(FGameplayAbilitySpecH
 		NetMode = LocalAvatarActor->GetLocalRole();
 	}
 
-	if (NetMode == ROLE_SimulatedProxy)
+	// Spike S-FP: see TryActivateAbility. The role is derived from the avatar here, which is ROLE_SimulatedProxy for a remote pawn.
+	if (NetMode == ROLE_SimulatedProxy && !CanPredictAsSimulatedProxy())
 	{
 		return false;
 	}
-	
+
 	UGameplayAbility* Ability = Spec->Ability;
 
 	if (!Ability)
