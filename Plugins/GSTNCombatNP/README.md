@@ -40,6 +40,17 @@ one, see `bSendCameraAim` in [GSTNInputNP](../GSTNInputNP/README.md)). The aim i
 so a re-simulation reads the command it replays. `FGSTN_InputHostUtils::IsCommandActivation()` is true inside `CanExecuteBinding` and
 `ExecuteRequest` (an `FGSTN_CommandActivationScope` on the stack): an ability uses it to tell a command from a trigger or an effect.
 
+**`UGSTN_GA_Base` (combat-m3 6.1).** The base of the abilities that run under the combat model (`Abilities/GSTN_GA_Base.h`, `Abstract, Blueprintable`,
+derives from the fork's `UNpGameplayAbility`). It gives an ability: `GetCombatComponent()` (cached when the avatar is set);
+`GetActivationContext()` (the command, press frame, trigger button and source of the activation, captured in `ActivateAbility` into sync
+variables and rebuilt on demand; the command is stored as its table index, never as a tag); `bEndOnTriggerRelease` (ends the ability on the
+frame the button that started it is no longer held in the input history; no effect on a start without a button); `GetCombatClock()` and
+`WaitCombatFrames(N)` (counts N combat frames, hitstop excluded, from a start clock in a sync variable, then calls `OnCombatFramesElapsed` /
+the Blueprint event; one wait at a time, never called while a frame is restored); `GetAimRotation()`; and `InterruptPolicy`
+(`SkipIfBusy` refuses a non-command activation while a timeline runs; `InterruptCurrent` cancels the running abilities that carry any tag of
+`InterruptTags`; a command is never subject to it). Call the parent's `ActivateAbility` before reading the context. The decisions are
+the pure `FGSTN_GARules` (`Abilities/GSTN_GATypes.h`). Costs, cooldowns, block/cancel tags and triggers are the ability system's own.
+
 **Sync state.** `FGSTN_CombatSyncState` is `Core` (`FGSTN_CombatSyncCore`: the input state, the hitstop window and the action part) followed by
 `Fragments`, a list of `FGSTN_SyncFragment` from `GSTNCombatCore` that features add per entity. The core's bytes are the same with
 or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the
@@ -113,6 +124,9 @@ Automation tests `GSTNCombat.NP.*` in `Source/GSTNCombatNP/Private/Tests/` run w
   (the log prints the bits of each; zero fragments are exactly one bit over the core), the array order not affecting the bytes,
   `ShouldReconcile`, `Interpolate` and `ToString` of the state, a fragment of an unknown type id being skipped without moving the reader, and a
   malformed count being an archive error. The fragments used are test-only types with ids from the test range.
+- `GABase.{WaitFramesRollback, InterruptPolicy, ReleaseEnds}`: the combat clock and a wait counted on it (through hitstop and through a
+  rollback and replay), the interrupt truth table and the command marker scope, the end on trigger release. Pure rules; the ability
+  itself is checked by the PIE scenarios.
 - `TickExtension.{OrderByPriority, EmptyHooksNoEffect}`: run order by priority then type id independent of registration order, duplicate
   ids refused, and the hook points changing nothing when no extension or only an observer is registered.
 
