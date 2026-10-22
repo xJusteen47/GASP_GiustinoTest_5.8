@@ -60,6 +60,8 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - **Gravity can change arbitrarily.** "Up" is always the opposite of the local gravity of the entity at that frame,
   never world Z: DI, launch angles, push back, the movement plane, projectiles and minion movement all follow it.
 - **Trampolines may exist** in levels: everyone landing on one is launched along its normal; a tumbling victim bounces.
+- **Trampolines** (2026-10-22 18:27): a box (parallelepiped) with adjustable height, depth and width; mesh, size, launch direction,
+  tilt etc. can differ per instance (M4 H11b).
   *Proposal* in combat-m4-hits.md §7b (own small plugin, not in the combat core).
 
 ## 2e. Super armor and ricochet (owner input, 2026-10-22 late morning)

@@ -67,10 +67,10 @@ Only one thread at a time should touch `GSTNCombatNP` and the harness on the PC 
 
 The owner allowed self-approval of these plans where they hold no architectural question and no new feature. Everything
 in the three plans is approved on that basis (assumptions in §5 are spec proposals or tunable data defaults) **except the
-items below, which stay owner decisions**. Implementation threads must not do them until the owner answers:
+items below, which were owner decisions**. All three are now answered:
 
-1. **Trampoline actor and `GSTNLevelObjects` plugin** (M4 H11b): new feature and new plugin. H11 keeps only the
-   `Surface.Type.Trampoline` bounce row and the launch move type.
+1. ~~Trampoline actor and `GSTNLevelObjects` plugin~~ **Approved 2026-10-22 18:27**: an adjustable box (height, depth,
+   width) with per-instance mesh, size, launch direction and tilt. Planned as M4 H11b; the plugin depends only on `GSTNCombatCore`.
 2. ~~`IsMovementLocked` extension point in the wall-movement core~~ **Approved 2026-10-22 18:25**: H7 adds the protected
    virtual to `UGSTN_WallMovementModeBase` (default: Mover has `Combat.Mover.Frozen`), so hitstop freezes on walls too.
 3. ~~Parts never heal~~ **Answered 2026-10-22 18:22**: no self-regeneration, but explicit restores (e.g. a healer enemy)
