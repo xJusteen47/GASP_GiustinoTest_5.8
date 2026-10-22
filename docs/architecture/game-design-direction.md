@@ -99,6 +99,8 @@ consequences for the design. Items marked *Reading* are interpretations to confi
   owner's reading of Smash). This logic is **standard** and generally does not change.
 - Example: hit 1 staggers without launching and does damage; hit 2's knockback, against the weight left after hit 1, is still not
   enough to launch, so the enemy is only staggered again.
+- A hit's own damage does not lighten the weight that decides its own knockback; only damage taken before it counts (owner
+  confirmed, 11:32).
 - Consequences (M4 §3): one dial per job; the standard knockback model is weight-driven (damage makes knockback stronger only
   through the weight, never twice); the default penetration bands act on damage only (combat-parts.md §3.4).
 

@@ -239,8 +239,8 @@ these four rules in order, from the hit data and `Ctx.Reaction` only (all *Propo
    or stagger it again (question M4.27). The C++ defaults of the thresholds stay 0 (identity, so unextended tests keep the
    always-launch result); the **standard rules asset** shipped with `GSTNCombat` (`GSTN_CombatRules_Standard`, the default of the
    plugin's developer settings) sets real values, *Proposal* starting points to tune: `PushBackThreshold` = 30 % and
-   `LaunchThreshold` = 60 % of `TumbleThreshold`. Whether this hit's own damage should already lighten the weight that decides its
-   launch is question M4.35 (*Proposal*: no, as in the example).
+   `LaunchThreshold` = 60 % of `TumbleThreshold`. This hit's own damage does **not** lighten the weight that decides its knockback
+   (owner confirmed, 2026-10-22, 11:32, question M4.35): it counts from the next hit on.
    - `Launch`: today's behaviour, **Smash-like percent knockback kept**: `LaunchVelocity` = direction × `K`, `bTumble = K ≥
      TumbleThreshold`, DI at hitstop end, forced `Falling`.
    - `PushBack`: a **horizontal slide on the ground, with no airborne state**: `LaunchVelocity` = the horizontal direction × `min(K ×

@@ -326,6 +326,7 @@ Ipotesi nella specifica: l'ultimo 40% del volo, fino al primo frame di atterragg
 **35. Il danno del colpo stesso alleggerisce già il peso che decide il suo knockback, o conta solo il danno subito prima?**
 Perché conta: nel primo caso ogni colpo forte lancia un po' di più (come la percentuale in Smash, che include il danno del colpo); nel secondo il tuo esempio vale alla lettera e il risultato si legge dallo stato visibile prima del colpo.
 Ipotesi nella specifica: conta solo il danno subito prima del colpo (M4 §3, punto 4).
+**Risposta (2026-10-22, 11:32):** Confermata l'ipotesi: conta solo il danno subito prima del colpo.
 
 **36. Il danno rende il knockback più forte solo tramite il peso (un'unica manopola, modello standard `WeightDriven`), mentre la formula di Smash con la percentuale come termine a sé resta un'opzione per il PvP?**
 Perché conta: se peso e percentuale contano entrambi, lo stesso danno viene contato due volte e i nemici malconci volano troppo; con una sola manopola il designer regola "quanto si alleggerisce" con una curva.
