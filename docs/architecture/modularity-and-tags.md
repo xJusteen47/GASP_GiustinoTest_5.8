@@ -108,7 +108,7 @@ PC has it. The tables below show **both**: "in repo" is what I read, "on owner's
 | `Plugins/EngineOverrides/` (`Mover`, `ChaosMover`, `MoverExamples`, `SmartObjects`, `GameplayInteractions`, `GameplayTargetingSystem`, `AllToolsets`, `GASToolsets`) | engine overrides | in repo | engine-level |
 | `Plugins/UE_MCP_Bridge` | editor tooling | in repo | not surveyed |
 | `GSTNInput` | `GSTNInputCore` (Runtime) | owner's PC | Core, CoreUObject, Engine, GameplayTags, DeveloperSettings; private EnhancedInput (input.md §2) |
-| `GSTNInput` | `GSTNInputNP` (Runtime) | owner's PC | GSTNInputCore, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, NetCore, Mover; private EnhancedInput |
+| `GSTNInput` | `GSTNInputNP` (Runtime) | owner's PC | GSTNInputCore, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, NetCore, Mover; private EnhancedInput. **Decision (2026-10-22, M2 independence work):** after the M2 push it moves to its own plugin `GSTNInputNP` (§3.6) |
 | `GSTNCombat` | `GSTNCombatCore` (Runtime) | in repo | public Core, CoreUObject, Engine, GameplayTags, DeveloperSettings; private EnhancedInput. Target: + GSTNInputCore |
 | `GSTNCombat` | `GSTNCombatNP` (Runtime) | in repo | public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, NetCore, Mover; private EnhancedInput. Target: + GSTNInputNP |
 | `GSTNCombat` | `GSTNCombatGAS` | planned (M3) | Core, GameplayAbilities, GameplayTasks (combat-m3 §), no NP, no Mover |
@@ -327,8 +327,8 @@ before any plugin ships content (already noted for combat).
 
 | Feature / milestone | Plugin (module) | Layer | Switchable how |
 |---|---|---|---|
-| Input layer (buffer, patterns, slots, bindings, events) | `GSTNInput` (`GSTNInputCore`, `GSTNInputNP`) | L3 | plugin enable |
-| Mover sim-state tracker, input sources, context provider | `GSTNInput` (`GSTNInputNP`) | L3 | with input |
+| Input layer (buffer, patterns, slots, bindings, events) | `GSTNInput` (`GSTNInputCore` only, *Decision* 2026-10-22 from the M2 independence work: it loads without the NP/GAS fork) | L3 | plugin enable |
+| Input simulation on NP, Mover sim-state tracker, input sources, context provider | **`GSTNInputNP`, its own plugin** after the M2 push (*Decision*, same source), depends on `GSTNInput` | L3 | with the NP fork |
 | Default command set, buttons, combat tags (M1) | `GSTNCombat` (`GSTNCombatCore`) | L3 | with combat |
 | Abilities base, attributes, kits, weapons, loadouts (M3) | `GSTNCombat` (`GSTNCombatGAS`, `GSTNCombatNP`) | L3 | with combat |
 | Combat NP model, hit pipeline, hitstop, knockback (M2, M4) | `GSTNCombat` (`GSTNCombatNP`; pure rules in `Core`) | L3 | with combat |
@@ -369,7 +369,8 @@ Each `GSTN*` plugin must work when copied alone (with the plugins its `.uplugin`
    `GSTNCombatNP` → `GSTNInputNP`: combat embeds the input simulation (one NP model per character) through
    `IGSTN_InputSimHost`; moving those types into `GSTNInputCore` would break the rule that `*Core` has no NP, GAS or Mover
    dependency. Each such edge is listed in the layers file as `embeds`, and the depended-on plugin must still build and run
-   alone (its own NP model and tests).
+   alone (its own NP model and tests). Since `GSTNInputNP` is its own plugin (*Decision* 2026-10-22, §3.6), the `GSTNCombat`
+   `.uplugin` lists both `GSTNInput` and `GSTNInputNP`, and the `embeds` edge is between plugins, not only modules.
 3. **Optional integrations are bridge plugins**, never `#if WITH_<OTHER_PLUGIN>` code paths: `GSTNPartsMinion` is the
    pattern and `GSTNPlatformMinion` (platform minions) the second instance. Disabling either side removes the bridge; neither
    side knows the other.
@@ -420,6 +421,10 @@ response or a mode rule **with data and Blueprint only, without a C++ build**. T
   hit or per event may be Blueprint; per-frame, per-entity hooks (tick extensions, minion steering for hundreds of enemies, M8)
   are C++ by default, with a Blueprint variant opt-in and counted in the profiling budget (combat.md §15). UE5 has no Blueprint
   nativization, so logic that shows in the profile moves to C++ behind the same event.
+
+**Already in place in `GSTNInput`** (M2 independence work, 2026-10-22): opt-in Blueprint wrappers for input **conditions,
+priorities and reset rules**. Slot validation cannot see inside a Blueprint condition, so it treats it as opaque and warns; the
+same rule (opaque plus a warning) applies to every Blueprint hook that a validator cannot analyse.
 
 **Stays C++ only, and why:** the NP model and sync-state fragments (native serialize, compare and interpolate, deterministic),
 the tick order, the snapshot and lag-compensation history, the input simulation, and hot loops. Designers still configure all of
@@ -502,7 +507,7 @@ Existing names are kept unless listed in 4.3.
 
 | Root | Subtrees (examples) | Owning plugin | Source |
 |---|---|---|---|
-| `Input.Button.*` | `Attack Strong Special Crouch Shield Jump`, designer buttons | root + generic: `GSTNInput`; standard buttons: `GSTNCombat` | native + ini |
+| `Input.Button.*` | `Attack Strong Special Crouch Shield Jump`, designer buttons | root: `GSTNInput`; **any plugin that depends on `GSTNInputCore` may declare leaves** (Lyra `InputTag` style, *Decision* 2026-10-22); combat's standard buttons are leaves declared in `GSTNCombatCore`; designer buttons in ini | native + ini |
 | `Input.Context.*` | `Grounded Airborne OnWall` | `GSTNInput` | native |
 | `Input.Lock.Command.*` | `Defence`, `Link` (per-root locks) | `GSTNInput` declares base; each command-root owner declares its lock | native |
 | `Input.BufferEvent.*`, `Input.Event.*` | `AbilityActivated`, `CommandExecuted` | `GSTNInput` | native |
@@ -535,7 +540,7 @@ Existing names are kept unless listed in 4.3.
 | `Test.*` | harness only | `GSTNTestKit` / project test content | native in a test module, **not** exported from the project's public headers |
 | `Foley.*`, `MotionMatching.*`, `SmartObject.*`, `StateTree.*`, `Abilities.*` | sample content | Epic sample; do not touch | ini (`DefaultGameplayTags.ini`) |
 
-**Open subtrees.** For `Combat.State.*`, `Combat.Event.*`, `Combat.HitType.*`, `Combat.Weapon.Role.*`, `Combat.Immunity.*`,
+**Open subtrees.** For `Input.Button.*` (any plugin depending on `GSTNInputCore`), `Combat.State.*`, `Combat.Event.*`, `Combat.HitType.*`, `Combat.Weapon.Role.*`, `Combat.Immunity.*`,
 `Combat.SetByCaller.*`, `Input.BufferEvent.*` and `Combat.Link.*`, the root owner declares the framework leaves and the plugin that
 introduces a mechanic declares its own leaves (documented in its spec, e.g. `Combat.State.Shielding` in `GSTNDefence`,
 `Combat.HitType.Interaction.Mount` in `GSTNPiggyback`, `Combat.Weapon.Role.Held` in `GSTNHeld`, `Combat.Event.Part.Broken` in `GSTNParts`). `Combat.Part.*` is a root of its own (one owner, `GSTNParts`), and `GSTNParts` declares **no** `Combat.State.*`, `Combat.Mover.*` or `Combat.Lock.*` (stagger is the existing `Combat.State.Hitstun`). Rule 1 of 4.1 still holds for
