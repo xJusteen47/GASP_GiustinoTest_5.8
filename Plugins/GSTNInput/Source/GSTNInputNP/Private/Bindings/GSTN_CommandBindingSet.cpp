@@ -230,7 +230,15 @@ EDataValidationResult UGSTN_CommandBindingSet::IsDataValid(FDataValidationContex
 		KeyToBinding.Add(Index);
 	}
 
-	for (const FGSTN_BindingConflict& Conflict : UGSTN_CommandBindingUtils::FindBindingConflicts(Keys))
+	const TArray<FGSTN_ExclusiveTagGroup> ExclusiveGroups = UGSTN_InputSettings::Get().GetAllExclusiveContextGroups();
+	for (const FGSTN_BindingConflict& Impossible : UGSTN_CommandBindingUtils::FindImpossibleBindings(Keys, ExclusiveGroups))
+	{
+		Context.AddError(FText::Format(LOCTEXT("BindingImpossible", "Binding {0}: {1}"),
+			KeyToBinding.IsValidIndex(Impossible.BindingA) ? KeyToBinding[Impossible.BindingA] : Impossible.BindingA,
+			FText::FromString(Impossible.Message)));
+		Result = EDataValidationResult::Invalid;
+	}
+	for (const FGSTN_BindingConflict& Conflict : UGSTN_CommandBindingUtils::FindBindingConflicts(Keys, ExclusiveGroups))
 	{
 		Context.AddError(FText::Format(LOCTEXT("BindingConflict", "Bindings {0} and {1}: {2}"),
 			KeyToBinding.IsValidIndex(Conflict.BindingA) ? KeyToBinding[Conflict.BindingA] : Conflict.BindingA,

@@ -18,7 +18,7 @@ int32 UGSTN_CommandBindingUtils::SelectBinding(TConstArrayView<const FGSTN_TagRe
 	return Best;
 }
 
-TArray<FGSTN_BindingConflict> UGSTN_CommandBindingUtils::FindBindingConflicts(TConstArrayView<FGSTN_BindingKey> Bindings)
+TArray<FGSTN_BindingConflict> UGSTN_CommandBindingUtils::FindBindingConflicts(TConstArrayView<FGSTN_BindingKey> Bindings, TConstArrayView<FGSTN_ExclusiveTagGroup> ExclusiveGroups)
 {
 	TArray<FGSTN_BindingConflict> Conflicts;
 	for (int32 A = 0; A < Bindings.Num(); ++A)
@@ -30,7 +30,7 @@ TArray<FGSTN_BindingConflict> UGSTN_CommandBindingUtils::FindBindingConflicts(TC
 		for (int32 B = A + 1; B < Bindings.Num(); ++B)
 		{
 			if (Bindings[B].Command == Bindings[A].Command && Bindings[B].Requirements
-				&& Bindings[A].Requirements->CanHoldTogether(*Bindings[B].Requirements)
+				&& Bindings[A].Requirements->CanHoldTogether(*Bindings[B].Requirements, ExclusiveGroups)
 				&& Bindings[A].Requirements->GetRequiredCount() == Bindings[B].Requirements->GetRequiredCount())
 			{
 				FGSTN_BindingConflict Conflict;
@@ -43,4 +43,22 @@ TArray<FGSTN_BindingConflict> UGSTN_CommandBindingUtils::FindBindingConflicts(TC
 		}
 	}
 	return Conflicts;
+}
+
+TArray<FGSTN_BindingConflict> UGSTN_CommandBindingUtils::FindImpossibleBindings(TConstArrayView<FGSTN_BindingKey> Bindings, TConstArrayView<FGSTN_ExclusiveTagGroup> ExclusiveGroups)
+{
+	TArray<FGSTN_BindingConflict> Impossible;
+	for (int32 Index = 0; Index < Bindings.Num(); ++Index)
+	{
+		if (Bindings[Index].Command.IsValid() && Bindings[Index].Requirements && Bindings[Index].Requirements->RequiresTwoOfAGroup(ExclusiveGroups))
+		{
+			FGSTN_BindingConflict Entry;
+			Entry.BindingA = Index;
+			Entry.BindingB = Index;
+			Entry.Message = FString::Printf(TEXT("Binding %d of %s requires two tags of one exclusive context group: no context can satisfy it."),
+				Index, *Bindings[Index].Command.ToString());
+			Impossible.Add(MoveTemp(Entry));
+		}
+	}
+	return Impossible;
 }

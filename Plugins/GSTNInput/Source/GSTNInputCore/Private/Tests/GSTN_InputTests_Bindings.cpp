@@ -143,4 +143,60 @@ bool FGSTN_BindingConflictsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_BindingExclusiveGroupsTest, "GSTNInput.Core.Input.Bindings.ExclusiveGroups", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_BindingExclusiveGroupsTest::RunTest(const FString& Parameters)
+{
+	const FGameplayTag Grounded = GSTNInputTags::Context_Grounded.GetTag();
+	const FGameplayTag Airborne = GSTNInputTags::Context_Airborne.GetTag();
+	const FGameplayTag OnWall = GSTNInputTags::Context_OnWall.GetTag();
+	const FGameplayTag Jab = GSTNTestTags::Attack_Neutral.GetTag();
+
+	const FGSTN_TagRequirements Ground = Requiring({ Grounded });
+	const FGSTN_TagRequirements Air = Requiring({ Airborne });
+	const FGSTN_TagRequirements Wall = Requiring({ OnWall });
+	const FGSTN_TagRequirements GroundAndAir = Requiring({ Grounded, Airborne });
+
+	FGSTN_ExclusiveTagGroup Pair;
+	Pair.Tags.AddTag(Grounded);
+	Pair.Tags.AddTag(Airborne);
+	const TArray<FGSTN_ExclusiveTagGroup> WithPair = { Pair };
+
+	const auto Conflicts = [](std::initializer_list<FGSTN_BindingKey> Keys, TConstArrayView<FGSTN_ExclusiveTagGroup> Groups)
+	{
+		return UGSTN_CommandBindingUtils::FindBindingConflicts(MakeArrayView(Keys.begin(), static_cast<int32>(Keys.size())), Groups);
+	};
+
+	TestEqual(TEXT("grounded vs airborne with the group: never together"), Conflicts({ { Jab, &Ground }, { Jab, &Air } }, WithPair).Num(), 0);
+	TestEqual(TEXT("the same pair without groups: a conflict"), Conflicts({ { Jab, &Ground }, { Jab, &Air } }, {}).Num(), 1);
+	TestEqual(TEXT("a requirement outside the group still holds with a member"), Conflicts({ { Jab, &Ground }, { Jab, &Wall } }, WithPair).Num(), 1);
+	TestTrue(TEXT("the overload agrees"), !Ground.CanHoldTogether(Air, WithPair) && Ground.CanHoldTogether(Air));
+	TestTrue(TEXT("the same tag in both is not a clash"), Ground.CanHoldTogether(Ground, WithPair));
+
+	// Three members: any two different ones exclude each other.
+	FGSTN_ExclusiveTagGroup Triple = Pair;
+	Triple.Tags.AddTag(OnWall);
+	const TArray<FGSTN_ExclusiveTagGroup> WithTriple = { Triple };
+	TestEqual(TEXT("three-member group, ground vs wall"), Conflicts({ { Jab, &Ground }, { Jab, &Wall } }, WithTriple).Num(), 0);
+	TestEqual(TEXT("three-member group, air vs wall"), Conflicts({ { Jab, &Air }, { Jab, &Wall } }, WithTriple).Num(), 0);
+	TestEqual(TEXT("three-member group, ground vs air"), Conflicts({ { Jab, &Ground }, { Jab, &Air } }, WithTriple).Num(), 0);
+
+	// A binding requiring two members of one group can never apply.
+	const auto Impossible = [](std::initializer_list<FGSTN_BindingKey> Keys, TConstArrayView<FGSTN_ExclusiveTagGroup> Groups)
+	{
+		return UGSTN_CommandBindingUtils::FindImpossibleBindings(MakeArrayView(Keys.begin(), static_cast<int32>(Keys.size())), Groups);
+	};
+	const TArray<FGSTN_BindingConflict> Found = Impossible({ { Jab, &Ground }, { Jab, &GroundAndAir } }, WithPair);
+	if (TestEqual(TEXT("one impossible binding"), Found.Num(), 1))
+	{
+		TestTrue(TEXT("it is the second, reported on itself"), Found[0].BindingA == 1 && Found[0].BindingB == 1);
+		TestTrue(TEXT("and names the command"), Found[0].Message.Contains(TEXT("Command.Test.Attack.Neutral")));
+	}
+	TestEqual(TEXT("without groups nothing is impossible"), Impossible({ { Jab, &GroundAndAir } }, {}).Num(), 0);
+	FGSTN_ExclusiveTagGroup Other;
+	Other.Tags.AddTag(OnWall);
+	const TArray<FGSTN_ExclusiveTagGroup> Unrelated = { Other };
+	TestEqual(TEXT("a group the binding does not touch"), Impossible({ { Jab, &GroundAndAir } }, Unrelated).Num(), 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

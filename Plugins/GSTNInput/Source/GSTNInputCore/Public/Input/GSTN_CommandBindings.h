@@ -8,6 +8,22 @@
 #include "GSTN_CommandBindings.generated.h"
 
 /**
+ * A set of state tags of which a context holds at most one (e.g. Grounded and Airborne). Binding validation uses the groups to know
+ * that two bindings requiring different members can never apply together, which "requires what the other ignores" cannot
+ * express. Data, not code: the validator never names a project tag, the settings and the plugins that own the tags list them
+ * (UGSTN_InputSettings::ExclusiveContextGroups). Members match exactly, not through the tag hierarchy.
+ */
+USTRUCT(BlueprintType)
+struct GSTNINPUTCORE_API FGSTN_ExclusiveTagGroup
+{
+	GENERATED_BODY()
+
+	/** A context holds at most one of these. State tags of any root, so no Categories filter */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Requirements")
+	FGameplayTagContainer Tags;
+};
+
+/**
  * Tags a character must have and must not have for a binding to apply. The engine's FGameplayTagRequirements lives in the
  * ability system module, which the Core must not depend on; this is the same two lists.
  *
@@ -48,6 +64,54 @@ struct GSTNINPUTCORE_API FGSTN_TagRequirements
 	bool CanHoldTogether(const FGSTN_TagRequirements& Other) const
 	{
 		return !RequireTags.HasAny(Other.IgnoreTags) && !Other.RequireTags.HasAny(IgnoreTags);
+	}
+
+	/**
+	 * As above, and also false when some group holds a tag this requires and a different tag Other requires: no context has
+	 * both members of an exclusive group.
+	 */
+	bool CanHoldTogether(const FGSTN_TagRequirements& Other, TConstArrayView<FGSTN_ExclusiveTagGroup> Groups) const
+	{
+		if (!CanHoldTogether(Other))
+		{
+			return false;
+		}
+		for (const FGSTN_ExclusiveTagGroup& Group : Groups)
+		{
+			for (const FGameplayTag& Mine : RequireTags)
+			{
+				if (!Group.Tags.HasTagExact(Mine))
+				{
+					continue;
+				}
+				for (const FGameplayTag& Theirs : Other.RequireTags)
+				{
+					if (Theirs != Mine && Group.Tags.HasTagExact(Theirs))
+					{
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
+	/** Whether RequireTags holds two different tags of one group: no context satisfies it */
+	bool RequiresTwoOfAGroup(TConstArrayView<FGSTN_ExclusiveTagGroup> Groups) const
+	{
+		for (const FGSTN_ExclusiveTagGroup& Group : Groups)
+		{
+			int32 Found = 0;
+			for (const FGameplayTag& Tag : RequireTags)
+			{
+				Found += Group.Tags.HasTagExact(Tag) ? 1 : 0;
+			}
+			if (Found > 1)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 };
 
@@ -96,6 +160,16 @@ public:
 	/**
 	 * Errors of a binding list: two bindings of the same command whose requirements can hold together and that require
 	 * the same number of tags. Bindings without a command are ignored (the owning asset reports them).
+	 * @param ExclusiveGroups Tags of which no context holds two (UGSTN_InputSettings::GetAllExclusiveContextGroups): bindings
+	 * requiring different members of a group cannot hold together, so they are not reported. Empty = only the ignore lists count.
 	 */
-	static TArray<FGSTN_BindingConflict> FindBindingConflicts(TConstArrayView<FGSTN_BindingKey> Bindings);
+	static TArray<FGSTN_BindingConflict> FindBindingConflicts(TConstArrayView<FGSTN_BindingKey> Bindings,
+		TConstArrayView<FGSTN_ExclusiveTagGroup> ExclusiveGroups = TConstArrayView<FGSTN_ExclusiveTagGroup>());
+
+	/**
+	 * Bindings that can never apply because they require two tags of one exclusive group. One entry per binding, with
+	 * BindingA == BindingB == its index in Bindings. Bindings without a command are ignored, like in FindBindingConflicts.
+	 */
+	static TArray<FGSTN_BindingConflict> FindImpossibleBindings(TConstArrayView<FGSTN_BindingKey> Bindings,
+		TConstArrayView<FGSTN_ExclusiveTagGroup> ExclusiveGroups);
 };

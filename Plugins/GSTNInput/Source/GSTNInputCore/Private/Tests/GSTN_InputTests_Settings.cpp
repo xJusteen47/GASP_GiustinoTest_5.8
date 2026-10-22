@@ -140,4 +140,69 @@ bool FGSTN_SettingsContributionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SettingsExclusiveGroupsTest, "GSTNInput.Core.Input.Settings.ExclusiveGroups", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_SettingsExclusiveGroupsTest::RunTest(const FString& Parameters)
+{
+	const FGameplayTag Grounded = GSTNInputTags::Context_Grounded.GetTag();
+	const FGameplayTag Airborne = GSTNInputTags::Context_Airborne.GetTag();
+	const FGameplayTag OnWall = GSTNInputTags::Context_OnWall.GetTag();
+
+	FGSTN_ExclusiveTagGroup OwnGroup;
+	OwnGroup.Tags.AddTag(Grounded);
+	OwnGroup.Tags.AddTag(Airborne);
+	FGSTN_ExclusiveTagGroup PluginGroup;
+	PluginGroup.Tags.AddTag(Airborne);
+	PluginGroup.Tags.AddTag(OnWall);
+
+	const auto Combined = [&](bool bOwnFirst) -> TArray<FGSTN_ExclusiveTagGroup>
+	{
+		const TStrongObjectPtr<UGSTN_InputSettings> Settings = GSTNTest::MakeSettings();
+		Settings->ExclusiveContextGroups.Empty();
+		Settings->ExclusiveContextGroups.Add(OwnGroup);
+		const TArray<FGSTN_ExclusiveTagGroup> A = { PluginGroup };
+		const TArray<FGSTN_ExclusiveTagGroup> B = { PluginGroup, OwnGroup };
+		const TMap<FGameplayTag, int32> NoTiers;
+		if (bOwnFirst)
+		{
+			Settings->SetContribution(TEXT("PluginA"), NoTiers, {}, A);
+			Settings->SetContribution(TEXT("PluginB"), NoTiers, {}, B);
+		}
+		else
+		{
+			Settings->SetContribution(TEXT("PluginB"), NoTiers, {}, B);
+			Settings->SetContribution(TEXT("PluginA"), NoTiers, {}, A);
+		}
+		return Settings->GetAllExclusiveContextGroups();
+	};
+
+	// What matters is which tag pairs are exclusive, whatever the order of the contributions.
+	const auto Excludes = [](const TArray<FGSTN_ExclusiveTagGroup>& Groups, const FGameplayTag& X, const FGameplayTag& Y)
+	{
+		FGSTN_TagRequirements RequireX;
+		RequireX.RequireTags.AddTag(X);
+		FGSTN_TagRequirements RequireY;
+		RequireY.RequireTags.AddTag(Y);
+		return !RequireX.CanHoldTogether(RequireY, Groups);
+	};
+
+	const TArray<FGSTN_ExclusiveTagGroup> Forward = Combined(true);
+	const TArray<FGSTN_ExclusiveTagGroup> Backward = Combined(false);
+	TestEqual(TEXT("own groups plus every contribution"), Forward.Num(), Backward.Num());
+	TestEqual(TEXT("own groups plus every contribution, count"), Forward.Num(), 4);
+	for (const TArray<FGSTN_ExclusiveTagGroup>* Groups : { &Forward, &Backward })
+	{
+		TestTrue(TEXT("the settings' own group"), Excludes(*Groups, Grounded, Airborne));
+		TestTrue(TEXT("a contributed group"), Excludes(*Groups, Airborne, OnWall));
+		TestFalse(TEXT("pairs no group holds stay compatible"), Excludes(*Groups, Grounded, OnWall));
+	}
+
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = GSTNTest::MakeSettings();
+	Settings->ExclusiveContextGroups.Empty();
+	Settings->SetContribution(TEXT("PluginA"), TMap<FGameplayTag, int32>(), {}, { PluginGroup });
+	TestEqual(TEXT("a contribution alone"), Settings->GetAllExclusiveContextGroups().Num(), 1);
+	Settings->RemoveContribution(TEXT("PluginA"));
+	TestEqual(TEXT("a removed contribution is gone"), Settings->GetAllExclusiveContextGroups().Num(), 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

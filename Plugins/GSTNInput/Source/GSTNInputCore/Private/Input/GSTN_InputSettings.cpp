@@ -61,11 +61,22 @@ bool UGSTN_InputSettings::IsExclusiveButton(const FGameplayTag& Button) const
 	return false;
 }
 
-void UGSTN_InputSettings::SetContribution(FName Source, const TMap<FGameplayTag, int32>& Tiers, const TArray<FGameplayTag>& InExclusiveButtons)
+void UGSTN_InputSettings::SetContribution(FName Source, const TMap<FGameplayTag, int32>& Tiers, const TArray<FGameplayTag>& InExclusiveButtons, const TArray<FGSTN_ExclusiveTagGroup>& InExclusiveGroups)
 {
 	FContribution& Contribution = Contributions.FindOrAdd(Source);
 	Contribution.Tiers = Tiers;
 	Contribution.ExclusiveButtons = InExclusiveButtons;
+	Contribution.ExclusiveGroups = InExclusiveGroups;
+}
+
+TArray<FGSTN_ExclusiveTagGroup> UGSTN_InputSettings::GetAllExclusiveContextGroups() const
+{
+	TArray<FGSTN_ExclusiveTagGroup> Result = ExclusiveContextGroups;
+	for (const TPair<FName, FContribution>& Pair : Contributions)
+	{
+		Result.Append(Pair.Value.ExclusiveGroups);
+	}
+	return Result;
 }
 
 void UGSTN_InputSettings::RemoveContribution(FName Source)

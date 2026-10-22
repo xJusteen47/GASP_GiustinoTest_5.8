@@ -6,6 +6,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "GameplayTagContainer.h"
 #include "GSTN_InputCoreTypes.h"
+#include "Input/GSTN_CommandBindings.h"
 #include "Input/GSTN_PriorityCriteria.h"
 #include "StructUtils/InstancedStruct.h"
 #include "GSTN_InputSettings.generated.h"
@@ -52,8 +53,17 @@ public:
 	 * object of the running project (call it on GetMutableDefault) once at module startup and when the contributor's settings
 	 * change, never during a match, and every machine of a match has to contribute the same values like for any other setting.
 	 * @param Source Name of the contributor, e.g. the contributing plugin
+	 * @param ExclusiveGroups Exclusive context tag groups of the contributor, added to ExclusiveContextGroups
 	 */
-	void SetContribution(FName Source, const TMap<FGameplayTag, int32>& Tiers, const TArray<FGameplayTag>& ExclusiveButtons);
+	void SetContribution(FName Source, const TMap<FGameplayTag, int32>& Tiers, const TArray<FGameplayTag>& ExclusiveButtons,
+		const TArray<FGSTN_ExclusiveTagGroup>& ExclusiveGroups = TArray<FGSTN_ExclusiveTagGroup>());
+
+	/**
+	 * ExclusiveContextGroups plus the groups of every contribution. The groups are a set (validation only asks whether two tags
+	 * share a group), so the order of the result carries no meaning and the contributions combine independently of order.
+	 * Editor-time validation only, it allocates.
+	 */
+	TArray<FGSTN_ExclusiveTagGroup> GetAllExclusiveContextGroups() const;
 
 	/** Removes what Source contributed */
 	void RemoveContribution(FName Source);
@@ -133,6 +143,18 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Input|Priority", meta = (ClampMin = "0"))
 	int32 ChordGraceFrames = 3;
 
+	// ---- Bindings
+
+	/**
+	 * Sets of state tags of which a context holds at most one (Grounded / Airborne). Binding validation uses them to know that
+	 * two bindings of a command requiring different members never apply together, so they are not reported as an arbitrary
+	 * choice, and to reject a binding requiring two members of one set. Editor-time only, the simulation does not read it. The
+	 * plugin ships its own contexts here and the game or another plugin adds the sets of its movement states, so the
+	 * validator never names a project tag.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Input|Bindings")
+	TArray<FGSTN_ExclusiveTagGroup> ExclusiveContextGroups;
+
 	// ---- Stick
 
 	/** Normalised stick magnitude below which the stick is Neutral */
@@ -164,6 +186,7 @@ private:
 	{
 		TMap<FGameplayTag, int32> Tiers;
 		TArray<FGameplayTag> ExclusiveButtons;
+		TArray<FGSTN_ExclusiveTagGroup> ExclusiveGroups;
 	};
 
 	/** Every lookup combines all sources the same way (highest tier, any source), so the map's iteration order never shows */
