@@ -1088,6 +1088,7 @@ TS.3. Quali nemici possono avere parti-superficie: solo quelli che possono già 
 TS.4. Mentre un giocatore scivola o si arrampica su un nemico, il nemico deve rallentare / fare l'animazione di "appoggio" come per le piattaforme (`MaxSpeedWhileOccupied`, brace), oppure resta libero di muoversi a piena velocità?
    Perché conta: l'errore di aggancio sui client cresce con velocità × (ping + ~100 ms); rallentare è la leva più economica ed è anche una scelta di design (un boss che "sente" il giocatore addosso).
    Risposta consigliata: sì, il giocatore in wall slide conta come occupante: stesso limitatore e stessa animazione delle piattaforme.
+   **Risposta (22/10, 21:58):** dipende dalla parte e dal nemico. → Dato per parte (`FGSTN_OccupantResponse` su ogni forma), con un default per nemico e un evento Blueprint; senza risposta il nemico si muove a piena velocità.
 
 TS.5. Quando la parte su cui il giocatore sta scivolando si rompe (o il nemico viene lanciato, muore, viene afferrato): avviso visibile di ~20 frame e poi il giocatore cade conservando la velocità del nemico, oppure distacco immediato? E il giocatore può "cavalcare" il pezzo staccato?
    Perché conta: la perdita della base arriva ai client con un RTT di ritardo (una correzione); l'avviso la rende quasi invisibile. Il pezzo staccato è solo presentazione (parti §6.2) e farne una superficie lo renderebbe parte della simulazione.

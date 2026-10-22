@@ -222,7 +222,7 @@ and M4b progress; T5 waits only for the owner.
 | TS.1 separate `GSTNSurface` plugin owning `Surface.*` | yes; H11/H11b consume it | T1, H11/H11b edits | S if before H11 starts; M after |
 | TS.2 wall-core filter extension point | asked now; T2 works without it | T5 only | none (T5 is additive) |
 | TS.3 which enemies | the same set as platforms (fighters + ≤ 8 platform minions), swarm never | T3, T8 | M (minions need the proxy anyway) |
-| TS.4 enemy slows while a player slides | yes, a sliding player counts as an occupant for `MaxSpeedWhileOccupied` and the brace | T3, T7 | S (data) |
+| TS.4 enemy slows while a player slides | **Answered 2026-10-22 21:58**: depends on the part and the enemy. `FGSTN_OccupantResponse` per platform shape (enemy-level default on the definition, BP `OnOccupantChanged`); T3 adds the struct, T7 tests one slowing and one full-speed enemy | T3, T7 | done (data) |
 | TS.5 part breaks under a player | `DropGraceFrames` telegraph then fall with base velocity; no riding the chunk | T6 | S |
 | TS.6 trampoline parts: direction follows the posed part, surface velocity added; tumbling victims bounce; hitting the part never launches | yes to all | T4 | S (flags) |
 | TS.7 who uses the surfaces | players and fighters; minions only on static trampolines | T4 | M (minion launch path) |

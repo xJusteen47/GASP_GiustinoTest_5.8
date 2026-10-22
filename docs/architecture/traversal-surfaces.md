@@ -180,7 +180,11 @@ data on the move, so it is identical everywhere and rollback-safe; it is **not**
   hits on the enemy use hurtboxes. A player attacking the trampoline part is never launched.
 - **Host** plays with zero error (its collider is the authoritative pose). Clients: a wall slide on a moving enemy is base-relative,
   so sliding and climbing never reconcile; errors appear at grab (mount) and at shape loss, the same two events as platforms, with
-  the same mitigations: `MaxSpeedWhileOccupied` (a sliding player counts as an occupant, TS.4), brace timeline, generous entry
+  the same mitigations: `MaxSpeedWhileOccupied` and brace timeline **as per-part, per-enemy data** (owner TS.4, 2026-10-22 21:58:
+  "depends on the part and the enemy"): `FGSTN_OccupantResponse { bCountsAsOccupant, MaxSpeedWhileOccupied (0 = no limit),
+  BraceTimeline (soft, optional), bApplyToWallSlide, bApplyToStand }` on each platform shape, with an enemy-level default on the
+  platform definition and a `BlueprintNativeEvent OnOccupantChanged` for designer logic (e.g. a boss that shakes the player off);
+  no response = the enemy moves at full speed. Generous entry
   (`UGSTN_GA_WallSlide::EntryGraceFrames`), shapes slightly larger than the visual.
 
 ### 4.4 Part state → shape state (bridge `GSTNPlatformParts`)
