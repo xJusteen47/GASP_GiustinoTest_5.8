@@ -5,9 +5,16 @@
 
 namespace
 {
-	/** Reads or writes a list length, bounded on read */
+	/**
+	 * Reads or writes a list length. Bounded on read, and on write too: a longer list writes its first MaxEntries entries (the
+	 * caller loops over Count, not over the container), so a writer can never produce a stream its own reader rejects.
+	 */
 	bool SerializeCount(FArchive& Ar, int32& Count)
 	{
+		if (Ar.IsSaving())
+		{
+			Count = FMath::Min(Count, FGSTN_LoadoutData::MaxEntries);
+		}
 		uint32 Value = static_cast<uint32>(Count);
 		Ar.SerializeIntPacked(Value);
 		if (Ar.IsLoading())
@@ -60,9 +67,9 @@ namespace
 			Ids.Reset();
 			Ids.SetNum(Count);
 		}
-		for (FPrimaryAssetId& Id : Ids)
+		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			SerializeAssetId(Ar, Id);
+			SerializeAssetId(Ar, Ids[Index]);
 		}
 		return true;
 	}
@@ -114,11 +121,16 @@ bool FGSTN_LoadoutData::SerializeInternal(FArchive& Ar)
 	{
 		SlotCustomisations.SetNum(CustomisationCount);
 	}
-	for (FGSTN_SlotCustomisation& Customisation : SlotCustomisations)
+	for (int32 CustomisationIndex = 0; CustomisationIndex < CustomisationCount; ++CustomisationIndex)
 	{
-		uint32 WeaponIndexValue = static_cast<uint32>(FMath::Max(Customisation.WeaponIndex, 0));
+		FGSTN_SlotCustomisation& Customisation = SlotCustomisations[CustomisationIndex];
+		// Writing never changes the object: the clamped index goes on the wire, the member keeps its value
+		uint32 WeaponIndexValue = static_cast<uint32>(FMath::Clamp(Customisation.WeaponIndex, 0, MaxEntries));
 		Ar.SerializeIntPacked(WeaponIndexValue);
-		Customisation.WeaponIndex = static_cast<int32>(FMath::Min<uint32>(WeaponIndexValue, MaxEntries));
+		if (Ar.IsLoading())
+		{
+			Customisation.WeaponIndex = static_cast<int32>(FMath::Min<uint32>(WeaponIndexValue, MaxEntries));
+		}
 		SerializeTag(Ar, Customisation.Command);
 
 		FString ClassPath = Ar.IsSaving() ? Customisation.AlternativeAbility.ToSoftObjectPath().ToString() : FString();

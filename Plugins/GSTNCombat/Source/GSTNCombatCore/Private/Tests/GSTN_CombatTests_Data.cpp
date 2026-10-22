@@ -171,6 +171,34 @@ bool FGSTN_CoreDataLoadoutNetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CoreDataLoadoutWriteBoundsTest, "GSTNCombat.Core.Data.LoadoutNetWriteBounds", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_CoreDataLoadoutWriteBoundsTest::RunTest(const FString& Parameters)
+{
+	// Writing must not change the object, and a list over the bound must produce a stream the reader accepts
+	FGSTN_LoadoutData Original = MakeLoadout();
+	Original.SlotCustomisations[0].WeaponIndex = 1000;
+	for (int32 Index = 0; Index < FGSTN_LoadoutData::MaxEntries + 10; ++Index)
+	{
+		Original.AdditionalWeapons.Add(FPrimaryAssetId(GSTNCombatAssetTypes::Weapon(), *FString::Printf(TEXT("W%d"), Index)));
+	}
+	const FGSTN_LoadoutData Before = Original;
+
+	int64 Bits = 0;
+	const TArray<uint8> Bytes = WriteNet(Original, Bits);
+	TestTrue(TEXT("writing leaves the loadout as it was"), Original == Before);
+	TestEqual(TEXT("including the out of range weapon index"), Original.SlotCustomisations[0].WeaponIndex, 1000);
+
+	FGSTN_LoadoutData Copy;
+	FBitReader Reader(Bytes.GetData(), Bits);
+	bool bSuccess = false;
+	Copy.NetSerialize(Reader, nullptr, bSuccess);
+	TestTrue(TEXT("the reader accepts what the writer wrote"), bSuccess && !Reader.IsError());
+	TestTrue(TEXT("every bit is consumed"), Reader.AtEnd());
+	TestEqual(TEXT("the list was cut to the bound"), Copy.AdditionalWeapons.Num(), FGSTN_LoadoutData::MaxEntries);
+	TestEqual(TEXT("the weapon index went out clamped"), Copy.SlotCustomisations.Num() == 1 ? Copy.SlotCustomisations[0].WeaponIndex : -1, FGSTN_LoadoutData::MaxEntries);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CoreDataLoadoutSaveTest, "GSTNCombat.Core.Data.LoadoutSaveSerialize", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_CoreDataLoadoutSaveTest::RunTest(const FString& Parameters)
 {
