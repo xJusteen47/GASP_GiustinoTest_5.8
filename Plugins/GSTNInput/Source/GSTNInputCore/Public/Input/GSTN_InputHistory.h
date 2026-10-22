@@ -53,6 +53,8 @@ struct FGSTN_DirectionEvent
  *    stick event: it is the current stick state, so it stays and its frame becomes AncientFrame.
  *  - A new stick event is created only when a direction (in any space) or the zone changes, or on a flick; so turning the
  *    character or the camera with the stick held adds at most one event per 45 degree sector.
+ *  - The frame of the last consumed stick anchor travels with the history (one optional byte on the wire, absent while
+ *    nothing is consumed or once it is older than MaxEventAge): it is what stops a stick-only command from re-firing.
  *  - Equality is logical (same events in the same order), not bitwise: the same history can sit at different positions
  *    of the rings.
  *
@@ -97,6 +99,16 @@ struct GSTNINPUTCORE_API FGSTN_InputHistory
 
 	/** Consumes every unconsumed press of the buttons in the mask made at or before UpToFrame (reset rules) */
 	void FlushPresses(uint32 ButtonMask, int32 UpToFrame);
+
+	/**
+	 * Marks the stick anchors up to Frame as used. A command that ends in a stick pattern (a motion, a spin) has no press to
+	 * consume, so without this it would fire again on every frame its anchor stays inside the time buffer. The matcher
+	 * ignores terminal stick anchors at or before this frame; a fresh motion has a later anchor and fires again.
+	 */
+	void ConsumeSticksUpTo(int32 Frame) { LastConsumedStickFrame = FMath::Max(LastConsumedStickFrame, Frame); }
+
+	/** Newest stick anchor frame already used by a command; AncientFrame when none (or when it aged out of the history) */
+	int32 GetLastConsumedStickFrame() const { return LastConsumedStickFrame; }
 
 	/**
 	 * True if the button is down now and was not released since the press at PressFrame: the press is still being held,
@@ -164,6 +176,9 @@ private:
 	uint8 DirectionCount = 0;
 
 	uint32 HeldButtons = 0;
+
+	/** See ConsumeSticksUpTo. Ages like an event: past MaxEventAge it goes back to AncientFrame, so an idle history stays unchanged */
+	int32 LastConsumedStickFrame = AncientFrame;
 
 	/** Stick of the newest frame. Its directions always equal the newest stick event's (or Neutral when there is none) */
 	FGSTN_DirectionEvent Current;

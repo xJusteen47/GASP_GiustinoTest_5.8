@@ -80,6 +80,12 @@ struct FGSTN_PatternMatch
 	/** The press that triggers the command (its newest press); INDEX_NONE when the terminal step is not button based */
 	int32 TerminalPressEvent = INDEX_NONE;
 
+	/**
+	 * Frame of the terminal anchor when it is a stick event (a motion, a spin), INDEX_NONE when it is made of button events.
+	 * Such an anchor has no press to consume: the caller passes this frame to FGSTN_InputHistory::ConsumeSticksUpTo.
+	 */
+	int32 TerminalStickAnchor = INDEX_NONE;
+
 	/** The terminal press was older than the time buffer and valid only because the button is still held */
 	bool bViaHoldBuffer = false;
 };

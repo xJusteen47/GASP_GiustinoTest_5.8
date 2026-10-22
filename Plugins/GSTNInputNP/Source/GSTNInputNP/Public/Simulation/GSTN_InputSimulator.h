@@ -45,8 +45,12 @@ public:
 
 	/**
 	 * Whether the binding's ability could start now (the ability system's CanActivateAbility, a const query on the state of
-	 * the end of the previous frame). The ability system checks again when it executes the request, so a disagreement costs a
-	 * failed activation, never a desync
+	 * the end of the previous frame). The ability system checks again when it executes the request, so a disagreement between
+	 * the two checks costs a failed activation. But the answer decides whether the press is consumed, and that is part of the
+	 * rolled back input state: if it differs between the client and the server the states diverge and a reconcile follows.
+	 * So the answer must be a function of rolled back state only: CanActivateAbility overrides used by bindings must not
+	 * read the role, local control or anything else that differs per machine, and abilities that are ServerOnly or
+	 * ServerOnlyExecution (their CanActivateAbility is role dependent) cannot be bound: the binding set rejects them.
 	 */
 	virtual bool CanExecuteBinding(int32 BindingIndex) const = 0;
 };
@@ -115,6 +119,11 @@ struct FGSTN_InputTickResult
  *
  * Consumption happens on request, not on confirmed activation: the confirmation arrives a frame later and the press must
  * not fire twice. The ability system re-checks CanActivateAbility at execution, and a failed activation is not retried.
+ * A command that ends in a stick pattern (a motion, a spin) consumes its terminal stick anchor in the history, which is
+ * what keeps it from firing on every frame of its time buffer.
+ *
+ * TODO: the CanActivateAbility query still goes through the engine ability, which checks the role (ShouldActivateAbility). A
+ * role free check in the fork would lift the restriction on bindings to server only abilities.
  */
 struct GSTNINPUTNP_API FGSTN_InputSimulator
 {

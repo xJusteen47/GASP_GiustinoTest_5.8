@@ -159,11 +159,9 @@ FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args
 					? static_cast<uint8>(Out.History.GetButtonEvent(Resolution.Match.TerminalPressEvent).Button + 1)
 					: FGSTN_InputSimState::CommandWithoutButton;
 
-				// The winner's presses and the losers of its press group, so the loser does not come out a few frames later
-				for (const uint8 EventSlot : Resolution.EventsToConsume)
-				{
-					Out.History.Consume(EventSlot);
-				}
+				// The winner's presses and the losers of its press group, so the loser does not come out a few frames later; for a
+				// stick-only command (a motion, a spin) also its anchor, which has no press to consume
+				Resolution.ConsumeFrom(Out.History);
 			}
 		}
 	}

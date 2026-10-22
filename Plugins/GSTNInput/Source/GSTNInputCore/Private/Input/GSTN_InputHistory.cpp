@@ -11,6 +11,9 @@ namespace
 	constexpr uint8 FlagFrameOffset = 1 << 6;
 	constexpr uint8 CountMask = 0x1F;
 
+	/** In the button header (its count uses the low 5 bits): a byte with the age of the last consumed stick anchor follows */
+	constexpr uint8 FlagHasConsumedStick = 1 << 5;
+
 	bool IsAged(int32 EventFrame, int32 Now)
 	{
 		return EventFrame == FGSTN_InputHistory::AncientFrame || Now - EventFrame > FGSTN_InputHistory::MaxEventAge;
@@ -184,6 +187,12 @@ void FGSTN_InputHistory::PushDirectionEvent(const FGSTN_DirectionEvent& Event)
 
 void FGSTN_InputHistory::DropOldEvents(int32 Now)
 {
+	// Every anchor still matchable is newer than this, so an aged mark has nothing left to block
+	if (IsAged(LastConsumedStickFrame, Now))
+	{
+		LastConsumedStickFrame = AncientFrame;
+	}
+
 	while (ButtonCount > 0 && IsAged(ButtonEvents[GetButtonSlot(ButtonCount - 1)].Frame, Now))
 	{
 		--ButtonCount;
@@ -217,6 +226,10 @@ void FGSTN_InputHistory::NetSerialize(FArchive& Ar, int32 CurrentFrame)
 		{
 			DirectionHeader |= FlagFrameOffset;
 		}
+		if (LastConsumedStickFrame != AncientFrame)
+		{
+			ButtonHeader |= FlagHasConsumedStick;
+		}
 		Ar << ButtonHeader;
 		Ar << DirectionHeader;
 		Ar.SerializeIntPacked(HeldButtons);
@@ -229,6 +242,13 @@ void FGSTN_InputHistory::NetSerialize(FArchive& Ar, int32 CurrentFrame)
 			// Only an owner that serializes a history it did not append to this frame gets here
 			int32 Frame = Current.Frame;
 			Ar << Frame;
+		}
+		if (LastConsumedStickFrame != AncientFrame)
+		{
+			const int32 Delta = CurrentFrame - LastConsumedStickFrame;
+			checkf(Delta >= 0 && Delta <= MaxEventAge, TEXT("Consumed stick anchor %d frames old"), Delta);
+			uint8 DeltaByte = static_cast<uint8>(Delta);
+			Ar << DeltaByte;
 		}
 
 		for (int32 Age = 0; Age < ButtonCount; ++Age)
@@ -265,7 +285,7 @@ void FGSTN_InputHistory::NetSerialize(FArchive& Ar, int32 CurrentFrame)
 
 	const int32 NumButtons = ButtonHeader & CountMask;
 	const int32 NumDirections = DirectionHeader & CountMask;
-	if ((ButtonHeader & ~CountMask) != 0 || NumButtons > MaxEvents || NumDirections > MaxEvents || (DirectionHeader & 0x80) != 0)
+	if ((ButtonHeader & ~(CountMask | FlagHasConsumedStick)) != 0 || NumButtons > MaxEvents || NumDirections > MaxEvents || (DirectionHeader & 0x80) != 0)
 	{
 		Ar.SetError();
 		return;
@@ -280,6 +300,17 @@ void FGSTN_InputHistory::NetSerialize(FArchive& Ar, int32 CurrentFrame)
 	if ((DirectionHeader & FlagFrameOffset) != 0)
 	{
 		Ar << LatestFrame;
+	}
+	if ((ButtonHeader & FlagHasConsumedStick) != 0)
+	{
+		uint8 DeltaByte = 0;
+		Ar << DeltaByte;
+		if (DeltaByte > MaxEventAge)
+		{
+			Ar.SetError();
+			return;
+		}
+		LastConsumedStickFrame = CurrentFrame - DeltaByte;
 	}
 
 	// Newest first on the wire; the rings are rebuilt oldest first so slot 0 is the oldest.
@@ -333,7 +364,7 @@ void FGSTN_InputHistory::NetSerialize(FArchive& Ar, int32 CurrentFrame)
 
 bool FGSTN_InputHistory::operator==(const FGSTN_InputHistory& Other) const
 {
-	if (HeldButtons != Other.HeldButtons || ButtonCount != Other.ButtonCount || DirectionCount != Other.DirectionCount
+	if (HeldButtons != Other.HeldButtons || LastConsumedStickFrame != Other.LastConsumedStickFrame || ButtonCount != Other.ButtonCount || DirectionCount != Other.DirectionCount
 		|| !(Current == Other.Current))
 	{
 		return false;

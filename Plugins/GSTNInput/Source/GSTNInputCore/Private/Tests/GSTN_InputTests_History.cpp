@@ -299,6 +299,57 @@ bool FGSTN_HistorySerializationTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HistoryConsumedStickTest, "GSTNInput.Core.Input.History.ConsumedStickAnchor", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_HistoryConsumedStickTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = GSTNTest::MakeSettings();
+	FGSTN_InputHistory History = MustBuild(*this, TEXT("0:2t 4:8t 6:+A"), *Settings);
+	const int32 Frame = History.GetLatestFrame();
+	const TArray<uint8> Plain = Save(History, Frame);
+
+	TestEqual(TEXT("nothing consumed at first"), History.GetLastConsumedStickFrame(), static_cast<int32>(FGSTN_InputHistory::AncientFrame));
+
+	// Only moves forward
+	History.ConsumeSticksUpTo(4);
+	History.ConsumeSticksUpTo(2);
+	TestEqual(TEXT("the newest consumed anchor stays"), History.GetLastConsumedStickFrame(), 4);
+
+	// On the wire, and part of equality
+	TArray<uint8> Bytes = Save(History, Frame);
+	TestEqual(TEXT("it costs one byte"), Bytes.Num(), Plain.Num() + 1);
+	FGSTN_InputHistory Loaded;
+	TestTrue(TEXT("loads"), Load(Loaded, Bytes, Frame));
+	TestEqual(TEXT("round trip keeps it"), Loaded.GetLastConsumedStickFrame(), 4);
+	TestTrue(TEXT("round trip is equal"), History == Loaded);
+	TestTrue(TEXT("saving a loaded history gives the same bytes"), Save(Loaded, Frame) == Bytes);
+
+	FGSTN_InputHistory Other = MustBuild(*this, TEXT("0:2t 4:8t 6:+A"), *Settings);
+	TestFalse(TEXT("a history with another consumed anchor differs"), History == Other);
+	Other.ConsumeSticksUpTo(4);
+	TestTrue(TEXT("and the same one is equal"), History == Other);
+
+	// A history written without the field (nothing consumed) still loads
+	FGSTN_InputHistory FromPlain;
+	TestTrue(TEXT("the layout without a consumed anchor loads"), Load(FromPlain, Plain, Frame));
+	TestEqual(TEXT("with none consumed"), FromPlain.GetLastConsumedStickFrame(), static_cast<int32>(FGSTN_InputHistory::AncientFrame));
+
+	// Corrupt delta
+	TArray<uint8> BadHeader = { 0x20, 0x00, 0x00, 0xFF };
+	FGSTN_InputHistory Bad;
+	TestFalse(TEXT("a consumed anchor older than the history is an error"), Load(Bad, BadHeader, 0));
+
+	// It ages like an event: once older than the history reaches, the field is gone and an idle history is unchanged again
+	for (int32 Next = Frame + 1; Next <= Frame + FGSTN_InputHistory::MaxEventAge + 2; ++Next)
+	{
+		FGSTN_InputSample Idle;
+		Idle.Frame = Next;
+		Idle.Held = 1u;
+		History.Append(Idle);
+	}
+	TestEqual(TEXT("an old consumed anchor is forgotten"), History.GetLastConsumedStickFrame(), static_cast<int32>(FGSTN_InputHistory::AncientFrame));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HistorySizeTest, "GSTNInput.Core.Input.History.SerializedSize", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_HistorySizeTest::RunTest(const FString& Parameters)
 {

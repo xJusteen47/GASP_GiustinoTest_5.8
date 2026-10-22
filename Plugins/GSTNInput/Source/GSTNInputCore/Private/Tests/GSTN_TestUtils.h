@@ -249,10 +249,7 @@ namespace GSTNTest
 	/** Marks the events a resolution asked to consume */
 	inline void ConsumeEvents(FGSTN_InputHistory& History, const FGSTN_SlotResolution& Resolution)
 	{
-		for (const uint8 Slot : Resolution.EventsToConsume)
-		{
-			History.Consume(Slot);
-		}
+		Resolution.ConsumeFrom(History);
 	}
 
 	// ---- Histories

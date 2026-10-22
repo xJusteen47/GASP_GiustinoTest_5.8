@@ -3,8 +3,35 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Abilities/GameplayAbility.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "GSTN_InputNPTestObjects.generated.h"
+
+/** An ability only the server may start: its CanActivateAbility depends on the net role, so bindings must refuse it. */
+UCLASS(Hidden)
+class UGSTN_TestServerOnlyAbility : public UGameplayAbility
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_TestServerOnlyAbility()
+	{
+		NetSecurityPolicy = EGameplayAbilityNetSecurityPolicy::ServerOnly;
+	}
+};
+
+/** Same for the other server only policy (the client may not even ask) */
+UCLASS(Hidden)
+class UGSTN_TestServerOnlyExecutionAbility : public UGameplayAbility
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_TestServerOnlyExecutionAbility()
+	{
+		NetSecurityPolicy = EGameplayAbilityNetSecurityPolicy::ServerOnlyExecution;
+	}
+};
 
 /** Answers like a Blueprint provider would: constants and a fingerprint-driven event. */
 UCLASS(Hidden)

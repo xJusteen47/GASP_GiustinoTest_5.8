@@ -64,6 +64,19 @@ Then call `FGSTN_InputSimulator::Tick` from the model's simulation tick with a c
 `FGSTN_CommandTable` once from a `UGSTN_CommandBindingSet` at BeginPlay, and execute `RequestedBinding` from the ability
 system's pre-tick when `RequestFrame` equals the frame. `UGSTN_CombatSimComponent` is a working example.
 
+**Bindings must not depend on the net role.** Press consumption follows `CanExecuteBinding`, which asks the ability's
+`CanActivateAbility`; its answer lands in the rolled back input state, so the client and the server must give the same
+answer. Therefore (1) abilities with a `ServerOnly` or `ServerOnlyExecution` net security policy cannot be bound
+(`UGSTN_CommandBindingSet::IsBindableAbility`; `BuildTable` drops and logs such a binding, `IsDataValid` reports it), because
+the engine's `ShouldActivateAbility(GetLocalRole())` refuses them on a client, and (2) `CanActivateAbility` overrides of
+bound abilities must not read the role, local control or any state outside the rolled back ones. TODO: a role free check
+in the fork would lift both limits.
+
+**Stick-only commands.** A command whose terminal step is a motion or a spin has no press to consume. The simulator
+therefore records the terminal stick anchor in `FGSTN_InputHistory` (`ConsumeSticksUpTo`, through
+`FGSTN_SlotResolution::ConsumeFrom`) and the matcher ignores terminal stick anchors at or before it, so such a command fires
+once per motion, not on every frame of its time buffer. The frame is part of the history on the wire (see the core README).
+
 Give the host an `FGSTN_SimEventOutbox`, pass it in `FGSTN_InputTickArgs::Outbox`, and call
 `FGSTN_InputHostUtils::PublishOutbox(Outbox, Owner)` from the model's `FinalizeFrame`; use `FGSTN_InputHostUtils::CanExecuteBinding`
 and `ExecuteRequest` for the ability system parts. Implement `IGSTN_CommandSourceInterface` so abilities can ask why they started.

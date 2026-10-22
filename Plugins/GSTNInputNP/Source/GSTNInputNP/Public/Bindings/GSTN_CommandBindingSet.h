@@ -159,11 +159,21 @@ public:
 	void GetSpecs(TArray<const FGSTN_InputSlotSpec*>& OutSpecs) const;
 
 	/**
-	 * Builds the runtime table. Slots with no command tag or a repeated tag, bindings with no slot or no ability and anything
+	 * Builds the runtime table. Slots with no command tag or a repeated tag, bindings with no slot, no ability or a server only ability (IsBindableAbility) and anything
 	 * past the table limits are left out and logged; IsDataValid reports the same problems to the designer.
 	 * @param ExtraResetRules The host's global rules, whose watched tags join this set's in the table.
 	 */
 	FGSTN_CommandTable BuildTable(TConstArrayView<TInstancedStruct<FGSTN_BufferResetRule>> ExtraResetRules = {}) const;
+
+	/**
+	 * Whether a command can be bound to this ability. The simulation decides press consumption with the ability's
+	 * CanActivateAbility, which checks the net role through ShouldActivateAbility: an ability whose net security policy is
+	 * ServerOnly or ServerOnlyExecution answers "no" on a client and "yes" on the server, so the two would consume the press
+	 * differently and the input state would diverge. BuildTable drops such bindings and IsDataValid reports them.
+	 * (TODO: a role free activation check in the fork would lift this.)
+	 * @param OutReason Why the ability is refused, when it is.
+	 */
+	static bool IsBindableAbility(const UGameplayAbility* Ability, FString* OutReason = nullptr);
 
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;

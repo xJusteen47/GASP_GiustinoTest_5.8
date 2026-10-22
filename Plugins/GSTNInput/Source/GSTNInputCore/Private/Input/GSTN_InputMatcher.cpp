@@ -17,6 +17,7 @@ namespace
 		TArray<int32, TInlineAllocator<4>> Anchors;
 		TArray<uint8, TInlineAllocator<8>> Used;
 		int32 TerminalPressSlot = INDEX_NONE;
+		int32 TerminalStickAnchor = INDEX_NONE;
 		bool bViaHoldBuffer = false;
 
 		int32 Evaluations = 0;
@@ -49,6 +50,13 @@ namespace
 		const FGSTN_MatchParams& Params = Search.Params;
 		const int32 Age = FGSTN_InputMatcher::GetAge(Anchor.Frame, Params);
 		bOutViaHoldBuffer = false;
+
+		// A stick anchor (no button events) cannot be consumed like a press: the history remembers the newest one a command
+		// used, and that one and every older one are spent. Otherwise a stick-only command fires on each frame of its buffer.
+		if (Anchor.UsedEvents.IsEmpty() && Anchor.Frame <= Search.History.GetLastConsumedStickFrame())
+		{
+			return false;
+		}
 		if (Age <= Params.BufferFrames)
 		{
 			return true;
@@ -188,12 +196,14 @@ namespace
 			// Commit this step, then the earlier ones; take it back if they cannot be completed.
 			const int32 UsedBefore = Search.Used.Num();
 			const int32 TerminalBefore = Search.TerminalPressSlot;
+			const int32 StickBefore = Search.TerminalStickAnchor;
 			const bool bHoldBefore = Search.bViaHoldBuffer;
 			Search.Anchors[StepIndex] = Anchor.Frame;
 			Search.Used.Append(StepUsed);
 			if (bTerminal)
 			{
 				Search.TerminalPressSlot = Anchor.TerminalPressSlot;
+				Search.TerminalStickAnchor = Anchor.UsedEvents.IsEmpty() ? Anchor.Frame : INDEX_NONE;
 				Search.bViaHoldBuffer = bViaHoldBuffer;
 			}
 
@@ -204,6 +214,7 @@ namespace
 
 			Search.Used.SetNum(UsedBefore);
 			Search.TerminalPressSlot = TerminalBefore;
+			Search.TerminalStickAnchor = StickBefore;
 			Search.bViaHoldBuffer = bHoldBefore;
 			if (Search.bAborted)
 			{
@@ -258,6 +269,7 @@ bool FGSTN_InputMatcher::Match(const FGSTN_InputPattern& Pattern, const FGSTN_In
 	Out.StepAnchors = MoveTemp(Search.Anchors);
 	Out.UsedButtonEvents = MoveTemp(Search.Used);
 	Out.TerminalPressEvent = Search.TerminalPressSlot;
+	Out.TerminalStickAnchor = Search.TerminalStickAnchor;
 	Out.bViaHoldBuffer = Search.bViaHoldBuffer;
 	return true;
 }

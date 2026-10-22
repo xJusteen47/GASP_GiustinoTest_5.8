@@ -210,6 +210,17 @@ Each plugin must work in a project that knows nothing about this one:
   `IsCommandAllowed(int32 CommandIndex)` (the host's own gating, e.g. combat timeline and cancel windows),
   `CanExecuteBinding(int32 BindingIndex)` (ASC `CanActivateAbility` by default), `AppendResetRules(...)`
   (host-level rules, e.g. the running timeline's).
+  **The answer of `CanExecuteBinding` decides whether a press is consumed**, which is rolled back state, so it must be the
+  same on the client and the server: `CanActivateAbility` overrides of bound abilities must not read the role, local control
+  or non rolled back state, and `ServerOnly` / `ServerOnlyExecution` abilities cannot be bound (the engine's
+  `ShouldActivateAbility(GetLocalRole())` refuses them on a client). `UGSTN_CommandBindingSet::IsBindableAbility` is the check:
+  `BuildTable` drops and logs such bindings, `IsDataValid` reports them. TODO (fork): a role free activation check would lift
+  the restriction.
+- **Stick-only commands consume their anchor.** A terminal motion or spin has no press, so `FGSTN_InputHistory` keeps the
+  newest consumed stick anchor frame (`ConsumeSticksUpTo`, set by the simulator through `FGSTN_SlotResolution::ConsumeFrom`);
+  the matcher ignores terminal stick anchors at or before it. Wire: one optional byte in the history (flag 0x20 of the first
+  header byte, the frame's age), compared in `operator==`, aged out like an event. Tests `GSTNInput.Core.Input.Resolver.StickOnly*`,
+  `...History.ConsumedStickAnchor`.
 - **`UGSTN_CommandBindingSet`** (DataAsset, was `UGSTN_CombatSlotBindingSet`): slots, bindings
   `{ Command; Requirements; Ability }`, reset rules. The combat model replaces it with its compiled loadout table (M3)
   through the same simulator calls.

@@ -36,6 +36,25 @@ namespace
 	}
 }
 
+bool UGSTN_CommandBindingSet::IsBindableAbility(const UGameplayAbility* Ability, FString* OutReason)
+{
+	if (!Ability)
+	{
+		return true;
+	}
+	const EGameplayAbilityNetSecurityPolicy::Type Policy = Ability->GetNetSecurityPolicy();
+	if (Policy == EGameplayAbilityNetSecurityPolicy::ServerOnly || Policy == EGameplayAbilityNetSecurityPolicy::ServerOnlyExecution)
+	{
+		if (OutReason)
+		{
+			*OutReason = FString::Printf(TEXT("ability %s has a server only net security policy: its CanActivateAbility depends on the net role, so a client and the server would consume the press differently"),
+				*Ability->GetClass()->GetName());
+		}
+		return false;
+	}
+	return true;
+}
+
 int32 FGSTN_CommandTable::FindCommand(const FGameplayTag& Command) const
 {
 	return Commands.IndexOfByPredicate([&Command](const FCommand& Entry) { return Entry.Tag == Command; });
@@ -133,6 +152,12 @@ FGSTN_CommandTable UGSTN_CommandBindingSet::BuildTable(TConstArrayView<TInstance
 			UE_LOG(LogGSTNInput, Warning, TEXT("%s: binding %d (%s): ability %s could not be loaded and is ignored"), *GetPathName(), Index, *Binding.Command.ToString(), *Binding.Ability.ToString());
 			continue;
 		}
+		FString Reason;
+		if (!IsBindableAbility(Binding.Ability->GetDefaultObject<UGameplayAbility>(), &Reason))
+		{
+			UE_LOG(LogGSTNInput, Error, TEXT("%s: binding %d (%s) is ignored: %s"), *GetPathName(), Index, *Binding.Command.ToString(), *Reason);
+			continue;
+		}
 		Order.Add(Index);
 	}
 	Order.StableSort([this](int32 A, int32 B) { return TagNameLess(Bindings[A].Command, Bindings[B].Command); });
@@ -225,6 +250,16 @@ EDataValidationResult UGSTN_CommandBindingSet::IsDataValid(FDataValidationContex
 			Context.AddError(FText::Format(LOCTEXT("BindingNoAbility", "Binding {0} ({1}) has no ability."),
 				Index, FText::FromName(Binding.Command.GetTagName())));
 			Result = EDataValidationResult::Invalid;
+		}
+		else if (const UClass* AbilityClass = Binding.Ability.LoadSynchronous())
+		{
+			FString Reason;
+			if (!IsBindableAbility(AbilityClass->GetDefaultObject<UGameplayAbility>(), &Reason))
+			{
+				Context.AddError(FText::Format(LOCTEXT("BindingRoleDependent", "Binding {0} ({1}): {2}."),
+					Index, FText::FromName(Binding.Command.GetTagName()), FText::FromString(Reason)));
+				Result = EDataValidationResult::Invalid;
+			}
 		}
 		Keys.Add({ Binding.Command, &Binding.Requirements });
 		KeyToBinding.Add(Index);

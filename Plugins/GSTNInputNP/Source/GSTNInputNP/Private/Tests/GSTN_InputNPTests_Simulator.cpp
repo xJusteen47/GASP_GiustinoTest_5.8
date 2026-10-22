@@ -3,6 +3,7 @@
 
 #include "Abilities/GameplayAbility.h"
 #include "Bindings/GSTN_CommandBindingSet.h"
+#include "Tests/GSTN_InputNPTestObjects.h"
 #include "Events/GSTN_SimEvent.h"
 #include "Input/GSTN_CommandLocks.h"
 #include "Input/GSTN_ButtonMap.h"
@@ -153,6 +154,35 @@ bool FGSTN_NPCommandTableTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("forced command 0 names nothing"), Table.FromForcedCommand(0), static_cast<int32>(INDEX_NONE));
 	TestEqual(TEXT("forced command round trip"), Table.FromForcedCommand(Table.ToForcedCommand(TestCommandBlock)), 1);
 	TestEqual(TEXT("unknown command"), static_cast<int32>(Table.ToForcedCommand(GSTNInputTags::Command)), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPServerOnlyBindingTest, "GSTNInput.NP.Bindings.ServerOnlyAbilityRejected", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPServerOnlyBindingTest::RunTest(const FString& Parameters)
+{
+	// The press consumption follows CanActivateAbility, which reads the net role of a server only ability: client and server
+	// would answer differently, so the table must not contain such a binding.
+	TestTrue(TEXT("a plain ability is bindable"), UGSTN_CommandBindingSet::IsBindableAbility(GetDefault<UGameplayAbility>()));
+	FString Reason;
+	TestFalse(TEXT("ServerOnly is refused"), UGSTN_CommandBindingSet::IsBindableAbility(GetDefault<UGSTN_TestServerOnlyAbility>(), &Reason));
+	TestTrue(TEXT("the reason names the policy"), Reason.Contains(TEXT("server only")));
+	TestFalse(TEXT("ServerOnlyExecution is refused"), UGSTN_CommandBindingSet::IsBindableAbility(GetDefault<UGSTN_TestServerOnlyExecutionAbility>()));
+
+	const TStrongObjectPtr<UGSTN_CommandBindingSet> Set = MakeBindingSet();
+	FGSTN_CommandBinding ServerOnly;
+	ServerOnly.Command = TestCommandBlock;
+	ServerOnly.Ability = TSoftClassPtr<UGameplayAbility>(UGSTN_TestServerOnlyAbility::StaticClass());
+	Set->Bindings.Add(ServerOnly);
+	FGSTN_CommandBinding ServerOnlyExecution = ServerOnly;
+	ServerOnlyExecution.Ability = TSoftClassPtr<UGameplayAbility>(UGSTN_TestServerOnlyExecutionAbility::StaticClass());
+	Set->Bindings.Add(ServerOnlyExecution);
+
+	AddExpectedError(TEXT("server only net security policy"), EAutomationExpectedErrorFlags::Contains, 2);
+	const FGSTN_CommandTable Table = Set->BuildTable();
+
+	TestEqual(TEXT("the server only bindings are left out"), Table.Bindings.Num(), 2);
+	TestEqual(TEXT("so the command has none"), Table.Commands[1].NumBindings, 0);
+	TestEqual(TEXT("and is not a candidate"), Table.CandidateSlots.Num(), 1);
 	return true;
 }
 
@@ -531,6 +561,9 @@ bool FGSTN_NPStandaloneComponentTest::RunTest(const FString& Parameters)
 	RunFrame(Sync.Input, 1, 1, Host, Table, Buttons, *Settings);
 	TestEqual(TEXT("a request was made"), static_cast<int32>(Sync.Input.RequestedBinding), 1);
 
+	// The consumed stick anchor (a stick-only command that fired) is part of the history on the wire
+	Sync.Input.History.ConsumeSticksUpTo(1);
+
 	TArray<uint8> Bytes;
 	FMemoryWriter Writer(Bytes);
 	Sync.Input.NetSerialize(Writer);
@@ -543,6 +576,7 @@ bool FGSTN_NPStandaloneComponentTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("request frame"), Loaded.Input.RequestFrame, Sync.Input.RequestFrame);
 	TestEqual(TEXT("last activated"), Loaded.Input.LastActivatedFrame, Sync.Input.LastActivatedFrame);
 	TestTrue(TEXT("history"), Loaded.Input.History == Sync.Input.History);
+	TestEqual(TEXT("consumed stick anchor"), Loaded.Input.History.GetLastConsumedStickFrame(), 1);
 
 	// Interpolated proxies take the newer state
 	FGSTN_InputModelSyncState Interpolated;

@@ -151,6 +151,16 @@ Bindings say which command a context runs (`GSTN_CommandBindings.h`, `FGSTN_TagR
 owner's tags). A command without a binding is never a candidate. `UGSTN_CommandBindingUtils` resolves bindings and
 detects conflicts between them.
 
+### Consumption
+
+A command that fires consumes the button events it used (`FGSTN_InputHistory::Consume`) and, when its terminal step is a
+stick pattern (motion, spin), its terminal stick anchor (`ConsumeSticksUpTo`): the matcher then ignores terminal stick
+anchors at or before the newest consumed one, and a fresh motion (a later anchor) fires again. Hosts consume through
+`FGSTN_SlotResolution::ConsumeFrom` so they cannot disagree. The consumed frame is serialized with the history as an optional
+byte (flag 0x20 of the first header byte; absent while nothing is consumed or once the frame is older than `MaxEventAge`),
+and it takes part in `operator==`, so it is reconciled with the rest of the history. Only terminal anchors are consumed:
+earlier steps of a longer pattern are not.
+
 ### Using it with Network Prediction
 
 See the [GSTNInputNP README](../GSTNInputNP/README.md) (embedding the simulation, standalone component, activation context, Mover tracker).

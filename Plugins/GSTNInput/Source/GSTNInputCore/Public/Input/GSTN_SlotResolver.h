@@ -41,6 +41,23 @@ struct FGSTN_SlotResolution
 
 	/** Nothing fires this frame because a chord that includes the pressed button may still be completed */
 	bool bDeferredForChord = false;
+
+	/**
+	 * Applies the consumption once the command is requested: the events above, and the winner's terminal stick anchor (a
+	 * motion or spin has no press, so this is what keeps it from firing again on the following frames). Every host calls
+	 * this instead of consuming by hand, so they cannot disagree.
+	 */
+	void ConsumeFrom(FGSTN_InputHistory& History) const
+	{
+		for (const uint8 EventSlot : EventsToConsume)
+		{
+			History.Consume(EventSlot);
+		}
+		if (Match.TerminalStickAnchor != INDEX_NONE)
+		{
+			History.ConsumeSticksUpTo(Match.TerminalStickAnchor);
+		}
+	}
 };
 
 /**

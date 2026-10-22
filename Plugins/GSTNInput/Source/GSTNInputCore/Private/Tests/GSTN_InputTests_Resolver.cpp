@@ -300,4 +300,116 @@ bool FGSTN_ResolverDeterminismTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/**
+	 * Plays Notation frame by frame like the simulator does (append, resolve, consume) and returns the frames on which a
+	 * command came out.
+	 */
+	TArray<int32> FireFrames(FAutomationTestBase& Test, const TArray<FGSTN_InputSlotSpec>& Slots, const TCHAR* Notation, int32 LastFrame, const UGSTN_InputSettings& Settings)
+	{
+		FGSTN_InputScript Script(GSTNTest::ButtonTags());
+		FString Error;
+		const bool bParsed = Script.Parse(Notation, Error);
+		Test.TestTrue(*FString::Printf(TEXT("script parses: %s (%s)"), Notation, *Error), bParsed);
+
+		TArray<int32> Fired;
+		FGSTN_InputHistory History;
+		for (int32 Frame = 0; Frame <= LastFrame; ++Frame)
+		{
+			Script.Advance(History, Settings, Frame);
+			const FGSTN_SlotResolution Resolution = ResolveSlots(Slots, History, Settings);
+			if (Resolution.SlotIndex != INDEX_NONE)
+			{
+				Fired.Add(Frame);
+				ConsumeEvents(History, Resolution);
+			}
+		}
+		return Fired;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ResolverStickOnlyMotionTest, "GSTNInput.Core.Input.Resolver.StickOnlyMotionFiresOnce", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ResolverStickOnlyMotionTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTN_DirectionMasks;
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeSettings();
+	const int32 Buffer = Settings->DefaultBufferFrames;
+
+	// A double tap dash: back then forward, no button. Nothing to consume but the anchor itself.
+	const TArray<FGSTN_InputSlotSpec> Slots = { Slot(GSTNTestTags::Attack_Neutral,
+		Pattern({ Motion(EGSTN_DirectionSpace::Facing, { FromDirection(EGSTN_StickDirection::Down), FromDirection(EGSTN_StickDirection::Up) }) })) };
+
+	// The anchor is frame 4. It stays inside the time buffer for Buffer + 1 more frames and must fire on the first only.
+	const TArray<int32> Once = FireFrames(*this, Slots, TEXT("0:2t 4:8t"), 4 + Buffer + 1, *Settings);
+	TestEqual(TEXT("the motion fires exactly once across its buffer"), Once.Num(), 1);
+	TestTrue(TEXT("on the frame it is completed"), Once.Num() == 1 && Once[0] == 4);
+
+	// A later, fresh motion has a newer anchor and fires again.
+	const TArray<int32> Twice = FireFrames(*this, Slots, TEXT("0:2t 4:8t 20:2t 24:8t"), 24 + Buffer + 1, *Settings);
+	TestEqual(TEXT("a fresh motion fires again"), Twice.Num(), 2);
+	TestTrue(TEXT("on its own completion frame"), Twice.Num() == 2 && Twice[0] == 4 && Twice[1] == 24);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ResolverStickOnlySpinTest, "GSTNInput.Core.Input.Resolver.StickOnlySpinFiresOnce", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ResolverStickOnlySpinTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeSettings();
+	const int32 Buffer = Settings->DefaultBufferFrames;
+	const TArray<FGSTN_InputSlotSpec> Slots = { Slot(GSTNTestTags::Attack_Neutral, Pattern({ Spin(EGSTN_SpinRotation::Either) })) };
+
+	// A full turn in 16 frames (a sector every 2), completed at frame 16.
+	FString Turn;
+	for (int32 Step = 0; Step <= 8; ++Step)
+	{
+		Turn += FString::Printf(TEXT("%d:@%d "), Step * 2, (Step * 45) % 360);
+	}
+	const TArray<int32> Once = FireFrames(*this, Slots, *Turn, 16 + Buffer + 1, *Settings);
+	TestEqual(TEXT("the spin fires exactly once across its buffer"), Once.Num(), 1);
+	TestTrue(TEXT("on the frame it is completed"), Once.Num() == 1 && Once[0] == 16);
+
+	// The stick goes back to neutral and turns again: a second spin, a second fire.
+	FString TwoTurns = Turn + TEXT("18:5 ");
+	for (int32 Step = 0; Step <= 8; ++Step)
+	{
+		TwoTurns += FString::Printf(TEXT("%d:@%d "), 40 + Step * 2, (Step * 45) % 360);
+	}
+	const TArray<int32> Twice = FireFrames(*this, Slots, *TwoTurns, 56 + Buffer + 1, *Settings);
+	TestEqual(TEXT("a fresh spin fires again"), Twice.Num(), 2);
+	TestTrue(TEXT("on its own completion frame"), Twice.Num() == 2 && Twice[0] == 16 && Twice[1] == 56);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ResolverStickAnchorMarkTest, "GSTNInput.Core.Input.Resolver.StickAnchorMark", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ResolverStickAnchorMarkTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTN_DirectionMasks;
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeSettings();
+	const TArray<FGSTN_InputSlotSpec> Motions = { Slot(GSTNTestTags::Attack_Neutral,
+		Pattern({ Motion(EGSTN_DirectionSpace::Facing, { FromDirection(EGSTN_StickDirection::Down), FromDirection(EGSTN_StickDirection::Up) }) })) };
+
+	// Only a stick anchor is marked: a press has its own consumption and leaves the mark alone.
+	FGSTN_InputHistory Pressed = PlayTo(*this, TEXT("5:+A"), *Settings);
+	const FGSTN_SlotResolution PressResolution = ResolveSlots({ AttackNeutral() }, Pressed, *Settings);
+	TestEqual(TEXT("a press resolves"), PressResolution.SlotIndex, 0);
+	TestEqual(TEXT("a press has no stick anchor"), PressResolution.Match.TerminalStickAnchor, static_cast<int32>(INDEX_NONE));
+	ConsumeEvents(Pressed, PressResolution);
+	TestEqual(TEXT("and marks no stick"), Pressed.GetLastConsumedStickFrame(), static_cast<int32>(FGSTN_InputHistory::AncientFrame));
+
+	FGSTN_InputHistory Moved = PlayTo(*this, TEXT("0:2t 4:8t"), *Settings);
+	const FGSTN_SlotResolution MotionResolution = ResolveSlots(Motions, Moved, *Settings);
+	TestEqual(TEXT("a motion resolves"), MotionResolution.SlotIndex, 0);
+	TestEqual(TEXT("its stick anchor"), MotionResolution.Match.TerminalStickAnchor, 4);
+	ConsumeEvents(Moved, MotionResolution);
+	TestEqual(TEXT("is marked consumed"), Moved.GetLastConsumedStickFrame(), 4);
+
+	// A command that cannot execute consumes nothing, so the motion stays available for the buffer.
+	FGSTN_InputHistory Blocked = PlayTo(*this, TEXT("0:2t 4:8t"), *Settings);
+	const FGSTN_SlotResolution Refused = ResolveSlots(Motions, Blocked, *Settings, [](int32) { return false; });
+	TestEqual(TEXT("an unavailable command does not resolve"), Refused.SlotIndex, static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("and marks nothing"), Blocked.GetLastConsumedStickFrame(), static_cast<int32>(FGSTN_InputHistory::AncientFrame));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
