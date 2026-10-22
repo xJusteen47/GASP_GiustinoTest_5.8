@@ -1075,6 +1075,65 @@ def scenario_combat_lock(client=1, attack_button='Attack', stance_button='Specia
     run.run(steps)
 
 
+def scenario_stance_lock(client=1, **kw):
+    """C9: the stance of the lock scenario now runs on UGSTN_GA_Base (bEndOnTriggerRelease, the trigger button captured into sync
+    variables by the base), so this is scenario_combat_lock over it: held stance, attack locked, release ends it, the stance survives
+    a forced reconcile (the trigger button is restored with the ability's sync vars)."""
+    return scenario_combat_lock(client, **kw)
+
+
+def scenario_camera_aim(client=1, yaw=123.0, pitch=-20.0, stance_button='Special'):
+    """C9 camera aim (combat-m3 7.10). IC_GASNPP_Test gets bSendCameraAim on IN MEMORY (never saved), the client's control rotation is set to
+    (pitch, yaw), the stance is pressed and its GA_Base logs the aim it read on activation (GASNPP_AIM, one line per machine that
+    activates it). Strict: the server and the predicting client both activated it, both read the aim within 0.02 degree of the control
+    rotation, and the activation context carried the Special button on both. The flag is switched back off at the end."""
+    _require_test_config(client)
+    cfg = unreal.load_asset(INPUT_CONFIG)
+    cfg.set_editor_property('send_camera_aim', True)
+    stance = button_mask(stance_button)
+    run = _Run('camera_aim', client, judge_reconciles=False)
+    state = {}
+
+    def lines():
+        text = _read_log_since(state['mark'])
+        out = []
+        for l in text.splitlines():
+            m = re.search(r'GASNPP_AIM role=(\d+) local=(\d+) yaw=([-\d.]+) pitch=([-\d.]+) button=(-?\d+) source=(\d+)', l)
+            if m:
+                out.append((int(m.group(1)), int(m.group(2)), float(m.group(3)), float(m.group(4)), int(m.group(5)), int(m.group(6))))
+        return out
+
+    def near(a, b):
+        return abs(((a - b) + 180.0) % 360.0 - 180.0) < 0.02
+
+    def check_lines():
+        ls = lines()
+        srv = [x for x in ls if x[0] == 3]      # ROLE_Authority
+        cli = [x for x in ls if x[1] == 1 and x[0] == 2]   # autonomous proxy
+        ok = bool(srv) and bool(cli) and all(near(x[2], yaw) and near(x[3], pitch) for x in srv + cli)
+        btn = button_index(stance_button)
+        ok = ok and all(x[4] == btn and x[5] == 0 for x in srv + cli)
+        return ok, f'server {srv[:2]} client {cli[:2]}'
+
+    steps = [
+        (0.0, lambda: ('mark', state.update(mark=mark_log()))),
+        (0.1, lambda: ('control rotation', _set_pitch_yaw(client, pitch, yaw))),
+        (0.5, lambda: ('stance held', combat_hold(client, stance))),
+        (1.2, run.at('aim read by the stance on the server and the client, trigger button in the context', check_lines)),
+        (1.3, lambda: ('release', combat_clear(client))),
+        (1.9, run.at('stance ended on release', lambda: (not run.saw_tag(TAG_STANCE, 1.5, 1.9), ''))),
+        (2.0, lambda: ('flag off', cfg.set_editor_property('send_camera_aim', False))),
+        (2.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def _set_pitch_yaw(client_index, pitch, yaw):
+    pc, _ = _local_pawn(client_index)
+    pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=pitch, yaw=yaw))
+    return (pitch, yaw)
+
+
 # ------------------------------------------------------------------------------------------------ combat input resolution (M2 S2b)
 # Strict scenarios over the test content (IC_GASNPP_Test + SS_GASNPP_Standard + the binding set on BP_GASNPP_TestCharacter): the
 # button names come from the asset, an activation is proven by tags/cooldown/stamina, a resolved binding by the combat sync state's

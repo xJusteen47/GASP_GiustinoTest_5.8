@@ -3,6 +3,7 @@
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
 #include "Input/GSTN_CombatLockTags.h"
 #include "NativeGameplayTags.h"
+#include "GameFramework/Actor.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 
 namespace
@@ -57,43 +58,21 @@ UGSTN_GA_TestStance::UGSTN_GA_TestStance(const FObjectInitializer& ObjectInitial
 	ActivationOwnedTags.AddTag(TAG_Test_State_Stance);
 	// The point of the stance: while it is held the attack commands are locked
 	ActivationOwnedTags.AddTag(GSTNCombatLockTags::Attack);
+	bEndOnTriggerRelease = true;
 }
 
 void UGSTN_GA_TestStance::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
+	// The base captures the activation context (trigger button included) before anything reads it
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	// The activation context is valid on this frame only: keep the button in a sync var
-	TriggerButton.Value = INDEX_NONE;
-	const AActor* Avatar = ActorInfo ? ActorInfo->AvatarActor.Get() : nullptr;
-	if (const IGSTN_CommandSourceInterface* CommandSource = IGSTN_CommandSourceInterface::Find(Avatar))
-	{
-		TriggerButton.Value = CommandSource->GetActivationContext().Button;
-	}
+	const FRotator Aim = GetAimRotation();
+	UE_LOG(LogTemp, Display, TEXT("GASNPP_AIM role=%d local=%d yaw=%.2f pitch=%.2f button=%d source=%d"), static_cast<int32>(GetAvatarActorFromActorInfo() ? GetAvatarActorFromActorInfo()->GetLocalRole() : ROLE_None),
+		ActorInfo && ActorInfo->IsLocallyControlled() ? 1 : 0, Aim.Yaw, Aim.Pitch, GetActivationContext().Button, static_cast<int32>(GetActivationContext().Source));
 
 	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 	}
-}
-
-void UGSTN_GA_TestStance::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep)
-{
-	Super::OnSimulationTick(TimeStep);
-
-	if (!IsActive())
-	{
-		return;
-	}
-
-	const FGameplayAbilityActorInfo* ActorInfo = GetCurrentActorInfo();
-	const AActor* Avatar = ActorInfo ? ActorInfo->AvatarActor.Get() : nullptr;
-	const IGSTN_CommandSourceInterface* CommandSource = IGSTN_CommandSourceInterface::Find(Avatar);
-	if (CommandSource && TriggerButton.Value != INDEX_NONE && CommandSource->IsCommandButtonHeld(TriggerButton.Value))
-	{
-		return;
-	}
-
-	EndAbility(GetCurrentAbilitySpecHandle(), ActorInfo, GetCurrentActivationInfo(), true, false);
 }

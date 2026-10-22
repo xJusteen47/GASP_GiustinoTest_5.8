@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Abilities/GSTN_GA_Base.h"
 #include "GAS/GSTN_GameplayAbility.h"
 #include "DataTypes/SyncedvariableTypes/BasicSyncedVariablesTypes.h"
 #include "GSTN_TestCombatAbilities.generated.h"
@@ -46,13 +47,12 @@ private:
  * ActivationOwnedTags), so the attack commands cannot start while the stance is held but a command of another root (the
  * dash) still does.
  *
- * It ends by itself when the button that started it is released, asking the input simulation
- * (IGSTN_CommandSourceInterface::IsCommandButtonHeld) so the answer is the rolled back one on re-simulation. The button is
- * read once from the activation context and kept in a sync variable, because the context is only valid on the activation
- * frame. A start without a button (a forced command) ends at once.
+ * It is a UGSTN_GA_Base with bEndOnTriggerRelease: the base captures the trigger button and ends the stance when the button is
+ * released (a start without a button never ends on release). It logs the camera aim it saw on activation (GASNPP_AIM, read by
+ * scenario_camera_aim).
  */
 UCLASS()
-class GASP_GIUSTINO2_API UGSTN_GA_TestStance : public UGSTN_GameplayAbility
+class GASP_GIUSTINO2_API UGSTN_GA_TestStance : public UGSTN_GA_Base
 {
 	GENERATED_BODY()
 
@@ -61,11 +61,4 @@ public:
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
-
-	virtual void OnSimulationTick(const FAbilitySystemTimeStep& TimeStep) override;
-
-private:
-	/** Index (in the input config) of the button that started the stance, INDEX_NONE if none. A sync var: rolled back with the ability instance */
-	UPROPERTY()
-	FSyncInteger TriggerButton;
 };
