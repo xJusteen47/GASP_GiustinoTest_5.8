@@ -205,7 +205,9 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
 - Tests: `GSTNParts.Core.Math.{ApplyHitGolden (hits to expected bytes, mask, MainDelta), Cascade, WeakPointMoreMainThanTorso,
   RicochetNoDamage, OverflowNotCarried, BrokenPolicyKeep/Disable/Replace, NonzeroHitChangesByte, SinglePartPlayerBreakIsAllBroken}`,
   `GSTNParts.Core.Determinism.{1000RandomSequencesTwoConfigs, WeightCurveTableEqualsHandValues, EffectiveWeightNeverBelowClamp}`,
-  `GSTNParts.Core.Math.TwoHitsSameFrameOrderIndependentGivenSortedInbox`.
+  `GSTNParts.Core.Math.TwoHitsSameFrameOrderIndependentGivenSortedInbox`, `GSTNParts.Core.Math.RestoreParts{ClearsBitsAndBytes,
+  KeepsOthers, RestoreThenBreakAgain}` (pure `UGSTN_PartMath::RestoreParts(State, Mask, Fraction)` for P7b; restoring a part does not
+  give back main-pool percent, which is the healer's own GE).
 - Acceptance: golden and determinism green on Win64 editor and a second compile config (e.g. Development vs DebugGame); zero
   allocations in `ApplyHit` (allocation counter test). No dependency on any M4 type except `GSTNCombatCore` value structs.
 - Spec: CP §4.2, §4.3, §5.1, §8.1. Size: M.
@@ -287,6 +289,27 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
 - Acceptance: all scenarios clean in both topologies; no `IsServer()` in plugin simulation code (grep gate); with the plugin disabled
   M4 scenarios unchanged; host bytes/s report with and without parts.
 - Spec: CP §3.5, §5.2, §5.3, §5.4, §5.5b, §8.2; M4 §3b, §5, §6, §7, §9, §9b, §10. Size: L.
+
+### P7b Part restore (owner answer 2026-10-22 18:22: no self-regeneration, explicit restore allowed) - needs P7
+
+- Goal: an ability or effect (e.g. an enemy that heals others) restores some or all broken parts of a target, rollback-safe.
+- Request path: `FGSTN_PartRestoreRequest { PartMask (0 = all), float DamageFraction (0 = full repair), Frame }`. Default (b): a
+  parts-owned pending request in `FGSTN_PartsFragment`, written by a simulated GE component `UGSTN_GEComponent_RestoreParts`
+  (`GSTNPartsGAS`, Blueprint-visible fields) and consumed by `UGSTN_PartsTickExtension` at the victim's next tick, so prediction and
+  reconcile follow the fragment; no combat-core change. Alternative (a): an M4 inbox entry with a `Support` hit type (needs the M4
+  `Support` step, M4.13): only if P0d shows (b) cannot be rollback-safe. `UGSTN_PartsLibrary::RequestRestore` (BlueprintCallable,
+  authority, outside simulation) applies that GE.
+- State: clears the `BrokenMask` bits, sets `PartDamage` to the restored fraction, increments `BreakSerial` (so restore + break again
+  is a new event key), re-applies removed break effects' inverse only where the effect declares `bReversible` (Stats GE removed,
+  Launch/Stagger one-shots not reversed). Grab gate and hit groups re-derive from the mask with no extra code.
+- Tags/events (`GSTNPartsCore`): `Combat.Event.Part.Restored` (payload part index, BreakSerial).
+- Presentation (P10/P11): the idempotent hidden-bone set already un-hides from the confirmed mask; stump caps and pooled chunks
+  are released on `Part.Restored`; a restore cue tag on the request for VFX.
+- Tests: `GSTNParts.NP.Restore.{ClearsMaskAtFPlus1, RollbackRedeliveryRestoresOnce, RestoreThenBreakNewSerial,
+  IrreversibleEffectsStay}`, `GSTNParts.GAS.Restore.GEComponentRequests`. Scenario `scenario_part_restore` (c1 breaks a limb of an
+  enemy, the host's healer dummy restores it, c2 breaks it again: masks equal everywhere, `Restored` and `Broken` once each, host too).
+- Acceptance: as P7; players (single part) cannot be "restored" from death by this path (KO wins; validator warns on player sets).
+- Spec: CP §4.5, §5.4, game-design-direction §5b. Size: M.
 
 ### P8 Hit feel through parts: stagger, weak point, ricochet, attacker hitstop - needs D2, D5, D11
 
@@ -433,7 +456,7 @@ OQ ids refer to "Parti distruttibili (M4b)" in `open-questions-m4-m10.md`. A = a
 | OQ | Assumption planned on | Affects | Cost to change |
 |---|---|---|---|
 | Q1 (rest) | Break of the single player part = death; no gameplay limb effects for players; effects on enemies via `OnBreak` data | P3, P7, P14 | Low: data only (add break effects to the player set) |
-| Q2 (A2) | **Owner decision before P7** (README "Approval status" 3): `BrokenMask` monotonic until reset/respawn; no healing of parts | P3, P6, P7, P10 | High if healing is wanted later: needs a second mechanism and the rollback story |
+| Q2 (A2) | **Answered 2026-10-22 18:22**: no self-regeneration; parts stay broken by default, but an explicit restore (e.g. a healer enemy) can clear bits of `BrokenMask` and reset `PartDamage`. Built in P7b; the break path stays monotonic within a hit | P3, P7b, P10, P11 | done (P7b) |
 | Q3 (A3) | No overflow of damage beyond `PartCap` into the main pool; bonus only by explicit `MainDamage` | P3 | Low: one rule in `UGSTN_PartMath` plus golden |
 | Q4 (A4) | Lethal parts configurable (`bKill` in `MainDamage`) but no shipped default; values of weak-point transfer are data | P2, P3, P14 | Low |
 | Q5 | Integer hardness/penetration 0..15 (answer reads as integer armour levels; confirm) | P2, P3 | Medium: changes struct types and the band lookup, but isolated in `GSTNPartsCore` |

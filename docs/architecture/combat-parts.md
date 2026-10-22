@@ -304,7 +304,7 @@ between prediction and resolution.
 | Death | KO event then shatter | KO then shatter | Dying state then shatter (tiered, §6.4) |
 
 Players: the single part's cap is the KO condition, so "part broken" and "player dead" are the same event for a player
-(`Combat.Event.Part.AllBroken` followed by KO). Enemies: `BrokenMask` is monotonic until the entity is reset (*Proposal*:
+(`Combat.Event.Part.AllBroken` followed by KO). Enemies: `BrokenMask` only changes back through an explicit restore request (owner 2026-10-22 18:22: no self-regeneration, but e.g. a healer enemy can restore parts; plan P7b) or an entity reset (*Proposal*:
 no healing of broken parts in the first version), which also keeps the rollback story simple.
 
 ## 5. Simulation and network
