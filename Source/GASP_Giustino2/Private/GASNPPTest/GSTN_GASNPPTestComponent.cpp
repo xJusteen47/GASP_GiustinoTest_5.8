@@ -269,7 +269,10 @@ void UGSTN_GASNPPTestComponent::RecordProbeActivation(FName Probe, bool bResimul
 		++Counters.ActivationsRestoring;
 		return;
 	}
-	if (bResimulating)
+	// The ability system's IsReSimulating() is false on the path that re-runs an activation after a rollback, so the flag
+	// alone counts a re-fire as a forward activation. A forward activation always lands on a frame beyond every earlier one;
+	// anything at or below LastFrame (the highest activation frame seen) is the simulation replaying a frame.
+	if (bResimulating || AbilityFrame <= Counters.LastFrame)
 	{
 		++Counters.ActivationsResim;
 	}
@@ -277,7 +280,7 @@ void UGSTN_GASNPPTestComponent::RecordProbeActivation(FName Probe, bool bResimul
 	{
 		++Counters.Activations;
 	}
-	Counters.LastFrame = AbilityFrame;
+	Counters.LastFrame = FMath::Max(Counters.LastFrame, AbilityFrame);
 }
 
 void UGSTN_GASNPPTestComponent::RecordProbeEnd(FName Probe)

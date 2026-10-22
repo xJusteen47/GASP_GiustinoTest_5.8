@@ -20,11 +20,12 @@ struct FGSTN_ProbeCounters
 	/** CanActivateAbility calls (before any refusal), and how many were made while the ability system restored a frame */
 	int32 Attempts = 0;
 	int32 AttemptsRestoring = 0;
-	/** ActivateAbility calls in the forward simulation, in a re-simulation, and while a frame was being restored */
+	/** ActivateAbility calls in the forward simulation, in a re-simulation (flagged as such, or on a frame at or below LastFrame:
+	 * a replayed activation), and while a frame was being restored */
 	int32 Activations = 0;
 	int32 ActivationsResim = 0;
 	int32 ActivationsRestoring = 0;
-	/** Simulation frame of the latest activation outside a restore (a re-simulation overwrites it with the same frame) */
+	/** Highest simulation frame with an activation outside a restore (a replay of an earlier frame never lowers it) */
 	int32 LastFrame = -1;
 	/** Simulation frame at which that activation ended (the frames it lived show whether it ticked in its activation frame) */
 	int32 EndFrame = -1;
