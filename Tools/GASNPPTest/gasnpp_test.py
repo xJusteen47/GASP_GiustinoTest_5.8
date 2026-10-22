@@ -88,7 +88,8 @@ def reset_all():
 
 
 def net(lag_ms=0, var_ms=0, loss_pct=0):
-    """Same emulation on every PIE net driver (server and clients)."""
+    """Same emulation on every PIE net driver (server and clients). Remembered: abilities_startup re-applies it after each PIE restart."""
+    _cfg['net'] = (lag_ms, var_ms, loss_pct)
     for w in worlds():
         for cmd in (f'NetEmulation.PktLag {lag_ms}', f'NetEmulation.PktLagVariance {var_ms}', f'NetEmulation.PktLoss {loss_pct}'):
             unreal.SystemLibrary.execute_console_command(w, cmd)
@@ -584,21 +585,100 @@ import os, re
 _LOG_LINE = re.compile(r'^(\[\d{4}\.\d\d\.\d\d-\d\d\.\d\d\.\d\d:\d+\]\[\s*\d+\])(\w+): (?:(\w+): )?(.*)$')
 
 
+_log_cache = {'path': None}
+
+
+def _flush_log():
+    """Pushes the editor's buffered log lines to disk (unreal.log_flush when this build exposes it)."""
+    fn = getattr(unreal, 'log_flush', None)
+    if fn is None:
+        return False
+    try:
+        fn()
+        return True
+    except Exception:
+        return False
+
+
+def _tail(path, size=262144):
+    with open(path, 'rb') as f:
+        f.seek(0, os.SEEK_END)
+        f.seek(max(0, f.tell() - size))
+        return f.read().decode('utf-8', errors='replace')
+
+
 def _log_path():
-    return os.path.join(unreal.Paths.project_log_dir(), unreal.SystemLibrary.get_game_name() + '.log')
+    """Log file of THIS editor process. Two editors on one project (Development and DebugGame) share Saved/Logs: the first owns
+    <Game>.log, the second is renamed (<Game>_2.log...) because the first holds the file, so "<Game>.log" is not necessarily ours.
+    Order of trust:
+      1. -ABSLOG=<file> / -LOG=<file.log> on this process's command line: the process was told which file to write.
+      2. A probe: write a line with a unique token (pid + uuid) through unreal.log, flush, and take the candidate
+         <Game>*.log whose tail contains it. Only the file this process writes can contain a token it just generated, so this
+         needs no assumption about the naming scheme, the number of editors or file locking (a "newest file" or "file that is
+         open" guess is wrong while the other editor logs too). The probe blocks the game thread for at most ~1 s, once.
+    The result is cached (the log file does not change during a session)."""
+    import uuid
+    cached = _log_cache['path']
+    if cached and os.path.exists(cached):
+        return cached
+    cmd = unreal.SystemLibrary.get_command_line()
+    log_dir = unreal.Paths.project_log_dir()
+    for pattern, rel in ((r'-ABSLOG=("[^"]+"|\S+)', False), (r'-LOG=("[^"]+\.log"|\S+\.log)', True)):
+        m = re.search(pattern, cmd, re.IGNORECASE)
+        if m:
+            p = m.group(1).strip('"')
+            p = os.path.join(log_dir, p) if rel and not os.path.isabs(p) else p
+            if os.path.exists(p):
+                _log_cache['path'] = p
+                return p
+    base = unreal.SystemLibrary.get_game_name()
+    token = f'GASNPP_LOG_PROBE pid={os.getpid()} {uuid.uuid4().hex}'
+    unreal.log(token)
+    for _ in range(10):
+        _flush_log()
+        candidates = [os.path.join(log_dir, f) for f in os.listdir(log_dir)
+                      if f.startswith(base) and f.endswith('.log') and '-backup-' not in f]
+        for p in candidates:
+            try:
+                if token in _tail(p):
+                    _log_cache['path'] = p
+                    return p
+            except OSError:
+                pass
+        time.sleep(0.1)
+    raise RuntimeError(f'could not find this editor process\'s log in {log_dir} (probe {token} not found in any {base}*.log)')
 
 
 def mark_log():
-    """Byte position of the end of the editor log: pass it to report_reconciles() to look only at what follows."""
+    """Byte position of the end of the editor log: pass it to report_reconciles() to look only at what follows.
+    Flushes first, otherwise lines still buffered in memory would land after the mark and be counted in the next window."""
+    _flush_log()
     return os.path.getsize(_log_path())
+
+
+def _read_log_since(since):
+    """Text of the log after `since`, tolerant of lines not flushed yet: flush, then read until the size stops growing (at most
+    ~0.5 s). A trailing line without newline is a half-written one and is dropped."""
+    path = _log_path()
+    last = -1
+    for _ in range(6):
+        _flush_log()
+        size = os.path.getsize(path)
+        if size == last:
+            break
+        last = size
+        time.sleep(0.08)
+    with open(path, 'rb') as f:
+        f.seek(since)
+        text = f.read().decode('utf-8', errors='replace')
+    return text if text.endswith('\n') else text[:text.rfind('\n') + 1]
 
 
 def report_reconciles(since=0):
     """Reconciles in the editor log after `since` (see mark_log): returns a dict and logs a summary.
-    unexplained = state mismatches not on the frame of an offset change (the number that must be 0)."""
-    with open(_log_path(), 'rb') as f:
-        f.seek(since)
-        text = f.read().decode('utf-8', errors='replace')
+    unexplained = state mismatches not on the frame of an offset change (the number that must be 0).
+    max_burst = most mismatches logged within one wall-clock second (a startup storm shows here)."""
+    text = _read_log_since(since)
     offset_frames, mismatches, forced = set(), [], 0
     for line in text.splitlines():
         m = _LOG_LINE.match(line)
@@ -614,8 +694,12 @@ def report_reconciles(since=0):
         elif 'ForceReconcile' in message and message.startswith('Reconcile activated'):
             forced += 1
     unexplained = [x for x in mismatches if x[0] not in offset_frames]
+    per_second = {}
+    for stamp, _ in mismatches:
+        per_second[stamp.split(':')[0]] = per_second.get(stamp.split(':')[0], 0) + 1
     result = {'offset_changes': len(offset_frames), 'mismatches': len(mismatches), 'on_offset_frames': len(mismatches) - len(unexplained),
-              'unexplained': len(unexplained), 'forced': forced, 'unexplained_lines': [x[1] for x in unexplained[:5]]}
+              'unexplained': len(unexplained), 'forced': forced, 'max_burst': max(per_second.values(), default=0),
+              'unexplained_lines': [x[1] for x in unexplained[:5]]}
     unreal.log('GASNPP reconciles: ' + json.dumps(result))
     return result
 
@@ -628,20 +712,222 @@ def combat_tap(client_index, mask):
     return True
 
 
-def scenario_combat_spike(client=1):
-    """Combat model spike on BP_GASNPP_TestCharacter (button 0 -> test dash, button 1 -> hitstop window):
-    the combat model asks the ability system for the dash, also across forced re-simulations.
-    Clean = server/client state equal and no reconciles besides the forced ones (np.PrintReconciles 1 to check)."""
+# ---- test content names: buttons are resolved from the InputConfig asset, never hard-coded as indices
+INPUT_CONFIG = '/Game/GASNPPTest/Input/IC_GASNPP_Test'
+TAG_DASHING, TAG_ATTACKING, TAG_STANCE, TAG_BUFFED = 'Test.State.Dashing', 'Test.State.Attacking', 'Test.State.Stance', 'Test.State.Buffed'
+
+
+def _tag_text(tag):
+    try:
+        return str(tag.get_editor_property('tag_name'))
+    except Exception:
+        m = re.search(r'TagName="?([^")]+)', str(tag))
+        return m.group(1) if m else str(tag)
+
+
+def button_index(name):
+    """Index (= bit) of button `name` ('Attack' or 'Input.Button.Attack') in IC_GASNPP_Test, looked up at call time so that
+    reordering the buttons in the asset does not break the scenarios. Raises when the asset has no such button."""
+    want = name if name.startswith('Input.Button.') else f'Input.Button.{name}'
+    names = [_tag_text(b.get_editor_property('tag')) for b in unreal.load_asset(INPUT_CONFIG).get_editor_property('buttons')]
+    if want not in names:
+        raise RuntimeError(f'{want} is not a button of {INPUT_CONFIG}: {names}')
+    return names.index(want)
+
+
+def button_mask(button):
+    """Mask of a button given by name (resolved from the asset) or by raw index (kept for old callers)."""
+    return 1 << (button if isinstance(button, int) else button_index(button))
+
+
+def _combat_comp(client_index):
+    _, pawn = _local_pawn(client_index)
+    return pawn.get_component_by_class(unreal.GSTN_CombatSimComponent)
+
+
+def _require_test_config(client_index):
+    """The pawn must run the input config the names were resolved from; skipped when the property is not readable from Python."""
+    try:
+        cfg = str(_combat_comp(client_index).get_editor_property('input_config'))
+    except Exception:
+        return
+    if cfg and 'None' not in cfg and 'IC_GASNPP_Test' not in cfg:
+        raise RuntimeError(f'the pawn uses {cfg}, not IC_GASNPP_Test: button names would resolve against the wrong asset')
+
+
+def _total_rollbacks():
+    return sum(local_comp(w).get_editor_property('rollback_count') for w in worlds()[1:] if local_comp(w))
+
+
+_last_run = {'name': None, 'results': [], 'verdict': None}
+
+
+class _Run:
+    """Sampler + assertions of one strict scenario. Every editor tick it records, for the authoritative copy (world 0) and the
+    client's own copy of the player's pawn: the Test.* tags, stamina, cooldowns, mode, rollbacks and the combat request. Checks
+    are timeline steps over windows of those samples ("tag seen between t0 and t1"), so they do not depend on the exact tick a
+    state change lands on, and each scenario asserts a positive effect (tag / cooldown / stamina) before it asserts an absence,
+    so it cannot pass vacuously. Verdict: unreal.log "PASS"/"FAIL" line, also in last_checks()."""
+
+    def __init__(self, name, client):
+        self.name, self.client, self.key = name, client, key_of_player(client)
+        self.results, self.samples, self.handle = [], [], None
+        self.rb0 = _total_rollbacks()
+        self.log_mark = None
+        try:
+            self.log_mark = mark_log()
+        except Exception as e:
+            self.note(f'log not readable ({e}): reconcile check skipped')
+        self.t0 = time.time()
+        self.handle = unreal.register_slate_post_tick_callback(self._tick)
+
+    def now(self):
+        return time.time() - self.t0
+
+    def _tick(self, _dt):
+        try:
+            ws = worlds()
+            s = {'t': self.now()}
+            for side, wi in (('srv', 0), ('cli', self.client)):
+                c = comps(ws[wi]).get(self.key)
+                if c is None:
+                    s[side] = None
+                    continue
+                v = json.loads(c.get_state_snapshot())
+                s[side] = {'tags': set(v.get('tags', [])), 'stamina': v['attributes'].get('Stamina'), 'cd': dict(v['cooldowns']),
+                           'mode': v.get('mode'), 'req': tuple((v.get('combat') or {}).get('request', (0, -1)))}
+            self.samples.append(s)
+        except Exception:
+            pass
+
+    def run(self, steps):
+        """Restarts the clock and runs the timeline; the last step must be finish()."""
+        self.t0 = time.time()
+        self.samples.clear()
+        run_timeline(steps)
+
+    # -- queries over the samples
+    def _win(self, side, t0, t1):
+        return [s[side] for s in self.samples if t0 <= s['t'] <= t1 and s.get(side)]
+
+    def saw_tag(self, tag, t0, t1, side='srv'):
+        return any(tag in s['tags'] for s in self._win(side, t0, t1))
+
+    def held_tag(self, tag, t0, t1, side='srv'):
+        w = self._win(side, t0, t1)
+        return bool(w) and all(tag in s['tags'] for s in w)
+
+    def saw_cooldown(self, name, t0, t1, side='srv'):
+        return any(x > 0 for s in self._win(side, t0, t1) for k, x in s['cd'].items() if name in k)
+
+    def stamina_drop(self, t0, t1):
+        """Stamina before t0 minus the lowest value in [t0, t1] (regen can only make it smaller, never fake a drop)."""
+        before = [s['srv']['stamina'] for s in self.samples if s['t'] < t0 and s.get('srv') and s['srv']['stamina'] is not None]
+        low = [s['stamina'] for s in self._win('srv', t0, t1) if s['stamina'] is not None]
+        return (before[-1] - min(low)) if before and low else 0.0
+
+    def new_bindings(self, t0, t1, side='srv'):
+        """Bindings (index + 1; the combat sync state's RequestedBinding) of requests made in [t0, t1], in order. A request is
+        new when its frame differs from the last sample before t0 (the sync state keeps the last one)."""
+        before = [s[side]['req'] for s in self.samples if s['t'] < t0 and s.get(side)]
+        seen, out = (before[-1][1] if before else None), []
+        for s in self._win(side, t0, t1):
+            if s['req'][1] != seen and s['req'][0] > 0:
+                out.append(s['req'][0])
+            seen = s['req'][1]
+        return out
+
+    def latest(self, side):
+        return next((s[side] for s in reversed(self.samples) if s.get(side)), None)
+
+    # -- results
+    def note(self, text):
+        self.results.append((None, text, ''))
+
+    def check(self, label, ok, detail=''):
+        self.results.append((bool(ok), label, detail))
+
+    def at(self, label, fn):
+        """Timeline step: fn() -> (ok, detail) evaluated at that time."""
+        def step():
+            try:
+                ok, detail = fn()
+            except Exception as e:
+                ok, detail = False, f'exception {e}'
+            self.check(label, ok, detail)
+            return f"{'PASS' if ok else 'FAIL'} {label} {detail}"
+        return step
+
+    def finish(self):
+        """Timeline step: stops sampling, adds the reconcile and forced-reconcile checks, logs the verdict."""
+        def step():
+            if self.handle is not None:
+                unreal.unregister_slate_post_tick_callback(self.handle)
+                self.handle = None
+            if self.log_mark is not None:
+                try:
+                    r = report_reconciles(self.log_mark)
+                    self.check('no unexplained reconciles', r['unexplained'] == 0, f"{r['unexplained']} unexplained {r['unexplained_lines']}, forced={r['forced']}")
+                except Exception as e:
+                    self.note(f'reconcile check failed to run: {e}')
+            if self.name in _FORCES_RECONCILES:
+                gained = _total_rollbacks() - self.rb0
+                self.check('forced reconciles happened (rollbacks went up)', gained > 0, f'+{gained} (np.ForceReconcile is one global cvar: another client may take it)')
+            bad = [(l, d) for ok, l, d in self.results if ok is False]
+            verdict = ('PASS' if not bad else 'FAIL') + f" {sum(1 for ok, _, _ in self.results if ok is not None)} checks"
+            _last_run.update(name=self.name, results=list(self.results), verdict=verdict)
+            text = f'GASNPP {self.name}: {verdict}' + ''.join(f"\n  {'PASS' if ok else 'FAIL' if ok is False else 'note'} {l} {d}" for ok, l, d in self.results)
+            (unreal.log_error if bad else unreal.log)(text)
+            return verdict
+        return step
+
+
+_FORCES_RECONCILES = ('combat_spike', 'combat_lock')
+
+
+def last_checks():
+    """(verdict, [(ok, label, detail)]) of the last strict scenario (ok None = a note, not a check)."""
+    return _last_run['verdict'], _last_run['results']
+
+
+def scenario_combat_spike(client=1, dash_button='Dash'):
+    """Combat model spike on BP_GASNPP_TestCharacter: the combat model asks the ability system for the dash (Input.Button.<dash_button>,
+    resolved from IC_GASNPP_Test), also across forced re-simulations. Strict: each dash must actually happen (Test.State.Dashing on
+    the server and predicted on the client, dash cooldown, stamina spent); the second one only after the cooldown. Needs a
+    Command.Dash slot in the standard slot set (see testing.md). The hitstop step uses the component's HitstopTestButton, when set.
+    Verdict: last_checks() / the log; also compare report() and np.PrintReconciles 1."""
+    _require_test_config(client)
+    dash = button_mask(dash_button)
+    try:
+        hs = _combat_comp(client).get_editor_property('hitstop_test_button')
+    except Exception:
+        hs = -1
+    run = _Run('combat_spike', client)
+
+    def dash_checks(t0, t1):
+        return [
+            (t1, run.at(f'dash at {t0}s: Test.State.Dashing on the server', lambda: (run.saw_tag(TAG_DASHING, t0, t1), ''))),
+            (t1, run.at(f'dash at {t0}s: predicted on the client', lambda: (run.saw_tag(TAG_DASHING, t0, t1, 'cli'), ''))),
+            (t1, run.at(f'dash at {t0}s: cooldown applied', lambda: (run.saw_cooldown('Dash', t0, t1), ''))),
+            (t1, run.at(f'dash at {t0}s: stamina spent', lambda: (run.stamina_drop(t0, t1) > 1.0, f'drop {run.stamina_drop(t0, t1):.1f}'))),
+        ]
+
     steps = [
         (0.0, lambda: ('move', hold(client, 'move', (0, 1, 0)))),
-        (1.0, lambda: ('combat dash', combat_tap(client, 1))),
+        (1.0, lambda: ('combat dash', combat_tap(client, dash))),
         (1.1, lambda: ('force reconcile across the request frame', force_reconcile(client, 15))),
-        (1.6, lambda: ('hitstop', combat_tap(client, 2))),
-        (1.7, lambda: ('force reconcile during hitstop', force_reconcile(client, 10))),
-        (3.4, lambda: ('combat dash after cooldown', combat_tap(client, 1))),
-        (4.0, lambda: ('stop', release(client, 'move'))),
+        *dash_checks(1.0, 1.9),
+        (3.4, lambda: ('combat dash after cooldown', combat_tap(client, dash))),
+        *dash_checks(3.4, 4.3),
+        (4.4, lambda: ('stop', release(client, 'move'))),
+        (4.8, run.finish()),
     ]
-    run_timeline(steps)
+    if hs >= 0:
+        steps += [(1.6, lambda: ('hitstop', combat_tap(client, 1 << hs))),
+                  (1.7, lambda: ('force reconcile during hitstop', force_reconcile(client, 10)))]
+    else:
+        run.note('hitstop step skipped: HitstopTestButton is unset on the combat component')
+    run.run(steps)
 
 
 # ------------------------------------------------------------------------------------------------ visual smoothness
@@ -698,3 +984,279 @@ def measure_smoothness(seconds=3.0, world_index=0, settle=1.0):
     if _smooth['handle'] is not None:
         unreal.unregister_slate_post_tick_callback(_smooth['handle'])
     _smooth['handle'] = unreal.register_slate_post_tick_callback(tick)
+
+
+# ------------------------------------------------------------------------------------------------ combat locks (M2 S2c)
+def combat_hold(client_index, mask):
+    """Replaces the sampled combat buttons with `mask` (bit i = button i) until combat_clear. Taps still add presses."""
+    _, pawn = _local_pawn(client_index)
+    pawn.get_component_by_class(unreal.GSTN_CombatSimComponent).set_scripted_buttons(mask)
+    return True
+
+
+def combat_clear(client_index):
+    _, pawn = _local_pawn(client_index)
+    pawn.get_component_by_class(unreal.GSTN_CombatSimComponent).clear_scripted_buttons()
+    return True
+
+
+def scenario_combat_lock(client=1, attack_button='Attack', stance_button='Special', dash_button='Dash'):
+    """Command locks (M2 section 6b/8) on the test content (GSTN_GA_TestStance on the Special command: owns Test.State.Stance and
+    Input.Lock.Command.Attack while the trigger button is held; GSTN_GA_TestAttack on the Attack commands: Test.State.Attacking;
+    GSTN_GA_TestDash on Command.Dash). Buttons are names resolved from IC_GASNPP_Test (an int is still taken as a raw index).
+    Strict, in order (every absence is asserted only together with the stance being active, so it cannot be vacuous):
+      0.5s  stance held                 -> Test.State.Stance on the server (and predicted on the client)
+      1.0s  dash tap under the stance   -> dashes (another root, not locked): Dashing + cooldown + stamina spent
+      2.0s  attack tap under the stance -> no Test.State.Attacking while the stance holds (locked; the press expires in the buffer)
+      3.0s  stance + attack held, 3.2s stance released, attack still held -> Attacking comes out after the release, not before
+      4.0s  stance held again, 4.2s forced reconcile -> stance continuous across it (the lock survives the re-simulation)
+    Needs a Command.Dash slot (testing.md, open item); without it the dash check fails visibly. Also: no unexplained reconciles."""
+    _require_test_config(client)
+    stance, attack, dash = button_mask(stance_button), button_mask(attack_button), button_mask(dash_button)
+    run = _Run('combat_lock', client)
+    steps = [
+        (0.0, lambda: ('move', hold(client, 'move', (0, 1, 0)))),
+        (0.5, lambda: ('stance held', combat_hold(client, stance))),
+        (0.95, run.at('stance activated (server)', lambda: (run.saw_tag(TAG_STANCE, 0.5, 0.95), ''))),
+        (0.95, run.at('stance predicted (client)', lambda: (run.saw_tag(TAG_STANCE, 0.5, 0.95, 'cli'), ''))),
+        (1.0, lambda: ('dash under the attack lock', combat_tap(client, dash))),
+        (1.9, run.at('dash not locked: Dashing', lambda: (run.saw_tag(TAG_DASHING, 1.0, 1.9), ''))),
+        (1.9, run.at('dash not locked: cooldown + stamina', lambda: (run.saw_cooldown('Dash', 1.0, 1.9) and run.stamina_drop(1.0, 1.9) > 1.0, f'drop {run.stamina_drop(1.0, 1.9):.1f}'))),
+        (2.0, lambda: ('attack tap under the lock', combat_tap(client, attack))),
+        (2.9, run.at('attack locked: stance held the whole time', lambda: (run.held_tag(TAG_STANCE, 2.0, 2.9), ''))),
+        (2.9, run.at('attack locked: no Attacking', lambda: (not run.saw_tag(TAG_ATTACKING, 2.0, 2.9), ''))),
+        (3.0, lambda: ('stance + attack held', combat_hold(client, stance | attack))),
+        (3.2, lambda: ('stance released, attack still held', combat_hold(client, attack))),
+        (3.15, run.at('attack still locked right before the release', lambda: (run.held_tag(TAG_STANCE, 3.0, 3.1) and not run.saw_tag(TAG_ATTACKING, 3.0, 3.15), ''))),
+        (3.6, lambda: ('release all', combat_clear(client))),
+        (3.95, run.at('held attack comes out after the stance ends', lambda: (run.saw_tag(TAG_ATTACKING, 3.2, 3.95), ''))),
+        (3.95, run.at('stance ended on release', lambda: (not run.saw_tag(TAG_STANCE, 3.6, 3.95), ''))),
+        (4.0, lambda: ('stance held again', combat_hold(client, stance))),
+        (4.2, lambda: ('force reconcile while the stance is held', force_reconcile(client, 10))),
+        (4.75, run.at('stance continuous across the reconcile', lambda: (run.held_tag(TAG_STANCE, 4.45, 4.75), ''))),
+        (4.8, lambda: ('release all', combat_clear(client))),
+        (5.5, lambda: ('stop', release(client, 'move'))),
+        (5.9, run.finish()),
+    ]
+    run.run(steps)
+
+
+# ------------------------------------------------------------------------------------------------ combat input resolution (M2 S2b)
+# Strict scenarios over the test content (IC_GASNPP_Test + SS_GASNPP_Standard + the binding set on BP_GASNPP_TestCharacter): the
+# button names come from the asset, an activation is proven by tags/cooldown/stamina, a resolved binding by the combat sync state's
+# request (binding index + 1, sampled every tick). Not coverable with the current content (no binding/slot for it): buffer,
+# motion, chord, spin, the "airborne-less command" part of the context test, light-tilt (aim zone) and "crouch 2 frames later"
+# (the editor tick cannot place a press with frame accuracy). See testing.md.
+def _set_yaw(client_index, yaw):
+    pc, _ = _local_pawn(client_index)
+    pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw))
+    return yaw
+
+
+_main_runs = {}
+
+
+def scenario_combat_main_inputs(client=1, camera_yaw=0.0):
+    """The four standard attack commands from stick + crouch: attack alone (Neutral), attack + stick forward (Directional), crouch held +
+    attack (CrouchNeutral), crouch held + stick + attack (CrouchDirectional), each 1.2 s apart. Each must start Test.State.Attacking
+    and resolve a new binding; the four bindings must be four different ones. `camera_yaw` rotates the control rotation first: run it
+    again with another yaw (e.g. 90) and the bindings must be identical (the stick is relative to the camera/facing, not to the world)."""
+    _require_test_config(client)
+    attack, crouch = button_mask('Attack'), button_mask('Crouch')
+    run = _Run('combat_main_inputs', client)
+    cases = [('neutral', False, False), ('directional', True, False), ('crouch_neutral', False, True), ('crouch_directional', True, True)]
+    found = {}
+
+    def setup(tilt, crouching):
+        if tilt:
+            hold(client, 'move', (0, 1, 0))
+        if crouching:
+            combat_hold(client, crouch)
+        else:
+            combat_clear(client)
+        return f'tilt={tilt} crouch={crouching}'
+
+    def teardown(tilt):
+        if tilt:
+            release(client, 'move')
+        combat_clear(client)
+        return 'released'
+
+    def check(name, a, b):
+        def f():
+            bs = run.new_bindings(a, b)
+            found[name] = bs[0] if bs else None
+            return run.saw_tag(TAG_ATTACKING, a, b) and bool(bs), f'binding {found[name]}'
+        return run.at(f'{name}: Attacking + a binding resolved', f)
+
+    def distinct():
+        vals = [found.get(n) for n, _, _ in cases]
+        _main_runs[camera_yaw] = dict(found)
+        others = {y: r for y, r in _main_runs.items() if y != camera_yaw}
+        return (None not in vals and len(set(vals)) == len(vals) and all(r == found for r in others.values()),
+                f'bindings {found}; other camera yaws {others}')
+
+    steps, t = [(0.0, lambda: ('camera yaw', _set_yaw(client, camera_yaw)))], 0.5
+    for name, tilt, crouching in cases:
+        steps += [(t, lambda tilt=tilt, c=crouching, name=name: (name, setup(tilt, c))),
+                  (t + 0.3, lambda: ('attack tap', combat_tap(client, attack))),
+                  (t + 1.1, check(name, t + 0.3, t + 1.1)),
+                  (t + 1.15, lambda tilt=tilt: teardown(tilt))]
+        t = round(t + 1.2, 2)
+    steps += [(t, run.at('four distinct bindings, same for every camera yaw', distinct)), (t + 0.1, run.finish())]
+    run.run(steps)
+
+
+def scenario_combat_context(client=1, wait_after_jump=0.3):
+    """Same input (Attack, no stick) on the ground and in the air: the Grounded and the Airborne binding of Command.Attack.Neutral
+    must be two different bindings, both activating Test.State.Attacking. The jump is real (GA_Jump); the scenario asserts that the
+    pawn is not Walking when the airborne attack is sent, so a failed jump fails the scenario instead of testing the ground twice.
+    Not covered: a command without an airborne binding / a command with a slot and no binding (no such content)."""
+    _require_test_config(client)
+    attack = button_mask('Attack')
+    run = _Run('combat_context', client)
+    got = {}
+
+    def binding(key, a, b):
+        def f():
+            bs = run.new_bindings(a, b)
+            got[key] = bs[0] if bs else None
+            return run.saw_tag(TAG_ATTACKING, a, b) and bool(bs), f'binding {got[key]}'
+        return f
+
+    def airborne():
+        mode = (run.latest('cli') or {}).get('mode')
+        return mode not in (None, 'Walking'), f'mode {mode}'
+
+    t_air = round(1.6 + wait_after_jump, 2)
+    steps = [
+        (0.3, lambda: ('ground attack', combat_tap(client, attack))),
+        (1.3, run.at('grounded attack: Attacking + binding', binding('ground', 0.3, 1.3))),
+        (1.6, lambda: ('jump', press(client, 'jump'))),
+        (t_air, run.at('airborne at the attack tap', airborne)),
+        (t_air, lambda: ('air attack', combat_tap(client, attack))),
+        (t_air + 1.0, run.at('airborne attack: Attacking + binding', binding('air', t_air, t_air + 1.0))),
+        (t_air + 1.0, run.at('grounded and airborne bindings differ', lambda: (None not in got.values() and len(set(got.values())) == 2, f'{got}'))),
+        (t_air + 1.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_combat_activation(client=1):
+    """Every button of IC_GASNPP_Test that has a command in the standard slot set starts its test ability (activation from the
+    InputConfig + SlotBindings): Attack -> Attacking, Special (held) -> Stance and gone after the release, Dash -> Dashing + cooldown +
+    stamina, Buff -> Buffed. Dash and Buff have no slot in SS_GASNPP_Standard yet (testing.md): those two checks fail until one exists."""
+    _require_test_config(client)
+    attack, special, dash, buff = (button_mask(n) for n in ('Attack', 'Special', 'Dash', 'Buff'))
+    run = _Run('combat_activation', client)
+
+    def dash_ok():
+        drop = run.stamina_drop(3.0, 4.0)
+        return run.saw_tag(TAG_DASHING, 3.0, 4.0) and run.saw_cooldown('Dash', 3.0, 4.0) and drop > 1.0, f'drop {drop:.1f}'
+
+    steps = [
+        (0.3, lambda: ('attack', combat_tap(client, attack))),
+        (1.2, run.at('Attack -> Attacking', lambda: (run.saw_tag(TAG_ATTACKING, 0.3, 1.2), ''))),
+        (1.4, lambda: ('special held', combat_hold(client, special))),
+        (2.0, run.at('Special held -> Stance', lambda: (run.held_tag(TAG_STANCE, 1.7, 2.0), ''))),
+        (2.1, lambda: ('special released', combat_clear(client))),
+        (2.8, run.at('Special released -> Stance gone', lambda: (not run.saw_tag(TAG_STANCE, 2.5, 2.8), ''))),
+        (3.0, lambda: ('dash', combat_tap(client, dash))),
+        (4.0, run.at('Dash -> Dashing + cooldown + stamina', dash_ok)),
+        (4.2, lambda: ('buff', combat_tap(client, buff))),
+        (5.2, run.at('Buff -> Buffed', lambda: (run.saw_tag(TAG_BUFFED, 4.2, 5.2), ''))),
+        (5.4, run.finish()),
+    ]
+    run.run(steps)
+
+
+# ------------------------------------------------------------------------------------------------ startup burst check
+_startup = {'handle': None, 'results': [], 'status': 'idle'}
+
+
+def abilities_startup(runs=3, run_seconds=14.0, burst_threshold=5, ready_timeout=60.0, settle_seconds=3.0):
+    """Restarts PIE `runs` times and runs scenario_abilities as soon as every pawn has its input ready, to see whether a burst of
+    Sync/Aux mismatch reconciles shows up at startup (26 in one burst on client 2 were seen once). The restart uses the current PIE
+    settings and re-applies the last m.net() values. Non-blocking: poll abilities_startup_result(). Per run: mismatches before the
+    scenario started (startup) and during it, unexplained ones, the largest per-second burst, topology problems and the CMP line.
+    The scenario starts `settle_seconds` after every pawn has its input ready: the fork's startup burst (Offset 0, the late client's
+    local Mover mode still None, "RollbackFrame N AHEAD of PendingFrame 0", so the rollback does nothing) falls before it and is only
+    reported (`startup_*` keys, `startup_max_burst` is informational), not judged.
+    Verdict (log): FAIL when a run has max_burst >= burst_threshold or unexplained mismatches in the scenario window, a failing CMP, or an error."""
+    les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+    if not all(hasattr(les, n) for n in ('editor_request_begin_play', 'editor_request_end_play', 'is_in_play_in_editor')):
+        raise RuntimeError('LevelEditorSubsystem has no begin/end play in this build: restart PIE by hand (ue_play) between runs')
+    if _startup['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(_startup['handle'])
+    expected = len(worlds()) or 3
+    st = {'run': 0, 'phase': 'end', 't': time.time(), 'ending': False, 'mark_start': None, 'mark_run': None, 'ready_at': None}
+    _startup.update(results=[], status=f'run 1/{runs}')
+
+    def finish(status):
+        unreal.unregister_slate_post_tick_callback(_startup['handle'])
+        _startup['handle'] = None
+        _startup['status'] = status
+        bad = status != 'done' or any(r.get('error') or r.get('max_burst', 0) >= burst_threshold or r.get('unexplained', 0)
+                                      or not r.get('cmp', '').endswith(tuple(f'{n}/{n} OK' for n in range(1, 100)))
+                                      for r in _startup['results'])
+        (unreal.log_error if bad else unreal.log)(f"GASNPP abilities_startup {status}: {'FAIL' if bad else 'PASS'} " + json.dumps(_startup['results']))
+
+    def ready():
+        ws = worlds()
+        if len(ws) < expected:
+            return False
+        for w in ws:
+            # Only the pawn a world's local player controls ever has its input ready (the others are authority or simulated copies),
+            # so every world must hold all the pawns and have exactly that one ready.
+            c = comps(w)
+            if len(c) < expected or not any(json.loads(x.get_state_snapshot()).get('inputReady') for x in c.values()):
+                return False
+        return True
+
+    def tick(_dt):
+        try:
+            elapsed = time.time() - st['t']
+            if st['phase'] == 'end':
+                if les.is_in_play_in_editor():
+                    if not st['ending']:
+                        les.editor_request_end_play()
+                        st['ending'] = True
+                else:
+                    st.update(mark_start=mark_log(), phase='wait_ready', t=time.time(), ending=False)
+                    les.editor_request_begin_play()
+            elif st['phase'] == 'wait_ready':
+                if les.is_in_play_in_editor() and ready():
+                    st.update(phase='settle', t=time.time())
+                elif elapsed > ready_timeout:
+                    _startup['results'].append({'run': st['run'] + 1, 'error': f'pawns not ready after {ready_timeout}s'})
+                    finish('error')
+            elif st['phase'] == 'settle':
+                if elapsed >= settle_seconds:
+                    if _cfg.get('net'):
+                        net(*_cfg['net'])
+                    st.update(mark_run=mark_log(), phase='run', t=time.time())
+                    reset_all()
+                    scenario_abilities()
+            elif st['phase'] == 'run' and elapsed > run_seconds:
+                whole, during = report_reconciles(st['mark_start']), report_reconciles(st['mark_run'])
+                _, problems = check_topology()
+                _startup['results'].append({
+                    'run': st['run'] + 1, 'startup_mismatches': whole['mismatches'] - during['mismatches'],
+                    'startup_unexplained': whole['unexplained'] - during['unexplained'], 'startup_max_burst': whole['max_burst'],
+                    'run_mismatches': during['mismatches'], 'unexplained': during['unexplained'], 'max_burst': during['max_burst'],
+                    'offset_changes': during['offset_changes'], 'topology': problems, 'cmp': report().splitlines()[-1]})
+                st['run'] += 1
+                if st['run'] >= runs:
+                    finish('done')
+                else:
+                    _startup['status'] = f"run {st['run'] + 1}/{runs}"
+                    st.update(phase='end', t=time.time())
+        except Exception as e:
+            _startup['results'].append({'run': st['run'] + 1, 'error': str(e)})
+            finish('error')
+
+    _startup['handle'] = unreal.register_slate_post_tick_callback(tick)
+
+
+def abilities_startup_result():
+    return _startup['status'], _startup['results']

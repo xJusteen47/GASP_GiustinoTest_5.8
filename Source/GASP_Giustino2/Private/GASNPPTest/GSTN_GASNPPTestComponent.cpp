@@ -241,7 +241,7 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			CombatJson->SetStringField(TEXT("history"), FGSTN_InputScript::Describe(CombatState->Input.History, 8));
 			CombatJson->SetNumberField(TEXT("heldButtons"), CombatState->Input.History.GetHeldButtons());
 			CombatJson->SetNumberField(TEXT("historyFrame"), CombatState->Input.History.GetLatestFrame());
-			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Input.RequestedAction), MakeShared<FJsonValueNumber>(CombatState->Input.RequestFrame) });
+			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Input.RequestFrame) });
 			Json->SetObjectField(TEXT("combat"), CombatJson);
 		}
 	}
