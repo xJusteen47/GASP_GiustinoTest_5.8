@@ -1065,3 +1065,42 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
    Perché conta: decide `bHittableWhileHeld` e le regole di fuoco amico durante `ThrownBody`.
    Ipotesi nella specifica: non colpibile mentre è in mano o in volo; colpisce qualsiasi nemico del lanciatore ignorando la squadra, credito al lanciatore (M10 §6b).
    
+
+---
+
+## Superfici di attraversamento sulle parti dei nemici (22/10 sera)
+
+Richiesta del proprietario (22/10): "alcuni nemici potrebbero avere porzioni di corpo su cui è possibile fare wall slide, oppure parti come trampolini etc...".
+Specifica di riferimento: `docs/architecture/traversal-surfaces.md`, piano `docs/architecture/plans/traversal-surfaces-plan.md` (T0..T9). Tutto ciò che non è elencato qui è deciso nella specifica come *Proposal* (regola di auto-approvazione del 22/10). Impostazione di fondo: una parte su cui si fa wall slide o che fa da trampolino è una **forma-piattaforma** del nemico (lo stesso collider rigido e separato dalla mesh di M8 §4d.5), con un "comportamento di superficie" come dato statico; la rottura della parte spegne la forma. Niente stato di simulazione nuovo.
+
+TS.1. Va bene un piccolo plugin a sé, `GSTNSurface` (solo `GSTNSurfaceCore`, senza GAS/NP/Mover), proprietario della radice di tag `Surface.*` e del contratto dati (comportamenti, parametri di lancio, interfaccia `IGSTN_SurfaceProvider`), da cui dipendono `GSTNCombatCore` (H11/H11b), `GSTNPlatform` e il codice di wall movement? Comporta spostare in quel plugin `Surface.Type.*`, `IGSTN_ImpactSurface`/`IGSTN_LaunchSurface` e `FGSTN_SurfaceLaunchParams` previsti in H11/H11b (non ancora iniziati).
+   Perché conta: tre consumatori indipendenti (impatti, wall movement, piattaforme) devono leggere gli stessi dati e un solo plugin deve possedere i tag; metterli in `GSTNLevelObjects` o in `GSTNPlatform` costringerebbe il wall movement a dipendere da combat o da Mover-piattaforme.
+   Risposta consigliata: sì, `GSTNSurface` separato; costo piccolo se deciso prima che H11 parta.
+
+TS.2. Autorizzi una modifica al core del wall movement (come `IsMovementLocked`): un campo `FGSTN_WallSurfaceFilter` (query di tag, default vuoto = comportamento attuale) in `FGSTN_WallCheckSettings`, valutato in `IsHitOnValidWall` e nello sweep della transizione di ingresso, per dire "questo muro non si può scalare/scivolare" o "solo arrampicata"?
+   Perché conta: senza, le parti dei nemici funzionano lo stesso (solo risposte di collisione, T2), ma un muro **statico** che blocca il giocatore senza permettere il wall slide, o una superficie solo-arrampicata, non sono esprimibili.
+   Risposta consigliata: sì (T5), è un solo punto di estensione con default identico a oggi.
+
+TS.3. Quali nemici possono avere parti-superficie: solo quelli che possono già fare da piattaforma (fighter: boss ed elite, più al massimo 8 minion-piattaforma vivi con attore di appoggio), oppure vuoi che anche minion dello sciame abbiano un fianco scivolabile?
+   Perché conta: i minion dello sciame non hanno un attore sui client e nessun riferimento stabile come base del Mover; aprirli a questa meccanica significa più attori di appoggio e banda.
+   Risposta consigliata: stesso insieme delle piattaforme, stesso tetto di 8; i minion dello sciame mai.
+
+TS.4. Mentre un giocatore scivola o si arrampica su un nemico, il nemico deve rallentare / fare l'animazione di "appoggio" come per le piattaforme (`MaxSpeedWhileOccupied`, brace), oppure resta libero di muoversi a piena velocità?
+   Perché conta: l'errore di aggancio sui client cresce con velocità × (ping + ~100 ms); rallentare è la leva più economica ed è anche una scelta di design (un boss che "sente" il giocatore addosso).
+   Risposta consigliata: sì, il giocatore in wall slide conta come occupante: stesso limitatore e stessa animazione delle piattaforme.
+
+TS.5. Quando la parte su cui il giocatore sta scivolando si rompe (o il nemico viene lanciato, muore, viene afferrato): avviso visibile di ~20 frame e poi il giocatore cade conservando la velocità del nemico, oppure distacco immediato? E il giocatore può "cavalcare" il pezzo staccato?
+   Perché conta: la perdita della base arriva ai client con un RTT di ritardo (una correzione); l'avviso la rende quasi invisibile. Il pezzo staccato è solo presentazione (parti §6.2) e farne una superficie lo renderebbe parte della simulazione.
+   Risposta consigliata: avviso di `DropGraceFrames` poi caduta con la velocità della base; i pezzi staccati non sono mai superfici.
+
+TS.6. Parti-trampolino: la direzione di lancio segue la posa della parte in quel frame (nemico inclinato → lancio inclinato) e si somma la velocità del nemico? Una vittima in tumble scagliata contro la parte rimbalza (riga `Surface.Type.Trampoline` di H11)? Colpire la parte con un attacco **non** lancia mai l'attaccante?
+   Perché conta: fissa cosa è "data della superficie" e cosa è contatto; evita casi speciali nel codice degli impatti.
+   Risposta consigliata: sì, sì, sì (flag `bAddSurfaceVelocity` nei parametri di lancio, default attivo).
+
+TS.7. Chi usa queste superfici: solo giocatori e fighter (entità NP con Mover), oppure anche i minion devono poter essere lanciati da una parte-trampolino di un altro nemico o scivolare su di essa?
+   Perché conta: i minion non hanno modalità di muro e il loro movimento leggero (M8) ha un lancio proprio; per i trampolini **statici** il percorso esiste già (H11), per quelli in movimento no.
+   Risposta consigliata: giocatori e fighter; i minion solo sui trampolini statici, per ora.
+
+TS.8. Quali comportamenti vuoi nella prima consegna: `WallSlide`, `WallClimb`, `Launch` (trampolino), `Stand` (piattaforma) sono quelli pianificati; `Slippery` (scivolo più veloce, niente presa) e `OneWay` restano tag riservati senza lettore. Ne mancano altri importanti (es. "appiccicoso", "danno al contatto")?
+   Perché conta: ogni comportamento con logica propria è un lettore in più (sottoclasse di modalità o di passo di pipeline); i tag riservati costano zero.
+   Risposta consigliata: i quattro pianificati; gli altri come tag riservati finché un livello non li chiede.

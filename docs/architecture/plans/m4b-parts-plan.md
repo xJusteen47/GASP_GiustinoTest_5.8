@@ -188,6 +188,10 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
   `GSTNParts.Core.Data.DefaultTableThreeBands` (above 1.0/1.0, equal 0.65/0.65, below ricochet with zero scales, stagger and hitstop
   scales 1 in damaging bands per DD §2h).
 - Acceptance: tests green; a new part set and a new table work with no C++; structs BlueprintType; default table matches CP §3.4.
+- 2026-10-22 evening, traversal surfaces ([traversal-surfaces.md](../traversal-surfaces.md) §4.1, plan T3/T6): **no surface field is
+  added to `FGSTN_PartDefinition`**. An enemy's wall-slideable or trampoline body portions are platform shapes (`GSTNPlatform`)
+  keyed by the part's `Name`; the bridge `GSTNPlatformParts` resolves names to indices and disables the shapes from the confirmed
+  `BrokenMask`. P2 only guarantees that `Name` is unique (already validated) and stable across restores.
 - Spec: CP §3.1, §3.3, §3.4, §3.6 (data only); M4 §3b item 5 (D7 base). Size: M.
 
 ### P3 Pure part math: state, quantisation, hit application, weight (`GSTNPartsCore`)
@@ -309,6 +313,8 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
   IrreversibleEffectsStay}`, `GSTNParts.GAS.Restore.GEComponentRequests`. Scenario `scenario_part_restore` (c1 breaks a limb of an
   enemy, the host's healer dummy restores it, c2 breaks it again: masks equal everywhere, `Restored` and `Broken` once each, host too).
 - Acceptance: as P7; players (single part) cannot be "restored" from death by this path (KO wins; validator warns on player sets).
+- 2026-10-22 evening: `Combat.Event.Part.Restored` and the confirmed mask are the inputs of the `GSTNPlatformParts` bridge
+  ([traversal-surfaces-plan.md](traversal-surfaces-plan.md) T6: restored parts re-enable their traversal shapes); nothing to add here.
 - Spec: CP §4.5, §5.4, game-design-direction §5b. Size: M.
 
 ### P8 Hit feel through parts: stagger, weak point, ricochet, attacker hitstop - needs D2, D5, D11
