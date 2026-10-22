@@ -35,7 +35,11 @@ struct FGSTN_CombatSyncCore
 
 	bool ShouldReconcile(const FGSTN_CombatSyncCore& AuthorityState) const
 	{
-		Input.ShouldReconcile(AuthorityState.Input);
+		// The input state is authoritative like the rest: a mismatch asks for a reconcile (the field is traced by the call)
+		if (Input.ShouldReconcile(AuthorityState.Input))
+		{
+			return true;
+		}
 		UE_NP_TRACE_RECONCILE(HitstopStartFrame != AuthorityState.HitstopStartFrame, "HitstopStartFrame:");
 		UE_NP_TRACE_RECONCILE(HitstopEndFrame != AuthorityState.HitstopEndFrame, "HitstopEndFrame:");
 		return false;

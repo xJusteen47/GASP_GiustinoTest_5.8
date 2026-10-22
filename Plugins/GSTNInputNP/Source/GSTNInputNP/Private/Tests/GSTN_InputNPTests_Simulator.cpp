@@ -582,6 +582,15 @@ bool FGSTN_NPStandaloneComponentTest::RunTest(const FString& Parameters)
 	FGSTN_InputModelSyncState Interpolated;
 	Interpolated.Interpolate(&Loaded, &Sync, 0.5f);
 	TestEqual(TEXT("interpolation takes the newer state"), Interpolated.Input.RequestFrame, Sync.Input.RequestFrame);
+
+	// The input state is authoritative: the standalone model reconciles on any difference of it, and only then
+	FGSTN_InputModelSyncState Authority = Loaded;
+	TestFalse(TEXT("equal input states do not reconcile"), Loaded.ShouldReconcile(Authority));
+	Authority.Input.RequestFrame += 1;
+	TestTrue(TEXT("a different request frame reconciles"), Loaded.ShouldReconcile(Authority));
+	Authority = Loaded;
+	Authority.Input.LastActivatedFrame += 1;
+	TestTrue(TEXT("a different last activated frame reconciles"), Loaded.ShouldReconcile(Authority));
 	return true;
 }
 

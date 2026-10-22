@@ -32,8 +32,8 @@ struct FGSTN_InputModelSyncState
 
 	bool ShouldReconcile(const FGSTN_InputModelSyncState& AuthorityState) const
 	{
-		Input.ShouldReconcile(AuthorityState.Input);
-		return false;
+		// The input state is authoritative like the rest of the sync state: the field that differs is traced by the call
+		return Input.ShouldReconcile(AuthorityState.Input);
 	}
 
 	void ToString(FAnsiStringBuilderBase& Out) const

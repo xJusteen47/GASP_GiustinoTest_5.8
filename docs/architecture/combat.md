@@ -167,7 +167,9 @@ re-fires tag delegates and `MonitoredTagChanged` is not guarded); cancels are ex
 2. No `HasAuthority`/resim branches; server-only behaviour comes from where the instance ticks (inbox, section 12.4).
 3. Prefer **end-frame stamps over countdowns**: an idle entity's state then does not change frame to frame (cheap
    delta serialization, section 15).
-4. Every sync state field is in `NetSerialize`, `ShouldReconcile`, `ToString` and `Interpolate`.
+4. Every sync state field is in `NetSerialize`, `ShouldReconcile`, `ToString` and `Interpolate`. That includes the embedded
+   input state: `FGSTN_CombatSyncCore::ShouldReconcile` returns the result of `Input.ShouldReconcile` (the input state is
+   authoritative, see input.md 5.1).
 
 ### 5.6 Authoritative combat events (*Decision*)
 

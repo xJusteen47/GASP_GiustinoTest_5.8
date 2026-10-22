@@ -128,14 +128,14 @@ bool FGSTN_FragmentsRoundTrip0Test::RunTest(const FString& Parameters)
 	Interpolated.Interpolate(&Older, &State, 0.5f);
 	TestTrue(TEXT("interpolation takes the newer state"), SameCore(Interpolated, State));
 
-	// The core still reconciles on the hitstop window and nothing else
+	// The core reconciles on the hitstop window and on the input state, which is authoritative like the rest
 	FGSTN_CombatSyncState Authority = State;
 	TestFalse(TEXT("equal"), State.ShouldReconcile(Authority));
 	Authority.Core.HitstopEndFrame = 19;
 	TestTrue(TEXT("hitstop mismatch"), State.ShouldReconcile(Authority));
 	Authority = State;
 	Authority.Core.Input.RequestFrame = 7;
-	TestFalse(TEXT("an input state mismatch is reported to the trace only"), State.ShouldReconcile(Authority));
+	TestTrue(TEXT("an input state mismatch asks for a reconcile"), State.ShouldReconcile(Authority));
 	return true;
 }
 

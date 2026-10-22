@@ -202,6 +202,9 @@ Each plugin must work in a project that knows nothing about this one:
 - **`FGSTN_InputSimState`**: `History`, `Classifier`, `WatchedTagMask`, the frame-stamped request (`RequestedBinding`,
   `RequestButton`, `RequestFrame`), `LastActivatedFrame`. Not a sync state by itself: helpers `NetSerialize(Ar)`,
   `ShouldReconcile(Other)`, `ToString(Builder)` that the host's sync state calls for its embedded member.
+  The input state is **authoritative**: `ShouldReconcile` is true on the first difference (the trace names the field in
+  `np.PrintReconciles`) and the host must return it from its own `ShouldReconcile`; discarding it would let the
+  rolled back history drift from the server's without a correction.
 - **`FGSTN_InputSimulator`** (stateless): `Tick(const FGSTN_InputTickArgs&, IGSTN_InputSimHost&)` runs M2 §5 steps
   1–7 for one frame (sample, history, watched tags, reset rules, locks, resolve, request, consumption, outbox entry) on
   the embedded state.

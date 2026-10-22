@@ -51,7 +51,7 @@ struct FGame_SyncState
 	FGSTN_InputSimState Input;
 
 	void NetSerialize(const FNetSerializeParams& P) { Input.NetSerialize(P.Ar); }
-	bool ShouldReconcile(const FGame_SyncState& Auth) const { Input.ShouldReconcile(Auth.Input); return false; }
+	bool ShouldReconcile(const FGame_SyncState& Auth) const { return Input.ShouldReconcile(Auth.Input); }
 	void ToString(FAnsiStringBuilderBase& Out) const { Input.ToString(Out); Out.Append("\n"); }
 };
 ```

@@ -26,7 +26,7 @@ project can subclass it for its own defaults; its `InputConfig` and `SlotBinding
 `Fragments`, a list of `FGSTN_SyncFragment` from `GSTNCombatCore` that features add per entity. The core's bytes are the same with
 or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the
 [GSTNCombat README](../GSTNCombat/README.md)). A fragment mismatch against the authority asks for a reconcile like the hitstop window
-does; the input state's mismatches are still reported to the trace only. Interpolated proxies take the newer core, and each fragment
+does, and so does a mismatch of the input state (it is authoritative; the trace names the field). Interpolated proxies take the newer core, and each fragment
 decides how it blends (default: the newer one). No fragment type exists yet.
 
 **Tick extensions.** `IGSTN_CombatTickExtension` (`Simulation/GSTN_CombatTickExtension.h`) is the C++ per-frame hook an optional plugin registers in

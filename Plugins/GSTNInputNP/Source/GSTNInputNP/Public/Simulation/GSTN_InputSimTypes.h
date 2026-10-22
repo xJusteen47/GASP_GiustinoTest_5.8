@@ -153,7 +153,7 @@ struct FGSTN_InputSimState
 		Ar << LastActivatedFrame;
 	}
 
-	/** Always returns false: the mismatches are reported through the trace macros, and the host decides what to do with them */
+	/** True on the first mismatch (the trace macros name the field in np.PrintReconciles). The input state is authoritative like any other sync state: the host's ShouldReconcile must return this result */
 	bool ShouldReconcile(const FGSTN_InputSimState& AuthorityState) const
 	{
 		UE_NP_TRACE_RECONCILE(!(History == AuthorityState.History), "History:");
