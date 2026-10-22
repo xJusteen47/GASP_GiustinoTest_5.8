@@ -605,6 +605,29 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
    Perché conta: senza parti (o con nemici semplici) serve comunque una regola di afferrabilità.
    Ipotesi nella specifica: entrambe le regole disponibili e combinabili (devono passare tutte quelle configurate).
 
+
+### Scudo come in Smash e mosse parry (dopo la direzione del 22/10)
+
+25. In Smash Ultimate il parry si fa **rilasciando** lo scudo pochi frame prima del colpo. Va bene così, o preferisci il powershield a pressione dei capitoli precedenti?
+   Perché conta: cambia il gesto del giocatore e quanto è facile fare parry per sbaglio.
+   Ipotesi nella specifica: rilascio, finestra di 5 frame (`Anchor = Release`); la pressione resta un'opzione per kit o modalità (M6 §5.4).
+
+26. Dopo un parry (dello scudo o di una mossa) l'attaccante resta davvero stordito, o il parry dà solo un vantaggio di frame al difensore come in Ultimate? Il difensore con una mossa parry prosegue nel contrattacco?
+   Perché conta: decide se il parry è una punizione forte o solo un vantaggio, e quanto pesa una mossa contrattacco rispetto a uno scudo.
+   Ipotesi nella specifica: stordimento dell'attaccante configurabile per classe di colpo (0 = solo vantaggio, come Ultimate); con lo scudo il difensore torna libero prima, con una mossa continua la sua animazione e può annullarla in un contrattacco tramite la condizione `OnParry`.
+
+27. In PvE le mosse con finestra di parry possono parare gli attacchi dei boss e dei nemici? Quali colpi restano non parabili?
+   Perché conta: un contrattacco troppo generoso può banalizzare uno scontro, mentre uno troppo limitato rende inutili le mosse parry in PvE.
+   Ipotesi nella specifica: sì, vale in ogni modalità; i colpi simbolo dei boss sono non parabili tramite il flag `bParryable = false` o il tag `Combat.Immunity.Parry`, deciso per singolo colpo nei contenuti.
+
+28. Lo scudo è attivato per modalità di gioco (PvP sì, PvE no) o dipende anche da chi colpisce? Nelle modalità PvP con minion o pericoli ambientali, questi colpi consumano lo scudo come quelli dei giocatori?
+   Perché conta: stabilisce se serve un solo interruttore per modalità o anche regole per relazione, e se i minion in massa possono rompere lo scudo in un attimo.
+   Ipotesi nella specifica: un solo interruttore per modalità (`UGSTN_DefenceRules::bShieldEnabled`, più lo scudo effettivamente presente nel kit); nelle modalità PvP con minion un moltiplicatore per relazione nelle regole (valori da decidere).
+
+29. Va bene che la bolla dello scudo sia una hurtbox aggiuntiva, così blocca anche i colpi che toccano solo la bolla e non il corpo (fedele a Smash), anche se richiede un piccolo intervento sul rilevamento colpi di M4?
+   Perché conta: l'alternativa più semplice (testare solo il punto di contatto sul corpo) non permette di bloccare un colpo che sfiora soltanto la bolla, quindi lo scudo risulterebbe più piccolo di quello che si vede.
+   Ipotesi nella specifica: hurtbox aggiuntiva con priorità sopra il corpo (la presa la ignora e colpisce il corpo, gli shield poke colpiscono le parti esposte), verificata dallo spike 2.5; se lo spike non passa si torna al test sul punto di contatto e ti avviso.
+
 ---
 
 ## M7 — Piggyback e mosse in coppia: domande al project owner
