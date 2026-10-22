@@ -287,7 +287,7 @@ protected:
 	FGSTN_WallTickState MakeTickState(const FSimulationTickParams& Params, const FQuat& StartQuat) const;
 
 	/** Moves/rotates the capsule, the wall normal and the velocity with the dynamic wall it is riding */
-	void ApplyMovementBase(const FMovingComponentSet& MovingComps, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
+	void ApplyMovementBase(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
 
 	/** Substepped move along the wall: translate, sense, filter the normal, orient, adhere, transport the velocity */
 	void MoveAlongWall(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
@@ -309,8 +309,8 @@ protected:
 	/** Turns the capsule toward the target orientation, smoothed, around the wall contact point */
 	void OrientToWall(const FMovingComponentSet& MovingComps, float DistanceTravelled, float DeltaSeconds, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
 
-	/** Stores the dynamic wall to ride next tick, or adds its velocity and forgets it when leaving */
-	void UpdateMovementBase(const FMovingComponentSet& MovingComps, FGSTN_WallTickState& InOutState) const;
+	/** Stores the dynamic wall to ride next tick (rollback blackboard, GSTNWallBlackboard::BaseInfo), or adds its velocity and forgets it when leaving */
+	void UpdateMovementBase(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState) const;
 
 	/** Writes the tick result into the default and wall sync states, and the mode switch if any */
 	void CaptureFinalState(const FSimulationTickParams& Params, const FQuat& StartQuat, const FGSTN_WallTickState& State, bool bLeftOnPurpose, FMoverTickEndData& OutputState) const;

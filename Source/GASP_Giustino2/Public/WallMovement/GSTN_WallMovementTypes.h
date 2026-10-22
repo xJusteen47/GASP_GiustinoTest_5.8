@@ -7,6 +7,7 @@
 #include "GSTN_WallMovementTypes.generated.h"
 
 class UPrimitiveComponent;
+struct FRollbackBlackboardSimWrapper;
 
 /** How 2D move input is mapped onto the wall plane. */
 UENUM(BlueprintType)
@@ -440,6 +441,14 @@ struct GASP_GIUSTINO2_API FGSTN_WallMovementSyncState : public FMoverDataStructB
 	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
 	double LastWallTimeMs = 0.0;
 
+	/**
+	 * Simulation time (ms) of the last manual wall memory reset (FGSTN_ResetWallMemoryEffect / UGSTN_WallMovementLibrary::ResetWallMemory),
+	 * negative if none. Walls left before it are forgotten. It lives here, not on the Mover blackboard, so it is predicted,
+	 * rolled back and replicated with the rest of the wall state
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	double MemoryResetTimeMs = -1.0;
+
 	virtual FMoverDataStructBase* Clone() const override;
 	virtual bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess) override;
 	virtual UScriptStruct* GetScriptStruct() const override { return StaticStruct(); }
@@ -469,7 +478,10 @@ struct FGSTN_WallEntryInfo
 	FVector Point = FVector::ZeroVector;
 };
 
-/** Dynamic wall the character rides, stored on the sim blackboard between ticks */
+/**
+ * Dynamic wall the character rides, stored between ticks in a Mover rollback blackboard entry (GSTNWallBlackboard::BaseInfo,
+ * InvalidatedOnRollback, one value per frame). An invalid Base means "not riding anything".
+ */
 struct FGSTN_WallBaseInfo
 {
 	TWeakObjectPtr<UPrimitiveComponent> Base;
@@ -537,10 +549,18 @@ struct FGSTN_WallTickState
 
 namespace GSTNWallBlackboard
 {
-	/** FGSTN_WallEntryInfo written by entry transitions, consumed by the mode's Activate */
+	/**
+	 * FGSTN_WallEntryInfo written by entry transitions (Trigger), consumed by the mode's Activate (which overwrites it with an
+	 * empty one). A zero normal means "none".
+	 */
 	extern GASP_GIUSTINO2_API const FName EntryInfo;
-	/** FGSTN_WallBaseInfo of the dynamic wall being ridden */
+	/** FGSTN_WallBaseInfo of the dynamic wall being ridden (invalid Base = none) */
 	extern GASP_GIUSTINO2_API const FName BaseInfo;
-	/** double: sim time (ms) of the last manual wall memory reset. Walls left before it are forgotten (no height cap) */
-	extern GASP_GIUSTINO2_API const FName MemoryResetTimeMs;
+
+	/**
+	 * Both entries are Mover rollback blackboard entries (not the plain SimBlackboard, which is never rewound): one value per
+	 * frame for as many frames as a rollback can rewind (Network Prediction's 64 frame buffer), invalidated on rollback.
+	 * Idempotent: modes create them in OnRegistered, the entry transition on first use.
+	 */
+	GASP_GIUSTINO2_API void EnsureEntries(FRollbackBlackboardSimWrapper& Blackboard);
 }

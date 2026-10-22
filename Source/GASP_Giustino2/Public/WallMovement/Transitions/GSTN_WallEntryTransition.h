@@ -49,7 +49,8 @@ enum class EGSTN_SameWallPolicy : uint8
  * higher up again and again, climbing it; the height cap stops that on walls facing the same (or a similar) way.
  * The memory is forgotten when:
  *  - the character went through one of MemoryResetModes (e.g. it landed and walked) after leaving the wall
- *  - one of MemoryResetTags is present (e.g. granted by an ability), or UGSTN_WallMovementLibrary::ResetWallMemory is called
+ *  - one of MemoryResetTags is present (e.g. granted by an ability; only while present), or
+ *    UGSTN_WallMovementLibrary::ResetWallMemory is called (FGSTN_ResetWallMemoryEffect, stored in the sync state)
  *  - a different wall is grabbed (it overwrites the memory)
  */
 UCLASS(Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
@@ -131,8 +132,10 @@ public:
 	TArray<FName> MemoryResetModes;
 
 	/**
-	 * While any of these tags is present the wall memory is reset (and stays reset after the tag goes away), e.g. an
-	 * ability that grants the tag for a moment to allow climbing the same wall again. Looked up on the Mover component
+	 * While any of these tags is present the wall memory is ignored, e.g. an ability that grants the tag to allow climbing
+	 * the same wall again. It is not latched: the entry check is read-only (it runs more than once per tick and again on
+	 * re-simulation), so the reset ends with the tag. To forget the wall for good, queue FGSTN_ResetWallMemoryEffect
+	 * (UGSTN_WallMovementLibrary::ResetWallMemory) from the ability. Looked up on the Mover component
 	 * (modes, layered moves, modifiers) and on the owner's IGameplayTagAssetInterface (the actor or a component of it,
 	 * such as an AbilitySystemComponent). Owner tags are game-thread state, not part of the predicted input
 	 */

@@ -32,15 +32,15 @@ FTransitionEvalResult UGSTN_WallEntryTransition::Evaluate_Implementation(const F
 void UGSTN_WallEntryTransition::Trigger_Implementation(const FSimulationTickParams& Params)
 {
 	// Hand the wall to the mode (consumed by its Activate), so it starts aligned to it instead of guessing from the facing
+	// (rollback blackboard: a re-simulated frame never reads a handoff left by an abandoned prediction)
 	FEntryCandidate Candidate;
-	const UMoverComponent* MoverComp = GetMoverComponent();
-	UMoverBlackboard* SimBlackboard = MoverComp ? MoverComp->GetSimBlackboard_Mutable() : nullptr;
-	if (SimBlackboard && FindEntryWall(Params, Candidate))
+	if (FindEntryWall(Params, Candidate))
 	{
 		FGSTN_WallEntryInfo EntryInfo;
 		EntryInfo.Normal = Candidate.Normal;
 		EntryInfo.Point = Candidate.Point;
-		SimBlackboard->Set(GSTNWallBlackboard::EntryInfo, EntryInfo);
+		GSTNWallBlackboard::EnsureEntries(Params.SimContext.Blackboard);
+		Params.SimContext.Blackboard.TrySet(GSTNWallBlackboard::EntryInfo, EntryInfo);
 	}
 }
 
@@ -192,22 +192,18 @@ bool UGSTN_WallEntryTransition::FindEntryWall(const FSimulationTickParams& Param
 	}
 
 	// Re-entry rules from the wall memory, unless it was reset after leaving the last wall:
-	// by going through a reset mode (landing), by a reset tag, or manually (UGSTN_WallMovementLibrary::ResetWallMemory)
+	// by going through a reset mode (landing), by a reset tag, or manually (UGSTN_WallMovementLibrary::ResetWallMemory).
+	// Evaluate runs more than once per tick (and again when re-simulating), so this is a pure function of the start state, the
+	// rollback blackboard and the tags: it writes nothing
 	const FGSTN_WallMovementSyncState* WallState = Params.StartState.SyncState.SyncStateCollection.FindDataByType<FGSTN_WallMovementSyncState>();
-	UMoverBlackboard* SimBlackboard = MoverComp->GetSimBlackboard_Mutable();
-	if (SimBlackboard && HasMemoryResetTag(Params.StartState.SyncState))
-	{
-		// Recorded as a time, so the reset outlives the tag
-		SimBlackboard->Set(GSTNWallBlackboard::MemoryResetTimeMs, NowMs);
-	}
-	double ManualResetTimeMs = -1.0;
-	if (SimBlackboard)
-	{
-		SimBlackboard->TryGet(GSTNWallBlackboard::MemoryResetTimeMs, ManualResetTimeMs);
-	}
 	const bool bMemoryWasReset = WallState
 		&& ((bHasModeChange && MemoryResetModes.Contains(ModeChange.PrevModeName) && ModeChange.SimTimeMs >= WallState->LastWallTimeMs)
-			|| ManualResetTimeMs >= WallState->LastWallTimeMs);
+			// Manual reset: recorded in the sync state by FGSTN_ResetWallMemoryEffect (predicted and rolled back with the state)
+			// (half a millisecond of slack: the reset time and LastWallTimeMs are the same instant computed along different paths)
+			|| (WallState->MemoryResetTimeMs >= 0.0 && WallState->MemoryResetTimeMs + 0.5 >= WallState->LastWallTimeMs)
+			// Tag reset: while the tag is present. It is not latched (that would need a write from here); an ability that must
+			// forget the wall for good queues FGSTN_ResetWallMemoryEffect instead
+			|| HasMemoryResetTag(Params.StartState.SyncState));
 	if (WallState && WallState->bHasWallMemory && !bMemoryWasReset)
 	{
 		const FVector LastFlatNormal = FVector::VectorPlaneProject(WallState->LastWallNormal, GravityUp).GetSafeNormal();
