@@ -12,7 +12,7 @@ Read the linked docs only when the task touches that area. Do not read the whole
 | Project C++ | `Source/GASP_Giustino2/{Public,Private}/` | this file |
 | Abilities, tags, ability input | `.../GAS/` | [gas-npp.md](docs/architecture/gas-npp.md) |
 | Wall movement modes, transitions, math/query libs | `.../WallMovement/` | [wall-movement.md](docs/architecture/wall-movement.md) |
-| Input plugin (commands, buffer, priority, bindings; embeddable NP input simulation) and the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`, `GSTNInputNP/Mover/`) | `Plugins/GSTNInput/` | [input.md](docs/architecture/input.md) |
+| Input plugin (commands, buffer, priority, bindings; embeddable NP input simulation) and the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`, `GSTNInputNP/Mover/`) | `Plugins/GSTNInput/` (Core), `Plugins/GSTNInputNP/` (NP adapter) | [input.md](docs/architecture/input.md) |
 | Combat plugin (default command set, combat abilities, hits; own NP model) | `Plugins/GSTNCombat/` | [combat.md](docs/architecture/combat.md), [gas-npp.md](docs/architecture/gas-npp.md) |
 | Network test harness (C++ side) | `.../GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | Editor Python tooling | `Tools/GAS/`, `Tools/GASNPPTest/` | [testing.md](docs/architecture/testing.md) |

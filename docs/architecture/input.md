@@ -3,7 +3,7 @@
 Fighting-game style input for any Unreal project: designer-defined commands (button, direction, motion, chord, charge,
 hold, release, mash, spin), time and hold buffering, reset rules, priority between commands, and command → GameplayAbility
 bindings with context requirements. Simulated and rolled back by the Network Prediction fork when used with GAS-NPP.
-Source: `Plugins/GSTNInput/`.
+Source: `Plugins/GSTNInput/` (`GSTNInputCore`) and `Plugins/GSTNInputNP/` (`GSTNInputNP`, the Network Prediction adapter).
 
 The combat plugin (`GSTNCombat`, [combat.md](combat.md)) is built on top of it. This file describes what the input
 plugin owns, what it leaves to its host, and how the code moves out of `GSTNCombat` (section 8). The input behaviour
@@ -29,10 +29,9 @@ Status (2026-10-22): step S1 is **done**: `GSTNInputCore` exists with the generi
 | `GSTNInputCore` (Runtime) | Core, CoreUObject, Engine, GameplayTags, DeveloperSettings; private EnhancedInput (only `UInputAction` references) | Today's `GSTNCombatCore/Input/` minus the combat content: core types, samples, direction classifier, history, conditions, patterns, matcher, buffer reset rules, slots, slot sets, resolver, validation, binding requirements and selection, input script, settings, input config, generic tags, the authoritative event stream. Automation tests `GSTNInput.Core.*`. |
 | `GSTNInputNP` (Runtime) | GSTNInputCore, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, NetCore, Mover; private EnhancedInput | Input command, embeddable input sim state and simulator, command binding set, input sources (player, AI), context providers, the Mover sim-state tracker, the standalone input component, activation context and the interface abilities use. |
 
-`GSTNInput.uplugin` plugin dependencies: GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, EnhancedInput,
-Mover. Prefix stays `GSTN_`; export macros `GSTNINPUTCORE_API`, `GSTNINPUTNP_API`; log category `LogGSTNInput`.
+**Two plugins.** `GSTNInput` holds `GSTNInputCore` only; its descriptor lists just EnhancedInput, so it works in a project without the GAS-NPP fork. `GSTNInputNP` is a separate plugin (`Plugins/GSTNInputNP/`, module name unchanged, so `/Script/GSTNInputNP.*` paths stay valid) that depends on `GSTNInput`, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, EnhancedInput and Mover (all non-optional there). Prefix stays `GSTN_`; export macros `GSTNINPUTCORE_API`, `GSTNINPUTNP_API`; log category `LogGSTNInput`.
 
-`GSTNCombat` declares a plugin dependency on `GSTNInput`; `GSTNCombatCore` depends on `GSTNInputCore`, `GSTNCombatNP`
+`GSTNCombat` declares plugin dependencies on `GSTNInput` and `GSTNInputNP`; `GSTNCombatCore` depends on `GSTNInputCore`, `GSTNCombatNP`
 on `GSTNInputNP`.
 
 **Dependency rule.** An `*NP` module may depend on another plugin's `*NP` module of the same layer, and on nothing above it.
@@ -148,8 +147,8 @@ Generic code that names combat content today, to be cleaned in the move:
 Each plugin must work in a project that knows nothing about this one:
 
 - **Own config files.** `UGSTN_InputSettings` is `config = GSTNInput, defaultconfig`: defaults in
-  `Plugins/GSTNInput/Config/DefaultGSTNInput.ini` (the class defaults written out, plus the `[CoreRedirects]` for the
-  Mover tracker's old class names), project overrides in the project's `Config/DefaultGSTNInput.ini`. Nothing is read from
+  `Plugins/GSTNInput/Config/DefaultGSTNInput.ini` (the class defaults written out; the `[CoreRedirects]` for the
+  Mover tracker's old class names are in `Plugins/GSTNInputNP/Config/DefaultGSTNInputNP.ini`), project overrides in the project's `Config/DefaultGSTNInput.ini`. Nothing is read from
   `DefaultGame.ini`. The combat plugin has `UGSTN_CombatSettings` (`GSTNCombatCore`, `config = GSTNCombat`) with `CommandTiers`
   and `ExclusiveButtons` and `Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini`.
 - **Contributions.** The combat module's startup (and a change of its settings in the editor) calls
@@ -158,6 +157,17 @@ Each plugin must work in a project that knows nothing about this one:
   same tag, otherwise the highest tier; any source makes a button exclusive). A contribution is not config: it lives on the
   settings default object only, so a transient settings object in a test starts without any, and nothing is read from it
   per frame beyond the same lookups as before.
+- **Exclusive context groups (binding validation).** `UGSTN_InputSettings::ExclusiveContextGroups` is a list of
+  `FGSTN_ExclusiveTagGroup` (`Tags`: a context holds at most one of them). The plugin ships `Input.Context.Grounded` +
+  `Input.Context.Airborne` as one group in `Config/DefaultGSTNInput.ini`; a game or plugin adds the groups of its own movement
+  states, directly in the settings or through the optional trailing argument of `SetContribution`.
+  `GetAllExclusiveContextGroups()` returns the settings' groups plus every contribution's (a set: order is irrelevant).
+  Validation only (editor time, the simulation never reads them): `FGSTN_TagRequirements::CanHoldTogether(Other, Groups)` is also
+  false when a group holds a tag this requires and a different one Other requires, so two bindings of a command that need
+  Grounded and Airborne are not reported as an arbitrary choice; `UGSTN_CommandBindingUtils::FindBindingConflicts(Bindings, Groups)`
+  takes the groups (default empty = the old behaviour) and `FindImpossibleBindings` reports a binding requiring two tags of one
+  group. `UGSTN_CommandBindingSet::IsDataValid` passes the combined groups of the settings. Members match exactly, not through
+  the tag hierarchy. The validator never names a project tag.
 - **Optional engine/fork plugins.** The `.uplugin` files mark GameplayAbilities, AbilitySystemSimulation, NetworkPrediction
   and Mover as `Optional`; EnhancedInput stays required (the Core module links it privately). The NP modules still need the
   fork to build, a full split into a sub-plugin is not done.
@@ -316,7 +326,7 @@ re-setting them on `BP_GASNPP_TestCharacter`**.
 
 Redirects (added in S2a in `Config/DefaultEngine.ini`; now in the input plugin's `[CoreRedirects]`):
 
-- Tracker (the entries moved to `Plugins/GSTNInput/Config/DefaultGSTNInput.ini`, §4.2): both old names → `/Script/GSTNInputNP.GSTN_MoverSimStateTracker` (update the existing entry, add one from
+- Tracker (the entries live in `Plugins/GSTNInputNP/Config/DefaultGSTNInputNP.ini`, §4.2): both old names → `/Script/GSTNInputNP.GSTN_MoverSimStateTracker` (update the existing entry, add one from
   `/Script/GSTNCombatNP.GSTN_MoverSimStateTracker`).
 - No asset of `UGSTN_CombatInputConfig` exists yet (checked), so the input classes need no redirects.
 

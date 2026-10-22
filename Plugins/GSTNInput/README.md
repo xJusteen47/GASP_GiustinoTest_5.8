@@ -3,9 +3,10 @@
 Fighting-game style input for Unreal Engine 5.8, usable by any game: designer-defined commands (button, direction,
 motion, chord, charge, hold, release, mash, spin), time and hold buffering, reset rules, priority between commands and
 command to GameplayAbility bindings with context requirements. Meant to be simulated and rolled back by Network
-Prediction (the GAS-NPP fork in `Plugins/GASNPP`), but the logic itself does not need it.
+Prediction (the GAS-NPP fork in `Plugins/GASNPP`), but the logic itself does not need it: this plugin is `GSTNInputCore` only and
+works without the fork. The simulation adapter is the separate plugin [GSTNInputNP](../GSTNInputNP/README.md).
 
-Status: **experimental (0.1)**. `GSTNInputCore` and `GSTNInputNP` exist (the simulator, command locks, the activation context, the event stream and the standalone component). The design, including what is planned, lives in
+Status: **experimental (0.1)**. `GSTNInputCore` exists (the plugin `GSTNInputNP` holds the simulator and the rest of the NP side). The design, including what is planned, lives in
 [docs/architecture/input.md](../../docs/architecture/input.md); the combat plugin ([GSTNCombat](../GSTNCombat/README.md))
 is built on top of this one. This README is the map; the documents hold the decisions and the reasons.
 
@@ -14,12 +15,13 @@ is built on top of this one. This README is the map; the documents hold the deci
 | Module | State | What it is |
 |---|---|---|
 | `GSTNInputCore` | exists | Pure, deterministic logic with no GAS, no Network Prediction and no Mover: input samples, the stick direction classifier, the input history, the pattern grammar (`FGSTN_InputPattern`, conditions), the matcher, buffer reset rules, slots, the slot resolver, slot validation, command bindings, command locks (`UGSTN_CommandLocks`), the authoritative event stream (`UGSTN_SimEventSubsystem`, `FGSTN_SimEvent`, the outbox), the button map, the input config and the project settings. Automation tests `GSTNInput.Core.*`. |
-| `GSTNInputNP` | exists | The adapter to the Network Prediction fork: `FGSTN_InputCmd` and `FGSTN_InputSimState` (`Simulation/GSTN_InputSimTypes.h`), `FGSTN_InputSimulator` and `IGSTN_InputSimHost` (`Simulation/GSTN_InputSimulator.h`), `UGSTN_CommandBindingSet` and the runtime `FGSTN_CommandTable` (`Bindings/`), the player and AI input sources (`Sources/`), the context provider base and the Mover provider (`Context/`), `UGSTN_MoverSimStateTracker` (`Mover/`), the activation context and `IGSTN_CommandSourceInterface` (`Simulation/GSTN_CommandSourceInterface.h`), the host helpers (`Simulation/GSTN_InputHostUtils.h`) and the standalone `UGSTN_InputSimComponent` (`Simulation/`). Automation tests `GSTNInput.NP.*`. |
+| `GSTNInputNP` | separate plugin | Moved to the plugin [GSTNInputNP](../GSTNInputNP/README.md) (same module name): the Network Prediction adapter (`FGSTN_InputCmd`, `FGSTN_InputSimState`, `FGSTN_InputSimulator`, binding set, sources, context providers, Mover tracker, standalone component). Automation tests `GSTNInput.NP.*`. |
 
-**Requirements.** `GSTNInputCore` needs only Gameplay Tags, Developer Settings and (privately) Enhanced Input. `GSTNInputNP`
-needs the GAS-NPP fork plugins and Mover; the descriptor lists those as optional plugin dependencies so it does not force
-them on a project, but the NP module does not build without them, so a project without the fork has to leave `GSTNInputNP`
-out of its build.
+**Requirements.** This plugin (`GSTNInputCore`) needs only Gameplay Tags, Developer Settings and (privately) Enhanced Input; its
+descriptor lists only Enhanced Input, so it works in a project without the GAS-NPP fork (NetworkPrediction, GameplayAbilities fork,
+Mover). To simulate it with Network Prediction, enable the plugin [GSTNInputNP](../GSTNInputNP/README.md), which needs the fork.
+The sections below that describe the simulation side (embedding, standalone component, locks in the simulator, Mover tracker)
+are about `GSTNInputNP`.
 
 **Network Prediction sort priorities.** Network Prediction orders models by a sort priority and warns when two registered
 models share one. The ability system is `PreKinematicMovers - 2`, the combat model (`GSTN_Combat`) `- 3` and the standalone
@@ -49,6 +51,10 @@ character (see input.md). Core modules keep no NP, GAS or Mover dependencies, so
    zones, and the two lists that start empty, `CommandTiers` (priority tier per command root) and `ExclusiveButtons` (buttons
    whose presses compete for one move). A game can fill them there, or a plugin brings its own through
    `UGSTN_InputSettings::SetContribution` (what the combat plugin does with its own settings).
+   `ExclusiveContextGroups` lists state tags of which a context holds at most one (the plugin ships Grounded + Airborne; add the
+   groups of your own movement states, or contribute them through the optional last argument of `SetContribution`): binding
+   validation uses them to accept a Grounded and an Airborne binding of one command as distinct, and to reject a binding that
+   requires two members of one group.
    `PriorityCriteria` is the ordered list that ranks commands matching at once (default Tier, Specificity, ManualOffset).
 4. **Define slots** (`UGSTN_InputSlotAsset` / `UGSTN_InputSlotSet`): a command tag plus the pattern that triggers it, then
    run the slot validator, which reports slots that shadow or conflict with each other.

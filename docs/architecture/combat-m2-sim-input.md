@@ -72,7 +72,7 @@ Source/GASP_Giustino2/
   GAS/GSTN_GameplayAbility.*, GSTN_GA_Jump.cpp, GSTN_GA_WallSlide.cpp   include the tracker from GSTNInputNP
 GASP_Giustino2.uproject                          + GSTNInput plugin entry
 Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini  combat tiers and exclusive buttons (UGSTN_CombatSettings; first planned in Config/DefaultGame.ini)
-Plugins/GSTNInput/Config/DefaultGSTNInput.ini      tracker redirects ([CoreRedirects]; first in Config/DefaultEngine.ini, input.md §8)
+Plugins/GSTNInputNP/Config/DefaultGSTNInputNP.ini  tracker redirects ([CoreRedirects]; first in Config/DefaultEngine.ini, input.md §8)
 Tools/GASNPPTest/gasnpp_test.py                  combat scenarios (section 8)
 Source/GASP_Giustino2/.../GSTN_GASNPPTestComponent.*   combat state in the snapshot JSON
 ```
@@ -80,7 +80,7 @@ Source/GASP_Giustino2/.../GSTN_GASNPPTestComponent.*   combat state in the snaps
 The tracker keeps its class name (`UGSTN_MoverSimStateTracker`) and API; only its module changes (include path stays
 `"Mover/GSTN_MoverSimStateTracker.h"`). Its export macro becomes `GSTNINPUTNP_API`. Blueprints do not reference it
 (it is created at runtime), so no asset redirect is needed; add a `CoreRedirects` class entry anyway in
-`Plugins/GSTNInput/Config/DefaultGSTNInput.ini` (first `Config/DefaultEngine.ini`; `/Script/GASP_Giustino2.GSTN_MoverSimStateTracker` and `/Script/GSTNCombatNP.GSTN_MoverSimStateTracker` → `/Script/GSTNInputNP.GSTN_MoverSimStateTracker`; done in S2a)
+`Plugins/GSTNInputNP/Config/DefaultGSTNInputNP.ini` (moved there when `GSTNInputNP` became its own plugin; first `Config/DefaultEngine.ini`; `/Script/GASP_Giustino2.GSTN_MoverSimStateTracker` and `/Script/GSTNCombatNP.GSTN_MoverSimStateTracker` → `/Script/GSTNInputNP.GSTN_MoverSimStateTracker`; done in S2a)
 in case a saved object references it.
 
 ## 3. State types

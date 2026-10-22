@@ -34,8 +34,8 @@ button leaves (`Input.Button.Attack`, `.Strong`, `.Special`, `.Crouch`, `.Shield
 are the vocabulary of whoever has them, and `Input.Button` is the filter every tag picker uses), see input.md. Designer buttons
 and commands of a game are tags in the game's own tag ini.
 
-**Requirements.** `GSTNCombatCore` needs `GSTNInputCore` and Developer Settings. `GSTNCombatNP` needs the GAS-NPP fork plugins and
-Mover (optional plugin dependencies in the descriptor, but the module does not build without them).
+**Requirements.** `GSTNCombatCore` needs `GSTNInputCore` and Developer Settings. `GSTNCombatNP` needs the `GSTNInputNP` plugin (a separate plugin from `GSTNInput`) and the GAS-NPP fork plugins and
+Mover (optional plugin dependencies in the descriptor, but the module does not build without them; `GSTNInputNP` is a regular dependency, which in turn requires the fork).
 The input command, the input sim state and the Mover tracker live in `GSTNInputNP` (step S2a of input.md); the simulator, sources,
 binding set and context provider (S2b) are there too: the combat component hosts the simulator
 (`IGSTN_InputSimHost`) and only adds the debug hitstop. It also implements `IGSTN_CommandSourceInterface` (the activation

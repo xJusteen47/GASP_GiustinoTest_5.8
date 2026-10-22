@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Input",
-	"Description": "Fighting-game style input for any project: buffered commands, motions, chords, charges, priorities and command to GameplayAbility bindings, simulated by Network Prediction (GAS-NPP fork). The GSTNInputCore module needs only Gameplay Tags and Enhanced Input; the GSTNInputNP module needs the GAS-NPP fork plugins (GameplayAbilities, AbilitySystemSimulation, NetworkPrediction) and Mover, which are therefore listed as optional dependencies: a project without the fork can use the Core module only if it removes the NP module from its build.",
+	"Description": "Fighting-game style input for any project: buffered commands, motions, chords, charges, priorities and command to GameplayAbility bindings. Pure logic (GSTNInputCore): needs only Gameplay Tags, Developer Settings and Enhanced Input. The simulation adapter for the Network Prediction fork lives in the separate GSTNInputNP plugin.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -19,37 +19,12 @@
 			"Name": "GSTNInputCore",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
-		},
-		{
-			"Name": "GSTNInputNP",
-			"Type": "Runtime",
-			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [
 		{
-			"Name": "GameplayAbilities",
-			"Enabled": true,
-			"Optional": true
-		},
-		{
-			"Name": "AbilitySystemSimulation",
-			"Enabled": true,
-			"Optional": true
-		},
-		{
-			"Name": "NetworkPrediction",
-			"Enabled": true,
-			"Optional": true
-		},
-		{
 			"Name": "EnhancedInput",
 			"Enabled": true
-		},
-		{
-			"Name": "Mover",
-			"Enabled": true,
-			"Optional": true
 		}
 	]
 }
