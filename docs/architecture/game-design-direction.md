@@ -42,6 +42,26 @@ consequences for the design. Items marked *Reading* are interpretations to confi
   stagger in place) chosen by comparing the knockback with the victim's effective weight (which also depends on
   remaining health, section 2).
 
+## 2c. DI, SDI and dodging in hitstun (owner input, 2026-10-22 late morning)
+
+- **No dodging during hitstun or hitstop**, "generally" (so a kit may still have a special escape).
+- **SDI**: holding the direction you want to drift, during hitstop (not mashing).
+- **DI** (owner examples, in terms of the launch direction's dot with the up vector):
+  - launched diagonally forward with dot `0.4`: stick **towards the attacker (DI in)** → dot `0.6`; stick **along the
+    launch (DI out)** → the message says `0.4` (*Reading*: probably `0.2`, see M4.29);
+  - launched horizontally (dot `0`): DI in → dot `0.2`; DI out → no change;
+  - **mirrored for downward launches** (dot with the down vector > 0): DI in → steeper down, DI out → flatter;
+  - launches with dot above about `−0.1` behave like upward ones;
+  - **lateral stick rotates the launch around the up axis**.
+- Formula derived from these examples: combat-m4-hits.md §3 (DI).
+
+## 2d. Arbitrary gravity and trampolines (owner input, 2026-10-22 late morning)
+
+- **Gravity can change arbitrarily.** "Up" is always the opposite of the local gravity of the entity at that frame,
+  never world Z: DI, launch angles, push back, the movement plane, projectiles and minion movement all follow it.
+- **Trampolines may exist** in levels: everyone landing on one is launched along its normal; a tumbling victim bounces.
+  *Proposal* in combat-m4-hits.md §7b (own small plugin, not in the combat core).
+
 ## 3. Grabs, interaction and throwing enemies
 
 - Example flow: a large enemy attacks; it is too big to grab. The player damages it until parts break off. Now it can
@@ -144,3 +164,30 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 >
 > Ricordiamo che il peso è il valore che decide quanto un nemico vola via quando entra in hitstun, oppure se non vola
 > via affatto ma viene solo staggerato sul posto, oppure mandato all'indietro.
+
+### Third and fourth messages (2026-10-22, verbatim)
+
+> Inoltre in genere no, non si può schivare durante l'hitstun o l'hitstop. L'SDI avviene tenendo premuta la direzione in
+> cui si vuole driftare.
+>
+> Per quanto riguarda la DI, ti mando delle ipotesi di funzionamento, trova una formula valida a partire da queste:
+>
+> Se vengo lanciato in diagonale avanti diciamo con un dot si 0.4 rispetto all'up vector, e tengo premuto lo stick lo
+> stick verso di lui, andrò lanciato con in diagonale verso l'alto, con un dot di 0.6. Se invece premo verso la direzione
+> in cui vengo lanciato (DI out), il dot rispetto all'up vector potrebbe diventare 0.4.
+>
+> Se vengo lanciato direttamente in orizzontale (dot 0.0) premere in direzione interna (DI In) dovrebbe risultare in un
+> vettore di lancio con dot di 0.2 ad esempio con l'up vector, mentre premere in avanti non risulta in nessun cambiamento
+> di dot.
+>
+> La situazione è speculare nel caso in cui il dot con il down vector sia >0. DI in, dot ancora più alto (con il down
+> vector), di out, dot ancora più basso (con il down vector).
+>
+> Nel caso dot> -0.1 ad esempio, ci si comporta come nel primo caso (dot con up vector).
+>
+> Premere lo stick lateralmente rispetto alla direzione del lancio, causa l'angolo di lancio di ruotarne attorno all'
+> asse dell' up vector
+
+> Ricorda che la gravità potrebbe cambiare arbitrariamente.
+>
+> Unrelated, ma tieni conto della presenza di eventuali trampolini

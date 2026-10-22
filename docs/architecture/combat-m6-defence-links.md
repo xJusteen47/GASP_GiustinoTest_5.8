@@ -188,8 +188,8 @@ mode like the rest of the rules):
 | `FGSTN_ShieldRules` | `ArcDegrees` (default 140; 360 = bubble), `ElevationLimitDeg` (90 = any), `TurnRateDegPerFrame` (0 = facing locked at press), `StartupFrames`, `ReleaseFrames`, `DrainPerFrame`, `RegenPerFrame`, `RegenDelayFrames`, `ShieldStunBase`, `ShieldStunPerDamage`, `MaxShieldStun`, `ShieldHitstopMultiplier`, `PushbackSpeed` (cm/s) and `PushbackFrames`, `BreakStunFrames`, `BreakLaunch` (cm/s up), `RecoverFractionAfterBreak`, `IncomingShieldDamageScaleByRelationship` (map, lets PvE enemies chip less/more) |
 | `FGSTN_ParryRules` | `WindowFrames` (default 5), `ReopenLockoutFrames` (shield re-press within this of the last release gets no window), `DefenderRecoveryFrames`, `HitstopFrames`, `AttackerStunFrames` (by hit class: `TMap<tag, int32>`, default entry), `bParryableProjectiles`, `bReflectProjectiles` (reserved, not implemented), `MeterGain` |
 | `FGSTN_TechRules` | `WindowFrames` (default 20 before contact), `LockoutFrames` (default 40 after a press), `LateFrames` (0), `bTechInHitstunNotTumble` (false), `InPlaceFrames`, `RollFrames`, `RollDistance`, `WallTechFrames`, `bAllowWallTech`, `KnockdownFrames`, `NoTechKnockdownBonusFrames`, `IntangibleFrames` (the moves' own `HurtboxModifier` windows win; this is only the fallback) |
-| `FGSTN_DIRules` | `MaxDIDegrees`, `StrengthCurve` (`FGSTN_Curve1D`: stick magnitude → factor, piecewise linear, quantized points, no engine curve in Core), `MinKnockbackForDI`, `ScaleByVictimTag` (`TMap<FGameplayTag, float>`: bosses 0), `bDIOnPlaneOnly` (true, as decided) |
-| `FGSTN_SDIRules` | `DistanceCm`, `MaxPerHit`, `MinZone` (Tilt), `RequireNewDirectionEvent` (true: a held direction does not repeat), `MinFramesBetween`, `bScaleByHitstopFrames`, `ScaleByVictimTag` |
+| `FGSTN_DIRules` | `Params` (`FGSTN_DIParams` of M4 §3: `MaxDIYawDegrees`, `MaxDIElevationDot`, `UpwardThresholdDot`, `MaxElevationDot`; overrides the rules default per game mode), `StrengthCurve` (`FGSTN_Curve1D`: stick magnitude → factor, piecewise linear, quantized points, no engine curve in Core), `ElevationDeltaByElevation` (optional `FGSTN_Curve1D`: scales `MaxDIElevationDot` by `|e|`, e.g. less influence near vertical; default flat 1), `MinKnockbackForDI`, `ScaleByVictimTag` (`TMap<FGameplayTag, float>`: bosses 0) |
+| `FGSTN_SDIRules` | Held-direction drift (owner direction): `DriftSpeedCmPerSec` (at full stick), `StrengthCurve` (stick magnitude → factor), `MaxDistanceCmPerHit`, `MinZone` (Tilt: below it no drift), `bScaleByHitstopFrames` (false: the total grows with hitstop length by itself), `ScaleByVictimTag` |
 | `FGSTN_GrabRules` | `Requirements` (`FGSTN_TagRequirements` on the victim, default ignore `Combat.State.Hitstun/.Tumble/.Knockdown/.ShieldBroken`, `Combat.Link.Linked`, `Combat.Immunity.Grab`, `Combat.State.Intangible`; **`Combat.Part.GrabLocked`** is added by the designer to the ignore list when `GSTNParts` is used, by data and by name, §8), `MaxGrabWeight`, `HeavyMaxGrabWeight` (§8), `TapMaxFrames`, `HoldFrames`, `InteractReachCm`, `InteractPriority` (ordered meanings, §8), `ImmunityFramesAfterRelease`, `ImmunityFramesAfterThrow`, `Mash` (`FGSTN_MashRule`), `PummelFreeFrames`, `bGrabBeatsShield` (true) |
 | `FGSTN_MashRule` | `ButtonMask` + `bCountFlicks` (Tilt direction events count), `BaseFrames`, `FramesPerDamagePercent`, `MinFrames`, `MaxFrames`, `ReducePerPress` (frames), `ResistanceAttribute` scaling |
 
@@ -290,7 +290,7 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
 | `FGSTN_LinkState Link` | §7.1. |
 | `int32 MashProcessedFrame` | Last history frame counted by the mash rule (grabbed). |
 | `int32 PunishEndFrame`, `uint8 PunishKind` | Attacker parry-stun etc. |
-| `uint8 SDIUsed`, `int32 LastSDIFrame` | M4's `SDICount` extended. |
+| `uint16 SDIDistanceUsed` (cm, quantized) | M4's reserved `SDICount` field, now the held-drift distance of the current hitstop. |
 
 `EGSTN_ActionState` gains `ShieldStun`, `ShieldBroken`, `Knockdown`, `Teching`, `Punished`, `Linked` (M4 had
 `Actionable`, `InTimeline`, `Hitstun`, `Tumble`). All fields in `NetSerialize`/`ShouldReconcile`/`ToString`/
@@ -364,13 +364,19 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
 
 ### 5.5 SDI/DI (rules asset)
 
-- **DI**: at `HitstopEndFrame`, `ApplyDI(Launch, Stick, KnockbackMagnitude, VictimTags, DIRules)`: stick magnitude →
-  `StrengthCurve`, × `ScaleByVictimTag`, rotation = `MaxDIDegrees × Strength × perpendicular component`; skipped when
-  knockback < `MinKnockbackForDI` or `HitData.bDisableDI`. Vertical component unchanged (decided).
-- **SDI** (during hitstop): each **new direction event** (history) with zone ≥ `MinZone`, at least `MinFramesBetween`
-  after `LastSDIFrame`, `SDIUsed < MaxPerHit` → instant movement effect of `DistanceCm` (× hitstop scale) along the
-  stick on the plane; `SDIUsed++`. The move is requested through a GE (instant, swept by Mover collision), so a wall
-  or ledge stops it. Not allowed while armored (`bSDIAllowedWhenArmored`, default false) or on throws.
+- **DI**: at `HitstopEndFrame`, `ApplyDI(Launch, Stick, Up, Params)` of M4 §3 (yaw from the lateral stick, elevation
+  in dot space from the stick along the launch: DI in steeper, DI out towards horizontal, never across it), with
+  `Params` from `DIRules`, the stick strength from `StrengthCurve` × `ScaleByVictimTag`, and
+  `ElevationDeltaByElevation` applied to `MaxDIElevationDot`; skipped when knockback < `MinKnockbackForDI` or
+  `HitData.bDisableDI`. Only the `Launch` reaction tier gets DI (M4 §7).
+- **SDI** (during hitstop, owner direction 2026-10-22): **holding** a direction drifts the victim that way; no mashing,
+  no direction events. Every victim hitstop frame with stick zone ≥ `MinZone`: drift velocity `v = Stick_on_plane ×
+  StrengthCurve(|Stick|) × DriftSpeedCmPerSec × ScaleByVictimTag`, until the accumulated distance reaches
+  `MaxDistanceCmPerHit`. *Proposal*: delivered as a per-frame `DriftVelocity` on the M4 freeze layered move
+  (`FGSTN_LayeredMove_Freeze`), set through the same GE + move-creator path, so the drift is swept by Mover collision
+  and a wall or ledge stops it; the accumulated distance is the sync field `SDIDistanceUsed` (quantized cm, replaces
+  `SDIUsed`/`LastSDIFrame`). Not allowed while armored (`bSDIAllowedWhenArmored`, default false), on throws, or in the
+  `StaggerInPlace` tier if the rules say so (`bSDIInStaggerInPlace`, default true).
 - Both rule sets are per game mode (rules asset), so PvE can scale DI/SDI by victim tag (bosses ignore them).
 
 ## 6. Tech and knockdown

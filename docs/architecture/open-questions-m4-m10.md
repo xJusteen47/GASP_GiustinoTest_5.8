@@ -15,7 +15,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 
 - [[M4.3](#m4--hits-domande-al-proprietario-del-progetto)] armatura dei boss: ruolo di `Poise` e `Armor` ora che la soglia di stagger è per parte (tenerli, fonderli o toglierli) e valori delle soglie
 - [[M4.4](#m4--hits-domande-al-proprietario-del-progetto)] condizione di KO (tetto o blast zone) e cosa fa il gioco dopo
-- [[M4.6](#m4--hits-domande-al-proprietario-del-progetto)] SDI dentro M4 o rimandato a M6 (la specifica si contraddice)
+- [[M4.29](#m4--hits-domande-al-proprietario-del-progetto)] DI out su un lancio a dot 0.4: resta 0.4 o scende a 0.2 (formula del DI)
 - [[M4.16](#m4--hits-domande-al-proprietario-del-progetto)] colpo subito come correzione di rollback o forward prediction per il client
 - [[M4.20](#m4--hits-domande-al-proprietario-del-progetto)] chi decide splat, bounce o distruzione all'impatto (attacco, vittima, superficie)
 - [[M4.24](#m4--hits-domande-al-proprietario-del-progetto)] vantaggio dell'host del server di ascolto: accettarlo o attenuarlo
@@ -154,14 +154,17 @@ Ipotesi nella specifica: `floor(Damage × HitstopPerDamage + HitstopBase)` con t
 **6. Durante l'hitstop la vittima può fare SDI: in M4 è davvero in scope, o si rimanda a M6 insieme a tech/shield?**
 Perché conta: il testo si contraddice (SDI "oltre lo spostamento di base" è fuori scope in M4 §1, ma M4 §7 lo descrive con `MaxSDIPerHit`); cambia lavoro e test.
 Ipotesi nella specifica: SDI base (spostamento sul piano, N volte per colpo) in M4 §7; tuning avanzato in M6 (M4 §1).
+**Risposta (2026-10-22, tarda mattina):** L'SDI si fa **tenendo premuta** la direzione in cui si vuole driftare durante l'hitstop, niente mash ([direzione §2c](game-design-direction.md#2c-di-sdi-and-dodging-in-hitstun-owner-input-2026-10-22-late-morning)). Nella specifica resta in M6 §5.5 (deriva continua con un tetto di distanza per colpo); resta aperto solo se anticiparlo in M4.
 
 **7. Durante il proprio hitstop, il giocatore deve poter bufferizzare input e quali (attacco, salto, dodge)? E la vittima in hitstun può fare qualcosa (es. DI, ma anche dodge/uscite)?**
 Perché conta: definisce "reattività" e potenziale di combo infinite/escape; influisce su cosa registra il buffer.
 Ipotesi nella specifica: i press durante l'hitstop sono registrati, l'età del buffer esclude i frame di hitstop (M4 §8); nessuna regola su azioni in hitstun oltre DI/SDI.
+**Risposta (2026-10-22, tarda mattina):** In genere **non si può schivare durante hitstun o hitstop** ([direzione §2c](game-design-direction.md#2c-di-sdi-and-dodging-in-hitstun-owner-input-2026-10-22-late-morning)); la vittima ha DI e SDI. Nella specifica è un dato delle abilità (tag bloccanti), quindi un kit può avere un'uscita speciale. Resta aperto quali altri input bufferizzare durante il proprio hitstop.
 
 **8. Il DI deve essere solo sul piano di movimento (come deciso), o anche in verticale/3D per colpi che lanciano in aria?**
 Perché conta: in 3D il DI solo orizzontale può limitare molto la sopravvivenza in aria rispetto al 2D.
 Ipotesi nella specifica: DI solo orizzontale, verticale invariata (M4 §3 DI; "as decided").
+**Risposta (2026-10-22, tarda mattina):** No: il DI cambia anche l'elevazione del lancio ([direzione §2c](game-design-direction.md#2c-di-sdi-and-dodging-in-hitstun-owner-input-2026-10-22-late-morning)). DI in rende il lancio più ripido sul suo lato (su o giù), DI out lo avvicina all'orizzontale senza superarlo, lo stick laterale ruota attorno all'asse "su". Formula in M4 §3; vedi M4.29 e M4.30 per due punti da confermare.
 
 **9. Angoli di lancio: per un attacco 3D la direzione "giusta" è la facciata dell'attaccante, il vettore hitbox→vittima o la velocità della hitbox, e può cambiare per colpo?**
 Perché conta: determina la sensazione di "controllo" del lancio e la combinabilità dei colpi; `Sakurai3D` e `AutoLink` hanno comportamenti diversi.
@@ -173,6 +176,7 @@ Ipotesi nella specifica: `YawSource` per hitbox, `SpecialAngle` opzionale; non c
 Perché conta: roll, spot dodge e air dodge sono in scope (M4 §1) ma la specifica definisce solo il meccanismo `HurtboxModifier`, non le regole.
 Ipotesi nella specifica: nessuna sul costo/anti-spam; l'intangibilità viene dai tracciati `Intangible` della timeline.
 **Risposta (2026-10-22):** Schivata base in PvE a terra: quasi un long jump di Super Mario o un tuffo di Helldivers, senza finire sdraiati all'atterraggio; solo i piedi sono invincibili. Nessuna implementazione standard: può dipendere dal kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Restano aperti durata, recovery, costo (cooldown, stamina) e se si può schivare durante hitstun.
+**Risposta (2026-10-22, tarda mattina):** In genere non si schiva durante hitstun o hitstop ([direzione §2c](game-design-direction.md#2c-di-sdi-and-dodging-in-hitstun-owner-input-2026-10-22-late-morning)).
 
 **11. L'air dodge può essere usata più volte in aria, e lascia il personaggio in stato "helpless"?**
 Perché conta: incide molto sul recupero e sul gioco in verticale 3D, e va allineato ai salti aerei del M3.
@@ -262,6 +266,26 @@ Ipotesi nella specifica: un secondo colpo sopra soglia ricalcola la reazione (pu
 **28. L'hitstop automatico usa danno e knockback scritti nell'attacco, o il knockback reale sul bersaglio (che dipende da percentuale e peso)?**
 Perché conta: con il knockback reale l'attaccante non può prevedere il proprio hitstop in locale (la vittima è interpolata) e rischia un disallineamento visibile; con quello scritto, colpire un nemico quasi morto non congela di più.
 Ipotesi nella specifica: danno e knockback scritti nell'attacco, senza moltiplicatori della vittima (solo dati statici); il designer può comunque fissare i frame a mano per attacco (`Override`) (M4 §3).
+**Risposta (2026-10-22, tarda mattina):** Il client deve predire il comportamento corretto. Nella specifica l'hitstop automatico usa ora il knockback reale, calcolato dallo stato della vittima che l'attaccante vede (percentuale, peso, parti, finestre); l'host usa lo stesso stato riavvolto con la lag compensation, quindi la predizione coincide. Solo se lo stato della vittima cambia nella finestra di latenza (es. un altro giocatore la colpisce) l'hitstop di vittima e attaccante può differire di qualche frame, senza correzioni (M4 §3, §9). Anche la reazione della vittima viene mostrata subito sul client come presentazione.
+
+
+### I. DI, gravità e trampolini (dopo la direzione della tarda mattina del 22/10)
+
+**29. Nel tuo esempio, DI out su un lancio con dot 0.4 dà 0.4 (nessun cambiamento) o 0.2?**
+Perché conta: con 0.4 il DI out non farebbe nulla sui lanci verso l'alto, mentre nel caso verso il basso lo hai descritto come "dot più basso"; la regola simmetrica dà 0.2.
+Ipotesi nella specifica: 0.2 (DI out avvicina all'orizzontale di `MaxDIElevationDot` = 0.2, senza superarlo) (M4 §3 DI).
+
+**30. Va bene il salto attorno alla soglia di -0.1? Con DI in, un lancio a -0.09 sale a +0.11, uno a -0.11 scende a -0.31.**
+Perché conta: è una conseguenza diretta della soglia; si può ammorbidire con una zona di transizione, ma cambia la regola che hai dato.
+Ipotesi nella specifica: soglia netta, regolabile (`UpwardThresholdDot`), più una curva opzionale che riduce l'effetto vicino alla verticale (M6 `ElevationDeltaByElevation`).
+
+**31. Sui trampolini: tenere premuto salto fa rimbalzare più in alto (come il salto variabile), e il fast fall sul trampolino aumenta il rimbalzo?**
+Perché conta: decide se il trampolino è un oggetto passivo o parte del sistema di movimento dei kit.
+Ipotesi nella specifica: rimbalzo lungo la normale del trampolino, fisso o scalato dalla velocità d'arrivo; interazione con salto e fast fall da decidere (M4 §7b, trampolini).
+
+**32. Quando la gravità cambia durante un lancio o un hitstun (es. si entra in una zona a gravità diversa), il lancio si piega con la nuova gravità o segue quella del momento del colpo?**
+Perché conta: con gravità arbitraria il "su" del DI, la caduta e il tumble dipendono dalla gravità; serve una regola chiara anche per i rollback.
+Ipotesi nella specifica: tutto usa la gravità del frame corrente della vittima (Mover), il DI usa quella del frame di fine hitstop (M4 §3).
 
 ### Lacune nella specifica
 

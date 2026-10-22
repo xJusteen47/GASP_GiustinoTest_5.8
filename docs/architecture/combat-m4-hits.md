@@ -23,6 +23,13 @@ Section numbers below are local to this file.
 > the reaction tier**: launch, push back or stagger in place (§3, §7). `StaggerPower`, `MinStagger` and `MaxStagger` are replaced by
 > this model. All new choices are *Proposal*.
 
+> **Revision 2026-10-22 (late morning, owner direction, game-design-direction.md §2c and §2d):** (1) **DI** changes the
+> launch's yaw (lateral stick) **and elevation** (stick along the launch: DI in steeper, DI out towards horizontal, never across
+> it), formula in §3; (2) **SDI is a held direction** (M6 §5.5); (3) **no dodging in hitstun or hitstop** by default (§1b);
+> (4) **gravity can change arbitrarily**: every "up", "horizontal", "movement plane", launch elevation and push-back direction in
+> this file is relative to the **victim's gravity at that frame** (`Up = −GravityDir`, read from the Mover sim state through the
+> tracker, M2), never world Z; (5) **trampolines** exist as level objects (§7b).
+
 ## 1. Scope
 
 **Goal:** moves hit. Hitboxes from move tracks overlap hurtboxes; the attacker predicts its own hitstop and
@@ -56,6 +63,10 @@ exist: a movement track (M3 `FGSTN_LayeredMove_MoveTrack`) and a `HurtboxModifie
   dodge does not depend on another set's names); the foot group is `Combat.Hurtbox.Feet` in the hurtbox set.
 - Other kits (heavy: armoured step, caster: blink) are only content: another timeline ability with another `HurtboxModifier`.
   Nothing in `GSTNCombat` assumes a particular dodge. M6's tech roll is a separate thing (tech ability, M6 §6).
+- **No dodging in hitstun or hitstop** (owner, 2026-10-22: "in genere no"). The base dodges list `Combat.State.Hitstun`
+  and `Combat.State.Hitstop` in their activation-blocked tags, so a dodge press during them is buffered or dropped by
+  the normal buffer rules, never executed. Because the owner said "generally", it is ability data, not a hard rule in
+  `GSTNCombat`: a kit can ship an escape option (a burst, a meter-paid break-out) that omits these tags.
 
 
 ## 2. Spikes first (record results in combat.md §17)
@@ -153,9 +164,17 @@ these four rules in order, from the hit data and `Ctx.Reaction` only (all *Propo
    `HitstopPerKnockback` defaults to 0, so content that does not set it keeps the old damage-only hitstop. `Override`:
    `HitstopFramesOverride` is the victim's final value and `AttackerHitstopFramesOverride` (when ≥ 0, else the same value) the attacker's:
    the multipliers and `HitstopScale` are ignored (the designer's number is final), still clamped to `MaxHitstop` as a safety limit
-   (a validator warns above it). `Damage` is the hit's **authored** damage, never multiplied by the victim's incoming multiplier, and
-   `NominalKnockback` is the authored knockback, not the victim's `K`: **the attacker predicts its own hitstop against a stale puppet
-   (§6 step 6), so no dynamic victim state may enter** (the static `HitstopScale` of the hurtbox or part may).
+   (a validator warns above it). **Which knockback** (owner, 2026-10-22: "non vedo perché il client non potrebbe predire il comportamento corretto"; this replaces
+   the earlier "authored knockback only" rule): `Auto` uses the **real** `K` of step 4 and the real damage, computed from the
+   **victim's reaction state as the attacker sees it**: the snapshot entry carries a compact `FGSTN_VictimReactionState`
+   (damage percent, effective weight scale, broken-part mask and thresholds through the extension of §3b, active Armor/Intangible
+   windows), which is replicated state the attacker's machine already has. The authority evaluates the attacker's side with the
+   **same view**: lag compensation (§9) rewinds `FGSTN_VictimReactionState` together with the transforms, so the host computes the
+   attacker's hitstop from exactly what the attacker saw, and the attacker's prediction matches by construction. The **victim's**
+   own hitstop, hitstun and reaction are computed by the authority from the victim's **current** state; they differ from the
+   attacker's view only when the victim's state changed inside the latency window (another player hit it, it broke a part, it
+   entered a window). Then attacker and victim hitstop can differ by a few frames, which is accepted (they are already separate
+   values); nothing is corrected on the attacker. *Proposal*; open question M4.28 records the choice.
 4. **Reaction tier (owner: weight decides).** `K` is computed with `Weight × WeightScale`, so a heavier or healthier victim gets a smaller
    `K`; remaining health (`HealthWeight`) or lost parts (`PartResolve`) lower the weight, raise `K` and move the victim up the tiers.
    For a staggered hit: `Reaction = K < PushBackThreshold ? StaggerInPlace : K < LaunchThreshold ? PushBack : Launch`, then capped at
@@ -193,9 +212,35 @@ modifiers are written by steps, never by the model, so the model stays one pure 
 `YawSource` on the movement plane, pitch from `AngleDeg` (`Sakurai3D`: low angle on grounded victims below a knockback
 threshold, higher in the air; `AutoLink`: towards the hitbox's velocity).
 
-**DI** — `UGSTN_HitMathUtils::ApplyDI(Launch, StickOnPlane, MaxDIDegrees)`: rotate the horizontal component of the
-launch around world up by `MaxDIDegrees × (component of the stick perpendicular to the launch direction)`; vertical
-component unchanged; DI on the plane only, as decided.
+**DI** (owner direction 2026-10-22, game-design-direction.md §2c; replaces the earlier yaw-only DI) —
+`UGSTN_HitMathUtils::ApplyDI(Launch, StickOnPlane, Up, const FGSTN_DIParams&)`, stateless, doubles. `Up` is the victim's
+local up at `HitstopEndFrame` (`−GravityDir` from the Mover sim state; gravity can change arbitrarily, so never world Z),
+and `StickOnPlane` is the stick projected on the plane normal to that `Up`. The stick is still read on the movement plane, but it now changes **both the yaw and the elevation** of the launch; the speed is unchanged.
+The elevation is handled in **dot space** (`e = LaunchDir · Up`), which is how the owner gave the examples.
+
+1. `s = |Launch|`, `e = Launch/s · Up`. Horizontal direction `h = normalize(Launch − (Launch·Up)·Up)`; if its length is
+   below a small epsilon (straight up or down), `h` = the hit's `YawSource` direction. Lateral axis `r = Up × h`.
+2. Stick strength `k = StrengthCurve(|Stick|) × ScaleByVictimTag` (M6 rules; M4 default: linear, 1). With `Ŝ = Stick/|Stick|`:
+   `a = k × (Ŝ·h)` (**along** the launch: `+1` = DI out, `−1` = DI in), `b = k × (Ŝ·r)` (**lateral**).
+3. **Yaw** (lateral stick): `h' = RotateAroundAxis(h, Up, MaxDIYawDegrees × b)`.
+4. **Side**: `σ = +1` if `e > UpwardThresholdDot` (default `−0.1`: slightly downward launches behave as upward ones,
+   as the owner asked), else `σ = −1` (downward launch, measured against the down vector).
+5. **Elevation**: `Δ = MaxDIElevationDot × (−a)` (default `0.2`); `e' = e + σ·Δ`. DI in (`Δ > 0`) moves the launch away
+   from horizontal on its side (steeper up, or steeper down); DI out (`Δ < 0`) moves it towards horizontal.
+6. **DI out never crosses horizontal**: if `Δ < 0`, `e' = max(e', min(e, 0))` when `σ = +1`, `e' = min(e', max(e, 0))`
+   when `σ = −1`. So a horizontal launch is not changed by DI out.
+7. Clamp `|e'| ≤ MaxElevationDot` (default `0.98`, keeps a horizontal direction for the yaw).
+8. `Launch' = s × (h'·sqrt(1 − e'²) + Up·e')`.
+
+Worked examples (defaults, full stick): `e = 0.4` → DI in `0.6`, DI out `0.2`; `e = 0` → DI in `0.2`, DI out `0`;
+`e = −0.5` (dot with down `0.5`) → DI in `−0.7` (down `0.7`), DI out `−0.3` (down `0.3`); `e = −0.05` → DI in `0.15`,
+DI out unchanged. A lateral stick only rotates around `Up`. *Proposal*: the owner's message gives DI out at `e = 0.4` as
+`0.4`; the symmetric rule gives `0.2` (open question M4.29). Note the jump at the threshold: at `e = −0.09` DI in
+gives `+0.11`, at `e = −0.11` it gives `−0.31` (inherent in the owner's rule; `UpwardThresholdDot` is tunable).
+`FGSTN_DIParams { float MaxDIYawDegrees = 15; float MaxDIElevationDot = 0.2; float UpwardThresholdDot = -0.1; float
+MaxElevationDot = 0.98; }` lives on `UGSTN_CombatRules` (*Proposal* values); M6's `FGSTN_DIRules` adds the strength
+curve, the victim-tag scales and `MinKnockbackForDI`. DI is read from the stick on the frame `HitstopEndFrame` and
+applies only to the `Launch` reaction tier.
 
 **Resolution pipeline** — `UGSTN_HitResolutionStep` (abstract, EditInlineNew, const): `EGSTN_StepResult
 Resolve(FGSTN_HitResolutionContext& Ctx) const` (Continue/Stop). `Ctx` holds the incoming hit, the victim's state at
@@ -309,7 +354,8 @@ replicated by asset reference).
   ground mode (no `Falling`, no tumble, no DI), the ground snap stays on, it stops at a wall or a ledge (no splat, no bounce, no fall:
   *Proposal*), and ends when the speed reaches zero or at `HitstunEndFrame`; `KnockbackResistance` scales the speed.
   **StaggerInPlace**: no move; the freeze ends with zero horizontal velocity (§8).
-- **SDI is not in M4.** It is specified once, by M6 §5.5 (`FGSTN_SDIRules`, new direction events during hitstop). M4 ships DI
+- **SDI is not in M4.** It is specified once, by M6 §5.5 (`FGSTN_SDIRules`; owner direction: SDI is a **held** direction that
+  drifts the victim during hitstop, game-design-direction.md §2c). M4 ships DI
   only; the sync field `SDICount` is reserved here and written by M6. (Earlier drafts described a basic SDI here while
   §1 put it out of scope: M6 owns it.)
 - **Hitstun end**: `ActionState = Actionable` (or `Tumble` until landing when tumbling; `PushBack` and `StaggerInPlace` go straight
@@ -348,6 +394,17 @@ The combat tick reads it at end of F-1 (one frame after contact, as M6 §6) and 
 `Combat.Event.Impact.*`). The surface table is part of the rules asset and the physical-material mapping is baked at load;
 nothing reads live components in the decision.
 
+**Trampolines** (owner, 2026-10-22: "tieni conto della presenza di eventuali trampolini"). *Proposal*: a trampoline is a
+level object (`AGSTN_Trampoline`, in a small optional plugin `GSTNLevelObjects`, not in `GSTNCombat`) that plays two roles:
+(1) for a **tumbling** victim it is just a surface whose `Surface.Type.Trampoline` row forces `Bounce` with its own
+`Restitution` and a minimum outgoing speed along its normal, through `IGSTN_ImpactSurface` (no special case in the impact
+code); (2) for **anyone not tumbling** (players, enemies, minions, thrown objects) landing on it, it launches along its
+normal with a fixed or speed-scaled velocity: a Mover launch requested through the normal queued-move path (players and
+fighters: `FGSTN_LayeredMove_Launch` via GE, predicted like any jump; minions: the lightweight movement's launch; M10
+projectiles: a bounce of the analytic segment). The launch direction is the trampoline's normal, not gravity's up, so a
+trampoline on a wall or ceiling works with any gravity. Interaction with the variable jump (holding jump for a higher
+bounce) and with fast fall is an open question (M4.31).
+
 **Interaction with tech (M6).** At the same contact frame the tech window is evaluated first: a **successful tech cancels the
 outcome** (no splat, no bounce, no damage; a wall tech is the reward). Only after a failed or absent tech does the impact
 resolve, and its result **replaces M6's default failure branch** (ground knockdown, wall bounce-off) when the three layers
@@ -380,6 +437,15 @@ version).
   target transforms from the rewound actors (a per-attacker snapshot overlay, not the shared snapshot), then
   `UnwindActors()` before returning. Requires `UNetworkPredictionLagCompensation` on hittable pawns. AI attackers never
   rewind.
+- **Victim reaction state in the rewind** (owner direction on prediction, §3 hitstop): the lag-compensation history keeps each
+  hittable entity's `FGSTN_VictimReactionState` next to its transform (a few bytes per entity per frame, same window as
+  `MaxRewindMs`), so a rewound query sees the victim's percent, weight and parts as the attacker saw them.
+- **Predicted victim reaction (presentation).** With the same `FGSTN_VictimReactionState` the attacker's machine computes the
+  victim's expected reaction (tier, hitstun and hitstop frames, launch direction without DI) and the presentation component plays it
+  on the interpolated puppet right away: freeze, flinch or launch pose, and a short cosmetic extrapolation of the launch until the
+  authoritative motion arrives, then a blend onto it. The victim's simulation itself stays authoritative on the host and
+  interpolated on other machines (combat.md §12.7); simulating remote victims (forward prediction) is a later option, open
+  question M4.16, blocked today by the proxy-attribute bug noted in combat.md §12.7.
 - **`UGSTN_HitPresentationComponent`** (attacker's machine): when `FinalizeFrame` sees a new predicted entry in
   `HitTargets`, it plays local-only effects on the (interpolated) victim: flash material parameter, local cue
   (`ExecuteGameplayCueLocal`), victim mesh pause for the hitstop length. When a later corrected state removes that

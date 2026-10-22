@@ -24,6 +24,11 @@ those milestones).
 > deciding between launch, push back and stagger in place. The tier is encoded in the existing 4-bit `ActionState` (new value
 > `PushedBack`, §8.2), with no extra wire bits (§4d.2). All new choices are *Proposal*.
 
+
+> **Revision 2026-10-22 (late morning, owner direction):** gravity can change arbitrarily: the lightweight movement
+> integrates the **gravity vector** of the minion's position (gravity volumes, global changes), and "ground", "horizontal"
+> and the push-back plane are relative to it; trampolines (M4 §7b) launch minions along the trampoline's normal.
+
 ## 1. Scope
 
 **Goal:** dozens of simple enemies (40 required, 100 stretch) with the **same timelines, hitboxes, hurtboxes, teams,

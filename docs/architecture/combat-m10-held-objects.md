@@ -240,8 +240,11 @@ Common rules:
 
 **Recommendation (*Proposal*): C, no NP model.** A projectile is `FGSTN_ProjectileState { Ref; FGSTN_EntityRef Owner; uint8
 OwnerSerial; FGenericTeamId TeamAtThrow; uint32 ThrowSerial; FGSTN_BallisticSegment Segment; uint8 BounceCount; uint8 HitCount;
-uint8 Charges; }` with `FGSTN_BallisticSegment { double StartFrame; FVector Start; FVector Velocity; float Gravity; float Drag;
-FVector AngularSpin; }`. `PositionAt(frame)` is **closed form** (gravity + linear drag), double math. The server's
+uint8 Charges; }` with `FGSTN_BallisticSegment { double StartFrame; FVector Start; FVector Velocity; FVector GravityAccel; float Drag;
+FVector AngularSpin; }`. `PositionAt(frame)` is **closed form** (gravity + linear drag), double math. Gravity can change arbitrarily (owner,
+2026-10-22): the segment's gravity is a **vector** (`FVector GravityAccel` replaces `float Gravity`), taken at the throw
+point; a gravity change (a gravity volume entered, a global change) ends the segment and starts a new one at that frame,
+exactly like a bounce, so `PositionAt` stays closed form per segment. The server's
 `UGSTN_ObjectSubsystem` steps projectiles at the fixed tick (after fighters' ticks, like minions): sweep the segment's
 step against the world (`IGSTN_WorldQuery`: capsule/sphere sweep, filter by profile) and against hurtboxes through the M4
 query code; on world contact apply `ImpactBehaviour`: a new segment (bounce with restitution), `Landed` (becomes a normal
@@ -265,7 +268,7 @@ which is all that replicates.
 - **Track:** `FGSTN_ProjectileTrack : FGSTN_TimelineTrack { TArray<FGSTN_ProjectileSpec> Keys; }`, `FGSTN_ProjectileSpec { int32 SpawnFrame;
   bool bUseHeldObject (else `ProjectileClass`); FGSTN_ProjectileMotion Motion; EGSTN_ThrowAim AimMode; FGSTN_HitboxSpec Hitbox (Space =
   Projectile, shape in object space, default from the object definition); uint8 MaxHits; int32 MaxLifetimeFrames; bool
-  bBreaksOnHit; }`. `FGSTN_ProjectileMotion { float Speed; float Gravity; float Drag; float Restitution; uint8 MaxBounces; float
+  bBreaksOnHit; }`. `FGSTN_ProjectileMotion { float Speed; float GravityScale; float Drag; float Restitution; uint8 MaxBounces; float
   InheritVelocity; float SpinRate; }`. Registered as a track type by `GSTNHeldGAS`; `GSTNCombatEditor` draws it generically.
 - **Space = Projectile:** the M4 attacker step queries `IGSTN_ProjectileHitboxProvider` for the **thrower's** live projectiles
   (`Owner == this` and `Hitbox` active); projectiles of a player are therefore evaluated in the **server's step of the
