@@ -67,6 +67,14 @@ public:
 	TSoftObjectPtr<UInputAction> MoveAction;
 
 	/**
+	 * Whether the player input source also sends the control rotation's yaw and pitch at 65536 steps per turn
+	 * (FGSTN_InputCmd::AimYaw/AimPitch), which an ability reads as its aim (a ranged attack, a hold-to-aim stance). Off: the command
+	 * carries one bit more than before and nothing else. The coarse camera yaw byte the direction classifier uses is always sent
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	bool bSendCameraAim = false;
+
+	/**
 	 * Loads the input actions (synchronously, if they are not loaded yet) and keeps them for the getters below. Call it once
 	 * when the host sets up (BeginPlay, a loadout change), never from a tick: the input source reads the resolved actions every
 	 * frame and does not resolve anything itself. Calling it again after the asset changed refreshes them.

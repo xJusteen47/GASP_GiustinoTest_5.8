@@ -197,7 +197,7 @@ Each plugin must work in a project that knows nothing about this one:
 ### 5.1 Simulation pieces (embeddable)
 
 - **`FGSTN_InputCmd`** (was `FGSTN_CombatInputCmd`): `HeldButtons`, `PressedButtons`, `StickX/Y`, `CameraYaw`,
-  `ForcedCommand`, later `AimYaw/AimPitch`; `NetSerialize`, `ToString`, `PrepareRepeatedInput`. A host model uses it
+  `ForcedCommand` and the optional camera aim `bHasAim`/`AimYaw`/`AimPitch` (uint16, 65536 steps per turn, `FGSTN_DirectionClassifier::QuantizeAim`; sent by the player source when `UGSTN_InputConfig::bSendCameraAim` is on and by the AI source after `SetAim`; one wire bit when absent, two words in full when present, no delta against the previous command because the NP input buffer does not offer it; a repeated input keeps it); `NetSerialize`, `ToString`, `PrepareRepeatedInput`. A host model uses it
   directly as its NP input type.
 - **`FGSTN_InputSimState`**: `History`, `Classifier`, `WatchedTagMask`, the frame-stamped request (`RequestedBinding`,
   `RequestButton`, `RequestFrame`), `LastActivatedFrame`. Not a sync state by itself: helpers `NetSerialize(Ar)`,

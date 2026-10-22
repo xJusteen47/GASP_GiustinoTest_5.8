@@ -19,6 +19,8 @@
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Sources/GSTN_InputSource.h"
 #include "Context/GSTN_InputContextProvider.h"
+#include "Serialization/BitReader.h"
+#include "Serialization/BitWriter.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 #include "UObject/StrongObjectPtr.h"
@@ -591,6 +593,46 @@ bool FGSTN_NPStandaloneComponentTest::RunTest(const FString& Parameters)
 	Authority = Loaded;
 	Authority.Input.LastActivatedFrame += 1;
 	TestTrue(TEXT("a different last activated frame reconciles"), Loaded.ShouldReconcile(Authority));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPCommandAimTest, "GSTNInput.NP.Command.CameraAim", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPCommandAimTest::RunTest(const FString& Parameters)
+{
+	auto RoundTrip = [](const FGSTN_InputCmd& Cmd, int64& OutBits)
+	{
+		FBitWriter Writer(1024, true);
+		FGSTN_InputCmd(Cmd).NetSerialize(FNetSerializeParams(Writer));
+		OutBits = Writer.GetNumBits();
+		FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+		FGSTN_InputCmd Loaded;
+		Loaded.NetSerialize(FNetSerializeParams(Reader));
+		return Loaded;
+	};
+
+	FGSTN_InputCmd Without;
+	Without.HeldButtons = 1;
+	Without.CameraYaw = 64;
+	int64 BitsWithout = 0;
+	const FGSTN_InputCmd LoadedWithout = RoundTrip(Without, BitsWithout);
+	TestFalse(TEXT("no aim stays off"), LoadedWithout.bHasAim);
+	TestEqual(TEXT("no aim reads as 0"), static_cast<int32>(LoadedWithout.AimYaw) + LoadedWithout.AimPitch, 0);
+
+	FGSTN_InputCmd With = Without;
+	With.bHasAim = true;
+	With.AimYaw = 12345;
+	With.AimPitch = 65000;
+	int64 BitsWith = 0;
+	const FGSTN_InputCmd LoadedWith = RoundTrip(With, BitsWith);
+	TestTrue(TEXT("aim flag"), LoadedWith.bHasAim);
+	TestEqual(TEXT("aim yaw"), static_cast<int32>(LoadedWith.AimYaw), 12345);
+	TestEqual(TEXT("aim pitch"), static_cast<int32>(LoadedWith.AimPitch), 65000);
+	TestEqual(TEXT("the aim costs two words"), BitsWith - BitsWithout, static_cast<int64>(32));
+
+	// A repeated input (the server filling a missing frame) keeps the aim: it is state like the stick
+	FGSTN_InputCmd Repeated = With;
+	Repeated.PrepareRepeatedInput();
+	TestTrue(TEXT("a repeated input keeps the aim"), Repeated.bHasAim && Repeated.AimYaw == 12345 && Repeated.AimPitch == 65000);
 	return true;
 }
 

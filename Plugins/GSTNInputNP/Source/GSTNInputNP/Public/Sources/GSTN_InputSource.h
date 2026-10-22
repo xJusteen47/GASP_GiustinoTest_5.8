@@ -83,7 +83,7 @@ private:
  * Input made by code: a behaviour tree task, a state tree, a script, a test. Holds buttons and a stick until told
  * otherwise, taps buttons for one command, and can ask for a command by name instead of synthesising its input
  * (ForcedCommand). The stick is a vector in the controller's frame sent with camera yaw 0, so with the settings' default
- * world reference "up" is the world's reference direction, not a camera-relative one.
+ * world reference "up" is the world's reference direction, not a camera-relative one. SetAim gives it an aim target.
  */
 UCLASS(BlueprintType, EditInlineNew, DefaultToInstanced)
 class GSTNINPUTNP_API UGSTN_AIInputSource : public UObject, public IGSTN_InputSource
@@ -109,9 +109,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Input")
 	void RequestCommand(FGameplayTag Command);
 
+	/** The aim (yaw, pitch of its target) sent in every command from now until ClearAim, like the player's camera aim */
+	UFUNCTION(BlueprintCallable, Category = "Input")
+	void SetAim(FRotator AimRotation);
+
+	UFUNCTION(BlueprintCallable, Category = "Input")
+	void ClearAim();
+
 private:
 	uint32 Held = 0;
 	uint32 Taps = 0;
 	FVector2D Stick = FVector2D::ZeroVector;
 	FGameplayTag ForcedCommand;
+	FRotator Aim = FRotator::ZeroRotator;
+	bool bAimSet = false;
 };

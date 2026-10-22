@@ -55,7 +55,15 @@ void UGSTN_PlayerInputSource::ProduceInput(const FGSTN_InputSourceContext& Conte
 		Out.StickY = FGSTN_DirectionClassifier::QuantizeStickAxis(static_cast<float>(Stick.Y));
 	}
 
-	Out.CameraYaw = FGSTN_DirectionClassifier::QuantizeYaw(static_cast<float>(PlayerController->GetControlRotation().Yaw));
+	const FRotator ControlRotation = PlayerController->GetControlRotation();
+	Out.CameraYaw = FGSTN_DirectionClassifier::QuantizeYaw(static_cast<float>(ControlRotation.Yaw));
+
+	if (Context.Config->bSendCameraAim)
+	{
+		Out.bHasAim = true;
+		Out.AimYaw = FGSTN_DirectionClassifier::QuantizeAim(static_cast<float>(ControlRotation.Yaw));
+		Out.AimPitch = FGSTN_DirectionClassifier::QuantizeAim(static_cast<float>(ControlRotation.Pitch));
+	}
 }
 
 void UGSTN_PlayerInputSource::EnsureBound(UEnhancedInputComponent& InputComponent, const UGSTN_InputConfig& Config)
@@ -136,6 +144,25 @@ void UGSTN_AIInputSource::ProduceInput(const FGSTN_InputSourceContext& Context, 
 		Out.ForcedCommand = Context.Table->ToForcedCommand(ForcedCommand);
 	}
 	ForcedCommand = FGameplayTag();
+
+	if (bAimSet)
+	{
+		Out.bHasAim = true;
+		Out.AimYaw = FGSTN_DirectionClassifier::QuantizeAim(static_cast<float>(Aim.Yaw));
+		Out.AimPitch = FGSTN_DirectionClassifier::QuantizeAim(static_cast<float>(Aim.Pitch));
+	}
+}
+
+void UGSTN_AIInputSource::SetAim(FRotator AimRotation)
+{
+	Aim = AimRotation;
+	bAimSet = true;
+}
+
+void UGSTN_AIInputSource::ClearAim()
+{
+	Aim = FRotator::ZeroRotator;
+	bAimSet = false;
 }
 
 void UGSTN_AIInputSource::SetHeld(int32 Mask)

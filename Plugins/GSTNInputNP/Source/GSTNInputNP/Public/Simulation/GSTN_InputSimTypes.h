@@ -38,6 +38,15 @@ struct FGSTN_InputCmd
 	/** Command requested by name, 0 = none; else 1 + index in the owner's command bindings. Set by AI and scripts, no input is synthesised */
 	uint16 ForcedCommand = 0;
 
+	/**
+	 * The aim the source sends when it has one (UGSTN_InputConfig::bSendCameraAim, an AI's aim target): control rotation yaw and
+	 * pitch, 65536 steps per turn (FGSTN_DirectionClassifier::QuantizeAim). Without it the command costs one bit more and the
+	 * aim reads as 0. Always sent in full while on: the Network Prediction input buffer gives no previous command to delta against
+	 */
+	bool bHasAim = false;
+	uint16 AimYaw = 0;
+	uint16 AimPitch = 0;
+
 	void NetSerialize(const FNetSerializeParams& P)
 	{
 		P.Ar.SerializeIntPacked(HeldButtons);
@@ -45,6 +54,20 @@ struct FGSTN_InputCmd
 		P.Ar << StickX;
 		P.Ar << StickY;
 		P.Ar << CameraYaw;
+
+		uint8 bAim = bHasAim ? 1 : 0;
+		P.Ar.SerializeBits(&bAim, 1);
+		if (bAim)
+		{
+			P.Ar << AimYaw;
+			P.Ar << AimPitch;
+		}
+		else
+		{
+			AimYaw = 0;
+			AimPitch = 0;
+		}
+		bHasAim = bAim != 0;
 
 		uint8 bHasForcedCommand = ForcedCommand != 0 ? 1 : 0;
 		P.Ar.SerializeBits(&bHasForcedCommand, 1);
@@ -60,14 +83,19 @@ struct FGSTN_InputCmd
 
 	void ToString(FAnsiStringBuilderBase& Out) const
 	{
-		Out.Appendf("Held: 0x%08x Pressed: 0x%08x Stick: (%d, %d) CameraYaw: %d Forced: %d\n", HeldButtons, PressedButtons,
+		Out.Appendf("Held: 0x%08x Pressed: 0x%08x Stick: (%d, %d) CameraYaw: %d Forced: %d", HeldButtons, PressedButtons,
 			static_cast<int32>(StickX), static_cast<int32>(StickY), static_cast<int32>(CameraYaw), static_cast<int32>(ForcedCommand));
+		if (bHasAim)
+		{
+			Out.Appendf(" Aim: (%d, %d)", static_cast<int32>(AimYaw), static_cast<int32>(AimPitch));
+		}
+		Out.Append("\n");
 	}
 
 	/**
 	 * Network Prediction hook: the server reuses this input for a frame the client's input did not reach it in time for
 	 * (gas-npp.md rule 9). The taps and the forced command already acted on the frame they came from; the held buttons,
-	 * stick and camera are state and carry over, and a held button repeated does not press again (the press is the edge
+	 * stick, camera and aim are state and carry over, and a held button repeated does not press again (the press is the edge
 	 * against the history's held mask).
 	 */
 	void PrepareRepeatedInput()

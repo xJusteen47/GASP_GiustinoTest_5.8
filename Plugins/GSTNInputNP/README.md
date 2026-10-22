@@ -98,6 +98,14 @@ before the ability system, executes requests from the ability system's pre-tick 
 A pawn uses **either** this component or a host that embeds the simulation (the combat component): with both, this one logs
 an error at BeginPlay and does nothing. Not done yet: projecting `Input.Context.*` onto the ability system.
 
+### Camera aim
+
+`FGSTN_InputCmd` can carry the aim of the controller (`bHasAim`, `AimYaw`, `AimPitch`; 65536 steps per turn, so the
+resolution is 0.0055 degrees, against the 1.4 degrees of the `CameraYaw` byte the direction classifier uses). The player source
+fills it when `UGSTN_InputConfig::bSendCameraAim` is on, the AI source after `SetAim`. Off, the command costs one bit more; on, it
+costs two words more, every command (the NP input buffer gives no previous command to delta against). The simulation host
+reads it for an ability (`UGSTN_CombatSimComponent::GetAimRotation`, combat-m3 7.10).
+
 ### Activation context and the buttons an ability holds
 
 An ability that must end when its trigger button is released finds the component through

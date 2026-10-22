@@ -108,3 +108,13 @@ uint8 FGSTN_DirectionClassifier::QuantizeYaw(float YawDeg)
 {
 	return static_cast<uint8>(FMath::RoundToInt(NormalizeAngle(YawDeg) * (256.f / 360.f)) & 0xFF);
 }
+
+float FGSTN_DirectionClassifier::DequantizeAim(uint16 Value)
+{
+	return Value * (360.f / 65536.f);
+}
+
+uint16 FGSTN_DirectionClassifier::QuantizeAim(float AngleDeg)
+{
+	return static_cast<uint16>(FMath::RoundToInt(NormalizeAngle(AngleDeg) * (65536.f / 360.f)) & 0xFFFF);
+}

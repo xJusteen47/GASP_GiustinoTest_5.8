@@ -78,4 +78,10 @@ struct GSTNINPUTCORE_API FGSTN_DirectionClassifier
 
 	/** Any yaw in degrees -> command camera yaw byte, rounded to the nearest step */
 	static uint8 QuantizeYaw(float YawDeg);
+
+	/** Command aim word (yaw or pitch) -> degrees [0, 360), 65536 steps per turn (0.0055 degrees) */
+	static float DequantizeAim(uint16 Value);
+
+	/** Any angle in degrees (a pitch too: negative values wrap) -> command aim word, rounded to the nearest step */
+	static uint16 QuantizeAim(float AngleDeg);
 };

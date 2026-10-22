@@ -226,6 +226,18 @@ bool FGSTN_ClassifierQuantizationTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("negative yaw wraps"), FGSTN_DirectionClassifier::QuantizeYaw(-90.f), static_cast<uint8>(192));
 	TestEqual(TEXT("yaw rounds to the nearest step"), FGSTN_DirectionClassifier::QuantizeYaw(1.f), static_cast<uint8>(1));
 
+	// The camera aim word: 65536 steps, exact on its grid, wrapping like the yaw byte (a pitch of -30 degrees is 330)
+	bool bAimRoundTrip = true;
+	for (int32 Value = 0; Value < 65536; Value += 7)
+	{
+		bAimRoundTrip &= FGSTN_DirectionClassifier::QuantizeAim(FGSTN_DirectionClassifier::DequantizeAim(static_cast<uint16>(Value))) == Value;
+	}
+	TestTrue(TEXT("camera aim word round trip"), bAimRoundTrip);
+	TestEqual(TEXT("aim wraps"), FGSTN_DirectionClassifier::QuantizeAim(360.f), static_cast<uint16>(0));
+	TestEqual(TEXT("negative aim wraps"), FGSTN_DirectionClassifier::QuantizeAim(-90.f), static_cast<uint16>(49152));
+	TestTrue(TEXT("aim is finer than a hundredth of a degree"),
+		FMath::Abs(FGSTN_DirectionClassifier::DequantizeAim(FGSTN_DirectionClassifier::QuantizeAim(12.345f)) - 12.345f) < 0.005f);
+
 	// A float stick and the same stick after quantization classify the same, away from the sector boundaries (the
 	// stick byte moves the angle by about half a degree at the lowest magnitude tested; the angles below stay 1.5
 	// degrees or more from every boundary).
