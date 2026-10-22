@@ -5,7 +5,23 @@ The Network Prediction adapter of [GSTNCombat](../GSTNCombat/README.md). It was 
 fork. The module keeps its name, so class paths (`/Script/GSTNCombatNP.*`) and include paths are unchanged and no class
 redirect is needed. Design: [docs/architecture/combat.md](../../docs/architecture/combat.md).
 
-Status: **experimental (0.1)**.
+Status: **experimental (0.1)** (`IsExperimentalVersion` in `GSTNCombatNP.uplugin`). No content (`CanContainContent: false`), no
+config file, no editor module.
+
+## Modules
+
+One module, `GSTNCombatNP` (`Runtime`, loading phase `Default`), export macro `GSTNCOMBATNP_API`, in
+`Source/GSTNCombatNP/`:
+
+| Path | Contents |
+|---|---|
+| `Public/Simulation/GSTN_CombatSimComponent.h` | `UGSTN_CombatSimComponent`, the combat NP model's driver and simulation (model def `FGSTN_CombatModelDef` is private, in the `.cpp`). |
+| `Public/Simulation/GSTN_CombatSimTypes.h` | `FGSTN_CombatSyncCore`, `FGSTN_CombatSyncState`, `FGSTN_CombatAuxState` (empty), `FGSTN_CombatStateTypes` (input `FGSTN_InputCmd` from `GSTNInputNP`). |
+| `Public/Simulation/GSTN_CombatTickExtension.h` | `EGSTN_CombatHookPoint`, `FGSTN_CombatTickContext`, `IGSTN_CombatTickExtension`, `FGSTN_CombatTickExtensionRegistry`. |
+| `Private/GSTNCombatNPModule.cpp` | `FDefaultModuleImpl`: the module registers nothing at startup. |
+| `Private/Tests/` | The `GSTNCombat.NP.*` automation tests and their test-only fragment types (`GSTN_CombatNPTestTypes.h`). |
+
+Console variable: `gstn.Combat.Debug.Input` (draws the input history above the locally controlled pawns, see `GetDebugString`).
 
 ## What it contains
 
@@ -42,8 +58,13 @@ is fixed and the call sites move with the model.
 
 - Plugins (all non-optional, see `GSTNCombatNP.uplugin`): `GSTNCombat`, `GSTNInputNP`, `GSTNInput`, GameplayAbilities,
   AbilitySystemSimulation, NetworkPrediction (the GAS-NPP fork in `Plugins/GASNPP`), EnhancedInput, Mover.
-- Module `GSTNCombatNP` depends on `GSTNCombatCore`, `GSTNInputCore`, `GSTNInputNP` and the fork modules. Nothing in `GSTNCombat`
-  depends on this plugin.
+- Module `GSTNCombatNP` (`GSTNCombatNP.Build.cs`, all public): Core, CoreUObject, Engine, GameplayTags, NetCore, `GSTNInputCore`,
+  `GSTNInputNP`, `GSTNCombatCore`, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, Mover. It does not list
+  `GSTNCombatGAS` yet (it will when it first needs a type from there). Nothing in `GSTNCombat`, `GSTNCombatGAS`, `GSTNInput` or
+  `GSTNInputNP` depends on this plugin.
+- What depends on it: the project module `GASP_Giustino2` (`Source/GASP_Giustino2/GASP_Giustino2.Build.cs`) and the project's
+  `.uproject`, which enables the plugin. `Plugins/GSTNInputNP/Config/DefaultGSTNInputNP.ini` carries one class redirect from
+  `/Script/GSTNCombatNP.GSTN_MoverSimStateTracker` to `GSTNInputNP`: the tracker used to live here before the input split.
 - Dependency rule: an `*NP` module may depend on another plugin's `*NP` module of the same layer, and on nothing above it.
   `GSTNCombatNP` depends on `GSTNInputNP` by design (one NP model per character embeds the input simulation) and may use only its
   Public headers and interfaces (for example `IGSTN_InputSimHost`), never its internals. Core modules keep no NP, GAS or Mover
@@ -62,6 +83,70 @@ settings in `GSTNInputCore`.
    `InputConfig` and `SlotBindings` (a `UGSTN_CommandBindingSet`), and use `UGSTN_StandardSlots` from `GSTNCombatCore` for the
    default command set. A pawn uses either this component or `UGSTN_InputSimComponent` of `GSTNInputNP`, never both.
 3. A project module that uses the component lists `GSTNCombatNP` (and the Core modules it includes from) in its `Build.cs`.
+
+Optional properties on the component: `ResetRules` (character-level buffer reset rules, applied before the binding set's own),
+`InputSource` (instanced object implementing `IGSTN_InputSource`; default `UGSTN_PlayerInputSource`, use `UGSTN_AIInputSource` for
+server-driven pawns), `ContextProvider` (instanced `UGSTN_InputContextProvider`; default `UGSTN_MoverInputContextProvider`, which
+needs a Mover component on the owner) and the two `Combat|Spike` fields of the debug hitstop (`HitstopTestButton`, -1 = off,
+`HitstopTestFrames`). Missing `InputConfig`, `SlotBindings`, context provider or `UNpAbilitySystemComponent` are logged at
+`BeginPlay` (`LogGSTNCombatSim`) and degrade the component rather than fail it: no buttons, no ability starts, facing yaw 0, or
+requests ignored.
+
+## How to extend it
+
+**In C++**
+
+- *A per-frame feature with its own state*: a sync fragment (`FGSTN_SyncFragment`, registered in `FGSTN_SyncFragmentRegistry`,
+  both in `GSTNCombatCore`) plus an `IGSTN_CombatTickExtension` registered in `FGSTN_CombatTickExtensionRegistry::Get()` from the
+  feature module's `StartupModule`, unregistered in `ShutdownModule`. Both share one id from `GSTNFeatureIds`
+  (`GSTNCombatCore/Public/Sync/GSTN_SyncFragment.h`). The hook gets `FGSTN_CombatTickContext` (`Frame`, `In`, `Out`) and may write
+  only its own fragment in `Out` (`FGSTN_SyncFragmentList::FindOrAdd<T>`). The feature plugin depends on `GSTNCombatNP`; nothing
+  here names it.
+- *Project defaults for the component*: subclass `UGSTN_CombatSimComponent` (`Blueprintable`) and set the properties in the
+  constructor or on the Blueprint child. `SimulationTick`, `ProduceInput`, `FinalizeFrame` and the `IGSTN_InputSimHost` /
+  `IGSTN_CommandSourceInterface` overrides are not meant to be overridden by a project: the model's behaviour is shared by every
+  machine in a match.
+- *A different input producer or movement context*: implement `IGSTN_InputSource` or subclass `UGSTN_InputContextProvider`
+  (both in `GSTNInputNP`) and assign the instance to `InputSource` / `ContextProvider`.
+- *The command set, abilities, reset rules and input conditions*: data and classes of `GSTNInput`, `GSTNCombat` and
+  `GSTNCombatGAS`; see their READMEs. Abilities read `GetActivationContext()` and `IsCommandButtonHeld()` through
+  `IGSTN_CommandSourceInterface` (`GSTNInputNP`), so they do not depend on this plugin.
+
+**In Blueprint**
+
+- A Blueprint child of `GSTN_CombatSimComponent` to set its defaults; the component is `BlueprintSpawnableComponent`.
+- The `BlueprintPure` reads `GetActivationContext` and `IsCommandButtonHeld` (from an ability's activation or tick only: they read
+  the sync state the simulation is on), the `BlueprintCallable` test helpers `SetScriptedButtons`, `ClearScriptedButtons`,
+  `TapScriptedButtons`, and `GetDebugString`.
+- A movement context written in Blueprint: assign a `UGSTN_BlueprintInputContextProvider` child (`GSTNInputNP`) to
+  `ContextProvider`; its rules (rolled-back reads only) are in its header.
+- There is no `BlueprintNativeEvent` or `BlueprintImplementableEvent` in this plugin, on purpose: a tick extension runs for every
+  entity on every simulated and re-simulated frame. The Blueprint extension point of the combat rules is the pipeline step
+  `UGSTN_CombatStep` of `GSTNCombatCore` (see the [GSTNCombat README](../GSTNCombat/README.md)).
+
+What must stay C++: the model definition and sort priority, the sync state and its fragments, `IGSTN_CombatTickExtension`,
+and everything called from `SimulationTick` or `HandleAbilitySimulationPreTick` (rules in
+[gas-npp.md](../../docs/architecture/gas-npp.md)).
+
+## Using it in another project
+
+Copy `Plugins/GSTNCombatNP` together with `Plugins/GSTNInput`, `Plugins/GSTNInputNP`, `Plugins/GSTNCombat` and the GAS-NPP fork
+(`Plugins/GASNPP`: `GameplayAbilities`, `AbilitySystemSimulation`, `NetworkPrediction`), and enable them plus `EnhancedInput` and
+`Mover` in the `.uproject`. Blockers and assumptions:
+
+- It compiles only against the fork: `UNpAbilitySystemComponent::OnSimulationPreTick`, `GetPlayingSyncedMontage`,
+  `PauseCurrentSyncedMontage` / `ResumeCurrentSyncedMontage` do not exist in stock GameplayAbilities, and Network Prediction
+  is the fork's version. Stock GAS gets no combat simulation from this plugin (a `GSTNCombatStockGAS` is only a note in
+  combat.md §3).
+- The default `ContextProvider` reads Mover through `UGSTN_MoverSimStateTracker` (`GSTNInputNP`); this project's
+  `Plugins/EngineOverrides/Mover` is the Mover it is tested with. Another movement system needs its own
+  `UGSTN_InputContextProvider`.
+- The pawn needs `UNpAbilitySystemComponent`, a Mover component and the input config, binding set and input actions of
+  `GSTNInput` / `GSTNCombat`; the ini of those plugins (`Config/DefaultGSTNInput*.ini`, `DefaultGSTNCombat.ini`) comes with them,
+  and the designer command tags are project content (here `Config/Tags/GSTNCommands.ini`). This plugin itself needs no ini entry.
+- Three models of this family share the `PreKinematicMovers - 2/-3/-4` priorities; a project model of its own takes the
+  next free one below (see the [GSTNInputNP README](../GSTNInputNP/README.md)).
+- Nothing here refers to `/Game/` content, to the project module or to a project tag.
 
 ## How a frame flows
 
@@ -110,6 +195,13 @@ Types are prefixed `GSTN_`; export macro `GSTNCOMBATNP_API`. Public headers in `
 
 ## Further reading
 
-[combat.md](../../docs/architecture/combat.md) · [combat-m2-sim-input.md](../../docs/architecture/combat-m2-sim-input.md) ·
-[input.md](../../docs/architecture/input.md) · [GSTNInputNP README](../GSTNInputNP/README.md) ·
-[gas-npp.md](../../docs/architecture/gas-npp.md) · [PATCHES.md](../GASNPP/PATCHES.md)
+- [combat.md](../../docs/architecture/combat.md): §3 modules, §5 simulation architecture (tick order, communication rule,
+  authoritative events), §16 project integration.
+- [combat-m3-moves-kits.md](../../docs/architecture/combat-m3-moves-kits.md): §3 what this module gains in M3, §7 combat model
+  changes (7.2 is the per-frame order the hook points follow, 7.3 the pre-tick execution).
+- [combat-m2-sim-input.md](../../docs/architecture/combat-m2-sim-input.md) and [input.md](../../docs/architecture/input.md):
+  the embedded input simulation.
+- [gas-npp.md](../../docs/architecture/gas-npp.md): the fork, tick order and the hard rules for simulation code;
+  [PATCHES.md](../GASNPP/PATCHES.md): the fork patches this plugin relies on (`OnSimulationPreTick`).
+- Sibling READMEs: [GSTNCombat](../GSTNCombat/README.md), [GSTNCombatGAS](../GSTNCombatGAS/README.md),
+  [GSTNInputNP](../GSTNInputNP/README.md), [GSTNInput](../GSTNInput/README.md).

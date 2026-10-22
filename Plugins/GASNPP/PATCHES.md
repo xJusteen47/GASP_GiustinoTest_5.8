@@ -54,6 +54,10 @@ spike measured that forward prediction is not worth enabling yet; the report is 
 `Plugins/EngineOverrides/` holds engine plugins copied into the project so they build against the forked plugins (Mover,
 ChaosMover, SmartObjects). Mover's NPP liaison forwards the re-simulation flag to Mover, and Mover implements the
 `PrepareRepeatedInput` hook above.
+Three Mover rollback fixes (`84e4893`) also live there: `SimpleWalkingMode` keeps its `DidGenerateMove` blackboard
+entry for 64 frames, `FLayeredMoveFinishVelocitySettings::NetSerialize` writes the finish velocity settings, and
+`SmoothWalkingState` spring tolerances match the default sync state. Every Mover edit is marked "GAS-NPP fork"; the
+full list is in [Mover's README](../EngineOverrides/Mover/README.md).
 
 | Patch | Why | Where |
 |---|---|---|

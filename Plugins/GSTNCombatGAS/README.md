@@ -10,6 +10,22 @@ effects, the stat/meter data structs, the plugin settings, the kit, weapon and s
 the pure binding-table compiler and loadout rules of `GSTNCombat`, and the loadout component, the local-player loadout subsystem
 with its save game, and the skin component.
 
+## Module
+
+One module, `GSTNCombatGAS` (Runtime, loading phase `Default`, `IMPLEMENT_MODULE(FDefaultModuleImpl, ...)`: no startup code).
+`CanContainContent` is false: the plugin ships no assets, only types. Export macro `GSTNCOMBATGAS_API`, headers in
+`Source/GSTNCombatGAS/Public/<Area>/`, implementations and tests in `Private/`.
+
+| Area | Headers | Contents |
+|---|---|---|
+| root | `GSTN_CombatTags.h` | The native tags (`GSTNCombatTags`), below. |
+| `Attributes/` | `GSTN_CombatAttributeSet.h`, `GSTN_MeterAttributeSet.h`, `GSTN_KitStats.h`, `GSTN_MeterSetup.h`, `GSTN_AttributeAccessors.h` | The two attribute sets, the stat and meter data structs, `UGSTN_MeterUtils`, the accessor macro. |
+| `Effects/` | `GSTN_GE_MeterCost.h`, `GSTN_GE_WeaponStats.h` | Base classes of the meter-cost and weapon-stats effects. |
+| `Settings/` | `GSTN_CombatGASSettings.h` | `UGSTN_CombatGASSettings` (attribute starting values). |
+| `Kits/` | `GSTN_AbilityBinding.h`, `GSTN_PrimaryKitDefinition.h`, `GSTN_WeaponDefinition.h`, `GSTN_SuperDefinition.h` | The binding type and the three primary data assets that hold ability or effect classes. |
+| `Loadout/` | `GSTN_LoadoutAssembly.h` | `FGSTN_ResolvedLoadout`, `FGSTN_LoadoutAssembly`: assets to compiler input. |
+| `Private/Tests/` | `GSTN_CombatGASTests_*.cpp`, `GSTN_GASTestTypes.h`, `GSTN_DataTestTypes.h` | Automation tests and their test-only effects, tags and extension structs. |
+
 ## Dependency rule
 
 ```
@@ -18,12 +34,14 @@ GSTNCombatCore  <  GSTNCombatGAS  <  GSTNCombatNP
 ```
 
 - Module `GSTNCombatGAS` depends on Core, CoreUObject, Engine, NetCore (the replicated loadout component), GameplayTags, GameplayAbilities, GameplayTasks,
-  DeveloperSettings, `GSTNCombatCore` and `GSTNInputCore` (the slot and requirement types the bindings use). The descriptor lists
-  the plugins `GSTNCombat`, `GSTNInput` and `GameplayAbilities`.
+  DeveloperSettings, `GSTNCombatCore` and `GSTNInputCore` (the slot and requirement types the bindings use)
+  (`GSTNCombatGAS.Build.cs`). The descriptor lists the plugins `GSTNCombat`, `GSTNInput` and `GameplayAbilities`, none optional.
 - It never depends on NetworkPrediction, AbilitySystemSimulation, Mover or `GSTNCombatNP`, and nothing here refers to the
   project module, `/Game/` content or a project tag. It compiles against stock GAS and against the GAS-NPP fork in
   `Plugins/GASNPP` (same plugin and module name).
-- Nothing in `GSTNCombat` depends on this plugin. `GSTNCombatNP` will list it when it first needs a type from here.
+- Nothing in `GSTNCombat` depends on this plugin. `GSTNCombatNP` will list it when it first needs a type from here; today
+  neither its `.uplugin` nor its `Build.cs` names it, and the only thing in the repo that does is the project's `.uproject`
+  (enabled) and the READMEs.
 
 ## Tags
 
@@ -162,6 +180,62 @@ Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Scrip
 1. Enable the plugin `GSTNCombatGAS` (the project's `.uproject` lists it; it pulls in `GSTNCombat` and GameplayAbilities).
 2. A module that uses the tags lists `GSTNCombatGAS` in its `Build.cs` and includes `GSTN_CombatTags.h`.
 3. Designers add leaves under the roots in a tag ini (`Config/Tags/` of a plugin or of the project).
+4. Add the attribute sets to the pawn's ability system component (both: the settings' `AttributeDefaults` list serves the
+   two sets, each takes the names it has in `PostInitProperties`). Register the primary asset types (above). The loadout
+   component that grants the kit, applies the init effect and the primary weapon's stats effect is M3 work, not in the repo yet:
+   until then `FGSTN_KitStats::ApplyTo` and `UGSTN_GE_WeaponStats::Apply` are called by project code or tests.
+
+## How to extend it
+
+**In C++.**
+
+- A new movement stat: one `FGameplayAttributeData` plus `GSTN_COMBAT_ATTRIBUTE_ACCESSORS` on `UGSTN_CombatAttributeSet` and a
+  default in the ini; `ClampStat` already covers it (every stat is clamped to at least 0; a gravity scale needs adding to the
+  `MinGravityScale` branch). A new meter: two attributes on `UGSTN_MeterAttributeSet` and one line in `GetMeterPairs()`.
+  Stats and meters that a plugin adds must therefore be edited here: there is no registry of attribute sets, and the kit data
+  refers to meters by `FGameplayAttribute`, so a second attribute set works for the data but not for the shared clamps.
+- A native cost or stats effect: a child of `UGSTN_GE_MeterCost` (set `Meter` and call `RebuildModifiers()` once in the
+  constructor) or of `UGSTN_GE_WeaponStats` (add the modifiers in the constructor).
+- New validation of an asset: `Validate` of the asset class (pure, testable) and `IsDataValid` (editor, cross-asset). New
+  loadout-level checks are `UGSTN_LoadoutRule` subclasses in `GSTNCombatCore`, not code here.
+- Per-plugin kit or weapon data: a `FGSTN_KitExtension`-derived struct (`GSTNCombatCore`, `Rules/GSTN_KitExtension.h`), read
+  from `Extensions`; see `GSTNCombat.GAS.Data.UnknownExtensionIgnored` for the contract when the struct's module is absent.
+- What stays C++: the attribute sets (`UCLASS()` without `Blueprintable`), the tags, the settings class, the assembly and the
+  binding utilities. No `BlueprintNativeEvent` or `BlueprintImplementableEvent` exists in this module.
+
+**In Blueprint.** Children of `UGSTN_GE_MeterCost` (pick `Meter`, the modifier is rebuilt on edit and on load) and of
+`UGSTN_GE_WeaponStats` (add modifiers whose magnitudes are set-by-caller `Combat.SetByCaller.Stat.*` keys, optionally a
+target-tags component granting `Combat.Weapon.Role.*`); kit init effects are any instant `UGameplayEffect` with such
+modifiers. Kit, weapon and super data assets (above). Blueprint-callable functions: `UGSTN_MeterUtils` and
+`UGSTN_AbilityBindingUtils::InheritBindings` (`BlueprintPure`); the structs are `BlueprintType`, the attributes
+`BlueprintReadOnly`.
+
+## Using it in another project
+
+Copy `Plugins/GSTNInput`, `Plugins/GSTNCombat` and `Plugins/GSTNCombatGAS` together and enable the three (plus GameplayAbilities,
+stock or the fork: the module only uses the stock API). Not needed: `GSTNInputNP`, `GSTNCombatNP`, `Plugins/GASNPP`, Mover,
+Network Prediction. Then:
+
+- Register the primary asset types in the project's `DefaultGame.ini` (`PrimaryAssetTypesToScan`, list above); the plugin
+  cannot do it for you. The types are named in `GSTNCombatAssetTypes` (`GSTNCombatCore`, `Kits/GSTN_CombatAssetTypes.h`).
+- Copy `Config/DefaultGSTNCombatGAS.ini` or override it (Project Settings > Plugins > GSTN Combat GAS); every machine of a
+  match must run the same values. The input and combat settings of the two Core plugins apply too (their READMEs).
+- Declare the designer leaves (`Kit.*`, `Weapon.*`, `Super.*`, `Loadout.*`, `Skin.*`, `Combat.Stat.*`, `Combat.Meter.*`,
+  `Combat.SetByCaller.Stat.*`) in a tag ini: the plugin declares only the roots and ships none.
+- Assumptions: nothing replicates the attributes (the fork's Network Prediction does that in this project; on stock GAS add
+  replication yourself if you need it), effects are applied outside any simulation, and the pawn has an
+  `UAbilitySystemComponent` with both sets. The abilities the data points at are the project's own: this plugin defines no
+  ability class, and the combat ability base classes (`UGSTN_GA_BaseCombat`) live in `GSTNCombatNP` and need the fork.
+
+## Further reading
+
+[combat.md](../../docs/architecture/combat.md) §3 (modules), §10 (kits, stats, meters, supers, loadouts) ·
+[combat-m3-moves-kits.md](../../docs/architecture/combat-m3-moves-kits.md) §4 (tags), §5 (attributes), §8 (data), §9 (table), §10 (loadout component) ·
+[combat-m4-hits.md](../../docs/architecture/combat-m4-hits.md) §4 (the damage side planned for this module) ·
+[GSTNCombat README](../GSTNCombat/README.md) · [GSTNInput README](../GSTNInput/README.md) · [GSTNCombatNP README](../GSTNCombatNP/README.md) ·
+[gas-npp.md](../../docs/architecture/gas-npp.md). Where the docs and the code differ, the code wins: the spec names the set
+`UGSTN_MovementAttributeSet` (it is `UGSTN_CombatAttributeSet`), uses hard `TSubclassOf` fields (they are soft), and puts the
+compiler, the super input scheme, the skin and the loadout data in this module (they are in `GSTNCombatCore`).
 
 ## Testing
 

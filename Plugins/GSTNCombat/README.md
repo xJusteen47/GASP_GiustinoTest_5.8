@@ -6,16 +6,23 @@ button and command tags, the combat lock tags, the default command set and the c
 Prediction (the combat NP model, the ability system driven from it) is the separate plugin
 [GSTNCombatNP](../GSTNCombatNP/README.md).
 
-Status: **experimental (0.1)**. Moves, kits and hits are specified but not built yet. The design lives in
+Status: **experimental (0.1)** (`IsExperimentalVersion` and `VersionName` in `GSTNCombat.uplugin`; `CanContainContent: true`,
+no content shipped yet). The pure data of moves (timelines), kits, loadouts and the extension surface exist here; the
+abilities that run them, the hits and the editor tooling are specified but not built yet. The design lives in
 [docs/architecture/combat.md](../../docs/architecture/combat.md) (with one file per milestone, `combat-m1` to
 `combat-m5-m9`); the generic input layer is described in [docs/architecture/input.md](../../docs/architecture/input.md).
 This README is the map; those documents hold the decisions and the reasons.
 
 ## Modules
 
+The descriptor (`GSTNCombat.uplugin`) lists one module, `GSTNCombatCore` (`Type: Runtime`, `LoadingPhase: Default`). Its
+module class (`Private/GSTNCombatCoreModule.cpp`) does one thing: on startup it pushes `UGSTN_CombatSettings` into the input
+plugin's settings, on shutdown it takes them back. The other rows are what used to be, or is planned as, a module of this
+plugin and now lives elsewhere.
+
 | Module | State | What it is |
 |---|---|---|
-| `GSTNCombatCore` | exists | Combat content built on `GSTNInputCore`, pure and deterministic (no GAS, no Network Prediction): the standard button tags (`Input.Button.Attack`...), the standard command tags and the default command set (`UGSTN_StandardSlots`). The pure timeline layer (`Timeline/`), the extension surface (`Sync/`, `Rules/`, `Hits/`) and the pure kit data (`Kits/`, `Loadout/`), all below. Covered by Automation tests (`GSTNCombat.Core.*`). |
+| `GSTNCombatCore` | exists (Runtime, Default) | Combat content built on `GSTNInputCore`, pure and deterministic (no GAS, no Network Prediction): the standard button tags (`Input.Button.Attack`...), the standard command tags and the default command set (`UGSTN_StandardSlots`), the settings (`UGSTN_CombatSettings`), all in `Public/Input/`. The pure timeline layer (`Timeline/`), the extension surface (`Sync/`, `Rules/`, `Hits/`) and the pure kit data (`Kits/`, `Loadout/`), all below. Covered by Automation tests (`GSTNCombat.Core.*`). |
 | `GSTNCombatNP` | separate plugin | Moved to the plugin [GSTNCombatNP](../GSTNCombatNP/README.md) (same module name): the combat NP model (`UGSTN_CombatSimComponent`), which needs the fork. |
 | `GSTNCombatGAS` | separate plugin | The plugin [GSTNCombatGAS](../GSTNCombatGAS/README.md): native ability-layer tags, attribute sets, meter and weapon-stats effects, and the kit, weapon and super data assets (the ones that hold ability or effect classes). Needs GameplayAbilities, so it is not part of this plugin. |
 | `GSTNCombatEditor` | planned | Timeline editor, slot conflict validator UI, debug drawing. |
@@ -46,6 +53,36 @@ the command locks, the activation context and the events work in the simulation 
 and engine modules, and nothing in this plugin depends on `GSTNCombatNP`. An `*NP` module may depend on another plugin's
 `*NP` module of the same layer, and on nothing above it; `GSTNCombatNP` depends on this plugin's Core and on `GSTNInputNP` by
 design (see the [GSTNCombatNP README](../GSTNCombatNP/README.md)). Shared NP types are not moved into the Core modules.
+
+## Dependencies
+
+- Plugins (`GSTNCombat.uplugin`): `GSTNInput` only, non-optional. Through it, EnhancedInput (the input plugin's descriptor
+  lists it; `GSTNInputCore` uses it only for the `UInputAction` references of the input config). No fork plugin, no Mover.
+- Module `GSTNCombatCore` (`Source/GSTNCombatCore/GSTNCombatCore.Build.cs`, all public): Core, CoreUObject, Engine,
+  GameplayTags, `GSTNInputCore`, DeveloperSettings. Nothing private.
+- What depends on it: the plugins [GSTNCombatGAS](../GSTNCombatGAS/README.md) (module `GSTNCombatGAS`) and
+  [GSTNCombatNP](../GSTNCombatNP/README.md) (module `GSTNCombatNP`) list `GSTNCombatCore` in their `Build.cs` and
+  `GSTNCombat` in their descriptors; the project module `GASP_Giustino2` (`Source/GASP_Giustino2/GASP_Giustino2.Build.cs`)
+  lists `GSTNCombatCore`; the project's `GASP_Giustino2.uproject` enables the plugin. `GSTNInput` and `GSTNInputNP` do not
+  depend on it.
+
+## Gameplay tags
+
+All native (`UE_DEFINE_GAMEPLAY_TAG_COMMENT`); the plugin has no `Config/Tags/*.ini` and its ini
+(`Config/DefaultGSTNCombat.ini`) holds only the settings. The input plugin owns the roots `Input.Button` and `Command`
+(`GSTN_InputTags.cpp` in `GSTNInputCore`); this plugin fills them.
+
+| Tags | Declared in (`Source/GSTNCombatCore/`) | Namespace |
+|---|---|---|
+| `Input.Button.Attack`, `.Strong`, `.Special`, `.Crouch`, `.Shield`, `.Jump` | `Public/Input/GSTN_CombatButtonTags.h`, `Private/Input/GSTN_CombatButtonTags.cpp` | `GSTNCombatButtonTags` (`Button_Attack`...) |
+| `Command.Attack`, `.Strong`, `.Special`, `.Combo`, `.Super` (roots) and their leaves `Command.{Attack,Strong,Special}.{Neutral,Directional,CrouchNeutral,CrouchDirectional}`, `Command.Combo.AttackSpecial.{same four}` | `Public/Input/GSTN_CombatCommandTags.h`, `Private/Input/GSTN_CombatCommandTags.cpp` | `GSTNCommandTags` (`Attack`, `Attack_Neutral`...) |
+| `Input.Lock.Command.Attack`, `.Strong`, `.Special`, `.Combo`, `.Super` | `Public/Input/GSTN_CombatLockTags.h`, `Private/Input/GSTN_CombatLockTags.cpp` | `GSTNCombatLockTags` |
+| `Command.Super.Slot1` to `.Slot8` | `Private/Loadout/GSTN_CompiledBindingTable.cpp` (anonymous namespace; reached through `FGSTN_BindingTableCompiler::GetSuperSlotCommand(Index)`) | none |
+
+The ability-layer tags (`Combat.State.*`, `Combat.Event.*`, asset roots `Kit.`, `Weapon.`, `Super.`...) belong to
+[GSTNCombatGAS](../GSTNCombatGAS/README.md), not here. The settings and the loadout data refer to tags only through
+`FGameplayTag` properties (with `Categories` filters) or by name when serializing a loadout; no tag string is hard-coded
+outside the definitions above and the tests that check them.
 
 ## Timeline layer (`Timeline/`)
 
@@ -142,17 +179,55 @@ Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Scrip
 The generic extension points (a new input condition, slot, binding or buffer reset rule) are described in the
 [GSTNInput README](../GSTNInput/README.md). What is specific to combat:
 
-- **A new standard command**: add its tag to `GSTN_CombatCommandTags` (and give its root a tier in
+- **A new standard command**: add its tag to `GSTN_CombatCommandTags.h/.cpp` (namespace `GSTNCommandTags`; give its root a tier in
   the combat settings, `Config/DefaultGSTNCombat.ini`, if it is a new root), add the slot in `UGSTN_StandardSlots::Build`, then update the
   `GSTNCombat.Core.StandardSlots.*` tests (they check the shapes, the chords and that the validator finds no conflicts).
-- **A new standard button**: add its tag to `GSTN_CombatButtonTags` and to the project's input config; add it to
+- **A new standard button**: add its tag to `GSTN_CombatButtonTags.h/.cpp` (namespace `GSTNCombatButtonTags`) and to the project's input config; add it to
   the combat settings' `ExclusiveButtons` if its presses compete with attacks for one move.
+- **A game's own commands and buttons** need no C++ here: they are tags in the game's tag ini under the same roots, with
+  their slots in the game's `UGSTN_InputSlotSet` (start it from the standard set with `UGSTN_StandardSlots::FillSlotSet`,
+  editor only, callable from Blueprint and Python) and their tiers in the game's `Config/DefaultGSTNCombat.ini`.
 - **The combat component**: in the [GSTNCombatNP README](../GSTNCombatNP/README.md).
 
-Tests are in `Source/GSTNCombatCore/Private/Tests/` with the helpers of `GSTN_CombatTestUtils.h`. The timeline layer is covered by
+What must stay C++: the tags, the standard slot builder, timeline track kinds, sync fragments, kit extension structs and the
+settings class. The Blueprint surface of this plugin is, per layer: the data assets (`UGSTN_CombatTimeline`,
+`UGSTN_SuperInputScheme`, `UGSTN_SkinDefinition`, `UGSTN_CombatRules`, `UGSTN_LoadoutRules`), the two `Blueprintable`
+step classes with a `BlueprintNativeEvent` `Evaluate` (`UGSTN_CombatStep`, `UGSTN_LoadoutRule`) and the function libraries
+(`UGSTN_StandardSlots`, `UGSTN_TimelineUtils`, `UGSTN_CommandSetUtils`, `UGSTN_DesignerIdentityUtils`,
+`UGSTN_LoadoutRules::Validate`). There is no `BlueprintImplementableEvent` and no Blueprintable actor or component in this
+plugin: it holds data and pure logic, the runtime objects are in the NP and GAS plugins.
+
+Tests are in `Source/GSTNCombatCore/Private/Tests/` with the helpers of `GSTN_CombatTestUtils.h`. The input content is covered by
+`GSTNCombat.Core.{Smoke, NativeTags, SettingsDefaults, OwnSettings, Locks.NativeRoots, StandardSlots.{Shapes, ChordCommands, NoConflicts, SlotSetAsset}}`. The timeline layer is covered by
 `GSTNCombat.Core.Timeline.{WindowsAtFrame, EventsOnce, NoAllocation, Validation, TailCancelFlagAfterStart, TailCancelNotBeforeStart,
 TailCancelUnsetMeansNone, TailStartClampedToLength, RicochetOutcomeSwitchesToRecoil}`; the rules pipeline by
 `GSTNCombat.Core.Rules.{PipelineOrder, UnknownStepSkipped}`; the kit data by `GSTNCombat.Core.Data.{CommandSetComposition, LoadoutNetSerialize, LoadoutSaveSerialize, IdentityExactlyOne, IdentityUniquePerType}`. The fragment and tick extension tests are `GSTNCombat.NP.*`, in GSTNCombatNP.
+
+## Using it standalone in another project
+
+1. Copy `Plugins/GSTNInput/` and `Plugins/GSTNCombat/` and enable both (`GSTNInput`, `GSTNCombat`) in the `.uproject`;
+   EnhancedInput (engine) comes with the input plugin. Nothing else is required: no GAS, no GAS-NPP fork, no Mover, no
+   project module. Both plugins are C++ (no prebuilt binaries are committed), so the target project needs a C++ build.
+2. Follow "Setting up a game" in the [GSTNInput README](../GSTNInput/README.md): buttons and commands as tags, an input
+   config, the input settings and a slot set. The standard buttons and commands of this plugin already exist as native tags;
+   `UGSTN_StandardSlots::FillSlotSet` fills a `UGSTN_InputSlotSet` asset with the default command set.
+3. Settings: the plugin's `Config/DefaultGSTNCombat.ini` ships the tiers (attack 100, strong 200, special 300, combo 350,
+   super 400) and the three exclusive buttons; override them in the project's own `Config/DefaultGSTNCombat.ini` or in
+   Project Settings > Plugins > GSTN Combat. `DefaultCommandSet` ships empty: point it at the slot set asset so that a kit's
+   `FGSTN_CommandSet` with an empty `BaseSet` composes against something.
+4. Asset manager: register the primary asset types you use (`GSTN_CombatTimeline`, `GSTN_SuperInputScheme`, `GSTN_Skin`, and
+   `GSTN_PrimaryKit`, `GSTN_Weapon`, `GSTN_Super` once GSTNCombatGAS is in) under `PrimaryAssetTypesToScan` in the project's
+   `DefaultGame.ini`; the plugin does not do it (the names are in `GSTNCombatAssetTypes`, the timeline's in
+   `UGSTN_CombatTimeline::GetPrimaryAssetId`).
+5. What you get without the other plugins: tags, settings, the default command set, timeline data and its evaluator,
+   the rules pipeline, the kit, skin, super-scheme and loadout data, the binding table compiler and the loadout rules, plus
+   their tests. What you do not get: anything that runs per frame on a pawn (the combat NP model and tick extensions are in
+   `GSTNCombatNP`, which needs the fork), abilities, attributes and the kit, weapon and super assets (`GSTNCombatGAS`, which
+   needs GameplayAbilities, stock or fork).
+
+The plugin assumes nothing about the project's characters, tag replication mode (loadouts serialize tags as names) or
+`/Game/` content; the only project-side files it reads are its own `DefaultGSTNCombat.ini` override and the tag ini(s) of the
+game.
 
 ## Conventions
 
@@ -170,6 +245,12 @@ TailCancelUnsetMeansNone, TailStartClampedToLength, RicochetOutcomeSwitchesToRec
   [testing.md](../../docs/architecture/testing.md).
 
 ## Further reading
+
+Where each part of this plugin is designed: modules and the dependency rule in combat.md §3, command tags, slots and the
+default command set in §9 and §9.1, priority tiers in §8.2, kits, loadouts and the compiled table in §10 (§10.1, §10.5,
+§10.6), timelines in §11.3 and combat-m3 §6.3, the sync fragments and the extension surface in combat-m3 §7.1; the tag
+roots and the input settings in input.md §3 and §4. The compiled binding table and loadout rules of C6 are described at
+the end of this file.
 
 [combat.md](../../docs/architecture/combat.md) (overview and decisions) ·
 [combat-m1-core-input.md](../../docs/architecture/combat-m1-core-input.md) ·

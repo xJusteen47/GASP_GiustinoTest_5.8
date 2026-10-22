@@ -3,7 +3,7 @@
 Unreal Engine **5.8** project built on the Game Animation Sample (GASP). One C++ module, `GASP_Giustino2` (prefix `GSTN_`).
 Focus: wall movement for **Mover**, driven by **Gameplay Abilities** simulated by **Network Prediction** (the "GAS-NPP fork").
 
-Read the linked docs only when the task touches that area. Do not read the whole `Plugins/` tree: it is engine-level code.
+Read the linked docs only when the task touches that area. Every plugin has a README next to its `.uplugin`; the index is [Plugins/README.md](Plugins/README.md). Do not read the whole `Plugins/` tree: it is engine-level code.
 
 ## Where things are
 
@@ -17,7 +17,7 @@ Read the linked docs only when the task touches that area. Do not read the whole
 | Network test harness (C++ side) | `.../GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | Editor Python tooling | `Tools/GAS/`, `Tools/GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | GAS-NPP plugin forks (GameplayAbilities, NetworkPrediction, AbilitySystemSimulation...) | `Plugins/GASNPP/` | [gas-npp.md](docs/architecture/gas-npp.md) |
-| Mover / ChaosMover / SmartObjects overrides of engine plugins | `Plugins/EngineOverrides/` | |
+| Engine plugin overrides (Mover, ChaosMover, MoverExamples, SmartObjects, GameplayInteractions, TargetingSystem, toolsets) | `Plugins/EngineOverrides/` | [EngineOverrides/README.md](Plugins/EngineOverrides/README.md) |
 | Working notes, plans, spike reports and the current handover (`takeover-state.md`, last entries) | `docs/notes/` | [README](docs/notes/README.md) |
 
 Headers carry long doc comments that explain intent and invariants: read the header of a class before its `.cpp`.

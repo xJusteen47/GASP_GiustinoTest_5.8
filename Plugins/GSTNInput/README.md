@@ -6,22 +6,47 @@ command to GameplayAbility bindings with context requirements. Meant to be simul
 Prediction (the GAS-NPP fork in `Plugins/GASNPP`), but the logic itself does not need it: this plugin is `GSTNInputCore` only and
 works without the fork. The simulation adapter is the separate plugin [GSTNInputNP](../GSTNInputNP/README.md).
 
-Status: **experimental (0.1)**. `GSTNInputCore` exists (the plugin `GSTNInputNP` holds the simulator and the rest of the NP side). The design, including what is planned, lives in
+Status: **experimental (0.1)** (`IsExperimentalVersion` and `VersionName` in `GSTNInput.uplugin`). `GSTNInputCore` exists (the plugin `GSTNInputNP` holds the simulator and the rest of the NP side). The design, including what is planned, lives in
 [docs/architecture/input.md](../../docs/architecture/input.md); the combat plugin ([GSTNCombat](../GSTNCombat/README.md))
 is built on top of this one. This README is the map; the documents hold the decisions and the reasons.
 
 ## Modules
 
-| Module | State | What it is |
+| Module | State | Type / loading phase | What it is |
+|---|---|---|---|
+| `GSTNInputCore` | exists | Runtime, Default | Pure, deterministic logic with no GAS, no Network Prediction and no Mover: input samples, the stick direction classifier, the input history, the pattern grammar (`FGSTN_InputPattern`, conditions), the matcher, buffer reset rules, slots, the slot resolver, slot validation, command bindings, command locks (`UGSTN_CommandLocks`), the authoritative event stream (`UGSTN_SimEventSubsystem`, `FGSTN_SimEvent`, the outbox), the button map, the input config and the project settings. Automation tests `GSTNInput.Core.*`. |
+| `GSTNInputNP` | separate plugin | (see its README) | Moved to the plugin [GSTNInputNP](../GSTNInputNP/README.md) (same module name): the Network Prediction adapter (`FGSTN_InputCmd`, `FGSTN_InputSimState`, `FGSTN_InputSimulator`, binding set, sources, context providers, Mover tracker, standalone component). Automation tests `GSTNInput.NP.*`. |
+
+The module has no startup code (`Private/GSTNInputCoreModule.cpp` is `FDefaultModuleImpl` plus the `LogGSTNInput` category).
+Its headers, all under `Source/GSTNInputCore/Public/`:
+
+| Area | Headers | Main types |
 |---|---|---|
-| `GSTNInputCore` | exists | Pure, deterministic logic with no GAS, no Network Prediction and no Mover: input samples, the stick direction classifier, the input history, the pattern grammar (`FGSTN_InputPattern`, conditions), the matcher, buffer reset rules, slots, the slot resolver, slot validation, command bindings, command locks (`UGSTN_CommandLocks`), the authoritative event stream (`UGSTN_SimEventSubsystem`, `FGSTN_SimEvent`, the outbox), the button map, the input config and the project settings. Automation tests `GSTNInput.Core.*`. |
-| `GSTNInputNP` | separate plugin | Moved to the plugin [GSTNInputNP](../GSTNInputNP/README.md) (same module name): the Network Prediction adapter (`FGSTN_InputCmd`, `FGSTN_InputSimState`, `FGSTN_InputSimulator`, binding set, sources, context providers, Mover tracker, standalone component). Automation tests `GSTNInput.NP.*`. |
+| Core types, log | `GSTN_InputCoreTypes.h`, `GSTN_InputLog.h` | `EGSTN_StickDirection`, `EGSTN_DirectionSpace`, `EGSTN_StickZone`, `EGSTN_DirectionPolicy`, `EGSTN_BufferConflictPolicy`, `LogGSTNInput` |
+| Samples, classifier, history | `Input/GSTN_InputSample.h`, `Input/GSTN_DirectionClassifier.h`, `Input/GSTN_InputHistory.h`, `Input/GSTN_ButtonMap.h` | `FGSTN_InputSample`, `FGSTN_StickSample`, `FGSTN_DirectionClassifier`, `FGSTN_InputHistory`, `FGSTN_ButtonMap` |
+| Patterns and conditions | `Input/GSTN_InputPattern.h`, `Input/GSTN_InputConditions.h` | `FGSTN_InputPattern`, `FGSTN_InputStep`, `FGSTN_InputCondition` and `_Press`, `_Release`, `_Hold`, `_Chord`, `_Mash`, `_Direction`, `_Motion`, `_Spin`, `_Charge`, `_AnyOf` |
+| Matcher, buffer, resolver | `Input/GSTN_InputMatcher.h`, `Input/GSTN_BufferResetRules.h`, `Input/GSTN_SlotResolver.h`, `Input/GSTN_PriorityCriteria.h` | `FGSTN_InputMatcher`, `FGSTN_BufferResetRule` (`_OnEvent`, `_OnTagAdded`, `_AfterIdleFrames`), `FGSTN_SlotResolver`, `FGSTN_PriorityCriterion` (`_Tier`, `_Specificity`, `_ManualOffset`) |
+| Slots and validation | `Input/GSTN_InputSlot.h`, `Input/GSTN_InputSlotValidation.h` | `FGSTN_InputSlotSpec`, `UGSTN_InputSlotAsset`, `UGSTN_InputSlotSet`, `UGSTN_InputSlotValidation` |
+| Bindings and locks | `Input/GSTN_CommandBindings.h`, `Input/GSTN_CommandLocks.h` | `FGSTN_TagRequirements`, `FGSTN_ExclusiveTagGroup`, `UGSTN_CommandBindingUtils`, `UGSTN_CommandLocks` |
+| Config, settings, tags | `Input/GSTN_InputConfig.h`, `Input/GSTN_InputSettings.h`, `Input/GSTN_InputTags.h` | `UGSTN_InputConfig`, `FGSTN_InputButtonDef`, `UGSTN_InputSettings`, namespace `GSTNInputTags` |
+| Blueprint rule wrappers | `Input/GSTN_BlueprintRules.h` | `UGSTN_InputConditionBlueprint`, `UGSTN_PriorityCriterionBlueprint`, `UGSTN_BufferResetRuleBlueprint` and their `*_Blueprint` structs |
+| Scripted input (tests) | `Input/GSTN_InputScript.h` | `FGSTN_InputScript` |
+| Authoritative events | `Events/GSTN_SimEvent.h`, `Events/GSTN_SimEventSubsystem.h` | `FGSTN_SimEvent`, `FGSTN_SimEventOutbox`, `FGSTN_SimEventDispatcher`, `UGSTN_SimEventSubsystem` |
+
+## Dependencies
 
 **Requirements.** This plugin (`GSTNInputCore`) needs only Gameplay Tags, Developer Settings and (privately) Enhanced Input; its
 descriptor lists only Enhanced Input, so it works in a project without the GAS-NPP fork (NetworkPrediction, GameplayAbilities fork,
 Mover). To simulate it with Network Prediction, enable the plugin [GSTNInputNP](../GSTNInputNP/README.md), which needs the fork.
 How to wire the simulation side (embedding it in a model, the standalone component, the activation context, the Mover
 tracker, Network Prediction sort priorities) is in the [GSTNInputNP README](../GSTNInputNP/README.md).
+
+| | |
+|---|---|
+| Plugin dependencies (`GSTNInput.uplugin`) | `EnhancedInput` (required, the only one) |
+| `GSTNInputCore` public module dependencies (`GSTNInputCore.Build.cs`) | `Core`, `CoreUObject`, `Engine`, `GameplayTags`, `DeveloperSettings` |
+| `GSTNInputCore` private module dependencies | `EnhancedInput` (only for the `UInputAction` soft references in `UGSTN_InputConfig`; the Core never reads input itself) |
+| Depends on this plugin | [GSTNInputNP](../GSTNInputNP/README.md) (`GSTNInputNP` module), [GSTNCombat](../GSTNCombat/README.md) (`GSTNCombatCore`), [GSTNCombatGAS](../GSTNCombatGAS/README.md), [GSTNCombatNP](../GSTNCombatNP/README.md), and the project module `GASP_Giustino2` |
 
 The plugin has no game vocabulary: no "attack", "crouch" or combat tags. Buttons, commands and their priority tiers are
 data the game provides; the combat plugin provides a fighting-game set.
@@ -31,6 +56,29 @@ data the game provides; the combat plugin provides a fighting-game set.
 character (see input.md). Core modules keep no NP, GAS or Mover dependencies, so shared NP types are not moved into
 `GSTNInputCore`. `GSTNCombatNP` may use only the Public headers and interfaces of `GSTNInputNP` (for example
 `IGSTN_InputSimHost`), never its internals.
+
+## Gameplay tags
+
+All of the plugin's tags are native, declared in `Public/Input/GSTN_InputTags.h` (namespace `GSTNInputTags`) and defined with
+`UE_DEFINE_GAMEPLAY_TAG_COMMENT` in `Private/Input/GSTN_InputTags.cpp`. The plugin ships no `Config/Tags/*.ini`.
+
+| Tag | Variable | Meaning |
+|---|---|---|
+| `Input.Button` | `Button` | Root of the logical button tags (the game declares the leaves) |
+| `Command` | `Command` | Root of the command tags; `CommandTiers` and the lock mapping work on its children |
+| `Input.Lock.Command` | `Lock_Command` | Locks every command; `Input.Lock.Command.<root>` locks `Command.<root>.*` |
+| `Input.Context.Grounded` | `Context_Grounded` | The character is on the ground |
+| `Input.Context.Airborne` | `Context_Airborne` | In the air (falling or rising, not on a wall) |
+| `Input.Context.OnWall` | `Context_OnWall` | In a wall movement mode; with Airborne it identifies wall bindings |
+| `Input.BufferEvent` | `BufferEvent` | Root of the frame events reset rules listen to |
+| `Input.BufferEvent.AbilityActivated` | `BufferEvent_AbilityActivated` | An ability started from a command this frame |
+| `Input.BufferEvent.Landed` | `BufferEvent_Landed` | The character landed this frame |
+| `Input.Event.CommandExecuted` | `Event_CommandExecuted` | A command was executed (authoritative event stream) |
+
+Per-root lock tags (`Input.Lock.Command.<root>`) are declared by whoever declares the command root (the combat plugin declares
+its own natively; the sample project's designer tags are in `Config/Tags/GSTNCommands.ini`). `UGSTN_CommandLocks` derives the
+lock tag name from the command path and looks it up with `RequestGameplayTag(..., false)`, so a root without a declared lock tag
+simply has no root lock.
 
 ## Setting up a game
 
@@ -136,9 +184,33 @@ random numbers or time, and no state outside its inputs (the class default objec
 back). The functions are `const` to say so. A Blueprint condition reports no canonical input, so slot validation cannot compare
 it with other slots. See `Private/Tests/GSTN_InputTests_Blueprint.cpp`.
 
-The movement context provider has the same kind of Blueprint class, `UGSTN_BlueprintInputContextProvider` (`Context/`), whose
+The movement context provider has the same kind of Blueprint class, `UGSTN_BlueprintInputContextProvider` (in the
+[GSTNInputNP](../GSTNInputNP/README.md) plugin, `Public/Context/GSTN_InputContextProvider.h`), whose
 events (`GetBlueprintFacingYaw`, `GetBlueprintContextTags`, `GetBlueprintContextFingerprint`, `GetBlueprintFrameEvents`) are
 called every simulated tick under the same rules; the base `UGSTN_InputContextProvider` stays plain C++.
+
+### What Blueprint can call, and what stays C++
+
+Besides the three rule wrappers above, the Core exposes read-only or editor-side helpers to Blueprint, nothing that runs the
+simulation:
+
+| Class | Blueprint functions |
+|---|---|
+| `UGSTN_InputConfig` (data asset) | `FindButtonIndex` (`BlueprintPure`); `Buttons` and `MoveAction` are `BlueprintReadOnly` |
+| `UGSTN_InputSettings` | `GetCommandTier`, `IsExclusiveButton` (`BlueprintPure`) |
+| `UGSTN_CommandLocks` (function library) | `GetLockTagForCommand`, `GetLockTagsForCommand`, `HasGlobalLock`, `IsLockedBy`, `IsCommandLocked` (`BlueprintPure`) |
+| `UGSTN_CommandBindingUtils` (function library) | `AreRequirementsSatisfied` (`BlueprintPure`) |
+| `UGSTN_SimEventSubsystem` (world subsystem) | `Broadcast`, `Listen` (with a `FGameplayTagQuery` and a dynamic delegate), `StopListening` (`BlueprintCallable`) |
+
+`UGSTN_InputSlotAsset`, `UGSTN_InputSlotSet` and `UGSTN_InputConfig` are `BlueprintType` data assets designers fill in the editor;
+the structs they hold (`FGSTN_InputSlotSpec`, `FGSTN_InputPattern`, the conditions, `FGSTN_TagRequirements`) are `BlueprintType`
+and editable in place. No Core class is `Blueprintable` except the three abstract rule bases of `GSTN_BlueprintRules.h`.
+
+Stays C++: new condition, criterion and reset-rule *types* (instanced structs; Blueprint only gets the wrapper), the matcher,
+the history, the resolver, slot validation (`UGSTN_InputSlotValidation::FindConflicts` and
+`UGSTN_CommandBindingUtils::FindBindingConflicts` / `FindImpossibleBindings` / `SelectBinding` are plain static functions),
+`UGSTN_InputSettings::SetContribution` and `ListenNative`. The reason is the one above: everything on the frame path must be
+deterministic and allocation free, and the Blueprint VM on a shared class default object is neither fast nor rolled back.
 
 ### A new slot (a command)
 
@@ -149,7 +221,9 @@ Create the command tag, add the slot to a set, run the slot validator (`GSTN_Inp
 
 Bindings say which command a context runs (`GSTN_CommandBindings.h`, `FGSTN_TagRequirements` for the conditions on the
 owner's tags). A command without a binding is never a candidate. `UGSTN_CommandBindingUtils` resolves bindings and
-detects conflicts between them.
+detects conflicts between them. The Core holds the requirement and selection logic only; the binding itself
+(`FGSTN_CommandBinding`, command + requirements + ability class) and the set asset (`UGSTN_CommandBindingSet`) are in
+[GSTNInputNP](../GSTNInputNP/README.md), `Public/Bindings/GSTN_CommandBindingSet.h`.
 
 ### Consumption
 
@@ -170,6 +244,7 @@ See the [GSTNInputNP README](../GSTNInputNP/README.md) (embedding the simulation
 Tag roots: `Input.Button` (buttons), `Command` (commands), `Input.Context.*` (written by the context provider),
 `Input.BufferEvent.*` (reset-rule events), `Input.Lock.Command` (command locks) and `Input.Event.CommandExecuted`
 (`GSTN_InputTags.h`). Per-root lock tags (`Input.Lock.Command.<root>`) are declared by whoever declares the command root.
+The full list is in [Gameplay tags](#gameplay-tags) above.
 
 ### Command locks
 
@@ -206,8 +281,32 @@ running match is fixed, like the table: change it only by rebuilding at a safe p
 
 Rules flush buffered presses when something happens (`GSTN_BufferResetRules.h`). Derive from `FGSTN_BufferResetRule`,
 override `ShouldFlush` and, if the rule watches tags, `GetWatchedTags`. Existing examples: `OnEvent` (a frame event such
-as `Input.BufferEvent.Landed`) and `OnTagAdded`. Rules are listed at global, weapon and move level and applied in that
-order.
+as `Input.BufferEvent.Landed`), `OnTagAdded` and `AfterIdleFrames` (flush when nothing happened on the buttons or the stick
+for N frames, default 30). Rules are listed at global, weapon and move level and applied in that
+order (`FGSTN_BufferResetRules::Apply`, once per list).
+
+## Using it standalone in another project
+
+What to copy and enable:
+
+1. Copy `Plugins/GSTNInput/` into the project's `Plugins/` and enable it (it is not `Installed`, so it must sit in the project).
+   It brings `Config/DefaultGSTNInput.ini` and the `GSTNInputCore` module; there is no `Content/` folder to copy
+   (`CanContainContent` is true but unused).
+2. Enable **Enhanced Input** (stock engine plugin, required). Gameplay Tags and Developer Settings are engine modules and
+   need nothing. No GAS, no Network Prediction, no Mover, no GAS-NPP fork is needed for this plugin alone.
+3. Declare the buttons, commands and lock tags the game uses (step 1 of *Setting up a game*). Nothing in the plugin names a
+   project tag: it only knows its own roots.
+4. Override settings, if needed, in the project's `Config/DefaultGSTNInput.ini` under `[/Script/GSTNInputCore.GSTN_InputSettings]`
+   or in Project Settings > Plugins > GSTN Input. `DefaultGame.ini` is not touched.
+
+What it assumes: the game provides the data assets (`UGSTN_InputConfig`, slot sets, and a command table built by *some* host),
+and something feeds `FGSTN_InputSample`s into an `FGSTN_InputHistory` and runs the matcher/resolver each frame. The Core has
+no such host: it is a library. The only host in this repository is the Network Prediction one in
+[GSTNInputNP](../GSTNInputNP/README.md) (`FGSTN_InputSimulator`, `UGSTN_InputSimComponent`, `UGSTN_CommandBindingSet`), which
+needs the GAS-NPP fork (`Plugins/GASNPP`) and Mover. A project without the fork can use the Core's data, matching, locks,
+validation and event stream, but has to write its own driver (a tick on a component or the equivalent in its own prediction
+system); bindings to abilities (`FGSTN_CommandBinding`, `TSoftClassPtr<UGameplayAbility>`) also live in `GSTNInputNP`, so the
+Core by itself maps commands to tags, not to abilities.
 
 ## Conventions
 
@@ -223,14 +322,18 @@ order.
 
 ## Testing
 
-Automation tests `GSTNInput.Core.*`: Session Frontend > Automation, or headless
+Automation tests `GSTNInput.Core.*` (full names are `GSTNInput.Core.Input.<Area>.<Case>`, 76 today, in
+`Source/GSTNInputCore/Private/Tests/GSTN_InputTests_<Area>.cpp`): Session Frontend > Automation, or headless
 `UnrealEditor-Cmd <your project>.uproject -ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit" -unattended -nullrhi`
 (with your project's `.uproject`).
 See [testing.md](../../docs/architecture/testing.md).
 
 ## Further reading
 
-[input.md](../../docs/architecture/input.md) (design and decisions) · [combat.md](../../docs/architecture/combat.md) ·
+[input.md](../../docs/architecture/input.md) (design and decisions): §2 Modules, §3 Tags (§3.1 designer tags),
+§4 `GSTNInputCore` (§4.1 priority criteria, §4.2 independence and extensibility: own config, contributions, exclusive
+context groups, soft references, Blueprint wrappers), §6 Authoritative events, §7 what stays in the combat plugin.
+Also [combat.md](../../docs/architecture/combat.md) ·
 [combat-m1-core-input.md](../../docs/architecture/combat-m1-core-input.md) ·
 [combat-m2-sim-input.md](../../docs/architecture/combat-m2-sim-input.md) ·
 [gas-npp.md](../../docs/architecture/gas-npp.md) · [testing.md](../../docs/architecture/testing.md)
