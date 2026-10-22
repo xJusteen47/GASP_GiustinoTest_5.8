@@ -9,8 +9,20 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | [m4-hits-plan.md](m4-hits-plan.md) | M4 Hits (`GSTNCombatCore/GAS/NP`) | H0..H13 | `../combat-m4-hits.md` |
 | [m4b-parts-plan.md](m4b-parts-plan.md) | M4b destructible parts (`GSTNParts*`) | P0..P16 | `../combat-parts.md` |
 | [m5-editor-plan.md](m5-editor-plan.md) | M5 editor and debug (`GSTNCombatEditor`, `GSTNCombatDebug`) | E0..E19 | `../combat-m5-editor.md` |
+| [traversal-surfaces-plan.md](traversal-surfaces-plan.md) (added 2026-10-22 evening) | Traversal surfaces: wall-slide / trampoline surfaces on level objects and enemy body parts (`GSTNSurface`, `GSTNPlatform`, `GSTNPlatformParts`) | T0..T9 | `../traversal-surfaces.md` |
 
 `../game-design-direction.md` wins over every spec and plan. `../modularity-and-tags.md` §3.7-3.9, §4, §5b are binding.
+
+### Traversal surfaces (T) on the other plans (added 2026-10-22 evening)
+
+| T needs | Ready at |
+|---|---|
+| H11 contact record and `Surface.Type.*` rows, H11b launch layered move and `FGSTN_SurfaceLaunchParams` (declared in `GSTNSurfaceCore` after T1, TS.1 approved 2026-10-22 22:15) | H11, H11b → T4 |
+| H10 lag-comp history (composed transform of based players) | H10 → T7 |
+| P7 confirmed `BrokenMask`, P7b `Combat.Event.Part.Restored` | P7b → T6 |
+| `GSTNPlatform` skeleton (M8 §4d.5 / many-enemies §4; no plan yet: T3 delivers the fighter minimum if none has started), `GSTNPlatformMinion` + P16 | T3 (own), M8 + P16 → T8 |
+| Wall movement core: T5 approved (TS.2, 2026-10-22 22:14); T2 is subclass-only | now → T0, T1, T2 |
+| M5 E10 validation mechanism | E10 → T9 |
 
 ## Cross-plan dependency map
 
