@@ -17,7 +17,7 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 
 | T needs | Ready at |
 |---|---|
-| H11 contact record and `Surface.Type.*` rows, H11b launch layered move and `FGSTN_SurfaceLaunchParams` (declared in `GSTNSurfaceCore` after T1, pending owner TS.1) | H11, H11b → T4 |
+| H11 contact record and `Surface.Type.*` rows, H11b launch layered move and `FGSTN_SurfaceLaunchParams` (declared in `GSTNSurfaceCore` after T1, TS.1 approved 2026-10-22 22:15) | H11, H11b → T4 |
 | H10 lag-comp history (composed transform of based players) | H10 → T7 |
 | P7 confirmed `BrokenMask`, P7b `Combat.Event.Part.Restored` | P7b → T6 |
 | `GSTNPlatform` skeleton (M8 §4d.5 / many-enemies §4; no plan yet: T3 delivers the fighter minimum if none has started), `GSTNPlatformMinion` + P16 | T3 (own), M8 + P16 → T8 |

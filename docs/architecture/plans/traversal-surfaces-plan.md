@@ -219,7 +219,7 @@ and M4b progress; T5 waits only for the owner.
 
 | Question | Assumption used here | Affects | Cost to change |
 |---|---|---|---|
-| TS.1 separate `GSTNSurface` plugin owning `Surface.*` | yes; H11/H11b consume it | T1, H11/H11b edits | S if before H11 starts; M after |
+| TS.1 separate `GSTNSurface` plugin owning `Surface.*` | **Answered 2026-10-22 22:15: yes**; H11/H11b consume it, so T1 lands before H11 | T1, H11/H11b edits | done |
 | TS.2 wall-core filter extension point | **Answered 2026-10-22 22:14: yes**, some surfaces are wall-slideable and others not | T5 | done |
 | TS.3 which enemies | the same set as platforms (fighters + ≤ 8 platform minions), swarm never | T3, T8 | M (minions need the proxy anyway) |
 | TS.4 enemy slows while a player slides | **Answered 2026-10-22 21:58**: depends on the part and the enemy. `FGSTN_OccupantResponse` per platform shape (enemy-level default on the definition, BP `OnOccupantChanged`); T3 adds the struct, T7 tests one slowing and one full-speed enemy | T3, T7 | done (data) |

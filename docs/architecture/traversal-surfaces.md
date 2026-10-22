@@ -88,7 +88,7 @@ name and contact point so a provider can answer per face.
 
 | Tag | Source | Meaning |
 |---|---|---|
-| `Surface.Type.*` | **ini** leaves (`Plugins/GSTNSurface/Config/Tags/GSTNSurface.ini`: `Wall Glass Crate Trampoline`), root native | impact class (H11); ownership moves from `GSTNCombat` to `GSTNSurface` before H11 lands (modularity §4.2 row updated when the owner approves TS.1) |
+| `Surface.Type.*` | **ini** leaves (`Plugins/GSTNSurface/Config/Tags/GSTNSurface.ini`: `Wall Glass Crate Trampoline`), root native | impact class (H11); ownership moves from `GSTNCombat` to `GSTNSurface` before H11 lands (owner approved TS.1 2026-10-22 22:15; modularity §4.2 row updated) |
 | `Surface.Behaviour.WallSlide`, `.WallClimb`, `.Launch`, `.Stand` | native | what the surface offers; read through `FGameplayTagQuery` fields on consumers (modularity §3.7 rule 4), never hard-coded in a consumer's logic |
 | `Surface.Behaviour.Slippery`, `.OneWay` | native, **reserved** | declared with a comment "no reader yet" so content can be authored; readers are later extensions (TS.8) |
 | `Surface.Event.Launched` | native | local presentation/cue trigger when a launch is applied (the combat event for tumbling victims stays `Combat.Event.Impact.Bounce`) |
@@ -103,7 +103,7 @@ One `FGSTN_SurfaceBehaviour Default` and the optional `PerComponent` map. `IsDat
 For the H11b trampoline: `AGSTN_Trampoline` keeps its `FGSTN_SurfaceLaunchParams Launch` property and implements the provider,
 or (simpler, *Proposal*) just carries this component with `{Launch}` and `Surface.Type.Trampoline`; H11b's tests keep their names.
 
-## 3. Plugin placement (*Proposal*; owner question TS.1)
+## 3. Plugin placement (approved by the owner, TS.1, 2026-10-22 22:15)
 
 | Plugin / module | Layer | Depends on | Owns |
 |---|---|---|---|

@@ -384,7 +384,7 @@ at step 6 (H8/H9), events with hit type and relationship (H9).
   `FGSTN_LayeredMove_Launch` through the GE path, direction = trampoline normal) lives in a small optional plugin `GSTNLevelObjects`
   (see **H11b**, approved by the owner 2026-10-22 18:27).
 - 2026-10-22 evening: `IGSTN_ImpactSurface` and the physical-material → `Surface.Type.*` bake move to `GSTNSurfaceCore`
-  (`IGSTN_SurfaceProvider`, `UGSTN_SurfaceUtils::Resolve`) when the owner approves TS.1 of
+  (`IGSTN_SurfaceProvider`, `UGSTN_SurfaceUtils::Resolve`) (owner approved TS.1 2026-10-22 22:15) of
   [traversal-surfaces-plan.md](traversal-surfaces-plan.md); the record keeps `uint8 SurfaceTypeIndex` unchanged.
 - Tests `GSTNCombat.NP.Hits.Impact.*`: `ContactRecordWritten`, `ResolvedOneFrameAfterContact`, `SplatEndsActionable`,
   `BounceKeepsTumble`, `BreakRequestOutsideSim`, `ForcedAndForbiddenByHitData`, `MaterialMappingBaked`.
@@ -398,7 +398,7 @@ at step 6 (H8/H9), events with hit type and relationship (H9).
 Owner answer 2026-10-22 18:27: a trampoline is a **box (parallelepiped) with adjustable height, depth and width**; mesh, size,
 launch direction, tilt etc. may differ per instance.
 
-> **2026-10-22 evening, traversal surfaces** ([traversal-surfaces-plan.md](traversal-surfaces-plan.md) T1/T4, pending owner TS.1):
+> **2026-10-22 evening, traversal surfaces** ([traversal-surfaces-plan.md](traversal-surfaces-plan.md) T1/T4, TS.1 approved 2026-10-22 22:15):
 > `FGSTN_SurfaceLaunchParams` and the surface interface are declared in the new `GSTNSurfaceCore` (one `IGSTN_SurfaceProvider`
 > replacing `IGSTN_LaunchSurface` here and `IGSTN_ImpactSurface` in H11; same fields, plus `bAddSurfaceVelocity`), so enemy body
 > parts reuse the trampoline params (T3/T4). `GSTNLevelObjects` then depends on `GSTNSurfaceCore` and `GSTNCombatCore`; the

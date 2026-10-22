@@ -515,7 +515,8 @@ Existing names are kept unless listed in 4.3.
 | `Combat.State.*` | `Busy InTimeline Hitstop Hitstun Tumble CancelWindow OverrideWindow SuperInput Falling Shielding Carrying Riding` | `GSTNCombat` (state-projection rules); extension plugins declare their own leaves (`Shielding` -> `GSTNDefence`) | native, **projected**, never granted by others |
 | `Combat.Event.*` | `HitLanded Hit.Received Blocked Parried LinkFormed`; `Part.Damaged .WeakPointHit .Ricochet .Broken .AllBroken` | each emitter's plugin; envelope in `GSTNCombat` (`Combat.Event.Part.*`: `GSTNParts`) | native |
 | `Combat.HitType.*`, `Combat.Hurtbox.*`, `Combat.Relationship.*` | `Normal Grab Throw`, `Head Torso Feet`, `Ally Enemy` | `GSTNCombat` (Link adds `Grab Throw Pummel`) | native |
-| `Surface.Type.*`, `Combat.Event.Impact.*` | surface classes mapped from physical materials for launch impacts (`Wall Glass Crate`); impact events (`Splat Bounce BreakSurface`) (M4 §7b) | `GSTNCombat` | ini (`Surface.Type.*`, designer vocabulary) + native (events) |
+| `Surface.*` (`Surface.Type.*`, `Surface.Behaviour.*`, `Surface.Event.*`) | surface classes mapped from physical materials (`Wall Glass Crate Trampoline`) and traversal behaviours (`WallSlide WallClimb Launch Stand`), traversal-surfaces.md | `GSTNSurface` (owner TS.1, 2026-10-22 22:15) | ini (`Surface.Type.*` leaves) + native (roots, behaviours, events) |
+| `Combat.Event.Impact.*` | impact events (`Splat Bounce BreakSurface`) (M4 §7b) | `GSTNCombat` | native |
 | `Combat.Lock.*` | `Movement`, `Link` | `GSTNCombat` (`Movement`); `GSTNLink` (`Link`) | native |
 | `Combat.Interact.*` | `Target.Grab` (projected: the one interactable the entity's tap would act on); `Target.Mount`, `Target.Pickup` (M6 §8) | root and `Target.Grab`: `GSTNLink`; `Target.Mount`: `GSTNPiggyback`; `Target.Pickup`: `GSTNHeld` | native, **projected** |
 | `Combat.Immunity.*` | `Grab`, `Parry`, `Shield` | the plugin whose mechanic it gates | native |
