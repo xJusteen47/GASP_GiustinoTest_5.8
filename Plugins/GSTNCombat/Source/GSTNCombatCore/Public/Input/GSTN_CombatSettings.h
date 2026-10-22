@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "GameplayTagContainer.h"
+#include "Input/GSTN_InputSlot.h"
 #include "GSTN_CombatSettings.generated.h"
 
 /**
@@ -51,6 +52,14 @@ public:
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Input", meta = (Categories = "Input.Button"))
 	TArray<FGameplayTag> ExclusiveButtons;
+
+	/**
+	 * The command set a kit starts from when it names no base set of its own (FGSTN_CommandSet::BaseSet). Soft: the plugin ships
+	 * it empty, a game points it at its slot set asset, and nothing is loaded until a kit's command set is composed (never
+	 * inside the simulation).
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Kits")
+	TSoftObjectPtr<UGSTN_InputSlotSet> DefaultCommandSet;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

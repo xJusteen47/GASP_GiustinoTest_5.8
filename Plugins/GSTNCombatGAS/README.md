@@ -6,7 +6,8 @@ the ability system. Design: [docs/architecture/combat.md](../../docs/architectur
 [combat-m3-moves-kits.md](../../docs/architecture/combat-m3-moves-kits.md).
 
 Status: **experimental (0.1)**. It holds the native tags, the two attribute sets, the meter-cost and weapon-stats
-effects, the stat/meter data structs and the plugin settings; the kit/weapon/loadout assets follow in M3.
+effects, the stat/meter data structs, the plugin settings and the kit, weapon and super data assets; the loadout component and
+the compiled binding table follow in M3.
 
 ## Dependency rule
 
@@ -16,7 +17,8 @@ GSTNCombatCore  <  GSTNCombatGAS  <  GSTNCombatNP
 ```
 
 - Module `GSTNCombatGAS` depends on Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, GameplayTasks,
-  DeveloperSettings and `GSTNCombatCore`. The descriptor lists the plugins `GSTNCombat` and `GameplayAbilities`.
+  DeveloperSettings, `GSTNCombatCore` and `GSTNInputCore` (the slot and requirement types the bindings use). The descriptor lists
+  the plugins `GSTNCombat`, `GSTNInput` and `GameplayAbilities`.
 - It never depends on NetworkPrediction, AbilitySystemSimulation, Mover or `GSTNCombatNP`, and nothing here refers to the
   project module, `/Game/` content or a project tag. It compiles against stock GAS and against the GAS-NPP fork in
   `Plugins/GASNPP` (same plugin and module name).
@@ -60,6 +62,39 @@ Blueprint notes: `UGSTN_GE_MeterCost` and `UGSTN_GE_WeaponStats` are `Blueprinta
 the structs are `BlueprintType` with `EditAnywhere, BlueprintReadOnly`, tag fields carry `Categories`; the attribute sets
 are native only. Applying and removing stats effects is for the loadout, outside the simulation.
 
+## Kit, weapon and super data (`Kits/`)
+
+Primary data assets and the binding type. They live here, not in `GSTNCombatCore`, because they hold ability or effect classes; the
+pure companions (command set, loadout data, super input scheme, skin, identity rules) are in
+[GSTNCombat](../GSTNCombat/README.md). Every content reference is soft, so naming a weapon, effect or ability loads nothing.
+
+| Type | What it is |
+|---|---|
+| `FGSTN_AbilityBinding` | `{Command, Requirements, SlotOverride, Ability, TimelineOverride, PriorityOffset, BufferFramesOverride}`: a command bound to an ability for a context. `HasSameKey` = same command and same requirement sets (the order of tags does not matter). The slot override is the input plugin's `FGSTN_InputSlotEntry`, which holds its slot asset by hard pointer: the one hard reference, the input plugin's choice. |
+| `UGSTN_AbilityBindingUtils` | `InheritBindings(Parent, Child)` (parent entries in order, each replaced in place by the child entry of the same command and requirements, then the new child entries) and `Validate` (invalid command, duplicate key, override slot of another command, bad buffer; with a command set: binding to a removed command, or to a command neither in the set nor given a slot override). |
+| `UGSTN_PrimaryKitDefinition` | `UPrimaryDataAsset` (`GSTN_PrimaryKit`): identity tags, primary weapon, `Stats` + `InitStatsEffect`, `Meters`, `CommandSet`, `KitBindings`, triggered abilities, passives, super slots and scheme, the allowed weapons/supers/skins queries, ricochet fallback and `Extensions`. |
+| `UGSTN_WeaponDefinition` | `UPrimaryDataAsset` (`GSTN_Weapon`): identity tags, `ParentWeapon`, `Bindings` (inherited along the parent chain by `GetEffectiveBindings`), `AllowedAlternatives`, one `StatsEffect` class plus `StatModifiers` (`FGSTN_WeaponStatModifiers` is `TArray<FGSTN_StatValue>`), passives, `Parameters`, anim layer, visual actor, ricochet fallback, `Extensions`. |
+| `UGSTN_SuperDefinition` | `UPrimaryDataAsset` (`GSTN_Super`): ability (+ timeline override), `SuperTags`, meter tag and cost, input code, owner requirements. |
+
+`IsDataValid` of each asset runs its `Validate` (also callable from tests and tools, no editor needed) and, for kits and weapons,
+compares against the other registered assets of the type. Errors: a binding to a command the command set removes (or neither in the
+set nor given a slot override); a duplicate command+requirements pair; an override slot of another command; **the identity rule**
+(`KitTags` / `WeaponTags` hold exactly one leaf under the kit / weapon root, zero or several is an error, the other tags only classify,
+unique among the assets of the type); a weapon whose stat modifiers have no stats effect; one stats effect class used by two weapons
+(it is removed by class); super slots without a scheme; a super without ability or a cost without a meter; a parent chain that loops.
+The roots come from `GSTNCombatTags` (`Root_Kit`, `Root_Weapon`); the leaves are designer content and no C++ names one.
+
+**Registering the types.** The uniqueness checks and the asset manager lookups need the types in the project's
+`Config/DefaultGame.ini` (`PrimaryAssetTypesToScan` for `GSTN_PrimaryKit`, `GSTN_Weapon`, `GSTN_Super`, `GSTN_SuperInputScheme`,
+`GSTN_Skin` and `GSTN_CombatTimeline`); the plugin does not edit the project's config, and until a type is registered nothing is
+compared across assets.
+
+**Extending in Blueprint.** Kits, weapons and supers are data assets created from the Content Browser (Miscellaneous > Data Asset);
+a designer fills the details panel and runs Validate. Abilities and effects are the Blueprint classes the soft fields point at
+(`UGSTN_GE_WeaponStats` children for stats effects). `UGSTN_AbilityBindingUtils::InheritBindings` is `BlueprintPure`. A kit gets
+behaviour from an optional plugin through `Extensions` (a `FGSTN_KitExtension`-derived struct picked in the details panel), never a
+new property. Nothing in this layer is subclassed; it is data.
+
 ## How to wire it
 
 1. Enable the plugin `GSTNCombatGAS` (the project's `.uproject` lists it; it pulls in `GSTNCombat` and GameplayAbilities).
@@ -69,7 +104,9 @@ are native only. Applying and removing stats effects is for the loadout, outside
 ## Testing
 
 Automation tests `GSTNCombat.GAS.*`: `Tags.AllRegisteredAndDocumented`, `Attributes.Clamp`, `Attributes.KitStatsInitEffect`,
-`Attributes.MeterCostSetByCaller`, `Attributes.WeaponStatsApplyRemoveByClass`. The attribute tests use a stock
+`Attributes.MeterCostSetByCaller`, `Attributes.WeaponStatsApplyRemoveByClass`, `Data.BindingInheritance`,
+`Data.BindingToRemovedCommandIsError`, `Data.UnknownExtensionIgnored`, `Data.KitIdentityExactlyOne`, `Data.WeaponIdentityExactlyOne`.
+The data tests build assets in memory and use test-only identity leaves (`GSTN_DataTestTypes`). The attribute tests use a stock
 `UAbilitySystemComponent` on an actor in a transient game world (effects need a world for their start time), with no Network
 Prediction or Mover, so they also run against stock GAS. Run with the same command
 as the other combat tests: `-ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit"`.

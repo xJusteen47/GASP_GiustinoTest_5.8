@@ -27,6 +27,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
 			"Name": "GameplayAbilities",
 			"Enabled": true
 		}
