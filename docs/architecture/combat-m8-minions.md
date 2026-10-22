@@ -146,6 +146,10 @@ first M8 commit** (file move, no behaviour change).
   Flags (Shielding, InHitstop...); FGameplayTagContainer Tags; FGenericTeamId Team; }`. M4's `FGSTN_HitResolutionContext`
   reads the victim through this view (a thin refactor: the fighter path fills it from its attribute snapshot, the minion
   path from the store). Steps never touch a component.
+- **Standard model: M4's `UGSTN_KnockbackModel_WeightDriven`** (owner, 2026-10-22, 11:20: weight decides the knockback's
+  strength and drops as damage grows): a minion's accumulated damage enters only through its effective weight (curve of
+  progress × lost mass), the same rule as fighters, so damage is never counted twice. The model below stays as an option for HP
+  games that want the percent-style growth, with a flat weight curve (the rules validator warns otherwise).
 - **`UGSTN_KnockbackModel_HealthFraction`** (*Proposal* for the percent-vs-HP question): behaves as
   `PercentScaling` with `DamagePercent` replaced by `(1 − Health/MaxHealth) × HealthToPercentScale` (default 100), so
   wounded minions fly further (and, through the reaction tiers of M4 §3, climb from stagger in place to push back to launch) and fresh ones barely move; `UGSTN_KnockbackModel_Fixed` stays available per definition.
@@ -311,7 +315,7 @@ stamped for a recycled slot is dropped.
   defaults `StaggerThreshold`/`MaxReaction` on their `UGSTN_HurtboxSetDefinition` (M4 §3), resolved by the `HurtboxReaction` step.
   Below the threshold: damage and hitstop, no hitstun, no launch or push, and `HitCounter` still increments (flash and flinch cue on the
   puppet); no separate hit-count armour (owner: armor and poise are stagger threshold and remaining weight). **Weight decides the tier**: the knockback `K` (effective weight with
-  the `HealthFraction` model of §3) compared with the tier thresholds gives `StaggerInPlace`, `PushBack` or `Launch`, capped by
+  the standard `WeightDriven` model of M4 §3) compared with the tier thresholds gives `StaggerInPlace`, `PushBack` or `Launch`, capped by
   `MaxReaction`; a battered minion therefore climbs from stagger in place to launch. **Compact encoding: the tier is the `ActionState`**
   (`Hitstun` = stagger in place, `PushedBack`, `Launched`; below the threshold the state does not change), 0 extra bits (§8.2). Attacker
   hitstop uses only static data (the authored hit and the band/part `HitstopScale`), never the victim's broken mask, health or weight

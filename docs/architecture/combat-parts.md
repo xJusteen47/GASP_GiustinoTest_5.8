@@ -161,14 +161,19 @@ FGSTN_PenetrationBand { int32 MinDelta; float PartScale; float MainScale; float 
                         bool bRicochet; FGameplayTag CueTag; }
 ```
 
-Default table (*Proposal*, tuned in data, not code):
+Default table (*Proposal*, tuned in data, not code). Revised 2026-10-22 (owner, 11:20–11:21: "la durezza regola la possibilità di
+applicare il danno o no"; "la durezza sarebbe il valore di armatura di helldivers"): hardness acts on **damage only**, as Helldivers 2's
+armour value against armour penetration, so the stagger and hitstop scales of the damaging bands are 1 (M4 §3 three dials), and an
+attack below the armour value does not damage at all: it bounces.
 
 | Delta (pen − hardness) | Meaning | PartScale | MainScale | StaggerScale | HitstopScale | bRicochet |
 |---|---|---|---|---|---|---|
 | ≥ +1 | above: full | 1.0 | 1.0 | 1.0 | 1.0 | no |
-| 0 | equal: partial | 0.6 | 0.7 | 0.8 | 0.9 | no |
-| −1 | below: reduced | 0.2 | 0.35 | 0.4 | 0.7 | no |
-| ≤ −2 | far below: **ricochet** | 0.0 | 0.0 | 0.0 | 0.0 | yes (cue `GameplayCue.Combat.Part.Ricochet`, event, no hitstun, **no hitstop**) |
+| 0 | equal: partial (Helldivers 2 deals about 65 %) | 0.65 | 0.65 | 1.0 | 1.0 | no |
+| ≤ −1 | below: **ricochet** | 0.0 | 0.0 | 0.0 | 0.0 | yes (cue `GameplayCue.Combat.Part.Ricochet`, event, no hitstun, **no hitstop**) |
+
+A game that wants a softer curve adds bands (e.g. a reduced −1 band) or lowers a band's `StaggerScale`/`HitstopScale`: these are
+designer knobs, not the standard.
 
 **Ricochet** (owner, 2026-10-22: "se si prova ad attaccare una parte troppo dura rispetto all'attacco, non si avrà un hitstop, ma
 un effetto di ricochet del colpo"): a `bRicochet` band gives **no hitstop on either side**, no damage, no stagger, no hit-confirm; the
@@ -176,8 +181,9 @@ un effetto di ricochet del colpo"): a `bRicochet` band gives **no hitstop on eit
 seam (M4 §3b), and the attacker's combat ability ends its current timeline and plays a **recoil montage chosen per attack**
 (`FGSTN_RicochetResponse` on the timeline, M4 §3b, with a per-weapon/kit default). The attacker's machine predicts it exactly:
 penetration and hardness are static data and the broken-part mask is replicated (M4 §3, prediction from the victim's reaction state).
-The victim gets only the spark cue and the `Combat.Event.Part.Ricochet` event. The band's `StaggerScale` multiplies the hit's stagger force before the part's threshold test (§4.4), so a hit
-that barely penetrates staggers less. A table with fewer bands is valid; an empty band set is a validation error.
+The victim gets only the spark cue and the `Combat.Event.Part.Ricochet` event. The band's `StaggerScale` multiplies the hit's stagger force before the part's threshold test (§4.4); it **defaults to 1**, because
+hardness decides damage, not hitstun (owner, 2026-10-22, 11:20; M4 §3 three dials), and a designer may lower it so a hit that barely
+penetrates staggers less. A table with fewer bands is valid; an empty band set is a validation error.
 
 ### 3.5 Entity's own hitboxes while parts are broken
 
@@ -201,6 +207,11 @@ without parts has the same thing. Under `DamageMode::PercentCapped` (M4 seam 4):
 raises the existing `Combat.Event.KO` (destroyed). Derived, never stored: `Progress = DamagePercent / MaxHealth` (0–1) and
 `HealthFraction = 1 − Progress`. `Health` is unused in this mode. M8's `KnockbackModel_HealthFraction` reads the same fraction,
 so minions and fighters agree on "how wounded".
+
+**Which knockback model** (owner, 2026-10-22, 11:20: "il peso determina la forza del knockback"; the three dials of M4 §3):
+the standard rules use M4's `UGSTN_KnockbackModel_WeightDriven`, where the capped percent makes knockback stronger **only
+through the effective weight** of §4.3. `UGSTN_KnockbackModel_CappedPercent` below is the platform-fighter option, with a flat
+`WeightCurve` (lost mass still applies), so damage is never counted twice.
 
 `UGSTN_KnockbackModel_CappedPercent` (in `GSTNCombat`, a variant of `PercentScaling`): the percent term is
 `DamagePercent` as is (platform-fighter feel: the cap only bounds it), every constant stays a property, and the effective

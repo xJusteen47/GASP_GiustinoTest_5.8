@@ -13,7 +13,7 @@ Le indicazioni del 22/10 sono in [game-design-direction.md](game-design-directio
 
 Le quindici domande ancora aperte la cui risposta cambia di più l'architettura o le prossime milestone (prima M3/M4, poi modularità e tag, poi M4b e M6).
 
-- [[M4.27](#m4--hits-domande-al-proprietario-del-progetto)] un nemico staggerato sul posto può essere lanciato da un secondo colpo (juggle)
+- [[M4.36](#m4--hits-domande-al-proprietario-del-progetto)] il danno rende il knockback più forte solo tramite il peso (modello standard), con la formula di Smash come opzione
 - [[M4.32](#m4--hits-domande-al-proprietario-del-progetto)] se la gravità cambia durante un lancio, il lancio segue la nuova gravità
 - [[Parti.2](#parti-distruttibili-m4b-domande-al-proprietario-del-progetto)] una parte rotta di un nemico può essere ripristinata
 - [[M4.16](#m4--hits-domande-al-proprietario-del-progetto)] colpo subito come correzione di rollback o forward prediction per il client
@@ -284,6 +284,7 @@ Ipotesi nella specifica: velocità = knockback × fattore con tetto e decadiment
 **27. Un nemico staggerato sul posto può essere "juggled" (lanciato da un secondo colpo)? Un colpo sotto soglia durante l'hitstun lo prolunga o non cambia nulla?**
 Perché conta: decide le combo sui nemici e il rischio di stun-lock (tenere un nemico fermo per sempre) o, al contrario, di colpi che non si concatenano.
 Ipotesi nella specifica: un secondo colpo sopra soglia ricalcola la reazione (può diventare un lancio se il knockback supera la soglia), uno sotto soglia non cambia lo stato; nessun decadimento dell'hitstun (resta la lacuna sull'hitstun decay).
+**Risposta (2026-10-22, 11:18):** Sì, con la logica standard: il secondo colpo ricalcola la reazione con il peso rimasto dopo il danno del primo; se il knockback non basta a lanciarlo, il nemico viene solo staggerato di nuovo ([direzione §2h](game-design-direction.md#2h-hardness-stagger-resistance-weight-three-dials-owner-input-2026-10-22-11181121), M4 §3). Resta aperto se un colpo sotto soglia durante l'hitstun lo prolunghi.
 
 **28. L'hitstop automatico usa danno e knockback scritti nell'attacco, o il knockback reale sul bersaglio (che dipende da percentuale e peso)?**
 Perché conta: con il knockback reale l'attaccante non può prevedere il proprio hitstop in locale (la vittima è interpolata) e rischia un disallineamento visibile; con quello scritto, colpire un nemico quasi morto non congela di più.
@@ -319,6 +320,16 @@ Ipotesi nella specifica: no, solo la coda cancellabile decisa dal designer, come
 **34. Da dove parte la "parte finale" in cui i piedi sono invincibili?**
 Perché conta: serve un valore di partenza per il kit base, anche se poi lo regola il designer.
 Ipotesi nella specifica: l'ultimo 40% del volo, fino al primo frame di atterraggio (M4 §1b).
+
+### K. Durezza, resistenza allo stagger e peso (dopo i messaggi delle 11:18–11:21 del 22/10)
+
+**35. Il danno del colpo stesso alleggerisce già il peso che decide il suo knockback, o conta solo il danno subito prima?**
+Perché conta: nel primo caso ogni colpo forte lancia un po' di più (come la percentuale in Smash, che include il danno del colpo); nel secondo il tuo esempio vale alla lettera e il risultato si legge dallo stato visibile prima del colpo.
+Ipotesi nella specifica: conta solo il danno subito prima del colpo (M4 §3, punto 4).
+
+**36. Il danno rende il knockback più forte solo tramite il peso (un'unica manopola, modello standard `WeightDriven`), mentre la formula di Smash con la percentuale come termine a sé resta un'opzione per il PvP?**
+Perché conta: se peso e percentuale contano entrambi, lo stesso danno viene contato due volte e i nemici malconci volano troppo; con una sola manopola il designer regola "quanto si alleggerisce" con una curva.
+Ipotesi nella specifica: sì; con la formula di Smash la curva del peso deve essere piatta e il validatore lo controlla (M4 §3, combat-parts §4.1, M8 §3).
 
 ### Lacune nella specifica
 
@@ -360,6 +371,7 @@ Riferimento: `combat-parts.md` (plugin `GSTNParts`) e [game-design-direction.md]
    Perché conta: i livelli interi rendono la regola prevedibile per i designer e deterministica; il continuo dà più sfumature.
    Ipotesi nella specifica: livelli interi 0-15 per durezza e penetrazione, con tabella a fasce (sotto, pari, sopra, molto sotto).
    **Risposta (2026-10-22):** Il riferimento è Helldivers 2, dove durezza e penetrazione sono livelli di armatura ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)); la lettura a livelli interi resta da confermare.
+   **Risposta (2026-10-22, 11:21):** La durezza è in pratica il valore di armatura di Helldivers e decide solo se il danno si applica ([direzione §2h](game-design-direction.md#2h-hardness-stagger-resistance-weight-three-dials-owner-input-2026-10-22-11181121)). Nella specifica le fasce standard sono ora tre: sopra = danno pieno, pari = circa 65 %, sotto = ricochet; le fasce non toccano più stagger e hitstop (combat-parts §3.4).
 
 6. Un colpo molto sotto la durezza viene deviato del tutto (nessun danno alla parte, nessun hitstun) ma registra comunque?
    Perché conta: definisce il feedback dei colpi inutili (scintille, hitstop breve) e quanto si può "spammare" contro armature.

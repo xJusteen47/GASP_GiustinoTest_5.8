@@ -90,6 +90,18 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - **Most gameplay logic must be easy for designers to extend or change in Blueprint** (modularity-and-tags.md §3.8).
 - **Extreme modularity must allow replacing content as needed** (modularity-and-tags.md §3.9).
 
+## 2h. Hardness, stagger resistance, weight: three dials (owner input, 2026-10-22, 11:18–11:21)
+
+- **Hardness** is the Helldivers armour value: against the attack's penetration it decides **whether damage applies** (too hard =
+  no damage, ricochet).
+- **Stagger resistance** decides **whether the victim enters hitstun**; hitstop can apply anyway.
+- **Weight** decides **how strong the knockback is**, and so whether the victim is launched. Weight **drops as damage grows** (the
+  owner's reading of Smash). This logic is **standard** and generally does not change.
+- Example: hit 1 staggers without launching and does damage; hit 2's knockback, against the weight left after hit 1, is still not
+  enough to launch, so the enemy is only staggered again.
+- Consequences (M4 §3): one dial per job; the standard knockback model is weight-driven (damage makes knockback stronger only
+  through the weight, never twice); the default penetration bands act on damage only (combat-parts.md §3.4).
+
 ## 3. Grabs, interaction and throwing enemies
 
 - Example flow: a large enemy attacks; it is too big to grab. The player damages it until parts break off. Now it can
@@ -154,6 +166,7 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 | Wall splat / bounce / destruction on impact | M4 (launch and tumble), M6 tech interaction |
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
+| §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
 | §2g: tap = grab, hold = pickup; feet invincible in the dodge's final part, invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
 | §2f, §6b: many enemies on a listen host (replication, presentation and host budgets) and enemies as solid platforms (players stand on them) | research [many-enemies-replication.md](many-enemies-replication.md); M8 minions ([combat-m8-minions.md](combat-m8-minions.md) §4d.1, §4d.5, §8, §11: packs with push model and dormancy, per-item tier rates, 150 as a population with about 60 awake, `MaxVisiblePuppets`, platform seams); new optional plugins `GSTNPlatform` and bridge `GSTNPlatformMinion` ([modularity-and-tags.md](modularity-and-tags.md) §3.6, tag root `Platform.*` §4.2) |
 
@@ -278,3 +291,18 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 > devono poter essere estese o modificate dal designer in modo agevole tramite BP.
 
 > La modularità estrema deve permettere di rimpiazzare contenuti a seconda delle esigenze.
+
+### Seventh to ninth messages (2026-10-22, 11:18–11:21, verbatim; the 11:20 one as edited at 11:21)
+
+> Aggiungo dei dettagli: la possibilità di lancio dei nemici dipende dal knockback e dal loro peso. Abbiamo detto che è possibile
+> che un nemico perda peso all'aumentare del danno preso (comportamento simile a smash). La logica è standard e in generale non
+> cambia. Se il primo colpo staggera (manda in hitstun senza lanciare), il nemico perde vita, ma il knockback del secondo colpo
+> non è sufficiente a lanciarlo in base al nuovo peso dopo il danno del primo colpo, allora il nemico sarà solo staggerato.
+
+> In pratica: la durezza regola la possibilità di applicare il danno o no.
+> La resistenza allo stagger determina la possibilità di entrare in hitstun o no, (potrebbe entrare in hitstop ugualmente),
+> Il peso determina il la forza del knockback.
+>
+> In smash è il peso che diminuisce all'aumentare del danno, ad esempio.
+
+> La durezza sarebbe il valore di armatura di helldivers, in pratica

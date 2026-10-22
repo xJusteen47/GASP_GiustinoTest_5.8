@@ -35,6 +35,16 @@ Section numbers below are local to this file.
 > data in general**, never code (§1b); (3) gameplay logic must be **extendable in Blueprint** and content **replaceable**
 > (modularity-and-tags.md §3.8, §3.9): the seams of §3b have Blueprint forms.
 
+> **Revision 2026-10-22 (11:18, owner, game-design-direction.md §2h):** whether a hit **launches** depends on its knockback and the
+> victim's **current weight**, which drops as damage accumulates (Smash-like). This is **standard logic** that generally does not
+> change: `HealthWeight` is part of the standard pipeline and the standard rules asset sets real tier thresholds (§3, step 4).
+> Owner's example: hit 1 staggers without launching and does damage; hit 2's knockback, against the lighter weight after hit 1,
+> is still below the launch threshold, so the enemy is only staggered again. **Three dials, one job each** (owner, 11:20):
+> **hardness** (the Helldivers armour value, against the attack's penetration) decides whether damage applies; **stagger
+> resistance** decides whether the victim enters hitstun (hitstop can apply either way); **weight** decides the knockback's
+> strength, and the reaction tier follows from it. Damage makes knockback stronger **only through the weight**, so the standard
+> model is the new `WeightDriven` one (§3) and damage is never counted twice.
+
 ## 1. Scope
 
 **Goal:** moves hit. Hitboxes from move tracks overlap hurtboxes; the attacker predicts its own hitstop and
@@ -146,14 +156,36 @@ temporary `Armor` window), super armor its infinite case, and "poise" is the eff
 **Knockback model** — `UGSTN_KnockbackModel` (abstract, EditInlineNew, const methods): `Compute(const
 FGSTN_KnockbackInput&) → FGSTN_KnockbackResult { EGSTN_HitReaction Reaction; bool bStaggered; float StaggerForce; FVector
 LaunchVelocity; int32 HitstunFrames; bool bTumble; int32 HitstopFrames; int32 AttackerHitstopFrames; }`. `FGSTN_KnockbackInput`
-also carries the victim's `HealthFraction` (derived, §3b) and `FGSTN_HitReactionModifiers Reaction`. Default
-`UGSTN_KnockbackModel_PercentScaling`: knockback `K` grows with the victim's damage percent and the hit's damage, scales
+also carries the victim's `HealthFraction` (derived, §3b) and `FGSTN_HitReactionModifiers Reaction`.
+`UGSTN_KnockbackModel_PercentScaling` (the default before 2026-10-22; now the platform-fighter option, the standard is
+`WeightDriven` below): knockback `K` grows with the victim's damage percent and the hit's damage, scales
 inversely with weight, plus base and growth (the commonly documented platform-fighter formula, every constant exposed as a
 property); `K` then feeds the stagger, hitstun, hitstop and reaction-tier rules below, whose constants are shared by every model
 through one struct, `FGSTN_ReactionTuning`, on the abstract base class (`HitstopPerDamage`, `HitstopBase`, `MaxHitstop` move there).
 `UGSTN_KnockbackModel_Fixed` (HP games): knockback = base, no percent.
 `UGSTN_KnockbackModel_CappedPercent` (owner direction, [combat-parts.md](combat-parts.md) §4.1): the percent term is
 `DamagePercent` as is, used with `DamageMode::PercentCapped` (below).
+**`UGSTN_KnockbackModel_WeightDriven` — the standard model** (owner, 2026-10-22, 11:18–11:20: "il peso determina la forza del
+knockback"; "in smash è il peso che diminuisce all'aumentare del danno"; *Proposal* for the formula):
+`K = (BaseKnockback + KnockbackGrowth × Damage) × WeightReference / EffectiveWeight`, `EffectiveWeight = max(Weight × WeightScale,
+MinWeight)`; `Damage` is this hit's damage (the attack's power), and the victim's accumulated damage enters **only** through
+`WeightScale` (the `HealthWeight` curve, or `PartResolve` with lost mass). `FixedKnockback ≥ 0` replaces the bracket as in the other
+models; `WeightReference` (default 100, the weight at which `K` equals the authored bracket) and `MinWeight` are properties. This is the
+model of the standard rules asset. `PercentScaling` and `CappedPercent` (the Smash formula, where percent is a term of its own) stay
+for games that want the exact platform-fighter feel; they must then use a **flat** weight curve, and the rules validator warns when a
+percent-term model and a non-flat `HealthWeight` curve meet in one pipeline (damage counted twice).
+
+**Three dials, one job each (owner, 2026-10-22, 11:20).** The pipeline keeps them separate, and every default keeps them so:
+
+| Dial | Victim side | Attack side | Decides | Never decides |
+|---|---|---|---|---|
+| **Hardness** (armour value, as Helldivers; per part with `GSTNParts`, combat-parts.md §3) | `Hardness` | `Penetration` | whether, and how much, damage applies; too hard = ricochet | hitstun, knockback |
+| **Stagger resistance** | `StaggerThreshold` (hurtbox, part, entity, rules; `Infinite` = super armor) | stagger force | whether the victim enters hitstun | damage, hitstop (it applies either way unless `HitstopScale` = 0) |
+| **Weight** (current: base weight × curve of damage taken × lost mass) | `Weight`, `WeightScale` | knockback (`BaseKnockback`, `KnockbackGrowth`, `FixedKnockback`) | knockback strength, so the tier (stagger in place, push back, launch), distance and hitstun length | whether damage applies, whether hitstun starts |
+
+Cross-terms exist only as explicit designer knobs, default identity: a penetration band's `StaggerScale` and `HitstopScale`
+(combat-parts.md §3.4) and a hurtbox's `KnockbackScale`. The ricochet band is the one built-in exception: a bounced hit does nothing
+at all (owner, §3b item 3c).
 
 **Stagger force, hitstun condition, hitstop and reaction tiers (owner, [game-design-direction.md](game-design-direction.md) §2b).** The model evaluates
 these four rules in order, from the hit data and `Ctx.Reaction` only (all *Proposal* except what the owner stated):
@@ -198,6 +230,17 @@ these four rules in order, from the hit data and `Ctx.Reaction` only (all *Propo
    are `FGSTN_ReactionTuning` properties (validator: `PushBackThreshold ≤ LaunchThreshold ≤ TumbleThreshold`); **both default to 0, so
    every staggered hit is a `Launch`, today's behaviour**. `K` is taken after `KnockbackScale`, before `KnockbackResistance` (which
    scales the velocity at hitstop end and never changes the tier).
+   **Standard rule (owner, 2026-10-22, 11:18–11:20):** the victim's **current** weight decides the knockback's strength (`WeightDriven`
+   model above), and a hit launches only if that knockback reaches `LaunchThreshold`; otherwise a staggered victim is only staggered
+   (in place or pushed back). The weight comes from the
+   damage taken **before** this hit (the victim's state at the end of F-1, plus the damage of earlier entries of the same inbox
+   drain, in the drain order of §7), so a victim that took damage is lighter for the next hit, exactly as in the owner's example. A
+   victim already in hitstun is resolved by the same rule with no special case: the second hit recomputes the tier and can launch it
+   or stagger it again (question M4.27). The C++ defaults of the thresholds stay 0 (identity, so unextended tests keep the
+   always-launch result); the **standard rules asset** shipped with `GSTNCombat` (`GSTN_CombatRules_Standard`, the default of the
+   plugin's developer settings) sets real values, *Proposal* starting points to tune: `PushBackThreshold` = 30 % and
+   `LaunchThreshold` = 60 % of `TumbleThreshold`. Whether this hit's own damage should already lighten the weight that decides its
+   launch is question M4.35 (*Proposal*: no, as in the example).
    - `Launch`: today's behaviour, **Smash-like percent knockback kept**: `LaunchVelocity` = direction × `K`, `bTumble = K ≥
      TumbleThreshold`, DI at hitstop end, forced `Falling`.
    - `PushBack`: a **horizontal slide on the ground, with no airborne state**: `LaunchVelocity` = the horizontal direction × `min(K ×
@@ -215,9 +258,13 @@ modifiers are written by steps, never by the model, so the model stays one pure 
 - `FGSTN_HitReactionModifiers { float WeightScale = 1, KnockbackScale = 1, HitstunScale = 1, HitstopScale = 1, StaggerScale = 1;
   float StaggerThreshold = −1 (negative = unset); EGSTN_HitReaction MaxReaction = Launch; bool bNoFlinch = false; }`
   (`GSTNCombatCore`; defaults are the identity, so unextended content is unchanged).
-- **Weight that depends on remaining health**: an optional generic step `HealthWeight` (before `ComputeKnockback`) writes `WeightScale = Curve(Progress)`
+- **Weight that depends on remaining health**: a generic step `HealthWeight` (before `ComputeKnockback`), **in the standard pipeline**
+  (owner, 11:18: the logic is standard and generally does not change; a game can still replace or remove the step, §3.8 of
+  modularity-and-tags.md), writes `WeightScale = Curve(Progress)`
   from a baked curve (`FGSTN_BakedCurve`, 64 `uint16` entries, integer interpolation, so every machine reads the same number;
-  default 1.0 at 0 % falling to 0.6 at the cap: a battered enemy flies further and climbs the reaction tiers). `Progress = DamagePercent / MaxHealth`
+  default 1.0 at 0 % falling to 0.6 at the cap: a battered enemy flies further and climbs the reaction tiers). The curve is
+  **entity data**: `UGSTN_HurtboxSetDefinition::WeightCurve`, falling back on the rules' default curve, so an enemy type that must
+  never get lighter has a flat curve and needs no other change. `Progress` is read from the damage taken before this hit (step 4). `Progress = DamagePercent / MaxHealth`
   under `PercentCapped`, `1 − Health / MaxHealth` under `Health`. With `GSTNParts` the `PartResolve` step **replaces** it (it
   adds lost mass of broken parts): the rules validator reports both in one pipeline.
 - **Stagger / juggle by what hits and where**: "what" = the hit's stagger force (`StaggerForceMode`, `StaggerForce`, `StaggerForceScale`),
@@ -262,7 +309,7 @@ applies only to the `Launch` reaction tier.
 Resolve(FGSTN_HitResolutionContext& Ctx) const` (Continue/Stop). `Ctx` holds the incoming hit, the victim's state at
 end of F-1 (combat state, attributes snapshot, tags), and the outcome being built `{ bHit, bBlocked, bParried, bClank,
 Damage, Knockback result, MeterGains, Events (tags), Effects to apply }`. Steps in M4: `TeamFilter`, `HurtState`
-(intangible/invincible/armor), `HurtboxReaction`, optional `HealthWeight`, `ComputeKnockback` (calls the model), `ApplyDamage` (adds
+(intangible/invincible/armor), `HurtboxReaction`, `HealthWeight` (standard, §3), `ComputeKnockback` (calls the model), `ApplyDamage` (adds
 `Outcome.Damage` through the damage GE), `Hitstop`, `MeterGain`. Placeholders for M6 (`Shield`, `Parry`) and M4b
 (`PartResolve`, after `Shield` and before `ComputeKnockback`) are documented, not implemented. The context also holds
 `FGSTN_HitReactionModifiers Reaction`, `uint8 HurtboxIndex` and `TArray<FInstancedStruct> OutcomeExtensions` (§3b).
@@ -551,7 +598,9 @@ the authority and how we measure it. A dedicated server stays supported.
   threshold staggers, one unit below does not; threshold resolution hurtbox → entity → rules; an Armor window raises it), hitstop `Auto`
   against hand values and clamp (`Override` is final), attacker hitstop independent of every victim field, reaction tier boundaries and
   the `MaxReaction` cap, a lighter weight never gives a milder tier, the 0/0 defaults reproduce the old always-launch results, the
-  `HealthWeight` curve table, seams with fake providers (§3b), every shape pair (touching, separated by ε, contained), swept overlap catches a fast box,
+  owner's two-hit example (hit 1 staggers and damages; hit 2 with the same move, against the weight after hit 1, still below
+  `LaunchThreshold`: staggered again; a stronger hit 2 launches), two hits in one inbox drain see each other's damage in drain order, the
+  `HealthWeight` curve table and a flat entity curve, seams with fake providers (§3b), every shape pair (touching, separated by ε, contained), swept overlap catches a fast box,
   knockback model values against hand-computed ones, DI rotation limits, variant application, pipeline step order
   with fake contexts, inbox ordering and rollback trimming.
 
