@@ -12,7 +12,7 @@
 
 namespace
 {
-	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+	constexpr EAutomationTestFlags DataTestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	FGSTN_AbilityBinding MakeBinding(const FGameplayTag& Command, const FGameplayTag& Require, int32 PriorityOffset)
 	{
@@ -44,7 +44,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataBindingInheritanceTest, "GSTNCombat.GAS.Data.BindingInheritance", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataBindingInheritanceTest, "GSTNCombat.GAS.Data.BindingInheritance", DataTestFlags)
 bool FGSTN_DataBindingInheritanceTest::RunTest(const FString& Parameters)
 {
 	const FGameplayTag Grounded = GSTNCombatTags::State_Busy.GetTag();
@@ -116,7 +116,7 @@ bool FGSTN_DataBindingInheritanceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataBindingToRemovedCommandTest, "GSTNCombat.GAS.Data.BindingToRemovedCommandIsError", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataBindingToRemovedCommandTest, "GSTNCombat.GAS.Data.BindingToRemovedCommandIsError", DataTestFlags)
 bool FGSTN_DataBindingToRemovedCommandTest::RunTest(const FString& Parameters)
 {
 	const FGameplayTag Jab = GSTNCommandTags::Attack_Neutral.GetTag();
@@ -186,7 +186,7 @@ bool FGSTN_DataBindingToRemovedCommandTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataUnknownExtensionTest, "GSTNCombat.GAS.Data.UnknownExtensionIgnored", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataUnknownExtensionTest, "GSTNCombat.GAS.Data.UnknownExtensionIgnored", DataTestFlags)
 bool FGSTN_DataUnknownExtensionTest::RunTest(const FString& Parameters)
 {
 	TStrongObjectPtr<UGSTN_PrimaryKitDefinition> Kit(NewObject<UGSTN_PrimaryKitDefinition>(GetTransientPackage()));
@@ -228,7 +228,7 @@ bool FGSTN_DataUnknownExtensionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataKitIdentityTest, "GSTNCombat.GAS.Data.KitIdentityExactlyOne", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataKitIdentityTest, "GSTNCombat.GAS.Data.KitIdentityExactlyOne", DataTestFlags)
 bool FGSTN_DataKitIdentityTest::RunTest(const FString& Parameters)
 {
 	TStrongObjectPtr<UGSTN_PrimaryKitDefinition> Kit(NewObject<UGSTN_PrimaryKitDefinition>(GetTransientPackage()));
@@ -261,7 +261,7 @@ bool FGSTN_DataKitIdentityTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataWeaponIdentityTest, "GSTNCombat.GAS.Data.WeaponIdentityExactlyOne", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DataWeaponIdentityTest, "GSTNCombat.GAS.Data.WeaponIdentityExactlyOne", DataTestFlags)
 bool FGSTN_DataWeaponIdentityTest::RunTest(const FString& Parameters)
 {
 	TStrongObjectPtr<UGSTN_WeaponDefinition> Weapon(NewObject<UGSTN_WeaponDefinition>(GetTransientPackage()));

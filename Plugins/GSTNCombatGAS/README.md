@@ -6,8 +6,8 @@ the ability system. Design: [docs/architecture/combat.md](../../docs/architectur
 [combat-m3-moves-kits.md](../../docs/architecture/combat-m3-moves-kits.md).
 
 Status: **experimental (0.1)**. It holds the native tags, the two attribute sets, the meter-cost and weapon-stats
-effects, the stat/meter data structs, the plugin settings and the kit, weapon and super data assets; the loadout component and
-the compiled binding table follow in M3.
+effects, the stat/meter data structs, the plugin settings, the kit, weapon and super data assets, and the assembly that feeds them to
+the pure binding-table compiler and loadout rules of `GSTNCombat`; the loadout component follows in M3.
 
 ## Dependency rule
 
@@ -95,6 +95,24 @@ a designer fills the details panel and runs Validate. Abilities and effects are 
 behaviour from an optional plugin through `Extensions` (a `FGSTN_KitExtension`-derived struct picked in the details panel), never a
 new property. Nothing in this layer is subclassed; it is data.
 
+## Loadout assembly (`Loadout/`)
+
+The compiled binding table and the loadout rules are pure and live in [GSTNCombat](../GSTNCombat/README.md) (`GSTNCombatCore`): they
+read plain values and opaque soft paths for abilities, so they need no ability-system type. This plugin holds the one piece that
+knows both sides.
+
+| Type | What it is |
+|---|---|
+| `FGSTN_ResolvedLoadout` | The assets a loadout names, already resolved by the caller (the loadout component, outside the simulation): kit, weapons in loadout order (0 = the kit's primary weapon), supers per slot, scheme, skin. A null pointer is an id that did not resolve. |
+| `FGSTN_LoadoutAssembly` | `BuildCompileInput` (kit command set and bindings, each weapon's bindings after inheritance, supers, customisations; the timeline predicate is `IsTimelineAbilityClass`, which loads the class and looks for the `Combat.Ability.Timeline` asset tag on its default object), `BuildRulesView` (tags, queries, allowed alternatives, compile findings), `CompileAndValidate` (compile, conflict check, rules in one call). |
+
+Why the compiler is not here: the spec put it in this module because it holds `TSoftClassPtr<UGameplayAbility>`, but the compile only
+sorts, dedupes and indexes ability keys, so an opaque `FSoftObjectPath` is enough and the code stays testable without GAS. Everything
+that needs the class (the timeline question, binding inheritance along the weapon chain) happens in the assembly.
+
+**Extending in Blueprint.** Loadout validation is extended with `UGSTN_LoadoutRule` subclasses in a `UGSTN_LoadoutRules` asset (see the
+GSTNCombat README); the assembly is stateless and not subclassed.
+
 ## How to wire it
 
 1. Enable the plugin `GSTNCombatGAS` (the project's `.uproject` lists it; it pulls in `GSTNCombat` and GameplayAbilities).
@@ -105,7 +123,9 @@ new property. Nothing in this layer is subclassed; it is data.
 
 Automation tests `GSTNCombat.GAS.*`: `Tags.AllRegisteredAndDocumented`, `Attributes.Clamp`, `Attributes.KitStatsInitEffect`,
 `Attributes.MeterCostSetByCaller`, `Attributes.WeaponStatsApplyRemoveByClass`, `Data.BindingInheritance`,
-`Data.BindingToRemovedCommandIsError`, `Data.UnknownExtensionIgnored`, `Data.KitIdentityExactlyOne`, `Data.WeaponIdentityExactlyOne`.
+`Data.BindingToRemovedCommandIsError`, `Data.UnknownExtensionIgnored`, `Data.KitIdentityExactlyOne`, `Data.WeaponIdentityExactlyOne`, `Table.AssembleFromDefinitions`
+(kit and weapon assets through the assembly into the compiler and rules). The compiler and rule tests are `GSTNCombat.Core.Table.*` and
+`GSTNCombat.Core.LoadoutRules.*`, where the code lives.
 The data tests build assets in memory and use test-only identity leaves (`GSTN_DataTestTypes`). The attribute tests use a stock
 `UAbilitySystemComponent` on an actor in a transient game world (effects need a world for their start time), with no Network
 Prediction or Mover, so they also run against stock GAS. Run with the same command
