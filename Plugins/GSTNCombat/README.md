@@ -125,6 +125,18 @@ identity rule is checked by `IsDataValid` instead). `UGSTN_CommandSetUtils::GetC
 derived from `FGSTN_KitExtension`, picked in the asset's `Extensions` list. There is nothing to subclass in this layer on purpose: it
 is data.
 
+## Primary asset types a host project must register
+
+Loadout data stores `FPrimaryAssetId`s, never hard references, so the data layer can validate identities and load assets on demand through the Asset Manager (`UAssetManager::GetPrimaryAssetIdList`, async loads). A type that is not registered has no ids for the Asset Manager to list or load.
+
+| Primary asset type | Base class (`AssetBaseClass`) |
+|---|---|
+| `GSTN_SuperInputScheme` | `/Script/GSTNCombatCore.GSTN_SuperInputScheme` |
+| `GSTN_Skin` | `/Script/GSTNCombatCore.GSTN_SkinDefinition` |
+| `GSTN_CombatTimeline` | `/Script/GSTNCombatCore.GSTN_CombatTimeline` |
+
+Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Script/<Module>.<Class>",bHasBlueprintClasses=False,bIsEditorOnly=False,Directories=((Path="/Game/<your folder>")),SpecificAssets=,Rules=(Priority=-1,ChunkId=-1,bApplyRecursively=True,CookRule=AlwaysCook))` line per type under `[/Script/Engine.AssetManagerSettings]` in the project's `DefaultGame.ini`. The plugin never edits the project's config. `AlwaysCook` matters because nothing hard-references these assets: they are found by id.
+
 ## How to extend it
 
 The generic extension points (a new input condition, slot, binding or buffer reset rule) are described in the

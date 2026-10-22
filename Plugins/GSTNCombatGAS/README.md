@@ -113,6 +113,18 @@ that needs the class (the timeline question, binding inheritance along the weapo
 **Extending in Blueprint.** Loadout validation is extended with `UGSTN_LoadoutRule` subclasses in a `UGSTN_LoadoutRules` asset (see the
 GSTNCombat README); the assembly is stateless and not subclassed.
 
+## Primary asset types a host project must register
+
+Kits, weapons and supers are referenced by `FPrimaryAssetId` from the loadout (ids, resolved by the Asset Manager), so they must be registered as primary asset types. The type names are in `GSTNCombatAssetTypes` (GSTNCombatCore); the skin, super input scheme and timeline types are listed in the GSTNCombat README.
+
+| Primary asset type | Base class (`AssetBaseClass`) |
+|---|---|
+| `GSTN_PrimaryKit` | `/Script/GSTNCombatGAS.GSTN_PrimaryKitDefinition` |
+| `GSTN_Weapon` | `/Script/GSTNCombatGAS.GSTN_WeaponDefinition` |
+| `GSTN_Super` | `/Script/GSTNCombatGAS.GSTN_SuperDefinition` |
+
+Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Script/<Module>.<Class>",bHasBlueprintClasses=False,bIsEditorOnly=False,Directories=((Path="/Game/<your folder>")),SpecificAssets=,Rules=(Priority=-1,ChunkId=-1,bApplyRecursively=True,CookRule=AlwaysCook))` line per type under `[/Script/Engine.AssetManagerSettings]` in the project's `DefaultGame.ini`. The plugin never edits the project's config. `AlwaysCook` matters because nothing hard-references these assets: they are found by id.
+
 ## How to wire it
 
 1. Enable the plugin `GSTNCombatGAS` (the project's `.uproject` lists it; it pulls in `GSTNCombat` and GameplayAbilities).

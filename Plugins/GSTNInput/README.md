@@ -54,6 +54,16 @@ character (see input.md). Core modules keep no NP, GAS or Mover dependencies, so
 4. **Define slots** (`UGSTN_InputSlotAsset` / `UGSTN_InputSlotSet`): a command tag plus the pattern that triggers it, then
    run the slot validator, which reports slots that shadow or conflict with each other.
 
+## Primary asset types a host project must register
+
+Slot assets (`UGSTN_InputSlotAsset`) return `GSTN_InputSlot` from `GetPrimaryAssetId`, so slot sets and tools can enumerate and load them by id. Register the type only if your project uses standalone slot assets.
+
+| Primary asset type | Base class (`AssetBaseClass`) |
+|---|---|
+| `GSTN_InputSlot` | `/Script/GSTNInputCore.GSTN_InputSlotAsset` |
+
+Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Script/<Module>.<Class>",bHasBlueprintClasses=False,bIsEditorOnly=False,Directories=((Path="/Game/<your folder>")),SpecificAssets=,Rules=(Priority=-1,ChunkId=-1,bApplyRecursively=True,CookRule=AlwaysCook))` line per type under `[/Script/Engine.AssetManagerSettings]` in the project's `DefaultGame.ini`. The plugin never edits the project's config. `AlwaysCook` matters because nothing hard-references these assets: they are found by id.
+
 ## How to extend it
 
 Everything in `GSTNInputCore` is testable without a world: add an Automation test next to the existing ones
