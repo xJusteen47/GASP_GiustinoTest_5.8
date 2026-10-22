@@ -21,7 +21,11 @@ int32 UGSTN_InputConfig::FindButtonIndex(const FGameplayTag& ButtonTag) const
 uint32 UGSTN_InputConfig::GetButtonMask(const FGameplayTag& ButtonTag) const
 {
 	const int32 Index = FindButtonIndex(ButtonTag);
-	return Index == INDEX_NONE ? 0u : (1u << Index);
+	if (Index < 0 || Index >= 32)
+	{
+		return 0u;
+	}
+	return 1u << Index;
 }
 
 FGSTN_ButtonMap UGSTN_InputConfig::MakeButtonMap() const
