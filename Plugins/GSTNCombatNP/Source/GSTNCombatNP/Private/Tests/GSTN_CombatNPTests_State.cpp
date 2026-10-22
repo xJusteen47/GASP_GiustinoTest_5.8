@@ -28,14 +28,14 @@ namespace
 		return State;
 	}
 
-	int64 BitsOf(FGSTN_CombatSyncState& State)
+	int64 BitsOfState(FGSTN_CombatSyncState& State)
 	{
 		FBitWriter Writer(512, true);
 		State.NetSerialize(FNetSerializeParams(Writer));
 		return Writer.GetNumBits();
 	}
 
-	FGSTN_CombatSyncState ReadBack(FGSTN_CombatSyncState& State, bool& bOutError)
+	FGSTN_CombatSyncState ReadBackState(FGSTN_CombatSyncState& State, bool& bOutError)
 	{
 		FBitWriter Writer(512, true);
 		State.NetSerialize(FNetSerializeParams(Writer));
@@ -59,17 +59,17 @@ bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 	CoreWriter << Start;
 	CoreWriter << Start;
 	TestTrue(TEXT("the default action part is default"), Idle.Core.IsActionPartDefault());
-	TestEqual(TEXT("an idle combatant pays one bit for the whole action part"), BitsOf(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(1));
+	TestEqual(TEXT("an idle combatant pays one bit for the whole action part"), BitsOfState(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(1));
 
 	bool bError = false;
-	const FGSTN_CombatSyncState IdleLoaded = ReadBack(Idle, bError);
+	const FGSTN_CombatSyncState IdleLoaded = ReadBackState(Idle, bError);
 	TestFalse(TEXT("an idle state reads back"), bError);
 	TestTrue(TEXT("and is idle"), IdleLoaded.Core.IsActionPartDefault());
 
 	// A busy one keeps every field, in the same order of requests
 	FGSTN_CombatSyncState Busy = MakeBusyState();
 	TestFalse(TEXT("the busy action part is not default"), Busy.Core.IsActionPartDefault());
-	const FGSTN_CombatSyncState Loaded = ReadBack(Busy, bError);
+	const FGSTN_CombatSyncState Loaded = ReadBackState(Busy, bError);
 	TestFalse(TEXT("a busy state reads back to the end"), bError);
 	TestTrue(TEXT("action state"), Loaded.Core.ActionState == EGSTN_ActionState::InTimeline);
 	TestEqual(TEXT("timeline"), static_cast<int32>(Loaded.Core.ActiveTimeline), 12);
@@ -86,7 +86,7 @@ bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 	FGSTN_CombatSyncState NoTimeline = MakeBusyState();
 	NoTimeline.Core.ActiveTimeline = INDEX_NONE;
 	NoTimeline.Core.TimelineStartFrame = INDEX_NONE;
-	const FGSTN_CombatSyncState NoTimelineLoaded = ReadBack(NoTimeline, bError);
+	const FGSTN_CombatSyncState NoTimelineLoaded = ReadBackState(NoTimeline, bError);
 	TestFalse(TEXT("reads back"), bError);
 	TestEqual(TEXT("INDEX_NONE timeline"), static_cast<int32>(NoTimelineLoaded.Core.ActiveTimeline), static_cast<int32>(INDEX_NONE));
 	TestEqual(TEXT("INDEX_NONE start"), NoTimelineLoaded.Core.TimelineStartFrame, static_cast<int32>(INDEX_NONE));
@@ -114,7 +114,7 @@ bool FGSTN_StateRequestsStaleDroppedTest::RunTest(const FString& Parameters)
 	FGSTN_CombatSyncState State;
 	State.Core.Requests = Requests;
 	bool bError = false;
-	const FGSTN_CombatSyncState Loaded = ReadBack(State, bError);
+	const FGSTN_CombatSyncState Loaded = ReadBackState(State, bError);
 	TestFalse(TEXT("reads back"), bError);
 	TestEqual(TEXT("two requests on the other side"), Loaded.Core.Requests.Num(), 2);
 
@@ -184,7 +184,7 @@ bool FGSTN_StateRevisionGateTest::RunTest(const FString& Parameters)
 
 	// The revision travels with the state, so the client learns it from the next correction
 	bool bError = false;
-	const FGSTN_CombatSyncState Loaded = ReadBack(State, bError);
+	const FGSTN_CombatSyncState Loaded = ReadBackState(State, bError);
 	TestFalse(TEXT("reads back"), bError);
 	TestEqual(TEXT("the revision arrived"), static_cast<int32>(Loaded.Core.LoadoutRevision), 3);
 
