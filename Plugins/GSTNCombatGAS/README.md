@@ -23,8 +23,9 @@ One module, `GSTNCombatGAS` (Runtime, loading phase `Default`, `IMPLEMENT_MODULE
 | `Effects/` | `GSTN_GE_MeterCost.h`, `GSTN_GE_WeaponStats.h` | Base classes of the meter-cost and weapon-stats effects. |
 | `Settings/` | `GSTN_CombatGASSettings.h` | `UGSTN_CombatGASSettings` (attribute starting values). |
 | `Kits/` | `GSTN_AbilityBinding.h`, `GSTN_PrimaryKitDefinition.h`, `GSTN_WeaponDefinition.h`, `GSTN_SuperDefinition.h` | The binding type and the three primary data assets that hold ability or effect classes. |
-| `Loadout/` | `GSTN_LoadoutAssembly.h` | `FGSTN_ResolvedLoadout`, `FGSTN_LoadoutAssembly`: assets to compiler input. |
-| `Private/Tests/` | `GSTN_CombatGASTests_*.cpp`, `GSTN_GASTestTypes.h`, `GSTN_DataTestTypes.h` | Automation tests and their test-only effects, tags and extension structs. |
+| `Loadout/` | `GSTN_LoadoutAssembly.h`, `GSTN_LoadoutComponent.h`, `GSTN_LoadoutSubsystem.h`, `GSTN_LoadoutSaveGame.h` | `FGSTN_ResolvedLoadout`, `FGSTN_LoadoutAssembly` (assets to compiler input); `UGSTN_LoadoutComponent` (replicated, PlayerState: request, validate, grant); `UGSTN_LoadoutSubsystem` (local-player presets) and `UGSTN_LoadoutSaveGame` (their save file). |
+| `Cosmetics/` | `GSTN_SkinComponent.h` | `UGSTN_SkinComponent`: applies the loadout's skin to the pawn's mesh, cosmetic only. |
+| `Private/Tests/` | `GSTN_CombatGASTests_*.cpp`, `GSTN_GASTestTypes.h`, `GSTN_DataTestTypes.h`, `GSTN_LoadoutTestTypes.h` | Automation tests and their test-only effects, tags, extension structs and the loadout component/subsystem test doubles. |
 
 ## Dependency rule
 
@@ -181,9 +182,10 @@ Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Scrip
 2. A module that uses the tags lists `GSTNCombatGAS` in its `Build.cs` and includes `GSTN_CombatTags.h`.
 3. Designers add leaves under the roots in a tag ini (`Config/Tags/` of a plugin or of the project).
 4. Add the attribute sets to the pawn's ability system component (both: the settings' `AttributeDefaults` list serves the
-   two sets, each takes the names it has in `PostInitProperties`). Register the primary asset types (above). The loadout
-   component that grants the kit, applies the init effect and the primary weapon's stats effect is M3 work, not in the repo yet:
-   until then `FGSTN_KitStats::ApplyTo` and `UGSTN_GE_WeaponStats::Apply` are called by project code or tests.
+   two sets, each takes the names it has in `PostInitProperties`). Register the primary asset types (above).
+5. Add `UGSTN_LoadoutComponent` to the PlayerState and `UGSTN_SkinComponent` to the pawn (the wiring list above): the
+   component grants the kit, applies the init effect and the primary weapon's stats effect. `FGSTN_KitStats::ApplyTo` and
+   `UGSTN_GE_WeaponStats::Apply` stay callable by hand for project code and tests.
 
 ## How to extend it
 
@@ -194,8 +196,14 @@ Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Scrip
   `MinGravityScale` branch). A new meter: two attributes on `UGSTN_MeterAttributeSet` and one line in `GetMeterPairs()`.
   Stats and meters that a plugin adds must therefore be edited here: there is no registry of attribute sets, and the kit data
   refers to meters by `FGameplayAttribute`, so a second attribute set works for the data but not for the shared clamps.
-- A native cost or stats effect: a child of `UGSTN_GE_MeterCost` (set `Meter` and call `RebuildModifiers()` once in the
-  constructor) or of `UGSTN_GE_WeaponStats` (add the modifiers in the constructor).
+- A native cost or stats effect: a child of `UGSTN_GE_MeterCost` (set `Meter` and `Cost`, then call `RebuildModifiers()`
+  once in the constructor) or of `UGSTN_GE_WeaponStats` (add the modifiers in the constructor).
+- Where the loadout component finds things: derive from `UGSTN_LoadoutComponent` and override `ResolveAsset` (an id to its
+  asset; the Asset Manager by default) or `GetTargetAbilitySystem` (the PlayerState's pawn by default); from
+  `UGSTN_SkinComponent`, `GetTargetMesh` (a Character's `GetMesh()`, else the owner's first skeletal mesh component); from `UGSTN_LoadoutSubsystem`,
+  `ReadStorage`/`WriteStorage` (the `GSTNCombatLoadouts` save slot by default; replace for a cloud or profile backend) and
+  `IsAssetIdKnown`. All are `virtual`, none `UFUNCTION`, so a Blueprint child cannot override them. The tests do exactly this
+  (`GSTN_LoadoutTestTypes.h`).
 - New validation of an asset: `Validate` of the asset class (pure, testable) and `IsDataValid` (editor, cross-asset). New
   loadout-level checks are `UGSTN_LoadoutRule` subclasses in `GSTNCombatCore`, not code here.
 - Per-plugin kit or weapon data: a `FGSTN_KitExtension`-derived struct (`GSTNCombatCore`, `Rules/GSTN_KitExtension.h`), read
@@ -203,12 +211,20 @@ Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Scrip
 - What stays C++: the attribute sets (`UCLASS()` without `Blueprintable`), the tags, the settings class, the assembly and the
   binding utilities. No `BlueprintNativeEvent` or `BlueprintImplementableEvent` exists in this module.
 
-**In Blueprint.** Children of `UGSTN_GE_MeterCost` (pick `Meter`, the modifier is rebuilt on edit and on load) and of
+**In Blueprint.** Children of `UGSTN_GE_MeterCost` (pick `Meter` and `Cost`, the modifier is rebuilt on edit and on load) and of
 `UGSTN_GE_WeaponStats` (add modifiers whose magnitudes are set-by-caller `Combat.SetByCaller.Stat.*` keys, optionally a
 target-tags component granting `Combat.Weapon.Role.*`); kit init effects are any instant `UGameplayEffect` with such
 modifiers. Kit, weapon and super data assets (above). Blueprint-callable functions: `UGSTN_MeterUtils` and
 `UGSTN_AbilityBindingUtils::InheritBindings` (`BlueprintPure`); the structs are `BlueprintType`, the attributes
-`BlueprintReadOnly`.
+`BlueprintReadOnly`. The two components are `Blueprintable` and `BlueprintSpawnableComponent` (class group "GSTN Combat"), so a
+Blueprint child can add logic around the events; their surface, all in the `Combat|Loadout` and `Combat|Skin` categories:
+
+| Class | Blueprint surface |
+|---|---|
+| `UGSTN_LoadoutComponent` | `Rules` (`EditAnywhere`); events `OnLoadoutApplied(Component, Revision)` and `OnLoadoutRejected(Component, Errors)`; `ServerRequestLoadout` (server RPC, callable from the owning client), `AcceptLoadout` (`BlueprintAuthorityOnly`), `ApplyAppliedLoadout`; pure `GetApplied`, `GetRevision`, `HasLoadout`, `IsGrantPending`, `GetResolvedKit`, `GetResolvedSkin`; the replicated `Applied` and `Revision` are `BlueprintReadOnly`. |
+| `UGSTN_SkinComponent` | `bAutoBind`, `MaxBindAttempts`, `BindRetryInterval` (`EditAnywhere`); `BindToLoadout`, `TryBindToPlayerState`, `ApplySkin`, `RestoreOriginal`; pure `GetAppliedSkin`. |
+| `UGSTN_LoadoutSubsystem` | `BlueprintType` local-player subsystem: `SaveLoadout`, `LoadLoadout`, `DeleteLoadout`, `HasLoadout`, `ListLoadouts`, `RequestLoadout`. |
+| `UGSTN_LoadoutSaveGame` | `BlueprintType`; `Loadouts` and `SaveVersion` are `BlueprintReadOnly`. |
 
 ## Using it in another project
 
@@ -218,6 +234,11 @@ Network Prediction. Then:
 
 - Register the primary asset types in the project's `DefaultGame.ini` (`PrimaryAssetTypesToScan`, list above); the plugin
   cannot do it for you. The types are named in `GSTNCombatAssetTypes` (`GSTNCombatCore`, `Kits/GSTN_CombatAssetTypes.h`).
+  This project's `Config/DefaultGame.ini` is a working example: it registers all seven (`GSTN_PrimaryKit`, `GSTN_Weapon`,
+  `GSTN_Super`, `GSTN_SuperInputScheme`, `GSTN_Skin`, `GSTN_CombatTimeline`, `GSTN_InputSlot`) under `/Game/GASNPPTest`.
+- Put `UGSTN_LoadoutComponent` on your PlayerState and `UGSTN_SkinComponent` on your pawn (wiring above). The component
+  replicates (`NetCore`), so the PlayerState must replicate too; the subsystem writes the save slot `GSTNCombatLoadouts`
+  per local user through `UGameplayStatics`.
 - Copy `Config/DefaultGSTNCombatGAS.ini` or override it (Project Settings > Plugins > GSTN Combat GAS); every machine of a
   match must run the same values. The input and combat settings of the two Core plugins apply too (their READMEs).
 - Declare the designer leaves (`Kit.*`, `Weapon.*`, `Super.*`, `Loadout.*`, `Skin.*`, `Combat.Stat.*`, `Combat.Meter.*`,

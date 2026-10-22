@@ -14,7 +14,7 @@ plugins that add GAS or Network Prediction, so the Core can be reused in a proje
 | [GSTNInput](GSTNInput/README.md) | Core | Input commands, buffer, priority, locks, contexts and native input tags. | No |
 | [GSTNInputNP](GSTNInputNP/README.md) | NP adapter | The input simulation embeddable in an NP model, ability bindings, the Mover sim-state tracker. | Yes |
 | [GSTNCombat](GSTNCombat/README.md) | Core | Default combat command set, combat tags and settings, timelines, loadout data and rules, sync fragment format. | No |
-| [GSTNCombatGAS](GSTNCombatGAS/README.md) | GAS | Combat ability tags, attribute sets, kit stats, meter and weapon effects, kit/weapon/super assets. | No (stock GAS works) |
+| [GSTNCombatGAS](GSTNCombatGAS/README.md) | GAS | Combat ability tags, attribute sets, kit stats, meter and weapon effects, kit/weapon/super assets, the loadout component, loadout presets (save game) and the skin component. | No (stock GAS works) |
 | [GSTNCombatNP](GSTNCombatNP/README.md) | NP adapter | The combat NP model (`UGSTN_CombatSimComponent`), sync fragments and tick extensions. | Yes |
 
 Dependency rule: Core modules depend on no GAS, NP or Mover module; an adapter depends on its own Core and may depend on

@@ -83,6 +83,7 @@ The fork was imported in one commit (`53c8716`), so git does not separate the up
 |---|---|
 | `UNpAbilitySystemComponent::OnSimulationPreTick` delegate, broadcast at the start of every (re)simulated tick so an earlier-sorted simulation can activate, cancel or pause montages with the right frame (`d6039e2`). | `Public/Abilities/NpAbilitySystemComponent.h`, `Private/Abilities/NpAbilitySystemComponent.cpp` |
 | `FMontageSimSyncState::ShouldReconcile` ignores `bIsPaused` when no montage plays (`3520b35`). | `Private/MontageSimulator/NetMontageSimulatorData.cpp` |
+| `UNpAbilitySystemComponent::MonitoredTagChanged` returns at once while `GetIsRestoringFrame()`: `RestoreTags` broadcasts the tag delegates, and an owned-tag trigger fired inside `RestoreFrame` double- or phantom-activated an ability on the owning client; the re-simulation fires the trigger again from the tag changes it simulates (`4838224`, PATCHES.md 1, with the re-apply recipe). | `Private/Abilities/NpAbilitySystemComponent.cpp` |
 | `FAbilitySimInputCmd::PrepareRepeatedInput()`: clears one-shot input action events when NP repeats an input after a hitch (`5a5fbcd`). | `Public/DataTypes/AbilitySimulationDataTypes.h` |
 | Spike S-FP (forward prediction of simulated proxies), inert behind `np.Spike.SPPredictActivation` and `np.Spike.SPSendAttributeBase` (both default 0): `CanPredictAsSimulatedProxy()`, `bInSimulationTick` (`bdfa7e8`). | `NpAbilitySystemComponent.h/.cpp`, `Private/Abilities/NpGameplayAbility.cpp`, `Private/DataTypes/EffectsDataTypes.cpp` |
 

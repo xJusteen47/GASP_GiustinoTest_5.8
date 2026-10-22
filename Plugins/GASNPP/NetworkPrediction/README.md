@@ -77,6 +77,7 @@ map, not a copy:
 |---|---|---|
 | `d53dff2` | Rollback: every instance's state view points at the restored frame before re-simulation (PATCHES.md 1). | `Public/Services/NetworkPredictionService_Rollback.inl` |
 | `951c495` | Rollbacks older than the 64-frame ring are ignored and forced rollbacks clamped; client delta-serialization bases are pruned; `NpInstanceFrameBufferSize` (PATCHES.md 1). | `NetworkPredictionService_Rollback.inl`, `Services/NetworkPredictionInstanceData.h`, `Public/NetworkPredictionSerialization.h` |
+| `5efc21a` | Rollback: a server state that maps past the local pending frame (input offset still 0, before the server consumed the client's first input) is skipped instead of compared with a never-simulated slot; a simulated proxy still copies the received input to the head (PATCHES.md 1). | `Public/Services/NetworkPredictionService_Rollback.inl` |
 | `5a5fbcd` | Hitch-safe input buffer: the server holds the last frame when starved and skips only past the ring; the client sends one RPC per engine frame; optional `InputType::PrepareRepeatedInput()` hook (PATCHES.md 2). | `Private/NetworkPredictionWorldManager.cpp`, `Private/NetworkPredictionPlayerControllerComponent.cpp` (+ `.h`), `Services/NetworkPredictionService_Input.inl`, `Public/NetworkPredictionDriver.h` |
 | `bdfa7e8` | Spike S-FP code, inert: `np.Spike.SPPrepareRepeatedInput`, `np.Spike.LogResimCost` (PATCHES.md 4). | `Services/NetworkPredictionService_Ticking.inl`, `NetworkPredictionWorldManager.cpp/.h` |
 

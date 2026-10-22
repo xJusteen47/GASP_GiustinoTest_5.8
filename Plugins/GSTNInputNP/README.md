@@ -213,7 +213,8 @@ so only binding requirements see them, not the abilities' own tag requirements.
 
 ## Tests
 
-Automation tests `GSTNInput.NP.*` (`Source/GSTNInputNP/Private/Tests/`: `Bindings.Table`, `Simulator.*` (buffer, request,
+Automation tests `GSTNInput.NP.*` (`Source/GSTNInputNP/Private/Tests/`: `Bindings.Table`, `Bindings.ServerOnlyAbilityRejected`
+(a `ServerOnly`/`ServerOnlyExecution` ability is dropped from the table), `Simulator.*` (buffer, request,
 forced, locks, unbound commands, `CommandExecutedEvent`), `Context.ActivationContext`, `Context.BlueprintProvider`,
 `Component.Standalone`), run with the usual `Automation RunTests GSTNInput+GSTNCombat` (filter by name prefix, so the plugin
 move did not change it). See [testing.md](../../docs/architecture/testing.md).

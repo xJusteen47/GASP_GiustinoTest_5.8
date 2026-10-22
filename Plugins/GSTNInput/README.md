@@ -322,10 +322,12 @@ Core by itself maps commands to tags, not to abilities.
 
 ## Testing
 
-Automation tests `GSTNInput.Core.*` (full names are `GSTNInput.Core.Input.<Area>.<Case>`, 76 today, in
+Automation tests `GSTNInput.Core.*` (full names are `GSTNInput.Core.Input.<Area>.<Case>`, 80 today, in
 `Source/GSTNInputCore/Private/Tests/GSTN_InputTests_<Area>.cpp`): Session Frontend > Automation, or headless
 `UnrealEditor-Cmd <your project>.uproject -ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit" -unattended -nullrhi`
-(with your project's `.uproject`).
+(with your project's `.uproject`). The stick-consumption rules have their own cases: `History.ConsumedStickAnchor`
+(serialization and equality of the consumed frame) and `Resolver.StickOnlyMotionFiresOnce`, `Resolver.StickOnlySpinFiresOnce`,
+`Resolver.StickAnchorMark`.
 See [testing.md](../../docs/architecture/testing.md).
 
 ## Further reading
