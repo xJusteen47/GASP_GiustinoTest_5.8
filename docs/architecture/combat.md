@@ -84,7 +84,7 @@ by `ShouldReconcile` when no montage plays.
 | Module | Depends on | Contents |
 |---|---|---|
 | `GSTNCombatCore` (Runtime) | Core, CoreUObject, Engine, GameplayTags, **GSTNInputCore** | Combat content that is **pure and deterministic**, built on the input core: the six standard button tags, the default command set (`UGSTN_StandardSlots`, command tags), later hit shapes and knockback models. No GAS, no NPP. Covered by Automation tests. The input layer itself is `GSTNInputCore` ([input.md](input.md)). |
-| `GSTNCombatGAS` (Runtime) | Core, GameplayAbilities, GameplayTasks | Native tags, `UGSTN_CombatAttributeSet`, damage GE and execution, hit effect context, weapons, loadouts, loadout component. Compiles against stock GAS and the fork (same module name). |
+| `GSTNCombatGAS` (Runtime, **exists**, plugin `GSTNCombatGAS`; so far only the tags) | Core, GameplayAbilities, GameplayTasks, GSTNCombatCore | Native tags, `UGSTN_CombatAttributeSet`, damage GE and execution, hit effect context, weapons, loadouts, loadout component. Compiles against stock GAS and the fork (same module name). |
 | `GSTNCombatNP` (Runtime, **exists**, plugin `GSTNCombatNP`) | Core, GAS, NetworkPrediction, AbilitySystemSimulation, Mover, **GSTNInputNP** | **Fork adapter**: combat NP model (embeds the input simulation of `GSTNInputNP` and is its host), simulation component, `UGSTN_GA_Base` and `UGSTN_GA_BaseCombat`, freeze/knockback layered moves, hit resolution. Input command, sources, tracker and binding set come from `GSTNInputNP`. |
 | `GSTNCombatEditor` (Editor) | all | Timeline editor (timeline assets and inline timelines; viewport), socket baking, slot conflict validator UI, debug draw. |
 

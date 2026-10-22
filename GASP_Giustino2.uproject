@@ -146,6 +146,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombatNP",
 			"Enabled": true
 		}

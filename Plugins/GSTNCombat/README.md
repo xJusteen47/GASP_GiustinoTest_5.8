@@ -17,7 +17,7 @@ This README is the map; those documents hold the decisions and the reasons.
 |---|---|---|
 | `GSTNCombatCore` | exists | Combat content built on `GSTNInputCore`, pure and deterministic (no GAS, no Network Prediction): the standard button tags (`Input.Button.Attack`...), the standard command tags and the default command set (`UGSTN_StandardSlots`). Covered by Automation tests (`GSTNCombat.Core.*`). |
 | `GSTNCombatNP` | separate plugin | Moved to the plugin [GSTNCombatNP](../GSTNCombatNP/README.md) (same module name): the combat NP model (`UGSTN_CombatSimComponent`), which needs the fork. |
-| `GSTNCombatGAS` | planned | Native tags, attribute set, damage effect and execution, weapons and loadouts. |
+| `GSTNCombatGAS` | separate plugin | The plugin [GSTNCombatGAS](../GSTNCombatGAS/README.md): native ability-layer tags now, later attribute set, damage effect and execution, weapons and loadouts. Needs GameplayAbilities, so it is not part of this plugin. |
 | `GSTNCombatEditor` | planned | Timeline editor, slot conflict validator UI, debug drawing. |
 
 The generic input code (history, classifier, pattern grammar, matcher, buffer, slots, resolver, bindings, settings) lives in
