@@ -88,6 +88,13 @@ consequences for the design. Items marked *Reading* are interpretations to confi
   cosmetic chips, or whole limbs (tied to the part-breaking system of section 1).
 - Dead players and enemies **shatter into pieces**.
 
+## 5b. Damage inside a part, detachment, players (owner input, 2026-10-22)
+
+- The "breaking" look **inside a part** is a diegetic display of that part's health: **just a material** (shader), no
+  spawned pieces.
+- When a part **detaches**, it is no longer a material effect: it is a real separation (mesh, chunk, physics).
+- **Players are a single part**: when it breaks, they die.
+
 ## 6. Dodge and shield
 
 - **No standard implementation**: dodge and shield may depend on the **kit**.
@@ -106,6 +113,13 @@ consequences for the design. Items marked *Reading* are interpretations to confi
   the host leaves, the session ends (no host migration unless asked). The PIE harness should also cover a
   listen-server configuration (host + 2 clients), not only a dedicated server.
 - Dedicated server support is not removed from the design, but it is no longer the reference configuration.
+
+## 6c. Cancellable animation tails (owner input, 2026-10-22)
+
+- Most moves and animations have an **automatic cancel window towards the end**: the final part of the return to idle can
+  be **cancelled by anything**, for responsiveness. Which portion is only cosmetic is **decided by the designer**.
+- **Stagger follows the same pattern**: about **half a second unskippable**, then the rest is cancellable.
+- Spec: M3 `FirstActionableFrame` for timelines; M4 §7 (hitstun = locked part, reaction tail cancellable; ricochet recoil too).
 
 ## 7. Consequences for the specifications
 
@@ -203,3 +217,13 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 > parte del nemico o giocatore è infinita. Per quanto riguarda la durezza delle parti, se si prova ad attaccare una
 > parte troppo dura rispetto all'attacco, non si avrà un hitstop, ma un effetto di "ricochet" del colpo, ossia il
 > personaggio ritira indietro l'arma con un montage che cambia a seconda del di attacco
+
+> Per quanto riguarda l'effetto visivo di "rottura". All'interno di una parte, è un modo diegetico di far vedere la sua
+> vita, un semplice materiale. Se una parte si stacca, quello non è più un semplice materiale/shader. I giocatori sono
+> semplicemente una parte, quindi, quando si rompono muoiono.
+>
+> Per quanto riguarda la domanda che mi hai appena fatto, tieni a mente che la maggior parte delle mosse e animazioni
+> dovrebbe avere una finestra di cancel automatico verso la fine (ossia la parte finale dell'animazione di ritorno a
+> "idle" dovrebbe poter essere cancellata da qualsiasi cosa, in modo da dare un senso di reattività. Ovviamente, quale
+> porzione di animazione è solo estetica, è decisa dal designer). Lo stagger segue questo pattern, ossia per circa mezzo
+> secondo l'animazione è unskippable, mentre la parte finale è cancellabile.

@@ -6,13 +6,19 @@ Part of the combat design ([combat.md](combat.md)): read §5.3, §12 and §15 th
 Section numbers below are local to this file. Items marked *Proposal* are choices for the owner or the milestone owner to
 confirm; *Reading* items interpret the owner's message (see the open questions list kept with the project notes).
 
+
+> **Revision 2026-10-22 (owner direction, game-design-direction.md §5b):** (1) damage **inside** a part is shown only by a
+> **material/shader** parameter (diegetic health: cracks, exposed crystal), never by spawned pieces; (2) a part that
+> **detaches** is a real separation (mesh, chunk, physics), §6.2; (3) a **player is a single part**: when it breaks, the player
+> dies (§4.5). Chips as spawned meshes/bursts are removed from §6.1.
+
 ## 1. Scope and place in the milestones
 
 **Goal:** an entity (player fighter, enemy fighter, server-only minion) can have **parts**. A hit lands on one part; the
 hit's **penetration** against the part's **hardness** decides how much of the hit damages the part and how much feeds the
 entity's main pool; a part that passes its cap **breaks** (state change, events, possible launch of a chunk); the main pool
 is a **capped damage percent** that also drives knockback, weight and presentation; passing the main cap destroys the
-entity. Presentation shows the crystal under the skin: chips as health drops, limbs on break, shatter on death.
+entity. Presentation shows the crystal under the skin: a damage material inside each part, limbs detaching on break, shatter on death.
 
 In: part set data, penetration table, part and main damage rules, per-part stagger thresholds and reaction caps, weight and juggle reaction modifiers, part state
 sync, break effects (derived tags, GE requests, disabled hurtboxes/hitboxes), events, minion path, presentation (client only),
@@ -183,7 +189,7 @@ author their hitboxes in groups per limb.
 ### 3.6 Presentation data is separate
 
 `UGSTN_PartPresentationSet` (Presentation module, soft reference from the set) is indexed by part index: bones to hide, stump
-cap mesh and socket, chunk class and impulse, chip sets and thresholds, shatter profile. Dedicated servers never load it; a listen-server host does.
+cap mesh and socket, chunk class and impulse, damage-material parameter names and part mask channel, shatter profile. Dedicated servers never load it; a listen-server host does.
 
 ## 4. Health model
 
@@ -248,7 +254,7 @@ data-driven:
   band, §3.4); a ricochet band skips the whole reaction (no damage, no hitstop, no flinch). Below the threshold M4's Armor semantics apply: damage and hitstop, no hitstun, no launch
   or push, flinch presentation only. This **replaces** the old per-part stagger factor and the single global threshold: with parts on,
   the part's own value is the condition. Typical data: a **weak point a low threshold** (a light hit staggers it, the reward for
-  aiming), the torso a middle value, **armoured limbs and boss plates a high one** (light hits chip the part and are shrugged off, only
+  aiming), the torso a middle value, **armoured limbs and boss plates a high one** (light hits scratch the part's material and are shrugged off, only
   heavy attacks stagger it).
 - **`MaxReaction`** (the `min` of the part's and the body's): the most severe reaction tier the part can undergo, `StaggerInPlace`,
   `PushBack` or `Launch` (default). A heavy limb or a boss never flies: it is capped at `PushBack` or `StaggerInPlace`.
@@ -279,14 +285,16 @@ between prediction and resolution.
 |---|---|---|---|
 | Part set source | Kit extension | Kit extension | Definition extension (bridge) |
 | Cap (`MaxHealth`) | High (long fights, comeback) | Per enemy, tuned for PvE | Small, 5-bit health on the wire |
-| Typical effect of a break | **Cosmetic by default**; optional stat penalty; never disables control | Gameplay: grabbable, disarmed, slowed | Cosmetic plus grabbable |
+| Part set | **One part = the whole body** (owner, 2026-10-22): its health is the player's health | Several parts | Few parts, often one |
+| Typical effect of a break | **The break is death** (no limb loss for players) | Gameplay: grabbable, disarmed, slowed | Cosmetic plus grabbable |
 | `StaggerThreshold` (hitstun condition) | Low (most hits stagger: fighter feel; *Proposal*) | Per enemy and per part: weak points low, armoured parts and bosses high | Per type and per part |
 | `MaxReaction` | `Launch` | Per enemy and part (heavy: `PushBack` or `StaggerInPlace`) | Per type; the tier is carried by `ActionState` (M8 §8.2) |
 | Weak points | Rare (e.g. head, hard to hit by design) | Core of PvE | Few, often one |
 | Death | KO event then shatter | KO then shatter | Dying state then shatter (tiered, §6.4) |
 
-*Proposal:* players' breaks are reversible by design only through respawn/loadout reset (no healing of broken parts in the
-first version; `BrokenMask` is monotonic until the entity is reset). Monotonic state also makes the rollback story simple.
+Players: the single part's cap is the KO condition, so "part broken" and "player dead" are the same event for a player
+(`Combat.Event.Part.AllBroken` followed by KO). Enemies: `BrokenMask` is monotonic until the entity is reset (*Proposal*:
+no healing of broken parts in the first version), which also keeps the rollback story simple.
 
 ## 5. Simulation and network
 
@@ -406,7 +414,7 @@ Minions are not NP actors (M8). The bridge plugin gives the minion store optiona
 - **Wire** (requires an M8 change, listed in §9): `FGSTN_MinionNetItem` gets an optional extension byte `ExtByte`
   guarded by a type-level `bHasExt` (0 bits for types without parts) owned by the bridge: `BrokenMask`. Dirty only when
   the mask changes. Cost: +8 bits on items of part-bearing types (about +1 B on an 18 B update, +5 %); items do not carry
-  per-part damage. Clients drive **chips from the existing 5-bit `Health`** and **limbs from the mask**; weak-point flashes use
+  per-part damage. Clients drive **the damage material from the existing 5-bit `Health`** and **limbs from the mask**; weak-point flashes use
   the existing `HitCounter` plus the local knowledge of where the attacker hit.
 - **Reaction**: the same step writes the part's `StaggerThreshold` and `MaxReaction`, so a minion's hitstun condition and reaction tier
   (`StaggerInPlace`, `PushBack`, `Launch`) follow M4 §3 per part; the tier is carried by the minion's `ActionState` (`Hitstun`,
@@ -421,14 +429,16 @@ Minions are not NP actors (M8). The bridge plugin gives the minion store optiona
 All of it lives in `GSTNPartsPresentation`, driven from `FinalizeFrame`/events, with **no feedback into gameplay**: no
 collision with pawns, no gameplay hits, no input, nothing the simulation reads.
 
-### 6.1 Progressive chips (cosmetic)
+### 6.1 Damage inside a part: material only (diegetic health)
 
-`UGSTN_PartsPresentationComponent` watches `Progress` (and per-part percent for owners/server data it has) and fires
-`FGSTN_ChipThreshold { float Progress; FGSTN_ChipSet Set; }` when a threshold is crossed upward: a Niagara burst of small
-crystal shards from a body region, a skin-damage mask parameter (material-driven crack/exposed-crystal blend), a few chip
-meshes. Seeds derive from `(EntityId, ThresholdIndex)`, so every client shows the same chips. Chips are **monotonic**: the
-component keeps a high-water mark; a rollback that lowers `Progress` never un-spawns a chip (cosmetic, accepted). Cost: one
-float compare per frame per entity; bursts are Niagara-pooled.
+Owner direction: inside a part, damage is **a material, a shader**, the diegetic way to show that part's health; nothing is
+spawned. `UGSTN_PartsPresentationComponent` writes, per part, a **damage parameter** (`0..1` = part damage / part cap, or
+`Progress` for a single-part player) into the mesh's dynamic material instances: the skin's crack and exposed-crystal blend,
+masked per part by a vertex-colour or UV region (*Proposal*: one `PartIndex` channel in the mesh, so one material serves all
+parts; for per-part materials, one parameter per material slot). The parameter is **driven directly from replicated state**
+every frame (no thresholds, no events), smoothed for display; it follows rollbacks and corrections naturally because it is
+not an effect but a view of the state. Cost: one scalar parameter write per part when the value changes. A small hit spark
+(`GameplayCue.Combat.Part.Hit`) is the only per-hit cosmetic, and it is a cue, not a piece.
 
 ### 6.2 Limb detachment: options and recommendation
 
@@ -465,7 +475,7 @@ Rules in the rules extension (`FGSTN_PartsPresentationBudget`), enforced by `UGS
 | Physical chunks alive (limbs and large shards), all entities | 48 pooled actors, 4 s lifetime then shrink-fade |
 | Shatter shards via Niagara mesh particles | 600 live particles total, CPU sim, simple ground collision, no pawn collision |
 | Geometry Collections alive | 2 (players/bosses) |
-| Chip bursts per frame | 8 (extra dropped) |
+| Damage-material parameter writes | only on change, no cap needed |
 | Cost control | By distance and tier (M8 §7): beyond tier T1 only the Niagara burst, no chunk; beyond T2 nothing; priority to chunks near the camera and to local-player hits; sleeping bodies stop simulating after 1.5 s |
 | Memory | Pieces and chunks are shared assets (instanced), loaded by the presentation set on demand, never on a dedicated server (the listen-server host loads them like any client) |
 
@@ -474,7 +484,7 @@ M8 bench adds a "40 deaths in 2 seconds" case (§8) with a frame-time ceiling.
 
 ### 6.5 Rollback and what may be shown when
 
-Reversible cosmetics (hit flash, chips) may use predicted data; **irreversible** ones (limb detach, shatter) fire only from
+Reversible cosmetics (hit flash, the damage material) may use predicted data; **irreversible** ones (limb detach, shatter) fire only from
 confirmed sources: the outbox event, or a mask bit that arrived in replicated/corrected state. For interpolated victims on
 the attacker's client that is the replicated fragment (M4 §9); for the local player as victim it is the server correction
 (M4 §13: hits on the local player arrive as corrections). If a future forward-prediction milestone predicts victim hits
@@ -495,7 +505,7 @@ designer vocabulary (`Plugins/GSTNParts/Config/Tags/GSTNParts.ini`). Rules of mo
 | `Combat.Event.Part.Damaged`, `.WeakPointHit`, `.Ricochet`, `.Broken`, `.AllBroken` | native | §5.4 | pipeline outbox | presentation, UI, objectives |
 | `Message.Combat.PartBroken` | native | Message-router channel for UI | presentation or UI bridge | HUD |
 | `Part.Type.Head`, `.Torso`, `.Arm`, `.Leg`, `.Weapon`, `.Armour`, `.Crystal` | **ini** | Part classification on `FGSTN_PartDefinition::Types`; unrelated to `Combat.Hurtbox.*` (which classifies hurtboxes, M5 §tags) | designers | rules, cues, AI |
-| `GameplayCue.Combat.Part.Chip`, `.Break`, `.Ricochet`, `.Shatter` | ini | Cue tags used by presentation sets | designers | presentation |
+| `GameplayCue.Combat.Part.Hit`, `.Break`, `.Ricochet`, `.Shatter` | ini | Cue tags used by presentation sets | designers | presentation |
 
 `Combat.State.*` is **never** declared or granted by parts: stagger is the existing `Combat.State.Hitstun`, hitstop the
 existing `Combat.State.Hitstop`. Parts add no `Combat.Mover.*` and no `Combat.Lock.*`.
@@ -526,7 +536,7 @@ same projected tag drives the minion path (the store mask feeds the same functio
   body and rules fallback; a weak point staggers on a hit an armoured part shrugs off; a ricochet band never staggers and never freezes); `MaxReaction`
   caps the tier; a lower effective weight never gives a milder tier.
 - **Events/dedupe**: key `(EntityRef, PartIndex, BreakSerial)`; two entries in one drain are order independent.
-- **Presentation (Runtime)**: chip thresholds fire once, idempotent hidden-bone set from the mask, pool never exceeds the
+- **Presentation (Runtime)**: damage material follows the replicated value (also after a rollback), idempotent hidden-bone set from the mask, pool never exceeds the
   budget, recycle order.
 - **Validators**: duplicate hurtbox, parent cycle, mask > 16 (> 8 for minions), missing bone.
 
@@ -551,7 +561,7 @@ Clean = state snapshots equal and no reconciles beyond the expected one per hit 
    no C++. Which hits stagger a part (its `StaggerThreshold`) and its `MaxReaction` are data too.
 4. Grab gating works with a rules-asset edit only (§7); no M6 code change.
 5. Minion path adds ≤ 5 % to an item update and ≤ 2 µs per hit on the authority; 40+ entities presentation inside the §6.4 budget **on the host machine** (it also renders), host upload within M8's budget.
-6. Death shatter, chips and limbs appear on players and enemies, and never alter simulation (a client with presentation
+6. Death shatter, the damage material and detached limbs appear on players and enemies, and never alter simulation (a client with presentation
    disabled produces identical state).
 7. combat.md updated (§3 modules, §12 milestone row M4b, §17 spikes, §15 byte budgets).
 

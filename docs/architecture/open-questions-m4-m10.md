@@ -68,6 +68,7 @@ Documento di riferimento: docs/architecture/modularity-and-tags.md.
 5. I plugin dovranno essere riusati in altri progetti o pubblicati (Marketplace/Fab)?
    Perché conta: richiede zero dipendenze dal modulo di progetto, licenze chiare, e il fork GASNPP diventa un vincolo (non redistribuibile in modo semplice).
    Ipotesi nella specifica: riuso in altri tuoi progetti sì, vendita no.
+   **Risposta (2026-10-22):** Sì: ogni plugin deve essere utilizzabile da solo in altri progetti indipendenti, con il minimo coupling tra plugin ([modularità §3.7](modularity-and-tags.md#37-reuse-in-independent-projects-owner-direction-2026-10-22)). Resta aperto se in futuro ci sarà anche una pubblicazione (Fab).
 
 6. Quanto deve essere rigido il controllo automatico (script sui Build.cs, lint dei tag)?
    Perché conta: troppo rigido rallenta un solo sviluppatore, troppo lasco lascia rientrare le dipendenze sbagliate.
@@ -309,6 +310,7 @@ Riferimento: `combat-parts.md` (plugin `GSTNParts`) e [game-design-direction.md]
    Perché conta: decide se serve bloccare comandi/hitbox per i giocatori e quanto pesa sul bilanciamento PvP/co-op.
    Ipotesi nella specifica: sui giocatori le rotture sono solo estetiche di default; gli effetti di gameplay sono opzionali per kit.
    **Risposta (2026-10-22):** Le parti valgono anche per i giocatori: al calare della vita perdono pezzi, piccoli o interi arti ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model), [direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Resta aperto se la perdita abbia effetti di gameplay (per esempio un braccio perso) o sia solo estetica.
+   **Risposta (2026-10-22):** I giocatori sono **una sola parte**: quando si rompe, muoiono ([direzione §5b](game-design-direction.md#5b-damage-inside-a-part-detachment-players-owner-input-2026-10-22)). Niente perdita di arti per i giocatori.
 
 2. Una parte rotta può essere ripristinata (cura, respawn, checkpoint) o resta rotta fino al reset dell'entità?
    Perché conta: stato monotono = rollback e replica molto più semplici; il ripristino richiede un secondo meccanismo.
@@ -333,6 +335,7 @@ Riferimento: `combat-parts.md` (plugin `GSTNParts`) e [game-design-direction.md]
    Ipotesi nella specifica: sì, deviato = hit registrato, hitstop ridotto, niente stagger, danno principale quasi nullo.
    **Risposta (2026-10-22):** La penetrazione dell'hitbox contro la durezza della parte decide se la parte subisce danno e può essere distrutta ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)). Resta aperto il comportamento dei colpi molto sotto la durezza (deviazione, hitstop, hitstun).
    **Risposta (2026-10-22, tarda mattina):** Contro una parte troppo dura non c'è hitstop ma un **ricochet**: l'attaccante ritira l'arma con un montage che dipende dall'attacco ([direzione §2e](game-design-direction.md#2e-super-armor-and-ricochet-owner-input-2026-10-22-late-morning)). Nella specifica: nessun danno, nessuno stagger, nessun hitstop da entrambe le parti, montage di rinculo per attacco con ripiego su arma e kit (combat-parts.md §3.4, M4 §3b). Resta aperto se il ricochet lasci l'attaccante punibile (frame di recupero) e se il rinculo possa essere annullato in un'altra mossa.
+   **Risposta (2026-10-22):** Il rinculo segue lo schema generale: una parte bloccata, poi una coda cancellabile da qualsiasi cosa, decisa dal designer ([direzione §6c](game-design-direction.md#6c-cancellable-animation-tails-owner-input-2026-10-22)); l'attaccante è punibile solo nella parte bloccata (`RecoilFrames`, M4 §7).
 
 7. Se un colpo tocca più parti insieme, quale conta?
    Perché conta: i punti deboli devono essere colpibili in modo affidabile, ma non deve essere sempre il punto debole a vincere.
@@ -373,6 +376,7 @@ Riferimento: `combat-parts.md` (plugin `GSTNParts`) e [game-design-direction.md]
     Perché conta: sarebbe un secondo livello di durezza per area e cambierebbe dati e bilanciamento.
     Ipotesi nella specifica: no, è solo presentazione; la vulnerabilità si ottiene con durezza e trasferimento delle parti.
     **Risposta (2026-10-22):** Cristallo all'interno e pelle umana all'esterno è l'idea di presentazione ([direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Resta aperto se abbia regole di gameplay (cristallo esposto più vulnerabile).
+    **Risposta (2026-10-22, parziale):** Il danno dentro una parte è solo un materiale, un modo diegetico di mostrarne la vita ([direzione §5b](game-design-direction.md#5b-damage-inside-a-part-detachment-players-owner-input-2026-10-22)); il distacco di una parte è una separazione vera. Resta aperto se il cristallo esposto abbia effetti di gioco.
 
 15. Con il listen server, accetti che l'host rompa le parti senza latenza (vantaggio dell'host) o vuoi mitigarlo (es. ritardare solo la presentazione)?
     Perché conta: la rottura di parti è molto visibile e rende evidente il vantaggio di chi ospita.
@@ -775,6 +779,7 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
 19. Il plugin dei minion deve poter essere disattivato in un progetto che usa solo i combattenti, e deve essere riutilizzabile in altri progetti senza il progetto GASP?
     Perché conta: stabilisce quanto vincolare le dipendenze (nessuna verso il modulo di progetto) e dove stanno i contenuti di esempio.
     Ipotesi nella specifica: plugin `GSTNMinion` separato che dipende solo da `GSTNCombat`; il resto del progetto non lo conosce.
+    **Risposta (2026-10-22):** Sì, vale per tutti i plugin: riusabili da soli in progetti indipendenti ([modularità §3.7](modularity-and-tags.md#37-reuse-in-independent-projects-owner-direction-2026-10-22)).
 
 ### Server di ascolto (dopo la direzione del 22/10)
 

@@ -272,7 +272,8 @@ lands these generic, inert-without-a-provider seams, each reviewed as a combat c
 3c. **Attacker outcome** (owner direction, ricochet): `IGSTN_AttackerOutcomeExtension::Evaluate(const FGSTN_HitContextView&) →
    EGSTN_AttackerHitOutcome { Normal, Ricochet }`, called on the attacker side at §6 step 6 with the snapshot's victim reaction
    state, deterministic. `GSTNCombat` alone always returns `Normal`. On `Ricochet` the attacker's `UGSTN_GA_BaseCombat` ends its
-   timeline at that frame and runs its `FGSTN_RicochetResponse { TSoftObjectPtr<UAnimMontage> RecoilMontage; int32 RecoilFrames;
+   timeline at that frame and runs its `FGSTN_RicochetResponse { TSoftObjectPtr<UAnimMontage> RecoilMontage; int32 RecoilFrames
+   (locked part; the rest of the montage is a cancellable tail, §7);
    FGSTN_MovementTrack Movement (optional push-back of the attacker); FGameplayTag CueTag; }`, authored **per attack** on the
    timeline, with a fallback on the weapon then the kit (*Proposal*); the recoil is predicted like any timeline (montage synced to
    the combat clock, M3) and confirmed by the host from the same rewound view (§9).
@@ -372,6 +373,14 @@ replicated by asset reference).
   §1 put it out of scope: M6 owns it.)
 - **Hitstun end**: `ActionState = Actionable` (or `Tumble` until landing when tumbling; `PushBack` and `StaggerInPlace` go straight
   to `Actionable`); M6 adds tech.
+- **Cancellable tail** (owner direction 2026-10-22, game-design-direction.md §6c): hitstun is the **locked** part of the reaction;
+  the reaction animation goes on after it as a **cosmetic tail that anything cancels** (any command, movement or jump input), the
+  same pattern as the first actionable frame of every timeline (M3 `FirstActionableFrame`). For staggers the owner's reference is
+  "about half a second unskippable, then cancellable": *Proposal*: `UGSTN_CombatRules::MinStaggerLockFrames` (default 31 frames,
+  ~0.5 s at 62.5 Hz) is the floor of `HitstunFrames` for `StaggerInPlace` and `PushBack`, overridable per entity or part; the
+  reaction montage is authored longer and its tail is blended out on the first input after `HitstunEndFrame`. The same applies to
+  the ricochet recoil (§3b item 3c): `RecoilFrames` is the locked part, the rest of the recoil montage is a cancellable tail; so the
+  attacker is punishable only during `RecoilFrames`.
 - Tags projected: `Combat.State.Hitstun`, `Combat.State.Tumble`, `Combat.State.Hitstop`.
 
 ## 7b. Surface impacts: wall splat, bounce, destruction

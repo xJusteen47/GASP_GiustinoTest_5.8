@@ -33,6 +33,9 @@ Lyra source in this session.
    another plugin's code (data and tags change, source does not).
 4. **Tags are the contract.** Plugins talk to each other through tags and small interfaces, not through includes.
 5. **Rules are checked by machines**, not by memory: a script on `.Build.cs` files and a tag validator (section 6).
+6. **Every plugin is reusable on its own in an independent project** (owner, 2026-10-22: "cerca di limitare il coupling dei
+   plugins. Vorrei che siano utilizzabili a parte da altri progetti indipendenti"). Coupling between plugins is kept to the
+   minimum; the rules are in section 3.7.
 
 ### 1.2 What Lyra and Fortnite do (the pattern to borrow)
 
@@ -339,6 +342,32 @@ before any plugin ships content (already noted for combat).
 
 ---
 
+
+### 3.7 Reuse in independent projects (owner direction, 2026-10-22)
+
+Each `GSTN*` plugin must work when copied alone (with the plugins its `.uplugin` lists) into a blank project. Rules:
+
+1. **No project knowledge.** No dependency on the `GASP_Giustino2` module, on `/Game/...` content, on the project's
+   `Config/Default*.ini` keys, or on project tags. Settings live in the plugin's own `UDeveloperSettings` (with defaults
+   in the plugin's `Config/Default<Plugin>.ini`); defaults for assets are soft references to the plugin's own `Content/`.
+2. **Minimal coupling between plugins.** A plugin may depend only on the **`*Core` module** (types, interfaces,
+   registries) of another plugin, never on its `*GAS`, `*NP`, presentation or editor modules, unless it is a bridge.
+   Cooperation goes through interfaces declared in a `*Core` module, registries filled at startup, Gameplay Messages and
+   tags carried in data. Each dependency edge between plugins is listed with its reason in the layers file (§6.1).
+3. **Optional integrations are bridge plugins**, never `#if WITH_<OTHER_PLUGIN>` code paths: `GSTNPartsMinion` is the
+   pattern. Disabling either side removes the bridge; neither side knows the other.
+4. **Tags are inputs, not assumptions.** A plugin declares only its own tag roots (§4.2). Any tag it must react to that
+   belongs to the game (a team, a surface, a command) is a `FGameplayTag` / `FGameplayTagQuery` field in its settings or
+   data assets, so another project maps its own tags.
+5. **The fork is a declared requirement, not a surprise.** Modules that need the GAS-NPP fork (`*NP`) say so in the
+   `.uplugin` description and README; `*Core` and `*GAS` modules build against stock engine plugins, so a project without
+   the fork can still use them (M9 keeps this true).
+6. **Each plugin ships what a stranger needs**: README (purpose, modules, dependencies, how to extend), its Automation
+   tests, its minimal map (§3.5) and a version number in the `.uplugin` with a short changelog.
+7. **Checked by a canary build** (*Proposal*): `Tools/Canary/make_canary.py <Plugin>` generates a blank `.uproject` that
+   enables only that plugin and the plugins its `.uplugin` lists, builds it, and runs the plugin's tests; one canary per
+   plugin, run before a milestone is closed. `check_modules.py` adds rules 10 and 11 (§6.1).
+
 ## 4. Gameplay tag taxonomy (*Proposal*)
 
 ### 4.1 Rules
@@ -598,6 +627,8 @@ Fail on:
 8. A module listed in `PublicDependencyModuleNames` that no public header of that module includes (warning only,
    needs a header scan: `#include "..."` resolved to the other module).
 9. A cycle in the module graph.
+10. Plugin source or config references `/Game/`, a `GASP_Giustino2` symbol, or a project `Config/` key (reuse rule 1, §3.7).
+11. A plugin depends on a non-`*Core` module of another plugin without being listed as a bridge (reuse rule 2, §3.7).
 
 Exit code 1 on failure, one line per violation with the edge and the rule number. Warn-only until S-H.
 
