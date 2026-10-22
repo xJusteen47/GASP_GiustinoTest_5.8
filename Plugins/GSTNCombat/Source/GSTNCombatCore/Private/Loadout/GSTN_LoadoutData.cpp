@@ -134,12 +134,13 @@ bool FGSTN_LoadoutData::SerializeInternal(FArchive& Ar)
 		SlotCustomisations.RemoveAll([](const FGSTN_SlotCustomisation& Customisation) { return !Customisation.Command.IsValid(); });
 	}
 
-	// Tag-name order: the same loadout is the same bytes whatever the insertion order of the map
+	// Tag-name order (lexical, not FastLess: FName indices differ between processes): the same loadout is the same bytes
+	// whatever the insertion order of the map or the machine
 	TArray<FGameplayTag> Keys;
 	if (Ar.IsSaving())
 	{
 		DesignerValues.GenerateKeyArray(Keys);
-		Keys.Sort([](const FGameplayTag& A, const FGameplayTag& B) { return A.GetTagName().FastLess(B.GetTagName()); });
+		Keys.Sort([](const FGameplayTag& A, const FGameplayTag& B) { return A.GetTagName().LexicalLess(B.GetTagName()); });
 	}
 	int32 ValueCount = Keys.Num();
 	if (!SerializeCount(Ar, ValueCount))
