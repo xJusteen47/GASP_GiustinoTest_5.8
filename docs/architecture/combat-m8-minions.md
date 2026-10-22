@@ -114,10 +114,10 @@ first M8 commit** (file move, no behaviour change).
 - **`UGSTN_KnockbackModel_HealthFraction`** (*Proposal* for the percent-vs-HP question): behaves as
   `PercentScaling` with `DamagePercent` replaced by `(1 − Health/MaxHealth) × HealthToPercentScale` (default 100), so
   wounded minions fly further (and, through the reaction tiers of M4 §3, climb from stagger in place to push back to launch) and fresh ones barely move; `UGSTN_KnockbackModel_Fixed` stays available per definition.
-  Attacker hitstop must not depend on victim data (the M4 `Auto` formula, from authored damage and nominal knockback, already does not); the model exposes
-  `bAttackerHitstopIndependentOfVictim = true` and a test asserts it, because the client predicts it against a puppet.
-- **`FGSTN_MinionStats`** (data): `MaxHealth, Weight, KnockbackResistance, HitstunResistance, PoiseHits (hits absorbed
-  as armor, 0 = none), WalkSpeed, RunSpeed, TurnRateDegPerSec, Acceleration, Braking, GravityScale, StepHeight,
+  Attacker hitstop follows M4 §3: it uses the minion's **reaction state as the attacker sees it** (health fraction, broken-part
+  byte, carried in the minion's replicated item and kept in the minion lag-compensation history), so the client predicts it and
+  the host, rewinding the same history, computes the same value; a test asserts the two match.
+- **`FGSTN_MinionStats`** (data): `MaxHealth, Weight, KnockbackResistance, HitstunResistance, WalkSpeed, RunSpeed, TurnRateDegPerSec, Acceleration, Braking, GravityScale, StepHeight,
   CapsuleRadius, CapsuleHalfHeight`. Converted to attributes only on promotion.
 - **`FGSTN_MinionHistory`**: ring of `K` frames (default 24 ≥ `MaxRewindMs` 250 ms at 62.5 Hz + margin) of
   `{ FVector3f Pos; float Yaw; uint8 ActionState; uint8 HurtState; uint16 HurtOverrideKey }` per minion slot, struct of
@@ -249,7 +249,7 @@ stamped for a recycled slot is dropped.
   type (`BodyReaction`) enter as `FGSTN_HitReactionModifiers` (M4 seam, combat-parts §4.4); types **without a part set** use the entity
   defaults `StaggerThreshold`/`MaxReaction` on their `UGSTN_HurtboxSetDefinition` (M4 §3), resolved by the `HurtboxReaction` step.
   Below the threshold: damage and hitstop, no hitstun, no launch or push, and `HitCounter` still increments (flash and flinch cue on the
-  puppet); `PoiseHits` stays as the coarse hit-count armour on top. **Weight decides the tier**: the knockback `K` (effective weight with
+  puppet); no separate hit-count armour (owner: armor and poise are stagger threshold and remaining weight). **Weight decides the tier**: the knockback `K` (effective weight with
   the `HealthFraction` model of §3) compared with the tier thresholds gives `StaggerInPlace`, `PushBack` or `Launch`, capped by
   `MaxReaction`; a battered minion therefore climbs from stagger in place to launch. **Compact encoding: the tier is the `ActionState`**
   (`Hitstun` = stagger in place, `PushedBack`, `Launched`; below the threshold the state does not change), 0 extra bits (§8.2). Attacker

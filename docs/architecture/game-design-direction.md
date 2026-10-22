@@ -69,6 +69,17 @@ consequences for the design. Items marked *Reading* are interpretations to confi
   back with a **montage that depends on the attack**. Spec: combat-parts.md §3.4 (ricochet band), M4 §3b (attacker
   outcome and per-attack ricochet response).
 
+## 2f. Clarifications (owner input, 2026-10-22, before noon)
+
+- **DI values were examples**: DI in makes the knockback more vertical, DI out more horizontal; amounts are tuning.
+- **Armor and poise** are special cases of **stagger resistance** and **remaining weight**: no separate poise system.
+- **Shield**, where present (**PvP, not PvE**), works **like Smash**. Some **special moves** may effectively **parry**:
+  keep the parry mechanism available to any move.
+- **Death**: a **KO zone** (e.g. ravines) or **health at zero**.
+- **Many enemies**: research the best replication techniques for performance (docs/architecture/many-enemies-replication.md).
+- **Some enemies work as solid platforms** (players can stand on them).
+- Flakes coming off a part's material are **only aesthetic**; players have one part, so for them it is all aesthetic.
+
 ## 3. Grabs, interaction and throwing enemies
 
 - Example flow: a large enemy attacks; it is too big to grab. The player damages it until parts break off. Now it can
@@ -227,3 +238,20 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 > "idle" dovrebbe poter essere cancellata da qualsiasi cosa, in modo da dare un senso di reattività. Ovviamente, quale
 > porzione di animazione è solo estetica, è decisa dal designer). Lo stagger segue questo pattern, ossia per circa mezzo
 > secondo l'animazione è unskippable, mentre la parte finale è cancellabile.
+
+> Per quanto riguarda I valori della DI, erano esempi, cioè DI IN rende il knockback più verticale, DI OUT più orizzontale.
+>
+> Per quanto riguarda armor e poise, abbiamo visto che sono casi speciali della resistenza allo stagger e del peso
+> rimanente, no?
+>
+> Per quanto riguarda lo scudo, ove presente (in PVP, non in PVE), funziona come in smash. Potrebbero essere presenti delle
+> mosse speciali che effettuano parry in pratica, ricordati questo aspetto.
+>
+> Condizione di morte: zona di KO (E.g. burroni) oppure vita a zero.
+>
+> Inoltre ricerca le migliori tecniche per gestire la replicazione etc… di molti nemici in modo da essere performanti.
+>
+> Alcuni nemici funzionano come piattaforme solide.
+>
+> I pezzi del material che si staccano di una parte sono solo estetici, i giocatori hanno solo una "parte" quindi, puoi
+> dedurre che sia estetico.

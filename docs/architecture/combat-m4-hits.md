@@ -128,8 +128,9 @@ writes the larger of the two as the effective threshold while the window is open
 for `ArmorThreshold`).
 **Super armor** (owner, 2026-10-22) is the special case of **infinite stagger resistance**: `ArmorThreshold` (or a hurtbox, set or
 part `StaggerThreshold`) may be `EGSTN_StaggerThreshold::Infinite` (stored as a flag, not a float sentinel, so tuning UI and validators
-show it plainly): no hit ever staggers, damage and hitstop still apply. `Poise`/`MaxPoise` are not needed for super armor; their
-remaining use (armor that breaks after N hits) stays open in M4.3.
+show it plainly): no hit ever staggers, damage and hitstop still apply. **No `Poise`** (owner, 2026-10-22: armor and poise are
+special cases of stagger resistance and remaining weight): armor is a stagger threshold (permanent on a hurtbox/part, or a
+temporary `Armor` window), super armor its infinite case, and "poise" is the effective weight that falls with remaining health.
 
 **Knockback model** — `UGSTN_KnockbackModel` (abstract, EditInlineNew, const methods): `Compute(const
 FGSTN_KnockbackInput&) → FGSTN_KnockbackResult { EGSTN_HitReaction Reaction; bool bStaggered; float StaggerForce; FVector
@@ -238,8 +239,8 @@ The elevation is handled in **dot space** (`e = LaunchDir · Up`), which is how 
 
 Worked examples (defaults, full stick): `e = 0.4` → DI in `0.6`, DI out `0.2`; `e = 0` → DI in `0.2`, DI out `0`;
 `e = −0.5` (dot with down `0.5`) → DI in `−0.7` (down `0.7`), DI out `−0.3` (down `0.3`); `e = −0.05` → DI in `0.15`,
-DI out unchanged. A lateral stick only rotates around `Up`. *Proposal*: the owner's message gives DI out at `e = 0.4` as
-`0.4`; the symmetric rule gives `0.2` (open question M4.29). Note the jump at the threshold: at `e = −0.09` DI in
+DI out unchanged. A lateral stick only rotates around `Up`. The owner's numbers were examples of the principle (DI in = more
+vertical, DI out = more horizontal); the amounts are tuning (`MaxDIElevationDot`, the strength curves). Note the jump at the threshold: at `e = −0.09` DI in
 gives `+0.11`, at `e = −0.11` it gives `−0.31` (inherent in the owner's rule; `UpwardThresholdDot` is tunable).
 `FGSTN_DIParams { float MaxDIYawDegrees = 15; float MaxDIElevationDot = 0.2; float UpwardThresholdDot = -0.1; float
 MaxElevationDot = 0.98; }` lives on `UGSTN_CombatRules` (*Proposal* values); M6's `FGSTN_DIRules` adds the strength
@@ -289,7 +290,11 @@ steps that write modifiers and an applier that records calls, run with no plugin
 
 **Combat rules** — `UGSTN_CombatRules` (DataAsset): `Pipeline (TArray<UGSTN_HitResolutionStep*> Instanced)`,
 `KnockbackModel (Instanced)`, `DamageMode (Percent/Health/PercentCapped)` (`PercentCapped`: `MaxHealth` is the cap in percent points; `DamagePercent` is
-clamped at it and reaching the cap raises `Combat.Event.KO`; `Health` unused; owner §2), `bFriendlyFire`, `HittableRelationships`
+clamped at it and reaching the cap raises `Combat.Event.KO`; `Health` unused; owner §2). **Death conditions** (owner, 2026-10-22):
+health at zero (the cap reached) **or** entering a **KO zone** (a ravine, a pit, a blast-zone volume): `AGSTN_KOZone` (volume, in
+`GSTNCombat`, no project dependency) raises the same `Combat.Event.KO` with `KOReason = Zone` when the entity's simulated position
+enters it, read from the Mover sim state in the combat tick (so it is predicted and rolled back like any state, never from an
+overlap callback); `KOReason { Health, Zone }` is on the event, `bFriendlyFire`, `HittableRelationships`
 (`FGameplayTagContainer`), `RelationshipResolver (Instanced)`, `bUseLagCompensation`, `MaxRewindMs`, DI tuning (SDI: M6), `StaggerThreshold` (the global default of the hitstun condition, default 0 = every hit staggers)/`AirborneJuggleScale`, `RulesExtensions`
 (`TArray<FInstancedStruct>` of base `FGSTN_RulesExtension`, §5b).
 Selected per game mode (`AGameModeBase` subclass property or a GameState component `UGSTN_CombatRulesComponent`,
@@ -297,7 +302,7 @@ replicated by asset reference).
 
 ## 4. GAS side (`GSTNCombatGAS`)
 
-- **`UGSTN_CombatAttributeSet`**: `Health`, `MaxHealth`, `DamagePercent`, `Poise`, `MaxPoise`,
+- **`UGSTN_CombatAttributeSet`**: `Health`, `MaxHealth`, `DamagePercent`, (no `Poise`: §3 Armor),
   `OutgoingDamageMultiplier`, `IncomingDamageMultiplier`, `KnockbackResistance`, `HitstunResistance`.
 - **`UGSTN_GE_Damage`** (instant) with **`UGSTN_DamageExecution`**: reads SetByCaller `Combat.SetByCaller.Damage`, the
   instigator's outgoing and the target's incoming multipliers; writes `DamagePercent` (+) or `Health` (−) by

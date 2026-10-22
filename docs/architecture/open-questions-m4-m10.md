@@ -13,9 +13,9 @@ Le indicazioni del 22/10 sono in [game-design-direction.md](game-design-directio
 
 Le quindici domande ancora aperte la cui risposta cambia di più l'architettura o le prossime milestone (prima M3/M4, poi modularità e tag, poi M4b e M6).
 
-- [[M4.3](#m4--hits-domande-al-proprietario-del-progetto)] armatura dei boss: ruolo di `Poise` e `Armor` ora che la soglia di stagger è per parte (tenerli, fonderli o toglierli) e valori delle soglie
-- [[M4.4](#m4--hits-domande-al-proprietario-del-progetto)] condizione di KO (tetto o blast zone) e cosa fa il gioco dopo
-- [[M4.29](#m4--hits-domande-al-proprietario-del-progetto)] DI out su un lancio a dot 0.4: resta 0.4 o scende a 0.2 (formula del DI)
+- [[M4.27](#m4--hits-domande-al-proprietario-del-progetto)] un nemico staggerato sul posto può essere lanciato da un secondo colpo (juggle)
+- [[M4.32](#m4--hits-domande-al-proprietario-del-progetto)] se la gravità cambia durante un lancio, il lancio segue la nuova gravità
+- [[Parti.2](#parti-distruttibili-m4b-domande-al-proprietario-del-progetto)] una parte rotta di un nemico può essere ripristinata
 - [[M4.16](#m4--hits-domande-al-proprietario-del-progetto)] colpo subito come correzione di rollback o forward prediction per il client
 - [[M4.20](#m4--hits-domande-al-proprietario-del-progetto)] chi decide splat, bounce o distruzione all'impatto (attacco, vittima, superficie)
 - [[M4.24](#m4--hits-domande-al-proprietario-del-progetto)] vantaggio dell'host del server di ascolto: accettarlo o attenuarlo
@@ -23,9 +23,9 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 - [[Mod.11](#domande-su-modularità-e-tag-per-il-proprietario)] il modulo di progetto smette di dipendere pubblicamente da `GSTNCombatNP`/`GSTNCombatCore`
 - [[Mod.13](#domande-su-modularità-e-tag-per-il-proprietario)] quali tag possono creare i designer senza C++
 - [[Mod.15](#domande-su-modularità-e-tag-per-il-proprietario)] punto di estensione del combat costruito una volta sola prima di M6
-- [[Parti.1](#parti-distruttibili-m4b-domande-al-proprietario-del-progetto)] le parti rotte dei giocatori hanno effetti di gameplay o sono solo estetiche
+- [[M4.31](#m4--hits-domande-al-proprietario-del-progetto)] trampolini: tenere premuto salto o il fast fall cambiano il rimbalzo
 - [[Parti.12](#parti-distruttibili-m4b-domande-al-proprietario-del-progetto)] quando un nemico diventa afferrabile (numero e tipo di parti rotte)
-- [[M6.1](#m6--difesa-e-link-domande-al-proprietario-del-progetto)] scudo limitato (barra) o sempre disponibile nel kit di riferimento
+- [[M8.1](#m8-minion-domande-al-responsabile-del-progetto)] quanti minion vivi e attivi in una scena tipica e nel caso peggiore
 - [[M6.17](#m6--difesa-e-link-domande-al-proprietario-del-progetto)] cosa fare se lo spike del link parcheggiato non passa le soglie
 - [[M6.22](#m6--difesa-e-link-domande-al-proprietario-del-progetto)] precedenza del tasto di interazione tra alleato, nemico e oggetto
 
@@ -139,11 +139,13 @@ Ipotesi nella specifica: `Armor` = niente knockback/hitstun sotto `ArmorThreshol
 **Risposta (2026-10-22):** Per i nemici grandi vale il modello a parti: durezza della parte contro penetrazione dell'hitbox decide se la parte subisce danno ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)), più il fattore di stagger ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)). Restano aperti la soglia di armatura/super-armor dei boss e il rapporto tra `Poise` e `Armor`.
 **Risposta (2026-10-22, mattina):** Se un nemico o un boss entra in hitstun dipende dalla parte colpita: ogni parte ha una condizione di hitstun, in genere una soglia che la forza di stagger dell'attacco deve raggiungere ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)). Per i boss le soglie alte stanno sulle parti corazzate (combat-parts §4.4); la specifica propone anche che `ArmorThreshold` sia misurata in forza di stagger (M4 §3). Restano aperti i valori delle soglie e il rapporto tra `Poise` e `Armor` (con la soglia per parte `Poise` potrebbe diventare ridondante).
 **Risposta (2026-10-22, tarda mattina):** La super armor è il caso speciale di resistenza allo stagger **infinita**, per nemici e giocatori ([direzione §2e](game-design-direction.md#2e-super-armor-and-ricochet-owner-input-2026-10-22-late-morning)): nella specifica una soglia `Infinite` (M4 §3). Resta aperto se serva ancora un'armatura che si rompe dopo N colpi (`Poise`).
+**Risposta (2026-10-22, prima di mezzogiorno):** Armor e poise sono casi speciali della resistenza allo stagger e del peso rimanente ([direzione §2f](game-design-direction.md#2f-clarifications-owner-input-2026-10-22-before-noon)): niente sistema `Poise` separato (tolto da M4 e M8).
 
 **4. Esiste un limite superiore al knockback/launch (o un KO per percentuale/blast zone), e cosa succede quando un personaggio "muore" (KO)?**
 Perché conta: M4 emette l'evento `KO` (revisione 2026-10-18) ma non dice quando scatta né cosa fa il gioco dopo (respawn, spettatore, game over).
 Ipotesi nella specifica: nessuna; si cita solo l'evento `Combat.Event.KO`.
 **Risposta (2026-10-22):** Quando la percentuale supera il tetto la parte o il nemico viene distrutto, e i morti vanno in pezzi come cristallo ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight), [direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Restano aperti la condizione di KO per i giocatori (blast zone o tetto), e cosa fa il gioco dopo (respawn, spettatore, game over).
+**Risposta (2026-10-22, prima di mezzogiorno):** Si muore per **vita a zero** o entrando in una **zona di KO** (es. burroni) ([direzione §2f](game-design-direction.md#2f-clarifications-owner-input-2026-10-22-before-noon)); nella specifica `AGSTN_KOZone` e `KOReason` (M4 §3). Resta aperto cosa succede dopo (respawn, spettatore, fine partita).
 
 ### B. Hitstop e sensazione dei colpi
 
@@ -276,6 +278,7 @@ Ipotesi nella specifica: danno e knockback scritti nell'attacco, senza moltiplic
 **29. Nel tuo esempio, DI out su un lancio con dot 0.4 dà 0.4 (nessun cambiamento) o 0.2?**
 Perché conta: con 0.4 il DI out non farebbe nulla sui lanci verso l'alto, mentre nel caso verso il basso lo hai descritto come "dot più basso"; la regola simmetrica dà 0.2.
 Ipotesi nella specifica: 0.2 (DI out avvicina all'orizzontale di `MaxDIElevationDot` = 0.2, senza superarlo) (M4 §3 DI).
+**Risposta (2026-10-22, prima di mezzogiorno):** I valori erano esempi: DI in rende il lancio più verticale, DI out più orizzontale; le quantità sono parametri ([direzione §2f](game-design-direction.md#2f-clarifications-owner-input-2026-10-22-before-noon)).
 
 **30. Va bene il salto attorno alla soglia di -0.1? Con DI in, un lancio a -0.09 sale a +0.11, uno a -0.11 scende a -0.31.**
 Perché conta: è una conseguenza diretta della soglia; si può ammorbidire con una zona di transizione, ma cambia la regola che hai dato.
@@ -377,6 +380,7 @@ Riferimento: `combat-parts.md` (plugin `GSTNParts`) e [game-design-direction.md]
     Ipotesi nella specifica: no, è solo presentazione; la vulnerabilità si ottiene con durezza e trasferimento delle parti.
     **Risposta (2026-10-22):** Cristallo all'interno e pelle umana all'esterno è l'idea di presentazione ([direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Resta aperto se abbia regole di gameplay (cristallo esposto più vulnerabile).
     **Risposta (2026-10-22, parziale):** Il danno dentro una parte è solo un materiale, un modo diegetico di mostrarne la vita ([direzione §5b](game-design-direction.md#5b-damage-inside-a-part-detachment-players-owner-input-2026-10-22)); il distacco di una parte è una separazione vera. Resta aperto se il cristallo esposto abbia effetti di gioco.
+    **Risposta (2026-10-22, prima di mezzogiorno):** I pezzi che si staccano dal materiale sono solo estetici; per i giocatori, che sono una sola parte, è tutto estetico ([direzione §2f](game-design-direction.md#2f-clarifications-owner-input-2026-10-22-before-noon)).
 
 15. Con il listen server, accetti che l'host rompa le parti senza latenza (vantaggio dell'host) o vuoi mitigarlo (es. ritardare solo la presentazione)?
     Perché conta: la rottura di parti è molto visibile e rende evidente il vantaggio di chi ospita.
@@ -490,6 +494,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
    Perché conta: cambia il rischio nei combattimenti contro boss e il bilanciamento di tutte le mosse nemiche.
    Ipotesi nella specifica: limitato, con barra `ShieldHealth`, rigenerazione ritardata e rottura con stordimento lungo.
    **Risposta (2026-10-22):** Nessuna implementazione standard di scudo e schivata: dipende dal kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Resta aperto il comportamento dello scudo del kit di riferimento (barra o sempre disponibile).
+   **Risposta (2026-10-22, prima di mezzogiorno):** Lo scudo esiste solo dove previsto, cioè in **PvP e non in PvE**, e funziona **come in Smash**; alcune **mosse speciali** possono fare parry ([direzione §2f](game-design-direction.md#2f-clarifications-owner-input-2026-10-22-before-noon)). Specifica M6 aggiornata di conseguenza.
 
 2. Lo scudo è direzionale (arco davanti al personaggio) o a bolla a 360°?
    Perché conta: l'arco rende rilevante il posizionamento, la bolla è più semplice da leggere per il giocatore.
@@ -715,6 +720,7 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
    Ipotesi nella specifica: solo armatura (`PoiseHits`); niente scudo, parata o schivata nei minion.
    **Risposta (2026-10-22):** I nemici hanno parti con durezza e fattore di stagger ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model), [direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)), che fa da armatura. Restano aperti scudo, parata e schivata dei minion (schivata e scudo dipendono dal kit, [direzione §6](game-design-direction.md#6-dodge-and-shield)).
    **Risposta (2026-10-22, mattina):** L'armatura di un minion è la soglia di stagger della parte colpita o del tipo ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)); `PoiseHits` resta come armatura a conteggio. Restano aperti scudo, parata e schivata.
+   **Risposta (2026-10-22, prima di mezzogiorno):** Armatura e poise sono soglia di stagger e peso rimanente, quindi nessun contatore separato ([direzione §2f](game-design-direction.md#2f-clarifications-owner-input-2026-10-22-before-noon)).
 
 7. Un singolo attacco del giocatore deve poter colpire molti minion insieme (spazzata, area)?
    Perché conta: richiede di alzare l'anello `HitTargets` e influisce sul costo delle query.

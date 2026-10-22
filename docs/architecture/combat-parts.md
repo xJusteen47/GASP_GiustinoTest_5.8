@@ -438,7 +438,12 @@ masked per part by a vertex-colour or UV region (*Proposal*: one `PartIndex` cha
 parts; for per-part materials, one parameter per material slot). The parameter is **driven directly from replicated state**
 every frame (no thresholds, no events), smoothed for display; it follows rollbacks and corrections naturally because it is
 not an effect but a view of the state. Cost: one scalar parameter write per part when the value changes. A small hit spark
-(`GameplayCue.Combat.Part.Hit`) is the only per-hit cosmetic, and it is a cue, not a piece.
+(`GameplayCue.Combat.Part.Hit`) is the per-hit cosmetic.
+**Cosmetic flakes** (owner, 2026-10-22: "i pezzi del material che si staccano di una parte sono solo estetici"): as the damage
+parameter crosses designer thresholds, small skin/crystal flakes may fly off the material (pooled Niagara or mesh particles, seeded
+by `(EntityRef, PartIndex, ThresholdIndex)` so every machine shows the same ones). They are **pure presentation**: no collision with
+pawns, no gameplay effect, never read by the simulation, monotonic (a rollback does not take them back). Players are a single part,
+so for them flakes and material are only aesthetic too; a player loses no limbs.
 
 ### 6.2 Limb detachment: options and recommendation
 
