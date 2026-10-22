@@ -21,7 +21,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 - [[M4.24](#m4--hits-domande-al-proprietario-del-progetto)] vantaggio dell'host del server di ascolto: accettarlo o attenuarlo
 - [[Mod.1](#domande-su-modularità-e-tag-per-il-proprietario)] Game Feature ed Experience subito o dopo M7
 - [[Mod.11](#domande-su-modularità-e-tag-per-il-proprietario)] il modulo di progetto smette di dipendere pubblicamente da `GSTNCombatNP`/`GSTNCombatCore`
-- [[Mod.13](#domande-su-modularità-e-tag-per-il-proprietario)] quali tag possono creare i designer senza C++
+- [[Mod.17](#domande-su-modularità-e-tag-per-il-proprietario)] regola per le estensioni Blueprint dentro la simulazione (pure; quelle per frame in C++)
 - [[Mod.15](#domande-su-modularità-e-tag-per-il-proprietario)] punto di estensione del combat costruito una volta sola prima di M6
 - [[M4.31](#m4--hits-domande-al-proprietario-del-progetto)] trampolini: tenere premuto salto o il fast fall cambiano il rimbalzo
 - [[Parti.12](#parti-distruttibili-m4b-domande-al-proprietario-del-progetto)] quando un nemico diventa afferrabile (numero e tipo di parti rotte)
@@ -102,6 +102,7 @@ Documento di riferimento: docs/architecture/modularity-and-tags.md.
 13. Quali tag possono creare i designer da soli (comandi, bottoni, stati, cue, tipi di minion, tipi di oggetto) senza C++?
     Perché conta: definisce cosa va in file ini per plugin e cosa resta nativo; vale come eccezione di CLAUDE.md per gli ini dei plugin (comandi di piggyback, tipi di minion, tipi di oggetto tenuto) e sostituisce le domande analoghe per singola milestone.
     Ipotesi nella specifica: comandi, bottoni, identità di kit/arma/super, status, cue, `Minion.Type.*`, `Held.Type.*` in ini del plugin proprietario; tutto ciò che il codice legge è nativo, dichiarato dal plugin proprietario (anche i tag standard di difesa e link).
+    **Risposta (2026-10-22, 10:34):** I designer devono poter creare tag appropriati per i nomi di armi, kit, speciali e simili ([direzione §2g](game-design-direction.md#2g-interact-button-dodge-windows-designer-tags-blueprint-replaceable-content-owner-input-2026-10-22-1034-and-1036)). Nella specifica: radici native, foglie create dall'editor nell'ini di chi possiede il contenuto, il codice non nomina mai una foglia ([modularità §4.2b](modularity-and-tags.md#42b-designer-identity-tags-owner-direction-2026-10-22)).
 
 14. Vuoi una mappa di test minima e un test automatico per ogni plugin, e una build CI con ciascun plugin opzionale disattivato?
     Perché conta: è l'unico modo di dimostrare che "ogni plugin funziona da solo"; ha un costo di manutenzione.
@@ -114,6 +115,20 @@ Documento di riferimento: docs/architecture/modularity-and-tags.md.
 16. La documentazione per plugin (README) va tenuta in inglese come il resto, e con quale livello di dettaglio?
     Perché conta: ogni plugin deve avere docs leggibili da una persona; lo standard fissa il lavoro per ogni nuovo plugin.
     Ipotesi nella specifica: inglese, README breve + documento di architettura in docs/architecture/.
+
+### Dopo le risposte delle 10:34 e 10:36 del 22/10 (Blueprint e contenuti sostituibili)
+
+17. Le estensioni in Blueprint chiamate dentro la simulazione devono essere "pure" (leggono solo i dati che ricevono, niente accesso al mondo, niente `Delay`), e quelle chiamate ogni frame per ogni entità restano in C++ di default. Va bene?
+    Perché conta: con il rollback la simulazione riesegue le stesse funzioni molte volte; un Blueprint che legge il mondo o tiene stato proprio rompe la predizione, e uno chiamato ogni frame su centinaia di nemici costa troppo.
+    Ipotesi nella specifica: sì; per lo stato per entità c'è un frammento generico di contatori per i designer, e un controllo di determinismo in debug ([modularità §3.8](modularity-and-tags.md#38-designer-extension-in-blueprint-owner-direction-2026-10-22)).
+
+18. Se host e client hanno contenuti di simulazione diversi (un kit o una mossa modificata, una mod), la connessione va rifiutata?
+    Perché conta: con contenuti sostituibili, due macchine possono simulare regole diverse e desincronizzarsi in modo invisibile.
+    Ipotesi nella specifica: sì, con una firma dei contenuti di simulazione controllata all'ingresso; i contenuti estetici (skin, suoni, UI) possono differire ([modularità §3.9](modularity-and-tags.md#39-replaceable-content-owner-direction-2026-10-22)).
+
+19. I nomi delle speciali come tag: sotto la radice delle mosse già usata da M3 (`Ability.Combat.Special.<Nome>`) o sotto una radice propria (`Special.<Nome>`)?
+    Perché conta: con due radici la stessa mossa avrebbe due identità da tenere allineate.
+    Ipotesi nella specifica: `Ability.Combat.Special.<Nome>` ([modularità §4.2b](modularity-and-tags.md#42b-designer-identity-tags-owner-direction-2026-10-22)).
 
 ---
 
@@ -182,6 +197,7 @@ Perché conta: roll, spot dodge e air dodge sono in scope (M4 §1) ma la specifi
 Ipotesi nella specifica: nessuna sul costo/anti-spam; l'intangibilità viene dai tracciati `Intangible` della timeline.
 **Risposta (2026-10-22):** Schivata base in PvE a terra: quasi un long jump di Super Mario o un tuffo di Helldivers, senza finire sdraiati all'atterraggio; solo i piedi sono invincibili. Nessuna implementazione standard: può dipendere dal kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Restano aperti durata, recovery, costo (cooldown, stamina) e se si può schivare durante hitstun.
 **Risposta (2026-10-22, tarda mattina):** In genere non si schiva durante hitstun o hitstop ([direzione §2c](game-design-direction.md#2c-di-sdi-and-dodging-in-hitstun-owner-input-2026-10-22-late-morning)).
+**Risposta (2026-10-22, 10:34):** Per ora i piedi sono invincibili **nella parte finale** della schivata; in generale quali porzioni degli hurtbox sono invincibili, e quando, lo decide il designer ([direzione §2g](game-design-direction.md#2g-interact-button-dodge-windows-designer-tags-blueprint-replaceable-content-owner-input-2026-10-22-1034-and-1036), M4 §1b). Restano aperti durata, recovery e costo; vedi M4.33 e M4.34.
 
 **11. L'air dodge può essere usata più volte in aria, e lascia il personaggio in stato "helpless"?**
 Perché conta: incide molto sul recupero e sul gioco in verticale 3D, e va allineato ai salti aerei del M3.
@@ -248,6 +264,7 @@ Ipotesi nella specifica: stessa regola della schivata a terra (solo i piedi), fi
 **23. Sui piedi la schivata è "intangibile" (il colpo non registra proprio) o "invincibile" (il colpo registra ma senza danno)?**
 Perché conta: con l'invincibilità l'attaccante ha comunque hitstop e conferma del colpo, con l'intangibilità no.
 Ipotesi nella specifica: intangibile.
+**Risposta (2026-10-22, 10:34):** In generale lo decide il designer ([direzione §2g](game-design-direction.md#2g-interact-button-dodge-windows-designer-tags-blueprint-replaceable-content-owner-input-2026-10-22-1034-and-1036)): lo stato della finestra è un dato della mossa. Nella specifica il valore di partenza della schivata base resta intangibile (M4 §1b).
 
 **24. Il vantaggio dell'host (zero latenza) va accettato così com'è o attenuato?**
 Perché conta: in cooperativo è tollerabile, ma l'host rompe arti e colpisce in modo visibilmente più immediato.
@@ -292,6 +309,16 @@ Ipotesi nella specifica: rimbalzo lungo la normale del trampolino, fisso o scala
 **32. Quando la gravità cambia durante un lancio o un hitstun (es. si entra in una zona a gravità diversa), il lancio si piega con la nuova gravità o segue quella del momento del colpo?**
 Perché conta: con gravità arbitraria il "su" del DI, la caduta e il tumble dipendono dalla gravità; serve una regola chiara anche per i rollback.
 Ipotesi nella specifica: tutto usa la gravità del frame corrente della vittima (Mover), il DI usa quella del frame di fine hitstop (M4 §3).
+
+### J. Schivata a terra (dopo le risposte delle 10:34 del 22/10)
+
+**33. La schivata a terra si può annullare con un salto o un'altra mossa prima della coda cancellabile?**
+Perché conta: decide quanto la schivata è un impegno e se serve una finestra di cancel apposita.
+Ipotesi nella specifica: no, solo la coda cancellabile decisa dal designer, come le altre mosse ([direzione §6c](game-design-direction.md#6c-cancellable-animation-tails-owner-input-2026-10-22)).
+
+**34. Da dove parte la "parte finale" in cui i piedi sono invincibili?**
+Perché conta: serve un valore di partenza per il kit base, anche se poi lo regola il designer.
+Ipotesi nella specifica: l'ultimo 40% del volo, fino al primo frame di atterraggio (M4 §1b).
 
 ### Lacune nella specifica
 
@@ -597,10 +624,12 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 22. Se un nemico e un alleato (o un oggetto) sono entrambi a portata del tasto interazione, quale ha la precedenza?
    Perché conta: lo stesso tasto fa afferrare, montare o raccogliere; un errore di contesto è frustrante.
    Ipotesi nella specifica: vince il più vicino alla direzione di sguardo; a parità, ordine dati: afferra, raccogli, monta.
+   Nota (2026-10-22, dopo la risposta a M6.23): ora tocco e pressione lunga hanno significati diversi. Con un solo bersaglio alla volta la presa parte subito alla pressione; un'alternativa è proiettare insieme presa e raccolta e far partire la presa al rilascio del tocco, così nemico e oggetto non competono più, al costo di qualche frame di ritardo sulla presa.
    
 23. Tenere premuto il tasto di interazione deve dare la presa pesante (più lenta, per bersagli più pesanti)?
    Perché conta: definisce il significato della pressione lunga e quanto si può afferrare.
    Ipotesi nella specifica: tocco = presa normale, pressione lunga = presa pesante con soglia di peso maggiore; rilascio = tocco da afferratore.
+   **Risposta (2026-10-22, 10:34):** Per ora **tocco = presa, pressione lunga = raccogliere oggetti** ([direzione §2g](game-design-direction.md#2g-interact-button-dodge-windows-designer-tags-blueprint-replaceable-content-owner-input-2026-10-22-1034-and-1036)). Nella specifica la presa pesante è tolta dal set standard (M6 §8, M10 §8); un kit può aggiungerne una su un altro tasto.
    
 24. Un nemico può essere afferrabile per peso (si alleggerisce con la salute) oltre che per parti rotte, oppure basta il meccanismo delle parti?
    Perché conta: senza parti (o con nemici semplici) serve comunque una regola di afferrabilità.

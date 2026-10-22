@@ -163,7 +163,7 @@ combat tick** under `Combat.State.*` (combat.md §5.4) and nothing else grants t
 | `Combat.Immunity.Grab` | native | GSTNLinkGAS | Cannot be grabbed (bosses, mid-link) | kits, GEs (ordinary counts); checked by `LinkRequest`; granting it mid-link breaks the link |
 | `Combat.Immunity.Parry` / `.Shield` | native | GSTNDefenceGAS | Attack cannot be parried / blocked (victim- or ability-side) | kits, abilities, GEs |
 | `Command.Defence.Shield` | native (standard set) | GSTNDefenceCore | Shield command (`Hold(Shield)`); built only where the mode enables the shield (§1d) | slot set |
-| `Command.Link.Grab` / `.GrabHeavy` / `.Pummel` / `.Release` / `.Throw.Forward` `.Back` `.Up` `.Down` | native (standard set) | GSTNLinkCore | Grab (tap), heavy grab (hold) and grabber-role commands (`Command.Link.Mount/Dismount/Drop` are declared, as ini, by `GSTNPiggyback`; `Pickup/Drop` of held objects by `GSTNHeld`) | slot set |
+| `Command.Link.Grab` / `.Pummel` / `.Release` / `.Throw.Forward` `.Back` `.Up` `.Down` | native (standard set) | GSTNLinkCore | Grab (tap) and grabber-role commands (`Command.Link.Mount/Dismount/Drop` are declared, as ini, by `GSTNPiggyback`; `Pickup` (hold) and `Drop` of held objects by `GSTNHeld`) | slot set |
 | `Input.Lock.Command.Defence`, `Input.Lock.Command.Link` | native | GSTNDefenceCore / GSTNLinkCore | Lock a command family | abilities/GEs (ordinary counts) |
 | `Combat.Event.Blocked/Parried/ShieldPoked/ShieldBroken/Teched/KnockedDown` | native | GSTNDefenceGAS | Authoritative events (§5.6 combat.md, server outbox); `Parried` carries the **source** (shield or move) in its payload, `ShieldPoked` is a hit that landed on a body hurtbox of a shielding victim | published by the combat model |
 | `Combat.Event.LinkFormed/LinkBroken/Throw/GrabEscaped` | native | GSTNLinkGAS | Same | published by the watchdog/pipeline |
@@ -235,7 +235,7 @@ mode like the rest of the rules). It holds **`bShieldEnabled`** (the PvP/PvE swi
 | `FGSTN_TechRules` | `WindowFrames` (default 20 before contact), `LockoutFrames` (default 40 after a press), `LateFrames` (0), `bTechInHitstunNotTumble` (false), `InPlaceFrames`, `RollFrames`, `RollDistance`, `WallTechFrames`, `bAllowWallTech`, `KnockdownFrames`, `NoTechKnockdownBonusFrames`, `IntangibleFrames` (the moves' own `HurtboxModifier` windows win; this is only the fallback) |
 | `FGSTN_DIRules` | `Params` (`FGSTN_DIParams` of M4 §3: `MaxDIYawDegrees`, `MaxDIElevationDot`, `UpwardThresholdDot`, `MaxElevationDot`; overrides the rules default per game mode), `StrengthCurve` (`FGSTN_Curve1D`: stick magnitude → factor, piecewise linear, quantized points, no engine curve in Core), `ElevationDeltaByElevation` (optional `FGSTN_Curve1D`: scales `MaxDIElevationDot` by `|e|`, e.g. less influence near vertical; default flat 1), `MinKnockbackForDI`, `ScaleByVictimTag` (`TMap<FGameplayTag, float>`: bosses 0) |
 | `FGSTN_SDIRules` | Held-direction drift (owner direction): `DriftSpeedCmPerSec` (at full stick), `StrengthCurve` (stick magnitude → factor), `MaxDistanceCmPerHit`, `MinZone` (Tilt: below it no drift), `bScaleByHitstopFrames` (false: the total grows with hitstop length by itself), `ScaleByVictimTag` |
-| `FGSTN_GrabRules` | `Requirements` (`FGSTN_TagRequirements` on the victim, default ignore `Combat.State.Hitstun/.Tumble/.Knockdown/.ShieldBroken`, `Combat.Link.Linked`, `Combat.Immunity.Grab`, `Combat.State.Intangible`; **`Combat.Part.GrabLocked`** is added by the designer to the ignore list when `GSTNParts` is used, by data and by name, §8), `MaxGrabWeight`, `HeavyMaxGrabWeight` (§8), `TapMaxFrames`, `HoldFrames`, `InteractReachCm`, `InteractPriority` (ordered meanings, §8), `ImmunityFramesAfterRelease`, `ImmunityFramesAfterThrow`, `Mash` (`FGSTN_MashRule`), `PummelFreeFrames`, `bGrabBeatsShield` (true: grab hits are `bBlockable = false`, so the shield bubble does not catch them) |
+| `FGSTN_GrabRules` | `Requirements` (`FGSTN_TagRequirements` on the victim, default ignore `Combat.State.Hitstun/.Tumble/.Knockdown/.ShieldBroken`, `Combat.Link.Linked`, `Combat.Immunity.Grab`, `Combat.State.Intangible`; **`Combat.Part.GrabLocked`** is added by the designer to the ignore list when `GSTNParts` is used, by data and by name, §8), `MaxGrabWeight` (§8), `TapMaxFrames`, `HoldFrames` (the Interact hold threshold; `GSTNHeld`'s pickup binding uses the same default), `InteractReachCm`, `InteractPriority` (ordered meanings, §8), `ImmunityFramesAfterRelease`, `ImmunityFramesAfterThrow`, `Mash` (`FGSTN_MashRule`), `PummelFreeFrames`, `bGrabBeatsShield` (true: grab hits are `bBlockable = false`, so the shield bubble does not catch them) |
 | `FGSTN_MashRule` | `ButtonMask` + `bCountFlicks` (Tilt direction events count), `BaseFrames`, `FramesPerDamagePercent`, `MinFrames`, `MaxFrames`, `ReducePerPress` (frames), `ResistanceAttribute` scaling |
 
 **Math** — `UGSTN_DefenceMath` (stateless, doubles, identical on every machine):
@@ -328,7 +328,7 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
   - Mover: `Combat.Mover.Linked`, `Combat.Mover.Tumble`.
   - Hit types: `Combat.HitType.Grab/Throw/Pummel`.
   - Immunity (granted by kits/bosses/GEs, read by rules): `Combat.Immunity.Grab`, `.Parry` (cannot be parried), `.Shield`.
-  - Commands (`Command.` root, standard slot set; patterns in §8): `Command.Defence.Shield`, `Command.Link.Grab`, `.GrabHeavy`,
+  - Commands (`Command.` root, standard slot set; patterns in §8): `Command.Defence.Shield`, `Command.Link.Grab`,
     `.Pummel`, `.Throw.Forward/.Back/.Up/.Down`, `.Release` (`Link.Mount/.Dismount` are `GSTNPiggyback`'s).
   - Events: `Combat.Event.Blocked`, `.Parried`, `.ShieldPoked`, `.ShieldBroken`, `.Teched`, `.KnockedDown`, `.LinkFormed`, `.LinkBroken`,
     `.Throw`, `.GrabEscaped` (outbox, tagged with hit type, relationship, link type, roles; §5.6 combat.md).
@@ -679,14 +679,24 @@ travels in `LinkCommand`; the teleport is a Mover instant move through a GE (the
 
 - **Grab = the interact button (owner direction §3).** The old `Chord(Attack, Shield)` is replaced by the single button
   `Input.Button.Interact`, shared with mount (M7 §7) and pickup (M10 §8). Variants come from `GSTNInput` conditions, so no new
-  input code (input.md §6): *Proposal*
+  input code (input.md §6). **Owner answer (2026-10-22, "per ora"): tap = grab, hold = pick up objects.** Every row below is
+  binding data in the slot set, so changing the mapping later costs no code.
 
   | Input | Command | Meaning |
   |---|---|---|
-  | **Tap** (fires on the press, not on the release, to keep the grab responsive) | `Command.Link.Grab` = `Press(Interact)`, requirement `Combat.Interact.Target.Grab` | Standing grab; with the other targets the same tap means Mount / Pickup (their plugins' commands, requirement their own `Combat.Interact.Target.*`) |
-  | **Hold** (`HoldFrames`, default 15, while the tap's startup is still cancellable) | `Command.Link.GrabHeavy` = `Hold(Interact, MinFrames = HoldFrames)`, same requirement, one tier above the tap | **Heavy grab**: slower startup and recovery, accepts targets up to `HeavyMaxGrabWeight` instead of `MaxGrabWeight`; for M10 the hold on an object is its heavy pickup |
+  | **Tap** (fires on the press, not on the release, to keep the grab responsive) | `Command.Link.Grab` = `Press(Interact)`, requirement `Combat.Interact.Target.Grab` | Standing grab. With a mountable ally as target the same tap means Mount (M7's command, requirement `Combat.Interact.Target.Mount`; *Proposal*: the owner decided grab and pickup only). A tap with an object as target does nothing in the first version |
+  | **Hold** (`HoldFrames`, default 15) | `Command.Link.Pickup` (declared by `GSTNHeld`, M10 §8) = `Hold(Interact, MinFrames = HoldFrames)`, requirement `Combat.Interact.Target.Pickup` | **Pick up an object** (owner answer). Without `GSTNHeld` the hold has no binding |
   | Tap as grabber | `Command.Link.Release` = `Press(Interact)`, requires `Combat.Link.Role.Grabber` | Release (was `Press(Shield)`) |
-  | Hold as grabber | unbound in the first version (reserved, e.g. a charged pummel) | none |
+  | Hold as grabber, hold on a grab target | unbound in the first version (reserved, e.g. a charged pummel) | none |
+
+  **Why the press can fire the grab at once although a hold means something else:** the context probe below projects exactly one
+  target tag per frame, so with `Target.Grab` the press is a grab (no wait to tell a tap from a hold) and with `Target.Pickup` only
+  the hold fires. The two meanings never need telling apart on the same target. The earlier heavy grab on the hold
+  (`Command.Link.GrabHeavy`, `HeavyMaxGrabWeight`) is **dropped** from the standard set: how heavy a target a kit can grab is its
+  `MaxGrabWeight`, and a kit that wants a heavy-grab move binds its own command by data (another button or a chord), never on the
+  Interact hold. *Option* (question M6.22): project the grab and the pickup targets together and fire the grab on the tap's
+  *release* (before `HoldFrames`); an enemy and an object in reach then never compete, at the cost of the tap's length in grab
+  latency. Data only (`Release(Interact, MaxFrames = TapMaxFrames)` instead of `Press`, and the probe's one-tag-per-meaning mode).
 
   **Which meaning a tap has** is resolved by *context*, not by an extra command: the link tick extension (tag projection hook)
   runs `UGSTN_InteractMath::PickTarget` on the end-of-F-1 snapshot: candidates from registered `IGSTN_InteractCandidateProvider`s
@@ -701,7 +711,7 @@ travels in `LinkCommand`; the teleport is a Mover instant move through a GE (the
 - **Grabbability: weight/size class and broken parts (owner §1, §3).** `LinkRequest` accepts a `Grab` only if the victim passes
   (a) the tag requirements, (b) **weight**: the victim's `EffectiveWeight` from its `FGSTN_HitVictimView` (the M4 `HealthWeight`
   curve of remaining health, or, with `GSTNParts`, `UGSTN_PartMath::EffectiveWeight` with lost limbs) is `≤ MaxGrabWeight` of the
-  grabber's rules (tap) or `≤ HeavyMaxGrabWeight` (hold), so the size/weight class is data and a battered enemy gets lighter, and
+  grabber's rules (per kit), so the size/weight class is data and a battered enemy gets lighter, and
   (c) **broken parts**: `Combat.Part.GrabLocked` (projected by `GSTNParts` while its `FGSTN_GrabGate` is unmet) is in the ignore
   list of `Requirements`, so a too-big enemy is **ungrabbable until the required parts break**, then the tag disappears. M6 names
   no part concept: `GrabLocked` is looked up by name (`RequestGameplayTag(…, false)`), `GSTNParts` needs no M6 change
@@ -816,7 +826,7 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
   first parry; a hit one frame after the window is a normal hit; with the shield disabled in the rules the result is the same), `scenario_tech_ground` (press at
   c−3 teches in place; c−25 no tech; two presses: lockout), `scenario_tech_wall`, `scenario_sdi` (rules asset values),
   `scenario_grab_throw` (c1 grabs, three pummels, throws forward; all states equal),
-  `scenario_grab_interact` (tap = grab, hold = heavy grab, tap as grabber = release; context picks the nearest of grab/pickup/mount;
+  `scenario_grab_interact` (tap = grab, hold on an object = pickup with `GSTNHeld`, tap on an object = nothing, tap as grabber = release; context picks the nearest of grab/pickup/mount;
   one `Combat.Interact.Target.*` tag at any frame), `scenario_grab_gate` (heavy enemy refused while `GrabLocked` or above
   `MaxGrabWeight`; accepted after the parts break / weight falls; with and without `GSTNParts`), `scenario_throw_at_enemy` (grabbed
   enemy thrown into two others: hand-off to the M10 thrown body, credit, link breaks once), `scenario_grab_mash` (c2 scripted

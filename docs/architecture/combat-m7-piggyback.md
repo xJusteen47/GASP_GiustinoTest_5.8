@@ -342,7 +342,7 @@ its root, which is the anchor, so no animation is evaluated at runtime.
   (the owner: "the grab button is also the interact button"). Mount is therefore one **contextual meaning** among several, chosen
   by the requirements below and by the context in reach: ally with `bCanBeMounted` in reach = Mount (this file), grabbable enemy = Grab
   (M6), object in reach = Pickup ([M10](combat-m10-held-objects.md) §8). M6 §8 owns the arbitration: **tap** = `Command.Link.Grab`
-  (and, by context, this file's Mount or M10's Pickup), **hold** = `Command.Link.GrabHeavy`, **tap as grabber** = `Command.Link.Release`;
+  (and, by context, this file's Mount: *Proposal*, the owner decided only grab and pickup), **hold** = M10's `Command.Link.Pickup` (owner answer 2026-10-22: hold = pick up objects), **tap as grabber** = `Command.Link.Release`;
   a context probe (`UGSTN_InteractMath::PickTarget`, nearest to the facing direction, ties by `InteractPriority`) projects **exactly
   one** `Combat.Interact.Target.*` tag, and each meaning's binding requires its own tag, so bindings never compete.
   Ownership: the button tag `Input.Button.Interact`, the probe and the priority list live with M6/`GSTNInput`; this file only

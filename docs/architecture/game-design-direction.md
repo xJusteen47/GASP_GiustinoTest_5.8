@@ -80,13 +80,23 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - **Some enemies work as solid platforms** (players can stand on them).
 - Flakes coming off a part's material are **only aesthetic**; players have one part, so for them it is all aesthetic.
 
+## 2g. Interact button, dodge windows, designer tags, Blueprint, replaceable content (owner input, 2026-10-22, 10:34 and 10:36)
+
+- **Interact button, for now: tap = grab, hold = pick up objects** (answer to the M3 question on tap/hold). The heavy grab on
+  the hold is dropped (M6 §8, M10 §8).
+- **Ground dodge, for now: the feet are invincible in the final part** of the dodge. In general, **which portions of the
+  hurtboxes are invincible (and similar windows) is the designer's choice** (M4 §1b: `HurtboxModifier` data, never code).
+- **Designers must be able to create tags for the names of weapons, kits, specials and so on** (modularity-and-tags.md §4.2b).
+- **Most gameplay logic must be easy for designers to extend or change in Blueprint** (modularity-and-tags.md §3.8).
+- **Extreme modularity must allow replacing content as needed** (modularity-and-tags.md §3.9).
+
 ## 3. Grabs, interaction and throwing enemies
 
 - Example flow: a large enemy attacks; it is too big to grab. The player damages it until parts break off. Now it can
   be grabbed and thrown, e.g. **thrown at other enemies** (the thrown enemy is a projectile with hitboxes).
 - **The grab button is also the general interact button.** Different meanings can come from input variations (e.g.
   holding the button), as long as the input system is flexible enough (it is: conditions such as hold/tap in
-  `GSTNInput`).
+  `GSTNInput`). Decided for now (§2g): **tap = grab, hold = pick up objects**.
 
 ## 4. Impacts with surfaces
 
@@ -110,8 +120,9 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 
 - **No standard implementation**: dodge and shield may depend on the **kit**.
 - Base PvE **ground dodge**: almost a Super Mario **long jump** or a Helldivers **dive**, but the character does not
-  end lying down on landing. **Only the feet are invincible.** *Reading:* the feet hurtboxes are intangible or
-  invincible during the dodge; the rest of the body can be hit.
+  end lying down on landing. **Only the feet are invincible**, and for now **only in the final part** of the dodge (§2g).
+  *Reading:* the feet hurtboxes are intangible (default) or invincible in that window; the rest of the body can be hit. The
+  windows are designer data.
 - **Air dodge**: like the **dive roll** of Super Mario 3D World.
 - A **rolling movement mode** may come later: **do not implement it now**.
 
@@ -143,6 +154,7 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 | Wall splat / bounce / destruction on impact | M4 (launch and tumble), M6 tech interaction |
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
+| §2g: tap = grab, hold = pickup; feet invincible in the dodge's final part, invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
 | §2f, §6b: many enemies on a listen host (replication, presentation and host budgets) and enemies as solid platforms (players stand on them) | research [many-enemies-replication.md](many-enemies-replication.md); M8 minions ([combat-m8-minions.md](combat-m8-minions.md) §4d.1, §4d.5, §8, §11: packs with push model and dormancy, per-item tier rates, 150 as a population with about 60 awake, `MaxVisiblePuppets`, platform seams); new optional plugins `GSTNPlatform` and bridge `GSTNPlatformMinion` ([modularity-and-tags.md](modularity-and-tags.md) §3.6, tag root `Platform.*` §4.2) |
 
 ## 8. Out of scope for now
@@ -256,3 +268,13 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 >
 > I pezzi del material che si staccano di una parte sono solo estetici, i giocatori hanno solo una "parte" quindi, puoi
 > dedurre che sia estetico.
+
+### Fifth and sixth messages (2026-10-22, 10:34 and 10:36, verbatim)
+
+> Ti do la risposta alla domanda 6: per ora (raccogliere oggetti richiede il tenere premuto, grabbare il tap). 5. Per ora
+> lascia i piedi invincibili nella parte finale, ma le porzioni delle hurtbox invincibili e quant altro dovrebbero poter
+> essere lasciate al designer, in generale. Per quanto riguarda le gameplay tag, beh devono poter essere create tag
+> appropriate per i nomi delle armi, dei kit, delle speciali, etc… Ricorda che la maggior parte delle logiche gameplay
+> devono poter essere estese o modificate dal designer in modo agevole tramite BP.
+
+> La modularità estrema deve permettere di rimpiazzare contenuti a seconda delle esigenze.

@@ -199,15 +199,17 @@ Common rules:
 ## 8. Pickup, drop, throw (abilities)
 
 - **Interact button** (owner direction §3): pickup, grab and mount share **one button**, `Input.Button.Interact` (declared by M6,
-  [M6](combat-m6-defence-links.md) §8, not redefined here). M6 §8 owns the arbitration: tap = `Command.Link.Grab` (and, by context,
-  this plugin's Pickup or M7's Mount), hold = `Command.Link.GrabHeavy`, tap as grabber = `Command.Link.Release`; a context probe
+  [M6](combat-m6-defence-links.md) §8, not redefined here). M6 §8 owns the arbitration. **Owner answer (2026-10-22, "per ora"):
+  picking up an object needs the hold, the tap grabs.** So tap = `Command.Link.Grab` (and, by context, M7's Mount), **hold =
+  this plugin's `Command.Link.Pickup`**, tap as grabber = `Command.Link.Release`; a tap with an object as target does nothing in
+  the first version. A context probe
   (`UGSTN_InteractMath::PickTarget`: nearest to the facing direction, ties by `InteractPriority`, default Grab, Pickup, Mount)
   projects **exactly one** `Combat.Interact.Target.*` tag. This plugin **declares `Combat.Interact.Target.Pickup`** (native,
   projected, modularity-and-tags.md §4.2), registers an `IGSTN_InteractCandidateProvider` for objects in reach (`PickupPriority`
   orders objects among themselves only), and `Command.Link.Pickup` **requires** that tag, so it never competes with the grab or the
-  mount. The hold on an object is its **heavy pickup** (M6 §8: `GrabHeavy`'s object meaning; `HeavyMaxGrabWeight`-style limit by
-  `MaxCarryWeight` and size class). Interact is blocked while carrying, as `Pickup` is.
-- **Pickup** (`Command.Link.Pickup`, bound with requirements `Combat.Interact.Target.Pickup` and *not carrying*): a timeline ability with an `Interaction.Pickup`
+  mount. There is no separate heavy pickup: how heavy an object a kit can lift is `MaxCarryWeight` and the size class. Interact
+  is blocked while carrying, as `Pickup` is.
+- **Pickup** (`Command.Link.Pickup` = `Hold(Interact, MinFrames = HoldFrames)`, default 15 frames, bound with requirements `Combat.Interact.Target.Pickup` and *not carrying*): a timeline ability with an `Interaction.Pickup`
   hitbox that **hits objects**: objects register a pickup volume with the world subsystem (hittable class `Object`, relationship
   `Neutral`). The resolution step `HeldLinkRequest` (object side, server) accepts if: state `Idle/Landed`, not held, kit
   `AllowedKinds` and `MaxCarryWeight` (attribute), the entity has a free hand channel, object not on the thrower's

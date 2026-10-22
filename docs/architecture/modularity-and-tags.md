@@ -8,6 +8,8 @@ and how this is enforced. Owner requirements, verbatim in spirit:
 - Gameplay tags are of fundamental importance: in a project this size they are the vocabulary the plugins share.
 - The target is modularity comparable to Lyra or Fortnite.
 - Epic's C++ coding standard; every plugin has human-readable docs.
+- Most gameplay logic can be extended or changed by designers, easily, in Blueprint (2026-10-22, §3.8).
+- Extreme modularity means content can be replaced as needed (2026-10-22, §3.9).
 
 Owner direction that applies here: [game-design-direction.md](game-design-direction.md) (§6b listen server, §1 parts).
 
@@ -36,6 +38,12 @@ Lyra source in this session.
 6. **Every plugin is reusable on its own in an independent project** (owner, 2026-10-22: "cerca di limitare il coupling dei
    plugins. Vorrei che siano utilizzabili a parte da altri progetti indipendenti"). Coupling between plugins is kept to the
    minimum; the rules are in section 3.7.
+7. **Designers extend gameplay in Blueprint** (owner, 2026-10-22: "la maggior parte delle logiche gameplay devono poter essere
+   estese o modificate dal designer in modo agevole tramite BP"). C++ owns the frame, the network model and the hot loops;
+   designers own behaviour through data and Blueprint. Rules in section 3.8.
+8. **Content is replaceable** (owner, 2026-10-22: "La modularità estrema deve permettere di rimpiazzare contenuti a seconda delle
+   esigenze"). A kit, weapon, special, enemy, cue, UI piece or rule set is swapped by changing data, never code. Rules in
+   section 3.9.
 
 ### 1.2 What Lyra and Fortnite do (the pattern to borrow)
 
@@ -377,6 +385,89 @@ Each `GSTN*` plugin must work when copied alone (with the plugins its `.uplugin`
    enables only that plugin and the plugins its `.uplugin` lists, builds it, and runs the plugin's tests; one canary per
    plugin, run before a milestone is closed. `check_modules.py` adds rules 10 and 11 (§6.1).
 
+### 3.8 Designer extension in Blueprint (owner direction, 2026-10-22)
+
+Goal 7. A designer can add or change a move, a kit, a weapon, a special, an enemy, a hit reaction, an interaction, a surface
+response or a mode rule **with data and Blueprint only, without a C++ build**. Three levels, preferred in this order:
+
+1. **Data**: data assets, curves, tag queries, timeline tracks, `FInstancedStruct` entries of existing types. No logic to
+   maintain, validated by `IsDataValid`.
+2. **Blueprint subclasses of extension classes.** Every extension point of section 5b that carries *behaviour* has a
+   Blueprint form: hit resolution steps, knockback models, relationship resolvers, outcome appliers, attacker outcomes
+   (M4 §3b), link rules, action providers and exit placers (M6 §7.0), interact candidate providers (M6 §8), part break
+   effects (combat-parts.md), surface impact responses (M4 §7b), minion behaviours (M8). Shape:
+   `UCLASS(Abstract, Blueprintable, EditInlineNew, DefaultToInstanced)`, one `UFUNCTION(BlueprintNativeEvent)` entry point
+   that takes a const input view struct and returns a result struct, the C++ behaviour as `_Implementation`. A Blueprint child
+   overrides the event, and can call the parent to extend rather than replace.
+3. **Blueprint abilities and presentation.** Moves are Blueprint children of `UGSTN_GameplayAbility` / `UGSTN_GA_BaseCombat`
+   (CLAUDE.md rule 3); cues, montages, VFX, materials (the part damage material), UI and cameras are Blueprint freely, with
+   `BlueprintImplementableEvent` hooks on presentation components (hit flash, part damage, shatter).
+
+**Simulation contract for Blueprint hooks** (CLAUDE.md rule 1 applies to Blueprint exactly as to C++):
+
+- A hook called inside the simulation is **pure**: it reads only its input view and writes only its result. No world, actor or
+  component reads (Mover queries stay forbidden), no `Delay` or latent nodes, no timers, no random except the seeded stream
+  passed in the view, no Blueprint variables kept between calls (the object is instanced in a shared asset). Views expose
+  `BlueprintReadOnly` fields only, so the graph cannot write state it should not.
+- **Per-entity simulation state for Blueprint** (*Proposal*): a generic sync fragment `FGSTN_DesignerCountersFragment` (up to 8
+  `{compiled tag index, int32}` pairs, zero bytes when unused, §5b) is passed in and out of the hooks, so a designer can keep a
+  combo counter or a charge level in the rolled-back state without C++.
+- **Checks** (*Proposal*): a debug-only determinism check runs each Blueprint hook twice per call with the same view and
+  compares the results (`gstn.Combat.VerifyHooks 1`, harness scenario per plugin); the M5 validator warns when a hook graph calls
+  a node from a deny list (`GetAllActorsOfClass`, `GetPlayerCharacter`, `Delay`, `SetTimer`, unseeded random). *Unsure*: the
+  cost of scanning a Blueprint's graph nodes in `IsDataValid` (editor only); verify in M5.
+- **Cost:** a Blueprint call is far slower than native and the simulation reruns it on every resimulated frame. Hooks called per
+  hit or per event may be Blueprint; per-frame, per-entity hooks (tick extensions, minion steering for hundreds of enemies, M8)
+  are C++ by default, with a Blueprint variant opt-in and counted in the profiling budget (combat.md §15). UE5 has no Blueprint
+  nativization, so logic that shows in the profile moves to C++ behind the same event.
+
+**Stays C++ only, and why:** the NP model and sync-state fragments (native serialize, compare and interpolate, deterministic),
+the tick order, the snapshot and lag-compensation history, the input simulation, and hot loops. Designers still configure all of
+them by data.
+
+**Exposure rules for every GSTN plugin** (also in checklist 7.1): tuning structs `USTRUCT(BlueprintType)` with
+`UPROPERTY(EditAnywhere, BlueprintReadOnly)` and tag fields with `meta=(Categories="...")`; stateless math in `*Utils`
+function libraries with `BlueprintPure` functions, usable inside hooks; events reach Blueprint through Gameplay Messages and
+gameplay cues, not multicast delegates on simulation components; each extension class ships an example Blueprint in the
+plugin's test content and a README section "Extending in Blueprint".
+
+### 3.9 Replaceable content (owner direction, 2026-10-22)
+
+Goal 8. Anything a game may want to swap is reached through a **data indirection**: a soft reference or a Primary Asset ID in
+a data asset, selected by tag or by the experience. No hard reference to content in C++ (`ConstructorHelpers`, literal asset
+paths), and no hard reference from one plugin's assets to another plugin's content.
+
+| Content | Swapped through | Selected by |
+|---|---|---|
+| Character, its abilities, input | `UGSTN_PawnData` (§3.4) | experience, player choice |
+| Kit (moveset, dodges, shield) | kit definition (M3 §8) | `Kit.*` identity tag (§4.2b), loadout |
+| Weapon | weapon definition (M3 §8) | `Weapon.*` identity tag |
+| Special, super | ability binding of the kit, the ability's timeline | `Ability.Combat.Special.*` / `Super.*` identity, `Command.*` |
+| Combat rules (pipeline steps, knockback model, DI) | `UGSTN_CombatRules` (M4 §3b) | game mode, experience |
+| Hit, impact, part-break, shatter visuals and sounds | gameplay cue notifies; cue paths added per Game Feature (`AddGameplayCuePath`) | `GameplayCue.*` tag |
+| Animation | montages referenced by timelines and kits; linked anim layers per kit and weapon (M3 `LocomotionAnimLayer`, `AnimLayer`) | kit, weapon |
+| Enemies and their parts | minion type definitions (M8), part sets (combat-parts.md) | `Minion.Type.*`, `Part.Type.*` |
+| Held objects | object definitions (M10) | `Held.Type.*` |
+| Surfaces | physical material → `Surface.Type.*` table, per-surface impact rules (M4 §7b) | physical material |
+| Level objects (KO zones, trampolines, enemy platforms) | the plugin's actor classes and their Blueprint children | placed in the level |
+| UI | UI extension points | `UI.Extension.*` |
+| A plugin's own defaults | the plugin's `UDeveloperSettings`, soft references to its `Content/` (§3.7 rule 1) | project config |
+
+**Override order**, lowest to highest: the plugin's default (its developer settings) < project settings < experience and Game
+Feature data (Data Registry sources added on activation, `UGameFeatureAction_DataRegistrySource`; *Unsure*: exact class name in
+5.8) < per-mode or per-map override. Lookup by tag goes through Data Registries or Asset Manager primary asset types whose
+Primary Asset ID derives from the identity tag (§4.2b). A project therefore replaces the plugins' demo content without editing
+the plugins.
+
+**Simulation caveat (§1.3).** Content the simulation reads (kits, timelines, hit data, rules, part sets) is resolved before the
+pawn's first NP tick and must be identical on host and clients. *Proposal*: a **content signature** (hash of the Primary Asset
+IDs and versions of the experience's simulation content) is checked at join next to the fragment registry (§4.7); a mismatch
+refuses the connection. Presentation content (meshes, materials, cues, sounds, UI, cosmetic skins) may differ per machine and
+may change at any time.
+
+**Checked by** `check_modules.py` rule 12 (§6.1) and a data validator that flags hard object references from one plugin's assets
+to another plugin's content.
+
 ## 4. Gameplay tag taxonomy (*Proposal*)
 
 ### 4.1 Rules
@@ -432,8 +523,8 @@ Existing names are kept unless listed in 4.3.
 | `Combat.Held.*`, `Combat.Source.*`, `Held.Type.*` | size, kind, carrying state of held objects; thrown/projectile credit; designer object types (M10) | `GSTNHeld` (`Held.Type.*`: ini) | native + ini |
 | `Minion.*`, `Command.Minion.*` | `Minion.State`, `Minion.LOD`, `Minion.Type.<Name>`; minion-only commands, never in a player binding set (M8) | `GSTNMinion` | native + ini |
 | `Platform.*` | new root (*Proposal*, many-enemies-replication.md §3.5). Leaves are examples, the final list belongs to the plugin's own spec: `Platform.State.<Active, Braced, Breaking, Inactive>` (names of the platform's active state, derived from the replicated value, never granted as loose tags), `Platform.Event.<Mounted, Dropped>` (local presentation and cue triggers) | `GSTNPlatform` (root and every leaf); the bridge `GSTNPlatformMinion` declares **none**; minion types stay `Minion.Type.*`; the platform collision channel `GSTN_EnemyPlatform` is a collision channel, not a tag | native |
-| `Weapon.*`, `Kit.*`, `Super.*`, `Loadout.*`, `Skin.*` | identity tags on assets | `GSTNCombat` roots, game content via ini | ini mostly |
-| `Ability.*` | `Ability.Movement.Jump`, `Ability.Combat.*` (identity of abilities) | owner of the ability | native |
+| `Weapon.*`, `Kit.*`, `Super.*`, `Loadout.*`, `Skin.*` | **designer identity tags** for named content (`Weapon.Sword.Longsword`, `Kit.Swordsman`, `Super.Meteor`), §4.2b | roots: `GSTNCombatCore` (native, for pickers; code never names a leaf); leaves: the content plugin, Game Feature or project that ships the asset | root native, leaves ini |
+| `Ability.*` | `Ability.Movement.Jump`, `Ability.Combat.*` (identity of abilities; named moves and **specials** as `Ability.Combat.Special.<Name>`, §4.2b) | owner of the ability; game moves and specials: the content's owner | native (framework), ini (game moves) |
 | `Status.*` | `Status.Burning`, `Status.Stunned` (gameplay-effect statuses) | `GSTNCombat` roots; game content | ini |
 | `Movement.*` | `Movement.Mode.Wall.Slide`, `Movement.Lock.Jump`, `Movement.Blocked.Jump` | `GSTNMovement` (project until extracted) | native |
 | `Team.*` | `Team.Player`, `Team.Enemy` | `GSTNCombat` (until a Teams plugin exists) | native |
@@ -449,6 +540,29 @@ Existing names are kept unless listed in 4.3.
 introduces a mechanic declares its own leaves (documented in its spec, e.g. `Combat.State.Shielding` in `GSTNDefence`,
 `Combat.HitType.Interaction.Mount` in `GSTNPiggyback`, `Combat.Weapon.Role.Held` in `GSTNHeld`, `Combat.Event.Part.Broken` in `GSTNParts`). `Combat.Part.*` is a root of its own (one owner, `GSTNParts`), and `GSTNParts` declares **no** `Combat.State.*`, `Combat.Mover.*` or `Combat.Lock.*` (stagger is the existing `Combat.State.Hitstun`). Rule 1 of 4.1 still holds for
 every other root: one owner, and two plugins never declare the same leaf.
+
+### 4.2b Designer identity tags (owner direction, 2026-10-22)
+
+Owner: "devono poter essere create tag appropriate per i nomi delle armi, dei kit, delle speciali, etc…". Answers Mod.13.
+
+- **Every named piece of designer content has an identity tag**: weapons `Weapon.<Family>.<Name>` (`Weapon.Sword.Longsword`),
+  kits `Kit.<Name>`, specials and other named moves `Ability.Combat.Special.<Name>` (the move-identity root M3 already uses,
+  so a special has one identity, not two), supers `Super.<Name>`, loadouts and skins, enemies `Minion.Type.<Name>`, held objects
+  `Held.Type.<Name>`, part types `Part.Type.<Name>`, surfaces `Surface.Type.<Name>`, modes `Experience.Mode.<Name>`.
+- **Roots native, leaves ini.** The root is declared by its owner (table 4.2) so pickers filter on it
+  (`meta=(Categories="Weapon")`). Leaves are created by designers in the editor (Project Settings → Gameplay Tags, or "Add New
+  Gameplay Tag" from any tag picker) with the tag source set to the ini of the content's owner: a content plugin or Game Feature
+  ships `Config/Tags/<Owner>.ini`, game content uses the project's `Config/Tags/GSTNContent.ini`. No C++ and no build.
+- **Code never names a leaf.** Behaviour comes from the asset's data; designers write tag *queries* in data (a buff for every
+  `Weapon.Sword`, a binding that requires `Kit.Swordsman`, a part that resists `Weapon.Blunt`), and the hierarchy forms the groups
+  (`Weapon.Sword.Longsword` matches `Weapon.Sword`).
+- **One asset, one identity.** M3's `KitTags` and `WeaponTags` containers hold exactly one leaf under their identity root (the
+  other tags in them classify); the special's identity is in the ability's `AbilityTags`. `IsDataValid` and the M5 project
+  validator check "exactly one, unique per asset type"; the Primary Asset ID may derive from it (§3.9). No M3 type changes.
+- **Visible to the simulation** (*Proposal*): the active kit's and weapon's identity tags are granted through their existing
+  effects (M3 `InitStatsEffect`, weapon `StatsEffect`, granted-tags component), so bindings, rules and hit data can require them
+  deterministically; hit events carry the move's identity for UI, stats and achievements.
+- Identity tags name content, they never carry tuning (rule 5 of 4.1: no numbers as meaning).
 
 ### 4.3 Migration items for existing tags (nothing renamed without being listed)
 
@@ -469,7 +583,7 @@ every other root: one owner, and two plugins never declare the same leaf.
 | Situation | Choice |
 |---|---|
 | Plugin code reads or writes the tag | native, owner's Public header |
-| Tag designers must add without C++ (commands, buttons, statuses, cues, weapon/kit identity) | ini under the right owner; the *root* is native so tag pickers can filter on it |
+| Tag designers must add without C++ (commands, buttons, statuses, cues, identity of weapons, kits, specials, supers, enemies, objects: §4.2b) | ini under the right owner; the *root* is native so tag pickers can filter on it |
 | Plugin must run when another plugin is absent but wants to look at its tag | `RequestGameplayTag(Name, /*ErrorIfNotFound*/ false)`, cache the result, treat invalid as "not present" |
 | Tag used only in tests | native in the test module, prefix `Test.` |
 
@@ -586,6 +700,11 @@ without defence, piggyback on link" true (combat-m6 §1b, m7, m8). The surface i
 | **Timeline track kinds** | Extra `UGSTN_TimelineTrack` types and their evaluators. | Evaluators live in `*Core` or `*GAS` of the plugin; unknown tracks are validation errors. |
 | **Victim read-model** (`FGSTN_HitVictimView`, M4) | A generic, read-only description of "what can be hit and how" so hit resolution does not care whether the victim is a fighter, a minion or a held object. | Plain struct, no GAS type. |
 
+**Blueprint access (§3.8).** The surfaces that carry behaviour (pipeline steps, outcome appliers, link rules and providers,
+asset extensions read by a step) have Blueprintable forms with pure `BlueprintNativeEvent` entry points; the surfaces that carry
+*state or wire format* (sync fragments, inbox payload types, entity references, snapshot extension PODs, tick order) stay C++,
+and Blueprint reaches per-entity state through the generic designer-counters fragment.
+
 Why this matters for tags: extensions communicate through the tags of 4.2 (`Combat.State.*` projected by the
 core, `Combat.Link.*` owned by Link). A fragment never carries behaviour the tags could express.
 
@@ -640,6 +759,8 @@ Fail on:
 10. Plugin source or config references `/Game/`, a `GASP_Giustino2` symbol, or a project `Config/` key (reuse rule 1, §3.7).
 11. A plugin depends on a non-`*Core` module of another plugin without being listed as a bridge or as an `embeds` `*NP` → `*NP`
     edge of the same layer (reuse rule 2, §3.7).
+12. Plugin C++ uses `ConstructorHelpers::FObjectFinder` / `FClassFinder` or a literal asset path (`TEXT("/...")` naming a
+    package): defaults belong in the plugin's developer settings as soft references (replaceable content, §3.9).
 
 Exit code 1 on failure, one line per violation with the edge and the rule number. Warn-only until S-H.
 
@@ -670,6 +791,9 @@ Exit code 1 on failure, one line per violation with the edge and the rule number
 9. Register: add to `.uproject` `Plugins` only if it is needed by the shipping game; otherwise an experience or
    mode enables it.
 10. Update this document's table 3.6 and the roadmap.
+11. Blueprint and content (§3.8, §3.9): every behaviour extension class is `Blueprintable` with a `BlueprintNativeEvent` entry
+    point and an example Blueprint; tuning structs are `BlueprintType`; no hard content references in C++; the README has an
+    "Extending in Blueprint" and a "Replacing content" section.
 
 ### 7.2 How to add a new tag
 
@@ -713,6 +837,7 @@ All are compatible with the specs as written; they only fix placement and names.
 | Kits | `Kit.<Name>` | root `GSTNCombatCore`, leaves ini |
 | Weapons and roles | `Weapon.<Name>`, `Combat.Weapon.Role.{Primary,Support}` (as M5 spec expects) | root native; leaves ini |
 | Supers | `Super.<Name>`, command `Command.Super.Slot1..` (existing) | `GSTNCombatCore` / ini |
+| Specials and named moves | `Ability.Combat.Special.<Name>` (§4.2b) | root `GSTNCombatGAS`, leaves ini |
 | Loadout, skins | `Loadout.*`, `Skin.*` | roots native, leaves ini |
 | Runtime states | `Combat.State.*` only, **projected by the combat tick** (`Busy`, `InTimeline`, `Hitstop`, `CancelWindow`, ...); never granted by abilities directly | `GSTNCombatGAS` declares, `GSTNCombatNP` projects |
 | Locks | `Input.Lock.Command.*` (command families), `Combat.Lock.Movement` (read by the stats modifier) | per input.md §3 |
