@@ -15,7 +15,7 @@ This README is the map; those documents hold the decisions and the reasons.
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNCombatCore` | exists | Combat content built on `GSTNInputCore`, pure and deterministic (no GAS, no Network Prediction): the standard button tags (`Input.Button.Attack`...), the standard command tags and the default command set (`UGSTN_StandardSlots`). Covered by Automation tests (`GSTNCombat.Core.*`). |
+| `GSTNCombatCore` | exists | Combat content built on `GSTNInputCore`, pure and deterministic (no GAS, no Network Prediction): the standard button tags (`Input.Button.Attack`...), the standard command tags and the default command set (`UGSTN_StandardSlots`). The pure timeline layer (`Timeline/`, below). Covered by Automation tests (`GSTNCombat.Core.*`). |
 | `GSTNCombatNP` | separate plugin | Moved to the plugin [GSTNCombatNP](../GSTNCombatNP/README.md) (same module name): the combat NP model (`UGSTN_CombatSimComponent`), which needs the fork. |
 | `GSTNCombatGAS` | separate plugin | The plugin [GSTNCombatGAS](../GSTNCombatGAS/README.md): native ability-layer tags now, later attribute set, damage effect and execution, weapons and loadouts. Needs GameplayAbilities, so it is not part of this plugin. |
 | `GSTNCombatEditor` | planned | Timeline editor, slot conflict validator UI, debug drawing. |
@@ -47,6 +47,30 @@ and engine modules, and nothing in this plugin depends on `GSTNCombatNP`. An `*N
 `*NP` module of the same layer, and on nothing above it; `GSTNCombatNP` depends on this plugin's Core and on `GSTNInputNP` by
 design (see the [GSTNCombatNP README](../GSTNCombatNP/README.md)). Shared NP types are not moved into the Core modules.
 
+## Timeline layer (`Timeline/`)
+
+Frame data of a combat ability and its evaluation, pure (no GAS, Network Prediction or Mover; the ability that runs it lives in
+`GSTNCombatNP`). Soft references only: montages and curves are `TSoftObjectPtr`, nothing is loaded by the data.
+
+| Type | What it is |
+|---|---|
+| `FGSTN_CombatTimelineData` | Total and first actionable frame, `FGSTN_TimelineTail`, montage, aim policy, override window, buffer reset rules, the tracks and an optional `FGSTN_RicochetResponse`. Inline on an ability or in the asset. |
+| `UGSTN_CombatTimeline` | `UPrimaryDataAsset` (type `GSTN_CombatTimeline`) holding one `FGSTN_CombatTimelineData`; `IsDataValid` runs the validation. |
+| `FGSTN_TimelineTrack` + kinds | `TInstancedStruct` tracks: `CancelWindow`, `Movement`, `Tags`, `Event`, `WeaponSwitch`, `Hitbox`, `HurtboxModifier`. A closed set (`EGSTN_TimelineTrackKind`). Hitbox and hurtbox tracks address `FGSTN_PartSelector` (part name, group name or tag), never the whole body, and are ignored until hits exist (M4). |
+| `FGSTN_TimelinePlayer` | Stateless `Evaluate(Data, Params, Output)`: active cancel/tag/movement windows, events, swaps, movement starts and ends and the commit, each fired once per `(PreviousFrame, Frame]`; `IsInTail`. O(tracks), the preallocated `FGSTN_TimelineOutput` is reused. A ricochet outcome flag evaluates the recoil data instead. |
+| `FGSTN_TimelineValidation` | Pure checks: first actionable frame, tail clamp, deferred-commit rules, track ranges, part selectors, montage length vs frames (only when the length is known), ricochet response. |
+| `UGSTN_TimelineUtils` | `BlueprintPure` helpers (`IsInTail`, `GetTailStartFrame`). |
+
+Ranges are half open (`StartFrame <= frame < EndFrame`). The tail (`FGSTN_TimelineTail`) is off by default; when on, its start
+defaults to `FirstActionableFrame` and from there anything cancels the timeline (the flag is `FGSTN_TimelineOutput::bTailCancel`).
+
+**Extending in Blueprint.** All timeline structs are `USTRUCT(BlueprintType)` with `EditAnywhere, BlueprintReadOnly` fields: a
+designer authors a timeline in the details panel of an ability or of a `UGSTN_CombatTimeline` asset (the track list is an
+instanced-struct array with a type picker), reads it from Blueprint and can call the `UGSTN_TimelineUtils` helpers. Tracks are
+a closed C++ set on purpose, because the player evaluates them every simulated frame: a new track kind is a C++ change (add the
+struct, a kind and a `switch` case in `FGSTN_TimelinePlayer`), not a Blueprint subclass. Behaviour hooks around timelines come
+with the ability layer.
+
 ## How to extend it
 
 The generic extension points (a new input condition, slot, binding or buffer reset rule) are described in the
@@ -59,7 +83,9 @@ The generic extension points (a new input condition, slot, binding or buffer res
   the combat settings' `ExclusiveButtons` if its presses compete with attacks for one move.
 - **The combat component**: in the [GSTNCombatNP README](../GSTNCombatNP/README.md).
 
-Tests are in `Source/GSTNCombatCore/Private/Tests/` with the helpers of `GSTN_CombatTestUtils.h`.
+Tests are in `Source/GSTNCombatCore/Private/Tests/` with the helpers of `GSTN_CombatTestUtils.h`. The timeline layer is covered by
+`GSTNCombat.Core.Timeline.{WindowsAtFrame, EventsOnce, NoAllocation, Validation, TailCancelFlagAfterStart, TailCancelNotBeforeStart,
+TailCancelUnsetMeansNone, TailStartClampedToLength, RicochetOutcomeSwitchesToRecoil}`.
 
 ## Conventions
 
