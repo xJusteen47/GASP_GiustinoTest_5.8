@@ -23,3 +23,7 @@ FGSTN_InputSimState::ShouldReconcile returns true on mismatch via UE_NP_TRACE_RE
 
 ## Other decisions from the coordinator
 - Trigger spike: option (a), fork patch guarding only the restore phase of MonitoredTagChanged; verify GetIsRestoringFrame() true in RestoreFrame, false in resim ticks; document in PATCHES.md; live probe (forced rollback across a tag-triggered activation: same active abilities on server, owning client, other client; no double activation; none during restore); GameplayEvent triggers unchanged. Folded into the live spike batch (L1-L9).
+
+## Deferred
+- D-Harness: move the GASNPPTest harness to a separate module of Type DeveloperTool/UncookedOnly with CoreRedirects (Lyra pattern), do at a stable point with a Shipping build check. Not done by wrapping in defines: UHT parses the reflected headers whatever a Build.cs define says, so only a module split excludes the generated code.
+- Done instead (8607390): no /Game paths in C++ for ability input actions and mapping contexts (Config properties, DefaultGame.ini).
