@@ -29,6 +29,19 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - Enemies have a **stagger** factor and a **juggle** factor (the weight for knockback): **hitstun and hitstop depend
   on what hits them and where** (which part, which hit).
 
+## 2b. Hitstun per part, stagger force, hitstop, weight (owner input, 2026-10-22 morning)
+
+- Whether an enemy or boss enters **hitstun depends on the part that is hit**. Each part has its own **hitstun
+  condition**: generally, the attack's **stagger force** parameter must exceed a threshold set on the part.
+- **Stagger force** generally **scales with the attack's power**, but the designer can set it independently.
+  *Reading:* by default derived from the hit's damage/knockback, with a per-hit override.
+- **Hitstop** can be **computed automatically from the attack's damage and knockback**, or **set by the designer**
+  per attack if they want.
+- **Weight** decides what happens when an entity enters hitstun: how far it **flies**, or whether it does not fly at
+  all and is only **staggered in place**, or is **pushed back**. *Reading:* three reaction tiers (launch, push back,
+  stagger in place) chosen by comparing the knockback with the victim's effective weight (which also depends on
+  remaining health, section 2).
+
 ## 3. Grabs, interaction and throwing enemies
 
 - Example flow: a large enemy attacks; it is too big to grab. The player damages it until parts break off. Now it can
@@ -73,6 +86,7 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 |---|---|
 | Parts, hardness, penetration, per-part health, transfer to main pool, part break events, capped percent | new spec [combat-parts.md](combat-parts.md) (own plugin); M4 resolution pipeline; M3 attributes; M8 minions |
 | Weight from remaining health, stagger and juggle factors, part-dependent hitstun/hitstop | M4 knockback model and victim side; M8 |
+| §2b: hitstun only if the hit's **stagger force** reaches the threshold of the part hit; stagger force derived from the attack's power or set by the designer; hitstop automatic (damage and knockback) or per attack; weight decides the reaction tier (launch, push back, stagger in place) | M4 hit data, knockback model, hurtbox thresholds and victim side ([combat-m4-hits.md](combat-m4-hits.md) §3, §7); per-part `StaggerThreshold` and `MaxReaction` ([combat-parts.md](combat-parts.md) §3.1, §4.4); M8 minions (same rules, tier encoded in `ActionState`, [combat-m8-minions.md](combat-m8-minions.md) §4d.2, §8.2) |
 | Grabbability depending on size and broken parts; grab = interact; throwing enemies at enemies | M6 grabs; M10 thrown objects (enemies as projectiles); M8 |
 | Wall splat / bounce / destruction on impact | M4 (launch and tumble), M6 tech interaction |
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
@@ -119,3 +133,14 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 >
 > Nemici, come in helldivers, dovrebbero avere un fattore di stagger e juggle (il peso per il knockback di cui parlavo
 > prima) dove hitstun e hitsop dipendono da cosa e dove vengono colpiti.
+
+### Second message (2026-10-22, verbatim)
+
+> Aggiungo delle cose: Se un nemico o un boss entra in hitsuno no, dipende dalla parte colpita. Ogni parte dovrebbe
+> avere una condizione di hitsun(generalmente se l'attacco ha un parametro, chiamato forza di stagger sopra un certo
+> totale. Generalmente scala con la potenza dell'attacco, ma potrebbe essere settato in modo diverso). Hitstop puo
+> venire calcolato dinamicamente in base al danno e al knockback dell'attacco, ma puo anche essere scelto a parte dal
+> designer, se vuole.
+>
+> Ricordiamo che il peso è il valore che decide quanto un nemico vola via quando entra in hitstun, oppure se non vola
+> via affatto ma viene solo staggerato sul posto, oppure mandato all'indietro.

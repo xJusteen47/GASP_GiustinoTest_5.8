@@ -18,6 +18,12 @@ those milestones).
 > become grabbable after parts break, and minions can be grabbed and thrown at other minions (§14, M10). (4) Death is a
 > crystal shatter, pooled (§4d.4). All new choices are *Proposal*; see §4d.
 
+> **Revision 2026-10-22 (morning, owner direction [game-design-direction.md](game-design-direction.md) §2b; it wins over this
+> file):** minions use the **same hitstun condition and reaction tiers as fighters** ([combat-m4-hits.md](combat-m4-hits.md) §3): the
+> hit's stagger force against a threshold (per part through `GSTNPartsMinion`, per type through the hurtbox set otherwise), and weight
+> deciding between launch, push back and stagger in place. The tier is encoded in the existing 4-bit `ActionState` (new value
+> `PushedBack`, §8.2), with no extra wire bits (§4d.2). All new choices are *Proposal*.
+
 ## 1. Scope
 
 **Goal:** dozens of simple enemies (40 required, 100 stretch) with the **same timelines, hitboxes, hurtboxes, teams,
@@ -102,8 +108,8 @@ first M8 commit** (file move, no behaviour change).
   path from the store). Steps never touch a component.
 - **`UGSTN_KnockbackModel_HealthFraction`** (*Proposal* for the percent-vs-HP question): behaves as
   `PercentScaling` with `DamagePercent` replaced by `(1 − Health/MaxHealth) × HealthToPercentScale` (default 100), so
-  wounded minions fly further and fresh ones barely move; `UGSTN_KnockbackModel_Fixed` stays available per definition.
-  Attacker hitstop must not depend on victim data (M4 formula already does not); the model exposes
+  wounded minions fly further (and, through the reaction tiers of M4 §3, climb from stagger in place to push back to launch) and fresh ones barely move; `UGSTN_KnockbackModel_Fixed` stays available per definition.
+  Attacker hitstop must not depend on victim data (the M4 `Auto` formula, from authored damage and nominal knockback, already does not); the model exposes
   `bAttackerHitstopIndependentOfVictim = true` and a test asserts it, because the client predicts it against a puppet.
 - **`FGSTN_MinionStats`** (data): `MaxHealth, Weight, KnockbackResistance, HitstunResistance, PoiseHits (hits absorbed
   as armor, 0 = none), WalkSpeed, RunSpeed, TurnRateDegPerSec, Acceleration, Braking, GravityScale, StepHeight,
@@ -122,7 +128,7 @@ Everything below lives in the separate plugin **`GSTNMinion`** (section 4b); fil
 
 | Type | File | Role |
 |---|---|---|
-| `UGSTN_MinionDefinition` (`UPrimaryDataAsset`, type `GSTN_MinionDefinition`) | `Data/GSTN_MinionDefinition.h` | One per minion type: `TypeTag`, `FGSTN_MinionStats`, `UGSTN_HurtboxSetDefinition`, `TArray<FGSTN_MinionMove> Moves { FGameplayTag Command; UGSTN_CombatTimeline* Timeline; int32 CooldownFrames; float MinRange, MaxRange; int32 Priority; }`, reaction timelines (`Spawn`, `Hitstun`, `Launched`, `Knockdown`, `GetUp`, `Death`), `KnockbackModel` (instanced override), `FGenericTeamId Team`, `EGSTN_MinionMovementBackend`, `PuppetClass`, `StateTree`, `LODOverride`, `PromotionFighterClass` (soft), `MaxHitsPerFrame`. `IsDataValid`: ≤ 31 moves, only supported tracks, hurtbox set present, timelines ≤ 1023 frames, `Hitstun`/`Death` timelines present. |
+| `UGSTN_MinionDefinition` (`UPrimaryDataAsset`, type `GSTN_MinionDefinition`) | `Data/GSTN_MinionDefinition.h` | One per minion type: `TypeTag`, `FGSTN_MinionStats`, `UGSTN_HurtboxSetDefinition`, `TArray<FGSTN_MinionMove> Moves { FGameplayTag Command; UGSTN_CombatTimeline* Timeline; int32 CooldownFrames; float MinRange, MaxRange; int32 Priority; }`, reaction timelines (`Spawn`, `Hitstun`, `PushBack`, `Launched`, `Knockdown`, `GetUp`, `Death`), `KnockbackModel` (instanced override), `FGenericTeamId Team`, `EGSTN_MinionMovementBackend`, `PuppetClass`, `StateTree`, `LODOverride`, `PromotionFighterClass` (soft), `MaxHitsPerFrame`. `IsDataValid`: ≤ 31 moves, only supported tracks, hurtbox set present, timelines ≤ 1023 frames, `Hitstun`/`Death` timelines present (`PushBack` is optional and falls back to `Hitstun`). |
 | `UGSTN_MinionLODSettings` (`UDataAsset`) | `Data/GSTN_MinionLODSettings.h` | Tier distances, hysteresis, intervals (section 7). |
 | `FGSTN_MinionHandle` | `Runtime/GSTN_MinionStore.h` | `{ uint16 Index; uint16 Generation; }`; stale handles resolve to invalid. |
 | `FGSTN_MinionStore` (plain C++) | same | Struct-of-arrays, free list, capacity `gstn.Minion.Max` (default 128, pre-allocated). Per slot: generation, definition index, position/velocity/yaw, `ActionState`, `MoveId`, `TimelineStartFrame`, `MovePausedFrames`, `HitstopEndFrame`, `HitstunEndFrame`, `NextMoveFrame[move]` cooldown stamps (small fixed array), `Health`, `KnockbackPercent`, LOD tier and phase, intent, flags, last-attacker ring (4 entries, for KO credit), `HitByRing[4] { AttackerId, TimelineStartFrame, HitGroup }` (once per group per attacker move on the victim side too). |
@@ -182,12 +188,12 @@ ever granted as a loose tag on a minion**; "who adds" means who writes it into e
 | `Combat.Entity.Fighter` | native | `GSTNCombatGAS` (`GSTN_CombatTags.h`) | Event/view marker for NP fighters | Combat event emitter adds to `Tags` of `HitLanded/HitReceived/KO` (M4) |
 | `Combat.Entity.Minion` | native | `GSTNMinionCore` | Same marker for minions | Minion subsystem, in the same events and in `FGSTN_HitVictimView::Tags` |
 | `Combat.Event.MinionSpawned`, `.MinionDespawned`, `.MinionPromoted` | native | `GSTNMinionCore` | Authoritative server events (combat.md §5.6) | Spawner / subsystem broadcast; never removed |
-| `Minion.State.Idle/Walk/Move/Hitstop/Hitstun/Launched/Knockdown/GetUp/Dying/Dead/Spawning` | native | `GSTNMinionCore` | Names of `EGSTN_MinionActionState` for Blueprint/StateTree queries and debug; wire value is the 4-bit enum | Batch publishes into a transient container per query; derived, never stored |
+| `Minion.State.Idle/Walk/Move/Hitstop/Hitstun/PushedBack/Launched/Knockdown/GetUp/Dying/Dead/Spawning` | native | `GSTNMinionCore` | Names of `EGSTN_MinionActionState` for Blueprint/StateTree queries and debug; wire value is the 4-bit enum | Batch publishes into a transient container per query; derived, never stored |
 | `Minion.LOD.Combat/Near/Far/Dormant` | native | `GSTNMinionCore` | Tier names (section 7) for StateTree conditions and `OnLODChanged` | Batch LOD stage; derived |
 | `Minion.Type` (parent) | native | `GSTNMinionCore` | Root of type tags | Declared once |
 | `Minion.Type.<Name>` (e.g. `Grunt`, `Heavy`) | **ini** | `GSTNMinion.ini` (test types in project test content) | `UGSTN_MinionDefinition::TypeTag`; filters in waves, events, quests | Designers add types; removal blocked while a definition references it (validator) |
 | `Command.Minion.<Name>` (e.g. `Attack.Swing`) | **ini** | `GSTNMinion.ini` | Command tags selecting a move of a minion's `Moves` list; **never** placed in a player binding set or slot (the input conflict validator ignores `Command.Minion`) | Designers; the brain requests them |
-| `Combat.State.Hitstop`, `.Hitstun`, `.Tumble`, `.Intangible` (existing M2–M4) | native | `GSTNCombatGAS` | Reused unchanged in `FGSTN_HitVictimView::Tags` so pipeline steps are shared | Minion batch fills the view per hit, from store fields (`Launched` and `Knockdown` map to `Tumble`) |
+| `Combat.State.Hitstop`, `.Hitstun`, `.Tumble`, `.Intangible` (existing M2–M4) | native | `GSTNCombatGAS` | Reused unchanged in `FGSTN_HitVictimView::Tags` so pipeline steps are shared | Minion batch fills the view per hit, from store fields (`Launched` and `Knockdown` map to `Tumble`; `PushedBack` maps to `Hitstun`) |
 | `GameplayCue.Minion.Hit/Death/Spawn` | native | `GSTNMinionRuntime` | Default cues played locally on puppets through `UGameplayCueManager` (no ASC) | Presentation subsystem on `HitCounter` change/state change; hits' own `CueTag` takes precedence |
 | `Combat.Link.Type.Minion` | reserved, **not declared in M8** | future (`GSTNMinion` when built; `Combat.Link.*` is owned by `GSTNLink`, M6 §1c) | Link type for grabbing/mounting minions (section 14); the partner is an `FGSTN_EntityRef` of kind `Minion` (M6 §7.0) | — |
 
@@ -232,11 +238,18 @@ stamped for a recycled slot is dropped.
   `HealthFraction = 1 - Progress`, the same number as `KnockbackModel_HealthFraction` (§3), so minions and fighters agree on
   "how wounded". Effective weight = base weight × weight curve of progress × lost mass of broken parts (combat-parts §4.3),
   derived at each resolution from the store, never stored: a battered minion flies further.
-- **Stagger and juggle.** `StaggerFactor` and `JuggleFactor` per type (`BodyReaction`) and per part enter as
-  `FGSTN_HitReactionModifiers` (M4 seam, combat-parts §1 and §4.4), so **hitstun and hitstop depend on the hit and on the part
-  hit**: a `StaggerValue` below the threshold gives `bNoFlinch` (`PoiseHits` stays the coarse version for types without parts).
-  Attacker hitstop uses only static data (band and part reaction), never the victim's broken mask or health (the assertion
-  of §3 is extended to the part-aware model).
+- **Stagger force, thresholds and reaction tiers** (owner §2b; the **same rules as fighters**, [combat-m4-hits.md](combat-m4-hits.md) §3).
+  The hit's stagger force (derived from its damage and nominal knockback, or the designer's override) must reach the **threshold of the
+  part hit** for the minion to enter hitstun: `StaggerThreshold`, `MaxReaction` and `JuggleFactor` per part (`GSTNPartsMinion`) and per
+  type (`BodyReaction`) enter as `FGSTN_HitReactionModifiers` (M4 seam, combat-parts §4.4); types **without a part set** use the entity
+  defaults `StaggerThreshold`/`MaxReaction` on their `UGSTN_HurtboxSetDefinition` (M4 §3), resolved by the `HurtboxReaction` step.
+  Below the threshold: damage and hitstop, no hitstun, no launch or push, and `HitCounter` still increments (flash and flinch cue on the
+  puppet); `PoiseHits` stays as the coarse hit-count armour on top. **Weight decides the tier**: the knockback `K` (effective weight with
+  the `HealthFraction` model of §3) compared with the tier thresholds gives `StaggerInPlace`, `PushBack` or `Launch`, capped by
+  `MaxReaction`; a battered minion therefore climbs from stagger in place to launch. **Compact encoding: the tier is the `ActionState`**
+  (`Hitstun` = stagger in place, `PushedBack`, `Launched`; below the threshold the state does not change), 0 extra bits (§8.2). Attacker
+  hitstop uses only static data (the authored hit and the band/part `HitstopScale`), never the victim's broken mask, health or weight
+  (the assertion of §3 is extended to the part-aware model and to both hitstop modes).
 - **Wire.** `ExtByte = BrokenMask` only for part-bearing types (`bHasExt`, 0 bits otherwise), dirty only on change: about +1 B
   per update (+5 %). Chips follow the existing 5-bit `Health`, limbs follow the mask (combat-parts §5.5).
 - **Promotion** copies `BrokenMask`/`PartDamage` into the fighter's `FGSTN_PartsFragment` (combat-parts §5.5).
@@ -274,9 +287,11 @@ Per fixed-tick frame F on the server:
    1. **LOD update** (tier from nearest-player distance and activity, hysteresis).
    2. **Inbox drain**: entries with `Frame < F`, sorted by (victim index, `AttackerId`, hitbox order) — the M4 rule
       (reaction at F+1, trades order-independent). Per entry: build `FGSTN_HitVictimView` from the store, run the
-      pipeline of the rules asset (steps `TeamFilter`, `HurtState`, `ComputeKnockback`, `ApplyDamage`, `Hitstop`;
+      pipeline of the rules asset (steps `TeamFilter`, `HurtState`, `HurtboxReaction`, `ComputeKnockback`, `ApplyDamage`, `Hitstop`;
       `MeterGain` is skipped for minion victims) → write `Health`, `KnockbackPercent`, `ActionState` (`Hitstop` →
-      `Hitstun`/`Launched`), `HitstopEndFrame`, `HitstunEndFrame`, a pending launch velocity, cancel of the current move,
+      `Hitstun` for a stagger in place, `PushedBack` or `Launched` by the reaction tier of M4 §3; a hit below the stagger threshold changes no
+      state), `HitstopEndFrame`, `HitstunEndFrame`, a pending launch velocity (zero for a stagger in place, horizontal for a push back),
+      cancel of the current move (staggered hits only),
       `HitCounter++`, last-attacker ring; at 0 health → `Dying` (death timeline) and a `KO` event. `ExtraEffects` of the hit
       are ignored for minions in v1 (counter `STAT_GSTN_MinionIgnoredEffects`; a minion status map is a later hook,
       section 14).
@@ -287,7 +302,8 @@ Per fixed-tick frame F on the server:
       `HitByRing`-style dedupe on the attacker side (the minion's own entries), deliver to the fighter's inbox with
       `Frame = F`. The player drains it in its combat tick of F+1 → correction on its client (spike 2.1 of M4).
    4. **Movement** through the backend (section 6): desired velocity from intent and the timeline's movement track,
-      knockback integration, gravity, collision, ground snap, minion–minion separation.
+      knockback integration (`Launched` integrates gravity; `PushedBack` slides on the ground with the snap on, decays per frame and stops at
+      walls and ledges, never leaving the grounded state), gravity, collision, ground snap, minion–minion separation.
    5. **Publish**: grid cell update (T0/T1), history ring write for frame F, replication dirtying (section 8), debug draw.
 3. **Next frame**: S(F+1) reads the store as written in 2. Fighters therefore see minions exactly one frame older than
    their own tick, consistently for every fighter, regardless of NP id order.
@@ -362,7 +378,7 @@ Spike 4 compares this with an Iris object filter; keep the simpler one that meet
 | `TypeIndex` | 8 | Index into `UGSTN_MinionRegistry` (project-wide list of definitions, same order on both sides); sent on add only, then 0 bits via `bHasType` |
 | Position X, Y, Z | 3 × 19 | cm, relative to the registry's `WorldOrigin` (±2.6 km at 1 cm) |
 | Yaw | 8 | 1.4° steps |
-| `ActionState` | 4 | `Idle, Walk, Move, Hitstop, Hitstun, Launched, Knockdown, GetUp, Dying, Dead, Spawning` |
+| `ActionState` | 4 | `Idle, Walk, Move, Hitstop, Hitstun, Launched, Knockdown, GetUp, Dying, Dead, Spawning, PushedBack` (12 of 16 values). **It also carries the reaction tier** (owner §2b): `Hitstun` = stagger in place, `PushedBack` = push back, `Launched` = launch; a hit below the stagger threshold changes nothing here (only `HitCounter`), so the tier costs no extra bits |
 | `MoveId` | 6 | Index in the type's move list + reaction timelines (0 = none) |
 | `MoveStartFrame` (low bits) | 10 | Server frame of the move start, wrap 16 s; client reconstructs from its frame estimate |
 | `FrameStamp` (low bits) | 8 | Server frame of this sample, wrap 4.1 s, for interpolation |
@@ -419,7 +435,8 @@ connection (needs Iris or a custom `NetDeltaSerialize`; not planned).
   no confirmation comes in 500 ms, ends the effect. Other clients play the same effects on `HitCounter` changes only.
   Reaction (hitstun/launch) shows when `ActionState` arrives: expected delay = pack period + interpolation buffer, which
   the immediate flash/pause must cover (M4 risk); a launched puppet is extrapolated ballistically from the first
-  `Launched` sample (velocity implied by two samples) for smoothness.
+  `Launched` sample (velocity implied by two samples) for smoothness; a `PushedBack` puppet is extrapolated along the ground (ground-snapped,
+  same decay) and plays the `PushBack` reaction timeline (falls back to `Hitstun`).
 - Death: `Dying` plays the death timeline's montage; `Dead` is held for `CorpseSeconds` then released; ragdoll is a cosmetic
   option on the puppet (client-only, no gameplay effect).
 
@@ -447,7 +464,7 @@ store is server-only and never rolls back.
 3. **`FGSTN_LagCompTime`**: one conversion (server frame ↔ the rewind time `RewindActors` receives) so both overlays use
    the same instant: the frame the attacker's client displayed = its last input's interpolation time (M4 §9), which is
    also the minion render time of section 8.4 (the *Proposal* that makes this a single number). `MaxRewindMs` clamps both.
-4. A new hit goes to `PendingHits` (stamped F, generation-checked); drained at F+1 (stage 2.2): damage, launch, hitstun,
+4. A new hit goes to `PendingHits` (stamped F, generation-checked); drained at F+1 (stage 2.2): damage, reaction (hitstun with its tier of M4 §3 when the stagger force reaches the threshold, nothing otherwise),
    `HitCounter++`. Dedupe: `HitTargets` on the attacker, `HitByRing` on the victim (a hit that the victim already has for
    `(AttackerId, TimelineStartFrame, HitGroup)` is dropped, protecting against re-delivery after attacker re-simulation
    on the server, which cannot happen today but is cheap to keep).
@@ -539,7 +556,8 @@ M4 §12.7); this is the number to budget:
   handle staleness; LOD thresholds, hysteresis and dwell; bucket scheduling spread (≤ ±1 minion per frame);
   `FGSTN_TimelinePlayer` goldens (identical to the pre-refactor M3/M4 results, frame-skipping fires events once);
   `FGSTN_HitVictimView` through each pipeline step with fake contexts for a minion victim; `KnockbackModel_HealthFraction`
-  values and the attacker-hitstop independence assertion; inbox ordering and generation drop; history ring interpolation,
+  values and the attacker-hitstop independence assertion; stagger-threshold and reaction-tier selection through `FGSTN_HitVictimView` per type (with and
+  without a part set) and the `ActionState` round trip with `PushedBack`; inbox ordering and generation drop; history ring interpolation,
   clamp and `MaxRewindMs`; net item serialization round trip with quantization bounds (position ≤ 0.5 cm, yaw ≤ 0.8°),
   frame-stamp wrap reconstruction near 8-bit and 10-bit boundaries; interpolator (render time between samples,
   extrapolation cap, teleport, out-of-order); attack token allocator (cap, release on death/hit); lightweight movement on a
@@ -550,6 +568,8 @@ M4 §12.7); this is the number to budget:
   within 20 cm of the server's position at the displayed frame; bytes/s read from `stat net`), `scenario_minion_late_join`
   (a client connects with 40 active), `scenario_minion_player_hits_minion` (c1 jabs a stationary grunt: server health, launch
   and hitstun equal what the model computes; c1's predicted hitstop and flash precede the reaction; c2 sees the reaction),
+  `scenario_minion_reaction_tiers` (a grunt and a heavy hit by a light and a heavy attack at full and at low health: below the threshold no state
+  change and `HitCounter` increments; stagger in place, a push back that stays on the ground, a launch; the client's `ActionState` equals the server's),
   `scenario_minion_lagcomp` (grunt strafing at 400 cm/s; c1 attacks the displayed position: hit with lag compensation,
   miss without; attack at the server-current position behind the display: miss), `scenario_minion_hits_player` (grunt jabs
   c1: corrections on c1 equal the hit count, snapshots equal after), `scenario_minion_tokens` (12 grunts vs c1: ≤ 4
@@ -565,7 +585,8 @@ M4 §12.7); this is the number to budget:
 2. At N=40 and N=60 the targets of section 11 hold in `scenario_minion_horde`; the max N within the targets is recorded.
 3. A designer builds a minion type (definition, reuse of an existing timeline, StateTree) and spawns a wave without C++.
 4. Player→minion hits: lag compensation scenario passes; predicted attacker hitstop matches the server (no attacker
-   reconcile in `scenario_minion_player_hits_minion`); crowd cleave over 12 minions hits each once.
+   reconcile in `scenario_minion_player_hits_minion`); crowd cleave over 12 minions hits each once; the stagger threshold and reaction tier follow M4 §3 per type and per part
+   (`scenario_minion_reaction_tiers`).
 5. Minion→player hits: one correction per hit frame on the victim's client, state equal afterwards; token cap enforced.
 6. Late join, LOD transitions and promotion scenarios clean.
 7. M1–M4 tests and scenarios still clean (the `FGSTN_TimelinePlayer` and `FGSTN_HitVictimView` refactors must not change a

@@ -16,14 +16,22 @@ Section numbers below are local to this file.
 > ground dodge = long-jump dive with feet-only intangibility, air dodge = dive roll; no roll/spot dodge, no rolling movement
 > mode (§1b); (5) the reference topology is a **listen server**, not a dedicated one (§9b); (6) SDI is M6's, M4 ships DI only (§7).
 
+> **Revision 2026-10-22 (morning, owner direction, [game-design-direction.md](game-design-direction.md) §2b; it wins over this
+> file):** (1) hitstun is **conditional**: the hit's **stagger force** (derived from its damage and knockback, or set by the
+> designer) must reach the **threshold of the hurtbox that was hit** (hurtbox, then entity, then rules), otherwise the hit does damage
+> and hitstop only (§3); (2) hitstop is **automatic** from damage and knockback, or **set per attack** (§3); (3) **weight decides
+> the reaction tier**: launch, push back or stagger in place (§3, §7). `StaggerPower`, `MinStagger` and `MaxStagger` are replaced by
+> this model. All new choices are *Proposal*.
+
 ## 1. Scope
 
 **Goal:** moves hit. Hitboxes from move tracks overlap hurtboxes; the attacker predicts its own hitstop and
 hit-confirm (cancel windows OnHit/OnBlock become live); the victim, on the machine that simulates it, resolves the hit
 through the pipeline: damage, meter, knockback with DI, hitstun, tumble, hitstop with a real freeze (also on walls).
 Teams and friendly-fire variants. Lag compensation for remote attackers. Hit presentation on interpolated victims.
-Knockback that depends on remaining health and on stagger/juggle factors, and the impact of a launched entity on a surface
-(§7b).
+Hitstun that depends on the hit's **stagger force** against the threshold of the hurtbox hit, hitstop that is automatic or set by
+the designer, a **reaction tier** (stagger in place, push back, launch) chosen by weight, knockback that depends on remaining health
+and on the juggle factor, and the impact of a launched entity on a surface (§7b).
 
 Also in: the **base dodges** (§1b), now that intangibility exists, and the **generic seams** of §3b.
 
@@ -74,12 +82,15 @@ results identical on every machine for identical inputs.
 
 **Hit data** — `FGSTN_HitData { float Damage; float BaseKnockback; float KnockbackGrowth; float FixedKnockback (≥ 0
 overrides); float AngleDeg; EGSTN_SpecialAngle SpecialAngle (None / Sakurai3D / AutoLink); EGSTN_YawSource YawSource
-(AttackerFacing / HitboxToVictim / HitboxVelocity); float HitstunMultiplier; float HitstopMultiplier; float
-AttackerHitstopMultiplier; float ShieldDamage; int32 Priority; FGameplayTag HitType (Combat.HitType.Normal/Grab/
+(AttackerFacing / HitboxToVictim / HitboxVelocity); float HitstunMultiplier; EGSTN_HitstopMode HitstopMode (Auto /
+Override); float HitstopMultiplier; float AttackerHitstopMultiplier; int32 HitstopFramesOverride; int32
+AttackerHitstopFramesOverride (−1 = same as HitstopFramesOverride); float ShieldDamage; int32 Priority; FGameplayTag HitType (Combat.HitType.Normal/Grab/
 Projectile/Unblockable); TArray<TSubclassOf<UGameplayEffect>> ExtraEffects (applied to victim); FGameplayTag CueTag;
-FInstancedStruct CustomData; float StaggerPower = 1; FGSTN_ImpactProfile Impact (§7b);
+FInstancedStruct CustomData; EGSTN_StaggerForceMode StaggerForceMode (Derived / Override); float StaggerForce (the override
+value); float StaggerForceScale = 1; FGSTN_ImpactProfile Impact (§7b);
 TArray<FInstancedStruct> ExtensionData (base struct FGSTN_HitExtension, modularity-and-tags.md §5b; empty by default); }`.
-`StaggerPower` is the "what hits" input of the stagger factor (§3 knockback model).
+The **stagger force** is the "what hits" input of the hitstun condition and the hitstop fields feed the model's hitstop rule
+(both in the knockback model below).
 
 **Hitbox** — `FGSTN_HitboxTrack : FGSTN_TimelineTrack { TArray<FGSTN_HitboxSpec> Hitboxes; }`, `FGSTN_HitboxSpec {
 FGSTN_HitShape Shape; EGSTN_HitboxSpace Space (Root/BakedSocket/WorldAtMoveStart/Projectile); FName Socket;
@@ -91,42 +102,93 @@ root-relative transform per frame, written by the M5 baking tool; in M4 a Python
 
 **Hurtboxes** — `UGSTN_HurtboxSetDefinition { TArray<FGSTN_Hurtbox { FName Name; FName Bone; FGSTN_HitShape Shape
 (root-relative, baked from the reference pose); FGameplayTagContainer Tags (e.g. Combat.Hurtbox.Head, .Feet); uint8 Priority = 0;
-FGSTN_HitReactionModifiers ReactionScale }> }`. `Priority` and the array index decide which hurtbox a hit lands on when several
-overlap (§6 step 4); `ReactionScale` is the "where" input of hitstun/hitstop/knockback scaling for combat without parts (§3).
+FGSTN_HitReactionModifiers ReactionScale }>; float StaggerThreshold = −1; EGSTN_HitReaction MaxReaction = Launch }`.
+`Priority` and the array index decide which hurtbox a hit lands on when several overlap (§6 step 4); `ReactionScale` (which
+also carries the hurtbox's own `StaggerThreshold` and `MaxReaction`) is the "where" input of hitstun/hitstop/knockback for combat
+without parts (§3); the set-level `StaggerThreshold` (negative = use the rules value) and `MaxReaction` are the **entity**
+defaults, so a whole enemy type can be given a threshold without touching each hurtbox.
 `FGSTN_HurtboxModifierTrack : FGSTN_TimelineTrack { EGSTN_HurtState State (Normal/Intangible/Invincible/Armor); float
 ArmorThreshold; TArray<FName> AffectedHurtboxes (empty = all); FGameplayTagContainer AffectedTags (matches `FGSTN_Hurtbox::Tags`; union
 with the names); TArray<FGSTN_HitShape> ShapeOverrides; }`.
 Intangible = not hit at all; Invincible = hit registers (attacker hitstop, confirm) but no damage/knockback/hitstun;
-Armor = no knockback/hitstun below the threshold, damage applies.
+Armor = no knockback/hitstun while the hit's stagger force is below `ArmorThreshold`, damage applies (*Proposal*: `ArmorThreshold`
+is measured in **stagger force**, so it is a temporary `StaggerThreshold`: `HurtState` records it in the context and `HurtboxReaction`
+writes the larger of the two as the effective threshold while the window is open; this settles the "damage or knockback" unit left open
+for `ArmorThreshold`).
 
 **Knockback model** — `UGSTN_KnockbackModel` (abstract, EditInlineNew, const methods): `Compute(const
-FGSTN_KnockbackInput&) → FGSTN_KnockbackResult { FVector LaunchVelocity; int32 HitstunFrames; bool bTumble; int32
-HitstopFrames; int32 AttackerHitstopFrames; }`. `FGSTN_KnockbackInput` also carries the victim's `HealthFraction` (derived, §3b) and
-`FGSTN_HitReactionModifiers Reaction`. Default `UGSTN_KnockbackModel_PercentScaling`: knockback grows with the
-victim's damage percent and the hit's damage, scales inversely with weight, plus base and growth (the commonly
-documented platform-fighter formula, every constant exposed as a property); hitstun = knockback × `HitstunFactor`;
-tumble above `TumbleThreshold`; hitstop = `floor(Damage × HitstopPerDamage + HitstopBase)` clamped to `MaxHitstop`,
-× the hit's multipliers. `UGSTN_KnockbackModel_Fixed` (HP games): knockback = base, no percent.
+FGSTN_KnockbackInput&) → FGSTN_KnockbackResult { EGSTN_HitReaction Reaction; bool bStaggered; float StaggerForce; FVector
+LaunchVelocity; int32 HitstunFrames; bool bTumble; int32 HitstopFrames; int32 AttackerHitstopFrames; }`. `FGSTN_KnockbackInput`
+also carries the victim's `HealthFraction` (derived, §3b) and `FGSTN_HitReactionModifiers Reaction`. Default
+`UGSTN_KnockbackModel_PercentScaling`: knockback `K` grows with the victim's damage percent and the hit's damage, scales
+inversely with weight, plus base and growth (the commonly documented platform-fighter formula, every constant exposed as a
+property); `K` then feeds the stagger, hitstun, hitstop and reaction-tier rules below, whose constants are shared by every model
+through one struct, `FGSTN_ReactionTuning`, on the abstract base class (`HitstopPerDamage`, `HitstopBase`, `MaxHitstop` move there).
+`UGSTN_KnockbackModel_Fixed` (HP games): knockback = base, no percent.
 `UGSTN_KnockbackModel_CappedPercent` (owner direction, [combat-parts.md](combat-parts.md) §4.1): the percent term is
 `DamagePercent` as is, used with `DamageMode::PercentCapped` (below).
 
-**Weight, stagger and juggle (owner §2).** Every model applies the modifiers of `Ctx.Reaction` exactly once, in this order:
-`Weight × WeightScale`, knockback magnitude, `× KnockbackScale`, hitstun from the knockback `× HitstunScale`, hitstop `×
-HitstopScale`; `bNoFlinch` keeps damage and hitstop but gives no hitstun or launch (the Armor semantics). The modifiers are
-written by steps, never by the model, so the model stays one pure function:
+**Stagger force, hitstun condition, hitstop and reaction tiers (owner, [game-design-direction.md](game-design-direction.md) §2b).** The model evaluates
+these four rules in order, from the hit data and `Ctx.Reaction` only (all *Proposal* except what the owner stated):
 
-- `FGSTN_HitReactionModifiers { float WeightScale = 1, KnockbackScale = 1, HitstunScale = 1, HitstopScale = 1; bool bNoFlinch =
-  false; }` (`GSTNCombatCore`; defaults are the identity, so unextended content is unchanged).
+1. **Stagger force** belongs to the **attack**, never to the victim. `EGSTN_StaggerForceMode::Derived` (default):
+   `StaggerForce = StaggerForceScale × (Damage × StaggerPerDamage + NominalKnockback × StaggerPerKnockback)` with
+   `NominalKnockback = FixedKnockback ≥ 0 ? FixedKnockback : BaseKnockback`. Both inputs are **authored** values (no victim percent,
+   no weight), so the force scales with the attack's power and is the same against every victim. `Override`: the designer's
+   `StaggerForce` replaces the bracket (`StaggerForceScale` still multiplies, so a relationship variant can halve it).
+   `StaggerPerDamage` and `StaggerPerKnockback` are properties of `FGSTN_ReactionTuning`, defaults tuned in data.
+2. **Hitstun condition (owner).** `bStaggered = !Reaction.bNoFlinch && StaggerForce × Reaction.StaggerScale ≥ Threshold` with
+   `Threshold = max(0, Reaction.StaggerThreshold)`: a negative value means "unset", so a context no step touched staggers on every hit
+   (the identity). The `HurtboxReaction` step resolves the threshold of **the hurtbox that was hit**: the hurtbox's own
+   (`ReactionScale.StaggerThreshold`), else the entity default (`UGSTN_HurtboxSetDefinition::StaggerThreshold`), else the rules'
+   (`UGSTN_CombatRules::StaggerThreshold`, default 0); the first non-negative value wins. With `GSTNParts` the part's threshold
+   takes the hurtbox's place ([combat-parts.md](combat-parts.md) §4.4). An `Armor` window raises it (above). `StaggerScale` is a victim-side
+   modifier (the penetration band of M4b, a hurtbox), default 1.
+   **Below the threshold** the hit still does what Armor does: damage applies, **hitstop applies** on both sides (a boss that must not
+   even pause sets `HitstopScale = 0` on that hurtbox), `HitReceived` is raised with `bStaggered = false`, and presentation plays a
+   **flinch cue and additive animation only**. No `ActionState` change, the current move is not cancelled, no launch, no push, no hitstun.
+3. **Hitstop.** `EGSTN_HitstopMode::Auto` (default): `Base = clamp(floor(Damage × HitstopPerDamage + NominalKnockback ×
+   HitstopPerKnockback + HitstopBase), 0, MaxHitstop)`; the victim's `HitstopFrames` = `Base × HitstopMultiplier × Reaction.HitstopScale`,
+   the attacker's `AttackerHitstopFrames` = `Base × AttackerHitstopMultiplier × Reaction.HitstopScale`, each clamped again to `MaxHitstop`.
+   `HitstopPerKnockback` defaults to 0, so content that does not set it keeps the old damage-only hitstop. `Override`:
+   `HitstopFramesOverride` is the victim's final value and `AttackerHitstopFramesOverride` (when ≥ 0, else the same value) the attacker's:
+   the multipliers and `HitstopScale` are ignored (the designer's number is final), still clamped to `MaxHitstop` as a safety limit
+   (a validator warns above it). `Damage` is the hit's **authored** damage, never multiplied by the victim's incoming multiplier, and
+   `NominalKnockback` is the authored knockback, not the victim's `K`: **the attacker predicts its own hitstop against a stale puppet
+   (§6 step 6), so no dynamic victim state may enter** (the static `HitstopScale` of the hurtbox or part may).
+4. **Reaction tier (owner: weight decides).** `K` is computed with `Weight × WeightScale`, so a heavier or healthier victim gets a smaller
+   `K`; remaining health (`HealthWeight`) or lost parts (`PartResolve`) lower the weight, raise `K` and move the victim up the tiers.
+   For a staggered hit: `Reaction = K < PushBackThreshold ? StaggerInPlace : K < LaunchThreshold ? PushBack : Launch`, then capped at
+   `Reaction.MaxReaction` (victim data: a heavy enemy or armoured part that can never fly). `PushBackThreshold` and `LaunchThreshold`
+   are `FGSTN_ReactionTuning` properties (validator: `PushBackThreshold ≤ LaunchThreshold ≤ TumbleThreshold`); **both default to 0, so
+   every staggered hit is a `Launch`, today's behaviour**. `K` is taken after `KnockbackScale`, before `KnockbackResistance` (which
+   scales the velocity at hitstop end and never changes the tier).
+   - `Launch`: today's behaviour, **Smash-like percent knockback kept**: `LaunchVelocity` = direction × `K`, `bTumble = K ≥
+     TumbleThreshold`, DI at hitstop end, forced `Falling`.
+   - `PushBack`: a **horizontal slide on the ground, with no airborne state**: `LaunchVelocity` = the horizontal direction × `min(K ×
+     PushBackSpeedScale, MaxPushBackSpeed)`; no tumble, no DI.
+   - `StaggerInPlace`: hitstun with **zero displacement** (`LaunchVelocity = 0`).
+   `HitstunFrames = max(MinHitstunFrames, floor(K × HitstunFactor × HitstunMultiplier × Reaction.HitstunScale))` when staggered, else 0 (the
+   floor keeps a stagger in place readable). The stagger force only **gates** hitstun: it does not scale its length.
+
+**Weight, stagger and juggle (owner §2, §2b).** Every model applies the modifiers of `Ctx.Reaction` exactly once, in this order:
+`Weight × WeightScale`, knockback magnitude, `× KnockbackScale`, the stagger test (force `× StaggerScale` against the threshold), the
+reaction tier from the magnitude (capped by `MaxReaction`), hitstun from the knockback `× HitstunScale`, hitstop `× HitstopScale`;
+`bNoFlinch` (or a failed stagger test) keeps damage and hitstop but gives no hitstun, launch or push (the Armor semantics). The
+modifiers are written by steps, never by the model, so the model stays one pure function:
+
+- `FGSTN_HitReactionModifiers { float WeightScale = 1, KnockbackScale = 1, HitstunScale = 1, HitstopScale = 1, StaggerScale = 1;
+  float StaggerThreshold = −1 (negative = unset); EGSTN_HitReaction MaxReaction = Launch; bool bNoFlinch = false; }`
+  (`GSTNCombatCore`; defaults are the identity, so unextended content is unchanged).
 - **Weight that depends on remaining health**: an optional generic step `HealthWeight` (before `ComputeKnockback`) writes `WeightScale = Curve(Progress)`
   from a baked curve (`FGSTN_BakedCurve`, 64 `uint16` entries, integer interpolation, so every machine reads the same number;
-  default 1.0 at 0 % falling to 0.6 at the cap: a battered enemy flies further). `Progress = DamagePercent / MaxHealth`
+  default 1.0 at 0 % falling to 0.6 at the cap: a battered enemy flies further and climbs the reaction tiers). `Progress = DamagePercent / MaxHealth`
   under `PercentCapped`, `1 − Health / MaxHealth` under `Health`. With `GSTNParts` the `PartResolve` step **replaces** it (it
   adds lost mass of broken parts): the rules validator reports both in one pipeline.
-- **Stagger / juggle by what hits and where**: "what" = `HitstunMultiplier`, `HitstopMultiplier`, `StaggerPower` of the
-  hit data; "where" = the `ReactionScale` of the hurtbox the hit landed on (a `HurtboxReaction` step multiplies it into the
-  modifiers; **hurtbox reaction and part reaction of GSTNParts must not both be set** on the same hurtbox: validator).
-  `UGSTN_CombatRules::StaggerThreshold` (default 0 = off), `MinStagger`, `MaxStagger`: a `StaggerPower × hurtbox factor` below the
-  threshold sets `bNoFlinch`; above it `HitstunScale` = that value clamped. The juggle factor of a victim already in
+- **Stagger / juggle by what hits and where**: "what" = the hit's stagger force (`StaggerForceMode`, `StaggerForce`, `StaggerForceScale`),
+  `HitstunMultiplier`, `HitstopMode` and the hitstop multipliers; "where" = the hurtbox the hit landed on: its `ReactionScale` (scales,
+  `StaggerThreshold`, `MaxReaction`) combined with the entity defaults and the rules by the `HurtboxReaction` step (**hurtbox reaction
+  and part reaction of GSTNParts must not both be set** on the same hurtbox: validator). The juggle factor of a victim already in
   `Tumble` is `AirborneJuggleScale` on the rules (default 1), the knob that allows or limits long juggles. Direction: yaw from
 `YawSource` on the movement plane, pitch from `AngleDeg` (`Sakurai3D`: low angle on grounded victims below a knockback
 threshold, higher in the air; `AutoLink`: towards the hitbox's velocity).
@@ -165,13 +227,13 @@ lands these generic, inert-without-a-provider seams, each reviewed as a combat c
    groups (§6 step 1).
 7. `FGSTN_HitVictimView` and the snapshot-extension POD of M8 §3 (if M8 lands first they exist already).
 
-Without a provider every seam is the identity: no extension, modifiers at 1, mask empty. Automation: a pipeline with fake
+Without a provider every seam is the identity: no extension, modifiers at the identity (scales 1, threshold unset, no reaction cap), mask empty. Automation: a pipeline with fake
 steps that write modifiers and an applier that records calls, run with no plugin present.
 
 **Combat rules** — `UGSTN_CombatRules` (DataAsset): `Pipeline (TArray<UGSTN_HitResolutionStep*> Instanced)`,
 `KnockbackModel (Instanced)`, `DamageMode (Percent/Health/PercentCapped)` (`PercentCapped`: `MaxHealth` is the cap in percent points; `DamagePercent` is
 clamped at it and reaching the cap raises `Combat.Event.KO`; `Health` unused; owner §2), `bFriendlyFire`, `HittableRelationships`
-(`FGameplayTagContainer`), `RelationshipResolver (Instanced)`, `bUseLagCompensation`, `MaxRewindMs`, DI tuning (SDI: M6), `StaggerThreshold`/`MinStagger`/`MaxStagger`/`AirborneJuggleScale`, `RulesExtensions`
+(`FGameplayTagContainer`), `RelationshipResolver (Instanced)`, `bUseLagCompensation`, `MaxRewindMs`, DI tuning (SDI: M6), `StaggerThreshold` (the global default of the hitstun condition, default 0 = every hit staggers)/`AirborneJuggleScale`, `RulesExtensions`
 (`TArray<FInstancedStruct>` of base `FGSTN_RulesExtension`, §5b).
 Selected per game mode (`AGameModeBase` subclass property or a GameState component `UGSTN_CombatRulesComponent`,
 replicated by asset reference).
@@ -217,7 +279,8 @@ replicated by asset reference).
    target is hit once per group per move execution.
 6. For each new hit: record it; **predict own consequences**: hit-confirm flags (`OnHit`, or `OnBlock` when the
    snapshot says the victim is shielding — always false until M6), attacker hitstop window from the knockback model's
-   `AttackerHitstopFrames` (computed with the snapshot's victim data), attacker meter gain request; deliver the hit to
+   `AttackerHitstopFrames` (computed from the authored hit and the static reaction data of the hurtbox the snapshot says was hit,
+   never from the victim's percent, weight or state, §3), attacker meter gain request; deliver the hit to
    the victim (7).
 
 ## 7. Victim side
@@ -227,19 +290,30 @@ replicated by asset reference).
   victim instance ticks on this machine (authority, or locally controlled). Drained at the victim's combat tick of
   `Frame + 1` (entries with `Frame < F`), in (AttackerId, hitbox order) order. On rollback the inbox drops entries with
   `Frame ≥` the restored frame (they are re-delivered by the attackers' re-simulation).
-- **Resolution** (combat tick at F+1): run the pipeline per entry. Outcome applied as state and requests:
-  `ActionState = Hitstun` (or `Tumble`), `HitstopStartFrame = F`, `HitstopEndFrame = F + HitstopFrames`,
-  `HitstunEndFrame = HitstopEndFrame + HitstunFrames`, `PendingLaunch` (quantized velocity), cancel of the current move
-  (`ActiveTableIndex = INDEX_NONE`; GA_Move ends itself), the registered outcome appliers run for each `OutcomeExtensions` entry (§3b), requests: damage GE, extra GEs, cue, freeze move (duration =
-  hitstop), buffer event `Input.BufferEvent.HitReceived`, gameplay event `Combat.Event.Hit.Received` (reaction
-  abilities may listen; they must not set combat state).
-- **Hitstop end** (frame `HitstopEndFrame`): DI from this frame's stick → `ApplyDI` → request knockback move
-  (`FGSTN_LayeredMove_Knockback { Velocity; float DecayPerFrame; float GravityScale; int32 ElapsedFrames; }`, forcing
-  Falling, applied through a GE + move creator) and `KnockbackResistance` applied.
+- **Resolution** (combat tick at F+1): run the pipeline per entry. Outcome applied as state and requests. **Staggered**
+  (`bStaggered`, §3): `ActionState = Hitstun` (or `Tumble` for a tumbling `Launch`), `HitstopStartFrame = F`, `HitstopEndFrame = F +
+  HitstopFrames`, `HitstunEndFrame = HitstopEndFrame + HitstunFrames`, `PendingReaction` (`EGSTN_HitReaction`) and `PendingLaunch`
+  (quantized velocity: zero for `StaggerInPlace`, horizontal for `PushBack`), cancel of the current move (`ActiveTableIndex =
+  INDEX_NONE`; GA_Move ends itself). **Not staggered** (stagger force below the threshold): only the hitstop window and the freeze
+  (no `ActionState` change, no `PendingReaction`, the current move resumes after the freeze, which restores the incoming velocity)
+  and the flinch cue. In both cases the registered outcome appliers run for each `OutcomeExtensions` entry (§3b), and the requests are:
+  damage GE, extra GEs, cue, freeze move (duration = hitstop), buffer event `Input.BufferEvent.HitReceived`, gameplay event
+  `Combat.Event.Hit.Received` whose payload carries `Reaction` and `bStaggered` so presentation picks the montage (reaction abilities may
+  listen; they must not set combat state). **`PushBack` needs ground** (*Proposal*): a victim that is airborne or in a wall mode at the
+  end of F-1 (read from the Mover sim-state tracker, the source of the snapshot) is promoted to `Launch`, since there is nothing to
+  slide on; `StaggerInPlace` works in every mode.
+- **Hitstop end** (frame `HitstopEndFrame`), by `PendingReaction`. **Launch**: DI from this frame's stick → `ApplyDI` → request
+  knockback move (`FGSTN_LayeredMove_Knockback { Velocity; float DecayPerFrame; float GravityScale; int32 ElapsedFrames; }`, forcing
+  Falling, applied through a GE + move creator) and `KnockbackResistance` applied. **PushBack**: request `FGSTN_LayeredMove_PushBack {
+  FVector Velocity (horizontal); float DecayPerFrame; int32 ElapsedFrames; }` through the same GE + move creator: it keeps the current
+  ground mode (no `Falling`, no tumble, no DI), the ground snap stays on, it stops at a wall or a ledge (no splat, no bounce, no fall:
+  *Proposal*), and ends when the speed reaches zero or at `HitstunEndFrame`; `KnockbackResistance` scales the speed.
+  **StaggerInPlace**: no move; the freeze ends with zero horizontal velocity (§8).
 - **SDI is not in M4.** It is specified once, by M6 §5.5 (`FGSTN_SDIRules`, new direction events during hitstop). M4 ships DI
   only; the sync field `SDICount` is reserved here and written by M6. (Earlier drafts described a basic SDI here while
   §1 put it out of scope: M6 owns it.)
-- **Hitstun end**: `ActionState = Actionable` (or `Tumble` until landing when tumbling); M6 adds tech.
+- **Hitstun end**: `ActionState = Actionable` (or `Tumble` until landing when tumbling; `PushBack` and `StaggerInPlace` go straight
+  to `Actionable`); M6 adds tech.
 - Tags projected: `Combat.State.Hitstun`, `Combat.State.Tumble`, `Combat.State.Hitstop`.
 
 ## 7b. Surface impacts: wall splat, bounce, destruction
@@ -289,7 +363,8 @@ version).
   The resolver does not run during hitstop.
 - Montage: paused while a montage plays (M0 rule), resumed at `HitstopEndFrame`.
 - Mover: `FGSTN_LayeredMove_Freeze` (OverrideAll, zero velocity, keeps the incoming velocity in its state and restores it
-  on finish for the attacker; the victim's knockback replaces it), plus the `Combat.Mover.Frozen` tag (spike 2.2).
+  on finish for the attacker and for a victim that was not staggered; a staggered victim's knockback or push replaces it, and a
+  `StaggerInPlace` victim's freeze ends with zero horizontal velocity, a `bZeroVelocityOnFinish` flag), plus the `Combat.Mover.Frozen` tag (spike 2.2).
   `FGSTN_LayeredMove_MoveTrack` (M3) does not advance while frozen.
 - **Wall lock** (project, by extension point, per wall-movement.md): `UGSTN_WallMovementModeBase` gains a protected
   virtual `IsMovementLocked(const FMoverTickStartData&)` (default: Mover has `Combat.Mover.Frozen`); when locked the
@@ -350,20 +425,29 @@ the authority and how we measure it. A dedicated server stays supported.
   on → variant applied), `scenario_hitstop_montage` (forced reconcile during hitstop with a montage),
   `scenario_hit_on_wall` (victim wall sliding, frozen during hitstop), `scenario_di` (victim holds a side: launch
   rotated), `scenario_hit_host` (host attacker, host victim, client against host: states equal, host without rollbacks),
+  `scenario_stagger_threshold` (c1 hits a high-threshold hurtbox with a light then a heavy attack: the light one gives damage and
+  hitstop, no hitstun, the victim's move is not cancelled; the heavy one gives hitstun; equal on all machines),
+  `scenario_reaction_tiers` (the same hit on victims of three weights: stagger in place with zero displacement, a push back that
+  stays grounded and never enters `Falling`, a launch with tumble),
   `scenario_dodge_feet` (feet intangible, torso hit during the base ground dodge), `scenario_impact_wall` (splat, bounce, forced
   and forbidden by hit data; tech cancels it in M6), all with 60/15 ms, with and without 2 % loss, **in the listen-server
   configuration (host + 2 clients) and in dedicated + 2 clients**. Clean = snapshots equal (combat state, attributes, positions
   after the launch settles) and no reconciles besides the forced ones **and the expected one per hit on the victim's
   client** (spike 2.1).
 - Automation tests (Core): `UGSTN_ImpactMath` precedence (hit, victim, surface, thresholds), modifier order in every knockback
-  model, the `HealthWeight` curve table, seams with fake providers (§3b), every shape pair (touching, separated by ε, contained), swept overlap catches a fast box,
+  model, stagger force (`Derived` against hand values, `Override`, scale), the hitstun condition at the boundary (force equal to the
+  threshold staggers, one unit below does not; threshold resolution hurtbox → entity → rules; an Armor window raises it), hitstop `Auto`
+  against hand values and clamp (`Override` is final), attacker hitstop independent of every victim field, reaction tier boundaries and
+  the `MaxReaction` cap, a lighter weight never gives a milder tier, the 0/0 defaults reproduce the old always-launch results, the
+  `HealthWeight` curve table, seams with fake providers (§3b), every shape pair (touching, separated by ε, contained), swept overlap catches a fast box,
   knockback model values against hand-computed ones, DI rotation limits, variant application, pipeline step order
   with fake contexts, inbox ordering and rollback trimming.
 
 ## 11. Sync state additions
 
 `MoveOriginTransform` (quantized), `HitTargets[8]`, `HitConfirmFlags`, `HitstopStartFrame/EndFrame` (now real),
-`HitstunEndFrame`, `PendingLaunch` (int16 × 3, cm/s / 4), `SDICount` (reserved, written by M6), `ImpactEndFrame` (splat),
+`HitstunEndFrame`, `PendingLaunch` (int16 × 3, cm/s / 4), `PendingReaction` (`EGSTN_HitReaction`, 2 bits, packed with the existing
+flag bits; state at F+1 like `PendingLaunch`, read at hitstop end to choose the move), `SDICount` (reserved, written by M6), `ImpactEndFrame` (splat),
 hurt state of the current frame (derived, not
 stored). Idle cost stays ~0 thanks to end-frame stamps.
 
@@ -375,6 +459,9 @@ stored). Idle cost stays ~0 thanks to end-frame stamps.
 4a. The seams of §3b exist and are inert: combat tests and scenarios pass with no optional plugin installed; modifiers change
     knockback, hitstun and hitstop exactly once (Core tests).
 4b. The base dodges (§1b) make only the feet intangible; surface impact outcomes follow the precedence of §7b.
+4c. Hitstun follows the stagger force against the threshold of the hurtbox hit (hurtbox, entity, rules); hitstop is automatic or the
+    designer's override; the reaction tier follows the weight-driven knockback and `MaxReaction` (Core tests, `scenario_stagger_threshold`,
+    `scenario_reaction_tiers`).
 4. Friendly-fire variants work per game mode by changing only the rules asset.
 5. combat.md updated (§12, §17).
 
@@ -391,5 +478,7 @@ stored). Idle cost stays ~0 thanks to end-frame stamps.
 - Swept overlaps multiply query cost; keep them opt-in per hitbox.
 - **Host-only costs and advantage** (§9b): resolution, rewinds and rendering share one machine; host hits feel instant.
 - **Seams slipping out of M4** make M4b edit the combat core (combat-parts.md §8.5): they are acceptance items (§12).
+- **Reaction constants explosion** (stagger force, thresholds, tiers, hitstop, per hurtbox/part/entity): defaults are the identity, thresholds
+  live on the hurtbox set and the rules, and a validator prints, per victim weight, which hits stagger and which tier they get.
 - **Impact data explosion** (surface types × victims × hits): defaults live in the surface table, victims only restrict, hits only
   force or forbid; a validator prints the resolved outcome matrix.

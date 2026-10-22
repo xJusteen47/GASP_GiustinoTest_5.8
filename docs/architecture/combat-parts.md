@@ -2,7 +2,7 @@
 
 Part of the combat design ([combat.md](combat.md)): read §5.3, §12 and §15 there, M4 ([combat-m4-hits.md](combat-m4-hits.md))
 §3, §7 and §9, [modularity-and-tags.md](modularity-and-tags.md) §3, §4 and §5b, and M8 ([combat-m8-minions.md](combat-m8-minions.md))
-§3 and §9. Owner direction: [game-design-direction.md](game-design-direction.md) §1, §2 and §5; it wins over this file.
+§3 and §9. Owner direction: [game-design-direction.md](game-design-direction.md) §1, §2, §2b and §5; it wins over this file.
 Section numbers below are local to this file. Items marked *Proposal* are choices for the owner or the milestone owner to
 confirm; *Reading* items interpret the owner's message (see the open questions list kept with the project notes).
 
@@ -14,7 +14,7 @@ entity's main pool; a part that passes its cap **breaks** (state change, events,
 is a **capped damage percent** that also drives knockback, weight and presentation; passing the main cap destroys the
 entity. Presentation shows the crystal under the skin: chips as health drops, limbs on break, shatter on death.
 
-In: part set data, penetration table, part and main damage rules, weight / stagger / juggle reaction modifiers, part state
+In: part set data, penetration table, part and main damage rules, per-part stagger thresholds and reaction caps, weight and juggle reaction modifiers, part state
 sync, break effects (derived tags, GE requests, disabled hurtboxes/hitboxes), events, minion path, presentation (client only),
 tests and harness scenarios.
 
@@ -31,7 +31,8 @@ supplies a tag it can gate on, §7), thrown enemies as projectiles (M10), editor
 **Seams that must land inside M4** (generic, inert without a provider, reviewed as combat changes in separate commits):
 
 1. `FGSTN_HitResolutionContext` gains `FGSTN_HitReactionModifiers { float WeightScale = 1, KnockbackScale = 1,
-   HitstunScale = 1, HitstopScale = 1; bool bNoFlinch = false; }` and `OutcomeExtensions` (`TArray<FInstancedStruct>`);
+   HitstunScale = 1, HitstopScale = 1, StaggerScale = 1; float StaggerThreshold = −1 (unset); EGSTN_HitReaction MaxReaction =
+   Launch; bool bNoFlinch = false; }` (M4 §3) and `OutcomeExtensions` (`TArray<FInstancedStruct>`);
    `PercentScaling`, `HealthFraction` and `Fixed` models read the modifiers.
 2. The victim inbox entry and the context carry `uint8 HurtboxIndex` (which hurtbox the overlap picked, §3.4).
 3. **Outcome appliers**: a registered `IGSTN_OutcomeExtensionApplier` is called when the combat tick applies the outcome
@@ -64,7 +65,7 @@ Rules:
   `FGSTN_PartsKitExtension { TSoftObjectPtr<UGSTN_PartSetDefinition> PartSet; }` (the `FGSTN_KitExtension` array of §5b),
   minions through the bridge plugin's definition extension, both ignored with a warning when the plugin is off.
 - A rules extension `FGSTN_PartsRulesExtension` (on `UGSTN_CombatRules`, `FGSTN_RulesExtension` array) holds game-wide
-  values: default `UGSTN_PenetrationTable`, `StaggerThreshold`, global weight curve default, presentation budgets, and
+  values: default `UGSTN_PenetrationTable`, global weight curve default, presentation budgets, and
   the pipeline lists `UGSTN_HitStep_PartResolve` (§5.3). Missing from the pipeline = no parts (validator reports a kit with a
   part set under rules without the step).
 - Dedicated-server builds do not load `GSTNPartsPresentation` and never reference its assets (soft paths only, §3.6). The reference topology is a **listen server** (owner direction §6b): the host runs authority and presentation in one process, so the module is a normal runtime module gated at runtime, not a `ClientOnly` one.
@@ -93,22 +94,26 @@ minions: 8, §5.5).
 | `float BrokenMainTransfer` | `MainTransfer` once the part is broken (stump), default = `MainTransfer × 0.5`; hurtbox policy below |
 | `EGSTN_BrokenHurtboxPolicy` | `Keep` (stump still hittable, uses `BrokenMainTransfer`), `Disable` (hits pass to the body), `Replace(FGSTN_HitShape)` (smaller stump shape) |
 | `bool bWeakPoint` | Cue/UI/event flag (`Combat.Event.Part.WeakPointHit`, hit marker). No damage effect of its own: the numbers above already encode it, so it cannot double count |
-| `FGSTN_PartReaction Reaction` | `StaggerFactor`, `JuggleFactor`, `HitstopScale`, `KnockbackScale` per part (§4.4) |
+| `FGSTN_PartReaction Reaction` | `StaggerThreshold` (the part's **hitstun condition**: negative = inherit the body's, then the rules' value), `MaxReaction` (the most severe reaction tier it can undergo), `JuggleFactor`, `HitstopScale`, `KnockbackScale` per part (§4.4) |
 | `float LostMassFraction` | Fraction of the entity's base weight lost when broken (§4.3) |
 | `TArray<FInstancedStruct> OnBreak` | Break effects, base struct `FGSTN_PartBreakEffect` (§3.3) |
 
 Set-level fields: `EntityCap` is **not** here (it is the entity's `MaxHealth` under `PercentCapped`, §4.1, so the plain
 combat model has it too); `UGSTN_PenetrationTable* Table` (null = rules default), `FGSTN_BakedCurve WeightCurve`,
-`FGSTN_PartReaction BodyReaction` (entity-level `StaggerFactor`/`JuggleFactor`), `FGSTN_GrabGate GrabGate` (§7),
+`FGSTN_PartReaction BodyReaction` (entity-level `StaggerThreshold`/`MaxReaction`/`JuggleFactor`: used for hits on the body and as the parts' default), `FGSTN_GrabGate GrabGate` (§7),
 `TSoftObjectPtr<UGSTN_PartPresentationSet> Presentation` (§6). `IsDataValid`: unique names, hurtbox in at most one part,
 no parent cycle, `PartCap` and transfers finite, mask size ≤ 16, bones exist in the preview mesh (warning).
 
 ### 3.2 Hit-side data (`FGSTN_PartHitData`, an entry of `FGSTN_HitData::ExtensionData`)
 
 ```
-FGSTN_PartHitData : FGSTN_HitExtension { uint8 Penetration; float PartDamageScale = 1; float StaggerPower = 1;
+FGSTN_PartHitData : FGSTN_HitExtension { uint8 Penetration; float PartDamageScale = 1;
                                          uint8 Flags (IgnoreHardness, MainOnly) }
 ```
+
+There is **no stagger field** here: the stagger force is the hit's own (`FGSTN_HitData::StaggerForceMode`, `StaggerForce`,
+`StaggerForceScale`, M4 §3), one source of truth that also works without parts. This extension only adds the penetration, whose
+band scales the force (§3.4).
 
 Authored per hitbox (the extension mechanism of §5b; a combat build without parts ignores it with a warning). Relationship
 variants can override each field (`FGSTN_HitDataOverride` extension entry), so one hitbox may have a weaker `Penetration`
@@ -160,7 +165,8 @@ Default table (*Proposal*, tuned in data, not code):
 | ≤ −2 | far below: deflect | 0.0 | 0.05 | 0.0 | 0.5 | yes (cue `GameplayCue.Combat.Part.Deflect`, event, no hitstun) |
 
 `bDeflected` hits still register (attacker hitstop and hit-confirm, as the Invincible state of M4 §3 does), take no part
-damage and no flinch. A table with fewer bands is valid; an empty band set is a validation error.
+damage and no flinch. The band's `StaggerScale` multiplies the hit's stagger force before the part's threshold test (§4.4), so a hit
+that barely penetrates staggers less. A table with fewer bands is valid; an empty band set is a validation error.
 
 ### 3.5 Entity's own hitboxes while parts are broken
 
@@ -188,7 +194,7 @@ so minions and fighters agree on "how wounded".
 `UGSTN_KnockbackModel_CappedPercent` (in `GSTNCombat`, a variant of `PercentScaling`): the percent term is
 `DamagePercent` as is (platform-fighter feel: the cap only bounds it), every constant stays a property, and the effective
 weight, juggle factor and the modifiers below are applied exactly once, in this order: `Weight × WeightScale`, knockback
-magnitude, `× KnockbackScale`, hitstun from the knockback `× HitstunScale`, hitstop `× HitstopScale`.
+magnitude, `× KnockbackScale`, the stagger test and the reaction tier (M4 §3), hitstun from the knockback `× HitstunScale`, hitstop `× HitstopScale`.
 
 ### 4.2 Part damage and main damage per hit
 
@@ -223,27 +229,41 @@ resolution from the snapshot extension**, never written back, so rollback has no
 weight may call `UGSTN_PartMath::EffectiveWeight` with the same inputs. `PartResolve` writes the result as
 `Reaction.WeightScale = EffectiveWeight / BaseWeight`.
 
-### 4.4 Stagger and juggle: what and where decide hitstun and hitstop
+### 4.4 Stagger force, hitstun condition and reactions: what and where decide hitstun and hitstop
 
-Per entity (`BodyReaction`) and per part (`p.Reaction`), all multiplicative and data-driven:
+Owner direction ([game-design-direction.md](game-design-direction.md) §2b): whether an enemy or boss enters hitstun **depends on the
+part that was hit**; each part has its own **hitstun condition**, generally that the attack's **stagger force** reaches a threshold set
+on the part. **M4 §3 owns the force** (`FGSTN_HitData`: `Derived` from the hit's damage and nominal knockback, or the designer's
+`Override`, times `StaggerForceScale`) **and the test**; parts supply the "where", per part and for the body (`BodyReaction`), all
+data-driven:
 
-- **`StaggerFactor`**: how readily the entity flinches. `StaggerValue = h.StaggerPower × b.StaggerScale ×
-  p.Reaction.StaggerFactor × Body.StaggerFactor`. Below the rules' `StaggerThreshold` the hit sets `bNoFlinch`
-  (M4's Armor semantics: damage and hitstop apply, no hitstun, no launch); above it `HitstunScale = StaggerValue`
-  (clamped to the rules' `[MinStagger, MaxStagger]`).
+- **`StaggerThreshold`** (*Proposal* for the placement): the hit staggers when `StaggerForce × b.StaggerScale ≥ threshold`. `PartResolve`
+  writes `Reaction.StaggerThreshold` (the part's, else the body's, else left unset so the rules'
+  `UGSTN_CombatRules::StaggerThreshold` applies as the **global default**) and `Reaction.StaggerScale = b.StaggerScale` (the penetration
+  band, §3.4); a deflected band sets `bNoFlinch`. Below the threshold M4's Armor semantics apply: damage and hitstop, no hitstun, no launch
+  or push, flinch presentation only. This **replaces** the old per-part stagger factor and the single global threshold: with parts on,
+  the part's own value is the condition. Typical data: a **weak point a low threshold** (a light hit staggers it, the reward for
+  aiming), the torso a middle value, **armoured limbs and boss plates a high one** (light hits chip the part and are shrugged off, only
+  heavy attacks stagger it).
+- **`MaxReaction`** (the `min` of the part's and the body's): the most severe reaction tier the part can undergo, `StaggerInPlace`,
+  `PushBack` or `Launch` (default). A heavy limb or a boss never flies: it is capped at `PushBack` or `StaggerInPlace`.
+- **Weight feeds the tier.** The reaction tier is chosen in M4 §3 by comparing the knockback `K`, computed with the effective weight of
+  §4.3 (remaining health and lost mass of broken parts), with the tier thresholds: a battered or mutilated enemy has a lower weight, so the
+  same hit moves it from stagger in place to push back to launch, with no extra rule here.
 - **`JuggleFactor`**: the weight-for-knockback multiplier of the owner's message: `WeightScale ×= p.Reaction.JuggleFactor ×
   Body.JuggleFactor`; a head hit may launch more than a leg hit, a heavy limb less. When the victim is already in `Tumble`
   the rules' `AirborneJuggleScale` (default 1) is applied too, the knob that makes long juggles possible or not (*Reading*).
-- **`HitstopScale`**: `b.HitstopScale × p.Reaction.HitstopScale`; a hit on a weak point freezes longer (more impact), a
-  deflect freezes less.
+- **`HitstopScale`**: `b.HitstopScale × p.Reaction.HitstopScale`, applied to the **automatic** hitstop only (a designer's `Override` is
+  final, M4 §3); a hit on a weak point freezes longer (more impact), a deflect freezes less.
 - **`KnockbackScale`**: `p.Reaction.KnockbackScale`, e.g. 0.3 for a pauldron, 1 for the torso.
 
-"What hits" enters through `FGSTN_HitData` (`HitstunMultiplier`, `HitstopMultiplier`, `StaggerPower`, `Penetration`), "where"
+"What hits" enters through `FGSTN_HitData` (stagger force, `HitstunMultiplier`, hitstop mode and multipliers) and `Penetration`, "where"
 through the part and the band. Steps stay const and pure: they write modifiers into the context, and the knockback model and
 `Hitstop` step read them (M4 seam 1).
 
 **Attacker hitstop and prediction.** The attacker predicts its own hitstop against a possibly stale puppet (M4 §6, M8 §3).
-It must not depend on the victim's *dynamic* part state. Rule: attacker hitstop uses only static data: `HitstopScale` of the
+It must not depend on the victim's *dynamic* part state. Rule: attacker hitstop uses only static data: the hit's authored damage and
+nominal knockback (M4 §3 `Auto`) or its `Override`, then `HitstopScale` of the
 band (from `Penetration` and the chosen part's `Hardness`) and the part's `Reaction.HitstopScale`; never broken mask,
 percent or weight. A test asserts it (as M8 does for the base model). The only disagreement left is a part that broke
 between prediction and resolution.
@@ -255,7 +275,8 @@ between prediction and resolution.
 | Part set source | Kit extension | Kit extension | Definition extension (bridge) |
 | Cap (`MaxHealth`) | High (long fights, comeback) | Per enemy, tuned for PvE | Small, 5-bit health on the wire |
 | Typical effect of a break | **Cosmetic by default**; optional stat penalty; never disables control | Gameplay: grabbable, disarmed, slowed | Cosmetic plus grabbable |
-| `StaggerFactor` | ~1 (fighter feel) | Per enemy; bosses high threshold | Per type |
+| `StaggerThreshold` (hitstun condition) | Low (most hits stagger: fighter feel; *Proposal*) | Per enemy and per part: weak points low, armoured parts and bosses high | Per type and per part |
+| `MaxReaction` | `Launch` | Per enemy and part (heavy: `PushBack` or `StaggerInPlace`) | Per type; the tier is carried by `ActionState` (M8 §8.2) |
 | Weak points | Rare (e.g. head, hard to hit by design) | Core of PvE | Few, often one |
 | Death | KO event then shatter | KO then shatter | Dying state then shatter (tiered, §6.4) |
 
@@ -307,7 +328,8 @@ minion paths share the code.
 1. `TeamFilter` 2. `HurtState` 3. `GrabImmunity` 4. `LinkRequest` 5. `Parry` 6. `Shield` (blocked, parried, grabbed or
    intangible hits have already stopped: **a blocked hit damages no part**)
 7. **`PartResolve`**: locate part from `HurtboxIndex`, band, `PartDelta`, `MainDelta`, break test (with cascade), the
-   reaction modifiers (§4.3, §4.4), `bLethal` from cap and `MainDamage`. Writes `Ctx.Outcome.Damage`, `Ctx.Reaction`, an
+   reaction modifiers (weight scale, stagger threshold and scale, `MaxReaction`, juggle, hitstop and knockback scales; §4.3, §4.4),
+   `bLethal` from cap and `MainDamage`. Writes `Ctx.Outcome.Damage`, `Ctx.Reaction`, an
    `FGSTN_PartHitOutcome` in `Ctx.OutcomeExtensions` (part index, new quantised damage, newly broken mask, events).
 8. `ComputeKnockback` (reads `Ctx.Reaction`), `ApplyDamage` (adds `Outcome.Damage`), `Hitstop` (reads `Ctx.Reaction`),
    `MeterGain`
@@ -381,6 +403,9 @@ Minions are not NP actors (M8). The bridge plugin gives the minion store optiona
   the mask changes. Cost: +8 bits on items of part-bearing types (about +1 B on an 18 B update, +5 %); items do not carry
   per-part damage. Clients drive **chips from the existing 5-bit `Health`** and **limbs from the mask**; weak-point flashes use
   the existing `HitCounter` plus the local knowledge of where the attacker hit.
+- **Reaction**: the same step writes the part's `StaggerThreshold` and `MaxReaction`, so a minion's hitstun condition and reaction tier
+  (`StaggerInPlace`, `PushBack`, `Launch`) follow M4 §3 per part; the tier is carried by the minion's `ActionState` (`Hitstun`,
+  `PushedBack`, `Launched`), with no extra wire bits (M8 §8.2).
 - **Cost per hit** (server): one table lookup, a few integer operations, no allocation, no GE: budgeted at ≤ 2 µs per hit,
   measured in the M8 bench (§8). `GSTNMinionRuntime` needs no knowledge of parts.
 - Minions stay GAS-free: part events are emitted through M8's outbox equivalent (the `Combat.Event.*` envelope is shared).
@@ -492,7 +517,9 @@ same projected tag drives the minion path (the store mask feeds the same functio
   exactness, byte sizes match §5.1.
 - **Step and context**: `PartResolve` through fake contexts of a fighter and of a minion view gives the same outputs;
   order validator (before `Parry`, after `ComputeKnockback`); blocked hit damages no part; attacker hitstop independent of
-  the victim's dynamic part state.
+  the victim's dynamic part state; stagger condition per part (force equal to the threshold staggers, one unit below does not; part,
+  body and rules fallback; a weak point staggers on a hit an armoured part shrugs off; a deflected band never staggers); `MaxReaction`
+  caps the tier; a lower effective weight never gives a milder tier.
 - **Events/dedupe**: key `(EntityRef, PartIndex, BreakSerial)`; two entries in one drain are order independent.
 - **Presentation (Runtime)**: chip thresholds fire once, idempotent hidden-bone set from the mask, pool never exceeds the
   budget, recycle order.
@@ -502,7 +529,9 @@ same projected tag drives the minion path (the store mask feeds the same functio
 
 `scenario_part_break` (c1 hits a limb of c2 until it breaks: mask, bytes and percent equal on all machines, `Part.Broken`
 once), `scenario_part_weakpoint` (weak point takes more main damage than the torso for the same hit), `scenario_part_deflect`
-(hard part, low penetration: no part damage, no hitstun, attacker hitstop present), `scenario_part_rollback` (forced reconcile
+(hard part, low penetration: no part damage, no hitstun, attacker hitstop present), `scenario_part_stagger` (c1 hits an armoured part
+with a light and a heavy attack, then the weak point with the light one: light on armour = damage, no hitstun; heavy on armour = hitstun and,
+with `MaxReaction = PushBack`, a grounded push back; light on the weak point = hitstun; equal on all machines), `scenario_part_rollback` (forced reconcile
 around the break: no duplicate event or chunk), `scenario_part_grabbable` (grab refused while `GrabLocked`; after the
 required parts break, accepted), `scenario_part_cap` (main percent reaches the cap: KO exactly once), `scenario_part_hitgroups`
 (lost arm stops its own hitbox), `scenario_minion_parts` (M8 bench, 40 minions with part sets: wire bytes within +5 %,
@@ -514,7 +543,7 @@ Clean = state snapshots equal and no reconciles beyond the expected one per hit 
 1. M1–M4 (and M6/M8 when present) tests and scenarios clean with `GSTNParts` **disabled and enabled**.
 2. Scenarios of §8.2 clean; `FGSTN_PartsFragment` stays within the §5.1 byte table; an entity without parts costs 0 bytes.
 3. Penetration rules change only by editing the `UGSTN_PenetrationTable` asset (no code change); a new part set works with
-   no C++.
+   no C++. Which hits stagger a part (its `StaggerThreshold`) and its `MaxReaction` are data too.
 4. Grab gating works with a rules-asset edit only (§7); no M6 code change.
 5. Minion path adds ≤ 5 % to an item update and ≤ 2 µs per hit on the authority; 40+ entities presentation inside the §6.4 budget **on the host machine** (it also renders), host upload within M8's budget.
 6. Death shatter, chips and limbs appear on players and enemies, and never alter simulation (a client with presentation
@@ -532,7 +561,8 @@ Clean = state snapshots equal and no reconciles beyond the expected one per hit 
 - **Combat seams slip out of M4**: without §1 seams M4b edits the core. Mitigation: seams are acceptance items of M4.
 - **Part choice disagreement** attacker/server: cosmetic if it is only the hurtbox flash, a rollback if it changes damage.
   The inbox carries `HurtboxIndex` to avoid re-derivation; spike 1.
-- **Balance explosion** (hardness, transfer, curves, stagger): validator prints "hits to break/kill" per part set.
+- **Balance explosion** (hardness, transfer, curves, stagger thresholds, reaction tiers): validator prints "hits to break/kill" and "hits to
+  stagger" per part set.
 - **Minion wire growth** if many minion types use parts: cap 8 parts, ext byte only for those types, measured in the bench.
 - **Host-only costs** (listen server): hit resolution, minions and presentation share the host's frame, and host upload limits clients; host advantage on instant breaks (§5.5b).
 - **Chunk and shard budget** on low-end clients and hosts: tier rules of §6.4, quality scalability settings.

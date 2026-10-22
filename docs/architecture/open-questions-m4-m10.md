@@ -7,13 +7,13 @@ specifica ha già adottato: se l'ipotesi va bene, basta rispondere "ok".
 Rispondi pure in ordine sparso, anche solo con il numero della sezione e della domanda (es. "M6.3: tasto dedicato").
 Le risposte vanno poi riportate nelle specifiche e in combat.md.
 
-Le indicazioni del 22/10 sono in [game-design-direction.md](game-design-direction.md); le domande a cui hanno già risposto sono marcate **Risposta**.
+Le indicazioni del 22/10 sono in [game-design-direction.md](game-design-direction.md); le domande a cui hanno già risposto sono marcate **Risposta** (quelle della mattina del 22/10, su stagger, hitstop e peso, **Risposta (2026-10-22, mattina)**).
 
 ## Da rispondere per prime (15)
 
 Le quindici domande ancora aperte la cui risposta cambia di più l'architettura o le prossime milestone (prima M3/M4, poi modularità e tag, poi M4b e M6).
 
-- [[M4.3](#m4--hits-domande-al-proprietario-del-progetto)] armatura e super-armor dei boss: soglia e rapporto tra `Poise` e `Armor`
+- [[M4.3](#m4--hits-domande-al-proprietario-del-progetto)] armatura dei boss: ruolo di `Poise` e `Armor` ora che la soglia di stagger è per parte (tenerli, fonderli o toglierli) e valori delle soglie
 - [[M4.4](#m4--hits-domande-al-proprietario-del-progetto)] condizione di KO (tetto o blast zone) e cosa fa il gioco dopo
 - [[M4.6](#m4--hits-domande-al-proprietario-del-progetto)] SDI dentro M4 o rimandato a M6 (la specifica si contraddice)
 - [[M4.16](#m4--hits-domande-al-proprietario-del-progetto)] colpo subito come correzione di rollback o forward prediction per il client
@@ -130,11 +130,13 @@ Ipotesi nella specifica: `DamageMode` è un'opzione per regole di gioco (M4 §3 
 Perché conta: con 40+ nemici il launch pieno costa in rollback, in leggibilità visiva e in controllo della folla.
 Ipotesi nella specifica: stessa pipeline per giocatori e IA (combat §1), nessuna distinzione per tipo di nemico; solo `KnockbackResistance`/`Poise` negli attributi (M4 §4).
 **Risposta (2026-10-22):** Il nemico ha peso legato alla salute rimasta (più è danneggiato, più vola lontano) e fattori di stagger e juggle; hitstun e hitstop dipendono da cosa e dove viene colpito ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)). Resta aperto se i nemici comuni vengano sempre lanciati o possano solo subire stagger.
+**Risposta (2026-10-22, mattina):** Il peso decide cosa succede quando un nemico entra in hitstun: quanto vola via, oppure se non vola affatto e viene solo staggerato sul posto, oppure se viene mandato all'indietro ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)). Quindi anche i nemici comuni usano tre livelli di reazione (lancio, spinta indietro, stagger sul posto), scelti confrontando il knockback con le soglie dei livelli (M4 §3). Restano aperti i valori delle soglie e in quale livello cadano di solito i vari tipi di nemico.
 
 **3. Boss e nemici pesanti: armatura, super-armor o resistenza al knockback sono previste in M4, e con quale soglia?**
 Perché conta: lo stato `Armor` esiste ma servono valori e regole (soglia in danno o in knockback?) per non rendere i boss inutilizzabili o banali.
 Ipotesi nella specifica: `Armor` = niente knockback/hitstun sotto `ArmorThreshold`, il danno si applica (M4 §3 Hurtboxes); il rapporto tra `Poise` e `Armor` non è definito.
 **Risposta (2026-10-22):** Per i nemici grandi vale il modello a parti: durezza della parte contro penetrazione dell'hitbox decide se la parte subisce danno ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)), più il fattore di stagger ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)). Restano aperti la soglia di armatura/super-armor dei boss e il rapporto tra `Poise` e `Armor`.
+**Risposta (2026-10-22, mattina):** Se un nemico o un boss entra in hitstun dipende dalla parte colpita: ogni parte ha una condizione di hitstun, in genere una soglia che la forza di stagger dell'attacco deve raggiungere ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)). Per i boss le soglie alte stanno sulle parti corazzate (combat-parts §4.4); la specifica propone anche che `ArmorThreshold` sia misurata in forza di stagger (M4 §3). Restano aperti i valori delle soglie e il rapporto tra `Poise` e `Armor` (con la soglia per parte `Poise` potrebbe diventare ridondante).
 
 **4. Esiste un limite superiore al knockback/launch (o un KO per percentuale/blast zone), e cosa succede quando un personaggio "muore" (KO)?**
 Perché conta: M4 emette l'evento `KO` (revisione 2026-10-18) ma non dice quando scatta né cosa fa il gioco dopo (respawn, spettatore, game over).
@@ -147,6 +149,7 @@ Ipotesi nella specifica: nessuna; si cita solo l'evento `Combat.Event.KO`.
 Perché conta: sono le costanti `HitstopPerDamage`, `HitstopBase`, `MaxHitstop` e i moltiplicatori; sono il cuore del game feel.
 Ipotesi nella specifica: `floor(Damage × HitstopPerDamage + HitstopBase)` con tetto `MaxHitstop`, moltiplicatori separati per attaccante e vittima (M4 §3); nessun valore numerico.
 **Risposta (2026-10-22):** L'hitstop dipende da cosa e dove viene colpito ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)), quindi anche dalla parte colpita. Restano aperti i valori in frame per jab, colpo medio e forte, e se attaccante e vittima li condividono.
+**Risposta (2026-10-22, mattina):** L'hitstop può essere calcolato in automatico dal danno e dal knockback dell'attacco, oppure scelto a parte dal designer per ogni attacco ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)); in M4 §3 sono le modalità `Auto` e `Override`. Restano aperti i valori in frame (jab, colpo medio, forte), se attaccante e vittima li condividono e se l'automatico usi il knockback scritto nell'attacco o quello reale sul bersaglio (vedi M4.28).
 
 **6. Durante l'hitstop la vittima può fare SDI: in M4 è davvero in scope, o si rimanda a M6 insieme a tech/shield?**
 Perché conta: il testo si contraddice (SDI "oltre lo spostamento di base" è fuori scope in M4 §1, ma M4 §7 lo descrive con `MaxSDIPerHit`); cambia lavoro e test.
@@ -242,12 +245,30 @@ Perché conta: in cooperativo è tollerabile, ma l'host rompe arti e colpisce in
 Ipotesi nella specifica: nessuna mitigazione nella simulazione; la compensazione del lag resta la leva di equità; eventuale ritardo solo di presentazione se i playtest lo chiedono.
 
 
+### H. Dopo la direzione della mattina del 22/10: stagger, hitstop e livelli di reazione
+
+**25. I giocatori usano le stesse soglie di stagger e gli stessi livelli di reazione dei nemici (un giocatore colpito può restare fermo sul posto o essere solo spinto indietro), o vengono sempre lanciati?**
+Perché conta: in un platform fighter ogni colpo lancia; se i giocatori usano i livelli, il peso del kit decide quanto è "pesante" un personaggio e una soglia alta lo rende un tank, ma cambia il feeling del PvP e del co-op.
+Ipotesi nella specifica: stesse regole e stessa pipeline per tutti (combat §1); soglia dei giocatori bassa (ogni colpo manda in hitstun) e `MaxReaction = Launch`; i kit pesanti possono alzare la soglia e abbassare `MaxReaction` (M4 §3).
+
+**26. Quanto deve scivolare una spinta indietro (`PushBack`), e si ferma contro muri e bordi?**
+Perché conta: con 40+ nemici decide leggibilità e rischio di spinte nel vuoto o contro i muri; stabilisce se serve una regola di bordo e di collisione per quel movimento.
+Ipotesi nella specifica: velocità = knockback × fattore con tetto e decadimento fisso per frame; resta a terra e si ferma contro muri e bordi (niente splat, rimbalzo o caduta); se la vittima è in aria o su un muro diventa un lancio (M4 §3, §7).
+
+**27. Un nemico staggerato sul posto può essere "juggled" (lanciato da un secondo colpo)? Un colpo sotto soglia durante l'hitstun lo prolunga o non cambia nulla?**
+Perché conta: decide le combo sui nemici e il rischio di stun-lock (tenere un nemico fermo per sempre) o, al contrario, di colpi che non si concatenano.
+Ipotesi nella specifica: un secondo colpo sopra soglia ricalcola la reazione (può diventare un lancio se il knockback supera la soglia), uno sotto soglia non cambia lo stato; nessun decadimento dell'hitstun (resta la lacuna sull'hitstun decay).
+
+**28. L'hitstop automatico usa danno e knockback scritti nell'attacco, o il knockback reale sul bersaglio (che dipende da percentuale e peso)?**
+Perché conta: con il knockback reale l'attaccante non può prevedere il proprio hitstop in locale (la vittima è interpolata) e rischia un disallineamento visibile; con quello scritto, colpire un nemico quasi morto non congela di più.
+Ipotesi nella specifica: danno e knockback scritti nell'attacco, senza moltiplicatori della vittima (solo dati statici); il designer può comunque fissare i frame a mano per attacco (`Override`) (M4 §3).
+
 ### Lacune nella specifica
 
 - Il testo non dice cosa succede a una hitbox contro più bersagli nello stesso frame oltre il "una volta per gruppo": manca un limite di bersagli per colpo (importante con 40+ nemici) e un ordine di risoluzione deterministico per l'attaccante.
 - `HitTargets` ha 8 voci: non è definito il comportamento quando si superano (colpo multiplo su folle, sostituzione, overflow).
 - Contraddizione sull'SDI: fuori scope in M4 §1 ma descritto in M4 §7.
-- Nessun valore di partenza per le costanti del modello di knockback, hitstop, DI e SDI (peso, `HitstunFactor`, `TumbleThreshold`, `MaxHitstop`): l'implementatore deve inventarli.
+- Nessun valore di partenza per le costanti del modello di knockback, hitstop, DI e SDI (peso, `HitstunFactor`, `TumbleThreshold`, `MaxHitstop`, soglie di stagger e dei livelli di reazione): l'implementatore deve inventarli.
 - Il KO è un evento ma non c'è definizione della condizione (HP a 0? blast zone?), né di cosa fare dopo.
 - Cure/buff agli alleati e `HitType` diversi da Normal (Grab/Projectile/Unblockable) sono nei dati ma non hanno comportamento in M4; non è chiaro se vadano ignorati o rifiutati dal validatore.
 - Regole per colpire bersagli con stati speciali (già in hitstun/tumble, in hitstop, già a terra, sul muro, in dodge) e relativa gestione di combo/hitstun decay non sono descritte.
@@ -304,11 +325,13 @@ Riferimento: `combat-parts.md` (plugin `GSTNParts`) e [game-design-direction.md]
 10. Lo stagger funziona a soglia (sotto una certa forza nessuna reazione, come l'armor) o sempre proporzionale?
     Perché conta: i boss "super armor" richiedono la soglia; i nemici piccoli vanno meglio con la proporzionalità.
     Ipotesi nella specifica: soglia globale nelle regole; sotto la soglia danno e hitstop ma niente hitstun né lancio.
+   **Risposta (2026-10-22, mattina):** Lo stagger funziona a soglia, e la soglia è per parte: la forza di stagger dell'attacco, che in genere scala con la potenza ma può essere impostata a parte, deve raggiungere la soglia della parte colpita ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)). Restano aperti i valori delle soglie e se, sopra la soglia, la durata dell'hitstun debba anche crescere con la forza (la specifica la fa dipendere solo dal knockback).
 
 11. L'hitstop dell'attaccante deve poter dipendere dalla parte colpita (più lungo sul punto debole)?
     Perché conta: l'attaccante lo predice in locale su dati vecchi; usare solo dati statici evita disallineamenti.
     Ipotesi nella specifica: sì, ma solo da penetrazione e durezza/reazione statica della parte, mai da stato dinamico della vittima.
     **Risposta (2026-10-22):** Hitstun e hitstop dipendono da cosa e dove viene colpito ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)), quindi dalla parte. Resta aperto se l'hitstop dell'attaccante debba usare solo dati statici della parte (ipotesi della specifica).
+   **Risposta (2026-10-22, mattina):** L'hitstop si calcola dal danno e dal knockback dell'attacco, oppure lo sceglie il designer ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)); la parte colpita lo modifica con la sua scala solo nella modalità automatica. Resta aperto se l'hitstop dell'attaccante debba usare solo dati statici (ipotesi della specifica, valida in entrambe le modalità; vedi M4.28).
 
 12. Quando i nemici diventano afferrabili: serve un numero minimo di parti rotte, parti specifiche, o una combinazione?
     Perché conta: è il cuore dell'esempio dell'owner (nemico grosso inafferrabile finché non si rompe).
@@ -655,11 +678,13 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
    Perché conta: lanci lunghi richiedono collisione e movimento piu robusti e piu tempo di simulazione per minion.
    Ipotesi nella specifica: lancio balistico con atterraggio e knockdown, nessun tech, nessun rimbalzo avanzato.
    **Risposta (2026-10-22):** Il peso scende con la salute (più danno, più volo), stagger e juggle dipendono da cosa e dove si colpisce, e l'impatto con superfici dà splat, rimbalzo o distruzione secondo il designer ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight), [direzione §4](game-design-direction.md#4-impacts-with-surfaces)). Restano aperti se ogni colpo lanci sempre il minion e se esistano tech o juggle avanzati.
+   **Risposta (2026-10-22, mattina):** Non sempre: il peso decide se il minion vola via, viene solo staggerato sul posto o viene spinto indietro, e se entra in hitstun dipende dalla parte colpita ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)). Valgono le stesse regole dei combattenti (M8 §4d.2) e il livello è codificato in `ActionState`. Restano aperti i valori delle soglie e se esistano tech o juggle avanzati.
 
 6. I minion possono avere armatura/poise (non interrompibili da colpi leggeri) o parare, schivare, usare scudo?
    Perché conta: la difesa dei minion e M6; armatura e invece gia gestita dalla pipeline.
    Ipotesi nella specifica: solo armatura (`PoiseHits`); niente scudo, parata o schivata nei minion.
    **Risposta (2026-10-22):** I nemici hanno parti con durezza e fattore di stagger ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model), [direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)), che fa da armatura. Restano aperti scudo, parata e schivata dei minion (schivata e scudo dipendono dal kit, [direzione §6](game-design-direction.md#6-dodge-and-shield)).
+   **Risposta (2026-10-22, mattina):** L'armatura di un minion è la soglia di stagger della parte colpita o del tipo ([direzione §2b](game-design-direction.md#2b-hitstun-per-part-stagger-force-hitstop-weight-owner-input-2026-10-22-morning)); `PoiseHits` resta come armatura a conteggio. Restano aperti scudo, parata e schivata.
 
 7. Un singolo attacco del giocatore deve poter colpire molti minion insieme (spazzata, area)?
    Perché conta: richiede di alzare l'anello `HitTargets` e influisce sul costo delle query.
