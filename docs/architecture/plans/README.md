@@ -73,8 +73,8 @@ items below, which stay owner decisions**. Implementation threads must not do th
    `Surface.Type.Trampoline` bounce row and the launch move type.
 2. **`IsMovementLocked` extension point in the wall-movement core** (M4 H7, plan §6): an architectural change in the
    project module. Until answered, hitstop freeze must not depend on it on walls (H7 ships without wall-mode lock).
-3. **Parts never heal: `BrokenMask` monotonic until reset/respawn** (M4b Q2/A2): cheap now, expensive to change later
-   (a second mechanism plus the rollback story). P3/P6 may implement monotonic, but the owner must confirm before P7.
+3. ~~Parts never heal~~ **Answered 2026-10-22 18:22**: no self-regeneration, but explicit restores (e.g. a healer enemy)
+   exist. Planned as M4b checkpoint P7b; no longer blocking.
 
 Owner-OK lists in §6 of each plan (shared Blueprints, `.uproject`, ini, wire changes) still apply as written: they are
 announced before the step happens, as with M2/M3.

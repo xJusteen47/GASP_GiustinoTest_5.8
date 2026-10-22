@@ -130,6 +130,9 @@ consequences for the design. Items marked *Reading* are interpretations to confi
   spawned pieces.
 - When a part **detaches**, it is no longer a material effect: it is a real separation (mesh, chunk, physics).
 - **Players are a single part**: when it breaks, they die.
+- **Parts do not regenerate by themselves** (18:22): they stay broken by default, but some cases can **restore** them,
+  for example an enemy that heals others. *Reading:* restoring is an explicit gameplay action (ability/effect), never a
+  timer inside the parts system.
 
 ## 6. Dodge and shield
 
