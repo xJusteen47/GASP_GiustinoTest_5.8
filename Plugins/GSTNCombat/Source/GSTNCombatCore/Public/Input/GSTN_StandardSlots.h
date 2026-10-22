@@ -34,7 +34,13 @@ public:
 	static TArray<FGSTN_InputSlotSpec> Build();
 
 #if WITH_EDITOR
-	/** Replaces the slots of a set asset with the standard command set, to start from or to look at (was an editor button on the set) */
-	static void FillSlotSet(UGSTN_InputSlotSet& Set);
+	/**
+	 * Replaces the slots of a set asset with the standard command set, to start from or to look at (was an editor button on
+	 * the set). Exposed to Blueprint and Python (editor builds only) so the standard set can be created as an asset by data
+	 * setup scripts and editor utilities, with no C++ in the loop. A pointer, not a reference, because that is what a
+	 * UFUNCTION takes for an object; null is ignored.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Input|Slots")
+	static void FillSlotSet(UGSTN_InputSlotSet* Set);
 #endif
 };

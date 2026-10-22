@@ -22,10 +22,33 @@ decisions and the reasons.
 The generic input code (history, classifier, pattern grammar, matcher, buffer, slots, resolver, bindings, settings) lives in
 the [GSTNInput](../GSTNInput/README.md) plugin, which this one depends on (`GSTNCombatCore` -> `GSTNInputCore`). The rule
 that decides what stays here: anything about *fighting* (standard buttons, command tags, default slots, hits) is combat,
-anything about *input in general* is input. The combat priority tiers and exclusive buttons are values in the project's
-`Config/DefaultGame.ini` (section `[/Script/GSTNInputCore.GSTN_InputSettings]`), not defaults of the input plugin.
-The input command, the input sim state and the Mover tracker live in `GSTNInputNP` (step S2a of input.md); the rest of the
-Network Prediction side of the input (simulator, sources, binding set) is still to come (S2b onwards).
+anything about *input in general* is input. The combat priority tiers and exclusive buttons are the plugin's own settings
+(`UGSTN_CombatSettings`, Project Settings > Plugins > GSTN Combat, `GSTNCombat.ini`): defaults in
+`Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini`, overridable in the project's `Config/DefaultGSTNCombat.ini`. The module
+contributes them to the input plugin's settings when it starts (`UGSTN_InputSettings::SetContribution`), which ships both lists
+empty; nothing about combat lives in the project's `DefaultGame.ini`.
+
+**Tags.** The combat plugin declares the standard command roots (`Command.Attack`...) and lock tags natively. The standard
+button leaves (`Input.Button.Attack`, `.Strong`, `.Special`, `.Crouch`, `.Shield`, `.Jump`) are native too and sit under the
+`Input.Button` root that the input plugin owns: an accepted exception for now (the input plugin declares only the root, buttons
+are the vocabulary of whoever has them, and `Input.Button` is the filter every tag picker uses), see input.md. Designer buttons
+and commands of a game are tags in the game's own tag ini.
+
+**Requirements.** `GSTNCombatCore` needs `GSTNInputCore` and Developer Settings. `GSTNCombatNP` needs the GAS-NPP fork plugins and
+Mover (optional plugin dependencies in the descriptor, but the module does not build without them).
+The input command, the input sim state and the Mover tracker live in `GSTNInputNP` (step S2a of input.md); the simulator, sources,
+binding set and context provider (S2b) are there too: the combat component hosts the simulator
+(`IGSTN_InputSimHost`) and only adds the debug hitstop. It also implements `IGSTN_CommandSourceInterface` (the activation
+context and `IsCommandButtonHeld` for abilities), honours the command locks (`Input.Lock.Command[.<root>]`) and publishes
+`Input.Event.CommandExecuted` through `UGSTN_SimEventSubsystem` on the authority only (the listen-server host's own pawn
+included). The native lock tags of the combat command roots (`Input.Lock.Command.Attack`, `.Strong`, `.Special`, `.Combo`, `.Super`)
+are declared here (`GSTN_CombatLockTags.h`, namespace `GSTNCombatLockTags`), next to the roots' command tags.
+
+**Dependency rule.** An `*NP` module may depend on another plugin's `*NP` module of the same layer, and on nothing above it.
+`GSTNCombatNP` depends on `GSTNInputNP` by design: the combat NP model embeds the input simulation, one NP model per
+character (see input.md). Core modules keep no NP, GAS or Mover dependencies, so shared NP types are not moved into
+`GSTNInputCore`. `GSTNCombatNP` may use only the Public headers and interfaces of `GSTNInputNP` (for example
+`IGSTN_InputSimHost`), never its internals.
 
 ## How a frame flows
 
@@ -56,10 +79,14 @@ The generic extension points (a new input condition, slot, binding or buffer res
 [GSTNInput README](../GSTNInput/README.md). What is specific to combat:
 
 - **A new standard command**: add its tag to `GSTN_CombatCommandTags` (and give its root a tier in
-  `Config/DefaultGame.ini` if it is a new root), add the slot in `UGSTN_StandardSlots::Build`, then update the
+  the combat settings, `Config/DefaultGSTNCombat.ini`, if it is a new root), add the slot in `UGSTN_StandardSlots::Build`, then update the
   `GSTNCombat.Core.StandardSlots.*` tests (they check the shapes, the chords and that the validator finds no conflicts).
 - **A new standard button**: add its tag to `GSTN_CombatButtonTags` and to the project's input config; add it to
-  `ExclusiveButtons` if its presses compete with attacks for one move.
+  the combat settings' `ExclusiveButtons` if its presses compete with attacks for one move.
+- **The combat component in Blueprint**: `UGSTN_CombatSimComponent` is `Blueprintable` so a project can subclass it for its own
+  defaults. The input source, the context provider and the rule families are the Blueprint extension points (see the GSTNInput
+  README, "Writing a rule in Blueprint"); the component's own simulation hooks stay in C++. Its `InputConfig` and `SlotBindings`
+  are soft references resolved once in `BeginPlay`.
 
 Tests are in `Source/GSTNCombatCore/Private/Tests/` with the helpers of `GSTN_CombatTestUtils.h`.
 
@@ -74,7 +101,7 @@ Tests are in `Source/GSTNCombatCore/Private/Tests/` with the helpers of `GSTN_Co
 ## Testing
 
 - Pure logic: Automation tests `GSTNCombat.Core.*` (Session Frontend > Automation, or
-  `UnrealEditor-Cmd GASP_Giustino2.uproject -ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit"`).
+  `UnrealEditor-Cmd <your project>.uproject -ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit"`, with your project's `.uproject`).
 - Network behaviour: the PIE harness `Tools/GASNPPTest/gasnpp_test.py` (dedicated server + 2 clients), scenario
   `combat_spike`. See [testing.md](../../docs/architecture/testing.md).
 

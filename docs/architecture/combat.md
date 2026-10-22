@@ -63,7 +63,7 @@ weapons + super slots**, skins separate; stats are GAS attributes, weapons modif
 | # | Fact | Consequence |
 |---|---|---|
 | 1 | `FAbilitySimSyncState` is hard-coded; `InternalSimulationTick`/`FillSyncState` are not virtual. | Combat state lives in **its own NP model** on a component. |
-| 2 | Sort priorities: ASC = `PreKinematicMovers - 2` (48), Mover = 50. | Combat model at **47**: before the ASC and Mover. |
+| 2 | Sort priorities: ASC = `PreKinematicMovers - 2` (48), Mover = 50. | Combat model at **47**: before the ASC and Mover. The standalone input model of GSTNInput is at 46 (never on the same pawn, but Network Prediction warns when two models share a priority). |
 | 3 | Fork input: 5 bools per `UInputAction`, no axes, no history; `TryActivateAbilitiesFromInput` tries only the first matching ability; `GetSynced*` getters read the wrong frame during resim. | Combat has **its own input command**; combat abilities never use `ActivationInputs`. |
 | 4 | GE durations and `UWaitForDurationPredictionTask` use absolute sim time; NPP has no per-entity freeze. | **Every combat timing is a frame count in the combat sync state** (pauses in hitstop). GEs only for attributes, tags, cues. |
 | 5 | Nothing runs on simulated proxies (`SimulatedProxyNetworkLOD=Interpolated`): `ApplyGameplayEffectSpecToSelf` and `TryActivateAbility` return early. | Victim reactions are server-authoritative; the attacker predicts only its own side. |
@@ -187,6 +187,9 @@ produced.
   `HitReceived`, `KO` (M4), `LinkFormed/Broken`, `PairMove` (M6–M7).
 - Clients that need feedback (UI flashes, tutorial prompts) use replicated results or predicted presentation, never
   these events. A client-side mirror can be added later from replicated server events if a feature needs it.
+- *As implemented (M2 S2d):* the subsystem lives in `GSTNInputCore` and is not server-only by construction but by use: the
+  host publishes from `FinalizeFrame` when `HasAuthority()`, which includes the **listen-server host's own pawn** (authority
+  with a local player). Nothing may infer authority from "no local player". See [input.md](input.md) §5.6.
 
 ## 6. Input
 
@@ -299,7 +302,7 @@ special, crouch variants...). The resolver orders them deterministically:
    `Oldest`). The terminal presses of the matching commands are grouped: presses within `SimultaneousFrames` (default
    2) of the newest one form the newest group. Only commands anchored in that group compete; older presses lose (a
    player who pressed attack and then changed their mind and pressed special gets the special).
-2. **Tier** of the command, from the command tag root, configured in the settings (`CommandTiers`: tag → tier), e.g.
+2. **Tier** of the command, from the command tag root, configured in the settings (`CommandTiers`: tag → tier; the combat values are `UGSTN_CombatSettings` in the combat plugin, contributed to the input settings), e.g.
    `Command.Super` 400 > `Command.Special` 300 > `Command.Strong` 200 > `Command.Attack` 100, movement and defensive
    roots as the game needs. Attack and special pressed together → the special, as in Smash.
 3. **Specificity** of the pattern (automatic): inside a tier, crouch + direction > crouch + neutral > direction >

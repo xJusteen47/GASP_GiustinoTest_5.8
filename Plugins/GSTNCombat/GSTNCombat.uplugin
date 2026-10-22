@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Combat",
-	"Description": "Fighting-game style combat: moves and hit system for GAS, simulated by Network Prediction (GAS-NPP fork).",
+	"Description": "Fighting-game style combat: moves and hit system for GAS, simulated by Network Prediction (GAS-NPP fork). The GSTNCombatCore module is pure logic on GSTNInput; the GSTNCombatNP module needs the GAS-NPP fork plugins and Mover, listed as optional dependencies so the plugin descriptor does not force them on a project that only wants the Core.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -33,15 +33,18 @@
 		},
 		{
 			"Name": "GameplayAbilities",
-			"Enabled": true
+			"Enabled": true,
+			"Optional": true
 		},
 		{
 			"Name": "AbilitySystemSimulation",
-			"Enabled": true
+			"Enabled": true,
+			"Optional": true
 		},
 		{
 			"Name": "NetworkPrediction",
-			"Enabled": true
+			"Enabled": true,
+			"Optional": true
 		},
 		{
 			"Name": "EnhancedInput",
@@ -49,7 +52,8 @@
 		},
 		{
 			"Name": "Mover",
-			"Enabled": true
+			"Enabled": true,
+			"Optional": true
 		}
 	]
 }

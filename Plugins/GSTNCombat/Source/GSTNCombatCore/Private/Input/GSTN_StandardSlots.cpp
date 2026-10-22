@@ -104,16 +104,21 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 }
 
 #if WITH_EDITOR
-void UGSTN_StandardSlots::FillSlotSet(UGSTN_InputSlotSet& Set)
+void UGSTN_StandardSlots::FillSlotSet(UGSTN_InputSlotSet* Set)
 {
-	Set.Modify();
-	Set.Slots.Reset();
+	if (!Set)
+	{
+		return;
+	}
+
+	Set->Modify();
+	Set->Slots.Reset();
 	for (const FGSTN_InputSlotSpec& Spec : Build())
 	{
 		FGSTN_InputSlotEntry Entry;
 		Entry.Inline = Spec;
-		Set.Slots.Add(MoveTemp(Entry));
+		Set->Slots.Add(MoveTemp(Entry));
 	}
-	Set.MarkPackageDirty();
+	Set->MarkPackageDirty();
 }
 #endif

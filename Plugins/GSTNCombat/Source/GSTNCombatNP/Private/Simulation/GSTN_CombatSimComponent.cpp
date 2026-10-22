@@ -3,26 +3,22 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 
 #include "AbilitySystemGlobals.h"
+#include "Abilities/GameplayAbility.h"
 #include "Abilities/NpAbilitySystemComponent.h"
+#include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
-#include "EnhancedInputSubsystems.h"
-#include "EnhancedPlayerInput.h"
-#include "Engine/LocalPlayer.h"
 #include "GameFramework/Pawn.h"
-#include "GameFramework/PlayerController.h"
-#include "Input/GSTN_InputSettings.h"
-#include "Input/GSTN_DirectionClassifier.h"
+#include "Input/GSTN_InputConfig.h"
 #include "Input/GSTN_InputScript.h"
-#include "InputAction.h"
-#include "MoverComponent.h"
-#include "MoverDataModelTypes.h"
-#include "Mover/GSTN_MoverSimStateTracker.h"
+#include "Input/GSTN_InputSettings.h"
 #include "NetworkPredictionModelDef.h"
 #include "NetworkPredictionModelDefRegistry.h"
 #include "NetworkPredictionProxyInit.h"
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
+#include "Simulation/GSTN_InputHostUtils.h"
+#include "Sources/GSTN_InputSource.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatSim, Log, All);
 
@@ -55,6 +51,9 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
 	bWantsInitializeComponent = true;
 	SetIsReplicatedByDefault(true);
+
+	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
+	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
 }
 
 void UGSTN_CombatSimComponent::InitializeNetworkPredictionProxy()
@@ -66,21 +65,51 @@ void UGSTN_CombatSimComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (ButtonActions.Num() > 32)
-	{
-		UE_LOG(LogGSTNCombatSim, Error, TEXT("%s: %d button actions, only the first 32 are sampled"), *GetPathName(), ButtonActions.Num());
-	}
-
+	CompileInput();
 	BindAbilitySystem();
 
-	// The facing the classifier needs is the Mover's simulated one at the end of the previous frame, not the actor's
-	if (UMoverComponent* Mover = GetOwner()->FindComponentByClass<UMoverComponent>())
+	if (ContextProvider)
 	{
-		MoverTracker = UGSTN_MoverSimStateTracker::FindOrAdd(Mover);
+		ContextProvider->Initialize(GetOwner());
 	}
 	else
 	{
-		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no Mover component on the owner, the character is taken to face yaw 0"), *GetPathName());
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no context provider, the character is taken to face yaw 0 with no movement context"), *GetPathName());
+	}
+}
+
+void UGSTN_CombatSimComponent::CompileInput()
+{
+	// Everything the simulation or the input source reads every frame is resolved here, once, and held strongly
+	ActiveInputConfig = InputConfig.IsNull() ? nullptr : InputConfig.LoadSynchronous();
+	ActiveSlotBindings = SlotBindings.IsNull() ? nullptr : SlotBindings.LoadSynchronous();
+
+	if (ActiveInputConfig)
+	{
+		ActiveInputConfig->ResolveActions();
+		ButtonMap = ActiveInputConfig->MakeButtonMap();
+		if (ActiveInputConfig->Buttons.Num() > UGSTN_InputConfig::MaxButtons)
+		{
+			UE_LOG(LogGSTNCombatSim, Error, TEXT("%s: %d buttons, only the first %d are sampled"), *GetPathName(), ActiveInputConfig->Buttons.Num(), UGSTN_InputConfig::MaxButtons);
+		}
+	}
+	else
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no input config, the combat input has no buttons"), *GetPathName());
+	}
+
+	if (ActiveSlotBindings)
+	{
+		CommandTable = ActiveSlotBindings->BuildTable(ResetRules);
+	}
+	else
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no slot bindings, no command starts an ability"), *GetPathName());
+	}
+
+	if (InputSource && !Cast<IGSTN_InputSource>(InputSource.Get()))
+	{
+		UE_LOG(LogGSTNCombatSim, Error, TEXT("%s: the input source %s does not implement IGSTN_InputSource"), *GetPathName(), *InputSource->GetName());
 	}
 }
 
@@ -92,7 +121,6 @@ void UGSTN_CombatSimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	PreTickHandle.Reset();
 	AbilitySystem = nullptr;
-	MoverTracker = nullptr;
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -141,77 +169,78 @@ void UGSTN_CombatSimComponent::InitializeSimulationState(FGSTN_CombatSyncState* 
 
 void UGSTN_CombatSimComponent::ProduceInput(const int32 DeltaTimeMS, FGSTN_InputCmd* Cmd)
 {
-	Cmd->HeldButtons = bUseScriptedButtons ? ScriptedButtons : SampleHeldButtons();
-	Cmd->PressedButtons = PendingTaps;
+	*Cmd = FGSTN_InputCmd();
+
+	if (IGSTN_InputSource* Source = Cast<IGSTN_InputSource>(InputSource.Get()))
+	{
+		FGSTN_InputSourceContext Context;
+		Context.Owner = GetOwner();
+		Context.Config = ActiveInputConfig;
+		Context.Table = &CommandTable;
+		Source->ProduceInput(Context, DeltaTimeMS, *Cmd);
+	}
+
+	// Test overrides: the scripted buttons replace what the source saw, taps are added to the presses
+	if (bUseScriptedButtons)
+	{
+		Cmd->HeldButtons = ScriptedButtons;
+		Cmd->PressedButtons = 0;
+	}
+	Cmd->PressedButtons |= PendingTaps;
 	PendingTaps = 0;
-	SampleStick(*Cmd);
 }
 
-const UEnhancedPlayerInput* UGSTN_CombatSimComponent::GetPlayerInput() const
+float UGSTN_CombatSimComponent::GetFacingYaw() const
 {
-	const APawn* Pawn = Cast<APawn>(GetOwner());
-	const APlayerController* PlayerController = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
-	const ULocalPlayer* LocalPlayer = PlayerController ? PlayerController->GetLocalPlayer() : nullptr;
-	const UEnhancedInputLocalPlayerSubsystem* InputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer);
-	return InputSubsystem ? InputSubsystem->GetPlayerInput() : nullptr;
+	return ContextProvider ? ContextProvider->GetFacingYaw() : 0.f;
 }
 
-uint32 UGSTN_CombatSimComponent::SampleHeldButtons() const
+void UGSTN_CombatSimComponent::GetOwnerTags(FGameplayTagContainer& OutTags) const
 {
-	const UEnhancedPlayerInput* PlayerInput = GetPlayerInput();
-	if (!PlayerInput)
+	if (AbilitySystem)
 	{
-		return 0;
-	}
-
-	uint32 Held = 0;
-	const int32 NumButtons = FMath::Min(ButtonActions.Num(), 32);
-	for (int32 Index = 0; Index < NumButtons; ++Index)
-	{
-		if (ButtonActions[Index] && PlayerInput->GetActionValue(ButtonActions[Index]).Get<bool>())
-		{
-			Held |= 1u << Index;
-		}
-	}
-	return Held;
-}
-
-void UGSTN_CombatSimComponent::SampleStick(FGSTN_InputCmd& Cmd) const
-{
-	const UEnhancedPlayerInput* PlayerInput = GetPlayerInput();
-	if (!PlayerInput)
-	{
-		return;
-	}
-
-	if (MoveAction)
-	{
-		FVector2D Stick = PlayerInput->GetActionValue(MoveAction).Get<FVector2D>();
-		if (Stick.SizeSquared() > 1.0)
-		{
-			Stick = Stick.GetSafeNormal();
-		}
-		Cmd.StickX = FGSTN_DirectionClassifier::QuantizeStickAxis(static_cast<float>(Stick.X));
-		Cmd.StickY = FGSTN_DirectionClassifier::QuantizeStickAxis(static_cast<float>(Stick.Y));
-	}
-
-	const APawn* Pawn = Cast<APawn>(GetOwner());
-	if (const AController* Controller = Pawn ? Pawn->GetController() : nullptr)
-	{
-		Cmd.CameraYaw = FGSTN_DirectionClassifier::QuantizeYaw(static_cast<float>(Controller->GetControlRotation().Yaw));
+		AbilitySystem->GetOwnedGameplayTags(OutTags);
 	}
 }
 
-float UGSTN_CombatSimComponent::GetSimulatedFacingYaw() const
+void UGSTN_CombatSimComponent::AppendContextTags(FGameplayTagContainer& OutTags) const
 {
-	if (MoverTracker)
+	if (ContextProvider)
 	{
-		if (const FMoverDefaultSyncState* DefaultSync = MoverTracker->GetSyncState().SyncStateCollection.FindDataByType<FMoverDefaultSyncState>())
-		{
-			return static_cast<float>(DefaultSync->GetOrientation_WorldSpace().Yaw);
-		}
+		ContextProvider->AppendContextTags(OutTags);
 	}
-	return 0.f;
+}
+
+uint8 UGSTN_CombatSimComponent::GetContextFingerprint() const
+{
+	return ContextProvider ? ContextProvider->GetContextFingerprint() : 0;
+}
+
+void UGSTN_CombatSimComponent::AppendFrameEvents(uint8 PreviousFingerprint, uint8 CurrentFingerprint, FGSTN_BufferFrameEvents& Events) const
+{
+	if (ContextProvider)
+	{
+		ContextProvider->AppendFrameEvents(PreviousFingerprint, CurrentFingerprint, Events);
+	}
+}
+
+bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
+{
+	// On the end-of-previous-frame state, like the ability system's own check at execution
+	return FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, CommandTable, BindingIndex);
+}
+
+FGSTN_ActivationContext UGSTN_CombatSimComponent::GetActivationContext() const
+{
+	// The simulation read: while the ability system ticks frame F this is the combat state F produced, request included
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync ? FGSTN_ActivationContext::FromRequest(Sync->Input, CommandTable, Sync->Input.History.GetLatestFrame()) : FGSTN_ActivationContext();
+}
+
+bool UGSTN_CombatSimComponent::IsCommandButtonHeld(int32 Button) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync && FGSTN_InputHostUtils::IsButtonHeld(Sync->Input, Button);
 }
 
 void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_CombatStateTypes>& Input,
@@ -222,42 +251,23 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	OutSync = InSync;
 
 	const int32 Frame = TimeStep.Frame;
-	const FGSTN_InputCmd& Cmd = *Input.Cmd;
-	const UGSTN_InputSettings& Settings = UGSTN_InputSettings::Get();
 
-	// This frame's sample: the buttons (a tap shorter than a frame is released on the frame it is pressed) and the stick
-	// classified in every direction space with the facing the Mover had at the end of the previous frame.
-	const uint32 PrevHeld = InSync.Input.History.GetHeldButtons();
-	FGSTN_InputSample Sample;
-	Sample.Frame = Frame;
-	Sample.Held = Cmd.HeldButtons;
-	Sample.Pressed = (Cmd.HeldButtons & ~PrevHeld) | Cmd.PressedButtons;
-	Sample.Released = (PrevHeld | Sample.Pressed) & ~Cmd.HeldButtons;
-	Sample.Stick = FGSTN_DirectionClassifier::Classify(
-		FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY)),
-		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), GetSimulatedFacingYaw(), InSync.Input.Classifier, Frame, Settings, OutSync.Input.Classifier);
-	OutSync.Input.History.Append(Sample);
+	FGSTN_InputTickArgs Args;
+	Args.Frame = Frame;
+	Args.Cmd = Input.Cmd;
+	Args.In = &InSync.Input;
+	Args.Out = &OutSync.Input;
+	Args.Table = &CommandTable;
+	Args.Buttons = &ButtonMap;
+	Args.Settings = &UGSTN_InputSettings::Get();
+	Args.GlobalResetRules = ResetRules;
+	Args.PausedStart = InSync.HitstopStartFrame;
+	Args.PausedEnd = InSync.HitstopEndFrame;
+	Args.Outbox = &EventOutbox;
+	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 
-	const uint32 Pressed = Sample.Pressed;
-
-	// Spike: presses during hitstop are dropped (buffering comes with the input history)
-	if (Pressed == 0 || InSync.IsInHitstop(Frame))
-	{
-		return;
-	}
-
-	const int32 NumAbilities = FMath::Min(ButtonAbilities.Num(), 32);
-	for (int32 Index = 0; Index < NumAbilities; ++Index)
-	{
-		if ((Pressed & (1u << Index)) && ButtonAbilities[Index])
-		{
-			OutSync.Input.RequestedAction = static_cast<uint8>(Index + 1);
-			OutSync.Input.RequestFrame = Frame;
-			break;
-		}
-	}
-
-	if (HitstopTestButton >= 0 && (Pressed & (1u << HitstopTestButton)))
+	// Debug hitstop, until hits replace it: a press of the test button opens a window (not while one is already open)
+	if (HitstopTestButton >= 0 && !InSync.IsInHitstop(Frame) && (Result.Pressed & (1u << HitstopTestButton)))
 	{
 		OutSync.HitstopStartFrame = Frame;
 		OutSync.HitstopEndFrame = Frame + HitstopTestFrames;
@@ -271,8 +281,8 @@ FString UGSTN_CombatSimComponent::GetDebugString(int32 MaxEvents) const
 	{
 		return TEXT("(no combat state)");
 	}
-	return FString::Printf(TEXT("%s\nheld 0x%x  frame %d  request %d@%d"), *FGSTN_InputScript::Describe(Sync->Input.History, MaxEvents),
-		Sync->Input.History.GetHeldButtons(), Sync->Input.History.GetLatestFrame(), Sync->Input.RequestedAction, Sync->Input.RequestFrame);
+	return FString::Printf(TEXT("%s\nheld 0x%x  frame %d  request %d@%d button %d"), *FGSTN_InputScript::Describe(Sync->Input.History, MaxEvents),
+		Sync->Input.History.GetHeldButtons(), Sync->Input.History.GetLatestFrame(), Sync->Input.RequestedBinding, Sync->Input.RequestFrame, Sync->Input.RequestButton);
 }
 
 void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -293,6 +303,9 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 
 void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
 {
+	// Outside the simulation: the authority (a dedicated server, or the listen-server host's own pawn) publishes each event
+	// once; a predicting client drops what its predictions and re-simulations wrote
+	FGSTN_InputHostUtils::PublishOutbox(EventOutbox, GetOwner());
 }
 
 void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep)
@@ -306,13 +319,8 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 
 	const int32 Frame = TimeStep.ServerFrame;
 
-	if (Sync->Input.RequestFrame == Frame && ButtonAbilities.IsValidIndex(Sync->Input.RequestedAction - 1))
-	{
-		if (const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(ButtonAbilities[Sync->Input.RequestedAction - 1]))
-		{
-			AbilitySystem->TryActivateAbility(Spec->Handle);
-		}
-	}
+	// A request made on this frame starts its ability here, inside the ability system's tick
+	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, CommandTable, Sync->Input, Frame);
 
 	// Paused on every hitstop frame with a montage (also one started during the hitstop), resumed on the first frame after.
 	// The pause flag only exists with a montage: it is not replicated otherwise

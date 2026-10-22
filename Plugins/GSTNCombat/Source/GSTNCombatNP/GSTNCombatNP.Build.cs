@@ -23,10 +23,5 @@ public class GSTNCombatNP : ModuleRules
 			"NetCore",
 			"Mover"
 		});
-
-		PrivateDependencyModuleNames.AddRange(new string[]
-		{
-			"EnhancedInput"
-		});
 	}
 }

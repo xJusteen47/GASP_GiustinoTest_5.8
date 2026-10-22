@@ -91,8 +91,8 @@ determinism constraints, tuning as `UPROPERTY(EditAnywhere/EditDefaultsOnly)` wi
 | `MaxHoldBufferFrames` | 0 | 0 = unlimited while held. |
 | `SimultaneousFrames` | 2 | Presses within this many frames of the newest terminal press form one press group (combat.md §8.2). |
 | `BufferConflictPolicy` | `MostRecent` | Which press group competes: `MostRecent`, `HighestPriority` (all groups, priority only), `Oldest`. |
-| `CommandTiers` | empty in the plugin; combat values (project `Config/DefaultGame.ini`, section `[/Script/GSTNInputCore.GSTN_InputSettings]`): `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400 | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
-| `ExclusiveButtons` | empty in the plugin; combat value (same ini section): Attack, Strong, Special | Button tags whose presses in the winner's press group are consumed with it. |
+| `CommandTiers` | empty in the plugin; combat values (the combat plugin's `UGSTN_CombatSettings`, `Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini`, contributed to the input settings at startup; first kept in the project's `DefaultGame.ini`): `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400 | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
+| `ExclusiveButtons` | empty in the plugin; combat value (same settings): Attack, Strong, Special | Button tags whose presses in the winner's press group are consumed with it. |
 | `bChordGraceByDefault` | false | Legacy wait before single-button commands (combat.md §8.3); off because the startup override handles chords. |
 | `ChordGraceFrames` | 3 | Only used when chord grace is on. |
 | `DefaultSimultaneityFrames` | 3 | Tolerance inside a step (e.g. direction vs press). |
@@ -363,7 +363,7 @@ M3's move sets:
   { BindingA, BindingB, Message }`. Bindings without a valid command are skipped (their owner reports them).
 - Native tags: `Input.Context.Grounded/Airborne/OnWall` next to the command tags; `Command.Air.*` and the airborne tier
   roots are removed. Standard set: 12 + 4 commands, `CommandTiers` = Attack 100, Strong 200, Special 300,
-  Combo 350, Super 400 (empty by default in `UGSTN_InputSettings`; the combat values live in the project's `Config/DefaultGame.ini`, section `[/Script/GSTNInputCore.GSTN_InputSettings]`).
+  Combo 350, Super 400 (empty by default in `UGSTN_InputSettings`; the combat values live in the combat plugin's own settings and config file, `Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini`, see input.md section 4.2).
 - Linking note: the project module lists `GSTNInputCore` and `GSTNCombatCore` themselves next to `GSTNCombatNP`: the linker does not take the
   Core import library from the plugin's public dependency.
 

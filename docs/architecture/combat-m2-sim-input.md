@@ -71,8 +71,8 @@ Source/GASP_Giustino2/
   GASP_Giustino2.Build.cs                        + GSTNInputNP (and GSTNInputCore if used)
   GAS/GSTN_GameplayAbility.*, GSTN_GA_Jump.cpp, GSTN_GA_WallSlide.cpp   include the tracker from GSTNInputNP
 GASP_Giustino2.uproject                          + GSTNInput plugin entry
-Config/DefaultGame.ini                           [/Script/GSTNInputCore.GSTN_InputSettings] combat tiers and exclusive buttons
-Config/DefaultEngine.ini                         tracker redirects (input.md §8)
+Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini  combat tiers and exclusive buttons (UGSTN_CombatSettings; first planned in Config/DefaultGame.ini)
+Plugins/GSTNInput/Config/DefaultGSTNInput.ini      tracker redirects ([CoreRedirects]; first in Config/DefaultEngine.ini, input.md §8)
 Tools/GASNPPTest/gasnpp_test.py                  combat scenarios (section 8)
 Source/GASP_Giustino2/.../GSTN_GASNPPTestComponent.*   combat state in the snapshot JSON
 ```
@@ -80,7 +80,7 @@ Source/GASP_Giustino2/.../GSTN_GASNPPTestComponent.*   combat state in the snaps
 The tracker keeps its class name (`UGSTN_MoverSimStateTracker`) and API; only its module changes (include path stays
 `"Mover/GSTN_MoverSimStateTracker.h"`). Its export macro becomes `GSTNINPUTNP_API`. Blueprints do not reference it
 (it is created at runtime), so no asset redirect is needed; add a `CoreRedirects` class entry anyway in
-`Config/DefaultEngine.ini` (`/Script/GASP_Giustino2.GSTN_MoverSimStateTracker` and `/Script/GSTNCombatNP.GSTN_MoverSimStateTracker` → `/Script/GSTNInputNP.GSTN_MoverSimStateTracker`; done in S2a)
+`Plugins/GSTNInput/Config/DefaultGSTNInput.ini` (first `Config/DefaultEngine.ini`; `/Script/GASP_Giustino2.GSTN_MoverSimStateTracker` and `/Script/GSTNCombatNP.GSTN_MoverSimStateTracker` → `/Script/GSTNInputNP.GSTN_MoverSimStateTracker`; done in S2a)
 in case a saved object references it.
 
 ## 3. State types
@@ -227,6 +227,13 @@ legal (unbound command): no diagnostic. The component property `SlotBindings` re
 - Test: a Blueprint-free C++ listener in the harness component counts `CommandExecuted` per command on the server;
   `GetStateSnapshot()` exposes the counts; scenarios check them against the expected number of activations, including
   runs with forced reconciles (the count must not grow on re-simulation).
+
+> **As implemented (S2c-S2e):** sections 6b, 7a and 7b are built as described in [input.md](input.md) §5.6, with these
+> differences: the interface method is `IsCommandButtonHeld` (not `IsCombatButtonHeld`) and `FGSTN_ActivationContext::Button`
+> is an `int32`; `RequestButton` is 255 (`CommandWithoutButton`) for a command with no terminal press; lock tags are
+> resolved per command when the table is built, not lazily; the lock check uses exact tags; the event outbox lives in
+> `GSTNInputCore`/`GSTNInputNP` and is published by `FGSTN_InputHostUtils::PublishOutbox` on `HasAuthority()` (the listen-server
+> host's own pawn included). The harness counter of `CommandExecuted` in the test component is not written yet.
 
 ## 8. Debug and harness
 
