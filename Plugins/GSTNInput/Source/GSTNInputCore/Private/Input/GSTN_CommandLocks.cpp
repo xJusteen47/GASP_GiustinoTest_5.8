@@ -7,7 +7,14 @@
 
 namespace
 {
-	/** The lock tag of one command tag, whatever its depth; the root maps to the global lock. Invalid if there is none */
+	/**
+	 * The lock tag of one command tag, whatever its depth; the root maps to the global lock. Invalid if there is none.
+	 *
+	 * This is the one place a tag is derived from a name. It is deliberate: the leaves of Command.* are designer content in a
+	 * tag ini, and so are their Input.Lock.Command.* partners, so no native tag can stand for them (the "no string tags" rule is
+	 * about code naming a tag it could declare). The lookup is not on a per-frame path: tables are compiled once and carry the
+	 * resulting lock tags (FGSTN_CommandBindingSet), the simulator only compares tag containers.
+	 */
 	FGameplayTag LockTagOf(const FGameplayTag& CommandTag)
 	{
 		const FString CommandRoot = GSTNInputTags::Command.GetTag().ToString();

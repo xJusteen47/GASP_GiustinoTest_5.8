@@ -21,6 +21,12 @@ the standalone `UGSTN_InputSimComponent` (model `GSTN_Input`). How to embed the 
   NetworkPrediction (the GAS-NPP fork in `Plugins/GASNPP`), Mover, EnhancedInput.
 - Module `GSTNInputNP` depends on `GSTNInputCore` (plugin `GSTNInput`) and the fork modules. Nothing in `GSTNInput` depends on
   this plugin.
+- The hard dependency on Mover is a deliberate bridge, not a leak: the module is the adapter between the pure input logic and
+  the simulation. Mover appears in two places only: `UGSTN_MoverSimStateTracker` (`Mover/`, the rollback-safe copy of the
+  character's simulated mode and tags) and `UGSTN_MoverInputContextProvider` (`Context/`, which turns that into the
+  grounded/airborne/on-wall context and the landing event). The simulator, the binding set and the input sync state never
+  touch Mover. A game with another movement system subclasses `UGSTN_InputContextProvider` (C++ or Blueprint) and does not
+  use those two classes; if a Mover-free build is ever needed, they are the pieces to move into their own bridge module.
 - Dependency rule: an `*NP` module may depend on another plugin's `*NP` module of the same layer, never on anything above it.
   `GSTNCombatNP` (plugin `GSTNCombat`) depends on `GSTNInputNP` and may use only its Public headers and interfaces.
 
