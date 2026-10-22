@@ -109,7 +109,7 @@ or (simpler, *Proposal*) just carries this component with `{Launch}` and `Surfac
 |---|---|---|---|
 | **`GSTNSurface`** (`GSTNSurfaceCore` only) | L2/L3, optional, `EnabledByDefault: false` | Engine, GameplayTags, PhysicsCore | `Surface.*`, §2 types, resolve utils, settings |
 | `GSTNCombatCore` (H11/H11b) | L3 | + `GSTNSurfaceCore` (Core → Core, allowed by §3.7 rule 2) | impact resolution reads `FGSTN_SurfaceView`; `GSTNLevelObjects` (H11b) depends on `GSTNSurfaceCore` and `GSTNCombatCore` |
-| wall movement (`GSTNMovement`, project today) | L3 | + `GSTNSurfaceCore` (private) | the surface filter extension point (§5.2, needs owner OK TS.2) |
+| wall movement (`GSTNMovement`, project today) | L3 | + `GSTNSurfaceCore` (private) | the surface filter extension point (§5.2, owner OK TS.2 given 2026-10-22 22:14) |
 | `GSTNPlatform` (`GSTNPlatformCore`, runtime) | L4 optional | + `GSTNSurfaceCore` | shapes with behaviours, per-shape activation, provider on the shape component (§4) |
 | **`GSTNPlatformParts`** (one module, bridge) | bridge | `GSTNPlatformCore`, `GSTNPartsCore`, `GSTNPartsNP` (reads the confirmed mask, as `GSTNPartsMinion` does with the store) | `PartName → shapes` mapping, mask projection (§4.4) |
 | `GSTNPlatformMinion` (M8 §4d.5) | bridge | unchanged + the shape mask column (§4.5) | platform minions' shapes |
@@ -220,7 +220,7 @@ Sliding, climbing, corners, adhesion, orientation and base riding are the existi
 responds Block on the wall probe channel is a wall. **First delivery uses collision responses only** (§4.1): no edit to the
 wall-movement core, so enemies with slideable flanks work before TS.2 is answered.
 
-### 5.2 The surface filter (core edit, owner OK TS.2)
+### 5.2 The surface filter (core edit, owner OK TS.2 given 2026-10-22 22:14: some surfaces allow wall slide, others do not)
 
 Collision responses cannot express "this *static* wall forbids wall slide but still blocks the player", nor "climbable but not
 slideable". *Proposal*: `FGSTN_WallCheckSettings` gains `FGSTN_WallSurfaceFilter { FGameplayTagQuery RequiredBehaviours;

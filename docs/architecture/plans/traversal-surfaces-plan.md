@@ -53,7 +53,7 @@ at surface loss on clients; host pawn zero reconciles.
 | T2 | T0 TS-A; project wall code (one PC, same branch as the M3 work) | after T0 |
 | T3 | T1; `GSTNPlatform` skeleton (`FGSTN_PlatformSpec`, `UGSTN_EnemyPlatformComponent`, collider rule, PL §4.2–4.3). If the platform plan has not started, T3 **delivers that minimum** for fighters and the platform plan builds on it (TS §10) | after T1 |
 | T4 | T3; **H11 and H11b** (contact record, launch layered move, `Surface.Type.Trampoline` row) | after H11b |
-| T5 | T1; **owner OK (TS.2)** | after T1 |
+| T5 | T1 (owner OK TS.2 given 2026-10-22 22:14) | after T1 |
 | T6 | T3; **P7** (confirmed `BrokenMask` readable, snapshot) and **P7b** (`Combat.Event.Part.Restored`) | after P7b |
 | T7 | T2, T3, T6; **H10** (lag comp history with composed transforms); platform spikes P3/P4 | after H10 and T6 |
 | T8 | T6; **M8 complete** (`GSTNPlatformMinion`, store, observer) and **P16** (minion part mask) | late |
@@ -147,7 +147,7 @@ and M4b progress; T5 waits only for the owner.
 - Acceptance: launch equal everywhere, host zero reconciles; combat has no dependency on `GSTNPlatform`.
 - Spec: TS §4.3 launch, H11/H11b.
 
-### T5 Wall-surface filter extension point (wall-movement core, **owner OK TS.2**) — size S/M
+### T5 Wall-surface filter extension point (wall-movement core, owner OK TS.2 given 2026-10-22 22:14) — size S/M
 
 - Files: `GSTN_WallMovementTypes.h` (`FGSTN_WallSurfaceFilter { FGameplayTagQuery RequiredBehaviours; bool bUnknownSurfacesPass }`
   added to `FGSTN_WallCheckSettings`), `UGSTN_WallQueryUtils::IsHitOnValidWall` evaluates it after the angle test (static resolve,
@@ -220,7 +220,7 @@ and M4b progress; T5 waits only for the owner.
 | Question | Assumption used here | Affects | Cost to change |
 |---|---|---|---|
 | TS.1 separate `GSTNSurface` plugin owning `Surface.*` | yes; H11/H11b consume it | T1, H11/H11b edits | S if before H11 starts; M after |
-| TS.2 wall-core filter extension point | asked now; T2 works without it | T5 only | none (T5 is additive) |
+| TS.2 wall-core filter extension point | **Answered 2026-10-22 22:14: yes**, some surfaces are wall-slideable and others not | T5 | done |
 | TS.3 which enemies | the same set as platforms (fighters + ≤ 8 platform minions), swarm never | T3, T8 | M (minions need the proxy anyway) |
 | TS.4 enemy slows while a player slides | **Answered 2026-10-22 21:58**: depends on the part and the enemy. `FGSTN_OccupantResponse` per platform shape (enemy-level default on the definition, BP `OnOccupantChanged`); T3 adds the struct, T7 tests one slowing and one full-speed enemy | T3, T7 | done (data) |
 | TS.5 part breaks under a player | `DropGraceFrames` telegraph then fall with base velocity; no riding the chunk | T6 | S |
@@ -235,7 +235,7 @@ and M4b progress; T5 waits only for the owner.
 - `Config/DefaultEngine.ini` collision: T3 adds the `GSTN_EnemyPlatform` object channel if the platform plugin has not already
   (plugin ini preferred, MT §3.7 rule 1; the project ini only if the engine requires it for channels).
 - `.uproject`: enabling `GSTNSurface` (T1), `GSTNPlatform` (T3), `GSTNPlatformParts` (T6), `GSTNPlatformMinion` (T8).
-- Wall-movement core edit (T5): one struct field and one check in `IsHitOnValidWall`/`SweepForWall`; the owner's OK is TS.2.
+- Wall-movement core edit (T5): one struct field and one check in `IsHitOnValidWall`/`SweepForWall`; the owner's OK is TS.2 (given 2026-10-22 22:14).
 - H11/H11b plan text: the `IGSTN_ImpactSurface`/`IGSTN_LaunchSurface` → `IGSTN_SurfaceProvider` move (done in the plans on 2026-10-22, code not started).
 
 ## 7. Risks and parallelisation
@@ -243,5 +243,5 @@ and M4b progress; T5 waits only for the owner.
 - Risks are TS §10; the two that gate the order are TS-A (base riding on kinematic colliders) and the absence of a platform plan: T3
   carries the platform minimum so this feature does not wait for M8.
 - Threads: (1) T0 + T2 on the PC with the wall code; (2) T1 (pure, any agent) then T3; (3) T4 follows the M4 thread after H11b; (4) T6/T7
-  follow the M4b thread after P7b and H10; (5) T5 as soon as the owner answers TS.2; (6) T8 after M8/P16; (7) T9 last.
+  follow the M4b thread after P7b and H10; (5) T5 right after T1 (TS.2 approved); (6) T8 after M8/P16; (7) T9 last.
 - Only one thread at a time touches `GSTNCombatNP`, the wall modes and the harness on the PC.

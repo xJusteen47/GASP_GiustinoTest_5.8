@@ -21,7 +21,7 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | H10 lag-comp history (composed transform of based players) | H10 → T7 |
 | P7 confirmed `BrokenMask`, P7b `Combat.Event.Part.Restored` | P7b → T6 |
 | `GSTNPlatform` skeleton (M8 §4d.5 / many-enemies §4; no plan yet: T3 delivers the fighter minimum if none has started), `GSTNPlatformMinion` + P16 | T3 (own), M8 + P16 → T8 |
-| Wall movement core: no edit until T5 (owner TS.2); T2 is subclass-only | now → T0, T1, T2 |
+| Wall movement core: T5 approved (TS.2, 2026-10-22 22:14); T2 is subclass-only | now → T0, T1, T2 |
 | M5 E10 validation mechanism | E10 → T9 |
 
 ## Cross-plan dependency map

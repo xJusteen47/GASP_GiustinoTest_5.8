@@ -1080,6 +1080,7 @@ TS.1. Va bene un piccolo plugin a sé, `GSTNSurface` (solo `GSTNSurfaceCore`, se
 TS.2. Autorizzi una modifica al core del wall movement (come `IsMovementLocked`): un campo `FGSTN_WallSurfaceFilter` (query di tag, default vuoto = comportamento attuale) in `FGSTN_WallCheckSettings`, valutato in `IsHitOnValidWall` e nello sweep della transizione di ingresso, per dire "questo muro non si può scalare/scivolare" o "solo arrampicata"?
    Perché conta: senza, le parti dei nemici funzionano lo stesso (solo risposte di collisione, T2), ma un muro **statico** che blocca il giocatore senza permettere il wall slide, o una superficie solo-arrampicata, non sono esprimibili.
    Risposta consigliata: sì (T5), è un solo punto di estensione con default identico a oggi.
+   **Risposta (22/10, 22:14):** sì: alcune superfici sono wall-slidabili e altre no, va inserito. → T5 approvato.
 
 TS.3. Quali nemici possono avere parti-superficie: solo quelli che possono già fare da piattaforma (fighter: boss ed elite, più al massimo 8 minion-piattaforma vivi con attore di appoggio), oppure vuoi che anche minion dello sciame abbiano un fianco scivolabile?
    Perché conta: i minion dello sciame non hanno un attore sui client e nessun riferimento stabile come base del Mover; aprirli a questa meccanica significa più attori di appoggio e banda.
