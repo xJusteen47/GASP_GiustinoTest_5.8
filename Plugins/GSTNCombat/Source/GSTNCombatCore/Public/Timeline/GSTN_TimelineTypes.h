@@ -47,15 +47,18 @@ enum class EGSTN_MoveMixMode : uint8
 	Override
 };
 
-/** What happens to the velocity the character had when the movement starts */
+/**
+ * What happens to the velocity the character already has (V0, sampled on the frame the movement track starts) when the track
+ * starts and ends. The track's own contribution is called T(f) below.
+ */
 UENUM(BlueprintType)
 enum class EGSTN_MomentumMode : uint8
 {
-	/** The old velocity is dropped at the start */
+	/** V0 is zeroed on the first frame of the track. From then on the velocity is only T(f) (the mix mode makes no difference) */
 	Discard,
-	/** The old velocity stays and the track mixes with it according to the mix mode */
+	/** V0 is kept untouched. Additive: velocity = V0 + T(f) for the whole track. Override: T(f) replaces it while the track runs, and V0 is not restored afterwards */
 	Preserve,
-	/** The old velocity stays during the track and is dropped at its end */
+	/** V0 is kept like Preserve while the track runs (so the mix mode applies to it), then zeroed on the frame after the last frame of the track */
 	ClearAtEnd
 };
 
