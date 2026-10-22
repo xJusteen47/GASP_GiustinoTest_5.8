@@ -238,10 +238,10 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 		{
 			// The input history in notation, oldest first: server and client must show the same newest events
 			TSharedRef<FJsonObject> CombatJson = MakeShared<FJsonObject>();
-			CombatJson->SetStringField(TEXT("history"), FGSTN_InputScript::Describe(CombatState->Input.History, 8));
-			CombatJson->SetNumberField(TEXT("heldButtons"), CombatState->Input.History.GetHeldButtons());
-			CombatJson->SetNumberField(TEXT("historyFrame"), CombatState->Input.History.GetLatestFrame());
-			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Input.RequestFrame) });
+			CombatJson->SetStringField(TEXT("history"), FGSTN_InputScript::Describe(CombatState->Core.Input.History, 8));
+			CombatJson->SetNumberField(TEXT("heldButtons"), CombatState->Core.Input.History.GetHeldButtons());
+			CombatJson->SetNumberField(TEXT("historyFrame"), CombatState->Core.Input.History.GetLatestFrame());
+			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestFrame) });
 			Json->SetObjectField(TEXT("combat"), CombatJson);
 		}
 	}

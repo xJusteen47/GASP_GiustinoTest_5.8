@@ -17,6 +17,7 @@
 #include "NetworkPredictionProxyInit.h"
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
+#include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_InputHostUtils.h"
 #include "Sources/GSTN_InputSource.h"
 
@@ -234,13 +235,13 @@ FGSTN_ActivationContext UGSTN_CombatSimComponent::GetActivationContext() const
 {
 	// The simulation read: while the ability system ticks frame F this is the combat state F produced, request included
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
-	return Sync ? FGSTN_ActivationContext::FromRequest(Sync->Input, CommandTable, Sync->Input.History.GetLatestFrame()) : FGSTN_ActivationContext();
+	return Sync ? FGSTN_ActivationContext::FromRequest(Sync->Core.Input, CommandTable, Sync->Core.Input.History.GetLatestFrame()) : FGSTN_ActivationContext();
 }
 
 bool UGSTN_CombatSimComponent::IsCommandButtonHeld(int32 Button) const
 {
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
-	return Sync && FGSTN_InputHostUtils::IsButtonHeld(Sync->Input, Button);
+	return Sync && FGSTN_InputHostUtils::IsButtonHeld(Sync->Core.Input, Button);
 }
 
 void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_CombatStateTypes>& Input,
@@ -252,26 +253,35 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	const int32 Frame = TimeStep.Frame;
 
+	// Extension hooks at the fixed points of the tick. With nothing registered every call is an empty loop
+	FGSTN_CombatTickContext HookContext(Frame, InSync, OutSync);
+	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
+	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
+	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
+
 	FGSTN_InputTickArgs Args;
 	Args.Frame = Frame;
 	Args.Cmd = Input.Cmd;
-	Args.In = &InSync.Input;
-	Args.Out = &OutSync.Input;
+	Args.In = &InSync.Core.Input;
+	Args.Out = &OutSync.Core.Input;
 	Args.Table = &CommandTable;
 	Args.Buttons = &ButtonMap;
 	Args.Settings = &UGSTN_InputSettings::Get();
 	Args.GlobalResetRules = ResetRules;
-	Args.PausedStart = InSync.HitstopStartFrame;
-	Args.PausedEnd = InSync.HitstopEndFrame;
+	Args.PausedStart = InSync.Core.HitstopStartFrame;
+	Args.PausedEnd = InSync.Core.HitstopEndFrame;
 	Args.Outbox = &EventOutbox;
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
+	Extensions.Run(EGSTN_CombatHookPoint::AfterExecute, HookContext);
 
 	// Debug hitstop, until hits replace it: a press of the test button opens a window (not while one is already open)
-	if (HitstopTestButton >= 0 && !InSync.IsInHitstop(Frame) && (Result.Pressed & (1u << HitstopTestButton)))
+	if (HitstopTestButton >= 0 && !InSync.Core.IsInHitstop(Frame) && (Result.Pressed & (1u << HitstopTestButton)))
 	{
-		OutSync.HitstopStartFrame = Frame;
-		OutSync.HitstopEndFrame = Frame + HitstopTestFrames;
+		OutSync.Core.HitstopStartFrame = Frame;
+		OutSync.Core.HitstopEndFrame = Frame + HitstopTestFrames;
 	}
+
+	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
 }
 
 FString UGSTN_CombatSimComponent::GetDebugString(int32 MaxEvents) const
@@ -281,8 +291,8 @@ FString UGSTN_CombatSimComponent::GetDebugString(int32 MaxEvents) const
 	{
 		return TEXT("(no combat state)");
 	}
-	return FString::Printf(TEXT("%s\nheld 0x%x  frame %d  request %d@%d button %d"), *FGSTN_InputScript::Describe(Sync->Input.History, MaxEvents),
-		Sync->Input.History.GetHeldButtons(), Sync->Input.History.GetLatestFrame(), Sync->Input.RequestedBinding, Sync->Input.RequestFrame, Sync->Input.RequestButton);
+	return FString::Printf(TEXT("%s\nheld 0x%x  frame %d  request %d@%d button %d"), *FGSTN_InputScript::Describe(Sync->Core.Input.History, MaxEvents),
+		Sync->Core.Input.History.GetHeldButtons(), Sync->Core.Input.History.GetLatestFrame(), Sync->Core.Input.RequestedBinding, Sync->Core.Input.RequestFrame, Sync->Core.Input.RequestButton);
 }
 
 void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -320,16 +330,16 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	const int32 Frame = TimeStep.ServerFrame;
 
 	// A request made on this frame starts its ability here, inside the ability system's tick
-	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, CommandTable, Sync->Input, Frame);
+	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, CommandTable, Sync->Core.Input, Frame);
 
 	// Paused on every hitstop frame with a montage (also one started during the hitstop), resumed on the first frame after.
 	// The pause flag only exists with a montage: it is not replicated otherwise
 	float MontageTime = 0.f;
-	if (Sync->IsInHitstop(Frame) && AbilitySystem->GetPlayingSyncedMontage(MontageTime))
+	if (Sync->Core.IsInHitstop(Frame) && AbilitySystem->GetPlayingSyncedMontage(MontageTime))
 	{
 		AbilitySystem->PauseCurrentSyncedMontage();
 	}
-	else if (Frame == Sync->HitstopEndFrame)
+	else if (Frame == Sync->Core.HitstopEndFrame)
 	{
 		AbilitySystem->ResumeCurrentSyncedMontage();
 	}

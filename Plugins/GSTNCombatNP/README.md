@@ -10,7 +10,8 @@ Status: **experimental (0.1)**.
 ## What it contains
 
 The combat NP model: `UGSTN_CombatSimComponent` (`Simulation/GSTN_CombatSimComponent.h`, model `GSTN_Combat`, sort priority
-`PreKinematicMovers - 3`) and its sync/aux/input types (`Simulation/GSTN_CombatSimTypes.h`). It embeds the input command and
+`PreKinematicMovers - 3`) and its sync/aux/input types (`Simulation/GSTN_CombatSimTypes.h`): the sync state is `FGSTN_CombatSyncCore` (the embedded input state
+and the hitstop window) plus a list of sync fragments (below). It embeds the input command and
 the input sim state of [GSTNInputNP](../GSTNInputNP/README.md) and is the host of its simulator (`IGSTN_InputSimHost`), so the
 component only adds the debug hitstop. It also implements `IGSTN_CommandSourceInterface` (the activation context and
 `IsCommandButtonHeld` for abilities), honours the command locks (`Input.Lock.Command[.<root>]`) and publishes
@@ -18,6 +19,24 @@ component only adds the debug hitstop. It also implements `IGSTN_CommandSourceIn
 included). Everything that touches the ability system goes through here. `UGSTN_CombatSimComponent` is `Blueprintable` so a
 project can subclass it for its own defaults; its `InputConfig` and `SlotBindings` are soft references resolved once in
 `BeginPlay`, and its simulation hooks stay in C++.
+
+## Sync fragments and tick extensions
+
+**Sync state.** `FGSTN_CombatSyncState` is `Core` (`FGSTN_CombatSyncCore`: the input state and the hitstop window, serialized exactly as before) followed by
+`Fragments`, a list of `FGSTN_SyncFragment` from `GSTNCombatCore` that features add per entity. The core's bytes are the same with
+or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the
+[GSTNCombat README](../GSTNCombat/README.md)). A fragment mismatch against the authority asks for a reconcile like the hitstop window
+does; the input state's mismatches are still reported to the trace only. Interpolated proxies take the newer core, and each fragment
+decides how it blends (default: the newer one). No fragment type exists yet.
+
+**Tick extensions.** `IGSTN_CombatTickExtension` (`Simulation/GSTN_CombatTickExtension.h`) is the C++ per-frame hook an optional plugin registers in
+`FGSTN_CombatTickExtensionRegistry::Get()`. The combat tick calls the registry at four fixed points (`EGSTN_CombatHookPoint`:
+`AfterClocks`, `BeforeCandidates`, `AfterExecute`, `BeforeTagProjection`, the steps of combat-m3 7.2); with nothing registered each call is an empty loop.
+Extensions run ordered by `GetPriority()` (lower first), ties by `GetTypeId()` (a `GSTNFeatureIds` value), so the order is the same on every
+machine whatever the plugin load order; two extensions with one type id are refused. An extension is simulation code: deterministic, its state only in
+its own sync fragment, no component, world or ability system reads, no net-mode branches. Until the timeline clock and tag projection exist
+in the model the four points sit around the input simulator call (which does candidates, resolution and the request in one function); their meaning
+is fixed and the call sites move with the model.
 
 ## Dependencies
 
@@ -69,10 +88,19 @@ state in the sync/aux state (rules in [gas-npp.md](../../docs/architecture/gas-n
 
 ## Tests
 
-This plugin has no Automation tests of its own: the pure logic is covered by `GSTNCombat.Core.*` (in `GSTNCombatCore`) and
-`GSTNInput.NP.*` (in `GSTNInputNP`), run together with `Automation RunTests GSTNInput+GSTNCombat`. The network behaviour of the
+Automation tests `GSTNCombat.NP.*` in `Source/GSTNCombatNP/Private/Tests/` run without a world, headless, with the rest:
+`Automation RunTests GSTNInput+GSTNCombat`.
+
+- `Fragments.{RoundTrip0, RoundTrip1, RoundTrip2, UnknownTypeId}`: the wire format of the combat sync state with zero, one and two fragments
+  (the log prints the bits of each; zero fragments are exactly one bit over the core), the array order not affecting the bytes,
+  `ShouldReconcile`, `Interpolate` and `ToString` of the state, a fragment of an unknown type id being skipped without moving the reader, and a
+  malformed count being an archive error. The fragments used are test-only types with ids from the test range.
+- `TickExtension.{OrderByPriority, EmptyHooksNoEffect}`: run order by priority then type id independent of registration order, duplicate
+  ids refused, and the hook points changing nothing when no extension or only an observer is registered.
+
+The pure logic is covered by `GSTNCombat.Core.*` (in `GSTNCombatCore`) and `GSTNInput.NP.*` (in `GSTNInputNP`). The network behaviour of the
 combat model is checked with the PIE harness `Tools/GASNPPTest/gasnpp_test.py` (dedicated server + 2 clients), scenario
-`combat_spike`. See [testing.md](../../docs/architecture/testing.md).
+`combat_spike`; any change to the combat sync state needs it (see [testing.md](../../docs/architecture/testing.md)).
 
 ## Conventions
 
