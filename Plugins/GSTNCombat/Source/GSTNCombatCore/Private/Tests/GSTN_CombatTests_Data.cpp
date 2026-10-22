@@ -1,4 +1,5 @@
 #include "Misc/AutomationTest.h"
+#include "GSTN_CombatCoreTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Kits/GSTN_CombatAssetTypes.h"
 #include "Kits/GSTN_CommandSet.h"
@@ -351,4 +352,19 @@ bool FGSTN_CoreDataIdentityUniqueTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CoreDataCoreTagsTest, "GSTNCombat.Core.Data.CoreTagsDeclared", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_CoreDataCoreTagsTest::RunTest(const FString& Parameters)
+{
+	// The identity roots and the Combat.State.* leaves belong to the core: they exist without the ability layer loaded
+	TArray<FGameplayTag> Tags;
+	GSTNCombatTags::GetDeclaredCoreTags(Tags);
+	TestEqual(TEXT("six states and five identity roots"), Tags.Num(), 11);
+	for (const FGameplayTag& Tag : Tags)
+	{
+		TestTrue(*FString::Printf(TEXT("%s is a valid tag"), *Tag.ToString()), Tag.IsValid());
+	}
+	TestEqual(TEXT("the weapon root keeps its name"), GSTNCombatTags::Root_Weapon.GetTag().ToString(), FString(TEXT("Weapon")));
+	TestEqual(TEXT("a state keeps its name"), GSTNCombatTags::State_Busy.GetTag().ToString(), FString(TEXT("Combat.State.Busy")));
+	return true;
+}
 #endif // WITH_DEV_AUTOMATION_TESTS

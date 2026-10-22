@@ -38,7 +38,10 @@ and commands of a game are tags in the game's own tag ini.
 **Requirements.** `GSTNCombatCore` needs `GSTNInputCore` and Developer Settings; the descriptor lists only the plugin
 `GSTNInput`, so enabling `GSTNCombat` pulls in no fork plugin (GameplayAbilities, AbilitySystemSimulation, NetworkPrediction)
 and no Mover. The native lock tags of the combat command roots (`Input.Lock.Command.Attack`, `.Strong`, `.Special`, `.Combo`,
-`.Super`) are declared here (`GSTN_CombatLockTags.h`, namespace `GSTNCombatLockTags`), next to the roots' command tags. How
+`.Super`) are declared here (`GSTN_CombatLockTags.h`, namespace `GSTNCombatLockTags`), next to the roots' command tags. So are
+the `Combat.State.*` leaves the state projection defines and the identity roots `Weapon`, `Kit`, `Super`, `Loadout` and `Skin`
+(`GSTN_CombatCoreTags.h`, namespace `GSTNCombatTags`, shared with the GAS layer's own tags): the core does not need the ability
+layer to name them. How
 the command locks, the activation context and the events work in the simulation is described in the
 [GSTNCombatNP README](../GSTNCombatNP/README.md) and the [GSTNInputNP README](../GSTNInputNP/README.md).
 

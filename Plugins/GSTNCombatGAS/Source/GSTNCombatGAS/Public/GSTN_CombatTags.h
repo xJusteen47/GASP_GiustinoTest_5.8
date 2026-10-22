@@ -2,40 +2,19 @@
 
 #pragma once
 
-#include "NativeGameplayTags.h"
+#include "GSTN_CombatCoreTags.h"
 
 /**
  * Native tags of the combat ability layer. The input vocabulary (Input.Button/Context/Lock.Command/BufferEvent.*, the
  * Command.* families) belongs to the input plugin and the combat core, and Combat.Mover.* to the NP module that sees
  * Mover: none of those are declared here.
  *
- * Combat.State.* are projected by the combat tick from the simulation, never granted by an ability or an effect, so they
- * stay deterministic across a rollback. Designer tags (weapon, kit, super, loadout and skin identity, stat and meter
- * names) are ini content: this module declares only their roots so tag pickers can filter on them, and code never names
- * a leaf.
+ * The Combat.State.* leaves and the weapon, kit, super, loadout and skin identity roots belong to the combat core and are
+ * declared in GSTN_CombatCoreTags.h (same namespace, included here). Designer tags (stat and meter names) are ini content:
+ * this module declares only their roots so tag pickers can filter on them, and code never names a leaf.
  */
 namespace GSTNCombatTags
 {
-	// States, projected by the combat tick
-
-	/** The combatant is committed to an action and cannot start a new one freely. Projected, never granted. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Busy);
-
-	/** A combat timeline is playing. Projected, never granted. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_InTimeline);
-
-	/** The super input sequence is being entered. Projected, never granted. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_SuperInput);
-
-	/** The active timeline is inside a cancel window. Projected, never granted. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_CancelWindow);
-
-	/** The active timeline is inside its startup override window (a new command may replace it). Projected, never granted. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_OverrideWindow);
-
-	/** The combatant is falling relative to its local gravity. Projected, never granted. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Falling);
-
 	// Ability identity
 
 	/** Identifies an ability that plays a combat timeline. Set in the ability's AbilityTags. */
@@ -77,21 +56,6 @@ namespace GSTNCombatTags
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MeterCost);
 
 	// Roots of designer tags: leaves are ini content, code never names one
-
-	/** Root of weapon identity tags. Leaves are designer content. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_Weapon);
-
-	/** Root of kit identity tags. Leaves are designer content. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_Kit);
-
-	/** Root of super identity tags. Leaves are designer content. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_Super);
-
-	/** Root of loadout tags. Leaves are designer content. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_Loadout);
-
-	/** Root of skin tags. Leaves are designer content. */
-	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_Skin);
 
 	/** Root of stat names. Leaves are designer content. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_Stat);
