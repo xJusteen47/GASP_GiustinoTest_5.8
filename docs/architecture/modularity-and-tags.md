@@ -354,6 +354,12 @@ Each `GSTN*` plugin must work when copied alone (with the plugins its `.uplugin`
    registries) of another plugin, never on its `*GAS`, `*NP`, presentation or editor modules, unless it is a bridge.
    Cooperation goes through interfaces declared in a `*Core` module, registries filled at startup, Gameplay Messages and
    tags carried in data. Each dependency edge between plugins is listed with its reason in the layers file (§6.1).
+   **Exception, `*NP` → `*NP` of the same layer:** a `*NP` module may depend on another plugin's `*NP` module when it embeds
+   that plugin's simulation in its own NP model, through Public headers and interfaces only. The reference case is
+   `GSTNCombatNP` → `GSTNInputNP`: combat embeds the input simulation (one NP model per character) through
+   `IGSTN_InputSimHost`; moving those types into `GSTNInputCore` would break the rule that `*Core` has no NP, GAS or Mover
+   dependency. Each such edge is listed in the layers file as `embeds`, and the depended-on plugin must still build and run
+   alone (its own NP model and tests).
 3. **Optional integrations are bridge plugins**, never `#if WITH_<OTHER_PLUGIN>` code paths: `GSTNPartsMinion` is the
    pattern. Disabling either side removes the bridge; neither side knows the other.
 4. **Tags are inputs, not assumptions.** A plugin declares only its own tag roots (§4.2). Any tag it must react to that
@@ -628,7 +634,8 @@ Fail on:
    needs a header scan: `#include "..."` resolved to the other module).
 9. A cycle in the module graph.
 10. Plugin source or config references `/Game/`, a `GASP_Giustino2` symbol, or a project `Config/` key (reuse rule 1, §3.7).
-11. A plugin depends on a non-`*Core` module of another plugin without being listed as a bridge (reuse rule 2, §3.7).
+11. A plugin depends on a non-`*Core` module of another plugin without being listed as a bridge or as an `embeds` `*NP` → `*NP`
+    edge of the same layer (reuse rule 2, §3.7).
 
 Exit code 1 on failure, one line per violation with the edge and the rule number. Warn-only until S-H.
 
