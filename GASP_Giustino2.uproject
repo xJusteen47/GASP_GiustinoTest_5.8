@@ -144,6 +144,10 @@
 		{
 			"Name": "GSTNCombat",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

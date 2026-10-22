@@ -1,7 +1,7 @@
 # Combat system (`GSTNCombat` plugin)
 
 Design document for a fighting-game / platform-fighter combat layer on top of GAS, simulated by Network Prediction
-(the GAS-NPP fork, see [gas-npp.md](gas-npp.md)). Source: `Plugins/GSTNCombat/`.
+(the GAS-NPP fork, see [gas-npp.md](gas-npp.md)). Source: `Plugins/GSTNCombat/` (`GSTNCombatCore`, usable without the fork) and `Plugins/GSTNCombatNP/` (`GSTNCombatNP`, the fork adapter).
 
 Status (2026-10-19): **M0 (risk spike) done and verified**, M1 implemented, M2 in progress; the rest is design. This
 file is the architecture; each milestone has its own implementation specification (section 18). Sections marked
@@ -79,13 +79,13 @@ by `ShouldReconcile` when no montage plays.
 
 ## 3. Modules
 
-`Plugins/GSTNCombat/` (type prefix `GSTN_`, like the project).
+`Plugins/GSTNCombat/` (`GSTNCombatCore`; its descriptor depends only on `GSTNInput`) and `Plugins/GSTNCombatNP/` (`GSTNCombatNP`; depends on `GSTNCombat`, `GSTNInputNP`, `GSTNInput`, the fork plugins, EnhancedInput and Mover, all non-optional). Module names did not change with the split, so `/Script/GSTNCombatNP.*` paths stay valid and no redirect exists. Type prefix `GSTN_`, like the project.
 
 | Module | Depends on | Contents |
 |---|---|---|
 | `GSTNCombatCore` (Runtime) | Core, CoreUObject, Engine, GameplayTags, **GSTNInputCore** | Combat content that is **pure and deterministic**, built on the input core: the six standard button tags, the default command set (`UGSTN_StandardSlots`, command tags), later hit shapes and knockback models. No GAS, no NPP. Covered by Automation tests. The input layer itself is `GSTNInputCore` ([input.md](input.md)). |
 | `GSTNCombatGAS` (Runtime) | Core, GameplayAbilities, GameplayTasks | Native tags, `UGSTN_CombatAttributeSet`, damage GE and execution, hit effect context, weapons, loadouts, loadout component. Compiles against stock GAS and the fork (same module name). |
-| `GSTNCombatNP` (Runtime, **exists**) | Core, GAS, NetworkPrediction, AbilitySystemSimulation, Mover, **GSTNInputNP** | **Fork adapter**: combat NP model (embeds the input simulation of `GSTNInputNP` and is its host), simulation component, `UGSTN_GA_Base` and `UGSTN_GA_BaseCombat`, freeze/knockback layered moves, hit resolution. Input command, sources, tracker and binding set come from `GSTNInputNP`. |
+| `GSTNCombatNP` (Runtime, **exists**, plugin `GSTNCombatNP`) | Core, GAS, NetworkPrediction, AbilitySystemSimulation, Mover, **GSTNInputNP** | **Fork adapter**: combat NP model (embeds the input simulation of `GSTNInputNP` and is its host), simulation component, `UGSTN_GA_Base` and `UGSTN_GA_BaseCombat`, freeze/knockback layered moves, hit resolution. Input command, sources, tracker and binding set come from `GSTNInputNP`. |
 | `GSTNCombatEditor` (Editor) | all | Timeline editor (timeline assets and inline timelines; viewport), socket baking, slot conflict validator UI, debug draw. |
 
 A future `GSTNCombatStockGAS` would replace only `GSTNCombatNP` (same data, simulation through prediction keys).

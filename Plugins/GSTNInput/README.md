@@ -20,13 +20,8 @@ is built on top of this one. This README is the map; the documents hold the deci
 **Requirements.** This plugin (`GSTNInputCore`) needs only Gameplay Tags, Developer Settings and (privately) Enhanced Input; its
 descriptor lists only Enhanced Input, so it works in a project without the GAS-NPP fork (NetworkPrediction, GameplayAbilities fork,
 Mover). To simulate it with Network Prediction, enable the plugin [GSTNInputNP](../GSTNInputNP/README.md), which needs the fork.
-The sections below that describe the simulation side (embedding, standalone component, locks in the simulator, Mover tracker)
-are about `GSTNInputNP`.
-
-**Network Prediction sort priorities.** Network Prediction orders models by a sort priority and warns when two registered
-models share one. The ability system is `PreKinematicMovers - 2`, the combat model (`GSTN_Combat`) `- 3` and the standalone
-input model (`GSTN_Input`, `UGSTN_InputSimComponent`) `- 4`. The input-only and combat models are never on the same pawn,
-but the check is global, hence three different numbers. A new model of this family takes the next free one below.
+How to wire the simulation side (embedding it in a model, the standalone component, the activation context, the Mover
+tracker, Network Prediction sort priorities) is in the [GSTNInputNP README](../GSTNInputNP/README.md).
 
 The plugin has no game vocabulary: no "attack", "crouch" or combat tags. Buttons, commands and their priority tiers are
 data the game provides; the combat plugin provides a fighting-game set.
@@ -146,49 +141,15 @@ Bindings say which command a context runs (`GSTN_CommandBindings.h`, `FGSTN_TagR
 owner's tags). A command without a binding is never a candidate. `UGSTN_CommandBindingUtils` resolves bindings and
 detects conflicts between them.
 
-### Embedding the input simulation in a model
+### Using it with Network Prediction
 
-`GSTNInputNP` does not own a Network Prediction model; a host model embeds its pieces (the combat plugin's
-`UGSTN_CombatSimComponent` is the first host). Use `FGSTN_InputCmd` as the model's input type and put an
-`FGSTN_InputSimState` member in its sync state, forwarding the three calls:
+See the [GSTNInputNP README](../GSTNInputNP/README.md) (embedding the simulation, standalone component, activation context, Mover tracker).
 
-```cpp
-struct FGame_SyncState
-{
-	FGSTN_InputSimState Input;
-
-	void NetSerialize(const FNetSerializeParams& P) { Input.NetSerialize(P.Ar); }
-	bool ShouldReconcile(const FGame_SyncState& Auth) const { Input.ShouldReconcile(Auth.Input); return false; }
-	void ToString(FAnsiStringBuilderBase& Out) const { Input.ToString(Out); Out.Append("\n"); }
-};
-```
-
-Add your own fields after the embedded member and serialize them there. Everything that touches this state must be
-deterministic and rollback-safe (gas-npp.md). Module dependencies: `GSTNInputNP` in the host's `Build.cs`.
-
-Then call `FGSTN_InputSimulator::Tick` from the model's simulation tick with a copy of the state as `Out`, and implement
-`IGSTN_InputSimHost` (owner tags, facing, `CanExecuteBinding`; the context provider covers the Mover parts). Build the
-`FGSTN_CommandTable` once from a `UGSTN_CommandBindingSet` at BeginPlay, and execute `RequestedBinding` from the ability
-system's pre-tick when `RequestFrame` equals the frame. `UGSTN_CombatSimComponent` is a working example.
-
-Give the host an `FGSTN_SimEventOutbox`, pass it in `FGSTN_InputTickArgs::Outbox`, and call
-`FGSTN_InputHostUtils::PublishOutbox(Outbox, Owner)` from the model's `FinalizeFrame`; use `FGSTN_InputHostUtils::CanExecuteBinding`
-and `ExecuteRequest` for the ability system parts. Implement `IGSTN_CommandSourceInterface` so abilities can ask why they started.
-A host that needs nothing of its own does not have to write any of this: add `UGSTN_InputSimComponent` (below).
+### Tag roots
 
 Tag roots: `Input.Button` (buttons), `Command` (commands), `Input.Context.*` (written by the context provider),
 `Input.BufferEvent.*` (reset-rule events), `Input.Lock.Command` (command locks) and `Input.Event.CommandExecuted`
 (`GSTN_InputTags.h`). Per-root lock tags (`Input.Lock.Command.<root>`) are declared by whoever declares the command root.
-
-### The standalone component
-
-`UGSTN_InputSimComponent` is the input simulation as a Network Prediction model of its own, for a project without the combat
-plugin: add it next to a `UNpAbilitySystemComponent` on a pawn, set `InputConfig` (buttons, move action) and `SlotBindings`
-(a `UGSTN_CommandBindingSet`: slots, bindings to abilities, reset rules), keep the default `UGSTN_PlayerInputSource` (or use
-`UGSTN_AIInputSource` for server-driven pawns) and the default `UGSTN_MoverInputContextProvider`. It registers its model
-before the ability system, executes requests from the ability system's pre-tick and publishes `Input.Event.CommandExecuted`.
-A pawn uses **either** this component or a host that embeds the simulation (the combat component): with both, this one logs
-an error at BeginPlay and does nothing. Not done yet: projecting `Input.Context.*` onto the ability system.
 
 ### Command locks
 
@@ -198,13 +159,6 @@ while a dash command under another root still starts). Abilities and effects gra
 in the simulation writes them. `UGSTN_CommandLocks` has the mapping and the checks and is testable without a world. A locked
 command reserves its press like an unavailable one, and a command with a slot but no binding is not a candidate, so it
 never reserves a press. To lock a designer root, declare `Input.Lock.Command.<root>` next to the root's tag.
-
-### Activation context and the buttons an ability holds
-
-An ability that must end when its trigger button is released finds the component through
-`IGSTN_CommandSourceInterface::Find(Avatar)` and calls, from `ActivateAbility` or its tick, `GetActivationContext()`
-(the command, the trigger button, the frame of the press and whether a command or a forced request started it; valid only on
-the activation frame, so keep what you need in your own sync variables) and `IsCommandButtonHeld(Button)`.
 
 ### Authoritative events
 
@@ -216,13 +170,6 @@ Network Prediction tick **on the authority only**, so each activation is counted
 it. The authority is `HasAuthority()` and nothing else: a listen-server host's own pawn is the authority and also has a local
 player, and its events are published like any other pawn's. Nothing is replicated; clients that need feedback use
 replicated results or predicted presentation.
-
-### The Mover sim-state tracker
-
-`UGSTN_MoverSimStateTracker::FindOrAdd(MoverComponent)` gives simulation code the Mover state of the frame being
-(re)simulated; never read the Mover component's own queries from the fixed tick (gas-npp.md). Include
-`"Mover/GSTN_MoverSimStateTracker.h"` and depend on `GSTNInputNP`. The tracker is a `BlueprintType` and its
-`GetMovementModeName` / `HasGameplayTag` are `BlueprintPure`, so a Blueprint ability can read the same rolled back state.
 
 ### Soft references and what is resolved when
 

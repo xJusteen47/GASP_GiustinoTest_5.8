@@ -63,6 +63,7 @@ Plugins/GSTNInput/                               new plugin (input.md); deps Gam
 Plugins/GSTNCombat/
   GSTNCombat.uplugin                             + plugin dependency GSTNInput
   Source/GSTNCombatCore/                         keeps combat button tags, command tags, UGSTN_StandardSlots (+ tests)
+  (module GSTNCombatNP later moved to its own plugin Plugins/GSTNCombatNP/Source/GSTNCombatNP/, name unchanged)
   Source/GSTNCombatNP/
     GSTNCombatNP.Build.cs                        + GSTNInputNP
     Public/Simulation/GSTN_CombatSimTypes.h      sync state = FGSTN_InputSimState Input + M0 hitstop fields; input = FGSTN_InputCmd

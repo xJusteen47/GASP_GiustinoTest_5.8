@@ -31,8 +31,7 @@ Status (2026-10-22): step S1 is **done**: `GSTNInputCore` exists with the generi
 
 **Two plugins.** `GSTNInput` holds `GSTNInputCore` only; its descriptor lists just EnhancedInput, so it works in a project without the GAS-NPP fork. `GSTNInputNP` is a separate plugin (`Plugins/GSTNInputNP/`, module name unchanged, so `/Script/GSTNInputNP.*` paths stay valid) that depends on `GSTNInput`, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, EnhancedInput and Mover (all non-optional there). Prefix stays `GSTN_`; export macros `GSTNINPUTCORE_API`, `GSTNINPUTNP_API`; log category `LogGSTNInput`.
 
-`GSTNCombat` declares plugin dependencies on `GSTNInput` and `GSTNInputNP`; `GSTNCombatCore` depends on `GSTNInputCore`, `GSTNCombatNP`
-on `GSTNInputNP`.
+`GSTNCombat` declares a plugin dependency on `GSTNInput` only; `GSTNCombatNP` is its own plugin (`Plugins/GSTNCombatNP/`) that depends on `GSTNCombat`, `GSTNInput` and `GSTNInputNP`. `GSTNCombatCore` depends on `GSTNInputCore`, `GSTNCombatNP` on `GSTNInputNP`.
 
 **Dependency rule.** An `*NP` module may depend on another plugin's `*NP` module of the same layer, and on nothing above it.
 `GSTNCombatNP` depends on `GSTNInputNP` by design: the combat NP model embeds the input simulation, one NP model per
