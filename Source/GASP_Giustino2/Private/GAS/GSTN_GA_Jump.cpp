@@ -41,7 +41,8 @@ UGSTN_GA_Jump::UGSTN_GA_Jump(const FObjectInitializer& ObjectInitializer)
 	ActivationBlockedTags.AddTag(GSTNAbilityTags::State_Movement_WallSliding);
 
 	JumpEffect = UGSTN_GE_Jump::StaticClass();
-	AddActivationInput(TEXT("/Game/Input/IA_Jump.IA_Jump"));
+	// The action (IA_Jump) comes from ActivationInput, set in DefaultGame.ini
+	bRequiresActivationInput = true;
 }
 
 bool UGSTN_GA_Jump::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,

@@ -7,7 +7,6 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
-#include "UObject/ConstructorHelpers.h"
 
 UGSTN_AbilityInputComponent::UGSTN_AbilityInputComponent()
 {
@@ -15,16 +14,20 @@ UGSTN_AbilityInputComponent::UGSTN_AbilityInputComponent()
 	PrimaryComponentTick.bStartWithTickEnabled = true;
 	PrimaryComponentTick.TickInterval = 0.1f;
 
-	static ConstructorHelpers::FObjectFinder<UInputMappingContext> MappingFinder(TEXT("/Game/GAS/Input/IMC_GAS_Abilities.IMC_GAS_Abilities"));
-	if (MappingFinder.Succeeded())
-	{
-		AbilityMappingContexts.Add(MappingFinder.Object);
-	}
 }
 
 void UGSTN_AbilityInputComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (AbilityMappingContexts.IsEmpty() && !DefaultAbilityMappingContext.IsNull())
+	{
+		if (UInputMappingContext* Loaded = DefaultAbilityMappingContext.LoadSynchronous())
+		{
+			AbilityMappingContexts.Add(Loaded);
+		}
+	}
+	UE_CLOG(AbilityMappingContexts.IsEmpty(), LogTemp, Error, TEXT("%s: no ability mapping context (set AbilityMappingContexts or DefaultAbilityMappingContext), ability input will not work"), *GetName());
 
 	AbilitySystem = GetOwner()->FindComponentByClass<UNpAbilitySystemComponent>();
 	if (!AbilitySystem)

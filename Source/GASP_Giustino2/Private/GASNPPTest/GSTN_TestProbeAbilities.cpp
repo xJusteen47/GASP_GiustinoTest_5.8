@@ -68,7 +68,8 @@ UGSTN_GA_ProbeEventRaiser::UGSTN_GA_ProbeEventRaiser(const FObjectInitializer& O
 	: Super(ObjectInitializer)
 {
 	ProbeName = TEXT("EventRaiser");
-	AddActivationInput(TEXT("/Game/GASNPPTest/Input/IA_GASNPP_Buff.IA_GASNPP_Buff"), ETriggerEvent::Completed);
+	// IA_GASNPP_Buff, Completed: ActivationInput in DefaultGame.ini
+	bRequiresActivationInput = true;
 }
 
 void UGSTN_GA_ProbeEventRaiser::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
@@ -100,7 +101,8 @@ UGSTN_GA_ProbeTagRaiser::UGSTN_GA_ProbeTagRaiser(const FObjectInitializer& Objec
 	: Super(ObjectInitializer)
 {
 	ProbeName = TEXT("TagRaiser");
-	AddActivationInput(TEXT("/Game/GASNPPTest/Input/IA_GASNPP_Buff.IA_GASNPP_Buff"), ETriggerEvent::Completed);
+	// IA_GASNPP_Buff, Completed: ActivationInput in DefaultGame.ini
+	bRequiresActivationInput = true;
 }
 
 void UGSTN_GA_ProbeTagRaiser::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,

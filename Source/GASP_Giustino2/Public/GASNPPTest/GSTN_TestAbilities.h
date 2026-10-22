@@ -4,10 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/NpGameplayAbility.h"
+#include "GAS/GSTN_AbilityActivationInput.h"
 #include "GSTN_TestAbilities.generated.h"
 
 /** Base for the placeholder test abilities: instant activation from an input action, apply one effect, end. */
-UCLASS(Abstract)
+UCLASS(Abstract, Config = Game)
 class GASP_GIUSTINO2_API UGSTN_TestAbilityBase : public UNpGameplayAbility
 {
 	GENERATED_BODY()
@@ -15,11 +16,15 @@ class GASP_GIUSTINO2_API UGSTN_TestAbilityBase : public UNpGameplayAbility
 public:
 	UGSTN_TestAbilityBase(const FObjectInitializer& ObjectInitializer);
 
+	virtual void OnAvatarSet(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
+
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 
 protected:
-	void SetActivationInput(const TCHAR* InputActionPath);
+	/** The input action, from the class's ini section (see UGSTN_GameplayAbility::ActivationInput) */
+	UPROPERTY(Config, EditDefaultsOnly, Category = "Test")
+	FGSTN_SoftActivationInput ActivationInput;
 
 	/** Effect applied to the owner when the ability activates. */
 	UPROPERTY(EditDefaultsOnly, Category = "Test")

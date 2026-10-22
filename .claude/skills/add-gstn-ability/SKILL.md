@@ -17,7 +17,7 @@ First read `docs/architecture/gas-npp.md` (rules for simulation code). Then foll
 
 - Derive from `UGSTN_GameplayAbility` (never `UGameplayAbility`: the fork only accepts `UNpGameplayAbility`).
 - Header in `Public/GAS/GSTN_GA_<Name>.h`, source in `Private/GAS/GSTN_GA_<Name>.cpp`; first line comment `// Gameplay Ability System setup (GAS-NPP fork).`; class doc comment explains behaviour, input, tags owned/blocked, and the rollback-relevant constraints, as in the existing abilities.
-- Input: call `AddActivationInput(TEXT("/Game/Input/IA_<Name>.IA_<Name>"), ETriggerEvent::Started)` **in the constructor**.
+- Input: set `bRequiresActivationInput = true;` in the constructor and name the action in `Config/DefaultGame.ini`: `[/Script/GASP_Giustino2.GSTN_GA_<Name>]` / `ActivationInput=(Action="/Game/Input/IA_<Name>.IA_<Name>",Trigger=Started)`. No content path in C++ (`FGSTN_SoftActivationInput` resolves it when the ability is granted and logs an error if it is missing).
 - Per-frame logic goes in `OnSimulationTick(const FAbilitySystemTimeStep&)`. State carried across frames is an `FSync*` variable (`UPROPERTY() FSyncInteger ...`), not a plain member.
 - Read movement state with `GetMoverSimState(ActorInfo)`, not Mover component queries.
 - No `HasAuthority()` / resimulation branches. Reset instance variables in `EndAbility` if they are not sync vars.

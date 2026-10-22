@@ -23,7 +23,7 @@ Fixed tick: **ability system first, then Mover**.
 
 | Class | Role |
 |---|---|
-| `UGSTN_GameplayAbility` (abstract) | Base of all project abilities. Helpers: `GetMoverComponentFromActorInfo`, `GetCharacterMoverFromActorInfo`, `GetMoverSimState`, `AddActivationInput` (constructor only). |
+| `UGSTN_GameplayAbility` (abstract) | Base of all project abilities. Helpers: `GetMoverComponentFromActorInfo`, `GetCharacterMoverFromActorInfo`, `GetMoverSimState`, and the config property `ActivationInput` (`FGSTN_SoftActivationInput`: the input action and trigger event that activate the ability, resolved into the fork's `ActivationInputs` when the ability is granted; set `bRequiresActivationInput` in the constructor so an unset action is logged). The action is named in `Config/DefaultGame.ini` under `[/Script/GASP_Giustino2.<Class>]` or in a Blueprint child's defaults, never as a content path in C++. |
 | `UGSTN_GA_Jump` | Ground jump. Applies `UGSTN_GE_Jump` whose `UGSTN_JumpImpulseMoveCreator` queues Mover's jump impulse. Turns off `UCharacterMoverComponent` built-in jump on the avatar (`bTakeOverMoverJump`). |
 | `UGSTN_GA_WallSlide` | "Being on a wall". No input. Owns `State.Movement.WallSliding`; ends when Mover leaves `WallModeNames`. Movement itself stays in the wall modes. |
 | `UGSTN_AbilityWallEntryTransition` | Mover transition (Falling -> wall mode) that grabs a wall only if an ability with `AbilityTags` is granted and `CanActivate`, then activates it. |

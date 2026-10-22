@@ -40,7 +40,7 @@ struct FGSTN_ProbeCounters
  *   activation counters of the trigger probes (GSTN_TestProbeAbilities.h) and a stats probe that rewrites Mover's MaxSpeed
  *   and gravity every tick from attributes.
  */
-UCLASS(ClassGroup = (Test), meta = (BlueprintSpawnableComponent))
+UCLASS(ClassGroup = (Test), Config = Game, meta = (BlueprintSpawnableComponent))
 class GASP_GIUSTINO2_API UGSTN_GASNPPTestComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -75,6 +75,10 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "GASNPP Test")
 	TObjectPtr<UInputMappingContext> TestMappingContext;
+
+	/** Loaded into TestMappingContext at BeginPlay when that is empty. Config: [/Script/GASP_Giustino2.GSTN_GASNPPTestComponent] in DefaultGame.ini */
+	UPROPERTY(Config, EditDefaultsOnly, Category = "GASNPP Test")
+	TSoftObjectPtr<UInputMappingContext> DefaultTestMappingContext;
 
 	// ---- M3 spike probes. The Server* functions run on the authority only, from outside the simulation (a plain game thread
 	// call, like a loadout component would), and return false / 0 elsewhere.

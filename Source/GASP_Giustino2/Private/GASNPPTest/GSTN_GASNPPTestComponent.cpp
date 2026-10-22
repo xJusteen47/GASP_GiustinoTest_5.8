@@ -19,23 +19,23 @@
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
-#include "UObject/ConstructorHelpers.h"
 
 UGSTN_GASNPPTestComponent::UGSTN_GASNPPTestComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.TickInterval = 0.25f;
 
-	static ConstructorHelpers::FObjectFinder<UInputMappingContext> MappingFinder(TEXT("/Game/GASNPPTest/Input/IMC_GASNPP_Test.IMC_GASNPP_Test"));
-	if (MappingFinder.Succeeded())
-	{
-		TestMappingContext = MappingFinder.Object;
-	}
 }
 
 void UGSTN_GASNPPTestComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (!TestMappingContext && !DefaultTestMappingContext.IsNull())
+	{
+		TestMappingContext = DefaultTestMappingContext.LoadSynchronous();
+	}
+	UE_CLOG(!TestMappingContext, LogTemp, Error, TEXT("%s: no test mapping context (set TestMappingContext or DefaultTestMappingContext in DefaultGame.ini), test input will not work"), *GetName());
 
 	Mover = GetOwner()->FindComponentByClass<UMoverComponent>();
 	AbilitySystem = GetOwner()->FindComponentByClass<UNpAbilitySystemComponent>();
