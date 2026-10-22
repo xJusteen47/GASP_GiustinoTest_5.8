@@ -110,6 +110,20 @@ public:
 				continue;
 			}
 
+			// GAS-NPP fork: the other side of the bound above. Until the server has consumed this client's first input the
+			// offset is still 0, so the server frame maps past the local pending frame: that slot was never simulated and
+			// comparing it reported false mismatches ("RollbackFrame N AHEAD of PendingFrame 0", a no-op rollback). Nothing
+			// to correct yet; a simulated proxy still takes the received input at the head, as below.
+			if (LocalFrame > TickState->PendingFrame)
+			{
+				if (ClientRecvData.NetRole == ROLE_SimulatedProxy)
+				{
+					Frames.Buffer[TickState->PendingFrame].InputCmd = ClientRecvData.InputCmd;
+				}
+				DataStore->ClientRecvBitMask[ClientRecvIdx] = false;
+				continue;
+			}
+
 			typename TInstanceFrameState<ModelDef>::FFrame& LocalFrameData = Frames.Buffer[LocalFrame];
 
 			TInstanceData<ModelDef>& InstanceData = DataStore->Instances.GetByIndexChecked(ClientRecvData.InstanceIdx);
