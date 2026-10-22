@@ -8,6 +8,10 @@ Written 2026-10-21 from the outline; M5–M8 are not implemented, so every state
 > 4 (the dependency rule and its automatic check) is **not** optional: it is a cheap guard that starts now and protects
 > the option.
 
+> **Revision 2026-10-22 (owner direction, [game-design-direction.md](game-design-direction.md) §6b):** the reference topology
+> is a **listen server**; the stock GAS adapter must also run on a listen host (§9b). Nothing else in this file changes; the
+> other owner-direction items (parts, grabs) live above the adapter and reach it only through the neutral seams of §4.
+
 ## 1. Scope
 
 **Goal:** a project with **stock** Gameplay Ability System (no Network Prediction, no Mover, no GAS-NPP fork) uses the
@@ -216,6 +220,23 @@ consecutive lost packets; the **release of a button bound as trigger/hold** also
   stops flash/pause, the component ends the predicted hitstop and removes `OnHit` flags. Costs and cooldown applied by the
   predicted ability are unaffected (the activation was real).
 
+## 9b. Listen server (owner direction §6b; *Proposal*)
+
+Stock GAS on a **listen-server host**: the host's own pawn has authority and is its own owner, so it activates abilities
+**without a prediction key round trip** (a locally controlled authority activation: no `ServerTryActivateAbility`, no payload
+RPC, no `ViewAge`, no rejection or rollback), while remote clients keep the whole predicted path of sections 8–10. Consequences:
+
+- **No payload race and no correction on the host's own pawn**: its hits are resolved in the same tick with current server state
+  (zero lag compensation), the host-advantage of M4 §13, accepted by default.
+- **Remote attackers against the host's pawn** are rewound by `UGSTN_HurtboxHistory` exactly as on a dedicated server; the host's
+  pawn is a normal entry of the history.
+- **Cost on the host**: hurtbox history (~250 KB for 48 entities, section 6), payload merge and lag-compensated queries share the host's
+  frame with its own render; budgeted with M8's host rows (`combat-m8-minions.md` §4d.1), and host upload multiplies per-client RPC and
+  correction bytes by connected clients (section 8's 18 B typical activation per action).
+- **Stock GAS on a listen server** needs the same adapter code path (nothing forks on topology, CLAUDE.md rule 1): the
+  "owner is also server" case is the authority branch of `UAbilitySystemComponent` itself, not a branch in M9 code.
+  The canary harness (section 13) gains a listen-server configuration (host + 2 clients) next to dedicated + 2 clients.
+
 ## 10. Misprediction correction (GAS-style)
 
 | Case | Correction |
@@ -289,7 +310,7 @@ Rules: kits may put capability tags in binding `Requirements` (e.g. a frame-exac
   extraction proof), input-stream merge with loss/reorder/duplicates, hurtbox history interpolation, lag-comp overlay
   against hand-computed positions, snapshot restore after rejection, phase absorption arithmetic.
 - **Boundary tests** (section 4): script, reflection test, canary build.
-- **Canary PIE harness** `Tools/StockGASCanary/stock_test.py` (modelled on `gasnpp_test.py`: dedicated server + 2 clients, net
+- **Canary PIE harness** `Tools/StockGASCanary/stock_test.py` (modelled on `gasnpp_test.py`: dedicated server + 2 clients **and, from 2026-10-22, a listen-server host + 2 clients** (§9b), net
   emulation 60/15 ms, 0/2/5 % loss): `s9_activation_basic`, `s9_activation_rejected` (server forces a cooldown → no
   residue: tags, GEs, montage, buffered press), `s9_payload_loss`, `s9_hit_basic`, `s9_hit_lagcomp` (target dashing,
   client hit ⇒ server hit ≥ 95 %), `s9_hit_unconfirmed` (target intangible on the server), `s9_cancel_jitter` (± 20 ms jitter,

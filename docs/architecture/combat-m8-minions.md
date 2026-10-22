@@ -10,11 +10,19 @@ those milestones).
 > every *Proposal* resolves an *Open* item of the outline and can be overridden by the spike results or by the
 > project owner (questions in [open-questions-m4-m10.md](open-questions-m4-m10.md), section M8).
 
+> **Revision 2026-10-22 (owner direction, [game-design-direction.md](game-design-direction.md) §1–§3, §5, §6b; it wins
+> over this file):** (1) reference topology is a **listen server**: every former "dedicated server" budget is now the
+> **host's machine, which also renders** (§4d.1, §8.3, §11); dedicated stays supported. (2) Minions get **parts**, stagger
+> and juggle factors and weight from remaining health through the bridge plugin `GSTNPartsMinion`
+> ([combat-parts.md](combat-parts.md) §5.5; adds an optional `ExtByte` to `FGSTN_MinionNetItem`, §8.2). (3) Big types may
+> become grabbable after parts break, and minions can be grabbed and thrown at other minions (§14, M10). (4) Death is a
+> crystal shatter, pooled (§4d.4). All new choices are *Proposal*; see §4d.
+
 ## 1. Scope
 
 **Goal:** dozens of simple enemies (40 required, 100 stretch) with the **same timelines, hitboxes, hurtboxes, teams,
-pipeline and knockback** as fighters, at a small fraction of a fighter's server cost, with bounded bandwidth, on a
-dedicated server. Player→minion and minion→player hits are first class (lag compensation, hit presentation, one
+pipeline and knockback** as fighters, at a small fraction of a fighter's server cost, with bounded bandwidth, on the
+**authority host** (a listen-server host that also renders, owner direction §6b; a dedicated server stays supported). Player→minion and minion→player hits are first class (lag compensation, hit presentation, one
 correction per hit on the player's client).
 
 In: server-side batch simulation outside NP; timeline player shared with fighters; movement backends (decision by
@@ -23,7 +31,8 @@ spawning, pooling, waves; promotion to fighter; debug, tests, harness.
 
 Out: AI design (behaviours are content), navigation setup, group tactics beyond attack tokens, loot and progression,
 minion grabs/shields/mounts (M6/M7 follow-ups, section 14), forward prediction of minions (never, combat.md §12.7),
-listen-server (dedicated only: the subsystem asserts `IsNetMode(NM_DedicatedServer) || NM_Standalone`).
+dedicated-only assumptions (*revised 2026-10-22*: the subsystem runs wherever there is authority,
+`NM_DedicatedServer || NM_ListenServer || NM_Standalone`; host-specific rules in §4d.1).
 
 **Decision (justified): minions do not run GAS abilities; they run a lighter timeline player over the same timeline
 data.**
@@ -48,8 +57,9 @@ Run in this order; each has a numeric exit. Tooling: `UGSTN_MinionBench` (a debu
 strips from shipping): `gstn.Minion.Bench.Spawn <N> <Scenario>` with scenarios `Idle`, `Chase` (walk to the nearest
 player), `Brawl` (chase + attack every 60–90 frames), `Massacre` (all minions hit at once, then knocked into walls).
 
-**Measurement method (every spike):** dedicated server, packaged-like config (`-nullrhi -unattended -NoSound`,
-Development build, cooked if possible), 2 PIE or standalone clients (testing.md harness) with 60/15 ms and 2 % loss, 60 s
+**Measurement method (every spike):** **listen-server host** (reference, owner direction §6b: the host process renders and
+runs a local player, measured with `stat unit` split into game/render/GPU) and, for comparison, a dedicated server; packaged-like config (`-nullrhi -unattended -NoSound` only for the dedicated comparison;
+the host run keeps rendering at the project's minimum-spec resolution; Development build, cooked if possible), 2 PIE or standalone clients (testing.md harness) with 60/15 ms and 2 % loss, 60 s
 per cell, N ∈ {20, 40, 60, 100, 150}.
 - CPU: `UnrealInsights` with `-trace=cpu,frame,bookmark,log,net -statnamedevents`; scopes `GSTN_MinionBatch` and children
   (`LOD`, `Inbox`, `Timeline`, `Query`, `Movement`, `Publish`, `Replicate`), plus `STAT_GSTN_Minion*` cycle counters and
@@ -67,7 +77,7 @@ per cell, N ∈ {20, 40, 60, 100, 150}.
 | 4 | **Replication** | `AGSTN_MinionPack` FastArray bytes/item, per-pack relevancy and `NetUpdateFrequency` tiers, dormancy wake latency; is Iris enabled in 5.8 for this project? | Bytes/minion/s inside budget (section 8); wake latency ≤ 2 frames of the pack rate. If Iris is on, compare with a `UNetObjectFilter` on one actor; keep the simpler one. |
 | 5 | **Lag compensation of non-NP entities** | Does `FGSTN_MinionHistory` + `FGSTN_LagCompTime` give a hit at the position the attacker's client displayed? | In `scenario_minion_lagcomp` (section 12) ≥ 95 % hits when aimed at the displayed minion at 60/15 ms, with the correct rewind frame; 0 hits when aimed at the *server-current* position behind the display by > 1 minion radius. |
 | 6 | **AI cost** | `UStateTreeComponent` per minion (no AIController) ticking at LOD rates: ms per minion and whether it runs without a controller. | ≤ 0.02 ms per ticking minion at T0, and tick interval control works. Else brain stays a thin `UGSTN_MinionBrainComponent` with a hand-written task list behind the same intent interface. |
-| 7 | **Client presentation cost** | Puppet skeletal mesh + animation for N=60 visible: game thread ms with Animation Budget Allocator, optional Animation Sharing. | ≤ 3 ms game thread at 60 puppets on the target client; else add puppet LOD (section 8.4). |
+| 7 | **Client presentation cost** | Puppet skeletal mesh + animation for N=60 visible: game thread ms with Animation Budget Allocator, optional Animation Sharing. **Also on the listen-server host**, where simulation and puppets share one frame (section 4d.1). | ≤ 3 ms game thread at 60 puppets on the target client; on the host, batch + puppets + host's own game inside section 11's host rows; else add puppet LOD (section 8.4). |
 | 8 | **Promotion at runtime** | Spawn an NP fighter mid-session and hand over from a puppet under 60/15 ms. | Client shows no pop > 15 cm and no rollback beyond the first sync; time to first control ≤ 500 ms. |
 
 ## 3. Core types (`GSTNCombatCore`, pure, Automation-tested)
@@ -118,7 +128,7 @@ Everything below lives in the separate plugin **`GSTNMinion`** (section 4b); fil
 | `FGSTN_MinionStore` (plain C++) | same | Struct-of-arrays, free list, capacity `gstn.Minion.Max` (default 128, pre-allocated). Per slot: generation, definition index, position/velocity/yaw, `ActionState`, `MoveId`, `TimelineStartFrame`, `MovePausedFrames`, `HitstopEndFrame`, `HitstunEndFrame`, `NextMoveFrame[move]` cooldown stamps (small fixed array), `Health`, `KnockbackPercent`, LOD tier and phase, intent, flags, last-attacker ring (4 entries, for KO credit), `HitByRing[4] { AttackerId, TimelineStartFrame, HitGroup }` (once per group per attacker move on the victim side too). |
 | `UGSTN_MinionCombatComponent` (`UActorComponent`, authority only, no tick) | `Runtime/GSTN_MinionCombatComponent.h` | The designer-facing handle on `AGSTN_MinionActor`: BeginPlay registers in the subsystem and gets a handle; Blueprint API `SetIntent`, `RequestCommand`, `GetHealth`, `GetHandle`; server delegates `OnMinionHit`, `OnMinionDied`, `OnLODChanged`. Holds no per-frame state. |
 | `AGSTN_MinionActor` (`AActor`, `bReplicates = false`) | `Runtime/GSTN_MinionActor.h` | Server-side handle: root scene, the component, the brain component, no mesh and no movement component unless backend A. Pooled. Moved by the subsystem (`SetActorLocationAndRotation` only for T0/T1 and when something reads the actor: debug, AI queries; T2/T3 keep a stale transform, flagged). |
-| `UGSTN_MinionCombatSubsystem` (`UWorldSubsystem`, dedicated server/standalone) | `Runtime/GSTN_MinionCombatSubsystem.h` | Owns the store, history, grid contribution, inbox, token allocator and spawn queue; the batch tick (section 5). |
+| `UGSTN_MinionCombatSubsystem` (`UWorldSubsystem`, authority: dedicated, listen host or standalone) | `Runtime/GSTN_MinionCombatSubsystem.h` | Owns the store, history, grid contribution, inbox, token allocator and spawn queue; the batch tick (section 5). |
 | `IGSTN_HittableProvider` (plain interface) | `GSTNCombatNP/World/` | New in M4's world subsystem: `AppendSnapshotEntities(FGSTN_StepSnapshot&)`; NP components and the minion subsystem both implement it (section 9). |
 | `AGSTN_MinionPack` (`AActor`, replicated) + `FGSTN_MinionNetArray` | `Net/GSTN_MinionPack.h` | Replication (section 8). |
 | `UGSTN_MinionPresentationSubsystem` (client `UWorldSubsystem`), `AGSTN_MinionPuppet`, `FGSTN_MinionInterpolator` | `Client/` | Puppets, interpolation, hit presentation (section 8). |
@@ -149,8 +159,9 @@ Rules:
   `OnPostFixedTick` (unbound), `FGSTN_TimelinePlayer` and `FGSTN_HitVictimView` (used by the fighter path too),
   `HitTargets` of 16 entries, entity-id kind bit, the `Combat.Entity.Fighter` tag. These stay in `GSTNCombat` and are reviewed as
   combat changes (separate commits, M3/M4 regression gate).
-- `GSTNMinionRuntime`'s `ShouldCreateSubsystem` is false off dedicated/standalone server; the presentation subsystem is
-  client only. Both are no-ops with no pack/definition loaded.
+- `GSTNMinionRuntime`'s `ShouldCreateSubsystem` is false without authority (true on dedicated, listen host and standalone);
+  the presentation subsystem is created wherever there is a screen (clients **and the listen-server host**, §4d.1), false on a
+  dedicated server. Both are no-ops with no pack/definition loaded.
 - **Isolated tests**: `GSTNMinion.Core.*` (Automation) builds with `GSTNCombatCore` only, so it runs without NP, Mover or a
   world; `GSTNMinion.Runtime.*` uses the editor world with a stub `IGSTN_HittableProvider` host and a fake NP-free snapshot, so
   no fork is needed; harness scenarios live in `Tools/GASNPPTest/minion_scenarios.py` (imports `gasnpp_test`) and need the fork
@@ -187,6 +198,68 @@ types are reused.
 (*Proposal*: NP proxy ids never reach it; the `HitTargets` ring and the inbox treat it as an opaque id;
 `UGSTN_CombatWorldSubsystem::FindEntity` dispatches on the bit). A 16-bit generation is checked on delivery so a hit
 stamped for a recycled slot is dropped.
+
+## 4d. Owner direction of 2026-10-22 (all *Proposal*)
+
+### 4d.1 Listen-server host (owner direction §6b)
+
+- **Host is authority and a player.** Its attacks on minions are server-side hits at zero latency (no lag compensation, no
+  pack round trip); clients see the same hit one pack period + interpolation buffer later. This is the host advantage of
+  M4 §13, now visible on every minion; accepted by default.
+- **Host puppets.** The host needs a visible minion, but replication to oneself is waste: on a listen host the presentation
+  subsystem builds puppets **directly from the store** (current transform, `ActionState`, `MoveId`, `HitCounter`), with no pack
+  item, no interpolator and no extra render delay. Remote clients are unchanged. Same puppet class, so cost per puppet is the
+  client cost of section 11, and the host pays batch + puppets + its own game in one frame.
+- **Budget consequence.** Section 11 gains host rows: the minion batch gets at most **~10 % of the 16 ms frame** (target
+  N=40: mean ≤ 1.0 ms, p99 ≤ 2.0 ms, tighter than the dedicated row), puppets ≤ 2 ms game thread, the rest is the host's own
+  game. If the spike does not fit, in order: lower `MaxActiveT0` (48 to 32), puppet LOD earlier, lower T0 rate; **record the max
+  N on the host honestly**, as the rule of section 6 already does. N=100 stays a dedicated-only stretch.
+- **Host upload bytes per minion.** The limit is the host's home upload, paid per connected client. Per minion update
+  18 B (19 B with `ExtByte`, section 8.2); 40 typical minions ≈ 5.2 KB/s per client, so a host with 3 clients ≈ **16 KB/s
+  (~130 kbit/s)** and 7 clients ≈ 36 KB/s: inside a 5 Mbit/s home upload, but the per-client figures of 8.3 are the ones to
+  defend because they multiply. *Proposal*: per-client cap stays ≤ 5 KB/s at N=40 and a host-total soft cap
+  `gstn.Minion.HostUploadBudgetKBps` (default 40) lowers the T0 rate to 10 Hz before it is exceeded.
+- **Host leaves = session ends** (owner direction); the store has no migration, nothing to design here.
+
+### 4d.2 Parts through `GSTNPartsMinion` ([combat-parts.md](combat-parts.md) §5.5)
+
+- `GSTNMinion` stays free of parts. The bridge plugin adds `FGSTN_PartsMinionExtension { PartSet }` on `UGSTN_MinionDefinition`
+  (≤ 8 parts), store columns `BrokenMask` (`uint8`) and `PartDamage[8]` (9 B per part-bearing minion), and runs the **same**
+  `UGSTN_HitStep_PartResolve` from stage 2.2 through `FGSTN_HitVictimView` (`FGSTN_PartsSnapshotExt`). The M8 side only
+  provides: the optional pipeline step slot, `HurtboxIndex` in `PendingHits` entries, the `ExtByte` of the wire (8.2) and an
+  `OnOutcomeApplied` store hook; nothing else knows parts.
+- **Health and weight (Helldivers-like).** The minion's health stays `Health` (5 bits on the wire). Under `PercentCapped`
+  `HealthFraction = 1 - Progress`, the same number as `KnockbackModel_HealthFraction` (§3), so minions and fighters agree on
+  "how wounded". Effective weight = base weight × weight curve of progress × lost mass of broken parts (combat-parts §4.3),
+  derived at each resolution from the store, never stored: a battered minion flies further.
+- **Stagger and juggle.** `StaggerFactor` and `JuggleFactor` per type (`BodyReaction`) and per part enter as
+  `FGSTN_HitReactionModifiers` (M4 seam, combat-parts §1 and §4.4), so **hitstun and hitstop depend on the hit and on the part
+  hit**: a `StaggerValue` below the threshold gives `bNoFlinch` (`PoiseHits` stays the coarse version for types without parts).
+  Attacker hitstop uses only static data (band and part reaction), never the victim's broken mask or health (the assertion
+  of §3 is extended to the part-aware model).
+- **Wire.** `ExtByte = BrokenMask` only for part-bearing types (`bHasExt`, 0 bits otherwise), dirty only on change: about +1 B
+  per update (+5 %). Chips follow the existing 5-bit `Health`, limbs follow the mask (combat-parts §5.5).
+- **Promotion** copies `BrokenMask`/`PartDamage` into the fighter's `FGSTN_PartsFragment` (combat-parts §5.5).
+
+### 4d.3 Grabbable big types, throwing minions
+
+- A heavy type with a part set stays ungrabbable while the projected tag `Combat.Part.GrabLocked` is present (combat-parts §7);
+  the store mask feeds the same function, so after enough parts break it becomes grabbable through a rules-asset edit only.
+  A boss keeps `Combat.Immunity.Grab`.
+- Any grabbable minion can be **grabbed and thrown at other minions**: M6 owns the link, [M10](combat-m10-held-objects.md)
+  owns the throw (the thrown minion becomes a projectile entity with hitboxes, credit to the thrower; link type
+  `Combat.Link.Type.Minion` stays reserved here, section 14). M8's contribution: a held or thrown minion is removed from the grid
+  and from the attack queries but keeps its slot (generation unchanged), so the landing can **return** it (wall splat, bounce or
+  destruction by designer data, the M4 surface-impact rules referenced, not redefined) or kill it.
+
+### 4d.4 Death: crystal shatter (presentation only)
+
+- `Dying` plays the death timeline as now; at `Dead` the puppet is replaced by the shatter of combat-parts §6.3
+  (pre-fractured pieces, **pooled**; Geometry Collections only for players and bosses, never minions) driven from the KO event
+  and the last hit's direction. Limbs: pooled chunk + stump cap (combat-parts §6.2 option A), keyed
+  `(EntityRef, PartIndex, BreakSerial)`. The corpse is released after `CorpseSeconds` as before; budgets and the "40 deaths in
+  2 seconds" bench case are those of combat-parts §6.4, **measured on the host** (it renders). Skipped debris never changes
+  gameplay.
 
 ## 5. Batch tick (server) and order
 
@@ -295,14 +368,15 @@ Spike 4 compares this with an Iris object filter; keep the simpler one that meet
 | `FrameStamp` (low bits) | 8 | Server frame of this sample, wrap 4.1 s, for interpolation |
 | `HitCounter` | 3 | Increments per accepted hit, detects repeated hits; drives presentation and de-duplicates the attacker's predicted flash |
 | `Health` | 5 | 1/32 of max; the pack also carries `MaxHealth` per type from the definition |
+| `ExtByte` (*Proposal*, owner direction 2026-10-22) | 0 or 8 | Optional extension byte guarded by a type-level `bHasExt` (0 bits for types without an extension), owned by a bridge plugin: `GSTNPartsMinion` sends `BrokenMask` (combat-parts §5.5). Dirty only when it changes. Not counted in the total below |
 | `Speed` | 6 | 0..`RunSpeed`, animation blend and extrapolation |
 | `Flags` | 3 | `Teleport` (no interpolation across), `Promoting`, `Elite` |
-| **Total** | **~121 bits ≈ 15.2 B** | + FastArray header (ReplicationID, change mask) ≈ **3 B** → **~18 B per item update** |
+| **Total** | **~121 bits ≈ 15.2 B** | + FastArray header (ReplicationID, change mask) ≈ **3 B** → **~18 B per item update** (**~19 B** for part-bearing types) |
 
 Dirty rules: an item is marked dirty when position moved > 3 cm or yaw > 4° or any other field changed, at most once per
 pack update; an idle minion costs 0 bytes. Removal = FastArray remove (death after the death timeline plus a grace time).
 
-### 8.3 Byte budget (per client, per second)
+### 8.3 Byte budget (per client, per second; on a listen host multiply by the connected clients, §4d.1)
 
 Wire cost per update 18 B (`bytesPerItem`); rates from section 7.
 
@@ -438,15 +512,18 @@ M4 §12.7); this is the number to budget:
   promotion timeline masks the swap). No demotion. Cap `MaxFightersFromMinions` (default 4) because each is a full NP
   entity (spike 1 numbers). Kill credit, team, StateTree asset and the last-attacker ring carry over.
 
-## 11. Targets and budgets (dedicated server, 62.5 Hz = 16 ms frame; to confirm in spike 1/3/4/7)
+## 11. Targets and budgets (authority host, 62.5 Hz = 16 ms frame; listen-server host rows added, §4d.1; to confirm in spike 1/3/4/7)
 
 | Metric | Target N=40 | Target N=60 | Stretch N=100 |
 |---|---|---|---|
-| Server `GSTN_MinionBatch` mean / p99 | ≤ 1.2 / 2.4 ms | ≤ 2.0 / 3.5 ms | ≤ 3.5 / 6 ms |
+| Server `GSTN_MinionBatch` mean / p99 (dedicated) | ≤ 1.2 / 2.4 ms | ≤ 2.0 / 3.5 ms | ≤ 3.5 / 6 ms |
+| **Host** `GSTN_MinionBatch` mean / p99 (listen server, also renders; ≤ ~10 % of the frame) | ≤ 1.0 / 2.0 ms | ≤ 1.6 / 3.0 ms | not targeted |
+| **Host** game thread incl. its own player and host puppets (4 players + minions, Brawl) | ≤ 11 / 14 ms | ≤ 13 / 16 ms | not targeted |
+| **Host upload** (per-client figure × clients, 3 clients) | ≤ 16 KB/s | ≤ 21 KB/s | not targeted |
 | Whole server game thread (4 players + minions, Brawl) | ≤ 8 / 12 ms | ≤ 10 / 14 ms | ≤ 13 / 16 ms |
 | Per minion-frame at T0 (all stages) | ≤ 0.03 ms | ≤ 0.03 ms | ≤ 0.035 ms |
 | Network per client | ≤ 5 KB/s | ≤ 7 KB/s | ≤ 12 KB/s |
-| Server memory per minion | ≤ 400 B store (+ actor) | | |
+| Server memory per minion | ≤ 400 B store (+ actor); +9 B with parts | | |
 | Client game thread for puppets | ≤ 2 ms | ≤ 3 ms | ≤ 5 ms (LOD) |
 | Corrections on a player from minion hits | ≤ 1 per hit frame; ≤ 6 per second under 4 tokens | | |
 
@@ -497,6 +574,8 @@ M4 §12.7); this is the number to budget:
 
 ## 14. How to extend
 
+- **Parts on a minion type** (owner direction 2026-10-22): enable `GSTNPartsMinion`, add a `UGSTN_PartSetDefinition` (≤ 8 parts) to
+  the definition's extension; no M8 change (§4d.2).
 - **New minion type**: create `UGSTN_MinionDefinition` (stats, hurtbox set, moves pointing at existing or new
   `UGSTN_CombatTimeline` assets, reaction timelines, puppet mesh/anim, StateTree); add it to `UGSTN_MinionRegistry` (append
   only: the index is the wire id; `IsDataValid` blocks reordering by storing a stable id table); spawn it from a wave. No C++
@@ -511,11 +590,17 @@ M4 §12.7); this is the number to budget:
 - **New movement backend**: implement `IGSTN_MinionMovementBackend`, add the enum value; flying types are the first user.
 - **Shield/grab/mount on minions** (M6/M7 follow-ups): grabs and mounts of minions need a different link type
   (`Combat.Link.Type.Minion`, the minion's store slot as parked entity, referenced by `FGSTN_EntityRef{Kind = Minion}`; needs `GSTNLink`, M6 §7.0); shields use the `FGSTN_HitVictimView` shield fields and the
-  M6 step. Not designed here.
+  M6 step. Not designed here. *Revision 2026-10-22:* the owner wants minions grabbed and thrown at other minions; the throw is
+  specified in [combat-m10-held-objects.md](combat-m10-held-objects.md), the grab in M6, the grabbability gate in §4d.3.
 - Related: promotion is the only supported way to give a minion prediction, GAS effects or loadouts.
 
 ## 15. Risks
 
+- **Host frame budget** (listen server, owner direction §6b): batch, puppets, shatter debris and the host's own game share
+  one frame, so the dedicated targets are not enough; the host rows and the `MaxActiveT0`/puppet LOD fallbacks of §4d.1 are
+  the mitigation. Host advantage (zero-latency hits on minions) is accepted unless the owner asks for parity.
+- **Parts bridge** (`GSTNPartsMinion`) adds `ExtByte` to the wire and a part-aware resolve per hit (≤ 2 µs): both are measured
+  in the bench; the M8 wire change lands as its own commit.
 - **The fighter-path baseline may already be enough** (spike 1): then M8 shrinks to configuration of AI fighters and
   server LOD; the exit rule is explicit so effort is not wasted.
 - **Fork hook for the post-fixed-tick** (spike 2) is a fork patch in the NP service: keep it small and inert. Tell the user

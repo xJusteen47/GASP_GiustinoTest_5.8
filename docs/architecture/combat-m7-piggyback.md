@@ -12,6 +12,12 @@ Section numbers below are local to this file. "Move" means a timeline ability (`
 > `UGSTN_LinkExitPlacer` + `IGSTN_ExitCollisionQuery` for exit placement; `UGSTN_LinkRegistry` for the link type; the link tags of
 > M6 §1c. M7 declares `Combat.Link.Type.Mount` and `Combat.Link.Role.Carrier/Rider` itself (section 11).
 
+> **Revision 2026-10-22 (owner direction, [game-design-direction.md](game-design-direction.md) §3 and §6b; it wins over this
+> file):** (1) **interact = grab**: the Mount command is a **context-dependent meaning of the one interact button** that also
+> starts grabs (M6) and pickups (M10), with hold/tap variants from `GSTNInput` conditions: §7, §12. (2) Reference topology is a
+> **listen server**; notes for spikes and carrier/rider roles when the host is carrier or rider: §2c. All new choices are
+> *Proposal*.
+
 ## 1. Scope
 
 **Goal:** a player rides a teammate. Mounting is predicted on the rider, confirmed or refused by the carrier's
@@ -40,6 +46,27 @@ the partner of a pair move (combat.md §12b *Open*, kept as a decision gate in s
    screen the time from the initiator's start to the partner's visible reaction (expect RTT/2 + interpolation or RTT
    + correction). If the median exceeds 150 ms with presentation hiding on, open a forward-prediction milestone for pair
    partners (ForwardPredict LOD for the pair only; needs the fork's per-entity LOD, combat.md §12.7).
+
+## 2c. Listen-server notes (owner direction §6b; *Proposal*)
+
+The owner's reference topology has a friend hosting and playing, so the host is a normal fighter that is also the authority.
+No simulation rule changes (nothing forks on topology, CLAUDE.md rule 1); what changes is **which spike measurements** matter and
+which side pays latency:
+
+- **Spike 1 (anchor agreement)** gains the **host as carrier** (the carrier is zero-latency and authoritative; the remote rider
+  predicts its anchor from an interpolated carrier, the divergence is the same as a dedicated server's) and the **host as rider**
+  (its anchor reads the carrier's rewound state exactly as a client's would, but the host's own mount needs no rewind: it is
+  the server). Both cases are measured; the verdict of 6.4 (predict or fall back to server-given positions) applies per case.
+- **Spike 3 (optimistic mount)**: a host rider is accepted or refused in the same tick (no optimistic undo to hide); a remote rider
+  mounting a host carrier pays the usual one correction on the host's side only when the host's own prediction is involved: the
+  host carrier is never corrected (it is the authority), so acceptance costs the **host nothing visible**. Remote carriers keep the
+  one-correction cost.
+- **Spike 4 (partner delay)**: the carrier-throws-rider pair move is instant on the host's screen when the host is the thrower or
+  the rider; the median to beat is that of the remote-to-remote pair and of remote-to-host. Host advantage on pair moves is
+  accepted by default.
+- **Host frame budget**: the pair link adds one fragment and one carry-load GE per pair; negligible against M8/parts on the host's
+  frame. Harness scenarios of section 9 also run in the **listen-server configuration** (host + 2 clients, with the host as
+  carrier and as rider in turn).
 
 ## 2b. Plugin and module boundaries
 
@@ -311,12 +338,24 @@ its root, which is the anchor, so no animation is evaluated at runtime.
 
 ## 7. Bindings and inputs (*Proposal* for the outline's *Open*; the standard set already reserves `Command.Link.*`)
 
-- New button **`Input.Button.Interact`** (designer tag in `GSTNCommands.ini`, one press, no chord) and slots
+- *Revision 2026-10-22 (owner direction §3):* `Input.Button.Interact` is **the same button as the grab and the object pickup**
+  (the owner: "the grab button is also the interact button"). Mount is therefore one **contextual meaning** among several, chosen
+  by the requirements below and by the context in reach: ally with `bCanBeMounted` in reach = Mount (this file), grabbable enemy = Grab
+  (M6), object in reach = Pickup ([M10](combat-m10-held-objects.md) §8). M6 §8 owns the arbitration: **tap** = `Command.Link.Grab`
+  (and, by context, this file's Mount or M10's Pickup), **hold** = `Command.Link.GrabHeavy`, **tap as grabber** = `Command.Link.Release`;
+  a context probe (`UGSTN_InteractMath::PickTarget`, nearest to the facing direction, ties by `InteractPriority`) projects **exactly
+  one** `Combat.Interact.Target.*` tag, and each meaning's binding requires its own tag, so bindings never compete.
+  Ownership: the button tag `Input.Button.Interact`, the probe and the priority list live with M6/`GSTNInput`; this file only
+  defines the Mount slots and **declares `Combat.Interact.Target.Mount`** (native, `GSTNPiggyback`; modularity-and-tags.md §4.2),
+  and registers an `IGSTN_InteractCandidateProvider` for mountable allies (`bCanBeMounted`, in reach).
+- **`Input.Button.Interact`** is declared by M6 (designer tag in `GSTNCommands.ini`, shared); this plugin only adds the slots
   `Command.Link.Mount`, `Command.Link.Dismount` = a press of Interact; `Command.Link.Drop` = Interact + crouch held (a
-  `Hold(Crouch)` slot, more specific than Dismount). The same button means three things purely through bindings:
+  `Hold(Crouch)` slot, more specific than Dismount). Mount requires `Combat.Interact.Target.Mount`. Note `Release` of M6 is the
+  tap of a *grabber* (`Role.Grabber`); the rider's tap is Dismount (`Role.Rider`), the carrier's is Drop, so the roles never collide.
+  The same button means several things purely through bindings:
   | Command | Requirements | Ability |
   |---|---|---|
-  | `Command.Link.Mount` | ignores `Combat.Link.Role.*` | `UGSTN_GA_Mount` |
+  | `Command.Link.Mount` | requires `Combat.Interact.Target.Mount`, ignores `Combat.Link.Role.*` | `UGSTN_GA_Mount` |
   | `Command.Link.Dismount` | requires `Role.Rider` | `UGSTN_GA_Dismount` |
   | `Command.Link.Drop` | requires `Role.Carrier` | `UGSTN_GA_Drop` |
   | `Command.Movement.Jump` | requires `Role.Rider` | `GA_Rider_BoostJump` (pair move) |
@@ -401,7 +440,8 @@ may *use* a tag by name only through data, never include the header. "Link" = `G
 | `Combat.Link.BreakReason.{Dismount,Drop,Throw,Outcome,CarrierHit,RiderHit,KO,Removed,Teleport,Timeout}` | native | piggyback (its own: `Dismount Drop Outcome CarrierHit RiderHit KO Removed Teleport`; the generic ones `Timeout Distance Hit Escape Release Throw Forced...` are `GSTNLink`'s, M6 §1c) | reason on `Broken` | emitter of the break |
 | `Combat.Link.Credit.Partner` | native | piggyback | event tag: credited partner present | attribution in `HitLanded`/`KO` events |
 | `Combat.SetByCaller.CarryLoad.Ratio` | native | piggyback | SetByCaller of the carry load GE | `ApplyLinkEffect` request |
-| `Input.Button.Interact` | ini | piggyback | designer button tag | input config |
+| `Input.Button.Interact` | ini | M6 (`GSTNInput` config; shared, only referenced here) | the grab/interact button | input config |
+| `Combat.Interact.Target.Mount` | native, projected | piggyback | the nearest interactable is a mountable ally (M6 §8 probe) | requirement of `Command.Link.Mount` |
 | `Command.Link.Mount` / `.Dismount` / `.Drop` | ini | piggyback | slots of the Interact button | slot asset, bindings (7) |
 
 Rules: no `AbilityTriggers` or tag-event listeners on projected tags (5.4); `Combat.Lock.Link` is the only lock-style tag
@@ -411,7 +451,7 @@ cannot leave one behind (test: every break reason in section 8 ends with none of
 
 ## 12. Resolution of the outline's *Open* items (all *Proposal*)
 
-- **Inputs**: one `Interact` button, three role-resolved meanings (7). Alternative if the pad has no spare button: Mount
+- **Inputs**: one `Interact` button, three role-resolved meanings (7), now shared with grab and pickup (owner direction 2026-10-22, 7). Alternative if the pad has no spare button: Mount
   and Dismount on a `Hold(Special)` slot; only slots change.
 - **Two riders / chains**: no. One rider per carrier (`LinkType == None` is a mount condition), a rider cannot carry. The
   data model allows more later (`PartnerId` is per link and channel; a list would be M6 work).
@@ -457,7 +497,9 @@ place for prediction and resolution).
   `UGSTN_LinkUtils` and review the project's users; the camera needs the anchor (*tell the user*: shared Blueprints).
 - **Optimistic accept**: a refusal after the rider already showed the attach costs one rollback and a visible snap
   (hidden by blend); keep `PendingFrames` and the pre-check identical on both sides so refusals stay rare (only races).
-- **Same button, three meanings** depends on the role tags being projected before the binding selection of the same
+- **Same button, more meanings** (mount, dismount, drop, and now grab and pickup, owner direction 2026-10-22): a context tie (ally vs enemy vs object
+  in reach) can pick the wrong action; hold/tap variants and a clear priority rule are needed, and the host's zero-latency
+  feel makes a wrong pick more visible. Depends on the role tags being projected before the binding selection of the same
   frame (5.4, M6): add an assert in development builds.
 - **Carry load and Mover**: the stats modifier rewrites settings every frame; a weight change at accept must show on the
   carrier on the same frame on server and client (harness: speed compared at accept).

@@ -7,10 +7,34 @@ specifica ha già adottato: se l'ipotesi va bene, basta rispondere "ok".
 Rispondi pure in ordine sparso, anche solo con il numero della sezione e della domanda (es. "M6.3: tasto dedicato").
 Le risposte vanno poi riportate nelle specifiche e in combat.md.
 
+Le indicazioni del 22/10 sono in [game-design-direction.md](game-design-direction.md); le domande a cui hanno già risposto sono marcate **Risposta**.
+
+## Da rispondere per prime (15)
+
+Le quindici domande ancora aperte la cui risposta cambia di più l'architettura o le prossime milestone (prima M3/M4, poi modularità e tag, poi M4b e M6).
+
+- [[M4.3](#m4--hits-domande-al-proprietario-del-progetto)] armatura e super-armor dei boss: soglia e rapporto tra `Poise` e `Armor`
+- [[M4.4](#m4--hits-domande-al-proprietario-del-progetto)] condizione di KO (tetto o blast zone) e cosa fa il gioco dopo
+- [[M4.6](#m4--hits-domande-al-proprietario-del-progetto)] SDI dentro M4 o rimandato a M6 (la specifica si contraddice)
+- [[M4.16](#m4--hits-domande-al-proprietario-del-progetto)] colpo subito come correzione di rollback o forward prediction per il client
+- [[M4.20](#m4--hits-domande-al-proprietario-del-progetto)] chi decide splat, bounce o distruzione all'impatto (attacco, vittima, superficie)
+- [[M4.24](#m4--hits-domande-al-proprietario-del-progetto)] vantaggio dell'host del server di ascolto: accettarlo o attenuarlo
+- [[Mod.1](#domande-su-modularità-e-tag-per-il-proprietario)] Game Feature ed Experience subito o dopo M7
+- [[Mod.11](#domande-su-modularità-e-tag-per-il-proprietario)] il modulo di progetto smette di dipendere pubblicamente da `GSTNCombatNP`/`GSTNCombatCore`
+- [[Mod.13](#domande-su-modularità-e-tag-per-il-proprietario)] quali tag possono creare i designer senza C++
+- [[Mod.15](#domande-su-modularità-e-tag-per-il-proprietario)] punto di estensione del combat costruito una volta sola prima di M6
+- [[Parti.1](#parti-distruttibili-m4b-domande-al-proprietario-del-progetto)] le parti rotte dei giocatori hanno effetti di gameplay o sono solo estetiche
+- [[Parti.12](#parti-distruttibili-m4b-domande-al-proprietario-del-progetto)] quando un nemico diventa afferrabile (numero e tipo di parti rotte)
+- [[M6.1](#m6--difesa-e-link-domande-al-proprietario-del-progetto)] scudo limitato (barra) o sempre disponibile nel kit di riferimento
+- [[M6.17](#m6--difesa-e-link-domande-al-proprietario-del-progetto)] cosa fare se lo spike del link parcheggiato non passa le soglie
+- [[M6.22](#m6--difesa-e-link-domande-al-proprietario-del-progetto)] precedenza del tasto di interazione tra alleato, nemico e oggetto
+
 | Sezione | Specifica |
 |---|---|
 | Modularità e tag | [modularity-and-tags.md](modularity-and-tags.md) |
+| Indicazioni del proprietario (22/10) | [game-design-direction.md](game-design-direction.md) |
 | M4 Colpi | [combat-m4-hits.md](combat-m4-hits.md) |
+| M4b Parti distruttibili | [combat-parts.md](combat-parts.md) |
 | M5 Editor | [combat-m5-editor.md](combat-m5-editor.md) |
 | M6 Difesa e link | [combat-m6-defence-links.md](combat-m6-defence-links.md) |
 | M7 Piggyback | [combat-m7-piggyback.md](combat-m7-piggyback.md) |
@@ -100,24 +124,29 @@ Riferimenti: `combat-m4-hits.md` (qui "M4 §n") e `combat.md` (qui "combat §n")
 **1. Il gioco usa danno a percentuale (stile Smash), a HP, o entrambi (es. percentuale per i giocatori, HP per i nemici PvE)?**
 Perché conta: decide `DamageMode`, il modello di knockback di default e la lettura di UI/bilanciamento; le due modalità danno un "feel" opposto.
 Ipotesi nella specifica: `DamageMode` è un'opzione per regole di gioco (M4 §3 Combat rules); default `PercentScaling` Smash-like, `Fixed` per i giochi a HP (M4 §3 Knockback model; combat §1).
+**Risposta (2026-10-22):** Entrambi, in un solo modello: danno a percentuale in stile platform fighter (il knockback cresce con la percentuale) ma con un tetto massimo; oltre il tetto la parte, o l'intera entità, viene distrutta ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)). Corrisponde a `PercentCapped` (M4 §3b). Resta aperto il valore del tetto per giocatori, nemici e singole parti.
 
 **2. Nel PvE un nemico comune deve poter essere lanciato via come un giocatore, o solo subire stagger/hitstun senza launch?**
 Perché conta: con 40+ nemici il launch pieno costa in rollback, in leggibilità visiva e in controllo della folla.
 Ipotesi nella specifica: stessa pipeline per giocatori e IA (combat §1), nessuna distinzione per tipo di nemico; solo `KnockbackResistance`/`Poise` negli attributi (M4 §4).
+**Risposta (2026-10-22):** Il nemico ha peso legato alla salute rimasta (più è danneggiato, più vola lontano) e fattori di stagger e juggle; hitstun e hitstop dipendono da cosa e dove viene colpito ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)). Resta aperto se i nemici comuni vengano sempre lanciati o possano solo subire stagger.
 
 **3. Boss e nemici pesanti: armatura, super-armor o resistenza al knockback sono previste in M4, e con quale soglia?**
 Perché conta: lo stato `Armor` esiste ma servono valori e regole (soglia in danno o in knockback?) per non rendere i boss inutilizzabili o banali.
 Ipotesi nella specifica: `Armor` = niente knockback/hitstun sotto `ArmorThreshold`, il danno si applica (M4 §3 Hurtboxes); il rapporto tra `Poise` e `Armor` non è definito.
+**Risposta (2026-10-22):** Per i nemici grandi vale il modello a parti: durezza della parte contro penetrazione dell'hitbox decide se la parte subisce danno ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)), più il fattore di stagger ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)). Restano aperti la soglia di armatura/super-armor dei boss e il rapporto tra `Poise` e `Armor`.
 
 **4. Esiste un limite superiore al knockback/launch (o un KO per percentuale/blast zone), e cosa succede quando un personaggio "muore" (KO)?**
 Perché conta: M4 emette l'evento `KO` (revisione 2026-10-18) ma non dice quando scatta né cosa fa il gioco dopo (respawn, spettatore, game over).
 Ipotesi nella specifica: nessuna; si cita solo l'evento `Combat.Event.KO`.
+**Risposta (2026-10-22):** Quando la percentuale supera il tetto la parte o il nemico viene distrutto, e i morti vanno in pezzi come cristallo ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight), [direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Restano aperti la condizione di KO per i giocatori (blast zone o tetto), e cosa fa il gioco dopo (respawn, spettatore, game over).
 
 ### B. Hitstop e sensazione dei colpi
 
 **5. Quanto deve durare e "sentirsi" l'hitstop: ci sono valori target in frame per un jab, un colpo medio e uno forte? Deve essere uguale per attaccante e vittima?**
 Perché conta: sono le costanti `HitstopPerDamage`, `HitstopBase`, `MaxHitstop` e i moltiplicatori; sono il cuore del game feel.
 Ipotesi nella specifica: `floor(Damage × HitstopPerDamage + HitstopBase)` con tetto `MaxHitstop`, moltiplicatori separati per attaccante e vittima (M4 §3); nessun valore numerico.
+**Risposta (2026-10-22):** L'hitstop dipende da cosa e dove viene colpito ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)), quindi anche dalla parte colpita. Restano aperti i valori in frame per jab, colpo medio e forte, e se attaccante e vittima li condividono.
 
 **6. Durante l'hitstop la vittima può fare SDI: in M4 è davvero in scope, o si rimanda a M6 insieme a tech/shield?**
 Perché conta: il testo si contraddice (SDI "oltre lo spostamento di base" è fuori scope in M4 §1, ma M4 §7 lo descrive con `MaxSDIPerHit`); cambia lavoro e test.
@@ -140,16 +169,19 @@ Ipotesi nella specifica: `YawSource` per hitbox, `SpecialAngle` opzionale; non c
 **10. Regole delle schivate: durata dell'intangibilità, frame di vulnerabilità finale (recovery), costo (cooldown, stamina, meter) e se si può schivare durante hitstun?**
 Perché conta: roll, spot dodge e air dodge sono in scope (M4 §1) ma la specifica definisce solo il meccanismo `HurtboxModifier`, non le regole.
 Ipotesi nella specifica: nessuna sul costo/anti-spam; l'intangibilità viene dai tracciati `Intangible` della timeline.
+**Risposta (2026-10-22):** Schivata base in PvE a terra: quasi un long jump di Super Mario o un tuffo di Helldivers, senza finire sdraiati all'atterraggio; solo i piedi sono invincibili. Nessuna implementazione standard: può dipendere dal kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Restano aperti durata, recovery, costo (cooldown, stamina) e se si può schivare durante hitstun.
 
 **11. L'air dodge può essere usata più volte in aria, e lascia il personaggio in stato "helpless"?**
 Perché conta: incide molto sul recupero e sul gioco in verticale 3D, e va allineato ai salti aerei del M3.
 Ipotesi nella specifica: nessuna.
+**Risposta (2026-10-22):** La schivata in aria è un dive roll alla Super Mario 3D World; la modalità di movimento rolling è rimandata e non va implementata ora ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Restano aperti il numero di schivate aeree consentite e lo stato helpless; vedi anche M4.22 e M4.23.
 
 ### D. PvE, squadre e fuoco amico
 
 **12. Nel co-op PvE il fuoco amico è attivo di default? Se sì, quanto è "serio" (danno pieno) rispetto a una versione leggera (niente hitstun, danno ridotto)?**
 Perché conta: scelta di design più visibile del progetto; determina i valori delle varianti per relazione `Ally`.
 Ipotesi nella specifica: `bFriendlyFire` per modalità; esempio di variante alleati con forma dimezzata e senza hitstun (M4 §3, §10; combat §12.3).
+**Risposta (2026-10-22):** La modalità di riferimento è il PvE (la schivata base è definita per il PvE) e i nemici lanciati colpiscono altri nemici ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Il fuoco amico tra giocatori in co-op non è stato deciso: resta aperto.
 
 **13. Gli attacchi di supporto (cure, buff, ecc.) su alleati usano la stessa pipeline di hit (e quindi hitbox/hitstop), o sono esclusi dalla pipeline di danno?**
 Perché conta: combat §1 cita "heals on allies"; M4 non dice se una cura è un `Hit` con hitstop o un effetto separato.
@@ -158,16 +190,19 @@ Ipotesi nella specifica: nessuna; la pipeline ha solo `TeamFilter` e varianti pe
 **14. I nemici si colpiscono tra loro (fuoco amico IA, area/boss che colpisce i minion)? E i colpi dei nemici che toccano oggetti/ambiente?**
 Perché conta: con 40+ nemici un hit tra IA moltiplica costo e caos; serve per la tabella `HittableRelationships`.
 Ipotesi nella specifica: il resolver restituisce Self/Ally/Enemy/Neutral; `NoTeam` = Neutral (M4 §6.3); la politica sui Neutral non è decisa.
+**Risposta (2026-10-22):** Un nemico lanciato dal giocatore colpisce altri nemici ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)), quindi almeno quel caso di danno tra nemici è voluto (credito al lanciatore, M10 §6b). Restano aperti i colpi tra IA ordinari, le aree dei boss sui minion e la politica sui Neutral.
 
 ### E. Lag compensation ed equità
 
 **15. In PvE co-op la lag compensation (`bUseLagCompensation`, `MaxRewindMs`) deve essere attiva di default? Quale massimo di rewind è accettabile per i colpi contro nemici IA?**
 Perché conta: un rewind alto fa colpire "dietro l'angolo" per chi subisce, ma un rewind nullo fa mancare colpi che sul client sembravano ok.
 Ipotesi nella specifica: opzione per modalità; le IA non rewindano mai, ma il bersaglio sì (M4 §9); nessun valore per `MaxRewindMs`.
+**Risposta (2026-10-22):** Server di ascolto: un amico ospita, gli altri sono client ([direzione §6b](game-design-direction.md#6b-network-topology-listen-server-owner-input-2026-10-22)). L'host non ha latenza né rewind: la lag compensation vale solo per i colpi dei client. Resta aperto il massimo di rewind per i client e se attenuare il vantaggio dell'host (vedi M4.24).
 
 **16. Quando un giocatore subisce un colpo, accettiamo che arrivi come correzione (rollback ~RTT/16 frame, "ti colpisce con ritardo"), o si vuole che M4 anticipi il colpo sul client locale (forward prediction)?**
 Perché conta: è la decisione di feel più rischiosa per il giocatore colpito (movimento che scatta indietro); la specifica rimanda la scelta.
 Ipotesi nella specifica: forward prediction spenta in M4, ogni hit sul giocatore locale è una correzione (M4 §13; combat §12.7).
+**Nota (2026-10-22):** Con il server di ascolto la correzione ritardata riguarda solo i client; l'host non vede mai un rollback sui propri colpi subiti ([direzione §6b](game-design-direction.md#6b-network-topology-listen-server-owner-input-2026-10-22)). La scelta di feel per i client resta aperta.
 
 **17. Se il colpo predetto dall'attaccante viene poi smentito dal server (il bersaglio era intangibile/aveva schivato), cosa deve vedere il giocatore: effetti annullati subito, o lasciati finire?**
 Perché conta: flash e hitstop visivi già mostrati e poi annullati possono sembrare un bug; definisce la tolleranza di presentazione.
@@ -182,6 +217,30 @@ Ipotesi nella specifica: nessuno step di clank in M4; trade semplice con entramb
 **19. Cue e feedback dei colpi (flash, scintille, suono, camera shake, numeri di danno): quali sono obbligatori in M4 e quali possono rimandare?**
 Perché conta: la presentazione sulla vittima interpolata è dichiarata essenziale in PvE, ma i contenuti minimi non sono elencati.
 Ipotesi nella specifica: flash sul materiale, cue locale, pausa mesh (M4 §9); nessun feedback sul giocatore colpito (camera, controller).
+**Risposta (2026-10-22):** Quando la salute scende devono saltare via pezzi: piccoli frammenti estetici o interi arti, e alla morte i corpi vanno in pezzi ([direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Restano aperti flash, suoni, camera shake e numeri di danno obbligatori in M4.
+
+### G. Dopo la direzione del 22/10: impatti, schivata e host
+
+**20. Negli impatti con le superfici, chi deve decidere tra splat, bounce e distruzione: l'attacco, la vittima o la superficie?**
+Perché conta: cambia dove il designer scrive i dati e chi può "forzare" un risultato (una mossa finale che sfonda sempre il muro, un nemico pesante che non si schiaccia mai).
+Ipotesi nella specifica: tre livelli con precedenza: dati dell'attacco (forza o vieta), poi la vittima (cosa può subire), poi la superficie (materiale fisico mappato su `Surface.Type.*`).
+
+**21. "Distruzione" all'impatto significa che si rompe la superficie (un muro di vetro) o che si frantuma la vittima?**
+Perché conta: sono due meccaniche diverse (richiesta alla superficie contro danno che può raggiungere il tetto e causare KO).
+Ipotesi nella specifica: si rompe la superficie e la vittima prosegue più lenta; la distruzione della vittima è solo un danno da impatto che può arrivare al tetto.
+
+**22. Nella schivata in aria (dive roll) vale la stessa regola dei piedi soli invincibili, o il corpo intero è intangibile?**
+Perché conta: decide quanto è sicura la schivata aerea e come si disegnano gli hurtbox.
+Ipotesi nella specifica: stessa regola della schivata a terra (solo i piedi), finché non decidi altrimenti.
+
+**23. Sui piedi la schivata è "intangibile" (il colpo non registra proprio) o "invincibile" (il colpo registra ma senza danno)?**
+Perché conta: con l'invincibilità l'attaccante ha comunque hitstop e conferma del colpo, con l'intangibilità no.
+Ipotesi nella specifica: intangibile.
+
+**24. Il vantaggio dell'host (zero latenza) va accettato così com'è o attenuato?**
+Perché conta: in cooperativo è tollerabile, ma l'host rompe arti e colpisce in modo visibilmente più immediato.
+Ipotesi nella specifica: nessuna mitigazione nella simulazione; la compensazione del lag resta la leva di equità; eventuale ritardo solo di presentazione se i playtest lo chiedono.
+
 
 ### Lacune nella specifica
 
@@ -193,6 +252,86 @@ Ipotesi nella specifica: flash sul materiale, cue locale, pausa mesh (M4 §9); n
 - Cure/buff agli alleati e `HitType` diversi da Normal (Grab/Projectile/Unblockable) sono nei dati ma non hanno comportamento in M4; non è chiaro se vadano ignorati o rifiutati dal validatore.
 - Regole per colpire bersagli con stati speciali (già in hitstun/tumble, in hitstop, già a terra, sul muro, in dodge) e relativa gestione di combo/hitstun decay non sono descritte.
 - Non è specificato cosa succede se l'attaccante muore, viene colpito o viene cancellato nello stesso frame in cui colpisce (hit già consegnato vs. annullato).
+
+---
+
+## Parti distruttibili (M4b): domande al proprietario del progetto
+
+Riferimento: `combat-parts.md` (plugin `GSTNParts`) e [game-design-direction.md](game-design-direction.md) §1, §2, §5. Le ipotesi indicate sono quelle scritte nella specifica.
+
+1. Le parti dei giocatori si rompono davvero (con effetti sul gameplay, es. braccio perso = niente pugni) o sono solo estetiche?
+   Perché conta: decide se serve bloccare comandi/hitbox per i giocatori e quanto pesa sul bilanciamento PvP/co-op.
+   Ipotesi nella specifica: sui giocatori le rotture sono solo estetiche di default; gli effetti di gameplay sono opzionali per kit.
+   **Risposta (2026-10-22):** Le parti valgono anche per i giocatori: al calare della vita perdono pezzi, piccoli o interi arti ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model), [direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Resta aperto se la perdita abbia effetti di gameplay (per esempio un braccio perso) o sia solo estetica.
+
+2. Una parte rotta può essere ripristinata (cura, respawn, checkpoint) o resta rotta fino al reset dell'entità?
+   Perché conta: stato monotono = rollback e replica molto più semplici; il ripristino richiede un secondo meccanismo.
+   Ipotesi nella specifica: la maschera delle parti rotte è monotona, si azzera solo al reset/respawn.
+
+3. Quando un colpo supera il tetto di una parte, il danno in eccesso passa alla vita principale?
+   Perché conta: cambia quanto conviene "finire" una parte e il numero di colpi per uccidere.
+   Ipotesi nella specifica: nessun overflow; il bonus alla vita principale è un effetto esplicito per parte ("MainDamage").
+
+4. Rompere una parte infligge un danno extra alla vita principale (es. testa) o può uccidere direttamente?
+   Perché conta: definisce se esistono parti letali (decapitazione) e il ruolo dei punti deboli.
+   Ipotesi nella specifica: configurabile per parte (percentuale extra o uccisione), nessun default letale.
+   **Risposta (2026-10-22):** I punti deboli hanno bassa durezza e alto danno durabile, cioè trasferiscono molto alla vita principale ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)). Restano aperti i valori e se esistano parti letali (decapitazione).
+
+5. La penetrazione è un valore intero a livelli (come i livelli di armatura di Helldivers) o un numero continuo?
+   Perché conta: i livelli interi rendono la regola prevedibile per i designer e deterministica; il continuo dà più sfumature.
+   Ipotesi nella specifica: livelli interi 0-15 per durezza e penetrazione, con tabella a fasce (sotto, pari, sopra, molto sotto).
+   **Risposta (2026-10-22):** Il riferimento è Helldivers 2, dove durezza e penetrazione sono livelli di armatura ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)); la lettura a livelli interi resta da confermare.
+
+6. Un colpo molto sotto la durezza viene deviato del tutto (nessun danno alla parte, nessun hitstun) ma registra comunque?
+   Perché conta: definisce il feedback dei colpi inutili (scintille, hitstop breve) e quanto si può "spammare" contro armature.
+   Ipotesi nella specifica: sì, deviato = hit registrato, hitstop ridotto, niente stagger, danno principale quasi nullo.
+   **Risposta (2026-10-22):** La penetrazione dell'hitbox contro la durezza della parte decide se la parte subisce danno e può essere distrutta ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)). Resta aperto il comportamento dei colpi molto sotto la durezza (deviazione, hitstop, hitstun).
+
+7. Se un colpo tocca più parti insieme, quale conta?
+   Perché conta: i punti deboli devono essere colpibili in modo affidabile, ma non deve essere sempre il punto debole a vincere.
+   Ipotesi nella specifica: vince la hurtbox con priorità più alta (i punti deboli ne hanno di più), a pari priorità l'indice più basso.
+
+8. Il peso effettivo scende solo con il danno percentuale, o anche con la perdita di arti (un nemico senza gambe vola diverso)?
+   Perché conta: decide se ogni parte ha una "massa persa" e quanto un nemico mutilato diventa leggero.
+   Ipotesi nella specifica: curva di peso sulla percentuale (da 1.0 a circa 0.6 al tetto) più una frazione di massa persa per parte rotta, con un minimo.
+   **Risposta (2026-10-22):** Il nemico ha un peso legato alla salute rimasta, che entra nel knockback ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)). Resta aperto se anche la perdita di arti alleggerisca (lettura da confermare).
+
+9. Cosa significa esattamente "juggle": un fattore che aumenta il peso (più pesante = più difficile tenere in aria) o un decadimento che cresce con i colpi in aria?
+   Perché conta: cambia la sensazione delle combo aeree e il rischio di combo infinite sui nemici.
+   Ipotesi nella specifica: fattore moltiplicativo sul peso per parte e per entità, più un parametro globale "AirborneJuggleScale" (default 1).
+   **Risposta (2026-10-22):** Il "juggle" è il peso per il knockback, insieme al fattore di stagger ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)), quindi un fattore sul peso e non un decadimento. Restano aperti i valori e il parametro globale per i colpi in aria.
+
+10. Lo stagger funziona a soglia (sotto una certa forza nessuna reazione, come l'armor) o sempre proporzionale?
+    Perché conta: i boss "super armor" richiedono la soglia; i nemici piccoli vanno meglio con la proporzionalità.
+    Ipotesi nella specifica: soglia globale nelle regole; sotto la soglia danno e hitstop ma niente hitstun né lancio.
+
+11. L'hitstop dell'attaccante deve poter dipendere dalla parte colpita (più lungo sul punto debole)?
+    Perché conta: l'attaccante lo predice in locale su dati vecchi; usare solo dati statici evita disallineamenti.
+    Ipotesi nella specifica: sì, ma solo da penetrazione e durezza/reazione statica della parte, mai da stato dinamico della vittima.
+    **Risposta (2026-10-22):** Hitstun e hitstop dipendono da cosa e dove viene colpito ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)), quindi dalla parte. Resta aperto se l'hitstop dell'attaccante debba usare solo dati statici della parte (ipotesi della specifica).
+
+12. Quando i nemici diventano afferrabili: serve un numero minimo di parti rotte, parti specifiche, o una combinazione?
+    Perché conta: è il cuore dell'esempio dell'owner (nemico grosso inafferrabile finché non si rompe).
+    Ipotesi nella specifica: un "gate" per set di parti (numero minimo e/o parti richieste) che proietta il tag Combat.Part.GrabLocked, usato dalle regole di grab.
+    **Risposta (2026-10-22):** Un nemico grande diventa afferrabile quando gli si rompono delle parti ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Restano aperti il numero minimo e quali parti, o la combinazione.
+
+13. I pezzi staccati (arti) devono poter essere raccolti, lanciati o fare danno, oppure sono solo decorazione?
+    Perché conta: se sono interattivi diventano oggetti di gioco (M10) con replica e simulazione, non più estetica.
+    Ipotesi nella specifica: solo estetici, mai nella simulazione; qualsiasi oggetto lanciabile è un sistema separato (M10).
+    **Risposta (2026-10-22):** Dalle parti saltano via piccoli pezzi estetici o interi arti ([direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)); non è detto se gli arti staccati siano interattivi. Resta aperto: la specifica li tratta come puramente estetici.
+
+14. Vuoi che il guscio di cristallo e la pelle abbiano regole di gioco (es. cristallo esposto = più vulnerabile)?
+    Perché conta: sarebbe un secondo livello di durezza per area e cambierebbe dati e bilanciamento.
+    Ipotesi nella specifica: no, è solo presentazione; la vulnerabilità si ottiene con durezza e trasferimento delle parti.
+    **Risposta (2026-10-22):** Cristallo all'interno e pelle umana all'esterno è l'idea di presentazione ([direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Resta aperto se abbia regole di gameplay (cristallo esposto più vulnerabile).
+
+15. Con il listen server, accetti che l'host rompa le parti senza latenza (vantaggio dell'host) o vuoi mitigarlo (es. ritardare solo la presentazione)?
+    Perché conta: la rottura di parti è molto visibile e rende evidente il vantaggio di chi ospita.
+    Ipotesi nella specifica: nessuna mitigazione di default; opzione per ritardare solo la presentazione degli effetti irreversibili.
+
+16. Quanto deve reggere il PC dell'host in scena (numero di nemici, detriti e frammenti contemporanei)?
+    Perché conta: simulazione, rendering e upload condividono la macchina dell'host; i budget di detriti dipendono dalla macchina minima.
+    Ipotesi nella specifica: 48 frammenti fisici, 600 particelle di cocci, 2 Geometry Collection, con riduzione automatica se il frame time sale.
 
 ---
 
@@ -275,9 +414,16 @@ Ipotesi nella specifica: flash sul materiale, cue locale, pausa mesh (M4 §9); n
 18. I tag delle hurtbox (Head, Torso, Arm...) sono sufficienti, o hai già una tassonomia delle zone del corpo per danni o reazioni?
     Perché conta: i tag nativi sono costosi da cambiare dopo che gli asset li usano.
     Ipotesi nella specifica: sei tag nativi in Core, estendibili da ini di progetto; il lato (sinistra/destra) non è un tag.
+    **Risposta (2026-10-22):** Le zone del corpo non sono solo tag di hurtbox: le parti distruttibili hanno durezza, vita propria e trasferimento alla vita principale ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)); la tassonomia definitiva nasce da combat-parts.md. Resta aperto quali tag di zona servano oltre al set a sei tag e come si mappano sulle parti.
 19. I tag per gli eventi e i test dell'editor vanno nei plugin o restano solo nel contenuto di test del progetto?
     Perché conta: tag nei plugin vincolano chi li riusa; nell'ini del progetto restano facili da cambiare.
     Ipotesi nella specifica: nel contenuto di test del progetto (ini), non nei plugin.
+
+### Parti distruttibili (dopo la direzione del 22/10)
+
+20. Gli strumenti per i set di parti (durezza, penetrazione, anteprima) possono vivere nel modulo editor del plugin GSTNParts invece che in M5?
+   Perché conta: mantiene il combattimento utilizzabile senza parti, ma sposta il lavoro di editor in un secondo plugin.
+   Ipotesi nella specifica: sì, `GSTNPartsEditor` riusa anteprima, generatore da Physics Asset e validatori di M5 tramite hook pubblici (M5 §12b).
 
 ---
 
@@ -290,18 +436,22 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 1. Lo scudo deve essere limitato (barra che si consuma e si rompe) o sempre disponibile in PvE co-op?
    Perché conta: cambia il rischio nei combattimenti contro boss e il bilanciamento di tutte le mosse nemiche.
    Ipotesi nella specifica: limitato, con barra `ShieldHealth`, rigenerazione ritardata e rottura con stordimento lungo.
+   **Risposta (2026-10-22):** Nessuna implementazione standard di scudo e schivata: dipende dal kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Resta aperto il comportamento dello scudo del kit di riferimento (barra o sempre disponibile).
 
 2. Lo scudo è direzionale (arco davanti al personaggio) o a bolla a 360°?
    Perché conta: l'arco rende rilevante il posizionamento, la bolla è più semplice da leggere per il giocatore.
    Ipotesi nella specifica: arco di 140° sul piano di movimento, direzione fissata alla pressione (nessuna rotazione).
+   **Risposta (2026-10-22):** Lo scudo dipende dal kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)): direzionale o a bolla è un dato del kit, non una regola globale. Resta aperta la scelta per il kit di riferimento.
 
 3. Il parry è una finestra nei primi frame della pressione dello scudo o ha un tasto dedicato?
    Perché conta: decide quanto è facile fare parry per sbaglio e quanto pesa la ricompensa.
    Ipotesi nella specifica: 5 frame iniziali dello scudo, con blocco se si ripreme subito dopo aver rilasciato.
+   **Risposta (2026-10-22):** Scudo e schivata dipendono dal kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Resta aperto se il parry del kit di riferimento sia una finestra iniziale o un tasto dedicato.
 
 4. Cosa guadagna chi fa parry e cosa perde l'attaccante (stordimento, vantaggio, barra EX, riflessione proiettili)?
    Perché conta: stabilisce se il parry è una scelta rischiosa o la risposta standard.
    Ipotesi nella specifica: difensore libero prima, attaccante stordito per frame configurabili per classe di colpo, guadagno di barra; nessuna riflessione.
+   **Risposta (2026-10-22):** Il premio del parry è un dato del kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Restano aperti stordimento, vantaggio, barra EX e riflessione per il kit di riferimento.
 
 5. Boss e attacchi speciali possono essere non parabili o non bloccabili? Le super sono bloccabili?
    Perché conta: evita che un'abilità cardine del boss sia annullata da un parry o da uno scudo.
@@ -310,6 +460,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 6. Lo scudo è disponibile in aria e su parete?
    Perché conta: in un platform fighter 3D la difesa aerea cambia molto il gioco verticale.
    Ipotesi nella specifica: solo a terra; in aria e su parete si usa lo schivata.
+   **Risposta (2026-10-22):** In aria la difesa base è la schivata: un dive roll alla Super Mario 3D World ([direzione §6](game-design-direction.md#6-dodge-and-shield)); lo scudo, anche in aria, dipende dal kit. Resta aperto se esista uno scudo aereo o a parete.
 
 7. In PvE i colpi dei nemici comuni consumano lo scudo come quelli dei giocatori?
    Perché conta: i minion in massa potrebbero rompere lo scudo in un attimo.
@@ -334,6 +485,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 11. Chi può essere afferrato e chi può afferrare: giocatori tra loro, nemici verso i giocatori, giocatori verso i nemici, boss?
    Perché conta: una presa subita da un boss è un'interazione completamente diversa da una tra alleati.
    Ipotesi nella specifica: i boss hanno `Combat.Immunity.Grab`; i nemici normali possono afferrare i giocatori con la stessa pipeline.
+   **Risposta (2026-10-22):** Un nemico grande non si può afferrare finché non si rompono delle parti; poi diventa afferrabile e lanciabile ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)), quindi per i nemici grandi il gate a parti e peso può sostituire l'immunità assoluta alla presa. Restano aperti nemici che afferrano i giocatori e se esistano nemici davvero inafferrabili.
 
 12. Un alleato può afferrare un compagno (fuoco amico) o salvarlo da una presa nemica colpendo il nemico?
    Perché conta: è la parte cooperativa più visibile del sistema.
@@ -346,6 +498,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 14. Quanti lanci ha un afferratore e con quali input (avanti, indietro, su, giù)? Si può afferrare in aria?
    Perché conta: determina quanti slot e animazioni servono per ogni kit.
    Ipotesi nella specifica: 4 lanci e pummel, grab con Attacco+Scudo a terra, nessuna presa aerea.
+   **Risposta (2026-10-22):** Il tasto della presa è anche il tasto di interazione generale, con varianti di input (per esempio tenere premuto) ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)); M6 §8 lo recepisce: tocco = presa, pressione lunga = presa pesante, tocco da afferratore = rilascio. L'ipotesi "Attacco+Scudo" qui sopra è superata. Restano aperti il numero di lanci, gli input direzionali e la presa aerea.
 
 15. Dopo una presa o un lancio c'è immunità alla presa? Per quanti frame e vale anche per il lanciatore?
    Perché conta: senza immunità le prese si ripetono all'infinito, con troppa non si può punire.
@@ -356,6 +509,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 16. Come deve sentirsi una presa per chi la subisce sul proprio client (circa 1 RTT di ritardo prima dell'effetto) e per chi la fa?
    Perché conta: la specifica non predice il cambio di ruolo del giocatore che afferra, solo hitstop e feedback.
    Ipotesi nella specifica: nessuna previsione del ruolo per le prese (solo hitstop e presentazione); la telecamera di chi è afferrato segue la posa derivata.
+   **Nota (2026-10-22):** Con il server di ascolto l'host che afferra non ha ritardo; i client mantengono circa 1 RTT ([direzione §6b](game-design-direction.md#6b-network-topology-listen-server-owner-input-2026-10-22)). La scelta di feel per i client resta aperta.
 
 17. Se lo spike del link parcheggiato non passa le soglie (errore di presentazione p95 10 cm / 25 cm), cosa preferisci: accettare, ritoccare le soglie o patchare il fork per la predizione in avanti?
    Perché conta: è la decisione che può far cambiare architettura al milestone.
@@ -379,6 +533,20 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
    Perché conta: nel primo caso un dato che cita `Combat.Link.Role.Holder` non si carica senza `GSTNHeld` (lo segnala `IsDataValid`); nel secondo `GSTNLink` conosce i nomi dei plugin successivi.
    Ipotesi nella specifica: dichiarati dal plugin proprietario del tipo; `GSTNLink` dichiara solo quelli generici.
 
+### Interazione e presa (dopo la direzione del 22/10)
+
+22. Se un nemico e un alleato (o un oggetto) sono entrambi a portata del tasto interazione, quale ha la precedenza?
+   Perché conta: lo stesso tasto fa afferrare, montare o raccogliere; un errore di contesto è frustrante.
+   Ipotesi nella specifica: vince il più vicino alla direzione di sguardo; a parità, ordine dati: afferra, raccogli, monta.
+   
+23. Tenere premuto il tasto di interazione deve dare la presa pesante (più lenta, per bersagli più pesanti)?
+   Perché conta: definisce il significato della pressione lunga e quanto si può afferrare.
+   Ipotesi nella specifica: tocco = presa normale, pressione lunga = presa pesante con soglia di peso maggiore; rilascio = tocco da afferratore.
+   
+24. Un nemico può essere afferrabile per peso (si alleggerisce con la salute) oltre che per parti rotte, oppure basta il meccanismo delle parti?
+   Perché conta: senza parti (o con nemici semplici) serve comunque una regola di afferrabilità.
+   Ipotesi nella specifica: entrambe le regole disponibili e combinabili (devono passare tutte quelle configurate).
+
 ---
 
 ## M7 — Piggyback e mosse in coppia: domande al project owner
@@ -388,6 +556,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 1. Per montare/smontare/lasciare cadere va bene un solo tasto "Interact" con significato deciso dal ruolo (montare, smontare, drop)?
    Perché conta: decide i binding, le collisioni di input e quanti tasti servono sul pad.
    Ipotesi nella specifica: sì, un tasto; Drop = Interact + accovacciarsi; il cooldown di 30 frame evita il re-mount immediato.
+   **Risposta (2026-10-22):** Sì: un solo tasto, quello della presa, è anche il tasto di interazione generale ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Il montaggio è un significato contestuale scelto dal contesto (M6 §8, tag `Combat.Interact.Target.Mount`). Resta aperta la precedenza tra alleato e nemico a portata (vedi M6.22).
 2. Il rider può smontare anche saltando, oppure il salto è riservato alla mossa in coppia "boost jump"?
    Perché conta: il salto è il gesto più naturale per scendere, ma qui è anche il trigger del boost.
    Ipotesi nella specifica: Jump del rider = boost jump (mossa in coppia); lo smontaggio semplice usa Interact.
@@ -405,6 +574,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 6. Il montaggio deve sembrare immediato per il rider anche con 60 ms di lag, accettando un piccolo "scatto" se il server rifiuta?
    Perché conta: è il compromesso tra reattività e correttezza (rollback visibile in caso di rifiuto).
    Ipotesi nella specifica: sì, predizione ottimistica a 2 frame; il rifiuto costa un rollback con blend visivo.
+   **Nota (2026-10-22):** Con il server di ascolto, se l'host è il rider il montaggio è istantaneo e senza rifiuto percepibile; per i client resta valido il compromesso descritto ([direzione §6b](game-design-direction.md#6b-network-topology-listen-server-owner-input-2026-10-22)).
 7. Quanto deve penalizzare il peso del rider il carrier (velocità, salto, salti aerei)?
    Perché conta: è il valore di bilanciamento principale di `GE_CarryLoad`.
    Ipotesi nella specifica: penalità lineare sul rapporto peso rider / `MaxCarryWeight`, valori per kit; pari peso = rider alla soglia massima.
@@ -436,6 +606,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 15. Un ritardo di circa metà RTT più interpolazione prima che il partner veda partire la propria parte è accettabile, o va prevista la predizione in avanti del partner?
     Perché conta: la predizione in avanti richiede modifiche al fork e costo CPU; è la decisione più costosa del milestone.
     Ipotesi nella specifica: accettato (la parte del partner è un lancio/reazione); si decide dopo la misura dello spike 4 (soglia 150 ms).
+    **Nota (2026-10-22):** Con il server di ascolto, se il partner è l'host non c'è ritardo di rete sulla sua parte della mossa; per un partner client resta valida la domanda ([direzione §6b](game-design-direction.md#6b-network-topology-listen-server-owner-input-2026-10-22)).
 
 ### Regole di contorno
 16. Può montare solo un alleato giocatore, o anche un PNG alleato o un nemico (domato) in futuro?
@@ -471,20 +642,24 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
 3. Esistono minion volanti, a distanza (proiettili) o di grandi dimensioni?
    Perché conta: i volanti richiedono un altro backend di movimento, i proiettili un sistema di hitbox `Projectile` che M4 non ha ancora.
    Ipotesi nella specifica: solo minion a terra e corpo a corpo; volanti possibili in seguito col backend Mover per tipo.
+   **Risposta (2026-10-22):** I nemici di grandi dimensioni esistono (non afferrabili finché non perdono parti) ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Restano aperti volanti e a distanza.
 
 ### Combattimento e reazioni
 
 4. I minion hanno punti vita (muoiono a 0) o la percentuale in stile platform fighter (volano sempre piu lontano)?
    Perché conta: cambia modello di knockback, interfaccia e come si "uccide" un nemico.
    Ipotesi nella specifica: punti vita, con knockback che cresce con la frazione di vita persa (`KnockbackModel_HealthFraction`).
+   **Risposta (2026-10-22):** Percentuale e tetto insieme: la salute è una percentuale che causa la distruzione della parte o del nemico oltre un massimo, con peso legato alla salute rimasta ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)); i nemici hanno anche parti con vita propria ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model)). La specifica a punti vita con frazione persa va allineata. Resta aperto il valore del tetto per tipo di minion.
 
 5. Quanto devono volare via i minion colpiti: sempre lanciati, solo stordimento, o dipende dal colpo? Possono rimbalzare su muri e pavimento (tech, juggle)?
    Perché conta: lanci lunghi richiedono collisione e movimento piu robusti e piu tempo di simulazione per minion.
    Ipotesi nella specifica: lancio balistico con atterraggio e knockdown, nessun tech, nessun rimbalzo avanzato.
+   **Risposta (2026-10-22):** Il peso scende con la salute (più danno, più volo), stagger e juggle dipendono da cosa e dove si colpisce, e l'impatto con superfici dà splat, rimbalzo o distruzione secondo il designer ([direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight), [direzione §4](game-design-direction.md#4-impacts-with-surfaces)). Restano aperti se ogni colpo lanci sempre il minion e se esistano tech o juggle avanzati.
 
 6. I minion possono avere armatura/poise (non interrompibili da colpi leggeri) o parare, schivare, usare scudo?
    Perché conta: la difesa dei minion e M6; armatura e invece gia gestita dalla pipeline.
    Ipotesi nella specifica: solo armatura (`PoiseHits`); niente scudo, parata o schivata nei minion.
+   **Risposta (2026-10-22):** I nemici hanno parti con durezza e fattore di stagger ([direzione §1](game-design-direction.md#1-destructible-body-parts-helldivers-2-model), [direzione §2](game-design-direction.md#2-health-as-a-capped-percentage-and-weight)), che fa da armatura. Restano aperti scudo, parata e schivata dei minion (schivata e scudo dipendono dal kit, [direzione §6](game-design-direction.md#6-dodge-and-shield)).
 
 7. Un singolo attacco del giocatore deve poter colpire molti minion insieme (spazzata, area)?
    Perché conta: richiede di alzare l'anello `HitTargets` e influisce sul costo delle query.
@@ -517,12 +692,14 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
 13. Cosa succede alla morte: cadavere, ragdoll, drop, punteggio? I cadaveri contano per il limite?
     Perché conta: i cadaveri occupano slot e banda; il ragdoll e solo estetico e non replicato.
     Ipotesi nella specifica: animazione di morte, cadavere breve (secondi), ragdoll solo cosmetico sul client.
+    **Risposta (2026-10-22):** I nemici morti vanno in pezzi: cristallo all'interno, rivestito di pelle, con pezzi che saltano via al calare della vita ([direzione §5](game-design-direction.md#5-death-and-damage-presentation-crystal-people)). Restano aperti cadavere, drop, punteggio e se i frammenti contino per il limite di entità.
 
 ### Giocatori, piattaforme, prestazioni
 
-14. Quanti giocatori per partita co-op (2? 4? di piu) e il server dedicato su quale hardware (vCPU cloud, macchina propria)?
+14. Quanti giocatori per partita co-op (2? 4? di piu) e su quale macchina gira l'host del server di ascolto (il PC di casa di un amico)?
     Perché conta: il costo server cresce con i giocatori (query e rollback) e il budget in ms dipende dalla macchina.
-    Ipotesi nella specifica: fino a 4 giocatori, server paragonabile al PC di sviluppo; da confermare con la misura.
+    Ipotesi nella specifica: fino a 4 giocatori, host paragonabile al PC di sviluppo, che gioca e fa da server insieme; da confermare con la misura.
+    **Risposta (2026-10-22):** Il server di ascolto è deciso: un amico ospita e gli altri sono client ([direzione §6b](game-design-direction.md#6b-network-topology-listen-server-owner-input-2026-10-22)). Restano aperti il numero di client e l'hardware tipico dell'host (vedi M8.20).
 
 15. Piattaforme client e requisiti minimi (PC solo? console? 60 fps?), e quanti minion visibili devono girare a 60 fps?
     Perché conta: il costo delle animazioni dei burattini puo superare quello del server e impone LOD e condivisione animazioni.
@@ -547,6 +724,17 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
 19. Il plugin dei minion deve poter essere disattivato in un progetto che usa solo i combattenti, e deve essere riutilizzabile in altri progetti senza il progetto GASP?
     Perché conta: stabilisce quanto vincolare le dipendenze (nessuna verso il modulo di progetto) e dove stanno i contenuti di esempio.
     Ipotesi nella specifica: plugin `GSTNMinion` separato che dipende solo da `GSTNCombat`; il resto del progetto non lo conosce.
+
+### Server di ascolto (dopo la direzione del 22/10)
+
+20. Con il server di ascolto, quanti client si connettono in genere all'host (2, 3, 7)? E che upload ha l'host di casa (circa)?
+   Perché conta: la banda dell'host si moltiplica per i client; decide il tetto per client dei minion (5 KB/s) e se serve il tetto totale dell'host.
+   Ipotesi nella specifica: fino a 3 client, host con almeno 5 Mbit/s di upload, tetto totale soft di 40 KB/s (M8 §4d.1).
+   
+21. Con 40 minion, la CPU dell'host deve restare libera per il suo gioco: va bene ridurre i minion attivi sull'host (per esempio 32 attivi in combattimento invece di 48) se il frame non basta?
+   Perché conta: decide se il numero richiesto (40) è un obiettivo fisso o un tetto che scende in base alla macchina dell'host.
+   Ipotesi nella specifica: sì, si riduce prima `MaxActiveT0`, poi il LOD dei puppet; il massimo N misurato sull'host viene registrato onestamente (M8 §4d.1).
+   
 
 ---
 
@@ -623,10 +811,12 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
 1. Quali tipi di oggetto vuoi davvero in gioco: consumabili, armi raccolte, oggetti di scena lanciabili, nemici (minion) afferrati e lanciati?
    Perché conta: decide le fasi (M10a props, b armi, c presa al volo, d minion) e quanto lavoro serve.
    Ipotesi nella specifica: tutte e quattro, in quattro fasi; i minion per ultimi.
+   **Risposta (2026-10-22):** Nemici afferrati e lanciati addosso ad altri nemici sono voluti, anche come proiettili con hitbox ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Gli altri tipi (consumabili, armi raccolte, oggetti di scena) non sono stati commentati: restano aperti.
 
 2. Quante classi di taglia servono e cosa cambia tra l'una e l'altra (velocità, salto, comandi permessi)?
    Perché conta: ogni taglia moltiplica i binding e il contenuto.
    Ipotesi nella specifica: Light, Medium, Heavy, Huge; Heavy permette solo camminare, posare, lanciare.
+   **Risposta (2026-10-22):** La taglia conta per la presa: un nemico troppo grande non si afferra finché non perde parti ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Restano aperti il numero di classi di taglia e cosa cambia nei comandi permessi.
 
 3. Le armi raccolte sostituiscono l'arma primaria mentre le tieni, hanno una durata (colpi/usi) e poi si rompono o diventano oggetti lanciabili?
    Perché conta: cambia come si progettano i binding e la durabilità.
@@ -637,6 +827,7 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
 4. Raccogliere è un comando dedicato (es. tasto Afferra) o contestuale all'attacco vicino a un oggetto?
    Perché conta: occupa o no uno slot e può confliggere con le mosse esistenti.
    Ipotesi nella specifica: comando dedicato `Command.Link.Pickup`, senza pattern di default, assegnato dal kit.
+   **Risposta (2026-10-22):** Contestuale: il tasto della presa è anche il tasto di interazione, con tocco e pressione lunga come varianti ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)); M6 §8 e M10 §8 lo recepiscono con il tag `Combat.Interact.Target.Pickup`. Resta aperta la precedenza tra oggetto, nemico e alleato (vedi M6.22).
 
 5. Se due giocatori raccolgono lo stesso oggetto nello stesso istante, chi vince?
    Perché conta: in co-op è un momento di attrito; la regola deve essere comprensibile.
@@ -657,6 +848,7 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
 9. Cosa succede all'impatto: rimbalza, si ferma e può essere raccolto di nuovo, si rompe, esplode? Dipende dall'oggetto?
     Perché conta: ogni comportamento complica fisica e rete; le geometrie complesse danno rimbalzi strani.
     Ipotesi nella specifica: comportamento per definizione (Break/Bounce/Stick/Explode), niente fisica Chaos.
+    **Risposta (2026-10-22):** Un lancio contro una superficie può causare splat, rimbalzo o distruzione a seconda del designer ([direzione §4](game-design-direction.md#4-impacts-with-surfaces)); M4 §7b ne fissa il meccanismo. Resta aperto chi decide (attacco, vittima o superficie, vedi M4.20).
 
 10. Un proiettile può colpire più bersagli (perforare)? Un nemico colpito può essere ricolpito dallo stesso oggetto dopo un rimbalzo?
     Perché conta: gruppi di colpo e bilanciamento delle folle.
@@ -665,6 +857,7 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
 11. Gli alleati possono essere colpiti da oggetti lanciati (fuoco amico)? Può dipendere dalla modalità?
     Perché conta: in co-op cambia molto la tensione e il design degli attacchi ad area.
     Ipotesi nella specifica: alleati ignorati di default, variante di fuoco amico per modalità.
+    **Risposta (2026-10-22):** I nemici lanciati colpiscono altri nemici ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Resta aperto se alleati giocatori e oggetti di scena subiscano fuoco amico.
 
 12. A chi va il merito di un KO: a chi ha lanciato anche dopo la sua morte? Se un alleato prende l'oggetto al volo e lo rilancia?
     Perché conta: statistiche, punteggi e assist.
@@ -691,6 +884,7 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
 17. Afferrare un minion e lanciarlo deve usare le stesse regole degli oggetti (danno, rimbalzo, presa al volo)?
     Perché conta: decide se M10d è un caso particolare o una meccanica nuova.
     Ipotesi nella specifica: il minion lanciato è un proiettile che rientra nel suo componente con stordimento.
+    **Risposta (2026-10-22):** Sì: afferrare e lanciare nemici è una meccanica voluta, con il nemico lanciato come proiettile con hitbox ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)); M10 §6b la tratta come caso dello stesso sistema. Restano aperti i dettagli di presa al volo e rimbalzi (vedi M10.20-22).
 
 ### Limiti e contenuti
 
@@ -701,3 +895,18 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
 19. Va bene che gli oggetti tenuti siano un plugin separato (`GSTNHeld`, che dipende da `GSTNCombat` e `GSTNLink`) che si può rimuovere senza toccare il resto?
     Perché conta: M10 usa il registro aperto dei tipi di link, `FGSTN_EntityRef` e il canale mano di M6 (§7.0), non hook propri in `GSTNCombat`; la modularità resta garantita.
     Ipotesi nella specifica: sì; i tag `Combat.Link.Type.Held` e dei ruoli Holder/HeldObject li dichiara `GSTNHeld` (domanda M6.21), così `GSTNCombat` e `GSTNLink` non lo conoscono.
+
+### Nemici lanciati (dopo la direzione del 22/10)
+
+20. Un nemico grande lanciato è un normale combattente (entità NP) con un hitbox generato dal suo stesso tick; va bene o i nemici afferrabili devono essere solo minion?
+   Perché conta: i combattenti NP lanciati richiedono un seam "lancio con credito" in M4/M6; solo minion è molto più semplice.
+   Ipotesi nella specifica: entrambi, ma M10d consegna prima i minion e poi i combattenti se il seam è pronto (M10 §6b).
+   
+21. Chi decide cosa succede quando un nemico lanciato sbatte contro una superficie (splat, rimbalzo, distruzione): il colpo, l'entità o la superficie?
+   Perché conta: M10 rimanda alle regole di M4 e non le ridefinisce; senza risposta le due specifiche potrebbero divergere.
+   Ipotesi nella specifica: stesse regole di un nemico lanciato da un colpo (M4); il lancio di oggetti-prop mantiene `ImpactBehaviour` dei dati dell'oggetto.
+   
+22. Il nemico lanciato può essere danneggiato mentre è in mano o in volo, e può colpire i suoi stessi alleati (altri nemici)?
+   Perché conta: decide `bHittableWhileHeld` e le regole di fuoco amico durante `ThrownBody`.
+   Ipotesi nella specifica: non colpibile mentre è in mano o in volo; colpisce qualsiasi nemico del lanciatore ignorando la squadra, credito al lanciatore (M10 §6b).
+   

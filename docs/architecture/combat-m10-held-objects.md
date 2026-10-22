@@ -5,21 +5,31 @@ and the M6/M7/M8 outlines in [combat-m5-m9.md](combat-m5-m9.md). Section numbers
 "Later — held and thrown objects" item (combat.md §13b) to **milestone M10**; combat.md §13b and §18 are updated by the
 acceptance criteria. Written 2026-10-21; M6–M8 are not implemented, so section 2 lists what is assumed from them.
 
+> **Revision 2026-10-22 (owner direction, [game-design-direction.md](game-design-direction.md) §1, §3, §4, §6b; it wins over
+> this file):** (1) **grabbed enemies (fighters or minions) thrown at other enemies are a first-class case**, no longer
+> "phase 2": §6b. (2) The pickup/grab button is the general **interact** button, with hold/tap variants: §8. (3) Reference
+> topology is a **listen server**: host-thrown objects have zero latency and the host pays the subsystem cost: §13b. All new
+> choices are *Proposal*.
+
 ## 1. Scope
 
 **Goal:** a character picks up an object, carries it, drops it or throws it; a thrown object flies, hits (or is caught,
 or breaks) with the ownership and credit of its thrower. Objects are items (consumables), picked-up **weapons**,
-**throwable props** of several size classes, and — phase 2 — **minions** (grab an enemy, throw it). Everything that is not
+**throwable props** of several size classes, and **enemies** (grab a minion or a broken-down enemy fighter, throw it at others:
+first-class by owner direction, §6b). Everything that is not
 a fighter is server-simulated and light (the minion philosophy, combat.md §13), with the thrower predicting its own side.
 
 In: object definitions and kinds, the `Held` link (holder / object), pickup, drop and throw abilities, the projectile entity
 and its motion, `Projectile`-space hitboxes (promised by M4 §6 step 1), ownership/credit, catching and deflecting
-(phase 2), carry load and role-only bindings, replication, harness. Out: thrown **fighters** (M7 pair moves), grabs (M6: a
+(phase 2), thrown enemies (§6b), carry load and role-only bindings, replication, harness. Out: thrown **allies as a pair move**
+(M7), the grab itself and its gate (M6; grab gating by broken parts is `Combat.Part.GrabLocked`, [combat-parts.md](combat-parts.md) §7), the surface-impact
+rules themselves (M4, referenced in §6b), grabs (M6: a
 grab links two entities; here the partner of a `Held` link is an object), destructible level geometry, physics-driven
 (Chaos) objects, inventory/crafting, persistence of objects across sessions.
 
 Phasing (*Proposal*): **M10a** props and items (pickup, carry, drop, throw, hit, break), **M10b** held weapons and
-durability, **M10c** catching and deflecting, **M10d** minions as objects. Each phase ends with its acceptance subset.
+durability, **M10c** catching and deflecting, **M10d** thrown enemies (§6b; owner direction makes it a headline feature, so the owner may pull
+it ahead of M10b; it needs M6 grabs and, for minions, M8). Each phase ends with its acceptance subset.
 
 ## 2. Assumptions about M6, M7, M8 (revise when those specs land)
 
@@ -92,6 +102,7 @@ owns the type, `GSTNHeld`, like `GSTNPiggyback` does for `Mount`. Data referenci
 | `Combat.Link.Type.Held` | `GSTNHeldCore` (link types are declared by their plugin, M6 §1c) | Link type holder ↔ object | Link request step (server) |
 | `Combat.Link.Role.Holder` | `GSTNHeldCore` | Role tag of the carrier; requirement of throw/drop bindings | Projected (combat.md §5.4) from `FGSTN_LinkState` |
 | `Combat.Link.Role.HeldObject` | `GSTNHeldCore` | Role of the object side (objects have no ASC; used in events and rules) | Event/rule data only, never a loose tag |
+| `Combat.Interact.Target.Pickup` | `GSTNHeldCore` (native, projected) | The nearest interactable is an object in reach (M6 §8 probe) | Requirement of `Command.Link.Pickup`; projected by the M6 link tick extension from this plugin's candidate provider |
 | `Command.Link.Pickup`, `Command.Link.Drop` | `GSTNHeld` ini `GSTNHeldCommands.ini` (designer family, CLAUDE.md input-tag exception) | Commands (slots with no default pattern, a kit sets them) | Kit bindings; the lock tags `Input.Lock.Command.Link[.Pickup]` come with the family |
 | `Combat.Held.Size.Light` / `.Medium` / `.Heavy` / `.Huge` | `GSTNHeldCore` (native) | Size class: selects bindings, carry load, allowed actions | Object definition (static); projected on the holder as `Combat.Held.Carrying.<size>` |
 | `Combat.Held.Carrying` (root) and `.Light/.Medium/.Heavy/.Huge` | `GSTNHeldCore` | Holder state: carries an object of that size | Projected from the link (adapter), absolute counts; removed on link end |
@@ -127,9 +138,47 @@ Reused unchanged: `Combat.Relationship.*`, `Combat.Event.Hit.*`, `Combat.State.H
 - **Props:** size classes decide carry load (`GE_HoldLoad`: speed/jump scaled by `Weight`, same pattern as M7's carry-load GE, own class),
   allowed commands while carrying (`FGSTN_HoldRules` per size: `Light` allows everything, `Medium` blocks shield and
   air-attacks, `Heavy` allows walk, drop, throw only, `Huge` needs `MaxCarryWeight` and slow walk).
-- **Minions** (M10d): `Kind.Minion` is not a definition but a *state* of an M8 minion: a `Grab` hitbox creates a link whose
-  partner is `FGSTN_EntityRef{Minion}`; the minion's combat state is suspended; throw spawns a projectile that **is** the minion
-  (it re-enters its component on landing with a stun). Needs M6 grabs and M8.
+- **Minions** (M10d): `Kind.Minion` is not a definition but a *state* of an M8 minion: see §6b.
+
+## 6b. Thrown enemies (owner direction 2026-10-22; *Proposal*)
+
+Flow wanted by the owner: a large enemy cannot be grabbed; the player breaks parts off it; now it is grabbable and can be
+thrown, for example **at other enemies**. M6 owns the grab and its gate, M8 and `GSTNParts` own the victim data, this section owns
+the **throw and the thrown body as a projectile**.
+
+**Contract with M6 and M4 (consumed, not redefined).** [M6](combat-m6-defence-links.md) §8 ("Throwing a grabbed enemy at other
+enemies") ends the grab link with a `Throw` hit whose `ThrowHit.ExtensionData` carries an **`FGSTN_ThrownBodyExtension`**
+(declared by this plugin; ignored with a warning when `GSTNHeld` is off, so the throw is then the plain M6 launch). The `Throw`
+resolution writes an **`FGSTN_ThrownOutcome { ThrowerRef, Serial }`** into `Ctx.OutcomeExtensions`, and this plugin's
+`IGSTN_OutcomeExtensionApplier` (the M4 §3b seam, [combat-m4-hits.md](combat-m4-hits.md) §3b) consumes it and turns the victim
+into a hitting projectile as described below. This file defines **no** second throw payload, outcome struct or "launch with
+credit" seam: the seam is M4 §3b item 3 plus these two structs. Surface impacts are M4 §7b.
+
+| Case | Representation while thrown | Why |
+|---|---|---|
+| **Minion** (M8) | The store slot is **held by the link and then flies as a `FGSTN_ProjectileState`** (analytic segment, `FGSTN_EntityRef{Minion}` as the object's identity); no NP, no component. Out of the grid and attack queries while held or flying (M8 §4d.3); on landing it returns to the store (stun, or `Dying`) | Same cheap server path as props; keeps the 40+ budget |
+| **Enemy fighter** (NP entity, hand-made or promoted) | It **stays an NP entity**: the M6 grab parks it, the release is a launch through the **same knockback layered move** as a hit (M4), with `Combat.State.Thrown` projected for the flight. The `FGSTN_ThrownOutcome` applier (M4 §3b) starts it; the projectile hitbox is **generated by the thrown entity's own tick extension** (`Space = Root`, group `ThrownBody`) and attributed to `ThrownOutcome.ThrowerRef` | An NP entity cannot be removed from prediction; its transform already replicates. Uses the M4 §3b outcome-applier seam (no extra seam) |
+
+Common rules:
+- **Hitboxes and damage.** The thrown body is a projectile with hitboxes (`Combat.HitType.Projectile`, `Combat.Source.Thrown`,
+  plus `Combat.Source.ThrownEnemy`). `FGSTN_ThrownDamageProfile` takes size and **effective weight** from
+  `UGSTN_PartMath::EffectiveWeight` when the thrown entity has parts (broken limbs lose mass, combat-parts §4.3), and `Penetration`
+  from the object definition or the entity's kit (a boulder-like heavy enemy breaks parts of the target, combat-parts §3.2).
+  `MaxHits` allows a bowling-ball pierce; hit groups per thrown body, as for props (§10).
+- **Credit.** `Owner`/`TeamAtThrow` = the thrower (`FGSTN_ThrownOutcome::ThrowerRef`, §10): KO of a target hit by the thrown enemy credits the thrower;
+  the thrown enemy's own team is irrelevant while `ThrownBody` is active (friendly fire among enemies is the point). A hit
+  on the thrown entity while held or flying is ignored by default (`bHittableWhileHeld = false`, per definition).
+- **Impact with surfaces.** Hitting a wall or floor causes **wall splat, bounce or destruction by designer data**. These are
+  **the surface-impact rules of M4 §7b** (`EGSTN_ImpactOutcome`: hit data, then victim, then surface, first match wins, *Proposal*;
+  the owner has not yet fixed which owns the choice): M10 **references, does not redefine** them. A thrown prop keeps `ImpactBehaviour` (§6); a thrown *enemy* never uses
+  it and takes M4's rules, so a thrown enemy and a launched enemy behave the same at a wall. Destruction of a thrown enemy follows
+  the entity's own death path (KO event, crystal shatter, combat-parts §6.3).
+- **Throw feel.** Same ghost and `ThrowSerial` handover (§9) for the thrower's presentation; the thrown fighter needs none (it is
+  already an NP proxy), only a short blend of the released pose.
+- **Ungrabbable entities.** Nothing here overrides the grab gate: a heavy enemy is thrown only when M6 let the grab happen
+  (`Combat.Part.GrabLocked` absent, `Combat.Immunity.Grab` respected).
+- **Carry load.** `GE_HoldLoad` uses the effective weight, so carrying a half-broken boss is slower than a minion; heavy enemies
+  may be unthrowable (`MaxCarryWeight`), by data.
 
 ## 7. The `Held` link
 
@@ -149,7 +198,16 @@ Reused unchanged: `Combat.Relationship.*`, `Combat.Event.Hit.*`, `Combat.State.H
 
 ## 8. Pickup, drop, throw (abilities)
 
-- **Pickup** (`Command.Link.Pickup`, bound with requirement *not carrying*): a timeline ability with an `Interaction.Pickup`
+- **Interact button** (owner direction §3): pickup, grab and mount share **one button**, `Input.Button.Interact` (declared by M6,
+  [M6](combat-m6-defence-links.md) §8, not redefined here). M6 §8 owns the arbitration: tap = `Command.Link.Grab` (and, by context,
+  this plugin's Pickup or M7's Mount), hold = `Command.Link.GrabHeavy`, tap as grabber = `Command.Link.Release`; a context probe
+  (`UGSTN_InteractMath::PickTarget`: nearest to the facing direction, ties by `InteractPriority`, default Grab, Pickup, Mount)
+  projects **exactly one** `Combat.Interact.Target.*` tag. This plugin **declares `Combat.Interact.Target.Pickup`** (native,
+  projected, modularity-and-tags.md §4.2), registers an `IGSTN_InteractCandidateProvider` for objects in reach (`PickupPriority`
+  orders objects among themselves only), and `Command.Link.Pickup` **requires** that tag, so it never competes with the grab or the
+  mount. The hold on an object is its **heavy pickup** (M6 §8: `GrabHeavy`'s object meaning; `HeavyMaxGrabWeight`-style limit by
+  `MaxCarryWeight` and size class). Interact is blocked while carrying, as `Pickup` is.
+- **Pickup** (`Command.Link.Pickup`, bound with requirements `Combat.Interact.Target.Pickup` and *not carrying*): a timeline ability with an `Interaction.Pickup`
   hitbox that **hits objects**: objects register a pickup volume with the world subsystem (hittable class `Object`, relationship
   `Neutral`). The resolution step `HeldLinkRequest` (object side, server) accepts if: state `Idle/Landed`, not held, kit
   `AllowedKinds` and `MaxCarryWeight` (attribute), the entity has a free hand channel, object not on the thrower's
@@ -251,7 +309,9 @@ which is all that replicates.
 | Carrier picks up while carrying | Refused unless the kit sets `bCanHoldWhileCarrying` (then `Light` only, extra `GE_CarryLoad`). |
 | Mount attempt on a holder (carrier) | Refused unless `Light`; otherwise the carrier drops first via a prompt ability. |
 | Object thrown onto a mounted pair | Hits whichever hurtbox it touches first; the carrier/rider `bHitBreaksLink` rules apply normally. |
-| Thrown fighter (pair move, M7) | Not an object: owned by M7; shares only `FGSTN_ProjectileMotion` math if wanted. |
+| Thrown ally as a pair move (M7) | Not an object: owned by M7; shares only `FGSTN_ProjectileMotion` math if wanted. |
+| Thrown **enemy** after a grab (owner direction 2026-10-22) | Owned by this file, §6b: the M6 grab link ends at release; the thrown body is the projectile, credit to the thrower. |
+| Enemy grabbed while it carries an object (a `Held` link on its hand channel) | The object is dropped (`DropOnGrab`), same row as the holder grabbed. |
 | Hold + hitstun on the holder | Drop (section 7). Held weapon with armor frames: keeps the link. |
 | Two holders, one object | Impossible: the object has one holder (`LinkSerial`); pickup race rule (section 8). |
 | Link spike variants (M6: parked transform) | Held objects are parked **visually only**; the holder's transform is untouched. No new correction source. |
@@ -273,6 +333,20 @@ which is all that replicates.
 - **Rollback:** the holder's `Held` link and throw request are in the rolled-back state; the object subsystem is server-only and
   never re-simulates, so a re-simulated release frame only affects the ghost (re-spawned deterministically by `ThrowSerial`).
 
+## 13b. Listen server (owner direction §6b)
+
+- **Host-thrown objects have zero latency.** The host is the authority: its throw spawns the authoritative projectile on the
+  release frame, with no ghost and no handover; thrown-enemy hits it causes resolve the same frame. Remote clients see the same
+  throw after replication, and clients' throws pay the ghost-and-handover of §9. Host advantage is accepted by default; no
+  mitigation is designed here.
+- **Catch judged on the host** uses `PositionAt` at the catcher's rewound view time for remote catchers and the current time for the
+  host's own catches, with no rewind (the same rule as lag compensation for the host's own hits).
+- **Cost.** `UGSTN_ObjectSubsystem`, up to `MaxActiveProjectiles`, thrown-enemy hitboxes and presentation run in the host's frame
+  together with its own game: the budget of §16.4 is measured on the host configuration. Replication to clients is event-only
+  (§13), so host upload stays small (about 0.15 kB/s per client at 3 throws/s, plus about 28 B per flying object update).
+- **Harness:** every scenario of §14 also runs in the listen-server configuration (host + 2 clients); the host as thrower and as
+  target are both covered.
+
 ## 14. Content, tools, harness
 
 - Test content: `Held.Type.Crate` (`Medium`, prop), `Held.Type.Rock` (`Light`), `Held.Type.Bat` (weapon, 20 charges), a three-bounce
@@ -283,7 +357,10 @@ which is all that replicates.
   throws at c2: object state, damage, knockback, credit equal; one rollback on c2), `scenario_throw_ghost` (handover error ≤ 25 cm, no
   duplicate actor), `scenario_pickup_race`, `scenario_drop_on_hit` (holder hit before release), `scenario_catch` (ally catches, ownership
   moves, link on both machines), `scenario_deflect`, `scenario_held_grabbed` (matrix rows), `scenario_object_dormancy` (no traffic when
-  resting), `scenario_throw_forced_reconcile` (forced rollback over the release frame: exactly one projectile, one event).
+  resting), `scenario_throw_forced_reconcile` (forced rollback over the release frame: exactly one projectile, one event),
+  `scenario_throw_enemy` (c1 grabs a minion, throws it at three others: credit to c1, hits and wall impact per designer data,
+  store slot returned or destroyed; the same with a part-broken enemy fighter), `scenario_throw_host` (host as thrower, zero-latency
+  spawn, clients see one projectile; host as victim).
 
 ## 15. Tests
 
@@ -302,9 +379,12 @@ which is all that replicates.
    frame (ghost), handover error ≤ 25 cm.
 3. Credit: KO and assist events name the thrower after the thrower leaves; a catch moves the credit.
 4. Idle objects: zero bandwidth and zero tick (dormancy test). 32 active projectiles stay within the performance budget set by spike
-   (record ms/frame on the dedicated server).
+   (record ms/frame on the **listen-server host**, which also renders, and on a dedicated server for comparison).
 5. `GSTNHeld` removed from the project: everything else builds and passes; boundary check green with the `GSTNHeld*` rows.
-6. combat.md §13b replaced by a pointer to this file, §18 gets the M10 row, tags documented in input.md/combat.md as needed.
+6. Thrown enemies (§6b): a minion and a part-broken enemy fighter are grabbed with the interact button, thrown at other enemies,
+   hit them with credit to the thrower, and hit a wall with the M4 surface-impact outcome chosen by data; ungrabbable enemies stay
+   ungrabbable. The interact button's tap/hold variants work with the input system's conditions, no new input code.
+7. combat.md §13b replaced by a pointer to this file, §18 gets the M10 row, tags documented in input.md/combat.md as needed.
 
 ## 17. Risks
 
@@ -314,6 +394,8 @@ which is all that replicates.
 - **Analytic motion vs complex geometry:** bounces on slopes and stairs produce odd rolls; mitigation: simple impact behaviours first, `Stick`
   or `Break` for awkward props; no Chaos physics.
 - **Credit abuse** (throw/catch loops for kills): `ChainDepth` cap and `AssistFrames` tuning.
+- **Thrown enemy fighter is still an NP entity** (§6b): its self-generated hitbox and the `FGSTN_ThrownOutcome` applier (M4 §3b seam, M6 §8) touch M4/M6; if
+  the seam is not there, M10d ships minions first. Host advantage on throws (§13b) is accepted unless the owner asks for parity.
 - **Content explosion** (sizes × kits × directions of bindings): bindings keyed by size and generic overlays; validator reports missing
   size/direction bindings per kit.
 - **NP cost** of `Combat.Held.Carrying` tag projection and link fields on every combat tick: end-frame stamps and absolute counts keep it flat;

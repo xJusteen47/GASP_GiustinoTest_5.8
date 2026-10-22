@@ -8,6 +8,12 @@ outline of [combat-m5-m9.md](combat-m5-m9.md).
 > re-read the finished headers before starting and fix this file where they differ. Items marked *Proposal* resolve an
 > open question of the outline; the owner decides later.
 
+> **Revision 2026-10-22 (owner direction, [game-design-direction.md](game-design-direction.md) §1 and §6b; it wins over this
+> file):** (1) authoring of **part sets** (`UGSTN_PartSetDefinition`) and the **penetration/hardness preview** are **deferred to the
+> parts plugin's own editor module `GSTNPartsEditor`** ([combat-parts.md](combat-parts.md) §2, §8), not added to
+> `GSTNCombatEditor`, so that combat builds and edits with `GSTNParts` absent (*Proposal*, §12b below lists the hooks M5 provides).
+> (2) The reference topology is a **listen server**: debug and harness notes in §10.2b and §13. No other scope change.
+
 ## 1. Scope
 
 **Goal:** a designer builds a three-hit jab string with a baked-socket hitbox, cancel windows and an EX version, and
@@ -24,7 +30,7 @@ In:
 - Validation: `IsDataValid` for timelines, hurtbox sets, kits, weapons, loadout presets, plus one validation panel.
 - Debug: input display widget, Gameplay Debugger category, trace of the combat state, debug draw (`gstn.Combat.Debug.*`).
 
-Out: Sequencer integration (decided against, §2.1); editing kits/weapons/bindings visually (they stay details-panel
+Out: part sets, hardness and penetration authoring and preview (owned by `GSTNPartsEditor`, hooks in §12b); Sequencer integration (decided against, §2.1); editing kits/weapons/bindings visually (they stay details-panel
 assets; only their validation gets UI); runtime features of M6+ (their tracks plug in through §12); a visual graph for
 conditions or patterns; cooking/packaging of editor data (nothing editor-only is cooked, §7.3).
 
@@ -468,6 +474,14 @@ data id, damage, knockback, relationship), from a small ring in the debug module
 **read-only const accessors** for this (history, timeline frame, windows, registry names), the only change to M2/M3 types
 besides §7.3; they never run inside the simulation.
 
+### 10.2b Listen-server host (owner direction §6b)
+
+The reference topology is a **listen server** (host also plays). The category collects on the authority, which is the host's
+process, so selecting a pawn on the host works as on a dedicated server; the **input display and debug draw show the host's local
+player like any client** (they read the local machine's data). Clients get the category through the data pack as before (the
+authority-side data of a client's pawn is read from the host). The debugger cost is a development-only concern; with 40+ entities
+on the host it is off by default (`gstn.Combat.Debug.*` = 0). Everything stays Development-only, so shipping hosts pay nothing.
+
 ### 10.3 Debug draw and CVars
 
 `gstn.Combat.Debug.Hitboxes/.Hurtboxes/.Buffer/.InputDisplay` (combat.md §14). `GSTN_CombatDebugDraw` draws the **same
@@ -489,6 +503,26 @@ with a track per entity showing timeline and state transitions, re-simulated fra
 `UGSTN_CombatEditorSettings` (`UDeveloperSettings`): default preview kit/skin, bake on save, auto-key default, track
 colours, hurtbox mirror naming pairs and forward axis, Physics Asset → `Combat.Hurtbox.*` tag mapping, debugger key.
 Project-wide values (naming pairs, mapping) go to `DefaultEditor.ini`, per-user ones to user settings.
+
+## 12b. Hooks for the parts editor (`GSTNPartsEditor`, owner direction 2026-10-22; *Proposal*)
+
+Part sets sit on top of the hurtbox set (combat-parts §3.1: parts map to hurtbox **names**), so the part editor is a client of
+this module's pieces, **never the reverse**: `GSTNCombatEditor` has no reference to parts. `GSTNPartsEditor` lives in
+`Plugins/GSTNParts/` (modularity: L3b combat extension) and depends on `GSTNCombatEditor` and `GSTNPartsPresentation`. What M5 must
+keep reusable (public headers, no parts names):
+
+| Hook | Use by `GSTNPartsEditor` |
+|---|---|
+| Preview scene `FGSTN_TimelinePreviewScene` (§5.4) and the shape drawing `GSTN_PreviewDrawing` (§3) | Part set toolkit: the skin mesh, the hurtboxes grouped and **coloured by part** (hardness colour ramp), broken-part preview (hide bones of the broken mask) |
+| `FGSTN_HurtboxSetEditorToolkit` details and `FGSTN_HurtboxGenerator::FromPhysicsAsset` (§8) | The **Physics Asset → part set** helper reuses the generator's body/bone mapping and the mirror naming rule; it creates parts, never hurtboxes |
+| Validation mechanism (§9.1: pure rule functions, `UEditorValidatorBase` children, the panel and Message Log) | Part set validators (duplicate hurtbox, parent cycle, mask > 16, missing bone, "hits to break" per part) register into the same panel and category; no change to §9.2 |
+| `IGSTN_TrackEditor` registry (§12) | Parts add no timeline track in the first version; the penetration of a hit is an `FGSTN_PartHitData` entry of `FGSTN_HitData::ExtensionData`, edited in the hitbox details through a customization registered by `GSTNPartsEditor` |
+| `Priority` of `FGSTN_Hurtbox` (combat-parts §3.4, an M4 field) | Shown and edited in the hurtbox set details (a plain field, no parts logic); the hurtbox overlay can show the priority number |
+
+**Penetration/hardness preview** (in `GSTNPartsEditor`, specified in combat-parts §8): select a hitbox key, pick a part: shows the
+band (`UGSTN_PenetrationTable`: delta, part/main scale, deflected or not) and the "hits to break / to kill" table, from the same
+pure `UGSTN_PartMath` as the runtime, so the preview cannot drift. M5 contributes only the hitbox selection event of the
+timeline editor (`OnKeySelected`, already needed for the details proxy). If `GSTNParts` is absent none of this appears and M5 is unchanged.
 
 ## 12. How to extend
 
@@ -540,7 +574,8 @@ command line; they build no viewport, so `-nullrhi` works).
 Test content under `/Game/GASNPPTest/Combat/Editor/` (a montage and skeleton shared with M3/M4 content, a Physics Asset,
 `TL_Test_Jab3`); nothing here edits `BP_GASNPP_TestCharacter`. A helper `Tools/GASNPPTest/gstn_editor_check.py` (editor
 Python console) opens a timeline, bakes, validates and prints the report, for the manual smoke test. PIE harness: no new
-scenario; `scenario_hit_basic` of M4 is re-run with a timeline **authored in the editor** (acceptance 6).
+scenario (the harness gains a **listen-server configuration**, host + 2 clients, owner direction §6b; the checks of this
+milestone run in it too, see acceptance 8); `scenario_hit_basic` of M4 is re-run with a timeline **authored in the editor** (acceptance 6).
 
 ## 14. Acceptance criteria
 
@@ -561,7 +596,7 @@ scenario; `scenario_hit_basic` of M4 is re-run with a timeline **authored in the
    (M4 harness, 60/15 ms, 2 % loss).
 7. Inline mode: the same flow on the inline timeline of a `UGSTN_GA_BaseCombat` Blueprint; Blueprint marked modified,
    survives compile, Save writes the Blueprint.
-8. Input display and Gameplay Debugger show correct data in a PIE with dedicated server and two clients (server's
+8. Input display and Gameplay Debugger show correct data in a PIE with a **listen server (host + two clients, the reference)** and with a dedicated server and two clients (the authority's
    category shows the client pawn); the trace channel can be captured in Insights. No Core/GAS/Input module depends on
    `GSTNCombatEditor` or `GSTNCombatDebug` (verified by the module `.Build.cs` files and a packaged Development
    build, the editor module absent from it).

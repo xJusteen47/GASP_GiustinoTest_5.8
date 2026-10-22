@@ -9,9 +9,11 @@ and how this is enforced. Owner requirements, verbatim in spirit:
 - The target is modularity comparable to Lyra or Fortnite.
 - Epic's C++ coding standard; every plugin has human-readable docs.
 
+Owner direction that applies here: [game-design-direction.md](game-design-direction.md) (§6b listen server, §1 parts).
+
 Related: [combat.md](combat.md) §3 (modules), §9 (command tags), §16 (project integration); [input.md](input.md) §2, §3,
 §8; [gas-npp.md](gas-npp.md); milestone specs `combat-m5-editor.md`, `combat-m6-defence-links.md`,
-`combat-m7-piggyback.md`, `combat-m8-minions.md` (each has a "Plugin and module boundaries" or tags section that this
+`combat-m7-piggyback.md`, `combat-m8-minions.md`, [combat-parts.md](combat-parts.md) (M4b; each has a "Plugin and module boundaries" or tags section that this
 document consolidates).
 
 Notation: *Decision* = already decided in another document. *Proposal* = this document's suggestion, to be confirmed
@@ -214,9 +216,9 @@ L2  Foundation plugins (no gameplay)        GSTNCore (tags helpers, messages, va
 L1  Engine and forks                        Plugins/GASNPP/*, Plugins/EngineOverrides/*, EnhancedInput, GameplayTags, Mover
 ```
 
-`GSTNDefence` and `GSTNLink` are specified as optional plugins depending on `GSTNCombat` (M6). They sit on L3/L4
+`GSTNDefence`, `GSTNLink` and `GSTNParts` (M4b, combat-parts.md §2) are specified as optional plugins depending on `GSTNCombat`. They sit on L3/L4
 boundary: they extend the combat pipeline through its extension surface, so I place them in **L3b "combat extensions"**
-(optional, may depend on L3 only, never on each other). A pure game-feature (L4) never extends the simulation by
+(optional, may depend on L3 only, never on each other; the only exception is a **bridge plugin** such as `GSTNPartsMinion`, below). A pure game-feature (L4) never extends the simulation by
 subclassing; it adds data and, at most, registers fragments before pawn start.
 
 ### 3.2 Allowed and forbidden dependencies
@@ -229,12 +231,13 @@ subclassing; it adds data and, at most, registers fragments before pawn start.
 | L3 framework (`*GAS`) | L3 `*Core` of own plugin and of its declared plugin deps, GameplayAbilities, GameplayTasks | NP, Mover | compiles against stock GAS and the fork |
 | L3 framework (`*NP`) | own `*GAS`/`*Core`, other plugins' `*NP` if declared, NP/GAS fork, Mover | Editor, Slate, project module | "fork adapter": the only modules that know the NP model |
 | L3b combat extensions | `GSTNCombat` (any module), `GSTNInput`, L2 | each other, L4, project | register through the extension surface (combat-m6 §1b), never edit combat |
+| Bridge plugin (`GSTNPartsMinion`) | exactly the two plugins it bridges (`GSTNParts`, `GSTNMinion`), through public headers | any third plugin; being depended on by either side | the only place allowed to know both siblings; tiny, no content (combat-parts.md §5.5). A new bridge is added to the layers file as an explicit pair |
 | L4 game features | L3, L3b, L2 | other L4 plugins (except declared base, e.g. Piggyback on Link), project | content-heavy; activated by experience; may have no C++ at all |
 | Editor modules (any layer) | their own plugin's runtime modules, editor engine modules | being depended on by any runtime module | separate `Editor` module type, or separate plugin when large (M5) |
 | L5 project | anything | being depended on by any plugin | thin: GameMode, Experience selection, project-only Blueprints, per-project tuning |
 
 **Forbidden edges, global:** upward (lower layer → higher), sideways between optional siblings (`GSTNDefence` ↔
-`GSTNLink`, `GSTNPiggyback` ↔ `GSTNHeld`), runtime → Editor, any plugin → project module, `*Core` → GAS/NP/Mover,
+`GSTNLink`, `GSTNPiggyback` ↔ `GSTNHeld`, `GSTNParts` ↔ `GSTNMinion`/`GSTNDefence`/`GSTNLink`; only a bridge plugin may join two siblings), runtime → Editor, any plugin → project module, `*Core` → GAS/NP/Mover,
 `*GAS` → NP/Mover. A plugin may use another plugin's *tags by name* (`RequestGameplayTag(…, false)`) without a module
 edge (section 5).
 
@@ -292,10 +295,17 @@ before adopting (question 3 in the questions file).
 | L2 foundation | `GSTNCore.*` (pure) | none | builds with only L1 plugins enabled |
 | L3 `*Core` | `GSTN<Plugin>.Core.*`, no world, fake contexts (as input.md and testing.md) | none | module builds in a program-like target is not required; editor build with only deps enabled |
 | L3 `*GAS` | `GSTN<Plugin>.GAS.*` with a transient ASC | none | same |
-| L3 `*NP` | `GSTN<Plugin>.NP.*` for state serialisation/round trips | `Content/GSTNTest/<Plugin>/L_<Plugin>_Min` plus a harness scenario group (`scenario_<plugin>_*`, testing.md) | dedicated server + 2 clients |
+| L3 `*NP` | `GSTN<Plugin>.NP.*` for state serialisation/round trips | `Content/GSTNTest/<Plugin>/L_<Plugin>_Min` plus a harness scenario group (`scenario_<plugin>_*`, testing.md) | listen server (host + 2 clients), the reference topology, and dedicated server + 2 clients |
 | L3b/L4 optional | same prefixes as above | each has its own min map using only a bare pawn + the plugin; a run with the sibling disabled must stay clean (combat-m6 §1b) | CI: build with each optional plugin disabled, one at a time |
 | Editor | `GSTN<Plugin>.Editor.*` | none | build with the editor plugin disabled; Shipping contains none of it |
 | L5 project | smoke only | project maps | full build |
+
+**Network topology (owner direction, game-design-direction.md §6b).** The reference topology is a **listen server**: the host
+is the authority and a player, and its machine also renders. Consequences for module shape: presentation modules (for
+example `GSTNPartsPresentation`) are *not* `ClientOnly`; they are normal runtime modules that skip creation only when
+`NM_DedicatedServer`, because the host renders. `*NP` simulation code never forks on topology (the dedicated server stays
+supported with the same code). Harness scenario groups run in both configurations, and server-side budgets (minion
+simulation, lag compensation, hit resolution) are measured **together with the host's own frame**.
 
 A "minimal test map" is a map with a `GameMode` override, one floor, one pawn Blueprint **owned by the plugin**
 (`Plugins/<P>/Content/Test/`) so the plugin can be exercised without the project's sample content. Note the existing
@@ -315,6 +325,8 @@ before any plugin ships content (already noted for combat).
 | Timeline editor, validators, socket baking (M5) | `GSTNCombatEditor` (own plugin, M5 §3b) | L3b editor | plugin enable (editor only); loads Debug dynamically if present |
 | Input display, gameplay debugger, trace (M5) | `GSTNCombatDebug` (own plugin, M5 §3b) | L3b runtime, no Shipping | optional |
 | Shield, parry, tech, SDI (M6) | `GSTNDefence` (Core, GAS, NP) | L3b | optional plugin; kit data decides use |
+| Destructible parts, penetration, capped percent, reaction modifiers, crystal presentation (M4b, combat-parts.md) | `GSTNParts` (`GSTNPartsCore`, `GSTNPartsGAS`, `GSTNPartsNP`, `GSTNPartsPresentation`, `GSTNPartsEditor`); optional, `EnabledByDefault: false`; owns `Combat.Part.*`, `Combat.Entity.Destructible`, `Combat.Event.Part.*`, `Part.Type.*` | L3b (presentation module: runtime, loaded by a listen-server host, not on a dedicated server) | optional plugin; kit data (`FGSTN_PartsKitExtension`) and the pipeline step `UGSTN_HitStep_PartResolve` decide use. `GSTNCombat` builds and passes its tests without it |
+| Parts on minions (M4b/M8 bridge) | `GSTNPartsMinion` (one module) | bridge between L3b `GSTNParts` and L4 `GSTNMinion` | optional; the only plugin that depends on both |
 | Links, grabs, throws (M6); owns `Combat.Link.*`, entity refs, link channels, link-type registry (M6 §7.0) | `GSTNLink` (Core, GAS, NP) | L3b | optional plugin |
 | Piggyback, pair moves (M7) | `GSTNPiggyback` | L4 on `GSTNLink` | Game Feature or optional plugin |
 | Minions (M8) | `GSTNMinion` (*Decision* of M8 §4b, kept here: a separate plugin, not `GSTNCombatMinion`, so combat stays free of StateTree/Navigation and each plugin is workable alone) | L4 | optional; per mode |
@@ -367,13 +379,17 @@ Existing names are kept unless listed in 4.3.
 | `Input.BufferEvent.*`, `Input.Event.*` | `AbilityActivated`, `CommandExecuted` | `GSTNInput` | native |
 | `Command.*` | `Attack`, `Strong`, `Special`, `Combo`, `Super`, `Movement`, `Defence`, `Link` | root: `GSTNInput`; each family: the plugin that defines it (combat, defence, link, piggyback) | native + ini |
 | `Combat.State.*` | `Busy InTimeline Hitstop Hitstun Tumble CancelWindow OverrideWindow SuperInput Falling Shielding Carrying Riding` | `GSTNCombat` (state-projection rules); extension plugins declare their own leaves (`Shielding` -> `GSTNDefence`) | native, **projected**, never granted by others |
-| `Combat.Event.*` | `HitLanded Hit.Received Blocked Parried LinkFormed` | each emitter's plugin; envelope in `GSTNCombat` | native |
-| `Combat.HitType.*`, `Combat.Hurtbox.*`, `Combat.Relationship.*` | `Normal Grab Throw`, `Head Torso`, `Ally Enemy` | `GSTNCombat` (Link adds `Grab Throw Pummel`) | native |
+| `Combat.Event.*` | `HitLanded Hit.Received Blocked Parried LinkFormed`; `Part.Damaged .WeakPointHit .Deflected .Broken .AllBroken` | each emitter's plugin; envelope in `GSTNCombat` (`Combat.Event.Part.*`: `GSTNParts`) | native |
+| `Combat.HitType.*`, `Combat.Hurtbox.*`, `Combat.Relationship.*` | `Normal Grab Throw`, `Head Torso Feet`, `Ally Enemy` | `GSTNCombat` (Link adds `Grab Throw Pummel`) | native |
+| `Surface.Type.*`, `Combat.Event.Impact.*` | surface classes mapped from physical materials for launch impacts (`Wall Glass Crate`); impact events (`Splat Bounce BreakSurface`) (M4 §7b) | `GSTNCombat` | ini (`Surface.Type.*`, designer vocabulary) + native (events) |
 | `Combat.Lock.*` | `Movement`, `Link` | `GSTNCombat` (`Movement`); `GSTNLink` (`Link`) | native |
+| `Combat.Interact.*` | `Target.Grab` (projected: the one interactable the entity's tap would act on); `Target.Mount`, `Target.Pickup` (M6 §8) | root and `Target.Grab`: `GSTNLink`; `Target.Mount`: `GSTNPiggyback`; `Target.Pickup`: `GSTNHeld` | native, **projected** |
 | `Combat.Immunity.*` | `Grab`, `Parry`, `Shield` | the plugin whose mechanic it gates | native |
 | `Combat.Link.*` | `Linked Pending`, `Type.Grab`, `Role.Grabber Role.Grabbed`, `BreakReason.*`; `Type.Mount Role.Carrier Role.Rider`; `Type.Held Role.Holder Role.HeldObject` | root and generic leaves: `GSTNLink`; a link type's own type, role and reason leaves: the plugin that owns the type (`GSTNPiggyback`: Mount; `GSTNHeld`: Held; `GSTNMinion`: Minion, later). `GSTNCombat` declares none | native |
 | `Combat.Mover.*` | `Frozen Tumble Linked` | emitting NP module | native |
-| `Combat.Entity.*`, `Combat.PairMove.*`, `Combat.Ability.*`, `Combat.SetByCaller.*` | `Minion Fighter`, `ThrowRider`, `Timeline`, `Damage` | owning plugin (`Fighter`: `GSTNCombat`; `Minion`: `GSTNMinion`; `PairMove`: `GSTNPiggyback`) | native |
+| `Combat.Entity.*`, `Combat.PairMove.*`, `Combat.Ability.*`, `Combat.SetByCaller.*` | `Minion Fighter Destructible`, `ThrowRider`, `Timeline`, `Damage` | owning plugin (`Fighter`: `GSTNCombat`; `Minion`: `GSTNMinion`; `Destructible`: `GSTNParts`; `PairMove`: `GSTNPiggyback`) | native |
+| `Combat.Part.*` | `Broken GrabLocked AllBroken`, `Effect.*` (e.g. `Effect.ArmLost`) | `GSTNParts` (all leaves; **projected** from the broken mask by its tick extension, never granted by others; `GrabLocked` is read by the grab rules of `GSTNLink` only as a data entry in the rules asset, by name, no module edge) | native, projected |
+| `Part.Type.*` | `Head Torso Arm Leg Weapon Armour Crystal` (classification of a part; unrelated to `Combat.Hurtbox.*`) | `GSTNParts` (designer vocabulary) | **ini** (`Plugins/GSTNParts/Config/Tags/GSTNParts.ini`) |
 | `Combat.Capability.*`, `Combat.Net.*` | adapter capabilities (`Rollback`, `LagCompensation`, ...); stock adapter payload keys (M9) | `GSTNCombat` (`Capability`, granted by the adapter that has it); `GSTNCombatStockGAS` (`Net`) | native |
 | `Combat.Held.*`, `Combat.Source.*`, `Held.Type.*` | size, kind, carrying state of held objects; thrown/projectile credit; designer object types (M10) | `GSTNHeld` (`Held.Type.*`: ini) | native + ini |
 | `Minion.*`, `Command.Minion.*` | `Minion.State`, `Minion.LOD`, `Minion.Type.<Name>`; minion-only commands, never in a player binding set (M8) | `GSTNMinion` | native + ini |
@@ -384,7 +400,7 @@ Existing names are kept unless listed in 4.3.
 | `Team.*` | `Team.Player`, `Team.Enemy` | `GSTNCombat` (until a Teams plugin exists) | native |
 | `GameplayCue.*` | `GameplayCue.Combat.Hit.Heavy` | owner of the effect; sample's `GameplayCue.ContextualAnim` stays Epic's | ini |
 | `UI.*` | `UI.Layer.Game`, `UI.Extension.PlayerHud`, `UI.Action.*` | UI plugin / project | native |
-| `Message.*` | channel tags for the message router, e.g. `Message.Combat.Elimination` | emitter's plugin | native |
+| `Message.*` | channel tags for the message router, e.g. `Message.Combat.Elimination`, `Message.Combat.PartBroken` (`GSTNParts`) | emitter's plugin | native |
 | `Experience.*`, `Feature.*` | `Experience.Mode.CoopWaves`, `Feature.Piggyback` | project / experience plugin; features declare theirs | ini |
 | `Test.*` | harness only | `GSTNTestKit` / project test content | native in a test module, **not** exported from the project's public headers |
 | `Foley.*`, `MotionMatching.*`, `SmartObject.*`, `StateTree.*`, `Abilities.*` | sample content | Epic sample; do not touch | ini (`DefaultGameplayTags.ini`) |
@@ -392,7 +408,7 @@ Existing names are kept unless listed in 4.3.
 **Open subtrees.** For `Combat.State.*`, `Combat.Event.*`, `Combat.HitType.*`, `Combat.Weapon.Role.*`, `Combat.Immunity.*`,
 `Combat.SetByCaller.*`, `Input.BufferEvent.*` and `Combat.Link.*`, the root owner declares the framework leaves and the plugin that
 introduces a mechanic declares its own leaves (documented in its spec, e.g. `Combat.State.Shielding` in `GSTNDefence`,
-`Combat.HitType.Interaction.Mount` in `GSTNPiggyback`, `Combat.Weapon.Role.Held` in `GSTNHeld`). Rule 1 of 4.1 still holds for
+`Combat.HitType.Interaction.Mount` in `GSTNPiggyback`, `Combat.Weapon.Role.Held` in `GSTNHeld`, `Combat.Event.Part.Broken` in `GSTNParts`). `Combat.Part.*` is a root of its own (one owner, `GSTNParts`), and `GSTNParts` declares **no** `Combat.State.*`, `Combat.Mover.*` or `Combat.Lock.*` (stagger is the existing `Combat.State.Hitstun`). Rule 1 of 4.1 still holds for
 every other root: one owner, and two plugins never declare the same leaf.
 
 ### 4.3 Migration items for existing tags (nothing renamed without being listed)
@@ -576,7 +592,7 @@ Fail on:
 3. `*GAS` module depends on `NetworkPrediction`, `AbilitySystemSimulation`, `Mover`.
 4. Any runtime module depends on an Editor module, or on `GSTNCombatDebug`.
 5. Any GSTN plugin module depends on `GASP_Giustino2`.
-6. Two optional sibling plugins depend on each other (list in the layers file).
+6. Two optional sibling plugins depend on each other (list in the layers file; the explicit bridge pairs, `GSTNPartsMinion` = `GSTNParts` + `GSTNMinion`, are the only allowed exceptions, and no third plugin may depend on a bridge).
 7. A module name used in `Build.cs` belongs to a plugin that is not listed in the owning `.uplugin` `Plugins` array
    (missing plugin dependency: the classic "works in editor, fails when disabled").
 8. A module listed in `PublicDependencyModuleNames` that no public header of that module includes (warning only,
