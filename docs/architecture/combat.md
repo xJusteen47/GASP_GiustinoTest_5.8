@@ -491,7 +491,7 @@ FGSTN_LoadoutData (what a player owns and saves)
 - **`UGSTN_MeterAttributeSet`**: `ExMeter`, `ExMeterMax`, `SuperMeter`, `SuperMeterMax` (two generic meters; the kit
   names them and sets bars × points per bar). A kit that needs more meters adds an attribute set; the meter API refers
   to meters by `FGameplayAttribute`, so no code assumes two.
-- **Spending** = standard GAS cost: `UGSTN_GE_MeterCost` (instant, SetByCaller `Combat.SetByCaller.MeterCost`) set as
+- **Spending** = standard GAS cost: `UGSTN_GE_MeterCost` (instant, amount in its `Cost` data) set as
   the ability's cost; `CanActivateAbility` checks it as usual, so the resolver's `CanExecute` rejects an
   unaffordable EX move.
 - **Gaining** = GEs applied by the hit pipeline (on hit dealt, hit taken, blocked, whiff) with rates from the kit's

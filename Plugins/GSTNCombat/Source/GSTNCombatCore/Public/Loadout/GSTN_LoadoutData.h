@@ -84,8 +84,11 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout")
 	TArray<FGSTN_SlotCustomisation> SlotCustomisations;
 
-	/** Settings a game defines for its own loadout screen. The key is a tag under the loadout root; code never names one */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout")
+	/**
+	 * Settings a game defines for its own loadout screen. The key is a tag under the loadout root; code never names one.
+	 * NotReplicated only silences UHT's "no maps in RPCs" check: the map travels through the struct's own NetSerialize
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout", NotReplicated)
 	TMap<FGameplayTag, FGSTN_LoadoutValue> DesignerValues;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout", meta = (AllowedTypes = "GSTN_Skin"))

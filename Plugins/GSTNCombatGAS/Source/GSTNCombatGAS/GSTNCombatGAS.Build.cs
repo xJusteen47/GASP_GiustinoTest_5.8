@@ -1,7 +1,7 @@
 using UnrealBuildTool;
 
 // Ability-system layer of the combat framework: native tags, attribute sets, effects and the kit, weapon and super data.
-// Allowed edges: engine, GameplayAbilities, GSTNCombatCore, GSTNInputCore (the slot and requirement types of
+// Allowed edges: engine (NetCore for the replicated loadout component), GameplayAbilities, GSTNCombatCore, GSTNInputCore (the slot and requirement types of
 // the data). It must never depend on NetworkPrediction, AbilitySystemSimulation, Mover or GSTNCombatNP (the NP adapter sits above this module), nor on the project module.
 public class GSTNCombatGAS : ModuleRules
 {
@@ -14,6 +14,7 @@ public class GSTNCombatGAS : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"NetCore",
 			"GameplayTags",
 			"GameplayAbilities",
 			"GameplayTasks",

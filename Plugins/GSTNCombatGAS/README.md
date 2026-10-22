@@ -7,7 +7,8 @@ the ability system. Design: [docs/architecture/combat.md](../../docs/architectur
 
 Status: **experimental (0.1)**. It holds the native tags, the two attribute sets, the meter-cost and weapon-stats
 effects, the stat/meter data structs, the plugin settings, the kit, weapon and super data assets, and the assembly that feeds them to
-the pure binding-table compiler and loadout rules of `GSTNCombat`; the loadout component follows in M3.
+the pure binding-table compiler and loadout rules of `GSTNCombat`, and the loadout component, the local-player loadout subsystem
+with its save game, and the skin component.
 
 ## Dependency rule
 
@@ -16,7 +17,7 @@ GSTNCombatCore  <  GSTNCombatGAS  <  GSTNCombatNP
  (no GAS/NP)       (GAS, no NP/Mover)   (fork, NP, Mover)
 ```
 
-- Module `GSTNCombatGAS` depends on Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, GameplayTasks,
+- Module `GSTNCombatGAS` depends on Core, CoreUObject, Engine, NetCore (the replicated loadout component), GameplayTags, GameplayAbilities, GameplayTasks,
   DeveloperSettings, `GSTNCombatCore` and `GSTNInputCore` (the slot and requirement types the bindings use). The descriptor lists
   the plugins `GSTNCombat`, `GSTNInput` and `GameplayAbilities`.
 - It never depends on NetworkPrediction, AbilitySystemSimulation, Mover or `GSTNCombatNP`, and nothing here refers to the
@@ -50,7 +51,7 @@ Not here: the input vocabulary (`Input.Button/Context/Lock.Command/BufferEvent.*
 | `UGSTN_MeterAttributeSet` | `Attributes/` | Meters as value/max pairs (`ExMeter`/`ExMeterMax`, `SuperMeter`/`SuperMeterMax`). `GetMeterPairs()` is the only place that pairs them: a new meter is two attributes and one line there. Value clamped to `[0, Max]`, max to `>= 0`; an instant effect that lowers a max pulls the value down (`PostGameplayEffectExecute`). |
 | `FGSTN_StatValue`, `FGSTN_KitStats` | `Attributes/GSTN_KitStats.h` | A designer number keyed by a `Combat.SetByCaller.Stat.*` leaf. `FGSTN_KitStats::ApplyTo(ASC, InitEffect)` fills the spec and applies the kit's instant init effect; `Validate` reports empty, duplicate and out-of-root tags. |
 | `FGSTN_MeterSetup`, `UGSTN_MeterUtils` | `Attributes/GSTN_MeterSetup.h` | `{Meter tag (Combat.Meter), Value, Max, PointsPerBar, Bars}` and BlueprintPure readers (`FindMeterSetup`, `GetFullBars`, `GetMeterAmount`, `GetMeterMax`). |
-| `UGSTN_GE_MeterCost` | `Effects/` | Instant cost: pick the meter attribute on a Blueprint child and the additive modifier on `Combat.SetByCaller.MeterCost` is built from it. `SetCost(Spec, Cost)` stores the negated cost; overspending stops at 0. |
+| `UGSTN_GE_MeterCost` | `Effects/` | Instant cost: pick the meter attribute and set `Cost` (an `FScalableFloat`, positive; a curve table scales it by ability level) on a Blueprint child and the additive modifier is built from both, negated. The cost is data because the stock `CheckCost`/`ApplyCost` build the spec themselves; the ability's cost effect class is how a kit or weapon sets a move's cost. `CheckCost` blocks an unaffordable activation; applying without it stops at 0. |
 | `UGSTN_GE_WeaponStats` | `Effects/` | Infinite base of a weapon stats effect. `Apply`/`Remove`/`IsApplied` find the effect by class (no stored handle); `Apply` returns the live effect instead of stacking. One stats class per weapon. |
 | `UGSTN_CombatGASSettings` | `Settings/` | Starting values of the attributes by property name (`AttributeDefaults`), defaults in `Config/DefaultGSTNCombatGAS.ini`. A kit init effect overwrites them. |
 
@@ -113,6 +114,37 @@ that needs the class (the timeline question, binding inheritance along the weapo
 **Extending in Blueprint.** Loadout validation is extended with `UGSTN_LoadoutRule` subclasses in a `UGSTN_LoadoutRules` asset (see the
 GSTNCombat README); the assembly is stateless and not subclassed.
 
+## Loadout component, subsystem and skins (`Loadout/`, `Cosmetics/`)
+
+Nothing here depends on Network Prediction or Mover: a loadout is granted on the pawn's ability system **outside the simulation**,
+and the combat sync state only ever sees the result (the revision write and the table hand-over are the NP adapter's job, `GSTNCombatNP`).
+
+| Type | What it is |
+|---|---|
+| `UGSTN_LoadoutComponent` | `UActorComponent`, meant for the **PlayerState**. `ServerRequestLoadout(FGSTN_LoadoutData)` (Server, Reliable) calls `AcceptLoadout`, which resolves the ids, compiles the table and runs the rules asset (`Rules`, empty = the built-in set); a refusal comes back as `OnLoadoutRejected` (rule findings as strings) and changes nothing. An accepted loadout is stored in the replicated `Applied` (with the replicated `Revision`, which counts accepted loadouts from 1), then `ApplyAppliedLoadout()` runs: **called directly on the server** and by `OnRep_Applied` on a client. It resolves every asset id once (Asset Manager, `ResolveAsset`), keeps the assets, compiles the table on this machine (`GetCompiledTable`), and on the server grants, then broadcasts `OnLoadoutApplied(Component, Revision)`. |
+| What the server grants | On the pawn's ability system (`GetTargetAbilitySystem`: the PlayerState's pawn, or the owner's own ASC): the kit's init stats effect (`FGSTN_KitStats::ApplyTo`), the primary weapon's stats effect (`UGSTN_GE_WeaponStats::Apply`), then the table's `GrantedAbilities` plus the primary weapon's `PassivesWhileActive` (`GiveAbility`, no source object, an ability the pawn already has is left alone and never removed). A later apply first removes exactly what the previous one granted (handles kept server-side, the stats effect removed by class). A pawn that is not there yet leaves `IsGrantPending()` true; the component listens to `APlayerState::OnPawnSet` (server) and applies again one tick after a pawn is set, and `ApplyAppliedLoadout()` can be called by hand. |
+| `UGSTN_LoadoutSubsystem` | `ULocalPlayerSubsystem`: named presets in the save slot `GSTNCombatLoadouts` of the local user. `SaveLoadout`, `LoadLoadout` (drops ids whose asset no longer exists, with a Warning, on a copy: the file keeps what was saved), `DeleteLoadout`, `HasLoadout`, `ListLoadouts`, `RequestLoadout(Preset, Component)`. Presets load lazily on first use. Storage is `ReadStorage`/`WriteStorage` (virtual: replace for a cloud save), the existence check is `IsAssetIdKnown`. |
+| `UGSTN_LoadoutSaveGame` | `USaveGame` with `TMap<FString, FGSTN_LoadoutData> Loadouts` and its own `SaveVersion`; `ToBytes`/`FromBytes`; the static `DropUnknownAssets` (kit/skin cleared, a super slot emptied, an additional weapon removed with the customisations of the later weapons re-indexed and those of the dropped weapon removed). |
+| `UGSTN_SkinComponent` | `UActorComponent` for the **pawn**, cosmetic only, never on a dedicated server. Follows the PlayerState's loadout component (auto-bind at BeginPlay with a short retry while the PlayerState replicates; or `BindToLoadout`) and applies `GetResolvedSkin()` on spawn and on every `OnLoadoutApplied`: mesh, material overrides per slot, anim class, all loaded once at apply. The pawn's original look is remembered and restored by `RestoreOriginal`/an empty skin, so skins never stack. |
+
+**Listen server.** The host is both server and a player: `AcceptLoadout` calls `ApplyAppliedLoadout()` itself and the host never relies
+on `OnRep_Applied` (it does not run for a value the host set). Grants and effect applications check that the ability system's owner has
+authority, so a client that calls `ApplyAppliedLoadout()` (its OnRep does) only resolves, compiles and broadcasts. With the GAS-NPP fork,
+abilities and effects reach the owning client through the simulation sync state: one reconcile after a grant, and
+`FindAbilitySpecFromClass` on the client is valid only after it (never right after the loadout changed; never for another player's pawn).
+Nobody but the server grants, because a client-side grant on an autonomous pawn is erased by the next reconcile.
+
+**Wiring.** (1) Add `UGSTN_LoadoutComponent` to the project's PlayerState class (component in the Blueprint, or `CreateDefaultSubobject` in C++); optionally point `Rules` at a
+`UGSTN_LoadoutRules` asset. (2) Add `UGSTN_SkinComponent` to the pawn class (`bAutoBind` on). (3) Register the primary asset types of the
+kit, weapon, super and skin (above, and the GSTNCombat README): ids resolve through the Asset Manager. (4) From the loadout UI, get the
+`UGSTN_LoadoutSubsystem` from the local player and call `RequestLoadout`, or call `ServerRequestLoadout` on the component. The pawn needs an
+ability system component that is reachable with `UAbilitySystemGlobals::GetAbilitySystemComponentFromActor`. To change where the pawn's ASC is found or where assets
+come from, derive from the component and override `GetTargetAbilitySystem` / `ResolveAsset` (both `protected virtual`).
+
+**Extending in Blueprint.** Both components are `Blueprintable` and `BlueprintSpawnableComponent`; every function above except the two virtual hooks is
+`BlueprintCallable`/`BlueprintPure`, the delegates `BlueprintAssignable`, the subsystem and save game `BlueprintType`. Rules are extended with
+`UGSTN_LoadoutRule` subclasses (see the GSTNCombat README).
+
 ## Primary asset types a host project must register
 
 Kits, weapons and supers are referenced by `FPrimaryAssetId` from the loadout (ids, resolved by the Asset Manager), so they must be registered as primary asset types. The type names are in `GSTNCombatAssetTypes` (GSTNCombatCore); the skin, super input scheme and timeline types are listed in the GSTNCombat README.
@@ -134,11 +166,15 @@ Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Scrip
 ## Testing
 
 Automation tests `GSTNCombat.GAS.*`: `Tags.AllRegisteredAndDocumented`, `Attributes.Clamp`, `Attributes.KitStatsInitEffect`,
-`Attributes.MeterCostSetByCaller`, `Attributes.WeaponStatsApplyRemoveByClass`, `Data.BindingInheritance`,
+`Attributes.MeterCostData`, `Effects.MeterCostCheckApply` (cost deducted and activation blocked through the real ability CheckCost/ApplyCost), `Attributes.WeaponStatsApplyRemoveByClass`, `Data.BindingInheritance`,
 `Data.BindingToRemovedCommandIsError`, `Data.UnknownExtensionIgnored`, `Data.KitIdentityExactlyOne`, `Data.WeaponIdentityExactlyOne`, `Table.AssembleFromDefinitions`
-(kit and weapon assets through the assembly into the compiler and rules). The compiler and rule tests are `GSTNCombat.Core.Table.*` and
+(kit and weapon assets through the assembly into the compiler and rules), `Loadout.SaveRoundTrip` (presets through the subsystem and the save game
+bytes, a new session over the same bytes), `Loadout.UnknownIdDropped` (unknown kit/weapon/super/skin ids dropped, super slots and weapon indices kept consistent, the file untouched),
+`Loadout.RulesRejectInvalid` (a rejected request changes nothing) and `Loadout.ApplyOnHostWithoutOnRep` (the server apply path on a transient ability system:
+grants, stats effects, replacement by a second loadout, broadcast count, a grant that waits for a pawn; no OnRep, no PIE, no Asset Manager). The compiler and rule tests are `GSTNCombat.Core.Table.*` and
 `GSTNCombat.Core.LoadoutRules.*`, where the code lives.
-The data tests build assets in memory and use test-only identity leaves (`GSTN_DataTestTypes`). The attribute tests use a stock
+The data tests build assets in memory and use test-only identity leaves (`GSTN_DataTestTypes`). The loadout tests use test doubles of the component and
+subsystem (`GSTN_LoadoutTestTypes`) that answer asset ids from a table, grant on a chosen ASC and keep the save slot in memory; they need a `ULocalPlayer` object only as the subsystem's outer. The attribute tests use a stock
 `UAbilitySystemComponent` on an actor in a transient game world (effects need a world for their start time), with no Network
 Prediction or Mover, so they also run against stock GAS. Run with the same command
 as the other combat tests: `-ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit"`.
