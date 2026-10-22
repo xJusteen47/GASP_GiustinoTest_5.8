@@ -382,13 +382,44 @@ at step 6 (H8/H9), events with hit type and relationship (H9).
   `ResidualSpeedScale`); event `Combat.Event.Impact.{Splat,Bounce,Break}`; `bNoTech` flag on hit data reserved for M6. Trampoline:
   `Surface.Type.Trampoline` row forces `Bounce` for tumbling victims (no special case); the non-tumbling launch (`AGSTN_Trampoline`,
   `FGSTN_LayeredMove_Launch` through the GE path, direction = trampoline normal) lives in a small optional plugin `GSTNLevelObjects`
-  (depends on `GSTNCombatNP`): **H11b, only if the owner wants it in M4** (§6; otherwise the row + launch move type only).
+  (see **H11b**, approved by the owner 2026-10-22 18:27).
 - Tests `GSTNCombat.NP.Hits.Impact.*`: `ContactRecordWritten`, `ResolvedOneFrameAfterContact`, `SplatEndsActionable`,
   `BounceKeepsTumble`, `BreakRequestOutsideSim`, `ForcedAndForbiddenByHitData`, `MaterialMappingBaked`.
 - Scenarios: `scenario_impact_wall` (splat, bounce, forced and forbidden by hit data; glass breaks), `scenario_hit_on_wall` second
   half (launch into the wall from the wall mode), `scenario_trampoline` (H11b only).
 - Acceptance (S §12 4b second half): outcomes follow the precedence of §7b; nothing reads live components in the decision.
 - Refs: S §7b, M6 §6 contact record, DD §4, §2d, OQ 20/21/31.
+
+### H11b Trampoline level object (`GSTNLevelObjects`, new optional plugin) — size M
+
+Owner answer 2026-10-22 18:27: a trampoline is a **box (parallelepiped) with adjustable height, depth and width**; mesh, size,
+launch direction, tilt etc. may differ per instance.
+
+- Layering (MT §3.7): the plugin depends only on Engine and `GSTNCombatCore`, never on `GSTNCombatNP`. Core gets the data contract
+  (in H3's area): `IGSTN_LaunchSurface` (UINTERFACE, `BlueprintNativeEvent GetLaunchParams()`) and `FGSTN_SurfaceLaunchParams`
+  (`Direction` mode `SurfaceNormal | LocalDirection | Tilt (pitch/yaw offset from the normal, degrees)`, `Speed` mode
+  `Fixed | ScaledByIncoming (Restitution, MinSpeed, MaxSpeed)`, `bKeepTangentialVelocity`, `bResetAirJumps`, `bResetCoyote`,
+  `LaunchTag` for kits). `GSTNCombatNP` consumes it: H11's contact probe sees an `IGSTN_LaunchSurface` and queues
+  `FGSTN_LayeredMove_Launch` through the GE path for any non-tumbling character (tumbling ones keep the `Surface.Type.Trampoline`
+  bounce row). Direction is local to the trampoline, so any gravity works (DD §2d).
+- Files (`Plugins/GSTNLevelObjects/Source/GSTNLevelObjects/`): `Public/GSTN_Trampoline.h` — `AGSTN_Trampoline` (Blueprintable):
+  root `UBoxComponent` whose `BoxExtent` comes from `FVector Size` (cm, `ClampMin` 10, `MakeEditWidget` handle to resize in the
+  viewport), collision profile with the `Surface.Type.Trampoline` physical material; optional `UStaticMeshComponent` with a
+  **soft** `TSoftObjectPtr<UStaticMesh>` (default a cube from the plugin content), `EGSTN_TrampolineMeshFit { StretchToBox, Keep }`
+  and a mesh offset; `FGSTN_SurfaceLaunchParams Launch` (EditAnywhere, `Category = "Trampoline|Launch"`); the launch face is the
+  actor's local up, so tilting the actor tilts the launch; an editor-only arrow previews the launch direction and a dotted arc for
+  a reference speed. `OnConstruction` rebuilds box and mesh from `Size`. `Private/GSTN_Trampoline.cpp`. Plugin `Content/` with
+  the default cube mesh and material; plugin tag ini with `Surface.Type.Trampoline`.
+- Rollback rule: launch params are read from the actor only as **static configuration**; a trampoline that moves or changes
+  params at runtime is out of M4 (validator warns if `Mobility != Static`).
+- Tests `GSTNLevelObjects.*`: `SizeDrivesBoxExtent`, `MeshFitStretch`, `LaunchDirectionModes` (normal, local, tilt),
+  `SpeedModes`, `SoftMeshNotLoadedInCDO`; `GSTNCombat.NP.Hits.Launch.{FromSurfaceParams, TiltedGravity, ResetAirJumpsFlag}`.
+- Scenario `scenario_trampoline` (listen primary, then dedicated; 60/15 ms, 2 % loss): host and a client land on a flat, a tilted
+  and a wall-mounted trampoline of different sizes; launch velocity and landing point equal on all machines, zero host reconciles,
+  one `Combat.Event.Impact.Bounce` for a tumbling victim thrown on it.
+- Acceptance: R-B (plugin builds and tests alone with `GSTNCombatCore`); a Blueprint child can change mesh, size and launch
+  without C++; README with how to extend (e.g. a moving or one-way trampoline later).
+- Refs: S §7b trampolines, DD §2d, OQ M4.31. Content edit: the H13 test map gets the three trampolines.
 
 ### H12 Base dodges, ricochet response, dodge gating (data + `GSTNCombatNP`) — size S/M
 
@@ -413,7 +444,7 @@ at step 6 (H8/H9), events with hit type and relationship (H9).
   hitbox, a baked-socket hitbox, a `WorldAtMoveStart` hitbox and an `Ally` variant (half shape, no hitstun); three test hurtbox sets
   (light / medium / heavy weight, one high-threshold hurtbox); example Blueprints for each extension class (`BP_Step_Example`,
   `BP_KnockbackModel_Example`, `BP_OutcomeApplier_Example`, `BP_AttackerOutcome_Example`, `BP_RelationshipResolver_Example`) under
-  `/Game/GASNPPTest/Combat/`; test map with a wall, a glass panel, a KO zone (and a trampoline if H11b). Validators' matrix printers
+  `/Game/GASNPPTest/Combat/`; test map with a wall, a glass panel, a KO zone (and three trampolines from H11b). Validators' matrix printers
   wired to `IsDataValid` output. Full harness (both topologies, every scenario of H7–H12, with and without loss) + all `GSTNCombat.*`.
   Docs commit: CM §12 (hits), §17 (H0 results), S corrections found while implementing, READMEs ("Extending in Blueprint", settings,
   fork requirements), plugin tag ini documented.
@@ -453,7 +484,7 @@ point (H7); any new Mover mode (never: the plan adds none).
 | M4.26 | push back: speed = min(K × `PushBackSpeedScale`, `MaxPushBackSpeed`), fixed `DecayPerFrame`, stops at walls and ledges, promoted to `Launch` when airborne/on a wall | H2, H9 | S (move tuning) |
 | M4.27 (open half) | a sub-threshold hit during hitstun changes nothing (no extension, no decay); no hitstun decay in M4 | H9 | S (a decay rule in the model) |
 | M4.30 | sharp `UpwardThresholdDot = −0.1`, tunable; no transition zone (M6 curve) | H3 | data, free |
-| M4.31 | trampoline bounce fixed or speed-scaled along the normal; no jump-hold or fast-fall interaction; `GSTNLevelObjects` only if asked (H11b) | H11 | M (kit interaction) |
+| M4.31 | **Answered 2026-10-22 18:27** for the shape: adjustable box, per-instance mesh, size, direction, tilt (H11b). Still assumed: no jump-hold or fast-fall interaction | H11, H11b | M (kit interaction) |
 | M4.32 | every "up" uses the victim's gravity of the current frame; DI uses the gravity at `HitstopEndFrame` | H3, H9 | S |
 | M4.33 | ground dodge not jump-/air-cancellable before its tail | H12 | data, free |
 | M4.34 | feet window = take-off to 40 % of the airborne frames | H12 | data, free |
@@ -475,7 +506,7 @@ point (H7); any new Mover mode (never: the plan adds none).
 - Game mode / GameState Blueprint: `UGSTN_CombatRulesComponent` (H5), next to the C7 loadout wiring.
 - Test map under `Content/GASNPPTest/Combat/` (new file): walls, glass panel with `IGSTN_ImpactSurface`, KO zone; physical material
   assets for `Surface.Type.*` (H11, H13). `Content/Levels/DefaultLevel.umap` untouched.
-- **Owner decision, not approved** (README "Approval status" 1): optional plugin `GSTNLevelObjects` with `AGSTN_Trampoline` (H11b).
+- **Approved 2026-10-22 18:27** (README "Approval status" 1): new optional plugin `GSTNLevelObjects` with `AGSTN_Trampoline` (H11b); enabling it in the `.uproject` is announced in H11b.
 - Standard rules asset and plugin tag ini (`Plugins/GSTNCombat/Config/Tags/GSTNCombat.ini`) are new plugin files, not project edits.
 
 ## 7. Risks and parallelisation
