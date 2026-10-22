@@ -282,7 +282,7 @@ Second seam checkpoint for M4b (P §1 item 2 inbox half, item 7 snapshot extensi
   `PausedFramesTotal`, buffer `PausedStart/PausedEnd` to `FGSTN_MatchParams`, resolver skipped during hitstop, montage pause/resume
   at `HitstopEndFrame` (M0 path), `FGSTN_LayeredMove_MoveTrack` does not advance while frozen (C12 flag). Project:
   `UGSTN_WallMovementModeBase::IsMovementLocked(const FMoverTickStartData&)` (virtual, default: Mover has `Combat.Mover.Frozen`);
-  locked = skip `CheckForWallExit`, `TryWallJump`, `TryDetachByPullingAway`, no timer advance. **Owner OK needed** (§6).
+  locked = skip `CheckForWallExit`, `TryWallJump`, `TryDetachByPullingAway`, no timer advance. **Approved by the owner 2026-10-22 18:25** (§6).
 - Tags (`GSTNCombatNP`): `Combat.Mover.Frozen`.
 - Tests `GSTNCombat.NP.Hits.Hitstop.*`: `PausedFramesCount`, `BufferAgeExcludesHitstop`, `FreezeRestoresVelocity`,
   `FreezeZeroOnFinishFlag`. Scenarios: `scenario_hitstop_montage` (forced reconcile in the window, montage position equal),
@@ -468,7 +468,7 @@ point (H7); any new Mover mode (never: the plan adds none).
 
 - `BP_GASNPP_TestCharacter`: hurtbox set reference, `UGSTN_HitPresentationComponent`, `UNetworkPredictionLagCompensation`
   (fork component), test move assets (H8, H10, H13). Via `Tools/GAS/setup_gas_assets.py` with backup, as in M2/M3.
-- **Owner decision, not approved** (README "Approval status" 2): wall movement core: `UGSTN_WallMovementModeBase::IsMovementLocked` extension point in the project module (H7; no behaviour change
+- **Approved 2026-10-22 18:25** (README "Approval status" 2): wall movement core: `UGSTN_WallMovementModeBase::IsMovementLocked` extension point in the project module (H7; no behaviour change
   when unlocked). Touches the wall-movement core, per wall-movement.md.
 - `Plugins/GASNPP/NetworkPrediction/Config/DefaultNetworkPrediction.ini`: `FixedTickInterpolationBufferedMS` to the H0d value (H10).
 - `GSTNInputCore` tags: `Input.BufferEvent.HitReceived` (one native line, H5), per coordinator decision 1.

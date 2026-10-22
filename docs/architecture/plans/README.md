@@ -71,8 +71,8 @@ items below, which stay owner decisions**. Implementation threads must not do th
 
 1. **Trampoline actor and `GSTNLevelObjects` plugin** (M4 H11b): new feature and new plugin. H11 keeps only the
    `Surface.Type.Trampoline` bounce row and the launch move type.
-2. **`IsMovementLocked` extension point in the wall-movement core** (M4 H7, plan §6): an architectural change in the
-   project module. Until answered, hitstop freeze must not depend on it on walls (H7 ships without wall-mode lock).
+2. ~~`IsMovementLocked` extension point in the wall-movement core~~ **Approved 2026-10-22 18:25**: H7 adds the protected
+   virtual to `UGSTN_WallMovementModeBase` (default: Mover has `Combat.Mover.Frozen`), so hitstop freezes on walls too.
 3. ~~Parts never heal~~ **Answered 2026-10-22 18:22**: no self-regeneration, but explicit restores (e.g. a healer enemy)
    exist. Planned as M4b checkpoint P7b; no longer blocking.
 
