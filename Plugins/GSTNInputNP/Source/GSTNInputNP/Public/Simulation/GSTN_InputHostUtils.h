@@ -19,6 +19,15 @@ struct FGSTN_InputSimState;
 struct GSTNINPUTNP_API FGSTN_InputHostUtils
 {
 	/**
+	 * True while CanExecuteBinding or ExecuteRequest is on the stack, i.e. while the ability system is asked about a command
+	 * (the binding check of the candidate scan, the activation of the request). An ability that must treat a command differently
+	 * from every other activation (a trigger, an effect, another ability) reads it in CanActivateAbility/ActivateAbility instead
+	 * of guessing from the role or from what the component holds: it is a property of the call, so every machine, and every
+	 * re-simulation, gets the same answer. Game thread only, like the simulation
+	 */
+	static bool IsCommandActivation();
+
+	/**
 	 * The ability system's CanActivateAbility for the binding's ability class, a const query on the state of the end of the
 	 * previous frame (the host's CanExecuteBinding). False if the ability system has no spec of that exact class.
 	 */
@@ -44,4 +53,12 @@ struct GSTNINPUTNP_API FGSTN_InputHostUtils
 	 * @return the number of events published
 	 */
 	static int32 PublishOutbox(FGSTN_SimEventOutbox& Outbox, AActor* Owner);
+};
+
+/** Marks the code under it as a command activation (FGSTN_InputHostUtils::IsCommandActivation). Nests */
+struct GSTNINPUTNP_API FGSTN_CommandActivationScope
+{
+	FGSTN_CommandActivationScope();
+	~FGSTN_CommandActivationScope();
+	UE_NONCOPYABLE(FGSTN_CommandActivationScope);
 };

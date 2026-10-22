@@ -32,6 +32,14 @@ only valid in the frame it was made: the combat tick must call `Requests.PruneBe
 abilities only while `Core.IsLoadoutCurrent(TableRevision)` (the loadout revision gate, combat-m3 7.8). All of it takes part in `ShouldReconcile`, `ToString` and
 `Interpolate` (discrete: the newer frame). Nothing in the tick reads these fields yet: the timeline abilities that write them are C10.
 
+**Clock, aim and command marker (for abilities).** The component answers three queries about the frame being simulated, for an
+ability's activation or tick (not presentation code): `GetCombatClock()` is the Network Prediction frame minus every hitstop frame so
+far (`Core.PausedFramesTotal`; the pure helper is `FGSTN_CombatClock`), so it stands still in hitstop; `IsInTimeline()` is
+`Core.ActionState == InTimeline`; `GetAimRotation()` is the camera aim of the frame's command (`HasAim()` says whether the command carried
+one, see `bSendCameraAim` in [GSTNInputNP](../GSTNInputNP/README.md)). The aim is copied at the top of each combat tick into three scalars,
+so a re-simulation reads the command it replays. `FGSTN_InputHostUtils::IsCommandActivation()` is true inside `CanExecuteBinding` and
+`ExecuteRequest` (an `FGSTN_CommandActivationScope` on the stack): an ability uses it to tell a command from a trigger or an effect.
+
 **Sync state.** `FGSTN_CombatSyncState` is `Core` (`FGSTN_CombatSyncCore`: the input state, the hitstop window and the action part) followed by
 `Fragments`, a list of `FGSTN_SyncFragment` from `GSTNCombatCore` that features add per entity. The core's bytes are the same with
 or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the

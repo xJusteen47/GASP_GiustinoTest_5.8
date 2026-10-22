@@ -9,6 +9,7 @@
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/Pawn.h"
+#include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputConfig.h"
 #include "Input/GSTN_InputScript.h"
 #include "Input/GSTN_InputSettings.h"
@@ -167,6 +168,24 @@ bool UGSTN_CombatSimComponent::ServerWriteLoadoutRevision(uint16 Revision)
 	}, "LoadoutRevision") != nullptr;
 }
 
+int32 UGSTN_CombatSimComponent::GetCombatClock() const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Frame = Sync ? Sync->Core.Input.History.GetLatestFrame() : INDEX_NONE;
+	return FGSTN_CombatClock::FromFrame(Frame, Sync ? Sync->Core.PausedFramesTotal : 0);
+}
+
+bool UGSTN_CombatSimComponent::IsInTimeline() const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync && Sync->Core.ActionState == EGSTN_ActionState::InTimeline;
+}
+
+FRotator UGSTN_CombatSimComponent::GetAimRotation() const
+{
+	return FrameAim.bHasAim ? FRotator(FGSTN_DirectionClassifier::DequantizeAim(FrameAim.Pitch), FGSTN_DirectionClassifier::DequantizeAim(FrameAim.Yaw), 0.f) : FRotator::ZeroRotator;
+}
+
 const FGSTN_CombatSyncState* UGSTN_CombatSimComponent::GetSyncState() const
 {
 	return NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>();
@@ -264,6 +283,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	OutSync = InSync;
 
 	const int32 Frame = TimeStep.Frame;
+
+	// The aim of this frame's command, kept for the ability system's tick that follows (GetAimRotation)
+	FrameAim.bHasAim = Input.Cmd->bHasAim;
+	FrameAim.Yaw = Input.Cmd->AimYaw;
+	FrameAim.Pitch = Input.Cmd->AimPitch;
 
 	// Extension hooks at the fixed points of the tick. With nothing registered every call is an empty loop
 	FGSTN_CombatTickContext HookContext(Frame, InSync, OutSync);

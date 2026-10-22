@@ -10,12 +10,34 @@
 #include "GameFramework/Actor.h"
 #include "Simulation/GSTN_InputSimTypes.h"
 
+namespace
+{
+	int32 CommandActivationDepth = 0;
+}
+
+FGSTN_CommandActivationScope::FGSTN_CommandActivationScope()
+{
+	++CommandActivationDepth;
+}
+
+FGSTN_CommandActivationScope::~FGSTN_CommandActivationScope()
+{
+	--CommandActivationDepth;
+}
+
+bool FGSTN_InputHostUtils::IsCommandActivation()
+{
+	return CommandActivationDepth > 0;
+}
+
 bool FGSTN_InputHostUtils::CanExecuteBinding(const UAbilitySystemComponent* AbilitySystem, const FGSTN_CommandTable& Table, int32 BindingIndex)
 {
 	if (!AbilitySystem || !Table.Bindings.IsValidIndex(BindingIndex))
 	{
 		return false;
 	}
+
+	const FGSTN_CommandActivationScope CommandScope;
 
 	// The same const query the ability system makes when it executes the request
 	const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(Table.Bindings[BindingIndex].Ability);
@@ -31,6 +53,7 @@ bool FGSTN_InputHostUtils::ExecuteRequest(UAbilitySystemComponent* AbilitySystem
 		return false;
 	}
 
+	const FGSTN_CommandActivationScope CommandScope;
 	const TSubclassOf<UGameplayAbility>& Ability = Table.Bindings[BindingIndex].Ability;
 	const FGameplayAbilitySpec* Spec = AbilitySystem ? AbilitySystem->FindAbilitySpecFromClass(Ability) : nullptr;
 	if (!Spec || !AbilitySystem->TryActivateAbility(Spec->Handle))

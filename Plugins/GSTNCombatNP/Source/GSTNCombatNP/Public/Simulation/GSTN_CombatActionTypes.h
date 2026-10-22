@@ -14,6 +14,22 @@ enum class EGSTN_ActionState : uint8
 	Count UMETA(Hidden)
 };
 
+/** The combat clock (combat-m3 7.1): the simulation frame minus every hitstop frame so far, so it stands still in hitstop */
+struct FGSTN_CombatClock
+{
+	/** INDEX_NONE before the first simulated frame (Frame < 0) */
+	static int32 FromFrame(int32 Frame, int32 PausedFramesTotal)
+	{
+		return Frame < 0 ? INDEX_NONE : Frame - PausedFramesTotal;
+	}
+
+	/** Combat frames since StartClock, 0 for a start that is not valid or a clock that is not */
+	static int32 Elapsed(int32 Clock, int32 StartClock)
+	{
+		return (Clock < 0 || StartClock < 0) ? 0 : FMath::Max(Clock - StartClock, 0);
+	}
+};
+
 /** What the combat tick asks the ability system to do before it ticks, in the frame it asks (combat-m3 7.1) */
 enum class EGSTN_RequestType : uint8
 {

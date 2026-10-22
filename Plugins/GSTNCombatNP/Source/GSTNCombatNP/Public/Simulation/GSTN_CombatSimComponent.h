@@ -96,6 +96,30 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Input")
 	void TapScriptedButtons(int32 Mask);
 
+	/**
+	 * The combat clock of the frame being simulated: the Network Prediction frame minus every hitstop frame so far
+	 * (Core.PausedFramesTotal), so it stands still while the combatant is in hitstop and a wait counted on it does not elapse then.
+	 * Same contract as GetActivationContext: call it from inside the simulation (an ability's activation or tick), where it is
+	 * deterministic and the same on every machine and in every re-simulation. INDEX_NONE before the first simulated frame
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Clock")
+	int32 GetCombatClock() const;
+
+	/** Whether the combat state of the frame being simulated says a timeline is running (EGSTN_ActionState::InTimeline). Simulation read, like GetCombatClock */
+	UFUNCTION(BlueprintPure, Category = "Combat|Clock")
+	bool IsInTimeline() const;
+
+	/**
+	 * The camera aim of the command of the frame being simulated (UGSTN_InputConfig::bSendCameraAim, combat-m3 7.10): control
+	 * rotation pitch and yaw, roll 0. The simulation keeps it on its way past the ability system's tick of the same frame, rewritten
+	 * every simulated frame, so a re-simulation reads the command it replays. Zero when the command carries no aim (HasAim)
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	FRotator GetAimRotation() const;
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	bool HasAim() const { return FrameAim.bHasAim; }
+
 	/** Latest simulated (or interpolated) combat state */
 	const FGSTN_CombatSyncState* GetSyncState() const;
 
@@ -179,6 +203,19 @@ private:
 
 	// Written by the simulation tick on every machine, published and emptied in FinalizeFrame (authority only); not sync state
 	FGSTN_SimEventOutbox EventOutbox;
+
+	/**
+	 * The aim of the command of the frame the simulation is on (a copy of three fields, not a pointer: the input buffer's memory
+	 * is not ours). Written at the top of every combat tick, read by the ability system's tick of the same frame; never a
+	 * source of state, so it needs no rollback
+	 */
+	struct FFrameAim
+	{
+		bool bHasAim = false;
+		uint16 Yaw = 0;
+		uint16 Pitch = 0;
+	};
+	FFrameAim FrameAim;
 
 	// Input production only (owning machine), not simulation state
 	uint32 ScriptedButtons = 0;
