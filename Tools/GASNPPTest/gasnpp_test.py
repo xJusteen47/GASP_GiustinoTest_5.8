@@ -1,12 +1,16 @@
 # GAS + NPP + Mover network test helpers (run inside the Unreal Editor Python console).
 #
-# Usage (PIE: dedicated server + 2 clients, "Run Under One Process"):
+# Usage (PIE "Run Under One Process"; PRIMARY = listen server: the host plays and is world 0, clients are worlds 1..N):
 #   import sys; sys.path.insert(0, r"<project>/Tools/GASNPPTest"); import gasnpp_test as m
-#   m.setup_editor(True)            # before Play: test GameMode on the open level (not saved), no CPU throttling
+#   m.setup_editor(True)            # before Play: test GameMode + PIE settings = listen server, host + 2 clients (not saved), no CPU throttling
+#   m.setup_editor(True, 'dedicated', 2)   # secondary check: dedicated server + 2 clients (world 0 = server with no local player)
 #   m.net(60, 15, 2)                # lag ms, jitter ms, packet loss %
-#   m.reset_all(); m.scenario_abilities((1, 2))   # or scenario_forced_rollback / scenario_server_correction / scenario_accounting
-#   print(m.report())               # counters + server vs client state comparison
-#   m.setup_editor(False)           # after Stop: restore GM_Sandbox and throttling
+#   m.check_topology()              # after Play: are the roles what the mode promises?
+#   m.reset_all(); m.scenario_abilities()   # all players (host included in listen); or scenario_forced_rollback / scenario_server_correction / scenario_accounting
+#   print(m.report())               # counters + authoritative copy vs every other world's copy of each pawn
+#   m.setup_editor(False)           # after Stop: restore GM_Sandbox, throttling and the PIE settings
+# World index: 0 = host (listen) or dedicated server; 1.. = clients. In listen, hold/press/release(0, ...) drive the host's own pawn
+# through the same Enhanced Input injection as the clients.
 import unreal, json
 
 CHAR = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
@@ -18,8 +22,11 @@ IA = {
 }
 
 
+_cfg = {'mode': None, 'prev': None}
+
+
 def worlds():
-    """[server, client1, client2] PIE worlds."""
+    """[host or dedicated server, client1, client2] PIE worlds."""
     return list(unreal.EditorLevelLibrary.get_pie_worlds(True))
 
 
@@ -34,13 +41,44 @@ def comps(world):
 
 
 def snap(world):
-    return {n: json.loads(c.get_state_snapshot()) for n, c in comps(world).items()}
+    """Snapshot per pawn key. 'local' is added here (not in C++): this world's own player controls that pawn."""
+    out = {}
+    for n, c in comps(world).items():
+        v = json.loads(c.get_state_snapshot())
+        v['local'] = bool(c.get_owner().is_locally_controlled())
+        out[n] = v
+    return out
 
 
 def local_comp(world):
     pc = unreal.GameplayStatics.get_player_controller(world, 0)
     pawn = pc.get_controlled_pawn() if pc else None
     return pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent) if pawn else None
+
+
+def _input_comp(index):
+    """Test component of the pawn the local player of world `index` controls: the one that injects input. Index 0 only has one in
+    listen mode (the host); on a dedicated server world 0 has no local player."""
+    comp = local_comp(worlds()[index])
+    if comp is None or not comp.get_owner().is_locally_controlled():
+        raise RuntimeError(f'world {index} has no locally controlled test pawn (dedicated server world, or PIE not running)')
+    return comp
+
+
+def key_of_player(index):
+    """Pawn key ('P<id>') of the pawn the local player of world `index` controls. Player ids depend on join order (listen:
+    host first), so scenarios resolve targets through this instead of hard-coded keys."""
+    return next(n for n, v in snap(worlds()[index]).items() if v['local'])
+
+
+def detected_mode():
+    """'listen' if world 0 has a locally controlled pawn, else 'dedicated'."""
+    return 'listen' if any(v['local'] for v in snap(worlds()[0]).values()) else 'dedicated'
+
+
+def all_players():
+    """World indices that have a local player to drive: 0..N in listen (host included), 1..N on a dedicated server."""
+    return tuple(range(0 if detected_mode() == 'listen' else 1, len(worlds())))
 
 
 def reset_all():
@@ -57,17 +95,17 @@ def net(lag_ms=0, var_ms=0, loss_pct=0):
 
 
 def hold(client_index, action, value):
-    c = local_comp(worlds()[client_index])
+    c = _input_comp(client_index)
     return c.start_holding_input(unreal.load_asset(IA[action]), unreal.Vector(*value))
 
 
 def release(client_index, action):
-    c = local_comp(worlds()[client_index])
+    c = _input_comp(client_index)
     return c.stop_holding_input(unreal.load_asset(IA[action]))
 
 
 def press(client_index, action):
-    c = local_comp(worlds()[client_index])
+    c = _input_comp(client_index)
     return c.press_input(unreal.load_asset(IA[action]))
 
 
@@ -134,28 +172,81 @@ def _diff(a, b, pos_tol=2.0):
     return d
 
 
-def report():
-    """Counters per world + server/autonomous/simulated state comparison for every pawn."""
+def _role(v):
+    return v['role'].split('::')[-1].replace('ROLE_', '')
+
+
+def _kind(v):
+    """host-local = the host's own pawn (authority AND locally controlled); server-copy = authoritative copy of a remote
+    client's pawn (on the host or on a dedicated server); autonomous = a client's own pawn; simulated = a client's view of
+    someone else's pawn (the host's included)."""
+    r = _role(v)
+    if r == 'Authority':
+        return 'host-local' if v.get('local') else 'server-copy'
+    return {'AutonomousProxy': 'autonomous', 'SimulatedProxy': 'simulated'}.get(r, r)
+
+
+def check_topology():
+    """Do the roles match the mode? Returns (mode, problems). Listen: w0 has one Authority+local pawn (the host) and the other pawns
+    Authority non-local; every client has exactly one AutonomousProxy+local pawn and the rest SimulatedProxy (the host's pawn is one of
+    those). Dedicated: w0 has no local pawn. Every world sees one pawn per player."""
     ws = worlds()
     snaps = [snap(w) for w in ws]
-    lines = []
+    mode = detected_mode()
+    problems = []
+    if _cfg['mode'] and _cfg['mode'] != mode:
+        problems.append(f"configured {_cfg['mode']} but the PIE session behaves as {mode}")
+    listen = mode == 'listen'
+    players = len(ws) if listen else len(ws) - 1
+    for i, s in enumerate(snaps):
+        if len(s) != players:
+            problems.append(f'w{i} has {len(s)} pawns, expected {players}: {sorted(s)}')
+        kinds = sorted(_kind(v) for v in s.values())
+        if i == 0:
+            want = (['host-local'] if listen else []) + ['server-copy'] * (players - (1 if listen else 0))
+        else:
+            want = ['autonomous'] + ['simulated'] * (players - 1)
+        if kinds != sorted(want):
+            problems.append(f'w{i} kinds {kinds}, expected {sorted(want)}')
+    return mode, problems
+
+
+def report(pos_tol=2.0, proxy_pos_tol=None):
+    """Counters per world + comparison of the authoritative copy of every pawn (w0: the host's own pawn in listen mode, the server copy
+    of each remote client's pawn) with that pawn in every other world:
+      host-local  vs simulated  = the host's pawn as a client sees it (listen only)
+      server-copy vs autonomous = a client's own pawn vs the authoritative copy on the host/server
+      server-copy vs simulated  = a client's pawn as another client sees it
+    proxy_pos_tol: position tolerance for 'simulated' copies (default: pos_tol); they are interpolated, so a moving one can lag."""
+    ws = worlds()
+    snaps = [snap(w) for w in ws]
+    mode, problems = check_topology()
+    lines = [f"mode={mode} worlds={len(ws)}" + (f" TOPOLOGY PROBLEMS: {problems}" if problems else '')]
     for i, s in enumerate(snaps):
         for n, v in sorted(s.items()):
-            lines.append(f"w{i} {n} {v['role'][5:]:<15} rb={v['rollbacks']:<3} rbMs={v['rolledBackMs']:<6.0f} ticks={v['simTicks']:<5} resim={v['resimTicks']:<4} abResim={v['abilityResimTicks']:<4} "
+            lines.append(f"w{i} {n} {_kind(v):<11} rb={v['rollbacks']:<3} rbMs={v['rolledBackMs']:<6.0f} ticks={v['simTicks']:<5} resim={v['resimTicks']:<4} abResim={v['abilityResimTicks']:<4} "
                          f"hp={v['attributes'].get('Health')} st={v['attributes'].get('Stamina')} tags={v['tags']} cd={ {k[14:]: round(x, 2) for k, x in v['cooldowns'].items()} } eff={len(v['effects'])} mode={v.get('mode')}")
-    server = snaps[0]
-    for n, sv in sorted(server.items()):
+    total = bad = 0
+    for n, sv in sorted(snaps[0].items()):
         for i in range(1, len(snaps)):
             cv = snaps[i].get(n)
+            total += 1
             if cv is None:
+                bad += 1
+                lines.append(f"CMP {n} {_kind(sv)}(w0) vs w{i}: MISSING pawn")
                 continue
-            diffs = _diff(sv, cv)
-            lines.append(f"CMP {n} server vs w{i}({cv['role'][5:]}): {'OK' if not diffs else diffs}")
+            tol = proxy_pos_tol if (proxy_pos_tol is not None and _role(cv) == 'SimulatedProxy') else pos_tol
+            diffs = _diff(sv, cv, tol)
+            bad += bool(diffs)
+            lines.append(f"CMP {n} {_kind(sv)}(w0) vs {_kind(cv)}(w{i}): {'OK' if not diffs else diffs}")
+    lines.append(f"CMP RESULT: {total - bad}/{total} OK")
     return '\n'.join(lines)
 
 
-def scenario_abilities(clients=(1,), stagger=0.3):
-    """Each client: walk forward, dash, buff, dash on cooldown, dash again, stop. Clients start `stagger` seconds apart."""
+def scenario_abilities(clients=None, stagger=0.3):
+    """Each player: walk forward, dash, buff, dash on cooldown, dash again, stop. Players start `stagger` seconds apart.
+    clients: world indices (0 = the host, listen only); default = every player (all_players())."""
+    clients = all_players() if clients is None else clients
     steps = []
     for n, c in enumerate(clients):
         o = n * stagger
@@ -171,6 +262,9 @@ def scenario_abilities(clients=(1,), stagger=0.3):
 
 
 def force_reconcile(client_index, extra_frames=10):
+    """Forces a reconcile on a client world. The host/server (world 0) is authoritative and never reconciles: refused."""
+    if client_index == 0:
+        raise RuntimeError('world 0 is the host/server: it has nothing to reconcile, pick a client (index >= 1)')
     w = worlds()[client_index]
     unreal.SystemLibrary.execute_console_command(w, f'np.ForceReconcileExtraFrames {extra_frames}')
     unreal.SystemLibrary.execute_console_command(w, 'np.ForceReconcile 1')
@@ -178,7 +272,8 @@ def force_reconcile(client_index, extra_frames=10):
 
 
 def server_apply(player_key, effect_class_name):
-    """Apply an effect on the server copy only (not predicted by the owning client)."""
+    """Apply an effect on the authoritative copy only (not predicted by the owning client; on the host's own pawn it is a plain
+    local application)."""
     comp = comps(worlds()[0])[player_key]
     asc = comp.get_owner().get_component_by_class(unreal.NpAbilitySystemComponent)
     cls = unreal.load_class(None, f'/Script/GASP_Giustino2.{effect_class_name}')
@@ -199,7 +294,9 @@ def scenario_forced_rollback(client=1):
     run_timeline(steps)
 
 
-def scenario_server_correction(player_key='P256'):
+def scenario_server_correction(player_key=None, client=1):
+    """Server-side unpredicted dash/buff/cost on the pawn of world `client` (default client 1; 0 = the host's own pawn)."""
+    player_key = player_key or key_of_player(client)
     steps = [
         (0.0, lambda: ('server dash (unpredicted move)', server_apply(player_key, 'GSTN_GE_Dash'))),
         (1.0, lambda: ('server buff (unpredicted effect)', server_apply(player_key, 'GSTN_GE_Buff'))),
@@ -208,14 +305,66 @@ def scenario_server_correction(player_key='P256'):
     run_timeline(steps)
 
 
-def setup_editor(enable=True):
-    """Temporary editor-only setup (never saved): test GameMode override on the open level, no background CPU throttling."""
+_PIE_PROPS = ('play_net_mode', 'play_number_of_clients', 'play_net_dedicated', 'run_under_one_process')
+
+
+def configure_pie(mode='listen', clients=2):
+    """PIE play settings for the harness (in memory; previous values kept for setup_editor(False)). clients = remote clients.
+    listen: net mode PIE_ListenServer, players = host + clients. dedicated: dedicated server + `clients` clients. Always one process.
+    Returns what was set / what failed; a property not reachable from Python has to be set by hand in Play > Advanced settings."""
+    _cfg['mode'] = mode
+    if not hasattr(unreal, 'LevelEditorPlaySettings'):
+        # Not exposed to Python in 5.8 (checked live). Start PIE through the play tool instead (e.g. Rider MCP ue_play:
+        # netMode=listen, players=clients+1, runUnderOneProcess=true; dedicated: netMode=client, dedicatedServer=true,
+        # players=clients) or set Play > Advanced settings by hand.
+        return {'play_settings': f"unreal.LevelEditorPlaySettings not available: start PIE with {'listen, players=%d' % (clients + 1) if mode == 'listen' else 'dedicated server, players=%d' % clients}, one process"}
+    s = unreal.get_default_object(unreal.LevelEditorPlaySettings)
+    if _cfg['prev'] is None:
+        _cfg['prev'] = {}
+        for k in _PIE_PROPS:
+            try:
+                _cfg['prev'][k] = s.get_editor_property(k)
+            except Exception:
+                pass
+    listen = mode == 'listen'
+    want = {
+        'play_net_mode': unreal.PlayNetMode.PIE_LISTEN_SERVER if listen else unreal.PlayNetMode.PIE_CLIENT,
+        'play_number_of_clients': clients + 1 if listen else clients,
+        'play_net_dedicated': not listen,
+        'run_under_one_process': True,
+    }
+    result = {}
+    for k, v in want.items():
+        try:
+            s.set_editor_property(k, v)
+            result[k] = str(v)
+        except Exception as e:
+            result[k] = f'FAILED {e}'
+    _cfg['mode'] = mode
+    return result
+
+
+def setup_editor(enable=True, mode='listen', clients=2):
+    """Temporary editor-only setup (never saved): test GameMode override on the open level, PIE settings for `mode` ('listen' =
+    primary, host + `clients` clients; 'dedicated' = secondary check), no background CPU throttling. enable=False restores all."""
     w = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
     gm = '/Game/GASNPPTest/GM_GASNPPTest' if enable else '/Game/Blueprints/GM_Sandbox'
     w.get_world_settings().set_editor_property('default_game_mode', unreal.load_asset(gm).generated_class())
     perf = unreal.get_default_object(unreal.load_class(None, '/Script/UnrealEd.EditorPerformanceSettings'))
     perf.set_editor_property('bThrottleCPUWhenNotForeground', not enable)
-    return w.get_world_settings().get_editor_property('default_game_mode').get_name(), perf.get_editor_property('bThrottleCPUWhenNotForeground')
+    if enable:
+        pie = configure_pie(mode, clients)
+    else:
+        pie = {}
+        s = unreal.get_default_object(unreal.LevelEditorPlaySettings) if hasattr(unreal, 'LevelEditorPlaySettings') else None
+        for k, v in ((_cfg['prev'] or {}).items() if s else ()):
+            try:
+                s.set_editor_property(k, v)
+                pie[k] = 'restored'
+            except Exception as e:
+                pie[k] = f'FAILED {e}'
+        _cfg.update(mode=None, prev=None)
+    return w.get_world_settings().get_editor_property('default_game_mode').get_name(), perf.get_editor_property('bThrottleCPUWhenNotForeground'), pie
 
 
 def server_remove(player_key, effect_class_name):
@@ -226,9 +375,10 @@ def server_remove(player_key, effect_class_name):
     return True
 
 
-def scenario_accounting(client=2, player_key='P257'):
-    """No regen: two successful dashes (+1 blocked by cooldown) and a buff, with forced rollbacks in between.
+def scenario_accounting(client=2, player_key=None):
+    """No regen: two successful dashes (+1 blocked by cooldown) and a buff, with forced rollbacks in between (client >= 1).
     Expected final: Stamina 50, Health 80 (from 50), no tags."""
+    player_key = player_key or key_of_player(client)
     steps = [
         (0.0, lambda: ('server removes regen', server_remove(player_key, 'GSTN_GE_StaminaRegen'))),
         (1.0, lambda: ('dash1', press(client, 'dash'))),
@@ -378,6 +528,8 @@ def force_reconcile_on_mode(client=1, mode='WallSliding', extra_frames=15):
     np.ForceReconcile is one global cvar: under "Run Under One Process" the first client world that runs its rollback
     service takes it, which is not always `client`. It is set again every frame until `client`'s rollback counter goes
     up, so the other client may get an extra reconcile too."""
+    if client == 0:
+        raise RuntimeError('world 0 is the host/server: it never reconciles, pick a client (index >= 1)')
     _force_on_mode['log'] = []
     st = {'start_rb': None}
 
@@ -408,9 +560,10 @@ def force_reconcile_on_mode(client=1, mode='WallSliding', extra_frames=15):
     _force_on_mode['handle'] = unreal.register_slate_post_tick_callback(tick)
 
 
-def scenario_server_dash(client=1, player_key='P256'):
+def scenario_server_dash(client=1, player_key=None):
     """Client walks forward; the server applies two dashes the client did not predict.
     Each must cost the owning client about one rollback (not a chain over the whole dash)."""
+    player_key = player_key or key_of_player(client)
     steps = [
         (0.0, lambda: ('move', hold(client, 'move', (0, 1, 0)))),
         (1.0, lambda: ('server dash 1', server_apply(player_key, 'GSTN_GE_Dash'))),
