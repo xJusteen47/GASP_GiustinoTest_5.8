@@ -464,8 +464,28 @@ def stop_mode_log():
 _steer = {'handle': None}
 
 
-def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=220.0, wall_time=0.7, ground_jump_first=True):
+def walk_back(client=1, x=680.0, y=-880.0):
+    """Walks the client's pawn to x <= `x` (away from the wall), so scenario_jump_wall starts from a known distance. Poll
+    the log for 'GASNPP walk_back done' before starting the next scenario."""
+    ia_move = unreal.load_asset(IA['move'])
+    handle = {'h': None}
+
+    def tick(_dt):
+        pc, pawn = _local_pawn(client)
+        comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
+        if pawn.get_actor_location().x > x:
+            comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, (x - 100.0, y))))
+        else:
+            comp.stop_holding_input(ia_move)
+            unreal.unregister_slate_post_tick_callback(handle['h'])
+            unreal.log(f'GASNPP walk_back done x={pawn.get_actor_location().x:.0f}')
+
+    handle['h'] = unreal.register_slate_post_tick_callback(tick)
+
+
+def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=130.0, wall_time=0.7, ground_jump_first=True):
     """Ground jump in place, then walk to the wall (face at x=wall_x, normal -X), jump at it, hold into it, wall jump.
+    The pawn must start further than jump_distance from the wall (walk_back()); a jump from 220 cm lands short of it.
     Steering re-aims the move input every tick. Run start_mode_log() first and read stop_mode_log() + report() after."""
     ia_move = unreal.load_asset(IA['move'])
     target = (wall_x + 200.0, wall_y)
