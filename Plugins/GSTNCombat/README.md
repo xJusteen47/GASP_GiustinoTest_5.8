@@ -92,6 +92,9 @@ simulation that uses them is in [GSTNCombatNP](../GSTNCombatNP/README.md).
 (its plugin is not loaded) skips exactly that many bytes, and a fragment that fails to read is dropped without moving the reader, so a
 plugin mismatch never desynchronises the rest of the state. It costs one byte per present fragment. Limits: 16 fragments, 512 bytes
 each; a larger count or length is a malformed list (archive error). The bytes do not depend on the array order or on plugin load order.
+A fragment that cannot be sent (type not registered, a second fragment of the same id, past the 16th, over 512 bytes) is dropped on write
+with an ensure, and `FGSTN_SyncFragmentList::ShouldReconcile` ignores it too: it compares only what `NetSerialize` would send, because
+the authority's copy never holds the dropped fragment and the client would otherwise reconcile on every frame.
 
 **Extending in Blueprint.** A pipeline step is the Blueprint extension point: create a Blueprint class from `GSTN_CombatStep`, override
 `Evaluate` (it receives the view struct, with `BlueprintReadOnly` fields, and returns a result struct) and add the class to the

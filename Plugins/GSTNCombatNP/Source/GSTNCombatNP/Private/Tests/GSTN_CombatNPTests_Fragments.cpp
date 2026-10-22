@@ -233,6 +233,31 @@ bool FGSTN_FragmentsRoundTrip2Test::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_FragmentsUnsendableTest, "GSTNCombat.NP.Fragments.UnsendableDoesNotReconcile", GSTN_NP_TEST_FLAGS)
+
+bool FGSTN_FragmentsUnsendableTest::RunTest(const FString& Parameters)
+{
+	// A fragment that cannot be sent (here: its type was unregistered after it was added) never reaches the authority's copy,
+	// so it must not take part in the comparison: otherwise the client would ask for a reconcile on every frame
+	FGSTN_CombatSyncState Local = MakeState();
+	{
+		FScopedTestFragments Registered;
+		FGSTN_SyncFragmentList::FindOrAdd<FGSTN_TestFragmentA>(Local.Fragments).Frame = 12;
+		FGSTN_SyncFragmentList::FindOrAdd<FGSTN_TestFragmentB>(Local.Fragments).Value = 34;
+	}
+	FGSTN_SyncFragmentRegistry::Register<FGSTN_TestFragmentA>(GSTNFeatureIds::TestA);
+
+	FGSTN_CombatSyncState Authority = MakeState();
+	FGSTN_SyncFragmentList::FindOrAdd<FGSTN_TestFragmentA>(Authority.Fragments).Frame = 12;
+
+	TestFalse(TEXT("the unregistered fragment of the local state is ignored"), Local.ShouldReconcile(Authority));
+	FGSTN_SyncFragmentList::Find<FGSTN_TestFragmentA>(Authority.Fragments)->Frame = 13;
+	TestTrue(TEXT("a sendable fragment still reconciles"), Local.ShouldReconcile(Authority));
+
+	FGSTN_SyncFragmentRegistry::Unregister(GSTNFeatureIds::TestA);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_FragmentsUnknownTypeIdTest, "GSTNCombat.NP.Fragments.UnknownTypeId", GSTN_NP_TEST_FLAGS)
 
 bool FGSTN_FragmentsUnknownTypeIdTest::RunTest(const FString& Parameters)

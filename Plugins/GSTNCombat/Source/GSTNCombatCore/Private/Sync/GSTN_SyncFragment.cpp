@@ -36,8 +36,55 @@ namespace
 	struct FWriteEntry
 	{
 		uint8 Id = GSTNFeatureIds::Invalid;
+		const TInstancedStruct<FGSTN_SyncFragment>* Source = nullptr;
 		TArray<uint8> Payload;
 	};
+
+	/**
+	 * The fragments of Fragments that NetSerialize would send, serialized: registered, the first of their type id, within the
+	 * count and size limits. A fragment that cannot be sent is not part of the replicated state, so ShouldReconcile must not
+	 * look at it either (the receiver never has it, which would ask for a reconcile every frame). bReport logs the dropped ones.
+	 */
+	void CollectSendable(const FGSTN_SyncFragmentArray& Fragments, TArray<FWriteEntry, TInlineAllocator<4>>& Entries, bool bReport)
+	{
+		for (const TInstancedStruct<FGSTN_SyncFragment>& Fragment : Fragments)
+		{
+			const uint8 Id = IdOf(Fragment);
+			if (Id == GSTNFeatureIds::Invalid)
+			{
+				ensureMsgf(!bReport, TEXT("A sync fragment of type %s is not registered and is not sent"), Fragment.IsValid() ? *Fragment.GetScriptStruct()->GetName() : TEXT("(empty)"));
+				continue;
+			}
+
+			bool bDuplicate = false;
+			for (const FWriteEntry& Existing : Entries)
+			{
+				bDuplicate |= Existing.Id == Id;
+			}
+			if (bDuplicate)
+			{
+				ensureMsgf(!bReport, TEXT("Two sync fragments with type id %d, the second is not sent"), Id);
+				continue;
+			}
+			if (Entries.Num() >= FGSTN_SyncFragmentList::MaxFragments)
+			{
+				ensureMsgf(!bReport, TEXT("More than %d sync fragments, the rest is not sent"), FGSTN_SyncFragmentList::MaxFragments);
+				continue;
+			}
+
+			FWriteEntry Entry;
+			Entry.Id = Id;
+			Entry.Source = &Fragment;
+			FMemoryWriter Writer(Entry.Payload);
+			const_cast<FGSTN_SyncFragment&>(Fragment.Get()).NetSerialize(Writer);
+			if (Entry.Payload.Num() > FGSTN_SyncFragmentList::MaxFragmentBytes)
+			{
+				ensureMsgf(!bReport, TEXT("Sync fragment %d is %d bytes, over the limit of %d, and is not sent"), Id, Entry.Payload.Num(), FGSTN_SyncFragmentList::MaxFragmentBytes);
+				continue;
+			}
+			Entries.Add(MoveTemp(Entry));
+		}
+	}
 }
 
 bool FGSTN_SyncFragment::ShouldReconcile(const FGSTN_SyncFragment& Authority) const
@@ -113,34 +160,7 @@ void FGSTN_SyncFragmentList::NetSerialize(FArchive& Ar, FGSTN_SyncFragmentArray&
 		// Everything is serialized before anything is written, because the count goes first and a fragment that cannot be sent
 		// (unregistered, a duplicate, too big) must not be in it
 		TArray<FWriteEntry, TInlineAllocator<4>> Entries;
-		for (const TInstancedStruct<FGSTN_SyncFragment>& Fragment : Fragments)
-		{
-			const uint8 Id = IdOf(Fragment);
-			if (!ensureMsgf(Id != GSTNFeatureIds::Invalid, TEXT("A sync fragment of type %s is not registered and is not sent"), Fragment.IsValid() ? *Fragment.GetScriptStruct()->GetName() : TEXT("(empty)")))
-			{
-				continue;
-			}
-
-			bool bDuplicate = false;
-			for (const FWriteEntry& Existing : Entries)
-			{
-				bDuplicate |= Existing.Id == Id;
-			}
-			if (bDuplicate || !ensureMsgf(Entries.Num() < MaxFragments, TEXT("More than %d sync fragments, the rest is not sent"), MaxFragments))
-			{
-				ensureMsgf(!bDuplicate, TEXT("Two sync fragments with type id %d, the second is not sent"), Id);
-				continue;
-			}
-
-			FWriteEntry& Entry = Entries.AddDefaulted_GetRef();
-			Entry.Id = Id;
-			FMemoryWriter Writer(Entry.Payload);
-			const_cast<FGSTN_SyncFragment&>(Fragment.Get()).NetSerialize(Writer);
-			if (!ensureMsgf(Entry.Payload.Num() <= MaxFragmentBytes, TEXT("Sync fragment %d is %d bytes, over the limit of %d, and is not sent"), Id, Entry.Payload.Num(), MaxFragmentBytes))
-			{
-				Entries.Pop();
-			}
-		}
+		CollectSendable(Fragments, Entries, true);
 		Algo::SortBy(Entries, &FWriteEntry::Id);
 
 		uint8 bHasFragments = Entries.IsEmpty() ? 0 : 1;
@@ -235,15 +255,21 @@ void FGSTN_SyncFragmentList::NetSerialize(FArchive& Ar, FGSTN_SyncFragmentArray&
 
 bool FGSTN_SyncFragmentList::ShouldReconcile(const FGSTN_SyncFragmentArray& Local, const FGSTN_SyncFragmentArray& Authority)
 {
-	if (Local.Num() != Authority.Num())
+	// Only what NetSerialize sends takes part: the authority's copy never holds a fragment that could not be sent, so comparing
+	// the raw arrays would ask for a reconcile on every frame
+	TArray<FWriteEntry, TInlineAllocator<4>> LocalEntries;
+	TArray<FWriteEntry, TInlineAllocator<4>> AuthorityEntries;
+	CollectSendable(Local, LocalEntries, false);
+	CollectSendable(Authority, AuthorityEntries, false);
+	if (LocalEntries.Num() != AuthorityEntries.Num())
 	{
 		return true;
 	}
 
-	for (const TInstancedStruct<FGSTN_SyncFragment>& Fragment : Local)
+	for (const FWriteEntry& Entry : LocalEntries)
 	{
-		const TInstancedStruct<FGSTN_SyncFragment>* Other = FindSameType(Authority, Fragment.GetScriptStruct());
-		if (!Other || Fragment.Get().ShouldReconcile(Other->Get()))
+		const FWriteEntry* Other = AuthorityEntries.FindByPredicate([&Entry](const FWriteEntry& Candidate) { return Candidate.Id == Entry.Id; });
+		if (!Other || Entry.Source->Get().ShouldReconcile(Other->Source->Get()))
 		{
 			return true;
 		}
