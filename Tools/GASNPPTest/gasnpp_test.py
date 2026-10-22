@@ -777,8 +777,12 @@ class _Run:
     state change lands on, and each scenario asserts a positive effect (tag / cooldown / stamina) before it asserts an absence,
     so it cannot pass vacuously. Verdict: unreal.log "PASS"/"FAIL" line, also in last_checks()."""
 
-    def __init__(self, name, client):
+    def __init__(self, name, client, extra=None, judge_reconciles=True):
+        """extra: more sampled copies as [(label, world_index, pawn_key)]; their samples are read like 'srv' / 'cli' (spike_stats uses
+        it for the second pawn). judge_reconciles=False: the spike scenarios create reconciles on purpose (a grant, an unpredicted
+        effect) and judge them per window themselves, so the whole-run 'no unexplained reconciles' check is left out."""
         self.name, self.client, self.key = name, client, key_of_player(client)
+        self.extra, self.judge_reconciles = list(extra or []), judge_reconciles
         self.results, self.samples, self.handle = [], [], None
         self.rb0 = _total_rollbacks()
         self.log_mark = None
@@ -796,14 +800,16 @@ class _Run:
         try:
             ws = worlds()
             s = {'t': self.now()}
-            for side, wi in (('srv', 0), ('cli', self.client)):
-                c = comps(ws[wi]).get(self.key)
+            for side, wi, key in (('srv', 0, self.key), ('cli', self.client, self.key), *self.extra):
+                c = comps(ws[wi]).get(key)
                 if c is None:
                     s[side] = None
                     continue
                 v = json.loads(c.get_state_snapshot())
                 s[side] = {'tags': set(v.get('tags', [])), 'stamina': v['attributes'].get('Stamina'), 'cd': dict(v['cooldowns']),
-                           'mode': v.get('mode'), 'req': tuple((v.get('combat') or {}).get('request', (0, -1)))}
+                           'mode': v.get('mode'), 'req': tuple((v.get('combat') or {}).get('request', (0, -1))),
+                           'loc': tuple(v['location']), 'vel': tuple(v.get('velocity', (0, 0, 0))), 'attr': dict(v['attributes']),
+                           'probe': v.get('probe') or {}}
             self.samples.append(s)
         except Exception:
             pass
@@ -872,7 +878,7 @@ class _Run:
             if self.handle is not None:
                 unreal.unregister_slate_post_tick_callback(self.handle)
                 self.handle = None
-            if self.log_mark is not None:
+            if self.log_mark is not None and self.judge_reconciles:
                 try:
                     r = report_reconciles(self.log_mark)
                     self.check('no unexplained reconciles', r['unexplained'] == 0, f"{r['unexplained']} unexplained {r['unexplained_lines']}, forced={r['forced']}")
@@ -890,7 +896,7 @@ class _Run:
         return step
 
 
-_FORCES_RECONCILES = ('combat_spike', 'combat_lock')
+_FORCES_RECONCILES = ('combat_spike', 'combat_lock', 'spike_stats', 'spike_triggers')
 
 
 def last_checks():
@@ -1268,3 +1274,439 @@ def abilities_startup(runs=3, run_seconds=14.0, burst_threshold=5, ready_timeout
 
 def abilities_startup_result():
     return _startup['status'], _startup['results']
+
+
+# ------------------------------------------------------------------------------------------------ M3 spikes (grants, stats, triggers)
+# Probes on UGSTN_GASNPPTestComponent (see GSTN_TestProbeAbilities.h). Run ONE scenario at a time and wait for its verdict
+# (last_checks() / the log): they share the probe abilities and the editor timeline. Judge them at m.net(60, 15, 0): packet loss
+# causes reconciles of its own (see "Known exception" above). Each scenario takes the world index of the pawn it drives
+# (default 1); index 0 is the host's own pawn in listen mode (no reconcile there, the owner is the authority).
+def _srv(key):
+    """Test component of pawn `key` on world 0 (the host or the dedicated server): the one whose Server* functions run."""
+    return comps(worlds()[0])[key]
+
+
+def _view(world_index, key):
+    """Snapshot (dict) of pawn `key` as world `world_index` sees it, or None."""
+    c = comps(worlds()[world_index]).get(key)
+    return json.loads(c.get_state_snapshot()) if c else None
+
+
+def _probe(view, name):
+    """Activation counters of probe `name` in a snapshot (zeros when it never ran there)."""
+    zero = dict(attempts=0, attemptsRestoring=0, activations=0, activationsResim=0, activationsRestoring=0, lastFrame=-1, endFrame=-1)
+    return {**zero, **(((view or {}).get('probe') or {}).get('triggers') or {}).get(name, {})}
+
+
+def _others(client):
+    """Client worlds that are neither the host/server nor the pawn's owner: they see it as a simulated proxy."""
+    return [i for i in range(1, len(worlds())) if i != client]
+
+
+def _set_stats_probe(keys, on):
+    """Stats probe on/off on every copy of the pawns `keys`, in every world (set it before the attribute changes, not mid-flight)."""
+    for w in worlds():
+        for k in keys:
+            c = comps(w).get(k)
+            if c is not None:
+                c.set_stats_probe_enabled(on)
+
+
+def _mark(run, marks, name):
+    """Timeline step: remembers the log position under `name` (None when the log is not readable)."""
+    def step():
+        try:
+            marks[name] = mark_log()
+        except Exception:
+            marks[name] = None
+        return f'mark {name}'
+    return step
+
+
+def _reconciles_since(marks, name):
+    """report_reconciles() over [mark `name`, now], or None when the log was not readable."""
+    return report_reconciles(marks[name]) if marks.get(name) is not None else None
+
+
+def _reconcile_check(run, marks, name, label, lo, hi, field='mismatches'):
+    """Timeline step: the reconciles logged since mark `name` are between lo and hi (`field` of report_reconciles)."""
+    def fn():
+        r = _reconciles_since(marks, name)
+        if r is None:
+            return True, 'log not readable: skipped'
+        return lo <= r[field] <= hi, f"{r[field]} {field} (want {lo}..{hi}), offset changes {r['offset_changes']}, forced {r['forced']} {r['unexplained_lines']}"
+    return run.at(label, fn)
+
+
+def _first_time(run, side, pred, t0):
+    """Time of the first sample of `side` at or after t0 that satisfies pred(sample), or None."""
+    return next((s['t'] for s in run.samples if s['t'] >= t0 and s.get(side) and pred(s[side])), None)
+
+
+def _latest(run, side):
+    s = run.latest(side)
+    return s if s is not None else {'probe': {}, 'attr': {}, 'tags': set(), 'vel': (0, 0, 0), 'loc': (0, 0, 0)}
+
+
+def _log_text_since(mark):
+    return _read_log_since(mark) if mark is not None else ''
+
+
+def scenario_spike_grants(client=1, count=40, bound=2.0):
+    """Spike 1 (L1-L3): a loadout-sized batch of ability specs granted on the server, outside the simulation, to a client's pawn.
+    Steps: grant `count` distinct ability classes (30 predicted + 10 ServerOnly when count is 40) and an infinite effect in ONE
+    game thread call; 5 s idle; revoke them; grant a different batch (the second half of the classes); revoke. Strict, per phase:
+      - the server owns the batch at once; the owner finds it with FindAbilitySpecFromClass within `bound` seconds (the time is
+        reported); the pawn as a simulated proxy (the other clients) finds NONE of it;
+      - the grant (and each revoke / re-grant) costs 1..2 logged reconciles on the owner's connection (0 for the host's own pawn);
+        5 idle seconds after it cost none;
+      - the infinite effect's tag is on the server and the owner; no 'GiveAbility on simulated proxy' error mentions the batch.
+    NOT measured here (the harness cannot read them): bytes per send and the one-frame cost of creating the instances; read the
+    bytes with `stat net` in the owner's world (Out Bytes) before and after the grant, and the cost in Insights."""
+    run = _Run('spike_grants', client, judge_reconciles=False)
+    key, others, marks, st = run.key, _others(client), {}, {}
+    want = (0, 0) if client == 0 else (1, 2)
+    half = count // 2
+
+    def owns(n):
+        return lambda p: (p.get('probe') or {}).get('ownedBulkSpecs') == n
+
+    def remote_none(label):
+        def fn():
+            seen = {i: (_view(i, key) or {}).get('probe', {}).get('ownedBulkSpecs') for i in others}
+            return bool(seen) and all(v == 0 for v in seen.values()), f'owned specs per remote client world {seen}'
+        return run.at(label, fn)
+
+    def owner_gets(label, n, t_key):
+        def fn():
+            t = _first_time(run, 'cli', owns(n), st[t_key])
+            return t is not None and t - st[t_key] <= bound, 'never' if t is None else f'{t - st[t_key]:.2f}s after the call (bound {bound}s)'
+        return run.at(label, fn)
+
+    def server_owns(label, n):
+        return run.at(label, lambda: (owns(n)(_latest(run, 'srv')), f"server finds {_latest(run, 'srv')['probe'].get('ownedBulkSpecs')}"))
+
+    def action(name, fn):
+        def step():
+            st['t_' + name] = run.now()
+            st[name] = fn()
+            return name, st[name]
+        return step
+
+    steps = [
+        (0.0, _mark(run, marks, 'start')),
+        (0.2, run.at('precondition: the snapshot carries the probe data and nothing is granted yet', lambda: (
+            'ownedBulkSpecs' in _latest(run, 'srv')['probe'] and owns(0)(_latest(run, 'srv')) and owns(0)(_latest(run, 'cli')), f"{_latest(run, 'srv')['probe']}"))),
+        (0.4, _mark(run, marks, 'grant')),
+        (0.5, action('grant', lambda: (_srv(key).server_grant_bulk(0, count), _srv(key).server_set_bulk_effect(True)))),
+        (3.5, run.at(f'grant: {count} specs granted and the effect applied', lambda: (st['grant'] == (count, True), f"{st['grant']}"))),
+        (3.5, server_owns(f'grant: the server owns {count}', count)),
+        (3.5, owner_gets(f'grant: the owner finds {count} within {bound}s', count, 't_grant')),
+        (3.5, remote_none('grant: the other clients find none')),
+        (3.5, run.at('grant: the infinite effect (Test.Probe.Bulk) is on the server and the owner', lambda: (
+            'Test.Probe.Bulk' in _latest(run, 'srv')['tags'] and 'Test.Probe.Bulk' in _latest(run, 'cli')['tags'], f"srv {sorted(_latest(run, 'srv')['tags'])} cli {sorted(_latest(run, 'cli')['tags'])}"))),
+        (3.5, _reconcile_check(run, marks, 'grant', 'grant: reconciles for the batch', *want)),
+        (3.6, _mark(run, marks, 'idle')),
+        (8.6, _reconcile_check(run, marks, 'idle', 'idle after the grant: no reconcile', 0, 0, 'unexplained')),
+        (8.6, owner_gets('idle: the owner still finds the batch', count, 't_grant')),
+        (8.7, _mark(run, marks, 'revoke')),
+        (8.8, action('revoke', lambda: (_srv(key).server_revoke_bulk(), _srv(key).server_set_bulk_effect(False)))),
+        (11.8, run.at(f'revoke: {count} specs cleared', lambda: (st['revoke'] == (count, True), f"{st['revoke']}"))),
+        (11.8, server_owns('revoke: the server owns none', 0)),
+        (11.8, owner_gets('revoke: the owner finds none within the bound', 0, 't_revoke')),
+        (11.8, _reconcile_check(run, marks, 'revoke', 'revoke: reconciles for the removal', *want)),
+        (11.9, _mark(run, marks, 'regrant')),
+        (12.0, action('regrant', lambda: _srv(key).server_grant_bulk(count - half, half))),
+        (15.0, run.at(f're-grant: {half} different specs granted', lambda: (st['regrant'] == half, f"{st['regrant']}"))),
+        (15.0, server_owns(f're-grant: the server owns {half}', half)),
+        (15.0, owner_gets(f're-grant: the owner finds {half} within {bound}s', half, 't_regrant')),
+        (15.0, remote_none('re-grant: the other clients find none')),
+        (15.0, _reconcile_check(run, marks, 'regrant', 're-grant: reconciles for the new batch', *want)),
+        (15.1, run.at('no GiveAbility error on a simulated proxy for the batch', lambda: (
+            not [l for l in _log_text_since(marks['start']).splitlines() if 'GiveAbility called on ability GSTN_GA_ProbeGrant' in l],
+            'log scan of the whole scenario'))),
+        (15.2, action('cleanup', lambda: _srv(key).server_revoke_bulk())),
+        (18.0, owner_gets('cleanup: the owner finds none again', 0, 't_cleanup')),
+        (18.1, run.finish()),
+    ]
+    run.note('bytes per send and the instance creation cost are not measured by this scenario (stat net / Insights)')
+    run.run(steps)
+
+
+def _horizontal_peak(run, side, t0, t1):
+    return max((sum(x * x for x in s['vel'][:2]) ** 0.5 for s in run._win(side, t0, t1)), default=0.0)
+
+
+def _apex(run, side, t_base, t0, t1):
+    """Highest z in [t0, t1] minus the z of the last sample before t_base."""
+    before = [s[side]['loc'][2] for s in run.samples if s['t'] < t_base and s.get(side)]
+    zs = [s['loc'][2] for s in run._win(side, t0, t1)]
+    return (max(zs) - before[-1]) if before and zs else 0.0
+
+
+def scenario_spike_stats(client_a=1, client_b=2):
+    """Spike 2 (L4-L5): Mover's MaxSpeed and gravity rewritten every tick from attributes, driven by infinite effects applied on
+    the server from outside the simulation. Pawn A gets preset 1 (speed x2, gravity x0.5), pawn B preset 2 (speed x0.5,
+    gravity x2), so the two pawns must keep different values at the same time (per-component settings). Forced reconciles across
+    the change and across the jump apexes. Strict:
+      - the attribute scales, MaxSpeed and gravity of both pawns are what the presets say, on the server AND the owning client;
+      - the pawns really move at those speeds (peak horizontal speed) and jump to different heights (apex ratio);
+      - after the change there is no reconcile that is not forced or an offset resync; at the end server and owner agree
+        (position, mode, attributes, MaxSpeed, gravity).
+    The settings are written by the test component from Mover's pre-simulation tick (not a Mover movement modifier): the write
+    is a pure function of the restored attribute, which is what the spike needs to show. Queueing a persistent modifier from
+    outside the simulation (L5) is NOT covered. If the speeds do not follow the scale, the walking mode may use MaxSpeedOverride."""
+    key_a, key_b = key_of_player(client_a), key_of_player(client_b)
+    run = _Run('spike_stats', client_a, extra=[('srvB', 0, key_b), ('cliB', client_b, key_b)], judge_reconciles=False)
+    marks, st = {}, {}
+    pawns = [('A', client_a, key_a, 'srv', 'cli', 1), ('B', client_b, key_b, 'srvB', 'cliB', 2)]
+
+    def stat(side, field):
+        return (_latest(run, side)['probe'].get('stats') or {}).get(field)
+
+    def close(a, b, tol):
+        return a is not None and b is not None and abs(a - b) <= tol
+
+    def scales():
+        out, ok = [], True
+        for name, _, _, srv, cli, preset in pawns:
+            sp, gr = (2.0, 0.5) if preset == 1 else (0.5, 2.0)
+            for side in (srv, cli):
+                a = _latest(run, side)['attr']
+                good = close(a.get('ProbeSpeedScale'), sp, 0.01) and close(a.get('ProbeGravityScale'), gr, 0.01)
+                ok &= good
+                out.append(f"{name}/{side} speed {a.get('ProbeSpeedScale')} gravity {a.get('ProbeGravityScale')}")
+        return ok, '; '.join(out)
+
+    def written():
+        ok, out = True, []
+        base_a = stat('srv', 'baseMaxSpeed')
+        for name, _, _, srv, cli, preset in pawns:
+            sp = 2.0 if preset == 1 else 0.5
+            good = bool(base_a) and close(stat(srv, 'maxSpeed'), base_a * sp, 0.5) and close(stat(cli, 'maxSpeed'), stat(srv, 'maxSpeed'), 0.5) \
+                and close(stat(cli, 'gravityZ'), stat(srv, 'gravityZ'), 0.5)
+            ok &= good
+            out.append(f"{name} maxSpeed srv {stat(srv, 'maxSpeed')} cli {stat(cli, 'maxSpeed')} (base {stat(srv, 'baseMaxSpeed')}), gravityZ srv {stat(srv, 'gravityZ')} cli {stat(cli, 'gravityZ')}")
+        ga, gb = stat('srv', 'gravityZ'), stat('srvB', 'gravityZ')
+        ratio = gb / ga if ga and gb else None
+        ratio_ok = ratio is not None and close(ratio, 4.0, 0.05)
+        out.append(f'gravity B/A {ratio} (want 4)')
+        return ok and ratio_ok, '; '.join(out)
+
+    def speeds():
+        va, vb = _horizontal_peak(run, 'srv', 3.4, 5.7), _horizontal_peak(run, 'srvB', 3.4, 5.7)
+        ma, mb = stat('srv', 'maxSpeed') or 0.0, stat('srvB', 'maxSpeed') or 0.0
+        good = vb > 1.0 and va > 2.5 * vb and 0.6 * ma <= va <= 1.05 * ma and 0.6 * mb <= vb <= 1.05 * mb
+        return good, f'peak speed A {va:.0f} (max {ma:.0f}), B {vb:.0f} (max {mb:.0f})'
+
+    def agree():
+        out, ok = [], True
+        for name, ci, key, _, _, _ in pawns:
+            sv, ov = _view(0, key), _view(ci, key)
+            if sv is None or ov is None:
+                ok = False
+                out.append(f'{name}: missing view')
+                continue
+            d = _diff(sv, ov)
+            same = close((sv['probe']['stats'] or {}).get('maxSpeed'), (ov['probe']['stats'] or {}).get('maxSpeed'), 0.01) and \
+                close((sv['probe']['stats'] or {}).get('gravityZ'), (ov['probe']['stats'] or {}).get('gravityZ'), 0.01)
+            ok &= not d and same
+            out.append(f"{name}: diff {d or 'none'}, MaxSpeed/gravity {'same' if same else 'DIFFERENT'}")
+        return ok, '; '.join(out)
+
+    def force(index, extra):
+        return lambda: (f'force reconcile on client {index}', force_reconcile(index, extra) if index != 0 else 'host: nothing to reconcile')
+
+    steps = [
+        (0.0, lambda: ('stats probe on', _set_stats_probe([key_a, key_b], True))),
+        (0.3, run.at('precondition: both pawns start with scale 1 and no preset', lambda: (
+            all(close(_latest(run, s)['attr'].get('ProbeSpeedScale'), 1.0, 0.01) for s in ('srv', 'srvB', 'cli', 'cliB')), f"{[_latest(run, s)['attr'] for s in ('srv', 'srvB')]}"))),
+        (0.5, _mark(run, marks, 'change')),
+        (0.6, lambda: ('presets', (_srv(key_a).server_set_stats_preset(1), _srv(key_b).server_set_stats_preset(2)))),
+        (0.8, force(client_a, 20)),
+        (1.4, force(client_b, 20)),
+        (3.0, run.at('the scales are what the presets say, on the server and the owners', scales)),
+        (3.0, run.at('MaxSpeed and gravity were written from the scales, owner = server', written)),
+        (3.0, _mark(run, marks, 'steady')),
+        (3.2, lambda: ('walk', (hold(client_a, 'move', (0, 1, 0)), hold(client_b, 'move', (0, 1, 0))))),
+        (5.7, run.at('the pawns move at their own speeds', speeds)),
+        (5.8, lambda: ('stop', (release(client_a, 'move'), release(client_b, 'move')))),
+        (6.5, lambda: ('jump', (press(client_a, 'jump'), press(client_b, 'jump')))),
+        (6.75, force(client_b, 10)),
+        (7.5, force(client_a, 10)),
+        (10.5, run.at('the pawns jump to different heights', lambda: (lambda a, b: (b > 5.0 and a > 1.8 * b, f'apex A {a:.0f} cm, B {b:.0f} cm (want A > 1.8 B)'))(
+            _apex(run, 'srv', 6.5, 6.5, 10.0), _apex(run, 'srvB', 6.5, 6.5, 10.0)))),
+        (10.6, run.at('server and owner agree at the end', agree)),
+        (10.6, _reconcile_check(run, marks, 'steady', 'no reconcile after the change besides the forced ones and offset resyncs', 0, 0, 'unexplained')),
+        (10.7, lambda: ('cleanup', (_srv(key_a).server_set_stats_preset(0), _srv(key_b).server_set_stats_preset(0)))),
+        (12.2, lambda: ('stats probe off', _set_stats_probe([key_a, key_b], False))),
+        (12.8, run.finish()),
+    ]
+    run.note('pawn B runs on the same Mover settings class as A but on its own component instance; L5 (modifier queued from outside) is not covered')
+    run.run(steps)
+
+
+def scenario_spike_triggers(client=1, fork_patched=True):
+    """Spike 3 (L6-L8): triggered abilities. Needs the fork patch in UNpAbilitySystemComponent::MonitoredTagChanged (PATCHES.md, 1.
+    OwnedTag triggers); fork_patched=False turns the 'nothing happens while a frame is restored' checks into notes, to see what
+    the unpatched fork does. Presses are IA_GASNPP_Buff releases (the raiser abilities activate on Completed; the test buff, on
+    Started, fires too). Phases, each with its own counters (reset between phases) and ProbeEventCount / ProbeTagCount (instant
+    effects applied by the triggered abilities, so the synced state shows a double activation):
+      E: GameplayEvent trigger, raiser granted AFTER the target (order A). One press, then one press with a forced reconcile
+         across the event frame. Server: 1 activation per press. Owner: 1 forward activation per press, >= 1 re-fire in the forced
+         resim, none while restoring. Other clients: no activation (a simulated proxy does not run abilities).
+      E swap: the same with the raiser granted BEFORE the target (order B). The activation frame is the same; the ability lives
+         one frame less when it is ticked in its activation frame. Server and owner must agree on both, whatever the order.
+      T: OwnedTagAdded trigger. Press (raiser applies the 1 s tag effect), press with a forced reconcile across the tag
+         transition: same expectations, and no CanActivate attempt while restoring.
+      T server-only: the tag effect applied by the server outside the simulation (the owner never predicts it): the owner
+         reconciles and RestoreTags raises the tag 0 -> 1 INSIDE the restore: no forward activation on the owner, counters equal.
+    End state of each phase, on the server, the owner and the other clients: same counter attribute, same Test.* tags, same
+    active probe abilities (none). Listen: run it with client=1 and with client=0 (the host's own pawn)."""
+    run = _Run('spike_triggers', client, judge_reconciles=False)
+    key, others, marks, st = run.key, _others(client), {}, {}
+    owner_is_server = client == 0
+
+    def reset_counters():
+        for w in worlds():
+            c = comps(w).get(key)
+            if c is not None:
+                c.reset_probe_counters()
+        return 'counters reset'
+
+    def baseline(attr):
+        def step():
+            st['base_' + attr] = (_view(0, key)['attributes'] or {}).get(attr, 0.0)
+            return attr, st['base_' + attr]
+        return step
+
+    def regrant(order):
+        def step():
+            _srv(key).server_revoke_probes()
+            st['granted_' + '+'.join(order)] = [_srv(key).server_grant_probe(n) for n in order]
+            return order, st['granted_' + '+'.join(order)]
+        return step
+
+    def specs_equal(label):
+        def fn():
+            s, o = (_view(0, key) or {}).get('probe', {}).get('specs'), (_view(client, key) or {}).get('probe', {}).get('specs')
+            return s is not None and s == o, f'activatable specs: server {s}, owner {o}'
+        return run.at(label, fn)
+
+    def verify(label, probe, attr, presses, forced, server_forward=None, owner_forward=None, owner_restore_legit=False):
+        """Counters of `probe` and the end state, after a phase. forced: forced reconciles across the activation in the phase.
+        server_forward / owner_forward: expected forward activations (default `presses`)."""
+        sf = presses if server_forward is None else server_forward
+        of = presses if owner_forward is None else owner_forward
+
+        def fn():
+            views = {i: _view(i, key) for i in range(len(worlds()))}
+            if any(v is None for v in views.values()):
+                return False, f'missing views {[i for i, v in views.items() if v is None]}'
+            bad = []
+            for i, v in views.items():
+                got = v['attributes'].get(attr)
+                if got is None or abs(got - (st['base_' + attr] + presses)) > 0.01:
+                    bad.append(f"w{i} {attr}={got}, want {st['base_' + attr] + presses}")
+            s = _probe(views[0], probe)
+            if s['activations'] != sf or s['activationsResim'] or s['activationsRestoring'] or s['attemptsRestoring']:
+                bad.append(f'server counters {s}, want {sf} forward and nothing re-simulated or restored')
+            if not owner_is_server:
+                o = _probe(views[client], probe)
+                if o['activations'] != of:
+                    bad.append(f"owner forward activations {o['activations']}, want {of}")
+                if forced and not 1 <= o['activationsResim'] <= 2 * forced:
+                    bad.append(f"owner re-fired {o['activationsResim']} times in {forced} forced resim(s), want 1..{2 * forced}")
+                if not forced and o['activationsResim']:
+                    bad.append(f"owner re-fired {o['activationsResim']} times without a forced resim")
+                restoring = []
+                if o['attemptsRestoring']:
+                    restoring.append(f"{o['attemptsRestoring']} CanActivate call(s) while restoring")
+                if o['activationsRestoring'] and not owner_restore_legit:
+                    restoring.append(f"{o['activationsRestoring']} activation(s) while restoring")
+                if restoring and fork_patched:
+                    bad.append('owner: ' + ' and '.join(restoring))
+                elif restoring:
+                    run.note(f'{label}: unpatched fork, owner made ' + ' and '.join(restoring))
+            for i in others:
+                p = _probe(views[i], probe)
+                if p['activations'] or p['activationsResim']:
+                    bad.append(f'w{i} (simulated proxy) activated {p}')
+            # End state: the same on every machine
+            names = lambda v: [n for n in (v['probe']['activeAbilities']) if n.startswith('GSTN_GA_Probe')]
+            tags = lambda v: sorted(t for t in v['tags'] if t.startswith('Test.Probe'))
+            ref = views[0]
+            for i, v in views.items():
+                if names(v) != names(ref) or tags(v) != tags(ref):
+                    bad.append(f'w{i} active {names(v)} tags {tags(v)} differ from the server {names(ref)} {tags(ref)}')
+            return not bad, '; '.join(bad) or f"{probe} {s}" + ('' if owner_is_server else f" owner {_probe(views[client], probe)}")
+        return run.at(label, fn)
+
+    def saw_active(label, name):
+        def fn():
+            srv = _first_time(run, 'srv', lambda p: name in (p['probe'].get('activeAbilities') or []), 0.0) is not None
+            cli = owner_is_server or _first_time(run, 'cli', lambda p: name in (p['probe'].get('activeAbilities') or []), 0.0) is not None
+            return srv and cli, f'{name} was active on the server: {srv}, on the owner: {cli}'
+        return run.at(label, fn)
+
+    def timing(label, order):
+        """Activation frame and lifetime of the target relative to the raiser, server = owner."""
+        def fn():
+            out, ok = {}, True
+            for who, i in (('server', 0), ('owner', client)):
+                v = _view(i, key)
+                t, r = _probe(v, 'EventTarget'), _probe(v, 'EventRaiser')
+                out[who] = (t['lastFrame'] - r['lastFrame'], t['endFrame'] - t['lastFrame'])
+            ok = out['server'] == out['owner'] and out['server'][1] > 0
+            st['timing_' + order] = out['server']
+            return ok, f"order {order}: (target activation - raiser activation, target lifetime) in frames {out}"
+        return run.at(label, fn)
+
+    steps = [
+        (0.0, _mark(run, marks, 'start')),
+        (0.1, regrant(('EventTarget', 'EventRaiser'))),
+        (0.2, run.at('E: probe abilities granted', lambda: (all(st['granted_EventTarget+EventRaiser']), f"{st['granted_EventTarget+EventRaiser']}"))),
+        (2.7, specs_equal('E: the owner has the granted specs') if not owner_is_server else (lambda: 'host owns them')),
+        (2.8, lambda: reset_counters()),
+        (2.8, baseline('ProbeEventCount')),
+        (3.0, lambda: ('E press 1', press(client, 'buff'))),
+        (4.5, saw_active('E: the target was active on the server and on the owner', 'GSTN_GA_ProbeEventTarget')),
+        (4.6, verify('E1: one press, one activation, everywhere', 'EventTarget', 'ProbeEventCount', 1, 0)),
+        (5.5, lambda: ('E press 2', press(client, 'buff'))),
+        (5.6, lambda: ('force reconcile across the event frame', force_reconcile(client, 15) if client != 0 else 'host: nothing to reconcile')),
+        (7.2, verify('E2: second press with a forced resim over the event frame', 'EventTarget', 'ProbeEventCount', 2, 0 if client == 0 else 1)),
+        (7.2, timing('E: tick order A (target before raiser in the spec array)', 'A')),
+        (7.4, regrant(('EventRaiser', 'EventTarget'))),
+        (7.5, run.at('E swap: probe abilities granted in the other order', lambda: (all(st['granted_EventRaiser+EventTarget']), f"{st['granted_EventRaiser+EventTarget']}"))),
+        (10.0, specs_equal('E swap: the owner has the granted specs') if not owner_is_server else (lambda: 'host owns them')),
+        (10.1, lambda: reset_counters()),
+        (10.1, baseline('ProbeEventCount')),
+        (10.3, lambda: ('E swap press', press(client, 'buff'))),
+        (10.4, lambda: ('force reconcile across the event frame', force_reconcile(client, 15) if client != 0 else 'host: nothing to reconcile')),
+        (12.0, verify('E3: raiser first in the spec array, forced resim over the event frame', 'EventTarget', 'ProbeEventCount', 1, 0 if client == 0 else 1)),
+        (12.0, timing('E: tick order B (raiser before target in the spec array)', 'B')),
+        (12.1, run.at('E: the two orders were measured (informational: same frame or the next one)', lambda: (
+            'timing_A' in st and 'timing_B' in st, f"A {st.get('timing_A')} B {st.get('timing_B')} (lifetime shorter by one frame in B = the target was ticked in its activation frame)"))),
+        (12.3, regrant(('TagTarget', 'TagRaiser'))),
+        (12.4, run.at('T: probe abilities granted', lambda: (all(st['granted_TagTarget+TagRaiser']), f"{st['granted_TagTarget+TagRaiser']}"))),
+        (14.9, specs_equal('T: the owner has the granted specs') if not owner_is_server else (lambda: 'host owns them')),
+        (15.0, lambda: reset_counters()),
+        (15.0, baseline('ProbeTagCount')),
+        (15.2, lambda: ('T press 1', press(client, 'buff'))),
+        (17.0, saw_active('T: the target was active on the server and on the owner', 'GSTN_GA_ProbeTagTarget')),
+        (17.0, verify('T1: one press, one tag activation, everywhere', 'TagTarget', 'ProbeTagCount', 1, 0)),
+        (17.5, lambda: ('T press 2', press(client, 'buff'))),
+        (17.6, lambda: ('force reconcile across the tag transition', force_reconcile(client, 15) if client != 0 else 'host: nothing to reconcile')),
+        (20.0, verify('T2: second press with a forced resim over the tag transition', 'TagTarget', 'ProbeTagCount', 2, 0 if client == 0 else 1)),
+        (20.1, _mark(run, marks, 'server_only')),
+        (20.1, lambda: reset_counters()),
+        (20.1, baseline('ProbeTagCount')),
+        (20.2, lambda: ('T server-only tag effect', server_apply(key, 'GSTN_GE_ProbeTagGrant'))),
+        (23.0, verify('T3: tag effect applied by the server only: no forward activation on the owner, counters equal', 'TagTarget', 'ProbeTagCount', 1, 0,
+                      server_forward=1, owner_forward=0, owner_restore_legit=True)),
+        (23.0, _reconcile_check(run, marks, 'server_only', 'T3: the owner reconciled, the tag came in through a restore', 0 if client == 0 else 1, 99)),
+        (23.1, lambda: ('cleanup', _srv(key).server_revoke_probes())),
+        (24.5, run.finish()),
+    ]
+    run.note('forced reconciles use np.ForceReconcile (one global cvar): the re-fire bound is 1..2 per forced reconcile')
+    run.run(steps)

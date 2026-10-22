@@ -66,6 +66,20 @@ m.setup_editor(False)         # after Stop: restore GM_Sandbox, throttling and t
 
 Button names are never indices: `button_index('Attack')` / `button_mask(name)` look up `Input.Button.<Name>` in `/Game/GASNPPTest/Input/IC_GASNPP_Test` at scenario start (an int is still accepted as a raw index), so reordering the buttons in the asset does not break anything. `_require_test_config` refuses to run if the pawn's combat component uses another input config.
 
+### M3 spike probes (`spike_grants`, `spike_stats`, `spike_triggers`)
+
+Live checks of the three M3 spikes (static analysis and numbers: `Saved/Notes/m3-spike-report.md`). Probe content lives in `GSTN_TestProbeAbilities.h` (trigger abilities, 40 distinct bulk-grant ability classes), `GSTN_TestEffects.h` (`Test.Probe.*` tags and effects) and `UGSTN_TestAttributeSet` (`ProbeEventCount`, `ProbeTagCount`, `ProbeSpeedScale`, `ProbeGravityScale`); nothing is in the test Blueprint's `DefaultAbilities`, the scenarios grant and revoke what they need on the server. `UGSTN_GASNPPTestComponent` has the server-side helpers (callable from Python: `server_grant_bulk(first, count)`, `server_revoke_bulk()`, `server_set_bulk_effect(bool)`, `server_set_stats_preset(0|1|2)`, `server_grant_probe(name)`, `server_revoke_probes()`, `count_owned_bulk_specs()`, `set_stats_probe_enabled(bool)`, `reset_probe_counters()`) and the snapshot gains a `probe` object (owned bulk specs, spec total, active abilities, per-trigger counters, MaxSpeed / gravity in effect) plus the four probe attributes in `attributes`, so `report()` compares them too.
+
+```python
+m.setup_editor(True); m.net(60, 15, 0)   # PIE started as above; judge these at 0 % loss (loss causes reconciles of its own)
+m.scenario_spike_grants(client=1)        # ~19 s. 40 specs + an infinite effect granted outside the simulation, revoked, a different 20 granted
+m.scenario_spike_stats(1, 2)             # ~13 s. two pawns with different speed and gravity scales, forced reconciles across the change and the jump apexes
+m.scenario_spike_triggers(client=1)      # ~25 s. GameplayEvent and OwnedTagAdded triggers, forced rollbacks across the activation, swapped grant order
+print(m.last_checks())                   # (verdict, [(ok, label, detail)]) once the log shows the verdict; never start another scenario before it
+```
+
+Run each with `client=0` too in listen mode (the host's own pawn: no reconcile expected, the owner is the authority). `scenario_spike_triggers(client, fork_patched=False)` turns the "nothing happens while a frame is restored" checks into notes, to measure the unpatched fork (`Plugins/GASNPP/PATCHES.md`, section 1). Not measurable from Python and left as notes: bytes per send of the 40 specs (read `stat net` in the owner's world before and after the grant) and the one-frame cost of creating the 40 instances (Insights). The stats probe rewrites Mover's settings from the component's pre-simulation tick, not from a Mover movement modifier, so queueing a persistent modifier from outside the simulation (L5) is not covered. The raiser abilities activate on the release of `IA_GASNPP_Buff` (the test buff uses its press), and the ability system activates only the first ability found for an (action, event) pair, so grant at most one raiser at a time.
+
 ### Test content the scenarios assume
 
 From `Saved/Notes/test-content-names.md` (`setup_gas_assets.run(combat_input=True)` builds it; the five strict scenarios pass on the listen server with it):

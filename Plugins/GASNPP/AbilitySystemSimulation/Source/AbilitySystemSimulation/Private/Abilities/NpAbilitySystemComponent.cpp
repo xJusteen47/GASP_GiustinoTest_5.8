@@ -2359,6 +2359,15 @@ bool UNpAbilitySystemComponent::TriggerAbilityFromGameplayEvent(FGameplayAbility
 }
 void UNpAbilitySystemComponent::MonitoredTagChanged(const FGameplayTag Tag, int32 NewCount)
 {
+	// RestoreTags writes the tag counts straight into the count container, which still broadcasts the tag delegates. A tag
+	// that differs between the restored frame and the current one would activate (or cancel) a triggered ability here, while
+	// the frame is being restored. The restored sync state already holds the ability state of that frame, and the
+	// resimulation fires the trigger again from the tag changes it simulates, so reacting here would double the activation.
+	if (GetIsRestoringFrame())
+	{
+		return;
+	}
+
 	ABILITYLIST_SCOPE_LOCK();
 	if (OwnedTagTriggeredAbilities.Contains(Tag))
 	{

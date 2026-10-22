@@ -11,6 +11,9 @@ namespace GSTNTestTags
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Buff, "Test.Cooldown.Buff");
 	UE_DEFINE_GAMEPLAY_TAG(State_Dashing, "Test.State.Dashing");
 	UE_DEFINE_GAMEPLAY_TAG(State_Buffed, "Test.State.Buffed");
+	UE_DEFINE_GAMEPLAY_TAG(Probe_Event, "Test.Probe.Event");
+	UE_DEFINE_GAMEPLAY_TAG(Probe_TagTrigger, "Test.Probe.TagTrigger");
+	UE_DEFINE_GAMEPLAY_TAG(Probe_Bulk, "Test.Probe.Bulk");
 }
 
 namespace
@@ -101,4 +104,43 @@ UGSTN_GE_StaminaRegen::UGSTN_GE_StaminaRegen()
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
 	Period = FScalableFloat(0.25f);
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetStaminaAttribute(), 2.f));
+}
+
+UGSTN_GE_ProbeTagGrant::UGSTN_GE_ProbeTagGrant()
+{
+	DurationPolicy = EGameplayEffectDurationType::HasDuration;
+	DurationMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(1.f));
+	GrantTag(this, GEComponents, GSTNTestTags::Probe_TagTrigger);
+}
+
+UGSTN_GE_ProbeCountEvent::UGSTN_GE_ProbeCountEvent()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeEventCountAttribute(), 1.f));
+}
+
+UGSTN_GE_ProbeCountTag::UGSTN_GE_ProbeCountTag()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeTagCountAttribute(), 1.f));
+}
+
+UGSTN_GE_ProbeBulk::UGSTN_GE_ProbeBulk()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	GrantTag(this, GEComponents, GSTNTestTags::Probe_Bulk);
+}
+
+UGSTN_GE_ProbeStatsFast::UGSTN_GE_ProbeStatsFast()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeSpeedScaleAttribute(), 1.f));
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), -0.5f));
+}
+
+UGSTN_GE_ProbeStatsSlow::UGSTN_GE_ProbeStatsSlow()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeSpeedScaleAttribute(), -0.5f));
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), 1.f));
 }
