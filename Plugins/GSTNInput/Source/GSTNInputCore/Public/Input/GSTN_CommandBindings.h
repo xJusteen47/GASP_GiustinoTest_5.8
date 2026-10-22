@@ -19,11 +19,14 @@ struct GSTNINPUTCORE_API FGSTN_TagRequirements
 {
 	GENERATED_BODY()
 
-	/** Every one of these must be present */
+	/**
+	 * Every one of these must be present. State tags of any root (Input.Context.*, gameplay tags, the movement system's own), so no
+	 * Categories filter
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Requirements")
 	FGameplayTagContainer RequireTags;
 
-	/** None of these may be present */
+	/** None of these may be present. State tags of any root, so no Categories filter */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Requirements")
 	FGameplayTagContainer IgnoreTags;
 
@@ -75,6 +78,13 @@ class GSTNINPUTCORE_API UGSTN_CommandBindingUtils : public UBlueprintFunctionLib
 	GENERATED_BODY()
 
 public:
+	/** Blueprint form of FGSTN_TagRequirements::IsSatisfiedBy: all required tags are in Context and none of the ignored ones is */
+	UFUNCTION(BlueprintPure, Category = "Input|Bindings")
+	static bool AreRequirementsSatisfied(const FGSTN_TagRequirements& Requirements, const FGameplayTagContainer& Context)
+	{
+		return Requirements.IsSatisfiedBy(Context);
+	}
+
 	/**
 	 * Picks the binding of a command for the current context among its candidates: of those whose requirements hold, the
 	 * one with the most required tags wins (an on-wall binding requiring Airborne + OnWall beats an airborne one), the

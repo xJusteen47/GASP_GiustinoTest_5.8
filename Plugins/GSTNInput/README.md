@@ -5,7 +5,7 @@ motion, chord, charge, hold, release, mash, spin), time and hold buffering, rese
 command to GameplayAbility bindings with context requirements. Meant to be simulated and rolled back by Network
 Prediction (the GAS-NPP fork in `Plugins/GASNPP`), but the logic itself does not need it.
 
-Status: **experimental (0.1)**. `GSTNInputCore` and the first part of `GSTNInputNP` exist. The design, including what is planned, lives in
+Status: **experimental (0.1)**. `GSTNInputCore` and `GSTNInputNP` exist (the simulator, command locks, the activation context, the event stream and the standalone component). The design, including what is planned, lives in
 [docs/architecture/input.md](../../docs/architecture/input.md); the combat plugin ([GSTNCombat](../GSTNCombat/README.md))
 is built on top of this one. This README is the map; the documents hold the decisions and the reasons.
 
@@ -13,23 +13,42 @@ is built on top of this one. This README is the map; the documents hold the deci
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNInputCore` | exists | Pure, deterministic logic with no GAS, no Network Prediction and no Mover: input samples, the stick direction classifier, the input history, the pattern grammar (`FGSTN_InputPattern`, conditions), the matcher, buffer reset rules, slots, the slot resolver, slot validation, command bindings, the button map, the input config and the project settings. Automation tests `GSTNInput.Core.*`. |
-| `GSTNInputNP` | exists (partial) | The adapter to the Network Prediction fork. Today: `FGSTN_InputCmd` (the NP input type) and `FGSTN_InputSimState` (the input part of a host's sync state) in `Simulation/GSTN_InputSimTypes.h`, and `UGSTN_MoverSimStateTracker` in `Mover/`. Planned (step S2b onwards): simulator, host interface, binding set, input sources, context providers, the standalone input component. |
+| `GSTNInputCore` | exists | Pure, deterministic logic with no GAS, no Network Prediction and no Mover: input samples, the stick direction classifier, the input history, the pattern grammar (`FGSTN_InputPattern`, conditions), the matcher, buffer reset rules, slots, the slot resolver, slot validation, command bindings, command locks (`UGSTN_CommandLocks`), the authoritative event stream (`UGSTN_SimEventSubsystem`, `FGSTN_SimEvent`, the outbox), the button map, the input config and the project settings. Automation tests `GSTNInput.Core.*`. |
+| `GSTNInputNP` | exists | The adapter to the Network Prediction fork: `FGSTN_InputCmd` and `FGSTN_InputSimState` (`Simulation/GSTN_InputSimTypes.h`), `FGSTN_InputSimulator` and `IGSTN_InputSimHost` (`Simulation/GSTN_InputSimulator.h`), `UGSTN_CommandBindingSet` and the runtime `FGSTN_CommandTable` (`Bindings/`), the player and AI input sources (`Sources/`), the context provider base and the Mover provider (`Context/`), `UGSTN_MoverSimStateTracker` (`Mover/`), the activation context and `IGSTN_CommandSourceInterface` (`Simulation/GSTN_CommandSourceInterface.h`), the host helpers (`Simulation/GSTN_InputHostUtils.h`) and the standalone `UGSTN_InputSimComponent` (`Simulation/`). Automation tests `GSTNInput.NP.*`. |
+
+**Requirements.** `GSTNInputCore` needs only Gameplay Tags, Developer Settings and (privately) Enhanced Input. `GSTNInputNP`
+needs the GAS-NPP fork plugins and Mover; the descriptor lists those as optional plugin dependencies so it does not force
+them on a project, but the NP module does not build without them, so a project without the fork has to leave `GSTNInputNP`
+out of its build.
+
+**Network Prediction sort priorities.** Network Prediction orders models by a sort priority and warns when two registered
+models share one. The ability system is `PreKinematicMovers - 2`, the combat model (`GSTN_Combat`) `- 3` and the standalone
+input model (`GSTN_Input`, `UGSTN_InputSimComponent`) `- 4`. The input-only and combat models are never on the same pawn,
+but the check is global, hence three different numbers. A new model of this family takes the next free one below.
 
 The plugin has no game vocabulary: no "attack", "crouch" or combat tags. Buttons, commands and their priority tiers are
 data the game provides; the combat plugin provides a fighting-game set.
 
+**Dependency rule.** An `*NP` module may depend on another plugin's `*NP` module of the same layer, and on nothing above it.
+`GSTNCombatNP` depends on `GSTNInputNP` by design: the combat NP model embeds the input simulation, one NP model per
+character (see input.md). Core modules keep no NP, GAS or Mover dependencies, so shared NP types are not moved into
+`GSTNInputCore`. `GSTNCombatNP` may use only the Public headers and interfaces of `GSTNInputNP` (for example
+`IGSTN_InputSimHost`), never its internals.
+
 ## Setting up a game
 
 1. **Declare buttons and commands as tags.** Buttons go under `Input.Button`, commands under `Command` (natively in C++,
-   or in a tag ini such as `Config/Tags/GSTNCommands.ini`). The plugin itself declares only the roots, the
+   or in a tag ini of the game, for example `Config/Tags/GSTNCommands.ini` in the project; the sample project has one). The plugin itself declares only the roots, the
    `Input.Context.*` tags, the `Input.BufferEvent.*` frame events and `Input.Event.CommandExecuted` (`GSTN_InputTags.h`).
 2. **Make an input config** (`UGSTN_InputConfig` data asset): the list of buttons, each with its tag and the Enhanced
-   Input action that drives it. The array index is the button's bit in every mask, so every machine of a match must use
-   the same config and order.
-3. **Set the project settings** (Project Settings > Plugins > GSTN Input, stored in `Config/DefaultGame.ini` under
-   `[/Script/GSTNInputCore.GSTN_InputSettings]`): buffer lengths, stick zones, and the two lists that start empty,
-   `CommandTiers` (priority tier per command root) and `ExclusiveButtons` (buttons whose presses compete for one move).
+   Input action that drives it (a soft reference: the host resolves the actions once at setup). The array index is the
+   button's bit in every mask, so every machine of a match must use the same config and order.
+3. **Set the settings** (Project Settings > Plugins > GSTN Input). They are stored in the plugin's own config file,
+   `GSTNInput.ini`: the plugin ships its defaults in `Plugins/GSTNInput/Config/DefaultGSTNInput.ini` and a project overrides
+   any of them in its own `Config/DefaultGSTNInput.ini`; nothing goes in `DefaultGame.ini`. They are the buffer lengths, stick
+   zones, and the two lists that start empty, `CommandTiers` (priority tier per command root) and `ExclusiveButtons` (buttons
+   whose presses compete for one move). A game can fill them there, or a plugin brings its own through
+   `UGSTN_InputSettings::SetContribution` (what the combat plugin does with its own settings).
    `PriorityCriteria` is the ordered list that ranks commands matching at once (default Tier, Specificity, ManualOffset).
 4. **Define slots** (`UGSTN_InputSlotAsset` / `UGSTN_InputSlotSet`): a command tag plus the pattern that triggers it, then
    run the slot validator, which reports slots that shadow or conflict with each other.
@@ -89,6 +108,27 @@ Reorder or remove the built-ins (`Tier`, `Specificity`, `ManualOffset`) the same
 must be pure and identical on every machine: it is the same kind of setting as the buffer lengths. See
 `Private/Tests/GSTN_InputTests_Priority.cpp` for examples.
 
+### Writing a rule in Blueprint (the slower path)
+
+The three instanced-struct families (conditions, priority criteria, buffer reset rules) cannot be subclassed in Blueprint, so
+each has one opt-in wrapper that holds a Blueprintable class with a const `BlueprintNativeEvent`
+(`Public/Input/GSTN_BlueprintRules.h`): `FGSTN_InputCondition_Blueprint` + `UGSTN_InputConditionBlueprint::Matches`,
+`FGSTN_PriorityCriterion_Blueprint` + `UGSTN_PriorityCriterionBlueprint::Score` and `FGSTN_BufferResetRule_Blueprint` +
+`UGSTN_BufferResetRuleBlueprint::ShouldFlush`. Create a Blueprint class from the base, override the function, then pick
+"Blueprint (slower)" in the family's list and set the class. The C++ structs stay the default and the fast path.
+
+It is the slower path: the wrapper runs the Blueprint VM on the class default object, and reset rules and conditions are
+evaluated every simulated frame (priority criteria only once per slot, when a table is built). Because the rules run inside
+the simulation, a Blueprint rule **must stay deterministic**: it answers only from the view struct it receives (a plain-value
+snapshot of the input around the anchor frame, the slot's facts, or the frame events), with no world queries, no actors, no
+random numbers or time, and no state outside its inputs (the class default object is shared by every pawn and is not rolled
+back). The functions are `const` to say so. A Blueprint condition reports no canonical input, so slot validation cannot compare
+it with other slots. See `Private/Tests/GSTN_InputTests_Blueprint.cpp`.
+
+The movement context provider has the same kind of Blueprint class, `UGSTN_BlueprintInputContextProvider` (`Context/`), whose
+events (`GetBlueprintFacingYaw`, `GetBlueprintContextTags`, `GetBlueprintContextFingerprint`, `GetBlueprintFrameEvents`) are
+called every simulated tick under the same rules; the base `UGSTN_InputContextProvider` stays plain C++.
+
 ### A new slot (a command)
 
 A slot ties a command tag to a pattern, a priority and a direction policy (`FGSTN_InputSlotSpec`, `GSTN_InputSlot.h`).
@@ -120,11 +160,74 @@ struct FGame_SyncState
 Add your own fields after the embedded member and serialize them there. Everything that touches this state must be
 deterministic and rollback-safe (gas-npp.md). Module dependencies: `GSTNInputNP` in the host's `Build.cs`.
 
+Then call `FGSTN_InputSimulator::Tick` from the model's simulation tick with a copy of the state as `Out`, and implement
+`IGSTN_InputSimHost` (owner tags, facing, `CanExecuteBinding`; the context provider covers the Mover parts). Build the
+`FGSTN_CommandTable` once from a `UGSTN_CommandBindingSet` at BeginPlay, and execute `RequestedBinding` from the ability
+system's pre-tick when `RequestFrame` equals the frame. `UGSTN_CombatSimComponent` is a working example.
+
+Give the host an `FGSTN_SimEventOutbox`, pass it in `FGSTN_InputTickArgs::Outbox`, and call
+`FGSTN_InputHostUtils::PublishOutbox(Outbox, Owner)` from the model's `FinalizeFrame`; use `FGSTN_InputHostUtils::CanExecuteBinding`
+and `ExecuteRequest` for the ability system parts. Implement `IGSTN_CommandSourceInterface` so abilities can ask why they started.
+A host that needs nothing of its own does not have to write any of this: add `UGSTN_InputSimComponent` (below).
+
+Tag roots: `Input.Button` (buttons), `Command` (commands), `Input.Context.*` (written by the context provider),
+`Input.BufferEvent.*` (reset-rule events), `Input.Lock.Command` (command locks) and `Input.Event.CommandExecuted`
+(`GSTN_InputTags.h`). Per-root lock tags (`Input.Lock.Command.<root>`) are declared by whoever declares the command root.
+
+### The standalone component
+
+`UGSTN_InputSimComponent` is the input simulation as a Network Prediction model of its own, for a project without the combat
+plugin: add it next to a `UNpAbilitySystemComponent` on a pawn, set `InputConfig` (buttons, move action) and `SlotBindings`
+(a `UGSTN_CommandBindingSet`: slots, bindings to abilities, reset rules), keep the default `UGSTN_PlayerInputSource` (or use
+`UGSTN_AIInputSource` for server-driven pawns) and the default `UGSTN_MoverInputContextProvider`. It registers its model
+before the ability system, executes requests from the ability system's pre-tick and publishes `Input.Event.CommandExecuted`.
+A pawn uses **either** this component or a host that embeds the simulation (the combat component): with both, this one logs
+an error at BeginPlay and does nothing. Not done yet: projecting `Input.Context.*` onto the ability system.
+
+### Command locks
+
+`Input.Lock.Command` on the owner stops every command from starting (presses stay buffered); `Input.Lock.Command.<path>`
+stops the commands under `Command.<path>` (a stance that owns `Input.Lock.Command.Attack` stops `Command.Attack.*`
+while a dash command under another root still starts). Abilities and effects grant the lock tags like any tag; nothing
+in the simulation writes them. `UGSTN_CommandLocks` has the mapping and the checks and is testable without a world. A locked
+command reserves its press like an unavailable one, and a command with a slot but no binding is not a candidate, so it
+never reserves a press. To lock a designer root, declare `Input.Lock.Command.<root>` next to the root's tag.
+
+### Activation context and the buttons an ability holds
+
+An ability that must end when its trigger button is released finds the component through
+`IGSTN_CommandSourceInterface::Find(Avatar)` and calls, from `ActivateAbility` or its tick, `GetActivationContext()`
+(the command, the trigger button, the frame of the press and whether a command or a forced request started it; valid only on
+the activation frame, so keep what you need in your own sync variables) and `IsCommandButtonHeld(Button)`.
+
+### Authoritative events
+
+`UGSTN_SimEventSubsystem` (a world subsystem) is the stream quests, statistics and kill feeds listen to: `Listen` takes a
+`FGameplayTagQuery` over the event's type and tags (an empty query takes everything), `ListenNative` takes a C++ callback.
+The input simulation publishes `Input.Event.CommandExecuted` with the command tag, the owner's context tags and the ability's
+asset tags. Events are written into an outbox by the simulation on every machine and published by the host after the
+Network Prediction tick **on the authority only**, so each activation is counted once however often a client re-simulates
+it. The authority is `HasAuthority()` and nothing else: a listen-server host's own pawn is the authority and also has a local
+player, and its events are published like any other pawn's. Nothing is replicated; clients that need feedback use
+replicated results or predicted presentation.
+
 ### The Mover sim-state tracker
 
 `UGSTN_MoverSimStateTracker::FindOrAdd(MoverComponent)` gives simulation code the Mover state of the frame being
 (re)simulated; never read the Mover component's own queries from the fixed tick (gas-npp.md). Include
-`"Mover/GSTN_MoverSimStateTracker.h"` and depend on `GSTNInputNP`.
+`"Mover/GSTN_MoverSimStateTracker.h"` and depend on `GSTNInputNP`. The tracker is a `BlueprintType` and its
+`GetMovementModeName` / `HasGameplayTag` are `BlueprintPure`, so a Blueprint ability can read the same rolled back state.
+
+### Soft references and what is resolved when
+
+Assets the plugin's data points at are soft references, so a config or a binding set does not drag a project's input actions,
+slot sets and abilities into memory with it: `FGSTN_InputButtonDef::Action` and `UGSTN_InputConfig::MoveAction`
+(`TSoftObjectPtr<UInputAction>`), `UGSTN_CommandBindingSet::SlotSets` (`TSoftObjectPtr`), `FGSTN_CommandBinding::Ability`
+(`TSoftClassPtr<UGameplayAbility>`) and the hosts' `InputConfig` / `SlotBindings`. Anything the simulation or the input
+source reads every frame is **resolved once at setup, never in a tick**: the host loads its config and binding set in
+`BeginPlay`, `UGSTN_InputConfig::ResolveActions` loads the actions, and `UGSTN_CommandBindingSet::BuildTable` loads the slot sets
+and abilities into the `FGSTN_CommandTable` (`FGSTN_CompiledBinding::Ability` is a plain `TSubclassOf`). The loadout of a
+running match is fixed, like the table: change it only by rebuilding at a safe point.
 
 ### A new buffer reset rule
 
@@ -135,6 +238,8 @@ order.
 
 ## Conventions
 
+- Gameplay tags: the plugin declares its roots and its own vocabulary natively. Leaves that are game data (a game's buttons,
+  commands, lock tags) belong in the game's tag ini, not in code.
 - Types are prefixed `GSTN_` (`UGSTN_`, `FGSTN_`, `EGSTN_`); export macros `GSTNINPUTCORE_API` and `GSTNINPUTNP_API`; log category
   `LogGSTNInput`.
 - Public headers in `Public/<Area>/`, implementations in `Private/<Area>/`.
@@ -146,7 +251,8 @@ order.
 ## Testing
 
 Automation tests `GSTNInput.Core.*`: Session Frontend > Automation, or headless
-`UnrealEditor-Cmd GASP_Giustino2.uproject -ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit" -unattended -nullrhi`.
+`UnrealEditor-Cmd <your project>.uproject -ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit" -unattended -nullrhi`
+(with your project's `.uproject`).
 See [testing.md](../../docs/architecture/testing.md).
 
 ## Further reading

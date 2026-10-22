@@ -1,6 +1,7 @@
 // Pure input logic (no GAS, no Network Prediction).
 
 #include "Input/GSTN_InputConfig.h"
+#include "InputAction.h"
 #include "Misc/DataValidation.h"
 
 #define LOCTEXT_NAMESPACE "GSTNInputConfig"
@@ -35,6 +36,21 @@ FGSTN_ButtonMap UGSTN_InputConfig::MakeButtonMap() const
 	return FGSTN_ButtonMap(Tags);
 }
 
+void UGSTN_InputConfig::ResolveActions()
+{
+	ResolvedButtonActions.Reset(Buttons.Num());
+	for (const FGSTN_InputButtonDef& Button : Buttons)
+	{
+		ResolvedButtonActions.Add(Button.Action.IsNull() ? nullptr : Button.Action.LoadSynchronous());
+	}
+	ResolvedMoveAction = MoveAction.IsNull() ? nullptr : MoveAction.LoadSynchronous();
+}
+
+UInputAction* UGSTN_InputConfig::GetButtonAction(int32 ButtonIndex) const
+{
+	return ResolvedButtonActions.IsValidIndex(ButtonIndex) ? ResolvedButtonActions[ButtonIndex].Get() : nullptr;
+}
+
 #if WITH_EDITOR
 EDataValidationResult UGSTN_InputConfig::IsDataValid(FDataValidationContext& Context) const
 {
@@ -56,7 +72,7 @@ EDataValidationResult UGSTN_InputConfig::IsDataValid(FDataValidationContext& Con
 			continue;
 		}
 
-		if (!Button.Action)
+		if (Button.Action.IsNull())
 		{
 			Context.AddWarning(FText::Format(LOCTEXT("ButtonNoAction", "Button {0} ({1}) has no input action: only AI and scripts can press it."),
 				Index, FText::FromName(Button.Tag.GetTagName())));
@@ -70,7 +86,7 @@ EDataValidationResult UGSTN_InputConfig::IsDataValid(FDataValidationContext& Con
 					Other, Index, FText::FromName(Button.Tag.GetTagName())));
 				Result = EDataValidationResult::Invalid;
 			}
-			if (Button.Action && Buttons[Other].Action == Button.Action)
+			if (!Button.Action.IsNull() && Buttons[Other].Action == Button.Action)
 			{
 				Context.AddError(FText::Format(LOCTEXT("ButtonDuplicateAction", "Buttons {0} and {1} use the same input action."), Other, Index));
 				Result = EDataValidationResult::Invalid;

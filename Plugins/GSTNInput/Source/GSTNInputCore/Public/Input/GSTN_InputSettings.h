@@ -17,8 +17,13 @@
  * frames and every stick threshold is applied to the quantized input (int8 stick, uint8 camera yaw), so the settings
  * must be identical on every machine of a match, like any other config the simulation reads. Frame logic reads them
  * only through this object; it never caches floats across frames.
+ *
+ * Stored in the plugin's own config file (GSTNInput.ini): the plugin ships its defaults in Config/DefaultGSTNInput.ini and a
+ * project overrides them in its Config/DefaultGSTNInput.ini, so nothing about this plugin lives in the project's DefaultGame.ini.
+ * Other plugins that need priority tiers or exclusive buttons (combat) own a settings object of their own and contribute
+ * to this one at startup, see SetContribution.
  */
-UCLASS(config = Game, defaultconfig, meta = (DisplayName = "GSTN Input"))
+UCLASS(config = GSTNInput, defaultconfig, meta = (DisplayName = "GSTN Input"))
 class GSTNINPUTCORE_API UGSTN_InputSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
@@ -31,9 +36,27 @@ public:
 
 	/**
 	 * Priority tier of a command: the value of the nearest ancestor (or the tag itself) listed in CommandTiers, 0 when none
-	 * is. Walks the tag hierarchy upwards, so it never iterates the map and gives the same answer on every machine.
+	 * is. Walks the tag hierarchy upwards and only looks tags up in the maps (the contributions are combined independently of order),
+	 * so it gives the same answer on every machine.
 	 */
+	UFUNCTION(BlueprintPure, Category = "Input|Settings")
 	int32 GetCommandTier(const FGameplayTag& Command) const;
+
+	/** Whether the button's presses compete for a single move: listed in ExclusiveButtons or contributed by a plugin */
+	UFUNCTION(BlueprintPure, Category = "Input|Settings")
+	bool IsExclusiveButton(const FGameplayTag& Button) const;
+
+	/**
+	 * Tiers and exclusive buttons that another plugin brings along (combat's, from its own settings), added to the lists below
+	 * without touching this plugin's config. Replaces the previous contribution of the same Source. Meant for the settings
+	 * object of the running project (call it on GetMutableDefault) once at module startup and when the contributor's settings
+	 * change, never during a match, and every machine of a match has to contribute the same values like for any other setting.
+	 * @param Source Name of the contributor, e.g. the contributing plugin
+	 */
+	void SetContribution(FName Source, const TMap<FGameplayTag, int32>& Tiers, const TArray<FGameplayTag>& ExclusiveButtons);
+
+	/** Removes what Source contributed */
+	void RemoveContribution(FName Source);
 
 	/** The default list: Tier, Specificity, ManualOffset */
 	static TArray<TInstancedStruct<FGSTN_PriorityCriterion>> MakeDefaultPriorityCriteria();
@@ -85,7 +108,8 @@ public:
 	/**
 	 * Tier per command tag root: a higher tier always beats a lower one, whatever the pattern specificity (an attack
 	 * and a special pressed together give the special). A command takes the tier of its nearest listed ancestor; a tag
-	 * with no listed ancestor is tier 0. Empty by default: the game lists its own (the combat values are in Config/DefaultGame.ini)
+	 * with no listed ancestor is tier 0. Empty by default: a game lists its own here, or a plugin contributes them (the combat
+	 * plugin ships its own in its settings)
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "Input|Priority", meta = (Categories = "Command"))
 	TMap<FGameplayTag, int32> CommandTiers;
@@ -133,4 +157,15 @@ public:
 	/** World yaw that counts as Up in World space */
 	UPROPERTY(Config, EditAnywhere, Category = "Input|Stick", meta = (ForceUnits = "deg"))
 	float WorldReferenceYaw = 0.f;
+
+private:
+	/** What one plugin contributes; not config, filled at startup, so never saved */
+	struct FContribution
+	{
+		TMap<FGameplayTag, int32> Tiers;
+		TArray<FGameplayTag> ExclusiveButtons;
+	};
+
+	/** Every lookup combines all sources the same way (highest tier, any source), so the map's iteration order never shows */
+	TMap<FName, FContribution> Contributions;
 };

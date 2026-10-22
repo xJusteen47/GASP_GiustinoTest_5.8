@@ -22,7 +22,7 @@ class UMoverComponent;
  *
  * Created on demand (FindOrAdd) on the Mover component's owner. Not replicated.
  */
-UCLASS(ClassGroup = (AbilitySystem))
+UCLASS(ClassGroup = (AbilitySystem), BlueprintType)
 class GSTNINPUTNP_API UGSTN_MoverSimStateTracker : public UActorComponent
 {
 	GENERATED_BODY()
@@ -38,9 +38,12 @@ public:
 	/** Sync state at the end of the last simulated frame (the input state of the next one) */
 	const FMoverSyncState& GetSyncState() const { return SyncState; }
 
+	/** The Mover movement mode at the end of the last simulated frame, for Blueprint abilities and context providers */
+	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
 	FName GetMovementModeName() const { return SyncState.MovementMode; }
 
 	/** Same as UMoverComponent::HasGameplayTag, on the tracked simulation state (e.g. Mover_IsOnGround) */
+	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
 	bool HasGameplayTag(FGameplayTag TagToFind, bool bExactMatch) const;
 
 private:

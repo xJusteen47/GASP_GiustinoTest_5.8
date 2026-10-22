@@ -101,10 +101,33 @@ struct FGSTN_InputSimState
 	/** Bit i = watched tag i was on the owner at the end of the previous frame (to detect tags added this frame) */
 	uint64 WatchedTagMask = 0;
 
-	/** Ability request for the ability system: 1-based index in the owner's request list, 0 = none */
-	uint8 RequestedAction = 0;
+	/**
+	 * Fingerprint of the movement context at the end of the previous frame, as the host's context provider defines it (0 =
+	 * unknown). The tracker only knows the latest frame, so the transitions that produce frame events ("landed") are
+	 * found by comparing it with the fingerprint now. A small number, not a name: names hash differently per machine
+	 */
+	uint8 PrevContext = 0;
 
-	/** Frame that made RequestedAction */
+	/** Ability request for the ability system: 1-based index in the compiled binding table, 0 = none (a binding, not a command: the context already chose it) */
+	uint8 RequestedBinding = 0;
+
+	/** RequestButton of a command whose match has no terminal press (a pattern made of holds or directions only): a command, but no trigger button */
+	static constexpr uint8 CommandWithoutButton = 255;
+
+	/**
+	 * Activation context of the request: 1 + the button of the winning command's terminal press, 0 for a forced command,
+	 * CommandWithoutButton for a command that has no press. Abilities read it through the host's activation context
+	 * (IGSTN_CommandSourceInterface) to end when the trigger button is released
+	 */
+	uint8 RequestButton = 0;
+
+	/** True when RequestButton names a trigger button (neither forced nor CommandWithoutButton): read this instead of comparing the raw byte */
+	bool HasRequestButton() const
+	{
+		return RequestButton != 0 && RequestButton != CommandWithoutButton;
+	}
+
+	/** Frame that made RequestedBinding */
 	int32 RequestFrame = INDEX_NONE;
 
 	/** Frame of the last request made by a command, for the reset rule event "move activated" */
@@ -123,7 +146,9 @@ struct FGSTN_InputSimState
 		Ar << Classifier.LastNeutralFrame;
 
 		Ar << WatchedTagMask;
-		Ar << RequestedAction;
+		Ar << PrevContext;
+		Ar << RequestedBinding;
+		Ar << RequestButton;
 		Ar << RequestFrame;
 		Ar << LastActivatedFrame;
 	}
@@ -134,7 +159,9 @@ struct FGSTN_InputSimState
 		UE_NP_TRACE_RECONCILE(!(History == AuthorityState.History), "History:");
 		UE_NP_TRACE_RECONCILE(!(Classifier == AuthorityState.Classifier), "Classifier:");
 		UE_NP_TRACE_RECONCILE(WatchedTagMask != AuthorityState.WatchedTagMask, "WatchedTagMask:");
-		UE_NP_TRACE_RECONCILE(RequestedAction != AuthorityState.RequestedAction, "RequestedAction:");
+		UE_NP_TRACE_RECONCILE(PrevContext != AuthorityState.PrevContext, "PrevContext:");
+		UE_NP_TRACE_RECONCILE(RequestedBinding != AuthorityState.RequestedBinding, "RequestedBinding:");
+		UE_NP_TRACE_RECONCILE(RequestButton != AuthorityState.RequestButton, "RequestButton:");
 		UE_NP_TRACE_RECONCILE(RequestFrame != AuthorityState.RequestFrame, "RequestFrame:");
 		UE_NP_TRACE_RECONCILE(LastActivatedFrame != AuthorityState.LastActivatedFrame, "LastActivatedFrame:");
 		return false;
@@ -143,7 +170,7 @@ struct FGSTN_InputSimState
 	/** The history in the input notation: this is what np.PrintReconciles shows, which is how mismatches get diagnosed. No line break at the end */
 	void ToString(FAnsiStringBuilderBase& Out) const
 	{
-		Out.Appendf("History: %s Held: 0x%08x Request: %d@%d Activated: %d Watched: 0x%llx", TCHAR_TO_ANSI(*FGSTN_InputScript::Describe(History)),
-			History.GetHeldButtons(), RequestedAction, RequestFrame, LastActivatedFrame, WatchedTagMask);
+		Out.Appendf("History: %s Held: 0x%08x Request: %d@%d Button: %d Activated: %d Watched: 0x%llx", TCHAR_TO_ANSI(*FGSTN_InputScript::Describe(History)),
+			History.GetHeldButtons(), RequestedBinding, RequestFrame, RequestButton, LastActivatedFrame, WatchedTagMask);
 	}
 };

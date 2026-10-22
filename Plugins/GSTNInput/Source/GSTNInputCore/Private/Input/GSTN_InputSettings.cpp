@@ -25,6 +25,50 @@ int32 UGSTN_InputSettings::GetCommandTier(const FGameplayTag& Command) const
 		{
 			return *Tier;
 		}
+		// Contributions are few and their order does not matter unless two plugins tier the same tag, which is a mistake
+		// the highest tier resolves the same way everywhere
+		int32 Best = 0;
+		bool bFound = false;
+		for (const TPair<FName, FContribution>& Pair : Contributions)
+		{
+			if (const int32* Tier = Pair.Value.Tiers.Find(Tag))
+			{
+				Best = bFound ? FMath::Max(Best, *Tier) : *Tier;
+				bFound = true;
+			}
+		}
+		if (bFound)
+		{
+			return Best;
+		}
 	}
 	return 0;
+}
+
+bool UGSTN_InputSettings::IsExclusiveButton(const FGameplayTag& Button) const
+{
+	if (ExclusiveButtons.Contains(Button))
+	{
+		return true;
+	}
+	for (const TPair<FName, FContribution>& Pair : Contributions)
+	{
+		if (Pair.Value.ExclusiveButtons.Contains(Button))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void UGSTN_InputSettings::SetContribution(FName Source, const TMap<FGameplayTag, int32>& Tiers, const TArray<FGameplayTag>& InExclusiveButtons)
+{
+	FContribution& Contribution = Contributions.FindOrAdd(Source);
+	Contribution.Tiers = Tiers;
+	Contribution.ExclusiveButtons = InExclusiveButtons;
+}
+
+void UGSTN_InputSettings::RemoveContribution(FName Source)
+{
+	Contributions.Remove(Source);
 }

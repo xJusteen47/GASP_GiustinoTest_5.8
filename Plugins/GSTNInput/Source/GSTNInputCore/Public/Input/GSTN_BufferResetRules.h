@@ -73,6 +73,7 @@ struct GSTNINPUTCORE_API FGSTN_BufferResetRule_OnTagAdded : public FGSTN_BufferR
 {
 	GENERATED_BODY()
 
+	/** A state tag of any root (granted by abilities, effects or the movement system), so no Categories filter */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reset")
 	FGameplayTag Tag;
 

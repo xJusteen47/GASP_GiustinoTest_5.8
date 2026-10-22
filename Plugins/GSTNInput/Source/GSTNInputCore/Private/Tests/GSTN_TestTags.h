@@ -34,6 +34,10 @@ namespace GSTNTestTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Special_Directional);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combo_AttackSpecial_Neutral);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combo_AttackSpecial_CrouchNeutral);
+
+	// Lock tags: one for a whole root, one for a single leaf. Special has none (a root without a lock tag)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Lock_Attack);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Lock_AttackNeutral);
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS

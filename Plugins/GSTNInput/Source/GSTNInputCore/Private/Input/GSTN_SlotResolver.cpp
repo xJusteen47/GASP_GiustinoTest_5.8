@@ -205,9 +205,12 @@ FGSTN_SlotResolution FGSTN_SlotResolver::Resolve(TConstArrayView<const FGSTN_Inp
 	Resolution.EventsToConsume = Winner.Match.UsedButtonEvents;
 
 	uint32 ExclusiveMask = 0;
-	for (const FGameplayTag& Button : Settings.ExclusiveButtons)
+	for (int32 Index = 0; Index < Params.Buttons->GetNum(); ++Index)
 	{
-		ExclusiveMask |= Params.Buttons->GetMask(Button);
+		if (Settings.IsExclusiveButton(Params.Buttons->GetTag(Index)))
+		{
+			ExclusiveMask |= 1u << Index;
+		}
 	}
 	if (Settings.BufferConflictPolicy == EGSTN_BufferConflictPolicy::HighestPriority)
 	{

@@ -26,6 +26,9 @@ namespace GSTNTestTags
 	UE_DEFINE_GAMEPLAY_TAG(Special_Directional, "Command.Test.Special.Directional");
 	UE_DEFINE_GAMEPLAY_TAG(Combo_AttackSpecial_Neutral, "Command.Test.Combo.AttackSpecial.Neutral");
 	UE_DEFINE_GAMEPLAY_TAG(Combo_AttackSpecial_CrouchNeutral, "Command.Test.Combo.AttackSpecial.CrouchNeutral");
+
+	UE_DEFINE_GAMEPLAY_TAG(Lock_Attack, "Input.Lock.Command.Test.Attack");
+	UE_DEFINE_GAMEPLAY_TAG(Lock_AttackNeutral, "Input.Lock.Command.Test.Attack.Neutral");
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS
