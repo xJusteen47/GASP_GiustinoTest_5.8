@@ -142,6 +142,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "1"))
 	int32 HitstopTestFrames = 8;
 
+	/**
+	 * Server only, from outside the simulation (a plain game thread call, like the loadout component's apply): writes the revision
+	 * of the loadout the tables were built from into the pending sync state (combat-m3 7.8). It travels to the clients with the next
+	 * correction, and the combat tick compares it with the revision of its local table (FGSTN_CombatSyncCore::IsLoadoutCurrent).
+	 * Returns false on a machine without authority or before the proxy has a pending state.
+	 */
+	bool ServerWriteLoadoutRevision(uint16 Revision);
+
 protected:
 	virtual void InitializeNetworkPredictionProxy() override;
 

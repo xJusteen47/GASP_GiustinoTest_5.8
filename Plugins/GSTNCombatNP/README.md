@@ -22,7 +22,17 @@ project can subclass it for its own defaults; its `InputConfig` and `SlotBinding
 
 ## Sync fragments and tick extensions
 
-**Sync state.** `FGSTN_CombatSyncState` is `Core` (`FGSTN_CombatSyncCore`: the input state and the hitstop window, serialized exactly as before) followed by
+**Action part (combat-m3 7.1).** `FGSTN_CombatSyncCore` also carries what the combatant is doing: `ActionState` (`Actionable`, `InTimeline`),
+`ActiveTimeline` (registry index or `INDEX_NONE`), `ActiveSource` (`EGSTN_ActivationSource`, from GSTNInputNP), `TimelineStartFrame` and
+`TimelinePausedFrames` (timeline frame = `F - TimelineStartFrame - TimelinePausedFrames`), `PausedFramesTotal` (combat clock = `F - PausedFramesTotal`),
+`ActiveWeaponIndex`, `LoadoutRevision` and `Requests`, a fixed array of four `{ Type, Frame, Arg }` (`Simulation/GSTN_CombatActionTypes.h`). An idle
+combatant holds the defaults and pays **one bit** for the whole part, so a game that applies no loadout sends what it sent before plus that bit. A request is
+only valid in the frame it was made: the combat tick must call `Requests.PruneBefore(Frame)` at the top of every frame (C10 wires it; no request is made before then), so the wire never carries a dead one.
+`LoadoutRevision` is written only by the server, out of band, with `UGSTN_CombatSimComponent::ServerWriteLoadoutRevision`; the tick makes requests and adopts
+abilities only while `Core.IsLoadoutCurrent(TableRevision)` (the loadout revision gate, combat-m3 7.8). All of it takes part in `ShouldReconcile`, `ToString` and
+`Interpolate` (discrete: the newer frame). Nothing in the tick reads these fields yet: the timeline abilities that write them are C10.
+
+**Sync state.** `FGSTN_CombatSyncState` is `Core` (`FGSTN_CombatSyncCore`: the input state, the hitstop window and the action part) followed by
 `Fragments`, a list of `FGSTN_SyncFragment` from `GSTNCombatCore` that features add per entity. The core's bytes are the same with
 or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the
 [GSTNCombat README](../GSTNCombat/README.md)). A fragment mismatch against the authority asks for a reconcile like the hitstop window

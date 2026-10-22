@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Simulation/GSTN_CombatActionTypes.h"
 #include "Simulation/GSTN_InputSimTypes.h"
 #include "Sync/GSTN_SyncFragment.h"
 #include "NetworkPredictionReplicationProxy.h"
@@ -26,11 +27,108 @@ struct FGSTN_CombatSyncCore
 
 	bool IsInHitstop(int32 Frame) const { return Frame >= HitstopStartFrame && Frame < HitstopEndFrame; }
 
+	// ---- The action part (combat-m3 7.1): what the combatant is doing, the timeline it runs and the requests of this frame.
+	// An idle combatant holds the defaults and costs one bit on the wire.
+
+	EGSTN_ActionState ActionState = EGSTN_ActionState::Actionable;
+
+	/** Index in the timeline registry (the compiled binding table), INDEX_NONE when none */
+	int16 ActiveTimeline = INDEX_NONE;
+	EGSTN_ActivationSource ActiveSource = EGSTN_ActivationSource::Command;
+
+	/** Timeline frame = F - TimelineStartFrame - TimelinePausedFrames (the paused frames grow in hitstop) */
+	int32 TimelineStartFrame = INDEX_NONE;
+	int32 TimelinePausedFrames = 0;
+
+	/** Every hitstop frame of the combatant so far: combat clock = F - PausedFramesTotal. Constant outside hitstop */
+	int32 PausedFramesTotal = 0;
+
+	/** 0 = the primary weapon, 1.. = the additional weapons in loadout order */
+	uint8 ActiveWeaponIndex = 0;
+
+	/** Written only by the server, out of band (UGSTN_CombatSimComponent::ServerWriteLoadoutRevision): the revision of the loadout the tables were built from */
+	uint16 LoadoutRevision = 0;
+
+	/** The requests of the frame being simulated; PruneBefore at the top of every frame keeps older ones off the wire */
+	FGSTN_CombatRequests Requests;
+
+	/** True when every field of the action part holds its default (an idle combatant that never had a loadout applied) */
+	bool IsActionPartDefault() const
+	{
+		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
+			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && ActiveWeaponIndex == 0
+			&& LoadoutRevision == 0 && Requests.IsEmpty();
+	}
+
+	/**
+	 * The loadout revision gate (combat-m3 7.8): the combat tick makes requests and adopts abilities only while the revision in
+	 * the state is the one the local table was built from. Until the table arrives the history and the buffer still run, so the
+	 * presses wait in the buffer.
+	 */
+	bool IsLoadoutCurrent(uint16 TableRevision) const { return LoadoutRevision == TableRevision; }
+
 	void NetSerialize(FArchive& Ar)
 	{
 		Input.NetSerialize(Ar);
 		Ar << HitstopStartFrame;
 		Ar << HitstopEndFrame;
+
+		uint8 bAction = IsActionPartDefault() ? 0 : 1;
+		Ar.SerializeBits(&bAction, 1);
+		if (!bAction)
+		{
+			if (Ar.IsLoading())
+			{
+				ResetActionPart();
+			}
+			return;
+		}
+
+		uint8 Action = static_cast<uint8>(ActionState);
+		Ar.SerializeBits(&Action, 2);
+		uint8 Source = static_cast<uint8>(ActiveSource);
+		Ar.SerializeBits(&Source, 2);
+		// +1 so that INDEX_NONE (-1) is 0 and the packed form stays small
+		uint32 TimelinePlusOne = static_cast<uint32>(FMath::Max(static_cast<int32>(ActiveTimeline) + 1, 0));
+		Ar.SerializeIntPacked(TimelinePlusOne);
+		uint32 StartPlusOne = static_cast<uint32>(FMath::Max(TimelineStartFrame + 1, 0));
+		Ar.SerializeIntPacked(StartPlusOne);
+		uint32 Paused = static_cast<uint32>(FMath::Max(TimelinePausedFrames, 0));
+		Ar.SerializeIntPacked(Paused);
+		uint32 PausedTotal = static_cast<uint32>(FMath::Max(PausedFramesTotal, 0));
+		Ar.SerializeIntPacked(PausedTotal);
+		Ar << ActiveWeaponIndex;
+		Ar << LoadoutRevision;
+		Requests.NetSerialize(Ar);
+
+		if (Ar.IsLoading())
+		{
+			if (Action >= static_cast<uint8>(EGSTN_ActionState::Count) || Source > static_cast<uint8>(EGSTN_ActivationSource::Other) || TimelinePlusOne > 0x8000u)
+			{
+				Ar.SetError();
+				ResetActionPart();
+				return;
+			}
+			ActionState = static_cast<EGSTN_ActionState>(Action);
+			ActiveSource = static_cast<EGSTN_ActivationSource>(Source);
+			ActiveTimeline = static_cast<int16>(static_cast<int32>(TimelinePlusOne) - 1);
+			TimelineStartFrame = static_cast<int32>(StartPlusOne) - 1;
+			TimelinePausedFrames = static_cast<int32>(Paused);
+			PausedFramesTotal = static_cast<int32>(PausedTotal);
+		}
+	}
+
+	void ResetActionPart()
+	{
+		ActionState = EGSTN_ActionState::Actionable;
+		ActiveTimeline = INDEX_NONE;
+		ActiveSource = EGSTN_ActivationSource::Command;
+		TimelineStartFrame = INDEX_NONE;
+		TimelinePausedFrames = 0;
+		PausedFramesTotal = 0;
+		ActiveWeaponIndex = 0;
+		LoadoutRevision = 0;
+		Requests = FGSTN_CombatRequests();
 	}
 
 	bool ShouldReconcile(const FGSTN_CombatSyncCore& AuthorityState) const
@@ -42,13 +140,28 @@ struct FGSTN_CombatSyncCore
 		}
 		UE_NP_TRACE_RECONCILE(HitstopStartFrame != AuthorityState.HitstopStartFrame, "HitstopStartFrame:");
 		UE_NP_TRACE_RECONCILE(HitstopEndFrame != AuthorityState.HitstopEndFrame, "HitstopEndFrame:");
+		UE_NP_TRACE_RECONCILE(ActionState != AuthorityState.ActionState, "ActionState:");
+		UE_NP_TRACE_RECONCILE(ActiveTimeline != AuthorityState.ActiveTimeline, "ActiveTimeline:");
+		UE_NP_TRACE_RECONCILE(ActiveSource != AuthorityState.ActiveSource, "ActiveSource:");
+		UE_NP_TRACE_RECONCILE(TimelineStartFrame != AuthorityState.TimelineStartFrame, "TimelineStartFrame:");
+		UE_NP_TRACE_RECONCILE(TimelinePausedFrames != AuthorityState.TimelinePausedFrames, "TimelinePausedFrames:");
+		UE_NP_TRACE_RECONCILE(PausedFramesTotal != AuthorityState.PausedFramesTotal, "PausedFramesTotal:");
+		UE_NP_TRACE_RECONCILE(ActiveWeaponIndex != AuthorityState.ActiveWeaponIndex, "ActiveWeaponIndex:");
+		UE_NP_TRACE_RECONCILE(LoadoutRevision != AuthorityState.LoadoutRevision, "LoadoutRevision:");
+		UE_NP_TRACE_RECONCILE(!(Requests == AuthorityState.Requests), "Requests:");
 		return false;
 	}
 
 	void ToString(FAnsiStringBuilderBase& Out) const
 	{
 		Input.ToString(Out);
-		Out.Appendf(" Hitstop: [%d, %d)\n", HitstopStartFrame, HitstopEndFrame);
+		Out.Appendf(" Hitstop: [%d, %d)", HitstopStartFrame, HitstopEndFrame);
+		if (!IsActionPartDefault())
+		{
+			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Weapon: %d Loadout: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision));
+			Requests.ToString(Out);
+		}
+		Out.Append("\n");
 	}
 };
 

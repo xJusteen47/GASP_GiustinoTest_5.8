@@ -155,6 +155,18 @@ void UGSTN_CombatSimComponent::TapScriptedButtons(int32 Mask)
 	PendingTaps |= static_cast<uint32>(Mask);
 }
 
+bool UGSTN_CombatSimComponent::ServerWriteLoadoutRevision(uint16 Revision)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	return NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([Revision](FGSTN_CombatSyncState& Sync)
+	{
+		Sync.Core.LoadoutRevision = Revision;
+	}, "LoadoutRevision") != nullptr;
+}
+
 const FGSTN_CombatSyncState* UGSTN_CombatSimComponent::GetSyncState() const
 {
 	return NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>();
