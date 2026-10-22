@@ -379,7 +379,7 @@ Existing names are kept unless listed in 4.3.
 | `Input.BufferEvent.*`, `Input.Event.*` | `AbilityActivated`, `CommandExecuted` | `GSTNInput` | native |
 | `Command.*` | `Attack`, `Strong`, `Special`, `Combo`, `Super`, `Movement`, `Defence`, `Link` | root: `GSTNInput`; each family: the plugin that defines it (combat, defence, link, piggyback) | native + ini |
 | `Combat.State.*` | `Busy InTimeline Hitstop Hitstun Tumble CancelWindow OverrideWindow SuperInput Falling Shielding Carrying Riding` | `GSTNCombat` (state-projection rules); extension plugins declare their own leaves (`Shielding` -> `GSTNDefence`) | native, **projected**, never granted by others |
-| `Combat.Event.*` | `HitLanded Hit.Received Blocked Parried LinkFormed`; `Part.Damaged .WeakPointHit .Deflected .Broken .AllBroken` | each emitter's plugin; envelope in `GSTNCombat` (`Combat.Event.Part.*`: `GSTNParts`) | native |
+| `Combat.Event.*` | `HitLanded Hit.Received Blocked Parried LinkFormed`; `Part.Damaged .WeakPointHit .Ricochet .Broken .AllBroken` | each emitter's plugin; envelope in `GSTNCombat` (`Combat.Event.Part.*`: `GSTNParts`) | native |
 | `Combat.HitType.*`, `Combat.Hurtbox.*`, `Combat.Relationship.*` | `Normal Grab Throw`, `Head Torso Feet`, `Ally Enemy` | `GSTNCombat` (Link adds `Grab Throw Pummel`) | native |
 | `Surface.Type.*`, `Combat.Event.Impact.*` | surface classes mapped from physical materials for launch impacts (`Wall Glass Crate`); impact events (`Splat Bounce BreakSurface`) (M4 §7b) | `GSTNCombat` | ini (`Surface.Type.*`, designer vocabulary) + native (events) |
 | `Combat.Lock.*` | `Movement`, `Link` | `GSTNCombat` (`Movement`); `GSTNLink` (`Link`) | native |

@@ -62,6 +62,13 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - **Trampolines may exist** in levels: everyone landing on one is launched along its normal; a tumbling victim bounces.
   *Proposal* in combat-m4-hits.md §7b (own small plugin, not in the combat core).
 
+## 2e. Super armor and ricochet (owner input, 2026-10-22 late morning)
+
+- **Super armor** is the special case of **infinite stagger resistance** (enemies or players): no hit staggers.
+- Attacking a **part too hard for the attack** gives **no hitstop** but a **ricochet**: the character pulls the weapon
+  back with a **montage that depends on the attack**. Spec: combat-parts.md §3.4 (ricochet band), M4 §3b (attacker
+  outcome and per-attack ricochet response).
+
 ## 3. Grabs, interaction and throwing enemies
 
 - Example flow: a large enemy attacks; it is too big to grab. The player damages it until parts break off. Now it can
@@ -191,3 +198,8 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 > Ricorda che la gravità potrebbe cambiare arbitrariamente.
 >
 > Unrelated, ma tieni conto della presenza di eventuali trampolini
+
+> Per quanto riguarda la "super armor" avrai capito che si tratta del caso speciale in cui la resistenza allo stagger da
+> parte del nemico o giocatore è infinita. Per quanto riguarda la durezza delle parti, se si prova ad attaccare una
+> parte troppo dura rispetto all'attacco, non si avrà un hitstop, ma un effetto di "ricochet" del colpo, ossia il
+> personaggio ritira indietro l'arma con un montage che cambia a seconda del di attacco

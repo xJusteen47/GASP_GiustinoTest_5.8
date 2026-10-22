@@ -118,7 +118,7 @@ band scales the force (§3.4).
 Authored per hitbox (the extension mechanism of §5b; a combat build without parts ignores it with a warning). Relationship
 variants can override each field (`FGSTN_HitDataOverride` extension entry), so one hitbox may have a weaker `Penetration`
 against allies. Heavy attacks, projectiles and thrown enemies (M10) just set a higher `Penetration`. No `FGSTN_PartHitData`
-on a hit = `Penetration 0`, scales 1 (so unannotated attacks still work, mostly deflected by hard parts).
+on a hit = `Penetration 0`, scales 1 (so unannotated attacks still work, mostly ricocheting off hard parts).
 
 ### 3.3 Break effects (base `FGSTN_PartBreakEffect`, polymorphic)
 
@@ -152,20 +152,25 @@ transforms, so the chosen index is consistent with what the attacker saw.
 
 ```
 FGSTN_PenetrationBand { int32 MinDelta; float PartScale; float MainScale; float StaggerScale; float HitstopScale;
-                        bool bDeflected; FGameplayTag CueTag; }
+                        bool bRicochet; FGameplayTag CueTag; }
 ```
 
 Default table (*Proposal*, tuned in data, not code):
 
-| Delta (pen − hardness) | Meaning | PartScale | MainScale | StaggerScale | HitstopScale | bDeflected |
+| Delta (pen − hardness) | Meaning | PartScale | MainScale | StaggerScale | HitstopScale | bRicochet |
 |---|---|---|---|---|---|---|
 | ≥ +1 | above: full | 1.0 | 1.0 | 1.0 | 1.0 | no |
 | 0 | equal: partial | 0.6 | 0.7 | 0.8 | 0.9 | no |
 | −1 | below: reduced | 0.2 | 0.35 | 0.4 | 0.7 | no |
-| ≤ −2 | far below: deflect | 0.0 | 0.05 | 0.0 | 0.5 | yes (cue `GameplayCue.Combat.Part.Deflect`, event, no hitstun) |
+| ≤ −2 | far below: **ricochet** | 0.0 | 0.0 | 0.0 | 0.0 | yes (cue `GameplayCue.Combat.Part.Ricochet`, event, no hitstun, **no hitstop**) |
 
-`bDeflected` hits still register (attacker hitstop and hit-confirm, as the Invincible state of M4 §3 does), take no part
-damage and no flinch. The band's `StaggerScale` multiplies the hit's stagger force before the part's threshold test (§4.4), so a hit
+**Ricochet** (owner, 2026-10-22: "se si prova ad attaccare una parte troppo dura rispetto all'attacco, non si avrà un hitstop, ma
+un effetto di ricochet del colpo"): a `bRicochet` band gives **no hitstop on either side**, no damage, no stagger, no hit-confirm; the
+**attacker's weapon bounces back**: the attacker side returns `EGSTN_AttackerHitOutcome::Ricochet` through M4's attacker-outcome
+seam (M4 §3b), and the attacker's combat ability ends its current timeline and plays a **recoil montage chosen per attack**
+(`FGSTN_RicochetResponse` on the timeline, M4 §3b, with a per-weapon/kit default). The attacker's machine predicts it exactly:
+penetration and hardness are static data and the broken-part mask is replicated (M4 §3, prediction from the victim's reaction state).
+The victim gets only the spark cue and the `Combat.Event.Part.Ricochet` event. The band's `StaggerScale` multiplies the hit's stagger force before the part's threshold test (§4.4), so a hit
 that barely penetrates staggers less. A table with fewer bands is valid; an empty band set is a validation error.
 
 ### 3.5 Entity's own hitboxes while parts are broken
@@ -240,7 +245,7 @@ data-driven:
 - **`StaggerThreshold`** (*Proposal* for the placement): the hit staggers when `StaggerForce × b.StaggerScale ≥ threshold`. `PartResolve`
   writes `Reaction.StaggerThreshold` (the part's, else the body's, else left unset so the rules'
   `UGSTN_CombatRules::StaggerThreshold` applies as the **global default**) and `Reaction.StaggerScale = b.StaggerScale` (the penetration
-  band, §3.4); a deflected band sets `bNoFlinch`. Below the threshold M4's Armor semantics apply: damage and hitstop, no hitstun, no launch
+  band, §3.4); a ricochet band skips the whole reaction (no damage, no hitstop, no flinch). Below the threshold M4's Armor semantics apply: damage and hitstop, no hitstun, no launch
   or push, flinch presentation only. This **replaces** the old per-part stagger factor and the single global threshold: with parts on,
   the part's own value is the condition. Typical data: a **weak point a low threshold** (a light hit staggers it, the reward for
   aiming), the torso a middle value, **armoured limbs and boss plates a high one** (light hits chip the part and are shrugged off, only
@@ -254,7 +259,7 @@ data-driven:
   Body.JuggleFactor`; a head hit may launch more than a leg hit, a heavy limb less. When the victim is already in `Tumble`
   the rules' `AirborneJuggleScale` (default 1) is applied too, the knob that makes long juggles possible or not (*Reading*).
 - **`HitstopScale`**: `b.HitstopScale × p.Reaction.HitstopScale`, applied to the **automatic** hitstop only (a designer's `Override` is
-  final, M4 §3); a hit on a weak point freezes longer (more impact), a deflect freezes less.
+  final, M4 §3); a hit on a weak point freezes longer (more impact), a ricochet does not freeze at all (the attacker recoils instead).
 - **`KnockbackScale`**: `p.Reaction.KnockbackScale`, e.g. 0.3 for a pauldron, 1 for the torso.
 
 "What hits" enters through `FGSTN_HitData` (stagger force, `HitstunMultiplier`, hitstop mode and multipliers) and `Penetration`, "where"
@@ -356,9 +361,9 @@ relationship) plus `FGSTN_PartEventPayload { uint8 PartIndex; uint8 BreakSerial;
 
 | Event | When | Consumers |
 |---|---|---|
-| `Combat.Event.Part.Damaged` | Part took damage (not deflected) | UI, hit marker |
-| `Combat.Event.Part.WeakPointHit` | `bWeakPoint` part hit and not deflected | UI marker, audio |
-| `Combat.Event.Part.Deflected` | `bDeflected` band | Spark cue, audio |
+| `Combat.Event.Part.Damaged` | Part took damage (not a ricochet) | UI, hit marker |
+| `Combat.Event.Part.WeakPointHit` | `bWeakPoint` part hit and not a ricochet | UI marker, audio |
+| `Combat.Event.Part.Ricochet` | `bRicochet` band | Spark cue, audio (the attacker's recoil is its own ability, not this event) |
 | `Combat.Event.Part.Broken` | Part (or cascaded child) broke | Presentation chunk, UI, objectives |
 | `Combat.Event.Part.AllBroken` | Optional: every part with `PartCap > 0` is broken | Design hooks |
 
@@ -487,10 +492,10 @@ designer vocabulary (`Plugins/GSTNParts/Config/Tags/GSTNParts.ini`). Rules of mo
 | `Combat.Part.AllBroken` | native, projected | All breakable parts broken | tick extension | design hooks |
 | `Combat.Part.Effect.*` | native | Leaves granted by `FGSTN_PartBreakEffect_Tags` of the shipped content, e.g. `Combat.Part.Effect.ArmLost` | break effects | kits, abilities, AI |
 | `Combat.Entity.Destructible` | native | The entity has a part set (marker in `FGSTN_HitVictimView::Tags`) | fragment registration | steps, UI |
-| `Combat.Event.Part.Damaged`, `.WeakPointHit`, `.Deflected`, `.Broken`, `.AllBroken` | native | §5.4 | pipeline outbox | presentation, UI, objectives |
+| `Combat.Event.Part.Damaged`, `.WeakPointHit`, `.Ricochet`, `.Broken`, `.AllBroken` | native | §5.4 | pipeline outbox | presentation, UI, objectives |
 | `Message.Combat.PartBroken` | native | Message-router channel for UI | presentation or UI bridge | HUD |
 | `Part.Type.Head`, `.Torso`, `.Arm`, `.Leg`, `.Weapon`, `.Armour`, `.Crystal` | **ini** | Part classification on `FGSTN_PartDefinition::Types`; unrelated to `Combat.Hurtbox.*` (which classifies hurtboxes, M5 §tags) | designers | rules, cues, AI |
-| `GameplayCue.Combat.Part.Chip`, `.Break`, `.Deflect`, `.Shatter` | ini | Cue tags used by presentation sets | designers | presentation |
+| `GameplayCue.Combat.Part.Chip`, `.Break`, `.Ricochet`, `.Shatter` | ini | Cue tags used by presentation sets | designers | presentation |
 
 `Combat.State.*` is **never** declared or granted by parts: stagger is the existing `Combat.State.Hitstun`, hitstop the
 existing `Combat.State.Hitstop`. Parts add no `Combat.Mover.*` and no `Combat.Lock.*`.
@@ -510,7 +515,7 @@ same projected tag drives the minion path (the store mask feeds the same functio
 - **Band lookup**: every `Delta` from −8 to +8 against hand-computed rows; `IgnoreHardness`; table with one band; empty
   table rejected.
 - **`UGSTN_PartMath::ApplyHit` golden**: sequence of hits → expected part bytes, broken mask, `MainDelta`, cascade, weak
-  point, deflect, overflow policy, broken-part policy (`Keep`, `Disable`, `Replace`); a nonzero hit always changes the byte.
+  point, ricochet, overflow policy, broken-part policy (`Keep`, `Disable`, `Replace`); a nonzero hit always changes the byte.
 - **Determinism**: the same inputs produce identical outputs across 1,000 randomised sequences and two compile configs; the
   weight curve table equals hand values; `EffectiveWeight` never below the clamp.
 - **Quantisation and fragment**: `NetSerialize` round trip (0, 1, 2 fragments, N = 1, 8, 16, empty and full), `ShouldReconcile`
@@ -518,7 +523,7 @@ same projected tag drives the minion path (the store mask feeds the same functio
 - **Step and context**: `PartResolve` through fake contexts of a fighter and of a minion view gives the same outputs;
   order validator (before `Parry`, after `ComputeKnockback`); blocked hit damages no part; attacker hitstop independent of
   the victim's dynamic part state; stagger condition per part (force equal to the threshold staggers, one unit below does not; part,
-  body and rules fallback; a weak point staggers on a hit an armoured part shrugs off; a deflected band never staggers); `MaxReaction`
+  body and rules fallback; a weak point staggers on a hit an armoured part shrugs off; a ricochet band never staggers and never freezes); `MaxReaction`
   caps the tier; a lower effective weight never gives a milder tier.
 - **Events/dedupe**: key `(EntityRef, PartIndex, BreakSerial)`; two entries in one drain are order independent.
 - **Presentation (Runtime)**: chip thresholds fire once, idempotent hidden-bone set from the mask, pool never exceeds the
@@ -528,7 +533,7 @@ same projected tag drives the minion path (the store mask feeds the same functio
 ### 8.2 Harness scenarios (`Tools/GASNPPTest/parts_scenarios.py`, imports `gasnpp_test`; 60/15 ms, with and without 2 % loss)
 
 `scenario_part_break` (c1 hits a limb of c2 until it breaks: mask, bytes and percent equal on all machines, `Part.Broken`
-once), `scenario_part_weakpoint` (weak point takes more main damage than the torso for the same hit), `scenario_part_deflect`
+once), `scenario_part_weakpoint` (weak point takes more main damage than the torso for the same hit), `scenario_part_ricochet` (attacker recoils with the attack's montage, no hitstop on either side, predicted on the attacker's client without correction)
 (hard part, low penetration: no part damage, no hitstun, attacker hitstop present), `scenario_part_stagger` (c1 hits an armoured part
 with a light and a heavy attack, then the weak point with the light one: light on armour = damage, no hitstun; heavy on armour = hitstun and,
 with `MaxReaction = PushBack`, a grounded push back; light on the weak point = hitstun; equal on all machines), `scenario_part_rollback` (forced reconcile

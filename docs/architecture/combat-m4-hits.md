@@ -126,6 +126,10 @@ Armor = no knockback/hitstun while the hit's stagger force is below `ArmorThresh
 is measured in **stagger force**, so it is a temporary `StaggerThreshold`: `HurtState` records it in the context and `HurtboxReaction`
 writes the larger of the two as the effective threshold while the window is open; this settles the "damage or knockback" unit left open
 for `ArmorThreshold`).
+**Super armor** (owner, 2026-10-22) is the special case of **infinite stagger resistance**: `ArmorThreshold` (or a hurtbox, set or
+part `StaggerThreshold`) may be `EGSTN_StaggerThreshold::Infinite` (stored as a flag, not a float sentinel, so tuning UI and validators
+show it plainly): no hit ever staggers, damage and hitstop still apply. `Poise`/`MaxPoise` are not needed for super armor; their
+remaining use (armor that breaks after N hits) stays open in M4.3.
 
 **Knockback model** — `UGSTN_KnockbackModel` (abstract, EditInlineNew, const methods): `Compute(const
 FGSTN_KnockbackInput&) → FGSTN_KnockbackResult { EGSTN_HitReaction Reaction; bool bStaggered; float StaggerForce; FVector
@@ -265,6 +269,13 @@ lands these generic, inert-without-a-provider seams, each reviewed as a combat c
 3. **Outcome appliers**: `IGSTN_OutcomeExtensionApplier` (registered by type), called when the combat tick applies the outcome
    (§7) for each `OutcomeExtensions` entry whose struct type it owns. State written there is state at F+1, so rollback restores
    it with the combat state.
+3c. **Attacker outcome** (owner direction, ricochet): `IGSTN_AttackerOutcomeExtension::Evaluate(const FGSTN_HitContextView&) →
+   EGSTN_AttackerHitOutcome { Normal, Ricochet }`, called on the attacker side at §6 step 6 with the snapshot's victim reaction
+   state, deterministic. `GSTNCombat` alone always returns `Normal`. On `Ricochet` the attacker's `UGSTN_GA_BaseCombat` ends its
+   timeline at that frame and runs its `FGSTN_RicochetResponse { TSoftObjectPtr<UAnimMontage> RecoilMontage; int32 RecoilFrames;
+   FGSTN_MovementTrack Movement (optional push-back of the attacker); FGameplayTag CueTag; }`, authored **per attack** on the
+   timeline, with a fallback on the weapon then the kit (*Proposal*); the recoil is predicted like any timeline (montage synced to
+   the combat clock, M3) and confirmed by the host from the same rewound view (§9).
 4. **`DamageMode::PercentCapped`** and `UGSTN_KnockbackModel_CappedPercent` (§3).
 5. **`FGSTN_HitData::ExtensionData`** and its per-field override variant (`FGSTN_HitDataOverride` extension entry), so a
    relationship variant can change an extension's fields.
@@ -322,11 +333,12 @@ replicated by asset reference).
    the `Priority`/index rule of §3b becomes `HurtboxIndex`.
 5. **Hit groups**: `HitTargets` ring in the combat sync state (8 entries `{ EntityId, TimelineStartFrame, HitGroup }`) — a
    target is hit once per group per move execution.
-6. For each new hit: record it; **predict own consequences**: hit-confirm flags (`OnHit`, or `OnBlock` when the
+6. For each new hit: record it; **predict own consequences**: first the **attacker outcome** (`EGSTN_AttackerHitOutcome`:
+   `Normal`, or `Ricochet` when an extension says so, §3b; with `GSTNParts` a too-hard part); on `Ricochet`: no hitstop, no
+   confirm, no meter, and the ability's ricochet response (§3b) instead; otherwise hit-confirm flags (`OnHit`, or `OnBlock` when the
    snapshot says the victim is shielding — always false until M6), attacker hitstop window from the knockback model's
-   `AttackerHitstopFrames` (computed from the authored hit and the static reaction data of the hurtbox the snapshot says was hit,
-   never from the victim's percent, weight or state, §3), attacker meter gain request; deliver the hit to
-   the victim (7).
+   `AttackerHitstopFrames` (computed from the hit and the **victim reaction state as seen in the snapshot**, §3 hitstop), attacker
+   meter gain request; deliver the hit to the victim (7) in both cases (a ricochet still informs the victim for cue and event).
 
 ## 7. Victim side
 

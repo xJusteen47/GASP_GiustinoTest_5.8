@@ -520,7 +520,7 @@ keep reusable (public headers, no parts names):
 | `Priority` of `FGSTN_Hurtbox` (combat-parts §3.4, an M4 field) | Shown and edited in the hurtbox set details (a plain field, no parts logic); the hurtbox overlay can show the priority number |
 
 **Penetration/hardness preview** (in `GSTNPartsEditor`, specified in combat-parts §8): select a hitbox key, pick a part: shows the
-band (`UGSTN_PenetrationTable`: delta, part/main scale, deflected or not) and the "hits to break / to kill" table, from the same
+band (`UGSTN_PenetrationTable`: delta, part/main scale, ricochet or not) and the "hits to break / to kill" table, from the same
 pure `UGSTN_PartMath` as the runtime, so the preview cannot drift. M5 contributes only the hitbox selection event of the
 timeline editor (`OnKeySelected`, already needed for the details proxy). If `GSTNParts` is absent none of this appears and M5 is unchanged.
 
