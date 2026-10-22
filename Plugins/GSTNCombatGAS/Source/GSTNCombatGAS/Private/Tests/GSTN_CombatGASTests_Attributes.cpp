@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "AbilitySystemComponent.h"
+#include "Abilities/GameplayAbility.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
 #include "Attributes/GSTN_KitStats.h"
 #include "Attributes/GSTN_MeterAttributeSet.h"
@@ -152,8 +153,8 @@ bool FGSTN_AttributesKitStatsInitEffectTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AttributesMeterCostSetByCallerTest, "GSTNCombat.GAS.Attributes.MeterCostSetByCaller", TestFlags)
-bool FGSTN_AttributesMeterCostSetByCallerTest::RunTest(const FString& Parameters)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AttributesMeterCostDataTest, "GSTNCombat.GAS.Attributes.MeterCostData", TestFlags)
+bool FGSTN_AttributesMeterCostDataTest::RunTest(const FString& Parameters)
 {
 	GSTNCombatGASTest::FRig Rig;
 	UAbilitySystemComponent& ASC = *Rig.ASC;
@@ -170,19 +171,42 @@ bool FGSTN_AttributesMeterCostSetByCallerTest::RunTest(const FString& Parameters
 	}
 	TestEqual(TEXT("the cost is instant"), static_cast<int32>(Cost->DurationPolicy), static_cast<int32>(EGameplayEffectDurationType::Instant));
 
-	auto Spend = [&ASC](float Amount)
-	{
-		FGameplayEffectSpecHandle Spec = ASC.MakeOutgoingSpec(UGSTN_TestExMeterCost::StaticClass(), 1.f, ASC.MakeEffectContext());
-		UGSTN_GE_MeterCost::SetCost(*Spec.Data, Amount);
-		ASC.ApplyGameplayEffectSpecToSelf(*Spec.Data);
-	};
+	// The negated cost lives in the modifier; the data stays a positive amount
+	TestEqual(TEXT("the cost is data on the effect"), GetDefault<UGSTN_TestExMeterCost>()->Cost.Value, 25.f);
 
-	Spend(25.f);
-	TestEqual(TEXT("the magnitude from the caller is spent"), Base(ASC, ExMeter), 35.f);
-	Spend(-10.f);
-	TestEqual(TEXT("a negative cost spends nothing"), Base(ASC, ExMeter), 35.f);
-	Spend(50.f);
-	TestEqual(TEXT("overspending empties the meter and stops at 0"), Base(ASC, ExMeter), 0.f);
+	ASC.ApplyGameplayEffectToSelf(GetDefault<UGSTN_TestExMeterCost>(), 1.f, ASC.MakeEffectContext());
+	TestEqual(TEXT("the cost from the data is spent"), Base(ASC, ExMeter), 35.f);
+	ASC.ApplyGameplayEffectToSelf(GetDefault<UGSTN_TestExMeterCost>(), 1.f, ASC.MakeEffectContext());
+	ASC.ApplyGameplayEffectToSelf(GetDefault<UGSTN_TestExMeterCost>(), 1.f, ASC.MakeEffectContext());
+	TestEqual(TEXT("overspending without a check empties the meter and stops at 0"), Base(ASC, ExMeter), 0.f);
+	return true;
+}
+
+// Goes through the real UGameplayAbility cost path (CanActivate -> CheckCost, Commit -> ApplyCost). An Error logged
+// during the test fails it, which covers the old "set-by-caller magnitude was never set" log.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_EffectsMeterCostCheckApplyTest, "GSTNCombat.GAS.Effects.MeterCostCheckApply", TestFlags)
+bool FGSTN_EffectsMeterCostCheckApplyTest::RunTest(const FString& Parameters)
+{
+	GSTNCombatGASTest::FRig Rig;
+	UAbilitySystemComponent& ASC = *Rig.ASC;
+	const FGameplayAttribute ExMeter = UGSTN_MeterAttributeSet::GetExMeterAttribute();
+	ASC.SetNumericAttributeBase(UGSTN_MeterAttributeSet::GetExMeterMaxAttribute(), 100.f);
+	ASC.SetNumericAttributeBase(ExMeter, 60.f);
+
+	const FGameplayAbilitySpecHandle Handle = ASC.GiveAbility(FGameplayAbilitySpec(UGSTN_TestExMeterCostAbility::StaticClass(), 1));
+	if (!TestTrue(TEXT("the ability was granted"), Handle.IsValid()))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("60 meter pays a cost of 25"), ASC.TryActivateAbility(Handle));
+	TestEqual(TEXT("the cost was deducted"), Base(ASC, ExMeter), 35.f);
+
+	TestTrue(TEXT("35 meter pays a cost of 25"), ASC.TryActivateAbility(Handle));
+	TestEqual(TEXT("the cost was deducted again"), Base(ASC, ExMeter), 10.f);
+
+	TestFalse(TEXT("10 meter can not pay a cost of 25"), ASC.TryActivateAbility(Handle));
+	TestEqual(TEXT("a blocked activation spends nothing"), Base(ASC, ExMeter), 10.f);
 	return true;
 }
 

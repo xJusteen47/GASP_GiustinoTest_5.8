@@ -61,7 +61,22 @@ UGSTN_TestKitInitEffect::UGSTN_TestKitInitEffect()
 UGSTN_TestExMeterCost::UGSTN_TestExMeterCost()
 {
 	Meter = UGSTN_MeterAttributeSet::GetExMeterAttribute();
+	Cost.SetValue(25.f);
 	RebuildModifiers();
+}
+
+UGSTN_TestExMeterCostAbility::UGSTN_TestExMeterCostAbility()
+{
+	CostGameplayEffectClass = UGSTN_TestExMeterCost::StaticClass();
+	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
+	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
+}
+
+void UGSTN_TestExMeterCostAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+	// Commit runs the stock CheckCost then ApplyCost, which is the path under test
+	CommitAbility(Handle, ActorInfo, ActivationInfo);
+	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }
 
 UGSTN_TestWeaponStatsA::UGSTN_TestWeaponStatsA()

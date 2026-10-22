@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayEffect.h"
+#include "Abilities/GameplayAbility.h"
 #include "NativeGameplayTags.h"
 #include "Effects/GSTN_GE_MeterCost.h"
 #include "Effects/GSTN_GE_WeaponStats.h"
@@ -29,7 +30,7 @@ public:
 	UGSTN_TestKitInitEffect();
 };
 
-/** Meter cost on the EX meter. */
+/** Meter cost on the EX meter: 25 points. */
 UCLASS(Hidden)
 class UGSTN_TestExMeterCost : public UGSTN_GE_MeterCost
 {
@@ -37,6 +38,18 @@ class UGSTN_TestExMeterCost : public UGSTN_GE_MeterCost
 
 public:
 	UGSTN_TestExMeterCost();
+};
+
+/** Spends the EX meter cost through the stock cost path: commits on activation, then ends. */
+UCLASS(Hidden)
+class UGSTN_TestExMeterCostAbility : public UGameplayAbility
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_TestExMeterCostAbility();
+
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 };
 
 /** Infinite: adds the test speed stat to the walk speed. */

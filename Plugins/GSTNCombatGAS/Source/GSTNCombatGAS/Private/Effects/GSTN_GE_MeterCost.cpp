@@ -1,7 +1,6 @@
 // Combat vocabulary that needs the ability system (no Network Prediction, no Mover).
 
 #include "Effects/GSTN_GE_MeterCost.h"
-#include "GSTN_CombatTags.h"
 
 UGSTN_GE_MeterCost::UGSTN_GE_MeterCost()
 {
@@ -16,21 +15,17 @@ void UGSTN_GE_MeterCost::RebuildModifiers()
 		return;
 	}
 
-	FSetByCallerFloat Cost;
-	Cost.DataTag = GSTNCombatTags::SetByCaller_MeterCost;
+	// The scalable float is negated here (Value multiplies the curve, if any), so the data stays a positive cost
+	FScalableFloat Spent = Cost;
+	Spent.Value = -FMath::Max(Cost.Value, 0.f);
 
 	FGameplayModifierInfo Modifier;
 	Modifier.Attribute = Meter;
 	Modifier.ModifierOp = EGameplayModOp::Additive;
-	Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(Cost);
+	Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(Spent);
 
 	Modifiers.Reset();
 	Modifiers.Add(Modifier);
-}
-
-void UGSTN_GE_MeterCost::SetCost(FGameplayEffectSpec& Spec, float Cost)
-{
-	Spec.SetSetByCallerMagnitude(GSTNCombatTags::SetByCaller_MeterCost, -FMath::Max(Cost, 0.f));
 }
 
 void UGSTN_GE_MeterCost::PostLoad()
@@ -43,7 +38,9 @@ void UGSTN_GE_MeterCost::PostLoad()
 void UGSTN_GE_MeterCost::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	if (PropertyChangedEvent.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UGSTN_GE_MeterCost, Meter))
+	// Member name: an edit of Cost reports the inner field of the scalable float
+	const FName Member = PropertyChangedEvent.GetMemberPropertyName();
+	if (Member == GET_MEMBER_NAME_CHECKED(UGSTN_GE_MeterCost, Meter) || Member == GET_MEMBER_NAME_CHECKED(UGSTN_GE_MeterCost, Cost))
 	{
 		RebuildModifiers();
 	}

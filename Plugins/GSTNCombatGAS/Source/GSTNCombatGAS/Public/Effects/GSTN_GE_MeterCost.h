@@ -8,13 +8,15 @@
 #include "GSTN_GE_MeterCost.generated.h"
 
 /**
- * Instant effect that spends a meter. Make a Blueprint child per meter and pick the meter attribute: the modifier (additive,
- * magnitude read from the Combat.SetByCaller.MeterCost key) is built from that pick, so a cost can not be wired to the wrong
- * key or sign. The activating ability fills the key with SetCost; as an ability cost the effect is applied through the
- * ability own cost path, which is also what makes "not enough meter" fail the activation.
+ * Instant effect that spends a meter. Make a Blueprint child per meter (or per cost) and pick the meter attribute and the
+ * Cost: the single additive modifier is built from those two, with the cost negated, so a cost can not be wired to the
+ * wrong attribute or sign. The magnitude is plain data on the effect, not a set-by-caller value, because as an ability cost
+ * the effect goes through the ability's own CheckCost/ApplyCost, which build the spec themselves and give the ability no
+ * hook to fill a key first. A kit or weapon therefore sets a move's cost by the cost effect class it assigns to the
+ * ability (Cost on the child, or a curve table scaled by the ability level), never at activation time.
  *
- * The meter attribute clamps at 0, so spending more than is available empties the meter instead of going negative; the
- * ability must check affordability before committing (the standard CheckCost does).
+ * The standard CheckCost compares the meter with the cost, so "not enough meter" fails the activation. The meter
+ * attribute clamps at 0, so applying the effect without that check empties the meter instead of going negative.
  */
 UCLASS(Blueprintable)
 class GSTNCOMBATGAS_API UGSTN_GE_MeterCost : public UGameplayEffect
@@ -28,11 +30,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Meter")
 	FGameplayAttribute Meter;
 
-	/** Rebuilds the single modifier from Meter. Runs after load and after Meter is edited; a native child calls it once from its constructor. */
-	void RebuildModifiers();
+	/** Amount spent, positive. Evaluated at the ability level, so a curve table can scale it per level. */
+	UPROPERTY(EditDefaultsOnly, Category = "Meter")
+	FScalableFloat Cost;
 
-	/** Writes the cost (a positive amount) into Spec under the meter-cost key. The key carries the negated amount. */
-	static void SetCost(FGameplayEffectSpec& Spec, float Cost);
+	/** Rebuilds the single modifier from Meter and Cost. Runs after load and after Meter or Cost is edited; a native child calls it once from its constructor. */
+	void RebuildModifiers();
 
 	virtual void PostLoad() override;
 
