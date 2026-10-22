@@ -468,14 +468,14 @@ point (H7); any new Mover mode (never: the plan adds none).
 
 - `BP_GASNPP_TestCharacter`: hurtbox set reference, `UGSTN_HitPresentationComponent`, `UNetworkPredictionLagCompensation`
   (fork component), test move assets (H8, H10, H13). Via `Tools/GAS/setup_gas_assets.py` with backup, as in M2/M3.
-- Wall movement core: `UGSTN_WallMovementModeBase::IsMovementLocked` extension point in the project module (H7; no behaviour change
+- **Owner decision, not approved** (README "Approval status" 2): wall movement core: `UGSTN_WallMovementModeBase::IsMovementLocked` extension point in the project module (H7; no behaviour change
   when unlocked). Touches the wall-movement core, per wall-movement.md.
 - `Plugins/GASNPP/NetworkPrediction/Config/DefaultNetworkPrediction.ini`: `FixedTickInterpolationBufferedMS` to the H0d value (H10).
 - `GSTNInputCore` tags: `Input.BufferEvent.HitReceived` (one native line, H5), per coordinator decision 1.
 - Game mode / GameState Blueprint: `UGSTN_CombatRulesComponent` (H5), next to the C7 loadout wiring.
 - Test map under `Content/GASNPPTest/Combat/` (new file): walls, glass panel with `IGSTN_ImpactSurface`, KO zone; physical material
   assets for `Surface.Type.*` (H11, H13). `Content/Levels/DefaultLevel.umap` untouched.
-- Optional plugin `GSTNLevelObjects` with `AGSTN_Trampoline` (H11b): only if the owner wants trampolines in M4.
+- **Owner decision, not approved** (README "Approval status" 1): optional plugin `GSTNLevelObjects` with `AGSTN_Trampoline` (H11b).
 - Standard rules asset and plugin tag ini (`Plugins/GSTNCombat/Config/Tags/GSTNCombat.ini`) are new plugin files, not project edits.
 
 ## 7. Risks and parallelisation

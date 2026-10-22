@@ -62,3 +62,19 @@ only the M5 validation mechanism (E10); its hits-to-break report can land before
 5. After H1: E3 final, E5b, E6-E9, E11, E12; after H6/H9: E15-E17. After H9/H10: P5-P12, P14.
 
 Only one thread at a time should touch `GSTNCombatNP` and the harness on the PC (one PIE scenario at a time).
+
+## Approval status (2026-10-22)
+
+The owner allowed self-approval of these plans where they hold no architectural question and no new feature. Everything
+in the three plans is approved on that basis (assumptions in §5 are spec proposals or tunable data defaults) **except the
+items below, which stay owner decisions**. Implementation threads must not do them until the owner answers:
+
+1. **Trampoline actor and `GSTNLevelObjects` plugin** (M4 H11b): new feature and new plugin. H11 keeps only the
+   `Surface.Type.Trampoline` bounce row and the launch move type.
+2. **`IsMovementLocked` extension point in the wall-movement core** (M4 H7, plan §6): an architectural change in the
+   project module. Until answered, hitstop freeze must not depend on it on walls (H7 ships without wall-mode lock).
+3. **Parts never heal: `BrokenMask` monotonic until reset/respawn** (M4b Q2/A2): cheap now, expensive to change later
+   (a second mechanism plus the rollback story). P3/P6 may implement monotonic, but the owner must confirm before P7.
+
+Owner-OK lists in §6 of each plan (shared Blueprints, `.uproject`, ini, wire changes) still apply as written: they are
+announced before the step happens, as with M2/M3.

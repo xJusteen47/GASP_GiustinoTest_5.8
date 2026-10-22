@@ -433,7 +433,7 @@ OQ ids refer to "Parti distruttibili (M4b)" in `open-questions-m4-m10.md`. A = a
 | OQ | Assumption planned on | Affects | Cost to change |
 |---|---|---|---|
 | Q1 (rest) | Break of the single player part = death; no gameplay limb effects for players; effects on enemies via `OnBreak` data | P3, P7, P14 | Low: data only (add break effects to the player set) |
-| Q2 (A2) | `BrokenMask` monotonic until reset/respawn; no healing of parts | P3, P6, P7, P10 | High if healing is wanted later: needs a second mechanism and the rollback story |
+| Q2 (A2) | **Owner decision before P7** (README "Approval status" 3): `BrokenMask` monotonic until reset/respawn; no healing of parts | P3, P6, P7, P10 | High if healing is wanted later: needs a second mechanism and the rollback story |
 | Q3 (A3) | No overflow of damage beyond `PartCap` into the main pool; bonus only by explicit `MainDamage` | P3 | Low: one rule in `UGSTN_PartMath` plus golden |
 | Q4 (A4) | Lethal parts configurable (`bKill` in `MainDamage`) but no shipped default; values of weak-point transfer are data | P2, P3, P14 | Low |
 | Q5 | Integer hardness/penetration 0..15 (answer reads as integer armour levels; confirm) | P2, P3 | Medium: changes struct types and the band lookup, but isolated in `GSTNPartsCore` |
