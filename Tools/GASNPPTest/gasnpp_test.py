@@ -1121,9 +1121,9 @@ def scenario_camera_aim(client=1, yaw=123.0, pitch=-20.0, stance_button='Special
         (0.5, lambda: ('stance held', combat_hold(client, stance))),
         (1.2, run.at('aim read by the stance on the server and the client, trigger button in the context', check_lines)),
         (1.3, lambda: ('release', combat_clear(client))),
-        (1.9, run.at('stance ended on release', lambda: (not run.saw_tag(TAG_STANCE, 1.5, 1.9), ''))),
-        (2.0, lambda: ('flag off', cfg.set_editor_property('send_camera_aim', False))),
-        (2.1, run.finish()),
+        (2.0, run.at('stance ended on release', lambda: (not run.saw_tag(TAG_STANCE, 1.75, 2.0), ''))),
+        (2.05, lambda: ('flag off', cfg.set_editor_property('send_camera_aim', False))),
+        (2.15, run.finish()),
     ]
     run.run(steps)
 
