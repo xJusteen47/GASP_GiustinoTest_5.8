@@ -111,14 +111,20 @@ def press(client_index, action):
 
 
 import time
-_timeline = {'handle': None}
+_timeline = {'handle': None}   # legacy name: kept None so callbacks of older module versions stay inert
+_running = {'handle': None}
 
 
 def run_timeline(steps):
     """steps: list of (seconds_from_now, callable). Runs on editor ticks without blocking."""
+    if _running['handle'] is not None:
+        # A previous timeline still running would otherwise leak its callback and, when it ends, unregister this one's handle.
+        unreal.unregister_slate_post_tick_callback(_running['handle'])
+        _running['handle'] = None
     start = time.time()
     pending = sorted(steps, key=lambda s: s[0])
     log = []
+    handle = []
 
     def tick(_dt):
         now = time.time() - start
@@ -128,12 +134,14 @@ def run_timeline(steps):
                 log.append(f'{t:.1f}s {fn()}')
             except Exception as e:
                 log.append(f'{t:.1f}s ERROR {e}')
-        if not pending and _timeline['handle'] is not None:
-            unreal.unregister_slate_post_tick_callback(_timeline['handle'])
-            _timeline['handle'] = None
+        if not pending and handle:
+            unreal.unregister_slate_post_tick_callback(handle.pop())
+            if _running['handle'] is not None and not handle:
+                _running['handle'] = None
             unreal.log('GASNPP timeline done: ' + ' | '.join(log))
 
-    _timeline['handle'] = unreal.register_slate_post_tick_callback(tick)
+    handle.append(unreal.register_slate_post_tick_callback(tick))
+    _running['handle'] = handle[0]
 
 
 def _combat_history(c):
