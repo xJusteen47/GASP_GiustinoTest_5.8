@@ -39,6 +39,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | M6 Difesa e link | [combat-m6-defence-links.md](combat-m6-defence-links.md) |
 | M7 Piggyback | [combat-m7-piggyback.md](combat-m7-piggyback.md) |
 | M8 Minion | [combat-m8-minions.md](combat-m8-minions.md) |
+| Molti nemici e nemici-piattaforma (ricerca del 22/10) | [many-enemies-replication.md](many-enemies-replication.md) |
 | M9 Adattatore GAS standard | [combat-m9-stock-gas.md](combat-m9-stock-gas.md) |
 | M10 Oggetti tenuti e lanciati | [combat-m10-held-objects.md](combat-m10-held-objects.md) |
 
@@ -714,7 +715,7 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
 
 1. Quanti minion devono essere vivi e attivi contemporaneamente in una scena tipica, e quanti nel caso peggiore (ondata finale)?
    Perché conta: decide i budget (server, banda, client) e se basta l'obiettivo 40 o serve lo stretch 100.
-   Ipotesi nella specifica: 40 richiesti, 60 tipici di progetto, 100 stretch.
+   Ipotesi nella specifica: 40 richiesti e tipici, 60 di progetto, 80 come picco sull'host, 100 stretch solo con server dedicato; **150 solo come popolazione**, con al massimo circa 60 nemici svegli insieme (gli altri dormienti o lontani, a costo quasi nullo). A 150 tutti svegli l'host spenderebbe circa 6,4 ms di frame solo per i nemici e circa 61 KB/s di upload con 3 client (143 KB/s con 7): irrealistico su un server di ascolto (M8 §4d.1, §8.3, §11; aggiornata dopo la ricerca del 22/10, [many-enemies-replication.md](many-enemies-replication.md) §3.3).
 
 2. Quanti tipi diversi di minion servono al lancio e quanto devono differire (solo statistiche, o mosse e comportamento diversi)?
    Perché conta: definisce quante `UGSTN_MinionDefinition` e quanti task di AI scrivere e testare.
@@ -787,7 +788,7 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
 
 15. Piattaforme client e requisiti minimi (PC solo? console? 60 fps?), e quanti minion visibili devono girare a 60 fps?
     Perché conta: il costo delle animazioni dei burattini puo superare quello del server e impone LOD e condivisione animazioni.
-    Ipotesi nella specifica: PC, 60 fps, obiettivo 3 ms di game thread per 60 burattini.
+    Ipotesi nella specifica: PC, 60 fps, obiettivo 3 ms di game thread per 60 burattini; tetto `MaxVisiblePuppets` = 60 burattini con scheletro visibili (gli altri istanziati o nascosti), budget di animazione 1 ms sui client e 1,5-2 ms sull'host (M8 §8.4, spike 7); aggiornata dopo la ricerca del 22/10.
 
 16. Priorita tra quantita di nemici, precisione dei colpi (feel) e risparmio di banda se non si possono avere tutti e tre?
     Perché conta: guida le scelte dei compromessi (frequenza di replica, LOD, token) quando i budget sforano.
@@ -813,13 +814,40 @@ Specifica: `docs/architecture/combat-m8-minions.md`. Domande sul comportamento d
 ### Server di ascolto (dopo la direzione del 22/10)
 
 20. Con il server di ascolto, quanti client si connettono in genere all'host (2, 3, 7)? E che upload ha l'host di casa (circa)?
-   Perché conta: la banda dell'host si moltiplica per i client; decide il tetto per client dei minion (5 KB/s) e se serve il tetto totale dell'host.
-   Ipotesi nella specifica: fino a 3 client, host con almeno 5 Mbit/s di upload, tetto totale soft di 40 KB/s (M8 §4d.1).
+   Perché conta: la banda dell'host si moltiplica per i client; decide il tetto per client dei minion (circa 6 KB/s a 40 nemici) e se serve il tetto totale dell'host.
+   Ipotesi nella specifica: fino a 3 client, host con almeno 5 Mbit/s di upload, tetto totale soft di 40 KB/s (M8 §4d.1). Con 40 nemici svegli e 20 B per aggiornamento sono 5,8 KB/s per client, cioè circa 17 KB/s con 3 client e 40 KB/s con 7 (sul limite del tetto); un upload di 1 Mbit/s (125 KB/s) non regge 150 svegli con 3 client (circa 61 KB/s) insieme al traffico dei giocatori (M8 §8.3; aggiornata dopo la ricerca del 22/10).
    
 21. Con 40 minion, la CPU dell'host deve restare libera per il suo gioco: va bene ridurre i minion attivi sull'host (per esempio 32 attivi in combattimento invece di 48) se il frame non basta?
    Perché conta: decide se il numero richiesto (40) è un obiettivo fisso o un tetto che scende in base alla macchina dell'host.
-   Ipotesi nella specifica: sì, si riduce prima `MaxActiveT0`, poi il LOD dei puppet; il massimo N misurato sull'host viene registrato onestamente (M8 §4d.1).
-   
+   Ipotesi nella specifica: sì, si riduce prima `MaxActiveT0` (da 48 a 32), poi la frequenza dei T0 a 10 Hz, poi il tetto dei puppet visibili (`MaxVisiblePuppets`) e il loro LOD; il massimo N misurato sull'host viene registrato onestamente (M8 §4d.1; ordine aggiornato dopo la ricerca del 22/10).
+
+### Replicazione di molti nemici e nemici-piattaforma (dopo la ricerca del 22/10)
+
+Specifica di riferimento: `docs/architecture/many-enemies-replication.md` (ricerca e proposta; i numeri citati sono quelli del suo §3.3 e §4) e `docs/architecture/combat-m8-minions.md` (§4d.1, §4d.5, §8, §11). La ricerca non è una risposta del proprietario: le ipotesi sono quelle ora usate nella specifica e non c'è nessuna **Risposta** da riportare. Le domande della ricerca su quanti nemici devono essere svegli sull'host (popolazione contro nemici attivi insieme) e sull'upload minimo dell'host sono già la 1 e la 20 di questa sezione: non sono ripetute, ma le loro ipotesi sono state aggiornate qui sopra.
+
+22. Quali nemici possono fare da piattaforma: solo i fighter (boss ed elite) o anche alcuni minion grandi? Quanti contemporaneamente?
+   Perché conta: i minion dello sciame non sono attori sui client e non possono essere una base su cui il giocatore cammina; per un minion-piattaforma serve un piccolo attore di appoggio replicato, che costa banda e CPU in più (circa 20-25 B per aggiornamento a 30 Hz per ciascuno).
+   Ipotesi nella specifica: sono piattaforme i fighter e al massimo 8 minion-piattaforma vivi insieme (`gstn.Platform.MaxActors`), di tipi contrassegnati da un flag nei dati; i minion dello sciame mai. La piattaforma è un collider rigido separato dalla mesh animata (mai un osso o la capsula) (M8 §4d.5).
+
+23. A che velocità si muove un nemico-piattaforma mentre un giocatore ci sale o ci cammina sopra? Si può saltare su un nemico che sta correndo, oppure deve rallentare o fare un'animazione di "appoggio" quando un giocatore si avvicina?
+   Perché conta: l'errore di atterraggio dei client cresce con velocità × (ping + circa 100 ms di interpolazione): a 300 cm/s sono 48-66 cm. Fino a circa 150-300 cm/s lo schema semplice (il giocatore si muove nello spazio locale della base) basta; sopra serve la compensazione del ritardo della piattaforma, che richiede lavoro in più.
+   Ipotesi nella specifica: velocità fino a 300 cm/s, con rallentamento automatico della piattaforma (`MaxSpeedWhileOccupied`) e animazione di appoggio quando un giocatore è vicino o sopra; la compensazione del ritardo si aggiunge solo se le misure (spike P1/P2) la richiedono.
+
+24. Cosa succede ai giocatori sopra una piattaforma quando viene colpita forte, lanciata, uccisa, afferrata, o quando si rompe la parte su cui stanno?
+   Perché conta: il server decide la perdita della base e il client lo scopre con ritardo (una correzione). Con un breve avviso visibile prima (circa 300 ms) la correzione è quasi invisibile; senza, il giocatore può cadere o scattare.
+   Ipotesi nella specifica: lo stagger e il knockback leggero non la disattivano; lancio, morte, rottura o presa la disattivano dopo un avviso di circa 20 frame (`DropGraceFrames`); il giocatore cade conservando la velocità della base e non viene mai rimosso in silenzio.
+
+25. I nemici che non sono piattaforme devono bloccare fisicamente i giocatori, oppure i giocatori li attraversano e il contatto conta solo per i colpi? (Estende la 18, che riguarda solo i minion.)
+   Perché conta: una collisione giocatore-nemico predetta sul client e simulata sul server è una fonte continua di correzioni (il nemico sul client è circa 160-220 ms indietro). Attraversabile significa zero correzioni, ma meno sensazione di massa.
+   Ipotesi nella specifica: solo le piattaforme sono solide per i giocatori; gli altri nemici non li bloccano (si separano solo tra loro) e i colpi usano gli hitbox, non la fisica.
+
+26. Quanto ritardo visivo sui nemici lontani e quanta perdita di dettaglio sono accettabili? In particolare: nemici lontani o numerosi con animazioni ridotte o condivise, istanze senza scheletro oltre una certa distanza, e posizioni dei minion in secondo piano meno precise (anche 40 cm di errore). (Approfondisce la 15 e la 16.)
+   Perché conta: è la leva più efficace per tenere frame e banda dell'host sotto controllo (limite di puppet visibili, animazioni condivise, aggiornamenti più rari ai lontani), ma cambia l'aspetto di una folla.
+   Ipotesi nella specifica: massimo circa 60 puppet con scheletro visibili; gli altri istanziati o nascosti; i nemici in combattimento (T0) aggiornati a 15 Hz con lo stesso ritardo di interpolazione dei giocatori (100 ms), gli altri tra 0,5 e 5 Hz (T1 5 Hz o 2-3 Hz, T2 1 Hz o meno) con posizione stimata sul client (M8 §7, §8.3, §8.4).
+
+27. Va bene restare per ora sulla replicazione classica di Unreal (pacchetti di nemici con FastArray, push model e dormancy) e rimandare Iris finché non risulta verificato con Network Prediction e Mover del nostro fork in 5.8?
+   Perché conta: Iris è dichiarato pronto per la produzione in 5.8 ma la compatibilità con NPP e Mover è documentata solo per la versione di sviluppo, e attivarlo è un interruttore per tutto il progetto, compresi i giocatori. Per il nostro numero di client il guadagno atteso è piccolo.
+   Ipotesi nella specifica: replicazione classica per M8; Iris solo come esperimento isolato (spike R3), da adottare se non rompe nessuno scenario di NPP/Mover e riduce di almeno il 25% CPU o banda di replicazione dell'host.
 
 ---
 

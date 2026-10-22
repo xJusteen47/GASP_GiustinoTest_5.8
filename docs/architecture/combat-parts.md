@@ -396,7 +396,7 @@ The reference topology is a host who is also a player; budgets are for **the hos
   scales by scalability level (and by measured frame time, dropping to Niagara bursts only when the host exceeds its frame
   budget). Frame-time impact of presentation is measured on the host configuration, not on a client.
 - **Host upload.** The limiting resource. Fragment cost is multiplied by connected clients (§5.1 bytes × clients, only on
-  change); minions pay the +1 B ext byte per item update per client (§5.5). Both stay inside M8's 5 KB/s target and fit the
+  change); minions pay the +1 B ext byte per item update per client (§5.5). Both stay inside M8's per-client target (≤ 6 KB/s at N = 40, M8 §8.3) and fit the
   M8 budget table; the harness reports host bytes/s with and without parts.
 - **Dedicated server** stays supported (same simulation code and fragment; nothing forks on topology).
 
@@ -413,7 +413,7 @@ Minions are not NP actors (M8). The bridge plugin gives the minion store optiona
   fragment) and mutates `Health`, hitstun and launch as M8 does for any hit.
 - **Wire** (requires an M8 change, listed in §9): `FGSTN_MinionNetItem` gets an optional extension byte `ExtByte`
   guarded by a type-level `bHasExt` (0 bits for types without parts) owned by the bridge: `BrokenMask`. Dirty only when
-  the mask changes. Cost: +8 bits on items of part-bearing types (about +1 B on an 18 B update, +5 %); items do not carry
+  the mask changes. Cost: +8 bits on items of part-bearing types (about +1 B on the 20 B planning-size update of M8 §8.3, +5 %); items do not carry
   per-part damage. Clients drive **the damage material from the existing 5-bit `Health`** and **limbs from the mask**; weak-point flashes use
   the existing `HitCounter` plus the local knowledge of where the attacker hit.
 - **Reaction**: the same step writes the part's `StaggerThreshold` and `MaxReaction`, so a minion's hitstun condition and reaction tier

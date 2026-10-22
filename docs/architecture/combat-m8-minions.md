@@ -29,9 +29,23 @@ those milestones).
 > integrates the **gravity vector** of the minion's position (gravity volumes, global changes), and "ground", "horizontal"
 > and the push-back plane are relative to it; trampolines (M4 §7b) launch minions along the trampoline's normal.
 
+> **Revision 2026-10-22 (research, [many-enemies-replication.md](many-enemies-replication.md); owner direction
+> [game-design-direction.md](game-design-direction.md) §2f "research the best replication techniques" and "some enemies work as
+> solid platforms", §6b; it wins over this file):** the research keeps the shape of section 8 (server-only store, a few pack
+> actors with a FastArray, client puppets) and changes parameters and seams. (1) Spikes: replication R1–R6 and platform P1–P4
+> (§2). (2) Replication: **push model, dormancy "wake or flush first, then mutate", rate per item** (the pack frequency is only a
+> ceiling), budgeted relevancy, **planning size 20 B** per item update (§8.1–§8.3). (3) Budgets for N = 40 / 80 / 150 on the
+> listen host, with the rule **"150 is a population of which about 60 are awake"** (§4d.1, §8.3, §11). (4) **Per-tier smoothing**
+> and `MaxVisiblePuppets` = 60 (§8.4). (5) A generic `FGSTN_PoseHistory` with **swept bounds**, shared with the platform plugin
+> through shared net primitives (§3, §4b, §9.2). (6) **Platform enemies**: swarm minions are never platforms; a flagged platform
+> minion (≤ 8) is carried by a small replicated proxy actor through the bridge `GSTNPlatformMinion` (§4b, §4d.5). Iris,
+> Replication Graph and Mass replication stay out of v1 (R3 decides on Iris). Nothing in the research is an owner answer: every
+> new choice is *Proposal*, and the new owner questions are 22–27 of section M8 in
+> [open-questions-m4-m10.md](open-questions-m4-m10.md). **[E]** marks an estimate to be measured (the research's convention).
+
 ## 1. Scope
 
-**Goal:** dozens of simple enemies (40 required, 100 stretch) with the **same timelines, hitboxes, hurtboxes, teams,
+**Goal:** dozens of simple enemies (40 required, 100 stretch on a dedicated server, 150 only as a population with about 60 awake on a listen host, §4d.1) with the **same timelines, hitboxes, hurtboxes, teams,
 pipeline and knockback** as fighters, at a small fraction of a fighter's server cost, with bounded bandwidth, on the
 **authority host** (a listen-server host that also renders, owner direction §6b; a dedicated server stays supported). Player→minion and minion→player hits are first class (lag compensation, hit presentation, one
 correction per hit on the player's client).
@@ -41,7 +55,8 @@ measurement); LOD; compact replication and client puppets with interpolation; hi
 spawning, pooling, waves; promotion to fighter; debug, tests, harness.
 
 Out: AI design (behaviours are content), navigation setup, group tactics beyond attack tokens, loot and progression,
-minion grabs/shields/mounts (M6/M7 follow-ups, section 14), forward prediction of minions (never, combat.md §12.7),
+minion grabs/shields/mounts (M6/M7 follow-ups, section 14), players standing on enemies (the optional plugins `GSTNPlatform`
+and `GSTNPlatformMinion`; M8 provides only the seams of §4d.5), forward prediction of minions (never, combat.md §12.7),
 dedicated-only assumptions (*revised 2026-10-22*: the subsystem runs wherever there is authority,
 `NM_DedicatedServer || NM_ListenServer || NM_Standalone`; host-specific rules in §4d.1).
 
@@ -71,12 +86,15 @@ player), `Brawl` (chase + attack every 60–90 frames), `Massacre` (all minions 
 **Measurement method (every spike):** **listen-server host** (reference, owner direction §6b: the host process renders and
 runs a local player, measured with `stat unit` split into game/render/GPU) and, for comparison, a dedicated server; packaged-like config (`-nullrhi -unattended -NoSound` only for the dedicated comparison;
 the host run keeps rendering at the project's minimum-spec resolution; Development build, cooked if possible), 2 PIE or standalone clients (testing.md harness) with 60/15 ms and 2 % loss, 60 s
-per cell, N ∈ {20, 40, 60, 100, 150}.
+per cell, N ∈ {20, 40, 60, 80, 100, 150}. The replication spikes R1–R6 (table after the spike list) use **3 headless remote
+clients** (`-nullrhi`; the harness has host + 2 today, so a third client is added) because the host upload is the figure of a
+3-client session.
 - CPU: `UnrealInsights` with `-trace=cpu,frame,bookmark,log,net -statnamedevents`; scopes `GSTN_MinionBatch` and children
   (`LOD`, `Inbox`, `Timeline`, `Query`, `Movement`, `Publish`, `Replicate`), plus `STAT_GSTN_Minion*` cycle counters and
   `stat unit`/`stat game` on the server. Report mean, p95, p99 and max per frame over the run.
 - Network: Net Insights (`-NetTrace=1`) per actor/property for `AGSTN_MinionPack`; `stat net`; the `NetProfile` console
-  command as a cross-check. Report bytes/s per client, split by pack tier.
+  command and the server replication time (`NetServerRepActorsTime`) as cross-checks. Report bytes/s per client, split by
+  pack tier, and the host upload with 3 clients.
 - Client: `stat game` and `stat anim` (puppet count, animation budget), Insights frame view.
 - Memory: `memreport -full` before/after spawn; target ≤ 400 B per minion in the store (excluding assets).
 
@@ -85,11 +103,28 @@ per cell, N ∈ {20, 40, 60, 100, 150}.
 | 1 | **Baseline: AI fighters** | What does the *existing* fighter path cost for N AI pawns (combat + ASC + Mover + NP replication, AI input source) in `Brawl`? | Records `cF` ms/frame per entity and KB/s. **If N=40 fits the targets of section 11 with no minion code, stop M8 and use fighters** (unlikely; needs ≤ 0.04 ms per entity and ≤ 4 KB/s). |
 | 2 | **Fixed-tick hook** | Is there a post-fixed-tick callback in `UNetworkPredictionWorldManager` (after all models of frame F, server) and how to read frame F and the time→frame mapping used by `RewindActors`? | Hook found, or a small fork patch `OnPostFixedTick(int32 Frame)` written (inert if unbound). Time→frame error ≤ 1 frame. |
 | 3 | **Movement** | Cost and robustness of option A (Mover, non-predicted) vs B (lightweight, section 6) per minion-frame in `Chase` and `Massacre`. | Decision rule of section 6. |
-| 4 | **Replication** | `AGSTN_MinionPack` FastArray bytes/item, per-pack relevancy and `NetUpdateFrequency` tiers, dormancy wake latency; is Iris enabled in 5.8 for this project? | Bytes/minion/s inside budget (section 8); wake latency ≤ 2 frames of the pack rate. If Iris is on, compare with a `UNetObjectFilter` on one actor; keep the simpler one. |
+| 4 | **Replication** (*revised 2026-10-22*: run as R1–R3 of the table below; R4–R5 refine it) | `AGSTN_MinionPack` FastArray bytes/item, per-pack relevancy, per-item tier rates, dormancy wake latency and flush order; is Iris an option at all? (Iris is **off**: no `UseIrisReplication` in `Config/`, and turning it on is a project-wide switch that also touches the fighters.) | Bytes/minion/s inside the budget of 8.3; wake latency ≤ 2 pack periods. The former "compare with a `UNetObjectFilter`" is dropped as premature: R3 decides on Iris. |
 | 5 | **Lag compensation of non-NP entities** | Does `FGSTN_MinionHistory` + `FGSTN_LagCompTime` give a hit at the position the attacker's client displayed? | In `scenario_minion_lagcomp` (section 12) ≥ 95 % hits when aimed at the displayed minion at 60/15 ms, with the correct rewind frame; 0 hits when aimed at the *server-current* position behind the display by > 1 minion radius. |
 | 6 | **AI cost** | `UStateTreeComponent` per minion (no AIController) ticking at LOD rates: ms per minion and whether it runs without a controller. | ≤ 0.02 ms per ticking minion at T0, and tick interval control works. Else brain stays a thin `UGSTN_MinionBrainComponent` with a hand-written task list behind the same intent interface. |
-| 7 | **Client presentation cost** | Puppet skeletal mesh + animation for N=60 visible: game thread ms with Animation Budget Allocator, optional Animation Sharing. **Also on the listen-server host**, where simulation and puppets share one frame (section 4d.1). | ≤ 3 ms game thread at 60 puppets on the target client; on the host, batch + puppets + host's own game inside section 11's host rows; else add puppet LOD (section 8.4). |
+| 7 | **Client presentation cost** (= **R6** of the research) | Puppet skeletal mesh + animation for N=60 visible: game thread ms with the variables `MaxVisiblePuppets` (default 60), Animation Budget Allocator (`a.Budget.BudgetMs`, significance from C++), update-rate optimization (URO) and `OnlyTickPoseWhenRendered`, Animation Sharing for idle crowds, Significance Manager ranking, instanced meshes for far puppets, custom primitive data instead of a dynamic material per puppet (section 8.4). **Also on the listen-server host**, where simulation and puppets share one frame (section 4d.1). | ≤ 3 ms game thread at 60 puppets on the target client and on the host (≤ 2 ms at 40); on the host, batch + puppets + host's own game inside section 11's host rows; else lower `MaxVisiblePuppets` and add puppet LOD (section 8.4). |
 | 8 | **Promotion at runtime** | Spawn an NP fighter mid-session and hand over from a puppet under 60/15 ms. | Client shows no pop > 15 cm and no rollback beyond the first sync; time to first control ≤ 500 ms. |
+
+**Replication and platform spikes (*Proposal*, added 2026-10-22 from [many-enemies-replication.md](many-enemies-replication.md)
+§3.4; R1–R3 replace the body of spike 4, R6 is spike 7).** Setup as above with 3 headless clients, N ∈ {20, 40, 80, 150}, Unreal
+Insights `-trace=cpu,frame,net -NetTrace=1`, `stat net`, `NetProfile`. R-spikes come before the byte layout of 8.2 is frozen;
+P-spikes belong to the optional platform plugins (§4d.5) and do **not** gate M8: run them only when that feature is built.
+
+| # | Spike | Question | Exit (go / no-go) |
+|---|---|---|---|
+| R1 | Replication bake-off | The same 150 walkers as (A) a lean actor per enemy, (B) packs + FastArray (this design), (C) a custom snapshot RPC with per-connection delta: host ms, bytes/s per client, client ms | B within ±25 % of the numbers of 8.3 and §11; B at least 2x cheaper in bytes than A; else re-decide. C only if B misses the budget by > 25 % |
+| R2 | Dormancy and flush order | Wake latency, lost updates and late join with *wake then mutate* against *mutate then flush* on a dormant pack (8.1) | 0 lost items over 10 min of waves; wake latency ≤ 2 pack periods; late join sees all 40 |
+| R3 | Iris viability | `-UseIrisReplication=1` with the packs: do `scenario_abilities`, `forced_rollback`, `combat_spike` and the minion scenarios stay clean with NP and Mover? | Any NP or Mover failure stops it (no further work); a gain below 25 % of host replication CPU or bytes stops it |
+| R4 | T1/T2 order replication | Waypoints + speed + start frame (the "order" of 8.3) against 2–3 Hz snapshots with dead reckoning: bytes, visible error against the server, correction pops | ≥ 50 % fewer T1/T2 bytes; error ≤ 40 cm at the 95th percentile; no pop > 25 cm |
+| R5 | Budgeted relevancy | `MaxRelevantPerClient` and the priority ranking (8.1): do far packs flicker? | No relevancy toggle faster than 1 s; host upload ≤ `HostUploadBudgetKBps` |
+| P1 | Standing on a fighter | Two clients stand on a fighter moving at 150 / 300 / 500 cm/s, walk, jump on and off (base-local prediction, research §4.5 approach B) | Standing and walking: 0 unexplained reconciles per 30 s, max correction ≤ 10 cm; mount success ≥ 95 % at 300 cm/s |
+| P2 | Two pings, one platform | Prototype the lag-compensated base pose lookup (approach D) with view offsets of 60 and 180 ms | Both clients: mount success ≥ 95 % at 500 cm/s; observers see the feet within 10 cm |
+| P3 | Platform lifecycle | Hit, launch, death, shatter and pool release under a standing player; whether the proxy carries the puppet's animation fields (§4d.5) | At most 1 correction, no stuck base, no fall through |
+| P4 | Dismount and cost | Velocity on leaving the base (a kinematic collider may report zero); cost of 8 colliders moved per step on the host | Momentum error ≤ 50 cm/s; ≤ 0.2 ms per frame |
 
 ## 3. Core types (`GSTNCombatCore`, pure, Automation-tested)
 
@@ -119,10 +154,14 @@ first M8 commit** (file move, no behaviour change).
   the host, rewinding the same history, computes the same value; a test asserts the two match.
 - **`FGSTN_MinionStats`** (data): `MaxHealth, Weight, KnockbackResistance, HitstunResistance, WalkSpeed, RunSpeed, TurnRateDegPerSec, Acceleration, Braking, GravityScale, StepHeight,
   CapsuleRadius, CapsuleHalfHeight`. Converted to attributes only on promotion.
-- **`FGSTN_MinionHistory`**: ring of `K` frames (default 24 ≥ `MaxRewindMs` 250 ms at 62.5 Hz + margin) of
-  `{ FVector3f Pos; float Yaw; uint8 ActionState; uint8 HurtState; uint16 HurtOverrideKey }` per minion slot, struct of
-  arrays, ~16 B × 24 × N. `Sample(Handle, FrameOrTimeMs, Out)` interpolates between two frames and clamps to the ring
-  (returns `bClamped`).
+- **`FGSTN_PoseHistory`** (generic, *Proposal* of the 2026-10-22 research; shared with the platform plugin, see the shared net
+  primitives of §4b): ring of `K` frames (default 24 ≥ `MaxRewindMs` 250 ms at 62.5 Hz + margin) per handle, struct of
+  arrays, columns `{ FVector3f Pos; float Yaw }`, an optional velocity column (platforms; off for minions), a **swept bound**
+  per frame (the extent the entity moved through in that frame: speed × dt plus the type's margin, so candidate rejection
+  against a rewound frame is a bound test, 9.2) and a caller-defined payload column. `Sample(Handle, FrameOrTimeMs, Out)`
+  interpolates between two frames and clamps to the ring (returns `bClamped`). **`FGSTN_MinionHistory`** is this history with
+  the payload `{ uint8 ActionState; uint8 HurtState; uint16 HurtOverrideKey }` per minion slot, ~16 B × 24 × N (15 / 31 / 58 KB
+  at N = 40 / 80 / 150) plus the swept bound.
 - **`FGSTN_MinionIntent`**: `{ FVector2f MoveDir; float DesiredSpeed; float DesiredYaw; FGameplayTag Command; int32
   TargetEntityId; uint8 Flags (Sprint, StrafeTarget); int32 StampFrame }`. Latest value wins; stale after 30 frames
   (minion idles).
@@ -136,12 +175,13 @@ Everything below lives in the separate plugin **`GSTNMinion`** (section 4b); fil
 | `UGSTN_MinionDefinition` (`UPrimaryDataAsset`, type `GSTN_MinionDefinition`) | `Data/GSTN_MinionDefinition.h` | One per minion type: `TypeTag`, `FGSTN_MinionStats`, `UGSTN_HurtboxSetDefinition`, `TArray<FGSTN_MinionMove> Moves { FGameplayTag Command; UGSTN_CombatTimeline* Timeline; int32 CooldownFrames; float MinRange, MaxRange; int32 Priority; }`, reaction timelines (`Spawn`, `Hitstun`, `PushBack`, `Launched`, `Knockdown`, `GetUp`, `Death`), `KnockbackModel` (instanced override), `FGenericTeamId Team`, `EGSTN_MinionMovementBackend`, `PuppetClass`, `StateTree`, `LODOverride`, `PromotionFighterClass` (soft), `MaxHitsPerFrame`. `IsDataValid`: ≤ 31 moves, only supported tracks, hurtbox set present, timelines ≤ 1023 frames, `Hitstun`/`Death` timelines present (`PushBack` is optional and falls back to `Hitstun`). |
 | `UGSTN_MinionLODSettings` (`UDataAsset`) | `Data/GSTN_MinionLODSettings.h` | Tier distances, hysteresis, intervals (section 7). |
 | `FGSTN_MinionHandle` | `Runtime/GSTN_MinionStore.h` | `{ uint16 Index; uint16 Generation; }`; stale handles resolve to invalid. |
-| `FGSTN_MinionStore` (plain C++) | same | Struct-of-arrays, free list, capacity `gstn.Minion.Max` (default 128, pre-allocated). Per slot: generation, definition index, position/velocity/yaw, `ActionState`, `MoveId`, `TimelineStartFrame`, `MovePausedFrames`, `HitstopEndFrame`, `HitstunEndFrame`, `NextMoveFrame[move]` cooldown stamps (small fixed array), `Health`, `KnockbackPercent`, LOD tier and phase, intent, flags, last-attacker ring (4 entries, for KO credit), `HitByRing[4] { AttackerId, TimelineStartFrame, HitGroup }` (once per group per attacker move on the victim side too). |
+| `FGSTN_MinionStore` (plain C++) | same | Struct-of-arrays, free list, capacity `gstn.Minion.Max` (default 128, pre-allocated). Per slot: generation, definition index, position/velocity/yaw, `ActionState`, `MoveId`, `TimelineStartFrame`, `MovePausedFrames`, `HitstopEndFrame`, `HitstunEndFrame`, `NextMoveFrame[move]` cooldown stamps (small fixed array), `Health`, `KnockbackPercent`, LOD tier and phase, intent, flags (including `bPlatformActor`, §4d.5), last-attacker ring (4 entries, for KO credit), `HitByRing[4] { AttackerId, TimelineStartFrame, HitGroup }` (once per group per attacker move on the victim side too). |
 | `UGSTN_MinionCombatComponent` (`UActorComponent`, authority only, no tick) | `Runtime/GSTN_MinionCombatComponent.h` | The designer-facing handle on `AGSTN_MinionActor`: BeginPlay registers in the subsystem and gets a handle; Blueprint API `SetIntent`, `RequestCommand`, `GetHealth`, `GetHandle`; server delegates `OnMinionHit`, `OnMinionDied`, `OnLODChanged`. Holds no per-frame state. |
 | `AGSTN_MinionActor` (`AActor`, `bReplicates = false`) | `Runtime/GSTN_MinionActor.h` | Server-side handle: root scene, the component, the brain component, no mesh and no movement component unless backend A. Pooled. Moved by the subsystem (`SetActorLocationAndRotation` only for T0/T1 and when something reads the actor: debug, AI queries; T2/T3 keep a stale transform, flagged). |
 | `UGSTN_MinionCombatSubsystem` (`UWorldSubsystem`, authority: dedicated, listen host or standalone) | `Runtime/GSTN_MinionCombatSubsystem.h` | Owns the store, history, grid contribution, inbox, token allocator and spawn queue; the batch tick (section 5). |
 | `IGSTN_HittableProvider` (plain interface) | `GSTNCombatNP/World/` | New in M4's world subsystem: `AppendSnapshotEntities(FGSTN_StepSnapshot&)`; NP components and the minion subsystem both implement it (section 9). |
-| `AGSTN_MinionPack` (`AActor`, replicated) + `FGSTN_MinionNetArray` | `Net/GSTN_MinionPack.h` | Replication (section 8). |
+| `AGSTN_MinionPack` (`AActor`, replicated, push model) + `FGSTN_MinionNetArray` | `Net/GSTN_MinionPack.h` | Replication (section 8). All mutation goes through one `MutatePack()` entry that wakes or flushes dormancy first (8.1). |
+| `IGSTN_MinionPublishObserver` (plain interface, *Proposal*) | `Runtime/GSTN_MinionPublishObserver.h` | Optional seam of §4d.5, called in stage 2.5 with the end-of-F pose and velocity of slots flagged `bPlatformActor`; inert without a registrant. Its only implementer is the bridge `GSTNPlatformMinion`. |
 | `UGSTN_MinionPresentationSubsystem` (client `UWorldSubsystem`), `AGSTN_MinionPuppet`, `FGSTN_MinionInterpolator` | `Client/` | Puppets, interpolation, hit presentation (section 8). |
 | `UGSTN_MinionSpawner` (static library), `UGSTN_MinionWaveDefinition` | `Spawn/` | Spawning, waves (section 10). |
 | `IGSTN_MinionMovementBackend`, `FGSTN_MinionMovement_Lightweight`, `FGSTN_MinionMovement_Mover` | `Movement/` | Section 6. |
@@ -155,16 +195,28 @@ Minions are optional and self-contained, so they are a **separate plugin, `Plugi
 
 | Plugin / module | Type | Depends on | Contents |
 |---|---|---|---|
-| `GSTNMinion` / **`GSTNMinionCore`** | Runtime | `GSTNCombatCore`, `GameplayTags`, `Core`, `CoreUObject` (no Engine world, no NP, no GAS) | Pure and Automation-tested: `FGSTN_MinionStore`, handles, LOD logic and scheduler, `FGSTN_MinionHistory`, `FGSTN_MinionIntent`, attack-token allocator, net item pack/unpack and quantization, `FGSTN_MinionInterpolator`, `UGSTN_MinionDefinition` data and validation, native tags. |
+| `GSTNMinion` / **`GSTNMinionCore`** | Runtime | `GSTNCombatCore`, `GSTNCore` (L2, net primitives, *Proposal*, see rules), `GameplayTags`, `Core`, `CoreUObject` (no Engine world, no NP, no GAS) | Pure and Automation-tested: `FGSTN_MinionStore`, handles, LOD logic and scheduler, `FGSTN_MinionHistory` (the minion payload of the generic `FGSTN_PoseHistory`), `FGSTN_MinionIntent`, attack-token allocator, net item pack/unpack (on the shared quantizer), `FGSTN_MinionInterpolator`, `UGSTN_MinionDefinition` data and validation, native tags. |
 | `GSTNMinion` / **`GSTNMinionRuntime`** | Runtime | `GSTNMinionCore`, `GSTNCombatGAS`, `GSTNCombatNP`, `NetCore`, `NavigationSystem`, `StateTreeModule`, `GameplayStateTreeModule`, `Engine` | Subsystem, component, actor, packs, presentation subsystem and puppets, spawner, waves, brain, lightweight movement backend, debug and bench. |
 | `GSTNMinion` / **`GSTNMinionMover`** | Runtime, optional | `GSTNMinionRuntime`, `Mover` | Backend A only. Loaded only if spike 3 picks it for some type; dropping it leaves the interface and backend B untouched. |
 | `GSTNMinion` / **`GSTNMinionEditor`** | Editor | `GSTNMinionRuntime`, `UnrealEd` | Definition and registry validators, wave actor details, later M5 hooks. |
 
 Rules:
 - **Allowed**: `GSTNMinion*` → `GSTNCombat*` (public headers only), never the reverse. **Must not depend on `GSTNMinion`**:
-  `GSTNCombatCore/GAS/NP/Editor`, `GSTNInput*`, the project module `GASP_Giustino2` (project content and code reach minions only
+  `GSTNCombatCore/GAS/NP/Editor`, `GSTNInput*`, `GSTNPlatform*` (siblings, below), the project module `GASP_Giustino2` (project content and code reach minions only
   through soft references or from a game-feature/sample module that is itself optional).
-- `GSTNMinion.uplugin` lists `GSTNCombat` as an enabled plugin dependency. Disabling `GSTNMinion` in the project (or in a
+- **Shared net primitives** (*Proposal*, research §3.5): the quantizer (19-bit cm positions, 8-bit yaw), frame-stamp
+  reconstruction (8- and 10-bit wrap), `FGSTN_PoseHistory` with its sampler and the tier rate scheduler have a second consumer
+  (`GSTNPlatform`), so they live in **`GSTNCore/Net/`** (L2, pure, no gameplay concept, Automation-tested as `GSTNCore.Net.*`;
+  the "two plugins need the same helper" trigger of [modularity-and-tags.md](modularity-and-tags.md) §3.6 is met). `GSTNMinion`
+  and `GSTNPlatform` both list `GSTNCore` in their `.uplugin`. Alternative if the owner prefers one fewer plugin in the base
+  set: keep them in `GSTNMinionCore` and duplicate about 200 lines in `GSTNPlatformCore` until M10 projectiles need them.
+  Either way the two plugins never depend on each other.
+- **Platforms**: swarm minions are never platforms. A minion *type* becomes one only through the optional **bridge plugin
+  `GSTNPlatformMinion`**, which depends on exactly `GSTNPlatform` + `GSTNMinion` (modularity §3.2, §3.6, §3.7 rule 3: the same
+  pattern as `GSTNPartsMinion`); `GSTNMinion` does not know `GSTNPlatform`. M8 adds only the generic seams of §4d.5 (store flag
+  `bPlatformActor`, `IGSTN_MinionPublishObserver`, a per-slot minimum LOD tier), which are inert without the bridge and land
+  as their own commit.
+- `GSTNMinion.uplugin` lists `GSTNCombat` (and `GSTNCore` if the shared net primitives go there) as enabled plugin dependencies. Disabling `GSTNMinion` in the project (or in a
   cooked build) removes the subsystem, packs, puppets and content; no combat code path changes, because the seams M8 adds to
   `GSTNCombat` are generic and inert without a provider: `IGSTN_HittableProvider` registration (empty list), the fork hook
   `OnPostFixedTick` (unbound), `FGSTN_TimelinePlayer` and `FGSTN_HitVictimView` (used by the fighter path too),
@@ -173,7 +225,7 @@ Rules:
 - `GSTNMinionRuntime`'s `ShouldCreateSubsystem` is false without authority (true on dedicated, listen host and standalone);
   the presentation subsystem is created wherever there is a screen (clients **and the listen-server host**, §4d.1), false on a
   dedicated server. Both are no-ops with no pack/definition loaded.
-- **Isolated tests**: `GSTNMinion.Core.*` (Automation) builds with `GSTNCombatCore` only, so it runs without NP, Mover or a
+- **Isolated tests**: `GSTNMinion.Core.*` (Automation) builds with `GSTNCombatCore` (and `GSTNCore`) only, so it runs without NP, Mover or a
   world; `GSTNMinion.Runtime.*` uses the editor world with a stub `IGSTN_HittableProvider` host and a fake NP-free snapshot, so
   no fork is needed; harness scenarios live in `Tools/GASNPPTest/minion_scenarios.py` (imports `gasnpp_test`) and need the fork
   only for the networked ones. Build check per commit: compile with `GSTNMinion` disabled, then enabled; combat tests run in both.
@@ -223,13 +275,22 @@ stamped for a recycled slot is dropped.
   client cost of section 11, and the host pays batch + puppets + its own game in one frame.
 - **Budget consequence.** Section 11 gains host rows: the minion batch gets at most **~10 % of the 16 ms frame** (target
   N=40: mean ≤ 1.0 ms, p99 ≤ 2.0 ms, tighter than the dedicated row), puppets ≤ 2 ms game thread, the rest is the host's own
-  game. If the spike does not fit, in order: lower `MaxActiveT0` (48 to 32), puppet LOD earlier, lower T0 rate; **record the max
-  N on the host honestly**, as the rule of section 6 already does. N=100 stays a dedicated-only stretch.
-- **Host upload bytes per minion.** The limit is the host's home upload, paid per connected client. Per minion update
-  18 B (19 B with `ExtByte`, section 8.2); 40 typical minions ≈ 5.2 KB/s per client, so a host with 3 clients ≈ **16 KB/s
-  (~130 kbit/s)** and 7 clients ≈ 36 KB/s: inside a 5 Mbit/s home upload, but the per-client figures of 8.3 are the ones to
-  defend because they multiply. *Proposal*: per-client cap stays ≤ 5 KB/s at N=40 and a host-total soft cap
-  `gstn.Minion.HostUploadBudgetKBps` (default 40) lowers the T0 rate to 10 Hz before it is exceeded.
+  game. If the spike does not fit, in order: lower `MaxActiveT0` (48 to 32), then the T0 rate to 10 Hz, then the puppet cap
+  `MaxVisiblePuppets` and puppet LOD (8.4); **record the max N on the host honestly**, as the rule of section 6 already
+  does. N=100 stays a dedicated-only stretch.
+- **Population versus awake: the "150 rule"** (*Proposal*, research §3.3). The host targets **40 awake typical and 80 as a
+  peak**. **150 is a population**, of which at most about **60 are awake** (T0–T2); the rest are T3 dormant or out of
+  relevancy (0 B, wake check only). All 150 awake needs about 6.4 ms of the host frame for enemies alone (batch 2.6,
+  replication ≤ 0.25, puppets 3.5) and about 61 KB/s of upload with 3 clients (143 KB/s with 7): that does not belong on a
+  listen host at 62.5 Hz and needs a dedicated server or the reduced awake set. Tables: 8.3 and §11.
+- **Host upload bytes per minion.** The limit is the host's home upload, paid per connected client. The **planning size is
+  20 B per item update** (the 18 B layout of 8.2 plus framing; about +1 B with `ExtByte`); 40 typical minions (12 T0 / 20 T1
+  / 8 T2) ≈ 5.8 KB/s per client, so a host with 3 clients ≈ **17 KB/s (~140 kbit/s)** and 7 clients ≈ 40 KB/s: inside a
+  5 Mbit/s home upload (625 KB/s), but the per-client figures of 8.3 are the ones to defend because they multiply. A 1 Mbit/s
+  upload (125 KB/s) cannot carry 150 awake enemies with 3 clients (61 KB/s) next to the players' traffic. *Proposal*:
+  per-client cap ≤ 6 KB/s at N=40 (hard ≤ 8) and a host-total soft cap `gstn.Minion.HostUploadBudgetKBps` (default 40) lowers
+  the T0 rate to 10 Hz before it is exceeded; it trips at N=80 with 7 clients, at N=150 with 3 clients and sits on the limit
+  at N=40 with 7 clients (40.3 KB/s). The T1/T2 reductions of 8.3 are what keeps N=150 under it.
 - **Host leaves = session ends** (owner direction); the store has no migration, nothing to design here.
 
 ### 4d.2 Parts through `GSTNPartsMinion` ([combat-parts.md](combat-parts.md) §5.5)
@@ -279,6 +340,45 @@ stamped for a recycled slot is dropped.
   2 seconds" bench case are those of combat-parts §6.4, **measured on the host** (it renders). Skipped debris never changes
   gameplay.
 
+### 4d.5 Enemies as solid platforms: what M8 provides (owner direction §2f, *Proposal*)
+
+The owner wants some enemies to work as solid platforms (players stand on them). The study, the stand-on-a-moving-base
+prediction and the lifecycle are in [many-enemies-replication.md](many-enemies-replication.md) §1.5 and §4; this section is only
+what M8 provides and the rules that bind it. The feature is **not** part of `GSTNMinion`: it lives in the optional plugin
+`GSTNPlatform` and the bridge `GSTNPlatformMinion` ([modularity-and-tags.md](modularity-and-tags.md) §3.6).
+
+- **Who.** Fighters (bosses, elites) are bases through content only: they are net-addressable NP entities, which Mover's sync
+  state needs (it stores the base as an object reference). **Swarm minions are never platforms**: a minion is a store slot with
+  no actor on clients (pack items at 1–15 Hz, T2 skipping frames, pooled puppets), so there is no stable base to reference. A
+  minion *type* can be flagged a **platform minion** through the bridge's `FGSTN_PlatformMinionExtension` on its definition:
+  at most **8 alive** (`gstn.Platform.MaxActors`; the owner decides the number, question 22). Promotion to fighter (§10) is the
+  escape when more are needed.
+- **Proxy actor, no pack item.** For each live platform minion the bridge spawns a small replicated `AGSTN_PlatformProxyActor`
+  (class from `GSTNPlatform`; 30 Hz while occupied or near, 15 Hz otherwise, dormant when no player is within 3000 cm) that
+  carries the collider's pose. The minion's **pack item is suppressed** (store flag `bPlatformActor`, set at spawn from the
+  extension; not a wire field), and the store keeps simulating the minion. Research cost: about 20 B per update for pose,
+  yaw, velocity XY, active state and frame stamp, i.e. 600 B/s per platform and relevant client at 30 Hz and 4.8 KB/s per client for 8
+  platforms; these are counted against `HostUploadBudgetKBps` and are **not** in the tables of 8.3. **Gap in the research**:
+  the puppet of such a minion still needs `ActionState`, `MoveId`, `MoveStartFrame`, `HitCounter`, `Health`, which the proxy state
+  does not list. *Proposal*: the proxy carries the same item codec for those fields (about +5 B per update, ~25 B, 750 B/s per
+  platform and client, 6 KB/s per client for 8 [E, derived here]); P3 and R1 settle it.
+- **Seams in M8** (generic, inert without the bridge, one commit): (1) store flag `bPlatformActor` that makes stage 2.5 skip
+  the pack item; (2) `IGSTN_MinionPublishObserver`, called in stage 2.5 from the post-fixed-tick hook with the end-of-F pose
+  and velocity of flagged slots: the bridge moves the platform collider proxy there, **one defined point per step**, so the
+  pose does not depend on the order of Mover instances; (3) a per-slot minimum LOD tier (store column, 0 = none) that the
+  bridge sets while a player is based on the minion or within mount range; (4) the `FGSTN_PoseHistory` samples of these slots,
+  which platform lag compensation reads (9.2).
+- **Rules** (research §4.6). A platform minion is never T2/T3 while a player is based or within mount range and is exempt from
+  the `MaxActiveT0` demotion (§7). Death, shatter, launch, part break, grab, promotion and pool release **deactivate the
+  platform first** (`DropGraceFrames`, about 20 frames, a visible telegraph) and the slot is never released while it has an
+  occupant (§10 despawn waits); stagger in place and light push back keep it a platform.
+- **Hits.** Platform minions are rewound with the same `FGSTN_LagCompTime` as every other entity (9.2); players standing on them
+  are rewound to the same frame.
+- **Validation.** A flagged type needs a flat-topped box or convex collider authored in the enemy's frame, never a bone, the
+  animated mesh or the capsule (research §4.3); `IsDataValid` of the bridge extension rejects the rest.
+- **Acceptance** is that of the research §4.9 (P1–P4 recorded, `scenario_platform_*` clean, canary build without the platform
+  plugins); it does not gate M8.
+
 ## 5. Batch tick (server) and order
 
 Per fixed-tick frame F on the server:
@@ -309,7 +409,11 @@ Per fixed-tick frame F on the server:
    4. **Movement** through the backend (section 6): desired velocity from intent and the timeline's movement track,
       knockback integration (`Launched` integrates gravity; `PushedBack` slides on the ground with the snap on, decays per frame and stops at
       walls and ledges, never leaving the grounded state), gravity, collision, ground snap, minion–minion separation.
-   5. **Publish**: grid cell update (T0/T1), history ring write for frame F, replication dirtying (section 8), debug draw.
+   5. **Publish**: grid cell update (T0/T1), history ring write for frame F (pose, swept bound, payload), replication
+      dirtying (section 8: an item is dirtied at its own tier's rate, through `MutatePack()` which wakes or flushes a dormant
+      pack first), debug draw. For slots flagged `bPlatformActor` (§4d.5) the end-of-F pose and velocity also go to the
+      registered `IGSTN_MinionPublishObserver`s: the bridge writes the platform collider proxy there, at this one defined point
+      per step, and the slot gets no pack item.
 3. **Next frame**: S(F+1) reads the store as written in 2. Fighters therefore see minions exactly one frame older than
    their own tick, consistently for every fighter, regardless of NP id order.
 
@@ -361,6 +465,13 @@ Per-type override stays: flying or large types may use A (few instances).
 - **Scheduling**: slot `Phase = Index % Interval`; a minion runs in frame F when `(F + Phase) % Interval == 0`, so cost is
   spread evenly. T0 minions run every frame; `MaxActiveT0` (default 48) caps them — the farthest T0 minions are demoted to
   T1 without being attackers first (attackers are never demoted: attack tokens already cap them, section 9b).
+- **Replication rate is per item, not per pack** (*Proposal*, research Rec3): an item becomes dirty at most at **its own
+  tier's rate** (T0 15 Hz, T1 5 Hz, T2 1 Hz; T0 10 Hz while the host guard `HostUploadBudgetKBps` is tripped), so a mixed pack
+  costs only its changed items; the pack's `NetUpdateFrequency` is only a ceiling (8.1). Lower T1/T2 rates (T1 2–3 Hz, T2
+  0.5–1 Hz, T3 0) with dead reckoning or an order replace the table's 5 Hz and 1 Hz only if spike R4 passes (8.3); T0 stays
+  snapshot-interpolated.
+- **Platform minions** (§4d.5) are never T2/T3 while a player is based on one or within mount range (the bridge sets the
+  per-slot minimum tier) and are exempt from the `MaxActiveT0` demotion.
 - Wake: any hit, any fighter entering the T1 radius, an explicit `Wake()`.
 - Debug: `gstn.Minion.Debug.LOD 1` colours capsules per tier; `stat GSTNMinion` shows counts per tier.
 
@@ -368,12 +479,34 @@ Per-type override stays: flying or large types may use A (few instances).
 
 ### 8.1 Packs and relevancy
 
-Minions are not actors on clients. `AGSTN_MinionPack` (replicated, `NetPriority` low, `bAlwaysRelevant = false`) holds a
-`FGSTN_MinionNetArray` of up to **16** items; the subsystem assigns a minion to a pack by spawn group (a wave spawns
-into whole packs), re-packing only at spawn. Per pack: `IsNetRelevantFor` = any viewer within `8000 cm` of any member
-(plus always relevant while a member is T0 near that viewer); `NetUpdateFrequency` follows the pack's **best tier**
-(T0 15 Hz, T1 5 Hz, T2 1 Hz, T3 dormant via `SetNetDormancy`, flushed on wake); `NetCullDistanceSquared` is not used.
-Spike 4 compares this with an Iris object filter; keep the simpler one that meets the byte budget.
+Minions are not actors on clients. `AGSTN_MinionPack` (replicated, **push model**, `NetPriority` low, `bAlwaysRelevant =
+false`) holds a `FGSTN_MinionNetArray` of up to **16** items; the subsystem assigns a minion to a pack by spawn group (a wave
+spawns into whole packs), re-packing only at spawn. Per pack: `IsNetRelevantFor` = any viewer within `8000 cm` of any
+member (plus always relevant while a member is T0 near that viewer), **granted by budget** (below); `NetUpdateFrequency` is
+only a **ceiling**, the pack's best tier rate (T0 15 Hz, T1 5 Hz, T2 1 Hz), because each item is dirtied at its own
+tier's rate (§7); a T3 pack is dormant via `SetNetDormancy`; `NetCullDistanceSquared` is not used. Rules from the research
+(Rec2, Rec3, Rec5), all *Proposal*:
+
+- **Push model.** Enable `net.IsPushModelEnabled` and mark the array property dirty together with `MarkItemDirty`; properties
+  not marked stay polled, so enabling it is safe. A missed dirty mark means clients never see the change (R2 and the
+  dormancy scenario cover it).
+- **Dormancy order: wake or flush first, then mutate.** `SetNetDormancy(DORM_Awake)` or `FlushNetDormancy` **before** the array
+  is modified and `MarkItemDirty` called, never after: Epic warns that modifying a dormant fast array and flushing afterwards
+  may result in no replication. The subsystem has a single `MutatePack()` entry that enforces the order (R2,
+  `scenario_minion_dormancy_flush`); this replaces the former "flushed on wake".
+- **Over-inclusion metric.** Relevancy is per pack, so a pack sends items that are beyond 8000 cm of a client when one member is
+  near. Measure items sent beyond 8000 cm divided by items sent. If above 30 %, fall back to re-packing by (grid cell, tier)
+  with 10 % hysteresis: one remove + one add per border crossing (about 100 B/s per client at 40 walkers [E]), which needs a
+  **stable global id** (+1 B on add only, 8.2). Default stays "re-pack only at spawn".
+- **Budgeted relevancy.** Per connection the subsystem ranks the packs every ~100 ms by a priority number (nearest living
+  fighter, attack-token holders, in view, recently hit) and grants packs until `MaxRelevantPerClient` (default 64 items; the
+  research gives "64" without a unit, items is the only reading that can bind with a 16-item pack and 128 slots) or
+  `gstn.Minion.HostUploadBudgetKBps` is reached; a denied pack returns `IsNetRelevantFor == false`. No pack toggles faster
+  than 1 s (hysteresis; R5).
+- **Not used in v1.** Iris (declared production-ready in 5.8, but unverified with this fork's NP and Mover, a project-wide
+  switch that also touches the fighters, and small gain at 3–7 connections: only as the isolated experiment R3), the
+  Replication Graph (built for about 100 connections) and Mass replication (experimental, no further updates). R1 compares the
+  packs with a lean actor per enemy and with a custom snapshot RPC.
 
 ### 8.2 Item layout (`FGSTN_MinionNetItem : FFastArraySerializerItem`, custom `NetSerialize`)
 
@@ -381,6 +514,7 @@ Spike 4 compares this with an Iris object filter; keep the simpler one that meet
 |---|---|---|
 | `Id` | 8 (index inside the pack) | Pack-local; the global handle is `PackId << 4 | Id` (pack id replicated once) |
 | `TypeIndex` | 8 | Index into `UGSTN_MinionRegistry` (project-wide list of definitions, same order on both sides); sent on add only, then 0 bits via `bHasType` |
+| `GlobalId` (*Proposal*, research) | 0 or 8 | Stable global id, sent on add only (`bHasId`, 0 bits otherwise) and only while the (cell, tier) re-pack fallback of 8.1 is active, so the client keeps the same puppet across a remove + add. Not counted in the total below |
 | Position X, Y, Z | 3 × 19 | cm, relative to the registry's `WorldOrigin` (±2.6 km at 1 cm) |
 | Yaw | 8 | 1.4° steps |
 | `ActionState` | 4 | `Idle, Walk, Move, Hitstop, Hitstun, Launched, Knockdown, GetUp, Dying, Dead, Spawning, PushedBack` (12 of 16 values). **It also carries the reaction tier** (owner §2b): `Hitstun` = stagger in place, `PushedBack` = push back, `Launched` = launch; a hit below the stagger threshold changes nothing here (only `HitCounter`), so the tier costs no extra bits |
@@ -392,26 +526,51 @@ Spike 4 compares this with an Iris object filter; keep the simpler one that meet
 | `ExtByte` (*Proposal*, owner direction 2026-10-22) | 0 or 8 | Optional extension byte guarded by a type-level `bHasExt` (0 bits for types without an extension), owned by a bridge plugin: `GSTNPartsMinion` sends `BrokenMask` (combat-parts §5.5). Dirty only when it changes. Not counted in the total below |
 | `Speed` | 6 | 0..`RunSpeed`, animation blend and extrapolation |
 | `Flags` | 3 | `Teleport` (no interpolation across), `Promoting`, `Elite` |
-| **Total** | **~121 bits ≈ 15.2 B** | + FastArray header (ReplicationID, change mask) ≈ **3 B** → **~18 B per item update** (**~19 B** for part-bearing types) |
+| **Total** | **~121 bits ≈ 15.2 B** | + FastArray header (ReplicationID, change mask) ≈ **3 B** → **~18 B per item update** at the layout minimum. **Planning size: 20 B per item update** (**~21 B** for part-bearing types) for every byte budget, because the research found 18 B optimistic before bunch and framing overhead [E]; R1 replaces it with the measured value |
 
 Dirty rules: an item is marked dirty when position moved > 3 cm or yaw > 4° or any other field changed, at most once per
-pack update; an idle minion costs 0 bytes. Removal = FastArray remove (death after the death timeline plus a grace time).
+**its tier's period** (§7; the pack frequency is only a ceiling); an idle minion costs 0 bytes. Removal = FastArray remove
+(death after the death timeline plus a grace time). One-shot cosmetics (the death shatter) are not state: they carry a
+seed and play locally.
+
+**Platform minions** (`bPlatformActor`, §4d.5) get **no pack item**: the platform proxy actor replicates them. The flag is
+store/definition data, not a wire field.
 
 ### 8.3 Byte budget (per client, per second; on a listen host multiply by the connected clients, §4d.1)
 
-Wire cost per update 18 B (`bytesPerItem`); rates from section 7.
+*Revised 2026-10-22 from [many-enemies-replication.md](many-enemies-replication.md) §3.3 (*Proposal*, all [E] until R1).*
+Planning size **20 B per item update** (`bytesPerItem`, 8.2); rates from section 7 (T0 15, T1 5, T2 1 Hz) and the per-item
+rule of §7; bytes/s = rate × 20 B per item. 1 KB = 1000 B. Worst case: every awake enemy is relevant to every client
+(co-op players stay together). Excludes the players' own NP traffic (measure in spike 1) and about 1 KB/s of protocol baseline
+per client.
 
-| Situation | Calc | Bytes/s |
-|---|---|---|
-| 12 T0 minions moving/fighting | 12 × 15 Hz × 18 | 3240 |
-| 20 T1 | 20 × 5 × 18 | 1800 |
-| 8 T2 | 8 × 1 × 18 | 144 |
-| **40 minions typical** | | **≈ 5.2 KB/s** (target: ≤ 5 KB/s, hard ≤ 8) |
-| 100 minions, 24 T0 | 24×15×18 + 36×5×18 + 40×1×18 | ≈ 10.4 KB/s (cap: ≤ 12) |
+| Enemies awake | T0 / T1 / T2 | KB/s per client | Host upload, 3 clients: KB/s (kbit/s) | 7 clients: KB/s | With T0 10 Hz + the T1/T2 order option*: per client / host with 3 clients |
+|---|---|---|---|---|---|
+| **40 typical** | 12 / 20 / 8 | 5.8 (target ≤ 6, hard ≤ 8) | 17.3 (138) | 40.3 | 3.0 / 9.0 |
+| 60 (derived here) | 18 / 26 / 16 | 8.3 | 25.0 (200) | 58.2 | 4.4 / 13.3 |
+| **80 peak** | 24 / 32 / 24 | 10.9 | 32.6 (261) | 76.2 | 5.9 / 17.6 |
+| 100 stretch, dedicated (derived here, M8 split) | 24 / 36 / 40 | 11.6 (cap ≤ 12) | 34.8 (278) | 81.2 | 6.1 / 18.3 |
+| 150 (T0 capped at 48 by `MaxActiveT0`) | 48 / 50 / 52 | 20.4 | 61.3 (490) | 143 | 11.4 / 34.1 |
 
-Out-of-relevancy and dormant minions cost 0. If the measured number exceeds the cap, in order: lower T0 rate to 10 Hz
-(interpolation hides it), drop `Speed`/`Health` precision, delta-code position against the previous item of the same
-connection (needs Iris or a custom `NetDeltaSerialize`; not planned).
+\* Order option column: T0 at 10 Hz and 20 B, T1 at 2 Hz and T2 at 0.5 Hz with a 14 B item (the order or dead-reckoned form, below).
+The 60 and 100 rows are not in the research: same formula, the 60 split interpolated between 40 and 80, the 100 split is the
+one this file already used.
+
+Reading: 40 awake fits any home upload of 5 Mbit/s or more; 80 is a peak; **150 awake is not a listen-host target** (61 KB/s
+with 3 clients is half of a 1 Mbit/s uplink before the players' traffic): design 150 as a population with at most about 60
+awake (§4d.1). `HostUploadBudgetKBps` (default 40) trips at N=80 with 7 clients and at N=150 with 3 clients; the order option
+is what keeps N=150 under it. Out-of-relevancy and dormant minions cost 0.
+
+If the measured number exceeds the cap, in order (research Rec4, Rec11):
+1. lower the T0 rate to 10 Hz (interpolation hides it);
+2. **T1/T2 reductions**: T1 at 2–3 Hz and T2 at 0.5–1 Hz with dead reckoning on the client (8.4), or the **order option** for
+   walkers: the item carries an order (a few waypoints, speed, start frame) that clients walk, as RTS games send orders
+   (not lockstep: it is only a smoother way to send a trajectory, and hits never use it); about 14 B per update [E]; spike
+   R4, falling back to the per-item rate alone if it does not hold;
+3. drop `Speed`/`Health` precision. Per-tier position precision classes would save only 0.75–1.5 B of 20 B: not worth the code;
+4. delta-code position against an acknowledged baseline (Gaffer style: needs Iris NetSerializers or a custom
+   `NetDeltaSerialize`; a rough ceiling of 9–11 B per item [E]) or the custom snapshot RPC of R1 variant C. Not planned: only
+   if R1 shows the packs missing the budget by more than 25 %.
 
 ### 8.4 Client: puppets, interpolation, presentation
 
@@ -419,9 +578,23 @@ connection (needs Iris or a custom `NetDeltaSerialize`; not planned).
   `AGSTN_MinionPuppet` (skeletal mesh + anim instance of the definition, no capsule, no movement component, tick
   disabled except the animation) on add (first sample `Teleport`, so late joiners see minions at current positions in
   their current move: the move start frame is reconstructed, the montage starts at the matching offset); release on
-  remove. Puppet LOD: far puppets use the lowest mesh LOD, animation budget allocator, optionally Animation Sharing;
-  hidden when culled.
-- **`FGSTN_MinionInterpolator`**: per puppet a ring of 8 samples keyed by reconstructed server frame
+  remove. Puppet LOD and cost: the puppet cap and animation stack below.
+- **Puppet cap and animation cost stack** (*Proposal*, research Rec6, spike 7 = R6). `MaxVisiblePuppets` (default **60**) ranks
+  the puppets by significance (distance, in view, recently hit, attacker; the Significance Manager is only the ranking, it
+  improves nothing by itself); puppets over the cap are instanced meshes or hidden, and a hidden or instanced enemy keeps its
+  replicated state and its gameplay. Animation: update-rate optimization (`bEnableUpdateRateOptimizations`),
+  `VisibilityBasedAnimTickOption = OnlyTickPoseWhenRendered`, the **Animation Budget Allocator** (1.0 ms on clients, 1.5–2.0 ms
+  on the host; significance set from C++), **Animation Sharing** for idle crowds (capped blends, variation mostly by time
+  offset), far crowds as vertex-animated instanced meshes (plain ISM, no Mass). **No dynamic material instance per puppet**:
+  flash and damage use custom primitive data. Pooled puppets as in §10.
+- **Per-tier smoothing** (*Proposal*, research Rec7). The NP buffer is 100 ms (`FixedTickInterpolationBufferedMS`), which holds
+  1.5 intervals at 15 Hz (one lost update is bridged by the ≤ 150 ms extrapolation below) but **cannot interpolate at 5 Hz
+  (200 ms) or 1 Hz**. So **T0 uses the shared render time** of the next bullet (it is the tier that is hit-tested, so it keeps
+  the single lag-compensation number of 9.2), while **T1/T2 puppets use dead reckoning** (last position plus velocity implied by
+  `Speed` and yaw, ground-snapped) and **blend corrections over 200 ms**, or a larger per-tier delay; `Teleport` still snaps.
+  Caveat: §7/9.1 keep T1 minions in the grid, so a first hit on a T1 minion meets a dead-reckoned display; a hit forces T0 at
+  once (§7); see §15.
+- **`FGSTN_MinionInterpolator`** (T0): per puppet a ring of 8 samples keyed by reconstructed server frame
   (`FrameStamp` + the client's estimate of the server frame at receipt). Render time = the NP interpolation time of the
   client (the same clock `FixedTickInterpolationBufferedMS` defines for interpolated proxies; spike 2 finds the accessor
   or adds a one-line getter to the fork). *Proposal*: **minions are displayed on the same render timeline as interpolated
@@ -463,12 +636,18 @@ store is server-only and never rolls back.
 2. Server, remote attacker with `bUseLagCompensation`: **minions are not NP actors, so `RewindActors` does not move
    them.** The attacker builds its query as follows: rewound fighters through `RewindActors` as in M4 §9, minions through
    `FGSTN_MinionHistory`: candidate minions come from the *current* grid inflated by `MaxMinionSpeed × RewindMs`
-   (cm, default 700 × 0.25 = 175) around the attacker's hitbox bounds; for each candidate `Sample(Handle, RewindFrame)`
-   gives the transform and hurt state at that frame; the overlap test uses it. No per-attacker grid rebuild. AI
-   attackers never rewind.
+   (cm, default 700 × 0.25 = 175) around the attacker's hitbox bounds; each candidate is first rejected by the **swept
+   bound** stored with its history frames (a bound test against the rewind frame, no interpolation), and only the survivors
+   run `Sample(Handle, RewindFrame)`, which gives the transform and hurt state at that frame; the overlap test uses it. No
+   per-attacker grid rebuild. AI attackers never rewind. The host never rewinds. All minion hit work stays in the single
+   pass per frame over `PendingHits` (stage 2.2, sorted by (victim, attacker, hitbox)), so its cost scales with the hits,
+   not with N (a 12-minion cleave at N=150: tens of microseconds [E], not a budget driver).
 3. **`FGSTN_LagCompTime`**: one conversion (server frame ↔ the rewind time `RewindActors` receives) so both overlays use
    the same instant: the frame the attacker's client displayed = its last input's interpolation time (M4 §9), which is
-   also the minion render time of section 8.4 (the *Proposal* that makes this a single number). `MaxRewindMs` clamps both.
+   also the T0 minion render time of section 8.4 (the *Proposal* that makes this a single number). `MaxRewindMs` clamps both.
+   **Platform enemies and the players standing on them share this rewind frame** (§4d.5): fighters through `RewindActors`,
+   platform minions through their `FGSTN_PoseHistory`, and a standing player's rewound world position is the composed world
+   transform kept in the history, never recomputed from the current base (research §4.7).
 4. A new hit goes to `PendingHits` (stamped F, generation-checked); drained at F+1 (stage 2.2): damage, reaction (hitstun with its tier of M4 §3 when the stagger force reaches the threshold, nothing otherwise),
    `HitCounter++`. Dedupe: `HitTargets` on the attacker, `HitByRing` on the victim (a hit that the victim already has for
    `(AttackerId, TimelineStartFrame, HitGroup)` is dropped, protecting against re-delivery after attacker re-simulation
@@ -519,7 +698,8 @@ M4 §12.7); this is the number to budget:
   returns a handle (invalid when the store is full or the per-frame spawn budget is spent: spawns go through a queue with
   `gstn.Minion.SpawnsPerFrame` = 4 to avoid hitches). The store slot, a pooled `AGSTN_MinionActor` and a free pack item
   (or a new pack) are claimed; the minion starts in `Spawning` (spawn timeline, intangible by its `HurtboxModifier`).
-- Despawn/death: slot freed after the death timeline + `CorpseSeconds`; actor returned to the pool (components reset,
+- Despawn/death: slot freed after the death timeline + `CorpseSeconds` (a platform minion deactivates its platform first and is
+  never released while a player stands on it, §4d.5); actor returned to the pool (components reset,
   StateTree stopped); handle generation bumped; pack item removed; clients release the puppet. Pools: server actors (cap
   `gstn.Minion.Max`), client puppets per type (`PuppetPoolPerType`, default 16, grows).
 - `UGSTN_MinionWaveDefinition` (`UDataAsset`): `Entries { Definition, Count, SpawnPoints tag/query, DelayFrames }`, a
@@ -534,20 +714,33 @@ M4 §12.7); this is the number to budget:
   promotion timeline masks the swap). No demotion. Cap `MaxFightersFromMinions` (default 4) because each is a full NP
   entity (spike 1 numbers). Kill credit, team, StateTree asset and the last-attacker ring carry over.
 
-## 11. Targets and budgets (authority host, 62.5 Hz = 16 ms frame; listen-server host rows added, §4d.1; to confirm in spike 1/3/4/7)
+## 11. Targets and budgets (authority host, 62.5 Hz = 16 ms frame; listen-server host rows added, §4d.1; N=80 and N=150 columns added 2026-10-22 from the research; to confirm in spike 1/3/4/7 and R1–R6)
 
-| Metric | Target N=40 | Target N=60 | Stretch N=100 |
-|---|---|---|---|
-| Server `GSTN_MinionBatch` mean / p99 (dedicated) | ≤ 1.2 / 2.4 ms | ≤ 2.0 / 3.5 ms | ≤ 3.5 / 6 ms |
-| **Host** `GSTN_MinionBatch` mean / p99 (listen server, also renders; ≤ ~10 % of the frame) | ≤ 1.0 / 2.0 ms | ≤ 1.6 / 3.0 ms | not targeted |
-| **Host** game thread incl. its own player and host puppets (4 players + minions, Brawl) | ≤ 11 / 14 ms | ≤ 13 / 16 ms | not targeted |
-| **Host upload** (per-client figure × clients, 3 clients) | ≤ 16 KB/s | ≤ 21 KB/s | not targeted |
-| Whole server game thread (4 players + minions, Brawl) | ≤ 8 / 12 ms | ≤ 10 / 14 ms | ≤ 13 / 16 ms |
-| Per minion-frame at T0 (all stages) | ≤ 0.03 ms | ≤ 0.03 ms | ≤ 0.035 ms |
-| Network per client | ≤ 5 KB/s | ≤ 7 KB/s | ≤ 12 KB/s |
-| Server memory per minion | ≤ 400 B store (+ actor); +9 B with parts | | |
-| Client game thread for puppets | ≤ 2 ms | ≤ 3 ms | ≤ 5 ms (LOD) |
-| Corrections on a player from minion hits | ≤ 1 per hit frame; ≤ 6 per second under 4 tokens | | |
+Columns are the **awake** enemies, except the last: **N=150 is a population of which at most about 60 are awake**, so its targets
+are those of the awake part (the N=60 column) and the rest costs only the dormant wake check (§4d.1). All values are *Proposal*
+and [E] until R1/R6; cells marked "interpolated" are not in the research.
+
+| Metric | Target N=40 | Target N=60 | Peak N=80 | Stretch N=100 | N=150 population (≤ ~60 awake) |
+|---|---|---|---|---|---|
+| Server `GSTN_MinionBatch` mean / p99 (dedicated) | ≤ 1.2 / 2.4 ms | ≤ 2.0 / 3.5 ms | ≈ 2.8 / 4.8 ms (interpolated) | ≤ 3.5 / 6 ms | as N=60 |
+| **Host** `GSTN_MinionBatch` mean / p99 (listen server, also renders; ≤ ~10 % of the frame) | ≤ 1.0 / 2.0 ms | ≤ 1.6 / 3.0 ms | ≤ 2.0 / 4.0 ms | not targeted | as N=60 |
+| **Host** replication of packs, mean (3 / 5 / 10 packs, ~20–30 µs per pack-connection update [E]) | ≤ 0.05 ms | not estimated | ≤ 0.1 ms | not targeted | ≤ 0.25 ms (10 packs, upper bound) |
+| **Host** puppets, game thread (≤ `MaxVisiblePuppets` = 60 visible, ABA on) | ≤ 2.0 ms | ≤ 3.0 ms | ≤ 3.0 ms | not targeted | ≤ 3.0 ms |
+| **Host** game thread incl. its own player and host puppets (4 players + minions, Brawl) | ≤ 11 / 14 ms | ≤ 13 / 16 ms | only if the host's own game stays under ~10 ms (a spike answer) | not targeted | as N=60 |
+| **Host upload** (per-client figure × clients, 3 clients; 8.3) | ≤ 18 KB/s | ≤ 25 KB/s | ≤ 33 KB/s | not targeted | as N=60 |
+| Whole server game thread (4 players + minions, Brawl) | ≤ 8 / 12 ms | ≤ 10 / 14 ms | ≈ 11.5 / 15 ms (interpolated) | ≤ 13 / 16 ms | as N=60 |
+| Per minion-frame at T0 (all stages) | ≤ 0.03 ms | ≤ 0.03 ms | ≤ 0.03 ms | ≤ 0.035 ms | ≤ 0.03 ms |
+| Network per client (8.3; T0 at 10 Hz plus the order option of 8.3 roughly halves it) | ≤ 6 KB/s (hard ≤ 8) | ≈ 8.3 KB/s (derived) | ≤ 11 KB/s | ≤ 12 KB/s | as N=60 |
+| Server memory per minion | ≤ 400 B store (+ actor); +9 B with parts; history ~16 B × 24 | | | | |
+| Client game thread for puppets (cap 60) | ≤ 2 ms | ≤ 3 ms | ≤ 3 ms | ≤ 5 ms (LOD) | ≤ 3 ms |
+| Corrections on a player from minion hits | ≤ 1 per hit frame; ≤ 6 per second under 4 tokens | | | | |
+| Platform minions (§4d.5, only if built) | ≤ 8 proxies: ≤ 0.2 ms per frame on the host (P4); ≤ 6 KB/s per client worst case | | | | |
+
+**All 150 awake (information, not a target; research §3.3).** Host enemy cost ≈ 6.4 ms of the 16 ms frame (batch 2.6, replication
+≤ 0.25, host puppets 3.5), leaving ≈ 9.6 ms for the host's own game and render submit; 20.4 KB/s per client, 61 KB/s of host
+upload with 3 clients and 143 KB/s with 7 (8.3); client puppets ≈ 4 ms. One replicated actor per enemy would cost about 1.3 ms of
+host replication CPU for the same 150 (≈ 6 µs per actor-connection update × 3 clients × 30 Hz, research §2) against ≤ 0.25 ms for packs. Memory: store
+400 B × N = 16 / 32 / 60 KB and history 15 / 31 / 58 KB at N = 40 / 80 / 150.
 
 ## 12. Test content, tools and harness
 
@@ -566,7 +759,11 @@ M4 §12.7); this is the number to budget:
   clamp and `MaxRewindMs`; net item serialization round trip with quantization bounds (position ≤ 0.5 cm, yaw ≤ 0.8°),
   frame-stamp wrap reconstruction near 8-bit and 10-bit boundaries; interpolator (render time between samples,
   extrapolation cap, teleport, out-of-order); attack token allocator (cap, release on death/hit); lightweight movement on a
-  test world (flat, step, slope, wall slide, no tunnelling at 3000 cm/s, ground snap); definition `IsDataValid` cases.
+  test world (flat, step, slope, wall slide, no tunnelling at 3000 cm/s, ground snap); definition `IsDataValid` cases;
+  *(2026-10-22)* `FGSTN_PoseHistory` swept bounds (a candidate rejected by its bound is never one the sampled overlap would
+  hit) and the payload round trip; the per-item tier rate scheduler (an item is dirtied at most once per its tier's period and
+  the pack ceiling is never exceeded); `MutatePack()` order (a dormant pack is woken before the array is touched);
+  `GSTNCore.Net.*` for the shared primitives (quantizer bounds, frame-stamp wrap, tier scheduler) if they live there.
 - **Harness (`gasnpp_test.py`, 60/15 ms, with and without 2 % loss; helpers `minion_spawn`, `minion_snapshot` via
   `UGSTN_MinionDebugLibrary::GetStoreSnapshotJson` on the server, puppet positions via the test component)**:
   `scenario_minion_replicate` (server spawns 40 over 3 packs; after settling, each client's interpolated puppet position is
@@ -582,6 +779,12 @@ M4 §12.7); this is the number to budget:
   `scenario_minion_promote` (grunt → fighter, client cross-fade, no pop > 15 cm), `scenario_minion_horde` (60 minions, both
   clients fighting 60 s: no unexplained reconciles beyond one per hit, server metrics inside section 11). Clean = snapshots
   equal and `report_reconciles(mark).unexplained == 0` (testing.md), the expected corrections counted.
+  *Added 2026-10-22* (research §3.4): `scenario_minion_bytes` (bytes/s per tier and per client at N = 40 / 80 and the host upload
+  with 3 headless clients, read from `stat net` and `NetProfile`, compared with the table of 8.3 within ±25 %),
+  `scenario_minion_dormancy_flush` (waves wake and mutate a dormant pack for 10 minutes: 0 lost items, wake latency ≤ 2 pack
+  periods, a late joiner sees all 40; the mutate-then-flush order is the negative control) and, when the platform plugins are
+  built, `scenario_platform_*` (`scenario_platform_stand`, `scenario_platform_mount`, a lifecycle case for hit, launch, death
+  and release under a standing player), which live in `Tools/GASNPPTest/` and are owned by `GSTNPlatform`.
 
 ## 13. Acceptance criteria
 
@@ -597,11 +800,21 @@ M4 §12.7); this is the number to budget:
 7. M1–M4 tests and scenarios still clean (the `FGSTN_TimelinePlayer` and `FGSTN_HitVictimView` refactors must not change a
    result); Core and GAS modules have no NP/Minion dependency.
 8. combat.md updated (§3 modules, §13, §15, §17, §18) and this file where implementation differs.
+9. *(2026-10-22)* Spikes R1–R6 recorded in combat.md §17; the byte and host-CPU tables of 8.3 and §11 re-based on the measured
+   values; the 150-population rule (at most about 60 awake) holds in `scenario_minion_horde` on the host at the recorded max N;
+   `scenario_minion_bytes` and `scenario_minion_dormancy_flush` clean; Iris, the Replication Graph and Mass replication
+   stay unused unless R3 or R1 changed that decision (recorded with the numbers).
+10. *(2026-10-22)* The platform seams of §4d.5 are in place and inert without the bridge (a build with `GSTNPlatform*` absent
+    passes every M8 test and scenario). If the platform plugins are built: P1–P4 recorded, a designer flags a fighter or a
+    minion type as a platform without C++, and the canary build of research §4.9 passes.
 
 ## 14. How to extend
 
 - **Parts on a minion type** (owner direction 2026-10-22): enable `GSTNPartsMinion`, add a `UGSTN_PartSetDefinition` (≤ 8 parts) to
   the definition's extension; no M8 change (§4d.2).
+- **Platform minion type** (owner direction §2f): enable `GSTNPlatformMinion`, add `FGSTN_PlatformMinionExtension` (collider
+  shapes, active action states, `MaxSpeedWhileOccupied`, `DropGraceFrames`) to the definition; at most 8 alive; no M8 change
+  (§4d.5). Fighters become platforms by content only (`GSTNPlatform`).
 - **New minion type**: create `UGSTN_MinionDefinition` (stats, hurtbox set, moves pointing at existing or new
   `UGSTN_CombatTimeline` assets, reaction timelines, puppet mesh/anim, StateTree); add it to `UGSTN_MinionRegistry` (append
   only: the index is the wire id; `IsDataValid` blocks reordering by storing a stable id table); spawn it from a wave. No C++
@@ -639,10 +852,36 @@ M4 §12.7); this is the number to budget:
 - **Lag compensation drift**: the interpolation buffer, pack rate and rewind clamp must agree; if the minion render time
   diverges from the player's (e.g. a lower buffer for minions), the single-number property is lost. Any change to the
   buffer must re-run `scenario_minion_lagcomp`.
-- **Puppet cost on clients** may dominate before the server does; the puppet LOD and animation sharing are planned, not free.
+- **Puppet cost on clients** may dominate before the server does; `MaxVisiblePuppets`, puppet LOD and animation sharing are
+  planned, not free (R6); the host pays it in the same frame as the batch.
 - **Sync-state and pipeline refactors** (`HitTargets` 16 entries, `FGSTN_HitVictimView`, `FGSTN_TimelinePlayer`) touch M3/M4
   code; land them as separate commits with the M3/M4 scenarios as the regression gate.
 - **Wire id stability**: the registry index and `MoveId` are protocol; changing definitions between server and client builds
   desyncs presentation (add a registry hash check at connect).
 - **Dormant packs and late join**: a missed wake can leave a client without a minion; the scenario covers it, and the pack
   flushes dormancy on any relevance change.
+- **FastArray plus dormancy order** (*2026-10-22*): modifying a dormant pack and flushing afterwards may replicate nothing, and
+  with the push model a missed dirty mark means clients never see the change. The rule is "wake or flush first, then mutate"
+  through the single `MutatePack()` entry; R2 and `scenario_minion_dormancy_flush` are the gate.
+- **NP under Iris is unverified** (*2026-10-22*): Epic states Iris support for Network Prediction and Mover is in the development
+  branch and Mover is still experimental; whether it is in a 5.8.x tag is unknown. The fork has Iris NetSerializers but the
+  project has no `UseIrisReplication`. Enabling Iris is a project-wide switch (it also changes the fighters), so it stays an
+  isolated experiment (R3) and is dropped if it breaks any NP or Mover scenario or gains less than 25 %.
+- **T1 rate below the interpolation buffer** (*2026-10-22*): 5 Hz (200 ms) and 1 Hz exceed NP's 100 ms buffer, so T1/T2 puppets
+  use dead reckoning and 200 ms correction blends (8.4). The research assumed only T0 minions are hit-tested, but §7 and 9.1
+  keep T1 minions in the grid: a first hit on a T1 minion (a minion demoted by `MaxActiveT0`, or a long-range attack) compares
+  the server's history pose with a dead-reckoned display, bounded by R4's error (≤ 40 cm at the 95th percentile); the hit forces T0
+  at once. Resolve in R4: a larger per-tier delay for T1, or T1 leaves the grid; then re-run `scenario_minion_lagcomp` for T1.
+- **Relevancy is per pack** (*2026-10-22*): items beyond 8000 cm travel with their pack; the over-inclusion metric of 8.1 and
+  the (cell, tier) re-pack fallback are the mitigation.
+- **150 awake on a listen host** (*2026-10-22*): about 6.4 ms of host frame and 61 KB/s of upload with 3 clients for enemies
+  alone; the population rule (≤ ~60 awake), the guard `HostUploadBudgetKBps` and the fallbacks of §4d.1 are the mitigation, and
+  the real max N is recorded.
+- **Platform risks** (*2026-10-22*, research §4.8, only if the feature is built): the base is frozen during resimulation
+  (inferred from Mover's rollback re-sampling the base's current transform; P1); mount, dismount and edge errors grow with
+  speed × (RTT + 100 ms) (AI limiter, brace animation, grace frames, then the lag-compensated base pose, P2); a base lost or
+  gained one RTT late (`DropGraceFrames` telegraph, never a silent removal); the proxy count (hard cap 8, promotion as the
+  escape); dismount velocity zero for a kinematic collider (P4); skeletal or capsule bases (forbidden by the validator);
+  host-only exactness (accepted, as the host advantage); interaction with grabs, throws, piggyback and parts (deactivation
+  rules of §4d.5, owned by the M6/M7/M10 integration notes); and the proxy state lacking the puppet's animation fields
+  (§4d.5, P3).

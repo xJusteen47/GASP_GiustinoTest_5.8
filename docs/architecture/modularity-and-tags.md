@@ -14,7 +14,7 @@ Owner direction that applies here: [game-design-direction.md](game-design-direct
 Related: [combat.md](combat.md) §3 (modules), §9 (command tags), §16 (project integration); [input.md](input.md) §2, §3,
 §8; [gas-npp.md](gas-npp.md); milestone specs `combat-m5-editor.md`, `combat-m6-defence-links.md`,
 `combat-m7-piggyback.md`, `combat-m8-minions.md`, [combat-parts.md](combat-parts.md) (M4b; each has a "Plugin and module boundaries" or tags section that this
-document consolidates).
+document consolidates), and [many-enemies-replication.md](many-enemies-replication.md) §3.5, §4 (the platform plugins).
 
 Notation: *Decision* = already decided in another document. *Proposal* = this document's suggestion, to be confirmed
 by the owner (open questions in [open-questions-m4-m10.md](open-questions-m4-m10.md)). *Unsure* = I could not verify it against engine or
@@ -215,13 +215,13 @@ Ordered by importance.
 L5  Project module (GASP_Giustino2)        glue: GameMode/GameState/Experience wiring, project Blueprints, maps
 L4  Game Feature plugins (optional)         GSTNPiggyback, GSTNHeld, GSTNMinion, GSTNModes_*, GSTNDefence?, GSTNLink?
 L3  Gameplay framework plugins              GSTNInput, GSTNCombat, GSTNMovement (wall modes, jump), GSTNTeams (if split)
-L2  Foundation plugins (no gameplay)        GSTNCore (tags helpers, messages, validation, settings), GSTNSimCore (pure maths)
+L2  Foundation plugins (no gameplay)        GSTNCore (tags helpers, messages, validation, settings, net primitives), GSTNSimCore (pure maths)
 L1  Engine and forks                        Plugins/GASNPP/*, Plugins/EngineOverrides/*, EnhancedInput, GameplayTags, Mover
 ```
 
-`GSTNDefence`, `GSTNLink` and `GSTNParts` (M4b, combat-parts.md §2) are specified as optional plugins depending on `GSTNCombat`. They sit on L3/L4
+`GSTNDefence`, `GSTNLink`, `GSTNParts` (M4b, combat-parts.md §2) and `GSTNPlatform` (enemies as solid platforms, many-enemies-replication.md §3.5, §4) are specified as optional plugins depending on `GSTNCombat`. They sit on L3/L4
 boundary: they extend the combat pipeline through its extension surface, so I place them in **L3b "combat extensions"**
-(optional, may depend on L3 only, never on each other; the only exception is a **bridge plugin** such as `GSTNPartsMinion`, below). A pure game-feature (L4) never extends the simulation by
+(optional, may depend on L3 only, never on each other; the only exception is a **bridge plugin** such as `GSTNPartsMinion` or `GSTNPlatformMinion`, below). A pure game-feature (L4) never extends the simulation by
 subclassing; it adds data and, at most, registers fragments before pawn start.
 
 ### 3.2 Allowed and forbidden dependencies
@@ -233,14 +233,14 @@ subclassing; it adds data and, at most, registers fragments before pawn start.
 | L3 framework (`*Core` modules) | L2, own plugin | GAS, NP, Mover, Slate, Editor modules | pure deterministic code; Automation-testable with no world |
 | L3 framework (`*GAS`) | L3 `*Core` of own plugin and of its declared plugin deps, GameplayAbilities, GameplayTasks | NP, Mover | compiles against stock GAS and the fork |
 | L3 framework (`*NP`) | own `*GAS`/`*Core`, other plugins' `*NP` if declared, NP/GAS fork, Mover | Editor, Slate, project module | "fork adapter": the only modules that know the NP model |
-| L3b combat extensions | `GSTNCombat` (any module), `GSTNInput`, L2 | each other, L4, project | register through the extension surface (combat-m6 §1b), never edit combat |
-| Bridge plugin (`GSTNPartsMinion`) | exactly the two plugins it bridges (`GSTNParts`, `GSTNMinion`), through public headers | any third plugin; being depended on by either side | the only place allowed to know both siblings; tiny, no content (combat-parts.md §5.5). A new bridge is added to the layers file as an explicit pair |
+| L3b combat extensions | `GSTNCombat` (any module), `GSTNInput`, L2 | each other, L4, project | register through the extension surface (combat-m6 §1b), never edit combat. `GSTNPlatform` is the strictest case: it applies §3.7 rule 2 and depends only on `GSTNCombatCore` (lag-compensation time), `GSTNCore` (shared net primitives, if adopted, see §3.6), and, in its `*NP` module, Mover and the fork; never on `GSTNCombatGAS/NP`, `GSTNMinion` or `GSTNParts` |
+| Bridge plugin (`GSTNPartsMinion`, `GSTNPlatformMinion`) | exactly the two plugins it bridges (`GSTNParts` + `GSTNMinion`; `GSTNPlatform` + `GSTNMinion`), through public headers | any third plugin; being depended on by either side | the only place allowed to know both siblings; tiny, no content (combat-parts.md §5.5; combat-m8-minions.md §4d.5 for the platform bridge). A new bridge is added to the layers file as an explicit pair |
 | L4 game features | L3, L3b, L2 | other L4 plugins (except declared base, e.g. Piggyback on Link), project | content-heavy; activated by experience; may have no C++ at all |
 | Editor modules (any layer) | their own plugin's runtime modules, editor engine modules | being depended on by any runtime module | separate `Editor` module type, or separate plugin when large (M5) |
 | L5 project | anything | being depended on by any plugin | thin: GameMode, Experience selection, project-only Blueprints, per-project tuning |
 
 **Forbidden edges, global:** upward (lower layer → higher), sideways between optional siblings (`GSTNDefence` ↔
-`GSTNLink`, `GSTNPiggyback` ↔ `GSTNHeld`, `GSTNParts` ↔ `GSTNMinion`/`GSTNDefence`/`GSTNLink`; only a bridge plugin may join two siblings), runtime → Editor, any plugin → project module, `*Core` → GAS/NP/Mover,
+`GSTNLink`, `GSTNPiggyback` ↔ `GSTNHeld`, `GSTNParts` ↔ `GSTNMinion`/`GSTNDefence`/`GSTNLink`, `GSTNPlatform` ↔ `GSTNMinion`/`GSTNParts`/`GSTNDefence`/`GSTNLink`; only a bridge plugin may join two siblings), runtime → Editor, any plugin → project module, `*Core` → GAS/NP/Mover,
 `*GAS` → NP/Mover. A plugin may use another plugin's *tags by name* (`RequestGameplayTag(…, false)`) without a module
 edge (section 5).
 
@@ -333,10 +333,12 @@ before any plugin ships content (already noted for combat).
 | Links, grabs, throws (M6); owns `Combat.Link.*`, entity refs, link channels, link-type registry (M6 §7.0) | `GSTNLink` (Core, GAS, NP) | L3b | optional plugin |
 | Piggyback, pair moves (M7) | `GSTNPiggyback` | L4 on `GSTNLink` | Game Feature or optional plugin |
 | Minions (M8) | `GSTNMinion` (*Decision* of M8 §4b, kept here: a separate plugin, not `GSTNCombatMinion`, so combat stays free of StateTree/Navigation and each plugin is workable alone) | L4 | optional; per mode |
+| Enemies as solid platforms (owner direction §2f; [many-enemies-replication.md](many-enemies-replication.md) §3.5, §4) | new optional plugin **`GSTNPlatform`** (*Proposal*; `EnabledByDefault: false`): `GSTNPlatformCore` (pure: `FGSTN_PlatformSpec`, active-state mask, view-offset mapping, uses `FGSTN_PoseHistory`) and `GSTNPlatformNP` (Mover/NP side: unattached kinematic collider moved at one defined point per step, `AGSTN_PlatformProxyActor`, base-pose lookup seam `IGSTN_PlatformPoseSource`, `UGSTN_EnemyPlatformComponent` for fighters); owns the `Platform.*` tag root (§4.2) | L3b | optional plugin; depends on `GSTNCombatCore` (lag-comp time), `GSTNCore` (net primitives, if adopted), Mover and the fork (declared in the `.uplugin`, §3.7 rule 5) and **not** on `GSTNMinion`; fighters become platforms by content only (component on the fighter Blueprint or a Game Feature), with no edge to combat; canary build for `GSTNPlatform` alone |
+| Platform minions (platform/minion bridge) | **`GSTNPlatformMinion`** (one module, *Proposal*): `FGSTN_PlatformMinionExtension` on `UGSTN_MinionDefinition`, spawns and despawns the proxy actor, feeds poses from the minion store through the publish seam of combat-m8-minions.md §4d.5; no tags, no content | bridge between L3b `GSTNPlatform` and L4 `GSTNMinion` | optional; depends on exactly `GSTNPlatform` + `GSTNMinion` (§3.2, §3.7 rule 3), the same pattern as `GSTNPartsMinion`; swarm minions are never platforms, at most 8 platform minions alive |
 | Stock GAS adapter (M9, optional) | `GSTNCombatStockGAS` replaces only `GSTNCombatNP`. **Proposal** (M9 §5b): both adapters become their own plugins (`GSTNCombatNP`, `GSTNInputNP`, `GSTNCombatStockGAS`, `GSTNInputStockGAS`), so `GSTNCombat` = Core + GAS and builds with neither NPP nor Mover; module names do not change | L3 | alternative plugin set, exactly one per project |
 | Held / thrown objects (M10) | `GSTNHeld` (Core, GAS, NP, StockGAS, Editor) | L4 on `GSTNLink` | Game Feature |
 | Game modes (co-op PvE waves, training) | `GSTNMode_*` Game Feature plugins + experience assets | L4 | experience |
-| Shared helpers (tag lint, message channels, base settings) | `GSTNCore` (**Proposal**, optional: only if two plugins need the same helper) | L2 | always on |
+| Shared helpers (tag lint, message channels, base settings, **net primitives**) | `GSTNCore` (**Proposal**, optional: only if two plugins need the same helper). First case, met by `GSTNMinion` + `GSTNPlatform` (many-enemies-replication.md §3.5): `Net/` with the quantizer, frame-stamp reconstruction, `FGSTN_PoseHistory` + sampler and the tier rate scheduler; alternative: keep them in `GSTNMinionCore` and duplicate about 200 lines in `GSTNPlatformCore` until M10 projectiles need them | L2 | always on |
 | Test harness (`GASNPPTest`) | project today; **Proposal**: `GSTNTestKit` developer plugin (`Type: Developer`/`DeveloperTool`) | dev | excluded from Shipping |
 | Project glue | `GASP_Giustino2` | L5 | n/a |
 
@@ -361,7 +363,8 @@ Each `GSTN*` plugin must work when copied alone (with the plugins its `.uplugin`
    dependency. Each such edge is listed in the layers file as `embeds`, and the depended-on plugin must still build and run
    alone (its own NP model and tests).
 3. **Optional integrations are bridge plugins**, never `#if WITH_<OTHER_PLUGIN>` code paths: `GSTNPartsMinion` is the
-   pattern. Disabling either side removes the bridge; neither side knows the other.
+   pattern and `GSTNPlatformMinion` (platform minions) the second instance. Disabling either side removes the bridge; neither
+   side knows the other.
 4. **Tags are inputs, not assumptions.** A plugin declares only its own tag roots (§4.2). Any tag it must react to that
    belongs to the game (a team, a surface, a command) is a `FGameplayTag` / `FGameplayTagQuery` field in its settings or
    data assets, so another project maps its own tags.
@@ -428,6 +431,7 @@ Existing names are kept unless listed in 4.3.
 | `Combat.Capability.*`, `Combat.Net.*` | adapter capabilities (`Rollback`, `LagCompensation`, ...); stock adapter payload keys (M9) | `GSTNCombat` (`Capability`, granted by the adapter that has it); `GSTNCombatStockGAS` (`Net`) | native |
 | `Combat.Held.*`, `Combat.Source.*`, `Held.Type.*` | size, kind, carrying state of held objects; thrown/projectile credit; designer object types (M10) | `GSTNHeld` (`Held.Type.*`: ini) | native + ini |
 | `Minion.*`, `Command.Minion.*` | `Minion.State`, `Minion.LOD`, `Minion.Type.<Name>`; minion-only commands, never in a player binding set (M8) | `GSTNMinion` | native + ini |
+| `Platform.*` | new root (*Proposal*, many-enemies-replication.md §3.5). Leaves are examples, the final list belongs to the plugin's own spec: `Platform.State.<Active, Braced, Breaking, Inactive>` (names of the platform's active state, derived from the replicated value, never granted as loose tags), `Platform.Event.<Mounted, Dropped>` (local presentation and cue triggers) | `GSTNPlatform` (root and every leaf); the bridge `GSTNPlatformMinion` declares **none**; minion types stay `Minion.Type.*`; the platform collision channel `GSTN_EnemyPlatform` is a collision channel, not a tag | native |
 | `Weapon.*`, `Kit.*`, `Super.*`, `Loadout.*`, `Skin.*` | identity tags on assets | `GSTNCombat` roots, game content via ini | ini mostly |
 | `Ability.*` | `Ability.Movement.Jump`, `Ability.Combat.*` (identity of abilities) | owner of the ability | native |
 | `Status.*` | `Status.Burning`, `Status.Stunned` (gameplay-effect statuses) | `GSTNCombat` roots; game content | ini |
@@ -627,7 +631,7 @@ Fail on:
 3. `*GAS` module depends on `NetworkPrediction`, `AbilitySystemSimulation`, `Mover`.
 4. Any runtime module depends on an Editor module, or on `GSTNCombatDebug`.
 5. Any GSTN plugin module depends on `GASP_Giustino2`.
-6. Two optional sibling plugins depend on each other (list in the layers file; the explicit bridge pairs, `GSTNPartsMinion` = `GSTNParts` + `GSTNMinion`, are the only allowed exceptions, and no third plugin may depend on a bridge).
+6. Two optional sibling plugins depend on each other (list in the layers file; the explicit bridge pairs, `GSTNPartsMinion` = `GSTNParts` + `GSTNMinion` and `GSTNPlatformMinion` = `GSTNPlatform` + `GSTNMinion`, are the only allowed exceptions, and no third plugin may depend on a bridge).
 7. A module name used in `Build.cs` belongs to a plugin that is not listed in the owning `.uplugin` `Plugins` array
    (missing plugin dependency: the classic "works in editor, fails when disabled").
 8. A module listed in `PublicDependencyModuleNames` that no public header of that module includes (warning only,
