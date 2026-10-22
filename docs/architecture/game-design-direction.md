@@ -84,7 +84,8 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 
 - **Interact button, for now: tap = grab, hold = pick up objects** (answer to the M3 question on tap/hold). The heavy grab on
   the hold is dropped (M6 §8, M10 §8).
-- **Ground dodge, for now: the feet are invincible in the final part** of the dodge. In general, **which portions of the
+- **Ground dodge: the feet are invincible in the initial part** of the dodge (owner's correction at 11:41: the 10:34 message
+  said "final part" by mistake). Dodges, jumps and the like are **pluggable gameplay abilities**, so changing this later is easy. In general, **which portions of the
   hurtboxes are invincible (and similar windows) is the designer's choice** (M4 §1b: `HurtboxModifier` data, never code).
 - **Designers must be able to create tags for the names of weapons, kits, specials and so on** (modularity-and-tags.md §4.2b).
 - **Most gameplay logic must be easy for designers to extend or change in Blueprint** (modularity-and-tags.md §3.8).
@@ -134,7 +135,7 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 
 - **No standard implementation**: dodge and shield may depend on the **kit**.
 - Base PvE **ground dodge**: almost a Super Mario **long jump** or a Helldivers **dive**, but the character does not
-  end lying down on landing. **Only the feet are invincible**, and for now **only in the final part** of the dodge (§2g).
+  end lying down on landing. **Only the feet are invincible**, and **only in the initial part** of the dodge (§2g, corrected at 11:41).
   *Reading:* the feet hurtboxes are intangible (default) or invincible in that window; the rest of the body can be hit. The
   windows are designer data.
 - **Air dodge**: like the **dive roll** of Super Mario 3D World.
@@ -169,7 +170,7 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
 | §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
-| §2g: tap = grab, hold = pickup; feet invincible in the dodge's final part, invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
+| §2g: tap = grab, hold = pickup; feet invincible in the dodge's initial part (corrected at 11:41), invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
 | §2f, §6b: many enemies on a listen host (replication, presentation and host budgets) and enemies as solid platforms (players stand on them) | research [many-enemies-replication.md](many-enemies-replication.md); M8 minions ([combat-m8-minions.md](combat-m8-minions.md) §4d.1, §4d.5, §8, §11: packs with push model and dormancy, per-item tier rates, 150 as a population with about 60 awake, `MaxVisiblePuppets`, platform seams); new optional plugins `GSTNPlatform` and bridge `GSTNPlatformMinion` ([modularity-and-tags.md](modularity-and-tags.md) §3.6, tag root `Platform.*` §4.2) |
 
 ## 8. Out of scope for now
@@ -308,3 +309,8 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 > In smash è il peso che diminuisce all'aumentare del danno, ad esempio.
 
 > La durezza sarebbe il valore di armatura di helldivers, in pratica
+
+### Tenth message (2026-10-22, 11:41, verbatim)
+
+> Comunque, solo la parte iniziale della schivata ha i piedi invincibili, mi sono sbagliato prima. Ricorda che schivate, salti
+> etc… sono abilità di gameplay pluggabili, come avevamo già concordato. Quindi cambiare idea dopo dovrebbe essere facile.

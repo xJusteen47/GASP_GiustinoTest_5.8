@@ -31,7 +31,7 @@ Section numbers below are local to this file.
 > tracker, M2), never world Z; (5) **trampolines** exist as level objects (§7b).
 
 > **Revision 2026-10-22 (10:30, owner answers, game-design-direction.md §2g):** (1) the base ground dodge's feet are intangible
-> **only in the final part** of the dodge, for now (§1b); (2) which hurtbox portions are invulnerable, when and how is **designer
+> **only in the initial part** of the dodge (owner's correction at 11:41; the 10:34 answer said "final part") (§1b); (2) which hurtbox portions are invulnerable, when and how is **designer
 > data in general**, never code (§1b); (3) gameplay logic must be **extendable in Blueprint** and content **replaceable**
 > (modularity-and-tags.md §3.8, §3.9): the seams of §3b have Blueprint forms.
 
@@ -69,7 +69,7 @@ exist: a movement track (M3 `FGSTN_LayeredMove_MoveTrack`) and a `HurtboxModifie
 
 | Dodge | Behaviour (base PvE kit) | Intangibility |
 |---|---|---|
-| Ground dodge | Long jump / dive: a committed forward leap with an arc, **ends standing** (a short landing recovery, no lying-down get-up state) | **Only the feet hurtboxes** (`Combat.Hurtbox.Feet`), and **only in the final part** of the dodge (owner, 2026-10-22, "per ora"): the window opens late in the leap and closes on landing (*Proposal* default: the last 40% of the airborne frames, up to the first landing-recovery frame). The rest of the body, and the feet before the window, can be hit. State `Intangible` by default (*Reading*: the owner says "invincibili"; intangible means a hit on the feet does not even register); the base kit's designer may switch the window to `Invincible` |
+| Ground dodge | Long jump / dive: a committed forward leap with an arc, **ends standing** (a short landing recovery, no lying-down get-up state) | **Only the feet hurtboxes** (`Combat.Hurtbox.Feet`), and **only in the initial part** of the dodge (owner, 2026-10-22, 11:41, correcting the 10:34 "final part"): the window opens on the dodge's first active frame (take-off) and closes partway through the leap (*Proposal* default: the first 40% of the airborne frames). The rest of the body, and the feet after the window, can be hit. State `Intangible` by default (*Reading*: the owner says "invincibili"; intangible means a hit on the feet does not even register); the base kit's designer may switch the window to `Invincible` |
 | Air dodge | Dive roll, as Super Mario 3D World: a forward air burst with a tuck animation, then normal falling | Not specified by the owner: *Proposal*: same rule as the ground dodge (feet only) until the owner says otherwise |
 
 - The "roll" is an **animation and ability**, queued as a normal move through Mover (rule 2 of CLAUDE.md); **no rolling
@@ -82,6 +82,9 @@ exist: a movement track (M3 `FGSTN_LayeredMove_MoveTrack`) and a `HurtboxModifie
   track data on the move's timeline, authored in the M5 timeline editor. The base dodges' windows above are defaults of the base
   kit's data, not code: `GSTNCombat` never hard-codes a hurtbox group, a window or a state for any move, and a designer can
   reshape the base dodges without a build.
+- **Dodges, jumps and the like are pluggable gameplay abilities** (owner, 2026-10-22, 11:41, "come avevamo già concordato"): each is
+  an ability granted by the kit or an ability set (M3 kit bindings, modularity-and-tags.md §3.4 pawn data), never a code path in
+  `GSTNCombat`, so changing the dodge later means editing or swapping that ability asset, not the framework.
 - Other kits (heavy: armoured step, caster: blink) are only content: another timeline ability with another `HurtboxModifier`.
   Nothing in `GSTNCombat` assumes a particular dodge. M6's tech roll is a separate thing (tech ability, M6 §6).
 - **No dodging in hitstun or hitstop** (owner, 2026-10-22: "in genere no"). The base dodges list `Combat.State.Hitstun`
@@ -588,7 +591,7 @@ the authority and how we measure it. A dedicated server stays supported.
   hitstop, no hitstun, the victim's move is not cancelled; the heavy one gives hitstun; equal on all machines),
   `scenario_reaction_tiers` (the same hit on victims of three weights: stagger in place with zero displacement, a push back that
   stays grounded and never enters `Falling`, a launch with tumble),
-  `scenario_dodge_feet` (base ground dodge: feet intangible only in the final part, so feet hit early in the leap, feet missed late, torso hit throughout), `scenario_impact_wall` (splat, bounce, forced
+  `scenario_dodge_feet` (base ground dodge: feet intangible only in the initial part, so feet missed early in the leap, feet hit late, torso hit throughout), `scenario_impact_wall` (splat, bounce, forced
   and forbidden by hit data; tech cancels it in M6), all with 60/15 ms, with and without 2 % loss, **in the listen-server
   configuration (host + 2 clients) and in dedicated + 2 clients**. Clean = snapshots equal (combat state, attributes, positions
   after the launch settles) and no reconciles besides the forced ones **and the expected one per hit on the victim's
@@ -619,7 +622,7 @@ stored). Idle cost stays ~0 thanks to end-frame stamps.
 3. The test move's three hitbox spaces hit where the debug draw shows them, on the authority (host) and on clients.
 4a. The seams of §3b exist and are inert: combat tests and scenarios pass with no optional plugin installed; modifiers change
     knockback, hitstun and hitstop exactly once (Core tests).
-4b. The base ground dodge (§1b) makes only the feet intangible, only in its final part, and the window is kit data; surface impact outcomes follow the precedence of §7b.
+4b. The base ground dodge (§1b) makes only the feet intangible, only in its initial part, and the window is kit data; surface impact outcomes follow the precedence of §7b.
 4c. Hitstun follows the stagger force against the threshold of the hurtbox hit (hurtbox, entity, rules); hitstop is automatic or the
     designer's override; the reaction tier follows the weight-driven knockback and `MaxReaction` (Core tests, `scenario_stagger_threshold`,
     `scenario_reaction_tiers`).

@@ -197,7 +197,7 @@ Perché conta: roll, spot dodge e air dodge sono in scope (M4 §1) ma la specifi
 Ipotesi nella specifica: nessuna sul costo/anti-spam; l'intangibilità viene dai tracciati `Intangible` della timeline.
 **Risposta (2026-10-22):** Schivata base in PvE a terra: quasi un long jump di Super Mario o un tuffo di Helldivers, senza finire sdraiati all'atterraggio; solo i piedi sono invincibili. Nessuna implementazione standard: può dipendere dal kit ([direzione §6](game-design-direction.md#6-dodge-and-shield)). Restano aperti durata, recovery, costo (cooldown, stamina) e se si può schivare durante hitstun.
 **Risposta (2026-10-22, tarda mattina):** In genere non si schiva durante hitstun o hitstop ([direzione §2c](game-design-direction.md#2c-di-sdi-and-dodging-in-hitstun-owner-input-2026-10-22-late-morning)).
-**Risposta (2026-10-22, 10:34):** Per ora i piedi sono invincibili **nella parte finale** della schivata; in generale quali porzioni degli hurtbox sono invincibili, e quando, lo decide il designer ([direzione §2g](game-design-direction.md#2g-interact-button-dodge-windows-designer-tags-blueprint-replaceable-content-owner-input-2026-10-22-1034-and-1036), M4 §1b). Restano aperti durata, recovery e costo; vedi M4.33 e M4.34.
+**Risposta (2026-10-22, 10:34, corretta alle 11:41):** I piedi sono invincibili **nella parte iniziale** della schivata (alle 10:34 era scritto "finale" per errore); schivate e salti sono abilità pluggabili, quindi si cambia facilmente; in generale quali porzioni degli hurtbox sono invincibili, e quando, lo decide il designer ([direzione §2g](game-design-direction.md#2g-interact-button-dodge-windows-designer-tags-blueprint-replaceable-content-owner-input-2026-10-22-1034-and-1036), M4 §1b). Restano aperti durata, recovery e costo; vedi M4.33 e M4.34.
 
 **11. L'air dodge può essere usata più volte in aria, e lascia il personaggio in stato "helpless"?**
 Perché conta: incide molto sul recupero e sul gioco in verticale 3D, e va allineato ai salti aerei del M3.
@@ -317,9 +317,9 @@ Ipotesi nella specifica: tutto usa la gravità del frame corrente della vittima 
 Perché conta: decide quanto la schivata è un impegno e se serve una finestra di cancel apposita.
 Ipotesi nella specifica: no, solo la coda cancellabile decisa dal designer, come le altre mosse ([direzione §6c](game-design-direction.md#6c-cancellable-animation-tails-owner-input-2026-10-22)).
 
-**34. Da dove parte la "parte finale" in cui i piedi sono invincibili?**
+**34. Fin dove arriva la "parte iniziale" in cui i piedi sono invincibili?**
 Perché conta: serve un valore di partenza per il kit base, anche se poi lo regola il designer.
-Ipotesi nella specifica: l'ultimo 40% del volo, fino al primo frame di atterraggio (M4 §1b).
+Ipotesi nella specifica: dal primo frame attivo (lo stacco) al 40% del volo (M4 §1b).
 
 ### K. Durezza, resistenza allo stagger e peso (dopo i messaggi delle 11:18–11:21 del 22/10)
 
