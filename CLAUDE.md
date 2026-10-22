@@ -18,6 +18,7 @@ Read the linked docs only when the task touches that area. Do not read the whole
 | Editor Python tooling | `Tools/GAS/`, `Tools/GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | GAS-NPP plugin forks (GameplayAbilities, NetworkPrediction, AbilitySystemSimulation...) | `Plugins/GASNPP/` | [gas-npp.md](docs/architecture/gas-npp.md) |
 | Mover / ChaosMover / SmartObjects overrides of engine plugins | `Plugins/EngineOverrides/` | |
+| Working notes, plans, spike reports and the current handover (`takeover-state.md`, last entries) | `docs/notes/` | [README](docs/notes/README.md) |
 
 Headers carry long doc comments that explain intent and invariants: read the header of a class before its `.cpp`.
 

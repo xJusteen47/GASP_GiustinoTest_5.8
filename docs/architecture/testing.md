@@ -68,7 +68,7 @@ Button names are never indices: `button_index('Attack')` / `button_mask(name)` l
 
 ### M3 spike probes (`spike_grants`, `spike_stats`, `spike_triggers`)
 
-Live checks of the three M3 spikes (static analysis and numbers: `Saved/Notes/m3-spike-report.md`). Probe content lives in `GSTN_TestProbeAbilities.h` (trigger abilities, 40 distinct bulk-grant ability classes), `GSTN_TestEffects.h` (`Test.Probe.*` tags and effects) and `UGSTN_TestAttributeSet` (`ProbeEventCount`, `ProbeTagCount`, `ProbeSpeedScale`, `ProbeGravityScale`); nothing is in the test Blueprint's `DefaultAbilities`, the scenarios grant and revoke what they need on the server. `UGSTN_GASNPPTestComponent` has the server-side helpers (callable from Python: `server_grant_bulk(first, count)`, `server_revoke_bulk()`, `server_set_bulk_effect(bool)`, `server_set_stats_preset(0|1|2)`, `server_grant_probe(name)`, `server_revoke_probes()`, `count_owned_bulk_specs()`, `set_stats_probe_enabled(bool)`, `reset_probe_counters()`) and the snapshot gains a `probe` object (owned bulk specs, spec total, active abilities, per-trigger counters, MaxSpeed / gravity in effect) plus the four probe attributes in `attributes`, so `report()` compares them too.
+Live checks of the three M3 spikes (static analysis and numbers: `docs/notes/m3-spike-report.md`). Probe content lives in `GSTN_TestProbeAbilities.h` (trigger abilities, 40 distinct bulk-grant ability classes), `GSTN_TestEffects.h` (`Test.Probe.*` tags and effects) and `UGSTN_TestAttributeSet` (`ProbeEventCount`, `ProbeTagCount`, `ProbeSpeedScale`, `ProbeGravityScale`); nothing is in the test Blueprint's `DefaultAbilities`, the scenarios grant and revoke what they need on the server. `UGSTN_GASNPPTestComponent` has the server-side helpers (callable from Python: `server_grant_bulk(first, count)`, `server_revoke_bulk()`, `server_set_bulk_effect(bool)`, `server_set_stats_preset(0|1|2)`, `server_grant_probe(name)`, `server_revoke_probes()`, `count_owned_bulk_specs()`, `set_stats_probe_enabled(bool)`, `reset_probe_counters()`) and the snapshot gains a `probe` object (owned bulk specs, spec total, active abilities, per-trigger counters, MaxSpeed / gravity in effect) plus the four probe attributes in `attributes`, so `report()` compares them too.
 
 ```python
 m.setup_editor(True); m.net(60, 15, 0)   # PIE started as above; judge these at 0 % loss (loss causes reconciles of its own)
@@ -82,7 +82,7 @@ Run each with `client=0` too in listen mode (the host's own pawn: no reconcile e
 
 ### Test content the scenarios assume
 
-From `Saved/Notes/test-content-names.md` (`setup_gas_assets.run(combat_input=True)` builds it; the five strict scenarios pass on the listen server with it):
+From `docs/notes/test-content-names.md` (`setup_gas_assets.run(combat_input=True)` builds it; the five strict scenarios pass on the listen server with it):
 
 - Abilities `GSTN_GA_TestAttack` (Attack commands x Grounded/Airborne, owns `Test.State.Attacking` for `ActiveFrames`) and `GSTN_GA_TestStance` (Special commands, owns `Test.State.Stance` and `Input.Lock.Command.Attack` while the trigger button is held); existing `GSTN_GA_TestDash`, `GSTN_GA_TestBuff`. The harness reads their tags by name (`Test.*` tags are in the snapshot).
 - Buttons in `IC_GASNPP_Test`: Attack, Special, Crouch, Dash, Buff. Slot set `SS_GASNPP_Standard` (16 standard slots), binding set `BS_GASNPP_Test`.

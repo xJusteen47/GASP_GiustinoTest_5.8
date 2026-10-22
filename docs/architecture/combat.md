@@ -752,7 +752,7 @@ timers — added by subclass/extension point, per wall-movement.md rules.
   player costs a rollback of about RTT/16 ms frames** (budget it).
 - `UGSTN_HitPresentationComponent` plays flash/sparks/visual freeze on the interpolated victim immediately on the
   attacker's client (essential in PvE), cancelled if not confirmed.
-- **Forward prediction of simulated proxies** (spike S-FP, 2026-10-19; report in `Saved/Notes/spike-sfp-report.md`,
+- **Forward prediction of simulated proxies** (spike S-FP, 2026-10-19; report in `docs/notes/spike-sfp-report.md`,
   not versioned). Feasible with small fork patches, **not worth enabling as it stands**: with dedicated server + 2
   clients at 60/15 ms and 2 % loss the observer saw a remote dash 40–50 ms earlier (73–82 ms instead of 108–132), which
   is mostly the interpolation buffer removed (`FixedTickInterpolationBufferedMS` = 100). Costs: every new input of the

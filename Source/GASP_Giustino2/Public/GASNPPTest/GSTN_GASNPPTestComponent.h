@@ -178,6 +178,10 @@ private:
 	/** Simulation frame of the latest tick of the ability system, to date the probe activations */
 	int32 AbilityFrame = -1;
 
+	/** Last Mover mode and floor-hit state logged by gstn.test.LogMoverModeChanges */
+	FName LoggedMode;
+	bool bLoggedFloor = false;
+
 	// Server-side handles of the infinite effects applied by the probes
 	FActiveGameplayEffectHandle BulkEffectHandle;
 	FActiveGameplayEffectHandle StatsEffectHandle;

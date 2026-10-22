@@ -143,8 +143,32 @@ bool UGSTN_GASNPPTestComponent::PressInput(UInputAction* Action)
 	return true;
 }
 
+namespace
+{
+	/** Temporary diagnosis (startup singles, review of the in-window mismatches): logs the Mover mode and the floor check of every
+	    pawn when either changes. Off by default: `gstn.test.LogMoverModeChanges 1` in the world to watch. */
+	static TAutoConsoleVariable<int32> CVarLogMoverModeChanges(TEXT("gstn.test.LogMoverModeChanges"), 0,
+		TEXT("Log Mover mode and floor-hit changes (GASNPP_MODE) and probe activations (GASNPP_ACT) of the test pawns."), ECVF_Default);
+}
+
 void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& TimeStep, const FMoverInputCmdContext& InputCmd)
 {
+	if (CVarLogMoverModeChanges.GetValueOnGameThread() != 0 && Mover)
+	{
+		FHitResult Floor;
+		const bool bFloor = Mover->TryGetFloorCheckHitResult(Floor);
+		const FName Mode = Mover->GetMovementModeName();
+		if (Mode != LoggedMode || bFloor != bLoggedFloor)
+		{
+			UE_LOG(LogTemp, Display, TEXT("GASNPP_MODE %s role=%d frame=%d resim=%d mode=%s->%s floor=%d->%d blocking=%d walkable=%d z=%.2f vel=%s"),
+				*GetNameSafe(GetOwner()), static_cast<int32>(GetOwner()->GetLocalRole()), TimeStep.ServerFrame, TimeStep.bIsResimulating ? 1 : 0,
+				*LoggedMode.ToString(), *Mode.ToString(), bLoggedFloor ? 1 : 0, bFloor ? 1 : 0, Floor.bBlockingHit ? 1 : 0,
+				Floor.bBlockingHit && Floor.IsValidBlockingHit() ? 1 : 0, GetOwner()->GetActorLocation().Z, *GetOwner()->GetVelocity().ToCompactString());
+			LoggedMode = Mode;
+			bLoggedFloor = bFloor;
+		}
+	}
+
 	++SimTickCount;
 	if (TimeStep.bIsResimulating)
 	{
@@ -232,6 +256,13 @@ void UGSTN_GASNPPTestComponent::RecordProbeAttempt(FName Probe, bool bRestoring)
 
 void UGSTN_GASNPPTestComponent::RecordProbeActivation(FName Probe, bool bResimulating, bool bRestoring)
 {
+	// Which path produced each activation: role, ability frame, and the flags the counters below are classified with (same cvar as the mode log)
+	if (CVarLogMoverModeChanges.GetValueOnGameThread() != 0)
+	{
+		UE_LOG(LogTemp, Display, TEXT("GASNPP_ACT %s probe=%s role=%d frame=%d resim=%d restoring=%d"),
+			*GetNameSafe(GetOwner()), *Probe.ToString(), static_cast<int32>(GetOwner()->GetLocalRole()), AbilityFrame, bResimulating ? 1 : 0, bRestoring ? 1 : 0);
+	}
+
 	FGSTN_ProbeCounters& Counters = ProbeCounters.FindOrAdd(Probe);
 	if (bRestoring)
 	{

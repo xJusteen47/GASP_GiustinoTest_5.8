@@ -1546,7 +1546,7 @@ def scenario_spike_stats(client_a=1, client_b=2):
     run.run(steps)
 
 
-def scenario_spike_triggers(client=1, fork_patched=True):
+def scenario_spike_triggers(client=1, fork_patched=True, resim_frames=15):
     """Spike 3 (L6-L8): triggered abilities. Needs the fork patch in UNpAbilitySystemComponent::MonitoredTagChanged (PATCHES.md, 1.
     OwnedTag triggers); fork_patched=False turns the 'nothing happens while a frame is restored' checks into notes, to see what
     the unpatched fork does. Presses are IA_GASNPP_Buff releases (the raiser abilities activate on Completed; the test buff, on
@@ -1673,7 +1673,7 @@ def scenario_spike_triggers(client=1, fork_patched=True):
         (4.5, saw_active('E: the target was active on the server and on the owner', 'GSTN_GA_ProbeEventTarget')),
         (4.6, verify('E1: one press, one activation, everywhere', 'EventTarget', 'ProbeEventCount', 1, 0)),
         (5.5, lambda: ('E press 2', press(client, 'buff'))),
-        (5.6, lambda: ('force reconcile across the event frame', force_reconcile(client, 15) if client != 0 else 'host: nothing to reconcile')),
+        (5.6, lambda: ('force reconcile across the event frame', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
         (7.2, verify('E2: second press with a forced resim over the event frame', 'EventTarget', 'ProbeEventCount', 2, 0 if client == 0 else 1)),
         (7.2, timing('E: tick order A (target before raiser in the spec array)', 'A')),
         (7.4, regrant(('EventRaiser', 'EventTarget'))),
@@ -1682,7 +1682,7 @@ def scenario_spike_triggers(client=1, fork_patched=True):
         (10.1, lambda: reset_counters()),
         (10.1, baseline('ProbeEventCount')),
         (10.3, lambda: ('E swap press', press(client, 'buff'))),
-        (10.4, lambda: ('force reconcile across the event frame', force_reconcile(client, 15) if client != 0 else 'host: nothing to reconcile')),
+        (10.4, lambda: ('force reconcile across the event frame', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
         (12.0, verify('E3: raiser first in the spec array, forced resim over the event frame', 'EventTarget', 'ProbeEventCount', 1, 0 if client == 0 else 1)),
         (12.0, timing('E: tick order B (raiser before target in the spec array)', 'B')),
         (12.1, run.at('E: the two orders were measured (informational: same frame or the next one)', lambda: (
@@ -1696,7 +1696,7 @@ def scenario_spike_triggers(client=1, fork_patched=True):
         (17.0, saw_active('T: the target was active on the server and on the owner', 'GSTN_GA_ProbeTagTarget')),
         (17.0, verify('T1: one press, one tag activation, everywhere', 'TagTarget', 'ProbeTagCount', 1, 0)),
         (17.5, lambda: ('T press 2', press(client, 'buff'))),
-        (17.6, lambda: ('force reconcile across the tag transition', force_reconcile(client, 15) if client != 0 else 'host: nothing to reconcile')),
+        (17.6, lambda: ('force reconcile across the tag transition', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
         (20.0, verify('T2: second press with a forced resim over the tag transition', 'TagTarget', 'ProbeTagCount', 2, 0 if client == 0 else 1)),
         (20.1, _mark(run, marks, 'server_only')),
         (20.1, lambda: reset_counters()),
