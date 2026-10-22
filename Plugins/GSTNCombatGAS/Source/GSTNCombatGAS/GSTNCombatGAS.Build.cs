@@ -17,6 +17,7 @@ public class GSTNCombatGAS : ModuleRules
 			"GameplayTags",
 			"GameplayAbilities",
 			"GameplayTasks",
+			"DeveloperSettings",
 			"GSTNCombatCore"
 		});
 	}
