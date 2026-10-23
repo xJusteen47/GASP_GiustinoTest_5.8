@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Camera",
+	"Description": "Presentation-only camera: a stack of camera modes (far platformer follow, free orbit, shoulder aim, Tekken-style duel, designer sections) blended in a gravity-relative frame. Local per player, never simulated or replicated, never created on a dedicated server. Standalone: no GAS, Network Prediction, Mover or other GSTN plugin.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNCameraCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

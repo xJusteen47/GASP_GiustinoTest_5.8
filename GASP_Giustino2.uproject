@@ -175,6 +175,10 @@
 		{
 			"Name": "GSTNDepthMarker",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNCamera",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

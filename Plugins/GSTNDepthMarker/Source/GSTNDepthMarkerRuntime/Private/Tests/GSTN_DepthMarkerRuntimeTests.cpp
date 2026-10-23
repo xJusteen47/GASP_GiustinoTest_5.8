@@ -26,7 +26,7 @@
 
 namespace GSTNDepthMarkerRuntimeTest
 {
-	constexpr EAutomationTestFlags Flags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+	constexpr EAutomationTestFlags RuntimeTestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	/** A throwaway game world to own the test actors */
 	struct FRig
@@ -66,7 +66,7 @@ namespace GSTNDepthMarkerRuntimeTest
 }
 
 #define GSTN_DMR_TEST(Name) \
-	IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNDepthMarkerRuntimeTest_##Name, "GSTNDepthMarker.Runtime." #Name, GSTNDepthMarkerRuntimeTest::Flags) \
+	IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNDepthMarkerRuntimeTest_##Name, "GSTNDepthMarker.Runtime." #Name, GSTNDepthMarkerRuntimeTest::RuntimeTestFlags) \
 	bool FGSTNDepthMarkerRuntimeTest_##Name::RunTest(const FString& Parameters)
 
 using namespace GSTNDepthMarkerRuntimeTest;
