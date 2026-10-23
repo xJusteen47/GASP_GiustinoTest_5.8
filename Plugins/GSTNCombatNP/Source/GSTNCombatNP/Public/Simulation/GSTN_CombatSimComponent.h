@@ -143,6 +143,9 @@ public:
 	 */
 	bool ReadJumpState(FGSTN_JumpState& OutState) const;
 
+	/** The tracker of the owner's Mover component (the movement facts of the end of the previous frame: up direction, velocity, ground tag), null without a Mover component. The movement abilities read the local gravity frame from it */
+	UGSTN_MoverSimStateTracker* GetMoverTracker() { return GetJumpTracker(); }
+
 	/**
 	 * Rewrites Mover's gravity override to the authored gravity scaled by the gravity phase of the jump state of the frame being
 	 * simulated (hold, cut, fall, fast fall), along the local gravity whatever its direction. Called by the stats movement modifier

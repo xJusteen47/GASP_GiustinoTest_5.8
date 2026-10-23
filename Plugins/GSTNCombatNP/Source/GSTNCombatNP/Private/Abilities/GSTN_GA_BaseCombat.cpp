@@ -125,6 +125,7 @@ void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 	{
 		AbilitySystem->PlaySyncedMontage(Montage, 0.f, Data.MontagePlayRate, Data.MontageSection, 1.f);
 	}
+	OnTimelineBegan(StateStart);
 }
 
 void UGSTN_GA_BaseCombat::ClearAwaitingAdoption()

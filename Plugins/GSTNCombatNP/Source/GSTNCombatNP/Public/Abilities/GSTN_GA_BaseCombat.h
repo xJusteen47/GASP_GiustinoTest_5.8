@@ -76,6 +76,16 @@ public:
 	/** True from an activation the combat state did not start until the combat tick adopts it (or it is cancelled). Read by the combat tick through the spec's instance */
 	bool IsAwaitingAdoption() const { return bAwaitingAdoption.Value; }
 
+	/** True once the ability found itself in the combat state and its timeline runs (false while it waits for adoption and after it ended) */
+	bool HasTimelineStarted() const { return bStarted.Value; }
+
+protected:
+	/**
+	 * Called once when the timeline starts: in ActivateAbility for a command, in the adoption tick for an activation that waited.
+	 * The movement abilities apply their impulse here. Simulation code: deterministic, no server-only branches
+	 */
+	virtual void OnTimelineBegan(int32 StateStartFrame) {}
+
 private:
 	/** Starts the timeline whose start the combat state shows: sync variables, montage */
 	void BeginTimeline(int32 StateStart);
