@@ -7,6 +7,8 @@
 #include "GSTN_PartsPresentationBudget.h"
 #include "GSTN_PartsSettings.generated.h"
 
+class UGSTN_PenetrationTable;
+
 /**
  * Settings of the parts plugin (Project Settings > Plugins > GSTN Parts): the defaults an entity falls back on when its part
  * set says nothing. Defaults ship in the plugin's Config/DefaultGSTNParts.ini; a project overrides them in its own
@@ -26,6 +28,13 @@ public:
 
 	/** The settings of the running project */
 	static const UGSTN_PartsSettings& Get() { return *GetDefault<UGSTN_PartsSettings>(); }
+
+	/**
+	 * Penetration table for part sets and rules that name none. Empty = the built-in three bands (above full, equal 65 %,
+	 * below ricochets). Soft, so the plugin's content (when it ships some) stays replaceable
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Penetration")
+	TSoftObjectPtr<UGSTN_PenetrationTable> DefaultPenetrationTable;
 
 	/**
 	 * Shape of the default weight curve of a part set that has none of its own: the weight scale falls linearly from 1 at no

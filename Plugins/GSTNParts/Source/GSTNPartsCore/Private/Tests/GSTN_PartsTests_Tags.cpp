@@ -3,15 +3,11 @@
 #include "GameplayTagsManager.h"
 #include "GSTN_PartsSettings.h"
 #include "GSTN_PartsTags.h"
+#include "GSTN_PartsTestUtils.h"
 #include "Misc/AutomationTest.h"
 #include "Modules/ModuleManager.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-
-namespace GSTNPartsTest
-{
-	constexpr EAutomationTestFlags Flags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
-}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsSmokeTest, "GSTNParts.Core.Smoke", GSTNPartsTest::Flags)
 bool FGSTN_PartsSmokeTest::RunTest(const FString& Parameters)
