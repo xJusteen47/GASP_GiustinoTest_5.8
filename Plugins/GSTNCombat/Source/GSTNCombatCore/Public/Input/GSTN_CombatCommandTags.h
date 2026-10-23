@@ -91,4 +91,19 @@ namespace GSTNCommandTags
 
 	/** Fast fall while descending (UGSTN_GA_PlatformFastFall) */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Movement_FastFall);
+
+	// Defence, movement and interaction commands of the default movement set (UGSTN_MovementSlots). Like the jump commands they are
+	// kit content: a kit removes them (CommandSet.RemovedCommands) or binds other abilities to them.
+
+	/** Dash: a burst of speed along the facing, in the plane perpendicular to the local gravity (UGSTN_GA_Dash) */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Movement_Dash);
+
+	/** Dodge: bound twice by context, a ground dodge (long jump arc) when grounded and an air dodge (dive roll) when airborne */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Defence_Dodge);
+
+	/** Interact, short press: grab in the default movement set */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact_Grab);
+
+	/** Interact, long press: pick up in the default movement set */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact_PickUp);
 }

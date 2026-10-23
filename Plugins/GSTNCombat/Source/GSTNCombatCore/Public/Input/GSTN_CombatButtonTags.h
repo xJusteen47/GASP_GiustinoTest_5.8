@@ -28,4 +28,13 @@ namespace GSTNCombatButtonTags
 
 	/** Jump */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Button_Jump);
+
+	/** Dodge (ground dodge or air dodge by context) */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Button_Dodge);
+
+	/** Dash / sprint burst */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Button_Sprint);
+
+	/** Interact: tap grabs, hold picks up in the default movement set */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Button_Interact);
 }

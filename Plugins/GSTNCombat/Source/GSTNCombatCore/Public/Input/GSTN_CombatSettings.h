@@ -104,6 +104,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
 	int32 JumpCoyoteFrames = 4;
 
+	/** Frames of press that turn an interact tap (grab) into a hold (pick up) in the default movement slots (UGSTN_MovementSlots) */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Interact", meta = (ClampMin = "1", ClampMax = "120", ForceUnits = "Frames"))
+	int32 InteractHoldFrames = 12;
+
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif

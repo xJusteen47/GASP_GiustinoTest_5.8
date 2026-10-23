@@ -35,6 +35,15 @@ namespace GSTNCombatTags
 	/** The combatant is falling relative to its local gravity. Projected, never granted. */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Falling);
 
+	/**
+	 * The combatant is in hitstun (it was hit and cannot act freely). Projected by the combat tick once hits exist (M4), never
+	 * granted. The dodge abilities of the default kit block on it as DATA (ActivationBlockedTags), so a kit can drop it.
+	 */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Hitstun);
+
+	/** The combatant is frozen by hitstop (its own or its victim's). Projected by the combat tick, never granted. Blocks the default dodges like State_Hitstun. */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Hitstop);
+
 	// Roots of the identity tags of the data the core carries: leaves are ini content, code never names one
 
 	/** Root of weapon identity tags. Leaves are designer content. */

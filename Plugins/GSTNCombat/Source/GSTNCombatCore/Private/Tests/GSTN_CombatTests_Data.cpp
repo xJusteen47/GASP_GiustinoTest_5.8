@@ -358,7 +358,7 @@ bool FGSTN_CoreDataCoreTagsTest::RunTest(const FString& Parameters)
 	// The identity roots and the Combat.State.* leaves belong to the core: they exist without the ability layer loaded
 	TArray<FGameplayTag> Tags;
 	GSTNCombatTags::GetDeclaredCoreTags(Tags);
-	TestEqual(TEXT("six states and five identity roots"), Tags.Num(), 11);
+	TestEqual(TEXT("eight states and five identity roots"), Tags.Num(), 13);
 	for (const FGameplayTag& Tag : Tags)
 	{
 		TestTrue(*FString::Printf(TEXT("%s is a valid tag"), *Tag.ToString()), Tag.IsValid());
