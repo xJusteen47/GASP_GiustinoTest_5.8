@@ -313,8 +313,9 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
 - **`UGSTN_GA_Tech`** (timeline ability, kit-assigned per tech type through `FGSTN_TechSet` on the kit: InPlace, RollLeft,
   RollRight, WallTech, WallJumpTech): started by a **Forced** `ActivateEntry` request from the model (ActiveSource
   `Forced`, M3). Intangibility = its `HurtboxModifier` window. Roll/wall movement = its movement track.
-- **`UGSTN_GA_Knockdown`/get-up** (*Proposal*: one neutral get-up ability with intangible frames, started the same way;
-  further get-ups later).
+- **`UGSTN_GA_Knockdown`/get-up**: superseded by the 2026-10-23 default of §6 (mini bounce `UGSTN_GA_GroundBounce`, downed state,
+  `UGSTN_GA_GetupRoll`, get-up attacks 0..N from the moveset, a neutral get-up); all pluggable abilities with intangible frames from their
+  own `HurtboxModifier` windows.
 - **`UGSTN_GA_LinkedHold`** (grabbed side presentation and tags): not an ability; the grabbed's reaction is state +
   Mover mode + the role's animation layer chosen by kit (`FGSTN_KitLinkAnims`, per role tag). Abilities of the
   grabbed are blocked by `ActivationBlockedTags` `Combat.Link.Role.Grabbed` (set in the base ability defaults).
@@ -512,6 +513,23 @@ attacker punish, meter, event) is applied by one piece of code and tested once.
 - Both rule sets are per game mode (rules asset), so PvE can scale DI/SDI by victim tag (bosses ignore them).
 
 ## 6. Tech and knockdown
+
+> **Revision 2026-10-23 (owner, 15:23): no tech by default; landing = mini bounce, then the downed state.** Tech is a good ability and,
+> like every ability, **pluggable**: the algorithm below stays as an optional ability that a kit or mode may grant (`UGSTN_GA_Tech` set,
+> `FGSTN_TechRules`), but the **standard set has no tech**. Default when a tumbling entity touches the ground and the M4 §7b surface impact
+> is neither a wall splat nor an excessive bounce:
+> 1. **Mini ground bounce**: a small bounce whose horizontal direction the **stick steers** (read from the command at the contact frame,
+>    so it is deterministic; `GroundBounceSpeed`, `GroundBounceSteerDeg` in the rules asset). Started as a Forced ability (`UGSTN_GA_GroundBounce`).
+> 2. **Downed state** ("downed" as in Smash; the identifiers keep the name `Knockdown`: `ActionState = Knockdown`, `Combat.State.Knockdown`).
+>    With no attack or direction input after the bounce the entity ends **lying on the ground**.
+> 3. On the ground: **holding the stick** in a direction starts a **get-up roll** that way (`UGSTN_GA_GetupRoll`); **attacking** starts a
+>    **get-up attack**. Get-up attacks are **0..N per moveset**, designer data: entries in the kit's slot set that require
+>    `Combat.State.Knockdown` (direction variants allowed); with none, the attack button does nothing there.
+>
+> All three are abilities granted by the base ability set or the kit, so changing the rule later is a data change. The tech button is
+> therefore free by default (question M6.8 answered). *Open* (M6.9): how to get up without a direction or an attack (a neutral get-up on
+> jump or shield, or automatically after `KnockdownFrames`), and the longest time one may stay down. *Proposal*: a neutral get-up on jump
+> or shield, automatic after `KnockdownFrames` (default 90).
 
 - **Contact record**: the record type `FGSTN_TumbleContactSyncState` and the probe are shared with **M4 §7b** (surface impacts: the
   knockback move already needs the contact, with `SurfaceTypeIndex`); `FGSTN_TumbleContactModifier` is M6's tech extension of that

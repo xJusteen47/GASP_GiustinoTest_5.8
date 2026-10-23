@@ -583,10 +583,12 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 8. Il tech deve esistere anche in PvE e usare il tasto dello scudo?
    Perché conta: aggiunge una difesa a costo zero ma rende gli scontri con i nemici meno punitivi.
    Ipotesi nella specifica: sì, tasto scudo, solo dopo un lancio con tumble; finestra 20 frame, blocco anti-mash 40 frame.
+   **Risposta (2026-10-23):** Di base niente tech: il tech è un'abilità pluggabile che un kit o una modalità può aggiungere, ma non c'è nel set standard ([M6 §6](combat-m6-defence-links.md#6-tech-and-knockdown)).
 
 9. Cosa succede quando si manca il tech: knockdown con rialzo automatico, rialzo con scelta (attacco, rotolata) o niente?
    Perché conta: definisce la punizione dopo un lancio e quanto tempo è in balia dei nemici.
    Ipotesi nella specifica: knockdown breve con un solo rialzo neutro; altri rialzi rimandati.
+   **Risposta (2026-10-23):** Se non c'è wall splat o rimbalzo eccessivo, il personaggio fa un mini rimbalzo a terra (direzione controllabile con lo stick) e finisce a terra (downed, come in Smash). Senza input resta a terra; tenendo lo stick in una direzione rotola da quella parte; attaccando fa un getup attack (da 0 a quanti ne vuole il designer per moveset). Resta aperto come ci si alza senza direzione né attacco (ipotesi: salto o scudo, oppure da soli dopo circa 1,5 s) e quanto si può restare a terra al massimo.
 
 10. DI e SDI devono valere uguale per giocatori, nemici e boss, e in tutte le modalità?
    Perché conta: la possibilità di sfuggire ai combo è parte del feeling e della difficoltà.

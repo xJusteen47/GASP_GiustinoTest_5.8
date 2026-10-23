@@ -219,6 +219,14 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   ([camera.md](camera.md) §6.1). The overlay **follows the camera** (12:53, CAM.10); movement while scoped **depends on the ability and the
   weapon** that use the scope (CAM.11).
 
+## 6g. No tech by default: mini bounce and downed state (owner input, 2026-10-23 15:23)
+
+- Tech, like every ability, must be **pluggable**. For now there is **no tech** in the standard set.
+- Without a wall splat or an excessive bounce, the character does a **mini bounce on the ground** (direction steerable with the stick) and
+  ends in a **downed state**, as in Smash. With no attack or direction input after the bounce, it ends lying on the ground.
+- On the ground, **holding the stick** in a direction makes it **roll** that way; **attacking** makes a **get-up attack**. Available get-up
+  attacks: **0 or as many as the designer wants**, per moveset. Spec: [combat-m6-defence-links.md](combat-m6-defence-links.md) §6.
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -461,3 +469,11 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 > Cam 10, segue la telecamera,
 > Cam 11, dipende dall'abilità e dall'arma che usa il mirino
+
+### Message of 2026-10-23, 15:23 (verbatim)
+
+> Comunque per quanto riguarda il tech, come buona abilità che sia, deve essere pluggabile. Per ora, voglio che si comporti nella maniera
+> seguente: se non c'è wall splat oppure rimbalzo eccessivo, il personaggio fa un mini rimbalzo a terra (controllabile con lo stick in
+> direzione) e finisce in downed state (come su smash). Dopo il rimbalzo se non si imputano attacchi o direzioni si finisce a terra. Tenere
+> premuto lo stick in una direzione (quando si è a terra)causa un roll verso quella direzione, attaccare, causa un getup attack. I getup
+> attack disponibili potrebbero essere 0 o quanti interessa a designer a seconda del moveset. Quindi di base, Niente tech.
