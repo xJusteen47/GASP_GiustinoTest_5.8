@@ -50,8 +50,14 @@ struct FGSTN_CombatSyncCore
 	/** 0 = the primary weapon, 1.. = the additional weapons in loadout order */
 	uint8 ActiveWeaponIndex = 0;
 
-	/** Written only by the server, out of band (UGSTN_CombatSimComponent::ServerWriteLoadoutRevision): the revision of the loadout the tables were built from */
+	/** Written only by the server, out of band (UGSTN_CombatSimComponent::ServerWriteLoadoutRevision): the revision of the loadout the simulation is to run on (the demand) */
 	uint16 LoadoutRevision = 0;
+
+	/**
+	 * The revision of the table set the simulation has swapped to (FGSTN_LoadoutSwapLogic). It follows LoadoutRevision at the first tick
+	 * that has the demanded table, so the swap happens on one frame on every machine; a state that carries both equal needs no swap
+	 */
+	uint16 TableRevision = 0;
 
 	/** The requests of the frame being simulated; PruneBefore at the top of every frame keeps older ones off the wire */
 	FGSTN_CombatRequests Requests;
@@ -61,7 +67,7 @@ struct FGSTN_CombatSyncCore
 	{
 		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
 			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && ActiveWeaponIndex == 0
-			&& LoadoutRevision == 0 && Requests.IsEmpty();
+			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty();
 	}
 
 	/**
@@ -69,7 +75,7 @@ struct FGSTN_CombatSyncCore
 	 * the state is the one the local table was built from. Until the table arrives the history and the buffer still run, so the
 	 * presses wait in the buffer.
 	 */
-	bool IsLoadoutCurrent(uint16 TableRevision) const { return LoadoutRevision == TableRevision; }
+	bool IsLoadoutCurrent(uint16 LocalTableRevision) const { return LoadoutRevision == LocalTableRevision; }
 
 	void NetSerialize(FArchive& Ar)
 	{
@@ -104,6 +110,7 @@ struct FGSTN_CombatSyncCore
 		Ar.SerializeIntPacked(PausedTotal);
 		Ar << ActiveWeaponIndex;
 		Ar << LoadoutRevision;
+		Ar << TableRevision;
 		Requests.NetSerialize(Ar);
 
 		if (Ar.IsLoading())
@@ -133,6 +140,7 @@ struct FGSTN_CombatSyncCore
 		PausedFramesTotal = 0;
 		ActiveWeaponIndex = 0;
 		LoadoutRevision = 0;
+		TableRevision = 0;
 		Requests = FGSTN_CombatRequests();
 	}
 
@@ -154,6 +162,7 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(PausedFramesTotal != AuthorityState.PausedFramesTotal, "PausedFramesTotal:");
 		UE_NP_TRACE_RECONCILE(ActiveWeaponIndex != AuthorityState.ActiveWeaponIndex, "ActiveWeaponIndex:");
 		UE_NP_TRACE_RECONCILE(LoadoutRevision != AuthorityState.LoadoutRevision, "LoadoutRevision:");
+		UE_NP_TRACE_RECONCILE(TableRevision != AuthorityState.TableRevision, "TableRevision:");
 		UE_NP_TRACE_RECONCILE(!(Requests == AuthorityState.Requests), "Requests:");
 		return false;
 	}
@@ -168,7 +177,7 @@ struct FGSTN_CombatSyncCore
 		}
 		if (!IsActionPartDefault())
 		{
-			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Weapon: %d Loadout: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision));
+			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Weapon: %d Loadout: %d Table: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision), static_cast<int32>(TableRevision));
 			Requests.ToString(Out);
 		}
 		Out.Append("\n");

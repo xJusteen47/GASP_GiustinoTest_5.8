@@ -168,6 +168,7 @@ bool FGSTN_StateShouldReconcileTest::RunTest(const FString& Parameters)
 	Differs(TEXT("paused total"), [](FGSTN_CombatSyncState& S) { S.Core.PausedFramesTotal = 31; });
 	Differs(TEXT("weapon"), [](FGSTN_CombatSyncState& S) { S.Core.ActiveWeaponIndex = 1; });
 	Differs(TEXT("loadout revision"), [](FGSTN_CombatSyncState& S) { S.Core.LoadoutRevision = 8; });
+	Differs(TEXT("table revision"), [](FGSTN_CombatSyncState& S) { S.Core.TableRevision = 8; });
 	Differs(TEXT("requests"), [](FGSTN_CombatSyncState& S) { S.Core.Requests.PruneBefore(411); });
 	return true;
 }
@@ -194,6 +195,38 @@ bool FGSTN_StateRevisionGateTest::RunTest(const FString& Parameters)
 	// A difference in the revision alone is a reconcile: the server's value wins
 	FGSTN_CombatSyncState Stale;
 	TestTrue(TEXT("a client that never heard of revision 3 reconciles"), Stale.ShouldReconcile(State));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_StateTableRevisionTest, "GSTNCombat.NP.State.TableRevisionRoundTrip", GSTN_NP_TEST_FLAGS)
+bool FGSTN_StateTableRevisionTest::RunTest(const FString& Parameters)
+{
+	FGSTN_CombatSyncState State;
+	State.Core.LoadoutRevision = 5;
+	State.Core.TableRevision = 4;
+	bool bError = false;
+	const FGSTN_CombatSyncState Loaded = ReadBackState(State, bError);
+	TestFalse(TEXT("reads back"), bError);
+	TestEqual(TEXT("the table revision arrived"), static_cast<int32>(Loaded.Core.TableRevision), 4);
+	TestEqual(TEXT("next to the demand"), static_cast<int32>(Loaded.Core.LoadoutRevision), 5);
+
+	FGSTN_CombatSyncState OnlyTable;
+	OnlyTable.Core.TableRevision = 1;
+	TestFalse(TEXT("a table revision alone is not the default state"), OnlyTable.Core.IsActionPartDefault());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_StateTableRevisionReconcileTest, "GSTNCombat.NP.State.TableRevisionReconciles", GSTN_NP_TEST_FLAGS)
+bool FGSTN_StateTableRevisionReconcileTest::RunTest(const FString& Parameters)
+{
+	FGSTN_CombatSyncState Server;
+	Server.Core.LoadoutRevision = 2;
+	Server.Core.TableRevision = 2;
+	FGSTN_CombatSyncState Client = Server;
+	TestFalse(TEXT("equal states agree"), Client.ShouldReconcile(Server));
+
+	Client.Core.TableRevision = 1;
+	TestTrue(TEXT("a client that has not swapped yet is corrected to the server's table revision"), Client.ShouldReconcile(Server));
 	return true;
 }
 
