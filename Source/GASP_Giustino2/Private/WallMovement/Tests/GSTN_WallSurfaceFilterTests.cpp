@@ -24,7 +24,7 @@
 
 namespace GSTNWallFilterTest
 {
-	constexpr EAutomationTestFlags Flags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+	constexpr EAutomationTestFlags FilterTestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	/** A throwaway game world to own the test actors */
 	struct FRig
@@ -98,7 +98,7 @@ namespace GSTNWallFilterTest
 
 using namespace GSTNWallFilterTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterForbiddenSurfaceRejectedTest, "GSTNMovement.Wall.Filter.ForbiddenSurfaceRejected", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterForbiddenSurfaceRejectedTest, "GSTNMovement.Wall.Filter.ForbiddenSurfaceRejected", FilterTestFlags)
 bool FGSTN_WallFilterForbiddenSurfaceRejectedTest::RunTest(const FString& Parameters)
 {
 	FRig Rig;
@@ -131,7 +131,7 @@ bool FGSTN_WallFilterForbiddenSurfaceRejectedTest::RunTest(const FString& Parame
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterUnknownPassesTest, "GSTNMovement.Wall.Filter.UnknownPasses", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterUnknownPassesTest, "GSTNMovement.Wall.Filter.UnknownPasses", FilterTestFlags)
 bool FGSTN_WallFilterUnknownPassesTest::RunTest(const FString& Parameters)
 {
 	FRig Rig;
@@ -154,7 +154,7 @@ bool FGSTN_WallFilterUnknownPassesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterClimbOnlyRejectsSlideTest, "GSTNMovement.Wall.Filter.ClimbOnlyRejectsSlide", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterClimbOnlyRejectsSlideTest, "GSTNMovement.Wall.Filter.ClimbOnlyRejectsSlide", FilterTestFlags)
 bool FGSTN_WallFilterClimbOnlyRejectsSlideTest::RunTest(const FString& Parameters)
 {
 	FRig Rig;
@@ -182,7 +182,7 @@ bool FGSTN_WallFilterClimbOnlyRejectsSlideTest::RunTest(const FString& Parameter
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterCornerOntoForbiddenRejectedTest, "GSTNMovement.Wall.Filter.CornerOntoForbiddenRejected", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterCornerOntoForbiddenRejectedTest, "GSTNMovement.Wall.Filter.CornerOntoForbiddenRejected", FilterTestFlags)
 bool FGSTN_WallFilterCornerOntoForbiddenRejectedTest::RunTest(const FString& Parameters)
 {
 	FRig Rig;
