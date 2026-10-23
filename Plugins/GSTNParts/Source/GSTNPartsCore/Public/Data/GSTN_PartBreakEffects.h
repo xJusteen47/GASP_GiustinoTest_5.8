@@ -6,6 +6,9 @@
 #include "GameplayTagContainer.h"
 #include "GSTN_PartBreakEffects.generated.h"
 
+struct FGSTN_PartsProjection;
+struct FGSTN_PartsState;
+
 /**
  * Base of what happens to an entity when one of its parts is broken (combat-parts.md §3.3). A derived struct holds the tuning
  * of one effect; the entries live in FGSTN_PartDefinition::OnBreak as FInstancedStruct, so a part set gains an effect by data
@@ -23,6 +26,13 @@ struct GSTNPARTSCORE_API FGSTN_PartBreakEffect
 	GENERATED_BODY()
 
 	virtual ~FGSTN_PartBreakEffect() = default;
+
+	/**
+	 * Derived effects only: adds this effect's projection for the broken part PartIndex. Called every frame for every broken
+	 * part, in part index order, so it must be a pure function of its own data and the state: no component, world or random
+	 * reads, no memory kept between calls. One-shot effects leave it empty; the outcome applier handles them
+	 */
+	virtual void Project(const FGSTN_PartsState& State, int32 PartIndex, FGSTN_PartsProjection& Out) const {}
 };
 
 /**
@@ -40,6 +50,8 @@ struct GSTNPARTSCORE_API FGSTN_PartBreakEffect_Tags : public FGSTN_PartBreakEffe
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Break Effect")
 	FGameplayTagContainer Removed;
+
+	virtual void Project(const FGSTN_PartsState& State, int32 PartIndex, FGSTN_PartsProjection& Out) const override;
 };
 
 /** Derived. Names of hurtboxes the snapshot hides while the part is broken; overrides the part's own broken-hurtbox policy */
@@ -50,6 +62,8 @@ struct GSTNPARTSCORE_API FGSTN_PartBreakEffect_DisableHurtbox : public FGSTN_Par
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Break Effect")
 	TArray<FName> Hurtboxes;
+
+	virtual void Project(const FGSTN_PartsState& State, int32 PartIndex, FGSTN_PartsProjection& Out) const override;
 };
 
 /** Derived. The entity's own hitboxes in these hit groups stop being generated while the part is broken: a lost arm cannot punch */
@@ -61,6 +75,8 @@ struct GSTNPARTSCORE_API FGSTN_PartBreakEffect_DisableHitGroups : public FGSTN_P
 	/** Bit n disables hit group n of the entity's moves */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Break Effect", meta = (Bitmask))
 	uint8 GroupMask = 0;
+
+	virtual void Project(const FGSTN_PartsState& State, int32 PartIndex, FGSTN_PartsProjection& Out) const override;
 };
 
 /** One magnitude of a Stats break effect: the SetByCaller key and its value */

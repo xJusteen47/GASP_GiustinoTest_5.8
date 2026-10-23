@@ -45,3 +45,29 @@ One line each: where, what differs, why. Collected per checkpoint; folded into `
   (`UGSTN_PartMath::LookupBand` of P3 wraps it for Blueprint).
 - m4b-parts-plan.md P2: added `Data.NumbersValidated`, `Data.PartSetAsset`, `Data.ExtensionsAndHitData`, `Data.StructsAreBlueprintTypes`,
   `Data.NoHardContentReferences` (the R-B and Blueprint gates as tests).
+
+## P3 (pure part math)
+
+- m4b-parts-plan.md P3: `FGSTN_PartsState` is a plain C++ POD, not a USTRUCT (fixed `uint8[16]` is not Blueprint-visible and the layout is the
+  wire contract); `UGSTN_PartMath::ApplyHit` is C++ only. The BlueprintPure subset is `GetPenetrationBandIndex`, `QuantisePartDamage`,
+  `DequantisePartDamage`, `IsPartBroken`, `CountBrokenParts`, `GetEffectiveWeight`. The names differ from the C++ statics because a UFUNCTION
+  cannot share a name with an overload.
+- combat-parts.md §4.2 / plan P3: "p breaks when it reaches `PartCap`" is implemented as "the stored byte reaches 255". With the ceil rule a
+  part at more than 254/255 of its cap breaks, so the break is a pure function of the byte the fragment carries.
+- combat-parts.md §4.2: a cascade breaks every descendant of a broken part, including unbreakable ones (an armour plate goes with the limb),
+  and sets their byte to 255. `AllBroken` still counts breakable parts only. Spec silent; flagged as an open point.
+- combat-parts.md §3.1: `Disable` on a broken part makes the hit the body's (full damage, part index `INDEX_NONE`, `bPassedToBody`); `Keep` and
+  `Replace` damage the stump with `BrokenMainTransfer` and the band of the stump's hardness. A hit on a broken part never changes the byte.
+- plan P3 `FGSTN_PartsProjection`: the "hurtbox mask" is a list of hurtbox **names** (`DisabledHurtboxes`), because hurtbox indices belong to the
+  hurtbox set of M4; the P7 snapshot code maps names to indices. The hit-group mask is a `uint8` as in the spec (`GroupMask`).
+- plan P3 `RestoreParts(State, Mask, Fraction)`: Fraction is the damage left as a fraction of the cap (0 = pristine), capped at 254/255 so a restored
+  part is not broken; it never raises a part's damage; the serial advances once if any part unbroke. Restoring a child while its parent stays
+  broken is not prevented (the plan's signature has no part list); flagged as an open point.
+- plan P3 result type: `FGSTN_PartHitResult` also carries the band's `StaggerScale` and `HitstopScale`, `HitMainDelta` / `BonusMainDamage` / `MainDelta`,
+  `bKill`, `bAllBrokenReached` so the P4 step needs nothing else from the math.
+- plan P3 tests: the grab gate evaluation is in P3 (`GrabGate.Evaluation`, one test covering empty, min count, required, any-of); P9 adds the NP
+  projection test. `Determinism.1000RandomSequencesTwoConfigs` runs 2 part sets x 1000 sequences x 40 hits twice each and compares the run
+  fingerprint with a pinned value (the "second compile config" check is that value on another build configuration).
+- plan P3 allocation test: a pass-through allocator installed with a compare and swap on the global allocator pointer counts the allocations of
+  the test thread (with a control that must see a growing array allocate). No engine facility counts per thread.
+- plan P3 acceptance: the golden hand values and the pinned fingerprint (0x827A1F0F6B36481A) pass in Development and DebugGame (`UnrealEditor-Win64-DebugGame-Cmd.exe`), 48 of 48 `GSTNParts.*`.

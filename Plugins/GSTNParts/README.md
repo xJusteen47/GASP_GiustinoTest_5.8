@@ -5,7 +5,7 @@ main pool), the penetration table that turns a hit's penetration against a part'
 effects as data, and the pure, integer-quantised math that applies a hit to a part. An entity without a part set behaves as it
 did before the plugin.
 
-Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P2 (P3 follows) of
+Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P3 of
 [m4b-parts-plan.md](../../docs/architecture/plans/m4b-parts-plan.md) are built (skeleton and tags, data, pure math); the design is
 [combat-parts.md](../../docs/architecture/combat-parts.md). The hit pipeline step (P4), the GAS appliers (P5), the NP sync
 fragment, tick extension and applier (P6, P7), hit feel (P8) and the presentation (P10-P12) are not built: they wait for the hit
@@ -18,7 +18,7 @@ regenerate by themselves.
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
+| `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve, the part state and the deterministic part math. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
 | `GSTNPartsGAS` | not built (P5) | Break-effect appliers, events, tag projection helpers. |
 | `GSTNPartsNP` | not built (P6-P8) | Sync fragment, tick extension, snapshot contributor, outcome applier. Needs the GAS-NPP fork. |
 | `GSTNPartsPresentation` | not built (P10-P12) | Damage material, hidden bones, chunks and shatter. Loaded by a listen-server host, skipped on a dedicated server. |
@@ -55,6 +55,31 @@ would otherwise be missing.
 more than 16 parts, a duplicate or empty name, a hurtbox in two parts, a bad or cyclic parent, hardness outside 0-15, a
 non-finite or negative number, an empty penetration table, two bands with one `MinDelta`. Warnings: a bone the preview mesh
 lacks, a part with no hurtbox, an unknown break effect, a band table that stops short of the lowest delta.
+
+## The part math
+
+`UGSTN_PartMath` (static, allocation free on the hit path, no tag, string, world or component access) over plain views of the
+authored data and a plain `FGSTN_PartsState` (`BrokenMask` uint16, `PartDamage[16]` bytes, `BreakSerial` 4 bits: the contract
+of the sync fragment and the snapshot; no floats, tags or pointers):
+
+- **Quantisation.** The stored byte is `min(255, ceil(damage / cap x 255))`; a nonzero hit always moves it; the next hit starts
+  from the dequantised value (worked in byte units, so there is no drift); 255 is "at the cap" and is what breaks a part.
+- **`ApplyHit`.** `PartDelta = D x band part scale x hit scale x part scale`, `MainDelta = D x band main scale x MainTransfer`
+  (`BrokenMainTransfer` on a stump). Overflow beyond the cap is not carried to the main pool. Children of a broken part break in
+  the same hit (also unbreakable ones: they go with the limb) and each newly broken part adds its `MainDamage` effects once, in
+  index order. A ricochet band changes nothing and reports zero stagger and hitstop scales. A hit on the body, or on a broken part
+  whose policy is `Disable`, is the full damage. `Replace` damages like `Keep` (its shape is not declared yet).
+- **Inbox order.** Two hits in one frame must be applied in the inbox's sorted order; each sees the state the previous one left.
+- **Weight.** `EffectiveWeightScale = curve(Progress) x Product(1 - LostMassFraction of the broken parts)`, floored at
+  `MinWeightScale`; the curve is the baked integer table, the progress is quantised to 16 bits first.
+- **Derived projection.** `ProjectDerived` fills an `FGSTN_PartsProjection` (granted and removed tags, hurtbox names to hide, hit
+  group mask, Broken / AllBroken / GrabLocked) from the mask; derived break effects implement `Project`. `IsGrabLocked` evaluates
+  the grab gate (an empty gate never locks).
+- **Restore.** `RestoreParts` unbreaks the masked parts (0 = all) and sets their damage to a fraction of the cap, never higher than
+  it was; the serial advances so restore then break again is a new event key. It does not give main-pool percent back.
+
+Blueprint gets the stateless helpers (`GetPenetrationBandIndex`, `QuantisePartDamage`, `DequantisePartDamage`, `IsPartBroken`,
+`CountBrokenParts`, `GetEffectiveWeight`); `ApplyHit` is C++ only (hot path, MT section 3.8).
 
 ## Gameplay tags
 
@@ -98,10 +123,14 @@ The plugin ships no content yet; every reference between assets is soft (checked
 `Core.Settings.Defaults`, `Core.Data.*` (part set valid, duplicate hurtbox, parent cycle, mask over 16, missing bone, numbers,
 unknown effect, asset helpers, extensions, Blueprint types, no hard references, default table), `Core.Penetration.*` (band
 lookup from -8 to +8, ignore hardness, one band, empty table, sorted bands), `Core.BakedCurve.*` (hand values, monotonic,
-integer only). The canary build
+integer only), `Core.Math.*` (quantise rule and hand values, golden hit sequence, cascade, weak point, ricochet, overflow, the
+three broken-hurtbox policies, nonzero hit moves the byte, single-part player, inbox order, restore, projection, AllBroken,
+no allocation), `Core.GrabGate.Evaluation`, `Core.Determinism.*` (2000 random sequences with a pinned fingerprint, weight
+curve against hand values, weight clamp). The canary build
 (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the canary script does not exist.
 
 ## Changelog
 
-- 0.1 (2026-10-23): plugin skeleton, native tags, ini vocabulary, settings (plan P1); part set, penetration table, break
+- 0.1 (2026-10-23): part state, quantisation, hit application, cascade, weight, projection, grab gate and restore math
+  (plan P3); plugin skeleton, native tags, ini vocabulary, settings (plan P1); part set, penetration table, break
   effects, hit data, kit and rules extensions, validators, baked curve (plan P2).
