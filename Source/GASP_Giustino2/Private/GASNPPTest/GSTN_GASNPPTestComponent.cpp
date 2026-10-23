@@ -51,6 +51,11 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 	if (UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
 	{
 		Combat->AdoptableTimelines.AddUnique(UGSTN_GA_TestTriggeredTimeline::StaticClass());
+		Combat->AdoptableTimelines.AddUnique(UGSTN_GA_TestWeaponSwitch::StaticClass());
+		// Weapon 0 is the primary, 1 the support: mechanism test effects (real support weapons ship without a stats effect)
+		Combat->WeaponStats.Reset();
+		Combat->WeaponStats.AddDefaulted_GetRef().Effect = UGSTN_GE_TestPrimaryWeaponStats::StaticClass();
+		Combat->WeaponStats.AddDefaulted_GetRef().Effect = UGSTN_GE_TestSupportWeaponStats::StaticClass();
 	}
 }
 
@@ -96,6 +101,14 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 					++TimelineStartedCounts.FindOrAdd(Source);
 				}
 			}).Id;
+		WeaponSwitchedListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCombatTags::Event_WeaponSwitched)),
+			[this](const FGSTN_SimEvent& Event)
+			{
+				if (Event.Instigator.Get() == GetOwner())
+				{
+					++WeaponSwitchedCount;
+				}
+			}).Id;
 	}
 }
 
@@ -119,6 +132,16 @@ void UGSTN_GASNPPTestComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 			Events->StopListening(Handle);
 		}
 		TimelineStartedListener = INDEX_NONE;
+	}
+	if (WeaponSwitchedListener != INDEX_NONE)
+	{
+		if (UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(this))
+		{
+			FGSTN_SimEventListenerHandle Handle;
+			Handle.Id = WeaponSwitchedListener;
+			Events->StopListening(Handle);
+		}
+		WeaponSwitchedListener = INDEX_NONE;
 	}
 	Super::EndPlay(EndPlayReason);
 }
@@ -354,6 +377,7 @@ namespace
 		if (Name == TEXT("TagRaiser")) { return UGSTN_GA_ProbeTagRaiser::StaticClass(); }
 		if (Name == TEXT("TagTarget")) { return UGSTN_GA_ProbeTagTarget::StaticClass(); }
 		if (Name == TEXT("TimelineTarget")) { return UGSTN_GA_TestTriggeredTimeline::StaticClass(); }
+		if (Name == TEXT("SwitchTarget")) { return UGSTN_GA_TestWeaponSwitch::StaticClass(); }
 		return nullptr;
 	}
 
@@ -393,7 +417,7 @@ int32 UGSTN_GASNPPTestComponent::ServerRevokeProbes()
 	{
 		return 0;
 	}
-	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()); });
+	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestWeaponSwitch::StaticClass()); });
 }
 
 int32 UGSTN_GASNPPTestComponent::ServerGrantBulk(int32 FirstIndex, int32 Count)
@@ -442,6 +466,25 @@ bool UGSTN_GASNPPTestComponent::ServerSetBulkEffect(bool bApply)
 		BulkEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_ProbeBulk>(), 1.f, AbilitySystem->MakeEffectContext());
 	}
 	return !bApply || BulkEffectHandle.IsValid();
+}
+
+bool UGSTN_GASNPPTestComponent::ServerEquipPrimaryWeapon(bool bEquip)
+{
+	UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>();
+	if (!AbilitySystem || !Combat || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (bEquip)
+	{
+		return FGSTN_WeaponStatsSwap::Execute(*AbilitySystem, Combat->WeaponStats, INDEX_NONE, 0);
+	}
+	int32 Removed = 0;
+	for (const FGSTN_WeaponStatsEntry& Weapon : Combat->WeaponStats)
+	{
+		Removed += UGSTN_GE_WeaponStats::Remove(*AbilitySystem, Weapon.Effect);
+	}
+	return true;
 }
 
 bool UGSTN_GASNPPTestComponent::ServerSetStatsPreset(int32 Preset)
@@ -641,6 +684,8 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				StartedJson->SetNumberField(Pair.Key.ToString(), Pair.Value);
 			}
 			CombatJson->SetObjectField(TEXT("timelineStarted"), StartedJson);
+			CombatJson->SetNumberField(TEXT("weaponSwitched"), WeaponSwitchedCount);
+			CombatJson->SetNumberField(TEXT("activeWeapon"), CombatState->Core.ActiveWeaponIndex);
 			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestFrame) });
 			Json->SetObjectField(TEXT("combat"), CombatJson);
 		}

@@ -7,10 +7,12 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameplayEffect.h"
 #include "GSTN_CombatTags.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "Misc/AutomationTest.h"
 #include "Movement/GSTN_StatsMovementModifier.h"
+#include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "MoverComponent.h"
 #include "Tests/GSTN_StatsModifierTestTypes.h"
 
@@ -148,6 +150,79 @@ bool FGSTN_StatsMaxSpeedFollowsAttributeTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("no attribute set, no factor"), Bare.Step());
 		TestEqual(TEXT("and nothing is written"), Bare.Walking->RunSpeed, 123.f);
 	}
+	return true;
+}
+
+namespace
+{
+	FGameplayModifierInfo WalkSpeedModifier(float Amount)
+	{
+		FGameplayModifierInfo Modifier;
+		Modifier.Attribute = UGSTN_CombatAttributeSet::GetWalkSpeedAttribute();
+		Modifier.ModifierOp = EGameplayModOp::Additive;
+		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(Amount));
+		return Modifier;
+	}
+}
+
+UGSTN_TestWeaponStatsPlus::UGSTN_TestWeaponStatsPlus()
+{
+	Modifiers.Add(WalkSpeedModifier(300.f));
+}
+
+UGSTN_TestWeaponStatsMinus::UGSTN_TestWeaponStatsMinus()
+{
+	Modifiers.Add(WalkSpeedModifier(-300.f));
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_StatsSwapDeterministicTest, "GSTNCombat.NP.Stats.SwapDeterministic", GSTN_NP_TEST_FLAGS)
+bool FGSTN_StatsSwapDeterministicTest::RunTest(const FString& Parameters)
+{
+	const FScopedStatsSettings Settings(600.f, { TEXT("RunSpeed") });
+	FStatsRig Rig;
+	Rig.SetWalkSpeed(600.f);
+
+	TArray<FGSTN_WeaponStatsEntry> Weapons;
+	Weapons.AddDefaulted_GetRef().Effect = UGSTN_TestWeaponStatsPlus::StaticClass();
+	Weapons.AddDefaulted_GetRef().Effect = UGSTN_TestWeaponStatsMinus::StaticClass();
+	Weapons.AddDefaulted();	// a support weapon without a stats effect inherits the kit's stats
+
+	const auto Current = [&Rig]() { return Rig.ASC->GetNumericAttribute(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute()); };
+
+	// The primary weapon is on from the start (the loadout applies it)
+	TestTrue(TEXT("the primary's effect applies"), FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, INDEX_NONE, 0));
+	TestEqual(TEXT("primary: +300"), Current(), 900.f);
+
+	FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 0, 1);
+	TestEqual(TEXT("switched to the support: the primary's bonus is gone, the support's malus is on"), Current(), 300.f);
+
+	// The same frame executed again, as a re-simulation does: the same result, nothing stacks
+	FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 0, 1);
+	FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 0, 1);
+	TestEqual(TEXT("a replayed swap changes nothing"), Current(), 300.f);
+
+	// A rolled back swap replayed from the state before it, then forward again
+	FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 1, 0);
+	TestEqual(TEXT("back to the primary"), Current(), 900.f);
+	FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 0, 1);
+	TestEqual(TEXT("and to the support again"), Current(), 300.f);
+
+	// A support weapon with no effect leaves only the kit's stats
+	FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 1, 2);
+	TestEqual(TEXT("no effect on the third weapon: the kit's 600"), Current(), 600.f);
+	TestFalse(TEXT("the swap to it reports no effect applied"), FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 2, 2));
+
+	// A swap that names an old index the list does not have (a stale request) still applies the new weapon
+	FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 7, 0);
+	TestEqual(TEXT("an unknown old index removes nothing and applies the new one"), Current(), 900.f);
+
+	// The speeds follow the swap through the modifier
+	Rig.Walking->RunSpeed = 0.f;
+	Rig.Step();
+	TestEqual(TEXT("the run speed follows the primary's +300 (x1.5)"), Rig.Walking->RunSpeed, 562.5f);
+	FGSTN_WeaponStatsSwap::Execute(*Rig.ASC, Weapons, 0, 1);
+	Rig.Step();
+	TestEqual(TEXT("and the support's -300 (x0.5)"), Rig.Walking->RunSpeed, 187.5f);
 	return true;
 }
 

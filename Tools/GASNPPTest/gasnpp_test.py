@@ -1284,7 +1284,7 @@ def scenario_triggered_timeline(client=1, resim_frames=15):
         return not bad, '; '.join(bad) or 'no waiting tag, no timeline tag, no active ability on any machine'
 
     steps = [
-        (0.0, _mark(run, marks, 'start')),
+        (0.6, _mark(run, marks, 'start')),   # after the grant: the server-only revoke and grant at 0.1 s is a deliberate one-off ASC difference
         (0.1, lambda: ('grant', regrant())),
         (0.2, run.at('probes granted', lambda: (all(st['granted']), f"{st['granted']}"))),
         (2.5, run.at('the owner has the granted specs', specs_equal)),
@@ -1301,6 +1301,92 @@ def scenario_triggered_timeline(client=1, resim_frames=15):
         (7.05, run.at('no unexplained reconciles (before the cleanup)', no_unexplained)),
         (7.1, lambda: ('cleanup', _srv(key).server_revoke_probes())),
         (7.8, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_weapon_switch(client=1, resim_frames=15):
+    """C12 weapon switch (combat-m3 7.7, 10.2): UGSTN_GA_TestWeaponSwitch (a 12 frame timeline with a weapon switch track at frame 3,
+    adopted like the triggered timeline: a press of the buff button) swaps the stats effect primary <-> support while the real
+    FGSTN_StatsMovementModifier follows the WalkSpeed stat. The primary effect is +300 (x1.5 -> run speed 600), the support -300 (x0.5 -> 200).
+    Two presses; the first with a forced reconcile across the swap frame, the second too. Judged on the server and the owner:
+      - the weapon index in the combat state and the WalkSpeed stat are those of the weapon, on both, after each press
+      - the authority published exactly one WeaponSwitched per press (a re-simulation publishes none)
+      - the peak walking speed is the primary's before the first press, the support's after it
+      - no unexplained reconcile of ours (ability system / combat) in the window"""
+    run = _Run('weapon_switch', client, judge_reconciles=False)
+    key = run.key
+    st, marks = {}, {}
+
+    def stat(side, field):
+        return (_latest(run, side)['probe'].get('stats') or {}).get(field)
+
+    def grant():
+        _srv(key).server_revoke_probes()
+        st['granted'] = [_srv(key).server_grant_probe(n) for n in ('SwitchTarget', 'TagRaiser')]
+        st['equipped'] = _srv(key).server_equip_primary_weapon(True)
+        return st['granted'] + [st['equipped']]
+
+    def peak(t0, t1, want):
+        def f():
+            v = _horizontal_peak(run, 'srv', t0, t1)
+            return 0.85 * want <= v <= 1.05 * want, f'peak speed {v:.0f} (want about {want})'
+        return f
+
+    def weapon(index, walk_speed, run_speed):
+        def f():
+            out, ok = [], True
+            for i, side in ((0, 'srv'), (client, 'cli')):
+                v = _view(i, key) or {}
+                w = ((v.get('combat') or {}).get('activeWeapon'))
+                ws, rs, has = stat(side, 'walkSpeedStat'), stat(side, 'gaitRunSpeed'), stat(side, 'hasCombatSet')
+                good = has and w == index and ws is not None and abs(ws - walk_speed) < 0.5 and rs is not None and abs(rs - run_speed) < 1.0
+                ok &= bool(good)
+                out.append(f'{side}: weapon {w}, WalkSpeed {ws}, run speed {rs}')
+            return ok, '; '.join(out) + f' (want weapon {index}, WalkSpeed {walk_speed}, run {run_speed})'
+        return f
+
+    def switched(n):
+        def f():
+            c = (((_view(0, key) or {}).get('combat') or {}).get('weaponSwitched'))
+            return c == n, f'WeaponSwitched published by the authority: {c} (want {n})'
+        return f
+
+    def agree():
+        sv, ov = _view(0, key), _view(client, key)
+        d = [x for x in _diff(sv, ov) if not str(x).startswith(('Health', 'Stamina'))] if sv and ov else 'missing view'   # the periodic regen of the test set lags by a period on the owner
+        return not d, f'server vs owner diff: {d or "none"}'
+
+    def no_unexplained():
+        r = report_reconciles(marks['start']) if marks.get('start') is not None else None
+        if r is None:
+            return False, 'the log was not readable'
+        return r['unexplained_ours'] == 0, f"{r['unexplained_ours']} unexplained of ours {r['unexplained_by_model']}, forced={r['forced']} {r['unexplained_lines']}"
+
+    steps = [
+        (0.6, _mark(run, marks, 'start')),   # after the grant: the server-only revoke and grant at 0.1 s is a deliberate one-off ASC difference
+        (0.1, lambda: ('grant and equip the primary', grant())),
+        (0.2, run.at('probes granted and the primary equipped', lambda: (all(st['granted']) and st['equipped'], f"{st['granted']} {st['equipped']}"))),
+        (2.5, run.at('start: the primary weapon, WalkSpeed 900, run 600', weapon(0, 900.0, 600.0))),
+        (2.6, lambda: ('reset counters', [c.reset_probe_counters() for w in worlds() for c in [comps(w).get(key)] if c is not None] and 'reset')),
+        (2.8, lambda: ('walk', hold(client, 'move', (0, 1, 0)))),
+        (5.0, run.at('walking with the primary', peak(3.6, 5.0, 600))),
+        (5.1, lambda: ('stop', release(client, 'move'))),
+        (5.6, lambda: ('press 1: switch', press(client, 'buff'))),
+        (5.7, lambda: ('force reconcile across the swap', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
+        (7.0, run.at('press 1: the support weapon, WalkSpeed 300, run 200', weapon(1, 300.0, 200.0))),
+        (7.0, run.at('press 1: exactly one WeaponSwitched', switched(1))),
+        (7.2, lambda: ('walk', hold(client, 'move', (0, 1, 0)))),
+        (9.6, run.at('walking with the support weapon', peak(8.2, 9.6, 200))),
+        (9.7, lambda: ('stop', release(client, 'move'))),
+        (10.2, lambda: ('press 2: switch back', press(client, 'buff'))),
+        (10.3, lambda: ('force reconcile across the swap', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
+        (11.6, run.at('press 2: the primary again', weapon(0, 900.0, 600.0))),
+        (11.6, run.at('press 2: exactly one more WeaponSwitched, none from the re-simulation', switched(2))),
+        (11.7, run.at('server and owner agree', agree)),
+        (11.75, run.at('no unexplained reconciles of ours (before the cleanup)', no_unexplained)),
+        (11.8, lambda: ('cleanup', (_srv(key).server_revoke_probes(), _srv(key).server_equip_primary_weapon(False)))),
+        (12.6, run.finish()),
     ]
     run.run(steps)
 

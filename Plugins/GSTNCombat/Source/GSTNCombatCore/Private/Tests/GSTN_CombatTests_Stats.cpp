@@ -1,5 +1,6 @@
 #include "Tests/GSTN_CombatTestUtils.h"
 #include "Stats/GSTN_StatsScaling.h"
+#include "Timeline/GSTN_WeaponSwitchRules.h"
 #include "Tests/GSTN_StatsTestTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -48,6 +49,22 @@ bool FGSTN_StatsScalingBaseRelativeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("ReadFloat reads a float"), FGSTN_StatsScaling::ReadFloat(*Base, TEXT("RunSpeed"), Read));
 	TestEqual(TEXT("its value"), Read, 375.0);
 	TestFalse(TEXT("ReadFloat refuses a non-number"), FGSTN_StatsScaling::ReadFloat(*Base, TEXT("Label"), Read));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WeaponSwitchResolveTest, "GSTNCombat.Core.Stats.WeaponSwitchResolve", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_WeaponSwitchResolveTest::RunTest(const FString& Parameters)
+{
+	using R = FGSTN_WeaponSwitchRules;
+	TestEqual(TEXT("next goes forward"), R::Resolve(EGSTN_SwitchTarget::Next, 0, 0, 3), 1);
+	TestEqual(TEXT("next wraps"), R::Resolve(EGSTN_SwitchTarget::Next, 0, 2, 3), 0);
+	TestEqual(TEXT("previous wraps"), R::Resolve(EGSTN_SwitchTarget::Previous, 0, 0, 3), 2);
+	TestEqual(TEXT("previous goes back"), R::Resolve(EGSTN_SwitchTarget::Previous, 0, 2, 3), 1);
+	TestEqual(TEXT("index selects"), R::Resolve(EGSTN_SwitchTarget::Index, 2, 0, 3), 2);
+	TestEqual(TEXT("an index the loadout does not have changes nothing"), R::Resolve(EGSTN_SwitchTarget::Index, 5, 1, 3), 1);
+	TestEqual(TEXT("one weapon never switches"), R::Resolve(EGSTN_SwitchTarget::Next, 0, 0, 1), 0);
+	TestEqual(TEXT("no weapon never switches"), R::Resolve(EGSTN_SwitchTarget::Next, 0, 0, 0), 0);
+	TestEqual(TEXT("an active index out of range counts as the first weapon"), R::Resolve(EGSTN_SwitchTarget::Next, 0, 9, 2), 1);
 	return true;
 }
 

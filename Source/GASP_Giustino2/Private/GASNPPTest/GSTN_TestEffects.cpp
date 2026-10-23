@@ -148,3 +148,13 @@ UGSTN_GE_ProbeStatsSlow::UGSTN_GE_ProbeStatsSlow()
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), 1.f));
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), -300.f));
 }
+
+UGSTN_GE_TestPrimaryWeaponStats::UGSTN_GE_TestPrimaryWeaponStats()
+{
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), 300.f));
+}
+
+UGSTN_GE_TestSupportWeaponStats::UGSTN_GE_TestSupportWeaponStats()
+{
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), -300.f));
+}

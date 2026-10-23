@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Effects/GSTN_GE_WeaponStats.h"
 #include "MovementMode.h"
 #include "GSTN_StatsModifierTestTypes.generated.h"
 
@@ -35,4 +36,23 @@ class UGSTN_TestPlainMode : public UBaseMovementMode
 public:
 	UPROPERTY()
 	float MaxSpeedOverride = -1.f;
+};
+
+/** Weapon stats effects of the swap test: +300 and -300 on the walk speed */
+UCLASS(Hidden)
+class UGSTN_TestWeaponStatsPlus : public UGSTN_GE_WeaponStats
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_TestWeaponStatsPlus();
+};
+
+UCLASS(Hidden)
+class UGSTN_TestWeaponStatsMinus : public UGSTN_GE_WeaponStats
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_TestWeaponStatsMinus();
 };

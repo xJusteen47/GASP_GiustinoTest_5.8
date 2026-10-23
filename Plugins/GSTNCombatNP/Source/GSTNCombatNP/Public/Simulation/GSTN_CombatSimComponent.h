@@ -12,6 +12,7 @@
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_InputSimulator.h"
+#include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "GSTN_CombatSimComponent.generated.h"
@@ -187,6 +188,16 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
 	bool bQueueStatsModifier = true;
+
+	/**
+	 * The stats effect of each weapon the combatant can switch to, in loadout order (0 = primary). A weapon switch track of a
+	 * running timeline picks the next index from this list's length and the combat tick requests SwapWeaponStats; the ability
+	 * system's pre-tick then removes the old weapon's effect and applies the new one (FGSTN_WeaponStatsSwap). The primary weapon
+	 * does not change during a match, so the switch is primary <-> support. An entry may leave Effect empty: a support weapon
+	 * inherits the kit's stats by default. The loadout fills it; fixed after BeginPlay like the bindings, the same on every machine
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
+	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
 
 	/** Button whose press opens a hitstop window. -1 = none */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "-1", ClampMax = "31"))

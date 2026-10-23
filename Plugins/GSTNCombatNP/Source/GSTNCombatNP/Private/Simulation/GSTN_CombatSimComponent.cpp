@@ -25,6 +25,7 @@
 #include "MoverComponent.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
+#include "Timeline/GSTN_WeaponSwitchRules.h"
 #include "Simulation/GSTN_InputHostUtils.h"
 #include "Sources/GSTN_InputSource.h"
 
@@ -475,6 +476,31 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		}
 		EventOutbox.Add(MoveTemp(Event));
 	}
+	// Step 4, the weapon switch track (combat-m3 7.2): the swap frame of the running timeline was crossed by this frame's evaluation.
+	// The new index goes into the state, the old one into the request, and the ability system's pre-tick swaps the stats effects. A
+	// timeline that ended or was replaced this frame left no valid evaluation behind
+	if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline)
+	{
+		for (const FGSTN_TimelineTrack_WeaponSwitch* Switch : TimelineOutput.WeaponSwitches)
+		{
+			const int32 Old = OutSync.Core.ActiveWeaponIndex;
+			const int32 New = FGSTN_WeaponSwitchRules::Resolve(Switch->Target, Switch->Index, Old, WeaponStats.Num());
+			if (New == Old)
+			{
+				continue;
+			}
+			OutSync.Core.ActiveWeaponIndex = static_cast<uint8>(New);
+			if (!OutSync.Core.Requests.Add(EGSTN_RequestType::SwapWeaponStats, Frame, static_cast<int16>(Old)))
+			{
+				UE_LOG(LogGSTNCombatSim, Error, TEXT("%s frame %d: no room for the weapon swap request"), *GetOwner()->GetName(), Frame);
+			}
+			FGSTN_SimEvent Event;
+			Event.EventType = GSTNCombatTags::Event_WeaponSwitched;
+			Event.Frame = Frame;
+			Event.Instigator = GetOwner();
+			EventOutbox.Add(MoveTemp(Event));
+		}
+	}
 	Extensions.Run(EGSTN_CombatHookPoint::AfterExecute, HookContext);
 
 	// Debug hitstop, until hits replace it: a press of the test button opens a window (not while one is already open)
@@ -591,6 +617,16 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 			{
 				AbilitySystem->CancelAbilityHandle(Spec->Handle);
 			}
+		}
+	}
+
+	// A weapon switch of this frame: the old weapon's stats effect goes, the new one's comes (found by class, so a re-simulated
+	// frame finds the same result). Before the activations so an ability that starts now sees the new stats
+	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
+	{
+		if (Slot.Type == EGSTN_RequestType::SwapWeaponStats && Slot.Frame == Frame)
+		{
+			FGSTN_WeaponStatsSwap::Execute(*AbilitySystem, WeaponStats, Slot.Arg, Sync->Core.ActiveWeaponIndex);
 		}
 	}
 
