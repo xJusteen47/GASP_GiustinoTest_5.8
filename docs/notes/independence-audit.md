@@ -55,3 +55,7 @@ Rule 3 = MT 3.8 Blueprint extension, rule 4 = MT 3.9 replaceable content, rule 5
 ## Decision (coordinator, 2026-10-22): Blueprint wrappers and soft refs
 - Opt-in wrapper per instanced-struct family (conditions, priority criteria, reset rules), e.g. `FGSTN_InputCondition_Blueprint` holding a Blueprintable UObject class with a const BlueprintNativeEvent. Built-in C++ structs remain the default. README documents it as the slower path that must stay deterministic (no world queries, no state outside its inputs). Needs an Automation test.
 - Soft references: loaded-at-use is fine for assets; anything the simulation reads every frame is resolved once at setup or on loadout change, never in the tick.
+
+## Known deviation: GSTNCombatNP depends on GSTNCombatGAS (2026-10-24)
+
+`GSTNCombatNP.Build.cs` lists `GSTNCombatGAS` (the timeline ability tags, the combat attribute set the stats modifier reads, `UGSTN_GE_WeaponStats`/`FGSTN_StatValue` in the weapon stats entries, the loadout component). The loadout table swap (C17) does not widen it: the converter, the table set and the swap logic use Core and InputNP types only (plus the weapon stats entry type, already there); GAS is touched in the component's `BindLoadoutComponent` / `BuildWeaponStats` glue.

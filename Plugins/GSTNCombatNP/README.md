@@ -212,3 +212,25 @@ The combat tick steps `FGSTN_CombatSyncCore::Jump` from the Mover sim-state trac
 
 `UGSTN_GA_MoveTimeline` (abstract) is a timeline ability whose movement is one instant velocity effect applied when the timeline begins (`UGSTN_GA_BaseCombat::OnTimelineBegan`). Concrete defaults: `UGSTN_GA_Dash`, `UGSTN_GA_GroundDodge` (low long-jump arc, lands standing), `UGSTN_GA_AirDodge` (dive roll, ends on landing after the landing lag of its movement track). The speeds are the data of the `MoveEffect` (`UGSTN_GE_Move*`, creator `UGSTN_MoveImpulseCreator`), the timeline is the ability's timeline data, and the dodges carry `Combat.State.Hitstun` / `Hitstop` in `ActivationBlockedTags` (no hard-coded check: a kit's child class clears them). The creator reads the up direction, facing and velocity from the Mover sim-state tracker, so the impulse is the same on every machine under any gravity. The ability never sets character state; it ends itself on landing from the tracker's ground tag. No Mover mode and no `Combat.Mover.*` tag is added.
 Bind them as data: dash to `Command.Movement.Dash`; the ground dodge (require `Input.Context.Grounded`) and the air dodge (require `Input.Context.Airborne`) to `Command.Defence.Dodge`. Tests: `GSTNCombat.NP.Dodge.*`; PIE scenarios dash, ground_dodge, air_dodge, dodge_blocked_in_hitstun, dash_tilted_gravity, kit_without_dodge, interact_tap_hold.
+
+## Loadout tables and the table swap (C17, `docs/notes/loadout-table-swap-design.md`)
+
+Everything the loadout decides lives in a **table set** (`UGSTN_CombatTableSet`, `Simulation/GSTN_CombatTableSet.h`): the `FGSTN_CommandTable` the input simulation
+resolves against, the timeline registry with its tiers and default windows, the per-binding timeline and jump role, the kit's jump data, the weapon stats, a
+deterministic `Checksum`. The component keeps one set per loadout revision (`FindTableSet`, `RegisterTableSet`): revision 0 is the Blueprint binding set (a pawn
+without a loadout runs on it for the whole match), the others are the newest `UGSTN_CombatSettings::MaxRetainedTableRevisions`. The active table is a pure function
+of the rolled-back state (`FGSTN_CombatSyncCore::TableRevision`), never "the current table" of the component.
+
+- **Converter** `FGSTN_CombatTableConverter::Convert` (pure, class loader injected): Core `FGSTN_CompiledBindingTable` to a set. Commands sorted by tag name, bindings by
+  (command name, Core entry order); each binding gets `SourceMask` (`GSTNEntrySourceMask::Bit`, Core) and, when its offset or buffer differs, its own slot. Entries that do not
+  load or do not fit are dropped with an error in the report. `RegisterExtension(Id, Fn)` is the seam for mods: extensions run in id order after the base conversion.
+- **Swap** `FGSTN_LoadoutSwapLogic::Step` at the top of `SimulationTick`, right after the request prune: `LoadoutRevision` is the demand (the server's out-of-band write),
+  `TableRevision` what the simulation has swapped to. The first frame that has the demanded set is the boundary on every machine: the running timeline ends (a `CancelTimeline`
+  request carrying the OLD registry index, resolved against the previous set in the pre-tick), the weapon returns to the primary, buffered presses and stick anchors are used
+  up, `TableRevision` follows, `Combat.Event.LoadoutSwapped` is published by the authority. A demand with no set yet (a client before the loadout OnRep) closes the gate: the
+  input history keeps running, no command resolves, no adoption (`GetGateClosedFrames()` counts those frames). A forced command on the swap frame is dropped.
+- **Feeding it** `BindLoadoutComponent` (done by the component itself, a few times a second until a `UGSTN_LoadoutComponent` is found on the owner or the pawn's PlayerState):
+  when the loadout applies on any machine its compiled table is converted and registered under the loadout revision. `ServerApplyLoadoutChange` refuses a change within
+  `MinFramesBetweenLoadoutChanges` of the previous one. `GSTN.NP.TableLimits` (a loadout validator registered at module startup) refuses a loadout over 255 bindings or 32767 timelines.
+- Tests: `GSTNCombat.NP.Table.*` (conversion, checksum, extensions, limits, weapon stats), `GSTNCombat.NP.Swap.*` (the step), `GSTNCombat.NP.State.TableRevision*`; the network behaviour
+  is `scenario_loadout_change` (checks 16 to 20: table revision follows, equal checksum, the dash command exists only in Beta, the gate stays open on the authority).

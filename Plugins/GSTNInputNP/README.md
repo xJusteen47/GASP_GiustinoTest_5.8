@@ -149,3 +149,10 @@ It also exposes the local gravity frame and the launch signal, all from the same
 
 Automation tests `GSTNInput.NP.*` (`Source/GSTNInputNP/Private/Tests/`), run with the usual `Automation RunTests GSTNInput+GSTNCombat`
 (filter by name prefix, so the plugin move did not change it). See [testing.md](../../docs/architecture/testing.md).
+
+### Source masks (C17)
+
+`FGSTN_CompiledBinding::SourceMask` is an opaque bit mask (0 = always active) and `Slot` an optional slot of the binding's own; `FGSTN_InputTickArgs::ActiveSourceMask` says which sources apply this frame
+(default all bits). The input plugin never reads what a bit means (the combat plugin maps kit, weapons and supers to bits). A binding of an inactive source is not selected; when any binding of the table has a
+mask, the candidates are rebuilt each frame from the commands that have an active binding (`FGSTN_CommandTable::BuildCandidates`, the slot of the first active binding ranks the command), so an inactive command
+neither fires nor reserves a press. A table without masks keeps the precomputed candidates. Tests `GSTNInput.NP.Table.*`.
