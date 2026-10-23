@@ -42,6 +42,9 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Molti nemici e nemici-piattaforma (ricerca del 22/10) | [many-enemies-replication.md](many-enemies-replication.md) |
 | M9 Adattatore GAS standard | [combat-m9-stock-gas.md](combat-m9-stock-gas.md) |
 | M10 Oggetti tenuti e lanciati | [combat-m10-held-objects.md](combat-m10-held-objects.md) |
+| Superfici di attraversamento sulle parti dei nemici | [traversal-surfaces.md](traversal-surfaces.md) |
+| M11 Kit in gioco, armi di supporto, mod, zaini | [combat-loadout-mods.md](combat-loadout-mods.md) |
+| Indicatore di profondità | [depth-marker.md](depth-marker.md) |
 
 
 ---
@@ -1175,3 +1178,43 @@ Specifica: [combat-loadout-mods.md](combat-loadout-mods.md). Già deciso da te i
 14. Gli impianti valgono anche per le armi di supporto (es. un impianto sul braccio che compare con l'arma) e per i nemici?
     Perché conta: decide se il sistema visivo degli impianti è solo dei giocatori.
     Ipotesi nella specifica: il componente visivo è generico (kit, arma, mod, zaino); sui nemici solo se il designer lo usa.
+
+## Indicatore di profondità (23/10)
+
+Specifica: [depth-marker.md](depth-marker.md). Già deciso da te il 23/10: un decal sotto il personaggio e una linea tratteggiata come nella mod 3D di Smash Melee, anche per alcuni nemici; l'aspetto finale lo sceglie il designer. Il punto aperto principale è su quale superficie puntare quando si è in aria (DM.1). Se l'ipotesi va bene basta rispondere "ok".
+
+DM.1. A mezz'aria il marcatore deve puntare **dritto lungo la gravità locale** (superficie sotto i piedi) oppure al **punto di atterraggio previsto**? Va bene che la previsione dell'atterraggio sia un secondo marcatore opzionale, spento di default?
+   Perché conta: la superficie sotto i piedi è stabile e leggibile ma non dice dove si atterra; la previsione dipende dagli input (controllo in aria, doppio salto, schivata, DI) e cambia a ogni frame, e per una vittima lanciata non è affidabile.
+   Ipotesi nella specifica: dritto lungo la gravità con tolleranza ai bordi e isteresi ([depth-marker.md](depth-marker.md) §2.2); la previsione è un secondo selettore, spento di default e mai mostrato a chi è in hitstun.
+
+DM.2. Quando sotto non c'è terreno (burrone, fuori dal palco), l'anello vuoto va disegnato su quale piano di riferimento: **l'ultima altezza su cui si è stati a terra**, un **volume di riferimento posto dal designer** nel livello, o il piano della zona KO?
+   Perché conta: decide se serve lavoro di authoring nei livelli e cosa legge il giocatore che recupera da sotto (dove sta il bordo, non dove muore).
+   Ipotesi nella specifica: volume del designer se presente, altrimenti ultima altezza a terra su superficie statica, altrimenti nessun anello; il piano KO non è usato per l'anello ([depth-marker.md](depth-marker.md) §2.7).
+
+DM.3. Chi vede il marcatore: sempre il giocatore locale, e gli **alleati**? Ci sono differenze tra PvE e PvP (in PvP anche gli avversari)? Il giocatore può spegnerlo o cambiarne l'intensità nelle opzioni?
+   Perché conta: in un livello affollato i marcatori degli altri possono confondere, e l'opzione di accessibilità cambia le impostazioni utente da prevedere.
+   Ipotesi nella specifica: giocatore locale sempre, alleati visibili (cooperativa), opzione utente per spegnere o attenuare; la regola per modalità è un dato dell'esperienza ([depth-marker.md](depth-marker.md) §3).
+
+DM.4. Quali nemici hanno il marcatore: solo volanti, boss e nemici lanciati, o qualunque tipo scelto dal designer? Qual è il numero massimo di marcatori contemporanei (giocatori inclusi)?
+   Perché conta: ogni marcatore costa tracce e disegno sull'host, che disegna anche il proprio gioco (listen server); il tetto fissa il budget.
+   Ipotesi nella specifica: lo decide il dato del tipo di nemico (componente o estensione della definizione), tetto globale di 12 marcatori e 8 tracce per frame, ordinati per rilevanza ([depth-marker.md](depth-marker.md) §3).
+
+DM.5. Il marcatore compare solo quando si è in aria oltre una certa altezza (per esempio 60 cm), oppure anche appena sopra il suolo? Compare anche durante hitstun, tumble e schivata in aria?
+   Perché conta: soglia e stati cambiano quanto "rumore" visivo c'è nei combattimenti e quanto aiuta chi viene lanciato.
+   Ipotesi nella specifica: in aria oltre 60 cm (nascosto sotto 40 cm), visibile anche da lanciato e in tumble, senza previsione dell'atterraggio ([depth-marker.md](depth-marker.md) §3, §2.6).
+
+DM.6. Come aspetto di partenza va bene riprodurre quello della mod (disco pieno sul terreno, anello vuoto senza terreno, linea tratteggiata), tenendo cono d'ombra e versione diegetica come stili alternativi da scegliere alla fine? Un colore per giocatore va bene, con un simbolo o un motivo in più per i daltonici?
+   Perché conta: lo stile è un asset sostituibile, quindi si può costruire prima e scegliere dopo; il colore da solo non basta a distinguere i giocatori.
+   Ipotesi nella specifica: stile di default come nella mod, altri stili come asset separati, tinta per giocatore o team più glifo opzionale ([depth-marker.md](depth-marker.md) §4.1, §4.4).
+
+DM.7. Durante il **wall slide** il marcatore resta visibile? Per chi è **afferrato, trasportato o in groppa** (piggyback) il marcatore si nasconde lasciando solo quello di chi porta?
+   Perché conta: sono i casi in cui la posizione del personaggio non è la sua da solo, e due marcatori nello stesso punto confondono.
+   Ipotesi nella specifica: wall slide sì (l'altezza dal suolo è utile), parcheggiato e in groppa nascosto, regola modificabile nel dato dello stile ([depth-marker.md](depth-marker.md) §2.6).
+
+DM.8. Su quali superfici può puntare: **trampolini** e **piattaforme-nemico** sì? Le superfici dove si può solo scivolare sul muro (non camminare) no? Una piattaforma sottile a senso unico sì?
+   Perché conta: decide il filtro sui comportamenti `Surface.Behaviour.*` e se i nemici-piattaforma devono rispondere al canale del marcatore.
+   Ipotesi nella specifica: sì a pavimenti, piattaforme sottili, nemici-piattaforma e trampolini (`Stand` o `Launch`), no a personaggi, proiettili, trigger e superfici solo-parete ([depth-marker.md](depth-marker.md) §2.8).
+
+DM.9. Nelle zone KO l'anello vuoto deve anche **avvertire del pericolo** (colore diverso, pulsazione), oppure resta lo stesso anello?
+   Perché conta: è un segnale di gameplay oltre che di profondità, e richiede che il designer segni le zone con un volume di riferimento.
+   Ipotesi nella specifica: sì, tramite un'opzione `bHazard` sul volume di riferimento posto nel burrone; senza volume l'anello resta neutro ([depth-marker.md](depth-marker.md) §2.7).
