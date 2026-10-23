@@ -6,7 +6,8 @@ button and command tags, the combat lock tags, the default command set and the c
 Prediction (the combat NP model, the ability system driven from it) is the separate plugin
 [GSTNCombatNP](../GSTNCombatNP/README.md).
 
-Status: **experimental (0.1)**. Moves, kits and hits are specified but not built yet. The design lives in
+Status: **experimental (0.1)**. Timelines, kits, loadouts, stats and the weapon switch are built (M3); hits, ricochet and the rest of the combat
+model (M4 onwards) are specified but not built yet. The design lives in
 [docs/architecture/combat.md](../../docs/architecture/combat.md) (with one file per milestone, `combat-m1` to
 `combat-m5-m9`); the generic input layer is described in [docs/architecture/input.md](../../docs/architecture/input.md).
 This README is the map; those documents hold the decisions and the reasons.
@@ -63,6 +64,11 @@ Frame data of a combat ability and its evaluation, pure (no GAS, Network Predict
 | `FGSTN_TimelinePlayer` | Stateless `Evaluate(Data, Params, Output)`: active cancel/tag/movement windows, events, swaps, movement starts and ends and the commit, each fired once per `(PreviousFrame, Frame]`; `IsInTail`. O(tracks), the preallocated `FGSTN_TimelineOutput` is reused. A ricochet outcome flag evaluates the recoil data instead. |
 | `FGSTN_TimelineValidation` | Pure checks: first actionable frame, tail clamp, deferred-commit rules, track ranges, part selectors, montage length vs frames (only when the length is known), ricochet response. |
 | `UGSTN_TimelineUtils` | `BlueprintPure` helpers (`IsInTail`, `GetTailStartFrame`). |
+
+The public types: `EGSTN_AimPolicy`, `EGSTN_CancelCondition` (`Always`, `OnHit`, `OnBlock`, `OnWhiff`), `EGSTN_MoveMixMode`, `EGSTN_MomentumMode`,
+`EGSTN_SwitchTarget`, `EGSTN_HurtboxModifierKind`, `EGSTN_TimelineTrackKind`, `FGSTN_PartSelector`, the track structs
+`FGSTN_TimelineTrack_{CancelWindow, Movement, Tags, Event, WeaponSwitch, Hitbox, HurtboxModifier}`, `FGSTN_TimelineTail`, `FGSTN_RicochetResponse`,
+`FGSTN_TimelineEvalParams` / `FGSTN_TimelineOutput` and `FGSTN_WeaponSwitchRules` (`Resolve`: Next / Previous wrap, an index that must exist).
 
 Ranges are half open (`StartFrame <= frame < EndFrame`). The tail (`FGSTN_TimelineTail`) is off by default; when on, its start
 defaults to `FirstActionableFrame` and from there anything cancels the timeline (the flag is `FGSTN_TimelineOutput::bTailCancel`).
@@ -143,6 +149,19 @@ Loadout data stores `FPrimaryAssetId`s, never hard references, so the data layer
 
 Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Script/<Module>.<Class>",bHasBlueprintClasses=False,bIsEditorOnly=False,Directories=((Path="/Game/<your folder>")),SpecificAssets=,Rules=(Priority=-1,ChunkId=-1,bApplyRecursively=True,CookRule=AlwaysCook))` line per type under `[/Script/Engine.AssetManagerSettings]` in the project's `DefaultGame.ini`. The plugin never edits the project's config. `AlwaysCook` matters because nothing hard-references these assets: they are found by id.
 
+## Gameplay tags
+
+Native tags, declared in four files (nothing here is defined in an ini; the designer leaves live in the project's tag ini):
+
+| File | Tags |
+|---|---|
+| `GSTN_CombatCoreTags.h` (`GSTNCombatTags`) | `Combat.State.{Busy, InTimeline, SuperInput, CancelWindow, OverrideWindow, Falling}` (the projection vocabulary; the combat tick does not project them yet), and the identity roots `Weapon`, `Kit`, `Super`, `Loadout`, `Skin` |
+| `Input/GSTN_CombatCommandTags.h` | the `Command.*` families (`Attack`, `Strong`, `Special`, `Super`, ...) the standard slots bind |
+| `Input/GSTN_CombatButtonTags.h` | the standard buttons |
+| `Input/GSTN_CombatLockTags.h` | the combat lock tags (`Combat.Lock.Movement` is declared in GSTNCombatGAS) |
+
+`Command.Super.Slot1..Slot8` are declared in `Loadout/GSTN_CompiledBindingTable.cpp`, beside the only code that uses them (the super code slots).
+
 ## How to extend it
 
 The generic extension points (a new input condition, slot, binding or buffer reset rule) are described in the
@@ -153,12 +172,22 @@ The generic extension points (a new input condition, slot, binding or buffer res
   `GSTNCombat.Core.StandardSlots.*` tests (they check the shapes, the chords and that the validator finds no conflicts).
 - **A new standard button**: add its tag to `GSTN_CombatButtonTags` and to the project's input config; add it to
   the combat settings' `ExclusiveButtons` if its presses compete with attacks for one move.
+- **A new loadout rule**: derive from `UGSTN_LoadoutRule` (Blueprintable, EditInlineNew), override `Evaluate(const FGSTN_LoadoutRulesView&)`
+  returning an `FGSTN_LoadoutRuleResult` (errors and warnings as `FText`), add an instance to the `Rules` list of a `UGSTN_LoadoutRules` asset
+  and test it like `GSTNCombat.Core.LoadoutRules.DefaultSetAndCustomRule`. The rule sees plain data, never a GAS type.
+- **A new timeline track kind**: add the struct (derive `FGSTN_TimelineTrack`), a value in `EGSTN_TimelineTrackKind`, its range check in
+  `FGSTN_TimelineValidation`, a `switch` case in `FGSTN_TimelinePlayer::Evaluate` and a list in `FGSTN_TimelineOutput` (reserved in `Reserve`, emptied in
+  `Reset`; the evaluation must not allocate), then whoever consumes the output (the combat tick) handles it; add a case to `Timeline.WindowsAtFrame`
+  or `Timeline.EventsOnce` and to `Timeline.NoAllocation`.
 - **The combat component**: in the [GSTNCombatNP README](../GSTNCombatNP/README.md).
 
 Tests are in `Source/GSTNCombatCore/Private/Tests/` with the helpers of `GSTN_CombatTestUtils.h`. The timeline layer is covered by
 `GSTNCombat.Core.Timeline.{WindowsAtFrame, EventsOnce, NoAllocation, Validation, TailCancelFlagAfterStart, TailCancelNotBeforeStart,
 TailCancelUnsetMeansNone, TailStartClampedToLength, RicochetOutcomeSwitchesToRecoil}`; the rules pipeline by
-`GSTNCombat.Core.Rules.{PipelineOrder, UnknownStepSkipped}`; the kit data by `GSTNCombat.Core.Data.{CommandSetComposition, LoadoutNetSerialize, LoadoutSaveSerialize, IdentityExactlyOne, IdentityUniquePerType}`. The fragment and tick extension tests are `GSTNCombat.NP.*`, in GSTNCombatNP.
+`GSTNCombat.Core.Rules.{PipelineOrder, UnknownStepSkipped}`; the tags and settings by `GSTNCombat.Core.{Smoke, NativeTags, OwnSettings, SettingsDefaults, Locks.NativeRoots,
+Data.CoreTagsDeclared}`; the standard command set by `GSTNCombat.Core.StandardSlots.{Shapes, ChordCommands, NoConflicts, SlotSetAsset}`; stats by
+`GSTNCombat.Core.Stats.{Factor, ScalingIsBaseRelative, WeaponSwitchResolve}`; the compiled table and loadout rules by `GSTNCombat.Core.Table.*` and
+`GSTNCombat.Core.LoadoutRules.*`; `Data.LoadoutNetWriteBounds` bounds the loadout wire size; the kit data by `GSTNCombat.Core.Data.{CommandSetComposition, LoadoutNetSerialize, LoadoutSaveSerialize, IdentityExactlyOne, IdentityUniquePerType}`. The fragment and tick extension tests are `GSTNCombat.NP.*`, in GSTNCombatNP.
 
 ## Conventions
 

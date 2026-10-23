@@ -30,7 +30,10 @@ combatant holds the defaults and pays **one bit** for the whole part, so a game 
 only valid in the frame it was made: the combat tick must call `Requests.PruneBefore(Frame)` at the top of every frame (C10 wires it; no request is made before then), so the wire never carries a dead one.
 `LoadoutRevision` is written only by the server, out of band, with `UGSTN_CombatSimComponent::ServerWriteLoadoutRevision`; the tick makes requests and adopts
 abilities only while `Core.IsLoadoutCurrent(TableRevision)` (the loadout revision gate, combat-m3 7.8). All of it takes part in `ShouldReconcile`, `ToString` and
-`Interpolate` (discrete: the newer frame). Nothing in the tick reads these fields yet: the timeline abilities that write them are C10.
+`Interpolate` (discrete: the newer frame). The tick reads and writes them (the clock, the requests, adoption, the weapon index); the types are
+`FGSTN_CombatRequest` and `FGSTN_CombatRequests` (`Find` and `Remove` by type, frame and argument: one frame can hold the commits of a replaced
+timeline and of its replacement), `FGSTN_CombatAuxState` (the model's aux state, empty) and `FGSTN_CombatTickContext` (what a tick extension sees).
+The `Combat.State.*` tags exist in `GSTNCombatCore` but the tick does not project them yet.
 
 **Clock, aim and command marker (for abilities).** The component answers three queries about the frame being simulated, for an
 ability's activation or tick (not presentation code): `GetCombatClock()` is the Network Prediction frame minus every hitstop frame so
@@ -42,7 +45,7 @@ so a re-simulation reads the command it replays. `FGSTN_InputHostUtils::IsComman
 `ExecuteRequest` (an `FGSTN_CommandActivationScope(Handle)` on the stack): an ability uses it to tell a command from a trigger or an effect,
 and an ability that a command's ability triggers synchronously (another handle) is not a command.
 
-**`UGSTN_GA_Base` (combat-m3 6.1).** The base of the abilities that run under the combat model (`Abilities/GSTN_GA_Base.h`, `Abstract, Blueprintable`,
+**`UGSTN_GA_Base` (combat-m3 6.1; policy enum `EGSTN_InterruptPolicy`: `SkipIfBusy`, `InterruptCurrent`).** The base of the abilities that run under the combat model (`Abilities/GSTN_GA_Base.h`, `Abstract, Blueprintable`,
 derives from the fork's `UNpGameplayAbility`). It gives an ability: `GetCombatComponent()` (cached when the avatar is set);
 `GetActivationContext()` (the command, press frame, trigger button and source of the activation, captured in `ActivateAbility` into sync
 variables and rebuilt on demand; the command is stored as its table index, never as a tag); `bEndOnTriggerRelease` (ends the ability on the
@@ -78,7 +81,7 @@ All of the logic is pure and covered by `GSTNCombat.NP.Timeline.*`.
 or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the
 [GSTNCombat README](../GSTNCombat/README.md)). A fragment mismatch against the authority asks for a reconcile like the hitstop window
 does, and so does a mismatch of the input state (it is authoritative; the trace names the field). Interpolated proxies take the newer core, and each fragment
-decides how it blends (default: the newer one). No fragment type exists yet.
+decides how it blends (default: the newer one). No production fragment type exists yet (the tests define their own).
 
 **Tick extensions.** `IGSTN_CombatTickExtension` (`Simulation/GSTN_CombatTickExtension.h`) is the C++ per-frame hook an optional plugin registers in
 `FGSTN_CombatTickExtensionRegistry::Get()`. The combat tick calls the registry at four fixed points (`EGSTN_CombatHookPoint`:
@@ -89,11 +92,19 @@ its own sync fragment, no component, world or ability system reads, no net-mode 
 in the model the four points sit around the input simulator call (which does candidates, resolution and the request in one function); their meaning
 is fixed and the call sites move with the model.
 
+*Register an extension:* derive from `IGSTN_CombatTickExtension`, give it a `GetTypeId()` (a `GSTNFeatureIds` value) and a `GetPriority()`, implement
+the hooks it needs and keep its state in its own `FGSTN_SyncFragment`; then call `FGSTN_CombatTickExtensionRegistry::Get().Register(&Extension)` once
+from the module's startup (and `Unregister` at shutdown). The hook receives an `FGSTN_CombatTickContext` (`In` read-only, `Out` for its fragment).
+
+*Model order:* the combat model (`GSTN_Combat`) sorts at `PreKinematicMovers - 3`, the embedded input model `GSTN_Input` (sort priority 46)
+is part of its state and has no tick of its own; the ability system is `- 2`, Mover after it.
+
 ## Dependencies
 
-- Plugins (all non-optional, see `GSTNCombatNP.uplugin`): `GSTNCombat`, `GSTNInputNP`, `GSTNInput`, GameplayAbilities,
+- Plugins (all non-optional, see `GSTNCombatNP.uplugin`): `GSTNCombat`, `GSTNCombatGAS`, `GSTNInputNP`, `GSTNInput`, GameplayAbilities,
   AbilitySystemSimulation, NetworkPrediction (the GAS-NPP fork in `Plugins/GASNPP`), EnhancedInput, Mover.
-- Module `GSTNCombatNP` depends on `GSTNCombatCore`, `GSTNInputCore`, `GSTNInputNP` and the fork modules. Nothing in `GSTNCombat`
+- Module `GSTNCombatNP` depends on `GSTNCombatCore`, `GSTNCombatGAS` (the timeline ability tags, the combat attribute set the stats modifier reads),
+  `GSTNInputCore`, `GSTNInputNP` and the fork modules. Nothing in `GSTNCombat`
   depends on this plugin.
 - Dependency rule: an `*NP` module may depend on another plugin's `*NP` module of the same layer, and on nothing above it.
   `GSTNCombatNP` depends on `GSTNInputNP` by design (one NP model per character embeds the input simulation) and may use only its
@@ -146,6 +157,11 @@ Automation tests `GSTNCombat.NP.*` in `Source/GSTNCombatNP/Private/Tests/` run w
   (the log prints the bits of each; zero fragments are exactly one bit over the core), the array order not affecting the bytes,
   `ShouldReconcile`, `Interpolate` and `ToString` of the state, a fragment of an unknown type id being skipped without moving the reader, and a
   malformed count being an archive error. The fragments used are test-only types with ids from the test range.
+- `State.{RoundTrip, RequestsStaleDropped, Interpolate, ShouldReconcile, RevisionGate}`: the wire format of the action part, requests of older frames
+  dropped by `PruneBefore`, interpolation, the reconcile rule and the loadout revision gate. `Fragments.UnsendableDoesNotReconcile`: a fragment that
+  cannot be sent never asks for a reconcile.
+- `Timeline.{Adopt, AdoptSameClass, SameFrameCommit, Hitstop}`: adoption (first waiting wins, losers cancelled, the running class adopted again is not
+  cancelled), the requests of one frame when a timeline is replaced at the end of its window, and the clock standing still in hitstop.
 - `Timeline.{CommitDeferred, Clock, OverrideInto, CancelWindow, Replace, TailCancel}`: the timeline part of the tick on plain sync state: the deferred
   commit (once, on the frame the override window ends, or on the start frame without a window), the clock and the end of a timeline, the override rule
   (higher tier, explicit query), cancel windows (half open), replacement (the old entry is cancelled, nothing was committed) and the cancellable tail.
