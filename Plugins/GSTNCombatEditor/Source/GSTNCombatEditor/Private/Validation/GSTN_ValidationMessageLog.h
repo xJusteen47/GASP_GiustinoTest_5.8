@@ -36,7 +36,8 @@ namespace GSTNValidationLog
 
 	/**
 	 * Writes the report to the Message Log on a page of its own and opens the log when there is anything but infos to read (or always,
-	 * with bOpenAlways). An empty report writes one info line saying nothing was found, so the button visibly did something.
+	 * with bOpenAlways). bOpenLog false never opens or focuses the window, for a caller that shows the report elsewhere (the timeline's
+	 * Frame Data tab); the messages are still written. An empty report writes one info line saying nothing was found, so the button visibly did something.
 	 */
-	void WriteReport(const FGSTN_ValidationReport& Report, const FText& PageTitle, bool bOpenAlways);
+	void WriteReport(const FGSTN_ValidationReport& Report, const FText& PageTitle, bool bOpenAlways, bool bOpenLog = true);
 }

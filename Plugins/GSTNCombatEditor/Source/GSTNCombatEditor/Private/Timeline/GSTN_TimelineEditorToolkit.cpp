@@ -292,7 +292,9 @@ FGSTN_ValidationReport FGSTN_TimelineEditorToolkit::ValidateNow()
 	// The asset's own name on the page, so two validations of two timelines can be told apart in the log
 	const FGSTN_TimelineRuleContext RuleContext = FGSTN_CombatValidators::MakeTimelineContext(*Data, Context.GetTarget(), Model->GetTickRate(), true);
 	FGSTN_CombatValidators::ValidateTimeline(*Data, RuleContext, Report);
-	GSTNValidationLog::WriteReport(Report, FText::Format(LOCTEXT("ValidatePageTitle", "Validate {0}"), Context.GetDisplayName()), true);
+	// The log window pops up only when the Frame Data tab is closed: with it open the findings are already on screen
+	const bool bFrameDataOpen = TabManager.IsValid() && TabManager->FindExistingLiveTab(FrameDataTabId).IsValid();
+	GSTNValidationLog::WriteReport(Report, FText::Format(LOCTEXT("ValidatePageTitle", "Validate {0}"), Context.GetDisplayName()), true, !bFrameDataOpen);
 	// The same report in the Frame Data tab: one run, two places to read it
 	Findings->SetReport(Report);
 	return Report;

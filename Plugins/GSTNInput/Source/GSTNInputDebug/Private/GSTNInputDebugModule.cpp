@@ -40,7 +40,8 @@ namespace
 		return SNew(SGSTN_InputDisplay)
 			.LocalSource(MakeShared<FGSTN_LocalInputSource>())
 			.bShowScriptBox(true)
-			.bShowPlayerPicker(true);
+			.bShowPlayerPicker(true)
+			.bShowControls(true);
 	}
 }
 

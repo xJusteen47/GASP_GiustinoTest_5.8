@@ -7,6 +7,7 @@
 #include "Widgets/Colors/SColorBlock.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/SGSTN_InputDisplay.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Widgets/SOverlay.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -19,7 +20,7 @@ using namespace GSTNInputDisplayTest;
 namespace GSTNVisualInput
 {
 	/** The history of the sample notation of the display's tests, plus a diagonal sweep and a release: every cell kind, flicks and facing */
-	const TCHAR* const SampleNotation = TEXT("0:face=90 0:4t 6:6t! 7:+A 12:2 14:3 16:6 16:+B 20:5 24:-A");
+	const TCHAR* const SampleNotation = TEXT("0:face=90 0:4t 6:6t! 7:+A 12:2 14:3 16:6 16:+B 20:5 24:-A 70:+C 71:-C");
 
 	TSharedRef<SGSTN_InputDisplay> MakeDisplay(bool bShowScriptBox)
 	{
@@ -54,6 +55,39 @@ bool FGSTN_VisualInputTabTest::RunTest(const FString& Parameters)
 			Display
 		];
 	TestFalse(TEXT("a snapshot was written"), GSTNVisualSnapshot::Render(*this, Root, FIntPoint(1100, 340), TEXT("input-display-tab-1100x340")).IsEmpty());
+	return true;
+}
+
+// Presses a command used (C, D, E consumed) next to a free one, and a long idle gap that shows as a counted column
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VisualInputConsumedTest, "GSTN.Visual.InputDisplay.ConsumedAndIdle", GSTN_VISUAL_TEST_FLAGS)
+bool FGSTN_VisualInputConsumedTest::RunTest(const FString& Parameters)
+{
+	if (!GSTNVisualSnapshot::CanRender(*this))
+	{
+		return true;
+	}
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeSettings();
+	FGSTN_InputDisplayData Data;
+	if (!Play(*this, TEXT("0:+A 2:+C 4:+D 5:-D 8:+E 9:-E 12:+B 14:-B 60:+F"), *Settings, Data))
+	{
+		return false;
+	}
+	Data.History.FlushPresses((1u << 2) | (1u << 3) | (1u << 4), 20);
+	FGSTN_InputDisplayProfile Profile;
+	Profile.ButtonTags = ButtonTags();
+	const TSharedRef<SGSTN_InputDisplay> Display = SNew(SGSTN_InputDisplay)
+		.bShowControls(true)
+		.Profile(Profile)
+		.Fetch(FGSTN_InputDisplayFetch::CreateLambda([Data](FGSTN_InputDisplayData& Out) { Out = Data; return true; }));
+	Display->Refresh();
+	const TSharedRef<SWidget> Root = SNew(SBorder)
+		.BorderImage(FAppStyle::Get().GetBrush("Brushes.Panel"))
+		.Padding(4.f)
+		[
+			Display
+		];
+	TestFalse(TEXT("a snapshot was written"), GSTNVisualSnapshot::Render(*this, Root, FIntPoint(1100, 340), TEXT("input-display-consumed-idle-1100x340")).IsEmpty());
 	return true;
 }
 

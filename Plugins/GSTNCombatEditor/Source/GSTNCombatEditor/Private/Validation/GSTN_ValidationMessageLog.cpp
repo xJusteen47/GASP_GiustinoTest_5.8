@@ -79,7 +79,7 @@ namespace GSTNValidationLog
 		return Message;
 	}
 
-	void WriteReport(const FGSTN_ValidationReport& Report, const FText& PageTitle, bool bOpenAlways)
+	void WriteReport(const FGSTN_ValidationReport& Report, const FText& PageTitle, bool bOpenAlways, bool bOpenLog)
 	{
 		FMessageLog Log(GetLogName());
 		Log.NewPage(PageTitle);
@@ -92,7 +92,10 @@ namespace GSTNValidationLog
 			Log.AddMessage(MakeMessage(Finding, true));
 		}
 		// Warnings and errors open the log; a clean run only when asked to, because the button should answer
-		Log.Open(EMessageSeverity::Warning, bOpenAlways);
+		if (bOpenLog)
+		{
+			Log.Open(EMessageSeverity::Warning, bOpenAlways);
+		}
 	}
 }
 

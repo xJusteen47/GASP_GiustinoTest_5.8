@@ -193,7 +193,7 @@ hurtbox set editor (E9), the rest of the validation: M4 rules, the validation pa
 ## Validation (E10)
 
 One set of rules, three readers: the **Data Validation** validators (on save, on demand, `-run=DataValidation` in CI), the **Validate**
-button of the timeline editor (the findings go to the Message Log, category *GSTN Combat*), and from E11 the validation panel. The rules
+button of the timeline editor (the findings go to the Message Log, category *GSTN Combat*, and the window is only brought up when the Frame Data tab is closed, because that tab shows the same findings), and from E11 the validation panel. The rules
 are pure functions that fill an `FGSTN_ValidationReport`, so the automation tests call them with no editor window.
 
 | Type | File | Role |

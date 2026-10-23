@@ -43,18 +43,19 @@ It is an input tool, so it lives here and not in the combat plugin; it works in 
 | top (10 px) | an orange marker on the frame a command came out; hover for the command tag |
 | stick (24 px) | the physical stick as an **arrow** (eight directions, a dot for neutral); bright in the tilt zone, dim in the aim zone, yellow on a flick |
 | under it (10 px) | the direction relative to the character as a small arrow, where it differs |
-| one per button (16 px each) | a **coloured rounded icon with the button's letter** on a press, a bar for a hold, a hollow marker on a release, an icon with a white rim for a tap; a press a command used is **grey**, with its hold |
+| one per button (16 px each) | a **coloured rounded icon with the button's letter** on a press, a bar for a hold, a hollow marker on a release, an icon with a white rim for a tap; a press a command used keeps its colour and letter, **dimmed inside a bright outline** (its hold is a grey bar) |
 | bottom (14 px) | the **frame gap** in frames between neighbouring events, as a small number, only when it is more than one frame; a number that would touch its neighbour is left out |
 
 A column is 18 px at least, so a window too narrow for the history cuts the oldest frames and a wide one stretches the columns to fill its width
 (`FGSTN_InputDisplayMetrics`: sizes, visible columns, arrows, gap labels; pure, tested). The numpad notation (`4t`, `6t!`) is **only in the tooltip**, with the direction in words.
+**Idle frames are compressed** by default: a run of three or more frames with no press, release, stick event or command is one narrow column (22 px) that shows the run length, so a press stays on screen long after it (the strip then covers the whole 255-frame history, as far as the width goes; `FGSTN_InputDisplayMetrics::ComputeSlots`, `IsIdleColumn`). The editor tab has a **Compress idle frames** check box and a **Pause** toggle (key `P` while the tab has the focus; click the strip to give it the focus) that freezes the live view. `GetPressIconStyle` is the one place that decides how a consumed press is painted.
 The history keeps 16 button events and 16 stick events, so a very fast sequence shows only the newest of them.
 
 - **PIE and development builds:** `gstn.Input.Debug.InputDisplay 1` (the older `gstn.Combat.Debug.InputDisplay` still works, `GSTNCombatDebug` forwards it) puts the strip in the lower right corner of every game or PIE viewport, fed by that viewport's
   local player, so a listen-server host and each client window show their own. As wide as the viewport allows up to 780 px. `0` (default) removes it. Hit-test invisible.
 - **Editor:** *Window > GSTN Input > Input Display* (editor builds), a window that opens at 1100 x 340 with the strip filling its width. It shows the player of the **play window that has the focus, or had it last**
   (so typing in its script box keeps showing the window you were looking at), and a **combo** lists every local player of every PIE world to pin one (a pick that is not in the session falls back to the focus and
-  comes back with its player). A box takes a **scripted input** such as `0:face=90 0:4t 6:6t! 7:+A`: Enter shows that history, greys the press the winning command used and names the command; an empty box is live again.
+  comes back with its player). A box takes a **scripted input** such as `0:face=90 0:4t 6:6t! 7:+A`: Enter shows that history, dims the press the winning command used and names the command; an empty box is live again.
 
 **What it can read.** `IGSTN_InputHistorySource` (`GSTNInputCore`, `Debug/GSTN_InputHistorySource.h`) is a plain interface of const reads: whether the source is still valid, the input history, the command requested last (frame and tag), the buttons by bit,
 the command set for the scripted box, a label, and the object it reads. Two ways in:

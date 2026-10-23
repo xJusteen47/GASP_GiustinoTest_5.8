@@ -14,6 +14,8 @@
 #include "Rendering/SlateRenderer.h"
 #include "Sources/GSTN_LocalInputSource.h"
 #include "Styling/CoreStyle.h"
+#include "Input/Events.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/SBoxPanel.h"
@@ -178,6 +180,21 @@ void SGSTN_InputStrip::SetButtonNames(const TArray<FString>& InNames)
 	}
 }
 
+void SGSTN_InputStrip::SetCompressIdle(bool bInCompress)
+{
+	if (bCompressIdle != bInCompress)
+	{
+		bCompressIdle = bInCompress;
+		Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
+	}
+}
+
+TArray<FGSTN_InputDisplaySlot> SGSTN_InputStrip::GetSlots() const
+{
+	// Compressed, the run of idle frames costs little, so the whole history is offered and the width decides
+	return FM::ComputeSlots(Layout, GetCachedGeometry().GetLocalSize().X, bCompressIdle ? FGSTN_InputHistory::MaxEventAge + 1 : NumFrames, bCompressIdle);
+}
+
 FVector2D SGSTN_InputStrip::ComputeDesiredSize(float LayoutScaleMultiplier) const
 {
 	// Room for the gutter and twenty columns; the widget takes all the width it is given
@@ -186,8 +203,8 @@ FVector2D SGSTN_InputStrip::ComputeDesiredSize(float LayoutScaleMultiplier) cons
 
 int32 SGSTN_InputStrip::GetFirstVisibleColumn() const
 {
-	const float Width = GetCachedGeometry().GetLocalSize().X;
-	return FM::GetFirstVisibleColumn(Layout.NumColumns, FM::GetVisibleColumns(Width, NumFrames));
+	const TArray<FGSTN_InputDisplaySlot> Slots = GetSlots();
+	return Slots.IsEmpty() ? 0 : Slots[0].FirstColumn;
 }
 
 int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
@@ -221,10 +238,8 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 		return LayerId + 2;
 	}
 
-	const int32 Visible = FM::GetVisibleColumns(Size.X, NumFrames);
-	const float ColumnWidth = FM::GetColumnWidth(Size.X, Visible);
-	const int32 FirstColumn = FM::GetFirstVisibleColumn(Layout.NumColumns, Visible);
-	const float IconSize = FMath::Min3(FM::IconSize, ColumnWidth - 2.f, Rows.H.Button - 2.f);
+	const TArray<FGSTN_InputDisplaySlot> Slots = FM::ComputeSlots(Layout, Size.X, bCompressIdle ? FGSTN_InputHistory::MaxEventAge + 1 : NumFrames, bCompressIdle);
+	const int32 FirstColumn = Slots.IsEmpty() ? 0 : Slots[0].FirstColumn;
 
 	// Row separators, faint, so the eye follows a row across the strip
 	for (int32 Button = 0; Button <= NumButtons; ++Button)
@@ -232,10 +247,32 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 		PaintRect(OutDrawElements, LayerId, AllottedGeometry, FVector2f(FM::GutterWidth, Rows.Buttons + Button * Rows.H.Button), FVector2f(Size.X - FM::GutterWidth, 1.f), FLinearColor(1.f, 1.f, 1.f, 0.05f));
 	}
 
-	for (int32 Column = FirstColumn; Column < Layout.NumColumns; ++Column)
+	for (const FGSTN_InputDisplaySlot& Slot : Slots)
 	{
-		const float X = FM::GetColumnX(Size.X, ColumnWidth, Layout.NumColumns, Column);
+		const int32 Column = Slot.FirstColumn;
+		const float X = Slot.X;
+		const float ColumnWidth = Slot.Width;
 		const float CentreX = X + ColumnWidth * 0.5f;
+		const float IconSize = FMath::Min3(FM::IconSize, ColumnWidth - 2.f, Rows.H.Button - 2.f);
+
+		if (Slot.IsCompressed())
+		{
+			// Nothing changed for NumColumns frames: a dim band across the rows with the count, the held state drawn through it
+			PaintRect(OutDrawElements, LayerId, AllottedGeometry, FVector2f(X + 1.f, Rows.Stick), FVector2f(ColumnWidth - 2.f, Rows.Gaps - Rows.Stick), FLinearColor(1.f, 1.f, 1.f, 0.045f));
+			const FGSTN_InputDisplayStickCell& Held = Layout.Stick[Column];
+			PaintArrow(OutDrawElements, LayerId + 2, AllottedGeometry, FVector2f(CentreX, Rows.Stick + Rows.H.Stick * 0.5f), Held.Zone != EGSTN_StickZone::Neutral ? Held.StickDirection : EGSTN_StickDirection::Neutral, 8.5f, 2.f, StickArrowColor(Held));
+			for (int32 Button = 0; Button < NumButtons; ++Button)
+			{
+				if (Layout.Buttons[Button][Column].Kind == EGSTN_InputCellKind::Hold)
+				{
+					const float RowCentre = Rows.Buttons + (Button + 0.5f) * Rows.H.Button;
+					const FLinearColor BarColour = Layout.Buttons[Button][Column].bConsumed ? FLinearColor(0.2f, 0.2f, 0.2f) : Dim(FM::GetButtonColor(Button), 0.55f);
+					PaintRect(OutDrawElements, LayerId + 2, AllottedGeometry, FVector2f(X, RowCentre - 3.f), FVector2f(ColumnWidth, 6.f), BarColour);
+				}
+			}
+			PaintTextCentred(OutDrawElements, LayerId + 3, AllottedGeometry, FVector2f(CentreX, Rows.Gaps + Rows.H.Gap * 0.5f), FString::FromInt(Slot.NumColumns), TextColor, SmallFont());
+			continue;
+		}
 
 		// A faint line at every tenth frame, so gaps can be counted
 		if ((Layout.FirstFrame + Column) % 10 == 0)
@@ -292,14 +329,19 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 			}
 			default:
 			{
-				// A press or a tap: the icon of the button with its letter. A tap has a white rim; a press a command used is grey
+				// A press or a tap: the icon of the button with its letter. A tap has a white rim; a press a command used is dimmed with an outline
 				if (Cell.Kind == EGSTN_InputCellKind::Tap)
 				{
 					PaintRect(OutDrawElements, LayerId + 2, AllottedGeometry, IconPosition - FVector2f(1.5f, 1.5f), FVector2f(IconSize + 3.f, IconSize + 3.f), FLinearColor::White, true);
 				}
-				const FLinearColor Fill = Cell.bConsumed ? FLinearColor(0.34f, 0.34f, 0.35f) : Colour;
-				PaintRect(OutDrawElements, LayerId + 3, AllottedGeometry, IconPosition, FVector2f(IconSize, IconSize), Fill, true);
-				PaintTextCentred(OutDrawElements, LayerId + 4, AllottedGeometry, FVector2f(CentreX, RowCentre), Letter, Cell.bConsumed ? FLinearColor(0.7f, 0.7f, 0.72f) : FM::GetButtonTextColor(Button), LetterFont());
+				// A consumed press keeps the button's colour and letter, dimmed inside a bright outline (GetPressIconStyle)
+				const FGSTN_InputPressIconStyle Style = FM::GetPressIconStyle(Button, Cell.bConsumed);
+				if (Style.Outline.A > 0.f)
+				{
+					PaintRect(OutDrawElements, LayerId + 2, AllottedGeometry, IconPosition - FVector2f(1.f, 1.f), FVector2f(IconSize + 2.f, IconSize + 2.f), Style.Outline, true);
+				}
+				PaintRect(OutDrawElements, LayerId + 3, AllottedGeometry, IconPosition, FVector2f(IconSize, IconSize), Style.Fill, true);
+				PaintTextCentred(OutDrawElements, LayerId + 4, AllottedGeometry, FVector2f(CentreX, RowCentre), Letter, Style.Letter, LetterFont());
 				break;
 			}
 			}
@@ -308,18 +350,38 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 
 	// Under the strip: a tick for every event, and the gap in frames between neighbouring events more than one frame apart.
 	// Labels that would touch are dropped by ChooseGapLabels, so nothing overlaps
+	const auto CentreOf = [&Slots](int32 Column)
+	{
+		for (const FGSTN_InputDisplaySlot& Slot : Slots)
+		{
+			if (Column >= Slot.FirstColumn && Column <= Slot.GetLastColumn())
+			{
+				return Slot.X + Slot.Width * 0.5f;
+			}
+		}
+		return -1.f;
+	};
 	for (const FGSTN_InputDisplayEvent& Event : Layout.Events)
 	{
 		if (Event.Column >= FirstColumn)
 		{
-			const float CentreX = FM::GetColumnX(Size.X, ColumnWidth, Layout.NumColumns, Event.Column) + ColumnWidth * 0.5f;
-			PaintRect(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(CentreX - 0.5f, Rows.Gaps + 1.f), FVector2f(1.f, 3.f), FLinearColor(1.f, 1.f, 1.f, 0.35f));
+			PaintRect(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(CentreOf(Event.Column) - 0.5f, Rows.Gaps + 1.f), FVector2f(1.f, 3.f), FLinearColor(1.f, 1.f, 1.f, 0.35f));
 		}
 	}
-	for (const FGSTN_InputGapLabel& Label : FM::ChooseGapLabels(Layout, FirstColumn, Size.X, ColumnWidth, GapCharWidth))
+	for (const FGSTN_InputGapLabel& Label : FM::ChooseGapLabels(Layout, FirstColumn, Size.X, CentreOf, GapCharWidth))
 	{
-		const float FromX = FM::GetColumnX(Size.X, ColumnWidth, Layout.NumColumns, Label.FromColumn) + ColumnWidth * 0.5f;
-		const float ToX = FM::GetColumnX(Size.X, ColumnWidth, Layout.NumColumns, Label.ToColumn) + ColumnWidth * 0.5f;
+		// A gap with a compressed run in it is already counted by the run's own number
+		bool bHasRun = false;
+		for (const FGSTN_InputDisplaySlot& Slot : Slots)
+		{
+			bHasRun |= Slot.IsCompressed() && Slot.FirstColumn > Label.FromColumn && Slot.FirstColumn < Label.ToColumn;
+		}
+		if (bHasRun)
+		{
+			continue;
+		}
+		const float FromX = CentreOf(Label.FromColumn);
+		const float ToX = CentreOf(Label.ToColumn);
 		PaintRect(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(FromX, Rows.Gaps + 2.f), FVector2f(ToX - FromX, 1.f), FLinearColor(1.f, 1.f, 1.f, 0.18f));
 		PaintText(OutDrawElements, LayerId + 3, AllottedGeometry, FVector2f(Label.X, Rows.Gaps + 3.f), Label.Text, DimColor, SmallFont());
 	}
@@ -334,7 +396,6 @@ FText SGSTN_InputStrip::DescribeAt(const FVector2D& Local) const
 	{
 		return FText::GetEmpty();
 	}
-	const float Width = GetCachedGeometry().GetLocalSize().X;
 	const int32 NumButtons = ButtonNames.Num();
 	const FRowTops Rows(NumButtons, GetCachedGeometry().GetLocalSize().Y);
 
@@ -349,14 +410,17 @@ FText SGSTN_InputStrip::DescribeAt(const FVector2D& Local) const
 		return Local.Y >= Rows.Stick && Local.Y < Rows.Buttons ? LOCTEXT("StickRowTip", "The stick, and under it the direction relative to the character where it differs") : FText::GetEmpty();
 	}
 
-	const int32 Visible = FM::GetVisibleColumns(Width, NumFrames);
-	const float ColumnWidth = FM::GetColumnWidth(Width, Visible);
-	const int32 FirstColumn = FM::GetFirstVisibleColumn(Layout.NumColumns, Visible);
-	const int32 Column = FMath::FloorToInt((Local.X - FM::GetColumnX(Width, ColumnWidth, Layout.NumColumns, 0)) / ColumnWidth);
-	if (Column < FirstColumn || Column >= Layout.NumColumns)
+	const TArray<FGSTN_InputDisplaySlot> Slots = GetSlots();
+	const FGSTN_InputDisplaySlot* Hit = Slots.FindByPredicate([&Local](const FGSTN_InputDisplaySlot& Slot) { return Local.X >= Slot.X && Local.X < Slot.X + Slot.Width; });
+	if (Hit == nullptr)
 	{
 		return FText::GetEmpty();
 	}
+	if (Hit->IsCompressed())
+	{
+		return FText::Format(LOCTEXT("IdleRunTip", "Frames {0} to {1}: nothing changed ({2} frames)"), Layout.FirstFrame + Hit->FirstColumn, Layout.FirstFrame + Hit->GetLastColumn(), Hit->NumColumns);
+	}
+	const int32 Column = Hit->FirstColumn;
 	const int32 Frame = Layout.FirstFrame + Column;
 
 	if (Local.Y < Rows.Stick)
@@ -427,6 +491,7 @@ void SGSTN_InputDisplay::Construct(const FArguments& InArgs)
 	}
 
 	Strip = SNew(SGSTN_InputStrip).NumFrames(NumFrames);
+	Strip->SetCompressIdle(bCompressIdle);
 	ApplyProfile(Profile);
 	Strip->SetMessage(GetNoDataMessage());
 	const TWeakPtr<SGSTN_InputStrip> WeakStrip = Strip;
@@ -466,6 +531,36 @@ void SGSTN_InputDisplay::Construct(const FArguments& InArgs)
 		];
 	}
 
+	if (InArgs._bShowControls)
+	{
+		Box->AddSlot().AutoHeight().Padding(0.f, 0.f, 0.f, 4.f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0.f, 0.f, 12.f, 0.f)
+			[
+				SNew(SCheckBox)
+				.IsChecked_Lambda([this]() { return bCompressIdle ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { SetCompressIdle(State == ECheckBoxState::Checked); })
+				.ToolTipText(LOCTEXT("CompressTip", "Show a run of frames with no change as one narrow column with its length, so a press stays on screen longer"))
+				[
+					SNew(STextBlock).Text(LOCTEXT("CompressLabel", "Compress idle frames"))
+				]
+			]
+			+ SHorizontalBox::Slot().AutoWidth()
+			[
+				SNew(SCheckBox)
+				.Style(&FCoreStyle::Get().GetWidgetStyle<FCheckBoxStyle>("ToggleButtonCheckbox"))
+				.Padding(FMargin(8.f, 2.f))
+				.IsChecked_Lambda([this]() { return bPaused ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { SetPaused(State == ECheckBoxState::Checked); })
+				.ToolTipText(LOCTEXT("PauseTip", "Freeze the strip to read it (key P while this tab has the focus)"))
+				[
+					SNew(STextBlock).Text_Lambda([this]() { return bPaused ? LOCTEXT("ResumeLabel", "Resume (P)") : LOCTEXT("PauseLabel", "Pause (P)"); })
+				]
+			]
+		];
+	}
+
 	Box->AddSlot().FillHeight(1.f).VAlign(VAlign_Top)
 	[
 		Strip.ToSharedRef()
@@ -486,6 +581,39 @@ void SGSTN_InputDisplay::Construct(const FArguments& InArgs)
 		];
 	}
 	ChildSlot[Box];
+}
+
+void SGSTN_InputDisplay::SetCompressIdle(bool bInCompress)
+{
+	if (bCompressIdle != bInCompress)
+	{
+		bCompressIdle = bInCompress;
+		Strip->SetCompressIdle(bCompressIdle);
+		// The layout covers more frames when compressed, so it is built again
+		bHasLastData = false;
+		Refresh();
+	}
+}
+
+void SGSTN_InputDisplay::SetPaused(bool bInPaused)
+{
+	bPaused = bInPaused;
+}
+
+FReply SGSTN_InputDisplay::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.GetKey() == EKeys::P && !InKeyEvent.IsRepeat() && !InKeyEvent.IsControlDown() && !InKeyEvent.IsAltDown())
+	{
+		SetPaused(!bPaused);
+		return FReply::Handled();
+	}
+	return SCompoundWidget::OnKeyDown(MyGeometry, InKeyEvent);
+}
+
+FReply SGSTN_InputDisplay::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
+{
+	// A click on the strip takes the focus, so P works without having to click a button first
+	return FReply::Unhandled().SetUserFocus(AsShared(), EFocusCause::Mouse);
 }
 
 void SGSTN_InputDisplay::ApplyProfile(const FGSTN_InputDisplayProfile& InProfile)
@@ -623,6 +751,10 @@ void SGSTN_InputDisplay::Tick(const FGeometry& AllottedGeometry, const double In
 
 void SGSTN_InputDisplay::Refresh()
 {
+	if (bPaused && !bScripted && bHasLastData)
+	{
+		return;
+	}
 	FGSTN_InputDisplayData Data;
 	if (bScripted)
 	{
@@ -681,7 +813,7 @@ void SGSTN_InputDisplay::ApplyData(const FGSTN_InputDisplayData& Data)
 	bHasLastData = true;
 
 	FGSTN_InputDisplayLayoutParams Params;
-	Params.MaxColumns = NumFrames;
+	Params.MaxColumns = bCompressIdle ? FGSTN_InputHistory::MaxEventAge + 1 : NumFrames;
 	Params.NumButtons = Profile.GetNumButtons();
 	Layout = FGSTN_InputDisplayLayout::Build(Data, Params);
 	Strip->SetLayout(Layout);

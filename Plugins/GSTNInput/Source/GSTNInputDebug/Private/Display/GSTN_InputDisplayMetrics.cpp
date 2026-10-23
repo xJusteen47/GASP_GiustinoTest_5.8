@@ -77,6 +77,11 @@ FVector2f FGSTN_InputDisplayMetrics::GetArrowDirection(EGSTN_StickDirection Dire
 
 TArray<FGSTN_InputGapLabel> FGSTN_InputDisplayMetrics::ChooseGapLabels(const FGSTN_InputDisplayLayout& Layout, int32 FirstColumn, float Width, float ColumnWidth, float CharWidth)
 {
+	return ChooseGapLabels(Layout, FirstColumn, Width, [&](int32 Column) { return GetColumnX(Width, ColumnWidth, Layout.NumColumns, Column) + ColumnWidth * 0.5f; }, CharWidth);
+}
+
+TArray<FGSTN_InputGapLabel> FGSTN_InputDisplayMetrics::ChooseGapLabels(const FGSTN_InputDisplayLayout& Layout, int32 FirstColumn, float Width, TFunctionRef<float(int32)> CentreOf, float CharWidth)
+{
 	TArray<FGSTN_InputGapLabel> Labels;
 	float PreviousRight = -FLT_MAX;
 	for (int32 Index = 1; Index < Layout.Events.Num(); ++Index)
@@ -97,8 +102,8 @@ TArray<FGSTN_InputGapLabel> FGSTN_InputDisplayMetrics::ChooseGapLabels(const FGS
 		Label.Width = Label.Text.Len() * CharWidth;
 
 		// Centred between the two event columns, kept inside the columns of the strip
-		const float FromCentre = GetColumnX(Width, ColumnWidth, Layout.NumColumns, From.Column) + ColumnWidth * 0.5f;
-		const float ToCentre = GetColumnX(Width, ColumnWidth, Layout.NumColumns, To.Column) + ColumnWidth * 0.5f;
+		const float FromCentre = CentreOf(From.Column);
+		const float ToCentre = CentreOf(To.Column);
 		const float Left = (FromCentre + ToCentre) * 0.5f - Label.Width * 0.5f;
 		Label.X = FMath::Clamp(Left, GutterWidth, FMath::Max(Width - Label.Width, GutterWidth));
 
@@ -110,6 +115,115 @@ TArray<FGSTN_InputGapLabel> FGSTN_InputDisplayMetrics::ChooseGapLabels(const FGS
 		Labels.Add(MoveTemp(Label));
 	}
 	return Labels;
+}
+
+bool FGSTN_InputDisplayMetrics::IsIdleColumn(const FGSTN_InputDisplayLayout& Layout, int32 Column)
+{
+	if (!Layout.Stick.IsValidIndex(Column) || Layout.Stick[Column].bEvent || (Layout.ColumnMarker.IsValidIndex(Column) && Layout.ColumnMarker[Column] != INDEX_NONE))
+	{
+		return false;
+	}
+	for (const TArray<FGSTN_InputDisplayCell>& Row : Layout.Buttons)
+	{
+		if (Row.IsValidIndex(Column) && Row[Column].Kind != EGSTN_InputCellKind::None && Row[Column].Kind != EGSTN_InputCellKind::Hold)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+TArray<FGSTN_InputDisplaySlot> FGSTN_InputDisplayMetrics::ComputeSlots(const FGSTN_InputDisplayLayout& Layout, float Width, int32 MaxFrames, bool bCompress)
+{
+	TArray<FGSTN_InputDisplaySlot> Slots;
+	if (Layout.NumColumns <= 0)
+	{
+		return Slots;
+	}
+	if (!bCompress)
+	{
+		const int32 Visible = GetVisibleColumns(Width, MaxFrames);
+		const float ColumnWidth = GetColumnWidth(Width, Visible);
+		for (int32 Column = GetFirstVisibleColumn(Layout.NumColumns, Visible); Column < Layout.NumColumns; ++Column)
+		{
+			FGSTN_InputDisplaySlot& Slot = Slots.AddDefaulted_GetRef();
+			Slot.FirstColumn = Column;
+			Slot.X = GetColumnX(Width, ColumnWidth, Layout.NumColumns, Column);
+			Slot.Width = ColumnWidth;
+		}
+		return Slots;
+	}
+
+	// Every column to a slot, idle runs merged
+	TArray<FGSTN_InputDisplaySlot> All;
+	for (int32 Column = 0; Column < Layout.NumColumns;)
+	{
+		int32 End = Column;
+		while (End < Layout.NumColumns && IsIdleColumn(Layout, End))
+		{
+			++End;
+		}
+		FGSTN_InputDisplaySlot& Slot = All.AddDefaulted_GetRef();
+		Slot.FirstColumn = Column;
+		if (End - Column >= MinCompressedRun)
+		{
+			Slot.NumColumns = End - Column;
+			Column = End;
+		}
+		else
+		{
+			Column += 1;
+		}
+	}
+
+	// The newest slots that fit, then the width left over shared out
+	const float Available = Width - GutterWidth - RightMargin;
+	int32 Frames = 0;
+	float Total = 0.f;
+	int32 First = All.Num();
+	bool bCut = false;
+	while (First > 0)
+	{
+		const FGSTN_InputDisplaySlot& Candidate = All[First - 1];
+		const float Needed = Candidate.IsCompressed() ? CompressedColumnWidth : MinColumnWidth;
+		if (First < All.Num() && (Total + Needed > Available || Frames + Candidate.NumColumns > FMath::Max(MaxFrames, 1)))
+		{
+			bCut = true;
+			break;
+		}
+		Total += Needed;
+		Frames += Candidate.NumColumns;
+		--First;
+	}
+	const float Scale = bCut ? FMath::Clamp(Available / FMath::Max(Total, 1.f), 1.f, 2.f) : 1.f;
+	float Right = Width - RightMargin;
+	for (int32 Index = All.Num() - 1; Index >= First; --Index)
+	{
+		FGSTN_InputDisplaySlot Slot = All[Index];
+		Slot.Width = (Slot.IsCompressed() ? CompressedColumnWidth : MinColumnWidth) * Scale;
+		Slot.X = Right - Slot.Width;
+		Right = Slot.X;
+		Slots.Insert(Slot, 0);
+	}
+	return Slots;
+}
+
+FGSTN_InputPressIconStyle FGSTN_InputDisplayMetrics::GetPressIconStyle(int32 Button, bool bConsumed)
+{
+	const FLinearColor Colour = GetButtonColor(Button);
+	FGSTN_InputPressIconStyle Style;
+	if (!bConsumed)
+	{
+		Style.Fill = Colour;
+		Style.Outline = FLinearColor(0.f, 0.f, 0.f, 0.f);
+		Style.Letter = GetButtonTextColor(Button);
+		return Style;
+	}
+	Style.Fill = FLinearColor(Colour.R * 0.3f, Colour.G * 0.3f, Colour.B * 0.3f, 1.f);
+	Style.Outline = FLinearColor(Colour.R, Colour.G, Colour.B, 1.f);
+	// A brightened copy of the colour: reads on the dark fill for every hue of the palette
+	Style.Letter = FLinearColor(FMath::Min(Colour.R * 0.3f + 0.7f, 1.f), FMath::Min(Colour.G * 0.3f + 0.7f, 1.f), FMath::Min(Colour.B * 0.3f + 0.7f, 1.f), 1.f);
+	return Style;
 }
 
 FLinearColor FGSTN_InputDisplayMetrics::GetButtonColor(int32 Button)

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Display/GSTN_InputDisplayLayout.h"
+#include "Display/GSTN_InputDisplayMetrics.h"
 #include "Display/GSTN_InputDisplayScript.h"
 #include "GameplayTagContainer.h"
 #include "Sources/GSTN_InputSourceRegistry.h"
@@ -45,6 +46,16 @@ public:
 	void SetMessage(const FText& InMessage);
 	void SetButtonNames(const TArray<FString>& InNames);
 
+	/**
+	 * Collapse runs of frames with no change into one narrow column that shows the run length. The layout then covers the whole history
+	 * (the strip decides what fits), so a press stays on screen as long as the strip has room for the slots after it.
+	 */
+	void SetCompressIdle(bool bInCompress);
+	bool IsCompressIdle() const { return bCompressIdle; }
+
+	/** The slots drawn at the current width (what the tooltip and the paint share) */
+	TArray<FGSTN_InputDisplaySlot> GetSlots() const;
+
 	/** The tooltip text for the column and row under a local position, empty when over nothing */
 	FText DescribeAt(const FVector2D& Local) const;
 
@@ -60,6 +71,7 @@ private:
 	FText Message;
 	TArray<FString> ButtonNames;
 	int32 NumFrames = 90;
+	bool bCompressIdle = false;
 };
 
 /**
@@ -82,6 +94,7 @@ public:
 		: _NumFrames(90)
 		, _bShowScriptBox(false)
 		, _bShowPlayerPicker(false)
+		, _bShowControls(false)
 	{}
 		/** Source of the live history, for a host that has its own (a test). Unbound = nothing live to show (only the scripted mode works) */
 		SLATE_EVENT(FGSTN_InputDisplayFetch, Fetch)
@@ -97,6 +110,9 @@ public:
 
 		/** Show the combo that picks the player (needs LocalSource) */
 		SLATE_ARGUMENT(bool, bShowPlayerPicker)
+
+		/** Show the Compress idle and Pause toggles above the strip (the key P pauses too while the display has the focus) */
+		SLATE_ARGUMENT(bool, bShowControls)
 
 		/** Buttons and command set when there is no local source and no registered default (a test) */
 		SLATE_ARGUMENT(TOptional<FGSTN_InputDisplayProfile>, Profile)
@@ -121,11 +137,25 @@ public:
 	/** The buttons and command set in use */
 	const FGSTN_InputDisplayProfile& GetProfile() const { return Profile; }
 
+	/** Compress runs of unchanged frames into one narrow column showing the run length. On by default */
+	void SetCompressIdle(bool bInCompress);
+	bool IsCompressIdle() const { return bCompressIdle; }
+
+	/** Freeze the live view: it keeps the last layout and stops reading the source until resumed (a scripted view does not move anyway) */
+	void SetPaused(bool bInPaused);
+	bool IsPaused() const { return bPaused; }
+
+	/** The strip, for tests */
+	const TSharedPtr<SGSTN_InputStrip>& GetStrip() const { return Strip; }
+
 	/** Reads the source and rebuilds the layout if the data changed. Tick calls it; public so a test can drive it without a window */
 	void Refresh();
 
 	//~ SWidget
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
+	virtual bool SupportsKeyboardFocus() const override { return true; }
+	virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 
 private:
 	void HandleNotationCommitted(const FText& Text, ETextCommit::Type CommitType);
@@ -153,6 +183,8 @@ private:
 	FGSTN_InputDisplayScriptResult ScriptResult;
 
 	FGSTN_InputDisplayLayout Layout;
+	bool bCompressIdle = true;
+	bool bPaused = false;
 
 	/** The data the layout was built from, to skip the rebuild (and the repaint) on a frame where nothing changed */
 	FGSTN_InputDisplayData LastData;

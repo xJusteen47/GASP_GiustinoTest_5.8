@@ -23,6 +23,30 @@ struct GSTNINPUTDEBUG_API FGSTN_InputGapLabel
 };
 
 /**
+ * One drawn slot of the strip: a single frame, or (when idle runs are compressed) a run of frames in which nothing changed, drawn as
+ * one narrow column that shows its length. Slots are in frame order; X and Width are strip pixels.
+ */
+struct GSTNINPUTDEBUG_API FGSTN_InputDisplaySlot
+{
+	/** First layout column of the slot and how many it covers (1 for a plain frame) */
+	int32 FirstColumn = 0;
+	int32 NumColumns = 1;
+	float X = 0.f;
+	float Width = 0.f;
+
+	bool IsCompressed() const { return NumColumns > 1; }
+	int32 GetLastColumn() const { return FirstColumn + NumColumns - 1; }
+};
+
+/** How a press or tap icon is painted: the fill, an outline (alpha 0 = none) and the letter */
+struct GSTNINPUTDEBUG_API FGSTN_InputPressIconStyle
+{
+	FLinearColor Fill;
+	FLinearColor Outline;
+	FLinearColor Letter;
+};
+
+/**
  * The sizes and the pure geometry of the input display strip: row heights, how many columns fit, where a column is, the arrow of a stick
  * direction, which frame-gap labels fit, the colour of a button. No Slate in this header or its source: the strip only paints what these
  * functions say, so "nothing overlaps", "newest on the right" and "an arrow for each of the nine directions" are tested without a window
@@ -111,6 +135,38 @@ struct GSTNINPUTDEBUG_API FGSTN_InputDisplayMetrics
 	 * @param FirstColumn the oldest column in view (GetFirstVisibleColumn)
 	 */
 	static TArray<FGSTN_InputGapLabel> ChooseGapLabels(const FGSTN_InputDisplayLayout& Layout, int32 FirstColumn, float Width, float ColumnWidth, float CharWidth);
+
+	/** Width of a compressed idle run: wide enough for a three digit frame count in the small font */
+	static constexpr float CompressedColumnWidth = 22.f;
+
+	/** The shortest idle run that is compressed: shorter ones take less room drawn as they are */
+	static constexpr int32 MinCompressedRun = 3;
+
+	/**
+	 * A column in which nothing happens: no button pressed, released or tapped, no stick event, no command. The held state
+	 * carries over from the column before, so a run of such columns is one picture repeated.
+	 */
+	static bool IsIdleColumn(const FGSTN_InputDisplayLayout& Layout, int32 Column);
+
+	/**
+	 * The slots to draw, oldest first, the last ending at the right edge. Without bCompress one slot per frame (GetVisibleColumns,
+	 * GetColumnWidth, GetColumnX). With it, every run of at least MinCompressedRun idle columns is one CompressedColumnWidth slot (the
+	 * fighting game way of showing "nothing for N frames"); the newest slots that fit the width and cover at most MaxFrames frames are
+	 * kept and stretched a little to fill the width. Never fewer than one slot for a non-empty layout.
+	 */
+	static TArray<FGSTN_InputDisplaySlot> ComputeSlots(const FGSTN_InputDisplayLayout& Layout, float Width, int32 MaxFrames, bool bCompress);
+
+	/**
+	 * Same as the other overload with the centre of each column given by CentreOf (column to strip x), for a strip whose columns are not
+	 * evenly spaced
+	 */
+	static TArray<FGSTN_InputGapLabel> ChooseGapLabels(const FGSTN_InputDisplayLayout& Layout, int32 FirstColumn, float Width, TFunctionRef<float(int32)> CentreOf, float CharWidth);
+
+	/**
+	 * Paint style of a press or tap icon. A press a command used stays the button's own colour, dimmed, with a bright outline of
+	 * that colour and the letter in it: never a grey that reads as a blank square.
+	 */
+	static FGSTN_InputPressIconStyle GetPressIconStyle(int32 Button, bool bConsumed);
 
 	/** The colour of a button's icon: six distinct hues for A to F, then the same hues a step darker */
 	static FLinearColor GetButtonColor(int32 Button);
