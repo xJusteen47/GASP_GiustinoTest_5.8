@@ -7,8 +7,8 @@ impacts and the platforms read surfaces without knowing what they hit.
 
 Status: **experimental (0.1)**, `EnabledByDefault: false`. This is checkpoint T1 of
 [traversal-surfaces-plan.md](../../docs/architecture/plans/traversal-surfaces-plan.md); the design is
-[traversal-surfaces.md](../../docs/architecture/traversal-surfaces.md) (§2 data model, §3 plugin placement). The consumers
-(wall-surface filter T5, platform shapes T3, launch T4, H11 impacts) are not built yet. Enabling the plugin changes nothing
+[traversal-surfaces.md](../../docs/architecture/traversal-surfaces.md) (§2 data model, §3 plugin placement). The wall-surface filter
+(T5) is built: the project's wall movement reads this plugin. The other consumers (platform shapes T3, launch T4, H11 impacts) are not built yet. Enabling the plugin changes nothing
 until a designer marks a surface: unmarked geometry resolves to the settings' default, which offers everything the wall and
 walking modes did before.
 
@@ -20,7 +20,8 @@ walking modes did before.
 
 The module class (`Private/GSTNSurfaceCoreModule.cpp`) registers the plugin's `Config/Tags` folder with the tag manager (the
 engine reads `Config/Tags` only for the project and for Game Feature plugins, not for ordinary plugins), bakes the surface table
-after engine init so no lookup inside the simulation loads assets, and rebuilds the type indices when the tag tree changes.
+after engine init so no lookup inside the simulation loads assets. In the editor it rebuilds the type indices when the tag tree
+changes; in the running game the type indices are frozen by that first bake (see "Gameplay tags").
 
 ## Dependencies
 
@@ -28,7 +29,7 @@ after engine init so no lookup inside the simulation loads assets, and rebuilds 
 - `GSTNSurfaceCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, PhysicsCore, DeveloperSettings; private
   Projects (to find the plugin's own folder).
 - Planned dependents (traversal-surfaces.md §3, each edge Core -> Core): `GSTNCombatCore` (H11/H11b impacts and launch params),
-  the wall movement (T5 surface filter, private), `GSTNPlatformCore` (T3 shapes), `GSTNLevelObjects` (H11b trampoline).
+  the wall movement (T5 surface filter, private; built: the project module depends on it today), `GSTNPlatformCore` (T3 shapes), `GSTNLevelObjects` (H11b trampoline).
 
 ## Gameplay tags
 
@@ -44,6 +45,14 @@ No surface tag is ever stored in a sync state: the simulation keeps the `uint8` 
 (`UGSTN_SurfaceUtils::GetSurfaceTypeIndex`). Indices follow the tag names in lexical order, so machines with the same tag set
 (already required by Network Prediction) agree. "No wall slide" is not a tag: a surface without `WallSlide` forbids it.
 
+The indices must not move while a match runs. In the **running game** the table is frozen by the bake after engine init: a tag
+added later (a Game Feature plugin, an ini that loads late) that would shift the indices is logged as an error and ignored, so
+its type reads as "no type" instead of silently renumbering the others. Put every `Surface.Type.*` leaf in a `Config/Tags` ini of the
+project or of a plugin that loads at startup. The **editor** never freezes, so a designer sees a new leaf's index at once.
+`UGSTN_SurfaceUtils::GetSurfaceTypeTableChecksum()` is a 32-bit checksum of the ordered type list (the bake logs it too): machines
+with the same value agree on every index, and a client whose value differs from its server's reads the wrong surface types with no
+other sign. Nothing compares it at connect yet; a join check should.
+
 ## How a surface is resolved
 
 `UGSTN_SurfaceUtils::Resolve(const FHitResult&)` returns an `FGSTN_SurfaceView`; first match wins:
@@ -58,7 +67,10 @@ whenever there is one (it is a fact of the pose, not configuration); without a p
 reads a live component's velocity. `bMoving` is the collider's mobility.
 
 Rollback: everything read is static configuration or what a provider answers from replicated state, so a resimulated frame
-resolves the same surface. Providers must answer from static data or confirmed state only, and write nothing.
+resolves the same surface. Providers must answer from static data or confirmed state only, and write nothing. `GetTable()` never
+loads an asset: the module bakes the table (loading the physical materials) after engine init; a lookup before that bakes the types
+and only the materials already in memory, on the game thread, with a warning once (from another thread it returns an empty table and
+fails an ensure). Reading a baked table from any thread is safe; baking it (`Rebake`) is game thread only.
 
 ## Settings
 
@@ -86,9 +98,11 @@ its own leaves in its own `Config/Tags` ini and its own table entries in its `De
 `Automation RunTests GSTNSurface`: `Smoke`, `TagsDeclaredOnce`, `TypeLeavesFromIni`, `TypeIndicesStable`,
 `ResolveOrderComponentBeforeProviderBeforeMaterial`, `DefaultPassesEverything`, `PerComponentOverride`,
 `TypeFallbackAndProviderVelocity`, `LaunchParamsValidated`, `LaunchDirectionAndSpeedModes`, `MaterialTableBaked`,
-`NoRuntimeWriteInBlueprint`. The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the
+`NoRuntimeWriteInBlueprint`, `TypeTableChecksum`, `FrozenTypeTableKeepsIndices`, `GetTableNeverLoadsAssets`. The wall filter built on
+this plugin is tested in the project module (`GSTNMovement.Wall.Filter.*`). The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the
 canary script does not exist.
 
 ## Changelog
 
 - 0.1 (2026-10-23): data contract, tags, resolution, settings and tests (plan T1).
+- 0.1.1 (2026-10-23, review fixes): the type table freezes in the running game and exposes a checksum, `GetTable()` never loads, `Rebake` is non-const and game thread only; README aligned with T5.

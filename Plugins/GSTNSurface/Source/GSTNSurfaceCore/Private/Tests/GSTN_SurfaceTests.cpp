@@ -11,6 +11,8 @@
 #include "GSTN_SurfaceTestTypes.h"
 #include "GSTN_SurfaceUtils.h"
 #include "Misc/AutomationTest.h"
+#include "HAL/FileManager.h"
+#include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "UObject/UnrealType.h"
@@ -449,6 +451,124 @@ bool FGSTN_SurfaceNoRuntimeWriteTest::RunTest(const FString& Parameters)
 					It->HasAnyPropertyFlags(CPF_BlueprintReadOnly));
 			}
 		}
+	}
+	return true;
+}
+
+// Review 2026-10-23 B.2: the type indices are what a sync state carries, so a machine whose tag set differs must be detectable and a
+// running game must not shift them
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SurfaceTypeChecksumTest, "GSTNSurface.Core.TypeTableChecksum", Flags)
+bool FGSTN_SurfaceTypeChecksumTest::RunTest(const FString& Parameters)
+{
+	const FGameplayTag A = GSTNSurfaceTags::Behaviour_Launch;
+	const FGameplayTag B = GSTNSurfaceTags::Behaviour_Stand;
+	const FGameplayTag C = GSTNSurfaceTags::Behaviour_WallSlide;
+
+	FGSTN_SurfaceTable First;
+	First.BakeTypes({ C, A, B, A });
+	FGSTN_SurfaceTable Second;
+	Second.BakeTypes({ B, C, A });
+	TestEqual(TEXT("The same set gives the same checksum whatever the order and duplicates"), First.GetTypesChecksum(), Second.GetTypesChecksum());
+	TestEqual(TEXT("The static form gives the value the bake stores"), FGSTN_SurfaceTable::ComputeTypesChecksum({ A, C, B }), First.GetTypesChecksum());
+
+	FGSTN_SurfaceTable Fewer;
+	Fewer.BakeTypes({ A, B });
+	TestNotEqual(TEXT("A missing type changes the checksum"), Fewer.GetTypesChecksum(), First.GetTypesChecksum());
+	FGSTN_SurfaceTable Other;
+	Other.BakeTypes({ A, B, GSTNSurfaceTags::Behaviour_WallClimb });
+	TestNotEqual(TEXT("A different type changes the checksum"), Other.GetTypesChecksum(), First.GetTypesChecksum());
+	FGSTN_SurfaceTable Empty;
+	Empty.BakeTypes({});
+	TestNotEqual(TEXT("An empty set differs from a set"), Empty.GetTypesChecksum(), First.GetTypesChecksum());
+
+	// The settings' table exposes the same value through the utils
+	TestEqual(TEXT("The utils report the settings' table checksum"), UGSTN_SurfaceUtils::GetSurfaceTypeTableChecksum(),
+		UGSTN_SurfaceSettings::Get().GetTable().GetTypesChecksum());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SurfaceFrozenTableTest, "GSTNSurface.Core.FrozenTypeTableKeepsIndices", Flags)
+bool FGSTN_SurfaceFrozenTableTest::RunTest(const FString& Parameters)
+{
+	const FGameplayTag A = GSTNSurfaceTags::Behaviour_Launch;
+	const FGameplayTag B = GSTNSurfaceTags::Behaviour_Stand;
+	const FGameplayTag C = GSTNSurfaceTags::Behaviour_WallSlide;
+
+	FGSTN_SurfaceTable Table;
+	TestTrue(TEXT("The first bake is accepted"), Table.BakeTypes({ A, C }));
+	Table.Freeze();
+	const uint32 Checksum = Table.GetTypesChecksum();
+	const uint8 IndexOfC = Table.GetTypeIndex(C);
+	TestTrue(TEXT("A frozen table reports it"), Table.IsFrozen());
+
+	// A tag that appears later would move C: the table refuses and says so
+	AddExpectedError(TEXT("changed after the surface type table was frozen"), EAutomationExpectedErrorFlags::Contains, 1);
+	TestFalse(TEXT("A different tag set is refused"), Table.BakeTypes({ A, B, C }));
+	TestEqual(TEXT("The checksum did not move"), Table.GetTypesChecksum(), Checksum);
+	TestEqual(TEXT("C keeps its index"), static_cast<int32>(Table.GetTypeIndex(C)), static_cast<int32>(IndexOfC));
+	TestEqual(TEXT("The new tag has none"), static_cast<int32>(Table.GetTypeIndex(B)), 0);
+	TestEqual(TEXT("The table did not grow"), Table.NumTypes(), 2);
+
+	// The same set again, in any order, is a no-op and not an error
+	TestTrue(TEXT("The same set is accepted"), Table.BakeTypes({ C, A }));
+	TestEqual(TEXT("... and changes nothing"), static_cast<int32>(Table.GetTypeIndex(C)), static_cast<int32>(IndexOfC));
+
+	// Forgetting the table is the only way to a new set
+	Table.Reset();
+	TestFalse(TEXT("Reset unfreezes"), Table.IsFrozen());
+	TestTrue(TEXT("A new set bakes after a reset"), Table.BakeTypes({ A, B, C }));
+	TestEqual(TEXT("... with the new indices"), Table.NumTypes(), 3);
+
+	// Materials can be forgotten without touching the frozen types
+	Table.Freeze();
+	Table.ResetMaterials();
+	TestTrue(TEXT("Forgetting the materials keeps the freeze"), Table.IsFrozen() && Table.AreTypesBaked());
+	TestFalse(TEXT("... and unbakes the materials"), Table.AreMaterialsBaked());
+	return true;
+}
+
+// Review 2026-10-23 B.7: GetTable() ran LoadSynchronous from inside the simulation when nothing had baked the table yet
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SurfaceGetTableNeverLoadsTest, "GSTNSurface.Core.GetTableNeverLoadsAssets", Flags)
+bool FGSTN_SurfaceGetTableNeverLoadsTest::RunTest(const FString& Parameters)
+{
+	UGSTN_SurfaceSettings* Settings = NewObject<UGSTN_SurfaceSettings>(GetTransientPackage());
+	Settings->PhysicalMaterials.Reset();
+
+	// One material that is in memory, one path that is not: a missing asset, and an engine asset that exists on disk but is not loaded
+	UPhysicalMaterial* Loaded = NewObject<UPhysicalMaterial>(GetTransientPackage());
+	Settings->PhysicalMaterials.Add(TSoftObjectPtr<UPhysicalMaterial>(Loaded), MakeBehaviour({ GSTNSurfaceTags::Behaviour_Launch }));
+	Settings->PhysicalMaterials.Add(TSoftObjectPtr<UPhysicalMaterial>(FSoftObjectPath(TEXT("/Game/GSTNSurfaceTest/Missing.Missing"))), MakeBehaviour({ GSTNSurfaceTags::Behaviour_Stand }));
+
+	// Any engine asset on disk that nothing has loaded: loading it is what the lookup must not do
+	FString UnloadedPath;
+	TArray<FString> Files;
+	IFileManager::Get().FindFiles(Files, *(FPaths::EngineContentDir() / TEXT("EngineMaterials/*.uasset")), true, false);
+	for (const FString& File : Files)
+	{
+		const FString Name = FPaths::GetBaseFilename(File);
+		const FString Object = FString::Printf(TEXT("/Engine/EngineMaterials/%s.%s"), *Name, *Name);
+		if (StaticFindObject(UObject::StaticClass(), nullptr, *Object) == nullptr)
+		{
+			UnloadedPath = Object;
+			break;
+		}
+	}
+	if (!UnloadedPath.IsEmpty())
+	{
+		Settings->PhysicalMaterials.Add(TSoftObjectPtr<UPhysicalMaterial>(FSoftObjectPath(UnloadedPath)), MakeBehaviour({ GSTNSurfaceTags::Behaviour_WallClimb }));
+	}
+
+	const FGSTN_SurfaceTable& Table = Settings->GetTable();
+	TestTrue(TEXT("The table is baked on first use"), Table.AreMaterialsBaked() && Table.AreTypesBaked());
+	const FGSTN_SurfaceBehaviour* Entry = Table.FindMaterial(Loaded);
+	TestTrue(TEXT("The material that is in memory is in the table"), Entry && Entry->HasBehaviour(GSTNSurfaceTags::Behaviour_Launch));
+	if (!UnloadedPath.IsEmpty())
+	{
+		TestNull(TEXT("The engine asset that was not loaded was not loaded by the lookup"), StaticFindObject(UObject::StaticClass(), nullptr, *UnloadedPath));
+	}
+	else
+	{
+		AddInfo(TEXT("No unloaded engine asset was found to prove the lookup does not load; only the table contents were checked"));
 	}
 	return true;
 }

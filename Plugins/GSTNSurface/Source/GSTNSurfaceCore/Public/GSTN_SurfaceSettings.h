@@ -17,8 +17,9 @@ class UPhysicalMaterial;
  *
  * The simulation of every machine reads these values, so they must be equal on all machines of a match and never change during
  * one, like any other setting the simulation reads. The physical material table is baked into FGSTN_SurfaceTable after the
- * engine starts (and again when the settings or the tag tree change in the editor), never inside the simulation; a lookup before
- * that bakes on first use as a fallback, which only costs a hitch.
+ * engine starts (and again when the settings or the tag tree change in the editor), never inside the simulation. A lookup before
+ * that must not load anything: it bakes the surface types and only the materials that are already in memory, and warns once.
+ * In the running game the surface type indices are frozen at the first bake (see FGSTN_SurfaceTable::Freeze); the editor rebakes.
  */
 UCLASS(config = GSTNSurface, defaultconfig, meta = (DisplayName = "GSTN Surface"))
 class GSTNSURFACECORE_API UGSTN_SurfaceSettings : public UDeveloperSettings
@@ -31,6 +32,9 @@ public:
 	/** The settings of the running project */
 	static const UGSTN_SurfaceSettings& Get() { return *GetDefault<UGSTN_SurfaceSettings>(); }
 
+	/** For the module and the editor, which bake the table; the simulation only reads */
+	static UGSTN_SurfaceSettings& GetMutable() { return *GetMutableDefault<UGSTN_SurfaceSettings>(); }
+
 	/**
 	 * What a surface nothing marks offers. Shipped as {WallSlide, WallClimb, Stand} with Surface.Type.Wall, so enabling the
 	 * plugin changes no existing wall until a designer marks one
@@ -42,17 +46,21 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Surface")
 	TMap<TSoftObjectPtr<UPhysicalMaterial>, FGSTN_SurfaceBehaviour> PhysicalMaterials;
 
-	/** The baked tables, baking on first use if nothing baked them yet */
+	/**
+	 * The baked tables. Safe to read from any thread once baked (the module bakes them after engine init). Never loads an asset:
+	 * if nothing baked them yet (a lookup before engine init) it bakes the types and the materials already in memory, logs a
+	 * warning once, and only on the game thread; from another thread it returns an empty table and fails an ensure
+	 */
 	const FGSTN_SurfaceTable& GetTable() const;
 
-	/** Loads the physical materials of the table and rebuilds both tables. Call outside the simulation */
-	void Rebake() const;
+	/** Loads the physical materials of the table and rebuilds both tables. Game thread only, outside the simulation */
+	void Rebake();
 
-	/** Rebuilds only the surface type indices (the tag tree changed); loads nothing */
-	void RebakeTypes() const;
+	/** Rebuilds only the surface type indices (the tag tree changed); loads nothing. A frozen table refuses a different set */
+	void RebakeTypes();
 
-	/** Forgets the baked tables (the settings changed); the next use bakes again */
-	void InvalidateTable() const;
+	/** Forgets the baked material entries (the settings changed); the next use bakes the loaded ones. Types are kept */
+	void InvalidateTable();
 
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 
@@ -63,8 +71,13 @@ public:
 	static void AddReferencedObjects(UObject* InThis, FReferenceCollector& Collector);
 
 private:
-	/** Keeps the baked materials loaded (reported in AddReferencedObjects), so the table's pointer keys stay valid */
-	mutable TArray<TObjectPtr<UPhysicalMaterial>> BakedMaterials;
+	/** The fallback of GetTable: types, and the materials that are already loaded. Never loads */
+	void BakeLoadedOnly();
 
-	mutable FGSTN_SurfaceTable Table;
+	/** Keeps the baked materials loaded (reported in AddReferencedObjects), so the table's pointer keys stay valid */
+	TArray<TObjectPtr<UPhysicalMaterial>> BakedMaterials;
+
+	FGSTN_SurfaceTable Table;
+
+	bool bWarnedLazyBake = false;
 };

@@ -69,6 +69,13 @@ public:
 	static FGameplayTag GetSurfaceTypeFromIndex(uint8 Index);
 
 	/**
+	 * 32-bit checksum of the ordered Surface.Type list behind those indices. Machines that report the same value agree on every
+	 * index a sync state carries; a client that differs from its server reads the wrong surface types without any other sign.
+	 * Meant for a join check (nothing compares it yet) and for the log, where the table bake prints it
+	 */
+	static uint32 GetSurfaceTypeTableChecksum();
+
+	/**
 	 * Unit launch direction in world space. SurfaceTransform is the surface's frame (its local up is the launch face, so
 	 * rotating the surface rotates LocalDirection and Tilt launches); ContactNormal is used by SurfaceNormal mode and falls back to
 	 * the local up when zero. Scale is ignored

@@ -147,6 +147,11 @@ uint8 UGSTN_SurfaceUtils::GetSurfaceTypeIndex(FGameplayTag SurfaceType)
 	return UGSTN_SurfaceSettings::Get().GetTable().GetTypeIndex(SurfaceType);
 }
 
+uint32 UGSTN_SurfaceUtils::GetSurfaceTypeTableChecksum()
+{
+	return UGSTN_SurfaceSettings::Get().GetTable().GetTypesChecksum();
+}
+
 FGameplayTag UGSTN_SurfaceUtils::GetSurfaceTypeFromIndex(uint8 Index)
 {
 	return UGSTN_SurfaceSettings::Get().GetTable().GetTypeByIndex(Index);

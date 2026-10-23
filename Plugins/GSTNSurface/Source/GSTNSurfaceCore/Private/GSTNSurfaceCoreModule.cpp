@@ -15,8 +15,10 @@ DEFINE_LOG_CATEGORY(LogGSTNSurface);
 
 /**
  * Registers the plugin's Config/Tags folder with the tag manager (the engine reads Config/Tags only for the project and for
- * Game Feature plugins, not for ordinary plugins, so the Surface.Type.* leaves would otherwise be missing). Then bakes the surface table once the engine has started (content can be loaded, the tag tree is complete), so the first lookup
- * inside the simulation does not load assets, and rebuilds the type indices when the tag tree changes.
+ * Game Feature plugins, not for ordinary plugins, so the Surface.Type.* leaves would otherwise be missing). Then bakes the
+ * surface table once the engine has started (content can be loaded, the tag tree is complete), so the first lookup inside the
+ * simulation does not load assets. In the editor the type indices are rebuilt when the tag tree changes; in the running game
+ * they are frozen by that first bake, and a later tree change that would move them is an error in the log, not a silent shift.
  */
 class FGSTNSurfaceCoreModule : public IModuleInterface
 {
@@ -31,22 +33,23 @@ public:
 
 		if (GEngine && GEngine->IsInitialized())
 		{
-			UGSTN_SurfaceSettings::Get().Rebake();
+			UGSTN_SurfaceSettings::GetMutable().Rebake();
 		}
 		else
 		{
 			PostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddLambda([]()
 			{
-				UGSTN_SurfaceSettings::Get().Rebake();
+				UGSTN_SurfaceSettings::GetMutable().Rebake();
 			});
 		}
 
 		TagTreeChangedHandle = IGameplayTagsModule::OnGameplayTagTreeChanged.AddLambda([]()
 		{
-			// Types only: a tag added in the editor must get an index, and nothing here may load assets
+			// Types only: in the editor a tag added by a designer must get an index, and nothing here may load assets. In the
+			// running game the table is frozen after engine init: a tree change that moves the indices is logged as an error
 			if (UObjectInitialized())
 			{
-				UGSTN_SurfaceSettings::Get().RebakeTypes();
+				UGSTN_SurfaceSettings::GetMutable().RebakeTypes();
 			}
 		});
 	}

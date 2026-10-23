@@ -64,3 +64,34 @@ Collected per the plan's rule (one docs commit at T9). Each line: where, what ch
 - Blueprint step left for later (shared asset `SandboxCharacter_Mover`, announced before editing): `SurfaceFilter.RequiredBehaviours`
   = `Surface.Behaviour.WallSlide` on the slide mode and on the Falling to slide transition, `Surface.Behaviour.WallClimb` on the
   climb mode and its transition. Until then nothing changes in play.
+
+## Review fixes (2026-10-23, review of T1 and T5 on `claude/project-thread-v1plhd`)
+
+- §2.2 / modularity-and-tags §4.7 `Surface.Type` indices (review B.2): the indices are what a sync state carries, so they cannot
+  move during a match. They are still computed from the tag tree (lexical order), once, at engine init. In the **running game**
+  that first bake freezes the table (`FGSTN_SurfaceTable::Freeze`); a later `OnGameplayTagTreeChanged` that would give a different
+  list is an error in the log and the table is left alone (the new type reads as 0). The **editor never freezes** (a designer who
+  adds a leaf needs its index at once). `UGSTN_SurfaceUtils::GetSurfaceTypeTableChecksum()` and `FGSTN_SurfaceTable::GetTypesChecksum()`
+  give a 32-bit CRC of the ordered names (UTF-8, so the value does not depend on the platform's `TCHAR`); the bake logs it. Nothing
+  compares it at connect yet: **a join check is needed** (server value vs client value, refuse or at least log) before Surface types
+  are stored in a sync state. Rule for content: every `Surface.Type.*` leaf lives in a `Config/Tags` ini of the project or of a
+  plugin that loads at startup, never in a late Game Feature plugin.
+- §2.2 lazy bake (review B.7): `GetTable()` no longer loads assets. A lookup before the engine-init bake gets the types and only the
+  physical materials already in memory (`TSoftObjectPtr::Get`, not `LoadSynchronous`), with one warning, and only on the game
+  thread (from another thread: an ensure and an empty table). `Rebake()`, `RebakeTypes()` and `InvalidateTable()` are non-const;
+  `Rebake()` asserts the game thread. A settings edit or config reload forgets only the material entries (the types stay).
+  Reading a baked table from any thread is safe.
+- Spec §3 vs §9 (review B.5, B.10): §3 says the wall movement depends on `GSTNSurfaceCore` (private) and the project module does
+  (`GASP_Giustino2.Build.cs`, private). §9's acceptance says "the project with `GSTNSurface`... removed, everything builds". **The two
+  contradict each other and the code follows §3**: the project does not compile without `GSTNSurfaceCore` (the plugin is
+  `EnabledByDefault: false` but the `.uproject` enables it and the module links it). This is a deviation from the canary rule, not an
+  oversight: the wall movement (future `GSTNMovement`) is a declared dependent. The "project builds without GSTNSurface" criterion
+  cannot be met until the filter sits behind an interface or in an optional module; decide at T9 whether to relax §9 or to split the
+  filter out. `check_modules.py` does not exist yet, so nothing catches it today.
+- Plan T1 names the tag namespace `GSTN_SurfaceTags`; the code uses `GSTNSurfaceTags` (like `GSTNCombatTags`). The Parts plugin used
+  `GSTN_PartsTags` and is renamed `GSTNPartsTags` for the same convention.
+- §2.4 warning "Stand only on a component with a walkable face" is not implemented in `IsDataValid` (nothing reads `Stand` yet).
+- Known limits left as they are (design choices, review B.8, B.9, B.10, B.13): the wall filter is empty by default on the modes and
+  the transition, so it must be set in both places; `bUnknownSurfacesPass` bypasses a customised `UGSTN_SurfaceSettings::Default`;
+  `Resolve` also computes velocity and launch for a yes/no filter question (measure before adding a `ResolveBehaviours`); two
+  `UGSTN_SurfaceBehaviourComponent` on one actor resolve to whichever `FindComponentByClass` returns first (the validator warns).
