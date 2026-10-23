@@ -214,6 +214,9 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - **Free camera**: in the Expedition, and in general where no designer guides the camera, take **Astro Bot's camera** as the reference ([camera.md](camera.md) §2.4).
 - **PvP camera**, for now: a Smash-like fight framed **the Tekken way**: the camera centre between the two fighters, both kept parallel to the
   screen ([camera.md](camera.md) §2.5).
+- **Scoped weapons** (12:48, with a sketch): a **zoom overlay** that still lets the rest of the character be seen, as in the drawing (a round
+  magnified view beside the aim, joined to the weapon's scope): "the flexibility of third person and the precision of a first-person scope"
+  ([camera.md](camera.md) §6.1).
 
 ## 7. Consequences for the specifications
 
@@ -227,7 +230,7 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
 | §6d: two PvE modes (designer levels, procedural expedition with missions); kit = stats, weapon = moveset; mid-match kit pickup; support weapons inherit kit stats; mods (cosmetic + moveset/specials); special swapping; implants; backpacks on the implant connector; depth marker; everything a pluggable ability | new specs [combat-loadout-mods.md](combat-loadout-mods.md) (M11), [game-modes.md](game-modes.md) (M12–M13), [depth-marker.md](depth-marker.md); M3 seams (loadout extensions, compile extension, mid-match apply); M4 hit data scalable by mods; M5 mod preview and validation; M6 interact probe (possible `GSTNInteract` plugin); [modularity-and-tags.md](modularity-and-tags.md) §1.1 goal 9, §3.6, §3.10, §4.2 |
-| §6f: lives pool and restart point per level; pointing with the character; Astro Bot free camera; Tekken-style PvP camera | [game-modes.md](game-modes.md) §5, §8.1; [interaction.md](interaction.md) §2.1; [camera.md](camera.md) §2.4, §2.5 |
+| §6f: lives pool and restart point per level; pointing with the character; Astro Bot free camera; Tekken-style PvP camera; scope zoom overlay | [game-modes.md](game-modes.md) §5, §8.1; [interaction.md](interaction.md) §2.1; [camera.md](camera.md) §2.4, §2.5, §6.1 |
 | §6e: interaction focus on what the player points at; depth marker above and below the last platform; far camera with shoulder aim and designer-set angles; shared lives, no revive; Expedition low priority | new [interaction.md](interaction.md) (`GSTNInteract`, replaces the probe part of M6 §8); [depth-marker.md](depth-marker.md) §2.7; new [camera.md](camera.md) (`GSTNCamera`); [game-modes.md](game-modes.md) §5, §6.2, §9.3 |
 | §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
 | §2g: tap = grab, hold = pickup; feet invincible in the dodge's initial part (corrected at 11:41), invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
@@ -451,3 +454,6 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 > Per il PVP, per ora, una cosa tipo smash bros, ma alla tekken (si cerca di avere il centro della telecamera tra i due personaggi e
 > mantenerli paralleli allo schermo)
+
+> inoltre, potrebbero esserci armi con mirino. In tal caso, vorrei un'overlay di zoom che pero lascia vedere il resto del personaggio. Ossia
+> come nel disegno. Voglio la flessibilità della terza persona, e la precisione di un mirino in prima.

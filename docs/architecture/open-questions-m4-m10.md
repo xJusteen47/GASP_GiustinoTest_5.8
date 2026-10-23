@@ -1372,3 +1372,11 @@ CAM.8. Online, ognuno vede se stesso sempre a sinistra dello schermo (come Tekke
 CAM.9. Della telecamera di Astro Bot fuori dai livelli guidati, ti va bene questa lettura: non gira da sola dietro al personaggio, durante i salti resta all'altezza dell'ultima piattaforma e scende subito se cadi più in basso, guarda un po' avanti nella direzione di corsa, e un tasto la riporta dietro al personaggio? C'è altro che ti piace di quella telecamera?
    Perché conta: ho potuto verificare solo il controllo con lo stick destro e l'assistenza che la ricentra; il resto è la mia lettura di una telecamera da platform 3D calma.
    Ipotesi nella specifica: come descritto ([camera.md](camera.md) §2.4), tutti i valori modificabili nei dati.
+
+CAM.10. La finestra di zoom del mirino va sempre in un punto fisso (in alto di lato, come nel disegno), oppure segue il punto mirato? Quanto grande (circa 40% dell'altezza dello schermo)? E la linea che la collega al mirino dell'arma la vuoi sempre?
+   Perché conta: decide se la finestra copre mai il personaggio o il bersaglio e quanto si vede del resto della scena.
+   Ipotesi nella specifica: in alto e di lato rispetto al punto mirato, circa 40% dell'altezza, sempre dentro lo schermo e mai sopra il personaggio, con la linea di collegamento; tutto modificabile per arma ([camera.md](camera.md) §6.1).
+
+CAM.11. Il mirino ha più livelli di zoom da cambiare con un tasto? Mentre si mira con il mirino ci si può muovere liberamente (magari più lentamente), saltare o scivolare sui muri?
+   Perché conta: la flessibilità della terza persona dipende da cosa resta permesso mentre si mira; i livelli di zoom richiedono un comando in più.
+   Ipotesi nella specifica: zoom a uno o più livelli per arma (dati), ci si muove liberamente con velocità ridotta decisa dall'abilità di mira dell'arma; salti e muri a scelta del designer della singola arma.

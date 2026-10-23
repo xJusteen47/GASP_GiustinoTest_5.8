@@ -23,13 +23,19 @@ durante i livelli il designer puo specificare l'angolo desiderato, e se si puo s
 Owner, 2026-10-23 12:44 and 12:45 (verbatim): "considera la telecamera di astrobot e il suo funzionamento nelle spedizioni o in genere quando non siamo in un livello dove il
 designer guida la telecamera." and "Per il PVP, per ora, una cosa tipo smash bros, ma alla tekken (si cerca di avere il centro della telecamera tra i due personaggi e
 mantenerli paralleli allo schermo)". These add **D5** (free camera modelled on Astro Bot, §2.4) and **D6** (PvP duel camera, Tekken style, §2.5).
+Owner, 12:48 (verbatim, with a sketch): "inoltre, potrebbero esserci armi con mirino. In tal caso, vorrei un'overlay di zoom che pero lascia vedere il resto del
+personaggio. Ossia come nel disegno. Voglio la flessibilità della terza persona, e la precisione di un mirino in prima." This adds **D7** (scope overlay, §6.1).
+The sketch: the character seen from behind in third person, holding a scoped weapon; a large round magnified view with a cross reticle and range ticks floats
+above and to the side, joined to the weapon's scope by two lines like a magnifier callout ([images/scope-overlay-sketch.png](images/scope-overlay-sketch.png)).
 
 ## 0. Summary
 
 - *Decisions* from the answer: **D1** the default camera is far from the player, Mario 3D World style. **D2** it can go over the shoulder to aim,
   only with some weapons and abilities. **D3** the player can move it by hand. **D4** in levels the designer sets the desired angle and whether it can be moved.
   **D5** where no designer section guides it (the Expedition, free areas) it behaves like **Astro Bot's** camera (§2.4). **D6** in PvP, for now, a Smash-like
-  fight framed **the Tekken way**: the camera centre between the two fighters, both kept parallel to the screen (§2.5).
+  fight framed **the Tekken way**: the camera centre between the two fighters, both kept parallel to the screen (§2.5). **D7** weapons with a scope show a
+  **zoom overlay** (a round magnified view) while the third-person view, character included, stays on screen: third-person flexibility, first-person
+  scope precision (§6.1).
 - Plugin **`GSTNCamera`**: one `UGSTN_CameraComponent` on the pawn runs a **stack of camera modes** with blending (the Lyra idea, §2). Built in:
   **Follow** (far, default), **Shoulder** (aim), **Section** (designer angle, fixed point or rail). Modes are data assets plus Blueprintable classes.
 - **The mode is chosen by data** (§3): a rule table (tag query to mode, priority) over the pawn's tags, read through a small interface so the plugin knows no GAS,
@@ -102,7 +108,7 @@ spirit (*Proposal*), for the owner to compare with the game (CAM.9).
 | Recentre | A recentre action (default: a button press) eases the heading behind the character's facing in `RecenterSeconds` (0.25); the accessibility assist of the reference maps to it (user setting) | One-stick play; quick reorientation |
 | Distance and FOV | Fixed far arm (Follow defaults, §2.3); optional `SpeedZoomOutCm` at high speed | The far framing of D1 |
 
-Tuning lives in `FGSTN_FollowTuning` (`Camera|Follow`), part of the Follow definition, so a mode (Expedition, a hub) can override it by data. Inside a section
+Tuning lives in `FGSTN_CameraFollowTuning` (`Camera|Follow`, extended with the fields named above), part of the Follow definition, so a mode (Expedition, a hub) can override it by data. Inside a section
 with `Path = Orbit`, the same rules apply at the designer's angle.
 
 ### 2.5 Duel: PvP framed the Tekken way (D6)
@@ -228,6 +234,28 @@ turn at once and the player would run the wrong way. The rule (game-modes §5 al
   quantised into the command like any aim, so the simulation stays deterministic. It needs one input-side hook (an aim-rotation provider on the input source, wired by the same bridge): *tell the owner*, it edits `input.md`.
 - **Crosshair** = a replaceable presenter: `UGSTN_CrosshairPresenter` (Abstract, Blueprintable, EditInlineNew), `OnCrosshairUpdated(const FGSTN_CrosshairView&)` with screen position, hit point, distance, `bConverged`. Default presenter adds a plain widget (soft class in settings) to the local player's screen; a CommonUI project replaces it. The crosshair shows where the shot goes (the converged point).
 
+### 6.1 Scoped weapons: the zoom overlay (D7)
+
+What the owner drew: the main view stays third person (the character, its surroundings and its movement stay readable), and a **round magnified view**
+appears beside the aim, joined to the weapon's scope by a callout. The precision comes from the overlay, the flexibility from the camera behind it.
+
+| Element | Rule (*Proposal* except D7 itself) |
+|---|---|
+| Trigger | The scoped weapon's aim ability grants `Camera.Request.Scope.<Name>` (an ini leaf per scope type) while aiming, as `Camera.Request.Aim` does (§3.3); the rule set maps each leaf to a **`UGSTN_CameraScopeDefinition`**, so the camera plugin never knows a weapon |
+| Main view | Shoulder by default (the rule for `Camera.Request.Scope` also implies Shoulder), or any mode the rule names (a far Follow with the overlay is allowed) |
+| Magnified view | A **second render** (`USceneCaptureComponent2D` into a render target, owned by the camera component, created only while scoped) from the **presented aim origin** (`IGSTN_CameraAimOrigin`, the scope socket) along the **simulated aim direction** (`AimYaw/AimPitch`), FOV = main FOV / `Magnification` |
+| Why from the aim origin | The reticle centre is then exactly the shot's path (combat.md §11.6: the shot leaves the character, not the camera), so there is no parallax at any distance and no convergence trace is needed while scoped |
+| Overlay | A replaceable presenter `UGSTN_ScopeOverlayPresenter` (Abstract, Blueprintable, EditInlineNew) draws the render target in a round mask with the reticle, range ticks and the callout line to the projected scope socket; default placement as in the sketch: up and to the side of the aim point, `OverlayScreenFraction` 0.4 of screen height, clamped inside the safe area and never over the character |
+| Aim input | While scoped, look input is aim input scaled by `1 / Magnification` (plus a user setting); optional zoom steps (`Magnifications[]`, cycled by a camera request) |
+| Main crosshair | Hidden or reduced to a small dot while the overlay is up (data on the scope definition) |
+| Simulation | Unchanged: the aim is the same 16-bit `AimYaw/AimPitch` (about 0.0055 degrees per step, roughly 1 cm at 100 m), sampled from the control rotation. Weapon sway or breathing, if wanted, must be simulated aim data on the weapon, never a camera effect, or the reticle would lie |
+| Remote players | Nothing is replicated; others see only the character's aim pose. A lens glint or laser for opponents would be weapon presentation (not here) |
+| Cost | One extra scene render while scoped, at `CaptureResolution` (512 by default) and with a reduced show-flag set (*Unsure*: what Lumen, Nanite and virtual shadow maps cost in a scene capture in 5.8; spike C6). Fallback for low magnification: a screen-space magnifier that crops and scales the main render (cheap, blurry above about 2x). On a listen host the host pays this while the host itself is scoped |
+
+`UGSTN_CameraScopeDefinition` (PrimaryDataAsset, `Camera|Scope`): `Magnifications[]`, `CaptureResolution`, `ShowFlagsPreset`, `OverlayPresenter` (instanced),
+`OverlayScreenFraction`, `OverlayAnchor` (screen offset from the aim point), `bHideMainCrosshair`, `AimSensitivityScale`, `PostProcess` (vignette, edge blur),
+`MainModeOverride` (optional). Owner questions: CAM.10 (overlay placement and size), CAM.11 (zoom steps and moving while scoped).
+
 ## 7. Hard cases
 
 ### 7.1 Occlusion with a far camera
@@ -282,7 +310,7 @@ Root `Camera.*` is owned by `GSTNCamera` (one owner, modularity §4.1; answers t
 | Subtree | Leaves | Source |
 |---|---|---|
 | `Camera.Mode.*` | native `Follow`, `Shoulder`, `Section`, `Duel`; designer modes `Camera.Mode.<Name>` | native + **ini** (the content owner's `Config/Tags/*.ini`) |
-| `Camera.Request.*` | native `Aim`; designer requests (`Camera.Request.<Name>`: zoom, swap shoulder, cinematic) granted by content | native + ini |
+| `Camera.Request.*` | native `Aim` and the `Scope` parent; designer requests (`Camera.Request.Scope.<Name>` per scope type, `Camera.Request.<Name>`: zoom, swap shoulder, cinematic) granted by content | native + ini |
 | `Camera.Section.*` | designer section identities (`Camera.Section.BossRoom`), usable in rule queries | root native, leaves ini |
 | `Camera.State.*` | `InSection`, `ShoulderBlocked`: **computed locally**, added to the query container, never on an ASC | native |
 
@@ -300,9 +328,11 @@ No `Message.Camera.*` in v1 (local delegates and section actions cover it; the m
 | `UGSTN_CameraLocalPlayerSubsystem`, `UGSTN_CameraSectionSubsystem`, `AGSTN_CameraSection`, `UGSTN_CameraSectionAction` | Runtime | subsystems, actor, Blueprintable | Per-player orbit, options, KO hold; section registry; §4 |
 | `IGSTN_CameraSubject`, `IGSTN_CameraTagSource`, `IGSTN_CameraAimOrigin` | Runtime | UINTERFACE (BlueprintNativeEvent) | Presented pivot, Up, suppressed; tags; aim origin. Adapter registry as in the depth marker (Actor, Character, Mover) |
 | `UGSTN_CameraOcclusionPolicy` (+ `_PullIn`, `_Fade`, `_FadeThenPullIn`), `UGSTN_CrosshairPresenter` | Runtime | Abstract, Blueprintable, EditInlineNew | §7.1, §6 |
+| `UGSTN_CameraScopeDefinition`, `UGSTN_ScopeOverlayPresenter`, `UGSTN_CameraMode_Duel`, `AGSTN_CameraBoundsVolume` | Runtime | data asset, Blueprintable presenter, mode, volume | §6.1, §2.5 |
 
 Tuning structs (`EditAnywhere, BlueprintReadOnly`, `ClampMin`, `ForceUnits`; values are estimates): `FGSTN_CameraFollowTuning` (`Camera|Follow`: `DistanceCm` 650, `PitchDeg` -25, `FovDeg` 65, `PivotDampingSeconds` 0.25, `bAutoAlignToMovement` false);
 `FGSTN_CameraShoulderTuning` (`Camera|Shoulder`: `ArmCm` 220, `ShoulderOffsetCm` 55, `FovDeg` 55, `AimSensitivityScale` 0.6, `bConvergeAim` true, `ConvergeMinCm` 300, `ConvergeMaxCm` 6000);
+`FGSTN_CameraDuelTuning` (`Camera|Duel`: `DuelYawRateDegPerSecond` 120, `DuelMarginCm`, `DuelMinArmCm`, `DuelMaxArmCm`, `DuelMinAxisCm`);
 `FGSTN_CameraBlendTuning` (`Camera|Blend`: `BlendSeconds`, `Function`, `Exponent`); `FGSTN_CameraStabilityTuning` (`Camera|Stability`: `UpRateLimitDegPerSecond` 90, `ExitDelaySeconds` 0.15, `MinDwellSeconds` 0.3, `MaxStackDepth` 4); `FGSTN_CameraOcclusionTuning`
 (`Camera|Occlusion`: `Policy`, `ProbeRadiusCm` 25, `FadeSeconds` 0.15, `FadedOpacity` 0.2, `PullInSecondsIn` 0.05, `PullInSecondsOut` 0.6, `NearClipSafeCm` 50). **Budget** (estimate, to measure): at most 0.15 ms mean game thread per local player, one probe plus at most one aim trace
 per frame; stat group `STATGROUP_GSTNCamera`; console `gstn.Camera.Debug`, `.Stats`, `.Occlusion`.
@@ -317,7 +347,7 @@ per frame; stat group `STATGROUP_GSTNCamera`; console `gstn.Camera.Debug`, `.Sta
 sideways and flipped gravity volumes; fadeable and non-fadeable walls; a KO ravine with respawn; a lift.
 **Harness (listen host plus 2 clients, then dedicated plus 2 clients):** `scenario_camera_replication` (**zero** bytes attributable to the plugin; host and clients keep different views), `scenario_camera_hold` (stick held forward across a section cut: the velocity direction stays within a few degrees
 until neutral; with 2 % loss and forced rollbacks the cut adds **no** reconcile), `scenario_camera_aim` (with `bSendCameraAim` on, `AimYaw/AimPitch` reach the simulation and match the converged direction within quantisation).
-**Spikes:** C1 tick group of the camera update against NP interpolation and Mover's visual smoothing; C2 component versus camera-manager hook versus Gameplay Cameras; C3 dither fade cost with Nanite and Lumen; C4 control-rotation write-back against the sample's look code and the manager's pitch clamps; C5 what the input sim does with `CameraYaw` under non-Z `Up`.
+**Spikes:** C1 tick group of the camera update against NP interpolation and Mover's visual smoothing; C2 component versus camera-manager hook versus Gameplay Cameras; C3 dither fade cost with Nanite and Lumen; C4 control-rotation write-back against the sample's look code and the manager's pitch clamps; C5 what the input sim does with `CameraYaw` under non-Z `Up`; C6 scope overlay cost: a 512 scene capture every frame with the project's Lumen and Nanite settings, on the listen host, against the screen-space magnifier fallback.
 
 ## 12. Risks and open points
 
@@ -325,6 +355,7 @@ until neutral; with 2 % loss and forced rollbacks the cut adds **no** reconcile)
 |---|---|
 | Reimplementing what Epic's Gameplay Cameras or Lyra already provide | Thin stack (a few hundred lines of logic), spike C2 first, bridge later if it wins |
 | Control rotation fights the sample's look code or the manager's pitch limits | One writer by policy, `LookInputSource` switch, spike C4 |
+| The scope's second render is too expensive on the host | Reduced show flags and resolution, screen-space magnifier for low zoom, spike C6 |
 | `CameraYaw` under arbitrary gravity is undefined today | C5 first; the camera needs only one deterministic function (§7.2); recorded as a gap in input.md |
 | Held direction feels wrong (never releases, or releases too early) | Tunable release (`ReleaseAngleDeg`, `MaxHoldSeconds`), per-section `StickHold`; CAM.4 |
 | Fade needs material support and designer marking; unmarked walls pull the camera in | Plugin material function, validator warns about large blockers in a section's probe path, fallback pull-in |
@@ -336,4 +367,4 @@ rule set; modules may carry sections. Later: split screen, a shared group-frame 
 
 ## Domande per il proprietario
 
-The questions CAM.1–CAM.6 (in Italian) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Telecamera": automatic return to the designer angle, which shoulder, hold or toggle aim, how long the stick reference is held, per-player or shared camera and split-screen, fade or pull-in on occlusion; added on 2026-10-23: CAM.7 (PvP with 3–4 players), CAM.8 (own side of the screen online), CAM.9 (the Astro Bot reading of §2.4). CAM.5 is answered in part (Tekken-style duel camera in PvP).
+The questions CAM.1–CAM.6 (in Italian) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Telecamera": automatic return to the designer angle, which shoulder, hold or toggle aim, how long the stick reference is held, per-player or shared camera and split-screen, fade or pull-in on occlusion; added on 2026-10-23: CAM.7 (PvP with 3–4 players), CAM.8 (own side of the screen online), CAM.9 (the Astro Bot reading of §2.4), CAM.10 and CAM.11 (the scope overlay). CAM.5 is answered in part (Tekken-style duel camera in PvP).
