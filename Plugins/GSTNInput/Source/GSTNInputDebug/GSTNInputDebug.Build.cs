@@ -27,7 +27,11 @@ public class GSTNInputDebug : ModuleRules
 		{
 			"InputCore",
 			"Projects",
-			"Slate"
+			"Slate",
+			// The offscreen snapshot tests (GSTN.Visual.*): FWidgetRenderer and the render target read-back
+			"UMG",
+			"RenderCore",
+			"RHI"
 		});
 
 		// The nomad tab of the editor: registered by this module itself, so the editor plugins have no edge to it
