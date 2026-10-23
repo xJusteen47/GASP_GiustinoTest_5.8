@@ -130,6 +130,12 @@ Documento di riferimento: docs/architecture/modularity-and-tags.md.
     Perché conta: con due radici la stessa mossa avrebbe due identità da tenere allineate.
     Ipotesi nella specifica: `Ability.Combat.Special.<Nome>` ([modularità §4.2b](modularity-and-tags.md#42b-designer-identity-tags-owner-direction-2026-10-22)).
 
+### Dopo i messaggi del 23/10 (kit, mod, zaini, modalità)
+
+20. Spostiamo la "sonda di interazione" (quella che sceglie se il tasto interazione afferra, monta, raccoglie un oggetto o un kit, o attiva un terminale) dal plugin dei link a un piccolo plugin di base proprio, `GSTNInteract`?
+    Perché conta: oggi vive in `GSTNLink`, ma solo la presa è un link; raccolta di kit e terminali delle missioni dovrebbero altrimenti dipendere dal plugin dei link.
+    Ipotesi nella specifica: sì, `GSTNInteract` (Core e NP) proprietario della radice `Combat.Interact.*` ([modularità §3.6](modularity-and-tags.md#36-map-of-features-to-plugins), [M11 §12](combat-loadout-mods.md#12-world-pickups-and-drops-gstnpickups)).
+
 ---
 
 ## M4 — Hits: domande al proprietario del progetto
@@ -1107,3 +1113,65 @@ TS.7. Chi usa queste superfici: solo giocatori e fighter (entità NP con Mover),
 TS.8. Quali comportamenti vuoi nella prima consegna: `WallSlide`, `WallClimb`, `Launch` (trampolino), `Stand` (piattaforma) sono quelli pianificati; `Slippery` (scivolo più veloce, niente presa) e `OneWay` restano tag riservati senza lettore. Ne mancano altri importanti (es. "appiccicoso", "danno al contatto")?
    Perché conta: ogni comportamento con logica propria è un lettore in più (sottoclasse di modalità o di passo di pipeline); i tag riservati costano zero.
    Risposta consigliata: i quattro pianificati; gli altri come tag riservati finché un livello non li chiede.
+
+---
+
+## M11 — Kit in gioco, armi di supporto, mod, zaini (23/10)
+
+Specifica: [combat-loadout-mods.md](combat-loadout-mods.md). Già deciso da te il 23/10: kit = statistiche + moveset; il kit si cambia a metà partita raccogliendone uno; l'arma di supporto eredita le statistiche del kit; per ora niente cambio dell'arma primaria separato dal kit; mod estetiche che possono toccare speciali e moveset; speciali intercambiabili; impianto sulla schiena; zaini modulari attaccati sopra l'impianto; quasi tutto è un'abilità pluggabile.
+
+1. Dove si trovano i kit da raccogliere: sparsi nei livelli, lanciati come rifornimento, lasciati dai nemici, o tutti questi a seconda della modalità?
+   Perché conta: decide chi crea gli oggetti raccoglibili (la modalità o il livello) e quanti ne servono.
+   Ipotesi nella specifica: li crea la modalità (livelli: piazzati dal designer; spedizione: rifornimenti), con lo stesso oggetto raccoglibile ([M11 §12](combat-loadout-mods.md#12-world-pickups-and-drops-gstnpickups)).
+
+2. Cambiando kit, il danno già subito resta? Se il nuovo kit ha un tetto diverso, si conserva la proporzione (es. 50 % del tetto)?
+   Perché conta: senza una regola, cambiare kit potrebbe "curare" o uccidere di colpo.
+   Ipotesi nella specifica: si conserva la proporzione del tetto; le barre (meter) restano, limitate ai nuovi massimi ([M11 §4](combat-loadout-mods.md#4-changing-kit-mid-match-pickup)).
+
+3. Il vecchio kit cade a terra e può raccoglierlo un compagno?
+   Perché conta: è comodo in co-op (scambio di kit) ma aumenta gli oggetti nel mondo.
+   Ipotesi nella specifica: sì, cade dove si trovava il giocatore, con le sue mod.
+
+4. Il kit raccolto porta con sé le sue mod e speciali, o usa la configurazione che il giocatore ha salvato per quel kit?
+   Perché conta: nel primo caso le mod si trovano nel mondo; nel secondo ogni giocatore ritrova il "suo" kit.
+   Ipotesi nella specifica: la configurazione salvata del giocatore, se esiste; altrimenti quella dell'oggetto raccolto.
+
+5. Cambiando kit, arma di supporto e zaino restano?
+   Perché conta: lo zaino è indipendente dal kit (si attacca all'impianto con un connettore standard), l'arma di supporto potrebbe non essere compatibile.
+   Ipotesi nella specifica: lo zaino resta sempre; l'arma di supporto resta se il nuovo kit la accetta, altrimenti cade a terra.
+
+6. Un'arma di supporto può comunque modificare le statistiche (es. molto pesante = più lento), o le statistiche del kit restano sempre identiche?
+   Perché conta: hai detto che le statistiche si ereditano dal kit; resta da capire se è una regola assoluta.
+   Ipotesi nella specifica: di base nessuna modifica; il meccanismo resta disponibile al designer con un avviso del validatore ([M11 §6](combat-loadout-mods.md#6-support-weapons)).
+
+7. Alla morte arma di supporto e zaino cadono a terra e si possono recuperare, come in Helldivers 2?
+   Perché conta: cambia il flusso di rinforzo e il numero di oggetti nel mondo.
+   Ipotesi nella specifica: sì, cadono dove si muore.
+
+8. Le armi di supporto hanno munizioni, ricariche o tempi di ricarica? Uno zaino può fornire munizioni a un'arma di supporto (ricarica di squadra)?
+   Perché conta: senza munizioni le armi di supporto sono solo un secondo moveset; con munizioni servono attributi e UI.
+   Ipotesi nella specifica: se servono, sono costi e cooldown delle abilità (GAS), nessun sistema nuovo; lo zaino può essere compatibile con certe armi di supporto.
+
+9. Le speciali si cambiano solo prima della partita, o anche durante (checkpoint, punti di rifornimento)?
+   Perché conta: cambiarle durante la partita passa dallo stesso percorso del cambio di kit (ricalcolo delle abilità).
+   Ipotesi nella specifica: prima della partita e tra un livello e l'altro; durante solo dove la modalità lo consente.
+
+10. Le mod valgono anche per armi di supporto e zaini, o solo per il kit (arma primaria compresa)?
+    Perché conta: la definizione delle mod lo permette già come dato; decide quanti contenuti servono.
+    Ipotesi nella specifica: solo kit e arma primaria per ora.
+
+11. Lo zaino si usa con un tasto dedicato? E sono ammessi zaini che proiettano una cupola energetica in PvE (lo scudo come azione difensiva resta solo PvP)?
+    Perché conta: un tasto in più sul controller; la cupola è un oggetto, non lo scudo di M6, ma potrebbe sembrare in contrasto con "niente scudo in PvE".
+    Ipotesi nella specifica: comando `Command.Backpack.Use` su un tasto da decidere; la cupola è ammessa come abilità dello zaino, a tua scelta.
+
+12. Come si ottengono kit, mod e zaini (sblocchi, progressione, valuta)?
+    Perché conta: incide su salvataggi e interfaccia, non sulla simulazione.
+    Ipotesi nella specifica: fuori da M11; tutto disponibile in sviluppo.
+
+13. Quanti slot mod ha un kit, e quali tipi (lama, nucleo, impugnatura...)? Una sola mod per slot?
+    Perché conta: definisce i limiti che impediscono combinazioni che rompono le mosse.
+    Ipotesi nella specifica: slot dichiarati dal kit con tipi creati dal designer (`Mod.Slot.*`), una mod per slot, limiti di velocità e portata per kit ([M11 §8](combat-loadout-mods.md#8-mods-gstnkitmods)).
+
+14. Gli impianti valgono anche per le armi di supporto (es. un impianto sul braccio che compare con l'arma) e per i nemici?
+    Perché conta: decide se il sistema visivo degli impianti è solo dei giocatori.
+    Ipotesi nella specifica: il componente visivo è generico (kit, arma, mod, zaino); sui nemici solo se il designer lo usa.

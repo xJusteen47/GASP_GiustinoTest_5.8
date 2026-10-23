@@ -10,6 +10,7 @@ and how this is enforced. Owner requirements, verbatim in spirit:
 - Epic's C++ coding standard; every plugin has human-readable docs.
 - Most gameplay logic can be extended or changed by designers, easily, in Blueprint (2026-10-22, §3.8).
 - Extreme modularity means content can be replaced as needed (2026-10-22, §3.9).
+- Practically everything is a pluggable gameplay ability, as in Fortnite (2026-10-23, §3.10).
 
 Owner direction that applies here: [game-design-direction.md](game-design-direction.md) (§6b listen server, §1 parts).
 
@@ -44,6 +45,9 @@ Lyra source in this session.
 8. **Content is replaceable** (owner, 2026-10-22: "La modularità estrema deve permettere di rimpiazzare contenuti a seconda delle
    esigenze"). A kit, weapon, special, enemy, cue, UI piece or rule set is swapped by changing data, never code. Rules in
    section 3.9.
+9. **Everything is a pluggable gameplay ability** (owner, 2026-10-23: "in generale praticamente ogni cosa dovrebbe essere
+   un'abilità pluggabile. Rende il design estremamente facile, in più è anche quello che avviene in giochi come Fortnite").
+   Rules in section 3.10.
 
 ### 1.2 What Lyra and Fortnite do (the pattern to borrow)
 
@@ -345,6 +349,10 @@ before any plugin ships content (already noted for combat).
 | Platform minions (platform/minion bridge) | **`GSTNPlatformMinion`** (one module, *Proposal*): `FGSTN_PlatformMinionExtension` on `UGSTN_MinionDefinition`, spawns and despawns the proxy actor, feeds poses from the minion store through the publish seam of combat-m8-minions.md §4d.5; no tags, no content | bridge between L3b `GSTNPlatform` and L4 `GSTNMinion` | optional; depends on exactly `GSTNPlatform` + `GSTNMinion` (§3.2, §3.7 rule 3), the same pattern as `GSTNPartsMinion`; swarm minions are never platforms, at most 8 platform minions alive |
 | Stock GAS adapter (M9, optional) | `GSTNCombatStockGAS` replaces only `GSTNCombatNP`. **Proposal** (M9 §5b): both adapters become their own plugins (`GSTNCombatNP`, `GSTNInputNP`, `GSTNCombatStockGAS`, `GSTNInputStockGAS`), so `GSTNCombat` = Core + GAS and builds with neither NPP nor Mover; module names do not change | L3 | alternative plugin set, exactly one per project |
 | Held / thrown objects (M10) | `GSTNHeld` (Core, GAS, NP, StockGAS, Editor) | L4 on `GSTNLink` | Game Feature |
+| Kit mods: cosmetic, stats, move modifiers baked into derived timelines (M11, [combat-loadout-mods.md](combat-loadout-mods.md) §8) | new optional **`GSTNKitMods`** (Core, GAS, Editor); owns `Mod.*`, `Mod.Slot.*` | L3b on `GSTNCombat` | optional plugin |
+| Backpacks, Helldivers 2 style, on the implant connector (M11 §10) | new optional **`GSTNBackpack`** (Core, GAS); owns `Backpack.*`, `Command.Backpack.*` | L3b on `GSTNCombat` | optional plugin |
+| World pickups and drops of kits, support weapons, backpacks (M11 §12) | new optional **`GSTNPickups`** (Core, Runtime); owns `Combat.Interact.Target.Equipment`; payloads are open structs registered by other plugins | L3b on `GSTNCombat` + interact probe core | optional plugin |
+| Interact probe (M6 §8: context target, candidate providers) | today in `GSTNLink`; **Proposal** (2026-10-23, question Mod.20): its own foundation plugin **`GSTNInteract`** (Core, NP) owning the `Combat.Interact.*` root, because grabs, mounts, held objects, equipment pickups and mission terminals all use it and only grabs are links | L3 | with combat |
 | Game modes (co-op PvE waves, training) | `GSTNMode_*` Game Feature plugins + experience assets | L4 | experience |
 | Shared helpers (tag lint, message channels, base settings, **net primitives**) | `GSTNCore` (**Proposal**, optional: only if two plugins need the same helper). First case, met by `GSTNMinion` + `GSTNPlatform` (many-enemies-replication.md §3.5): `Net/` with the quantizer, frame-stamp reconstruction, `FGSTN_PoseHistory` + sampler and the tier rate scheduler; alternative: keep them in `GSTNMinionCore` and duplicate about 200 lines in `GSTNPlatformCore` until M10 projectiles need them | L2 | always on |
 | Test harness (`GASNPPTest`) | project today; **Proposal**: `GSTNTestKit` developer plugin (`Type: Developer`/`DeveloperTool`) | dev | excluded from Shipping |
@@ -473,6 +481,35 @@ may change at any time.
 **Checked by** `check_modules.py` rule 12 (§6.1) and a data validator that flags hard object references from one plugin's assets
 to another plugin's content.
 
+### 3.10 Everything is a pluggable gameplay ability (owner direction, 2026-10-23)
+
+Goal 9. **Every verb of a player or an enemy is a gameplay ability granted by data**, bound to a command or a trigger; frameworks
+own state, rules and resolution, abilities are the verbs. Adding, removing or replacing a verb is a data change.
+
+| Verb | Ability granted by | Spec |
+|---|---|---|
+| Attacks, specials, supers | weapon, kit, super definitions (M3 §8), mods (combat-loadout-mods.md §8) | M3, M11 |
+| Dodge, jump, air jump, fast fall, wall-slide entry | kit bindings (M3 §7.9; owner 2026-10-22 11:41: "schivate, salti etc… sono abilità di gameplay pluggabili") | M3, M4 §1b |
+| Weapon switch, picking up a kit or a support weapon | kit bindings, default ability set (M3 §7.7, combat-loadout-mods.md §4) | M3, M11 |
+| Shield, parry, grab, throw, mount, pickup of objects | kit / plugin ability sets (M6, M7, M10) | M6, M7, M10 |
+| Backpack actions (jump pack, dome, supply) | backpack definition (combat-loadout-mods.md §10) | M11 |
+| Mode verbs (activate a terminal, call a drop or a reinforcement, revive, extract) | the mode's Game Feature ability sets ([game-modes.md](game-modes.md)) | M12–M13 |
+| Enemy attacks and actions | minion definitions: timelines through the GAS-free player (M8) | M8 |
+
+Rules:
+
+1. **Granting is data**: `UGSTN_AbilitySet` (ability + command/input tag, effects, attribute sets, a handle struct that removes
+   them), carried by pawn data, kit, weapon, mod, backpack, Game Feature action or experience (§3.4). No code path grants a verb
+   by name.
+2. **Granting respects the simulation** (§1.3): sets are granted at spawn or through the loadout revision gate (M3 §7.8,
+   server-applied, out of band), never in the middle of a simulated frame; a granted set changes the compiled binding table, so
+   every machine rebuilds it from the same replicated data.
+3. **Variants are Blueprint children** of the base ability (§3.8), with their data (timeline, costs, tags) overridden; a mod or a
+   kit swaps the class or the data, never edits the base.
+4. **Not abilities**: passive systems that resolve or present (hit pipeline steps, knockback models, the depth marker, mode and
+   mission state). They are configured by data and extended through the surface of §5b; an ability may *trigger* them through
+   tags, events and requests.
+
 ## 4. Gameplay tag taxonomy (*Proposal*)
 
 ### 4.1 Rules
@@ -518,7 +555,7 @@ Existing names are kept unless listed in 4.3.
 | `Surface.*` (`Surface.Type.*`, `Surface.Behaviour.*`, `Surface.Event.*`) | surface classes mapped from physical materials (`Wall Glass Crate Trampoline`) and traversal behaviours (`WallSlide WallClimb Launch Stand`), traversal-surfaces.md | `GSTNSurface` (owner TS.1, 2026-10-22 22:15) | ini (`Surface.Type.*` leaves) + native (roots, behaviours, events) |
 | `Combat.Event.Impact.*` | impact events (`Splat Bounce BreakSurface`) (M4 §7b) | `GSTNCombat` | native |
 | `Combat.Lock.*` | `Movement`, `Link` | `GSTNCombat` (`Movement`); `GSTNLink` (`Link`) | native |
-| `Combat.Interact.*` | `Target.Grab` (projected: the one interactable the entity's tap would act on); `Target.Mount`, `Target.Pickup` (M6 §8) | root and `Target.Grab`: `GSTNLink`; `Target.Mount`: `GSTNPiggyback`; `Target.Pickup`: `GSTNHeld` | native, **projected** |
+| `Combat.Interact.*` | `Target.Grab` (projected: the one interactable the entity's tap would act on); `Target.Mount`, `Target.Pickup` (M6 §8); `Target.Equipment` (M11 §12) | root and `Target.Grab`: `GSTNLink` (root moves to `GSTNInteract` if Mod.20 is accepted); `Target.Mount`: `GSTNPiggyback`; `Target.Pickup`: `GSTNHeld`; `Target.Equipment`: `GSTNPickups` | native, **projected** |
 | `Combat.Immunity.*` | `Grab`, `Parry`, `Shield` | the plugin whose mechanic it gates | native |
 | `Combat.Link.*` | `Linked Pending`, `Type.Grab`, `Role.Grabber Role.Grabbed`, `BreakReason.*`; `Type.Mount Role.Carrier Role.Rider`; `Type.Held Role.Holder Role.HeldObject` | root and generic leaves: `GSTNLink`; a link type's own type, role and reason leaves: the plugin that owns the type (`GSTNPiggyback`: Mount; `GSTNHeld`: Held; `GSTNMinion`: Minion, later). `GSTNCombat` declares none | native |
 | `Combat.Mover.*` | `Frozen Tumble Linked` | emitting NP module | native |
@@ -526,6 +563,8 @@ Existing names are kept unless listed in 4.3.
 | `Combat.Part.*` | `Broken GrabLocked AllBroken`, `Effect.*` (e.g. `Effect.ArmLost`) | `GSTNParts` (all leaves; **projected** from the broken mask by its tick extension, never granted by others; `GrabLocked` is read by the grab rules of `GSTNLink` only as a data entry in the rules asset, by name, no module edge) | native, projected |
 | `Part.Type.*` | `Head Torso Arm Leg Weapon Armour Crystal` (classification of a part; unrelated to `Combat.Hurtbox.*`) | `GSTNParts` (designer vocabulary) | **ini** (`Plugins/GSTNParts/Config/Tags/GSTNParts.ini`) |
 | `Combat.Capability.*`, `Combat.Net.*` | adapter capabilities (`Rollback`, `LagCompensation`, ...); stock adapter payload keys (M9) | `GSTNCombat` (`Capability`, granted by the adapter that has it); `GSTNCombatStockGAS` (`Net`) | native |
+| `Mod.*`, `Mod.Slot.*` | designer identity of kit mods and mod slot types (M11 §8) | `GSTNKitMods` | root native, leaves ini |
+| `Backpack.*`, `Command.Backpack.*` | backpack identity (designer leaves); backpack commands (`Use`) (M11 §10) | `GSTNBackpack` | root native + ini leaves; commands native |
 | `Combat.Held.*`, `Combat.Source.*`, `Held.Type.*` | size, kind, carrying state of held objects; thrown/projectile credit; designer object types (M10) | `GSTNHeld` (`Held.Type.*`: ini) | native + ini |
 | `Minion.*`, `Command.Minion.*` | `Minion.State`, `Minion.LOD`, `Minion.Type.<Name>`; minion-only commands, never in a player binding set (M8) | `GSTNMinion` | native + ini |
 | `Platform.*` | new root (*Proposal*, many-enemies-replication.md §3.5). Leaves are examples, the final list belongs to the plugin's own spec: `Platform.State.<Active, Braced, Breaking, Inactive>` (names of the platform's active state, derived from the replicated value, never granted as loose tags), `Platform.Event.<Mounted, Dropped>` (local presentation and cue triggers) | `GSTNPlatform` (root and every leaf); the bridge `GSTNPlatformMinion` declares **none**; minion types stay `Minion.Type.*`; the platform collision channel `GSTN_EnemyPlatform` is a collision channel, not a tag | native |

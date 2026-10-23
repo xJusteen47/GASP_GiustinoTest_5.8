@@ -163,6 +163,34 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - **Stagger follows the same pattern**: about **half a second unskippable**, then the rest is cancellable.
 - Spec: M3 `FirstActionableFrame` for timelines; M4 §7 (hitstun = locked part, reaction tail cancellable; ricochet recoil too).
 
+## 6d. Game modes, kits, weapons, mods, implants, backpacks, depth marker (owner input, 2026-10-23)
+
+For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md) (kits in play, mods, backpacks),
+[game-modes.md](game-modes.md), [depth-marker.md](depth-marker.md).
+
+- **Two PvE modes**: a mode of **designer-made 3D levels** (Super Mario 3D World style), and a **Helldivers-style mode** where
+  a **large level is generated randomly** and **missions** must be completed. **No shield in PvE** (as §2f).
+- **Everything is a pluggable gameplay ability** ("in generale praticamente ogni cosa dovrebbe essere un'abilità pluggabile"):
+  it makes design extremely easy and it is what games like Fortnite do. Dodges and jumps already are (§6).
+- **Kit = stats + moveset.** As a technical term, the **kit** is the **stats**, which stay in force even while a support weapon
+  is in use; the **weapon** ("arma") is the **moveset of the primary kit** without the support weapon. A "weapon" may be fists
+  and kicks and use a sword mesh only in some animations.
+- **The kit can be changed mid-match by picking one up.** Changing the primary weapon separately from the kit mid-match is
+  **not planned for now**.
+- **Support weapons** (Helldivers style: a big extra weapon to switch to when needed) **inherit the kit's stats**.
+- **Kits can be modded**: mods change the look (cosmetic changes by the mods chosen) and can affect **special moves and the base
+  moveset**. Example: a mod that makes the sword longer but some attacks slower. **Special moves can be swapped** among the
+  available ones.
+- **Kit visuals: an "implant"**, an extra mesh on the character's back (or anything that shows which kit is in use). A weapon can
+  be a sword plus implants reaching the hands or the feet.
+- **Backpacks** exist, as in Helldivers 2. They are **modular and attach on top of the kit implant** through a standard
+  connector, like the standard port of an electronic device.
+- **Depth-perception marker**: as in the Smash Bros Melee 3D mod, a **decal or marker pointing at the platform under the
+  character plus a dashed line**; **some enemies** have it too. Which surface it should point to **while airborne is ambiguous**
+  and needs design work. The final look (e.g. a shadow cone, something more diegetic) is the designer's choice. Reference
+  screenshots: a filled disc on the floor under a character above the stage; off stage, over the void and below the stage's
+  level, a hollow ring at about the stage's height joined to the character by a vertical dashed line.
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -174,6 +202,7 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 | Wall splat / bounce / destruction on impact | M4 (launch and tumble), M6 tech interaction |
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
+| §6d: two PvE modes (designer levels, procedural expedition with missions); kit = stats, weapon = moveset; mid-match kit pickup; support weapons inherit kit stats; mods (cosmetic + moveset/specials); special swapping; implants; backpacks on the implant connector; depth marker; everything a pluggable ability | new specs [combat-loadout-mods.md](combat-loadout-mods.md) (M11), [game-modes.md](game-modes.md) (M12–M13), [depth-marker.md](depth-marker.md); M3 seams (loadout extensions, compile extension, mid-match apply); M4 hit data scalable by mods; M5 mod preview and validation; M6 interact probe (possible `GSTNInteract` plugin); [modularity-and-tags.md](modularity-and-tags.md) §1.1 goal 9, §3.6, §3.10, §4.2 |
 | §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
 | §2g: tap = grab, hold = pickup; feet invincible in the dodge's initial part (corrected at 11:41), invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
 | §2f, §6b: many enemies on a listen host (replication, presentation and host budgets) and enemies as solid platforms (players stand on them) | research [many-enemies-replication.md](many-enemies-replication.md); M8 minions ([combat-m8-minions.md](combat-m8-minions.md) §4d.1, §4d.5, §8, §11: packs with push model and dormancy, per-item tier rates, 150 as a population with about 60 awake, `MaxVisiblePuppets`, platform seams); new optional plugins `GSTNPlatform` and bridge `GSTNPlatformMinion` ([modularity-and-tags.md](modularity-and-tags.md) §3.6, tag root `Platform.*` §4.2) |
@@ -319,3 +348,49 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 
 > Comunque, solo la parte iniziale della schivata ha i piedi invincibili, mi sono sbagliato prima. Ricorda che schivate, salti
 > etc… sono abilità di gameplay pluggabili, come avevamo già concordato. Quindi cambiare idea dopo dovrebbe essere facile.
+
+### Messages of 2026-10-23 (verbatim)
+
+> Aggiungo altri dettagli di cui fare l'implementazione poi. Ci dovrà essere una modalità a livelli scelti dal designer (livelli in
+> 3d, stile Mario 3d world), e una modalità alla helldivers dove si genera casualmente un grande livello e bisogna terminare delle
+> missioni.
+>
+> Nella modalità PVE non c'è lo scudo.
+>
+> I kit, come ti ho già detto sono un'unione di statistiche e moveset. Si può cambiare kit a metà partita raccogliendone uno.
+>
+> Se si usa un'arma di supporto (alla helldivers, un'arma grossa aggiuntiva, a cui si può passare quando serve), vengono ereditate
+> dal kit.
+>
+> Per ora non prevedo il supporto al cambiamento di arma primaria separata dal kit a metà partita.
+>
+> Aggiungo che dovrebbe essere possibile moddare il kit (con cambiamenti estetici in base alle mod scelte) e cambiare mosse
+> speciali tra quelle disponibili. Cambiamenti alle mod potrebbero influire su alcune mosse speciali come sul moveset base. Per
+> esempio, una mod che aumenta la lunghezza della spada, ma rende alcuni attacchi più lenti.
+>
+> Quando mi riferisco al "kit" come termine tecnico mi riferisco a statistiche che vengono mantenute in generale anche se si
+> adopera un'arma di supporto.
+> Quando parlo di "arma" come termine tecnico mi riferisco al moveset del kit primario senza arma di support.
+>
+> Anche se lo chiamo "arma" in realtà potrebbe benissimo avere pugni e calci, e usare magari una spada (la mesh nelle animazioni)
+> solo qualche volta.
+>
+> Il kit dovrebbe essere indicato da una mesh aggiuntiva posta nella schiena del personaggio (o insomma, qualcosa che fa vedere che
+> si sta usando un determinato kit), una sorta di "impianto". L'arma può essere una spada + degli impianti che vanno fino alle mani
+> o ai piedi.
+>
+> Inoltre: per evitare problemi con la percezione di profondità, sarebbe buono adottare un sistema alla smash bros melee 3d (la
+> nuova mod uscita), dove c'è un decal, o qualcosa che punta alla piattaforma sotto il personaggio, più una linea tratteggiata.
+> Anche alcuni nemici dovrebbero averla. Il modo in cui calcolare esattamente quale è la superficie a cui dovrebbe puntare il
+> decal quando si è a mezz'aria però è ambiguo, quindi ci si dovrebbe pensare un po. Ovviamente, l'effetto estetico finale
+> potrebbe anche essere, ad esempio un cono d'ombra, o qualcosa di più diegetico che il designer scioglierà alla fine.
+
+> Ah, inoltre, è prevista la presenza di Zaino come in helldivers 2.
+
+> Potrebbero essere semplicemente modulari, attaccandosi diciamo, come un attacco standard di qualche dispositivo elettronico
+
+> Sopra il kit.
+
+> Sì, in generale praticamente ogni cosa dovrebbe essere un'abilità pluggabile.
+
+> Rende il design estremamente facile, in più è anche quello che avviene in giochi come Fortnite
