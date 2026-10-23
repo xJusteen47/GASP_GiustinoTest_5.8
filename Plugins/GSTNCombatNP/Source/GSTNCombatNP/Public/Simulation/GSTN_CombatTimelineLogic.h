@@ -43,6 +43,13 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 */
 	static void Start(FGSTN_CombatSyncCore& Core, int32 Frame, int32 TimelineIndex, EGSTN_ActivationSource Source);
 
+	/**
+	 * Step 8, the other case: a command that is not a timeline ability won while a timeline runs (the stance that replaced an attack
+	 * inside its override window, a jump out of a cancel window). The running timeline is cancelled (CancelTimeline request) and the
+	 * combatant is Actionable again; the winner's own ability is started by the input request. Does nothing when idle.
+	 */
+	static void CancelForOtherCommand(FGSTN_CombatSyncCore& Core, int32 Frame);
+
 	/** Evaluates frame 0 of the timeline Start just began, so a commit on the first frame is requested in the same tick */
 	static void EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output);
 

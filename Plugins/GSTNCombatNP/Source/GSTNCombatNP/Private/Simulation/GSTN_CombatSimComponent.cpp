@@ -373,8 +373,15 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Running]);
 			bAbilityActive = Spec && Spec->IsActive();
 		}
+		const bool bWasRunning = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline;
+		const int32 StartBefore = OutSync.Core.TimelineStartFrame;
 		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(Running),
 			TimelineDefaultOverride.IsValidIndex(Running) ? TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput);
+		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
+		{
+			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,
+				TimelineOutput.Frame, TimelineOutput.TotalFrames, TimelineOutput.bFinished, bAbilityActive);
+		}
 	}
 	// The gate the input simulation asks (IsCommandAllowed) reads the state this frame is writing
 	GateCore = &OutSync.Core;
@@ -402,7 +409,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	// Step 8: a command that started a timeline ability replaces the running timeline (if any) and begins its own. The ability
 	// itself is activated by the input request of this frame, from the ability system's pre-tick
-	if (Result.HasRequest() && BindingTimeline.IsValidIndex(Result.BindingIndex) && BindingTimeline[Result.BindingIndex] != INDEX_NONE)
+	if (Result.HasRequest() && BindingTimeline.IsValidIndex(Result.BindingIndex) && BindingTimeline[Result.BindingIndex] == INDEX_NONE)
+	{
+		// A plain ability (a stance, a jump) that the gate let through ends the running timeline: its turn is over
+		FGSTN_CombatTimelineLogic::CancelForOtherCommand(OutSync.Core, Frame);
+	}
+	else if (Result.HasRequest() && BindingTimeline.IsValidIndex(Result.BindingIndex) && BindingTimeline[Result.BindingIndex] != INDEX_NONE)
 	{
 		const int32 Entry = BindingTimeline[Result.BindingIndex];
 		FGSTN_CombatTimelineLogic::Start(OutSync.Core, Frame, Entry, Input.Cmd->ForcedCommand != 0 ? EGSTN_ActivationSource::Forced : EGSTN_ActivationSource::Command);
@@ -430,8 +442,9 @@ FString UGSTN_CombatSimComponent::GetDebugString(int32 MaxEvents) const
 	{
 		return TEXT("(no combat state)");
 	}
-	return FString::Printf(TEXT("%s\nheld 0x%x  frame %d  request %d@%d button %d"), *FGSTN_InputScript::Describe(Sync->Core.Input.History, MaxEvents),
-		Sync->Core.Input.History.GetHeldButtons(), Sync->Core.Input.History.GetLatestFrame(), Sync->Core.Input.RequestedBinding, Sync->Core.Input.RequestFrame, Sync->Core.Input.RequestButton);
+	return FString::Printf(TEXT("%s\nheld 0x%x  frame %d  request %d@%d button %d\naction %d timeline %d@%d+%d source %d"), *FGSTN_InputScript::Describe(Sync->Core.Input.History, MaxEvents),
+		Sync->Core.Input.History.GetHeldButtons(), Sync->Core.Input.History.GetLatestFrame(), Sync->Core.Input.RequestedBinding, Sync->Core.Input.RequestFrame, Sync->Core.Input.RequestButton,
+		static_cast<int32>(Sync->Core.ActionState), static_cast<int32>(Sync->Core.ActiveTimeline), Sync->Core.TimelineStartFrame, Sync->Core.TimelinePausedFrames, static_cast<int32>(Sync->Core.ActiveSource));
 }
 
 void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

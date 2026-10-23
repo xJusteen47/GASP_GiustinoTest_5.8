@@ -7,6 +7,7 @@
 #include "GSTN_CombatTags.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Simulation/GSTN_InputHostUtils.h"
 #include "Timeline/GSTN_CombatTimeline.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNBaseCombat, Log, All);
@@ -81,7 +82,8 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	int32 StateStart = INDEX_NONE;
 	if (!Combat || !Combat->IsTimelineRunning(GetClass(), StateStart) || StateStart != Combat->GetSimulationFrame())
 	{
-		UE_LOG(LogGSTNBaseCombat, Verbose, TEXT("%s: activated without a timeline start in the combat state (a command starts a timeline ability): ended"), *GetName());
+		UE_LOG(LogGSTNBaseCombat, Log, TEXT("%s: activated without a timeline start in the combat state (a command starts a timeline ability): ended. Combat component %d, running %d with start %d, simulation frame %d, command activation %d"),
+			*GetName(), Combat != nullptr, Combat && Combat->IsTimelineRunning(GetClass(), StateStart), StateStart, Combat ? Combat->GetSimulationFrame() : INDEX_NONE, FGSTN_InputHostUtils::IsCommandActivation());
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
@@ -111,6 +113,11 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 	// The combat state no longer names this timeline: it ended, was replaced or was cancelled
 	if (!IsStillTheRunningTimeline())
 	{
+		const UGSTN_CombatSimComponent* CombatNow = GetCombatComponent();
+		int32 StateStartNow = INDEX_NONE;
+		const bool bRunningNow = CombatNow && CombatNow->IsTimelineRunning(GetClass(), StateStartNow);
+		UE_LOG(LogGSTNBaseCombat, Log, TEXT("%s: the combat state no longer names this timeline: ended (running %d, state start %d, own start %d, frame %d, step frame %d)"),
+			*GetName(), bRunningNow, StateStartNow, StartFrame.Value, CombatNow ? CombatNow->GetSimulationFrame() : INDEX_NONE, TimeStep.ServerFrame);
 		EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, false);
 	}
 }

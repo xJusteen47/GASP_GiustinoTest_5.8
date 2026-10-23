@@ -192,6 +192,16 @@ bool FGSTN_NPTimelineReplaceTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("from the replacing frame"), Core.TimelineStartFrame, 104);
 	TestEqual(TEXT("paused frames start over"), Core.TimelinePausedFrames, 0);
 
+	// A command that is not a timeline ability ends the running timeline: the entry is cancelled and the combatant is free
+	FGSTN_CombatSyncCore Other = MakeRunning(300, 5);
+	FGSTN_CombatTimelineLogic::CancelForOtherCommand(Other, 303);
+	const FGSTN_CombatRequest* OtherCancel = Other.Requests.Find(EGSTN_RequestType::CancelTimeline, 303);
+	TestTrue(TEXT("the running entry is cancelled by a plain ability"), OtherCancel && OtherCancel->Arg == 5);
+	TestTrue(TEXT("and the combatant is Actionable"), Other.ActionState == EGSTN_ActionState::Actionable && Other.ActiveTimeline == INDEX_NONE && Other.TimelineStartFrame == INDEX_NONE);
+	FGSTN_CombatSyncCore IdleOther;
+	FGSTN_CombatTimelineLogic::CancelForOtherCommand(IdleOther, 10);
+	TestTrue(TEXT("a plain ability from idle cancels nothing"), IdleOther.Requests.IsEmpty());
+
 	// From idle there is nothing to cancel
 	FGSTN_CombatSyncCore Idle;
 	FGSTN_CombatTimelineLogic::Start(Idle, 10, 2, EGSTN_ActivationSource::Command);

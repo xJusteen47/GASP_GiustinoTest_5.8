@@ -13,8 +13,8 @@
  * It is a combat timeline ability (UGSTN_GA_BaseCombat) whose only effect is to own Test.State.Attacking while the timeline
  * runs, so a command that started it (or one that was locked and did not) shows up in the ability system's tags, the harness
  * snapshots and the Test.* log. It never touches the character: the harness checks input, lock and timeline behaviour here,
- * not combat moves. The frame data is set in the constructor (no asset): 20 frames, a 6 frame startup override window (a
- * higher tier command replaces it), a cancel window [6, 14) into the special commands, free from frame 14.
+ * not combat moves. The frame data is set in the constructor (no asset): 20 frames, an 8 frame startup override window (a
+ * higher tier command replaces it), a cancel window [8, 14) into the special commands, free from frame 14.
  */
 UCLASS()
 class GASP_GIUSTINO2_API UGSTN_GA_TestAttack : public UGSTN_GA_BaseCombat

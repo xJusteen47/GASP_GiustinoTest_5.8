@@ -22,13 +22,13 @@ UGSTN_GA_TestAttack::UGSTN_GA_TestAttack(const FObjectInitializer& ObjectInitial
 {
 	ActivationOwnedTags.AddTag(TAG_Test_State_Attacking);
 
-	// 20 frames, free from 14, a 6 frame startup override window and a cancel window [6, 14) into the special commands
+	// 20 frames, free from 14, an 8 frame startup override window and a cancel window [8, 14) into the special commands
 	Timeline.TotalFrames = 20;
 	Timeline.FirstActionableFrame = 14;
-	Timeline.OverrideFrames = 6;
+	Timeline.OverrideFrames = 8;
 
 	FGSTN_TimelineTrack_CancelWindow Window;
-	Window.StartFrame = 6;
+	Window.StartFrame = 8;
 	Window.EndFrame = 14;
 	Window.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCommandTags::Special));
 	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Window));

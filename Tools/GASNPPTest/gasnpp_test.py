@@ -1128,45 +1128,64 @@ def scenario_camera_aim(client=1, yaw=123.0, pitch=-20.0, stance_button='Special
     run.run(steps)
 
 
+def _tag_span(run, side, tag, t0, t1):
+    """(first, last) sample times in [t0, t1] at which `side` owned `tag`, None if never. The server's copy lags the client's
+    clock by the input lead, so the checks of timeline_cancel compare durations and order, never absolute times."""
+    ts = [s['t'] for s in run.samples if t0 <= s['t'] <= t1 and s.get(side) and tag in s[side]['tags']]
+    return (ts[0], ts[-1]) if ts else None
+
+
 def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Special'):
     """C10 timeline abilities (combat-m3 7.2, 8.3) on UGSTN_GA_TestAttack, a UGSTN_GA_BaseCombat of 20 frames (0.32 s), startup override
-    window of 6 frames, cancel window [6, 14) into Command.Special, free from frame 14, and the stance (Special, a higher tier).
-    Strict, on the server and the predicting client, three cases 1.5 s apart:
-      0.5s  startup override: attack tap, then the stance held 0.03 s later (inside the 6 frame window) -> the stance starts and the
-            attack timeline is REPLACED (Attacking gone long before its 0.32 s)
-      2.0s  cancel window: attack tap, stance held 0.17 s later (after the window of frame 6, inside [6, 14)) -> the stance starts and
-            the attack ends before its natural end
-      3.5s  not cancellable: attack tap, a second attack tap 0.1 s later (same tier, before the first actionable frame) -> still ONE
-            request in the first 0.2 s and Attacking continuous to the end
+    window of 8 frames (0.13 s), cancel window [8, 14) into Command.Special, free from frame 14, and the stance (Special, a higher tier).
+    Three cases 1.5 s apart, judged on the server's copy and the predicting client's by how long Attacking lasts and in which order the
+    tags come (the natural length of the attack is 0.32 s, sampled every ~40 ms):
+      0.5s  startup override: attack tap, the stance held 0.08 s later (frame ~5, inside the window) -> Stance comes and Attacking ends
+            well before its natural end (the replaced timeline is cancelled)
+      2.0s  cancel window: attack tap, the stance held 0.17 s later (frame ~10, in [8, 14)) -> Stance comes and Attacking ends before 0.28 s
+      3.5s  not cancellable: attack tap, a second attack tap 0.05 s later (same tier, before the first actionable frame) -> Attacking lasts
+            its natural 0.28 to 0.38 s (a restart would make it 0.42 s or more)
     Also: no unexplained reconciles."""
     _require_test_config(client)
     attack, stance = button_mask(attack_button), button_mask(stance_button)
     run = _Run('timeline_cancel', client)
+    global _tc_run
+    _tc_run = run
 
-    def srv_cli(label, fn):
-        return run.at(label, lambda: (fn('srv') and fn('cli'), ''))
+    def case(label, a0, a1, side, lo, hi, with_stance):
+        def f():
+            att = _tag_span(run, side, TAG_ATTACKING, a0, a1)
+            if att is None:
+                return False, f'{side}: Attacking never seen'
+            dur = att[1] - att[0] + 0.04      # one sample of resolution
+            ok = lo <= dur <= hi
+            detail = f'{side}: Attacking {dur:.2f}s (want {lo}..{hi})'
+            if with_stance:
+                st = _tag_span(run, side, TAG_STANCE, a0, a1)
+                ok = ok and st is not None and st[0] >= att[0]
+                detail += f', stance {"seen after the attack started" if ok else "missing or before the attack"}'
+            return ok, detail
+        return f
 
     steps = [
         # case 1: startup override
         (0.5, lambda: ('attack', combat_tap(client, attack))),
-        (0.53, lambda: ('stance held (inside the override window)', combat_hold(client, stance))),
-        (0.9, lambda: ('release', combat_clear(client))),
-        (1.1, srv_cli('override: attack started', lambda s: run.saw_tag(TAG_ATTACKING, 0.5, 0.56, s))),
-        (1.1, srv_cli('override: the stance replaced it', lambda s: run.saw_tag(TAG_STANCE, 0.53, 0.9, s))),
-        (1.1, srv_cli('override: the replaced attack ended early', lambda s: not run.saw_tag(TAG_ATTACKING, 0.7, 0.9, s))),
+        (0.58, lambda: ('stance held (inside the override window)', combat_hold(client, stance))),
+        (1.0, lambda: ('release', combat_clear(client))),
+        (1.4, run.at('override: server', case('', 0.4, 1.4, 'srv', 0.0, 0.2, True))),
+        (1.4, run.at('override: client', case('', 0.4, 1.4, 'cli', 0.0, 0.2, True))),
         # case 2: cancel window
         (2.0, lambda: ('attack', combat_tap(client, attack))),
         (2.17, lambda: ('stance held (inside the cancel window)', combat_hold(client, stance))),
         (2.6, lambda: ('release', combat_clear(client))),
-        (2.8, srv_cli('cancel window: attack started', lambda s: run.saw_tag(TAG_ATTACKING, 2.0, 2.1, s))),
-        (2.8, srv_cli('cancel window: the stance started', lambda s: run.saw_tag(TAG_STANCE, 2.17, 2.6, s))),
-        (2.8, srv_cli('cancel window: the attack ended before its natural end', lambda s: not run.saw_tag(TAG_ATTACKING, 2.28, 2.6, s))),
+        (3.1, run.at('cancel window: server', case('', 1.9, 3.1, 'srv', 0.1, 0.28, True))),
+        (3.1, run.at('cancel window: client', case('', 1.9, 3.1, 'cli', 0.1, 0.28, True))),
         # case 3: not cancellable by the same tier
         (3.5, lambda: ('attack', combat_tap(client, attack))),
-        (3.6, lambda: ('second attack (same tier, before the first actionable frame)', combat_tap(client, attack))),
-        (4.4, run.at('no cancel: one request in the first 0.2 s', lambda: (len(run.new_bindings(3.5, 3.7)) == 1, f'requests {run.new_bindings(3.5, 3.7)}'))),
-        (4.4, srv_cli('no cancel: Attacking continuous to the natural end', lambda s: run.held_tag(TAG_ATTACKING, 3.55, 3.76, s))),
-        (4.5, run.finish()),
+        (3.55, lambda: ('second attack (same tier, before the first actionable frame)', combat_tap(client, attack))),
+        (4.6, run.at('no cancel: server', case('', 3.4, 4.6, 'srv', 0.28, 0.38, False))),
+        (4.6, run.at('no cancel: client', case('', 3.4, 4.6, 'cli', 0.28, 0.38, False))),
+        (4.7, run.finish()),
     ]
     run.run(steps)
 

@@ -108,6 +108,19 @@ void FGSTN_CombatTimelineLogic::Start(FGSTN_CombatSyncCore& Core, int32 Frame, i
 	Core.TimelinePausedFrames = 0;
 }
 
+void FGSTN_CombatTimelineLogic::CancelForOtherCommand(FGSTN_CombatSyncCore& Core, int32 Frame)
+{
+	if (Core.ActionState != EGSTN_ActionState::InTimeline)
+	{
+		return;
+	}
+	if (Core.ActiveTimeline != INDEX_NONE)
+	{
+		Core.Requests.Add(EGSTN_RequestType::CancelTimeline, Frame, Core.ActiveTimeline);
+	}
+	ClearTimeline(Core);
+}
+
 void FGSTN_CombatTimelineLogic::EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output)
 {
 	EvaluateInto(Core, Frame, INDEX_NONE, Data, DefaultOverrideFrames, Output);
