@@ -3,7 +3,7 @@
 Unreal Engine **5.8** project built on the Game Animation Sample (GASP). One C++ module, `GASP_Giustino2` (prefix `GSTN_`).
 Focus: wall movement for **Mover**, driven by **Gameplay Abilities** simulated by **Network Prediction** (the "GAS-NPP fork").
 
-Read the linked docs only when the task touches that area. Do not read the whole `Plugins/` tree: it is engine-level code.
+Read the linked docs only when the task touches that area. Every plugin has a README next to its `.uplugin`; the index is [Plugins/README.md](Plugins/README.md). Do not read the whole `Plugins/` tree: it is engine-level code.
 
 ## Where things are
 

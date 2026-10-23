@@ -53,7 +53,8 @@ spike measured that forward prediction is not worth enabling yet; the report is 
 
 `Plugins/EngineOverrides/` holds engine plugins copied into the project so they build against the forked plugins (Mover,
 ChaosMover, SmartObjects). Mover's NPP liaison forwards the re-simulation flag to Mover, and Mover implements the
-`PrepareRepeatedInput` hook above.
+`PrepareRepeatedInput` hook above. Every Mover edit is marked "GAS-NPP fork"; the full list, with the engine files they
+touch, is in [Mover's README](../EngineOverrides/Mover/README.md).
 
 | Patch | Why | Where |
 |---|---|---|
