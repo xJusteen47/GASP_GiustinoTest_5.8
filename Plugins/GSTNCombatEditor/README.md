@@ -6,7 +6,7 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.6)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+Status: **experimental (0.7)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
 model), E4 (timeline panel), E5 (toolkit, track editors), E10 (validation) and E13 (inline mode) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
@@ -245,8 +245,8 @@ Asset Manager and checks the loadout as the server will.
 ## Dependencies
 
 - Plugins: `GSTNCombat` (the timeline data), `GSTNInput` (the slot validator and the notation), `GSTNCombatGAS` (kit, weapon and loadout
-  data, and the `Combat.Hurtbox.*` tags the settings map to), `GSTNCombatNP` (since E13: the ability class `UGSTN_GA_BaseCombat`, see below), the engine plugin `DataValidation`, `GSTNCombatDebug` as `Optional`
-  (only to enable it together when it is present).
+  data, and the `Combat.Hurtbox.*` tags the settings map to), `GSTNCombatNP` (since E13: the ability class `UGSTN_GA_BaseCombat`, see below) and the engine plugin `DataValidation`. Not `GSTNCombatDebug`: since E14 the debug plugin registers its own
+  editor tab, so the two plugins have no edge in either direction.
 - `GSTNCombatEditor` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore; private ApplicationCore (clipboard),
   AssetDefinition (`UAssetDefinition`; `UAssetDefinitionDefault` itself is in UnrealEd), DeveloperSettings, EditorFramework, InputCore,
   PropertyEditor (the Details tab and the timeline data row), Slate, SlateCore, UnrealEd (the toolkit, `FBlueprintEditorUtils`, `FKismetEditorUtilities`), ContentBrowser and AssetTools (the save dialog of Extract), GSTNCombatGAS, GSTNCombatNP, GSTNInputCore, and for validation DataValidation
@@ -260,8 +260,9 @@ Asset Manager and checks the loadout as the server will.
   the Network Prediction settings object by reflection.
 - Not a dependency, on purpose:
   - `NetworkPrediction` itself, see above.
-  - `GSTNCombatDebug`: the editor reaches it through `IGSTN_CombatDebugModule::Get()` at run time, never through `Build.cs`,
-    because UnrealBuildTool stops when a named module does not exist, and the plugin must build with the debug plugin absent.
+  - `GSTNCombatDebug`: no module, plugin or include edge. The *Window > GSTN Combat > Input Display* tab belongs to the debug module,
+    which registers it in an editor build; with the debug plugin off the tab does not exist and this plugin builds and runs the same.
+    `GSTNCombat.Editor.Debug.NoDependencyOnDebugModule` keeps it so.
 - No runtime module depends on this plugin (grep of every `*.Build.cs` and `.uplugin`, repeated at E19).
 
 ## Gameplay tags
@@ -308,7 +309,7 @@ The plugin ships no content and references none by path. The preview kit, skin a
 
 ## Tests
 
-`Automation RunTests GSTNCombat.Editor`: `Module.LoadsAndRegisters`, `Settings.DefaultsFromPluginIni`,
+`Automation RunTests GSTNCombat.Editor`: `Module.LoadsAndRegisters`, `Debug.NoDependencyOnDebugModule` (E14: no debug module, plugin or include in this plugin), `Settings.DefaultsFromPluginIni`,
 `Settings.TickRateFromNetworkPrediction`, and `Model.*`: `EachMutationOnlyChangesWhatItSays`, `ClampsToTotalFrames`,
 `UndoRedoRestoresExactData`, `DragIsOneUndoStep`, `CancelledDragLeavesNoStep`, `SelectionRevalidatedAfterUndo`,
 `ClipboardRoundTrip`, `FitTotalFramesDoesNotRunSilently`, `TwoToolkitsOneTargetRefused`, `ViewTransformRoundTrip`. The model tests
@@ -325,6 +326,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.7 (2026-10-23): the descriptor no longer lists `GSTNCombatDebug` as an optional plugin and a test keeps the editor free of any edge to it; the input display tab is registered by the debug plugin (plan E14).
 - 0.6 (2026-10-23): inline mode: the timeline of an ability Blueprint edited in the same window through the class default object, the Open Timeline Editor row, the compile handling, Extract to timeline asset, the ability timeline validator, and the `GSTNCombatNP` edge for the ability class (plan E13).
 - 0.5 (2026-10-23): validation: the report and the rules of the M3 timeline, the Data Validation validators of timeline, kit, weapon and loadout preset, the slot conflict findings with both slot names and the M1 notation, the Message Log category, the Validate button and F7, the `Validate` hook of the track editor (plan E10).
 - 0.4 (2026-10-23): timeline asset editor (toolkit, asset definition, Details tab through a selection proxy, montage-length bar, loop range), the track editor registry and the built-in track editors of the M3 kinds; the E4 test tab and its console command are removed (plan E5).

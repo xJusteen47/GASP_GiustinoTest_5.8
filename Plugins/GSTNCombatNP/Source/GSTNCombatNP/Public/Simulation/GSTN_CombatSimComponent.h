@@ -146,6 +146,17 @@ public:
 	FString GetDebugString(int32 MaxEvents = 8) const;
 
 	/**
+	 * The input history of the latest simulated (or interpolated) combat state, null before the proxy has one. Read-only and for
+	 * debug tools (the input display of GSTNCombatDebug): never call it from inside the simulation, which reads the history it is
+	 * given. The pointer is valid until the next simulation step, so copy what must outlive the frame
+	 */
+	const FGSTN_InputHistory* GetInputHistoryView() const
+	{
+		const FGSTN_CombatSyncState* Sync = GetSyncState();
+		return Sync ? &Sync->Core.Input.History : nullptr;
+	}
+
+	/**
 	 * Buttons (bit i = Buttons[i]) and the move action. Every machine of a match must use the same asset. Soft: loaded once at
 	 * BeginPlay (CompileInput), together with its input actions, never while simulating
 	 */

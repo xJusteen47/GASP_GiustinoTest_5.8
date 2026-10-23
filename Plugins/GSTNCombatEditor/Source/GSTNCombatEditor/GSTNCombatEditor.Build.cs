@@ -8,8 +8,8 @@ using UnrealBuildTool;
 // property an ability Blueprint edits inline (UGSTN_GA_BaseCombat) lives there, so the edit context and the ability validator need
 // the type (plan m5 R-B exception (c), the editor -> NP edge). Not allowed: the project module, and NetworkPrediction itself (the tick
 // rate is still read from the Network Prediction settings object by reflection, see UGSTN_CombatEditorSettings; the module comes in
-// only through GSTNCombatNP), and GSTNCombatDebug (a sibling plugin: an optional tool the editor will reach through FModuleManager,
-// never through a Build.cs edge, because UBT stops when a named module is missing).
+// only through GSTNCombatNP), and GSTNCombatDebug (a sibling plugin that has no edge with this one in either direction: the debug module registers its own
+// editor tab, so with the debug plugin off the tab is just not there; checked by GSTNCombat.Editor.Debug.NoDependencyOnDebugModule).
 //
 // Validation (E10) adds DataValidation (UEditorValidatorBase, the engine plugin of the same name), MessageLog (the findings of a Validate
 // button), AssetRegistry (the kits that can carry a weapon) and GSTNInputCore (the slot validator the kit, weapon and preset checks wrap).
