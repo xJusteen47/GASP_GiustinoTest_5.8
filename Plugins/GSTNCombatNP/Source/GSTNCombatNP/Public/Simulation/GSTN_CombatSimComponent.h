@@ -9,6 +9,8 @@
 #include "Events/GSTN_SimEvent.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "Input/GSTN_ButtonMap.h"
+#include "Jump/GSTN_GravityPhases.h"
+#include "Jump/GSTN_JumpLogic.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_InputSimulator.h"
@@ -21,6 +23,8 @@ class UGSTN_CommandBindingSet;
 class UGSTN_GA_BaseCombat;
 class UGSTN_InputConfig;
 class UGSTN_InputContextProvider;
+class UGSTN_MoverSimStateTracker;
+class UMoverComponent;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
 
@@ -133,6 +137,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Input")
 	bool HasAim() const { return FrameAim.bHasAim; }
 
+	/**
+	 * The jump state of the frame being simulated (combat-m3 7.9): phase, air jumps used, fast fall. Same contract as GetActivationContext:
+	 * a simulation read, called from an ability's activation or tick. False before the first simulated frame
+	 */
+	bool ReadJumpState(FGSTN_JumpState& OutState) const;
+
+	/**
+	 * Rewrites Mover's gravity override to the authored gravity scaled by the gravity phase of the jump state of the frame being
+	 * simulated (hold, cut, fall, fast fall), along the local gravity whatever its direction. Called by the stats movement modifier
+	 * from OnPreMovement, i.e. on every simulated substep. A pawn without the combat stats, or that never leaves scale 1, is left alone
+	 */
+	void ApplyJumpGravity(UMoverComponent& MoverComp);
+
 	/** Latest simulated (or interpolated) combat state */
 	const FGSTN_CombatSyncState* GetSyncState() const;
 
@@ -222,6 +239,34 @@ private:
 	void CompileInput();
 
 	void BindAbilitySystem();
+
+	/** The tracker of the owner's Mover component, bound on first use; null without a Mover component */
+	UGSTN_MoverSimStateTracker* GetJumpTracker();
+
+	/** The stats and settings the jump state machine reads, from the ability system of the frame being simulated. False without the combat attribute set */
+	bool BuildJumpParams(FGSTN_JumpParams& OutParams) const;
+
+	/** Step 5a of the combat tick: the jump bookkeeping of the frame from the Mover state of the end of the previous one. HeldButtons are the buttons of this frame's command */
+	void StepJump(int32 Frame, uint32 HeldButtons, FGSTN_CombatSyncCore& Core);
+
+	/** Step 5b: a request of this frame that is a jump or a fast fall turns into the state change (take-off, fast fall) */
+	void ApplyJumpRequest(int32 Frame, int32 BindingIndex, FGSTN_CombatSyncCore& Core);
+
+	/** Whether a jump or fast fall binding may be requested now, from the jump state this frame is writing. Other bindings are never refused here */
+	bool IsJumpBindingAllowed(int32 BindingIndex) const;
+
+	/** Per binding: EGSTN_PlatformJumpRole + 1 for a UGSTN_GA_PlatformJump binding, 0 for any other. Built with the table, read-only while simulating */
+	TArray<uint8> BindingJumpRole;
+
+	/** The movement facts and stats of the frame the tick is on, read once per tick for the gate and the take-off. Rewritten every tick, never state */
+	FGSTN_JumpMoverSample FrameJumpSample;
+	FGSTN_JumpParams FrameJumpParams;
+	bool bFrameJumpValid = false;
+
+	/** The authored gravity next to what the phases wrote over it; configuration mirrored from outside the simulation, see FGSTN_GravityBase */
+	FGSTN_GravityBase GravityBase;
+
+	TWeakObjectPtr<UGSTN_MoverSimStateTracker> JumpTracker;
 
 	/** Queues the stats modifier on Mover once (see bQueueStatsModifier); called from the component tick until it has */
 	void TryQueueStatsModifier();

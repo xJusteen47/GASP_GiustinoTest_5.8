@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Jump/GSTN_JumpTypes.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
 #include "Simulation/GSTN_InputSimTypes.h"
 #include "Sync/GSTN_SyncFragment.h"
@@ -24,6 +25,9 @@ struct FGSTN_CombatSyncCore
 	/** Hitstop window [HitstopStartFrame, HitstopEndFrame) */
 	int32 HitstopStartFrame = INDEX_NONE;
 	int32 HitstopEndFrame = INDEX_NONE;
+
+	/** Jump phase, air jumps used, coyote window and the hold of the jump button (combat-m3 7.9). Written by the combat tick only; one bit when default */
+	FGSTN_JumpState Jump;
 
 	bool IsInHitstop(int32 Frame) const { return Frame >= HitstopStartFrame && Frame < HitstopEndFrame; }
 
@@ -72,6 +76,7 @@ struct FGSTN_CombatSyncCore
 		Input.NetSerialize(Ar);
 		Ar << HitstopStartFrame;
 		Ar << HitstopEndFrame;
+		Jump.NetSerialize(Ar);
 
 		uint8 bAction = IsActionPartDefault() ? 0 : 1;
 		Ar.SerializeBits(&bAction, 1);
@@ -140,6 +145,7 @@ struct FGSTN_CombatSyncCore
 		}
 		UE_NP_TRACE_RECONCILE(HitstopStartFrame != AuthorityState.HitstopStartFrame, "HitstopStartFrame:");
 		UE_NP_TRACE_RECONCILE(HitstopEndFrame != AuthorityState.HitstopEndFrame, "HitstopEndFrame:");
+		UE_NP_TRACE_RECONCILE(!(Jump == AuthorityState.Jump), "Jump:");
 		UE_NP_TRACE_RECONCILE(ActionState != AuthorityState.ActionState, "ActionState:");
 		UE_NP_TRACE_RECONCILE(ActiveTimeline != AuthorityState.ActiveTimeline, "ActiveTimeline:");
 		UE_NP_TRACE_RECONCILE(ActiveSource != AuthorityState.ActiveSource, "ActiveSource:");
@@ -156,6 +162,10 @@ struct FGSTN_CombatSyncCore
 	{
 		Input.ToString(Out);
 		Out.Appendf(" Hitstop: [%d, %d)", HitstopStartFrame, HitstopEndFrame);
+		if (!Jump.IsDefault())
+		{
+			Jump.ToString(Out);
+		}
 		if (!IsActionPartDefault())
 		{
 			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Weapon: %d Loadout: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision));

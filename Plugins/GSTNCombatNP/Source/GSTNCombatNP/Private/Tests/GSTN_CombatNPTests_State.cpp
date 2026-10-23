@@ -4,6 +4,7 @@
 #include "Misc/AutomationTest.h"
 #include "Serialization/BitReader.h"
 #include "Serialization/BitWriter.h"
+#include "Jump/GSTN_JumpLogic.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -25,6 +26,7 @@ namespace
 		State.Core.LoadoutRevision = 7;
 		State.Core.Requests.Add(EGSTN_RequestType::ActivateEntry, 410, 3);
 		State.Core.Requests.Add(EGSTN_RequestType::CancelAbility, 410, 99);
+		State.Core.Jump = FGSTN_JumpLogic::ApplyTakeoff(FGSTN_JumpState(), 405, 5, EGSTN_JumpKind::Air);
 		return State;
 	}
 
@@ -51,7 +53,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_StateRoundTripTest, "GSTNCombat.NP.State.
 
 bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 {
-	// An idle combatant that never had a loadout costs one bit more than the part that existed before
+	// An idle combatant that never had a loadout costs two bits more than the part that existed before: the action part and the jump state
 	FGSTN_CombatSyncState Idle;
 	FBitWriter CoreWriter(512, true);
 	Idle.Core.Input.NetSerialize(CoreWriter);
@@ -59,7 +61,7 @@ bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 	CoreWriter << Start;
 	CoreWriter << Start;
 	TestTrue(TEXT("the default action part is default"), Idle.Core.IsActionPartDefault());
-	TestEqual(TEXT("an idle combatant pays one bit for the whole action part"), BitsOfState(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(1));
+	TestEqual(TEXT("an idle combatant pays one bit for the whole action part and one for the jump state"), BitsOfState(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(2));
 
 	bool bError = false;
 	const FGSTN_CombatSyncState IdleLoaded = ReadBackState(Idle, bError);
@@ -72,6 +74,7 @@ bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 	const FGSTN_CombatSyncState Loaded = ReadBackState(Busy, bError);
 	TestFalse(TEXT("a busy state reads back to the end"), bError);
 	TestTrue(TEXT("action state"), Loaded.Core.ActionState == EGSTN_ActionState::InTimeline);
+	TestTrue(TEXT("jump state"), Loaded.Core.Jump == Busy.Core.Jump && Loaded.Core.Jump.AirJumpsUsed == 1);
 	TestEqual(TEXT("timeline"), static_cast<int32>(Loaded.Core.ActiveTimeline), 12);
 	TestTrue(TEXT("source"), Loaded.Core.ActiveSource == EGSTN_ActivationSource::Adopted);
 	TestEqual(TEXT("start frame"), Loaded.Core.TimelineStartFrame, 400);

@@ -4,6 +4,7 @@
 
 #include "Abilities/GameplayAbility.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
+#include "Abilities/GSTN_GA_PlatformJump.h"
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "Context/GSTN_InputContextProvider.h"
@@ -120,6 +121,7 @@ void UGSTN_CombatSimComponent::CompileInput()
 	TimelineRegistry.Reset();
 	TimelineContent.Reset();
 	BindingTimeline.Reset();
+	BindingJumpRole.Reset();
 	TimelineTier.Reset();
 	TimelineDefaultOverride.Reset();
 	const UGSTN_InputSettings& InputSettings = UGSTN_InputSettings::Get();
@@ -143,6 +145,10 @@ void UGSTN_CombatSimComponent::CompileInput()
 			}
 		}
 		BindingTimeline.Add(static_cast<int16>(Index));
+
+		const UClass* AbilityClass = Binding.Ability.Get();
+		const UGSTN_GA_PlatformJump* JumpDefault = AbilityClass && AbilityClass->IsChildOf(UGSTN_GA_PlatformJump::StaticClass()) ? AbilityClass->GetDefaultObject<UGSTN_GA_PlatformJump>() : nullptr;
+		BindingJumpRole.Add(JumpDefault ? static_cast<uint8>(JumpDefault->Role) + 1 : 0);
 	}
 	// The adoptable ones after the bound ones. Their tier is none (combat-m3 6.3: an adopted timeline has the tier of its ability's command, else none)
 	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : AdoptableTimelines)
@@ -360,6 +366,10 @@ void UGSTN_CombatSimComponent::AppendFrameEvents(uint8 PreviousFingerprint, uint
 
 bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 {
+	if (!IsJumpBindingAllowed(BindingIndex))
+	{
+		return false;
+	}
 	// On the end-of-previous-frame state, like the ability system's own check at execution
 	return FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, CommandTable, BindingIndex);
 }
@@ -452,6 +462,9 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
 
+	// Step 5a, the jump bookkeeping: before the input tick, because the gate asks whether a jump or an air jump is available this frame
+	StepJump(Frame, Input.Cmd->HeldButtons, OutSync.Core);
+
 	FGSTN_InputTickArgs Args;
 	Args.Frame = Frame;
 	Args.Cmd = Input.Cmd;
@@ -466,6 +479,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Args.Outbox = &EventOutbox;
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
+
+	// Step 5b: a jump or fast fall command that the gate let through changes the jump state in the frame of the request
+	if (Result.HasRequest())
+	{
+		ApplyJumpRequest(Frame, Result.BindingIndex, OutSync.Core);
+	}
 
 	// Step 8: a command that started a timeline ability replaces the running timeline (if any) and begins its own. The ability
 	// itself is activated by the input request of this frame, from the ability system's pre-tick
