@@ -100,7 +100,7 @@ public:
 	 * Name of the Slate brush in the editor style (FAppStyle) drawn in the name column, NAME_None for none. A name, not a brush,
 	 * so this header needs no Slate and a brush that does not exist in a later engine version only loses its icon.
 	 */
-	virtual FName GetIconBrushName() const { return NAME_None; }
+	virtual FName GetIconBrushName() const { return TEXT("Icons.Box"); }
 
 	/** Text on the bar and in the tooltip of the name column. Default: the display name. Called on every paint: keep it cheap */
 	virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const;

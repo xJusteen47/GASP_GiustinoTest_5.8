@@ -31,6 +31,7 @@ void SGSTN_FrameDataSummary::Construct(const FArguments& InArgs)
 	ChildSlot
 	[
 		SNew(STextBlock)
+		.AutoWrapText(true)
 		.Text_Lambda([this]() { return MakeSummaryText(*Model); })
 	];
 }

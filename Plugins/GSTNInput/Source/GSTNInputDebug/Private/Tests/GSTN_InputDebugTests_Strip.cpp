@@ -158,7 +158,7 @@ bool FGSTN_InputStripNewestRightTest::RunTest(const FString& Parameters)
 		const int32 Visible = FStripMetrics::GetVisibleColumns(Width, 90);
 		const float ColumnWidth = FStripMetrics::GetColumnWidth(Width, Visible);
 		const float LastRight = FStripMetrics::GetColumnX(Width, ColumnWidth, Layout.NumColumns, Layout.NumColumns - 1) + ColumnWidth;
-		TestEqual(*FString::Printf(TEXT("the newest column ends at the right edge of a %.0f px strip"), Width), LastRight, Width, 1e-3f);
+		TestEqual(*FString::Printf(TEXT("the newest column ends a small margin left of the right edge of a %.0f px strip"), Width), LastRight, Width - FStripMetrics::RightMargin, 1e-3f);
 		float PreviousX = -FLT_MAX;
 		for (int32 Column = 0; Column < Layout.NumColumns; ++Column)
 		{
@@ -193,14 +193,14 @@ bool FGSTN_InputStripSizesTest::RunTest(const FString& Parameters)
 			TestTrue(*FString::Printf(TEXT("width %.0f max %d: between 1 and the maximum (%d)"), Width, Max, Visible), Visible >= 1 && Visible <= Max);
 			const float ColumnWidth = FStripMetrics::GetColumnWidth(Width, Visible);
 			TestTrue(*FString::Printf(TEXT("width %.0f max %d: column %.1f px is not below the minimum"), Width, Max, ColumnWidth), ColumnWidth >= FStripMetrics::MinColumnWidth);
-			if (Width >= FStripMetrics::GutterWidth + FStripMetrics::MinColumnWidth && Visible < Max)
+			if (Width >= FStripMetrics::GutterWidth + FStripMetrics::RightMargin + FStripMetrics::MinColumnWidth && Visible < Max)
 			{
 				// Limited by the width, not by the history: the columns use all of it
-				TestEqual(*FString::Printf(TEXT("width %.0f max %d: the columns fill the width"), Width, Max), FStripMetrics::GutterWidth + Visible * ColumnWidth, Width, 1e-2f);
+				TestEqual(*FString::Printf(TEXT("width %.0f max %d: the columns fill the width"), Width, Max), FStripMetrics::GutterWidth + Visible * ColumnWidth + FStripMetrics::RightMargin, Width, 1e-2f);
 			}
 		}
 	}
-	TestEqual(TEXT("an 800 px strip shows 43 columns"), FStripMetrics::GetVisibleColumns(800.f, 90), 43);
+	TestEqual(TEXT("an 800 px strip shows 42 columns"), FStripMetrics::GetVisibleColumns(800.f, 90), 42);
 
 	// Six buttons, six colours: told apart
 	TSet<uint32> Colours;
@@ -209,6 +209,38 @@ bool FGSTN_InputStripSizesTest::RunTest(const FString& Parameters)
 		Colours.Add(FStripMetrics::GetButtonColor(Button).ToFColor(true).DWColor());
 	}
 	TestEqual(TEXT("six distinct button colours"), Colours.Num(), 6);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_InputStripFitRowsTest, "GSTNInput.Debug.InputDisplay.RowsShrinkToFitTheHeight", GSTN_INPUTSTRIP_TEST_FLAGS)
+bool FGSTN_InputStripFitRowsTest::RunTest(const FString& Parameters)
+{
+	const int32 Buttons = 6;
+	const float Full = FStripMetrics::GetStripHeight(Buttons);
+	const FStripMetrics::FRowHeights Roomy = FStripMetrics::FitRowHeights(Full + 50.f, Buttons);
+	TestEqual(TEXT("enough height: the default button row"), Roomy.Button, FStripMetrics::ButtonRowHeight);
+	TestEqual(TEXT("enough height: the relative row is kept"), Roomy.Facing, FStripMetrics::FacingRowHeight);
+
+	// 120 px, the height of the small overlay: everything fits, rows are smaller but the relative row is still there
+	const FStripMetrics::FRowHeights Fit = FStripMetrics::FitRowHeights(120.f, Buttons);
+	TestTrue(TEXT("120 px: the rows fit"), Fit.GetTotal(Buttons) <= 120.01f);
+	TestTrue(TEXT("120 px: the button row shrank"), Fit.Button < FStripMetrics::ButtonRowHeight && Fit.Button >= FStripMetrics::MinButtonRowHeight);
+	TestTrue(TEXT("120 px: the relative row is kept"), Fit.Facing > 0.f);
+
+	// Shorter than the minimums: the relative row goes, the rest is at its minimum
+	const FStripMetrics::FRowHeights Tight = FStripMetrics::FitRowHeights(105.f, Buttons);
+	TestEqual(TEXT("105 px: the relative row is hidden"), Tight.Facing, 0.f);
+	TestEqual(TEXT("105 px: the buttons are at their minimum"), Tight.Button, FStripMetrics::MinButtonRowHeight);
+	TestTrue(TEXT("105 px: it fits"), Tight.GetTotal(Buttons) <= 105.f);
+
+	// Monotonic: more height never makes a row smaller
+	float PreviousButton = 0.f;
+	for (float Height = 60.f; Height <= Full + 10.f; Height += 5.f)
+	{
+		const float Button = FStripMetrics::FitRowHeights(Height, Buttons).Button;
+		TestTrue(*FString::Printf(TEXT("button row does not shrink as height grows (%.0f)"), Height), Button >= PreviousButton);
+		PreviousButton = Button;
+	}
 	return true;
 }
 

@@ -7,20 +7,50 @@ float FGSTN_InputDisplayMetrics::GetStripHeight(int32 NumButtons)
 	return MarkerRowHeight + StickRowHeight + FacingRowHeight + FMath::Max(NumButtons, 0) * ButtonRowHeight + GapRowHeight;
 }
 
+FGSTN_InputDisplayMetrics::FRowHeights FGSTN_InputDisplayMetrics::FitRowHeights(float Height, int32 NumButtons)
+{
+	FRowHeights Full;
+	if (Height >= Full.GetTotal(NumButtons))
+	{
+		return Full;
+	}
+	FRowHeights Min;
+	Min.Marker = MinMarkerRowHeight;
+	Min.Stick = MinStickRowHeight;
+	Min.Facing = MinFacingRowHeight;
+	Min.Button = MinButtonRowHeight;
+	Min.Gap = MinGapRowHeight;
+	const float FullTotal = Full.GetTotal(NumButtons);
+	const float MinTotal = Min.GetTotal(NumButtons);
+	if (Height < MinTotal)
+	{
+		Min.Facing = 0.f;
+		return Min;
+	}
+	const float T = (Height - MinTotal) / FMath::Max(FullTotal - MinTotal, 1.f);
+	FRowHeights Fit;
+	Fit.Marker = FMath::Lerp(Min.Marker, Full.Marker, T);
+	Fit.Stick = FMath::Lerp(Min.Stick, Full.Stick, T);
+	Fit.Facing = FMath::Lerp(Min.Facing, Full.Facing, T);
+	Fit.Button = FMath::Lerp(Min.Button, Full.Button, T);
+	Fit.Gap = FMath::Lerp(Min.Gap, Full.Gap, T);
+	return Fit;
+}
+
 int32 FGSTN_InputDisplayMetrics::GetVisibleColumns(float Width, int32 MaxColumns)
 {
-	const int32 Fit = FMath::FloorToInt32((Width - GutterWidth) / MinColumnWidth);
+	const int32 Fit = FMath::FloorToInt32((Width - GutterWidth - RightMargin) / MinColumnWidth);
 	return FMath::Clamp(Fit, 1, FMath::Max(MaxColumns, 1));
 }
 
 float FGSTN_InputDisplayMetrics::GetColumnWidth(float Width, int32 VisibleColumns)
 {
-	return FMath::Max((Width - GutterWidth) / FMath::Max(VisibleColumns, 1), MinColumnWidth);
+	return FMath::Max((Width - GutterWidth - RightMargin) / FMath::Max(VisibleColumns, 1), MinColumnWidth);
 }
 
 float FGSTN_InputDisplayMetrics::GetColumnX(float Width, float ColumnWidth, int32 NumColumns, int32 Column)
 {
-	return Width - (NumColumns - Column) * ColumnWidth;
+	return Width - RightMargin - (NumColumns - Column) * ColumnWidth;
 }
 
 int32 FGSTN_InputDisplayMetrics::GetFirstVisibleColumn(int32 NumColumns, int32 VisibleColumns)

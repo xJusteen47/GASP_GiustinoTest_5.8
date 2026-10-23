@@ -121,22 +121,24 @@ namespace
 		return FLinearColor(Colour.R * Scale, Colour.G * Scale, Colour.B * Scale, Colour.A);
 	}
 
-	/** Y of the top of each row, from the strip's metrics */
+	/** Y of the top of each row, from the row heights fitted to the strip's height */
 	struct FRowTops
 	{
+		FM::FRowHeights H;
 		float Stick;
 		float Facing;
 		float Buttons;
 		float Gaps;
 		float Bottom;
 
-		explicit FRowTops(int32 NumButtons)
+		FRowTops(int32 NumButtons, float Height)
+			: H(FM::FitRowHeights(Height, NumButtons))
 		{
-			Stick = FM::MarkerRowHeight;
-			Facing = Stick + FM::StickRowHeight;
-			Buttons = Facing + FM::FacingRowHeight;
-			Gaps = Buttons + NumButtons * FM::ButtonRowHeight;
-			Bottom = Gaps + FM::GapRowHeight;
+			Stick = H.Marker;
+			Facing = Stick + H.Stick;
+			Buttons = Facing + H.Facing;
+			Gaps = Buttons + NumButtons * H.Button;
+			Bottom = Gaps + H.Gap;
 		}
 	};
 }
@@ -192,7 +194,7 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 {
 	const FVector2f Size = AllottedGeometry.GetLocalSize();
 	const int32 NumButtons = ButtonNames.Num();
-	const FRowTops Rows(NumButtons);
+	const FRowTops Rows(NumButtons, Size.Y);
 	const FLinearColor TextColor(0.85f, 0.85f, 0.85f);
 	const FLinearColor DimColor(0.55f, 0.55f, 0.58f);
 	const FLinearColor Background(0.06f, 0.06f, 0.065f);
@@ -203,11 +205,14 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 	// Row names in the gutter: the letter of a button in its colour, so the row and its icons read as one
 	for (int32 Button = 0; Button < NumButtons; ++Button)
 	{
-		const float Centre = Rows.Buttons + (Button + 0.5f) * FM::ButtonRowHeight;
+		const float Centre = Rows.Buttons + (Button + 0.5f) * Rows.H.Button;
 		PaintTextCentred(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(FM::GutterWidth * 0.5f, Centre), FString::Chr(FGSTN_InputDisplayLayout::GetButtonLetter(Button)), FM::GetButtonColor(Button), LetterFont());
 	}
-	PaintTextCentred(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(FM::GutterWidth * 0.5f, Rows.Stick + FM::StickRowHeight * 0.5f), TEXT("STK"), DimColor, SmallFont());
-	PaintTextCentred(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(FM::GutterWidth * 0.5f, Rows.Facing + FM::FacingRowHeight * 0.5f), TEXT("rel"), Dim(DimColor, 0.8f), SmallFont());
+	PaintTextCentred(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(FM::GutterWidth * 0.5f, Rows.Stick + Rows.H.Stick * 0.5f), TEXT("STK"), DimColor, SmallFont());
+	if (Rows.H.Facing > 0.f)
+	{
+		PaintTextCentred(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(FM::GutterWidth * 0.5f, Rows.Facing + Rows.H.Facing * 0.5f), TEXT("rel"), Dim(DimColor, 0.8f), SmallFont());
+	}
 
 	if (Layout.NumColumns == 0)
 	{
@@ -219,12 +224,12 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 	const int32 Visible = FM::GetVisibleColumns(Size.X, NumFrames);
 	const float ColumnWidth = FM::GetColumnWidth(Size.X, Visible);
 	const int32 FirstColumn = FM::GetFirstVisibleColumn(Layout.NumColumns, Visible);
-	const float IconSize = FMath::Min(FM::IconSize, ColumnWidth - 2.f);
+	const float IconSize = FMath::Min3(FM::IconSize, ColumnWidth - 2.f, Rows.H.Button - 2.f);
 
 	// Row separators, faint, so the eye follows a row across the strip
 	for (int32 Button = 0; Button <= NumButtons; ++Button)
 	{
-		PaintRect(OutDrawElements, LayerId, AllottedGeometry, FVector2f(FM::GutterWidth, Rows.Buttons + Button * FM::ButtonRowHeight), FVector2f(Size.X - FM::GutterWidth, 1.f), FLinearColor(1.f, 1.f, 1.f, 0.05f));
+		PaintRect(OutDrawElements, LayerId, AllottedGeometry, FVector2f(FM::GutterWidth, Rows.Buttons + Button * Rows.H.Button), FVector2f(Size.X - FM::GutterWidth, 1.f), FLinearColor(1.f, 1.f, 1.f, 0.05f));
 	}
 
 	for (int32 Column = FirstColumn; Column < Layout.NumColumns; ++Column)
@@ -241,17 +246,17 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 		// A command came out on this frame
 		if (Layout.ColumnMarker[Column] != INDEX_NONE)
 		{
-			PaintRect(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(X + 2.f, 1.f), FVector2f(ColumnWidth - 4.f, FM::MarkerRowHeight - 3.f), FLinearColor(1.f, 0.62f, 0.1f), true);
+			PaintRect(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2f(X + 2.f, 1.f), FVector2f(ColumnWidth - 4.f, Rows.H.Marker - 3.f), FLinearColor(1.f, 0.62f, 0.1f), true);
 		}
 
 		// The stick: an arrow, a dot for neutral, the relative direction as a small arrow below when it differs
 		const FGSTN_InputDisplayStickCell& Stick = Layout.Stick[Column];
-		const FVector2f StickCentre(CentreX, Rows.Stick + FM::StickRowHeight * 0.5f);
+		const FVector2f StickCentre(CentreX, Rows.Stick + Rows.H.Stick * 0.5f);
 		const bool bTilted = Stick.Zone != EGSTN_StickZone::Neutral;
 		PaintArrow(OutDrawElements, LayerId + 2, AllottedGeometry, StickCentre, bTilted ? Stick.StickDirection : EGSTN_StickDirection::Neutral, 8.5f, 2.f, StickArrowColor(Stick));
-		if (bTilted && Stick.FacingDirection != Stick.StickDirection)
+		if (bTilted && Rows.H.Facing > 0.f && Stick.FacingDirection != Stick.StickDirection)
 		{
-			PaintArrow(OutDrawElements, LayerId + 2, AllottedGeometry, FVector2f(CentreX, Rows.Facing + FM::FacingRowHeight * 0.5f), Stick.FacingDirection, 3.8f, 1.f, Dim(StickArrowColor(Stick), 0.7f));
+			PaintArrow(OutDrawElements, LayerId + 2, AllottedGeometry, FVector2f(CentreX, Rows.Facing + Rows.H.Facing * 0.5f), Stick.FacingDirection, 3.8f, 1.f, Dim(StickArrowColor(Stick), 0.7f));
 		}
 
 		// The buttons
@@ -262,7 +267,7 @@ int32 SGSTN_InputStrip::OnPaint(const FPaintArgs& Args, const FGeometry& Allotte
 			{
 				continue;
 			}
-			const float RowCentre = Rows.Buttons + (Button + 0.5f) * FM::ButtonRowHeight;
+			const float RowCentre = Rows.Buttons + (Button + 0.5f) * Rows.H.Button;
 			const FLinearColor Colour = FM::GetButtonColor(Button);
 			const FVector2f IconPosition(CentreX - IconSize * 0.5f, RowCentre - IconSize * 0.5f);
 			const FString Letter = FString::Chr(FGSTN_InputDisplayLayout::GetButtonLetter(Button));
@@ -331,14 +336,14 @@ FText SGSTN_InputStrip::DescribeAt(const FVector2D& Local) const
 	}
 	const float Width = GetCachedGeometry().GetLocalSize().X;
 	const int32 NumButtons = ButtonNames.Num();
-	const FRowTops Rows(NumButtons);
+	const FRowTops Rows(NumButtons, GetCachedGeometry().GetLocalSize().Y);
 
 	// The gutter names the row
 	if (Local.X < FM::GutterWidth)
 	{
 		if (Local.Y >= Rows.Buttons && Local.Y < Rows.Gaps)
 		{
-			const int32 Button = FMath::FloorToInt((Local.Y - Rows.Buttons) / FM::ButtonRowHeight);
+			const int32 Button = FMath::FloorToInt((Local.Y - Rows.Buttons) / Rows.H.Button);
 			return FText::FromString(ButtonNames.IsValidIndex(Button) ? ButtonNames[Button] : FString());
 		}
 		return Local.Y >= Rows.Stick && Local.Y < Rows.Buttons ? LOCTEXT("StickRowTip", "The stick, and under it the direction relative to the character where it differs") : FText::GetEmpty();
@@ -372,7 +377,7 @@ FText SGSTN_InputStrip::DescribeAt(const FVector2D& Local) const
 	}
 	else if (Local.Y < Rows.Gaps)
 	{
-		const int32 Button = FMath::FloorToInt((Local.Y - Rows.Buttons) / FM::ButtonRowHeight);
+		const int32 Button = FMath::FloorToInt((Local.Y - Rows.Buttons) / Rows.H.Button);
 		if (Layout.Buttons.IsValidIndex(Button))
 		{
 			const FGSTN_InputDisplayCell& Cell = Layout.Buttons[Button][Column];
@@ -564,6 +569,10 @@ void SGSTN_InputDisplay::SetResultText(const FText& Text)
 
 bool SGSTN_InputDisplay::SetScriptedNotation(const FString& Notation)
 {
+	if (NotationBox.IsValid())
+	{
+		NotationBox->SetText(FText::FromString(Notation));
+	}
 	if (Notation.TrimStartAndEnd().IsEmpty())
 	{
 		bScripted = false;

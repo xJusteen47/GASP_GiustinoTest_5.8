@@ -98,6 +98,7 @@ void FGSTN_TimelineDataCustomization::CustomizeHeader(TSharedRef<IPropertyHandle
 		[
 			SNew(STextBlock)
 			.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+			.AutoWrapText(true)
 			.Text_Raw(this, &FGSTN_TimelineDataCustomization::MakeSummary)
 		]
 		+ SHorizontalBox::Slot()

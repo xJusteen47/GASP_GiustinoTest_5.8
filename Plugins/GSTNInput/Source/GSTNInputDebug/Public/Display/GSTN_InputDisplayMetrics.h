@@ -47,11 +47,38 @@ struct GSTNINPUTDEBUG_API FGSTN_InputDisplayMetrics
 	static constexpr float ButtonRowHeight = 16.f;
 	static constexpr float GapRowHeight = 14.f;
 
+	/** Smallest row heights the strip shrinks to when its height is short, before it hides the relative-direction row */
+	static constexpr float MinMarkerRowHeight = 6.f;
+	static constexpr float MinStickRowHeight = 16.f;
+	static constexpr float MinFacingRowHeight = 8.f;
+	static constexpr float MinButtonRowHeight = 12.f;
+	static constexpr float MinGapRowHeight = 10.f;
+
+	/** Space kept right of the newest column, so a hold bar or an icon in it does not touch the edge of the strip */
+	static constexpr float RightMargin = 4.f;
+
 	/** The edge of a button icon inside its row cell, so the icons of two rows or two columns leave a gap */
 	static constexpr float IconSize = 14.f;
 
 	/** Space kept between two frame-gap labels, in pixels */
 	static constexpr float GapLabelSpacing = 4.f;
+
+	/** The row heights the strip paints with: the defaults, or smaller ones that fit a given height */
+	struct FRowHeights
+	{
+		float Marker = MarkerRowHeight;
+		float Stick = StickRowHeight;
+		float Facing = FacingRowHeight;
+		float Button = ButtonRowHeight;
+		float Gap = GapRowHeight;
+		float GetTotal(int32 NumButtons) const { return Marker + Stick + Facing + FMath::Max(NumButtons, 0) * Button + Gap; }
+	};
+
+	/**
+	 * Row heights that fit Height: the defaults when they fit; otherwise every row shrinks in proportion towards its Min* height; if even
+	 * those do not fit, the relative-direction row (Facing = 0) goes. Below that the strip is clipped, the newest content being on top.
+	 */
+	static FRowHeights FitRowHeights(float Height, int32 NumButtons);
 
 	/** Height of the whole strip for a number of button rows */
 	static float GetStripHeight(int32 NumButtons);

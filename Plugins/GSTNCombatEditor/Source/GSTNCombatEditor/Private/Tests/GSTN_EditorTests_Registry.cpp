@@ -177,7 +177,7 @@ bool FGSTN_RegistryGenericRowTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("its bar says the same"), Generic->GetRowLabel(Track).ToString(), Generic->GetDisplayName().ToString());
 	TestEqual(TEXT("in the generic colour of the settings"), Generic->GetColor(), UGSTN_CombatEditorSettings::Get().GetTrackColor(Unknown->GetFName()));
 	TestEqual(TEXT("a window of the fallback length"), Generic->GetDefaultLength(), IGSTN_TrackEditor::FallbackDefaultLength);
-	TestTrue(TEXT("no icon"), Generic->GetIconBrushName().IsNone());
+	TestEqual(TEXT("a neutral default icon"), Generic->GetIconBrushName(), FName(TEXT("Icons.Box")));
 	TestTrue(TEXT("no gizmo"), Generic->AsGizmoProvider() == nullptr);
 	TestFalse(TEXT("no keys until a keyed access is registered"), Generic->HasKeys());
 	TestTrue(TEXT("one instance per struct, not one per repaint"), &Registry.FindOrGeneric(Unknown).Get() == &Generic.Get());
