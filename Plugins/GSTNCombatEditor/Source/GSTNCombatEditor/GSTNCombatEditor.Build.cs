@@ -48,6 +48,7 @@ public class GSTNCombatEditor : ModuleRules
 			"AssetDefinition",
 			"DeveloperSettings",
 			"AssetRegistry",
+			"AnimGraph",
 			"AssetTools",
 			"ContentBrowser",
 			"DataValidation",
