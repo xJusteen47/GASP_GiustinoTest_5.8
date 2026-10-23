@@ -1,0 +1,34 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Combat Debug",
+	"Description": "Development tooling of GSTN Combat that runs in PIE and development builds: the input display widget now, and later the Gameplay Debugger category, debug draw and the combat trace. Excluded from Shipping builds. Nothing in the game depends on it: it only reads combat state through const accessors.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNCombatDebug",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"TargetConfigurationDenyList": [
+				"Shipping"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		}
+	]
+}

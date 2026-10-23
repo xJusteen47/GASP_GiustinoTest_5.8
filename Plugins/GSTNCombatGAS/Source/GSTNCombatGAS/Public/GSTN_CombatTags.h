@@ -50,6 +50,26 @@ namespace GSTNCombatTags
 	/** A super was used. Published by the combat tick on the authority. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_SuperUsed);
 
+	// Hurtbox zones (classification of a hurtbox, read by hit resolution and the editor tooling; never granted to an actor)
+
+	/** Zone of a hurtbox on the head. Classifies a hurtbox in FGSTN_Hurtbox::Tags and in the editor's Physics Asset mapping; never granted to an actor. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Hurtbox_Head);
+
+	/** Zone of a hurtbox on the torso. Classifies a hurtbox; never granted to an actor. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Hurtbox_Torso);
+
+	/** Zone of a hurtbox on an arm (the side is the bone name, not a tag). Classifies a hurtbox; never granted to an actor. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Hurtbox_Arm);
+
+	/** Zone of a hurtbox on a leg (the side is the bone name, not a tag). Classifies a hurtbox; never granted to an actor. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Hurtbox_Leg);
+
+	/** Zone of a hurtbox on a hand. Classifies a hurtbox; never granted to an actor. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Hurtbox_Hand);
+
+	/** Zone of a hurtbox on a foot. Classifies a hurtbox; never granted to an actor. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Hurtbox_Foot);
+
 	// Set-by-caller keys (magnitudes travel in effects, not in tags)
 
 	/** Set-by-caller key: the meter cost an effect spends. Set by the activating ability. */

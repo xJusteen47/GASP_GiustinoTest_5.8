@@ -17,6 +17,13 @@ namespace GSTNCombatTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_WeaponSwitched, "Combat.Event.WeaponSwitched", "The active weapon changed. Published once by the combat tick on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_SuperUsed, "Combat.Event.SuperUsed", "A super was used. Published once by the combat tick on the authority");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Head, "Combat.Hurtbox.Head", "Zone of a hurtbox on the head. Classifies a hurtbox (hurtbox set data, editor Physics Asset mapping); never granted to an actor");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Torso, "Combat.Hurtbox.Torso", "Zone of a hurtbox on the torso. Classifies a hurtbox; never granted to an actor");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Arm, "Combat.Hurtbox.Arm", "Zone of a hurtbox on an arm; the side is the bone name, not a tag. Classifies a hurtbox; never granted to an actor");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Leg, "Combat.Hurtbox.Leg", "Zone of a hurtbox on a leg; the side is the bone name, not a tag. Classifies a hurtbox; never granted to an actor");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Hand, "Combat.Hurtbox.Hand", "Zone of a hurtbox on a hand. Classifies a hurtbox; never granted to an actor");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Foot, "Combat.Hurtbox.Foot", "Zone of a hurtbox on a foot. Classifies a hurtbox; never granted to an actor");
+
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MeterCost, "Combat.SetByCaller.MeterCost", "Set-by-caller key: the meter cost an effect spends. Set by the activating ability");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Root_Stat, "Combat.Stat", "Root of stat names. Leaves are designer content in a tag ini, code never names one");
@@ -31,6 +38,7 @@ namespace GSTNCombatTags
 			Lock_Movement,
 			Weapon_Role_Primary, Weapon_Role_Support,
 			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_SuperUsed,
+			Hurtbox_Head, Hurtbox_Torso, Hurtbox_Arm, Hurtbox_Leg, Hurtbox_Hand, Hurtbox_Foot,
 			SetByCaller_MeterCost,
 			Root_Stat, Root_Meter, Root_SetByCallerStat });
 	}

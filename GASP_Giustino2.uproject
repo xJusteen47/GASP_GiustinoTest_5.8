@@ -156,6 +156,17 @@
 		{
 			"Name": "GSTNSurface",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatEditor",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "GSTNCombatDebug",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"
