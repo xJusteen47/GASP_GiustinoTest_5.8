@@ -29,6 +29,22 @@ void UGSTN_DepthMarkerStyle::PopulateDefaultPresenters()
 	Presenters.Add(AboveLine);
 }
 
+void UGSTN_DepthMarkerStyle::PopulateApproachPresenters()
+{
+	Presenters.Reset();
+	DefaultTint = FLinearColor(0.35f, 0.85f, 1.f, 1.f);
+
+	UGSTN_DepthPresenter_Ring* Ring = NewObject<UGSTN_DepthPresenter_Ring>(this);
+	Ring->Layer = EGSTN_DepthLayer::Approach;
+	Ring->ActiveStates = { EGSTN_DepthMarkerState::Approach };
+	Presenters.Add(Ring);
+
+	UGSTN_DepthPresenter_Line* Line = NewObject<UGSTN_DepthPresenter_Line>(this);
+	Line->Layer = EGSTN_DepthLayer::Approach;
+	Line->ActiveStates = { EGSTN_DepthMarkerState::Approach };
+	Presenters.Add(Line);
+}
+
 bool UGSTN_DepthMarkerStyle::Validate(TArray<FText>& OutErrors) const
 {
 	const int32 Before = OutErrors.Num();

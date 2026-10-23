@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "GSTN_DepthMarkerComponent.h"
 #include "GSTN_DepthMarkerMath.h"
+#include "GSTN_DepthMarkerPlane.h"
 #include "GSTN_DepthMarkerPresenter.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "GSTN_DepthMarkerStyle.h"
@@ -24,10 +25,16 @@ namespace GSTNDepthMarkerSubsystemPrivate
 	enum class EQueryKind : uint32
 	{
 		Probe = 0,
-		Footprint = 1
+		Footprint = 1,
+		/** One slot of the approach probe pattern */
+		ApproachProbe = 2
 	};
 
-	static uint32 PackUserData(int32 Id, EQueryKind Kind) { return (static_cast<uint32>(Id) << 2) | static_cast<uint32>(Kind); }
+	/** (marker id << 8) | (approach slot << 2) | kind */
+	static uint32 PackUserData(int32 Id, EQueryKind Kind, uint32 Slot = 0)
+	{
+		return (static_cast<uint32>(Id) << 8) | ((Slot & 63u) << 2) | static_cast<uint32>(Kind);
+	}
 
 	static int64 KeyOf(const UPrimitiveComponent* Component)
 	{
@@ -67,6 +74,28 @@ struct UGSTN_DepthMarkerSubsystem::FMarker
 
 	TStrongObjectPtr<UGSTN_DepthMarkerStyle> Style;
 	TArray<TStrongObjectPtr<UGSTN_DepthMarkerPresenter>> Presenters;
+
+	/** Fade-in bookkeeping of the below layer: the blend length of the last switch (the target reports it for one frame only) */
+	float BelowBlendMs = 0.f;
+
+	/** Approach marker B: a short-lived cache of probe results per slot, the pattern cursor and its own presenters */
+	struct FApproachSample
+	{
+		uint32 Slot = 0;
+		TWeakObjectPtr<UPrimitiveComponent> Component;
+		FVector LocalPoint = FVector::ZeroVector;
+		FVector LocalNormal = FVector::UpVector;
+		int64 Key = 0;
+		double Time = 0.0;
+	};
+	TArray<FApproachSample> ApproachCache;
+	uint32 ApproachNextSlot = 0;
+	double LastApproachProbeTime = -1.0e9;
+	int64 LastApproachKey = 0;
+	double ApproachSwitchTime = -1.0e9;
+	float ApproachBlendMs = 0.f;
+	TStrongObjectPtr<UGSTN_DepthMarkerStyle> ApproachStyle;
+	TArray<TStrongObjectPtr<UGSTN_DepthMarkerPresenter>> ApproachPresenters;
 };
 
 bool UGSTN_DepthMarkerSubsystem::ShouldCreateFor(ENetMode NetMode, bool bGameWorld, bool bEnabled)
@@ -132,12 +161,14 @@ void UGSTN_DepthMarkerSubsystem::Deinitialize()
 	Markers.Reset();
 	MarkersById.Reset();
 	StyleOverrides.Reset();
+	Planes.Reset();
 	if (AActor* HolderActor = Holder.Get())
 	{
 		HolderActor->Destroy();
 	}
 	Holder.Reset();
 	BuiltinStyle.Reset();
+	BuiltinApproachStyle.Reset();
 	BuiltinSelector.Reset();
 	Super::Deinitialize();
 }
@@ -163,6 +194,19 @@ void UGSTN_DepthMarkerSubsystem::UnregisterMarker(UGSTN_DepthMarkerComponent* Co
 		MarkersById.Remove((*Found)->Id);
 		Markers.Remove(Component);
 	}
+}
+
+void UGSTN_DepthMarkerSubsystem::RegisterPlane(UGSTN_DepthMarkerPlaneComponent* Plane)
+{
+	if (Plane)
+	{
+		Planes.AddUnique(Plane);
+	}
+}
+
+void UGSTN_DepthMarkerSubsystem::UnregisterPlane(UGSTN_DepthMarkerPlaneComponent* Plane)
+{
+	Planes.Remove(Plane);
 }
 
 void UGSTN_DepthMarkerSubsystem::PushStyleOverride(const UObject* Source, UGSTN_DepthMarkerStyle* Style, int32 Priority)
@@ -191,6 +235,37 @@ UGSTN_DepthMarkerStyle* UGSTN_DepthMarkerSubsystem::GetBuiltinStyle()
 		BuiltinStyle = TStrongObjectPtr<UGSTN_DepthMarkerStyle>(Style);
 	}
 	return BuiltinStyle.Get();
+}
+
+UGSTN_DepthMarkerStyle* UGSTN_DepthMarkerSubsystem::GetBuiltinApproachStyle()
+{
+	if (!BuiltinApproachStyle)
+	{
+		UGSTN_DepthMarkerStyle* Style = NewObject<UGSTN_DepthMarkerStyle>(this);
+		Style->PopulateApproachPresenters();
+		BuiltinApproachStyle = TStrongObjectPtr<UGSTN_DepthMarkerStyle>(Style);
+	}
+	return BuiltinApproachStyle.Get();
+}
+
+UGSTN_DepthMarkerStyle* UGSTN_DepthMarkerSubsystem::ResolveApproachStyle(const UGSTN_DepthMarkerComponent& Component, const UGSTN_DepthMarkerStyle* PrimaryStyle)
+{
+	// Component slot, then the style's own ApproachStyle slot, then the built-in approach look
+	if (!Component.ApproachStyle.IsNull())
+	{
+		if (UGSTN_DepthMarkerStyle* Style = Component.ApproachStyle.LoadSynchronous())
+		{
+			return Style;
+		}
+	}
+	if (PrimaryStyle && !PrimaryStyle->ApproachStyle.IsNull())
+	{
+		if (UGSTN_DepthMarkerStyle* Style = PrimaryStyle->ApproachStyle.LoadSynchronous())
+		{
+			return Style;
+		}
+	}
+	return GetBuiltinApproachStyle();
 }
 
 AActor* UGSTN_DepthMarkerSubsystem::GetHolder()
@@ -305,8 +380,40 @@ void UGSTN_DepthMarkerSubsystem::BindPresenters(FMarker& Marker, UGSTN_DepthMark
 	}
 }
 
+void UGSTN_DepthMarkerSubsystem::BindApproachPresenters(FMarker& Marker, UGSTN_DepthMarkerStyle* Style)
+{
+	for (TStrongObjectPtr<UGSTN_DepthMarkerPresenter>& Presenter : Marker.ApproachPresenters)
+	{
+		if (Presenter->LastState != EGSTN_DepthMarkerState::Hidden)
+		{
+			Presenter->OnMarkerReleased();
+			Presenter->LastState = EGSTN_DepthMarkerState::Hidden;
+		}
+	}
+	Marker.ApproachPresenters.Reset();
+	Marker.ApproachStyle = TStrongObjectPtr<UGSTN_DepthMarkerStyle>(Style);
+	if (!Style)
+	{
+		return;
+	}
+	for (const UGSTN_DepthMarkerPresenter* Template : Style->Presenters)
+	{
+		if (Template)
+		{
+			UGSTN_DepthMarkerPresenter* Presenter = DuplicateObject<UGSTN_DepthMarkerPresenter>(Template, this);
+			// Whatever the approach style lists draws the approach layer, in the one state that layer has
+			Presenter->Layer = EGSTN_DepthLayer::Approach;
+			Presenter->ActiveStates = { EGSTN_DepthMarkerState::Approach };
+			Marker.ApproachPresenters.Add(TStrongObjectPtr<UGSTN_DepthMarkerPresenter>(Presenter));
+		}
+	}
+}
+
 void UGSTN_DepthMarkerSubsystem::ReleasePresenters(FMarker& Marker)
 {
+	BindApproachPresenters(Marker, nullptr);
+	Marker.ApproachCache.Reset();
+	Marker.LastApproachKey = 0;
 	for (TStrongObjectPtr<UGSTN_DepthMarkerPresenter>& Presenter : Marker.Presenters)
 	{
 		if (Presenter->LastState != EGSTN_DepthMarkerState::Hidden)
@@ -374,12 +481,39 @@ void UGSTN_DepthMarkerSubsystem::IssueFootprint(FMarker& Marker, const TArray<AA
 
 void UGSTN_DepthMarkerSubsystem::OnProbeDone(const FTraceHandle& Handle, FTraceDatum& Datum)
 {
-	const int32 Id = static_cast<int32>(Datum.UserData >> 2);
+	const int32 Id = static_cast<int32>(Datum.UserData >> 8);
+	const uint32 Slot = (Datum.UserData >> 2) & 63u;
 	const EQueryKind Kind = static_cast<EQueryKind>(Datum.UserData & 3u);
 	const TWeakPtr<FMarker>* Weak = MarkersById.Find(Id);
 	const TSharedPtr<FMarker> Marker = Weak ? Weak->Pin() : nullptr;
 	if (!Marker)
 	{
+		return;
+	}
+	if (Kind == EQueryKind::ApproachProbe)
+	{
+		// The first blocking top under the probe; start-penetrating hits (the probe began inside a solid) and excluded types do not count
+		Marker->ApproachCache.RemoveAll([Slot](const FMarker::FApproachSample& Sample) { return Sample.Slot == Slot; });
+		for (const FHitResult& Hit : Datum.OutHits)
+		{
+			const UPrimitiveComponent* Component = Hit.GetComponent();
+			if (!Hit.bBlockingHit || !Component)
+			{
+				continue;
+			}
+			if (!Hit.bStartPenetrating && !IsExcludedObjectType(Component->GetCollisionObjectType(), UGSTN_DepthMarkerSettings::Get().ExcludedObjectTypes))
+			{
+				FMarker::FApproachSample& Sample = Marker->ApproachCache.AddDefaulted_GetRef();
+				const FTransform Xf = Component->GetComponentTransform();
+				Sample.Slot = Slot;
+				Sample.Component = const_cast<UPrimitiveComponent*>(Component);
+				Sample.LocalPoint = Xf.InverseTransformPosition(FVector(Hit.ImpactPoint));
+				Sample.LocalNormal = Xf.InverseTransformVectorNoScale(FVector(Hit.ImpactNormal));
+				Sample.Key = KeyOf(Component);
+				Sample.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+			}
+			break;
+		}
 		return;
 	}
 	if (Kind == EQueryKind::Probe)
@@ -413,6 +547,85 @@ void UGSTN_DepthMarkerSubsystem::OnProbeDone(const FTraceHandle& Handle, FTraceD
 			Marker->Footprint.LateralCm = static_cast<float>((Offset - Up * FVector::DotProduct(Offset, Up)).Size());
 			break;
 		}
+	}
+}
+
+void UGSTN_DepthMarkerSubsystem::BuildApproachCandidates(FMarker& Marker, double Time, TArray<FGSTN_DepthPlaneCandidate>& OutProbed,
+	TArray<FGSTN_DepthPlaneCandidate>& OutExplicit)
+{
+	const UGSTN_DepthMarkerComponent* Component = Marker.Component.Get();
+	if (!Component)
+	{
+		return;
+	}
+	const FGSTN_DepthSelectorParams& Params = ResolveSelector(*Component)->Params;
+	if (!Params.bApproachEnabled)
+	{
+		return;
+	}
+
+	// Probe results expire, so the platform that was left behind stops being offered
+	const double Ttl = Params.ApproachCacheMs * 0.001;
+	Marker.ApproachCache.RemoveAll([&](const FMarker::FApproachSample& Sample) { return !Sample.Component.IsValid() || Time - Sample.Time > Ttl; });
+	for (const FMarker::FApproachSample& Sample : Marker.ApproachCache)
+	{
+		// Re-expressed with the platform's CURRENT transform: a lift or a sliding platform does not leave its marker behind
+		const FTransform Xf = Sample.Component->GetComponentTransform();
+		FGSTN_DepthPlaneCandidate& Candidate = OutProbed.AddDefaulted_GetRef();
+		Candidate.Point = Xf.TransformPosition(Sample.LocalPoint);
+		Candidate.Normal = Xf.TransformVectorNoScale(Sample.LocalNormal).GetSafeNormal();
+		Candidate.SurfaceKey = Sample.Key;
+		Candidate.ComponentTransform = Xf;
+	}
+
+	// Designer planes that overlap the character: they win over probing
+	const FVector Centre = Marker.Subject.Feet + Marker.Subject.Up.GetSafeNormal() * (Marker.Subject.TopOffset * 0.5f);
+	for (const TWeakObjectPtr<UGSTN_DepthMarkerPlaneComponent>& Weak : Planes)
+	{
+		const UGSTN_DepthMarkerPlaneComponent* Plane = Weak.Get();
+		if (Plane && Plane->bPlaneEnabled && Plane->ContainsPoint(Centre))
+		{
+			OutExplicit.Add(Plane->MakeCandidate());
+		}
+	}
+}
+
+void UGSTN_DepthMarkerSubsystem::IssueApproachProbes(FMarker& Marker, int32 Rank, const FGSTN_DepthSchedulerConfig& Config,
+	const TArray<AActor*>& Ignored, double Time, int32& InOutRemaining)
+{
+	UWorld* World = GetWorld();
+	const UGSTN_DepthMarkerComponent* Component = Marker.Component.Get();
+	if (!World || !Component || InOutRemaining <= 0 || !Marker.Subject.bAirborne)
+	{
+		return;
+	}
+	const FGSTN_DepthSelectorParams& Params = ResolveSelector(*Component)->Params;
+	const int32 Slots = FGSTN_DepthMarkerMath::NumApproachProbeSlots(Params);
+	// The same rank rates as the primary probes: the first ranks every frame, the rest less often
+	if (!Params.bApproachEnabled || Slots <= 0 || (Time - Marker.LastApproachProbeTime) < FGSTN_DepthMarkerScheduler::RankInterval(Rank, Config))
+	{
+		return;
+	}
+	Marker.LastApproachProbeTime = Time;
+
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(GSTNDepthMarkerApproach), false);
+	Query.AddIgnoredActors(Ignored);
+	// A few slots per tick, rotating: the whole pattern is covered over a few ticks instead of in one burst
+	for (int32 Index = 0; Index < Params.ApproachProbesPerTick && InOutRemaining > 0; ++Index)
+	{
+		const uint32 Slot = Marker.ApproachNextSlot++ % static_cast<uint32>(Slots);
+		FVector Start;
+		FVector End;
+		if (!FGSTN_DepthMarkerMath::ApproachProbeSegment(Marker.Subject, Params, static_cast<int32>(Slot), Start, End))
+		{
+			// A velocity slot while the character is slow: nothing to trace, and its old sample is stale
+			Marker.ApproachCache.RemoveAll([Slot](const FMarker::FApproachSample& Sample) { return Sample.Slot == Slot; });
+			continue;
+		}
+		World->AsyncLineTraceByChannel(EAsyncTraceType::Multi, Start, End, UGSTN_DepthMarkerSettings::Get().TraceChannel, Query,
+			FCollisionResponseParams::DefaultResponseParam, &ProbeDelegate, PackUserData(Marker.Id, EQueryKind::ApproachProbe, Slot));
+		--InOutRemaining;
+		++LastTraceCount;
 	}
 }
 
@@ -472,6 +685,8 @@ void UGSTN_DepthMarkerSubsystem::RefreshMarker(FMarker& Marker, double Time, boo
 	{
 		Marker.ResetTime = Time;
 		Marker.LastBelow = FGSTN_DepthTarget();
+		// Probed tops belong to the old gravity: a floor of the old Up is not a platform of the new one
+		Marker.ApproachCache.Reset();
 	}
 	if (bProbed || bRing)
 	{
@@ -494,6 +709,26 @@ void UGSTN_DepthMarkerSubsystem::RefreshMarker(FMarker& Marker, double Time, boo
 	{
 		Marker.LastBelowKey = Result.Below.SurfaceKey;
 		Marker.SwitchTime = Time;
+		Marker.BelowBlendMs = Result.Below.BlendMs;
+	}
+
+	// Approach marker B: independent of the below marker, which it only reads to stay off the primary plane
+	TArray<FGSTN_DepthPlaneCandidate> ProbedPlanes;
+	TArray<FGSTN_DepthPlaneCandidate> ExplicitPlanes;
+	BuildApproachCandidates(Marker, Time, ProbedPlanes, ExplicitPlanes);
+	Result.Approach = Selector->ChooseApproach(Subject, Result.Below, ProbedPlanes, ExplicitPlanes, Marker.State, Time);
+	if (Result.Approach.IsValid())
+	{
+		if (Result.Approach.SurfaceKey != Marker.LastApproachKey)
+		{
+			Marker.LastApproachKey = Result.Approach.SurfaceKey;
+			Marker.ApproachSwitchTime = Time;
+			Marker.ApproachBlendMs = Result.Approach.BlendMs;
+		}
+	}
+	else
+	{
+		Marker.LastApproachKey = 0;
 	}
 	Marker.Result = Result;
 }
@@ -520,6 +755,7 @@ void UGSTN_DepthMarkerSubsystem::DriveMarker(FMarker& Marker, double Time, bool 
 	View.Subject = Subject;
 	View.Below = Result.Below;
 	View.Above = Result.Above;
+	View.Approach = Result.Approach;
 	View.TimeSeconds = static_cast<float>(FMath::Fmod(Time, 10000.0));
 
 	if (Component->bOverrideTint)
@@ -541,9 +777,10 @@ void UGSTN_DepthMarkerSubsystem::DriveMarker(FMarker& Marker, double Time, bool 
 	{
 		Blend = FMath::Min(Blend, static_cast<float>((Time - Marker.ResetTime) / (Selector->Params.GravityFadeMs * 0.001)));
 	}
-	if (Result.Below.BlendMs > 0.f)
+	const float GravityBlend = FMath::Clamp(Blend, 0.f, 1.f);
+	if (Marker.BelowBlendMs > 0.f)
 	{
-		Blend = FMath::Min(Blend, static_cast<float>((Time - Marker.SwitchTime) / (Result.Below.BlendMs * 0.001)));
+		Blend = FMath::Min(Blend, static_cast<float>((Time - Marker.SwitchTime) / (Marker.BelowBlendMs * 0.001)));
 	}
 	Blend = FMath::Clamp(Blend, 0.f, 1.f);
 
@@ -597,6 +834,50 @@ void UGSTN_DepthMarkerSubsystem::DriveMarker(FMarker& Marker, double Time, bool 
 		if (bDraw)
 		{
 			Presenter->OnMarkerUpdated(View, GetHolder());
+		}
+	}
+
+	// Marker B draws with its own style slot: another colour or effect, at the same time as the others
+	UGSTN_DepthMarkerStyle* ApproachStyle = ResolveApproachStyle(*Component, Style);
+	if (ApproachStyle != Marker.ApproachStyle.Get())
+	{
+		BindApproachPresenters(Marker, ApproachStyle);
+	}
+	if (Result.Approach.IsValid() && ApproachStyle)
+	{
+		float ApproachAlpha = 1.f;
+		float ApproachRadius = 1.f;
+		FGSTN_DepthMarkerMath::ComputeFade(FMath::Max(Result.Approach.Height, 0.f), ApproachStyle->Fade, ApproachAlpha, ApproachRadius);
+		float ApproachBlend = GravityBlend;
+		if (Marker.ApproachBlendMs > 0.f)
+		{
+			ApproachBlend = FMath::Min(ApproachBlend, static_cast<float>((Time - Marker.ApproachSwitchTime) / (Marker.ApproachBlendMs * 0.001)));
+		}
+		View.bApproachVisible = bAllowed;
+		View.ApproachAlpha = ApproachAlpha * Result.Approach.EdgeAlpha * FMath::Clamp(ApproachBlend, 0.f, 1.f);
+		View.ApproachRadiusScale = ApproachRadius;
+		View.ApproachTint = ApproachStyle->DefaultTint;
+	}
+	for (TStrongObjectPtr<UGSTN_DepthMarkerPresenter>& Presenter : Marker.ApproachPresenters)
+	{
+		// The approach presenters see the approach tint and radius where the others see theirs
+		FGSTN_DepthMarkerView ApproachView = View;
+		ApproachView.Tint = View.ApproachTint;
+		ApproachView.RadiusScale = View.ApproachRadiusScale;
+		const bool bDraw = Presenter->ShouldDraw(ApproachView);
+		const EGSTN_DepthMarkerState NewState = bDraw ? EGSTN_DepthMarkerState::Approach : EGSTN_DepthMarkerState::Hidden;
+		if (NewState != Presenter->LastState)
+		{
+			Presenter->OnStateChanged(Presenter->LastState, NewState);
+			if (NewState == EGSTN_DepthMarkerState::Hidden)
+			{
+				Presenter->OnMarkerReleased();
+			}
+			Presenter->LastState = NewState;
+		}
+		if (bDraw)
+		{
+			Presenter->OnMarkerUpdated(ApproachView, GetHolder());
 		}
 	}
 	Component->LastResult = Result;
@@ -787,5 +1068,16 @@ void UGSTN_DepthMarkerSubsystem::TickMarkers(float DeltaSeconds)
 		RefreshMarker(*Marker, Time, Marker->bAllowed);
 		DriveMarker(*Marker, Time, Marker->bAllowed);
 		++LastActiveCount;
+	}
+
+	// Approach probes come last: they use only what the primary probes and the footprint sweeps left of the cap
+	int32 Remaining = FMath::Max(Config.MaxTraces - LastTraceCount, 0);
+	for (int32 Rank = 0; Rank < Entries.Num() && Remaining > 0; ++Rank)
+	{
+		const TWeakPtr<FMarker>* Weak = MarkersById.Find(Entries[Rank].Id);
+		if (TSharedPtr<FMarker> Marker = Weak ? Weak->Pin() : nullptr)
+		{
+			IssueApproachProbes(*Marker, Rank, Config, AllOwners, Time, Remaining);
+		}
 	}
 }

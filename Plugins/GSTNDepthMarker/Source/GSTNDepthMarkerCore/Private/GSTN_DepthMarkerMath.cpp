@@ -395,6 +395,299 @@ FGSTN_DepthTarget FGSTN_DepthMarkerMath::ReprojectTarget(const FGSTN_DepthTarget
 	return Out;
 }
 
+bool FGSTN_DepthMarkerMath::PointInOrientedBox(const FVector& Point, const FTransform& BoxTransform, const FVector& HalfExtent)
+{
+	const FVector Local = BoxTransform.InverseTransformPositionNoScale(Point);
+	return FMath::Abs(Local.X) <= HalfExtent.X && FMath::Abs(Local.Y) <= HalfExtent.Y && FMath::Abs(Local.Z) <= HalfExtent.Z;
+}
+
+int32 FGSTN_DepthMarkerMath::NumApproachProbeSlots(const FGSTN_DepthSelectorParams& Params)
+{
+	return Params.ApproachRingProbes + Params.ApproachVelocityProbes;
+}
+
+bool FGSTN_DepthMarkerMath::ApproachProbeSegment(const FGSTN_DepthSubjectState& Subject, const FGSTN_DepthSelectorParams& Params, int32 Slot,
+	FVector& OutStart, FVector& OutEnd)
+{
+	if (Slot < 0 || Slot >= NumApproachProbeSlots(Params))
+	{
+		return false;
+	}
+	const FVector Up = Subject.Up.GetSafeNormal();
+	FVector Offset = FVector::ZeroVector;
+	if (Slot < Params.ApproachRingProbes)
+	{
+		const FVector Seed = FMath::Abs(Up.Z) < 0.9 ? FVector::UpVector : FVector::RightVector;
+		const FVector A = FVector::CrossProduct(Up, Seed).GetSafeNormal();
+		const FVector B = FVector::CrossProduct(Up, A);
+		const double Angle = 2.0 * UE_DOUBLE_PI * Slot / FMath::Max(Params.ApproachRingProbes, 1);
+		Offset = (A * FMath::Cos(Angle) + B * FMath::Sin(Angle)) * Params.ApproachProbeRadiusCm;
+	}
+	else
+	{
+		// Along the horizontal velocity: where the character is heading, which a ring of fixed radius may miss
+		const FVector HorizontalVelocity = Subject.Velocity - Up * FVector::DotProduct(Subject.Velocity, Up);
+		if (HorizontalVelocity.Size() < Params.ApproachMinTowardSpeed)
+		{
+			return false;
+		}
+		const int32 Index = Slot - Params.ApproachRingProbes;
+		Offset = HorizontalVelocity.GetSafeNormal() * Params.ApproachDistanceCm * (Index + 1) / FMath::Max(Params.ApproachVelocityProbes, 1);
+	}
+	OutStart = Subject.Feet + Up * Params.ApproachNearAboveFeetCm + Offset;
+	OutEnd = OutStart - Up * (Params.ApproachNearAboveFeetCm + Params.ApproachProbeDepthCm);
+	return true;
+}
+
+namespace GSTNDepthMarkerPrivate
+{
+	/** One approach candidate measured against the subject of the frame */
+	struct FApproachInfo
+	{
+		const FGSTN_DepthPlaneCandidate* Candidate = nullptr;
+		/** Distance along Up from the feet to the plane at the column: negative = the plane is below */
+		float S = 0.f;
+		float Edge = 0.f;
+		float Toward = 0.f;
+	};
+}
+
+bool FGSTN_DepthMarkerMath::EvaluateApproach(FGSTN_DepthSelectionState& State, const FGSTN_DepthSubjectState& Subject,
+	const FGSTN_DepthSelectorParams& Params, const FGSTN_DepthTarget& Primary, const TArray<FGSTN_DepthPlaneCandidate>& Probed,
+	const TArray<FGSTN_DepthPlaneCandidate>& Explicit, double Time, FGSTN_DepthTarget& OutApproach)
+{
+	using namespace GSTNDepthMarkerPrivate;
+	OutApproach = FGSTN_DepthTarget();
+	if (!Params.bApproachEnabled || !Subject.bAirborne || Subject.bSuppressed)
+	{
+		State.ClearApproach();
+		return false;
+	}
+
+	const FVector Up = Subject.Up.GetSafeNormal();
+	const FVector& Feet = Subject.Feet;
+	const FVector HorizontalVelocity = Subject.Velocity - Up * FVector::DotProduct(Subject.Velocity, Up);
+	const bool bHasPrimary = Primary.Kind == EGSTN_DepthTargetKind::Surface;
+	// The primary plane at the column, along Up from the feet: Height is measured along Down, so S = -Height
+	const float PrimaryS = bHasPrimary ? -Primary.Height : 0.f;
+	const float ShowDistance = Params.ApproachDistanceCm;
+	const float HideDistance = ShowDistance + Params.ApproachHideMarginCm;
+
+	auto Measure = [&](const FGSTN_DepthPlaneCandidate& C, FApproachInfo& Info) -> bool
+	{
+		FVector Normal = C.Normal.GetSafeNormal();
+		// A probed top must face up as it was seen (an underside or a wall is no platform); a designer plane faces up by decree
+		if (!C.bExplicit && FVector::DotProduct(Normal, Up) < Params.ApproachMinNormalDot)
+		{
+			return false;
+		}
+		if (FVector::DotProduct(Normal, Up) < 0.0)
+		{
+			Normal = -Normal;
+		}
+		FVector OnPlane;
+		float S = 0.f;
+		if (!ProjectOntoPlane(Feet, Up, C.Point, Normal, OnPlane, S))
+		{
+			return false;
+		}
+		// Never the primary's own plane: the same surface, or a coplanar one (a second platform at the same level adds nothing)
+		if (bHasPrimary)
+		{
+			const bool bSameSurface = C.SurfaceKey != 0 && C.SurfaceKey == Primary.SurfaceKey;
+			const bool bCoplanar = FMath::Abs(S - PrimaryS) <= Params.CoplanarTolerance
+				&& AngleDegrees(Normal, Primary.Normal.GetSafeNormal()) <= Params.CoplanarAngleDegrees;
+			if (bSameSurface || bCoplanar)
+			{
+				return false;
+			}
+		}
+		// Below or near the character; a plane well above it is the above layer's business
+		if (S > Params.ApproachNearAboveFeetCm)
+		{
+			return false;
+		}
+		if (!C.bExplicit)
+		{
+			if (bHasPrimary)
+			{
+				const float Rise = S - PrimaryS;
+				if (Rise < Params.ApproachMinRiseCm || Rise > Params.ApproachMaxRiseCm)
+				{
+					return false;
+				}
+			}
+		}
+		Info.Candidate = &C;
+		Info.S = S;
+		if (C.bExplicit)
+		{
+			Info.Edge = 0.f;
+			Info.Toward = 0.f;
+			return true;
+		}
+		const FVector Offset = C.Point - Feet;
+		const FVector Horizontal = Offset - Up * FVector::DotProduct(Offset, Up);
+		Info.Edge = static_cast<float>(Horizontal.Size());
+		Info.Toward = Info.Edge > 1.f ? static_cast<float>(FVector::DotProduct(HorizontalVelocity, Horizontal / Info.Edge)) : 0.f;
+		return true;
+	};
+
+	auto IsCurrent = [&](const FGSTN_DepthPlaneCandidate& C) { return State.bApproachShown && C.SurfaceKey == State.ApproachKey; };
+
+	TArray<FApproachInfo> ValidExplicit;
+	for (const FGSTN_DepthPlaneCandidate& C : Explicit)
+	{
+		FApproachInfo Info;
+		if (Measure(C, Info))
+		{
+			ValidExplicit.Add(Info);
+		}
+	}
+	TArray<FApproachInfo> ValidProbed;
+	for (const FGSTN_DepthPlaneCandidate& C : Probed)
+	{
+		FApproachInfo Info;
+		if (!Measure(C, Info))
+		{
+			continue;
+		}
+		// Near enough: the show distance, or the wider hide distance for the plane already shown (no movement test then)
+		const bool bCurrent = IsCurrent(C);
+		if (Info.Edge > (bCurrent ? HideDistance : ShowDistance))
+		{
+			continue;
+		}
+		if (!bCurrent && Info.Edge > Params.ApproachCloseDistanceCm && Info.Toward < Params.ApproachMinTowardSpeed)
+		{
+			continue;
+		}
+		ValidProbed.Add(Info);
+	}
+
+	// Score: designer planes win over probing (priority, then key); probed ones by nearest edge, then approach speed
+	const FApproachInfo* Best = nullptr;
+	if (!ValidExplicit.IsEmpty())
+	{
+		for (const FApproachInfo& Info : ValidExplicit)
+		{
+			if (!Best || Info.Candidate->Priority > Best->Candidate->Priority
+				|| (Info.Candidate->Priority == Best->Candidate->Priority && Info.Candidate->SurfaceKey < Best->Candidate->SurfaceKey))
+			{
+				Best = &Info;
+			}
+		}
+	}
+	else
+	{
+		for (const FApproachInfo& Info : ValidProbed)
+		{
+			if (!Best || Info.Edge < Best->Edge - KINDA_SMALL_NUMBER
+				|| (FMath::IsNearlyEqual(Info.Edge, Best->Edge) && (Info.Toward > Best->Toward
+					|| (FMath::IsNearlyEqual(Info.Toward, Best->Toward) && Info.Candidate->SurfaceKey < Best->Candidate->SurfaceKey))))
+			{
+				Best = &Info;
+			}
+		}
+	}
+	const FApproachInfo* CurrentBest = nullptr;
+	if (State.bApproachShown)
+	{
+		for (const TArray<FApproachInfo>* List : { &ValidExplicit, &ValidProbed })
+		{
+			for (const FApproachInfo& Info : *List)
+			{
+				if (Info.Candidate->SurfaceKey == State.ApproachKey && (!CurrentBest || Info.Edge < CurrentBest->Edge))
+				{
+					CurrentBest = &Info;
+				}
+			}
+		}
+	}
+
+	const double Dwell = Params.ApproachMinDwellMs * 0.001;
+	const bool bDwelling = (Time - State.ApproachSwitchTime) < Dwell;
+	const FApproachInfo* Chosen = nullptr;
+	if (Best)
+	{
+		if (!State.bApproachShown || Best->Candidate->SurfaceKey == State.ApproachKey)
+		{
+			Chosen = Best;
+		}
+		else if (CurrentBest)
+		{
+			// A challenger replaces the shown plane only after the dwell and when clearly nearer (or designer-declared)
+			const bool bClearlyBetter = (Best->Candidate->bExplicit && !State.bApproachExplicit)
+				|| Best->Edge + Params.ApproachSwitchMarginCm < CurrentBest->Edge;
+			Chosen = (!bDwelling && bClearlyBetter) ? Best : CurrentBest;
+		}
+		else
+		{
+			// The shown plane is not among the candidates this frame (probes are staggered): it is held, and only a
+			// dwell that is over lets the challenger in
+			Chosen = bDwelling ? nullptr : Best;
+		}
+	}
+
+	FVector Point;
+	FVector Normal;
+	int64 Key;
+	FTransform Transform;
+	bool bExplicit;
+	float Edge;
+	if (Chosen)
+	{
+		Point = Chosen->Candidate->Point;
+		Normal = Chosen->Candidate->Normal;
+		Key = Chosen->Candidate->SurfaceKey;
+		Transform = Chosen->Candidate->ComponentTransform;
+		bExplicit = Chosen->Candidate->bExplicit;
+		Edge = Chosen->Edge;
+		const bool bSwitch = !State.bApproachShown || Key != State.ApproachKey;
+		if (bSwitch)
+		{
+			State.ApproachSwitchTime = Time;
+		}
+		State.bApproachShown = true;
+		State.ApproachKey = Key;
+		State.bApproachExplicit = bExplicit;
+		State.ApproachPoint = Point;
+		State.ApproachNormal = Normal;
+		State.ApproachTransform = Transform;
+		State.ApproachLastSeenTime = Time;
+		OutApproach.BlendMs = bSwitch ? Params.ApproachBlendMs : 0.f;
+	}
+	else if (State.bApproachShown && (Time - State.ApproachLastSeenTime) <= Params.ApproachHoldMs * 0.001)
+	{
+		// Held: the stored plane, while it stays in range
+		Point = State.ApproachPoint;
+		Normal = State.ApproachNormal;
+		Key = State.ApproachKey;
+		Transform = State.ApproachTransform;
+		bExplicit = State.bApproachExplicit;
+		const FVector Offset = Point - Feet;
+		Edge = bExplicit ? 0.f : static_cast<float>((Offset - Up * FVector::DotProduct(Offset, Up)).Size());
+		if (Edge > HideDistance)
+		{
+			State.ClearApproach();
+			return false;
+		}
+	}
+	else
+	{
+		State.ClearApproach();
+		return false;
+	}
+
+	const float Span = FMath::Max(HideDistance - Params.ApproachCloseDistanceCm, 1.f);
+	const float EdgeAlpha = bExplicit ? 1.f : FMath::Clamp(1.f - (Edge - Params.ApproachCloseDistanceCm) / Span, 0.f, 1.f);
+	const float BlendMs = OutApproach.BlendMs;
+	OutApproach = MakeSurfaceTarget(Feet, Up, Point, Normal, Key, Transform, Params, EGSTN_DepthMarkerState::Approach, EdgeAlpha);
+	OutApproach.Kind = EGSTN_DepthTargetKind::ApproachPlane;
+	OutApproach.BlendMs = BlendMs;
+	return true;
+}
+
 void FGSTN_DepthMarkerMath::ComputeFade(float Height, const FGSTN_DepthFadeParams& Fade, float& OutAlpha, float& OutRadiusScale)
 {
 	const float T = FMath::Clamp(Height / FMath::Max(Fade.FadeEndHeight, 1.f), 0.f, 1.f);

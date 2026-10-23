@@ -30,6 +30,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker")
 	TSoftObjectPtr<UGSTN_DepthMarkerStyle> Style;
 
+	/** Look of the approach marker B of this pawn; empty = the style's own ApproachStyle slot, then the built-in look */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker")
+	TSoftObjectPtr<UGSTN_DepthMarkerStyle> ApproachStyle;
+
 	/** Target selection of this marker; empty = the default selector */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category = "DepthMarker")
 	TObjectPtr<UGSTN_DepthTargetSelector> Selector;

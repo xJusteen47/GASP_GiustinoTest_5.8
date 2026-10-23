@@ -15,7 +15,9 @@ enum class EGSTN_DepthTargetKind : uint8
 	/** A real surface found by a trace */
 	Surface,
 	/** The reference plane (the last platform's surface or a reference volume): the "no ground" ring or the "above" ring */
-	ReferencePlane
+	ReferencePlane,
+	/** The plane of a nearby higher platform, seen from here: marker B of the approach layer (the above layer is a different one) */
+	ApproachPlane
 };
 
 /** Visual state of one target (§2.3 step 9) */
@@ -30,7 +32,9 @@ enum class EGSTN_DepthMarkerState : uint8
 	/** Nothing below and the entity is above the reference plane: the hollow ring below (§2.7) */
 	NoGround,
 	/** Below the reference plane: the ring above the entity, line going up */
-	AboveReference
+	AboveReference,
+	/** The character column projected onto a nearby higher platform top plane: it hangs in the air beyond the platform edge */
+	Approach
 };
 
 /**
@@ -142,6 +146,40 @@ struct GSTNDEPTHMARKERCORE_API FGSTN_DepthCandidate
 	/** Pawn, projectile, ignored subject, non-target: excluded by the caller from settings (§2.8) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Candidate")
 	bool bExcluded = false;
+};
+
+/**
+ * One candidate projection plane for the approach marker: a walkable top found by a probe near the character, or a plane a
+ * designer declared (volume or component). Heights, distances and approach speed are computed from the subject each frame,
+ * so a cached candidate stays valid while the character moves.
+ */
+USTRUCT(BlueprintType)
+struct GSTNDEPTHMARKERCORE_API FGSTN_DepthPlaneCandidate
+{
+	GENERATED_BODY()
+
+	/** A point of the platform top: the sampled hit, or for a designer plane any point of it */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Approach")
+	FVector Point = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Approach")
+	FVector Normal = FVector::UpVector;
+
+	/** Opaque identity of the platform (the hit component, hashed); 0 = none */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Approach")
+	int64 SurfaceKey = 0;
+
+	/** Transform of the platform component, to re-express the plane on a moving base */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Approach")
+	FTransform ComponentTransform = FTransform::Identity;
+
+	/** Declared by a designer (volume or plane component) and overlapping the character: wins over probing */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Approach")
+	bool bExplicit = false;
+
+	/** Among several overlapping designer planes the higher priority wins */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Approach")
+	int32 Priority = 0;
 };
 
 /** The footprint sweep result of rule R3: does a short sphere sweep still touch the previously selected surface */
@@ -257,6 +295,10 @@ struct GSTNDEPTHMARKERCORE_API FGSTN_DepthResult
 	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Result")
 	FGSTN_DepthTarget Above;
 
+	/** The approach marker B: the column projected onto a nearby higher platform plane (at most one) */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Result")
+	FGSTN_DepthTarget Approach;
+
 	/** The gravity direction jumped this frame: the presenter cross-fades over GravityFadeMs and drops its line history */
 	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Result")
 	bool bGravityReset = false;
@@ -323,9 +365,46 @@ struct GSTNDEPTHMARKERCORE_API FGSTN_DepthSelectionState
 	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
 	bool bVisible = false;
 
+	/** The approach marker is currently shown, and the plane it holds (world point and normal, kept for the hold time) */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
+	bool bApproachShown = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
+	int64 ApproachKey = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
+	bool bApproachExplicit = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
+	FVector ApproachPoint = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
+	FVector ApproachNormal = FVector::UpVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
+	FTransform ApproachTransform = FTransform::Identity;
+
+	/** Time of the last switch of the approach plane (dwell) */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
+	double ApproachSwitchTime = -1000.0;
+
+	/** Time a candidate last confirmed the held plane (hold time while probes are staggered) */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|State")
+	double ApproachLastSeenTime = -1000.0;
+
+	void ClearApproach()
+	{
+		bApproachShown = false;
+		ApproachKey = 0;
+		bApproachExplicit = false;
+		ApproachSwitchTime = -1000.0;
+		ApproachLastSeenTime = -1000.0;
+	}
+
 	/** Forget the selection and the above latch (teleport, pool acquire, gravity jump). The grounded point stays unless asked */
 	void ClearSelection()
 	{
+		ClearApproach();
 		bHasPrevious = false;
 		PreviousKey = 0;
 		bLastSwitchWasFarther = false;
@@ -419,6 +498,83 @@ struct GSTNDEPTHMARKERCORE_API FGSTN_DepthSelectorParams
 	/** Surfaces no resolver knows pass the behaviour filter */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Selection")
 	bool bUnknownSurfacesPass = true;
+
+	// ---- Approach marker (marker B): the character is above a lower platform and a higher one is nearby, offset sideways ----
+
+	/** Master switch of the approach layer */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach")
+	bool bApproachEnabled = true;
+
+	/** A higher platform whose nearest sampled point is within this horizontal distance can show marker B */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ApproachDistanceCm = 500.f;
+
+	/** Once shown, marker B stays until the platform is farther than ApproachDistanceCm plus this (hysteresis) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ApproachHideMarginCm = 100.f;
+
+	/** Within this distance the platform counts as near even if the character is not moving towards it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ApproachCloseDistanceCm = 150.f;
+
+	/** Horizontal speed towards the platform that counts as approaching it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float ApproachMinTowardSpeed = 60.f;
+
+	/** The plane must be at most this far above the feet: below or near the character (higher ones are the above layer job) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ApproachNearAboveFeetCm = 60.f;
+
+	/** The plane must be at least this far above the primary ground (a platform at the same level is not worth a second marker) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ApproachMinRiseCm = 30.f;
+
+	/** ... and at most this far above it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ApproachMaxRiseCm = 1500.f;
+
+	/** Probed tops must be this flat: dot(Normal, Up) at least this (a wall is no platform) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ApproachMinNormalDot = 0.7f;
+
+	/** No switch from one approach plane to another before this long after the last one */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "ms"))
+	float ApproachMinDwellMs = 200.f;
+
+	/** A challenger must be this much nearer (edge distance) to take over after the dwell */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ApproachSwitchMarginCm = 60.f;
+
+	/** Probes are staggered, so a plane that no probe confirmed is held this long (while it stays in range) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "ms"))
+	float ApproachHoldMs = 300.f;
+
+	/** Fade-in of marker B when it appears or switches plane */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "ms"))
+	float ApproachBlendMs = 120.f;
+
+	/** Downward probes on a ring around the character */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0", ClampMax = "16"))
+	int32 ApproachRingProbes = 6;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ApproachProbeRadiusCm = 350.f;
+
+	/** Downward probes along the horizontal velocity (half and full ApproachDistanceCm); skipped when the character is slow */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0", ClampMax = "4"))
+	int32 ApproachVelocityProbes = 2;
+
+	/** Probes issued per marker per tick; they rotate, so the whole pattern is covered over a few ticks */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "1", ClampMax = "16"))
+	int32 ApproachProbesPerTick = 3;
+
+	/** How far below the probe start (which sits ApproachNearAboveFeetCm above the feet) each probe reaches */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float ApproachProbeDepthCm = 1500.f;
+
+	/** A probe result is reused this long before it expires */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Approach", meta = (ClampMin = "0.0", ForceUnits = "ms"))
+	float ApproachCacheMs = 600.f;
 };
 
 /** Visibility and fade over height (§3); the style's curves feed the presenters, these linear defaults are the maths fallback */

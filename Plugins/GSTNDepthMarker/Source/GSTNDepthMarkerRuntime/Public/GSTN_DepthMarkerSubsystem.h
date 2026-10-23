@@ -15,6 +15,7 @@
 #include "GSTN_DepthMarkerSubsystem.generated.h"
 
 class UGSTN_DepthMarkerComponent;
+class UGSTN_DepthMarkerPlaneComponent;
 class UGSTN_DepthMarkerPresenter;
 class UGSTN_DepthMarkerStyle;
 class UGSTN_DepthTargetSelector;
@@ -55,6 +56,11 @@ public:
 	void UnregisterMarker(UGSTN_DepthMarkerComponent* Component);
 	int32 GetNumMarkers() const { return Markers.Num(); }
 
+	/** Designer projection planes for the approach marker (volumes and components register themselves) */
+	void RegisterPlane(UGSTN_DepthMarkerPlaneComponent* Plane);
+	void UnregisterPlane(UGSTN_DepthMarkerPlaneComponent* Plane);
+	int32 GetNumPlanes() const { return Planes.Num(); }
+
 	/** Markers the last tick drew (after the cap) and traces it issued, for the tests and stat displays */
 	int32 GetLastActiveCount() const { return LastActiveCount; }
 	int32 GetLastTraceCount() const { return LastTraceCount; }
@@ -72,6 +78,9 @@ public:
 	/** The built-in look (made once), used when nothing names a style */
 	UGSTN_DepthMarkerStyle* GetBuiltinStyle();
 
+	/** The built-in approach look (made once): a ring and a dashed line in another colour */
+	UGSTN_DepthMarkerStyle* GetBuiltinApproachStyle();
+
 private:
 	struct FMarker;
 
@@ -81,6 +90,11 @@ private:
 	bool ReadSubject(const UGSTN_DepthMarkerComponent& Component, FGSTN_DepthSubjectState& Out) const;
 	UGSTN_DepthMarkerStyle* ResolveStyle(const UGSTN_DepthMarkerComponent& Component);
 	UGSTN_DepthTargetSelector* ResolveSelector(const UGSTN_DepthMarkerComponent& Component);
+	UGSTN_DepthMarkerStyle* ResolveApproachStyle(const UGSTN_DepthMarkerComponent& Component, const UGSTN_DepthMarkerStyle* PrimaryStyle);
+	void BindApproachPresenters(FMarker& Marker, UGSTN_DepthMarkerStyle* Style);
+	void IssueApproachProbes(FMarker& Marker, int32 Rank, const FGSTN_DepthSchedulerConfig& Config, const TArray<AActor*>& Ignored, double Time,
+		int32& InOutRemaining);
+	void BuildApproachCandidates(FMarker& Marker, double Time, TArray<FGSTN_DepthPlaneCandidate>& OutProbed, TArray<FGSTN_DepthPlaneCandidate>& OutExplicit);
 	void BindPresenters(FMarker& Marker, UGSTN_DepthMarkerStyle* Style);
 	void ReleasePresenters(FMarker& Marker);
 	void IssueProbe(FMarker& Marker, const TArray<AActor*>& Ignored, double Time);
@@ -103,7 +117,10 @@ private:
 	};
 	TArray<FStyleOverride> StyleOverrides;
 
+	TArray<TWeakObjectPtr<UGSTN_DepthMarkerPlaneComponent>> Planes;
+
 	TStrongObjectPtr<UGSTN_DepthMarkerStyle> BuiltinStyle;
+	TStrongObjectPtr<UGSTN_DepthMarkerStyle> BuiltinApproachStyle;
 	TStrongObjectPtr<UGSTN_DepthTargetSelector> BuiltinSelector;
 	TStrongObjectPtr<AActor> Holder;
 

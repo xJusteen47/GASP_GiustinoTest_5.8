@@ -1,7 +1,8 @@
 # GSTNDepthMarker
 
 A presentation-only depth cue for Unreal Engine 5.8: a marker on the surface under a character joined to it by a dashed line,
-and a hollow ring on the last platform's plane when the character is off-stage. Computed locally on every machine from the
+a hollow ring on the last platform's plane when the character is off-stage, and a second marker on a nearby higher platform's plane
+(the approach marker). Computed locally on every machine from the
 presented transform; never simulated, never replicated, never created on a dedicated server.
 
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Design: [depth-marker.md](../../docs/architecture/depth-marker.md).
@@ -12,7 +13,7 @@ Binding rules: [modularity-and-tags.md](../../docs/architecture/modularity-and-t
 | Module | State | What it is |
 |---|---|---|
 | `GSTNDepthMarkerCore` | exists (Runtime) | Pure types and `FGSTN_DepthMarkerMath`, the target selection maths (filter, nearest surface, hysteresis R1-R5, reference plane, above/below layers, fade). No world, no Engine. Covered by `GSTNDepthMarker.Core.*`. |
-| `GSTNDepthMarkerRuntime` | exists (Runtime) | Settings, world subsystem (local players only, never created on a dedicated server), `UGSTN_DepthMarkerComponent` (the opt-in, never replicated), the gravity selector, the CharacterMovement and generic actor adapters, the style asset, the presenters, the trace scheduler with a per-frame cap, the Blueprint wrapper `UGSTN_DepthMarkerMath`. Covered by `GSTNDepthMarker.Runtime.*`. |
+| `GSTNDepthMarkerRuntime` | exists (Runtime) | Settings, world subsystem (local players only, never created on a dedicated server), `UGSTN_DepthMarkerComponent` (the opt-in, never replicated), the gravity selector, the CharacterMovement and generic actor adapters, the style asset, the presenters, the trace scheduler with a per-frame cap, the plane volume and component of the approach marker, the Blueprint wrapper `UGSTN_DepthMarkerMath`. Covered by `GSTNDepthMarker.Runtime.*`. |
 
 ## Dependencies
 
@@ -20,7 +21,7 @@ Binding rules: [modularity-and-tags.md](../../docs/architecture/modularity-and-t
 - `GSTNDepthMarkerCore` (`Build.cs`): Core, CoreUObject, GameplayTags. Never GASP_Giustino2, another GSTN plugin, GameplayAbilities,
   AbilitySystemSimulation, NetworkPrediction or Mover.
 - `GSTNDepthMarkerRuntime`: Core, CoreUObject, Engine, GameplayTags, DeveloperSettings, GSTNDepthMarkerCore. A Mover adapter would
-  be a separate plugin (spec �6.1); the runtime knows no movement type besides `UCharacterMovementComponent` and plain actors.
+  be a separate plugin (spec §6.1); the runtime knows no movement type besides `UCharacterMovementComponent` and plain actors.
 
 ## Using it
 
@@ -40,11 +41,33 @@ A pawn can implement `IGSTN_DepthSubject` to report its own state; a project mov
 With no style set the subsystem uses a built-in style made of **engine primitives only**, named as soft references in
 `Config/DefaultGSTNDepthMarker.ini` (`/Engine/BasicShapes/Cube` and `/Engine/EngineDebugMaterials/DebugMeshMaterial`, parameters
 `Color` and `Opacity`): a hollow ring of flat cube segments and a dashed line of cube dashes, below the character on the first
-surface along its own gravity, and a lighter ring plus line above it on the last platform's plane when it is mid-air below it.
+surface along its own gravity, a lighter ring plus line above it on the last platform's plane when it is mid-air below it, and a
+ring plus line in light blue on a nearby higher platform's plane (the approach marker).
 **No decal content ships**: `UGSTN_DepthPresenter_Decal` draws nothing until a style names a decal material (its
 `MaterialOverride`) or the settings do (`DefaultDecalMaterial`). Clear the two ini entries and the built-in presenters also draw
 nothing until a style names its own mesh and material. The debug material is an engine editor asset: a packaged game should
 point the settings at its own content.
+
+## Approach marker and projection planes
+
+The character is airborne above a lower platform (marker A, straight down along gravity) and a higher platform is nearby, offset
+sideways. When the character gets close, a **second marker B** appears at the character's position projected along gravity onto the
+higher platform's top plane, hanging in the air beyond the platform's edge, so the player reads that surface's height. Both show at
+once; there is at most one B. It has its own style slot, `ApproachStyle` (on the style, with a component override; the built-in
+look is a ring and a dashed line in another colour). The above marker of the spec is a different layer and stays.
+
+- **Probing**: a ring of downward traces around the character plus two along its horizontal velocity, a few per tick in rotation,
+  lowest priority under the per-frame trace cap. A walkable top qualifies when it rises above the primary ground, is not above the
+  feet by more than `ApproachNearAboveFeetCm`, its nearest sampled point is within `ApproachDistanceCm` and the character moves
+  towards it (or is within `ApproachCloseDistanceCm`). Nearest wins, then approach speed. Never the primary target's plane.
+- **Explicit planes** (override and fallback): place an `AGSTN_DepthMarkerPlaneVolume` (or add a `UGSTN_DepthMarkerPlaneComponent`
+  to any actor). Its box is the region of influence and its **top face** (plus `PlaneOffsetCm`, along its own up) is the plane;
+  while a character overlaps the box that plane wins over probing. `Priority` picks among overlapping ones.
+- **Stability**: hysteresis between `ApproachDistanceCm` and the hide margin, a hold time while probes are staggered, a minimum dwell
+  and a switch margin before another platform takes over, a fade-in on appearance; a gravity jump clears it. All tuning is the
+  `DepthMarker|Approach` block of `FGSTN_DepthSelectorParams` (settings `DefaultParams`, or a component's own selector).
+- The edge distance is measured to the nearest **sampled** point of the platform, an upper bound of the true edge distance.
+  Details and deltas: [depth-marker-doc-deltas.md](../../docs/notes/depth-marker-doc-deltas.md).
 
 ## Extending in Blueprint
 
@@ -52,7 +75,7 @@ point the settings at its own content.
   `UGSTN_DepthMarkerSubsystem::PushStyleOverride` (a local override, per machine).
 - A Blueprint child of `UGSTN_DepthMarkerPresenter` overrides `OnMarkerUpdated(View, Holder)` and can drive any actor or Niagara
   system (the diegetic option); `Holder` is the transient actor that owns presenter components.
-- A Blueprint child of `UGSTN_DepthTargetSelector` overrides `BuildProbe` / `ChooseTarget`; the maths stay callable through
+- A Blueprint child of `UGSTN_DepthTargetSelector` overrides `BuildProbe` / `ChooseTarget` / `ChooseApproach`; the maths stay callable through
   `UGSTN_DepthMarkerMath`.
 
 ## Replacing content
@@ -71,9 +94,12 @@ None declared (spec §6.4). The target filter reads `Surface.Behaviour.*` throug
 
 ## Tests
 
-`GSTNDepthMarker.Core.*`: every test runs with several Up vectors (flipped, sideways, diagonal) so a hidden world-Z assumption fails.
-`GSTNDepthMarker.Runtime.*` (headless): scheduler cap, ranking, adapters, dedicated-server rule, replication flag, excluded hits, style
-validation and a subsystem tick smoke test in a throwaway game world.
+`GSTNDepthMarker.Core.*` (30): every test runs with several Up vectors (flipped, sideways, diagonal) so a hidden world-Z assumption
+fails; the approach marker has `ApproachMarkerOnHigherPlatformPlane`, `NoApproachWhenNotMovingToward`,
+`ApproachUsesVolumePlaneWhenPresent`, `ApproachHysteresisNoFlicker`, `ApproachNeverDuplicatesPrimaryPlane`, `ApproachProbePatternFollowsUp`.
+`GSTNDepthMarker.Runtime.*` (15, headless): scheduler cap, ranking, adapters, dedicated-server rule, replication flag, excluded hits,
+style validation, a subsystem tick smoke test, the trace cap with approach probes, approach probes as lowest priority, plane component
+containment and projection, approach style validation.
 
 ## Known limits (v0.1)
 

@@ -7,6 +7,8 @@
 #include "Engine/World.h"
 #include "GSTN_DepthMarkerComponent.h"
 #include "GSTN_DepthMarkerMath.h"
+#include "GSTN_DepthMarkerPlane.h"
+#include "GSTN_DepthMarkerPresenter.h"
 #include "GSTN_DepthMarkerScheduler.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "GSTN_DepthMarkerStyle.h"
@@ -14,6 +16,7 @@
 #include "GSTN_DepthSubject.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -273,6 +276,156 @@ GSTN_DMR_TEST(SubsystemTicksWithoutContent)
 	TestTrue(TEXT("within the trace cap"), Subsystem->GetLastTraceCount() <= UGSTN_DepthMarkerSettings::Get().MaxTracesPerFrame);
 	Subsystem->UnregisterMarker(Marker);
 	TestEqual(TEXT("unregistered"), Subsystem->GetNumMarkers(), 0);
+	return true;
+}
+
+namespace GSTNDepthMarkerRuntimeTest
+{
+	/** An actor that counts as airborne for the generic adapter (it moves along Up) and carries a marker for everyone to see */
+	static UGSTN_DepthMarkerComponent* SpawnAirborneMarker(UWorld* World, UGSTN_DepthMarkerSubsystem* Subsystem, const FVector& Location)
+	{
+		AActor* Actor = World->SpawnActor<AActor>(Location, FRotator::ZeroRotator);
+		USceneComponent* Root = NewObject<USceneComponent>(Actor, TEXT("Root"));
+		Actor->SetRootComponent(Root);
+		Root->RegisterComponent();
+		Root->ComponentVelocity = FVector(0, 0, 500);
+		UGSTN_DepthMarkerComponent* Marker = NewObject<UGSTN_DepthMarkerComponent>(Actor);
+		Marker->Audience = EGSTN_DepthAudience::All;
+		Marker->RegisterComponent();
+		Subsystem->RegisterMarker(Marker);
+		return Marker;
+	}
+
+	/** Sets a console variable for the length of a scope */
+	struct FScopedCVar
+	{
+		IConsoleVariable* Variable = nullptr;
+		int32 Previous = 0;
+
+		FScopedCVar(const TCHAR* Name, int32 Value)
+		{
+			Variable = IConsoleManager::Get().FindConsoleVariable(Name);
+			if (Variable)
+			{
+				Previous = Variable->GetInt();
+				Variable->Set(Value, ECVF_SetByCode);
+			}
+		}
+
+		~FScopedCVar()
+		{
+			if (Variable)
+			{
+				Variable->Set(Previous, ECVF_SetByCode);
+			}
+		}
+	};
+}
+
+GSTN_DMR_TEST(ApproachProbesRespectTraceCap)
+{
+	FRig Rig;
+	UGSTN_DepthMarkerSubsystem* Subsystem = UGSTN_DepthMarkerSubsystem::Get(Rig.World);
+	if (!TestNotNull(TEXT("subsystem"), Subsystem))
+	{
+		return false;
+	}
+	for (int32 Index = 0; Index < 20; ++Index)
+	{
+		SpawnAirborneMarker(Rig.World, Subsystem, FVector(Index * 150.0, 0, 400));
+	}
+	const int32 Cap = UGSTN_DepthMarkerSettings::Get().MaxTracesPerFrame;
+	int32 Worst = 0;
+	for (int32 Frame = 0; Frame < 12; ++Frame)
+	{
+		Subsystem->TickMarkers(0.016f);
+		Worst = FMath::Max(Worst, Subsystem->GetLastTraceCount());
+	}
+	TestTrue(*FString::Printf(TEXT("primary, footprint and approach probes together stay within the cap (%d of %d)"), Worst, Cap), Worst <= Cap);
+	TestEqual(TEXT("markers beyond MaxMarkers are not drawn"), Subsystem->GetLastActiveCount(), FMath::Min(20, UGSTN_DepthMarkerSettings::Get().MaxMarkers));
+	return true;
+}
+
+GSTN_DMR_TEST(ApproachProbesAreLowestPriority)
+{
+	FRig Rig;
+	UGSTN_DepthMarkerSubsystem* Subsystem = UGSTN_DepthMarkerSubsystem::Get(Rig.World);
+	if (!TestNotNull(TEXT("subsystem"), Subsystem))
+	{
+		return false;
+	}
+	SpawnAirborneMarker(Rig.World, Subsystem, FVector(0, 0, 400));
+
+	{
+		// One trace per frame: the primary probe takes it, the approach probes get nothing
+		FScopedCVar Cap(TEXT("gstn.DepthMarker.TracesPerFrame"), 1);
+		Subsystem->TickMarkers(0.016f);
+		TestEqual(TEXT("the primary probe goes first"), Subsystem->GetLastTraceCount(), 1);
+	}
+	{
+		// The primary probe is still in flight: all the budget left goes to approach probes, a few slots per tick
+		FScopedCVar Cap(TEXT("gstn.DepthMarker.TracesPerFrame"), 8);
+		Subsystem->TickMarkers(0.016f);
+		const int32 PerTick = UGSTN_DepthMarkerSettings::Get().DefaultParams.ApproachProbesPerTick;
+		TestEqual(TEXT("approach probes are staggered: only a few slots per tick"), Subsystem->GetLastTraceCount(), PerTick);
+	}
+	return true;
+}
+
+GSTN_DMR_TEST(PlaneComponentContainsAndProjects)
+{
+	FRig Rig;
+	UGSTN_DepthMarkerSubsystem* Subsystem = UGSTN_DepthMarkerSubsystem::Get(Rig.World);
+	if (!TestNotNull(TEXT("subsystem"), Subsystem))
+	{
+		return false;
+	}
+	// A volume tilted 30 degrees about X: its plane follows its own up, not world Z
+	AGSTN_DepthMarkerPlaneVolume* Volume = Rig.World->SpawnActor<AGSTN_DepthMarkerPlaneVolume>(FVector(100, 200, 300), FRotator(0, 0, 30));
+	if (!TestNotNull(TEXT("volume"), Volume))
+	{
+		return false;
+	}
+	UGSTN_DepthMarkerPlaneComponent* Plane = Volume->Plane;
+	Plane->SetBoxExtent(FVector(100, 100, 50));
+	Plane->PlaneOffsetCm = 10.f;
+
+	FVector Point;
+	FVector Normal;
+	Plane->GetProjectionPlane(Point, Normal);
+	TestTrue(TEXT("the normal is the component's up"), Normal.Equals(Plane->GetUpVector(), 1.e-4));
+	TestTrue(TEXT("the plane sits on the top face plus the offset"), Point.Equals(Plane->GetComponentLocation() + Normal * 60.0, 0.01));
+	TestTrue(TEXT("inside"), Plane->ContainsPoint(Plane->GetComponentLocation() + Plane->GetUpVector() * 20.0));
+	TestFalse(TEXT("above the box"), Plane->ContainsPoint(Plane->GetComponentLocation() + Plane->GetUpVector() * 80.0));
+	TestFalse(TEXT("beside the box"), Plane->ContainsPoint(Plane->GetComponentLocation() + Plane->GetRightVector() * 150.0));
+
+	const FGSTN_DepthPlaneCandidate Candidate = Plane->MakeCandidate();
+	TestTrue(TEXT("an explicit candidate whose key cannot clash with a hit component"), Candidate.bExplicit && Candidate.SurfaceKey < 0);
+
+	Subsystem->RegisterPlane(Plane);
+	TestEqual(TEXT("registered"), Subsystem->GetNumPlanes(), 1);
+	Subsystem->UnregisterPlane(Plane);
+	TestEqual(TEXT("unregistered"), Subsystem->GetNumPlanes(), 0);
+	return true;
+}
+
+GSTN_DMR_TEST(ApproachStyleValidates)
+{
+	UGSTN_DepthMarkerStyle* Style = NewObject<UGSTN_DepthMarkerStyle>(GetTransientPackage());
+	Style->PopulateApproachPresenters();
+	TArray<FText> Errors;
+	TestTrue(TEXT("the built-in approach look validates"), Style->Validate(Errors));
+	bool bAllApproach = Style->Presenters.Num() > 0;
+	for (const UGSTN_DepthMarkerPresenter* Presenter : Style->Presenters)
+	{
+		bAllApproach &= Presenter && Presenter->Layer == EGSTN_DepthLayer::Approach;
+	}
+	TestTrue(TEXT("every presenter draws the approach layer"), bAllApproach);
+
+	UGSTN_DepthMarkerStyle* Primary = NewObject<UGSTN_DepthMarkerStyle>(GetTransientPackage());
+	Primary->PopulateDefaultPresenters();
+	TestTrue(TEXT("a style has an approach slot, empty by default"), Primary->ApproachStyle.IsNull());
+	TestFalse(TEXT("the approach colour differs from the default"), Style->DefaultTint.Equals(Primary->DefaultTint, 0.01f));
 	return true;
 }
 

@@ -604,6 +604,259 @@ GSTN_DM_TEST(AboveFollowsGravityFlip)
 	return true;
 }
 
+// ---- Approach marker (marker B) ----
+
+namespace GSTNDepthMarkerCoreTest
+{
+	/** A walkable top whose sampled point lies Along over the ground plane and Lateral to the side */
+	static FGSTN_DepthPlaneCandidate Plane(const FCtx& C, double Along, double Lateral, int64 Key, bool bExplicit = false, int32 Priority = 0)
+	{
+		FGSTN_DepthPlaneCandidate P;
+		P.Point = C.At(Along, Lateral);
+		P.Normal = C.Up;
+		P.SurfaceKey = Key;
+		P.bExplicit = bExplicit;
+		P.Priority = Priority;
+		return P;
+	}
+
+	/** The primary (below) target: ground key 1 at Along 0 under a character at Along 300 (every approach test stands there) */
+	static FGSTN_DepthTarget Primary(FCtx& C, const FGSTN_DepthSubjectState& S)
+	{
+		return C.Eval(S, { C.Cand(S, 300.0, 1) }, 0.0).Below;
+	}
+
+	static bool Approach(FCtx& C, const FGSTN_DepthSubjectState& S, const FGSTN_DepthTarget& Prim, const TArray<FGSTN_DepthPlaneCandidate>& Probed,
+		const TArray<FGSTN_DepthPlaneCandidate>& Explicit, double Time, FGSTN_DepthTarget& Out)
+	{
+		return FGSTN_DepthMarkerMath::EvaluateApproach(C.St, S, C.P, Prim, Probed, Explicit, Time, Out);
+	}
+}
+
+GSTN_DM_TEST(ApproachMarkerOnHigherPlatformPlane)
+{
+	GSTN_DM_FOR_EACH_UP
+	{
+		FGSTN_DepthSubjectState S = C.Subject(300, 0, true, false);
+		S.Velocity = C.Side * 300.0;
+		const FGSTN_DepthTarget Prim = Primary(C, S);
+		CHECK(Prim.Kind == EGSTN_DepthTargetKind::Surface && Prim.SurfaceKey == 1);
+
+		// A platform 150 over the ground (150 below the feet), its nearest sampled point 250 cm to the side
+		FGSTN_DepthTarget A;
+		CHECK(Approach(C, S, Prim, { Plane(C, 150, 250, 2) }, {}, 0.0, A));
+		CHECK(A.Kind == EGSTN_DepthTargetKind::ApproachPlane && A.State == EGSTN_DepthMarkerState::Approach && A.SurfaceKey == 2);
+		// Marker B hangs in the air: the character's column projected onto that plane, beyond the platform's edge
+		CHECK(A.Point.Equals(C.At(150, 0), 0.01));
+		CHECK(FMath::IsNearlyEqual(A.Height, 150.f, 0.01f));
+		// Both markers at once: the primary one is untouched
+		CHECK(Prim.Point.Equals(C.At(0, 0), 0.01));
+	}
+	return true;
+}
+
+GSTN_DM_TEST(NoApproachWhenNotMovingToward)
+{
+	GSTN_DM_FOR_EACH_UP
+	{
+		FGSTN_DepthSubjectState S = C.Subject(300, 0, true, false);
+		const FGSTN_DepthTarget Prim = Primary(C, S);
+		FGSTN_DepthTarget A;
+
+		// Standing still, 300 cm away: neither approaching nor close
+		CHECK(!Approach(C, S, Prim, { Plane(C, 150, 300, 2) }, {}, 0.0, A));
+		// Moving away
+		S.Velocity = -C.Side * 300.0;
+		CHECK(!Approach(C, S, Prim, { Plane(C, 150, 300, 2) }, {}, 0.1, A));
+		// Moving towards but too far
+		S.Velocity = C.Side * 300.0;
+		CHECK(!Approach(C, S, Prim, { Plane(C, 150, 700, 2) }, {}, 0.2, A));
+		// Moving towards a plane that is higher than the feet by more than the near-above tolerance
+		CHECK(!Approach(C, S, Prim, { Plane(C, 400, 250, 2) }, {}, 0.3, A));
+		// An underside (a ceiling seen from below) or a wall is no platform, however near
+		S.Velocity = C.Side * 300.0;
+		FGSTN_DepthPlaneCandidate Ceiling = Plane(C, 150, 100, 2);
+		Ceiling.Normal = -C.Up;
+		CHECK(!Approach(C, S, Prim, { Ceiling }, {}, 0.35, A));
+		FGSTN_DepthPlaneCandidate Wall = Plane(C, 150, 100, 2);
+		Wall.Normal = C.Side;
+		CHECK(!Approach(C, S, Prim, { Wall }, {}, 0.36, A));
+		// Standing still but within the min distance: shown
+		S.Velocity = FVector::ZeroVector;
+		CHECK(Approach(C, S, Prim, { Plane(C, 150, 100, 2) }, {}, 0.4, A));
+		// Grounded: never
+		S.bAirborne = false;
+		S.bGrounded = true;
+		CHECK(!Approach(C, S, Prim, { Plane(C, 150, 100, 2) }, {}, 0.5, A));
+	}
+	return true;
+}
+
+GSTN_DM_TEST(ApproachUsesVolumePlaneWhenPresent)
+{
+	GSTN_DM_FOR_EACH_UP
+	{
+		FGSTN_DepthSubjectState S = C.Subject(300, 0, true, false);
+		S.Velocity = C.Side * 300.0;
+		const FGSTN_DepthTarget Prim = Primary(C, S);
+		FGSTN_DepthTarget A;
+
+		// Probing alone finds the platform
+		CHECK(Approach(C, S, Prim, { Plane(C, 150, 100, 2) }, {}, 0.0, A) && A.SurfaceKey == 2);
+		C.St.ClearApproach();
+
+		// A designer plane that overlaps the character wins over the probed platform, whatever the distances
+		CHECK(Approach(C, S, Prim, { Plane(C, 150, 100, 2) }, { Plane(C, 100, 0, 9, true) }, 1.0, A));
+		CHECK(A.SurfaceKey == 9 && A.Point.Equals(C.At(100, 0), 0.01) && FMath::IsNearlyEqual(A.EdgeAlpha, 1.f));
+		C.St.ClearApproach();
+
+		// Among designer planes the priority decides
+		CHECK(Approach(C, S, Prim, {}, { Plane(C, 100, 0, 9, true, 1), Plane(C, 200, 0, 10, true, 5) }, 2.0, A));
+		CHECK(A.SurfaceKey == 10 && A.Point.Equals(C.At(200, 0), 0.01));
+
+		// It is the fallback too: no probe found anything, the declared plane still shows
+		C.St.ClearApproach();
+		CHECK(Approach(C, S, Prim, {}, { Plane(C, 100, 0, 9, true) }, 3.0, A) && A.SurfaceKey == 9);
+	}
+	return true;
+}
+
+GSTN_DM_TEST(ApproachHysteresisNoFlicker)
+{
+	GSTN_DM_FOR_EACH_UP
+	{
+		// One platform at a fixed place; the character moves, so the edge distance is the character's lateral position
+		const double PlatformLateral = 1000.0;
+		FGSTN_DepthSubjectState S = C.Subject(300, PlatformLateral - 480.0, true, false);
+		S.Velocity = C.Side * 300.0;
+		const FGSTN_DepthTarget Prim = Primary(C, S);
+		const FGSTN_DepthPlaneCandidate Platform = Plane(C, 150, PlatformLateral, 2);
+		FGSTN_DepthTarget A;
+		CHECK(Approach(C, S, Prim, { Platform }, {}, 0.0, A));
+
+		// Edge distance jittering around the show distance (500): it never drops out once shown
+		int32 Drops = 0;
+		for (int32 Frame = 1; Frame <= 20; ++Frame)
+		{
+			S.Feet = C.At(300, PlatformLateral - ((Frame % 2) ? 510.0 : 490.0));
+			if (!Approach(C, S, Prim, { Platform }, {}, Frame * 0.016, A) || A.SurfaceKey != 2)
+			{
+				++Drops;
+			}
+		}
+		CHECK(Drops == 0);
+
+		// Between the show and hide distances, no longer moving towards it: still shown (hysteresis)
+		S.Velocity = FVector::ZeroVector;
+		S.Feet = C.At(300, PlatformLateral - 540.0);
+		CHECK(Approach(C, S, Prim, { Platform }, {}, 1.0, A));
+
+		// Beyond the hide distance: gone at once, even though a probe still sees the platform
+		S.Feet = C.At(300, PlatformLateral - 650.0);
+		CHECK(!Approach(C, S, Prim, { Platform }, {}, 1.1, A));
+		CHECK(!C.St.bApproachShown);
+
+		// Two platforms almost equally near: the shown one is not swapped back and forth while the nearest alternates
+		C.St.ClearApproach();
+		S.Velocity = FVector::ZeroVector;
+		int64 First = 0;
+		int32 Swaps = 0;
+		for (int32 Frame = 0; Frame < 12; ++Frame)
+		{
+			S.Feet = C.At(300, (Frame % 2) ? 5.0 : -5.0);
+			const TArray<FGSTN_DepthPlaneCandidate> Both = { Plane(C, 150, 100, 2), Plane(C, 150, -100, 3) };
+			if (Approach(C, S, Prim, Both, {}, 2.0 + Frame * 0.016, A))
+			{
+				if (!First)
+				{
+					First = A.SurfaceKey;
+				}
+				Swaps += A.SurfaceKey != First;
+			}
+		}
+		CHECK(First != 0 && Swaps == 0);
+
+		// Probes are staggered: a frame without any candidate holds the plane, a late one does not
+		FGSTN_DepthSubjectState T = C.Subject(300, 0, true, false);
+		C.St.ClearApproach();
+		CHECK(Approach(C, T, Prim, { Plane(C, 150, 100, 2) }, {}, 10.0, A));
+		CHECK(Approach(C, T, Prim, {}, {}, 10.1, A) && A.SurfaceKey == 2);
+		CHECK(!Approach(C, T, Prim, {}, {}, 10.5, A));
+	}
+	return true;
+}
+
+GSTN_DM_TEST(ApproachNeverDuplicatesPrimaryPlane)
+{
+	GSTN_DM_FOR_EACH_UP
+	{
+		FGSTN_DepthSubjectState S = C.Subject(300, 0, true, false);
+		S.Velocity = C.Side * 300.0;
+		const FGSTN_DepthTarget Prim = Primary(C, S);
+		FGSTN_DepthTarget A;
+
+		// The primary's own surface, seen from another probe point
+		CHECK(!Approach(C, S, Prim, { Plane(C, 0, 200, 1) }, {}, 0.0, A));
+		// Another component coplanar with it
+		CHECK(!Approach(C, S, Prim, { Plane(C, 1, 200, 7) }, {}, 0.1, A));
+		// A designer plane on the primary's surface
+		CHECK(!Approach(C, S, Prim, {}, { Plane(C, 0, 0, 1, true) }, 0.2, A));
+		// A designer plane coplanar with the primary
+		CHECK(!Approach(C, S, Prim, {}, { Plane(C, 0, 0, 5, true) }, 0.3, A));
+		// A step below the minimum rise adds nothing; a real step does
+		CHECK(!Approach(C, S, Prim, { Plane(C, 20, 200, 8) }, {}, 0.4, A));
+		CHECK(Approach(C, S, Prim, { Plane(C, 60, 200, 8) }, {}, 0.5, A) && A.SurfaceKey == 8);
+		// The result is never the primary's plane
+		CHECK(A.SurfaceKey != Prim.SurfaceKey && !FMath::IsNearlyEqual(A.Height, Prim.Height, 1.f));
+
+		// The primary's surface sampled on both sides of the column is rejected on both
+		C.St.ClearApproach();
+		CHECK(!Approach(C, S, Prim, { Plane(C, 0, 300, 1), Plane(C, 5, -300, 1) }, {}, 0.6, A));
+	}
+	return true;
+}
+
+GSTN_DM_TEST(ApproachProbePatternFollowsUp)
+{
+	GSTN_DM_FOR_EACH_UP
+	{
+		FGSTN_DepthSubjectState S = C.Subject(300, 0, true, false);
+		const int32 Ring = C.P.ApproachRingProbes;
+		CHECK(FGSTN_DepthMarkerMath::NumApproachProbeSlots(C.P) == Ring + C.P.ApproachVelocityProbes);
+
+		// A slow character: only the ring
+		int32 Valid = 0;
+		for (int32 Slot = 0; Slot < FGSTN_DepthMarkerMath::NumApproachProbeSlots(C.P); ++Slot)
+		{
+			FVector Start;
+			FVector End;
+			Valid += FGSTN_DepthMarkerMath::ApproachProbeSegment(S, C.P, Slot, Start, End) ? 1 : 0;
+		}
+		CHECK(Valid == Ring);
+
+		// Moving: the velocity probes lead the way, along the horizontal velocity
+		S.Velocity = C.Side * 400.0 + C.Up * 200.0;
+		FVector Start;
+		FVector End;
+		CHECK(FGSTN_DepthMarkerMath::ApproachProbeSegment(S, C.P, Ring + 1, Start, End));
+		CHECK((Start - (S.Feet + C.Up * C.P.ApproachNearAboveFeetCm)).Equals(C.Side * C.P.ApproachDistanceCm, 0.01));
+		for (int32 Slot = 0; Slot < FGSTN_DepthMarkerMath::NumApproachProbeSlots(C.P); ++Slot)
+		{
+			CHECK(FGSTN_DepthMarkerMath::ApproachProbeSegment(S, C.P, Slot, Start, End));
+			// Every probe starts level with the feet (plus the near-above tolerance) and runs straight along gravity
+			CHECK(FMath::Abs(FVector::DotProduct(Start - S.Feet, C.Up) - C.P.ApproachNearAboveFeetCm) < 0.01);
+			CHECK((End - Start).GetSafeNormal().Equals(-C.Up, 1.e-4));
+		}
+		CHECK(!FGSTN_DepthMarkerMath::ApproachProbeSegment(S, C.P, FGSTN_DepthMarkerMath::NumApproachProbeSlots(C.P), Start, End));
+
+		// Designer plane overlap test on an oriented box
+		const FTransform Box(FQuat::FindBetweenNormals(FVector::UpVector, C.Up), C.Origin);
+		CHECK(FGSTN_DepthMarkerMath::PointInOrientedBox(C.At(10, 20), Box, FVector(100, 100, 50)));
+		CHECK(!FGSTN_DepthMarkerMath::PointInOrientedBox(C.At(80, 0), Box, FVector(100, 100, 50)));
+	}
+	return true;
+}
+
 #undef CHECK
 
 #endif // WITH_DEV_AUTOMATION_TESTS

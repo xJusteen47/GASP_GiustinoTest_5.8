@@ -24,6 +24,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category = "DepthMarker|Style")
 	TArray<TObjectPtr<UGSTN_DepthMarkerPresenter>> Presenters;
 
+	/**
+	 * The look of the approach marker B (the platform plane hanging beyond a nearby higher platform's edge): its own slot, so it can
+	 * be another colour or effect. Its presenters are forced onto the approach layer. Empty = the built-in approach look.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Style")
+	TSoftObjectPtr<UGSTN_DepthMarkerStyle> ApproachStyle;
+
 	/** Fade and visibility thresholds over height (§3) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Style")
 	FGSTN_DepthFadeParams Fade;
@@ -46,6 +53,10 @@ public:
 	/** The built-in look: ground decal, no-ground ring, above ring and the two dashed lines, all from engine primitives */
 	UFUNCTION(BlueprintCallable, Category = "DepthMarker")
 	void PopulateDefaultPresenters();
+
+	/** The built-in approach look: a ring and a dashed line in another colour, drawn in the Approach state of the approach layer */
+	UFUNCTION(BlueprintCallable, Category = "DepthMarker")
+	void PopulateApproachPresenters();
 
 	/** Problems of the style as text; runtime-safe (an Editor module can wrap it in the data validator). True when none */
 	bool Validate(TArray<FText>& OutErrors) const;

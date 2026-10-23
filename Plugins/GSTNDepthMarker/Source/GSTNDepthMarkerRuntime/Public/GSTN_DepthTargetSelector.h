@@ -37,7 +37,19 @@ public:
 		const FGSTN_DepthFootprintHit& Footprint, const FGSTN_DepthReferenceOverride& Override, UPARAM(ref) FGSTN_DepthSelectionState& State,
 		double TimeSeconds, bool bProbed) const;
 
+	/**
+	 * The approach marker B: at most one nearby higher platform plane, from the probed candidates and the designer planes that
+	 * overlap the character (they win). Primary is the below target. Returns a target of Kind None when there is none.
+	 */
+	UFUNCTION(BlueprintNativeEvent, Category = "DepthMarker")
+	FGSTN_DepthTarget ChooseApproach(const FGSTN_DepthSubjectState& Subject, const FGSTN_DepthTarget& Primary,
+		const TArray<FGSTN_DepthPlaneCandidate>& Probed, const TArray<FGSTN_DepthPlaneCandidate>& Explicit,
+		UPARAM(ref) FGSTN_DepthSelectionState& State, double TimeSeconds) const;
+
 protected:
+	virtual FGSTN_DepthTarget ChooseApproach_Implementation(const FGSTN_DepthSubjectState& Subject, const FGSTN_DepthTarget& Primary,
+		const TArray<FGSTN_DepthPlaneCandidate>& Probed, const TArray<FGSTN_DepthPlaneCandidate>& Explicit,
+		FGSTN_DepthSelectionState& State, double TimeSeconds) const;
 	virtual void BuildProbe_Implementation(const FGSTN_DepthSubjectState& Subject, FVector& OutStart, FVector& OutEnd) const;
 	virtual FGSTN_DepthResult ChooseTarget_Implementation(const FGSTN_DepthSubjectState& Subject, const TArray<FGSTN_DepthCandidate>& Candidates,
 		const FGSTN_DepthFootprintHit& Footprint, const FGSTN_DepthReferenceOverride& Override, FGSTN_DepthSelectionState& State,

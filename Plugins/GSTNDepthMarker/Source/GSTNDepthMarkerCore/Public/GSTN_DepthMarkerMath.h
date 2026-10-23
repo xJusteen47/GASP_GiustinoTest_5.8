@@ -84,6 +84,37 @@ struct GSTNDEPTHMARKERCORE_API FGSTN_DepthMarkerMath
 	static FGSTN_DepthTarget ReprojectTarget(const FGSTN_DepthTarget& Target, const FTransform& CurrentComponentTransform,
 		const FVector& Feet, const FVector& Up);
 
+	/**
+	 * Approach marker (marker B). Chooses at most one nearby higher platform and returns its plane as a target: the character
+	 * column (Feet + Up * S) projected onto it, which hangs in the air beyond the platform edge.
+	 *
+	 * Candidates: Probed are walkable tops found by the runtime probes around the character; Explicit are designer planes
+	 * that already overlap the character and win over probing. A plane is kept only when it is not above the feet by more than
+	 * ApproachNearAboveFeetCm, rises ApproachMinRiseCm..ApproachMaxRiseCm over the primary ground (Primary, the below target),
+	 * is not the primary plane (same surface key, or coplanar within CoplanarTolerance), and, if probed, its nearest sampled
+	 * point is within ApproachDistanceCm horizontally and the character moves towards it or is within ApproachCloseDistanceCm.
+	 * Score: nearest edge distance, then approach speed. Hysteresis: a shown plane is kept up to ApproachDistanceCm plus the hide
+	 * margin without the movement test, held ApproachHoldMs when no probe confirms it, and replaced only after
+	 * ApproachMinDwellMs by a challenger ApproachSwitchMarginCm nearer. Returns true and fills OutApproach when shown.
+	 */
+	static bool EvaluateApproach(FGSTN_DepthSelectionState& State, const FGSTN_DepthSubjectState& Subject, const FGSTN_DepthSelectorParams& Params,
+		const FGSTN_DepthTarget& Primary, const TArray<FGSTN_DepthPlaneCandidate>& Probed, const TArray<FGSTN_DepthPlaneCandidate>& Explicit,
+		double TimeSeconds, FGSTN_DepthTarget& OutApproach);
+
+	/** Number of approach probe slots: the ring plus the velocity probes */
+	static int32 NumApproachProbeSlots(const FGSTN_DepthSelectorParams& Params);
+
+	/**
+	 * The segment of one approach probe slot: a downward line that starts ApproachNearAboveFeetCm above the feet at a ring offset
+	 * (or ahead along the horizontal velocity) and reaches ApproachProbeDepthCm below that. False for a velocity slot while the
+	 * character is slower than ApproachMinTowardSpeed.
+	 */
+	static bool ApproachProbeSegment(const FGSTN_DepthSubjectState& Subject, const FGSTN_DepthSelectorParams& Params, int32 Slot,
+		FVector& OutStart, FVector& OutEnd);
+
+	/** True when Point is inside the oriented box (transform without scale, half extents already scaled) */
+	static bool PointInOrientedBox(const FVector& Point, const FTransform& BoxTransform, const FVector& HalfExtent);
+
 	/** Alpha and radius factors over the height above the target (linear between the near and far values) */
 	static void ComputeFade(float Height, const FGSTN_DepthFadeParams& Fade, float& OutAlpha, float& OutRadiusScale);
 
