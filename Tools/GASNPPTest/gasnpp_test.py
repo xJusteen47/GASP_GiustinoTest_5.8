@@ -2330,3 +2330,43 @@ def scenario_external_launch_jump(client=1, launch_speed=900.0):
         (TB + 9.0, run.finish()),
     ]
     run.run(steps)
+
+
+IA.setdefault('sprint', '/Game/Input/IA_Sprint')
+IA.setdefault('crouch', '/Game/Input/IA_Crouch')
+
+
+def scenario_slide_jump(client=1, repeats=10):
+    """Owner bug report 2026-10-23: sprint, crouch to slide, jump during the slide, and at some point the client is corrected. Repeats the sequence
+    `repeats` times with np.LogReconcileField on and attributes the reconciles of the whole run: mismatches, unexplained of ours, by model
+    (mover / asc / combat) and the logged differing fields (see the lines in the report). Strict check: no unexplained reconcile of ours; the Mover
+    corrections are listed, not judged (the cause is in the Blueprint modes if they show a movement mode / slide state field)."""
+    run = _Run('slide_jump', client, judge_reconciles=False)
+    marks = {}
+    for w in worlds():
+        unreal.SystemLibrary.execute_console_command(w, 'np.LogReconcileField 1')
+    steps = [(0.5, _mark(run, marks, 'start'))]
+    t = 1.0
+    for i in range(repeats):
+        steps += [
+            (t, lambda: ('walk + sprint', (hold(client, 'move', (0, 1, 0)), hold(client, 'sprint', (1, 0, 0))))),
+            (t + 1.3, lambda: ('crouch: slide', hold(client, 'crouch', (1, 0, 0)))),
+            (t + 1.7, lambda: ('jump during the slide', press(client, 'jump'))),
+            (t + 2.0, lambda: ('release crouch', release(client, 'crouch'))),
+            (t + 2.4, lambda: ('release', (release(client, 'sprint'), release(client, 'move')))),
+        ]
+        t += 3.6
+    def attribute():
+        r = report_reconciles(marks['start']) if marks.get('start') is not None else None
+        if r is None:
+            return False, 'log not readable'
+        run.note(f"reconciles: {r['mismatches']} mismatches, unexplained of ours {r['unexplained_ours']} {r['unexplained_by_model']}, forced {r['forced']}, offset changes {r['offset_changes']}")
+        for line in (r['unexplained_lines'] or [])[:12]:
+            run.note(f'  {line}')
+        return r['unexplained_ours'] == 0, f"{r['unexplained_ours']} unexplained of ours {r['unexplained_by_model']}; mover-side total mismatches {r['mismatches']}"
+    steps += [
+        (t, run.at('no unexplained reconcile of ours over the repeats', attribute)),
+        (t + 0.5, run.finish()),
+    ]
+    run.run(steps)
+
