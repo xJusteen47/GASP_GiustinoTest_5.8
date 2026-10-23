@@ -47,6 +47,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Modalità di gioco (Livelli, Spedizione, PvP) | [game-modes.md](game-modes.md) |
 | Indicatore di profondità | [depth-marker.md](depth-marker.md) |
 | Telecamera | [camera.md](camera.md) |
+| Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
 
 
 ---
@@ -649,6 +650,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 22. Se un nemico e un alleato (o un oggetto) sono entrambi a portata del tasto interazione, quale ha la precedenza?
    Perché conta: lo stesso tasto fa afferrare, montare o raccogliere; un errore di contesto è frustrante.
    Ipotesi nella specifica: vince il più vicino alla direzione di sguardo; a parità, ordine dati: afferra, raccogli, monta.
+   *23/10: ora vale un solo bersaglio, quello puntato ([interaction.md](interaction.md)); la precedenza tra significati resta la domanda INT.5.*
    Nota (2026-10-22, dopo la risposta a M6.23): ora tocco e pressione lunga hanno significati diversi. Con un solo bersaglio alla volta la presa parte subito alla pressione; un'alternativa è proiettare insieme presa e raccolta e far partire la presa al rilascio del tocco, così nemico e oggetto non competono più, al costo di qualche frame di ritardo sulla presa.
    
 23. Tenere premuto il tasto di interazione deve dare la presa pesante (più lenta, per bersagli più pesanti)?
@@ -1324,3 +1326,34 @@ CAM.5. Online e in locale: **una telecamera per giocatore** (come ipotizzato) o 
 CAM.6. Quando un muro o un soffitto si mette tra la telecamera lontana e il personaggio, preferisci che l'ostacolo **sfumi** (la telecamera resta ferma) o che la telecamera **si avvicini** al personaggio?
    Perché conta: avvicinare la telecamera in un platform 3D distrugge la lettura delle distanze, ma sfumare richiede materiali compatibili e che il designer marchi i muri.
    Ipotesi nella specifica: sfumare per Follow e sezioni lontane, avvicinarsi solo per ostacoli non sfumabili vicini e in modalità spalla; una sezione può scegliere il contrario ([camera.md](camera.md) §7.1).
+
+## Interazione: cosa si sta puntando (23/10)
+
+Specifica: [interaction.md](interaction.md). Già deciso da te il 23/10 (Mod.20): un plugin dedicato, `GSTNInteract`, perché con moltissime armi per terra sia sempre chiaro su quale agisce il tasto; il contratto resta un'interfaccia più i gameplay tag. INT.5 riprende M6.22. Se l'ipotesi va bene basta rispondere "ok".
+
+INT.1. Con la telecamera lontana alla Super Mario 3D World, il giocatore "punta" con il **personaggio** (direzione dello stick, poi quella in cui guarda) oppure con il
+**centro dello schermo**? Con la mira da spalla di certe armi o abilità si usa la direzione di mira?
+   Perché conta: il centro dello schermo richiederebbe la posizione della telecamera nella simulazione, che oggi non c'è; lo stick è già nell'input.
+   Ipotesi nella specifica: personaggio (stick, poi direzione in cui guarda); direzione di mira solo con la mira da telecamera attiva ([interaction.md](interaction.md) §2.1).
+
+INT.2. Serve un **tasto per scorrere il bersaglio** quando due oggetti sono quasi alla stessa distanza e direzione, o basta spostarsi un poco?
+   Perché conta: è un comando in più da legare a un tasto e un piccolo stato nel frammento; senza di esso la scelta dipende solo da dove ci si mette.
+   Ipotesi nella specifica: nessun tasto nella prima versione, disponibile come opzione a dati ([interaction.md](interaction.md) §2.5).
+
+INT.3. Gli altri oggetti vicini (non quello selezionato) devono avere un **segnalino tenue**, oppure si evidenzia solo il bersaglio?
+   Perché conta: con tante armi per terra i segnalini aiutano a capire cosa c'è, ma possono aumentare la confusione che vuoi evitare, e costano disegno sull'host.
+   Ipotesi nella specifica: spenti di default, evidenziazione forte solo sul bersaglio; i segnalini (massimo 8) sono un'opzione dello stile ([interaction.md](interaction.md) §5).
+
+INT.4. Gli **alleati** (e in PvP gli avversari) vedono cosa stai puntando, per esempio con un contorno di colore diverso sull'oggetto che un compagno sta per raccogliere?
+   Perché conta: evita di contendersi lo stesso oggetto in cooperativa, ma aggiunge rumore visivo e, in PvP, regala informazione.
+   Ipotesi nella specifica: no, si disegna solo il bersaglio del giocatore locale; il dato è già replicato, quindi l'opzione costa solo presentazione ([interaction.md](interaction.md) §5).
+
+INT.5. Quando un **nemico afferrabile** e un **oggetto** a terra sono entrambi a portata, vince sempre il nemico (così il tocco afferra nel mezzo di uno scontro) oppure conta
+soprattutto ciò che si sta puntando? Qual è l'ordine di priorità tra afferrare, terminale, raccogliere oggetto, kit e montare?
+   Perché conta: è la domanda M6.22; con un nemico davanti, un tocco che non afferra sarebbe grave in combattimento, ma una priorità rigida impedisce di scegliere l'oggetto.
+   Ipotesi nella specifica: la priorità è un contributo al punteggio (non un'esclusione), ordine afferrare, terminale, raccogliere oggetto, kit, montare, tutto a dati ([interaction.md](interaction.md) §2.3).
+
+INT.6. Un oggetto che **non si può usare ora** (si porta già qualcosa, kit non compatibile, terminale non ancora attivo) viene evidenziato con un messaggio grigio che spiega il
+motivo, oppure viene ignorato come se non ci fosse?
+   Perché conta: mostrarlo spiega perché il tasto non fa nulla, ma un oggetto inutilizzabile può rubare il bersaglio a uno utilizzabile lì vicino.
+   Ipotesi nella specifica: ignorato, tranne dove il progettista lo segna (terminali bloccati), che mostrano il motivo senza tag attivo ([interaction.md](interaction.md) §2.2).

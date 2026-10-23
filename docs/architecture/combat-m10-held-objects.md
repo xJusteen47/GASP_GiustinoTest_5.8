@@ -202,7 +202,9 @@ Common rules:
   [M6](combat-m6-defence-links.md) §8, not redefined here). M6 §8 owns the arbitration. **Owner answer (2026-10-22, "per ora"):
   picking up an object needs the hold, the tap grabs.** So tap = `Command.Link.Grab` (and, by context, M7's Mount), **hold =
   this plugin's `Command.Link.Pickup`**, tap as grabber = `Command.Link.Release`; a tap with an object as target does nothing in
-  the first version. A context probe
+  the first version. The probe now lives in `GSTNInteract` ([interaction.md](interaction.md), owner answer to Mod.20, 2026-10-23: a
+  sticky focus on what the player points at, so one object among many is clearly the one the hold takes; the pickup ability takes its
+  target from the focus id, the hitbox only validates contact). Before that revision the text read: a context probe
   (`UGSTN_InteractMath::PickTarget`: nearest to the facing direction, ties by `InteractPriority`, default Grab, Pickup, Mount)
   projects **exactly one** `Interact.Target.*` tag. This plugin **declares `Interact.Target.Pickup`** (native,
   projected, modularity-and-tags.md §4.2), registers an `IGSTN_InteractCandidateProvider` for objects in reach (`PickupPriority`

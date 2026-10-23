@@ -341,7 +341,8 @@ its root, which is the anchor, so no animation is evaluated at runtime.
 - *Revision 2026-10-22 (owner direction §3):* `Input.Button.Interact` is **the same button as the grab and the object pickup**
   (the owner: "the grab button is also the interact button"). Mount is therefore one **contextual meaning** among several, chosen
   by the requirements below and by the context in reach: ally with `bCanBeMounted` in reach = Mount (this file), grabbable enemy = Grab
-  (M6), object in reach = Pickup ([M10](combat-m10-held-objects.md) §8). M6 §8 owns the arbitration: **tap** = `Command.Link.Grab`
+  (M6), object in reach = Pickup ([M10](combat-m10-held-objects.md) §8). The arbitration is owned by [interaction.md](interaction.md) (`GSTNInteract`, owner answer
+  to Mod.20, 2026-10-23: one sticky focus on what the player points at; mount is a snapshot provider with a priority below grab, *Proposal*, question INT.5): **tap** = `Command.Link.Grab`
   (and, by context, this file's Mount: *Proposal*, the owner decided only grab and pickup), **hold** = M10's `Command.Link.Pickup` (owner answer 2026-10-22: hold = pick up objects), **tap as grabber** = `Command.Link.Release`;
   a context probe (`UGSTN_InteractMath::PickTarget`, nearest to the facing direction, ties by `InteractPriority`) projects **exactly
   one** `Interact.Target.*` tag, and each meaning's binding requires its own tag, so bindings never compete.

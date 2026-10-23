@@ -34,6 +34,9 @@ equipment is not a part). The M3 seams that M11 needs are listed in `../combat-l
 M12 (mode framework + Levels) later needs two small combat seams that no current plan builds: an authoritative event key on
 the timeline that posts to the combat outbox (game-modes D-1) and the outbox-to-`Message.*` republisher of modularity §5 item 4
 (D-2). Neither blocks M4, M4b or M5; adding D-1 next to the timeline `Event` track in M4 would be cheaper than later.
+The interaction plugin ([`../interaction.md`](../interaction.md) §3.3, owner answer to Mod.20) asks M2/M3 for one generic seam: an opaque
+`uint64 TargetKey` in `FGSTN_ActivationContext`, stamped when a binding requires an `Interact.Target.*` tag (combat never names interaction).
+Cheap now, a fallback accessor exists if it is refused; the probe text of M6 §8 that the M6 plan will use is superseded by interaction.md.
 
 ## Cross-plan dependency map
 

@@ -57,7 +57,7 @@ optional plugins without touching `GSTNCombat`'s types again.
 *Decision*: a kit can be changed mid-match by picking one up. Flow (*Proposal*):
 
 1. A **kit pickup** in the world (`AGSTN_EquipmentPickup` with a kit payload, §12) registers an interact candidate. The interact
-   probe of [M6](combat-m6-defence-links.md) §8 projects `Interact.Target.Equipment` when it is the best target, and the
+   probe of [M6](combat-m6-defence-links.md) §8 projects `Interact.Target.Equipment` when it is the player's focus ([interaction.md](interaction.md): what the player points at), and the
    **hold** of the interact button (owner, 2026-10-22: hold = pick up objects) fires the kit's pickup ability, an ordinary timeline
    ability (`UGSTN_GA_EquipPickup`: a short "plug in" animation of the implant) granted to every pawn by the default ability set.
 2. At the ability's `RequestFrame` the **server** validates (pickup still there, reach, rules of the mode: `bAllowMidMatchKitChange`)

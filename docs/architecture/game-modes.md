@@ -131,9 +131,9 @@ seam in `GSTNCombatNP` that this spec needs. Without it the fallback is a server
 **The interact button.** A terminal is a third meaning of the Interact button after tap = grab and hold = pick up (owner, M6 §8). The probe projects exactly one
 `Interact.Target.*` tag per frame, so meanings never compete; the new leaf `Target.Objective` is declared by `GSTNModeVerbs`. *Proposal*: `Command.Mode.Interact`
 = `Hold(Interact, HoldFrames)` requiring that tag (a hold avoids accidental activation; data in the slot set, changing it costs no code). Tie priority with grab,
-pickup and mount (data `InteractPriority`, existing question M6.22) gets a fourth entry. **Objective availability is not simulated state**: a terminal that is not
-yet armed may look interactable on a lagging client; the server refuses and the ability cancels once. Mitigation: objectives arm long before players reach them
-and the UI greys them. If the mismatch rate (spike G5) is too high, the probe takes a replicated "armed" mask as a recorded input (more code, not v1).
+pickup and mount (data priority of [interaction.md](interaction.md) §2.3, questions M6.22 and INT.5) gets a fourth entry. **Objective availability** reaches the
+simulation as a stamped interact record (interaction.md §3.2): `GSTNModeVerbs` registers each mission prop and the mission framework arms it ahead of time by setting
+`ActionableFrom`, so host and clients see it become usable at the same frame. A prop removed late still gives one server refusal and one ability cancel.
 
 ### 2.5 Simulation caveat applied (modularity §1.3)
 
