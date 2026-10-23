@@ -61,6 +61,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	void ResetCounters();
 
+	/** Every simulation tick since the last call (resimulated ticks included), as a JSON array of
+	    {t: BaseSimTimeMs, loc, vel, mode, tags: Test.* tags}, then forgets them. The harness judges heights, speeds and tag spans on
+	    these, not on the editor tick, so a check does not depend on how many sim steps one editor frame holds. */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	FString DrainSimHistory();
+
 	/**
 	 * Authority only: puts the pawn back where it spawned (a teleport through Mover's instant effects, so it is predicted and rolled back like any other move;
 	 * the caller waits for the pawn to settle). The scenarios start from here, wherever the previous one ended.
@@ -237,6 +243,16 @@ private:
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
 
 	bool bInputReady = false;
+
+	struct FSimHistoryEntry
+	{
+		int32 SimTimeMs = 0;
+		FVector Location = FVector::ZeroVector;
+		FVector Velocity = FVector::ZeroVector;
+		FName Mode;
+		TArray<FString> Tags;
+	};
+	TArray<FSimHistoryEntry> SimHistory;
 
 	/** Where the pawn was at BeginPlay on the authority */
 	FVector SpawnLocation = FVector::ZeroVector;

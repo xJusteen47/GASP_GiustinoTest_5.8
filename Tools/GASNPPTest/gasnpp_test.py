@@ -869,7 +869,7 @@ class _Run:
         self.name, self.client, self.sample = name, client, sample
         self.key = key_of_player(client) if sample else None
         self.extra, self.judge_reconciles = list(extra or []), judge_reconciles
-        self.results, self.samples, self.handle = [], [], None
+        self.results, self.samples, self.sim, self.handle = [], [], [], None
         self.rb0 = _total_rollbacks()
         self.log_mark = None
         try:
@@ -877,6 +877,7 @@ class _Run:
         except Exception as e:
             self.note(f'log not readable ({e}): reconcile check skipped')
         self.t0 = time.time()
+        _last_run['obj'] = self    # for post-mortems of a failed check (samples)
         self.handle = unreal.register_slate_post_tick_callback(self._tick)
 
     def now(self):
@@ -899,25 +900,47 @@ class _Run:
                            'loc': tuple(v['location']), 'vel': tuple(v.get('velocity', (0, 0, 0))), 'attr': dict(v['attributes']),
                            'probe': v.get('probe') or {}, 'jump': (v.get('combat') or {}).get('jump') or {},
                            'intl': bool((v.get('combat') or {}).get('inTimeline', False))}
+            self._add_sim_samples(ws, s)
             self.samples.append(s)
+            self.sim.sort(key=lambda x: x['t'])
         except Exception:
             pass
+
+    def _add_sim_samples(self, ws, editor_sample):
+        """Adds one entry to self.sim per simulation tick the pawn ran since the last editor tick (UGSTN_GASNPPTestComponent.DrainSimHistory),
+        so heights, speeds and tag spans are judged on the simulation tick and not on how many sim steps one editor frame held. An entry
+        holds only what the simulation owns (loc, vel, mode, tags) and its sim time 'ms' (exact: use differences of it for durations); 't'
+        is this tick's time minus the sim time still to come (the newest sim tick is 'now'), good to ~one editor tick. Resimulated ticks
+        are in it too. Editor-tick fields (stamina, cooldowns, combat) stay in self.samples."""
+        for side, wi, key in (('srv', 0, self.key), ('cli', self.client, self.key), *self.extra):
+            c, base = comps(ws[wi]).get(key), editor_sample.get(side)
+            if c is None or base is None:
+                continue
+            ticks = json.loads(c.drain_sim_history())
+            if not ticks:
+                continue
+            newest = ticks[-1]['t']
+            for e in ticks:
+                self.sim.append({'t': editor_sample['t'] - (newest - e['t']) / 1000.0, side: {'ms': e['t'], 'tags': set(e['tags']), 'loc': tuple(e['loc']),
+                                                                                              'vel': tuple(e['vel']), 'mode': e['mode']}})
 
     def run(self, steps):
         """Restarts the clock and runs the timeline; the last step must be finish()."""
         self.t0 = time.time()
         self.samples.clear()
+        self.sim.clear()
         run_timeline(steps)
 
     # -- queries over the samples
-    def _win(self, side, t0, t1):
-        return [s[side] for s in self.samples if t0 <= s['t'] <= t1 and s.get(side)]
+    def _win(self, side, t0, t1, sim=False):
+        """Samples of `side` in [t0, t1]: the editor ticks, or with sim=True the simulation ticks (loc / vel / mode / tags / ms only)."""
+        return [s[side] for s in (self.sim if sim else self.samples) if t0 <= s['t'] <= t1 and s.get(side)]
 
     def saw_tag(self, tag, t0, t1, side='srv'):
-        return any(tag in s['tags'] for s in self._win(side, t0, t1))
+        return any(tag in s['tags'] for s in self._win(side, t0, t1, sim=True))
 
     def held_tag(self, tag, t0, t1, side='srv'):
-        w = self._win(side, t0, t1)
+        w = self._win(side, t0, t1, sim=True)
         return bool(w) and all(tag in s['tags'] for s in w)
 
     def saw_cooldown(self, name, t0, t1, side='srv'):
@@ -1200,8 +1223,8 @@ def scenario_camera_aim(client=1, yaw=123.0, pitch=-20.0, stance_button='Special
 def _tag_span(run, side, tag, t0, t1):
     """(first, last) sample times in [t0, t1] at which `side` owned `tag`, None if never. The server's copy lags the client's
     clock by the input lead, so the checks of timeline_cancel compare durations and order, never absolute times."""
-    ts = [s['t'] for s in run.samples if t0 <= s['t'] <= t1 and s.get(side) and tag in s[side]['tags']]
-    return (ts[0], ts[-1]) if ts else None
+    ts = [s[side]['ms'] / 1000.0 for s in run.sim if t0 <= s['t'] <= t1 and s.get(side) and tag in s[side]['tags']]
+    return (min(ts), max(ts)) if ts else None
 
 
 def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Special'):
@@ -1226,7 +1249,7 @@ def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Sp
             att = _tag_span(run, side, TAG_ATTACKING, a0, a1)
             if att is None:
                 return False, f'{side}: Attacking never seen'
-            dur = att[1] - att[0] + 0.04      # one sample of resolution
+            dur = att[1] - att[0] + 0.02      # one sim tick of resolution
             ok = lo <= dur <= hi
             detail = f'{side}: Attacking {dur:.2f}s (want {lo}..{hi})'
             if with_stance:
@@ -1843,13 +1866,13 @@ def scenario_spike_grants(client=1, count=40, bound=2.0):
 
 
 def _horizontal_peak(run, side, t0, t1):
-    return max((sum(x * x for x in s['vel'][:2]) ** 0.5 for s in run._win(side, t0, t1)), default=0.0)
+    return max((sum(x * x for x in s['vel'][:2]) ** 0.5 for s in run._win(side, t0, t1, sim=True)), default=0.0)
 
 
 def _apex(run, side, t_base, t0, t1):
     """Highest z in [t0, t1] minus the z of the last sample before t_base."""
-    before = [s[side]['loc'][2] for s in run.samples if s['t'] < t_base and s.get(side)]
-    zs = [s['loc'][2] for s in run._win(side, t0, t1)]
+    before = [s[side]['loc'][2] for s in run.sim if s['t'] < t_base and s.get(side)]
+    zs = [s['loc'][2] for s in run._win(side, t0, t1, sim=True)]
     return (max(zs) - before[-1]) if before and zs else 0.0
 
 
@@ -2137,11 +2160,11 @@ def _jump_tap(client, hold):
 
 def _apex_up(run, side, t_base, t0, t1, up=(0.0, 0.0, 1.0)):
     """Highest point along `up` reached in [t0, t1], measured from the last sample before t_base: (height, displacement vector at the apex)."""
-    before = [s[side]['loc'] for s in run.samples if s['t'] < t_base and s.get(side)]
+    before = [s[side]['loc'] for s in run.sim if s['t'] < t_base and s.get(side)]
     if not before:
         return 0.0, None
     b, best, at = before[-1], 0.0, None
-    for s in run._win(side, t0, t1):
+    for s in run._win(side, t0, t1, sim=True):
         d = tuple(s['loc'][i] - b[i] for i in range(3))
         h = sum(d[i] * up[i] for i in range(3))
         if h > best:
@@ -2150,7 +2173,7 @@ def _apex_up(run, side, t_base, t0, t1, up=(0.0, 0.0, 1.0)):
 
 
 def _extreme_up_speed(run, side, t0, t1, up=(0.0, 0.0, 1.0), lowest=True):
-    speeds = [sum(s['vel'][i] * up[i] for i in range(3)) for s in run._win(side, t0, t1)]
+    speeds = [sum(s['vel'][i] * up[i] for i in range(3)) for s in run._win(side, t0, t1, sim=True)]
     return (min(speeds) if lowest else max(speeds)) if speeds else 0.0
 
 
@@ -2248,10 +2271,17 @@ def scenario_air_jump_fastfall(client=1):
         run.log_mark = mark_log()
         return 'judge window starts after the grant', True
 
+    def descent(label, t0):
+        """Seconds of sim time from the apex to the landing (z back within 2 cm of the take-off height), on the sim ticks of the authority."""
+        w = [x['srv'] for x in run.sim if t0 <= x['t'] <= t0 + 3.0 and x.get('srv')]
+        z0, top = w[0]['loc'][2], max(range(len(w)), key=lambda i: w[i]['loc'][2])
+        land = next((x['ms'] for x in w[top:] if x['loc'][2] <= z0 + 2.0), None)
+        return None if land is None else (land - w[top]['ms']) / 1000.0
+
     def faster_fall():
-        a = _extreme_up_speed(run, 'srv', TA, TA + 3.0)
-        b = _extreme_up_speed(run, 'srv', TB, TB + 3.0)
-        return b < a - 30.0, f'lowest speed along up: A {a:.0f}, B (fast fall) {b:.0f} (B must be at least 30 cm/s faster down; the margin depends on the tick that requests it, and with a fast fall gravity scale near 1 there is no margin: listen runs of 3 pawns in one process fail it often)'
+        a, b = descent('A', TA), descent('B', TB)
+        ok = a is not None and b is not None and b < a - 0.03
+        return ok, f'apex-to-landing time: A {a}, B (fast fall requested while falling) {b} (B must be at least 0.03 s shorter: a time is exact on the sim tick, a landing speed is not)'
 
     def air_higher():
         a, c = apex['A'][0], apex['C'][0]
@@ -2268,8 +2298,8 @@ def scenario_air_jump_fastfall(client=1):
         (TB, lambda: ('B: jump', _jump_tap(client, 0.3))),
         (TB + 0.3, lambda: ('release', combat_clear(client))),
         (TB + 0.2, lambda: ('B: fast fall while rising (refused)', combat_tap(client, crouch))),
-        (TB + 0.75, _field_never(run, 'fastFalling', True, 'B: no fast fall while rising', TB, TB + 0.75)),
-        (TB + 0.85, lambda: ('B: fast fall while falling', combat_tap(client, crouch))),
+        (TB + 0.55, _field_never(run, 'fastFalling', True, 'B: no fast fall while rising', TB, TB + 0.55)),
+        (TB + 0.66, lambda: ('B: fast fall while falling', combat_tap(client, crouch))),
         (TB + 1.6, _field_is(run, 'fastFalling', True, 'B: fast falling', span=1.0)),
         (TB + 3.0, run.at('B: the fast fall descent is faster than the plain one', faster_fall)),
         # C: an air jump, and a second one refused
@@ -2323,7 +2353,7 @@ def scenario_tilted_gravity_jump(client=1, tilt_deg=30.0):
     T = 3.0
 
     def fast_samples(side, t0, t1, speed):
-        return [s['vel'] for s in run._win(side, t0, t1) if sum(x * x for x in s['vel']) > speed ** 2]
+        return [s['vel'] for s in run._win(side, t0, t1, sim=True) if sum(x * x for x in s['vel']) > speed ** 2]
 
     def launch_direction():
         def f(side):
@@ -2494,8 +2524,8 @@ def _kit(key, dash=True, dodge=True, interact=True):
 
 def _moved(run, side, t_base, t1):
     """Displacement (x, y, z) of `side` between the last sample before t_base and the latest sample up to t1."""
-    before = [s[side]['loc'] for s in run.samples if s['t'] < t_base and s.get(side)]
-    after = [s[side]['loc'] for s in run.samples if s['t'] <= t1 and s.get(side)]
+    before = [s[side]['loc'] for s in run.sim if s['t'] < t_base and s.get(side)]
+    after = [s[side]['loc'] for s in run.sim if s['t'] <= t1 and s.get(side)]
     if not before or not after:
         return None
     return tuple(after[-1][i] - before[-1][i] for i in range(3))
@@ -2555,7 +2585,7 @@ def scenario_dash(client=1, up=(0.0, 0.0, 1.0), gravity=None, name='dash'):
 
     def peak_direction():
         def f(side):
-            fast = [s['vel'] for s in run._win(side, T, T + 1.0) if _norm(s['vel']) > 500.0]
+            fast = [s['vel'] for s in run._win(side, T, T + 1.0, sim=True) if _norm(s['vel']) > 500.0]
             if not fast:
                 return False, 'no fast sample'
             a = _angle_deg(fast[0], up)
@@ -2648,7 +2678,7 @@ def scenario_dodge_blocked_in_hitstun(client=1):
         (TB - 0.5, lambda: ('hitstun off', _srv(key).server_set_hitstun(False))),
         (TB, lambda: ('B: dodge without hitstun', combat_tap(client, dodge))),
         (TB + 3.0, _landing_pair(run, st, 'B: free dodge', TB - 0.05, TB + 3.0, floor=200.0)),
-        (TC - 0.6, lambda: ('hitstun on, escape kit on', (_srv(key).server_set_hitstun(True), _srv(key).server_set_escape_kit(True)))),
+        (TC - 1.5, lambda: ('hitstun on, escape kit on', (_srv(key).server_set_hitstun(True), _srv(key).server_set_escape_kit(True)))),
         (TC, lambda: ('C: dodge in hitstun with the escape kit', combat_tap(client, dodge))),
         (TC + 3.0, _landing_pair(run, st, 'C: escape dodge in hitstun', TC - 0.05, TC + 3.0, floor=200.0)),
         (TC + 3.1, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_hitstun(False), _srv(key).server_set_escape_kit(False), _kit(key, False, False, False)))),
@@ -2688,7 +2718,7 @@ def scenario_interact_tap_hold(client=1):
     TA, TB, TC = 2.0, 5.0, 8.0
 
     def tags(sd, t0, t1):
-        return set().union(*[s[sd]['tags'] for s in run.samples if t0 <= s['t'] <= t1 and s.get(sd)] or [set()])
+        return set().union(*[s[sd]['tags'] for s in run.sim if t0 <= s['t'] <= t1 and s.get(sd)] or [set()])
 
     def only(label, want, other, t0, t1):
         def f(sd):
@@ -2861,9 +2891,9 @@ def scenario_hitstop(client=1):
 
     def span(label, t0, t1):
         def f():
-            ins = [s['t'] for s in run.samples if t0 <= s['t'] <= t1 and s.get('srv') and s['srv'].get('intl')]
-            seen[label] = (max(ins) - min(ins)) if ins else 0.0
-            return bool(ins), f'{label}: the attack was in its timeline for {seen[label]:.3f} s on the authority'
+            att = _tag_span(run, 'srv', TAG_ATTACKING, t0, t1)     # sim time: a duration of 7 frames must not depend on the editor tick
+            seen[label] = (att[1] - att[0] + 1 / 60.0) if att else 0.0
+            return bool(att), f'{label}: the attack was Attacking for {seen[label]:.3f} s of sim time on the authority'
         return run.at(f'{label}: the attack ran', f)
 
     def mark(label):

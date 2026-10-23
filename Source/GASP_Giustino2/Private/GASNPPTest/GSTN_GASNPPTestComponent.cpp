@@ -266,6 +266,33 @@ void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& Ti
 		}
 	}
 
+	{
+		FSimHistoryEntry& Entry = SimHistory.AddDefaulted_GetRef();
+		Entry.SimTimeMs = TimeStep.BaseSimTimeMs;
+		Entry.Location = GetOwner()->GetActorLocation();
+		if (Mover)
+		{
+			Entry.Velocity = Mover->GetVelocity();
+			Entry.Mode = Mover->GetMovementModeName();
+		}
+		if (AbilitySystem)
+		{
+			FGameplayTagContainer OwnedTags;
+			AbilitySystem->GetOwnedGameplayTags(OwnedTags);
+			for (const FGameplayTag& Tag : OwnedTags)
+			{
+				if (Tag.ToString().StartsWith(TEXT("Test.")))
+				{
+					Entry.Tags.Add(Tag.ToString());
+				}
+			}
+		}
+		if (SimHistory.Num() > 4000)
+		{
+			SimHistory.RemoveAt(0, 2000, EAllowShrinking::No);
+		}
+	}
+
 	++SimTickCount;
 	if (TimeStep.bIsResimulating)
 	{
@@ -711,6 +738,35 @@ int32 UGSTN_GASNPPTestComponent::CountOwnedBulkSpecs() const
 		Owned += AbilitySystem->FindAbilitySpecFromClass(AbilityClass) ? 1 : 0;
 	}
 	return Owned;
+}
+
+FString UGSTN_GASNPPTestComponent::DrainSimHistory()
+{
+	auto Vec = [](const FVector& V) -> TArray<TSharedPtr<FJsonValue>>
+	{
+		return { MakeShared<FJsonValueNumber>(V.X), MakeShared<FJsonValueNumber>(V.Y), MakeShared<FJsonValueNumber>(V.Z) };
+	};
+	TArray<TSharedPtr<FJsonValue>> Out;
+	for (const FSimHistoryEntry& Entry : SimHistory)
+	{
+		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+		Json->SetNumberField(TEXT("t"), Entry.SimTimeMs);
+		Json->SetArrayField(TEXT("loc"), Vec(Entry.Location));
+		Json->SetArrayField(TEXT("vel"), Vec(Entry.Velocity));
+		Json->SetStringField(TEXT("mode"), Entry.Mode.ToString());
+		TArray<TSharedPtr<FJsonValue>> Tags;
+		for (const FString& Tag : Entry.Tags)
+		{
+			Tags.Add(MakeShared<FJsonValueString>(Tag));
+		}
+		Json->SetArrayField(TEXT("tags"), Tags);
+		Out.Add(MakeShared<FJsonValueObject>(Json));
+	}
+	SimHistory.Reset();
+	FString Result;
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer = TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Result);
+	FJsonSerializer::Serialize(Out, Writer);
+	return Result;
 }
 
 FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
