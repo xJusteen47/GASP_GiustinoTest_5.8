@@ -5,6 +5,7 @@
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
+#include "DefaultMovementSet/InstantMovementEffects/BasicInstantMovementEffects.h"
 #include "DefaultMovementSet/Modes/SimpleWalkingMode.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Dom/JsonObject.h"
@@ -81,6 +82,12 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 
 	Mover = GetOwner()->FindComponentByClass<UMoverComponent>();
 	AbilitySystem = GetOwner()->FindComponentByClass<UNpAbilitySystemComponent>();
+
+	if (GetOwner()->HasAuthority())
+	{
+		SpawnLocation = GetOwner()->GetActorLocation();
+		bHasSpawnLocation = true;
+	}
 
 	if (Mover)
 	{
@@ -596,6 +603,20 @@ bool UGSTN_GASNPPTestComponent::ServerEquipPrimaryWeapon(bool bEquip)
 	{
 		Removed += UGSTN_GE_WeaponStats::Remove(*AbilitySystem, Weapon.Effect);
 	}
+	return true;
+}
+
+bool UGSTN_GASNPPTestComponent::ServerResetToSpawn(FVector Offset)
+{
+	if (!Mover || !bHasSpawnLocation || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	TSharedPtr<FTeleportEffect> Teleport = MakeShared<FTeleportEffect>();
+	Teleport->TargetLocation = SpawnLocation + Offset;
+	Teleport->bUseActorRotation = true;
+	Mover->QueueInstantMovementEffect(Teleport);
+
 	return true;
 }
 

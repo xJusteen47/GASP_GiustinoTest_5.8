@@ -61,6 +61,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	void ResetCounters();
 
+	/**
+	 * Authority only: puts the pawn back where it spawned (a teleport through Mover's instant effects, so it is predicted and rolled back like any other move;
+	 * the caller waits for the pawn to settle). The scenarios start from here, wherever the previous one ended.
+	 * Offset: shifts the spot so that the pawns of one process do not stand in each other's way (they all spawn within a metre).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	bool ServerResetToSpawn(FVector Offset);
+
 	UFUNCTION(BlueprintPure, Category = "GASNPP Test")
 	bool IsTestInputReady() const { return bInputReady; }
 
@@ -229,6 +237,10 @@ private:
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
 
 	bool bInputReady = false;
+
+	/** Where the pawn was at BeginPlay on the authority */
+	FVector SpawnLocation = FVector::ZeroVector;
+	bool bHasSpawnLocation = false;
 
 	TMap<FName, FGSTN_ProbeCounters> ProbeCounters;
 

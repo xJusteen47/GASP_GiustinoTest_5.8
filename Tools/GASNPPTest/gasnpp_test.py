@@ -1213,7 +1213,7 @@ def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Sp
             well before its natural end (the replaced timeline is cancelled)
       2.0s  cancel window: attack tap, the stance held 0.17 s later (frame ~10, in [8, 14)) -> Stance comes and Attacking ends before 0.28 s
       3.5s  not cancellable: attack tap, a second attack tap 0.05 s later (same tier, before the first actionable frame) -> Attacking lasts
-            its natural 0.28 to 0.38 s (a restart would make it 0.42 s or more)
+            its natural 0.28 to 0.38 s (checked from 0.25: a sample is quantised by the editor tick) (a restart would make it 0.42 s or more)
     Also: no unexplained reconciles."""
     _require_test_config(client)
     attack, stance = button_mask(attack_button), button_mask(stance_button)
@@ -1252,8 +1252,8 @@ def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Sp
         # case 3: not cancellable by the same tier
         (3.5, lambda: ('attack', combat_tap(client, attack))),
         (3.55, lambda: ('second attack (same tier, before the first actionable frame)', combat_tap(client, attack))),
-        (4.6, run.at('no cancel: server', case('', 3.4, 4.6, 'srv', 0.28, 0.38, False))),
-        (4.6, run.at('no cancel: client', case('', 3.4, 4.6, 'cli', 0.28, 0.38, False))),
+        (4.6, run.at('no cancel: server', case('', 3.4, 4.6, 'srv', 0.25, 0.38, False))),
+        (4.6, run.at('no cancel: client', case('', 3.4, 4.6, 'cli', 0.25, 0.38, False))),
         (4.7, run.finish()),
     ]
     run.run(steps)
@@ -2251,7 +2251,7 @@ def scenario_air_jump_fastfall(client=1):
     def faster_fall():
         a = _extreme_up_speed(run, 'srv', TA, TA + 3.0)
         b = _extreme_up_speed(run, 'srv', TB, TB + 3.0)
-        return b < a - 30.0, f'lowest speed along up: A {a:.0f}, B (fast fall) {b:.0f} (B must be at least 30 cm/s faster down; the margin depends on the tick that requests it)'
+        return b < a - 30.0, f'lowest speed along up: A {a:.0f}, B (fast fall) {b:.0f} (B must be at least 30 cm/s faster down; the margin depends on the tick that requests it, and with a fast fall gravity scale near 1 there is no margin: listen runs of 3 pawns in one process fail it often)'
 
     def air_higher():
         a, c = apex['A'][0], apex['C'][0]
@@ -2909,15 +2909,11 @@ SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'comba
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 
-def run_suite(names=None, timeout=120.0, settle=2.0, client=1):
+def run_suite(names=None, timeout=120.0, settle=2.0, client=1, reset_wait=1.5):
     st = _suite
     if st['handle'] is not None:
         unreal.unregister_slate_post_tick_callback(st['handle'])
-    st.update(results=[], queue=list(names or SUITE_DEFAULT), current=None, timeout=timeout, settle=settle, settle_until=0.0, homing=None)
-    # The owner's pawn walks back to where the suite found it before each scenario (the dashes and walks of the previous one move it, and the
-    # walking scenarios measure a clean run along +Y)
-    home_pawn = _local_pawn(client)[1].get_actor_location()
-    st['home'] = (home_pawn.x, home_pawn.y)
+    st.update(results=[], queue=list(names or SUITE_DEFAULT), current=None, timeout=timeout, settle=settle, settle_until=0.0, resetting=None, reset_done=False, reset_wait=reset_wait)
     st['client'] = client
 
     def tick(_dt):
@@ -2938,29 +2934,24 @@ def run_suite(names=None, timeout=120.0, settle=2.0, client=1):
                 return
             if now < st['settle_until']:
                 return
-            if st['homing'] is not None:
-                pawn = _local_pawn(st['client'])[1]
-                loc = pawn.get_actor_location()
-                near = ((loc.x - st['home'][0]) ** 2 + (loc.y - st['home'][1]) ** 2) ** 0.5 < 120.0
-                comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
-                if near or now - st['homing'] > 12.0:
-                    comp.stop_holding_input(unreal.load_asset(IA['move']))
-                    st['homing'] = None
-                    st['homed'] = True
-                    st['settle_until'] = now + 1.0
-                else:
-                    comp.start_holding_input(unreal.load_asset(IA['move']), unreal.Vector(*_steer_value(st['client'], st['home'])))
-                return
-            pawn_loc = _local_pawn(st['client'])[1].get_actor_location()
-            if st['queue'] and not st.get('homed') and ((pawn_loc.x - st['home'][0]) ** 2 + (pawn_loc.y - st['home'][1]) ** 2) ** 0.5 >= 120.0:
-                st['homing'] = now
-                return
+            if st['queue'] and not st.get('reset_done'):
+                # Every scenario starts from the spawn, standing still, whatever the previous one did to the pawns
+                if st.get('resetting') is None:
+                    # One lane per pawn, 5 m apart along -X (the map is open there): the pawns spawn within a metre of each other
+                    for lane, w_key in enumerate(sorted(comps(worlds()[0]), key=str)):
+                        comps(worlds()[0])[w_key].server_reset_to_spawn(unreal.Vector(-500.0 * lane, 0.0, 0.0))
+                    st['resetting'] = now
+                    return
+                if now - st['resetting'] < st['reset_wait']:
+                    return
+                st['resetting'] = None
+                st['reset_done'] = True
             if not st['queue']:
                 unreal.unregister_slate_post_tick_callback(st['handle'])
                 st['handle'] = None
                 return
             name = st['queue'].pop(0)
-            st['homed'] = False
+            st['reset_done'] = False
             st['prev'] = _last_run.get('results')
             reset_all()
             st['current'], st['started'] = name, now
