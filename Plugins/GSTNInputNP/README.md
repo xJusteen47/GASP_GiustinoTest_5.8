@@ -119,6 +119,7 @@ the activation frame, so keep what you need in your own sync variables) and `IsC
 (re)simulated; never read the Mover component's own queries from the fixed tick (gas-npp.md). Include
 `"Mover/GSTN_MoverSimStateTracker.h"` and depend on `GSTNInputNP`. The tracker is a `BlueprintType` and its
 `GetMovementModeName` / `HasGameplayTag` are `BlueprintPure`, so a Blueprint ability can read the same rolled back state.
+It also exposes the local gravity frame and the launch signal, all from the same frame as the other fields: `GetUpDirection()` / `GetGravityDirection()` (Mover's up direction, quantised to 1/4096, never world Z), `GetVelocity()`, `GetUpSpeed()` (velocity along up) and `WasExternallyLaunchedThisFrame()` (the last step started a `FLayeredMove_Launch` or child, derived from the restored sync state so a re-simulation agrees; the jump impulse is an instant effect and never sets it).
 
 ## Types the host and the sources use
 

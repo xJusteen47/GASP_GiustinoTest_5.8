@@ -46,6 +46,37 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
 	bool HasGameplayTag(FGameplayTag TagToFind, bool bExactMatch) const;
 
+	/**
+	 * The direction Mover considers up (UMoverComponent::GetUpDirection: gravity derived unless overridden) as of the last
+	 * simulated frame, rounded to 1/4096 per component so that machines that compute it from the same gravity hold the same
+	 * bits. Gravity points the other way: every "up", "down" and "horizontal" of simulation code is relative to this, never to world Z.
+	 * Mover's gravity is a component setting that no rollback restores, so this is the value the last step ran with.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
+	FVector GetUpDirection() const { return UpDirection; }
+
+	/** The unit direction gravity pulls in, -GetUpDirection() */
+	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
+	FVector GetGravityDirection() const { return -UpDirection; }
+
+	/** The world space velocity at the end of the last simulated frame (zero without a default sync state) */
+	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
+	FVector GetVelocity() const;
+
+	/** The velocity component along GetUpDirection(): positive while moving away from the ground, whatever the gravity direction */
+	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
+	double GetUpSpeed() const { return GetVelocity().Dot(UpDirection); }
+
+	/**
+	 * True when the last simulated frame started a launch layered move (FLayeredMove_Launch or a child: a trampoline, a
+	 * knockback launcher, a test launch) that is in the sync state, i.e. the character was thrown by something other than its
+	 * own jump. Derived from the restored sync state only, so a rollback and a re-simulation give the same answer. The jump impulse
+	 * is an instant effect, not a layered move, and never sets it. Abilities that must not assume they are the only upward launch source
+	 * (air jump count, coyote time) react to it.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
+	bool WasExternallyLaunchedThisFrame() const { return bExternallyLaunched; }
+
 private:
 	void Bind(UMoverComponent* MoverComponent);
 
@@ -58,5 +89,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMoverComponent> Mover;
 
+	/** Reads the quantised up direction and the launch flag of SyncState, produced by the step that began at StepBaseTimeMs */
+	void CaptureFrameFacts(const FMoverSyncState& InSyncState, double StepBaseTimeMs);
+
 	FMoverSyncState SyncState;
+	FVector UpDirection = FVector::UpVector;
+	bool bExternallyLaunched = false;
 };
