@@ -13,6 +13,7 @@
 #include "Events/GSTN_SimEventSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
 #include "Abilities/GSTN_GA_Dash.h"
 #include "Abilities/GSTN_GA_PlatformJump.h"
@@ -23,6 +24,9 @@
 #include "Input/GSTN_InputScript.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "Kits/GSTN_CombatAssetTypes.h"
+#include "Kits/GSTN_PrimaryKitDefinition.h"
+#include "Loadout/GSTN_LoadoutComponent.h"
 #include "MoverComponent.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -59,6 +63,9 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 		Combat->WeaponStats.Reset();
 		Combat->WeaponStats.AddDefaulted_GetRef().Effect = UGSTN_GE_TestPrimaryWeaponStats::StaticClass();
 		Combat->WeaponStats.AddDefaulted_GetRef().Effect = UGSTN_GE_TestSupportWeaponStats::StaticClass();
+		// Bit 20 is bound to no button of the test input config: the hitstop scenario taps it as a scripted button (every machine alike)
+		Combat->HitstopTestButton = 20;
+		Combat->HitstopTestFrames = 8;
 	}
 }
 
@@ -592,6 +599,52 @@ bool UGSTN_GASNPPTestComponent::ServerEquipPrimaryWeapon(bool bEquip)
 	return true;
 }
 
+UGSTN_LoadoutComponent* UGSTN_GASNPPTestComponent::EnsureLoadoutComponent()
+{
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	APlayerState* PlayerState = Pawn ? Pawn->GetPlayerState() : nullptr;
+	if (!PlayerState)
+	{
+		return nullptr;
+	}
+	if (UGSTN_LoadoutComponent* Found = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>())
+	{
+		return Found;
+	}
+	if (!PlayerState->HasAuthority())
+	{
+		return nullptr;
+	}
+	// A replicated component made at runtime: the PlayerState Blueprint is shared and stays as it is
+	UGSTN_LoadoutComponent* Created = NewObject<UGSTN_LoadoutComponent>(PlayerState, TEXT("GSTNTestLoadout"));
+	Created->SetIsReplicated(true);
+	Created->RegisterComponent();
+	return Created;
+}
+
+FString UGSTN_GASNPPTestComponent::ServerApplyTestLoadout(const FString& KitName, const FString& SupportWeaponName)
+{
+	UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>();
+	UGSTN_LoadoutComponent* Loadout = EnsureLoadoutComponent();
+	if (!Combat || !Loadout || !GetOwner()->HasAuthority())
+	{
+		return TEXT("no combat component, no loadout component or not the authority");
+	}
+
+	FGSTN_LoadoutData Data;
+	Data.PrimaryKit = FPrimaryAssetId(GSTNCombatAssetTypes::PrimaryKit(), FName(*KitName));
+	if (!SupportWeaponName.IsEmpty())
+	{
+		Data.AdditionalWeapons.Add(FPrimaryAssetId(GSTNCombatAssetTypes::Weapon(), FName(*SupportWeaponName)));
+	}
+	TArray<FString> Errors;
+	if (!Combat->ServerApplyLoadoutChange(*Loadout, Data, Errors))
+	{
+		return FString::Join(Errors, TEXT(" | "));
+	}
+	return TEXT("OK");
+}
+
 bool UGSTN_GASNPPTestComponent::ServerSetStatsPreset(int32 Preset)
 {
 	if (!AbilitySystem || !GetOwner()->HasAuthority())
@@ -808,9 +861,40 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				CombatJson->SetObjectField(TEXT("jump"), JumpJson);
 			}
 			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestFrame) });
+			CombatJson->SetNumberField(TEXT("pausedTotal"), CombatState->Core.PausedFramesTotal);
+			CombatJson->SetNumberField(TEXT("timelinePaused"), CombatState->Core.TimelinePausedFrames);
+			CombatJson->SetNumberField(TEXT("loadoutRevision"), CombatState->Core.LoadoutRevision);
 			CombatJson->SetBoolField(TEXT("inTimeline"), CombatState->Core.ActionState == EGSTN_ActionState::InTimeline);
 			CombatJson->SetNumberField(TEXT("timeline"), CombatState->Core.ActiveTimeline);
 			Json->SetObjectField(TEXT("combat"), CombatJson);
+		}
+	}
+
+	// The loadout of the PlayerState, on every machine that has the component (the server made it, the clients replicate it)
+	if (const APawn* Pawn = Cast<APawn>(GetOwner()))
+	{
+		if (const APlayerState* PlayerState = Pawn->GetPlayerState())
+		{
+			if (const UGSTN_LoadoutComponent* Loadout = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>())
+			{
+				const TSharedRef<FJsonObject> LoadoutJson = MakeShared<FJsonObject>();
+				LoadoutJson->SetNumberField(TEXT("revision"), Loadout->GetRevision());
+				LoadoutJson->SetStringField(TEXT("kit"), Loadout->GetApplied().PrimaryKit.PrimaryAssetName.ToString());
+				TArray<TSharedPtr<FJsonValue>> Weapons;
+				for (const FPrimaryAssetId& Id : Loadout->GetApplied().AdditionalWeapons)
+				{
+					Weapons.Add(MakeShared<FJsonValueString>(Id.PrimaryAssetName.ToString()));
+				}
+				LoadoutJson->SetArrayField(TEXT("additionalWeapons"), Weapons);
+				LoadoutJson->SetBoolField(TEXT("kitResolved"), Loadout->GetResolvedKit() != nullptr);
+				LoadoutJson->SetNumberField(TEXT("tableEntries"), Loadout->GetCompiledTable().Entries.Num());
+				LoadoutJson->SetNumberField(TEXT("grantedAbilities"), Loadout->GetCompiledTable().GrantedAbilities.Num());
+				// The table bytes are the same on every machine for the same loadout: compare the checksums
+				TArray<uint8> TableBytes;
+				Loadout->GetCompiledTable().WriteBytes(TableBytes);
+				LoadoutJson->SetStringField(TEXT("tableCrc"), FString::Printf(TEXT("%08x"), FCrc::MemCrc32(TableBytes.GetData(), TableBytes.Num())));
+				Json->SetObjectField(TEXT("loadout"), LoadoutJson);
+			}
 		}
 	}
 

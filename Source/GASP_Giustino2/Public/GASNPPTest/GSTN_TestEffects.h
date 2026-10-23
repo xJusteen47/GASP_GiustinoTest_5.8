@@ -16,6 +16,10 @@ namespace GSTNTestTags
 	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dashing);
 	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Buffed);
 
+	// C15 test kits: the stat keys of the kit init effect (leaves under the plugin's stat set-by-caller root)
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_WalkSpeed);
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_JumpVelocity);
+
 	// M3 spike probes (see GSTN_TestProbeAbilities.h)
 	/** GameplayEvent that the event raiser sends and the event target ability is triggered by */
 	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Probe_Event);
@@ -168,4 +172,16 @@ class GASP_GIUSTINO2_API UGSTN_GE_TestSupportWeaponStats : public UGSTN_GE_Weapo
 	GENERATED_BODY()
 public:
 	UGSTN_GE_TestSupportWeaponStats();
+};
+
+/**
+ * Instant kit init effect of the C15 test kits (KIT_Test_*): overrides WalkSpeed and JumpVelocity with the numbers of the kit's
+ * stats, read as set-by-caller magnitudes (the kit data holds the numbers, this class only names the attributes).
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestKitInit : public UGameplayEffect
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestKitInit();
 };

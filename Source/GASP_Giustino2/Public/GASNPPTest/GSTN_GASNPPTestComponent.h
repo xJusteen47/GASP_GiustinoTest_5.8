@@ -8,6 +8,7 @@
 #include "GameplayEffectTypes.h"
 #include "GSTN_GASNPPTestComponent.generated.h"
 
+class UGSTN_LoadoutComponent;
 class UMoverComponent;
 class UNpAbilitySystemComponent;
 class UInputMappingContext;
@@ -163,6 +164,18 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerEquipPrimaryWeapon(bool bEquip);
+
+	/**
+	 * Server only: applies the loadout of the C15 test content (/Game/GASNPPTest/Combat) to this pawn through the combat component's
+	 * ServerApplyLoadoutChange: the kit named KitName and, when SupportWeaponName is not empty, that weapon as the additional weapon.
+	 * The loadout component is added to the PlayerState at runtime on the first call (the shared PlayerState Blueprint is not edited).
+	 * Returns "OK", or the findings of the loadout rules joined with " | ".
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
+	FString ServerApplyTestLoadout(const FString& KitName, const FString& SupportWeaponName);
+
+	/** Server only: puts the loadout component on the PlayerState if there is none yet (clients get it by replication). Null without a PlayerState */
+	UGSTN_LoadoutComponent* EnsureLoadoutComponent();
 
 	/** Same as setting bStatsProbeEnabled, for Python (the harness calls it on every copy of the pawn, in every world) */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
