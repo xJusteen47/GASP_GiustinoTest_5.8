@@ -112,10 +112,10 @@ private:
 class FGSTN_TimelineActions
 {
 public:
-	/** Frames of a window added by a double-click on a track that has no keys. E5's track editors replace this with their own default length */
-	static constexpr int32 DefaultWindowFrames = 6;
-
-	/** Double-click on empty lane space: a key on a keyed track, else a new track of the same kind at Frame. Returns whether something was added */
+	/**
+	 * Double-click on empty lane space: a key on a keyed track, else a new track of the same kind at Frame, as long as its track
+	 * editor says (IGSTN_TrackEditor::GetDefaultLength; one frame for a track that fires on a single frame). Returns whether something was added
+	 */
 	static bool AddAtFrame(FGSTN_TimelineEditorModel& Model, int32 TrackIndex, int32 Frame);
 
 	/** Delete: the selected keys, or, with no key selected, the selected tracks. Returns how many things were removed */

@@ -2,6 +2,8 @@
 
 #include "Timeline/GSTN_TimelineGesture.h"
 
+#include "Timeline/GSTN_TimelineTrackEditor.h"
+
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
 
 namespace
@@ -382,8 +384,9 @@ bool FGSTN_TimelineActions::AddAtFrame(FGSTN_TimelineEditorModel& Model, int32 T
 	{
 		return !HasKeyAtFrame(*Data, TrackIndex, Frame) && Model.AddKey(TrackIndex, Frame) != INDEX_NONE;
 	}
-	const int32 Length = FGSTN_TimelineEditorModel::IsPointTrack(*Track) ? 1 : DefaultWindowFrames;
-	return Model.AddTrack(Data->Tracks[TrackIndex].GetScriptStruct(), Frame, Length) != INDEX_NONE;
+	const UScriptStruct* TrackStruct = Data->Tracks[TrackIndex].GetScriptStruct();
+	const int32 Length = FGSTN_TimelineEditorModel::IsPointTrack(*Track) ? 1 : FGSTN_TrackEditorRegistry::Get().FindOrGeneric(TrackStruct)->GetDefaultLength();
+	return Model.AddTrack(TrackStruct, Frame, Length) != INDEX_NONE;
 }
 
 int32 FGSTN_TimelineActions::DeleteSelection(FGSTN_TimelineEditorModel& Model)

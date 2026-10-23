@@ -20,7 +20,7 @@ struct FGSTN_TimelineRowData;
  * The frame timeline (combat-m5-editor 5.2): a toolbar, the ruler, the phase bar, one row per track in a list view, and the frame
  * data line. It is a view of an FGSTN_TimelineEditorModel and nothing else: every gesture goes through the model (one transaction
  * each, the drag helper for drags), and the panel owns only what is not data, the commands, the playback ticker and the gesture
- * shared by its lanes. The toolkit of E5 hosts it in its Timeline tab; E4's test tab hosts it alone.
+ * shared by its lanes. The toolkit (FGSTN_TimelineEditorToolkit) hosts it in its Timeline tab.
  *
  * Keyboard: the panel takes the focus when a lane, the ruler or the phase bar is clicked and runs the chords of
  * FGSTN_TimelineEditorCommands through its command list, so they follow the user's key bindings. Escape cancels a drag.
@@ -32,6 +32,8 @@ public:
 		SLATE_ARGUMENT(TSharedPtr<FGSTN_TimelineEditorModel>, Model)
 		/** Shows the paint time of the last repaint in the footer (the acceptance readout of E4) */
 		SLATE_ARGUMENT(bool, bShowPaintStats)
+		/** Controls the host adds to the end of the toolbar (the toolkit: loop range, preview skin and kit, validate). The panel knows nothing of them */
+		SLATE_NAMED_SLOT(FArguments, ToolbarExtra)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -57,7 +59,7 @@ private:
 	void RebuildRows();
 
 	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FGSTN_TimelineRowData> Item, const TSharedRef<STableViewBase>& OwnerTable);
-	TSharedRef<SWidget> MakeToolbar();
+	TSharedRef<SWidget> MakeToolbar(const TSharedRef<SWidget>& ToolbarExtra);
 	TSharedRef<SWidget> MakeCommandButton(const TSharedPtr<FUICommandInfo>& Command);
 	TSharedRef<SWidget> MakeAddTrackMenu();
 

@@ -3,7 +3,7 @@
 #include "Timeline/Widgets/SGSTN_TimelineLane.h"
 
 #include "HAL/PlatformTime.h"
-#include "Settings/GSTN_CombatEditorSettings.h"
+#include "Timeline/GSTN_TimelineTrackEditor.h"
 
 void SGSTN_TimelineLane::Construct(const FArguments& InArgs)
 {
@@ -68,7 +68,8 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 	const UScriptStruct* TrackStruct = Data->Tracks.IsValidIndex(TrackIndex) ? Data->Tracks[TrackIndex].GetScriptStruct() : nullptr;
 	if (Track != nullptr && TrackStruct != nullptr)
 	{
-		const FLinearColor TrackColor = UGSTN_CombatEditorSettings::Get().GetTrackColor(TrackStruct->GetFName());
+		const TSharedRef<const IGSTN_TrackEditor> TrackEditor = FGSTN_TrackEditorRegistry::Get().FindOrGeneric(TrackStruct);
+		const FLinearColor TrackColor = TrackEditor->GetColor();
 		const bool bWindowSelected = Model->GetSelection().ContainsByPredicate([this](const FGSTN_Selection& Item) { return Item.TrackIndex == TrackIndex && !Item.IsKey(); });
 		const bool bPoint = FGSTN_TimelineEditorModel::IsPointTrack(*Track);
 		int32 Start = 0;
@@ -108,7 +109,7 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 				else if (BarSize.X > 30.0)
 				{
 					OutDrawElements.PushClip(FSlateClippingZone(AllottedGeometry.ToPaintGeometry(FVector2f(BarSize), FSlateLayoutTransform(FVector2f(BarPosition)))));
-					DrawLabel(OutDrawElements, LayerId + 6, AllottedGeometry, FVector2D(BarPosition.X + 4.0, 6.0), TrackStruct->GetDisplayNameText().ToString(), FLinearColor(0.02f, 0.02f, 0.02f, 0.9f));
+					DrawLabel(OutDrawElements, LayerId + 6, AllottedGeometry, FVector2D(BarPosition.X + 4.0, 6.0), TrackEditor->GetRowLabel(*Track).ToString(), FLinearColor(0.02f, 0.02f, 0.02f, 0.9f));
 					OutDrawElements.PopClip();
 				}
 			}

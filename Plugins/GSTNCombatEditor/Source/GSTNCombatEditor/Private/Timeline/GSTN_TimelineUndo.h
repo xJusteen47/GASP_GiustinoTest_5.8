@@ -60,8 +60,8 @@ private:
 
 /**
  * Connects a model to the editor's undo system: after an undo or redo that touched the model's owner it revalidates the
- * selection and the playhead and tells the listeners the data changed (combat-m5-editor 4.3). The toolkit of E5 owns one;
- * until then the tests are the owner. Registers itself on construction and unregisters on destruction.
+ * selection and the playhead and tells the listeners the data changed (combat-m5-editor 4.3). The toolkit owns one, and so does a test;
+ * it registers itself on construction and unregisters on destruction.
  */
 class FGSTN_TimelineUndoClient : public FEditorUndoClient
 {

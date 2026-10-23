@@ -9,8 +9,9 @@ using UnrealBuildTool;
 // editor does not link the fork), and GSTNCombatDebug (a sibling plugin: an optional tool the editor will reach through
 // FModuleManager, never through a Build.cs edge, because UBT stops when a named module is missing).
 //
-// Slate arrived with the timeline panel (E4); the toolkit and the preview scene add their modules in E5 and E6. The model, edit
-// context, undo helper, layout and gesture code use no Slate type at all: only Private/Timeline/Widgets and the commands do.
+// Slate arrived with the timeline panel (E4), the toolkit (UnrealEd), the asset definition (AssetDefinition) and the details panel
+// (PropertyEditor) with E5; the preview scene adds its modules in E6. The model, edit context, undo helper, layout, gesture code and
+// the track editor registry use no Slate type at all: only Private/Timeline/Widgets, the toolkit and the commands do.
 public class GSTNCombatEditor : ModuleRules
 {
 	public GSTNCombatEditor(ReadOnlyTargetRules Target) : base(Target)
@@ -29,8 +30,11 @@ public class GSTNCombatEditor : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"ApplicationCore",
+			"AssetDefinition",
 			"DeveloperSettings",
+			"EditorFramework",
 			"InputCore",
+			"PropertyEditor",
 			"Slate",
 			"SlateCore",
 			"UnrealEd",

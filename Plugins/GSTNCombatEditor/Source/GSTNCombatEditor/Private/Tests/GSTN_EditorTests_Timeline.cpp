@@ -13,7 +13,7 @@
 #include "Timeline/GSTN_TimelineEditorModel.h"
 #include "Timeline/GSTN_TimelineGesture.h"
 #include "Timeline/GSTN_TimelineLayout.h"
-#include "Timeline/GSTN_TimelinePanelTest.h"
+#include "Timeline/GSTN_TimelineTrackEditor.h"
 #include "Timeline/GSTN_TimelineUndo.h"
 #include "Timeline/Widgets/SGSTN_FrameDataSummary.h"
 #include "Timeline/Widgets/SGSTN_TimelinePanel.h"
@@ -750,7 +750,7 @@ bool FGSTN_UiActionsTest::RunTest(const FString& Parameters)
 		const FGSTN_TimelineTrack* Added = F.M().GetTrack(Tracks);
 		TestTrue(TEXT("of the same kind"), Added != nullptr && Added->GetKind() == EGSTN_TimelineTrackKind::Movement);
 		TestEqual(TEXT("starting there"), Added ? Added->StartFrame : -1, 20);
-		TestEqual(TEXT("with the default length"), Added ? Added->EndFrame - Added->StartFrame : -1, FGSTN_TimelineActions::DefaultWindowFrames);
+		TestEqual(TEXT("with the default length of its track editor"), Added ? Added->EndFrame - Added->StartFrame : -1, FGSTN_TrackEditorRegistry::Get().FindOrGeneric(FGSTN_TimelineTrack_Movement::StaticStruct())->GetDefaultLength());
 		TestTrue(TEXT("an event is one frame"), FGSTN_TimelineActions::AddAtFrame(F.M(), UiEvent, 22));
 		const FGSTN_TimelineTrack* Event = F.M().GetTrack(Tracks + 1);
 		TestEqual(TEXT("event length"), Event ? Event->EndFrame - Event->StartFrame : -1, 1);
@@ -820,25 +820,6 @@ bool FGSTN_UiCommandsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("frame all is Home"), Commands.FrameAll->GetFirstValidChord()->Key == EKeys::Home);
 	TestTrue(TEXT("bake is ctrl+B"), Commands.BakeSockets->GetFirstValidChord()->Key == EKeys::B && Commands.BakeSockets->GetFirstValidChord()->NeedsControl());
 	TestTrue(TEXT("copy is ctrl+C"), Commands.CopyKeys->GetFirstValidChord()->Key == EKeys::C && Commands.CopyKeys->GetFirstValidChord()->NeedsControl());
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_UiPanelTestCommandTest, "GSTNCombat.Editor.Timeline.PanelTestCommandRegistered", GSTN_UI_TEST_FLAGS)
-bool FGSTN_UiPanelTestCommandTest::RunTest(const FString& Parameters)
-{
-	IConsoleObject* Object = IConsoleManager::Get().FindConsoleObject(GSTNTimelinePanelTest::OpenCommandName);
-	TestNotNull(TEXT("the console command that opens the test tab exists"), Object);
-	TestNotNull(TEXT("and is a command"), Object ? Object->AsCommand() : nullptr);
-
-	// The demo content is something the phase bar and the lanes can show
-	FGSTN_CombatTimelineData Demo;
-	GSTNTimelinePanelTest::FillDemoTimeline(Demo, false);
-	TestTrue(TEXT("the demo has tracks of several kinds"), Demo.Tracks.Num() >= 8);
-	TestTrue(TEXT("and an active range for the phase bar"), FGSTN_PhaseBarData::Compute(Demo).bHasActive);
-	FGSTN_CombatTimelineData Stress;
-	GSTNTimelinePanelTest::FillDemoTimeline(Stress, true);
-	TestEqual(TEXT("the stress timeline has 12 tracks"), Stress.Tracks.Num(), 12);
-	TestEqual(TEXT("of 60 keys"), Stress.Tracks[0].GetPtr<FGSTN_TestKeyedTrack>() ? Stress.Tracks[0].Get<FGSTN_TestKeyedTrack>().Keys.Num() : 0, 60);
 	return true;
 }
 

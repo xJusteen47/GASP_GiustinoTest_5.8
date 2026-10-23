@@ -9,7 +9,7 @@
 #include "Timeline/Widgets/SGSTN_FrameDataSummary.h"
 #include "Timeline/Widgets/SGSTN_PhaseBar.h"
 #include "Timeline/Widgets/SGSTN_TimelineTrackRow.h"
-#include "UObject/UObjectIterator.h"
+#include "Timeline/GSTN_TimelineTrackEditor.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboButton.h"
@@ -51,7 +51,7 @@ void SGSTN_TimelinePanel::Construct(const FArguments& InArgs)
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
-			MakeToolbar()
+			MakeToolbar(InArgs._ToolbarExtra.Widget)
 		]
 
 		// The ruler: a cell over the name column, then the frames, then room for the scrollbar of the rows
@@ -281,39 +281,51 @@ TSharedRef<SWidget> SGSTN_TimelinePanel::MakeCommandButton(const TSharedPtr<FUIC
 TSharedRef<SWidget> SGSTN_TimelinePanel::MakeAddTrackMenu()
 {
 	FMenuBuilder Menu(true, nullptr);
-
-	// Every track struct there is, by name. E5 replaces this with the registry of track editors, which also knows each kind's default length
-	TArray<const UScriptStruct*> Structs;
-	for (TObjectIterator<UScriptStruct> It; It; ++It)
-	{
-		const UScriptStruct* Struct = *It;
-		if (Struct != FGSTN_TimelineTrack::StaticStruct() && Struct->IsChildOf(FGSTN_TimelineTrack::StaticStruct()) && !Struct->HasMetaData(TEXT("Hidden")))
-		{
-			Structs.Add(Struct);
-		}
-	}
-	Structs.Sort([](const UScriptStruct& A, const UScriptStruct& B) { return A.GetDisplayNameText().CompareTo(B.GetDisplayNameText()) < 0; });
-
 	const TWeakPtr<FGSTN_TimelineEditorModel> WeakModel = Model;
-	for (const UScriptStruct* Struct : Structs)
+	const FGSTN_TrackEditorRegistry& Registry = FGSTN_TrackEditorRegistry::Get();
+
+	auto AddEntry = [&Menu, &WeakModel](const UScriptStruct* Struct, const FText& Name, FName IconName, int32 Length)
 	{
 		Menu.AddMenuEntry(
-			Struct->GetDisplayNameText(),
-			FText::Format(LOCTEXT("AddTrackTip", "Add a {0} track at the playhead"), Struct->GetDisplayNameText()),
-			FSlateIcon(),
-			FUIAction(FExecuteAction::CreateLambda([WeakModel, Struct]()
+			Name,
+			FText::Format(LOCTEXT("AddTrackTip", "Add a {0} track at the playhead"), Name),
+			IconName.IsNone() ? FSlateIcon() : FSlateIcon(FAppStyle::GetAppStyleSetName(), IconName),
+			FUIAction(FExecuteAction::CreateLambda([WeakModel, Struct, Length]()
 			{
 				if (const TSharedPtr<FGSTN_TimelineEditorModel> Pinned = WeakModel.Pin())
 				{
-					const int32 Length = (Struct->IsChildOf(FGSTN_TimelineTrack_Event::StaticStruct()) || Struct->IsChildOf(FGSTN_TimelineTrack_WeaponSwitch::StaticStruct())) ? 1 : FGSTN_TimelineActions::DefaultWindowFrames;
 					Pinned->AddTrack(Struct, Pinned->GetPlayhead(), Length);
 				}
 			})));
+	};
+
+	// The registered track editors: each knows its name, its icon and the length of a new window
+	TArray<TSharedRef<const IGSTN_TrackEditor>> Editors;
+	Registry.GetAll(Editors);
+	Menu.BeginSection("GSTNTrackEditors", LOCTEXT("AddTrackKnown", "Tracks"));
+	for (const TSharedRef<const IGSTN_TrackEditor>& Editor : Editors)
+	{
+		AddEntry(Editor->GetTrackStruct(), Editor->GetDisplayName(), Editor->GetIconBrushName(), Editor->GetDefaultLength());
+	}
+	Menu.EndSection();
+
+	// Track structs nobody wrote an editor for are still tracks: they get the generic row and the details panel
+	TArray<const UScriptStruct*> Others;
+	Registry.GetUnregisteredTrackStructs(Others);
+	if (!Others.IsEmpty())
+	{
+		Menu.BeginSection("GSTNOtherTracks", LOCTEXT("AddTrackOther", "Other track types"));
+		for (const UScriptStruct* Struct : Others)
+		{
+			const TSharedRef<const IGSTN_TrackEditor> Generic = Registry.FindOrGeneric(Struct);
+			AddEntry(Struct, Generic->GetDisplayName(), Generic->GetIconBrushName(), Generic->GetDefaultLength());
+		}
+		Menu.EndSection();
 	}
 	return Menu.MakeWidget();
 }
 
-TSharedRef<SWidget> SGSTN_TimelinePanel::MakeToolbar()
+TSharedRef<SWidget> SGSTN_TimelinePanel::MakeToolbar(const TSharedRef<SWidget>& ToolbarExtra)
 {
 	const FGSTN_TimelineEditorCommands& Commands = FGSTN_TimelineEditorCommands::Get();
 
@@ -415,6 +427,9 @@ TSharedRef<SWidget> SGSTN_TimelinePanel::MakeToolbar()
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(12.f, 0.f, 0.f, 0.f)) [ MakeCommandButton(Commands.FrameAll) ]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center) [ MakeCommandButton(Commands.FrameSelection) ]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center) [ MakeCommandButton(Commands.FitTotalFramesToMontage) ]
+
+			// What the host adds (the toolkit: loop range, skin and kit, validate)
+			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(FMargin(12.f, 0.f, 0.f, 0.f)) [ ToolbarExtra ]
 		];
 }
 
@@ -529,7 +544,11 @@ bool SGSTN_TimelinePanel::TickPlayback(float DeltaSeconds)
 	const int32 Steps = PlaybackClock.Advance(DeltaSeconds, Model->GetTickRate());
 	if (Steps > 0)
 	{
-		Model->SetPlayhead(FGSTN_PlaybackClock::StepLooped(Model->GetPlayhead(), Steps, 0, Total));
+		// The loop range when one is set, the whole timeline otherwise
+		int32 First = 0;
+		int32 End = 0;
+		Model->GetEffectivePlayRange(First, End);
+		Model->SetPlayhead(FGSTN_PlaybackClock::StepLooped(Model->GetPlayhead(), Steps, First, End));
 	}
 	return true;
 }

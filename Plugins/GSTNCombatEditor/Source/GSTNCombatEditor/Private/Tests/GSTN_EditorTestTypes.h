@@ -37,6 +37,19 @@ struct FGSTN_TestKeyedTrack : public FGSTN_TimelineTrack
 	TArray<FGSTN_TestKey> Keys;
 };
 
+/**
+ * A game's own track derived from a built-in one (a dash that is a movement with extras), to test that a track editor registered for
+ * the derived struct wins and that, without one, the base's editor serves it. Hidden so it never shows in a track picker.
+ */
+USTRUCT(meta = (Hidden))
+struct FGSTN_TestDerivedMovement : public FGSTN_TimelineTrack_Movement
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 ExtraFrames = 0;
+};
+
 /** The adapter a keyed track registers: linear interpolation of position and size for a new key, stable sort by frame */
 class FGSTN_TestKeyedAccess : public IGSTN_KeyedTrackAccess
 {

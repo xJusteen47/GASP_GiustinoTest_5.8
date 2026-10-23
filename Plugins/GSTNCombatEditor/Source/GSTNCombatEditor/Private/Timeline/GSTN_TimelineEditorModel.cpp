@@ -7,6 +7,7 @@
 #include "ScopedTransaction.h"
 #include "Settings/GSTN_CombatEditorSettings.h"
 #include "Timeline/GSTN_KeyedTrackAccess.h"
+#include "Timeline/GSTN_TimelineTrackEditor.h"
 #include "UObject/StructOnScope.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
@@ -188,6 +189,42 @@ void FGSTN_TimelineEditorModel::NotifyDataChanged()
 
 // Playhead
 
+void FGSTN_TimelineEditorModel::GetEffectivePlayRange(int32& OutFirst, int32& OutEnd) const
+{
+	const int32 Total = FMath::Max(GetTotalFrames(), 0);
+	OutFirst = 0;
+	OutEnd = Total;
+	if (HasPlayRange())
+	{
+		const int32 First = FMath::Clamp(PlayRangeStart, 0, Total);
+		const int32 End = FMath::Clamp(PlayRangeEnd, 0, Total);
+		if (End > First)
+		{
+			OutFirst = First;
+			OutEnd = End;
+		}
+	}
+}
+
+void FGSTN_TimelineEditorModel::SetPlayRange(int32 Start, int32 End)
+{
+	const int32 Total = FMath::Max(GetTotalFrames(), 0);
+	int32 NewStart = FMath::Clamp(Start, 0, Total);
+	int32 NewEnd = FMath::Clamp(End, 0, Total);
+	if (NewEnd <= NewStart)
+	{
+		NewStart = 0;
+		NewEnd = 0;
+	}
+	if (NewStart == PlayRangeStart && NewEnd == PlayRangeEnd)
+	{
+		return;
+	}
+	PlayRangeStart = NewStart;
+	PlayRangeEnd = NewEnd;
+	NotifyViewChanged();
+}
+
 bool FGSTN_TimelineEditorModel::SetPlayhead(int32 Frame)
 {
 	const int32 Clamped = FMath::Clamp(Frame, 0, FMath::Max(GetTotalFrames() - 1, 0));
@@ -343,9 +380,10 @@ int32 FGSTN_TimelineEditorModel::AddTrack(const UScriptStruct* TrackStruct, int3
 	FGSTN_TimelineTrack& Track = NewTrack.GetMutable();
 	Track.StartFrame = Start;
 	Track.EndFrame = End;
-	if (Track.GetKind() == EGSTN_TimelineTrackKind::WeaponSwitch)
+	// The defaults a kind needs beyond the window (the weapon switch's own copy of its frame) belong to its track editor
+	if (const TSharedPtr<const IGSTN_TrackEditor> Editor = FGSTN_TrackEditorRegistry::Get().Find(TrackStruct))
 	{
-		static_cast<FGSTN_TimelineTrack_WeaponSwitch&>(Track).SwapFrame = Start;
+		Editor->InitNewTrack(Track, Start, *Data);
 	}
 
 	const int32 NewIndex = Data->Tracks.Add(MoveTemp(NewTrack));

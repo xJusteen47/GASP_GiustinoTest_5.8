@@ -121,7 +121,7 @@ DECLARE_MULTICAST_DELEGATE(FGSTN_OnTimelineViewChanged);
  *  - Nothing here changes a field other than the one the method names. Fitting TotalFrames to a montage is an explicit command,
  *    never a side effect (combat-m5-editor 2.1 item 6).
  *
- * The owner of the model (the toolkit of E5, or a test) creates an FGSTN_TimelineUndoClient next to it.
+ * The owner of the model (the toolkit, or a test) creates an FGSTN_TimelineUndoClient next to it.
  */
 class FGSTN_TimelineEditorModel
 {
@@ -173,6 +173,20 @@ public:
 	bool SetPlayhead(int32 Frame);
 	bool StepPlayhead(int32 DeltaFrames) { return SetPlayhead(PlayheadFrame + DeltaFrames); }
 
+	// Play range: the stretch of frames playback loops over. Editor state like the view, not data: never undone, never saved
+
+	/** Is a loop range set? */
+	bool HasPlayRange() const { return PlayRangeEnd > PlayRangeStart; }
+
+	/** [First, End) the playback loops over: the loop range cut to the timeline, or the whole timeline when there is none (or nothing of it is left inside) */
+	void GetEffectivePlayRange(int32& OutFirst, int32& OutEnd) const;
+
+	/** Sets the loop range [Start, End) cut to [0, TotalFrames]. An empty result clears it. Repaints, nothing else */
+	void SetPlayRange(int32 Start, int32 End);
+	void ClearPlayRange() { SetPlayRange(0, 0); }
+	int32 GetPlayRangeStart() const { return PlayRangeStart; }
+	int32 GetPlayRangeEnd() const { return PlayRangeEnd; }
+
 	// Selection
 
 	const TArray<FGSTN_Selection>& GetSelection() const { return Selection; }
@@ -198,7 +212,11 @@ public:
 
 	// Window mutations (frames in [0, TotalFrames])
 
-	/** Appends a track of the given struct, a child of FGSTN_TimelineTrack, with a window of LengthFrames starting at StartFrame. Returns its index, INDEX_NONE if the struct is not a track */
+	/**
+	 * Appends a track of the given struct, a child of FGSTN_TimelineTrack, with a window of LengthFrames starting at StartFrame, then
+	 * lets the struct's track editor fill what a window cannot (FGSTN_TrackEditorRegistry, IGSTN_TrackEditor::InitNewTrack). The callers
+	 * ask the track editor for the length (GetDefaultLength). Returns its index, INDEX_NONE if the struct is not a track
+	 */
 	int32 AddTrack(const UScriptStruct* TrackStruct, int32 StartFrame = 0, int32 LengthFrames = 1);
 
 	/** Removes the tracks, selection included. Returns how many were removed */
@@ -319,6 +337,8 @@ private:
 	FGSTN_TimelineEditContext Context;
 	TArray<FGSTN_Selection> Selection;
 	int32 PlayheadFrame = 0;
+	int32 PlayRangeStart = 0;
+	int32 PlayRangeEnd = 0;
 	float TickRate = 62.5f;
 	bool bAutoKey = true;
 	FGSTN_TimelineDragTransaction Drag;

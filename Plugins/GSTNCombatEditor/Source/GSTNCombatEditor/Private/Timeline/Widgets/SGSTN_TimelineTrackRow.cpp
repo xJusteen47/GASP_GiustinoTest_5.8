@@ -2,9 +2,10 @@
 
 #include "Timeline/Widgets/SGSTN_TimelineTrackRow.h"
 
-#include "Settings/GSTN_CombatEditorSettings.h"
+#include "Timeline/GSTN_TimelineTrackEditor.h"
 #include "Styling/AppStyle.h"
 #include "Timeline/Widgets/SGSTN_TimelineLane.h"
+#include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -80,20 +81,45 @@ void SGSTN_TimelineTrackRow::Construct(const FArguments& InArgs, const TSharedRe
 									.BorderBackgroundColor_Lambda([GetTrackStruct]() -> FSlateColor
 									{
 										const UScriptStruct* Struct = GetTrackStruct();
-										return Struct ? UGSTN_CombatEditorSettings::Get().GetTrackColor(Struct->GetFName()) : FLinearColor::Gray;
+										return Struct ? FGSTN_TrackEditorRegistry::Get().FindOrGeneric(Struct)->GetColor() : FLinearColor::Gray;
 									})
 								]
+							]
+							// The icon the track editor names (nothing when it names none)
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.VAlign(VAlign_Center)
+							.Padding(FMargin(6.f, 0.f, 0.f, 0.f))
+							[
+								SNew(SImage)
+								.Image_Lambda([GetTrackStruct]() -> const FSlateBrush*
+								{
+									const UScriptStruct* Struct = GetTrackStruct();
+									const FName IconName = Struct ? FGSTN_TrackEditorRegistry::Get().FindOrGeneric(Struct)->GetIconBrushName() : NAME_None;
+									return IconName.IsNone() ? nullptr : FAppStyle::Get().GetBrush(IconName);
+								})
 							]
 							+ SHorizontalBox::Slot()
 							.FillWidth(1.f)
 							.VAlign(VAlign_Center)
-							.Padding(FMargin(8.f, 0.f, 4.f, 0.f))
+							.Padding(FMargin(6.f, 0.f, 4.f, 0.f))
 							[
 								SNew(STextBlock)
 								.Text_Lambda([GetTrackStruct]() -> FText
 								{
 									const UScriptStruct* Struct = GetTrackStruct();
-									return Struct ? Struct->GetDisplayNameText() : FText::GetEmpty();
+									return Struct ? FGSTN_TrackEditorRegistry::Get().FindOrGeneric(Struct)->GetDisplayName() : FText::GetEmpty();
+								})
+								// What the bar says, for a row whose name column is too narrow for it
+								.ToolTipText_Lambda([Model, TrackIndex]() -> FText
+								{
+									const FGSTN_CombatTimelineData* Data = Model->GetData();
+									if (Data == nullptr || !Data->Tracks.IsValidIndex(TrackIndex))
+									{
+										return FText::GetEmpty();
+									}
+									const FGSTN_TimelineTrack* Track = Data->Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack>();
+									return Track ? FGSTN_TrackEditorRegistry::Get().FindOrGeneric(Data->Tracks[TrackIndex].GetScriptStruct())->GetRowLabel(*Track) : FText::GetEmpty();
 								})
 							]
 							+ SHorizontalBox::Slot()

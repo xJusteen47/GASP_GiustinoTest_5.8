@@ -9,7 +9,7 @@
 /**
  * The frame data of the timeline on one line: "Startup 7 | Active 3 | Recovery 14 | FAF 24 | Total 30 (480 ms)", plus the tail
  * when there is one. Read-only, derived from the data on every read, so it can never disagree with the phase bar. The Frame Data
- * tab of the toolkit (E5) hosts it next to the validation findings.
+ * tab of the toolkit hosts it, with the validation findings once the validators exist.
  */
 class SGSTN_FrameDataSummary : public SCompoundWidget
 {

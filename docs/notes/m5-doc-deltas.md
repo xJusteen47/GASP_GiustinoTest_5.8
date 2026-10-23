@@ -116,3 +116,59 @@ One line each: where, what differs from the spec, why. Checkpoints in `docs/arch
   listed in the commit message instead.
 - Not verified headless (needs a rendering editor): painting (colours, hatching, diamonds, labels), the mouse and cursor handling in real windows, keyboard focus routing,
   tab docking, the paint time. The maths, the gestures, undo, the commands and widget construction are covered by `GSTNCombat.Editor.Timeline.*`.
+
+## E5 toolkit, registry, details proxy, built-in track editors
+
+- plan E5 files: as planned, plus `Private/Timeline/GSTN_TimelineTrackEditor.cpp` (the registry; the header is Public), `Widgets/SGSTN_TimelineDetails`,
+  `SGSTN_MontageLengthBar` and `SGSTN_TimelineToolbarExtra`. `GSTN_TimelinePanelTest.*`, the console command `gstn.Combat.OpenTimelinePanelTest` and the test
+  `PanelTestCommandRegistered` are deleted; `Private/Tests/GSTN_EditorTestTypes.h` is now included by tests only (it gained `FGSTN_TestDerivedMovement`).
+  Build.cs gains `AssetDefinition`, `EditorFramework`, `PropertyEditor`. `UAssetDefinitionDefault` itself is in UnrealEd (`AssetDefinitionDefault.h`), `UAssetDefinition`
+  in the engine module `AssetDefinition`; no plugin dependency is needed for either. The definition has no factory (timelines stay Data Assets of the class), it only
+  changes how they open; category Gameplay > Combat.
+- combat-m5-editor 12 `IGSTN_TrackEditor`, differences from the listing: `GetTrackStruct()` returns `const UScriptStruct*`. `GetColor()` has a default (the settings colour of
+  the struct, so a designer re-colours without code) and so does `HasKeys()` (an `IGSTN_KeyedTrackAccess` is registered for the struct: one source of truth). Added
+  `GetIconBrushName()` (an `FAppStyle` brush name, not a brush: the public header stays free of Slate), `GetDefaultLength()` (with `FallbackDefaultLength = 6`, replacing
+  `FGSTN_TimelineActions::DefaultWindowFrames`, which is removed; a point track still takes one frame whatever the editor says) and `AsGizmoProvider()` (no RTTI).
+  `InitNewTrack(Track, AddedAtFrame, Data)`: the second argument is the frame the track was added at (the spec said playhead), and **the model's `AddTrack` calls it**
+  inside the add transaction, so every way of adding a track gets the same defaults. The weapon switch's `SwapFrame` default moved from the model into its track editor.
+- combat-m5-editor 12 `Validate(Track, Data, FGSTN_ValidationReport&)`: **not declared yet**. `FGSTN_ValidationReport` is an E10 type; E10 adds the virtual with an empty default,
+  which breaks no registered editor.
+- `IGSTN_GizmoProvider` and `FGSTN_TrackPreviewContext` are declared as specified in 12 and plan E5 and nothing calls them before E6/E7. Open point for E7: `ApplyWidgetDelta`
+  takes `FGSTN_TimelineEditorModel&`, whose header is Private to the module, so a plugin outside it can implement the query half of a gizmo provider but not the write half
+  until E7 publishes the model's mutation surface (or a narrower write interface).
+- Registry (`FGSTN_TrackEditorRegistry`): `Find` also walks the base structs, so a game's track derived from a built-in keeps the built-in's row until it registers its own.
+  `FindOrGeneric` never fails: the generic editor (window bar, name from the struct, colour from the settings, details only) is made on demand and cached per struct.
+  Add Track lists the registered editors, then an "Other track types" section for every concrete non-hidden track struct without an editor, so the declared Hitbox and
+  HurtboxModifier shells can still be added (as generic rows) until E5b. `OnChanged` is broadcast on register and unregister (nothing listens yet).
+- Built-in editors: CancelWindow, Movement, Tags, Event, WeaponSwitch. **There is no Charge track in M3's Core** (`GSTN_TimelineTypes.h` has none), so there is no charge editor;
+  the plan's list names one. The CancelWindow "condition icon" is a text suffix on the bar ("[on hit]", "[on block]", "[on whiff]"); the registry carries one icon per row, not
+  per state. The icons are `Icons.Next`, `Transform`, `Details`, `Event`, `Convert` (verified in `StarshipStyle.cpp`), picked by meaning and easy to change.
+- Row wiring: the colour swatch, the bar colour, the bar text (`GetRowLabel`, clipped to the bar), the name column (icon, `GetDisplayName`, row label in the tooltip) and the
+  double-click length all come from the track editor of the row's struct. A key on a keyed track is still found through the keyed access registry, not the track editor.
+- combat-m5-editor 5.1 Details: the proxy `UGSTN_TimelineSelectionProxy` (transient UObject) owns a `TInstancedStruct<FGSTN_TimelineTrack>` **copy** of the selected track, and the
+  Details tab shows it with `IStructureDetailsView` over an `FStructOnScope` that points into the copy; `OnFinishedChangingProperties` calls `Commit`, which writes the copy back
+  with `ApplyTrackEdit`. The spec's "pointer to the track" is a copy on purpose: an add, delete or undo moves the memory a pointer would aim at. An interactive change (slider)
+  opens the model's drag on the first change and the committed change closes it, so a slider drag is one undo step. The proxy follows its track **index**, like the selection:
+  when a track is removed, the one that moves into the index is shown; when the index no longer exists the proxy lets go. The tab shows one row at a time (a selection across
+  rows, or nothing, shows a hint). **Keys are not shown yet**: `IGSTN_KeyedTrackAccess` hands out only const key memory, so editing a key's fields in the panel needs a mutable
+  accessor next to `SetKeyTransform`; that arrives with the hitbox adapter (E5b). Selecting a key shows its track.
+- Toolbar (combat-m5-editor 6): the skin and kit combos (stubs, disabled), Validate (disabled; its label is the command's) and the loop range are added to the end of the
+  **panel's** toolbar through a named slot (`SGSTN_TimelineToolbarExtra`), not to the asset editor's toolbar. The panel already holds play, step, frame field with milliseconds,
+  auto-key, add key, **Add Track**, frame all/selection and Fit Length; one toolbar in one place avoids a second set of `UToolMenus` extensions. The asset editor's default
+  toolbar remains, with Save. The panel's toolbar is a single row and clips at narrow widths; wrapping it is cosmetic work for a rendering editor.
+- Loop range (E4 left "Play range" for the E5 toolbar): `FGSTN_TimelineEditorModel::SetPlayRange(Start, End)` / `ClearPlayRange` / `GetEffectivePlayRange`. Editor state like the
+  view: not data, not undone, not saved, cut to `[0, TotalFrames]`, and the whole timeline when empty or left outside by a shorter timeline. Playback loops over it.
+- Warning bar and Fit Total Frames: `SGSTN_MontageLengthBar` sits above the panel in the Timeline tab and shows only when the montage's length in frames differs from
+  `TotalFrames`. It loads the montage once per path (as the Fit command does) and never changes `TotalFrames` itself; the button is `FitTotalFramesToMontage`, one undo step.
+- Layout: `GSTN_TimelineEditor_Layout_v1` as combat-m5-editor 5.1: viewport above the timeline on the left (0.45 / 0.55), details above frame data on the right (0.65 / 0.35).
+  The Viewport tab is a placeholder until E6; the Frame Data tab holds the summary line and a note for the findings that arrive with the validators. The editor saves and
+  restores the layout by its name.
+- One editor per asset: `InitEditor` claims the context before building anything; when another toolkit holds the target, that one is focused (`FocusWindow`) and the second is not
+  opened (returns false). `UAssetEditorSubsystem` normally focuses an open editor before `OpenAssets` runs, so the lease is the backstop for paths that skip it. `InitEditor` sets
+  `RF_Transactional` on the asset, as the engine's own editors do, because an asset made without the flag would record nothing and undo would have nothing to restore.
+- Test notes: `TwoToolkitsOneAssetFocusesOpen` tests the claim the toolkit makes (second claim refused, first claimant focused, close frees the asset) with a stand-in callback.
+  Building the toolkit needs a window; `-nullrhi` has no Slate application. `DetailsFollowsSelection` constructs the Details tab and the montage bar only when a Slate
+  application exists (it does not in this run). The layout test reads the layout text; the asset definition test asks the registry for the class.
+- Not verified headless (needs a rendering editor): opening a timeline from the Content Browser, the four tabs and the saved layout, the structure details view over the proxy
+  (including that the tag query and instanced struct fields edit correctly in a struct-only details view), the Add Track menu and icons, the colours/labels/icons on the rows, the
+  warning bar, the loop range controls, Save, the tab and window behaviour of a refused second toolkit, and all painting.
