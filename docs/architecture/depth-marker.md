@@ -20,6 +20,12 @@ engine source or the mod in this session. "Estimate" = a number to measure, not 
 > **Revision 2026-10-23:** first version. It folds in the owner rule of the same day that almost everything is a pluggable
 > gameplay ability: the marker is **presentation**, so it stays a component plus a subsystem, and every per-pawn on/off switch
 > is **data granted with the pawn** (pawn data, Game Feature component, kit ability set), never a code branch (§6.4).
+>
+> **Revision 2026-10-23, owner answers DM.1 and DM.2 (in part):** the marker points **straight along gravity**; no landing
+> prediction in v1. When the entity is mid-air **below the surface of the last platform** it stood on, the marker also points
+> **up**, against gravity, to that platform's plane (the owner's second screenshot), and when there is also a lower platform
+> below, **both** show: one marker above and one below. The reference plane is the last platform's surface; a designer volume
+> stays an optional override. Changed: §0, §2.2, §2.3 steps 8–9, §2.7 (now an independent "above" layer), §3, §4.1, §5, §7, §8.
 
 Owner request (2026-10-23, verbatim): "Inoltre: per evitare problemi con la percezione di profondità, sarebbe buono adottare un
 sistema alla smash bros melee 3d (la nuova mod uscita), dove c'è un decal, o qualcosa che punta alla piattaforma sotto il
@@ -32,10 +38,13 @@ designer scioglierà alla fine."
 
 - A **depth marker** is a local, per-machine cue: a marker on the surface under a character, joined to it by a dashed line, so
   the player can judge height and horizontal position against platforms in a 3D camera. Some enemies have one (opt-in by data).
-- **Default policy**: point at the first valid surface **straight along the entity's own local gravity**, measured from the
-  feet, with edge tolerance and hysteresis (§2.2–§2.4). A ballistic landing preview is a separate optional layer, off by default.
-- **No ground below**: a **hollow ring on a reference plane** (the owner's second screenshot): level-authored reference volume,
-  else the **last grounded height**, else nothing (§2.7). Inside a KO zone the ring doubles as a warning.
+- **Below** (*Decision*, owner DM.1): point at the first valid surface **straight along the entity's own local gravity**, measured
+  from the feet, with edge tolerance and hysteresis (§2.2–§2.4). No landing prediction in v1.
+- **Above** (*Decision*, owner DM.1): mid-air and **below the surface of the last platform**, a **hollow ring on that platform's
+  plane, above the entity**, joined by a dashed line going up (the owner's second screenshot). It is an independent layer: with a
+  lower platform underneath, **both** the below marker and the above ring show (§2.7).
+- **Reference plane**: the **last platform's surface** (*Decision*, owner DM.2 in part); a level-authored reference volume can
+  override it (*Proposal*). Over a gap at the same level the ring sits below. Inside a KO zone the ring can double as a warning.
 - **Never simulated, never replicated.** Computed on every machine, host included, from the *presented* transform with
   asynchronous traces; a dedicated server creates nothing (§3, §6.3). Cost is bounded: 12 markers, 8 traces per frame (§3, §4.5).
 - **Replaceable look**: a style data asset lists instanced presenters (decal, ring, dashed line, shadow cone, a diegetic
@@ -82,9 +91,9 @@ Non-goals: an aiming tool, a ledge, KO or hit detector, anything in the simulati
 
 **Default selector = D implemented as "A with edge tolerance and hysteresis"** (`UGSTN_DepthTargetSelector_Gravity`). Reason: the
 marker is a depth cue, so it must be stable and physically readable; prediction is a different question and depends on input.
-B ships as a second selector (`..._Landing`, a smaller ghost marker on a separate presenter) and is **off by default**, only for
-the local player and only while the entity is controllable (not in hitstun or tumble). C is not shipped as a default; a designer
-can still write it as a Blueprint selector (§6.5).
+B is **not built in v1** (owner, DM.1: straight along gravity). The selector stays a replaceable class, so a landing preview can
+be added later as a C++ or Blueprint child (a smaller ghost marker on its own presenter, never shown in hitstun) without changing the
+plugin. C is not shipped either; a designer can still write it as a Blueprint selector (§6.5).
 
 ### 2.3 Algorithm (default selector; the pure parts live in `UGSTN_DepthMarkerMath`, §5)
 
@@ -109,8 +118,12 @@ Per marker, per probe tick (rates in §3). `Up` and `Feet` come from the subject
    `SurfaceKey`). Every frame the marker point is the intersection of the subject's column (`Feet + Down * t`) with that plane
    **re-expressed with the component's current transform**. So the marker follows moving bases between traces and hides trace
    latency; traces only revalidate the surface.
-8. **No candidate** → reference plane (§2.7) or nothing.
-9. **Present** (§3, §4): fade by height, state `Ground`, `EdgeHold`, `NoGround`.
+8. **Reference layer** (§2.7), evaluated on every probe tick **independently of steps 3–7** and with no trace (pure plane maths):
+   with `D = dot(Feet - P, Up)` the signed height of the feet over the reference plane, `D < -AboveShowDepthCm` adds the **above
+   target** (the plane point straight along `Up` from the feet); if step 5 found no candidate and `D >= 0`, the **below** target is
+   the ring on the plane; if step 5 found no candidate and `D < 0`, there is no below target, only the above one.
+9. **Present** (§3, §4): fade by height; below states `Ground`, `EdgeHold`, `NoGround`; above layer `AboveReference`. One marker
+   can show a below target and an above target at the same time.
 
 ### 2.4 Stacked platforms, gaps and flicker
 
@@ -151,8 +164,18 @@ A respawn, teleport or pool acquire is a `Teleport`: state cleared, no blend (no
 
 ### 2.7 No ground below: the reference plane
 
-When step 8 finds no candidate, the target is the **reference plane**, drawn with the `NoGround` presenters (hollow ring by
-default, §4). Options considered:
+The reference plane serves two layers (owner, DM.1, 2026-10-23): the **above** marker whenever the entity is mid-air below the
+plane, and the **below** ring when no surface is found under an entity that is above the plane. Both use the hollow ring presenter
+by default (§4). The four cases:
+
+| Feet vs the plane | Surface found below (§2.3 steps 3–7) | Shown |
+|---|---|---|
+| above (or within `AboveShowDepthCm`) | yes | the below marker on that surface (the common case) |
+| above | no (a gap at the same level) | the ring **below**, on the plane: "no ground here" |
+| below | no (off-stage, recovering from under the lip) | the ring **above**, on the plane, line going up (screenshot 2) |
+| below | yes (dropping from a high platform onto a lower one) | **both**: the marker on the lower surface and the ring above |
+
+Options considered for the plane:
 
 | Option | Pros | Cons |
 |---|---|---|
@@ -160,14 +183,19 @@ default, §4). Options considered:
 | **Level-authored reference volume** (`AGSTN_DepthReferenceVolume`: the plane is the volume's top face, in the volume's own up) | Explicit, deterministic, designer-owned; covers ravines whatever the history | Authoring effort; forgotten volumes give no ring |
 | **KO plane** (bottom of a KO zone) | Already in the level (M4 §3) | It is *below* the entity, the opposite of screenshot 2; says where you die, not where the lip is; couples to combat |
 
-**Recommendation: reference volume, else last grounded, else none.** With no authoring the mod's behaviour is reproduced by
-last grounded; a designer overrides it where it is wrong. The KO plane is **not** used as the ring plane; the warning role is
+**Owner answer (DM.2 in part): the plane is the surface of the last platform**, which is "last grounded". Kept as a *Proposal*:
+a reference volume, where a designer places one, overrides it (ravines whose lip is not the last platform), and no plane means no
+ring. The KO plane is **not** used as the ring plane; the warning role is
 served by `bHazard` on a reference volume placed in the pit (§3, §8).
 
 Rules: the last grounded point updates only after `GroundedMinMs` (150 ms) on a **static** surface (`bUpdateFromMovingBases` is
 off by default, so riding an enemy that walks off a cliff does not move the lip); the ring is shown while the entity is within
 `ReferenceMaxDistanceCm` (4000) of the plane, then fades; an entity **above** the plane with no ground (over a gap at the same
-level) gets the ring below it, which reads as "no ground here", the intended meaning of hollow.
+level) gets the ring below it, which reads as "no ground here", the intended meaning of hollow. The above ring appears once the feet
+are `AboveShowDepthCm` (50 cm) below the plane and hides above `AboveHideDepthCm` (30 cm), so landing back on the lip does not
+flicker it; it uses a lighter style than the below marker by default so two markers do not compete, and it follows a gravity change
+like the below plane (rebuilt from the stored point with the new `Up`). While grounded the stored plane moves with every new
+platform, so after landing on the lower platform of row 4 the old ring disappears.
 
 ### 2.8 Valid targets
 
@@ -191,6 +219,7 @@ geometry, one-way and thin platforms, **enemy platform shapes** and traversal su
 | Shown when | the adapter says `bAirborne` **and** height above the target ≥ `ShowHeight` (60 cm); hidden below `HideHeight` (40 cm) | Hysteresis; nothing to read while standing |
 | Fade by height | `AlphaOverHeight` and `RadiusOverHeight` curves in the style (alpha 1 → 0.25, radius 1 → 0.6 over 0..`FadeEndHeight`) | Mario-style shrinking cue; far surfaces stay faint, not absent |
 | `NoGround` shown | within `ReferenceMaxDistanceCm` of the plane, regardless of `ShowHeight` | The ring is the main cue off-stage |
+| `AboveReference` shown | airborne, feet at least `AboveShowDepthCm` (50 cm) below the plane (hidden above 30 cm), within `ReferenceMaxDistanceCm`; with or without a below marker | Owner, DM.1: below the last platform the marker points up |
 | Whose | **local player(s)** always; allies per `Audience` (`LocalOnly`, `LocalAndAllies`, `All`; default `LocalAndAllies`, co-op); enemies **only if opted in by data** (§6.4) | The owner asked for it on some enemies only |
 | Audience source | `IGenericTeamAgentInterface` when the pawn has it; otherwise the adapter's `GetTeamId` | No team plugin dependency |
 | Distance cull | local player none; others beyond `MaxViewDistanceCm` (4000) get no probe and no marker | Cost control |
@@ -217,8 +246,8 @@ option (accessibility; not per-pawn data).
 | Layer | Technique | Why |
 |---|---|---|
 | Ground disc | **Decal** (`UDecalComponent`), box projected along `Down`, size from radius | Clips to geometry and edges, follows slopes; no floating disc hanging off a platform edge |
-| No-ground ring | **Translucent unlit mesh** (flat ring on the plane), oriented to `Up`, no depth fade | A decal needs a receiver; there is none in the void |
-| Dashed line | **Camera-facing quad** from the feet to the marker point | One mesh, shader-driven dashes (§4.2) |
+| No-ground ring, above ring | **Translucent unlit mesh** (flat ring on the plane), oriented to `Up`, no depth fade; the above ring has its own presenter entry so a style can make it lighter | A decal needs a receiver; there is none in the void (and the above plane is often inside the platform) |
+| Dashed line | **Camera-facing quad** from the feet to the below marker point, and from the head (`Feet + Up * TopOffset`) to the above ring | One mesh, shader-driven dashes (§4.2); starting above the head keeps the up line off the character |
 | Shadow cone | Cone mesh, apex at the feet, base = disc radius on the target | The owner's "cono d'ombra"; combines disc and line |
 | Diegetic | A designer **presenter** (Blueprint) driving a Niagara system or actor | The owner's "something more diegetic", decided at the end |
 
@@ -264,14 +293,15 @@ Naming: `UGSTN_`, `FGSTN_`, `EGSTN_`, export `GSTNDEPTHMARKER_API`; stateless ma
 |---|---|---|---|
 | `FGSTN_DepthSubjectState` | Core | USTRUCT | What the adapter reports each frame (table below) |
 | `FGSTN_DepthCandidate` | Core | USTRUCT | One trace hit reduced to numbers: `Height`, `Point`, `Normal`, `SurfaceKey` (opaque `uint64`), `BehaviourTags`, flags `bBlocking`, `bStartPenetrating`, `bMovingBase`, `bExcluded` |
-| `FGSTN_DepthTarget` | Core | USTRUCT | Result: `Kind {None, Surface, ReferencePlane}`, `Point`, `Normal`, `Height`, `SurfaceKey`, `LocalPoint/LocalNormal`, `EdgeAlpha`, `bHazard` |
+| `FGSTN_DepthTarget` | Core | USTRUCT | One target: `Kind {None, Surface, ReferencePlane}`, `Point`, `Normal`, `Height`, `SurfaceKey`, `LocalPoint/LocalNormal`, `EdgeAlpha`, `bHazard` |
+| `FGSTN_DepthResult` | Core | USTRUCT | What a selector returns: `Below` and `Above` (`FGSTN_DepthTarget` each, either may be `None`) |
 | `FGSTN_DepthSelectionState` | Core | USTRUCT | Per marker memory: previous `SurfaceKey`, height, last switch time, last grounded point, last `Up` |
 | `FGSTN_DepthSelectorParams` | Core | USTRUCT, BlueprintType | Tuning of §2 (table below) |
-| `UGSTN_DepthMarkerMath` | Core | BlueprintFunctionLibrary | `FilterCandidates`, `ChooseFirstBelow`, `ApplyHysteresis`, `ProjectOntoPlane`, `ClampTilt`, `ReferencePlane`, `ComputeFade`, `PredictBallistic` (pure, `BlueprintPure`) |
+| `UGSTN_DepthMarkerMath` | Core | BlueprintFunctionLibrary | `FilterCandidates`, `ChooseFirstBelow`, `ApplyHysteresis`, `ProjectOntoPlane`, `ClampTilt`, `ReferencePlane`, `ReferenceAbove`, `ComputeFade` (pure, `BlueprintPure`; a `PredictBallistic` helper only if a landing selector is added later) |
 | `UGSTN_DepthMarkerSettings` | Runtime | UDeveloperSettings | Project defaults and caps (below) |
 | `UGSTN_DepthMarkerStyle` | Runtime | PrimaryDataAsset | Look: `TArray<Instanced UGSTN_DepthMarkerPresenter> Presenters` with `ActiveStates`, curves, tints, `OccludedAlpha`, `LinkPolicy` |
 | `UGSTN_DepthMarkerPresenter` | Runtime | Abstract, Blueprintable, EditInlineNew | `BlueprintNativeEvent OnMarkerUpdated(const FGSTN_DepthMarkerView&)`, `OnStateChanged`; built-ins `_Decal`, `_Ring`, `_Line`, `_Cone` |
-| `UGSTN_DepthTargetSelector` | Runtime | Abstract, Blueprintable, EditInlineNew | `BlueprintNativeEvent BuildProbes(Subject) → probes`, `ChooseTarget(Subject, Hits, State) → Target`; built-ins `_Gravity` (default), `_Landing` |
+| `UGSTN_DepthTargetSelector` | Runtime | Abstract, Blueprintable, EditInlineNew | `BlueprintNativeEvent BuildProbes(Subject) → probes`, `ChooseTarget(Subject, Hits, State) → FGSTN_DepthResult`; built-in `_Gravity` (default; a `_Landing` child is a later option, §2.2) |
 | `UGSTN_DepthSurfaceResolver` | Runtime | Abstract, Blueprintable, EditInlineNew | `ResolveSurface(const FHitResult&) → {Behaviours, bTarget}`; default: unknown, passes |
 | `IGSTN_DepthSubject` | Runtime | UINTERFACE | An actor that reports its own `FGSTN_DepthSubjectState` (BlueprintNativeEvent) |
 | `IGSTN_DepthSubjectProvider` | Runtime | UINTERFACE | A batch source of subjects that are not actors with components (minion puppets); registered with the subsystem |
@@ -287,14 +317,16 @@ Naming: `UGSTN_`, `FGSTN_`, `EGSTN_`, export `GSTNDEPTHMARKER_API`; stateless ma
 |---|---|
 | `Feet`, `Up` | Foot point and unit up (opposite of the entity's local gravity this frame) |
 | `bAirborne`, `bGrounded` | From the movement component; `bGrounded` also feeds the last grounded point |
-| `FootRadius`, `Velocity` | Footprint sweep radius and decal scale; velocity for the optional landing selector |
+| `FootRadius`, `TopOffset` | Footprint sweep radius and decal scale; height of the head over the feet (start of the up line) |
+| `Velocity` | Unused by the v1 selector; kept for a later landing selector |
 | `BaseComponent` (weak) | What the entity stands on, for `bMovingBase` and the grounded point |
 | `bOnWall`, `bParked`, `bSuppressed` | Wall mode, linked/parked, dead or hidden; derived from **mode names given as data** on the adapter (`WallModeNames`, `ParkedModeNames`), so the adapter knows no project mode |
 | `TeamId`, `Tint` | Optional, for audience and colour |
 
 `FGSTN_DepthSelectorParams` holds every named tolerance of §2 (`ProbeLength`, `PenetrationTolerance`, `CoplanarTolerance`,
 `EdgeForgivenessCm`, `FootprintRadiusScale`, `MinDwellMs`, `SwitchBlendMs`, `MinNormalDot`, `MaxTiltDegrees`, `SurfaceOffsetCm`,
-`UpResetDegrees`, `GravityFadeMs`, `GroundedMinMs`, `ReferenceMaxDistanceCm`, `bUpdateFromMovingBases`), each `EditAnywhere,
+`UpResetDegrees`, `GravityFadeMs`, `GroundedMinMs`, `ReferenceMaxDistanceCm`, `AboveShowDepthCm`, `AboveHideDepthCm`,
+`bUpdateFromMovingBases`), each `EditAnywhere,
 BlueprintReadOnly`, `Category = "DepthMarker|Selection"`, with `ClampMin` and `ForceUnits`.
 
 `UGSTN_DepthMarkerSettings`: `bEnabled`, `TraceChannel`, `ExcludedObjectTypes`, `TargetBehaviours` (query), `bUnknownSurfacesPass`,
@@ -366,8 +398,8 @@ The marker is not an ability (presentation), but per the owner rule **no switch 
 
 - **Look**: swap the `UGSTN_DepthMarkerStyle` asset (settings default < component override < game mode or experience data).
   A **local style override** sits on top: `UGSTN_DepthMarkerSubsystem::PushStyleOverride(Source, Style, Priority)` / `PopStyleOverride(Source)`,
-  per machine, used by the Levels mode's camera sections (a fixed camera wants a stronger line, [game-modes.md](game-modes.md) §5); presentation only,
-  nothing replicates. Presenters
+  per machine; `Source` is an opaque key (e.g. the camera section object). Its user is the section action of the bridge `GSTNCameraDepthMarker`
+  ([camera.md](camera.md) §8; a fixed-angle section wants a stronger line, [game-modes.md](game-modes.md) §5); presentation only, nothing replicates. Presenters
   are `Blueprintable` instanced objects; a Blueprint presenter can drive any actor or Niagara system (the diegetic option).
 - **Target selection**: `UGSTN_DepthTargetSelector` has `BlueprintNativeEvent`s taking a const input view and returning a result
   struct; the C++ `_Gravity` selector is the default `_Implementation`, and a Blueprint child can call the parent or replace it (cone,
@@ -383,7 +415,7 @@ The marker is not an ability (presentation), but per the owner rule **no switch 
 `NearerSurfaceSwitchesAtOnce`, `EdgeHoldWithinForgiveness`, `SwitchBeyondForgivenessWithBlend`, `MinDwellPreventsPingPong`,
 `PitUsesReferenceVolume`, `PitUsesLastGroundedPlane`, `NoReferenceMeansNone`, `RingAboveEntityWhenBelowPlane`, `GravityFlipUsesNewUp`,
 `SidewaysGravityPlane`, `UpResetOnlyOnJump`, `SlopeTiltClamped`, `MovingBaseLocalPlaneFollows`, `FadeCurvesMonotonic`,
-`BallisticLandingUnderGravity`, `BallisticAbortsOnGravityChange`. Tests use several `Up` vectors, diagonal ones included, so a hidden
+`AboveAndBelowWhenDroppingToLowerPlatform`, `AboveHysteresisAtLip`, `AboveClearedOnLanding`, `AboveFollowsGravityFlip`. Tests use several `Up` vectors, diagonal ones included, so a hidden
 world-Z assumption fails.
 
 **Automation, runtime (`GSTNDepthMarker.Runtime.*`, editor world):** `SchedulerRespectsTraceCap`, `RankingKeepsLocalPlayer`,
@@ -392,7 +424,7 @@ world-Z assumption fails.
 
 **Test map `L_DepthMarker_Min`** (plugin content, one plugin-owned pawn Blueprint, §3.5): flat floor and jump; three stacked
 platforms; a one-way thin platform; a short and a long gap; ramp and stairs; a pit with and without a reference volume; a gravity
-flip and a sideways gravity volume; a lift and a sliding platform; an enemy platform proxy (once `GSTNPlatform` exists); a wall; a
+flip and a sideways gravity volume; a high platform over a lower one with a gap between (above and below markers together); a lift and a sliding platform; an enemy platform proxy (once `GSTNPlatform` exists); a wall; a
 trampoline; a trigger volume, a pawn and a projectile under a platform (must not be targets); a 12-flyer stress area.
 
 **Harness (listen host + 2 clients, then dedicated + 2 clients):** `scenario_depthmarker_remote` (a remote pawn's marker within 1 cm
@@ -409,7 +441,7 @@ opted in through the bridge: the subsystem must hold ≤ 12 markers and ≤ 8 tr
 
 | Risk | Mitigation |
 |---|---|
-| The straight-down marker is not what the owner wants for "where will I land" | `_Landing` selector as a separate layer; question DM.1 |
+| Two markers at once (dropping to a lower platform) add clutter | Lighter above style, fade by distance to the plane (`ReferenceMaxDistanceCm`), both data per style; test map case |
 | Last grounded plane is wrong after a wall slide, a high launch or an airborne spawn | Reference volumes override it; moving bases do not update it; no plane means no ring |
 | Enemy platform shapes ignore the marker channel, so players see the floor below an enemy platform | One profile line in the platform plugin (§2.8); test map entry; validator warning in the platform plugin |
 | Characters or projectiles become targets (a Block default of a new channel) | Ignore list of subjects, `ExcludedObjectTypes`, tests `TriggerPawnProjectileNeverTargets`; *Unsure* of the default response of a new channel |
@@ -423,4 +455,4 @@ opted in through the bridge: the subsystem must hold ≤ 12 markers and ≤ 8 tr
 
 ## 9. Questions for the owner
 
-The questions DM.1–DM.9 (in Italian, for the owner) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Indicatore di profondità". Each one states the hypothesis this spec is written on, so the spec stands until an answer changes it. The main one is DM.1: straight down along local gravity (the default selector, §2.2) or the predicted landing point (an optional second selector).
+The questions DM.1–DM.9 (in Italian, for the owner) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Indicatore di profondità". Each one states the hypothesis this spec is written on, so the spec stands until an answer changes it. DM.1 is answered (straight along gravity, plus the above ring below the last platform, both when dropping to a lower one) and DM.2 in part (the plane is the last platform's surface), both on 2026-10-23.

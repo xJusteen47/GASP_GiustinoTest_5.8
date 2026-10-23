@@ -22,6 +22,13 @@ Notation as in modularity-and-tags.md: *Decision* = decided elsewhere or by the 
 > **Revision 2026-10-23 (owner rule, applied throughout):** player-facing mode actions (activate a terminal, call a reinforcement or a drop, call extraction,
 > revive) are **gameplay abilities** granted by the mode's Game Feature / ability sets, never hard-coded mode logic. The mode frameworks own **state and rules**
 > (server-authoritative); abilities are the **verbs** (§2.4).
+>
+> **Revision 2026-10-23, owner answers (11:47):** **GM.1** Levels first; the Expedition stays planned but is **low priority** for now.
+> **GM.6** camera: generally far from the player (Mario 3D World), over the shoulder to aim with some weapons and abilities, movable
+> by hand, but a level may set the desired angle and whether it can be moved: specified in [camera.md](camera.md) (`GSTNCamera`).
+> **GM.9** no revive: **shared reinforcements (lives)**. Read here as one rule for both PvE modes (a shared pool of lives); in Levels a
+> fallen player comes back at the shared checkpoint, in Expedition a teammate calls the reinforcement (*Proposal* for how each mode spends
+> the pool). **Mod.20** the interact probe becomes its own plugin, [interaction.md](interaction.md) (`GSTNInteract`, root `Interact.*`).
 
 ## 0. Summary
 
@@ -33,8 +40,8 @@ Notation as in modularity-and-tags.md: *Decision* = decided elsewhere or by the 
    authored modules from it.** Seeded generation on every machine is rejected for anything with collision; it stays acceptable for cosmetic scatter only.
 4. **Mission state is server-authoritative gameplay state, outside the rollback simulation** (it must count once, it is global, a one-RTT delay is invisible).
    Only the player's verb is predicted; its confirmation is one authoritative event (§4.3).
-5. Levels = designer maps + checkpoints + a `Reach` goal (a mission) + camera sections + score. Expedition = generated map + mission chain + extraction + reinforcements + spawn
-   director. Both reuse M8 packs (**150 is a population with about 60 awake**, M8 §4d.1). Anything that changes the rollback simulation is fixed by the Experience before pawns
+5. Levels = designer maps + shared checkpoints + a **shared pool of lives** (owner, GM.9) + a `Reach` goal (a mission) + camera sections ([camera.md](camera.md)) + score.
+   Expedition (later, low priority) = generated map + mission chain + extraction + shared reinforcements + spawn director. Both reuse M8 packs (**150 is a population with about 60 awake**, M8 §4d.1). Anything that changes the rollback simulation is fixed by the Experience before pawns
    simulate and never toggled mid-match (§2.5).
 
 ## 1. Scope and the mode list
@@ -42,7 +49,7 @@ Notation as in modularity-and-tags.md: *Decision* = decided elsewhere or by the 
 | Mode | Source | What it is (Proposal unless noted) | Experience tag |
 |---|---|---|---|
 | **A. Levels** | owner (two sentences) | Designer-authored 3D stages, Mario 3D World style, co-op PvE: mostly linear stages, shared checkpoints, a goal, designer-chosen camera sections, KO zones (ravines) and trampolines, enemies placed by the designer. | `Experience.Mode.Levels` |
-| **B. Expedition** | owner (two sentences) | Helldivers style: a large map generated at random from authored modules, a set of missions, optional ones, an extraction, reinforcement of fallen teammates, an enemy director with patrols and breaches, drops from the sky. | `Experience.Mode.Expedition` |
+| **B. Expedition** | owner (two sentences); **low priority for now** (owner, 2026-10-23 11:47) | Helldivers style: a large map generated at random from authored modules, a set of missions, optional ones, an extraction, reinforcement of fallen teammates, an enemy director with patrols and breaches, drops from the sky. | `Experience.Mode.Expedition` |
 | **C. Versus (PvP)** | owner: "PvP exists", shield only here | Another experience on the same frameworks: authored arenas, teams, KO zones as the main kill, stocks or timed respawn, shield on, no missions, no minions. **Not designed here**; section 2.3 only shows its toggles so nothing blocks it. | `Experience.Mode.Versus` |
 
 Out of scope: kits, pickups, support weapons, mods and backpacks (**[combat-loadout-mods.md](combat-loadout-mods.md)**: this file only *spawns* their pickups and drops and decides whether
@@ -56,7 +63,7 @@ mid-match changes are allowed); the depth marker (`depth-marker.md`); lobby, mat
 | Plugin (modules) | Layer | Job | May depend on | Owns tag roots / leaves |
 |---|---|---|---|---|
 | `GSTNMission` (`Core`, `Runtime`, `Editor`) | L3 optional | Objective rules, mission graph and chains, replicated mission state, markers. **No combat, GAS, NP or Mover.** | GameplayTags, NetCore, message router (modularity §5 item 4, *Unsure* in 5.8) | `Mission.*`, `Message.Mission.*` |
-| `GSTNModeVerbs` (`Core`, `NP`) | L3b | `UGSTN_GA_ModeVerb`, the requestable-prop candidate provider for the interact probe (M6 §8), `Command.Mode.*`, republisher of verb events as messages. | `GSTNCombat` (any module), `GSTNCore` (payload structs, see below), the interact probe's `Core` | `Ability.Mode.*`, `Command.Mode.*`, `Combat.Interact.Target.Objective`, `Message.Mode.*` |
+| `GSTNModeVerbs` (`Core`, `NP`) | L3b | `UGSTN_GA_ModeVerb`, the requestable-prop candidate provider for the interact probe (`GSTNInteract`, [interaction.md](interaction.md)), `Command.Mode.*`, republisher of verb events as messages. | `GSTNCombat` (any module), `GSTNCore` (payload structs, see below), `GSTNInteractCore` | `Ability.Mode.*`, `Command.Mode.*`, `Interact.Target.Objective`, `Message.Mode.*` |
 | `GSTNRespawn` (`Core`, `Runtime`) | L3 optional | Checkpoints, respawn policies, reinforcement pool, stocks, player-spawn service interface. No combat dependency: it reads KO through messages. | GameplayTags, NetCore, message router | `Message.Respawn.*` |
 | `GSTNSpawnDirector` (`Core`, `Runtime`) | L3 optional | Pressure model, spawn patterns (wave, patrol, breach), zones, budgets. Spawns through `IGSTN_SpawnSink`; knows no minion. | GameplayTags, message router | `Spawn.*`, `Message.Spawn.*` |
 | `GSTNSpawnDirectorMinion` (one module) | bridge | `FGSTN_SpawnSinkMinion`: turns director requests into `UGSTN_MinionSpawner::Spawn` (M8 §10) and `UGSTN_MinionWaveDefinition`s. No tags, no content. | exactly `GSTNSpawnDirector` + `GSTNMinion` | none |
@@ -92,7 +99,7 @@ and `GenerationVersion`; a mismatch refuses the connection.
 | Shield | Sim | defence rules `bShieldEnabled` (M6 §1d); the shield binding is then not built and the slot is free for kits | **off** (owner) | **off** (owner) | on (owner) |
 | Friendly fire | Sim | `UGSTN_CombatRules` relationships (M4; **undecided**, existing question M4.12) | open | open | team rule |
 | KO zones | Sim | level actors `AGSTN_KOZone` (M4 §3b); present where the designer or a module puts them | ravines | ravine modules | arena edges |
-| What a KO means | Server | `UGSTN_RespawnRules` by `KOReason` (Health or Zone) | checkpoint | reinforcement | stock |
+| What a KO means | Server | `UGSTN_RespawnRules` by `KOReason` (Health or Zone) | one life from the shared pool, back at the checkpoint (owner GM.9: shared lives, no revive) | shared reinforcement, called by a teammate (owner GM.9) | stock |
 | Mid-match kit change by pickup | Sim | a flag in the loadout rules (loadout spec); this file only decides the value and places pickups | designer-placed | drops and found kits | question GM.13 |
 | Backpack and support-weapon drops | Server | `UGSTN_DropTable` entries naming the loadout spec's pickups (§6.3) | optional, placed | yes | no |
 | Minion budgets | Server | `UGSTN_SpawnDirectorRules` + M8 settings, overridden per Experience (modularity §3.9 override order) | §7.3 | §7.3 | none |
@@ -106,11 +113,11 @@ settings, and one authoritative request at its confirmation frame). A mode adds,
 
 | Verb | Ability identity tag | Target source | Server-side handler (state owner) |
 |---|---|---|---|
-| Activate a terminal, arm a charge, open a gate | `Ability.Mode.Interact` | the interact probe's target (`Combat.Interact.Target.Objective`) | `GSTNMission`: objective rule `Activate` |
+| Activate a terminal, arm a charge, open a gate | `Ability.Mode.Interact` | the interact probe's target (`Interact.Target.Objective`) | `GSTNMission`: objective rule `Activate` |
 | Call a reinforcement (bring back a fallen teammate) | `Ability.Mode.CallReinforcement` | aim point | `GSTNRespawn`: pool, placement, pod |
 | Call a drop (supply pod: kits, support weapons, backpacks) | `Ability.Mode.CallDrop` | aim point | drop service of the mode (§6.3) over `UGSTN_DropTable` |
 | Call extraction | `Ability.Mode.CallExtraction` | the extraction console (interact target) | `GSTNMission`: objective `Extract` |
-| Revive in place | `Ability.Mode.Revive` | a downed teammate | **not specified**: needs a "downed" combat state that does not exist (GM.9) |
+| Revive in place | none | none | **not planned** (owner, GM.9: no revive; shared reinforcements instead), so no "downed" combat state is needed |
 | Carry and deliver an item | M10's pickup, carry, drop and throw abilities (**no new verb**) | held object | `GSTNMission` reads the confirmed M10 events |
 
 Mechanics (*Proposal*): `UGSTN_GA_ModeVerb` derives from `UGSTN_GA_Base` (Blueprintable; designers author the timeline and presentation as in modularity §3.8). Data per
@@ -122,7 +129,7 @@ their own state, then mutate it**. A refusal changes nothing; the client sees th
 seam in `GSTNCombatNP` that this spec needs. Without it the fallback is a server request through the combat inbox (modularity §5b), more code. Spike G5.
 
 **The interact button.** A terminal is a third meaning of the Interact button after tap = grab and hold = pick up (owner, M6 §8). The probe projects exactly one
-`Combat.Interact.Target.*` tag per frame, so meanings never compete; the new leaf `Target.Objective` is declared by `GSTNModeVerbs`. *Proposal*: `Command.Mode.Interact`
+`Interact.Target.*` tag per frame, so meanings never compete; the new leaf `Target.Objective` is declared by `GSTNModeVerbs`. *Proposal*: `Command.Mode.Interact`
 = `Hold(Interact, HoldFrames)` requiring that tag (a hold avoids accidental activation; data in the slot set, changing it costs no code). Tie priority with grab,
 pickup and mount (data `InteractPriority`, existing question M6.22) gets a fourth entry. **Objective availability is not simulated state**: a terminal that is not
 yet armed may look interactable on a lagging client; the server refuses and the ability cancels once. Mitigation: objectives arm long before players reach them
@@ -273,20 +280,21 @@ with the required players) or **failure** (everyone down and the pool empty, a t
   a plain one does not). Level change = seamless travel. Designers place: spawners and wave triggers (M8 §10), KO zones, trampolines (`GSTNLevelObjects`, M4 H11b),
   checkpoints, objective actors, collectibles, kit pickups (loadout spec), camera sections.
 - **Checkpoints.** `AGSTN_Checkpoint` (order index, section id), **shared by the team**: the first player to touch it (host-side position from the NP server state)
-  activates it for everyone. Respawn picks the last activated checkpoint; `UGSTN_RespawnRules` says how many lives (unlimited by default, a counter for the
-  score, GM.4), delay, invulnerability frames, whether a fallen player waits for a teammate or all restart. KO by `Health` or by `Zone` use the same rule (data by
+  activates it for everyone. Respawn picks the last activated checkpoint. **Lives are a shared pool** (owner, GM.9: shared reinforcements, no revive):
+  each KO spends one life from the team's pool and the fallen player comes back at the checkpoint after a delay (*Proposal*: automatic, no teammate call in
+  Levels). `UGSTN_RespawnRules` holds the pool size, extra lives from collectibles, delay and invulnerability frames; what happens when the pool is empty
+  (restart from the checkpoint or from the level start) is still GM.4. KO by `Health` or by `Zone` use the same rule (data by
   `KOReason`); the death presentation (crystal shatter) plays before the new pawn spawns.
 - **Goal.** A `Reach` objective (§4.1) at a goal zone: the level completes when any player or all alive players are inside (`Require`, GM.5). Secondary
   objectives (collect, defeat a boss) are optional missions in the same set. Levels therefore need no goal code of their own.
 - **Collectibles** (Mario 3D World style stars, stamps): `UGSTN_CollectibleComponent`, taken server-side once, `Message.Mission.Collected`, team or per-player counting
   and persistence are GM.5 and GM.3; v1 counts per level, no save.
-- **Camera sections** (*Proposal*, GM.6). The reference uses mostly fixed and rail cameras; the project's style is not stated. `AGSTN_CameraSection` (volume, optional spline)
-  holds a `UGSTN_CameraModeDefinition` (follow, fixed, rail, limited orbit, blend time, player rotation allowed, a soft reference to a depth-marker style). Each client picks the
-  section from **its own** pawn (a per-player camera is the safe online default; a shared camera that frames all players is a question). Presentation, but **the camera yaw is
-  an input** (`CameraYaw` in `FGSTN_InputCmd`, combat.md §6.1): a cut would flip the stick direction mid-run, so the input source latches the world direction until the stick
-  returns to neutral (client-side only, the simulation is untouched). Fixed cameras hurt depth reading: a section sets the depth marker's **local style override**
-  ([depth-marker.md](depth-marker.md) §6.5, added for this case; presentation only), and the marker is on by default there. `Camera.*` has no owner yet (§8.2). A 2.5D
-  plane lock is **not proposed** (not asked; it would be a simulation change). The camera follow stops on KO and resumes on respawn.
+- **Camera** (owner, GM.6, 2026-10-23): generally **far from the player**, Mario 3D World style; it may go **over the shoulder** to aim with some
+  weapons and abilities; the player can move it by hand, but **a level section can set the desired angle and whether it can be moved**. All of it is the
+  `GSTNCamera` plugin ([camera.md](camera.md)): this mode only places its section volumes. Each client picks the section from **its own** pawn (per-player
+  camera online). The camera yaw is an input (`CameraYaw`, combat.md §6.1), so a cut latches the stick's world direction until the stick returns to neutral
+  (a hold in the input source, wired by the bridge `GSTNCameraInput`, camera.md §5). Fixed-angle sections set the depth marker's local style override
+  ([depth-marker.md](depth-marker.md) §6.5) through a section action supplied by the bridge `GSTNCameraDepthMarker`, so neither plugin knows the other. A 2.5D plane lock is **not proposed** (not asked; it would be a simulation change).
 - **Scoring** (*Proposal*): `UGSTN_ScoreRules` maps message tag queries to counters (kills, collectibles, deaths, time) shown at the results screen; whether there
   is a score and a rank is GM.5.
 
@@ -302,9 +310,9 @@ reinforcement settings.
 
 - **Reinforcement** (state in `GSTNRespawn`, verb `Ability.Mode.CallReinforcement`): a shared pool (initial size, regeneration, floor), one call brings back one
   fallen teammate through a pod at the aim point after a delay; invulnerability frames, the new pawn is a fresh NP entity, its kit is the lobby kit unless the
-  loadout spec says otherwise (GM.9). v1 uses the aim point; a thrown beacon would be an M10 object (`Held.Type.Beacon`) and is a later option.
+  loadout spec says otherwise (GM.9, kit part still open). The pool is the shared lives of the owner's answer to GM.9 (no revive). v1 uses the aim point; a thrown beacon would be an M10 object (`Held.Type.Beacon`) and is a later option.
 - **Extraction**: opens when the chain says so (`Message.Mission.ExtractionOpened`); the console is an `Activate` target; the verb starts a countdown during
-  which a `Defend` objective runs and the director raises pressure; success needs the required players inside the zone at the end (GM.8: all alive, or at least one). No downed state exists, so v1 reinforces only, no revive in place (GM.9).
+  which a `Defend` objective runs and the director raises pressure; success needs the required players inside the zone at the end (GM.8: all alive, or at least one). No revive in place (owner, GM.9): only reinforcements.
 
 ### 6.3 Drops and backpacks (spawn only)
 
@@ -363,7 +371,7 @@ recorded honestly. The host's own hits are not lag-compensated (host advantage, 
 | `UGSTN_RespawnRules`, `FGSTN_RespawnState`, `AGSTN_Checkpoint`, `IGSTN_PawnSpawnService`, `UGSTN_RespawnSubsystem` | data, POD, actor, interface, subsystem | `GSTNRespawnCore/Runtime` | rules: `Policy {Checkpoint, Reinforcement, Stocks}`, delay, limit, placement (`Checkpoint`, `DropPod`, `NearTeam`), invulnerability, `JoinInProgress`; the GameMode or project implements the service |
 | `UGSTN_SpawnDirectorRules`, `UGSTN_SpawnPatternDefinition`, `UGSTN_SpawnDirectorSubsystem`, `AGSTN_SpawnZone`, `AGSTN_PatrolRoute`, `IGSTN_SpawnSink` | data, subsystem, actors, interface | `GSTNSpawnDirectorCore/Runtime` | §7 |
 | `UGSTN_ModuleDefinition`, `UGSTN_GenerationRules`, `FGSTN_LayoutDescription`, `FGSTN_Rng`, `UGSTN_LayoutSolver`, `UGSTN_LevelBuilderSubsystem` | data, struct, pure class, subsystem | `GSTNProcGenCore/Runtime` | `UGSTN_ModuleDefinition`: soft level, footprint in cells, sockets, slots (`Generation.Slot.*`), traversal classes, weight, tags. `UGSTN_GenerationRules`: pool, size, attempt cap, mission-site rules |
-| `UGSTN_LevelSetDefinition`, `AGSTN_CameraSection`, `UGSTN_CameraModeDefinition`, `UGSTN_ScoreRules` | data, actor | `GSTNMode_Levels` | §5 |
+| `UGSTN_LevelSetDefinition`, `UGSTN_ScoreRules` | data | `GSTNMode_Levels` | §5 (camera sections and camera modes are `GSTNCamera` types, [camera.md](camera.md)) |
 | `UGSTN_ExpeditionDefinition`, `UGSTN_DifficultyDefinition`, `UGSTN_DropTable` | data | `GSTNMode_Expedition` | §6; difficulty rows: map size, mission counts, enemy tier mix, `SpawnCost` multiplier, alert growth, reinforcement pool, time limit, scaling by player count |
 
 Every behaviour type has a Blueprint form with a `BlueprintNativeEvent` entry point and an example Blueprint in the plugin's test content (modularity §3.8, §7.1 item 11);
@@ -376,12 +384,12 @@ no hard content references between plugins (modularity §3.9): modes reference m
 | `Mission.Def.*`, `Mission.Objective.*` | designer identity of missions and objectives | root `GSTNMission`; leaves the mode or content plugin | root native, leaves **ini** (`Config/Tags/<Mode>.ini`) |
 | `Mission.Kind.*`, `Mission.State.*` | `Eliminate DestroyTarget Activate Retrieve Defend Reach Hold Escort Collect Extract`; `Locked Available Active Completed Failed` (names of the replicated enum, derived, never granted) | `GSTNMission` | native |
 | `Message.Mission.*` | `ObjectiveActivated Progressed Completed Failed`, `MissionCompleted Failed`, `Collected`, `ExtractionOpened Started` | `GSTNMission` | native |
-| `Message.Mode.Verb`, `Ability.Mode.*`, `Command.Mode.*`, `Combat.Interact.Target.Objective` | verbs of §2.4; designer verbs as ini leaves | `GSTNModeVerbs` (`Command.*` root: `GSTNInput`; `Combat.Interact.*` root: `GSTNLink` or the probe's plugin, the leaf is ours) | native + ini |
+| `Message.Mode.Verb`, `Ability.Mode.*`, `Command.Mode.*`, `Interact.Target.Objective` | verbs of §2.4; designer verbs as ini leaves | `GSTNModeVerbs` (`Command.*` root: `GSTNInput`; `Interact.*` root: `GSTNInteract`, [interaction.md](interaction.md); the leaf is ours) | native + ini |
 | `Message.Respawn.*` | `Down Respawned PoolChanged` | `GSTNRespawn` | native |
 | `Spawn.Zone.*`, `Spawn.Pattern.*`, `Message.Spawn.*` | designer zone names and pattern identities; `RequestPattern PatternStarted Alert` | `GSTNSpawnDirector` | roots native, leaves ini |
 | `Generation.Module.*`, `Generation.Slot.*`, `Generation.Socket.*`, `Generation.Biome.*`, `Message.Generation.*` | module and slot identities, socket types, loading progress (`LayoutReady ModulesBuilt Failed`); native slot leaves `Start Extraction Objective SpawnZone Patrol Drop` | `GSTNProcGen` | roots native, leaves ini |
 | `Experience.Mode.*`, `Experience.Trait.*` | `Levels Expedition Versus`; `PvE PvP Coop Procedural` | existing root (modularity §4.2), leaves by the mode plugin or `GSTNExperience` | ini |
-| `Camera.*` | `Camera.Mode.<Name>` leaves ini | **owner open**: decided with `depth-marker.md` (a camera plugin, or `GSTNMode_Levels` until a second consumer exists) | ini |
+| `Camera.*` | `Camera.Mode.<Name>` leaves ini | `GSTNCamera` ([camera.md](camera.md)); two consumers now: level sections and aiming abilities | root native, leaves ini |
 
 **No new `Mode.*` root.** `Experience.Mode.<Name>` is already the mode identity (modularity §4.2b); a second root for one concept would break one-owner-per-root. `Ability.Mode.*` and
 `Command.Mode.*` use "Mode" only as a family segment. Mission state is never a tag granted on a pawn (ASC tags are simulated); others read the replicated state or the messages. Tags
@@ -413,12 +421,12 @@ unbound in Levels and Expedition, bound in Versus; a Sim toggle change mid-match
 
 | Milestone | Content | Needs |
 |---|---|---|
-| **M12 Mode framework + Levels** | S-J and S-K of modularity §6 if not done, G4, G5; `GSTNMission`, `GSTNModeVerbs`, `GSTNRespawn`, `GSTNMode_Levels`, camera sections, one test level; mission and respawn tests | M3 (ability base, loadout), M4 (KO event and zone, rules asset), M6 (interact probe, defence rules), M5 E10 (validator mechanism); M8 only for waves, so a first level can use fighters and dummies |
-| **M13 Expedition** | G1–G3, G6; `GSTNProcGen`, `GSTNSpawnDirector` + `GSTNSpawnDirectorMinion`, `GSTNMode_Expedition`, drops (needs the loadout spec's pickups), extraction and reinforcement | M12, M8 (minions, waves, platforms optional), M10 (retrieve), the loadout spec |
+| **M12 Mode framework + Levels** | S-J and S-K of modularity §6 if not done, G4, G5; `GSTNMission`, `GSTNModeVerbs`, `GSTNRespawn`, `GSTNMode_Levels`, camera sections, one test level; mission and respawn tests | M3 (ability base, loadout), M4 (KO event and zone, rules asset), M6 (defence rules), `GSTNInteract` ([interaction.md](interaction.md)), `GSTNCamera` stages C1 and C3 ([camera.md](camera.md)), M5 E10 (validator mechanism); M8 only for waves, so a first level can use fighters and dummies |
+| **M13 Expedition** (low priority, owner 2026-10-23) | G1–G3, G6; `GSTNProcGen`, `GSTNSpawnDirector` + `GSTNSpawnDirectorMinion`, `GSTNMode_Expedition`, drops (needs the loadout spec's pickups), extraction and reinforcement | M12, M8 (minions, waves, platforms optional), M10 (retrieve), the loadout spec |
 | M14 Versus | an Experience on the same frameworks (stocks, shield on, authored arenas) | M12, M6 |
 
-M12 forces the owner's decision on adopting Game Features and Experiences now (existing question Mod.1). The order Levels then Expedition proves the framework on the
-smaller mode first (GM.1).
+M12 forces the owner's decision on adopting Game Features and Experiences now (existing question Mod.1). Levels then Expedition is the owner's order (GM.1, 2026-10-23); the
+Expedition is kept in the plan but not worked on soon.
 
 ## 10. Risks
 
@@ -432,8 +440,8 @@ smaller mode first (GM.1).
 6. **Interact probe versus non-simulated objective state**: a rare refused hold; mitigated by early arming and UI, with a recorded-input fallback.
 7. **Players far apart**: the host loads the union of regions; a leash or a regroup rule (GM.14) or a higher soft cap.
 8. **Content signature and version drift** between friends' builds: refused at join with a clear message (modularity §3.9); `GenerationVersion` protects replays.
-9. **Camera and input**: cuts change the stick plane (latch, §5) and fixed cameras need the marker override; **late join** during a mission or extraction has edge cases (GM.12).
+9. **Camera and input**: cuts change the stick plane (latch, camera.md) and fixed-angle sections want the marker override; **late join** during a mission or extraction has edge cases (GM.12).
 
 ## 11. Questions for the owner
 
-The questions GM.1–GM.15 (in Italian, for the owner) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Modalità di gioco". Each states the hypothesis this spec is written on. The ones that shape M12 most are GM.1 (Levels first), GM.4 (respawn in Levels), GM.6 (camera style) and GM.9 (reinforcement instead of revive in place).
+The questions GM.1–GM.15 (in Italian, for the owner) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Modalità di gioco". Each states the hypothesis this spec is written on. Answered on 2026-10-23: GM.1 (Levels first, Expedition low priority), GM.6 (camera, now [camera.md](camera.md)) and GM.9 (no revive, shared reinforcements as lives). GM.4 is open only for what happens when the shared lives run out. The Expedition questions (GM.7, GM.8, GM.10, GM.11, GM.14) can wait.

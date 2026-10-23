@@ -191,6 +191,20 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   screenshots: a filled disc on the floor under a character above the stage; off stage, over the void and below the stage's
   level, a hollow ring at about the stage's height joined to the character by a vertical dashed line.
 
+## 6e. Interaction focus, depth marker direction, camera, lives, Expedition priority (owner answers, 2026-10-23 11:47)
+
+- **Interaction (Mod.20)**: an interface with gameplay tags is the base, and a **dedicated plugin** makes it easy to interact with
+  **what the player is pointing at**, instead of having a million weapons on the ground and not being able to tell which one the
+  button acts on. Spec: [interaction.md](interaction.md) (`GSTNInteract`, tag root `Interact.*`).
+- **Depth marker (DM.1)**: **straight along the gravity direction**. When the character is mid-air and **below the surface of the
+  last platform**, it should point **opposite to gravity** (up) to that surface (the second screenshot); when dropping from a high
+  platform onto another one, **both above and below**. Spec: [depth-marker.md](depth-marker.md) §2.7.
+- **Expedition**: keep it as something to do, but **not a big concern for now**. Levels come first.
+- **Camera (GM.6)**: generally **fairly far from the player**, Mario 3D World style. It may go **over the shoulder** to aim with some
+  weapons and some abilities. The player can **move it manually**, but in levels the **designer can set the desired angle and
+  whether it can be moved**. Spec: [camera.md](camera.md) (`GSTNCamera`).
+- **Coming back after a KO (GM.9)**: **no revive**; a **shared reinforcement system (lives)**. Read as the rule for both PvE modes.
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -203,6 +217,7 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
 | §6d: two PvE modes (designer levels, procedural expedition with missions); kit = stats, weapon = moveset; mid-match kit pickup; support weapons inherit kit stats; mods (cosmetic + moveset/specials); special swapping; implants; backpacks on the implant connector; depth marker; everything a pluggable ability | new specs [combat-loadout-mods.md](combat-loadout-mods.md) (M11), [game-modes.md](game-modes.md) (M12–M13), [depth-marker.md](depth-marker.md); M3 seams (loadout extensions, compile extension, mid-match apply); M4 hit data scalable by mods; M5 mod preview and validation; M6 interact probe (possible `GSTNInteract` plugin); [modularity-and-tags.md](modularity-and-tags.md) §1.1 goal 9, §3.6, §3.10, §4.2 |
+| §6e: interaction focus on what the player points at; depth marker above and below the last platform; far camera with shoulder aim and designer-set angles; shared lives, no revive; Expedition low priority | new [interaction.md](interaction.md) (`GSTNInteract`, replaces the probe part of M6 §8); [depth-marker.md](depth-marker.md) §2.7; new [camera.md](camera.md) (`GSTNCamera`); [game-modes.md](game-modes.md) §5, §6.2, §9.3 |
 | §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
 | §2g: tap = grab, hold = pickup; feet invincible in the dodge's initial part (corrected at 11:41), invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
 | §2f, §6b: many enemies on a listen host (replication, presentation and host budgets) and enemies as solid platforms (players stand on them) | research [many-enemies-replication.md](many-enemies-replication.md); M8 minions ([combat-m8-minions.md](combat-m8-minions.md) §4d.1, §4d.5, §8, §11: packs with push model and dormancy, per-item tier rates, 150 as a population with about 60 awake, `MaxVisiblePuppets`, platform seams); new optional plugins `GSTNPlatform` and bridge `GSTNPlatformMinion` ([modularity-and-tags.md](modularity-and-tags.md) §3.6, tag root `Platform.*` §4.2) |
@@ -394,3 +409,20 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Sì, in generale praticamente ogni cosa dovrebbe essere un'abilità pluggabile.
 
 > Rende il design estremamente facile, in più è anche quello che avviene in giochi come Fortnite
+
+### Answers of 2026-10-23, 11:47 (verbatim)
+
+> Mod 20. Non basta un'interfaccia con gameplay tag, beh si potrebbe creare un plugin per rendere facile interagire con cosa si sta
+> puntando invece avere un milioni di armi per terra e non riuscire a capire.
+>
+> dritto verso la direzione di gravità. Opportunamente dovrebbe puntare verso l'opposto della direzione di gravità (in caso si stia
+> scendendo sotto la superficie dell'ultima piattaforma quando si è a mezz'aria. Ho mandato delle foto di esempio prima), oppure sia
+> sopra che sotto, nel caso in cui si stia scendendo da una piattaforma alta, ma si debba atterrare su un'altra piattaforma.
+>
+> Per ora mantieni la spedizione come cosa da fare, ma non ce ne preoccupiamo molto.
+>
+> La telecamera dovrebbe essere in generale abbastanza lontana dal giocatore, stile mario 3d world. E' possibile pero che vada sulle
+> spalle per permettere di mirare con alcune armi e alcune abilità. Dovrebbe essere possibile muoverla manualmente, ma durante i
+> livelli il designer puo specificare l'angolo desiderato, e se si puo spostare o no.
+>
+> GM.9 Niente rianimazione. Sistema a rinforzi (vite) condivisi.

@@ -57,7 +57,7 @@ optional plugins without touching `GSTNCombat`'s types again.
 *Decision*: a kit can be changed mid-match by picking one up. Flow (*Proposal*):
 
 1. A **kit pickup** in the world (`AGSTN_EquipmentPickup` with a kit payload, §12) registers an interact candidate. The interact
-   probe of [M6](combat-m6-defence-links.md) §8 projects `Combat.Interact.Target.Equipment` when it is the best target, and the
+   probe of [M6](combat-m6-defence-links.md) §8 projects `Interact.Target.Equipment` when it is the best target, and the
    **hold** of the interact button (owner, 2026-10-22: hold = pick up objects) fires the kit's pickup ability, an ordinary timeline
    ability (`UGSTN_GA_EquipPickup`: a short "plug in" animation of the implant) granted to every pawn by the default ability set.
 2. At the ability's `RequestFrame` the **server** validates (pickup still there, reach, rules of the mode: `bAllowMidMatchKitChange`)
@@ -235,10 +235,10 @@ M3 also records that the kit's primary weapon never changes mid-match, so its we
 - `AGSTN_EquipmentPickup` (actor) with a payload `FInstancedStruct` (base `FGSTN_PickupPayload`): `FGSTN_KitPickupPayload { kit id,
   mods, special choices }`, `FGSTN_SupportWeaponPickupPayload`, and the backpack plugin's `FGSTN_BackpackPickupPayload` registered
   by `GSTNBackpack` (the pickups plugin never names backpacks). Applying a payload produces a `FGSTN_LoadoutChange`.
-- Interaction: an interact candidate provider (M6 §8) projecting `Combat.Interact.Target.Equipment`; bound to the **hold** of the
-  interact button. The interact probe currently lives in `GSTNLink`; with grabs, mounts, held objects, equipment pickups and
-  mission terminals as consumers, this spec proposes moving the probe and the `Combat.Interact.*` root into a small foundation
-  plugin `GSTNInteract` (modularity-and-tags.md §3.6, question Mod.20).
+- Interaction: an interact candidate provider (M6 §8) projecting `Interact.Target.Equipment`; bound to the **hold** of the
+  interact button. The probe, its focus on what the player points at (so one weapon among many on the ground is clearly the one
+  the button takes) and the `Interact.*` root live in the plugin `GSTNInteract` (*Decision*, owner answer to Mod.20, 2026-10-23;
+  [interaction.md](interaction.md)); `GSTNPickups` is one of its candidate providers.
 - Server-authoritative actor (replicated, dormant until touched); the pickup ability is predicted, the grant is not (§4).
   Simultaneous pickups: earliest `RequestFrame`, then lower player id (same rule as M10).
 - Spawning: by the mode (supply drops, level placement), [game-modes.md](game-modes.md).
@@ -251,7 +251,7 @@ M3 also records that the kit's primary weapon never changes mid-match, so its we
 | `Mod.*` (identity), `Mod.Slot.*` (slot types) | `GSTNKitMods` | roots native, leaves ini (designers) | §8 |
 | `Backpack.*` (identity) | `GSTNBackpack` | root native, leaves ini | §10 |
 | `Command.Backpack.Use` | `GSTNBackpack` | native | §10 |
-| `Combat.Interact.Target.Equipment` | `GSTNPickups` | native, projected | §12 |
+| `Interact.Target.Equipment` | `GSTNPickups` | native, projected | §12 |
 | `Combat.Event.Loadout.KitChanged`, `.SupportWeaponChanged`, `.BackpackChanged`, `.Picked`, `.Dropped` | `GSTNCombat` (`Loadout.*` events of M3's component; `Picked/Dropped` by `GSTNPickups`) | native | presentation, UI, missions |
 
 ## 14. Simulation and network summary
@@ -276,7 +276,7 @@ Listen host: applying a loadout change re-grants abilities on the host's ASC and
 | **M4** / `plans/m4-hits-plan.md` | Hit data gets an optional `ReachAxis` per hitbox (H1), and the reaction/hitstop rules already take the per-hit scales a derived timeline writes; no simulation change. |
 | **M4b** / `plans/m4b-parts-plan.md` | None: players stay one part; equipment is not a part. |
 | **M5** / `plans/m5-editor-plan.md` | Preview a timeline with a mod list applied (derived timeline), validate reach vs mesh bounds, connector socket on back implants, mod limits; loadout validator covers extensions. New editor tooling can live in `GSTNKitModsEditor` (client of M5 hooks, like `GSTNPartsEditor`). |
-| **M6** | Interact probe consumers grow (equipment pickups, mission terminals): proposal to move it to `GSTNInteract` (Mod.20). PvP shield only, unchanged. |
+| **M6** | Interact probe consumers grow (equipment pickups, mission terminals): it moves to `GSTNInteract` (owner, Mod.20; [interaction.md](interaction.md)). PvP shield only, unchanged. |
 | **M10** | Different system (held objects); shares the hold-to-pick-up input and the simultaneous-pickup rule. |
 | Game modes | Spawn pickups and drops; toggle `bAllowMidMatchKitChange`, mid-match special swaps, backpack drops ([game-modes.md](game-modes.md)). |
 
@@ -287,7 +287,7 @@ Listen host: applying a loadout change re-grants abilities on the host's ASC and
 | `GSTNCombat` (M3) | Core, GAS, NP | — | Kits, weapons, supers, loadout, compile and the §11 seams, equipment visual component |
 | `GSTNKitMods` (optional) | `GSTNKitModsCore` (definitions, pure baking of derived timelines, tested without a world), `GSTNKitModsGAS` (compile extension registration, stat effects), `GSTNKitModsEditor` | `GSTNCombatCore`, `GSTNCombatGAS` | Disabled = kits without mods; saved mod data dropped with a warning |
 | `GSTNBackpack` (optional) | `GSTNBackpackCore`, `GSTNBackpackGAS` | `GSTNCombatCore`, `GSTNCombatGAS` | Registers loadout extension, entry source, attachment provider, pickup payload |
-| `GSTNPickups` (optional) | `GSTNPickupsCore`, `GSTNPickupsRuntime` | `GSTNCombatCore`, interact probe core (`GSTNInteract` or `GSTNLinkCore` until then) | Payloads are open structs; knows no backpack or mod |
+| `GSTNPickups` (optional) | `GSTNPickupsCore`, `GSTNPickupsRuntime` | `GSTNCombatCore`, `GSTNInteractCore` | Payloads are open structs; knows no backpack or mod |
 
 No plugin above depends on another optional plugin; backpack pickups are registered by `GSTNBackpack` into `GSTNPickups`' payload
 registry only if both are loaded. That registration is the one allowed contact; if it grows, it becomes a bridge plugin
@@ -306,7 +306,7 @@ registry only if both are loaded. That registration is the one allowed contact; 
 
 ## 18. Milestone placement and risks
 
-M11 after M3 (seams), M4 (hit data, `ReachAxis`) and M5 (preview, validators); pickups need the interact probe (M6) or `GSTNInteract`.
+M11 after M3 (seams), M4 (hit data, `ReachAxis`) and M5 (preview, validators); pickups need `GSTNInteract` ([interaction.md](interaction.md)).
 Order: M11a seams and mid-match apply (in M3 if cheap), M11b support weapons and special swapping (pure data on M3), M11c mods,
 M11d backpacks, M11e pickups.
 
