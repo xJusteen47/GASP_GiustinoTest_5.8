@@ -11,5 +11,8 @@ To fold into the M4 (hits) and M5 (editor) specs at their next docs pass.
 - **Weapons with moddable length (M4).** Hitboxes scale with the weapon length, both for swings and for stabs, and a hitbox
   carries sweet spots and sour spots (different hit data by region along the weapon). The M4 hitbox spec (`FGSTN_HitboxSpec`,
   hit data variants) needs: a length parameter from the equipped weapon, a scaling rule per hitbox (along an axis, swing arc vs
-  stab line), and sub-regions with their own hit data. Open question for M4 planning: is the length a weapon stat replicated as
-  part of the loadout (deterministic, read by the simulation) or fixed per weapon asset.
+  stab line), and sub-regions with their own hit data. Owner answer: lengths may change during a match (extensible weapons) but only in discrete steps, not continuously, and
+  modding must be possible. Decision: the length is a weapon stat as a GAS attribute (`Combat.Stat` leaf), set by the weapon's
+  stats effect (M3 weapon switch already swaps it) or by a mod/extension effect; the fork rolls attributes back with Network
+  Prediction, so a discrete change is predicted and corrected like any effect. The hitbox evaluation reads the attribute value of
+  that frame, quantised (e.g. to 1 cm) before scaling, so every machine scales the same; the editor previews with a chosen length.
