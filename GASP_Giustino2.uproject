@@ -152,6 +152,10 @@
 		{
 			"Name": "GSTNCombatNP",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNSurface",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"
