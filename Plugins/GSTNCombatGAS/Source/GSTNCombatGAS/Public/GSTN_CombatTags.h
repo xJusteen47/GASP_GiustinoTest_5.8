@@ -50,6 +50,17 @@ namespace GSTNCombatTags
 	/** A super was used. Published by the combat tick on the authority. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_SuperUsed);
 
+	// Activation sources (EGSTN_ActivationSource as tags, on the events that name how a timeline started)
+
+	/** A command started the timeline. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_Command);
+
+	/** A forced command (test or scripted) started the timeline. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_Forced);
+
+	/** Something other than a command (a trigger, an effect, another ability, AI) started the ability and the combat tick adopted it. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_Adopted);
+
 	// Hurtbox zones (classification of a hurtbox, read by hit resolution and the editor tooling; never granted to an actor)
 
 	/** Zone of a hurtbox on the head. Classifies a hurtbox in FGSTN_Hurtbox::Tags and in the editor's Physics Asset mapping; never granted to an actor. */

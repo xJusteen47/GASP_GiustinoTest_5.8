@@ -702,13 +702,29 @@ def _read_log_since(since):
     return text if text.endswith('\n') else text[:text.rfind('\n') + 1]
 
 
+def _tick_key(stamp):
+    """'[2026.10.23-01.49.34:967][397]' -> '2026.10.23-01.49.34][397' (the wall-clock second and the engine tick, no millisecond)"""
+    return stamp.split(':')[0] + stamp[stamp.index(']'):]
+
+
+_MODEL_MARKERS = (('[MoverDefaultSyncState]', 'mover'), ('Current period Time', 'asc'), ('Active Mappings', 'asc'), ('History:', 'combat'))
+
+
 def report_reconciles(since=0):
     """Reconciles in the editor log after `since` (see mark_log): returns a dict and logs a summary.
-    unexplained = state mismatches not on the frame of an offset change (the number that must be 0).
+    unexplained = state mismatches not on the tick of an offset change, with the model each one came from in
+    unexplained_by_model. unexplained_ours leaves out the Mover model (position corrections under network lag are the
+    movement prediction's own business); it is the number the 'no unexplained reconciles' checks require to be 0.
     max_burst = most mismatches logged within one wall-clock second (a startup storm shows here)."""
     text = _read_log_since(since)
     offset_frames, mismatches, forced = set(), [], 0
+    models = []  # model of each mismatch, read from the first state block that follows its line
     for line in text.splitlines():
+        if models and models[-1] is None:
+            for marker, model in _MODEL_MARKERS:
+                if marker in line:
+                    models[-1] = model
+                    break
         m = _LOG_LINE.match(line)
         if not m:
             continue
@@ -716,17 +732,30 @@ def report_reconciles(since=0):
         if category != 'LogNetworkPrediction':
             continue
         if message.startswith('ReconcileFromInputOffset'):
-            offset_frames.add(stamp)
+            # Every model of the entity logs its own mismatch a few ms after the offset line, inside the same engine tick:
+            # match on (second, tick, new offset), not on the millisecond
+            new_offset = re.search(r'New Offset (\d+)', message)
+            offset_frames.add((_tick_key(stamp), new_offset.group(1) if new_offset else None))
         elif message.startswith('Reconcile required due to Sync/Aux mismatch'):
             mismatches.append((stamp, message))
+            models.append(None)
         elif 'ForceReconcile' in message and message.startswith('Reconcile activated'):
             forced += 1
-    unexplained = [x for x in mismatches if x[0] not in offset_frames]
+    def _on_offset_change(stamp, message):
+        offset = re.search(r'Offset: (\d+)\.', message)
+        return (_tick_key(stamp), offset.group(1) if offset else None) in offset_frames
+
+    unexplained = [x for x in mismatches if not _on_offset_change(*x)]
+    by_model = {}
+    for x, model in zip(mismatches, models):
+        if not _on_offset_change(*x):
+            by_model[model or 'unknown'] = by_model.get(model or 'unknown', 0) + 1
     per_second = {}
     for stamp, _ in mismatches:
         per_second[stamp.split(':')[0]] = per_second.get(stamp.split(':')[0], 0) + 1
     result = {'offset_changes': len(offset_frames), 'mismatches': len(mismatches), 'on_offset_frames': len(mismatches) - len(unexplained),
-              'unexplained': len(unexplained), 'forced': forced, 'max_burst': max(per_second.values(), default=0),
+              'unexplained': len(unexplained), 'unexplained_by_model': by_model,
+              'unexplained_ours': len(unexplained) - by_model.get('mover', 0), 'forced': forced, 'max_burst': max(per_second.values(), default=0),
               'unexplained_lines': [x[1] for x in unexplained[:5]]}
     unreal.log('GASNPP reconciles: ' + json.dumps(result))
     return result
@@ -901,7 +930,7 @@ class _Run:
             if self.log_mark is not None and self.judge_reconciles:
                 try:
                     r = report_reconciles(self.log_mark)
-                    self.check('no unexplained reconciles', r['unexplained'] == 0, f"{r['unexplained']} unexplained {r['unexplained_lines']}, forced={r['forced']}")
+                    self.check('no unexplained reconciles', r['unexplained_ours'] == 0, f"{r['unexplained_ours']} unexplained {r['unexplained_by_model']} {r['unexplained_lines']}, forced={r['forced']}")
                 except Exception as e:
                     self.note(f'reconcile check failed to run: {e}')
             if self.name in _FORCES_RECONCILES:
@@ -1124,6 +1153,154 @@ def scenario_camera_aim(client=1, yaw=123.0, pitch=-20.0, stance_button='Special
         (2.0, run.at('stance ended on release', lambda: (not run.saw_tag(TAG_STANCE, 1.75, 2.0), ''))),
         (2.05, lambda: ('flag off', cfg.set_editor_property('send_camera_aim', False))),
         (2.15, run.finish()),
+    ]
+    run.run(steps)
+
+
+def _tag_span(run, side, tag, t0, t1):
+    """(first, last) sample times in [t0, t1] at which `side` owned `tag`, None if never. The server's copy lags the client's
+    clock by the input lead, so the checks of timeline_cancel compare durations and order, never absolute times."""
+    ts = [s['t'] for s in run.samples if t0 <= s['t'] <= t1 and s.get(side) and tag in s[side]['tags']]
+    return (ts[0], ts[-1]) if ts else None
+
+
+def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Special'):
+    """C10 timeline abilities (combat-m3 7.2, 8.3) on UGSTN_GA_TestAttack, a UGSTN_GA_BaseCombat of 20 frames (0.32 s), startup override
+    window of 8 frames (0.13 s), cancel window [8, 14) into Command.Special, free from frame 14, and the stance (Special, a higher tier).
+    Three cases 1.5 s apart, judged on the server's copy and the predicting client's by how long Attacking lasts and in which order the
+    tags come (the natural length of the attack is 0.32 s, sampled every ~40 ms):
+      0.5s  startup override: attack tap, the stance held 0.08 s later (frame ~5, inside the window) -> Stance comes and Attacking ends
+            well before its natural end (the replaced timeline is cancelled)
+      2.0s  cancel window: attack tap, the stance held 0.17 s later (frame ~10, in [8, 14)) -> Stance comes and Attacking ends before 0.28 s
+      3.5s  not cancellable: attack tap, a second attack tap 0.05 s later (same tier, before the first actionable frame) -> Attacking lasts
+            its natural 0.28 to 0.38 s (a restart would make it 0.42 s or more)
+    Also: no unexplained reconciles."""
+    _require_test_config(client)
+    attack, stance = button_mask(attack_button), button_mask(stance_button)
+    run = _Run('timeline_cancel', client)
+    global _tc_run
+    _tc_run = run
+
+    def case(label, a0, a1, side, lo, hi, with_stance):
+        def f():
+            att = _tag_span(run, side, TAG_ATTACKING, a0, a1)
+            if att is None:
+                return False, f'{side}: Attacking never seen'
+            dur = att[1] - att[0] + 0.04      # one sample of resolution
+            ok = lo <= dur <= hi
+            detail = f'{side}: Attacking {dur:.2f}s (want {lo}..{hi})'
+            if with_stance:
+                st = _tag_span(run, side, TAG_STANCE, a0, a1)
+                ok = ok and st is not None and st[0] >= att[0]
+                detail += f', stance {"seen after the attack started" if ok else "missing or before the attack"}'
+            return ok, detail
+        return f
+
+    steps = [
+        # case 1: startup override
+        (0.5, lambda: ('attack', combat_tap(client, attack))),
+        (0.58, lambda: ('stance held (inside the override window)', combat_hold(client, stance))),
+        (1.0, lambda: ('release', combat_clear(client))),
+        (1.4, run.at('override: server', case('', 0.4, 1.4, 'srv', 0.0, 0.2, True))),
+        (1.4, run.at('override: client', case('', 0.4, 1.4, 'cli', 0.0, 0.2, True))),
+        # case 2: cancel window
+        (2.0, lambda: ('attack', combat_tap(client, attack))),
+        (2.17, lambda: ('stance held (inside the cancel window)', combat_hold(client, stance))),
+        (2.6, lambda: ('release', combat_clear(client))),
+        (3.1, run.at('cancel window: server', case('', 1.9, 3.1, 'srv', 0.1, 0.28, True))),
+        (3.1, run.at('cancel window: client', case('', 1.9, 3.1, 'cli', 0.1, 0.28, True))),
+        # case 3: not cancellable by the same tier
+        (3.5, lambda: ('attack', combat_tap(client, attack))),
+        (3.55, lambda: ('second attack (same tier, before the first actionable frame)', combat_tap(client, attack))),
+        (4.6, run.at('no cancel: server', case('', 3.4, 4.6, 'srv', 0.28, 0.38, False))),
+        (4.6, run.at('no cancel: client', case('', 3.4, 4.6, 'cli', 0.28, 0.38, False))),
+        (4.7, run.finish()),
+    ]
+    run.run(steps)
+
+
+TAG_TRIGGERED, TAG_AWAITING = 'Test.State.Triggered', 'Combat.Ability.AwaitingAdoption'
+
+
+def scenario_triggered_timeline(client=1, resim_frames=15):
+    """C11 adoption (combat-m3 7.4) on UGSTN_GA_TestTriggeredTimeline, a 12 frame timeline ability (0.2 s) that no command starts: the tag
+    raiser probe (a press of the buff button) applies the effect that grants Test.Probe.TagTrigger, the owned-tag trigger activates the
+    ability, it waits with Combat.Ability.AwaitingAdoption and the combat tick adopts it one frame later. Two presses, 2 s apart, the second
+    with a forced reconcile across the activation and adoption frames. Judged on the server's copy and the owner's:
+      - Test.State.Triggered (owned while the adopted timeline runs) shows on both and lasts about the 0.2 s of the timeline
+      - Combat.Ability.AwaitingAdoption never stays: gone on every machine at the end of each press
+      - the authority published exactly one TimelineStarted(Adopted) per press (clients publish nothing), none from a command
+      - nothing of the ability is left active anywhere
+    Also: no unexplained reconciles."""
+    # The cleanup revokes the probe abilities on the server only, which makes the owner reconcile on purpose: judge the window before it
+    run = _Run('triggered_timeline', client, judge_reconciles=False)
+    key = run.key
+    st, marks = {}, {}
+
+    def no_unexplained():
+        r = report_reconciles(marks['start']) if marks.get('start') is not None else None
+        if r is None:
+            return False, 'the log was not readable'
+        return r['unexplained_ours'] == 0, f"{r['unexplained_ours']} unexplained {r['unexplained_by_model']} {r['unexplained_lines']}, forced={r['forced']}"
+
+    def regrant():
+        _srv(key).server_revoke_probes()
+        st['granted'] = [_srv(key).server_grant_probe(n) for n in ('TimelineTarget', 'TagRaiser')]
+        return st['granted']
+
+    def specs_equal():
+        s, o = (_view(0, key) or {}).get('probe', {}).get('specs'), (_view(client, key) or {}).get('probe', {}).get('specs')
+        return s is not None and s == o, f'activatable specs: server {s}, owner {o}'
+
+    def started(n_adopted):
+        def f():
+            counts = (((_view(0, key) or {}).get('combat') or {}).get('timelineStarted')) or {}
+            return counts.get('adopted', 0) == n_adopted and not counts.get('command', 0) and not counts.get('forced', 0), f'TimelineStarted published by the authority: {counts}'
+        return f
+
+    def span(t0, t1):
+        def f():
+            out, ok = [], True
+            for side in ('srv', 'cli'):
+                s = _tag_span(run, side, TAG_TRIGGERED, t0, t1)
+                if s is None:
+                    return False, f'{side}: {TAG_TRIGGERED} never seen'
+                dur = s[1] - s[0] + 0.04
+                ok = ok and 0.1 <= dur <= 0.45
+                out.append(f'{side} {dur:.2f}s')
+            return ok, ', '.join(out) + ' (want 0.1..0.45, the timeline is 0.2 s)'
+        return f
+
+    def clean():
+        bad = []
+        for i in range(len(worlds())):
+            v = _view(i, key) or {}
+            if TAG_AWAITING in v.get('tags', []):
+                bad.append(f'w{i} still has {TAG_AWAITING}')
+            if TAG_TRIGGERED in v.get('tags', []):
+                bad.append(f'w{i} still has {TAG_TRIGGERED}')
+            if 'GSTN_GA_TestTriggeredTimeline' in ((v.get('probe') or {}).get('activeAbilities') or []):
+                bad.append(f'w{i} still has the ability active')
+        return not bad, '; '.join(bad) or 'no waiting tag, no timeline tag, no active ability on any machine'
+
+    steps = [
+        (0.0, _mark(run, marks, 'start')),
+        (0.1, lambda: ('grant', regrant())),
+        (0.2, run.at('probes granted', lambda: (all(st['granted']), f"{st['granted']}"))),
+        (2.5, run.at('the owner has the granted specs', specs_equal)),
+        (2.6, lambda: ('reset counters', [c.reset_probe_counters() for w in worlds() for c in [comps(w).get(key)] if c is not None] and 'reset')),
+        (3.0, lambda: ('press 1', press(client, 'buff'))),
+        (4.4, run.at('press 1: the adopted timeline ran on the server and the owner', span(3.0, 4.4))),
+        (4.4, run.at('press 1: exactly one TimelineStarted(Adopted)', started(1))),
+        (4.4, run.at('press 1: nothing left over', clean)),
+        (5.5, lambda: ('press 2', press(client, 'buff'))),
+        (5.6, lambda: ('force reconcile across the adoption', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
+        (7.0, run.at('press 2: the adopted timeline ran on the server and the owner', span(5.5, 7.0))),
+        (7.0, run.at('press 2: exactly one more TimelineStarted(Adopted), none re-published by the resimulation', started(2))),
+        (7.0, run.at('press 2: nothing left over', clean)),
+        (7.05, run.at('no unexplained reconciles (before the cleanup)', no_unexplained)),
+        (7.1, lambda: ('cleanup', _srv(key).server_revoke_probes())),
+        (7.8, run.finish()),
     ]
     run.run(steps)
 

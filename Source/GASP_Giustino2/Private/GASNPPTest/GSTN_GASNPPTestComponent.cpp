@@ -2,6 +2,7 @@
 
 #include "GASNPPTest/GSTN_GASNPPTestComponent.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
+#include "GASNPPTest/GSTN_TestCombatAbilities.h"
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "GASNPPTest/GSTN_TestProbeAbilities.h"
 #include "Abilities/NpAbilitySystemComponent.h"
@@ -10,6 +11,8 @@
 #include "Input/GSTN_InputScript.h"
 #include "MoverComponent.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Events/GSTN_SimEventSubsystem.h"
+#include "GSTN_CombatTags.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
@@ -24,7 +27,18 @@ UGSTN_GASNPPTestComponent::UGSTN_GASNPPTestComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.TickInterval = 0.25f;
+	bWantsInitializeComponent = true;
+}
 
+void UGSTN_GASNPPTestComponent::InitializeComponent()
+{
+	Super::InitializeComponent();
+
+	// Before any BeginPlay: the combat component compiles its timeline registry there, and the list must be the same on every machine
+	if (UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
+	{
+		Combat->AdoptableTimelines.AddUnique(UGSTN_GA_TestTriggeredTimeline::StaticClass());
+	}
 }
 
 void UGSTN_GASNPPTestComponent::BeginPlay()
@@ -50,6 +64,20 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 	{
 		AbilitySystem->OnSimulationPreTick.AddUObject(this, &UGSTN_GASNPPTestComponent::HandleAbilityPreTick);
 	}
+
+	// The authority publishes each timeline start once (clients get nothing): count them by source, for scenario_triggered_timeline
+	if (UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(this))
+	{
+		TimelineStartedListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCombatTags::Event_TimelineStarted)),
+			[this](const FGSTN_SimEvent& Event)
+			{
+				if (Event.Instigator.Get() == GetOwner())
+				{
+					const FName Source = Event.Tags.HasTagExact(GSTNCombatTags::Source_Adopted) ? FName("adopted") : Event.Tags.HasTagExact(GSTNCombatTags::Source_Forced) ? FName("forced") : FName("command");
+					++TimelineStartedCounts.FindOrAdd(Source);
+				}
+			}).Id;
+	}
 }
 
 void UGSTN_GASNPPTestComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -62,6 +90,16 @@ void UGSTN_GASNPPTestComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 	if (AbilitySystem)
 	{
 		AbilitySystem->OnSimulationPreTick.RemoveAll(this);
+	}
+	if (TimelineStartedListener != INDEX_NONE)
+	{
+		if (UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(this))
+		{
+			FGSTN_SimEventListenerHandle Handle;
+			Handle.Id = TimelineStartedListener;
+			Events->StopListening(Handle);
+		}
+		TimelineStartedListener = INDEX_NONE;
 	}
 	Super::EndPlay(EndPlayReason);
 }
@@ -296,6 +334,7 @@ namespace
 		if (Name == TEXT("EventTarget")) { return UGSTN_GA_ProbeEventTarget::StaticClass(); }
 		if (Name == TEXT("TagRaiser")) { return UGSTN_GA_ProbeTagRaiser::StaticClass(); }
 		if (Name == TEXT("TagTarget")) { return UGSTN_GA_ProbeTagTarget::StaticClass(); }
+		if (Name == TEXT("TimelineTarget")) { return UGSTN_GA_TestTriggeredTimeline::StaticClass(); }
 		return nullptr;
 	}
 
@@ -335,7 +374,7 @@ int32 UGSTN_GASNPPTestComponent::ServerRevokeProbes()
 	{
 		return 0;
 	}
-	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()); });
+	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()); });
 }
 
 int32 UGSTN_GASNPPTestComponent::ServerGrantBulk(int32 FirstIndex, int32 Count)
@@ -563,6 +602,12 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			CombatJson->SetStringField(TEXT("history"), FGSTN_InputScript::Describe(CombatState->Core.Input.History, 8));
 			CombatJson->SetNumberField(TEXT("heldButtons"), CombatState->Core.Input.History.GetHeldButtons());
 			CombatJson->SetNumberField(TEXT("historyFrame"), CombatState->Core.Input.History.GetLatestFrame());
+			TSharedRef<FJsonObject> StartedJson = MakeShared<FJsonObject>();
+			for (const TPair<FName, int32>& Pair : TimelineStartedCounts)
+			{
+				StartedJson->SetNumberField(Pair.Key.ToString(), Pair.Value);
+			}
+			CombatJson->SetObjectField(TEXT("timelineStarted"), StartedJson);
 			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestFrame) });
 			Json->SetObjectField(TEXT("combat"), CombatJson);
 		}

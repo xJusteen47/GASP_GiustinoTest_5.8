@@ -5,6 +5,7 @@
 
 #include "GameplayEffect.h"
 #include "NetworkPredictionReplicationProxy.h"
+#include "NetworkPredictionTrace.h"
 #include "HAL/IConsoleManager.h"
 
 #pragma region Synced data for captured attributes
@@ -525,26 +526,12 @@ void FActiveEffectSyncData::ToString(FAnsiStringBuilderBase& Out) const
 }
 bool FActiveEffectSyncData::ShouldReconcile(const FActiveEffectSyncData& AuthorityState) const
 {
-	if (EffectHandle != AuthorityState.EffectHandle)
-	{
-		return true;
-	}
-	if (EffectSpecData.ShouldReconcile(AuthorityState.EffectSpecData))
-	{
-		return true;
-	}
-	if (StartTimeMS != AuthorityState.StartTimeMS)
-	{
-		return true;
-	}
-	if (PeriodTimeMS != AuthorityState.PeriodTimeMS)
-	{
-		return true;
-	}
-	if (bIsInhibited != AuthorityState.bIsInhibited)
-	{
-		return true;
-	}
+	// Named so np.LogReconcileField attributes an effect mismatch to its field (the delta serialization also calls this)
+	UE_NP_TRACE_RECONCILE(EffectHandle != AuthorityState.EffectHandle, "Effect.Handle");
+	UE_NP_TRACE_RECONCILE(EffectSpecData.ShouldReconcile(AuthorityState.EffectSpecData), "Effect.Spec");
+	UE_NP_TRACE_RECONCILE(StartTimeMS != AuthorityState.StartTimeMS, "Effect.StartTimeMS");
+	UE_NP_TRACE_RECONCILE(PeriodTimeMS != AuthorityState.PeriodTimeMS, "Effect.PeriodTimeMS");
+	UE_NP_TRACE_RECONCILE(bIsInhibited != AuthorityState.bIsInhibited, "Effect.Inhibited");
 	return false;
 }
 void FActiveEffectSyncData::Interpolate(const FActiveEffectSyncData& From, const FActiveEffectSyncData& To, float Pct)

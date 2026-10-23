@@ -17,6 +17,10 @@ namespace GSTNCombatTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_WeaponSwitched, "Combat.Event.WeaponSwitched", "The active weapon changed. Published once by the combat tick on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_SuperUsed, "Combat.Event.SuperUsed", "A super was used. Published once by the combat tick on the authority");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Command, "Combat.Source.Command", "A command started the timeline. On the TimelineStarted event");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Forced, "Combat.Source.Forced", "A forced command (test or scripted) started the timeline. On the TimelineStarted event");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Adopted, "Combat.Source.Adopted", "A trigger, effect, other ability or AI started the ability and the combat tick adopted it. On the TimelineStarted event");
+
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Head, "Combat.Hurtbox.Head", "Zone of a hurtbox on the head. Classifies a hurtbox (hurtbox set data, editor Physics Asset mapping); never granted to an actor");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Torso, "Combat.Hurtbox.Torso", "Zone of a hurtbox on the torso. Classifies a hurtbox; never granted to an actor");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Arm, "Combat.Hurtbox.Arm", "Zone of a hurtbox on an arm; the side is the bone name, not a tag. Classifies a hurtbox; never granted to an actor");
@@ -38,6 +42,7 @@ namespace GSTNCombatTags
 			Lock_Movement,
 			Weapon_Role_Primary, Weapon_Role_Support,
 			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_SuperUsed,
+			Source_Command, Source_Forced, Source_Adopted,
 			Hurtbox_Head, Hurtbox_Torso, Hurtbox_Arm, Hurtbox_Leg, Hurtbox_Hand, Hurtbox_Foot,
 			SetByCaller_MeterCost,
 			Root_Stat, Root_Meter, Root_SetByCallerStat });

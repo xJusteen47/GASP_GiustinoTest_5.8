@@ -51,6 +51,26 @@ the Blueprint event; one wait at a time, never called while a frame is restored)
 `InterruptTags`; a command is never subject to it). Call the parent's `ActivateAbility` before reading the context. The decisions are
 the pure `FGSTN_GARules` (`Abilities/GSTN_GATypes.h`). Costs, cooldowns, block/cancel tags and triggers are the ability system's own.
 
+**Timeline abilities (combat-m3 6.2, 7.2).** `UGSTN_GA_BaseCombat` derives from `UGSTN_GA_Base` and carries frame data (`Timeline`, or a
+`TimelineAsset` that wins): total and first actionable frames, a startup override window, cancel windows, a cancellable tail, a montage.
+The component builds a **timeline registry** from the bindings of its command table (the timeline ability classes, each once, in binding order;
+the index is what `ActiveTimeline` stores). Each combat tick: requests older than the frame are pruned; the running timeline is evaluated
+(`FGSTN_CombatTimelineLogic::AdvanceClock`: it ends at its length, or when its ability is gone; crossing the commit frame requests
+`CommitTimeline`); the input simulation asks the component `IsCommandAllowed` for every candidate (`FGSTN_CombatTimelineLogic::IsCommandAllowed`:
+free when idle, in the tail or from the first actionable frame; inside the override window a command named by `OverrideInto`, or of a higher tier
+when it is empty; inside an open cancel window a command its query names); a timeline command that wins starts the timeline
+(`Start`: a `CancelTimeline` request for the replaced entry and the new state). The ability is activated by the input request of the same frame,
+finds itself in the combat state, plays its montage and ends when the state stops naming it. The ability system's pre-tick runs
+`CancelTimeline`, the input request, then `CommitTimeline` (`CommitAbility`), so a timeline replaced inside its override window never pays.
+**Adoption (combat-m3 7.4).** A timeline ability that something other than a command activates (a gameplay event or tag trigger, an effect, another
+ability, AI) finds no start in the combat state, so it marks itself as waiting (sync var `bAwaitingAdoption` plus the loose tag
+`Combat.Ability.AwaitingAdoption`) and the combat tick of the next frame adopts it (`FGSTN_CombatTimelineLogic::Adopt`: the first waiting entry in registry
+order wins, the others get a `CancelAbility` request, the timeline state is written with source `Adopted`); the ability starts in its own tick of that frame.
+The class has to be in the registry: list it in `UGSTN_CombatSimComponent::AdoptableTimelines` (same list on every machine) or bind it to a command.
+The tick publishes `Combat.Event.TimelineStarted` (source tag `Combat.Source.{Command,Forced,Adopted}`) when a timeline reaches its commit.
+Not done yet: tag projection, facing, movement track, the other events (C12), hits (M4).
+All of the logic is pure and covered by `GSTNCombat.NP.Timeline.*`.
+
 **Sync state.** `FGSTN_CombatSyncState` is `Core` (`FGSTN_CombatSyncCore`: the input state, the hitstop window and the action part) followed by
 `Fragments`, a list of `FGSTN_SyncFragment` from `GSTNCombatCore` that features add per entity. The core's bytes are the same with
 or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the
@@ -124,6 +144,9 @@ Automation tests `GSTNCombat.NP.*` in `Source/GSTNCombatNP/Private/Tests/` run w
   (the log prints the bits of each; zero fragments are exactly one bit over the core), the array order not affecting the bytes,
   `ShouldReconcile`, `Interpolate` and `ToString` of the state, a fragment of an unknown type id being skipped without moving the reader, and a
   malformed count being an archive error. The fragments used are test-only types with ids from the test range.
+- `Timeline.{CommitDeferred, Clock, OverrideInto, CancelWindow, Replace, TailCancel}`: the timeline part of the tick on plain sync state: the deferred
+  commit (once, on the frame the override window ends, or on the start frame without a window), the clock and the end of a timeline, the override rule
+  (higher tier, explicit query), cancel windows (half open), replacement (the old entry is cancelled, nothing was committed) and the cancellable tail.
 - `GABase.{WaitFramesRollback, InterruptPolicy, ReleaseEnds}`: the combat clock and a wait counted on it (through hitstop and through a
   rollback and replay), the interrupt truth table and the command marker scope, the end on trigger release. Pure rules; the ability
   itself is checked by the PIE scenarios.

@@ -4,41 +4,40 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/GSTN_GA_Base.h"
-#include "GAS/GSTN_GameplayAbility.h"
-#include "DataTypes/SyncedvariableTypes/BasicSyncedVariablesTypes.h"
+#include "Abilities/GSTN_GA_BaseCombat.h"
 #include "GSTN_TestCombatAbilities.generated.h"
 
 /**
  * Placeholder ability bound to the four Command.Attack.* commands (grounded and airborne) by the combat test binding set.
  *
- * It does nothing but own Test.State.Attacking for ActiveFrames simulation frames, so a command that started it (or one
- * that was locked and did not) shows up in the ability system's tags, the harness snapshots and the Test.* log. It never
- * touches the character: the harness checks input and lock behaviour here, not combat moves.
- *
- * Rollback: the frame counter is a sync variable; the ability is instanced per actor, so it is reset on every activation.
+ * It is a combat timeline ability (UGSTN_GA_BaseCombat) whose only effect is to own Test.State.Attacking while the timeline
+ * runs, so a command that started it (or one that was locked and did not) shows up in the ability system's tags, the harness
+ * snapshots and the Test.* log. It never touches the character: the harness checks input, lock and timeline behaviour here,
+ * not combat moves. The frame data is set in the constructor (no asset): 20 frames, an 8 frame startup override window (a
+ * higher tier command replaces it), a cancel window [8, 14) into the special commands, free from frame 14.
  */
 UCLASS()
-class GASP_GIUSTINO2_API UGSTN_GA_TestAttack : public UGSTN_GameplayAbility
+class GASP_GIUSTINO2_API UGSTN_GA_TestAttack : public UGSTN_GA_BaseCombat
 {
 	GENERATED_BODY()
 
 public:
 	UGSTN_GA_TestAttack(const FObjectInitializer& ObjectInitializer);
+};
 
-	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
-		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+/**
+ * A timeline ability no command starts: the owned tag Test.Probe.TagTrigger (granted by the tag raiser probe, which a press of the
+ * buff button activates from inside the simulation) triggers it, and the combat tick adopts it (combat-m3 7.4, scenario_triggered_timeline).
+ * It owns Test.State.Triggered while the timeline runs. 12 frames, no startup override window, free from frame 12. The test
+ * component adds it to the combat component's AdoptableTimelines.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestTriggeredTimeline : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
 
-	virtual void OnSimulationTick(const FAbilitySystemTimeStep& TimeStep) override;
-
-protected:
-	/** Simulation frames the ability (and Test.State.Attacking) lasts */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Test|Attack", meta = (ClampMin = "1"))
-	int32 ActiveFrames = 20;
-
-private:
-	/** Simulation frames since activation. A sync var: rolled back with the ability instance on corrections */
-	UPROPERTY()
-	FSyncInteger FramesSinceActivation;
+public:
+	UGSTN_GA_TestTriggeredTimeline(const FObjectInitializer& ObjectInitializer);
 };
 
 /**

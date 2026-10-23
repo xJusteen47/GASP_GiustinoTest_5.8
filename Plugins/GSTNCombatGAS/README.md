@@ -34,6 +34,7 @@ Native, declared in `Public/GSTN_CombatTags.h` (namespace `GSTNCombatTags`), one
 |---|---|---|
 | `Combat.State.*` | `Busy InTimeline SuperInput CancelWindow OverrideWindow Falling` | Projected by the combat tick, never granted by an ability or effect. |
 | `Combat.Ability.*` | `Timeline AwaitingAdoption` | Ability identity. |
+| `Combat.Source.*` | `Command Forced Adopted` | How a timeline started (`EGSTN_ActivationSource`), on the `TimelineStarted` event. |
 | `Combat.Lock.Movement` | | Read by the stats movement modifier. |
 | `Combat.Weapon.Role.*` | `Primary Support` | Granted by the stats effect of the active weapon. |
 | `Combat.Event.*` | `TimelineStarted TimelineFinished WeaponSwitched SuperUsed` | Authoritative outbox events. |
