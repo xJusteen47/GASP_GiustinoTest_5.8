@@ -234,3 +234,7 @@ of the rolled-back state (`FGSTN_CombatSyncCore::TableRevision`), never "the cur
   `MinFramesBetweenLoadoutChanges` of the previous one. `GSTN.NP.TableLimits` (a loadout validator registered at module startup) refuses a loadout over 255 bindings or 32767 timelines.
 - Tests: `GSTNCombat.NP.Table.*` (conversion, checksum, extensions, limits, weapon stats), `GSTNCombat.NP.Swap.*` (the step), `GSTNCombat.NP.State.TableRevision*`; the network behaviour
   is `scenario_loadout_change` (checks 16 to 20: table revision follows, equal checksum, the dash command exists only in Beta, the gate stays open on the authority).
+- Table swap scenarios (session 2, `docs/notes/m3-doc-deltas.md` C18), all on the kit tables of `/Game/GASNPPTest/Combat`: `scenario_command_set` (a removed command and an added one on its button),
+  `scenario_ex_meter` (the EX slot falls through to the plain special without meter), `scenario_super_code` (supers entered as a code, meter gate, a reconcile mid-code),
+  `scenario_wait_frames` (a kit-bound timeline that waits combat frames, delayed exactly by a hitstop). A command's tier is the tier of its tag root (`Command.Special.*` = 300): an EX or
+  alternative command of a tiered family has to live under the same root, or the plain command outranks it whatever the pattern.
