@@ -8,6 +8,7 @@
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Validation/GSTN_ValidationReport.h"
 
+class FGSTN_PreviewController;
 class FGSTN_TimelineEditorModel;
 class FGSTN_TimelineUndoClient;
 class SDockTab;
@@ -19,7 +20,7 @@ class UBlueprint;
  * an undo, and the lease that makes it the only editor of its target; the widgets of the tabs only call the model.
  *
  * What the tabs hold today: Timeline is the panel of E4 with the montage-length bar and the toolbar additions; Details edits the
- * selected track through the selection proxy; Frame Data is the summary line. Viewport is a placeholder until the preview scene (E6).
+ * selected track through the selection proxy; Frame Data is the summary line. Viewport is the 3D preview scene (E6) of the controller the toolkit owns.
  *
  * Save is the standard one of the asset editor: it saves the object GetObjectsCurrentlyBeingEdited returns, which is the target of the
  * context (the asset; the Blueprint in inline mode). The layout is saved by the editor under the layout name and restored when the
@@ -107,6 +108,9 @@ private:
 	TWeakObjectPtr<UBlueprint> ObservedBlueprint;
 
 	TSharedPtr<FGSTN_TimelineEditorModel> Model;
+
+	/** The preview scene and its subject. Declared after the model it listens to, so it is destroyed first */
+	TSharedPtr<FGSTN_PreviewController> Preview;
 
 	/** What the last Validate found, for the Frame Data tab. Marked stale when the data changes afterwards */
 	TSharedRef<FGSTN_FindingsStore> Findings = MakeShared<FGSTN_FindingsStore>();

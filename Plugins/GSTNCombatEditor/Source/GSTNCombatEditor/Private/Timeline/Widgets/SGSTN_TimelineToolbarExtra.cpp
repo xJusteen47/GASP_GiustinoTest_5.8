@@ -2,7 +2,9 @@
 
 #include "Timeline/Widgets/SGSTN_TimelineToolbarExtra.h"
 
+#include "Preview/GSTN_PreviewController.h"
 #include "Styling/AppStyle.h"
+#include "Timeline/Widgets/SGSTN_PreviewSubjectPicker.h"
 #include "Timeline/GSTN_TimelineEditorCommands.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
@@ -12,22 +14,6 @@
 #include "Widgets/Text/STextBlock.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
-
-namespace
-{
-	/** A combo that is drawn and does nothing yet */
-	TSharedRef<SWidget> MakeStubCombo(const FText& Label, const FText& Tip)
-	{
-		return SNew(SComboButton)
-			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-			.IsEnabled(false)
-			.ToolTipText(Tip)
-			.ButtonContent()
-			[
-				SNew(STextBlock).Text(Label)
-			];
-	}
-}
 
 void SGSTN_TimelineToolbarExtra::Construct(const FArguments& InArgs)
 {
@@ -102,14 +88,19 @@ void SGSTN_TimelineToolbarExtra::Construct(const FArguments& InArgs)
 			]
 		]
 
-		// Preview skin and kit (E6)
+		// Preview subject (E6): a kit and skin, or any skeletal mesh, plus extra meshes. Without a controller (a bare panel) the picker is drawn disabled
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(12.f, 0.f, 0.f, 0.f))
 		[
-			MakeStubCombo(LOCTEXT("SkinCombo", "Skin"), LOCTEXT("SkinComboTip", "The skin shown in the preview. Available with the preview scene."))
-		]
-		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-		[
-			MakeStubCombo(LOCTEXT("KitCombo", "Kit"), LOCTEXT("KitComboTip", "The kit whose hurtboxes and skins the preview uses. Available with the preview scene."))
+			InArgs._Preview.IsValid()
+				? StaticCastSharedRef<SWidget>(SNew(SGSTN_PreviewSubjectPicker).Controller(InArgs._Preview))
+				: StaticCastSharedRef<SWidget>(SNew(SComboButton)
+					.ButtonStyle(FAppStyle::Get(), "SimpleButton")
+					.IsEnabled(false)
+					.ToolTipText(LOCTEXT("SubjectUnavailableTip", "The preview subject. Available when the timeline is opened in its editor."))
+					.ButtonContent()
+					[
+						SNew(STextBlock).Text(LOCTEXT("SubjectUnavailable", "Preview"))
+					])
 		]
 
 		// Validate (E10): the findings go to the Message Log, category GSTN Combat

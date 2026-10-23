@@ -1,9 +1,9 @@
 {
 	"FileVersion": 3,
 	"Version": 4,
-	"VersionName": "0.7",
+	"VersionName": "0.8",
 	"FriendlyName": "GSTN Combat Editor",
-	"Description": "Editor tooling of GSTN Combat: the timeline editor (edit context, selection, undo, the timeline panel, the asset editor and the track editor registry, and inline mode for the timeline of an ability Blueprint), the validators of the data it edits (Data Validation, the Message Log), and later the preview scene, socket baking and the hurtbox set editor. Editor only: it authors the plain combat data and the runtime never knows it exists, so disabling it changes nothing in the game, the harness or cooked data.",
+	"Description": "Editor tooling of GSTN Combat: the timeline editor (edit context, selection, undo, the timeline panel, the asset editor and the track editor registry, and inline mode for the timeline of an ability Blueprint), the validators of the data it edits (Data Validation, the Message Log), the preview scene (a generic subject, the pose set per frame), and later socket baking and the hurtbox set editor. Editor only: it authors the plain combat data and the runtime never knows it exists, so disabling it changes nothing in the game, the harness or cooked data.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",

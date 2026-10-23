@@ -1,13 +1,13 @@
 # GSTNCombatEditor
 
 Editor tooling of GSTN Combat for Unreal Engine 5.8: the timeline editor (edit context, model, undo, the timeline panel, the
-toolkit and track editors, then preview scene, gizmos), validation, socket baking and the hurtbox set editor. A designer builds a move with windows and keys instead
+toolkit and track editors, the preview scene, then gizmos), validation, socket baking and the hurtbox set editor. A designer builds a move with windows and keys instead
 of typing frame numbers in a details panel. Everything the tooling writes is the plain data of `GSTNCombatCore`
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
 Status: **experimental (0.7)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
-model), E4 (timeline panel), E5 (toolkit, track editors), E10 (validation) and E13 (inline mode) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
+model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E10 (validation) and E13 (inline mode) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
 (E3 is not built: the phase bar reads a private stand-in, `FGSTN_PhaseBarData`, until `GSTNCombatCore` gets `FGSTN_TimelinePhases`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
@@ -80,7 +80,7 @@ with their scrollbar or with the wheel over the name column.
 
 Double-click a `UGSTN_CombatTimeline` asset in the Content Browser (a Data Asset of that class, as before): the asset definition
 `UGSTN_AssetDefinition_CombatTimeline` (`UAssetDefinitionDefault`) opens `FGSTN_TimelineEditorToolkit`, a standalone asset editor with
-four tabs in the layout `GSTN_TimelineEditor_Layout_v1`: **Viewport** (a placeholder until the preview scene, E6), **Timeline** (the
+four tabs in the layout `GSTN_TimelineEditor_Layout_v1`: **Viewport** (the 3D preview, E6, below), **Timeline** (the
 panel of E4 under a warning bar), **Details** and **Frame Data**. Save is the editor's own Save; the layout is saved and restored by
 the editor. A second toolkit on an open asset is refused and the open one comes to the front (the context registry of E2).
 
@@ -90,13 +90,46 @@ the editor. A second toolkit on an open asset is refused and the open one comes 
 | `UGSTN_TimelineSelectionProxy` | `Private/Timeline/GSTN_TimelineSelectionProxy.h` | A transient copy of the selected track, shown by a structure details view. `Commit` writes it back with `ApplyTrackEdit` (one undo step; a slider drag is one step through the model's drag). |
 | `SGSTN_TimelineDetails` | `Private/Timeline/Widgets/` | The Details tab: follows the selection (one row at a time) and the data. |
 | `SGSTN_MontageLengthBar` | same | Warning bar when the montage and `TotalFrames` disagree, with **Fit Total Frames to montage** (undoable, explicit, never automatic). |
-| `SGSTN_TimelineToolbarExtra` | same | Loop range (editor state, not saved), skin and kit combos (stubs until E6), Validate (runs the timeline rules, E10). |
+| `SGSTN_TimelineToolbarExtra` | same | Loop range (editor state, not saved), the preview subject picker (E6), Validate (runs the timeline rules, E10). |
 | `IGSTN_TrackEditor`, `FGSTN_TrackEditorRegistry`, `IGSTN_GizmoProvider`, `FGSTN_TrackPreviewContext` | `Public/Timeline/GSTN_TimelineTrackEditor.h` | The extension point (below). |
 | `GSTNTrackEditors` | `Private/Timeline/GSTN_TrackEditors.cpp` | The built-in track editors: CancelWindow, Movement, Tags, Event, WeaponSwitch. |
 
 The names, colours, icons, bar labels and default lengths of the rows come from the track editors. A track struct nobody registered
 (the Hitbox and HurtboxModifier shells until E5b, or a game's own track) gets the **generic row**: a window bar named by the struct,
 its fields in the Details tab. Add Track lists the registered editors, then "Other track types" for the unregistered structs.
+
+### The preview scene (E6)
+
+The Viewport tab (`SGSTN_TimelineViewport`) is a 3D preview of the timeline at the playhead frame: `FGSTN_TimelinePreviewScene` (an `FAdvancedPreviewScene`)
+with one `UDebugSkelMeshComponent`, `FGSTN_TimelineViewportClient` (camera presets Side, Front and 3/4, Frame, Follow root, Grid, Root capsule and facing
+arrow, Lit/Unlit) and `FGSTN_PreviewController`, which the toolkit creates next to the model and which keeps the scene in step with the playhead, the
+montage, its section and play rate. The preview loads the timeline's montage by itself (the one place besides *Fit Total Frames* that does).
+
+**The subject is generic.** `FGSTN_PreviewSubject` is either a **player kit and skin** (read only: the skin's mesh and animation class, the kit's
+locomotion class) or **any `USkeletalMesh`** (an enemy, humanoid or not, with an optional animation class), plus a list of **attachments**: a skeletal or
+static mesh hung from a bone or socket of the main mesh with a full relative transform, scale included (a sword in a hand, a turret on a base; a
+longer blade is a scale along one axis). Everything is a soft reference. The toolbar's **Preview** combo opens the subject's properties: kind, assets,
+the attachment list. No weapon data names a mesh yet, so attachments are added by hand for both kinds of subject; when a weapon definition gets a mesh
+the resolver (`GSTNPreviewSubject::Resolve`) is where it joins.
+
+The subject is stored **per asset** (the timeline asset, or the ability Blueprint for an inline timeline) in `UGSTN_CombatEditorPreviewState`, config
+`EditorPerProjectUserSettings`: per user and project, never in the versioned asset (`UGSTN_CombatTimeline` is a runtime type and has no preview
+properties). A restart keeps it; deleting the entry in that ini resets it.
+
+**Nothing assumes a skeleton.** The mesh is placed in root space (the space hitboxes live in: +X forward, Z up, origin at the middle of the capsule)
+from the mesh alone: turned so `USkeletalMesh::ForwardAxis` faces +X, dropped so the middle of its reference-pose bounds sits at the origin's height. The
+root capsule is derived from the same bounds (the narrower horizontal half-size as radius, the half height from Z) and the facing arrow is +X. Bones and
+sockets are only ever asked for by the name the caller holds.
+
+**The pose is set, never ticked.** `FGSTN_PreviewPose::Evaluate(Frame)` puts the montage at `SectionStart + Frame / TickRate x PlayRate` on the debug
+component's preview instance (paused, no blend-in or blend-out) and evaluates once with a zero delta; the baker (E8) will call the same function. No
+montage: the reference pose. Spike S1 (docs/notes/m5-spike-report.md) measured it: bit-identical across runs and backwards, the root bone's track (root
+motion) is not in the pose, the post process graph changed nothing it sampled.
+
+Overlays that need M4 (the hit and hurt shapes) register in `FGSTN_PreviewOverlayRegistry` (`IGSTN_PreviewOverlay`): the viewport calls every registered
+one at the playhead frame, none is built yet. Not in this checkpoint: the movement-path polyline and the motion trail (both toggles of the spec), the
+skin combo listing only the kit's compatible skins (the subject lists any skin and says in words when it does not match the kit's query), and gizmos (E7).
+Camera: a plain camera, not the engine's orbit camera, whose stored rotation is read through its own orbit convention; Alt+drag orbits.
 
 ## Inline mode: the timeline of an ability Blueprint (E13)
 
@@ -187,7 +220,7 @@ registry. `Validate(Track, Data, Report)` adds the findings that are about your 
 its base's editor until it registers its own. Add a test: a registry case (listed, defaults applied by `AddTrack`) as in
 `GSTN_EditorTests_Registry.cpp`.
 
-Planned in this module, by checkpoint: hitbox and hurtbox-modifier track editors (E5b), preview scene (E6), gizmos (E7), baker (E8),
+Planned in this module, by checkpoint: hitbox and hurtbox-modifier track editors (E5b), gizmos (E7), baker (E8),
 hurtbox set editor (E9), the rest of the validation: M4 rules, the validation panel, Bake all (E11), details customizations (E12, E13).
 
 ## Validation (E10)
@@ -250,7 +283,7 @@ Asset Manager and checks the loadout as the server will.
 - Plugins: `GSTNCombat` (the timeline data), `GSTNInput` (the slot validator and the notation), `GSTNCombatGAS` (kit, weapon and loadout
   data, and the `Combat.Hurtbox.*` tags the settings map to), `GSTNCombatNP` (since E13: the ability class `UGSTN_GA_BaseCombat`, see below) and the engine plugin `DataValidation`. Not `GSTNCombatDebug`: since E14 the debug plugin registers its own
   editor tab, so the two plugins have no edge in either direction.
-- `GSTNCombatEditor` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore; private ApplicationCore (clipboard),
+- `GSTNCombatEditor` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore; private ApplicationCore (clipboard), AdvancedPreviewScene and AnimGraph (the preview scene and the anim instance montages play on, E6),
   AssetDefinition (`UAssetDefinition`; `UAssetDefinitionDefault` itself is in UnrealEd), DeveloperSettings, EditorFramework, InputCore,
   PropertyEditor (the Details tab and the timeline data row), Slate, SlateCore, UnrealEd (the toolkit, `FBlueprintEditorUtils`, `FKismetEditorUtilities`), ContentBrowser and AssetTools (the save dialog of Extract), GSTNCombatGAS, GSTNCombatNP, GSTNInputCore, and for validation DataValidation
   (`UEditorValidatorBase`), MessageLog, AssetRegistry, Projects, GameplayAbilities (the ability base class `UGSTN_GA_BaseCombat`, and the test bindings, derive from `UGameplayAbility`). The module
@@ -281,7 +314,7 @@ Project Settings > Plugins > GSTN Combat Editor (`UGSTN_CombatEditorSettings`, `
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `DefaultPreviewKit`, `DefaultPreviewSkin` | none | Soft references the preview uses when an asset has none of its own (E6) |
+| `DefaultPreviewKit`, `DefaultPreviewSkin` | none | The player subject the preview starts with when an asset has none of its own (E6). The subject of an asset is stored per user, see the preview section |
 | `bBakeOnSave` | off | Bake sockets when a timeline is saved (E8); baking is a button otherwise |
 | `bAutoKeyDefault` | on | A gizmo drag on a frame without a key creates the key first (E7) |
 | `TrackColors`, `GenericTrackColor` | one per M3 track kind | Row colours by track struct name |
@@ -312,7 +345,7 @@ The plugin ships no content and references none by path. The preview kit, skin a
 
 ## Tests
 
-`Automation RunTests GSTNCombat.Editor`: `UiFixes.*` (UI test fixes: `PlayheadWorksWithoutLength`, `TotalFramesAndFafAreUndoable`, `EmptySpaceClickClearsSelection`, `TextIsReadableOnEveryBar`, `FindingsStoreAndList`, `GoToFindingSelectsAndMoves`, `LengthFieldsConstruct`), `Module.LoadsAndRegisters`, `Debug.NoDependencyOnDebugModule` (E14: no debug module, plugin or include in this plugin), `Settings.DefaultsFromPluginIni`,
+`Automation RunTests GSTNCombat.Editor`: `Preview.*` (E6, on the engine's own `SkeletalCube` and `BasicShapes` and a montage built in memory, so no project content): `PoseAtFrameMatchesSectionTime`, `EvaluateIsRepeatable`, `FollowRootFramesMesh`, `NonHumanoidSubjectHasNoBoneAssumptions` (placement and capsule for odd shapes, every bone reachable by its own name, no bone name in a literal of the preview sources), `AttachmentsHangFromSocketsWithFullTransform`, `KitSkinSubjectResolvesReadOnly`, `SubjectPersistsPerAsset` (a restart is `ReloadFromDisk`), `ControllerFollowsPlayheadAndMontage`, `OverlayRegistryDrawsRegistered`, and `Preview.Spike.MontageSampling` (S1, needs any project montage with a preview mesh, skips without). The snapshots `GSTN.Visual.Timeline.Preview` (viewport with a real montage and a sword, and the reference pose seen from the side) and `PreviewToolbar` need a renderer (`-RenderOffscreen`). `UiFixes.*` (UI test fixes: `PlayheadWorksWithoutLength`, `TotalFramesAndFafAreUndoable`, `EmptySpaceClickClearsSelection`, `TextIsReadableOnEveryBar`, `FindingsStoreAndList`, `GoToFindingSelectsAndMoves`, `LengthFieldsConstruct`), `Module.LoadsAndRegisters`, `Debug.NoDependencyOnDebugModule` (E14: no debug module, plugin or include in this plugin), `Settings.DefaultsFromPluginIni`,
 `Settings.TickRateFromNetworkPrediction`, and `Model.*`: `EachMutationOnlyChangesWhatItSays`, `ClampsToTotalFrames`,
 `UndoRedoRestoresExactData`, `DragIsOneUndoStep`, `CancelledDragLeavesNoStep`, `SelectionRevalidatedAfterUndo`,
 `ClipboardRoundTrip`, `FitTotalFramesDoesNotRunSilently`, `TwoToolkitsOneTargetRefused`, `ViewTransformRoundTrip`. The model tests
@@ -345,6 +378,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.8.0 (2026-10-23, E6): the preview scene: a generic subject (kit and skin, or any skeletal mesh) with attachments, stored per asset in the user's config; the pose set per frame by `FGSTN_PreviewPose`; camera presets, root capsule, facing arrow, overlay registry for M4; tests `Preview.*` and the snapshots `GSTN.Visual.Timeline.Preview*`.
 - 0.7.3 (2026-10-23, UI test fixes): the playhead works while `TotalFrames` is 0, `Length` and `FAF` fields (timeline panel and Frame Data tab), readable bar, phase and header colours with distinct phase colours, the findings of Validate listed in the Frame Data tab, a click on empty space clears the selection; test file `GSTN_EditorTests_UiFixes.cpp` (`GSTNCombat.Editor.UiFixes.*`).
 - 0.7.2 (2026-10-23, review fixes): an unresolvable `TimelineAsset` on an ability is the error `Ability.TimelineAssetUnresolved`; a `SwapFrame` typed in the details panel moves the weapon switch window's `StartFrame` with it; a header comment about the weapon switch frame.
 - 0.7.1 (2026-10-23, review fixes): the weapon switch is drawn, hit-tested, moved and clamped on `SwapFrame` like the runtime and the validation (moving it also repairs a stale `StartFrame`), with a `WeaponSwitch.FrameMismatch` warning; Extract no longer replaces a named `TimelineAsset` without a confirmation, and drops the new asset when it is refused.

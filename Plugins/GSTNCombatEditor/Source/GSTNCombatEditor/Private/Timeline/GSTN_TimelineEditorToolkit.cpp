@@ -28,6 +28,8 @@
 #include "Timeline/Widgets/SGSTN_FindingsList.h"
 #include "Timeline/Widgets/SGSTN_FrameDataSummary.h"
 #include "Timeline/Widgets/SGSTN_InlineTimelineBar.h"
+#include "Preview/GSTN_PreviewController.h"
+#include "Preview/SGSTN_TimelineViewport.h"
 #include "Timeline/Widgets/SGSTN_MontageLengthBar.h"
 #include "Timeline/Widgets/SGSTN_TimelineDetails.h"
 #include "Timeline/Widgets/SGSTN_TimelineLengthFields.h"
@@ -153,6 +155,8 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 	}
 
 	Model = MakeShared<FGSTN_TimelineEditorModel>(Context);
+	// The preview scene follows the model's playhead and montage; its subject is stored per asset in the user's config
+	Preview = FGSTN_PreviewController::Create(Model.ToSharedRef());
 	UndoClient = MakeUnique<FGSTN_TimelineUndoClient>(*Model);
 	// Findings about the timeline as it was when Validate ran are marked out of date by the next edit (the model, and its delegate, go with this toolkit)
 	Model->OnDataChanged.AddSP(this, &FGSTN_TimelineEditorToolkit::HandleDataChanged);
@@ -364,19 +368,10 @@ void FGSTN_TimelineEditorToolkit::OnClose()
 
 TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnViewportTab(const FSpawnTabArgs& Args)
 {
-	// The preview scene is E6. The tab exists so the layout has its final shape and a saved layout does not change when the scene arrives
 	return SNew(SDockTab)
 		.Label(LOCTEXT("ViewportTabLabel", "Viewport"))
 		[
-			SNew(SBorder)
-			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
-			.HAlign(HAlign_Center)
-			.VAlign(VAlign_Center)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("ViewportPlaceholder", "The preview is not available yet."))
-				.ColorAndOpacity(FSlateColor(GSTNTimelineWidgets::TextColorDim()))
-			]
+			SNew(SGSTN_TimelineViewport).Controller(Preview)
 		];
 }
 
@@ -407,6 +402,7 @@ TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnTimelineTab(const FSpawnT
 				[
 					SNew(SGSTN_TimelineToolbarExtra)
 					.Model(Model)
+					.Preview(Preview)
 					.OnValidate(FSimpleDelegate::CreateSPLambda(this, [this]() { ValidateNow(); }))
 				]
 			]

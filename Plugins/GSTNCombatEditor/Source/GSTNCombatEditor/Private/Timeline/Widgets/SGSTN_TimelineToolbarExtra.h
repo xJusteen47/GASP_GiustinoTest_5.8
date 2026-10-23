@@ -6,13 +6,14 @@
 #include "Timeline/GSTN_TimelineEditorModel.h"
 #include "Widgets/SCompoundWidget.h"
 
+class FGSTN_PreviewController;
+
 /**
  * What the toolkit adds to the end of the panel's toolbar (combat-m5-editor 6): the loop range of playback, the preview skin and kit
  * combos and Validate.
  *
- * The skin and kit combos are stubs until the preview scene (E6) has a mesh to put a skin on: they are drawn so the toolbar has its
- * final shape and the tooltips are already where a designer will look for them, and they change nothing. Validate runs what the
- * toolkit gives it (the timeline rules, the findings go to the Message Log, E10) and is disabled when nothing is bound.
+ * The subject picker (E6) names what the preview shows (a player kit and skin, or any skeletal mesh, plus extra meshes) and edits it.
+ * Validate runs what the toolkit gives it (the timeline rules, the findings go to the Message Log, E10) and is disabled when nothing is bound.
  */
 class SGSTN_TimelineToolbarExtra : public SCompoundWidget
 {
@@ -22,6 +23,9 @@ public:
 
 		/** What Validate does. Unbound: the button is drawn disabled */
 		SLATE_EVENT(FSimpleDelegate, OnValidate)
+
+		/** The preview the subject picker drives. Unset: the picker is drawn disabled */
+		SLATE_ARGUMENT(TSharedPtr<FGSTN_PreviewController>, Preview)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
