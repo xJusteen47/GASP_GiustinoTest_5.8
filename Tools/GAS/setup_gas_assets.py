@@ -601,8 +601,8 @@ def c18_content_specs():
              [jump, ('Command.Test.Gamma', [], [], 'GSTN_GA_TestGammaMove')], 0, []),
             # Delta: plain special, and an EX chord (Special + Buff) that falls through to it when the meter is short
             ('KIT_Test_Delta', 'Kit.Test.Delta',
-             {'removed': [], 'added': [('Command.Test.SpecialEx', ['Input.Button.Special', 'Input.Button.Buff'], True, True, 100)]},
-             [jump, ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'), ('Command.Test.SpecialEx', [], [], 'GSTN_GA_TestSpecialEx')], 0, []),
+             {'removed': [], 'added': [('Command.Special.Ex', ['Input.Button.Special', 'Input.Button.Buff'], True, True, 100)]},
+             [jump, ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'), ('Command.Special.Ex', [], [], 'GSTN_GA_TestSpecialEx')], 0, []),
             # Sigma: two supers entered as codes (Special, then the super's own two buttons)
             ('KIT_Test_Sigma', 'Kit.Test.Sigma', {'removed': [], 'added': []}, [jump], 2, ['SUP_Test_A', 'SUP_Test_B']),
             # Omega: a timeline that waits combat frames before a strike, on the plain special

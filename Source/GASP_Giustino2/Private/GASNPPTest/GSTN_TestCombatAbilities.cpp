@@ -317,3 +317,18 @@ void UGSTN_GA_TestWaitStrike::OnCombatFramesElapsed()
 {
 	ApplyGameplayEffectToOwner(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), GetDefault<UGSTN_GE_TestStrike>(), 1);
 }
+
+UGSTN_GA_TestCostGrab::UGSTN_GA_TestCostGrab(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+}
+
+void UGSTN_GA_TestCostGrab::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+	// The base captures the activation context first, like the stance
+	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+	}
+}

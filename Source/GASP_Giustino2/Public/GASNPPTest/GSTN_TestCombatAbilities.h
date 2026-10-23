@@ -237,6 +237,18 @@ public:
 	UGSTN_GA_TestGammaMove(const FObjectInitializer& ObjectInitializer);
 };
 
+/** The grab placeholder that pays its cost: commits the ability when it starts (a command activation does not commit by itself), so a meter cost is spent in the simulation on every machine */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestCostGrab : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GA_TestCostGrab(const FObjectInitializer& ObjectInitializer);
+
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+};
+
 /** The plain special of KIT_Test_Delta: owns Test.State.Special for a few combat frames */
 UCLASS()
 class GASP_GIUSTINO2_API UGSTN_GA_TestSpecial : public UGSTN_GA_TestGrab
@@ -248,7 +260,7 @@ public:
 
 /** The EX special: Test.State.SpecialEx, costs UGSTN_GE_TestExCost. Its slot falls through to the plain special when this cannot start */
 UCLASS()
-class GASP_GIUSTINO2_API UGSTN_GA_TestSpecialEx : public UGSTN_GA_TestGrab
+class GASP_GIUSTINO2_API UGSTN_GA_TestSpecialEx : public UGSTN_GA_TestCostGrab
 {
 	GENERATED_BODY()
 public:
@@ -257,7 +269,7 @@ public:
 
 /** Super A of KIT_Test_Sigma: Test.State.SuperA, costs UGSTN_GE_TestSuperCost */
 UCLASS()
-class GASP_GIUSTINO2_API UGSTN_GA_TestSuperA : public UGSTN_GA_TestGrab
+class GASP_GIUSTINO2_API UGSTN_GA_TestSuperA : public UGSTN_GA_TestCostGrab
 {
 	GENERATED_BODY()
 public:
@@ -266,7 +278,7 @@ public:
 
 /** Super B: Test.State.SuperB, same cost */
 UCLASS()
-class GASP_GIUSTINO2_API UGSTN_GA_TestSuperB : public UGSTN_GA_TestGrab
+class GASP_GIUSTINO2_API UGSTN_GA_TestSuperB : public UGSTN_GA_TestCostGrab
 {
 	GENERATED_BODY()
 public:
