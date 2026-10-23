@@ -47,6 +47,14 @@ public:
 	TMap<TSoftObjectPtr<UPhysicalMaterial>, FGSTN_SurfaceBehaviour> PhysicalMaterials;
 
 	/**
+	 * The server kicks a client that joins without announcing its surface type table checksum (FGSTN_SurfaceJoinCheck). Off by
+	 * default: a mismatch is always kicked, but a game that does not send the option yet only gets a warning. Turn it on once the
+	 * game's ULocalPlayer returns FGSTN_SurfaceJoinCheck::GetJoinOption from GetGameLoginOptions. Server setting
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Surface|Network")
+	bool bRequireJoinChecksum = false;
+
+	/**
 	 * The baked tables. Safe to read from any thread once baked (the module bakes them after engine init). Never loads an asset:
 	 * if nothing baked them yet (a lookup before engine init) it bakes the types and the materials already in memory, logs a
 	 * warning once, and only on the game thread; from another thread it returns an empty table and fails an ensure
@@ -80,4 +88,7 @@ private:
 	FGSTN_SurfaceTable Table;
 
 	bool bWarnedLazyBake = false;
+
+	/** Set by Rebake (engine started): only then may a tag tree change freeze a table that the first bake found empty */
+	bool bBakedAfterEngineInit = false;
 };

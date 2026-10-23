@@ -71,7 +71,7 @@ public:
 	/**
 	 * 32-bit checksum of the ordered Surface.Type list behind those indices. Machines that report the same value agree on every
 	 * index a sync state carries; a client that differs from its server reads the wrong surface types without any other sign.
-	 * Meant for a join check (nothing compares it yet) and for the log, where the table bake prints it
+	 * The server compares it with the client's at login (FGSTN_SurfaceJoinCheck) and the table bake prints it
 	 */
 	static uint32 GetSurfaceTypeTableChecksum();
 

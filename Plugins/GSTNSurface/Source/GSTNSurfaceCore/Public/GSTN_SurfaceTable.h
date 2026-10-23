@@ -43,9 +43,21 @@ public:
 	/**
 	 * Locks the type indices for the rest of the session (the running game does it once the engine has started). The indices are
 	 * what a sync state stores, so they must not move while a match runs; Reset is the only way back. The editor never freezes:
-	 * a designer adding a Surface.Type tag has to see its index at once
+	 * a designer adding a Surface.Type tag has to see its index at once.
+	 *
+	 * An empty table is never frozen (returns false): a bake that ran before the tag tree was complete would otherwise lock "no
+	 * types" for the whole session and refuse every Surface.Type leaf that registers afterwards. Freeze again after a bake that
+	 * found at least one type
 	 */
-	void Freeze() { bTypesFrozen = true; }
+	bool Freeze()
+	{
+		if (!bTypesBaked || NumTypes() == 0)
+		{
+			return false;
+		}
+		bTypesFrozen = true;
+		return true;
+	}
 	bool IsFrozen() const { return bTypesFrozen; }
 
 	/**

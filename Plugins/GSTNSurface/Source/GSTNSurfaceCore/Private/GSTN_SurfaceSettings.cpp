@@ -4,9 +4,7 @@
 
 #include "Engine/Engine.h"
 #include "GSTNSurfaceCoreModule.h"
-#include "HAL/PlatformTLS.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
-#include "Misc/CoreMisc.h"
 
 UGSTN_SurfaceSettings::UGSTN_SurfaceSettings()
 {
@@ -83,9 +81,11 @@ void UGSTN_SurfaceSettings::Rebake()
 
 	// The indices are what sync states store, so in the running game they never change after this bake. The editor keeps rebaking:
 	// a designer who adds a Surface.Type tag needs its index at once, and no match runs against a half-edited tag set
-	if (!GIsEditor)
+	bBakedAfterEngineInit = true;
+	if (!GIsEditor && !Table.Freeze())
 	{
-		Table.Freeze();
+		// Freezing "no types" would refuse every leaf that registers later; wait for the first non-empty set (RebakeTypes)
+		UE_LOG(LogGSTNSurface, Warning, TEXT("The surface table has no Surface.Type tags at the first bake, so it is not frozen yet: it freezes with the first set the tag tree gives. Check that the Surface.Type leaves are in a Config/Tags ini of the project or of a plugin that loads at startup"));
 	}
 	UE_LOG(LogGSTNSurface, Log, TEXT("Surface table baked: %d materials, %d surface types, type checksum %08X%s"),
 		Entries.Num(), Table.NumTypes(), Table.GetTypesChecksum(), Table.IsFrozen() ? TEXT(" (frozen)") : TEXT(""));
@@ -94,6 +94,13 @@ void UGSTN_SurfaceSettings::Rebake()
 void UGSTN_SurfaceSettings::RebakeTypes()
 {
 	Table.BakeTypesFromTagManager();
+
+	// A first bake that found no types left the table open (see Rebake); the first non-empty set after the engine started is the
+	// one the running game keeps. Before engine init the tag tree is still loading, so nothing freezes here
+	if (!GIsEditor && bBakedAfterEngineInit && !Table.IsFrozen() && Table.Freeze())
+	{
+		UE_LOG(LogGSTNSurface, Log, TEXT("Surface type table frozen: %d surface types, type checksum %08X"), Table.NumTypes(), Table.GetTypesChecksum());
+	}
 }
 
 void UGSTN_SurfaceSettings::InvalidateTable()

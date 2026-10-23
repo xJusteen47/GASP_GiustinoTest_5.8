@@ -21,5 +21,8 @@ public class GSTNSurfaceCore : ModuleRules
 
 		// Finds the plugin's own Config/Tags folder to register it with the tag manager
 		PrivateDependencyModuleNames.Add("Projects");
+
+		// The join check closes a connection (UNetConnection::Close names ENetCloseResult, which lives in NetCore)
+		PrivateDependencyModuleNames.Add("NetCore");
 	}
 }

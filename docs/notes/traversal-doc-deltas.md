@@ -72,9 +72,8 @@ Collected per the plan's rule (one docs commit at T9). Each line: where, what ch
   that first bake freezes the table (`FGSTN_SurfaceTable::Freeze`); a later `OnGameplayTagTreeChanged` that would give a different
   list is an error in the log and the table is left alone (the new type reads as 0). The **editor never freezes** (a designer who
   adds a leaf needs its index at once). `UGSTN_SurfaceUtils::GetSurfaceTypeTableChecksum()` and `FGSTN_SurfaceTable::GetTypesChecksum()`
-  give a 32-bit CRC of the ordered names (UTF-8, so the value does not depend on the platform's `TCHAR`); the bake logs it. Nothing
-  compares it at connect yet: **a join check is needed** (server value vs client value, refuse or at least log) before Surface types
-  are stored in a sync state. Rule for content: every `Surface.Type.*` leaf lives in a `Config/Tags` ini of the project or of a
+  give a 32-bit CRC of the ordered names (UTF-8, so the value does not depend on the platform's `TCHAR`); the bake logs it. A join
+  check now compares it (second review fixes, below). Rule for content: every `Surface.Type.*` leaf lives in a `Config/Tags` ini of the project or of a
   plugin that loads at startup, never in a late Game Feature plugin.
 - §2.2 lazy bake (review B.7): `GetTable()` no longer loads assets. A lookup before the engine-init bake gets the types and only the
   physical materials already in memory (`TSoftObjectPtr::Get`, not `LoadSynchronous`), with one warning, and only on the game
@@ -94,4 +93,25 @@ Collected per the plan's rule (one docs commit at T9). Each line: where, what ch
 - Known limits left as they are (design choices, review B.8, B.9, B.10, B.13): the wall filter is empty by default on the modes and
   the transition, so it must be set in both places; `bUnknownSurfacesPass` bypasses a customised `UGSTN_SurfaceSettings::Default`;
   `Resolve` also computes velocity and launch for a yes/no filter question (measure before adding a `ResolveBehaviours`); two
-  `UGSTN_SurfaceBehaviourComponent` on one actor resolve to whichever `FindComponentByClass` returns first (the validator warns).
+  `UGSTN_SurfaceBehaviourComponent` on one actor: superseded, see "Second review fixes" (lowest name wins, validator error).
+
+## Second review fixes (2026-10-23, B.2 rest and B.13)
+
+- §2.2 / modularity-and-tags §4.7 join check (B.2, rest). Design chosen: the server hooks `FGameModeEvents::OnGameModePostLoginEvent` in the
+  module (`FGSTN_SurfaceJoinCheck::CheckLogin`) and compares the URL option `GSTNSurfaceTypes=<8 hex>` of the connection's `RequestURL` with
+  its own `GetTypesChecksum()`; a mismatch (or, with `UGSTN_SurfaceSettings::bRequireJoinChecksum`, a missing option) is kicked through
+  `GameSession->KickPlayer` and logged as an error. **PostLogin, not PreLogin**, because `GameModePreLoginEvent` carries no options and the
+  plugin must not override the project's game mode or game session. **The client side is the game's job**: the engine has no global hook
+  on the connect URL, so the game returns `FGSTN_SurfaceJoinCheck::GetJoinOption()` from `ULocalPlayer::GetGameLoginOptions` or calls
+  `AppendJoinOption` on its travel URL. Until it does, a client without the option is only a warning (the default), so the existing
+  PIE harness and projects keep working; turn `bRequireJoinChecksum` on after wiring the game. Not wired in this project (`Source/` was out
+  of scope): **open item for the project module**. The kick path needs a real connection and is not covered by an automation test (the
+  decision, `Evaluate`, and the option round trip are); verify with the dedicated-server PIE harness by joining with a different tag set.
+- B.2 empty bake: `FGSTN_SurfaceTable::Freeze()` returns false and does nothing for a table with no types. The bake after engine init warns
+  and leaves the table open; `RebakeTypes` (tag tree change) freezes it on the first non-empty set once the engine has started. Before, a
+  first bake that ran with an incomplete tag tree froze "no types" for the session.
+- B.13: `UGSTN_SurfaceBehaviourComponent::FindFor(Actor)` picks the component with the lowest name instead of the first one the actor's
+  unordered component set returns, so every machine resolves the same surface. A second component is now an **error** (was a warning) in
+  `CollectFindings` / `IsDataValid`. `ResolveQuery` uses `FindFor`.
+- Test nit: `GetTableNeverLoadsAssets` adds a warning (`VACUOUS: ...`) when no unloaded engine asset is found under `/Engine/EngineMaterials`,
+  instead of an info line; it still checks the table contents.

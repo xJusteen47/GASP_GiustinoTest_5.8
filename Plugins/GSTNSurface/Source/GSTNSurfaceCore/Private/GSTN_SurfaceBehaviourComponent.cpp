@@ -29,6 +29,25 @@ const FGSTN_SurfaceBehaviour& UGSTN_SurfaceBehaviourComponent::GetBehaviourFor(c
 	return Default;
 }
 
+const UGSTN_SurfaceBehaviourComponent* UGSTN_SurfaceBehaviourComponent::FindFor(const AActor* Owner)
+{
+	if (!Owner)
+	{
+		return nullptr;
+	}
+	// The component set of an actor is unordered, so a plain "first" can differ between machines: choose by name
+	const UGSTN_SurfaceBehaviourComponent* Best = nullptr;
+	TInlineComponentArray<UGSTN_SurfaceBehaviourComponent*, 2> Candidates(Owner);
+	for (const UGSTN_SurfaceBehaviourComponent* Candidate : Candidates)
+	{
+		if (Candidate && (!Best || Candidate->GetFName().Compare(Best->GetFName()) < 0))
+		{
+			Best = Candidate;
+		}
+	}
+	return Best;
+}
+
 void UGSTN_SurfaceBehaviourComponent::CollectFindings(TArray<FText>& OutErrors, TArray<FText>& OutWarnings) const
 {
 	Default.Validate(OutErrors);
@@ -67,11 +86,13 @@ void UGSTN_SurfaceBehaviourComponent::CollectFindings(TArray<FText>& OutErrors, 
 		}
 	}
 
+	// An error, not a warning: the extra components change what is simulated (which one is read), and a level that ships with
+	// two is a content mistake even though the pick by name keeps the machines in agreement
 	TInlineComponentArray<UGSTN_SurfaceBehaviourComponent*> SurfaceComponents(Owner);
 	if (SurfaceComponents.Num() > 1)
 	{
-		OutWarnings.Add(FText::Format(LOCTEXT("SeveralSurfaceComponents",
-			"{0} has {1} surface behaviour components: only the first one is read. Use PerComponent instead"),
+		OutErrors.Add(FText::Format(LOCTEXT("SeveralSurfaceComponents",
+			"{0} has {1} surface behaviour components: only the one with the lowest name is read. Keep one and use PerComponent instead"),
 			FText::FromString(Owner->GetName()), SurfaceComponents.Num()));
 	}
 }

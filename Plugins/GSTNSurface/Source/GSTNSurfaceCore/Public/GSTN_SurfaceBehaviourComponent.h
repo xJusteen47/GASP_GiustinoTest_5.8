@@ -7,12 +7,13 @@
 #include "GSTN_SurfaceTypes.h"
 #include "GSTN_SurfaceBehaviourComponent.generated.h"
 
+class AActor;
 class UPrimitiveComponent;
 
 /**
  * Marks the colliders of an actor as surfaces (traversal-surfaces.md §2.4, step 1 of the resolution order): a level wall that
  * forbids wall slide, a climb-only wall, a trampoline. Add it to the actor, fill Default, and name the colliders that differ in
- * PerComponent (one component per actor; a second one is ignored and the validator says so).
+ * PerComponent (one component per actor: with several, only the one with the lowest name is read, and the validator reports an error).
  *
  * Static configuration: the fields are BlueprintReadOnly and nothing writes them during a match, because the simulation of every
  * machine resolves surfaces from them and must read the same values (CLAUDE.md rule 1).
@@ -41,9 +42,16 @@ public:
 	FGSTN_SurfaceBehaviour K2_GetBehaviourFor(const UPrimitiveComponent* Collider) const { return GetBehaviourFor(Collider); }
 
 	/**
-	 * Findings shared by IsDataValid and the tests: invalid launch parameters (errors), PerComponent names that are not
-	 * primitive components of the owner (errors, only when an owner is known) and a second surface component on the owner
-	 * (warning)
+	 * The surface component the resolution reads for an actor. With a single one (the supported setup) it is that one; with
+	 * several it is the one with the lowest name, so every machine picks the same: the owner's component set has no stable
+	 * order, and a pick by iteration order could differ between server and client
+	 */
+	static const UGSTN_SurfaceBehaviourComponent* FindFor(const AActor* Owner);
+
+	/**
+	 * Findings shared by IsDataValid and the tests: invalid launch parameters, PerComponent names that are not primitive
+	 * components of the owner (only when an owner is known) and a second surface component on the owner. All are errors; the
+	 * warning list is kept for findings that do not change what is simulated and is empty today
 	 */
 	void CollectFindings(TArray<FText>& OutErrors, TArray<FText>& OutWarnings) const;
 

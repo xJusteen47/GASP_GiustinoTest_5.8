@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "GameplayTagsManager.h"
 #include "GSTN_SurfaceBehaviourComponent.h"
+#include "GSTN_SurfaceJoinCheck.h"
 #include "GSTN_SurfaceSettings.h"
 #include "GSTN_SurfaceTable.h"
 #include "GSTN_SurfaceTags.h"
@@ -568,8 +569,107 @@ bool FGSTN_SurfaceGetTableNeverLoadsTest::RunTest(const FString& Parameters)
 	}
 	else
 	{
-		AddInfo(TEXT("No unloaded engine asset was found to prove the lookup does not load; only the table contents were checked"));
+		// Not a pass: this run proved nothing about loading. A warning shows in the report instead of a silent green
+		AddWarning(TEXT("VACUOUS: no unloaded engine asset was found under /Engine/EngineMaterials, so this run did not prove that GetTable() never loads; only the table contents were checked"));
 	}
+	return true;
+}
+
+// Review 2026-10-23 B.2 (partial): a first bake that ran before the tag tree was complete found no types and froze that, so every
+// leaf that registered later was refused for the whole session
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SurfaceEmptyTableNotFrozenTest, "GSTNSurface.Core.EmptyTypeTableIsNeverFrozen", Flags)
+bool FGSTN_SurfaceEmptyTableNotFrozenTest::RunTest(const FString& Parameters)
+{
+	FGSTN_SurfaceTable Table;
+	TestFalse(TEXT("A table nothing baked is not frozen"), Table.Freeze());
+	TestTrue(TEXT("An empty bake is accepted"), Table.BakeTypes({}));
+	TestFalse(TEXT("An empty table refuses to freeze"), Table.Freeze());
+	TestFalse(TEXT("... and reports it is not frozen"), Table.IsFrozen());
+
+	// The tags that arrive afterwards still get their indices, then the table freezes
+	TestTrue(TEXT("A later set is accepted because nothing was frozen"), Table.BakeTypes({ GSTNSurfaceTags::Behaviour_Launch, GSTNSurfaceTags::Behaviour_Stand }));
+	TestEqual(TEXT("... with indices"), Table.NumTypes(), 2);
+	TestTrue(TEXT("A table with types freezes"), Table.Freeze());
+	TestTrue(TEXT("... and reports it"), Table.IsFrozen());
+	return true;
+}
+
+// Review 2026-10-23 B.2 (partial): the connect-time checksum comparison. The server hook itself needs a network connection and is
+// covered by the PIE harness; the decision it takes is this function
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SurfaceJoinCheckTest, "GSTNSurface.Core.JoinCheckComparesChecksums", Flags)
+bool FGSTN_SurfaceJoinCheckTest::RunTest(const FString& Parameters)
+{
+	constexpr uint32 Server = 0x00ABCDEFu;
+	const FString Good = FString(TEXT("/Game/Map?Name=Bob?")) + FGSTN_SurfaceJoinCheck::MakeOption(Server);
+	uint32 Client = 0;
+	TestTrue(TEXT("The server's own checksum matches"), FGSTN_SurfaceJoinCheck::Evaluate(Good, Server, &Client) == EGSTN_SurfaceJoinVerdict::Match);
+	TestEqual(TEXT("The announced checksum is reported"), Client, Server);
+
+	TestTrue(TEXT("Another checksum is a mismatch"),
+		FGSTN_SurfaceJoinCheck::Evaluate(FString(TEXT("?")) + FGSTN_SurfaceJoinCheck::MakeOption(Server + 1), Server) == EGSTN_SurfaceJoinVerdict::Mismatch);
+	TestTrue(TEXT("No option is reported as missing, not as a mismatch"),
+		FGSTN_SurfaceJoinCheck::Evaluate(TEXT("/Game/Map?Name=Bob"), Server) == EGSTN_SurfaceJoinVerdict::MissingOption);
+	TestTrue(TEXT("An empty URL is missing"), FGSTN_SurfaceJoinCheck::Evaluate(FString(), Server) == EGSTN_SurfaceJoinVerdict::MissingOption);
+	TestTrue(TEXT("A malformed value is a mismatch"),
+		FGSTN_SurfaceJoinCheck::Evaluate(TEXT("?GSTNSurfaceTypes=zzzz"), Server) == EGSTN_SurfaceJoinVerdict::Mismatch);
+	TestTrue(TEXT("A value of the wrong length is a mismatch"),
+		FGSTN_SurfaceJoinCheck::Evaluate(TEXT("?GSTNSurfaceTypes=ABCDEF"), Server) == EGSTN_SurfaceJoinVerdict::Mismatch);
+
+	// The client side round trip: what AppendJoinOption writes, Evaluate accepts for this machine's own checksum
+	FString Url = TEXT("/Game/Map?Name=Bob?GSTNSurfaceTypes=11111111");
+	FGSTN_SurfaceJoinCheck::AppendJoinOption(Url);
+	const uint32 Local = UGSTN_SurfaceUtils::GetSurfaceTypeTableChecksum();
+	TestTrue(TEXT("The appended option matches this machine"), FGSTN_SurfaceJoinCheck::Evaluate(Url, Local) == EGSTN_SurfaceJoinVerdict::Match);
+	TestEqual(TEXT("... and an earlier option was replaced, not duplicated"), Url.Find(TEXT("GSTNSurfaceTypes"), ESearchCase::IgnoreCase, ESearchDir::FromEnd),
+		Url.Find(TEXT("GSTNSurfaceTypes"), ESearchCase::IgnoreCase, ESearchDir::FromStart));
+	TestTrue(TEXT("... and the other options stay"), Url.StartsWith(TEXT("/Game/Map?Name=Bob")));
+	TestEqual(TEXT("The login option has no leading separator"), FGSTN_SurfaceJoinCheck::GetJoinOption(), FGSTN_SurfaceJoinCheck::MakeOption(Local));
+	return true;
+}
+
+// Review 2026-10-23 B.13: two surface components on one actor were read in whichever order the actor's component set iterates, which
+// can differ between machines; the lowest name wins, and the validator reports an error
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SurfaceSeveralComponentsTest, "GSTNSurface.Core.SeveralSurfaceComponentsPickLowestName", Flags)
+bool FGSTN_SurfaceSeveralComponentsTest::RunTest(const FString& Parameters)
+{
+	FRig Rig;
+	const FGSTN_SurfaceTable Table;
+
+	// Created in opposite orders on two actors: the pick must not depend on creation or iteration order
+	for (const bool bAlphabetical : { true, false })
+	{
+		AActor* Actor = Rig.Spawn();
+		UBoxComponent* Box = Rig.Add<UBoxComponent>(Actor, TEXT("Box"));
+		UGSTN_SurfaceBehaviourComponent* First = nullptr;
+		UGSTN_SurfaceBehaviourComponent* Second = nullptr;
+		if (bAlphabetical)
+		{
+			First = Rig.Add<UGSTN_SurfaceBehaviourComponent>(Actor, TEXT("SurfaceA"));
+			Second = Rig.Add<UGSTN_SurfaceBehaviourComponent>(Actor, TEXT("SurfaceZ"));
+		}
+		else
+		{
+			Second = Rig.Add<UGSTN_SurfaceBehaviourComponent>(Actor, TEXT("SurfaceZ"));
+			First = Rig.Add<UGSTN_SurfaceBehaviourComponent>(Actor, TEXT("SurfaceA"));
+		}
+		First->Default = MakeBehaviour({ GSTNSurfaceTags::Behaviour_WallSlide });
+		Second->Default = MakeBehaviour({ GSTNSurfaceTags::Behaviour_Stand });
+
+		TestTrue(*FString::Printf(TEXT("FindFor picks the lowest name (alphabetical creation %d)"), bAlphabetical), UGSTN_SurfaceBehaviourComponent::FindFor(Actor) == First);
+		const FGSTN_SurfaceView View = UGSTN_SurfaceUtils::ResolveQuery(QueryFor(Box), nullptr, Table, MakeDefault());
+		TestTrue(*FString::Printf(TEXT("Resolve reads the lowest-named component (alphabetical creation %d)"), bAlphabetical), View.HasBehaviour(GSTNSurfaceTags::Behaviour_WallSlide));
+		TestFalse(TEXT("... and not the other"), View.HasBehaviour(GSTNSurfaceTags::Behaviour_Stand));
+
+		TArray<FText> Errors;
+		TArray<FText> Warnings;
+		First->CollectFindings(Errors, Warnings);
+		TestEqual(TEXT("A second surface component is an error, not a warning"), Errors.Num(), 1);
+		TestEqual(TEXT("... and no warning"), Warnings.Num(), 0);
+	}
+
+	AActor* Alone = Rig.Spawn();
+	TestNull(TEXT("An actor without the component has none"), UGSTN_SurfaceBehaviourComponent::FindFor(Alone));
+	TestNull(TEXT("No actor, no component"), UGSTN_SurfaceBehaviourComponent::FindFor(nullptr));
 	return true;
 }
 

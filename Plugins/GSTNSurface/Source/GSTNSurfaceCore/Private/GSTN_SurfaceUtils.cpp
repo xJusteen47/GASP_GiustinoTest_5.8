@@ -74,8 +74,7 @@ FGSTN_SurfaceView UGSTN_SurfaceUtils::ResolveQuery(const FGSTN_SurfaceQuery& Que
 	const FGSTN_SurfaceBehaviour* Behaviour = nullptr;
 	EGSTN_SurfaceSource Source = EGSTN_SurfaceSource::Default;
 
-	const UGSTN_SurfaceBehaviourComponent* SurfaceComponent =
-		Owner ? Owner->FindComponentByClass<UGSTN_SurfaceBehaviourComponent>() : nullptr;
+	const UGSTN_SurfaceBehaviourComponent* SurfaceComponent = UGSTN_SurfaceBehaviourComponent::FindFor(Owner);
 	if (SurfaceComponent)
 	{
 		Behaviour = &SurfaceComponent->GetBehaviourFor(Collider);
