@@ -115,7 +115,7 @@ Both topologies, listen first. Record pass/fail and numbers.
   BlueprintPure: `Overlap` for all six pairs, `SweptOverlap` with N = ceil(distance / smallest extent) capped at 4; doubles),
   `GSTN_HitData.h` (`FGSTN_HitData` complete per S §3 incl. `StaggerForceMode/StaggerForce/StaggerForceScale`, `HitstopMode`,
   `Impact`, `ExtensionData`; `FGSTN_HitDataOverride`, `FGSTN_HitVariant`, `EGSTN_SpecialAngle`, `EGSTN_YawSource`,
-  `EGSTN_HitstopMode`, `EGSTN_StaggerForceMode`), `GSTN_HitboxTypes.h` (`FGSTN_HitboxSpec` incl. the optional `ReachAxis` (2026-10-23, for M11 kit mods; data only, no reader in M4), `FGSTN_HitboxKey`, `EGSTN_HitboxSpace`;
+  `EGSTN_HitstopMode`, `EGSTN_StaggerForceMode`), `GSTN_HitboxTypes.h` (`FGSTN_HitboxSpec` incl. the optional `ReachAxis`, `bScaleExtentWithReach` and the `Zone` label (2026-10-23, for M11 kit mods and sweet/sour spots; data only, no reader in M4; the same-group priority rule for sweet and sour spots is H8, combat-m4-hits.md §6 step 4), `FGSTN_HitboxKey`, `EGSTN_HitboxSpace`;
   `FGSTN_HitboxTrack` completed where C2 declared it), `GSTN_HurtboxTypes.h` (`FGSTN_Hurtbox` with `Priority`, `Tags`,
   `ReactionScale`; `UGSTN_HurtboxSetDefinition` with `StaggerThreshold`, `MaxReaction`, `WeightCurve`;
   `FGSTN_HurtboxModifierTrack` completed: `State`, `ArmorThreshold` as `FGSTN_StaggerThreshold { float Value; bool bInfinite }`,
