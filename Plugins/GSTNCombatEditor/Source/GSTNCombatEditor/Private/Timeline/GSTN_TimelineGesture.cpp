@@ -449,4 +449,30 @@ bool FGSTN_TimelineActions::JumpToAdjacentEdge(FGSTN_TimelineEditorModel& Model,
 	return Edge != INDEX_NONE && Model.SetPlayhead(Edge);
 }
 
+bool FGSTN_TimelineActions::ClickEmptySpace(FGSTN_TimelineEditorModel& Model, bool bAdditive)
+{
+	if (bAdditive || Model.GetSelection().IsEmpty())
+	{
+		return false;
+	}
+	Model.ClearSelection();
+	return true;
+}
+
+bool FGSTN_TimelineActions::GoToFinding(FGSTN_TimelineEditorModel& Model, const FGSTN_FindingLocation& Where)
+{
+	bool bMoved = false;
+	if (Where.TrackIndex != INDEX_NONE && Model.GetTrack(Where.TrackIndex) != nullptr)
+	{
+		const TArray<FGSTN_Selection> Before = Model.GetSelection();
+		Model.SetSelection({ Where.KeyIndex != INDEX_NONE ? FGSTN_Selection::Key(Where.TrackIndex, Where.KeyIndex) : FGSTN_Selection::Window(Where.TrackIndex) });
+		bMoved |= !(Before == Model.GetSelection());
+	}
+	if (Where.Frame != INDEX_NONE)
+	{
+		bMoved |= Model.SetPlayhead(Where.Frame);
+	}
+	return bMoved;
+}
+
 #undef LOCTEXT_NAMESPACE

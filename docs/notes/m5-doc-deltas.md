@@ -256,3 +256,14 @@ One line each: where, what differs from the spec, why. Checkpoints in `docs/arch
   (the same repair `MoveWindow` does); an edit of another field leaves `StartFrame` alone. A comment in `GSTN_TimelineEditorModel.h` that still said
   the weapon switch fires on `StartFrame` is corrected.
 - Still open from section C: C.4 to C.7 and C.9 to C.12 as listed above.
+
+## UI test fixes (2026-10-23, timeline editor)
+
+- combat-m5-editor 5.2 / 4.2 ("the playhead is clamped to `[0, TotalFrames - 1]`"): while `TotalFrames` is 0 the clamp is `[0, GetPlayableFrames - 1]`, where the playable length is
+  the end of the content (every track's span, point tracks one frame, and the FAF) but at least 30 frames (`FGSTN_TimelineEditorModel::MinimumRulerFrames`, the span Frame All used for a timeline with no length). The loop range, Play and the toolbar spin boxes use the same length.
+  A timeline with a real length behaves as before.
+- combat-m5-editor 5.1 (Frame Data tab "validation findings once the validators exist"): the tab lists the findings of the last Validate. `FGSTN_FindingsStore` (toolkit-owned) gets the report that `ValidateNow` also writes to the Message Log, so there is one run and two readers; the Frame Data tab does not run the rules itself.
+  The findings are marked out of date by the next data change (the list keeps them and says "Validate again"). Not the validation panel of E11 (no filters, no fix actions): a plain list with a double click to jump.
+- combat-m5-editor 5.2 (bar colours "from the track editor / settings"): the track colour is still the settings' colour, but it is the **outline**; the fill is 0.4 of it so the text on it always reads. The phase colours are fixed dark values (`GSTNTimelineColors::PhaseFill`), not settings. Pale pastel bars with a fixed dark label were unreadable in the dark theme.
+- New: `TotalFrames` and FAF fields (`SGSTN_TimelineLengthFields`) in the timeline panel footer and the Frame Data tab: the spec had no editing control for the length (only Fit to montage and the details panel, which an inline timeline does not show without a selection).
+- The washed-out look of the first UI test (every colour pale, near white) is **not explained by the code**: the old values were plain dark colours. The new ones are darker still and chosen to keep their hue if the display brightens them; if the owner's editor still shows pale bars, the cause is in the display path (HDR or colour management) and needs a look in a rendering editor.

@@ -22,12 +22,15 @@
 #include "Styling/AppStyle.h"
 #include "Timeline/GSTN_TimelineEditorCommands.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
+#include "Timeline/GSTN_TimelineGesture.h"
 #include "Timeline/GSTN_TimelineUndo.h"
 #include "Timeline/Widgets/GSTN_TimelineWidgetCommon.h"
+#include "Timeline/Widgets/SGSTN_FindingsList.h"
 #include "Timeline/Widgets/SGSTN_FrameDataSummary.h"
 #include "Timeline/Widgets/SGSTN_InlineTimelineBar.h"
 #include "Timeline/Widgets/SGSTN_MontageLengthBar.h"
 #include "Timeline/Widgets/SGSTN_TimelineDetails.h"
+#include "Timeline/Widgets/SGSTN_TimelineLengthFields.h"
 #include "Timeline/Widgets/SGSTN_TimelinePanel.h"
 #include "Timeline/Widgets/SGSTN_TimelineToolbarExtra.h"
 #include "UObject/Object.h"
@@ -151,6 +154,8 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 
 	Model = MakeShared<FGSTN_TimelineEditorModel>(Context);
 	UndoClient = MakeUnique<FGSTN_TimelineUndoClient>(*Model);
+	// Findings about the timeline as it was when Validate ran are marked out of date by the next edit (the model, and its delegate, go with this toolkit)
+	Model->OnDataChanged.AddSP(this, &FGSTN_TimelineEditorToolkit::HandleDataChanged);
 
 	constexpr bool bCreateDefaultStandaloneMenu = true;
 	constexpr bool bCreateDefaultToolbar = true;
@@ -262,6 +267,19 @@ void FGSTN_TimelineEditorToolkit::ExtractToAsset()
 	GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(NewAsset);
 }
 
+void FGSTN_TimelineEditorToolkit::HandleDataChanged()
+{
+	Findings->MarkStale();
+}
+
+void FGSTN_TimelineEditorToolkit::GoToFinding(const FGSTN_ValidationFinding& Finding)
+{
+	if (Model.IsValid())
+	{
+		FGSTN_TimelineActions::GoToFinding(*Model, Finding.Where);
+	}
+}
+
 FGSTN_ValidationReport FGSTN_TimelineEditorToolkit::ValidateNow()
 {
 	FGSTN_ValidationReport Report;
@@ -275,6 +293,8 @@ FGSTN_ValidationReport FGSTN_TimelineEditorToolkit::ValidateNow()
 	const FGSTN_TimelineRuleContext RuleContext = FGSTN_CombatValidators::MakeTimelineContext(*Data, Context.GetTarget(), Model->GetTickRate(), true);
 	FGSTN_CombatValidators::ValidateTimeline(*Data, RuleContext, Report);
 	GSTNValidationLog::WriteReport(Report, FText::Format(LOCTEXT("ValidatePageTitle", "Validate {0}"), Context.GetDisplayName()), true);
+	// The same report in the Frame Data tab: one run, two places to read it
+	Findings->SetReport(Report);
 	return Report;
 }
 
@@ -408,17 +428,23 @@ TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnFrameDataTab(const FSpawn
 			SNew(SVerticalBox)
 			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(FMargin(8.f, 8.f))
+			.Padding(FMargin(8.f, 8.f, 8.f, 4.f))
+			[
+				SNew(SGSTN_TimelineLengthFields).Model(Model)
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(FMargin(8.f, 4.f))
 			[
 				SNew(SGSTN_FrameDataSummary).Model(Model)
 			]
 			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(FMargin(8.f, 0.f))
+			.FillHeight(1.f)
+			.Padding(FMargin(8.f, 4.f, 8.f, 8.f))
 			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("FrameDataFindings", "Validation findings will be listed here."))
-				.ColorAndOpacity(FSlateColor(GSTNTimelineWidgets::TextColorDim()))
+				SNew(SGSTN_FindingsList)
+				.Store(Findings)
+				.OnFindingActivated(SGSTN_FindingsList::FOnFindingActivated::CreateSP(this, &FGSTN_TimelineEditorToolkit::GoToFinding))
 			]
 		];
 }

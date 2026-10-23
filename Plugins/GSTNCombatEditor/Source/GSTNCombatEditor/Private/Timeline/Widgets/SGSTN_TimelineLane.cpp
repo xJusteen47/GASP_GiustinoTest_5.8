@@ -3,6 +3,7 @@
 #include "Timeline/Widgets/SGSTN_TimelineLane.h"
 
 #include "HAL/PlatformTime.h"
+#include "Timeline/GSTN_TimelineColors.h"
 #include "Timeline/GSTN_TimelineTrackEditor.h"
 
 void SGSTN_TimelineLane::Construct(const FArguments& InArgs)
@@ -87,7 +88,7 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 			{
 				DrawDiamond(OutDrawElements, LayerId + 4, AllottedGeometry, Centre, 9.0, SelectionOutline());
 			}
-			DrawDiamond(OutDrawElements, LayerId + 5, AllottedGeometry, Centre, 7.0, bInvalid ? InvalidColor() : TrackColor);
+			DrawDiamond(OutDrawElements, LayerId + 5, AllottedGeometry, Centre, 7.0, bInvalid ? InvalidColor() : GSTNTimelineColors::BarOutline(TrackColor));
 		}
 		else
 		{
@@ -101,15 +102,18 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 				{
 					DrawRect(OutDrawElements, LayerId + 4, AllottedGeometry, BarPosition - FVector2D(2.0, 2.0), BarSize + FVector2D(4.0, 4.0), SelectionOutline(), true);
 				}
-				DrawRect(OutDrawElements, LayerId + 5, AllottedGeometry, BarPosition, BarSize, bInvalid ? TrackColor * FLinearColor(0.5f, 0.5f, 0.5f, 1.f) : TrackColor, true);
+				// A dark fill inside a one pixel outline of the track colour; the text on the fill is white or black by the fill's luminance (GSTN_TimelineColors.h)
+				const FLinearColor Fill = GSTNTimelineColors::BarFill(TrackColor) * (bInvalid ? FLinearColor(0.6f, 0.6f, 0.6f, 1.f) : FLinearColor::White);
+				DrawRect(OutDrawElements, LayerId + 5, AllottedGeometry, BarPosition, BarSize, GSTNTimelineColors::BarOutline(TrackColor), true);
+				DrawRect(OutDrawElements, LayerId + 6, AllottedGeometry, BarPosition + FVector2D(1.0, 1.0), FVector2D(FMath::Max(BarSize.X - 2.0, 0.0), FMath::Max(BarSize.Y - 2.0, 0.0)), Fill, true);
 				if (bInvalid)
 				{
-					DrawHatch(OutDrawElements, LayerId + 6, AllottedGeometry, BarPosition, BarSize, InvalidColor());
+					DrawHatch(OutDrawElements, LayerId + 7, AllottedGeometry, BarPosition, BarSize, InvalidColor());
 				}
 				else if (BarSize.X > 30.0)
 				{
 					OutDrawElements.PushClip(FSlateClippingZone(AllottedGeometry.ToPaintGeometry(FVector2f(BarSize), FSlateLayoutTransform(FVector2f(BarPosition)))));
-					DrawLabel(OutDrawElements, LayerId + 6, AllottedGeometry, FVector2D(BarPosition.X + 4.0, 6.0), TrackEditor->GetRowLabel(*Track).ToString(), FLinearColor(0.02f, 0.02f, 0.02f, 0.9f));
+					DrawLabel(OutDrawElements, LayerId + 7, AllottedGeometry, FVector2D(BarPosition.X + 4.0, 6.0), TrackEditor->GetRowLabel(*Track).ToString(), GSTNTimelineColors::ReadableTextOn(Fill));
 					OutDrawElements.PopClip();
 				}
 			}
@@ -128,16 +132,16 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 			const double HalfSize = KeyFrame == Model->GetPlayhead() ? 7.0 : 5.0;
 			if (Model->IsSelected(FGSTN_Selection::Key(TrackIndex, KeyIndex)))
 			{
-				DrawDiamond(OutDrawElements, LayerId + 7, AllottedGeometry, FVector2D(KeyX, CentreY), HalfSize + 2.0, SelectionOutline());
+				DrawDiamond(OutDrawElements, LayerId + 9, AllottedGeometry, FVector2D(KeyX, CentreY), HalfSize + 2.0, SelectionOutline());
 			}
-			DrawDiamond(OutDrawElements, LayerId + 8, AllottedGeometry, FVector2D(KeyX, CentreY), HalfSize, FLinearColor(0.98f, 0.9f, 0.55f));
+			DrawDiamond(OutDrawElements, LayerId + 10, AllottedGeometry, FVector2D(KeyX, CentreY), HalfSize, FLinearColor(0.98f, 0.9f, 0.55f));
 		}
 	}
 
 	// Playhead
 	const double PlayX = View.FrameToPixel(Model->GetPlayhead());
-	DrawRect(OutDrawElements, LayerId + 9, AllottedGeometry, FVector2D(PlayX, 0.0), FVector2D(FMath::Max(View.PixelsPerFrame, 2.0), Size.Y), PlayheadColor() * FLinearColor(1.f, 1.f, 1.f, 0.18f));
-	DrawVerticalLine(OutDrawElements, LayerId + 9, AllottedGeometry, PlayX + 1.0, 0.0, Size.Y, PlayheadColor(), 2.0);
+	DrawRect(OutDrawElements, LayerId + 11, AllottedGeometry, FVector2D(PlayX, 0.0), FVector2D(FMath::Max(View.PixelsPerFrame, 2.0), Size.Y), PlayheadColor() * FLinearColor(1.f, 1.f, 1.f, 0.18f));
+	DrawVerticalLine(OutDrawElements, LayerId + 11, AllottedGeometry, PlayX + 1.0, 0.0, Size.Y, PlayheadColor(), 2.0);
 
 	// The rectangle of a box select that started in any lane, cut to this row
 	FVector2D BoxMin;
@@ -149,16 +153,16 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 		const double Bottom = FMath::Min(BoxMax.Y - RowTop, Size.Y);
 		if (Bottom > Top)
 		{
-			DrawRect(OutDrawElements, LayerId + 10, AllottedGeometry, FVector2D(BoxMin.X, Top), FVector2D(BoxMax.X - BoxMin.X, Bottom - Top), BoxSelectFill());
-			DrawVerticalLine(OutDrawElements, LayerId + 10, AllottedGeometry, BoxMin.X, Top, Bottom, BoxSelectLine());
-			DrawVerticalLine(OutDrawElements, LayerId + 10, AllottedGeometry, BoxMax.X, Top, Bottom, BoxSelectLine());
+			DrawRect(OutDrawElements, LayerId + 12, AllottedGeometry, FVector2D(BoxMin.X, Top), FVector2D(BoxMax.X - BoxMin.X, Bottom - Top), BoxSelectFill());
+			DrawVerticalLine(OutDrawElements, LayerId + 12, AllottedGeometry, BoxMin.X, Top, Bottom, BoxSelectLine());
+			DrawVerticalLine(OutDrawElements, LayerId + 12, AllottedGeometry, BoxMax.X, Top, Bottom, BoxSelectLine());
 			if (BoxMin.Y >= RowTop)
 			{
-				DrawRect(OutDrawElements, LayerId + 10, AllottedGeometry, FVector2D(BoxMin.X, Top), FVector2D(BoxMax.X - BoxMin.X, 1.0), BoxSelectLine());
+				DrawRect(OutDrawElements, LayerId + 12, AllottedGeometry, FVector2D(BoxMin.X, Top), FVector2D(BoxMax.X - BoxMin.X, 1.0), BoxSelectLine());
 			}
 			if (BoxMax.Y <= RowTop + Size.Y)
 			{
-				DrawRect(OutDrawElements, LayerId + 10, AllottedGeometry, FVector2D(BoxMin.X, Bottom - 1.0), FVector2D(BoxMax.X - BoxMin.X, 1.0), BoxSelectLine());
+				DrawRect(OutDrawElements, LayerId + 12, AllottedGeometry, FVector2D(BoxMin.X, Bottom - 1.0), FVector2D(BoxMax.X - BoxMin.X, 1.0), BoxSelectLine());
 			}
 		}
 	}
@@ -167,7 +171,7 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 	{
 		PaintStats->AccumulatedSeconds += FPlatformTime::Seconds() - PaintStart;
 	}
-	return LayerId + 11;
+	return LayerId + 13;
 }
 
 FReply SGSTN_TimelineLane::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)

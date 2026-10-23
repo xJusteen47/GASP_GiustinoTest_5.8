@@ -5,9 +5,11 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Styling/AppStyle.h"
+#include "Styling/StyleDefaults.h"
 #include "Timeline/GSTN_TimelineEditorCommands.h"
 #include "Timeline/Widgets/SGSTN_FrameDataSummary.h"
 #include "Timeline/Widgets/SGSTN_PhaseBar.h"
+#include "Timeline/Widgets/SGSTN_TimelineLengthFields.h"
 #include "Timeline/Widgets/SGSTN_TimelineTrackRow.h"
 #include "Timeline/GSTN_TimelineTrackEditor.h"
 #include "Widgets/Input/SButton.h"
@@ -68,7 +70,7 @@ void SGSTN_TimelinePanel::Construct(const FArguments& InArgs)
 				[
 					SNew(SBorder)
 					.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
-					.BorderBackgroundColor(FLinearColor(0.07f, 0.07f, 0.075f))
+					.BorderBackgroundColor(HeaderBackground())
 					.VAlign(VAlign_Center)
 					.Padding(FMargin(8.f, 0.f))
 					[
@@ -107,7 +109,7 @@ void SGSTN_TimelinePanel::Construct(const FArguments& InArgs)
 				[
 					SNew(SBorder)
 					.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
-					.BorderBackgroundColor(FLinearColor(0.07f, 0.07f, 0.075f))
+					.BorderBackgroundColor(HeaderBackground())
 					.VAlign(VAlign_Center)
 					.Padding(FMargin(8.f, 0.f))
 					[
@@ -140,14 +142,29 @@ void SGSTN_TimelinePanel::Construct(const FArguments& InArgs)
 			+ SHorizontalBox::Slot()
 			.FillWidth(1.f)
 			[
-				SAssignNew(RowList, SListView<TSharedPtr<FGSTN_TimelineRowData>>)
-				.ListItemsSource(&Rows)
-				.SelectionMode(ESelectionMode::None)
-				.ClearSelectionOnClick(false)
-				.OnGenerateRow(this, &SGSTN_TimelinePanel::OnGenerateRow)
-				.ExternalScrollbar(RowScrollBar)
-				.ScrollbarVisibility(EVisibility::Visible)
-				.IsFocusable(false)
+				// A click no row takes (the empty space under the last track) falls through the list to this border and clears the selection
+				SNew(SBorder)
+				.BorderImage(FStyleDefaults::GetNoBrush())
+				.Padding(FMargin(0.f))
+				.OnMouseButtonDown_Lambda([this, FocusTarget](const FGeometry&, const FPointerEvent& MouseEvent) -> FReply
+				{
+					if (MouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+					{
+						return FReply::Unhandled();
+					}
+					FGSTN_TimelineActions::ClickEmptySpace(*Model, MouseEvent.IsShiftDown());
+					return WithPanelFocus(FReply::Handled(), FocusTarget);
+				})
+				[
+					SAssignNew(RowList, SListView<TSharedPtr<FGSTN_TimelineRowData>>)
+					.ListItemsSource(&Rows)
+					.SelectionMode(ESelectionMode::None)
+					.ClearSelectionOnClick(false)
+					.OnGenerateRow(this, &SGSTN_TimelinePanel::OnGenerateRow)
+					.ExternalScrollbar(RowScrollBar)
+					.ScrollbarVisibility(EVisibility::Visible)
+					.IsFocusable(false)
+				]
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
@@ -168,8 +185,17 @@ void SGSTN_TimelinePanel::Construct(const FArguments& InArgs)
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot()
 			.FillWidth(1.f)
+			.VAlign(VAlign_Center)
 			[
 				SNew(SGSTN_FrameDataSummary).Model(Model)
+			]
+			// TotalFrames and the first actionable frame: a new inline timeline has no length and this is where it is set
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(FMargin(12.f, 0.f))
+			[
+				SNew(SGSTN_TimelineLengthFields).Model(Model)
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
@@ -208,7 +234,7 @@ EActiveTimerReturnType SGSTN_TimelinePanel::FitInitialView(double CurrentTime, f
 	{
 		return EActiveTimerReturnType::Continue;
 	}
-	FGSTN_TimelineLayout::FrameAll(Model->ViewTransform, Width, Model->GetTotalFrames());
+	FGSTN_TimelineLayout::FrameAll(Model->ViewTransform, Width, Model->GetPlayableFrames());
 	Model->NotifyViewChanged();
 	return EActiveTimerReturnType::Stop;
 }
@@ -374,9 +400,9 @@ TSharedRef<SWidget> SGSTN_TimelinePanel::MakeToolbar(const TSharedRef<SWidget>& 
 				[
 					SNew(SSpinBox<int32>)
 					.MinValue(0)
-					.MaxValue_Lambda([this]() { return FMath::Max(Model->GetTotalFrames() - 1, 0); })
+					.MaxValue_Lambda([this]() { return FMath::Max(Model->GetPlayableFrames() - 1, 0); })
 					.MinSliderValue(0)
-					.MaxSliderValue_Lambda([this]() { return FMath::Max(Model->GetTotalFrames() - 1, 0); })
+					.MaxSliderValue_Lambda([this]() { return FMath::Max(Model->GetPlayableFrames() - 1, 0); })
 					.Value_Lambda([this]() { return Model->GetPlayhead(); })
 					.OnValueChanged_Lambda([this](int32 NewFrame) { Model->SetPlayhead(NewFrame); })
 					.OnValueCommitted_Lambda([this](int32 NewFrame, ETextCommit::Type) { Model->SetPlayhead(NewFrame); })
@@ -469,7 +495,7 @@ void SGSTN_TimelinePanel::BindCommands()
 
 	CommandList->MapAction(Commands.FrameAll, FExecuteAction::CreateLambda([this]()
 	{
-		FGSTN_TimelineLayout::FrameAll(Model->ViewTransform, GetLaneWidth(), Model->GetTotalFrames());
+		FGSTN_TimelineLayout::FrameAll(Model->ViewTransform, GetLaneWidth(), Model->GetPlayableFrames());
 		Model->NotifyViewChanged();
 	}));
 	CommandList->MapAction(Commands.FrameSelection,
@@ -484,7 +510,7 @@ void SGSTN_TimelinePanel::BindCommands()
 			}
 			else
 			{
-				FGSTN_TimelineLayout::FrameAll(Model->ViewTransform, GetLaneWidth(), Model->GetTotalFrames());
+				FGSTN_TimelineLayout::FrameAll(Model->ViewTransform, GetLaneWidth(), Model->GetPlayableFrames());
 			}
 			Model->NotifyViewChanged();
 		}));
@@ -535,7 +561,8 @@ void SGSTN_TimelinePanel::SetPlaying(bool bInPlaying)
 
 bool SGSTN_TimelinePanel::TickPlayback(float DeltaSeconds)
 {
-	const int32 Total = Model->GetTotalFrames();
+	// The playable length: the timeline's, or its content's while it has none, so Play moves the playhead on a new inline timeline too
+	const int32 Total = Model->GetPlayableFrames();
 	if (!bPlaying || Total <= 0)
 	{
 		bPlaying = false;

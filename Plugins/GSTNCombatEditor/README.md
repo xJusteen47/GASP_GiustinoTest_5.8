@@ -312,7 +312,7 @@ The plugin ships no content and references none by path. The preview kit, skin a
 
 ## Tests
 
-`Automation RunTests GSTNCombat.Editor`: `Module.LoadsAndRegisters`, `Debug.NoDependencyOnDebugModule` (E14: no debug module, plugin or include in this plugin), `Settings.DefaultsFromPluginIni`,
+`Automation RunTests GSTNCombat.Editor`: `UiFixes.*` (UI test fixes: `PlayheadWorksWithoutLength`, `TotalFramesAndFafAreUndoable`, `EmptySpaceClickClearsSelection`, `TextIsReadableOnEveryBar`, `FindingsStoreAndList`, `GoToFindingSelectsAndMoves`, `LengthFieldsConstruct`), `Module.LoadsAndRegisters`, `Debug.NoDependencyOnDebugModule` (E14: no debug module, plugin or include in this plugin), `Settings.DefaultsFromPluginIni`,
 `Settings.TickRateFromNetworkPrediction`, and `Model.*`: `EachMutationOnlyChangesWhatItSays`, `ClampsToTotalFrames`,
 `UndoRedoRestoresExactData`, `DragIsOneUndoStep`, `CancelledDragLeavesNoStep`, `SelectionRevalidatedAfterUndo`,
 `ClipboardRoundTrip`, `FitTotalFramesDoesNotRunSilently`, `TwoToolkitsOneTargetRefused`, `ViewTransformRoundTrip`. The model tests
@@ -327,8 +327,25 @@ window), `ToolkitLayoutAndAssetDefinition`, `PlayRangeIsEditorStateOnly`. `Valid
 headless; check them by hand in a rendering editor: open a timeline asset and an ability Blueprint's inline timeline, add, drag and resize tracks and keys, undo and redo, play with Space, Validate (F7) and Extract. The Hurtbox zone tags are covered by `GSTNCombat.GAS.Tags.HurtboxZonesRegistered`.
 The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is not run: the canary script does not exist yet.
 
+### Reading the timeline (UI test fixes, 0.7.3)
+
+- **Playhead with no length.** A new inline timeline has `TotalFrames` 0. The playhead, the loop range, Play and Frame All now work over
+  `FGSTN_TimelineEditorModel::GetPlayableFrames`: `TotalFrames`, or while it is 0 the end of the content (tracks and FAF) and never less than
+  `MinimumRulerFrames` (30, the span Frame All already showed). Ruler clicks, Step Forward and Play therefore move the playhead on a timeline that has no length.
+- **Length and FAF fields.** `SGSTN_TimelineLengthFields` ("Length [n] frames  FAF [n]") sits under the lanes of the timeline panel and above the summary of
+  the Frame Data tab. Typing is one undo step (`Set timeline length`, `Move first actionable frame`); dragging a field is one step for the drag.
+- **Colours.** Bars are a dark fill (`GSTNTimelineColors::BarFill`, 0.4 of the track colour) inside a 1 px outline of the track colour; the text on a bar, on a phase and on the
+  name cell of a row is white or black by the luminance of its background (`ReadableTextOn`, WCAG contrast at least 4.5:1), never a fixed colour. A selected track row has a dark blue name
+  cell (`SelectedHeaderFill`); a selected bar gets a white outline. Startup is blue, active red, recovery orange, actionable green, and a phase segment wide enough carries its name and length.
+  Backgrounds and text come from the editor theme (`FStyleColors`), not literal values. All of it is in `Private/Timeline/GSTN_TimelineColors.h`, with no Slate in it.
+- **Findings in the Frame Data tab.** `FGSTN_FindingsStore` keeps the report of the last Validate (the same one the Message Log gets, one run); `SGSTN_FindingsList` lists it with severity icons and the
+  `[Code] message` text, goes stale (and says so) when the data changes afterwards, and a double click selects the finding's track and puts the playhead on its frame (`FGSTN_TimelineActions::GoToFinding`).
+- **Empty space clears the selection.** A click that no row takes (under the last track) falls through the list to a border that calls `FGSTN_TimelineActions::ClickEmptySpace` (Shift keeps the selection).
+  The selection is editor state: no transaction, the undo history is untouched.
+
 ## Changelog
 
+- 0.7.3 (2026-10-23, UI test fixes): the playhead works while `TotalFrames` is 0, `Length` and `FAF` fields (timeline panel and Frame Data tab), readable bar, phase and header colours with distinct phase colours, the findings of Validate listed in the Frame Data tab, a click on empty space clears the selection; test file `GSTN_EditorTests_UiFixes.cpp` (`GSTNCombat.Editor.UiFixes.*`).
 - 0.7.2 (2026-10-23, review fixes): an unresolvable `TimelineAsset` on an ability is the error `Ability.TimelineAssetUnresolved`; a `SwapFrame` typed in the details panel moves the weapon switch window's `StartFrame` with it; a header comment about the weapon switch frame.
 - 0.7.1 (2026-10-23, review fixes): the weapon switch is drawn, hit-tested, moved and clamped on `SwapFrame` like the runtime and the validation (moving it also repairs a stale `StartFrame`), with a `WeaponSwitch.FrameMismatch` warning; Extract no longer replaces a named `TimelineAsset` without a confirmation, and drops the new asset when it is refused.
 - 0.7 (2026-10-23): the descriptor no longer lists `GSTNCombatDebug` as an optional plugin and a test keeps the editor free of any edge to it; the input display tab is registered by the debug plugin (plan E14).

@@ -45,9 +45,9 @@ void SGSTN_TimelineToolbarExtra::Construct(const FArguments& InArgs)
 			[
 				SNew(SSpinBox<int32>)
 				.MinValue(0)
-				.MaxValue_Lambda([M]() { return FMath::Max(M->GetTotalFrames(), 0); })
+				.MaxValue_Lambda([M]() { return M->GetPlayableFrames(); })
 				.MinSliderValue(0)
-				.MaxSliderValue_Lambda([M]() { return FMath::Max(M->GetTotalFrames(), 0); })
+				.MaxSliderValue_Lambda([M]() { return M->GetPlayableFrames(); })
 				.Value_Lambda([M, bFrom]()
 				{
 					int32 First = 0;

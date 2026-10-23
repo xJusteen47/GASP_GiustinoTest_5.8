@@ -329,7 +329,7 @@ void FGSTN_TimelineLayout::FrameAll(FGSTN_TimelineViewTransform& View, double Wi
 		return;
 	}
 	// A timeline with no length yet shows a screenful of frames rather than a single enormous one
-	const double Length = TotalFrames > 0 ? static_cast<double>(TotalFrames) : 30.0;
+	const double Length = TotalFrames > 0 ? static_cast<double>(TotalFrames) : static_cast<double>(FGSTN_TimelineEditorModel::MinimumRulerFrames);
 	View.FitRange(-0.5, Length + 0.5, WidthPixels);
 }
 

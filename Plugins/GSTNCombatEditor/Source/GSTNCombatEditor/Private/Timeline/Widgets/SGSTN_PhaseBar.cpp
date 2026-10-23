@@ -3,6 +3,7 @@
 #include "Timeline/Widgets/SGSTN_PhaseBar.h"
 
 #include "Timeline/GSTN_PhaseBarData.h"
+#include "Timeline/GSTN_TimelineColors.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
 
@@ -34,19 +35,7 @@ FVector2D SGSTN_PhaseBar::ComputeDesiredSize(float) const
 
 FLinearColor SGSTN_PhaseBar::PhaseColor(EGSTN_PhaseKind Kind)
 {
-	switch (Kind)
-	{
-	case EGSTN_PhaseKind::Startup:
-		return FLinearColor(0.2f, 0.45f, 0.85f);
-	case EGSTN_PhaseKind::Active:
-		return FLinearColor(0.85f, 0.2f, 0.2f);
-	case EGSTN_PhaseKind::Recovery:
-		return FLinearColor(0.85f, 0.55f, 0.15f);
-	case EGSTN_PhaseKind::Actionable:
-		return FLinearColor(0.25f, 0.65f, 0.35f);
-	default:
-		return FLinearColor(0.45f, 0.45f, 0.5f);
-	}
+	return GSTNTimelineColors::PhaseFill(Kind);
 }
 
 SGSTN_PhaseBar::EHandle SGSTN_PhaseBar::HitTestHandle(const FVector2D& Local) const
@@ -73,7 +62,7 @@ int32 SGSTN_PhaseBar::OnPaint(const FPaintArgs& Args, const FGeometry& AllottedG
 	const FVector2D Size = AllottedGeometry.GetLocalSize();
 	const FGSTN_TimelineViewTransform& View = Model->ViewTransform;
 
-	DrawRect(OutDrawElements, LayerId, AllottedGeometry, FVector2D::ZeroVector, Size, FLinearColor(0.07f, 0.07f, 0.075f));
+	DrawRect(OutDrawElements, LayerId, AllottedGeometry, FVector2D::ZeroVector, Size, HeaderBackground());
 	if (Data == nullptr)
 	{
 		return LayerId + 1;
@@ -88,11 +77,17 @@ int32 SGSTN_PhaseBar::OnPaint(const FPaintArgs& Args, const FGeometry& AllottedG
 		{
 			continue;
 		}
-		DrawRect(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2D(X0, 1.0), FVector2D(X1 - X0 - 1.0, PhaseStripHeight - 2.0), PhaseColor(Segment.Kind));
-		if (X1 - X0 > 56.0)
+		const FLinearColor Fill = PhaseColor(Segment.Kind);
+		DrawRect(OutDrawElements, LayerId + 1, AllottedGeometry, FVector2D(X0, 1.0), FVector2D(X1 - X0 - 1.0, PhaseStripHeight - 2.0), Fill);
+		// The name and the length when the segment is wide enough for both, the length alone when it fits that, nothing below that
+		const double Width = X1 - X0;
+		if (Width > 28.0)
 		{
-			DrawLabel(OutDrawElements, LayerId + 2, AllottedGeometry, FVector2D(FMath::Max(X0, 0.0) + 4.0, 3.0),
-				FString::Printf(TEXT("%d"), Segment.End - Segment.Start), FLinearColor(1.f, 1.f, 1.f, 0.9f));
+			const int32 Frames = Segment.End - Segment.Start;
+			const FString Label = Width > 96.0 ? FString::Printf(TEXT("%s %d"), GSTNTimelineColors::PhaseName(Segment.Kind), Frames) : FString::Printf(TEXT("%d"), Frames);
+			OutDrawElements.PushClip(FSlateClippingZone(AllottedGeometry.ToPaintGeometry(FVector2f(FMath::Max(Width - 1.0, 0.0), PhaseStripHeight - 2.0), FSlateLayoutTransform(FVector2f(X0, 1.0)))));
+			DrawLabel(OutDrawElements, LayerId + 2, AllottedGeometry, FVector2D(FMath::Max(X0, 0.0) + 4.0, 3.0), Label, GSTNTimelineColors::ReadableTextOn(Fill));
+			OutDrawElements.PopClip();
 		}
 	}
 

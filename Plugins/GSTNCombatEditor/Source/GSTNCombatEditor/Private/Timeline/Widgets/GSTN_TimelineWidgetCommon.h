@@ -8,6 +8,7 @@
 #include "Layout/Geometry.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
+#include "Styling/StyleColors.h"
 #include "Input/Events.h"
 #include "Input/Reply.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
@@ -48,12 +49,15 @@ namespace GSTNTimelineWidgets
 		return FCoreStyle::GetDefaultFontStyle("Regular", 8);
 	}
 
-	// Colours. Plain values: the timeline reads like a dark editor panel in the default theme
+	// Colours. The backgrounds and the text come from the editor theme, so the timeline follows it; the bars are in GSTN_TimelineColors.h
 
 	inline FLinearColor LaneBackground(bool bOddRow)
 	{
-		return bOddRow ? FLinearColor(0.095f, 0.095f, 0.10f) : FLinearColor(0.115f, 0.115f, 0.12f);
+		return bOddRow ? FStyleColors::Background.GetSpecifiedColor() : FStyleColors::Recessed.GetSpecifiedColor();
 	}
+
+	/** Behind the ruler, the phase bar and their corner cells: a notch lighter than the lanes so the header reads as a header */
+	inline FLinearColor HeaderBackground() { return FStyleColors::Panel.GetSpecifiedColor(); }
 	inline FLinearColor BeyondEndShade() { return FLinearColor(0.f, 0.f, 0.f, 0.35f); }
 	inline FLinearColor GridMinor() { return FLinearColor(1.f, 1.f, 1.f, 0.05f); }
 	inline FLinearColor GridMajor() { return FLinearColor(1.f, 1.f, 1.f, 0.11f); }
@@ -65,14 +69,14 @@ namespace GSTNTimelineWidgets
 	inline FLinearColor SelectionOutline() { return FLinearColor(1.f, 1.f, 1.f); }
 	inline FLinearColor BoxSelectFill() { return FLinearColor(0.4f, 0.6f, 1.f, 0.18f); }
 	inline FLinearColor BoxSelectLine() { return FLinearColor(0.5f, 0.7f, 1.f, 0.9f); }
-	inline FLinearColor TextColor() { return FLinearColor(0.85f, 0.85f, 0.85f); }
-	inline FLinearColor TextColorDim() { return FLinearColor(0.6f, 0.6f, 0.6f); }
+	inline FLinearColor TextColor() { return FStyleColors::Foreground.GetSpecifiedColor(); }
+	inline FLinearColor TextColorDim() { return FStyleColors::Foreground.GetSpecifiedColor() * FLinearColor(1.f, 1.f, 1.f, 0.7f); }
 
 	/** The wheel over the ruler, the phase bar or a lane: scroll, or zoom around the cursor with Ctrl */
 	inline FReply HandleWheel(FGSTN_TimelineEditorModel& Model, const FGeometry& Geometry, const FPointerEvent& MouseEvent)
 	{
 		const FVector2D Local = Geometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
-		FGSTN_TimelineLayout::ApplyWheel(Model.ViewTransform, Local.X, MouseEvent.GetWheelDelta(), MouseEvent.IsControlDown(), Geometry.GetLocalSize().X, Model.GetTotalFrames());
+		FGSTN_TimelineLayout::ApplyWheel(Model.ViewTransform, Local.X, MouseEvent.GetWheelDelta(), MouseEvent.IsControlDown(), Geometry.GetLocalSize().X, Model.GetPlayableFrames());
 		Model.NotifyViewChanged();
 		return FReply::Handled();
 	}

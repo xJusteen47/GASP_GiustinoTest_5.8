@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Timeline/GSTN_FindingsStore.h"
 #include "Timeline/GSTN_TimelineEditContext.h"
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Validation/GSTN_ValidationReport.h"
@@ -51,12 +52,15 @@ public:
 	bool InitEditor(const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost, const FGSTN_TimelineEditContext& InContext);
 
 	const TSharedPtr<FGSTN_TimelineEditorModel>& GetModel() const { return Model; }
+
+	/** The findings of the last Validate, listed by the Frame Data tab */
+	const TSharedRef<FGSTN_FindingsStore>& GetFindings() const { return Findings; }
 	const FGSTN_TimelineEditContext& GetContext() const { return Context; }
 
 	/**
-	 * Validate: runs the timeline rules on the data as it is now, at the model's tick rate with the montage loaded, and writes the findings
-	 * to the Message Log (category GSTN Combat, a page named after the asset). The Validate button and F7 call it. Returns the report so a
-	 * test, or the validation panel of E11, can read it; nothing is changed in the data.
+	* Validate: runs the timeline rules on the data as it is now, at the model's tick rate with the montage loaded, and writes the findings
+	* to the Message Log (category GSTN Combat, a page named after the asset) and to the Frame Data tab (GetFindings). The Validate button
+	* and F7 call it. Returns the report so a test can read it; nothing is changed in the data.
 	 */
 	FGSTN_ValidationReport ValidateNow();
 
@@ -88,6 +92,12 @@ private:
 	TSharedRef<SDockTab> SpawnDetailsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnFrameDataTab(const FSpawnTabArgs& Args);
 
+	/** The data changed: the findings of the last Validate describe the timeline as it was */
+	void HandleDataChanged();
+
+	/** A finding of the Frame Data tab was double-clicked: select its track, put the playhead on its frame */
+	void GoToFinding(const FGSTN_ValidationFinding& Finding);
+
 	/** Lets go of the target and the undo client. Safe to call twice */
 	void Release();
 
@@ -97,6 +107,9 @@ private:
 	TWeakObjectPtr<UBlueprint> ObservedBlueprint;
 
 	TSharedPtr<FGSTN_TimelineEditorModel> Model;
+
+	/** What the last Validate found, for the Frame Data tab. Marked stale when the data changes afterwards */
+	TSharedRef<FGSTN_FindingsStore> Findings = MakeShared<FGSTN_FindingsStore>();
 
 	/** Declared after the model it points at, so it is destroyed first */
 	TUniquePtr<FGSTN_TimelineUndoClient> UndoClient;

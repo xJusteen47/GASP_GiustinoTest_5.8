@@ -32,7 +32,7 @@ int32 SGSTN_TimelineRuler::OnPaint(const FPaintArgs& Args, const FGeometry& Allo
 	const FGSTN_TimelineViewTransform& View = Model->ViewTransform;
 	const float TickRate = Model->GetTickRate();
 
-	DrawRect(OutDrawElements, LayerId, AllottedGeometry, FVector2D::ZeroVector, Size, FLinearColor(0.07f, 0.07f, 0.075f));
+	DrawRect(OutDrawElements, LayerId, AllottedGeometry, FVector2D::ZeroVector, Size, HeaderBackground());
 
 	// Past the last frame of the timeline
 	const int32 Total = Data ? Data->TotalFrames : 0;

@@ -2,6 +2,7 @@
 
 #include "Timeline/Widgets/SGSTN_TimelineTrackRow.h"
 
+#include "Timeline/GSTN_TimelineColors.h"
 #include "Timeline/GSTN_TimelineTrackEditor.h"
 #include "Styling/AppStyle.h"
 #include "Timeline/Widgets/SGSTN_TimelineLane.h"
@@ -28,6 +29,14 @@ void SGSTN_TimelineTrackRow::Construct(const FArguments& InArgs, const TSharedRe
 		return (Data != nullptr && Data->Tracks.IsValidIndex(TrackIndex)) ? Data->Tracks[TrackIndex].GetScriptStruct() : nullptr;
 	};
 
+	// The fill of the name cell: the lane colour, or a dark blue when the row is selected. The text colour is derived from it (never a fixed
+	// white or black), so no fill can hide its own text
+	auto HeaderFill = [Model, TrackIndex]() -> FLinearColor
+	{
+		const bool bSelected = Model->GetSelection().ContainsByPredicate([TrackIndex](const FGSTN_Selection& Item) { return Item.TrackIndex == TrackIndex; });
+		return bSelected ? GSTNTimelineColors::SelectedHeaderFill() : GSTNTimelineWidgets::LaneBackground((TrackIndex & 1) != 0);
+	};
+
 	const TWeakPtr<FGSTN_TimelineEditorModel> WeakModel = Model;
 
 	FRowBase::Construct(
@@ -50,10 +59,9 @@ void SGSTN_TimelineTrackRow::Construct(const FArguments& InArgs, const TSharedRe
 						SNew(SBorder)
 						.Padding(FMargin(0.f))
 						.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
-						.BorderBackgroundColor_Lambda([Model, TrackIndex]() -> FSlateColor
+						.BorderBackgroundColor_Lambda([HeaderFill]() -> FSlateColor
 						{
-							const bool bSelected = Model->GetSelection().ContainsByPredicate([TrackIndex](const FGSTN_Selection& Item) { return Item.TrackIndex == TrackIndex; });
-							return bSelected ? FLinearColor(0.2f, 0.28f, 0.42f) : GSTNTimelineWidgets::LaneBackground((TrackIndex & 1) != 0);
+							return HeaderFill();
 						})
 						.OnMouseButtonDown_Lambda([WeakModel, TrackIndex](const FGeometry&, const FPointerEvent& MouseEvent) -> FReply
 						{
@@ -105,6 +113,7 @@ void SGSTN_TimelineTrackRow::Construct(const FArguments& InArgs, const TSharedRe
 							.Padding(FMargin(6.f, 0.f, 4.f, 0.f))
 							[
 								SNew(STextBlock)
+								.ColorAndOpacity_Lambda([HeaderFill]() -> FSlateColor { return FSlateColor(GSTNTimelineColors::ReadableTextOn(HeaderFill())); })
 								.Text_Lambda([GetTrackStruct]() -> FText
 								{
 									const UScriptStruct* Struct = GetTrackStruct();

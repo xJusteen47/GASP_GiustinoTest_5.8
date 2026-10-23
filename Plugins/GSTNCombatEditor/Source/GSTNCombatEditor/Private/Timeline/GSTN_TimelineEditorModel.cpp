@@ -136,6 +136,32 @@ int32 FGSTN_TimelineEditorModel::GetFrameLimit(const FGSTN_CombatTimelineData& D
 	return FrameLimit(Data);
 }
 
+int32 FGSTN_TimelineEditorModel::GetContentEnd(const FGSTN_CombatTimelineData& Data)
+{
+	int32 End = FMath::Max(Data.FirstActionableFrame, 0);
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
+	{
+		if (const FGSTN_TimelineTrack* Track = Instance.GetPtr<FGSTN_TimelineTrack>())
+		{
+			int32 Start = 0;
+			int32 TrackEnd = 0;
+			GetTrackSpan(*Track, Start, TrackEnd);
+			End = FMath::Max(End, TrackEnd);
+		}
+	}
+	return End;
+}
+
+int32 FGSTN_TimelineEditorModel::GetPlayableFrames(const FGSTN_CombatTimelineData& Data)
+{
+	return Data.TotalFrames > 0 ? Data.TotalFrames : FMath::Max(GetContentEnd(Data), MinimumRulerFrames);
+}
+
+int32 FGSTN_TimelineEditorModel::ClampPlayheadFrame(const FGSTN_CombatTimelineData& Data, int32 Frame)
+{
+	return FMath::Clamp(Frame, 0, GetPlayableFrames(Data) - 1);
+}
+
 /**
  * The transaction of one mutation. Outside a drag it opens its own scoped transaction; inside a drag it joins the drag's
  * (opened at the first change), so the drag stays one undo step. Records the owner before the caller edits. When it goes out of
@@ -181,6 +207,12 @@ int32 FGSTN_TimelineEditorModel::GetTotalFrames() const
 	return Data ? Data->TotalFrames : 0;
 }
 
+int32 FGSTN_TimelineEditorModel::GetPlayableFrames() const
+{
+	const FGSTN_CombatTimelineData* Data = Context.Get();
+	return Data ? GetPlayableFrames(*Data) : MinimumRulerFrames;
+}
+
 int32 FGSTN_TimelineEditorModel::GetTrackCount() const
 {
 	const FGSTN_CombatTimelineData* Data = Context.Get();
@@ -204,7 +236,7 @@ void FGSTN_TimelineEditorModel::NotifyDataChanged()
 
 void FGSTN_TimelineEditorModel::GetEffectivePlayRange(int32& OutFirst, int32& OutEnd) const
 {
-	const int32 Total = FMath::Max(GetTotalFrames(), 0);
+	const int32 Total = GetPlayableFrames();
 	OutFirst = 0;
 	OutEnd = Total;
 	if (HasPlayRange())
@@ -221,7 +253,7 @@ void FGSTN_TimelineEditorModel::GetEffectivePlayRange(int32& OutFirst, int32& Ou
 
 void FGSTN_TimelineEditorModel::SetPlayRange(int32 Start, int32 End)
 {
-	const int32 Total = FMath::Max(GetTotalFrames(), 0);
+	const int32 Total = GetPlayableFrames();
 	int32 NewStart = FMath::Clamp(Start, 0, Total);
 	int32 NewEnd = FMath::Clamp(End, 0, Total);
 	if (NewEnd <= NewStart)
@@ -240,7 +272,9 @@ void FGSTN_TimelineEditorModel::SetPlayRange(int32 Start, int32 End)
 
 bool FGSTN_TimelineEditorModel::SetPlayhead(int32 Frame)
 {
-	const int32 Clamped = FMath::Clamp(Frame, 0, FMath::Max(GetTotalFrames() - 1, 0));
+	// The length of the timeline, or its content while it has none: a new inline timeline has TotalFrames 0 and must still be scrubbable
+	const FGSTN_CombatTimelineData* Data = Context.Get();
+	const int32 Clamped = Data ? ClampPlayheadFrame(*Data, Frame) : 0;
 	if (Clamped == PlayheadFrame)
 	{
 		return false;
@@ -339,7 +373,8 @@ void FGSTN_TimelineEditorModel::Revalidate()
 	}
 	CommitSelection(MoveTemp(Valid));
 
-	const int32 Clamped = FMath::Clamp(PlayheadFrame, 0, FMath::Max(GetTotalFrames() - 1, 0));
+	const FGSTN_CombatTimelineData* Data = Context.Get();
+	const int32 Clamped = Data ? ClampPlayheadFrame(*Data, PlayheadFrame) : 0;
 	if (Clamped != PlayheadFrame)
 	{
 		PlayheadFrame = Clamped;

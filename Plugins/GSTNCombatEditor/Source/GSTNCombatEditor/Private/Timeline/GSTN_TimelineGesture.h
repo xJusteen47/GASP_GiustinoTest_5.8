@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
 #include "Timeline/GSTN_TimelineLayout.h"
+#include "Validation/GSTN_ValidationReport.h"
 
 /** What the mouse is doing to the timeline between mouse-down and mouse-up */
 enum class EGSTN_GestureKind : uint8
@@ -138,4 +139,17 @@ public:
 
 	/** The track of the selection that has keys, INDEX_NONE if the selection has none (the target of K and Ctrl+V) */
 	static int32 FindKeyedSelectionTrack(const FGSTN_TimelineEditorModel& Model);
+
+	/**
+	 * Mouse-down on empty space of the timeline (under the last row, where no lane takes the click): clears the selection, or keeps it with
+	 * bAdditive (Shift), like a click on an empty lane does. The selection is editor state, not data: this opens no transaction and leaves
+	 * the undo history as it was. Returns whether the selection changed.
+	 */
+	static bool ClickEmptySpace(FGSTN_TimelineEditorModel& Model, bool bAdditive);
+
+	/**
+	 * Double-click on a validation finding: selects the track it names and puts the playhead on its frame, whichever of the two it has.
+	 * Returns whether anything moved.
+	 */
+	static bool GoToFinding(FGSTN_TimelineEditorModel& Model, const FGSTN_FindingLocation& Where);
 };

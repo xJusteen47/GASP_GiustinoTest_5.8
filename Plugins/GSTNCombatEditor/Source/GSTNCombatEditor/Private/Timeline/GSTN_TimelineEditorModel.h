@@ -140,6 +140,9 @@ public:
 	int32 GetTotalFrames() const;
 	int32 GetTrackCount() const;
 
+	/** GetPlayableFrames of the data now (MinimumRulerFrames when the context is gone) */
+	int32 GetPlayableFrames() const;
+
 	// Frame vocabulary the gestures and the widgets share, so there is one definition of it
 
 	/** Event fires on StartFrame and weapon switch on SwapFrame; both ignore EndFrame, so they occupy one frame and have no edges to move */
@@ -150,6 +153,21 @@ public:
 
 	/** One past the last frame a window may end on: TotalFrames, or a very large number while the timeline has no length yet */
 	static int32 GetFrameLimit(const FGSTN_CombatTimelineData& Data);
+
+	/** The ruler of a timeline that has no length yet shows (at least) this many frames: the playhead can go there, and Frame All frames it */
+	static constexpr int32 MinimumRulerFrames = 30;
+
+	/** One past the last frame any track occupies, or the first actionable frame if that is later. 0 for an empty timeline */
+	static int32 GetContentEnd(const FGSTN_CombatTimelineData& Data);
+
+	/**
+	 * How many frames the playhead, the loop range and playback can use: TotalFrames, or, while it is 0 (a new inline timeline), the end
+	 * of the content but never less than MinimumRulerFrames. Without it a timeline that has no length yet could not be scrubbed at all.
+	 */
+	static int32 GetPlayableFrames(const FGSTN_CombatTimelineData& Data);
+
+	/** Frame clamped to the last playable frame [0, GetPlayableFrames - 1] */
+	static int32 ClampPlayheadFrame(const FGSTN_CombatTimelineData& Data, int32 Frame);
 	const FGSTN_TimelineTrack* GetTrack(int32 TrackIndex) const;
 
 	/** Frames per second of the simulation tick, from the project's Network Prediction settings unless a test sets it */
@@ -169,7 +187,7 @@ public:
 
 	int32 GetPlayhead() const { return PlayheadFrame; }
 
-	/** Moves the playhead to a frame clamped to [0, TotalFrames - 1]. Returns whether it moved */
+	/** Moves the playhead to a frame clamped to [0, GetPlayableFrames - 1] (the length of the timeline, or its content while it has none). Returns whether it moved */
 	bool SetPlayhead(int32 Frame);
 	bool StepPlayhead(int32 DeltaFrames) { return SetPlayhead(PlayheadFrame + DeltaFrames); }
 
