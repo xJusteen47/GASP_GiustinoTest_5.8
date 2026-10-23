@@ -119,6 +119,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
 	int32 JumpCoyoteFrames = 4;
 
+	/** Frames between a ground jump request and the take-off (the squat). 0 = the take-off is the frame of the request. A kit overrides it on its jump ability (UGSTN_GA_PlatformJump::bOverrideSquatFrames) */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
+	int32 JumpSquatFrames = 0;
+
 	/** Frames of press that turn an interact tap (grab) into a hold (pick up) in the default movement slots (UGSTN_MovementSlots) */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Interact", meta = (ClampMin = "1", ClampMax = "120", ForceUnits = "Frames"))
 	int32 InteractHoldFrames = 12;

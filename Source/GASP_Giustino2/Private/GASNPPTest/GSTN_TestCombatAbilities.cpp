@@ -32,6 +32,7 @@ namespace
 		"Granted by the harness to give the pawn a kit with a special escape dodge: the default ground dodge ignores it, the escape dodge requires it");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_GammaMove, "Test.State.GammaMove", "Owned while the added command of KIT_Test_Gamma runs");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_JumpSquat, "Test.State.JumpSquat", "Owned from the jump request to the take-off of the squat jump of KIT_Test_Squat");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Special, "Test.State.Special", "Owned while the plain special of KIT_Test_Delta runs");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_SpecialEx, "Test.State.SpecialEx", "Owned while the EX special of KIT_Test_Delta runs");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_SuperA, "Test.State.SuperA", "Owned while super A of KIT_Test_Sigma runs");
@@ -331,4 +332,11 @@ void UGSTN_GA_TestCostGrab::ActivateAbility(const FGameplayAbilitySpecHandle Han
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 	}
+}
+
+UGSTN_GA_TestJumpSquat::UGSTN_GA_TestJumpSquat(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	bOverrideSquatFrames = true;
+	SquatFrames = 6;
+	ActivationOwnedTags.AddTag(TAG_Test_State_JumpSquat);
 }

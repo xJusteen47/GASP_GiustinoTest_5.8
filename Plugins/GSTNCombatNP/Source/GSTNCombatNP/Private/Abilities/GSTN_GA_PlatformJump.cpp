@@ -76,7 +76,7 @@ void UGSTN_GA_PlatformJump::ActivateAbility(const FGameplayAbilitySpecHandle Han
 	const bool bHaveState = Combat && Combat->ReadJumpState(Jump);
 	const bool bDecided = bHaveState && (Role == EGSTN_PlatformJumpRole::FastFall
 		? Jump.bFastFalling
-		: Jump.Phase == EGSTN_JumpPhase::Rising && Jump.StartFrame == Combat->GetSimulationFrame());
+		: (Jump.Phase == EGSTN_JumpPhase::Rising && Jump.StartFrame == Combat->GetSimulationFrame()) || Jump.SquatFramesLeft > 0);
 	if (!bDecided)
 	{
 		UE_LOG(LogGSTNPlatformJump, Verbose, TEXT("%s: activated without a jump decided by the combat tick (state %d), nothing to do"), *GetName(), bHaveState);
@@ -90,13 +90,16 @@ void UGSTN_GA_PlatformJump::ActivateAbility(const FGameplayAbilitySpecHandle Han
 		return;
 	}
 
+	SquatPending.Value = 0;
 	if (Role == EGSTN_PlatformJumpRole::Jump)
 	{
-		const TSubclassOf<UGameplayEffect>& Effect = Jump.bTakeoffWasAir ? AirJumpEffect : JumpEffect;
-		if (Effect)
+		if (Jump.SquatFramesLeft > 0)
 		{
-			ApplyGameplayEffectToOwner(Handle, ActorInfo, ActivationInfo, Effect.GetDefaultObject(), GetAbilityLevel(Handle, ActorInfo));
+			// The squat started: the impulse comes with the take-off, in OnSimulationTick
+			SquatPending.Value = 1;
+			return;
 		}
+		ApplyTakeoffEffect(Handle, ActorInfo, ActivationInfo, Jump.bTakeoffWasAir);
 	}
 
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
@@ -106,4 +109,45 @@ UGSTN_GA_PlatformFastFall::UGSTN_GA_PlatformFastFall(const FObjectInitializer& O
 	: Super(ObjectInitializer)
 {
 	Role = EGSTN_PlatformJumpRole::FastFall;
+}
+
+void UGSTN_GA_PlatformJump::ApplyTakeoffEffect(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayAbilityActivationInfo ActivationInfo, bool bAirJump)
+{
+	const TSubclassOf<UGameplayEffect>& Effect = bAirJump ? AirJumpEffect : JumpEffect;
+	if (Effect)
+	{
+		ApplyGameplayEffectToOwner(Handle, ActorInfo, ActivationInfo, Effect.GetDefaultObject(), GetAbilityLevel(Handle, ActorInfo));
+	}
+}
+
+void UGSTN_GA_PlatformJump::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep)
+{
+	Super::OnSimulationTick(TimeStep);
+
+	if (!IsActive() || SquatPending.Value == 0)
+	{
+		return;
+	}
+
+	// The combat tick owns the squat: it takes off on the frame it runs out, or drops the squat (knocked off the ground)
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	FGSTN_JumpState Jump;
+	if (!Combat || !Combat->ReadJumpState(Jump))
+	{
+		SquatPending.Value = 0;
+		EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, true);
+		return;
+	}
+	if (Jump.Phase == EGSTN_JumpPhase::Rising && Jump.StartFrame == Combat->GetSimulationFrame())
+	{
+		SquatPending.Value = 0;
+		ApplyTakeoffEffect(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), Jump.bTakeoffWasAir);
+		EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, false);
+	}
+	else if (Jump.SquatFramesLeft == 0)
+	{
+		SquatPending.Value = 0;
+		EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, true);
+	}
 }

@@ -65,6 +65,12 @@ struct GSTNCOMBATCORE_API FGSTN_JumpLogic
 	/** The take-off of a request of this frame: rising from Frame, the button's hold begins, an air jump uses one of the air jumps */
 	static FGSTN_JumpState ApplyTakeoff(const FGSTN_JumpState& In, int32 Frame, int32 Button, EGSTN_JumpKind Kind);
 
+	/**
+	 * What a jump request of this frame does to the state: a ground jump from the ground with Params.SquatFrames > 0 starts the squat
+	 * (SquatFramesLeft, Button kept, still Phase None; Step takes off when it runs out), every other jump takes off now (ApplyTakeoff)
+	 */
+	static FGSTN_JumpState ApplyRequest(const FGSTN_JumpState& In, int32 Frame, int32 Button, EGSTN_JumpKind Kind, bool bGrounded, const FGSTN_JumpParams& Params);
+
 	static FGSTN_JumpState ApplyFastFall(const FGSTN_JumpState& In);
 
 	/** The multiplier of gravity for the state: the hold, cut, fall or fast fall scale of Params; 1 for no jump or a launch */

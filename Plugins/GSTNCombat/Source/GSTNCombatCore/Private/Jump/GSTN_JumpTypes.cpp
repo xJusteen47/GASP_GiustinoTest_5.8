@@ -26,6 +26,7 @@ void FGSTN_JumpState::NetSerialize(FArchive& Ar)
 	Ar << ButtonPlusOne;
 	Ar << AirJumpsUsed;
 	Ar << CoyoteFramesLeft;
+	Ar << SquatFramesLeft;
 
 	if (Ar.IsLoading())
 	{
@@ -40,5 +41,5 @@ void FGSTN_JumpState::NetSerialize(FArchive& Ar)
 
 void FGSTN_JumpState::ToString(FAnsiStringBuilderBase& Out) const
 {
-	Out.Appendf(" Jump: %d@%d btn %d cut %d fast %d air %d used %d coyote %d", static_cast<int32>(Phase), StartFrame, static_cast<int32>(Button), bJumpCut, bFastFalling, bTakeoffWasAir, AirJumpsUsed, CoyoteFramesLeft);
+	Out.Appendf(" Jump: %d@%d btn %d cut %d fast %d air %d used %d coyote %d squat %d", static_cast<int32>(Phase), StartFrame, static_cast<int32>(Button), bJumpCut, bFastFalling, bTakeoffWasAir, AirJumpsUsed, CoyoteFramesLeft, SquatFramesLeft);
 }

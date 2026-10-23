@@ -603,6 +603,9 @@ def c18_content_specs():
             ('KIT_Test_Delta', 'Kit.Test.Delta',
              {'removed': [], 'added': [('Command.Special.Ex', ['Input.Button.Special', 'Input.Button.Buff'], True, True, 100)]},
              [jump, ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'), ('Command.Special.Ex', [], [], 'GSTN_GA_TestSpecialEx')], 0, []),
+            # Squat: the jump command is bound to the test jump with a 6 frame squat (data on the ability)
+            ('KIT_Test_Squat', 'Kit.Test.Squat', {'removed': [], 'added': []},
+             [('Command.Movement.Jump', [], [], 'GSTN_GA_TestJumpSquat')], 0, []),
             # Sigma: two supers entered as codes (Special, then the super's own two buttons)
             ('KIT_Test_Sigma', 'Kit.Test.Sigma', {'removed': [], 'added': []}, [jump], 2, ['SUP_Test_A', 'SUP_Test_B']),
             # Omega: a timeline that waits combat frames before a strike, on the plain special

@@ -94,6 +94,9 @@ struct GSTNCOMBATCORE_API FGSTN_JumpParams
 
 	/** Frames after leaving the ground in which a ground jump is still allowed (0 = none) */
 	int32 CoyoteFrames = 4;
+
+	/** Frames between a ground jump request and its take-off (0 = the take-off is the frame of the request) */
+	int32 SquatFrames = 0;
 };
 
 /**
@@ -124,16 +127,19 @@ struct GSTNCOMBATCORE_API FGSTN_JumpState
 	/** Frames left in which a ground jump is allowed after leaving the ground */
 	uint8 CoyoteFramesLeft = 0;
 
+	/** Frames of the ground squat still to go before the take-off (0 = not squatting). Phase stays None and Button holds the jump button meanwhile */
+	uint8 SquatFramesLeft = 0;
+
 	bool IsDefault() const
 	{
 		return Phase == EGSTN_JumpPhase::None && StartFrame == INDEX_NONE && Button == INDEX_NONE && !bJumpCut && !bFastFalling && !bTakeoffWasAir
-			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0;
+			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0;
 	}
 
 	bool operator==(const FGSTN_JumpState& Other) const
 	{
 		return Phase == Other.Phase && StartFrame == Other.StartFrame && Button == Other.Button && bJumpCut == Other.bJumpCut && bFastFalling == Other.bFastFalling
-			&& bTakeoffWasAir == Other.bTakeoffWasAir && AirJumpsUsed == Other.AirJumpsUsed && CoyoteFramesLeft == Other.CoyoteFramesLeft;
+			&& bTakeoffWasAir == Other.bTakeoffWasAir && AirJumpsUsed == Other.AirJumpsUsed && CoyoteFramesLeft == Other.CoyoteFramesLeft && SquatFramesLeft == Other.SquatFramesLeft;
 	}
 
 	/** One bit when default; same code for both directions */

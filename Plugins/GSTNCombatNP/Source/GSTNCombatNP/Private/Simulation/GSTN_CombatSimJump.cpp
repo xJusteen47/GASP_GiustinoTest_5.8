@@ -49,6 +49,7 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 	OutParams.AirJumpCount = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetAirJumpCountAttribute(), bFound));
 	const UGSTN_GA_PlatformJump* TableJumpData = Tables().TableJumpData;
 	OutParams.CoyoteFrames = TableJumpData && TableJumpData->bOverrideCoyoteFrames ? TableJumpData->CoyoteFrames : UGSTN_CombatSettings::Get().JumpCoyoteFrames;
+	OutParams.SquatFrames = TableJumpData && TableJumpData->bOverrideSquatFrames ? TableJumpData->SquatFrames : UGSTN_CombatSettings::Get().JumpSquatFrames;
 	return true;
 }
 
@@ -111,7 +112,7 @@ void UGSTN_CombatSimComponent::ApplyJumpRequest(int32 Frame, int32 BindingIndex,
 	{
 		// RequestButton is 1 + the button index, 0 for none (a forced command has no button, nothing to hold)
 		const int32 Button = Core.Input.RequestButton >= 1 && Core.Input.RequestButton != FGSTN_InputSimState::CommandWithoutButton ? static_cast<int32>(Core.Input.RequestButton) - 1 : INDEX_NONE;
-		Core.Jump = FGSTN_JumpLogic::ApplyTakeoff(Core.Jump, Frame, Button, Kind);
+		Core.Jump = FGSTN_JumpLogic::ApplyRequest(Core.Jump, Frame, Button, Kind, FrameJumpSample.bGrounded, FrameJumpParams);
 	}
 }
 

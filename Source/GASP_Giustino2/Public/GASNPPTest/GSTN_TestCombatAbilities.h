@@ -6,6 +6,7 @@
 #include "Abilities/GSTN_GA_Base.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Abilities/GSTN_GA_Dash.h"
+#include "Abilities/GSTN_GA_PlatformJump.h"
 #include "EffectsComponents/ApplyMoveGameplayEffectComponent.h"
 #include "Effects/GSTN_GE_MeterCost.h"
 #include "GameplayEffect.h"
@@ -305,4 +306,13 @@ public:
 
 protected:
 	virtual void OnCombatFramesElapsed() override;
+};
+
+/** The platform jump with a 6 frame squat (KIT_Test_Squat): owns Test.State.JumpSquat from the request to the take-off, which is how the harness measures the squat */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestJumpSquat : public UGSTN_GA_PlatformJump
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GA_TestJumpSquat(const FObjectInitializer& ObjectInitializer);
 };

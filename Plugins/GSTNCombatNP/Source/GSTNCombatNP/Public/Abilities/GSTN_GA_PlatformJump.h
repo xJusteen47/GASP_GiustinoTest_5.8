@@ -73,7 +73,8 @@ enum class EGSTN_PlatformJumpRole : uint8
  * tick decided: on a take-off frame it applies the impulse effect (the ability never sets the character's state: Mover applies the
  * queued move). Activated by anything else than a command that the tick turned into a take-off (a trigger, an effect), it does nothing and ends.
  *
- * Squat frames (JumpSquatFrames) are not simulated yet: the take-off is the frame of the request.
+ * Squat: with SquatFrames > 0 a ground jump request only starts the squat (the combat tick keeps the frames in the jump state); the ability stays
+ * active and applies the impulse on the frame the tick takes off. Per kit like the other jump data, default in UGSTN_CombatSettings::JumpSquatFrames.
  */
 UCLASS(Blueprintable)
 class GSTNCOMBATNP_API UGSTN_GA_PlatformJump : public UGSTN_GA_Base
@@ -113,8 +114,24 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (EditCondition = "bOverrideCoyoteFrames", ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
 	int32 CoyoteFrames = 4;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
+	bool bOverrideSquatFrames = false;
+
+	/** Frames between a ground jump request and the take-off; the impulse is applied on the frame the squat ends. 0 = at once. Air and coyote jumps never squat */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (EditCondition = "bOverrideSquatFrames", ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
+	int32 SquatFrames = 0;
+
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+
+	virtual void OnSimulationTick(const FAbilitySystemTimeStep& TimeStep) override;
+
+private:
+	/** 1 while a ground squat started by this activation is running: the impulse waits for the take-off the combat tick decides. Sync variable (rolled back) */
+	UPROPERTY(Transient)
+	FSyncInteger SquatPending;
+
+	void ApplyTakeoffEffect(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bAirJump);
 };
 
 /** The fast fall of the default kit: UGSTN_GA_PlatformJump with Role FastFall, to bind to Command.Movement.FastFall */

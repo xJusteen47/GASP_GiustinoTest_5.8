@@ -2252,6 +2252,56 @@ def scenario_variable_jump(client=1, holds=(0.0, 0.10, 0.15, 0.30), spacing=3.0)
     run.run(steps)
 
 
+
+def scenario_jump_squat(client=1):
+    """C19 jump squat: KIT_Test_Squat binds UGSTN_GA_TestJumpSquat (SquatFrames 6, data on the ability) to the jump command. The ability owns
+    Test.State.JumpSquat from the request to the take-off. Judged on the sim ticks of the authority and the owner: six frames with the tag and no
+    vertical speed in them, the first rising tick comes 7 ticks after the first tag tick (6 of squat + the tick that shows the impulse; a plain jump
+    shows it 1 tick after the request), a second jump press inside the squat is refused (one request only), and both machines agree to a tick."""
+    run = _Run('jump_squat', client, judge_reconciles=False)
+    key, st, marks = run.key, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    tag, jump, frame_ms = 'Test.State.JumpSquat', button_mask('Jump'), 1000.0 / 60.0
+
+    def ticks(side):
+        return [x[side] for x in run.sim if 2.0 <= x['t'] <= 4.5 and x.get(side)]
+
+    def squat_shape(side):
+        def f():
+            w = ticks(side)
+            tagged = [s for s in w if tag in s['tags']]
+            rise = next((s for s in w if s['vel'][2] > 100.0), None)
+            if not tagged or rise is None:
+                return False, f'{side}: tagged ticks {len(tagged)}, rising tick {rise is not None}'
+            flat = all(abs(s['vel'][2]) < 50.0 for s in tagged)
+            delay = (rise['ms'] - tagged[0]['ms']) / frame_ms
+            return (len(tagged) == 6 and flat and abs(delay - 7.0) < 0.5), f'{side}: {len(tagged)} tagged ticks (want 6), flat in the squat {flat}, first tag tick to first rising tick {delay:.2f} ticks (want 7)'
+        return run.at(f'squat shape on the {side}', f)
+
+    def same_tick():
+        t = {}
+        for side in ('srv', 'cli'):
+            rise = next((s for s in ticks(side) if s['vel'][2] > 100.0), None)
+            t[side] = rise['ms'] if rise else None
+        return t['srv'] is not None and t['srv'] == t['cli'], f"first rising sim tick: authority {t['srv']} ms, owner {t['cli']} ms (want equal)"
+
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'S', 'KIT_Test_Squat')),
+        (1.8, _c18_accepted(run, st, 'S')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Squat', base + 1, 'Squat kit applied on both, same table')),
+        (2.0, lambda: ('jump', combat_tap(client, jump))),
+        (2.04, lambda: ('second press inside the squat', combat_tap(client, jump))),
+        (4.4, squat_shape('srv')),
+        (4.4, squat_shape('cli')),
+        (4.4, run.at('the squat jump takes off on the same sim tick on both', same_tick)),
+        (4.4, _c18_requests(run, 1.95, 4.4, 'one jump request on both (the second press in the squat is refused)', 1)),
+        (4.5, lambda: ('cleanup', combat_clear(client))),
+        (4.6, run.finish()),
+    ]
+    run.run(steps)
+
 def scenario_air_jump_fastfall(client=1):
     """C13 air jump and fast fall. A: a plain jump (reference apex and fall speed). B: a fast fall request while still rising is refused (no
     request), one while falling sets the fast fall and the descent is faster than A. C: a jump and an air jump (one used, higher than A), and
@@ -3256,7 +3306,7 @@ def scenario_wait_frames(client=1):
 SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
                  'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
                  'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'dodge_blocked_in_hitstun', 'kit_without_dodge', 'interact_tap_hold',
-                 'hitstop', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'loadout_change']
+                 'hitstop', 'jump_squat', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'loadout_change']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 

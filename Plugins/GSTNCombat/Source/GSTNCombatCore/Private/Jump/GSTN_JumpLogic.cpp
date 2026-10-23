@@ -13,10 +13,25 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 
 	if (Sample.bGrounded)
 	{
+		if (In.SquatFramesLeft > 0)
+		{
+			// The squat runs on the ground: the take-off is the frame it runs out, as a request of that frame would have been
+			if (In.SquatFramesLeft == 1)
+			{
+				FGSTN_JumpState Takeoff = ApplyTakeoff(In, Frame, In.Button, EGSTN_JumpKind::Ground);
+				Takeoff.SquatFramesLeft = 0;
+				return Takeoff;
+			}
+			Out.SquatFramesLeft = In.SquatFramesLeft - 1;
+			return Out;
+		}
 		Out = FGSTN_JumpState();
 		Out.CoyoteFramesLeft = static_cast<uint8>(FMath::Clamp(Params.CoyoteFrames, 0, 255));
 		return Out;
 	}
+
+	// Off the ground (knocked, pushed) the squat is over without a jump
+	Out.SquatFramesLeft = 0;
 
 	if (Out.CoyoteFramesLeft > 0)
 	{
@@ -96,6 +111,10 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 
 EGSTN_JumpKind FGSTN_JumpLogic::ClassifyJump(const FGSTN_JumpState& State, bool bGrounded, const FGSTN_JumpParams& Params)
 {
+	if (State.SquatFramesLeft > 0)
+	{
+		return EGSTN_JumpKind::None;
+	}
 	if (bGrounded || State.CoyoteFramesLeft > 0)
 	{
 		return EGSTN_JumpKind::Ground;
@@ -123,6 +142,18 @@ FGSTN_JumpState FGSTN_JumpLogic::ApplyTakeoff(const FGSTN_JumpState& In, int32 F
 		++Out.AirJumpsUsed;
 	}
 	return Out;
+}
+
+FGSTN_JumpState FGSTN_JumpLogic::ApplyRequest(const FGSTN_JumpState& In, int32 Frame, int32 Button, EGSTN_JumpKind Kind, bool bGrounded, const FGSTN_JumpParams& Params)
+{
+	if (Kind == EGSTN_JumpKind::Ground && bGrounded && Params.SquatFrames > 0)
+	{
+		FGSTN_JumpState Out = In;
+		Out.SquatFramesLeft = static_cast<uint8>(FMath::Clamp(Params.SquatFrames, 1, 255));
+		Out.Button = static_cast<int8>(Button);
+		return Out;
+	}
+	return ApplyTakeoff(In, Frame, Button, Kind);
 }
 
 FGSTN_JumpState FGSTN_JumpLogic::ApplyFastFall(const FGSTN_JumpState& In)

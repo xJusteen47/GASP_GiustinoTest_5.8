@@ -1,6 +1,8 @@
 #include "Tests/GSTN_CombatTestUtils.h"
 #include "Jump/GSTN_GravityPhases.h"
 #include "Jump/GSTN_JumpLogic.h"
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -259,4 +261,64 @@ bool FGSTN_JumpTerminalFallSpeedTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_JumpSquatDelaysImpulseTest, "GSTNCombat.Core.Jump.SquatDelaysImpulse", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_JumpSquatDelaysImpulseTest::RunTest(const FString& Parameters)
+{
+	FGSTN_JumpMoverSample Ground;
+	const FGSTN_JumpResetRules Rules;
+	FGSTN_JumpParams Params;
+
+	// 0 = today's behaviour: the request takes off at once
+	FGSTN_JumpState State = FGSTN_JumpLogic::Step(FGSTN_JumpState(), 9, Ground, true, Params, Rules);
+	State = FGSTN_JumpLogic::ApplyRequest(State, 10, 3, FGSTN_JumpLogic::ClassifyJump(State, true, Params), true, Params);
+	TestTrue(TEXT("no squat: rising on the frame of the request"), State.Phase == EGSTN_JumpPhase::Rising && State.StartFrame == 10 && State.SquatFramesLeft == 0);
+
+	for (const int32 Squat : { 1, 3, 7 })
+	{
+		Params.SquatFrames = Squat;
+		State = FGSTN_JumpLogic::Step(FGSTN_JumpState(), 9, Ground, true, Params, Rules);
+		State = FGSTN_JumpLogic::ApplyRequest(State, 10, 3, FGSTN_JumpLogic::ClassifyJump(State, true, Params), true, Params);
+		TestTrue(TEXT("the squat starts on the request, not yet rising"), State.Phase == EGSTN_JumpPhase::None && State.SquatFramesLeft == Squat && State.Button == 3);
+		TestEqual(TEXT("a second request in the squat is no jump"), static_cast<int32>(FGSTN_JumpLogic::ClassifyJump(State, true, Params)), static_cast<int32>(EGSTN_JumpKind::None));
+
+		int32 TakeoffFrame = INDEX_NONE;
+		for (int32 Frame = 11; Frame < 11 + Squat + 2 && TakeoffFrame == INDEX_NONE; ++Frame)
+		{
+			State = FGSTN_JumpLogic::Step(State, Frame, Ground, true, Params, Rules);
+			if (State.Phase == EGSTN_JumpPhase::Rising)
+			{
+				TakeoffFrame = Frame;
+			}
+		}
+		TestEqual(*FString::Printf(TEXT("squat %d takes off exactly that many frames after the request"), Squat), TakeoffFrame, 10 + Squat);
+		TestTrue(TEXT("the take-off carries the button and ends the squat"), State.StartFrame == TakeoffFrame && State.Button == 3 && State.SquatFramesLeft == 0 && !State.bTakeoffWasAir);
+	}
+
+	// Knocked off the ground in the squat: no jump
+	Params.SquatFrames = 5;
+	State = FGSTN_JumpLogic::ApplyRequest(FGSTN_JumpState(), 10, 3, EGSTN_JumpKind::Ground, true, Params);
+	FGSTN_JumpMoverSample Air;
+	Air.bGrounded = false;
+	Air.UpSpeed = 300.0;
+	State = FGSTN_JumpLogic::Step(State, 11, Air, true, Params, Rules);
+	TestTrue(TEXT("leaving the ground cancels the squat"), State.SquatFramesLeft == 0 && State.Phase != EGSTN_JumpPhase::Rising);
+
+	// A coyote or air jump never squats
+	State = FGSTN_JumpLogic::ApplyRequest(FGSTN_JumpState(), 20, 3, EGSTN_JumpKind::Ground, false, Params);
+	TestTrue(TEXT("a coyote jump in the air takes off at once"), State.Phase == EGSTN_JumpPhase::Rising && State.SquatFramesLeft == 0);
+	State = FGSTN_JumpLogic::ApplyRequest(FGSTN_JumpState(), 20, 3, EGSTN_JumpKind::Air, false, Params);
+	TestTrue(TEXT("an air jump takes off at once"), State.Phase == EGSTN_JumpPhase::Rising && State.bTakeoffWasAir);
+
+	// The state round trips through the wire with the squat in it
+	FGSTN_JumpState Squatting = FGSTN_JumpLogic::ApplyRequest(FGSTN_JumpState(), 10, 3, EGSTN_JumpKind::Ground, true, Params);
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	Squatting.NetSerialize(Writer);
+	FMemoryReader Reader(Bytes);
+	FGSTN_JumpState Loaded;
+	Loaded.NetSerialize(Reader);
+	TestTrue(TEXT("a squatting state is not default and survives NetSerialize"), !Squatting.IsDefault() && Loaded == Squatting);
+	return true;
+}
 #endif
