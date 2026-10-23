@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "MovementModeTransition.h"
+#include "WallMovement/GSTN_WallMovementTypes.h"
 #include "GSTN_WallEntryTransition.generated.h"
 
 struct FHitResult;
@@ -81,6 +82,14 @@ public:
 	/** ...to MaxSurfaceAngle (90 = vertical, above = overhangs) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection", meta = (ClampMin = "0", ClampMax = "180", ForceUnits = "deg"))
 	float MaxSurfaceAngle = 120.f;
+
+	/**
+	 * Which surfaces can be grabbed besides the angle: set it to the same behaviours as the target mode (WallSlide for a slide
+	 * entry, WallClimb for a climb entry), so a surface the mode would reject at once is never entered. Empty by default =
+	 * every surface, as before. Applied to the face hit by the sweep and to the confirmation at capsule height
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection")
+	FGSTN_WallSurfaceFilter SurfaceFilter;
 
 	// ---------------------------------------------------------------- Conditions
 

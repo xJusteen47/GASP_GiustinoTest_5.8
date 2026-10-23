@@ -7,6 +7,8 @@
 #include "Engine/World.h"
 #include "MoveLibrary/MovementUtils.h"
 #include "MoveLibrary/MovementUtilsTypes.h"
+#include "GSTN_SurfaceTypes.h"
+#include "GSTN_SurfaceUtils.h"
 #include "WallMovement/GSTN_WallMovementDebug.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallQueryUtils)
@@ -180,11 +182,36 @@ bool UGSTN_WallQueryUtils::IsValidWallNormal(const FVector& Normal, const FVecto
 	return AngleDeg >= MinSurfaceAngle && AngleDeg <= MaxSurfaceAngle;
 }
 
+bool UGSTN_WallQueryUtils::PassesSurfaceFilter(const FHitResult& Hit, const FGSTN_WallSurfaceFilter& Filter)
+{
+	// Empty query: today's behaviour, and the surface is not resolved at all (no cost for modes that do not use the filter)
+	if (Filter.IsEmpty())
+	{
+		return true;
+	}
+
+	// Static configuration only (components, settings, providers answering from replicated state): the same answer in a
+	// re-simulated frame, so there is nothing to cache or to roll back
+	const FGSTN_SurfaceView Surface = UGSTN_SurfaceUtils::Resolve(Hit);
+	if (Surface.Source == EGSTN_SurfaceSource::Default)
+	{
+		return Filter.bUnknownSurfacesPass;
+	}
+	return Surface.MatchesBehaviours(Filter.RequiredBehaviours);
+}
+
 bool UGSTN_WallQueryUtils::IsHitOnValidWall(const UWorld* World, const FHitResult& Hit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings,
 	ECollisionChannel Channel, const FCollisionQueryParams& QueryParams, const FCollisionResponseParams& ResponseParams)
 {
 	if (!IsValidWallNormal(Hit.Normal, GravityUp, Settings.MinSurfaceAngle, Settings.MaxSurfaceAngle)
 		|| !IsValidWallNormal(Hit.ImpactNormal, GravityUp, Settings.MinSurfaceAngle, Settings.MaxSurfaceAngle))
+	{
+		return false;
+	}
+
+	// Angle is fine: does the surface allow this kind of wall? Done before the edge trace below, which is the costly part.
+	// An edge hit is judged by the component it touched, not by the neighbouring face the trace may find
+	if (!PassesSurfaceFilter(Hit, Settings.SurfaceFilter))
 	{
 		return false;
 	}

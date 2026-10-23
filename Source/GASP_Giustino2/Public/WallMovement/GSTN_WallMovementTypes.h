@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "MoverTypes.h"
 #include "GSTN_WallMovementTypes.generated.h"
 
@@ -264,6 +265,38 @@ struct GASP_GIUSTINO2_API FGSTN_WallJump
 };
 
 /**
+ * Which surfaces a wall mode (or the entry transition) accepts as a wall, on top of the angle test. The surface of a hit comes
+ * from UGSTN_SurfaceUtils::Resolve (GSTNSurface plugin, traversal-surfaces.md §5.2): a UGSTN_SurfaceBehaviourComponent on the
+ * collider's actor, a provider, or the physical material table. A surface without the behaviour is simply not a wall for this
+ * mode: it still blocks the character, who slides along it or lands on it like on any geometry.
+ *
+ * Read-only configuration (no state, no cache): a re-simulated frame resolves the same surface. An empty query is the old
+ * behaviour exactly: every hit passes and the surface is not even resolved.
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallSurfaceFilter
+{
+	GENERATED_BODY()
+
+	/**
+	 * Behaviours (Surface.Behaviour.*) a surface must offer to count as a wall, e.g. WallSlide for the slide mode and WallClimb
+	 * for the climb mode. Empty = no filter
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	FGameplayTagQuery RequiredBehaviours;
+
+	/**
+	 * Surfaces nothing marked (no surface component, provider or material entry: they resolve to the plugin's default) pass
+	 * without the query being evaluated, so level geometry that was never authored keeps working as before. Turn off to make
+	 * only authored surfaces walls. Ignored while RequiredBehaviours is empty
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	bool bUnknownSurfacesPass = true;
+
+	bool IsEmpty() const { return RequiredBehaviours.IsEmpty(); }
+};
+
+/**
  * Parameters of the wall queries (UGSTN_WallQueryUtils), built by the wall modes from their Surface Detection and
  * Adhesion settings. Same role as FFloorCheckSettings for the ground modes
  */
@@ -315,6 +348,10 @@ struct GASP_GIUSTINO2_API FGSTN_WallCheckSettings
 	/** Minimum lookahead distance (cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ForceUnits = "cm"))
 	float MinLookaheadDistance = 15.f;
+
+	/** Which surfaces count as a wall besides the angle test. Default: all */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	FGSTN_WallSurfaceFilter SurfaceFilter;
 
 	/** Draw the probes */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")

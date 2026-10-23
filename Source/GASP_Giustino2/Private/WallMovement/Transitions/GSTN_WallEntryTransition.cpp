@@ -112,6 +112,14 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 		return false;
 	}
 
+	// A surface that does not offer what the target mode needs is not a wall to grab (after the angle test, as in the mode's
+	// probes). Nothing is resolved with an empty filter
+	if (!UGSTN_WallQueryUtils::PassesSurfaceFilter(OutHit, SurfaceFilter))
+	{
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: surface filter"));
+		return false;
+	}
+
 	// The capsule can touch just a lip (top edge, under the feet) that the mode's probes, cast from the capsule center,
 	// don't see: grabbing it would bounce between this transition and the mode's "no wall" exit. Confirm at center height
 	const FVector FlatNormal = FVector::VectorPlaneProject(FaceNormal, GravityUp).GetSafeNormal();
@@ -126,6 +134,13 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 		|| FVector::DotProduct(CenterHit.ImpactNormal, FlatNormal) < 0.5f)
 	{
 		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: no wall at capsule center height"));
+		return false;
+	}
+	// The mode's probes start from the capsule center: if the surface they would find there is forbidden, the mode would
+	// exit at once and the transition grab again, every tick
+	if (!UGSTN_WallQueryUtils::PassesSurfaceFilter(CenterHit, SurfaceFilter))
+	{
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: surface filter at capsule center height"));
 		return false;
 	}
 	return true;

@@ -30,8 +30,16 @@ public:
 	static bool IsValidWallNormal(const FVector& Normal, const FVector& GravityUp, float MinSurfaceAngle, float MaxSurfaceAngle);
 
 	/**
+	 * Whether the surface of a hit is accepted by the filter (traversal-surfaces.md §5.2): the hit's behaviours, from
+	 * UGSTN_SurfaceUtils::Resolve, must match RequiredBehaviours. An empty query passes everything without resolving (the old
+	 * behaviour); a surface nothing marked passes if bUnknownSurfacesPass. Stateless: resolves once per call, caches nothing.
+	 */
+	static bool PassesSurfaceFilter(const FHitResult& Hit, const FGSTN_WallSurfaceFilter& Filter);
+
+	/**
 	 * Whether a sweep hit lies on climbable geometry. On edges a sphere/capsule sweep returns a "rounded" normal blended between
 	 * the two faces: that is only trusted if both faces are walls, so the lip of a floor or roof can't tilt the capsule toward it.
+	 * The surface filter of Settings is evaluated right after the angle test of the hit's own normals.
 	 */
 	static bool IsHitOnValidWall(const UWorld* World, const FHitResult& Hit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings,
 		ECollisionChannel Channel, const FCollisionQueryParams& QueryParams, const FCollisionResponseParams& ResponseParams);

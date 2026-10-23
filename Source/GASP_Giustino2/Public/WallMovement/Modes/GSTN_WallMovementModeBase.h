@@ -169,6 +169,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Surface Detection", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float MinLookaheadDistance = 15.f;
 
+	/**
+	 * Which surfaces count as a wall for this mode besides the angle: the probes, the corner checks and the wrap probe ignore
+	 * a hit whose surface lacks the required behaviours (a wall slide mode asks Surface.Behaviour.WallSlide, a climb mode
+	 * WallClimb). Empty by default = every surface, as before. See FGSTN_WallSurfaceFilter
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Surface Detection")
+	FGSTN_WallSurfaceFilter SurfaceFilter;
+
 	// ---------------------------------------------------------------- Normal Filter
 	// Raw probe normal -> FILTERED NORMAL (sync state). This is the movement plane: velocity, input mapping, adhesion
 	// and next substep's probe directions use it. The capsule rotation then chases it (see Orientation).

@@ -13,6 +13,9 @@ public class GASP_Giustino2 : ModuleRules
 		// GAS + Network Prediction (GAS-NPP fork) test harness
 		PrivateDependencyModuleNames.AddRange(new string[] { "GameplayTasks", "NetworkPrediction", "EnhancedInput", "Json" });
 
+		// Traversal surface data contract: the wall surface filter resolves the surface of a hit (traversal-surfaces.md section 5.2)
+		PrivateDependencyModuleNames.Add("GSTNSurfaceCore");
+
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 		

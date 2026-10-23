@@ -577,6 +577,7 @@ FGSTN_WallCheckSettings UGSTN_WallMovementModeBase::GetWallCheckSettings() const
 	Settings.MaxConvexAngle = MaxConvexAngle;
 	Settings.LookaheadTime = LookaheadTime;
 	Settings.MinLookaheadDistance = MinLookaheadDistance;
+	Settings.SurfaceFilter = SurfaceFilter;
 	Settings.bDrawDebug = bDrawDebug;
 	return Settings;
 }
