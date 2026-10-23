@@ -212,4 +212,51 @@ bool FGSTN_GravityPhasesFollowLocalGravityTest::RunTest(const FString& Parameter
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_JumpTerminalFallSpeedTest, "GSTNCombat.Core.Jump.TerminalFallSpeed", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_JumpTerminalFallSpeedTest::RunTest(const FString& Parameters)
+{
+	const double G = 980.0, Dt = 1.0 / 60.0;
+	FGSTN_JumpParams Params;
+	Params.MaxFallSpeed = 1500.f;
+	Params.FastFallSpeed = 2200.f;
+
+	// Falls under the scale of the state until the terminal speed, and stays on it: reached exactly, never passed
+	auto Fall = [&](const FGSTN_JumpState& State, int32 Frames)
+	{
+		double Down = 0.0, Peak = 0.0;
+		for (int32 Frame = 0; Frame < Frames; ++Frame)
+		{
+			Down += G * FGSTN_JumpLogic::LimitedGravityScale(State, Params, Down, G, Dt) * Dt;
+			Peak = FMath::Max(Peak, Down);
+		}
+		return TPair<double, double>(Down, Peak);
+	};
+
+	FGSTN_JumpState Falling;
+	Falling.Phase = EGSTN_JumpPhase::Falling;
+	const TPair<double, double> Plain = Fall(Falling, 600);
+	TestTrue(TEXT("a plain fall ends on MaxFallSpeed and never passes it"), FMath::IsNearlyEqual(Plain.Key, 1500.0, 0.01) && Plain.Value <= 1500.0 + 0.01);
+
+	FGSTN_JumpState Fast = Falling;
+	Fast.bFastFalling = true;
+	const TPair<double, double> FastFall = Fall(Fast, 600);
+	TestTrue(TEXT("a fast fall ends on FastFallSpeed and never passes it"), FMath::IsNearlyEqual(FastFall.Key, 2200.0, 0.01) && FastFall.Value <= 2200.0 + 0.01);
+
+	TestEqual(TEXT("far from the cap the scale is the plain gravity scale"), FGSTN_JumpLogic::LimitedGravityScale(Falling, Params, 100.0, G, Dt), FGSTN_JumpLogic::GravityScale(Falling, Params));
+	TestEqual(TEXT("a speed already past the cap is kept: no gravity"), FGSTN_JumpLogic::LimitedGravityScale(Falling, Params, 1800.0, G, Dt), 0.f);
+
+	Params.MaxFallSpeed = 0.f;
+	TestEqual(TEXT("0 = no limit"), FGSTN_JumpLogic::LimitedGravityScale(Falling, Params, 5000.0, G, Dt), FGSTN_JumpLogic::GravityScale(Falling, Params));
+
+	// The same under another gravity magnitude and step: the cap is a speed, not a frame count
+	Params.MaxFallSpeed = 900.f;
+	double Down = 0.0;
+	for (int32 Frame = 0; Frame < 600; ++Frame)
+	{
+		Down += 2000.0 * FGSTN_JumpLogic::LimitedGravityScale(Falling, Params, Down, 2000.0, 1.0 / 30.0) * (1.0 / 30.0);
+	}
+	TestTrue(TEXT("with another gravity and step it ends on the cap"), FMath::IsNearlyEqual(Down, 900.0, 0.01));
+	return true;
+}
+
 #endif

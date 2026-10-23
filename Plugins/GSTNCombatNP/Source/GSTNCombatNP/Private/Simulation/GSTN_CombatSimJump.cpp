@@ -42,6 +42,8 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 	OutParams.CutGravityScale = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetJumpCutGravityScaleAttribute(), bFound);
 	OutParams.FallGravityScale = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetFallGravityScaleAttribute(), bFound);
 	OutParams.FastFallGravityScale = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetFastFallGravityScaleAttribute(), bFound);
+	OutParams.MaxFallSpeed = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetMaxFallSpeedAttribute(), bFound);
+	OutParams.FastFallSpeed = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetFastFallSpeedAttribute(), bFound);
 	OutParams.MinHoldFrames = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetMinJumpHoldFramesAttribute(), bFound));
 	OutParams.MaxHoldFrames = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetMaxJumpHoldFramesAttribute(), bFound));
 	OutParams.AirJumpCount = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetAirJumpCountAttribute(), bFound));
@@ -120,7 +122,7 @@ bool UGSTN_CombatSimComponent::ReadJumpState(FGSTN_JumpState& OutState) const
 	return true;
 }
 
-void UGSTN_CombatSimComponent::ApplyJumpGravity(UMoverComponent& MoverComp)
+void UGSTN_CombatSimComponent::ApplyJumpGravity(UMoverComponent& MoverComp, double DeltaSeconds)
 {
 	FGSTN_JumpParams Params;
 	FGSTN_JumpState State;
@@ -129,8 +131,13 @@ void UGSTN_CombatSimComponent::ApplyJumpGravity(UMoverComponent& MoverComp)
 		return;
 	}
 
+	// The terminal speed lowers the scale on the step that would pass it: from the velocity Mover holds at the start of the step and the
+	// authored gravity (the base the phases scale), so it is the same on every machine and in every re-simulation
+	const FVector CurrentGravity = MoverComp.GetGravityAcceleration();
+	const FVector AuthoredGravity = GravityBase.bValid ? GravityBase.Base : CurrentGravity;
+	const double DownSpeed = AuthoredGravity.IsNearlyZero() ? 0.0 : MoverComp.GetVelocity().Dot(AuthoredGravity.GetSafeNormal());
 	bool bWrite = false;
-	const FVector Gravity = FGSTN_GravityPhases::Resolve(GravityBase, MoverComp.GetGravityAcceleration(), FGSTN_JumpLogic::GravityScale(State, Params), bWrite);
+	const FVector Gravity = FGSTN_GravityPhases::Resolve(GravityBase, CurrentGravity, FGSTN_JumpLogic::LimitedGravityScale(State, Params, DownSpeed, AuthoredGravity.Size(), DeltaSeconds), bWrite);
 	if (bWrite)
 	{
 		MoverComp.SetGravityOverride(true, Gravity);

@@ -88,6 +88,10 @@ struct GSTNCOMBATCORE_API FGSTN_JumpParams
 	int32 MaxHoldFrames = 12;
 	int32 AirJumpCount = 1;
 
+	/** Terminal speeds along local down in cm/s (<= 0 = no limit): MaxFallSpeed for a plain fall, FastFallSpeed while fast falling. See FGSTN_JumpLogic::LimitedGravityScale */
+	float MaxFallSpeed = 0.f;
+	float FastFallSpeed = 0.f;
+
 	/** Frames after leaving the ground in which a ground jump is still allowed (0 = none) */
 	int32 CoyoteFrames = 4;
 };

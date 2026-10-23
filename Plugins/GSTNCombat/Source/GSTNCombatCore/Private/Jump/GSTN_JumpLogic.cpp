@@ -151,6 +151,23 @@ float FGSTN_JumpLogic::GravityScale(const FGSTN_JumpState& State, const FGSTN_Ju
 	}
 }
 
+float FGSTN_JumpLogic::LimitedGravityScale(const FGSTN_JumpState& State, const FGSTN_JumpParams& Params, double DownSpeed, double GravityMagnitude, double DeltaSeconds)
+{
+	const float Scale = GravityScale(State, Params);
+	const float Cap = State.bFastFalling ? Params.FastFallSpeed : Params.MaxFallSpeed;
+	const double Step = GravityMagnitude * Scale * DeltaSeconds;
+	if (Cap <= 0.f || Step <= 0.0)
+	{
+		return Scale;
+	}
+	const double Headroom = Cap - DownSpeed;
+	if (Headroom <= 0.0)
+	{
+		return 0.f;
+	}
+	return Headroom >= Step ? Scale : static_cast<float>(Scale * Headroom / Step);
+}
+
 FGSTN_JumpApex FGSTN_JumpLogic::SimulateApex(const FVector& GravityDir, double GravityMagnitude, double JumpSpeed, int32 HoldFrames, const FGSTN_JumpParams& Params, double DeltaTime)
 {
 	const FVector Down = GravityDir.GetSafeNormal();

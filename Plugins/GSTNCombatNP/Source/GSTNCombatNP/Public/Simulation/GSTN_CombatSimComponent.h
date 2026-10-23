@@ -154,7 +154,7 @@ public:
 	 * simulated (hold, cut, fall, fast fall), along the local gravity whatever its direction. Called by the stats movement modifier
 	 * from OnPreMovement, i.e. on every simulated substep. A pawn without the combat stats, or that never leaves scale 1, is left alone
 	 */
-	void ApplyJumpGravity(UMoverComponent& MoverComp);
+	void ApplyJumpGravity(UMoverComponent& MoverComp, double DeltaSeconds);
 
 	/** Latest simulated (or interpolated) combat state */
 	const FGSTN_CombatSyncState* GetSyncState() const;
