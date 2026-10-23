@@ -13,9 +13,11 @@
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_InputSimulator.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Timeline/GSTN_TimelinePlayer.h"
 #include "GSTN_CombatSimComponent.generated.h"
 
 class UGSTN_CommandBindingSet;
+class UGSTN_GA_BaseCombat;
 class UGSTN_InputConfig;
 class UGSTN_InputContextProvider;
 class UNpAbilitySystemComponent;
@@ -74,6 +76,7 @@ public:
 	virtual uint8 GetContextFingerprint() const override;
 	virtual void AppendFrameEvents(uint8 PreviousFingerprint, uint8 CurrentFingerprint, FGSTN_BufferFrameEvents& Events) const override;
 	virtual bool CanExecuteBinding(int32 BindingIndex) const override;
+	virtual bool IsCommandAllowed(int32 CommandIndex) const override;
 
 	// IGSTN_CommandSourceInterface. Read the sync state the simulation is on, so call them from ActivateAbility or an ability's tick
 	UFUNCTION(BlueprintPure, Category = "Combat|Input")
@@ -108,6 +111,15 @@ public:
 	/** Whether the combat state of the frame being simulated says a timeline is running (EGSTN_ActionState::InTimeline). Simulation read, like GetCombatClock */
 	UFUNCTION(BlueprintPure, Category = "Combat|Clock")
 	bool IsInTimeline() const;
+
+	/** The simulation frame the combat state is on (the latest frame of the input history), INDEX_NONE before the first. Simulation read, like GetCombatClock */
+	int32 GetSimulationFrame() const;
+
+	/**
+	 * Whether the combat state of the frame being simulated says a timeline of exactly this ability class is running, and the
+	 * frame it started on (the ability compares it with the one it started on to notice a replacement by the same class)
+	 */
+	bool IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame) const;
 
 	/**
 	 * The camera aim of the command of the frame being simulated (UGSTN_InputConfig::bSendCameraAim, combat-m3 7.10): control
@@ -190,6 +202,27 @@ private:
 	// Compiled from the assets once: read-only while simulating, so neither is rolled back
 	FGSTN_CommandTable CommandTable;
 	FGSTN_ButtonMap ButtonMap;
+
+	/**
+	 * The timeline registry (combat-m3 7.1 "index in the timeline registry"): the timeline ability classes of the command table's
+	 * bindings, in binding order, each once. The index is what the combat sync state stores. Built with the table, identical on
+	 * every machine, read-only while simulating. BindingTimeline[b] is the registry index of binding b (INDEX_NONE for a plain
+	 * ability) and TimelineTier[r] the priority tier of the first command bound to entry r (the running tier of the override rule)
+	 */
+	UPROPERTY(Transient)
+	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> TimelineRegistry;
+	TArray<int16> BindingTimeline;
+	TArray<int32> TimelineTier;
+	TArray<int32> TimelineDefaultOverride;
+
+	/** The frame data of registry entry Index (its class default), null if the index is not one */
+	const FGSTN_CombatTimelineData* GetRegistryTimeline(int32 Index) const;
+
+	/** Scratch of the combat tick, reused every frame (no allocation); the evaluation of the frame the gate and the commit read */
+	FGSTN_TimelineOutput TimelineOutput;
+
+	/** The state the gate (IsCommandAllowed) reads: set at the top of the combat tick, valid only inside it */
+	const FGSTN_CombatSyncCore* GateCore = nullptr;
 
 	// The assets InputConfig / SlotBindings resolved to at setup, strongly held because the table points into them and the
 	// input source reads the config every frame. Never resolved in a tick

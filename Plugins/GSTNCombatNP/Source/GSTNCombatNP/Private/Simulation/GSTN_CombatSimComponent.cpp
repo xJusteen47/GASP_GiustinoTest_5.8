@@ -18,7 +18,10 @@
 #include "NetworkPredictionProxyInit.h"
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
+#include "Abilities/GSTN_GA_BaseCombat.h"
+#include "Input/GSTN_CombatSettings.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
+#include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Simulation/GSTN_InputHostUtils.h"
 #include "Sources/GSTN_InputSource.h"
 
@@ -109,6 +112,40 @@ void UGSTN_CombatSimComponent::CompileInput()
 		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no slot bindings, no command starts an ability"), *GetPathName());
 	}
 
+	// The timeline registry: the timeline abilities of the bindings, in binding order, each once (the index the sync state stores)
+	TimelineRegistry.Reset();
+	BindingTimeline.Reset();
+	TimelineTier.Reset();
+	TimelineDefaultOverride.Reset();
+	const UGSTN_InputSettings& InputSettings = UGSTN_InputSettings::Get();
+	for (const FGSTN_CompiledBinding& Binding : CommandTable.Bindings)
+	{
+		const TSubclassOf<UGSTN_GA_BaseCombat> TimelineClass = Binding.Ability.Get() && Binding.Ability->IsChildOf(UGSTN_GA_BaseCombat::StaticClass())
+			? TSubclassOf<UGSTN_GA_BaseCombat>(Binding.Ability.Get()) : nullptr;
+		int32 Index = INDEX_NONE;
+		if (TimelineClass)
+		{
+			Index = TimelineRegistry.IndexOfByKey(TimelineClass);
+			if (Index == INDEX_NONE)
+			{
+				Index = TimelineRegistry.Add(TimelineClass);
+				const int32 Tier = CommandTable.Commands.IsValidIndex(Binding.CommandIndex) ? InputSettings.GetCommandTier(CommandTable.Commands[Binding.CommandIndex].Tag) : 0;
+				TimelineTier.Add(Tier);
+				TimelineDefaultOverride.Add(UGSTN_CombatSettings::Get().GetDefaultOverrideFrames(Tier));
+
+				// Soft content the timeline needs in memory before its first frame, loaded here and never in a tick
+				UGSTN_GA_BaseCombat* Default = TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>();
+				Default->PreloadTimelineContent();
+			}
+		}
+		BindingTimeline.Add(static_cast<int16>(Index));
+	}
+	// Reserve for the largest timeline, so no frame allocates (the output keeps its capacity)
+	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : TimelineRegistry)
+	{
+		TimelineOutput.Reserve(TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData());
+	}
+
 	if (InputSource && !Cast<IGSTN_InputSource>(InputSource.Get()))
 	{
 		UE_LOG(LogGSTNCombatSim, Error, TEXT("%s: the input source %s does not implement IGSTN_InputSource"), *GetPathName(), *InputSource->GetName());
@@ -166,6 +203,41 @@ bool UGSTN_CombatSimComponent::ServerWriteLoadoutRevision(uint16 Revision)
 	{
 		Sync.Core.LoadoutRevision = Revision;
 	}, "LoadoutRevision") != nullptr;
+}
+
+const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::GetRegistryTimeline(int32 Index) const
+{
+	return TimelineRegistry.IsValidIndex(Index) && TimelineRegistry[Index] ? &TimelineRegistry[Index]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData() : nullptr;
+}
+
+int32 UGSTN_CombatSimComponent::GetSimulationFrame() const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync ? Sync->Core.Input.History.GetLatestFrame() : INDEX_NONE;
+}
+
+bool UGSTN_CombatSimComponent::IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline || !TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
+	{
+		return false;
+	}
+	OutStartFrame = Sync->Core.TimelineStartFrame;
+	return TimelineRegistry[Sync->Core.ActiveTimeline] == AbilityClass;
+}
+
+bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
+{
+	// Outside the combat tick (or with no timeline running) nothing gates: only a running timeline closes commands
+	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !CommandTable.Commands.IsValidIndex(CommandIndex))
+	{
+		return true;
+	}
+	const FGameplayTag& Command = CommandTable.Commands[CommandIndex].Tag;
+	const int32 Running = GateCore->ActiveTimeline;
+	return FGSTN_CombatTimelineLogic::IsCommandAllowed(*GateCore, GetRegistryTimeline(Running), TimelineOutput, Command,
+		UGSTN_InputSettings::Get().GetCommandTier(Command), TimelineTier.IsValidIndex(Running) ? TimelineTier[Running] : 0);
 }
 
 int32 UGSTN_CombatSimComponent::GetCombatClock() const
@@ -289,6 +361,24 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	FrameAim.Yaw = Input.Cmd->AimYaw;
 	FrameAim.Pitch = Input.Cmd->AimPitch;
 
+	// Requests older than this frame are dead (the ability system executed them in their own frame's pre-tick)
+	OutSync.Core.Requests.PruneBefore(Frame);
+
+	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
+	{
+		const int32 Running = OutSync.Core.ActiveTimeline;
+		bool bAbilityActive = true;
+		if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline && AbilitySystem && TimelineRegistry.IsValidIndex(Running))
+		{
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Running]);
+			bAbilityActive = Spec && Spec->IsActive();
+		}
+		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(Running),
+			TimelineDefaultOverride.IsValidIndex(Running) ? TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput);
+	}
+	// The gate the input simulation asks (IsCommandAllowed) reads the state this frame is writing
+	GateCore = &OutSync.Core;
+
 	// Extension hooks at the fixed points of the tick. With nothing registered every call is an empty loop
 	FGSTN_CombatTickContext HookContext(Frame, InSync, OutSync);
 	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
@@ -308,6 +398,19 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Args.PausedEnd = InSync.Core.HitstopEndFrame;
 	Args.Outbox = &EventOutbox;
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
+	GateCore = nullptr;
+
+	// Step 8: a command that started a timeline ability replaces the running timeline (if any) and begins its own. The ability
+	// itself is activated by the input request of this frame, from the ability system's pre-tick
+	if (Result.HasRequest() && BindingTimeline.IsValidIndex(Result.BindingIndex) && BindingTimeline[Result.BindingIndex] != INDEX_NONE)
+	{
+		const int32 Entry = BindingTimeline[Result.BindingIndex];
+		FGSTN_CombatTimelineLogic::Start(OutSync.Core, Frame, Entry, Input.Cmd->ForcedCommand != 0 ? EGSTN_ActivationSource::Forced : EGSTN_ActivationSource::Command);
+		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Entry))
+		{
+			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, TimelineDefaultOverride[Entry], TimelineOutput);
+		}
+	}
 	Extensions.Run(EGSTN_CombatHookPoint::AfterExecute, HookContext);
 
 	// Debug hitstop, until hits replace it: a press of the test button opens a window (not while one is already open)
@@ -365,8 +468,35 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 
 	const int32 Frame = TimeStep.ServerFrame;
 
+	// A timeline replaced or cancelled this frame ends first, so its ability is gone before the replacing one starts
+	if (const FGSTN_CombatRequest* Cancel = Sync->Core.Requests.Find(EGSTN_RequestType::CancelTimeline, Frame))
+	{
+		if (TimelineRegistry.IsValidIndex(Cancel->Arg))
+		{
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Cancel->Arg]);
+			if (Spec && Spec->IsActive())
+			{
+				AbilitySystem->CancelAbilityHandle(Spec->Handle);
+			}
+		}
+	}
+
 	// A request made on this frame starts its ability here, inside the ability system's tick
 	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, CommandTable, Sync->Core.Input, Frame);
+
+	// The cost of a timeline commits when its startup override window ends: the ability is committed from here, so a timeline
+	// that was replaced inside the window never paid
+	if (const FGSTN_CombatRequest* Commit = Sync->Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame))
+	{
+		if (TimelineRegistry.IsValidIndex(Commit->Arg))
+		{
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Commit->Arg]);
+			if (UGameplayAbility* Instance = Spec && Spec->IsActive() ? Spec->GetPrimaryInstance() : nullptr)
+			{
+				Instance->CommitAbility(Spec->Handle, AbilitySystem->AbilityActorInfo.Get(), Instance->GetCurrentActivationInfo());
+			}
+		}
+	}
 
 	// Paused on every hitstop frame with a montage (also one started during the hitstop), resumed on the first frame after.
 	// The pause flag only exists with a montage: it is not replicated otherwise

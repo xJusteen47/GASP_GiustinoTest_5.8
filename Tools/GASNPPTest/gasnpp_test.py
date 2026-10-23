@@ -1128,6 +1128,49 @@ def scenario_camera_aim(client=1, yaw=123.0, pitch=-20.0, stance_button='Special
     run.run(steps)
 
 
+def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Special'):
+    """C10 timeline abilities (combat-m3 7.2, 8.3) on UGSTN_GA_TestAttack, a UGSTN_GA_BaseCombat of 20 frames (0.32 s), startup override
+    window of 6 frames, cancel window [6, 14) into Command.Special, free from frame 14, and the stance (Special, a higher tier).
+    Strict, on the server and the predicting client, three cases 1.5 s apart:
+      0.5s  startup override: attack tap, then the stance held 0.03 s later (inside the 6 frame window) -> the stance starts and the
+            attack timeline is REPLACED (Attacking gone long before its 0.32 s)
+      2.0s  cancel window: attack tap, stance held 0.17 s later (after the window of frame 6, inside [6, 14)) -> the stance starts and
+            the attack ends before its natural end
+      3.5s  not cancellable: attack tap, a second attack tap 0.1 s later (same tier, before the first actionable frame) -> still ONE
+            request in the first 0.2 s and Attacking continuous to the end
+    Also: no unexplained reconciles."""
+    _require_test_config(client)
+    attack, stance = button_mask(attack_button), button_mask(stance_button)
+    run = _Run('timeline_cancel', client)
+
+    def srv_cli(label, fn):
+        return run.at(label, lambda: (fn('srv') and fn('cli'), ''))
+
+    steps = [
+        # case 1: startup override
+        (0.5, lambda: ('attack', combat_tap(client, attack))),
+        (0.53, lambda: ('stance held (inside the override window)', combat_hold(client, stance))),
+        (0.9, lambda: ('release', combat_clear(client))),
+        (1.1, srv_cli('override: attack started', lambda s: run.saw_tag(TAG_ATTACKING, 0.5, 0.56, s))),
+        (1.1, srv_cli('override: the stance replaced it', lambda s: run.saw_tag(TAG_STANCE, 0.53, 0.9, s))),
+        (1.1, srv_cli('override: the replaced attack ended early', lambda s: not run.saw_tag(TAG_ATTACKING, 0.7, 0.9, s))),
+        # case 2: cancel window
+        (2.0, lambda: ('attack', combat_tap(client, attack))),
+        (2.17, lambda: ('stance held (inside the cancel window)', combat_hold(client, stance))),
+        (2.6, lambda: ('release', combat_clear(client))),
+        (2.8, srv_cli('cancel window: attack started', lambda s: run.saw_tag(TAG_ATTACKING, 2.0, 2.1, s))),
+        (2.8, srv_cli('cancel window: the stance started', lambda s: run.saw_tag(TAG_STANCE, 2.17, 2.6, s))),
+        (2.8, srv_cli('cancel window: the attack ended before its natural end', lambda s: not run.saw_tag(TAG_ATTACKING, 2.28, 2.6, s))),
+        # case 3: not cancellable by the same tier
+        (3.5, lambda: ('attack', combat_tap(client, attack))),
+        (3.6, lambda: ('second attack (same tier, before the first actionable frame)', combat_tap(client, attack))),
+        (4.4, run.at('no cancel: one request in the first 0.2 s', lambda: (len(run.new_bindings(3.5, 3.7)) == 1, f'requests {run.new_bindings(3.5, 3.7)}'))),
+        (4.4, srv_cli('no cancel: Attacking continuous to the natural end', lambda s: run.held_tag(TAG_ATTACKING, 3.55, 3.76, s))),
+        (4.5, run.finish()),
+    ]
+    run.run(steps)
+
+
 def _set_pitch_yaw(client_index, pitch, yaw):
     pc, _ = _local_pawn(client_index)
     pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=pitch, yaw=yaw))

@@ -1,6 +1,7 @@
 // GAS + NPP + Mover network test harness.
 
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
+#include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatLockTags.h"
 #include "NativeGameplayTags.h"
 #include "GameFramework/Actor.h"
@@ -20,36 +21,17 @@ UGSTN_GA_TestAttack::UGSTN_GA_TestAttack(const FObjectInitializer& ObjectInitial
 	: Super(ObjectInitializer)
 {
 	ActivationOwnedTags.AddTag(TAG_Test_State_Attacking);
-}
 
-void UGSTN_GA_TestAttack::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
-	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
-{
-	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+	// 20 frames, free from 14, a 6 frame startup override window and a cancel window [6, 14) into the special commands
+	Timeline.TotalFrames = 20;
+	Timeline.FirstActionableFrame = 14;
+	Timeline.OverrideFrames = 6;
 
-	// Instanced per actor: sync vars keep their value between activations
-	FramesSinceActivation.Value = 0;
-
-	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
-	{
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-	}
-}
-
-void UGSTN_GA_TestAttack::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep)
-{
-	Super::OnSimulationTick(TimeStep);
-
-	if (!IsActive())
-	{
-		return;
-	}
-
-	++FramesSinceActivation.Value;
-	if (FramesSinceActivation.Value >= ActiveFrames)
-	{
-		EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, false);
-	}
+	FGSTN_TimelineTrack_CancelWindow Window;
+	Window.StartFrame = 6;
+	Window.EndFrame = 14;
+	Window.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCommandTags::Special));
+	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Window));
 }
 
 UGSTN_GA_TestStance::UGSTN_GA_TestStance(const FObjectInitializer& ObjectInitializer)

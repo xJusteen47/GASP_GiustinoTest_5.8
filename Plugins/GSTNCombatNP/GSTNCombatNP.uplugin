@@ -27,6 +27,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNInputNP",
 			"Enabled": true
 		},
