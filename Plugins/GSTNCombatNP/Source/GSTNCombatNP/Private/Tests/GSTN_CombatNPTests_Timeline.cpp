@@ -244,4 +244,53 @@ bool FGSTN_NPTimelineTailTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTimelineAdoptTest, "GSTNCombat.NP.Timeline.Adopt", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPTimelineAdoptTest::RunTest(const FString& Parameters)
+{
+	// Nobody waits: nothing happens
+	FGSTN_CombatSyncCore Idle;
+	TestEqual(TEXT("an empty list adopts nothing"), FGSTN_CombatTimelineLogic::Adopt(Idle, 50, TConstArrayView<int32>()), static_cast<int32>(INDEX_NONE));
+	TestTrue(TEXT("and leaves the state alone"), Idle.ActionState == EGSTN_ActionState::Actionable && Idle.Requests.IsEmpty());
+
+	// The first in registry order wins, with source Adopted and no ActivateEntry; the others are cancelled
+	FGSTN_CombatSyncCore Core;
+	const int32 Waiting[] = { 2, 5, 6 };
+	TestEqual(TEXT("the first waiting entry is adopted"), FGSTN_CombatTimelineLogic::Adopt(Core, 50, Waiting), 2);
+	TestTrue(TEXT("in a timeline"), Core.ActionState == EGSTN_ActionState::InTimeline);
+	TestEqual(TEXT("of that entry"), static_cast<int32>(Core.ActiveTimeline), 2);
+	TestEqual(TEXT("from this frame"), Core.TimelineStartFrame, 50);
+	TestTrue(TEXT("with source Adopted"), Core.ActiveSource == EGSTN_ActivationSource::Adopted);
+	TestTrue(TEXT("no entry is activated: the ability is active already"), !Core.Requests.Find(EGSTN_RequestType::ActivateEntry, 50));
+	const FGSTN_CombatRequest* CancelFive = Core.Requests.Find(EGSTN_RequestType::CancelAbility, 50);
+	TestTrue(TEXT("the losers are cancelled"), CancelFive && CancelFive->Arg == 5);
+	int32 Cancels = 0;
+	for (const FGSTN_CombatRequest& Slot : Core.Requests.Slots)
+	{
+		Cancels += (Slot.Type == EGSTN_RequestType::CancelAbility && Slot.Frame == 50) ? 1 : 0;
+	}
+	TestEqual(TEXT("two of them"), Cancels, 2);
+
+	// A timeline that still runs is cancelled first: the newcomer was allowed to activate, so it wins
+	FGSTN_CombatSyncCore Busy = MakeRunning(40, 1);
+	Busy.Requests.PruneBefore(50);
+	const int32 One[] = { 4 };
+	FGSTN_CombatTimelineLogic::Adopt(Busy, 50, One);
+	const FGSTN_CombatRequest* CancelOld = Busy.Requests.Find(EGSTN_RequestType::CancelTimeline, 50);
+	TestTrue(TEXT("the running timeline is cancelled"), CancelOld && CancelOld->Arg == 1);
+	TestEqual(TEXT("and the newcomer runs"), static_cast<int32>(Busy.ActiveTimeline), 4);
+
+	// Deterministic: the same inputs give an equal state (a re-simulation of the adoption frame writes what the first run wrote)
+	FGSTN_CombatSyncCore Again;
+	FGSTN_CombatTimelineLogic::Adopt(Again, 50, Waiting);
+	TestFalse(TEXT("re-adopting the same frame gives an equal state"), Again.ShouldReconcile(Core));
+
+	// And the adopted timeline commits like any other: no override window (tier none), so on its first frame
+	FGSTN_CombatTimelineData Data = MakeTimeline(0);
+	FGSTN_TimelineOutput Output;
+	Output.Reserve(Data);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Core, 50, Data, 0, Output);
+	TestTrue(TEXT("the cost commits on the adoption frame"), Core.Requests.Find(EGSTN_RequestType::CommitTimeline, 50) != nullptr);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

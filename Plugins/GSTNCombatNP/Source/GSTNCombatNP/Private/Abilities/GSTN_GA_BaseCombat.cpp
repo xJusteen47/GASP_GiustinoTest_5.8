@@ -26,6 +26,8 @@ UGSTN_GA_BaseCombat::UGSTN_GA_BaseCombat(const FObjectInitializer& ObjectInitial
 	bStarted.Value = 0;
 	StartClock.Value = INDEX_NONE;
 	StartFrame.Value = INDEX_NONE;
+	bAwaitingAdoption.Value = 0;
+	AwaitSinceFrame.Value = INDEX_NONE;
 }
 
 const FGSTN_CombatTimelineData& UGSTN_GA_BaseCombat::GetTimelineData() const
@@ -70,27 +72,47 @@ bool UGSTN_GA_BaseCombat::IsStillTheRunningTimeline() const
 void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
+	// A retrigger of an instance that still waits: its tag goes before the variables are rewritten
+	ClearAwaitingAdoption();
+
 	// Captures the activation context and applies the interrupt policy
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
 	bStarted.Value = 0;
 	StartClock.Value = INDEX_NONE;
 	StartFrame.Value = INDEX_NONE;
+	AwaitSinceFrame.Value = INDEX_NONE;
 
-	// The combat tick wrote this timeline's start into its state in this frame, before the ability system ticked
 	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
-	int32 StateStart = INDEX_NONE;
-	if (!Combat || !Combat->IsTimelineRunning(GetClass(), StateStart) || StateStart != Combat->GetSimulationFrame())
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	if (!Combat || !AbilitySystem)
 	{
-		UE_LOG(LogGSTNBaseCombat, Log, TEXT("%s: activated without a timeline start in the combat state (a command starts a timeline ability): ended. Combat component %d, running %d with start %d, simulation frame %d, command activation %d"),
-			*GetName(), Combat != nullptr, Combat && Combat->IsTimelineRunning(GetClass(), StateStart), StateStart, Combat ? Combat->GetSimulationFrame() : INDEX_NONE, FGSTN_InputHostUtils::IsCommandActivation());
+		UE_LOG(LogGSTNBaseCombat, Log, TEXT("%s: no combat component or ability system on the avatar: ended"), *GetName());
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
 
+	// A command: the combat tick wrote this timeline's start into its state in this frame, before the ability system ticked
+	int32 StateStart = INDEX_NONE;
+	if (Combat->IsTimelineRunning(GetClass(), StateStart) && StateStart == Combat->GetSimulationFrame())
+	{
+		BeginTimeline(StateStart);
+		return;
+	}
+
+	// Anything else (a trigger, an effect, another ability, AI): wait for the combat tick of the next frame to adopt this
+	// activation (combat-m3 7.4). The loose tag is what lets that tick skip the scan on every frame nothing waits
+	bAwaitingAdoption.Value = 1;
+	AwaitSinceFrame.Value = Combat->GetSimulationFrame();
+	AbilitySystem->AddLooseGameplayTag(GSTNCombatTags::Ability_AwaitingAdoption);
+}
+
+void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
+{
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
 	bStarted.Value = 1;
 	StartFrame.Value = StateStart;
-	StartClock.Value = Combat->GetCombatClock();
+	StartClock.Value = Combat ? Combat->GetCombatClock() : INDEX_NONE;
 
 	const FGSTN_CombatTimelineData& Data = GetTimelineData();
 	UAnimMontage* Montage = Data.Montage.Get();
@@ -101,11 +123,49 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	}
 }
 
+void UGSTN_GA_BaseCombat::ClearAwaitingAdoption()
+{
+	if (bAwaitingAdoption.Value != 0)
+	{
+		bAwaitingAdoption.Value = 0;
+		if (UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent())
+		{
+			AbilitySystem->RemoveLooseGameplayTag(GSTNCombatTags::Ability_AwaitingAdoption);
+		}
+	}
+}
+
 void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep)
 {
 	Super::OnSimulationTick(TimeStep);
 
-	if (!IsActive() || bStarted.Value == 0)
+	if (!IsActive())
+	{
+		return;
+	}
+
+	if (bAwaitingAdoption.Value != 0)
+	{
+		const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+		const int32 Frame = Combat ? Combat->GetSimulationFrame() : INDEX_NONE;
+		int32 StateStart = INDEX_NONE;
+		if (Combat && Combat->IsTimelineRunning(GetClass(), StateStart) && StateStart == Frame)
+		{
+			// The combat tick adopted this activation in this frame: from here it is a timeline like any other
+			ClearAwaitingAdoption();
+			SetActivationSource(EGSTN_ActivationSource::Adopted);
+			BeginTimeline(StateStart);
+		}
+		else if (Frame - AwaitSinceFrame.Value > MaxAdoptionWaitFrames)
+		{
+			// Another ability was adopted in its place, or the combat model does not know this class
+			UE_LOG(LogGSTNBaseCombat, Log, TEXT("%s: not adopted within %d frames (waiting since %d, frame %d): cancelled"), *GetName(), MaxAdoptionWaitFrames, AwaitSinceFrame.Value, Frame);
+			EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, true);
+		}
+		return;
+	}
+
+	if (bStarted.Value == 0)
 	{
 		return;
 	}
@@ -125,6 +185,7 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
+	ClearAwaitingAdoption();
 	if (bStarted.Value != 0)
 	{
 		// Stop the montage only if it is still this ability's: another timeline may have started its own in the same frame

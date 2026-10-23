@@ -171,6 +171,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, Instanced, Category = "Combat|Input")
 	TObjectPtr<UGSTN_InputContextProvider> ContextProvider;
 
+	/**
+	 * Timeline abilities that no command binds but something else starts (a gameplay event or tag trigger, an effect, another
+	 * ability, AI) and that the combat tick adopts (combat-m3 7.4). They join the timeline registry after the bound ones, in
+	 * this order, so the list is part of the sync contract like the bindings: the same on every machine, fixed after BeginPlay
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
+	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> AdoptableTimelines;
+
 	/** Button whose press opens a hitstop window. -1 = none */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "-1", ClampMax = "31"))
 	int32 HitstopTestButton = INDEX_NONE;

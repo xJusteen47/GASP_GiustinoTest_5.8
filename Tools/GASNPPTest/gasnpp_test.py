@@ -1219,6 +1219,92 @@ def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Sp
     run.run(steps)
 
 
+TAG_TRIGGERED, TAG_AWAITING = 'Test.State.Triggered', 'Combat.Ability.AwaitingAdoption'
+
+
+def scenario_triggered_timeline(client=1, resim_frames=15):
+    """C11 adoption (combat-m3 7.4) on UGSTN_GA_TestTriggeredTimeline, a 12 frame timeline ability (0.2 s) that no command starts: the tag
+    raiser probe (a press of the buff button) applies the effect that grants Test.Probe.TagTrigger, the owned-tag trigger activates the
+    ability, it waits with Combat.Ability.AwaitingAdoption and the combat tick adopts it one frame later. Two presses, 2 s apart, the second
+    with a forced reconcile across the activation and adoption frames. Judged on the server's copy and the owner's:
+      - Test.State.Triggered (owned while the adopted timeline runs) shows on both and lasts about the 0.2 s of the timeline
+      - Combat.Ability.AwaitingAdoption never stays: gone on every machine at the end of each press
+      - the authority published exactly one TimelineStarted(Adopted) per press (clients publish nothing), none from a command
+      - nothing of the ability is left active anywhere
+    Also: no unexplained reconciles."""
+    # The cleanup revokes the probe abilities on the server only, which makes the owner reconcile on purpose: judge the window before it
+    run = _Run('triggered_timeline', client, judge_reconciles=False)
+    key = run.key
+    st, marks = {}, {}
+
+    def no_unexplained():
+        r = report_reconciles(marks['start']) if marks.get('start') is not None else None
+        if r is None:
+            return False, 'the log was not readable'
+        return r['unexplained_ours'] == 0, f"{r['unexplained_ours']} unexplained {r['unexplained_by_model']} {r['unexplained_lines']}, forced={r['forced']}"
+
+    def regrant():
+        _srv(key).server_revoke_probes()
+        st['granted'] = [_srv(key).server_grant_probe(n) for n in ('TimelineTarget', 'TagRaiser')]
+        return st['granted']
+
+    def specs_equal():
+        s, o = (_view(0, key) or {}).get('probe', {}).get('specs'), (_view(client, key) or {}).get('probe', {}).get('specs')
+        return s is not None and s == o, f'activatable specs: server {s}, owner {o}'
+
+    def started(n_adopted):
+        def f():
+            counts = (((_view(0, key) or {}).get('combat') or {}).get('timelineStarted')) or {}
+            return counts.get('adopted', 0) == n_adopted and not counts.get('command', 0) and not counts.get('forced', 0), f'TimelineStarted published by the authority: {counts}'
+        return f
+
+    def span(t0, t1):
+        def f():
+            out, ok = [], True
+            for side in ('srv', 'cli'):
+                s = _tag_span(run, side, TAG_TRIGGERED, t0, t1)
+                if s is None:
+                    return False, f'{side}: {TAG_TRIGGERED} never seen'
+                dur = s[1] - s[0] + 0.04
+                ok = ok and 0.1 <= dur <= 0.45
+                out.append(f'{side} {dur:.2f}s')
+            return ok, ', '.join(out) + ' (want 0.1..0.45, the timeline is 0.2 s)'
+        return f
+
+    def clean():
+        bad = []
+        for i in range(len(worlds())):
+            v = _view(i, key) or {}
+            if TAG_AWAITING in v.get('tags', []):
+                bad.append(f'w{i} still has {TAG_AWAITING}')
+            if TAG_TRIGGERED in v.get('tags', []):
+                bad.append(f'w{i} still has {TAG_TRIGGERED}')
+            if 'GSTN_GA_TestTriggeredTimeline' in ((v.get('probe') or {}).get('activeAbilities') or []):
+                bad.append(f'w{i} still has the ability active')
+        return not bad, '; '.join(bad) or 'no waiting tag, no timeline tag, no active ability on any machine'
+
+    steps = [
+        (0.0, _mark(run, marks, 'start')),
+        (0.1, lambda: ('grant', regrant())),
+        (0.2, run.at('probes granted', lambda: (all(st['granted']), f"{st['granted']}"))),
+        (2.5, run.at('the owner has the granted specs', specs_equal)),
+        (2.6, lambda: ('reset counters', [c.reset_probe_counters() for w in worlds() for c in [comps(w).get(key)] if c is not None] and 'reset')),
+        (3.0, lambda: ('press 1', press(client, 'buff'))),
+        (4.4, run.at('press 1: the adopted timeline ran on the server and the owner', span(3.0, 4.4))),
+        (4.4, run.at('press 1: exactly one TimelineStarted(Adopted)', started(1))),
+        (4.4, run.at('press 1: nothing left over', clean)),
+        (5.5, lambda: ('press 2', press(client, 'buff'))),
+        (5.6, lambda: ('force reconcile across the adoption', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
+        (7.0, run.at('press 2: the adopted timeline ran on the server and the owner', span(5.5, 7.0))),
+        (7.0, run.at('press 2: exactly one more TimelineStarted(Adopted), none re-published by the resimulation', started(2))),
+        (7.0, run.at('press 2: nothing left over', clean)),
+        (7.05, run.at('no unexplained reconciles (before the cleanup)', no_unexplained)),
+        (7.1, lambda: ('cleanup', _srv(key).server_revoke_probes())),
+        (7.8, run.finish()),
+    ]
+    run.run(steps)
+
+
 def _set_pitch_yaw(client_index, pitch, yaw):
     pc, _ = _local_pawn(client_index)
     pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=pitch, yaw=yaw))

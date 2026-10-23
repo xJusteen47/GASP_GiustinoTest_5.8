@@ -19,8 +19,12 @@ class UGSTN_CombatTimeline;
  * its end, was replaced by another command, or was cancelled). The cost is committed by the combat tick when the startup override
  * window ends (CommitTimeline request), so a timeline replaced inside the window leaves no trace but its turn.
  *
- * Only a command can start a timeline in this version: an activation the combat state does not show ends at once (adoption of
- * abilities started by triggers or effects comes with combat-m3 7.4). The frame data comes from TimelineAsset when it is set,
+ * Anything that is not a command can start the ability too (a gameplay event or tag trigger, an effect, another ability, AI). It
+ * finds no start in the combat state, so it only marks itself as waiting (the loose tag Combat.Ability.AwaitingAdoption and the sync
+ * variable behind IsAwaitingAdoption) and the combat tick of the next frame adopts it: it writes the timeline state with source
+ * Adopted, and the ability starts in its own tick of that frame (combat-m3 7.4). The class has to be in the component's registry
+ * for that (UGSTN_CombatSimComponent::AdoptableTimelines, or a command binding); an ability the registry does not know is cancelled
+ * after MaxAdoptionWaitFrames. The frame data comes from TimelineAsset when it is set,
  * else from Timeline; both are read from the class default object by the combat component, never from an instance, because the
  * component needs it before the ability runs.
  */
@@ -60,7 +64,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
 	int32 GetTimelineFrame() const;
 
+	/** Frames an activation without a command waits to be adopted before it is cancelled (another ability won the adoption) */
+	static constexpr int32 MaxAdoptionWaitFrames = 2;
+
+	/** True from an activation the combat state did not start until the combat tick adopts it (or it is cancelled). Read by the combat tick through the spec's instance */
+	bool IsAwaitingAdoption() const { return bAwaitingAdoption.Value != 0; }
+
 private:
+	/** Starts the timeline whose start the combat state shows: sync variables, montage */
+	void BeginTimeline(int32 StateStart);
+
+	/** Drops the waiting state and its loose tag, if it holds them */
+	void ClearAwaitingAdoption();
+
 	/** True while the combat state names this ability's class and the start frame it started on */
 	bool IsStillTheRunningTimeline() const;
 
@@ -75,6 +91,14 @@ private:
 	/** Simulation frame the combat state said the timeline started on */
 	UPROPERTY()
 	FSyncInteger StartFrame;
+
+	/** 1 from an activation that waits for adoption until it is adopted, cancelled or ended */
+	UPROPERTY()
+	FSyncInteger bAwaitingAdoption;
+
+	/** Simulation frame the wait began on */
+	UPROPERTY()
+	FSyncInteger AwaitSinceFrame;
 
 	/** Acceleration only, resolved by PreloadTimelineContent */
 	UPROPERTY(Transient)

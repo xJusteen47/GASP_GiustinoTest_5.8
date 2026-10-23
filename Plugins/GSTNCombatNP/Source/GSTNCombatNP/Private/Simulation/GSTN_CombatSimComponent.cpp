@@ -19,6 +19,7 @@
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
+#include "GSTN_CombatTags.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
@@ -139,6 +140,17 @@ void UGSTN_CombatSimComponent::CompileInput()
 			}
 		}
 		BindingTimeline.Add(static_cast<int16>(Index));
+	}
+	// The adoptable ones after the bound ones. Their tier is none (combat-m3 6.3: an adopted timeline has the tier of its ability's command, else none)
+	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : AdoptableTimelines)
+	{
+		if (TimelineClass && !TimelineRegistry.Contains(TimelineClass))
+		{
+			TimelineRegistry.Add(TimelineClass);
+			TimelineTier.Add(0);
+			TimelineDefaultOverride.Add(0);
+			TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->PreloadTimelineContent();
+		}
 	}
 	// Reserve for the largest timeline, so no frame allocates (the output keeps its capacity)
 	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : TimelineRegistry)
@@ -383,6 +395,28 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 				TimelineOutput.Frame, TimelineOutput.TotalFrames, TimelineOutput.bFinished, bAbilityActive);
 		}
 	}
+	// Step 3, adoption (combat-m3 7.4): timeline abilities that something other than a command activated in the previous frame.
+	// The owner's tags are the end-of-previous-frame ones here (the ability system ticks after this model), so the loose tag the
+	// waiting abilities hold makes every frame without one a single tag test
+	if (AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Ability_AwaitingAdoption))
+	{
+		TArray<int32, TInlineAllocator<8>> Awaiting;
+		for (int32 Index = 0; Index < TimelineRegistry.Num(); ++Index)
+		{
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Index]);
+			const UGSTN_GA_BaseCombat* Instance = Spec && Spec->IsActive() ? Cast<UGSTN_GA_BaseCombat>(Spec->GetPrimaryInstance()) : nullptr;
+			if (Instance && Instance->IsAwaitingAdoption())
+			{
+				Awaiting.Add(Index);
+			}
+		}
+		const int32 Adopted = FGSTN_CombatTimelineLogic::Adopt(OutSync.Core, Frame, Awaiting);
+		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Adopted))
+		{
+			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, TimelineDefaultOverride[Adopted], TimelineOutput);
+		}
+	}
+
 	// The gate the input simulation asks (IsCommandAllowed) reads the state this frame is writing
 	GateCore = &OutSync.Core;
 
@@ -422,6 +456,22 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		{
 			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, TimelineDefaultOverride[Entry], TimelineOutput);
 		}
+	}
+	// A timeline that reached its commit is a timeline that started: the event of the one that was replaced inside its startup
+	// override window never exists. Written on every machine and every re-simulation, published by the authority only
+	if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline && OutSync.Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame))
+	{
+		FGSTN_SimEvent Event;
+		Event.EventType = GSTNCombatTags::Event_TimelineStarted;
+		Event.Frame = Frame;
+		Event.Instigator = GetOwner();
+		Event.Tags.AddTag(OutSync.Core.ActiveSource == EGSTN_ActivationSource::Adopted ? GSTNCombatTags::Source_Adopted
+			: OutSync.Core.ActiveSource == EGSTN_ActivationSource::Forced ? GSTNCombatTags::Source_Forced : GSTNCombatTags::Source_Command);
+		if (const UGSTN_GA_BaseCombat* Default = TimelineRegistry.IsValidIndex(OutSync.Core.ActiveTimeline) ? TimelineRegistry[OutSync.Core.ActiveTimeline]->GetDefaultObject<UGSTN_GA_BaseCombat>() : nullptr)
+		{
+			Event.Tags.AppendTags(Default->GetAssetTags());
+		}
+		EventOutbox.Add(MoveTemp(Event));
 	}
 	Extensions.Run(EGSTN_CombatHookPoint::AfterExecute, HookContext);
 
@@ -487,6 +537,19 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		if (TimelineRegistry.IsValidIndex(Cancel->Arg))
 		{
 			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Cancel->Arg]);
+			if (Spec && Spec->IsActive())
+			{
+				AbilitySystem->CancelAbilityHandle(Spec->Handle);
+			}
+		}
+	}
+
+	// An adoption that another ability won: this one waited in vain and is cancelled before the winner starts
+	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
+	{
+		if (Slot.Type == EGSTN_RequestType::CancelAbility && Slot.Frame == Frame && TimelineRegistry.IsValidIndex(Slot.Arg))
+		{
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Slot.Arg]);
 			if (Spec && Spec->IsActive())
 			{
 				AbilitySystem->CancelAbilityHandle(Spec->Handle);

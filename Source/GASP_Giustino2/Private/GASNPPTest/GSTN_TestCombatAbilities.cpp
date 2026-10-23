@@ -1,6 +1,7 @@
 // GAS + NPP + Mover network test harness.
 
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
+#include "GASNPPTest/GSTN_TestEffects.h"
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatLockTags.h"
 #include "NativeGameplayTags.h"
@@ -15,6 +16,8 @@ namespace
 		"Owned while the test attack ability is active: the harness uses it to see that an attack command started");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Stance, "Test.State.Stance",
 		"Owned while the test stance ability is active (held button): the harness uses it to see that the stance command started");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Triggered, "Test.State.Triggered",
+		"Owned while the triggered test timeline runs: the harness uses it to see that the adopted timeline started");
 }
 
 UGSTN_GA_TestAttack::UGSTN_GA_TestAttack(const FObjectInitializer& ObjectInitializer)
@@ -32,6 +35,22 @@ UGSTN_GA_TestAttack::UGSTN_GA_TestAttack(const FObjectInitializer& ObjectInitial
 	Window.EndFrame = 14;
 	Window.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCommandTags::Special));
 	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Window));
+}
+
+UGSTN_GA_TestTriggeredTimeline::UGSTN_GA_TestTriggeredTimeline(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.AddTag(TAG_Test_State_Triggered);
+
+	// Started by an owned tag being added, not by a command
+	FAbilityTriggerData Trigger;
+	Trigger.TriggerTag = GSTNTestTags::Probe_TagTrigger.GetTag();
+	Trigger.TriggerSource = EGameplayAbilityTriggerSource::OwnedTagAdded;
+	AbilityTriggers.Add(Trigger);
+
+	Timeline.TotalFrames = 12;
+	Timeline.FirstActionableFrame = 12;
+	Timeline.OverrideFrames = 0;
 }
 
 UGSTN_GA_TestStance::UGSTN_GA_TestStance(const FObjectInitializer& ObjectInitializer)

@@ -50,6 +50,16 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 */
 	static void CancelForOtherCommand(FGSTN_CombatSyncCore& Core, int32 Frame);
 
+	/**
+	 * Step 3, adoption (combat-m3 7.4). Awaiting holds the registry indices of the timeline abilities that were activated in the
+	 * previous frame by something other than a command and are waiting, in registry order. The first one wins: the timeline
+	 * state is written as for a command with source Adopted (a running timeline is cancelled, the newcomer was allowed to activate
+	 * by the ability system), and each other one gets a CancelAbility request. No ActivateEntry request: the winner is active
+	 * already and starts itself when it sees its start frame in the state.
+	 * @return the adopted registry index, INDEX_NONE when Awaiting is empty
+	 */
+	static int32 Adopt(FGSTN_CombatSyncCore& Core, int32 Frame, TConstArrayView<int32> Awaiting);
+
 	/** Evaluates frame 0 of the timeline Start just began, so a commit on the first frame is requested in the same tick */
 	static void EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output);
 

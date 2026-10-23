@@ -62,7 +62,13 @@ when it is empty; inside an open cancel window a command its query names); a tim
 (`Start`: a `CancelTimeline` request for the replaced entry and the new state). The ability is activated by the input request of the same frame,
 finds itself in the combat state, plays its montage and ends when the state stops naming it. The ability system's pre-tick runs
 `CancelTimeline`, the input request, then `CommitTimeline` (`CommitAbility`), so a timeline replaced inside its override window never pays.
-Not done yet: tag projection, facing, movement track, events (C12), adoption of abilities started by triggers (C11), hits (M4).
+**Adoption (combat-m3 7.4).** A timeline ability that something other than a command activates (a gameplay event or tag trigger, an effect, another
+ability, AI) finds no start in the combat state, so it marks itself as waiting (sync var `bAwaitingAdoption` plus the loose tag
+`Combat.Ability.AwaitingAdoption`) and the combat tick of the next frame adopts it (`FGSTN_CombatTimelineLogic::Adopt`: the first waiting entry in registry
+order wins, the others get a `CancelAbility` request, the timeline state is written with source `Adopted`); the ability starts in its own tick of that frame.
+The class has to be in the registry: list it in `UGSTN_CombatSimComponent::AdoptableTimelines` (same list on every machine) or bind it to a command.
+The tick publishes `Combat.Event.TimelineStarted` (source tag `Combat.Source.{Command,Forced,Adopted}`) when a timeline reaches its commit.
+Not done yet: tag projection, facing, movement track, the other events (C12), hits (M4).
 All of the logic is pure and covered by `GSTNCombat.NP.Timeline.*`.
 
 **Sync state.** `FGSTN_CombatSyncState` is `Core` (`FGSTN_CombatSyncCore`: the input state, the hitstop window and the action part) followed by

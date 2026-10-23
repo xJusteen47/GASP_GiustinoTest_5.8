@@ -48,6 +48,7 @@ class GASP_GIUSTINO2_API UGSTN_GASNPPTestComponent : public UActorComponent
 public:
 	UGSTN_GASNPPTestComponent();
 
+	virtual void InitializeComponent() override;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -131,7 +132,7 @@ public:
 
 	/** Clears the activation counters of the trigger probes only (ResetCounters clears them too, with the rollback counters) */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
-	void ResetProbeCounters() { ProbeCounters.Reset(); }
+	void ResetProbeCounters() { ProbeCounters.Reset(); TimelineStartedCounts.Reset(); }
 
 	// Probe bookkeeping, called by the probe abilities
 	void RecordProbeAttempt(FName Probe, bool bRestoring);
@@ -179,6 +180,10 @@ private:
 	bool bInputReady = false;
 
 	TMap<FName, FGSTN_ProbeCounters> ProbeCounters;
+
+	/** TimelineStarted events the authority published for this pawn, by source name (adopted, command, forced). Empty on a client: nothing is published there */
+	TMap<FName, int32> TimelineStartedCounts;
+	int32 TimelineStartedListener = INDEX_NONE;
 
 	/** Simulation frame of the latest tick of the ability system, to date the probe activations */
 	int32 AbilityFrame = -1;

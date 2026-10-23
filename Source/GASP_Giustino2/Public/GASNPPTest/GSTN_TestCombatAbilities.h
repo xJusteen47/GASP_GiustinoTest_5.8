@@ -26,6 +26,21 @@ public:
 };
 
 /**
+ * A timeline ability no command starts: the owned tag Test.Probe.TagTrigger (granted by the tag raiser probe, which a press of the
+ * buff button activates from inside the simulation) triggers it, and the combat tick adopts it (combat-m3 7.4, scenario_triggered_timeline).
+ * It owns Test.State.Triggered while the timeline runs. 12 frames, no startup override window, free from frame 12. The test
+ * component adds it to the combat component's AdoptableTimelines.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestTriggeredTimeline : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestTriggeredTimeline(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
  * Placeholder stance, bound to the Command.Special.* commands (the Special button is the stance button of
  * scenario_combat_lock). While active it owns Test.State.Stance and the attack command lock (Input.Lock.Command.Attack, via
  * ActivationOwnedTags), so the attack commands cannot start while the stance is held but a command of another root (the

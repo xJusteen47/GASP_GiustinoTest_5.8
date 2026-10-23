@@ -121,6 +121,22 @@ void FGSTN_CombatTimelineLogic::CancelForOtherCommand(FGSTN_CombatSyncCore& Core
 	ClearTimeline(Core);
 }
 
+int32 FGSTN_CombatTimelineLogic::Adopt(FGSTN_CombatSyncCore& Core, int32 Frame, TConstArrayView<int32> Awaiting)
+{
+	if (Awaiting.IsEmpty())
+	{
+		return INDEX_NONE;
+	}
+	// Start first: its CancelTimeline matters more than a loser's cancel if the small request array runs out (the losers then
+	// end by themselves when they have waited too long)
+	Start(Core, Frame, Awaiting[0], EGSTN_ActivationSource::Adopted);
+	for (int32 Index = 1; Index < Awaiting.Num(); ++Index)
+	{
+		Core.Requests.Add(EGSTN_RequestType::CancelAbility, Frame, static_cast<int16>(Awaiting[Index]));
+	}
+	return Awaiting[0];
+}
+
 void FGSTN_CombatTimelineLogic::EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output)
 {
 	EvaluateInto(Core, Frame, INDEX_NONE, Data, DefaultOverrideFrames, Output);

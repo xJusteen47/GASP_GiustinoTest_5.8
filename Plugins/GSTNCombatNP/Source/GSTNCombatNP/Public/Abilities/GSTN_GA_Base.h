@@ -101,6 +101,9 @@ public:
 	virtual void OnSimulationTick(const FAbilitySystemTimeStep& TimeStep) override;
 
 protected:
+	/** For the timeline abilities: the combat tick adopted this activation, so it has a source now (see UGSTN_GA_BaseCombat) */
+	void SetActivationSource(EGSTN_ActivationSource Source) { ActivationSource.Value = static_cast<uint8>(Source); }
+
 	/** The wait of WaitCombatFrames is over. Runs inside the simulation tick, never while a frame is being restored */
 	virtual void OnCombatFramesElapsed();
 
