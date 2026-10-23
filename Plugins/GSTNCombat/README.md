@@ -247,3 +247,14 @@ and `LoadoutRules.{KitExists, AdditionalWeapons, Supers, Customisations, Skin, N
 ## Jump (`Jump/`, added in C13)
 
 Pure and relative to a `GravityDir` the caller passes in (up = -GravityDir, never world Z): `FGSTN_JumpState` (the jump part of the combat sync core, one bit when default), `FGSTN_JumpLogic` (`Step`, `ClassifyJump`, `ApplyTakeoff`, `ApplyFastFall`, `GravityScale`, `SimulateApex`), `FGSTN_GravityPhases` / `FGSTN_GravityBase` (the phase scale applied to the local gravity, remembering the authored one) and `FGSTN_JumpResetRules` data (air jumps Keep / Refill / Set N, coyote Clear / Keep, cancel the hold phase on an external launch; default Refill + Clear + cancel). The rules and `JumpCoyoteFrames` are settings of `UGSTN_CombatSettings`. Native tags `Command.Movement.Jump` / `.FastFall`. Tests: `GSTNCombat.Core.Jump.*`, `GSTNCombat.Core.Gravity.*`.
+
+## Movement kit data (`Movement/`, `Input/GSTN_MovementSlots`, added in C14)
+
+Dash, ground dodge, air dodge and interact are **default kit content**, not framework: nothing in the core assumes them.
+
+- `FGSTN_DashMoveData` + `FGSTN_DashMath`: the speeds of one impulse (forward speed in the plane perpendicular to the local up, speed along up, mix and momentum mode, whether it leaves for the air mode) and the pure math. Up is always `-GravityDir`, never world Z; the facing is projected onto the plane perpendicular to it. `PredictArc` gives air time, apex and range of an arc for tuning and tests.
+- `FGSTN_MoveTimelines`: builds the default timelines as plain `FGSTN_CombatTimelineData` (one movement track over the whole length with `bCancelOnLand` / `LandingLagFrames`, and for the dodges a `HurtboxModifier` track on the group `Feet` from take-off to 40 % of the airborne frames). A kit replaces them with its own timeline asset; changing the window is a data edit.
+- `UGSTN_MovementSlots`: the slots `Command.Movement.Dash` (press of `Input.Button.Sprint`), `Command.Defence.Dodge` (press of `Input.Button.Dodge`; the bindings pick ground or air dodge by context) and the interact pair. Tap and hold are two `Release` anchors that exclude each other by duration (`FGSTN_InputCondition_Release::MaxHeldFrames`), so a press never fires both and a pending hold never swallows the tap. `InteractHoldFrames` (settings) is the threshold. Default: tap = `Command.Interact.Grab`, hold = `Command.Interact.PickUp`; `Build(true)` swaps them.
+- A kit without a dodge lists `Command.Defence.Dodge` in `CommandSet.RemovedCommands`, or simply does not grant the abilities: the command then starts nothing and reserves nothing.
+- Tags added: buttons `Input.Button.Dodge/Sprint/Interact`, commands `Command.Movement.Dash`, `Command.Defence.Dodge`, `Command.Interact.Grab/PickUp`, states `Combat.State.Hitstun/Hitstop` (projected by the M4 hit reaction; the default dodges block on them).
+- Tests: `GSTNCombat.Core.Dash.*`, `GSTNCombat.Core.Dodge.*`, `GSTNCombat.Core.MovementSlots.*`.

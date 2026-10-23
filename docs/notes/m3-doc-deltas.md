@@ -177,3 +177,12 @@ Design deviations from combat-m3 7.9 (all kept deliberately small):
 ## Slide + jump correction report (owner bug, 2026-10-23)
 
 `scenario_slide_jump` (10 x sprint, crouch to slide, jump mid-slide; listen 60/15/0 and 60/15/2, `np.LogReconcileField 1`) on the harness character: 0 mismatches, 0 unexplained of ours in both runs (the pawn does go Walking -> Sliding at 800 cm/s -> Falling -> Walking). Not reproduced on `BP_GASNPP_TestCharacter`. The report is for the harness character, which uses the project GA_Jump / Mover jump, not the SandboxCharacter_Mover base character; try the scenario on that character (set `m.CHAR`) before concluding.
+
+## C14 Movement abilities
+
+- **The Movement track has no velocity consumer.** Nothing applied `FGSTN_TimelineTrack_Movement` to Mover. Dash and dodges apply one instant velocity effect (`FApplyVelocityEffect`) at take-off in the local gravity frame; the arc is then ballistic under Mover's gravity (a "forward velocity curve + low arc" is the impulse plus gravity). The track still carries the timing data the ability reads (`bCancelOnLand`, `LandingLagFrames`) and `VelocityCurve` stays unused for these abilities. A sustained velocity curve needs a layered move and is open.
+- **Dash direction = the character's facing** (Mover orientation in the tracker), not the stick. Stick-relative dashes are a feel decision left open.
+- **Interact tap/hold use `Release` anchors** (new `MaxHeldFrames`), so both fire on release; the plan's "Press slot for tap, Hold(n) slot for hold" would fire the grab at the start of every hold. The swapped set is a Core test; PIE runs the default set only.
+- **New buttons** `Dodge`, `Sprint`, `Interact` (the harness's own `Input.Button.Dash` stays for the old test dash).
+- **Fork:** `UNpAbilitySystemComponent::InitializeSimulationState` no longer calls `GiveAbility` for `DefaultAbilities` when the owner is not authoritative (it refused and logged one error per ability on simulated proxies); behaviour is unchanged.
+- **`setup_gas_assets.py --combat-input` never edits `BP_GASNPP_TestCharacter`** any more (it warns); step 2 is `--test-character`.
