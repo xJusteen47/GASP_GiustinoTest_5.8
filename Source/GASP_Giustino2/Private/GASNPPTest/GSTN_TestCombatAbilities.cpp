@@ -2,6 +2,8 @@
 
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
 #include "GASNPPTest/GSTN_TestEffects.h"
+#include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
+#include "GSTN_CombatCoreTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatLockTags.h"
 #include "NativeGameplayTags.h"
@@ -21,6 +23,15 @@ namespace
 		"Owned while the test stance ability is active (held button): the harness uses it to see that the stance command started");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Triggered, "Test.State.Triggered",
 		"Owned while the triggered test timeline runs: the harness uses it to see that the adopted timeline started");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Grab, "Test.State.Grab",
+		"Owned while the placeholder grab ability (interact tap) is active: the harness reads which interact command fired");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_PickUp, "Test.State.PickUp",
+		"Owned while the placeholder pick up ability (interact hold) is active");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Escape, "Test.State.Escape",
+		"Granted by the harness to give the pawn a kit with a special escape dodge: the default ground dodge ignores it, the escape dodge requires it");
+
+	/** Frames the placeholder interact abilities stay active */
+	constexpr int32 InteractTestFrames = 10;
 }
 
 UGSTN_GA_TestAttack::UGSTN_GA_TestAttack(const FObjectInitializer& ObjectInitializer)
@@ -140,4 +151,56 @@ void UGSTN_GA_TestLaunch::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 
 	ApplyGameplayEffectToOwner(Handle, ActorInfo, ActivationInfo, GetDefault<UGSTN_GE_TestLaunch>(), GetAbilityLevel(Handle, ActorInfo));
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+}
+
+UGSTN_GA_TestGrab::UGSTN_GA_TestGrab(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.AddTag(TAG_Test_State_Grab);
+}
+
+void UGSTN_GA_TestGrab::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+	WaitCombatFrames(InteractTestFrames);
+}
+
+void UGSTN_GA_TestGrab::OnCombatFramesElapsed()
+{
+	EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, false);
+}
+
+UGSTN_GA_TestPickUp::UGSTN_GA_TestPickUp(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_PickUp);
+}
+
+UGSTN_GA_TestEscapeDodge::UGSTN_GA_TestEscapeDodge(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// The special escape: the same dodge, free to start in hitstun and hitstop. Data, not code
+	ActivationBlockedTags.Reset();
+}
+
+UGSTN_GE_TestHitstun::UGSTN_GE_TestHitstun()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
+	FInheritedTagContainer Tags;
+	Tags.Added.AddTag(GSTNCombatTags::State_Hitstun);
+	TargetTags->SetAndApplyTargetTagChanges(Tags);
+	GEComponents.Add(TargetTags);
+}
+
+UGSTN_GE_TestEscapeKit::UGSTN_GE_TestEscapeKit()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
+	FInheritedTagContainer Tags;
+	Tags.Added.AddTag(TAG_Test_State_Escape);
+	TargetTags->SetAndApplyTargetTagChanges(Tags);
+	GEComponents.Add(TargetTags);
 }

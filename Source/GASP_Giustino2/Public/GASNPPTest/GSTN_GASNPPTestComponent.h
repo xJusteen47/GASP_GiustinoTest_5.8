@@ -99,6 +99,22 @@ public:
 	int32 ServerSetJumpKit(bool bGrant);
 
 	/**
+	 * Grants (true) or removes (false) the abilities of the movement kit that the test binding set binds: Dash is UGSTN_GA_Dash, Dodge is the ground
+	 * dodge, the air dodge and the escape dodge, Interact is the placeholder grab and pick up. Authority only, from outside the simulation: a kit without
+	 * a dodge is a pawn whose Dodge flag is false. Returns how many specs changed.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	int32 ServerSetMoveKit(bool bDash, bool bDodge, bool bInteract);
+
+	/** Applies (true) or removes (false) an infinite effect granting Combat.State.Hitstun, the stand-in of the hit reaction of M4. Authority only */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerSetHitstun(bool bApply);
+
+	/** Applies (true) or removes (false) an infinite effect granting Test.State.Escape: the pawn then uses the escape dodge, which is not blocked in hitstun. Authority only */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerSetEscapeKit(bool bApply);
+
+	/**
 	 * Sets Mover's gravity override (acceleration in cm/s^2 world space) on THIS machine's copy of the pawn, or clears it. Call it on every
 	 * machine, while the pawn stands still: gravity is a Mover component setting, not simulated state, so every copy must hold the same value
 	 * before it matters (the tilted gravity scenario)
@@ -221,6 +237,8 @@ private:
 	// Server-side handles of the infinite effects applied by the probes
 	FActiveGameplayEffectHandle BulkEffectHandle;
 	FActiveGameplayEffectHandle StatsEffectHandle;
+	FActiveGameplayEffectHandle HitstunEffectHandle;
+	FActiveGameplayEffectHandle EscapeEffectHandle;
 
 	// Stats probe: the values captured before the first rewrite, and what was written last
 	bool bStatsBaseCaptured = false;

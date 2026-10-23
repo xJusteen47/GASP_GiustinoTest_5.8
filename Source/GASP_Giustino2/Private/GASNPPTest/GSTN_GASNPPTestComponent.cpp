@@ -14,6 +14,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
+#include "Abilities/GSTN_GA_Dash.h"
 #include "Abilities/GSTN_GA_PlatformJump.h"
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
 #include "GASNPPTest/GSTN_TestEffects.h"
@@ -443,6 +444,74 @@ int32 UGSTN_GASNPPTestComponent::ServerSetJumpKit(bool bGrant)
 		}
 	}
 	return Granted;
+}
+
+int32 UGSTN_GASNPPTestComponent::ServerSetMoveKit(bool bDash, bool bDodge, bool bInteract)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return 0;
+	}
+
+	const auto Apply = [this](bool bGrant, std::initializer_list<TSubclassOf<UGameplayAbility>> Classes)
+	{
+		int32 Changed = 0;
+		for (const TSubclassOf<UGameplayAbility>& AbilityClass : Classes)
+		{
+			if (bGrant)
+			{
+				if (!AbilitySystem->FindAbilitySpecFromClass(AbilityClass))
+				{
+					Changed += AbilitySystem->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, INDEX_NONE, nullptr)).IsValid() ? 1 : 0;
+				}
+			}
+			else
+			{
+				Changed += ClearAbilitiesWhere(*AbilitySystem, [&AbilityClass](const UClass* Existing) { return Existing == AbilityClass.Get(); });
+			}
+		}
+		return Changed;
+	};
+	int32 Changed = Apply(bDash, { UGSTN_GA_Dash::StaticClass() });
+	Changed += Apply(bDodge, { UGSTN_GA_GroundDodge::StaticClass(), UGSTN_GA_AirDodge::StaticClass(), UGSTN_GA_TestEscapeDodge::StaticClass() });
+	Changed += Apply(bInteract, { UGSTN_GA_TestGrab::StaticClass(), UGSTN_GA_TestPickUp::StaticClass() });
+	return Changed;
+}
+
+bool UGSTN_GASNPPTestComponent::ServerSetHitstun(bool bApply)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (HitstunEffectHandle.IsValid())
+	{
+		AbilitySystem->RemoveActiveGameplayEffect(HitstunEffectHandle);
+		HitstunEffectHandle = FActiveGameplayEffectHandle();
+	}
+	if (bApply)
+	{
+		HitstunEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestHitstun>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
+	return !bApply || HitstunEffectHandle.IsValid();
+}
+
+bool UGSTN_GASNPPTestComponent::ServerSetEscapeKit(bool bApply)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (EscapeEffectHandle.IsValid())
+	{
+		AbilitySystem->RemoveActiveGameplayEffect(EscapeEffectHandle);
+		EscapeEffectHandle = FActiveGameplayEffectHandle();
+	}
+	if (bApply)
+	{
+		EscapeEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestEscapeKit>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
+	return !bApply || EscapeEffectHandle.IsValid();
 }
 
 bool UGSTN_GASNPPTestComponent::SetTestGravity(FVector Acceleration, bool bEnable)

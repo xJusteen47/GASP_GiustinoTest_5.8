@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Abilities/GSTN_GA_Base.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
+#include "Abilities/GSTN_GA_Dash.h"
 #include "EffectsComponents/ApplyMoveGameplayEffectComponent.h"
 #include "GameplayEffect.h"
 #include "GSTN_TestCombatAbilities.generated.h"
@@ -117,4 +118,63 @@ public:
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+};
+
+/** Placeholder of the interact tap (combat-m3 C14): owns Test.State.Grab for a few combat frames, so the harness sees which interact command fired */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestGrab : public UGSTN_GA_Base
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestGrab(const FObjectInitializer& ObjectInitializer);
+
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+
+protected:
+	virtual void OnCombatFramesElapsed() override;
+};
+
+/** Placeholder of the interact hold: owns Test.State.PickUp for a few combat frames */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestPickUp : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestPickUp(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
+ * A kit's special escape: the default ground dodge with the hitstun and hitstop blocks dropped, as data. The test binding set binds it to
+ * Command.Defence.Dodge for a grounded pawn that owns Test.State.Escape (the default dodge ignores that tag), so granting the tag swaps one for the other
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestEscapeDodge : public UGSTN_GA_GroundDodge
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestEscapeDodge(const FObjectInitializer& ObjectInitializer);
+};
+
+/** Infinite: grants Combat.State.Hitstun to the owner. Stands in for the hit reaction of M4, which projects the tag from the combat tick */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestHitstun : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_TestHitstun();
+};
+
+/** Infinite: grants Test.State.Escape, the requirement of the escape dodge binding (the ignore tag of the default dodge) */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestEscapeKit : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_TestEscapeKit();
 };
