@@ -381,7 +381,7 @@ bool FGSTN_PartsSinglePartTest::RunTest(const FString& Parameters)
 
 	FGameplayTagContainer Tags;
 	Projection.AppendNativeTags(Tags);
-	TestTrue(TEXT("The native tags follow the flags"), Tags.HasTagExact(GSTN_PartsTags::Part_Broken) && Tags.HasTagExact(GSTN_PartsTags::Part_AllBroken) && !Tags.HasTagExact(GSTN_PartsTags::Part_GrabLocked));
+	TestTrue(TEXT("The native tags follow the flags"), Tags.HasTagExact(GSTNPartsTags::Part_Broken) && Tags.HasTagExact(GSTNPartsTags::Part_AllBroken) && !Tags.HasTagExact(GSTNPartsTags::Part_GrabLocked));
 
 	// Reaching AllBroken happens once
 	R = UGSTN_PartMath::ApplyHit(Parts, Bands, State, GSTNPartsTest::Hit(40.f, 0, 3));
@@ -449,7 +449,7 @@ bool FGSTN_PartsRestoreClearsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Arm and hand broken"), static_cast<int32>(State.BrokenMask), 0b0110);
 	const int32 SerialBefore = State.BreakSerial;
 
-	const uint16 Restored = UGSTN_PartMath::RestoreParts(State, 0, 0.f); // everything, fully
+	const uint16 Restored = UGSTN_PartMath::RestoreParts(Parts, State, 0, 0.f); // everything, fully
 	TestEqual(TEXT("Both unbroke"), static_cast<int32>(Restored), 0b0110);
 	TestEqual(TEXT("No bit is set"), static_cast<int32>(State.BrokenMask), 0);
 	for (int32 Index = 0; Index < GSTN_PartsLimits::MaxParts; ++Index)
@@ -460,7 +460,7 @@ bool FGSTN_PartsRestoreClearsTest::RunTest(const FString& Parameters)
 
 	// A restore with nothing broken changes nothing, serial included
 	const FGSTN_PartsState Pristine = State;
-	TestEqual(TEXT("Nothing to unbreak"), static_cast<int32>(UGSTN_PartMath::RestoreParts(State, 0, 0.f)), 0);
+	TestEqual(TEXT("Nothing to unbreak"), static_cast<int32>(UGSTN_PartMath::RestoreParts(Parts, State, 0, 0.f)), 0);
 	TestTrue(TEXT("... so nothing moved"), State == Pristine);
 	return true;
 }
@@ -479,7 +479,7 @@ bool FGSTN_PartsRestoreKeepsOthersTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Head byte"), static_cast<int32>(State.PartDamage[3]), 192);
 
 	// Restore the arm and the head to half damage: 0.5 x 255 = 127.5 -> 128
-	const uint16 Restored = UGSTN_PartMath::RestoreParts(State, 0b1010, 0.5f);
+	const uint16 Restored = UGSTN_PartMath::RestoreParts(Parts, State, 0b1010, 0.5f);
 	TestEqual(TEXT("Only the arm was broken"), static_cast<int32>(Restored), 0b0010);
 	TestEqual(TEXT("The hand stays broken"), static_cast<int32>(State.BrokenMask), 0b0100);
 	TestEqual(TEXT("The arm is at half damage"), static_cast<int32>(State.PartDamage[1]), 128);
@@ -488,13 +488,13 @@ bool FGSTN_PartsRestoreKeepsOthersTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("The torso is not in the mask: untouched"), static_cast<int32>(State.PartDamage[0]), static_cast<int32>(TorsoBefore));
 
 	// A repair never hurts: the torso is lighter than half, so it stays
-	UGSTN_PartMath::RestoreParts(State, 0b0001, 0.9f);
+	UGSTN_PartMath::RestoreParts(Parts, State, 0b0001, 0.9f);
 	TestEqual(TEXT("A restore never makes a part worse"), static_cast<int32>(State.PartDamage[0]), static_cast<int32>(TorsoBefore));
 
 	// A restored part is left just under the cap, never broken
 	FGSTN_PartsState Wreck;
 	UGSTN_PartMath::ApplyHit(Parts, Bands, Wreck, GSTNPartsTest::Hit(500.f, 3, 6));
-	UGSTN_PartMath::RestoreParts(Wreck, 0, 5.f);
+	UGSTN_PartMath::RestoreParts(Parts, Wreck, 0, 5.f);
 	TestFalse(TEXT("Restored to 'more than the cap' is still unbroken"), Wreck.IsBroken(3));
 	TestEqual(TEXT("... at one below the cap"), static_cast<int32>(Wreck.PartDamage[3]), 254);
 	return true;
@@ -511,7 +511,7 @@ bool FGSTN_PartsRestoreRebreakTest::RunTest(const FString& Parameters)
 	const int32 FirstBreak = State.BreakSerial;
 	TestTrue(TEXT("Broke"), State.IsBroken(3));
 
-	UGSTN_PartMath::RestoreParts(State, 0b1000, 0.f);
+	UGSTN_PartMath::RestoreParts(Parts, State, 0b1000, 0.f);
 	const int32 Restore = State.BreakSerial;
 	TestFalse(TEXT("Restored"), State.IsBroken(3));
 	TestEqual(TEXT("Pristine again"), static_cast<int32>(State.PartDamage[3]), 0);
@@ -528,6 +528,76 @@ bool FGSTN_PartsRestoreRebreakTest::RunTest(const FString& Parameters)
 	Wrap.BreakSerial = 15;
 	Wrap.AdvanceSerial();
 	TestEqual(TEXT("Wraps to 0"), static_cast<int32>(Wrap.BreakSerial), 0);
+	return true;
+}
+
+// Review 2026-10-23 B.1: restoring a child while its parent stayed broken left an intact child under a broken parent, and the next
+// unrelated break cascaded onto it again with a second bonus
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsRestoreChildRestoresParentTest, "GSTNParts.Core.Math.RestorePartsChildRestoresBrokenParent", GSTNPartsTest::Flags)
+bool FGSTN_PartsRestoreChildRestoresParentTest::RunTest(const FString& Parameters)
+{
+	const TArray<FGSTN_PartDefinition> Parts = GSTNPartsTest::MakeGoldenParts(); // arm bonus 10, hand (its child) bonus 5, head none
+	const TArray<FGSTN_PenetrationBand> Bands = UGSTN_PenetrationTable::MakeDefaultBands();
+	FGSTN_PartsState State;
+
+	const FGSTN_PartHitResult ArmBreak = UGSTN_PartMath::ApplyHit(Parts, Bands, State, GSTNPartsTest::Hit(500.f, 1, 6));
+	TestEqual(TEXT("The arm broke and the hand with it"), static_cast<int32>(State.BrokenMask), 0b0110);
+	TestEqual(TEXT("... with both bonuses"), ArmBreak.BonusMainDamage, 15.f, 1e-4f);
+
+	// Restore the hand only: its broken parent comes with it
+	const uint16 Restored = UGSTN_PartMath::RestoreParts(Parts, State, 0b0100, 0.f);
+	TestEqual(TEXT("The arm unbroke with the hand"), static_cast<int32>(Restored), 0b0110);
+	TestEqual(TEXT("Nothing is broken"), static_cast<int32>(State.BrokenMask), 0);
+	TestEqual(TEXT("The arm is pristine"), static_cast<int32>(State.PartDamage[1]), 0);
+	TestEqual(TEXT("The hand is pristine"), static_cast<int32>(State.PartDamage[2]), 0);
+
+	// A later unrelated break does not touch them and pays no second bonus
+	const FGSTN_PartHitResult HeadBreak = UGSTN_PartMath::ApplyHit(Parts, Bands, State, GSTNPartsTest::Hit(500.f, 3, 6));
+	TestEqual(TEXT("Only the head broke"), static_cast<int32>(HeadBreak.NewlyBrokenMask), 0b1000);
+	TestEqual(TEXT("No second bonus"), HeadBreak.BonusMainDamage, 0.f, 1e-4f);
+	TestFalse(TEXT("The arm stays intact"), State.IsBroken(1));
+	TestFalse(TEXT("The hand stays intact"), State.IsBroken(2));
+
+	// Three levels: restoring the leaf restores the whole chain above it, and an intact ancestor is left alone
+	TArray<FGSTN_PartDefinition> Chain;
+	Chain.Add(GSTNPartsTest::MakePart("Root", { "RootBox" }, 0, 50.f));                      // 0
+	Chain.Add(GSTNPartsTest::MakePart("Mid", { "MidBox" }, 0, 50.f, 1.f, 0));                // 1, child of 0
+	Chain.Add(GSTNPartsTest::MakePart("Leaf", { "LeafBox" }, 0, 50.f, 1.f, 1));              // 2, child of 1
+	FGSTN_PartsState Deep;
+	UGSTN_PartMath::ApplyHit(Chain, Bands, Deep, GSTNPartsTest::Hit(500.f, 0, 6));
+	TestEqual(TEXT("The whole chain broke"), static_cast<int32>(Deep.BrokenMask), 0b111);
+	TestEqual(TEXT("Restoring the leaf restores the chain"), static_cast<int32>(UGSTN_PartMath::RestoreParts(Chain, Deep, 0b100, 0.f)), 0b111);
+	TestEqual(TEXT("... all of it"), static_cast<int32>(Deep.BrokenMask), 0);
+
+	FGSTN_PartsState Stump;
+	Stump.PartDamage[0] = 100; // the root is hurt but intact; the leaf was broken by a direct hit
+	UGSTN_PartMath::ApplyHit(Chain, Bands, Stump, GSTNPartsTest::Hit(500.f, 2, 6));
+	TestEqual(TEXT("Only the leaf is broken"), static_cast<int32>(Stump.BrokenMask), 0b100);
+	TestEqual(TEXT("Restoring it unbreaks only it"), static_cast<int32>(UGSTN_PartMath::RestoreParts(Chain, Stump, 0b100, 0.f)), 0b100);
+	TestEqual(TEXT("An intact ancestor is not part of the restore"), static_cast<int32>(Stump.PartDamage[0]), 100);
+	return true;
+}
+
+// The same rule seen from the hit: a state that does hold an intact child under a broken parent (built by hand, as a network state
+// of an older build could) must not break the child again when something else breaks
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsUnrelatedBreakDoesNotRebreakTest, "GSTNParts.Core.Math.UnrelatedBreakDoesNotRebreakIntactChild", GSTNPartsTest::Flags)
+bool FGSTN_PartsUnrelatedBreakDoesNotRebreakTest::RunTest(const FString& Parameters)
+{
+	const TArray<FGSTN_PartDefinition> Parts = GSTNPartsTest::MakeGoldenParts();
+	const TArray<FGSTN_PenetrationBand> Bands = UGSTN_PenetrationTable::MakeDefaultBands();
+
+	FGSTN_PartsState State;
+	State.BrokenMask = 0b0010; // the arm is broken, its child the hand is intact
+	State.PartDamage[1] = 255;
+	State.PartDamage[2] = 40;
+	const int32 SerialBefore = State.BreakSerial;
+
+	const FGSTN_PartHitResult R = UGSTN_PartMath::ApplyHit(Parts, Bands, State, GSTNPartsTest::Hit(500.f, 3, 6)); // breaks the head
+	TestEqual(TEXT("Only the head broke"), static_cast<int32>(R.NewlyBrokenMask), 0b1000);
+	TestEqual(TEXT("The hand was not broken again"), static_cast<int32>(State.BrokenMask), 0b1010);
+	TestEqual(TEXT("... and keeps its damage"), static_cast<int32>(State.PartDamage[2]), 40);
+	TestEqual(TEXT("No bonus for the hand or the arm"), R.BonusMainDamage, 0.f, 1e-4f);
+	TestEqual(TEXT("The serial moved once"), static_cast<int32>(State.BreakSerial), (SerialBefore + 1) & 15);
 	return true;
 }
 
@@ -576,9 +646,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsProjectTest, "GSTNParts.Core.Math.Pr
 bool FGSTN_PartsProjectTest::RunTest(const FString& Parameters)
 {
 	TArray<FGSTN_PartDefinition> Parts = GSTNPartsTest::MakeEnemyParts();
-	const FGameplayTag Broken = GSTN_PartsTags::Part_Broken; // any registered tag stands in for a designer leaf
-	const FGameplayTag Effect = GSTN_PartsTags::Part_Effect;
-	const FGameplayTag Allbroken = GSTN_PartsTags::Part_AllBroken;
+	const FGameplayTag Broken = GSTNPartsTags::Part_Broken; // any registered tag stands in for a designer leaf
+	const FGameplayTag Effect = GSTNPartsTags::Part_Effect;
+	const FGameplayTag Allbroken = GSTNPartsTags::Part_AllBroken;
 
 	FGSTN_PartBreakEffect_Tags TagEffect;
 	TagEffect.Granted.AddTag(Effect);

@@ -14,7 +14,7 @@ namespace GSTN_PartsLimits
 	/** Parts per entity: the width of the broken mask (uint16) and of the per-part damage array */
 	constexpr int32 MaxParts = 16;
 
-	/** Parts per minion (a uint8 mask, combat-parts.md §5.5): the minion bridge validates against this */
+	/** Parts per minion (a uint8 mask, combat-parts.md §5.5): the minion bridge planned for M8 (combat-m8-minions.md, not built) validates against this */
 	constexpr int32 MaxMinionParts = 8;
 
 	/** Hardness and penetration tiers are integers 0..MaxHardness (owner: Helldivers armour levels), so no float decides a band */

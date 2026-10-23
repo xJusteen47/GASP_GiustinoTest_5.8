@@ -51,10 +51,13 @@ would otherwise be missing.
 | `FGSTN_PartsBakedCurve` | A 0..1 curve as 64 `uint16` entries with integer interpolation, so every machine reads the same number. |
 
 `FGSTN_PartsValidation` holds the rules as pure functions over arrays (`ValidateParts`, `ValidateBands`); the assets'
-`IsDataValid` forward their findings, and the editor module and the minion bridge call them with their own limits. Errors:
+`IsDataValid` forward their findings, and the editor module and the minion bridge planned for M8 (not built) call them with their own limits. Errors:
 more than 16 parts, a duplicate or empty name, a hurtbox in two parts, a bad or cyclic parent, hardness outside 0-15, a
-non-finite or negative number, an empty penetration table, two bands with one `MinDelta`. Warnings: a bone the preview mesh
-lacks, a part with no hurtbox, an unknown break effect, a band table that stops short of the lowest delta.
+non-finite or negative number (also in the `Launch`, `Stagger`, `Stats` and `DisableHurtbox` effects), a grab gate that can never
+open (a required part, or a minimum count, that no break can reach: an unbreakable part with no breakable ancestor), an empty
+penetration table, two bands with one `MinDelta`. Warnings: a bone the preview mesh lacks, a part type outside `Part.Type`, a part
+with no hurtbox, an unknown break effect, a band table that stops short of the lowest delta, with no damaging band, or whose top
+band ricochets.
 
 ## The part math
 
@@ -64,6 +67,9 @@ of the sync fragment and the snapshot; no floats, tags or pointers):
 
 - **Quantisation.** The stored byte is `min(255, ceil(damage / cap x 255))`; a nonzero hit always moves it; the next hit starts
   from the dequantised value (worked in byte units, so there is no drift); 255 is "at the cap" and is what breaks a part.
+  The `ceil` rounds up on every hit (on average half a byte, 0.2 % of the cap, per hit, and a hit of any size is at least one
+  byte): a weapon that lands many tiny hits breaks a part a little sooner than its nominal damage says. Chosen so a nonzero hit
+  always moves the state; weigh it when tuning multi-hit or damage-over-time attacks.
 - **`ApplyHit`.** `PartDelta = D x band part scale x hit scale x part scale`, `MainDelta = D x band main scale x MainTransfer`
   (`BrokenMainTransfer` on a stump). Overflow beyond the cap is not carried to the main pool. Children of a broken part break in
   the same hit (also unbreakable ones: they go with the limb) and each newly broken part adds its `MainDamage` effects once, in
@@ -75,8 +81,10 @@ of the sync fragment and the snapshot; no floats, tags or pointers):
 - **Derived projection.** `ProjectDerived` fills an `FGSTN_PartsProjection` (granted and removed tags, hurtbox names to hide, hit
   group mask, Broken / AllBroken / GrabLocked) from the mask; derived break effects implement `Project`. `IsGrabLocked` evaluates
   the grab gate (an empty gate never locks).
-- **Restore.** `RestoreParts` unbreaks the masked parts (0 = all) and sets their damage to a fraction of the cap, never higher than
-  it was; the serial advances so restore then break again is a new event key. It does not give main-pool percent back.
+- **Restore.** `RestoreParts(Parts, State, Mask, Fraction)` unbreaks the masked parts (0 = all, so check a computed mask for
+  emptiness first) and sets their damage to a fraction of the cap, never higher than it was; the serial advances so restore then
+  break again is a new event key. A child cannot stay intact under a broken parent, so the broken ancestors of the masked parts
+  are restored too, and a later break never cascades onto an intact child. It does not give main-pool percent back.
 
 Blueprint gets the stateless helpers (`GetPenetrationBandIndex`, `QuantisePartDamage`, `DequantisePartDamage`, `IsPartBroken`,
 `CountBrokenParts`, `GetEffectiveWeight`); `ApplyHit` is C++ only (hot path, MT section 3.8).
@@ -85,7 +93,7 @@ Blueprint gets the stateless helpers (`GetPenetrationBandIndex`, `QuantisePartDa
 
 | Tags | Source | Declared in |
 |---|---|---|
-| `Combat.Part.Broken`, `.GrabLocked`, `.AllBroken` | native, **projected** from the broken mask, never granted | `Public/GSTN_PartsTags.h`, namespace `GSTN_PartsTags` |
+| `Combat.Part.Broken`, `.GrabLocked`, `.AllBroken` | native, **projected** from the broken mask, never granted | `Public/GSTN_PartsTags.h`, namespace `GSTNPartsTags` |
 | `Combat.Part.Effect` (root; leaves such as `ArmLost` are content) | native root | same |
 | `Combat.Entity.Destructible` | native (marker in the victim view) | same |
 | `Combat.Event.Part.Damaged`, `.WeakPointHit`, `.Ricochet`, `.Broken`, `.AllBroken` | native | same |
@@ -94,8 +102,9 @@ Blueprint gets the stateless helpers (`GetPenetrationBandIndex`, `QuantisePartDa
 | `GameplayCue.Combat.Part.Hit`, `.Break`, `.Ricochet`, `.Shatter` | ini, designer vocabulary | same |
 
 The plugin declares no `Combat.State.*`, `Combat.Mover.*`, `Combat.Lock.*` or `Combat.Link.*` tag (checked by
-`GSTNParts.Core.Tags.NoStateTagDeclared`): stagger is the existing `Combat.State.Hitstun`, hitstop the existing
-`Combat.State.Hitstop`. No part tag is ever stored in a sync state or a snapshot: those carry part indices and masks.
+`GSTNParts.Core.Tags.NoStateTagDeclared`). No `Combat.State.Hitstun` or `Combat.State.Hitstop` tag exists yet in any plugin: the
+stagger and hitstop a part causes are values in the hit result, and the M4 hit pipeline decides how they reach the victim. No
+part tag is ever stored in a sync state or a snapshot: those carry part indices and masks.
 
 ## Settings
 

@@ -199,8 +199,11 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 	{
 		const bool bWasAllBroken = IsAllBroken(Parts, State.BrokenMask);
 
-		// Children go with their parent in the same hit; the order below is part index order, whatever order they were found in
-		NewlyBroken = ComputeCascade(Parts, State.BrokenMask | NewlyBroken) & static_cast<uint16>(~State.BrokenMask);
+		// Children go with their parent in the same hit; the order below is part index order, whatever order they were found in.
+		// The cascade starts from the part that just broke, not from the whole mask: a state is never expected to hold a child
+		// intact under a broken parent (RestoreParts forbids it), but if one does, an unrelated break must not break it again
+		// and pay its bonus a second time
+		NewlyBroken = ComputeCascade(Parts, NewlyBroken) & static_cast<uint16>(~State.BrokenMask);
 		State.BrokenMask |= NewlyBroken;
 		for (int32 Index = 0; Index < Num; ++Index)
 		{
@@ -312,9 +315,36 @@ void UGSTN_PartMath::ProjectDerived(TConstArrayView<FGSTN_PartDefinition> Parts,
 	}
 }
 
-uint16 UGSTN_PartMath::RestoreParts(FGSTN_PartsState& State, uint16 Mask, float DamageFraction)
+uint16 UGSTN_PartMath::GetBrokenAncestorsMask(TConstArrayView<FGSTN_PartDefinition> Parts, uint16 BrokenMask, uint16 Mask)
 {
-	const uint16 Target = (Mask == 0) ? static_cast<uint16>(0xFFFFu) : Mask;
+	const int32 Num = AddressableParts(Parts);
+	uint16 Ancestors = 0;
+	for (int32 Index = 0; Index < Num; ++Index)
+	{
+		if ((Mask & BitOf(Index)) == 0)
+		{
+			continue;
+		}
+		// At most Num steps up, so a parent cycle ends the walk
+		int32 Parent = Parts[Index].ParentIndex;
+		for (int32 Step = 0; Step < Num && Parent >= 0 && Parent < Num; ++Step)
+		{
+			if ((BrokenMask & BitOf(Parent)) != 0)
+			{
+				Ancestors |= BitOf(Parent);
+			}
+			Parent = Parts[Parent].ParentIndex;
+		}
+	}
+	return Ancestors;
+}
+
+uint16 UGSTN_PartMath::RestoreParts(TConstArrayView<FGSTN_PartDefinition> Parts, FGSTN_PartsState& State, uint16 Mask, float DamageFraction)
+{
+	uint16 Target = (Mask == 0) ? static_cast<uint16>(0xFFFFu) : Mask;
+	// A child cannot be intact under a broken parent (children break with it, combat-parts.md §3.1): restoring a part restores the
+	// broken ancestors it hangs off too, or the next unrelated break would cascade onto it again
+	Target |= GetBrokenAncestorsMask(Parts, State.BrokenMask, Target);
 	// A restored part is left just under the cap at most: a part restored "to the cap" would be broken again at once
 	const uint8 Left = (DamageFraction > 0.f && FMath::IsFinite(DamageFraction))
 		? static_cast<uint8>(FMath::Min(FMath::CeilToInt(FMath::Min(DamageFraction, 1.f) * static_cast<float>(DamageAtCap)), DamageAtCap - 1))

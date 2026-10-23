@@ -4,6 +4,7 @@
 
 #include "Data/GSTN_PartBreakEffects.h"
 #include "Data/GSTN_PartsLimits.h"
+#include "Math/GSTN_PartMath.h"
 
 void FGSTN_PartsValidationReport::AddError(const FString& Message)
 {
@@ -105,6 +106,15 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 			}
 		}
 
+		for (const FGameplayTag& Type : Part.Types)
+		{
+			// Compared as text: the validator must not name a tag the parts module does not own, and it changes no behaviour
+			if (!Type.ToString().StartsWith(TEXT("Part.Type.")))
+			{
+				Report.AddWarning(FString::Printf(TEXT("%s: type %s is not a Part.Type.* tag, so rules that look for part types will not see it."), *Label, *Type.ToString()));
+			}
+		}
+
 		if (Part.Hurtboxes.IsEmpty())
 		{
 			Report.AddWarning(FString::Printf(TEXT("%s names no hurtbox, so no hit can land on it."), *Label));
@@ -184,6 +194,59 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 					Report.AddError(FString::Printf(TEXT("%s: the bonus main damage of break effect %d must be finite and not negative."), *Label, EffectIndex));
 				}
 			}
+			else if (const FGSTN_PartBreakEffect_Launch* Launch = Entry.GetPtr<FGSTN_PartBreakEffect_Launch>())
+			{
+				// The ClampMin/ClampMax of the properties only guard the editor: data from an ini, JSON or code reaches here unclamped
+				if (!IsFiniteNonNegative(Launch->Speed))
+				{
+					Report.AddError(FString::Printf(TEXT("%s: the launch speed of break effect %d must be finite and not negative."), *Label, EffectIndex));
+				}
+				if (!FMath::IsFinite(Launch->UpFraction) || Launch->UpFraction < 0.f || Launch->UpFraction > 1.f)
+				{
+					Report.AddError(FString::Printf(TEXT("%s: the up fraction of break effect %d must be between 0 and 1."), *Label, EffectIndex));
+				}
+			}
+			else if (const FGSTN_PartBreakEffect_Stagger* Stagger = Entry.GetPtr<FGSTN_PartBreakEffect_Stagger>())
+			{
+				if (Stagger->Frames < 0)
+				{
+					Report.AddError(FString::Printf(TEXT("%s: the stagger frames of break effect %d must not be negative."), *Label, EffectIndex));
+				}
+			}
+			else if (const FGSTN_PartBreakEffect_Stats* Stats = Entry.GetPtr<FGSTN_PartBreakEffect_Stats>())
+			{
+				if (Stats->Magnitudes.IsEmpty())
+				{
+					Report.AddWarning(FString::Printf(TEXT("%s: break effect %d lists no stat magnitude, so it changes nothing."), *Label, EffectIndex));
+				}
+				for (const FGSTN_PartStatMagnitude& Magnitude : Stats->Magnitudes)
+				{
+					if (!Magnitude.Stat.IsValid())
+					{
+						Report.AddError(FString::Printf(TEXT("%s: a magnitude of break effect %d has no stat tag."), *Label, EffectIndex));
+					}
+					else if (!Magnitude.Stat.ToString().StartsWith(TEXT("Combat.SetByCaller.Stat.")))
+					{
+						// The root is the GAS module's tag, which this module cannot name; the effect is applied by SetByCaller key
+						Report.AddWarning(FString::Printf(TEXT("%s: stat %s of break effect %d is not under Combat.SetByCaller.Stat, so the applied effect will not read it."), *Label, *Magnitude.Stat.ToString(), EffectIndex));
+					}
+					if (!FMath::IsFinite(Magnitude.Magnitude))
+					{
+						Report.AddError(FString::Printf(TEXT("%s: a magnitude of break effect %d is not a finite number."), *Label, EffectIndex));
+					}
+				}
+			}
+			else if (const FGSTN_PartBreakEffect_DisableHurtbox* DisableHurtbox = Entry.GetPtr<FGSTN_PartBreakEffect_DisableHurtbox>())
+			{
+				if (DisableHurtbox->Hurtboxes.IsEmpty())
+				{
+					Report.AddWarning(FString::Printf(TEXT("%s: break effect %d disables no hurtbox."), *Label, EffectIndex));
+				}
+				if (DisableHurtbox->Hurtboxes.Contains(NAME_None))
+				{
+					Report.AddError(FString::Printf(TEXT("%s: break effect %d lists an empty hurtbox name."), *Label, EffectIndex));
+				}
+			}
 			if (!Part.IsBreakable())
 			{
 				Report.AddWarning(FString::Printf(TEXT("%s is unbreakable (part cap 0 or less), so its break effect %d never fires unless a broken parent cascades onto it."), *Label, EffectIndex));
@@ -213,16 +276,40 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 		}
 	}
 
+	// A part can break by damage only when it is breakable, or by cascade when an ancestor does: the others never appear in the
+	// broken mask, so a gate that waits for them would lock the entity for good
+	const uint16 Reachable = UGSTN_PartMath::ComputeCascade(Parts, UGSTN_PartMath::GetBreakableMask(Parts));
+	const int32 NumReachable = FMath::CountBits(static_cast<uint32>(Reachable));
+
 	if (GrabGate.MinBrokenParts > Num)
 	{
 		Report.AddError(FString::Printf(TEXT("The grab gate needs %d broken parts but the set has %d."), GrabGate.MinBrokenParts, Num));
 	}
+	else if (GrabGate.MinBrokenParts > NumReachable)
+	{
+		Report.AddError(FString::Printf(TEXT("The grab gate needs %d broken parts but only %d can ever break (a part with a cap of 0 or less breaks only with a breakable ancestor): the entity could never be grabbed."), GrabGate.MinBrokenParts, NumReachable));
+	}
+
+	bool bAnyRequiredReachable = false;
+	bool bAnyRequiredInRange = false;
 	for (const int32 Required : GrabGate.RequiredParts)
 	{
 		if (Required < 0 || Required >= Num)
 		{
 			Report.AddError(FString::Printf(TEXT("The grab gate requires part %d, which does not exist."), Required));
+			continue;
 		}
+		bAnyRequiredInRange = true;
+		const bool bReachable = Required < GSTN_PartsLimits::MaxParts && (Reachable & static_cast<uint16>(1u << Required)) != 0;
+		bAnyRequiredReachable |= bReachable;
+		if (!bReachable && !GrabGate.bAnyOf)
+		{
+			Report.AddError(FString::Printf(TEXT("The grab gate requires %s, which can never break (its cap is 0 or less and no ancestor is breakable): the entity could never be grabbed."), *PartLabel(Required, Parts[Required])));
+		}
+	}
+	if (GrabGate.bAnyOf && bAnyRequiredInRange && !bAnyRequiredReachable)
+	{
+		Report.AddError(TEXT("The grab gate needs any of its required parts, but none of them can ever break: the entity could never be grabbed."));
 	}
 }
 
@@ -243,9 +330,13 @@ void FGSTN_PartsValidation::ValidateBands(TConstArrayView<FGSTN_PenetrationBand>
 		{
 			Report.AddError(FString::Printf(TEXT("%s: the scales must be finite and not negative."), *Label));
 		}
-		if (Band.bRicochet && (Band.PartScale != 0.f || Band.MainScale != 0.f))
+		if (Band.bRicochet && (Band.PartScale != 0.f || Band.MainScale != 0.f || Band.StaggerScale != 0.f || Band.HitstopScale != 0.f))
 		{
-			Report.AddWarning(FString::Printf(TEXT("%s ricochets, so its part and main scales are ignored (a ricochet deals no damage)."), *Label));
+			Report.AddWarning(FString::Printf(TEXT("%s ricochets, so its part, main, stagger and hitstop scales are ignored (a ricochet deals no damage and no reaction)."), *Label));
+		}
+		if (Band.bRicochet && Index == 0)
+		{
+			Report.AddWarning(FString::Printf(TEXT("%s is the top band and ricochets: a hit that ignores hardness always takes the top band, so it would ricochet off everything."), *Label));
 		}
 		if (Index > 0)
 		{
@@ -258,6 +349,16 @@ void FGSTN_PartsValidation::ValidateBands(TConstArrayView<FGSTN_PenetrationBand>
 				Report.AddError(FString::Printf(TEXT("%s is not sorted: bands must run from the highest MinDelta down (use Normalize)."), *Label));
 			}
 		}
+	}
+
+	bool bAnyDamaging = false;
+	for (const FGSTN_PenetrationBand& Band : Bands)
+	{
+		bAnyDamaging |= !Band.bRicochet && (Band.PartScale > 0.f || Band.MainScale > 0.f);
+	}
+	if (!bAnyDamaging)
+	{
+		Report.AddWarning(TEXT("No band deals damage (every band ricochets or has part and main scales of 0), so no hit could hurt a part or the entity through it."));
 	}
 
 	if (Bands.Last().MinDelta > GSTN_PartsLimits::MinPossibleDelta)

@@ -20,7 +20,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTagsDocumentedTest, "GSTNParts.Core.
 bool FGSTN_PartsTagsDocumentedTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
-	GSTN_PartsTags::GetDeclaredTags(Tags);
+	GSTNPartsTags::GetDeclaredTags(Tags);
 	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 11);
 
 	const UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
@@ -56,7 +56,7 @@ bool FGSTN_PartsTagsNoStateTest::RunTest(const FString& Parameters)
 {
 	// Parts project Combat.Part.* and emit Combat.Event.Part.*; stagger and hitstop stay the combat core's tags (combat-parts.md §7)
 	TArray<FGameplayTag> Tags;
-	GSTN_PartsTags::GetDeclaredTags(Tags);
+	GSTNPartsTags::GetDeclaredTags(Tags);
 	const TCHAR* Forbidden[] = { TEXT("Combat.State"), TEXT("Combat.Mover"), TEXT("Combat.Lock"), TEXT("Combat.Link") };
 	for (const FGameplayTag& Tag : Tags)
 	{
@@ -76,7 +76,7 @@ bool FGSTN_PartsTagsOwnedRootsTest::RunTest(const FString& Parameters)
 	// Each native tag sits in a subtree the plugin owns (modularity-and-tags 4.2): Combat.Part, Combat.Event.Part,
 	// Combat.Entity.Destructible and the Message.Combat.PartBroken channel
 	TArray<FGameplayTag> Tags;
-	GSTN_PartsTags::GetDeclaredTags(Tags);
+	GSTNPartsTags::GetDeclaredTags(Tags);
 	for (const FGameplayTag& Tag : Tags)
 	{
 		const FString Name = Tag.ToString();

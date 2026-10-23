@@ -31,7 +31,7 @@ struct GSTNPARTSCORE_API FGSTN_PartsValidationReport
 
 /**
  * The rules a part set and a penetration table must obey (combat-parts.md §3.1, plan P2), as pure functions over plain arrays.
- * The assets' IsDataValid call these and forward the findings; the editor module and the minion bridge call them with their
+ * The assets' IsDataValid call these and forward the findings; the editor module and the minion bridge planned for M8 (not built) call them with their
  * own limits.
  */
 struct GSTNPARTSCORE_API FGSTN_PartsValidation

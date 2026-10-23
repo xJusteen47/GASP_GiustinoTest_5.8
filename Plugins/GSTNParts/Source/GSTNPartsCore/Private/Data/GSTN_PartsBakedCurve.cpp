@@ -6,7 +6,7 @@
 
 namespace
 {
-	constexpr int32 Last = GSTN_PartsLimits::CurveEntries - 1;
+	constexpr int32 CurveLastIndex = GSTN_PartsLimits::CurveEntries - 1;
 }
 
 FGSTN_PartsBakedCurve::FGSTN_PartsBakedCurve()
@@ -46,11 +46,11 @@ FGSTN_PartsBakedCurve FGSTN_PartsBakedCurve::MakeLinear(float AtZero, float AtOn
 	FGSTN_PartsBakedCurve Curve;
 	const int64 From = QuantiseUnit(AtZero);
 	const int64 To = QuantiseUnit(AtOne);
-	for (int32 Index = 0; Index <= Last; ++Index)
+	for (int32 Index = 0; Index <= CurveLastIndex; ++Index)
 	{
 		// Rounded to nearest in integers, away from zero on a tie, so the table never depends on float rounding
 		const int64 Numerator = (To - From) * Index;
-		const int64 Offset = Numerator >= 0 ? (Numerator + Last / 2) / Last : -((-Numerator + Last / 2) / Last);
+		const int64 Offset = Numerator >= 0 ? (Numerator + CurveLastIndex / 2) / CurveLastIndex : -((-Numerator + CurveLastIndex / 2) / CurveLastIndex);
 		Curve.Table[Index] = static_cast<uint16>(From + Offset);
 	}
 	return Curve;
@@ -59,9 +59,9 @@ FGSTN_PartsBakedCurve FGSTN_PartsBakedCurve::MakeLinear(float AtZero, float AtOn
 FGSTN_PartsBakedCurve FGSTN_PartsBakedCurve::FromRichCurve(const FRichCurve& Curve)
 {
 	FGSTN_PartsBakedCurve Baked;
-	for (int32 Index = 0; Index <= Last; ++Index)
+	for (int32 Index = 0; Index <= CurveLastIndex; ++Index)
 	{
-		Baked.Table[Index] = static_cast<uint16>(QuantiseUnit(Curve.Eval(static_cast<float>(Index) / static_cast<float>(Last))));
+		Baked.Table[Index] = static_cast<uint16>(QuantiseUnit(Curve.Eval(static_cast<float>(Index) / static_cast<float>(CurveLastIndex))));
 	}
 	return Baked;
 }
@@ -73,7 +73,7 @@ FGSTN_PartsBakedCurve FGSTN_PartsBakedCurve::FromSamples(TConstArrayView<float> 
 	{
 		return Baked;
 	}
-	for (int32 Index = 0; Index <= Last; ++Index)
+	for (int32 Index = 0; Index <= CurveLastIndex; ++Index)
 	{
 		Baked.Table[Index] = static_cast<uint16>(QuantiseUnit(Samples[FMath::Min(Index, Samples.Num() - 1)]));
 	}
@@ -84,11 +84,11 @@ uint32 FGSTN_PartsBakedCurve::SampleQuantised(uint32 ProgressQuantised) const
 {
 	const uint32 Progress = FMath::Min(ProgressQuantised, One);
 	// Position in 64-entry space scaled by One: at most 63 * 65535, which fits comfortably
-	const uint32 Position = Progress * static_cast<uint32>(Last);
+	const uint32 Position = Progress * static_cast<uint32>(CurveLastIndex);
 	const uint32 Index = Position / One;
-	if (Index >= static_cast<uint32>(Last))
+	if (Index >= static_cast<uint32>(CurveLastIndex))
 	{
-		return Table[Last];
+		return Table[CurveLastIndex];
 	}
 	const int64 Fraction = Position % One;
 	const int64 Low = Table[Index];

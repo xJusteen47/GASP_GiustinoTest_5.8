@@ -73,7 +73,11 @@ void UGSTN_PenetrationTable::PostLoad()
 void UGSTN_PenetrationTable::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	Normalize();
+	// Not while a value is being typed or dragged: the rows would reorder under the cursor. The final event sorts
+	if (PropertyChangedEvent.ChangeType != EPropertyChangeType::Interactive)
+	{
+		Normalize();
+	}
 }
 
 EDataValidationResult UGSTN_PenetrationTable::IsDataValid(FDataValidationContext& Context) const

@@ -13,11 +13,12 @@
  * only (Config/Tags/GSTNParts.ini): the Part.Type.* classification of a part and the GameplayCue.Combat.Part.* cues, and code
  * never names a leaf.
  *
- * The plugin declares no Combat.State.*, Combat.Mover.*, Combat.Lock.* or Combat.Link.* tag: stagger is the existing
- * Combat.State.Hitstun and hitstop the existing Combat.State.Hitstop. No part tag is ever stored in a sync state or a snapshot:
- * those carry the part mask and the part indices only.
+ * The plugin declares no Combat.State.*, Combat.Mover.*, Combat.Lock.* or Combat.Link.* tag: the stagger and hitstop a part
+ * causes are values in the hit result, and how they reach the victim is the M4 hit pipeline's business (no Combat.State.Hitstun
+ * or Hitstop tag exists yet). No part tag is ever stored in a sync state or a snapshot: those carry the part mask and the part
+ * indices only.
  */
-namespace GSTN_PartsTags
+namespace GSTNPartsTags
 {
 	/** At least one part of the entity is broken. Projected from the broken mask, never granted. */
 	GSTNPARTSCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Part_Broken);

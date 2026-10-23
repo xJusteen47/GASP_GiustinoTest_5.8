@@ -9,6 +9,7 @@
 #include "Data/GSTN_PartsRulesExtension.h"
 #include "Data/GSTN_PartsValidation.h"
 #include "GSTN_PartsSettings.h"
+#include "GSTN_PartsTags.h"
 #include "GSTN_PartsTestUtils.h"
 #include "Misc/DataValidation.h"
 #include "UObject/UnrealType.h"
@@ -118,7 +119,7 @@ bool FGSTN_PartsDataMaskOver16Test::RunTest(const FString& Parameters)
 	Parts.Add(GSTNPartsTest::MakePart("Part16", { "Box16" }, 0, 10.f));
 	TestTrue(TEXT("Seventeen parts are an error"), GSTNPartsTest::Validate(Parts).Contains(true, TEXT("limit is 16")));
 
-	// The minion bridge validates with its own limit
+	// The minion bridge planned for M8 will validate with its own limit
 	Parts.SetNum(GSTN_PartsLimits::MaxMinionParts + 1);
 	TestTrue(TEXT("Nine parts exceed a minion set"), GSTNPartsTest::Validate(Parts, nullptr, GSTN_PartsLimits::MaxMinionParts).Contains(true, TEXT("limit is 8")));
 	TestEqual(TEXT("Nine parts are fine for a fighter"), GSTNPartsTest::Validate(Parts).NumErrors(), 0);
@@ -316,5 +317,187 @@ bool FGSTN_PartsDataNoHardContentTest::RunTest(const FString& Parameters)
 	}
 	return true;
 }
+
+// Review 2026-10-23 B.3: a grab gate that waits for parts no break can reach locked the entity for good and the validator said valid
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsDataGateReachableTest, "GSTNParts.Core.Data.GrabGateMustBeReachable", GSTNPartsTest::Flags)
+bool FGSTN_PartsDataGateReachableTest::RunTest(const FString& Parameters)
+{
+	// Torso 0, arm 1, hand 2 under the arm, head 3: the head is an armour plate that never breaks
+	TArray<FGSTN_PartDefinition> Parts = GSTNPartsTest::MakeEnemyParts();
+	Parts[3].PartCap = 0.f;
+
+	FGSTN_GrabGate Gate;
+	Gate.RequiredParts = { 3 };
+	TestTrue(TEXT("Requiring an unbreakable part with no breakable ancestor is an error"), GSTNPartsTest::Validate(Parts, nullptr, 16, Gate).Contains(true, TEXT("can never break")));
+
+	Gate.bAnyOf = true;
+	TestTrue(TEXT("Any of a set where nothing can break is an error"), GSTNPartsTest::Validate(Parts, nullptr, 16, Gate).Contains(true, TEXT("none of them can ever break")));
+	Gate.RequiredParts = { 3, 1 };
+	TestFalse(TEXT("Any of a set where one can break is fine"), GSTNPartsTest::Validate(Parts, nullptr, 16, Gate).HasErrors());
+
+	// An unbreakable part under a breakable parent breaks with it, so it is reachable
+	TArray<FGSTN_PartDefinition> Plated = GSTNPartsTest::MakeEnemyParts();
+	Plated[2].PartCap = 0.f; // the hand plate, child of the arm
+	Gate = FGSTN_GrabGate();
+	Gate.RequiredParts = { 2 };
+	TestFalse(TEXT("A plate that goes with a breakable limb is reachable"), GSTNPartsTest::Validate(Plated, nullptr, 16, Gate).HasErrors());
+
+	// The count: torso, arm and hand can break (3 of 4)
+	Gate = FGSTN_GrabGate();
+	Gate.MinBrokenParts = 3;
+	TestFalse(TEXT("A count the breakable parts can reach is fine"), GSTNPartsTest::Validate(Parts, nullptr, 16, Gate).HasErrors());
+	Gate.MinBrokenParts = 4;
+	const FGSTN_PartsValidationReport Report = GSTNPartsTest::Validate(Parts, nullptr, 16, Gate);
+	TestTrue(TEXT("A count above the reachable parts is an error"), Report.Contains(true, TEXT("only 3 can ever break")));
+	TestFalse(TEXT("... which is not the error for more than the set holds"), Report.Contains(true, TEXT("but the set has")));
+	return true;
+}
+
+// Review 2026-10-23 B.4: only MainDamage was checked; the other effects and the band table had holes
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsDataEffectFieldsTest, "GSTNParts.Core.Data.BreakEffectFieldsValidated", GSTNPartsTest::Flags)
+bool FGSTN_PartsDataEffectFieldsTest::RunTest(const FString& Parameters)
+{
+	auto WithEffect = [](const FInstancedStruct& Effect)
+	{
+		TArray<FGSTN_PartDefinition> Parts = GSTNPartsTest::MakeEnemyParts();
+		Parts[1].OnBreak.Add(Effect);
+		return GSTNPartsTest::Validate(Parts);
+	};
+	constexpr float NaN = std::numeric_limits<float>::quiet_NaN();
+
+	FGSTN_PartBreakEffect_Launch Launch;
+	Launch.Speed = 600.f;
+	Launch.UpFraction = 0.5f;
+	TestFalse(TEXT("A sane launch is valid"), WithEffect(FInstancedStruct::Make(Launch)).HasErrors());
+	Launch.Speed = NaN;
+	TestTrue(TEXT("A NaN launch speed is an error"), WithEffect(FInstancedStruct::Make(Launch)).Contains(true, TEXT("launch speed")));
+	Launch.Speed = -1.f;
+	TestTrue(TEXT("A negative launch speed is an error"), WithEffect(FInstancedStruct::Make(Launch)).Contains(true, TEXT("launch speed")));
+	Launch.Speed = 600.f;
+	Launch.UpFraction = 1.5f;
+	TestTrue(TEXT("An up fraction above 1 is an error"), WithEffect(FInstancedStruct::Make(Launch)).Contains(true, TEXT("up fraction")));
+	Launch.UpFraction = -0.1f;
+	TestTrue(TEXT("An up fraction below 0 is an error"), WithEffect(FInstancedStruct::Make(Launch)).Contains(true, TEXT("up fraction")));
+
+	FGSTN_PartBreakEffect_Stagger Stagger;
+	Stagger.Frames = 12;
+	TestFalse(TEXT("A stagger of 12 frames is valid"), WithEffect(FInstancedStruct::Make(Stagger)).HasErrors());
+	Stagger.Frames = -3;
+	TestTrue(TEXT("Negative stagger frames are an error"), WithEffect(FInstancedStruct::Make(Stagger)).Contains(true, TEXT("stagger frames")));
+
+	FGSTN_PartBreakEffect_Stats Stats;
+	TestTrue(TEXT("A stats effect with no magnitude warns"), WithEffect(FInstancedStruct::Make(Stats)).Contains(false, TEXT("no stat magnitude")));
+	FGSTN_PartStatMagnitude& Magnitude = Stats.Magnitudes.AddDefaulted_GetRef();
+	TestTrue(TEXT("A magnitude with no stat tag is an error"), WithEffect(FInstancedStruct::Make(Stats)).Contains(true, TEXT("no stat tag")));
+	Magnitude.Stat = GSTNPartsTags::Part_Broken; // a registered tag, but not under Combat.SetByCaller.Stat
+	TestTrue(TEXT("A stat outside the SetByCaller stat root warns"), WithEffect(FInstancedStruct::Make(Stats)).Contains(false, TEXT("not under Combat.SetByCaller.Stat")));
+	Magnitude.Magnitude = NaN;
+	TestTrue(TEXT("A NaN magnitude is an error"), WithEffect(FInstancedStruct::Make(Stats)).Contains(true, TEXT("not a finite number")));
+
+	FGSTN_PartBreakEffect_DisableHurtbox Disable;
+	Disable.Hurtboxes = { "ArmBox", NAME_None };
+	TestTrue(TEXT("An empty hurtbox name in a disable effect is an error"), WithEffect(FInstancedStruct::Make(Disable)).Contains(true, TEXT("empty hurtbox name")));
+	Disable.Hurtboxes = { "ArmBox" };
+	TestFalse(TEXT("A named hurtbox is valid"), WithEffect(FInstancedStruct::Make(Disable)).HasErrors());
+
+	// Part types are Part.Type.* leaves: anything else is not seen by the rules that look for a type
+	TArray<FGSTN_PartDefinition> Parts = GSTNPartsTest::MakeEnemyParts();
+	Parts[3].Types.AddTag(GSTNPartsTags::Part_Broken);
+	TestTrue(TEXT("A type outside Part.Type warns"), GSTNPartsTest::Validate(Parts).Contains(false, TEXT("not a Part.Type.* tag")));
+	Parts = GSTNPartsTest::MakeEnemyParts();
+	const FGameplayTag Head = FGameplayTag::RequestGameplayTag(FName(TEXT("Part.Type.Head")), false);
+	if (Head.IsValid())
+	{
+		Parts[3].Types.AddTag(Head);
+		TestEqual(TEXT("A Part.Type leaf passes"), GSTNPartsTest::Validate(Parts).NumWarnings(), 0);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsDataDegenerateBandsTest, "GSTNParts.Core.Data.DegenerateBandTablesWarn", GSTNPartsTest::Flags)
+bool FGSTN_PartsDataDegenerateBandsTest::RunTest(const FString& Parameters)
+{
+	auto Validate = [](const TArray<FGSTN_PenetrationBand>& Bands)
+	{
+		FGSTN_PartsValidationReport Report;
+		FGSTN_PartsValidation::ValidateBands(Bands, Report);
+		return Report;
+	};
+
+	TestEqual(TEXT("The default table has no finding"), Validate(UGSTN_PenetrationTable::MakeDefaultBands()).Issues.Num(), 0);
+
+	// A ricochet on top: a hit that ignores hardness takes band 0 and would bounce off everything
+	TArray<FGSTN_PenetrationBand> Bands = UGSTN_PenetrationTable::MakeDefaultBands();
+	Bands[0].bRicochet = true;
+	Bands[0].PartScale = Bands[0].MainScale = Bands[0].StaggerScale = Bands[0].HitstopScale = 0.f;
+	TestTrue(TEXT("A top band that ricochets warns"), Validate(Bands).Contains(false, TEXT("top band and ricochets")));
+
+	// Nothing deals damage
+	FGSTN_PenetrationBand Wall;
+	Wall.MinDelta = GSTN_PartsLimits::MinPossibleDelta;
+	Wall.bRicochet = true;
+	Wall.PartScale = Wall.MainScale = Wall.StaggerScale = Wall.HitstopScale = 0.f;
+	TestTrue(TEXT("A table where every band ricochets warns"), Validate({ Wall }).Contains(false, TEXT("No band deals damage")));
+	FGSTN_PenetrationBand Zero;
+	Zero.MinDelta = GSTN_PartsLimits::MinPossibleDelta;
+	Zero.PartScale = Zero.MainScale = 0.f;
+	TestTrue(TEXT("A table where every band has scales of 0 warns"), Validate({ Zero }).Contains(false, TEXT("No band deals damage")));
+
+	// A ricochet band whose stagger or hitstop scale is set: ApplyHit ignores it
+	Bands = UGSTN_PenetrationTable::MakeDefaultBands();
+	Bands[2].StaggerScale = 1.f;
+	TestTrue(TEXT("Stagger on a ricochet band warns"), Validate(Bands).Contains(false, TEXT("stagger and hitstop scales are ignored")));
+	Bands = UGSTN_PenetrationTable::MakeDefaultBands();
+	Bands[2].HitstopScale = 1.f;
+	TestTrue(TEXT("Hitstop on a ricochet band warns"), Validate(Bands).Contains(false, TEXT("stagger and hitstop scales are ignored")));
+	return true;
+}
+
+// Review 2026-10-23 B.6: a duplicated set kept the constructor baked curve until the next load
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsDataDuplicateCurveTest, "GSTNParts.Core.Data.DuplicatedSetRebakesItsCurve", GSTNPartsTest::Flags)
+bool FGSTN_PartsDataDuplicateCurveTest::RunTest(const FString& Parameters)
+{
+	UGSTN_PartSetDefinition* Set = NewObject<UGSTN_PartSetDefinition>(GetTransientPackage(), TEXT("CurveSource"));
+	Set->bOverrideWeightCurve = true;
+	if (FRichCurve* Curve = Set->WeightCurve.GetRichCurve())
+	{
+		Curve->Reset();
+		Curve->AddKey(0.f, 0.5f);
+		Curve->AddKey(1.f, 0.5f);
+	}
+	Set->RebakeWeightCurve();
+	TestEqual(TEXT("The source is baked from its curve"), Set->GetWeightCurve().Sample(0.f), 0.5f, 0.0001f);
+
+	UGSTN_PartSetDefinition* Copy = DuplicateObject<UGSTN_PartSetDefinition>(Set, GetTransientPackage(), TEXT("CurveCopy"));
+	if (TestNotNull(TEXT("The set duplicates"), Copy))
+	{
+		TestTrue(TEXT("The copy keeps the override flag"), Copy->bOverrideWeightCurve);
+		TestEqual(TEXT("The copy is baked from the copied curve, not the constructor one (1.0)"), Copy->GetWeightCurve().Sample(0.f), 0.5f, 0.0001f);
+		TestEqual(TEXT("... and flat like its source"), Copy->GetWeightCurve().Sample(1.f), 0.5f, 0.0001f);
+	}
+	return true;
+}
+
+#if WITH_EDITOR
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsDataTableSortOnEditTest, "GSTNParts.Core.Data.TableSortsWhenEditSettles", GSTNPartsTest::Flags)
+bool FGSTN_PartsDataTableSortOnEditTest::RunTest(const FString& Parameters)
+{
+	UGSTN_PenetrationTable* Table = NewObject<UGSTN_PenetrationTable>(GetTransientPackage());
+	FGSTN_PenetrationBand Low;
+	Low.MinDelta = -3;
+	FGSTN_PenetrationBand High;
+	High.MinDelta = 2;
+	Table->Bands = { Low, High }; // typed in the wrong order
+
+	FPropertyChangedEvent Interactive(nullptr, EPropertyChangeType::Interactive);
+	Table->PostEditChangeProperty(Interactive);
+	TestEqual(TEXT("A value being dragged does not reorder the rows"), Table->Bands[0].MinDelta, -3);
+
+	FPropertyChangedEvent Settled(nullptr, EPropertyChangeType::ValueSet);
+	Table->PostEditChangeProperty(Settled);
+	TestEqual(TEXT("The final edit sorts them"), Table->Bands[0].MinDelta, 2);
+	return true;
+}
+#endif
 
 #endif // WITH_DEV_AUTOMATION_TESTS

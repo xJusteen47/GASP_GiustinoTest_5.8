@@ -2,7 +2,7 @@
 
 #include "GSTN_PartsTags.h"
 
-namespace GSTN_PartsTags
+namespace GSTNPartsTags
 {
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Part_Broken, "Combat.Part.Broken", "At least one part of the entity is broken. Projected every frame from the broken mask by the parts tick extension, never granted by an ability or effect");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Part_GrabLocked, "Combat.Part.GrabLocked", "The grab gate of the entity's part set is unmet, so the entity cannot be grabbed yet. Projected from the broken mask by the parts tick extension; the grab rules list it as an ignore requirement in data");

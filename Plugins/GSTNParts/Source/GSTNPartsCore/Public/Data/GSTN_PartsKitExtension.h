@@ -13,8 +13,9 @@ class UGSTN_PartSetDefinition;
  * asset never grows a property that names parts; a combat build without this plugin keeps the entry and ignores it with a
  * warning. Parts are attached to an entity by this data, never by code in the combat core.
  *
- * The reference is soft: a dedicated server and a client both resolve it before the pawn's first simulation tick, and a
- * mismatch of the resolved set between machines is refused at connect (the part count is not on the wire).
+ * The reference is soft: a dedicated server and a client both resolve it before the pawn's first simulation tick and must
+ * resolve the same set. Nothing checks that yet (the part count is not on the wire); the connect check belongs to the network
+ * module of this plugin, which is not built.
  */
 USTRUCT(BlueprintType)
 struct GSTNPARTSCORE_API FGSTN_PartsKitExtension : public FGSTN_KitExtension

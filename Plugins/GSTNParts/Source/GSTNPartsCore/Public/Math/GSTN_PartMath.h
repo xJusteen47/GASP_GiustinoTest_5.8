@@ -147,7 +147,8 @@ public:
 	 * Applies one hit to the state. PartDelta = D x band part scale x hit scale x part scale, MainDelta = D x band main scale x
 	 * the part's transfer (its broken transfer once broken). The part breaks when its stored byte reaches 255; damage beyond the
 	 * cap is not carried to the main pool. Children of a part that broke break in the same hit, in index order, and each newly
-	 * broken part adds its MainDamage effects once. A ricochet band changes nothing. A hit on the body is the full damage.
+	 * broken part adds its MainDamage effects once; only the children of the part that just broke cascade, never a child that is
+	 * intact under an older broken parent. A ricochet band changes nothing. A hit on the body is the full damage.
 	 * Allocation free. Two hits in one frame must be applied in the inbox's sorted order: each sees the state of the one before
 	 */
 	static FGSTN_PartHitResult ApplyHit(TConstArrayView<FGSTN_PartDefinition> Parts, TConstArrayView<FGSTN_PenetrationBand> SortedBands,
@@ -189,14 +190,19 @@ public:
 
 	// --- Restore (C++) ---
 
+	/** The broken ancestors (parent, grandparent...) of the parts in Mask, Mask itself not included. Terminates on a cycle */
+	static uint16 GetBrokenAncestorsMask(TConstArrayView<FGSTN_PartDefinition> Parts, uint16 BrokenMask, uint16 Mask);
+
 	/**
-	 * Restores parts (a healer, an explicit reset; parts never regenerate by themselves). Mask 0 = every part. A broken part in
-	 * the mask unbreaks; the damage of every part in the mask becomes DamageFraction of its cap (0 = pristine) but never more than
-	 * it held, so a restore never hurts. The fraction is capped just below the cap so a restored part is not broken. The serial
-	 * advances once if any part unbroke, so restore then break again is a new event key. The main pool is not touched: giving
-	 * percent back is the healer's own effect. Returns the parts that unbroke
+	 * Restores parts (a healer, an explicit reset; parts never regenerate by themselves). Mask 0 = every part, so a mask computed
+	 * by the caller must be checked for emptiness first. A broken part in the mask unbreaks; the damage of every part in the mask
+	 * becomes DamageFraction of its cap (0 = pristine) but never more than it held, so a restore never hurts. The fraction is
+	 * capped just below the cap so a restored part is not broken. A child cannot stay intact under a broken parent (children break
+	 * with it), so the broken ancestors of the masked parts are restored too, with the same fraction. The serial advances once if
+	 * any part unbroke, so restore then break again is a new event key. The main pool is not touched: giving percent back is the
+	 * healer's own effect. Returns the parts that unbroke, ancestors included
 	 */
-	static uint16 RestoreParts(FGSTN_PartsState& State, uint16 Mask, float DamageFraction);
+	static uint16 RestoreParts(TConstArrayView<FGSTN_PartDefinition> Parts, FGSTN_PartsState& State, uint16 Mask, float DamageFraction);
 
 	// --- Blueprint helpers: stateless, pure, safe inside a simulation hook ---
 

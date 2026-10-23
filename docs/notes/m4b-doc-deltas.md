@@ -61,8 +61,12 @@ One line each: where, what differs, why. Collected per checkpoint; folded into `
 - plan P3 `FGSTN_PartsProjection`: the "hurtbox mask" is a list of hurtbox **names** (`DisabledHurtboxes`), because hurtbox indices belong to the
   hurtbox set of M4; the P7 snapshot code maps names to indices. The hit-group mask is a `uint8` as in the spec (`GroupMask`).
 - plan P3 `RestoreParts(State, Mask, Fraction)`: Fraction is the damage left as a fraction of the cap (0 = pristine), capped at 254/255 so a restored
-  part is not broken; it never raises a part's damage; the serial advances once if any part unbroke. Restoring a child while its parent stays
-  broken is not prevented (the plan's signature has no part list); flagged as an open point.
+  part is not broken; it never raises a part's damage; the serial advances once if any part unbroke. **Changed after review (B.1):** the
+  signature is `RestoreParts(Parts, State, Mask, Fraction)`; a child cannot stay intact under a broken parent (combat-parts §3.1), so the
+  broken ancestors of the masked parts are restored too (and returned in the result). `ApplyHit` also starts the cascade from the part that
+  just broke instead of from the whole broken mask, so a state that does hold an intact child under a broken parent does not re-break the
+  child (no second bonus, no serial event) when something else breaks. Mask 0 still means every part; a caller that computes a mask must
+  test it for emptiness.
 - plan P3 result type: `FGSTN_PartHitResult` also carries the band's `StaggerScale` and `HitstopScale`, `HitMainDelta` / `BonusMainDamage` / `MainDelta`,
   `bKill`, `bAllBrokenReached` so the P4 step needs nothing else from the math.
 - plan P3 tests: the grab gate evaluation is in P3 (`GrabGate.Evaluation`, one test covering empty, min count, required, any-of); P9 adds the NP
@@ -71,3 +75,24 @@ One line each: where, what differs, why. Collected per checkpoint; folded into `
 - plan P3 allocation test: a pass-through allocator installed with a compare and swap on the global allocator pointer counts the allocations of
   the test thread (with a control that must see a growing array allocate). No engine facility counts per thread.
 - plan P3 acceptance: the golden hand values and the pinned fingerprint (0x827A1F0F6B36481A) pass in Development and DebugGame (`UnrealEditor-Win64-DebugGame-Cmd.exe`), 48 of 48 `GSTNParts.*`.
+
+## Review fixes (2026-10-23)
+
+- Validators (review B.3, B.4): the grab gate is checked against the parts that can ever break (breakable parts and the descendants of
+  breakable parts, by the same cascade `ApplyHit` uses): a required part outside that set, an any-of gate with none inside it, or a
+  `MinBrokenParts` above its size is an error. The `Launch` (finite non-negative speed, up fraction in 0..1), `Stagger` (frames not
+  negative), `Stats` (a valid stat tag, finite magnitudes; a stat outside `Combat.SetByCaller.Stat` is a warning, compared as text because
+  the root belongs to `GSTNCombatGAS`) and `DisableHurtbox` (no empty name) effects are checked, and a part type outside `Part.Type` warns.
+  Band tables warn when the top band ricochets, when no band deals damage, and when a ricochet band keeps stagger or hitstop scales.
+- Baked weight curve (review B.6): `UGSTN_PartSetDefinition` rebakes in `PostDuplicate` and `PostEditImport` as well as on load and edit. A set
+  built with `NewObject` and filled by code still has to call `RebakeWeightCurve()` (documented on the function).
+- `UGSTN_PenetrationTable::PostEditChangeProperty` no longer sorts on an interactive change (rows jumped while typing `MinDelta`).
+- Tag namespace `GSTN_PartsTags` is now `GSTNPartsTags` (the files keep their names), to match `GSTNCombatTags` and `GSTNSurfaceTags`.
+- Wording: the README and headers no longer say stagger is "the existing `Combat.State.Hitstun`" (no such tag is declared anywhere; the M4
+  pipeline decides how stagger and hitstop reach the victim), no longer claim a set mismatch "is refused at connect" (nothing does that yet),
+  and name the minion bridge as planned for M8, not built.
+- Left as they are (design choices or theory, review B.11, B.12, minor list): the per-hit `ceil` rounding (documented in the README as a bias
+  of up to half a byte per hit), `FRichCurve::Eval` in float at bake time (only linear or constant curves are bit-identical by construction; a
+  fingerprint check at connect would cover it), `bWeakPointHit` on an already broken part, `Penetration` clamping in `Make`, FString vs FText
+  messages in the validators, the `Mask == 0` meaning of "all" in `RestoreParts`, and the test hygiene items (`UCLASS(Hidden)` test types
+  outside a test guard, the counting allocator, tests that read the project's ini defaults).

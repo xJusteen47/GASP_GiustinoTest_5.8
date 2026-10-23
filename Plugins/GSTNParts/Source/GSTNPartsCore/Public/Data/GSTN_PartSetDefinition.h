@@ -80,15 +80,19 @@ public:
 	const FGSTN_PartsBakedCurve& GetWeightCurve() const { return BakedWeightCurve; }
 
 	/**
-	 * Rebuilds the baked weight curve from WeightCurve or the settings. Runs on load and after an editor edit; call it after
-	 * changing the curve or the settings at run time, outside the simulation
+	 * Rebuilds the baked weight curve from WeightCurve or the settings. Runs on load, on duplication and after an editor edit; call
+	 * it after changing the curve or the settings at run time, or after filling a set built with NewObject, outside the simulation
 	 */
 	void RebakeWeightCurve();
 
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 	virtual void PostLoad() override;
 
+	/** A duplicate is built by the constructor and gets the properties copied, so the baked curve (not a property) has to follow */
+	virtual void PostDuplicate(EDuplicateMode::Type DuplicateMode) override;
+
 #if WITH_EDITOR
+	virtual void PostEditImport() override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif

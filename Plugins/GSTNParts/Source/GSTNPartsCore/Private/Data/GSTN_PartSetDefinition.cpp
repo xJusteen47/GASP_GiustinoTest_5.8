@@ -86,7 +86,19 @@ void UGSTN_PartSetDefinition::PostLoad()
 	RebakeWeightCurve();
 }
 
+void UGSTN_PartSetDefinition::PostDuplicate(EDuplicateMode::Type DuplicateMode)
+{
+	Super::PostDuplicate(DuplicateMode);
+	RebakeWeightCurve();
+}
+
 #if WITH_EDITOR
+void UGSTN_PartSetDefinition::PostEditImport()
+{
+	Super::PostEditImport();
+	RebakeWeightCurve();
+}
+
 void UGSTN_PartSetDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);

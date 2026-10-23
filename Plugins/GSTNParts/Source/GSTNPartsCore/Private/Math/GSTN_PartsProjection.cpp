@@ -19,14 +19,14 @@ void FGSTN_PartsProjection::AppendNativeTags(FGameplayTagContainer& OutTags) con
 {
 	if (bAnyBroken)
 	{
-		OutTags.AddTag(GSTN_PartsTags::Part_Broken);
+		OutTags.AddTag(GSTNPartsTags::Part_Broken);
 	}
 	if (bGrabLocked)
 	{
-		OutTags.AddTag(GSTN_PartsTags::Part_GrabLocked);
+		OutTags.AddTag(GSTNPartsTags::Part_GrabLocked);
 	}
 	if (bAllBroken)
 	{
-		OutTags.AddTag(GSTN_PartsTags::Part_AllBroken);
+		OutTags.AddTag(GSTNPartsTags::Part_AllBroken);
 	}
 }
