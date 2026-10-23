@@ -217,6 +217,19 @@ These keep M11 additive. They are cheap while M3 is being written and costly aft
 5. **Visual composition**: the skin component accepts attachment providers (§9), so kit implants and backpacks plug in.
 6. **Support weapon stats default**: support weapons ship without `StatsEffect` (§6).
 
+**What M3 takes** (answer of the M3 implementation thread, 2026-10-23; C12 in progress, C13–C15 to come):
+
+| Seam | In M3 | Left to M11 |
+|---|---|---|
+| 1 Loadout extensions | a reserved, versioned, empty extension block in `NetSerialize` and the save game, so the format can grow without a redirect | the typed `TArray<FInstancedStruct>` with base `FGSTN_LoadoutExtension` and its wire type ids |
+| 2 Compile extension | interface and registry only, called by `Compile` (C15, if it fits a short commit) | implementations; if it does not fit C15, the whole seam |
+| 3 Rules validators | yes (C12/C15) | — |
+| 4 Mid-match apply | yes: it is M3's `scenario_loadout_change` (C12/C15) | the pickup ability and actor (§4, §12) |
+| 5 Attachment providers | interface only on the skin component (C15, if it fits) | implementations; if it does not fit C15, the whole seam |
+| 6 Support weapon stats default | yes, data default (C12) | — |
+
+M3 also records that the kit's primary weapon never changes mid-match, so its weapon-switch track means primary ↔ support only.
+
 ## 12. World pickups and drops (`GSTNPickups`)
 
 - `AGSTN_EquipmentPickup` (actor) with a payload `FInstancedStruct` (base `FGSTN_PickupPayload`): `FGSTN_KitPickupPayload { kit id,
