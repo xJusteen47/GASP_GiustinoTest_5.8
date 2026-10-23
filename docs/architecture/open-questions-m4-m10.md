@@ -1376,7 +1376,9 @@ CAM.9. Della telecamera di Astro Bot fuori dai livelli guidati, ti va bene quest
 CAM.10. La finestra di zoom del mirino va sempre in un punto fisso (in alto di lato, come nel disegno), oppure segue il punto mirato? Quanto grande (circa 40% dell'altezza dello schermo)? E la linea che la collega al mirino dell'arma la vuoi sempre?
    Perché conta: decide se la finestra copre mai il personaggio o il bersaglio e quanto si vede del resto della scena.
    Ipotesi nella specifica: in alto e di lato rispetto al punto mirato, circa 40% dell'altezza, sempre dentro lo schermo e mai sopra il personaggio, con la linea di collegamento; tutto modificabile per arma ([camera.md](camera.md) §6.1).
+   **Risposta (2026-10-23):** Segue la telecamera: posizione fissa nella vista della telecamera (di default in alto di lato come nel disegno), non insegue il punto mirato.
 
 CAM.11. Il mirino ha più livelli di zoom da cambiare con un tasto? Mentre si mira con il mirino ci si può muovere liberamente (magari più lentamente), saltare o scivolare sui muri?
    Perché conta: la flessibilità della terza persona dipende da cosa resta permesso mentre si mira; i livelli di zoom richiedono un comando in più.
    Ipotesi nella specifica: zoom a uno o più livelli per arma (dati), ci si muove liberamente con velocità ridotta decisa dall'abilità di mira dell'arma; salti e muri a scelta del designer della singola arma.
+   **Risposta (2026-10-23):** Dipende dall'abilità e dall'arma che usa il mirino: sono dati loro, non della telecamera.

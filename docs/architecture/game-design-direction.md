@@ -216,7 +216,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   screen ([camera.md](camera.md) §2.5).
 - **Scoped weapons** (12:48, with a sketch): a **zoom overlay** that still lets the rest of the character be seen, as in the drawing (a round
   magnified view beside the aim, joined to the weapon's scope): "the flexibility of third person and the precision of a first-person scope"
-  ([camera.md](camera.md) §6.1).
+  ([camera.md](camera.md) §6.1). The overlay **follows the camera** (12:53, CAM.10); movement while scoped **depends on the ability and the
+  weapon** that use the scope (CAM.11).
 
 ## 7. Consequences for the specifications
 
@@ -457,3 +458,6 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 > inoltre, potrebbero esserci armi con mirino. In tal caso, vorrei un'overlay di zoom che pero lascia vedere il resto del personaggio. Ossia
 > come nel disegno. Voglio la flessibilità della terza persona, e la precisione di un mirino in prima.
+
+> Cam 10, segue la telecamera,
+> Cam 11, dipende dall'abilità e dall'arma che usa il mirino

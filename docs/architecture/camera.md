@@ -245,16 +245,17 @@ appears beside the aim, joined to the weapon's scope by a callout. The precision
 | Main view | Shoulder by default (the rule for `Camera.Request.Scope` also implies Shoulder), or any mode the rule names (a far Follow with the overlay is allowed) |
 | Magnified view | A **second render** (`USceneCaptureComponent2D` into a render target, owned by the camera component, created only while scoped) from the **presented aim origin** (`IGSTN_CameraAimOrigin`, the scope socket) along the **simulated aim direction** (`AimYaw/AimPitch`), FOV = main FOV / `Magnification` |
 | Why from the aim origin | The reticle centre is then exactly the shot's path (combat.md §11.6: the shot leaves the character, not the camera), so there is no parallax at any distance and no convergence trace is needed while scoped |
-| Overlay | A replaceable presenter `UGSTN_ScopeOverlayPresenter` (Abstract, Blueprintable, EditInlineNew) draws the render target in a round mask with the reticle, range ticks and the callout line to the projected scope socket; default placement as in the sketch: up and to the side of the aim point, `OverlayScreenFraction` 0.4 of screen height, clamped inside the safe area and never over the character |
+| Overlay | A replaceable presenter `UGSTN_ScopeOverlayPresenter` (Abstract, Blueprintable, EditInlineNew) draws the render target in a round mask with the reticle, range ticks and the callout line to the projected scope socket; **anchored to the camera view** (owner, CAM.10: it follows the camera): a fixed screen position from the scope definition, by default up and to the side as in the sketch, so it moves with the camera and never chases the aim point; `OverlayScreenFraction` 0.4 of screen height, inside the safe area, placed so it does not cover the character |
 | Aim input | While scoped, look input is aim input scaled by `1 / Magnification` (plus a user setting); optional zoom steps (`Magnifications[]`, cycled by a camera request) |
 | Main crosshair | Hidden or reduced to a small dot while the overlay is up (data on the scope definition) |
+| Moving while scoped | **Decided by the ability and the weapon that use the scope** (owner, CAM.11): speed, jumping, wall slide and cancels are the aim ability's data and the weapon's; the camera only shows the overlay |
 | Simulation | Unchanged: the aim is the same 16-bit `AimYaw/AimPitch` (about 0.0055 degrees per step, roughly 1 cm at 100 m), sampled from the control rotation. Weapon sway or breathing, if wanted, must be simulated aim data on the weapon, never a camera effect, or the reticle would lie |
 | Remote players | Nothing is replicated; others see only the character's aim pose. A lens glint or laser for opponents would be weapon presentation (not here) |
 | Cost | One extra scene render while scoped, at `CaptureResolution` (512 by default) and with a reduced show-flag set (*Unsure*: what Lumen, Nanite and virtual shadow maps cost in a scene capture in 5.8; spike C6). Fallback for low magnification: a screen-space magnifier that crops and scales the main render (cheap, blurry above about 2x). On a listen host the host pays this while the host itself is scoped |
 
 `UGSTN_CameraScopeDefinition` (PrimaryDataAsset, `Camera|Scope`): `Magnifications[]`, `CaptureResolution`, `ShowFlagsPreset`, `OverlayPresenter` (instanced),
-`OverlayScreenFraction`, `OverlayAnchor` (screen offset from the aim point), `bHideMainCrosshair`, `AimSensitivityScale`, `PostProcess` (vignette, edge blur),
-`MainModeOverride` (optional). Owner questions: CAM.10 (overlay placement and size), CAM.11 (zoom steps and moving while scoped).
+`OverlayScreenFraction`, `OverlayAnchor` (screen position in the camera view), `bHideMainCrosshair`, `AimSensitivityScale`, `PostProcess` (vignette, edge blur),
+`MainModeOverride` (optional). Owner answers: CAM.10 (the overlay follows the camera) and CAM.11 (movement is up to the ability and the weapon); zoom steps stay data per scope.
 
 ## 7. Hard cases
 
