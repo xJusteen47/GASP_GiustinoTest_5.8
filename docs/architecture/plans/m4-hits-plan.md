@@ -453,7 +453,8 @@ launch direction, tilt etc. may differ per instance.
   hitbox, a baked-socket hitbox, a `WorldAtMoveStart` hitbox and an `Ally` variant (half shape, no hitstun); three test hurtbox sets
   (light / medium / heavy weight, one high-threshold hurtbox); example Blueprints for each extension class (`BP_Step_Example`,
   `BP_KnockbackModel_Example`, `BP_OutcomeApplier_Example`, `BP_AttackerOutcome_Example`, `BP_RelationshipResolver_Example`) under
-  `/Game/GASNPPTest/Combat/`; test map with a wall, a glass panel, a KO zone (and three trampolines from H11b). Validators' matrix printers
+  `/Game/GASNPPTest/Combat/`; test map with a wall, a glass panel, a KO zone (and three trampolines from H11b), built as the first stations of
+  TM2 `L_Test_Combat` ([test-maps.md](test-maps.md)). Validators' matrix printers
   wired to `IsDataValid` output. Full harness (both topologies, every scenario of H7–H12, with and without loss) + all `GSTNCombat.*`.
   Docs commit: CM §12 (hits), §17 (H0 results), S corrections found while implementing, READMEs ("Extending in Blueprint", settings,
   fork requirements), plugin tag ini documented.

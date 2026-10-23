@@ -441,6 +441,11 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
 - Acceptance: CP §8.3 item 5 minion half; M8 acceptance unchanged without the bridge plugin.
 - Spec: CP §5.5, §8.3 item 5; M8 §4d.2, §8.2, §8.3, §9.2, §10. Size: L.
 
+### P17 Test-map stations for parts
+
+- Add the parts dummy to TM2 `L_Test_Combat` (station 8) after P12, and the parts boss to TM3 `L_Test_Enemies` (station 5) after P16, as in
+  [test-maps.md](test-maps.md). Content only, built by Ludus AI or a person from primitives. Size: S.
+
 ## 4. Spikes first and stop-and-ask conditions
 
 Spikes are P0 (above). Summary of stop conditions (do not continue past them without the owner or lead):

@@ -38,6 +38,17 @@ The interaction plugin ([`../interaction.md`](../interaction.md) §3.3, owner an
 `uint64 TargetKey` in `FGSTN_ActivationContext`, stamped when a binding requires an `Interact.Target.*` tag (combat never names interaction).
 Cheap now, a fallback accessor exists if it is refused; the probe text of M6 §8 that the M6 plan will use is superseded by interaction.md.
 
+### Test maps (owner request, 2026-10-23)
+
+After the related milestones, three test maps are built from primitives by Ludus AI (an editor AI assistant) or a person,
+following the briefs in [test-maps.md](test-maps.md):
+
+| Checkpoint | Map | Build after |
+|---|---|---|
+| **TM1** | `L_Test_Movement` | wall movement core (T5) and the jump; later stations after T1–T4, camera C3 and gravity volumes |
+| **TM2** | `L_Test_Combat` | M4 H13 (it grows the H13 test map); later stations after M4b, M6, M10 and M11 |
+| **TM3** | `L_Test_Enemies` | M8; the parts station after P16; the platform enemy once `GSTNPlatform` exists |
+
 ## Cross-plan dependency map
 
 The M4b and M5 plans name M4 capabilities (D-ids, "M4-*" names) instead of H-numbers. This table maps them.
