@@ -5,9 +5,12 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Input/GSTN_InputSlot.h"
 #include "GSTN_TestSlotUtils.generated.h"
 
 class UGSTN_InputSlotSet;
+struct FGSTN_InputSlotEntry;
+struct FGSTN_InputPattern;
 class APlayerController;
 class UInputAction;
 
@@ -34,6 +37,18 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GASNPPTest|Input")
 	static bool AddButtonPressSlot(UGSTN_InputSlotSet* Set, FGameplayTag Command, FGameplayTag Button);
+
+	/**
+	 * A slot written in place (a kit's AddedSlots entry): Command on the buttons, as one chord (all pressed together) or as a sequence of
+	 * presses (one step per button, in order). bFallThrough = the slot lets lower slots use its press while it cannot execute (EX without meter).
+	 * Python cannot build the instanced condition structs, so the C18 test kits get their slots from here.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPPTest|Input")
+	static FGSTN_InputSlotEntry MakeSlotEntry(FGameplayTag Command, const TArray<FGameplayTag>& Buttons, bool bChord, bool bFallThrough, int32 PriorityOffset);
+
+	/** The code of a super (PerSuperCode): one press step per button, in order */
+	UFUNCTION(BlueprintCallable, Category = "GASNPPTest|Input")
+	static FGSTN_InputPattern MakePressSequence(const TArray<FGameplayTag>& Buttons);
 
 	/**
 	 * Input for a pawn that has no GSTN_GASNPPTestComponent (the pawn override of the harness, e.g. SandboxCharacter_Mover): the local player's

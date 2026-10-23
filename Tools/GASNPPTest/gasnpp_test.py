@@ -2963,6 +2963,291 @@ def scenario_hitstop(client=1):
     run.run(steps)
 
 
+# ---- C18 table swap scenarios (loadout-table-swap-design.md, session 2). The kits are /Game/GASNPPTest/Combat/KIT_Test_{Gamma, Delta, Sigma, Omega}
+# (Tools/GAS/setup_gas_assets.py --combat-content); each scenario applies its own kit first. A loadout stays applied after the scenario: they run
+# before loadout_change, after hitstop (every kit binds the blade's attack and the platform jump, so the earlier press-driven scenarios still work).
+
+def _c18_apply(key, st, label, kit, supers=''):
+    def f():
+        st[label] = _srv(key).server_apply_test_loadout_with_supers(kit, '', supers)
+        return label, st[label]
+    return f
+
+
+def _c18_state(run, key, client, kit, revision, label, bindings=None):
+    """The kit is the loadout on both machines, the simulation swapped to its table (table revision == loadout revision), same table checksum
+    and binding count on both (`bindings`: and that count)."""
+    def f():
+        out, ok, crcs, counts = [], True, [], []
+        for i, side in ((0, 'srv'), (client, 'cli')):
+            lo, co, _ = _loadout_view(i, key)
+            ok &= bool(lo.get('kit') == kit and lo.get('revision') == revision and co.get('loadoutRevision') == revision
+                       and co.get('tableRevision') == revision and lo.get('kitResolved'))
+            crcs.append(co.get('tableCrc'))
+            counts.append(co.get('tableBindings'))
+            out.append(f"{side}: kit {lo.get('kit')} rev {lo.get('revision')} table rev {co.get('tableRevision')} bindings {co.get('tableBindings')}")
+        ok &= bool(crcs[0]) and crcs[0] == crcs[1] and counts[0] == counts[1] and (bindings is None or counts[0] == bindings)
+        return ok, '; '.join(out) + f' table checksums {crcs} (want equal; kit {kit}, revision {revision}' + (f', {bindings} bindings)' if bindings is not None else ')')
+    return run.at(label, f)
+
+
+def _c18_accepted(run, st, label):
+    return run.at(f'{label}: accepted', lambda: (st.get(label) == 'OK', f'ServerApplyTestLoadout -> {st.get(label)}'))
+
+
+def _c18_both_saw(run, tag, t0, t1, label, want=True):
+    """The authority and the owner owned `tag` somewhere in [t0, t1] (want) or neither did"""
+    def f():
+        s, c = run.saw_tag(tag, t0, t1, 'srv'), run.saw_tag(tag, t0, t1, 'cli')
+        return (s and c) if want else (not s and not c), f'{tag}: authority {s}, owner {c} (want {"both" if want else "neither"})'
+    return run.at(label, f)
+
+
+def _c18_requests(run, t0, t1, label, count):
+    """The same number of requests (`count`) on the authority and the owner in [t0, t1]"""
+    def f():
+        s, c = run.new_bindings(t0, t1, 'srv'), run.new_bindings(t0, t1, 'cli')
+        return s == c and len(s) == count, f'request bindings authority {s}, owner {c} (want equal, {count})'
+    return run.at(label, f)
+
+
+def _c18_meters(key, i):
+    st = ((_view(i, key) or {}).get('probe') or {}).get('stats') or {}
+    return st.get('exMeter'), st.get('superMeter'), st.get('hasMeterSet')
+
+
+def _c18_meter_is(run, key, client, field, want, label):
+    """ExMeter (field 0) or SuperMeter (field 1) equals `want` on the authority and the owner"""
+    def f():
+        got = [_c18_meters(key, i)[field] for i in (0, client)]
+        return all(g is not None and abs(g - want) < 0.5 for g in got), f'{"ex" if field == 0 else "super"} meter authority/owner {got}, want {want}'
+    return run.at(label, f)
+
+
+def _c18_reconciles(marks, max_combat, max_asc):
+    def f():
+        r = report_reconciles(marks['start'], ignore_own_changes=False)
+        by = r['unexplained_by_model']
+        return by.get('combat', 0) <= max_combat and by.get('asc', 0) <= max_asc and by.get('mover', 0) == 0, \
+            f"unexplained by model {by} (at most combat {max_combat}, asc {max_asc}, no Mover), forced={r['forced']}"
+    return f
+
+
+def _c18_gate_open(key):
+    closed = _loadout_view(0, key)[1].get('tableGateClosed')
+    return closed == 0, f'frames the authority ran with the table gate closed: {closed} (want 0)'
+
+
+def scenario_command_set(client=1):
+    """C18 command set (design session 2, item 1): KIT_Test_Gamma removes the dash command from the shared set and adds Command.Test.Gamma on the
+    same button (Sprint). Judged on the authority and the owner: the press starts the added command and nothing else (no dash, no movement, one request
+    on both), the attack pressed after it is not swallowed, a forced reconcile across the press changes nothing, and the same press under Beta
+    (which binds the dash) dashes and starts no added command. Reconciles: one combat and one ability system change per accepted loadout (2)."""
+    run = _Run('command_set', client, judge_reconciles=False)
+    key, st, marks, store = run.key, {}, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    sprint, attack = button_mask('Sprint'), button_mask('Attack')
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'G', 'KIT_Test_Gamma')),
+        (1.8, _c18_accepted(run, st, 'G')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Gamma', base + 1, 'Gamma applied on both, same table')),
+        (2.0, lambda: ('Gamma: press the removed dash button', combat_tap(client, sprint))),
+        (2.8, _c18_both_saw(run, 'Test.State.GammaMove', 1.95, 2.8, 'Gamma: the press started the added command on both')),
+        (2.8, _c18_both_saw(run, TAG_DASHING, 1.95, 2.8, 'Gamma: no dash', want=False)),
+        (2.8, _no_move(run, 'Gamma: nothing moved', 1.95, 2.8)),
+        (2.8, _c18_requests(run, 1.95, 2.8, 'Gamma: exactly one request, the added command, on both', 1)),
+        (3.0, lambda: ('Gamma: attack right after (not swallowed by the removed command)', combat_tap(client, attack))),
+        (3.8, _c18_both_saw(run, TAG_ATTACKING, 2.95, 3.8, 'Gamma: the attack came out on both')),
+        (4.2, lambda: ('Gamma: press again, with a forced reconcile across it', combat_tap(client, sprint))),
+        (4.22, lambda: ('force reconcile', force_reconcile(client, 12))),
+        (5.2, _c18_both_saw(run, 'Test.State.GammaMove', 4.15, 5.2, 'Gamma: the second press started the added command on both')),
+        (5.2, _c18_requests(run, 4.15, 5.2, 'Gamma: one request for the second press on both', 1)),
+        (5.4, _c18_apply(key, st, 'B', 'KIT_Test_Beta')),
+        (6.6, _c18_accepted(run, st, 'B')),
+        (6.7, _c18_state(run, key, client, 'KIT_Test_Beta', base + 2, 'Beta applied on both, same table')),
+        (6.8, lambda: ('Beta: the same press', combat_tap(client, sprint))),
+        (8.0, _c18_both_saw(run, 'Test.State.GammaMove', 6.75, 8.0, 'Beta: no added command', want=False)),
+        (8.0, _landing_pair(run, store, 'Beta: the same press dashes', 6.75, 8.0, floor=100.0)),
+        (8.0, _c18_requests(run, 6.75, 8.0, 'Beta: one request (the dash) on both', 1)),
+        (8.1, run.at('reconciles: one combat and one asc per accepted change', _c18_reconciles(marks, 2, 2))),
+        (8.15, run.at('the table gate stayed open on the authority', lambda: _c18_gate_open(key))),
+        (8.2, lambda: ('cleanup', combat_clear(client))),
+        (8.3, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_ex_meter(client=1):
+    """C18 EX meter (design session 2, item 3): KIT_Test_Delta has a plain special (Press Special) and an EX chord (Special + Buff, priority +100,
+    falls through when unavailable) whose ability costs 50 ExMeter. A: no meter, the EX chord gives the plain special and no EX, meter untouched.
+    B: after a server grant of 60, the chord gives the EX and spends 50 (10 left). C: 10 left is short again, the chord falls through to the plain
+    special and the meter stays. Always the same on the authority and the owner."""
+    run = _Run('ex_meter', client, judge_reconciles=False)
+    key, st, marks = run.key, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    chord = button_mask('Special') | button_mask('Buff')
+    plain, ex = 'Test.State.Special', 'Test.State.SpecialEx'
+
+    def grant():
+        st['grant'] = _srv(key).server_grant_meter(0)
+        return 'grant 60 ExMeter', st['grant']
+
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'D', 'KIT_Test_Delta')),
+        (1.8, _c18_accepted(run, st, 'D')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Delta', base + 1, 'Delta applied on both, same table')),
+        (1.95, run.at('the pawn has the meter set and an empty ExMeter', lambda: (all(_c18_meters(key, i)[2] and abs(_c18_meters(key, i)[0]) < 0.5 for i in (0, client)),
+                                                                                  f'meters authority {_c18_meters(key, 0)}, owner {_c18_meters(key, client)}'))),
+        (2.0, lambda: ('A: the EX chord without meter', combat_tap(client, chord))),
+        (2.9, _c18_both_saw(run, plain, 1.95, 2.9, 'A: the plain special came out on both')),
+        (2.9, _c18_both_saw(run, ex, 1.95, 2.9, 'A: no EX', want=False)),
+        (2.9, _c18_requests(run, 1.95, 2.9, 'A: one request on both (the fall-through, not two)', 1)),
+        (2.9, _c18_meter_is(run, key, client, 0, 0.0, 'A: ExMeter untouched')),
+        (3.2, grant),
+        (4.0, run.at('B: the grant landed (60) on both', lambda: (st.get('grant') is True and all(abs((_c18_meters(key, i)[0] or -1) - 60.0) < 0.5 for i in (0, client)),
+                                                                f'grant {st.get("grant")}, meters authority {_c18_meters(key, 0)}, owner {_c18_meters(key, client)}'))),
+        (4.1, lambda: ('B: the EX chord with 60', combat_tap(client, chord))),
+        (5.0, _c18_both_saw(run, ex, 4.05, 5.0, 'B: the EX came out on both')),
+        (5.0, _c18_both_saw(run, plain, 4.05, 5.0, 'B: not the plain special', want=False)),
+        (5.0, _c18_requests(run, 4.05, 5.0, 'B: one request on both', 1)),
+        (5.0, _c18_meter_is(run, key, client, 0, 10.0, 'B: the EX spent 50 on both')),
+        (5.3, lambda: ('C: the EX chord with 10 left', combat_tap(client, chord))),
+        (6.2, _c18_both_saw(run, plain, 5.25, 6.2, 'C: the plain special again on both')),
+        (6.2, _c18_both_saw(run, ex, 5.25, 6.2, 'C: no EX', want=False)),
+        (6.2, _c18_meter_is(run, key, client, 0, 10.0, 'C: the meter stayed at 10')),
+        (6.3, run.at('reconciles: loadout change and grant (combat 1, asc 2)', _c18_reconciles(marks, 1, 2))),
+        (6.35, run.at('the table gate stayed open on the authority', lambda: _c18_gate_open(key))),
+        (6.4, lambda: ('cleanup', combat_clear(client))),
+        (6.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_super_code(client=1):
+    """C18 super code (design session 2, item 2): KIT_Test_Sigma has two supers entered as codes (PerSuperCode: Special, then Dodge+Interact for A,
+    Interact+Dodge for B), 100 SuperMeter each. Wrong code with meter: nothing, meter kept. Code A: super A, meter spent. Code B with the meter
+    empty: refused, nothing. After a grant, code B with a forced reconcile between its buttons: the history is sync state, so the code resumes and
+    super B comes out. Every result identical on the authority and the owner."""
+    run = _Run('super_code', client, judge_reconciles=False)
+    key, st, marks = run.key, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    special, dodge, interact = button_mask('Special'), button_mask('Dodge'), button_mask('Interact')
+    A, B = 'Test.State.SuperA', 'Test.State.SuperB'
+
+    def grant(label):
+        def f():
+            st[label] = _srv(key).server_grant_meter(1)
+            return label, st[label]
+        return f
+
+    def code(t, buttons, tag, reconcile_after=None):
+        """Steps that enter special + buttons from time t, 0.15 s apart"""
+        out = [(t, lambda: (f'{tag}: special (code entry)', combat_tap(client, special)))]
+        for n, mask in enumerate(buttons, 1):
+            out.append((t + 0.15 * n, lambda m=mask: ('code button', combat_tap(client, m))))
+            if reconcile_after == n:
+                out.append((t + 0.15 * n + 0.02, lambda: ('force reconcile mid-code', force_reconcile(client, 12))))
+        return out
+
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'S', 'KIT_Test_Sigma', 'SUP_Test_A,SUP_Test_B')),
+        (1.8, _c18_accepted(run, st, 'S')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Sigma', base + 1, 'Sigma applied on both, same table (jump, the blade attack, two supers = 4 bindings)', bindings=4)),
+        (2.0, grant('g1')),
+        (3.0, _c18_meter_is(run, key, client, 1, 100.0, 'the first grant landed: SuperMeter 100 on both')),
+        # wrong code: neither super's pattern
+        *code(3.2, [interact, interact], 'wrong code', None),
+        (4.4, _c18_both_saw(run, A, 3.1, 4.4, 'wrong code: no super A', want=False)),
+        (4.4, _c18_both_saw(run, B, 3.1, 4.4, 'wrong code: no super B', want=False)),
+        (4.4, _c18_meter_is(run, key, client, 1, 100.0, 'wrong code: meter kept')),
+        # code A
+        *code(5.0, [dodge, interact], 'code A', None),
+        (6.2, _c18_both_saw(run, A, 4.95, 6.2, 'code A: super A came out on both')),
+        (6.2, _c18_both_saw(run, B, 4.95, 6.2, 'code A: not super B', want=False)),
+        (6.2, _c18_requests(run, 4.95, 6.2, 'code A: one request on both', 1)),
+        (6.2, _c18_meter_is(run, key, client, 1, 0.0, 'code A: the cost was spent (0 left) on both')),
+        # code B with the meter empty
+        *code(7.0, [interact, dodge], 'code B, no meter', None),
+        (8.2, _c18_both_saw(run, B, 6.95, 8.2, 'code B without meter: refused, no super B', want=False)),
+        (8.2, _c18_meter_is(run, key, client, 1, 0.0, 'code B without meter: meter still 0')),
+        # grant, code B with a forced reconcile between its buttons
+        (8.4, grant('g2')),
+        (9.2, _c18_meter_is(run, key, client, 1, 100.0, 'the second grant landed: SuperMeter 100 on both')),
+        *code(9.4, [interact, dodge], 'code B, reconcile mid-code', 1),
+        (10.8, _c18_both_saw(run, B, 9.35, 10.8, 'code B with a reconcile mid-code: super B came out on both')),
+        (10.8, _c18_meter_is(run, key, client, 1, 0.0, 'code B: the cost was spent on both')),
+        (10.9, run.at('reconciles: loadout change and two grants (combat 1, asc 3)', _c18_reconciles(marks, 1, 3))),
+        (10.95, run.at('the table gate stayed open on the authority', lambda: _c18_gate_open(key))),
+        (11.0, lambda: ('cleanup', combat_clear(client))),
+        (11.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_wait_frames(client=1):
+    """C18 wait frames (design session 2, item 4; the C11 leftover): KIT_Test_Omega binds a timeline ability (Command.Special.Neutral) that waits 20
+    combat frames and then strikes (Test.State.Strike). The timeline is in the registry of the swapped table, not the Blueprint's. A: no hitstop,
+    the strike comes 20 frames after the start. B: a hitstop window (8 frames, the M0 debug button) opened 5 frames into the wait, with a forced
+    reconcile inside the wait: the strike comes 7 frames later than in A (the window opened on frame F pauses from F+1). The same on both machines."""
+    run = _Run('wait_frames', client, judge_reconciles=False)
+    key, st, marks, delay = run.key, {}, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    special, stop = button_mask('Special'), 1 << 20
+    frame_ms = 1000.0 / 60.0
+
+    def first_ms(side, tag, t0, t1):
+        ms = [s[side]['ms'] for s in run.sim if t0 <= s['t'] <= t1 and s.get(side) and tag in s[side]['tags']]
+        return min(ms) if ms else None
+
+    def strike_delay(label, t0, t1):
+        def f():
+            out, ok = [], True
+            for side in ('srv', 'cli'):
+                a, b = first_ms(side, 'Test.State.Windup', t0, t1), first_ms(side, 'Test.State.Strike', t0, t1)
+                d = (b - a) if a is not None and b is not None else None
+                delay.setdefault(label, {})[side] = d
+                ok &= d is not None
+                out.append(f'{side}: windup at {a} ms, strike at {b} ms, delay {d}')
+            return ok, '; '.join(out)
+        return run.at(f'{label}: the windup ran and the strike came, on both', f)
+
+    def delays():
+        a, b = delay.get('A', {}), delay.get('B', {})
+        if None in (a.get('srv'), a.get('cli'), b.get('srv'), b.get('cli')):
+            return False, f'delays A {a}, B {b}'
+        want_a, want_b = 20 * frame_ms, 27 * frame_ms
+        ok = all(abs(a[s] - want_a) <= 2 * frame_ms for s in a) and all(abs(b[s] - want_b) <= 2 * frame_ms for s in b) \
+            and all(abs((b[s] - a[s]) - 7 * frame_ms) <= 1.01 * frame_ms for s in a)
+        return ok, f'delays A {a}, B {b} ms; want A ~{want_a:.0f} (20 frames), B ~{want_b:.0f} (27 frames), B - A = 7 frames ({7 * frame_ms:.0f} ms), each within a frame or two'
+
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'O', 'KIT_Test_Omega')),
+        (1.8, _c18_accepted(run, st, 'O')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Omega', base + 1, 'Omega applied on both, same table')),
+        (2.0, lambda: ('A: the wait-strike timeline', combat_tap(client, special))),
+        (3.6, strike_delay('A', 1.95, 3.6)),
+        (3.6, _c18_requests(run, 1.95, 3.6, 'A: one request on both', 1)),
+        (5.0, lambda: ('B: the wait-strike timeline', combat_tap(client, special))),
+        (5.0 + 5 / 60.0, lambda: ('B: hitstop 5 frames into the wait', combat_tap(client, stop))),
+        (5.0 + 8 / 60.0, lambda: ('B: force reconcile inside the wait', force_reconcile(client, 10))),
+        (6.9, strike_delay('B', 4.95, 6.9)),
+        (6.9, run.at('the hitstop delayed the strike by exactly the window (7 frames), on both', delays)),
+        (7.0, run.at('reconciles: the loadout change and the forced one (combat 1, asc 1)', _c18_reconciles(marks, 1, 1))),
+        (7.05, run.at('the table gate stayed open on the authority', lambda: _c18_gate_open(key))),
+        (7.1, lambda: ('cleanup', combat_clear(client))),
+        (7.2, run.finish()),
+    ]
+    run.run(steps)
+
+
 # ---- Suite runner (C15): runs scenarios that report through _Run one after the other inside a single editor tick callback, so one python call
 # starts the whole batch and a later one reads suite_report(). reset_all() and a settle pause come before each; a scenario that does not
 # report within its timeout is recorded as TIMEOUT and the suite moves on. loadout_change goes last (its loadout outlives the scenario).
@@ -2971,7 +3256,7 @@ def scenario_hitstop(client=1):
 SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
                  'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
                  'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'dodge_blocked_in_hitstun', 'kit_without_dodge', 'interact_tap_hold',
-                 'hitstop', 'loadout_change']
+                 'hitstop', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'loadout_change']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 

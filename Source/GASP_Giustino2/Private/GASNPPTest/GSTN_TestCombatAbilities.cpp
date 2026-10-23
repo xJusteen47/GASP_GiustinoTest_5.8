@@ -2,6 +2,7 @@
 
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
 #include "GASNPPTest/GSTN_TestEffects.h"
+#include "Attributes/GSTN_MeterAttributeSet.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "GSTN_CombatCoreTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
@@ -29,6 +30,14 @@ namespace
 		"Owned while the placeholder pick up ability (interact hold) is active");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Escape, "Test.State.Escape",
 		"Granted by the harness to give the pawn a kit with a special escape dodge: the default ground dodge ignores it, the escape dodge requires it");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_GammaMove, "Test.State.GammaMove", "Owned while the added command of KIT_Test_Gamma runs");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Special, "Test.State.Special", "Owned while the plain special of KIT_Test_Delta runs");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_SpecialEx, "Test.State.SpecialEx", "Owned while the EX special of KIT_Test_Delta runs");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_SuperA, "Test.State.SuperA", "Owned while super A of KIT_Test_Sigma runs");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_SuperB, "Test.State.SuperB", "Owned while super B of KIT_Test_Sigma runs");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Windup, "Test.State.Windup", "Owned while the wait-strike timeline of KIT_Test_Omega runs");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Strike, "Test.State.Strike", "Granted for half a second by the strike of the wait-strike timeline");
 
 	/** Frames the placeholder interact abilities stay active */
 	constexpr int32 InteractTestFrames = 10;
@@ -203,4 +212,108 @@ UGSTN_GE_TestEscapeKit::UGSTN_GE_TestEscapeKit()
 	Tags.Added.AddTag(TAG_Test_State_Escape);
 	TargetTags->SetAndApplyTargetTagChanges(Tags);
 	GEComponents.Add(TargetTags);
+}
+
+namespace
+{
+
+	FGameplayModifierInfo MeterModifier(const FGameplayAttribute& Attribute, float Amount)
+	{
+		FGameplayModifierInfo Modifier;
+		Modifier.Attribute = Attribute;
+		Modifier.ModifierOp = EGameplayModOp::Additive;
+		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(Amount));
+		return Modifier;
+	}
+}
+
+UGSTN_GE_TestExCost::UGSTN_GE_TestExCost()
+{
+	Meter = UGSTN_MeterAttributeSet::GetExMeterAttribute();
+	Cost.Value = 50.f;
+	RebuildModifiers();
+}
+
+UGSTN_GE_TestSuperCost::UGSTN_GE_TestSuperCost()
+{
+	Meter = UGSTN_MeterAttributeSet::GetSuperMeterAttribute();
+	Cost.Value = 100.f;
+	RebuildModifiers();
+}
+
+UGSTN_GE_TestExMeterGrant::UGSTN_GE_TestExMeterGrant()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	Modifiers.Add(MeterModifier(UGSTN_MeterAttributeSet::GetExMeterAttribute(), 60.f));
+}
+
+UGSTN_GE_TestSuperMeterGrant::UGSTN_GE_TestSuperMeterGrant()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	Modifiers.Add(MeterModifier(UGSTN_MeterAttributeSet::GetSuperMeterAttribute(), 100.f));
+}
+
+UGSTN_GE_TestStrike::UGSTN_GE_TestStrike()
+{
+	DurationPolicy = EGameplayEffectDurationType::HasDuration;
+	DurationMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(0.5f));
+	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
+	FInheritedTagContainer Tags;
+	Tags.Added.AddTag(TAG_Test_State_Strike);
+	TargetTags->SetAndApplyTargetTagChanges(Tags);
+	GEComponents.Add(TargetTags);
+}
+
+UGSTN_GA_TestGammaMove::UGSTN_GA_TestGammaMove(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_GammaMove);
+}
+
+UGSTN_GA_TestSpecial::UGSTN_GA_TestSpecial(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_Special);
+}
+
+UGSTN_GA_TestSpecialEx::UGSTN_GA_TestSpecialEx(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_SpecialEx);
+	CostGameplayEffectClass = UGSTN_GE_TestExCost::StaticClass();
+}
+
+UGSTN_GA_TestSuperA::UGSTN_GA_TestSuperA(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_SuperA);
+	CostGameplayEffectClass = UGSTN_GE_TestSuperCost::StaticClass();
+}
+
+UGSTN_GA_TestSuperB::UGSTN_GA_TestSuperB(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_SuperB);
+	CostGameplayEffectClass = UGSTN_GE_TestSuperCost::StaticClass();
+}
+
+UGSTN_GA_TestWaitStrike::UGSTN_GA_TestWaitStrike(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.AddTag(TAG_Test_State_Windup);
+	Timeline.TotalFrames = 60;
+	Timeline.FirstActionableFrame = 60;
+	Timeline.OverrideFrames = 0;
+}
+
+void UGSTN_GA_TestWaitStrike::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+	WaitCombatFrames(WaitFrames);
+}
+
+void UGSTN_GA_TestWaitStrike::OnCombatFramesElapsed()
+{
+	ApplyGameplayEffectToOwner(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), GetDefault<UGSTN_GE_TestStrike>(), 1);
 }

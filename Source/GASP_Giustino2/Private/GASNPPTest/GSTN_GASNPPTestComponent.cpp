@@ -4,6 +4,7 @@
 
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
+#include "Attributes/GSTN_MeterAttributeSet.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DefaultMovementSet/InstantMovementEffects/BasicInstantMovementEffects.h"
 #include "DefaultMovementSet/Modes/SimpleWalkingMode.h"
@@ -50,6 +51,9 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 	if (UNpAbilitySystemComponent* Asc = GetOwner()->FindComponentByClass<UNpAbilitySystemComponent>())
 	{
 		Asc->DefaultAttributes.AddUnique(UGSTN_CombatAttributeSet::StaticClass());
+		// The meters of the C18 scenarios (ex_meter, super_code): the same early creation
+		Asc->DefaultAttributes.AddUnique(UGSTN_MeterAttributeSet::StaticClass());
+		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_MeterAttributeSet::StaticClass());
 		// The ability system may have initialised its simulation already (components initialise in their own order): create it
 		// now as well, the lookup by class keeps it from being added twice
 		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_CombatAttributeSet::StaticClass());
@@ -677,6 +681,23 @@ UGSTN_LoadoutComponent* UGSTN_GASNPPTestComponent::EnsureLoadoutComponent()
 
 FString UGSTN_GASNPPTestComponent::ServerApplyTestLoadout(const FString& KitName, const FString& SupportWeaponName)
 {
+	return ServerApplyTestLoadoutWithSupers(KitName, SupportWeaponName, FString());
+}
+
+bool UGSTN_GASNPPTestComponent::ServerGrantMeter(int32 Which)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	const UGameplayEffect* Effect = Which == 0 ? static_cast<const UGameplayEffect*>(GetDefault<UGSTN_GE_TestExMeterGrant>()) : GetDefault<UGSTN_GE_TestSuperMeterGrant>();
+	// Instant: the handle of the application is not valid by design
+	AbilitySystem->ApplyGameplayEffectToSelf(Effect, 1.f, AbilitySystem->MakeEffectContext());
+	return true;
+}
+
+FString UGSTN_GASNPPTestComponent::ServerApplyTestLoadoutWithSupers(const FString& KitName, const FString& SupportWeaponName, const FString& SuperNamesCsv)
+{
 	UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>();
 	UGSTN_LoadoutComponent* Loadout = EnsureLoadoutComponent();
 	if (!Combat || !Loadout || !GetOwner()->HasAuthority())
@@ -689,6 +710,12 @@ FString UGSTN_GASNPPTestComponent::ServerApplyTestLoadout(const FString& KitName
 	if (!SupportWeaponName.IsEmpty())
 	{
 		Data.AdditionalWeapons.Add(FPrimaryAssetId(GSTNCombatAssetTypes::Weapon(), FName(*SupportWeaponName)));
+	}
+	TArray<FString> SuperNames;
+	SuperNamesCsv.ParseIntoArray(SuperNames, TEXT(","), true);
+	for (const FString& SuperName : SuperNames)
+	{
+		Data.Supers.Add(FPrimaryAssetId(GSTNCombatAssetTypes::Super(), FName(*SuperName.TrimStartAndEnd())));
 	}
 	TArray<FString> Errors;
 	if (!Combat->ServerApplyLoadoutChange(Loadout, Data, Errors))
@@ -902,6 +929,10 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			bool bWalkFound = false;
 			StatsJson->SetNumberField(TEXT("walkSpeedStat"), AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), bWalkFound));
 			StatsJson->SetBoolField(TEXT("hasCombatSet"), bWalkFound);
+			bool bMeterFound = false;
+			StatsJson->SetNumberField(TEXT("exMeter"), AbilitySystem->GetGameplayAttributeValue(UGSTN_MeterAttributeSet::GetExMeterAttribute(), bMeterFound));
+			StatsJson->SetNumberField(TEXT("superMeter"), AbilitySystem->GetGameplayAttributeValue(UGSTN_MeterAttributeSet::GetSuperMeterAttribute(), bMeterFound));
+			StatsJson->SetBoolField(TEXT("hasMeterSet"), bMeterFound);
 			const USimpleWalkingMode* SimpleWalking = Cast<USimpleWalkingMode>(Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking"))));
 			StatsJson->SetNumberField(TEXT("maxSpeedOverride"), SimpleWalking ? SimpleWalking->MaxSpeedOverride : -2.f);
 		}

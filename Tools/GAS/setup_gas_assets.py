@@ -584,6 +584,90 @@ def setup_combat_content():
     return changed
 
 
+
+def c18_content_specs():
+    """C18 (loadout table swap, session 2) test content, plain data. Kits reuse the Alpha weapon and stats (WalkSpeed 600, JumpVelocity 700).
+    (asset, identity, command set {removed, added: [(command, buttons, chord, fall_through, priority_offset)]}, bindings, super slot count, [super asset])"""
+    jump = ('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump')
+    return {
+        'scheme': ('SIS_Test_Code', ['Input.Button.Special']),
+        # (asset, ability class, tag, code buttons)
+        'supers': [('SUP_Test_A', 'GSTN_GA_TestSuperA', 'Super.Test.A', ['Input.Button.Dodge', 'Input.Button.Interact']),
+                   ('SUP_Test_B', 'GSTN_GA_TestSuperB', 'Super.Test.B', ['Input.Button.Interact', 'Input.Button.Dodge'])],
+        'kits': [
+            # Gamma: the dash command is removed and an added command takes its button (Sprint)
+            ('KIT_Test_Gamma', 'Kit.Test.Gamma',
+             {'removed': ['Command.Movement.Dash'], 'added': [('Command.Test.Gamma', ['Input.Button.Sprint'], False, False, 0)]},
+             [jump, ('Command.Test.Gamma', [], [], 'GSTN_GA_TestGammaMove')], 0, []),
+            # Delta: plain special, and an EX chord (Special + Buff) that falls through to it when the meter is short
+            ('KIT_Test_Delta', 'Kit.Test.Delta',
+             {'removed': [], 'added': [('Command.Test.SpecialEx', ['Input.Button.Special', 'Input.Button.Buff'], True, True, 100)]},
+             [jump, ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'), ('Command.Test.SpecialEx', [], [], 'GSTN_GA_TestSpecialEx')], 0, []),
+            # Sigma: two supers entered as codes (Special, then the super's own two buttons)
+            ('KIT_Test_Sigma', 'Kit.Test.Sigma', {'removed': [], 'added': []}, [jump], 2, ['SUP_Test_A', 'SUP_Test_B']),
+            # Omega: a timeline that waits combat frames before a strike, on the plain special
+            ('KIT_Test_Omega', 'Kit.Test.Omega', {'removed': [], 'added': []},
+             [jump, ('Command.Special.Neutral', [], [], 'GSTN_GA_TestWaitStrike')], 0, []),
+        ],
+    }
+
+
+def setup_combat_content_c18():
+    """The C18 assets under /Game/GASNPPTest/Combat: a PerSuperCode scheme, two supers and four kits. New assets only; rerun converges."""
+    specs = c18_content_specs()
+    base = combat_content_specs()
+    utils = unreal.GSTN_TestSlotUtils
+
+    def tags(names):
+        return [_make_tag(n) for n in names]
+
+    name, entry_buttons = specs['scheme']
+    scheme, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_SuperInputScheme, unreal.DataAssetFactory())
+    scheme.set_editor_property('mode', unreal.GSTN_SuperInputMode.PER_SUPER_CODE)
+    entry = utils.make_slot_entry(unreal.GameplayTag(), tags(entry_buttons), False, False, 0)
+    scheme.set_editor_property('code_entry', entry.get_editor_property('inline'))
+    unreal.EditorAssetLibrary.save_loaded_asset(scheme)
+
+    for asset_name, ability, tag, buttons in specs['supers']:
+        sup, _ = _get_or_create(asset_name, TEST_COMBAT_DIR, unreal.GSTN_SuperDefinition, unreal.DataAssetFactory())
+        sup.set_editor_property('ability', getattr(unreal, ability))
+        sup.set_editor_property('super_tags', _tag_container([tag]))
+        sup.set_editor_property('meter', _make_tag('Combat.Meter.TestSuper'))
+        sup.set_editor_property('meter_cost', 100.0)
+        sup.set_editor_property('input_code', utils.make_press_sequence(tags(buttons)))
+        unreal.EditorAssetLibrary.save_loaded_asset(sup)
+
+    for asset_name, identity, command_set_spec, bindings, super_slots, supers in specs['kits']:
+        kit, _ = _get_or_create(asset_name, TEST_COMBAT_DIR, unreal.GSTN_PrimaryKitDefinition, unreal.DataAssetFactory())
+        kit.set_editor_property('kit_tags', _tag_container([identity]))
+        kit.set_editor_property('primary_weapon', unreal.load_asset(f'{TEST_COMBAT_DIR}/WPN_Test_Blade'))
+        kit.set_editor_property('allowed_additional_weapons', _any_tag_query(base['allowed_support_role']))
+        kit.set_editor_property('max_additional_weapons', 1)
+        values = []
+        for stat_tag, value in {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0}.items():
+            stat = unreal.GSTN_StatValue()
+            stat.set_editor_property('stat', _make_tag(stat_tag))
+            stat.set_editor_property('value', value)
+            values.append(stat)
+        stats = unreal.GSTN_KitStats()
+        stats.set_editor_property('values', values)
+        kit.set_editor_property('stats', stats)
+        kit.set_editor_property('init_stats_effect', getattr(unreal, base['init_effect'], None))
+        command_set = unreal.GSTN_CommandSet()
+        command_set.set_editor_property('base_set', unreal.load_asset(base['base_slot_set']))
+        command_set.set_editor_property('removed_commands', _tag_container(command_set_spec['removed']))
+        command_set.set_editor_property('added_slots', [utils.make_slot_entry(_make_tag(c), tags(b), chord, fall, offset)
+                                                        for c, b, chord, fall, offset in command_set_spec['added']])
+        kit.set_editor_property('command_set', command_set)
+        kit.set_editor_property('kit_bindings', [b for b in (_binding(*row) for row in bindings) if b])
+        kit.set_editor_property('super_slot_count', super_slots)
+        if super_slots:
+            kit.set_editor_property('super_input_scheme', unreal.load_asset(f'{TEST_COMBAT_DIR}/{specs["scheme"][0]}'))
+            kit.set_editor_property('allowed_supers', _any_tag_query('Super.Test'))
+        unreal.EditorAssetLibrary.save_loaded_asset(kit)
+    log('C18 combat content written (scheme, supers, kits Gamma / Delta / Sigma / Omega)')
+    return True
+
 def run(wall_transition=False, combat_input=False, test_character=False, combat_content=False):
     """Step 2 and step 3 change shared Blueprints (the test character, the sandbox character) and are opt-in; step 4 never does."""
     log(f'mapping context changed: {setup_mapping_context()}')
@@ -599,6 +683,7 @@ def run(wall_transition=False, combat_input=False, test_character=False, combat_
         log(f'combat input changed: {setup_combat_input()}')
     if combat_content:
         log(f'combat content changed: {setup_combat_content()}')
+        log(f'C18 combat content changed: {setup_combat_content_c18()}')
 
 
 if __name__ == '__main__':

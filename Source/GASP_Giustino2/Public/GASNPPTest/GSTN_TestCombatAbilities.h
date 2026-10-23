@@ -7,6 +7,7 @@
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Abilities/GSTN_GA_Dash.h"
 #include "EffectsComponents/ApplyMoveGameplayEffectComponent.h"
+#include "Effects/GSTN_GE_MeterCost.h"
 #include "GameplayEffect.h"
 #include "GSTN_TestCombatAbilities.generated.h"
 
@@ -177,4 +178,119 @@ class GASP_GIUSTINO2_API UGSTN_GE_TestEscapeKit : public UGameplayEffect
 
 public:
 	UGSTN_GE_TestEscapeKit();
+};
+
+// ---- C18 loadout table swap scenarios (command_set, super_code, ex_meter, wait_frames). Test kits bind these; the meters come from
+// UGSTN_MeterAttributeSet, which the test component puts on the pawn (the shared Blueprints are not edited).
+
+/** Instant: spends 50 ExMeter. The cost of the EX special; a short meter fails CanActivateAbility, which is what lets the EX slot fall through */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestExCost : public UGSTN_GE_MeterCost
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestExCost();
+};
+
+/** Instant: spends 100 SuperMeter. The cost of both test supers */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestSuperCost : public UGSTN_GE_MeterCost
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestSuperCost();
+};
+
+/** Instant: +60 ExMeter. Applied by the harness on the authority (an out-of-band write, like a grant) */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestExMeterGrant : public UGameplayEffect
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestExMeterGrant();
+};
+
+/** Instant: +100 SuperMeter, applied like the EX grant */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestSuperMeterGrant : public UGameplayEffect
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestSuperMeterGrant();
+};
+
+/** Has a duration of half a second and grants Test.State.Strike: the strike of UGSTN_GA_TestWaitStrike, seen in the tag history */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestStrike : public UGameplayEffect
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestStrike();
+};
+
+/** Added command of KIT_Test_Gamma (the replacement of the removed dash): owns Test.State.GammaMove for a few combat frames */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestGammaMove : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GA_TestGammaMove(const FObjectInitializer& ObjectInitializer);
+};
+
+/** The plain special of KIT_Test_Delta: owns Test.State.Special for a few combat frames */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestSpecial : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GA_TestSpecial(const FObjectInitializer& ObjectInitializer);
+};
+
+/** The EX special: Test.State.SpecialEx, costs UGSTN_GE_TestExCost. Its slot falls through to the plain special when this cannot start */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestSpecialEx : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GA_TestSpecialEx(const FObjectInitializer& ObjectInitializer);
+};
+
+/** Super A of KIT_Test_Sigma: Test.State.SuperA, costs UGSTN_GE_TestSuperCost */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestSuperA : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GA_TestSuperA(const FObjectInitializer& ObjectInitializer);
+};
+
+/** Super B: Test.State.SuperB, same cost */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestSuperB : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GA_TestSuperB(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
+ * A kit-bound timeline ability that waits WaitFrames combat frames and then strikes (scenario_wait_frames): it owns Test.State.Windup while
+ * it runs, and at the end of the wait it applies UGSTN_GE_TestStrike (Test.State.Strike). The wait counts combat frames, so a hitstop opened
+ * during it delays the strike by exactly the window. The timeline is longer than the wait (60 frames), so the wait ends inside it.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestWaitStrike : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GA_TestWaitStrike(const FObjectInitializer& ObjectInitializer);
+
+	/** Combat frames between the start and the strike */
+	static constexpr int32 WaitFrames = 20;
+
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+
+protected:
+	virtual void OnCombatFramesElapsed() override;
 };

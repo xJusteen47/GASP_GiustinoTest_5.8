@@ -76,3 +76,49 @@ bool UGSTN_TestSlotUtils::StopInput(APlayerController* Controller, UInputAction*
 	Subsystem->StopContinuousInputInjectionForAction(Action);
 	return true;
 }
+
+namespace
+{
+	FGSTN_InputStep MakePressStep(const FGameplayTag& Button)
+	{
+		FGSTN_InputCondition_Press Press;
+		Press.Buttons.AddTag(Button);
+		FGSTN_InputStep Step;
+		Step.AllOf.Add(TInstancedStruct<FGSTN_InputCondition>::Make<FGSTN_InputCondition_Press>(Press));
+		return Step;
+	}
+}
+
+FGSTN_InputSlotEntry UGSTN_TestSlotUtils::MakeSlotEntry(FGameplayTag Command, const TArray<FGameplayTag>& Buttons, bool bChord, bool bFallThrough, int32 PriorityOffset)
+{
+	FGSTN_InputSlotEntry Entry;
+	Entry.Inline.Command = Command;
+	Entry.Inline.bFallThroughWhenUnavailable = bFallThrough;
+	Entry.Inline.PriorityOffset = PriorityOffset;
+	if (bChord)
+	{
+		FGSTN_InputCondition_Chord Chord;
+		for (const FGameplayTag& Button : Buttons)
+		{
+			Chord.Buttons.AddTag(Button);
+		}
+		FGSTN_InputStep Step;
+		Step.AllOf.Add(TInstancedStruct<FGSTN_InputCondition>::Make<FGSTN_InputCondition_Chord>(Chord));
+		Entry.Inline.Pattern.Steps.Add(MoveTemp(Step));
+	}
+	else
+	{
+		Entry.Inline.Pattern = MakePressSequence(Buttons);
+	}
+	return Entry;
+}
+
+FGSTN_InputPattern UGSTN_TestSlotUtils::MakePressSequence(const TArray<FGameplayTag>& Buttons)
+{
+	FGSTN_InputPattern Pattern;
+	for (const FGameplayTag& Button : Buttons)
+	{
+		Pattern.Steps.Add(MakePressStep(Button));
+	}
+	return Pattern;
+}

@@ -188,6 +188,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
 	FString ServerApplyTestLoadout(const FString& KitName, const FString& SupportWeaponName);
 
+	/** ServerApplyTestLoadout with supers: SuperNamesCsv lists the SUP_Test_* assets in slot order (comma separated, may be empty) */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
+	FString ServerApplyTestLoadoutWithSupers(const FString& KitName, const FString& SupportWeaponName, const FString& SuperNamesCsv);
+
+	/** Server only: applies an instant meter grant (0 = ExMeter +60, 1 = SuperMeter +100). An out-of-band ability system change, like a grant */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
+	bool ServerGrantMeter(int32 Which);
+
 	/** Server only: puts the loadout component on the PlayerState if there is none yet (clients get it by replication). Null without a PlayerState */
 	UGSTN_LoadoutComponent* EnsureLoadoutComponent();
 
