@@ -1247,6 +1247,7 @@ GM.4. Nei Livelli, come funziona il respawn: vite infinite o limitate, checkpoin
    Perché conta: è la regola che più cambia il senso di una caduta in un burrone (KO zone) e va nei dati di `UGSTN_RespawnRules`.
    Ipotesi nella specifica: checkpoint condivisi, vite infinite con contatore delle morti per il punteggio, ritorno al checkpoint se muoiono tutti.
    **Risposta parziale (2026-10-23, da GM.9):** Vite condivise dalla squadra, niente rianimazione; nei Livelli chi cade riparte dal checkpoint condiviso consumando una vita del gruppo (ipotesi: in automatico, senza chiamata dei compagni). Resta aperto cosa succede quando le vite finiscono.
+   **Risposta (2026-10-23, 12:44):** Quando finiscono le vite si ricomincia dal checkpoint o dall'inizio del livello, a seconda di quante vite vuoi dare: per esempio 20 vite senza checkpoint, oppure 4 vite che si ricaricano velocemente, così si perde solo quando quattro giocatori muoiono quasi insieme (in quel caso i checkpoint hanno senso). Nella specifica: dimensione del pool, ricarica, checkpoint sì/no e punto di ripartenza sono dati del livello ([game-modes.md](game-modes.md) §5).
 
 GM.5. Qual è il traguardo di un livello (basta uno che arrivi o devono arrivare tutti i vivi), ci sono collezionabili (stelle, francobolli), contano per giocatore o per squadra, e c'è un punteggio?
    Perché conta: il traguardo è un obiettivo `Reach` con parametro `Require`; collezionabili e punteggio aggiungono stato replicato e una schermata dei risultati.
@@ -1322,6 +1323,7 @@ CAM.4. Se la telecamera cambia (taglio di sezione, cambio di mirino) mentre tien
 CAM.5. Online e in locale: **una telecamera per giocatore** (come ipotizzato) o una condivisa che inquadra tutti? In locale ci sarà **split-screen** (co-op sullo stesso schermo) o solo un giocatore per macchina?
    Perché conta: una telecamera condivisa è un altro modo (distanza e limiti legati alla posizione di tutti, rischio di sezioni in conflitto) e lo split-screen raddoppia costi e interfaccia.
    Ipotesi nella specifica: una telecamera per giocatore, ognuna locale alla propria macchina (host incluso); split-screen non previsto nella prima versione ma l'architettura lo ammette; la telecamera di gruppo è un modo aggiuntivo rimandato ([camera.md](camera.md) §7.3).
+   **Risposta parziale (2026-10-23, 12:45):** In PvP la telecamera è alla Tekken, centrata tra i due personaggi e con entrambi paralleli allo schermo ([camera.md](camera.md) §2.5). Restano aperti lo split-screen e la telecamera condivisa in co-op.
 
 CAM.6. Quando un muro o un soffitto si mette tra la telecamera lontana e il personaggio, preferisci che l'ostacolo **sfumi** (la telecamera resta ferma) o che la telecamera **si avvicini** al personaggio?
    Perché conta: avvicinare la telecamera in un platform 3D distrugge la lettura delle distanze, ma sfumare richiede materiali compatibili e che il designer marchi i muri.
@@ -1335,6 +1337,7 @@ INT.1. Con la telecamera lontana alla Super Mario 3D World, il giocatore "punta"
 **centro dello schermo**? Con la mira da spalla di certe armi o abilità si usa la direzione di mira?
    Perché conta: il centro dello schermo richiederebbe la posizione della telecamera nella simulazione, che oggi non c'è; lo stick è già nell'input.
    Ipotesi nella specifica: personaggio (stick, poi direzione in cui guarda); direzione di mira solo con la mira da telecamera attiva ([interaction.md](interaction.md) §2.1).
+   **Risposta (2026-10-23):** Con il personaggio (direzione dello stick, poi quella in cui guarda).
 
 INT.2. Serve un **tasto per scorrere il bersaglio** quando due oggetti sono quasi alla stessa distanza e direzione, o basta spostarsi un poco?
    Perché conta: è un comando in più da legare a un tasto e un piccolo stato nel frammento; senza di esso la scelta dipende solo da dove ci si mette.
@@ -1357,3 +1360,15 @@ INT.6. Un oggetto che **non si può usare ora** (si porta già qualcosa, kit non
 motivo, oppure viene ignorato come se non ci fosse?
    Perché conta: mostrarlo spiega perché il tasto non fa nulla, ma un oggetto inutilizzabile può rubare il bersaglio a uno utilizzabile lì vicino.
    Ipotesi nella specifica: ignorato, tranne dove il progettista lo segna (terminali bloccati), che mostrano il motivo senza tag attivo ([interaction.md](interaction.md) §2.2).
+
+CAM.7. Nel PvP con più di due giocatori (3 o 4), la telecamera alla Tekken segue te e l'avversario più vicino, oppure passa a un'inquadratura larga alla Smash che li tiene tutti?
+   Perché conta: la regola "centro tra i due personaggi" vale per un uno contro uno; con più giocatori serve una scelta.
+   Ipotesi nella specifica: con due giocatori la telecamera alla Tekken; con più giocatori inquadratura larga che li tiene tutti, con la direzione dell'ultimo asse tra te e l'avversario più vicino ([camera.md](camera.md) §2.5).
+
+CAM.8. Online, ognuno vede se stesso sempre a sinistra dello schermo (come Tekken 7 aveva provato con entrambi i giocatori sul lato sinistro dei rispettivi cabinati), oppure i lati sono fissi per giocatore 1 e 2?
+   Perché conta: cambia da che lato parte la telecamera su ogni macchina; in locale sullo stesso schermo i lati sono per forza condivisi.
+   Ipotesi nella specifica: online ognuno parte a sinistra sul proprio schermo; sullo stesso schermo il giocatore 1 parte a sinistra.
+
+CAM.9. Della telecamera di Astro Bot fuori dai livelli guidati, ti va bene questa lettura: non gira da sola dietro al personaggio, durante i salti resta all'altezza dell'ultima piattaforma e scende subito se cadi più in basso, guarda un po' avanti nella direzione di corsa, e un tasto la riporta dietro al personaggio? C'è altro che ti piace di quella telecamera?
+   Perché conta: ho potuto verificare solo il controllo con lo stick destro e l'assistenza che la ricentra; il resto è la mia lettura di una telecamera da platform 3D calma.
+   Ipotesi nella specifica: come descritto ([camera.md](camera.md) §2.4), tutti i valori modificabili nei dati.

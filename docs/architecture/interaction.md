@@ -48,13 +48,14 @@ items lie around and does not tell the player what a press will do. This file re
 
 | `PointingMode` | Direction | Notes |
 |---|---|---|
-| `StickThenFacing` (default) | World-plane stick direction (`WorldYaw`, which the classifier already computes from `StickX/Y` and `CameraYaw`, combat.md §6.3) when the stick is past the `Aim` zone, else the facing from the Mover sim state of F-1 | The stick is the intent: walking towards an item points at it; the facing alone lags by the turn rate |
+| `StickThenFacing` (default; *Decision*, owner answer to INT.1, 2026-10-23: the player points with the **character**) | World-plane stick direction (`WorldYaw`, which the classifier already computes from `StickX/Y` and `CameraYaw`, combat.md §6.3) when the stick is past the `Aim` zone, else the facing from the Mover sim state of F-1 | The stick is the intent: walking towards an item points at it; the facing alone lags by the turn rate |
 | `Facing` | The facing | Kits that should not steer by stick |
-| `CameraAim` | 3D direction from `AimYaw/AimPitch` (combat.md §11.6), origin at the character, never the camera (its position is not simulated) | While `CameraAimWhen` (tag query on the entity's projected tags; the kit's aim ability grants its own tag) holds and the command carries aim values. Pitch reaches shelves and low items; narrower arc |
+| `CameraAim` (off by default; kept as data for a kit that wants it, since the owner chose the character) | 3D direction from `AimYaw/AimPitch` (combat.md §11.6), origin at the character, never the camera (its position is not simulated) | While `CameraAimWhen` (tag query on the entity's projected tags; the kit's aim ability grants its own tag) holds and the command carries aim values. Pitch reaches shelves and low items; narrower arc |
 
 Planar modes measure angles in the plane perpendicular to the entity's simulated `Up` and bound the height difference along `Up` (`MaxHeightDeltaCm`), never world Z
 (gravity can change, game-design-direction §2d). The probe does not read `AimPolicy` (which turns the character during an attack). With a far Mario 3D World camera
-the stick is what the player sees, so character-based modes apply; the screen centre would need the camera position in the simulation (INT.1).
+the stick is what the player sees, so character-based modes apply; the screen centre would need the camera position in the simulation. The owner confirmed the
+character (INT.1, 2026-10-23).
 
 ### 2.2 Candidates, reach and arc
 

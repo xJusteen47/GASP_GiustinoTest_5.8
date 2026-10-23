@@ -205,6 +205,16 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   whether it can be moved**. Spec: [camera.md](camera.md) (`GSTNCamera`).
 - **Coming back after a KO (GM.9)**: **no revive**; a **shared reinforcement system (lives)**. Read as the rule for both PvE modes.
 
+## 6f. Lives and restarts, pointing, free camera, PvP camera (owner answers, 2026-10-23 12:44–12:45)
+
+- **Lives run out (GM.4)**: the team restarts **from the checkpoint or from the start of the level**, depending on how many lives the
+  designer gives: e.g. **20 lives without checkpoints**, or **4 lives that refill quickly**, so the team falls only when four players
+  die almost together (then checkpoints make sense). Pool size, refill, checkpoints and restart point are level data ([game-modes.md](game-modes.md) §5).
+- **Pointing for interaction (INT.1)**: with the **character** ([interaction.md](interaction.md) §2.1).
+- **Free camera**: in the Expedition, and in general where no designer guides the camera, take **Astro Bot's camera** as the reference ([camera.md](camera.md) §2.4).
+- **PvP camera**, for now: a Smash-like fight framed **the Tekken way**: the camera centre between the two fighters, both kept parallel to the
+  screen ([camera.md](camera.md) §2.5).
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -217,6 +227,7 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
 | §6d: two PvE modes (designer levels, procedural expedition with missions); kit = stats, weapon = moveset; mid-match kit pickup; support weapons inherit kit stats; mods (cosmetic + moveset/specials); special swapping; implants; backpacks on the implant connector; depth marker; everything a pluggable ability | new specs [combat-loadout-mods.md](combat-loadout-mods.md) (M11), [game-modes.md](game-modes.md) (M12–M13), [depth-marker.md](depth-marker.md); M3 seams (loadout extensions, compile extension, mid-match apply); M4 hit data scalable by mods; M5 mod preview and validation; M6 interact probe (possible `GSTNInteract` plugin); [modularity-and-tags.md](modularity-and-tags.md) §1.1 goal 9, §3.6, §3.10, §4.2 |
+| §6f: lives pool and restart point per level; pointing with the character; Astro Bot free camera; Tekken-style PvP camera | [game-modes.md](game-modes.md) §5, §8.1; [interaction.md](interaction.md) §2.1; [camera.md](camera.md) §2.4, §2.5 |
 | §6e: interaction focus on what the player points at; depth marker above and below the last platform; far camera with shoulder aim and designer-set angles; shared lives, no revive; Expedition low priority | new [interaction.md](interaction.md) (`GSTNInteract`, replaces the probe part of M6 §8); [depth-marker.md](depth-marker.md) §2.7; new [camera.md](camera.md) (`GSTNCamera`); [game-modes.md](game-modes.md) §5, §6.2, §9.3 |
 | §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
 | §2g: tap = grab, hold = pickup; feet invincible in the dodge's initial part (corrected at 11:41), invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
@@ -426,3 +437,17 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > livelli il designer puo specificare l'angolo desiderato, e se si puo spostare o no.
 >
 > GM.9 Niente rianimazione. Sistema a rinforzi (vite) condivisi.
+
+### Answers of 2026-10-23, 12:44 and 12:45 (verbatim)
+
+> quando si finiscono le vite si ricomincia dal check point o dall'inizio del livello. Dipende da quante vite voglio dare (potrei darne 20
+> ma senza checkpoint, o 4 che si refreshano velocemente, in modo che si muore quando 4 persone muoiono quasi tutte insieme, in quest
+> ultimo caso, ha senso che ci siano checkpoint).
+>
+> 2.Personaggio.
+>
+> considera la telecamera di astrobot e il suo funzionamento nelle spedizioni o in genere quando non siamo in un livello dove il designer
+> guida la telecamera.
+
+> Per il PVP, per ora, una cosa tipo smash bros, ma alla tekken (si cerca di avere il centro della telecamera tra i due personaggi e
+> mantenerli paralleli allo schermo)

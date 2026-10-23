@@ -50,7 +50,7 @@ Notation as in modularity-and-tags.md: *Decision* = decided elsewhere or by the 
 |---|---|---|---|
 | **A. Levels** | owner (two sentences) | Designer-authored 3D stages, Mario 3D World style, co-op PvE: mostly linear stages, shared checkpoints, a goal, designer-chosen camera sections, KO zones (ravines) and trampolines, enemies placed by the designer. | `Experience.Mode.Levels` |
 | **B. Expedition** | owner (two sentences); **low priority for now** (owner, 2026-10-23 11:47) | Helldivers style: a large map generated at random from authored modules, a set of missions, optional ones, an extraction, reinforcement of fallen teammates, an enemy director with patrols and breaches, drops from the sky. | `Experience.Mode.Expedition` |
-| **C. Versus (PvP)** | owner: "PvP exists", shield only here | Another experience on the same frameworks: authored arenas, teams, KO zones as the main kill, stocks or timed respawn, shield on, no missions, no minions. **Not designed here**; section 2.3 only shows its toggles so nothing blocks it. | `Experience.Mode.Versus` |
+| **C. Versus (PvP)** | owner: "PvP exists", shield only here; for now a Smash-like fight framed the Tekken way (owner, 2026-10-23 12:45; [camera.md](camera.md) §2.5) | Another experience on the same frameworks: authored arenas, teams, KO zones as the main kill, stocks or timed respawn, shield on, no missions, no minions. **Not designed here**; section 2.3 only shows its toggles so nothing blocks it. | `Experience.Mode.Versus` |
 
 Out of scope: kits, pickups, support weapons, mods and backpacks (**[combat-loadout-mods.md](combat-loadout-mods.md)**: this file only *spawns* their pickups and drops and decides whether
 mid-match changes are allowed); the depth marker (`depth-marker.md`); lobby, matchmaking, save games and progression (GM.3); AI behaviour content. Reference topology:
@@ -99,7 +99,7 @@ and `GenerationVersion`; a mismatch refuses the connection.
 | Shield | Sim | defence rules `bShieldEnabled` (M6 §1d); the shield binding is then not built and the slot is free for kits | **off** (owner) | **off** (owner) | on (owner) |
 | Friendly fire | Sim | `UGSTN_CombatRules` relationships (M4; **undecided**, existing question M4.12) | open | open | team rule |
 | KO zones | Sim | level actors `AGSTN_KOZone` (M4 §3b); present where the designer or a module puts them | ravines | ravine modules | arena edges |
-| What a KO means | Server | `UGSTN_RespawnRules` by `KOReason` (Health or Zone) | one life from the shared pool, back at the checkpoint (owner GM.9: shared lives, no revive) | shared reinforcement, called by a teammate (owner GM.9) | stock |
+| What a KO means | Server | `UGSTN_RespawnRules` by `KOReason` (Health or Zone) | one life from the shared pool (size and refill per level); pool empty = restart from checkpoint or level start (owner GM.4, GM.9) | shared reinforcement, called by a teammate (owner GM.9) | stock |
 | Mid-match kit change by pickup | Sim | a flag in the loadout rules (loadout spec); this file only decides the value and places pickups | designer-placed | drops and found kits | question GM.13 |
 | Backpack and support-weapon drops | Server | `UGSTN_DropTable` entries naming the loadout spec's pickups (§6.3) | optional, placed | yes | no |
 | Minion budgets | Server | `UGSTN_SpawnDirectorRules` + M8 settings, overridden per Experience (modularity §3.9 override order) | §7.3 | §7.3 | none |
@@ -281,9 +281,13 @@ with the required players) or **failure** (everyone down and the pool empty, a t
   checkpoints, objective actors, collectibles, kit pickups (loadout spec), camera sections.
 - **Checkpoints.** `AGSTN_Checkpoint` (order index, section id), **shared by the team**: the first player to touch it (host-side position from the NP server state)
   activates it for everyone. Respawn picks the last activated checkpoint. **Lives are a shared pool** (owner, GM.9: shared reinforcements, no revive):
-  each KO spends one life from the team's pool and the fallen player comes back at the checkpoint after a delay (*Proposal*: automatic, no teammate call in
-  Levels). `UGSTN_RespawnRules` holds the pool size, extra lives from collectibles, delay and invulnerability frames; what happens when the pool is empty
-  (restart from the checkpoint or from the level start) is still GM.4. KO by `Health` or by `Zone` use the same rule (data by
+  each KO spends one life from the team's pool and the fallen player comes back after a delay (*Proposal*: automatic, no teammate call in Levels).
+  **When the lives run out, the team restarts from the last checkpoint or from the start of the level** (owner, GM.4, 2026-10-23), and the designer balances it
+  per level with the pool: e.g. **20 lives and no checkpoints**, or **4 lives that refill quickly**, so the team falls only when four players die almost
+  together, which is the case where checkpoints make sense. Data per level in `UGSTN_RespawnRules`: `LivesPoolSize`, `LifeRegenSeconds` (0 = no refill),
+  `bUseCheckpoints`, `OnLivesExhausted {RestartFromCheckpoint, RestartLevel}`, delay, invulnerability frames, extra lives from collectibles. *Reading* of the
+  owner's example: the restart triggers when a KO takes the pool to zero. Without checkpoints a fallen player comes back near a living teammate on safe ground,
+  else at the level start (*Proposal*). KO by `Health` or by `Zone` use the same rule (data by
   `KOReason`); the death presentation (crystal shatter) plays before the new pawn spawns.
 - **Goal.** A `Reach` objective (§4.1) at a goal zone: the level completes when any player or all alive players are inside (`Require`, GM.5). Secondary
   objectives (collect, defeat a boss) are optional missions in the same set. Levels therefore need no goal code of their own.
@@ -368,7 +372,7 @@ recorded honestly. The host's own hits are not lag-compensated (host advantage, 
 | `UGSTN_MissionDefinition`, `UGSTN_MissionSet`, `UGSTN_MissionChainDefinition`, `FGSTN_ObjectiveSpec`, `UGSTN_ObjectiveRule`, `UGSTN_ObjectiveAction` | data, Blueprintable | `GSTNMissionCore` | §4.2 |
 | `UGSTN_MissionSubsystem`, `UGSTN_MissionStateComponent`, `UGSTN_ObjectiveTargetComponent`, `AGSTN_ObjectiveZone`, `AGSTN_ExtractionZone`, `UGSTN_ObjectiveMarkerComponent` | world subsystem, components, actors | `GSTNMissionRuntime` | server rules, replicated state, markers |
 | `UGSTN_GA_ModeVerb`, `FGSTN_VerbSpec`, `UGSTN_RequestableComponent`, `UGSTN_VerbSubsystem` | ability, struct, component, subsystem | `GSTNModeVerbs` | §2.4 |
-| `UGSTN_RespawnRules`, `FGSTN_RespawnState`, `AGSTN_Checkpoint`, `IGSTN_PawnSpawnService`, `UGSTN_RespawnSubsystem` | data, POD, actor, interface, subsystem | `GSTNRespawnCore/Runtime` | rules: `Policy {Checkpoint, Reinforcement, Stocks}`, delay, limit, placement (`Checkpoint`, `DropPod`, `NearTeam`), invulnerability, `JoinInProgress`; the GameMode or project implements the service |
+| `UGSTN_RespawnRules`, `FGSTN_RespawnState`, `AGSTN_Checkpoint`, `IGSTN_PawnSpawnService`, `UGSTN_RespawnSubsystem` | data, POD, actor, interface, subsystem | `GSTNRespawnCore/Runtime` | rules: `Policy {Checkpoint, Reinforcement, Stocks}`, `LivesPoolSize`, `LifeRegenSeconds`, `bUseCheckpoints`, `OnLivesExhausted {RestartFromCheckpoint, RestartLevel}`, delay, limit, placement (`Checkpoint`, `DropPod`, `NearTeam`), invulnerability, `JoinInProgress`; the GameMode or project implements the service |
 | `UGSTN_SpawnDirectorRules`, `UGSTN_SpawnPatternDefinition`, `UGSTN_SpawnDirectorSubsystem`, `AGSTN_SpawnZone`, `AGSTN_PatrolRoute`, `IGSTN_SpawnSink` | data, subsystem, actors, interface | `GSTNSpawnDirectorCore/Runtime` | §7 |
 | `UGSTN_ModuleDefinition`, `UGSTN_GenerationRules`, `FGSTN_LayoutDescription`, `FGSTN_Rng`, `UGSTN_LayoutSolver`, `UGSTN_LevelBuilderSubsystem` | data, struct, pure class, subsystem | `GSTNProcGenCore/Runtime` | `UGSTN_ModuleDefinition`: soft level, footprint in cells, sockets, slots (`Generation.Slot.*`), traversal classes, weight, tags. `UGSTN_GenerationRules`: pool, size, attempt cap, mission-site rules |
 | `UGSTN_LevelSetDefinition`, `UGSTN_ScoreRules` | data | `GSTNMode_Levels` | §5 (camera sections and camera modes are `GSTNCamera` types, [camera.md](camera.md)) |
@@ -444,4 +448,4 @@ Expedition is kept in the plan but not worked on soon.
 
 ## 11. Questions for the owner
 
-The questions GM.1–GM.15 (in Italian, for the owner) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Modalità di gioco". Each states the hypothesis this spec is written on. Answered on 2026-10-23: GM.1 (Levels first, Expedition low priority), GM.6 (camera, now [camera.md](camera.md)) and GM.9 (no revive, shared reinforcements as lives). GM.4 is open only for what happens when the shared lives run out. The Expedition questions (GM.7, GM.8, GM.10, GM.11, GM.14) can wait.
+The questions GM.1–GM.15 (in Italian, for the owner) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Modalità di gioco". Each states the hypothesis this spec is written on. Answered on 2026-10-23: GM.1 (Levels first, Expedition low priority), GM.6 (camera, now [camera.md](camera.md)) and GM.9 (no revive, shared reinforcements as lives). GM.4 is answered too (lives exhausted = restart from the checkpoint or the level start, balanced per level). The Expedition questions (GM.7, GM.8, GM.10, GM.11, GM.14) can wait.

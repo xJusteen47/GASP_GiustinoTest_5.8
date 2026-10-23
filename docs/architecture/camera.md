@@ -20,10 +20,16 @@ Owner answer to GM.6 (2026-10-23, verbatim): "La telecamera dovrebbe essere in g
 possibile pero che vada sulle spalle per permettere di mirare con alcune armi e alcune abilità. Dovrebbe essere possibile muoverla manualmente, ma
 durante i livelli il designer puo specificare l'angolo desiderato, e se si puo spostare o no."
 
+Owner, 2026-10-23 12:44 and 12:45 (verbatim): "considera la telecamera di astrobot e il suo funzionamento nelle spedizioni o in genere quando non siamo in un livello dove il
+designer guida la telecamera." and "Per il PVP, per ora, una cosa tipo smash bros, ma alla tekken (si cerca di avere il centro della telecamera tra i due personaggi e
+mantenerli paralleli allo schermo)". These add **D5** (free camera modelled on Astro Bot, §2.4) and **D6** (PvP duel camera, Tekken style, §2.5).
+
 ## 0. Summary
 
 - *Decisions* from the answer: **D1** the default camera is far from the player, Mario 3D World style. **D2** it can go over the shoulder to aim,
   only with some weapons and abilities. **D3** the player can move it by hand. **D4** in levels the designer sets the desired angle and whether it can be moved.
+  **D5** where no designer section guides it (the Expedition, free areas) it behaves like **Astro Bot's** camera (§2.4). **D6** in PvP, for now, a Smash-like
+  fight framed **the Tekken way**: the camera centre between the two fighters, both kept parallel to the screen (§2.5).
 - Plugin **`GSTNCamera`**: one `UGSTN_CameraComponent` on the pawn runs a **stack of camera modes** with blending (the Lyra idea, §2). Built in:
   **Follow** (far, default), **Shoulder** (aim), **Section** (designer angle, fixed point or rail). Modes are data assets plus Blueprintable classes.
 - **The mode is chosen by data** (§3): a rule table (tag query to mode, priority) over the pawn's tags, read through a small interface so the plugin knows no GAS,
@@ -72,12 +78,49 @@ per-entry weights (blend time and function on the mode) and drops covered entrie
 | **Follow** `Camera.Mode.Follow` | The default. Far, Mario 3D World style (D1) | Arm 650 cm, pitch -25 degrees, FOV 65, pivot damping 0.25 s, free manual orbit (D3), no auto-align to movement | Never inherits the character's rotation. Occlusion: fade (§7.1) |
 | **Shoulder** `Camera.Mode.Shoulder` | Over the shoulder to aim (D2) | Arm 220 cm, offset 55 cm to the shoulder side and 55 cm along Up, FOV 55, aim sensitivity 0.6 | Camera input becomes aim input; crosshair; pull-in occlusion (§6) |
 | **Section** `Camera.Mode.Section` | The designer's angle (D4) | Everything from the active section spec (§4) | Three paths: `Orbit` (far follow at a designer angle), `FixedPoint`, `Rail` |
+| **Duel** `Camera.Mode.Duel` | PvP, Tekken-style framing (D6) | Pivot at the fighters' midpoint, heading perpendicular to the line between them, arm from their separation (§2.5) | Default mode of the Versus experience's rule set; no manual orbit |
 
 **Modes are data.** `UGSTN_CameraModeDefinition` (PrimaryDataAsset): identity tag (exactly one `Camera.Mode.*` leaf), an instanced `UGSTN_CameraMode`, blend in and out (`Camera|Blend`),
 crosshair on or off, default manual-control flag, look sensitivity, occlusion policy. `UGSTN_CameraMode` is `Abstract, Blueprintable, EditInlineNew`: `BlueprintNativeEvent
 ComputeView(const FGSTN_CameraModeContext&) -> FGSTN_CameraView`, the C++ built-ins are the `_Implementation`, a Blueprint child may call the parent. A designer adds a mode with a
 Blueprint child, a definition and a new `Camera.Mode.<Name>` ini leaf; replacing Follow is another definition under the same tag in the Experience data (override order, modularity §3.9).
 Stack entries are runtime copies, so a mode may keep smoothing state; the asset stays read-only. Presentation only: Blueprint is free (no determinism contract), cost counts against §10.
+
+### 2.4 Follow where no designer guides the camera: the Astro Bot reference (D5)
+
+What the reference is known to do (checked only through a game review, *Unsure* beyond it): the player turns the camera with the right stick, with
+separate horizontal and vertical inversion settings, and an optional assist recentres it towards where the character faces (hold a button and use the
+left stick), which also makes one-stick play possible. Everything else below is this spec's reading of a calm 3D-platformer follow camera in that
+spirit (*Proposal*), for the owner to compare with the game (CAM.9).
+
+| Behaviour | Rule | Why |
+|---|---|---|
+| No automatic swing behind the character | Yaw stays where the player or the last section left it; running sideways or towards the camera never turns it | A stable view and a stable stick mapping: `CameraYaw` is an input, and a camera that keeps turning keeps re-mapping the stick |
+| Calm vertical follow | The pivot height follows the **ground the character last stood on**, not the jump arc: vertical dead zone `JumpDeadZoneUpCm` (250) above it; the camera follows down at once when the character drops more than `FallFollowCm` (50) below it, and up when landing on a higher platform | Jumps read against a still frame; this is the same "last platform" idea as the depth marker (depth-marker §2.7), computed here from the subject state with no dependency |
+| Look-ahead | Pivot offset towards the horizontal velocity, `LookAheadCm` (150), eased over `LookAheadSeconds` (0.6), capped while airborne | Shows more of where the player is going |
+| Pitch help near drops | Optional (`bPitchDownWhenFalling`): pitch eases down by up to `FallPitchExtraDeg` (12) while falling past the last ground height | Helps find the landing below |
+| Recentre | A recentre action (default: a button press) eases the heading behind the character's facing in `RecenterSeconds` (0.25); the accessibility assist of the reference maps to it (user setting) | One-stick play; quick reorientation |
+| Distance and FOV | Fixed far arm (Follow defaults, §2.3); optional `SpeedZoomOutCm` at high speed | The far framing of D1 |
+
+Tuning lives in `FGSTN_FollowTuning` (`Camera|Follow`), part of the Follow definition, so a mode (Expedition, a hub) can override it by data. Inside a section
+with `Path = Orbit`, the same rules apply at the designer's angle.
+
+### 2.5 Duel: PvP framed the Tekken way (D6)
+
+| Element | Rule (*Proposal* except the owner's two sentences) |
+|---|---|
+| Who | The **local player** and **its opponent**. With exactly two fighters that is unambiguous; with more (Versus with 3–4) a Smash-style wide shot keeps everyone, with the heading from the axis between the local player and the nearest opponent (hypothesis, CAM.7) |
+| Pivot | The midpoint of the two presented pivots, projected on the plane normal to `Up`, with height from the lower ground of the two plus a vertical extent term for launches |
+| Heading | **Perpendicular to the line between the fighters**, so both stay parallel to the screen. The camera keeps the side it is on (the perpendicular nearer to the current heading), so it never flips across the fighters; rate limited (`DuelYawRateDegPerSecond`, 120) and smoothed |
+| Screen side | *Proposal*: on each player's own screen the local player starts on the **left** (Tekken 7 tested both players starting from the left on their own cabinets), CAM.8; on one shared screen, player 1 starts on the left |
+| Distance and FOV | From the horizontal separation and the vertical extent (both inside the frame with `DuelMarginCm`), clamped between `DuelMinArmCm` and `DuelMaxArmCm`; Smash-like zoom out on launches |
+| Degenerate axis | Horizontal separation under `DuelMinAxisCm` (one fighter straight above the other): keep the last heading |
+| Arena | Clamp the pivot and arm to an optional `AGSTN_CameraBoundsVolume`, so KO zones at the arena edge stay readable |
+| Manual control | None (consumed); Shoulder is not used in the duel unless a rule says so |
+| Input | `CameraYaw` follows the duel axis, so stick left and right mean towards and away from the opponent and up and down mean sidesteps, the Tekken feel, with no simulation change. The heading turns slowly and continuously; only a side swap is a cut (stick hold, §5) |
+| Network | Local per machine from presented transforms: the remote fighter is interpolated, so the two screens differ slightly, which is fine because each player's `CameraYaw` is their own recorded input |
+
+The Duel mode is the default of the Versus experience's rule set (§3.1, override order); the plugin does not know what PvP is.
 
 ## 3. Who picks the mode
 
@@ -238,7 +281,7 @@ Root `Camera.*` is owned by `GSTNCamera` (one owner, modularity §4.1; answers t
 
 | Subtree | Leaves | Source |
 |---|---|---|
-| `Camera.Mode.*` | native `Follow`, `Shoulder`, `Section`; designer modes `Camera.Mode.<Name>` | native + **ini** (the content owner's `Config/Tags/*.ini`) |
+| `Camera.Mode.*` | native `Follow`, `Shoulder`, `Section`, `Duel`; designer modes `Camera.Mode.<Name>` | native + **ini** (the content owner's `Config/Tags/*.ini`) |
 | `Camera.Request.*` | native `Aim`; designer requests (`Camera.Request.<Name>`: zoom, swap shoulder, cinematic) granted by content | native + ini |
 | `Camera.Section.*` | designer section identities (`Camera.Section.BossRoom`), usable in rule queries | root native, leaves ini |
 | `Camera.State.*` | `InSection`, `ShoulderBlocked`: **computed locally**, added to the query container, never on an ASC | native |
@@ -293,4 +336,4 @@ rule set; modules may carry sections. Later: split screen, a shared group-frame 
 
 ## Domande per il proprietario
 
-The questions CAM.1–CAM.6 (in Italian) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Telecamera": automatic return to the designer angle, which shoulder, hold or toggle aim, how long the stick reference is held, per-player or shared camera and split-screen, fade or pull-in on occlusion.
+The questions CAM.1–CAM.6 (in Italian) are in [open-questions-m4-m10.md](open-questions-m4-m10.md), section "Telecamera": automatic return to the designer angle, which shoulder, hold or toggle aim, how long the stick reference is held, per-player or shared camera and split-screen, fade or pull-in on occlusion; added on 2026-10-23: CAM.7 (PvP with 3–4 players), CAM.8 (own side of the screen online), CAM.9 (the Astro Bot reading of §2.4). CAM.5 is answered in part (Tekken-style duel camera in PvP).
