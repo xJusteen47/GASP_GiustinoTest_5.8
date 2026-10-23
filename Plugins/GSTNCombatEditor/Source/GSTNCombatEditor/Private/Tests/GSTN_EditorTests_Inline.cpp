@@ -528,6 +528,29 @@ bool FGSTN_InlineValidatorTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the warning has its code"), Report.Findings.Num() == 1 && Report.Findings[0].Code == GSTNValidationCodes::AbilityInlineIgnored());
 	}
 
+	// Review 2026-10-23 C.8: a TimelineAsset that does not resolve is an error, whatever the inline data says. Silence here meant a
+	// deleted or renamed asset left an ability with no timeline and a green validator
+	Ability->Timeline = FGSTN_CombatTimelineData();
+	Ability->TimelineAsset = TSoftObjectPtr<UGSTN_CombatTimeline>(FSoftObjectPath(TEXT("/Game/GSTNCombatEditorTest/DoesNotExist.DoesNotExist")));
+	{
+		FDataValidationContext Context;
+		TestEqual(TEXT("a Timeline Asset that does not exist is invalid"), Validator->ValidateLoadedAsset(AssetData, Blueprint, Context), EDataValidationResult::Invalid);
+		TestEqual(TEXT("with one error"), static_cast<int32>(Context.GetNumErrors()), 1);
+
+		FGSTN_ValidationReport Report;
+		FGSTN_CombatValidators::ValidateAbilityTimeline(*Ability, Blueprint, 62.5f, false, Report);
+		TestTrue(TEXT("the error has its code (also without loading)"), Report.Findings.Num() == 1 && Report.Findings[0].Code == GSTNValidationCodes::AbilityTimelineAssetUnresolved()
+			&& Report.Findings[0].Severity == EGSTN_Severity::Error);
+		TestFalse(TEXT("the reference does not resolve"), FGSTN_CombatValidators::IsTimelineAssetResolvable(Ability->TimelineAsset, false));
+		TestFalse(TEXT("... loading or not"), FGSTN_CombatValidators::IsTimelineAssetResolvable(Ability->TimelineAsset, true));
+	}
+	TestFalse(TEXT("an empty reference is not a resolvable one (the validator never asks: it is the inline case)"), FGSTN_CombatValidators::IsTimelineAssetResolvable(TSoftObjectPtr<UGSTN_CombatTimeline>(), false));
+	Ability->TimelineAsset = Asset.Get();
+	{
+		FDataValidationContext Context;
+		TestEqual(TEXT("a reference that resolves is valid again"), Validator->ValidateLoadedAsset(AssetData, Blueprint, Context), EDataValidationResult::Valid);
+	}
+
 	// Another Blueprint is not this validator's
 	FBlueprintFixture Other(UObject::StaticClass());
 	if (TestTrue(TEXT("a Blueprint of another class was made"), Other.IsOk()))

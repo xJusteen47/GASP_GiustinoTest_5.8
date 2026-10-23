@@ -3,6 +3,8 @@
 #include "Validation/GSTN_CombatValidators.h"
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
+#include "AssetRegistry/AssetData.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/AssetManager.h"
 #include "GameplayTagsManager.h"
@@ -20,6 +22,7 @@
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutRules.h"
+#include "Timeline/GSTN_CombatTimeline.h"
 #include "Timeline/GSTN_TimelineTrackEditor.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
@@ -204,10 +207,42 @@ bool FGSTN_CombatValidators::HasInlineContent(const FGSTN_CombatTimelineData& Da
 	return Data.TotalFrames > 0 || !Data.Tracks.IsEmpty() || !Data.Montage.IsNull();
 }
 
+bool FGSTN_CombatValidators::IsTimelineAssetResolvable(const TSoftObjectPtr<UGSTN_CombatTimeline>& Reference, bool bLoad)
+{
+	if (Reference.IsNull())
+	{
+		return false;
+	}
+	if (Reference.Get())
+	{
+		return true; // in memory, of the right class (the pointer is typed)
+	}
+
+	// Not loaded: the registry knows whether the asset exists without loading it
+	const FAssetData Data = IAssetRegistry::GetChecked().GetAssetByObjectPath(Reference.ToSoftObjectPath());
+	if (!Data.IsValid())
+	{
+		return false;
+	}
+	const UClass* AssetClass = Data.GetClass(EResolveClass::Yes);
+	if (AssetClass == nullptr || !AssetClass->IsChildOf(UGSTN_CombatTimeline::StaticClass()))
+	{
+		return false;
+	}
+	return !bLoad || Reference.LoadSynchronous() != nullptr;
+}
+
 void FGSTN_CombatValidators::ValidateAbilityTimeline(const UGSTN_GA_BaseCombat& Ability, UObject* Asset, float TickRate, bool bLoadMontage, FGSTN_ValidationReport& Report)
 {
 	if (!Ability.TimelineAsset.IsNull())
 	{
+		if (!IsTimelineAssetResolvable(Ability.TimelineAsset, bLoadMontage))
+		{
+			Report.Add(EGSTN_Severity::Error, GSTNValidationCodes::AbilityTimelineAssetUnresolved(),
+				FText::Format(LOCTEXT("AbilityTimelineAssetUnresolved", "The ability names the Timeline Asset {0}, which does not exist or is not a combat timeline. The reference wins over the inline timeline, so this ability would play no timeline."),
+					FText::FromString(Ability.TimelineAsset.ToSoftObjectPath().ToString())),
+				Asset);
+		}
 		if (HasInlineContent(Ability.Timeline))
 		{
 			Report.Add(EGSTN_Severity::Warning, GSTNValidationCodes::AbilityInlineIgnored(),

@@ -72,9 +72,22 @@ bool UGSTN_TimelineSelectionProxy::Commit(EPropertyChangeType::Type ChangeType)
 		{
 			bOwnsDrag = Pinned->BeginDrag(Description);
 		}
-		bChanged = Pinned->ApplyTrackEdit(TrackIndex, [this](FGSTN_TimelineTrack& Destination)
+		const bool bIsSwitch = Track.GetScriptStruct() == FGSTN_TimelineTrack_WeaponSwitch::StaticStruct();
+		bChanged = Pinned->ApplyTrackEdit(TrackIndex, [this, bIsSwitch](FGSTN_TimelineTrack& Destination)
 		{
+			const int32 SwapBefore = bIsSwitch ? static_cast<const FGSTN_TimelineTrack_WeaponSwitch&>(Destination).SwapFrame : 0;
 			Track.GetScriptStruct()->CopyScriptStruct(&Destination, Track.GetMemory());
+
+			// The runtime fires the weapon switch on SwapFrame and the editor draws it there (review C.2); StartFrame is the window the
+			// model keeps in step with it (MoveWindow does the same), so a SwapFrame typed in the details panel must not leave it stale
+			if (bIsSwitch)
+			{
+				FGSTN_TimelineTrack_WeaponSwitch& Switch = static_cast<FGSTN_TimelineTrack_WeaponSwitch&>(Destination);
+				if (Switch.SwapFrame != SwapBefore)
+				{
+					Switch.StartFrame = Switch.SwapFrame;
+				}
+			}
 		}, Description);
 	}
 	if (!bInteractive && bOwnsDrag)

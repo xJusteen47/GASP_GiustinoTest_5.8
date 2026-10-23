@@ -244,3 +244,15 @@ One line each: where, what differs from the spec, why. Checkpoints in `docs/arch
   style items), and the `Test` configuration note (documented in the debug README, descriptor unchanged).
 - README fixes: the Play row and the E3/E14 status line of the editor README, the `GameplayAbilities` dependency note, the smoke-steps sentence, and the debug README's
   claim about reaching the module without linking.
+
+## Second review fixes (2026-10-23, C.8 and nits)
+
+- 9.2 (review C.8): new code `Ability.TimelineAssetUnresolved` (error, not in the spec's table). When the ability names a `TimelineAsset` that does not
+  resolve (missing, or not a `UGSTN_CombatTimeline`), `ValidateAbilityTimeline` reports it; the reference still wins over the inline timeline, so the
+  ability would play none. `FGSTN_CombatValidators::IsTimelineAssetResolvable(Reference, bLoad)`: in memory resolves; else the asset registry must know the
+  asset and its class must derive from the timeline class; with `bLoad` (the Data Validation path) the asset is also loaded. The existing warning
+  `Ability.InlineIgnored` is unchanged and can accompany the error. The asset registry is queried through `IAssetRegistry::GetChecked()`.
+- Details panel (nit): `UGSTN_TimelineSelectionProxy::Commit` sets a weapon switch's `StartFrame` to its `SwapFrame` when the edit changed `SwapFrame`
+  (the same repair `MoveWindow` does); an edit of another field leaves `StartFrame` alone. A comment in `GSTN_TimelineEditorModel.h` that still said
+  the weapon switch fires on `StartFrame` is corrected.
+- Still open from section C: C.4 to C.7 and C.9 to C.12 as listed above.

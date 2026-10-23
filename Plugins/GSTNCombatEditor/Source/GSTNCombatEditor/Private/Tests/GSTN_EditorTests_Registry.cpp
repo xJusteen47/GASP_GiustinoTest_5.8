@@ -341,6 +341,46 @@ bool FGSTN_RegistryDetailsProxyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Review 2026-10-23 nit: the details panel wrote SwapFrame and left the window's StartFrame where it was
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RegistryDetailsSwapFrameTest, "GSTNCombat.Editor.Registry.DetailsSwapFrameKeepsStartFrameInSync", GSTN_REGISTRY_TEST_FLAGS)
+bool FGSTN_RegistryDetailsSwapFrameTest::RunTest(const FString& Parameters)
+{
+	if (!HasEditorContext())
+	{
+		AddInfo(TEXT("no transaction buffer in this editor, skipped"));
+		return true;
+	}
+	FFixture F;
+	FGSTN_TimelineTrack_WeaponSwitch Switch;
+	Switch.StartFrame = 6;
+	Switch.EndFrame = 7;
+	Switch.SwapFrame = 6;
+	F.Data().Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_WeaponSwitch>(Switch));
+	const int32 SwitchIndex = F.Data().Tracks.Num() - 1;
+
+	TStrongObjectPtr<UGSTN_TimelineSelectionProxy> Proxy(NewObject<UGSTN_TimelineSelectionProxy>(GetTransientPackage()));
+	Proxy->Bind(F.Model, SwitchIndex);
+	if (!TestTrue(TEXT("bound to the weapon switch"), Proxy->IsBound() && Proxy->GetTrackStruct() == FGSTN_TimelineTrack_WeaponSwitch::StaticStruct()))
+	{
+		return false;
+	}
+
+	TSharedPtr<FStructOnScope> Shown = Proxy->MakeStructData();
+	reinterpret_cast<FGSTN_TimelineTrack_WeaponSwitch*>(Shown->GetStructMemory())->SwapFrame = 15;
+	TestTrue(TEXT("the commit changed the data"), Proxy->Commit());
+	const FGSTN_TimelineTrack_WeaponSwitch& Written = F.Data().Tracks[SwitchIndex].Get<FGSTN_TimelineTrack_WeaponSwitch>();
+	TestEqual(TEXT("the swap frame is what was typed"), Written.SwapFrame, 15);
+	TestEqual(TEXT("the window followed it"), Written.StartFrame, 15);
+
+	// Another field of the switch leaves the window alone
+	Proxy->Pull();
+	Shown = Proxy->MakeStructData();
+	reinterpret_cast<FGSTN_TimelineTrack_WeaponSwitch*>(Shown->GetStructMemory())->EndFrame = 17;
+	TestTrue(TEXT("a second edit commits"), Proxy->Commit());
+	TestEqual(TEXT("the start frame did not move again"), F.Data().Tracks[SwitchIndex].Get<FGSTN_TimelineTrack_WeaponSwitch>().StartFrame, 15);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RegistryDetailsWidgetsTest, "GSTNCombat.Editor.Registry.DetailsFollowsSelection", GSTN_REGISTRY_TEST_FLAGS)
 bool FGSTN_RegistryDetailsWidgetsTest::RunTest(const FString& Parameters)
 {

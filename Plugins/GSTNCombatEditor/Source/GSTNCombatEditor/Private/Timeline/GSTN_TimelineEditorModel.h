@@ -142,7 +142,7 @@ public:
 
 	// Frame vocabulary the gestures and the widgets share, so there is one definition of it
 
-	/** Event and weapon switch fire on StartFrame and ignore EndFrame, so they occupy one frame and have no edges to move */
+	/** Event fires on StartFrame and weapon switch on SwapFrame; both ignore EndFrame, so they occupy one frame and have no edges to move */
 	static bool IsPointTrack(const FGSTN_TimelineTrack& Track);
 
 	/** The frames the track occupies: [OutStart, OutEnd). One frame for a point track */

@@ -10,6 +10,7 @@
 #include "UObject/StrongObjectPtr.h"
 #include "Validation/GSTN_ValidationReport.h"
 
+class UGSTN_CombatTimeline;
 class UGSTN_GA_BaseCombat;
 class UGSTN_InputSettings;
 class UGSTN_LoadoutRules;
@@ -39,6 +40,7 @@ namespace GSTNValidationCodes
 
 	// The inline timeline of an ability Blueprint (E13)
 	inline FName AbilityInlineIgnored() { return TEXT("Ability.InlineIgnored"); }
+	inline FName AbilityTimelineAssetUnresolved() { return TEXT("Ability.TimelineAssetUnresolved"); }
 
 	// Slots, shared by kit, weapon and preset
 	inline FName SlotAmbiguous() { return TEXT("Slot.Ambiguous"); }
@@ -125,8 +127,14 @@ struct FGSTN_CombatValidators
 	 * The timeline an ability Blueprint carries inline, read from the default object of its class: the same rules as a timeline asset
 	 * (ValidateTimeline) on the Timeline property. When the ability names a TimelineAsset, the asset is what plays and has its own
 	 * validator, so the inline data is not checked; if it still holds a timeline, Ability.InlineIgnored (warning) says it is dead data.
+	 * A TimelineAsset that does not resolve (the asset was deleted or renamed, or is not a combat timeline) is Ability.TimelineAssetUnresolved
+	 * (error): it still wins over the inline data, so the ability would play no timeline. bLoadMontage also allows loading the asset to
+	 * prove it resolves; without it only the asset registry is asked.
 	 */
 	static void ValidateAbilityTimeline(const UGSTN_GA_BaseCombat& Ability, UObject* Asset, float TickRate, bool bLoadMontage, FGSTN_ValidationReport& Report);
+
+	/** Does a TimelineAsset reference point at a combat timeline that exists? The pure part of the Ability.TimelineAssetUnresolved check */
+	static bool IsTimelineAssetResolvable(const TSoftObjectPtr<UGSTN_CombatTimeline>& Reference, bool bLoad);
 
 	/** Does the inline timeline hold anything: a length, a track or a montage? A default timeline is the empty state of a Blueprint that uses TimelineAsset */
 	static bool HasInlineContent(const FGSTN_CombatTimelineData& Data);
