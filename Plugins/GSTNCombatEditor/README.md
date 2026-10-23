@@ -6,7 +6,7 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.1)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton) and E2 (edit context and
+Status: **experimental (0.2)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton) and E2 (edit context and
 model) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
@@ -15,7 +15,23 @@ harness or cooked data.
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNCombatEditor` | exists (Editor, PostEngineInit) | Module class (`FGSTN_CombatEditorModule`, log `LogGSTNCombatEditor`), `UGSTN_CombatEditorSettings`, and from E2 the pure editing model of a timeline. Covered by `GSTNCombat.Editor.*`. |
+| `GSTNCombatEditor` | exists (Editor, PostEngineInit) | Module class (`FGSTN_CombatEditorModule`, log `LogGSTNCombatEditor`), `UGSTN_CombatEditorSettings`, and the pure editing model of a timeline (below). Covered by `GSTNCombat.Editor.*`. |
+
+### The editing model (E2, no UI types)
+
+| Type | File | Role |
+|---|---|---|
+| `FGSTN_TimelineEditContext` | `Public/Timeline/GSTN_TimelineEditContext.h` | What is edited: a `UGSTN_CombatTimeline` asset (complete) or the inline timeline of a Blueprint (declared, resolved in E13). Resolves the data on every call. |
+| `FGSTN_TimelineEditContextRegistry`, `FGSTN_TimelineContextLease` | same | One editor per target: the second `Acquire` on the same asset is refused and the open editor is asked to focus. |
+| `FGSTN_TimelineEditorModel` | `Private/Timeline/GSTN_TimelineEditorModel.h` | State (selection, playhead, view transform, tick rate, auto-key) and every mutation: add and remove track, move and resize window, total frames, first actionable frame, fit to montage, details edits, keys. The only writer of the data. Each mutation is one transaction, and does nothing, with no undo step, when it would change nothing. |
+| `FGSTN_TimelineViewTransform` | same | Frame to pixel mapping shared by the future ruler, lanes and phase bar. |
+| `FGSTN_TimelineDragTransaction` | `Private/Timeline/GSTN_TimelineUndo.h` | One drag, one undo step. The transaction opens at the first change; Escape restores the data (the editor's `CancelTransaction` only drops the record). |
+| `FGSTN_TimelineUndoClient` | same | The `FEditorUndoClient` an owner (the toolkit of E5) creates next to the model: after undo or redo it revalidates the selection and clamps the playhead. |
+| `IGSTN_KeyedTrackAccess` and its registry | `Private/Timeline/GSTN_KeyedTrackAccess.h` | How the model reaches the keys of a keyed track (the hitbox track of M4) without knowing its struct. The key gestures (`AddKey`, `MoveKeys`, `DuplicateKeys`, `RemoveKeys`, copy and paste as text, `SetKeyTransform`) are written against it and tested with a test track; the hitbox track registers its adapter when it exists. |
+
+Frames are integers. The gestures clamp to `[0, TotalFrames]` (a timeline of length 0 is clamped at 0 only). `ApplyTrackEdit` and
+`ApplyDataEdit` (the details panel) write what they are given, because an invalid value is allowed there and the validator
+reports it. Fitting `TotalFrames` to the montage is the explicit `FitTotalFramesToMontage`, never a side effect.
 
 Planned in this module, by checkpoint: timeline panel (E4), toolkit, track editor registry (E5), preview scene (E6), gizmos
 (E7), baker (E8), hurtbox set editor (E9), validators (E10, E11), details customizations (E12, E13).
@@ -24,8 +40,8 @@ Planned in this module, by checkpoint: timeline panel (E4), toolkit, track edito
 
 - Plugins: `GSTNCombat` (the timeline data), `GSTNCombatGAS` (kit data, and the `Combat.Hurtbox.*` tags the settings map to),
   `GSTNCombatDebug` as `Optional` (only to enable it together when it is present).
-- `GSTNCombatEditor` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore; private DeveloperSettings,
-  InputCore, UnrealEd, GSTNCombatGAS. Slate and the other editor modules are added by the checkpoints that need them.
+- `GSTNCombatEditor` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore; private ApplicationCore (clipboard),
+  DeveloperSettings, InputCore, UnrealEd, GSTNCombatGAS. Slate and the other editor modules are added by the checkpoints that need them.
 - Not a dependency, on purpose:
   - `GSTNCombatNP` and `NetworkPrediction`: the one thing the editor needs from the fork, the fixed tick rate, is read from the
     Network Prediction settings object by reflection (`UGSTN_CombatEditorSettings::GetSimulationTickRate`), so the plugin links
@@ -81,9 +97,13 @@ The plugin ships no content and references none by path. The preview kit, skin a
 ## Tests
 
 `Automation RunTests GSTNCombat.Editor`: `Module.LoadsAndRegisters`, `Settings.DefaultsFromPluginIni`,
-`Settings.TickRateFromNetworkPrediction`. The Hurtbox zone tags are covered by `GSTNCombat.GAS.Tags.HurtboxZonesRegistered`.
+`Settings.TickRateFromNetworkPrediction`, and `Model.*`: `EachMutationOnlyChangesWhatItSays`, `ClampsToTotalFrames`,
+`UndoRedoRestoresExactData`, `DragIsOneUndoStep`, `CancelledDragLeavesNoStep`, `SelectionRevalidatedAfterUndo`,
+`ClipboardRoundTrip`, `FitTotalFramesDoesNotRunSilently`, `TwoToolkitsOneTargetRefused`, `ViewTransformRoundTrip`. The model tests
+run in the editor context (they need `GEditor->Trans`) on a transient timeline. The Hurtbox zone tags are covered by `GSTNCombat.GAS.Tags.HurtboxZonesRegistered`.
 The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is not run: the canary script does not exist yet.
 
 ## Changelog
 
+- 0.2 (2026-10-23): edit context, editor model, drag transaction, undo client, keyed track adapter (plan E2).
 - 0.1 (2026-10-23): plugin and module skeleton, settings, tick rate helper (plan E1).

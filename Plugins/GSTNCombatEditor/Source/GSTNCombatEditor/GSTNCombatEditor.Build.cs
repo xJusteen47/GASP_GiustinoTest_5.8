@@ -28,6 +28,7 @@ public class GSTNCombatEditor : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
+			"ApplicationCore",
 			"DeveloperSettings",
 			"InputCore",
 			"UnrealEd",
