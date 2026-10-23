@@ -1751,9 +1751,10 @@ def scenario_spike_stats(client_a=1, client_b=2):
 
     def speeds():
         va, vb = _horizontal_peak(run, 'srv', 3.4, 5.7), _horizontal_peak(run, 'srvB', 3.4, 5.7)
-        ma, mb = stat('srv', 'maxSpeed') or 0.0, stat('srvB', 'maxSpeed') or 0.0
+        # The GASP walking mode takes its speed from the gait variables (run for a full stick), not from MaxSpeed
+        ma, mb = stat('srv', 'gaitRunSpeed') or 0.0, stat('srvB', 'gaitRunSpeed') or 0.0
         good = vb > 1.0 and va > 2.5 * vb and 0.6 * ma <= va <= 1.05 * ma and 0.6 * mb <= vb <= 1.05 * mb
-        return good, f'peak speed A {va:.0f} (max {ma:.0f}), B {vb:.0f} (max {mb:.0f})'
+        return good, f"peak speed A {va:.0f} (run {ma:.0f}), B {vb:.0f} (run {mb:.0f}); MaxSpeedOverride A {stat('srv', 'maxSpeedOverride')} B {stat('srvB', 'maxSpeedOverride')}"
 
     def agree():
         out, ok = [], True

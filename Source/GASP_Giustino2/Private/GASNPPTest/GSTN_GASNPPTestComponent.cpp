@@ -10,6 +10,7 @@
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Input/GSTN_InputScript.h"
 #include "MoverComponent.h"
+#include "DefaultMovementSet/Modes/SimpleWalkingMode.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Events/GSTN_SimEventSubsystem.h"
 #include "GSTN_CombatTags.h"
@@ -243,6 +244,7 @@ void UGSTN_GASNPPTestComponent::ApplyStatsProbe()
 		// Switched off: put back what was captured, once
 		Settings->MaxSpeed = BaseMaxSpeed;
 		Mover->SetGravityOverride(false);
+		ScaleGaitSpeeds(1.f);
 		bStatsBaseCaptured = false;
 		AppliedSpeedScale = 1.f;
 		AppliedGravityScale = 1.f;
@@ -267,6 +269,28 @@ void UGSTN_GASNPPTestComponent::ApplyStatsProbe()
 
 	Settings->MaxSpeed = BaseMaxSpeed * AppliedSpeedScale;
 	Mover->SetGravityOverride(true, BaseGravity * AppliedGravityScale);
+	ScaleGaitSpeeds(AppliedSpeedScale);
+}
+
+void UGSTN_GASNPPTestComponent::ScaleGaitSpeeds(float Scale)
+{
+	// The GASP walking mode is a Blueprint whose WalkSpeed/RunSpeed/SprintSpeed/CrouchSpeed variables feed MaxSpeedOverride, which
+	// wins over the shared MaxSpeed. Each is assigned base (the class default) * scale, never a delta on the current value.
+	static const FName GaitSpeedNames[] = { TEXT("WalkSpeed"), TEXT("RunSpeed"), TEXT("SprintSpeed"), TEXT("CrouchSpeed") };
+	UBaseMovementMode* Mode = Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking")));
+	if (!Mode)
+	{
+		return;
+	}
+	const UObject* Defaults = Mode->GetClass()->GetDefaultObject();
+	for (const FName Name : GaitSpeedNames)
+	{
+		const FFloatProperty* Property = CastField<FFloatProperty>(Mode->GetClass()->FindPropertyByName(Name));
+		if (Property)
+		{
+			Property->SetPropertyValue_InContainer(Mode, Property->GetPropertyValue_InContainer(Defaults) * Scale);
+		}
+	}
 }
 
 void UGSTN_GASNPPTestComponent::HandlePostSimulationRollback(const FMoverTimeStep& CurrentTimeStep, const FMoverTimeStep& ExpungedTimeStep)
@@ -588,6 +612,17 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			StatsJson->SetNumberField(TEXT("maxSpeed"), Settings ? Settings->MaxSpeed : -1.f);
 			StatsJson->SetNumberField(TEXT("baseMaxSpeed"), BaseMaxSpeed);
 			StatsJson->SetNumberField(TEXT("gravityZ"), Mover->GetGravityAcceleration().Z);
+			float RunSpeed = -1.f;
+			if (const UBaseMovementMode* Walking = Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking"))))
+			{
+				if (const FFloatProperty* Property = CastField<FFloatProperty>(Walking->GetClass()->FindPropertyByName(TEXT("RunSpeed"))))
+				{
+					RunSpeed = Property->GetPropertyValue_InContainer(Walking);
+				}
+			}
+			StatsJson->SetNumberField(TEXT("gaitRunSpeed"), RunSpeed);
+			const USimpleWalkingMode* SimpleWalking = Cast<USimpleWalkingMode>(Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking"))));
+			StatsJson->SetNumberField(TEXT("maxSpeedOverride"), SimpleWalking ? SimpleWalking->MaxSpeedOverride : -2.f);
 		}
 		ProbeJson->SetObjectField(TEXT("stats"), StatsJson);
 		Json->SetObjectField(TEXT("probe"), ProbeJson);
