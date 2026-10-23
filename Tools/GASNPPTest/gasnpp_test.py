@@ -2686,3 +2686,181 @@ def scenario_interact_tap_hold(client=1):
         (TC + 2.3, run.finish()),
     ]
     run.run(steps)
+
+
+# ---- C15 loadout and hitstop scenarios. The test kits / weapons are /Game/GASNPPTest/Combat/{KIT_Test_Alpha, KIT_Test_Beta, WPN_Test_*}
+# (Tools/GAS/setup_gas_assets.py --combat-content). The loadout component is put on the PlayerState at run time by the test component
+# (ServerApplyTestLoadout), so no shared Blueprint is edited. A loadout stays applied until the PIE session ends: run loadout_change LAST in a
+# session (the kit stats override WalkSpeed / JumpVelocity of every scenario after it).
+
+def _apply_loadout(key, kit, support=''):
+    return _srv(key).server_apply_test_loadout(kit, support)
+
+
+def _loadout_view(i, key):
+    v = _view(i, key) or {}
+    return v.get('loadout') or {}, v.get('combat') or {}, ((v.get('probe') or {}).get('stats') or {})
+
+
+def scenario_loadout_change(client=1):
+    """C15 kit changes by pickup (combat-m3 loadout direction): ServerApplyLoadoutChange on the authority, judged on the authority and the owner.
+      A  Alpha: loadout revision 1 on both, same table checksum, the kit stats (WalkSpeed 600, no weapon effect) and the jump of the kit
+      B  an attack in progress, then Beta: the timeline is cancelled at once, revision 2, WalkSpeed 900 (600 + the spear's 300), a higher jump
+      C  a refused loadout (unknown kit; a primary weapon as the additional weapon) changes nothing: revision stays, the running state too
+      D  Alpha + the support weapon: accepted, the kit stats stay (support weapons ship without a stats effect), the weapon is listed
+    Reconciles: every accepted change is one out-of-band ability system change (like a grant), so they are listed, not judged."""
+    run = _Run('loadout_change', client, judge_reconciles=False)
+    key, st, apex, marks = run.key, {}, {}, {}
+    # The loadout outlives a scenario (until the PIE session ends): the revisions are counted from the one the authority has at the start
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    jump = button_mask('Jump')
+    attack = button_mask('Attack')
+
+    def apply(kit, support, label):
+        def f():
+            st[label] = _apply_loadout(key, kit, support)
+            return label, st[label]
+        return f
+
+    def accepted(label):
+        return run.at(f'{label}: accepted', lambda: (st.get(label) == 'OK', f'ServerApplyTestLoadout -> {st.get(label)}'))
+
+    def refused(label):
+        return run.at(f'{label}: refused with a finding', lambda: (st.get(label) not in (None, 'OK'), f'ServerApplyTestLoadout -> {st.get(label)}'))
+
+    def state(label, kit, revision, walk, weapons=()):
+        def f():
+            out, ok, crcs = [], True, []
+            for i, side in ((0, 'srv'), (client, 'cli')):
+                lo, co, stats = _loadout_view(i, key)
+                good = (lo.get('kit') == kit and lo.get('revision') == revision and co.get('loadoutRevision') == revision and lo.get('kitResolved')
+                        and abs((stats.get('walkSpeedStat') or -1) - walk) < 0.5 and tuple(lo.get('additionalWeapons') or ()) == tuple(weapons))
+                ok &= bool(good)
+                crcs.append(lo.get('tableCrc'))
+                out.append(f"{side}: kit {lo.get('kit')} rev {lo.get('revision')} (combat state {co.get('loadoutRevision')}) WalkSpeed {stats.get('walkSpeedStat')} weapons {lo.get('additionalWeapons')}")
+            same = crcs[0] is not None and crcs[0] == crcs[1]
+            return ok and same, '; '.join(out) + f' table checksums {crcs} (want equal; kit {kit}, revision {revision}, WalkSpeed {walk}, weapons {list(weapons)})'
+        return run.at(label, f)
+
+    def unchanged(label, kit, revision):
+        def f():
+            lo, co, _ = _loadout_view(0, key)
+            return lo.get('kit') == kit and lo.get('revision') == revision, f"authority kit {lo.get('kit')} revision {lo.get('revision')} (want {kit}, {revision})"
+        return run.at(label, f)
+
+    def apexes():
+        a, b = apex.get('alpha'), apex.get('beta')
+        return a is not None and b is not None and b[0] > a[0] + 30.0 and abs(a[0] - a[1]) <= 1.0 and abs(b[0] - b[1]) <= 1.0, \
+            f'apex Alpha {a}, Beta {b} (authority, owner; Beta must be > Alpha + 30 cm, owner within 1 cm)'
+
+    def apex_step(label, t0, t1):
+        def f():
+            hs, _ = _apex_up(run, 'srv', t0 - 0.05, t0, t1)
+            hc, _ = _apex_up(run, 'cli', t0 - 0.05, t0, t1)
+            apex[label] = (hs, hc)
+            return hs > 20.0, f'{label}: authority {hs:.1f} cm, owner {hc:.1f} cm'
+        return run.at(f'{label}: a jump gives an apex', f)
+
+    def timeline_cancelled():
+        def f():
+            out, ok = [], True
+            for i, side in ((0, 'srv'), (client, 'cli')):
+                v = _view(i, key) or {}
+                co = v.get('combat') or {}
+                ok &= not co.get('inTimeline')
+                out.append(f"{side}: inTimeline {co.get('inTimeline')}")
+            return ok, '; '.join(out)
+        return run.at('B: the running timeline is gone on both after the change', f)
+
+    def reconciles():
+        r = report_reconciles(marks['start'])
+        by = r['unexplained_by_model']
+        # three accepted changes: each is one out-of-band write of the combat state and of the ability system, so at most 3 of each model
+        ok = by.get('combat', 0) <= 3 and by.get('asc', 0) <= 3 and by.get('mover', 0) == 0
+        return ok, f"unexplained by model {by} (at most one combat and one asc reconcile per accepted change = 3 each, no Mover), forced={r['forced']}"
+
+    steps = [
+        (0.4, _mark(run, marks, 'start')),
+        (0.5, lambda: ('clear a stale press', combat_clear(client))),
+        (0.6, apply('KIT_Test_Alpha', '', 'A')),
+        (1.8, accepted('A')),
+        (1.9, state('A: Alpha applied on both (revision base+1, WalkSpeed 600, same table)', 'KIT_Test_Alpha', base + 1, 600.0)),
+        (2.5, lambda: ('A: jump', _jump_tap(client, 0.3))),
+        (2.8, lambda: ('release', combat_clear(client))),
+        (5.5, apex_step('alpha', 2.5, 5.5)),
+        # B: an attack in progress, then the kit change
+        (6.0, lambda: ('B: attack', combat_tap(client, attack))),
+        (6.1, run.at('B: the attack is running', lambda: (any((_view(i, key) or {}).get('combat', {}).get('inTimeline') for i in (0, client)), 'inTimeline on the authority or the owner'))),
+        (6.12, apply('KIT_Test_Beta', '', 'B')),
+        (7.2, accepted('B')),
+        (7.3, timeline_cancelled()),
+        (7.4, state('B: Beta applied on both (revision base+2, WalkSpeed 900, same table)', 'KIT_Test_Beta', base + 2, 900.0)),
+        (8.0, lambda: ('B: jump', _jump_tap(client, 0.3))),
+        (8.3, lambda: ('release', combat_clear(client))),
+        (11.0, apex_step('beta', 8.0, 11.0)),
+        (11.1, run.at('B: the Beta jump is higher', apexes)),
+        # C: refusals change nothing
+        (11.5, apply('KIT_Missing', '', 'C1')),
+        (11.6, apply('KIT_Test_Beta', 'WPN_Test_Blade', 'C2')),
+        (12.2, refused('C1')),
+        (12.2, refused('C2')),
+        (12.3, unchanged('C: nothing changed after the refusals', 'KIT_Test_Beta', base + 2)),
+        # D: the support weapon
+        (12.5, apply('KIT_Test_Alpha', 'WPN_Test_Support', 'D')),
+        (13.8, accepted('D')),
+        (13.9, state('D: Alpha + support weapon (revision base+3, WalkSpeed 600 kept)', 'KIT_Test_Alpha', base + 3, 600.0, ('WPN_Test_Support',))),
+        (14.0, run.at('reconciles: one per accepted change and model', reconciles)),
+        (14.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_hitstop(client=1):
+    """C15 hitstop (combat-m3 7.3): a hitstop window opened during a running attack pauses its timeline and the combat clock for exactly
+    HitstopTestFrames (8) frames, the same on the authority and the owner, and the attack still finishes. The test component sets the
+    combat component's HitstopTestButton to bit 20 (bound to no button), tapped as a scripted button. A: an attack without a hitstop gives the
+    plain duration. B: the same attack with a hitstop 5 frames in lasts longer by the window, and the paused frames rise by exactly 7 on both (the window
+    opened on frame F pauses from F+1)."""
+    run = _Run('hitstop', client, judge_reconciles=False)
+    key, seen = run.key, {}
+    attack, stop = button_mask('Attack'), 1 << 20
+
+    def paused(side_i):
+        return ((_view(side_i, key) or {}).get('combat') or {}).get('pausedTotal')
+
+    def span(label, t0, t1):
+        def f():
+            ins = [s['t'] for s in run.samples if t0 <= s['t'] <= t1 and s.get('srv') and s['srv'].get('intl')]
+            seen[label] = (max(ins) - min(ins)) if ins else 0.0
+            return bool(ins), f'{label}: the attack was in its timeline for {seen[label]:.3f} s on the authority'
+        return run.at(f'{label}: the attack ran', f)
+
+    def mark(label):
+        def f():
+            seen[label] = (paused(0), paused(client))
+            return label, seen[label]
+        return f
+
+    def rose():
+        a0, a1 = seen['before'], seen['after']
+        d = (a1[0] - a0[0], a1[1] - a0[1])
+        return d == (7, 7), f'paused frames rose by {d} on (authority, owner), want (7, 7): the window opened on frame F pauses from F+1, so 8 - 1 frames'
+
+    def longer():
+        a, b = seen.get('A'), seen.get('B')
+        return a is not None and b is not None and b > a + 0.07, f'duration without {a} s, with {b} s (want at least 0.07 s longer: 7 paused frames are 0.117 s at 60 Hz)'
+
+    steps = [
+        (0.5, lambda: ('clear', combat_clear(client))),
+        (1.0, lambda: ('A: attack', combat_tap(client, attack))),
+        (2.5, span('A', 0.9, 2.5)),
+        (3.0, mark('before')),
+        (3.2, lambda: ('B: attack', combat_tap(client, attack))),
+        (3.2 + 5 / 60.0, lambda: ('B: hitstop', combat_tap(client, stop))),
+        (5.0, span('B', 3.1, 5.0)),
+        (5.1, mark('after')),
+        (5.2, run.at('B: the paused frames rose by exactly the window on both', rose)),
+        (5.3, run.at('B: the hitstop attack lasted longer', longer)),
+        (5.4, run.finish()),
+    ]
+    run.run(steps)

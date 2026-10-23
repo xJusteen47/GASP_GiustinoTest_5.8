@@ -17,6 +17,9 @@
 #     set, filled by UGSTN_StandardSlots.FillSlotSet), BS_GASNPP_Test (UGSTN_CommandBindingSet: Dash/Buff, Attack.* -> test
 #     attack, Special.* -> test stance, the C14 movement kit). It does NOT edit BP_GASNPP_TestCharacter: it warns when the
 #     Blueprint's GSTN_CombatSimComponent does not point to these assets, and the harness grants the abilities at run time.
+#  5. (opt-in, --combat-content) C15 loadout test content in /Game/GASNPPTest/Combat (specs in combat_content_specs()): the kits
+#     KIT_Test_Alpha / KIT_Test_Beta and the weapons WPN_Test_Blade / Spear / Support. New assets only. Needs the tags of
+#     Config/Tags/GSTNCombatTest.ini and step 4's slot set.
 # The Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
 #
 # Current layout (2026-10-17, set by hand from the editor, not by this script): the NpAbilitySystem (GA_Jump, GA_WallSlide)
@@ -486,7 +489,102 @@ def setup_combat_input():
     return changed
 
 
-def run(wall_transition=False, combat_input=False, test_character=False):
+TEST_COMBAT_DIR = '/Game/GASNPPTest/Combat'
+
+
+def combat_content_specs():
+    """C15 test kits and weapons, as plain data. Names are asset names (they are the primary asset ids), tags are registered in
+    Config/Tags/GSTNCombatTest.ini, classes are names in `unreal`. The support weapon ships without a stats effect and without bindings:
+    it inherits the kit's stats (owner direction 2026-10-23)."""
+    return {
+        'weapons': [
+            # (asset, identity tag, role tag, [(command, require, ignore, ability)], weapon stats effect class or None)
+            ('WPN_Test_Blade', 'Weapon.Test.Blade', 'Test.Role.Primary',
+             [('Command.Attack.Neutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestAttack')], None),
+            ('WPN_Test_Spear', 'Weapon.Test.Spear', 'Test.Role.Primary',
+             [('Command.Attack.Neutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestBuff')], 'GSTN_GE_TestPrimaryWeaponStats'),
+            ('WPN_Test_Support', 'Weapon.Test.Support', 'Test.Role.Support', [], None),
+        ],
+        'kits': [
+            # (asset, identity tag, primary weapon, {stat tag: value}, [(command, require, ignore, ability)])
+            ('KIT_Test_Alpha', 'Kit.Test.Alpha', 'WPN_Test_Blade',
+             {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
+             [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump')]),
+            ('KIT_Test_Beta', 'Kit.Test.Beta', 'WPN_Test_Spear',
+             {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 900.0},
+             [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Movement.Dash', [], [], 'GSTN_GA_Dash')]),
+        ],
+        'allowed_support_role': 'Test.Role.Support',
+        'base_slot_set': TEST_INPUT_DIR + '/SS_GASNPP_Standard',
+        'init_effect': 'GSTN_GE_TestKitInit',
+    }
+
+
+def _any_tag_query(tag_name):
+    """A FGameplayTagQuery matching any of the one tag, built by the engine (the token stream is not hand-written)."""
+    return unreal.GameplayTagLibrary.make_gameplay_tag_query_match_any_tags(_tag_container([tag_name]))
+
+
+def _binding(command, require, ignore, ability_name):
+    """A FGSTN_AbilityBinding, or None when the ability class does not exist (logged)."""
+    cls = getattr(unreal, ability_name, None)
+    if cls is None or not _tag_exists(command):
+        log(f'  binding {command} -> {ability_name} skipped (class or tag missing)')
+        return None
+    binding = unreal.GSTN_AbilityBinding()
+    binding.set_editor_property('command', _make_tag(command))
+    requirements = unreal.GSTN_TagRequirements()
+    requirements.set_editor_property('require_tags', _tag_container(require))
+    requirements.set_editor_property('ignore_tags', _tag_container(ignore))
+    binding.set_editor_property('requirements', requirements)
+    binding.set_editor_property('ability', cls)
+    return binding
+
+
+def setup_combat_content():
+    """Creates/updates /Game/GASNPPTest/Combat from combat_content_specs(). New assets only: no Blueprint is edited. Every property is
+    rewritten from the specs on each run (so a rerun converges to the specs) and the assets are saved. Returns True when something was saved."""
+    specs = combat_content_specs()
+    changed = False
+
+    for name, identity, role, bindings, stats_effect in specs['weapons']:
+        asset, created = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_WeaponDefinition, unreal.DataAssetFactory())
+        asset.set_editor_property('display_name', name)
+        asset.set_editor_property('weapon_tags', _tag_container([identity, role]))
+        asset.set_editor_property('bindings', [b for b in (_binding(*row) for row in bindings) if b])
+        effect = getattr(unreal, stats_effect, None) if stats_effect else None
+        asset.set_editor_property('stats_effect', effect)
+        asset.set_editor_property('stat_modifiers', [])   # the test effect has constant modifiers, it reads no set-by-caller number
+        unreal.EditorAssetLibrary.save_loaded_asset(asset)
+        changed = True
+
+    for name, identity, weapon, stat_values, bindings in specs['kits']:
+        asset, created = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_PrimaryKitDefinition, unreal.DataAssetFactory())
+        asset.set_editor_property('kit_tags', _tag_container([identity]))
+        asset.set_editor_property('primary_weapon', unreal.load_asset(f'{TEST_COMBAT_DIR}/{weapon}'))
+        asset.set_editor_property('allowed_additional_weapons', _any_tag_query(specs['allowed_support_role']))
+        asset.set_editor_property('max_additional_weapons', 1)
+        values = []
+        for tag, value in stat_values.items():
+            stat = unreal.GSTN_StatValue()
+            stat.set_editor_property('stat', _make_tag(tag))
+            stat.set_editor_property('value', value)
+            values.append(stat)
+        stats = unreal.GSTN_KitStats()
+        stats.set_editor_property('values', values)
+        asset.set_editor_property('stats', stats)
+        asset.set_editor_property('init_stats_effect', getattr(unreal, specs['init_effect'], None))
+        command_set = unreal.GSTN_CommandSet()
+        command_set.set_editor_property('base_set', unreal.load_asset(specs['base_slot_set']))
+        asset.set_editor_property('command_set', command_set)
+        asset.set_editor_property('kit_bindings', [b for b in (_binding(*row) for row in bindings) if b])
+        unreal.EditorAssetLibrary.save_loaded_asset(asset)
+        changed = True
+    log(f'combat content written under {TEST_COMBAT_DIR}')
+    return changed
+
+
+def run(wall_transition=False, combat_input=False, test_character=False, combat_content=False):
     """Step 2 and step 3 change shared Blueprints (the test character, the sandbox character) and are opt-in; step 4 never does."""
     log(f'mapping context changed: {setup_mapping_context()}')
     if test_character:
@@ -499,9 +597,11 @@ def run(wall_transition=False, combat_input=False, test_character=False):
         log('wall transition skipped (run(wall_transition=True) or --wall-transition)')
     if combat_input:
         log(f'combat input changed: {setup_combat_input()}')
+    if combat_content:
+        log(f'combat content changed: {setup_combat_content()}')
 
 
 if __name__ == '__main__':
     import sys
     run(wall_transition='--wall-transition' in sys.argv, combat_input='--combat-input' in sys.argv,
-        test_character='--test-character' in sys.argv)
+        test_character='--test-character' in sys.argv, combat_content='--combat-content' in sys.argv)
