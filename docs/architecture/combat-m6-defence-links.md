@@ -527,9 +527,9 @@ attacker punish, meter, event) is applied by one piece of code and tested once.
 >    `Combat.State.Knockdown` (direction variants allowed); with none, the attack button does nothing there.
 >
 > All three are abilities granted by the base ability set or the kit, so changing the rule later is a data change. The tech button is
-> therefore free by default (question M6.8 answered). *Open* (M6.9): how to get up without a direction or an attack (a neutral get-up on
-> jump or shield, or automatically after `KnockdownFrames`), and the longest time one may stay down. *Proposal*: a neutral get-up on jump
-> or shield, automatic after `KnockdownFrames` (default 90).
+> therefore free by default (question M6.8 answered). **Pressing jump gets up** (owner, 16:23): a neutral get-up ability bound to
+> `Press(Jump)` requiring `Combat.State.Knockdown`. An automatic get-up after a time is optional data (`MaxDownedFrames`, 0 = never, the
+> default) for a mode or kit that wants it.
 
 - **Contact record**: the record type `FGSTN_TumbleContactSyncState` and the probe are shared with **M4 §7b** (surface impacts: the
   knockback move already needs the contact, with `SurfaceTypeIndex`); `FGSTN_TumbleContactModifier` is M6's tech extension of that

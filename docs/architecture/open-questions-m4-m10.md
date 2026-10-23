@@ -588,7 +588,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 9. Cosa succede quando si manca il tech: knockdown con rialzo automatico, rialzo con scelta (attacco, rotolata) o niente?
    Perché conta: definisce la punizione dopo un lancio e quanto tempo è in balia dei nemici.
    Ipotesi nella specifica: knockdown breve con un solo rialzo neutro; altri rialzi rimandati.
-   **Risposta (2026-10-23):** Se non c'è wall splat o rimbalzo eccessivo, il personaggio fa un mini rimbalzo a terra (direzione controllabile con lo stick) e finisce a terra (downed, come in Smash). Senza input resta a terra; tenendo lo stick in una direzione rotola da quella parte; attaccando fa un getup attack (da 0 a quanti ne vuole il designer per moveset). Resta aperto come ci si alza senza direzione né attacco (ipotesi: salto o scudo, oppure da soli dopo circa 1,5 s) e quanto si può restare a terra al massimo.
+   **Risposta (2026-10-23):** Se non c'è wall splat o rimbalzo eccessivo, il personaggio fa un mini rimbalzo a terra (direzione controllabile con lo stick) e finisce a terra (downed, come in Smash). Senza input resta a terra; tenendo lo stick in una direzione rotola da quella parte; attaccando fa un getup attack (da 0 a quanti ne vuole il designer per moveset). Ci si rialza premendo salto (risposta del 23/10, 16:23); un rialzo automatico dopo un certo tempo resta un dato opzionale, spento di default.
 
 10. DI e SDI devono valere uguale per giocatori, nemici e boss, e in tutte le modalità?
    Perché conta: la possibilità di sfuggire ai combo è parte del feeling e della difficoltà.

@@ -226,6 +226,7 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   ends in a **downed state**, as in Smash. With no attack or direction input after the bounce, it ends lying on the ground.
 - On the ground, **holding the stick** in a direction makes it **roll** that way; **attacking** makes a **get-up attack**. Available get-up
   attacks: **0 or as many as the designer wants**, per moveset. Spec: [combat-m6-defence-links.md](combat-m6-defence-links.md) §6.
+- **Pressing jump gets up** (16:23).
 
 ## 7. Consequences for the specifications
 
@@ -477,3 +478,5 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > direzione) e finisce in downed state (come su smash). Dopo il rimbalzo se non si imputano attacchi o direzioni si finisce a terra. Tenere
 > premuto lo stick in una direzione (quando si è a terra)causa un roll verso quella direzione, attaccare, causa un getup attack. I getup
 > attack disponibili potrebbero essere 0 o quanti interessa a designer a seconda del moveset. Quindi di base, Niente tech.
+
+> Ci si rialza quando si preme salto comunque. (16:23)
