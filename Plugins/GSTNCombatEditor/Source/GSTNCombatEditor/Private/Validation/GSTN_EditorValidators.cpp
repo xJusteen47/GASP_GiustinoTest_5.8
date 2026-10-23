@@ -2,8 +2,10 @@
 
 #include "Validation/GSTN_EditorValidators.h"
 
+#include "Abilities/GSTN_GA_BaseCombat.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/IAssetRegistry.h"
+#include "Engine/Blueprint.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
@@ -74,6 +76,36 @@ EDataValidationResult UGSTN_TimelineValidator::ValidateLoadedAsset_Implementatio
 	FGSTN_ValidationReport Report;
 	const FGSTN_TimelineRuleContext Context = FGSTN_CombatValidators::MakeTimelineContext(Timeline->Data, InAsset, UGSTN_CombatEditorSettings::GetSimulationTickRate(), true);
 	FGSTN_CombatValidators::ValidateTimeline(Timeline->Data, Context, Report);
+	return AddReportToContext(Report, InAssetData, InContext);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+bool UGSTN_AbilityTimelineValidator::IsAbilityBlueprint(const UObject* Asset)
+{
+	const UBlueprint* Blueprint = Cast<UBlueprint>(Asset);
+	return Blueprint != nullptr && Blueprint->GeneratedClass != nullptr && Blueprint->GeneratedClass->IsChildOf(UGSTN_GA_BaseCombat::StaticClass());
+}
+
+bool UGSTN_AbilityTimelineValidator::CanValidateAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) const
+{
+	return IsAbilityBlueprint(InAsset);
+}
+
+EDataValidationResult UGSTN_AbilityTimelineValidator::ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext)
+{
+	const UBlueprint* Blueprint = Cast<UBlueprint>(InAsset);
+	const UClass* Class = Blueprint ? Blueprint->GeneratedClass.Get() : nullptr;
+
+	// The default object is the one that holds the inline values; it is never created here, a class that was never built has none to read
+	const UGSTN_GA_BaseCombat* Ability = Class ? Cast<UGSTN_GA_BaseCombat>(Class->GetDefaultObject(false)) : nullptr;
+	if (Ability == nullptr)
+	{
+		return EDataValidationResult::NotValidated;
+	}
+
+	FGSTN_ValidationReport Report;
+	FGSTN_CombatValidators::ValidateAbilityTimeline(*Ability, InAsset, UGSTN_CombatEditorSettings::GetSimulationTickRate(), true, Report);
 	return AddReportToContext(Report, InAssetData, InContext);
 }
 

@@ -45,6 +45,25 @@ protected:
 	virtual EDataValidationResult ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) override;
 };
 
+/**
+ * A Blueprint whose class derives from the combat ability (UGSTN_GA_BaseCombat): the inline timeline, read from the default object of its
+ * generated class, with the rules of the timeline asset validator (combat-m5-editor 9.1, E13). When the ability names a TimelineAsset
+ * that is what plays and has its own validator; see FGSTN_CombatValidators::ValidateAbilityTimeline.
+ */
+UCLASS()
+class UGSTN_AbilityTimelineValidator : public UGSTN_CombatValidatorBase
+{
+	GENERATED_BODY()
+
+public:
+	/** Is this a Blueprint whose generated class derives from the combat ability? What CanValidateAsset asks, public so a test can ask it too */
+	static bool IsAbilityBlueprint(const UObject* Asset);
+
+protected:
+	virtual bool CanValidateAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) const override;
+	virtual EDataValidationResult ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) override;
+};
+
 /** A kit: its own checks, and the conflicts of its command set (Ambiguous, DuplicateCommand, InvalidSlot errors, Shadowed warnings) */
 UCLASS()
 class UGSTN_KitValidator : public UGSTN_CombatValidatorBase

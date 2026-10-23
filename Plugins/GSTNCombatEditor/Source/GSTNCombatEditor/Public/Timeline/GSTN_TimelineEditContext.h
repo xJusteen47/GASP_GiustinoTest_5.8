@@ -14,8 +14,10 @@ class UBlueprint;
  * the inline timeline of an ability Blueprint (combat-m5-editor 4.1). A small value type: it holds weak pointers and resolves the
  * data on every call, never caching a pointer across edits (a Blueprint recompile replaces the object the data lives in).
  *
- * Asset mode is complete. Inline mode is declared so the model and the toolkit are written against the final shape, but a
- * Blueprint context never resolves until E13 implements the lookup on the class default object: Get() is null, IsValid() false.
+ * Asset mode edits the Data of a timeline asset. Inline mode (E13) edits the Timeline property of the class default object of an
+ * ability Blueprint (UGSTN_GA_BaseCombat): the Blueprint is the target, the CDO of its generated class is the owner, and both are
+ * looked up again on every call, because a compile replaces the CDO. A Blueprint whose generated class does not derive from the
+ * ability (reparented, not compiled yet, being compiled) does not resolve: Get() is null and IsValid() false.
  */
 struct GSTNCOMBATEDITOR_API FGSTN_TimelineEditContext
 {
@@ -24,13 +26,31 @@ struct GSTNCOMBATEDITOR_API FGSTN_TimelineEditContext
 	/** The timeline asset is edited in place */
 	static FGSTN_TimelineEditContext ForAsset(UGSTN_CombatTimeline* Timeline);
 
-	/** The inline timeline of the Blueprint's ability. Not resolvable before E13 */
+	/** The inline timeline of the Blueprint's ability */
 	static FGSTN_TimelineEditContext ForBlueprint(UBlueprint* Blueprint);
+
+	/**
+	 * The context for the object a details row of an FGSTN_CombatTimelineData belongs to: a timeline asset, or the class default
+	 * object of an ability Blueprint. Invalid for anything else (an instance, a native class without a Blueprint, a struct view).
+	 */
+	static FGSTN_TimelineEditContext FromOwnerObject(UObject* Owner);
+
+	/** Can this Blueprint hold an inline timeline: does its generated class derive from the combat ability? Says nothing about the class being compiled right now */
+	static bool CanEditInline(const UBlueprint* Blueprint);
 
 	/** True when Get() returns data. A context whose asset was deleted or whose property is gone is not valid */
 	bool IsValid() const { return Get() != nullptr; }
 
 	bool IsInline() const { return bInline; }
+
+	/** The Blueprint of an inline context, null otherwise */
+	UBlueprint* GetBlueprint() const { return Blueprint.Get(); }
+
+	/**
+	 * Inline only: the ability also names a TimelineAsset, which wins at run time, so the inline data being edited is not what plays.
+	 * The editor says so; it never changes the property.
+	 */
+	bool IsInlineShadowedByAsset() const;
 
 	/** The data being edited, null when the context is not valid. Resolved on every call */
 	FGSTN_CombatTimelineData* Get() const;

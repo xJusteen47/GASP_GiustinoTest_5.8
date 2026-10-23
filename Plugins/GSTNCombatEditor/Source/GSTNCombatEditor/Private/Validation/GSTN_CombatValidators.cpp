@@ -2,6 +2,7 @@
 
 #include "Validation/GSTN_CombatValidators.h"
 
+#include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/AssetManager.h"
 #include "GameplayTagsManager.h"
@@ -196,6 +197,29 @@ void FGSTN_CombatValidators::ValidateTimeline(const FGSTN_CombatTimelineData& Da
 	CheckAimTurn(Data, Context, Report);
 	CheckUnknownTracks(Data, Context, Report);
 	CheckTrackEditors(Data, Context, Report);
+}
+
+bool FGSTN_CombatValidators::HasInlineContent(const FGSTN_CombatTimelineData& Data)
+{
+	return Data.TotalFrames > 0 || !Data.Tracks.IsEmpty() || !Data.Montage.IsNull();
+}
+
+void FGSTN_CombatValidators::ValidateAbilityTimeline(const UGSTN_GA_BaseCombat& Ability, UObject* Asset, float TickRate, bool bLoadMontage, FGSTN_ValidationReport& Report)
+{
+	if (!Ability.TimelineAsset.IsNull())
+	{
+		if (HasInlineContent(Ability.Timeline))
+		{
+			Report.Add(EGSTN_Severity::Warning, GSTNValidationCodes::AbilityInlineIgnored(),
+				FText::Format(LOCTEXT("AbilityInlineIgnored", "The ability names the Timeline Asset {0}, which plays instead of the inline timeline; the inline timeline is not used."),
+					FText::FromString(Ability.TimelineAsset.GetAssetName())),
+				Asset);
+		}
+		return;
+	}
+
+	const FGSTN_TimelineRuleContext Context = MakeTimelineContext(Ability.Timeline, Asset, TickRate, bLoadMontage);
+	ValidateTimeline(Ability.Timeline, Context, Report);
 }
 
 void FGSTN_CombatValidators::CheckCoreRules(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report)

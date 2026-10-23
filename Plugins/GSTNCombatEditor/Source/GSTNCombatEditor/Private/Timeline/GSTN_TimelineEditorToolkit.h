@@ -10,6 +10,7 @@
 class FGSTN_TimelineEditorModel;
 class FGSTN_TimelineUndoClient;
 class SDockTab;
+class UBlueprint;
 
 /**
  * The asset editor of a timeline (combat-m5-editor 5.1): a standalone (or world-centric) window with four tabs, Viewport, Timeline,
@@ -20,8 +21,14 @@ class SDockTab;
  * selected track through the selection proxy; Frame Data is the summary line. Viewport is a placeholder until the preview scene (E6).
  *
  * Save is the standard one of the asset editor: it saves the object GetObjectsCurrentlyBeingEdited returns, which is the target of the
- * context (the asset; the Blueprint once inline mode arrives in E13). The layout is saved by the editor under the layout name and
- * restored when the asset is opened again.
+ * context (the asset; the Blueprint in inline mode). The layout is saved by the editor under the layout name and restored when the
+ * asset is opened again.
+ *
+ * Inline mode (E13) is the same window on the inline timeline of an ability Blueprint. The toolkit is registered with the asset editor
+ * subsystem under the Blueprint but says it is not the primary editor of it, so opening the Blueprint from the Content Browser still
+ * opens the Blueprint editor and does not focus this one. It listens to the compiles of the Blueprint: the default object is a new one
+ * after each, the editor refreshes from it, and closes with a message when the Blueprint no longer has an inline timeline. A strip above
+ * the timeline names the Blueprint and offers Extract to timeline asset.
  */
 class FGSTN_TimelineEditorToolkit : public FAssetEditorToolkit
 {
@@ -56,7 +63,17 @@ public:
 	/** The standalone default layout, apart so a test can read its shape without opening a window */
 	static TSharedRef<FTabManager::FLayout> MakeDefaultLayout();
 
+	/** Inline mode: after a compile of the Blueprint. Refreshes, or closes the window (next tick) with a message when the inline timeline is gone */
+	void HandleBlueprintCompiled(UBlueprint* Blueprint);
+
+	/**
+	 * Inline mode: Extract to timeline asset. Asks where to put the asset (Content Browser save dialog), creates it, moves the inline
+	 * timeline into it with GSTNInlineTimeline::ExtractToAsset, closes this window and opens the asset in its own editor.
+	 */
+	void ExtractToAsset();
+
 	//~ FAssetEditorToolkit
+	virtual bool IsPrimaryEditor() const override { return !Context.IsInline(); }
 	virtual void RegisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
 	virtual void UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
 	virtual FName GetToolkitFName() const override;
@@ -75,6 +92,10 @@ private:
 	void Release();
 
 	FGSTN_TimelineEditContext Context;
+
+	/** Inline mode: the Blueprint whose compiles this toolkit listens to */
+	TWeakObjectPtr<UBlueprint> ObservedBlueprint;
+
 	TSharedPtr<FGSTN_TimelineEditorModel> Model;
 
 	/** Declared after the model it points at, so it is destroyed first */

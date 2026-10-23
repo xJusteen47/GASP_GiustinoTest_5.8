@@ -2,13 +2,29 @@
 
 #include "Timeline/GSTN_TimelineEditorToolkit.h"
 
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "AssetToolsModule.h"
+#include "Containers/Ticker.h"
+#include "ContentBrowserModule.h"
+#include "Editor.h"
+#include "Engine/Blueprint.h"
 #include "Framework/Docking/TabManager.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "GSTNCombatEditorModule.h"
+#include "IAssetTools.h"
+#include "IContentBrowserSingleton.h"
+#include "Misc/PackageName.h"
+#include "Subsystems/AssetEditorSubsystem.h"
+#include "Timeline/GSTN_CombatTimeline.h"
+#include "Timeline/GSTN_InlineTimeline.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "Styling/AppStyle.h"
 #include "Timeline/GSTN_TimelineEditorCommands.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
 #include "Timeline/GSTN_TimelineUndo.h"
 #include "Timeline/Widgets/GSTN_TimelineWidgetCommon.h"
 #include "Timeline/Widgets/SGSTN_FrameDataSummary.h"
+#include "Timeline/Widgets/SGSTN_InlineTimelineBar.h"
 #include "Timeline/Widgets/SGSTN_MontageLengthBar.h"
 #include "Timeline/Widgets/SGSTN_TimelineDetails.h"
 #include "Timeline/Widgets/SGSTN_TimelinePanel.h"
@@ -44,6 +60,12 @@ FGSTN_TimelineEditorToolkit::~FGSTN_TimelineEditorToolkit()
 
 void FGSTN_TimelineEditorToolkit::Release()
 {
+	if (UBlueprint* Blueprint = ObservedBlueprint.Get())
+	{
+		Blueprint->OnCompiled().RemoveAll(this);
+	}
+	ObservedBlueprint.Reset();
+
 	// The client first: it points at the model. The lease last: the target is free for another editor only when this one is gone
 	UndoClient.Reset();
 	Model.Reset();
@@ -133,9 +155,91 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 	constexpr bool bCreateDefaultToolbar = true;
 	FAssetEditorToolkit::InitAssetEditor(Mode, InitToolkitHost, TimelineEditorAppIdentifier, MakeDefaultLayout(), bCreateDefaultStandaloneMenu, bCreateDefaultToolbar, Context.GetTarget());
 
+	// Inline mode: the compile of the Blueprint replaces the default object the data lives in
+	if (UBlueprint* Blueprint = Context.GetBlueprint())
+	{
+		ObservedBlueprint = Blueprint;
+		Blueprint->OnCompiled().AddSP(this, &FGSTN_TimelineEditorToolkit::HandleBlueprintCompiled);
+	}
+
 	// The chord of Validate (F7) lives on the toolkit, not on the panel's command list: the toolbar button and the chord do the same thing
 	ToolkitCommands->MapAction(FGSTN_TimelineEditorCommands::Get().ValidateNow, FExecuteAction::CreateSPLambda(this, [this]() { ValidateNow(); }));
 	return true;
+}
+
+void FGSTN_TimelineEditorToolkit::HandleBlueprintCompiled(UBlueprint* Blueprint)
+{
+	if (!Model.IsValid())
+	{
+		return;
+	}
+	if (GSTNInlineTimeline::DecideAfterCompile(Context) == GSTNInlineTimeline::EAfterCompile::Refresh)
+	{
+		// A new default object with the same values: the model resolves it on every call, the views only need to read again
+		Model->HandleUndoRedo();
+		return;
+	}
+
+	FNotificationInfo Info(FText::Format(LOCTEXT("InlineTimelineGone", "{0} has no inline combat timeline any more (it no longer derives from the combat ability). The timeline editor was closed."), Context.GetDisplayName()));
+	Info.ExpireDuration = 8.f;
+	FSlateNotificationManager::Get().AddNotification(Info);
+	UE_LOG(LogGSTNCombatEditor, Warning, TEXT("The inline timeline of %s is gone after a compile; closing its timeline editor."), *Context.GetDisplayName().ToString());
+
+	// Not from inside the compile: the Blueprint is still being reinstanced around this call
+	const TWeakPtr<FGSTN_TimelineEditorToolkit> WeakSelf = StaticCastSharedRef<FGSTN_TimelineEditorToolkit>(AsShared());
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakSelf](float) -> bool
+	{
+		if (const TSharedPtr<FGSTN_TimelineEditorToolkit> Pinned = WeakSelf.Pin())
+		{
+			Pinned->CloseWindow(EAssetEditorCloseReason::AssetUnloadingOrInvalid);
+		}
+		return false;
+	}));
+}
+
+void FGSTN_TimelineEditorToolkit::ExtractToAsset()
+{
+	if (!Context.IsInline() || !Context.IsValid())
+	{
+		return;
+	}
+
+	FString PackagePath;
+	FString AssetName;
+	GSTNInlineTimeline::GetExtractDefaults(Context, PackagePath, AssetName);
+	FString UniquePackageName;
+	FString UniqueAssetName;
+	FAssetToolsModule::GetModule().Get().CreateUniqueAssetName(PackagePath / AssetName, FString(), UniquePackageName, UniqueAssetName);
+
+	FSaveAssetDialogConfig Config;
+	Config.DialogTitleOverride = LOCTEXT("ExtractDialogTitle", "Extract Timeline Asset");
+	Config.DefaultPath = FPackageName::GetLongPackagePath(UniquePackageName);
+	Config.DefaultAssetName = UniqueAssetName;
+	Config.AssetClassNames.Add(UGSTN_CombatTimeline::StaticClass()->GetClassPathName());
+	Config.ExistingAssetPolicy = ESaveAssetDialogExistingAssetPolicy::Disallow;
+	const FString ObjectPath = IContentBrowserSingleton::Get().CreateModalSaveAssetDialog(Config);
+	if (ObjectPath.IsEmpty())
+	{
+		return;
+	}
+
+	const FString PackageName = FPackageName::ObjectPathToPackageName(ObjectPath);
+	UPackage* Package = CreatePackage(*PackageName);
+	if (Package == nullptr)
+	{
+		return;
+	}
+	UGSTN_CombatTimeline* NewAsset = NewObject<UGSTN_CombatTimeline>(Package, FName(*FPackageName::GetLongPackageAssetName(PackageName)), RF_Public | RF_Standalone | RF_Transactional);
+	if (NewAsset == nullptr || !GSTNInlineTimeline::ExtractToAsset(Context, NewAsset))
+	{
+		return;
+	}
+	FAssetRegistryModule::AssetCreated(NewAsset);
+	Package->MarkPackageDirty();
+
+	// This window edits the inline data, which is empty now: the asset takes over in its own editor
+	CloseWindow(EAssetEditorCloseReason::AssetEditorHostClosed);
+	GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(NewAsset);
 }
 
 FGSTN_ValidationReport FGSTN_TimelineEditorToolkit::ValidateNow()
@@ -193,6 +297,10 @@ FName FGSTN_TimelineEditorToolkit::GetToolkitFName() const
 
 FText FGSTN_TimelineEditorToolkit::GetBaseToolkitName() const
 {
+	if (Context.IsInline())
+	{
+		return LOCTEXT("InlineToolkitName", "Inline Combat Timeline Editor");
+	}
 	return LOCTEXT("ToolkitName", "Combat Timeline Editor");
 }
 
@@ -236,6 +344,13 @@ TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnTimelineTab(const FSpawnT
 		.Label(LOCTEXT("TimelineTabLabel", "Timeline"))
 		[
 			SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(SGSTN_InlineTimelineBar)
+				.Model(Model)
+				.OnExtract(FSimpleDelegate::CreateSP(this, &FGSTN_TimelineEditorToolkit::ExtractToAsset))
+			]
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			[

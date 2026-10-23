@@ -10,6 +10,7 @@
 #include "UObject/StrongObjectPtr.h"
 #include "Validation/GSTN_ValidationReport.h"
 
+class UGSTN_GA_BaseCombat;
 class UGSTN_InputSettings;
 class UGSTN_LoadoutRules;
 class UGSTN_PrimaryKitDefinition;
@@ -35,6 +36,9 @@ namespace GSTNValidationCodes
 	inline FName EmptyTrack() { return TEXT("Timeline.EmptyTrack"); }
 	inline FName Ricochet() { return TEXT("Timeline.Ricochet"); }
 	inline FName CoreOther() { return TEXT("Timeline.Core"); }
+
+	// The inline timeline of an ability Blueprint (E13)
+	inline FName AbilityInlineIgnored() { return TEXT("Ability.InlineIgnored"); }
 
 	// Slots, shared by kit, weapon and preset
 	inline FName SlotAmbiguous() { return TEXT("Slot.Ambiguous"); }
@@ -116,6 +120,16 @@ struct FGSTN_CombatValidators
 
 	/** The Validate of the registered track editor of each track */
 	static void CheckTrackEditors(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
+
+	/**
+	 * The timeline an ability Blueprint carries inline, read from the default object of its class: the same rules as a timeline asset
+	 * (ValidateTimeline) on the Timeline property. When the ability names a TimelineAsset, the asset is what plays and has its own
+	 * validator, so the inline data is not checked; if it still holds a timeline, Ability.InlineIgnored (warning) says it is dead data.
+	 */
+	static void ValidateAbilityTimeline(const UGSTN_GA_BaseCombat& Ability, UObject* Asset, float TickRate, bool bLoadMontage, FGSTN_ValidationReport& Report);
+
+	/** Does the inline timeline hold anything: a length, a track or a montage? A default timeline is the empty state of a Blueprint that uses TimelineAsset */
+	static bool HasInlineContent(const FGSTN_CombatTimelineData& Data);
 
 	// ---- Kit, weapon, loadout
 

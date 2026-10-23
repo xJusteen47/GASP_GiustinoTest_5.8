@@ -6,8 +6,8 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.5)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
-model), E4 (timeline panel), E5 (toolkit, track editors) and E10 (validation) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md); the design is
+Status: **experimental (0.6)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+model), E4 (timeline panel), E5 (toolkit, track editors), E10 (validation) and E13 (inline mode) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
 
@@ -15,13 +15,13 @@ harness or cooked data.
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNCombatEditor` | exists (Editor, PostEngineInit) | Module class (`FGSTN_CombatEditorModule`, log `LogGSTNCombatEditor`), `UGSTN_CombatEditorSettings`, the pure editing model of a timeline, the timeline panel with its commands, the track editor registry, the timeline asset editor and the validators (below). Covered by `GSTNCombat.Editor.*`. |
+| `GSTNCombatEditor` | exists (Editor, PostEngineInit) | Module class (`FGSTN_CombatEditorModule`, log `LogGSTNCombatEditor`), `UGSTN_CombatEditorSettings`, the pure editing model of a timeline, the timeline panel with its commands, the track editor registry, the timeline asset editor, inline mode for ability Blueprints and the validators (below). Covered by `GSTNCombat.Editor.*`. |
 
 ### The editing model (E2, no UI types)
 
 | Type | File | Role |
 |---|---|---|
-| `FGSTN_TimelineEditContext` | `Public/Timeline/GSTN_TimelineEditContext.h` | What is edited: a `UGSTN_CombatTimeline` asset (complete) or the inline timeline of a Blueprint (declared, resolved in E13). Resolves the data on every call. |
+| `FGSTN_TimelineEditContext` | `Public/Timeline/GSTN_TimelineEditContext.h` | What is edited: a `UGSTN_CombatTimeline` asset, or the inline `Timeline` of an ability Blueprint (inline mode, below). Resolves the data on every call. |
 | `FGSTN_TimelineEditContextRegistry`, `FGSTN_TimelineContextLease` | same | One editor per target: the second `Acquire` on the same asset is refused and the open editor is asked to focus. |
 | `FGSTN_TimelineEditorModel` | `Private/Timeline/GSTN_TimelineEditorModel.h` | State (selection, playhead, view transform, tick rate, auto-key) and every mutation: add and remove track, move and resize window, total frames, first actionable frame, fit to montage, details edits, keys. The only writer of the data. Each mutation is one transaction, and does nothing, with no undo step, when it would change nothing. |
 | `FGSTN_TimelineViewTransform` | same | Frame to pixel mapping shared by the future ruler, lanes and phase bar. |
@@ -97,6 +97,58 @@ The names, colours, icons, bar labels and default lengths of the rows come from 
 (the Hitbox and HurtboxModifier shells until E5b, or a game's own track) gets the **generic row**: a window bar named by the struct,
 its fields in the Details tab. Add Track lists the registered editors, then "Other track types" for the unregistered structs.
 
+## Inline mode: the timeline of an ability Blueprint (E13)
+
+A `UGSTN_GA_BaseCombat` Blueprint keeps a timeline of its own in the `Timeline` property of its class defaults (when `TimelineAsset` is
+empty or not loaded; a loaded asset wins at run time). Timeline assets are the recommended home of a move, because several abilities and
+weapons can share one; inline is supported for the one-off ability. The same editor edits both.
+
+**Opening.** In the Blueprint editor, open Class Defaults: the `Timeline` row shows the frame data on one line (`Startup 7 | Active 3 |
+Recovery 14 | FAF 24 | Total 30`) and an **Open Timeline Editor** button, over the same child rows as before, so the data is still editable in
+the panel. The row (`FGSTN_TimelineDataCustomization`, registered for `FGSTN_CombatTimelineData`) is also on the `Data` of a timeline
+asset. On any other `FGSTN_CombatTimelineData` (an instance, a struct in a Data Table, several objects selected) it shows the line and no
+button. There is no custom Blueprint editor and no toolbar entry: the details row is the one door.
+
+**What happens.** The window is the asset editor, with a strip above the timeline that names the Blueprint and says when a `TimelineAsset`
+is also named (the inline timeline then does not play). Edits go through the same model, so every gesture is one transaction on the
+**class default object** of the Blueprint's generated class, `Modify()` is called on it first, the owner gets `PostEditChangeProperty` for
+`Timeline` and the Blueprint is marked modified (`FBlueprintEditorUtils::MarkBlueprintAsModified`: its package is dirty and its status
+is out of date, exactly as after an edit in Class Defaults). Nothing recompiles the Blueprint; **Save** in the timeline window saves the
+Blueprint (`GetObjectsCurrentlyBeingEdited` returns it).
+
+| Piece | File | Role |
+|---|---|---|
+| `FGSTN_TimelineEditContext::ForBlueprint`, `FromOwnerObject`, `CanEditInline`, `IsInlineShadowedByAsset` | `Public/Timeline/GSTN_TimelineEditContext.h` | The inline half of the context. The Blueprint is the target (what is claimed and saved), the default object of its generated class the owner (what is recorded and undone). Both are looked up on every call; a Blueprint that is being compiled, was never compiled, or no longer derives from the ability does not resolve (`Get()` is null). `Modify()` also gives the owner `RF_Transactional`, which the default object a compile creates may not have. |
+| `GSTNInlineTimeline` | `Private/Timeline/GSTN_InlineTimeline.h` | Plain functions: `OpenEditor`, `DecideAfterCompile` (refresh or close), `ExtractToAsset`, `GetExtractDefaults`. No Slate in the signatures, so the tests call them. |
+| `FGSTN_TimelineDataCustomization` | `Private/Timeline/Details/` | The details row above. |
+| `SGSTN_InlineTimelineBar` | `Private/Timeline/Widgets/` | The strip: the Blueprint's name, the note about `TimelineAsset`, **Extract to timeline asset...**. Collapsed for an asset. |
+
+**Compile.** The toolkit listens to the Blueprint's `OnCompiled()`. A compile makes a new default object with the values carried over:
+the model finds it by itself (nothing is cached across calls), the toolkit just revalidates the selection and redraws. When the
+property is gone after a compile (the Blueprint was reparented to something that is not a combat ability), the toolkit shows a
+notification and closes its window on the next tick. The compile callback itself is not the place to close: the Blueprint is still
+being reinstanced around it.
+
+**One editor per Blueprint.** The context registry refuses a second timeline editor on the same Blueprint and focuses the open one
+(also across compiles: the target is the Blueprint, not its default object). The inline toolkit is registered with the asset editor
+subsystem under the Blueprint, so closing or deleting the Blueprint closes it, but it says it is **not the primary editor** of the
+Blueprint (`IsPrimaryEditor`), so double-clicking the Blueprint in the Content Browser still opens the Blueprint editor and does not
+bring the timeline window to the front.
+
+**Extract to timeline asset.** The button asks for a location (Content Browser save dialog, next to the Blueprint by default, named
+`<Blueprint>_Timeline`), creates a `UGSTN_CombatTimeline`, copies the inline data into it, points the ability's `TimelineAsset` at it and
+clears the inline `Timeline`, in **one** undo step on the default object, then closes the inline window and opens the asset in its own
+editor. This is the spec's fallback for a Blueprint whose inline editing is not wanted (or is brittle), and the way to move to the
+recommended workflow.
+
+**Known limits.**
+- A child Blueprint of an edited ability gets the new value through the normal compile of the parent: the model writes the parent's default
+  object, it does not walk the derived classes the way the details panel does for a value it edits. Not verified in a rendering editor.
+- Undo history from before a compile refers to the default object the compile replaced; undo is matched on the live one, so the first Ctrl+Z
+  after a compile may find nothing to restore. The same holds for an edit made in Class Defaults.
+- The inline editor edits `Timeline` even when `TimelineAsset` is set (the strip says it does not play); it never changes `TimelineAsset`
+  except through Extract.
+
 ## Adding a track editor
 
 A new runtime track (`FMyShieldTrack : FGSTN_TimelineTrack` in a runtime module) becomes a row, an Add Track entry and a Details
@@ -145,7 +197,7 @@ are pure functions that fill an `FGSTN_ValidationReport`, so the automation test
 |---|---|---|
 | `FGSTN_ValidationReport`, `FGSTN_ValidationFinding`, `EGSTN_Severity`, `FGSTN_FindingLocation` | `Public/Validation/GSTN_ValidationReport.h` | The result: severity (Error, Warning, Info), a stable `Code`, a message, an optional detail, the asset and where in it (track, key, frame). Includes no Slate. **Errors invalidate an asset, warnings do not.** |
 | `FGSTN_CombatValidators` | `Private/Validation/GSTN_CombatValidators.h` | The rules and the checks of kit, weapon and loadout, as static functions. |
-| `UGSTN_TimelineValidator`, `UGSTN_KitValidator`, `UGSTN_WeaponValidator`, `UGSTN_LoadoutPresetValidator` | `Private/Validation/GSTN_EditorValidators.h` | `UEditorValidatorBase` children: the Data Validation side. |
+| `UGSTN_TimelineValidator`, `UGSTN_AbilityTimelineValidator`, `UGSTN_KitValidator`, `UGSTN_WeaponValidator`, `UGSTN_LoadoutPresetValidator` | `Private/Validation/GSTN_EditorValidators.h` | `UEditorValidatorBase` children: the Data Validation side. The ability validator takes a Blueprint whose generated class derives from `UGSTN_GA_BaseCombat` and runs the timeline rules on the `Timeline` of its default object (below). |
 | `GSTNValidationLog` | `Private/Validation/GSTN_ValidationMessageLog.h` | A report as Message Log entries (an asset link, `[Code] message`, a **Show** action when a finding has a detail). |
 
 Data Validation runs an asset's own `IsDataValid` first, then the validators. The assets already report what they check themselves (a
@@ -171,6 +223,8 @@ the codes, and a test pins every one of its messages):
 
 The Hitbox same-group overlap, the baked-socket and hitbox rules arrive with E11 (they need M4).
 
+**Inline timelines (E13).** `UGSTN_AbilityTimelineValidator` reads `Timeline` from the default object of the Blueprint's generated class and runs exactly `FGSTN_CombatValidators::ValidateTimeline` on it (`ValidateAbilityTimeline`; the findings belong to the Blueprint), so an inline timeline and an asset get the same codes for the same data, including `FrameRange` for a Blueprint that was never given a length. When the ability names a `TimelineAsset`, the asset plays and has its own validator: the inline data is not checked, and if it still holds something (a length, a track or a montage) the warning `Ability.InlineIgnored` says it is dead data. A class that was never compiled has no default object to read and is not validated.
+
 **Kit, weapon and loadout.** Nothing new is decided here: the kit's and weapon's own `Validate` become findings (`Kit.Data`,
 `Weapon.Data`: identity leaf, bindings, command set), the loadout rules of Core (`UGSTN_LoadoutRules`: allowed weapons, supers and
 skins, customisations, the timeline registry) become `Loadout.Rule`, and the command table is compiled with the compiler the game
@@ -183,8 +237,7 @@ in the table: a slot nobody binds can never fire, and is not compared.
 
 There is no preset asset class in M3 (`UGSTN_LoadoutDefinition` is still to come), so the preset validator takes **any asset whose class
 has an `FGSTN_LoadoutData` property**: that class when it arrives, or a game's own Blueprint holding one. It resolves the ids through the
-Asset Manager and checks the loadout as the server will. The validator for the inline timelines of ability Blueprints (E13) is not
-declared: M3 has no ability class with an inline timeline yet.
+Asset Manager and checks the loadout as the server will.
 
 **Console and CI.** `UnrealEditor-Cmd <project> -run=DataValidation` runs every validator over the project's assets
 (`-AssetType=GSTN_CombatTimeline` narrows it to a class); the exit code is 2 when an asset is invalid.
@@ -192,19 +245,21 @@ declared: M3 has no ability class with an inline timeline yet.
 ## Dependencies
 
 - Plugins: `GSTNCombat` (the timeline data), `GSTNInput` (the slot validator and the notation), `GSTNCombatGAS` (kit, weapon and loadout
-  data, and the `Combat.Hurtbox.*` tags the settings map to), the engine plugin `DataValidation`, `GSTNCombatDebug` as `Optional`
+  data, and the `Combat.Hurtbox.*` tags the settings map to), `GSTNCombatNP` (since E13: the ability class `UGSTN_GA_BaseCombat`, see below), the engine plugin `DataValidation`, `GSTNCombatDebug` as `Optional`
   (only to enable it together when it is present).
 - `GSTNCombatEditor` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore; private ApplicationCore (clipboard),
   AssetDefinition (`UAssetDefinition`; `UAssetDefinitionDefault` itself is in UnrealEd), DeveloperSettings, EditorFramework, InputCore,
-  PropertyEditor (the Details tab), Slate, SlateCore, UnrealEd (the toolkit), GSTNCombatGAS, GSTNInputCore, and for validation DataValidation
+  PropertyEditor (the Details tab and the timeline data row), Slate, SlateCore, UnrealEd (the toolkit, `FBlueprintEditorUtils`, `FKismetEditorUtilities`), ContentBrowser and AssetTools (the save dialog of Extract), GSTNCombatGAS, GSTNCombatNP, GSTNInputCore, and for validation DataValidation
   (`UEditorValidatorBase`), MessageLog, AssetRegistry, Projects, GameplayAbilities (a test binding names the ability base class). The module
   is compiled file by file (`bUseUnity = false`): the tests share helper names through file-scope using-directives. The other editor
   modules are added by the checkpoints that need them.
+- The `GSTNCombatNP` edge (plan m5 R-B exception (c), the editor to NP edge, added by E13): inline mode needs the type of the ability whose `Timeline`
+  and `TimelineAsset` a Blueprint edits, `UGSTN_GA_BaseCombat`, for the cast on the default object, the class check of the context and the
+  validator. It is the only NP type the editor names. It brings Network Prediction, Mover and the ability system simulation into the editor's
+  link graph (they are loaded by the project anyway); the editor still touches none of their APIs, and the fixed tick rate is still read from
+  the Network Prediction settings object by reflection.
 - Not a dependency, on purpose:
-  - `GSTNCombatNP` and `NetworkPrediction`: the one thing the editor needs from the fork, the fixed tick rate, is read from the
-    Network Prediction settings object by reflection (`UGSTN_CombatEditorSettings::GetSimulationTickRate`), so the plugin links
-    neither. The plan allows the `GSTNCombatNP` edge; it is added when a module really needs a type from it (the first
-    candidates are the const accessors of E14/E15, which are the debug plugin's business).
+  - `NetworkPrediction` itself, see above.
   - `GSTNCombatDebug`: the editor reaches it through `IGSTN_CombatDebugModule::Get()` at run time, never through `Build.cs`,
     because UnrealBuildTool stops when a named module does not exist, and the plugin must build with the debug plugin absent.
 - No runtime module depends on this plugin (grep of every `*.Build.cs` and `.uplugin`, repeated at E19).
@@ -264,12 +319,13 @@ run in the editor context (they need `GEditor->Trans`) on a transient timeline. 
 and `PanelConstructsAndRunsCommands` (skipped when the run has no Slate application). `Registry.*` (E5): `RegisteredTrackListed`,
 `UnknownTrackGetsGenericRow`, `BuiltInsAllRegistered`, `DetailsProxyAppliesEditThroughModel`, `DetailsFollowsSelection` (the widgets
 only with a Slate application), `AddTrackInitializesDefaults`, `TwoToolkitsOneAssetFocusesOpen` (the claim the toolkit makes, not the
-window), `ToolkitLayoutAndAssetDefinition`, `PlayRangeIsEditorStateOnly`. `Validate.*` (E10): one failing and one passing case for each timeline rule (`FrameRange`, `MontageLength`, `OverlapSameKind`, `RootMotionMix`, `DeferredCommit`, `CancelWindowTarget`, `TagsTrack`, `UnregisteredTagIsError`, `AimTurn`, `UnknownTrack`), `CleanTimelineHasNoFindings`, `CoreMessagesClassified`, `TrackEditorValidate`, `KitConflictFlagsBothSlotNames`, `FixClearsTheError`, `WeaponReportsWhatItAdds`, `KitCanCarryWeapon`, `PresetConflictNamesWeaponOrSuper`, `PresetValidatorTakesAnyLoadoutHolder`, `SlotInputNotation`, `ErrorsInvalidateWarningsDoNot`, `SkipsWhatIsDataValidSaid`, `FindingMessage`, `ReportIsWidgetFree`. Painting, mouse input and the toolkit window are not tested
+window), `ToolkitLayoutAndAssetDefinition`, `PlayRangeIsEditorStateOnly`. `Validate.*` (E10): one failing and one passing case for each timeline rule (`FrameRange`, `MontageLength`, `OverlapSameKind`, `RootMotionMix`, `DeferredCommit`, `CancelWindowTarget`, `TagsTrack`, `UnregisteredTagIsError`, `AimTurn`, `UnknownTrack`), `CleanTimelineHasNoFindings`, `CoreMessagesClassified`, `TrackEditorValidate`, `KitConflictFlagsBothSlotNames`, `FixClearsTheError`, `WeaponReportsWhatItAdds`, `KitCanCarryWeapon`, `PresetConflictNamesWeaponOrSuper`, `PresetValidatorTakesAnyLoadoutHolder`, `SlotInputNotation`, `ErrorsInvalidateWarningsDoNot`, `SkipsWhatIsDataValidSaid`, `FindingMessage`, `ReportIsWidgetFree`. `Inline.*` (E13), on a real Blueprint of `UGSTN_GA_BaseCombat` made and compiled in a temporary package: `ContextResolvesCdoTimeline`, `SurvivesBlueprintCompile`, `ToolkitClosesWhenPropertyGone`, `EditMarksBlueprintModified`, `UndoRestoresCdoValue`, `ExtractCreatesAssetAndClearsInline`, `TwoToolkitsSameBlueprintRefused`, `BarWording`, and `Validate.AbilityInlineTimeline`. Painting, mouse input, the toolkit window, the details row and the save dialog of Extract are not tested
 headless: the smoke steps are in the commit messages of E4 and E5. The Hurtbox zone tags are covered by `GSTNCombat.GAS.Tags.HurtboxZonesRegistered`.
 The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is not run: the canary script does not exist yet.
 
 ## Changelog
 
+- 0.6 (2026-10-23): inline mode: the timeline of an ability Blueprint edited in the same window through the class default object, the Open Timeline Editor row, the compile handling, Extract to timeline asset, the ability timeline validator, and the `GSTNCombatNP` edge for the ability class (plan E13).
 - 0.5 (2026-10-23): validation: the report and the rules of the M3 timeline, the Data Validation validators of timeline, kit, weapon and loadout preset, the slot conflict findings with both slot names and the M1 notation, the Message Log category, the Validate button and F7, the `Validate` hook of the track editor (plan E10).
 - 0.4 (2026-10-23): timeline asset editor (toolkit, asset definition, Details tab through a selection proxy, montage-length bar, loop range), the track editor registry and the built-in track editors of the M3 kinds; the E4 test tab and its console command are removed (plan E5).
 - 0.3 (2026-10-23): timeline panel (ruler, phase bar, rows, lanes, frame data), gestures, commands and the test tab (plan E4).

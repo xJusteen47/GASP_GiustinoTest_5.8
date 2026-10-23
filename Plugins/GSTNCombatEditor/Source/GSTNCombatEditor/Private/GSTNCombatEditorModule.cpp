@@ -3,6 +3,8 @@
 #include "GSTNCombatEditorModule.h"
 
 #include "Modules/ModuleManager.h"
+#include "PropertyEditorModule.h"
+#include "Timeline/Details/GSTN_TimelineDataCustomization.h"
 #include "Timeline/GSTN_TimelineEditorCommands.h"
 #include "Timeline/GSTN_TrackEditors.h"
 #include "Validation/GSTN_ValidationMessageLog.h"
@@ -21,12 +23,20 @@ void FGSTN_CombatEditorModule::StartupModule()
 	// The Message Log tab the findings of the Validate button go to. The validators themselves need no registration: Data Validation finds
 	// UEditorValidatorBase classes by reflection when the editor starts
 	GSTNValidationLog::RegisterListing();
+
+	// The Open Timeline Editor row of an FGSTN_CombatTimelineData, in the Class Defaults of an ability Blueprint and on a timeline asset (inline mode, E13)
+	FPropertyEditorModule& PropertyEditor = FModuleManager::LoadModuleChecked<FPropertyEditorModule>(TEXT("PropertyEditor"));
+	PropertyEditor.RegisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FGSTN_TimelineDataCustomization::MakeInstance));
 	UE_LOG(LogGSTNCombatEditor, Verbose, TEXT("GSTN Combat Editor module started"));
 }
 
 void FGSTN_CombatEditorModule::ShutdownModule()
 {
 	// Reverse order of startup
+	if (FPropertyEditorModule* PropertyEditor = FModuleManager::GetModulePtr<FPropertyEditorModule>(TEXT("PropertyEditor")))
+	{
+		PropertyEditor->UnregisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName());
+	}
 	GSTNValidationLog::UnregisterListing();
 	GSTNTrackEditors::UnregisterBuiltIns();
 	FGSTN_TimelineEditorCommands::Unregister();
