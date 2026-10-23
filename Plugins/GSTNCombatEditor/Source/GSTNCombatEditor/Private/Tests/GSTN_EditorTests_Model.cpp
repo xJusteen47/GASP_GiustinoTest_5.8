@@ -7,6 +7,7 @@
 #include "Timeline/GSTN_KeyedTrackAccess.h"
 #include "Timeline/GSTN_TimelineEditContext.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
+#include "Timeline/GSTN_TimelineLayout.h"
 #include "Timeline/GSTN_TimelineUndo.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -730,6 +731,57 @@ bool FGSTN_ModelViewTransformTest::RunTest(const FString& Parameters)
 
 	View.FitRange(0.0, 30.0, 600.0);
 	TestTrue(TEXT("fit shows the whole range"), FMath::IsNearlyEqual(View.FrameToPixel(30.0), 600.0, 1e-6) && FMath::IsNearlyEqual(View.FrameToPixel(0.0), 0.0, 1e-6));
+	return true;
+}
+
+// Review 2026-10-23 C.2: the editor drew, hit-tested and moved the weapon switch on StartFrame while the runtime and the validation use SwapFrame
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ModelWeaponSwitchOnSwapFrameTest, "GSTNCombat.Editor.Model.WeaponSwitchIsDrawnAndMovedOnSwapFrame", GSTN_EDITOR_TEST_FLAGS)
+bool FGSTN_ModelWeaponSwitchOnSwapFrameTest::RunTest(const FString& Parameters)
+{
+	FFixture Fixture;
+	FGSTN_TimelineEditorModel& Model = *Fixture.Model;
+
+	// An asset whose two copies of the frame disagree: the switch swaps at 18 whatever StartFrame says
+	{
+		FGSTN_TimelineTrack_WeaponSwitch& Switch = Fixture.Data().Tracks[SwitchTrack].GetMutable<FGSTN_TimelineTrack_WeaponSwitch>();
+		Switch.StartFrame = 0;
+		Switch.EndFrame = 1;
+		Switch.SwapFrame = 18;
+	}
+
+	int32 Start = 0;
+	int32 End = 0;
+	FGSTN_TimelineEditorModel::GetTrackSpan(*Model.GetTrack(SwitchTrack), Start, End);
+	TestEqual(TEXT("the diamond is on the swap frame"), Start, 18);
+	TestEqual(TEXT("... one frame wide"), End, 19);
+
+	// Hit testing follows it: frame 18 spans 180..190 pixels at 10 px per frame
+	FGSTN_TimelineViewTransform View;
+	View.FirstVisibleFrame = 0.0;
+	View.PixelsPerFrame = 10.0;
+	TestTrue(TEXT("a click on the swap frame hits the switch"), FGSTN_TimelineLayout::HitTestTrack(Fixture.Data(), SwitchTrack, View, 185.0).IsHit());
+	TestFalse(TEXT("a click on the stale start frame does not"), FGSTN_TimelineLayout::HitTestTrack(Fixture.Data(), SwitchTrack, View, 5.0).IsHit());
+
+	// Moving it moves the swap frame, and the window follows it, so the stale copy is repaired and not carried along
+	TestTrue(TEXT("the move happens"), Model.MoveWindow(SwitchTrack, 2));
+	{
+		const FGSTN_TimelineTrack_WeaponSwitch& Switch = Fixture.Data().Tracks[SwitchTrack].Get<FGSTN_TimelineTrack_WeaponSwitch>();
+		TestEqual(TEXT("swap frame moved"), Switch.SwapFrame, 20);
+		TestEqual(TEXT("start frame took the swap frame"), Switch.StartFrame, 20);
+		TestEqual(TEXT("the window kept its width"), Switch.EndFrame, 21);
+	}
+
+	// Clamping is on the swap frame too: it cannot leave the timeline
+	Model.MoveWindow(SwitchTrack, -100);
+	TestEqual(TEXT("clamped at the first frame"), Fixture.Data().Tracks[SwitchTrack].Get<FGSTN_TimelineTrack_WeaponSwitch>().SwapFrame, 0);
+	Model.MoveWindow(SwitchTrack, 100);
+	TestEqual(TEXT("clamped at the last frame"), Fixture.Data().Tracks[SwitchTrack].Get<FGSTN_TimelineTrack_WeaponSwitch>().SwapFrame, 29);
+	TestEqual(TEXT("the window is on it"), Fixture.Data().Tracks[SwitchTrack].Get<FGSTN_TimelineTrack_WeaponSwitch>().StartFrame, 29);
+
+	// A switch that agrees with itself behaves as before
+	Fixture.Data().Tracks[SwitchTrack] = MakeSwitch(6);
+	FGSTN_TimelineEditorModel::GetTrackSpan(*Model.GetTrack(SwitchTrack), Start, End);
+	TestTrue(TEXT("a consistent switch spans its frame"), Start == 6 && End == 7);
 	return true;
 }
 

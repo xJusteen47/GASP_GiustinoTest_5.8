@@ -135,7 +135,10 @@ FGSTN_LaneHit FGSTN_TimelineLayout::HitTestTrack(const FGSTN_CombatTimelineData&
 		return Hit;
 	}
 
-	Hit.Kind = HitTestWindow(Track->StartFrame, Track->EndFrame, FGSTN_TimelineEditorModel::IsPointTrack(*Track), View, X);
+	int32 SpanStart = 0;
+	int32 SpanEnd = 0;
+	FGSTN_TimelineEditorModel::GetTrackSpan(*Track, SpanStart, SpanEnd);
+	Hit.Kind = HitTestWindow(SpanStart, SpanEnd, FGSTN_TimelineEditorModel::IsPointTrack(*Track), View, X);
 	if (Hit.Kind == EGSTN_LaneHitKind::None)
 	{
 		Hit.TrackIndex = INDEX_NONE;

@@ -12,10 +12,16 @@ Status: **experimental (0.2)**, `EnabledByDefault: false`. Checkpoints E1 (skele
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNCombatDebug` | exists (Runtime, Default, not in Shipping) | `IGSTN_CombatDebugModule` (the interface other plugins may use; `CreateInputDisplay()` returns the input display widget), `LogGSTNCombatDebug`, the input display (below), its PIE overlay and, in an editor build, its editor tab. Covered by `GSTNCombat.Debug.*`. |
+| `GSTNCombatDebug` | exists (Runtime, Default, not in Shipping) | `IGSTN_CombatDebugModule` (the exported interface other plugins may use: `Get()`, `IsAvailable()`, and `CreateInputDisplay()` for the input display widget), `LogGSTNCombatDebug`, the input display (below), its PIE overlay and, in an editor build, its editor tab. Covered by `GSTNCombat.Debug.*`. |
 
 The descriptor excludes the module from Shipping with `TargetConfigurationDenyList: ["Shipping"]` (the spec's "bIsShippingExcluded"
-rule: UnrealBuildTool has no such flag, the descriptor is where a module is kept out of a configuration).
+rule: UnrealBuildTool has no such flag, the descriptor is where a module is kept out of a configuration). The **Test** configuration
+and the Development client and server builds still include it, with its console variable and the 0.2 s ticker of the overlay
+(which does nothing without a game viewport, as on a dedicated server); add `"Test"` to the deny list if a Test build must not carry it.
+
+Other plugins reach it through `IGSTN_CombatDebugModule::Get()` (null when the plugin is disabled or excluded), which needs this
+module in their dependencies because the interface is exported; a plugin that must not depend on it can call
+`FModuleManager::GetModulePtr<IGSTN_CombatDebugModule>("GSTNCombatDebug")` itself and needs only the header's include path.
 
 ## Input display (E14)
 
@@ -42,7 +48,7 @@ The layout is a pure function of the history (`FGSTN_InputDisplayLayout::Build`,
 
 - Plugins: `GSTNCombat`, `GSTNInput`, `GSTNInputNP`, `GSTNCombatNP` (the NP-of-same-layer exception of plan m5 R-B (c); it needs the GAS-NPP fork).
 - `GSTNCombatDebug` (`Build.cs`): public Core, CoreUObject, Engine, SlateCore; private GameplayTags, Projects (tests read the plugin's sources), Slate, GSTNInputCore, GSTNInputNP (the command table), GSTNCombatCore, GSTNCombatNP (the component), and WorkspaceMenuStructure in editor builds. `GameplayDebugger` is added by E15.
-- Nobody links this module, and the editor plugin has **no edge to it at all**: the editor tab belongs to this module, so with this plugin off the tab is just not there and `GSTNCombatEditor` builds and runs the same
+- Nobody links this module yet, and the editor plugin has **no edge to it at all**: the editor tab belongs to this module, so with this plugin off the tab is just not there and `GSTNCombatEditor` builds and runs the same
   (`GSTNCombat.Editor.Debug.NoDependencyOnDebugModule`).
 
 ## Gameplay tags
@@ -59,9 +65,10 @@ The plugin ships no content and references none by path.
 
 ## Tests
 
-`Automation RunTests GSTNCombat.Debug`: `Module.LoadsAndExposesInterface`, and `InputDisplay.*` (E14): `LayoutOfSampleHistory` (the notation sample: columns, gaps, facing key, flick, strip as a script), `ButtonRows`, `ConsumedPressGreyed`, `FlickMarker`, `ScriptedHistoryResolvesCommand`, `LayoutIsPure` (no Slate in the layout files), `NoLocalPawnShowsNothing`, `WidgetFollowsSourceAndScript` (skipped when the run has no Slate application). Painting, hover, the overlay in a viewport and the editor tab need a rendering editor and are checked by hand: open a PIE session (listen server, host + 2 clients), run `gstn.Combat.Debug.InputDisplay 1` in each window and press buttons while moving the stick; open *Window > GSTN Combat > Input Display* and type a notation.
+`Automation RunTests GSTNCombat.Debug`: `Module.LoadsAndExposesInterface`, `Module.InterfaceIsExported`, and `InputDisplay.*` (E14): `LayoutOfSampleHistory` (the notation sample: columns, gaps, facing key, flick, strip as a script), `ButtonRows`, `ConsumedPressGreyed`, `FlickMarker`, `ScriptedHistoryResolvesCommand`, `LayoutIsPure` (no Slate in the layout files), `NoLocalPawnShowsNothing`, `WidgetFollowsSourceAndScript` (skipped when the run has no Slate application). Painting, hover, the overlay in a viewport and the editor tab need a rendering editor and are checked by hand: open a PIE session (listen server, host + 2 clients), run `gstn.Combat.Debug.InputDisplay 1` in each window and press buttons while moving the stick; open *Window > GSTN Combat > Input Display* and type a notation.
 
 ## Changelog
 
+- 0.2.1 (2026-10-23, review fixes): `IGSTN_CombatDebugModule` is exported (`GSTNCOMBATDEBUG_API`) so `Get()` and `IsAvailable()` link from other modules; test `Module.InterfaceIsExported`.
 - 0.2 (2026-10-23): input display: layout, widget, scripted history, PIE overlay (`gstn.Combat.Debug.InputDisplay`), editor tab registered by this module, `CreateInputDisplay()` implemented (plan E14).
 - 0.1 (2026-10-23): plugin and module skeleton, module interface stub (plan E1).

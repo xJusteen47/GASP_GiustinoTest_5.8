@@ -32,15 +32,24 @@ namespace GSTNTimelineModel
 		return Max < Min ? Min : FMath::Clamp(Value, Min, Max);
 	}
 
-	/** Moves a whole track. The weapon switch keeps its own copy of the frame, which has to travel with the window */
+	/**
+	 * Moves a whole track. The weapon switch fires on SwapFrame, not on StartFrame (the player and the validation read SwapFrame),
+	 * so SwapFrame is what moves; the window follows it and takes the same frame, which also repairs an asset whose two values
+	 * had drifted apart instead of carrying the gap along
+	 */
 	void ShiftTrack(FGSTN_TimelineTrack& Track, int32 Delta)
 	{
-		Track.StartFrame += Delta;
-		Track.EndFrame += Delta;
 		if (Track.GetKind() == EGSTN_TimelineTrackKind::WeaponSwitch)
 		{
-			static_cast<FGSTN_TimelineTrack_WeaponSwitch&>(Track).SwapFrame += Delta;
+			FGSTN_TimelineTrack_WeaponSwitch& Switch = static_cast<FGSTN_TimelineTrack_WeaponSwitch&>(Track);
+			const int32 Width = Track.EndFrame - Track.StartFrame;
+			Switch.SwapFrame += Delta;
+			Track.StartFrame = Switch.SwapFrame;
+			Track.EndFrame = Track.StartFrame + Width;
+			return;
 		}
+		Track.StartFrame += Delta;
+		Track.EndFrame += Delta;
 	}
 
 	FGSTN_TimelineTrack* MutableTrack(FGSTN_CombatTimelineData* Data, int32 TrackIndex)
@@ -105,7 +114,7 @@ namespace GSTNTimelineModel
 
 using namespace GSTNTimelineModel;
 
-// Event and weapon switch fire on StartFrame and ignore EndFrame (GSTN_TimelineTypes.h), so they have no edges to move
+// Event fires on StartFrame and weapon switch on SwapFrame; both ignore EndFrame (GSTN_TimelineTypes.h), so they have no edges to move
 bool FGSTN_TimelineEditorModel::IsPointTrack(const FGSTN_TimelineTrack& Track)
 {
 	const EGSTN_TimelineTrackKind Kind = Track.GetKind();
@@ -114,8 +123,12 @@ bool FGSTN_TimelineEditorModel::IsPointTrack(const FGSTN_TimelineTrack& Track)
 
 void FGSTN_TimelineEditorModel::GetTrackSpan(const FGSTN_TimelineTrack& Track, int32& OutStart, int32& OutEnd)
 {
-	OutStart = Track.StartFrame;
-	OutEnd = IsPointTrack(Track) ? Track.StartFrame + 1 : Track.EndFrame;
+	// The frame a point track fires on: SwapFrame for the weapon switch, the same word the runtime and the validation use
+	const int32 FireFrame = (Track.GetKind() == EGSTN_TimelineTrackKind::WeaponSwitch)
+		? static_cast<const FGSTN_TimelineTrack_WeaponSwitch&>(Track).SwapFrame
+		: Track.StartFrame;
+	OutStart = FireFrame;
+	OutEnd = IsPointTrack(Track) ? FireFrame + 1 : Track.EndFrame;
 }
 
 int32 FGSTN_TimelineEditorModel::GetFrameLimit(const FGSTN_CombatTimelineData& Data)

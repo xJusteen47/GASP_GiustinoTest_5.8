@@ -1006,4 +1006,28 @@ bool FGSTN_ValidateNotationTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Review 2026-10-23 C.2: a weapon switch whose StartFrame drifted from its SwapFrame is a stale copy the designer should hear about
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ValidateWeaponSwitchFrameTest, "GSTNCombat.Editor.Validate.WeaponSwitchFrameMismatch", GSTN_VALIDATE_TEST_FLAGS)
+bool FGSTN_ValidateWeaponSwitchFrameTest::RunTest(const FString& Parameters)
+{
+	FGSTN_CombatTimelineData Data = GSTNValidateTest::MakeData();
+	FGSTN_TimelineTrack_WeaponSwitch Switch;
+	Switch.StartFrame = 4;
+	Switch.EndFrame = 5;
+	Switch.SwapFrame = 4;
+	GSTNValidateTest::AddTrack(Data, Switch);
+	TestFalse(TEXT("a switch whose two frames agree has no finding"), GSTNValidateTest::Run(Data).HasCode(TEXT("WeaponSwitch.FrameMismatch")));
+
+	Data.Tracks[0].GetMutable<FGSTN_TimelineTrack_WeaponSwitch>().SwapFrame = 18;
+	const FGSTN_ValidationReport Report = GSTNValidateTest::Run(Data);
+	TestEqual(TEXT("a switch that starts at 4 and swaps at 18 is reported once"), Report.CountCode(TEXT("WeaponSwitch.FrameMismatch")), 1);
+	if (const FGSTN_ValidationFinding* Finding = Report.FindCode(TEXT("WeaponSwitch.FrameMismatch")))
+	{
+		TestTrue(TEXT("it is a warning"), Finding->Severity == EGSTN_Severity::Warning);
+		TestEqual(TEXT("it points at the track"), Finding->Where.TrackIndex, 0);
+		TestEqual(TEXT("and at the frame the switch really swaps"), Finding->Where.Frame, 18);
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

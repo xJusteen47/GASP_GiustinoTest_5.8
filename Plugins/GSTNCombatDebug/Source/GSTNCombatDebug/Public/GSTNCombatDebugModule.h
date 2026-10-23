@@ -12,12 +12,15 @@ class SWidget;
 DECLARE_LOG_CATEGORY_EXTERN(LogGSTNCombatDebug, Log, All);
 
 /**
- * What other plugins may ask of the debug module. It is an interface so that a plugin that wants a debug widget does not link
- * this module: it asks FModuleManager for the module by name and gets nothing back when the plugin is disabled or this is a
- * Shipping build (the plugin descriptor excludes it). The editor plugin does not use it: the editor tab of the input display is
- * registered by this module itself (see FGSTN_CombatDebugModule), so the editor has no edge to the debug plugin at all.
+ * What other plugins may ask of the debug module. A plugin that wants a debug widget gets the module through Get(), which asks
+ * FModuleManager by name and returns null when the plugin is disabled or this is a Shipping build (the plugin descriptor excludes
+ * it), so the caller treats absence as normal. The class is exported so that Get() and IsAvailable() link; a plugin that must not
+ * depend on this module at all can skip them and call FModuleManager::GetModulePtr<IGSTN_CombatDebugModule>("GSTNCombatDebug")
+ * itself, which needs only this header's include path (GSTNCombat.Debug.Module.InterfaceIsExported pins the export). The editor
+ * plugin does neither: the editor tab of the input display is registered by this module itself (see FGSTN_CombatDebugModule),
+ * so the editor has no edge to the debug plugin at all.
  */
-class IGSTN_CombatDebugModule : public IModuleInterface
+class GSTNCOMBATDEBUG_API IGSTN_CombatDebugModule : public IModuleInterface
 {
 public:
 	/** The module when it is loaded, null when the plugin is disabled or excluded from this build. Never forces a load. */

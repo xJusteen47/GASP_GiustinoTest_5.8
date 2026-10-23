@@ -28,10 +28,23 @@ GSTNInlineTimeline::EAfterCompile GSTNInlineTimeline::DecideAfterCompile(const F
 	return Context.IsValid() ? EAfterCompile::Refresh : EAfterCompile::Close;
 }
 
-bool GSTNInlineTimeline::ExtractToAsset(const FGSTN_TimelineEditContext& Context, UGSTN_CombatTimeline* NewAsset)
+bool GSTNInlineTimeline::ExtractWouldReplaceAsset(const FGSTN_TimelineEditContext& Context)
+{
+	const UGSTN_GA_BaseCombat* Ability = Context.IsInline() ? Cast<UGSTN_GA_BaseCombat>(Context.GetOwner()) : nullptr;
+	return Ability != nullptr && !Ability->TimelineAsset.IsNull();
+}
+
+bool GSTNInlineTimeline::ExtractToAsset(const FGSTN_TimelineEditContext& Context, UGSTN_CombatTimeline* NewAsset, const FConfirmReplaceAsset& ConfirmReplace)
 {
 	UGSTN_GA_BaseCombat* Ability = Context.IsInline() ? Cast<UGSTN_GA_BaseCombat>(Context.GetOwner()) : nullptr;
 	if (Ability == nullptr || NewAsset == nullptr || NewAsset == Context.GetOwner())
+	{
+		return false;
+	}
+
+	// The asset the ability names wins at run time and the inline data is dead: pointing the ability at the new asset would switch what
+	// plays and orphan the old one, so it needs a yes
+	if (!Ability->TimelineAsset.IsNull() && (!ConfirmReplace || !ConfirmReplace(Ability->TimelineAsset.ToSoftObjectPath())))
 	{
 		return false;
 	}

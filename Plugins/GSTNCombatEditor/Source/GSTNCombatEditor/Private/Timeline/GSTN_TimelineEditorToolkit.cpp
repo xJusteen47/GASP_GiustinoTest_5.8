@@ -13,6 +13,7 @@
 #include "GSTNCombatEditorModule.h"
 #include "IAssetTools.h"
 #include "IContentBrowserSingleton.h"
+#include "Misc/MessageDialog.h"
 #include "Misc/PackageName.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "Timeline/GSTN_CombatTimeline.h"
@@ -204,6 +205,18 @@ void FGSTN_TimelineEditorToolkit::ExtractToAsset()
 		return;
 	}
 
+	// An ability that names a Timeline Asset plays that asset, not the inline data: extracting would switch it to the new one
+	if (GSTNInlineTimeline::ExtractWouldReplaceAsset(Context))
+	{
+		const FText Question = FText::Format(
+			LOCTEXT("ExtractReplacesAsset", "{0} already names a Timeline Asset, and that asset is what plays; this inline timeline is not used. Extracting will point the ability at the new asset instead and the current one will no longer play.\n\nExtract anyway?"),
+			Context.GetDisplayName());
+		if (FMessageDialog::Open(EAppMsgType::YesNo, Question) != EAppReturnType::Yes)
+		{
+			return;
+		}
+	}
+
 	FString PackagePath;
 	FString AssetName;
 	GSTNInlineTimeline::GetExtractDefaults(Context, PackagePath, AssetName);
@@ -230,8 +243,15 @@ void FGSTN_TimelineEditorToolkit::ExtractToAsset()
 		return;
 	}
 	UGSTN_CombatTimeline* NewAsset = NewObject<UGSTN_CombatTimeline>(Package, FName(*FPackageName::GetLongPackageAssetName(PackageName)), RF_Public | RF_Standalone | RF_Transactional);
-	if (NewAsset == nullptr || !GSTNInlineTimeline::ExtractToAsset(Context, NewAsset))
+	// Replacing the named asset was confirmed above, before the save dialog
+	if (NewAsset == nullptr || !GSTNInlineTimeline::ExtractToAsset(Context, NewAsset, [](const FSoftObjectPath&) { return true; }))
 	{
+		if (NewAsset != nullptr)
+		{
+			// Nothing refers to it and it was never announced to the asset registry: let it go
+			NewAsset->ClearFlags(RF_Public | RF_Standalone);
+			NewAsset->MarkAsGarbage();
+		}
 		return;
 	}
 	FAssetRegistryModule::AssetCreated(NewAsset);

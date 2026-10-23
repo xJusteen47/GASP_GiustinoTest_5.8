@@ -119,7 +119,7 @@ namespace GSTNTrackEditors
 			}
 		};
 
-		/** WeaponSwitch: a diamond on the frame the weapon changes. The swap frame follows the frame the track is added at */
+		/** WeaponSwitch: a diamond on SwapFrame, the frame the weapon changes. The swap frame follows the frame the track is added at */
 		class FWeaponSwitchTrackEditor final : public IGSTN_TrackEditor
 		{
 		public:
@@ -132,6 +132,19 @@ namespace GSTNTrackEditors
 			{
 				// The switch keeps its own copy of the frame: a default of 0 would swap at the start whatever the track says
 				static_cast<FGSTN_TimelineTrack_WeaponSwitch&>(Track).SwapFrame = AddedAtFrame;
+			}
+
+			virtual void Validate(const FGSTN_TimelineTrack& Track, const FGSTN_CombatTimelineData& Data, FGSTN_ValidationReport& Report) const override
+			{
+				// The editor draws and moves the switch on SwapFrame and the runtime fires it there; a different StartFrame is a stale copy
+				const FGSTN_TimelineTrack_WeaponSwitch& Switch = static_cast<const FGSTN_TimelineTrack_WeaponSwitch&>(Track);
+				if (Switch.StartFrame != Switch.SwapFrame)
+				{
+					Report.Add(EGSTN_Severity::Warning, TEXT("WeaponSwitch.FrameMismatch"),
+						FText::Format(LOCTEXT("SwitchFrameMismatch", "The weapon switch starts at frame {0} but swaps at frame {1}. It swaps at {1}; moving it in the editor sets both."),
+							FText::AsNumber(Switch.StartFrame), FText::AsNumber(Switch.SwapFrame)),
+						nullptr, FGSTN_FindingLocation::OnFrame(Switch.SwapFrame));
+				}
 			}
 
 			virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const override

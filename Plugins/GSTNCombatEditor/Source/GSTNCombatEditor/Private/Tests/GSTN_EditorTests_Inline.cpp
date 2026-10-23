@@ -561,4 +561,77 @@ bool FGSTN_InlineBarTextTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Review 2026-10-23 C.3: Extract silently replaced the Timeline Asset an ability already named, which changed what runs
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_InlineExtractReplaceNeedsConfirmTest, "GSTNCombat.Editor.Inline.ExtractNeverReplacesANamedAssetWithoutConfirmation", GSTN_INLINE_TEST_FLAGS)
+bool FGSTN_InlineExtractReplaceNeedsConfirmTest::RunTest(const FString& Parameters)
+{
+	if (!TestTrue(TEXT("the editor has a transaction buffer"), GEditor != nullptr && GEditor->Trans != nullptr))
+	{
+		return false;
+	}
+	FBlueprintFixture Fixture;
+	if (!TestTrue(TEXT("the test Blueprint was made"), Fixture.IsOk()) || !TestNotNull(TEXT("with a default object"), Fixture.Ability()))
+	{
+		return false;
+	}
+	FillData(Fixture.Ability()->Timeline);
+	Fixture.Ability()->SetFlags(RF_Transactional);
+
+	// The ability already names an asset, so the inline data above is shadowed and does not play
+	const TStrongObjectPtr<UGSTN_CombatTimeline> Existing(NewObject<UGSTN_CombatTimeline>(GetTransientPackage(), NAME_None, RF_Transactional));
+	Existing->Data.TotalFrames = 77;
+	Fixture.Ability()->TimelineAsset = Existing.Get();
+	Fixture.MakeClean();
+	const FGSTN_TimelineEditContext Context = Fixture.Context();
+	TestTrue(TEXT("the extraction would replace the asset"), GSTNInlineTimeline::ExtractWouldReplaceAsset(Context));
+
+	const FString Inline = Export(Fixture.Ability()->Timeline);
+	const int32 StartSteps = AppliedSteps();
+	const TStrongObjectPtr<UGSTN_CombatTimeline> Asset(NewObject<UGSTN_CombatTimeline>(GetTransientPackage(), NAME_None, RF_Transactional));
+	auto ExpectUntouched = [&](const TCHAR* When)
+	{
+		TestTrue(FString::Printf(TEXT("%s: the ability still names the old asset"), When), Fixture.Ability()->TimelineAsset.Get() == Existing.Get());
+		TestEqual(FString::Printf(TEXT("%s: the inline data is as it was"), When), Export(Fixture.Ability()->Timeline), Inline);
+		TestEqual(FString::Printf(TEXT("%s: the new asset is empty"), When), Asset->Data.TotalFrames, 0);
+		TestEqual(FString::Printf(TEXT("%s: the old asset is as it was"), When), Existing->Data.TotalFrames, 77);
+		TestEqual(FString::Printf(TEXT("%s: no undo step was left"), When), AppliedSteps(), StartSteps);
+	};
+
+	TestFalse(TEXT("without a confirmation it is refused"), GSTNInlineTimeline::ExtractToAsset(Context, Asset.Get()));
+	ExpectUntouched(TEXT("no callback"));
+
+	int32 Asked = 0;
+	FSoftObjectPath AskedAbout;
+	TestFalse(TEXT("a no is refused"), GSTNInlineTimeline::ExtractToAsset(Context, Asset.Get(), [&](const FSoftObjectPath& Path)
+	{
+		++Asked;
+		AskedAbout = Path;
+		return false;
+	}));
+	TestEqual(TEXT("the callback was asked once"), Asked, 1);
+	TestTrue(TEXT("... about the asset the ability names"), AskedAbout == FSoftObjectPath(Existing.Get()));
+	ExpectUntouched(TEXT("a no"));
+
+	TestTrue(TEXT("a yes goes through"), GSTNInlineTimeline::ExtractToAsset(Context, Asset.Get(), [](const FSoftObjectPath&) { return true; }));
+	TestTrue(TEXT("the ability names the new asset"), Fixture.Ability()->TimelineAsset.Get() == Asset.Get());
+	TestEqual(TEXT("the new asset holds the inline data"), Export(Asset->Data), Inline);
+	TestEqual(TEXT("the old asset was not edited"), Existing->Data.TotalFrames, 77);
+	TestEqual(TEXT("it is one undo step"), AppliedSteps(), StartSteps + 1);
+
+	TestTrue(TEXT("undo"), GEditor->UndoTransaction());
+	TestTrue(TEXT("undo puts the old asset back"), Fixture.Ability()->TimelineAsset.Get() == Existing.Get());
+
+	// With no asset named nothing is asked, as before
+	Fixture.Ability()->TimelineAsset = nullptr;
+	TestFalse(TEXT("nothing to replace"), GSTNInlineTimeline::ExtractWouldReplaceAsset(Context));
+	int32 AskedAgain = 0;
+	TestTrue(TEXT("the plain extraction needs no answer"), GSTNInlineTimeline::ExtractToAsset(Context, Asset.Get(), [&](const FSoftObjectPath&) { ++AskedAgain; return false; }));
+	TestEqual(TEXT("and asks nothing"), AskedAgain, 0);
+
+	while (AppliedSteps() > StartSteps && GEditor->UndoTransaction())
+	{
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

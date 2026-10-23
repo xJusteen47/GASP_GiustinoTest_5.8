@@ -225,3 +225,22 @@ One line each: where, what differs from the spec, why. Checkpoints in `docs/arch
 - Dependencies of `GSTNCombatDebug`: private GameplayTags, Projects (tests read the plugin's own sources), Slate, GSTNInputCore, GSTNInputNP (the command table), GSTNCombatCore, GSTNCombatNP (the component), plus WorkspaceMenuStructure in editor builds. Plugin descriptor: GSTNInput, GSTNInputNP, GSTNCombatNP added. Version 0.2.
 - Build note (not E14): `Source/GASP_Giustino2/Private/WallMovement/Tests/GSTN_WallSurfaceFilterTests.cpp` (T5) declares `GSTNWallFilterTest::Flags` and has a file-scope `using namespace`; in a unity bundle with `GSTN_WallMovementDebug.cpp` the global-name hiding warning C4459 on `Flags` (an error in this project) breaks `GASP_Giustino2`. It stays hidden while the file is in the git working set (adaptive unity builds it alone) and shows up the first time the module recompiles after the file is committed. Any header change that `Source/` includes triggers it (the E14 accessor did). Renaming the constant (`FilterTestFlags`) fixes it; E14 built with that rename applied temporarily and then reverted, because `Source/` is out of scope here.
 - Not verified (needs a rendering editor and a PIE session): painting of the strip, the tooltip, the overlay in PIE (listen host + clients), the tab in the Window menu, the script box in the tab.
+
+## Review fixes (2026-10-23)
+
+- `WeaponSwitch` vocabulary (review C.2): the editor now uses `SwapFrame`, the frame the player fires and the validation checks.
+  `FGSTN_TimelineEditorModel::GetTrackSpan` returns `[SwapFrame, SwapFrame + 1)` for a weapon switch, so drawing, hit-testing (`HitTestTrack` used
+  `StartFrame` directly), move clamping and box select agree. `MoveWindow` shifts `SwapFrame` and sets `StartFrame` and `EndFrame` to follow it
+  (keeping the window width), which repairs a stale copy instead of carrying the gap along. New warning `WeaponSwitch.FrameMismatch` from the
+  weapon switch track editor's `Validate` when `StartFrame != SwapFrame`. A single field in Core (dropping `StartFrame` for the switch) would be
+  cleaner and is Core's decision.
+- Extract (review C.3): `GSTNInlineTimeline::ExtractToAsset(Context, NewAsset, ConfirmReplace)` refuses (false, nothing changed, no undo step) when the
+  ability already names a `TimelineAsset` unless the callback answers yes; `ExtractWouldReplaceAsset` tells the toolkit to ask. The toolkit shows a Yes/No dialog
+  before the save dialog and drops the new asset if the extraction does not happen.
+- `IGSTN_CombatDebugModule` is exported (`GSTNCOMBATDEBUG_API`) (review C.1). The plan's wording "does not link" is replaced: the exported
+  `Get()`/`IsAvailable()` need the module as a dependency; `FModuleManager::GetModulePtr` by name needs only the include path.
+- Left as they are: C.4 (undo after a compile, declared), C.5 and C.6 (unverified), C.7 (`ClassifyCoreMessage` reads Core's English text; a message
+  code in Core is the structural fix and Core is another thread's), C.8 to C.12 (validator gaps, registry keys, widget lifetimes, history copy per frame,
+  style items), and the `Test` configuration note (documented in the debug README, descriptor unchanged).
+- README fixes: the Play row and the E3/E14 status line of the editor README, the `GameplayAbilities` dependency note, the smoke-steps sentence, and the debug README's
+  claim about reaching the module without linking.
