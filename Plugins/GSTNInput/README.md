@@ -200,6 +200,14 @@ earlier steps of a longer pattern are not.
 
 See the [GSTNInputNP README](../GSTNInputNP/README.md) (embedding the simulation, standalone component, activation context, Mover tracker).
 
+### Gameplay tags
+
+Native, declared in `Public/Input/GSTN_InputTags.h` (`GSTNInputTags`): the roots `Input.Button`, `Command`, `Input.Lock.Command`, `Input.BufferEvent`,
+the movement contexts `Input.Context.{Grounded, Airborne, OnWall}` (`OnWall` is true in a wall movement mode and, with `Airborne`, identifies
+the wall bindings), the buffer events `Input.BufferEvent.{AbilityActivated, Landed}` and the event `Input.Event.CommandExecuted`. The plugin has
+no game vocabulary: the Core automation tests declare their own small set under a `Test` sub-root in `Private/Tests/GSTN_TestTags.h` (compiled
+only with automation tests), and a game's buttons, commands and lock tags are tag-ini leaves.
+
 ### Tag roots
 
 Tag roots: `Input.Button` (buttons), `Command` (commands), `Input.Context.*` (written by the context provider),
@@ -244,13 +252,26 @@ override `ShouldFlush` and, if the rule watches tags, `GetWatchedTags`. Existing
 as `Input.BufferEvent.Landed`) and `OnTagAdded`. Rules are listed at global, weapon and move level and applied in that
 order.
 
+### More ways to extend it
+
+- **The concrete types.** Conditions: `FGSTN_InputCondition_{Press, Release, Hold, Chord, Mash, Direction, Motion, Spin, Charge, AnyOf}`; priority
+  criteria: `FGSTN_PriorityCriterion_{Tier, Specificity, ManualOffset}`; buffer reset rules: `FGSTN_BufferResetRule_{OnEvent, OnTagAdded, AfterIdleFrames}`
+  (`AfterIdleFrames` clears the buffer after the stated number of frames with no input).
+- **A new movement context** (say `Input.Context.Swimming`): declare the native tag in `GSTN_InputTags.h/.cpp`, have the context provider
+  (see GSTNInputNP) add it in `AppendContextTags`, and write the bindings with it as a required tag. If it excludes another context, add the pair to
+  the exclusive context groups of `UGSTN_InputSettings`.
+- **A new buffer event**: declare an `Input.BufferEvent.<Name>` leaf, produce it from `AppendFrameEvents` of the context provider (or from the
+  host) when the movement state changes, and list `FGSTN_BufferResetRule_OnEvent` rules that react to it (global, weapon or move level).
+- **A context provider for a non-Mover system**: see "How to extend" in the [GSTNInputNP README](../GSTNInputNP/README.md).
+
 ## Conventions
 
 - Gameplay tags: the plugin declares its roots and its own vocabulary natively. Leaves that are game data (a game's buttons,
   commands, lock tags) belong in the game's tag ini, not in code.
 - Types are prefixed `GSTN_` (`UGSTN_`, `FGSTN_`, `EGSTN_`); export macros `GSTNINPUTCORE_API` and `GSTNINPUTNP_API`; log category
   `LogGSTNInput`.
-- Public headers in `Public/<Area>/`, implementations in `Private/<Area>/`.
+- Public headers in `Public/Input/` (the input vocabulary, matcher, settings, buffer rules) and `Public/Events/` (the simulation event types
+  and subsystem), plus `GSTN_InputCoreTypes.h` and `GSTN_InputLog.h` at the top; implementations mirror it in `Private/`.
 - Comments explain *why* and the simulation constraints. Headers document the intent of a class: read the header before
   the `.cpp`.
 - Simulation code must be deterministic and rollback-safe (rules in

@@ -27,7 +27,7 @@ class UGSTN_CombatSimComponent;
  *
  * Lock tags, costs, cooldowns, block and cancel tags, cues and triggers are the ability system's own and work as usual. A command
  * binding never meets InterruptPolicy: the combat tick has decided that the command may start, and the ability sees that through
- * FGSTN_InputHostUtils::IsCommandActivation, a property of the call that is the same on every machine and in every re-simulation.
+ * FGSTN_InputHostUtils::IsCommandActivation(Handle), a property of the call for that spec that is the same on every machine and in every re-simulation.
  *
  * Derive in C++ or Blueprint (call the parent's ActivateAbility first, so the context is captured before the ability reads it).
  * Everything an override reads must be deterministic and rollback safe (gas-npp.md): state in sync variables, none in members.
@@ -40,7 +40,7 @@ class GSTNCOMBATNP_API UGSTN_GA_Base : public UNpGameplayAbility
 public:
 	UGSTN_GA_Base(const FObjectInitializer& ObjectInitializer);
 
-	/** Ends the ability when the button that started it is released (see FGSTN_GARules::EndsOnRelease). Has no effect on a start without a button */
+	/** Ends the ability when the button that started it is released (see FGSTN_GARules::EndsOnRelease). Has no effect on a start without a button: a forced command or a trigger has none, so an ability they start (a forced stance) never ends by release and whoever forced it ends it */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Activation")
 	bool bEndOnTriggerRelease = false;
 
@@ -119,26 +119,26 @@ private:
 	// ---- Sync variables: rolled back with the ability instance. The ability is instanced per actor, so every activation rewrites them
 
 	/** Index in the command table of the command that started the ability, INDEX_NONE if none did */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncInteger CommandIndex;
 
 	/** Frame of the press that completed the command, INDEX_NONE if none */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncInteger PressFrame;
 
 	/** Index (in the input config) of the button that started the ability, INDEX_NONE if none */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncInteger TriggerButton;
 
 	/** EGSTN_ActivationSource */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncByte ActivationSource;
 
 	/** Combat clock when WaitCombatFrames was called */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncInteger WaitStartClock;
 
 	/** Frames WaitCombatFrames waits, 0 = no wait pending */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncInteger WaitFrames;
 };

@@ -12,6 +12,7 @@
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_InputSimulator.h"
+#include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "GSTN_CombatSimComponent.generated.h"
@@ -190,6 +191,25 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> AdoptableTimelines;
 
+	/**
+	 * Queues the permanent stats movement modifier (FGSTN_StatsMovementModifier) on the owner's Mover component once its
+	 * simulation exists, on the authority and the owning client. It makes the character's speeds follow its WalkSpeed stat
+	 * and stops them under Combat.Lock.Movement; it does nothing for an ability system without the combat attribute set.
+	 * Turn it off for a pawn whose speeds the combat stats must not touch
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
+	bool bQueueStatsModifier = true;
+
+	/**
+	 * The stats effect of each weapon the combatant can switch to, in loadout order (0 = primary). A weapon switch track of a
+	 * running timeline picks the next index from this list's length and the combat tick requests SwapWeaponStats; the ability
+	 * system's pre-tick then removes the old weapon's effect and applies the new one (FGSTN_WeaponStatsSwap). The primary weapon
+	 * does not change during a match, so the switch is primary <-> support. An entry may leave Effect empty: a support weapon
+	 * inherits the kit's stats by default. The loadout fills it; fixed after BeginPlay like the bindings, the same on every machine
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
+	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
+
 	/** Button whose press opens a hitstop window. -1 = none */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "-1", ClampMax = "31"))
 	int32 HitstopTestButton = INDEX_NONE;
@@ -213,6 +233,11 @@ private:
 	void CompileInput();
 
 	void BindAbilitySystem();
+
+	/** Queues the stats modifier on Mover once (see bQueueStatsModifier); called from the component tick until it has */
+	void TryQueueStatsModifier();
+	bool bStatsModifierQueued = false;
+
 	void HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep);
 
 	UPROPERTY(Transient)
@@ -230,6 +255,10 @@ private:
 	 */
 	UPROPERTY(Transient)
 	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> TimelineRegistry;
+
+	/** The timeline assets and montages of the registry classes, loaded with it and kept alive here: the classes' default objects keep nothing */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UObject>> TimelineContent;
 	TArray<int16> BindingTimeline;
 	TArray<int32> TimelineTier;
 	TArray<int32> TimelineDefaultOverride;

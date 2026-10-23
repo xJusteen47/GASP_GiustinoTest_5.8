@@ -12,22 +12,27 @@
 
 namespace
 {
-	int32 CommandActivationDepth = 0;
+	/** The specs a command is being activated for, innermost last. Scopes are stack objects, so they pop in reverse order */
+	TArray<FGameplayAbilitySpecHandle, TInlineAllocator<4>>& GetCommandActivations()
+	{
+		static TArray<FGameplayAbilitySpecHandle, TInlineAllocator<4>> Activations;
+		return Activations;
+	}
 }
 
-FGSTN_CommandActivationScope::FGSTN_CommandActivationScope()
+FGSTN_CommandActivationScope::FGSTN_CommandActivationScope(const FGameplayAbilitySpecHandle& Handle)
 {
-	++CommandActivationDepth;
+	GetCommandActivations().Add(Handle);
 }
 
 FGSTN_CommandActivationScope::~FGSTN_CommandActivationScope()
 {
-	--CommandActivationDepth;
+	GetCommandActivations().Pop(EAllowShrinking::No);
 }
 
-bool FGSTN_InputHostUtils::IsCommandActivation()
+bool FGSTN_InputHostUtils::IsCommandActivation(const FGameplayAbilitySpecHandle& Handle)
 {
-	return CommandActivationDepth > 0;
+	return Handle.IsValid() && GetCommandActivations().Contains(Handle);
 }
 
 bool FGSTN_InputHostUtils::CanExecuteBinding(const UAbilitySystemComponent* AbilitySystem, const FGSTN_CommandTable& Table, int32 BindingIndex)
@@ -37,11 +42,14 @@ bool FGSTN_InputHostUtils::CanExecuteBinding(const UAbilitySystemComponent* Abil
 		return false;
 	}
 
-	const FGSTN_CommandActivationScope CommandScope;
-
 	// The same const query the ability system makes when it executes the request
 	const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(Table.Bindings[BindingIndex].Ability);
-	return Spec && Spec->Ability && Spec->Ability->CanActivateAbility(Spec->Handle, AbilitySystem->AbilityActorInfo.Get());
+	if (!Spec || !Spec->Ability)
+	{
+		return false;
+	}
+	const FGSTN_CommandActivationScope CommandScope(Spec->Handle);
+	return Spec->Ability->CanActivateAbility(Spec->Handle, AbilitySystem->AbilityActorInfo.Get());
 }
 
 bool FGSTN_InputHostUtils::ExecuteRequest(UAbilitySystemComponent* AbilitySystem, const FGSTN_CommandTable& Table, const FGSTN_InputSimState& State, int32 Frame)
@@ -53,10 +61,17 @@ bool FGSTN_InputHostUtils::ExecuteRequest(UAbilitySystemComponent* AbilitySystem
 		return false;
 	}
 
-	const FGSTN_CommandActivationScope CommandScope;
 	const TSubclassOf<UGameplayAbility>& Ability = Table.Bindings[BindingIndex].Ability;
 	const FGameplayAbilitySpec* Spec = AbilitySystem ? AbilitySystem->FindAbilitySpecFromClass(Ability) : nullptr;
-	if (!Spec || !AbilitySystem->TryActivateAbility(Spec->Handle))
+	bool bActivated = false;
+	if (Spec)
+	{
+		// Copied: the ability system's spec array can move while the activation runs
+		const FGameplayAbilitySpecHandle Handle = Spec->Handle;
+		const FGSTN_CommandActivationScope CommandScope(Handle);
+		bActivated = AbilitySystem->TryActivateAbility(Handle);
+	}
+	if (!bActivated)
 	{
 		UE_LOG(LogGSTNInput, Verbose, TEXT("Frame %d: binding %d (%s) did not activate"), Frame, BindingIndex + 1, *GetNameSafe(Ability.Get()));
 	}

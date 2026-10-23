@@ -114,7 +114,10 @@ struct FGSTN_CombatRequests
 		return false;
 	}
 
-	/** The first request of the type made in Frame, or null */
+	/**
+	 * The first request of the type made in Frame, or null. A frame can hold several of one type (a Commit for the timeline that
+	 * was replaced and one for its replacement): a caller that cares which one asks with the argument
+	 */
 	const FGSTN_CombatRequest* Find(EGSTN_RequestType Type, int32 Frame) const
 	{
 		for (const FGSTN_CombatRequest& Slot : Slots)
@@ -125,6 +128,40 @@ struct FGSTN_CombatRequests
 			}
 		}
 		return nullptr;
+	}
+
+	/** The request of the type made in Frame with exactly this argument, or null */
+	const FGSTN_CombatRequest* Find(EGSTN_RequestType Type, int32 Frame, int16 Arg) const
+	{
+		for (const FGSTN_CombatRequest& Slot : Slots)
+		{
+			if (Slot.Type == Type && Slot.Frame == Frame && Slot.Arg == Arg)
+			{
+				return &Slot;
+			}
+		}
+		return nullptr;
+	}
+
+	/** Removes the request of the type, frame and argument and packs the rest to the front. @return true if one was removed */
+	bool Remove(EGSTN_RequestType Type, int32 Frame, int16 Arg)
+	{
+		bool bRemoved = false;
+		int32 Out = 0;
+		for (int32 In = 0; In < Capacity; ++In)
+		{
+			if (!bRemoved && Slots[In].Type == Type && Slots[In].Frame == Frame && Slots[In].Arg == Arg)
+			{
+				bRemoved = true;
+				continue;
+			}
+			Slots[Out++] = Slots[In];
+		}
+		for (; Out < Capacity; ++Out)
+		{
+			Slots[Out] = FGSTN_CombatRequest();
+		}
+		return bRemoved;
 	}
 
 	/** Drops every request made before Frame and packs the rest to the front, so equal sets are equal arrays */

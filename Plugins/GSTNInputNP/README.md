@@ -32,7 +32,7 @@ the standalone `UGSTN_InputSimComponent` (model `GSTN_Input`). How to embed the 
 
 ## Tags and settings
 
-This plugin declares no gameplay tags and owns no settings class: tags and `UGSTN_InputSettings` live in `GSTNInputCore`
+This plugin declares no runtime gameplay tags (only the Core automation tests declare test tags) and owns no settings class: tags and `UGSTN_InputSettings` live in `GSTNInputCore`
 (`Plugins/GSTNInput/Config/DefaultGSTNInput.ini`). Its only config is `Config/DefaultGSTNInputNP.ini`, the `[CoreRedirects]`
 of the Mover tracker's old class names (`/Script/GASP_Giustino2.*` and `/Script/GSTNCombatNP.*`).
 
@@ -119,6 +119,30 @@ the activation frame, so keep what you need in your own sync variables) and `IsC
 (re)simulated; never read the Mover component's own queries from the fixed tick (gas-npp.md). Include
 `"Mover/GSTN_MoverSimStateTracker.h"` and depend on `GSTNInputNP`. The tracker is a `BlueprintType` and its
 `GetMovementModeName` / `HasGameplayTag` are `BlueprintPure`, so a Blueprint ability can read the same rolled back state.
+
+## Types the host and the sources use
+
+- `IGSTN_InputSource` (`UGSTN_InputSource` is its `UInterface`): `ProduceInput(const FGSTN_InputSourceContext&, DeltaTimeMS, FGSTN_InputCmd&)` fills the
+  command of one fixed tick on the machine that controls the pawn. `FGSTN_InputSourceContext` is what it may read (the owner, the input config and the
+  command table). `UGSTN_PlayerInputSource` and `UGSTN_AIInputSource` are the two shipped sources.
+- `FGSTN_InputModelSyncState` / `FGSTN_InputModelAuxState` (`GSTN_InputSimComponent.h`): the standalone component's model state, the input sim state
+  plus nothing else; the combat model embeds `FGSTN_InputSimState` instead.
+- `FGSTN_InputTickResult` (`GSTN_InputSimulator.h`): what one `FGSTN_InputSimulator::Tick` returns to its host (the pressed buttons, the request, the binding index).
+- `FGSTN_CommandBinding` and `FGSTN_CompiledBinding` (`Bindings/GSTN_CommandBindingSet.h`): an authored binding (command, ability, requirements) and its
+  compiled form in the command table the simulation reads.
+- `UGSTN_BlueprintInputContextProvider` (`Context/`): the context provider written in Blueprint, the slower path (see its header for the rollback rules).
+
+## How to extend
+
+- **A new input source** (replay, network bot, test script): a `UObject` that implements `IGSTN_InputSource` and fills the command in `ProduceInput`
+  from nothing but its own state and the context; set it as the host's `InputSource`. It runs only on the controlling machine, and the command it
+  makes is what the server and every re-simulation replay, so it must not read anything the simulation also writes.
+- **A context provider for a non-Mover movement system**: derive from `UGSTN_InputContextProvider`, implement `Initialize` (bind to the owner),
+  `GetFacingYaw`, `AppendContextTags` (the `Input.Context.*` tags), `GetContextFingerprint` (a small summary, 0 = unknown) and `AppendFrameEvents`
+  (the buffer events a change of fingerprint produced). Read only rolled-back state, as the Mover tracker does; assign it to the host's `ContextProvider`.
+- **A new host**: implement `IGSTN_InputSimHost` (candidate check, activation context, the held buttons...) on a model that embeds `FGSTN_InputSimState`
+  and call `FGSTN_InputSimulator::Tick` each frame; use `FGSTN_InputHostUtils` for the binding check, `ExecuteRequest` from the ability system's
+  pre-tick and `PublishOutbox` from `FinalizeFrame`. `UGSTN_InputSimComponent` is the minimal example, `UGSTN_CombatSimComponent` the full one.
 
 ## Debug module
 

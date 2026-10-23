@@ -129,18 +129,31 @@ bool FGSTN_GABaseInterruptPolicyTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("interrupt: trigger while idle"), FGSTN_GARules::ShouldInterrupt(Policy::InterruptCurrent, false, false));
 	TestFalse(TEXT("interrupt: a command while busy is the combat tick's business"), FGSTN_GARules::ShouldInterrupt(Policy::InterruptCurrent, true, true));
 
-	// The command marker is a property of the call: set under the scope, nested scopes keep it, gone after the last one
-	TestFalse(TEXT("no command activation outside a scope"), FGSTN_InputHostUtils::IsCommandActivation());
+	// The command marker is a property of the call for one spec: set under its scope, nested scopes keep it, gone after the last
+	// one, and an ability another one triggers inside the command's activation (another handle) is not a command
+	FGameplayAbilitySpecHandle Command;
+	Command.GenerateNewHandle();
+	FGameplayAbilitySpecHandle Triggered;
+	Triggered.GenerateNewHandle();
+	TestFalse(TEXT("no command activation outside a scope"), FGSTN_InputHostUtils::IsCommandActivation(Command));
 	{
-		const FGSTN_CommandActivationScope Outer;
-		TestTrue(TEXT("command activation under a scope"), FGSTN_InputHostUtils::IsCommandActivation());
+		const FGSTN_CommandActivationScope Outer(Command);
+		TestTrue(TEXT("command activation under a scope"), FGSTN_InputHostUtils::IsCommandActivation(Command));
+		TestFalse(TEXT("an ability triggered inside it is not a command"), FGSTN_InputHostUtils::IsCommandActivation(Triggered));
+		TestFalse(TEXT("an invalid handle never is"), FGSTN_InputHostUtils::IsCommandActivation(FGameplayAbilitySpecHandle()));
 		{
-			const FGSTN_CommandActivationScope Inner;
-			TestTrue(TEXT("nested scope"), FGSTN_InputHostUtils::IsCommandActivation());
+			const FGSTN_CommandActivationScope Inner(Command);
+			TestTrue(TEXT("nested scope"), FGSTN_InputHostUtils::IsCommandActivation(Command));
 		}
-		TestTrue(TEXT("still under the outer scope"), FGSTN_InputHostUtils::IsCommandActivation());
+		TestTrue(TEXT("still under the outer scope"), FGSTN_InputHostUtils::IsCommandActivation(Command));
+		{
+			const FGSTN_CommandActivationScope Other(Triggered);
+			TestTrue(TEXT("a second spec under its own scope"), FGSTN_InputHostUtils::IsCommandActivation(Triggered));
+			TestTrue(TEXT("the outer one is still a command"), FGSTN_InputHostUtils::IsCommandActivation(Command));
+		}
+		TestFalse(TEXT("the second spec's scope is gone"), FGSTN_InputHostUtils::IsCommandActivation(Triggered));
 	}
-	TestFalse(TEXT("no command activation after the scope"), FGSTN_InputHostUtils::IsCommandActivation());
+	TestFalse(TEXT("no command activation after the scope"), FGSTN_InputHostUtils::IsCommandActivation(Command));
 	return true;
 }
 

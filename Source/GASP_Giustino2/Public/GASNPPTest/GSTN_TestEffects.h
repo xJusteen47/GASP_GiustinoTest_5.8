@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayEffect.h"
+#include "Effects/GSTN_GE_WeaponStats.h"
 #include "NativeGameplayTags.h"
 #include "EffectsComponents/ApplyMoveGameplayEffectComponent.h"
 #include "GSTN_TestEffects.generated.h"
@@ -146,4 +147,25 @@ class GASP_GIUSTINO2_API UGSTN_GE_ProbeStatsSlow : public UGameplayEffect
 	GENERATED_BODY()
 public:
 	UGSTN_GE_ProbeStatsSlow();
+};
+
+/**
+ * Weapon stats effects of the weapon switch scenario (scenario_weapon_switch): the primary adds 300 to WalkSpeed (x1.5 of the
+ * reference 600), the support removes 300 (x0.5). Mechanism tests only: the real support weapons inherit the kit's stats and ship
+ * without a stats effect by default.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestPrimaryWeaponStats : public UGSTN_GE_WeaponStats
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestPrimaryWeaponStats();
+};
+
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestSupportWeaponStats : public UGSTN_GE_WeaponStats
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestSupportWeaponStats();
 };

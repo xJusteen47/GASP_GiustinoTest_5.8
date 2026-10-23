@@ -23,7 +23,7 @@ GSTNCombatCore  <  GSTNCombatGAS  <  GSTNCombatNP
 - It never depends on NetworkPrediction, AbilitySystemSimulation, Mover or `GSTNCombatNP`, and nothing here refers to the
   project module, `/Game/` content or a project tag. It compiles against stock GAS and against the GAS-NPP fork in
   `Plugins/GASNPP` (same plugin and module name).
-- Nothing in `GSTNCombat` depends on this plugin. `GSTNCombatNP` will list it when it first needs a type from here.
+- Nothing in `GSTNCombat` depends on this plugin. `GSTNCombatNP` lists it (the timeline ability tags, the combat attribute set).
 
 ## Tags
 
@@ -32,17 +32,18 @@ Native, declared in `Public/GSTN_CombatTags.h` (namespace `GSTNCombatTags`), one
 
 | Subtree | Tags | Notes |
 |---|---|---|
-| `Combat.State.*` | `Busy InTimeline SuperInput CancelWindow OverrideWindow Falling` | Projected by the combat tick, never granted by an ability or effect. |
 | `Combat.Ability.*` | `Timeline AwaitingAdoption` | Ability identity. |
 | `Combat.Source.*` | `Command Forced Adopted` | How a timeline started (`EGSTN_ActivationSource`), on the `TimelineStarted` event. |
 | `Combat.Lock.Movement` | | Read by the stats movement modifier. |
 | `Combat.Weapon.Role.*` | `Primary Support` | Granted by the stats effect of the active weapon. |
 | `Combat.Event.*` | `TimelineStarted TimelineFinished WeaponSwitched SuperUsed` | Authoritative outbox events. |
 | `Combat.SetByCaller.MeterCost` | | Set-by-caller key. |
-| Designer roots | `Weapon`, `Kit`, `Super`, `Loadout`, `Skin`, `Combat.Stat`, `Combat.Meter`, `Combat.SetByCaller.Stat` | Roots only, so tag pickers can filter; the leaves are designer content in a tag ini and code never names one. |
 
 Not here: the input vocabulary (`Input.Button/Context/Lock.Command/BufferEvent.*`, `Command.*` families) belongs to
-`GSTNInputCore` and `GSTNCombatCore`, and `Combat.Mover.*` to the NP module that sees Mover.
+`GSTNInputCore` and `GSTNCombatCore`. The `Combat.State.*` tags (`Busy InTimeline SuperInput CancelWindow OverrideWindow Falling`, projected by the
+combat tick, never granted) and the designer roots (`Weapon`, `Kit`, `Super`, `Loadout`, `Skin`, `Combat.Stat`, `Combat.Meter`,
+`Combat.SetByCaller.Stat`; roots only, the leaves are designer content in a tag ini) are declared in `GSTNCombatCore`
+(`GSTN_CombatCoreTags.h`).
 
 ## Attributes, effects and data
 
@@ -59,6 +60,18 @@ Not here: the input vocabulary (`Input.Button/Context/Lock.Command/BufferEvent.*
 Modifiers on a stats effect and on the kit init effect read their magnitudes from set-by-caller stat tags, and the number for
 each tag lives in `FGSTN_KitStats` / the weapon modifiers, so no C++ names a stat leaf. A kit init effect must override a
 meter maximum before the meter.
+
+Other public types: `FGSTN_BindingValidationContext` (what a binding list is checked against: the kit's command set, its resolved base set and whether membership is checked),
+`FGSTN_AbilityClassList` (a weapon's allowed alternatives per command: a map value cannot be an array), `FGSTN_AttributeDefault`
+(`{ property name, value }` of `UGSTN_CombatGASSettings::AttributeDefaults`) and `Attributes/GSTN_AttributeAccessors.h`
+(`GSTN_COMBAT_ATTRIBUTE_ACCESSORS(Class, Property)`: the getter, setter and init functions of an attribute).
+
+*Add an attribute:* (1) in the set, a `UPROPERTY(BlueprintReadOnly) FGameplayAttributeData Name;` and `GSTN_COMBAT_ATTRIBUTE_ACCESSORS(UGSTN_CombatAttributeSet, Name)`;
+(2) clamp it in both `PreAttributeChange` and `PreAttributeBaseChange` (the fork idiom); (3) give it a starting value in `AttributeDefaults`
+(`Config/DefaultGSTNCombatGAS.ini`; applied in `PostInitProperties`, not on the CDO); (4) if a stat tag should set it, the kit or weapon
+stats effect gets a modifier reading `Combat.SetByCaller.Stat.<leaf>` and the leaf is added to the project's tag ini; (5) a meter is two
+attributes (value and max) and one line in `GetMeterPairs()`; (6) a pawn must list the set in the ability system's default attributes in the same
+order on every machine, because the sync state compares sets by position (see gas-npp.md); (7) add a clamp case to `GSTNCombat.GAS.Attributes.Clamp`.
 
 Blueprint notes: `UGSTN_GE_MeterCost` and `UGSTN_GE_WeaponStats` are `Blueprintable` (children are the designer content);
 the structs are `BlueprintType` with `EditAnywhere, BlueprintReadOnly`, tag fields carry `Categories`; the attribute sets

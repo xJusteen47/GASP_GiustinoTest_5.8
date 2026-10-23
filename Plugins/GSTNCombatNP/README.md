@@ -30,17 +30,22 @@ combatant holds the defaults and pays **one bit** for the whole part, so a game 
 only valid in the frame it was made: the combat tick must call `Requests.PruneBefore(Frame)` at the top of every frame (C10 wires it; no request is made before then), so the wire never carries a dead one.
 `LoadoutRevision` is written only by the server, out of band, with `UGSTN_CombatSimComponent::ServerWriteLoadoutRevision`; the tick makes requests and adopts
 abilities only while `Core.IsLoadoutCurrent(TableRevision)` (the loadout revision gate, combat-m3 7.8). All of it takes part in `ShouldReconcile`, `ToString` and
-`Interpolate` (discrete: the newer frame). Nothing in the tick reads these fields yet: the timeline abilities that write them are C10.
+`Interpolate` (discrete: the newer frame). The tick reads and writes them (the clock, the requests, adoption, the weapon index); the types are
+`FGSTN_CombatRequest` and `FGSTN_CombatRequests` (`Find` and `Remove` by type, frame and argument: one frame can hold the commits of a replaced
+timeline and of its replacement), `FGSTN_CombatAuxState` (the model's aux state, empty) and `FGSTN_CombatTickContext` (what a tick extension sees).
+The `Combat.State.*` tags exist in `GSTNCombatCore` but the tick does not project them yet.
 
 **Clock, aim and command marker (for abilities).** The component answers three queries about the frame being simulated, for an
 ability's activation or tick (not presentation code): `GetCombatClock()` is the Network Prediction frame minus every hitstop frame so
-far (`Core.PausedFramesTotal`; the pure helper is `FGSTN_CombatClock`), so it stands still in hitstop; `IsInTimeline()` is
+far (`Core.PausedFramesTotal`; the pure helper is `FGSTN_CombatClock`), so it stands still in hitstop (the tick adds one to it for every frame inside the window of the previous state, and to `TimelinePausedFrames`
+when a timeline runs, so a timeline also stands still and ends later by the hitstop length); `IsInTimeline()` is
 `Core.ActionState == InTimeline`; `GetAimRotation()` is the camera aim of the frame's command (`HasAim()` says whether the command carried
 one, see `bSendCameraAim` in [GSTNInputNP](../GSTNInputNP/README.md)). The aim is copied at the top of each combat tick into three scalars,
-so a re-simulation reads the command it replays. `FGSTN_InputHostUtils::IsCommandActivation()` is true inside `CanExecuteBinding` and
-`ExecuteRequest` (an `FGSTN_CommandActivationScope` on the stack): an ability uses it to tell a command from a trigger or an effect.
+so a re-simulation reads the command it replays. `FGSTN_InputHostUtils::IsCommandActivation(Handle)` is true for the spec's own handle inside `CanExecuteBinding` and
+`ExecuteRequest` (an `FGSTN_CommandActivationScope(Handle)` on the stack): an ability uses it to tell a command from a trigger or an effect,
+and an ability that a command's ability triggers synchronously (another handle) is not a command.
 
-**`UGSTN_GA_Base` (combat-m3 6.1).** The base of the abilities that run under the combat model (`Abilities/GSTN_GA_Base.h`, `Abstract, Blueprintable`,
+**`UGSTN_GA_Base` (combat-m3 6.1; policy enum `EGSTN_InterruptPolicy`: `SkipIfBusy`, `InterruptCurrent`).** The base of the abilities that run under the combat model (`Abilities/GSTN_GA_Base.h`, `Abstract, Blueprintable`,
 derives from the fork's `UNpGameplayAbility`). It gives an ability: `GetCombatComponent()` (cached when the avatar is set);
 `GetActivationContext()` (the command, press frame, trigger button and source of the activation, captured in `ActivateAbility` into sync
 variables and rebuilt on demand; the command is stored as its table index, never as a tag); `bEndOnTriggerRelease` (ends the ability on the
@@ -76,7 +81,7 @@ All of the logic is pure and covered by `GSTNCombat.NP.Timeline.*`.
 or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the
 [GSTNCombat README](../GSTNCombat/README.md)). A fragment mismatch against the authority asks for a reconcile like the hitstop window
 does, and so does a mismatch of the input state (it is authoritative; the trace names the field). Interpolated proxies take the newer core, and each fragment
-decides how it blends (default: the newer one). No fragment type exists yet.
+decides how it blends (default: the newer one). No production fragment type exists yet (the tests define their own).
 
 **Tick extensions.** `IGSTN_CombatTickExtension` (`Simulation/GSTN_CombatTickExtension.h`) is the C++ per-frame hook an optional plugin registers in
 `FGSTN_CombatTickExtensionRegistry::Get()`. The combat tick calls the registry at four fixed points (`EGSTN_CombatHookPoint`:
@@ -87,11 +92,19 @@ its own sync fragment, no component, world or ability system reads, no net-mode 
 in the model the four points sit around the input simulator call (which does candidates, resolution and the request in one function); their meaning
 is fixed and the call sites move with the model.
 
+*Register an extension:* derive from `IGSTN_CombatTickExtension`, give it a `GetTypeId()` (a `GSTNFeatureIds` value) and a `GetPriority()`, implement
+the hooks it needs and keep its state in its own `FGSTN_SyncFragment`; then call `FGSTN_CombatTickExtensionRegistry::Get().Register(&Extension)` once
+from the module's startup (and `Unregister` at shutdown). The hook receives an `FGSTN_CombatTickContext` (`In` read-only, `Out` for its fragment).
+
+*Model order:* the combat model (`GSTN_Combat`) sorts at `PreKinematicMovers - 3`, the embedded input model `GSTN_Input` (sort priority 46)
+is part of its state and has no tick of its own; the ability system is `- 2`, Mover after it.
+
 ## Dependencies
 
-- Plugins (all non-optional, see `GSTNCombatNP.uplugin`): `GSTNCombat`, `GSTNInputNP`, `GSTNInput`, GameplayAbilities,
+- Plugins (all non-optional, see `GSTNCombatNP.uplugin`): `GSTNCombat`, `GSTNCombatGAS`, `GSTNInputNP`, `GSTNInput`, GameplayAbilities,
   AbilitySystemSimulation, NetworkPrediction (the GAS-NPP fork in `Plugins/GASNPP`), EnhancedInput, Mover.
-- Module `GSTNCombatNP` depends on `GSTNCombatCore`, `GSTNInputCore`, `GSTNInputNP` and the fork modules. Nothing in `GSTNCombat`
+- Module `GSTNCombatNP` depends on `GSTNCombatCore`, `GSTNCombatGAS` (the timeline ability tags, the combat attribute set the stats modifier reads),
+  `GSTNInputCore`, `GSTNInputNP` and the fork modules. Nothing in `GSTNCombat`
   depends on this plugin.
 - Dependency rule: an `*NP` module may depend on another plugin's `*NP` module of the same layer, and on nothing above it.
   `GSTNCombatNP` depends on `GSTNInputNP` by design (one NP model per character embeds the input simulation) and may use only its
@@ -144,6 +157,11 @@ Automation tests `GSTNCombat.NP.*` in `Source/GSTNCombatNP/Private/Tests/` run w
   (the log prints the bits of each; zero fragments are exactly one bit over the core), the array order not affecting the bytes,
   `ShouldReconcile`, `Interpolate` and `ToString` of the state, a fragment of an unknown type id being skipped without moving the reader, and a
   malformed count being an archive error. The fragments used are test-only types with ids from the test range.
+- `State.{RoundTrip, RequestsStaleDropped, Interpolate, ShouldReconcile, RevisionGate}`: the wire format of the action part, requests of older frames
+  dropped by `PruneBefore`, interpolation, the reconcile rule and the loadout revision gate. `Fragments.UnsendableDoesNotReconcile`: a fragment that
+  cannot be sent never asks for a reconcile.
+- `Timeline.{Adopt, AdoptSameClass, SameFrameCommit, Hitstop}`: adoption (first waiting wins, losers cancelled, the running class adopted again is not
+  cancelled), the requests of one frame when a timeline is replaced at the end of its window, and the clock standing still in hitstop.
 - `Timeline.{CommitDeferred, Clock, OverrideInto, CancelWindow, Replace, TailCancel}`: the timeline part of the tick on plain sync state: the deferred
   commit (once, on the frame the override window ends, or on the start frame without a window), the clock and the end of a timeline, the override rule
   (higher tier, explicit query), cancel windows (half open), replacement (the old entry is cancelled, nothing was committed) and the cancellable tail.
@@ -168,3 +186,20 @@ Types are prefixed `GSTN_`; export macro `GSTNCOMBATNP_API`. Public headers in `
 [combat.md](../../docs/architecture/combat.md) · [combat-m2-sim-input.md](../../docs/architecture/combat-m2-sim-input.md) ·
 [input.md](../../docs/architecture/input.md) · [GSTNInputNP README](../GSTNInputNP/README.md) ·
 [gas-npp.md](../../docs/architecture/gas-npp.md) · [PATCHES.md](../GASNPP/PATCHES.md)
+
+## Stats movement modifier (combat-m3 5)
+
+`FGSTN_StatsMovementModifier` (`Movement/GSTN_StatsMovementModifier.h`) is a permanent Mover modifier that makes a character's speeds follow
+its `WalkSpeed` stat. `UGSTN_CombatSimComponent` queues it once (`bQueueStatsModifier`, default on) on the authority and the owning client, on the first
+tick where Mover's simulation exists. On every simulated substep (`OnPreMovement`) it assigns **archetype value x factor**, never the current value
+times a factor, to the speeds the modes read, so the result is a pure function of the restored stats and a rollback cannot leave a stale value. Factor =
+`WalkSpeed / UGSTN_CombatSettings::StatsReferenceWalkSpeed` (0 while the owner has `Combat.Lock.Movement`: the character brakes with its own
+deceleration). What it writes, in all modes of the component: `UCommonLegacyMovementSettings::MaxSpeed`; `MaxSpeedOverride` of a mode whose archetype sets
+it (>= 0); and the float properties named in `UGSTN_CombatSettings::StatsSpeedProperties` (the gait variables of a Blueprint walking mode, which feed
+`MaxSpeedOverride` and so win over the shared settings: the project lists `WalkSpeed`, `RunSpeed`, `SprintSpeed`, `CrouchSpeed` in its
+`Config/DefaultGSTNCombat.ini`). A character whose ability system has no `UGSTN_CombatAttributeSet` is left alone. The arithmetic is `FGSTN_StatsScaling`
+(GSTNCombatCore). Not built yet: acceleration/braking/air control, gravity phases (C13).
+Tests: `GSTNCombat.Core.Stats.{Factor,ScalingIsBaseRelative}`, `GSTNCombat.NP.Stats.{MaxSpeedFollowsAttribute,LockMovementBrakes}`.
+
+## Weapon switch (combat-m3 7.7)
+A timeline ability with a `FGSTN_TimelineTrack_WeaponSwitch` track swaps the active weapon: when the track's frame is crossed the combat tick sets `ActiveWeaponIndex` (`FGSTN_WeaponSwitchRules::Resolve`, GSTNCombatCore), makes a `SwapWeaponStats` request carrying the old index and publishes `Combat.Event.WeaponSwitched` (authority only). The ability system's pre-tick runs `FGSTN_WeaponStatsSwap::Execute`: the old weapon's stats effect (`UGSTN_GE_WeaponStats`) is removed and the new one's applied, both found by class, so replaying the frame gives the same stats. The effects come from `UGSTN_CombatSimComponent::WeaponStats` (index 0 = primary). The primary weapon does not change during a match, so a switch is primary <-> support; a support weapon inherits the kit's stats and by default has no effect (an entry with an empty `Effect`). Tests: `GSTNCombat.Core.Stats.WeaponSwitchResolve`, `GSTNCombat.NP.Stats.SwapDeterministic`; PIE: `scenario_weapon_switch` (Tools/GASNPPTest). Not built yet: the loadout filling `WeaponStats`, the per-weapon anim layer, `UGSTN_GA_WeaponSwitch` as a plugin ability.

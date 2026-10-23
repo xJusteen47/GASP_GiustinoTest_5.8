@@ -126,13 +126,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GASNPP Test|Probe")
 	bool bStatsProbeEnabled = false;
 
+	/**
+	 * Server only: puts the primary weapon's stats effect on the pawn (what the loadout does at spawn), or takes both weapons'
+	 * effects off. Weapon scenario setup and cleanup, from outside the simulation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerEquipPrimaryWeapon(bool bEquip);
+
 	/** Same as setting bStatsProbeEnabled, for Python (the harness calls it on every copy of the pawn, in every world) */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	void SetStatsProbeEnabled(bool bEnabled) { bStatsProbeEnabled = bEnabled; }
 
 	/** Clears the activation counters of the trigger probes only (ResetCounters clears them too, with the rollback counters) */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
-	void ResetProbeCounters() { ProbeCounters.Reset(); TimelineStartedCounts.Reset(); }
+	void ResetProbeCounters() { ProbeCounters.Reset(); TimelineStartedCounts.Reset(); WeaponSwitchedCount = 0; }
 
 	// Probe bookkeeping, called by the probe abilities
 	void RecordProbeAttempt(FName Probe, bool bRestoring);
@@ -184,6 +191,10 @@ private:
 	/** TimelineStarted events the authority published for this pawn, by source name (adopted, command, forced). Empty on a client: nothing is published there */
 	TMap<FName, int32> TimelineStartedCounts;
 	int32 TimelineStartedListener = INDEX_NONE;
+
+	/** WeaponSwitched events the authority published for this pawn (nothing on a client) */
+	int32 WeaponSwitchedCount = 0;
+	int32 WeaponSwitchedListener = INDEX_NONE;
 
 	/** Simulation frame of the latest tick of the ability system, to date the probe activations */
 	int32 AbilityFrame = -1;

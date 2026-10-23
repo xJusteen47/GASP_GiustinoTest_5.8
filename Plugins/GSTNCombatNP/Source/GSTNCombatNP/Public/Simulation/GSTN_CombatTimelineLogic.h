@@ -23,10 +23,12 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 * Step 2. Evaluates the running timeline at Frame into Output. If it reached its end, or its ability is gone (cancelled by
 	 * something else; checked only after the start frame, because the ability system activates it later in the start frame),
 	 * the combatant goes back to Actionable. A commit crossed by this evaluation adds a CommitTimeline request.
+	 * A hitstop frame (bHitstopFrame) adds one to TimelinePausedFrames first: the timeline frame stands still, so nothing keyed
+	 * to a frame fires again and the timeline ends later by as many frames as the hitstop lasted.
 	 * @return true if a timeline is still running after the step
 	 */
 	static bool AdvanceClock(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, int32 DefaultOverrideFrames,
-		bool bAbilityActive, FGSTN_TimelineOutput& Output);
+		bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame = false);
 
 	/**
 	 * Step 6. May the command start now? Actionable: yes. Running: inside the cancellable tail yes; inside the startup override

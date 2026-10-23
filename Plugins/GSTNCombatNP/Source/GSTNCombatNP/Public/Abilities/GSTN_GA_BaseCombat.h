@@ -47,8 +47,14 @@ public:
 	/** The frame data this class runs: the asset's when it is set and loaded, else the inline one */
 	const FGSTN_CombatTimelineData& GetTimelineData() const;
 
-	/** Loads the soft references the simulation needs (the timeline asset, the montage). Call outside the simulation; the grant does */
+	/** Loads the soft references the simulation needs (the timeline asset, the montage) and keeps them in this instance. Call outside the simulation; the avatar being set does */
 	void PreloadTimelineContent();
+
+	/**
+	 * Loads the same content and appends the loaded objects to OutKeep, for an owner that has to keep them alive itself: the combat
+	 * component does this for every registry class, because it reads the class default object, which holds nothing. Not in a tick
+	 */
+	void LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKeep) const;
 
 	virtual void OnAvatarSet(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
 
@@ -68,7 +74,7 @@ public:
 	static constexpr int32 MaxAdoptionWaitFrames = 2;
 
 	/** True from an activation the combat state did not start until the combat tick adopts it (or it is cancelled). Read by the combat tick through the spec's instance */
-	bool IsAwaitingAdoption() const { return bAwaitingAdoption.Value != 0; }
+	bool IsAwaitingAdoption() const { return bAwaitingAdoption.Value; }
 
 private:
 	/** Starts the timeline whose start the combat state shows: sync variables, montage */
@@ -80,27 +86,27 @@ private:
 	/** True while the combat state names this ability's class and the start frame it started on */
 	bool IsStillTheRunningTimeline() const;
 
-	/** 1 once the ability found itself in the combat state and started (sync var: rolled back with the instance) */
-	UPROPERTY()
-	FSyncInteger bStarted;
+	/** True once the ability found itself in the combat state and started (sync var: rolled back with the instance) */
+	UPROPERTY(Transient)
+	FSyncBool bStarted;
 
 	/** Combat clock at the start, the origin of GetTimelineFrame */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncInteger StartClock;
 
 	/** Simulation frame the combat state said the timeline started on */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncInteger StartFrame;
 
-	/** 1 from an activation that waits for adoption until it is adopted, cancelled or ended */
-	UPROPERTY()
-	FSyncInteger bAwaitingAdoption;
+	/** True from an activation that waits for adoption until it is adopted, cancelled or ended */
+	UPROPERTY(Transient)
+	FSyncBool bAwaitingAdoption;
 
 	/** Simulation frame the wait began on */
-	UPROPERTY()
+	UPROPERTY(Transient)
 	FSyncInteger AwaitSinceFrame;
 
-	/** Acceleration only, resolved by PreloadTimelineContent */
+	/** What PreloadTimelineContent loaded (the timeline asset and the montage): nothing else keeps them in memory, and a montage collected on one machine only would desynchronise the played montages */
 	UPROPERTY(Transient)
-	TObjectPtr<UGSTN_CombatTimeline> LoadedAsset;
+	TArray<TObjectPtr<UObject>> LoadedContent;
 };
