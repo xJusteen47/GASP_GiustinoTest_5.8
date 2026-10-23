@@ -289,6 +289,9 @@ Total 30 (484 ms)` and `On shield/on hit advantage` is **not** computed (needs M
   `CompatibleSkins`); the choice is remembered per asset in an editor-only property `PreviewKit`/`PreviewSkin` of
   `UGSTN_CombatTimeline` (and in `UGSTN_CombatEditorSettings` for inline mode). **(M3 result: where the skin mesh
   lives in `UGSTN_SkinDefinition`.)**
+- **Several meshes together** (owner, 2026-10-23 13:48: judging a sword's reach without the sword is hard): the preview attaches the
+  kit's equipment meshes (weapon, implants, and with `GSTNKitModsEditor` a mod's longer blade) to their sockets on the skin mesh, from
+  the same visual data the game uses (M11 §9), each toggleable; hitboxes in `BakedSocket` space are drawn on the attached weapon.
 - Pose: a transient anim instance playing the timeline's montage section; **the pose is set per frame, never
   ticked in real time**: `Position = SectionStart + (Frame / TickRate) × MontagePlayRate`, evaluated on demand
   (`SetPosition`, `TickAnimation(0)`, `RefreshBoneTransforms`). The same function feeds the baker, so what you

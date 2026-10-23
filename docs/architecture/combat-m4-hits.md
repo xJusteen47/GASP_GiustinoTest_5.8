@@ -132,7 +132,16 @@ FGSTN_HitShape Shape; EGSTN_HitboxSpace Space (Root/BakedSocket/WorldAtMoveStart
 TArray<FGSTN_HitboxKey> Keys (frame, offset, rotation, scale; linear interpolation); uint8 HitGroup; bool
 bSweepBetweenFrames; FGSTN_HitData Data; TMap<FGameplayTag, FGSTN_HitVariant> RelationshipVariants; EGSTN_ReachAxis ReachAxis
 (None/X/Y/Z in the hitbox's space, default None; added 2026-10-23 for kit mods that lengthen a weapon, combat-loadout-mods.md §8:
-a mod's `ReachScale` stretches and moves only hitboxes that declare an axis); }`.
+a mod's `ReachScale` stretches and moves only hitboxes that declare an axis); bool bScaleExtentWithReach = true;
+EGSTN_HitboxZone Zone (Normal/Sweet/Sour, label only); }`.
+**Weapon length, swing and stab, sweet and sour spots (owner, 2026-10-23 13:48).** Hitboxes scale with a moddable weapon's length for
+**both swings and stabs**: a swing hitbox sits in `BakedSocket` space on the weapon's grip socket with `ReachAxis` along the blade; a stab
+hitbox sits in `Root` (or grip) space with `ReachAxis` along the thrust. Scaling is from the space's origin: position along the axis
+× `ReachScale`, extent along the axis × `ReachScale` unless `bScaleExtentWithReach` is false (a tip sweetspot that moves to the new tip
+but keeps its size). **Sweetspots and sourspots** are several hitboxes of the **same `HitGroup`** with different `FGSTN_HitData` (a
+strong tip, a weak base): when more than one of them overlaps the same victim in the same frame, the highest `Data.Priority` wins, ties
+by the lower array index, and the group then counts as hit (step 5 of §6). `Zone` changes no rule: it drives editor colours and lets cues
+pick a sweetspot sound or effect.
 `FGSTN_HitVariant { bool bIgnore; float ShapeScale = 1; FGSTN_HitDataOverride Override (per-field optional values and
 multipliers); }`. `BakedSocket` uses `FGSTN_CombatTimelineData::BakedSockets (TMap<FName, TArray<FTransform>>)` — one
 root-relative transform per frame, written by the M5 baking tool; in M4 a Python helper bakes them (section 10).
@@ -408,7 +417,8 @@ replicated by asset reference).
 3. **Relationship** first (resolver: self / same team = Ally / `FGenericTeamId::NoTeam` = Neutral / else Enemy), then
    `HittableRelationships` and `bFriendlyFire`, then the variant (`bIgnore`, `ShapeScale`).
 4. Overlap (swept if flagged) against the target's hurtboxes with its overrides; `Intangible` skipped; the hurtbox that wins
-   the `Priority`/index rule of §3b becomes `HurtboxIndex`.
+   the `Priority`/index rule of §3b becomes `HurtboxIndex`. If several hitboxes of the same `HitGroup` touch the same target this
+   frame (sweet and sour spots), only the one with the highest `Data.Priority` (ties: lower index) produces the hit.
 5. **Hit groups**: `HitTargets` ring in the combat sync state (8 entries `{ EntityId, TimelineStartFrame, HitGroup }`) — a
    target is hit once per group per move execution.
 6. For each new hit: record it; **predict own consequences**: first the **attacker outcome** (`EGSTN_AttackerHitOutcome`:

@@ -151,7 +151,9 @@ registry stores it like any timeline override, so the rollback simulation sees o
   marked `bFixedTime` (e.g. a parry window that must not grow). The montage is played at `1 / TimeScale` so animation and frames
   agree (M3 syncs montages to the combat clock). Movement tracks scale in time and keep their distance.
 - **Reach scaling** moves and stretches hitboxes along `ReachAxis` (authored per hitbox in M4 hit data, new field, default none:
-  such a hitbox ignores `ReachScale`). Baked socket tracks (M5) are transformed the same way. M5 validates that a mod's longer
+  such a hitbox ignores `ReachScale`), for **swings and stabs** alike, and **sweet and sour spots move with the blade** (owner,
+  2026-10-23 13:48): a tip sweetspot follows the new tip and keeps its size when `bScaleExtentWithReach` is false; the
+  sweet/sour choice between overlapping hitboxes of one group is M4's priority rule ([M4](combat-m4-hits.md) §3, §6 step 4). Baked socket tracks (M5) are transformed the same way. M5 validates that a mod's longer
   blade mesh and the scaled hitboxes agree (bounds check, warning).
 - **Order and stacking.** Modifiers apply in slot order; scales multiply; results are clamped by the kit's `ModLimits`
   (`MinTimeScale`, `MaxTimeScale`, `MaxReachScale`) so no combination breaks a move. One mod per slot (question M11.13).
