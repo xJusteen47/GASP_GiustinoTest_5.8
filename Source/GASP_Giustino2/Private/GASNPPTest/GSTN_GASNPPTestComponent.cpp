@@ -601,6 +601,11 @@ bool UGSTN_GASNPPTestComponent::ServerEquipPrimaryWeapon(bool bEquip)
 
 UGSTN_LoadoutComponent* UGSTN_GASNPPTestComponent::EnsureLoadoutComponent()
 {
+	// A loadout component wired into the test character Blueprint wins (it grants on the owner's own ability system)
+	if (UGSTN_LoadoutComponent* OnPawn = GetOwner()->FindComponentByClass<UGSTN_LoadoutComponent>())
+	{
+		return OnPawn;
+	}
 	const APawn* Pawn = Cast<APawn>(GetOwner());
 	APlayerState* PlayerState = Pawn ? Pawn->GetPlayerState() : nullptr;
 	if (!PlayerState)
@@ -638,7 +643,7 @@ FString UGSTN_GASNPPTestComponent::ServerApplyTestLoadout(const FString& KitName
 		Data.AdditionalWeapons.Add(FPrimaryAssetId(GSTNCombatAssetTypes::Weapon(), FName(*SupportWeaponName)));
 	}
 	TArray<FString> Errors;
-	if (!Combat->ServerApplyLoadoutChange(*Loadout, Data, Errors))
+	if (!Combat->ServerApplyLoadoutChange(Loadout, Data, Errors))
 	{
 		return FString::Join(Errors, TEXT(" | "));
 	}
@@ -873,9 +878,14 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 	// The loadout of the PlayerState, on every machine that has the component (the server made it, the clients replicate it)
 	if (const APawn* Pawn = Cast<APawn>(GetOwner()))
 	{
-		if (const APlayerState* PlayerState = Pawn->GetPlayerState())
 		{
-			if (const UGSTN_LoadoutComponent* Loadout = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>())
+			const APlayerState* PlayerState = Pawn->GetPlayerState();
+			const UGSTN_LoadoutComponent* Loadout = GetOwner()->FindComponentByClass<UGSTN_LoadoutComponent>();
+			if (!Loadout && PlayerState)
+			{
+				Loadout = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>();
+			}
+			if (Loadout)
 			{
 				const TSharedRef<FJsonObject> LoadoutJson = MakeShared<FJsonObject>();
 				LoadoutJson->SetNumberField(TEXT("revision"), Loadout->GetRevision());

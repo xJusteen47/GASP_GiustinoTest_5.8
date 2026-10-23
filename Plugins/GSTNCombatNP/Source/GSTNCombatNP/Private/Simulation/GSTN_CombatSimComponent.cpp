@@ -8,7 +8,9 @@
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Abilities/GSTN_GA_PlatformJump.h"
 #include "Abilities/NpAbilitySystemComponent.h"
+#include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "AttributeSet.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
@@ -70,6 +72,14 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 
 void UGSTN_CombatSimComponent::InitializeNetworkPredictionProxy()
 {
+	// The ability system's sync state lists the attribute sets by position, and machines add them in different orders: one fixed
+	// order (by class name) before the simulation starts, the same rule the harness applied by hand
+	if (UAbilitySystemComponent* ASC = GetOwner() ? GetOwner()->FindComponentByClass<UAbilitySystemComponent>() : nullptr)
+	{
+		TArray<UAttributeSet*> Sets = ASC->GetSpawnedAttributes();
+		Sets.Sort([](const UAttributeSet& A, const UAttributeSet& B) { return A.GetClass()->GetName() < B.GetClass()->GetName(); });
+		ASC->SetSpawnedAttributes(Sets);
+	}
 	NetworkPredictionProxy.Init<FGSTN_CombatModelDef>(GetWorld(), GetReplicationProxies(), this, this);
 }
 
@@ -246,21 +256,21 @@ bool UGSTN_CombatSimComponent::ServerWriteLoadoutRevision(uint16 Revision)
 	}, "LoadoutRevision") != nullptr;
 }
 
-bool UGSTN_CombatSimComponent::ServerApplyLoadoutChange(UGSTN_LoadoutComponent& Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
+bool UGSTN_CombatSimComponent::ServerApplyLoadoutChange(UGSTN_LoadoutComponent* Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
 {
 	OutErrors.Reset();
-	if (!GetOwner() || !GetOwner()->HasAuthority())
+	if (!Loadout || !GetOwner() || !GetOwner()->HasAuthority())
 	{
-		OutErrors.Add(TEXT("A loadout change is applied on the server only."));
+		OutErrors.Add(TEXT("A loadout change is applied on the server only, on a loadout component."));
 		return false;
 	}
 	// A refused loadout changes nothing, not even the move in progress
-	if (!Loadout.ValidateLoadout(Requested, OutErrors))
+	if (!Loadout->ValidateLoadout(Requested, OutErrors))
 	{
 		return false;
 	}
 
-	if (!Loadout.HasLoadout() || Requested != Loadout.GetApplied())
+	if (!Loadout->HasLoadout() || Requested != Loadout->GetApplied())
 	{
 		// The running timeline belongs to the old kit: its ability is cancelled and the action state returns to actionable
 		const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
@@ -278,11 +288,11 @@ bool UGSTN_CombatSimComponent::ServerApplyLoadoutChange(UGSTN_LoadoutComponent& 
 		}, "LoadoutChangeClearTimeline");
 	}
 
-	if (!Loadout.AcceptLoadout(Requested, OutErrors))
+	if (!Loadout->AcceptLoadout(Requested, OutErrors))
 	{
 		return false;
 	}
-	return ServerWriteLoadoutRevision(static_cast<uint16>(Loadout.GetRevision()));
+	return ServerWriteLoadoutRevision(static_cast<uint16>(Loadout->GetRevision()));
 }
 
 const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::GetRegistryTimeline(int32 Index) const

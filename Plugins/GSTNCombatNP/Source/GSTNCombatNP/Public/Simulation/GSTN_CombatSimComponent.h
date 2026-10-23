@@ -11,6 +11,7 @@
 #include "Input/GSTN_ButtonMap.h"
 #include "Jump/GSTN_GravityPhases.h"
 #include "Jump/GSTN_JumpLogic.h"
+#include "Loadout/GSTN_LoadoutData.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_InputSimulator.h"
@@ -29,7 +30,6 @@ class UGSTN_MoverSimStateTracker;
 class UMoverComponent;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
-struct FGSTN_LoadoutData;
 
 /**
  * Runs the combat Network Prediction model of its actor and drives the actor's ability system from it.
@@ -244,7 +244,8 @@ public:
 	 * revision into the sync state through ServerWriteLoadoutRevision. Returns false with the findings in OutErrors when refused.
 	 * The grants reach the owning client through the simulation's sync state: one reconcile per change, like any grant.
 	 */
-	bool ServerApplyLoadoutChange(UGSTN_LoadoutComponent& Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
+	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+	bool ServerApplyLoadoutChange(UGSTN_LoadoutComponent* Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
 
 protected:
 	virtual void InitializeNetworkPredictionProxy() override;
