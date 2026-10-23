@@ -5,6 +5,7 @@
 #include "Input/GSTN_StandardSlots.h"
 #include "Kits/GSTN_SuperInputScheme.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
+#include "Loadout/GSTN_EntrySourceMask.h"
 #include "Input/GSTN_InputTags.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -523,6 +524,40 @@ bool FGSTN_TableAmbiguousConflictTest::RunTest(const FString& Parameters)
 		FGSTN_BindingTableCompiler::FindConflicts(FGSTN_BindingTableCompiler::Compile(TwoWeapons, *Settings), *Settings, Report);
 		TestEqual(TEXT("the kit's conflict is found in both weapon contexts but reported with each context's own index"), TblCountContaining(Report.Errors, TEXT("arbitrary")), 2);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TableSourceMaskBitsTest, "GSTNCombat.Core.Table.SourceMaskBits", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_TableSourceMaskBitsTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("kit is bit 0"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Kit, 0), 1u);
+	TestEqual(TEXT("super slot 0 is bit 1"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Super, 0), 2u);
+	TestEqual(TEXT("super slot 7 is bit 8"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Super, 7), 1u << 8);
+	TestEqual(TEXT("weapon 0 is bit 9"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, 0), 1u << 9);
+	TestEqual(TEXT("weapon 22 is bit 31"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, 22), 1u << 31);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TableSourceMaskActiveWeaponTest, "GSTNCombat.Core.Table.SourceMaskActiveWeapon", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_TableSourceMaskActiveWeaponTest::RunTest(const FString& Parameters)
+{
+	const uint32 Primary = GSTNEntrySourceMask::ActiveMask(0);
+	const uint32 Support = GSTNEntrySourceMask::ActiveMask(1);
+	TestTrue(TEXT("the kit is always active"), (Primary & GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Kit, 0)) != 0);
+	TestTrue(TEXT("every super slot is always active"), (Support & GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Super, 5)) != 0);
+	TestTrue(TEXT("the primary weapon is active at index 0"), (Primary & GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, 0)) != 0);
+	TestTrue(TEXT("and the support weapon is not"), (Primary & GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, 1)) == 0);
+	TestEqual(TEXT("a switch only flips the weapon bit"), Primary ^ Support, GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, 0) | GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, 1));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TableSourceMaskLimitsTest, "GSTNCombat.Core.Table.SourceMaskLimits", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_TableSourceMaskLimitsTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("an out-of-range super is inert"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Super, 8), 0u);
+	TestEqual(TEXT("an out-of-range weapon is inert"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, GSTNEntrySourceMask::MaxWeapons), 0u);
+	TestEqual(TEXT("a negative index is inert"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, -1), 0u);
+	TestEqual(TEXT("the layout fills 32 bits"), GSTNEntrySourceMask::MaxWeapons, 23);
 	return true;
 }
 
