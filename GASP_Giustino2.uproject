@@ -171,6 +171,10 @@
 		{
 			"Name": "GSTNParts",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNDepthMarker",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

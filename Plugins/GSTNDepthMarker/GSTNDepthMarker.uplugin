@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Depth Marker",
+	"Description": "Presentation-only depth cue: a marker on the surface under a character joined to it by a dashed line, and a hollow ring on the last platform's plane when the character is off-stage. Computed locally on every machine from the presented transform, never simulated or replicated, never created on a dedicated server. Standalone: no GAS, Network Prediction, Mover or other GSTN plugin.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNDepthMarkerCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
