@@ -10,6 +10,7 @@ and how this is enforced. Owner requirements, verbatim in spirit:
 - Epic's C++ coding standard; every plugin has human-readable docs.
 - Most gameplay logic can be extended or changed by designers, easily, in Blueprint (2026-10-22, §3.8).
 - Extreme modularity means content can be replaced as needed (2026-10-22, §3.9).
+- Practically everything is a pluggable gameplay ability, as in Fortnite (2026-10-23, §3.10).
 
 Owner direction that applies here: [game-design-direction.md](game-design-direction.md) (§6b listen server, §1 parts).
 
@@ -44,6 +45,9 @@ Lyra source in this session.
 8. **Content is replaceable** (owner, 2026-10-22: "La modularità estrema deve permettere di rimpiazzare contenuti a seconda delle
    esigenze"). A kit, weapon, special, enemy, cue, UI piece or rule set is swapped by changing data, never code. Rules in
    section 3.9.
+9. **Everything is a pluggable gameplay ability** (owner, 2026-10-23: "in generale praticamente ogni cosa dovrebbe essere
+   un'abilità pluggabile. Rende il design estremamente facile, in più è anche quello che avviene in giochi come Fortnite").
+   Rules in section 3.10.
 
 ### 1.2 What Lyra and Fortnite do (the pattern to borrow)
 
@@ -345,6 +349,22 @@ before any plugin ships content (already noted for combat).
 | Platform minions (platform/minion bridge) | **`GSTNPlatformMinion`** (one module, *Proposal*): `FGSTN_PlatformMinionExtension` on `UGSTN_MinionDefinition`, spawns and despawns the proxy actor, feeds poses from the minion store through the publish seam of combat-m8-minions.md §4d.5; no tags, no content | bridge between L3b `GSTNPlatform` and L4 `GSTNMinion` | optional; depends on exactly `GSTNPlatform` + `GSTNMinion` (§3.2, §3.7 rule 3), the same pattern as `GSTNPartsMinion`; swarm minions are never platforms, at most 8 platform minions alive |
 | Stock GAS adapter (M9, optional) | `GSTNCombatStockGAS` replaces only `GSTNCombatNP`. **Proposal** (M9 §5b): both adapters become their own plugins (`GSTNCombatNP`, `GSTNInputNP`, `GSTNCombatStockGAS`, `GSTNInputStockGAS`), so `GSTNCombat` = Core + GAS and builds with neither NPP nor Mover; module names do not change | L3 | alternative plugin set, exactly one per project |
 | Held / thrown objects (M10) | `GSTNHeld` (Core, GAS, NP, StockGAS, Editor) | L4 on `GSTNLink` | Game Feature |
+| Kit mods: cosmetic, stats, move modifiers baked into derived timelines (M11, [combat-loadout-mods.md](combat-loadout-mods.md) §8) | new optional **`GSTNKitMods`** (Core, GAS, Editor); owns `Mod.*`, `Mod.Slot.*` | L3b on `GSTNCombat` | optional plugin |
+| Backpacks, Helldivers 2 style, on the implant connector (M11 §10) | new optional **`GSTNBackpack`** (Core, GAS); owns `Backpack.*`, `Command.Backpack.*` | L3b on `GSTNCombat` | optional plugin |
+| World pickups and drops of kits, support weapons, backpacks (M11 §12) | new optional **`GSTNPickups`** (Core, Runtime); owns `Interact.Target.Equipment`; payloads are open structs registered by other plugins | L3b on `GSTNCombat` + interact probe core | optional plugin |
+| Interaction: focus on what the player points at, candidate records and providers, highlight and prompt ([interaction.md](interaction.md); replaces the probe half of M6 §8) | **`GSTNInteract`** (Core, Runtime, Editor), *Decision* (owner answer to Mod.20, 2026-10-23); owns `Interact.*`; consumers depend on `GSTNInteractCore` only; Runtime has a game-thread interactor for projects with no rollback simulation | L3 | optional plugin |
+| Interaction focus inside the combat simulation (tick extension, focus fragment, `TargetKey` stamping) | bridge **`GSTNInteractCombat`** (`GSTNInteract` + `GSTNCombat`); no tags | bridge | with both plugins |
+| Depth-perception marker: decal under the character, dashed line, reference plane when no ground (presentation only, [depth-marker.md](depth-marker.md)) | new optional **`GSTNDepthMarker`** (Core, Runtime, Editor); depends on engine modules only; declares no tag | L4 on L1 | optional plugin |
+| Mover adapter for the depth marker (gravity and grounded state from Mover) | **`GSTNDepthMarkerMover`** | adapter: `GSTNDepthMarker` + `Mover` | with Mover |
+| Depth marker target filter by surface behaviour; marker on minion types | bridges **`GSTNDepthMarkerSurface`** (`GSTNSurfaceCore`), **`GSTNDepthMarkerMinion`** (`GSTNMinionRuntime`) | bridge | later, optional |
+| Missions and objectives: rules, chains, replicated mission state, markers ([game-modes.md](game-modes.md) §4) | new optional **`GSTNMission`** (Core, Runtime, Editor); no combat, GAS, NP or Mover; owns `Mission.*`, `Message.Mission.*` | L3 optional | optional plugin |
+| Mode verbs: one `UGSTN_GA_ModeVerb` base for terminals, calls, extraction (game-modes §2.4, the pluggable-ability rule §3.10) | new optional **`GSTNModeVerbs`** (Core, NP); owns `Ability.Mode.*`, `Command.Mode.*`, `Message.Mode.*`, leaf `Interact.Target.Objective` | L3b on `GSTNCombat` | optional plugin |
+| Checkpoints, respawn policies, reinforcement pool, stocks (game-modes §5, §6.2) | new optional **`GSTNRespawn`** (Core, Runtime); reads KO through messages; owns `Message.Respawn.*` | L3 optional | optional plugin |
+| Enemy director: pressure, waves, patrols, breaches, budgets (game-modes §7) | new optional **`GSTNSpawnDirector`** (Core, Runtime) + bridge **`GSTNSpawnDirectorMinion`** (`GSTNMinion`); owns `Spawn.*`, `Message.Spawn.*` | L3 optional + bridge | optional plugin |
+| Procedural map: integer layout solver, module definitions, level builder, loading flow (game-modes §3) | new optional **`GSTNProcGen`** (Core, Runtime, Editor) + bridge **`GSTNProcGenPCG`** (cosmetic scatter only); owns `Generation.*`, `Message.Generation.*` | L3 optional + bridge | optional plugin |
+| Game modes: designer 3D levels; Helldivers-style expedition; PvP later (game-modes §1) | Game Feature plugins **`GSTNMode_Levels`**, **`GSTNMode_Expedition`** (later `GSTNMode_Versus`); each is an Experience plus content; never depends on another L4 | L4 | Game Feature, by Experience |
+| Camera: far follow camera (Mario 3D World), shoulder aim, designer sections with angle and manual-control lock, mode stack ([camera.md](camera.md)) | new optional **`GSTNCamera`** (Core, Runtime, Editor); engine modules only; owns `Camera.*` | L4 on L1 | optional plugin |
+| Camera adapter and bridges | **`GSTNCameraMover`** (adapter, `Mover`); bridges **`GSTNCameraInput`** (`GSTNInputCore` interfaces: stick-reference hold, converged aim) and **`GSTNCameraDepthMarker`** (`GSTNDepthMarker`: section style action) | adapter, bridge | with Mover / with both plugins |
 | Game modes (co-op PvE waves, training) | `GSTNMode_*` Game Feature plugins + experience assets | L4 | experience |
 | Shared helpers (tag lint, message channels, base settings, **net primitives**) | `GSTNCore` (**Proposal**, optional: only if two plugins need the same helper). First case, met by `GSTNMinion` + `GSTNPlatform` (many-enemies-replication.md §3.5): `Net/` with the quantizer, frame-stamp reconstruction, `FGSTN_PoseHistory` + sampler and the tier rate scheduler; alternative: keep them in `GSTNMinionCore` and duplicate about 200 lines in `GSTNPlatformCore` until M10 projectiles need them | L2 | always on |
 | Test harness (`GASNPPTest`) | project today; **Proposal**: `GSTNTestKit` developer plugin (`Type: Developer`/`DeveloperTool`) | dev | excluded from Shipping |
@@ -473,6 +493,35 @@ may change at any time.
 **Checked by** `check_modules.py` rule 12 (§6.1) and a data validator that flags hard object references from one plugin's assets
 to another plugin's content.
 
+### 3.10 Everything is a pluggable gameplay ability (owner direction, 2026-10-23)
+
+Goal 9. **Every verb of a player or an enemy is a gameplay ability granted by data**, bound to a command or a trigger; frameworks
+own state, rules and resolution, abilities are the verbs. Adding, removing or replacing a verb is a data change.
+
+| Verb | Ability granted by | Spec |
+|---|---|---|
+| Attacks, specials, supers | weapon, kit, super definitions (M3 §8), mods (combat-loadout-mods.md §8) | M3, M11 |
+| Dodge, jump, air jump, fast fall, wall-slide entry | kit bindings (M3 §7.9; owner 2026-10-22 11:41: "schivate, salti etc… sono abilità di gameplay pluggabili") | M3, M4 §1b |
+| Weapon switch, picking up a kit or a support weapon | kit bindings, default ability set (M3 §7.7, combat-loadout-mods.md §4) | M3, M11 |
+| Shield, parry, grab, throw, mount, pickup of objects | kit / plugin ability sets (M6, M7, M10) | M6, M7, M10 |
+| Backpack actions (jump pack, dome, supply) | backpack definition (combat-loadout-mods.md §10) | M11 |
+| Mode verbs (activate a terminal, call a drop or a reinforcement, revive, extract) | the mode's Game Feature ability sets ([game-modes.md](game-modes.md)) | M12–M13 |
+| Enemy attacks and actions | minion definitions: timelines through the GAS-free player (M8) | M8 |
+
+Rules:
+
+1. **Granting is data**: `UGSTN_AbilitySet` (ability + command/input tag, effects, attribute sets, a handle struct that removes
+   them), carried by pawn data, kit, weapon, mod, backpack, Game Feature action or experience (§3.4). No code path grants a verb
+   by name.
+2. **Granting respects the simulation** (§1.3): sets are granted at spawn or through the loadout revision gate (M3 §7.8,
+   server-applied, out of band), never in the middle of a simulated frame; a granted set changes the compiled binding table, so
+   every machine rebuilds it from the same replicated data.
+3. **Variants are Blueprint children** of the base ability (§3.8), with their data (timeline, costs, tags) overridden; a mod or a
+   kit swaps the class or the data, never edits the base.
+4. **Not abilities**: passive systems that resolve or present (hit pipeline steps, knockback models, the depth marker, mode and
+   mission state). They are configured by data and extended through the surface of §5b; an ability may *trigger* them through
+   tags, events and requests.
+
 ## 4. Gameplay tag taxonomy (*Proposal*)
 
 ### 4.1 Rules
@@ -518,7 +567,7 @@ Existing names are kept unless listed in 4.3.
 | `Surface.*` (`Surface.Type.*`, `Surface.Behaviour.*`, `Surface.Event.*`) | surface classes mapped from physical materials (`Wall Glass Crate Trampoline`) and traversal behaviours (`WallSlide WallClimb Launch Stand`), traversal-surfaces.md | `GSTNSurface` (owner TS.1, 2026-10-22 22:15) | ini (`Surface.Type.*` leaves) + native (roots, behaviours, events) |
 | `Combat.Event.Impact.*` | impact events (`Splat Bounce BreakSurface`) (M4 §7b) | `GSTNCombat` | native |
 | `Combat.Lock.*` | `Movement`, `Link` | `GSTNCombat` (`Movement`); `GSTNLink` (`Link`) | native |
-| `Combat.Interact.*` | `Target.Grab` (projected: the one interactable the entity's tap would act on); `Target.Mount`, `Target.Pickup` (M6 §8) | root and `Target.Grab`: `GSTNLink`; `Target.Mount`: `GSTNPiggyback`; `Target.Pickup`: `GSTNHeld` | native, **projected** |
+| `Interact.*` | `Target.Grab` (projected: the one interactable the entity's tap would act on); `Target.Mount`, `Target.Pickup` (M6 §8); `Target.Equipment` (M11 §12); `Target.Objective` (mode terminals, game-modes §2.4) | root, `Interact.Target` parent and `Message.Interact.FocusChanged`: `GSTNInteract` ([interaction.md](interaction.md) §8); `Target.Grab`: `GSTNLink`; `Target.Mount`: `GSTNPiggyback`; `Target.Pickup`: `GSTNHeld`; `Target.Equipment`: `GSTNPickups`; `Target.Objective`: `GSTNModeVerbs` | native, **projected** |
 | `Combat.Immunity.*` | `Grab`, `Parry`, `Shield` | the plugin whose mechanic it gates | native |
 | `Combat.Link.*` | `Linked Pending`, `Type.Grab`, `Role.Grabber Role.Grabbed`, `BreakReason.*`; `Type.Mount Role.Carrier Role.Rider`; `Type.Held Role.Holder Role.HeldObject` | root and generic leaves: `GSTNLink`; a link type's own type, role and reason leaves: the plugin that owns the type (`GSTNPiggyback`: Mount; `GSTNHeld`: Held; `GSTNMinion`: Minion, later). `GSTNCombat` declares none | native |
 | `Combat.Mover.*` | `Frozen Tumble Linked` | emitting NP module | native |
@@ -526,6 +575,14 @@ Existing names are kept unless listed in 4.3.
 | `Combat.Part.*` | `Broken GrabLocked AllBroken`, `Effect.*` (e.g. `Effect.ArmLost`) | `GSTNParts` (all leaves; **projected** from the broken mask by its tick extension, never granted by others; `GrabLocked` is read by the grab rules of `GSTNLink` only as a data entry in the rules asset, by name, no module edge) | native, projected |
 | `Part.Type.*` | `Head Torso Arm Leg Weapon Armour Crystal` (classification of a part; unrelated to `Combat.Hurtbox.*`) | `GSTNParts` (designer vocabulary) | **ini** (`Plugins/GSTNParts/Config/Tags/GSTNParts.ini`) |
 | `Combat.Capability.*`, `Combat.Net.*` | adapter capabilities (`Rollback`, `LagCompensation`, ...); stock adapter payload keys (M9) | `GSTNCombat` (`Capability`, granted by the adapter that has it); `GSTNCombatStockGAS` (`Net`) | native |
+| `Mod.*`, `Mod.Slot.*` | designer identity of kit mods and mod slot types (M11 §8) | `GSTNKitMods` | root native, leaves ini |
+| `Backpack.*`, `Command.Backpack.*` | backpack identity (designer leaves); backpack commands (`Use`) (M11 §10) | `GSTNBackpack` | root native + ini leaves; commands native |
+| `Mission.Def.*`, `Mission.Objective.*`, `Mission.Kind.*`, `Mission.State.*`, `Message.Mission.*` | designer identity of missions and objectives (leaves ini); objective kinds and state names (derived, never granted); mission messages ([game-modes.md](game-modes.md) §8.2) | `GSTNMission` | roots native, identity leaves ini |
+| `Ability.Mode.*`, `Command.Mode.*`, `Message.Mode.*` | mode verbs (`Interact`, `CallReinforcement`, `CallDrop`, `CallExtraction`; designer verbs as ini leaves) | `GSTNModeVerbs` | native + ini |
+| `Message.Respawn.*` | `Down`, `Respawned`, `PoolChanged` | `GSTNRespawn` | native |
+| `Spawn.Zone.*`, `Spawn.Pattern.*`, `Message.Spawn.*` | designer zone and pattern identities; `RequestPattern`, `PatternStarted`, `Alert` | `GSTNSpawnDirector` | roots native, leaves ini |
+| `Generation.Module.*`, `Generation.Slot.*`, `Generation.Socket.*`, `Generation.Biome.*`, `Message.Generation.*` | module, slot, socket and biome identities; loading progress | `GSTNProcGen` | roots native, leaves ini |
+| `Camera.*` | `Camera.Mode.*` (native `Follow`, `Shoulder`, `Section` + designer leaves), `Camera.Request.*` (native `Aim`, granted by aiming abilities or weapons), `Camera.Section.*` (designer section ids), `Camera.State.*` (computed locally, never on an ASC) ([camera.md](camera.md) §9) | `GSTNCamera` | root native, designer leaves ini |
 | `Combat.Held.*`, `Combat.Source.*`, `Held.Type.*` | size, kind, carrying state of held objects; thrown/projectile credit; designer object types (M10) | `GSTNHeld` (`Held.Type.*`: ini) | native + ini |
 | `Minion.*`, `Command.Minion.*` | `Minion.State`, `Minion.LOD`, `Minion.Type.<Name>`; minion-only commands, never in a player binding set (M8) | `GSTNMinion` | native + ini |
 | `Platform.*` | new root (*Proposal*, many-enemies-replication.md §3.5). Leaves are examples, the final list belongs to the plugin's own spec: `Platform.State.<Active, Braced, Breaking, Inactive>` (names of the platform's active state, derived from the replicated value, never granted as loose tags), `Platform.Event.<Mounted, Dropped>` (local presentation and cue triggers) | `GSTNPlatform` (root and every leaf); the bridge `GSTNPlatformMinion` declares **none**; minion types stay `Minion.Type.*`; the platform collision channel `GSTN_EnemyPlatform` is a collision channel, not a tag | native |
@@ -537,7 +594,7 @@ Existing names are kept unless listed in 4.3.
 | `GameplayCue.*` | `GameplayCue.Combat.Hit.Heavy` | owner of the effect; sample's `GameplayCue.ContextualAnim` stays Epic's | ini |
 | `UI.*` | `UI.Layer.Game`, `UI.Extension.PlayerHud`, `UI.Action.*` | UI plugin / project | native |
 | `Message.*` | channel tags for the message router, e.g. `Message.Combat.Elimination`, `Message.Combat.PartBroken` (`GSTNParts`) | emitter's plugin | native |
-| `Experience.*`, `Feature.*` | `Experience.Mode.CoopWaves`, `Feature.Piggyback` | project / experience plugin; features declare theirs | ini |
+| `Experience.*`, `Feature.*` | `Experience.Mode.Levels`, `Experience.Mode.Expedition`, `Experience.Mode.Versus` (game-modes §1; no separate `Mode.*` root), `Experience.Trait.PvE`/`PvP`/`Coop`/`Procedural`, `Feature.Piggyback` | project / experience plugin; features declare theirs | ini |
 | `Test.*` | harness only | `GSTNTestKit` / project test content | native in a test module, **not** exported from the project's public headers |
 | `Foley.*`, `MotionMatching.*`, `SmartObject.*`, `StateTree.*`, `Abilities.*` | sample content | Epic sample; do not touch | ini (`DefaultGameplayTags.ini`) |
 

@@ -102,7 +102,7 @@ owns the type, `GSTNHeld`, like `GSTNPiggyback` does for `Mount`. Data referenci
 | `Combat.Link.Type.Held` | `GSTNHeldCore` (link types are declared by their plugin, M6 §1c) | Link type holder ↔ object | Link request step (server) |
 | `Combat.Link.Role.Holder` | `GSTNHeldCore` | Role tag of the carrier; requirement of throw/drop bindings | Projected (combat.md §5.4) from `FGSTN_LinkState` |
 | `Combat.Link.Role.HeldObject` | `GSTNHeldCore` | Role of the object side (objects have no ASC; used in events and rules) | Event/rule data only, never a loose tag |
-| `Combat.Interact.Target.Pickup` | `GSTNHeldCore` (native, projected) | The nearest interactable is an object in reach (M6 §8 probe) | Requirement of `Command.Link.Pickup`; projected by the M6 link tick extension from this plugin's candidate provider |
+| `Interact.Target.Pickup` | `GSTNHeldCore` (native, projected) | The nearest interactable is an object in reach (M6 §8 probe) | Requirement of `Command.Link.Pickup`; projected by the M6 link tick extension from this plugin's candidate provider |
 | `Command.Link.Pickup`, `Command.Link.Drop` | `GSTNHeld` ini `GSTNHeldCommands.ini` (designer family, CLAUDE.md input-tag exception) | Commands (slots with no default pattern, a kit sets them) | Kit bindings; the lock tags `Input.Lock.Command.Link[.Pickup]` come with the family |
 | `Combat.Held.Size.Light` / `.Medium` / `.Heavy` / `.Huge` | `GSTNHeldCore` (native) | Size class: selects bindings, carry load, allowed actions | Object definition (static); projected on the holder as `Combat.Held.Carrying.<size>` |
 | `Combat.Held.Carrying` (root) and `.Light/.Medium/.Heavy/.Huge` | `GSTNHeldCore` | Holder state: carries an object of that size | Projected from the link (adapter), absolute counts; removed on link end |
@@ -202,14 +202,16 @@ Common rules:
   [M6](combat-m6-defence-links.md) §8, not redefined here). M6 §8 owns the arbitration. **Owner answer (2026-10-22, "per ora"):
   picking up an object needs the hold, the tap grabs.** So tap = `Command.Link.Grab` (and, by context, M7's Mount), **hold =
   this plugin's `Command.Link.Pickup`**, tap as grabber = `Command.Link.Release`; a tap with an object as target does nothing in
-  the first version. A context probe
+  the first version. The probe now lives in `GSTNInteract` ([interaction.md](interaction.md), owner answer to Mod.20, 2026-10-23: a
+  sticky focus on what the player points at, so one object among many is clearly the one the hold takes; the pickup ability takes its
+  target from the focus id, the hitbox only validates contact). Before that revision the text read: a context probe
   (`UGSTN_InteractMath::PickTarget`: nearest to the facing direction, ties by `InteractPriority`, default Grab, Pickup, Mount)
-  projects **exactly one** `Combat.Interact.Target.*` tag. This plugin **declares `Combat.Interact.Target.Pickup`** (native,
+  projects **exactly one** `Interact.Target.*` tag. This plugin **declares `Interact.Target.Pickup`** (native,
   projected, modularity-and-tags.md §4.2), registers an `IGSTN_InteractCandidateProvider` for objects in reach (`PickupPriority`
   orders objects among themselves only), and `Command.Link.Pickup` **requires** that tag, so it never competes with the grab or the
   mount. There is no separate heavy pickup: how heavy an object a kit can lift is `MaxCarryWeight` and the size class. Interact
   is blocked while carrying, as `Pickup` is.
-- **Pickup** (`Command.Link.Pickup` = `Hold(Interact, MinFrames = HoldFrames)`, default 15 frames, bound with requirements `Combat.Interact.Target.Pickup` and *not carrying*): a timeline ability with an `Interaction.Pickup`
+- **Pickup** (`Command.Link.Pickup` = `Hold(Interact, MinFrames = HoldFrames)`, default 15 frames, bound with requirements `Interact.Target.Pickup` and *not carrying*): a timeline ability with an `Interaction.Pickup`
   hitbox that **hits objects**: objects register a pickup volume with the world subsystem (hittable class `Object`, relationship
   `Neutral`). The resolution step `HeldLinkRequest` (object side, server) accepts if: state `Idle/Landed`, not held, kit
   `AllowedKinds` and `MaxCarryWeight` (attribute), the entity has a free hand channel, object not on the thrower's

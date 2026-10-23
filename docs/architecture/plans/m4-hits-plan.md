@@ -115,7 +115,7 @@ Both topologies, listen first. Record pass/fail and numbers.
   BlueprintPure: `Overlap` for all six pairs, `SweptOverlap` with N = ceil(distance / smallest extent) capped at 4; doubles),
   `GSTN_HitData.h` (`FGSTN_HitData` complete per S §3 incl. `StaggerForceMode/StaggerForce/StaggerForceScale`, `HitstopMode`,
   `Impact`, `ExtensionData`; `FGSTN_HitDataOverride`, `FGSTN_HitVariant`, `EGSTN_SpecialAngle`, `EGSTN_YawSource`,
-  `EGSTN_HitstopMode`, `EGSTN_StaggerForceMode`), `GSTN_HitboxTypes.h` (`FGSTN_HitboxSpec`, `FGSTN_HitboxKey`, `EGSTN_HitboxSpace`;
+  `EGSTN_HitstopMode`, `EGSTN_StaggerForceMode`), `GSTN_HitboxTypes.h` (`FGSTN_HitboxSpec` incl. the optional `ReachAxis`, `bScaleExtentWithReach` and the `Zone` label (2026-10-23, for M11 kit mods and sweet/sour spots; data only, no reader in M4; the same-group priority rule for sweet and sour spots is H8, combat-m4-hits.md §6 step 4), `FGSTN_HitboxKey`, `EGSTN_HitboxSpace`;
   `FGSTN_HitboxTrack` completed where C2 declared it), `GSTN_HurtboxTypes.h` (`FGSTN_Hurtbox` with `Priority`, `Tags`,
   `ReactionScale`; `UGSTN_HurtboxSetDefinition` with `StaggerThreshold`, `MaxReaction`, `WeightCurve`;
   `FGSTN_HurtboxModifierTrack` completed: `State`, `ArmorThreshold` as `FGSTN_StaggerThreshold { float Value; bool bInfinite }`,
@@ -453,7 +453,8 @@ launch direction, tilt etc. may differ per instance.
   hitbox, a baked-socket hitbox, a `WorldAtMoveStart` hitbox and an `Ally` variant (half shape, no hitstun); three test hurtbox sets
   (light / medium / heavy weight, one high-threshold hurtbox); example Blueprints for each extension class (`BP_Step_Example`,
   `BP_KnockbackModel_Example`, `BP_OutcomeApplier_Example`, `BP_AttackerOutcome_Example`, `BP_RelationshipResolver_Example`) under
-  `/Game/GASNPPTest/Combat/`; test map with a wall, a glass panel, a KO zone (and three trampolines from H11b). Validators' matrix printers
+  `/Game/GASNPPTest/Combat/`; test map with a wall, a glass panel, a KO zone (and three trampolines from H11b), built as the first stations of
+  TM2 `L_Test_Combat` ([test-maps.md](test-maps.md)). Validators' matrix printers
   wired to `IsDataValid` output. Full harness (both topologies, every scenario of H7–H12, with and without loss) + all `GSTNCombat.*`.
   Docs commit: CM §12 (hits), §17 (H0 results), S corrections found while implementing, READMEs ("Extending in Blueprint", settings,
   fork requirements), plugin tag ini documented.

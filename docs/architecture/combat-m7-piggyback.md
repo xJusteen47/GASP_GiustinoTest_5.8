@@ -341,21 +341,22 @@ its root, which is the anchor, so no animation is evaluated at runtime.
 - *Revision 2026-10-22 (owner direction §3):* `Input.Button.Interact` is **the same button as the grab and the object pickup**
   (the owner: "the grab button is also the interact button"). Mount is therefore one **contextual meaning** among several, chosen
   by the requirements below and by the context in reach: ally with `bCanBeMounted` in reach = Mount (this file), grabbable enemy = Grab
-  (M6), object in reach = Pickup ([M10](combat-m10-held-objects.md) §8). M6 §8 owns the arbitration: **tap** = `Command.Link.Grab`
+  (M6), object in reach = Pickup ([M10](combat-m10-held-objects.md) §8). The arbitration is owned by [interaction.md](interaction.md) (`GSTNInteract`, owner answer
+  to Mod.20, 2026-10-23: one sticky focus on what the player points at; mount is a snapshot provider with a priority below grab, *Proposal*, question INT.5): **tap** = `Command.Link.Grab`
   (and, by context, this file's Mount: *Proposal*, the owner decided only grab and pickup), **hold** = M10's `Command.Link.Pickup` (owner answer 2026-10-22: hold = pick up objects), **tap as grabber** = `Command.Link.Release`;
   a context probe (`UGSTN_InteractMath::PickTarget`, nearest to the facing direction, ties by `InteractPriority`) projects **exactly
-  one** `Combat.Interact.Target.*` tag, and each meaning's binding requires its own tag, so bindings never compete.
+  one** `Interact.Target.*` tag, and each meaning's binding requires its own tag, so bindings never compete.
   Ownership: the button tag `Input.Button.Interact`, the probe and the priority list live with M6/`GSTNInput`; this file only
-  defines the Mount slots and **declares `Combat.Interact.Target.Mount`** (native, `GSTNPiggyback`; modularity-and-tags.md §4.2),
+  defines the Mount slots and **declares `Interact.Target.Mount`** (native, `GSTNPiggyback`; modularity-and-tags.md §4.2),
   and registers an `IGSTN_InteractCandidateProvider` for mountable allies (`bCanBeMounted`, in reach).
 - **`Input.Button.Interact`** is declared by M6 (designer tag in `GSTNCommands.ini`, shared); this plugin only adds the slots
   `Command.Link.Mount`, `Command.Link.Dismount` = a press of Interact; `Command.Link.Drop` = Interact + crouch held (a
-  `Hold(Crouch)` slot, more specific than Dismount). Mount requires `Combat.Interact.Target.Mount`. Note `Release` of M6 is the
+  `Hold(Crouch)` slot, more specific than Dismount). Mount requires `Interact.Target.Mount`. Note `Release` of M6 is the
   tap of a *grabber* (`Role.Grabber`); the rider's tap is Dismount (`Role.Rider`), the carrier's is Drop, so the roles never collide.
   The same button means several things purely through bindings:
   | Command | Requirements | Ability |
   |---|---|---|
-  | `Command.Link.Mount` | requires `Combat.Interact.Target.Mount`, ignores `Combat.Link.Role.*` | `UGSTN_GA_Mount` |
+  | `Command.Link.Mount` | requires `Interact.Target.Mount`, ignores `Combat.Link.Role.*` | `UGSTN_GA_Mount` |
   | `Command.Link.Dismount` | requires `Role.Rider` | `UGSTN_GA_Dismount` |
   | `Command.Link.Drop` | requires `Role.Carrier` | `UGSTN_GA_Drop` |
   | `Command.Movement.Jump` | requires `Role.Rider` | `GA_Rider_BoostJump` (pair move) |
@@ -441,7 +442,7 @@ may *use* a tag by name only through data, never include the header. "Link" = `G
 | `Combat.Link.Credit.Partner` | native | piggyback | event tag: credited partner present | attribution in `HitLanded`/`KO` events |
 | `Combat.SetByCaller.CarryLoad.Ratio` | native | piggyback | SetByCaller of the carry load GE | `ApplyLinkEffect` request |
 | `Input.Button.Interact` | ini | M6 (`GSTNInput` config; shared, only referenced here) | the grab/interact button | input config |
-| `Combat.Interact.Target.Mount` | native, projected | piggyback | the nearest interactable is a mountable ally (M6 §8 probe) | requirement of `Command.Link.Mount` |
+| `Interact.Target.Mount` | native, projected | piggyback | the nearest interactable is a mountable ally (M6 §8 probe) | requirement of `Command.Link.Mount` |
 | `Command.Link.Mount` / `.Dismount` / `.Drop` | ini | piggyback | slots of the Interact button | slot asset, bindings (7) |
 
 Rules: no `AbilityTriggers` or tag-event listeners on projected tags (5.4); `Combat.Lock.Link` is the only lock-style tag

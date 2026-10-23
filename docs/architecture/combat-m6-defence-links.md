@@ -137,7 +137,7 @@ combat tick** under `Combat.State.*` (combat.md §5.4) and nothing else grants t
 |---|---|---|---|---|
 | `Input.Button.Shield` | native (exists, M1) | GSTNCombatCore | Shield/tech button (**no longer part of the grab chord**); **free for kits where the mode disables the shield (PvE)**, tech still reads it during `Tumble` (§1d) | input config |
 | `Input.Button.Interact` | ini (designer tag, `GSTNCommands.ini`, shared with M7/M10) | `GSTNInput` config | The grab / interact button; tap and hold variants (§8) | input config |
-| `Combat.Interact.Target.Grab` | native | GSTNLinkGAS | Projected: a grabbable entity is the nearest interactable in reach (§8); `.Mount` is declared by `GSTNPiggyback`, `.Pickup` by `GSTNHeld` | projected by the link tick extension |
+| `Interact.Target.Grab` | native | GSTNLinkGAS | Projected: a grabbable entity is the nearest interactable in reach (§8); `.Mount` is declared by `GSTNPiggyback`, `.Pickup` by `GSTNHeld` | projected by the link tick extension |
 | `Combat.State.Shielding` | native | GSTNDefenceGAS | Shield bubble raised (after startup); never projected where the mode disables the shield | projected by defence tick, removed on release/stun/break |
 | `Combat.State.ShieldStun` | native | GSTNDefenceGAS | Stalled by a blocked hit (the bubble stays up, no out-of-shield action) | projected until `ShieldStunEndFrame` |
 | `Combat.State.ShieldBroken` | native | GSTNDefenceGAS | Long stun after shield break (launched upward) | projected until `BreakEndFrame` |
@@ -172,7 +172,7 @@ combat tick** under `Combat.State.*` (combat.md §5.4) and nothing else grants t
 
 Designer-made commands (new throws, a second shield) go in the ini; a game that wants a different shield *button* adds
 `Input.Button.*` there. Tag hierarchy rule: a plugin declares only tags under its own roots (`Combat.Link.*`,
-`Combat.Immunity.Grab`, `Combat.Interact.Target.Grab` for Link; `Combat.State.Shield*/Parry*/Tech*`, `Combat.Immunity.Parry/Shield`, and the defence events under `Combat.Event.*` for Defence; the parry source and the shield bubble carry no tag of their own), and
+`Combat.Immunity.Grab`, `Interact.Target.Grab` for Link; `Combat.State.Shield*/Parry*/Tech*`, `Combat.Immunity.Parry/Shield`, and the defence events under `Combat.Event.*` for Defence; the parry source and the shield bubble carry no tag of their own), and
 reads the other plugin's tags by *name through `FGameplayTag::RequestGameplayTag(…, false)`*, never by an extern
 declaration, so each plugin builds and runs alone.
 
@@ -313,8 +313,9 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
 - **`UGSTN_GA_Tech`** (timeline ability, kit-assigned per tech type through `FGSTN_TechSet` on the kit: InPlace, RollLeft,
   RollRight, WallTech, WallJumpTech): started by a **Forced** `ActivateEntry` request from the model (ActiveSource
   `Forced`, M3). Intangibility = its `HurtboxModifier` window. Roll/wall movement = its movement track.
-- **`UGSTN_GA_Knockdown`/get-up** (*Proposal*: one neutral get-up ability with intangible frames, started the same way;
-  further get-ups later).
+- **`UGSTN_GA_Knockdown`/get-up**: superseded by the 2026-10-23 default of §6 (mini bounce `UGSTN_GA_GroundBounce`, downed state,
+  `UGSTN_GA_GetupRoll`, get-up attacks 0..N from the moveset, a neutral get-up); all pluggable abilities with intangible frames from their
+  own `HurtboxModifier` windows.
 - **`UGSTN_GA_LinkedHold`** (grabbed side presentation and tags): not an ability; the grabbed's reaction is state +
   Mover mode + the role's animation layer chosen by kit (`FGSTN_KitLinkAnims`, per role tag). Abilities of the
   grabbed are blocked by `ActivationBlockedTags` `Combat.Link.Role.Grabbed` (set in the base ability defaults).
@@ -513,6 +514,23 @@ attacker punish, meter, event) is applied by one piece of code and tested once.
 
 ## 6. Tech and knockdown
 
+> **Revision 2026-10-23 (owner, 15:23): no tech by default; landing = mini bounce, then the downed state.** Tech is a good ability and,
+> like every ability, **pluggable**: the algorithm below stays as an optional ability that a kit or mode may grant (`UGSTN_GA_Tech` set,
+> `FGSTN_TechRules`), but the **standard set has no tech**. Default when a tumbling entity touches the ground and the M4 §7b surface impact
+> is neither a wall splat nor an excessive bounce:
+> 1. **Mini ground bounce**: a small bounce whose horizontal direction the **stick steers** (read from the command at the contact frame,
+>    so it is deterministic; `GroundBounceSpeed`, `GroundBounceSteerDeg` in the rules asset). Started as a Forced ability (`UGSTN_GA_GroundBounce`).
+> 2. **Downed state** ("downed" as in Smash; the identifiers keep the name `Knockdown`: `ActionState = Knockdown`, `Combat.State.Knockdown`).
+>    With no attack or direction input after the bounce the entity ends **lying on the ground**.
+> 3. On the ground: **holding the stick** in a direction starts a **get-up roll** that way (`UGSTN_GA_GetupRoll`); **attacking** starts a
+>    **get-up attack**. Get-up attacks are **0..N per moveset**, designer data: entries in the kit's slot set that require
+>    `Combat.State.Knockdown` (direction variants allowed); with none, the attack button does nothing there.
+>
+> All three are abilities granted by the base ability set or the kit, so changing the rule later is a data change. The tech button is
+> therefore free by default (question M6.8 answered). **Pressing jump gets up** (owner, 16:23): a neutral get-up ability bound to
+> `Press(Jump)` requiring `Combat.State.Knockdown`. An automatic get-up after a time is optional data (`MaxDownedFrames`, 0 = never, the
+> default) for a mode or kit that wants it.
+
 - **Contact record**: the record type `FGSTN_TumbleContactSyncState` and the probe are shared with **M4 §7b** (surface impacts: the
   knockback move already needs the contact, with `SurfaceTypeIndex`); `FGSTN_TumbleContactModifier` is M6's tech extension of that
   probe, not a second one. `FGSTN_TumbleContactModifier` (`FMovementModifierBase`, queued with the hitstun knockback while
@@ -684,8 +702,8 @@ travels in `LinkCommand`; the teleport is a Mover instant move through a GE (the
 
   | Input | Command | Meaning |
   |---|---|---|
-  | **Tap** (fires on the press, not on the release, to keep the grab responsive) | `Command.Link.Grab` = `Press(Interact)`, requirement `Combat.Interact.Target.Grab` | Standing grab. With a mountable ally as target the same tap means Mount (M7's command, requirement `Combat.Interact.Target.Mount`; *Proposal*: the owner decided grab and pickup only). A tap with an object as target does nothing in the first version |
-  | **Hold** (`HoldFrames`, default 15) | `Command.Link.Pickup` (declared by `GSTNHeld`, M10 §8) = `Hold(Interact, MinFrames = HoldFrames)`, requirement `Combat.Interact.Target.Pickup` | **Pick up an object** (owner answer). Without `GSTNHeld` the hold has no binding |
+  | **Tap** (fires on the press, not on the release, to keep the grab responsive) | `Command.Link.Grab` = `Press(Interact)`, requirement `Interact.Target.Grab` | Standing grab. With a mountable ally as target the same tap means Mount (M7's command, requirement `Interact.Target.Mount`; *Proposal*: the owner decided grab and pickup only). A tap with an object as target does nothing in the first version |
+  | **Hold** (`HoldFrames`, default 15) | `Command.Link.Pickup` (declared by `GSTNHeld`, M10 §8) = `Hold(Interact, MinFrames = HoldFrames)`, requirement `Interact.Target.Pickup` | **Pick up an object** (owner answer). Without `GSTNHeld` the hold has no binding |
   | Tap as grabber | `Command.Link.Release` = `Press(Interact)`, requires `Combat.Link.Role.Grabber` | Release (was `Press(Shield)`) |
   | Hold as grabber, hold on a grab target | unbound in the first version (reserved, e.g. a charged pummel) | none |
 
@@ -698,11 +716,16 @@ travels in `LinkCommand`; the teleport is a Mover instant move through a GE (the
   *release* (before `HoldFrames`); an enemy and an object in reach then never compete, at the cost of the tap's length in grab
   latency. Data only (`Release(Interact, MaxFrames = TapMaxFrames)` instead of `Press`, and the probe's one-tag-per-meaning mode).
 
+  > **Revision 2026-10-23 (owner, Mod.20):** the probe below, `IGSTN_InteractCandidateProvider`, `UGSTN_InteractMath` and the tie rules
+  > move to their own plugin `GSTNInteract` ([interaction.md](interaction.md)), which also owns the tag root, renamed `Interact.*`, and adds
+  > a sticky focus on what the player points at plus its highlight. This section keeps the grab rules; where the text below differs from
+  > interaction.md, interaction.md wins. `GSTNLink` becomes one candidate provider (grabbable entities) and keeps declaring `Interact.Target.Grab`.
+
   **Which meaning a tap has** is resolved by *context*, not by an extra command: the link tick extension (tag projection hook)
   runs `UGSTN_InteractMath::PickTarget` on the end-of-F-1 snapshot: candidates from registered `IGSTN_InteractCandidateProvider`s
   (`GSTNLink`: grabbable entities; `GSTNPiggyback`: mountable allies; `GSTNHeld`: objects) inside `InteractReachCm` and the facing
   arc, the **nearest to the facing direction wins, ties by `InteractPriority`** (data, default Grab, Pickup, Mount; *Proposal*, the
-  owner has not decided the tie of an ally and an enemy, M7 §7 question). It projects **exactly one** `Combat.Interact.Target.*`
+  owner has not decided the tie of an ally and an enemy, M7 §7 question). It projects **exactly one** `Interact.Target.*`
   tag; each meaning's binding requires its tag, so the bindings never compete. Cost: one broadphase query per entity with an
   Interact binding, pure function, no component access. Airborne binding absent by default.
   The grab move's timeline has a hitbox of HitType `Grab`
@@ -827,7 +850,7 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
   c−3 teches in place; c−25 no tech; two presses: lockout), `scenario_tech_wall`, `scenario_sdi` (rules asset values),
   `scenario_grab_throw` (c1 grabs, three pummels, throws forward; all states equal),
   `scenario_grab_interact` (tap = grab, hold on an object = pickup with `GSTNHeld`, tap on an object = nothing, tap as grabber = release; context picks the nearest of grab/pickup/mount;
-  one `Combat.Interact.Target.*` tag at any frame), `scenario_grab_gate` (heavy enemy refused while `GrabLocked` or above
+  one `Interact.Target.*` tag at any frame), `scenario_grab_gate` (heavy enemy refused while `GrabLocked` or above
   `MaxGrabWeight`; accepted after the parts break / weight falls; with and without `GSTNParts`), `scenario_throw_at_enemy` (grabbed
   enemy thrown into two others: hand-off to the M10 thrown body, credit, link breaks once), `scenario_grab_mash` (c2 scripted
   presses: escapes on the predicted frame, forced reconcile mid-mash), `scenario_link_break_distance` (server moves the
@@ -922,7 +945,7 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
   a kit's rules asset.
 - **A new tech type or get-up**: a timeline ability in the kit's `FGSTN_TechSet` + a `TechType` selector rule; no model change.
 - **A new break reason**: an enum value and a rule in `FGSTN_LinkBreakRules`, evaluated in the watchdog.
-- **A new interact meaning** (open a chest, talk): an `IGSTN_InteractCandidateProvider`, a `Combat.Interact.Target.<Name>` tag in
+- **A new interact meaning** (open a chest, talk): an `IGSTN_InteractCandidateProvider`, a `Interact.Target.<Name>` tag in
   the owning plugin and a binding requiring it; add it to `InteractPriority`. No change to the grab or the input system.
 - **New inbox entry kinds**: payload struct + handler in step 2 of §5.2; remember rollback trimming and `Serial` idempotence.
 

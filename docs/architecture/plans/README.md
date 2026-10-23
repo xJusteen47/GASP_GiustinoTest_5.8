@@ -24,6 +24,31 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | Wall movement core: T5 approved (TS.2, 2026-10-22 22:14); T2 is subclass-only | now → T0, T1, T2 |
 | M5 E10 validation mechanism | E10 → T9 |
 
+### Owner direction of 2026-10-23 on these plans (added by the milestone-planning thread)
+
+New specs [`../combat-loadout-mods.md`](../combat-loadout-mods.md) (M11: kits in play, support weapons, mods, backpacks),
+[`../game-modes.md`](../game-modes.md) (M12–M13) and [`../depth-marker.md`](../depth-marker.md) do not change the checkpoints. Only:
+H1 adds the optional hitbox field `ReachAxis` (data only, used by M11 mods); M5 keeps mod preview and mod validators out of scope
+(they go to `GSTNKitModsEditor`, a client of the M5 hooks like `GSTNPartsEditor`); M4b is unaffected (players stay one part,
+equipment is not a part). The M3 seams that M11 needs are listed in `../combat-loadout-mods.md` §11.
+M12 (mode framework + Levels) later needs two small combat seams that no current plan builds: an authoritative event key on
+the timeline that posts to the combat outbox (game-modes D-1) and the outbox-to-`Message.*` republisher of modularity §5 item 4
+(D-2). Neither blocks M4, M4b or M5; adding D-1 next to the timeline `Event` track in M4 would be cheaper than later.
+The interaction plugin ([`../interaction.md`](../interaction.md) §3.3, owner answer to Mod.20) asks M2/M3 for one generic seam: an opaque
+`uint64 TargetKey` in `FGSTN_ActivationContext`, stamped when a binding requires an `Interact.Target.*` tag (combat never names interaction).
+Cheap now, a fallback accessor exists if it is refused; the probe text of M6 §8 that the M6 plan will use is superseded by interaction.md.
+
+### Test maps (owner request, 2026-10-23)
+
+After the related milestones, three test maps are built from primitives by Ludus AI (an editor AI assistant) or a person,
+following the briefs in [test-maps.md](test-maps.md):
+
+| Checkpoint | Map | Build after |
+|---|---|---|
+| **TM1** | `L_Test_Movement` | wall movement core (T5) and the jump; later stations after T1–T4, camera C3 and gravity volumes |
+| **TM2** | `L_Test_Combat` | M4 H13 (it grows the H13 test map); later stations after M4b, M6, M10 and M11 |
+| **TM3** | `L_Test_Enemies` | M8; the parts station after P16; the platform enemy once `GSTNPlatform` exists |
+
 ## Cross-plan dependency map
 
 The M4b and M5 plans name M4 capabilities (D-ids, "M4-*" names) instead of H-numbers. This table maps them.

@@ -42,6 +42,12 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Molti nemici e nemici-piattaforma (ricerca del 22/10) | [many-enemies-replication.md](many-enemies-replication.md) |
 | M9 Adattatore GAS standard | [combat-m9-stock-gas.md](combat-m9-stock-gas.md) |
 | M10 Oggetti tenuti e lanciati | [combat-m10-held-objects.md](combat-m10-held-objects.md) |
+| Superfici di attraversamento sulle parti dei nemici | [traversal-surfaces.md](traversal-surfaces.md) |
+| M11 Kit in gioco, armi di supporto, mod, zaini | [combat-loadout-mods.md](combat-loadout-mods.md) |
+| Modalità di gioco (Livelli, Spedizione, PvP) | [game-modes.md](game-modes.md) |
+| Indicatore di profondità | [depth-marker.md](depth-marker.md) |
+| Telecamera | [camera.md](camera.md) |
+| Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
 
 
 ---
@@ -129,6 +135,13 @@ Documento di riferimento: docs/architecture/modularity-and-tags.md.
 19. I nomi delle speciali come tag: sotto la radice delle mosse già usata da M3 (`Ability.Combat.Special.<Nome>`) o sotto una radice propria (`Special.<Nome>`)?
     Perché conta: con due radici la stessa mossa avrebbe due identità da tenere allineate.
     Ipotesi nella specifica: `Ability.Combat.Special.<Nome>` ([modularità §4.2b](modularity-and-tags.md#42b-designer-identity-tags-owner-direction-2026-10-22)).
+
+### Dopo i messaggi del 23/10 (kit, mod, zaini, modalità)
+
+20. Spostiamo la "sonda di interazione" (quella che sceglie se il tasto interazione afferra, monta, raccoglie un oggetto o un kit, o attiva un terminale) dal plugin dei link a un piccolo plugin di base proprio, `GSTNInteract`?
+    Perché conta: oggi vive in `GSTNLink`, ma solo la presa è un link; raccolta di kit e terminali delle missioni dovrebbero altrimenti dipendere dal plugin dei link.
+    Ipotesi nella specifica: sì, `GSTNInteract` (Core e NP) proprietario della radice `Interact.*` ([modularità §3.6](modularity-and-tags.md#36-map-of-features-to-plugins), [M11 §12](combat-loadout-mods.md#12-world-pickups-and-drops-gstnpickups)).
+    **Risposta (2026-10-23):** Sì, un plugin dedicato: il contratto resta semplice (un'interfaccia più i gameplay tag), ma il plugin serve a rendere facile interagire con **ciò che si sta puntando**, anche con moltissime armi per terra. Specifica: [interaction.md](interaction.md) (`GSTNInteract`). La radice dei tag diventa `Interact.*` (non più `Combat.Interact.*`), così il plugin funziona anche senza il combattimento.
 
 ---
 
@@ -570,10 +583,12 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 8. Il tech deve esistere anche in PvE e usare il tasto dello scudo?
    Perché conta: aggiunge una difesa a costo zero ma rende gli scontri con i nemici meno punitivi.
    Ipotesi nella specifica: sì, tasto scudo, solo dopo un lancio con tumble; finestra 20 frame, blocco anti-mash 40 frame.
+   **Risposta (2026-10-23):** Di base niente tech: il tech è un'abilità pluggabile che un kit o una modalità può aggiungere, ma non c'è nel set standard ([M6 §6](combat-m6-defence-links.md#6-tech-and-knockdown)).
 
 9. Cosa succede quando si manca il tech: knockdown con rialzo automatico, rialzo con scelta (attacco, rotolata) o niente?
    Perché conta: definisce la punizione dopo un lancio e quanto tempo è in balia dei nemici.
    Ipotesi nella specifica: knockdown breve con un solo rialzo neutro; altri rialzi rimandati.
+   **Risposta (2026-10-23):** Se non c'è wall splat o rimbalzo eccessivo, il personaggio fa un mini rimbalzo a terra (direzione controllabile con lo stick) e finisce a terra (downed, come in Smash). Senza input resta a terra; tenendo lo stick in una direzione rotola da quella parte; attaccando fa un getup attack (da 0 a quanti ne vuole il designer per moveset). Ci si rialza premendo salto (risposta del 23/10, 16:23); un rialzo automatico dopo un certo tempo resta un dato opzionale, spento di default.
 
 10. DI e SDI devono valere uguale per giocatori, nemici e boss, e in tutte le modalità?
    Perché conta: la possibilità di sfuggire ai combo è parte del feeling e della difficoltà.
@@ -637,6 +652,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 22. Se un nemico e un alleato (o un oggetto) sono entrambi a portata del tasto interazione, quale ha la precedenza?
    Perché conta: lo stesso tasto fa afferrare, montare o raccogliere; un errore di contesto è frustrante.
    Ipotesi nella specifica: vince il più vicino alla direzione di sguardo; a parità, ordine dati: afferra, raccogli, monta.
+   *23/10: ora vale un solo bersaglio, quello puntato ([interaction.md](interaction.md)); la precedenza tra significati resta la domanda INT.5.*
    Nota (2026-10-22, dopo la risposta a M6.23): ora tocco e pressione lunga hanno significati diversi. Con un solo bersaglio alla volta la presa parte subito alla pressione; un'alternativa è proiettare insieme presa e raccolta e far partire la presa al rilascio del tocco, così nemico e oggetto non competono più, al costo di qualche frame di ritardo sulla presa.
    
 23. Tenere premuto il tasto di interazione deve dare la presa pesante (più lenta, per bersagli più pesanti)?
@@ -680,7 +696,7 @@ Specifica di riferimento: docs/architecture/combat-m6-defence-links.md (le ipote
 1. Per montare/smontare/lasciare cadere va bene un solo tasto "Interact" con significato deciso dal ruolo (montare, smontare, drop)?
    Perché conta: decide i binding, le collisioni di input e quanti tasti servono sul pad.
    Ipotesi nella specifica: sì, un tasto; Drop = Interact + accovacciarsi; il cooldown di 30 frame evita il re-mount immediato.
-   **Risposta (2026-10-22):** Sì: un solo tasto, quello della presa, è anche il tasto di interazione generale ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Il montaggio è un significato contestuale scelto dal contesto (M6 §8, tag `Combat.Interact.Target.Mount`). Resta aperta la precedenza tra alleato e nemico a portata (vedi M6.22).
+   **Risposta (2026-10-22):** Sì: un solo tasto, quello della presa, è anche il tasto di interazione generale ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)). Il montaggio è un significato contestuale scelto dal contesto (M6 §8, tag `Interact.Target.Mount`). Resta aperta la precedenza tra alleato e nemico a portata (vedi M6.22).
 2. Il rider può smontare anche saltando, oppure il salto è riservato alla mossa in coppia "boost jump"?
    Perché conta: il salto è il gesto più naturale per scendere, ma qui è anche il trigger del boost.
    Ipotesi nella specifica: Jump del rider = boost jump (mossa in coppia); lo smontaggio semplice usa Interact.
@@ -982,7 +998,7 @@ Riferimento: `docs/architecture/combat-m10-held-objects.md`. Le domande riguarda
 4. Raccogliere è un comando dedicato (es. tasto Afferra) o contestuale all'attacco vicino a un oggetto?
    Perché conta: occupa o no uno slot e può confliggere con le mosse esistenti.
    Ipotesi nella specifica: comando dedicato `Command.Link.Pickup`, senza pattern di default, assegnato dal kit.
-   **Risposta (2026-10-22):** Contestuale: il tasto della presa è anche il tasto di interazione, con tocco e pressione lunga come varianti ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)); M6 §8 e M10 §8 lo recepiscono con il tag `Combat.Interact.Target.Pickup`. Resta aperta la precedenza tra oggetto, nemico e alleato (vedi M6.22).
+   **Risposta (2026-10-22):** Contestuale: il tasto della presa è anche il tasto di interazione, con tocco e pressione lunga come varianti ([direzione §3](game-design-direction.md#3-grabs-interaction-and-throwing-enemies)); M6 §8 e M10 §8 lo recepiscono con il tag `Interact.Target.Pickup`. Resta aperta la precedenza tra oggetto, nemico e alleato (vedi M6.22).
 
 5. Se due giocatori raccolgono lo stesso oggetto nello stesso istante, chi vince?
    Perché conta: in co-op è un momento di attrito; la regola deve essere comprensibile.
@@ -1107,3 +1123,264 @@ TS.7. Chi usa queste superfici: solo giocatori e fighter (entità NP con Mover),
 TS.8. Quali comportamenti vuoi nella prima consegna: `WallSlide`, `WallClimb`, `Launch` (trampolino), `Stand` (piattaforma) sono quelli pianificati; `Slippery` (scivolo più veloce, niente presa) e `OneWay` restano tag riservati senza lettore. Ne mancano altri importanti (es. "appiccicoso", "danno al contatto")?
    Perché conta: ogni comportamento con logica propria è un lettore in più (sottoclasse di modalità o di passo di pipeline); i tag riservati costano zero.
    Risposta consigliata: i quattro pianificati; gli altri come tag riservati finché un livello non li chiede.
+
+---
+
+## M11 — Kit in gioco, armi di supporto, mod, zaini (23/10)
+
+Specifica: [combat-loadout-mods.md](combat-loadout-mods.md). Già deciso da te il 23/10: kit = statistiche + moveset; il kit si cambia a metà partita raccogliendone uno; l'arma di supporto eredita le statistiche del kit; per ora niente cambio dell'arma primaria separato dal kit; mod estetiche che possono toccare speciali e moveset; speciali intercambiabili; impianto sulla schiena; zaini modulari attaccati sopra l'impianto; quasi tutto è un'abilità pluggabile.
+
+1. Dove si trovano i kit da raccogliere: sparsi nei livelli, lanciati come rifornimento, lasciati dai nemici, o tutti questi a seconda della modalità?
+   Perché conta: decide chi crea gli oggetti raccoglibili (la modalità o il livello) e quanti ne servono.
+   Ipotesi nella specifica: li crea la modalità (livelli: piazzati dal designer; spedizione: rifornimenti), con lo stesso oggetto raccoglibile ([M11 §12](combat-loadout-mods.md#12-world-pickups-and-drops-gstnpickups)).
+
+2. Cambiando kit, il danno già subito resta? Se il nuovo kit ha un tetto diverso, si conserva la proporzione (es. 50 % del tetto)?
+   Perché conta: senza una regola, cambiare kit potrebbe "curare" o uccidere di colpo.
+   Ipotesi nella specifica: si conserva la proporzione del tetto; le barre (meter) restano, limitate ai nuovi massimi ([M11 §4](combat-loadout-mods.md#4-changing-kit-mid-match-pickup)).
+
+3. Il vecchio kit cade a terra e può raccoglierlo un compagno?
+   Perché conta: è comodo in co-op (scambio di kit) ma aumenta gli oggetti nel mondo.
+   Ipotesi nella specifica: sì, cade dove si trovava il giocatore, con le sue mod.
+
+4. Il kit raccolto porta con sé le sue mod e speciali, o usa la configurazione che il giocatore ha salvato per quel kit?
+   Perché conta: nel primo caso le mod si trovano nel mondo; nel secondo ogni giocatore ritrova il "suo" kit.
+   Ipotesi nella specifica: la configurazione salvata del giocatore, se esiste; altrimenti quella dell'oggetto raccolto.
+
+5. Cambiando kit, arma di supporto e zaino restano?
+   Perché conta: lo zaino è indipendente dal kit (si attacca all'impianto con un connettore standard), l'arma di supporto potrebbe non essere compatibile.
+   Ipotesi nella specifica: lo zaino resta sempre; l'arma di supporto resta se il nuovo kit la accetta, altrimenti cade a terra.
+
+6. Un'arma di supporto può comunque modificare le statistiche (es. molto pesante = più lento), o le statistiche del kit restano sempre identiche?
+   Perché conta: hai detto che le statistiche si ereditano dal kit; resta da capire se è una regola assoluta.
+   Ipotesi nella specifica: di base nessuna modifica; il meccanismo resta disponibile al designer con un avviso del validatore ([M11 §6](combat-loadout-mods.md#6-support-weapons)).
+
+7. Alla morte arma di supporto e zaino cadono a terra e si possono recuperare, come in Helldivers 2?
+   Perché conta: cambia il flusso di rinforzo e il numero di oggetti nel mondo.
+   Ipotesi nella specifica: sì, cadono dove si muore.
+
+8. Le armi di supporto hanno munizioni, ricariche o tempi di ricarica? Uno zaino può fornire munizioni a un'arma di supporto (ricarica di squadra)?
+   Perché conta: senza munizioni le armi di supporto sono solo un secondo moveset; con munizioni servono attributi e UI.
+   Ipotesi nella specifica: se servono, sono costi e cooldown delle abilità (GAS), nessun sistema nuovo; lo zaino può essere compatibile con certe armi di supporto.
+
+9. Le speciali si cambiano solo prima della partita, o anche durante (checkpoint, punti di rifornimento)?
+   Perché conta: cambiarle durante la partita passa dallo stesso percorso del cambio di kit (ricalcolo delle abilità).
+   Ipotesi nella specifica: prima della partita e tra un livello e l'altro; durante solo dove la modalità lo consente.
+
+10. Le mod valgono anche per armi di supporto e zaini, o solo per il kit (arma primaria compresa)?
+    Perché conta: la definizione delle mod lo permette già come dato; decide quanti contenuti servono.
+    Ipotesi nella specifica: solo kit e arma primaria per ora.
+
+11. Lo zaino si usa con un tasto dedicato? E sono ammessi zaini che proiettano una cupola energetica in PvE (lo scudo come azione difensiva resta solo PvP)?
+    Perché conta: un tasto in più sul controller; la cupola è un oggetto, non lo scudo di M6, ma potrebbe sembrare in contrasto con "niente scudo in PvE".
+    Ipotesi nella specifica: comando `Command.Backpack.Use` su un tasto da decidere; la cupola è ammessa come abilità dello zaino, a tua scelta.
+
+12. Come si ottengono kit, mod e zaini (sblocchi, progressione, valuta)?
+    Perché conta: incide su salvataggi e interfaccia, non sulla simulazione.
+    Ipotesi nella specifica: fuori da M11; tutto disponibile in sviluppo.
+
+13. Quanti slot mod ha un kit, e quali tipi (lama, nucleo, impugnatura...)? Una sola mod per slot?
+    Perché conta: definisce i limiti che impediscono combinazioni che rompono le mosse.
+    Ipotesi nella specifica: slot dichiarati dal kit con tipi creati dal designer (`Mod.Slot.*`), una mod per slot, limiti di velocità e portata per kit ([M11 §8](combat-loadout-mods.md#8-mods-gstnkitmods)).
+
+14. Gli impianti valgono anche per le armi di supporto (es. un impianto sul braccio che compare con l'arma) e per i nemici?
+    Perché conta: decide se il sistema visivo degli impianti è solo dei giocatori.
+    Ipotesi nella specifica: il componente visivo è generico (kit, arma, mod, zaino); sui nemici solo se il designer lo usa.
+
+## Indicatore di profondità (23/10)
+
+Specifica: [depth-marker.md](depth-marker.md). Già deciso da te il 23/10: un decal sotto il personaggio e una linea tratteggiata come nella mod 3D di Smash Melee, anche per alcuni nemici; l'aspetto finale lo sceglie il designer. Il punto aperto principale è su quale superficie puntare quando si è in aria (DM.1). Se l'ipotesi va bene basta rispondere "ok".
+
+DM.1. A mezz'aria il marcatore deve puntare **dritto lungo la gravità locale** (superficie sotto i piedi) oppure al **punto di atterraggio previsto**? Va bene che la previsione dell'atterraggio sia un secondo marcatore opzionale, spento di default?
+   Perché conta: la superficie sotto i piedi è stabile e leggibile ma non dice dove si atterra; la previsione dipende dagli input (controllo in aria, doppio salto, schivata, DI) e cambia a ogni frame, e per una vittima lanciata non è affidabile.
+   Ipotesi nella specifica: dritto lungo la gravità con tolleranza ai bordi e isteresi ([depth-marker.md](depth-marker.md) §2.2); la previsione è un secondo selettore, spento di default e mai mostrato a chi è in hitstun.
+   **Risposta (2026-10-23):** Dritto lungo la direzione della gravità. Se a mezz'aria si scende sotto la superficie dell'ultima piattaforma, l'indicatore punta anche verso l'alto, contro la gravità, al piano di quella piattaforma (come nella seconda foto); se si scende da una piattaforma alta verso un'altra più in basso, si vedono entrambi, sopra e sotto. Niente previsione dell'atterraggio per ora ([depth-marker.md](depth-marker.md) §2.7).
+
+DM.2. Quando sotto non c'è terreno (burrone, fuori dal palco), l'anello vuoto va disegnato su quale piano di riferimento: **l'ultima altezza su cui si è stati a terra**, un **volume di riferimento posto dal designer** nel livello, o il piano della zona KO?
+   Perché conta: decide se serve lavoro di authoring nei livelli e cosa legge il giocatore che recupera da sotto (dove sta il bordo, non dove muore).
+   Ipotesi nella specifica: volume del designer se presente, altrimenti ultima altezza a terra su superficie statica, altrimenti nessun anello; il piano KO non è usato per l'anello ([depth-marker.md](depth-marker.md) §2.7).
+   **Risposta parziale (2026-10-23):** Il piano è la superficie dell'ultima piattaforma. Resta un'ipotesi della specifica che il designer possa sostituirlo con un volume nei burroni dove il bordo da raggiungere non è l'ultima piattaforma.
+
+DM.3. Chi vede il marcatore: sempre il giocatore locale, e gli **alleati**? Ci sono differenze tra PvE e PvP (in PvP anche gli avversari)? Il giocatore può spegnerlo o cambiarne l'intensità nelle opzioni?
+   Perché conta: in un livello affollato i marcatori degli altri possono confondere, e l'opzione di accessibilità cambia le impostazioni utente da prevedere.
+   Ipotesi nella specifica: giocatore locale sempre, alleati visibili (cooperativa), opzione utente per spegnere o attenuare; la regola per modalità è un dato dell'esperienza ([depth-marker.md](depth-marker.md) §3).
+
+DM.4. Quali nemici hanno il marcatore: solo volanti, boss e nemici lanciati, o qualunque tipo scelto dal designer? Qual è il numero massimo di marcatori contemporanei (giocatori inclusi)?
+   Perché conta: ogni marcatore costa tracce e disegno sull'host, che disegna anche il proprio gioco (listen server); il tetto fissa il budget.
+   Ipotesi nella specifica: lo decide il dato del tipo di nemico (componente o estensione della definizione), tetto globale di 12 marcatori e 8 tracce per frame, ordinati per rilevanza ([depth-marker.md](depth-marker.md) §3).
+
+DM.5. Il marcatore compare solo quando si è in aria oltre una certa altezza (per esempio 60 cm), oppure anche appena sopra il suolo? Compare anche durante hitstun, tumble e schivata in aria?
+   Perché conta: soglia e stati cambiano quanto "rumore" visivo c'è nei combattimenti e quanto aiuta chi viene lanciato.
+   Ipotesi nella specifica: in aria oltre 60 cm (nascosto sotto 40 cm), visibile anche da lanciato e in tumble, senza previsione dell'atterraggio ([depth-marker.md](depth-marker.md) §3, §2.6).
+
+DM.6. Come aspetto di partenza va bene riprodurre quello della mod (disco pieno sul terreno, anello vuoto senza terreno, linea tratteggiata), tenendo cono d'ombra e versione diegetica come stili alternativi da scegliere alla fine? Un colore per giocatore va bene, con un simbolo o un motivo in più per i daltonici?
+   Perché conta: lo stile è un asset sostituibile, quindi si può costruire prima e scegliere dopo; il colore da solo non basta a distinguere i giocatori.
+   Ipotesi nella specifica: stile di default come nella mod, altri stili come asset separati, tinta per giocatore o team più glifo opzionale ([depth-marker.md](depth-marker.md) §4.1, §4.4).
+
+DM.7. Durante il **wall slide** il marcatore resta visibile? Per chi è **afferrato, trasportato o in groppa** (piggyback) il marcatore si nasconde lasciando solo quello di chi porta?
+   Perché conta: sono i casi in cui la posizione del personaggio non è la sua da solo, e due marcatori nello stesso punto confondono.
+   Ipotesi nella specifica: wall slide sì (l'altezza dal suolo è utile), parcheggiato e in groppa nascosto, regola modificabile nel dato dello stile ([depth-marker.md](depth-marker.md) §2.6).
+
+DM.8. Su quali superfici può puntare: **trampolini** e **piattaforme-nemico** sì? Le superfici dove si può solo scivolare sul muro (non camminare) no? Una piattaforma sottile a senso unico sì?
+   Perché conta: decide il filtro sui comportamenti `Surface.Behaviour.*` e se i nemici-piattaforma devono rispondere al canale del marcatore.
+   Ipotesi nella specifica: sì a pavimenti, piattaforme sottili, nemici-piattaforma e trampolini (`Stand` o `Launch`), no a personaggi, proiettili, trigger e superfici solo-parete ([depth-marker.md](depth-marker.md) §2.8).
+
+DM.9. Nelle zone KO l'anello vuoto deve anche **avvertire del pericolo** (colore diverso, pulsazione), oppure resta lo stesso anello?
+   Perché conta: è un segnale di gameplay oltre che di profondità, e richiede che il designer segni le zone con un volume di riferimento.
+   Ipotesi nella specifica: sì, tramite un'opzione `bHazard` sul volume di riferimento posto nel burrone; senza volume l'anello resta neutro ([depth-marker.md](depth-marker.md) §2.7).
+
+## Modalità di gioco (23/10)
+
+Specifica: [game-modes.md](game-modes.md). Già deciso da te il 23/10: una modalità a livelli 3D fatti dal designer (stile Super Mario 3D World) e una modalità alla Helldivers con un grande livello generato a caso e missioni da completare; niente scudo in PvE; il kit si cambia raccogliendone uno; zaini come in Helldivers 2; le azioni delle modalità (terminali, chiamate di rinforzi e rifornimenti, estrazione) sono abilità pluggabili. Tutto il resto è un'ipotesi della specifica: se va bene basta rispondere "ok".
+
+GM.1. Realizziamo prima la modalità Livelli (con il framework di missioni, respawn e verbi) e solo dopo la Spedizione alla Helldivers?
+   Perché conta: la Spedizione richiede generazione procedurale, direttore dei nemici e lancio dei rifornimenti, molto più lavoro; farla per seconda dimostra prima l'infrastruttura comune.
+   Ipotesi nella specifica: sì, M12 = framework + Livelli, M13 = Spedizione ([game-modes.md](game-modes.md) §9.3).
+   **Risposta (2026-10-23):** Sì, prima i Livelli. La Spedizione resta da fare ma per ora non ce ne preoccupiamo molto.
+
+GM.2. Quanti giocatori per le modalità PvE (1–4?), e deve funzionare anche da solo (l'host senza altri client)?
+   Perché conta: dimensiona i budget dell'host ([game-modes.md](game-modes.md) §7.3), il numero di rinforzi, la difficoltà e i moduli caricati contemporaneamente.
+   Ipotesi nella specifica: da 1 a 4 giocatori, giocabile anche da soli, difficoltà scalata sul numero di giocatori.
+
+GM.3. Come si scelgono e si sbloccano i livelli (mappa del mondo, elenco, ordine fisso), e c'è salvataggio o progressione tra le partite?
+   Perché conta: decide se serve una `UGSTN_LevelSetDefinition` a grafo e un sistema di salvataggio, oggi fuori ambito.
+   Ipotesi nella specifica: elenco ordinato di mappe, nessun salvataggio nella prima versione.
+
+GM.4. Nei Livelli, come funziona il respawn: vite infinite o limitate, checkpoint condivisi dalla squadra, cosa succede se muoiono tutti e quanto dura l'attesa?
+   Perché conta: è la regola che più cambia il senso di una caduta in un burrone (KO zone) e va nei dati di `UGSTN_RespawnRules`.
+   Ipotesi nella specifica: checkpoint condivisi, vite infinite con contatore delle morti per il punteggio, ritorno al checkpoint se muoiono tutti.
+   **Risposta parziale (2026-10-23, da GM.9):** Vite condivise dalla squadra, niente rianimazione; nei Livelli chi cade riparte dal checkpoint condiviso consumando una vita del gruppo (ipotesi: in automatico, senza chiamata dei compagni). Resta aperto cosa succede quando le vite finiscono.
+   **Risposta (2026-10-23, 12:44):** Quando finiscono le vite si ricomincia dal checkpoint o dall'inizio del livello, a seconda di quante vite vuoi dare: per esempio 20 vite senza checkpoint, oppure 4 vite che si ricaricano velocemente, così si perde solo quando quattro giocatori muoiono quasi insieme (in quel caso i checkpoint hanno senso). Nella specifica: dimensione del pool, ricarica, checkpoint sì/no e punto di ripartenza sono dati del livello ([game-modes.md](game-modes.md) §5).
+
+GM.5. Qual è il traguardo di un livello (basta uno che arrivi o devono arrivare tutti i vivi), ci sono collezionabili (stelle, francobolli), contano per giocatore o per squadra, e c'è un punteggio?
+   Perché conta: il traguardo è un obiettivo `Reach` con parametro `Require`; collezionabili e punteggio aggiungono stato replicato e una schermata dei risultati.
+   Ipotesi nella specifica: arriva uno qualsiasi dei giocatori vivi, collezionabili contati per livello e per squadra, punteggio semplice a dati (`UGSTN_ScoreRules`).
+
+GM.6. Che telecamera hanno i livelli: fissa o su binario per sezione come Mario 3D World, libera, o mista; una per giocatore o condivisa che inquadra tutti?
+   Perché conta: la telecamera fissa peggiora la percezione della profondità (collegata a `depth-marker.md`), e l'orientamento della telecamera entra come input nella simulazione (serve il "latch" dello stick ai tagli).
+   Ipotesi nella specifica: sezioni di telecamera scelte dal designer, una telecamera per giocatore, marcatore di profondità acceso nelle sezioni fisse.
+   **Risposta (2026-10-23):** In generale abbastanza lontana dal giocatore, stile Mario 3D World; può passare sulle spalle per mirare con alcune armi e abilità; si può muovere a mano, ma nei livelli il designer può indicare l'angolo desiderato e se si può spostare o no. Specifica: [camera.md](camera.md).
+
+GM.7. Quanto grande deve essere la mappa della Spedizione (superficie, durata media, numero di livelli di difficoltà), deve essere assemblata da moduli fatti a mano o anche generata "libera" (PCG), e vuoi poter ripetere o condividere una spedizione con un seed?
+   Perché conta: dimensione e tipo di moduli decidono il tempo di generazione, la banda e la memoria dell'host, e se la posizione esatta delle collisioni è garantita; il seed condiviso obbliga a conservare le versioni del generatore.
+   Ipotesi nella specifica: circa 800 m di lato, 150–250 moduli fatti a mano su griglia con rotazioni a 90°, PCG solo per decorazioni senza collisione; il seed è registrato e riproducibile con la stessa `GenerationVersion`, senza funzione di condivisione (seed del giorno) nella prima versione.
+   *Spedizione a bassa priorità (23/10): si può rispondere più avanti.*
+
+GM.8. Quali tipi di missione vuoi (distruggere, difendere, recuperare e portare un oggetto, attivare un terminale, eliminare, scortare, altro), quante per spedizione, obbligatorie o facoltative, e l'estrazione deve sempre esserci (basta un giocatore vivo o tutti)?
+   Perché conta: ogni tipo è una regola in più da costruire e da testare; "distruggere un bersaglio" richiede un'entità distruttibile che oggi non esiste come oggetto di livello; la scorta richiede un'entità con attore.
+   Ipotesi nella specifica: tutti i tipi di §4.1, bersagli come minion stazionari, 1–3 missioni primarie e alcune facoltative, estrazione sempre presente con almeno i giocatori vivi richiesti dentro la zona.
+   *Spedizione a bassa priorità (23/10): si può rispondere più avanti.*
+
+GM.9. Come si torna in gioco da morti: solo rinforzo con un pool condiviso alla Helldivers (quanti, si ricaricano?), o anche rianimazione sul posto (che richiederebbe uno stato "a terra" che oggi non esiste)? Con quale kit si rientra, e un giocatore morto guarda i compagni?
+   Perché conta: lo stato "a terra" è una modifica al combat; il kit al rientro dipende dalla specifica dei loadout.
+   Ipotesi nella specifica: solo rinforzo, pool condiviso con dimensione a dati, rientro con il kit scelto nella lobby, spettatore finché non viene richiamato.
+   **Risposta (2026-10-23):** Niente rianimazione. Sistema a rinforzi (vite) condivisi. Letta come regola per entrambe le modalità PvE; resta aperto con quale kit si rientra.
+
+GM.10. Come si chiamano rinforzi e rifornimenti: codice di direzioni come gli stratagemmi di Helldivers, menu, o un tasto? Cooldown condivisi o per giocatore? Si lancia un faro (oggetto tenuto, M10) o si sceglie un punto?
+   Perché conta: cambia l'input (pattern in `GSTNInput`), l'interfaccia e se serve M10; l'abilità resta la stessa.
+   Ipotesi nella specifica: stessa abilità con binding a dati, punto di mira nella prima versione, il faro lanciato come opzione successiva.
+   *Spedizione a bassa priorità (23/10): si può rispondere più avanti.*
+
+GM.11. Quanto deve essere "intelligente" il direttore dei nemici: pattuglie, irruzioni (breach) e ondate decise da una pressione che dipende da come stanno i giocatori, oppure schemi fissi e casuali? I nemici possono comparire alle spalle?
+   Perché conta: un direttore adattivo è più complesso da bilanciare e da testare, e cambia la percezione di equità; i limiti di budget restano comunque quelli di M8.
+   Ipotesi nella specifica: pressione adattiva con pattuglie dormienti, irruzioni telegrafate fuori dal cono visivo e a distanza minima, ondate legate agli obiettivi.
+   *Spedizione a bassa priorità (23/10): si può rispondere più avanti.*
+
+GM.12. L'ingresso a partita in corso è ammesso (Livelli, Spedizione)? Come entra il nuovo giocatore (vicino ai compagni, come rinforzo a pagamento del pool) e durante un conto alla rovescia di estrazione?
+   Perché conta: obbliga a replicare lo stato completo e a costruire la mappa durante il gioco, e interagisce con il pool di rinforzi.
+   Ipotesi nella specifica: ammesso in Livelli e Spedizione tranne durante l'estrazione, ingresso vicino ai compagni senza costo; mai in Versus.
+
+GM.13. In ogni modalità: fuoco amico (già aperto come M4.12), cambio kit a metà partita raccogliendo un kit (permesso ovunque? kit trovati o solo dai rifornimenti?), zaini e armi di supporto solo nella Spedizione?
+   Perché conta: sono i valori degli interruttori di §2.3; quelli che toccano la simulazione si fissano al caricamento dell'Experience, mai a partita in corso.
+   Ipotesi nella specifica: cambio kit consentito in Livelli e Spedizione (kit piazzati dal designer nei primi, rifornimenti e kit trovati nei secondi), zaini e armi di supporto solo nella Spedizione, fuoco amico ancora da decidere.
+
+GM.14. In Spedizione i giocatori possono allontanarsi quanto vogliono, o c'è un guinzaglio / un teletrasporto verso il gruppo?
+   Perché conta: ogni giocatore lontano obbliga l'host a tenere caricati i moduli (collisione e navmesh) e a simulare nemici in più zone.
+   Ipotesi nella specifica: nessun guinzaglio rigido; tetto morbido di moduli caricati sull'host (120) e, se superato, regola di ricongiungimento a dati.
+   *Spedizione a bassa priorità (23/10): si può rispondere più avanti.*
+
+GM.15. Il PvP (Versus) userà la stessa infrastruttura (arene d'autore, vite/stock, respawn a tempo, scudo, niente missioni né minion) e va rimandato dopo la Spedizione? Quali valori di fuoco amico e squadre?
+   Perché conta: decide se `GSTNRespawn` deve già supportare gli "stock" e se M14 viene pianificato ora.
+   Ipotesi nella specifica: sì, stessa infrastruttura, progettazione rimandata a M14; scudo acceso solo lì (indicazione già data).
+
+## Telecamera (23/10)
+
+Specifica: [camera.md](camera.md). Già deciso da te il 23/10 (GM.6): telecamera in generale lontana stile Super Mario 3D World, sulle spalle per mirare con alcune armi e abilità, movimento manuale possibile, ma nei livelli il designer sceglie l'angolo e se si può spostare. Se l'ipotesi va bene basta rispondere "ok".
+
+CAM.1. Dopo che il giocatore ha spostato la telecamera a mano, deve **tornare da sola** all'angolo del designer? Dopo quanto tempo, e anche fuori dalle sezioni (telecamera libera)?
+   Perché conta: un ritorno automatico aiuta a non perdere la lettura del livello ma toglie il controllo; il valore sta nei dati di ogni sezione.
+   Ipotesi nella specifica: nessun ritorno automatico di default; per sezione un ritardo opzionale (0 = mai) e una velocità; entrando in una nuova sezione si va all'angolo del designer e lo spostamento manuale si perde ([camera.md](camera.md) §4).
+
+CAM.2. Sopra **quale spalla** passa la telecamera quando si mira (destra o sinistra), e il giocatore può scambiarla con un tasto? Cambia per arma?
+   Perché conta: la spalla decide cosa si vede e quanto il personaggio copre il mirino; lo scambio richiede un'azione in più (una richiesta `Camera.Request.*` data da un'abilità).
+   Ipotesi nella specifica: spalla destra di default, scambio con un tasto dato da un'abilità, scelta ricordata per giocatore ([camera.md](camera.md) §6).
+
+CAM.3. Mirare si fa **tenendo premuto** o con un **tasto che attiva e disattiva**? Quando smetti di mirare la telecamera torna all'angolo di prima o resta dove l'hai portata?
+   Perché conta: la modalità di mira è dell'abilità (non della telecamera) e il ritorno cambia quanto ci si sente "spostati" dopo uno sparo.
+   Ipotesi nella specifica: tenuto premuto (l'abilità termina al rilascio); all'uscita si mantiene la direzione di vista attuale come orbita libera, senza scatto indietro ([camera.md](camera.md) §3.3, §6).
+
+CAM.4. Se la telecamera cambia (taglio di sezione, cambio di mirino) mentre tieni lo stick, il personaggio deve **continuare nella stessa direzione finché non rilasci lo stick**, oppure finché non giri lo stick di molto (per esempio oltre 60 gradi)?
+   Perché conta: senza questa regola un taglio capovolge la direzione di corsa; il rilascio troppo lento sembra un controllo "incollato", troppo rapido non risolve il problema.
+   Ipotesi nella specifica: direzione mantenuta finché lo stick torna al neutro; il rilascio per angolo è un'opzione spenta, per sezione si sceglie se tenere il blocco solo ai tagli o anche alle transizioni morbide ([camera.md](camera.md) §5).
+
+CAM.5. Online e in locale: **una telecamera per giocatore** (come ipotizzato) o una condivisa che inquadra tutti? In locale ci sarà **split-screen** (co-op sullo stesso schermo) o solo un giocatore per macchina?
+   Perché conta: una telecamera condivisa è un altro modo (distanza e limiti legati alla posizione di tutti, rischio di sezioni in conflitto) e lo split-screen raddoppia costi e interfaccia.
+   Ipotesi nella specifica: una telecamera per giocatore, ognuna locale alla propria macchina (host incluso); split-screen non previsto nella prima versione ma l'architettura lo ammette; la telecamera di gruppo è un modo aggiuntivo rimandato ([camera.md](camera.md) §7.3).
+   **Risposta parziale (2026-10-23, 12:45):** In PvP la telecamera è alla Tekken, centrata tra i due personaggi e con entrambi paralleli allo schermo ([camera.md](camera.md) §2.5). Restano aperti lo split-screen e la telecamera condivisa in co-op.
+
+CAM.6. Quando un muro o un soffitto si mette tra la telecamera lontana e il personaggio, preferisci che l'ostacolo **sfumi** (la telecamera resta ferma) o che la telecamera **si avvicini** al personaggio?
+   Perché conta: avvicinare la telecamera in un platform 3D distrugge la lettura delle distanze, ma sfumare richiede materiali compatibili e che il designer marchi i muri.
+   Ipotesi nella specifica: sfumare per Follow e sezioni lontane, avvicinarsi solo per ostacoli non sfumabili vicini e in modalità spalla; una sezione può scegliere il contrario ([camera.md](camera.md) §7.1).
+
+## Interazione: cosa si sta puntando (23/10)
+
+Specifica: [interaction.md](interaction.md). Già deciso da te il 23/10 (Mod.20): un plugin dedicato, `GSTNInteract`, perché con moltissime armi per terra sia sempre chiaro su quale agisce il tasto; il contratto resta un'interfaccia più i gameplay tag. INT.5 riprende M6.22. Se l'ipotesi va bene basta rispondere "ok".
+
+INT.1. Con la telecamera lontana alla Super Mario 3D World, il giocatore "punta" con il **personaggio** (direzione dello stick, poi quella in cui guarda) oppure con il
+**centro dello schermo**? Con la mira da spalla di certe armi o abilità si usa la direzione di mira?
+   Perché conta: il centro dello schermo richiederebbe la posizione della telecamera nella simulazione, che oggi non c'è; lo stick è già nell'input.
+   Ipotesi nella specifica: personaggio (stick, poi direzione in cui guarda); direzione di mira solo con la mira da telecamera attiva ([interaction.md](interaction.md) §2.1).
+   **Risposta (2026-10-23):** Con il personaggio (direzione dello stick, poi quella in cui guarda).
+
+INT.2. Serve un **tasto per scorrere il bersaglio** quando due oggetti sono quasi alla stessa distanza e direzione, o basta spostarsi un poco?
+   Perché conta: è un comando in più da legare a un tasto e un piccolo stato nel frammento; senza di esso la scelta dipende solo da dove ci si mette.
+   Ipotesi nella specifica: nessun tasto nella prima versione, disponibile come opzione a dati ([interaction.md](interaction.md) §2.5).
+
+INT.3. Gli altri oggetti vicini (non quello selezionato) devono avere un **segnalino tenue**, oppure si evidenzia solo il bersaglio?
+   Perché conta: con tante armi per terra i segnalini aiutano a capire cosa c'è, ma possono aumentare la confusione che vuoi evitare, e costano disegno sull'host.
+   Ipotesi nella specifica: spenti di default, evidenziazione forte solo sul bersaglio; i segnalini (massimo 8) sono un'opzione dello stile ([interaction.md](interaction.md) §5).
+
+INT.4. Gli **alleati** (e in PvP gli avversari) vedono cosa stai puntando, per esempio con un contorno di colore diverso sull'oggetto che un compagno sta per raccogliere?
+   Perché conta: evita di contendersi lo stesso oggetto in cooperativa, ma aggiunge rumore visivo e, in PvP, regala informazione.
+   Ipotesi nella specifica: no, si disegna solo il bersaglio del giocatore locale; il dato è già replicato, quindi l'opzione costa solo presentazione ([interaction.md](interaction.md) §5).
+
+INT.5. Quando un **nemico afferrabile** e un **oggetto** a terra sono entrambi a portata, vince sempre il nemico (così il tocco afferra nel mezzo di uno scontro) oppure conta
+soprattutto ciò che si sta puntando? Qual è l'ordine di priorità tra afferrare, terminale, raccogliere oggetto, kit e montare?
+   Perché conta: è la domanda M6.22; con un nemico davanti, un tocco che non afferra sarebbe grave in combattimento, ma una priorità rigida impedisce di scegliere l'oggetto.
+   Ipotesi nella specifica: la priorità è un contributo al punteggio (non un'esclusione), ordine afferrare, terminale, raccogliere oggetto, kit, montare, tutto a dati ([interaction.md](interaction.md) §2.3).
+
+INT.6. Un oggetto che **non si può usare ora** (si porta già qualcosa, kit non compatibile, terminale non ancora attivo) viene evidenziato con un messaggio grigio che spiega il
+motivo, oppure viene ignorato come se non ci fosse?
+   Perché conta: mostrarlo spiega perché il tasto non fa nulla, ma un oggetto inutilizzabile può rubare il bersaglio a uno utilizzabile lì vicino.
+   Ipotesi nella specifica: ignorato, tranne dove il progettista lo segna (terminali bloccati), che mostrano il motivo senza tag attivo ([interaction.md](interaction.md) §2.2).
+
+CAM.7. Nel PvP con più di due giocatori (3 o 4), la telecamera alla Tekken segue te e l'avversario più vicino, oppure passa a un'inquadratura larga alla Smash che li tiene tutti?
+   Perché conta: la regola "centro tra i due personaggi" vale per un uno contro uno; con più giocatori serve una scelta.
+   Ipotesi nella specifica: con due giocatori la telecamera alla Tekken; con più giocatori inquadratura larga che li tiene tutti, con la direzione dell'ultimo asse tra te e l'avversario più vicino ([camera.md](camera.md) §2.5).
+
+CAM.8. Online, ognuno vede se stesso sempre a sinistra dello schermo (come Tekken 7 aveva provato con entrambi i giocatori sul lato sinistro dei rispettivi cabinati), oppure i lati sono fissi per giocatore 1 e 2?
+   Perché conta: cambia da che lato parte la telecamera su ogni macchina; in locale sullo stesso schermo i lati sono per forza condivisi.
+   Ipotesi nella specifica: online ognuno parte a sinistra sul proprio schermo; sullo stesso schermo il giocatore 1 parte a sinistra.
+
+CAM.9. Della telecamera di Astro Bot fuori dai livelli guidati, ti va bene questa lettura: non gira da sola dietro al personaggio, durante i salti resta all'altezza dell'ultima piattaforma e scende subito se cadi più in basso, guarda un po' avanti nella direzione di corsa, e un tasto la riporta dietro al personaggio? C'è altro che ti piace di quella telecamera?
+   Perché conta: ho potuto verificare solo il controllo con lo stick destro e l'assistenza che la ricentra; il resto è la mia lettura di una telecamera da platform 3D calma.
+   Ipotesi nella specifica: come descritto ([camera.md](camera.md) §2.4), tutti i valori modificabili nei dati.
+
+CAM.10. La finestra di zoom del mirino va sempre in un punto fisso (in alto di lato, come nel disegno), oppure segue il punto mirato? Quanto grande (circa 40% dell'altezza dello schermo)? E la linea che la collega al mirino dell'arma la vuoi sempre?
+   Perché conta: decide se la finestra copre mai il personaggio o il bersaglio e quanto si vede del resto della scena.
+   Ipotesi nella specifica: in alto e di lato rispetto al punto mirato, circa 40% dell'altezza, sempre dentro lo schermo e mai sopra il personaggio, con la linea di collegamento; tutto modificabile per arma ([camera.md](camera.md) §6.1).
+   **Risposta (2026-10-23):** Segue la telecamera: posizione fissa nella vista della telecamera (di default in alto di lato come nel disegno), non insegue il punto mirato.
+
+CAM.11. Il mirino ha più livelli di zoom da cambiare con un tasto? Mentre si mira con il mirino ci si può muovere liberamente (magari più lentamente), saltare o scivolare sui muri?
+   Perché conta: la flessibilità della terza persona dipende da cosa resta permesso mentre si mira; i livelli di zoom richiedono un comando in più.
+   Ipotesi nella specifica: zoom a uno o più livelli per arma (dati), ci si muove liberamente con velocità ridotta decisa dall'abilità di mira dell'arma; salti e muri a scelta del designer della singola arma.
+   **Risposta (2026-10-23):** Dipende dall'abilità e dall'arma che usa il mirino: sono dati loro, non della telecamera.

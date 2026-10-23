@@ -143,6 +143,9 @@ Mover capsule on `GSTN_EnemyPlatform`; `WallSlide`/`WallClimb` ⇒ Block the cap
 use; `Launch` ⇒ Block the capsule (the contact is a landing or a tumble contact); a shape with **no** traversal behaviour and
 no `Stand` is Ignore for the capsule (it exists only as an impact surface, e.g. a `Surface.Type.Glass` crystal plate). All shapes
 Ignore minion sweeps, projectiles and hit queries (M8 §4.3; hits use hurtboxes, not these shapes).
+*Proposal* (2026-10-23, applies if [depth-marker.md](depth-marker.md) is accepted): `Stand` and `Launch` shapes also Block the
+depth marker's trace channel (a project setting), so the marker shows the platform rather than the floor below it (depth-marker §2.8).
+Neither plugin names the other: the channel in project settings is the contract.
 
 Validation (`IsDataValid`, as M8 §4d.5): flat-topped box or convex for `Stand`; **never a bone, the animated mesh or the
 capsule**; a `WallSlide` shape face must be within the wall modes' `[MinSurfaceAngle, MaxSurfaceAngle]` in the enemy's upright

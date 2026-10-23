@@ -163,6 +163,71 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - **Stagger follows the same pattern**: about **half a second unskippable**, then the rest is cancellable.
 - Spec: M3 `FirstActionableFrame` for timelines; M4 §7 (hitstun = locked part, reaction tail cancellable; ricochet recoil too).
 
+## 6d. Game modes, kits, weapons, mods, implants, backpacks, depth marker (owner input, 2026-10-23)
+
+For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md) (kits in play, mods, backpacks),
+[game-modes.md](game-modes.md), [depth-marker.md](depth-marker.md).
+
+- **Two PvE modes**: a mode of **designer-made 3D levels** (Super Mario 3D World style), and a **Helldivers-style mode** where
+  a **large level is generated randomly** and **missions** must be completed. **No shield in PvE** (as §2f).
+- **Everything is a pluggable gameplay ability** ("in generale praticamente ogni cosa dovrebbe essere un'abilità pluggabile"):
+  it makes design extremely easy and it is what games like Fortnite do. Dodges and jumps already are (§6).
+- **Kit = stats + moveset.** As a technical term, the **kit** is the **stats**, which stay in force even while a support weapon
+  is in use; the **weapon** ("arma") is the **moveset of the primary kit** without the support weapon. A "weapon" may be fists
+  and kicks and use a sword mesh only in some animations.
+- **The kit can be changed mid-match by picking one up.** Changing the primary weapon separately from the kit mid-match is
+  **not planned for now**.
+- **Support weapons** (Helldivers style: a big extra weapon to switch to when needed) **inherit the kit's stats**.
+- **Kits can be modded**: mods change the look (cosmetic changes by the mods chosen) and can affect **special moves and the base
+  moveset**. Example: a mod that makes the sword longer but some attacks slower. **Special moves can be swapped** among the
+  available ones.
+- **Kit visuals: an "implant"**, an extra mesh on the character's back (or anything that shows which kit is in use). A weapon can
+  be a sword plus implants reaching the hands or the feet.
+- **Backpacks** exist, as in Helldivers 2. They are **modular and attach on top of the kit implant** through a standard
+  connector, like the standard port of an electronic device.
+- **Depth-perception marker**: as in the Smash Bros Melee 3D mod, a **decal or marker pointing at the platform under the
+  character plus a dashed line**; **some enemies** have it too. Which surface it should point to **while airborne is ambiguous**
+  and needs design work. The final look (e.g. a shadow cone, something more diegetic) is the designer's choice. Reference
+  screenshots: a filled disc on the floor under a character above the stage; off stage, over the void and below the stage's
+  level, a hollow ring at about the stage's height joined to the character by a vertical dashed line.
+
+## 6e. Interaction focus, depth marker direction, camera, lives, Expedition priority (owner answers, 2026-10-23 11:47)
+
+- **Interaction (Mod.20)**: an interface with gameplay tags is the base, and a **dedicated plugin** makes it easy to interact with
+  **what the player is pointing at**, instead of having a million weapons on the ground and not being able to tell which one the
+  button acts on. Spec: [interaction.md](interaction.md) (`GSTNInteract`, tag root `Interact.*`).
+- **Depth marker (DM.1)**: **straight along the gravity direction**. When the character is mid-air and **below the surface of the
+  last platform**, it should point **opposite to gravity** (up) to that surface (the second screenshot); when dropping from a high
+  platform onto another one, **both above and below**. Spec: [depth-marker.md](depth-marker.md) §2.7.
+- **Expedition**: keep it as something to do, but **not a big concern for now**. Levels come first.
+- **Camera (GM.6)**: generally **fairly far from the player**, Mario 3D World style. It may go **over the shoulder** to aim with some
+  weapons and some abilities. The player can **move it manually**, but in levels the **designer can set the desired angle and
+  whether it can be moved**. Spec: [camera.md](camera.md) (`GSTNCamera`).
+- **Coming back after a KO (GM.9)**: **no revive**; a **shared reinforcement system (lives)**. Read as the rule for both PvE modes.
+
+## 6f. Lives and restarts, pointing, free camera, PvP camera (owner answers, 2026-10-23 12:44–12:45)
+
+- **Lives run out (GM.4)**: the team restarts **from the checkpoint or from the start of the level**, depending on how many lives the
+  designer gives: e.g. **20 lives without checkpoints**, or **4 lives that refill quickly**, so the team falls only when four players
+  die almost together (then checkpoints make sense). Pool size, refill, checkpoints and restart point are level data ([game-modes.md](game-modes.md) §5).
+- **Pointing for interaction (INT.1)**: with the **character** ([interaction.md](interaction.md) §2.1).
+- **Free camera**: in the Expedition, and in general where no designer guides the camera, take **Astro Bot's camera** as the reference ([camera.md](camera.md) §2.4).
+- **PvP camera**, for now: a Smash-like fight framed **the Tekken way**: the camera centre between the two fighters, both kept parallel to the
+  screen ([camera.md](camera.md) §2.5).
+- **Scoped weapons** (12:48, with a sketch): a **zoom overlay** that still lets the rest of the character be seen, as in the drawing (a round
+  magnified view beside the aim, joined to the weapon's scope): "the flexibility of third person and the precision of a first-person scope"
+  ([camera.md](camera.md) §6.1). The overlay **follows the camera** (12:53, CAM.10); movement while scoped **depends on the ability and the
+  weapon** that use the scope (CAM.11).
+
+## 6g. No tech by default: mini bounce and downed state (owner input, 2026-10-23 15:23)
+
+- Tech, like every ability, must be **pluggable**. For now there is **no tech** in the standard set.
+- Without a wall splat or an excessive bounce, the character does a **mini bounce on the ground** (direction steerable with the stick) and
+  ends in a **downed state**, as in Smash. With no attack or direction input after the bounce, it ends lying on the ground.
+- On the ground, **holding the stick** in a direction makes it **roll** that way; **attacking** makes a **get-up attack**. Available get-up
+  attacks: **0 or as many as the designer wants**, per moveset. Spec: [combat-m6-defence-links.md](combat-m6-defence-links.md) §6.
+- **Pressing jump gets up** (16:23).
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -174,6 +239,9 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 | Wall splat / bounce / destruction on impact | M4 (launch and tumble), M6 tech interaction |
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
+| §6d: two PvE modes (designer levels, procedural expedition with missions); kit = stats, weapon = moveset; mid-match kit pickup; support weapons inherit kit stats; mods (cosmetic + moveset/specials); special swapping; implants; backpacks on the implant connector; depth marker; everything a pluggable ability | new specs [combat-loadout-mods.md](combat-loadout-mods.md) (M11), [game-modes.md](game-modes.md) (M12–M13), [depth-marker.md](depth-marker.md); M3 seams (loadout extensions, compile extension, mid-match apply); M4 hit data scalable by mods; M5 mod preview and validation; M6 interact probe (possible `GSTNInteract` plugin); [modularity-and-tags.md](modularity-and-tags.md) §1.1 goal 9, §3.6, §3.10, §4.2 |
+| §6f: lives pool and restart point per level; pointing with the character; Astro Bot free camera; Tekken-style PvP camera; scope zoom overlay | [game-modes.md](game-modes.md) §5, §8.1; [interaction.md](interaction.md) §2.1; [camera.md](camera.md) §2.4, §2.5, §6.1 |
+| §6e: interaction focus on what the player points at; depth marker above and below the last platform; far camera with shoulder aim and designer-set angles; shared lives, no revive; Expedition low priority | new [interaction.md](interaction.md) (`GSTNInteract`, replaces the probe part of M6 §8); [depth-marker.md](depth-marker.md) §2.7; new [camera.md](camera.md) (`GSTNCamera`); [game-modes.md](game-modes.md) §5, §6.2, §9.3 |
 | §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
 | §2g: tap = grab, hold = pickup; feet invincible in the dodge's initial part (corrected at 11:41), invulnerability windows designer-owned; designer identity tags; Blueprint extension; replaceable content | M6 §8, M7 §7, M10 §8; M4 §1b, §3b; [modularity-and-tags.md](modularity-and-tags.md) §1.1, §3.8, §3.9, §4.2b, §5b, §6.1 rule 12, §7.1 |
 | §2f, §6b: many enemies on a listen host (replication, presentation and host budgets) and enemies as solid platforms (players stand on them) | research [many-enemies-replication.md](many-enemies-replication.md); M8 minions ([combat-m8-minions.md](combat-m8-minions.md) §4d.1, §4d.5, §8, §11: packs with push model and dormancy, per-item tier rates, 150 as a population with about 60 awake, `MaxVisiblePuppets`, platform seams); new optional plugins `GSTNPlatform` and bridge `GSTNPlatformMinion` ([modularity-and-tags.md](modularity-and-tags.md) §3.6, tag root `Platform.*` §4.2) |
@@ -319,3 +387,96 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 
 > Comunque, solo la parte iniziale della schivata ha i piedi invincibili, mi sono sbagliato prima. Ricorda che schivate, salti
 > etc… sono abilità di gameplay pluggabili, come avevamo già concordato. Quindi cambiare idea dopo dovrebbe essere facile.
+
+### Messages of 2026-10-23 (verbatim)
+
+> Aggiungo altri dettagli di cui fare l'implementazione poi. Ci dovrà essere una modalità a livelli scelti dal designer (livelli in
+> 3d, stile Mario 3d world), e una modalità alla helldivers dove si genera casualmente un grande livello e bisogna terminare delle
+> missioni.
+>
+> Nella modalità PVE non c'è lo scudo.
+>
+> I kit, come ti ho già detto sono un'unione di statistiche e moveset. Si può cambiare kit a metà partita raccogliendone uno.
+>
+> Se si usa un'arma di supporto (alla helldivers, un'arma grossa aggiuntiva, a cui si può passare quando serve), vengono ereditate
+> dal kit.
+>
+> Per ora non prevedo il supporto al cambiamento di arma primaria separata dal kit a metà partita.
+>
+> Aggiungo che dovrebbe essere possibile moddare il kit (con cambiamenti estetici in base alle mod scelte) e cambiare mosse
+> speciali tra quelle disponibili. Cambiamenti alle mod potrebbero influire su alcune mosse speciali come sul moveset base. Per
+> esempio, una mod che aumenta la lunghezza della spada, ma rende alcuni attacchi più lenti.
+>
+> Quando mi riferisco al "kit" come termine tecnico mi riferisco a statistiche che vengono mantenute in generale anche se si
+> adopera un'arma di supporto.
+> Quando parlo di "arma" come termine tecnico mi riferisco al moveset del kit primario senza arma di support.
+>
+> Anche se lo chiamo "arma" in realtà potrebbe benissimo avere pugni e calci, e usare magari una spada (la mesh nelle animazioni)
+> solo qualche volta.
+>
+> Il kit dovrebbe essere indicato da una mesh aggiuntiva posta nella schiena del personaggio (o insomma, qualcosa che fa vedere che
+> si sta usando un determinato kit), una sorta di "impianto". L'arma può essere una spada + degli impianti che vanno fino alle mani
+> o ai piedi.
+>
+> Inoltre: per evitare problemi con la percezione di profondità, sarebbe buono adottare un sistema alla smash bros melee 3d (la
+> nuova mod uscita), dove c'è un decal, o qualcosa che punta alla piattaforma sotto il personaggio, più una linea tratteggiata.
+> Anche alcuni nemici dovrebbero averla. Il modo in cui calcolare esattamente quale è la superficie a cui dovrebbe puntare il
+> decal quando si è a mezz'aria però è ambiguo, quindi ci si dovrebbe pensare un po. Ovviamente, l'effetto estetico finale
+> potrebbe anche essere, ad esempio un cono d'ombra, o qualcosa di più diegetico che il designer scioglierà alla fine.
+
+> Ah, inoltre, è prevista la presenza di Zaino come in helldivers 2.
+
+> Potrebbero essere semplicemente modulari, attaccandosi diciamo, come un attacco standard di qualche dispositivo elettronico
+
+> Sopra il kit.
+
+> Sì, in generale praticamente ogni cosa dovrebbe essere un'abilità pluggabile.
+
+> Rende il design estremamente facile, in più è anche quello che avviene in giochi come Fortnite
+
+### Answers of 2026-10-23, 11:47 (verbatim)
+
+> Mod 20. Non basta un'interfaccia con gameplay tag, beh si potrebbe creare un plugin per rendere facile interagire con cosa si sta
+> puntando invece avere un milioni di armi per terra e non riuscire a capire.
+>
+> dritto verso la direzione di gravità. Opportunamente dovrebbe puntare verso l'opposto della direzione di gravità (in caso si stia
+> scendendo sotto la superficie dell'ultima piattaforma quando si è a mezz'aria. Ho mandato delle foto di esempio prima), oppure sia
+> sopra che sotto, nel caso in cui si stia scendendo da una piattaforma alta, ma si debba atterrare su un'altra piattaforma.
+>
+> Per ora mantieni la spedizione come cosa da fare, ma non ce ne preoccupiamo molto.
+>
+> La telecamera dovrebbe essere in generale abbastanza lontana dal giocatore, stile mario 3d world. E' possibile pero che vada sulle
+> spalle per permettere di mirare con alcune armi e alcune abilità. Dovrebbe essere possibile muoverla manualmente, ma durante i
+> livelli il designer puo specificare l'angolo desiderato, e se si puo spostare o no.
+>
+> GM.9 Niente rianimazione. Sistema a rinforzi (vite) condivisi.
+
+### Answers of 2026-10-23, 12:44 and 12:45 (verbatim)
+
+> quando si finiscono le vite si ricomincia dal check point o dall'inizio del livello. Dipende da quante vite voglio dare (potrei darne 20
+> ma senza checkpoint, o 4 che si refreshano velocemente, in modo che si muore quando 4 persone muoiono quasi tutte insieme, in quest
+> ultimo caso, ha senso che ci siano checkpoint).
+>
+> 2.Personaggio.
+>
+> considera la telecamera di astrobot e il suo funzionamento nelle spedizioni o in genere quando non siamo in un livello dove il designer
+> guida la telecamera.
+
+> Per il PVP, per ora, una cosa tipo smash bros, ma alla tekken (si cerca di avere il centro della telecamera tra i due personaggi e
+> mantenerli paralleli allo schermo)
+
+> inoltre, potrebbero esserci armi con mirino. In tal caso, vorrei un'overlay di zoom che pero lascia vedere il resto del personaggio. Ossia
+> come nel disegno. Voglio la flessibilità della terza persona, e la precisione di un mirino in prima.
+
+> Cam 10, segue la telecamera,
+> Cam 11, dipende dall'abilità e dall'arma che usa il mirino
+
+### Message of 2026-10-23, 15:23 (verbatim)
+
+> Comunque per quanto riguarda il tech, come buona abilità che sia, deve essere pluggabile. Per ora, voglio che si comporti nella maniera
+> seguente: se non c'è wall splat oppure rimbalzo eccessivo, il personaggio fa un mini rimbalzo a terra (controllabile con lo stick in
+> direzione) e finisce in downed state (come su smash). Dopo il rimbalzo se non si imputano attacchi o direzioni si finisce a terra. Tenere
+> premuto lo stick in una direzione (quando si è a terra)causa un roll verso quella direzione, attaccare, causa un getup attack. I getup
+> attack disponibili potrebbero essere 0 o quanti interessa a designer a seconda del moveset. Quindi di base, Niente tech.
+
+> Ci si rialza quando si preme salto comunque. (16:23)
