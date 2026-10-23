@@ -6,6 +6,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "GameplayTagContainer.h"
 #include "Input/GSTN_InputSlot.h"
+#include "Jump/GSTN_JumpTypes.h"
 #include "GSTN_CombatSettings.generated.h"
 
 /**
@@ -90,6 +91,18 @@ public:
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Stats")
 	TArray<FName> StatsSpeedProperties;
+
+	/**
+	 * How the jump state reacts to a launch by something other than the combatant's own jump (a trampoline). The default refills the air
+	 * jumps, clears the coyote window and ends the hold phase of a jump in progress. A kit's own rules replace these once the loadout
+	 * carries them; every machine of a match must run the same values
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump")
+	FGSTN_JumpResetRules JumpResetRules;
+
+	/** Frames after walking off a ledge in which a ground jump is still allowed. 0 = none */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
+	int32 JumpCoyoteFrames = 4;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

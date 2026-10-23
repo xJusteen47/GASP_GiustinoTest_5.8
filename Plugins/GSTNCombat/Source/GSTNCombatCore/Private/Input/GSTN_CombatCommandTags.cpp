@@ -25,4 +25,6 @@ namespace GSTNCommandTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_Directional, "Command.Combo.AttackSpecial.Directional", "Attack + special chord, stick tilted");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_CrouchNeutral, "Command.Combo.AttackSpecial.CrouchNeutral", "Attack + special chord, crouch held, stick neutral or lightly tilted");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_CrouchDirectional, "Command.Combo.AttackSpecial.CrouchDirectional", "Attack + special chord, crouch held, stick tilted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_Jump, "Command.Movement.Jump", "Jump: ground jump, coyote jump or air jump, decided by the movement state");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_FastFall, "Command.Movement.FastFall", "Fast fall while descending");
 }
