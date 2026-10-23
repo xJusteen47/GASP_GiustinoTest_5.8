@@ -186,3 +186,7 @@ Design deviations from combat-m3 7.9 (all kept deliberately small):
 - **New buttons** `Dodge`, `Sprint`, `Interact` (the harness's own `Input.Button.Dash` stays for the old test dash).
 - **Fork:** `UNpAbilitySystemComponent::InitializeSimulationState` no longer calls `GiveAbility` for `DefaultAbilities` when the owner is not authoritative (it refused and logged one error per ability on simulated proxies); behaviour is unchanged.
 - **`setup_gas_assets.py --combat-input` never edits `BP_GASNPP_TestCharacter`** any more (it warns); step 2 is `--test-character`.
+
+### Slide + jump on SandboxCharacter_Mover (C14, 2026-10-23)
+
+`scenario_slide_jump(bare=True)` after `set_pawn_override('SandboxCharacter_Mover')` (the real pawn: Mover, locomotion modes and ASC of the owner's setup; inputs injected through the local player's enhanced input, verified: the pawn runs at 800 cm/s), listen 60/15/0, 10 repeats, `np.LogReconcileField 1`: 0 mismatches, 0 unexplained, 0 offset changes. **Not reproduced** on the real pawn either, so no sync-state field to name. What is still open: the run had no packet loss or lag (the owner's report may need them), and the bare mode does not sample the pawn, so it cannot show that the slide state was entered (only that the inputs reach the pawn). Next try: the same run with `NetEmulation` loss 2 % and 60 ms, and a log of the Mover mode per frame (`gstn.test.LogMoverModeChanges` exists only on the harness pawn's component).
