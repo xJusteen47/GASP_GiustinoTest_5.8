@@ -83,6 +83,15 @@ look is a ring and a dashed line in another colour). The above marker of the spe
 Everything visible is a soft reference: the settings (`DefaultSegmentMesh`, `DefaultSegmentMaterial`, `DefaultDecalMaterial`,
 `DefaultStyle`, `DefaultSelector`) and the presenters' `MeshOverride` / `MaterialOverride`. The plugin ships no `Content/`.
 
+**Grid plane layer.** `UGSTN_DepthPresenter_Plane` ("Plane (grid material quad)") is in the built-in below, above and approach looks and
+is off while its `PlaneMaterial` is empty. Set `PlaneMaterial` (optionally `MeshOverride`; `PlaneExtentCm` = side length, default 150) and
+a quad is drawn centred on the marker point, oriented to the layer's present normal. The material instance gets, every frame:
+`MarkerWorldPosition` (vector, world cm), `MarkerNormal` (vector, unit), `Opacity` (scalar, the layer alpha including edge alpha) and
+`EdgeDistance` (scalar, cm: horizontal distance to the platform edge on the approach layer, 0 elsewhere). A world-aligned grid reads
+`MarkerWorldPosition` and `MarkerNormal` and fades with `Opacity`.
+
+The approach marker never depends on the ground below: with no primary surface, or only the "no ground" ring, it still shows.
+
 ## Gameplay tags
 
 None declared (spec §6.4). The target filter reads `Surface.Behaviour.*` through a `FGameplayTagQuery` the caller supplies.

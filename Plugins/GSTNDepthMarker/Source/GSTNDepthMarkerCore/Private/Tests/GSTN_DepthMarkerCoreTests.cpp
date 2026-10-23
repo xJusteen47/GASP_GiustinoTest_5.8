@@ -655,6 +655,38 @@ GSTN_DM_TEST(ApproachMarkerOnHigherPlatformPlane)
 	return true;
 }
 
+// The approach marker depends on its own target only: no ground below (nothing, or the "no ground" reference ring) never hides it
+GSTN_DM_TEST(ApproachVisibleWithoutGround)
+{
+	GSTN_DM_FOR_EACH_UP
+	{
+		FGSTN_DepthSubjectState S = C.Subject(300, 0, true, false);
+		S.Velocity = C.Side * 300.0;
+		const FGSTN_DepthTarget NoPrimary;
+		FGSTN_DepthTarget A;
+		CHECK(Approach(C, S, NoPrimary, { Plane(C, 150, 250, 2) }, {}, 0.0, A));
+		CHECK(A.Kind == EGSTN_DepthTargetKind::ApproachPlane && A.State == EGSTN_DepthMarkerState::Approach && A.SurfaceKey == 2);
+		CHECK(A.EdgeDistanceCm > 0.f);
+	}
+	return true;
+}
+
+GSTN_DM_TEST(ApproachVisibleOverNoGroundRing)
+{
+	GSTN_DM_FOR_EACH_UP
+	{
+		FGSTN_DepthSubjectState S = C.Subject(300, 0, true, false);
+		S.Velocity = C.Side * 300.0;
+		FGSTN_DepthTarget Ring = Primary(C, S);
+		Ring.Kind = EGSTN_DepthTargetKind::ReferencePlane;
+		Ring.State = EGSTN_DepthMarkerState::NoGround;
+		FGSTN_DepthTarget A;
+		CHECK(Approach(C, S, Ring, { Plane(C, 150, 250, 2) }, {}, 0.0, A));
+		CHECK(A.Kind == EGSTN_DepthTargetKind::ApproachPlane && A.SurfaceKey == 2);
+	}
+	return true;
+}
+
 GSTN_DM_TEST(NoApproachWhenNotMovingToward)
 {
 	GSTN_DM_FOR_EACH_UP

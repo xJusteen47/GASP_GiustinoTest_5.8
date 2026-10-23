@@ -9,6 +9,7 @@
 
 class UDecalComponent;
 class UInstancedStaticMeshComponent;
+class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UStaticMesh;
@@ -189,4 +190,45 @@ public:
 
 protected:
 	virtual void OnMarkerUpdated_Implementation(const FGSTN_DepthMarkerView& View, AActor* Holder) override;
+};
+
+/**
+ * A flat quad centred on the marker point and oriented to the layer's present normal, for a designer's world-aligned grid material.
+ * Off (nothing created, nothing loaded) while PlaneMaterial is empty. Dynamic material parameters, set every frame:
+ * MarkerWorldPosition (vector), MarkerNormal (vector), Opacity (scalar, the layer alpha), EdgeDistance (scalar, cm; approach layer, else 0).
+ */
+UCLASS(meta = (DisplayName = "Plane (grid material quad)"))
+class GSTNDEPTHMARKERRUNTIME_API UGSTN_DepthPresenter_Plane : public UGSTN_DepthMarkerPresenter
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_DepthPresenter_Plane();
+
+	/** Material of the quad; empty = the layer is off */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Plane")
+	TSoftObjectPtr<UMaterialInterface> PlaneMaterial;
+
+	/** Replaces the engine plane (a 100 cm quad facing +Z); empty = the engine plane */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Plane")
+	TSoftObjectPtr<UStaticMesh> MeshOverride;
+
+	/** Side length of the quad */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Plane", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float PlaneExtentCm = 150.f;
+
+	/** The component and the dynamic material, for tests and adapters; null while the layer is off or not yet drawn */
+	UStaticMeshComponent* GetPlaneComponent() const { return PlaneComponent; }
+	UMaterialInstanceDynamic* GetPlaneMaterialInstance() const { return Material; }
+
+protected:
+	virtual void OnMarkerUpdated_Implementation(const FGSTN_DepthMarkerView& View, AActor* Holder) override;
+	virtual void OnMarkerReleased_Implementation() override;
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<UStaticMeshComponent> PlaneComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> Material;
 };

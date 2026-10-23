@@ -27,6 +27,17 @@ void UGSTN_DepthMarkerStyle::PopulateDefaultPresenters()
 	AboveLine->ActiveStates = { EGSTN_DepthMarkerState::AboveReference };
 	AboveLine->AlphaScale = 0.6f;
 	Presenters.Add(AboveLine);
+
+	// Optional grid quads: an empty PlaneMaterial keeps them off until a designer fills it
+	UGSTN_DepthPresenter_Plane* GroundPlane = NewObject<UGSTN_DepthPresenter_Plane>(this);
+	GroundPlane->ActiveStates = BelowStates;
+	Presenters.Add(GroundPlane);
+
+	UGSTN_DepthPresenter_Plane* AbovePlane = NewObject<UGSTN_DepthPresenter_Plane>(this);
+	AbovePlane->Layer = EGSTN_DepthLayer::Above;
+	AbovePlane->ActiveStates = { EGSTN_DepthMarkerState::AboveReference };
+	AbovePlane->AlphaScale = 0.6f;
+	Presenters.Add(AbovePlane);
 }
 
 void UGSTN_DepthMarkerStyle::PopulateApproachPresenters()
@@ -43,6 +54,11 @@ void UGSTN_DepthMarkerStyle::PopulateApproachPresenters()
 	Line->Layer = EGSTN_DepthLayer::Approach;
 	Line->ActiveStates = { EGSTN_DepthMarkerState::Approach };
 	Presenters.Add(Line);
+
+	UGSTN_DepthPresenter_Plane* Plane = NewObject<UGSTN_DepthPresenter_Plane>(this);
+	Plane->Layer = EGSTN_DepthLayer::Approach;
+	Plane->ActiveStates = { EGSTN_DepthMarkerState::Approach };
+	Presenters.Add(Plane);
 }
 
 bool UGSTN_DepthMarkerStyle::Validate(TArray<FText>& OutErrors) const

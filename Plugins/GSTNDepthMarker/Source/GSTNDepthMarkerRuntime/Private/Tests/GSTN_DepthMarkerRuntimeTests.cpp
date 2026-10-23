@@ -17,6 +17,9 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Components/StaticMeshComponent.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -426,6 +429,74 @@ GSTN_DMR_TEST(ApproachStyleValidates)
 	Primary->PopulateDefaultPresenters();
 	TestTrue(TEXT("a style has an approach slot, empty by default"), Primary->ApproachStyle.IsNull());
 	TestFalse(TEXT("the approach colour differs from the default"), Style->DefaultTint.Equals(Primary->DefaultTint, 0.01f));
+	return true;
+}
+
+// The approach layer draws from its own target: a missing or "no ground" primary never gates it
+GSTN_DMR_TEST(ApproachLayerIndependentOfGround)
+{
+	UGSTN_DepthPresenter_Ring* Ring = NewObject<UGSTN_DepthPresenter_Ring>(GetTransientPackage());
+	Ring->Layer = EGSTN_DepthLayer::Approach;
+	Ring->ActiveStates = { EGSTN_DepthMarkerState::Approach };
+	for (const EGSTN_DepthTargetKind GroundKind : { EGSTN_DepthTargetKind::None, EGSTN_DepthTargetKind::ReferencePlane })
+	{
+		FGSTN_DepthMarkerView View;
+		View.Below.Kind = GroundKind;
+		View.Below.State = GroundKind == EGSTN_DepthTargetKind::None ? EGSTN_DepthMarkerState::Hidden : EGSTN_DepthMarkerState::NoGround;
+		View.Approach.Kind = EGSTN_DepthTargetKind::ApproachPlane;
+		View.Approach.State = EGSTN_DepthMarkerState::Approach;
+		View.bApproachVisible = true;
+		TestTrue(TEXT("approach draws whatever the ground below is"), Ring->ShouldDraw(View));
+	}
+	return true;
+}
+
+GSTN_DMR_TEST(PlaneLayerOnlyWithMaterialAndPushesParameters)
+{
+	FRig Rig;
+	AActor* Holder = Rig.World->SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator);
+	USceneComponent* Root = NewObject<USceneComponent>(Holder, TEXT("Root"));
+	Holder->SetRootComponent(Root);
+	Root->RegisterComponent();
+
+	FGSTN_DepthMarkerView View;
+	View.Approach.Kind = EGSTN_DepthTargetKind::ApproachPlane;
+	View.Approach.State = EGSTN_DepthMarkerState::Approach;
+	View.Approach.Point = FVector(10, 20, 30);
+	View.Approach.PresentNormal = FVector::UpVector;
+	View.Approach.EdgeDistanceCm = 77.f;
+	View.bApproachVisible = true;
+	View.ApproachAlpha = 0.4f;
+
+	UGSTN_DepthPresenter_Plane* Plane = NewObject<UGSTN_DepthPresenter_Plane>(GetTransientPackage());
+	Plane->Layer = EGSTN_DepthLayer::Approach;
+	Plane->ActiveStates = { EGSTN_DepthMarkerState::Approach };
+	Plane->OnMarkerUpdated(View, Holder);
+	TestNull(TEXT("no material, no layer"), Plane->GetPlaneComponent());
+
+	Plane->PlaneMaterial = TSoftObjectPtr<UMaterialInterface>(UMaterial::GetDefaultMaterial(MD_Surface));
+	Plane->OnMarkerUpdated(View, Holder);
+	if (!TestNotNull(TEXT("material set: the layer is created"), Plane->GetPlaneComponent()) || !TestNotNull(TEXT("dynamic material"), Plane->GetPlaneMaterialInstance()))
+	{
+		return false;
+	}
+	UStaticMeshComponent* Created = Plane->GetPlaneComponent();
+	UMaterialInstanceDynamic* Material = Plane->GetPlaneMaterialInstance();
+	FLinearColor Position;
+	FLinearColor Normal;
+	float Opacity = 0.f;
+	float Edge = 0.f;
+	TestTrue(TEXT("MarkerWorldPosition"), Material->GetVectorParameterValue(TEXT("MarkerWorldPosition"), Position) && FVector(Position.R, Position.G, Position.B).Equals(FVector(10, 20, 30), 0.01));
+	TestTrue(TEXT("MarkerNormal"), Material->GetVectorParameterValue(TEXT("MarkerNormal"), Normal) && FVector(Normal.R, Normal.G, Normal.B).Equals(FVector::UpVector, 0.01));
+	TestTrue(TEXT("Opacity"), Material->GetScalarParameterValue(TEXT("Opacity"), Opacity) && FMath::IsNearlyEqual(Opacity, 0.4f, 0.001f));
+	TestTrue(TEXT("EdgeDistance"), Material->GetScalarParameterValue(TEXT("EdgeDistance"), Edge) && FMath::IsNearlyEqual(Edge, 77.f, 0.01f));
+
+	// Pooled: a second frame reuses the component and the material
+	View.Approach.Point = FVector(0, 0, 50);
+	Plane->OnMarkerUpdated(View, Holder);
+	TestTrue(TEXT("same component"), Plane->GetPlaneComponent() == Created && Plane->GetPlaneMaterialInstance() == Material);
+	Material->GetVectorParameterValue(TEXT("MarkerWorldPosition"), Position);
+	TestTrue(TEXT("position follows"), FMath::IsNearlyEqual(Position.B, 50.f, 0.01f));
 	return true;
 }
 

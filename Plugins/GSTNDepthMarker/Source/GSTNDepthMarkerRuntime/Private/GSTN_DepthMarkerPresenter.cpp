@@ -2,6 +2,7 @@
 
 #include "Components/DecalComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -227,4 +228,61 @@ void UGSTN_DepthPresenter_Line::OnMarkerUpdated_Implementation(const FGSTN_Depth
 		Component->UpdateInstanceTransform(Index, Xf, true, Index == PoolSize - 1, true);
 	}
 	Component->SetVisibility(true);
+}
+
+UGSTN_DepthPresenter_Plane::UGSTN_DepthPresenter_Plane()
+{
+	ActiveStates = { EGSTN_DepthMarkerState::Ground, EGSTN_DepthMarkerState::EdgeHold, EGSTN_DepthMarkerState::NoGround };
+}
+
+void UGSTN_DepthPresenter_Plane::OnMarkerUpdated_Implementation(const FGSTN_DepthMarkerView& View, AActor* Holder)
+{
+	// Off without a material: nothing is created and no content is loaded
+	if (!Holder || PlaneMaterial.IsNull())
+	{
+		return;
+	}
+	if (!PlaneComponent)
+	{
+		UMaterialInterface* Parent = PlaneMaterial.LoadSynchronous();
+		UStaticMesh* Mesh = !MeshOverride.IsNull() ? MeshOverride.LoadSynchronous()
+			: LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+		if (!Parent || !Mesh)
+		{
+			return;
+		}
+		Material = UMaterialInstanceDynamic::Create(Parent, this);
+		PlaneComponent = NewObject<UStaticMeshComponent>(Holder);
+		PlaneComponent->SetStaticMesh(Mesh);
+		PlaneComponent->SetMaterial(0, Material);
+		PlaneComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		PlaneComponent->SetCastShadow(false);
+		PlaneComponent->SetCanEverAffectNavigation(false);
+		PlaneComponent->SetupAttachment(Holder->GetRootComponent());
+		PlaneComponent->RegisterComponent();
+	}
+
+	const FGSTN_DepthTarget& Target = View.GetTarget(Layer);
+	const FVector Normal = Target.PresentNormal.GetSafeNormal();
+	// A hair off the surface so the quad does not z-fight with it
+	PlaneComponent->SetWorldLocationAndRotation(Target.Point + Normal * 0.5f, FRotationMatrix::MakeFromZ(Normal).Rotator());
+	PlaneComponent->SetWorldScale3D(FVector(PlaneExtentCm / 100.f));
+
+	static const FName PositionName(TEXT("MarkerWorldPosition"));
+	static const FName NormalName(TEXT("MarkerNormal"));
+	static const FName OpacityName(TEXT("Opacity"));
+	static const FName EdgeDistanceName(TEXT("EdgeDistance"));
+	Material->SetVectorParameterValue(PositionName, FLinearColor(Target.Point.X, Target.Point.Y, Target.Point.Z, 0.f));
+	Material->SetVectorParameterValue(NormalName, FLinearColor(Normal.X, Normal.Y, Normal.Z, 0.f));
+	Material->SetScalarParameterValue(OpacityName, GetAlpha(View));
+	Material->SetScalarParameterValue(EdgeDistanceName, Layer == EGSTN_DepthLayer::Approach ? Target.EdgeDistanceCm : 0.f);
+	PlaneComponent->SetVisibility(true);
+}
+
+void UGSTN_DepthPresenter_Plane::OnMarkerReleased_Implementation()
+{
+	if (PlaneComponent)
+	{
+		PlaneComponent->SetVisibility(false);
+	}
 }

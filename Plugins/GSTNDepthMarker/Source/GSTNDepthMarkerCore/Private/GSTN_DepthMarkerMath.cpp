@@ -685,6 +685,7 @@ bool FGSTN_DepthMarkerMath::EvaluateApproach(FGSTN_DepthSelectionState& State, c
 	OutApproach = MakeSurfaceTarget(Feet, Up, Point, Normal, Key, Transform, Params, EGSTN_DepthMarkerState::Approach, EdgeAlpha);
 	OutApproach.Kind = EGSTN_DepthTargetKind::ApproachPlane;
 	OutApproach.BlendMs = BlendMs;
+	OutApproach.EdgeDistanceCm = bExplicit ? 0.f : Edge;
 	return true;
 }
 

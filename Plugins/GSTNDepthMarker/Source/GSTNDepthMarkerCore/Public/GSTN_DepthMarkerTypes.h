@@ -276,6 +276,10 @@ struct GSTNDEPTHMARKERCORE_API FGSTN_DepthTarget
 	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Target")
 	bool bHazard = false;
 
+	/** Approach target only: horizontal distance from the feet to the platform's nearest sampled point (0 for a designer plane and elsewhere) */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Target", meta = (ForceUnits = "cm"))
+	float EdgeDistanceCm = 0.f;
+
 	/** Cross-fade length when this target replaced another one (0 = none) */
 	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Target", meta = (ForceUnits = "ms"))
 	float BlendMs = 0.f;
