@@ -17,18 +17,25 @@ namespace
 	 * Index in table.Bindings of the binding the context picks for a command, INDEX_NONE if none holds. The candidates are
 	 * the command's own bindings, already in declaration order, so the first of equally demanding ones wins on every machine.
 	 */
-	int32 SelectBindingFor(const FGSTN_CommandTable& Table, int32 CommandIndex, const FGameplayTagContainer& Context)
+	int32 SelectBindingFor(const FGSTN_CommandTable& Table, int32 CommandIndex, const FGameplayTagContainer& Context, uint32 ActiveSourceMask)
 	{
 		const FGSTN_CommandTable::FCommand& Command = Table.Commands[CommandIndex];
 
+		// Bindings of an inactive source are left out; Indices maps a candidate back to its place in the table
 		TArray<const FGSTN_TagRequirements*, TInlineAllocator<8>> Candidates;
+		TArray<int32, TInlineAllocator<8>> Indices;
 		for (int32 Offset = 0; Offset < Command.NumBindings; ++Offset)
 		{
-			Candidates.Add(&Table.Bindings[Command.FirstBinding + Offset].Requirements);
+			const FGSTN_CompiledBinding& Binding = Table.Bindings[Command.FirstBinding + Offset];
+			if (Binding.SourceMask == 0 || (Binding.SourceMask & ActiveSourceMask) != 0)
+			{
+				Candidates.Add(&Binding.Requirements);
+				Indices.Add(Command.FirstBinding + Offset);
+			}
 		}
 
 		const int32 Selected = UGSTN_CommandBindingUtils::SelectBinding(Candidates, Context);
-		return Selected == INDEX_NONE ? INDEX_NONE : Command.FirstBinding + Selected;
+		return Selected == INDEX_NONE ? INDEX_NONE : Indices[Selected];
 	}
 }
 
@@ -104,8 +111,19 @@ FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args
 	}
 
 	// 6. Resolve. Nothing to do without commands to start, or when a forced command names none
+	// With source masks the candidates are those of the active sources this frame; without, the table's precomputed ones
+	const bool bMasked = Table.HasSourceMasks();
+	TArray<const FGSTN_InputSlotSpec*, TInlineAllocator<48>> MaskedSlots;
+	TArray<int32, TInlineAllocator<48>> MaskedCommands;
+	if (bMasked)
+	{
+		Table.BuildCandidates(Args.ActiveSourceMask, MaskedSlots, MaskedCommands);
+	}
+	const TConstArrayView<const FGSTN_InputSlotSpec*> CandidateSlots = bMasked ? TConstArrayView<const FGSTN_InputSlotSpec*>(MaskedSlots) : TConstArrayView<const FGSTN_InputSlotSpec*>(Table.CandidateSlots);
+	const TConstArrayView<int32> CandidateCommands = bMasked ? TConstArrayView<int32>(MaskedCommands) : TConstArrayView<int32>(Table.CandidateCommands);
+
 	const int32 ForcedCommandIndex = Table.FromForcedCommand(Cmd.ForcedCommand);
-	if (Table.CandidateSlots.IsEmpty() && ForcedCommandIndex == INDEX_NONE)
+	if (CandidateSlots.IsEmpty() && ForcedCommandIndex == INDEX_NONE)
 	{
 		return Result;
 	}
@@ -121,7 +139,7 @@ FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args
 		{
 			return INDEX_NONE;
 		}
-		const int32 BindingIndex = SelectBindingFor(Table, CommandIndex, Context);
+		const int32 BindingIndex = SelectBindingFor(Table, CommandIndex, Context, Args.ActiveSourceMask);
 		return BindingIndex != INDEX_NONE && Host.CanExecuteBinding(BindingIndex) ? BindingIndex : INDEX_NONE;
 	};
 
@@ -143,12 +161,12 @@ FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args
 		Params.PausedStart = Args.PausedStart;
 		Params.PausedEnd = Args.PausedEnd;
 
-		const FGSTN_SlotResolution Resolution = FGSTN_SlotResolver::Resolve(Table.CandidateSlots, Out.History, Params, *Args.Settings,
-			[&](int32 SlotIndex) { return FindExecutableBinding(Table.CandidateCommands[SlotIndex]) != INDEX_NONE; });
+		const FGSTN_SlotResolution Resolution = FGSTN_SlotResolver::Resolve(CandidateSlots, Out.History, Params, *Args.Settings,
+			[&](int32 SlotIndex) { return FindExecutableBinding(CandidateCommands[SlotIndex]) != INDEX_NONE; });
 
 		if (Resolution.SlotIndex != INDEX_NONE)
 		{
-			CommandIndex = Table.CandidateCommands[Resolution.SlotIndex];
+			CommandIndex = CandidateCommands[Resolution.SlotIndex];
 			BindingIndex = FindExecutableBinding(CommandIndex);
 
 			if (BindingIndex != INDEX_NONE)

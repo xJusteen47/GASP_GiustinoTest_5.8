@@ -50,6 +50,15 @@ struct FGSTN_CompiledBinding
 
 	/** Loaded when the table was built: the simulation reads it every frame and never resolves a soft reference */
 	TSubclassOf<UGameplayAbility> Ability;
+
+	/**
+	 * Opaque bit mask of the sources (kit, weapon, super...) the binding belongs to. The binding applies while it intersects the
+	 * frame's FGSTN_InputTickArgs::ActiveSourceMask; 0 = always active. This module never learns what a bit means.
+	 */
+	uint32 SourceMask = 0;
+
+	/** The binding's own slot, for a binding whose priority offset or buffer differs from the command's. Null = the command's */
+	const FGSTN_InputSlotSpec* Slot = nullptr;
 };
 
 /**
@@ -105,6 +114,33 @@ struct GSTNINPUTNP_API FGSTN_CommandTable
 	const TArray<TInstancedStruct<FGSTN_BufferResetRule>>* ResetRules = nullptr;
 
 	bool IsEmpty() const { return Commands.IsEmpty(); }
+
+	/** Whether any binding carries a source mask. A table without masks resolves with the precomputed candidates, unchanged */
+	bool HasSourceMasks() const;
+
+	/**
+	 * The candidates of a frame in which only the bindings that intersect ActiveMask apply: the commands with at least one such
+	 * binding, in command order, each with the slot of its first active binding (the binding's own slot, else the command's).
+	 * A command without an active binding is not a candidate, so its input neither fires nor reserves a press.
+	 */
+	template <typename SlotArrayType, typename CommandArrayType>
+	void BuildCandidates(uint32 ActiveMask, SlotArrayType& OutSlots, CommandArrayType& OutCommands) const
+	{
+		for (int32 CommandIndex = 0; CommandIndex < Commands.Num(); ++CommandIndex)
+		{
+			const FCommand& Command = Commands[CommandIndex];
+			for (int32 Offset = 0; Offset < Command.NumBindings; ++Offset)
+			{
+				const FGSTN_CompiledBinding& Binding = Bindings[Command.FirstBinding + Offset];
+				if (Binding.SourceMask == 0 || (Binding.SourceMask & ActiveMask) != 0)
+				{
+					OutSlots.Add(Binding.Slot ? Binding.Slot : Command.Slot);
+					OutCommands.Add(CommandIndex);
+					break;
+				}
+			}
+		}
+	}
 
 	/** Index of a command by tag (exact), INDEX_NONE if the table does not have it */
 	int32 FindCommand(const FGameplayTag& Command) const;

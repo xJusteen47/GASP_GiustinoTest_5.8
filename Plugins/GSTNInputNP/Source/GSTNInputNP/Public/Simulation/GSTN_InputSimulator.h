@@ -79,6 +79,12 @@ struct FGSTN_InputTickArgs
 	int32 PausedEnd = INDEX_NONE;
 
 	/**
+	 * The sources whose bindings apply this frame (a bit mask the host and the table agree on; this module never reads a bit's
+	 * meaning). A binding applies when its SourceMask is 0 or intersects it. All bits = every binding, the default.
+	 */
+	uint32 ActiveSourceMask = ~0u;
+
+	/**
 	 * Where the simulation appends Input.Event.CommandExecuted for each command it requests, null for none. The simulation
 	 * writes it unconditionally; the host publishes it after the Network Prediction tick, on the authority only
 	 * (FGSTN_SimEventOutbox::Flush)
