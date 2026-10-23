@@ -24,6 +24,14 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | Wall movement core: T5 approved (TS.2, 2026-10-22 22:14); T2 is subclass-only | now → T0, T1, T2 |
 | M5 E10 validation mechanism | E10 → T9 |
 
+### Owner direction of 2026-10-23 on these plans (added by the milestone-planning thread)
+
+New specs [`../combat-loadout-mods.md`](../combat-loadout-mods.md) (M11: kits in play, support weapons, mods, backpacks),
+[`../game-modes.md`](../game-modes.md) (M12–M13) and [`../depth-marker.md`](../depth-marker.md) do not change the checkpoints. Only:
+H1 adds the optional hitbox field `ReachAxis` (data only, used by M11 mods); M5 keeps mod preview and mod validators out of scope
+(they go to `GSTNKitModsEditor`, a client of the M5 hooks like `GSTNPartsEditor`); M4b is unaffected (players stay one part,
+equipment is not a part). The M3 seams that M11 needs are listed in `../combat-loadout-mods.md` §11.
+
 ## Cross-plan dependency map
 
 The M4b and M5 plans name M4 capabilities (D-ids, "M4-*" names) instead of H-numbers. This table maps them.

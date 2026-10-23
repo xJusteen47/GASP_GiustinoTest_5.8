@@ -130,7 +130,9 @@ The **stagger force** is the "what hits" input of the hitstun condition and the 
 **Hitbox** — `FGSTN_HitboxTrack : FGSTN_TimelineTrack { TArray<FGSTN_HitboxSpec> Hitboxes; }`, `FGSTN_HitboxSpec {
 FGSTN_HitShape Shape; EGSTN_HitboxSpace Space (Root/BakedSocket/WorldAtMoveStart/Projectile); FName Socket;
 TArray<FGSTN_HitboxKey> Keys (frame, offset, rotation, scale; linear interpolation); uint8 HitGroup; bool
-bSweepBetweenFrames; FGSTN_HitData Data; TMap<FGameplayTag, FGSTN_HitVariant> RelationshipVariants; }`.
+bSweepBetweenFrames; FGSTN_HitData Data; TMap<FGameplayTag, FGSTN_HitVariant> RelationshipVariants; EGSTN_ReachAxis ReachAxis
+(None/X/Y/Z in the hitbox's space, default None; added 2026-10-23 for kit mods that lengthen a weapon, combat-loadout-mods.md §8:
+a mod's `ReachScale` stretches and moves only hitboxes that declare an axis); }`.
 `FGSTN_HitVariant { bool bIgnore; float ShapeScale = 1; FGSTN_HitDataOverride Override (per-field optional values and
 multipliers); }`. `BakedSocket` uses `FGSTN_CombatTimelineData::BakedSockets (TMap<FName, TArray<FTransform>>)` — one
 root-relative transform per frame, written by the M5 baking tool; in M4 a Python helper bakes them (section 10).
