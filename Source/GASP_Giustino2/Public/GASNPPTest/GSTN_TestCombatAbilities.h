@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "Abilities/GSTN_GA_Base.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
+#include "EffectsComponents/ApplyMoveGameplayEffectComponent.h"
+#include "GameplayEffect.h"
 #include "GSTN_TestCombatAbilities.generated.h"
 
 /**
@@ -74,4 +76,45 @@ class GASP_GIUSTINO2_API UGSTN_GA_TestWeaponSwitch : public UGSTN_GA_BaseCombat
 
 public:
 	UGSTN_GA_TestWeaponSwitch(const FObjectInitializer& ObjectInitializer);
+};
+
+/** Launch layered move (FLayeredMove_Launch, overriding the velocity) along Mover's up direction at LaunchSpeed: what a trampoline asks the GE path for */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_TestLaunchMoveCreator : public UBaseMoveEffectCreator
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditDefaultsOnly, Category = "Launch", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float LaunchSpeed = 900.f;
+
+	virtual FEffectMoveContainer MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+		const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const override;
+};
+
+/** Instant effect that queues the test launch */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestLaunch : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_TestLaunch();
+};
+
+/**
+ * A launch no jump asked for (scenario_external_launch_jump): triggered like the triggered timeline by Test.Probe.TagTrigger (a press of the
+ * buff button with the tag raiser probe granted), it applies UGSTN_GE_TestLaunch from inside the simulation, so every machine launches in the same frame.
+ * Granted as the probe "Launcher".
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestLaunch : public UGSTN_GA_Base
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestLaunch(const FObjectInitializer& ObjectInitializer);
+
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 };

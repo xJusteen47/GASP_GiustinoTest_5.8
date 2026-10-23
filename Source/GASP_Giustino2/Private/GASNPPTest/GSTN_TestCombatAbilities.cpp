@@ -5,7 +5,9 @@
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatLockTags.h"
 #include "NativeGameplayTags.h"
+#include "DefaultMovementSet/LayeredMoves/LaunchMove.h"
 #include "GameFramework/Actor.h"
+#include "MoverComponent.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 
 namespace
@@ -94,4 +96,42 @@ UGSTN_GA_TestWeaponSwitch::UGSTN_GA_TestWeaponSwitch(const FObjectInitializer& O
 	Switch.SwapFrame = 3;
 	Switch.Target = EGSTN_SwitchTarget::Next;
 	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_WeaponSwitch>(Switch));
+}
+
+FEffectMoveContainer UGSTN_TestLaunchMoveCreator::MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+	const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const
+{
+	FLayeredMove_Launch Launch;
+	Launch.LaunchVelocity = (TargetMoverComponent ? TargetMoverComponent->GetUpDirection() : FVector::UpVector) * LaunchSpeed;
+	return FEffectMoveContainer(&Launch);
+}
+
+UGSTN_GE_TestLaunch::UGSTN_GE_TestLaunch()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+
+	UApplyMoveGameplayEffectComponent* ApplyMove = CreateDefaultSubobject<UApplyMoveGameplayEffectComponent>(TEXT("ApplyMove"));
+	ApplyMove->MoveProcessor = CreateDefaultSubobject<UGSTN_TestLaunchMoveCreator>(TEXT("LaunchMoveCreator"));
+	GEComponents.Add(ApplyMove);
+}
+
+UGSTN_GA_TestLaunch::UGSTN_GA_TestLaunch(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
+	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+
+	FAbilityTriggerData Trigger;
+	Trigger.TriggerTag = GSTNTestTags::Probe_TagTrigger.GetTag();
+	Trigger.TriggerSource = EGameplayAbilityTriggerSource::OwnedTagAdded;
+	AbilityTriggers.Add(Trigger);
+}
+
+void UGSTN_GA_TestLaunch::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+
+	ApplyGameplayEffectToOwner(Handle, ActorInfo, ActivationInfo, GetDefault<UGSTN_GE_TestLaunch>(), GetAbilityLevel(Handle, ActorInfo));
+	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

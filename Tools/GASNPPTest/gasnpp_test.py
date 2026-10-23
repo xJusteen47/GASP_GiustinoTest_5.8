@@ -858,7 +858,7 @@ class _Run:
                 s[side] = {'tags': set(v.get('tags', [])), 'stamina': v['attributes'].get('Stamina'), 'cd': dict(v['cooldowns']),
                            'mode': v.get('mode'), 'req': tuple((v.get('combat') or {}).get('request', (0, -1))),
                            'loc': tuple(v['location']), 'vel': tuple(v.get('velocity', (0, 0, 0))), 'attr': dict(v['attributes']),
-                           'probe': v.get('probe') or {}}
+                           'probe': v.get('probe') or {}, 'jump': (v.get('combat') or {}).get('jump') or {}}
             self.samples.append(s)
         except Exception:
             pass
@@ -2052,4 +2052,281 @@ def scenario_spike_triggers(client=1, fork_patched=True, resim_frames=15):
         (24.5, run.finish()),
     ]
     run.note('forced reconciles use np.ForceReconcile (one global cvar): the re-fire bound is 1..2 per forced reconcile')
+    run.run(steps)
+
+
+
+# ---- C13 jump scenarios (combat-m3 7.9). The test pawn is given the platform jump kit by the harness (server_set_jump_kit), which the test binding set
+# binds to Command.Movement.Jump (Press of Input.Button.Jump) and Command.Movement.FastFall (Press of Input.Button.Crouch).
+
+def _jump_tap(client, hold):
+    """One press of the jump button; with hold > 0 the button then stays held until combat_clear (the caller schedules it)."""
+    mask = button_mask('Jump')
+    combat_tap(client, mask)
+    if hold > 0:
+        combat_hold(client, mask)
+    return f'tap jump, hold {hold}s'
+
+
+def _apex_up(run, side, t_base, t0, t1, up=(0.0, 0.0, 1.0)):
+    """Highest point along `up` reached in [t0, t1], measured from the last sample before t_base: (height, displacement vector at the apex)."""
+    before = [s[side]['loc'] for s in run.samples if s['t'] < t_base and s.get(side)]
+    if not before:
+        return 0.0, None
+    b, best, at = before[-1], 0.0, None
+    for s in run._win(side, t0, t1):
+        d = tuple(s['loc'][i] - b[i] for i in range(3))
+        h = sum(d[i] * up[i] for i in range(3))
+        if h > best:
+            best, at = h, d
+    return best, at
+
+
+def _extreme_up_speed(run, side, t0, t1, up=(0.0, 0.0, 1.0), lowest=True):
+    speeds = [sum(s['vel'][i] * up[i] for i in range(3)) for s in run._win(side, t0, t1)]
+    return (min(speeds) if lowest else max(speeds)) if speeds else 0.0
+
+
+def _jump_field(run, side, field):
+    return (_latest(run, side).get('jump') or {}).get(field)
+
+
+def _both(run, fn):
+    """(ok, text) of fn(side) on the authority ('srv') and the owner ('cli'): both must hold, the text shows both."""
+    a, b = fn('srv'), fn('cli')
+    return bool(a[0] and b[0]), f'srv: {a[1]}; cli: {b[1]}'
+
+
+def _field_is(run, field, want, label):
+    """Timeline check: a field of the jump state is `want` on the authority and on the owner."""
+    return run.at(label, lambda: _both(run, lambda side: (_jump_field(run, side, field) == want, f'{field} {_jump_field(run, side, field)} (want {want})')))
+
+
+def _apex_pair(run, store, label, t_base, t0, t1, up=(0.0, 0.0, 1.0), tol=1.0, floor=20.0):
+    """Timeline check: the apex height of this jump on the authority and on the owner, kept in store[label], within `tol` cm of each other."""
+    def f():
+        hs, ds = _apex_up(run, 'srv', t_base, t0, t1, up)
+        hc, dc = _apex_up(run, 'cli', t_base, t0, t1, up)
+        store[label] = (hs, hc, ds, dc)
+        return hs > floor and abs(hs - hc) <= tol, f'{label}: apex srv {hs:.1f} cm, owner {hc:.1f} cm (delta {abs(hs - hc):.2f}, want <= {tol})'
+    return run.at(f'{label}: apex height, authority vs owner', f)
+
+
+def scenario_variable_jump(client=1, holds=(0.0, 0.08, 0.16, 0.30), spacing=3.0):
+    """C13 variable jump: the longer the jump button is held (anywhere between the minimum hop and MaxJumpHoldFrames) the higher the jump.
+    One jump per hold time, each from standing; judged on the authority and the owner: apex heights strictly increase with the hold time,
+    authority and owner agree within 1 cm, no unexplained reconcile of ours."""
+    run = _Run('variable_jump', client)
+    key, apex = run.key, {}
+    steps = [(0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True)))]
+    for i, hold in enumerate(holds):
+        t = 1.5 + i * spacing
+        steps.append((t, lambda hold=hold: ('jump', _jump_tap(client, hold))))
+        if hold > 0:
+            steps.append((t + hold, lambda: ('release', combat_clear(client))))
+        steps.append((t + spacing - 0.3, _apex_pair(run, apex, f'hold {hold}s', t - 0.05, t, t + spacing - 0.3)))
+
+    def increasing():
+        hs = [apex[f'hold {h}s'][0] for h in holds if f'hold {h}s' in apex]
+        return len(hs) == len(holds) and all(b > a + 2.0 for a, b in zip(hs, hs[1:])), 'authority apex heights ' + ', '.join(f'{x:.1f}' for x in hs) + ' (each > the previous + 2 cm)'
+
+    end = 1.5 + len(holds) * spacing
+    steps += [
+        (end, run.at('apex heights strictly increase with the hold time', increasing)),
+        (end + 0.1, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
+        (end + 1.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_air_jump_fastfall(client=1):
+    """C13 air jump and fast fall. A: a plain jump (reference apex and fall speed). B: a fast fall request while still rising is refused (no
+    request), one while falling sets the fast fall and the descent is faster than A. C: a jump and an air jump (one used, higher than A), and
+    a second air jump request is refused (none left). Authority and owner agree within 1 cm on every apex."""
+    run = _Run('air_jump_fastfall', client)
+    key, apex = run.key, {}
+    jump, crouch = button_mask('Jump'), button_mask('Crouch')
+    TA, TB, TC = 1.5, 5.0, 8.5
+
+    def refused(t0, t1, label):
+        def f():
+            s, c = run.new_bindings(t0, t1, 'srv'), run.new_bindings(t0, t1, 'cli')
+            return not s and not c, f'requests srv {s} cli {c} (want none)'
+        return run.at(label, f)
+
+    def faster_fall():
+        a = _extreme_up_speed(run, 'srv', TA, TA + 3.0)
+        b = _extreme_up_speed(run, 'srv', TB, TB + 3.0)
+        return b < a - 60.0, f'lowest speed along up: A {a:.0f}, B (fast fall) {b:.0f} (B must be at least 60 cm/s faster down)'
+
+    def air_higher():
+        a, c = apex['A'][0], apex['C'][0]
+        return c > a + 30.0, f'apex A {a:.1f}, C (with the air jump) {c:.1f} (C > A + 30)'
+
+    steps = [
+        (0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True))),
+        # A: a plain jump
+        (TA, lambda: ('A: jump', _jump_tap(client, 0.3))),
+        (TA + 0.3, lambda: ('release', combat_clear(client))),
+        (TA + 3.0, _apex_pair(run, apex, 'A', TA - 0.05, TA, TA + 3.0)),
+        # B: fast fall refused while rising, accepted while falling
+        (TB, lambda: ('B: jump', _jump_tap(client, 0.3))),
+        (TB + 0.3, lambda: ('release', combat_clear(client))),
+        (TB + 0.17, lambda: ('B: fast fall while rising (refused)', combat_tap(client, crouch))),
+        (TB + 0.4, refused(TB + 0.12, TB + 0.4, 'B: no fast fall request while rising')),
+        (TB + 0.4, _field_is(run, 'fastFalling', False, 'B: not fast falling while rising')),
+        (TB + 0.7, lambda: ('B: fast fall while falling', combat_tap(client, crouch))),
+        (TB + 0.9, _field_is(run, 'fastFalling', True, 'B: fast falling')),
+        (TB + 3.0, run.at('B: the fast fall descent is faster than the plain one', faster_fall)),
+        # C: an air jump, and a second one refused
+        (TC, lambda: ('C: jump', _jump_tap(client, 0.3))),
+        (TC + 0.3, lambda: ('release', combat_clear(client))),
+        (TC + 0.38, lambda: ('C: air jump', combat_tap(client, jump))),
+        (TC + 0.55, _field_is(run, 'airJumpsUsed', 1, 'C: one air jump used')),
+        (TC + 0.7, lambda: ('C: a second air jump (refused)', combat_tap(client, jump))),
+        (TC + 0.9, refused(TC + 0.65, TC + 0.9, 'C: no second air jump request')),
+        (TC + 0.9, _field_is(run, 'airJumpsUsed', 1, 'C: still one air jump used')),
+        (TC + 3.0, _apex_pair(run, apex, 'C', TC - 0.05, TC, TC + 1.2)),
+        (TC + 3.0, run.at('the air jump goes higher than the plain jump', air_higher)),
+        (TC + 3.5, _field_is(run, 'airJumpsUsed', 0, 'C: landing resets the air jumps')),
+        (TC + 3.6, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
+        (TC + 4.6, run.finish()),
+    ]
+    run.run(steps)
+
+
+def _set_gravity_everywhere(key, accel, enable):
+    """Mover's gravity override on every machine's copy of pawn `key`: it is a component setting, so every copy must hold the same value."""
+    for w in worlds():
+        c = comps(w).get(key)
+        if c is not None:
+            c.set_test_gravity(unreal.Vector(*accel), enable)
+    return f'gravity {accel if enable else "default"} set on {len(worlds())} worlds'
+
+
+def _unit(v):
+    n = sum(x * x for x in v) ** 0.5
+    return tuple(x / n for x in v)
+
+
+def _angle_deg(a, b):
+    import math
+    ua, ub = _unit(a), _unit(b)
+    return math.degrees(math.acos(max(-1.0, min(1.0, sum(x * y for x, y in zip(ua, ub))))))
+
+
+def scenario_tilted_gravity_jump(client=1, tilt_deg=30.0):
+    """C13 under tilted gravity (owner rule 1): gravity 980 cm/s^2 tilted `tilt_deg` from straight down; every "up" is -gravity. A jump, an air jump
+    and a fast fall go along local up: the launch velocity is within 3 degrees of local up, the displacement at the apex is along it, the
+    fast fall descends along it, and authority and owner agree on the apex within 1 cm. The tilt is kept small enough for the world floor to
+    stay walkable under it."""
+    import math
+    t = math.radians(tilt_deg)
+    gravity = (980.0 * math.sin(t), 0.0, -980.0 * math.cos(t))
+    up = _unit(tuple(-g for g in gravity))
+    run = _Run('tilted_gravity_jump', client)
+    key, apex = run.key, {}
+    jump, crouch = button_mask('Jump'), button_mask('Crouch')
+    T = 3.0
+
+    def fast_samples(side, t0, t1, speed):
+        return [s['vel'] for s in run._win(side, t0, t1) if sum(x * x for x in s['vel']) > speed ** 2]
+
+    def launch_direction():
+        def f(side):
+            fast = fast_samples(side, T + 0.02, T + 0.25, 200.0)
+            if not fast:
+                return False, 'no fast sample'
+            a = _angle_deg(fast[0], up)
+            return a < 3.0, f'launch velocity {a:.2f} deg from local up'
+        return _both(run, f)
+
+    def displacement_along_up():
+        def f(side):
+            h, d = _apex_up(run, side, T - 0.05, T, T + 2.0, up)
+            if d is None:
+                return False, 'no apex'
+            lateral = sum((d[i] - h * up[i]) ** 2 for i in range(3)) ** 0.5
+            return lateral < 5.0 and h > 50.0, f'apex {h:.1f} cm along up, {lateral:.1f} cm sideways of it'
+        return _both(run, f)
+
+    def descent_along_up():
+        def f(side):
+            fast = fast_samples(side, T + 1.0, T + 2.6, 500.0)
+            if not fast:
+                return False, 'no fast descent sample'
+            a = _angle_deg(fast[-1], tuple(-x for x in up))
+            return a < 6.0, f'fast descent {a:.2f} deg from local down'
+        return _both(run, f)
+
+    def standing():
+        def f(side):
+            s = _latest(run, side)
+            return abs(s['vel'][2]) < 20.0 and abs(s['vel'][0]) < 20.0, f'mode {s["mode"]}, velocity {tuple(round(x) for x in s["vel"])}'
+        return _both(run, f)
+
+    steps = [
+        (0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True))),
+        (0.6, lambda: ('tilt gravity', _set_gravity_everywhere(key, gravity, True))),
+        (T - 0.5, run.at('standing still under the tilted gravity', standing)),
+        (T, lambda: ('jump', _jump_tap(client, 0.3))),
+        (T + 0.3, lambda: ('release', combat_clear(client))),
+        (T + 0.3, run.at('the launch goes along local up', launch_direction)),
+        (T + 0.45, lambda: ('air jump', combat_tap(client, jump))),
+        (T + 0.65, _field_is(run, 'airJumpsUsed', 1, 'one air jump used')),
+        (T + 1.3, lambda: ('fast fall', combat_tap(client, crouch))),
+        (T + 1.5, _field_is(run, 'fastFalling', True, 'fast falling')),
+        (T + 3.5, _apex_pair(run, apex, 'tilted jump', T - 0.05, T, T + 2.0, up)),
+        (T + 3.5, run.at('the displacement at the apex is along local up', displacement_along_up)),
+        (T + 3.5, run.at('the fast fall descends along local up', descent_along_up)),
+        (T + 3.6, lambda: ('restore gravity', _set_gravity_everywhere(key, gravity, False))),
+        (T + 3.7, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
+        (T + 4.7, run.finish()),
+    ]
+    run.note(f'gravity {tuple(round(g, 1) for g in gravity)}, local up {tuple(round(x, 3) for x in up)}')
+    run.run(steps)
+
+
+def scenario_external_launch_jump(client=1, launch_speed=900.0):
+    """C13 external launch (owner rule 2): a launch layered move through the GE path (the Launcher probe ability, triggered by a press of the buff
+    button like the triggered timeline) that is not the combatant's own jump. Judged on the authority and the owner:
+      A (in the air): jump, air jump (none left), the launch refills the air jumps (default rules), the next air jump works again;
+      B (from the ground): the launch ends the coyote window, so a jump request right after leaving the ground is an air jump (airJumpsUsed 1);
+      the launch rises with plain gravity (no hold phase): apex about speed^2 / (2 g), authority and owner within 1 cm."""
+    run = _Run('external_launch_jump', client)
+    key, apex = run.key, {}
+    jump = button_mask('Jump')
+    TA, TB = 1.5, 6.0
+
+    def launch_apex():
+        hs = apex['B'][0]
+        want = launch_speed ** 2 / (2.0 * 980.0)
+        return abs(hs - want) < 0.06 * want, f'apex {hs:.1f} cm, plain gravity predicts {want:.1f}'
+
+    steps = [
+        (0.3, lambda: ('grant the jump kit and the launcher', (_srv(key).server_set_jump_kit(True), _srv(key).server_revoke_probes(), [_srv(key).server_grant_probe(n) for n in ('Launcher', 'TagRaiser')]))),
+        # A: both jumps used, then a launch in the air
+        (TA, lambda: ('A: jump', _jump_tap(client, 0.3))),
+        (TA + 0.3, lambda: ('release', combat_clear(client))),
+        (TA + 0.4, lambda: ('A: air jump', combat_tap(client, jump))),
+        (TA + 0.6, _field_is(run, 'airJumpsUsed', 1, 'A: the air jump is used')),
+        (TA + 0.7, lambda: ('A: a second air jump (refused)', combat_tap(client, jump))),
+        (TA + 0.8, _field_is(run, 'airJumpsUsed', 1, 'A: no air jump left')),
+        (TA + 0.9, lambda: ('A: the launch', press(client, 'buff'))),
+        (TA + 1.1, _field_is(run, 'airJumpsUsed', 0, 'A: the launch refilled the air jumps')),
+        (TA + 1.1, _field_is(run, 'phase', 3, 'A: launched phase (3), plain gravity')),
+        (TA + 1.2, lambda: ('A: air jump again', combat_tap(client, jump))),
+        (TA + 1.4, _field_is(run, 'airJumpsUsed', 1, 'A: the air jump works again after the launch')),
+        (TA + 4.0, _field_is(run, 'airJumpsUsed', 0, 'A: landed, reset')),
+        # B1: a launch from the ground and nothing else: plain gravity all the way
+        (TB, lambda: ('B1: the launch from the ground', press(client, 'buff'))),
+        (TB + 3.0, _apex_pair(run, apex, 'B', TB - 0.05, TB, TB + 2.5)),
+        (TB + 3.1, run.at('the launch rises with plain gravity', launch_apex)),
+        # B2: the same launch, then a jump request right after leaving the ground
+        (TB + 4.0, lambda: ('B2: the launch from the ground', press(client, 'buff'))),
+        (TB + 4.25, lambda: ('B2: jump request in the air', combat_tap(client, jump))),
+        (TB + 4.45, _field_is(run, 'airJumpsUsed', 1, 'B2: the launch ended the coyote window: the jump was an air jump')),
+        (TB + 8.0, lambda: ('cleanup', (combat_clear(client), _srv(key).server_revoke_probes(), _srv(key).server_set_jump_kit(False)))),
+        (TB + 9.0, run.finish()),
+    ]
     run.run(steps)

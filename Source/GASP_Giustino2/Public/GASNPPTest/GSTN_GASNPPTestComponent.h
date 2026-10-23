@@ -91,6 +91,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerGrantProbe(const FString& Name);
 
+	/**
+	 * Grants (true) or removes (false) the platform jump kit, UGSTN_GA_PlatformJump and UGSTN_GA_PlatformFastFall, which the test binding set
+	 * binds to Command.Movement.Jump / FastFall. Authority only, from outside the simulation. Returns how many specs changed.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	int32 ServerSetJumpKit(bool bGrant);
+
+	/**
+	 * Sets Mover's gravity override (acceleration in cm/s^2 world space) on THIS machine's copy of the pawn, or clears it. Call it on every
+	 * machine, while the pawn stands still: gravity is a Mover component setting, not simulated state, so every copy must hold the same value
+	 * before it matters (the tilted gravity scenario)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool SetTestGravity(FVector Acceleration, bool bEnable);
+
 	/** Removes every trigger probe ability (raisers and targets) from this pawn. Returns how many specs were cleared. */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	int32 ServerRevokeProbes();

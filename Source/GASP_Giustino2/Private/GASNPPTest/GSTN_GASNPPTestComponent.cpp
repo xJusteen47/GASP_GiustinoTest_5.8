@@ -14,6 +14,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
+#include "Abilities/GSTN_GA_PlatformJump.h"
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "GASNPPTest/GSTN_TestProbeAbilities.h"
@@ -379,6 +380,7 @@ namespace
 		if (Name == TEXT("TagTarget")) { return UGSTN_GA_ProbeTagTarget::StaticClass(); }
 		if (Name == TEXT("TimelineTarget")) { return UGSTN_GA_TestTriggeredTimeline::StaticClass(); }
 		if (Name == TEXT("SwitchTarget")) { return UGSTN_GA_TestWeaponSwitch::StaticClass(); }
+		if (Name == TEXT("Launcher")) { return UGSTN_GA_TestLaunch::StaticClass(); }
 		return nullptr;
 	}
 
@@ -418,7 +420,40 @@ int32 UGSTN_GASNPPTestComponent::ServerRevokeProbes()
 	{
 		return 0;
 	}
-	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestWeaponSwitch::StaticClass()); });
+	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestWeaponSwitch::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestLaunch::StaticClass()); });
+}
+
+int32 UGSTN_GASNPPTestComponent::ServerSetJumpKit(bool bGrant)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return 0;
+	}
+	if (!bGrant)
+	{
+		return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_GA_PlatformJump::StaticClass()); });
+	}
+
+	int32 Granted = 0;
+	for (const TSubclassOf<UGameplayAbility> AbilityClass : { TSubclassOf<UGameplayAbility>(UGSTN_GA_PlatformJump::StaticClass()), TSubclassOf<UGameplayAbility>(UGSTN_GA_PlatformFastFall::StaticClass()) })
+	{
+		if (!AbilitySystem->FindAbilitySpecFromClass(AbilityClass))
+		{
+			Granted += AbilitySystem->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, INDEX_NONE, nullptr)).IsValid() ? 1 : 0;
+		}
+	}
+	return Granted;
+}
+
+bool UGSTN_GASNPPTestComponent::SetTestGravity(FVector Acceleration, bool bEnable)
+{
+	UMoverComponent* GravityMover = GetOwner()->FindComponentByClass<UMoverComponent>();
+	if (!GravityMover)
+	{
+		return false;
+	}
+	GravityMover->SetGravityOverride(bEnable, bEnable ? Acceleration : FVector::ZeroVector);
+	return true;
 }
 
 int32 UGSTN_GASNPPTestComponent::ServerGrantBulk(int32 FirstIndex, int32 Count)
@@ -687,6 +722,22 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			CombatJson->SetObjectField(TEXT("timelineStarted"), StartedJson);
 			CombatJson->SetNumberField(TEXT("weaponSwitched"), WeaponSwitchedCount);
 			CombatJson->SetNumberField(TEXT("activeWeapon"), CombatState->Core.ActiveWeaponIndex);
+			{
+				const FGSTN_JumpState& Jump = CombatState->Core.Jump;
+				TSharedRef<FJsonObject> JumpJson = MakeShared<FJsonObject>();
+				JumpJson->SetNumberField(TEXT("phase"), static_cast<int32>(Jump.Phase));
+				JumpJson->SetNumberField(TEXT("startFrame"), Jump.StartFrame);
+				JumpJson->SetBoolField(TEXT("cut"), Jump.bJumpCut);
+				JumpJson->SetBoolField(TEXT("fastFalling"), Jump.bFastFalling);
+				JumpJson->SetNumberField(TEXT("airJumpsUsed"), Jump.AirJumpsUsed);
+				JumpJson->SetNumberField(TEXT("coyote"), Jump.CoyoteFramesLeft);
+				if (const UMoverComponent* GravityMover = Owner->FindComponentByClass<UMoverComponent>())
+				{
+					const FVector Gravity = GravityMover->GetGravityAcceleration();
+					JumpJson->SetArrayField(TEXT("gravity"), { MakeShared<FJsonValueNumber>(Gravity.X), MakeShared<FJsonValueNumber>(Gravity.Y), MakeShared<FJsonValueNumber>(Gravity.Z) });
+				}
+				CombatJson->SetObjectField(TEXT("jump"), JumpJson);
+			}
 			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestFrame) });
 			Json->SetObjectField(TEXT("combat"), CombatJson);
 		}

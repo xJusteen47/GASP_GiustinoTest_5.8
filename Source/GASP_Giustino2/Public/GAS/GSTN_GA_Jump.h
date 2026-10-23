@@ -11,6 +11,9 @@
 /**
  * Creates Mover's jump impulse (FJumpImpulseEffect, the same instant effect UCharacterMoverComponent::Jump queues):
  * overrides the vertical velocity and switches to the air mode of the common legacy settings.
+ *
+ * The upward speed is, in order: UpwardsSpeed when set, the JumpVelocity stat when the ability system has the combat attribute set
+ * (so the project jump and the combat kit's UGSTN_GA_PlatformJump reach the same height), JumpUpwardsSpeed of the Mover settings.
  */
 UCLASS(DisplayName = "GSTN Jump Impulse Move Creator")
 class GASP_GIUSTINO2_API UGSTN_JumpImpulseMoveCreator : public UBaseMoveEffectCreator
@@ -37,7 +40,8 @@ public:
 };
 
 /**
- * Ground jump as a gameplay ability. Input: IA_Jump (Started).
+ * Ground jump as a gameplay ability. Input: IA_Jump (Started). TO BE REPLACED LATER by the combat plugin's UGSTN_GA_PlatformJump
+ * (variable height, air jump, fast fall) for characters with a combat kit; kept for the ones without.
  *
  * Activation applies JumpEffect (by default UGSTN_GE_Jump, which queues Mover's jump impulse) and ends. Costs,
  * cooldowns and blocking/cancel tags are the standard UGameplayAbility settings, so they can be set on a Blueprint child.

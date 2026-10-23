@@ -208,6 +208,8 @@ def combat_test_specs():
         'new_actions': [
             ('IA_GASNPP_Attack', ['LeftMouseButton']),
             ('IA_GASNPP_Special', ['MiddleMouseButton']),
+            # C13: the jump button of the platform jump kit (the scenarios drive it with scripted buttons; the key is for manual tries)
+            ('IA_GASNPP_Jump', ['Y']),
         ],
         # Bit order of the buttons = order here (it is the bit in every input mask: keep it stable)
         'input_config': {
@@ -219,13 +221,17 @@ def combat_test_specs():
                 # Dash/Buff buttons: tags in Config/Tags/GSTNCommands.ini. A button whose tag or action is missing is skipped
                 ('Input.Button.Dash', TEST_INPUT_DIR + '/IA_GASNPP_Dash'),
                 ('Input.Button.Buff', TEST_INPUT_DIR + '/IA_GASNPP_Buff'),
+                # C13: bit 5, after Buff, so the indices of the buttons above stay as they were
+                ('Input.Button.Jump', TEST_INPUT_DIR + '/IA_GASNPP_Jump'),
             ],
             'move_action': IA_MOVE,
         },
         # The standard command slots (combat.md 9.1) as a shared slot set asset, filled by UGSTN_StandardSlots.FillSlotSet
         'slot_set': ('SS_GASNPP_Standard', TEST_INPUT_DIR),
         # Plain button-press slots added to that set (command, button): the harness' own commands. Not added twice.
-        'press_slots': [('Command.Dash', 'Input.Button.Dash'), ('Command.Buff', 'Input.Button.Buff')],
+        'press_slots': [('Command.Dash', 'Input.Button.Dash'), ('Command.Buff', 'Input.Button.Buff'),
+                        # C13: the default proposal of the jump kit: Press(Jump), and a down press (Crouch) for the fast fall
+                        ('Command.Movement.Jump', 'Input.Button.Jump'), ('Command.Movement.FastFall', 'Input.Button.Crouch')],
         # Test abilities (project module, Source/GASP_Giustino2/GASNPPTest) the pawn's ability system must be granted for a
         # binding to start them. Added to the NpAbilitySystemComponent's DefaultAbilities when missing.
         'abilities': ['GSTN_GA_TestDash', 'GSTN_GA_TestBuff', 'GSTN_GA_TestAttack', 'GSTN_GA_TestStance'],
@@ -236,6 +242,9 @@ def combat_test_specs():
                 # Command.Dash / Command.Buff get their slot from 'press_slots' above (a binding without a slot never starts)
                 ('Command.Dash', [], [], 'GSTN_GA_TestDash'),
                 ('Command.Buff', [], [], 'GSTN_GA_TestBuff'),
+                # C13 jump kit (plugin abilities; the harness grants them with ServerSetJumpKit, they are not in the Blueprint's DefaultAbilities)
+                ('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'),
+                ('Command.Movement.FastFall', [], [], 'GSTN_GA_PlatformFastFall'),
                 # The four standard attack commands, grounded / airborne: one test attack (owns Test.State.Attacking)
                 *[(f'Command.Attack.{shape}', [ctx], [], 'GSTN_GA_TestAttack')
                   for shape in SHAPES for ctx in CONTEXTS],
