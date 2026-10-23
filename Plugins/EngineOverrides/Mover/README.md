@@ -4,6 +4,8 @@ Mover is an Unreal Engine plugin to support movement of actors with rollback net
 
 **The Mover plugin is Experimental. Many features are incomplete or missing. APIs and data formats are subject to change at any time.**
 
+> **In this project** this folder is a copy of Epic's Mover 5.8 that overrides the engine plugin, patched so it works with the forked Network Prediction (the "GAS-NPP fork", `Plugins/GASNPP/`). Everything above the "Project notes" section at the end is Epic's own README, kept as is. Sections "Project notes" onwards describe what this project changed and how to use and extend Mover here. The sample content that Getting Started and Examples refer to (maps, Manny pawns) is not versioned in this repository, only the MoverExamples C++ is.
+
 
 ## Getting Started
 
@@ -209,3 +211,66 @@ Additionally, when the simulation runs at a lower rate than rendering, the resul
 **Multiple Modifiers of the Same Type:** Currently Mover expects there to be only one modifier of a given type active at a time. This can be worked around by overriding the Matches function and using more criteria than just the type, as long as that criteria is reflected by data included in the NetSerialize function.
 
 **Absolute Timestamps in Blackboard (prior to 5.7):** Timestamps were originally kept as single-precision floats, and later updated to double-precision. FMoverTimeStep::BaseSimTimeMs is an example. If you had been storing any timestamps in a Mover blackboard, be aware that inconsistent use of float and double as the element type can lead to reading bad data. If you 'Set' a blackboard item using a double, you need to 'Get' it as a double as well.
+
+
+# Project notes (GAS-NPP fork)
+
+## Purpose and status
+
+Mover (`Mover.uplugin` 1.0, `IsExperimentalVersion: true`, by Epic Games) is the movement framework the whole project builds on: the wall movement modes (`Source/GASP_Giustino2/.../WallMovement/`) are Mover modes, abilities move the character through Mover queued moves, and the input and combat Network Prediction models embed Mover's simulation. This copy exists so Mover can be patched to run correctly on top of the forked Network Prediction (rollback and re-simulation). It is still Mover: do not put project gameplay in here.
+
+## Modules
+
+| Module | Type | Loading phase | Contents |
+|---|---|---|---|
+| `Mover` | Runtime | Default | The framework. `Source/Mover/Public/`: `MoverComponent.h`, `MovementMode.h`, `MovementModeTransition.h`, `LayeredMove*.h`, `InstantMovementEffect.h`, `MovementModifier.h`, `MoverSimulationTypes.h` (input/sync/aux state), `Backends/` (`MoverNetworkPredictionLiaison.h`, `MoverStandaloneLiaison.h`), `DefaultMovementSet/` (`CharacterMoverComponent.h`, `Modes/`, `LayeredMoves/`, `MovementModifiers/`), `MoveLibrary/` (`*MovementUtils.h`, `RollbackBlackboard.h`, `MovementRecord.h`). |
+| `MoverCVDData` | Runtime (denied in Shipping) | Default | Chaos Visual Debugger data wrappers (`MoverCVDDataWrappers.h`). |
+| `MoverEditor` | UncookedOnly | PreDefault | Blueprint node `K2Node_PlayMontageOnMoverActor.h`. |
+| `MoverCVDEditor` | UncookedOnly | PreDefault | Chaos Visual Debugger editor integration. |
+
+## Dependencies
+
+- Plugins (all `Enabled: true`, none optional): `NetworkPrediction` (here the fork in `Plugins/GASNPP/NetworkPrediction`), `MotionWarping`, `PoseSearch`, `Water`, `ChaosVD`.
+- Module deps (`Mover.Build.cs`): public `Core`, `NetCore`, `InputCore`, `NetworkPrediction`, `AnimGraphRuntime`, `MotionWarping`, `Water`, `GameplayTags`, `NavigationSystem` (plus `MoverCVDData` where Chaos Visual Debugger is supported); private `Chaos`, `CoreUObject`, `Engine`, `PhysicsCore`, `DeveloperSettings`, `PoseSearch`.
+- Used by: `ChaosMover`, `MoverExamples`, `GSTNInputNP`, `GSTNCombatNP`, `AbilitySystemSimulation` (module deps), the project module `GASP_Giustino2`, and the Mover-based Blueprints.
+
+## Gameplay tags
+
+Mover defines native tags in `Source/Mover/Private/MoverTypes.cpp` (`UE_DEFINE_GAMEPLAY_TAG_COMMENT`): `Mover.IsOnGround`, `Mover.IsInAir`, `Mover.IsFalling`, `Mover.IsFlying`, `Mover.IsSwimming`, `Mover.Stance.IsCrouching`, `Mover.IsNavWalking`, `Mover.AnimRootMotion`, `Mover.SkipAnimRootMotion`, `Mover.SkipVerticalAnimRootMotion`. They are Mover state flags, not project tags. There is no `Config/Tags` file; `Config/DefaultMover.ini` only holds core redirects for old `Kinematic*` names.
+
+## What this project changed vs. the stock engine plugin
+
+Five small edits, all marked `GAS-NPP fork` in the source so they can be found and carried over when the plugin is re-synced with a newer engine. Found with `git log -- Plugins/EngineOverrides/Mover` (`53c8716` imported the plugin, `84e4893` and `3ff9286` patched it) and a grep of the marker. Nothing else differs as far as git shows (the import commit has no stock copy to diff against, so unmarked changes cannot be ruled out).
+
+| File | Change | Why |
+|---|---|---|
+| `Private/Backends/MoverNetworkPredictionLiaison.cpp` | `FMoverTimeStep::bIsResimulating` is set from the forked Network Prediction's `TimeStep.IsResimulating`. | Mover and the rollback blackboard need to know a step is a re-simulation. |
+| `Public/MoverSimulationTypes.h`, `Private/MoverSimulationTypes.cpp` | New non-virtual `FMoverInputCmdContext::PrepareRepeatedInput()`: clears `FCharacterDefaultInputs::bIsJumpJustPressed` and `SuggestedMovementMode`, keeps held and continuous data. | The forked NP repeats the last input when a client's input is late; without the hook a repeated input could jump or switch mode twice (`3ff9286`, hook list in gas-npp.md rule 9). A new Mover input struct with a "just pressed" bit must be cleared here too. |
+| `Private/DefaultMovementSet/Modes/SimpleWalkingMode.cpp` | The `DidGenerateMove` blackboard entry uses `FixedDeclaredSize` (kept for 64 frames, NP's buffer) instead of 2 slots. | A rollback deeper than one frame invalidated it and the smooth walking spring reset on the first re-simulated frame, causing chains of reconciles (`84e4893`). |
+| `Private/LayeredMove.cpp` | `FLayeredMoveFinishVelocitySettings::NetSerialize` now writes the "has finish velocity settings" flag when saving. | It was never set, so replicated moves (for example a server-side dash) ended with ClampVelocity/SetVelocity on the server only (`84e4893`). |
+| `Private/DefaultMovementSet/Modes/SmoothWalkingState.cpp` | Wider spring velocity and acceleration tolerances in the state comparison (were 10 cm/s and 50 cm/s^2), `ToString` fixed. | The springs amplified small, legitimate differences into reconcile chains after dashes and on stairs (`84e4893`). |
+
+See [PATCHES.md](../../GASNPP/PATCHES.md) section 5 for how this fits the rest of the fork.
+
+## How to extend
+
+Mover is extended by subclassing, never by editing the plugin. In C++:
+
+- Movement modes: subclass `UBaseMovementMode` (or `UWalkingMode`, `UFallingMode`, ...) and register it on the `UMoverComponent` modes map. Wall modes in this project do exactly that, see [wall-movement.md](../../../docs/architecture/wall-movement.md).
+- Transitions: `UBaseMovementModeTransition` (`Evaluate`/`Trigger`).
+- Layered moves (`FLayeredMoveBase`), instant effects (`FInstantMovementEffect`), modifiers (`FMovementModifierBase`): structs, C++ only.
+- Custom input or sync state: add structs to the input collection / sync state (`FMoverDataStructBase`). If an input struct has an edge-triggered bit, also clear it in `FMoverInputCmdContext::PrepareRepeatedInput` (the single place that is not a pure subclass).
+- Reusable math: the `*MovementUtils` libraries in `Public/MoveLibrary/`.
+
+In Blueprint: movement modes and transitions have Blueprint subclasses, and custom input and state can be Blueprint structs (see "Blueprinting Support" above for what still needs C++). Layered moves, instant effects and modifiers need C++ in the current API.
+
+## Using it standalone in another project
+
+Copy `Mover` (with the `ChaosMover` and `MoverExamples` siblings only if you want them) into `Plugins/` and enable it. Dependencies on engine plugins (`MotionWarping`, `PoseSearch`, `Water`, `ChaosVD`) are enabled automatically. The fork edits assume the forked Network Prediction (the liaison reads `TimeStep.IsResimulating` and the fork calls `PrepareRepeatedInput`), so use this Mover together with `Plugins/GASNPP/NetworkPrediction`, or revert the `MoverNetworkPredictionLiaison.cpp` edit and drop the `PrepareRepeatedInput` hook if you stay on stock Network Prediction (not tested here). Apply the project settings listed under Getting Started.
+
+## Where to read more
+
+- [wall-movement.md](../../../docs/architecture/wall-movement.md): wall modes built on Mover.
+- [gas-npp.md](../../../docs/architecture/gas-npp.md): tick order with Mover, `GetMoverSimState`, rule 9 (`PrepareRepeatedInput`).
+- [input.md](../../../docs/architecture/input.md): the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`).
+- [PATCHES.md](../../GASNPP/PATCHES.md): the Network Prediction fork changes that these edits depend on.
