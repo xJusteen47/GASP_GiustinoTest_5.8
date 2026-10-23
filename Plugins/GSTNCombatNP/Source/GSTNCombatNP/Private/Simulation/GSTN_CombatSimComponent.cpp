@@ -462,7 +462,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	}
 	// A timeline that reached its commit is a timeline that started: the event of the one that was replaced inside its startup
 	// override window never exists. Written on every machine and every re-simulation, published by the authority only
-	if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline && OutSync.Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame))
+	if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline && OutSync.Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame, OutSync.Core.ActiveTimeline))
 	{
 		FGSTN_SimEvent Event;
 		Event.EventType = GSTNCombatTags::Event_TimelineStarted;
@@ -595,11 +595,11 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	const int32 Frame = TimeStep.ServerFrame;
 
 	// A timeline replaced or cancelled this frame ends first, so its ability is gone before the replacing one starts
-	if (const FGSTN_CombatRequest* Cancel = Sync->Core.Requests.Find(EGSTN_RequestType::CancelTimeline, Frame))
+	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
 	{
-		if (TimelineRegistry.IsValidIndex(Cancel->Arg))
+		if (Slot.Type == EGSTN_RequestType::CancelTimeline && Slot.Frame == Frame && TimelineRegistry.IsValidIndex(Slot.Arg))
 		{
-			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Cancel->Arg]);
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Slot.Arg]);
 			if (Spec && Spec->IsActive())
 			{
 				AbilitySystem->CancelAbilityHandle(Spec->Handle);
@@ -634,15 +634,21 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, CommandTable, Sync->Core.Input, Frame);
 
 	// The cost of a timeline commits when its startup override window ends: the ability is committed from here, so a timeline
-	// that was replaced inside the window never paid
-	if (const FGSTN_CombatRequest* Commit = Sync->Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame))
+	// that was replaced inside the window never paid. Only the commit of the timeline the state runs counts: a frame can hold the
+	// commit of one that was replaced in it, and the timeline logic removes that one, this is the second guard
+	if (Sync->Core.ActionState == EGSTN_ActionState::InTimeline && Sync->Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame, Sync->Core.ActiveTimeline))
 	{
-		if (TimelineRegistry.IsValidIndex(Commit->Arg))
+		if (TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
 		{
-			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Commit->Arg]);
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Sync->Core.ActiveTimeline]);
 			if (UGameplayAbility* Instance = Spec && Spec->IsActive() ? Spec->GetPrimaryInstance() : nullptr)
 			{
-				Instance->CommitAbility(Spec->Handle, AbilitySystem->AbilityActorInfo.Get(), Instance->GetCurrentActivationInfo());
+				// The meter can have dropped since the activation: a refused commit ends the ability (the clock then returns to
+				// Actionable on the next frame) instead of letting the timeline run for free
+				if (!Instance->CommitAbility(Spec->Handle, AbilitySystem->AbilityActorInfo.Get(), Instance->GetCurrentActivationInfo()))
+				{
+					AbilitySystem->CancelAbilityHandle(Spec->Handle);
+				}
 			}
 		}
 	}

@@ -2,8 +2,37 @@
 
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatTimeline, Log, All);
+
 namespace
 {
+	/** The request array is small on purpose; a full one is a bug in the tick (more requests in a frame than the design has), not a state to live with */
+	void AddRequest(FGSTN_CombatSyncCore& Core, EGSTN_RequestType Type, int32 Frame, int16 Arg)
+	{
+		if (!Core.Requests.Add(Type, Frame, Arg))
+		{
+			UE_LOG(LogGSTNCombatTimeline, Error, TEXT("Frame %d: the request array is full, dropped request type %d arg %d"), Frame, static_cast<int32>(Type), static_cast<int32>(Arg));
+		}
+	}
+
+	/** The timeline that was running is replaced or cancelled: its commit of this very frame (the end of its override window) never happens, and its slot is free */
+	void DropOldCommit(FGSTN_CombatSyncCore& Core, int32 Frame)
+	{
+		if (Core.ActiveTimeline != INDEX_NONE)
+		{
+			Core.Requests.Remove(EGSTN_RequestType::CommitTimeline, Frame, Core.ActiveTimeline);
+		}
+	}
+
+	void BeginState(FGSTN_CombatSyncCore& Core, int32 Frame, int32 TimelineIndex, EGSTN_ActivationSource Source)
+	{
+		Core.ActionState = EGSTN_ActionState::InTimeline;
+		Core.ActiveTimeline = static_cast<int16>(TimelineIndex);
+		Core.ActiveSource = Source;
+		Core.TimelineStartFrame = Frame;
+		Core.TimelinePausedFrames = 0;
+	}
+
 	void EvaluateInto(const FGSTN_CombatSyncCore& Core, int32 Frame, int32 PreviousFrame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output)
 	{
 		FGSTN_TimelineEvalParams Params;
@@ -56,7 +85,7 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 
 	if (Output.bCommitThisFrame)
 	{
-		Core.Requests.Add(EGSTN_RequestType::CommitTimeline, Frame, Core.ActiveTimeline);
+		AddRequest(Core, EGSTN_RequestType::CommitTimeline, Frame, Core.ActiveTimeline);
 	}
 	return true;
 }
@@ -99,13 +128,10 @@ void FGSTN_CombatTimelineLogic::Start(FGSTN_CombatSyncCore& Core, int32 Frame, i
 {
 	if (Core.ActionState == EGSTN_ActionState::InTimeline && Core.ActiveTimeline != INDEX_NONE)
 	{
-		Core.Requests.Add(EGSTN_RequestType::CancelTimeline, Frame, Core.ActiveTimeline);
+		DropOldCommit(Core, Frame);
+		AddRequest(Core, EGSTN_RequestType::CancelTimeline, Frame, Core.ActiveTimeline);
 	}
-	Core.ActionState = EGSTN_ActionState::InTimeline;
-	Core.ActiveTimeline = static_cast<int16>(TimelineIndex);
-	Core.ActiveSource = Source;
-	Core.TimelineStartFrame = Frame;
-	Core.TimelinePausedFrames = 0;
+	BeginState(Core, Frame, TimelineIndex, Source);
 }
 
 void FGSTN_CombatTimelineLogic::CancelForOtherCommand(FGSTN_CombatSyncCore& Core, int32 Frame)
@@ -116,7 +142,8 @@ void FGSTN_CombatTimelineLogic::CancelForOtherCommand(FGSTN_CombatSyncCore& Core
 	}
 	if (Core.ActiveTimeline != INDEX_NONE)
 	{
-		Core.Requests.Add(EGSTN_RequestType::CancelTimeline, Frame, Core.ActiveTimeline);
+		DropOldCommit(Core, Frame);
+		AddRequest(Core, EGSTN_RequestType::CancelTimeline, Frame, Core.ActiveTimeline);
 	}
 	ClearTimeline(Core);
 }
@@ -127,12 +154,22 @@ int32 FGSTN_CombatTimelineLogic::Adopt(FGSTN_CombatSyncCore& Core, int32 Frame, 
 	{
 		return INDEX_NONE;
 	}
-	// Start first: its CancelTimeline matters more than a loser's cancel if the small request array runs out (the losers then
-	// end by themselves when they have waited too long)
-	Start(Core, Frame, Awaiting[0], EGSTN_ActivationSource::Adopted);
+	// The winner is the running timeline's own class (a retrigger): its ability was restarted by the activation that is being
+	// adopted, so cancelling "the old entry" would cancel the newcomer. Only the state is rewritten with the new start frame
+	if (Core.ActionState == EGSTN_ActionState::InTimeline && Core.ActiveTimeline == Awaiting[0])
+	{
+		DropOldCommit(Core, Frame);
+		BeginState(Core, Frame, Awaiting[0], EGSTN_ActivationSource::Adopted);
+	}
+	else
+	{
+		// Start first: its CancelTimeline matters more than a loser's cancel if the small request array runs out (the losers then
+		// end by themselves when they have waited too long)
+		Start(Core, Frame, Awaiting[0], EGSTN_ActivationSource::Adopted);
+	}
 	for (int32 Index = 1; Index < Awaiting.Num(); ++Index)
 	{
-		Core.Requests.Add(EGSTN_RequestType::CancelAbility, Frame, static_cast<int16>(Awaiting[Index]));
+		AddRequest(Core, EGSTN_RequestType::CancelAbility, Frame, static_cast<int16>(Awaiting[Index]));
 	}
 	return Awaiting[0];
 }
@@ -142,6 +179,6 @@ void FGSTN_CombatTimelineLogic::EvaluateStart(FGSTN_CombatSyncCore& Core, int32 
 	EvaluateInto(Core, Frame, INDEX_NONE, Data, DefaultOverrideFrames, Output);
 	if (Output.bCommitThisFrame)
 	{
-		Core.Requests.Add(EGSTN_RequestType::CommitTimeline, Frame, Core.ActiveTimeline);
+		AddRequest(Core, EGSTN_RequestType::CommitTimeline, Frame, Core.ActiveTimeline);
 	}
 }
