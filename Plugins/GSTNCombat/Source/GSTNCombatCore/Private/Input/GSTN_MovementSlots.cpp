@@ -8,9 +8,9 @@
 
 namespace
 {
-	using FCondition = TInstancedStruct<FGSTN_InputCondition>;
+	using FMovementCondition = TInstancedStruct<FGSTN_InputCondition>;
 
-	FGSTN_InputSlotSpec MakeSlot(const FGameplayTag& Command, FCondition Anchor)
+	FGSTN_InputSlotSpec MakeMovementSlot(const FGameplayTag& Command, FMovementCondition Anchor)
 	{
 		FGSTN_InputSlotSpec Spec;
 		Spec.Command = Command;
@@ -20,20 +20,20 @@ namespace
 		return Spec;
 	}
 
-	FCondition MakePress(const FGameplayTag& Button)
+	FMovementCondition MakeMovementPress(const FGameplayTag& Button)
 	{
 		FGSTN_InputCondition_Press Condition;
 		Condition.Buttons.AddTag(Button);
-		return FCondition::Make<FGSTN_InputCondition_Press>(Condition);
+		return FMovementCondition::Make<FGSTN_InputCondition_Press>(Condition);
 	}
 
-	FCondition MakeRelease(const FGameplayTag& Button, int32 MinHeld, int32 MaxHeld)
+	FMovementCondition MakeMovementRelease(const FGameplayTag& Button, int32 MinHeld, int32 MaxHeld)
 	{
 		FGSTN_InputCondition_Release Condition;
 		Condition.Button = Button;
 		Condition.MinHeldFrames = MinHeld;
 		Condition.MaxHeldFrames = MaxHeld;
-		return FCondition::Make<FGSTN_InputCondition_Release>(Condition);
+		return FMovementCondition::Make<FGSTN_InputCondition_Release>(Condition);
 	}
 }
 
@@ -45,10 +45,10 @@ TArray<FGSTN_InputSlotSpec> UGSTN_MovementSlots::Build(bool bSwapTapHold, int32 
 	const FGameplayTag HoldCommand = (bSwapTapHold ? GSTNCommandTags::Interact_Grab : GSTNCommandTags::Interact_PickUp).GetTag();
 
 	TArray<FGSTN_InputSlotSpec> Slots;
-	Slots.Add(MakeSlot(GSTNCommandTags::Movement_Dash.GetTag(), MakePress(GSTNCombatButtonTags::Button_Sprint.GetTag())));
-	Slots.Add(MakeSlot(GSTNCommandTags::Defence_Dodge.GetTag(), MakePress(GSTNCombatButtonTags::Button_Dodge.GetTag())));
-	Slots.Add(MakeSlot(TapCommand, MakeRelease(Interact, 0, Hold - 1)));
-	Slots.Add(MakeSlot(HoldCommand, MakeRelease(Interact, Hold, INDEX_NONE)));
+	Slots.Add(MakeMovementSlot(GSTNCommandTags::Movement_Dash.GetTag(), MakeMovementPress(GSTNCombatButtonTags::Button_Sprint.GetTag())));
+	Slots.Add(MakeMovementSlot(GSTNCommandTags::Defence_Dodge.GetTag(), MakeMovementPress(GSTNCombatButtonTags::Button_Dodge.GetTag())));
+	Slots.Add(MakeMovementSlot(TapCommand, MakeMovementRelease(Interact, 0, Hold - 1)));
+	Slots.Add(MakeMovementSlot(HoldCommand, MakeMovementRelease(Interact, Hold, INDEX_NONE)));
 	return Slots;
 }
 

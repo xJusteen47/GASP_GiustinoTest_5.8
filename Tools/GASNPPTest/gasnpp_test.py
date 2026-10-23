@@ -353,7 +353,38 @@ def configure_pie(mode='listen', clients=2):
     return result
 
 
-def setup_editor(enable=True, mode='listen', clients=2):
+_pawn_override = {'prev': None}
+
+
+def _find_blueprint(name):
+    """Soft path ('/Game/.../Name.Name') of the Blueprint asset called `name`, searched through the asset registry; None when there is none."""
+    for a in unreal.AssetRegistryHelpers.get_asset_registry().get_assets_by_path('/Game', recursive=True):
+        if str(a.asset_name) == name and 'Blueprint' in str(a.asset_class_path.asset_name):
+            return str(a.package_name) + '.' + name
+    return None
+
+
+def set_pawn_override(pawn=None):
+    """Swaps the default pawn class of GM_GASNPPTest in memory (never saved) for the Blueprint called `pawn` (e.g. 'SandboxCharacter_Mover'),
+    resolved by soft path: no Blueprint is edited. None restores the class that was replaced. The scenarios that sample the test component
+    (_Run) need the harness pawn: use this for log based scenarios such as slide_jump(bare=True)."""
+    gm_class = unreal.load_asset('/Game/GASNPPTest/GM_GASNPPTest').generated_class()
+    cdo = unreal.get_default_object(gm_class)
+    if pawn is None:
+        if _pawn_override['prev'] is not None:
+            cdo.set_editor_property('default_pawn_class', _pawn_override['prev'])
+            _pawn_override['prev'] = None
+        return 'pawn restored'
+    path = _find_blueprint(pawn)
+    if path is None:
+        raise RuntimeError(f'no Blueprint called {pawn} under /Game')
+    if _pawn_override['prev'] is None:
+        _pawn_override['prev'] = cdo.get_editor_property('default_pawn_class')
+    cdo.set_editor_property('default_pawn_class', unreal.load_object(None, path + '_C'))
+    return f'pawn class {path}_C'
+
+
+def setup_editor(enable=True, mode='listen', clients=2, pawn=None):
     """Temporary editor-only setup (never saved): test GameMode override on the open level, PIE settings for `mode` ('listen' =
     primary, host + `clients` clients; 'dedicated' = secondary check), no background CPU throttling. enable=False restores all."""
     w = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
@@ -361,6 +392,7 @@ def setup_editor(enable=True, mode='listen', clients=2):
     w.get_world_settings().set_editor_property('default_game_mode', unreal.load_asset(gm).generated_class())
     perf = unreal.get_default_object(unreal.load_class(None, '/Script/UnrealEd.EditorPerformanceSettings'))
     perf.set_editor_property('bThrottleCPUWhenNotForeground', not enable)
+    set_pawn_override(pawn if enable else None)
     if enable:
         pie = configure_pie(mode, clients)
     else:
@@ -826,11 +858,12 @@ class _Run:
     state change lands on, and each scenario asserts a positive effect (tag / cooldown / stamina) before it asserts an absence,
     so it cannot pass vacuously. Verdict: unreal.log "PASS"/"FAIL" line, also in last_checks()."""
 
-    def __init__(self, name, client, extra=None, judge_reconciles=True):
+    def __init__(self, name, client, extra=None, judge_reconciles=True, sample=True):
         """extra: more sampled copies as [(label, world_index, pawn_key)]; their samples are read like 'srv' / 'cli' (spike_stats uses
         it for the second pawn). judge_reconciles=False: the spike scenarios create reconciles on purpose (a grant, an unpredicted
         effect) and judge them per window themselves, so the whole-run 'no unexplained reconciles' check is left out."""
-        self.name, self.client, self.key = name, client, key_of_player(client)
+        self.name, self.client, self.sample = name, client, sample
+        self.key = key_of_player(client) if sample else None
         self.extra, self.judge_reconciles = list(extra or []), judge_reconciles
         self.results, self.samples, self.handle = [], [], None
         self.rb0 = _total_rollbacks()
@@ -846,6 +879,8 @@ class _Run:
         return time.time() - self.t0
 
     def _tick(self, _dt):
+        if not self.sample:
+            return
         try:
             ws = worlds()
             s = {'t': self.now()}
@@ -858,7 +893,8 @@ class _Run:
                 s[side] = {'tags': set(v.get('tags', [])), 'stamina': v['attributes'].get('Stamina'), 'cd': dict(v['cooldowns']),
                            'mode': v.get('mode'), 'req': tuple((v.get('combat') or {}).get('request', (0, -1))),
                            'loc': tuple(v['location']), 'vel': tuple(v.get('velocity', (0, 0, 0))), 'attr': dict(v['attributes']),
-                           'probe': v.get('probe') or {}, 'jump': (v.get('combat') or {}).get('jump') or {}}
+                           'probe': v.get('probe') or {}, 'jump': (v.get('combat') or {}).get('jump') or {},
+                           'intl': bool((v.get('combat') or {}).get('inTimeline', False))}
             self.samples.append(s)
         except Exception:
             pass
@@ -2351,12 +2387,34 @@ IA.setdefault('sprint', '/Game/Input/IA_Sprint')
 IA.setdefault('crouch', '/Game/Input/IA_Crouch')
 
 
-def scenario_slide_jump(client=1, repeats=10):
+def _bare_input(client, action, value=(1.0, 0.0, 0.0), start=True):
+    """Input on a pawn without the test component (SandboxCharacter_Mover through set_pawn_override): the local player's enhanced input
+    subsystem injects the action. Raises when the subsystem is not reachable from Python in this build."""
+    pc = unreal.GameplayStatics.get_player_controller(worlds()[client], 0)
+    subsystem = unreal.SubsystemBlueprintLibrary.get_local_player_subsystem(pc, unreal.EnhancedInputLocalPlayerSubsystem)
+    act = unreal.load_asset(IA[action])
+    if start:
+        subsystem.start_continuous_input_injection_for_action(act, unreal.Vector(*value), [], [])
+    else:
+        subsystem.stop_continuous_input_injection_for_action(act)
+    return f'{"start" if start else "stop"} {action}'
+
+
+def scenario_slide_jump(client=1, repeats=10, bare=False):
     """Owner bug report 2026-10-23: sprint, crouch to slide, jump during the slide, and at some point the client is corrected. Repeats the sequence
     `repeats` times with np.LogReconcileField on and attributes the reconciles of the whole run: mismatches, unexplained of ours, by model
     (mover / asc / combat) and the logged differing fields (see the lines in the report). Strict check: no unexplained reconcile of ours; the Mover
-    corrections are listed, not judged (the cause is in the Blueprint modes if they show a movement mode / slide state field)."""
-    run = _Run('slide_jump', client, judge_reconciles=False)
+    corrections are listed, not judged (the cause is in the Blueprint modes if they show a movement mode / slide state field).
+    bare=True: the pawn is not the harness pawn (set_pawn_override('SandboxCharacter_Mover') before PIE): no sampling, inputs through the
+    player's enhanced input subsystem, the verdict is the reconcile report only."""
+    run = _Run('slide_jump', client, judge_reconciles=False, sample=not bare)
+    if bare:
+        press = lambda c, a: (_bare_input(c, a), _bare_input(c, a, start=False))
+        hold = lambda c, a, v: _bare_input(c, a, v)
+        release = lambda c, a: _bare_input(c, a, start=False)
+    else:
+        from_globals = globals()
+        press, hold, release = from_globals['press'], from_globals['hold'], from_globals['release']
     marks = {}
     for w in worlds():
         unreal.SystemLibrary.execute_console_command(w, 'np.LogReconcileField 1')
@@ -2385,3 +2443,238 @@ def scenario_slide_jump(client=1, repeats=10):
     ]
     run.run(steps)
 
+
+
+# ---- C14 movement kit scenarios (combat-m3 section 3). The harness grants the plugin dash / dodge abilities (server_set_move_kit); the test binding
+# set binds them to Command.Movement.Dash (Press of Input.Button.Sprint), Command.Defence.Dodge (Press of Input.Button.Dodge, ground / air /
+# escape variants by context and tag) and Command.Interact.Grab / PickUp (Release of Input.Button.Interact, tap / hold).
+
+def _kit(key, dash=True, dodge=True, interact=True):
+    return _srv(key).server_set_move_kit(dash, dodge, interact)
+
+
+def _moved(run, side, t_base, t1):
+    """Displacement (x, y, z) of `side` between the last sample before t_base and the latest sample up to t1."""
+    before = [s[side]['loc'] for s in run.samples if s['t'] < t_base and s.get(side)]
+    after = [s[side]['loc'] for s in run.samples if s['t'] <= t1 and s.get(side)]
+    if not before or not after:
+        return None
+    return tuple(after[-1][i] - before[-1][i] for i in range(3))
+
+
+def _norm(v):
+    return sum(x * x for x in v) ** 0.5
+
+
+def _landing_pair(run, store, label, t_base, t1, up=(0.0, 0.0, 1.0), tol=1.0, floor=30.0):
+    """Timeline check: where the move left the pawn (displacement from before t_base), authority vs owner within `tol` cm, and it moved at least `floor`."""
+    def f():
+        ds, dc = _moved(run, 'srv', t_base, t1), _moved(run, 'cli', t_base, t1)
+        if ds is None or dc is None:
+            return False, 'no samples'
+        store[label] = (ds, dc)
+        delta = _norm(tuple(ds[i] - dc[i] for i in range(3)))
+        return _norm(ds) > floor and delta <= tol, f'{label}: displacement srv {tuple(round(x, 1) for x in ds)}, owner {tuple(round(x, 1) for x in dc)} (delta {delta:.2f} cm, want <= {tol}, moved >= {floor})'
+    return run.at(f'{label}: landing position, authority vs owner', f)
+
+
+def _no_move(run, label, t_base, t1, limit=5.0):
+    """Timeline check: neither copy moved more than `limit` cm between t_base and t1 (a blocked or missing move does nothing)."""
+    def f():
+        ds, dc = _moved(run, 'srv', t_base, t1), _moved(run, 'cli', t_base, t1)
+        if ds is None or dc is None:
+            return False, 'no samples'
+        return _norm(ds) <= limit and _norm(dc) <= limit, f'displacement srv {_norm(ds):.1f} cm, owner {_norm(dc):.1f} cm (want <= {limit})'
+    return run.at(label, f)
+
+
+def _in_timeline_seen(run, label, t0, t1, want=True):
+    def f():
+        def side(sd):
+            seen = any(s['t'] >= t0 and s['t'] <= t1 and s.get(sd) and s[sd].get('intl') for s in run.samples)
+            return seen == want, f'timeline seen {seen} (want {want})'
+        return _both(run, side)
+    return run.at(label, f)
+
+
+def _standing_after(run, label, t):
+    def f():
+        def side(sd):
+            s = _latest(run, sd)
+            return (not s.get('intl')) and abs(s['vel'][2]) < 20.0 and (s['vel'][0] ** 2 + s['vel'][1] ** 2) ** 0.5 < 40.0, f'mode {s.get("mode")}, in timeline {s.get("intl")}, velocity {tuple(round(x) for x in s["vel"])}'
+        return _both(run, side)
+    return run.at(label, f)
+
+
+def scenario_dash(client=1, up=(0.0, 0.0, 1.0), gravity=None, name='dash'):
+    """C14 dash: a press of the sprint button throws the pawn along its facing in the plane perpendicular to local up. Judged on the authority and
+    the owner: the pawn moved, the peak speed is perpendicular to up (within 4 degrees), the timeline ran and ended, and both copies end within 1 cm."""
+    run = _Run(name, client)
+    key, st = run.key, {}
+    sprint = button_mask('Sprint')
+    T = 2.0
+
+    def peak_direction():
+        def f(side):
+            fast = [s['vel'] for s in run._win(side, T, T + 1.0) if _norm(s['vel']) > 500.0]
+            if not fast:
+                return False, 'no fast sample'
+            a = _angle_deg(fast[0], up)
+            return abs(a - 90.0) < 4.0, f'peak velocity {a:.2f} deg from local up (want 90 +- 4)'
+        return _both(run, f)
+
+    steps = [(0.3, lambda: ('grant the movement kit', _kit(key)))]
+    if gravity is not None:
+        steps += [(0.6, lambda: ('tilt gravity', _set_gravity_everywhere(key, gravity, True)))]
+    steps += [
+        (T - 0.3, _standing_after(run, 'standing before the dash', T)),
+        (T, lambda: ('dash', combat_tap(client, sprint))),
+        (T + 0.8, _in_timeline_seen(run, 'the dash timeline ran', T, T + 0.8)),
+        (T + 1.2, run.at('the peak speed is perpendicular to local up', peak_direction)),
+        (T + 3.0, _landing_pair(run, st, 'dash', T - 0.05, T + 3.0, floor=100.0)),
+        (T + 3.0, _standing_after(run, 'back to actionable, at rest', T)),
+    ]
+    if gravity is not None:
+        steps += [(T + 3.1, lambda: ('restore gravity', _set_gravity_everywhere(key, gravity, False)))]
+    steps += [
+        (T + 3.2, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False)))),
+        (T + 4.2, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_dash_tilted_gravity(client=1, tilt_deg=30.0):
+    """C14 dash under gravity tilted `tilt_deg` from straight down (owner rule 1): the same checks as scenario_dash with the up of the tilted frame."""
+    import math
+    t = math.radians(tilt_deg)
+    gravity = (980.0 * math.sin(t), 0.0, -980.0 * math.cos(t))
+    scenario_dash(client, up=_unit(tuple(-g for g in gravity)), gravity=gravity, name='dash_tilted_gravity')
+
+
+def scenario_ground_dodge(client=1):
+    """C14 ground dodge: a press of the dodge button on the ground throws the pawn into a low arc (long jump) and it lands standing. Judged on the authority
+    and the owner: the apex of the arc and the landing position agree within 1 cm, the apex is near the prediction of the default data (46 cm), the
+    timeline ended on landing (actionable again, no lying state: mode walking, speed ~0)."""
+    run = _Run('ground_dodge', client)
+    key, st, apex = run.key, {}, {}
+    dodge = button_mask('Dodge')
+    T = 2.0
+    steps = [
+        (0.3, lambda: ('grant the movement kit', _kit(key))),
+        (T, lambda: ('dodge', combat_tap(client, dodge))),
+        (T + 0.4, _in_timeline_seen(run, 'the dodge timeline ran', T, T + 0.4)),
+        (T + 3.0, _apex_pair(run, apex, 'ground dodge', T - 0.05, T, T + 1.5, tol=1.0, floor=20.0)),
+        (T + 3.0, _landing_pair(run, st, 'ground dodge', T - 0.05, T + 3.0, floor=200.0)),
+        (T + 3.0, _standing_after(run, 'landed standing, actionable', T)),
+        (T + 3.1, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False)))),
+        (T + 4.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_air_dodge(client=1):
+    """C14 air dodge (dive roll): jump, press dodge in the air. The dive goes forward and down, the timeline ends on landing (plus the landing lag),
+    and the landing position agrees between the authority and the owner within 1 cm."""
+    run = _Run('air_dodge', client)
+    key, st = run.key, {}
+    dodge, jump = button_mask('Dodge'), button_mask('Jump')
+    T = 2.0
+    steps = [
+        (0.3, lambda: ('grant the movement and jump kits', (_kit(key), _srv(key).server_set_jump_kit(True)))),
+        (T, lambda: ('jump', _jump_tap(client, 0.3))),
+        (T + 0.3, lambda: ('release', combat_clear(client))),
+        (T + 0.55, lambda: ('air dodge', combat_tap(client, dodge))),
+        (T + 0.9, _in_timeline_seen(run, 'the air dodge timeline ran', T + 0.55, T + 0.9)),
+        (T + 4.0, _landing_pair(run, st, 'air dodge', T - 0.05, T + 4.0, floor=100.0)),
+        (T + 4.0, _standing_after(run, 'landed, actionable again', T)),
+        (T + 4.1, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False), _srv(key).server_set_jump_kit(False)))),
+        (T + 5.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_dodge_blocked_in_hitstun(client=1):
+    """C14 owner rule 3: no dodging in hitstun by default (blocked tag data of the ability). A: hitstun on, dodge pressed: nothing happens. B: hitstun off,
+    dodge works. C: hitstun on and the kit has the escape dodge (blocks dropped as data): it works. Judged on the authority and the owner."""
+    run = _Run('dodge_blocked_in_hitstun', client)
+    key, st = run.key, {}
+    dodge = button_mask('Dodge')
+    TA, TB, TC = 2.0, 6.0, 10.5
+    steps = [
+        (0.3, lambda: ('grant the movement kit', _kit(key, False, True, False))),
+        (TA - 0.5, lambda: ('hitstun on', _srv(key).server_set_hitstun(True))),
+        (TA, lambda: ('A: dodge in hitstun', combat_tap(client, dodge))),
+        (TA + 2.0, _no_move(run, 'A: blocked in hitstun, nothing moved', TA - 0.05, TA + 2.0)),
+        (TA + 2.0, _in_timeline_seen(run, 'A: no timeline started', TA, TA + 2.0, want=False)),
+        (TB - 0.5, lambda: ('hitstun off', _srv(key).server_set_hitstun(False))),
+        (TB, lambda: ('B: dodge without hitstun', combat_tap(client, dodge))),
+        (TB + 3.0, _landing_pair(run, st, 'B: free dodge', TB - 0.05, TB + 3.0, floor=200.0)),
+        (TC - 0.6, lambda: ('hitstun on, escape kit on', (_srv(key).server_set_hitstun(True), _srv(key).server_set_escape_kit(True)))),
+        (TC, lambda: ('C: dodge in hitstun with the escape kit', combat_tap(client, dodge))),
+        (TC + 3.0, _landing_pair(run, st, 'C: escape dodge in hitstun', TC - 0.05, TC + 3.0, floor=200.0)),
+        (TC + 3.1, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_hitstun(False), _srv(key).server_set_escape_kit(False), _kit(key, False, False, False)))),
+        (TC + 4.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_kit_without_dodge(client=1):
+    """C14: a kit without a dodge (the abilities are not granted; the command is bound but has nothing to start). A press of the dodge button does
+    nothing and does not reserve the press: no request, no movement, and a dash pressed right after still works."""
+    run = _Run('kit_without_dodge', client)
+    key, st = run.key, {}
+    dodge, sprint = button_mask('Dodge'), button_mask('Sprint')
+    T = 2.0
+    steps = [
+        (0.3, lambda: ('grant dash and interact only', _kit(key, True, False, True))),
+        (T, lambda: ('dodge (no such ability)', combat_tap(client, dodge))),
+        (T + 1.0, _no_move(run, 'no dodge: nothing moved', T - 0.05, T + 1.0)),
+        (T + 1.0, run.at('no request was made for the dodge press', lambda: (not run.new_bindings(T - 0.05, T + 1.0, 'srv') and not run.new_bindings(T - 0.05, T + 1.0, 'cli'),
+                                                                              f'bindings srv {run.new_bindings(T - 0.05, T + 1.0, "srv")}, owner {run.new_bindings(T - 0.05, T + 1.0, "cli")}'))),
+        (T + 1.2, lambda: ('dash right after', combat_tap(client, sprint))),
+        (T + 4.0, _landing_pair(run, st, 'the dash still works', T + 1.15, T + 4.0, floor=100.0)),
+        (T + 4.1, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False)))),
+        (T + 5.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_interact_tap_hold(client=1):
+    """C14 interact: the default movement slots give a tap = grab and a hold = pick up (the placeholder abilities own Test.State.Grab / PickUp).
+    A: tap -> grab only. B: a press held 0.5 s -> pick up only. C: a press that is pending (no command yet) and released after 7 frames -> grab, so
+    a pending hold never swallows the tap. Judged on the authority and the owner. (The swapped data set is a Core test: GSTNCombat.Core.MovementSlots.InteractTapHold.)"""
+    run = _Run('interact_tap_hold', client)
+    key = run.key
+    interact = button_mask('Interact')
+    TA, TB, TC = 2.0, 5.0, 8.0
+
+    def tags(sd, t0, t1):
+        return set().union(*[s[sd]['tags'] for s in run.samples if t0 <= s['t'] <= t1 and s.get(sd)] or [set()])
+
+    def only(label, want, other, t0, t1):
+        def f(sd):
+            seen = tags(sd, t0, t1)
+            return want in seen and other not in seen, f'seen {sorted(t for t in seen if t.startswith("Test.State.") and t[11:] in ("Grab", "PickUp"))} (want {want} only)'
+        return run.at(label, lambda: _both(run, f))
+
+    def pending():
+        def f(sd):
+            seen = tags(sd, TC + 0.02, TC + 0.09)
+            return 'Test.State.Grab' not in seen and 'Test.State.PickUp' not in seen, 'no interact command while the press is pending'
+        return _both(run, f)
+
+    steps = [
+        (0.3, lambda: ('grant the interact kit', _kit(key, False, False, True))),
+        (TA, lambda: ('A: tap', combat_tap(client, interact))),
+        (TA + 1.0, only('A: a tap is a grab', 'Test.State.Grab', 'Test.State.PickUp', TA, TA + 1.0)),
+        (TB, lambda: ('B: press and hold', combat_hold(client, interact))),
+        (TB + 0.5, lambda: ('B: release', combat_clear(client))),
+        (TB + 1.5, only('B: a hold is a pick up', 'Test.State.PickUp', 'Test.State.Grab', TB, TB + 1.5)),
+        (TC, lambda: ('C: press', combat_hold(client, interact))),
+        (TC + 0.09, run.at('C: nothing fires while the press may still become a hold', pending)),
+        (TC + 0.12, lambda: ('C: release after about 7 frames', combat_clear(client))),
+        (TC + 1.2, only('C: the tap was not swallowed by the pending hold', 'Test.State.Grab', 'Test.State.PickUp', TC + 0.1, TC + 1.2)),
+        (TC + 1.3, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False)))),
+        (TC + 2.3, run.finish()),
+    ]
+    run.run(steps)

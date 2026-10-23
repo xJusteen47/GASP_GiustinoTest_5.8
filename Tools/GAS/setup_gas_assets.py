@@ -8,15 +8,15 @@
 # Steps:
 #  1. /Game/GAS/Input/IMC_GAS_Abilities: lists IA_Jump for the ability system (keys copied from IMC_Sandbox). It must be
 #     in Project Settings > Ability Simulation Settings > Ability System Mapping Contexts (Config/DefaultGame.ini).
-#  2. BP_GASNPP_TestCharacter: GSTN_GA_Jump and GSTN_GA_WallSlide in the NpAbilitySystem DefaultAbilities, plus a
+#  2. (opt-in, --test-character; edits a shared Blueprint) BP_GASNPP_TestCharacter: GSTN_GA_Jump and GSTN_GA_WallSlide in the NpAbilitySystem DefaultAbilities, plus a
 #     GSTN_AbilityInputComponent (binds the ability input actions for the local player).
 #  3. (opt-in) SandboxCharacter_Mover: the Falling mode's GSTN_WallEntryTransition becomes a GSTN_AbilityWallEntryTransition with
 #     the same settings. Pawns without an ability system behave as before (bAllowWithoutAbilitySystem).
 #  4. (opt-in, --combat-input) Combat M2 test content in /Game/GASNPPTest/Input (specs in combat_test_specs()):
 #     IA_GASNPP_Attack/Special (+ keys in IMC_GASNPP_Test), IC_GASNPP_Test (UGSTN_InputConfig), SS_GASNPP_Standard (slot
 #     set, filled by UGSTN_StandardSlots.FillSlotSet), BS_GASNPP_Test (UGSTN_CommandBindingSet: Dash/Buff, Attack.* -> test
-#     attack, Special.* -> test stance), assigned to BP_GASNPP_TestCharacter's GSTN_CombatSimComponent; the test abilities are
-#     added to its ability system's DefaultAbilities.
+#     attack, Special.* -> test stance, the C14 movement kit). It does NOT edit BP_GASNPP_TestCharacter: it warns when the
+#     Blueprint's GSTN_CombatSimComponent does not point to these assets, and the harness grants the abilities at run time.
 # The Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
 #
 # Current layout (2026-10-17, set by hand from the editor, not by this script): the NpAbilitySystem (GA_Jump, GA_WallSlide)
@@ -210,6 +210,10 @@ def combat_test_specs():
             ('IA_GASNPP_Special', ['MiddleMouseButton']),
             # C13: the jump button of the platform jump kit (the scenarios drive it with scripted buttons; the key is for manual tries)
             ('IA_GASNPP_Jump', ['Y']),
+            # C14: dodge, interact and sprint (dash) buttons of the movement kit
+            ('IA_GASNPP_Dodge', ['U']),
+            ('IA_GASNPP_Interact', ['O']),
+            ('IA_GASNPP_Sprint', ['L']),
         ],
         # Bit order of the buttons = order here (it is the bit in every input mask: keep it stable)
         'input_config': {
@@ -223,6 +227,10 @@ def combat_test_specs():
                 ('Input.Button.Buff', TEST_INPUT_DIR + '/IA_GASNPP_Buff'),
                 # C13: bit 5, after Buff, so the indices of the buttons above stay as they were
                 ('Input.Button.Jump', TEST_INPUT_DIR + '/IA_GASNPP_Jump'),
+                # C14: bits 6, 7 and 8, after Jump, for the same reason
+                ('Input.Button.Dodge', TEST_INPUT_DIR + '/IA_GASNPP_Dodge'),
+                ('Input.Button.Interact', TEST_INPUT_DIR + '/IA_GASNPP_Interact'),
+                ('Input.Button.Sprint', TEST_INPUT_DIR + '/IA_GASNPP_Sprint'),
             ],
             'move_action': IA_MOVE,
         },
@@ -232,6 +240,9 @@ def combat_test_specs():
         'press_slots': [('Command.Dash', 'Input.Button.Dash'), ('Command.Buff', 'Input.Button.Buff'),
                         # C13: the default proposal of the jump kit: Press(Jump), and a down press (Crouch) for the fast fall
                         ('Command.Movement.Jump', 'Input.Button.Jump'), ('Command.Movement.FastFall', 'Input.Button.Crouch')],
+        # C14: the default movement slots of the plugin (UGSTN_MovementSlots): dash, dodge, interact tap = grab and hold = pick up.
+        # The swapped data set (tap = pick up, hold = grab) is a Core test; the PIE scenario runs the default one
+        'movement_slots': {'swap_tap_hold': False},
         # Test abilities (project module, Source/GASP_Giustino2/GASNPPTest) the pawn's ability system must be granted for a
         # binding to start them. Added to the NpAbilitySystemComponent's DefaultAbilities when missing.
         'abilities': ['GSTN_GA_TestDash', 'GSTN_GA_TestBuff', 'GSTN_GA_TestAttack', 'GSTN_GA_TestStance'],
@@ -245,6 +256,14 @@ def combat_test_specs():
                 # C13 jump kit (plugin abilities; the harness grants them with ServerSetJumpKit, they are not in the Blueprint's DefaultAbilities)
                 ('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'),
                 ('Command.Movement.FastFall', [], [], 'GSTN_GA_PlatformFastFall'),
+                # C14 movement kit (plugin abilities, granted by the harness with ServerSetMoveKit). The dodge is one command bound by context;
+                # the escape dodge (a kit with the blocks dropped as data) takes over when the pawn owns Test.State.Escape
+                ('Command.Movement.Dash', [], [], 'GSTN_GA_Dash'),
+                ('Command.Defence.Dodge', ['Input.Context.Grounded'], ['Test.State.Escape'], 'GSTN_GA_GroundDodge'),
+                ('Command.Defence.Dodge', ['Input.Context.Grounded', 'Test.State.Escape'], [], 'GSTN_GA_TestEscapeDodge'),
+                ('Command.Defence.Dodge', ['Input.Context.Airborne'], [], 'GSTN_GA_AirDodge'),
+                ('Command.Interact.Grab', [], [], 'GSTN_GA_TestGrab'),
+                ('Command.Interact.PickUp', [], [], 'GSTN_GA_TestPickUp'),
                 # The four standard attack commands, grounded / airborne: one test attack (owns Test.State.Attacking)
                 *[(f'Command.Attack.{shape}', [ctx], [], 'GSTN_GA_TestAttack')
                   for shape in SHAPES for ctx in CONTEXTS],
@@ -370,6 +389,12 @@ def setup_combat_slot_set(specs):
             break
         elif add(asset, _make_tag(command), _make_tag(button)):
             log(f'{name}: press slot {command} <- {button}')
+    movement = getattr(getattr(unreal, 'GSTN_MovementSlots', None), 'append_to_slot_set', None)
+    if movement:
+        movement(asset, specs['movement_slots']['swap_tap_hold'])
+        log(f'{name}: movement slots (dash, dodge, interact tap/hold) added')
+    else:
+        log('  movement slots NOT added: unreal.GSTN_MovementSlots not found (rebuild the editor and run again)')
     if str(asset.get_editor_property('slots')) != before:
         changed = True
     if changed:
@@ -415,37 +440,29 @@ def setup_combat_binding_set(specs, slot_set):
     return asset, changed
 
 
-def setup_combat_test_abilities(specs):
-    """Grants the test abilities of specs['abilities'] on the test character's ability system (DefaultAbilities), if missing."""
+def check_test_character_abilities(specs):
+    """Reports (never changes) the test abilities that BP_GASNPP_TestCharacter's ability system does not list in DefaultAbilities.
+
+    The Blueprint is shared: this script does not edit it. The harness grants the abilities at run time instead
+    (UGSTN_GASNPPTestComponent.ServerSetJumpKit / ServerSetMoveKit), so a missing entry is only informative."""
     bp = unreal.load_asset(TEST_CHAR)
     asc = next((obj for _, obj in blueprint_components(bp) if isinstance(obj, unreal.NpAbilitySystemComponent)), None)
     if not asc:
         log(f'ERROR: no NpAbilitySystemComponent on {TEST_CHAR}')
-        return False
-    classes = []
+        return
+    defaults = list(asc.get_editor_property('default_abilities'))
     for name in specs['abilities']:
         cls = getattr(unreal, name, None)
-        if cls is None:
-            log(f'  ability {name} skipped (class not in this editor build)')
-            continue
-        classes.append(cls.static_class())
-    defaults = list(asc.get_editor_property('default_abilities'))
-    missing = [c for c in classes if c not in defaults]
-    if not missing:
-        return False
-    backup(TEST_CHAR)
-    asc.set_editor_property('default_abilities', defaults + missing)
-    log(f'DefaultAbilities += {[c.get_name() for c in missing]}')
-    unreal.BlueprintEditorLibrary.compile_blueprint(bp)
-    unreal.EditorAssetLibrary.save_loaded_asset(bp)
-    return True
+        if cls is not None and cls.static_class() not in defaults:
+            log(f'  note: {name} is not in the DefaultAbilities of {TEST_CHAR} (not edited: the harness grants abilities at run time)')
 
 
 def setup_combat_input():
-    """Creates/updates the combat test content from combat_test_specs() and assigns it to the test character's component."""
+    """Creates/updates the combat test content from combat_test_specs(). Never edits or saves BP_GASNPP_TestCharacter:
+    it only reports when the Blueprint's GSTN_CombatSimComponent does not point to the assets made here."""
     specs = combat_test_specs()
     changed = setup_combat_test_actions(specs)
-    changed |= setup_combat_test_abilities(specs)
+    check_test_character_abilities(specs)
     config, c = setup_combat_input_config(specs)
     changed |= c
     slot_set, c = setup_combat_slot_set(specs)
@@ -458,21 +475,24 @@ def setup_combat_input():
     if not combat:
         log(f'ERROR: no GSTN_CombatSimComponent on {TEST_CHAR}')
         return changed
-    if combat.get_editor_property('input_config') != config or combat.get_editor_property('slot_bindings') != binding_set:
-        backup(TEST_CHAR)
-        combat.set_editor_property('input_config', config)
-        combat.set_editor_property('slot_bindings', binding_set)
-        log('GSTN_CombatSimComponent.InputConfig / SlotBindings assigned')
-        unreal.BlueprintEditorLibrary.compile_blueprint(bp)
-        unreal.EditorAssetLibrary.save_loaded_asset(bp)
-        changed = True
+    # Soft pointers: compare asset paths, not objects (an object compare is never equal and made the old script save the Blueprint every run)
+    def path_of(value):
+        return str(value.get_path_name()) if value else ''
+    assigned = {path_of(combat.get_editor_property('input_config')), path_of(combat.get_editor_property('slot_bindings'))}
+    wanted = {path_of(config), path_of(binding_set)}
+    if assigned != wanted:
+        log(f'  WARNING: the GSTN_CombatSimComponent of {TEST_CHAR} points to {sorted(assigned)}, not to {sorted(wanted)}. '
+            'This script does not edit the shared Blueprint: assign InputConfig / SlotBindings by hand if that is wanted')
     return changed
 
 
-def run(wall_transition=False, combat_input=False):
-    """Step 3 changes a movement asset owned by the movement work and step 4 the combat test character: opt-in."""
+def run(wall_transition=False, combat_input=False, test_character=False):
+    """Step 2 and step 3 change shared Blueprints (the test character, the sandbox character) and are opt-in; step 4 never does."""
     log(f'mapping context changed: {setup_mapping_context()}')
-    log(f'test character changed: {setup_test_character()}')
+    if test_character:
+        log(f'test character changed: {setup_test_character()}')
+    else:
+        log('test character skipped (run(test_character=True) or --test-character: it edits BP_GASNPP_TestCharacter)')
     if wall_transition:
         log(f'wall transition changed: {setup_wall_transition()}')
     else:
@@ -483,4 +503,5 @@ def run(wall_transition=False, combat_input=False):
 
 if __name__ == '__main__':
     import sys
-    run(wall_transition='--wall-transition' in sys.argv, combat_input='--combat-input' in sys.argv)
+    run(wall_transition='--wall-transition' in sys.argv, combat_input='--combat-input' in sys.argv,
+        test_character='--test-character' in sys.argv)

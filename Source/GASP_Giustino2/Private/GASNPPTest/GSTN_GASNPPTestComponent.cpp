@@ -808,6 +808,8 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				CombatJson->SetObjectField(TEXT("jump"), JumpJson);
 			}
 			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestFrame) });
+			CombatJson->SetBoolField(TEXT("inTimeline"), CombatState->Core.ActionState == EGSTN_ActionState::InTimeline);
+			CombatJson->SetNumberField(TEXT("timeline"), CombatState->Core.ActiveTimeline);
 			Json->SetObjectField(TEXT("combat"), CombatJson);
 		}
 	}
