@@ -177,6 +177,7 @@ void FGSTN_LoadoutAssembly::BuildRulesView(const FGSTN_ResolvedLoadout& Resolved
 	{
 		OutView.Table.Warnings.Add(Warning.ToString());
 	}
+	OutView.Table.EntryCount = Table.Entries.Num();
 	for (const FGSTN_TimelineRegistryEntry& Entry : Table.Registry)
 	{
 		OutView.Table.RegistryAbilities.AddUnique(Entry.Ability);

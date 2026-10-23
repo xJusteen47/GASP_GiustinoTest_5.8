@@ -11,6 +11,7 @@
 #include "Input/GSTN_ButtonMap.h"
 #include "Jump/GSTN_GravityPhases.h"
 #include "Jump/GSTN_JumpLogic.h"
+#include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatTableSet.h"
@@ -264,6 +265,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
 	bool ServerApplyLoadoutChange(UGSTN_LoadoutComponent* Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
 
+	/**
+	 * Feeds the loadout's compiled table to the simulation: on every machine, when the loadout component applies a loadout (the server
+	 * directly, a client from the OnRep), the table is converted into a table set and registered under the loadout's revision. The set
+	 * takes over at the revision boundary of the combat tick. The component finds a loadout component by itself (on the owner, else on the
+	 * pawn's PlayerState) and binds it; call this to bind one explicitly. Binding the same component twice does nothing
+	 */
+	void BindLoadoutComponent(UGSTN_LoadoutComponent* Loadout);
+
+	/** The stats effect entries of a resolved loadout's weapons, in loadout order (a weapon without a stats effect leaves its Effect empty) */
+	static TArray<FGSTN_WeaponStatsEntry> BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved);
+
 protected:
 	virtual void InitializeNetworkPredictionProxy() override;
 
@@ -272,6 +284,18 @@ private:
 	void CompileInput();
 
 	void BindAbilitySystem();
+
+	UFUNCTION()
+	void HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision);
+
+	/** Looks for the loadout component to bind, a few times a second, until one is bound (the PlayerState and its component arrive after BeginPlay on a client) */
+	void PollLoadoutComponent();
+
+	TWeakObjectPtr<UGSTN_LoadoutComponent> BoundLoadout;
+	int32 LoadoutPollTicks = 0;
+
+	/** Server: the simulation frame of the last accepted loadout change, INDEX_NONE before the first (MinFramesBetweenLoadoutChanges) */
+	int32 LastLoadoutChangeFrame = INDEX_NONE;
 
 	/** The tracker of the owner's Mover component, bound on first use; null without a Mover component */
 	UGSTN_MoverSimStateTracker* GetJumpTracker();

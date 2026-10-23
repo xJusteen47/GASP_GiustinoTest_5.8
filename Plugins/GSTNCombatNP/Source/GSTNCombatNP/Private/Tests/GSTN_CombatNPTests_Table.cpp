@@ -2,6 +2,10 @@
 // ability system instance is involved. Classes are the hidden test abilities of this module and the plugin's own.
 
 #include "Abilities/GSTN_GA_PlatformJump.h"
+#include "Effects/GSTN_GE_WeaponStats.h"
+#include "Kits/GSTN_WeaponDefinition.h"
+#include "Loadout/GSTN_LoadoutRules.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Loadout/GSTN_EntrySourceMask.h"
@@ -255,6 +259,59 @@ bool FGSTN_NPTableExtensionOrderTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("both ran"), Order.Num(), 2);
 	TestTrue(TEXT("in id order, whatever the registration order"), Order.Num() == 2 && Order[0] == TEXT("A") && Order[1] == TEXT("B"));
 	TestNotEqual(TEXT("what an extension changes is part of the checksum"), Set->Checksum, Convert(MakeCompiled(), Settings)->Checksum);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTableLimitsValidatorTest, "GSTNCombat.NP.Table.LimitsValidatorRefuses", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPTableLimitsValidatorTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_LoadoutRules> Rules(NewObject<UGSTN_LoadoutRules>(GetTransientPackage()));
+	auto CountLimitErrors = [&Rules](const FGSTN_LoadoutRulesView& View)
+	{
+		int32 Count = 0;
+		for (const FText& Error : Rules->Validate(View).Errors)
+		{
+			Count += Error.ToString().Contains(TEXT("combat simulation holds")) ? 1 : 0;
+		}
+		return Count;
+	};
+
+	FGSTN_LoadoutRulesView View;
+	View.Table.EntryCount = FGSTN_CommandTable::MaxBindings;
+	TestEqual(TEXT("a table at the limit is accepted"), CountLimitErrors(View), 0);
+	View.Table.EntryCount = FGSTN_CommandTable::MaxBindings + 1;
+	TestEqual(TEXT("one binding too many is refused"), CountLimitErrors(View), 1);
+
+	View.Table.EntryCount = 0;
+	for (int32 Index = 0; Index <= FGSTN_CompiledBindingTable::MaxRegistryEntries; ++Index)
+	{
+		View.Table.RegistryAbilities.Add(FSoftObjectPath(FString::Printf(TEXT("/Script/GSTNCombatNP.Timeline%d"), Index)));
+	}
+	TestEqual(TEXT("a registry past its limit is refused"), CountLimitErrors(View), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTableWeaponStatsTest, "GSTNCombat.NP.Table.WeaponStatsFromLoadout", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPTableWeaponStatsTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_WeaponDefinition> Primary(NewObject<UGSTN_WeaponDefinition>(GetTransientPackage()));
+	Primary->StatsEffect = TSoftClassPtr<UGSTN_GE_WeaponStats>(UGSTN_GE_WeaponStats::StaticClass());
+	Primary->StatModifiers.AddDefaulted();
+	Primary->StatModifiers[0].Value = 300.f;
+	const TStrongObjectPtr<UGSTN_WeaponDefinition> Support(NewObject<UGSTN_WeaponDefinition>(GetTransientPackage()));
+
+	FGSTN_ResolvedLoadout Resolved;
+	Resolved.Weapons = { Primary.Get(), Support.Get(), nullptr };
+	const TArray<FGSTN_WeaponStatsEntry> Entries = UGSTN_CombatSimComponent::BuildWeaponStats(Resolved);
+
+	if (!TestEqual(TEXT("one entry per weapon, an unresolved one included"), Entries.Num(), 3))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the primary weapon's effect class"), Entries[0].Effect.Get(), UGSTN_GE_WeaponStats::StaticClass());
+	TestEqual(TEXT("and its stat magnitudes"), Entries[0].Stats.Num(), 1);
+	TestTrue(TEXT("a support weapon ships without a stats effect"), Entries[1].Effect == nullptr && Entries[1].Stats.IsEmpty());
+	TestTrue(TEXT("an unresolved weapon is an empty entry"), Entries[2].Effect == nullptr);
 	return true;
 }
 

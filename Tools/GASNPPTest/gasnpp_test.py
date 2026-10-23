@@ -2840,12 +2840,45 @@ def scenario_loadout_change(client=1):
         ok = by.get('combat', 0) <= 3 and by.get('asc', 0) <= 3 and by.get('mover', 0) == 0
         return ok, f"unexplained by model {by} (at most one combat and one asc reconcile per accepted change = 3 each, no Mover), forced={r['forced']}"
 
+    def table_swapped(label, revision):
+        """The simulation swapped to the loadout's table set: the combat state's table revision follows the demanded loadout revision on both"""
+        def f():
+            out, ok = [], True
+            for i, side in ((0, 'srv'), (client, 'cli')):
+                co = _loadout_view(i, key)[1]
+                ok &= co.get('tableRevision') == revision and co.get('loadoutRevision') == revision
+                out.append(f"{side}: table revision {co.get('tableRevision')} loadout revision {co.get('loadoutRevision')} bindings {co.get('tableBindings')}")
+            return ok, '; '.join(out) + f' (want both {revision})'
+        return run.at(label, f)
+
+    def combat_table_crc(label):
+        def f():
+            crcs = [_loadout_view(i, key)[1].get('tableCrc') for i in (0, client)]
+            return bool(crcs[0]) and crcs[0] == crcs[1], f'combat table checksums (authority, owner) {crcs}, want equal'
+        return run.at(label, f)
+
+    def dash_requests(label, t0, t1, want):
+        """A press of the dash button: a request is made (want True) or none is, and the press is not reserved (want False)"""
+        def f():
+            srv, cli = run.new_bindings(t0, t1, 'srv'), run.new_bindings(t0, t1, 'cli')
+            return (bool(srv) and bool(cli)) if want else (not srv and not cli), f'dash press: bindings authority {srv}, owner {cli} (want {"a request" if want else "none"})'
+        return run.at(label, f)
+
+    def gate_open():
+        closed = _loadout_view(0, key)[1].get('tableGateClosed')
+        return closed == 0, f'frames the authority ran with the table gate closed: {closed} (want 0)'
+
+    sprint = button_mask('Sprint')
     steps = [
         (0.4, _mark(run, marks, 'start')),
         (0.5, lambda: ('clear a stale press', combat_clear(client))),
         (0.6, apply('KIT_Test_Alpha', '', 'A')),
         (1.8, accepted('A')),
         (1.9, state('A: Alpha applied on both (revision base+1, WalkSpeed 600, same table)', 'KIT_Test_Alpha', base + 1, 600.0)),
+        (1.92, table_swapped('A: the simulation swapped to the loadout table (table revision == loadout revision)', base + 1)),
+        (1.92, combat_table_crc('A: the combat table checksum is the same on the authority and the owner')),
+        (1.95, lambda: ('A: dash press (Alpha has no dash command)', combat_tap(client, sprint))),
+        (2.35, dash_requests('A: the dash command does not exist after Alpha: no request, no reserved press', 1.93, 2.35, False)),
         (2.5, lambda: ('A: jump', _jump_tap(client, 0.3))),
         (2.8, lambda: ('release', combat_clear(client))),
         (5.5, apex_step('alpha', 2.5, 5.5)),
@@ -2856,6 +2889,8 @@ def scenario_loadout_change(client=1):
         (7.2, accepted('B')),
         (7.3, timeline_cancelled()),
         (7.4, state('B: Beta applied on both (revision base+2, WalkSpeed 900, same table)', 'KIT_Test_Beta', base + 2, 900.0)),
+        (7.45, lambda: ('B: dash press (Beta has the dash)', combat_tap(client, sprint))),
+        (7.85, dash_requests('B: after Beta the dash command exists: the press makes a request', 7.43, 7.85, True)),
         (8.0, lambda: ('B: jump', _jump_tap(client, 0.3))),
         (8.3, lambda: ('release', combat_clear(client))),
         (11.0, apex_step('beta', 8.0, 11.0)),
@@ -2871,6 +2906,7 @@ def scenario_loadout_change(client=1):
         (13.8, accepted('D')),
         (13.9, state('D: Alpha + support weapon (revision base+3, WalkSpeed 600 kept)', 'KIT_Test_Alpha', base + 3, 600.0, ('WPN_Test_Support',))),
         (14.0, run.at('reconciles: one per accepted change and model', reconciles)),
+        (14.05, run.at('the table gate stayed open on the authority', gate_open)),
         (14.1, run.finish()),
     ]
     run.run(steps)

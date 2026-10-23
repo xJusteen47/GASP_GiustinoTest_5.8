@@ -946,6 +946,14 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			CombatJson->SetNumberField(TEXT("pausedTotal"), CombatState->Core.PausedFramesTotal);
 			CombatJson->SetNumberField(TEXT("timelinePaused"), CombatState->Core.TimelinePausedFrames);
 			CombatJson->SetNumberField(TEXT("loadoutRevision"), CombatState->Core.LoadoutRevision);
+			// The table set the simulation is on: the revision it swapped to, its checksum and size, and the frames the gate ran closed
+			CombatJson->SetNumberField(TEXT("tableRevision"), CombatState->Core.TableRevision);
+			if (const UGSTN_CombatTableSet* TableSet = Combat->FindTableSet(CombatState->Core.TableRevision))
+			{
+				CombatJson->SetStringField(TEXT("tableCrc"), FString::Printf(TEXT("%08x"), TableSet->Checksum));
+				CombatJson->SetNumberField(TEXT("tableBindings"), TableSet->Table.Bindings.Num());
+			}
+			CombatJson->SetNumberField(TEXT("tableGateClosed"), Combat->GetGateClosedFrames());
 			CombatJson->SetBoolField(TEXT("inTimeline"), CombatState->Core.ActionState == EGSTN_ActionState::InTimeline);
 			CombatJson->SetNumberField(TEXT("timeline"), CombatState->Core.ActiveTimeline);
 			Json->SetObjectField(TEXT("combat"), CombatJson);

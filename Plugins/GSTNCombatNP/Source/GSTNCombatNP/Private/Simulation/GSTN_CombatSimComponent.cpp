@@ -15,6 +15,8 @@
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
+#include "Kits/GSTN_WeaponDefinition.h"
 #include "GSTN_CombatTags.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_DirectionClassifier.h"
@@ -91,6 +93,7 @@ void UGSTN_CombatSimComponent::BeginPlay()
 
 	CompileInput();
 	BindAbilitySystem();
+	PollLoadoutComponent();
 
 	if (ContextProvider)
 	{
@@ -249,6 +252,101 @@ void UGSTN_CombatSimComponent::BindAbilitySystem()
 	PreTickHandle = AbilitySystem->OnSimulationPreTick.AddUObject(this, &UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick);
 }
 
+void UGSTN_CombatSimComponent::PollLoadoutComponent()
+{
+	if (BoundLoadout.IsValid() || (LoadoutPollTicks++ % 15) != 0)
+	{
+		return;
+	}
+	AActor* Owner = GetOwner();
+	UGSTN_LoadoutComponent* Found = Owner ? Owner->FindComponentByClass<UGSTN_LoadoutComponent>() : nullptr;
+	if (!Found)
+	{
+		if (const APawn* Pawn = Cast<APawn>(Owner))
+		{
+			if (const APlayerState* PlayerState = Pawn->GetPlayerState())
+			{
+				Found = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>();
+			}
+		}
+	}
+	if (Found)
+	{
+		BindLoadoutComponent(Found);
+	}
+}
+
+void UGSTN_CombatSimComponent::BindLoadoutComponent(UGSTN_LoadoutComponent* Loadout)
+{
+	if (!Loadout || BoundLoadout.Get() == Loadout)
+	{
+		return;
+	}
+	if (UGSTN_LoadoutComponent* Old = BoundLoadout.Get())
+	{
+		Old->OnLoadoutApplied.RemoveDynamic(this, &UGSTN_CombatSimComponent::HandleLoadoutApplied);
+	}
+	BoundLoadout = Loadout;
+	Loadout->OnLoadoutApplied.AddUniqueDynamic(this, &UGSTN_CombatSimComponent::HandleLoadoutApplied);
+
+	// A loadout that was applied before this component looked (the client's OnRep ran when the component replicated in)
+	if (Loadout->HasLoadout())
+	{
+		HandleLoadoutApplied(Loadout, Loadout->GetRevision());
+	}
+}
+
+TArray<FGSTN_WeaponStatsEntry> UGSTN_CombatSimComponent::BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved)
+{
+	TArray<FGSTN_WeaponStatsEntry> Entries;
+	for (const UGSTN_WeaponDefinition* Weapon : Resolved.Weapons)
+	{
+		FGSTN_WeaponStatsEntry& Entry = Entries.AddDefaulted_GetRef();
+		if (Weapon)
+		{
+			Entry.Effect = Weapon->StatsEffect.IsNull() ? nullptr : Weapon->StatsEffect.LoadSynchronous();
+			Entry.Stats = Weapon->StatModifiers;
+		}
+	}
+	return Entries;
+}
+
+void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision)
+{
+	if (!Component || !Component->HasLoadout())
+	{
+		return;
+	}
+	const FGSTN_CompiledBindingTable& Compiled = Component->GetCompiledTable();
+	if (Compiled.Entries.IsEmpty())
+	{
+		// The loadout did not compile on this machine: no set, so a demand for its revision keeps the gate closed instead of running a wrong table
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: loadout revision %d has no usable table on this machine, the combat simulation stays gated"), *GetOwner()->GetName(), Revision);
+		return;
+	}
+	if (FindTableSet(Compiled.Revision))
+	{
+		// A revision's loadout never changes; a repeated apply (a pawn that was set again) has nothing new
+		return;
+	}
+
+	FGSTN_CombatTableConvertInput Input([](const FSoftObjectPath& Path) -> UClass* { return TSoftClassPtr<UGameplayAbility>(Path).LoadSynchronous(); });
+	Input.InputSettings = &UGSTN_InputSettings::Get();
+	Input.CombatSettings = &UGSTN_CombatSettings::Get();
+	Input.GlobalResetRules = ResetRules;
+	Input.Adoptable = AdoptableTimelines;
+	Input.WeaponStats = BuildWeaponStats(Component->GetResolvedLoadout());
+	Input.ReservedExtension = Component->GetApplied().ReservedExtension;
+
+	FGSTN_CompileReport Report;
+	UGSTN_CombatTableSet* Set = FGSTN_CombatTableConverter::Convert(this, Compiled, Input, &Report);
+	for (const FText& Error : Report.Errors)
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: loadout revision %d: %s"), *GetOwner()->GetName(), Revision, *Error.ToString());
+	}
+	RegisterTableSet(Set);
+}
+
 void UGSTN_CombatSimComponent::SetScriptedButtons(int32 Mask)
 {
 	ScriptedButtons = static_cast<uint32>(Mask);
@@ -286,13 +384,25 @@ bool UGSTN_CombatSimComponent::ServerApplyLoadoutChange(UGSTN_LoadoutComponent* 
 		OutErrors.Add(TEXT("A loadout change is applied on the server only, on a loadout component."));
 		return false;
 	}
+	// The table set must be registered by the time the loadout applies (AcceptLoadout broadcasts), on this machine as on the clients
+	BindLoadoutComponent(Loadout);
+
 	// A refused loadout changes nothing, not even the move in progress
 	if (!Loadout->ValidateLoadout(Requested, OutErrors))
 	{
 		return false;
 	}
 
-	if (!Loadout->HasLoadout() || Requested != Loadout->GetApplied())
+	const bool bChanges = !Loadout->HasLoadout() || Requested != Loadout->GetApplied();
+	const int32 NowFrame = GetSimulationFrame();
+	if (bChanges && LastLoadoutChangeFrame != INDEX_NONE && NowFrame != INDEX_NONE && NowFrame - LastLoadoutChangeFrame < UGSTN_CombatSettings::Get().MinFramesBetweenLoadoutChanges)
+	{
+		// Two table sets must not expire inside the rollback window, and the first swap must be settled before the second starts
+		OutErrors.Add(FString::Printf(TEXT("A loadout change within %d frames of the previous one is refused (%d frames ago)."), UGSTN_CombatSettings::Get().MinFramesBetweenLoadoutChanges, NowFrame - LastLoadoutChangeFrame));
+		return false;
+	}
+
+	if (bChanges)
 	{
 		// The running timeline belongs to the old kit: its ability is cancelled and the action state returns to actionable
 		const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
@@ -314,6 +424,10 @@ bool UGSTN_CombatSimComponent::ServerApplyLoadoutChange(UGSTN_LoadoutComponent* 
 	if (!Loadout->AcceptLoadout(Requested, OutErrors))
 	{
 		return false;
+	}
+	if (bChanges)
+	{
+		LastLoadoutChangeFrame = NowFrame;
 	}
 	return ServerWriteLoadoutRevision(static_cast<uint16>(Loadout->GetRevision()));
 }
@@ -695,6 +809,7 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	{
 		TryQueueStatsModifier();
 	}
+	PollLoadoutComponent();
 
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)

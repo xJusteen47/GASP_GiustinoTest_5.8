@@ -116,6 +116,10 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutTableView
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Loadout")
 	TArray<FString> Warnings;
 
+	/** Rows of the compiled table: what an adapter with a bounded table (the combat simulation: 255 bindings) judges the loadout by */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Loadout")
+	int32 EntryCount = 0;
+
 	/** Ability keys of the timeline registry */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Loadout")
 	TArray<FSoftObjectPath> RegistryAbilities;
