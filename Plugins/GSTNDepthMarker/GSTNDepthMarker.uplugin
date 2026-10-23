@@ -20,6 +20,11 @@
 			"Name": "GSTNDepthMarkerCore",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNDepthMarkerRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
 		}
 	]
 }
