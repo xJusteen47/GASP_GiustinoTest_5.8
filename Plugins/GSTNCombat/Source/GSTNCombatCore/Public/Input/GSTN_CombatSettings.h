@@ -54,6 +54,18 @@ public:
 	TArray<FGameplayTag> ExclusiveButtons;
 
 	/**
+	 * Frames of the startup override window (combat.md 8.3) of a timeline that asks for the default of its command tier
+	 * (FGSTN_CombatTimelineData::OverrideFrames = -1), keyed by the tier value of the command tiers above. A tier without an
+	 * entry uses the entry of the highest tier below it, and 0 (no window) when there is none. The default is attack 1, strong 2,
+	 * special 2
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Timeline", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	TMap<int32, int32> OverrideFramesByTier;
+
+	/** The override frames a timeline of a command of this tier gets by default (see OverrideFramesByTier) */
+	int32 GetDefaultOverrideFrames(int32 Tier) const;
+
+	/**
 	 * The command set a kit starts from when it names no base set of its own (FGSTN_CommandSet::BaseSet). Soft: the plugin ships
 	 * it empty, a game points it at its slot set asset, and nothing is loaded until a kit's command set is composed (never
 	 * inside the simulation).
