@@ -21,12 +21,15 @@
 
 class UGSTN_CommandBindingSet;
 class UGSTN_GA_BaseCombat;
+class UGSTN_GA_PlatformJump;
 class UGSTN_InputConfig;
 class UGSTN_InputContextProvider;
+class UGSTN_LoadoutComponent;
 class UGSTN_MoverSimStateTracker;
 class UMoverComponent;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
+struct FGSTN_LoadoutData;
 
 /**
  * Runs the combat Network Prediction model of its actor and drives the actor's ability system from it.
@@ -234,6 +237,15 @@ public:
 	 */
 	bool ServerWriteLoadoutRevision(uint16 Revision);
 
+	/**
+	 * Server only, from outside the simulation: a kit change by pickup (combat-m3 direction of 2026-10-23). Judges the loadout first
+	 * (a refused one changes nothing, the running timeline included), then ends the running timeline (its ability and the action
+	 * state), applies the loadout on the loadout component (the re-grant and the stats effects of the new kit) and writes the new
+	 * revision into the sync state through ServerWriteLoadoutRevision. Returns false with the findings in OutErrors when refused.
+	 * The grants reach the owning client through the simulation's sync state: one reconcile per change, like any grant.
+	 */
+	bool ServerApplyLoadoutChange(UGSTN_LoadoutComponent& Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
+
 protected:
 	virtual void InitializeNetworkPredictionProxy() override;
 
@@ -260,6 +272,9 @@ private:
 
 	/** Per binding: EGSTN_PlatformJumpRole + 1 for a UGSTN_GA_PlatformJump binding, 0 for any other. Built with the table, read-only while simulating */
 	TArray<uint8> BindingJumpRole;
+
+	/** The class default of the Jump-role binding of the table (the kit's jump data), null without one. Built with the table, read-only while simulating */
+	const UGSTN_GA_PlatformJump* TableJumpData = nullptr;
 
 	/** The movement facts and stats of the frame the tick is on, read once per tick for the gate and the take-off. Rewritten every tick, never state */
 	FGSTN_JumpMoverSample FrameJumpSample;

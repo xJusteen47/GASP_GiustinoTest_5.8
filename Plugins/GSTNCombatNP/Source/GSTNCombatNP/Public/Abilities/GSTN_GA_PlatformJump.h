@@ -6,6 +6,7 @@
 #include "Abilities/GSTN_GA_Base.h"
 #include "EffectsComponents/ApplyMoveGameplayEffectComponent.h"
 #include "GameplayEffect.h"
+#include "Jump/GSTN_JumpTypes.h"
 #include "GSTN_GA_PlatformJump.generated.h"
 
 class UGSTN_CombatSimComponent;
@@ -92,6 +93,25 @@ public:
 	/** Applied to the owner on an air jump */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump")
 	TSubclassOf<UGameplayEffect> AirJumpEffect;
+
+	/**
+	 * Per-kit jump data (combat-m3 C15): the kit binds this class (or a Blueprint child of it) to its jump command, and the combat
+	 * tick reads the data from the Jump-role binding it finds in the table. Off = the plugin settings (UGSTN_CombatSettings), the
+	 * defaults of every kit. Fixed after the table is built, the same on every machine like the bindings.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
+	bool bOverrideResetRules = false;
+
+	/** What an external launch and the ground do to the air jumps, the coyote window and the hold phase of this kit */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (EditCondition = "bOverrideResetRules"))
+	FGSTN_JumpResetRules ResetRules;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
+	bool bOverrideCoyoteFrames = false;
+
+	/** Frames after leaving the ground in which a ground jump is still allowed */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (EditCondition = "bOverrideCoyoteFrames", ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
+	int32 CoyoteFrames = 4;
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;

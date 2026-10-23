@@ -56,6 +56,13 @@ public:
 	 */
 	void LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKeep) const;
 
+	/**
+	 * The commit of a timeline that just started (cost and cooldown): when the ability refuses it (the meter dropped since the
+	 * activation) the ability is cancelled, so the timeline never runs for free and the clock returns to actionable. Returns whether
+	 * the commit went through. Split out of the combat tick so a test can run it on a plain ability system
+	 */
+	static bool CommitOrCancel(UAbilitySystemComponent& AbilitySystem, const FGameplayAbilitySpec& Spec);
+
 	virtual void OnAvatarSet(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,

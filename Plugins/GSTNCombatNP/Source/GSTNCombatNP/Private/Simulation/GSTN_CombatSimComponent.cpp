@@ -2,6 +2,8 @@
 
 #include "Simulation/GSTN_CombatSimComponent.h"
 
+#include "Loadout/GSTN_LoadoutComponent.h"
+
 #include "Abilities/GameplayAbility.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Abilities/GSTN_GA_PlatformJump.h"
@@ -122,6 +124,7 @@ void UGSTN_CombatSimComponent::CompileInput()
 	TimelineContent.Reset();
 	BindingTimeline.Reset();
 	BindingJumpRole.Reset();
+	TableJumpData = nullptr;
 	TimelineTier.Reset();
 	TimelineDefaultOverride.Reset();
 	const UGSTN_InputSettings& InputSettings = UGSTN_InputSettings::Get();
@@ -149,6 +152,10 @@ void UGSTN_CombatSimComponent::CompileInput()
 		const UClass* AbilityClass = Binding.Ability.Get();
 		const UGSTN_GA_PlatformJump* JumpDefault = AbilityClass && AbilityClass->IsChildOf(UGSTN_GA_PlatformJump::StaticClass()) ? AbilityClass->GetDefaultObject<UGSTN_GA_PlatformJump>() : nullptr;
 		BindingJumpRole.Add(JumpDefault ? static_cast<uint8>(JumpDefault->Role) + 1 : 0);
+		if (JumpDefault && JumpDefault->Role == EGSTN_PlatformJumpRole::Jump && !TableJumpData)
+		{
+			TableJumpData = JumpDefault;
+		}
 	}
 	// The adoptable ones after the bound ones. Their tier is none (combat-m3 6.3: an adopted timeline has the tier of its ability's command, else none)
 	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : AdoptableTimelines)
@@ -237,6 +244,45 @@ bool UGSTN_CombatSimComponent::ServerWriteLoadoutRevision(uint16 Revision)
 	{
 		Sync.Core.LoadoutRevision = Revision;
 	}, "LoadoutRevision") != nullptr;
+}
+
+bool UGSTN_CombatSimComponent::ServerApplyLoadoutChange(UGSTN_LoadoutComponent& Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
+{
+	OutErrors.Reset();
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		OutErrors.Add(TEXT("A loadout change is applied on the server only."));
+		return false;
+	}
+	// A refused loadout changes nothing, not even the move in progress
+	if (!Loadout.ValidateLoadout(Requested, OutErrors))
+	{
+		return false;
+	}
+
+	if (!Loadout.HasLoadout() || Requested != Loadout.GetApplied())
+	{
+		// The running timeline belongs to the old kit: its ability is cancelled and the action state returns to actionable
+		const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+		const int32 Running = Sync && Sync->Core.ActionState == EGSTN_ActionState::InTimeline ? static_cast<int32>(Sync->Core.ActiveTimeline) : INDEX_NONE;
+		if (AbilitySystem && TimelineRegistry.IsValidIndex(Running))
+		{
+			if (const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Running]))
+			{
+				AbilitySystem->CancelAbilityHandle(Spec->Handle);
+			}
+		}
+		NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([](FGSTN_CombatSyncState& State)
+		{
+			FGSTN_CombatTimelineLogic::ClearTimeline(State.Core);
+		}, "LoadoutChangeClearTimeline");
+	}
+
+	if (!Loadout.AcceptLoadout(Requested, OutErrors))
+	{
+		return false;
+	}
+	return ServerWriteLoadoutRevision(static_cast<uint16>(Loadout.GetRevision()));
 }
 
 const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::GetRegistryTimeline(int32 Index) const
@@ -683,14 +729,11 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		if (TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
 		{
 			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Sync->Core.ActiveTimeline]);
-			if (UGameplayAbility* Instance = Spec && Spec->IsActive() ? Spec->GetPrimaryInstance() : nullptr)
+			if (Spec)
 			{
 				// The meter can have dropped since the activation: a refused commit ends the ability (the clock then returns to
 				// Actionable on the next frame) instead of letting the timeline run for free
-				if (!Instance->CommitAbility(Spec->Handle, AbilitySystem->AbilityActorInfo.Get(), Instance->GetCurrentActivationInfo()))
-				{
-					AbilitySystem->CancelAbilityHandle(Spec->Handle);
-				}
+				UGSTN_GA_BaseCombat::CommitOrCancel(*AbilitySystem, *Spec);
 			}
 		}
 	}

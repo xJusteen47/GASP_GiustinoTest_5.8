@@ -54,6 +54,21 @@ void UGSTN_GA_BaseCombat::LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKe
 	}
 }
 
+bool UGSTN_GA_BaseCombat::CommitOrCancel(UAbilitySystemComponent& AbilitySystem, const FGameplayAbilitySpec& Spec)
+{
+	UGameplayAbility* Instance = Spec.IsActive() ? Spec.GetPrimaryInstance() : nullptr;
+	if (!Instance)
+	{
+		return false;
+	}
+	if (Instance->CommitAbility(Spec.Handle, AbilitySystem.AbilityActorInfo.Get(), Instance->GetCurrentActivationInfo()))
+	{
+		return true;
+	}
+	AbilitySystem.CancelAbilityHandle(Spec.Handle);
+	return false;
+}
+
 void UGSTN_GA_BaseCombat::PreloadTimelineContent()
 {
 	LoadedContent.Reset();
