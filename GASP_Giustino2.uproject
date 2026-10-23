@@ -167,6 +167,10 @@
 		{
 			"Name": "GSTNCombatDebug",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNParts",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"
