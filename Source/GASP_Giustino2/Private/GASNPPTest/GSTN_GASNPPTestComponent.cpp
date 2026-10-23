@@ -6,6 +6,7 @@
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "GASNPPTest/GSTN_TestProbeAbilities.h"
 #include "Abilities/NpAbilitySystemComponent.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Input/GSTN_InputScript.h"
@@ -35,6 +36,17 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 {
 	Super::InitializeComponent();
 
+	// The harness pawn has no loadout yet, so it gets the combat attribute set here (the ability system creates the listed sets
+	// when its simulation state initialises, later than this). The production path is the loadout wiring (C7/C15), which needs the
+	// owner's ok on the game mode / PlayerState Blueprints
+	if (UNpAbilitySystemComponent* Asc = GetOwner()->FindComponentByClass<UNpAbilitySystemComponent>())
+	{
+		Asc->DefaultAttributes.AddUnique(UGSTN_CombatAttributeSet::StaticClass());
+		// The ability system may have initialised its simulation already (components initialise in their own order): create it
+		// now as well, the lookup by class keeps it from being added twice
+		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_CombatAttributeSet::StaticClass());
+	}
+
 	// Before any BeginPlay: the combat component compiles its timeline registry there, and the list must be the same on every machine
 	if (UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
 	{
@@ -63,6 +75,12 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 
 	if (AbilitySystem)
 	{
+		// Machines initialise the ability system and this component in different orders, so the sets would be listed in a different
+		// order on each, and the sync state compares them by position. Put them in a fixed order (by class name)
+		TArray<UAttributeSet*> Sets = AbilitySystem->GetSpawnedAttributes();
+		Sets.Sort([](const UAttributeSet& A, const UAttributeSet& B) { return A.GetClass()->GetName() < B.GetClass()->GetName(); });
+		AbilitySystem->SetSpawnedAttributes(Sets);
+
 		AbilitySystem->OnSimulationPreTick.AddUObject(this, &UGSTN_GASNPPTestComponent::HandleAbilityPreTick);
 	}
 
@@ -241,10 +259,8 @@ void UGSTN_GASNPPTestComponent::ApplyStatsProbe()
 
 	if (!bStatsProbeEnabled)
 	{
-		// Switched off: put back what was captured, once
-		Settings->MaxSpeed = BaseMaxSpeed;
+		// Switched off: put back what was captured, once. Speeds are not the probe's: the stats modifier owns them
 		Mover->SetGravityOverride(false);
-		ScaleGaitSpeeds(1.f);
 		bStatsBaseCaptured = false;
 		AppliedSpeedScale = 1.f;
 		AppliedGravityScale = 1.f;
@@ -267,30 +283,9 @@ void UGSTN_GASNPPTestComponent::ApplyStatsProbe()
 	const float GravityScale = AbilitySystem->GetGameplayAttributeValue(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), bFound);
 	AppliedGravityScale = bFound ? GravityScale : 1.f;
 
-	Settings->MaxSpeed = BaseMaxSpeed * AppliedSpeedScale;
+	// Only gravity is the probe's. The speeds follow the WalkSpeed stat through the real FGSTN_StatsMovementModifier (the preset
+	// effects change it together with ProbeSpeedScale, which the checks use as the expected factor)
 	Mover->SetGravityOverride(true, BaseGravity * AppliedGravityScale);
-	ScaleGaitSpeeds(AppliedSpeedScale);
-}
-
-void UGSTN_GASNPPTestComponent::ScaleGaitSpeeds(float Scale)
-{
-	// The GASP walking mode is a Blueprint whose WalkSpeed/RunSpeed/SprintSpeed/CrouchSpeed variables feed MaxSpeedOverride, which
-	// wins over the shared MaxSpeed. Each is assigned base (the class default) * scale, never a delta on the current value.
-	static const FName GaitSpeedNames[] = { TEXT("WalkSpeed"), TEXT("RunSpeed"), TEXT("SprintSpeed"), TEXT("CrouchSpeed") };
-	UBaseMovementMode* Mode = Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking")));
-	if (!Mode)
-	{
-		return;
-	}
-	const UObject* Defaults = Mode->GetClass()->GetDefaultObject();
-	for (const FName Name : GaitSpeedNames)
-	{
-		const FFloatProperty* Property = CastField<FFloatProperty>(Mode->GetClass()->FindPropertyByName(Name));
-		if (Property)
-		{
-			Property->SetPropertyValue_InContainer(Mode, Property->GetPropertyValue_InContainer(Defaults) * Scale);
-		}
-	}
 }
 
 void UGSTN_GASNPPTestComponent::HandlePostSimulationRollback(const FMoverTimeStep& CurrentTimeStep, const FMoverTimeStep& ExpungedTimeStep)
@@ -621,6 +616,9 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				}
 			}
 			StatsJson->SetNumberField(TEXT("gaitRunSpeed"), RunSpeed);
+			bool bWalkFound = false;
+			StatsJson->SetNumberField(TEXT("walkSpeedStat"), AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), bWalkFound));
+			StatsJson->SetBoolField(TEXT("hasCombatSet"), bWalkFound);
 			const USimpleWalkingMode* SimpleWalking = Cast<USimpleWalkingMode>(Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking"))));
 			StatsJson->SetNumberField(TEXT("maxSpeedOverride"), SimpleWalking ? SimpleWalking->MaxSpeedOverride : -2.f);
 		}

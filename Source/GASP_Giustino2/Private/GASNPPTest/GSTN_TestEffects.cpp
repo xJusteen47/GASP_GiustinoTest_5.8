@@ -2,6 +2,7 @@
 
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "DefaultMovementSet/LayeredMoves/BasicLayeredMoves.h"
 
@@ -136,6 +137,8 @@ UGSTN_GE_ProbeStatsFast::UGSTN_GE_ProbeStatsFast()
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeSpeedScaleAttribute(), 1.f));
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), -0.5f));
+	// The real stats modifier follows the combat WalkSpeed stat (600 by default): +600 doubles it
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), 600.f));
 }
 
 UGSTN_GE_ProbeStatsSlow::UGSTN_GE_ProbeStatsSlow()
@@ -143,4 +146,5 @@ UGSTN_GE_ProbeStatsSlow::UGSTN_GE_ProbeStatsSlow()
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeSpeedScaleAttribute(), -0.5f));
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), 1.f));
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), -300.f));
 }

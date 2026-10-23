@@ -196,9 +196,6 @@ private:
 	FActiveGameplayEffectHandle BulkEffectHandle;
 	FActiveGameplayEffectHandle StatsEffectHandle;
 
-	/** Assigns the walking mode's gait speed variables class default * Scale (the Blueprint mode ignores the shared MaxSpeed). */
-	void ScaleGaitSpeeds(float Scale);
-
 	// Stats probe: the values captured before the first rewrite, and what was written last
 	bool bStatsBaseCaptured = false;
 	float BaseMaxSpeed = 0.f;
