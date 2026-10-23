@@ -293,4 +293,138 @@ bool FGSTN_NPTimelineAdoptTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTimelineSameFrameCommitTest, "GSTNCombat.NP.Timeline.SameFrameCommit", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPTimelineSameFrameCommitTest::RunTest(const FString& Parameters)
+{
+	// A (index 3, 2 frame window) reaches its commit on frame 102; the same frame B (index 4, no window) wins in the cancel window
+	const FGSTN_CombatTimelineData DataA = MakeTimeline(2);
+	const FGSTN_CombatTimelineData DataB = MakeTimeline(0);
+	FGSTN_TimelineOutput Output;
+	Output.Reserve(DataA);
+
+	FGSTN_CombatSyncCore Core = MakeRunning(100, 3);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Core, 100, DataA, 2, Output);
+	Core.Requests.PruneBefore(101);
+	FGSTN_CombatTimelineLogic::AdvanceClock(Core, 101, &DataA, 2, true, Output);
+	Core.Requests.PruneBefore(102);
+	FGSTN_CombatTimelineLogic::AdvanceClock(Core, 102, &DataA, 2, true, Output);
+	TestTrue(TEXT("A asks for its commit on 102"), Core.Requests.Find(EGSTN_RequestType::CommitTimeline, 102, 3) != nullptr);
+
+	FGSTN_CombatTimelineLogic::Start(Core, 102, 4, EGSTN_ActivationSource::Command);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Core, 102, DataB, 0, Output);
+	TestTrue(TEXT("the replaced timeline never commits"), Core.Requests.Find(EGSTN_RequestType::CommitTimeline, 102, 3) == nullptr);
+	TestTrue(TEXT("the replacement commits on its first frame"), Core.Requests.Find(EGSTN_RequestType::CommitTimeline, 102, 4) != nullptr);
+	TestTrue(TEXT("and A is cancelled"), Core.Requests.Find(EGSTN_RequestType::CancelTimeline, 102, 3) != nullptr);
+	TestEqual(TEXT("the cancel and the commit only"), Core.Requests.Num(), 2);
+
+	// The same with a cancel of the running timeline by a plain command: A's commit goes
+	FGSTN_CombatSyncCore Plain = MakeRunning(100, 3);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Plain, 100, DataA, 2, Output);
+	Plain.Requests.PruneBefore(102);
+	FGSTN_CombatTimelineLogic::AdvanceClock(Plain, 102, &DataA, 2, true, Output);
+	FGSTN_CombatTimelineLogic::CancelForOtherCommand(Plain, 102);
+	TestTrue(TEXT("a plain command cancels without A's commit"), Plain.Requests.Find(EGSTN_RequestType::CommitTimeline, 102) == nullptr && Plain.Requests.Find(EGSTN_RequestType::CancelTimeline, 102, 3) != nullptr);
+
+	// Adoption and a command in one frame stay inside the capacity: cancel + commit of the winner + cancels of two losers
+	FGSTN_CombatSyncCore Busy = MakeRunning(100, 3);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Busy, 100, DataA, 2, Output);
+	Busy.Requests.PruneBefore(102);
+	FGSTN_CombatTimelineLogic::AdvanceClock(Busy, 102, &DataA, 2, true, Output);
+	const int32 Waiting[] = { 4, 5, 6 };
+	FGSTN_CombatTimelineLogic::Adopt(Busy, 102, Waiting);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Busy, 102, DataB, 0, Output);
+	TestTrue(TEXT("the winner's commit is kept"), Busy.Requests.Find(EGSTN_RequestType::CommitTimeline, 102, 4) != nullptr);
+	TestTrue(TEXT("and the old one's is gone"), Busy.Requests.Find(EGSTN_RequestType::CommitTimeline, 102, 3) == nullptr);
+	TestEqual(TEXT("cancel of the old, commit, two loser cancels"), Busy.Requests.Num(), 4);
+
+	// Remove packs the array so that equal sets stay equal arrays
+	FGSTN_CombatRequests Requests;
+	Requests.Add(EGSTN_RequestType::CancelTimeline, 10, 1);
+	Requests.Add(EGSTN_RequestType::CommitTimeline, 10, 2);
+	Requests.Add(EGSTN_RequestType::CancelAbility, 10, 3);
+	TestTrue(TEXT("removes the matching request"), Requests.Remove(EGSTN_RequestType::CommitTimeline, 10, 2));
+	TestFalse(TEXT("not twice"), Requests.Remove(EGSTN_RequestType::CommitTimeline, 10, 2));
+	FGSTN_CombatRequests Expected;
+	Expected.Add(EGSTN_RequestType::CancelTimeline, 10, 1);
+	Expected.Add(EGSTN_RequestType::CancelAbility, 10, 3);
+	TestTrue(TEXT("the rest is packed to the front"), Requests == Expected);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTimelineAdoptSameClassTest, "GSTNCombat.NP.Timeline.AdoptSameClass", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPTimelineAdoptSameClassTest::RunTest(const FString& Parameters)
+{
+	// The running timeline's own class is adopted again (a retrigger): the activation that is being adopted must not be cancelled
+	FGSTN_CombatSyncCore Core = MakeRunning(40, 2);
+	Core.Requests.PruneBefore(50);
+	const int32 Same[] = { 2 };
+	TestEqual(TEXT("adopted"), FGSTN_CombatTimelineLogic::Adopt(Core, 50, Same), 2);
+	TestTrue(TEXT("no cancel of the entry that was just activated"), Core.Requests.Find(EGSTN_RequestType::CancelTimeline, 50) == nullptr);
+	TestEqual(TEXT("the timeline starts over from this frame"), Core.TimelineStartFrame, 50);
+	TestTrue(TEXT("with source Adopted"), Core.ActiveSource == EGSTN_ActivationSource::Adopted);
+	TestTrue(TEXT("in a timeline"), Core.ActionState == EGSTN_ActionState::InTimeline);
+	TestEqual(TEXT("with the pause count reset"), Core.TimelinePausedFrames, 0);
+
+	// Another class still cancels the running one
+	FGSTN_CombatSyncCore Other = MakeRunning(40, 2);
+	Other.Requests.PruneBefore(50);
+	const int32 Different[] = { 5 };
+	FGSTN_CombatTimelineLogic::Adopt(Other, 50, Different);
+	TestTrue(TEXT("a different class cancels the running one"), Other.Requests.Find(EGSTN_RequestType::CancelTimeline, 50, 2) != nullptr);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTimelineHitstopTest, "GSTNCombat.NP.Timeline.Hitstop", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPTimelineHitstopTest::RunTest(const FString& Parameters)
+{
+	// Window of 2 frames: the commit is at timeline frame 2. Started on 100, hitstop on frames 102 to 104 (three frames)
+	const FGSTN_CombatTimelineData Data = MakeTimeline(2);
+	FGSTN_TimelineOutput Output;
+	Output.Reserve(Data);
+	FGSTN_CombatSyncCore Core = MakeRunning(100);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Core, 100, Data, 1, Output);
+
+	int32 CommitFrame = INDEX_NONE;
+	int32 Commits = 0;
+	for (int32 Frame = 101; Frame <= 110; ++Frame)
+	{
+		Core.Requests.PruneBefore(Frame);
+		const bool bPaused = Frame >= 102 && Frame <= 104;
+		FGSTN_CombatTimelineLogic::AdvanceClock(Core, Frame, &Data, 1, true, Output, bPaused);
+		if (bPaused)
+		{
+			TestEqual(*FString::Printf(TEXT("the timeline frame stands still on %d"), Frame), Output.Frame, 1);
+			TestTrue(*FString::Printf(TEXT("nothing is committed on %d"), Frame), !Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame));
+		}
+		if (Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame))
+		{
+			CommitFrame = Frame;
+			++Commits;
+		}
+	}
+	TestEqual(TEXT("the commit comes three frames later"), CommitFrame, 105);
+	TestEqual(TEXT("and once"), Commits, 1);
+	TestEqual(TEXT("the timeline counted its paused frames"), Core.TimelinePausedFrames, 3);
+
+	// The end moves by the same amount: 30 frames from 100 plus 3 paused is 133
+	FGSTN_CombatSyncCore Ends = MakeRunning(100);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Ends, 100, Data, 1, Output);
+	int32 EndFrame = INDEX_NONE;
+	for (int32 Frame = 101; Frame <= 140 && EndFrame == INDEX_NONE; ++Frame)
+	{
+		FGSTN_CombatTimelineLogic::AdvanceClock(Ends, Frame, &Data, 1, true, Output, Frame >= 102 && Frame <= 104);
+		if (Ends.ActionState != EGSTN_ActionState::InTimeline)
+		{
+			EndFrame = Frame;
+		}
+	}
+	TestEqual(TEXT("the timeline ends after its length plus the hitstop"), EndFrame, 133);
+
+	// The combat clock stands still too
+	TestEqual(TEXT("clock before"), FGSTN_CombatClock::FromFrame(101, 0), 101);
+	TestEqual(TEXT("clock in hitstop frame 104, three paused"), FGSTN_CombatClock::FromFrame(104, 3), 101);
+	TestEqual(TEXT("clock after"), FGSTN_CombatClock::FromFrame(105, 3), 102);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

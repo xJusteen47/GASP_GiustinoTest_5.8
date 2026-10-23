@@ -9,6 +9,8 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_InputHostUtils.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogGSTNGABase, Log, All);
+
 UGSTN_GA_Base::UGSTN_GA_Base(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -74,7 +76,12 @@ FRotator UGSTN_GA_Base::GetAimRotation() const
 
 void UGSTN_GA_Base::WaitCombatFrames(int32 Frames)
 {
-	WaitStartClock.Value = GetCombatClock();
+	if (Frames < 1)
+	{
+		UE_LOG(LogGSTNGABase, Warning, TEXT("%s: WaitCombatFrames(%d) waits at least one frame"), *GetName(), Frames);
+	}
+	// Before the first simulated frame the clock is INDEX_NONE and a wait started then would never elapse: that wait starts at 0
+	WaitStartClock.Value = FMath::Max(GetCombatClock(), 0);
 	WaitFrames.Value = FMath::Max(Frames, 1);
 }
 
@@ -92,7 +99,7 @@ bool UGSTN_GA_Base::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	}
 
 	const UGSTN_CombatSimComponent* Combat = FindCombatComponent(ActorInfo);
-	return !(Combat && FGSTN_GARules::BlocksActivation(InterruptPolicy, Combat->IsInTimeline(), FGSTN_InputHostUtils::IsCommandActivation()));
+	return !(Combat && FGSTN_GARules::BlocksActivation(InterruptPolicy, Combat->IsInTimeline(), FGSTN_InputHostUtils::IsCommandActivation(Handle)));
 }
 
 void UGSTN_GA_Base::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
@@ -105,7 +112,7 @@ void UGSTN_GA_Base::ActivateAbility(const FGameplayAbilitySpecHandle Handle, con
 	ActivationSource.Value = static_cast<uint8>(EGSTN_ActivationSource::Other);
 	WaitFrames.Value = 0;
 
-	const bool bCommandActivation = FGSTN_InputHostUtils::IsCommandActivation();
+	const bool bCommandActivation = FGSTN_InputHostUtils::IsCommandActivation(Handle);
 	UGSTN_CombatSimComponent* Combat = FindCombatComponent(ActorInfo);
 	CachedCombat = Combat;
 	if (Combat)

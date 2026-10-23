@@ -97,14 +97,14 @@ PC has it. The tables below show **both**: "in repo" is what I read, "on owner's
 | `GSTNInput` | `GSTNInputCore` (Runtime) | owner's PC | Core, CoreUObject, Engine, GameplayTags, DeveloperSettings; private EnhancedInput (input.md §2) |
 | `GSTNInput` | `GSTNInputNP` (Runtime) | owner's PC | GSTNInputCore, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, NetCore, Mover; private EnhancedInput |
 | `GSTNCombat` | `GSTNCombatCore` (Runtime) | in repo | public Core, CoreUObject, Engine, GameplayTags, DeveloperSettings; private EnhancedInput. Target: + GSTNInputCore |
-| `GSTNCombat` | `GSTNCombatNP` (Runtime) | in repo | public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, NetCore, Mover; private EnhancedInput. Target: + GSTNInputNP |
-| `GSTNCombat` | `GSTNCombatGAS` | planned (M3) | Core, GameplayAbilities, GameplayTasks (combat-m3 §), no NP, no Mover |
+| `GSTNCombat` | `GSTNCombatNP` (Runtime) | in repo | public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore, GSTNCombatGAS, GSTNInputCore, GSTNInputNP, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, NetCore, Mover; private EnhancedInput (GSTNCombatNP needs GSTNCombatGAS for the timeline ability tags and the combat attribute set) |
+| `GSTNCombat` | `GSTNCombatGAS` (Runtime) | in repo | GSTNCombatCore, GSTNInputCore, GameplayAbilities, GameplayTasks, NetCore, no NP, no Mover (combat-m3 §); `GSTNCombatNP` and the project module depend on it |
 | `GSTNCombat` | `GSTNCombatEditor` | planned; M5 spec moves it to its own plugin | see combat-m5-editor §3b |
 | `GSTNCombatEditor`, `GSTNCombatDebug` | Editor / Runtime (no Shipping) | planned (M5 spec) | `GSTNCombat`, `GSTNInput`, GameplayDebugger |
 | `GSTNDefence` (`...Core`, `...GAS`, `...NP`), `GSTNLink` (same three) | Runtime | planned (M6 spec) | see combat-m6 §1b |
 | `GSTNPiggyback`, `GSTNHeld` | Runtime | planned (M7, later) | `GSTNLink` + `GSTNCombat` |
 | `GSTNMinion` | Runtime | planned (M8; a separate plugin, its module was drafted as `GSTNCombatMinion`) | Core/GAS/NP of combat, StateTree, Navigation |
-| `GASP_Giustino2` (project) | `GASP_Giustino2` (Runtime) | in repo | public: Core, CoreUObject, Engine, InputCore, Mover, GameplayTags, NetCore, GameplayAbilities, AbilitySystemSimulation, **GSTNCombatNP, GSTNCombatCore**; private: GameplayTasks, NetworkPrediction, EnhancedInput, Json |
+| `GASP_Giustino2` (project) | `GASP_Giustino2` (Runtime) | in repo | public: Core, CoreUObject, Engine, InputCore, Mover, GameplayTags, NetCore, GameplayAbilities, AbilitySystemSimulation, **GSTNCombatNP, GSTNCombatCore**; private: GSTNCombatGAS (only the harness files use it), GameplayTasks, NetworkPrediction, EnhancedInput, Json |
 
 `GSTNCombat.uplugin` lists plugin dependencies GameplayAbilities, AbilitySystemSimulation, NetworkPrediction,
 EnhancedInput, Mover. It has no `GSTNInput` entry in the repo copy (expected after the split). The `.uproject` enables
@@ -367,6 +367,7 @@ Existing names are kept unless listed in 4.3.
 | `Input.BufferEvent.*`, `Input.Event.*` | `AbilityActivated`, `CommandExecuted` | `GSTNInput` | native |
 | `Command.*` | `Attack`, `Strong`, `Special`, `Combo`, `Super`, `Movement`, `Defence`, `Link` | root: `GSTNInput`; each family: the plugin that defines it (combat, defence, link, piggyback) | native + ini |
 | `Combat.State.*` | `Busy InTimeline Hitstop Hitstun Tumble CancelWindow OverrideWindow SuperInput Falling Shielding Carrying Riding` | `GSTNCombat` (state-projection rules); extension plugins declare their own leaves (`Shielding` -> `GSTNDefence`) | native, **projected**, never granted by others |
+| `Combat.Source.*` | `Command Forced Adopted` | `GSTNCombatGAS` (mirrors `EGSTN_ActivationSource`, carried by `Combat.Event.TimelineStarted`) | native |
 | `Combat.Event.*` | `HitLanded Hit.Received Blocked Parried LinkFormed` | each emitter's plugin; envelope in `GSTNCombat` | native |
 | `Combat.HitType.*`, `Combat.Hurtbox.*`, `Combat.Relationship.*` | `Normal Grab Throw`, `Head Torso`, `Ally Enemy` | `GSTNCombat` (Link adds `Grab Throw Pummel`) | native |
 | `Combat.Lock.*` | `Movement`, `Link` | `GSTNCombat`; Link its own | native |

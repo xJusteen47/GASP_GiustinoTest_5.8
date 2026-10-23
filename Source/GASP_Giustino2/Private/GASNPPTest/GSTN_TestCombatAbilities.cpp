@@ -77,3 +77,21 @@ void UGSTN_GA_TestStance::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 	}
 }
+
+UGSTN_GA_TestWeaponSwitch::UGSTN_GA_TestWeaponSwitch(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	FAbilityTriggerData Trigger;
+	Trigger.TriggerTag = GSTNTestTags::Probe_TagTrigger.GetTag();
+	Trigger.TriggerSource = EGameplayAbilityTriggerSource::OwnedTagAdded;
+	AbilityTriggers.Add(Trigger);
+
+	Timeline.TotalFrames = 12;
+	Timeline.FirstActionableFrame = 12;
+	Timeline.OverrideFrames = 0;
+
+	FGSTN_TimelineTrack_WeaponSwitch Switch;
+	Switch.SwapFrame = 3;
+	Switch.Target = EGSTN_SwitchTarget::Next;
+	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_WeaponSwitch>(Switch));
+}

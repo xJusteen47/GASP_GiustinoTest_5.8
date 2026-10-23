@@ -1,27 +1,30 @@
 // GAS + NPP + Mover network test harness.
 
 #include "GASNPPTest/GSTN_GASNPPTestComponent.h"
+
+#include "Abilities/NpAbilitySystemComponent.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
+#include "DataTypes/AbilitySimulationDataTypes.h"
+#include "DefaultMovementSet/Modes/SimpleWalkingMode.h"
+#include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
+#include "Dom/JsonObject.h"
+#include "Engine/LocalPlayer.h"
+#include "EnhancedInputSubsystems.h"
+#include "Events/GSTN_SimEventSubsystem.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "GASNPPTest/GSTN_TestProbeAbilities.h"
-#include "Abilities/NpAbilitySystemComponent.h"
-#include "DataTypes/AbilitySimulationDataTypes.h"
-#include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
-#include "Input/GSTN_InputScript.h"
-#include "MoverComponent.h"
-#include "Simulation/GSTN_CombatSimComponent.h"
-#include "Events/GSTN_SimEventSubsystem.h"
 #include "GSTN_CombatTags.h"
-#include "EnhancedInputSubsystems.h"
-#include "InputMappingContext.h"
+#include "Input/GSTN_InputScript.h"
 #include "InputAction.h"
-#include "GameFramework/Pawn.h"
-#include "GameFramework/PlayerController.h"
-#include "Engine/LocalPlayer.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonWriter.h"
+#include "InputMappingContext.h"
+#include "MoverComponent.h"
 #include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 
 UGSTN_GASNPPTestComponent::UGSTN_GASNPPTestComponent()
 {
@@ -34,10 +37,26 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 {
 	Super::InitializeComponent();
 
+	// The harness pawn has no loadout yet, so it gets the combat attribute set here (the ability system creates the listed sets
+	// when its simulation state initialises, later than this). The production path is the loadout wiring (C7/C15), which needs the
+	// owner's ok on the game mode / PlayerState Blueprints
+	if (UNpAbilitySystemComponent* Asc = GetOwner()->FindComponentByClass<UNpAbilitySystemComponent>())
+	{
+		Asc->DefaultAttributes.AddUnique(UGSTN_CombatAttributeSet::StaticClass());
+		// The ability system may have initialised its simulation already (components initialise in their own order): create it
+		// now as well, the lookup by class keeps it from being added twice
+		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_CombatAttributeSet::StaticClass());
+	}
+
 	// Before any BeginPlay: the combat component compiles its timeline registry there, and the list must be the same on every machine
 	if (UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
 	{
 		Combat->AdoptableTimelines.AddUnique(UGSTN_GA_TestTriggeredTimeline::StaticClass());
+		Combat->AdoptableTimelines.AddUnique(UGSTN_GA_TestWeaponSwitch::StaticClass());
+		// Weapon 0 is the primary, 1 the support: mechanism test effects (real support weapons ship without a stats effect)
+		Combat->WeaponStats.Reset();
+		Combat->WeaponStats.AddDefaulted_GetRef().Effect = UGSTN_GE_TestPrimaryWeaponStats::StaticClass();
+		Combat->WeaponStats.AddDefaulted_GetRef().Effect = UGSTN_GE_TestSupportWeaponStats::StaticClass();
 	}
 }
 
@@ -62,6 +81,12 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 
 	if (AbilitySystem)
 	{
+		// Machines initialise the ability system and this component in different orders, so the sets would be listed in a different
+		// order on each, and the sync state compares them by position. Put them in a fixed order (by class name)
+		TArray<UAttributeSet*> Sets = AbilitySystem->GetSpawnedAttributes();
+		Sets.Sort([](const UAttributeSet& A, const UAttributeSet& B) { return A.GetClass()->GetName() < B.GetClass()->GetName(); });
+		AbilitySystem->SetSpawnedAttributes(Sets);
+
 		AbilitySystem->OnSimulationPreTick.AddUObject(this, &UGSTN_GASNPPTestComponent::HandleAbilityPreTick);
 	}
 
@@ -75,6 +100,14 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 				{
 					const FName Source = Event.Tags.HasTagExact(GSTNCombatTags::Source_Adopted) ? FName("adopted") : Event.Tags.HasTagExact(GSTNCombatTags::Source_Forced) ? FName("forced") : FName("command");
 					++TimelineStartedCounts.FindOrAdd(Source);
+				}
+			}).Id;
+		WeaponSwitchedListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCombatTags::Event_WeaponSwitched)),
+			[this](const FGSTN_SimEvent& Event)
+			{
+				if (Event.Instigator.Get() == GetOwner())
+				{
+					++WeaponSwitchedCount;
 				}
 			}).Id;
 	}
@@ -100,6 +133,16 @@ void UGSTN_GASNPPTestComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 			Events->StopListening(Handle);
 		}
 		TimelineStartedListener = INDEX_NONE;
+	}
+	if (WeaponSwitchedListener != INDEX_NONE)
+	{
+		if (UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(this))
+		{
+			FGSTN_SimEventListenerHandle Handle;
+			Handle.Id = WeaponSwitchedListener;
+			Events->StopListening(Handle);
+		}
+		WeaponSwitchedListener = INDEX_NONE;
 	}
 	Super::EndPlay(EndPlayReason);
 }
@@ -240,8 +283,7 @@ void UGSTN_GASNPPTestComponent::ApplyStatsProbe()
 
 	if (!bStatsProbeEnabled)
 	{
-		// Switched off: put back what was captured, once
-		Settings->MaxSpeed = BaseMaxSpeed;
+		// Switched off: put back what was captured, once. Speeds are not the probe's: the stats modifier owns them
 		Mover->SetGravityOverride(false);
 		bStatsBaseCaptured = false;
 		AppliedSpeedScale = 1.f;
@@ -265,7 +307,8 @@ void UGSTN_GASNPPTestComponent::ApplyStatsProbe()
 	const float GravityScale = AbilitySystem->GetGameplayAttributeValue(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), bFound);
 	AppliedGravityScale = bFound ? GravityScale : 1.f;
 
-	Settings->MaxSpeed = BaseMaxSpeed * AppliedSpeedScale;
+	// Only gravity is the probe's. The speeds follow the WalkSpeed stat through the real FGSTN_StatsMovementModifier (the preset
+	// effects change it together with ProbeSpeedScale, which the checks use as the expected factor)
 	Mover->SetGravityOverride(true, BaseGravity * AppliedGravityScale);
 }
 
@@ -335,6 +378,7 @@ namespace
 		if (Name == TEXT("TagRaiser")) { return UGSTN_GA_ProbeTagRaiser::StaticClass(); }
 		if (Name == TEXT("TagTarget")) { return UGSTN_GA_ProbeTagTarget::StaticClass(); }
 		if (Name == TEXT("TimelineTarget")) { return UGSTN_GA_TestTriggeredTimeline::StaticClass(); }
+		if (Name == TEXT("SwitchTarget")) { return UGSTN_GA_TestWeaponSwitch::StaticClass(); }
 		return nullptr;
 	}
 
@@ -374,7 +418,7 @@ int32 UGSTN_GASNPPTestComponent::ServerRevokeProbes()
 	{
 		return 0;
 	}
-	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()); });
+	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestWeaponSwitch::StaticClass()); });
 }
 
 int32 UGSTN_GASNPPTestComponent::ServerGrantBulk(int32 FirstIndex, int32 Count)
@@ -423,6 +467,25 @@ bool UGSTN_GASNPPTestComponent::ServerSetBulkEffect(bool bApply)
 		BulkEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_ProbeBulk>(), 1.f, AbilitySystem->MakeEffectContext());
 	}
 	return !bApply || BulkEffectHandle.IsValid();
+}
+
+bool UGSTN_GASNPPTestComponent::ServerEquipPrimaryWeapon(bool bEquip)
+{
+	UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>();
+	if (!AbilitySystem || !Combat || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (bEquip)
+	{
+		return FGSTN_WeaponStatsSwap::Execute(*AbilitySystem, Combat->WeaponStats, INDEX_NONE, 0);
+	}
+	int32 Removed = 0;
+	for (const FGSTN_WeaponStatsEntry& Weapon : Combat->WeaponStats)
+	{
+		Removed += UGSTN_GE_WeaponStats::Remove(*AbilitySystem, Weapon.Effect);
+	}
+	return true;
 }
 
 bool UGSTN_GASNPPTestComponent::ServerSetStatsPreset(int32 Preset)
@@ -588,6 +651,20 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			StatsJson->SetNumberField(TEXT("maxSpeed"), Settings ? Settings->MaxSpeed : -1.f);
 			StatsJson->SetNumberField(TEXT("baseMaxSpeed"), BaseMaxSpeed);
 			StatsJson->SetNumberField(TEXT("gravityZ"), Mover->GetGravityAcceleration().Z);
+			float RunSpeed = -1.f;
+			if (const UBaseMovementMode* Walking = Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking"))))
+			{
+				if (const FFloatProperty* Property = CastField<FFloatProperty>(Walking->GetClass()->FindPropertyByName(TEXT("RunSpeed"))))
+				{
+					RunSpeed = Property->GetPropertyValue_InContainer(Walking);
+				}
+			}
+			StatsJson->SetNumberField(TEXT("gaitRunSpeed"), RunSpeed);
+			bool bWalkFound = false;
+			StatsJson->SetNumberField(TEXT("walkSpeedStat"), AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), bWalkFound));
+			StatsJson->SetBoolField(TEXT("hasCombatSet"), bWalkFound);
+			const USimpleWalkingMode* SimpleWalking = Cast<USimpleWalkingMode>(Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking"))));
+			StatsJson->SetNumberField(TEXT("maxSpeedOverride"), SimpleWalking ? SimpleWalking->MaxSpeedOverride : -2.f);
 		}
 		ProbeJson->SetObjectField(TEXT("stats"), StatsJson);
 		Json->SetObjectField(TEXT("probe"), ProbeJson);
@@ -608,6 +685,8 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				StartedJson->SetNumberField(Pair.Key.ToString(), Pair.Value);
 			}
 			CombatJson->SetObjectField(TEXT("timelineStarted"), StartedJson);
+			CombatJson->SetNumberField(TEXT("weaponSwitched"), WeaponSwitchedCount);
+			CombatJson->SetNumberField(TEXT("activeWeapon"), CombatState->Core.ActiveWeaponIndex);
 			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestFrame) });
 			Json->SetObjectField(TEXT("combat"), CombatJson);
 		}

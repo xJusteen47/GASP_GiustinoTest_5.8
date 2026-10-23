@@ -61,3 +61,17 @@ public:
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 };
+
+/**
+ * A weapon switch ability (scenario_weapon_switch): triggered like UGSTN_GA_TestTriggeredTimeline by Test.Probe.TagTrigger and adopted by
+ * the combat tick, with a weapon switch track (next weapon) at frame 3 of a 12 frame timeline. Grant it instead of the triggered
+ * timeline (both would wait for the same adoption). The test component adds it to the combat component's AdoptableTimelines.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestWeaponSwitch : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestWeaponSwitch(const FObjectInitializer& ObjectInitializer);
+};
