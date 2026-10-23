@@ -742,7 +742,7 @@ def _tick_key(stamp):
 _MODEL_MARKERS = (('[MoverDefaultSyncState]', 'mover'), ('Current period Time', 'asc'), ('Active Mappings', 'asc'), ('History:', 'combat'))
 
 
-def report_reconciles(since=0):
+def report_reconciles(since=0, ignore_own_changes=True):
     """Reconciles in the editor log after `since` (see mark_log): returns a dict and logs a summary.
     unexplained = state mismatches not on the tick of an offset change, with the model each one came from in
     unexplained_by_model. unexplained_ours leaves out the Mover model (position corrections under network lag are the
@@ -777,10 +777,14 @@ def report_reconciles(since=0):
         offset = re.search(r'Offset: (\d+)\.', message)
         return (_tick_key(stamp), offset.group(1) if offset else None) in offset_frames
 
-    unexplained = [x for x in mismatches if not _on_offset_change(*x)]
+    def _own_change(message):
+        recv = re.search(r'Recv Frame: (\d+)', message)
+        return bool(ignore_own_changes and recv and any(f <= int(recv.group(1)) <= f + OWN_CHANGE_FRAMES for f in _server_changes))
+
+    unexplained = [x for x in mismatches if not _on_offset_change(*x) and not _own_change(x[1])]
     by_model = {}
     for x, model in zip(mismatches, models):
-        if not _on_offset_change(*x):
+        if not _on_offset_change(*x) and not _own_change(x[1]):
             by_model[model or 'unknown'] = by_model.get(model or 'unknown', 0) + 1
     per_second = {}
     for stamp, _ in mismatches:
@@ -1659,9 +1663,36 @@ def abilities_startup_result():
 # (last_checks() / the log): they share the probe abilities and the editor timeline. Judge them at m.net(60, 15, 0): packet loss
 # causes reconciles of its own (see "Known exception" above). Each scenario takes the world index of the pawn it drives
 # (default 1); index 0 is the host's own pawn in listen mode (no reconcile there, the owner is the authority).
+# Server frames at which a scenario made a deliberate server-only change (a grant, a revoke, a kit or loadout change): each is an out-of-band
+# change of the ability system, so the owner reconciles once, by design. report_reconciles does not count a mismatch whose received frame lies in
+# [frame, frame + OWN_CHANGE_FRAMES] (about 1.5 s: lag and the resend) as unexplained; loadout_change judges its own changes separately.
+_server_changes = []
+OWN_CHANGE_FRAMES = 90
+
+
+class _ServerProxy:
+    """The authority's test component; every server_* call it receives is recorded in _server_changes with the server frame."""
+    def __init__(self, comp):
+        self._c = comp
+
+    def __getattr__(self, name):
+        attr = getattr(self._c, name)
+        if name.startswith('server_') and callable(attr):
+            def call(*args, **kwargs):
+                try:
+                    frame = json.loads(self._c.get_state_snapshot()).get('serverFrame')
+                except Exception:
+                    frame = None
+                if frame is not None:
+                    _server_changes.append(frame)
+                return attr(*args, **kwargs)
+            return call
+        return attr
+
+
 def _srv(key):
     """Test component of pawn `key` on world 0 (the host or the dedicated server): the one whose Server* functions run."""
-    return comps(worlds()[0])[key]
+    return _ServerProxy(comps(worlds()[0])[key])
 
 
 def _view(world_index, key):
@@ -2773,7 +2804,7 @@ def scenario_loadout_change(client=1):
         return run.at('B: the running timeline is gone on both after the change', f)
 
     def reconciles():
-        r = report_reconciles(marks['start'])
+        r = report_reconciles(marks['start'], ignore_own_changes=False)
         by = r['unexplained_by_model']
         # three accepted changes: each is one out-of-band write of the combat state and of the ability system, so at most 3 of each model
         ok = by.get('combat', 0) <= 3 and by.get('asc', 0) <= 3 and by.get('mover', 0) == 0
@@ -2864,3 +2895,86 @@ def scenario_hitstop(client=1):
         (5.4, run.finish()),
     ]
     run.run(steps)
+
+
+# ---- Suite runner (C15): runs scenarios that report through _Run one after the other inside a single editor tick callback, so one python call
+# starts the whole batch and a later one reads suite_report(). reset_all() and a settle pause come before each; a scenario that does not
+# report within its timeout is recorded as TIMEOUT and the suite moves on. loadout_change goes last (its loadout outlives the scenario).
+# The scenarios that walk (weapon_switch, combat_context) come first: the later ones dash and drift the pawn into the corner of the map, and a
+# pawn against the wall cannot walk. The suite also walks the pawn back to where it started before each scenario.
+SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
+                 'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
+                 'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'dodge_blocked_in_hitstun', 'kit_without_dodge', 'interact_tap_hold',
+                 'hitstop', 'loadout_change']
+_suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
+
+
+def run_suite(names=None, timeout=120.0, settle=2.0, client=1):
+    st = _suite
+    if st['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(st['handle'])
+    st.update(results=[], queue=list(names or SUITE_DEFAULT), current=None, timeout=timeout, settle=settle, settle_until=0.0, homing=None)
+    # The owner's pawn walks back to where the suite found it before each scenario (the dashes and walks of the previous one move it, and the
+    # walking scenarios measure a clean run along +Y)
+    home_pawn = _local_pawn(client)[1].get_actor_location()
+    st['home'] = (home_pawn.x, home_pawn.y)
+    st['client'] = client
+
+    def tick(_dt):
+        try:
+            now = time.time()
+            if st['current'] is not None:
+                done = _last_run.get('results') is not st['prev'] and _last_run.get('results') is not None
+                if done:
+                    res = _last_run
+                    bad = [f'{l} -> {d[:200]}' for ok, l, d in res['results'] if ok is False]
+                    st['results'].append((st['current'], res['verdict'], bad))
+                    st['current'] = None
+                    st['settle_until'] = now + st['settle']
+                elif now - st['started'] > st['timeout']:
+                    st['results'].append((st['current'], 'TIMEOUT', []))
+                    st['current'] = None
+                    st['settle_until'] = now + st['settle']
+                return
+            if now < st['settle_until']:
+                return
+            if st['homing'] is not None:
+                pawn = _local_pawn(st['client'])[1]
+                loc = pawn.get_actor_location()
+                near = ((loc.x - st['home'][0]) ** 2 + (loc.y - st['home'][1]) ** 2) ** 0.5 < 120.0
+                comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
+                if near or now - st['homing'] > 12.0:
+                    comp.stop_holding_input(unreal.load_asset(IA['move']))
+                    st['homing'] = None
+                    st['homed'] = True
+                    st['settle_until'] = now + 1.0
+                else:
+                    comp.start_holding_input(unreal.load_asset(IA['move']), unreal.Vector(*_steer_value(st['client'], st['home'])))
+                return
+            pawn_loc = _local_pawn(st['client'])[1].get_actor_location()
+            if st['queue'] and not st.get('homed') and ((pawn_loc.x - st['home'][0]) ** 2 + (pawn_loc.y - st['home'][1]) ** 2) ** 0.5 >= 120.0:
+                st['homing'] = now
+                return
+            if not st['queue']:
+                unreal.unregister_slate_post_tick_callback(st['handle'])
+                st['handle'] = None
+                return
+            name = st['queue'].pop(0)
+            st['homed'] = False
+            st['prev'] = _last_run.get('results')
+            reset_all()
+            st['current'], st['started'] = name, now
+            globals()['scenario_' + name]()
+        except Exception as e:
+            st['results'].append((st.get('current'), f'EXCEPTION {e}', []))
+            st['current'] = None
+            st['settle_until'] = time.time() + st['settle']
+
+    st['handle'] = unreal.register_slate_post_tick_callback(tick)
+    return f"suite of {len(st['queue'])} started"
+
+
+def suite_report():
+    st = _suite
+    lines = [f"{n}: {v}" + (f" FAILED {b}" if b else '') for n, v, b in st['results']]
+    return ('RUNNING ' if st['handle'] is not None else 'DONE ') + f"{len(st['results'])} done, current {st['current']}, queued {st['queue']}\n" + '\n'.join(lines)
