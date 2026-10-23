@@ -191,6 +191,30 @@ UGSTN_LoadoutRules::UGSTN_LoadoutRules()
 	Rules.Add(CreateDefaultSubobject<UGSTN_LoadoutRule_TimelineRegistry>(TEXT("Rule_TimelineRegistry")));
 }
 
+namespace
+{
+	TMap<FName, UGSTN_LoadoutRules::FValidator>& GetValidators()
+	{
+		static TMap<FName, UGSTN_LoadoutRules::FValidator> Validators;
+		return Validators;
+	}
+}
+
+void UGSTN_LoadoutRules::RegisterValidator(FName Id, FValidator Validator)
+{
+	GetValidators().Add(Id, MoveTemp(Validator));
+}
+
+bool UGSTN_LoadoutRules::UnregisterValidator(FName Id)
+{
+	return GetValidators().Remove(Id) > 0;
+}
+
+int32 UGSTN_LoadoutRules::GetValidatorCount()
+{
+	return GetValidators().Num();
+}
+
 FGSTN_LoadoutRuleResult UGSTN_LoadoutRules::Validate(const FGSTN_LoadoutRulesView& View) const
 {
 	FGSTN_LoadoutRuleResult Joined;
@@ -201,6 +225,16 @@ FGSTN_LoadoutRuleResult UGSTN_LoadoutRules::Validate(const FGSTN_LoadoutRulesVie
 			continue;
 		}
 		const FGSTN_LoadoutRuleResult Found = Rule->Evaluate(View);
+		Joined.Errors.Append(Found.Errors);
+		Joined.Warnings.Append(Found.Warnings);
+	}
+
+	TArray<FName> Ids;
+	GetValidators().GenerateKeyArray(Ids);
+	Ids.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
+	for (const FName& Id : Ids)
+	{
+		const FGSTN_LoadoutRuleResult Found = GetValidators().FindChecked(Id)(View);
 		Joined.Errors.Append(Found.Errors);
 		Joined.Warnings.Append(Found.Warnings);
 	}

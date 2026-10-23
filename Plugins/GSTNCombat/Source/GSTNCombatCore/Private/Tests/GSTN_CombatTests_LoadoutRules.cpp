@@ -329,4 +329,52 @@ bool FGSTN_RuleSetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RuleRegisteredValidatorTest, "GSTNCombat.Core.LoadoutRules.RegisteredValidators", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RuleRegisteredValidatorTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGSTN_LoadoutRules> Rules(NewObject<UGSTN_LoadoutRules>(GetTransientPackage()));
+	TestTrue(TEXT("a valid view passes with no validator"), Rules->Validate(LRMakeValidView()).IsValid());
+	const int32 Before = UGSTN_LoadoutRules::GetValidatorCount();
+
+	// Registered under ids in reverse order: the findings come in id order, whatever the registration order
+	TArray<FString> Order;
+	UGSTN_LoadoutRules::RegisterValidator(TEXT("GSTNTest.B"), [&Order](const FGSTN_LoadoutRulesView&)
+	{
+		Order.Add(TEXT("B"));
+		FGSTN_LoadoutRuleResult Result;
+		Result.Warnings.Add(FText::FromString(TEXT("warning from B")));
+		return Result;
+	});
+	UGSTN_LoadoutRules::RegisterValidator(TEXT("GSTNTest.A"), [&Order](const FGSTN_LoadoutRulesView& View)
+	{
+		Order.Add(TEXT("A"));
+		FGSTN_LoadoutRuleResult Result;
+		if (View.Loadout.AdditionalWeapons.Num() > 0)
+		{
+			Result.Errors.Add(FText::FromString(TEXT("no weapons in this mode")));
+		}
+		return Result;
+	});
+	TestEqual(TEXT("two validators registered"), UGSTN_LoadoutRules::GetValidatorCount(), Before + 2);
+
+	const FGSTN_LoadoutRuleResult Rejected = Rules->Validate(LRMakeValidView());
+	TestEqual(TEXT("the registered validator rejects"), Rejected.Errors.Num(), 1);
+	TestEqual(TEXT("and the other warns"), Rejected.Warnings.Num(), 1);
+	TestTrue(TEXT("validators ran in id order"), Order == TArray<FString>({ TEXT("A"), TEXT("B") }));
+
+	// They apply to any rules asset, also one with an empty list
+	Rules->Rules.Empty();
+	TestEqual(TEXT("an empty rules list still runs the validators"), Rules->Validate(LRMakeValidView()).Errors.Num(), 1);
+
+	// Registering an id again replaces it; unregistering removes it
+	UGSTN_LoadoutRules::RegisterValidator(TEXT("GSTNTest.A"), [](const FGSTN_LoadoutRulesView&) { return FGSTN_LoadoutRuleResult(); });
+	TestEqual(TEXT("a replaced validator does not add up"), UGSTN_LoadoutRules::GetValidatorCount(), Before + 2);
+	TestTrue(TEXT("and has the new behaviour"), Rules->Validate(LRMakeValidView()).Errors.IsEmpty());
+	TestTrue(TEXT("unregister A"), UGSTN_LoadoutRules::UnregisterValidator(TEXT("GSTNTest.A")));
+	TestTrue(TEXT("unregister B"), UGSTN_LoadoutRules::UnregisterValidator(TEXT("GSTNTest.B")));
+	TestFalse(TEXT("unregistering twice reports it"), UGSTN_LoadoutRules::UnregisterValidator(TEXT("GSTNTest.B")));
+	TestEqual(TEXT("the registry is back as it was"), UGSTN_LoadoutRules::GetValidatorCount(), Before);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -149,18 +149,9 @@ void UGSTN_LoadoutComponent::ClientLoadoutRejected_Implementation(const TArray<F
 	OnLoadoutRejected.Broadcast(this, Errors);
 }
 
-bool UGSTN_LoadoutComponent::AcceptLoadout(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
+bool UGSTN_LoadoutComponent::ValidateLoadout(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors) const
 {
 	OutErrors.Reset();
-	if (!IsServerAuthority())
-	{
-		OutErrors.Add(TEXT("A loadout is accepted on the server only."));
-		return false;
-	}
-	if (HasLoadout() && Requested == Applied)
-	{
-		return true;
-	}
 
 	// Judged exactly as it will be applied: same resolution, same table, with the revision it would get
 	TArray<TStrongObjectPtr<UObject>> Hold;
@@ -175,6 +166,26 @@ bool UGSTN_LoadoutComponent::AcceptLoadout(const FGSTN_LoadoutData& Requested, T
 		{
 			OutErrors.Add(Error.ToString());
 		}
+		return false;
+	}
+	return true;
+}
+
+bool UGSTN_LoadoutComponent::AcceptLoadout(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
+{
+	OutErrors.Reset();
+	if (!IsServerAuthority())
+	{
+		OutErrors.Add(TEXT("A loadout is accepted on the server only."));
+		return false;
+	}
+	if (HasLoadout() && Requested == Applied)
+	{
+		return true;
+	}
+
+	if (!ValidateLoadout(Requested, OutErrors))
+	{
 		return false;
 	}
 

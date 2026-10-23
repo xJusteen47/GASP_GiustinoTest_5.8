@@ -86,6 +86,13 @@ public:
 	bool AcceptLoadout(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
 
 	/**
+	 * Judges a loadout exactly as AcceptLoadout would (same resolution, same table, the revision it would get, the rules and the
+	 * registered validators) without changing anything. Server or client; the findings are ready to show.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+	bool ValidateLoadout(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors) const;
+
+	/**
 	 * Resolves the applied loadout's assets, compiles the table, grants on the server and broadcasts. Called by the accept path
 	 * on the server and by OnRep_Applied on a client; call it again to retry a grant that was waiting for a pawn.
 	 */

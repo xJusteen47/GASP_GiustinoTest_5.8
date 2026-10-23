@@ -278,9 +278,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category = "Rules")
 	TArray<TObjectPtr<UGSTN_LoadoutRule>> Rules;
 
-	/** Runs every rule in order and joins their errors and warnings. A null entry is skipped */
+	/** Runs every rule in order, then the registered validators, and joins their errors and warnings. A null entry is skipped */
 	UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
 	FGSTN_LoadoutRuleResult Validate(const FGSTN_LoadoutRulesView& View) const;
+
+	/** A check that code outside the rules asset adds (an optional plugin, a game module): pure over the view, like a rule */
+	using FValidator = TFunction<FGSTN_LoadoutRuleResult(const FGSTN_LoadoutRulesView&)>;
+
+	/**
+	 * Registers a validator that every Validate call runs after the rules, whichever rules asset is in use. Registering an id
+	 * again replaces its validator. Validators run in id order (lexical), so the findings are the same on every machine. Call it
+	 * from module startup; the registry is read on the game thread only.
+	 */
+	static void RegisterValidator(FName Id, FValidator Validator);
+
+	/** Removes a validator; returns whether it was registered */
+	static bool UnregisterValidator(FName Id);
+
+	/** Number of registered validators */
+	static int32 GetValidatorCount();
 
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
