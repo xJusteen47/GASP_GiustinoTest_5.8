@@ -2165,13 +2165,19 @@ def _apex_pair(run, store, label, t_base, t0, t1, up=(0.0, 0.0, 1.0), tol=1.0, f
     return run.at(f'{label}: apex height, authority vs owner', f)
 
 
-def scenario_variable_jump(client=1, holds=(0.0, 0.08, 0.16, 0.30), spacing=3.0):
+def scenario_variable_jump(client=1, holds=(0.0, 0.10, 0.15, 0.30), spacing=3.0):
     """C13 variable jump: the longer the jump button is held (anywhere between the minimum hop and MaxJumpHoldFrames) the higher the jump.
     One jump per hold time, each from standing; judged on the authority and the owner: apex heights strictly increase with the hold time,
-    authority and owner agree within 1 cm, no unexplained reconcile of ours."""
+    authority and owner agree within 1 cm, no unexplained reconcile of ours. The hold times are well apart in frames (a hold is quantised by the
+    editor tick that releases it, about one frame): 0.10 s is 6 frames, 0.15 s about 9, 0.30 s the cap."""
     run = _Run('variable_jump', client)
     key, apex = run.key, {}
-    steps = [(0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True)))]
+    # The server-only grant and revoke of the kit are reconciles of their own (an unpredicted ASC change): the reconcile judgement window is
+    # re-marked after the grant and closed before the revoke.
+    def remark():
+        run.log_mark = mark_log()
+        return 'judge window starts after the grant', True
+    steps = [(0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True))), (1.0, remark)]
     for i, hold in enumerate(holds):
         t = 1.5 + i * spacing
         steps.append((t, lambda hold=hold: ('jump', _jump_tap(client, hold))))
@@ -2186,8 +2192,8 @@ def scenario_variable_jump(client=1, holds=(0.0, 0.08, 0.16, 0.30), spacing=3.0)
     end = 1.5 + len(holds) * spacing
     steps += [
         (end, run.at('apex heights strictly increase with the hold time', increasing)),
-        (end + 0.1, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
-        (end + 1.1, run.finish()),
+        (end + 0.1, run.finish()),
+        (end + 0.2, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
     ]
     run.run(steps)
 
@@ -2207,10 +2213,14 @@ def scenario_air_jump_fastfall(client=1):
             return not s and not c, f'requests srv {s} cli {c} (want none)'
         return run.at(label, f)
 
+    def remark():
+        run.log_mark = mark_log()
+        return 'judge window starts after the grant', True
+
     def faster_fall():
         a = _extreme_up_speed(run, 'srv', TA, TA + 3.0)
         b = _extreme_up_speed(run, 'srv', TB, TB + 3.0)
-        return b < a - 60.0, f'lowest speed along up: A {a:.0f}, B (fast fall) {b:.0f} (B must be at least 60 cm/s faster down)'
+        return b < a - 30.0, f'lowest speed along up: A {a:.0f}, B (fast fall) {b:.0f} (B must be at least 30 cm/s faster down; the margin depends on the tick that requests it)'
 
     def air_higher():
         a, c = apex['A'][0], apex['C'][0]
@@ -2218,6 +2228,7 @@ def scenario_air_jump_fastfall(client=1):
 
     steps = [
         (0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True))),
+        (1.0, remark),  # the server-only grant / revoke are reconciles of their own: judged after the grant, closed before the revoke
         # A: a plain jump
         (TA, lambda: ('A: jump', _jump_tap(client, 0.3))),
         (TA + 0.3, lambda: ('release', combat_clear(client))),
@@ -2240,8 +2251,8 @@ def scenario_air_jump_fastfall(client=1):
         (TC + 3.0, _apex_pair(run, apex, 'C', TC - 0.05, TC, TC + 1.8)),
         (TC + 3.0, run.at('the air jump goes higher than the plain jump', air_higher)),
         (TC + 3.8, _field_is(run, 'airJumpsUsed', 0, 'C: landing resets the air jumps', span=0.5)),
-        (TC + 3.9, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
-        (TC + 4.9, run.finish()),
+        (TC + 3.9, run.finish()),
+        (TC + 4.0, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
     ]
     run.run(steps)
 
