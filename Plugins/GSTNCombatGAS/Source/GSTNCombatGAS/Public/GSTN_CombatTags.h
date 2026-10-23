@@ -50,6 +50,17 @@ namespace GSTNCombatTags
 	/** A super was used. Published by the combat tick on the authority. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_SuperUsed);
 
+	// Activation sources (EGSTN_ActivationSource as tags, on the events that name how a timeline started)
+
+	/** A command started the timeline. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_Command);
+
+	/** A forced command (test or scripted) started the timeline. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_Forced);
+
+	/** Something other than a command (a trigger, an effect, another ability, AI) started the ability and the combat tick adopted it. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_Adopted);
+
 	// Set-by-caller keys (magnitudes travel in effects, not in tags)
 
 	/** Set-by-caller key: the meter cost an effect spends. Set by the activating ability. */

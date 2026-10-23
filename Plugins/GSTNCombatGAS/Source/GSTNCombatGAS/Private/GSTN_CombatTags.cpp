@@ -17,6 +17,10 @@ namespace GSTNCombatTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_WeaponSwitched, "Combat.Event.WeaponSwitched", "The active weapon changed. Published once by the combat tick on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_SuperUsed, "Combat.Event.SuperUsed", "A super was used. Published once by the combat tick on the authority");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Command, "Combat.Source.Command", "A command started the timeline. On the TimelineStarted event");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Forced, "Combat.Source.Forced", "A forced command (test or scripted) started the timeline. On the TimelineStarted event");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Adopted, "Combat.Source.Adopted", "A trigger, effect, other ability or AI started the ability and the combat tick adopted it. On the TimelineStarted event");
+
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MeterCost, "Combat.SetByCaller.MeterCost", "Set-by-caller key: the meter cost an effect spends. Set by the activating ability");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Root_Stat, "Combat.Stat", "Root of stat names. Leaves are designer content in a tag ini, code never names one");
@@ -31,6 +35,7 @@ namespace GSTNCombatTags
 			Lock_Movement,
 			Weapon_Role_Primary, Weapon_Role_Support,
 			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_SuperUsed,
+			Source_Command, Source_Forced, Source_Adopted,
 			SetByCaller_MeterCost,
 			Root_Stat, Root_Meter, Root_SetByCallerStat });
 	}
