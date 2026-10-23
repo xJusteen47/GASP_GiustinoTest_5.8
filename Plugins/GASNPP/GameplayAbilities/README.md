@@ -4,6 +4,8 @@ This documentation is meant to support and enhance the [official Gameplay Abilit
 
 It is worth noting there are extensive resources that the wider end-user developer community has written.  One such source of knowledge is the [tranek GAS documentation](https://github.com/tranek/GASDocumentation) which is highly detailed and an excellent resource for implementation details, but risks falling out of date with new feature additions or changes.
 
+> **In this project** this folder is a copy of Epic's GameplayAbilities 5.8 plugin that overrides the engine one, with the hooks the GAS-NPP fork (`Plugins/GASNPP/`, see [../README.md](../README.md)) needs so that [AbilitySystemSimulation](../AbilitySystemSimulation/README.md) can simulate the ability system inside Network Prediction. Everything above the "Project notes" section at the end is Epic's own README, kept as is. Its concepts (attributes, tags, effects, cues, debugging) still apply here; its sections on prediction, replication, RPCs and ability tasks describe stock GAS and are **not** how abilities behave in this project (see [docs/architecture/gas-npp.md](../../../docs/architecture/gas-npp.md)). The project sections start at [Project notes](#project-notes).
+
 # Overview of the Gameplay Ability System
 
 The Gameplay Ability System is a framework for building abilities and interactions that Actors can own and trigger. This system is designed mainly for RPGs, action-adventure games, MOBAs, and other types of games where characters have abilities that need to coordinate mechanics, visual effects, animations, sounds, and data-driven elements, although it can be adapted to a wide variety of projects. The Gameplay Ability System also supports replication for multiplayer games, and can save developers a lot of time scaling up their designs to support multiplayer.
@@ -291,3 +293,120 @@ Gameplay Cues have their own set of debug commands.
 New in UE5.4, there has been extra care put into the [Visual Logger](https://dev.epicgames.com/documentation/en-us/unreal-engine/visual-logger-in-unreal-engine) facilities for the Gameplay Ability System.  The [Visual Logger](https://dev.epicgames.com/documentation/en-us/unreal-engine/visual-logger-in-unreal-engine) is useful to see the complex interactions of Gameplay Abilities and Gameplay Effects over time.  The Visual Logger always captures the verbose logs and saves a snapshot of the state of the Ability System Component on every frame there is a log entry.
 
 In UE5.4, the [Visual Logger](https://dev.epicgames.com/documentation/en-us/unreal-engine/visual-logger-in-unreal-engine) now correctly orders the events between clients and servers when using Play In Editor.  This makes the Visual Logger especially useful for debugging how the client and server interact when activating abilities, gameplay effects, and modifying attributes.
+
+---
+
+# Project notes
+
+The sections below are this project's documentation of the plugin as it exists in `Plugins/GASNPP/GameplayAbilities`.
+Epic's README above is kept unchanged.
+
+## Purpose and status
+
+A copy of Epic's GameplayAbilities plugin for UE 5.8 that overrides the engine plugin of the same name. It exists
+because the GAS-NPP fork needs a handful of hooks inside GAS's structs and components that are not virtual in stock
+GAS: without them [AbilitySystemSimulation](../AbilitySystemSimulation/README.md) could not apply, remove and restore
+active effects from a Network Prediction rollback, nor time effects on the simulation clock. Everything else (attribute
+sets, effects, cues, tags, the editor, the Gameplay Debugger) is stock. Status: stock plugin, `.uplugin` version 1.0,
+`EnabledByDefault` false; the fork hooks are experimental like the rest of `Plugins/GASNPP/`.
+
+## Modules
+
+| Module | Type / phase | Contents |
+|---|---|---|
+| `GameplayAbilities` | Runtime, PreDefault | The whole runtime: `UAbilitySystemComponent` (`Public/AbilitySystemComponent.h`), `UGameplayAbility` (`Public/Abilities/GameplayAbility.h`), `UGameplayEffect` and `FActiveGameplayEffectsContainer` (`Public/GameplayEffect.h`), `UAttributeSet`, `UGameplayCueManager`, the ability tasks, `UAbilitySystemGlobals`, `UGameplayAbilitiesDeveloperSettings`, the cheat manager extension and the automation tests in `Private/Tests/`. |
+| `GameplayAbilitiesEditor` | UncookedOnly, PreDefault | Asset definitions and factories for abilities, effects and cues, the Gameplay Cue editor (`Private/SGameplayCueEditor.cpp`), Blueprint nodes and details customizations. |
+
+Config shipped with the plugin: `Config/DefaultGameplayAbilities.ini` (core redirects for renamed classes, functions,
+properties and enums) and `Config/Input.ini` (console autocomplete for `ShowDebug AbilitySystem`). Both are stock.
+
+## Dependencies
+
+Plugins (`GameplayAbilities.uplugin`, all non-optional): `EngineAssetDefinitions`, `GameplayTagsEditor`, `Niagara`,
+`DataRegistry`.
+
+Modules: `GameplayAbilities` public: `Core`, `CoreUObject`, `NetCore`, `Engine`, `GameplayTags`, `GameplayTasks`,
+`MovieScene`, `PhysicsCore`, `DeveloperSettings`, `DataRegistry`; private: `Niagara`, and with an editor target
+`EditorFramework`, `UnrealEd`, `Slate`, `SequenceRecorder`; Gameplay Debugger and Iris support through the UBT helpers.
+`GameplayAbilitiesEditor` depends privately on the usual editor modules (`AssetDefinition`, `AssetTools`,
+`KismetCompiler`, `Sequencer`, `DataRegistryEditor`, ...). Neither module depends on NetworkPrediction: the plugin only
+exposes hooks, the simulation lives in `AbilitySystemSimulation`.
+
+What depends on it in this project: `AbilitySystemSimulation`, `GSTNCombatGAS` (attribute sets, effects, kits; GAS only,
+no NP), `GSTNInputNP`, `GSTNCombatNP`, the project module `GASP_Giustino2`, and the engine overrides in
+`Plugins/EngineOverrides/` that list `GameplayAbilities` in their `Build.cs` (`GASToolsets`, `SmartObjects`,
+`GameplayTargetingSystem`). The Core modules `GSTNInputCore` and `GSTNCombatCore` must not depend on it (their
+`Build.cs` say so).
+
+## Gameplay tags
+
+The plugin owns no gameplay tag roots. The only native tags it defines are the static `GameplayCue` root used by
+`UGameplayCueSet` (`Private/GameplayCueSet.cpp`) and test-only tags (`GameplayCue.Test`, `Tests.GenericTag*`) in
+`Private/Tests/`. The `Config/` folder holds no `Tags/*.ini`.
+
+## What this project changed vs. the stock engine plugin and why
+
+Git holds the plugin in a single import commit (`53c8716`, "Add GAS-NPP 5.8 plugins, network test harness and rollback
+fixes"), so the fork author's changes and the project's port to 5.8 cannot be separated by history. What can be told
+apart is the marker: `// GAS-NPP:` comments are the project's port, `Added By Kai` and the `Np*` names are the upstream
+fork. Compared with the stock 5.8 plugin, the differences found in the code are:
+
+| Change | Why | Where |
+|---|---|---|
+| `virtual float UAbilitySystemComponent::GetCurrentSimulationTimeMS() const` (returns 0 in the base class; "Added By Kai"). `FActiveGameplayEffectsContainer::GetCurrentSimulationTime[MS]()` use it for effect start times, durations and time remaining. | Effect timing must follow the Network Prediction simulation clock, not world time, so a rolled-back effect has the same start and end on client and server. `UNpAbilitySystemComponent` overrides it. | `Public/AbilitySystemComponent.h`, `Private/GameplayEffect.cpp` |
+| `Np*` functions on `FActiveGameplayEffectsContainer`: `NpApplyGameplayEffectSpec`, `NpForceApplyGameplayEffectSpec`, `NpRemoveActiveGameplayEffect`, `NpForceRemoveActiveGameplayEffect`, `NpCheckDuration`, `NpRestartActiveGameplayEffectDuration`, `NpAdd/RemoveActiveGameplayEffectGrantedTagsAndModifiers`, `NpGetActiveEffectsTimeRemaining[AndDuration]` and the `NpInternal*` removal helpers. | The container is a struct, so its apply/remove paths cannot be overridden; the fork needs variants that skip prediction keys and replication and that can force the container to the authority state during a restore. | `Public/GameplayEffect.h`, `Private/GameplayEffect.cpp` |
+| `friend class UNpAbilitySystemComponent` in `UGameplayAbility` and `FActiveGameplayEffectsContainer`. | Lets the simulated component reach the private activation and effect state it restores. | `Public/Abilities/GameplayAbility.h`, `Public/GameplayEffect.h` |
+| `NonReplicatedTags` and `Add/Remove/SetNonReplicatedLooseTag(s)` on `UAbilitySystemComponent`; `UAbilitySystemBlueprintLibrary` routes loose tags with `EGameplayTagReplicationState::None` to them (`// GAS-NPP` comment). | In the fork every tag in the tag count container is synced by Network Prediction, so "non replicated" has to be tracked separately; `UNpAbilitySystemComponent::FillSyncState` removes these tags from the sync state. | `Public/AbilitySystemComponent.h`, `Private/AbilitySystemBlueprintLibrary.cpp` |
+| `PrivateIncludePaths` for `Engine/Source/Runtime/CoreUObject/Internal` (`// GAS-NPP` comment). | Engine "Internal" headers are visible only to engine plugins; a project plugin that overrides an engine plugin must add them by hand. | `Source/GameplayAbilities/GameplayAbilities.Build.cs` |
+| `GASNPP_WITH_ADD_NEW_TAG_WIDGET 0` in the Gameplay Cue editor (`// GAS-NPP` comment). | `SAddNewGameplayTagWidget` lives in GameplayTagsEditor's Internal folder and is not exported, so the "add new tag" widget cannot be compiled into a project plugin. New cue tags are added from the Gameplay Tags project settings instead. | `Source/GameplayAbilitiesEditor/Private/SGameplayCueEditor.cpp` |
+
+None of the project patches listed in [PATCHES.md](../PATCHES.md) touch this plugin; they are all in
+`NetworkPrediction` and `AbilitySystemSimulation`.
+
+## How to extend
+
+In this project you do not extend this plugin directly; you write abilities against the fork. The rule that matters:
+**only `UNpGameplayAbility` children can be granted to a `UNpAbilitySystemComponent`**; a Blueprint or C++ child of
+`UGameplayAbility` is refused with an error log. Derive from `UGSTN_GameplayAbility`
+(`Source/GASP_Giustino2/Public/GAS/GSTN_GameplayAbility.h`) in C++, or make a Blueprint child of one of the project's
+ability classes. The how-to for predicted abilities, move effects, prediction tasks and sync variables is in the
+[AbilitySystemSimulation README](../AbilitySystemSimulation/README.md#how-to-extend) and in
+[gas-npp.md](../../../docs/architecture/gas-npp.md).
+
+What is still authored exactly as in stock GAS (C++ or Blueprint):
+
+- **Gameplay effects**: `UGameplayEffect` subclasses or data-only Blueprints with modifiers, duration, stacking,
+  components (`UGameplayEffectComponent` subclasses, C++ only for new component types) and executions
+  (`UGameplayEffectExecutionCalculation`). Project examples: `UGSTN_GE_Jump` (`GAS/GSTN_GA_Jump.h`), the test effects
+  in `GASNPPTest/GSTN_TestEffects.h`, and the data-driven `UGSTN_GE_MeterCost` / `UGSTN_GE_WeaponStats` in
+  `Plugins/GSTNCombatGAS/Source/GSTNCombatGAS/Public/Effects/`.
+- **Attribute sets**: `UAttributeSet` with `FGameplayAttributeData` members and `ATTRIBUTE_ACCESSORS`; added through
+  `UNpAbilitySystemComponent::DefaultAttributes`, changed only through effects. Examples: `GSTN_TestAttributeSet`
+  (`GASNPPTest/`), `UGSTN_CombatAttributeSet` and `UGSTN_MeterAttributeSet` (`GSTNCombatGAS/.../Attributes/`).
+- **Gameplay cues**: `GameplayCue.*` tags, `UGameplayCueNotify_Static` / `AGameplayCueNotify_Actor` (Blueprint). In the
+  fork cue events are dispatched from the simulation's finalize frame instead of GAS's RPCs; authoring is the same.
+- **Tags**: native (`UE_DECLARE_GAMEPLAY_TAG_EXTERN` in `GAS/GSTN_AbilityTags.h`) in this project, ini tags only for
+  designer-made input tags (`Config/Tags/GSTNCommands.ini`).
+- **Globals and settings**: `UAbilitySystemGlobals` (subclass it for allocation hooks; this project uses the default)
+  and `UGameplayAbilitiesDeveloperSettings` for values; untouched by the fork.
+
+What must not be used here, even though the stock README describes it: ability tasks (`UAbilityTask`), replicated
+ability variables, ability RPCs, `FScopedServerAbilityRPCBatcher`, prediction keys and `FScopedPredictionWindow`,
+`AbilitySystem.Ability.Activate -Server`-style reasoning about client/server activation. The fork simulates all of that.
+
+## Using it standalone in another project
+
+On its own this folder is a 5.8 GameplayAbilities plugin with inert hooks: dropped into another project it overrides
+the engine plugin and behaves like stock GAS (the `Np*` functions and `GetCurrentSimulationTimeMS` are only called by
+`AbilitySystemSimulation`, and `GetCurrentSimulationTimeMS` returns 0 in the base class, which the effect container
+uses as "no simulation clock"). There is little reason to copy it without the rest of `Plugins/GASNPP/`; copy the whole
+folder, see [../README.md](../README.md) and the [AbilitySystemSimulation README](../AbilitySystemSimulation/README.md)
+for the plugins to enable and the config needed. The only project-specific build assumption is the explicit engine
+Internal include path in `GameplayAbilities.Build.cs`, which depends on `EngineDirectory` and works from any project.
+
+## Where to read more
+
+[gas-npp.md](../../../docs/architecture/gas-npp.md) · [combat.md](../../../docs/architecture/combat.md) (GAS layer of
+combat, sections 12.7 and 17) · [PATCHES.md](../PATCHES.md) · [GASNPP/README.md](../README.md) ·
+[AbilitySystemSimulation/README.md](../AbilitySystemSimulation/README.md) · [GSTNCombatGAS README](../../GSTNCombatGAS/README.md)
+for a GAS-only (no NP) consumer of this plugin.
