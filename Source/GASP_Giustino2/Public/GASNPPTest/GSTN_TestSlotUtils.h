@@ -8,6 +8,8 @@
 #include "GSTN_TestSlotUtils.generated.h"
 
 class UGSTN_InputSlotSet;
+class APlayerController;
+class UInputAction;
 
 /**
  * Editor and Python helpers to write the harness' slots into a slot set asset.
@@ -32,4 +34,14 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GASNPPTest|Input")
 	static bool AddButtonPressSlot(UGSTN_InputSlotSet* Set, FGameplayTag Command, FGameplayTag Button);
+
+	/**
+	 * Input for a pawn that has no GSTN_GASNPPTestComponent (the pawn override of the harness, e.g. SandboxCharacter_Mover): the local player's
+	 * enhanced input subsystem injects Action. bPulse = one frame (a press); otherwise a continuous injection that StopInput ends.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPPTest|Input")
+	static bool InjectInput(APlayerController* Controller, UInputAction* Action, FVector Value, bool bPulse);
+
+	UFUNCTION(BlueprintCallable, Category = "GASNPPTest|Input")
+	static bool StopInput(APlayerController* Controller, UInputAction* Action);
 };

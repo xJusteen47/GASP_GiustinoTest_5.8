@@ -2387,17 +2387,14 @@ IA.setdefault('sprint', '/Game/Input/IA_Sprint')
 IA.setdefault('crouch', '/Game/Input/IA_Crouch')
 
 
-def _bare_input(client, action, value=(1.0, 0.0, 0.0), start=True):
+def _bare_input(client, action, value=(1.0, 0.0, 0.0), start=True, pulse=False):
     """Input on a pawn without the test component (SandboxCharacter_Mover through set_pawn_override): the local player's enhanced input
-    subsystem injects the action. Raises when the subsystem is not reachable from Python in this build."""
+    subsystem injects the action (UGSTN_TestSlotUtils.inject_input / stop_input)."""
     pc = unreal.GameplayStatics.get_player_controller(worlds()[client], 0)
-    subsystem = unreal.SubsystemBlueprintLibrary.get_local_player_subsystem(pc, unreal.EnhancedInputLocalPlayerSubsystem)
     act = unreal.load_asset(IA[action])
-    if start:
-        subsystem.start_continuous_input_injection_for_action(act, unreal.Vector(*value), [], [])
-    else:
-        subsystem.stop_continuous_input_injection_for_action(act)
-    return f'{"start" if start else "stop"} {action}'
+    utils = unreal.GSTN_TestSlotUtils
+    ok = utils.inject_input(pc, act, unreal.Vector(*value), pulse) if start else utils.stop_input(pc, act)
+    return f'{"start" if start else "stop"} {action}: {ok}'
 
 
 def scenario_slide_jump(client=1, repeats=10, bare=False):
@@ -2409,7 +2406,7 @@ def scenario_slide_jump(client=1, repeats=10, bare=False):
     player's enhanced input subsystem, the verdict is the reconcile report only."""
     run = _Run('slide_jump', client, judge_reconciles=False, sample=not bare)
     if bare:
-        press = lambda c, a: (_bare_input(c, a), _bare_input(c, a, start=False))
+        press = lambda c, a: _bare_input(c, a, pulse=True)
         hold = lambda c, a, v: _bare_input(c, a, v)
         release = lambda c, a: _bare_input(c, a, start=False)
     else:
