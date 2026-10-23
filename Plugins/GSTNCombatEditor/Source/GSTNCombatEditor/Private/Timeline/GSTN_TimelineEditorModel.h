@@ -104,6 +104,7 @@ DECLARE_MULTICAST_DELEGATE(FGSTN_OnTimelineDataChanged);
 DECLARE_MULTICAST_DELEGATE(FGSTN_OnTimelineSelectionChanged);
 DECLARE_MULTICAST_DELEGATE_OneParam(FGSTN_OnTimelinePlayheadChanged, int32 /*Frame*/);
 DECLARE_MULTICAST_DELEGATE_OneParam(FGSTN_OnTimelineKeySelected, const FGSTN_Selection& /*Key*/);
+DECLARE_MULTICAST_DELEGATE(FGSTN_OnTimelineViewChanged);
 
 /**
  * The state and the mutations of one open timeline editor (combat-m5-editor 4.2). A plain C++ object: it owns no UObject, only
@@ -138,6 +139,17 @@ public:
 
 	int32 GetTotalFrames() const;
 	int32 GetTrackCount() const;
+
+	// Frame vocabulary the gestures and the widgets share, so there is one definition of it
+
+	/** Event and weapon switch fire on StartFrame and ignore EndFrame, so they occupy one frame and have no edges to move */
+	static bool IsPointTrack(const FGSTN_TimelineTrack& Track);
+
+	/** The frames the track occupies: [OutStart, OutEnd). One frame for a point track */
+	static void GetTrackSpan(const FGSTN_TimelineTrack& Track, int32& OutStart, int32& OutEnd);
+
+	/** One past the last frame a window may end on: TotalFrames, or a very large number while the timeline has no length yet */
+	static int32 GetFrameLimit(const FGSTN_CombatTimelineData& Data);
 	const FGSTN_TimelineTrack* GetTrack(int32 TrackIndex) const;
 
 	/** Frames per second of the simulation tick, from the project's Network Prediction settings unless a test sets it */
@@ -148,8 +160,10 @@ public:
 	bool IsAutoKeyEnabled() const { return bAutoKey; }
 	void SetAutoKey(bool bInAutoKey) { bAutoKey = bInAutoKey; }
 
-	/** Shared by every widget of the editor. Not part of the data: scrolling and zooming are never undone */
+	/** Shared by every widget of the editor. Not part of the data: scrolling and zooming are never undone. After changing it, call NotifyViewChanged so the widgets repaint */
 	FGSTN_TimelineViewTransform ViewTransform;
+
+	void NotifyViewChanged() { OnViewChanged.Broadcast(); }
 
 	// Playhead
 
@@ -200,6 +214,12 @@ public:
 
 	bool SetTotalFrames(int32 Frames);
 	bool SetFirstActionableFrame(int32 Frame);
+
+	/**
+	 * Sets the first frame of the cancellable tail to an explicit frame in [0, TotalFrames] (a tail that followed FirstActionableFrame
+	 * with a negative StartFrame stops following it). Does nothing when the timeline has no tail: whether there is one is a details panel edit.
+	 */
+	bool SetTailStartFrame(int32 Frame);
 
 	/**
 	 * Sets TotalFrames to the length of the timeline's montage section at its play rate, in frames of the tick. The montage is
@@ -274,6 +294,9 @@ public:
 	FGSTN_OnTimelineSelectionChanged OnSelectionChanged;
 	FGSTN_OnTimelinePlayheadChanged OnPlayheadChanged;
 	FGSTN_OnTimelineKeySelected OnKeySelected;
+
+	/** Scrolled or zoomed: repaint only, no data changed */
+	FGSTN_OnTimelineViewChanged OnViewChanged;
 
 private:
 	/** Opens the transaction of a mutation (or joins the drag's) and ends with the notification */

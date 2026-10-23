@@ -66,3 +66,53 @@ One line each: where, what differs from the spec, why. Checkpoints in `docs/arch
   OS clipboard (`PasteKeys` and `CopyKeys` are thin wrappers), so it stays deterministic on a build machine. Test-only types live in
   `Private/Tests/GSTN_EditorTestTypes.h` (a hidden keyed track struct and its adapter). The extra test `ViewTransformRoundTrip` covers
   `FGSTN_TimelineViewTransform`, which the plan names in E2 and E4 tests in E4 will reuse.
+
+## E4 timeline panel
+
+- plan E4 files: the widgets are in `Private/Timeline/Widgets/` as planned. Added, widget-free: `GSTN_TimelineLayout` (hit-testing, box
+  select, ruler spacing, navigation, wheel, playback clock), `GSTN_TimelineGesture` (the mouse state machine and `FGSTN_TimelineActions`) and
+  `GSTN_PhaseBarData`; plus `GSTN_TimelineWidgetCommon.h` (colours, drawing helpers) and `GSTN_TimelinePanelTest`. Build.cs gains `Slate`, `SlateCore`.
+- plan E4 ("phase bar from E3"): E3 (`FGSTN_TimelinePhases`, Core) is not in. The panel draws from `FGSTN_PhaseBarData`, a private stand-in in the editor
+  module with the same rules as combat-m5-editor 5.3 (merged hitbox windows, startup = frames before the first one, recovery up to the FAF,
+  "No hitbox" form of the summary, tail from `Data.GetTailStartFrame()`). **When E3 lands, the phase bar and `SGSTN_FrameDataSummary` call
+  `FGSTN_TimelinePhases::Compute` and `GSTN_PhaseBarData.*` is deleted.** Core was not touched.
+- combat-m5-editor 5.2 ("window = bar from StartFrame to EndFrame inclusive"): `GSTN_TimelineTypes.h` says ranges are half open, and the E2 model
+  clamps to `[0, TotalFrames]` on that basis, so the bar covers `[StartFrame, EndFrame)`: from the start of the first frame to the start of the frame
+  after the last. A one-frame window is one cell wide. Event and weapon switch tracks (they ignore `EndFrame`) are drawn as a diamond, not a bar.
+- combat-m5-editor 5.2 (playhead `Home`/`End` first/last frame) vs 6 (`Home` = FrameAll): followed 6. `Home` frames the whole timeline, `End` is not bound.
+- combat-m5-editor 5.2 ("`Space` plays ... honouring Play range"): there is no play range until the toolbar of E5; playback loops the whole timeline
+  `[0, TotalFrames)`, from real time through `FGSTN_PlaybackClock` (frames skip after a slow editor frame instead of the move slowing down; one call
+  never accounts for more than 0.25 s). A `FTSTicker` advances the playhead and an active timer keeps Slate awake while it runs.
+- combat-m5-editor 5.2 ("wheel scroll, Ctrl+wheel zoom"): the wheel over a lane, the ruler or the phase bar moves the view in time, so the rows scroll
+  with their own scrollbar or with the wheel over the name column. The view is clamped to stay near the timeline (a quarter of the view before the
+  start, three quarters past the end).
+- combat-m5-editor 5.2 (name column "mute/solo-preview toggle and + for adding keys"): the mute/solo toggle is for the preview scene and arrives
+  with E6. The "+" is there only on tracks that have keys (it adds a key at the playhead).
+- combat-m5-editor 5.2 ("Ctrl+drag duplicates"): applies to keys (`DuplicateKeys`), as the clipboard rules (plan Q4: keys only). A window is a track here,
+  so there is nothing to Ctrl+drag; the copies appear with the first move off the pressed frame and are what the mouse then drags (one undo step).
+- combat-m5-editor 5.2 ("double-click adds a window with the default length from the track editor"): E5's track editors do not exist, so a double-click on
+  empty lane space adds a key on a keyed track (not twice on a frame), and on any other track a new track of the same kind starting there, 6 frames long
+  (`FGSTN_TimelineActions::DefaultWindowFrames`), one frame for event and weapon switch. E5 replaces the constant by the track editor default.
+- combat-m5-editor 5.2 ("drags clamp to `[0, TotalFrames - 1]`"): same as the E2 delta, windows to `[0, TotalFrames]` (a window may end on `TotalFrames`),
+  keys to `[0, TotalFrames - 1]`. Several selected windows dragged together share one clamp, so they keep their distances.
+- A press and release without a move on a member of a multiple selection narrows the selection to it (usual list behaviour); a drag keeps the group.
+- Phase bar: the FAF marker writes `FirstActionableFrame` (`SetFirstActionableFrame`, nearest frame boundary). The tail band is hatched and starts at
+  `GetTailStartFrame()`; its handle writes `Tail.StartFrame` through the new `SetTailStartFrame`. A tail whose `StartFrame` is negative (follows the FAF)
+  stays that way until the handle actually leaves its frame; after that it is explicit. The tail is drawn only when `bHasTail` is on, turning it on is a
+  details-panel edit. Hovering the bar shows the frame data line.
+- Model changes (editor module, E2 types): `IsPointTrack`, `GetTrackSpan`, `GetFrameLimit` are public statics (one definition of the frame vocabulary for the
+  gestures and the lanes), `SetTailStartFrame`, and `OnViewChanged`/`NotifyViewChanged` (repaint only: scroll, zoom and the box-select rectangle).
+- Commands: the set holds step, previous/next key, play, add key, auto-key, delete, copy/paste/duplicate, frame all/selection and fit-to-montage, which the panel
+  binds, and Bake (Ctrl+B), Validate (F7) and the three view toggles, which are declared so the chords are reserved and appear in Keyboard Shortcuts, and are
+  mapped by the toolkits of E6, E8 and E10. The translate/rotate/scale chords (W/E/R) of combat-m5-editor 6 belong to the viewport client (E7) and are not in this set.
+  `FUICommandList::CanExecuteAction` is true for an unmapped command, so the toolbar shows only mapped ones.
+- Rows are an `SListView` of `FGSTN_TimelineRowData`, rebuilt only when a track appears, disappears or changes struct (add, delete, undo, redo); moves and
+  resizes repaint. The keyboard focus goes to the panel when a lane, the ruler or the phase bar is clicked (`FReply::SetUserFocus`), and the panel runs the command
+  list on key down. Escape cancels the drag and releases the mouse capture.
+- Test tab: `gstn.Combat.OpenTimelinePanelTest [stress]`, editor only, a nomad tab with a hidden menu entry. It borrows the hidden keyed track and its adapter from
+  `Private/Tests/GSTN_EditorTestTypes.h` so diamonds can be tried before the hitbox track exists; E5 removes the tab, the command and that dependency. The footer
+  shows the paint time of the last repaint (sum of the lanes, closed by the ruler) as the acceptance readout of "12 tracks x 60 keys".
+- Plan E4 ("manual: `Tools/GASNPPTest/gstn_editor_check.py` smoke steps"): that script is outside this branch's remit (another machine works there); the smoke steps are
+  listed in the commit message instead.
+- Not verified headless (needs a rendering editor): painting (colours, hatching, diamonds, labels), the mouse and cursor handling in real windows, keyboard focus routing,
+  tab docking, the paint time. The maths, the gestures, undo, the commands and widget construction are covered by `GSTNCombat.Editor.Timeline.*`.

@@ -31,20 +31,6 @@ namespace GSTNTimelineModel
 		return Max < Min ? Min : FMath::Clamp(Value, Min, Max);
 	}
 
-	/** Event and weapon switch fire on StartFrame and ignore EndFrame (GSTN_TimelineTypes.h), so they have no edges to move */
-	bool IsPointTrack(const FGSTN_TimelineTrack& Track)
-	{
-		const EGSTN_TimelineTrackKind Kind = Track.GetKind();
-		return Kind == EGSTN_TimelineTrackKind::Event || Kind == EGSTN_TimelineTrackKind::WeaponSwitch;
-	}
-
-	/** The frames the track occupies on the timeline: [Start, End) */
-	void GetSpan(const FGSTN_TimelineTrack& Track, int32& OutStart, int32& OutEnd)
-	{
-		OutStart = Track.StartFrame;
-		OutEnd = IsPointTrack(Track) ? Track.StartFrame + 1 : Track.EndFrame;
-	}
-
 	/** Moves a whole track. The weapon switch keeps its own copy of the frame, which has to travel with the window */
 	void ShiftTrack(FGSTN_TimelineTrack& Track, int32 Delta)
 	{
@@ -117,6 +103,24 @@ namespace GSTNTimelineModel
 }
 
 using namespace GSTNTimelineModel;
+
+// Event and weapon switch fire on StartFrame and ignore EndFrame (GSTN_TimelineTypes.h), so they have no edges to move
+bool FGSTN_TimelineEditorModel::IsPointTrack(const FGSTN_TimelineTrack& Track)
+{
+	const EGSTN_TimelineTrackKind Kind = Track.GetKind();
+	return Kind == EGSTN_TimelineTrackKind::Event || Kind == EGSTN_TimelineTrackKind::WeaponSwitch;
+}
+
+void FGSTN_TimelineEditorModel::GetTrackSpan(const FGSTN_TimelineTrack& Track, int32& OutStart, int32& OutEnd)
+{
+	OutStart = Track.StartFrame;
+	OutEnd = IsPointTrack(Track) ? Track.StartFrame + 1 : Track.EndFrame;
+}
+
+int32 FGSTN_TimelineEditorModel::GetFrameLimit(const FGSTN_CombatTimelineData& Data)
+{
+	return FrameLimit(Data);
+}
 
 /**
  * The transaction of one mutation. Outside a drag it opens its own scoped transaction; inside a drag it joins the drag's
@@ -408,7 +412,7 @@ bool FGSTN_TimelineEditorModel::MoveWindow(int32 TrackIndex, int32 DeltaFrames)
 
 	int32 Start = 0;
 	int32 End = 0;
-	GetSpan(*Track, Start, End);
+	GetTrackSpan(*Track, Start, End);
 	const int32 Lowest = -Start;
 	const int32 Highest = FrameLimit(*Data) - End;
 	const int32 Delta = Highest < Lowest ? 0 : FMath::Clamp(DeltaFrames, Lowest, Highest);
@@ -485,6 +489,24 @@ bool FGSTN_TimelineEditorModel::SetFirstActionableFrame(int32 Frame)
 
 	FChangeScope Scope(*this, LOCTEXT("SetFirstActionableFrame", "Move first actionable frame"));
 	Data->FirstActionableFrame = NewFrame;
+	return true;
+}
+
+bool FGSTN_TimelineEditorModel::SetTailStartFrame(int32 Frame)
+{
+	FGSTN_CombatTimelineData* Data = Context.Get();
+	if (Data == nullptr || !Data->Tail.bHasTail)
+	{
+		return false;
+	}
+	const int32 NewFrame = ClampRange(Frame, 0, FrameLimit(*Data));
+	if (Data->Tail.StartFrame == NewFrame)
+	{
+		return false;
+	}
+
+	FChangeScope Scope(*this, LOCTEXT("SetTailStartFrame", "Move cancellable tail start"));
+	Data->Tail.StartFrame = NewFrame;
 	return true;
 }
 
