@@ -160,3 +160,20 @@
 - (10) The registry, its tiers and window defaults are not in the sync state (local ini plus class default data): the component logs `timeline registry of N entries, checksum X` when it builds them, so two machines are compared by their logs. A mismatch check at connection time is not done.
 - Style: `bStarted` and `bAwaitingAdoption` are `FSyncBool`, the private sync variables of `UGSTN_GA_Base` / `UGSTN_GA_BaseCombat` are `Transient`, `GetDefaultOverrideFrames` uses a `TOptional` instead of a sentinel, `GSTNCombatGAS` is a private dependency of the project module (only private harness files use it).
 
+
+## C13 Jump (2026-10-23)
+
+Design deviations from combat-m3 7.9 (all kept deliberately small):
+- **No squat frames**: `JumpSquatFrames` stays an attribute but is not simulated; the take-off is the frame of the request. `UGSTN_GA_PlatformJump` is a plain `UGSTN_GA_Base` ability (not a timeline ability), so it has no startup override window yet.
+- **Jump state is `FGSTN_JumpState` in `FGSTN_CombatSyncCore::Jump`** (Core, one bit on the wire when default), with phases None / Rising / Falling / **Launched** (rising because of an external launch: plain gravity, no hold phase). `CoyoteFramesLeft` and `bTakeoffWasAir` were added; `JumpPressEvent` became `Button` (the held bit of the command of the frame).
+- **One binding for jump**: the combat tick (not two bindings with Grounded/Airborne requirements) decides ground jump / coyote jump / air jump / none (`FGSTN_JumpLogic::ClassifyJump`) and gates the request in `CanExecuteBinding`; `Role` (Jump / FastFall) is a CDO property of the bound ability class (`UGSTN_GA_PlatformJump`, `UGSTN_GA_PlatformFastFall`). Tags `Command.Movement.Jump` / `.FastFall` are native but the default slot set does not fill slots for them.
+- **Reset rules and coyote frames live in `UGSTN_CombatSettings`** (`JumpResetRules`, `JumpCoyoteFrames`, defaults in `Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini`), not per kit yet: the per-kit override comes with the loadout (C15).
+- **`ExternalLaunchedThisFrame`** is derived in the Mover sim-state tracker from the sync state: an active `FLayeredMove_Launch` (or child) whose `StartSimTimeMs` is in the step that produced the state. Instant effects (`FApplyVelocityEffect`) do not set it. The tracker also exposes the quantised up direction (1/4096) and velocity.
+- **Gravity**: the stats modifier calls `UGSTN_CombatSimComponent::ApplyJumpGravity` per substep. The authored gravity is kept in `FGSTN_GravityBase` (transient, per component) so the override it writes is not read back as the pawn's gravity; any outside change of gravity becomes the new base. `MaxFallSpeed` / `FastFallSpeed` caps are NOT applied yet (only the gravity scales).
+- Project `UGSTN_JumpImpulseMoveCreator` reads the `JumpVelocity` stat when present. The project `GA_Jump` is kept, marked to be replaced later.
+- Harness: the jump kit is granted by `ServerSetJumpKit`, not through the Blueprint's DefaultAbilities. `setup_gas_assets.py --combat-input` still touches `BP_GASNPP_TestCharacter` (adds `IMC_GAS_Abilities` to its mapping contexts); that change was reverted with `git checkout`, do not commit it.
+- Tilted gravity scenario uses 30 degrees: the world floor must stay walkable under the tilt (45 degrees or sideways need a level made for it).
+
+## Slide + jump correction report (owner bug, 2026-10-23)
+
+`scenario_slide_jump` (10 x sprint, crouch to slide, jump mid-slide; listen 60/15/0 and 60/15/2, `np.LogReconcileField 1`) on the harness character: 0 mismatches, 0 unexplained of ours in both runs (the pawn does go Walking -> Sliding at 800 cm/s -> Falling -> Walking). Not reproduced on `BP_GASNPP_TestCharacter`. The report is for the harness character, which uses the project GA_Jump / Mover jump, not the SandboxCharacter_Mover base character; try the scenario on that character (set `m.CHAR`) before concluding.

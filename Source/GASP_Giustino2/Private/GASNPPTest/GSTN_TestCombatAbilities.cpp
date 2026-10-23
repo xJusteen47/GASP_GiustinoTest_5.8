@@ -7,6 +7,7 @@
 #include "NativeGameplayTags.h"
 #include "DefaultMovementSet/LayeredMoves/LaunchMove.h"
 #include "GameFramework/Actor.h"
+#include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "MoverComponent.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 
@@ -103,6 +104,11 @@ FEffectMoveContainer UGSTN_TestLaunchMoveCreator::MakeMove_Implementation(UMover
 {
 	FLayeredMove_Launch Launch;
 	Launch.LaunchVelocity = (TargetMoverComponent ? TargetMoverComponent->GetUpDirection() : FVector::UpVector) * LaunchSpeed;
+	// From the ground the launch must leave the walking mode: the air mode of the common settings, like the jump impulse does
+	if (const UCommonLegacyMovementSettings* CommonSettings = TargetMoverComponent ? TargetMoverComponent->FindSharedSettings<UCommonLegacyMovementSettings>() : nullptr)
+	{
+		Launch.ForceMovementMode = CommonSettings->AirMovementModeName;
+	}
 	return FEffectMoveContainer(&Launch);
 }
 

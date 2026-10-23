@@ -220,3 +220,15 @@ PIE regression (listen 60/15/0, one fresh PIE, editor PID 27400): timeline_cance
 Behaviour changes to know: hitstop now stops the combat clock and the running timeline (the debug window opened on frame F pauses from F+1); `IsCommandActivation` takes the spec handle; `GetAimRotation` is [-180, 180]; the combat component logs `timeline registry of N entries, checksum X` (compare machines by it); `GSTNCombatGAS` is private in the project Build.cs. A forced stance still never ends by release (documented).
 Not done: no hitstop PIE scenario (the debug hitstop button + a timeline running); the registry checksum is only logged, not compared across machines.
 NEXT: C13 (acceleration/braking/air control attributes, gravity phases, jump state).
+
+## HANDOVER 7 (laptop, 2026-10-23 ~16:20): C13 jump done
+
+Branch feature/gas-npp-5.8, pushed. Editor CLOSED (setup_editor(False) then quit_editor). Build green; headless `Automation RunTests GSTN` 187/187 (Saved/Logs/headless-tests16.log). Working tree: `.mcp.json` (+tmp), none ours.
+
+Done: ORG-1 tracker (up direction, velocity, launch flag; e9ed07b), Core jump state machine / gravity phases / reset rules / tags (`Jump/`), the jump state in the combat sync core, `UGSTN_GA_PlatformJump` + `UGSTN_GA_PlatformFastFall`, gravity phases in the stats modifier, project JumpVelocity read. Design deviations: m3-doc-deltas.md "C13 Jump".
+New tests: `GSTNCombat.Core.Jump.TiltedGravityApex`, `Jump.ExternalLaunchResets`, `Gravity.PhasesFollowLocalGravity`; `NP.State.RoundTrip` now expects 2 idle bits (action part + jump state).
+PIE (listen 60/15/0, fresh PIE, host/authority vs owner): variable_jump PASS 6 (apex 140.7 / 155.6 / 169.0 / 177.5 cm for holds 0 / 0.08 / 0.16 / 0.30 s, delta 0.00); air_jump_fastfall PASS 10 (A 177.6, with air jump 276.6, deltas <= 0.37 cm; fast fall -721 vs -635 cm/s); tilted_gravity_jump (30 degrees) PASS 8 (launch 0.00 deg from local up, 0.0 cm sideways, apex 282.7 cm, delta 0.07); external_launch_jump PASS 10 (launch apex 420.5 cm vs 413.3 predicted, delta 0.10; air jumps refilled; coyote cleared). unexplained_ours = 0 in all. jump_wall: run once, no rollback on the wall client in report() (weak evidence, it has no strict verdict). Not run: abilities, stance_lock, combat_spike.
+Slide + jump bug: scenario_slide_jump, 20 repeats, 0 mismatches (see the deltas file); not reproduced on the harness character.
+Not done: squat frames, MaxFallSpeed / FastFallSpeed caps, per-kit reset rules (C15), a coyote-specific PIE (the ground launch case covers the Clear rule only), checks of the harness scenarios use "seen within the last second" because the authority simulates about 0.25 s later in wall time than the owner.
+Process: the first harness bug was mine: `Input.RequestButton` is 1 + the button index. `setup_gas_assets.py --combat-input` edits BP_GASNPP_TestCharacter: reverted by `git checkout`. Python in a Bash heredoc with triple quotes fails to parse: use the Write tool for long files; ue_play needs netMode=listen players=3 runUnderOneProcess=true.
+NEXT: C14 (movement abilities, defensive shells).

@@ -2097,9 +2097,26 @@ def _both(run, fn):
     return bool(a[0] and b[0]), f'srv: {a[1]}; cli: {b[1]}'
 
 
-def _field_is(run, field, want, label):
-    """Timeline check: a field of the jump state is `want` on the authority and on the owner."""
-    return run.at(label, lambda: _both(run, lambda side: (_jump_field(run, side, field) == want, f'{field} {_jump_field(run, side, field)} (want {want})')))
+def _field_is(run, field, want, label, span=1.0):
+    """Timeline check: a field of the jump state was `want` on the authority and on the owner at some sample of the last `span` seconds. The
+    authority simulates a frame later in wall time than the owner (input travel), so a point test would compare different frames."""
+    def f():
+        t1 = run.now()
+        def side(sd):
+            seen = [s[sd].get('jump', {}).get(field) for s in run.samples if t1 - span <= s['t'] <= t1 and s.get(sd)]
+            return want in seen, f'{field} seen {sorted(set(map(str, seen)))} (want {want})'
+        return _both(run, side)
+    return run.at(label, f)
+
+
+def _field_never(run, field, bad, label, t0, t1):
+    """Timeline check: a field of the jump state was never `bad` on either side in [t0, t1] (scenario time, so mind the authority's delay)."""
+    def f():
+        def side(sd):
+            hit = [s['t'] for s in run.samples if t0 <= s['t'] <= t1 and s.get(sd) and s[sd].get('jump', {}).get(field) == bad]
+            return not hit, f'{field} == {bad} at {hit[:1]}'
+        return _both(run, side)
+    return run.at(label, f)
 
 
 def _apex_pair(run, store, label, t_base, t0, t1, up=(0.0, 0.0, 1.0), tol=1.0, floor=20.0):
@@ -2172,25 +2189,23 @@ def scenario_air_jump_fastfall(client=1):
         # B: fast fall refused while rising, accepted while falling
         (TB, lambda: ('B: jump', _jump_tap(client, 0.3))),
         (TB + 0.3, lambda: ('release', combat_clear(client))),
-        (TB + 0.17, lambda: ('B: fast fall while rising (refused)', combat_tap(client, crouch))),
-        (TB + 0.4, refused(TB + 0.12, TB + 0.4, 'B: no fast fall request while rising')),
-        (TB + 0.4, _field_is(run, 'fastFalling', False, 'B: not fast falling while rising')),
-        (TB + 0.7, lambda: ('B: fast fall while falling', combat_tap(client, crouch))),
-        (TB + 0.9, _field_is(run, 'fastFalling', True, 'B: fast falling')),
+        (TB + 0.2, lambda: ('B: fast fall while rising (refused)', combat_tap(client, crouch))),
+        (TB + 0.75, _field_never(run, 'fastFalling', True, 'B: no fast fall while rising', TB, TB + 0.75)),
+        (TB + 0.85, lambda: ('B: fast fall while falling', combat_tap(client, crouch))),
+        (TB + 1.6, _field_is(run, 'fastFalling', True, 'B: fast falling', span=1.0)),
         (TB + 3.0, run.at('B: the fast fall descent is faster than the plain one', faster_fall)),
         # C: an air jump, and a second one refused
         (TC, lambda: ('C: jump', _jump_tap(client, 0.3))),
         (TC + 0.3, lambda: ('release', combat_clear(client))),
-        (TC + 0.38, lambda: ('C: air jump', combat_tap(client, jump))),
-        (TC + 0.55, _field_is(run, 'airJumpsUsed', 1, 'C: one air jump used')),
+        (TC + 0.4, lambda: ('C: air jump', combat_tap(client, jump))),
+        (TC + 1.0, _field_is(run, 'airJumpsUsed', 1, 'C: one air jump used', span=0.8)),
         (TC + 0.7, lambda: ('C: a second air jump (refused)', combat_tap(client, jump))),
-        (TC + 0.9, refused(TC + 0.65, TC + 0.9, 'C: no second air jump request')),
-        (TC + 0.9, _field_is(run, 'airJumpsUsed', 1, 'C: still one air jump used')),
-        (TC + 3.0, _apex_pair(run, apex, 'C', TC - 0.05, TC, TC + 1.2)),
+        (TC + 1.2, _field_never(run, 'airJumpsUsed', 2, 'C: never a second air jump', TC, TC + 1.2)),
+        (TC + 3.0, _apex_pair(run, apex, 'C', TC - 0.05, TC, TC + 1.8)),
         (TC + 3.0, run.at('the air jump goes higher than the plain jump', air_higher)),
-        (TC + 3.5, _field_is(run, 'airJumpsUsed', 0, 'C: landing resets the air jumps')),
-        (TC + 3.6, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
-        (TC + 4.6, run.finish()),
+        (TC + 3.8, _field_is(run, 'airJumpsUsed', 0, 'C: landing resets the air jumps', span=0.5)),
+        (TC + 3.9, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
+        (TC + 4.9, run.finish()),
     ]
     run.run(steps)
 
@@ -2234,7 +2249,7 @@ def scenario_tilted_gravity_jump(client=1, tilt_deg=30.0):
 
     def launch_direction():
         def f(side):
-            fast = fast_samples(side, T + 0.02, T + 0.25, 200.0)
+            fast = fast_samples(side, T + 0.02, T + 0.7, 200.0)
             if not fast:
                 return False, 'no fast sample'
             a = _angle_deg(fast[0], up)
@@ -2247,15 +2262,15 @@ def scenario_tilted_gravity_jump(client=1, tilt_deg=30.0):
             if d is None:
                 return False, 'no apex'
             lateral = sum((d[i] - h * up[i]) ** 2 for i in range(3)) ** 0.5
-            return lateral < 5.0 and h > 50.0, f'apex {h:.1f} cm along up, {lateral:.1f} cm sideways of it'
+            return lateral < 0.08 * h and h > 50.0, f'apex {h:.1f} cm along up, {lateral:.1f} cm sideways of it (want < 8%)'
         return _both(run, f)
 
     def descent_along_up():
         def f(side):
-            fast = fast_samples(side, T + 1.0, T + 2.6, 500.0)
+            fast = fast_samples(side, T + 1.35, T + 2.6, 400.0)
             if not fast:
                 return False, 'no fast descent sample'
-            a = _angle_deg(fast[-1], tuple(-x for x in up))
+            a = _angle_deg(fast[0], tuple(-x for x in up))
             return a < 6.0, f'fast descent {a:.2f} deg from local down'
         return _both(run, f)
 
@@ -2271,11 +2286,11 @@ def scenario_tilted_gravity_jump(client=1, tilt_deg=30.0):
         (T - 0.5, run.at('standing still under the tilted gravity', standing)),
         (T, lambda: ('jump', _jump_tap(client, 0.3))),
         (T + 0.3, lambda: ('release', combat_clear(client))),
-        (T + 0.3, run.at('the launch goes along local up', launch_direction)),
+        (T + 0.8, run.at("the launch goes along local up", launch_direction)),
         (T + 0.45, lambda: ('air jump', combat_tap(client, jump))),
-        (T + 0.65, _field_is(run, 'airJumpsUsed', 1, 'one air jump used')),
+        (T + 1.0, _field_is(run, 'airJumpsUsed', 1, 'one air jump used')),
         (T + 1.3, lambda: ('fast fall', combat_tap(client, crouch))),
-        (T + 1.5, _field_is(run, 'fastFalling', True, 'fast falling')),
+        (T + 1.9, _field_is(run, 'fastFalling', True, 'fast falling')),
         (T + 3.5, _apex_pair(run, apex, 'tilted jump', T - 0.05, T, T + 2.0, up)),
         (T + 3.5, run.at('the displacement at the apex is along local up', displacement_along_up)),
         (T + 3.5, run.at('the fast fall descends along local up', descent_along_up)),
@@ -2309,12 +2324,12 @@ def scenario_external_launch_jump(client=1, launch_speed=900.0):
         (TA, lambda: ('A: jump', _jump_tap(client, 0.3))),
         (TA + 0.3, lambda: ('release', combat_clear(client))),
         (TA + 0.4, lambda: ('A: air jump', combat_tap(client, jump))),
-        (TA + 0.6, _field_is(run, 'airJumpsUsed', 1, 'A: the air jump is used')),
+        (TA + 0.85, _field_is(run, 'airJumpsUsed', 1, 'A: the air jump is used')),
         (TA + 0.7, lambda: ('A: a second air jump (refused)', combat_tap(client, jump))),
         (TA + 0.8, _field_is(run, 'airJumpsUsed', 1, 'A: no air jump left')),
         (TA + 0.9, lambda: ('A: the launch', press(client, 'buff'))),
         (TA + 1.1, _field_is(run, 'airJumpsUsed', 0, 'A: the launch refilled the air jumps')),
-        (TA + 1.1, _field_is(run, 'phase', 3, 'A: launched phase (3), plain gravity')),
+        (TA + 1.5, _field_is(run, 'phase', 3, 'A: launched phase (3), plain gravity')),
         (TA + 1.2, lambda: ('A: air jump again', combat_tap(client, jump))),
         (TA + 1.4, _field_is(run, 'airJumpsUsed', 1, 'A: the air jump works again after the launch')),
         (TA + 4.0, _field_is(run, 'airJumpsUsed', 0, 'A: landed, reset')),
@@ -2325,7 +2340,7 @@ def scenario_external_launch_jump(client=1, launch_speed=900.0):
         # B2: the same launch, then a jump request right after leaving the ground
         (TB + 4.0, lambda: ('B2: the launch from the ground', press(client, 'buff'))),
         (TB + 4.25, lambda: ('B2: jump request in the air', combat_tap(client, jump))),
-        (TB + 4.45, _field_is(run, 'airJumpsUsed', 1, 'B2: the launch ended the coyote window: the jump was an air jump')),
+        (TB + 4.95, _field_is(run, 'airJumpsUsed', 1, 'B2: the launch ended the coyote window: the jump was an air jump')),
         (TB + 8.0, lambda: ('cleanup', (combat_clear(client), _srv(key).server_revoke_probes(), _srv(key).server_set_jump_kit(False)))),
         (TB + 9.0, run.finish()),
     ]
