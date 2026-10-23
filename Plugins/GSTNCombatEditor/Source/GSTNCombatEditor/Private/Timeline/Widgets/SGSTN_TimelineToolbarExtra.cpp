@@ -33,6 +33,7 @@ void SGSTN_TimelineToolbarExtra::Construct(const FArguments& InArgs)
 {
 	Model = InArgs._Model;
 	check(Model.IsValid());
+	const FSimpleDelegate OnValidate = InArgs._OnValidate;
 	const TSharedRef<FGSTN_TimelineEditorModel> M = Model.ToSharedRef();
 	const FGSTN_TimelineEditorCommands& Commands = FGSTN_TimelineEditorCommands::Get();
 
@@ -111,13 +112,18 @@ void SGSTN_TimelineToolbarExtra::Construct(const FArguments& InArgs)
 			MakeStubCombo(LOCTEXT("KitCombo", "Kit"), LOCTEXT("KitComboTip", "The kit whose hurtboxes and skins the preview uses. Available with the preview scene."))
 		]
 
-		// Validate (E10)
+		// Validate (E10): the findings go to the Message Log, category GSTN Combat
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 		[
 			SNew(SButton)
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-			.IsEnabled(false)
-			.ToolTipText(LOCTEXT("ValidateTip", "Checks the timeline for errors. Available with the validators."))
+			.IsEnabled(OnValidate.IsBound())
+			.ToolTipText(LOCTEXT("ValidateTip", "Checks the timeline against the rules and lists the findings in the Message Log. Errors make the asset invalid, warnings do not."))
+			.OnClicked_Lambda([OnValidate]() -> FReply
+			{
+				OnValidate.ExecuteIfBound();
+				return FReply::Handled();
+			})
 			[
 				SNew(STextBlock).Text(Commands.ValidateNow->GetLabel())
 			]

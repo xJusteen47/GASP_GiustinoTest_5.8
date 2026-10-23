@@ -7,6 +7,7 @@
 #include "Math/Transform.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "UObject/WeakObjectPtrTemplates.h"
+#include "Validation/GSTN_ValidationReport.h"
 
 class FGSTN_TimelineEditorModel;
 class FPrimitiveDrawInterface;
@@ -119,6 +120,15 @@ public:
 	 * is set here.
 	 */
 	virtual void InitNewTrack(FGSTN_TimelineTrack& Track, int32 AddedAtFrame, const FGSTN_CombatTimelineData& Data) const {}
+
+	/**
+	 * The findings this track kind has beyond the general rules of the timeline (combat-m5-editor 12): a shield window that must lie
+	 * inside the airborne part, a projectile with no class. Called by the timeline validation once per track of this struct, with the
+	 * data around it for the context; add findings to Report with the codes of your own (a plugin prefix keeps them apart from
+	 * Timeline.*). The track index is filled in for every finding that does not set one, so a finding needs no index of its own.
+	 * Pure like every rule: read the arguments, load nothing, keep nothing. Default: nothing to add.
+	 */
+	virtual void Validate(const FGSTN_TimelineTrack& Track, const FGSTN_CombatTimelineData& Data, FGSTN_ValidationReport& Report) const {}
 
 	/** Draws the track into the viewport for the playhead frame (E6). Default: nothing */
 	virtual void DrawPreview(const FGSTN_TrackPreviewContext& Context) const {}

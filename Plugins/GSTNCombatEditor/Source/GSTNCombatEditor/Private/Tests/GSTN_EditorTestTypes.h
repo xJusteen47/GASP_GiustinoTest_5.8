@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Loadout/GSTN_LoadoutData.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "Timeline/GSTN_KeyedTrackAccess.h"
 #include "GSTN_EditorTestTypes.generated.h"
@@ -48,6 +49,17 @@ struct FGSTN_TestDerivedMovement : public FGSTN_TimelineTrack_Movement
 
 	UPROPERTY()
 	int32 ExtraFrames = 0;
+};
+
+/** An object that holds a loadout, as a designer preset asset will: the preset validator takes any asset with such a property */
+UCLASS(Transient)
+class UGSTN_TestLoadoutHolder : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY()
+	FGSTN_LoadoutData Loadout;
 };
 
 /** The adapter a keyed track registers: linear interpolation of position and size for a new key, stable sort by frame */

@@ -4,6 +4,7 @@
 
 #include "Framework/Docking/TabManager.h"
 #include "Styling/AppStyle.h"
+#include "Timeline/GSTN_TimelineEditorCommands.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
 #include "Timeline/GSTN_TimelineUndo.h"
 #include "Timeline/Widgets/GSTN_TimelineWidgetCommon.h"
@@ -13,6 +14,8 @@
 #include "Timeline/Widgets/SGSTN_TimelinePanel.h"
 #include "Timeline/Widgets/SGSTN_TimelineToolbarExtra.h"
 #include "UObject/Object.h"
+#include "Validation/GSTN_CombatValidators.h"
+#include "Validation/GSTN_ValidationMessageLog.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/SBoxPanel.h"
@@ -129,7 +132,26 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 	constexpr bool bCreateDefaultStandaloneMenu = true;
 	constexpr bool bCreateDefaultToolbar = true;
 	FAssetEditorToolkit::InitAssetEditor(Mode, InitToolkitHost, TimelineEditorAppIdentifier, MakeDefaultLayout(), bCreateDefaultStandaloneMenu, bCreateDefaultToolbar, Context.GetTarget());
+
+	// The chord of Validate (F7) lives on the toolkit, not on the panel's command list: the toolbar button and the chord do the same thing
+	ToolkitCommands->MapAction(FGSTN_TimelineEditorCommands::Get().ValidateNow, FExecuteAction::CreateSPLambda(this, [this]() { ValidateNow(); }));
 	return true;
+}
+
+FGSTN_ValidationReport FGSTN_TimelineEditorToolkit::ValidateNow()
+{
+	FGSTN_ValidationReport Report;
+	const FGSTN_CombatTimelineData* Data = Model.IsValid() ? Model->GetData() : nullptr;
+	if (!Data)
+	{
+		return Report;
+	}
+
+	// The asset's own name on the page, so two validations of two timelines can be told apart in the log
+	const FGSTN_TimelineRuleContext RuleContext = FGSTN_CombatValidators::MakeTimelineContext(*Data, Context.GetTarget(), Model->GetTickRate(), true);
+	FGSTN_CombatValidators::ValidateTimeline(*Data, RuleContext, Report);
+	GSTNValidationLog::WriteReport(Report, FText::Format(LOCTEXT("ValidatePageTitle", "Validate {0}"), Context.GetDisplayName()), true);
+	return Report;
 }
 
 void FGSTN_TimelineEditorToolkit::RegisterTabSpawners(const TSharedRef<FTabManager>& InTabManager)
@@ -226,7 +248,9 @@ TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnTimelineTab(const FSpawnT
 				.Model(Model)
 				.ToolbarExtra()
 				[
-					SNew(SGSTN_TimelineToolbarExtra).Model(Model)
+					SNew(SGSTN_TimelineToolbarExtra)
+					.Model(Model)
+					.OnValidate(FSimpleDelegate::CreateSPLambda(this, [this]() { ValidateNow(); }))
 				]
 			]
 		];

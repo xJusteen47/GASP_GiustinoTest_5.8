@@ -1,13 +1,13 @@
 # GSTNCombatEditor
 
 Editor tooling of GSTN Combat for Unreal Engine 5.8: the timeline editor (edit context, model, undo, the timeline panel, the
-toolkit and track editors, then preview scene, gizmos), socket baking, the hurtbox set editor and validation. A designer builds a move with windows and keys instead
+toolkit and track editors, then preview scene, gizmos), validation, socket baking and the hurtbox set editor. A designer builds a move with windows and keys instead
 of typing frame numbers in a details panel. Everything the tooling writes is the plain data of `GSTNCombatCore`
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.4)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
-model), E4 (timeline panel) and E5 (toolkit, track editors) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md); the design is
+Status: **experimental (0.5)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+model), E4 (timeline panel), E5 (toolkit, track editors) and E10 (validation) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
 
@@ -15,7 +15,7 @@ harness or cooked data.
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNCombatEditor` | exists (Editor, PostEngineInit) | Module class (`FGSTN_CombatEditorModule`, log `LogGSTNCombatEditor`), `UGSTN_CombatEditorSettings`, the pure editing model of a timeline, the timeline panel with its commands, the track editor registry and the timeline asset editor (below). Covered by `GSTNCombat.Editor.*`. |
+| `GSTNCombatEditor` | exists (Editor, PostEngineInit) | Module class (`FGSTN_CombatEditorModule`, log `LogGSTNCombatEditor`), `UGSTN_CombatEditorSettings`, the pure editing model of a timeline, the timeline panel with its commands, the track editor registry, the timeline asset editor and the validators (below). Covered by `GSTNCombat.Editor.*`. |
 
 ### The editing model (E2, no UI types)
 
@@ -72,7 +72,8 @@ with their scrollbar or with the wheel over the name column.
 | Copy / Paste / Duplicate Keys | `Ctrl+C` / `Ctrl+V` / `Ctrl+D` | yes (paste and duplicate at the playhead) |
 | Frame All / Frame Selection | `Home` / `F` | yes |
 | Fit Length to Montage | none | yes, the explicit command |
-| Bake Sockets, Validate, Show Hitboxes/Hurtboxes/Movement Path | `Ctrl+B`, `F7`, none | declared, mapped by the toolkits of E6, E8, E10 |
+| Validate | `F7` | mapped by the toolkit (not the panel): the same as the toolbar button, see Validation |
+| Bake Sockets, Show Hitboxes/Hurtboxes/Movement Path | `Ctrl+B`, none | declared, mapped by the toolkits of E6, E8 |
 
 ### The timeline editor window (E5)
 
@@ -88,7 +89,7 @@ the editor. A second toolkit on an open asset is refused and the open one comes 
 | `UGSTN_TimelineSelectionProxy` | `Private/Timeline/GSTN_TimelineSelectionProxy.h` | A transient copy of the selected track, shown by a structure details view. `Commit` writes it back with `ApplyTrackEdit` (one undo step; a slider drag is one step through the model's drag). |
 | `SGSTN_TimelineDetails` | `Private/Timeline/Widgets/` | The Details tab: follows the selection (one row at a time) and the data. |
 | `SGSTN_MontageLengthBar` | same | Warning bar when the montage and `TotalFrames` disagree, with **Fit Total Frames to montage** (undoable, explicit, never automatic). |
-| `SGSTN_TimelineToolbarExtra` | same | Loop range (editor state, not saved), skin and kit combos (stubs until E6), Validate (disabled until E10). |
+| `SGSTN_TimelineToolbarExtra` | same | Loop range (editor state, not saved), skin and kit combos (stubs until E6), Validate (runs the timeline rules, E10). |
 | `IGSTN_TrackEditor`, `FGSTN_TrackEditorRegistry`, `IGSTN_GizmoProvider`, `FGSTN_TrackPreviewContext` | `Public/Timeline/GSTN_TimelineTrackEditor.h` | The extension point (below). |
 | `GSTNTrackEditors` | `Private/Timeline/GSTN_TrackEditors.cpp` | The built-in track editors: CancelWindow, Movement, Tags, Event, WeaponSwitch. |
 
@@ -127,27 +128,83 @@ void FMyEditorModule::ShutdownModule() { FGSTN_TrackEditorRegistry::Get().Unregi
 
 Only `GetTrackStruct` and `GetDisplayName` are required. The colour defaults to the one the settings list for the struct
 (`TrackColors`), so a designer re-colours it without code; override `GetColor` to fix one. `HasKeys` follows the keyed track access
-registry. `DrawPreview` (E6) and `AsGizmoProvider` (E7) are declared and not called yet. A struct derived from a registered track keeps
+registry. `Validate(Track, Data, Report)` adds the findings that are about your track kind (see Validation); the default adds none. `DrawPreview` (E6) and `AsGizmoProvider` (E7) are declared and not called yet. A struct derived from a registered track keeps
 its base's editor until it registers its own. Add a test: a registry case (listed, defaults applied by `AddTrack`) as in
 `GSTN_EditorTests_Registry.cpp`.
 
 Planned in this module, by checkpoint: hitbox and hurtbox-modifier track editors (E5b), preview scene (E6), gizmos (E7), baker (E8),
-hurtbox set editor (E9), validators (E10, E11), details customizations (E12, E13).
+hurtbox set editor (E9), the rest of the validation: M4 rules, the validation panel, Bake all (E11), details customizations (E12, E13).
+
+## Validation (E10)
+
+One set of rules, three readers: the **Data Validation** validators (on save, on demand, `-run=DataValidation` in CI), the **Validate**
+button of the timeline editor (the findings go to the Message Log, category *GSTN Combat*), and from E11 the validation panel. The rules
+are pure functions that fill an `FGSTN_ValidationReport`, so the automation tests call them with no editor window.
+
+| Type | File | Role |
+|---|---|---|
+| `FGSTN_ValidationReport`, `FGSTN_ValidationFinding`, `EGSTN_Severity`, `FGSTN_FindingLocation` | `Public/Validation/GSTN_ValidationReport.h` | The result: severity (Error, Warning, Info), a stable `Code`, a message, an optional detail, the asset and where in it (track, key, frame). Includes no Slate. **Errors invalidate an asset, warnings do not.** |
+| `FGSTN_CombatValidators` | `Private/Validation/GSTN_CombatValidators.h` | The rules and the checks of kit, weapon and loadout, as static functions. |
+| `UGSTN_TimelineValidator`, `UGSTN_KitValidator`, `UGSTN_WeaponValidator`, `UGSTN_LoadoutPresetValidator` | `Private/Validation/GSTN_EditorValidators.h` | `UEditorValidatorBase` children: the Data Validation side. |
+| `GSTNValidationLog` | `Private/Validation/GSTN_ValidationMessageLog.h` | A report as Message Log entries (an asset link, `[Code] message`, a **Show** action when a finding has a detail). |
+
+Data Validation runs an asset's own `IsDataValid` first, then the validators. The assets already report what they check themselves (a
+timeline its Core rules, a kit its own checks), so a validator does not say twice what the context already holds. What a validator adds
+is what no asset could check alone: the track registry, the montage loaded at the project's tick rate, and the command table of a kit
+with its weapons. An asset that is `Invalid` after its own check is not given to the validators.
+
+**Timeline rules** (codes `Timeline.*`; `GSTN_TimelineValidation.h` of Core is wrapped, never repeated: its messages are classified into
+the codes, and a test pins every one of its messages):
+
+| Code | Source | Severity |
+|---|---|---|
+| `FrameRange` | Core (FirstActionableFrame, empty or late windows, the tail inside the timeline, events outside) plus `TotalFrames >= 1` and no negative frame | error; Core's warnings stay warnings |
+| `MontageLength` | Core, with the montage loaded and the project's tick rate | warning |
+| `DeferredCommit` | Core (nothing acts before the override window ends, the window ends inside the timeline) | error |
+| `PartSelector`, `EmptyTrack`, `Ricochet` | Core, rules the spec table has no row for | as Core |
+| `OverlapSameKind` | two overlapping `Movement` tracks; two `HurtboxModifier` tracks of different kinds on the same part, group or tag; a `Tags` window with the global lock next to one with a narrower lock | error, error, warning |
+| `RootMotionMix` | a root motion montage and a `Movement` track whose mix mode is `Override` | warning |
+| `CancelWindowTarget` | empty `IntoCommands`; no command of the kits that use the ability matches (only when the caller passes the commands); `OnHit`/`OnBlock` with no hitbox on the timeline | error, warning, warning |
+| `TagsTrack` | a tag of a Tags window, an event cue, an event's gameplay event or the ricochet cue that is not in the tag table | error |
+| `AimTurn` | `TurnUntilFrame` past the end (camera policy); `MaxTurnDegrees` not positive for a policy that turns | error |
+| `UnknownTrack` | a track struct with no track editor (shown as a generic row) | warning |
+
+The Hitbox same-group overlap, the baked-socket and hitbox rules arrive with E11 (they need M4).
+
+**Kit, weapon and loadout.** Nothing new is decided here: the kit's and weapon's own `Validate` become findings (`Kit.Data`,
+`Weapon.Data`: identity leaf, bindings, command set), the loadout rules of Core (`UGSTN_LoadoutRules`: allowed weapons, supers and
+skins, customisations, the timeline registry) become `Loadout.Rule`, and the command table is compiled with the compiler the game
+runs and checked with the input plugin's validators, once per weapon, like the game does. A slot conflict (`Slot.Ambiguous`,
+`Slot.DuplicateCommand`, `Slot.InvalidSlot` errors, `Slot.Shadowed` warning) names **both slots** (their command tags), says which of them
+comes from a weapon or a super, and carries a **Show** detail with each slot's input in the notation of M1 section 4, frames counted from
+the slot's first event and the letters named (`A=Input.Button.Attack`). The weapon's check reports what the weapon adds to each kit that
+can carry it (as its primary weapon or through the kit's weapon query), not the kit's own problems. Only slots that some binding uses are
+in the table: a slot nobody binds can never fire, and is not compared.
+
+There is no preset asset class in M3 (`UGSTN_LoadoutDefinition` is still to come), so the preset validator takes **any asset whose class
+has an `FGSTN_LoadoutData` property**: that class when it arrives, or a game's own Blueprint holding one. It resolves the ids through the
+Asset Manager and checks the loadout as the server will. The validator for the inline timelines of ability Blueprints (E13) is not
+declared: M3 has no ability class with an inline timeline yet.
+
+**Console and CI.** `UnrealEditor-Cmd <project> -run=DataValidation` runs every validator over the project's assets
+(`-AssetType=GSTN_CombatTimeline` narrows it to a class); the exit code is 2 when an asset is invalid.
 
 ## Dependencies
 
-- Plugins: `GSTNCombat` (the timeline data), `GSTNCombatGAS` (kit data, and the `Combat.Hurtbox.*` tags the settings map to),
-  `GSTNCombatDebug` as `Optional` (only to enable it together when it is present).
+- Plugins: `GSTNCombat` (the timeline data), `GSTNInput` (the slot validator and the notation), `GSTNCombatGAS` (kit, weapon and loadout
+  data, and the `Combat.Hurtbox.*` tags the settings map to), the engine plugin `DataValidation`, `GSTNCombatDebug` as `Optional`
+  (only to enable it together when it is present).
 - `GSTNCombatEditor` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore; private ApplicationCore (clipboard),
   AssetDefinition (`UAssetDefinition`; `UAssetDefinitionDefault` itself is in UnrealEd), DeveloperSettings, EditorFramework, InputCore,
-  PropertyEditor (the Details tab), Slate, SlateCore, UnrealEd (the toolkit), GSTNCombatGAS. The other editor modules are added by the
-  checkpoints that need them.
+  PropertyEditor (the Details tab), Slate, SlateCore, UnrealEd (the toolkit), GSTNCombatGAS, GSTNInputCore, and for validation DataValidation
+  (`UEditorValidatorBase`), MessageLog, AssetRegistry, Projects, GameplayAbilities (a test binding names the ability base class). The module
+  is compiled file by file (`bUseUnity = false`): the tests share helper names through file-scope using-directives. The other editor
+  modules are added by the checkpoints that need them.
 - Not a dependency, on purpose:
   - `GSTNCombatNP` and `NetworkPrediction`: the one thing the editor needs from the fork, the fixed tick rate, is read from the
     Network Prediction settings object by reflection (`UGSTN_CombatEditorSettings::GetSimulationTickRate`), so the plugin links
     neither. The plan allows the `GSTNCombatNP` edge; it is added when a module really needs a type from it (the first
     candidates are the const accessors of E14/E15, which are the debug plugin's business).
-  - `GSTNInput`: nothing reads input data yet (E10 validators will).
   - `GSTNCombatDebug`: the editor reaches it through `IGSTN_CombatDebugModule::Get()` at run time, never through `Build.cs`,
     because UnrealBuildTool stops when a named module does not exist, and the plugin must build with the debug plugin absent.
 - No runtime module depends on this plugin (grep of every `*.Build.cs` and `.uplugin`, repeated at E19).
@@ -207,12 +264,13 @@ run in the editor context (they need `GEditor->Trans`) on a transient timeline. 
 and `PanelConstructsAndRunsCommands` (skipped when the run has no Slate application). `Registry.*` (E5): `RegisteredTrackListed`,
 `UnknownTrackGetsGenericRow`, `BuiltInsAllRegistered`, `DetailsProxyAppliesEditThroughModel`, `DetailsFollowsSelection` (the widgets
 only with a Slate application), `AddTrackInitializesDefaults`, `TwoToolkitsOneAssetFocusesOpen` (the claim the toolkit makes, not the
-window), `ToolkitLayoutAndAssetDefinition`, `PlayRangeIsEditorStateOnly`. Painting, mouse input and the toolkit window are not tested
+window), `ToolkitLayoutAndAssetDefinition`, `PlayRangeIsEditorStateOnly`. `Validate.*` (E10): one failing and one passing case for each timeline rule (`FrameRange`, `MontageLength`, `OverlapSameKind`, `RootMotionMix`, `DeferredCommit`, `CancelWindowTarget`, `TagsTrack`, `UnregisteredTagIsError`, `AimTurn`, `UnknownTrack`), `CleanTimelineHasNoFindings`, `CoreMessagesClassified`, `TrackEditorValidate`, `KitConflictFlagsBothSlotNames`, `FixClearsTheError`, `WeaponReportsWhatItAdds`, `KitCanCarryWeapon`, `PresetConflictNamesWeaponOrSuper`, `PresetValidatorTakesAnyLoadoutHolder`, `SlotInputNotation`, `ErrorsInvalidateWarningsDoNot`, `SkipsWhatIsDataValidSaid`, `FindingMessage`, `ReportIsWidgetFree`. Painting, mouse input and the toolkit window are not tested
 headless: the smoke steps are in the commit messages of E4 and E5. The Hurtbox zone tags are covered by `GSTNCombat.GAS.Tags.HurtboxZonesRegistered`.
 The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is not run: the canary script does not exist yet.
 
 ## Changelog
 
+- 0.5 (2026-10-23): validation: the report and the rules of the M3 timeline, the Data Validation validators of timeline, kit, weapon and loadout preset, the slot conflict findings with both slot names and the M1 notation, the Message Log category, the Validate button and F7, the `Validate` hook of the track editor (plan E10).
 - 0.4 (2026-10-23): timeline asset editor (toolkit, asset definition, Details tab through a selection proxy, montage-length bar, loop range), the track editor registry and the built-in track editors of the M3 kinds; the E4 test tab and its console command are removed (plan E5).
 - 0.3 (2026-10-23): timeline panel (ruler, phase bar, rows, lanes, frame data), gestures, commands and the test tab (plan E4).
 - 0.2 (2026-10-23): edit context, editor model, drag transaction, undo client, keyed track adapter (plan E2).

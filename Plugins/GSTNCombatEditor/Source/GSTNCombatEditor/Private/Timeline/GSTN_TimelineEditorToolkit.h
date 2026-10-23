@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Timeline/GSTN_TimelineEditContext.h"
 #include "Toolkits/AssetEditorToolkit.h"
+#include "Validation/GSTN_ValidationReport.h"
 
 class FGSTN_TimelineEditorModel;
 class FGSTN_TimelineUndoClient;
@@ -44,6 +45,13 @@ public:
 
 	const TSharedPtr<FGSTN_TimelineEditorModel>& GetModel() const { return Model; }
 	const FGSTN_TimelineEditContext& GetContext() const { return Context; }
+
+	/**
+	 * Validate: runs the timeline rules on the data as it is now, at the model's tick rate with the montage loaded, and writes the findings
+	 * to the Message Log (category GSTN Combat, a page named after the asset). The Validate button and F7 call it. Returns the report so a
+	 * test, or the validation panel of E11, can read it; nothing is changed in the data.
+	 */
+	FGSTN_ValidationReport ValidateNow();
 
 	/** The standalone default layout, apart so a test can read its shape without opening a window */
 	static TSharedRef<FTabManager::FLayout> MakeDefaultLayout();
