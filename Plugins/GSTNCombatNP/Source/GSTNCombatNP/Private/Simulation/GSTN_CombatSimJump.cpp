@@ -47,6 +47,7 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 	OutParams.MinHoldFrames = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetMinJumpHoldFramesAttribute(), bFound));
 	OutParams.MaxHoldFrames = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetMaxJumpHoldFramesAttribute(), bFound));
 	OutParams.AirJumpCount = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetAirJumpCountAttribute(), bFound));
+	const UGSTN_GA_PlatformJump* TableJumpData = Tables().TableJumpData;
 	OutParams.CoyoteFrames = TableJumpData && TableJumpData->bOverrideCoyoteFrames ? TableJumpData->CoyoteFrames : UGSTN_CombatSettings::Get().JumpCoyoteFrames;
 	return true;
 }
@@ -70,6 +71,7 @@ void UGSTN_CombatSimComponent::StepJump(int32 Frame, uint32 HeldButtons, FGSTN_C
 	// The hold is read from the command of this frame: the button that started the jump, still down or not
 	const int32 Button = Core.Jump.Button;
 	const bool bHeld = Button >= 0 && Button < 32 && (HeldButtons & (1u << Button)) != 0;
+	const UGSTN_GA_PlatformJump* TableJumpData = Tables().TableJumpData;
 	const FGSTN_JumpResetRules& JumpRules = TableJumpData && TableJumpData->bOverrideResetRules ? TableJumpData->ResetRules : UGSTN_CombatSettings::Get().JumpResetRules;
 	Core.Jump = FGSTN_JumpLogic::Step(Core.Jump, Frame, FrameJumpSample, bHeld, FrameJumpParams, JumpRules);
 }
@@ -77,6 +79,7 @@ void UGSTN_CombatSimComponent::StepJump(int32 Frame, uint32 HeldButtons, FGSTN_C
 bool UGSTN_CombatSimComponent::IsJumpBindingAllowed(int32 BindingIndex) const
 {
 	// Outside the combat tick, for a binding that is not a jump, or without the movement facts: not this gate's business
+	const TArray<uint8>& BindingJumpRole = Tables().BindingJumpRole;
 	if (!GateCore || !bFrameJumpValid || !BindingJumpRole.IsValidIndex(BindingIndex) || BindingJumpRole[BindingIndex] == 0)
 	{
 		return true;
@@ -90,6 +93,7 @@ bool UGSTN_CombatSimComponent::IsJumpBindingAllowed(int32 BindingIndex) const
 
 void UGSTN_CombatSimComponent::ApplyJumpRequest(int32 Frame, int32 BindingIndex, FGSTN_CombatSyncCore& Core)
 {
+	const TArray<uint8>& BindingJumpRole = Tables().BindingJumpRole;
 	if (!bFrameJumpValid || !BindingJumpRole.IsValidIndex(BindingIndex) || BindingJumpRole[BindingIndex] == 0)
 	{
 		return;

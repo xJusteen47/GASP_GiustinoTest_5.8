@@ -46,6 +46,7 @@ namespace GSTNCombatTags
 
 	/** The active weapon changed. Published by the combat tick on the authority. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_WeaponSwitched);
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_LoadoutSwapped);
 
 	/** A super was used. Published by the combat tick on the authority. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_SuperUsed);

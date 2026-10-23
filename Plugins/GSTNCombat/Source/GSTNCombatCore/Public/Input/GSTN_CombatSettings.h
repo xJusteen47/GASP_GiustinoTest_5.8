@@ -67,6 +67,21 @@ public:
 	int32 GetDefaultOverrideFrames(int32 Tier) const;
 
 	/**
+	 * Loadout table sets the combat simulation keeps besides the Blueprint's (revision 0): the newest this many. A rollback never
+	 * reaches back further than a few frames, so two sets never expire inside the rollback window as long as loadout changes are
+	 * spaced by MinFramesBetweenLoadoutChanges. A lookup miss is a closed gate, never a crash
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Loadout", meta = (ClampMin = "1", ClampMax = "16"))
+	int32 MaxRetainedTableRevisions = 4;
+
+	/**
+	 * A loadout change within this many simulation frames of the previous one is refused (UGSTN_CombatSimComponent::ServerApplyLoadoutChange):
+	 * the table swap of the first must be settled on every machine before the second starts
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Loadout", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 MinFramesBetweenLoadoutChanges = 30;
+
+	/**
 	 * The command set a kit starts from when it names no base set of its own (FGSTN_CommandSet::BaseSet). Soft: the plugin ships
 	 * it empty, a game points it at its slot set asset, and nothing is loaded until a kit's command set is composed (never
 	 * inside the simulation).

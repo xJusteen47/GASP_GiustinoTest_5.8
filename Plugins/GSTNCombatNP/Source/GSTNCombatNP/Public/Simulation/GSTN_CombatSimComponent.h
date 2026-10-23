@@ -13,6 +13,7 @@
 #include "Jump/GSTN_JumpLogic.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
@@ -159,8 +160,24 @@ public:
 	/** Latest simulated (or interpolated) combat state */
 	const FGSTN_CombatSyncState* GetSyncState() const;
 
-	/** The compiled commands and bindings: the meaning of the indices in the sync state and in the commands */
-	const FGSTN_CommandTable& GetCommandTable() const { return CommandTable; }
+	/**
+	 * The compiled commands and bindings the combat state is on: the meaning of the indices in the sync state and in the commands. Inside the
+	 * simulation (an ability's activation or tick) it is the table of the frame being simulated; elsewhere the one of the latest state
+	 */
+	const FGSTN_CommandTable& GetCommandTable() const;
+
+	/** The table set of exactly this loadout revision (0 = the Blueprint's), null if this machine does not have it (never built, or expired) */
+	const UGSTN_CombatTableSet* FindTableSet(int32 Revision) const;
+
+	/**
+	 * Adds a table set built for a loadout revision (game thread, outside the simulation: the loadout component's apply, on every machine).
+	 * A set of the same revision is replaced. Keeps the Blueprint's set and the newest MaxRetainedTableRevisions others; a tick that finds
+	 * no set for the revision it demands runs closed (no commands) until it exists
+	 */
+	void RegisterTableSet(UGSTN_CombatTableSet* Set);
+
+	/** Frames the combat tick ran with the gate closed (the demanded table was missing). Diagnostic, not state: it also counts re-simulated frames */
+	int32 GetGateClosedFrames() const { return GateClosedFrames; }
 
 	/**
 	 * The input history in the notation of FGSTN_InputScript (oldest first, newest at the end), the held buttons and the
@@ -271,12 +288,6 @@ private:
 	/** Whether a jump or fast fall binding may be requested now, from the jump state this frame is writing. Other bindings are never refused here */
 	bool IsJumpBindingAllowed(int32 BindingIndex) const;
 
-	/** Per binding: EGSTN_PlatformJumpRole + 1 for a UGSTN_GA_PlatformJump binding, 0 for any other. Built with the table, read-only while simulating */
-	TArray<uint8> BindingJumpRole;
-
-	/** The class default of the Jump-role binding of the table (the kit's jump data), null without one. Built with the table, read-only while simulating */
-	const UGSTN_GA_PlatformJump* TableJumpData = nullptr;
-
 	/** The movement facts and stats of the frame the tick is on, read once per tick for the gate and the take-off. Rewritten every tick, never state */
 	FGSTN_JumpMoverSample FrameJumpSample;
 	FGSTN_JumpParams FrameJumpParams;
@@ -296,28 +307,41 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
 
-	// Compiled from the assets once: read-only while simulating, so neither is rolled back
-	FGSTN_CommandTable CommandTable;
+	// Compiled from the assets once: read-only while simulating, so not rolled back
 	FGSTN_ButtonMap ButtonMap;
 
 	/**
-	 * The timeline registry (combat-m3 7.1 "index in the timeline registry"): the timeline ability classes of the command table's
-	 * bindings, in binding order, each once. The index is what the combat sync state stores. Built with the table, identical on
-	 * every machine, read-only while simulating. BindingTimeline[b] is the registry index of binding b (INDEX_NONE for a plain
-	 * ability) and TimelineTier[r] the priority tier of the first command bound to entry r (the running tier of the override rule)
+	 * Everything the loadout decides (command table, timeline registry, tiers, jump roles, weapon stats) lives in table sets, one per
+	 * loadout revision (combat-m3 9, loadout-table-swap-design). The active table is a pure function of the rolled-back state: the set of
+	 * FGSTN_CombatSyncCore::TableRevision, never "the current table" of this component, so a re-simulated frame meets the table it had
+	 * the first time. Revision 0 is the Blueprint's binding set and is pinned; the others are the newest MaxRetainedTableRevisions
 	 */
 	UPROPERTY(Transient)
-	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> TimelineRegistry;
+	TArray<TObjectPtr<UGSTN_CombatTableSet>> TableSets;
 
-	/** The timeline assets and montages of the registry classes, loaded with it and kept alive here: the classes' default objects keep nothing */
+	/** A set with no commands: the table of a closed frame and the answer before any set exists. Never null after BeginPlay */
 	UPROPERTY(Transient)
-	TArray<TObjectPtr<UObject>> TimelineContent;
-	TArray<int16> BindingTimeline;
-	TArray<int32> TimelineTier;
-	TArray<int32> TimelineDefaultOverride;
+	TObjectPtr<UGSTN_CombatTableSet> EmptyTableSet;
 
-	/** The frame data of registry entry Index (its class default), null if the index is not one */
-	const FGSTN_CombatTimelineData* GetRegistryTimeline(int32 Index) const;
+	/** Registers a set without the retention rules of RegisterTableSet's caller side (BeginPlay's revision 0) and loads what the registry classes need */
+	void AdoptTableSet(UGSTN_CombatTableSet* Set);
+
+	/** The tables of the frame being simulated, set at the top of every combat tick and read by everything that frame (the ability system's pre-tick included). Rewritten every tick, never state */
+	const UGSTN_CombatTableSet* FrameTables = nullptr;
+
+	/** The set of the previous frame's TableRevision: the registry a CancelTimeline request of a swap frame refers to. Same lifetime as FrameTables */
+	const UGSTN_CombatTableSet* FramePrevTables = nullptr;
+
+	/** Whether the frame ran with the gate closed. Same lifetime as FrameTables */
+	bool bFrameGateClosed = false;
+
+	int32 GateClosedFrames = 0;
+
+	/** The set the frame is on, else the one of the latest state, else the empty one. Never null after BeginPlay */
+	const UGSTN_CombatTableSet& Tables() const;
+
+	/** The frame data of registry entry Index (its class default) of the set, null if the index is not one */
+	static const FGSTN_CombatTimelineData* GetRegistryTimeline(const UGSTN_CombatTableSet& Set, int32 Index);
 
 	/** Scratch of the combat tick, reused every frame (no allocation); the evaluation of the frame the gate and the commit read */
 	FGSTN_TimelineOutput TimelineOutput;
