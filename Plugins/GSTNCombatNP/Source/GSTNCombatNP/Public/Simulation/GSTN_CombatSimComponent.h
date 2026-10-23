@@ -179,6 +179,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> AdoptableTimelines;
 
+	/**
+	 * Queues the permanent stats movement modifier (FGSTN_StatsMovementModifier) on the owner's Mover component once its
+	 * simulation exists, on the authority and the owning client. It makes the character's speeds follow its WalkSpeed stat
+	 * and stops them under Combat.Lock.Movement; it does nothing for an ability system without the combat attribute set.
+	 * Turn it off for a pawn whose speeds the combat stats must not touch
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
+	bool bQueueStatsModifier = true;
+
 	/** Button whose press opens a hitstop window. -1 = none */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "-1", ClampMax = "31"))
 	int32 HitstopTestButton = INDEX_NONE;
@@ -202,6 +211,11 @@ private:
 	void CompileInput();
 
 	void BindAbilitySystem();
+
+	/** Queues the stats modifier on Mover once (see bQueueStatsModifier); called from the component tick until it has */
+	void TryQueueStatsModifier();
+	bool bStatsModifierQueued = false;
+
 	void HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep);
 
 	UPROPERTY(Transient)

@@ -168,3 +168,17 @@ Types are prefixed `GSTN_`; export macro `GSTNCOMBATNP_API`. Public headers in `
 [combat.md](../../docs/architecture/combat.md) · [combat-m2-sim-input.md](../../docs/architecture/combat-m2-sim-input.md) ·
 [input.md](../../docs/architecture/input.md) · [GSTNInputNP README](../GSTNInputNP/README.md) ·
 [gas-npp.md](../../docs/architecture/gas-npp.md) · [PATCHES.md](../GASNPP/PATCHES.md)
+
+## Stats movement modifier (combat-m3 5)
+
+`FGSTN_StatsMovementModifier` (`Movement/GSTN_StatsMovementModifier.h`) is a permanent Mover modifier that makes a character's speeds follow
+its `WalkSpeed` stat. `UGSTN_CombatSimComponent` queues it once (`bQueueStatsModifier`, default on) on the authority and the owning client, on the first
+tick where Mover's simulation exists. On every simulated substep (`OnPreMovement`) it assigns **archetype value x factor**, never the current value
+times a factor, to the speeds the modes read, so the result is a pure function of the restored stats and a rollback cannot leave a stale value. Factor =
+`WalkSpeed / UGSTN_CombatSettings::StatsReferenceWalkSpeed` (0 while the owner has `Combat.Lock.Movement`: the character brakes with its own
+deceleration). What it writes, in all modes of the component: `UCommonLegacyMovementSettings::MaxSpeed`; `MaxSpeedOverride` of a mode whose archetype sets
+it (>= 0); and the float properties named in `UGSTN_CombatSettings::StatsSpeedProperties` (the gait variables of a Blueprint walking mode, which feed
+`MaxSpeedOverride` and so win over the shared settings: the project lists `WalkSpeed`, `RunSpeed`, `SprintSpeed`, `CrouchSpeed` in its
+`Config/DefaultGSTNCombat.ini`). A character whose ability system has no `UGSTN_CombatAttributeSet` is left alone. The arithmetic is `FGSTN_StatsScaling`
+(GSTNCombatCore). Not built yet: acceleration/braking/air control, gravity phases (C13).
+Tests: `GSTNCombat.Core.Stats.{Factor,ScalingIsBaseRelative}`, `GSTNCombat.NP.Stats.{MaxSpeedFollowsAttribute,LockMovementBrakes}`.

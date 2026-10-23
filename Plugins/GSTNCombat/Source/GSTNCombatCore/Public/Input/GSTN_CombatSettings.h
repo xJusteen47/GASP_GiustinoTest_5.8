@@ -73,6 +73,24 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Kits")
 	TSoftObjectPtr<UGSTN_InputSlotSet> DefaultCommandSet;
 
+	/**
+	 * The ground speed, in cm/s, that the speeds of the character's movement modes are authored for. The stats movement modifier
+	 * scales them by the WalkSpeed stat divided by this, so a combatant whose WalkSpeed equals it moves at the authored speeds.
+	 * Equal to the WalkSpeed starting value of the combat attribute defaults unless a game changes one of them.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Stats", meta = (ClampMin = "1", ForceUnits = "cm/s"))
+	float StatsReferenceWalkSpeed = 600.f;
+
+	/**
+	 * Names of floating point properties of the character's movement modes (any mode that has one) that hold a speed the stat scales:
+	 * a Blueprint walking mode's gait speeds (walk, run, sprint, crouch) that feed MaxSpeedOverride. Each is assigned its archetype
+	 * value times the stat factor on every simulated substep. Empty is valid: the modifier then scales only the plain path every
+	 * stock mode reads (UCommonLegacyMovementSettings::MaxSpeed, and MaxSpeedOverride when the mode's archetype sets it). This is
+	 * project content: the plugin ships it empty, the project lists the names of its Blueprint modes
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Stats")
+	TArray<FName> StatsSpeedProperties;
+
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif

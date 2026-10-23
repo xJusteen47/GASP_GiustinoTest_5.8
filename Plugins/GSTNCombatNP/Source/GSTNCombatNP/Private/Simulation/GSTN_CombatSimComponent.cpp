@@ -21,6 +21,8 @@
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "GSTN_CombatTags.h"
 #include "Input/GSTN_CombatSettings.h"
+#include "Movement/GSTN_StatsMovementModifier.h"
+#include "MoverComponent.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Simulation/GSTN_InputHostUtils.h"
@@ -501,6 +503,11 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	if (bQueueStatsModifier && !bStatsModifierQueued)
+	{
+		TryQueueStatsModifier();
+	}
+
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)
 	{
@@ -511,6 +518,36 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		}
 	}
 #endif
+}
+
+void UGSTN_CombatSimComponent::TryQueueStatsModifier()
+{
+	const AActor* Owner = GetOwner();
+	UMoverComponent* Mover = Owner ? Owner->FindComponentByClass<UMoverComponent>() : nullptr;
+	if (!Mover)
+	{
+		bStatsModifierQueued = true;
+		return;
+	}
+
+	// Mover's sync state carries the modifier to the machines that simulate it: the authority and the owning client queue it, the
+	// others get it with the state. A simulated proxy only interpolates, so it has nothing to write
+	if (Owner->GetLocalRole() != ROLE_Authority && Owner->GetLocalRole() != ROLE_AutonomousProxy)
+	{
+		bStatsModifierQueued = true;
+		return;
+	}
+	if (Mover->FindMovementModifierByType<FGSTN_StatsMovementModifier>())
+	{
+		bStatsModifierQueued = true;
+		return;
+	}
+
+	// An invalid handle means Mover's simulation does not exist yet: try again next tick
+	if (Mover->QueueMovementModifier(MakeShared<FGSTN_StatsMovementModifier>()).IsValid())
+	{
+		bStatsModifierQueued = true;
+	}
 }
 
 void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
