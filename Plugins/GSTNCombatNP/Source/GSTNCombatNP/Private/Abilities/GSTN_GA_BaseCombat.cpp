@@ -5,9 +5,7 @@
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
 #include "GSTN_CombatTags.h"
-#include "Simulation/GSTN_CombatActionTypes.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
-#include "Simulation/GSTN_InputHostUtils.h"
 #include "Timeline/GSTN_CombatTimeline.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNBaseCombat, Log, All);
@@ -23,10 +21,10 @@ UGSTN_GA_BaseCombat::UGSTN_GA_BaseCombat(const FObjectInitializer& ObjectInitial
 	// Another timeline ability that interrupts this kind (InterruptCurrent) cancels the running ones of the kind
 	InterruptTags.AddTag(GSTNCombatTags::Ability_Timeline);
 
-	bStarted.Value = 0;
+	bStarted.Value = false;
 	StartClock.Value = INDEX_NONE;
 	StartFrame.Value = INDEX_NONE;
-	bAwaitingAdoption.Value = 0;
+	bAwaitingAdoption.Value = false;
 	AwaitSinceFrame.Value = INDEX_NONE;
 }
 
@@ -34,7 +32,7 @@ const FGSTN_CombatTimelineData& UGSTN_GA_BaseCombat::GetTimelineData() const
 {
 	if (!TimelineAsset.IsNull())
 	{
-		if (const UGSTN_CombatTimeline* Asset = LoadedAsset ? LoadedAsset.Get() : TimelineAsset.Get())
+		if (const UGSTN_CombatTimeline* Asset = TimelineAsset.Get())
 		{
 			return Asset->Data;
 		}
@@ -42,18 +40,24 @@ const FGSTN_CombatTimelineData& UGSTN_GA_BaseCombat::GetTimelineData() const
 	return Timeline;
 }
 
-void UGSTN_GA_BaseCombat::PreloadTimelineContent()
+void UGSTN_GA_BaseCombat::LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKeep) const
 {
 	if (!TimelineAsset.IsNull())
 	{
-		LoadedAsset = TimelineAsset.LoadSynchronous();
+		OutKeep.AddUnique(TimelineAsset.LoadSynchronous());
 	}
 	// The synced montage is played from a plain pointer: it has to be in memory before the first frame of the timeline
 	const FGSTN_CombatTimelineData& Data = GetTimelineData();
 	if (!Data.Montage.IsNull())
 	{
-		Data.Montage.LoadSynchronous();
+		OutKeep.AddUnique(Data.Montage.LoadSynchronous());
 	}
+}
+
+void UGSTN_GA_BaseCombat::PreloadTimelineContent()
+{
+	LoadedContent.Reset();
+	LoadTimelineContent(LoadedContent);
 }
 
 void UGSTN_GA_BaseCombat::OnAvatarSet(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec)
@@ -78,7 +82,7 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	// Captures the activation context and applies the interrupt policy
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	bStarted.Value = 0;
+	bStarted.Value = false;
 	StartClock.Value = INDEX_NONE;
 	StartFrame.Value = INDEX_NONE;
 	AwaitSinceFrame.Value = INDEX_NONE;
@@ -102,7 +106,7 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 
 	// Anything else (a trigger, an effect, another ability, AI): wait for the combat tick of the next frame to adopt this
 	// activation (combat-m3 7.4). The loose tag is what lets that tick skip the scan on every frame nothing waits
-	bAwaitingAdoption.Value = 1;
+	bAwaitingAdoption.Value = true;
 	AwaitSinceFrame.Value = Combat->GetSimulationFrame();
 	AbilitySystem->AddLooseGameplayTag(GSTNCombatTags::Ability_AwaitingAdoption);
 }
@@ -110,7 +114,7 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 {
 	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
-	bStarted.Value = 1;
+	bStarted.Value = true;
 	StartFrame.Value = StateStart;
 	StartClock.Value = Combat ? Combat->GetCombatClock() : INDEX_NONE;
 
@@ -125,9 +129,9 @@ void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 
 void UGSTN_GA_BaseCombat::ClearAwaitingAdoption()
 {
-	if (bAwaitingAdoption.Value != 0)
+	if (bAwaitingAdoption.Value)
 	{
-		bAwaitingAdoption.Value = 0;
+		bAwaitingAdoption.Value = false;
 		if (UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent())
 		{
 			AbilitySystem->RemoveLooseGameplayTag(GSTNCombatTags::Ability_AwaitingAdoption);
@@ -144,7 +148,7 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 		return;
 	}
 
-	if (bAwaitingAdoption.Value != 0)
+	if (bAwaitingAdoption.Value)
 	{
 		const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
 		const int32 Frame = Combat ? Combat->GetSimulationFrame() : INDEX_NONE;
@@ -165,7 +169,7 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 		return;
 	}
 
-	if (bStarted.Value == 0)
+	if (!bStarted.Value)
 	{
 		return;
 	}
@@ -186,7 +190,7 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 	const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
 	ClearAwaitingAdoption();
-	if (bStarted.Value != 0)
+	if (bStarted.Value)
 	{
 		// Stop the montage only if it is still this ability's: another timeline may have started its own in the same frame
 		const FGSTN_CombatTimelineData& Data = GetTimelineData();
@@ -197,12 +201,12 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 		{
 			AbilitySystem->StopSyncedMontage(Montage, bWasCancelled);
 		}
-		bStarted.Value = 0;
+		bStarted.Value = false;
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
 int32 UGSTN_GA_BaseCombat::GetTimelineFrame() const
 {
-	return bStarted.Value != 0 ? FGSTN_CombatClock::Elapsed(GetCombatClock(), StartClock.Value) : 0;
+	return bStarted.Value ? FGSTN_CombatClock::Elapsed(GetCombatClock(), StartClock.Value) : 0;
 }

@@ -374,4 +374,57 @@ bool FGSTN_NPTimelineAdoptSameClassTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTimelineHitstopTest, "GSTNCombat.NP.Timeline.Hitstop", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPTimelineHitstopTest::RunTest(const FString& Parameters)
+{
+	// Window of 2 frames: the commit is at timeline frame 2. Started on 100, hitstop on frames 102 to 104 (three frames)
+	const FGSTN_CombatTimelineData Data = MakeTimeline(2);
+	FGSTN_TimelineOutput Output;
+	Output.Reserve(Data);
+	FGSTN_CombatSyncCore Core = MakeRunning(100);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Core, 100, Data, 1, Output);
+
+	int32 CommitFrame = INDEX_NONE;
+	int32 Commits = 0;
+	for (int32 Frame = 101; Frame <= 110; ++Frame)
+	{
+		Core.Requests.PruneBefore(Frame);
+		const bool bPaused = Frame >= 102 && Frame <= 104;
+		FGSTN_CombatTimelineLogic::AdvanceClock(Core, Frame, &Data, 1, true, Output, bPaused);
+		if (bPaused)
+		{
+			TestEqual(*FString::Printf(TEXT("the timeline frame stands still on %d"), Frame), Output.Frame, 1);
+			TestTrue(*FString::Printf(TEXT("nothing is committed on %d"), Frame), !Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame));
+		}
+		if (Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame))
+		{
+			CommitFrame = Frame;
+			++Commits;
+		}
+	}
+	TestEqual(TEXT("the commit comes three frames later"), CommitFrame, 105);
+	TestEqual(TEXT("and once"), Commits, 1);
+	TestEqual(TEXT("the timeline counted its paused frames"), Core.TimelinePausedFrames, 3);
+
+	// The end moves by the same amount: 30 frames from 100 plus 3 paused is 133
+	FGSTN_CombatSyncCore Ends = MakeRunning(100);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Ends, 100, Data, 1, Output);
+	int32 EndFrame = INDEX_NONE;
+	for (int32 Frame = 101; Frame <= 140 && EndFrame == INDEX_NONE; ++Frame)
+	{
+		FGSTN_CombatTimelineLogic::AdvanceClock(Ends, Frame, &Data, 1, true, Output, Frame >= 102 && Frame <= 104);
+		if (Ends.ActionState != EGSTN_ActionState::InTimeline)
+		{
+			EndFrame = Frame;
+		}
+	}
+	TestEqual(TEXT("the timeline ends after its length plus the hitstop"), EndFrame, 133);
+
+	// The combat clock stands still too
+	TestEqual(TEXT("clock before"), FGSTN_CombatClock::FromFrame(101, 0), 101);
+	TestEqual(TEXT("clock in hitstop frame 104, three paused"), FGSTN_CombatClock::FromFrame(104, 3), 101);
+	TestEqual(TEXT("clock after"), FGSTN_CombatClock::FromFrame(105, 3), 102);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

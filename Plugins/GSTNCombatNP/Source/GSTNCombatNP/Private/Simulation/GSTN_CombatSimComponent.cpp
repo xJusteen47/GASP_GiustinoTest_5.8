@@ -2,32 +2,32 @@
 
 #include "Simulation/GSTN_CombatSimComponent.h"
 
-#include "AbilitySystemGlobals.h"
 #include "Abilities/GameplayAbility.h"
+#include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Abilities/NpAbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/Pawn.h"
+#include "GSTN_CombatTags.h"
+#include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputConfig.h"
 #include "Input/GSTN_InputScript.h"
 #include "Input/GSTN_InputSettings.h"
+#include "Movement/GSTN_StatsMovementModifier.h"
+#include "MoverComponent.h"
 #include "NetworkPredictionModelDef.h"
 #include "NetworkPredictionModelDefRegistry.h"
 #include "NetworkPredictionProxyInit.h"
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
-#include "Abilities/GSTN_GA_BaseCombat.h"
-#include "GSTN_CombatTags.h"
-#include "Input/GSTN_CombatSettings.h"
-#include "Movement/GSTN_StatsMovementModifier.h"
-#include "MoverComponent.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
-#include "Timeline/GSTN_WeaponSwitchRules.h"
 #include "Simulation/GSTN_InputHostUtils.h"
 #include "Sources/GSTN_InputSource.h"
+#include "Timeline/GSTN_WeaponSwitchRules.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatSim, Log, All);
 
@@ -118,6 +118,7 @@ void UGSTN_CombatSimComponent::CompileInput()
 
 	// The timeline registry: the timeline abilities of the bindings, in binding order, each once (the index the sync state stores)
 	TimelineRegistry.Reset();
+	TimelineContent.Reset();
 	BindingTimeline.Reset();
 	TimelineTier.Reset();
 	TimelineDefaultOverride.Reset();
@@ -137,9 +138,8 @@ void UGSTN_CombatSimComponent::CompileInput()
 				TimelineTier.Add(Tier);
 				TimelineDefaultOverride.Add(UGSTN_CombatSettings::Get().GetDefaultOverrideFrames(Tier));
 
-				// Soft content the timeline needs in memory before its first frame, loaded here and never in a tick
-				UGSTN_GA_BaseCombat* Default = TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>();
-				Default->PreloadTimelineContent();
+				// Soft content the timeline needs in memory before its first frame, loaded here and never in a tick, kept by this component
+				TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->LoadTimelineContent(TimelineContent);
 			}
 		}
 		BindingTimeline.Add(static_cast<int16>(Index));
@@ -152,7 +152,7 @@ void UGSTN_CombatSimComponent::CompileInput()
 			TimelineRegistry.Add(TimelineClass);
 			TimelineTier.Add(0);
 			TimelineDefaultOverride.Add(0);
-			TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->PreloadTimelineContent();
+			TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->LoadTimelineContent(TimelineContent);
 		}
 	}
 	// Reserve for the largest timeline, so no frame allocates (the output keeps its capacity)
@@ -160,6 +160,19 @@ void UGSTN_CombatSimComponent::CompileInput()
 	{
 		TimelineOutput.Reserve(TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData());
 	}
+
+	// The registry, the tiers and the window defaults come from local ini and class default data, and must be the same on every
+	// machine (they are not in the sync state). A checksum in the log is what two machines' logs are compared by
+	uint32 RegistryChecksum = 0;
+	for (int32 Entry = 0; Entry < TimelineRegistry.Num(); ++Entry)
+	{
+		const FString ClassPath = TimelineRegistry[Entry]->GetPathName();
+		RegistryChecksum = HashCombineFast(RegistryChecksum, GetTypeHash(ClassPath));
+		RegistryChecksum = HashCombineFast(RegistryChecksum, GetTypeHash(TimelineTier[Entry]));
+		RegistryChecksum = HashCombineFast(RegistryChecksum, GetTypeHash(TimelineDefaultOverride[Entry]));
+		RegistryChecksum = HashCombineFast(RegistryChecksum, GetTypeHash(TimelineRegistry[Entry]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData().TotalFrames));
+	}
+	UE_LOG(LogGSTNCombatSim, Log, TEXT("%s: timeline registry of %d entries, checksum %08x"), *GetOwner()->GetName(), TimelineRegistry.Num(), RegistryChecksum);
 
 	if (InputSource && !Cast<IGSTN_InputSource>(InputSource.Get()))
 	{
@@ -270,7 +283,9 @@ bool UGSTN_CombatSimComponent::IsInTimeline() const
 
 FRotator UGSTN_CombatSimComponent::GetAimRotation() const
 {
-	return FrameAim.bHasAim ? FRotator(FGSTN_DirectionClassifier::DequantizeAim(FrameAim.Pitch), FGSTN_DirectionClassifier::DequantizeAim(FrameAim.Yaw), 0.f) : FRotator::ZeroRotator;
+	// DequantizeAim gives [0, 360); a rotation is read as [-180, 180]
+	return FrameAim.bHasAim ? FRotator(FRotator::NormalizeAxis(FGSTN_DirectionClassifier::DequantizeAim(FrameAim.Pitch)),
+		FRotator::NormalizeAxis(FGSTN_DirectionClassifier::DequantizeAim(FrameAim.Yaw)), 0.f) : FRotator::ZeroRotator;
 }
 
 const FGSTN_CombatSyncState* UGSTN_CombatSimComponent::GetSyncState() const
@@ -379,6 +394,14 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// Requests older than this frame are dead (the ability system executed them in their own frame's pre-tick)
 	OutSync.Core.Requests.PruneBefore(Frame);
 
+	// Hitstop (combat-m3 7.1): a frame inside the window of the previous state stands still on the combat clock. The window the
+	// debug button opens on frame F pauses from F+1 (F itself was simulated with the clock running when it opened)
+	const bool bHitstopFrame = InSync.Core.IsInHitstop(Frame);
+	if (bHitstopFrame)
+	{
+		++OutSync.Core.PausedFramesTotal;
+	}
+
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
 	{
 		const int32 Running = OutSync.Core.ActiveTimeline;
@@ -391,7 +414,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		const bool bWasRunning = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline;
 		const int32 StartBefore = OutSync.Core.TimelineStartFrame;
 		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(Running),
-			TimelineDefaultOverride.IsValidIndex(Running) ? TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput);
+			TimelineDefaultOverride.IsValidIndex(Running) ? TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame);
 		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,

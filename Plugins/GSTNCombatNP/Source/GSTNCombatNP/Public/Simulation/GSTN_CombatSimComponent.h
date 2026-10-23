@@ -244,6 +244,10 @@ private:
 	 */
 	UPROPERTY(Transient)
 	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> TimelineRegistry;
+
+	/** The timeline assets and montages of the registry classes, loaded with it and kept alive here: the classes' default objects keep nothing */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UObject>> TimelineContent;
 	TArray<int16> BindingTimeline;
 	TArray<int32> TimelineTier;
 	TArray<int32> TimelineDefaultOverride;

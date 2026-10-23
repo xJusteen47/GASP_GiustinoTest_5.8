@@ -60,7 +60,7 @@ void FGSTN_CombatTimelineLogic::ClearTimeline(FGSTN_CombatSyncCore& Core)
 }
 
 bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, int32 DefaultOverrideFrames,
-	bool bAbilityActive, FGSTN_TimelineOutput& Output)
+	bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame)
 {
 	Output.Reset();
 	if (Core.ActionState != EGSTN_ActionState::InTimeline)
@@ -74,7 +74,12 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	}
 
 	// The previous evaluation was the frame before this one (the start frame was evaluated by EvaluateStart)
+	// (the pause count as of that frame, so before this frame's own pause is added)
 	const int32 Previous = Frame - 1 - Core.TimelineStartFrame - Core.TimelinePausedFrames;
+	if (bHitstopFrame)
+	{
+		++Core.TimelinePausedFrames;
+	}
 	EvaluateInto(Core, Frame, Previous >= 0 ? Previous : INDEX_NONE, *Data, DefaultOverrideFrames, Output);
 
 	if (Output.bFinished || (Frame > Core.TimelineStartFrame && !bAbilityActive))

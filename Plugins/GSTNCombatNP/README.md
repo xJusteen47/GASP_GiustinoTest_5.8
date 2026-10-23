@@ -34,11 +34,13 @@ abilities only while `Core.IsLoadoutCurrent(TableRevision)` (the loadout revisio
 
 **Clock, aim and command marker (for abilities).** The component answers three queries about the frame being simulated, for an
 ability's activation or tick (not presentation code): `GetCombatClock()` is the Network Prediction frame minus every hitstop frame so
-far (`Core.PausedFramesTotal`; the pure helper is `FGSTN_CombatClock`), so it stands still in hitstop; `IsInTimeline()` is
+far (`Core.PausedFramesTotal`; the pure helper is `FGSTN_CombatClock`), so it stands still in hitstop (the tick adds one to it for every frame inside the window of the previous state, and to `TimelinePausedFrames`
+when a timeline runs, so a timeline also stands still and ends later by the hitstop length); `IsInTimeline()` is
 `Core.ActionState == InTimeline`; `GetAimRotation()` is the camera aim of the frame's command (`HasAim()` says whether the command carried
 one, see `bSendCameraAim` in [GSTNInputNP](../GSTNInputNP/README.md)). The aim is copied at the top of each combat tick into three scalars,
-so a re-simulation reads the command it replays. `FGSTN_InputHostUtils::IsCommandActivation()` is true inside `CanExecuteBinding` and
-`ExecuteRequest` (an `FGSTN_CommandActivationScope` on the stack): an ability uses it to tell a command from a trigger or an effect.
+so a re-simulation reads the command it replays. `FGSTN_InputHostUtils::IsCommandActivation(Handle)` is true for the spec's own handle inside `CanExecuteBinding` and
+`ExecuteRequest` (an `FGSTN_CommandActivationScope(Handle)` on the stack): an ability uses it to tell a command from a trigger or an effect,
+and an ability that a command's ability triggers synchronously (another handle) is not a command.
 
 **`UGSTN_GA_Base` (combat-m3 6.1).** The base of the abilities that run under the combat model (`Abilities/GSTN_GA_Base.h`, `Abstract, Blueprintable`,
 derives from the fork's `UNpGameplayAbility`). It gives an ability: `GetCombatComponent()` (cached when the avatar is set);
