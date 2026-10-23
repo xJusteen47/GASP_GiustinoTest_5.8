@@ -1,6 +1,6 @@
-// Development tooling of GSTN Combat (PIE and development builds, never Shipping).
+// Development tooling of GSTN Input (PIE and development builds, never Shipping).
 
-#include "Widgets/GSTN_InputDisplayLayout.h"
+#include "Display/GSTN_InputDisplayLayout.h"
 
 TCHAR FGSTN_InputDisplayLayout::GetNumpadKey(EGSTN_StickDirection Direction)
 {
@@ -30,6 +30,28 @@ FString FGSTN_InputDisplayLayout::DescribeStick(const FGSTN_InputDisplayStickCel
 		Item += TEXT("!");
 	}
 	return Item;
+}
+
+FString FGSTN_InputDisplayLayout::GetDirectionName(EGSTN_StickDirection Direction)
+{
+	switch (Direction)
+	{
+	case EGSTN_StickDirection::Up:        return TEXT("up");
+	case EGSTN_StickDirection::UpRight:   return TEXT("up right");
+	case EGSTN_StickDirection::Right:     return TEXT("right");
+	case EGSTN_StickDirection::DownRight: return TEXT("down right");
+	case EGSTN_StickDirection::Down:      return TEXT("down");
+	case EGSTN_StickDirection::DownLeft:  return TEXT("down left");
+	case EGSTN_StickDirection::Left:      return TEXT("left");
+	case EGSTN_StickDirection::UpLeft:    return TEXT("up left");
+	default:                              return TEXT("neutral");
+	}
+}
+
+FString FGSTN_InputDisplayLayout::DescribeStickForTooltip(const FGSTN_InputDisplayStickCell& Cell)
+{
+	const TCHAR* Zone = Cell.Zone == EGSTN_StickZone::Tilt ? TEXT(", tilt") : (Cell.Zone == EGSTN_StickZone::Aim ? TEXT(", aim") : TEXT(""));
+	return FString::Printf(TEXT("%s (%s%s%s)"), *DescribeStick(Cell), *GetDirectionName(Cell.StickDirection), Zone, Cell.bFlick ? TEXT(", flick") : TEXT(""));
 }
 
 FString FGSTN_InputDisplayLayout::ToNotation() const
@@ -108,6 +130,8 @@ FGSTN_InputDisplayLayout FGSTN_InputDisplayLayout::Build(const FGSTN_InputDispla
 	{
 		const FGSTN_StickSample Sample = History.GetStickAt(First + Column);
 		FGSTN_InputDisplayStickCell& Cell = Layout.Stick[Column];
+		Cell.StickDirection = Sample.StickDir;
+		Cell.FacingDirection = Sample.FacingDir;
 		Cell.StickKey = GetNumpadKey(Sample.StickDir);
 		Cell.FacingKey = GetNumpadKey(Sample.FacingDir);
 		Cell.Zone = Sample.Zone;

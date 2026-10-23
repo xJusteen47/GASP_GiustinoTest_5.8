@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Input",
-	"Description": "Fighting-game style input for any project: buffered commands, motions, chords, charges, priorities and command to GameplayAbility bindings. Pure logic (GSTNInputCore): needs only Gameplay Tags, Developer Settings and Enhanced Input. The simulation adapter for the Network Prediction fork lives in the separate GSTNInputNP plugin.",
+	"Description": "Fighting-game style input for any project: buffered commands, motions, chords, charges, priorities and command to GameplayAbility bindings. Pure logic (GSTNInputCore): needs only Gameplay Tags, Developer Settings and Enhanced Input. The simulation adapter for the Network Prediction fork lives in the separate GSTNInputNP plugin. GSTNInputDebug is the development tooling (input display), left out of Shipping.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -19,6 +19,14 @@
 			"Name": "GSTNInputCore",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNInputDebug",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"TargetConfigurationDenyList": [
+				"Shipping"
+			]
 		}
 	],
 	"Plugins": [

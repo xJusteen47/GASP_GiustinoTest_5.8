@@ -17,8 +17,8 @@ DECLARE_LOG_CATEGORY_EXTERN(LogGSTNCombatDebug, Log, All);
  * it), so the caller treats absence as normal. The class is exported so that Get() and IsAvailable() link; a plugin that must not
  * depend on this module at all can skip them and call FModuleManager::GetModulePtr<IGSTN_CombatDebugModule>("GSTNCombatDebug")
  * itself, which needs only this header's include path (GSTNCombat.Debug.Module.InterfaceIsExported pins the export). The editor
- * plugin does neither: the editor tab of the input display is registered by this module itself (see FGSTN_CombatDebugModule),
- * so the editor has no edge to the debug plugin at all.
+ * plugin does neither: the editor tab of the input display is registered by the input debug module (GSTNInputDebug), so the editor
+ * has no edge to the debug plugin at all.
  */
 class GSTNCOMBATDEBUG_API IGSTN_CombatDebugModule : public IModuleInterface
 {
@@ -30,10 +30,11 @@ public:
 	static bool IsAvailable();
 
 	/**
-	 * A widget showing the pressed inputs of the local player in the notation of the input plugin, with the frame gaps and a box
-	 * for a scripted input (E14): the strip that is the corner overlay and the editor tab. It follows the first PIE or game world
-	 * that has a local player with a combat component. Null when Slate is not running (a commandlet, a dedicated server), which
-	 * callers treat like an absent module.
+	 * The input display of the local player (GSTNInputDebug's widget: strip, script box, player picker), with the combat component
+	 * registered as something it can read and the standard command set as its default. It follows the play window that has the focus or
+	 * had it last. The display itself belongs to the input plugin since the input tools moved there; this forwards to
+	 * IGSTN_InputDebugModule::CreateInputDisplay, so a caller of the combat module keeps working. Null when Slate is not running (a
+	 * commandlet, a dedicated server) or the input debug module is absent, which callers treat like an absent module.
 	 */
 	virtual TSharedPtr<SWidget> CreateInputDisplay() = 0;
 };

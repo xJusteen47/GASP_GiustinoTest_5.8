@@ -1,6 +1,6 @@
-// Development tooling of GSTN Combat (PIE and development builds, never Shipping).
+// Development tooling of GSTN Input (PIE and development builds, never Shipping).
 
-#include "Widgets/GSTN_InputDisplayScript.h"
+#include "Display/GSTN_InputDisplayScript.h"
 
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_InputScript.h"

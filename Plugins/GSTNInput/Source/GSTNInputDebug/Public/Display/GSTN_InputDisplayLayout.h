@@ -1,4 +1,4 @@
-// Development tooling of GSTN Combat (PIE and development builds, never Shipping).
+// Development tooling of GSTN Input (PIE and development builds, never Shipping).
 
 #pragma once
 
@@ -9,7 +9,7 @@
 
 // The layout of the input display as plain data. This header and its .cpp include no Slate and no engine UI: the widget only
 // paints what the layout says, so the columns, the gaps and the greyed presses are tested without a window
-// (GSTNCombat.Debug.InputDisplay.*, combat-m5-editor 10.1).
+// (GSTNInput.Debug.InputDisplay.*; the drawing is SGSTN_InputStrip).
 
 /** What a button does in one column (one column is one simulated frame) */
 enum class EGSTN_InputCellKind : uint8
@@ -26,7 +26,7 @@ enum class EGSTN_InputCellKind : uint8
 };
 
 /** One button in one column */
-struct FGSTN_InputDisplayCell
+struct GSTNINPUTDEBUG_API FGSTN_InputDisplayCell
 {
 	EGSTN_InputCellKind Kind = EGSTN_InputCellKind::None;
 
@@ -38,28 +38,32 @@ struct FGSTN_InputDisplayCell
 };
 
 /** The stick in one column */
-struct FGSTN_InputDisplayStickCell
+struct GSTNINPUTDEBUG_API FGSTN_InputDisplayStickCell
 {
-	/** Numpad key of the physical stick ('5' neutral), and of the direction relative to the character */
+	/** The physical stick and the direction relative to the character: what the strip draws as arrows */
+	EGSTN_StickDirection StickDirection = EGSTN_StickDirection::Neutral;
+	EGSTN_StickDirection FacingDirection = EGSTN_StickDirection::Neutral;
+
+	/** The same as numpad keys ('5' neutral), the notation of FGSTN_InputScript: kept for the tooltip and ToNotation, not drawn */
 	TCHAR StickKey = TEXT('5');
 	TCHAR FacingKey = TEXT('5');
 
 	EGSTN_StickZone Zone = EGSTN_StickZone::Neutral;
 	bool bFlick = false;
 
-	/** The history has a stick event on this frame (the first column counts as one: it is where the strip starts). The widget prints the labels on these */
+	/** The history has a stick event on this frame (the first column counts as one: it is where the strip starts). */
 	bool bEvent = false;
 };
 
 /** A command that came out: the Input.Event.CommandExecuted of this display, drawn as a marker above its frame */
-struct FGSTN_InputDisplayMarker
+struct GSTNINPUTDEBUG_API FGSTN_InputDisplayMarker
 {
 	int32 Frame = INDEX_NONE;
 	FGameplayTag Command;
 };
 
 /** An event of the strip in the notation of FGSTN_InputScript (combat-m1-core-input 4) */
-struct FGSTN_InputDisplayEvent
+struct GSTNINPUTDEBUG_API FGSTN_InputDisplayEvent
 {
 	int32 Frame = INDEX_NONE;
 
@@ -77,7 +81,7 @@ struct FGSTN_InputDisplayEvent
 };
 
 /** What the display shows: a history and the commands that came out of it */
-struct FGSTN_InputDisplayData
+struct GSTNINPUTDEBUG_API FGSTN_InputDisplayData
 {
 	FGSTN_InputHistory History;
 
@@ -85,7 +89,7 @@ struct FGSTN_InputDisplayData
 	TArray<FGSTN_InputDisplayMarker> Markers;
 };
 
-struct FGSTN_InputDisplayLayoutParams
+struct GSTNINPUTDEBUG_API FGSTN_InputDisplayLayoutParams
 {
 	/** Most frames shown, the newest ones (one column each). Events older than the history keeps (254 frames) cannot be shown anyway */
 	int32 MaxColumns = 90;
@@ -101,12 +105,13 @@ struct FGSTN_InputDisplayLayoutParams
 };
 
 /**
- * The input display as columns: one per frame, newest on the right, in the NPP tick rate (a frame is a tick). Row per button
- * (press / hold / release / tap, consumed presses flagged), the stick as numpad key with the facing-relative key beneath, the
- * flick flag, the events with the frame gap in notation, and the command markers. A pure function of the history: the same
- * history gives the same layout, and nothing here reads the world, the clock or the settings.
+ * The input display as columns: one per frame, oldest first, so the newest frame is the last column and the strip draws it at
+ * the right edge (a frame is a tick of the simulation). Row per button (press / hold / release / tap, consumed presses flagged),
+ * the stick as a direction (the strip draws an arrow, 8 directions and neutral) with the facing-relative direction, the flick flag,
+ * the events with the frame gap in notation, and the command markers. A pure function of the history: the same history gives
+ * the same layout, and nothing here reads the world, the clock or the settings.
  */
-struct FGSTN_InputDisplayLayout
+struct GSTNINPUTDEBUG_API FGSTN_InputDisplayLayout
 {
 	/** Frame of column 0 and the number of columns; 0 columns for a history that has had no frame yet */
 	int32 FirstFrame = 0;
@@ -147,4 +152,10 @@ struct FGSTN_InputDisplayLayout
 
 	/** A, B, C... for button 0, 1, 2... */
 	static TCHAR GetButtonLetter(int32 Button) { return static_cast<TCHAR>(TEXT('A') + Button); }
+
+	/** The explanation of a stick cell for the tooltip, the one place the numpad notation is shown: "4t (left, tilt)" */
+	static FString DescribeStickForTooltip(const FGSTN_InputDisplayStickCell& Cell);
+
+	/** "left", "up right", "neutral" */
+	static FString GetDirectionName(EGSTN_StickDirection Direction);
 };

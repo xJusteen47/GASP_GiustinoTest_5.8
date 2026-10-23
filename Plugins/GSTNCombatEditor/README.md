@@ -8,7 +8,7 @@ details panel.
 
 Status: **experimental (0.7)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
 model), E4 (timeline panel), E5 (toolkit, track editors), E10 (validation) and E13 (inline mode) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
-(E3 is not built: the phase bar reads a private stand-in, `FGSTN_PhaseBarData`, until `GSTNCombatCore` gets `FGSTN_TimelinePhases`; E14, the input display, lives in `GSTNCombatDebug`); the design is
+(E3 is not built: the phase bar reads a private stand-in, `FGSTN_PhaseBarData`, until `GSTNCombatCore` gets `FGSTN_TimelinePhases`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
 
@@ -263,8 +263,8 @@ Asset Manager and checks the loadout as the server will.
   the Network Prediction settings object by reflection.
 - Not a dependency, on purpose:
   - `NetworkPrediction` itself, see above.
-  - `GSTNCombatDebug`: no module, plugin or include edge. The *Window > GSTN Combat > Input Display* tab belongs to the debug module,
-    which registers it in an editor build; with the debug plugin off the tab does not exist and this plugin builds and runs the same.
+  - `GSTNCombatDebug`: no module, plugin or include edge. The *Window > GSTN Input > Input Display* tab belongs to the input debug module (`GSTNInputDebug`, plugin GSTNInput),
+    which registers it in an editor build; with that plugin off the tab does not exist and this plugin builds and runs the same.
     `GSTNCombat.Editor.Debug.NoDependencyOnDebugModule` keeps it so.
 - No runtime module depends on this plugin (grep of every `*.Build.cs` and `.uplugin`, repeated at E19).
 

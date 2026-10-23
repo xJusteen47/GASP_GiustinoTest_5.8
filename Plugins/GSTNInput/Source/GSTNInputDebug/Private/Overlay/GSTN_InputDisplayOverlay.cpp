@@ -1,4 +1,4 @@
-// Development tooling of GSTN Combat (PIE and development builds, never Shipping).
+// Development tooling of GSTN Input (PIE and development builds, never Shipping).
 
 #include "Overlay/GSTN_InputDisplayOverlay.h"
 
@@ -6,8 +6,8 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
+#include "Sources/GSTN_LocalInputSource.h"
 #include "Styling/CoreStyle.h"
-#include "Widgets/GSTN_LocalInputSource.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SGSTN_InputDisplay.h"
@@ -15,12 +15,15 @@
 
 namespace
 {
-	TAutoConsoleVariable<int32> CVarInputDisplay(TEXT("gstn.Combat.Debug.InputDisplay"), 0,
+	TAutoConsoleVariable<int32> CVarInputDisplay(TEXT("gstn.Input.Debug.InputDisplay"), 0,
 		TEXT("Shows the input history of the local player in the lower right corner of every game or PIE viewport: buttons, stick, frame gaps, commands.\n")
-		TEXT("0 = off (default), 1 = on. Development builds only."),
+		TEXT("0 = off (default), 1 = on. Development builds only. The older name gstn.Combat.Debug.InputDisplay sets this variable too (GSTNCombatDebug)."),
 		ECVF_Default);
 
-	constexpr float OverlayWidth = 460.f;
+	/** The widest the overlay gets: about 40 columns of the strip's minimum width. A narrower viewport gets what fits */
+	constexpr float OverlayMaxWidth = 780.f;
+	constexpr float OverlayMinWidth = 200.f;
+	constexpr float OverlayMargin = 16.f;
 	constexpr int32 OverlayZOrder = 100;
 }
 
@@ -80,22 +83,32 @@ bool FGSTN_InputDisplayOverlay::Update(float DeltaTime)
 		}
 
 		const TSharedRef<FGSTN_LocalInputSource> Source = MakeShared<FGSTN_LocalInputSource>(Context.World());
+		const TWeakObjectPtr<UGameViewportClient> WeakViewport = Viewport;
 		const TSharedRef<SWidget> Widget = SNew(SBox)
 			.Visibility(EVisibility::HitTestInvisible)
 			.HAlign(HAlign_Right)
 			.VAlign(VAlign_Bottom)
-			.Padding(16.f)
+			.Padding(OverlayMargin)
 			[
 				SNew(SBox)
-				.WidthOverride(OverlayWidth)
+				// As wide as the viewport leaves room for, so a small PIE window does not clip the strip off its right edge
+				.WidthOverride_Lambda([WeakViewport]() -> FOptionalSize
+				{
+					FVector2D ViewportSize(OverlayMaxWidth, 0.0);
+					if (const UGameViewportClient* Pinned = WeakViewport.Get())
+					{
+						Pinned->GetViewportSize(ViewportSize);
+					}
+					return FOptionalSize(FMath::Clamp(static_cast<float>(ViewportSize.X) - 2.f * OverlayMargin, OverlayMinWidth, OverlayMaxWidth));
+				})
 				[
 					SNew(SBorder)
 					.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-					.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.55f))
+					.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.6f))
 					.Padding(4.f)
 					[
 						SNew(SGSTN_InputDisplay)
-						.Fetch(FGSTN_InputDisplayFetch::CreateLambda([Source](FGSTN_InputDisplayData& OutData) { return Source->Fetch(OutData); }))
+						.LocalSource(Source)
 					]
 				]
 			];

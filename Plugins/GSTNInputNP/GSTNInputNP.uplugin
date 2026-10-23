@@ -19,6 +19,14 @@
 			"Name": "GSTNInputNP",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNInputNPDebug",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"TargetConfigurationDenyList": [
+				"Shipping"
+			]
 		}
 	],
 	"Plugins": [

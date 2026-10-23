@@ -15,6 +15,7 @@ is built on top of this one. This README is the map; the documents hold the deci
 | Module | State | What it is |
 |---|---|---|
 | `GSTNInputCore` | exists | Pure, deterministic logic with no GAS, no Network Prediction and no Mover: input samples, the stick direction classifier, the input history, the pattern grammar (`FGSTN_InputPattern`, conditions), the matcher, buffer reset rules, slots, the slot resolver, slot validation, command bindings, command locks (`UGSTN_CommandLocks`), the authoritative event stream (`UGSTN_SimEventSubsystem`, `FGSTN_SimEvent`, the outbox), the button map, the input config and the project settings. Automation tests `GSTNInput.Core.*`. |
+| `GSTNInputDebug` | exists (Runtime, Default, not in Shipping) | Development tooling: the **input display** (strip, corner overlay in PIE, editor tab), see below. Reads an input history through `IGSTN_InputHistorySource` and the `FGSTN_InputSourceRegistry`; knows no game vocabulary and no Network Prediction. Automation tests `GSTNInput.Debug.*`. |
 | `GSTNInputNP` | separate plugin | Moved to the plugin [GSTNInputNP](../GSTNInputNP/README.md) (same module name): the Network Prediction adapter (`FGSTN_InputCmd`, `FGSTN_InputSimState`, `FGSTN_InputSimulator`, binding set, sources, context providers, Mover tracker, standalone component). Automation tests `GSTNInput.NP.*`. |
 
 **Requirements.** This plugin (`GSTNInputCore`) needs only Gameplay Tags, Developer Settings and (privately) Enhanced Input; its
@@ -31,6 +32,39 @@ data the game provides; the combat plugin provides a fighting-game set.
 character (see input.md). Core modules keep no NP, GAS or Mover dependencies, so shared NP types are not moved into
 `GSTNInputCore`. `GSTNCombatNP` may use only the Public headers and interfaces of `GSTNInputNP` (for example
 `IGSTN_InputSimHost`), never its internals.
+
+## Input display (`GSTNInputDebug`)
+
+A debug view of what the simulation saw of one local player: the input history, one column per simulated frame, **newest at the right**.
+It is an input tool, so it lives here and not in the combat plugin; it works in a project without the combat plugin and without the fork.
+
+| Row | What it shows |
+|---|---|
+| top (10 px) | an orange marker on the frame a command came out; hover for the command tag |
+| stick (24 px) | the physical stick as an **arrow** (eight directions, a dot for neutral); bright in the tilt zone, dim in the aim zone, yellow on a flick |
+| under it (10 px) | the direction relative to the character as a small arrow, where it differs |
+| one per button (16 px each) | a **coloured rounded icon with the button's letter** on a press, a bar for a hold, a hollow marker on a release, an icon with a white rim for a tap; a press a command used is **grey**, with its hold |
+| bottom (14 px) | the **frame gap** in frames between neighbouring events, as a small number, only when it is more than one frame; a number that would touch its neighbour is left out |
+
+A column is 18 px at least, so a window too narrow for the history cuts the oldest frames and a wide one stretches the columns to fill its width
+(`FGSTN_InputDisplayMetrics`: sizes, visible columns, arrows, gap labels; pure, tested). The numpad notation (`4t`, `6t!`) is **only in the tooltip**, with the direction in words.
+The history keeps 16 button events and 16 stick events, so a very fast sequence shows only the newest of them.
+
+- **PIE and development builds:** `gstn.Input.Debug.InputDisplay 1` (the older `gstn.Combat.Debug.InputDisplay` still works, `GSTNCombatDebug` forwards it) puts the strip in the lower right corner of every game or PIE viewport, fed by that viewport's
+  local player, so a listen-server host and each client window show their own. As wide as the viewport allows up to 780 px. `0` (default) removes it. Hit-test invisible.
+- **Editor:** *Window > GSTN Input > Input Display* (editor builds), a window that opens at 1100 x 340 with the strip filling its width. It shows the player of the **play window that has the focus, or had it last**
+  (so typing in its script box keeps showing the window you were looking at), and a **combo** lists every local player of every PIE world to pin one (a pick that is not in the session falls back to the focus and
+  comes back with its player). A box takes a **scripted input** such as `0:face=90 0:4t 6:6t! 7:+A`: Enter shows that history, greys the press the winning command used and names the command; an empty box is live again.
+
+**What it can read.** `IGSTN_InputHistorySource` (`GSTNInputCore`, `Debug/GSTN_InputHistorySource.h`) is a plain interface of const reads: whether the source is still valid, the input history, the command requested last (frame and tag), the buttons by bit,
+the command set for the scripted box, a label, and the object it reads. Two ways in:
+
+1. A pawn component implements `IGSTN_InputHistoryProvider` (a `UINTERFACE` in the same header) and returns its source from `CreateInputHistorySource()`; the display asks every component of a local pawn.
+2. A module registers a **finder** for a component type it does not own: `FGSTN_InputSourceRegistry::Get().RegisterFinder(Key, [](APawn& Pawn) { ... })`, removed at shutdown, with `RegisterDefaultProfile` for the buttons and command set a display shows before any source exists.
+   `GSTNCombatDebug` does this for the combat component (the six combat buttons and the standard command set), `GSTNInputNPDebug` (in the [GSTNInputNP](../GSTNInputNP/README.md) plugin) for `UGSTN_InputSimComponent`.
+
+Neither the interface nor the finders can write the simulation. `IGSTN_InputDebugModule::Get()` (null when the plugin is disabled or this is a Shipping build) gives `CreateInputDisplay()`.
+The dependency rule: `GSTNInputDebug` depends on `GSTNInputCore` and engine modules only; nothing of the runtime depends on it.
 
 ## Setting up a game
 
@@ -223,7 +257,11 @@ order.
 
 ## Testing
 
-Automation tests `GSTNInput.Core.*`: Session Frontend > Automation, or headless
+Automation tests `GSTNInput.Core.*` and, for the input display, `GSTNInput.Debug.*`: `Module.LoadsAndExposesInterface`, `Module.InterfaceIsExported`, and `InputDisplay.*`: `LayoutOfSampleHistory`, `ButtonRows`, `FlickMarker`, `ScriptPlaysWithoutACommandSet`,
+`LayoutIsPure` (no Slate in the layout, the metrics and the selection files), `NoLocalPawnShowsNothing`, `WidgetFollowsSourceAndScript` (skipped without a Slate application), `ArrowForEachOfTheNineDirections`, `NewestInputIsOnTheRight`,
+`ColumnsAndRowsAreBigEnoughToRead`, `GapLabelsNeverOverlap`, `TargetSelectionFollowsTheFocusedWindow`, `SourceRegistryFindsProvidersAndFinders`. Painting, the tooltip, the overlay in a viewport, the focus following and the combo need a rendering
+editor and are checked by hand: open a PIE session (listen server, host + 2 clients), run `gstn.Input.Debug.InputDisplay 1` and press buttons while moving the stick, open *Window > GSTN Input > Input Display*, click each PIE window and watch it follow,
+pick a player in the combo, and type a notation. The run: Session Frontend > Automation, or headless
 `UnrealEditor-Cmd <your project>.uproject -ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit" -unattended -nullrhi`
 (with your project's `.uproject`).
 See [testing.md](../../docs/architecture/testing.md).

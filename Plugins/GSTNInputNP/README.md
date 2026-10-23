@@ -120,6 +120,12 @@ the activation frame, so keep what you need in your own sync variables) and `IsC
 `"Mover/GSTN_MoverSimStateTracker.h"` and depend on `GSTNInputNP`. The tracker is a `BlueprintType` and its
 `GetMovementModeName` / `HasGameplayTag` are `BlueprintPure`, so a Blueprint ability can read the same rolled back state.
 
+## Debug module
+
+`GSTNInputNPDebug` (Runtime, not in Shipping) registers a finder in the input display's source registry (plugin GSTNInput, module `GSTNInputDebug`) so the display can read a pawn's `UGSTN_InputSimComponent`: its input history and the command it
+requested last, from the sync state through the component's public `GetSyncState()` and `GetCommandTable()` (read-only), and the buttons of its `InputConfig`. It offers no command set, so the scripted box only plays the notation for such a pawn. Nothing in
+this plugin's runtime module depends on it. Test `GSTNInput.NP.Debug.InputComponentIsRegisteredWithTheInputDisplay`.
+
 ## Tests
 
 Automation tests `GSTNInput.NP.*` (`Source/GSTNInputNP/Private/Tests/`), run with the usual `Automation RunTests GSTNInput+GSTNCombat`
