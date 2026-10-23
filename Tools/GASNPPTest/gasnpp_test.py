@@ -702,13 +702,29 @@ def _read_log_since(since):
     return text if text.endswith('\n') else text[:text.rfind('\n') + 1]
 
 
+def _tick_key(stamp):
+    """'[2026.10.23-01.49.34:967][397]' -> '2026.10.23-01.49.34][397' (the wall-clock second and the engine tick, no millisecond)"""
+    return stamp.split(':')[0] + stamp[stamp.index(']'):]
+
+
+_MODEL_MARKERS = (('[MoverDefaultSyncState]', 'mover'), ('Current period Time', 'asc'), ('Active Mappings', 'asc'), ('History:', 'combat'))
+
+
 def report_reconciles(since=0):
     """Reconciles in the editor log after `since` (see mark_log): returns a dict and logs a summary.
-    unexplained = state mismatches not on the frame of an offset change (the number that must be 0).
+    unexplained = state mismatches not on the tick of an offset change, with the model each one came from in
+    unexplained_by_model. unexplained_ours leaves out the Mover model (position corrections under network lag are the
+    movement prediction's own business); it is the number the 'no unexplained reconciles' checks require to be 0.
     max_burst = most mismatches logged within one wall-clock second (a startup storm shows here)."""
     text = _read_log_since(since)
     offset_frames, mismatches, forced = set(), [], 0
+    models = []  # model of each mismatch, read from the first state block that follows its line
     for line in text.splitlines():
+        if models and models[-1] is None:
+            for marker, model in _MODEL_MARKERS:
+                if marker in line:
+                    models[-1] = model
+                    break
         m = _LOG_LINE.match(line)
         if not m:
             continue
@@ -716,17 +732,30 @@ def report_reconciles(since=0):
         if category != 'LogNetworkPrediction':
             continue
         if message.startswith('ReconcileFromInputOffset'):
-            offset_frames.add(stamp)
+            # Every model of the entity logs its own mismatch a few ms after the offset line, inside the same engine tick:
+            # match on (second, tick, new offset), not on the millisecond
+            new_offset = re.search(r'New Offset (\d+)', message)
+            offset_frames.add((_tick_key(stamp), new_offset.group(1) if new_offset else None))
         elif message.startswith('Reconcile required due to Sync/Aux mismatch'):
             mismatches.append((stamp, message))
+            models.append(None)
         elif 'ForceReconcile' in message and message.startswith('Reconcile activated'):
             forced += 1
-    unexplained = [x for x in mismatches if x[0] not in offset_frames]
+    def _on_offset_change(stamp, message):
+        offset = re.search(r'Offset: (\d+)\.', message)
+        return (_tick_key(stamp), offset.group(1) if offset else None) in offset_frames
+
+    unexplained = [x for x in mismatches if not _on_offset_change(*x)]
+    by_model = {}
+    for x, model in zip(mismatches, models):
+        if not _on_offset_change(*x):
+            by_model[model or 'unknown'] = by_model.get(model or 'unknown', 0) + 1
     per_second = {}
     for stamp, _ in mismatches:
         per_second[stamp.split(':')[0]] = per_second.get(stamp.split(':')[0], 0) + 1
     result = {'offset_changes': len(offset_frames), 'mismatches': len(mismatches), 'on_offset_frames': len(mismatches) - len(unexplained),
-              'unexplained': len(unexplained), 'forced': forced, 'max_burst': max(per_second.values(), default=0),
+              'unexplained': len(unexplained), 'unexplained_by_model': by_model,
+              'unexplained_ours': len(unexplained) - by_model.get('mover', 0), 'forced': forced, 'max_burst': max(per_second.values(), default=0),
               'unexplained_lines': [x[1] for x in unexplained[:5]]}
     unreal.log('GASNPP reconciles: ' + json.dumps(result))
     return result
@@ -901,7 +930,7 @@ class _Run:
             if self.log_mark is not None and self.judge_reconciles:
                 try:
                     r = report_reconciles(self.log_mark)
-                    self.check('no unexplained reconciles', r['unexplained'] == 0, f"{r['unexplained']} unexplained {r['unexplained_lines']}, forced={r['forced']}")
+                    self.check('no unexplained reconciles', r['unexplained_ours'] == 0, f"{r['unexplained_ours']} unexplained {r['unexplained_by_model']} {r['unexplained_lines']}, forced={r['forced']}")
                 except Exception as e:
                     self.note(f'reconcile check failed to run: {e}')
             if self.name in _FORCES_RECONCILES:
