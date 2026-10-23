@@ -31,6 +31,9 @@ New specs [`../combat-loadout-mods.md`](../combat-loadout-mods.md) (M11: kits in
 H1 adds the optional hitbox field `ReachAxis` (data only, used by M11 mods); M5 keeps mod preview and mod validators out of scope
 (they go to `GSTNKitModsEditor`, a client of the M5 hooks like `GSTNPartsEditor`); M4b is unaffected (players stay one part,
 equipment is not a part). The M3 seams that M11 needs are listed in `../combat-loadout-mods.md` §11.
+M12 (mode framework + Levels) later needs two small combat seams that no current plan builds: an authoritative event key on
+the timeline that posts to the combat outbox (game-modes D-1) and the outbox-to-`Message.*` republisher of modularity §5 item 4
+(D-2). Neither blocks M4, M4b or M5; adding D-1 next to the timeline `Event` track in M4 would be cheaper than later.
 
 ## Cross-plan dependency map
 

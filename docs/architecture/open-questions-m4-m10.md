@@ -44,6 +44,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | M10 Oggetti tenuti e lanciati | [combat-m10-held-objects.md](combat-m10-held-objects.md) |
 | Superfici di attraversamento sulle parti dei nemici | [traversal-surfaces.md](traversal-surfaces.md) |
 | M11 Kit in gioco, armi di supporto, mod, zaini | [combat-loadout-mods.md](combat-loadout-mods.md) |
+| Modalità di gioco (Livelli, Spedizione, PvP) | [game-modes.md](game-modes.md) |
 | Indicatore di profondità | [depth-marker.md](depth-marker.md) |
 
 
@@ -1218,3 +1219,67 @@ DM.8. Su quali superfici può puntare: **trampolini** e **piattaforme-nemico** s
 DM.9. Nelle zone KO l'anello vuoto deve anche **avvertire del pericolo** (colore diverso, pulsazione), oppure resta lo stesso anello?
    Perché conta: è un segnale di gameplay oltre che di profondità, e richiede che il designer segni le zone con un volume di riferimento.
    Ipotesi nella specifica: sì, tramite un'opzione `bHazard` sul volume di riferimento posto nel burrone; senza volume l'anello resta neutro ([depth-marker.md](depth-marker.md) §2.7).
+
+## Modalità di gioco (23/10)
+
+Specifica: [game-modes.md](game-modes.md). Già deciso da te il 23/10: una modalità a livelli 3D fatti dal designer (stile Super Mario 3D World) e una modalità alla Helldivers con un grande livello generato a caso e missioni da completare; niente scudo in PvE; il kit si cambia raccogliendone uno; zaini come in Helldivers 2; le azioni delle modalità (terminali, chiamate di rinforzi e rifornimenti, estrazione) sono abilità pluggabili. Tutto il resto è un'ipotesi della specifica: se va bene basta rispondere "ok".
+
+GM.1. Realizziamo prima la modalità Livelli (con il framework di missioni, respawn e verbi) e solo dopo la Spedizione alla Helldivers?
+   Perché conta: la Spedizione richiede generazione procedurale, direttore dei nemici e lancio dei rifornimenti, molto più lavoro; farla per seconda dimostra prima l'infrastruttura comune.
+   Ipotesi nella specifica: sì, M12 = framework + Livelli, M13 = Spedizione ([game-modes.md](game-modes.md) §9.3).
+
+GM.2. Quanti giocatori per le modalità PvE (1–4?), e deve funzionare anche da solo (l'host senza altri client)?
+   Perché conta: dimensiona i budget dell'host ([game-modes.md](game-modes.md) §7.3), il numero di rinforzi, la difficoltà e i moduli caricati contemporaneamente.
+   Ipotesi nella specifica: da 1 a 4 giocatori, giocabile anche da soli, difficoltà scalata sul numero di giocatori.
+
+GM.3. Come si scelgono e si sbloccano i livelli (mappa del mondo, elenco, ordine fisso), e c'è salvataggio o progressione tra le partite?
+   Perché conta: decide se serve una `UGSTN_LevelSetDefinition` a grafo e un sistema di salvataggio, oggi fuori ambito.
+   Ipotesi nella specifica: elenco ordinato di mappe, nessun salvataggio nella prima versione.
+
+GM.4. Nei Livelli, come funziona il respawn: vite infinite o limitate, checkpoint condivisi dalla squadra, cosa succede se muoiono tutti e quanto dura l'attesa?
+   Perché conta: è la regola che più cambia il senso di una caduta in un burrone (KO zone) e va nei dati di `UGSTN_RespawnRules`.
+   Ipotesi nella specifica: checkpoint condivisi, vite infinite con contatore delle morti per il punteggio, ritorno al checkpoint se muoiono tutti.
+
+GM.5. Qual è il traguardo di un livello (basta uno che arrivi o devono arrivare tutti i vivi), ci sono collezionabili (stelle, francobolli), contano per giocatore o per squadra, e c'è un punteggio?
+   Perché conta: il traguardo è un obiettivo `Reach` con parametro `Require`; collezionabili e punteggio aggiungono stato replicato e una schermata dei risultati.
+   Ipotesi nella specifica: arriva uno qualsiasi dei giocatori vivi, collezionabili contati per livello e per squadra, punteggio semplice a dati (`UGSTN_ScoreRules`).
+
+GM.6. Che telecamera hanno i livelli: fissa o su binario per sezione come Mario 3D World, libera, o mista; una per giocatore o condivisa che inquadra tutti?
+   Perché conta: la telecamera fissa peggiora la percezione della profondità (collegata a `depth-marker.md`), e l'orientamento della telecamera entra come input nella simulazione (serve il "latch" dello stick ai tagli).
+   Ipotesi nella specifica: sezioni di telecamera scelte dal designer, una telecamera per giocatore, marcatore di profondità acceso nelle sezioni fisse.
+
+GM.7. Quanto grande deve essere la mappa della Spedizione (superficie, durata media, numero di livelli di difficoltà), deve essere assemblata da moduli fatti a mano o anche generata "libera" (PCG), e vuoi poter ripetere o condividere una spedizione con un seed?
+   Perché conta: dimensione e tipo di moduli decidono il tempo di generazione, la banda e la memoria dell'host, e se la posizione esatta delle collisioni è garantita; il seed condiviso obbliga a conservare le versioni del generatore.
+   Ipotesi nella specifica: circa 800 m di lato, 150–250 moduli fatti a mano su griglia con rotazioni a 90°, PCG solo per decorazioni senza collisione; il seed è registrato e riproducibile con la stessa `GenerationVersion`, senza funzione di condivisione (seed del giorno) nella prima versione.
+
+GM.8. Quali tipi di missione vuoi (distruggere, difendere, recuperare e portare un oggetto, attivare un terminale, eliminare, scortare, altro), quante per spedizione, obbligatorie o facoltative, e l'estrazione deve sempre esserci (basta un giocatore vivo o tutti)?
+   Perché conta: ogni tipo è una regola in più da costruire e da testare; "distruggere un bersaglio" richiede un'entità distruttibile che oggi non esiste come oggetto di livello; la scorta richiede un'entità con attore.
+   Ipotesi nella specifica: tutti i tipi di §4.1, bersagli come minion stazionari, 1–3 missioni primarie e alcune facoltative, estrazione sempre presente con almeno i giocatori vivi richiesti dentro la zona.
+
+GM.9. Come si torna in gioco da morti: solo rinforzo con un pool condiviso alla Helldivers (quanti, si ricaricano?), o anche rianimazione sul posto (che richiederebbe uno stato "a terra" che oggi non esiste)? Con quale kit si rientra, e un giocatore morto guarda i compagni?
+   Perché conta: lo stato "a terra" è una modifica al combat; il kit al rientro dipende dalla specifica dei loadout.
+   Ipotesi nella specifica: solo rinforzo, pool condiviso con dimensione a dati, rientro con il kit scelto nella lobby, spettatore finché non viene richiamato.
+
+GM.10. Come si chiamano rinforzi e rifornimenti: codice di direzioni come gli stratagemmi di Helldivers, menu, o un tasto? Cooldown condivisi o per giocatore? Si lancia un faro (oggetto tenuto, M10) o si sceglie un punto?
+   Perché conta: cambia l'input (pattern in `GSTNInput`), l'interfaccia e se serve M10; l'abilità resta la stessa.
+   Ipotesi nella specifica: stessa abilità con binding a dati, punto di mira nella prima versione, il faro lanciato come opzione successiva.
+
+GM.11. Quanto deve essere "intelligente" il direttore dei nemici: pattuglie, irruzioni (breach) e ondate decise da una pressione che dipende da come stanno i giocatori, oppure schemi fissi e casuali? I nemici possono comparire alle spalle?
+   Perché conta: un direttore adattivo è più complesso da bilanciare e da testare, e cambia la percezione di equità; i limiti di budget restano comunque quelli di M8.
+   Ipotesi nella specifica: pressione adattiva con pattuglie dormienti, irruzioni telegrafate fuori dal cono visivo e a distanza minima, ondate legate agli obiettivi.
+
+GM.12. L'ingresso a partita in corso è ammesso (Livelli, Spedizione)? Come entra il nuovo giocatore (vicino ai compagni, come rinforzo a pagamento del pool) e durante un conto alla rovescia di estrazione?
+   Perché conta: obbliga a replicare lo stato completo e a costruire la mappa durante il gioco, e interagisce con il pool di rinforzi.
+   Ipotesi nella specifica: ammesso in Livelli e Spedizione tranne durante l'estrazione, ingresso vicino ai compagni senza costo; mai in Versus.
+
+GM.13. In ogni modalità: fuoco amico (già aperto come M4.12), cambio kit a metà partita raccogliendo un kit (permesso ovunque? kit trovati o solo dai rifornimenti?), zaini e armi di supporto solo nella Spedizione?
+   Perché conta: sono i valori degli interruttori di §2.3; quelli che toccano la simulazione si fissano al caricamento dell'Experience, mai a partita in corso.
+   Ipotesi nella specifica: cambio kit consentito in Livelli e Spedizione (kit piazzati dal designer nei primi, rifornimenti e kit trovati nei secondi), zaini e armi di supporto solo nella Spedizione, fuoco amico ancora da decidere.
+
+GM.14. In Spedizione i giocatori possono allontanarsi quanto vogliono, o c'è un guinzaglio / un teletrasporto verso il gruppo?
+   Perché conta: ogni giocatore lontano obbliga l'host a tenere caricati i moduli (collisione e navmesh) e a simulare nemici in più zone.
+   Ipotesi nella specifica: nessun guinzaglio rigido; tetto morbido di moduli caricati sull'host (120) e, se superato, regola di ricongiungimento a dati.
+
+GM.15. Il PvP (Versus) userà la stessa infrastruttura (arene d'autore, vite/stock, respawn a tempo, scudo, niente missioni né minion) e va rimandato dopo la Spedizione? Quali valori di fuoco amico e squadre?
+   Perché conta: decide se `GSTNRespawn` deve già supportare gli "stock" e se M14 viene pianificato ora.
+   Ipotesi nella specifica: sì, stessa infrastruttura, progettazione rimandata a M14; scudo acceso solo lì (indicazione già data).

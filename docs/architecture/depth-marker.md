@@ -364,7 +364,10 @@ The marker is not an ability (presentation), but per the owner rule **no switch 
 
 ### 6.5 Designer extension (§3.8) and replaceable content (§3.9)
 
-- **Look**: swap the `UGSTN_DepthMarkerStyle` asset (settings default < component override < game mode or experience data). Presenters
+- **Look**: swap the `UGSTN_DepthMarkerStyle` asset (settings default < component override < game mode or experience data).
+  A **local style override** sits on top: `UGSTN_DepthMarkerSubsystem::PushStyleOverride(Source, Style, Priority)` / `PopStyleOverride(Source)`,
+  per machine, used by the Levels mode's camera sections (a fixed camera wants a stronger line, [game-modes.md](game-modes.md) §5); presentation only,
+  nothing replicates. Presenters
   are `Blueprintable` instanced objects; a Blueprint presenter can drive any actor or Niagara system (the diegetic option).
 - **Target selection**: `UGSTN_DepthTargetSelector` has `BlueprintNativeEvent`s taking a const input view and returning a result
   struct; the C++ `_Gravity` selector is the default `_Implementation`, and a Blueprint child can call the parent or replace it (cone,
