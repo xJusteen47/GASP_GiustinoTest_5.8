@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Hits/GSTN_ReactionTypes.h"
 #include "GSTN_HitVictimView.generated.h"
 
 /** Whether a part of a victim can be hurt at the frame it is read */
@@ -99,6 +100,26 @@ struct GSTNCOMBATCORE_API FGSTN_HitVictimView
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Victim")
 	TArray<FGSTN_HitVictimPartView> Parts;
+
+	/** 1 = full health, derived by the pipeline from the health stats (0 when the victim keeps none the damage mode can read) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Victim", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float HealthFraction = 1.f;
+
+	/** The victim's base weight, before WeightScale (same unit as FGSTN_KnockbackInput::Weight) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Victim", meta = (ClampMin = "0.0"))
+	float Weight = 100.f;
+
+	/**
+	 * The compact reaction state the attacker's machine shares (damage percent, weight scale, windows). Plain data that is not
+	 * reflected: it is copied byte for byte with the snapshot, so a Blueprint cannot read it.
+	 */
+	FGSTN_VictimReactionState ReactionState;
+
+	/**
+	 * The snapshot's extension POD of the optional plugins (broken parts...), or null. Not owned and not reflected: valid for the
+	 * frame the view was read, the core never dereferences it.
+	 */
+	const void* SnapshotExtension = nullptr;
 
 	/** The value of a stat of the victim as a whole, or Default when it has none of that tag */
 	float GetStat(const FGameplayTag& Stat, float Default = 0.f) const
