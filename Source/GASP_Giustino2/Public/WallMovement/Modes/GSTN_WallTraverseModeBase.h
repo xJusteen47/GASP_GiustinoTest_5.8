@@ -93,6 +93,9 @@ protected:
 	 */
 	virtual FVector ComputeWallVelocity(const FMoverTickStartData& StartState, const FGSTN_WallMovementPlane& Plane, const FVector& WallIntent, float DeltaSeconds) const;
 
+	/** The stick as a world vector (length <= 1), with the debug stick override; zero without input. For modes that read the stick besides the plane intent */
+	FVector GetWorldMoveIntent(const FMoverTickStartData& StartState, const FVector& GravityUp) const;
+
 	/** Prior velocity of the start state projected on the plane (not length preserving: a velocity into the wall must not turn into speed along it) */
 	FVector GetPriorVelocityOnPlane(const FMoverTickStartData& StartState, const FGSTN_WallMovementPlane& Plane) const;
 

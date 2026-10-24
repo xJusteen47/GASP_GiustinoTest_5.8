@@ -19,7 +19,10 @@
 #include "UObject/StrongObjectPtr.h"
 #include "WallMovement/GSTN_WallMovementDebug.h"
 #include "WallMovement/Modes/GSTN_WallSlideV2MovementMode.h"
+#include "WallMovement/MoveLibrary/GSTN_WallControlUtils.h"
 #include "WallMovement/MoveLibrary/GSTN_WallEdgeUtils.h"
+#include "WallMovement/MoveLibrary/GSTN_WallMovementUtils.h"
+#include "MoverDataModelTypes.h"
 #include "GSTN_WallV2TestAccess.h"
 
 namespace GSTNWallEdgeWorld
@@ -200,6 +203,14 @@ namespace GSTNWallEdgeWorld
 	{
 		const float Speed = FMath::Min(Scene.State.Velocity.Size() + Gain * Dt, Target);
 		return Direction * Speed;
+	}
+
+	static FMoverTickStartData MakeStartStateWithVelocity(const FVector& Velocity)
+	{
+		FMoverTickStartData StartState;
+		FMoverDefaultSyncState& Sync = StartState.SyncState.SyncStateCollection.FindOrAddMutableDataByType<FMoverDefaultSyncState>();
+		Sync.SetTransforms_WorldSpace(FVector::ZeroVector, FRotator::ZeroRotator, Velocity, FVector::ZeroVector, nullptr);
+		return StartState;
 	}
 
 	static float AllowedAt(const FGSTN_WallEdgeSettings& Edges, EGSTN_WallEdgeKind Kind, float Angle, float Reference, float Distance)
@@ -639,6 +650,46 @@ bool FGSTN_WallV2RecessTest::RunTest(const FString& Parameters)
 				TestTrue(*FString::Printf(TEXT("%s: the plane did not turn (%.2f deg)"), *What, Scene.PlaneTurnDeg()), Scene.PlaneTurnDeg() < 1.f);
 			}
 		}
+	}
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------------------
+// Control: the stick into the wall
+// -------------------------------------------------------------------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2PushIntoWallTest, "GSTN.Wall.V2.PushIntoWallDoesNotChangeSlide", GSTNWallEdgeWorld::TestFlags)
+bool FGSTN_WallV2PushIntoWallTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGSTN_WallSlideV2MovementMode> Mode(NewObject<UGSTN_WallSlideV2MovementMode>(GetTransientPackage()));
+	for (const FQuat& Frame : Frames())
+	{
+		const FVector Up = Frame.RotateVector(FVector::UpVector);
+		const FVector N = Frame.RotateVector(FVector::ForwardVector);
+		const FGSTN_WallMovementPlane Plane = UGSTN_WallMovementUtils::MakeMovementPlane(Frame, N, Up);
+		FVector H, V;
+		UGSTN_WallControlUtils::MakePlaneAxes(N, Up, H, V);
+
+		// The camera looks into the wall; the camera rotation is the frame's heading turned toward -N
+		FCharacterDefaultInputs Inputs;
+		Inputs.ControlRotation = FRotationMatrix::MakeFromXZ(-N, Up).Rotator();
+
+		// Forward on the stick = into the wall. It must map to nothing vertical (it used to map to "up" and brake the fall to a crawl)
+		const FVector Mapped = FGSTN_WallTraverseTestAccess::MapMoveIntentToWall(*Mode, Inputs, -N, Plane);
+		const FVector2D MappedOnPlane = UGSTN_WallControlUtils::ToPlane(Mapped, H, V);
+		TestTrue(*FString::Printf(TEXT("Pushing into the wall has no vertical part (was %.3f)"), MappedOnPlane.Y), FMath::Abs(MappedOnPlane.Y) < 1e-3);
+
+		// The slide is the one without input: same velocity
+		const FVector Prior = H * 120.f - Up * 500.f;
+		const FMoverTickStartData StartState = MakeStartStateWithVelocity(Prior);
+		const FVector Idle = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, FVector::ZeroVector, Dt);
+		const FVector Pushing = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, Mapped, Dt);
+		TestTrue(*FString::Printf(TEXT("Pushing into the wall changes nothing (%s vs %s)"), *Pushing.ToString(), *Idle.ToString()), Pushing.Equals(Idle, 0.05));
+
+		// Sideways still steers: right on the stick (camera looking at the wall: along the wall) gives horizontal control
+		const FVector Side = FVector::CrossProduct(Up, -N).GetSafeNormal();
+		const FVector2D SideOnPlane = UGSTN_WallControlUtils::ToPlane(FGSTN_WallTraverseTestAccess::MapMoveIntentToWall(*Mode, Inputs, Side, Plane), H, V);
+		TestTrue(*FString::Printf(TEXT("A sideways stick still controls the horizontal (%.2f)"), SideOnPlane.X), FMath::Abs(SideOnPlane.X) > 0.9f);
 	}
 	return true;
 }

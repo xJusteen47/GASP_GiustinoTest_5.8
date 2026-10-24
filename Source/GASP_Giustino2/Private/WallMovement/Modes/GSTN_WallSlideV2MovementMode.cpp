@@ -39,6 +39,16 @@ FVector UGSTN_WallSlideV2MovementMode::ComputeEntryVelocity(const FVector& InVel
 	return UGSTN_WallControlUtils::ProjectEntryVelocity(Control, InVelocity, WallNormal);
 }
 
+FVector UGSTN_WallSlideV2MovementMode::MapMoveIntentToWall(const FCharacterDefaultInputs& Inputs, const FVector& MoveIntent, const FGSTN_WallMovementPlane& Plane) const
+{
+	const FVector Mapped = Super::MapMoveIntentToWall(Inputs, MoveIntent, Plane);
+	FVector HAxis, VAxis;
+	UGSTN_WallControlUtils::MakePlaneAxes(Plane.Normal, Plane.GravityUp, HAxis, VAxis);
+	const FVector2D OnPlane = UGSTN_WallControlUtils::ToPlane(Mapped, HAxis, VAxis);
+	const FVector2D Kept = UGSTN_WallControlUtils::SuppressVerticalIntoWall(OnPlane, UGSTN_WallControlUtils::IntoWallAmount(MoveIntent, Plane.Normal, Plane.GravityUp), MoveIntent.Size());
+	return UGSTN_WallControlUtils::FromPlane(Kept, HAxis, VAxis);
+}
+
 FVector UGSTN_WallSlideV2MovementMode::ComputeWallVelocity(const FMoverTickStartData& StartState, const FGSTN_WallMovementPlane& Plane, const FVector& WallIntent, float DeltaSeconds) const
 {
 	FVector HAxis, VAxis;
@@ -58,7 +68,10 @@ FVector UGSTN_WallSlideV2MovementMode::ComputeWallVelocity(const FMoverTickStart
 	}
 
 	const bool bBrake = UGSTN_WallControlUtils::ResolveBrake(Brake, PriorOnPlane, InputOnPlane, bBrakeTag);
-	const FVector2D NewOnPlane = UGSTN_WallControlUtils::StepSlideVelocity(Settings, PriorOnPlane, InputOnPlane, bBrake, DeltaSeconds);
+	// The option to slow the slide while pushing into the wall; the stick is only read for it when it is on
+	const float IntoWall = Settings.HoldTowardWallTerminalScale < 1.f
+		? UGSTN_WallControlUtils::IntoWallAmount(GetWorldMoveIntent(StartState, Plane.GravityUp), Plane.Normal, Plane.GravityUp) : 0.f;
+	const FVector2D NewOnPlane = UGSTN_WallControlUtils::StepSlideVelocity(Settings, PriorOnPlane, InputOnPlane, bBrake, DeltaSeconds, IntoWall);
 
 	GSTN_WALL_LOG(2, TEXT("GEN slide v2 prior=(h %.1f v %.1f) in=(%.2f %.2f) brake=%d out=(h %.1f v %.1f)"),
 		PriorOnPlane.X, PriorOnPlane.Y, InputOnPlane.X, InputOnPlane.Y, bBrake ? 1 : 0, NewOnPlane.X, NewOnPlane.Y);

@@ -415,3 +415,11 @@ Not yet run in the editor (the owner's editor was open): compile-checked on the 
   recess deeper than `MaxStepHeight` that the capsule has dived into is exited as a corner, not as a bump.
 - Known limits for PIE: a curved wall (lane g) shows a growing angle at the end of the look and relies on the distance-based allowance not to cap; a recess
   deeper than `RecessDepth` is read as an outside edge; features narrower than the look slip between two ticks and are met by the move sweep (then step-over).
+
+### 6.7 Stick into the wall (owner PIE report, 2026-10-24)
+
+Facing the wall, "stick forward" was mapped by the camera-relative mapping onto the plane's up axis and read as the vertical brake (stick against the fall),
+which held the slide at `BrakeMinSpeed`. In v2 `MapMoveIntentToWall` drops the vertical part of a stick that mostly pushes into the wall (more than half of its
+size, `UGSTN_WallControlUtils::IntoWallAmount` / `SuppressVerticalIntoWall`); the into-wall component is otherwise ignored, so pushing toward the wall does nothing special.
+Option kept, off by default: `HoldTowardWallTerminalScale` (1 = off) scales the terminal down speed with the push. `BrakeMinSpeed` is 80 cm/s and a held brake brings any
+slower or upward speed up to it, so the slide cannot freeze. Tests: `GSTN.Wall.Control.{PushIntoWallDoesNotChangeSlide, BrakeNeverBelowMinSpeed}`, `GSTN.Wall.V2.PushIntoWallDoesNotChangeSlide`.

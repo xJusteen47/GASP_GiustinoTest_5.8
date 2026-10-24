@@ -59,9 +59,19 @@ struct GASP_GIUSTINO2_API FGSTN_WallSlideControlSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Vertical", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
 	float VerticalBrakeDecel = 2600.f;
 
-	/** The vertical brake stops decelerating at this downward speed and holds it, no gravity gain (cm/s) */
+	/**
+	 * The vertical brake stops decelerating at this downward speed and holds it, no gravity gain (cm/s). Above zero on purpose: the slide
+	 * never freezes on the wall (a slower or upward speed under the brake is brought to this one), only a climb mode holds still
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Vertical", meta = (ClampMin = "0", ForceUnits = "cm/s"))
-	float BrakeMinSpeed = 60.f;
+	float BrakeMinSpeed = 80.f;
+
+	/**
+	 * Option: pushing the stick into the wall scales the terminal down speed by this (1 = off, the default: the stick component into the wall
+	 * is simply ignored). It only slows the approach to a lower terminal speed, it never brakes
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Vertical", meta = (ClampMin = "0", ClampMax = "1"))
+	float HoldTowardWallTerminalScale = 1.f;
 
 	/** Stick magnitude below this counts as no input */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control", meta = (ClampMin = "0", ClampMax = "1"))

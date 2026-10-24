@@ -35,6 +35,25 @@ FVector UGSTN_WallControlUtils::ProjectEntryVelocity(const FGSTN_WallSlideContro
 	return OnPlane.GetSafeNormal() * Speed;
 }
 
+float UGSTN_WallControlUtils::IntoWallAmount(const FVector& MoveIntent, const FVector& WallNormal, const FVector& GravityUp)
+{
+	const FVector FlatNormal = FVector::VectorPlaneProject(WallNormal, GravityUp).GetSafeNormal();
+	if (FlatNormal.IsNearlyZero())
+	{
+		return 0.f;
+	}
+	return FMath::Clamp(-FVector::DotProduct(MoveIntent, FlatNormal), 0.f, 1.f);
+}
+
+FVector2D UGSTN_WallControlUtils::SuppressVerticalIntoWall(const FVector2D& InputOnPlane, float IntoAmount, float StickSize, float MostlyIntoFraction)
+{
+	if (StickSize > UE_KINDA_SMALL_NUMBER && IntoAmount / StickSize > MostlyIntoFraction)
+	{
+		return FVector2D(InputOnPlane.X, 0.0);
+	}
+	return InputOnPlane;
+}
+
 bool UGSTN_WallControlUtils::ResolveBrake(const FGSTN_WallBrakeInput& BrakeInput, const FVector2D& VelocityOnPlane, const FVector2D& InputOnPlane, bool bTagActive)
 {
 	if (bTagActive)
@@ -52,7 +71,7 @@ bool UGSTN_WallControlUtils::ResolveBrake(const FGSTN_WallBrakeInput& BrakeInput
 	return BrakeInput.bStickAgainstMotion && InputOnPlane.Y * VelocityOnPlane.Y < 0.f;
 }
 
-FVector2D UGSTN_WallControlUtils::StepSlideVelocity(const FGSTN_WallSlideControlSettings& Settings, const FVector2D& VelocityOnPlane, const FVector2D& InputOnPlane, bool bBrake, float DeltaSeconds)
+FVector2D UGSTN_WallControlUtils::StepSlideVelocity(const FGSTN_WallSlideControlSettings& Settings, const FVector2D& VelocityOnPlane, const FVector2D& InputOnPlane, bool bBrake, float DeltaSeconds, float IntoWall)
 {
 	if (DeltaSeconds <= 0.f)
 	{
@@ -84,16 +103,18 @@ FVector2D UGSTN_WallControlUtils::StepSlideVelocity(const FGSTN_WallSlideControl
 		{
 			S = FMath::Max(S - Settings.VerticalBrakeDecel * DeltaSeconds, Settings.BrakeMinSpeed);
 		}
-		else if (S < 0.f)
+		else if (S < Settings.BrakeMinSpeed)
 		{
-			S = FMath::Min(S + Settings.VerticalBrakeDecel * DeltaSeconds, 0.f);
+			// Slower than the brake's floor, or drifting up: the upward part is shed at the brake rate and the slide settles at the floor, never at rest
+			S = FMath::Min(S + Settings.VerticalBrakeDecel * DeltaSeconds, Settings.BrakeMinSpeed);
 		}
 	}
 	else
 	{
 		const float Gravity = Settings.GravityAcceleration * Settings.GravityScale;
 		const float DownInput = FMath::Max(-InputOnPlane.Y, 0.f) > Settings.InputDeadzone ? -InputOnPlane.Y : 0.f;
-		const float Terminal = Settings.TerminalDownSpeed + Settings.DownBoost * FMath::Clamp(DownInput, 0.f, 1.f);
+		const float Terminal = (Settings.TerminalDownSpeed + Settings.DownBoost * FMath::Clamp(DownInput, 0.f, 1.f))
+			* FMath::Lerp(1.f, Settings.HoldTowardWallTerminalScale, FMath::Clamp(IntoWall, 0.f, 1.f));
 		if (S >= Terminal)
 		{
 			// Entered faster than terminal: decay toward it, never an instant clamp

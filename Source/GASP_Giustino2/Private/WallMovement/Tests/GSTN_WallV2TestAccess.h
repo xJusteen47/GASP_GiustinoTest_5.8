@@ -5,6 +5,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "MoverDataModelTypes.h"
 #include "WallMovement/Modes/GSTN_WallSlideV2MovementMode.h"
 
 struct FGSTN_WallTraverseTestAccess
@@ -24,6 +25,11 @@ struct FGSTN_WallTraverseTestAccess
 	static FGSTN_WallAheadResult ProbeAhead(const UGSTN_WallTraverseModeBase& Mode, const FMovingComponentSet& MovingComps, const FGSTN_WallTickState& State)
 	{
 		return Mode.ProbeAhead(MovingComps, State, Mode.GetWallCheckSettings());
+	}
+
+	static FVector MapMoveIntentToWall(const UGSTN_WallSlideV2MovementMode& Mode, const FCharacterDefaultInputs& Inputs, const FVector& MoveIntent, const FGSTN_WallMovementPlane& Plane)
+	{
+		return Mode.MapMoveIntentToWall(Inputs, MoveIntent, Plane);
 	}
 
 	static float ComputeEdgeSpeedCap(const UGSTN_WallTraverseModeBase& Mode, const FGSTN_WallAheadResult& Ahead)

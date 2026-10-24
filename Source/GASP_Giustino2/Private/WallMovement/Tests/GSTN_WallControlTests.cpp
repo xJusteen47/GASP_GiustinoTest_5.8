@@ -193,8 +193,8 @@ bool FGSTN_WallControlBrakeDownTest::RunTest(const FString& Parameters)
 	V = Run(S, V, FVector2D::ZeroVector, false, 0.5f);
 	TestTrue(TEXT("Falls again after release"), -V.Y > S.BrakeMinSpeed + 50.f);
 
-	// Braking an upward drift brings it to rest
-	TestTrue(TEXT("Upward drift stopped"), FMath::IsNearlyZero(Run(S, FVector2D(0.f, 300.f), FVector2D::ZeroVector, true, 1.f).Y));
+	// Braking an upward drift sheds it and settles at the brake floor: the slide never freezes
+	ControlNearlyEq(*this, TEXT("Upward drift ends at the min speed"), -Run(S, FVector2D(0.f, 300.f), FVector2D::ZeroVector, true, 1.f).Y, S.BrakeMinSpeed, 0.001f);
 	return true;
 }
 
@@ -270,6 +270,80 @@ bool FGSTN_WallControlGravityIndependentTest::RunTest(const FString& Parameters)
 	UGSTN_WallControlUtils::MakePlaneAxes(FVector(0, 0, -1), FVector(0, 0, 1), H, V);
 	ControlNearlyEq(*this, TEXT("Ceiling axes orthogonal"), FVector::DotProduct(H, V), 0.f, 0.001f);
 	TestTrue(TEXT("Ceiling axes unit"), H.IsNormalized() && V.IsNormalized());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallControlIntoWallTest, "GSTN.Wall.Control.PushIntoWallDoesNotChangeSlide", GSTNWallControlTest::TestFlags)
+bool FGSTN_WallControlIntoWallTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNWallControlTest;
+	const FGSTN_WallSlideControlSettings S;
+	TestEqual(TEXT("Hold-on option is off by default"), S.HoldTowardWallTerminalScale, 1.f);
+
+	// A stick pushed into the wall, wherever gravity points: it is the into-wall component, and it is dropped from the vertical
+	for (const FVector& Up : UpVectors())
+	{
+		const FVector N = WallNormalFor(Up, 0.f);
+		ControlNearlyEq(*this, TEXT("Into the wall: full"), UGSTN_WallControlUtils::IntoWallAmount(-N, N, Up), 1.0, 1e-4);
+		ControlNearlyEq(*this, TEXT("Away from the wall: none"), UGSTN_WallControlUtils::IntoWallAmount(N, N, Up), 0.0, 1e-4);
+		FVector H, V;
+		UGSTN_WallControlUtils::MakePlaneAxes(N, Up, H, V);
+		ControlNearlyEq(*this, TEXT("Along the wall: none"), UGSTN_WallControlUtils::IntoWallAmount(H, N, Up), 0.0, 1e-4);
+	}
+	// A stick mostly into the wall keeps its sideways part and loses the up part; a stick mostly along the wall keeps both
+	const FVector2D Mostly = UGSTN_WallControlUtils::SuppressVerticalIntoWall(FVector2D(0.3f, 0.9f), 0.9f, 1.f);
+	ControlNearlyEq(*this, TEXT("Mostly into: sideways kept"), Mostly.X, 0.3, 1e-4);
+	ControlNearlyEq(*this, TEXT("Mostly into: no vertical"), Mostly.Y, 0.0, 1e-4);
+	const FVector2D Along = UGSTN_WallControlUtils::SuppressVerticalIntoWall(FVector2D(0.8f, 0.6f), 0.1f, 1.f);
+	ControlNearlyEq(*this, TEXT("Mostly along: vertical kept"), Along.Y, 0.6, 1e-4);
+
+	// By default the slide does not know about the push: same velocity with and without it, and it keeps falling to terminal
+	FVector2D Free(0.f, -200.f), Pushed(0.f, -200.f);
+	for (int32 i = 0; i < 180; ++i)
+	{
+		Free = UGSTN_WallControlUtils::StepSlideVelocity(S, Free, FVector2D::ZeroVector, false, Dt, 0.f);
+		Pushed = UGSTN_WallControlUtils::StepSlideVelocity(S, Pushed, FVector2D::ZeroVector, false, Dt, 1.f);
+		TestTrue(TEXT("Pushing changes nothing"), Free.Equals(Pushed, 1e-4));
+	}
+	ControlNearlyEq(*this, TEXT("Reaches terminal while pushing"), -Pushed.Y, S.TerminalDownSpeed, 1.0);
+
+	// The option: a slower terminal, approached softly, never a stop
+	FGSTN_WallSlideControlSettings Hold = S;
+	Hold.HoldTowardWallTerminalScale = 0.5f;
+	FVector2D V(0.f, -600.f);
+	for (int32 i = 0; i < 600; ++i)
+	{
+		V = UGSTN_WallControlUtils::StepSlideVelocity(Hold, V, FVector2D::ZeroVector, false, Dt, 1.f);
+		TestTrue(TEXT("Never stopped by the push"), -V.Y >= Hold.TerminalDownSpeed * 0.5f - 0.01f);
+	}
+	ControlNearlyEq(*this, TEXT("Slides at half terminal"), -V.Y, Hold.TerminalDownSpeed * 0.5f, 0.5);
+	// Without the push the same settings fall to the full terminal
+	ControlNearlyEq(*this, TEXT("Not pushing: full terminal"), -Run(Hold, FVector2D(0.f, -300.f), FVector2D::ZeroVector, false, 12.f).Y, Hold.TerminalDownSpeed, 0.5);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallControlBrakeFloorTest, "GSTN.Wall.Control.BrakeNeverBelowMinSpeed", GSTNWallControlTest::TestFlags)
+bool FGSTN_WallControlBrakeFloorTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNWallControlTest;
+	const FGSTN_WallSlideControlSettings S;
+	TestTrue(TEXT("The floor is above zero by default"), S.BrakeMinSpeed >= 60.f);
+
+	// From any vertical speed (fast fall, slow, rest, upward drift) held brake never leaves the slide under the floor, and ends on it
+	for (float Start : { -1400.f, -600.f, -100.f, -30.f, 0.f, 150.f, 600.f })
+	{
+		FVector2D V(0.f, Start);
+		for (int32 i = 0; i < 240; ++i)
+		{
+			V = UGSTN_WallControlUtils::StepSlideVelocity(S, V, FVector2D::ZeroVector, true, Dt);
+			if (-V.Y < S.BrakeMinSpeed - 1e-3 && -Start >= S.BrakeMinSpeed)
+			{
+				AddError(FString::Printf(TEXT("Start %.0f: fell under the brake floor (%.3f)"), Start, -V.Y));
+				break;
+			}
+		}
+		ControlNearlyEq(*this, TEXT("Settles on the floor, never at rest"), -V.Y, S.BrakeMinSpeed, 1e-3);
+	}
 	return true;
 }
 

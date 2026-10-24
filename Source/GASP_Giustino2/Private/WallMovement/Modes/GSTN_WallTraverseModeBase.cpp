@@ -108,6 +108,20 @@ FVector UGSTN_WallTraverseModeBase::ComputeWallVelocity(const FMoverTickStartDat
 	return GetPriorVelocityOnPlane(StartState, Plane);
 }
 
+FVector UGSTN_WallTraverseModeBase::GetWorldMoveIntent(const FMoverTickStartData& StartState, const FVector& GravityUp) const
+{
+	const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>();
+	if (!Inputs)
+	{
+		return FVector::ZeroVector;
+	}
+	FVector MoveIntent = UMovementUtils::ComputeDirectionIntent(Inputs->GetMoveInput_WorldSpace(), Inputs->GetMoveInputType(), FMath::Max(Horizontal.MaxSpeed, 1.f));
+#if GSTN_WALL_DEBUG
+	GSTNWallDebug::OverrideMoveInput(Inputs->ControlRotation, GravityUp, MoveIntent);
+#endif
+	return MoveIntent.GetClampedToMaxSize(1.f);
+}
+
 FVector UGSTN_WallTraverseModeBase::GetPriorVelocityOnPlane(const FMoverTickStartData& StartState, const FGSTN_WallMovementPlane& Plane) const
 {
 	const FMoverDefaultSyncState* Sync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();

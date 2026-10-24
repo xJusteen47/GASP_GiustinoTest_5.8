@@ -38,6 +38,13 @@ public:
 	virtual FVector ComputeEntryVelocity(const FVector& InVelocity, const FVector& WallNormal) const override;
 
 protected:
+	/**
+	 * The camera-relative mapping of the controlled mode, minus the trap that froze the slide: a stick that mostly pushes into the wall
+	 * has no vertical part (facing the wall, "forward" is into it, not up it, and it would read as the brake). The into-wall component is
+	 * otherwise ignored; Control.HoldTowardWallTerminalScale can turn it into a slower slide
+	 */
+	virtual FVector MapMoveIntentToWall(const FCharacterDefaultInputs& Inputs, const FVector& MoveIntent, const FGSTN_WallMovementPlane& Plane) const override;
+
 	/** The corner caps are fractions of Control.TerminalDownSpeed */
 	virtual float GetEdgeReferenceSpeed() const override;
 
