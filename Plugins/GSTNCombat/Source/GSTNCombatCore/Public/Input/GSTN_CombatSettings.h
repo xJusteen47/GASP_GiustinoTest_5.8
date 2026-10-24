@@ -6,6 +6,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "GameplayTagContainer.h"
 #include "Input/GSTN_InputSlot.h"
+#include "Jump/GSTN_JumpTypes.h"
 #include "GSTN_CombatSettings.generated.h"
 
 /**
@@ -66,6 +67,21 @@ public:
 	int32 GetDefaultOverrideFrames(int32 Tier) const;
 
 	/**
+	 * Loadout table sets the combat simulation keeps besides the Blueprint's (revision 0): the newest this many. A rollback never
+	 * reaches back further than a few frames, so two sets never expire inside the rollback window as long as loadout changes are
+	 * spaced by MinFramesBetweenLoadoutChanges. A lookup miss is a closed gate, never a crash
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Loadout", meta = (ClampMin = "1", ClampMax = "16"))
+	int32 MaxRetainedTableRevisions = 4;
+
+	/**
+	 * A loadout change within this many simulation frames of the previous one is refused (UGSTN_CombatSimComponent::ServerApplyLoadoutChange):
+	 * the table swap of the first must be settled on every machine before the second starts
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Loadout", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 MinFramesBetweenLoadoutChanges = 30;
+
+	/**
 	 * The command set a kit starts from when it names no base set of its own (FGSTN_CommandSet::BaseSet). Soft: the plugin ships
 	 * it empty, a game points it at its slot set asset, and nothing is loaded until a kit's command set is composed (never
 	 * inside the simulation).
@@ -90,6 +106,26 @@ public:
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Stats")
 	TArray<FName> StatsSpeedProperties;
+
+	/**
+	 * How the jump state reacts to a launch by something other than the combatant's own jump (a trampoline). The default refills the air
+	 * jumps, clears the coyote window and ends the hold phase of a jump in progress. A kit's own rules replace these once the loadout
+	 * carries them; every machine of a match must run the same values
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump")
+	FGSTN_JumpResetRules JumpResetRules;
+
+	/** Frames after walking off a ledge in which a ground jump is still allowed. 0 = none */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
+	int32 JumpCoyoteFrames = 4;
+
+	/** Frames between a ground jump request and the take-off (the squat). 0 = the take-off is the frame of the request. A kit overrides it on its jump ability (UGSTN_GA_PlatformJump::bOverrideSquatFrames) */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
+	int32 JumpSquatFrames = 0;
+
+	/** Frames of press that turn an interact tap (grab) into a hold (pick up) in the default movement slots (UGSTN_MovementSlots) */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Interact", meta = (ClampMin = "1", ClampMax = "120", ForceUnits = "Frames"))
+	int32 InteractHoldFrames = 12;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

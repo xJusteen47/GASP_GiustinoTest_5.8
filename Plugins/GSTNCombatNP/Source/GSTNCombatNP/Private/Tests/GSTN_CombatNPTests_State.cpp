@@ -4,6 +4,7 @@
 #include "Misc/AutomationTest.h"
 #include "Serialization/BitReader.h"
 #include "Serialization/BitWriter.h"
+#include "Jump/GSTN_JumpLogic.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -25,6 +26,7 @@ namespace
 		State.Core.LoadoutRevision = 7;
 		State.Core.Requests.Add(EGSTN_RequestType::ActivateEntry, 410, 3);
 		State.Core.Requests.Add(EGSTN_RequestType::CancelAbility, 410, 99);
+		State.Core.Jump = FGSTN_JumpLogic::ApplyTakeoff(FGSTN_JumpState(), 405, 5, EGSTN_JumpKind::Air);
 		return State;
 	}
 
@@ -51,7 +53,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_StateRoundTripTest, "GSTNCombat.NP.State.
 
 bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 {
-	// An idle combatant that never had a loadout costs one bit more than the part that existed before
+	// An idle combatant that never had a loadout costs two bits more than the part that existed before: the action part and the jump state
 	FGSTN_CombatSyncState Idle;
 	FBitWriter CoreWriter(512, true);
 	Idle.Core.Input.NetSerialize(CoreWriter);
@@ -59,7 +61,7 @@ bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 	CoreWriter << Start;
 	CoreWriter << Start;
 	TestTrue(TEXT("the default action part is default"), Idle.Core.IsActionPartDefault());
-	TestEqual(TEXT("an idle combatant pays one bit for the whole action part"), BitsOfState(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(1));
+	TestEqual(TEXT("an idle combatant pays one bit for the whole action part and one for the jump state"), BitsOfState(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(2));
 
 	bool bError = false;
 	const FGSTN_CombatSyncState IdleLoaded = ReadBackState(Idle, bError);
@@ -72,6 +74,7 @@ bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 	const FGSTN_CombatSyncState Loaded = ReadBackState(Busy, bError);
 	TestFalse(TEXT("a busy state reads back to the end"), bError);
 	TestTrue(TEXT("action state"), Loaded.Core.ActionState == EGSTN_ActionState::InTimeline);
+	TestTrue(TEXT("jump state"), Loaded.Core.Jump == Busy.Core.Jump && Loaded.Core.Jump.AirJumpsUsed == 1);
 	TestEqual(TEXT("timeline"), static_cast<int32>(Loaded.Core.ActiveTimeline), 12);
 	TestTrue(TEXT("source"), Loaded.Core.ActiveSource == EGSTN_ActivationSource::Adopted);
 	TestEqual(TEXT("start frame"), Loaded.Core.TimelineStartFrame, 400);
@@ -165,6 +168,7 @@ bool FGSTN_StateShouldReconcileTest::RunTest(const FString& Parameters)
 	Differs(TEXT("paused total"), [](FGSTN_CombatSyncState& S) { S.Core.PausedFramesTotal = 31; });
 	Differs(TEXT("weapon"), [](FGSTN_CombatSyncState& S) { S.Core.ActiveWeaponIndex = 1; });
 	Differs(TEXT("loadout revision"), [](FGSTN_CombatSyncState& S) { S.Core.LoadoutRevision = 8; });
+	Differs(TEXT("table revision"), [](FGSTN_CombatSyncState& S) { S.Core.TableRevision = 8; });
 	Differs(TEXT("requests"), [](FGSTN_CombatSyncState& S) { S.Core.Requests.PruneBefore(411); });
 	return true;
 }
@@ -191,6 +195,38 @@ bool FGSTN_StateRevisionGateTest::RunTest(const FString& Parameters)
 	// A difference in the revision alone is a reconcile: the server's value wins
 	FGSTN_CombatSyncState Stale;
 	TestTrue(TEXT("a client that never heard of revision 3 reconciles"), Stale.ShouldReconcile(State));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_StateTableRevisionTest, "GSTNCombat.NP.State.TableRevisionRoundTrip", GSTN_NP_TEST_FLAGS)
+bool FGSTN_StateTableRevisionTest::RunTest(const FString& Parameters)
+{
+	FGSTN_CombatSyncState State;
+	State.Core.LoadoutRevision = 5;
+	State.Core.TableRevision = 4;
+	bool bError = false;
+	const FGSTN_CombatSyncState Loaded = ReadBackState(State, bError);
+	TestFalse(TEXT("reads back"), bError);
+	TestEqual(TEXT("the table revision arrived"), static_cast<int32>(Loaded.Core.TableRevision), 4);
+	TestEqual(TEXT("next to the demand"), static_cast<int32>(Loaded.Core.LoadoutRevision), 5);
+
+	FGSTN_CombatSyncState OnlyTable;
+	OnlyTable.Core.TableRevision = 1;
+	TestFalse(TEXT("a table revision alone is not the default state"), OnlyTable.Core.IsActionPartDefault());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_StateTableRevisionReconcileTest, "GSTNCombat.NP.State.TableRevisionReconciles", GSTN_NP_TEST_FLAGS)
+bool FGSTN_StateTableRevisionReconcileTest::RunTest(const FString& Parameters)
+{
+	FGSTN_CombatSyncState Server;
+	Server.Core.LoadoutRevision = 2;
+	Server.Core.TableRevision = 2;
+	FGSTN_CombatSyncState Client = Server;
+	TestFalse(TEXT("equal states agree"), Client.ShouldReconcile(Server));
+
+	Client.Core.TableRevision = 1;
+	TestTrue(TEXT("a client that has not swapped yet is corrected to the server's table revision"), Client.ShouldReconcile(Server));
 	return true;
 }
 

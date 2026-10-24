@@ -10,4 +10,7 @@ namespace GSTNCombatButtonTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Button_Crouch, "Input.Button.Crouch", "Crouch: movement stance and the down modifier of the standard commands");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Button_Shield, "Input.Button.Shield", "Shield / guard");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Button_Jump, "Input.Button.Jump", "Jump");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Button_Dodge, "Input.Button.Dodge", "Dodge");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Button_Sprint, "Input.Button.Sprint", "Dash / sprint burst");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Button_Interact, "Input.Button.Interact", "Interact: tap grabs, hold picks up");
 }

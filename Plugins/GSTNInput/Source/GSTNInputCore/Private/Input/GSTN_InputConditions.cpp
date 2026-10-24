@@ -176,7 +176,7 @@ bool FGSTN_InputCondition_Release::Matches(const FGSTN_ConditionContext& Ctx, in
 				break;
 			}
 		}
-		if (HeldFrames >= MinHeldFrames)
+		if (HeldFrames >= MinHeldFrames && (MaxHeldFrames < 0 || HeldFrames <= MaxHeldFrames))
 		{
 			SetResult(Out, Event.Frame, Slot, INDEX_NONE);
 			return true;

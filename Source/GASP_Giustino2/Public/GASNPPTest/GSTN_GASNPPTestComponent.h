@@ -8,6 +8,7 @@
 #include "GameplayEffectTypes.h"
 #include "GSTN_GASNPPTestComponent.generated.h"
 
+class UGSTN_LoadoutComponent;
 class UMoverComponent;
 class UNpAbilitySystemComponent;
 class UInputMappingContext;
@@ -60,6 +61,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	void ResetCounters();
 
+	/** Every simulation tick since the last call (resimulated ticks included), as a JSON array of
+	    {t: BaseSimTimeMs, loc, vel, mode, tags: Test.* tags}, then forgets them. The harness judges heights, speeds and tag spans on
+	    these, not on the editor tick, so a check does not depend on how many sim steps one editor frame holds. */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	FString DrainSimHistory();
+
+	/**
+	 * Authority only: puts the pawn back where it spawned (a teleport through Mover's instant effects, so it is predicted and rolled back like any other move;
+	 * the caller waits for the pawn to settle). The scenarios start from here, wherever the previous one ended.
+	 * Offset: shifts the spot so that the pawns of one process do not stand in each other's way (they all spawn within a metre).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	bool ServerResetToSpawn(FVector Offset);
+
 	UFUNCTION(BlueprintPure, Category = "GASNPP Test")
 	bool IsTestInputReady() const { return bInputReady; }
 
@@ -90,6 +105,37 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerGrantProbe(const FString& Name);
+
+	/**
+	 * Grants (true) or removes (false) the platform jump kit, UGSTN_GA_PlatformJump and UGSTN_GA_PlatformFastFall, which the test binding set
+	 * binds to Command.Movement.Jump / FastFall. Authority only, from outside the simulation. Returns how many specs changed.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	int32 ServerSetJumpKit(bool bGrant);
+
+	/**
+	 * Grants (true) or removes (false) the abilities of the movement kit that the test binding set binds: Dash is UGSTN_GA_Dash, Dodge is the ground
+	 * dodge, the air dodge and the escape dodge, Interact is the placeholder grab and pick up. Authority only, from outside the simulation: a kit without
+	 * a dodge is a pawn whose Dodge flag is false. Returns how many specs changed.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	int32 ServerSetMoveKit(bool bDash, bool bDodge, bool bInteract);
+
+	/** Applies (true) or removes (false) an infinite effect granting Combat.State.Hitstun, the stand-in of the hit reaction of M4. Authority only */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerSetHitstun(bool bApply);
+
+	/** Applies (true) or removes (false) an infinite effect granting Test.State.Escape: the pawn then uses the escape dodge, which is not blocked in hitstun. Authority only */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerSetEscapeKit(bool bApply);
+
+	/**
+	 * Sets Mover's gravity override (acceleration in cm/s^2 world space) on THIS machine's copy of the pawn, or clears it. Call it on every
+	 * machine, while the pawn stands still: gravity is a Mover component setting, not simulated state, so every copy must hold the same value
+	 * before it matters (the tilted gravity scenario)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool SetTestGravity(FVector Acceleration, bool bEnable);
 
 	/** Removes every trigger probe ability (raisers and targets) from this pawn. Returns how many specs were cleared. */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
@@ -132,6 +178,26 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerEquipPrimaryWeapon(bool bEquip);
+
+	/**
+	 * Server only: applies the loadout of the C15 test content (/Game/GASNPPTest/Combat) to this pawn through the combat component's
+	 * ServerApplyLoadoutChange: the kit named KitName and, when SupportWeaponName is not empty, that weapon as the additional weapon.
+	 * The loadout component is added to the PlayerState at runtime on the first call (the shared PlayerState Blueprint is not edited).
+	 * Returns "OK", or the findings of the loadout rules joined with " | ".
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
+	FString ServerApplyTestLoadout(const FString& KitName, const FString& SupportWeaponName);
+
+	/** ServerApplyTestLoadout with supers: SuperNamesCsv lists the SUP_Test_* assets in slot order (comma separated, may be empty) */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
+	FString ServerApplyTestLoadoutWithSupers(const FString& KitName, const FString& SupportWeaponName, const FString& SuperNamesCsv);
+
+	/** Server only: applies an instant meter grant (0 = ExMeter +60, 1 = SuperMeter +100). An out-of-band ability system change, like a grant */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
+	bool ServerGrantMeter(int32 Which);
+
+	/** Server only: puts the loadout component on the PlayerState if there is none yet (clients get it by replication). Null without a PlayerState */
+	UGSTN_LoadoutComponent* EnsureLoadoutComponent();
 
 	/** Same as setting bStatsProbeEnabled, for Python (the harness calls it on every copy of the pawn, in every world) */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
@@ -186,6 +252,20 @@ private:
 
 	bool bInputReady = false;
 
+	struct FSimHistoryEntry
+	{
+		int32 SimTimeMs = 0;
+		FVector Location = FVector::ZeroVector;
+		FVector Velocity = FVector::ZeroVector;
+		FName Mode;
+		TArray<FString> Tags;
+	};
+	TArray<FSimHistoryEntry> SimHistory;
+
+	/** Where the pawn was at BeginPlay on the authority */
+	FVector SpawnLocation = FVector::ZeroVector;
+	bool bHasSpawnLocation = false;
+
 	TMap<FName, FGSTN_ProbeCounters> ProbeCounters;
 
 	/** TimelineStarted events the authority published for this pawn, by source name (adopted, command, forced). Empty on a client: nothing is published there */
@@ -206,6 +286,8 @@ private:
 	// Server-side handles of the infinite effects applied by the probes
 	FActiveGameplayEffectHandle BulkEffectHandle;
 	FActiveGameplayEffectHandle StatsEffectHandle;
+	FActiveGameplayEffectHandle HitstunEffectHandle;
+	FActiveGameplayEffectHandle EscapeEffectHandle;
 
 	// Stats probe: the values captured before the first rewrite, and what was written last
 	bool bStatsBaseCaptured = false;

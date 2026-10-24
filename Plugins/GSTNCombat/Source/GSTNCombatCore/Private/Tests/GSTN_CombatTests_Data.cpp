@@ -252,6 +252,10 @@ bool FGSTN_CoreDataLoadoutSaveTest::RunTest(const FString& Parameters)
 		Writer << GoneTag << NoClass;
 		Writer.SerializeIntPacked(One);
 		Writer << GoneTag << Number << NoWeapon;
+		// The extension block of version 2: layout byte, empty payload
+		uint8 ExtensionLayout = 0;
+		Writer << ExtensionLayout;
+		Writer.SerializeIntPacked(Zero);
 
 		FGSTN_LoadoutData Loaded;
 		FMemoryReader Reader(Stale);
@@ -358,13 +362,92 @@ bool FGSTN_CoreDataCoreTagsTest::RunTest(const FString& Parameters)
 	// The identity roots and the Combat.State.* leaves belong to the core: they exist without the ability layer loaded
 	TArray<FGameplayTag> Tags;
 	GSTNCombatTags::GetDeclaredCoreTags(Tags);
-	TestEqual(TEXT("six states and five identity roots"), Tags.Num(), 11);
+	TestEqual(TEXT("eight states and five identity roots"), Tags.Num(), 13);
 	for (const FGameplayTag& Tag : Tags)
 	{
 		TestTrue(*FString::Printf(TEXT("%s is a valid tag"), *Tag.ToString()), Tag.IsValid());
 	}
 	TestEqual(TEXT("the weapon root keeps its name"), GSTNCombatTags::Root_Weapon.GetTag().ToString(), FString(TEXT("Weapon")));
 	TestEqual(TEXT("a state keeps its name"), GSTNCombatTags::State_Busy.GetTag().ToString(), FString(TEXT("Combat.State.Busy")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CoreDataLoadoutExtensionTest, "GSTNCombat.Core.Data.LoadoutExtensionBlock", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_CoreDataLoadoutExtensionTest::RunTest(const FString& Parameters)
+{
+	// The reserved block is empty today: the net format is the old bytes plus a layout byte and a zero length
+	FGSTN_LoadoutData Original = MakeLoadout();
+	int64 Bits = 0;
+	const TArray<uint8> Bytes = WriteNet(Original, Bits);
+
+	// A stream from a newer build with a payload: read, kept, written back unchanged
+	FGSTN_LoadoutData Newer = MakeLoadout();
+	Newer.ReservedExtension = { 7, 8, 9 };
+	int64 NewerBits = 0;
+	const TArray<uint8> NewerBytes = WriteNet(Newer, NewerBits);
+	TestTrue(TEXT("a payload makes the stream longer"), NewerBits > Bits);
+
+	FGSTN_LoadoutData Read;
+	{
+		FBitReader Reader(NewerBytes.GetData(), NewerBits);
+		bool bSuccess = false;
+		Read.NetSerialize(Reader, nullptr, bSuccess);
+		TestTrue(TEXT("the stream reads back"), bSuccess && !Reader.IsError() && Reader.AtEnd());
+	}
+	TestTrue(TEXT("the payload is kept unread"), Read.ReservedExtension == TArray<uint8>({ 7, 8, 9 }));
+	TestTrue(TEXT("the rest of the loadout is intact"), Read == Original);
+	int64 AgainBits = 0;
+	TestTrue(TEXT("and written back as it came"), WriteNet(Read, AgainBits) == NewerBytes && AgainBits == NewerBits);
+
+	// A payload longer than the bound is refused when reading (a hostile stream), and a writer never exceeds it
+	FGSTN_LoadoutData Huge = MakeLoadout();
+	Huge.ReservedExtension.Init(1, FGSTN_LoadoutData::MaxExtensionBytes + 100);
+	int64 HugeBits = 0;
+	const TArray<uint8> HugeBytes = WriteNet(Huge, HugeBits);
+	FGSTN_LoadoutData HugeRead;
+	{
+		FBitReader Reader(HugeBytes.GetData(), HugeBits);
+		bool bSuccess = false;
+		HugeRead.NetSerialize(Reader, nullptr, bSuccess);
+		TestTrue(TEXT("a writer clamps the payload, so its own stream reads"), bSuccess && HugeRead.ReservedExtension.Num() == FGSTN_LoadoutData::MaxExtensionBytes);
+	}
+
+	// Save format: version 2 carries the block, a version 1 file (no block) still loads
+	TArray<uint8> Saved;
+	{
+		FMemoryWriter Writer(Saved);
+		Newer.Serialize(Writer);
+	}
+	FGSTN_LoadoutData Loaded;
+	{
+		FMemoryReader Reader(Saved);
+		Loaded.Serialize(Reader);
+		TestFalse(TEXT("the save reads without error"), Reader.IsError());
+	}
+	TestTrue(TEXT("the save keeps the payload"), Loaded.ReservedExtension == TArray<uint8>({ 7, 8, 9 }) && Loaded == Original);
+
+	TArray<uint8> V1;
+	{
+		FMemoryWriter Writer(V1);
+		int32 Version = 1;
+		Writer << Version;
+		// A version 1 body is the shared body without the block: write it through a copy whose block the writer skips
+		FGSTN_LoadoutData Plain = MakeLoadout();
+		TArray<uint8> Body;
+		{
+			FMemoryWriter BodyWriter(Body);
+			Plain.Serialize(BodyWriter);
+		}
+		// Body = [int32 version 2][body v1][layout byte 0][length 0]: strip the head and the 2-byte tail
+		V1.Append(Body.GetData() + sizeof(int32), Body.Num() - sizeof(int32) - 2);
+	}
+	FGSTN_LoadoutData FromV1;
+	{
+		FMemoryReader Reader(V1);
+		FromV1.Serialize(Reader);
+		TestFalse(TEXT("a version 1 file reads without error"), Reader.IsError());
+	}
+	TestTrue(TEXT("and equals the loadout it was written from"), FromV1 == Original && FromV1.ReservedExtension.IsEmpty());
 	return true;
 }
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -9,6 +9,8 @@
 namespace GSTNTestTags
 {
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Dash, "Test.Cooldown.Dash");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_WalkSpeed, "Combat.SetByCaller.Stat.WalkSpeed");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_JumpVelocity, "Combat.SetByCaller.Stat.JumpVelocity");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Buff, "Test.Cooldown.Buff");
 	UE_DEFINE_GAMEPLAY_TAG(State_Dashing, "Test.State.Dashing");
 	UE_DEFINE_GAMEPLAY_TAG(State_Buffed, "Test.State.Buffed");
@@ -157,4 +159,23 @@ UGSTN_GE_TestPrimaryWeaponStats::UGSTN_GE_TestPrimaryWeaponStats()
 UGSTN_GE_TestSupportWeaponStats::UGSTN_GE_TestSupportWeaponStats()
 {
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), -300.f));
+}
+
+UGSTN_GE_TestKitInit::UGSTN_GE_TestKitInit()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	const TPair<FGameplayAttribute, FGameplayTag> Stats[] = {
+		{ UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), GSTNTestTags::Stat_WalkSpeed },
+		{ UGSTN_CombatAttributeSet::GetJumpVelocityAttribute(), GSTNTestTags::Stat_JumpVelocity },
+	};
+	for (const TPair<FGameplayAttribute, FGameplayTag>& Stat : Stats)
+	{
+		FGameplayModifierInfo Modifier;
+		Modifier.Attribute = Stat.Key;
+		Modifier.ModifierOp = EGameplayModOp::Override;
+		FSetByCallerFloat SetByCaller;
+		SetByCaller.DataTag = Stat.Value;
+		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(SetByCaller);
+		Modifiers.Add(Modifier);
+	}
 }

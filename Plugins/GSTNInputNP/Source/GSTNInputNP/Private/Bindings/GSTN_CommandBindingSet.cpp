@@ -55,6 +55,18 @@ bool UGSTN_CommandBindingSet::IsBindableAbility(const UGameplayAbility* Ability,
 	return true;
 }
 
+bool FGSTN_CommandTable::HasSourceMasks() const
+{
+	for (const FGSTN_CompiledBinding& Binding : Bindings)
+	{
+		if (Binding.SourceMask != 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 int32 FGSTN_CommandTable::FindCommand(const FGameplayTag& Command) const
 {
 	return Commands.IndexOfByPredicate([&Command](const FCommand& Entry) { return Entry.Tag == Command; });

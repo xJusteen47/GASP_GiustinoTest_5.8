@@ -9,7 +9,12 @@
 #include "Events/GSTN_SimEvent.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "Input/GSTN_ButtonMap.h"
+#include "Jump/GSTN_GravityPhases.h"
+#include "Jump/GSTN_JumpLogic.h"
+#include "Loadout/GSTN_LoadoutAssembly.h"
+#include "Loadout/GSTN_LoadoutData.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
@@ -19,8 +24,12 @@
 
 class UGSTN_CommandBindingSet;
 class UGSTN_GA_BaseCombat;
+class UGSTN_GA_PlatformJump;
 class UGSTN_InputConfig;
 class UGSTN_InputContextProvider;
+class UGSTN_LoadoutComponent;
+class UGSTN_MoverSimStateTracker;
+class UMoverComponent;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
 
@@ -133,11 +142,43 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Input")
 	bool HasAim() const { return FrameAim.bHasAim; }
 
+	/**
+	 * The jump state of the frame being simulated (combat-m3 7.9): phase, air jumps used, fast fall. Same contract as GetActivationContext:
+	 * a simulation read, called from an ability's activation or tick. False before the first simulated frame
+	 */
+	bool ReadJumpState(FGSTN_JumpState& OutState) const;
+
+	/** The tracker of the owner's Mover component (the movement facts of the end of the previous frame: up direction, velocity, ground tag), null without a Mover component. The movement abilities read the local gravity frame from it */
+	UGSTN_MoverSimStateTracker* GetMoverTracker() { return GetJumpTracker(); }
+
+	/**
+	 * Rewrites Mover's gravity override to the authored gravity scaled by the gravity phase of the jump state of the frame being
+	 * simulated (hold, cut, fall, fast fall), along the local gravity whatever its direction. Called by the stats movement modifier
+	 * from OnPreMovement, i.e. on every simulated substep. A pawn without the combat stats, or that never leaves scale 1, is left alone
+	 */
+	void ApplyJumpGravity(UMoverComponent& MoverComp, double DeltaSeconds);
+
 	/** Latest simulated (or interpolated) combat state */
 	const FGSTN_CombatSyncState* GetSyncState() const;
 
-	/** The compiled commands and bindings: the meaning of the indices in the sync state and in the commands */
-	const FGSTN_CommandTable& GetCommandTable() const { return CommandTable; }
+	/**
+	 * The compiled commands and bindings the combat state is on: the meaning of the indices in the sync state and in the commands. Inside the
+	 * simulation (an ability's activation or tick) it is the table of the frame being simulated; elsewhere the one of the latest state
+	 */
+	const FGSTN_CommandTable& GetCommandTable() const;
+
+	/** The table set of exactly this loadout revision (0 = the Blueprint's), null if this machine does not have it (never built, or expired) */
+	const UGSTN_CombatTableSet* FindTableSet(int32 Revision) const;
+
+	/**
+	 * Adds a table set built for a loadout revision (game thread, outside the simulation: the loadout component's apply, on every machine).
+	 * A set of the same revision is replaced. Keeps the Blueprint's set and the newest MaxRetainedTableRevisions others; a tick that finds
+	 * no set for the revision it demands runs closed (no commands) until it exists
+	 */
+	void RegisterTableSet(UGSTN_CombatTableSet* Set);
+
+	/** Frames the combat tick ran with the gate closed (the demanded table was missing). Diagnostic, not state: it also counts re-simulated frames */
+	int32 GetGateClosedFrames() const { return GateClosedFrames; }
 
 	/**
 	 * The input history in the notation of FGSTN_InputScript (oldest first, newest at the end), the held buttons and the
@@ -225,6 +266,27 @@ public:
 	 */
 	bool ServerWriteLoadoutRevision(uint16 Revision);
 
+	/**
+	 * Server only, from outside the simulation: a kit change by pickup (combat-m3 direction of 2026-10-23). Judges the loadout first
+	 * (a refused one changes nothing, the running timeline included), then ends the running timeline (its ability and the action
+	 * state), applies the loadout on the loadout component (the re-grant and the stats effects of the new kit) and writes the new
+	 * revision into the sync state through ServerWriteLoadoutRevision. Returns false with the findings in OutErrors when refused.
+	 * The grants reach the owning client through the simulation's sync state: one reconcile per change, like any grant.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+	bool ServerApplyLoadoutChange(UGSTN_LoadoutComponent* Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
+
+	/**
+	 * Feeds the loadout's compiled table to the simulation: on every machine, when the loadout component applies a loadout (the server
+	 * directly, a client from the OnRep), the table is converted into a table set and registered under the loadout's revision. The set
+	 * takes over at the revision boundary of the combat tick. The component finds a loadout component by itself (on the owner, else on the
+	 * pawn's PlayerState) and binds it; call this to bind one explicitly. Binding the same component twice does nothing
+	 */
+	void BindLoadoutComponent(UGSTN_LoadoutComponent* Loadout);
+
+	/** The stats effect entries of a resolved loadout's weapons, in loadout order (a weapon without a stats effect leaves its Effect empty) */
+	static TArray<FGSTN_WeaponStatsEntry> BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved);
+
 protected:
 	virtual void InitializeNetworkPredictionProxy() override;
 
@@ -233,6 +295,43 @@ private:
 	void CompileInput();
 
 	void BindAbilitySystem();
+
+	UFUNCTION()
+	void HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision);
+
+	/** Looks for the loadout component to bind, a few times a second, until one is bound (the PlayerState and its component arrive after BeginPlay on a client) */
+	void PollLoadoutComponent();
+
+	TWeakObjectPtr<UGSTN_LoadoutComponent> BoundLoadout;
+	int32 LoadoutPollTicks = 0;
+
+	/** Server: the simulation frame of the last accepted loadout change, INDEX_NONE before the first (MinFramesBetweenLoadoutChanges) */
+	int32 LastLoadoutChangeFrame = INDEX_NONE;
+
+	/** The tracker of the owner's Mover component, bound on first use; null without a Mover component */
+	UGSTN_MoverSimStateTracker* GetJumpTracker();
+
+	/** The stats and settings the jump state machine reads, from the ability system of the frame being simulated. False without the combat attribute set */
+	bool BuildJumpParams(FGSTN_JumpParams& OutParams) const;
+
+	/** Step 5a of the combat tick: the jump bookkeeping of the frame from the Mover state of the end of the previous one. HeldButtons are the buttons of this frame's command */
+	void StepJump(int32 Frame, uint32 HeldButtons, FGSTN_CombatSyncCore& Core);
+
+	/** Step 5b: a request of this frame that is a jump or a fast fall turns into the state change (take-off, fast fall) */
+	void ApplyJumpRequest(int32 Frame, int32 BindingIndex, FGSTN_CombatSyncCore& Core);
+
+	/** Whether a jump or fast fall binding may be requested now, from the jump state this frame is writing. Other bindings are never refused here */
+	bool IsJumpBindingAllowed(int32 BindingIndex) const;
+
+	/** The movement facts and stats of the frame the tick is on, read once per tick for the gate and the take-off. Rewritten every tick, never state */
+	FGSTN_JumpMoverSample FrameJumpSample;
+	FGSTN_JumpParams FrameJumpParams;
+	bool bFrameJumpValid = false;
+
+	/** The authored gravity next to what the phases wrote over it; configuration mirrored from outside the simulation, see FGSTN_GravityBase */
+	FGSTN_GravityBase GravityBase;
+
+	TWeakObjectPtr<UGSTN_MoverSimStateTracker> JumpTracker;
 
 	/** Queues the stats modifier on Mover once (see bQueueStatsModifier); called from the component tick until it has */
 	void TryQueueStatsModifier();
@@ -243,28 +342,41 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
 
-	// Compiled from the assets once: read-only while simulating, so neither is rolled back
-	FGSTN_CommandTable CommandTable;
+	// Compiled from the assets once: read-only while simulating, so not rolled back
 	FGSTN_ButtonMap ButtonMap;
 
 	/**
-	 * The timeline registry (combat-m3 7.1 "index in the timeline registry"): the timeline ability classes of the command table's
-	 * bindings, in binding order, each once. The index is what the combat sync state stores. Built with the table, identical on
-	 * every machine, read-only while simulating. BindingTimeline[b] is the registry index of binding b (INDEX_NONE for a plain
-	 * ability) and TimelineTier[r] the priority tier of the first command bound to entry r (the running tier of the override rule)
+	 * Everything the loadout decides (command table, timeline registry, tiers, jump roles, weapon stats) lives in table sets, one per
+	 * loadout revision (combat-m3 9, loadout-table-swap-design). The active table is a pure function of the rolled-back state: the set of
+	 * FGSTN_CombatSyncCore::TableRevision, never "the current table" of this component, so a re-simulated frame meets the table it had
+	 * the first time. Revision 0 is the Blueprint's binding set and is pinned; the others are the newest MaxRetainedTableRevisions
 	 */
 	UPROPERTY(Transient)
-	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> TimelineRegistry;
+	TArray<TObjectPtr<UGSTN_CombatTableSet>> TableSets;
 
-	/** The timeline assets and montages of the registry classes, loaded with it and kept alive here: the classes' default objects keep nothing */
+	/** A set with no commands: the table of a closed frame and the answer before any set exists. Never null after BeginPlay */
 	UPROPERTY(Transient)
-	TArray<TObjectPtr<UObject>> TimelineContent;
-	TArray<int16> BindingTimeline;
-	TArray<int32> TimelineTier;
-	TArray<int32> TimelineDefaultOverride;
+	TObjectPtr<UGSTN_CombatTableSet> EmptyTableSet;
 
-	/** The frame data of registry entry Index (its class default), null if the index is not one */
-	const FGSTN_CombatTimelineData* GetRegistryTimeline(int32 Index) const;
+	/** Registers a set without the retention rules of RegisterTableSet's caller side (BeginPlay's revision 0) and loads what the registry classes need */
+	void AdoptTableSet(UGSTN_CombatTableSet* Set);
+
+	/** The tables of the frame being simulated, set at the top of every combat tick and read by everything that frame (the ability system's pre-tick included). Rewritten every tick, never state */
+	const UGSTN_CombatTableSet* FrameTables = nullptr;
+
+	/** The set of the previous frame's TableRevision: the registry a CancelTimeline request of a swap frame refers to. Same lifetime as FrameTables */
+	const UGSTN_CombatTableSet* FramePrevTables = nullptr;
+
+	/** Whether the frame ran with the gate closed. Same lifetime as FrameTables */
+	bool bFrameGateClosed = false;
+
+	int32 GateClosedFrames = 0;
+
+	/** The set the frame is on, else the one of the latest state, else the empty one. Never null after BeginPlay */
+	const UGSTN_CombatTableSet& Tables() const;
+
+	/** The frame data of registry entry Index (its class default) of the set, null if the index is not one */
+	static const FGSTN_CombatTimelineData* GetRegistryTimeline(const UGSTN_CombatTableSet& Set, int32 Index);
 
 	/** Scratch of the combat tick, reused every frame (no allocation); the evaluation of the frame the gate and the commit read */
 	FGSTN_TimelineOutput TimelineOutput;

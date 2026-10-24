@@ -107,7 +107,7 @@ namespace
 
 	/** Runs one frame of the simulator on State, with the buttons held as given */
 	FGSTN_InputTickResult RunFrame(FGSTN_InputSimState& State, int32 Frame, uint32 Held, const FMockHost& Host, const FGSTN_CommandTable& Table,
-		const FGSTN_ButtonMap& Buttons, const UGSTN_InputSettings& Settings, uint16 ForcedCommand = 0, FGSTN_SimEventOutbox* Outbox = nullptr)
+		const FGSTN_ButtonMap& Buttons, const UGSTN_InputSettings& Settings, uint16 ForcedCommand = 0, FGSTN_SimEventOutbox* Outbox = nullptr, uint32 ActiveSourceMask = ~0u)
 	{
 		FGSTN_InputCmd Cmd;
 		Cmd.HeldButtons = Held;
@@ -123,6 +123,7 @@ namespace
 		Args.Buttons = &Buttons;
 		Args.Settings = &Settings;
 		Args.Outbox = Outbox;
+		Args.ActiveSourceMask = ActiveSourceMask;
 
 		const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, Host);
 		State = Out;
@@ -633,6 +634,126 @@ bool FGSTN_NPCommandAimTest::RunTest(const FString& Parameters)
 	FGSTN_InputCmd Repeated = With;
 	Repeated.PrepareRepeatedInput();
 	TestTrue(TEXT("a repeated input keeps the aim"), Repeated.bHasAim && Repeated.AimYaw == 12345 && Repeated.AimPitch == 65000);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPSourceFilterTest, "GSTNInput.NP.Table.SourceFilterActiveOnly", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPSourceFilterTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_CommandBindingSet> Set = MakeBindingSet();
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeNPSettings();
+	FGSTN_CommandTable Table = Set->BuildTable();
+	Table.Bindings[0].SourceMask = 2;	// the airborne binding belongs to source bit 1
+	Table.Bindings[1].SourceMask = 1;	// the plain one to source bit 0
+	const FGSTN_ButtonMap Buttons(TArray<FGameplayTag>{ TestButtonA.GetTag() });
+	FMockHost Host;
+	Host.ContextTags.AddTag(GSTNInputTags::Context_Airborne);
+	TestTrue(TEXT("the table has masks"), Table.HasSourceMasks());
+
+	FGSTN_InputSimState Plain;
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		RunFrame(Plain, Frame, 0, Host, Table, Buttons, *Settings, 0, nullptr, 1);
+	}
+	TestEqual(TEXT("only the plain source is active: its binding, although the context favours the other"),
+		RunFrame(Plain, 10, 1, Host, Table, Buttons, *Settings, 0, nullptr, 1).BindingIndex, 1);
+
+	FGSTN_InputSimState Air;
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		RunFrame(Air, Frame, 0, Host, Table, Buttons, *Settings, 0, nullptr, 3);
+	}
+	TestEqual(TEXT("both active: the more demanding airborne binding wins as before"),
+		RunFrame(Air, 10, 1, Host, Table, Buttons, *Settings, 0, nullptr, 3).BindingIndex, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPInactiveCommandTest, "GSTNInput.NP.Table.InactiveCommandDoesNotReservePress", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPInactiveCommandTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_CommandBindingSet> Set = MakeBindingSet();
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeNPSettings();
+	FGSTN_CommandTable Table = Set->BuildTable();
+	Table.Bindings[0].SourceMask = 4;
+	Table.Bindings[1].SourceMask = 4;
+	const FGSTN_ButtonMap Buttons(TArray<FGameplayTag>{ TestButtonA.GetTag() });
+	FMockHost Host;
+
+	TArray<const FGSTN_InputSlotSpec*> Slots;
+	TArray<int32> Commands;
+	Table.BuildCandidates(1, Slots, Commands);
+	TestEqual(TEXT("a command with no active binding is not a candidate"), Slots.Num(), 0);
+
+	FGSTN_InputSimState State;
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		RunFrame(State, Frame, 0, Host, Table, Buttons, *Settings, 0, nullptr, 1);
+	}
+	TestFalse(TEXT("the press of an inactive command starts nothing"), RunFrame(State, 10, 1, Host, Table, Buttons, *Settings, 0, nullptr, 1).HasRequest());
+	TestTrue(TEXT("and was not consumed: once the source turns active the held press still comes out inside its buffer"),
+		RunFrame(State, 11, 1, Host, Table, Buttons, *Settings, 0, nullptr, 4).HasRequest());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPZeroMaskTest, "GSTNInput.NP.Table.ZeroMaskAlwaysActive", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPZeroMaskTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_CommandBindingSet> Set = MakeBindingSet();
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeNPSettings();
+	FGSTN_CommandTable Table = Set->BuildTable();
+	Table.Bindings[1].SourceMask = 8;	// one masked binding makes the table masked; the other binding keeps mask 0
+	Table.Bindings[0].SourceMask = 0;
+	const FGSTN_ButtonMap Buttons(TArray<FGameplayTag>{ TestButtonA.GetTag() });
+	FMockHost Host;
+	Host.ContextTags.AddTag(GSTNInputTags::Context_Airborne);
+
+	FGSTN_InputSimState State;
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		RunFrame(State, Frame, 0, Host, Table, Buttons, *Settings, 0, nullptr, 0);
+	}
+	TestEqual(TEXT("a binding with mask 0 applies whatever the active mask"), RunFrame(State, 10, 1, Host, Table, Buttons, *Settings, 0, nullptr, 0).BindingIndex, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPFirstActiveSlotTest, "GSTNInput.NP.Table.FirstActiveBindingSlotRanks", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPFirstActiveSlotTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_CommandBindingSet> Set = MakeBindingSet();
+	FGSTN_CommandTable Table = Set->BuildTable();
+	const FGSTN_InputSlotSpec Own;
+	Table.Bindings[0].SourceMask = 2;
+	Table.Bindings[0].Slot = &Own;
+	Table.Bindings[1].SourceMask = 1;
+
+	TArray<const FGSTN_InputSlotSpec*> Slots;
+	TArray<int32> Commands;
+	Table.BuildCandidates(3, Slots, Commands);
+	TestTrue(TEXT("the first active binding's own slot ranks the command"), Slots.Num() == 1 && Slots[0] == &Own);
+
+	Slots.Reset();
+	Commands.Reset();
+	Table.BuildCandidates(1, Slots, Commands);
+	TestTrue(TEXT("with that binding inactive the command's slot does"), Slots.Num() == 1 && Slots[0] == Table.Commands[0].Slot && Commands[0] == 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPLegacyTableTest, "GSTNInput.NP.Table.LegacyTableUnchanged", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPLegacyTableTest::RunTest(const FString& Parameters)
+{
+	const TStrongObjectPtr<UGSTN_CommandBindingSet> Set = MakeBindingSet();
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeNPSettings();
+	const FGSTN_CommandTable Table = Set->BuildTable();
+	const FGSTN_ButtonMap Buttons(TArray<FGameplayTag>{ TestButtonA.GetTag() });
+	FMockHost Host;
+	TestFalse(TEXT("a table built from a binding set has no masks"), Table.HasSourceMasks());
+
+	FGSTN_InputSimState State;
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		RunFrame(State, Frame, 0, Host, Table, Buttons, *Settings, 0, nullptr, 0);
+	}
+	TestEqual(TEXT("the active mask is ignored and the precomputed candidates are used"), RunFrame(State, 10, 1, Host, Table, Buttons, *Settings, 0, nullptr, 0).BindingIndex, 1);
 	return true;
 }
 

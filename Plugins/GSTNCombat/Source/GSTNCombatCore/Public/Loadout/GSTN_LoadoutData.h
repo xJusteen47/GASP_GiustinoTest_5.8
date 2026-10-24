@@ -64,8 +64,14 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutData
 {
 	GENERATED_BODY()
 
-	/** Version written by Serialize */
-	static constexpr int32 SaveVersion = 1;
+	/** Version written by Serialize (2 added the extension block; 1 is still read) */
+	static constexpr int32 SaveVersion = 2;
+
+	/** Version of the extension block layout written by this build. A block of a newer layout is carried unread */
+	static constexpr uint8 ExtensionLayoutVersion = 0;
+
+	/** Largest extension payload a stream may carry */
+	static constexpr int32 MaxExtensionBytes = 1024;
 
 	/** Largest list or map a stream may carry */
 	static constexpr int32 MaxEntries = 64;
@@ -94,6 +100,13 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout", meta = (AllowedTypes = "GSTN_Skin"))
 	FPrimaryAssetId Skin;
 
+	/**
+	 * Reserved for typed extensions of optional plugins (M11): the payload that follows the extension layout version at the end of
+	 * both serializers. Empty today and written as such; a stream that carries bytes (a newer build) is read into this array and
+	 * written back unchanged, so a relay or a save/load cycle never drops them. Not part of the equality of two loadouts.
+	 */
+	TArray<uint8> ReservedExtension;
+
 	/** Wire format of a request or an applied loadout */
 	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
 
@@ -104,7 +117,7 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutData
 	bool operator!=(const FGSTN_LoadoutData& Other) const { return !(*this == Other); }
 
 private:
-	bool SerializeInternal(FArchive& Ar);
+	bool SerializeInternal(FArchive& Ar, bool bWithExtension);
 };
 
 template <>

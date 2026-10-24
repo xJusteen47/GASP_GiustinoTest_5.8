@@ -15,6 +15,7 @@ namespace GSTNCombatTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_TimelineStarted, "Combat.Event.TimelineStarted", "A combat timeline started. Published once by the combat tick on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_TimelineFinished, "Combat.Event.TimelineFinished", "A combat timeline finished or ended. Published once by the combat tick on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_WeaponSwitched, "Combat.Event.WeaponSwitched", "The active weapon changed. Published once by the combat tick on the authority");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_LoadoutSwapped, "Combat.Event.LoadoutSwapped", "The combat simulation swapped to a new loadout table (the boundary frame). Published once by the combat tick on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_SuperUsed, "Combat.Event.SuperUsed", "A super was used. Published once by the combat tick on the authority");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Command, "Combat.Source.Command", "A command started the timeline. On the TimelineStarted event");
@@ -41,7 +42,7 @@ namespace GSTNCombatTags
 			Ability_Timeline, Ability_AwaitingAdoption,
 			Lock_Movement,
 			Weapon_Role_Primary, Weapon_Role_Support,
-			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_SuperUsed,
+			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_LoadoutSwapped, Event_SuperUsed,
 			Source_Command, Source_Forced, Source_Adopted,
 			Hurtbox_Head, Hurtbox_Torso, Hurtbox_Arm, Hurtbox_Leg, Hurtbox_Hand, Hurtbox_Foot,
 			SetByCaller_MeterCost,

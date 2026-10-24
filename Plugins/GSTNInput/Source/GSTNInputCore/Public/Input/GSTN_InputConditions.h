@@ -159,6 +159,13 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition_Release : public FGSTN_InputCondit
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Release", meta = (ClampMin = "0"))
 	int32 MinHeldFrames = 0;
 
+	/**
+	 * The press must have lasted at most this many frames (a tap). INDEX_NONE = no upper bound. A tap slot (Max = N - 1) and a hold
+	 * slot (Min = N) on the same button never match the same release, so a long press cannot also fire the tap
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Release", meta = (ClampMin = "-1"))
+	int32 MaxHeldFrames = INDEX_NONE;
+
 	virtual bool Matches(const FGSTN_ConditionContext& Ctx, int32 AnchorFrame, FGSTN_ConditionResult& Out) const override;
 	virtual bool IsAnchorCondition() const override { return true; }
 	virtual int32 GetSpecificity() const override { return 10; }

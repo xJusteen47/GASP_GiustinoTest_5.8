@@ -797,7 +797,9 @@ void UNpAbilitySystemComponent::FinalizeSmoothingFrame(const FAbilitySimSyncStat
 void UNpAbilitySystemComponent::InitializeSimulationState(FAbilitySimSyncState* OutSync, FAbilitySimAuxState* OutAux)
 {
 	//This is the function that will initialize the ability system component data.
-	for (int32 i=0; i < DefaultAbilities.Num(); ++i)
+	// GiveAbility refuses (and logs an error for each one) when the owner is not authoritative: a proxy gets its abilities with the state
+	const bool bGrantDefaults = IsOwnerActorAuthoritative();
+	for (int32 i=0; bGrantDefaults && i < DefaultAbilities.Num(); ++i)
 	{
 		if (DefaultAbilities[i])
 		{

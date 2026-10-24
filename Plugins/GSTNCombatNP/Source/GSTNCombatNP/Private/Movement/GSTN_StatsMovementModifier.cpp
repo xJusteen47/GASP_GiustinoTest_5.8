@@ -9,6 +9,7 @@
 #include "GSTN_CombatTags.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "MoverComponent.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 #include "Stats/GSTN_StatsScaling.h"
 
 namespace
@@ -89,6 +90,12 @@ void FGSTN_StatsMovementModifier::OnPreMovement(UMoverComponent* MoverComp, cons
 	if (ASC && ResolveSpeedFactor(*ASC, Factor))
 	{
 		ApplySpeedFactor(*MoverComp, Factor);
+	}
+
+	// The gravity phase of the jump state of this frame (the combat model ticked before Mover): hold, cut, fall, fast fall
+	if (UGSTN_CombatSimComponent* Combat = MoverComp->GetOwner() ? MoverComp->GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr)
+	{
+		Combat->ApplyJumpGravity(*MoverComp, TimeStep.StepMs * 0.001);
 	}
 }
 

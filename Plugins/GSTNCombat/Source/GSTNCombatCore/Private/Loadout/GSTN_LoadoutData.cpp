@@ -9,17 +9,17 @@ namespace
 	 * Reads or writes a list length. Bounded on read, and on write too: a longer list writes its first MaxEntries entries (the
 	 * caller loops over Count, not over the container), so a writer can never produce a stream its own reader rejects.
 	 */
-	bool SerializeCount(FArchive& Ar, int32& Count)
+	bool SerializeCount(FArchive& Ar, int32& Count, int32 Max = FGSTN_LoadoutData::MaxEntries)
 	{
 		if (Ar.IsSaving())
 		{
-			Count = FMath::Min(Count, FGSTN_LoadoutData::MaxEntries);
+			Count = FMath::Min(Count, Max);
 		}
 		uint32 Value = static_cast<uint32>(Count);
 		Ar.SerializeIntPacked(Value);
 		if (Ar.IsLoading())
 		{
-			if (Value > static_cast<uint32>(FGSTN_LoadoutData::MaxEntries))
+			if (Value > static_cast<uint32>(Max))
 			{
 				Count = 0;
 				return false;
@@ -77,7 +77,7 @@ namespace
 
 bool FGSTN_LoadoutData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
-	bOutSuccess = SerializeInternal(Ar);
+	bOutSuccess = SerializeInternal(Ar, true);
 	return true;
 }
 
@@ -92,14 +92,14 @@ bool FGSTN_LoadoutData::Serialize(FArchive& Ar)
 		Ar.SetError();
 		return true;
 	}
-	if (!SerializeInternal(Ar))
+	if (!SerializeInternal(Ar, Version >= 2))
 	{
 		Ar.SetError();
 	}
 	return true;
 }
 
-bool FGSTN_LoadoutData::SerializeInternal(FArchive& Ar)
+bool FGSTN_LoadoutData::SerializeInternal(FArchive& Ar, bool bWithExtension)
 {
 	if (Ar.IsLoading())
 	{
@@ -180,6 +180,26 @@ bool FGSTN_LoadoutData::SerializeInternal(FArchive& Ar)
 	}
 
 	SerializeAssetId(Ar, Skin);
+
+	if (bWithExtension)
+	{
+		// Layout version, payload length, payload. A reader that does not know the layout keeps the payload as it is
+		uint8 Layout = ExtensionLayoutVersion;
+		Ar << Layout;
+		int32 ExtensionBytes = ReservedExtension.Num();
+		if (!SerializeCount(Ar, ExtensionBytes, MaxExtensionBytes))
+		{
+			return false;
+		}
+		if (Ar.IsLoading())
+		{
+			ReservedExtension.SetNumUninitialized(ExtensionBytes);
+		}
+		if (ExtensionBytes > 0)
+		{
+			Ar.Serialize(ReservedExtension.GetData(), ExtensionBytes);
+		}
+	}
 	return !Ar.IsError();
 }
 

@@ -353,7 +353,38 @@ def configure_pie(mode='listen', clients=2):
     return result
 
 
-def setup_editor(enable=True, mode='listen', clients=2):
+_pawn_override = {'prev': None}
+
+
+def _find_blueprint(name):
+    """Soft path ('/Game/.../Name.Name') of the Blueprint asset called `name`, searched through the asset registry; None when there is none."""
+    for a in unreal.AssetRegistryHelpers.get_asset_registry().get_assets_by_path('/Game', recursive=True):
+        if str(a.asset_name) == name and 'Blueprint' in str(a.asset_class_path.asset_name):
+            return str(a.package_name) + '.' + name
+    return None
+
+
+def set_pawn_override(pawn=None):
+    """Swaps the default pawn class of GM_GASNPPTest in memory (never saved) for the Blueprint called `pawn` (e.g. 'SandboxCharacter_Mover'),
+    resolved by soft path: no Blueprint is edited. None restores the class that was replaced. The scenarios that sample the test component
+    (_Run) need the harness pawn: use this for log based scenarios such as slide_jump(bare=True)."""
+    gm_class = unreal.load_asset('/Game/GASNPPTest/GM_GASNPPTest').generated_class()
+    cdo = unreal.get_default_object(gm_class)
+    if pawn is None:
+        if _pawn_override['prev'] is not None:
+            cdo.set_editor_property('default_pawn_class', _pawn_override['prev'])
+            _pawn_override['prev'] = None
+        return 'pawn restored'
+    path = _find_blueprint(pawn)
+    if path is None:
+        raise RuntimeError(f'no Blueprint called {pawn} under /Game')
+    if _pawn_override['prev'] is None:
+        _pawn_override['prev'] = cdo.get_editor_property('default_pawn_class')
+    cdo.set_editor_property('default_pawn_class', unreal.load_object(None, path + '_C'))
+    return f'pawn class {path}_C'
+
+
+def setup_editor(enable=True, mode='listen', clients=2, pawn=None):
     """Temporary editor-only setup (never saved): test GameMode override on the open level, PIE settings for `mode` ('listen' =
     primary, host + `clients` clients; 'dedicated' = secondary check), no background CPU throttling. enable=False restores all."""
     w = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
@@ -361,6 +392,7 @@ def setup_editor(enable=True, mode='listen', clients=2):
     w.get_world_settings().set_editor_property('default_game_mode', unreal.load_asset(gm).generated_class())
     perf = unreal.get_default_object(unreal.load_class(None, '/Script/UnrealEd.EditorPerformanceSettings'))
     perf.set_editor_property('bThrottleCPUWhenNotForeground', not enable)
+    set_pawn_override(pawn if enable else None)
     if enable:
         pie = configure_pie(mode, clients)
     else:
@@ -386,7 +418,7 @@ def server_remove(player_key, effect_class_name):
 
 def scenario_accounting(client=2, player_key=None):
     """No regen: two successful dashes (+1 blocked by cooldown) and a buff, with forced rollbacks in between (client >= 1).
-    Expected final: Stamina 50, Health 80 (from 50), no tags."""
+    Expected final: Stamina 50, no tags (Health was 100 in the C19 run; this text used to say 80), authority and owner equal."""
     player_key = player_key or key_of_player(client)
     steps = [
         (0.0, lambda: ('server removes regen', server_remove(player_key, 'GSTN_GE_StaminaRegen'))),
@@ -710,7 +742,7 @@ def _tick_key(stamp):
 _MODEL_MARKERS = (('[MoverDefaultSyncState]', 'mover'), ('Current period Time', 'asc'), ('Active Mappings', 'asc'), ('History:', 'combat'))
 
 
-def report_reconciles(since=0):
+def report_reconciles(since=0, ignore_own_changes=True):
     """Reconciles in the editor log after `since` (see mark_log): returns a dict and logs a summary.
     unexplained = state mismatches not on the tick of an offset change, with the model each one came from in
     unexplained_by_model. unexplained_ours leaves out the Mover model (position corrections under network lag are the
@@ -745,10 +777,14 @@ def report_reconciles(since=0):
         offset = re.search(r'Offset: (\d+)\.', message)
         return (_tick_key(stamp), offset.group(1) if offset else None) in offset_frames
 
-    unexplained = [x for x in mismatches if not _on_offset_change(*x)]
+    def _own_change(message):
+        recv = re.search(r'Recv Frame: (\d+)', message)
+        return bool(ignore_own_changes and recv and any(f <= int(recv.group(1)) <= f + OWN_CHANGE_FRAMES for f in _server_changes))
+
+    unexplained = [x for x in mismatches if not _on_offset_change(*x) and not _own_change(x[1])]
     by_model = {}
     for x, model in zip(mismatches, models):
-        if not _on_offset_change(*x):
+        if not _on_offset_change(*x) and not _own_change(x[1]):
             by_model[model or 'unknown'] = by_model.get(model or 'unknown', 0) + 1
     per_second = {}
     for stamp, _ in mismatches:
@@ -826,13 +862,14 @@ class _Run:
     state change lands on, and each scenario asserts a positive effect (tag / cooldown / stamina) before it asserts an absence,
     so it cannot pass vacuously. Verdict: unreal.log "PASS"/"FAIL" line, also in last_checks()."""
 
-    def __init__(self, name, client, extra=None, judge_reconciles=True):
+    def __init__(self, name, client, extra=None, judge_reconciles=True, sample=True):
         """extra: more sampled copies as [(label, world_index, pawn_key)]; their samples are read like 'srv' / 'cli' (spike_stats uses
         it for the second pawn). judge_reconciles=False: the spike scenarios create reconciles on purpose (a grant, an unpredicted
         effect) and judge them per window themselves, so the whole-run 'no unexplained reconciles' check is left out."""
-        self.name, self.client, self.key = name, client, key_of_player(client)
+        self.name, self.client, self.sample = name, client, sample
+        self.key = key_of_player(client) if sample else None
         self.extra, self.judge_reconciles = list(extra or []), judge_reconciles
-        self.results, self.samples, self.handle = [], [], None
+        self.results, self.samples, self.sim, self.handle = [], [], [], None
         self.rb0 = _total_rollbacks()
         self.log_mark = None
         try:
@@ -840,12 +877,15 @@ class _Run:
         except Exception as e:
             self.note(f'log not readable ({e}): reconcile check skipped')
         self.t0 = time.time()
+        _last_run['obj'] = self    # for post-mortems of a failed check (samples)
         self.handle = unreal.register_slate_post_tick_callback(self._tick)
 
     def now(self):
         return time.time() - self.t0
 
     def _tick(self, _dt):
+        if not self.sample:
+            return
         try:
             ws = worlds()
             s = {'t': self.now()}
@@ -858,26 +898,49 @@ class _Run:
                 s[side] = {'tags': set(v.get('tags', [])), 'stamina': v['attributes'].get('Stamina'), 'cd': dict(v['cooldowns']),
                            'mode': v.get('mode'), 'req': tuple((v.get('combat') or {}).get('request', (0, -1))),
                            'loc': tuple(v['location']), 'vel': tuple(v.get('velocity', (0, 0, 0))), 'attr': dict(v['attributes']),
-                           'probe': v.get('probe') or {}}
+                           'probe': v.get('probe') or {}, 'jump': (v.get('combat') or {}).get('jump') or {},
+                           'intl': bool((v.get('combat') or {}).get('inTimeline', False))}
+            self._add_sim_samples(ws, s)
             self.samples.append(s)
+            self.sim.sort(key=lambda x: x['t'])
         except Exception:
             pass
+
+    def _add_sim_samples(self, ws, editor_sample):
+        """Adds one entry to self.sim per simulation tick the pawn ran since the last editor tick (UGSTN_GASNPPTestComponent.DrainSimHistory),
+        so heights, speeds and tag spans are judged on the simulation tick and not on how many sim steps one editor frame held. An entry
+        holds only what the simulation owns (loc, vel, mode, tags) and its sim time 'ms' (exact: use differences of it for durations); 't'
+        is this tick's time minus the sim time still to come (the newest sim tick is 'now'), good to ~one editor tick. Resimulated ticks
+        are in it too. Editor-tick fields (stamina, cooldowns, combat) stay in self.samples."""
+        for side, wi, key in (('srv', 0, self.key), ('cli', self.client, self.key), *self.extra):
+            c, base = comps(ws[wi]).get(key), editor_sample.get(side)
+            if c is None or base is None:
+                continue
+            ticks = json.loads(c.drain_sim_history())
+            if not ticks:
+                continue
+            newest = ticks[-1]['t']
+            for e in ticks:
+                self.sim.append({'t': editor_sample['t'] - (newest - e['t']) / 1000.0, side: {'ms': e['t'], 'tags': set(e['tags']), 'loc': tuple(e['loc']),
+                                                                                              'vel': tuple(e['vel']), 'mode': e['mode']}})
 
     def run(self, steps):
         """Restarts the clock and runs the timeline; the last step must be finish()."""
         self.t0 = time.time()
         self.samples.clear()
+        self.sim.clear()
         run_timeline(steps)
 
     # -- queries over the samples
-    def _win(self, side, t0, t1):
-        return [s[side] for s in self.samples if t0 <= s['t'] <= t1 and s.get(side)]
+    def _win(self, side, t0, t1, sim=False):
+        """Samples of `side` in [t0, t1]: the editor ticks, or with sim=True the simulation ticks (loc / vel / mode / tags / ms only)."""
+        return [s[side] for s in (self.sim if sim else self.samples) if t0 <= s['t'] <= t1 and s.get(side)]
 
     def saw_tag(self, tag, t0, t1, side='srv'):
-        return any(tag in s['tags'] for s in self._win(side, t0, t1))
+        return any(tag in s['tags'] for s in self._win(side, t0, t1, sim=True))
 
     def held_tag(self, tag, t0, t1, side='srv'):
-        w = self._win(side, t0, t1)
+        w = self._win(side, t0, t1, sim=True)
         return bool(w) and all(tag in s['tags'] for s in w)
 
     def saw_cooldown(self, name, t0, t1, side='srv'):
@@ -1160,8 +1223,8 @@ def scenario_camera_aim(client=1, yaw=123.0, pitch=-20.0, stance_button='Special
 def _tag_span(run, side, tag, t0, t1):
     """(first, last) sample times in [t0, t1] at which `side` owned `tag`, None if never. The server's copy lags the client's
     clock by the input lead, so the checks of timeline_cancel compare durations and order, never absolute times."""
-    ts = [s['t'] for s in run.samples if t0 <= s['t'] <= t1 and s.get(side) and tag in s[side]['tags']]
-    return (ts[0], ts[-1]) if ts else None
+    ts = [s[side]['ms'] / 1000.0 for s in run.sim if t0 <= s['t'] <= t1 and s.get(side) and tag in s[side]['tags']]
+    return (min(ts), max(ts)) if ts else None
 
 
 def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Special'):
@@ -1173,7 +1236,7 @@ def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Sp
             well before its natural end (the replaced timeline is cancelled)
       2.0s  cancel window: attack tap, the stance held 0.17 s later (frame ~10, in [8, 14)) -> Stance comes and Attacking ends before 0.28 s
       3.5s  not cancellable: attack tap, a second attack tap 0.05 s later (same tier, before the first actionable frame) -> Attacking lasts
-            its natural 0.28 to 0.38 s (a restart would make it 0.42 s or more)
+            its natural 0.28 to 0.38 s (checked from 0.25: a sample is quantised by the editor tick) (a restart would make it 0.42 s or more)
     Also: no unexplained reconciles."""
     _require_test_config(client)
     attack, stance = button_mask(attack_button), button_mask(stance_button)
@@ -1186,7 +1249,7 @@ def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Sp
             att = _tag_span(run, side, TAG_ATTACKING, a0, a1)
             if att is None:
                 return False, f'{side}: Attacking never seen'
-            dur = att[1] - att[0] + 0.04      # one sample of resolution
+            dur = att[1] - att[0] + 0.02      # one sim tick of resolution
             ok = lo <= dur <= hi
             detail = f'{side}: Attacking {dur:.2f}s (want {lo}..{hi})'
             if with_stance:
@@ -1212,8 +1275,8 @@ def scenario_timeline_cancel(client=1, attack_button='Attack', stance_button='Sp
         # case 3: not cancellable by the same tier
         (3.5, lambda: ('attack', combat_tap(client, attack))),
         (3.55, lambda: ('second attack (same tier, before the first actionable frame)', combat_tap(client, attack))),
-        (4.6, run.at('no cancel: server', case('', 3.4, 4.6, 'srv', 0.28, 0.38, False))),
-        (4.6, run.at('no cancel: client', case('', 3.4, 4.6, 'cli', 0.28, 0.38, False))),
+        (4.6, run.at('no cancel: server', case('', 3.4, 4.6, 'srv', 0.25, 0.38, False))),
+        (4.6, run.at('no cancel: client', case('', 3.4, 4.6, 'cli', 0.25, 0.38, False))),
         (4.7, run.finish()),
     ]
     run.run(steps)
@@ -1623,9 +1686,36 @@ def abilities_startup_result():
 # (last_checks() / the log): they share the probe abilities and the editor timeline. Judge them at m.net(60, 15, 0): packet loss
 # causes reconciles of its own (see "Known exception" above). Each scenario takes the world index of the pawn it drives
 # (default 1); index 0 is the host's own pawn in listen mode (no reconcile there, the owner is the authority).
+# Server frames at which a scenario made a deliberate server-only change (a grant, a revoke, a kit or loadout change): each is an out-of-band
+# change of the ability system, so the owner reconciles once, by design. report_reconciles does not count a mismatch whose received frame lies in
+# [frame, frame + OWN_CHANGE_FRAMES] (about 1.5 s: lag and the resend) as unexplained; loadout_change judges its own changes separately.
+_server_changes = []
+OWN_CHANGE_FRAMES = 90
+
+
+class _ServerProxy:
+    """The authority's test component; every server_* call it receives is recorded in _server_changes with the server frame."""
+    def __init__(self, comp):
+        self._c = comp
+
+    def __getattr__(self, name):
+        attr = getattr(self._c, name)
+        if name.startswith('server_') and callable(attr):
+            def call(*args, **kwargs):
+                try:
+                    frame = json.loads(self._c.get_state_snapshot()).get('serverFrame')
+                except Exception:
+                    frame = None
+                if frame is not None:
+                    _server_changes.append(frame)
+                return attr(*args, **kwargs)
+            return call
+        return attr
+
+
 def _srv(key):
     """Test component of pawn `key` on world 0 (the host or the dedicated server): the one whose Server* functions run."""
-    return comps(worlds()[0])[key]
+    return _ServerProxy(comps(worlds()[0])[key])
 
 
 def _view(world_index, key):
@@ -1707,7 +1797,7 @@ def scenario_spike_grants(client=1, count=40, bound=2.0):
     bytes with `stat net` in the owner's world (Out Bytes) before and after the grant, and the cost in Insights."""
     run = _Run('spike_grants', client, judge_reconciles=False)
     key, others, marks, st = run.key, _others(client), {}, {}
-    want = (0, 0) if client == 0 else (1, 2)
+    want = (0, 0) if client == 0 else (0, 2)  # the owner's cost of an out-of-simulation grant: C19 measured 0 (the fork no longer mismatches on it), the spike's 1..2 stays the bound
     half = count // 2
 
     def owns(n):
@@ -1776,13 +1866,13 @@ def scenario_spike_grants(client=1, count=40, bound=2.0):
 
 
 def _horizontal_peak(run, side, t0, t1):
-    return max((sum(x * x for x in s['vel'][:2]) ** 0.5 for s in run._win(side, t0, t1)), default=0.0)
+    return max((sum(x * x for x in s['vel'][:2]) ** 0.5 for s in run._win(side, t0, t1, sim=True)), default=0.0)
 
 
 def _apex(run, side, t_base, t0, t1):
     """Highest z in [t0, t1] minus the z of the last sample before t_base."""
-    before = [s[side]['loc'][2] for s in run.samples if s['t'] < t_base and s.get(side)]
-    zs = [s['loc'][2] for s in run._win(side, t0, t1)]
+    before = [s[side]['loc'][2] for s in run.sim if s['t'] < t_base and s.get(side)]
+    zs = [s['loc'][2] for s in run._win(side, t0, t1, sim=True)]
     return (max(zs) - before[-1]) if before and zs else 0.0
 
 
@@ -2053,3 +2143,1251 @@ def scenario_spike_triggers(client=1, fork_patched=True, resim_frames=15):
     ]
     run.note('forced reconciles use np.ForceReconcile (one global cvar): the re-fire bound is 1..2 per forced reconcile')
     run.run(steps)
+
+
+
+# ---- C13 jump scenarios (combat-m3 7.9). The test pawn is given the platform jump kit by the harness (server_set_jump_kit), which the test binding set
+# binds to Command.Movement.Jump (Press of Input.Button.Jump) and Command.Movement.FastFall (Press of Input.Button.Crouch).
+
+def _jump_tap(client, hold):
+    """One press of the jump button; with hold > 0 the button then stays held until combat_clear (the caller schedules it)."""
+    mask = button_mask('Jump')
+    combat_tap(client, mask)
+    if hold > 0:
+        combat_hold(client, mask)
+    return f'tap jump, hold {hold}s'
+
+
+def _apex_up(run, side, t_base, t0, t1, up=(0.0, 0.0, 1.0)):
+    """Highest point along `up` reached in [t0, t1], measured from the last sample before t_base: (height, displacement vector at the apex)."""
+    before = [s[side]['loc'] for s in run.sim if s['t'] < t_base and s.get(side)]
+    if not before:
+        return 0.0, None
+    b, best, at = before[-1], 0.0, None
+    for s in run._win(side, t0, t1, sim=True):
+        d = tuple(s['loc'][i] - b[i] for i in range(3))
+        h = sum(d[i] * up[i] for i in range(3))
+        if h > best:
+            best, at = h, d
+    return best, at
+
+
+def _extreme_up_speed(run, side, t0, t1, up=(0.0, 0.0, 1.0), lowest=True):
+    speeds = [sum(s['vel'][i] * up[i] for i in range(3)) for s in run._win(side, t0, t1, sim=True)]
+    return (min(speeds) if lowest else max(speeds)) if speeds else 0.0
+
+
+def _jump_field(run, side, field):
+    return (_latest(run, side).get('jump') or {}).get(field)
+
+
+def _both(run, fn):
+    """(ok, text) of fn(side) on the authority ('srv') and the owner ('cli'): both must hold, the text shows both."""
+    a, b = fn('srv'), fn('cli')
+    return bool(a[0] and b[0]), f'srv: {a[1]}; cli: {b[1]}'
+
+
+def _field_is(run, field, want, label, span=1.0):
+    """Timeline check: a field of the jump state was `want` on the authority and on the owner at some sample of the last `span` seconds. The
+    authority simulates a frame later in wall time than the owner (input travel), so a point test would compare different frames."""
+    def f():
+        t1 = run.now()
+        def side(sd):
+            seen = [s[sd].get('jump', {}).get(field) for s in run.samples if t1 - span <= s['t'] <= t1 and s.get(sd)]
+            return want in seen, f'{field} seen {sorted(set(map(str, seen)))} (want {want})'
+        return _both(run, side)
+    return run.at(label, f)
+
+
+def _field_never(run, field, bad, label, t0, t1):
+    """Timeline check: a field of the jump state was never `bad` on either side in [t0, t1] (scenario time, so mind the authority's delay)."""
+    def f():
+        def side(sd):
+            hit = [s['t'] for s in run.samples if t0 <= s['t'] <= t1 and s.get(sd) and s[sd].get('jump', {}).get(field) == bad]
+            return not hit, f'{field} == {bad} at {hit[:1]}'
+        return _both(run, side)
+    return run.at(label, f)
+
+
+def _apex_pair(run, store, label, t_base, t0, t1, up=(0.0, 0.0, 1.0), tol=1.0, floor=20.0):
+    """Timeline check: the apex height of this jump on the authority and on the owner, kept in store[label], within `tol` cm of each other."""
+    def f():
+        hs, ds = _apex_up(run, 'srv', t_base, t0, t1, up)
+        hc, dc = _apex_up(run, 'cli', t_base, t0, t1, up)
+        store[label] = (hs, hc, ds, dc)
+        return hs > floor and abs(hs - hc) <= tol, f'{label}: apex srv {hs:.1f} cm, owner {hc:.1f} cm (delta {abs(hs - hc):.2f}, want <= {tol})'
+    return run.at(f'{label}: apex height, authority vs owner', f)
+
+
+def scenario_variable_jump(client=1, holds=(0.0, 0.12, 0.30), spacing=3.0):
+    """C13 variable jump: the longer the jump button is held (anywhere between the minimum hop and MaxJumpHoldFrames) the higher the jump.
+    One jump per hold time, each from standing; judged on the authority and the owner: apex heights strictly increase with the hold time,
+    authority and owner agree within 1 cm, no unexplained reconcile of ours. The hold times are well apart in frames (a hold is quantised by the
+    editor tick that releases it, about one frame): 0.12 s lands between the minimum hop and the cap (0.10 s sometimes gave the apex of a tap, 0.16 s sometimes the cap: the window between 4 and 12 frames is too narrow for a third mid hold), 0.30 s the cap."""
+    run = _Run('variable_jump', client)
+    key, apex = run.key, {}
+    # The server-only grant and revoke of the kit are reconciles of their own (an unpredicted ASC change): the reconcile judgement window is
+    # re-marked after the grant and closed before the revoke.
+    def remark():
+        run.log_mark = mark_log()
+        return 'judge window starts after the grant', True
+    steps = [(0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True))), (1.0, remark)]
+    for i, hold in enumerate(holds):
+        t = 1.5 + i * spacing
+        steps.append((t, lambda hold=hold: ('jump', _jump_tap(client, hold))))
+        if hold > 0:
+            steps.append((t + hold, lambda: ('release', combat_clear(client))))
+        steps.append((t + spacing - 0.3, _apex_pair(run, apex, f'hold {hold}s', t - 0.05, t, t + spacing - 0.3)))
+
+    def increasing():
+        hs = [apex[f'hold {h}s'][0] for h in holds if f'hold {h}s' in apex]
+        return len(hs) == len(holds) and all(b > a + 2.0 for a, b in zip(hs, hs[1:])), 'authority apex heights ' + ', '.join(f'{x:.1f}' for x in hs) + ' (each > the previous + 2 cm)'
+
+    end = 1.5 + len(holds) * spacing
+    steps += [
+        (end, run.at('apex heights strictly increase with the hold time', increasing)),
+        (end + 0.1, run.finish()),
+        (end + 0.2, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
+    ]
+    run.run(steps)
+
+
+
+def scenario_jump_squat(client=1):
+    """C19 jump squat: KIT_Test_Squat binds UGSTN_GA_TestJumpSquat (SquatFrames 6, data on the ability) to the jump command. The ability owns
+    Test.State.JumpSquat from the request to the take-off. Judged on the sim ticks of the authority and the owner: six frames with the tag and no
+    vertical speed in them, the first rising tick comes 7 to 10 ticks after the first tag tick (6 of squat plus the 1 to 4 ticks the velocity sample takes to show a
+    queued impulse; the pure state machine test pins the take-off frame exactly), a second jump press inside the squat is refused (one request only), and both machines agree to a tick."""
+    run = _Run('jump_squat', client, judge_reconciles=False)
+    key, st, marks = run.key, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    tag, jump, frame_ms = 'Test.State.JumpSquat', button_mask('Jump'), 1000.0 / 60.0
+
+    def ticks(side):
+        # one entry per sim tick (a resimulated tick keeps its last version), in sim order
+        by_ms = {x[side]['ms']: x[side] for x in run.sim if 2.0 <= x['t'] <= 4.5 and x.get(side)}
+        return [by_ms[k] for k in sorted(by_ms)]
+
+    def squat_shape(side):
+        def f():
+            w = ticks(side)
+            tagged = [s for s in w if tag in s['tags']]
+            rise = next((s for s in w if s['vel'][2] > 100.0), None)
+            if not tagged or rise is None:
+                return False, f'{side}: tagged ticks {len(tagged)}, rising tick {rise is not None}'
+            flat = all(abs(s['vel'][2]) < 50.0 for s in tagged)
+            delay = w.index(rise) - w.index(tagged[0])
+            return (len(tagged) == 6 and flat and 7 <= delay <= 10), f'{side}: {len(tagged)} tagged ticks (want 6: the ability ends on the take-off frame), flat in the squat {flat}, first tag tick to first rising tick {delay} sim ticks (want 7..10: 6 of squat plus the 1 to 4 sim ticks the velocity sample takes to show the impulse: it moves in steps of 2 to 3 ticks, as after a plain jump)'
+        return run.at(f'squat shape on the {side}', f)
+
+    def same_delay():
+        d = {}
+        for side in ('srv', 'cli'):
+            w = ticks(side)
+            tagged = [i for i, s in enumerate(w) if tag in s['tags']]
+            rise = next((i for i, s in enumerate(w) if s['vel'][2] > 100.0), None)
+            d[side] = (rise - tagged[0]) if tagged and rise is not None else None
+        return d['srv'] is not None and d['cli'] is not None and abs(d["srv"] - d["cli"]) <= 3, f"sim ticks from the request to the first rising tick: authority {d['srv']}, owner {d['cli']} (want within 3: the velocity sample moves in steps of 2 to 3 ticks and the two copies sample on different phases)"
+
+    def same_requests():
+        s, c = run.new_bindings(1.95, 4.4, 'srv'), run.new_bindings(1.95, 4.4, 'cli')
+        return s == c, f'request bindings authority {s}, owner {c} (want equal; the refused press shows in the squat tag count of 6, a second squat would run longer)'
+
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'S', 'KIT_Test_Squat')),
+        (1.8, _c18_accepted(run, st, 'S')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Squat', base + 1, 'Squat kit applied on both, same table')),
+        (2.0, lambda: ('jump', combat_tap(client, jump))),
+        (2.04, lambda: ('second press inside the squat', combat_tap(client, jump))),
+        (4.4, squat_shape('srv')),
+        (4.4, squat_shape('cli')),
+        (4.4, run.at('the squat jump takes off at the same delay (within the sample step) on both', same_delay)),
+        (4.4, run.at('the same requests on both', same_requests)),
+        (4.5, lambda: ('cleanup', combat_clear(client))),
+        (4.6, run.finish()),
+    ]
+    run.run(steps)
+
+def scenario_air_jump_fastfall(client=1):
+    """C13 air jump and fast fall. A: a plain jump (reference apex and fall speed). B: a fast fall request while still rising is refused (no
+    request), one while falling sets the fast fall and the descent is faster than A. C: a jump and an air jump (one used, higher than A), and
+    a second air jump request is refused (none left). Authority and owner agree within 1 cm on every apex."""
+    run = _Run('air_jump_fastfall', client)
+    key, apex = run.key, {}
+    jump, crouch = button_mask('Jump'), button_mask('Crouch')
+    TA, TB, TC = 1.5, 5.0, 8.5
+
+    def refused(t0, t1, label):
+        def f():
+            s, c = run.new_bindings(t0, t1, 'srv'), run.new_bindings(t0, t1, 'cli')
+            return not s and not c, f'requests srv {s} cli {c} (want none)'
+        return run.at(label, f)
+
+    def remark():
+        run.log_mark = mark_log()
+        return 'judge window starts after the grant', True
+
+    def descent(label, t0):
+        """Seconds of sim time from the apex to the landing (z back within 2 cm of the take-off height), on the sim ticks of the authority."""
+        w = [x['srv'] for x in run.sim if t0 <= x['t'] <= t0 + 3.0 and x.get('srv')]
+        z0, top = w[0]['loc'][2], max(range(len(w)), key=lambda i: w[i]['loc'][2])
+        land = next((x['ms'] for x in w[top:] if x['loc'][2] <= z0 + 2.0), None)
+        return None if land is None else (land - w[top]['ms']) / 1000.0
+
+    def faster_fall():
+        a, b = descent('A', TA), descent('B', TB)
+        ok = a is not None and b is not None and b < a - 0.03
+        return ok, f'apex-to-landing time: A {a}, B (fast fall requested while falling) {b} (B must be at least 0.03 s shorter: a time is exact on the sim tick, a landing speed is not)'
+
+    def air_higher():
+        a, c = apex['A'][0], apex['C'][0]
+        return c > a + 30.0, f'apex A {a:.1f}, C (with the air jump) {c:.1f} (C > A + 30)'
+
+    steps = [
+        (0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True))),
+        (1.0, remark),  # the server-only grant / revoke are reconciles of their own: judged after the grant, closed before the revoke
+        # A: a plain jump
+        (TA, lambda: ('A: jump', _jump_tap(client, 0.3))),
+        (TA + 0.3, lambda: ('release', combat_clear(client))),
+        (TA + 3.0, _apex_pair(run, apex, 'A', TA - 0.05, TA, TA + 3.0)),
+        # B: fast fall refused while rising, accepted while falling
+        (TB, lambda: ('B: jump', _jump_tap(client, 0.3))),
+        (TB + 0.3, lambda: ('release', combat_clear(client))),
+        (TB + 0.2, lambda: ('B: fast fall while rising (refused)', combat_tap(client, crouch))),
+        (TB + 0.55, _field_never(run, 'fastFalling', True, 'B: no fast fall while rising', TB, TB + 0.55)),
+        (TB + 0.66, lambda: ('B: fast fall while falling', combat_tap(client, crouch))),
+        (TB + 1.6, _field_is(run, 'fastFalling', True, 'B: fast falling', span=1.0)),
+        (TB + 3.0, run.at('B: the fast fall descent is faster than the plain one', faster_fall)),
+        # C: an air jump, and a second one refused
+        (TC, lambda: ('C: jump', _jump_tap(client, 0.3))),
+        (TC + 0.3, lambda: ('release', combat_clear(client))),
+        (TC + 0.4, lambda: ('C: air jump', combat_tap(client, jump))),
+        (TC + 1.0, _field_is(run, 'airJumpsUsed', 1, 'C: one air jump used', span=0.8)),
+        (TC + 0.7, lambda: ('C: a second air jump (refused)', combat_tap(client, jump))),
+        (TC + 1.2, _field_never(run, 'airJumpsUsed', 2, 'C: never a second air jump', TC, TC + 1.2)),
+        (TC + 3.0, _apex_pair(run, apex, 'C', TC - 0.05, TC, TC + 1.8)),
+        (TC + 3.0, run.at('the air jump goes higher than the plain jump', air_higher)),
+        (TC + 3.8, _field_is(run, 'airJumpsUsed', 0, 'C: landing resets the air jumps', span=0.5)),
+        (TC + 3.9, run.finish()),
+        (TC + 4.0, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
+    ]
+    run.run(steps)
+
+
+def _set_gravity_everywhere(key, accel, enable):
+    """Mover's gravity override on every machine's copy of pawn `key`: it is a component setting, so every copy must hold the same value."""
+    for w in worlds():
+        c = comps(w).get(key)
+        if c is not None:
+            c.set_test_gravity(unreal.Vector(*accel), enable)
+    return f'gravity {accel if enable else "default"} set on {len(worlds())} worlds'
+
+
+def _unit(v):
+    n = sum(x * x for x in v) ** 0.5
+    return tuple(x / n for x in v)
+
+
+def _angle_deg(a, b):
+    import math
+    ua, ub = _unit(a), _unit(b)
+    return math.degrees(math.acos(max(-1.0, min(1.0, sum(x * y for x, y in zip(ua, ub))))))
+
+
+def scenario_tilted_gravity_jump(client=1, tilt_deg=30.0):
+    """C13 under tilted gravity (owner rule 1): gravity 980 cm/s^2 tilted `tilt_deg` from straight down; every "up" is -gravity. A jump, an air jump
+    and a fast fall go along local up: the launch velocity is within 3 degrees of local up, the displacement at the apex is along it, the
+    fast fall descends along it, and authority and owner agree on the apex within 1 cm. The tilt is kept small enough for the world floor to
+    stay walkable under it."""
+    import math
+    t = math.radians(tilt_deg)
+    gravity = (980.0 * math.sin(t), 0.0, -980.0 * math.cos(t))
+    up = _unit(tuple(-g for g in gravity))
+    run = _Run('tilted_gravity_jump', client)
+    key, apex = run.key, {}
+    jump, crouch = button_mask('Jump'), button_mask('Crouch')
+    T = 3.0
+
+    def fast_samples(side, t0, t1, speed):
+        return [s['vel'] for s in run._win(side, t0, t1, sim=True) if sum(x * x for x in s['vel']) > speed ** 2]
+
+    def launch_direction():
+        def f(side):
+            fast = fast_samples(side, T + 0.02, T + 0.7, 200.0)
+            if not fast:
+                return False, 'no fast sample'
+            a = _angle_deg(fast[0], up)
+            return a < 3.0, f'launch velocity {a:.2f} deg from local up'
+        return _both(run, f)
+
+    def displacement_along_up():
+        def f(side):
+            h, d = _apex_up(run, side, T - 0.05, T, T + 2.0, up)
+            if d is None:
+                return False, 'no apex'
+            lateral = sum((d[i] - h * up[i]) ** 2 for i in range(3)) ** 0.5
+            return lateral < 0.08 * h and h > 50.0, f'apex {h:.1f} cm along up, {lateral:.1f} cm sideways of it (want < 8%)'
+        return _both(run, f)
+
+    def descent_along_up():
+        def f(side):
+            fast = fast_samples(side, T + 1.35, T + 2.6, 400.0)
+            if not fast:
+                return False, 'no fast descent sample'
+            a = _angle_deg(fast[0], tuple(-x for x in up))
+            return a < 6.0, f'fast descent {a:.2f} deg from local down'
+        return _both(run, f)
+
+    def standing():
+        def f(side):
+            s = _latest(run, side)
+            return abs(s['vel'][2]) < 20.0 and abs(s['vel'][0]) < 20.0, f'mode {s["mode"]}, velocity {tuple(round(x) for x in s["vel"])}'
+        return _both(run, f)
+
+    steps = [
+        (0.3, lambda: ('grant the jump kit', _srv(key).server_set_jump_kit(True))),
+        (0.6, lambda: ('tilt gravity', _set_gravity_everywhere(key, gravity, True))),
+        (T - 0.5, run.at('standing still under the tilted gravity', standing)),
+        (T, lambda: ('jump', _jump_tap(client, 0.3))),
+        (T + 0.3, lambda: ('release', combat_clear(client))),
+        (T + 0.8, run.at("the launch goes along local up", launch_direction)),
+        (T + 0.45, lambda: ('air jump', combat_tap(client, jump))),
+        (T + 1.0, _field_is(run, 'airJumpsUsed', 1, 'one air jump used')),
+        (T + 1.3, lambda: ('fast fall', combat_tap(client, crouch))),
+        (T + 1.9, _field_is(run, 'fastFalling', True, 'fast falling')),
+        (T + 3.5, _apex_pair(run, apex, 'tilted jump', T - 0.05, T, T + 2.0, up)),
+        (T + 3.5, run.at('the displacement at the apex is along local up', displacement_along_up)),
+        (T + 3.5, run.at('the fast fall descends along local up', descent_along_up)),
+        (T + 3.6, lambda: ('restore gravity', _set_gravity_everywhere(key, gravity, False))),
+        (T + 3.7, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_jump_kit(False)))),
+        (T + 4.7, run.finish()),
+    ]
+    run.note(f'gravity {tuple(round(g, 1) for g in gravity)}, local up {tuple(round(x, 3) for x in up)}')
+    run.run(steps)
+
+
+def scenario_external_launch_jump(client=1, launch_speed=900.0):
+    """C13 external launch (owner rule 2): a launch layered move through the GE path (the Launcher probe ability, triggered by a press of the buff
+    button like the triggered timeline) that is not the combatant's own jump. Judged on the authority and the owner:
+      A (in the air): jump, air jump (none left), the launch refills the air jumps (default rules), the next air jump works again;
+      B (from the ground): the launch ends the coyote window, so a jump request right after leaving the ground is an air jump (airJumpsUsed 1);
+      the launch rises with plain gravity (no hold phase): apex about speed^2 / (2 g), authority and owner within 1 cm."""
+    run = _Run('external_launch_jump', client)
+    key, apex = run.key, {}
+    jump = button_mask('Jump')
+    TA, TB = 1.5, 6.0
+
+    def launch_apex():
+        hs = apex['B'][0]
+        want = launch_speed ** 2 / (2.0 * 980.0)
+        return abs(hs - want) < 0.06 * want, f'apex {hs:.1f} cm, plain gravity predicts {want:.1f}'
+
+    steps = [
+        (0.3, lambda: ('grant the jump kit and the launcher', (_srv(key).server_set_jump_kit(True), _srv(key).server_revoke_probes(), [_srv(key).server_grant_probe(n) for n in ('Launcher', 'TagRaiser')]))),
+        # A: both jumps used, then a launch in the air
+        (TA, lambda: ('A: jump', _jump_tap(client, 0.3))),
+        (TA + 0.3, lambda: ('release', combat_clear(client))),
+        (TA + 0.4, lambda: ('A: air jump', combat_tap(client, jump))),
+        (TA + 0.85, _field_is(run, 'airJumpsUsed', 1, 'A: the air jump is used')),
+        (TA + 0.7, lambda: ('A: a second air jump (refused)', combat_tap(client, jump))),
+        (TA + 0.8, _field_is(run, 'airJumpsUsed', 1, 'A: no air jump left')),
+        (TA + 0.9, lambda: ('A: the launch', press(client, 'buff'))),
+        (TA + 1.1, _field_is(run, 'airJumpsUsed', 0, 'A: the launch refilled the air jumps')),
+        (TA + 1.5, _field_is(run, 'phase', 3, 'A: launched phase (3), plain gravity')),
+        (TA + 1.2, lambda: ('A: air jump again', combat_tap(client, jump))),
+        (TA + 1.4, _field_is(run, 'airJumpsUsed', 1, 'A: the air jump works again after the launch')),
+        (TA + 4.0, _field_is(run, 'airJumpsUsed', 0, 'A: landed, reset')),
+        # B1: a launch from the ground and nothing else: plain gravity all the way
+        (TB, lambda: ('B1: the launch from the ground', press(client, 'buff'))),
+        (TB + 3.0, _apex_pair(run, apex, 'B', TB - 0.05, TB, TB + 2.5)),
+        (TB + 3.1, run.at('the launch rises with plain gravity', launch_apex)),
+        # B2: the same launch, then a jump request right after leaving the ground
+        (TB + 4.0, lambda: ('B2: the launch from the ground', press(client, 'buff'))),
+        (TB + 4.25, lambda: ('B2: jump request in the air', combat_tap(client, jump))),
+        (TB + 4.95, _field_is(run, 'airJumpsUsed', 1, 'B2: the launch ended the coyote window: the jump was an air jump')),
+        (TB + 8.0, lambda: ('cleanup', (combat_clear(client), _srv(key).server_revoke_probes(), _srv(key).server_set_jump_kit(False)))),
+        (TB + 9.0, run.finish()),
+    ]
+    run.run(steps)
+
+
+IA.setdefault('sprint', '/Game/Input/IA_Sprint')
+IA.setdefault('crouch', '/Game/Input/IA_Crouch')
+
+
+def _bare_input(client, action, value=(1.0, 0.0, 0.0), start=True, pulse=False):
+    """Input on a pawn without the test component (SandboxCharacter_Mover through set_pawn_override): the local player's enhanced input
+    subsystem injects the action (UGSTN_TestSlotUtils.inject_input / stop_input)."""
+    pc = unreal.GameplayStatics.get_player_controller(worlds()[client], 0)
+    act = unreal.load_asset(IA[action])
+    utils = unreal.GSTN_TestSlotUtils
+    ok = utils.inject_input(pc, act, unreal.Vector(*value), pulse) if start else utils.stop_input(pc, act)
+    return f'{"start" if start else "stop"} {action}: {ok}'
+
+
+def scenario_slide_jump(client=1, repeats=10, bare=False):
+    """Owner bug report 2026-10-23: sprint, crouch to slide, jump during the slide, and at some point the client is corrected. Repeats the sequence
+    `repeats` times with np.LogReconcileField on and attributes the reconciles of the whole run: mismatches, unexplained of ours, by model
+    (mover / asc / combat) and the logged differing fields (see the lines in the report). Strict check: no unexplained reconcile of ours; the Mover
+    corrections are listed, not judged (the cause is in the Blueprint modes if they show a movement mode / slide state field).
+    bare=True: the pawn is not the harness pawn (set_pawn_override('SandboxCharacter_Mover') before PIE): no sampling, inputs through the
+    player's enhanced input subsystem, the verdict is the reconcile report only."""
+    run = _Run('slide_jump', client, judge_reconciles=False, sample=not bare)
+    if bare:
+        press = lambda c, a: _bare_input(c, a, pulse=True)
+        hold = lambda c, a, v: _bare_input(c, a, v)
+        release = lambda c, a: _bare_input(c, a, start=False)
+    else:
+        from_globals = globals()
+        press, hold, release = from_globals['press'], from_globals['hold'], from_globals['release']
+    marks = {}
+    for w in worlds():
+        unreal.SystemLibrary.execute_console_command(w, 'np.LogReconcileField 1')
+    steps = [(0.5, _mark(run, marks, 'start'))]
+    t = 1.0
+    for i in range(repeats):
+        steps += [
+            (t, lambda: ('walk + sprint', (hold(client, 'move', (0, 1, 0)), hold(client, 'sprint', (1, 0, 0))))),
+            (t + 1.3, lambda: ('crouch: slide', hold(client, 'crouch', (1, 0, 0)))),
+            (t + 1.7, lambda: ('jump during the slide', press(client, 'jump'))),
+            (t + 2.0, lambda: ('release crouch', release(client, 'crouch'))),
+            (t + 2.4, lambda: ('release', (release(client, 'sprint'), release(client, 'move')))),
+        ]
+        t += 3.6
+    def attribute():
+        r = report_reconciles(marks['start']) if marks.get('start') is not None else None
+        if r is None:
+            return False, 'log not readable'
+        run.note(f"reconciles: {r['mismatches']} mismatches, unexplained of ours {r['unexplained_ours']} {r['unexplained_by_model']}, forced {r['forced']}, offset changes {r['offset_changes']}")
+        for line in (r['unexplained_lines'] or [])[:12]:
+            run.note(f'  {line}')
+        return r['unexplained_ours'] == 0, f"{r['unexplained_ours']} unexplained of ours {r['unexplained_by_model']}; mover-side total mismatches {r['mismatches']}"
+    steps += [
+        (t, run.at('no unexplained reconcile of ours over the repeats', attribute)),
+        (t + 0.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+
+# ---- C14 movement kit scenarios (combat-m3 section 3). The harness grants the plugin dash / dodge abilities (server_set_move_kit); the test binding
+# set binds them to Command.Movement.Dash (Press of Input.Button.Sprint), Command.Defence.Dodge (Press of Input.Button.Dodge, ground / air /
+# escape variants by context and tag) and Command.Interact.Grab / PickUp (Release of Input.Button.Interact, tap / hold).
+
+def _kit(key, dash=True, dodge=True, interact=True):
+    return _srv(key).server_set_move_kit(dash, dodge, interact)
+
+
+def _moved(run, side, t_base, t1):
+    """Displacement (x, y, z) of `side` between the last sample before t_base and the latest sample up to t1."""
+    before = [s[side]['loc'] for s in run.sim if s['t'] < t_base and s.get(side)]
+    after = [s[side]['loc'] for s in run.sim if s['t'] <= t1 and s.get(side)]
+    if not before or not after:
+        return None
+    return tuple(after[-1][i] - before[-1][i] for i in range(3))
+
+
+def _norm(v):
+    return sum(x * x for x in v) ** 0.5
+
+
+def _landing_pair(run, store, label, t_base, t1, up=(0.0, 0.0, 1.0), tol=1.0, floor=30.0):
+    """Timeline check: where the move left the pawn (displacement from before t_base), authority vs owner within `tol` cm, and it moved at least `floor`."""
+    def f():
+        ds, dc = _moved(run, 'srv', t_base, t1), _moved(run, 'cli', t_base, t1)
+        if ds is None or dc is None:
+            return False, 'no samples'
+        store[label] = (ds, dc)
+        delta = _norm(tuple(ds[i] - dc[i] for i in range(3)))
+        start = [s['srv'] for s in run.sim if s['t'] < t_base and s.get('srv')][-1]
+        return _norm(ds) > floor and delta <= tol, f'{label}: displacement srv {tuple(round(x, 1) for x in ds)}, owner {tuple(round(x, 1) for x in dc)} (delta {delta:.2f} cm, want <= {tol}, moved >= {floor}; authority from {tuple(round(x) for x in start["loc"])} in {start["mode"]})'
+    return run.at(f'{label}: landing position, authority vs owner', f)
+
+
+def _no_move(run, label, t_base, t1, limit=5.0):
+    """Timeline check: neither copy moved more than `limit` cm between t_base and t1 (a blocked or missing move does nothing)."""
+    def f():
+        ds, dc = _moved(run, 'srv', t_base, t1), _moved(run, 'cli', t_base, t1)
+        if ds is None or dc is None:
+            return False, 'no samples'
+        return _norm(ds) <= limit and _norm(dc) <= limit, f'displacement srv {_norm(ds):.1f} cm, owner {_norm(dc):.1f} cm (want <= {limit})'
+    return run.at(label, f)
+
+
+def _in_timeline_seen(run, label, t0, t1, want=True):
+    def f():
+        def side(sd):
+            seen = any(s['t'] >= t0 and s['t'] <= t1 and s.get(sd) and s[sd].get('intl') for s in run.samples)
+            return seen == want, f'timeline seen {seen} (want {want})'
+        return _both(run, side)
+    return run.at(label, f)
+
+
+def _standing_after(run, label, t):
+    def f():
+        def side(sd):
+            s = _latest(run, sd)
+            return (not s.get('intl')) and abs(s['vel'][2]) < 20.0 and (s['vel'][0] ** 2 + s['vel'][1] ** 2) ** 0.5 < 40.0, f'mode {s.get("mode")}, in timeline {s.get("intl")}, velocity {tuple(round(x) for x in s["vel"])}'
+        return _both(run, side)
+    return run.at(label, f)
+
+
+def scenario_dash(client=1, up=(0.0, 0.0, 1.0), gravity=None, name='dash'):
+    """C14 dash: a press of the sprint button throws the pawn along its facing in the plane perpendicular to local up. Judged on the authority and
+    the owner: the pawn moved, the peak speed is perpendicular to up (within 4 degrees), the timeline ran and ended, and both copies end within 1 cm."""
+    run = _Run(name, client)
+    key, st = run.key, {}
+    sprint = button_mask('Sprint')
+    T = 2.0
+
+    def peak_direction():
+        def f(side):
+            fast = [s['vel'] for s in run._win(side, T, T + 1.0, sim=True) if _norm(s['vel']) > 500.0]
+            if not fast:
+                return False, 'no fast sample'
+            a = _angle_deg(fast[0], up)
+            return abs(a - 90.0) < 4.0, f'peak velocity {a:.2f} deg from local up (want 90 +- 4)'
+        return _both(run, f)
+
+    steps = [(0.3, lambda: ('grant the movement kit', _kit(key)))]
+    if gravity is not None:
+        steps += [(0.6, lambda: ('tilt gravity', _set_gravity_everywhere(key, gravity, True)))]
+    steps += [
+        (T - 0.3, _standing_after(run, 'standing before the dash', T)),
+        (T, lambda: ('dash', combat_tap(client, sprint))),
+        (T + 0.8, _in_timeline_seen(run, 'the dash timeline ran', T, T + 0.8)),
+        (T + 1.2, run.at('the peak speed is perpendicular to local up', peak_direction)),
+        (T + 3.0, _landing_pair(run, st, 'dash', T - 0.05, T + 3.0, floor=100.0)),
+        (T + 3.0, _standing_after(run, 'back to actionable, at rest', T)),
+    ]
+    if gravity is not None:
+        steps += [(T + 3.1, lambda: ('restore gravity', _set_gravity_everywhere(key, gravity, False)))]
+    steps += [
+        (T + 3.2, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False)))),
+        (T + 4.2, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_dash_tilted_gravity(client=1, tilt_deg=30.0):
+    """C14 dash under gravity tilted `tilt_deg` from straight down (owner rule 1): the same checks as scenario_dash with the up of the tilted frame."""
+    import math
+    t = math.radians(tilt_deg)
+    gravity = (980.0 * math.sin(t), 0.0, -980.0 * math.cos(t))
+    scenario_dash(client, up=_unit(tuple(-g for g in gravity)), gravity=gravity, name='dash_tilted_gravity')
+
+
+def scenario_ground_dodge(client=1):
+    """C14 ground dodge: a press of the dodge button on the ground throws the pawn into a low arc (long jump) and it lands standing. Judged on the authority
+    and the owner: the apex of the arc and the landing position agree within 1 cm, the apex is near the prediction of the default data (46 cm), the
+    timeline ended on landing (actionable again, no lying state: mode walking, speed ~0)."""
+    run = _Run('ground_dodge', client)
+    key, st, apex = run.key, {}, {}
+    dodge = button_mask('Dodge')
+    T = 2.0
+    steps = [
+        (0.3, lambda: ('grant the movement kit', _kit(key))),
+        (T, lambda: ('dodge', combat_tap(client, dodge))),
+        (T + 0.4, _in_timeline_seen(run, 'the dodge timeline ran', T, T + 0.4)),
+        (T + 3.0, _apex_pair(run, apex, 'ground dodge', T - 0.05, T, T + 1.5, tol=1.0, floor=20.0)),
+        (T + 3.0, _landing_pair(run, st, 'ground dodge', T - 0.05, T + 3.0, floor=200.0)),
+        (T + 3.0, _standing_after(run, 'landed standing, actionable', T)),
+        (T + 3.1, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False)))),
+        (T + 4.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_air_dodge(client=1):
+    """C14 air dodge (dive roll): jump, press dodge in the air. The dive goes forward and down, the timeline ends on landing (plus the landing lag),
+    and the landing position agrees between the authority and the owner within 1 cm."""
+    run = _Run('air_dodge', client)
+    key, st = run.key, {}
+    dodge, jump = button_mask('Dodge'), button_mask('Jump')
+    T = 2.0
+    steps = [
+        (0.3, lambda: ('grant the movement and jump kits', (_kit(key), _srv(key).server_set_jump_kit(True)))),
+        (T, lambda: ('jump', _jump_tap(client, 0.3))),
+        (T + 0.3, lambda: ('release', combat_clear(client))),
+        (T + 0.55, lambda: ('air dodge', combat_tap(client, dodge))),
+        (T + 0.9, _in_timeline_seen(run, 'the air dodge timeline ran', T + 0.55, T + 0.9)),
+        (T + 4.0, _landing_pair(run, st, 'air dodge', T - 0.05, T + 4.0, floor=100.0)),
+        (T + 4.0, _standing_after(run, 'landed, actionable again', T)),
+        (T + 4.1, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False), _srv(key).server_set_jump_kit(False)))),
+        (T + 5.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_dodge_blocked_in_hitstun(client=1):
+    """C14 owner rule 3: no dodging in hitstun by default (blocked tag data of the ability). A: hitstun on, dodge pressed: nothing happens. B: hitstun off,
+    dodge works. C: hitstun on and the kit has the escape dodge (blocks dropped as data): it works. Judged on the authority and the owner."""
+    run = _Run('dodge_blocked_in_hitstun', client)
+    key, st = run.key, {}
+    dodge = button_mask('Dodge')
+    TA, TB, TC = 2.0, 6.0, 10.5
+
+    def back_to_lane():
+        # B's dodge slides the pawn 2 to 3 m along -X and C's goes on from there: toward the next pawn's lane (5 m behind), where a capsule
+        # can stop it dead (the flake of the first pass). The suite's own reset puts the pawn back on its lane before C.
+        lane = sorted(comps(worlds()[0]), key=str).index(key)
+        return 'back to the lane', comps(worlds()[0])[key].server_reset_to_spawn(unreal.Vector(-500.0 * lane, 0.0, 0.0))
+
+    def remark():
+        run.log_mark = mark_log()
+        return 'judge window starts after the teleport', True
+    steps = [
+        (0.3, lambda: ('grant the movement kit', _kit(key, False, True, False))),
+        (TA - 0.5, lambda: ('hitstun on', _srv(key).server_set_hitstun(True))),
+        (TA, lambda: ('A: dodge in hitstun', combat_tap(client, dodge))),
+        (TA + 2.0, _no_move(run, 'A: blocked in hitstun, nothing moved', TA - 0.05, TA + 2.0)),
+        (TA + 2.0, _in_timeline_seen(run, 'A: no timeline started', TA, TA + 2.0, want=False)),
+        (TB - 0.5, lambda: ('hitstun off', _srv(key).server_set_hitstun(False))),
+        (TB, lambda: ('B: dodge without hitstun', combat_tap(client, dodge))),
+        (TB + 3.0, _landing_pair(run, st, 'B: free dodge', TB - 0.05, TB + 3.0, floor=200.0)),
+        (TC - 3.5, back_to_lane),
+        (TC - 2.0, remark),
+        (TC - 1.5, lambda: ('hitstun on, escape kit on', (_srv(key).server_set_hitstun(True), _srv(key).server_set_escape_kit(True)))),
+        (TC, lambda: ('C: dodge in hitstun with the escape kit', combat_tap(client, dodge))),
+        (TC + 3.0, _landing_pair(run, st, 'C: escape dodge in hitstun', TC - 0.05, TC + 3.0, floor=200.0)),
+        (TC + 3.1, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_hitstun(False), _srv(key).server_set_escape_kit(False), _kit(key, False, False, False)))),
+        (TC + 4.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_kit_without_dodge(client=1):
+    """C14: a kit without a dodge (the abilities are not granted; the command is bound but has nothing to start). A press of the dodge button does
+    nothing and does not reserve the press: no request, no movement, and a dash pressed right after still works."""
+    run = _Run('kit_without_dodge', client)
+    key, st = run.key, {}
+    dodge, sprint = button_mask('Dodge'), button_mask('Sprint')
+    T = 2.0
+    steps = [
+        (0.3, lambda: ('grant dash and interact only', _kit(key, True, False, True))),
+        (T, lambda: ('dodge (no such ability)', combat_tap(client, dodge))),
+        (T + 1.0, _no_move(run, 'no dodge: nothing moved', T - 0.05, T + 1.0)),
+        (T + 1.0, run.at('no request was made for the dodge press', lambda: (not run.new_bindings(T - 0.05, T + 1.0, 'srv') and not run.new_bindings(T - 0.05, T + 1.0, 'cli'),
+                                                                              f'bindings srv {run.new_bindings(T - 0.05, T + 1.0, "srv")}, owner {run.new_bindings(T - 0.05, T + 1.0, "cli")}'))),
+        (T + 1.2, lambda: ('dash right after', combat_tap(client, sprint))),
+        (T + 4.0, _landing_pair(run, st, 'the dash still works', T + 1.15, T + 4.0, floor=100.0)),
+        (T + 4.1, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False)))),
+        (T + 5.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_interact_tap_hold(client=1):
+    """C14 interact: the default movement slots give a tap = grab and a hold = pick up (the placeholder abilities own Test.State.Grab / PickUp).
+    A: tap -> grab only. B: a press held 0.5 s -> pick up only. C: a press that is pending (no command yet) and released after 7 frames -> grab, so
+    a pending hold never swallows the tap. Judged on the authority and the owner. (The swapped data set is a Core test: GSTNCombat.Core.MovementSlots.InteractTapHold.)"""
+    run = _Run('interact_tap_hold', client)
+    key = run.key
+    interact = button_mask('Interact')
+    TA, TB, TC = 2.0, 5.0, 8.0
+
+    def tags(sd, t0, t1):
+        return set().union(*[s[sd]['tags'] for s in run.sim if t0 <= s['t'] <= t1 and s.get(sd)] or [set()])
+
+    def only(label, want, other, t0, t1):
+        def f(sd):
+            seen = tags(sd, t0, t1)
+            return want in seen and other not in seen, f'seen {sorted(t for t in seen if t.startswith("Test.State.") and t[11:] in ("Grab", "PickUp"))} (want {want} only)'
+        return run.at(label, lambda: _both(run, f))
+
+    def pending():
+        def f(sd):
+            seen = tags(sd, TC + 0.02, TC + 0.09)
+            return 'Test.State.Grab' not in seen and 'Test.State.PickUp' not in seen, 'no interact command while the press is pending'
+        return _both(run, f)
+
+    steps = [
+        (0.3, lambda: ('grant the interact kit', _kit(key, False, False, True))),
+        (TA, lambda: ('A: tap', combat_tap(client, interact))),
+        (TA + 1.0, only('A: a tap is a grab', 'Test.State.Grab', 'Test.State.PickUp', TA, TA + 1.0)),
+        (TB, lambda: ('B: press and hold', combat_hold(client, interact))),
+        (TB + 0.5, lambda: ('B: release', combat_clear(client))),
+        (TB + 1.5, only('B: a hold is a pick up', 'Test.State.PickUp', 'Test.State.Grab', TB, TB + 1.5)),
+        (TC, lambda: ('C: press', combat_hold(client, interact))),
+        (TC + 0.09, run.at('C: nothing fires while the press may still become a hold', pending)),
+        (TC + 0.12, lambda: ('C: release after about 7 frames', combat_clear(client))),
+        (TC + 1.2, only('C: the tap was not swallowed by the pending hold', 'Test.State.Grab', 'Test.State.PickUp', TC + 0.1, TC + 1.2)),
+        (TC + 1.3, lambda: ('cleanup', (combat_clear(client), _kit(key, False, False, False)))),
+        (TC + 2.3, run.finish()),
+    ]
+    run.run(steps)
+
+
+# ---- C15 loadout and hitstop scenarios. The test kits / weapons are /Game/GASNPPTest/Combat/{KIT_Test_Alpha, KIT_Test_Beta, WPN_Test_*}
+# (Tools/GAS/setup_gas_assets.py --combat-content). The loadout component is put on the PlayerState at run time by the test component
+# (ServerApplyTestLoadout), so no shared Blueprint is edited. A loadout stays applied until the PIE session ends: run loadout_change LAST in a
+# session (the kit stats override WalkSpeed / JumpVelocity of every scenario after it).
+
+def _apply_loadout(key, kit, support=''):
+    return _srv(key).server_apply_test_loadout(kit, support)
+
+
+def _loadout_view(i, key):
+    v = _view(i, key) or {}
+    return v.get('loadout') or {}, v.get('combat') or {}, ((v.get('probe') or {}).get('stats') or {})
+
+
+def scenario_loadout_change(client=1):
+    """C15 kit changes by pickup (combat-m3 loadout direction): ServerApplyLoadoutChange on the authority, judged on the authority and the owner.
+      A  Alpha: loadout revision 1 on both, same table checksum, the kit stats (WalkSpeed 600, no weapon effect) and the jump of the kit
+      B  an attack in progress, then Beta: the timeline is cancelled at once, revision 2, WalkSpeed 900 (600 + the spear's 300), a higher jump
+      C  a refused loadout (unknown kit; a primary weapon as the additional weapon) changes nothing: revision stays, the running state too
+      D  Alpha + the support weapon: accepted, the kit stats stay (support weapons ship without a stats effect), the weapon is listed
+    Reconciles: every accepted change is one out-of-band ability system change (like a grant), so they are listed, not judged."""
+    run = _Run('loadout_change', client, judge_reconciles=False)
+    key, st, apex, marks = run.key, {}, {}, {}
+    # The loadout outlives a scenario (until the PIE session ends): the revisions are counted from the one the authority has at the start
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    jump = button_mask('Jump')
+    attack = button_mask('Attack')
+
+    def apply(kit, support, label):
+        def f():
+            st[label] = _apply_loadout(key, kit, support)
+            return label, st[label]
+        return f
+
+    def accepted(label):
+        return run.at(f'{label}: accepted', lambda: (st.get(label) == 'OK', f'ServerApplyTestLoadout -> {st.get(label)}'))
+
+    def refused(label):
+        return run.at(f'{label}: refused with a finding', lambda: (st.get(label) not in (None, 'OK'), f'ServerApplyTestLoadout -> {st.get(label)}'))
+
+    def state(label, kit, revision, walk, weapons=()):
+        def f():
+            out, ok, crcs = [], True, []
+            for i, side in ((0, 'srv'), (client, 'cli')):
+                lo, co, stats = _loadout_view(i, key)
+                good = (lo.get('kit') == kit and lo.get('revision') == revision and co.get('loadoutRevision') == revision and lo.get('kitResolved')
+                        and abs((stats.get('walkSpeedStat') or -1) - walk) < 0.5 and tuple(lo.get('additionalWeapons') or ()) == tuple(weapons))
+                ok &= bool(good)
+                crcs.append(lo.get('tableCrc'))
+                out.append(f"{side}: kit {lo.get('kit')} rev {lo.get('revision')} (combat state {co.get('loadoutRevision')}) WalkSpeed {stats.get('walkSpeedStat')} weapons {lo.get('additionalWeapons')}")
+            same = crcs[0] is not None and crcs[0] == crcs[1]
+            return ok and same, '; '.join(out) + f' table checksums {crcs} (want equal; kit {kit}, revision {revision}, WalkSpeed {walk}, weapons {list(weapons)})'
+        return run.at(label, f)
+
+    def unchanged(label, kit, revision):
+        def f():
+            lo, co, _ = _loadout_view(0, key)
+            return lo.get('kit') == kit and lo.get('revision') == revision, f"authority kit {lo.get('kit')} revision {lo.get('revision')} (want {kit}, {revision})"
+        return run.at(label, f)
+
+    def apexes():
+        a, b = apex.get('alpha'), apex.get('beta')
+        return a is not None and b is not None and b[0] > a[0] + 30.0 and abs(a[0] - a[1]) <= 1.0 and abs(b[0] - b[1]) <= 1.0, \
+            f'apex Alpha {a}, Beta {b} (authority, owner; Beta must be > Alpha + 30 cm, owner within 1 cm)'
+
+    def apex_step(label, t0, t1):
+        def f():
+            hs, _ = _apex_up(run, 'srv', t0 - 0.05, t0, t1)
+            hc, _ = _apex_up(run, 'cli', t0 - 0.05, t0, t1)
+            apex[label] = (hs, hc)
+            return hs > 20.0, f'{label}: authority {hs:.1f} cm, owner {hc:.1f} cm'
+        return run.at(f'{label}: a jump gives an apex', f)
+
+    def timeline_cancelled():
+        def f():
+            out, ok = [], True
+            for i, side in ((0, 'srv'), (client, 'cli')):
+                v = _view(i, key) or {}
+                co = v.get('combat') or {}
+                ok &= not co.get('inTimeline')
+                out.append(f"{side}: inTimeline {co.get('inTimeline')}")
+            return ok, '; '.join(out)
+        return run.at('B: the running timeline is gone on both after the change', f)
+
+    def reconciles():
+        r = report_reconciles(marks['start'], ignore_own_changes=False)
+        by = r['unexplained_by_model']
+        # three accepted changes: each is one out-of-band write of the combat state and of the ability system, so at most 3 of each model
+        ok = by.get('combat', 0) <= 3 and by.get('asc', 0) <= 3 and by.get('mover', 0) == 0
+        return ok, f"unexplained by model {by} (at most one combat and one asc reconcile per accepted change = 3 each, no Mover), forced={r['forced']}"
+
+    def table_swapped(label, revision):
+        """The simulation swapped to the loadout's table set: the combat state's table revision follows the demanded loadout revision on both"""
+        def f():
+            out, ok = [], True
+            for i, side in ((0, 'srv'), (client, 'cli')):
+                co = _loadout_view(i, key)[1]
+                ok &= co.get('tableRevision') == revision and co.get('loadoutRevision') == revision
+                out.append(f"{side}: table revision {co.get('tableRevision')} loadout revision {co.get('loadoutRevision')} bindings {co.get('tableBindings')}")
+            return ok, '; '.join(out) + f' (want both {revision})'
+        return run.at(label, f)
+
+    def combat_table_crc(label):
+        def f():
+            crcs = [_loadout_view(i, key)[1].get('tableCrc') for i in (0, client)]
+            return bool(crcs[0]) and crcs[0] == crcs[1], f'combat table checksums (authority, owner) {crcs}, want equal'
+        return run.at(label, f)
+
+    def dash_requests(label, t0, t1, want):
+        """A press of the dash button: a request is made (want True) or none is, and the press is not reserved (want False)"""
+        def f():
+            srv, cli = run.new_bindings(t0, t1, 'srv'), run.new_bindings(t0, t1, 'cli')
+            return (bool(srv) and bool(cli)) if want else (not srv and not cli), f'dash press: bindings authority {srv}, owner {cli} (want {"a request" if want else "none"})'
+        return run.at(label, f)
+
+    def gate_open():
+        closed = _loadout_view(0, key)[1].get('tableGateClosed')
+        return closed == 0, f'frames the authority ran with the table gate closed: {closed} (want 0)'
+
+    sprint = button_mask('Sprint')
+    steps = [
+        (0.4, _mark(run, marks, 'start')),
+        (0.5, lambda: ('clear a stale press', combat_clear(client))),
+        (0.6, apply('KIT_Test_Alpha', '', 'A')),
+        (1.8, accepted('A')),
+        (1.9, state('A: Alpha applied on both (revision base+1, WalkSpeed 600, same table)', 'KIT_Test_Alpha', base + 1, 600.0)),
+        (1.92, table_swapped('A: the simulation swapped to the loadout table (table revision == loadout revision)', base + 1)),
+        (1.92, combat_table_crc('A: the combat table checksum is the same on the authority and the owner')),
+        (1.95, lambda: ('A: dash press (Alpha has no dash command)', combat_tap(client, sprint))),
+        (2.35, dash_requests('A: the dash command does not exist after Alpha: no request, no reserved press', 1.93, 2.35, False)),
+        (2.5, lambda: ('A: jump', _jump_tap(client, 0.3))),
+        (2.8, lambda: ('release', combat_clear(client))),
+        (5.5, apex_step('alpha', 2.5, 5.5)),
+        # B: an attack in progress, then the kit change
+        (6.0, lambda: ('B: attack', combat_tap(client, attack))),
+        (6.1, run.at('B: the attack is running', lambda: (any((_view(i, key) or {}).get('combat', {}).get('inTimeline') for i in (0, client)), 'inTimeline on the authority or the owner'))),
+        (6.12, apply('KIT_Test_Beta', '', 'B')),
+        (7.2, accepted('B')),
+        (7.3, timeline_cancelled()),
+        (7.4, state('B: Beta applied on both (revision base+2, WalkSpeed 900, same table)', 'KIT_Test_Beta', base + 2, 900.0)),
+        (7.45, lambda: ('B: dash press (Beta has the dash)', combat_tap(client, sprint))),
+        (7.85, dash_requests('B: after Beta the dash command exists: the press makes a request', 7.43, 7.85, True)),
+        (8.0, lambda: ('B: jump', _jump_tap(client, 0.3))),
+        (8.3, lambda: ('release', combat_clear(client))),
+        (11.0, apex_step('beta', 8.0, 11.0)),
+        (11.1, run.at('B: the Beta jump is higher', apexes)),
+        # C: refusals change nothing
+        (11.5, apply('KIT_Missing', '', 'C1')),
+        (11.6, apply('KIT_Test_Beta', 'WPN_Test_Blade', 'C2')),
+        (12.2, refused('C1')),
+        (12.2, refused('C2')),
+        (12.3, unchanged('C: nothing changed after the refusals', 'KIT_Test_Beta', base + 2)),
+        # D: the support weapon
+        (12.5, apply('KIT_Test_Alpha', 'WPN_Test_Support', 'D')),
+        (13.8, accepted('D')),
+        (13.9, state('D: Alpha + support weapon (revision base+3, WalkSpeed 600 kept)', 'KIT_Test_Alpha', base + 3, 600.0, ('WPN_Test_Support',))),
+        (14.0, run.at('reconciles: one per accepted change and model', reconciles)),
+        (14.05, run.at('the table gate stayed open on the authority', gate_open)),
+        (14.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_hitstop(client=1):
+    """C15 hitstop (combat-m3 7.3): a hitstop window opened during a running attack pauses its timeline and the combat clock for exactly
+    HitstopTestFrames (8) frames, the same on the authority and the owner, and the attack still finishes. The test component sets the
+    combat component's HitstopTestButton to bit 20 (bound to no button), tapped as a scripted button. A: an attack without a hitstop gives the
+    plain duration. B: the same attack with a hitstop 5 frames in lasts longer by the window, and the paused frames rise by exactly 7 on both (the window
+    opened on frame F pauses from F+1)."""
+    run = _Run('hitstop', client, judge_reconciles=False)
+    key, seen = run.key, {}
+    attack, stop = button_mask('Attack'), 1 << 20
+
+    def paused(side_i):
+        return ((_view(side_i, key) or {}).get('combat') or {}).get('pausedTotal')
+
+    def span(label, t0, t1):
+        def f():
+            att = _tag_span(run, 'srv', TAG_ATTACKING, t0, t1)     # sim time: a duration of 7 frames must not depend on the editor tick
+            seen[label] = (att[1] - att[0] + 1 / 60.0) if att else 0.0
+            return bool(att), f'{label}: the attack was Attacking for {seen[label]:.3f} s of sim time on the authority'
+        return run.at(f'{label}: the attack ran', f)
+
+    def mark(label):
+        def f():
+            seen[label] = (paused(0), paused(client))
+            return label, seen[label]
+        return f
+
+    def rose():
+        a0, a1 = seen['before'], seen['after']
+        d = (a1[0] - a0[0], a1[1] - a0[1])
+        return d == (7, 7), f'paused frames rose by {d} on (authority, owner), want (7, 7): the window opened on frame F pauses from F+1, so 8 - 1 frames'
+
+    def longer():
+        a, b = seen.get('A'), seen.get('B')
+        return a is not None and b is not None and b > a + 0.07, f'duration without {a} s, with {b} s (want at least 0.07 s longer: 7 paused frames are 0.117 s at 60 Hz)'
+
+    steps = [
+        (0.5, lambda: ('clear', combat_clear(client))),
+        (1.0, lambda: ('A: attack', combat_tap(client, attack))),
+        (2.5, span('A', 0.9, 2.5)),
+        (3.0, mark('before')),
+        (3.2, lambda: ('B: attack', combat_tap(client, attack))),
+        (3.2 + 5 / 60.0, lambda: ('B: hitstop', combat_tap(client, stop))),
+        (5.0, span('B', 3.1, 5.0)),
+        (5.1, mark('after')),
+        (5.2, run.at('B: the paused frames rose by exactly the window on both', rose)),
+        (5.3, run.at('B: the hitstop attack lasted longer', longer)),
+        (5.4, run.finish()),
+    ]
+    run.run(steps)
+
+
+# ---- C18 table swap scenarios (loadout-table-swap-design.md, session 2). The kits are /Game/GASNPPTest/Combat/KIT_Test_{Gamma, Delta, Sigma, Omega}
+# (Tools/GAS/setup_gas_assets.py --combat-content); each scenario applies its own kit first. A loadout stays applied after the scenario: they run
+# before loadout_change, after hitstop (every kit binds the blade's attack and the platform jump, so the earlier press-driven scenarios still work).
+
+def _c18_apply(key, st, label, kit, supers=''):
+    def f():
+        st[label] = _srv(key).server_apply_test_loadout_with_supers(kit, '', supers)
+        return label, st[label]
+    return f
+
+
+def _c18_state(run, key, client, kit, revision, label, bindings=None):
+    """The kit is the loadout on both machines, the simulation swapped to its table (table revision == loadout revision), same table checksum
+    and binding count on both (`bindings`: and that count)."""
+    def f():
+        out, ok, crcs, counts = [], True, [], []
+        for i, side in ((0, 'srv'), (client, 'cli')):
+            lo, co, _ = _loadout_view(i, key)
+            ok &= bool(lo.get('kit') == kit and lo.get('revision') == revision and co.get('loadoutRevision') == revision
+                       and co.get('tableRevision') == revision and lo.get('kitResolved'))
+            crcs.append(co.get('tableCrc'))
+            counts.append(co.get('tableBindings'))
+            out.append(f"{side}: kit {lo.get('kit')} rev {lo.get('revision')} table rev {co.get('tableRevision')} bindings {co.get('tableBindings')}")
+        ok &= bool(crcs[0]) and crcs[0] == crcs[1] and counts[0] == counts[1] and (bindings is None or counts[0] == bindings)
+        return ok, '; '.join(out) + f' table checksums {crcs} (want equal; kit {kit}, revision {revision}' + (f', {bindings} bindings)' if bindings is not None else ')')
+    return run.at(label, f)
+
+
+def _c18_accepted(run, st, label):
+    return run.at(f'{label}: accepted', lambda: (st.get(label) == 'OK', f'ServerApplyTestLoadout -> {st.get(label)}'))
+
+
+def _c18_both_saw(run, tag, t0, t1, label, want=True):
+    """The authority and the owner owned `tag` somewhere in [t0, t1] (want) or neither did"""
+    def f():
+        s, c = run.saw_tag(tag, t0, t1, 'srv'), run.saw_tag(tag, t0, t1, 'cli')
+        return (s and c) if want else (not s and not c), f'{tag}: authority {s}, owner {c} (want {"both" if want else "neither"})'
+    return run.at(label, f)
+
+
+def _c18_requests(run, t0, t1, label, count):
+    """The same number of requests (`count`) on the authority and the owner in [t0, t1]"""
+    def f():
+        s, c = run.new_bindings(t0, t1, 'srv'), run.new_bindings(t0, t1, 'cli')
+        return s == c and len(s) == count, f'request bindings authority {s}, owner {c} (want equal, {count})'
+    return run.at(label, f)
+
+
+def _c18_meters(key, i):
+    st = ((_view(i, key) or {}).get('probe') or {}).get('stats') or {}
+    return st.get('exMeter'), st.get('superMeter'), st.get('hasMeterSet')
+
+
+def _c18_meter_is(run, key, client, field, want, label):
+    """ExMeter (field 0) or SuperMeter (field 1) equals `want` on the authority and the owner"""
+    def f():
+        got = [_c18_meters(key, i)[field] for i in (0, client)]
+        return all(g is not None and abs(g - want) < 0.5 for g in got), f'{"ex" if field == 0 else "super"} meter authority/owner {got}, want {want}'
+    return run.at(label, f)
+
+
+def _c18_reconciles(marks, max_combat, max_asc):
+    def f():
+        r = report_reconciles(marks['start'], ignore_own_changes=False)
+        by = r['unexplained_by_model']
+        return by.get('combat', 0) <= max_combat and by.get('asc', 0) <= max_asc and by.get('mover', 0) == 0, \
+            f"unexplained by model {by} (at most combat {max_combat}, asc {max_asc}, no Mover), forced={r['forced']}"
+    return f
+
+
+def _c18_gate_open(key):
+    closed = _loadout_view(0, key)[1].get('tableGateClosed')
+    return closed == 0, f'frames the authority ran with the table gate closed: {closed} (want 0)'
+
+
+def scenario_command_set(client=1):
+    """C18 command set (design session 2, item 1): KIT_Test_Gamma removes the dash command from the shared set and adds Command.Test.Gamma on the
+    same button (Sprint). Judged on the authority and the owner: the press starts the added command and nothing else (no dash, no movement, one request
+    on both), the attack pressed after it is not swallowed, a forced reconcile across the press changes nothing, and the same press under Beta
+    (which binds the dash) dashes and starts no added command. Reconciles: one combat and one ability system change per accepted loadout (2)."""
+    run = _Run('command_set', client, judge_reconciles=False)
+    key, st, marks, store = run.key, {}, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    sprint, attack = button_mask('Sprint'), button_mask('Attack')
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'G', 'KIT_Test_Gamma')),
+        (1.8, _c18_accepted(run, st, 'G')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Gamma', base + 1, 'Gamma applied on both, same table')),
+        (2.0, lambda: ('Gamma: press the removed dash button', combat_tap(client, sprint))),
+        (2.8, _c18_both_saw(run, 'Test.State.GammaMove', 1.95, 2.8, 'Gamma: the press started the added command on both')),
+        (2.8, _c18_both_saw(run, TAG_DASHING, 1.95, 2.8, 'Gamma: no dash', want=False)),
+        (2.8, _no_move(run, 'Gamma: nothing moved', 1.95, 2.8)),
+        (2.8, _c18_requests(run, 1.95, 2.8, 'Gamma: exactly one request, the added command, on both', 1)),
+        (3.0, lambda: ('Gamma: attack right after (not swallowed by the removed command)', combat_tap(client, attack))),
+        (3.8, _c18_both_saw(run, TAG_ATTACKING, 2.95, 3.8, 'Gamma: the attack came out on both')),
+        (4.2, lambda: ('Gamma: press again, with a forced reconcile across it', combat_tap(client, sprint))),
+        (4.22, lambda: ('force reconcile', force_reconcile(client, 12))),
+        (5.2, _c18_both_saw(run, 'Test.State.GammaMove', 4.15, 5.2, 'Gamma: the second press started the added command on both')),
+        (5.2, _c18_requests(run, 4.15, 5.2, 'Gamma: one request for the second press on both', 1)),
+        (5.4, _c18_apply(key, st, 'B', 'KIT_Test_Beta')),
+        (6.6, _c18_accepted(run, st, 'B')),
+        (6.7, _c18_state(run, key, client, 'KIT_Test_Beta', base + 2, 'Beta applied on both, same table')),
+        (6.8, lambda: ('Beta: the same press', combat_tap(client, sprint))),
+        (8.0, _c18_both_saw(run, 'Test.State.GammaMove', 6.75, 8.0, 'Beta: no added command', want=False)),
+        (8.0, _landing_pair(run, store, 'Beta: the same press dashes', 6.75, 8.0, floor=100.0)),
+        (8.0, _c18_requests(run, 6.75, 8.0, 'Beta: one request (the dash) on both', 1)),
+        (8.1, run.at('reconciles: one combat and one asc per accepted change', _c18_reconciles(marks, 2, 2))),
+        (8.15, run.at('the table gate stayed open on the authority', lambda: _c18_gate_open(key))),
+        (8.2, lambda: ('cleanup', combat_clear(client))),
+        (8.3, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_ex_meter(client=1):
+    """C18 EX meter (design session 2, item 3): KIT_Test_Delta has a plain special (Press Special) and an EX chord (Special + Buff, priority +100,
+    falls through when unavailable) whose ability costs 50 ExMeter. A: no meter, the EX chord gives the plain special and no EX, meter untouched.
+    B: after a server grant of 60, the chord gives the EX and spends 50 (10 left). C: 10 left is short again, the chord falls through to the plain
+    special and the meter stays. Always the same on the authority and the owner."""
+    run = _Run('ex_meter', client, judge_reconciles=False)
+    key, st, marks = run.key, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    chord = button_mask('Special') | button_mask('Buff')
+    plain, ex = 'Test.State.Special', 'Test.State.SpecialEx'
+
+    def grant():
+        st['grant'] = _srv(key).server_grant_meter(0)
+        return 'grant 60 ExMeter', st['grant']
+
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'D', 'KIT_Test_Delta')),
+        (1.8, _c18_accepted(run, st, 'D')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Delta', base + 1, 'Delta applied on both, same table')),
+        (1.95, run.at('the pawn has the meter set and an empty ExMeter', lambda: (all(_c18_meters(key, i)[2] and abs(_c18_meters(key, i)[0]) < 0.5 for i in (0, client)),
+                                                                                  f'meters authority {_c18_meters(key, 0)}, owner {_c18_meters(key, client)}'))),
+        (2.0, lambda: ('A: the EX chord without meter', combat_tap(client, chord))),
+        (2.9, _c18_both_saw(run, plain, 1.95, 2.9, 'A: the plain special came out on both')),
+        (2.9, _c18_both_saw(run, ex, 1.95, 2.9, 'A: no EX', want=False)),
+        (2.9, _c18_requests(run, 1.95, 2.9, 'A: one request on both (the fall-through, not two)', 1)),
+        (2.9, _c18_meter_is(run, key, client, 0, 0.0, 'A: ExMeter untouched')),
+        (3.2, grant),
+        (4.0, run.at('B: the grant landed (60) on both', lambda: (st.get('grant') is True and all(abs((_c18_meters(key, i)[0] or -1) - 60.0) < 0.5 for i in (0, client)),
+                                                                f'grant {st.get("grant")}, meters authority {_c18_meters(key, 0)}, owner {_c18_meters(key, client)}'))),
+        (4.1, lambda: ('B: the EX chord with 60', combat_tap(client, chord))),
+        (5.0, _c18_both_saw(run, ex, 4.05, 5.0, 'B: the EX came out on both')),
+        (5.0, _c18_both_saw(run, plain, 4.05, 5.0, 'B: not the plain special', want=False)),
+        (5.0, _c18_requests(run, 4.05, 5.0, 'B: one request on both', 1)),
+        (5.0, _c18_meter_is(run, key, client, 0, 10.0, 'B: the EX spent 50 on both')),
+        (5.3, lambda: ('C: the EX chord with 10 left', combat_tap(client, chord))),
+        (6.2, _c18_both_saw(run, plain, 5.25, 6.2, 'C: the plain special again on both')),
+        (6.2, _c18_both_saw(run, ex, 5.25, 6.2, 'C: no EX', want=False)),
+        (6.2, _c18_meter_is(run, key, client, 0, 10.0, 'C: the meter stayed at 10')),
+        (6.3, run.at('reconciles: loadout change and grant (combat 1, asc 2)', _c18_reconciles(marks, 1, 2))),
+        (6.35, run.at('the table gate stayed open on the authority', lambda: _c18_gate_open(key))),
+        (6.4, lambda: ('cleanup', combat_clear(client))),
+        (6.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_super_code(client=1):
+    """C18 super code (design session 2, item 2): KIT_Test_Sigma has two supers entered as codes (PerSuperCode: Special, then Dodge+Interact for A,
+    Interact+Dodge for B), 100 SuperMeter each. Wrong code with meter: nothing, meter kept. Code A: super A, meter spent. Code B with the meter
+    empty: refused, nothing. After a grant, code B with a forced reconcile between its buttons: the history is sync state, so the code resumes and
+    super B comes out. Every result identical on the authority and the owner."""
+    run = _Run('super_code', client, judge_reconciles=False)
+    key, st, marks = run.key, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    special, dodge, interact = button_mask('Special'), button_mask('Dodge'), button_mask('Interact')
+    A, B = 'Test.State.SuperA', 'Test.State.SuperB'
+
+    def grant(label):
+        def f():
+            st[label] = _srv(key).server_grant_meter(1)
+            return label, st[label]
+        return f
+
+    def code(t, buttons, tag, reconcile_after=None):
+        """Steps that enter special + buttons from time t, 0.15 s apart"""
+        out = [(t, lambda: (f'{tag}: special (code entry)', combat_tap(client, special)))]
+        for n, mask in enumerate(buttons, 1):
+            out.append((t + 0.15 * n, lambda m=mask: ('code button', combat_tap(client, m))))
+            if reconcile_after == n:
+                out.append((t + 0.15 * n + 0.02, lambda: ('force reconcile mid-code', force_reconcile(client, 12))))
+        return out
+
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'S', 'KIT_Test_Sigma', 'SUP_Test_A,SUP_Test_B')),
+        (1.8, _c18_accepted(run, st, 'S')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Sigma', base + 1, 'Sigma applied on both, same table (jump, the blade attack, two supers = 4 bindings)', bindings=4)),
+        (2.0, grant('g1')),
+        (3.0, _c18_meter_is(run, key, client, 1, 100.0, 'the first grant landed: SuperMeter 100 on both')),
+        # wrong code: neither super's pattern
+        *code(3.2, [interact, interact], 'wrong code', None),
+        (4.4, _c18_both_saw(run, A, 3.1, 4.4, 'wrong code: no super A', want=False)),
+        (4.4, _c18_both_saw(run, B, 3.1, 4.4, 'wrong code: no super B', want=False)),
+        (4.4, _c18_meter_is(run, key, client, 1, 100.0, 'wrong code: meter kept')),
+        # code A
+        *code(5.0, [dodge, interact], 'code A', None),
+        (6.2, _c18_both_saw(run, A, 4.95, 6.2, 'code A: super A came out on both')),
+        (6.2, _c18_both_saw(run, B, 4.95, 6.2, 'code A: not super B', want=False)),
+        (6.2, _c18_requests(run, 4.95, 6.2, 'code A: one request on both', 1)),
+        (6.2, _c18_meter_is(run, key, client, 1, 0.0, 'code A: the cost was spent (0 left) on both')),
+        # code B with the meter empty
+        *code(7.0, [interact, dodge], 'code B, no meter', None),
+        (8.2, _c18_both_saw(run, B, 6.95, 8.2, 'code B without meter: refused, no super B', want=False)),
+        (8.2, _c18_meter_is(run, key, client, 1, 0.0, 'code B without meter: meter still 0')),
+        # grant, code B with a forced reconcile between its buttons
+        (8.4, grant('g2')),
+        (9.2, _c18_meter_is(run, key, client, 1, 100.0, 'the second grant landed: SuperMeter 100 on both')),
+        *code(9.4, [interact, dodge], 'code B, reconcile mid-code', 1),
+        (10.8, _c18_both_saw(run, B, 9.35, 10.8, 'code B with a reconcile mid-code: super B came out on both')),
+        (10.8, _c18_meter_is(run, key, client, 1, 0.0, 'code B: the cost was spent on both')),
+        (10.9, run.at('reconciles: loadout change and two grants (combat 1, asc 3)', _c18_reconciles(marks, 1, 3))),
+        (10.95, run.at('the table gate stayed open on the authority', lambda: _c18_gate_open(key))),
+        (11.0, lambda: ('cleanup', combat_clear(client))),
+        (11.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_wait_frames(client=1):
+    """C18 wait frames (design session 2, item 4; the C11 leftover): KIT_Test_Omega binds a timeline ability (Command.Special.Neutral) that waits 20
+    combat frames and then strikes (Test.State.Strike). The timeline is in the registry of the swapped table, not the Blueprint's. A: no hitstop,
+    the strike comes 20 frames after the start. B: a hitstop window (8 frames, the M0 debug button) opened 5 frames into the wait, with a forced
+    reconcile inside the wait: the strike comes 7 frames later than in A (the window opened on frame F pauses from F+1). The same on both machines."""
+    run = _Run('wait_frames', client, judge_reconciles=False)
+    key, st, marks, delay = run.key, {}, {}, {}
+    base = (_loadout_view(0, key)[0].get('revision') or 0)
+    special, stop = button_mask('Special'), 1 << 20
+    frame_ms = 1000.0 / 60.0
+
+    def first_ms(side, tag, t0, t1):
+        ms = [s[side]['ms'] for s in run.sim if t0 <= s['t'] <= t1 and s.get(side) and tag in s[side]['tags']]
+        return min(ms) if ms else None
+
+    def strike_delay(label, t0, t1):
+        def f():
+            out, ok = [], True
+            for side in ('srv', 'cli'):
+                a, b = first_ms(side, 'Test.State.Windup', t0, t1), first_ms(side, 'Test.State.Strike', t0, t1)
+                d = (b - a) if a is not None and b is not None else None
+                delay.setdefault(label, {})[side] = d
+                ok &= d is not None
+                out.append(f'{side}: windup at {a} ms, strike at {b} ms, delay {d}')
+            return ok, '; '.join(out)
+        return run.at(f'{label}: the windup ran and the strike came, on both', f)
+
+    def delays():
+        a, b = delay.get('A', {}), delay.get('B', {})
+        if None in (a.get('srv'), a.get('cli'), b.get('srv'), b.get('cli')):
+            return False, f'delays A {a}, B {b}'
+        want_a, want_b = 20 * frame_ms, 27 * frame_ms
+        ok = all(abs(a[s] - want_a) <= 2 * frame_ms for s in a) and all(abs(b[s] - want_b) <= 2 * frame_ms for s in b) \
+            and all(abs((b[s] - a[s]) - 7 * frame_ms) <= 1.01 * frame_ms for s in a)
+        return ok, f'delays A {a}, B {b} ms; want A ~{want_a:.0f} (20 frames), B ~{want_b:.0f} (27 frames), B - A = 7 frames ({7 * frame_ms:.0f} ms), each within a frame or two'
+
+    steps = [
+        (0.3, _mark(run, marks, 'start')),
+        (0.4, lambda: ('clear', combat_clear(client))),
+        (0.6, _c18_apply(key, st, 'O', 'KIT_Test_Omega')),
+        (1.8, _c18_accepted(run, st, 'O')),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Omega', base + 1, 'Omega applied on both, same table')),
+        (2.0, lambda: ('A: the wait-strike timeline', combat_tap(client, special))),
+        (3.6, strike_delay('A', 1.95, 3.6)),
+        (3.6, _c18_requests(run, 1.95, 3.6, 'A: one request on both', 1)),
+        (5.0, lambda: ('B: the wait-strike timeline', combat_tap(client, special))),
+        (5.0 + 5 / 60.0, lambda: ('B: hitstop 5 frames into the wait', combat_tap(client, stop))),
+        (5.0 + 8 / 60.0, lambda: ('B: force reconcile inside the wait', force_reconcile(client, 10))),
+        (6.9, strike_delay('B', 4.95, 6.9)),
+        (6.9, run.at('the hitstop delayed the strike by exactly the window (7 frames), on both', delays)),
+        (7.0, run.at('reconciles: the loadout change and the forced one (combat 1, asc 1)', _c18_reconciles(marks, 1, 1))),
+        (7.05, run.at('the table gate stayed open on the authority', lambda: _c18_gate_open(key))),
+        (7.1, lambda: ('cleanup', combat_clear(client))),
+        (7.2, run.finish()),
+    ]
+    run.run(steps)
+
+
+# ---- Suite runner (C15): runs scenarios that report through _Run one after the other inside a single editor tick callback, so one python call
+# starts the whole batch and a later one reads suite_report(). reset_all() and a settle pause come before each; a scenario that does not
+# report within its timeout is recorded as TIMEOUT and the suite moves on. loadout_change goes last (its loadout outlives the scenario).
+# The scenarios that walk (weapon_switch, combat_context) come first: the later ones dash and drift the pawn into the corner of the map, and a
+# pawn against the wall cannot walk. The suite also walks the pawn back to where it started before each scenario.
+SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
+                 'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
+                 'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'dodge_blocked_in_hitstun', 'kit_without_dodge', 'interact_tap_hold',
+                 'hitstop', 'jump_squat', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'spike_stats', 'spike_grants', 'slide_jump', 'loadout_change']
+_suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
+
+
+def run_suite(names=None, timeout=240.0, settle=2.0, client=1, reset_wait=2.5):
+    st = _suite
+    if st['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(st['handle'])
+    st.update(results=[], queue=list(names or SUITE_DEFAULT), current=None, timeout=timeout, settle=settle, settle_until=0.0, resetting=None, reset_done=False, reset_wait=reset_wait)
+    st['client'] = client
+
+    def tick(_dt):
+        try:
+            now = time.time()
+            if st['current'] is not None:
+                done = _last_run.get('results') is not st['prev'] and _last_run.get('results') is not None
+                if done:
+                    res = _last_run
+                    bad = [f'{l} -> {d[:200]}' for ok, l, d in res['results'] if ok is False]
+                    st['results'].append((st['current'], res['verdict'], bad))
+                    st['current'] = None
+                    st['settle_until'] = now + st['settle']
+                elif now - st['started'] > st['timeout']:
+                    st['results'].append((st['current'], 'TIMEOUT', []))
+                    st['current'] = None
+                    st['settle_until'] = now + st['settle']
+                return
+            if now < st['settle_until']:
+                return
+            if st['queue'] and not st.get('reset_done'):
+                # Every scenario starts from the spawn, standing still, whatever the previous one did to the pawns
+                if st.get('resetting') is None:
+                    # One lane per pawn, 5 m apart along -X (the map is open there): the pawns spawn within a metre of each other
+                    for lane, w_key in enumerate(sorted(comps(worlds()[0]), key=str)):
+                        comps(worlds()[0])[w_key].server_reset_to_spawn(unreal.Vector(-500.0 * lane, 0.0, 0.0))
+                    st['resetting'] = now
+                    return
+                if now - st['resetting'] < st['reset_wait']:
+                    return
+                st['resetting'] = None
+                st['reset_done'] = True
+            if not st['queue']:
+                unreal.unregister_slate_post_tick_callback(st['handle'])
+                st['handle'] = None
+                return
+            name = st['queue'].pop(0)
+            st['reset_done'] = False
+            st['prev'] = _last_run.get('results')
+            reset_all()
+            st['current'], st['started'] = name, now
+            globals()['scenario_' + name]()
+        except Exception as e:
+            st['results'].append((st.get('current'), f'EXCEPTION {e}', []))
+            st['current'] = None
+            st['settle_until'] = time.time() + st['settle']
+
+    st['handle'] = unreal.register_slate_post_tick_callback(tick)
+    return f"suite of {len(st['queue'])} started"
+
+
+def suite_report():
+    st = _suite
+    lines = [f"{n}: {v}" + (f" FAILED {b}" if b else '') for n, v, b in st['results']]
+    return ('RUNNING ' if st['handle'] is not None else 'DONE ') + f"{len(st['results'])} done, current {st['current']}, queued {st['queue']}\n" + '\n'.join(lines)

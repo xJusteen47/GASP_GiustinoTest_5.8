@@ -2,14 +2,21 @@
 
 #include "Simulation/GSTN_CombatSimComponent.h"
 
+#include "Loadout/GSTN_LoadoutComponent.h"
+
 #include "Abilities/GameplayAbility.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
+#include "Abilities/GSTN_GA_PlatformJump.h"
 #include "Abilities/NpAbilitySystemComponent.h"
+#include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "AttributeSet.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
+#include "Kits/GSTN_WeaponDefinition.h"
 #include "GSTN_CombatTags.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_DirectionClassifier.h"
@@ -25,6 +32,8 @@
 #include "NetworkPredictionWorldManager.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
+#include "Simulation/GSTN_LoadoutSwapLogic.h"
+#include "Loadout/GSTN_EntrySourceMask.h"
 #include "Simulation/GSTN_InputHostUtils.h"
 #include "Sources/GSTN_InputSource.h"
 #include "Timeline/GSTN_WeaponSwitchRules.h"
@@ -67,6 +76,14 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 
 void UGSTN_CombatSimComponent::InitializeNetworkPredictionProxy()
 {
+	// The ability system's sync state lists the attribute sets by position, and machines add them in different orders: one fixed
+	// order (by class name) before the simulation starts, the same rule the harness applied by hand
+	if (UAbilitySystemComponent* ASC = GetOwner() ? GetOwner()->FindComponentByClass<UAbilitySystemComponent>() : nullptr)
+	{
+		TArray<UAttributeSet*> Sets = ASC->GetSpawnedAttributes();
+		Sets.Sort([](const UAttributeSet& A, const UAttributeSet& B) { return A.GetClass()->GetName() < B.GetClass()->GetName(); });
+		ASC->SetSpawnedAttributes(Sets);
+	}
 	NetworkPredictionProxy.Init<FGSTN_CombatModelDef>(GetWorld(), GetReplicationProxies(), this, this);
 }
 
@@ -76,6 +93,7 @@ void UGSTN_CombatSimComponent::BeginPlay()
 
 	CompileInput();
 	BindAbilitySystem();
+	PollLoadoutComponent();
 
 	if (ContextProvider)
 	{
@@ -107,77 +125,107 @@ void UGSTN_CombatSimComponent::CompileInput()
 		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no input config, the combat input has no buttons"), *GetPathName());
 	}
 
+	// Revision 0: the Blueprint's binding set, which a pawn without a loadout runs on for the whole match. A loadout's table is added as
+	// a further set by RegisterTableSet and takes over at its revision boundary (FGSTN_LoadoutSwapLogic)
+	EmptyTableSet = NewObject<UGSTN_CombatTableSet>(this);
+	UGSTN_CombatTableSet* Blueprint = NewObject<UGSTN_CombatTableSet>(this);
 	if (ActiveSlotBindings)
 	{
-		CommandTable = ActiveSlotBindings->BuildTable(ResetRules);
+		Blueprint->Table = ActiveSlotBindings->BuildTable(ResetRules);
 	}
 	else
 	{
 		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no slot bindings, no command starts an ability"), *GetPathName());
 	}
-
-	// The timeline registry: the timeline abilities of the bindings, in binding order, each once (the index the sync state stores)
-	TimelineRegistry.Reset();
-	TimelineContent.Reset();
-	BindingTimeline.Reset();
-	TimelineTier.Reset();
-	TimelineDefaultOverride.Reset();
-	const UGSTN_InputSettings& InputSettings = UGSTN_InputSettings::Get();
-	for (const FGSTN_CompiledBinding& Binding : CommandTable.Bindings)
-	{
-		const TSubclassOf<UGSTN_GA_BaseCombat> TimelineClass = Binding.Ability.Get() && Binding.Ability->IsChildOf(UGSTN_GA_BaseCombat::StaticClass())
-			? TSubclassOf<UGSTN_GA_BaseCombat>(Binding.Ability.Get()) : nullptr;
-		int32 Index = INDEX_NONE;
-		if (TimelineClass)
-		{
-			Index = TimelineRegistry.IndexOfByKey(TimelineClass);
-			if (Index == INDEX_NONE)
-			{
-				Index = TimelineRegistry.Add(TimelineClass);
-				const int32 Tier = CommandTable.Commands.IsValidIndex(Binding.CommandIndex) ? InputSettings.GetCommandTier(CommandTable.Commands[Binding.CommandIndex].Tag) : 0;
-				TimelineTier.Add(Tier);
-				TimelineDefaultOverride.Add(UGSTN_CombatSettings::Get().GetDefaultOverrideFrames(Tier));
-
-				// Soft content the timeline needs in memory before its first frame, loaded here and never in a tick, kept by this component
-				TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->LoadTimelineContent(TimelineContent);
-			}
-		}
-		BindingTimeline.Add(static_cast<int16>(Index));
-	}
-	// The adoptable ones after the bound ones. Their tier is none (combat-m3 6.3: an adopted timeline has the tier of its ability's command, else none)
-	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : AdoptableTimelines)
-	{
-		if (TimelineClass && !TimelineRegistry.Contains(TimelineClass))
-		{
-			TimelineRegistry.Add(TimelineClass);
-			TimelineTier.Add(0);
-			TimelineDefaultOverride.Add(0);
-			TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->LoadTimelineContent(TimelineContent);
-		}
-	}
-	// Reserve for the largest timeline, so no frame allocates (the output keeps its capacity)
-	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : TimelineRegistry)
-	{
-		TimelineOutput.Reserve(TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData());
-	}
-
-	// The registry, the tiers and the window defaults come from local ini and class default data, and must be the same on every
-	// machine (they are not in the sync state). A checksum in the log is what two machines' logs are compared by
-	uint32 RegistryChecksum = 0;
-	for (int32 Entry = 0; Entry < TimelineRegistry.Num(); ++Entry)
-	{
-		const FString ClassPath = TimelineRegistry[Entry]->GetPathName();
-		RegistryChecksum = HashCombineFast(RegistryChecksum, GetTypeHash(ClassPath));
-		RegistryChecksum = HashCombineFast(RegistryChecksum, GetTypeHash(TimelineTier[Entry]));
-		RegistryChecksum = HashCombineFast(RegistryChecksum, GetTypeHash(TimelineDefaultOverride[Entry]));
-		RegistryChecksum = HashCombineFast(RegistryChecksum, GetTypeHash(TimelineRegistry[Entry]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData().TotalFrames));
-	}
-	UE_LOG(LogGSTNCombatSim, Log, TEXT("%s: timeline registry of %d entries, checksum %08x"), *GetOwner()->GetName(), TimelineRegistry.Num(), RegistryChecksum);
+	Blueprint->WeaponStats = WeaponStats;
+	// The timeline registry: the timeline abilities of the bindings, in binding order, each once (the index the sync state stores),
+	// then the adoptable ones, which have no tier (combat-m3 6.3: an adopted timeline has the tier of its ability's command, else none)
+	Blueprint->DeriveFromBindings(UGSTN_InputSettings::Get(), UGSTN_CombatSettings::Get());
+	Blueprint->AppendAdoptable(AdoptableTimelines);
+	Blueprint->Checksum = Blueprint->ComputeChecksum();
+	TableSets.Reset();
+	AdoptTableSet(Blueprint);
 
 	if (InputSource && !Cast<IGSTN_InputSource>(InputSource.Get()))
 	{
 		UE_LOG(LogGSTNCombatSim, Error, TEXT("%s: the input source %s does not implement IGSTN_InputSource"), *GetPathName(), *InputSource->GetName());
 	}
+}
+
+void UGSTN_CombatSimComponent::AdoptTableSet(UGSTN_CombatTableSet* Set)
+{
+	TableSets.Add(Set);
+
+	// Reserve for the largest timeline, so no frame allocates (the output keeps its capacity)
+	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : Set->TimelineRegistry)
+	{
+		TimelineOutput.Reserve(TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData());
+	}
+
+	// The registry, the tiers and the window defaults come from local ini and class default data, and must be the same on every
+	// machine (they are not in the sync state). The checksum in the log is what two machines' logs are compared by
+	UE_LOG(LogGSTNCombatSim, Log, TEXT("%s: table set revision %d: %d commands, %d bindings, timeline registry of %d entries, checksum %08x"), GetOwner() ? *GetOwner()->GetName() : TEXT("?"),
+		Set->Revision, Set->Table.Commands.Num(), Set->Table.Bindings.Num(), Set->TimelineRegistry.Num(), Set->Checksum);
+}
+
+void UGSTN_CombatSimComponent::RegisterTableSet(UGSTN_CombatTableSet* Set)
+{
+	if (!Set)
+	{
+		return;
+	}
+	// The same revision again (a re-applied loadout) replaces the old set; the frame pointers are dropped so none can dangle
+	TableSets.RemoveAll([Set](const TObjectPtr<UGSTN_CombatTableSet>& Existing) { return Existing && Existing != Set && Existing->Revision != 0 && static_cast<uint16>(Existing->Revision) == static_cast<uint16>(Set->Revision); });
+	AdoptTableSet(Set);
+
+	// Revision 0 stays; of the others only the newest MaxRetainedTableRevisions
+	const int32 Keep = FMath::Max(UGSTN_CombatSettings::Get().MaxRetainedTableRevisions, 1);
+	int32 Others = 0;
+	for (int32 Index = TableSets.Num() - 1; Index >= 0; --Index)
+	{
+		if (TableSets[Index] && TableSets[Index]->Revision != 0 && ++Others > Keep)
+		{
+			TableSets.RemoveAt(Index);
+		}
+	}
+	FrameTables = nullptr;
+	FramePrevTables = nullptr;
+}
+
+const UGSTN_CombatTableSet* UGSTN_CombatSimComponent::FindTableSet(int32 Revision) const
+{
+	for (const TObjectPtr<UGSTN_CombatTableSet>& Set : TableSets)
+	{
+		if (Set && static_cast<uint16>(Set->Revision) == static_cast<uint16>(Revision))
+		{
+			return Set;
+		}
+	}
+	return nullptr;
+}
+
+const UGSTN_CombatTableSet& UGSTN_CombatSimComponent::Tables() const
+{
+	if (FrameTables)
+	{
+		return *FrameTables;
+	}
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (const UGSTN_CombatTableSet* Found = Sync ? FindTableSet(Sync->Core.TableRevision) : nullptr)
+	{
+		return *Found;
+	}
+	if (const UGSTN_CombatTableSet* Blueprint = FindTableSet(0))
+	{
+		return *Blueprint;
+	}
+	check(EmptyTableSet);
+	return *EmptyTableSet;
+}
+
+const FGSTN_CommandTable& UGSTN_CombatSimComponent::GetCommandTable() const
+{
+	return Tables().Table;
 }
 
 void UGSTN_CombatSimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -202,6 +250,101 @@ void UGSTN_CombatSimComponent::BindAbilitySystem()
 	}
 
 	PreTickHandle = AbilitySystem->OnSimulationPreTick.AddUObject(this, &UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick);
+}
+
+void UGSTN_CombatSimComponent::PollLoadoutComponent()
+{
+	if (BoundLoadout.IsValid() || (LoadoutPollTicks++ % 15) != 0)
+	{
+		return;
+	}
+	AActor* Owner = GetOwner();
+	UGSTN_LoadoutComponent* Found = Owner ? Owner->FindComponentByClass<UGSTN_LoadoutComponent>() : nullptr;
+	if (!Found)
+	{
+		if (const APawn* Pawn = Cast<APawn>(Owner))
+		{
+			if (const APlayerState* PlayerState = Pawn->GetPlayerState())
+			{
+				Found = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>();
+			}
+		}
+	}
+	if (Found)
+	{
+		BindLoadoutComponent(Found);
+	}
+}
+
+void UGSTN_CombatSimComponent::BindLoadoutComponent(UGSTN_LoadoutComponent* Loadout)
+{
+	if (!Loadout || BoundLoadout.Get() == Loadout)
+	{
+		return;
+	}
+	if (UGSTN_LoadoutComponent* Old = BoundLoadout.Get())
+	{
+		Old->OnLoadoutApplied.RemoveDynamic(this, &UGSTN_CombatSimComponent::HandleLoadoutApplied);
+	}
+	BoundLoadout = Loadout;
+	Loadout->OnLoadoutApplied.AddUniqueDynamic(this, &UGSTN_CombatSimComponent::HandleLoadoutApplied);
+
+	// A loadout that was applied before this component looked (the client's OnRep ran when the component replicated in)
+	if (Loadout->HasLoadout())
+	{
+		HandleLoadoutApplied(Loadout, Loadout->GetRevision());
+	}
+}
+
+TArray<FGSTN_WeaponStatsEntry> UGSTN_CombatSimComponent::BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved)
+{
+	TArray<FGSTN_WeaponStatsEntry> Entries;
+	for (const UGSTN_WeaponDefinition* Weapon : Resolved.Weapons)
+	{
+		FGSTN_WeaponStatsEntry& Entry = Entries.AddDefaulted_GetRef();
+		if (Weapon)
+		{
+			Entry.Effect = Weapon->StatsEffect.IsNull() ? nullptr : Weapon->StatsEffect.LoadSynchronous();
+			Entry.Stats = Weapon->StatModifiers;
+		}
+	}
+	return Entries;
+}
+
+void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision)
+{
+	if (!Component || !Component->HasLoadout())
+	{
+		return;
+	}
+	const FGSTN_CompiledBindingTable& Compiled = Component->GetCompiledTable();
+	if (Compiled.Entries.IsEmpty())
+	{
+		// The loadout did not compile on this machine: no set, so a demand for its revision keeps the gate closed instead of running a wrong table
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: loadout revision %d has no usable table on this machine, the combat simulation stays gated"), *GetOwner()->GetName(), Revision);
+		return;
+	}
+	if (FindTableSet(Compiled.Revision))
+	{
+		// A revision's loadout never changes; a repeated apply (a pawn that was set again) has nothing new
+		return;
+	}
+
+	FGSTN_CombatTableConvertInput Input([](const FSoftObjectPath& Path) -> UClass* { return TSoftClassPtr<UGameplayAbility>(Path).LoadSynchronous(); });
+	Input.InputSettings = &UGSTN_InputSettings::Get();
+	Input.CombatSettings = &UGSTN_CombatSettings::Get();
+	Input.GlobalResetRules = ResetRules;
+	Input.Adoptable = AdoptableTimelines;
+	Input.WeaponStats = BuildWeaponStats(Component->GetResolvedLoadout());
+	Input.ReservedExtension = Component->GetApplied().ReservedExtension;
+
+	FGSTN_CompileReport Report;
+	UGSTN_CombatTableSet* Set = FGSTN_CombatTableConverter::Convert(this, Compiled, Input, &Report);
+	for (const FText& Error : Report.Errors)
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: loadout revision %d: %s"), *GetOwner()->GetName(), Revision, *Error.ToString());
+	}
+	RegisterTableSet(Set);
 }
 
 void UGSTN_CombatSimComponent::SetScriptedButtons(int32 Mask)
@@ -233,9 +376,65 @@ bool UGSTN_CombatSimComponent::ServerWriteLoadoutRevision(uint16 Revision)
 	}, "LoadoutRevision") != nullptr;
 }
 
-const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::GetRegistryTimeline(int32 Index) const
+bool UGSTN_CombatSimComponent::ServerApplyLoadoutChange(UGSTN_LoadoutComponent* Loadout, const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
 {
-	return TimelineRegistry.IsValidIndex(Index) && TimelineRegistry[Index] ? &TimelineRegistry[Index]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData() : nullptr;
+	OutErrors.Reset();
+	if (!Loadout || !GetOwner() || !GetOwner()->HasAuthority())
+	{
+		OutErrors.Add(TEXT("A loadout change is applied on the server only, on a loadout component."));
+		return false;
+	}
+	// The table set must be registered by the time the loadout applies (AcceptLoadout broadcasts), on this machine as on the clients
+	BindLoadoutComponent(Loadout);
+
+	// A refused loadout changes nothing, not even the move in progress
+	if (!Loadout->ValidateLoadout(Requested, OutErrors))
+	{
+		return false;
+	}
+
+	const bool bChanges = !Loadout->HasLoadout() || Requested != Loadout->GetApplied();
+	const int32 NowFrame = GetSimulationFrame();
+	if (bChanges && LastLoadoutChangeFrame != INDEX_NONE && NowFrame != INDEX_NONE && NowFrame - LastLoadoutChangeFrame < UGSTN_CombatSettings::Get().MinFramesBetweenLoadoutChanges)
+	{
+		// Two table sets must not expire inside the rollback window, and the first swap must be settled before the second starts
+		OutErrors.Add(FString::Printf(TEXT("A loadout change within %d frames of the previous one is refused (%d frames ago)."), UGSTN_CombatSettings::Get().MinFramesBetweenLoadoutChanges, NowFrame - LastLoadoutChangeFrame));
+		return false;
+	}
+
+	if (bChanges)
+	{
+		// The running timeline belongs to the old kit: its ability is cancelled and the action state returns to actionable
+		const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+		const int32 Running = Sync && Sync->Core.ActionState == EGSTN_ActionState::InTimeline ? static_cast<int32>(Sync->Core.ActiveTimeline) : INDEX_NONE;
+		const UGSTN_CombatTableSet& Current = Tables();
+		if (AbilitySystem && Current.TimelineRegistry.IsValidIndex(Running))
+		{
+			if (const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(Current.TimelineRegistry[Running]))
+			{
+				AbilitySystem->CancelAbilityHandle(Spec->Handle);
+			}
+		}
+		NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([](FGSTN_CombatSyncState& State)
+		{
+			FGSTN_CombatTimelineLogic::ClearTimeline(State.Core);
+		}, "LoadoutChangeClearTimeline");
+	}
+
+	if (!Loadout->AcceptLoadout(Requested, OutErrors))
+	{
+		return false;
+	}
+	if (bChanges)
+	{
+		LastLoadoutChangeFrame = NowFrame;
+	}
+	return ServerWriteLoadoutRevision(static_cast<uint16>(Loadout->GetRevision()));
+}
+
+const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::GetRegistryTimeline(const UGSTN_CombatTableSet& Set, int32 Index)
+{
+	return Set.TimelineRegistry.IsValidIndex(Index) && Set.TimelineRegistry[Index] ? &Set.TimelineRegistry[Index]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData() : nullptr;
 }
 
 int32 UGSTN_CombatSimComponent::GetSimulationFrame() const
@@ -247,25 +446,27 @@ int32 UGSTN_CombatSimComponent::GetSimulationFrame() const
 bool UGSTN_CombatSimComponent::IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame) const
 {
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
-	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline || !TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
+	const UGSTN_CombatTableSet& Current = Tables();
+	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline || !Current.TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
 	{
 		return false;
 	}
 	OutStartFrame = Sync->Core.TimelineStartFrame;
-	return TimelineRegistry[Sync->Core.ActiveTimeline] == AbilityClass;
+	return Current.TimelineRegistry[Sync->Core.ActiveTimeline] == AbilityClass;
 }
 
 bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 {
 	// Outside the combat tick (or with no timeline running) nothing gates: only a running timeline closes commands
-	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !CommandTable.Commands.IsValidIndex(CommandIndex))
+	const UGSTN_CombatTableSet& Current = Tables();
+	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !Current.Table.Commands.IsValidIndex(CommandIndex))
 	{
 		return true;
 	}
-	const FGameplayTag& Command = CommandTable.Commands[CommandIndex].Tag;
+	const FGameplayTag& Command = Current.Table.Commands[CommandIndex].Tag;
 	const int32 Running = GateCore->ActiveTimeline;
-	return FGSTN_CombatTimelineLogic::IsCommandAllowed(*GateCore, GetRegistryTimeline(Running), TimelineOutput, Command,
-		UGSTN_InputSettings::Get().GetCommandTier(Command), TimelineTier.IsValidIndex(Running) ? TimelineTier[Running] : 0);
+	return FGSTN_CombatTimelineLogic::IsCommandAllowed(*GateCore, GetRegistryTimeline(Current, Running), TimelineOutput, Command,
+		UGSTN_InputSettings::Get().GetCommandTier(Command), Current.TimelineTier.IsValidIndex(Running) ? Current.TimelineTier[Running] : 0);
 }
 
 int32 UGSTN_CombatSimComponent::GetCombatClock() const
@@ -310,7 +511,7 @@ void UGSTN_CombatSimComponent::ProduceInput(const int32 DeltaTimeMS, FGSTN_Input
 		FGSTN_InputSourceContext Context;
 		Context.Owner = GetOwner();
 		Context.Config = ActiveInputConfig;
-		Context.Table = &CommandTable;
+		Context.Table = &GetCommandTable();
 		Source->ProduceInput(Context, DeltaTimeMS, *Cmd);
 	}
 
@@ -360,15 +561,19 @@ void UGSTN_CombatSimComponent::AppendFrameEvents(uint8 PreviousFingerprint, uint
 
 bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 {
+	if (!IsJumpBindingAllowed(BindingIndex))
+	{
+		return false;
+	}
 	// On the end-of-previous-frame state, like the ability system's own check at execution
-	return FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, CommandTable, BindingIndex);
+	return FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, GetCommandTable(), BindingIndex);
 }
 
 FGSTN_ActivationContext UGSTN_CombatSimComponent::GetActivationContext() const
 {
 	// The simulation read: while the ability system ticks frame F this is the combat state F produced, request included
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
-	return Sync ? FGSTN_ActivationContext::FromRequest(Sync->Core.Input, CommandTable, Sync->Core.Input.History.GetLatestFrame()) : FGSTN_ActivationContext();
+	return Sync ? FGSTN_ActivationContext::FromRequest(Sync->Core.Input, GetCommandTable(), Sync->Core.Input.History.GetLatestFrame()) : FGSTN_ActivationContext();
 }
 
 bool UGSTN_CombatSimComponent::IsCommandButtonHeld(int32 Button) const
@@ -394,6 +599,43 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// Requests older than this frame are dead (the ability system executed them in their own frame's pre-tick)
 	OutSync.Core.Requests.PruneBefore(Frame);
 
+	// The loadout table swap (loadout-table-swap-design 2c). The active table is the set of the demanded revision; the frame that first has
+	// it is the boundary on every machine, and every later step of the frame (clock, adoption, jump, input, step 8) reads that one table.
+	// A demand whose set is not here yet (the loadout has not reached this machine) closes the gate: the clocks keep running on the table
+	// the state is on, the input history keeps recording, and no command resolves
+	const UGSTN_CombatTableSet* DemandedTables = FindTableSet(InSync.Core.LoadoutRevision);
+	const UGSTN_CombatTableSet* PreviousTables = FindTableSet(InSync.Core.TableRevision);
+	const EGSTN_LoadoutSwapResult SwapResult = FGSTN_LoadoutSwapLogic::Step(OutSync.Core, DemandedTables != nullptr, Frame);
+	bFrameGateClosed = SwapResult == EGSTN_LoadoutSwapResult::Closed;
+	FrameTables = bFrameGateClosed ? PreviousTables : DemandedTables;
+	if (!FrameTables)
+	{
+		FrameTables = EmptyTableSet;
+	}
+	FramePrevTables = PreviousTables ? PreviousTables : FrameTables;
+	const UGSTN_CombatTableSet& FrameSet = *FrameTables;
+	if (bFrameGateClosed)
+	{
+		++GateClosedFrames;
+	}
+	if (SwapResult == EGSTN_LoadoutSwapResult::Swapped)
+	{
+		// Written on every machine and every re-simulation, published by the authority only
+		FGSTN_SimEvent Event;
+		Event.EventType = GSTNCombatTags::Event_LoadoutSwapped;
+		Event.Frame = Frame;
+		Event.Instigator = GetOwner();
+		EventOutbox.Add(MoveTemp(Event));
+	}
+
+	// A forced command is a table index with no revision: one made for the frame of the boundary is dropped (the harness and AI force
+	// commands; they see the new table from the next frame)
+	FGSTN_InputCmd FrameCmd = *Input.Cmd;
+	if (SwapResult == EGSTN_LoadoutSwapResult::Swapped)
+	{
+		FrameCmd.ForcedCommand = 0;
+	}
+
 	// Hitstop (combat-m3 7.1): a frame inside the window of the previous state stands still on the combat clock. The window the
 	// debug button opens on frame F pauses from F+1 (F itself was simulated with the clock running when it opened)
 	const bool bHitstopFrame = InSync.Core.IsInHitstop(Frame);
@@ -406,15 +648,15 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		const int32 Running = OutSync.Core.ActiveTimeline;
 		bool bAbilityActive = true;
-		if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline && AbilitySystem && TimelineRegistry.IsValidIndex(Running))
+		if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline && AbilitySystem && FrameSet.TimelineRegistry.IsValidIndex(Running))
 		{
-			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Running]);
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(FrameSet.TimelineRegistry[Running]);
 			bAbilityActive = Spec && Spec->IsActive();
 		}
 		const bool bWasRunning = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline;
 		const int32 StartBefore = OutSync.Core.TimelineStartFrame;
-		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(Running),
-			TimelineDefaultOverride.IsValidIndex(Running) ? TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame);
+		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(FrameSet, Running),
+			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame);
 		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,
@@ -424,12 +666,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// Step 3, adoption (combat-m3 7.4): timeline abilities that something other than a command activated in the previous frame.
 	// The owner's tags are the end-of-previous-frame ones here (the ability system ticks after this model), so the loose tag the
 	// waiting abilities hold makes every frame without one a single tag test
-	if (AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Ability_AwaitingAdoption))
+	if (!bFrameGateClosed && AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Ability_AwaitingAdoption))
 	{
 		TArray<int32, TInlineAllocator<8>> Awaiting;
-		for (int32 Index = 0; Index < TimelineRegistry.Num(); ++Index)
+		for (int32 Index = 0; Index < FrameSet.TimelineRegistry.Num(); ++Index)
 		{
-			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Index]);
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(FrameSet.TimelineRegistry[Index]);
 			const UGSTN_GA_BaseCombat* Instance = Spec && Spec->IsActive() ? Cast<UGSTN_GA_BaseCombat>(Spec->GetPrimaryInstance()) : nullptr;
 			if (Instance && Instance->IsAwaitingAdoption())
 			{
@@ -437,9 +679,9 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 			}
 		}
 		const int32 Adopted = FGSTN_CombatTimelineLogic::Adopt(OutSync.Core, Frame, Awaiting);
-		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Adopted))
+		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Adopted))
 		{
-			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, TimelineDefaultOverride[Adopted], TimelineOutput);
+			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Adopted], TimelineOutput);
 		}
 	}
 
@@ -452,12 +694,17 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
 
+	// Step 5a, the jump bookkeeping: before the input tick, because the gate asks whether a jump or an air jump is available this frame
+	StepJump(Frame, Input.Cmd->HeldButtons, OutSync.Core);
+
 	FGSTN_InputTickArgs Args;
 	Args.Frame = Frame;
-	Args.Cmd = Input.Cmd;
+	Args.Cmd = &FrameCmd;
 	Args.In = &InSync.Core.Input;
 	Args.Out = &OutSync.Core.Input;
-	Args.Table = &CommandTable;
+	// A closed gate resolves against no commands; the sample is appended and aged all the same
+	Args.Table = bFrameGateClosed ? &EmptyTableSet->Table : &FrameSet.Table;
+	Args.ActiveSourceMask = GSTNEntrySourceMask::ActiveMask(InSync.Core.ActiveWeaponIndex);
 	Args.Buttons = &ButtonMap;
 	Args.Settings = &UGSTN_InputSettings::Get();
 	Args.GlobalResetRules = ResetRules;
@@ -467,20 +714,26 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
 
+	// Step 5b: a jump or fast fall command that the gate let through changes the jump state in the frame of the request
+	if (Result.HasRequest())
+	{
+		ApplyJumpRequest(Frame, Result.BindingIndex, OutSync.Core);
+	}
+
 	// Step 8: a command that started a timeline ability replaces the running timeline (if any) and begins its own. The ability
 	// itself is activated by the input request of this frame, from the ability system's pre-tick
-	if (Result.HasRequest() && BindingTimeline.IsValidIndex(Result.BindingIndex) && BindingTimeline[Result.BindingIndex] == INDEX_NONE)
+	if (Result.HasRequest() && FrameSet.BindingTimeline.IsValidIndex(Result.BindingIndex) && FrameSet.BindingTimeline[Result.BindingIndex] == INDEX_NONE)
 	{
 		// A plain ability (a stance, a jump) that the gate let through ends the running timeline: its turn is over
 		FGSTN_CombatTimelineLogic::CancelForOtherCommand(OutSync.Core, Frame);
 	}
-	else if (Result.HasRequest() && BindingTimeline.IsValidIndex(Result.BindingIndex) && BindingTimeline[Result.BindingIndex] != INDEX_NONE)
+	else if (Result.HasRequest() && FrameSet.BindingTimeline.IsValidIndex(Result.BindingIndex) && FrameSet.BindingTimeline[Result.BindingIndex] != INDEX_NONE)
 	{
-		const int32 Entry = BindingTimeline[Result.BindingIndex];
-		FGSTN_CombatTimelineLogic::Start(OutSync.Core, Frame, Entry, Input.Cmd->ForcedCommand != 0 ? EGSTN_ActivationSource::Forced : EGSTN_ActivationSource::Command);
-		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Entry))
+		const int32 Entry = FrameSet.BindingTimeline[Result.BindingIndex];
+		FGSTN_CombatTimelineLogic::Start(OutSync.Core, Frame, Entry, FrameCmd.ForcedCommand != 0 ? EGSTN_ActivationSource::Forced : EGSTN_ActivationSource::Command);
+		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Entry))
 		{
-			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, TimelineDefaultOverride[Entry], TimelineOutput);
+			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Entry], TimelineOutput);
 		}
 	}
 	// A timeline that reached its commit is a timeline that started: the event of the one that was replaced inside its startup
@@ -493,7 +746,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		Event.Instigator = GetOwner();
 		Event.Tags.AddTag(OutSync.Core.ActiveSource == EGSTN_ActivationSource::Adopted ? GSTNCombatTags::Source_Adopted
 			: OutSync.Core.ActiveSource == EGSTN_ActivationSource::Forced ? GSTNCombatTags::Source_Forced : GSTNCombatTags::Source_Command);
-		if (const UGSTN_GA_BaseCombat* Default = TimelineRegistry.IsValidIndex(OutSync.Core.ActiveTimeline) ? TimelineRegistry[OutSync.Core.ActiveTimeline]->GetDefaultObject<UGSTN_GA_BaseCombat>() : nullptr)
+		if (const UGSTN_GA_BaseCombat* Default = FrameSet.TimelineRegistry.IsValidIndex(OutSync.Core.ActiveTimeline) ? FrameSet.TimelineRegistry[OutSync.Core.ActiveTimeline]->GetDefaultObject<UGSTN_GA_BaseCombat>() : nullptr)
 		{
 			Event.Tags.AppendTags(Default->GetAssetTags());
 		}
@@ -507,7 +760,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		for (const FGSTN_TimelineTrack_WeaponSwitch* Switch : TimelineOutput.WeaponSwitches)
 		{
 			const int32 Old = OutSync.Core.ActiveWeaponIndex;
-			const int32 New = FGSTN_WeaponSwitchRules::Resolve(Switch->Target, Switch->Index, Old, WeaponStats.Num());
+			const int32 New = FGSTN_WeaponSwitchRules::Resolve(Switch->Target, Switch->Index, Old, FrameSet.WeaponStats.Num());
 			if (New == Old)
 			{
 				continue;
@@ -556,6 +809,7 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	{
 		TryQueueStatsModifier();
 	}
+	PollLoadoutComponent();
 
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)
@@ -617,12 +871,17 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 
 	const int32 Frame = TimeStep.ServerFrame;
 
+	// The tables of this frame (the combat tick of the same frame set them). A CancelTimeline names a slot of the registry the timeline
+	// was started in, which on a swap frame is the previous set
+	const UGSTN_CombatTableSet& FrameSet = Tables();
+	const UGSTN_CombatTableSet& PrevSet = FramePrevTables ? *FramePrevTables : FrameSet;
+
 	// A timeline replaced or cancelled this frame ends first, so its ability is gone before the replacing one starts
 	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
 	{
-		if (Slot.Type == EGSTN_RequestType::CancelTimeline && Slot.Frame == Frame && TimelineRegistry.IsValidIndex(Slot.Arg))
+		if (Slot.Type == EGSTN_RequestType::CancelTimeline && Slot.Frame == Frame && PrevSet.TimelineRegistry.IsValidIndex(Slot.Arg))
 		{
-			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Slot.Arg]);
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(PrevSet.TimelineRegistry[Slot.Arg]);
 			if (Spec && Spec->IsActive())
 			{
 				AbilitySystem->CancelAbilityHandle(Spec->Handle);
@@ -633,9 +892,9 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	// An adoption that another ability won: this one waited in vain and is cancelled before the winner starts
 	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
 	{
-		if (Slot.Type == EGSTN_RequestType::CancelAbility && Slot.Frame == Frame && TimelineRegistry.IsValidIndex(Slot.Arg))
+		if (Slot.Type == EGSTN_RequestType::CancelAbility && Slot.Frame == Frame && FrameSet.TimelineRegistry.IsValidIndex(Slot.Arg))
 		{
-			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Slot.Arg]);
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(FrameSet.TimelineRegistry[Slot.Arg]);
 			if (Spec && Spec->IsActive())
 			{
 				AbilitySystem->CancelAbilityHandle(Spec->Handle);
@@ -649,29 +908,26 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	{
 		if (Slot.Type == EGSTN_RequestType::SwapWeaponStats && Slot.Frame == Frame)
 		{
-			FGSTN_WeaponStatsSwap::Execute(*AbilitySystem, WeaponStats, Slot.Arg, Sync->Core.ActiveWeaponIndex);
+			FGSTN_WeaponStatsSwap::Execute(*AbilitySystem, FrameSet.WeaponStats, Slot.Arg, Sync->Core.ActiveWeaponIndex);
 		}
 	}
 
 	// A request made on this frame starts its ability here, inside the ability system's tick
-	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, CommandTable, Sync->Core.Input, Frame);
+	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, bFrameGateClosed ? EmptyTableSet->Table : FrameSet.Table, Sync->Core.Input, Frame);
 
 	// The cost of a timeline commits when its startup override window ends: the ability is committed from here, so a timeline
 	// that was replaced inside the window never paid. Only the commit of the timeline the state runs counts: a frame can hold the
 	// commit of one that was replaced in it, and the timeline logic removes that one, this is the second guard
 	if (Sync->Core.ActionState == EGSTN_ActionState::InTimeline && Sync->Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame, Sync->Core.ActiveTimeline))
 	{
-		if (TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
+		if (FrameSet.TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
 		{
-			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(TimelineRegistry[Sync->Core.ActiveTimeline]);
-			if (UGameplayAbility* Instance = Spec && Spec->IsActive() ? Spec->GetPrimaryInstance() : nullptr)
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(FrameSet.TimelineRegistry[Sync->Core.ActiveTimeline]);
+			if (Spec)
 			{
 				// The meter can have dropped since the activation: a refused commit ends the ability (the clock then returns to
 				// Actionable on the next frame) instead of letting the timeline run for free
-				if (!Instance->CommitAbility(Spec->Handle, AbilitySystem->AbilityActorInfo.Get(), Instance->GetCurrentActivationInfo()))
-				{
-					AbilitySystem->CancelAbilityHandle(Spec->Handle);
-				}
+				UGSTN_GA_BaseCombat::CommitOrCancel(*AbilitySystem, *Spec);
 			}
 		}
 	}

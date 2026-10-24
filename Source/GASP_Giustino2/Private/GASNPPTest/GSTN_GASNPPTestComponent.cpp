@@ -4,7 +4,9 @@
 
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
+#include "Attributes/GSTN_MeterAttributeSet.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
+#include "DefaultMovementSet/InstantMovementEffects/BasicInstantMovementEffects.h"
 #include "DefaultMovementSet/Modes/SimpleWalkingMode.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Dom/JsonObject.h"
@@ -13,7 +15,10 @@
 #include "Events/GSTN_SimEventSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
+#include "Abilities/GSTN_GA_Dash.h"
+#include "Abilities/GSTN_GA_PlatformJump.h"
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "GASNPPTest/GSTN_TestProbeAbilities.h"
@@ -21,6 +26,9 @@
 #include "Input/GSTN_InputScript.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "Kits/GSTN_CombatAssetTypes.h"
+#include "Kits/GSTN_PrimaryKitDefinition.h"
+#include "Loadout/GSTN_LoadoutComponent.h"
 #include "MoverComponent.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -43,6 +51,9 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 	if (UNpAbilitySystemComponent* Asc = GetOwner()->FindComponentByClass<UNpAbilitySystemComponent>())
 	{
 		Asc->DefaultAttributes.AddUnique(UGSTN_CombatAttributeSet::StaticClass());
+		// The meters of the C18 scenarios (ex_meter, super_code): the same early creation
+		Asc->DefaultAttributes.AddUnique(UGSTN_MeterAttributeSet::StaticClass());
+		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_MeterAttributeSet::StaticClass());
 		// The ability system may have initialised its simulation already (components initialise in their own order): create it
 		// now as well, the lookup by class keeps it from being added twice
 		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_CombatAttributeSet::StaticClass());
@@ -57,6 +68,9 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 		Combat->WeaponStats.Reset();
 		Combat->WeaponStats.AddDefaulted_GetRef().Effect = UGSTN_GE_TestPrimaryWeaponStats::StaticClass();
 		Combat->WeaponStats.AddDefaulted_GetRef().Effect = UGSTN_GE_TestSupportWeaponStats::StaticClass();
+		// Bit 20 is bound to no button of the test input config: the hitstop scenario taps it as a scripted button (every machine alike)
+		Combat->HitstopTestButton = 20;
+		Combat->HitstopTestFrames = 8;
 	}
 }
 
@@ -72,6 +86,12 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 
 	Mover = GetOwner()->FindComponentByClass<UMoverComponent>();
 	AbilitySystem = GetOwner()->FindComponentByClass<UNpAbilitySystemComponent>();
+
+	if (GetOwner()->HasAuthority())
+	{
+		SpawnLocation = GetOwner()->GetActorLocation();
+		bHasSpawnLocation = true;
+	}
 
 	if (Mover)
 	{
@@ -250,6 +270,33 @@ void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& Ti
 		}
 	}
 
+	{
+		FSimHistoryEntry& Entry = SimHistory.AddDefaulted_GetRef();
+		Entry.SimTimeMs = TimeStep.BaseSimTimeMs;
+		Entry.Location = GetOwner()->GetActorLocation();
+		if (Mover)
+		{
+			Entry.Velocity = Mover->GetVelocity();
+			Entry.Mode = Mover->GetMovementModeName();
+		}
+		if (AbilitySystem)
+		{
+			FGameplayTagContainer OwnedTags;
+			AbilitySystem->GetOwnedGameplayTags(OwnedTags);
+			for (const FGameplayTag& Tag : OwnedTags)
+			{
+				if (Tag.ToString().StartsWith(TEXT("Test.")))
+				{
+					Entry.Tags.Add(Tag.ToString());
+				}
+			}
+		}
+		if (SimHistory.Num() > 4000)
+		{
+			SimHistory.RemoveAt(0, 2000, EAllowShrinking::No);
+		}
+	}
+
 	++SimTickCount;
 	if (TimeStep.bIsResimulating)
 	{
@@ -379,6 +426,7 @@ namespace
 		if (Name == TEXT("TagTarget")) { return UGSTN_GA_ProbeTagTarget::StaticClass(); }
 		if (Name == TEXT("TimelineTarget")) { return UGSTN_GA_TestTriggeredTimeline::StaticClass(); }
 		if (Name == TEXT("SwitchTarget")) { return UGSTN_GA_TestWeaponSwitch::StaticClass(); }
+		if (Name == TEXT("Launcher")) { return UGSTN_GA_TestLaunch::StaticClass(); }
 		return nullptr;
 	}
 
@@ -418,7 +466,108 @@ int32 UGSTN_GASNPPTestComponent::ServerRevokeProbes()
 	{
 		return 0;
 	}
-	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestWeaponSwitch::StaticClass()); });
+	return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_ProbeAbilityBase::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestTriggeredTimeline::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestWeaponSwitch::StaticClass()) || AbilityClass->IsChildOf(UGSTN_GA_TestLaunch::StaticClass()); });
+}
+
+int32 UGSTN_GASNPPTestComponent::ServerSetJumpKit(bool bGrant)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return 0;
+	}
+	if (!bGrant)
+	{
+		return ClearAbilitiesWhere(*AbilitySystem, [](const UClass* AbilityClass) { return AbilityClass->IsChildOf(UGSTN_GA_PlatformJump::StaticClass()); });
+	}
+
+	int32 Granted = 0;
+	for (const TSubclassOf<UGameplayAbility> AbilityClass : { TSubclassOf<UGameplayAbility>(UGSTN_GA_PlatformJump::StaticClass()), TSubclassOf<UGameplayAbility>(UGSTN_GA_PlatformFastFall::StaticClass()) })
+	{
+		if (!AbilitySystem->FindAbilitySpecFromClass(AbilityClass))
+		{
+			Granted += AbilitySystem->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, INDEX_NONE, nullptr)).IsValid() ? 1 : 0;
+		}
+	}
+	return Granted;
+}
+
+int32 UGSTN_GASNPPTestComponent::ServerSetMoveKit(bool bDash, bool bDodge, bool bInteract)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return 0;
+	}
+
+	const auto Apply = [this](bool bGrant, std::initializer_list<TSubclassOf<UGameplayAbility>> Classes)
+	{
+		int32 Changed = 0;
+		for (const TSubclassOf<UGameplayAbility>& AbilityClass : Classes)
+		{
+			if (bGrant)
+			{
+				if (!AbilitySystem->FindAbilitySpecFromClass(AbilityClass))
+				{
+					Changed += AbilitySystem->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, INDEX_NONE, nullptr)).IsValid() ? 1 : 0;
+				}
+			}
+			else
+			{
+				Changed += ClearAbilitiesWhere(*AbilitySystem, [&AbilityClass](const UClass* Existing) { return Existing == AbilityClass.Get(); });
+			}
+		}
+		return Changed;
+	};
+	int32 Changed = Apply(bDash, { UGSTN_GA_Dash::StaticClass() });
+	Changed += Apply(bDodge, { UGSTN_GA_GroundDodge::StaticClass(), UGSTN_GA_AirDodge::StaticClass(), UGSTN_GA_TestEscapeDodge::StaticClass() });
+	Changed += Apply(bInteract, { UGSTN_GA_TestGrab::StaticClass(), UGSTN_GA_TestPickUp::StaticClass() });
+	return Changed;
+}
+
+bool UGSTN_GASNPPTestComponent::ServerSetHitstun(bool bApply)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (HitstunEffectHandle.IsValid())
+	{
+		AbilitySystem->RemoveActiveGameplayEffect(HitstunEffectHandle);
+		HitstunEffectHandle = FActiveGameplayEffectHandle();
+	}
+	if (bApply)
+	{
+		HitstunEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestHitstun>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
+	return !bApply || HitstunEffectHandle.IsValid();
+}
+
+bool UGSTN_GASNPPTestComponent::ServerSetEscapeKit(bool bApply)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (EscapeEffectHandle.IsValid())
+	{
+		AbilitySystem->RemoveActiveGameplayEffect(EscapeEffectHandle);
+		EscapeEffectHandle = FActiveGameplayEffectHandle();
+	}
+	if (bApply)
+	{
+		EscapeEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestEscapeKit>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
+	return !bApply || EscapeEffectHandle.IsValid();
+}
+
+bool UGSTN_GASNPPTestComponent::SetTestGravity(FVector Acceleration, bool bEnable)
+{
+	UMoverComponent* GravityMover = GetOwner()->FindComponentByClass<UMoverComponent>();
+	if (!GravityMover)
+	{
+		return false;
+	}
+	GravityMover->SetGravityOverride(bEnable, bEnable ? Acceleration : FVector::ZeroVector);
+	return true;
 }
 
 int32 UGSTN_GASNPPTestComponent::ServerGrantBulk(int32 FirstIndex, int32 Count)
@@ -488,6 +637,94 @@ bool UGSTN_GASNPPTestComponent::ServerEquipPrimaryWeapon(bool bEquip)
 	return true;
 }
 
+bool UGSTN_GASNPPTestComponent::ServerResetToSpawn(FVector Offset)
+{
+	if (!Mover || !bHasSpawnLocation || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	TSharedPtr<FTeleportEffect> Teleport = MakeShared<FTeleportEffect>();
+	Teleport->TargetLocation = SpawnLocation + Offset;
+	Teleport->bUseActorRotation = true;
+	Mover->QueueInstantMovementEffect(Teleport);
+
+	return true;
+}
+
+UGSTN_LoadoutComponent* UGSTN_GASNPPTestComponent::EnsureLoadoutComponent()
+{
+	// A loadout component wired into the test character Blueprint wins (it grants on the owner's own ability system)
+	if (UGSTN_LoadoutComponent* OnPawn = GetOwner()->FindComponentByClass<UGSTN_LoadoutComponent>())
+	{
+		return OnPawn;
+	}
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	APlayerState* PlayerState = Pawn ? Pawn->GetPlayerState() : nullptr;
+	if (!PlayerState)
+	{
+		return nullptr;
+	}
+	if (UGSTN_LoadoutComponent* Found = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>())
+	{
+		return Found;
+	}
+	if (!PlayerState->HasAuthority())
+	{
+		return nullptr;
+	}
+	// A replicated component made at runtime: the PlayerState Blueprint is shared and stays as it is
+	UGSTN_LoadoutComponent* Created = NewObject<UGSTN_LoadoutComponent>(PlayerState, TEXT("GSTNTestLoadout"));
+	Created->SetIsReplicated(true);
+	Created->RegisterComponent();
+	return Created;
+}
+
+FString UGSTN_GASNPPTestComponent::ServerApplyTestLoadout(const FString& KitName, const FString& SupportWeaponName)
+{
+	return ServerApplyTestLoadoutWithSupers(KitName, SupportWeaponName, FString());
+}
+
+bool UGSTN_GASNPPTestComponent::ServerGrantMeter(int32 Which)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	const UGameplayEffect* Effect = Which == 0 ? static_cast<const UGameplayEffect*>(GetDefault<UGSTN_GE_TestExMeterGrant>()) : GetDefault<UGSTN_GE_TestSuperMeterGrant>();
+	// Instant: the handle of the application is not valid by design
+	AbilitySystem->ApplyGameplayEffectToSelf(Effect, 1.f, AbilitySystem->MakeEffectContext());
+	return true;
+}
+
+FString UGSTN_GASNPPTestComponent::ServerApplyTestLoadoutWithSupers(const FString& KitName, const FString& SupportWeaponName, const FString& SuperNamesCsv)
+{
+	UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>();
+	UGSTN_LoadoutComponent* Loadout = EnsureLoadoutComponent();
+	if (!Combat || !Loadout || !GetOwner()->HasAuthority())
+	{
+		return TEXT("no combat component, no loadout component or not the authority");
+	}
+
+	FGSTN_LoadoutData Data;
+	Data.PrimaryKit = FPrimaryAssetId(GSTNCombatAssetTypes::PrimaryKit(), FName(*KitName));
+	if (!SupportWeaponName.IsEmpty())
+	{
+		Data.AdditionalWeapons.Add(FPrimaryAssetId(GSTNCombatAssetTypes::Weapon(), FName(*SupportWeaponName)));
+	}
+	TArray<FString> SuperNames;
+	SuperNamesCsv.ParseIntoArray(SuperNames, TEXT(","), true);
+	for (const FString& SuperName : SuperNames)
+	{
+		Data.Supers.Add(FPrimaryAssetId(GSTNCombatAssetTypes::Super(), FName(*SuperName.TrimStartAndEnd())));
+	}
+	TArray<FString> Errors;
+	if (!Combat->ServerApplyLoadoutChange(Loadout, Data, Errors))
+	{
+		return FString::Join(Errors, TEXT(" | "));
+	}
+	return TEXT("OK");
+}
+
 bool UGSTN_GASNPPTestComponent::ServerSetStatsPreset(int32 Preset)
 {
 	if (!AbilitySystem || !GetOwner()->HasAuthority())
@@ -528,6 +765,35 @@ int32 UGSTN_GASNPPTestComponent::CountOwnedBulkSpecs() const
 		Owned += AbilitySystem->FindAbilitySpecFromClass(AbilityClass) ? 1 : 0;
 	}
 	return Owned;
+}
+
+FString UGSTN_GASNPPTestComponent::DrainSimHistory()
+{
+	auto Vec = [](const FVector& V) -> TArray<TSharedPtr<FJsonValue>>
+	{
+		return { MakeShared<FJsonValueNumber>(V.X), MakeShared<FJsonValueNumber>(V.Y), MakeShared<FJsonValueNumber>(V.Z) };
+	};
+	TArray<TSharedPtr<FJsonValue>> Out;
+	for (const FSimHistoryEntry& Entry : SimHistory)
+	{
+		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+		Json->SetNumberField(TEXT("t"), Entry.SimTimeMs);
+		Json->SetArrayField(TEXT("loc"), Vec(Entry.Location));
+		Json->SetArrayField(TEXT("vel"), Vec(Entry.Velocity));
+		Json->SetStringField(TEXT("mode"), Entry.Mode.ToString());
+		TArray<TSharedPtr<FJsonValue>> Tags;
+		for (const FString& Tag : Entry.Tags)
+		{
+			Tags.Add(MakeShared<FJsonValueString>(Tag));
+		}
+		Json->SetArrayField(TEXT("tags"), Tags);
+		Out.Add(MakeShared<FJsonValueObject>(Json));
+	}
+	SimHistory.Reset();
+	FString Result;
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer = TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Result);
+	FJsonSerializer::Serialize(Out, Writer);
+	return Result;
 }
 
 FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
@@ -663,6 +929,10 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			bool bWalkFound = false;
 			StatsJson->SetNumberField(TEXT("walkSpeedStat"), AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), bWalkFound));
 			StatsJson->SetBoolField(TEXT("hasCombatSet"), bWalkFound);
+			bool bMeterFound = false;
+			StatsJson->SetNumberField(TEXT("exMeter"), AbilitySystem->GetGameplayAttributeValue(UGSTN_MeterAttributeSet::GetExMeterAttribute(), bMeterFound));
+			StatsJson->SetNumberField(TEXT("superMeter"), AbilitySystem->GetGameplayAttributeValue(UGSTN_MeterAttributeSet::GetSuperMeterAttribute(), bMeterFound));
+			StatsJson->SetBoolField(TEXT("hasMeterSet"), bMeterFound);
 			const USimpleWalkingMode* SimpleWalking = Cast<USimpleWalkingMode>(Mover->FindMode_Mutable(UBaseMovementMode::StaticClass(), FName(TEXT("Walking"))));
 			StatsJson->SetNumberField(TEXT("maxSpeedOverride"), SimpleWalking ? SimpleWalking->MaxSpeedOverride : -2.f);
 		}
@@ -687,8 +957,70 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 			CombatJson->SetObjectField(TEXT("timelineStarted"), StartedJson);
 			CombatJson->SetNumberField(TEXT("weaponSwitched"), WeaponSwitchedCount);
 			CombatJson->SetNumberField(TEXT("activeWeapon"), CombatState->Core.ActiveWeaponIndex);
+			{
+				const FGSTN_JumpState& Jump = CombatState->Core.Jump;
+				TSharedRef<FJsonObject> JumpJson = MakeShared<FJsonObject>();
+				JumpJson->SetNumberField(TEXT("phase"), static_cast<int32>(Jump.Phase));
+				JumpJson->SetNumberField(TEXT("startFrame"), Jump.StartFrame);
+				JumpJson->SetBoolField(TEXT("cut"), Jump.bJumpCut);
+				JumpJson->SetBoolField(TEXT("fastFalling"), Jump.bFastFalling);
+				JumpJson->SetNumberField(TEXT("airJumpsUsed"), Jump.AirJumpsUsed);
+				JumpJson->SetNumberField(TEXT("coyote"), Jump.CoyoteFramesLeft);
+				if (const UMoverComponent* GravityMover = Owner->FindComponentByClass<UMoverComponent>())
+				{
+					const FVector Gravity = GravityMover->GetGravityAcceleration();
+					JumpJson->SetArrayField(TEXT("gravity"), { MakeShared<FJsonValueNumber>(Gravity.X), MakeShared<FJsonValueNumber>(Gravity.Y), MakeShared<FJsonValueNumber>(Gravity.Z) });
+				}
+				CombatJson->SetObjectField(TEXT("jump"), JumpJson);
+			}
 			CombatJson->SetArrayField(TEXT("request"), { MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestedBinding), MakeShared<FJsonValueNumber>(CombatState->Core.Input.RequestFrame) });
+			CombatJson->SetNumberField(TEXT("pausedTotal"), CombatState->Core.PausedFramesTotal);
+			CombatJson->SetNumberField(TEXT("timelinePaused"), CombatState->Core.TimelinePausedFrames);
+			CombatJson->SetNumberField(TEXT("loadoutRevision"), CombatState->Core.LoadoutRevision);
+			// The table set the simulation is on: the revision it swapped to, its checksum and size, and the frames the gate ran closed
+			CombatJson->SetNumberField(TEXT("tableRevision"), CombatState->Core.TableRevision);
+			if (const UGSTN_CombatTableSet* TableSet = Combat->FindTableSet(CombatState->Core.TableRevision))
+			{
+				CombatJson->SetStringField(TEXT("tableCrc"), FString::Printf(TEXT("%08x"), TableSet->Checksum));
+				CombatJson->SetNumberField(TEXT("tableBindings"), TableSet->Table.Bindings.Num());
+			}
+			CombatJson->SetNumberField(TEXT("tableGateClosed"), Combat->GetGateClosedFrames());
+			CombatJson->SetBoolField(TEXT("inTimeline"), CombatState->Core.ActionState == EGSTN_ActionState::InTimeline);
+			CombatJson->SetNumberField(TEXT("timeline"), CombatState->Core.ActiveTimeline);
 			Json->SetObjectField(TEXT("combat"), CombatJson);
+		}
+	}
+
+	// The loadout of the PlayerState, on every machine that has the component (the server made it, the clients replicate it)
+	if (const APawn* Pawn = Cast<APawn>(GetOwner()))
+	{
+		{
+			const APlayerState* PlayerState = Pawn->GetPlayerState();
+			const UGSTN_LoadoutComponent* Loadout = GetOwner()->FindComponentByClass<UGSTN_LoadoutComponent>();
+			if (!Loadout && PlayerState)
+			{
+				Loadout = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>();
+			}
+			if (Loadout)
+			{
+				const TSharedRef<FJsonObject> LoadoutJson = MakeShared<FJsonObject>();
+				LoadoutJson->SetNumberField(TEXT("revision"), Loadout->GetRevision());
+				LoadoutJson->SetStringField(TEXT("kit"), Loadout->GetApplied().PrimaryKit.PrimaryAssetName.ToString());
+				TArray<TSharedPtr<FJsonValue>> Weapons;
+				for (const FPrimaryAssetId& Id : Loadout->GetApplied().AdditionalWeapons)
+				{
+					Weapons.Add(MakeShared<FJsonValueString>(Id.PrimaryAssetName.ToString()));
+				}
+				LoadoutJson->SetArrayField(TEXT("additionalWeapons"), Weapons);
+				LoadoutJson->SetBoolField(TEXT("kitResolved"), Loadout->GetResolvedKit() != nullptr);
+				LoadoutJson->SetNumberField(TEXT("tableEntries"), Loadout->GetCompiledTable().Entries.Num());
+				LoadoutJson->SetNumberField(TEXT("grantedAbilities"), Loadout->GetCompiledTable().GrantedAbilities.Num());
+				// The table bytes are the same on every machine for the same loadout: compare the checksums
+				TArray<uint8> TableBytes;
+				Loadout->GetCompiledTable().WriteBytes(TableBytes);
+				LoadoutJson->SetStringField(TEXT("tableCrc"), FString::Printf(TEXT("%08x"), FCrc::MemCrc32(TableBytes.GetData(), TableBytes.Num())));
+				Json->SetObjectField(TEXT("loadout"), LoadoutJson);
+			}
 		}
 	}
 
