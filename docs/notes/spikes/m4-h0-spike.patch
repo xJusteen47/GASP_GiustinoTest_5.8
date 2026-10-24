@@ -1,0 +1,228 @@
+diff --git a/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Private/Simulation/GSTN_CombatSimComponent.cpp b/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Private/Simulation/GSTN_CombatSimComponent.cpp
+index 1e30208..763021c 100644
+--- a/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Private/Simulation/GSTN_CombatSimComponent.cpp
++++ b/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Private/Simulation/GSTN_CombatSimComponent.cpp
+@@ -10,6 +10,7 @@
+ #include "Abilities/NpAbilitySystemComponent.h"
+ #include "AbilitySystemComponent.h"
+ #include "AbilitySystemGlobals.h"
++#include "Animation/AnimMontage.h"
+ #include "AttributeSet.h"
+ #include "Context/GSTN_InputContextProvider.h"
+ #include "DataTypes/AbilitySimulationDataTypes.h"
+@@ -378,6 +379,31 @@ void UGSTN_CombatSimComponent::TapScriptedButtons(int32 Mask)
+ 	PendingTaps |= static_cast<uint32>(Mask);
+ }
+ 
++bool UGSTN_CombatSimComponent::Spike_ServerOpenHitstop(int32 Frames)
++{
++	if (!GetOwner() || !GetOwner()->HasAuthority())
++	{
++		return false;
++	}
++	return NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([Frames](FGSTN_CombatSyncState& Sync)
++	{
++		const int32 Start = Sync.Core.Input.History.GetLatestFrame() + 1;
++		Sync.Core.HitstopStartFrame = Start;
++		Sync.Core.HitstopEndFrame = Start + Frames;
++	}, "SpikeHitstop") != nullptr;
++}
++
++FString UGSTN_CombatSimComponent::Spike_GetHitstop() const
++{
++	const FGSTN_CombatSyncState* Sync = GetSyncState();
++	if (!Sync)
++	{
++		return TEXT("none");
++	}
++	const int32 Latest = Sync->Core.Input.History.GetLatestFrame();
++	return FString::Printf(TEXT("%d,%d,%d,%d"), Sync->Core.HitstopStartFrame, Sync->Core.HitstopEndFrame, Latest, Sync->Core.IsInHitstop(Latest + 1) ? 1 : 0);
++}
++
+ bool UGSTN_CombatSimComponent::ServerWriteLoadoutRevision(uint16 Revision)
+ {
+ 	if (!GetOwner() || !GetOwner()->HasAuthority())
+@@ -798,6 +824,10 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
+ 	{
+ 		OutSync.Core.HitstopStartFrame = Frame;
+ 		OutSync.Core.HitstopEndFrame = Frame + HitstopTestFrames;
++		if (SpikeMontage && AbilitySystem)
++		{
++			AbilitySystem->PlaySyncedMontage(SpikeMontage, 0.f, 1.f, NAME_None, 0.f);
++		}
+ 	}
+ 
+ 	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
+diff --git a/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Public/Simulation/GSTN_CombatSimComponent.h b/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Public/Simulation/GSTN_CombatSimComponent.h
+index d214733..28a8ad0 100644
+--- a/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Public/Simulation/GSTN_CombatSimComponent.h
++++ b/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Public/Simulation/GSTN_CombatSimComponent.h
+@@ -288,6 +288,16 @@ public:
+ 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "1"))
+ 	int32 HitstopTestFrames = 8;
+ 
++	// THROWAWAY H0 spike
++	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
++	bool Spike_ServerOpenHitstop(int32 Frames);
++
++	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
++	FString Spike_GetHitstop() const;
++
++	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Spike")
++	TObjectPtr<class UAnimMontage> SpikeMontage = nullptr;
++
+ 	/**
+ 	 * Server only, from outside the simulation (a plain game thread call, like the loadout component's apply): writes the revision
+ 	 * of the loadout the tables were built from into the pending sync state (combat-m3 7.8). It travels to the clients with the next
+diff --git a/Source/GASP_Giustino2/Private/GASNPPTest/GSTN_SpikeH0.cpp b/Source/GASP_Giustino2/Private/GASNPPTest/GSTN_SpikeH0.cpp
+new file mode 100644
+index 0000000..f7e8ee1
+--- /dev/null
++++ b/Source/GASP_Giustino2/Private/GASNPPTest/GSTN_SpikeH0.cpp
+@@ -0,0 +1,85 @@
++// THROWAWAY (M4 H0 spikes): never committed, reverted before the docs commit.
++#include "GASNPPTest/GSTN_SpikeH0.h"
++#include "MoverComponent.h"
++#include "MoverTypes.h"
++#include "NativeGameplayTags.h"
++#include "NetworkPredictionLagCompensation.h"
++#include "GameFramework/Actor.h"
++
++UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_SpikeFrozen, "Spike.Mover.Frozen");
++
++FGSTN_LayeredMove_Freeze::FGSTN_LayeredMove_Freeze()
++{
++	DurationMs = 500.f;
++	MixMode = EMoveMixMode::OverrideAll;
++}
++
++bool FGSTN_LayeredMove_Freeze::GenerateMove(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, UMoverBlackboard* SimBlackboard, FProposedMove& OutProposedMove)
++{
++	OutProposedMove.MixMode = EMoveMixMode::OverrideAll;
++	OutProposedMove.LinearVelocity = FVector::ZeroVector;
++	OutProposedMove.AngularVelocityDegrees = FVector::ZeroVector;
++	return true;
++}
++
++bool FGSTN_LayeredMove_Freeze::HasGameplayTag(FGameplayTag TagToFind, bool bExactMatch) const
++{
++	const FGameplayTag Tag = TAG_SpikeFrozen.GetTag();
++	return (bExactMatch ? Tag.MatchesTagExact(TagToFind) : Tag.MatchesTag(TagToFind)) || Super::HasGameplayTag(TagToFind, bExactMatch);
++}
++
++FLayeredMoveBase* FGSTN_LayeredMove_Freeze::Clone() const
++{
++	return new FGSTN_LayeredMove_Freeze(*this);
++}
++
++void FGSTN_LayeredMove_Freeze::NetSerialize(FArchive& Ar)
++{
++	Super::NetSerialize(Ar);
++}
++
++UScriptStruct* FGSTN_LayeredMove_Freeze::GetScriptStruct() const
++{
++	return FGSTN_LayeredMove_Freeze::StaticStruct();
++}
++
++bool UGSTN_SpikeH0::QueueFreeze(AActor* Pawn, float DurationMs)
++{
++	UMoverComponent* Mover = Pawn ? Pawn->FindComponentByClass<UMoverComponent>() : nullptr;
++	if (!Mover)
++	{
++		return false;
++	}
++	TSharedPtr<FGSTN_LayeredMove_Freeze> Move = MakeShared<FGSTN_LayeredMove_Freeze>();
++	Move->DurationMs = DurationMs;
++	Mover->QueueLayeredMove(Move);
++	return true;
++}
++
++bool UGSTN_SpikeH0::HasFrozenTag(AActor* Pawn)
++{
++	const UMoverComponent* Mover = Pawn ? Pawn->FindComponentByClass<UMoverComponent>() : nullptr;
++	return Mover && Mover->HasGameplayTag(TAG_SpikeFrozen.GetTag(), true);
++}
++
++FString UGSTN_SpikeH0::MoverInfo(AActor* Pawn)
++{
++	const UMoverComponent* Mover = Pawn ? Pawn->FindComponentByClass<UMoverComponent>() : nullptr;
++	if (!Mover)
++	{
++		return TEXT("(no mover)");
++	}
++	return FString::Printf(TEXT("%s;%.1f,%.1f,%.1f;%d"), *Mover->GetMovementModeName().ToString(), Mover->GetVelocity().X, Mover->GetVelocity().Y, Mover->GetVelocity().Z, HasFrozenTag(Pawn) ? 1 : 0);
++}
++
++bool UGSTN_SpikeH0::AddLagComp(AActor* Pawn)
++{
++	if (!Pawn || Pawn->FindComponentByClass<UNetworkPredictionLagCompensation>())
++	{
++		return false;
++	}
++	UNetworkPredictionLagCompensation* Comp = NewObject<UNetworkPredictionLagCompensation>(Pawn, TEXT("SpikeLagComp"));
++	Pawn->AddInstanceComponent(Comp);
++	Comp->RegisterComponent();
++	return true;
++}
+diff --git a/Source/GASP_Giustino2/Public/GASNPPTest/GSTN_SpikeH0.h b/Source/GASP_Giustino2/Public/GASNPPTest/GSTN_SpikeH0.h
+new file mode 100644
+index 0000000..ffdf2d7
+--- /dev/null
++++ b/Source/GASP_Giustino2/Public/GASNPPTest/GSTN_SpikeH0.h
+@@ -0,0 +1,55 @@
++// THROWAWAY (M4 H0 spikes): never committed, reverted before the docs commit.
++#pragma once
++
++#include "CoreMinimal.h"
++#include "LayeredMove.h"
++#include "LayeredMoveBase.h"
++#include "Kismet/BlueprintFunctionLibrary.h"
++#include "GSTN_SpikeH0.generated.h"
++
++/** H0b: layered move that holds the pawn still (OverrideAll, zero velocity) and carries a Mover gameplay tag */
++USTRUCT()
++struct FGSTN_LayeredMove_Freeze : public FLayeredMoveBase
++{
++	GENERATED_BODY()
++
++	FGSTN_LayeredMove_Freeze();
++	virtual ~FGSTN_LayeredMove_Freeze() = default;
++
++	virtual bool SupportsAsync() const override { return false; }
++	virtual bool GenerateMove(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, UMoverBlackboard* SimBlackboard, FProposedMove& OutProposedMove) override;
++	virtual bool HasGameplayTag(FGameplayTag TagToFind, bool bExactMatch) const override;
++	virtual FLayeredMoveBase* Clone() const override;
++	virtual void NetSerialize(FArchive& Ar) override;
++	virtual UScriptStruct* GetScriptStruct() const override;
++	virtual FString ToSimpleString() const override { return TEXT("Freeze"); }
++};
++
++template<>
++struct TStructOpsTypeTraits<FGSTN_LayeredMove_Freeze> : public TStructOpsTypeTraitsBase2<FGSTN_LayeredMove_Freeze>
++{
++	enum { WithCopy = true };
++};
++
++UCLASS()
++class UGSTN_SpikeH0 : public UBlueprintFunctionLibrary
++{
++	GENERATED_BODY()
++
++public:
++	/** Queues a freeze on the pawn's Mover (call on every machine that simulates the pawn) */
++	UFUNCTION(BlueprintCallable, Category = "Spike")
++	static bool QueueFreeze(AActor* Pawn, float DurationMs);
++
++	/** UMoverComponent::HasGameplayTag(Spike.Mover.Frozen) (committed sync state) */
++	UFUNCTION(BlueprintCallable, Category = "Spike")
++	static bool HasFrozenTag(AActor* Pawn);
++
++	/** "mode;velocity;frozen" */
++	UFUNCTION(BlueprintCallable, Category = "Spike")
++	static FString MoverInfo(AActor* Pawn);
++
++	/** H0e: adds and registers a UNetworkPredictionLagCompensation on the pawn */
++	UFUNCTION(BlueprintCallable, Category = "Spike")
++	static bool AddLagComp(AActor* Pawn);
++};

@@ -8,8 +8,14 @@ Saved/
 Plugins/*/Binaries/
 Plugins/*/Intermediate/
 
-# Content is not versioned in this repository yet (large binary assets)
-Content/
+# Content: only the project's own folders are versioned (through Git LFS, see .gitattributes).
+# The rest is sample content (GASP, MetaHumans, audio...): about 5 GB, not versioned.
+Content/*
+!Content/Blueprints/
+!Content/GAS/
+!Content/GASNPPTest/
+!Content/Input/
+!Content/Levels/
 Plugins/*/Content/
 
 # IDE / solution files (regenerated from the .uproject)
@@ -23,4 +29,12 @@ Plugins/*/Content/
 *.suo
 
 # Local Claude Code settings and tooling
-.claude/
+.claude/*
+!.claude/skills/
+
+# Nested plugin folders (Plugins/GASNPP/*, Plugins/EngineOverrides/*)
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+Plugins/**/Content/
+
+__pycache__/
