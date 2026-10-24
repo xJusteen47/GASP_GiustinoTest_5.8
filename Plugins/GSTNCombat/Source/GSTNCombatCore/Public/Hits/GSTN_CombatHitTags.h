@@ -14,6 +14,9 @@ namespace GSTNCombatHitTags
 	/** Root of the hurtbox classification tags. Leaves are ini content, code never names one */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_Hurtbox);
 
+	/** Root of the surface type tags a contact is classified by (combat-m4-hits 7b). Leaves (Wall, Glass, Crate, Trampoline) are designer content in the plugin tag ini, code never names one */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_SurfaceType);
+
 	/** A hit that damages and moves its victim. An unset hit type means the same */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_Normal);
 
