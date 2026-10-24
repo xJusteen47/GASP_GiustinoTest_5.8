@@ -71,3 +71,7 @@ New layer on top of the spec; the spec's section 2.7 above marker stays as it is
   `ApproachProbePatternFollowsUp` (all with diagonal Up); `Runtime.ApproachProbesRespectTraceCap`,
   `ApproachProbesAreLowestPriority`, `PlaneComponentContainsAndProjects`, `ApproachStyleValidates`. The test map
   `L_DepthMarker_Min` should get a low platform with a higher one beside it and a gap.
+
+## To align before the final version (2026-10-24)
+
+- Player colour order: the prototype ranks players alphabetically from GameState::PlayerArray on every machine every frame, so a late joiner with an earlier name shifts everyone else's colour. combat-parts.md 6.0 wants the host to fix the player numbers at match start (alphabetical then) and late joiners to take the first free number; read that replicated number instead of ranking locally.
