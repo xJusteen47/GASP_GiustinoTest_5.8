@@ -341,3 +341,12 @@ Branch feature/gas-npp-5.8. No build, no tests, no editor, no code changes. The 
 Done: `docs/notes/m4-spike-report.md` with the source findings: H0b (a layered move can carry a Mover tag, `MoverComponent.cpp:693-740`) and H0e (`RewindActors/UnwindActors` and `UNetworkPredictionLagCompensation` exist in the fork).
 Pending (editor): H0a, H0c, H0d and the live parts of H0b/H0e (rollbacks per hit, montage divergence, buffer ms, freeze in each mode, rewind cost). NEXT: open the project in Rider, start the editor, run them, then H5.
 Working tree: `.mcp.json` and `.mcp.json.tmp` dirty as before, not committed.
+
+## HANDOVER 19 (laptop, 2026-10-24): M4 H5 GAS damage, attributes, effects, events
+
+Branch feature/gas-npp-5.8. Build green (UBT, full, editor closed), headless `Automation RunTests GSTN` 302 successes, exit code 0 (294 + 8 `GSTNCombat.GAS.Damage.*`; Saved/Logs/headless-h5.log). No PIE (GAS layer only; no NP or shared simulation code touched). Editor CLOSED (never opened this session). `GSTNCombatGAS` still has no NetworkPrediction / Mover dependency.
+Done: H5 (commit 25ac7de), details and every deviation in m4-doc-deltas "H5": `UGSTN_HealthAttributeSet`, `UGSTN_GE_Damage` + `UGSTN_DamageExecution`, `UGSTN_GE_MeterGain`, `FGSTN_HitEffectContext` (+ `Make`), `FGSTN_HitEventPayload`, `UGSTN_CombatRulesComponent`, the native tags of the plan (Tumble only: Hitstun/Hitstop were in the core).
+Deviations to know: the PercentCapped cap is applied by the execution and reads the target's `MaxHealth` attribute (not the rules' `MaxHealth`: H9 must reconcile); the context carries the rules as a local weak pointer (not serialized; no rules = Percent mode) plus `HurtboxIndex`/`KOReason`; no AbilitySystemGlobals subclass (needs a project ini line, not touched).
+Pending: (1) `Input.BufferEvent.HitReceived` tag in GSTNInputCore: owner has not answered, deliberately NOT added; (2) GameState Blueprint wiring of `UGSTN_CombatRulesComponent` and adding the health set to the harness pawn (owner OK, H13); (3) the standard rules asset still names no effect classes (H9/H13); (4) asset `GSTN_CombatRules_Standard`, `BlueprintStepRoundTrip`, H0 spikes, as in HANDOVER 17/18.
+Working tree note: `.mcp.json` (modified) and `.mcp.json.tmp` were dirty before this session and are not committed.
+NEXT: H0 spikes in the editor, then H6 (NP sync state, world subsystem, snapshot, inbox).
