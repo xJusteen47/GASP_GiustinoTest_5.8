@@ -32,6 +32,18 @@ struct FGSTN_CombatSyncCore
 
 	bool IsInHitstop(int32 Frame) const { return Frame >= HitstopStartFrame && Frame < HitstopEndFrame; }
 
+	/**
+	 * The move clock of a frame (combat-m4-hits 8): a frame inside the window of the previous state adds one to PausedFramesTotal, so
+	 * the combat clock (frame minus paused frames) stands still. Returns whether the frame was a hitstop frame. Deterministic: it reads
+	 * and writes this state only
+	 */
+	bool AdvanceHitstopClock(int32 Frame)
+	{
+		const bool bHitstopFrame = IsInHitstop(Frame);
+		PausedFramesTotal += bHitstopFrame ? 1 : 0;
+		return bHitstopFrame;
+	}
+
 	// ---- The action part (combat-m3 7.1): what the combatant is doing, the timeline it runs and the requests of this frame.
 	// An idle combatant holds the defaults and costs one bit on the wire.
 

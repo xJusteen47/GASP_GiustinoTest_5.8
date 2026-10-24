@@ -33,6 +33,7 @@ class UGSTN_InputConfig;
 class UGSTN_InputContextProvider;
 class UGSTN_LoadoutComponent;
 class UGSTN_MoverSimStateTracker;
+class UGameplayEffect;
 class UMoverComponent;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
@@ -289,6 +290,14 @@ public:
 	int32 HitstopTestFrames = 8;
 
 	/**
+	 * Instant effect a Freeze request applies to this entity (combat-m4-hits 8): holds its Mover still for the window and restores the
+	 * velocity afterwards. Replace it with UGSTN_GE_FreezeZeroVelocity for a victim that leaves the freeze at rest. The duration travels
+	 * as the SetByCaller Combat.SetByCaller.FreezeSeconds
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> FreezeEffect;
+
+	/**
 	 * Server only, from outside the simulation (a plain game thread call, like the loadout component's apply): writes the revision
 	 * of the loadout the tables were built from into the pending sync state (combat-m3 7.8). It travels to the clients with the next
 	 * correction, and the combat tick compares it with the revision of its local table (FGSTN_CombatSyncCore::IsLoadoutCurrent).
@@ -368,6 +377,9 @@ private:
 	bool bStatsModifierQueued = false;
 
 	void HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep);
+
+	/** Applies the freeze effect for Frames frames of StepMs each. Only from the ability system's pre-tick (rule 2: Mover is moved through a queued move) */
+	void ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect, int32 Frames, float StepMs);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;

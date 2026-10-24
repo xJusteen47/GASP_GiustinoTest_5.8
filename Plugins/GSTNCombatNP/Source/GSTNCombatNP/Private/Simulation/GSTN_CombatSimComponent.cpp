@@ -11,6 +11,8 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "AttributeSet.h"
+#include "GSTN_CombatNPTags.h"
+#include "Movement/GSTN_LayeredMove_Freeze.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
@@ -70,6 +72,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
 	bWantsInitializeComponent = true;
 	SetIsReplicatedByDefault(true);
+	FreezeEffect = UGSTN_GE_Freeze::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -652,11 +655,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	// Hitstop (combat-m3 7.1): a frame inside the window of the previous state stands still on the combat clock. The window the
 	// debug button opens on frame F pauses from F+1 (F itself was simulated with the clock running when it opened)
-	const bool bHitstopFrame = InSync.Core.IsInHitstop(Frame);
-	if (bHitstopFrame)
-	{
-		++OutSync.Core.PausedFramesTotal;
-	}
+	const bool bHitstopFrame = OutSync.Core.AdvanceHitstopClock(Frame);
+	// The resolver of hits (M4 H8/H9) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
 	{
@@ -798,6 +798,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		OutSync.Core.HitstopStartFrame = Frame;
 		OutSync.Core.HitstopEndFrame = Frame + HitstopTestFrames;
+		// The Mover half of the window: the freeze runs for as many frames as the window, from this frame (the ability system's pre-tick executes it)
+		OutSync.Core.Requests.Add(EGSTN_RequestType::Freeze, Frame, static_cast<int16>(HitstopTestFrames));
 	}
 
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
@@ -911,6 +913,20 @@ void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, 
 	FGSTN_InputHostUtils::PublishOutbox(EventOutbox, GetOwner());
 }
 
+void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect, int32 Frames, float StepMs)
+{
+	if (!AbilitySystem || !Effect || Frames <= 0)
+	{
+		return;
+	}
+	const FGameplayEffectSpecHandle Spec = AbilitySystem->MakeOutgoingSpec(Effect, 1.f, AbilitySystem->MakeEffectContext());
+	if (Spec.IsValid())
+	{
+		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_FreezeSeconds, Frames * StepMs * 0.001f);
+		AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+	}
+}
+
 void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep)
 {
 	// The combat model ticked this frame already: its pending state is this frame's output
@@ -960,6 +976,15 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		if (Slot.Type == EGSTN_RequestType::SwapWeaponStats && Slot.Frame == Frame)
 		{
 			FGSTN_WeaponStatsSwap::Execute(*AbilitySystem, FrameSet.WeaponStats, Slot.Arg, Sync->Core.ActiveWeaponIndex);
+		}
+	}
+
+	// A freeze of this frame (a hit's hitstop, or the debug window): queued on Mover before it ticks, for as many frames as the window
+	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
+	{
+		if (Slot.Type == EGSTN_RequestType::Freeze && Slot.Frame == Frame)
+		{
+			ExecuteFreeze(FreezeEffect, Slot.Arg, TimeStep.StepMs);
 		}
 	}
 
