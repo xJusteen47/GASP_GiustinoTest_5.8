@@ -7,6 +7,8 @@
 #include "GameplayTagContainer.h"
 #include "Input/GSTN_InputSlot.h"
 #include "Jump/GSTN_JumpTypes.h"
+class UGSTN_CombatRules;
+
 #include "GSTN_CombatSettings.generated.h"
 
 /**
@@ -88,6 +90,20 @@ public:
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Kits")
 	TSoftObjectPtr<UGSTN_InputSlotSet> DefaultCommandSet;
+
+	/**
+	 * The rules of the match's combat (hit pipeline, knockback model, teams). Soft: loaded outside the simulation. Empty means the
+	 * built-in standard rules, which UGSTN_CombatRules::CreateStandard builds with the same values as GSTN_CombatRules_Standard,
+	 * so a project that sets nothing has working hits
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Rules")
+	TSoftObjectPtr<UGSTN_CombatRules> DefaultRules;
+
+	/**
+	 * The rules of DefaultRules once loaded, or the built-in standard rules when it is empty or does not load. Call it outside the
+	 * simulation (BeginPlay): it may load an asset or build the built-in copy, which is then kept
+	 */
+	const UGSTN_CombatRules* ResolveDefaultRules() const;
 
 	/**
 	 * The ground speed, in cm/s, that the speeds of the character's movement modes are authored for. The stats movement modifier
