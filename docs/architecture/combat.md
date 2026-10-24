@@ -664,7 +664,7 @@ FGSTN_LoadoutData (what a player owns and saves)
   | `MaxFallSpeed`, `FastFallSpeed`, `FastFallGravityScale` | Terminal speeds and fast-fall. |
   | `MinJumpHoldFrames` | Frames before a release starts cutting (the minimum hop). |
   | `AirJumpCount`, `AirJumpVelocity` | Multi-jump. |
-  | `JumpSquatFrames` | Ground startup before take-off (0 = immediate). |
+  | `JumpSquatFrames` | Not read (C19): the squat is data on the jump ability (`SquatFrames`), default in `UGSTN_CombatSettings`. |
 
 - **Jump state lives in the combat sync state** (`JumpPhase`, `JumpStartFrame`, `bJumpCut`, `AirJumpsUsed`,
   `bFastFalling`); "held" is read from the input history (the jump press still held continuously), so it is
