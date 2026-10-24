@@ -120,6 +120,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetHitLog() const;
 
+	/** What the inbox of this victim received, one entry per drained hit, the last 512 frames. Under the same switch as the hit log */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetInboxLog() const;
+
 	/**
 	 * "frame:hitbox:space:x,y,z;..." of the world centre of every open hitbox, the last 512 frames, written under the same switch as the hit
 	 * log. The harness checks the frame of a hit against the geometry with it
@@ -515,6 +519,14 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGSTN_HurtboxSetDefinition> ActiveHurtboxSet;
+
+	/**
+	 * Until the victim side exists (H9) the entries of the inbox are drained and dropped at the top of every tick, so the inbox never fills; under
+	 * gstn.Combat.Debug.HitLog the drain is logged as "frame:attacker:hitbox:hurtbox:hurtState:ricochet;..." (GetInboxLog)
+	 */
+	void DrainInboxForNow(int32 Frame);
+	TArray<FGSTN_HitInboxEntry> InboxScratch;
+	TMap<int32, FString> InboxLogByFrame;
 
 	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */
 	void RunAttackerStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncCore& Core, const FGSTN_StepSnapshot* Snapshot, const FGSTN_HitGroupMask& GroupMask);

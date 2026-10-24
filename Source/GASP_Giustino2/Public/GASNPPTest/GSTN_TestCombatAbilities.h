@@ -31,6 +31,25 @@ public:
 };
 
 /**
+ * The test move of the attacker side (combat-m4-hits 6, M4 H8): bound to Command.Attack.Neutral by WPN_Test_Hits / KIT_Test_Hits. A 32 frame
+ * timeline with a hitbox track of each space, every hit with an authored hitstop (8 frames for the victim, 6 for the attacker), and a cancel
+ * window into the special commands that opens only on a hit. The geometry is relative to an attacker at the origin facing +X:
+ *   frames  4..7   Root           sphere r 50, group 0, sweeps from 80 to 170 cm ahead (keys over the track), swept between frames
+ *   frames 10..13  BakedSocket    sphere r 45, group 1, socket hand_r baked to run from (100, 260) to (100, 140) cm
+ *   frames 16..19  WorldAtMoveStart sphere r 60, group 2, at (200, -160) cm of where the move started
+ *   frames 20..23  Root           sphere r 140 around the attacker, group 3, with an Ally variant (damage 3)
+ * Owns Test.State.HitMove while the timeline runs.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestHitMove : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestHitMove(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
  * A timeline ability no command starts: the owned tag Test.Probe.TagTrigger (granted by the tag raiser probe, which a press of the
  * buff button activates from inside the simulation) triggers it, and the combat tick adopts it (combat-m3 7.4, scenario_triggered_timeline).
  * It owns Test.State.Triggered while the timeline runs. 12 frames, no startup override window, free from frame 12. The test

@@ -620,6 +620,9 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
 	const FGSTN_StepSnapshot* StepSnapshot = World ? &World->EnsureSnapshot(Frame) : nullptr;
 
+	// Hits written for this frame by the attackers of the previous one. Nobody resolves them before H9
+	DrainInboxForNow(Frame);
+
 	// The aim of this frame's command, kept for the ability system's tick that follows (GetAimRotation)
 	FrameAim.bHasAim = Input.Cmd->bHasAim;
 	FrameAim.Yaw = Input.Cmd->AimYaw;

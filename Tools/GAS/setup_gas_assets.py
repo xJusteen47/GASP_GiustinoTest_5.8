@@ -20,6 +20,10 @@
 #  5. (opt-in, --combat-content) C15 loadout test content in /Game/GASNPPTest/Combat (specs in combat_content_specs()): the kits
 #     KIT_Test_Alpha / KIT_Test_Beta and the weapons WPN_Test_Blade / Spear / Support. New assets only. Needs the tags of
 #     Config/Tags/GSTNCombatTest.ini and step 4's slot set.
+#  6. (opt-in, --hits-content) M4 H8 hit test content in /Game/GASNPPTest/Combat (specs in hits_content_specs()): the hurtbox set
+#     HBS_Test_Pawn (torso / head / feet capsules, tag leaves of Config/Tags/GSTNCombat.ini), the weapon WPN_Test_Hits and the kit KIT_Test_Hits
+#     (Command.Attack.Neutral -> GSTN_GA_TestHitMove, whose frame data is in C++: a hitbox of each space), and BP_GASNPP_TestCharacter's
+#     combat component HurtboxSet -> HBS_Test_Pawn (the one shared Blueprint this step edits; backed up first).
 # The Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
 #
 # Current layout (2026-10-17, set by hand from the editor, not by this script): the NpAbilitySystem (GA_Jump, GA_WallSlide)
@@ -671,7 +675,97 @@ def setup_combat_content_c18():
     log('C18 combat content written (scheme, supers, kits Gamma / Delta / Sigma / Omega)')
     return True
 
-def run(wall_transition=False, combat_input=False, test_character=False, combat_content=False):
+
+# ---------------------------------------------------------------------------------------------------- 6. hit test content
+
+def hits_content_specs():
+    """M4 H8 test content as plain data. Hurtboxes are capsules in the local space of the pawn (the actor origin is the middle of its capsule).
+    (name, bone, tag, priority, radius, half height incl. the hemispheres, local z)"""
+    return {
+        'hurtbox_set': 'HBS_Test_Pawn',
+        'hurtboxes': [
+            ('torso', 'spine_03', 'Combat.Hurtbox.Torso', 1, 35.0, 55.0, 15.0),
+            ('head', 'head', 'Combat.Hurtbox.Head', 2, 22.0, 22.0, 68.0),
+            ('feet', 'foot_l', 'Combat.Hurtbox.Feet', 0, 30.0, 30.0, -62.0),
+        ],
+        'weapon': ('WPN_Test_Hits', 'Weapon.Test.Hits', 'Test.Role.Primary', [('Command.Attack.Neutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestHitMove')]),
+        'kit': ('KIT_Test_Hits', 'Kit.Test.Hits', 'WPN_Test_Hits', {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
+                [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump')]),
+    }
+
+
+def setup_hits_content():
+    """Creates/updates the hurtbox set, the hit weapon and kit, and points the test character's combat component at the set. Rewrites every
+    property from the specs on each run (a rerun converges). Returns True when something was saved."""
+    specs = hits_content_specs()
+    base = combat_content_specs()
+    changed = False
+
+    set_asset, _ = _get_or_create(specs['hurtbox_set'], TEST_COMBAT_DIR, unreal.GSTN_HurtboxSetDefinition, unreal.DataAssetFactory())
+    boxes = []
+    for name, bone, tag, priority, radius, half_height, z in specs['hurtboxes']:
+        shape = unreal.GSTN_HitShape()
+        shape.set_editor_property('type', unreal.GSTN_ShapeType.CAPSULE)
+        shape.set_editor_property('extent', unreal.Vector(radius, radius, half_height))
+        shape.set_editor_property('local', unreal.Transform(location=unreal.Vector(0.0, 0.0, z)))
+        box = unreal.GSTN_Hurtbox()
+        box.set_editor_property('name', name)
+        box.set_editor_property('bone', bone)
+        box.set_editor_property('shape', shape)
+        box.set_editor_property('tags', _tag_container([tag]))
+        box.set_editor_property('priority', priority)
+        boxes.append(box)
+    set_asset.set_editor_property('hurtboxes', boxes)
+    unreal.EditorAssetLibrary.save_loaded_asset(set_asset)
+    changed = True
+
+    name, identity, role, bindings = specs['weapon']
+    weapon, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_WeaponDefinition, unreal.DataAssetFactory())
+    weapon.set_editor_property('display_name', name)
+    weapon.set_editor_property('weapon_tags', _tag_container([identity, role]))
+    weapon.set_editor_property('bindings', [b for b in (_binding(*row) for row in bindings) if b])
+    weapon.set_editor_property('stats_effect', None)
+    weapon.set_editor_property('stat_modifiers', [])
+    unreal.EditorAssetLibrary.save_loaded_asset(weapon)
+
+    name, identity, weapon_name, stat_values, bindings = specs['kit']
+    kit, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_PrimaryKitDefinition, unreal.DataAssetFactory())
+    kit.set_editor_property('kit_tags', _tag_container([identity]))
+    kit.set_editor_property('primary_weapon', unreal.load_asset(f'{TEST_COMBAT_DIR}/{weapon_name}'))
+    kit.set_editor_property('allowed_additional_weapons', _any_tag_query(base['allowed_support_role']))
+    kit.set_editor_property('max_additional_weapons', 1)
+    values = []
+    for tag, value in stat_values.items():
+        stat = unreal.GSTN_StatValue()
+        stat.set_editor_property('stat', _make_tag(tag))
+        stat.set_editor_property('value', value)
+        values.append(stat)
+    stats = unreal.GSTN_KitStats()
+    stats.set_editor_property('values', values)
+    kit.set_editor_property('stats', stats)
+    kit.set_editor_property('init_stats_effect', getattr(unreal, base['init_effect'], None))
+    command_set = unreal.GSTN_CommandSet()
+    command_set.set_editor_property('base_set', unreal.load_asset(base['base_slot_set']))
+    kit.set_editor_property('command_set', command_set)
+    kit.set_editor_property('kit_bindings', [b for b in (_binding(*row) for row in bindings) if b])
+    unreal.EditorAssetLibrary.save_loaded_asset(kit)
+
+    # The one shared Blueprint of this step (owner approved 2026-10-24): the combat component's hurtbox set, nothing else
+    bp = unreal.load_asset(TEST_CHAR)
+    comp = next((obj for _, obj in blueprint_components(bp) if isinstance(obj, unreal.GSTN_CombatSimComponent)), None)
+    if not comp:
+        log(f'ERROR: no GSTN_CombatSimComponent on {TEST_CHAR}')
+    elif comp.get_editor_property('hurtbox_set') != set_asset:
+        backup(TEST_CHAR)
+        comp.set_editor_property('hurtbox_set', set_asset)
+        unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+        unreal.EditorAssetLibrary.save_loaded_asset(bp)
+        log(f'{TEST_CHAR}: combat component HurtboxSet -> {specs["hurtbox_set"]}')
+    log(f'hit content written under {TEST_COMBAT_DIR}')
+    return changed
+
+
+def run(wall_transition=False, combat_input=False, test_character=False, combat_content=False, hits_content=False):
     """Step 2 and step 3 change shared Blueprints (the test character, the sandbox character) and are opt-in; step 4 never does."""
     log(f'mapping context changed: {setup_mapping_context()}')
     if test_character:
@@ -687,9 +781,12 @@ def run(wall_transition=False, combat_input=False, test_character=False, combat_
     if combat_content:
         log(f'combat content changed: {setup_combat_content()}')
         log(f'C18 combat content changed: {setup_combat_content_c18()}')
+    if hits_content:
+        log(f'hits content changed: {setup_hits_content()}')
 
 
 if __name__ == '__main__':
     import sys
     run(wall_transition='--wall-transition' in sys.argv, combat_input='--combat-input' in sys.argv,
-        test_character='--test-character' in sys.argv, combat_content='--combat-content' in sys.argv)
+        test_character='--test-character' in sys.argv, combat_content='--combat-content' in sys.argv,
+        hits_content='--hits-content' in sys.argv)
