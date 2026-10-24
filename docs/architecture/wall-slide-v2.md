@@ -309,3 +309,70 @@ bumps (1-5), any visible snap. Decision inputs: lanes b/c/d are the owner's requ
    v2 adesso; il core dopo i test, in un commit separato.
 6. **Niente substep in v2**: un solo sweep per tick, limite implicito "un raggio di capsula per tick" (≈ 2000 cm/s a 60 Hz,
    ben oltre i 400-800 della slide). Accetti il limite al posto del loop di substep? *Default*: sì.
+
+## 6. Owner direction of 2026-10-24 and the resulting design (supersedes §2 where they differ)
+
+Owner, 2026-10-24 (verbatim): "il wallslide dovrebbe mantenere il momentum in entrata, avere supporto alle basi di movimento,
+avere poco movimento di base (tipo mario), ma grande capacità di frenata. Inoltre vorrei che fosse intercambiabile con una modalità
+di climbing con parametri aggiustabili su alcune superfici dedicate che consentono il climbing vero. Hopefully, dovrebbero
+praticamente avere la logica di base in comune, ed essere estendibili tramite proposed move e quant altro. [...] il ragionamento
+degli sviluppatori di warframe: la geometria dei loro tileset è troppo complessa, e quindi non possono introdurre un wall run
+fluido. Il wallslide dell'ultima volta rallenta, si intoppa, e il modo in cui avviene il girarsi causa l'inceppamento su piccoli
+dislivelli o geometria complessa. Vorrei un modo per evitare ciò."
+
+### 6.1 Why the current slide snags (the Warframe problem), and the rule that removes it
+
+1. **The collision shape turns with the wall.** `ComputeTargetUp`/`OrientToWall` tilt and yaw the capsule toward each new normal;
+   a capsule rotated into complex geometry overlaps it, the orientation step needs overlap tests and pushes, and a small ledge or
+   facet makes it jam or pop. **Rule: the collision capsule never rotates on a wall.** Its axis stays gravity-up (a capsule is
+   symmetric about that axis, so facing the wall needs no collision rotation at all); facing is presentation (mesh/actor yaw for
+   animation), written to the sync state as a yaw only. Climbing overhangs, where tilting is unavoidable, is the climb mode's
+   opt-in, never the slide's.
+2. **Motion follows the raw surface.** Every facet normal changes the movement plane and the velocity transport, so a ribbed or
+   tiled wall turns into dozens of tiny corners, each braking or deflecting. **Rule: the character moves on a proxy plane**, not on
+   the raw surface: the proxy normal is the contact sweep's normal filtered (deadzone + rate limit, as today) **and** stabilised by
+   the lookahead (the classification of §2.2 step 5: `Bump` and `Slope` never change the proxy's plane abruptly, only real
+   `Concave`/`Convex` edges do, and then through a rate-limited turn). Small features are absorbed by adhesion (the capsule stays at
+   `WallGap` from the real surface, pulled in unswept, pushed out swept) and by step-over along the wall normal, never by a turn.
+3. **Speed is lost in many places.** Today friction, axis braking, transport and substep slides each take a share. **Rule: one
+   place decides speed** (the control model, §6.2); geometry may only cap speed ahead of real corners (§2.2 step 6), transport is
+   length-preserving, and a blocked sweep slides along the surface without a separate friction term.
+
+### 6.2 Control model (slide): momentum in, little control, strong braking
+
+Velocity on the wall is split into the along-gravity axis `V` and the horizontal-on-wall axis `H` of the proxy plane.
+
+- **Entry**: the falling velocity is projected onto the proxy plane at grab time, keeping its length (`EntrySpeedKeep = 1.0`,
+  tunable, with `MaxEntrySpeed` clamp): you keep the horizontal run and the vertical speed you had. Nothing is zeroed.
+- **Horizontal `H`, Mario style**: momentum decays slowly (`HorizontalDrag`, low); stick input along `H` adds only a small
+  acceleration (`HorizontalControlAccel`, low, and capped at `HorizontalControlMaxSpeed`); stick **against** the current `H`
+  brakes hard (`HorizontalBrakeDecel`, high).
+- **Vertical `V`**: gravity along the wall scaled (`GravityScale`) toward a terminal speed (`TerminalDownSpeed`) with a soft
+  approach; upward entry speed decays under gravity (no instant stop). Stick **down** (toward gravity) is "let go faster"
+  (`DownBoost`, optional); stick **up** or a dedicated brake button brakes hard (`VerticalBrakeDecel`, high) down to
+  `BrakeMinSpeed`. Which input brakes is data (`FGSTN_WallBrakeInput`: stick-against-motion, stick-up, an input tag), so
+  the input layer and the GA can decide.
+- All of it is a pure function `UGSTN_WallControlUtils::StepSlideVelocity(Settings, VelocityOnPlane, InputOnPlane, Brake, Dt)`,
+  testable without a world, and called from `GenerateMove` (it builds the `FProposedMove`), not from the tick.
+
+### 6.3 One core, two modes (slide and climb), extended through the proposed move
+
+- `UGSTN_WallTraverseModeBase` (new, abstract): the lean pipeline of §2.2 (base riding, exit checks, lookahead/classify, cap,
+  single move sweep, step-over, contact+adhesion in one sweep, proxy plane, presentation yaw, capture) — no control model of its own.
+- `GenerateMove` builds the `FProposedMove` from a virtual `ComputeWallVelocity(StartState, Plane, Input, Dt)`; Mover's layered
+  moves and queued moves (abilities, knockback, launches) combine with it as for any mode, and the tick moves by the **final**
+  proposed velocity. Extension = override `ComputeWallVelocity` (or the edge hooks of §2.6), or add a layered move; never the tick.
+- `UGSTN_WallSlideV2MovementMode`: `ComputeWallVelocity` = §6.2. `UGSTN_WallClimbV2MovementMode`: full 2D stick control on the
+  proxy plane (`ClimbSpeed`, `ClimbAccel`, `ClimbBrake`, optional stamina hook as a tag query, no gravity slide while holding),
+  allowed only on surfaces whose `Surface.Behaviour` has `WallClimb` (T5 filter on the mode and on its entry transition), with
+  `bAllowCapsuleTilt` (off by default) for overhangs. Both share every tunable struct except their control settings.
+- **Interchangeable**: the entry transition resolves the hit's surface (`UGSTN_SurfaceUtils::Resolve`) and picks the climb mode
+  when the surface offers `WallClimb` and the climb mode is registered, else the slide (a priority list of `{TagQuery, ModeName}`
+  on the transition, data). While on a wall, crossing from a climb-only surface onto a slide-only one switches mode in place with
+  the velocity kept (same core, same sync state).
+
+### 6.4 Plan update
+
+W0-W1 unchanged (instrumentation, pure edge math) plus `UGSTN_WallControlUtils` and its tests in W1. W2 builds the shared base and
+the slide on it; W3-W4 unchanged (corners, bumps); **W4b** the climb mode and the surface-driven transition; W5-W6 unchanged. The
+current modes stay as they are for the A/B test.
