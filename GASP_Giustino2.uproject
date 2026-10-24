@@ -179,6 +179,10 @@
 		{
 			"Name": "GSTNCamera",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNInteract",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"
