@@ -12,6 +12,7 @@ UGSTN_GA_WallSlide::UGSTN_GA_WallSlide(const FObjectInitializer& ObjectInitializ
 	ActivationBlockedTags.AddTag(GSTNAbilityTags::State_Movement_WallSlideBlocked);
 
 	WallModeNames.Add(TEXT("WallSliding"));
+	WallModeNames.Add(TEXT("WallSlidingV2"));
 }
 
 void UGSTN_GA_WallSlide::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
