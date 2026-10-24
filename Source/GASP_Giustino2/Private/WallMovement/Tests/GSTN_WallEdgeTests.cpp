@@ -162,4 +162,41 @@ bool FGSTN_WallEdgeGravityIndependentTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallEdgeStepFaceTest, "GSTN.Wall.Edge.FlatFacedStepIsBumpAndRecedingEdgeIsConvex", GSTNWallEdgeTest::TestFlags)
+bool FGSTN_WallEdgeStepFaceTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNWallEdgeTest;
+	const FGSTN_WallEdgeSettings S;
+	// A face parallel to the wall 5 cm proud of it, sampled 60 cm ahead: a slope could not have made that offset, it is a step
+	TestEqual(TEXT("Flat-faced step"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -5.f, 0.f, false, 60.f), EGSTN_WallEdgeKind::Bump);
+	// A 10 degree slope sampled 20 cm ahead makes up to 3.5 cm: slope
+	TestEqual(TEXT("Gentle slope"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -3.f, 10.f, false, 20.f), EGSTN_WallEdgeKind::Slope);
+	TestEqual(TEXT("Unknown distance keeps the old rule"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -5.f, 0.f, false), EGSTN_WallEdgeKind::Slope);
+	// Past the step height the sign of the offset says which way the surface turns
+	TestEqual(TEXT("Rising toward the character"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -40.f, 45.f, false, 90.f), EGSTN_WallEdgeKind::Concave);
+	TestEqual(TEXT("Falling away"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, 40.f, 45.f, false, 90.f), EGSTN_WallEdgeKind::Convex);
+	TestEqual(TEXT("Falling away beyond the limit"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, 40.f, 85.f, false, 90.f), EGSTN_WallEdgeKind::Blocked);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallEdgeStepLiftTest, "GSTN.Wall.Edge.StepLiftAndCapsuleSupport", GSTNWallEdgeTest::TestFlags)
+bool FGSTN_WallEdgeStepLiftTest::RunTest(const FString& Parameters)
+{
+	const FGSTN_WallEdgeSettings S;
+	// Seated 2 cm above the plane: only the part of the bump above the capsule has to be cleared, plus the margin
+	EdgeNearlyEq(*this, TEXT("5 cm bump"), UGSTN_WallEdgeUtils::StepLiftFor(S, 5.f, 2.f), 3.f + S.StepMargin);
+	EdgeNearlyEq(*this, TEXT("A bump under the gap needs only the margin"), UGSTN_WallEdgeUtils::StepLiftFor(S, 1.f, 2.f), S.StepMargin);
+	EdgeNearlyEq(*this, TEXT("Never more than step + margin"), UGSTN_WallEdgeUtils::StepLiftFor(S, 80.f, 2.f), S.MaxStepHeight + S.StepMargin);
+
+	// An upright capsule: its radius sideways, its half height along its axis, in between for a diagonal
+	const FQuat Upright = FQuat::Identity;
+	EdgeNearlyEq(*this, TEXT("Sideways"), UGSTN_WallEdgeUtils::CapsuleSupportAlong(34.f, 88.f, Upright, FVector::ForwardVector), 34.f);
+	EdgeNearlyEq(*this, TEXT("Along the axis"), UGSTN_WallEdgeUtils::CapsuleSupportAlong(34.f, 88.f, Upright, FVector::UpVector), 88.f);
+	const FVector Diagonal = FVector(1, 0, 1).GetSafeNormal();
+	EdgeNearlyEq(*this, TEXT("Diagonal"), UGSTN_WallEdgeUtils::CapsuleSupportAlong(34.f, 88.f, Upright, Diagonal), 54.f * Diagonal.Z + 34.f);
+	const FQuat Tilted(FVector::RightVector, FMath::DegreesToRadians(90.f));
+	EdgeNearlyEq(*this, TEXT("A tilted capsule follows its own axis"), UGSTN_WallEdgeUtils::CapsuleSupportAlong(34.f, 88.f, Tilted, FVector::ForwardVector), 88.f, 1e-3);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

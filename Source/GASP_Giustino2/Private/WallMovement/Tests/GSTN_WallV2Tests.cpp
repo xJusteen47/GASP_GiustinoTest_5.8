@@ -26,22 +26,9 @@
 #include "WallMovement/MoveLibrary/GSTN_WallControlUtils.h"
 #include "WallMovement/MoveLibrary/GSTN_WallMovementUtils.h"
 #include "WallMovement/Modes/GSTN_WallSlideV2MovementMode.h"
+#include "GSTN_WallV2TestAccess.h"
 
-/** Friend of the v2 modes: reaches the protected pieces the headless tests exercise */
-struct FGSTN_WallTraverseTestAccess
-{
-	static FVector ComputeWallVelocity(const UGSTN_WallSlideV2MovementMode& Mode, const FMoverTickStartData& StartState, const FGSTN_WallMovementPlane& Plane,
-		const FVector& WallIntent, float DeltaSeconds)
-	{
-		return Mode.ComputeWallVelocity(StartState, Plane, WallIntent, DeltaSeconds);
-	}
-
-	static void Step(const UGSTN_WallTraverseModeBase& Mode, const FMovingComponentSet& MovingComps, float DeltaSeconds, bool bHasDirIntent,
-		FGSTN_WallTickState& State, FMovementRecord& MoveRecord)
-	{
-		Mode.TraverseStep(MovingComps, DeltaSeconds, bHasDirIntent, State, MoveRecord);
-	}
-};
+// FGSTN_WallTraverseTestAccess (friend of the v2 modes) lives in the shared header below
 
 namespace GSTNWallV2Test
 {
@@ -301,9 +288,9 @@ bool FGSTN_WallV2OneSweepTest::RunTest(const FString& Parameters)
 		int32 Max;
 		GSTNWallDebug::GetQueryStats(ModeName, Ticks, Average, Max);
 		TestEqual(TEXT("Every tick was counted"), Ticks, NumTicks);
-		// One move sweep + one contact/adhesion sweep: the flat wall costs two queries, no probe fan, no substeps
-		TestTrue(*FString::Printf(TEXT("Average queries per tick on a flat wall is about 2 (was %.2f)"), Average), Average >= 1.9 && Average <= 2.2);
-		TestTrue(*FString::Printf(TEXT("At most 3 in the worst tick (was %d)"), Max), Max <= 3);
+		// One move sweep + one contact/adhesion sweep + one look-ahead line trace (W3): the flat wall costs three queries, no probe fan, no substeps
+		TestTrue(*FString::Printf(TEXT("Average queries per tick on a flat wall is about 3 (was %.2f)"), Average), Average >= 2.9 && Average <= 3.2);
+		TestTrue(*FString::Printf(TEXT("At most 4 in the worst tick (was %d)"), Max), Max <= 4);
 		TestTrue(TEXT("The wall was held all along"), Scene.State.bHasWall);
 	}
 

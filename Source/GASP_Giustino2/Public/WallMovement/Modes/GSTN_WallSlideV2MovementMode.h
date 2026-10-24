@@ -38,6 +38,9 @@ public:
 	virtual FVector ComputeEntryVelocity(const FVector& InVelocity, const FVector& WallNormal) const override;
 
 protected:
+	/** The corner caps are fractions of Control.TerminalDownSpeed */
+	virtual float GetEdgeReferenceSpeed() const override;
+
 	/**
 	 * StepSlideVelocity on the plane (H = horizontal along the wall, V = along the gravity tangent, up positive). Gravity along the
 	 * wall comes from the Mover component when there is one, so slanted walls slide slower and any gravity direction works

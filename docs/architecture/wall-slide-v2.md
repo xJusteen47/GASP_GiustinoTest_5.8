@@ -387,3 +387,31 @@ no new sync-state field. Not yet done: pawns excluded from the contact sweep (W5
 Needed outside this checkpoint: `UGSTN_GA_WallSlide::WallModeNames` (`GAS/GSTN_GA_WallSlide.cpp:14`) must also list `WallSlidingV2`, otherwise the ability ends at once
 on the v2 mode; it was left unchanged (GAS territory).
 
+
+### 6.6 W3 and W4 status (code, 2026-10-24)
+
+Built in `UGSTN_WallTraverseModeBase` and `UGSTN_WallEdgeUtils` (tests `GSTN.Wall.V2.*` in `GSTN_WallV2EdgeTests.cpp`, pure ones in `GSTN_WallEdgeTests.cpp`).
+Not yet run in the editor (the owner's editor was open): compile-checked on the game target only.
+
+- **Look-ahead** (`ProbeAhead`): the capsule is taken as seated on the wall plane at `WallGap`, the plane is read at `LookaheadDistance` past the capsule's
+  *leading edge* (`CapsuleSupportAlong`, so a slide down looks from the feet, not from the centre). Trace 1 (always, the only one on a flat wall): lifted
+  `MaxStepHeight + StepMargin` off the plane at the end point, down toward the wall, `RecessDepth` deep (the v2 slide sets it to `WallProbeDistance`).
+  Trace 2 only if trace 1 starts inside geometry (something taller than the step: an inside corner): a ray along the movement from the lifted leading edge
+  gives the face, angle and distance. Trace 3 only if the wall ends: a ray back from just behind the plane gives the far face of an outside edge (no face: a
+  90 degree edge at half the look). Every accepted hit goes through `IsHitOnValidWall`; a refused surface counts as "the wall ends"; pawns are ignored by
+  response (`bIgnorePawns`). This replaces the single-trace description of 2.2 step 4, which could not see an inside corner (its end point is inside the corner).
+- **Classification refinements** (`ClassifyAhead`): a face within the smooth angle is a `Slope` only if its offset is what such a slope makes over the sampled
+  distance, otherwise it is a step (`Bump`): a ledge face is parallel to the wall. Past step height the sign of the offset decides: rising = `Concave`,
+  receding = `Convex`.
+- **Cap**: `ComputeEdgeSpeedCap` = corner speed (`GetEdgeReferenceSpeed()`, the slide's `TerminalDownSpeed`, times the angle scale) raised along the approach
+  curve by the distance to the edge; it clamps the proposed velocity in `TraverseStep`, transport stays length preserving. `Bump`, `Slope`, `Blocked`: no cap.
+- **Proxy plane**: the contact normal turns it only if the look-ahead said `Concave`/`Convex` this tick, the move met an inside corner, or the contact normal is
+  within `MaxSmoothAngle` of the plane (curves, facets); the wrap around a convex edge (unchanged, two sweeps only when the wall is lost) always may.
+- **Blocked**: never capped, never a reason to turn, never stepped; the move sweep then slides along it or, for a floor, leaves to `FloorModeName`.
+- **Step-over** (`TryStepOverBump`, tried on every blocking hit): a line trace at the hit (`ProbeBumpAt`) sizes the feature; if it is a `Bump` (up to
+  `MaxStepHeight`) and the look-ahead did not name an inside corner, the capsule is lifted along the wall normal by `StepLiftFor` (height above the seat plus
+  `StepMargin`, swept), the rest of the move is redone (swept), adhesion pulls back in. Anything that does not clear is undone. A ledge below up to the step
+  height is therefore stepped (never `FloorModeName`); taller ones fall through to the floor rule. A recess is absorbed by the rate-limited unswept pull-in; a
+  recess deeper than `MaxStepHeight` that the capsule has dived into is exited as a corner, not as a bump.
+- Known limits for PIE: a curved wall (lane g) shows a growing angle at the end of the look and relies on the distance-based allowance not to cap; a recess
+  deeper than `RecessDepth` is read as an outside edge; features narrower than the look slip between two ticks and are met by the move sweep (then step-over).

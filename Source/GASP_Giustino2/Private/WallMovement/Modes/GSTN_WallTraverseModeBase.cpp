@@ -115,12 +115,17 @@ FVector UGSTN_WallTraverseModeBase::GetPriorVelocityOnPlane(const FMoverTickStar
 }
 
 // ------------------------------------------------------------------------------------------------
-// Edge hooks: no-ops until W3 / W4
+// Edge hooks
 // ------------------------------------------------------------------------------------------------
+
+float UGSTN_WallTraverseModeBase::GetEdgeReferenceSpeed() const
+{
+	return FGSTN_WallSlideControlSettings().TerminalDownSpeed;
+}
 
 FGSTN_WallAheadResult UGSTN_WallTraverseModeBase::ProbeAhead(const FMovingComponentSet& MovingComps, const FGSTN_WallTickState& State, const FGSTN_WallCheckSettings& CheckSettings) const
 {
-	return FGSTN_WallAheadResult();
+	return UGSTN_WallEdgeUtils::ProbeAhead(MovingComps, Edges, CheckSettings, State.WallNormal, State.GravityUp, State.Velocity);
 }
 
 EGSTN_WallEdgeKind UGSTN_WallTraverseModeBase::ClassifyAhead(const FGSTN_WallAheadResult& Ahead) const
@@ -130,13 +135,93 @@ EGSTN_WallEdgeKind UGSTN_WallTraverseModeBase::ClassifyAhead(const FGSTN_WallAhe
 
 float UGSTN_WallTraverseModeBase::ComputeEdgeSpeedCap(const FGSTN_WallAheadResult& Ahead) const
 {
-	return TNumericLimits<float>::Max();
+	// Only a real corner slows the character (the owner's rule); the approach curve makes it a brake that releases by itself
+	const float CornerSpeed = UGSTN_WallEdgeUtils::EdgeSpeedCap(Edges, Ahead.Kind, Ahead.Angle, GetEdgeReferenceSpeed());
+	if (CornerSpeed >= TNumericLimits<float>::Max())
+	{
+		return CornerSpeed;
+	}
+	return UGSTN_WallEdgeUtils::AllowedSpeedAtDistance(Edges, CornerSpeed, Ahead.Distance);
 }
 
-bool UGSTN_WallTraverseModeBase::TryStepOverBump(const FMovingComponentSet& MovingComps, const FHitResult& Hit, const FGSTN_WallAheadResult& Ahead, float DeltaSeconds,
-	FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const
+bool UGSTN_WallTraverseModeBase::TryStepOverBump(const FMovingComponentSet& MovingComps, const FHitResult& Hit, const FVector& MoveDelta, const FGSTN_WallAheadResult& Ahead,
+	float DeltaSeconds, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const
 {
-	return false;
+	USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
+	if (!UpdatedComponent || Edges.MaxStepHeight <= 0.f)
+	{
+		return false;
+	}
+	// An inside corner (or a surface that cannot be turned onto) is ahead: what blocks is that, not a bump
+	if (Ahead.Kind == EGSTN_WallEdgeKind::Concave || Ahead.Kind == EGSTN_WallEdgeKind::Blocked)
+	{
+		return false;
+	}
+	const FVector Dir = FVector::VectorPlaneProject(MoveDelta, InOutState.WallNormal).GetSafeNormal();
+	if (Dir.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// Size what blocks. Anything but a low feature (taller, a ramp, geometry around the probe) is for the corner / floor logic
+	const FGSTN_WallCheckSettings CheckSettings = GetWallCheckSettings();
+	const FGSTN_WallAheadResult Feature = UGSTN_WallEdgeUtils::ProbeBumpAt(MovingComps, Edges, CheckSettings, InOutState.WallNormal, InOutState.GravityUp, Hit.ImpactPoint, Dir);
+	if (Feature.Kind != EGSTN_WallEdgeKind::Bump)
+	{
+		return false;
+	}
+	const float BumpHeight = UGSTN_WallEdgeUtils::BumpHeightOf(Edges, Feature.Offset);
+	if (BumpHeight <= UE_KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+
+	const float Lift = UGSTN_WallEdgeUtils::StepLiftFor(Edges, BumpHeight, CheckSettings.WallGap);
+	const FVector StartLocation = UpdatedComponent->GetComponentLocation();
+	const FQuat Quat = UpdatedComponent->GetComponentQuat();
+
+	auto Revert = [&]()
+	{
+		FHitResult BackHit(1.f);
+		MoveRecord.LockRelevancy(false);
+		UMovementUtils::TrySafeMoveUpdatedComponent(MovingComps, StartLocation - UpdatedComponent->GetComponentLocation(), Quat, false, BackHit, ETeleportType::None, MoveRecord);
+		MoveRecord.UnlockRelevancy();
+	};
+
+	// Lift off the wall: a pose correction, not travel
+	FHitResult LiftHit(1.f);
+	MoveRecord.LockRelevancy(false);
+	{
+		GSTN_WALL_QUERY_SCOPE();
+		UMovementUtils::TrySafeMoveUpdatedComponent(MovingComps, InOutState.WallNormal * Lift, Quat, true, LiftHit, ETeleportType::None, MoveRecord);
+	}
+	MoveRecord.UnlockRelevancy();
+	if (FVector::DotProduct(UpdatedComponent->GetComponentLocation() - StartLocation, InOutState.WallNormal) < Lift - 0.5f)
+	{
+		Revert();
+		return false;
+	}
+
+	// The rest of the move the bump interrupted
+	const FVector Remaining = MoveDelta * (1.f - Hit.Time);
+	if (!Remaining.IsNearlyZero())
+	{
+		FHitResult RedoHit(1.f);
+		{
+			GSTN_WALL_QUERY_SCOPE();
+			UMovementUtils::TrySafeMoveUpdatedComponent(MovingComps, Remaining, Quat, true, RedoHit, ETeleportType::None, MoveRecord);
+		}
+		if (RedoHit.IsValidBlockingHit() && RedoHit.Time < 0.5f && Remaining.Size() > 1.f)
+		{
+			// Still blocked: it was not what the probe took it for
+			Revert();
+			return false;
+		}
+	}
+
+	GSTN_WALL_LOG(1, TEXT("v2 STEP OVER bump=%.1f lift=%.1f"), BumpHeight, Lift);
+	InOutState.Orientation = UpdatedComponent->GetComponentQuat();
+	return true;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -208,7 +293,7 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 	UGSTN_WallQueryUtils::GetCapsuleSize(UpdatedPrimitive, CapsuleRadius, CapsuleHalfHeight);
 	const FGSTN_WallCheckSettings CheckSettings = GetWallCheckSettings();
 
-	// Edge hooks (no-ops before W3): what is ahead, and the speed it allows
+	// Edge hooks: what is ahead, and the speed it allows. The cap clamps the proposed velocity here, the one place geometry may touch speed
 	FGSTN_WallAheadResult Ahead = ProbeAhead(MovingComps, InOutState, CheckSettings);
 	Ahead.Kind = ClassifyAhead(Ahead);
 	const float SpeedCap = ComputeEdgeSpeedCap(Ahead);
@@ -217,6 +302,8 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 	{
 		InOutState.Velocity *= SpeedCap / Speed;
 	}
+	GSTN_WALL_LOG(2, TEXT("v2 ahead kind=%d angle=%.1f offset=%.1f dist=%.1f cap=%.0f speed=%.0f"), static_cast<int32>(Ahead.Kind), Ahead.Angle, Ahead.Offset, Ahead.Distance,
+		FMath::Min(SpeedCap, 99999.f), Speed);
 
 	// The move: one sweep, at most MaxMoveRadii capsule radii. The facing yaw rides in the same move; it cannot change what
 	// the capsule collides with (rotation about its own axis)
@@ -260,7 +347,11 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 	bool bSensed = bContact || CornerHit.IsValid();
 	if (bContact)
 	{
-		Probe.Normal = Contact.Normal;
+		// The proxy plane turns only for a real corner or a gentle change. A rounded edge normal of a bump or a facet would otherwise
+		// turn the plane toward it for a few ticks, which is exactly the snag on complex geometry
+		const bool bRealCorner = Ahead.Kind == EGSTN_WallEdgeKind::Concave || Ahead.Kind == EGSTN_WallEdgeKind::Convex || CornerHit.IsValid();
+		const bool bGentle = UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(Contact.Normal, InOutState.WallNormal) <= Edges.MaxSmoothAngle;
+		Probe.Normal = (bRealCorner || bGentle) ? FVector(Contact.Normal) : InOutState.WallNormal;
 		Probe.ContactPoint = Contact.ImpactPoint;
 		Probe.Component = Contact.GetComponent();
 		Probe.BoneName = Contact.BoneName;
@@ -325,8 +416,9 @@ bool UGSTN_WallTraverseModeBase::HandleMoveBlocked(const FMovingComponentSet& Mo
 		MoverComp->HandleImpact(ImpactParams);
 	}
 
-	// A bump the look-ahead named stepable is not an obstacle (W4)
-	if (Ahead.Kind == EGSTN_WallEdgeKind::Bump && TryStepOverBump(MovingComps, Hit, Ahead, DeltaSeconds, InOutState, MoveRecord))
+	// A low feature is not an obstacle: step over it before any corner or floor logic can read it as one (a small ledge below must not
+	// end the slide, a real floor must)
+	if (TryStepOverBump(MovingComps, Hit, MoveDelta, Ahead, DeltaSeconds, InOutState, MoveRecord))
 	{
 		return true;
 	}

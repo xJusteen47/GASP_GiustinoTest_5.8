@@ -23,6 +23,15 @@ UGSTN_WallSlideV2MovementMode::UGSTN_WallSlideV2MovementMode(const FObjectInitia
 	MaxSurfaceAngle = 120.f;
 	WallProbeDistance = 30.f;
 	MaxNormalChangeRate = 600.f;
+
+	// The look-ahead sees a recess as deep as the contact sweep reaches (wall-slide-v2.md 2.3: RecessDepth = WallProbeDistance), so a recess
+	// is read as a recess and not as the end of the wall
+	Edges.RecessDepth = WallProbeDistance;
+}
+
+float UGSTN_WallSlideV2MovementMode::GetEdgeReferenceSpeed() const
+{
+	return Control.TerminalDownSpeed;
 }
 
 FVector UGSTN_WallSlideV2MovementMode::ComputeEntryVelocity(const FVector& InVelocity, const FVector& WallNormal) const

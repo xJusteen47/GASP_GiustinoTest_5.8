@@ -28,12 +28,15 @@ struct FGSTN_WallTraverseTestAccess;
  *
  * SimulationTick, per tick, one pass and no substeps (the move is clamped to MaxMoveRadii capsule radii instead):
  *  1. ride the movement base, voluntary exits (CheckForWallExit of the controlled mode: wall jump, detach)
- *  2. edge hooks (ProbeAhead, ClassifyAhead, ComputeEdgeSpeedCap): no-ops until W3, so no query is spent on them yet
- *  3. ONE move sweep along the plane, facing yaw applied in the same move (a blocking hit: floor -> FloorModeName, step-over hook,
- *     inside corner, else slide)
+ *  2. edge hooks: ProbeAhead (one line trace on a flat wall), ClassifyAhead, ComputeEdgeSpeedCap, which clamps the proposed velocity
+ *  3. ONE move sweep along the plane, facing yaw applied in the same move (a blocking hit: a low feature is stepped over, else floor
+ *     -> FloorModeName, inside corner, else slide)
  *  4. contact + adhesion in ONE capsule sweep (UGSTN_WallMovementUtils::AdhereAndSense); nothing found -> wrap around the convex
  *     edge, then NoWallGraceTime -> NoWallModeName
- *  5. filter the proxy plane toward the contact normal, transport the velocity onto it
+ *  5. filter the proxy plane toward the contact normal, transport the velocity onto it. The plane turns only for a real corner (the
+ *     look-ahead said Concave/Convex, the move met an inside corner, or the wall was wrapped) or for a change within
+ *     Edges.MaxSmoothAngle; a bump or a facet beyond that never turns it
+ *     (the limits of the look-ahead: a feature narrower than the look can slip between two ticks and is then met by the move sweep)
  *  6. store the ridden base, write the sync state
  *
  * Properties of the legacy base that this mode does not read (documented, not hidden: a later EditCondition can grey them out):
@@ -63,10 +66,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement", meta = (ClampMin = "0.1", ClampMax = "2"))
 	float MaxMoveRadii = 1.f;
 
-	/**
-	 * Edge look-ahead, corner speed cap and step-over tuning (wall-slide-v2.md 2.3). INERT until checkpoints W3 (corners) and W4
-	 * (bumps) fill the hooks below: the values are stored but nothing reads them yet
-	 */
+	/** Edge look-ahead, corner speed cap and step-over tuning (wall-slide-v2.md 2.3) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Edges")
 	FGSTN_WallEdgeSettings Edges;
 
@@ -96,23 +96,36 @@ protected:
 	/** Prior velocity of the start state projected on the plane (not length preserving: a velocity into the wall must not turn into speed along it) */
 	FVector GetPriorVelocityOnPlane(const FMoverTickStartData& StartState, const FGSTN_WallMovementPlane& Plane) const;
 
-	// ---------------------------------------------------------------- Edge hooks (wall-slide-v2.md 2.6), no-ops until W3 / W4
+	// ---------------------------------------------------------------- Edge hooks (wall-slide-v2.md 2.6)
 
-	/** Looks at the wall ahead of the movement (line traces in W3, counted with GSTN_WALL_QUERY_SCOPE). Base: nothing ahead (Kind None) */
+	/** Speed the corner caps are a fraction of (cm/s). Base: the default slide terminal speed; the slide returns its own TerminalDownSpeed */
+	virtual float GetEdgeReferenceSpeed() const;
+
+	/**
+	 * Looks at the wall ahead of the movement: UGSTN_WallEdgeUtils::ProbeAhead with this mode's edge and check settings (line traces,
+	 * counted, IsHitOnValidWall on every hit, pawns ignored). Kind None without a query when the velocity on the plane is ~0
+	 */
 	virtual FGSTN_WallAheadResult ProbeAhead(const FMovingComponentSet& MovingComps, const FGSTN_WallTickState& State, const FGSTN_WallCheckSettings& CheckSettings) const;
 
 	/** Final kind of what the look-ahead found. Base: the kind the probe already set */
 	virtual EGSTN_WallEdgeKind ClassifyAhead(const FGSTN_WallAheadResult& Ahead) const;
 
-	/** Highest speed allowed now given the edge ahead (cm/s). Base: no cap (the largest float) */
+	/**
+	 * Highest speed allowed now given the edge ahead (cm/s): for Concave/Convex the corner speed (GetEdgeReferenceSpeed scaled by the
+	 * angle) raised by the approach curve over the distance to the edge, so the speed falls to it as the edge nears and no state has to
+	 * cross a tick. Bump, Slope, Blocked and None: no cap (the largest float)
+	 */
 	virtual float ComputeEdgeSpeedCap(const FGSTN_WallAheadResult& Ahead) const;
 
 	/**
-	 * A move was blocked by a bump the look-ahead classified as stepable: lift over it and redo the move. Returns true if it
-	 * handled the hit (then no corner or floor logic runs). Base: false
+	 * The move was blocked: if what blocks is a low feature (a bump, rib or ledge up to Edges.MaxStepHeight, sized by a line trace at the
+	 * hit; never when the look-ahead named an inside corner or a surface that cannot be turned onto), lift along the wall normal by its
+	 * height plus the margin (swept), redo the rest of the move (swept) and leave the pull-in to the adhesion. Undoes everything and returns
+	 * false if the lift or the redo does not clear it. True = handled: no corner and no floor logic runs, so a small ledge below never
+	 * leaves the mode while a real floor does
 	 */
-	virtual bool TryStepOverBump(const FMovingComponentSet& MovingComps, const FHitResult& Hit, const FGSTN_WallAheadResult& Ahead, float DeltaSeconds,
-		FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
+	virtual bool TryStepOverBump(const FMovingComponentSet& MovingComps, const FHitResult& Hit, const FVector& MoveDelta, const FGSTN_WallAheadResult& Ahead,
+		float DeltaSeconds, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
 
 	// ---------------------------------------------------------------- SimulationTick steps
 
