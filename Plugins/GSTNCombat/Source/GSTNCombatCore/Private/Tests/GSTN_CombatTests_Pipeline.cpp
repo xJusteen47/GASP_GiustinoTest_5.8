@@ -4,7 +4,9 @@
 
 #include "GSTN_PipelineTestTypes.h"
 #include "GSTN_CombatTestUtils.h"
+#include "Tests/GSTN_HitsTestTypes.h"
 #include "Hits/GSTN_CombatHitTags.h"
+#include "Hits/GSTN_HitExtensions.h"
 #include "Hits/GSTN_HitRunner.h"
 #include "Hits/GSTN_HitSteps.h"
 #include "Hits/GSTN_KnockbackModels.h"
@@ -490,6 +492,231 @@ bool FGSTN_PipelineMatrixGoldenTest::RunTest(const FString& Parameters)
 		FGSTN_CombatRulesValidation::ValidateHitstopOverride(Hit, Rules->KnockbackModel->Tuning, Messages);
 		TestTrue(TEXT("within the limit is silent"), Messages.IsEmpty());
 	}
+	return true;
+}
+
+namespace GSTNPipelineTest
+{
+	/** A native applier that appends "<label><value>" to a shared log, so the order of calls across appliers is visible */
+	class FFakeApplier : public IGSTN_OutcomeExtensionApplier
+	{
+	public:
+		FFakeApplier(const UScriptStruct* InStruct, TCHAR InLabel, TArray<FString>& InLog) : Struct(InStruct), Label(InLabel), Log(InLog) {}
+
+		virtual const UScriptStruct* GetExtensionStruct() const override { return Struct; }
+
+		virtual void Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const override
+		{
+			const FGSTN_TestHitExtensionA* AsA = Extension.GetPtr<FGSTN_TestHitExtensionA>();
+			const FGSTN_TestHitExtensionB* AsB = Extension.GetPtr<FGSTN_TestHitExtensionB>();
+			Log.Add(FString::Printf(TEXT("%c%d"), Label, AsA ? AsA->Value : AsB ? AsB->Value : -1));
+		}
+
+	private:
+		const UScriptStruct* Struct;
+		TCHAR Label;
+		TArray<FString>& Log;
+	};
+
+	class FFakeAttackerOutcome : public IGSTN_AttackerOutcomeExtension
+	{
+	public:
+		virtual FName GetName() const override { return TEXT("GSTNTestRicochetOnPriority7"); }
+
+		virtual EGSTN_AttackerHitOutcome Evaluate(const FGSTN_HitContextView& View) const override
+		{
+			return View.Incoming.Hit.Priority == 7 ? EGSTN_AttackerHitOutcome::Ricochet : EGSTN_AttackerHitOutcome::Normal;
+		}
+	};
+
+	FInstancedStruct MakeA(int32 Value)
+	{
+		FGSTN_TestHitExtensionA Extension;
+		Extension.Value = Value;
+		return FInstancedStruct::Make(Extension);
+	}
+
+	FInstancedStruct MakeB(int32 Value)
+	{
+		FGSTN_TestHitExtensionB Extension;
+		Extension.Value = Value;
+		return FInstancedStruct::Make(Extension);
+	}
+
+	FGSTN_HitContextView MakeView(const UGSTN_CombatRules* Rules, const FGSTN_HitResolutionContext& Context)
+	{
+		FGSTN_HitContextView View;
+		FGSTN_HitPipelineRunner::MakeView(Rules, Context, View);
+		return View;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PipelineFakeApplierTest, "GSTNCombat.Core.Hits.Pipeline.FakeApplierRecordsCalls", GSTN_CORE_TEST_FLAGS)
+
+bool FGSTN_PipelineFakeApplierTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPipelineTest;
+	// No optional plugin anywhere: the extension structs are the tests' own and the appliers are fakes
+	const FGSTN_HitResolutionContext Context = MakeContext();
+	const FGSTN_HitContextView View = MakeView(nullptr, Context);
+	const TArray<FInstancedStruct> Extensions = { MakeA(5), MakeB(7), MakeA(9) };
+
+	TArray<FString> Log;
+	FFakeApplier ForA(FGSTN_TestHitExtensionA::StaticStruct(), TEXT('A'), Log);
+	FFakeApplier ForB(FGSTN_TestHitExtensionB::StaticStruct(), TEXT('B'), Log);
+
+	FGSTN_OutcomeApplierRegistry First;
+	TestTrue(TEXT("register A"), First.Register(&ForA));
+	TestTrue(TEXT("register B"), First.Register(&ForB));
+	TestFalse(TEXT("the same applier twice is refused"), First.Register(&ForA));
+	FGSTN_OutcomeApplyContext ApplyContext;
+	First.ApplyAll(nullptr, Extensions, View, ApplyContext);
+	TestEqual(TEXT("each entry reaches the applier that owns its type, once"), Log.Num(), 3);
+	const TArray<FString> FirstOrder = Log;
+	TestTrue(TEXT("A's entries stay in array order"), FirstOrder.IndexOfByKey(TEXT("A5")) < FirstOrder.IndexOfByKey(TEXT("A9")));
+	TestTrue(TEXT("B was called with 7"), FirstOrder.Contains(TEXT("B7")));
+
+	// Registered the other way round, the calls come in the same order (the order is the hash of the type name)
+	Log.Reset();
+	FGSTN_OutcomeApplierRegistry Second;
+	Second.Register(&ForB);
+	Second.Register(&ForA);
+	FGSTN_OutcomeApplyContext SecondContext;
+	Second.ApplyAll(nullptr, Extensions, View, SecondContext);
+	TestTrue(TEXT("registration order does not matter"), Log == FirstOrder);
+
+	First.Unregister(&ForA);
+	TestEqual(TEXT("unregistered"), First.Num(), 1);
+
+	// The Blueprint form in the rules asset: one adapter for type A sees the two A entries, none for B
+	{
+		const TStrongObjectPtr<UGSTN_CombatRules> Rules(NewObject<UGSTN_CombatRules>(GetTransientPackage()));
+		UGSTN_TestOutcomeApplier* Adapter = NewObject<UGSTN_TestOutcomeApplier>(Rules.Get());
+		Adapter->ExtensionStruct = FGSTN_TestHitExtensionA::StaticStruct();
+		Rules->OutcomeAppliers.Add(Adapter);
+		Rules->OutcomeAppliers.Add(nullptr);
+
+		AppliedLog().Reset();
+		FGSTN_OutcomeApplierRegistry Empty;
+		FGSTN_OutcomeApplyContext AdapterContext;
+		Empty.ApplyAll(Rules.Get(), Extensions, MakeView(Rules.Get(), Context), AdapterContext);
+		TestEqual(TEXT("the adapter was called for the two A entries"), AppliedLog().Num(), 2);
+		TestEqual(TEXT("its results are merged"), AdapterContext.Result.Events.Num(), 2);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PipelineUnknownExtensionTest, "GSTNCombat.Core.Hits.Pipeline.ExtensionDataUnknownTypeIgnored", GSTN_CORE_TEST_FLAGS)
+
+bool FGSTN_PipelineUnknownExtensionTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPipelineTest;
+	const FGSTN_HitResolutionContext Context = MakeContext();
+	const FGSTN_HitContextView View = MakeView(nullptr, Context);
+
+	TArray<FString> Log;
+	FFakeApplier ForA(FGSTN_TestHitExtensionA::StaticStruct(), TEXT('A'), Log);
+	FGSTN_OutcomeApplierRegistry Registry;
+	Registry.Register(&ForA);
+
+	// A type nobody owns, and an empty entry (the plugin that defined its struct is not loaded)
+	FGSTN_TestHitExtensionC Unknown;
+	const TArray<FInstancedStruct> Extensions = { FInstancedStruct::Make(Unknown), FInstancedStruct(), MakeA(3) };
+	FGSTN_OutcomeApplyContext ApplyContext;
+	Registry.ApplyAll(nullptr, Extensions, View, ApplyContext);
+	TestEqual(TEXT("only the owned type reached an applier"), Log.Num(), 1);
+	TestTrue(TEXT("nothing was produced"), ApplyContext.Result.Events.IsEmpty() && ApplyContext.Result.Effects.IsEmpty());
+
+	// An applier with no struct is refused, an empty registry ignores everything
+	FGSTN_OutcomeApplierRegistry Empty;
+	FGSTN_OutcomeApplyContext EmptyContext;
+	Empty.ApplyAll(nullptr, Extensions, View, EmptyContext);
+	TestEqual(TEXT("nothing registered, nothing called"), Log.Num(), 1);
+
+	// Hit data that carries an unknown extension goes through the pipeline untouched
+	const auto Rules = MakeStandard({ Step(UGSTN_HitStep_ApplyDamage::StaticClass()) });
+	FGSTN_HitResolutionContext Hit = MakeContext();
+	Hit.Incoming.Hit.ExtensionData = Extensions;
+	FGSTN_HitPipelineRunner::Run(*Rules, Hit);
+	TestEqual(TEXT("the damage step ignores extension data"), Hit.Outcome.Damage, 10.f);
+	TestTrue(TEXT("and does not copy it into the outcome"), Hit.OutcomeExtensions.IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PipelineAttackerOutcomeDefaultTest, "GSTNCombat.Core.Hits.Pipeline.AttackerOutcomeDefaultNormal", GSTN_CORE_TEST_FLAGS)
+
+bool FGSTN_PipelineAttackerOutcomeDefaultTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPipelineTest;
+	const FGSTN_HitResolutionContext Context = MakeContext();
+	const TStrongObjectPtr<UGSTN_CombatRules> Rules(UGSTN_CombatRules::CreateStandard(GetTransientPackage()));
+	const FGSTN_HitContextView View = MakeView(Rules.Get(), Context);
+
+	const FGSTN_AttackerOutcomeRegistry Empty;
+	TestTrue(TEXT("nothing registered: Normal"), Empty.Evaluate(Rules.Get(), View) == EGSTN_AttackerHitOutcome::Normal);
+	TestTrue(TEXT("no rules either: Normal"), Empty.Evaluate(nullptr, View) == EGSTN_AttackerHitOutcome::Normal);
+	TestTrue(TEXT("the shared registry has no extension of the core"), FGSTN_AttackerOutcomeRegistry::Get().Evaluate(Rules.Get(), View) == EGSTN_AttackerHitOutcome::Normal);
+
+	// A Blueprint adapter that keeps the default is Normal too, in the rules asset as on its own
+	UGSTN_TestAttackerOutcomeDefault* Adapter = NewObject<UGSTN_TestAttackerOutcomeDefault>(Rules.Get());
+	TestTrue(TEXT("the adapter's own default is Normal"), Adapter->Evaluate(View) == EGSTN_AttackerHitOutcome::Normal);
+	Rules->AttackerOutcomes.Add(Adapter);
+	TestTrue(TEXT("and so is the registry with it in the rules"), Empty.Evaluate(Rules.Get(), View) == EGSTN_AttackerHitOutcome::Normal);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PipelineFakeAttackerOutcomeTest, "GSTNCombat.Core.Hits.Pipeline.FakeAttackerOutcomeRicochet", GSTN_CORE_TEST_FLAGS)
+
+bool FGSTN_PipelineFakeAttackerOutcomeTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPipelineTest;
+	FGSTN_HitResolutionContext Context = MakeContext();
+	FFakeAttackerOutcome Fake;
+	FGSTN_AttackerOutcomeRegistry Registry;
+	TestTrue(TEXT("register"), Registry.Register(&Fake));
+	TestFalse(TEXT("twice is refused"), Registry.Register(&Fake));
+
+	TestTrue(TEXT("a priority 6 hit is Normal"), Registry.Evaluate(nullptr, MakeView(nullptr, Context)) == EGSTN_AttackerHitOutcome::Normal);
+	Context.Incoming.Hit.Priority = 7;
+	TestTrue(TEXT("a priority 7 hit bounces"), Registry.Evaluate(nullptr, MakeView(nullptr, Context)) == EGSTN_AttackerHitOutcome::Ricochet);
+
+	Registry.Unregister(&Fake);
+	TestTrue(TEXT("unregistered, Normal again"), Registry.Evaluate(nullptr, MakeView(nullptr, Context)) == EGSTN_AttackerHitOutcome::Normal);
+
+	// The Blueprint form in the rules asset
+	const TStrongObjectPtr<UGSTN_CombatRules> Rules(NewObject<UGSTN_CombatRules>(GetTransientPackage()));
+	Rules->AttackerOutcomes.Add(NewObject<UGSTN_TestAttackerOutcomeRicochet>(Rules.Get()));
+	TestTrue(TEXT("the rules' adapter makes it a Ricochet"), Registry.Evaluate(Rules.Get(), MakeView(Rules.Get(), Context)) == EGSTN_AttackerHitOutcome::Ricochet);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PipelineHitGroupMaskTest, "GSTNCombat.Core.Hits.Pipeline.HitGroupMaskDefaultEmpty", GSTN_CORE_TEST_FLAGS)
+
+bool FGSTN_PipelineHitGroupMaskTest::RunTest(const FString& Parameters)
+{
+	FGSTN_HitGroupMask Mask;
+	TestTrue(TEXT("empty by default"), Mask.IsEmpty());
+	for (int32 Group = 0; Group < 256; ++Group)
+	{
+		if (Mask.Has(static_cast<uint8>(Group)))
+		{
+			AddError(TEXT("a default mask has a group set"));
+			break;
+		}
+	}
+
+	Mask.Set(3);
+	Mask.Set(255);
+	TestFalse(TEXT("not empty"), Mask.IsEmpty());
+	TestTrue(TEXT("3"), Mask.Has(3));
+	TestTrue(TEXT("255, the top bit"), Mask.Has(255));
+	TestFalse(TEXT("4 is not set"), Mask.Has(4));
+
+	FGSTN_HitGroupMask Other;
+	Other.Set(70);
+	Mask.Merge(Other);
+	TestTrue(TEXT("merged group"), Mask.Has(70));
+	TestTrue(TEXT("kept group"), Mask.Has(3));
 	return true;
 }
 

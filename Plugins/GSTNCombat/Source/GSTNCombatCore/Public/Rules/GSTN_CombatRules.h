@@ -6,6 +6,7 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Hits/GSTN_HitExtensions.h"
 #include "Hits/GSTN_HitMathUtils.h"
 #include "Hits/GSTN_HitResolution.h"
 #include "Hits/GSTN_KnockbackModel.h"
@@ -155,6 +156,17 @@ public:
 	/** Meter gained per point of damage. 0 = the MeterGain step writes nothing */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Effects", meta = (ClampMin = "0.0"))
 	float MeterGainPerDamage = 0.f;
+
+	/**
+	 * Blueprint outcome appliers: each handles the outcome extensions of one struct type (combat-m4-hits 3b). Pure hooks; native
+	 * appliers register in FGSTN_OutcomeApplierRegistry instead
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category = "Rules|Hits")
+	TArray<TObjectPtr<UGSTN_OutcomeApplier>> OutcomeAppliers;
+
+	/** Blueprint attacker outcome extensions: the first that answers Ricochet bounces the hit. Pure hooks. None = always Normal */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category = "Rules|Hits")
+	TArray<TObjectPtr<UGSTN_AttackerOutcome>> AttackerOutcomes;
 
 	/** Rules data of optional plugins, each entry a struct derived from FGSTN_RulesExtension */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules", meta = (BaseStruct = "/Script/GSTNCombatCore.GSTN_RulesExtension", ExcludeBaseStruct))

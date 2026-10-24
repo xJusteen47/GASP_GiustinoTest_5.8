@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Hits/GSTN_HitExtensions.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 
 /**
@@ -41,6 +42,13 @@ struct FGSTN_CombatTickContext
 
 	/** The state the frame produces; an extension changes only its own fragment in here */
 	FGSTN_CombatSyncState& Out;
+
+	/**
+	 * Out-parameter of the BeforeCandidates point: an extension sets the bits of the hit groups of the entity's own hitboxes that
+	 * must not hit this frame (combat-m4-hits 3b, item 6). Empty at the start of every frame, which masks nothing; nothing reads
+	 * it before the attacker side exists (M4 H8)
+	 */
+	FGSTN_HitGroupMask HitGroupMask;
 
 	FGSTN_CombatTickContext(int32 InFrame, const FGSTN_CombatSyncState& InState, FGSTN_CombatSyncState& OutState)
 		: Frame(InFrame), In(InState), Out(OutState)

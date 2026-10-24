@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Hits/GSTN_HitExtensions.h"
 #include "Hits/GSTN_HitResolution.h"
 #include "GSTN_PipelineTestTypes.generated.h"
 
@@ -10,6 +11,13 @@ namespace GSTNPipelineTest
 {
 	/** Ids of the steps that ran, in order; cleared by each test */
 	inline TArray<int32>& RunLog()
+	{
+		static TArray<int32> Log;
+		return Log;
+	}
+
+	/** Extension values the Blueprint-form applier test double saw, in order; cleared by each test */
+	inline TArray<int32>& AppliedLog()
 	{
 		static TArray<int32> Log;
 		return Log;
@@ -83,4 +91,40 @@ public:
 		Out.MaxReaction = EGSTN_HitReaction::PushBack;
 		return EGSTN_StepResult::Continue;
 	}
+};
+
+/** Stands for a Blueprint outcome applier: records the value of the extension it was given (the extension struct is set by the test) */
+UCLASS(Hidden)
+class UGSTN_TestOutcomeApplier : public UGSTN_OutcomeApplier
+{
+	GENERATED_BODY()
+
+public:
+	virtual FGSTN_OutcomeApplyResult Apply_Implementation(const FGSTN_HitContextView& View, const FInstancedStruct& Extension) const override
+	{
+		GSTNPipelineTest::AppliedLog().Add(Extension.IsValid() ? 1 : 0);
+		FGSTN_OutcomeApplyResult Result;
+		Result.Events.Add(FGameplayTag());
+		return Result;
+	}
+};
+
+/** Stands for a Blueprint attacker outcome that always bounces */
+UCLASS(Hidden)
+class UGSTN_TestAttackerOutcomeRicochet : public UGSTN_AttackerOutcome
+{
+	GENERATED_BODY()
+
+public:
+	virtual EGSTN_AttackerHitOutcome Evaluate_Implementation(const FGSTN_HitContextView& View) const override
+	{
+		return EGSTN_AttackerHitOutcome::Ricochet;
+	}
+};
+
+/** A Blueprint attacker outcome that overrides nothing: the base class default */
+UCLASS(Hidden)
+class UGSTN_TestAttackerOutcomeDefault : public UGSTN_AttackerOutcome
+{
+	GENERATED_BODY()
 };
