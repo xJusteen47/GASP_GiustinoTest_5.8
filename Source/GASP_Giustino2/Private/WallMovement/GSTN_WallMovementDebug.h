@@ -18,6 +18,14 @@
  *   gstn.Wall.Jump                    Simulate one jump press (wall jump)
  *   gstn.Wall.Detach 1|0              Hold/release the detach button (the GASP pawn overwrites the crouch intent every tick)
  *   gstn.Wall.ResetMemory             UGSTN_WallMovementLibrary::ResetWallMemory (forget the last wall / height cap)
+ *   gstn.Wall.CountQueries 0|1        Count the queries (sweeps, traces, overlaps) each tick through GSTN_WALL_QUERY_SCOPE
+ *   gstn.Wall.QueryStats [reset]      Log per-mode tick count, average and max queries per tick (and reset with "reset")
+ *   gstn.Wall.Metrics 0|1             One log line per tick: time, mode, speed, filtered-normal angle change, queries
+ *
+ * Query counting is explicit: engine SCENE_QUERY_STAT tags cannot be counted cheaply, so code that wants to be counted wraps
+ * each query in GSTN_WALL_QUERY_SCOPE(). The existing wall modes and utils are NOT instrumented (they stay untouched for the
+ * A/B baseline); the v2 code calls the scope around each of its queries, and a later checkpoint may add it to the old ones.
+ * The counter is process-wide (a PIE with several pawns shares it), so read it with one wall pawn ticking.
  */
 
 #ifndef GSTN_WALL_DEBUG
@@ -59,12 +67,40 @@ namespace GSTNWallDebug
 
 	/** True while gstn.Wall.Detach 1 */
 	bool IsDetachHeld();
+
+	/** Adds one query to the current tick count (no-op unless gstn.Wall.CountQueries 1) */
+	void CountQuery();
+
+	/** Queries counted since the last FinishTick */
+	int32 GetTickQueryCount();
+
+	/**
+	 * Ends the tick of a wall mode: adds the tick's query count to the stats of ModeName, optionally logs the edge metrics
+	 * (gstn.Wall.Metrics) and resets the tick counter. Speed in cm/s; NormalChangeDeg is the filtered wall normal change this tick.
+	 */
+	void FinishTick(FName ModeName, double TimeSeconds, float Speed, float NormalChangeDeg);
+
+	/** Stats of a mode since the last reset (zeros when never ticked) */
+	void GetQueryStats(FName ModeName, int32& OutTicks, double& OutAverage, int32& OutMax);
+
+	/** Clears all per-mode stats and the tick counter */
+	void ResetQueryStats();
+
+	/** RAII marker around one query; use through GSTN_WALL_QUERY_SCOPE */
+	struct FQueryScope
+	{
+		FQueryScope() { CountQuery(); }
+	};
 }
 
 #define GSTN_WALL_LOG(Level, Format, ...) UE_CLOG(GSTNWallDebug::GetLogLevel() >= (Level), LogGSTNWall, Log, Format, ##__VA_ARGS__)
 
+/** Counts one query for gstn.Wall.CountQueries; place right before the sweep / trace / overlap */
+#define GSTN_WALL_QUERY_SCOPE() GSTNWallDebug::FQueryScope PREPROCESSOR_JOIN(WallQueryScope_, __LINE__)
+
 #else
 
 #define GSTN_WALL_LOG(Level, Format, ...)
+#define GSTN_WALL_QUERY_SCOPE()
 
 #endif

@@ -96,6 +96,89 @@ namespace GSTNWallDebug
 		return bDetachHeld;
 	}
 
+	static TAutoConsoleVariable<int32> CVarCountQueries(TEXT("gstn.Wall.CountQueries"), 0,
+		TEXT("1 = count the wall queries of each tick (scoped counter); see gstn.Wall.QueryStats"), ECVF_Cheat);
+
+	static TAutoConsoleVariable<int32> CVarMetrics(TEXT("gstn.Wall.Metrics"), 0,
+		TEXT("1 = one log line per wall tick: time, mode, speed, filtered-normal angle change, queries"), ECVF_Cheat);
+
+	namespace
+	{
+		struct FModeQueryStats
+		{
+			int32 Ticks = 0;
+			int64 Total = 0;
+			int32 Max = 0;
+		};
+		std::atomic<int32> TickQueries = 0;
+		FCriticalSection StatsLock;
+		TMap<FName, FModeQueryStats> Stats;
+	}
+
+	void CountQuery()
+	{
+		if (CVarCountQueries.GetValueOnAnyThread() != 0)
+		{
+			++TickQueries;
+		}
+	}
+
+	int32 GetTickQueryCount()
+	{
+		return TickQueries.load();
+	}
+
+	void FinishTick(FName ModeName, double TimeSeconds, float Speed, float NormalChangeDeg)
+	{
+		const int32 Queries = TickQueries.exchange(0);
+		if (CVarCountQueries.GetValueOnAnyThread() != 0)
+		{
+			FScopeLock Lock(&StatsLock);
+			FModeQueryStats& S = Stats.FindOrAdd(ModeName);
+			++S.Ticks;
+			S.Total += Queries;
+			S.Max = FMath::Max(S.Max, Queries);
+		}
+		if (CVarMetrics.GetValueOnAnyThread() != 0)
+		{
+			UE_LOG(LogGSTNWall, Log, TEXT("Metrics t=%.3f mode=%s speed=%.1f dNormal=%.2fdeg queries=%d"), TimeSeconds, *ModeName.ToString(), Speed, NormalChangeDeg, Queries);
+		}
+	}
+
+	void GetQueryStats(FName ModeName, int32& OutTicks, double& OutAverage, int32& OutMax)
+	{
+		FScopeLock Lock(&StatsLock);
+		const FModeQueryStats* S = Stats.Find(ModeName);
+		OutTicks = S ? S->Ticks : 0;
+		OutAverage = (S && S->Ticks > 0) ? double(S->Total) / S->Ticks : 0.0;
+		OutMax = S ? S->Max : 0;
+	}
+
+	void ResetQueryStats()
+	{
+		FScopeLock Lock(&StatsLock);
+		Stats.Reset();
+		TickQueries = 0;
+	}
+
+	static FAutoConsoleCommand CmdQueryStats(TEXT("gstn.Wall.QueryStats"),
+		TEXT("Logs per-mode wall query stats (ticks, average, max queries per tick); \"reset\" clears them"),
+		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+		{
+			{
+				FScopeLock Lock(&StatsLock);
+				for (const TPair<FName, FModeQueryStats>& Pair : Stats)
+				{
+					UE_LOG(LogGSTNWall, Log, TEXT("QueryStats mode=%s ticks=%d avg=%.2f max=%d"), *Pair.Key.ToString(), Pair.Value.Ticks,
+						Pair.Value.Ticks > 0 ? double(Pair.Value.Total) / Pair.Value.Ticks : 0.0, Pair.Value.Max);
+				}
+			}
+			if (Args.Num() > 0 && Args[0].Equals(TEXT("reset"), ESearchCase::IgnoreCase))
+			{
+				ResetQueryStats();
+			}
+		}));
+
 	static TAutoConsoleVariable<int32> CVarLog(TEXT("gstn.Wall.Log"), 0,
 		TEXT("Wall movement logging. 1 = one line per substep, 2 = also every probe sweep and pivot rotation"), ECVF_Cheat);
 
