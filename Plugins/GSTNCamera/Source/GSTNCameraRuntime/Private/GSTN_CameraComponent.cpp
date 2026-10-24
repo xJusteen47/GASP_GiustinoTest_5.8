@@ -35,6 +35,8 @@ UGSTN_CameraComponent::UGSTN_CameraComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 	// After movement and animation: the camera reads the PRESENTED state (camera.md §2.2)
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
+	// Ticks only once activated (Activate enables the tick), so an Auto Activate off component costs nothing
+	PrimaryComponentTick.bStartWithTickEnabled = false;
 	// Nothing about the camera replicates, ever (camera.md §1)
 	SetIsReplicatedByDefault(false);
 	bUsePawnControlRotation = false;
@@ -64,6 +66,12 @@ void UGSTN_CameraComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void UGSTN_CameraComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	// An inactive camera (Auto Activate off) must never drive the view or write the control rotation: it would fight the
+	// pawn's own camera every frame
+	if (!IsActive())
+	{
+		return;
+	}
 	const APawn* Pawn = Cast<APawn>(GetOwner());
 	if (Pawn && !Pawn->IsLocallyControlled())
 	{

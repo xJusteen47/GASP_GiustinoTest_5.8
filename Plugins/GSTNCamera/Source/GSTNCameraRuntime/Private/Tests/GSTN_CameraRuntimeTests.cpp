@@ -575,4 +575,26 @@ GSTN_CAM_RT_TEST(ArenaFramesEveryoneWithStableYaw)
 	return true;
 }
 
+// An inactive camera (Auto Activate off) must neither tick nor evaluate: it would otherwise keep writing the control rotation
+// and fight the pawn's own camera (PIE jitter)
+GSTN_CAM_RT_TEST(InactiveComponentNeverWritesControlRotation)
+{
+	FRig Rig;
+	AActor* Subject = Rig.SpawnSubject(FVector(0, 0, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
+	Camera->Deactivate();
+
+	TestFalse(TEXT("the camera is inactive"), Camera->IsActive());
+	TestFalse(TEXT("an inactive camera does not tick"), Camera->IsComponentTickEnabled());
+
+	Camera->AddLookInput(FVector2D(500.0, 0.0));
+	const FGSTN_CameraView Before = Camera->GetBlendedView();
+	Camera->TickComponent(Dt, LEVELTICK_All, &Camera->PrimaryComponentTick);
+	TestTrue(TEXT("a forced tick on an inactive camera evaluates nothing"), Camera->GetBlendedView().Pivot.Equals(Before.Pivot) && Camera->GetBlendedView().ArmCm == Before.ArmCm);
+
+	Camera->Activate(true);
+	TestTrue(TEXT("activating enables the tick"), Camera->IsComponentTickEnabled());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
