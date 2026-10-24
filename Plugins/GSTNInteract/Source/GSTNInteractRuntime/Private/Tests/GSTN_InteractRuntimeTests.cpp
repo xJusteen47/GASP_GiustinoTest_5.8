@@ -18,7 +18,7 @@
 
 namespace GSTNInteractRuntimeTest
 {
-	constexpr EAutomationTestFlags Flags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	/** A throwaway game world; the interact subsystems are created with it */
 	struct FRig
@@ -82,7 +82,7 @@ namespace GSTNInteractRuntimeTest
 using namespace GSTNInteractRuntimeTest;
 
 #define GSTN_INTERACT_RT_TEST(Name) \
-	IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNInteractRuntimeTest_##Name, "GSTNInteract.Runtime." #Name, GSTNInteractRuntimeTest::Flags) \
+	IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNInteractRuntimeTest_##Name, "GSTNInteract.Runtime." #Name, GSTNInteractRuntimeTest::TestFlags) \
 	bool FGSTNInteractRuntimeTest_##Name::RunTest(const FString& Parameters)
 
 GSTN_INTERACT_RT_TEST(RecordReplicatesWithStamps)

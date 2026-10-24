@@ -112,8 +112,10 @@ bool FGSTN_WallControlBrakeAgainstTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Braking sheds far more than drag"), Brake.X < Coast.X - 200.f);
 	ControlNearlyEq(*this, TEXT("Brake decel rate"), Brake.X, 500.f * FMath::Exp(-S.HorizontalDrag * 0.2f) - S.HorizontalBrakeDecel * 0.2f, 30.f);
 
-	const FVector2D Stopped = Run(S, Start, FVector2D(-1.f, 0.f), false, 0.5f);
-	TestTrue(TEXT("Stops without reversing in one go"), Stopped.X >= 0.f);
+	// The brake itself never overshoots zero in the step that crosses it. Holding the stick afterwards does accelerate the
+	// other way (the little control along the motion), which is intended, so a long run is not asserted as "stays >= 0"
+	const FVector2D Crossing = UGSTN_WallControlUtils::StepSlideVelocity(S, FVector2D(10.f, 0.f), FVector2D(-1.f, 0.f), false, Dt);
+	TestTrue(TEXT("Stops without reversing in one go"), Crossing.X >= 0.f);
 
 	// The vertical brake input resolution
 	FGSTN_WallBrakeInput B;

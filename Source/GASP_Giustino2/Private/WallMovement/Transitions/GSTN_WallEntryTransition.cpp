@@ -127,9 +127,9 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 	{
 		return false;
 	}
-	const float Radius = UpdatedPrimitive->GetCollisionShape().GetCapsuleRadius();
+	const float CapsuleRadius = UpdatedPrimitive->GetCollisionShape().GetCapsuleRadius();
 	FHitResult CenterHit;
-	const FVector CenterEnd = Start - FlatNormal * (Radius + ProbeDistance + 5.f);
+	const FVector CenterEnd = Start - FlatNormal * (CapsuleRadius + ProbeDistance + 5.f);
 	if (!World->LineTraceSingleByChannel(CenterHit, Start, CenterEnd, UpdatedPrimitive->GetCollisionObjectType(), QueryParams, ResponseParams)
 		|| FVector::DotProduct(CenterHit.ImpactNormal, FlatNormal) < 0.5f)
 	{
