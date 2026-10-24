@@ -2730,10 +2730,9 @@ def scenario_dodge_blocked_in_hitstun(client=1):
     TA, TB, TC = 2.0, 6.0, 10.5
 
     def back_to_lane():
-        # B's dodge slides the pawn 2 to 3 m along -X and C's goes on from there: toward the next pawn's lane (5 m behind), where a capsule
-        # can stop it dead (the flake of the first pass). The suite's own reset puts the pawn back on its lane before C.
+        # B's dodge (6.0 to 9.0 s) slides the pawn 2 to 3 m and C's goes on from there; back on the lane, C starts from the same pose as B.
         lane = sorted(comps(worlds()[0]), key=str).index(key)
-        return 'back to the lane', comps(worlds()[0])[key].server_reset_to_spawn(unreal.Vector(-500.0 * lane, 0.0, 0.0))
+        return 'back to the lane', comps(worlds()[0])[key].server_reset_to_spawn(lane_offset(lane))
 
     def remark():
         run.log_mark = mark_log()
@@ -2747,8 +2746,8 @@ def scenario_dodge_blocked_in_hitstun(client=1):
         (TB - 0.5, lambda: ('hitstun off', _srv(key).server_set_hitstun(False))),
         (TB, lambda: ('B: dodge without hitstun', combat_tap(client, dodge))),
         (TB + 3.0, _landing_pair(run, st, 'B: free dodge', TB - 0.05, TB + 3.0, floor=200.0)),
-        (TC - 3.5, back_to_lane),
-        (TC - 2.0, remark),
+        (TB + 3.1, back_to_lane),
+        (TB + 3.2, remark),
         (TC - 1.5, lambda: ('hitstun on, escape kit on', (_srv(key).server_set_hitstun(True), _srv(key).server_set_escape_kit(True)))),
         (TC, lambda: ('C: dodge in hitstun with the escape kit', combat_tap(client, dodge))),
         (TC + 3.0, _landing_pair(run, st, 'C: escape dodge in hitstun', TC - 0.05, TC + 3.0, floor=200.0)),
@@ -3324,6 +3323,56 @@ def scenario_wait_frames(client=1):
 # report within its timeout is recorded as TIMEOUT and the suite moves on. loadout_change goes last (its loadout outlives the scenario).
 # The scenarios that walk (weapon_switch, combat_context) come first: the later ones dash and drift the pawn into the corner of the map, and a
 # pawn against the wall cannot walk. The suite also walks the pawn back to where it started before each scenario.
+# One lane per pawn, 15 m apart: a dodge or a knockback moves a pawn a few metres, never far enough to reach a neighbour (the lanes were 5 m apart
+# along -X and a slide of C14 ended in the next pawn's capsule). Probed on the harness level: the floor is clear for 20+ m to -X and -Y of the spawn
+# (the wall of scenario_jump_wall is on the +X side, x about 1000); +Y of it there are props, so the third lane goes to -Y, not +Y.
+LANE_SPACING = 1500.0
+LANE_POSE_TOL = 30.0       # cm, horizontal: the pose the sim confirms before a scenario starts (a teleport next to a prop is nudged a few cm)
+LANE_Z_TOL = 80.0
+
+
+def lane_offset(lane):
+    """Offset from the spawn of lane `lane` (the index of the pawn in the sorted keys): the spawn, one spacing to -X, one spacing to -Y, then both."""
+    x, y = ((0, 0), (-1, 0), (0, -1), (-1, -1))[lane % 4]
+    return unreal.Vector(LANE_SPACING * x, LANE_SPACING * y, 0.0)
+
+
+def lane_keys():
+    return sorted(comps(worlds()[0]), key=str)
+
+
+def reset_lanes():
+    """Authoritative reset of every pawn to its lane (pose, velocity zero, mode Walking, leftover test state) and of the stats probe flag on every
+    machine's copy. Returns the target pose per key so lanes_settled can check it on every world."""
+    targets = {}
+    for lane, key in enumerate(lane_keys()):
+        c = comps(worlds()[0])[key]
+        off = lane_offset(lane)
+        c.server_reset_test_state(off)
+        sp = c.get_spawn_location()
+        targets[key] = (sp.x + off.x, sp.y + off.y, sp.z + off.z)
+    for w in worlds():
+        for c in comps(w).values():
+            c.set_stats_probe_enabled(False)
+    return targets
+
+
+def lanes_settled(targets):
+    """(ok, detail): on EVERY world each pawn stands on its lane origin, at rest, in Walking (the pose the sim confirmed, not just the server's)."""
+    bad = []
+    for i, w in enumerate(worlds()):
+        for key, v in snap(w).items():
+            t = targets.get(key)
+            if t is None:
+                continue
+            loc, vel = v['location'], v['velocity']
+            d = ((loc[0] - t[0]) ** 2 + (loc[1] - t[1]) ** 2) ** 0.5
+            speed = (vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2) ** 0.5
+            if d > LANE_POSE_TOL or abs(loc[2] - t[2]) > LANE_Z_TOL or speed > 10.0 or v.get('mode') != 'Walking':
+                bad.append(f"w{i}/{key}: {d:.0f} cm off, speed {speed:.0f}, {v.get('mode')}")
+    return not bad, '; '.join(bad)
+
+
 SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
                  'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
                  'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'dodge_blocked_in_hitstun', 'kit_without_dodge', 'interact_tap_hold',
@@ -3331,8 +3380,15 @@ SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'comba
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 
-def run_suite(names=None, timeout=240.0, settle=2.0, client=1, reset_wait=2.5):
+def run_suite(names=None, timeout=240.0, settle=2.0, client=1, reset_wait=2.5, allow_kit=False):
+    """Starts the suite (poll suite_report()). A loadout cannot be taken off a pawn (the combat API has no empty loadout): once a kit scenario ran, the
+    pawn keeps that kit's binding table until PIE restarts, and the scenarios that expect the default table (dodge, jump...) fail without saying why.
+    So a suite refuses to start on pawns that carry a loadout, unless allow_kit."""
     st = _suite
+    if not allow_kit:
+        dirty = [f"{k} ({v['loadout'].get('kit')})" for k, v in snap(worlds()[0]).items() if (v.get('loadout') or {}).get('revision')]
+        if dirty:
+            return f'refused: restart PIE first, these pawns still carry a loadout: {dirty}'
     if st['handle'] is not None:
         unreal.unregister_slate_post_tick_callback(st['handle'])
     st.update(results=[], queue=list(names or SUITE_DEFAULT), current=None, timeout=timeout, settle=settle, settle_until=0.0, resetting=None, reset_done=False, reset_wait=reset_wait)
@@ -3357,16 +3413,30 @@ def run_suite(names=None, timeout=240.0, settle=2.0, client=1, reset_wait=2.5):
             if now < st['settle_until']:
                 return
             if st['queue'] and not st.get('reset_done'):
-                # Every scenario starts from the spawn, standing still, whatever the previous one did to the pawns
+                # Every scenario starts from its lane, standing still, in Walking, with no test state left over, confirmed on every machine
                 if st.get('resetting') is None:
-                    # One lane per pawn, 5 m apart along -X (the map is open there): the pawns spawn within a metre of each other
-                    for lane, w_key in enumerate(sorted(comps(worlds()[0]), key=str)):
-                        comps(worlds()[0])[w_key].server_reset_to_spawn(unreal.Vector(-500.0 * lane, 0.0, 0.0))
+                    st['targets'] = reset_lanes()
                     st['resetting'] = now
                     return
                 if now - st['resetting'] < st['reset_wait']:
                     return
+                ok, detail = lanes_settled(st['targets'])
+                if not ok and not st.get('retried') and now - st['resetting'] >= st['reset_wait'] + 3.0:
+                    # A pawn teleported next to another that had not left yet is nudged aside: once the others are on their lanes, again
+                    st['targets'] = reset_lanes()
+                    st['retried'] = True
+                    st['resetting'] = now
+                    return
+                if not ok and now - st['resetting'] < st['reset_wait'] + 8.0:
+                    return
+                if not ok:
+                    st['results'].append((st['queue'][0], f'RESET FAILED {detail}', []))
+                    st['queue'].pop(0)
+                    st['resetting'] = None
+                    st['retried'] = False
+                    return
                 st['resetting'] = None
+                st['retried'] = False
                 st['reset_done'] = True
             if not st['queue']:
                 unreal.unregister_slate_post_tick_callback(st['handle'])
@@ -3379,7 +3449,10 @@ def run_suite(names=None, timeout=240.0, settle=2.0, client=1, reset_wait=2.5):
             st['current'], st['started'] = name, now
             globals()['scenario_' + name]()
         except Exception as e:
-            st['results'].append((st.get('current'), f'EXCEPTION {e}', []))
+            # A failure before the scenario started (the reset) drops that scenario, or the same exception would repeat every tick
+            name = st.get('current') or (st['queue'].pop(0) if st['queue'] and not st.get('reset_done') else None)
+            st['results'].append((name, f'EXCEPTION {e!r}', []))
+            st['resetting'] = None
             st['current'] = None
             st['settle_until'] = time.time() + st['settle']
 

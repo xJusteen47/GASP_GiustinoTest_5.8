@@ -11,6 +11,7 @@
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Dom/JsonObject.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
 #include "EnhancedInputSubsystems.h"
 #include "Events/GSTN_SimEventSubsystem.h"
 #include "GameFramework/Pawn.h"
@@ -33,6 +34,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "World/GSTN_StepSnapshot.h"
 
 UGSTN_GASNPPTestComponent::UGSTN_GASNPPTestComponent()
 {
@@ -645,10 +647,92 @@ bool UGSTN_GASNPPTestComponent::ServerResetToSpawn(FVector Offset)
 	}
 	TSharedPtr<FTeleportEffect> Teleport = MakeShared<FTeleportEffect>();
 	Teleport->TargetLocation = SpawnLocation + Offset;
+	// The spawn is a little above the floor and a lane may sit on other ground: stand the capsule on the floor under the lane, or the pawn would be
+	// left floating in Walking (the mode does not look for a floor while it stands still) and the first move of the scenario would start with a fall
+	FHitResult Floor;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GASNPPTestReset), false, GetOwner());
+	if (GetWorld()->LineTraceSingleByChannel(Floor, Teleport->TargetLocation + FVector(0.0, 0.0, 50.0), Teleport->TargetLocation - FVector(0.0, 0.0, 600.0), ECC_Visibility, Params))
+	{
+		Teleport->TargetLocation.Z = Floor.ImpactPoint.Z + GetOwner()->GetSimpleCollisionHalfHeight() + 1.0;
+	}
 	Teleport->bUseActorRotation = true;
 	Mover->QueueInstantMovementEffect(Teleport);
 
 	return true;
+}
+
+bool UGSTN_GASNPPTestComponent::ServerResetTestState(FVector Offset)
+{
+	if (!ServerResetToSpawn(Offset))
+	{
+		return false;
+	}
+	// The teleport keeps the velocity, and a pawn left in the air would land wherever it was going. The mode is not forced: a forced Walking leaves the
+	// pawn without the floor result of a mode that arrived by itself and the first ground move of the scenario (a dodge) did nothing; the harness
+	// waits until the sim reports Walking at rest instead
+	TSharedPtr<FApplyVelocityEffect> Stop = MakeShared<FApplyVelocityEffect>();
+	Stop->VelocityToApply = FVector::ZeroVector;
+	Stop->bAdditiveVelocity = false;
+	Mover->QueueInstantMovementEffect(Stop);
+
+	ServerRevokeProbes();
+	ServerRevokeBulk();
+	ServerSetBulkEffect(false);
+	ServerSetStatsPreset(0);
+	ServerSetHitstun(false);
+	ServerSetEscapeKit(false);
+	ServerEquipPrimaryWeapon(false);
+	bStatsProbeEnabled = false;
+	if (AbilitySystem)
+	{
+		// Only a meter that is not empty: a write is an out-of-band change that the owner reconciles
+		for (const FGameplayAttribute& Meter : { UGSTN_MeterAttributeSet::GetExMeterAttribute(), UGSTN_MeterAttributeSet::GetSuperMeterAttribute() })
+		{
+			if (AbilitySystem->HasAttributeSetForAttribute(Meter) && AbilitySystem->GetNumericAttribute(Meter) > 0.f)
+			{
+				AbilitySystem->SetNumericAttributeBase(Meter, 0.f);
+			}
+		}
+	}
+	return true;
+}
+
+FString UGSTN_GASNPPTestComponent::ReadSnapshotEntry(int32 Frame)
+{
+	UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>();
+	const FGSTN_CombatSyncState* State = Combat ? Combat->GetSyncState() : nullptr;
+	if (!State)
+	{
+		return FString();
+	}
+	FGSTN_SnapshotEntry Entry;
+	Entry.Hurtboxes = Combat->HurtboxSet.LoadSynchronous();
+	const int32 ReadFrame = Frame >= 0 ? Frame : State->Core.Input.History.GetLatestFrame();
+	if (!Combat->ReadSnapshotEntry(ReadFrame, Entry))
+	{
+		return FString();
+	}
+	auto Vec = [](const FVector& V) { return TArray<TSharedPtr<FJsonValue>>{ MakeShared<FJsonValueNumber>(V.X), MakeShared<FJsonValueNumber>(V.Y), MakeShared<FJsonValueNumber>(V.Z) }; };
+	TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+	Json->SetNumberField(TEXT("frame"), ReadFrame);
+	Json->SetArrayField(TEXT("loc"), Vec(Entry.Transform.GetLocation()));
+	Json->SetArrayField(TEXT("vel"), Vec(Entry.Velocity));
+	Json->SetArrayField(TEXT("up"), Vec(Entry.Up));
+	Json->SetArrayField(TEXT("facing"), Vec(Entry.Facing));
+	Json->SetBoolField(TEXT("inHitstop"), Entry.bInHitstop);
+	Json->SetNumberField(TEXT("actionState"), static_cast<int32>(Entry.ActionState));
+	TArray<TSharedPtr<FJsonValue>> Hurt;
+	for (const FGSTN_HurtboxFrameState& H : Entry.HurtStates)
+	{
+		Hurt.Add(MakeShared<FJsonValueNumber>(static_cast<int32>(H.State)));
+	}
+	Json->SetArrayField(TEXT("hurtStates"), Hurt);
+	Json->SetNumberField(TEXT("reactionFlags"), Entry.Reaction.Flags);
+	Json->SetNumberField(TEXT("damagePercent"), Entry.Reaction.GetDamagePercent());
+	FString Out;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Out);
+	FJsonSerializer::Serialize(Json, Writer);
+	return Out;
 }
 
 UGSTN_LoadoutComponent* UGSTN_GASNPPTestComponent::EnsureLoadoutComponent()

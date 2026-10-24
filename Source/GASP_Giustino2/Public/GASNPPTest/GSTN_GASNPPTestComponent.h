@@ -75,6 +75,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	bool ServerResetToSpawn(FVector Offset);
 
+	/** Where this pawn spawned (the origin its lane is measured from); zero before BeginPlay */
+	UFUNCTION(BlueprintPure, Category = "GASNPP Test")
+	FVector GetSpawnLocation() const { return SpawnLocation; }
+
+	/**
+	 * Authority only: the harness's per scenario reset. ServerResetToSpawn plus velocity zero (the teleport keeps the velocity of the previous scenario), and the server-side test state a scenario can leave behind: probe and bulk abilities, the bulk and stats effects,
+	 * hitstun and escape, both weapons' stat effects, the EX and super meters. The loadout (kit) is not touched: scenarios count its revision from
+	 * where it is. Everything goes through queued moves or out-of-band ability system changes, like the helpers it calls.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	bool ServerResetTestState(FVector Offset);
+
+	/**
+	 * The step snapshot entry (H6) of this entity as a JSON object: tracker pose, velocity, up, hitstop flag, action state, the hurt state of every hurtbox
+	 * of the set, the reaction flags and the damage percent. Frame INDEX_NONE (or any negative) reads the latest input history frame. Empty string when
+	 * the pawn has no combat component or no sync state yet. Valid on every machine (an interpolated proxy shows its presentation pose).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	FString ReadSnapshotEntry(int32 Frame = -1);
+
 	UFUNCTION(BlueprintPure, Category = "GASNPP Test")
 	bool IsTestInputReady() const { return bInputReady; }
 
