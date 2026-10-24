@@ -12,7 +12,9 @@ UBaseMovementMode
        └ UGSTN_ControlledWallMovementMode      stick mapping on the wall (MapMoveIntentToWall), detach, wall jump (CheckForWallExit)
           ├ UGSTN_SkiddingWallMovementMode     skid against horizontal movement (ComputeHorizontalSpeed)
           │  └ UGSTN_SimpleWallMovementMode    climbing: stick drives the vertical axis (GetVerticalMovement, ComputeTargetUp)
-          └ UGSTN_WallSlideMovementMode        gravity drives the vertical axis (ComputeVerticalSpeed)
+          ├ UGSTN_WallSlideMovementMode        gravity drives the vertical axis (ComputeVerticalSpeed)
+          └ UGSTN_WallTraverseModeBase (abstract)  v2 family, lean pipeline (wall-slide-v2.md 6): capsule never rotates, proxy plane, one move sweep + one contact/adhesion sweep
+             └ UGSTN_WallSlideV2MovementMode       control model = UGSTN_WallControlUtils::StepSlideVelocity; registered as "WallSlidingV2" next to the legacy slide
 UBaseMovementModeTransition
  └ UGSTN_WallEntryTransition                   Falling -> wall mode (decides WHETHER to grab)
     └ UGSTN_AbilityWallEntryTransition         (GAS/) same, but only if the wall ability can activate

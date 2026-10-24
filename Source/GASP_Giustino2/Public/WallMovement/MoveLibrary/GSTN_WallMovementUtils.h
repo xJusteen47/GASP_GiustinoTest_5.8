@@ -7,6 +7,7 @@
 #include "WallMovement/GSTN_WallMovementTypes.h"
 #include "GSTN_WallMovementUtils.generated.h"
 
+struct FHitResult;
 struct FMovementRecord;
 struct FMovingComponentSet;
 
@@ -135,6 +136,20 @@ public:
 	 */
 	static void TryMoveToAdhereToWall(const FMovingComponentSet& MovingComps, const FQuat& Orientation, const FVector& WallNormal, float WallGap,
 		float WallProbeDistance, float MaxAdhesionSpeed, float DeltaSeconds, FMovementRecord& MoveRecord);
+
+	/**
+	 * Contact and adhesion in ONE capsule sweep (wall-slide-v2.md 2.2 step 8): the sweep toward -WallNormal over
+	 * WallGap + WallProbeDistance is both the wall sensor (OutContact: rounded normal, contact point, component) and the
+	 * adhesion probe. The gap error then moves the capsule along the normal: pulling in is UNSWEPT (at most Hit.Distance - WallGap,
+	 * which the sweep already proved free) and rate-limited to MaxAdhesionSpeed, pushing out is swept and instant.
+	 *
+	 * Returns true when a hit that passes IsHitOnValidWall (angle, surface filter, edge faces) was found; OutContact is then valid
+	 * (as measured BEFORE the correction). Returns false with OutContact.bStartPenetrating set when the capsule was already
+	 * overlapping something (resolved along the penetration, no sensing this tick), and false for nothing found / not a wall.
+	 * Every query is counted for gstn.Wall.CountQueries.
+	 */
+	static bool AdhereAndSense(const FMovingComponentSet& MovingComps, const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp,
+		const FGSTN_WallCheckSettings& Settings, float MaxAdhesionSpeed, float DeltaSeconds, FMovementRecord& MoveRecord, FHitResult& OutContact);
 
 	/**
 	 * Moves/rotates the capsule, the wall normal and the velocity with the dynamic wall described by BaseInfo, according to

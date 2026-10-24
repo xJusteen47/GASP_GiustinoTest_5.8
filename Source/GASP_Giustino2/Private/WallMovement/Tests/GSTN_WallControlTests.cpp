@@ -7,7 +7,7 @@
 #include "WallMovement/MoveLibrary/GSTN_WallControlUtils.h"
 
 /** Double-safe tolerance compare (FVector2D components are double, the literals float: TestNearlyEqual is ambiguous) */
-static void NearlyEq(FAutomationTestBase& Test, const TCHAR* What, double A, double B, double Tolerance = 1e-4)
+static void ControlNearlyEq(FAutomationTestBase& Test, const TCHAR* What, double A, double B, double Tolerance = 1e-4)
 {
 	Test.TestTrue(What, FMath::Abs(A - B) <= Tolerance);
 }
@@ -56,18 +56,18 @@ bool FGSTN_WallControlEntryTest::RunTest(const FString& Parameters)
 
 		S.EntrySpeedKeep = 1.f;
 		const FVector Out = UGSTN_WallControlUtils::ProjectEntryVelocity(S, In, N);
-		NearlyEq(*this, TEXT("Length kept"), Out.Size(), In.Size(), 0.1f);
-		NearlyEq(*this, TEXT("On the plane"), FVector::DotProduct(Out, N), 0.f, 0.01f);
+		ControlNearlyEq(*this, TEXT("Length kept"), Out.Size(), In.Size(), 0.1f);
+		ControlNearlyEq(*this, TEXT("On the plane"), FVector::DotProduct(Out, N), 0.f, 0.01f);
 		const FVector2D P = UGSTN_WallControlUtils::ToPlane(Out, H, V);
 		TestTrue(TEXT("Keeps the run direction"), P.X > 0.f);
 		TestTrue(TEXT("Keeps the fall direction"), P.Y < 0.f);
 
 		S.EntrySpeedKeep = 0.5f;
-		NearlyEq(*this, TEXT("Keep factor"), UGSTN_WallControlUtils::ProjectEntryVelocity(S, In, N).Size(), In.Size() * 0.5f, 0.1f);
+		ControlNearlyEq(*this, TEXT("Keep factor"), UGSTN_WallControlUtils::ProjectEntryVelocity(S, In, N).Size(), In.Size() * 0.5f, 0.1f);
 
 		S.EntrySpeedKeep = 1.f;
 		S.MaxEntrySpeed = 300.f;
-		NearlyEq(*this, TEXT("Clamped to the max"), UGSTN_WallControlUtils::ProjectEntryVelocity(S, In, N).Size(), 300.f, 0.1f);
+		ControlNearlyEq(*this, TEXT("Clamped to the max"), UGSTN_WallControlUtils::ProjectEntryVelocity(S, In, N).Size(), 300.f, 0.1f);
 		S.MaxEntrySpeed = 1500.f;
 
 		TestTrue(TEXT("Head-on gives nothing to carry"), UGSTN_WallControlUtils::ProjectEntryVelocity(S, -N * 300.f, N).IsNearlyZero());
@@ -88,7 +88,7 @@ bool FGSTN_WallControlHorizontalTest::RunTest(const FString& Parameters)
 
 	// Input from rest accelerates only a little: after 0.5 s, accel * 0.5
 	const FVector2D Push = Run(S, FVector2D::ZeroVector, FVector2D(1.f, 0.f), false, 0.5f);
-	NearlyEq(*this, TEXT("Low control accel"), Push.X, S.HorizontalControlAccel * 0.5f, S.HorizontalControlAccel * 0.05f);
+	ControlNearlyEq(*this, TEXT("Low control accel"), Push.X, S.HorizontalControlAccel * 0.5f, S.HorizontalControlAccel * 0.05f);
 	TestTrue(TEXT("Capped by the control max"), Run(S, FVector2D::ZeroVector, FVector2D(1.f, 0.f), false, 10.f).X <= S.HorizontalControlMaxSpeed + 0.01f);
 
 	// Input along entry momentum above the max adds nothing
@@ -110,7 +110,7 @@ bool FGSTN_WallControlBrakeAgainstTest::RunTest(const FString& Parameters)
 	const FVector2D Coast = Run(S, Start, FVector2D::ZeroVector, false, 0.2f);
 	const FVector2D Brake = Run(S, Start, FVector2D(-1.f, 0.f), false, 0.2f);
 	TestTrue(TEXT("Braking sheds far more than drag"), Brake.X < Coast.X - 200.f);
-	NearlyEq(*this, TEXT("Brake decel rate"), Brake.X, 500.f * FMath::Exp(-S.HorizontalDrag * 0.2f) - S.HorizontalBrakeDecel * 0.2f, 30.f);
+	ControlNearlyEq(*this, TEXT("Brake decel rate"), Brake.X, 500.f * FMath::Exp(-S.HorizontalDrag * 0.2f) - S.HorizontalBrakeDecel * 0.2f, 30.f);
 
 	const FVector2D Stopped = Run(S, Start, FVector2D(-1.f, 0.f), false, 0.5f);
 	TestTrue(TEXT("Stops without reversing in one go"), Stopped.X >= 0.f);
@@ -149,7 +149,7 @@ bool FGSTN_WallControlTerminalTest::RunTest(const FString& Parameters)
 	// Entered faster than terminal: decays toward it gradually, not in one tick
 	const FVector2D Fast = UGSTN_WallControlUtils::StepSlideVelocity(S, FVector2D(0.f, -1200.f), FVector2D::ZeroVector, false, Dt);
 	TestTrue(TEXT("Not clamped instantly"), -Fast.Y > S.TerminalDownSpeed + 100.f && -Fast.Y < 1200.f);
-	NearlyEq(*this, TEXT("Settles to terminal"), -Run(S, FVector2D(0.f, -1200.f), FVector2D::ZeroVector, false, 3.f).Y, S.TerminalDownSpeed, 0.5f);
+	ControlNearlyEq(*this, TEXT("Settles to terminal"), -Run(S, FVector2D(0.f, -1200.f), FVector2D::ZeroVector, false, 3.f).Y, S.TerminalDownSpeed, 0.5f);
 
 	// Upward entry speed decays under gravity, no instant stop
 	const FVector2D Up = UGSTN_WallControlUtils::StepSlideVelocity(S, FVector2D(0.f, 400.f), FVector2D::ZeroVector, false, Dt);
@@ -159,8 +159,8 @@ bool FGSTN_WallControlTerminalTest::RunTest(const FString& Parameters)
 	// Stick down lets go faster, only when DownBoost is set
 	FGSTN_WallSlideControlSettings Boost = S;
 	Boost.DownBoost = 200.f;
-	NearlyEq(*this, TEXT("Boosted terminal"), -Run(Boost, FVector2D(0.f, -600.f), FVector2D(0.f, -1.f), false, 12.f).Y, S.TerminalDownSpeed + 200.f, 2.f);
-	NearlyEq(*this, TEXT("No boost by default"), -Run(S, FVector2D(0.f, -600.f), FVector2D(0.f, -1.f), false, 12.f).Y, S.TerminalDownSpeed, 0.5f);
+	ControlNearlyEq(*this, TEXT("Boosted terminal"), -Run(Boost, FVector2D(0.f, -600.f), FVector2D(0.f, -1.f), false, 12.f).Y, S.TerminalDownSpeed + 200.f, 2.f);
+	ControlNearlyEq(*this, TEXT("No boost by default"), -Run(S, FVector2D(0.f, -600.f), FVector2D(0.f, -1.f), false, 12.f).Y, S.TerminalDownSpeed, 0.5f);
 	return true;
 }
 
@@ -181,11 +181,11 @@ bool FGSTN_WallControlBrakeDownTest::RunTest(const FString& Parameters)
 	}
 	const int32 Expected = FMath::CeilToInt((600.f - S.BrakeMinSpeed) / (S.VerticalBrakeDecel * Dt));
 	TestEqual(TEXT("Tick count follows the decel"), Ticks, Expected);
-	NearlyEq(*this, TEXT("Reaches the min speed exactly"), -V.Y, S.BrakeMinSpeed, 0.001f);
+	ControlNearlyEq(*this, TEXT("Reaches the min speed exactly"), -V.Y, S.BrakeMinSpeed, 0.001f);
 
 	// It then holds: no gravity gain while braking
 	V = Run(S, V, FVector2D::ZeroVector, true, 2.f);
-	NearlyEq(*this, TEXT("Holds the min speed"), -V.Y, S.BrakeMinSpeed, 0.001f);
+	ControlNearlyEq(*this, TEXT("Holds the min speed"), -V.Y, S.BrakeMinSpeed, 0.001f);
 
 	// Releasing resumes the soft fall
 	V = Run(S, V, FVector2D::ZeroVector, false, 0.5f);
@@ -215,8 +215,8 @@ bool FGSTN_WallControlClimbTest::RunTest(const FString& Parameters)
 		const FVector2D V = Climb(FVector2D::ZeroVector, Dir, 2.f);
 		TestTrue(TEXT("Reaches climb speed in any direction"), V.Equals(Dir * C.ClimbSpeed, 0.01f));
 	}
-	NearlyEq(*this, TEXT("Half stick, half speed"), Climb(FVector2D::ZeroVector, FVector2D(0.f, 0.5f), 2.f).Y, C.ClimbSpeed * 0.5f, 0.01f);
-	NearlyEq(*this, TEXT("Oversize stick is clamped"), Climb(FVector2D::ZeroVector, FVector2D(0.f, 3.f), 2.f).Y, C.ClimbSpeed, 0.01f);
+	ControlNearlyEq(*this, TEXT("Half stick, half speed"), Climb(FVector2D::ZeroVector, FVector2D(0.f, 0.5f), 2.f).Y, C.ClimbSpeed * 0.5f, 0.01f);
+	ControlNearlyEq(*this, TEXT("Oversize stick is clamped"), Climb(FVector2D::ZeroVector, FVector2D(0.f, 3.f), 2.f).Y, C.ClimbSpeed, 0.01f);
 
 	// No gravity: released, it stops and stays stopped (no slide)
 	TestTrue(TEXT("Release holds position"), Climb(FVector2D(100.f, 200.f), FVector2D::ZeroVector, 2.f).IsNearlyZero());
@@ -248,8 +248,8 @@ bool FGSTN_WallControlGravityIndependentTest::RunTest(const FString& Parameters)
 			const FVector N = WallNormalFor(Up, Tilt);
 			FVector H, V;
 			UGSTN_WallControlUtils::MakePlaneAxes(N, Up, H, V);
-			NearlyEq(*this, TEXT("Axes orthogonal"), FVector::DotProduct(H, V), 0.f, 0.001f);
-			NearlyEq(*this, TEXT("H on the plane"), FVector::DotProduct(H, N), 0.f, 0.001f);
+			ControlNearlyEq(*this, TEXT("Axes orthogonal"), FVector::DotProduct(H, V), 0.f, 0.001f);
+			ControlNearlyEq(*this, TEXT("H on the plane"), FVector::DotProduct(H, N), 0.f, 0.001f);
 			TestTrue(TEXT("V points up along the wall"), FVector::DotProduct(V, Up) > 0.f);
 
 			FVector World = UGSTN_WallControlUtils::FromPlane(Start, H, V);
@@ -259,14 +259,14 @@ bool FGSTN_WallControlGravityIndependentTest::RunTest(const FString& Parameters)
 				World = UGSTN_WallControlUtils::FromPlane(UGSTN_WallControlUtils::StepSlideVelocity(S, Plane, Input, i > 45, Dt), H, V);
 			}
 			TestTrue(TEXT("Same result in every frame"), UGSTN_WallControlUtils::ToPlane(World, H, V).Equals(Reference, 0.05f));
-			NearlyEq(*this, TEXT("Stays on the plane"), FVector::DotProduct(World, N), 0.f, 0.01f);
+			ControlNearlyEq(*this, TEXT("Stays on the plane"), FVector::DotProduct(World, N), 0.f, 0.01f);
 		}
 	}
 
 	// Ceiling: no gravity tangent, axes still well defined
 	FVector H, V;
 	UGSTN_WallControlUtils::MakePlaneAxes(FVector(0, 0, -1), FVector(0, 0, 1), H, V);
-	NearlyEq(*this, TEXT("Ceiling axes orthogonal"), FVector::DotProduct(H, V), 0.f, 0.001f);
+	ControlNearlyEq(*this, TEXT("Ceiling axes orthogonal"), FVector::DotProduct(H, V), 0.f, 0.001f);
 	TestTrue(TEXT("Ceiling axes unit"), H.IsNormalized() && V.IsNormalized());
 	return true;
 }

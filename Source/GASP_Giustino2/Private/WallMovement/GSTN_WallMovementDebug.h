@@ -96,7 +96,7 @@ namespace GSTNWallDebug
 #define GSTN_WALL_LOG(Level, Format, ...) UE_CLOG(GSTNWallDebug::GetLogLevel() >= (Level), LogGSTNWall, Log, Format, ##__VA_ARGS__)
 
 /** Counts one query for gstn.Wall.CountQueries; place right before the sweep / trace / overlap */
-#define GSTN_WALL_QUERY_SCOPE() GSTNWallDebug::FQueryScope PREPROCESSOR_JOIN(WallQueryScope_, __LINE__)
+#define GSTN_WALL_QUERY_SCOPE() GSTNWallDebug::FQueryScope UE_JOIN(WallQueryScope_, __LINE__)
 
 #else
 

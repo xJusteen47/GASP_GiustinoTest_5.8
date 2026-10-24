@@ -12,7 +12,7 @@
 #include "WallMovement/GSTN_WallMovementDebug.h"
 
 /** Double-safe tolerance compare (FVector2D components are double, the literals float: TestNearlyEqual is ambiguous) */
-static void NearlyEq(FAutomationTestBase& Test, const TCHAR* What, double A, double B, double Tolerance = 1e-4)
+static void UtilsNearlyEq(FAutomationTestBase& Test, const TCHAR* What, double A, double B, double Tolerance = 1e-4)
 {
 	Test.TestTrue(What, FMath::Abs(A - B) <= Tolerance);
 }
@@ -52,19 +52,19 @@ bool FGSTN_WallUtilsFilterNormalTest::RunTest(const FString& Parameters)
 
 		// Inside the deadzone the response is quadratic: 1 deg of a 4 deg deadzone moves (1/4)^2 of it
 		const float Small = AngleDeg(Current, UGSTN_WallMovementUtils::FilterWallNormal(Current, Rotated(1.f), 4.f, 0.f, 0.016f));
-		NearlyEq(*this, TEXT("Deadzone shrinks small changes"), Small, 1.f / 16.f, 0.01f);
+		UtilsNearlyEq(*this, TEXT("Deadzone shrinks small changes"), Small, 1.f / 16.f, 0.01f);
 
 		// At or beyond the deadzone the change passes whole when the rate is unlimited
 		const float Whole = AngleDeg(Current, UGSTN_WallMovementUtils::FilterWallNormal(Current, Rotated(20.f), 4.f, 0.f, 0.016f));
-		NearlyEq(*this, TEXT("Beyond the deadzone passes whole"), Whole, 20.f, 0.05f);
+		UtilsNearlyEq(*this, TEXT("Beyond the deadzone passes whole"), Whole, 20.f, 0.05f);
 
 		// The rate limit caps the turn per tick: 90 deg/s over 0.1 s = 9 deg
 		const float Limited = AngleDeg(Current, UGSTN_WallMovementUtils::FilterWallNormal(Current, Rotated(40.f), 4.f, 90.f, 0.1f));
-		NearlyEq(*this, TEXT("Rate limits the turn"), Limited, 9.f, 0.05f);
+		UtilsNearlyEq(*this, TEXT("Rate limits the turn"), Limited, 9.f, 0.05f);
 
 		// No deadzone: the change goes through (blend 1)
 		const float NoDeadzone = AngleDeg(Current, UGSTN_WallMovementUtils::FilterWallNormal(Current, Rotated(0.5f), 0.f, 0.f, 0.016f));
-		NearlyEq(*this, TEXT("Zero deadzone passes"), NoDeadzone, 0.5f, 0.01f);
+		UtilsNearlyEq(*this, TEXT("Zero deadzone passes"), NoDeadzone, 0.5f, 0.01f);
 
 		TestTrue(TEXT("Result stays unit"), UGSTN_WallMovementUtils::FilterWallNormal(Current, Rotated(40.f), 4.f, 90.f, 0.1f).IsNormalized());
 	}
@@ -83,8 +83,8 @@ bool FGSTN_WallUtilsTransportTest::RunTest(const FString& Parameters)
 		const FVector Velocity = Up * -450.f + FVector::CrossProduct(From, Up).GetSafeNormal() * 200.f;
 
 		const FVector Transported = UGSTN_WallMovementUtils::TransportVelocity(Velocity, From, To);
-		NearlyEq(*this, TEXT("Speed kept"), Transported.Size(), Velocity.Size(), 0.1f);
-		NearlyEq(*this, TEXT("Lies on the new plane"), FVector::DotProduct(Transported, To), 0.f, 0.1f);
+		UtilsNearlyEq(*this, TEXT("Speed kept"), Transported.Size(), Velocity.Size(), 0.1f);
+		UtilsNearlyEq(*this, TEXT("Lies on the new plane"), FVector::DotProduct(Transported, To), 0.f, 0.1f);
 
 		const FVector Same = UGSTN_WallMovementUtils::TransportVelocity(Velocity, From, From);
 		TestTrue(TEXT("Same normal is identity"), Same.Equals(Velocity, 0.1f));
@@ -125,7 +125,7 @@ bool FGSTN_WallUtilsAxisSpeedTest::RunTest(const FString& Parameters)
 		Fast = UGSTN_WallMovementUtils::ComputeAxisSpeed(Fast, 400.f, 500.f, 0.f, 2.f, 200.f, 10.f, 1.f / 60.f);
 		TestTrue(TEXT("Not below target"), Fast >= 400.f - UE_KINDA_SMALL_NUMBER);
 	}
-	NearlyEq(*this, TEXT("Settles at target"), Fast, 400.f, 0.5f);
+	UtilsNearlyEq(*this, TEXT("Settles at target"), Fast, 400.f, 0.5f);
 	return true;
 }
 
@@ -187,7 +187,7 @@ bool FGSTN_WallDebugQueryCounterTest::RunTest(const FString& Parameters)
 	GSTNWallDebug::GetQueryStats(Mode, Ticks, Avg, Max);
 	TestEqual(TEXT("Ticks"), Ticks, 4);
 	TestEqual(TEXT("Max"), Max, 4);
-	NearlyEq(*this, TEXT("Average"), (float)Avg, 2.5f);
+	UtilsNearlyEq(*this, TEXT("Average"), (float)Avg, 2.5f);
 	TestEqual(TEXT("Tick counter resets"), GSTNWallDebug::GetTickQueryCount(), 0);
 
 	GSTNWallDebug::ResetQueryStats();

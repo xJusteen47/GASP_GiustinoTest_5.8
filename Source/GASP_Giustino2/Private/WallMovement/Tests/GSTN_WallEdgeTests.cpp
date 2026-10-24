@@ -7,7 +7,7 @@
 #include "WallMovement/MoveLibrary/GSTN_WallEdgeUtils.h"
 
 /** Double-safe tolerance compare (FVector2D components are double, the literals float: TestNearlyEqual is ambiguous) */
-static void NearlyEq(FAutomationTestBase& Test, const TCHAR* What, double A, double B, double Tolerance = 1e-4)
+static void EdgeNearlyEq(FAutomationTestBase& Test, const TCHAR* What, double A, double B, double Tolerance = 1e-4)
 {
 	Test.TestTrue(What, FMath::Abs(A - B) <= Tolerance);
 }
@@ -61,8 +61,8 @@ bool FGSTN_WallEdgeConcaveCapTest::RunTest(const FString& Parameters)
 {
 	using namespace GSTNWallEdgeTest;
 	const FGSTN_WallEdgeSettings S;
-	NearlyEq(*this, TEXT("Full speed at the smooth limit"), UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Concave, S.MaxSmoothAngle, Terminal), Terminal, 0.01f);
-	NearlyEq(*this, TEXT("Min scale at 90"), UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Concave, 90.f, Terminal), Terminal * S.ConcaveMinScale, 0.01f);
+	EdgeNearlyEq(*this, TEXT("Full speed at the smooth limit"), UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Concave, S.MaxSmoothAngle, Terminal), Terminal, 0.01f);
+	EdgeNearlyEq(*this, TEXT("Min scale at 90"), UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Concave, 90.f, Terminal), Terminal * S.ConcaveMinScale, 0.01f);
 	float Previous = Terminal + 1.f;
 	for (float Angle = S.MaxSmoothAngle; Angle <= 90.f; Angle += 5.f)
 	{
@@ -81,9 +81,9 @@ bool FGSTN_WallEdgeConvexCapTest::RunTest(const FString& Parameters)
 {
 	using namespace GSTNWallEdgeTest;
 	const FGSTN_WallEdgeSettings S;
-	NearlyEq(*this, TEXT("Min scale at 90"), UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Convex, 90.f, Terminal), Terminal * S.ConvexMinScale, 0.01f);
+	EdgeNearlyEq(*this, TEXT("Min scale at 90"), UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Convex, 90.f, Terminal), Terminal * S.ConvexMinScale, 0.01f);
 	const float Mid = UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Convex, 52.5f, Terminal);
-	NearlyEq(*this, TEXT("Halfway is the middle scale"), Mid, Terminal * (1.f + S.ConvexMinScale) * 0.5f, 0.5f);
+	EdgeNearlyEq(*this, TEXT("Halfway is the middle scale"), Mid, Terminal * (1.f + S.ConvexMinScale) * 0.5f, 0.5f);
 	TestTrue(TEXT("Convex is stricter than concave at the same angle"),
 		UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Convex, 70.f, Terminal) < UGSTN_WallEdgeUtils::EdgeSpeedCap(S, EGSTN_WallEdgeKind::Concave, 70.f, Terminal));
 	return true;
@@ -100,8 +100,8 @@ bool FGSTN_WallEdgeApproachTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Allowed speed grows with distance"), Allowed >= Previous);
 		Previous = Allowed;
 	}
-	NearlyEq(*this, TEXT("At the edge it is the corner speed"), UGSTN_WallEdgeUtils::AllowedSpeedAtDistance(S, 240.f, 0.f), 240.f, 0.01f);
-	NearlyEq(*this, TEXT("Constant braking curve"), UGSTN_WallEdgeUtils::AllowedSpeedAtDistance(S, 100.f, 50.f), FMath::Sqrt(100.f * 100.f + 2.f * S.CornerBraking * 50.f), 0.01f);
+	EdgeNearlyEq(*this, TEXT("At the edge it is the corner speed"), UGSTN_WallEdgeUtils::AllowedSpeedAtDistance(S, 240.f, 0.f), 240.f, 0.01f);
+	EdgeNearlyEq(*this, TEXT("Constant braking curve"), UGSTN_WallEdgeUtils::AllowedSpeedAtDistance(S, 100.f, 50.f), FMath::Sqrt(100.f * 100.f + 2.f * S.CornerBraking * 50.f), 0.01f);
 	return true;
 }
 
@@ -122,7 +122,7 @@ bool FGSTN_WallEdgeCornerFloorTest::RunTest(const FString& Parameters)
 			}
 		}
 	}
-	NearlyEq(*this, TEXT("Negative distance is clamped"), UGSTN_WallEdgeUtils::AllowedSpeedAtDistance(S, 100.f, -30.f), 100.f, 0.01f);
+	EdgeNearlyEq(*this, TEXT("Negative distance is clamped"), UGSTN_WallEdgeUtils::AllowedSpeedAtDistance(S, 100.f, -30.f), 100.f, 0.01f);
 	return true;
 }
 
@@ -135,7 +135,7 @@ bool FGSTN_WallEdgeGravityIndependentTest::RunTest(const FString& Parameters)
 	const FVector WallN = FVector(1, 0, 0);
 	const FVector HitN = FQuat(FVector::UpVector, FMath::DegreesToRadians(50.f)).RotateVector(WallN);
 	const float Reference = UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(WallN, HitN);
-	NearlyEq(*this, TEXT("Reference angle"), Reference, 50.f, 0.01f);
+	EdgeNearlyEq(*this, TEXT("Reference angle"), Reference, 50.f, 0.01f);
 	const EGSTN_WallEdgeKind RefKind = UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -30.f, Reference, false);
 	const float RefCap = UGSTN_WallEdgeUtils::EdgeSpeedCap(S, RefKind, Reference, Terminal);
 
@@ -149,16 +149,16 @@ bool FGSTN_WallEdgeGravityIndependentTest::RunTest(const FString& Parameters)
 	for (const FQuat& Frame : Frames)
 	{
 		const float Angle = UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(Frame.RotateVector(WallN), Frame.RotateVector(HitN));
-		NearlyEq(*this, TEXT("Angle is frame independent"), Angle, Reference, 0.01f);
+		EdgeNearlyEq(*this, TEXT("Angle is frame independent"), Angle, Reference, 0.01f);
 		const EGSTN_WallEdgeKind Kind = UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -30.f, Angle, false);
 		TestEqual(TEXT("Kind is frame independent"), Kind, RefKind);
-		NearlyEq(*this, TEXT("Cap is frame independent"), UGSTN_WallEdgeUtils::EdgeSpeedCap(S, Kind, Angle, Terminal), RefCap, 0.1f);
+		EdgeNearlyEq(*this, TEXT("Cap is frame independent"), UGSTN_WallEdgeUtils::EdgeSpeedCap(S, Kind, Angle, Terminal), RefCap, 0.1f);
 	}
 	TestEqual(TEXT("Bump height of a 6 cm rib"), UGSTN_WallEdgeUtils::BumpHeightOf(S, -6.f), 6.f);
 	TestEqual(TEXT("Bump height of a recess is 0"), UGSTN_WallEdgeUtils::BumpHeightOf(S, 4.f), 0.f);
 	TestEqual(TEXT("Bump height clamps to the step"), UGSTN_WallEdgeUtils::BumpHeightOf(S, -50.f), S.MaxStepHeight);
 	TestEqual(TEXT("Lookahead floor"), UGSTN_WallEdgeUtils::LookaheadDistance(S, 10.f), S.MinLookahead);
-	NearlyEq(*this, TEXT("Lookahead scales with speed"), UGSTN_WallEdgeUtils::LookaheadDistance(S, 600.f), 600.f * S.LookaheadTime, 0.01f);
+	EdgeNearlyEq(*this, TEXT("Lookahead scales with speed"), UGSTN_WallEdgeUtils::LookaheadDistance(S, 600.f), 600.f * S.LookaheadTime, 0.01f);
 	return true;
 }
 

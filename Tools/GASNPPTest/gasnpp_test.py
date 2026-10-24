@@ -435,6 +435,9 @@ def scenario_accounting(client=2, player_key=None):
 
 # ------------------------------------------------------------------------------------------------ GA_Jump / GA_WallSlide
 WALL_SLIDING_TAG = 'State.Movement.WallSliding'
+# Mover mode the wall scenarios expect ('WallSliding' = legacy slide, 'WallSlidingV2' = slide v2; set it before running a scenario,
+# and point the Falling entry transition at the same mode with Tools/GAS/setup_wall_slide_modes.py --use v2|legacy)
+WALL_MODE = 'WallSliding'
 
 
 def _has_tag(actor, tag_name):
@@ -547,7 +550,7 @@ def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=130
                     st.update(phase='air', t1=now)
             elif st['phase'] == 'air':
                 comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, target)))
-                if mode == 'WallSliding':
+                if mode == WALL_MODE:
                     note(f'on wall tag={_has_tag(pawn, WALL_SLIDING_TAG)}')
                     st.update(phase='wall', t1=now)
                 elif now - st['t1'] > 2.0:
@@ -582,7 +585,7 @@ def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=130
 _force_on_mode = {'handle': None, 'log': []}
 
 
-def force_reconcile_on_mode(client=1, mode='WallSliding', extra_frames=15):
+def force_reconcile_on_mode(client=1, mode=None, extra_frames=15):
     """Forces a reconcile on the client while its pawn is in `mode` (e.g. on the wall, with GA_WallSlide active): the
     re-simulation must activate the ability again on the same frame. Read _force_on_mode['log'] after.
 
@@ -591,6 +594,7 @@ def force_reconcile_on_mode(client=1, mode='WallSliding', extra_frames=15):
     up, so the other client may get an extra reconcile too."""
     if client == 0:
         raise RuntimeError('world 0 is the host/server: it never reconciles, pick a client (index >= 1)')
+    mode = mode or WALL_MODE
     _force_on_mode['log'] = []
     st = {'start_rb': None}
 

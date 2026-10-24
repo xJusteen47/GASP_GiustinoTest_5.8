@@ -376,3 +376,14 @@ Velocity on the wall is split into the along-gravity axis `V` and the horizontal
 W0-W1 unchanged (instrumentation, pure edge math) plus `UGSTN_WallControlUtils` and its tests in W1. W2 builds the shared base and
 the slide on it; W3-W4 unchanged (corners, bumps); **W4b** the climb mode and the surface-driven transition; W5-W6 unchanged. The
 current modes stay as they are for the A/B test.
+
+### 6.5 W2 status (code only, 2026-10-24)
+
+Built: `UGSTN_WallTraverseModeBase` and `UGSTN_WallSlideV2MovementMode` (derived from `UGSTN_ControlledWallMovementMode`, so the legacy modes are untouched),
+`UGSTN_WallMovementUtils::AdhereAndSense`, `Tools/GAS/setup_wall_slide_modes.py` (written, NOT run: it edits `SandboxCharacter_Mover`), `WALL_MODE` in the harness.
+The edge hooks of 2.6 (`ProbeAhead`, `ClassifyAhead`, `ComputeEdgeSpeedCap`, `TryStepOverBump`) are declared and wired into the tick with no-op defaults, and
+`Edges` (`FGSTN_WallEdgeSettings`) is stored but inert until W3/W4. Facing is written as the capsule's yaw about gravity-up (the default sync state's orientation),
+no new sync-state field. Not yet done: pawns excluded from the contact sweep (W5), `IsMovementLocked` (H7), `IsHitOnValidWall` on the ahead traces (W3).
+Needed outside this checkpoint: `UGSTN_GA_WallSlide::WallModeNames` (`GAS/GSTN_GA_WallSlide.cpp:14`) must also list `WallSlidingV2`, otherwise the ability ends at once
+on the v2 mode; it was left unchanged (GAS territory).
+
