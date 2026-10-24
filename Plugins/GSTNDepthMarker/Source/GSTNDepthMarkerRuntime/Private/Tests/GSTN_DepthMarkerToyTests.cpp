@@ -250,4 +250,171 @@ GSTN_DMT_TEST(ConePresenterWritesCustomPrimitiveData)
 	return bOk;
 }
 
+GSTN_DMT_TEST(ToyLandingSizeFollowsHeightAndBeamNeverExceedsIt)
+{
+	const FGSTN_DepthToyParams Params;
+	for (const float Foot : { 20.f, 34.f, 50.f })
+	{
+		float Previous = 0.f;
+		for (float Height = 0.f; Height <= 1500.f; Height += 25.f)
+		{
+			const float Radius = FGSTN_DepthToy::LandingRadius(Params, Foot, Height);
+			TestTrue(TEXT("the landing spot grows (never shrinks) with height: tight when low, larger when high"), Radius >= Previous - 0.001f);
+			Previous = Radius;
+			TestTrue(TEXT("the beam is never wider than the decal"), FGSTN_DepthToy::TopRadius(Params, Foot, Radius) <= Radius + 0.001f);
+			const float Soft = FGSTN_DepthToy::Softness(Params, Height);
+			TestTrue(TEXT("softness stays in range"), Soft >= 0.f && Soft <= 1.f);
+		}
+		TestTrue(TEXT("larger and softer when high"), FGSTN_DepthToy::LandingRadius(Params, Foot, 1000.f) > FGSTN_DepthToy::LandingRadius(Params, Foot, 40.f)
+			&& FGSTN_DepthToy::Softness(Params, 1000.f) > FGSTN_DepthToy::Softness(Params, 40.f));
+		TestTrue(TEXT("the beam top is about 0.6 of the capsule radius"), FMath::IsNearlyEqual(FGSTN_DepthToy::TopRadius(Params, Foot, 1000.f), Foot * 0.6f, 0.01f));
+	}
+	return true;
+}
+
+GSTN_DMT_TEST(ToyMinHeightFadesInAndOut)
+{
+	const FGSTN_DepthToyParams Params;
+	TestEqual(TEXT("nothing at a few cm"), FGSTN_DepthToy::SizeFade(Params, 5.f), 0.f);
+	TestEqual(TEXT("nothing at the minimum height"), FGSTN_DepthToy::SizeFade(Params, Params.MinHeightCm), 0.f);
+	TestEqual(TEXT("full above the fade band"), FGSTN_DepthToy::SizeFade(Params, Params.MinHeightCm + Params.FadeBandCm + 1.f), 1.f);
+	float Previous = 0.f;
+	for (float Height = 0.f; Height < 120.f; Height += 4.f)
+	{
+		const float Fade = FGSTN_DepthToy::SizeFade(Params, Height);
+		TestTrue(TEXT("monotonic: no pop"), Fade >= Previous);
+		Previous = Fade;
+	}
+	TestEqual(TEXT("the decal is full on a floor"), FGSTN_DepthToy::SlopeFade(Params, 1.f), 1.f);
+	TestEqual(TEXT("and gone on a wall"), FGSTN_DepthToy::SlopeFade(Params, 0.f), 0.f);
+	TestTrue(TEXT("and partial on a steep slope"), FGSTN_DepthToy::SlopeFade(Params, 0.75f) > 0.f && FGSTN_DepthToy::SlopeFade(Params, 0.75f) < 1.f);
+	return true;
+}
+
+GSTN_DMT_TEST(ToyDecalBoxIsThinOnFlatAndGrowsOnSlopes)
+{
+	const FGSTN_DepthToyParams Params;
+	TestEqual(TEXT("flat: the base depth"), FGSTN_DepthToy::DecalHalfDepth(Params, 60.f, 1.f), Params.DecalDepthCm);
+	TestTrue(TEXT("a slope needs a deeper box"), FGSTN_DepthToy::DecalHalfDepth(Params, 60.f, 0.85f) > Params.DecalDepthCm);
+	TestTrue(TEXT("but never more than the cap"), FGSTN_DepthToy::DecalHalfDepth(Params, 200.f, 0.3f) <= Params.DecalMaxDepthCm);
+	return true;
+}
+
+GSTN_DMT_TEST(ToyClearanceSweepRunsAlongTheColumn)
+{
+	const FGSTN_DepthToyParams Params;
+	for (const FVector& Up : UpVectors())
+	{
+		const FVector Feet(10, 20, 30);
+		const FVector Point = Feet - Up * 200.0;
+		FVector Start, End;
+		TestTrue(TEXT("a long column gets a sweep"), FGSTN_DepthToy::ClearanceSweep(Feet, Up, Point, 40.f, Start, End));
+		TestTrue(TEXT("from the feet"), Start.Equals(Feet, 0.01));
+		TestTrue(TEXT("down the column"), (End - Start).GetSafeNormal().Equals(-Up, 1.0e-4));
+		TestTrue(TEXT("ending above the floor by more than the sphere radius"), FVector::DotProduct(End - Point, Up) > 40.0);
+		TestFalse(TEXT("a column shorter than the sphere is not swept"), FGSTN_DepthToy::ClearanceSweep(Feet, Up, Feet - Up * 30.0, 40.f, Start, End));
+	}
+	TestEqual(TEXT("equal radii need no extension"), FGSTN_DepthToy::ApexExtension(100.f, 30.f, 30.f), 0.f);
+	TestTrue(TEXT("the apex extension follows the similar triangles"), FMath::IsNearlyEqual(FGSTN_DepthToy::ApexExtension(300.f, 20.f, 80.f), 100.f, 0.01f));
+	TestTrue(TEXT("the sweep radius lies between the top and the landing radius"),
+		FGSTN_DepthToy::ClearanceRadius(Params, 20.f, 60.f) > 20.f && FGSTN_DepthToy::ClearanceRadius(Params, 20.f, 60.f) < 60.f);
+	return true;
+}
+
+GSTN_DMT_TEST(ToySmoothingIsStableAndClearanceFades)
+{
+	float Value = 0.f;
+	for (int32 Frame = 0; Frame < 120; ++Frame)
+	{
+		const float Next = FGSTN_DepthToy::SmoothTowards(Value, 100.f, 1.f / 60.f, 0.06f);
+		TestTrue(TEXT("no overshoot"), Next >= Value && Next <= 100.f);
+		Value = Next;
+	}
+	TestTrue(TEXT("converges"), Value > 99.f);
+	TestEqual(TEXT("a zero time constant snaps"), FGSTN_DepthToy::SmoothTowards(3.f, 9.f, 0.016f, 0.f), 9.f);
+
+	float Clear = 1.f;
+	Clear = FGSTN_DepthToy::MoveClearance(Clear, 0.f, 0.06f, 0.12f, 0.35f);
+	TestTrue(TEXT("fades out in about 0.12 s, not at once"), FMath::IsNearlyEqual(Clear, 0.5f, 0.01f));
+	Clear = FGSTN_DepthToy::MoveClearance(Clear, 0.f, 0.1f, 0.12f, 0.35f);
+	TestEqual(TEXT("and stops at zero"), Clear, 0.f);
+	Clear = FGSTN_DepthToy::MoveClearance(Clear, 1.f, 0.035f, 0.12f, 0.35f);
+	TestTrue(TEXT("fades in slowly"), FMath::IsNearlyEqual(Clear, 0.1f, 0.01f));
+	return true;
+}
+
+GSTN_DMT_TEST(ToyBeamBaseMatchesDecalRadius)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("GSTNDepthMarkerToyBeamWorld"));
+	World->AddToRoot();
+	FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+	Context.SetCurrentWorld(World);
+	World->InitializeActorsForPlay(FURL());
+	AActor* Holder = World->SpawnActor<AActor>();
+	USceneComponent* Root = NewObject<USceneComponent>(Holder, TEXT("Root"));
+	Holder->SetRootComponent(Root);
+	Root->RegisterComponent();
+
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
+	bool bOk = true;
+	if (Mesh)
+	{
+		UGSTN_DepthPresenter_Cone* Cone = NewObject<UGSTN_DepthPresenter_Cone>(GetTransientPackage());
+		Cone->MeshOverride = Mesh;
+		Cone->MaterialOverride = TSoftObjectPtr<UMaterialInterface>(UMaterial::GetDefaultMaterial(MD_Surface));
+		FGSTN_DepthMarkerView View;
+		View.Subject.Feet = FVector(0, 0, 300);
+		View.Subject.FootRadius = 34.f;
+		View.Below.Kind = EGSTN_DepthTargetKind::Surface;
+		View.Below.State = EGSTN_DepthMarkerState::Ground;
+		View.Below.Point = FVector::ZeroVector;
+		View.Below.Height = 300.f;
+		View.bBelowVisible = true;
+		View.Tint = Blue;
+		View.Toy.bActive = true;
+		View.Toy.LandingRadius = FGSTN_DepthToy::LandingRadius(View.Toy.Params, 34.f, 300.f);
+		View.Toy.BeamClearance = 1.f;
+		View.Toy.BeamEnd = FVector::ZeroVector;
+
+		Cone->OnMarkerUpdated(View, Holder);
+		if (TestNotNull(TEXT("the toy beam is created"), Cone->GetMeshComponent()))
+		{
+			const FGSTN_DepthToy::FLook Look = FGSTN_DepthToy::ResolveLook(View, EGSTN_DepthLayer::Below);
+			// Bounds of the engine cone: z 0..100, radius 50, tip at +Z (the tip is placed on the apex, the base on the landing spot)
+			const FTransform Xf = Cone->GetMeshComponent()->GetComponentTransform();
+			const FBoxSphereBounds MeshBounds = Cone->GetMeshComponent()->GetStaticMesh()->GetBounds();
+			const double ZMin = MeshBounds.Origin.Z - MeshBounds.BoxExtent.Z;
+			const double ZMax = MeshBounds.Origin.Z + MeshBounds.BoxExtent.Z;
+			const FVector Base = Xf.TransformPosition(FVector(0, 0, ZMin));
+			const FVector Tip = Xf.TransformPosition(FVector(0, 0, ZMax));
+			TestTrue(TEXT("the beam base is on the landing spot"), Base.Equals(View.Toy.BeamEnd, 0.1));
+			TestTrue(TEXT("the base diameter is the landing diameter"), FMath::IsNearlyEqual(static_cast<float>(Xf.GetScale3D().X * 2.0 * MeshBounds.BoxExtent.X), Look.Radius * 2.f, 0.05f));
+			// The cone is linear: at the character (the beam start) its radius is the top radius, and the apex lies above the character
+			const double Along = FVector::DotProduct(View.Subject.Feet - Tip, (Base - Tip).GetSafeNormal());
+			const double RadiusAtStart = Look.Radius * Along / (Base - Tip).Size();
+			TestTrue(TEXT("radius at the character is the top radius"), FMath::IsNearlyEqual(static_cast<float>(RadiusAtStart), Look.TopRadius, 0.05f));
+			TestTrue(TEXT("never wider than the decal"), Look.TopRadius <= Look.Radius);
+			const TArray<float>& Data = Cone->GetMeshComponent()->GetCustomPrimitiveData().Data;
+			TestTrue(TEXT("the beam is a hint: opacity is the toy peak at most"), Data[FGSTN_DepthToy::OpacityOffset] <= View.Toy.Params.BeamOpacity + 1.0e-4f);
+
+			// Under the minimum height and when blocked the beam is gone
+			View.Subject.Feet = FVector(0, 0, 20);
+			Cone->OnMarkerUpdated(View, Holder);
+			TestFalse(TEXT("no beam at 20 cm"), Cone->GetMeshComponent()->IsVisible());
+			View.Subject.Feet = FVector(0, 0, 300);
+			View.Toy.BeamClearance = 0.f;
+			Cone->OnMarkerUpdated(View, Holder);
+			TestFalse(TEXT("no beam while blocked by geometry"), Cone->GetMeshComponent()->IsVisible());
+		}
+		else
+		{
+			bOk = false;
+		}
+	}
+	GEngine->DestroyWorldContext(World);
+	World->DestroyWorld(false);
+	World->RemoveFromRoot();
+	return bOk;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

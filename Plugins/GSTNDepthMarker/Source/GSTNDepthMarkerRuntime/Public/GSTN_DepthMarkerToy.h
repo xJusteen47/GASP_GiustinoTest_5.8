@@ -67,6 +67,51 @@ struct GSTNDEPTHMARKERRUNTIME_API FGSTN_DepthToy
 	/** Rotation of a quad whose normal (local Z) is Normal and whose local Y leans towards UpHint */
 	static FQuat QuadRotation(const FVector& Normal, const FVector& UpHint);
 
+	/** Landing spot size: foot radius x multiplier x a smooth curve of the height (tight when low, larger when high), in cm */
+	static float HeightScale(const FGSTN_DepthToyParams& Params, float HeightCm);
+	static float LandingRadius(const FGSTN_DepthToyParams& Params, float FootRadius, float HeightCm);
+	/** 0 crisp .. 1 soft, over the same height range */
+	static float Softness(const FGSTN_DepthToyParams& Params, float HeightCm);
+	/** Beam radius at the character; never above the landing radius */
+	static float TopRadius(const FGSTN_DepthToyParams& Params, float FootRadius, float LandingRadius);
+	/** 0 below MinHeightCm, 1 from MinHeightCm + FadeBandCm, smooth in between; Length is the column length (height) in cm */
+	static float SizeFade(const FGSTN_DepthToyParams& Params, float LengthCm);
+	/** 1 on a floor, 0 on a wall: from the dot of the surface normal and Up */
+	static float SlopeFade(const FGSTN_DepthToyParams& Params, float NormalDotUp);
+	/** Half depth of the decal box along -Up: thin on a flat floor, deeper on a slope (the surface leaves the plane by Radius x tan) */
+	static float DecalHalfDepth(const FGSTN_DepthToyParams& Params, float Radius, float NormalDotUp);
+	/** Radius of the sweep that checks the column for geometry */
+	static float ClearanceRadius(const FGSTN_DepthToyParams& Params, float TopRadius, float LandingRadius);
+	/**
+	 * Start and end of the clearance sweep (a sphere of Radius, the capsule of the beam seen from the side): from the feet down the column to
+	 * where the sphere would just touch a floor at Point. False when the column is too short for the sphere (then nothing is checked).
+	 */
+	static bool ClearanceSweep(const FVector& Feet, const FVector& Up, const FVector& Point, float Radius, FVector& OutStart, FVector& OutEnd);
+	/** Exponential smoothing; a non-positive Tau returns Target */
+	static float SmoothTowards(float Current, float Target, float DeltaSeconds, float Tau);
+	/** Linear move of a 0..1 value towards Target taking OutSeconds to fall from 1 to 0 and InSeconds to rise from 0 to 1 */
+	static float MoveClearance(float Current, float Target, float DeltaSeconds, float OutSeconds, float InSeconds);
+
+	/**
+	 * How far above the beam start (the character) the cone mesh must extend so that its radius at the start is TopRadius and at the end BaseRadius
+	 * (a cone has no flat top: the apex sits above the character and the material cuts the beam at the character). 0 when the radii are equal or
+	 * the top is wider.
+	 */
+	static float ApexExtension(float LengthCm, float TopRadius, float BaseRadius);
+
+	/** Everything a toy presenter needs for one layer, from the view (below: the subsystem's smoothed values; other layers: the params) */
+	struct FLook
+	{
+		FVector Point = FVector::ZeroVector;
+		float Radius = 0.f;
+		float TopRadius = 0.f;
+		float Softness = 0.f;
+		float SizeFade = 1.f;
+		float BeamClearance = 1.f;
+		float SlopeFade = 1.f;
+	};
+	static FLook ResolveLook(const FGSTN_DepthMarkerView& View, EGSTN_DepthLayer Layer);
+
 	/** Writes colour and opacity (and nothing else) into the custom primitive data of Component at Base */
 	static void WriteColor(UPrimitiveComponent* Component, int32 Base, const FLinearColor& Color, float Opacity);
 	static void WriteBeamEnds(UPrimitiveComponent* Component, int32 Base, const FVector& Start, const FVector& End);
@@ -96,7 +141,11 @@ protected:
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
 };
 
-/** The beam: a tapered translucent cone from the feet (head for the above layer) to the marker point, tip at the character */
+/**
+ * The beam: a soft translucent column from the feet (head for the above layer) to the marker point. Classic mode: a cone with its tip at the
+ * character. Toy mode (the style's Toy.bEnabled): the same cone extended above the character, so the radius at the character is the wanted top
+ * radius and at the landing spot the decal radius (never wider); the material cuts it at the character.
+ */
 UCLASS(meta = (DisplayName = "Beam (cone)"))
 class GSTNDEPTHMARKERRUNTIME_API UGSTN_DepthPresenter_Cone : public UGSTN_DepthPresenter_Toy
 {
@@ -118,6 +167,20 @@ protected:
 };
 
 /**
+ * The toy landing spot: the decal of the toy look. Its radius is the beam base radius (FGSTN_DepthToy::ResolveLook), it projects straight along
+ * -Up with a thin box, fades by surface angle and by minimum height, and its material gets Color, Opacity and Softness. Without an active toy
+ * style it behaves like the plain decal.
+ */
+UCLASS(meta = (DisplayName = "Decal (toy landing spot)"))
+class GSTNDEPTHMARKERRUNTIME_API UGSTN_DepthPresenter_ToyDecal : public UGSTN_DepthPresenter_Decal
+{
+	GENERATED_BODY()
+
+protected:
+	virtual void OnMarkerUpdated_Implementation(const FGSTN_DepthMarkerView& View, AActor* Holder) override;
+};
+
+/**
  * A small semi-fake fog puff where the beam lands in the AIR (no-ground ring, above reference, approach marker), so the beam does not
  * end abruptly. A flat quad that faces the camera or lies on the layer's plane; the material brings the noise and the depth fade.
  */
@@ -132,6 +195,10 @@ public:
 	/** Side of the quad as a multiple of the foot radius */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Puff", meta = (ClampMin = "0.1"))
 	float SizeMultiplier = 3.f;
+
+	/** Toy mode: puff side as a multiple of the landing diameter (the puff fades out before its edge, so a bit more than 1) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Puff", meta = (ClampMin = "0.1"))
+	float PuffSpan = 1.15f;
 
 	/** True: faces the player camera. False: lies on the layer's present normal (plane aligned) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Puff")

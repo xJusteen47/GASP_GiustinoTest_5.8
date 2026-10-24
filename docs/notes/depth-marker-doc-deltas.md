@@ -75,3 +75,12 @@ New layer on top of the spec; the spec's section 2.7 above marker stays as it is
 ## To align before the final version (2026-10-24)
 
 - Player colour order: the prototype ranks players alphabetically from GameState::PlayerArray on every machine every frame, so a late joiner with an earlier name shifts everyone else's colour. combat-parts.md 6.0 wants the host to fix the player numbers at match start (alphabetical then) and late joiners to take the first free number; read that replicated number instead of ranking locally.
+
+## Toy look polish: decal-led landing spot (2026-10-24, owner feedback on a PIE video)
+
+- New `FGSTN_DepthToyParams` on the style (`Toy`, `bEnabled` set by `PopulateToyPresenters`) and `FGSTN_DepthToyView` on the view: one landing radius for the decal, the beam base and the air puff; height curve; minimum height with fade; beam top radius; beam opacity; smoothing; decal depth and slope fade; beam clearance. Pure helpers in `FGSTN_DepthToy` (`GSTNDepthMarker.Runtime.Toy.*`).
+- `UGSTN_DepthPresenter_ToyDecal` (subclass of the decal presenter) projects straight along -Up with a thin box; `UGSTN_DepthPresenter_Cone` in toy mode extends the engine cone above the character (`ApexExtension`) so the radius at the character is the wanted top radius; the fog puff takes its size from the same radius.
+- Beam clearance sweep: a new async query kind (`Clearance`) in the subsystem, issued after the primary probes within `MaxTracesPerFrame`. Only active when the style is a toy style, so the classic look and the trace-cap tests are unchanged.
+- The CharacterMovement and Actor adapters do not set `FGSTN_DepthSubjectState::bOnWall` (still only a field a project adapter fills); the clearance sweep is what hides the beam next to a wall.
+- `Tools/DepthMarker/setup_depth_marker_toy_look.py`: `delete_all_material_expressions` leaves about half of the nodes behind in one call (it deletes while iterating), so a material that was regenerated kept dead nodes, some of them invalid; the script now repeats the call until the graph is empty and reports a node that survives.
+- A scene capture draws a material that is still compiling as the default material (or not at all): the visual tests wait for the shader compiler after the first capture and capture again.

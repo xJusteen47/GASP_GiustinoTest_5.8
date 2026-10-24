@@ -29,7 +29,13 @@ def get_or_create(name, asset_class, factory):
 
 def new_material(name, domain, blend, shading, two_sided):
     mat = get_or_create(name, unreal.Material, unreal.MaterialFactoryNew())
-    lib.delete_all_material_expressions(mat)
+    # One call leaves about half of the nodes behind (it deletes while iterating): repeat until the graph is empty
+    for _ in range(30):
+        if lib.get_num_material_expressions(mat) == 0:
+            break
+        lib.delete_all_material_expressions(mat)
+    if lib.get_num_material_expressions(mat) != 0:
+        problems.append("%s: %d expressions survived delete_all_material_expressions" % (name, lib.get_num_material_expressions(mat)))
     mat.set_editor_property("material_domain", domain)
     mat.set_editor_property("blend_mode", blend)
     mat.set_editor_property("shading_model", shading)
@@ -58,14 +64,14 @@ def scalar_param(mat, x, y, name, default, cpd_index=None):
     return node(mat, unreal.MaterialExpressionScalarParameter, x, y, **props)
 
 
-def custom(mat, x, y, code, input_names=()):
+def custom(mat, x, y, code, input_names=(), output=unreal.CustomMaterialOutputType.CMOT_FLOAT1):
     inputs = []
     for input_name in input_names:
         item = unreal.CustomInput()
         item.set_editor_property("input_name", input_name)
         inputs.append(item)
     return node(mat, unreal.MaterialExpressionCustom, x, y, code=code, inputs=inputs,
-                output_type=unreal.CustomMaterialOutputType.CMOT_FLOAT1, description="DM")
+                output_type=output, description="DM")
 
 
 def link(src, dst, input_index, output=""):
@@ -95,27 +101,38 @@ def finish(mat):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# M_DM_StainedGlass_Decal: dark soft silhouette with a coloured stained-glass core (voronoi cells with dark leading)
+# M_DM_StainedGlass_Decal: the landing spot. r = 0 at the centre, r = 1 at the landing radius (the decal half size = the beam base radius).
+# A soft dark contact shadow, a stained-glass core (voronoi cells in the player colour, dark leading between them) and a crisp thin ring.
+# Softness (0 crisp .. 1 soft) comes from the presenter (soft when high); everything fades to nothing before r = 1, so the box edge never shows.
 # ---------------------------------------------------------------------------------------------------------------------------------
 decal = new_material("M_DM_StainedGlass_Decal", unreal.MaterialDomain.MD_DEFERRED_DECAL, unreal.BlendMode.BLEND_TRANSLUCENT,
                      unreal.MaterialShadingModel.MSM_DEFAULT_LIT, False)
-alpha_code = """
+DECAL_COMMON = """
 float2 p = UV.xy * 2.0 - 1.0;
 float r = length(p);
-float shadow = 1.0 - smoothstep(0.55, 1.0, r);
-float core = 1.0 - smoothstep(0.40, 0.48, r);
-return max(shadow * 0.55, core * 0.92);
+float s = saturate(Softness);
+float coreR = 0.64;
+float core = 1.0 - smoothstep(coreR - 0.05 - 0.10 * s, coreR, r);
+float pulse = 1.0 + 0.012 * sin(Time * 3.0);
+float ringC = 0.86 * pulse;
+float ringW = lerp(0.03, 0.065, s);
+float ring = 1.0 - smoothstep(ringW * 0.5, ringW, abs(r - ringC));
+float edge = 1.0 - smoothstep(0.93, 1.0, r);
 """
-glass_code = """
-float2 p = UV.xy * 2.0 - 1.0;
-float r = length(p);
-float core = 1.0 - smoothstep(0.34, 0.44, r);
-float2 g = p * 3.2;
+alpha_code = DECAL_COMMON + """
+float shadow = (1.0 - smoothstep(lerp(0.45, 0.12, s), 1.0, r));
+shadow = shadow * shadow * (3.0 - 2.0 * shadow) * 0.55;
+float ringA = ring * lerp(1.0, 0.6, s) * 0.95;
+return max(shadow, max(core * 0.85, ringA)) * edge;
+"""
+glass_code = DECAL_COMMON + """
+float2 g = p / coreR * 2.4;
 float2 cell = floor(g);
 float2 f = frac(g);
 float d1 = 8.0;
 float d2 = 8.0;
 float shade = 0.5;
+float hue = 0.0;
 [unroll] for (int j = -1; j <= 1; j++)
 {
     [unroll] for (int i = -1; i <= 1; i++)
@@ -125,27 +142,51 @@ float shade = 0.5;
         float2 h = frac(sin(float2(dot(c, float2(127.1, 311.7)), dot(c, float2(269.5, 183.3)))) * 43758.5453);
         float2 q = o + h - f;
         float d = dot(q, q);
-        if (d < d1) { d2 = d1; d1 = d; shade = frac(sin(dot(c, float2(12.9898, 78.233))) * 43758.5453); }
+        if (d < d1) { d2 = d1; d1 = d; shade = frac(sin(dot(c, float2(12.9898, 78.233))) * 43758.5453); hue = h.x; }
         else if (d < d2) { d2 = d; }
     }
 }
-float lead = smoothstep(0.0, 0.14, sqrt(d2) - sqrt(d1));
-return core * lead * (0.5 + 0.5 * shade);
+float lead = smoothstep(0.02, 0.16, sqrt(d2) - sqrt(d1));
+float3 glassTint = lerp(Color.rgb, float3(1.0, 1.0, 1.0), 0.3 * hue);
+float breathe = 0.92 + 0.08 * sin(Time * 2.4 + shade * 6.0);
+float3 glass = glassTint * (0.55 + 0.75 * shade) * lead * core * breathe * 1.5;
+float3 ringCol = lerp(Color.rgb, float3(1.0, 1.0, 1.0), 0.2) * ring * 1.35;
+return glass + ringCol;
 """
-n_uv = node(decal, unreal.MaterialExpressionTextureCoordinate, -900, 0)  # Parameters.TexCoords does not exist in a decal / needs the node
-n_alpha = custom(decal, -700, -100, alpha_code, ("UV",))
+n_uv = node(decal, unreal.MaterialExpressionTextureCoordinate, -1100, 0)
+n_time = node(decal, unreal.MaterialExpressionTime, -1100, 120)
+n_soft = scalar_param(decal, -1100, 240, "Softness", 0.2)
+n_color = vector_param(decal, -1100, 360, "Color", unreal.LinearColor(1.0, 0.8, 0.2, 1.0))
+n_opacity = scalar_param(decal, -1100, 520, "Opacity", 1.0)
+n_alpha = custom(decal, -800, -100, alpha_code, ("UV", "Time", "Softness"))
 link(n_uv, n_alpha, 0)
-n_glass = custom(decal, -700, 100, glass_code, ("UV",))
+link(n_time, n_alpha, 1)
+link(n_soft, n_alpha, 2)
+n_glass = custom(decal, -800, 150, glass_code, ("UV", "Time", "Softness", "Color"), unreal.CustomMaterialOutputType.CMOT_FLOAT3)
 link(n_uv, n_glass, 0)
-n_color = vector_param(decal, -700, 300, "Color", unreal.LinearColor(1.0, 0.8, 0.2, 1.0))
-n_opacity = scalar_param(decal, -700, 450, "Opacity", 1.0)
-n_gain = node(decal, unreal.MaterialExpressionConstant, -500, 520, r=3.0)
-prop(mul(decal, -300, -50, n_alpha, n_opacity), unreal.MaterialProperty.MP_OPACITY)
-prop(mul(decal, -100, 150, mul(decal, -300, 200, n_color, n_glass), n_gain), unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+link(n_time, n_glass, 1)
+link(n_soft, n_glass, 2)
+link(n_color, n_glass, 3)
+# Only on surfaces that face Up (a floor or a gentle slope): the box is thin, but its edge still touches a wall beside the spot; the scene
+# normal under each pixel (the GBuffer is there when a deferred decal draws) keeps the decal off walls. UpDirection is set by the presenter.
+n_up = vector_param(decal, -1100, 680, "UpDirection", unreal.LinearColor(0.0, 0.0, 1.0, 0.0))
+n_scene_normal = node(decal, unreal.MaterialExpressionSceneTexture, -1100, 800, scene_texture_id=unreal.SceneTextureId.PPI_WORLD_NORMAL)
+facing_code = """
+float3 n = normalize(N.xyz + float3(0.0, 0.0, 1.0e-4));
+return smoothstep(0.5, 0.85, saturate(dot(n, normalize(Up.xyz))));
+"""
+n_facing = custom(decal, -800, 700, facing_code, ("N", "Up"))
+link(n_scene_normal, n_facing, 0)
+link(n_up, n_facing, 1)
+prop(mul(decal, -250, -50, mul(decal, -400, -50, n_alpha, n_opacity), n_facing), unreal.MaterialProperty.MP_OPACITY)
+prop(n_glass, unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 finish(decal)
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# M_DM_Beam: additive unlit light shaft; soft silhouette (fresnel), soft at the character and a little at the landing, depth fade
+# M_DM_Beam: a fake god ray. Additive unlit, two sided, on the engine Cone (the presenter extends the cone above the character so the radius
+# at the character is the wanted top radius; the material cuts it at the character); alpha = axial gradient (fades near the character and before the ground) x fresnel soft edges x a very
+# faint stained-glass cell pattern (one light with the decal) x camera distance fade (never a wall of colour when the camera is inside) x
+# DepthFade against floor and walls. Colour is desaturated; the opacity (about 0.3) comes from the presenter, the decal is the marker.
 # ---------------------------------------------------------------------------------------------------------------------------------
 beam = new_material("M_DM_Beam", unreal.MaterialDomain.MD_SURFACE, unreal.BlendMode.BLEND_ADDITIVE,
                     unreal.MaterialShadingModel.MSM_UNLIT, True)
@@ -154,32 +195,63 @@ float3 P = LWCToFloat(Parameters.AbsoluteWorldPosition);
 float3 S = Start.xyz;
 float3 E = End.xyz;
 float3 d = E - S;
-float len2 = max(dot(d, d), 1.0);
-float t = saturate(dot(P - S, d) / len2);
-float tip = smoothstep(0.0, 0.3, t);
-float landing = 1.0 - 0.5 * smoothstep(0.85, 1.0, t);
-float shimmer = 0.85 + 0.15 * sin(Time * 3.0 + t * 14.0);
-return tip * landing * shimmer;
+float len = max(length(d), 1.0);
+float3 dir = d / len;
+float ds = dot(P - S, dir);
+float fadeTop = smoothstep(0.0, min(80.0, len * 0.4), ds);
+float fadeBot = 1.0 - smoothstep(len - min(70.0, len * 0.4), len - 3.0, ds);
+float shimmer = 0.9 + 0.1 * sin(Time * 2.0 + ds * 0.03);
+float3 refv = abs(dir.z) < 0.9 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+float3 ax = normalize(cross(dir, refv));
+float3 ay = cross(dir, ax);
+float3 q = P - S - dir * ds;
+float ang = atan2(dot(q, ay), dot(q, ax));
+float2 g = float2(ang * 1.2732, ds * 0.022 - Time * 0.12);
+float2 cell = floor(g);
+float2 f = frac(g);
+float d1 = 8.0;
+float d2 = 8.0;
+[unroll] for (int j = -1; j <= 1; j++)
+{
+    [unroll] for (int i = -1; i <= 1; i++)
+    {
+        float2 o = float2(i, j);
+        float2 c = cell + o;
+        c.x = c.x - 8.0 * floor(c.x / 8.0);
+        float2 h = frac(sin(float2(dot(c, float2(127.1, 311.7)), dot(c, float2(269.5, 183.3)))) * 43758.5453);
+        float2 qq = o + h - f;
+        float dd = dot(qq, qq);
+        if (dd < d1) { d2 = d1; d1 = dd; } else if (dd < d2) { d2 = dd; }
+    }
+}
+float lead = smoothstep(0.0, 0.2, sqrt(d2) - sqrt(d1));
+float pattern = 0.9 + 0.1 * lead;
+float cam = smoothstep(40.0, 180.0, CamDepth);
+return fadeTop * fadeBot * shimmer * pattern * cam;
 """
-b_color = vector_param(beam, -900, -300, "Color", unreal.LinearColor(1.0, 0.9, 0.5, 1.0), 0)
-b_opacity = scalar_param(beam, -900, -150, "Opacity", 1.0, 4)
-b_start = vector_param(beam, -900, 0, "BeamStart", unreal.LinearColor(0, 0, 0, 0), 5)
-b_end = vector_param(beam, -900, 150, "BeamEnd", unreal.LinearColor(0, 0, 100, 0), 9)
-b_time = node(beam, unreal.MaterialExpressionTime, -900, 300)
-b_axis = custom(beam, -600, 100, axis_code, ("Start", "End", "Time"))
+b_color = vector_param(beam, -1200, -300, "Color", unreal.LinearColor(1.0, 0.9, 0.5, 1.0), 0)
+b_opacity = scalar_param(beam, -1200, -150, "Opacity", 1.0, 4)
+b_start = vector_param(beam, -1200, 0, "BeamStart", unreal.LinearColor(0, 0, 0, 0), 5)
+b_end = vector_param(beam, -1200, 150, "BeamEnd", unreal.LinearColor(0, 0, 100, 0), 9)
+b_time = node(beam, unreal.MaterialExpressionTime, -1200, 450)
+b_pdepth = node(beam, unreal.MaterialExpressionPixelDepth, -1200, 570)
+b_axis = custom(beam, -800, 100, axis_code, ("Start", "End", "Time", "CamDepth"))
 link(b_start, b_axis, 0)
 link(b_end, b_axis, 1)
 link(b_time, b_axis, 2)
-b_fresnel = node(beam, unreal.MaterialExpressionFresnel, -600, 300, exponent=2.2)
-b_centre = node(beam, unreal.MaterialExpressionOneMinus, -450, 300)
+link(b_pdepth, b_axis, 3)
+b_fresnel = node(beam, unreal.MaterialExpressionFresnel, -800, 300, exponent=2.5)
+b_centre = node(beam, unreal.MaterialExpressionOneMinus, -650, 300)
 link(b_fresnel, b_centre, 0)
-b_strength = node(beam, unreal.MaterialExpressionConstant, -450, 420, r=0.7)
-b_shape = mul(beam, -300, 150, mul(beam, -450, 150, b_axis, b_centre), b_opacity)
-b_shaped = mul(beam, -150, 150, b_shape, b_strength)
-b_depth = node(beam, unreal.MaterialExpressionDepthFade, 0, 150, fade_distance_default=35.0)
-link(b_shaped, b_depth, 0)
-b_gain = node(beam, unreal.MaterialExpressionConstant, -300, -250, r=2.5)
-prop(mul(beam, -100, -250, b_color, b_gain), unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+b_shape = mul(beam, -300, 150, mul(beam, -500, 150, b_axis, b_centre), b_opacity)
+b_depth = node(beam, unreal.MaterialExpressionDepthFade, 0, 150, fade_distance_default=40.0)
+link(b_shape, b_depth, 0)
+b_luma = node(beam, unreal.MaterialExpressionDesaturation, -500, -300, luminance_factors=unreal.LinearColor(0.3, 0.59, 0.11, 0.0))
+link(b_color, b_luma, 0)
+b_fraction = node(beam, unreal.MaterialExpressionConstant, -500, -200, r=0.55)
+link(b_fraction, b_luma, 1)
+b_gain = node(beam, unreal.MaterialExpressionConstant, -300, -250, r=1.8)
+prop(mul(beam, -100, -250, b_luma, b_gain), unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 prop(b_depth, unreal.MaterialProperty.MP_OPACITY)
 finish(beam)
 

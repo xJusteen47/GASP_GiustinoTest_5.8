@@ -109,7 +109,6 @@ protected:
 	virtual void OnMarkerUpdated_Implementation(const FGSTN_DepthMarkerView& View, AActor* Holder) override;
 	virtual void OnMarkerReleased_Implementation() override;
 
-private:
 	UPROPERTY(Transient)
 	TObjectPtr<UDecalComponent> Decal;
 };

@@ -18,5 +18,12 @@ public class GSTNDepthMarkerRuntime : ModuleRules
 			"DeveloperSettings",
 			"GSTNDepthMarkerCore"
 		});
+
+		// Only the automation snapshots (GSTN.Visual.DepthMarker.*) use these: they read back a scene capture
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"RHI",
+			"RenderCore"
+		});
 	}
 }

@@ -63,7 +63,9 @@ namespace GSTNDepthMarkerSubsystemPrivate
 		Probe = 0,
 		Footprint = 1,
 		/** One slot of the approach probe pattern */
-		ApproachProbe = 2
+		ApproachProbe = 2,
+		/** The toy beam clearance sweep along the column */
+		Clearance = 3
 	};
 
 	/** (marker id << 8) | (approach slot << 2) | kind */
@@ -110,6 +112,17 @@ struct UGSTN_DepthMarkerSubsystem::FMarker
 
 	TStrongObjectPtr<UGSTN_DepthMarkerStyle> Style;
 	TArray<TStrongObjectPtr<UGSTN_DepthMarkerPresenter>> Presenters;
+
+	/** Toy look state of the below layer: smoothed size and beam end (along Up only), the beam clearance and its sweep */
+	bool bToyInit = false;
+	double ToyLastTime = 0.0;
+	int64 ToyKey = 0;
+	float ToyRadius = 0.f;
+	float ToyUp = 0.f;
+	float ToyClear = 0.f;
+	bool bClearanceInFlight = false;
+	bool bClearanceBlocked = false;
+	double LastClearanceTime = -1.0e9;
 
 	/** Fade-in bookkeeping of the below layer: the blend length of the last switch (the target reports it for one frame only) */
 	float BelowBlendMs = 0.f;
@@ -531,6 +544,40 @@ void UGSTN_DepthMarkerSubsystem::IssueFootprint(FMarker& Marker, const TArray<AA
 	++LastTraceCount;
 }
 
+void UGSTN_DepthMarkerSubsystem::IssueClearance(FMarker& Marker, const TArray<AActor*>& Ignored, double Time)
+{
+	UWorld* World = GetWorld();
+	const UGSTN_DepthMarkerStyle* Style = Marker.Style.Get();
+	if (!World || !Style || !Style->Toy.bEnabled || !Style->Toy.bBeamClearance || Marker.bClearanceInFlight)
+	{
+		return;
+	}
+	const FGSTN_DepthTarget& Below = Marker.Result.Below;
+	if (Below.Kind != EGSTN_DepthTargetKind::Surface || Marker.ToyRadius <= 0.f)
+	{
+		Marker.bClearanceBlocked = false;
+		return;
+	}
+	const FGSTN_DepthToyParams& Toy = Style->Toy;
+	const float Top = FGSTN_DepthToy::TopRadius(Toy, Marker.Subject.FootRadius, Marker.ToyRadius);
+	const float Radius = FGSTN_DepthToy::ClearanceRadius(Toy, Top, Marker.ToyRadius);
+	FVector Start, End;
+	if (!FGSTN_DepthToy::ClearanceSweep(Marker.Subject.Feet, Marker.Subject.Up, Below.Point, Radius, Start, End))
+	{
+		// A column shorter than the sphere: the beam is nearly invisible there anyway (minimum height)
+		Marker.bClearanceBlocked = false;
+		return;
+	}
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(GSTNDepthMarkerClearance), false);
+	Query.AddIgnoredActors(Ignored);
+	World->AsyncSweepByChannel(EAsyncTraceType::Multi, Start, End, FQuat::Identity, UGSTN_DepthMarkerSettings::Get().TraceChannel,
+		FCollisionShape::MakeSphere(Radius), Query, FCollisionResponseParams::DefaultResponseParam, &ProbeDelegate,
+		PackUserData(Marker.Id, EQueryKind::Clearance));
+	Marker.bClearanceInFlight = true;
+	Marker.LastClearanceTime = Time;
+	++LastTraceCount;
+}
+
 void UGSTN_DepthMarkerSubsystem::OnProbeDone(const FTraceHandle& Handle, FTraceDatum& Datum)
 {
 	const int32 Id = static_cast<int32>(Datum.UserData >> 8);
@@ -565,6 +612,24 @@ void UGSTN_DepthMarkerSubsystem::OnProbeDone(const FTraceHandle& Handle, FTraceD
 				Sample.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 			}
 			break;
+		}
+		return;
+	}
+	if (Kind == EQueryKind::Clearance)
+	{
+		// Blocked by anything that is not a floor under the column (a wall, a ceiling, a ledge side), an excluded type never blocks
+		Marker->bClearanceInFlight = false;
+		Marker->bClearanceBlocked = false;
+		const FVector Up = Marker->Subject.Up.GetSafeNormal();
+		for (const FHitResult& Hit : Datum.OutHits)
+		{
+			const UPrimitiveComponent* Component = Hit.GetComponent();
+			if (Hit.bBlockingHit && Component && FVector::DotProduct(FVector(Hit.ImpactNormal), Up) < 0.7
+				&& !IsExcludedObjectType(Component->GetCollisionObjectType(), UGSTN_DepthMarkerSettings::Get().ExcludedObjectTypes))
+			{
+				Marker->bClearanceBlocked = true;
+				break;
+			}
 		}
 		return;
 	}
@@ -879,6 +944,43 @@ void UGSTN_DepthMarkerSubsystem::DriveMarker(FMarker& Marker, double Time, bool 
 		}
 	}
 
+	if (Style->Toy.bEnabled)
+	{
+		const FGSTN_DepthToyParams& Toy = Style->Toy;
+		View.Toy.bActive = true;
+		View.Toy.Params = Toy;
+		if (Result.Below.IsValid())
+		{
+			// Size and beam end are smoothed (a switch of surface or a long pause snaps); the decal itself stays on the raw column point
+			const FVector Up = Subject.Up.GetSafeNormal();
+			const double Elapsed = Time - Marker.ToyLastTime;
+			const bool bSnap = !Marker.bToyInit || Elapsed > 0.25 || Result.Below.SurfaceKey != Marker.ToyKey;
+			const float Dt = static_cast<float>(FMath::Clamp(Elapsed, 0.0, 0.1));
+			const float TargetRadius = FGSTN_DepthToy::LandingRadius(Toy, Subject.FootRadius, FMath::Max(Result.Below.Height, 0.f));
+			const float RawUp = static_cast<float>(FVector::DotProduct(Result.Below.Point, Up));
+			if (!Marker.bToyInit)
+			{
+				Marker.ToyClear = 0.f;
+			}
+			Marker.ToyRadius = bSnap ? TargetRadius : FGSTN_DepthToy::SmoothTowards(Marker.ToyRadius, TargetRadius, Dt, Toy.SmoothingSeconds);
+			Marker.ToyUp = (bSnap || FMath::Abs(RawUp - Marker.ToyUp) > 80.f) ? RawUp
+				: FGSTN_DepthToy::SmoothTowards(Marker.ToyUp, RawUp, Dt, Toy.SmoothingSeconds);
+			const bool bBlocked = Marker.bClearanceBlocked || Subject.bOnWall;
+			Marker.ToyClear = FGSTN_DepthToy::MoveClearance(Marker.ToyClear, bBlocked ? 0.f : 1.f, Dt, Toy.ClearanceFadeOutSeconds, Toy.ClearanceFadeInSeconds);
+			Marker.ToyKey = Result.Below.SurfaceKey;
+			Marker.ToyLastTime = Time;
+			Marker.bToyInit = true;
+			View.Toy.LandingRadius = Marker.ToyRadius;
+			View.Toy.BeamClearance = Marker.ToyClear;
+			View.Toy.BeamEnd = Result.Below.Point + Up * (Marker.ToyUp - RawUp);
+		}
+		else
+		{
+			Marker.bToyInit = false;
+			Marker.bClearanceBlocked = false;
+		}
+	}
+
 	for (TStrongObjectPtr<UGSTN_DepthMarkerPresenter>& Presenter : Marker.Presenters)
 	{
 		const bool bDraw = Presenter->ShouldDraw(View);
@@ -1129,6 +1231,19 @@ void UGSTN_DepthMarkerSubsystem::TickMarkers(float DeltaSeconds)
 		RefreshMarker(*Marker, Time, Marker->bAllowed);
 		DriveMarker(*Marker, Time, Marker->bAllowed);
 		++LastActiveCount;
+	}
+
+	// Toy beam clearance sweeps: after the primary probes, at the rank rate of the marker, never above the cap
+	for (int32 Rank = 0; Rank < Entries.Num() && LastTraceCount < Config.MaxTraces; ++Rank)
+	{
+		const TWeakPtr<FMarker>* Weak = MarkersById.Find(Entries[Rank].Id);
+		if (TSharedPtr<FMarker> Marker = Weak ? Weak->Pin() : nullptr)
+		{
+			if ((Time - Marker->LastClearanceTime) >= FGSTN_DepthMarkerScheduler::RankInterval(Rank, Config))
+			{
+				IssueClearance(*Marker, AllOwners, Time);
+			}
+		}
 	}
 
 	// Approach probes come last: they use only what the primary probes and the footprint sweeps left of the cap

@@ -42,6 +42,117 @@ enum class EGSTN_DepthLayer : uint8
 	Approach
 };
 
+/**
+ * Tuning of the toy look, on the style (UGSTN_DepthMarkerStyle::Toy). One size drives the landing spot: the decal radius is the
+ * beam base radius, and the fog puff of an air marker is sized from it too. Presentation only.
+ */
+USTRUCT(BlueprintType)
+struct GSTNDEPTHMARKERRUNTIME_API FGSTN_DepthToyParams
+{
+	GENERATED_BODY()
+
+	/** The style is a toy style: presenters use the shared size and the visibility rules below. Set by PopulateToyPresenters */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy")
+	bool bEnabled = false;
+
+	/** Landing radius (decal radius = beam base radius) as a multiple of the subject's foot radius, before the height curve */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "0.1"))
+	float LandingRadiusFootMultiplier = 1.9f;
+
+	/** Below this height the landing spot has its tight size and crisp edge */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float NearHeightCm = 60.f;
+
+	/** From this height up it has its large, soft size */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float FarHeightCm = 800.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "0.1"))
+	float NearScale = 0.8f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "0.1"))
+	float FarScale = 1.45f;
+
+	/** 0 = crisp, 1 = very soft (shadow and ring), at the near and far heights */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float SoftnessNear = 0.1f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float SoftnessFar = 0.8f;
+
+	/** The decal fades out as the surface normal leaves Up: full above StartDot (dot of normal and Up), nothing at EndDot (no smear on walls) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float SlopeFadeStartDot = 0.9f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float SlopeFadeEndDot = 0.6f;
+
+	/** Half depth of the decal box along -Up on a flat floor; it grows with the slope up to the maximum */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float DecalDepthCm = 12.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Landing", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float DecalMaxDepthCm = 45.f;
+
+	/** Beam radius at the character as a multiple of the foot radius (never above the landing radius) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Beam", meta = (ClampMin = "0.05"))
+	float BeamTopFootMultiplier = 0.6f;
+
+	/** Peak opacity of the beam: it is a hint, the decal is the marker */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Beam", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float BeamOpacity = 0.24f;
+
+	/** Nothing is drawn while the column from the character to the landing spot is shorter than this; fades in over FadeBandCm */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Visibility", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float MinHeightCm = 40.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Visibility", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float FadeBandCm = 40.f;
+
+	/** A capsule (sphere) of the beam radius is swept along the column; the beam fades out while it is blocked (a wall beside the character) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Visibility")
+	bool bBeamClearance = true;
+
+	/** Radius of the clearance sweep between the top radius (0) and the landing radius (1) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Visibility", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ClearanceRadiusMix = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Visibility", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float ClearanceFadeOutSeconds = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Visibility", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float ClearanceFadeInSeconds = 0.35f;
+
+	/** Time constant of the exponential smoothing of the size and of the beam end (along Up only, so the spot stays on the column) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Visibility", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float SmoothingSeconds = 0.06f;
+};
+
+/** What the subsystem computed for the toy presenters this frame (the below layer; the other layers derive their look from the params) */
+USTRUCT(BlueprintType)
+struct GSTNDEPTHMARKERRUNTIME_API FGSTN_DepthToyView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Toy")
+	bool bActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Toy")
+	FGSTN_DepthToyParams Params;
+
+	/** Smoothed landing radius of the below layer: decal radius and beam base radius */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Toy")
+	float LandingRadius = 0.f;
+
+	/** 1 clear, 0 blocked (a wall hugs the column) or wall sliding; smoothed */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Toy")
+	float BeamClearance = 1.f;
+
+	/** The beam end and puff centre of the below layer: the landing point, smoothed along Up only */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|Toy")
+	FVector BeamEnd = FVector::ZeroVector;
+};
+
 /** Everything a presenter needs for one frame; presented values only (§3) */
 USTRUCT(BlueprintType)
 struct GSTNDEPTHMARKERRUNTIME_API FGSTN_DepthMarkerView
@@ -100,6 +211,10 @@ struct GSTNDEPTHMARKERRUNTIME_API FGSTN_DepthMarkerView
 
 	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|View")
 	float TimeSeconds = 0.f;
+
+	/** Toy look data (inactive for the classic styles) */
+	UPROPERTY(BlueprintReadOnly, Category = "DepthMarker|View")
+	FGSTN_DepthToyView Toy;
 
 	/** Hold the current target of the layer */
 	const FGSTN_DepthTarget& GetTarget(EGSTN_DepthLayer Layer) const

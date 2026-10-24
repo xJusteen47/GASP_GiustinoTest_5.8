@@ -99,6 +99,7 @@ private:
 	void ReleasePresenters(FMarker& Marker);
 	void IssueProbe(FMarker& Marker, const TArray<AActor*>& Ignored, double Time);
 	void IssueFootprint(FMarker& Marker, const TArray<AActor*>& Ignored, double Time);
+	void IssueClearance(FMarker& Marker, const TArray<AActor*>& Ignored, double Time);
 	void FinishHits(FMarker& Marker, const TArray<FHitResult>& Hits, double Time);
 	void RefreshMarker(FMarker& Marker, double Time, bool bAllowed);
 	void DriveMarker(FMarker& Marker, double Time, bool bAllowed);

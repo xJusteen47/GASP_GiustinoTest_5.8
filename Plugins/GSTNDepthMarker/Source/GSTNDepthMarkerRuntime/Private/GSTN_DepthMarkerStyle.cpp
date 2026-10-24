@@ -66,10 +66,11 @@ void UGSTN_DepthMarkerStyle::PopulateToyPresenters()
 {
 	Presenters.Reset();
 	bUsePlayerPalette = true;
+	Toy.bEnabled = true;
 	const TArray<EGSTN_DepthMarkerState> BelowStates = { EGSTN_DepthMarkerState::Ground, EGSTN_DepthMarkerState::EdgeHold, EGSTN_DepthMarkerState::NoGround };
 
-	UGSTN_DepthPresenter_Decal* Decal = NewObject<UGSTN_DepthPresenter_Decal>(this);
-	Decal->RadiusMultiplier = 1.8f;
+	// The landing spot first: it is the marker, the beam only points at it
+	UGSTN_DepthPresenter_ToyDecal* Decal = NewObject<UGSTN_DepthPresenter_ToyDecal>(this);
 	Presenters.Add(Decal);
 
 	UGSTN_DepthPresenter_Cone* Beam = NewObject<UGSTN_DepthPresenter_Cone>(this);
@@ -97,6 +98,7 @@ void UGSTN_DepthMarkerStyle::PopulateToyApproachPresenters()
 {
 	Presenters.Reset();
 	bUsePlayerPalette = true;
+	Toy.bEnabled = true;
 
 	UGSTN_DepthPresenter_Cone* Beam = NewObject<UGSTN_DepthPresenter_Cone>(this);
 	Beam->Layer = EGSTN_DepthLayer::Approach;

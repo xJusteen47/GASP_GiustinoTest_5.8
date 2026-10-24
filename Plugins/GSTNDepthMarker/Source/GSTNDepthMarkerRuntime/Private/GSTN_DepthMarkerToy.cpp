@@ -1,12 +1,14 @@
 #include "GSTN_DepthMarkerToy.h"
 
 #include "Camera/PlayerCameraManager.h"
+#include "Components/DecalComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 
 EGSTN_DepthLookRequest FGSTN_DepthToy::ParseLookRequest(const FString& Value)
@@ -91,6 +93,111 @@ FQuat FGSTN_DepthToy::QuadRotation(const FVector& Normal, const FVector& UpHint)
 	return FMatrix(X, FVector::CrossProduct(Z, X), Z, FVector::ZeroVector).ToQuat();
 }
 
+float FGSTN_DepthToy::HeightScale(const FGSTN_DepthToyParams& Params, float HeightCm)
+{
+	const float Span = FMath::Max(Params.FarHeightCm - Params.NearHeightCm, 1.f);
+	const float T = FMath::Clamp((HeightCm - Params.NearHeightCm) / Span, 0.f, 1.f);
+	return FMath::Lerp(Params.NearScale, Params.FarScale, T * T * (3.f - 2.f * T));
+}
+
+float FGSTN_DepthToy::LandingRadius(const FGSTN_DepthToyParams& Params, float FootRadius, float HeightCm)
+{
+	return FMath::Max(FootRadius, 1.f) * Params.LandingRadiusFootMultiplier * HeightScale(Params, HeightCm);
+}
+
+float FGSTN_DepthToy::Softness(const FGSTN_DepthToyParams& Params, float HeightCm)
+{
+	const float Span = FMath::Max(Params.FarHeightCm - Params.NearHeightCm, 1.f);
+	const float T = FMath::Clamp((HeightCm - Params.NearHeightCm) / Span, 0.f, 1.f);
+	return FMath::Lerp(Params.SoftnessNear, Params.SoftnessFar, T * T * (3.f - 2.f * T));
+}
+
+float FGSTN_DepthToy::TopRadius(const FGSTN_DepthToyParams& Params, float FootRadius, float LandingRadius)
+{
+	return FMath::Min(FMath::Max(FootRadius, 1.f) * Params.BeamTopFootMultiplier, LandingRadius);
+}
+
+float FGSTN_DepthToy::SizeFade(const FGSTN_DepthToyParams& Params, float LengthCm)
+{
+	const float T = FMath::Clamp((LengthCm - Params.MinHeightCm) / FMath::Max(Params.FadeBandCm, 1.f), 0.f, 1.f);
+	return T * T * (3.f - 2.f * T);
+}
+
+float FGSTN_DepthToy::SlopeFade(const FGSTN_DepthToyParams& Params, float NormalDotUp)
+{
+	const float Span = FMath::Max(Params.SlopeFadeStartDot - Params.SlopeFadeEndDot, UE_KINDA_SMALL_NUMBER);
+	const float T = FMath::Clamp((NormalDotUp - Params.SlopeFadeEndDot) / Span, 0.f, 1.f);
+	return T * T * (3.f - 2.f * T);
+}
+
+float FGSTN_DepthToy::DecalHalfDepth(const FGSTN_DepthToyParams& Params, float Radius, float NormalDotUp)
+{
+	const float Cos = FMath::Clamp(NormalDotUp, 0.05f, 1.f);
+	const float Tan = FMath::Sqrt(FMath::Max(1.f - Cos * Cos, 0.f)) / Cos;
+	return FMath::Clamp(Params.DecalDepthCm + Radius * Tan, Params.DecalDepthCm, FMath::Max(Params.DecalMaxDepthCm, Params.DecalDepthCm));
+}
+
+float FGSTN_DepthToy::ClearanceRadius(const FGSTN_DepthToyParams& Params, float TopRadius, float LandingRadius)
+{
+	return FMath::Lerp(TopRadius, LandingRadius, Params.ClearanceRadiusMix);
+}
+
+bool FGSTN_DepthToy::ClearanceSweep(const FVector& Feet, const FVector& Up, const FVector& Point, float Radius, FVector& OutStart, FVector& OutEnd)
+{
+	const FVector UnitUp = Up.GetSafeNormal();
+	// The sphere ends a little above a floor at Point (10 % and 2 cm of margin: a gentle slope under the column is not a hit)
+	OutEnd = Point + UnitUp * (Radius * 1.1f + 2.f);
+	OutStart = Feet;
+	return FVector::DotProduct(OutStart - OutEnd, UnitUp) > 1.f;
+}
+
+float FGSTN_DepthToy::SmoothTowards(float Current, float Target, float DeltaSeconds, float Tau)
+{
+	if (Tau <= UE_KINDA_SMALL_NUMBER)
+	{
+		return Target;
+	}
+	return FMath::Lerp(Current, Target, 1.f - FMath::Exp(-FMath::Max(DeltaSeconds, 0.f) / Tau));
+}
+
+float FGSTN_DepthToy::MoveClearance(float Current, float Target, float DeltaSeconds, float OutSeconds, float InSeconds)
+{
+	const bool bRise = Target > Current;
+	const float Seconds = bRise ? InSeconds : OutSeconds;
+	if (Seconds <= UE_KINDA_SMALL_NUMBER)
+	{
+		return Target;
+	}
+	const float Step = FMath::Max(DeltaSeconds, 0.f) / Seconds;
+	return bRise ? FMath::Min(Current + Step, Target) : FMath::Max(Current - Step, Target);
+}
+
+float FGSTN_DepthToy::ApexExtension(float LengthCm, float TopRadius, float BaseRadius)
+{
+	return BaseRadius > TopRadius + UE_KINDA_SMALL_NUMBER ? FMath::Max(TopRadius, 0.f) * LengthCm / (BaseRadius - TopRadius) : 0.f;
+}
+
+FGSTN_DepthToy::FLook FGSTN_DepthToy::ResolveLook(const FGSTN_DepthMarkerView& View, EGSTN_DepthLayer Layer)
+{
+	const FGSTN_DepthToyParams& Params = View.Toy.Params;
+	const FGSTN_DepthTarget& Target = View.GetTarget(Layer);
+	const float FootRadius = View.Subject.FootRadius;
+	const float Height = FMath::Max(Target.Height, 0.f);
+
+	FLook Look;
+	const bool bSmoothed = Layer == EGSTN_DepthLayer::Below && View.Toy.LandingRadius > 0.f;
+	Look.Point = bSmoothed ? View.Toy.BeamEnd : Target.Point;
+	Look.Radius = bSmoothed ? View.Toy.LandingRadius : LandingRadius(Params, FootRadius, Height);
+	Look.BeamClearance = bSmoothed ? View.Toy.BeamClearance : 1.f;
+	Look.TopRadius = TopRadius(Params, FootRadius, Look.Radius);
+	Look.Softness = Softness(Params, Height);
+	FVector Start, End;
+	BeamEnds(View.Subject, Layer, Target.Point, Start, End);
+	Look.SizeFade = SizeFade(Params, static_cast<float>((End - Start).Size()));
+	Look.SlopeFade = SlopeFade(Params, static_cast<float>(FVector::DotProduct(Target.Normal.GetSafeNormal(), View.Subject.Up.GetSafeNormal())));
+	return Look;
+}
+
 void FGSTN_DepthToy::WriteColor(UPrimitiveComponent* Component, int32 Base, const FLinearColor& Color, float Opacity)
 {
 	if (Component)
@@ -149,8 +256,25 @@ UGSTN_DepthPresenter_Cone::UGSTN_DepthPresenter_Cone()
 void UGSTN_DepthPresenter_Cone::OnMarkerUpdated_Implementation(const FGSTN_DepthMarkerView& View, AActor* Holder)
 {
 	const UGSTN_DepthMarkerSettings& Settings = UGSTN_DepthMarkerSettings::Get();
+	FGSTN_DepthToy::FLook Look;
 	FVector Start, End;
-	FGSTN_DepthToy::BeamEnds(View.Subject, Layer, View.GetTarget(Layer).Point, Start, End);
+	float Opacity = GetAlpha(View);
+	if (View.Toy.bActive)
+	{
+		// Toy: a soft column that ends where the decal is, never wider than it, fading with height and when geometry hugs it
+		Look = FGSTN_DepthToy::ResolveLook(View, Layer);
+		FGSTN_DepthToy::BeamEnds(View.Subject, Layer, Look.Point, Start, End);
+		Opacity *= Look.SizeFade * Look.BeamClearance * View.Toy.Params.BeamOpacity;
+		if (Opacity < 0.002f)
+		{
+			OnMarkerReleased();
+			return;
+		}
+	}
+	else
+	{
+		FGSTN_DepthToy::BeamEnds(View.Subject, Layer, View.GetTarget(Layer).Point, Start, End);
+	}
 	if ((End - Start).SizeSquared() < 1.0)
 	{
 		OnMarkerReleased();
@@ -162,10 +286,17 @@ void UGSTN_DepthPresenter_Cone::OnMarkerUpdated_Implementation(const FGSTN_Depth
 		return;
 	}
 	const FBoxSphereBounds Bounds = Component->GetStaticMesh()->GetBounds();
-	const float Width = View.Subject.FootRadius * BaseWidthMultiplier * View.RadiusScale;
-	Component->SetWorldTransform(FGSTN_DepthToy::BeamTransform(Start, End, static_cast<float>(Bounds.Origin.Z - Bounds.BoxExtent.Z),
+	const float Width = View.Toy.bActive ? Look.Radius * 2.f : View.Subject.FootRadius * BaseWidthMultiplier * View.RadiusScale;
+	// Toy: the cone continues above the character up to its apex, so its radius at the character is the top radius (the material cuts it there)
+	FVector MeshStart = Start;
+	if (View.Toy.bActive)
+	{
+		const float Length = static_cast<float>((End - Start).Size());
+		MeshStart = Start - (End - Start).GetSafeNormal() * FGSTN_DepthToy::ApexExtension(Length, Look.TopRadius, Look.Radius);
+	}
+	Component->SetWorldTransform(FGSTN_DepthToy::BeamTransform(MeshStart, End, static_cast<float>(Bounds.Origin.Z - Bounds.BoxExtent.Z),
 		static_cast<float>(Bounds.Origin.Z + Bounds.BoxExtent.Z), static_cast<float>(Bounds.BoxExtent.X), Width, bFlipTaper));
-	FGSTN_DepthToy::WriteColor(Component, Settings.ToyCustomPrimitiveDataBase, View.Tint, GetAlpha(View));
+	FGSTN_DepthToy::WriteColor(Component, Settings.ToyCustomPrimitiveDataBase, View.Tint, Opacity);
 	FGSTN_DepthToy::WriteBeamEnds(Component, Settings.ToyCustomPrimitiveDataBase, Start, End);
 	Component->SetVisibility(true);
 }
@@ -203,9 +334,81 @@ void UGSTN_DepthPresenter_FogPuff::OnMarkerUpdated_Implementation(const FGSTN_De
 		}
 	}
 	const FBoxSphereBounds Bounds = Component->GetStaticMesh()->GetBounds();
-	const double Side = View.Subject.FootRadius * SizeMultiplier * View.RadiusScale;
+	double Side = View.Subject.FootRadius * SizeMultiplier * View.RadiusScale;
+	FVector Centre = Target.Point;
+	float Opacity = GetAlpha(View);
+	if (View.Toy.bActive)
+	{
+		// The same base radius as the beam that lands here; nothing under the minimum height
+		const FGSTN_DepthToy::FLook Look = FGSTN_DepthToy::ResolveLook(View, Layer);
+		Side = Look.Radius * 2.0 * PuffSpan;
+		Centre = Look.Point;
+		Opacity *= Look.SizeFade;
+		if (Opacity < 0.002f)
+		{
+			OnMarkerReleased();
+			return;
+		}
+	}
 	const double Scale = Side / FMath::Max(2.0 * Bounds.BoxExtent.X, UE_SMALL_NUMBER);
-	Component->SetWorldTransform(FTransform(FGSTN_DepthToy::QuadRotation(Normal, View.Subject.Up), Target.Point, FVector(Scale)));
-	FGSTN_DepthToy::WriteColor(Component, Settings.ToyCustomPrimitiveDataBase, View.Tint, GetAlpha(View));
+	Component->SetWorldTransform(FTransform(FGSTN_DepthToy::QuadRotation(Normal, View.Subject.Up), Centre, FVector(Scale)));
+	FGSTN_DepthToy::WriteColor(Component, Settings.ToyCustomPrimitiveDataBase, View.Tint, Opacity);
 	Component->SetVisibility(true);
+}
+
+void UGSTN_DepthPresenter_ToyDecal::OnMarkerUpdated_Implementation(const FGSTN_DepthMarkerView& View, AActor* Holder)
+{
+	if (!View.Toy.bActive)
+	{
+		Super::OnMarkerUpdated_Implementation(View, Holder);
+		return;
+	}
+	UMaterialInterface* DecalMaterial = !MaterialOverride.IsNull() ? MaterialOverride.LoadSynchronous()
+		: UGSTN_DepthMarkerSettings::Get().DefaultDecalMaterial.LoadSynchronous();
+	if (!Holder || !DecalMaterial)
+	{
+		return;
+	}
+	const FGSTN_DepthTarget& Target = View.GetTarget(Layer);
+	const FGSTN_DepthToy::FLook Look = FGSTN_DepthToy::ResolveLook(View, Layer);
+	const float Alpha = GetAlpha(View) * Look.SizeFade * Look.SlopeFade;
+	if (Alpha < 0.003f)
+	{
+		OnMarkerReleased();
+		return;
+	}
+	if (!Decal)
+	{
+		Decal = NewObject<UDecalComponent>(Holder);
+		Decal->SetupAttachment(Holder->GetRootComponent());
+		Decal->RegisterComponent();
+		// A landing spot stays visible from far away; its box is thin, so the screen-size cull would only ever remove it
+		Decal->SetFadeScreenSize(0.f);
+	}
+	if (!Material)
+	{
+		Material = UMaterialInstanceDynamic::Create(DecalMaterial, this);
+	}
+	if (Material)
+	{
+		const UGSTN_DepthMarkerSettings& Settings = UGSTN_DepthMarkerSettings::Get();
+		Material->SetVectorParameterValue(Settings.TintParameterName, View.Tint);
+		Material->SetScalarParameterValue(Settings.OpacityParameterName, Alpha);
+		Material->SetScalarParameterValue(TEXT("Softness"), Look.Softness);
+		// The material keeps the spot off surfaces that do not face Up (walls beside it): Up is the subject's, never world Z
+		const FVector UpDirection = View.Subject.Up.GetSafeNormal();
+		Material->SetVectorParameterValue(TEXT("UpDirection"), FLinearColor(UpDirection.X, UpDirection.Y, UpDirection.Z, 0.f));
+		Decal->SetDecalMaterial(Material);
+	}
+
+	// Straight along -Up and thin: the spot lies on the surface under the column and never smears onto walls behind it. It stays centred
+	// on the column (the raw target point); the smoothing is for the beam end only
+	const FVector Up = View.Subject.Up.GetSafeNormal();
+	const float NormalDotUp = static_cast<float>(FVector::DotProduct(Target.Normal.GetSafeNormal(), Up));
+	const float Depth = FGSTN_DepthToy::DecalHalfDepth(View.Toy.Params, Look.Radius, NormalDotUp);
+	// Any perpendicular of Up as the roll: stable from frame to frame
+	const FVector Seed = FMath::Abs(Up.Z) < 0.9 ? FVector::UpVector : FVector::RightVector;
+	Decal->SetWorldLocationAndRotation(Target.Point, FRotationMatrix::MakeFromXZ(-Up, Seed).Rotator());
+	Decal->DecalSize = FVector(Depth, Look.Radius, Look.Radius);
+	Decal->SetVisibility(true);
 }

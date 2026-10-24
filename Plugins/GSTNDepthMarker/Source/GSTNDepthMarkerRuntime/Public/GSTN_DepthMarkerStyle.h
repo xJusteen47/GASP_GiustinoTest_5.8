@@ -43,6 +43,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Style")
 	FLinearColor DefaultTint = FLinearColor(1.f, 0.95f, 0.6f, 1.f);
 
+	/** Toy look tuning (size curve, beam, min height, clearance); only read when Toy.bEnabled */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Style")
+	FGSTN_DepthToyParams Toy;
+
 	/** Alpha of the dashed line and ring where the scene hides them (reserved for the depth-aware materials of §4.3) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Style", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float OccludedAlpha = 0.3f;
