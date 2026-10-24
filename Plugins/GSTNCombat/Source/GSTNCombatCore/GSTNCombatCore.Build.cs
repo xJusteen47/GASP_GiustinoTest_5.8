@@ -18,5 +18,8 @@ public class GSTNCombatCore : ModuleRules
 			"GSTNInputCore",
 			"DeveloperSettings"
 		});
+
+		// The module registers the plugin's tag ini folder at startup
+		PrivateDependencyModuleNames.Add("Projects");
 	}
 }

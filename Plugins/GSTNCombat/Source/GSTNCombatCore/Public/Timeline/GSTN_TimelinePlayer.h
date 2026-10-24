@@ -119,15 +119,73 @@ struct FGSTN_TimelineEvalParams
 	int32 DefaultOverrideFrames = 0;
 };
 
+/** A hitbox that is open at the evaluated frame */
+struct FGSTN_ActiveHitbox
+{
+	const FGSTN_HitboxSpec* Spec = nullptr;
+
+	/** The track that holds it (its Part selector, its range) */
+	const FGSTN_TimelineTrack_Hitbox* Track = nullptr;
+
+	/** Frames since the track started: what the keys of the hitbox count in */
+	int32 TrackFrame = 0;
+};
+
+/** How one hurtbox takes hits at a frame after the open modifier tracks are applied */
+struct FGSTN_HurtboxFrameState
+{
+	EGSTN_HurtState State = EGSTN_HurtState::Normal;
+
+	/** With State Armor: the largest armor threshold of the open Armor windows that address the hurtbox */
+	FGSTN_StaggerThreshold ArmorThreshold;
+};
+
+/**
+ * What the hit side of a timeline reports for one frame: the hitboxes that are open and the hurtbox modifier tracks that are
+ * open. Like FGSTN_TimelineOutput it is the caller's scratch: Reserve once (at ability grant), then EvaluateHits only resets
+ * the lengths, so a running timeline costs no heap traffic. The pointers point into the evaluated timeline data and are never
+ * kept across frames.
+ */
+struct GSTNCOMBATCORE_API FGSTN_TimelineFrameResult
+{
+	/** The timeline frame that was evaluated (frame minus paused frames) */
+	int32 Frame = 0;
+
+	/** Hitboxes of the hitbox tracks that contain Frame, in track order then array order */
+	TArray<FGSTN_ActiveHitbox> Hitboxes;
+
+	/** Hurtbox modifier tracks that contain Frame */
+	TArray<const FGSTN_TimelineTrack_HurtboxModifier*> HurtModifiers;
+
+	/** Grows the arrays to what the timeline can report, once. A no-op when the capacity is there */
+	void Reserve(const FGSTN_CombatTimelineData& Data);
+
+	/** Empties the lists but keeps the memory */
+	void Reset();
+};
+
 /**
  * Evaluates a timeline at a frame (combat.md 11.3, modularity 8.5.5). Stateless and pure: the timeline frame lives in the
  * combat state of the caller, which makes the result identical on the server, on a client and after a rollback. O(tracks),
- * no allocation once the output is reserved. Hitbox and hurtbox-modifier tracks are skipped until M4.
+ * no allocation once the output is reserved. Evaluate leaves the hitbox and hurtbox-modifier tracks to EvaluateHits.
  */
 struct GSTNCOMBATCORE_API FGSTN_TimelinePlayer
 {
 	/** Fills Output for the frame described by Params. Resets Output first */
 	static void Evaluate(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineEvalParams& Params, FGSTN_TimelineOutput& Output);
+
+	/**
+	 * Fills Result with the open hitboxes and hurtbox modifiers at Frame, the timeline frame with paused frames already
+	 * removed (the Frame of FGSTN_TimelineOutput). Resets Result first.
+	 */
+	static void EvaluateHits(const FGSTN_CombatTimelineData& Data, int32 Frame, FGSTN_TimelineFrameResult& Result);
+
+	/**
+	 * The state of one hurtbox under the open modifiers: Intangible beats Invincible beats Armor beats Normal, and Armor keeps
+	 * the largest threshold. A modifier with ShapeOverrides covers only a portion of the hurtbox and is left out here: which
+	 * portion a hit lands on needs the contact, which the HurtState step (H4) has.
+	 */
+	static FGSTN_HurtboxFrameState ResolveHurtState(const FGSTN_TimelineFrameResult& Result, const FGSTN_Hurtbox& Hurtbox);
 
 	/** Is Frame inside the cancellable tail of the timeline (false without a tail or at/after TotalFrames)? */
 	static bool IsInTail(const FGSTN_CombatTimelineData& Data, int32 Frame);

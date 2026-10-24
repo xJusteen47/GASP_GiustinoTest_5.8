@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Hits/GSTN_HitboxTypes.h"
+#include "Hits/GSTN_HurtboxTypes.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "StructUtils/InstancedStruct.h"
 #include "GSTN_TimelineTypes.generated.h"
@@ -71,14 +73,16 @@ enum class EGSTN_SwitchTarget : uint8
 	Index
 };
 
-/** What a hurtbox modifier does to the hurtboxes it addresses. Armor arrives with hits (M4), together with its threshold. */
+/** What a hurtbox modifier does to the hurtboxes it addresses (the resolved states are EGSTN_HurtState) */
 UENUM(BlueprintType)
 enum class EGSTN_HurtboxModifierKind : uint8
 {
 	/** Hits land but do no damage */
 	Invincible,
 	/** Hits pass through */
-	Intangible
+	Intangible,
+	/** No knockback or hitstun while the stagger force is below the track's ArmorThreshold; damage applies */
+	Armor
 };
 
 /** Discriminator of the closed set of track types, so the player can cast without RTTI and without a type chain */
@@ -241,7 +245,11 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_WeaponSwitch : public FGSTN_Timeli
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::WeaponSwitch; }
 };
 
-/** Declared so assets can be authored now; ignored until hits exist (M4). Attached to a part or group, never the whole body. */
+/**
+ * The hitboxes of a frame range (the FGSTN_HitboxTrack of combat-m4-hits 3). The track is active for [StartFrame, EndFrame);
+ * the Frame of a hitbox key counts from StartFrame. Attached to a part or group when the combatant has any, never the whole
+ * body. The hits themselves are found by the attacker tick (H8); the timeline player only reports which hitboxes are open.
+ */
 USTRUCT(BlueprintType, meta = (DisplayName = "Hitbox"))
 struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hitbox : public FGSTN_TimelineTrack
 {
@@ -251,26 +259,73 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hitbox : public FGSTN_TimelineTrac
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
 	FGSTN_PartSelector Part;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
+	TArray<FGSTN_HitboxSpec> Hitboxes;
+
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Hitbox; }
 };
 
 /**
- * Changes how the addressed hurtboxes take hits for a frame range (the feet of a dodge, an armored arm). Which parts, which
- * frames and which kind are designer data; nothing in C++ or in an ability decides them. Declared now, ignored until M4.
+ * Changes how the addressed hurtboxes take hits for a frame range (the feet of a dodge, an armored arm). Which hurtboxes,
+ * which frames and which kind are designer data; nothing in C++ or in an ability decides them. A hurtbox is addressed when it
+ * matches ANY of: Part.PartName or AffectedHurtboxes by name, Part.PartTag or AffectedTags by tag (hierarchical). Part.GroupName
+ * is reserved for the parts layer (a hurtbox has no group of its own). Nothing set addresses nothing (validation reports it):
+ * the whole body is spelled by naming it, never by leaving the selector empty.
  */
 USTRUCT(BlueprintType, meta = (DisplayName = "Hurtbox Modifier"))
 struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_HurtboxModifier : public FGSTN_TimelineTrack
 {
 	GENERATED_BODY()
 
-	/** The hurtboxes affected, by part name, group name or tag. Never empty (validation) */
+	/** The hurtboxes affected, by part name, group name or tag. Never empty together with the lists below (validation) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
 	FGSTN_PartSelector Part;
 
+	/** The state the addressed hurtboxes take (Normal is "no track") */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
 	EGSTN_HurtboxModifierKind Kind = EGSTN_HurtboxModifierKind::Invincible;
 
+	/** With Kind Armor: hits whose stagger force is below this do not stagger. Infinite is super armor */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox", meta = (EditCondition = "Kind == EGSTN_HurtboxModifierKind::Armor"))
+	FGSTN_StaggerThreshold ArmorThreshold;
+
+	/** Hurtboxes by FGSTN_Hurtbox::Name, in union with Part and AffectedTags */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
+	TArray<FName> AffectedHurtboxes;
+
+	/** Hurtboxes whose Tags match any of these, in union with the names */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox", meta = (Categories = "Combat.Hurtbox"))
+	FGameplayTagContainer AffectedTags;
+
+	/**
+	 * The portion of the addressed hurtboxes the state covers, in root-relative shapes (the first 40 % of a foot, a weak
+	 * point left exposed). Empty = the whole hurtbox. Data only in H1: the HurtState step (H4) decides with the contact point.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
+	TArray<FGSTN_HitShape> ShapeOverrides;
+
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::HurtboxModifier; }
+
+	/** Does the selector (names, tag, lists) leave nothing to address? */
+	bool IsEmpty() const { return Part.IsEmpty() && AffectedHurtboxes.IsEmpty() && AffectedTags.IsEmpty(); }
+
+	/** Is this hurtbox one of the addressed (union of names and tags)? */
+	bool Addresses(const FGSTN_Hurtbox& Hurtbox) const
+	{
+		if (!Part.PartName.IsNone() && Part.PartName == Hurtbox.Name)
+		{
+			return true;
+		}
+		if (AffectedHurtboxes.Contains(Hurtbox.Name))
+		{
+			return true;
+		}
+		if (Part.PartTag.IsValid() && Hurtbox.Tags.HasTag(Part.PartTag))
+		{
+			return true;
+		}
+		return !AffectedTags.IsEmpty() && Hurtbox.Tags.HasAny(AffectedTags);
+	}
 };
 
 /**
@@ -397,6 +452,10 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Tracks")
 	TArray<TInstancedStruct<FGSTN_TimelineTrack>> Tracks;
 
+	/** Root-relative transform of every socket a BakedSocket hitbox uses, one per timeline frame. Written by the baking tool */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Tracks")
+	TMap<FName, FGSTN_BakedSocketFrames> BakedSockets;
+
 	/** Optional recoil the timeline ends into when the attacker-outcome flag says ricochet */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet")
 	bool bHasRicochetResponse = false;
@@ -408,6 +467,21 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	const FGSTN_RicochetResponse* GetRicochetResponse() const
 	{
 		return bHasRicochetResponse && RicochetResponse.IsAuthored() ? &RicochetResponse : nullptr;
+	}
+
+	/**
+	 * The baked root-relative transform of a socket at a timeline frame. A frame past the baked range holds the last one and
+	 * a negative frame the first. False for an unknown or empty socket.
+	 */
+	bool FindBakedSocket(FName Socket, int32 Frame, FTransform& OutTransform) const
+	{
+		const FGSTN_BakedSocketFrames* Baked = BakedSockets.Find(Socket);
+		if (!Baked || Baked->Frames.IsEmpty())
+		{
+			return false;
+		}
+		OutTransform = Baked->Frames[FMath::Clamp(Frame, 0, Baked->Frames.Num() - 1)];
+		return true;
 	}
 
 	/** First frame of the cancellable tail, INDEX_NONE if there is none */

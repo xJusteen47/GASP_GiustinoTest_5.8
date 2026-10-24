@@ -60,7 +60,7 @@ Frame data of a combat ability and its evaluation, pure (no GAS, Network Predict
 |---|---|
 | `FGSTN_CombatTimelineData` | Total and first actionable frame, `FGSTN_TimelineTail`, montage, aim policy, override window, buffer reset rules, the tracks and an optional `FGSTN_RicochetResponse`. Inline on an ability or in the asset. |
 | `UGSTN_CombatTimeline` | `UPrimaryDataAsset` (type `GSTN_CombatTimeline`) holding one `FGSTN_CombatTimelineData`; `IsDataValid` runs the validation. |
-| `FGSTN_TimelineTrack` + kinds | `TInstancedStruct` tracks: `CancelWindow`, `Movement`, `Tags`, `Event`, `WeaponSwitch`, `Hitbox`, `HurtboxModifier`. A closed set (`EGSTN_TimelineTrackKind`). Hitbox and hurtbox tracks address `FGSTN_PartSelector` (part name, group name or tag), never the whole body, and are ignored until hits exist (M4). |
+| `FGSTN_TimelineTrack` + kinds | `TInstancedStruct` tracks: `CancelWindow`, `Movement`, `Tags`, `Event`, `WeaponSwitch`, `Hitbox`, `HurtboxModifier`. A closed set (`EGSTN_TimelineTrackKind`). Hitbox and hurtbox tracks address `FGSTN_PartSelector` (part name, group name or tag), never the whole body; their data is described under Hits (`Evaluate` leaves them to `EvaluateHits`). |
 | `FGSTN_TimelinePlayer` | Stateless `Evaluate(Data, Params, Output)`: active cancel/tag/movement windows, events, swaps, movement starts and ends and the commit, each fired once per `(PreviousFrame, Frame]`; `IsInTail`. O(tracks), the preallocated `FGSTN_TimelineOutput` is reused. A ricochet outcome flag evaluates the recoil data instead. |
 | `FGSTN_TimelineValidation` | Pure checks: first actionable frame, tail clamp, deferred-commit rules, track ranges, part selectors, montage length vs frames (only when the length is known), ricochet response. |
 | `UGSTN_TimelineUtils` | `BlueprintPure` helpers (`IsInTail`, `GetTailStartFrame`). |
@@ -151,7 +151,7 @@ Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Scrip
 
 ## Gameplay tags
 
-Native tags, declared in four files (nothing here is defined in an ini; the designer leaves live in the project's tag ini):
+Native tags, declared in five files (the designer leaves live in the project's tag ini, the hurtbox leaves in the plugin's `Config/Tags/GSTNCombat.ini`):
 
 | File | Tags |
 |---|---|
@@ -159,6 +159,7 @@ Native tags, declared in four files (nothing here is defined in an ini; the desi
 | `Input/GSTN_CombatCommandTags.h` | the `Command.*` families (`Attack`, `Strong`, `Special`, `Super`, ...) the standard slots bind |
 | `Input/GSTN_CombatButtonTags.h` | the standard buttons |
 | `Input/GSTN_CombatLockTags.h` | the combat lock tags (`Combat.Lock.Movement` is declared in GSTNCombatGAS) |
+| `Hits/GSTN_CombatHitTags.h` (`GSTNCombatHitTags`) | the root `Combat.Hurtbox`, `Combat.HitType.*` and `Combat.Relationship.*` |
 
 `Command.Super.Slot1..Slot8` are declared in `Loadout/GSTN_CompiledBindingTable.cpp`, beside the only code that uses them (the super code slots).
 
@@ -258,3 +259,25 @@ Dash, ground dodge, air dodge and interact are **default kit content**, not fram
 - A kit without a dodge lists `Command.Defence.Dodge` in `CommandSet.RemovedCommands`, or simply does not grant the abilities: the command then starts nothing and reserves nothing.
 - Tags added: buttons `Input.Button.Dodge/Sprint/Interact`, commands `Command.Movement.Dash`, `Command.Defence.Dodge`, `Command.Interact.Grab/PickUp`, states `Combat.State.Hitstun/Hitstop` (projected by the M4 hit reaction; the default dodges block on them).
 - Tests: `GSTNCombat.Core.Dash.*`, `GSTNCombat.Core.Dodge.*`, `GSTNCombat.Core.MovementSlots.*`.
+
+## Hits: geometry and data (`Hits/`, added in M4 H1)
+
+Pure data and stateless math the hit system is built on (design: [combat-m4-hits](../../docs/architecture/combat-m4-hits.md) 3, on the docs branch until it lands). Nothing here runs a hit: the attacker tick, the victim pipeline and the reaction model come in later checkpoints (H2 to H9). Every function is plain double math over its inputs, so the same inputs give the same bits on every machine and in a resimulation.
+
+| Type | What it is |
+|---|---|
+| `FGSTN_HitShape`, `EGSTN_ShapeType` | Sphere, capsule or box: `Extent` (radius, radius + half height including the caps with the capsule along local Z, or half extents) and a `Local` transform. The local scale scales the extent. |
+| `UGSTN_HitShapeUtils` | `Overlap` for all six pairs (capsule-box exact, box-box by separating axes; touching overlaps), `SweptOverlap` and `GetSweepSubsteps` (N = ceil(centre travel / smallest extent), capped at `MaxSweepSubsteps` = 4, location and scale lerped, rotation slerped), `ScaleShape`, `EvaluateKeys` (a hitbox path at a frame) and `PickHurtbox` (highest `Priority`, ties by lowest index). |
+| `FGSTN_HitData` + `EGSTN_YawSource`, `EGSTN_SpecialAngle`, `EGSTN_HitstopMode`, `EGSTN_StaggerForceMode` | The authored side of a hit: damage, knockback bracket, angle, hitstun and hitstop multipliers or overrides, shield damage, `Priority`, `HitType` (unset = Normal; anything else is data only in M4, the timeline validator warns), soft `ExtraEffects`, cue, `CustomData`, stagger force, `FGSTN_ImpactProfile` and `ExtensionData`. |
+| `FGSTN_HitVariant`, `FGSTN_HitDataOverride`, `EGSTN_HitDataField` | A relationship variant of a hitbox: `bIgnore`, `ShapeScale`, and an override that names the fields to replace (bit mask), then multipliers, then extension entries replaced by struct type. `UGSTN_HitDataUtils::ApplyVariant` resolves it. |
+| `FGSTN_HitExtension` | Base struct of the data an optional plugin attaches to a hit. The core only carries it. |
+| `FGSTN_HitboxSpec`, `FGSTN_HitboxKey`, `EGSTN_HitboxSpace`, `EGSTN_ReachAxis`, `EGSTN_HitboxZone` | A hitbox: shape, space (`Root`, `BakedSocket`, `WorldAtMoveStart`, `Projectile`), socket, keys (frames count from the track start), `HitGroup`, `bSweepBetweenFrames`, hit data, `RelationshipVariants` (keys `Combat.Relationship.*`), and the data-only `ReachAxis`, `bScaleExtentWithReach` and `Zone`. `FGSTN_BakedSocketFrames` holds a socket's per-frame transforms in `FGSTN_CombatTimelineData::BakedSockets` (`FindBakedSocket`: the last frame holds). |
+| `FGSTN_Hurtbox`, `UGSTN_HurtboxSetDefinition`, `EGSTN_HurtState` | A combatant's hurtboxes (name, bone, root-relative shape, tags under `Combat.Hurtbox`, `Priority`, `ReactionScale`) and the entity defaults: `StaggerThreshold`, `MaxReaction`, `WeightCurve`. |
+| `FGSTN_StaggerThreshold`, `FGSTN_HitReactionModifiers`, `EGSTN_HitReaction`, `FGSTN_BakedCurve` (`Hits/GSTN_ReactionTypes.h`) | The smallest pieces of the reaction model that hit data and hurtboxes need. H2 completes the file; the modifiers default to the identity. |
+| `FGSTN_ImpactProfile`, `EGSTN_ImpactOutcome` (`Hits/GSTN_ImpactTypes.h`) | What an attack asks of a surface impact (force or forbid an outcome). H3 adds the resolution. |
+| `FGSTN_TimelineTrack_Hitbox` (`Hitboxes`), `FGSTN_TimelineTrack_HurtboxModifier` (`Kind` Invincible, Intangible or Armor, `ArmorThreshold`, `AffectedHurtboxes`, `AffectedTags`, `ShapeOverrides`) | The two hit tracks, completed. A modifier addresses a hurtbox by the union of its names and tags (`Addresses`); nothing set addresses nothing, and the validator reports it. |
+| `FGSTN_TimelinePlayer::EvaluateHits`, `FGSTN_TimelineFrameResult`, `ResolveHurtState` | The open hitboxes (with the frame since their track started) and the open hurtbox modifiers at a frame, into caller scratch that is reserved once (no allocation per frame); and a hurtbox's state under them (Intangible beats Invincible beats Armor, armor keeps the largest threshold, a modifier with `ShapeOverrides` is left to the pipeline's contact test). |
+
+Tags (`Hits/GSTN_CombatHitTags.h`, namespace `GSTNCombatHitTags`): native `Combat.Hurtbox` (root), `Combat.HitType.{Normal, Grab, Projectile, Unblockable}` and `Combat.Relationship.{Self, Ally, Enemy, Neutral}`. The hurtbox leaves `Feet`, `Head` and `Torso` are data in `Config/Tags/GSTNCombat.ini`, which `GSTNCombatCore` registers when it starts (the engine does not scan a plugin's tag folder; a loose tag ini takes one plain `GameplayTagList=` line per tag, not the `+` form).
+
+**Extending it.** A hitbox gets its behaviour from data: add `FGSTN_HitboxSpec` entries to a `FGSTN_TimelineTrack_Hitbox`, and per-relationship changes as `RelationshipVariants` (never a code path). A new hit extension is a struct derived from `FGSTN_HitExtension` in the optional plugin, attached in `FGSTN_HitData::ExtensionData` and replaced per relationship through `FGSTN_HitDataOverride::ExtensionOverrides`. A new hurtbox group is a tag leaf in a tag ini plus `Tags` on the hurtboxes; a dodge's intangible window is a `HurtboxModifier` track that names it. Tests: `GSTNCombat.Core.Hits.{ShapePairs, SweptCatchesFastBox, SweptSubstepCap, KeyInterpolation, VariantOverrideAndMultiplier, VariantExtensionOverride, PickHurtboxPriorityThenIndex, ModifierTrackByNameOrTag, BakedSocketLookup, TimelinePlayerHitboxesNoAlloc, ValidatorHitTypeNonNormalWarns}`.

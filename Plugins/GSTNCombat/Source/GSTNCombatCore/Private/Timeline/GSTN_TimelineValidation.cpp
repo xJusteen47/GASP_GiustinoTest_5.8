@@ -26,6 +26,76 @@ namespace
 			Add(Out, true, FString::Printf(TEXT("Track %d (%s): unknown group '%s'."), Index, Kind, *Part.GroupName.ToString()));
 		}
 	}
+
+	bool HasValidExtent(const FGSTN_HitShape& Shape)
+	{
+		switch (Shape.Type)
+		{
+		case EGSTN_ShapeType::Sphere:
+			return Shape.Extent.X > 0.0;
+		case EGSTN_ShapeType::Capsule:
+			return Shape.Extent.X > 0.0 && Shape.Extent.Z >= Shape.Extent.X;
+		case EGSTN_ShapeType::Box:
+			return Shape.Extent.X > 0.0 && Shape.Extent.Y > 0.0 && Shape.Extent.Z > 0.0;
+		}
+		return false;
+	}
+
+	void CheckHitData(const TCHAR* Where, int32 Index, int32 HitboxIndex, const FGSTN_HitData& Hit, TArray<FGSTN_TimelineMessage>& Out)
+	{
+		// Only Normal hits have a pipeline path in M4: the other types are carried as data (plan assumption M4.13)
+		if (!Hit.IsNormalHitType())
+		{
+			Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d (%s): HitType %s is data only in M4 and behaves as Normal."), Index, HitboxIndex, Where, *Hit.HitType.ToString()));
+		}
+	}
+
+	void CheckHitboxes(int32 Index, const FGSTN_TimelineTrack_Hitbox& Track, const FGSTN_CombatTimelineData& Data, TArray<FGSTN_TimelineMessage>& Out)
+	{
+		for (int32 HitboxIndex = 0; HitboxIndex < Track.Hitboxes.Num(); ++HitboxIndex)
+		{
+			const FGSTN_HitboxSpec& Spec = Track.Hitboxes[HitboxIndex];
+			if (!HasValidExtent(Spec.Shape))
+			{
+				Add(Out, true, FString::Printf(TEXT("Track %d, hitbox %d: the shape has no volume (a radius or half extent is not positive, or a capsule is shorter than its radius)."), Index, HitboxIndex));
+			}
+			if (Spec.Space == EGSTN_HitboxSpace::BakedSocket)
+			{
+				if (Spec.Socket.IsNone())
+				{
+					Add(Out, true, FString::Printf(TEXT("Track %d, hitbox %d: a BakedSocket hitbox names no socket."), Index, HitboxIndex));
+				}
+				else if (const FGSTN_BakedSocketFrames* Baked = Data.BakedSockets.Find(Spec.Socket))
+				{
+					if (Baked->Frames.Num() < Data.TotalFrames)
+					{
+						Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d: socket '%s' is baked for %d frames, the timeline has %d (the last frame holds)."), Index, HitboxIndex, *Spec.Socket.ToString(), Baked->Frames.Num(), Data.TotalFrames));
+					}
+				}
+				else
+				{
+					Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d: socket '%s' has no baked frames yet (run the baking tool)."), Index, HitboxIndex, *Spec.Socket.ToString()));
+				}
+			}
+			for (int32 KeyIndex = 1; KeyIndex < Spec.Keys.Num(); ++KeyIndex)
+			{
+				if (Spec.Keys[KeyIndex].Frame <= Spec.Keys[KeyIndex - 1].Frame)
+				{
+					Add(Out, true, FString::Printf(TEXT("Track %d, hitbox %d: the keys are not sorted by strictly increasing frame (key %d)."), Index, HitboxIndex, KeyIndex));
+					break;
+				}
+			}
+			CheckHitData(TEXT("base"), Index, HitboxIndex, Spec.Data, Out);
+			for (const TPair<FGameplayTag, FGSTN_HitVariant>& Pair : Spec.RelationshipVariants)
+			{
+				const FGSTN_HitDataOverride& Override = Pair.Value.Override;
+				if (Override.Overrides(EGSTN_HitDataField::HitType) && !Override.Values.IsNormalHitType())
+				{
+					Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d (variant %s): HitType %s is data only in M4 and behaves as Normal."), Index, HitboxIndex, *Pair.Key.ToString(), *Override.Values.HitType.ToString()));
+				}
+			}
+		}
+	}
 }
 
 FGSTN_TimelineValidationContext FGSTN_TimelineValidation::MakeContext(const FGSTN_CombatTimelineData& Data, float TickRate, int32 DefaultOverrideFrames)
@@ -136,11 +206,22 @@ void FGSTN_TimelineValidation::Validate(const FGSTN_CombatTimelineData& Data, co
 
 		if (Kind == EGSTN_TimelineTrackKind::Hitbox)
 		{
-			CheckSelector(TEXT("Hitbox"), Index, static_cast<const FGSTN_TimelineTrack_Hitbox*>(Track)->Part, Context, OutMessages);
+			const FGSTN_TimelineTrack_Hitbox* HitboxTrack = static_cast<const FGSTN_TimelineTrack_Hitbox*>(Track);
+			CheckSelector(TEXT("Hitbox"), Index, HitboxTrack->Part, Context, OutMessages);
+			CheckHitboxes(Index, *HitboxTrack, Data, OutMessages);
 		}
 		else if (Kind == EGSTN_TimelineTrackKind::HurtboxModifier)
 		{
-			CheckSelector(TEXT("HurtboxModifier"), Index, static_cast<const FGSTN_TimelineTrack_HurtboxModifier*>(Track)->Part, Context, OutMessages);
+			const FGSTN_TimelineTrack_HurtboxModifier* Modifier = static_cast<const FGSTN_TimelineTrack_HurtboxModifier*>(Track);
+			// Names and tags in the lists address hurtboxes by themselves; the part selector is checked when it is used or when nothing is
+			if (!Modifier->Part.IsEmpty() || Modifier->IsEmpty())
+			{
+				CheckSelector(TEXT("HurtboxModifier"), Index, Modifier->Part, Context, OutMessages);
+			}
+			if (Modifier->Kind == EGSTN_HurtboxModifierKind::Armor && !Modifier->ArmorThreshold.IsSet())
+			{
+				Add(OutMessages, false, FString::Printf(TEXT("Track %d (HurtboxModifier): an Armor window with no ArmorThreshold staggers on every hit, so it does nothing."), Index));
+			}
 		}
 	}
 

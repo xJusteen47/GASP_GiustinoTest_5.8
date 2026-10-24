@@ -190,8 +190,105 @@ void FGSTN_TimelinePlayer::Evaluate(const FGSTN_CombatTimelineData& Data, const 
 		case EGSTN_TimelineTrackKind::Hitbox:
 		case EGSTN_TimelineTrackKind::HurtboxModifier:
 		default:
-			// Declared for authoring, ignored until hits exist (M4)
+			// Reported by EvaluateHits, not by this per-frame output
 			break;
 		}
 	}
+}
+
+void FGSTN_TimelineFrameResult::Reserve(const FGSTN_CombatTimelineData& Data)
+{
+	int32 HitboxCount = 0;
+	int32 ModifierCount = 0;
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
+	{
+		const FGSTN_TimelineTrack* Track = Instance.GetPtr<FGSTN_TimelineTrack>();
+		if (!Track)
+		{
+			continue;
+		}
+		if (Track->GetKind() == EGSTN_TimelineTrackKind::Hitbox)
+		{
+			HitboxCount += static_cast<const FGSTN_TimelineTrack_Hitbox*>(Track)->Hitboxes.Num();
+		}
+		else if (Track->GetKind() == EGSTN_TimelineTrackKind::HurtboxModifier)
+		{
+			++ModifierCount;
+		}
+	}
+	if (Hitboxes.Max() < HitboxCount)
+	{
+		Hitboxes.Reserve(HitboxCount);
+	}
+	EnsureCapacity(HurtModifiers, ModifierCount);
+}
+
+void FGSTN_TimelineFrameResult::Reset()
+{
+	Frame = 0;
+	Hitboxes.Reset();
+	HurtModifiers.Reset();
+}
+
+void FGSTN_TimelinePlayer::EvaluateHits(const FGSTN_CombatTimelineData& Data, int32 Frame, FGSTN_TimelineFrameResult& Result)
+{
+	Result.Reserve(Data);
+	Result.Reset();
+	Result.Frame = Frame;
+
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
+	{
+		const FGSTN_TimelineTrack* Track = Instance.GetPtr<FGSTN_TimelineTrack>();
+		if (!Track || !Track->Contains(Frame))
+		{
+			continue;
+		}
+		if (Track->GetKind() == EGSTN_TimelineTrackKind::Hitbox)
+		{
+			const FGSTN_TimelineTrack_Hitbox* HitboxTrack = static_cast<const FGSTN_TimelineTrack_Hitbox*>(Track);
+			for (const FGSTN_HitboxSpec& Spec : HitboxTrack->Hitboxes)
+			{
+				FGSTN_ActiveHitbox& Active = Result.Hitboxes.AddDefaulted_GetRef();
+				Active.Spec = &Spec;
+				Active.Track = HitboxTrack;
+				Active.TrackFrame = Frame - Track->StartFrame;
+			}
+		}
+		else if (Track->GetKind() == EGSTN_TimelineTrackKind::HurtboxModifier)
+		{
+			Result.HurtModifiers.Add(static_cast<const FGSTN_TimelineTrack_HurtboxModifier*>(Track));
+		}
+	}
+}
+
+FGSTN_HurtboxFrameState FGSTN_TimelinePlayer::ResolveHurtState(const FGSTN_TimelineFrameResult& Result, const FGSTN_Hurtbox& Hurtbox)
+{
+	FGSTN_HurtboxFrameState State;
+	for (const FGSTN_TimelineTrack_HurtboxModifier* Modifier : Result.HurtModifiers)
+	{
+		if (!Modifier->ShapeOverrides.IsEmpty() || !Modifier->Addresses(Hurtbox))
+		{
+			continue;
+		}
+		switch (Modifier->Kind)
+		{
+		case EGSTN_HurtboxModifierKind::Intangible:
+			State.State = EGSTN_HurtState::Intangible;
+			break;
+		case EGSTN_HurtboxModifierKind::Invincible:
+			if (State.State != EGSTN_HurtState::Intangible)
+			{
+				State.State = EGSTN_HurtState::Invincible;
+			}
+			break;
+		case EGSTN_HurtboxModifierKind::Armor:
+			if (State.State == EGSTN_HurtState::Normal || State.State == EGSTN_HurtState::Armor)
+			{
+				State.State = EGSTN_HurtState::Armor;
+				State.ArmorThreshold = FGSTN_StaggerThreshold::Max(State.ArmorThreshold, Modifier->ArmorThreshold);
+			}
+			break;
+		}
+	}
+	return State;
 }
