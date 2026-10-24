@@ -853,6 +853,37 @@ void UGSTN_CombatSimComponent::TryQueueStatsModifier()
 	}
 }
 
+void UGSTN_CombatSimComponent::RestoreFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
+{
+	if (!Sync)
+	{
+		HitInbox.Reset();
+		return;
+	}
+	// The restored state is the end of its latest frame; the re-simulation starts on the next one
+	HitInbox.TrimFrom(Sync->Core.Input.History.GetLatestFrame() + 1);
+}
+
+bool UGSTN_CombatSimComponent::TicksOnThisMachine() const
+{
+	const AActor* Owner = GetOwner();
+	return Owner && Owner->GetLocalRole() != ROLE_SimulatedProxy;
+}
+
+bool UGSTN_CombatSimComponent::PostHit(const FGSTN_HitInboxEntry& Entry)
+{
+	if (!TicksOnThisMachine())
+	{
+		return false;
+	}
+	if (!HitInbox.Add(Entry))
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: hit inbox full (%d entries), a hit from %d at frame %d is dropped"), *GetPathName(), FGSTN_HitInbox::MaxEntries, Entry.AttackerId, Entry.Frame);
+		return false;
+	}
+	return true;
+}
+
 void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
 {
 	// Outside the simulation: the authority (a dedicated server, or the listen-server host's own pawn) publishes each event

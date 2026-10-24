@@ -5,11 +5,17 @@
 #include "CoreMinimal.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 
-/** What the combatant is doing, as far as the combat model is concerned. Hitstun and the rest come with the hit milestone (M4) */
+/**
+ * What the combatant is doing, as far as the combat model is concerned. The hit states are written by the victim side of M4 (H9):
+ * Hitstun is the locked part of a stagger, Tumble a launch that cannot act until it lands, Splat the reaction to a wall impact
+ */
 enum class EGSTN_ActionState : uint8
 {
 	Actionable = 0,
 	InTimeline = 1,
+	Hitstun = 2,
+	Tumble = 3,
+	Splat = 4,
 
 	Count UMETA(Hidden)
 };
@@ -43,6 +49,16 @@ enum class EGSTN_RequestType : uint8
 	SetFacing = 6,
 	Cue = 7,
 
+	// ---- The hit milestone (M4): what the victim side asks of the ability system when a hit resolves. Arg is an index the
+	// executor resolves (an outcome slot, a table row), never a pointer or a tag
+	ApplyDamage = 8,
+	ApplyEffect = 9,
+	Freeze = 10,
+	Knockback = 11,
+	PushBack = 12,
+	MeterGain = 13,
+	ImpactSurface = 14,
+
 	Count UMETA(Hidden)
 };
 
@@ -64,7 +80,7 @@ struct FGSTN_CombatRequest
  * (the ability system executes it in that frame's pre-tick): the combat tick calls PruneBefore at the top of every frame, so a
  * state at the end of a frame holds that frame's requests and nothing older, and the wire never carries a dead one.
  *
- * Wire format: 3 bits count (0 to Capacity), then per request 3 bits type, the frame as a packed integer, 16 bits argument.
+ * Wire format: 3 bits count (0 to Capacity), then per request 4 bits type, the frame as a packed integer, 16 bits argument.
  */
 struct FGSTN_CombatRequests
 {
@@ -221,7 +237,7 @@ struct FGSTN_CombatRequests
 		{
 			FGSTN_CombatRequest& Request = Local[Index];
 			uint8 Type = static_cast<uint8>(Request.Type);
-			Ar.SerializeBits(&Type, 3);
+			Ar.SerializeBits(&Type, 4);
 			uint32 FramePlusOne = static_cast<uint32>(FMath::Max(Request.Frame + 1, 0));
 			Ar.SerializeIntPacked(FramePlusOne);
 			uint16 Arg = static_cast<uint16>(Request.Arg);

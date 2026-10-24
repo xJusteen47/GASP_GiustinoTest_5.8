@@ -23,7 +23,7 @@
 
 namespace
 {
-	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+	constexpr EAutomationTestFlags DamageTestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	/** Rules whose only content is the damage mode: the execution reads nothing else */
 	TStrongObjectPtr<UGSTN_CombatRules> MakeRules(EGSTN_DamageMode Mode)
@@ -43,13 +43,13 @@ namespace
 		Rig.ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data);
 	}
 
-	float Base(const UAbilitySystemComponent& ASC, const FGameplayAttribute& Attribute)
+	float DamageBase(const UAbilitySystemComponent& ASC, const FGameplayAttribute& Attribute)
 	{
 		return ASC.GetNumericAttributeBase(Attribute);
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamagePercentModeAddsTest, "GSTNCombat.GAS.Damage.PercentModeAdds", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamagePercentModeAddsTest, "GSTNCombat.GAS.Damage.PercentModeAdds", DamageTestFlags)
 bool FGSTN_DamagePercentModeAddsTest::RunTest(const FString& Parameters)
 {
 	GSTNCombatGASTest::FRig Rig;
@@ -57,45 +57,45 @@ bool FGSTN_DamagePercentModeAddsTest::RunTest(const FString& Parameters)
 
 	ApplyDamage(Rig, Rules.Get(), 12.f);
 	ApplyDamage(Rig, Rules.Get(), 12.f);
-	TestEqual(TEXT("the percent grows by every hit"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 24.f);
-	TestEqual(TEXT("and health is untouched"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetMaxHealthAttribute()));
+	TestEqual(TEXT("the percent grows by every hit"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 24.f);
+	TestEqual(TEXT("and health is untouched"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetMaxHealthAttribute()));
 
 	// The percent mode has no cap: a heavy hit goes past the maximum
 	ApplyDamage(Rig, Rules.Get(), 500.f);
-	TestEqual(TEXT("past MaxHealth"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 524.f);
+	TestEqual(TEXT("past MaxHealth"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 524.f);
 
 	// A plain context (no rules) counts as the percent mode, and a negative damage heals nothing
 	ApplyDamage(Rig, nullptr, 6.f);
 	ApplyDamage(Rig, Rules.Get(), -50.f);
-	TestEqual(TEXT("a context without rules adds percent, a negative damage nothing"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 530.f);
+	TestEqual(TEXT("a context without rules adds percent, a negative damage nothing"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 530.f);
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageHealthModeSubtractsTest, "GSTNCombat.GAS.Damage.HealthModeSubtracts", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageHealthModeSubtractsTest, "GSTNCombat.GAS.Damage.HealthModeSubtracts", DamageTestFlags)
 bool FGSTN_DamageHealthModeSubtractsTest::RunTest(const FString& Parameters)
 {
 	GSTNCombatGASTest::FRig Rig;
 	const TStrongObjectPtr<UGSTN_CombatRules> Rules = MakeRules(EGSTN_DamageMode::Health);
-	const float Full = Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetMaxHealthAttribute());
-	TestTrue(TEXT("the defaults give a full health bar"), Full > 0.f && Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()) == Full);
+	const float Full = DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetMaxHealthAttribute());
+	TestTrue(TEXT("the defaults give a full health bar"), Full > 0.f && DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()) == Full);
 
 	ApplyDamage(Rig, Rules.Get(), 30.f);
-	TestEqual(TEXT("health falls by the damage"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), Full - 30.f);
-	TestEqual(TEXT("and the percent is untouched"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 0.f);
+	TestEqual(TEXT("health falls by the damage"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), Full - 30.f);
+	TestEqual(TEXT("and the percent is untouched"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 0.f);
 
 	ApplyDamage(Rig, Rules.Get(), 1000.f);
-	TestEqual(TEXT("health stops at zero"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), 0.f);
+	TestEqual(TEXT("health stops at zero"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), 0.f);
 
 	// Lowering the maximum pulls the health down with it
 	Rig.ASC->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetHealthAttribute(), Full);
 	Rig.ASC->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetMaxHealthAttribute(), 40.f);
-	TestEqual(TEXT("the base clamp keeps health under the maximum"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), Full);
+	TestEqual(TEXT("the base clamp keeps health under the maximum"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), Full);
 	Rig.ASC->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetHealthAttribute(), 60.f);
-	TestEqual(TEXT("a write above the maximum is clamped"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), 40.f);
+	TestEqual(TEXT("a write above the maximum is clamped"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), 40.f);
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamagePercentCappedClampsAtMaxTest, "GSTNCombat.GAS.Damage.PercentCappedClampsAtMax", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamagePercentCappedClampsAtMaxTest, "GSTNCombat.GAS.Damage.PercentCappedClampsAtMax", DamageTestFlags)
 bool FGSTN_DamagePercentCappedClampsAtMaxTest::RunTest(const FString& Parameters)
 {
 	GSTNCombatGASTest::FRig Rig;
@@ -103,16 +103,16 @@ bool FGSTN_DamagePercentCappedClampsAtMaxTest::RunTest(const FString& Parameters
 	Rig.ASC->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetMaxHealthAttribute(), 50.f);
 
 	ApplyDamage(Rig, Rules.Get(), 30.f);
-	TestEqual(TEXT("under the cap the percent adds up"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 30.f);
+	TestEqual(TEXT("under the cap the percent adds up"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 30.f);
 	ApplyDamage(Rig, Rules.Get(), 30.f);
-	TestEqual(TEXT("the hit that passes the cap stops exactly at it"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 50.f);
+	TestEqual(TEXT("the hit that passes the cap stops exactly at it"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 50.f);
 	ApplyDamage(Rig, Rules.Get(), 30.f);
-	TestEqual(TEXT("and further hits add nothing"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 50.f);
-	TestEqual(TEXT("health is not used in this mode"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), 100.f);
+	TestEqual(TEXT("and further hits add nothing"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 50.f);
+	TestEqual(TEXT("health is not used in this mode"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetHealthAttribute()), 100.f);
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageMultipliersAppliedTest, "GSTNCombat.GAS.Damage.MultipliersApplied", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageMultipliersAppliedTest, "GSTNCombat.GAS.Damage.MultipliersApplied", DamageTestFlags)
 bool FGSTN_DamageMultipliersAppliedTest::RunTest(const FString& Parameters)
 {
 	GSTNCombatGASTest::FRig Rig;
@@ -122,18 +122,18 @@ bool FGSTN_DamageMultipliersAppliedTest::RunTest(const FString& Parameters)
 
 	// The combatant hits itself, so it is both the attacker (outgoing) and the victim (incoming)
 	ApplyDamage(Rig, Rules.Get(), 10.f);
-	TestEqual(TEXT("10 x 2 x 1.5"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 30.f);
+	TestEqual(TEXT("10 x 2 x 1.5"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 30.f);
 
 	Rig.ASC->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetIncomingDamageMultiplierAttribute(), 0.f);
 	ApplyDamage(Rig, Rules.Get(), 10.f);
-	TestEqual(TEXT("a victim that takes no damage takes none"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 30.f);
+	TestEqual(TEXT("a victim that takes no damage takes none"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), 30.f);
 
 	Rig.ASC->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetIncomingDamageMultiplierAttribute(), -3.f);
-	TestEqual(TEXT("a multiplier cannot go negative"), Base(*Rig.ASC, UGSTN_HealthAttributeSet::GetIncomingDamageMultiplierAttribute()), 0.f);
+	TestEqual(TEXT("a multiplier cannot go negative"), DamageBase(*Rig.ASC, UGSTN_HealthAttributeSet::GetIncomingDamageMultiplierAttribute()), 0.f);
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageEffectContextNetSerializeRoundTripTest, "GSTNCombat.GAS.Damage.EffectContextNetSerializeRoundTrip", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageEffectContextNetSerializeRoundTripTest, "GSTNCombat.GAS.Damage.EffectContextNetSerializeRoundTrip", DamageTestFlags)
 bool FGSTN_DamageEffectContextNetSerializeRoundTripTest::RunTest(const FString& Parameters)
 {
 	FGSTN_HitEffectContext Source;
@@ -189,13 +189,13 @@ bool FGSTN_DamageEffectContextNetSerializeRoundTripTest::RunTest(const FString& 
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageMeterGainSetByCallerTest, "GSTNCombat.GAS.Damage.MeterGainSetByCaller", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageMeterGainSetByCallerTest, "GSTNCombat.GAS.Damage.MeterGainSetByCaller", DamageTestFlags)
 bool FGSTN_DamageMeterGainSetByCallerTest::RunTest(const FString& Parameters)
 {
 	GSTNCombatGASTest::FRig Rig;
 	const FGameplayAttribute Ex = UGSTN_MeterAttributeSet::GetExMeterAttribute();
-	const float Max = Base(*Rig.ASC, UGSTN_MeterAttributeSet::GetExMeterMaxAttribute());
-	TestTrue(TEXT("the meter starts empty and has room"), Max > 40.f && Base(*Rig.ASC, Ex) == 0.f);
+	const float Max = DamageBase(*Rig.ASC, UGSTN_MeterAttributeSet::GetExMeterMaxAttribute());
+	TestTrue(TEXT("the meter starts empty and has room"), Max > 40.f && DamageBase(*Rig.ASC, Ex) == 0.f);
 
 	auto Gain = [&Rig](float Amount)
 	{
@@ -205,15 +205,15 @@ bool FGSTN_DamageMeterGainSetByCallerTest::RunTest(const FString& Parameters)
 	};
 
 	Gain(40.f);
-	TestEqual(TEXT("the meter gains the set-by-caller amount"), Base(*Rig.ASC, Ex), 40.f);
+	TestEqual(TEXT("the meter gains the set-by-caller amount"), DamageBase(*Rig.ASC, Ex), 40.f);
 	Gain(10.f);
-	TestEqual(TEXT("and gains again on top"), Base(*Rig.ASC, Ex), 50.f);
+	TestEqual(TEXT("and gains again on top"), DamageBase(*Rig.ASC, Ex), 50.f);
 	Gain(Max * 10.f);
-	TestEqual(TEXT("an overfill stops at the maximum"), Base(*Rig.ASC, Ex), Max);
+	TestEqual(TEXT("an overfill stops at the maximum"), DamageBase(*Rig.ASC, Ex), Max);
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageRulesComponentHostAppliesWithoutOnRepTest, "GSTNCombat.GAS.Damage.RulesComponentHostAppliesWithoutOnRep", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageRulesComponentHostAppliesWithoutOnRepTest, "GSTNCombat.GAS.Damage.RulesComponentHostAppliesWithoutOnRep", DamageTestFlags)
 bool FGSTN_DamageRulesComponentHostAppliesWithoutOnRepTest::RunTest(const FString& Parameters)
 {
 	GSTNCombatGASTest::FRig Rig;
@@ -238,7 +238,7 @@ bool FGSTN_DamageRulesComponentHostAppliesWithoutOnRepTest::RunTest(const FStrin
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageTagsRegisteredAndDocumentedTest, "GSTNCombat.GAS.Damage.TagsRegisteredAndDocumented", TestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DamageTagsRegisteredAndDocumentedTest, "GSTNCombat.GAS.Damage.TagsRegisteredAndDocumented", DamageTestFlags)
 bool FGSTN_DamageTagsRegisteredAndDocumentedTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Declared;

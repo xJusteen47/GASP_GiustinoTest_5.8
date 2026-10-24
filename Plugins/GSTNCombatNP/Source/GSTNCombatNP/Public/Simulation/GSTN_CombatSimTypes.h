@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Jump/GSTN_JumpTypes.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
+#include "Simulation/GSTN_CombatHitState.h"
 #include "Simulation/GSTN_InputSimTypes.h"
 #include "Sync/GSTN_SyncFragment.h"
 #include "NetworkPredictionReplicationProxy.h"
@@ -62,12 +63,29 @@ struct FGSTN_CombatSyncCore
 	/** The requests of the frame being simulated; PruneBefore at the top of every frame keeps older ones off the wire */
 	FGSTN_CombatRequests Requests;
 
+	/**
+	 * The hit part (combat-m4-hits 11): the attacker's targets and move origin, the victim's windows and pending launch. Its fields
+	 * expire by their own end frames, so it belongs to the action part only while something in it is live (IsActionPartDefault)
+	 */
+	FGSTN_HitSyncState Hit;
+
+	/** The frame and timeline facts the hit part needs to tell live fields from expired ones */
+	FGSTN_HitLiveContext GetHitContext() const
+	{
+		FGSTN_HitLiveContext Context;
+		Context.Frame = Input.History.GetLatestFrame();
+		Context.bInTimeline = ActionState == EGSTN_ActionState::InTimeline;
+		Context.TimelineStartFrame = TimelineStartFrame;
+		Context.HitstopEndFrame = HitstopEndFrame;
+		return Context;
+	}
+
 	/** True when every field of the action part holds its default (an idle combatant that never had a loadout applied) */
 	bool IsActionPartDefault() const
 	{
 		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
 			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && ActiveWeaponIndex == 0
-			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty();
+			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty() && Hit.IsDefault(GetHitContext());
 	}
 
 	/**
@@ -96,7 +114,7 @@ struct FGSTN_CombatSyncCore
 		}
 
 		uint8 Action = static_cast<uint8>(ActionState);
-		Ar.SerializeBits(&Action, 2);
+		Ar.SerializeBits(&Action, 3);
 		uint8 Source = static_cast<uint8>(ActiveSource);
 		Ar.SerializeBits(&Source, 2);
 		// +1 so that INDEX_NONE (-1) is 0 and the packed form stays small
@@ -128,6 +146,9 @@ struct FGSTN_CombatSyncCore
 			TimelinePausedFrames = static_cast<int32>(Paused);
 			PausedFramesTotal = static_cast<int32>(PausedTotal);
 		}
+
+		// After the fields it reads its context from: the loaded state has them by now
+		Hit.NetSerialize(Ar, GetHitContext());
 	}
 
 	void ResetActionPart()
@@ -142,6 +163,7 @@ struct FGSTN_CombatSyncCore
 		LoadoutRevision = 0;
 		TableRevision = 0;
 		Requests = FGSTN_CombatRequests();
+		Hit = FGSTN_HitSyncState();
 	}
 
 	bool ShouldReconcile(const FGSTN_CombatSyncCore& AuthorityState) const
@@ -164,6 +186,8 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(LoadoutRevision != AuthorityState.LoadoutRevision, "LoadoutRevision:");
 		UE_NP_TRACE_RECONCILE(TableRevision != AuthorityState.TableRevision, "TableRevision:");
 		UE_NP_TRACE_RECONCILE(!(Requests == AuthorityState.Requests), "Requests:");
+		// Compared in canonical form: a window that ran out is not a difference, and the quantised fields compare as integers
+		UE_NP_TRACE_RECONCILE(!(Hit.Canonical(GetHitContext()) == AuthorityState.Hit.Canonical(AuthorityState.GetHitContext())), "Hit:");
 		return false;
 	}
 
@@ -179,6 +203,7 @@ struct FGSTN_CombatSyncCore
 		{
 			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Weapon: %d Loadout: %d Table: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision), static_cast<int32>(TableRevision));
 			Requests.ToString(Out);
+			Hit.Canonical(GetHitContext()).ToString(Out);
 		}
 		Out.Append("\n");
 	}
@@ -219,10 +244,11 @@ struct FGSTN_CombatSyncState
 		FGSTN_SyncFragmentList::ToString(Fragments, Out);
 	}
 
-	/** The fixed part is discrete: interpolated proxies just take the newer frame. Fragments may blend (FGSTN_SyncFragment::Interpolate) */
+	/** The fixed part is discrete: interpolated proxies just take the newer frame, except the move origin of the hit part, which blends. Fragments may blend (FGSTN_SyncFragment::Interpolate) */
 	void Interpolate(const FGSTN_CombatSyncState* From, const FGSTN_CombatSyncState* To, float PCT)
 	{
 		Core = To->Core;
+		Core.Hit = FGSTN_HitSyncState::Interpolated(From ? &From->Core.Hit : nullptr, To->Core.Hit, PCT);
 		FGSTN_SyncFragmentList::Interpolate(Fragments, From ? &From->Fragments : nullptr, To->Fragments, PCT);
 	}
 };

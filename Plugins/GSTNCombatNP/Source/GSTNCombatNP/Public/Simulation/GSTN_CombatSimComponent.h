@@ -16,6 +16,7 @@
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
+#include "Simulation/GSTN_HitInbox.h"
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "StructUtils/InstancedStruct.h"
@@ -78,6 +79,29 @@ public:
 	void ProduceInput(const int32 DeltaTimeMS, FGSTN_InputCmd* Cmd);
 	void SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_CombatStateTypes>& Input, const TNetSimOutput<FGSTN_CombatStateTypes>& Output);
 	void FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux);
+
+	/**
+	 * Network Prediction calls it on every instance of the model, whenever the simulation rolls back to a state. Drops the hits that
+	 * were written for frames the re-simulation will run again (their attackers write them again)
+	 */
+	void RestoreFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux);
+
+	/**
+	 * Whether this instance runs the combat tick on this machine: the authority and the locally controlled pawn do, an interpolated
+	 * simulated proxy never does. This is where hits are delivered, not a branch of the simulation: nothing a tick computes depends on it
+	 */
+	bool TicksOnThisMachine() const;
+
+	/**
+	 * Delivers a hit to this victim (combat-m4-hits 7). Written only where the instance ticks, so a client never queues a hit for a
+	 * remote victim it only interpolates. @return false when nothing was queued
+	 */
+	bool PostHit(const FGSTN_HitInboxEntry& Entry);
+
+	/** The victim side's drain at the start of its combat tick of Frame: the entries stamped before it, in (AttackerId, hitbox) order, appended to Out */
+	void DrainHitInbox(int32 Frame, TArray<FGSTN_HitInboxEntry>& Out) { HitInbox.Drain(Frame, Out); }
+
+	const FGSTN_HitInbox& GetHitInbox() const { return HitInbox; }
 
 	// IGSTN_InputSimHost
 	virtual float GetFacingYaw() const override;
@@ -398,6 +422,9 @@ private:
 		uint16 Pitch = 0;
 	};
 	FFrameAim FrameAim;
+
+	/** Hits waiting for this victim's next tick. Local data, not sync state: the attackers' re-simulation rebuilds it after a rollback */
+	FGSTN_HitInbox HitInbox;
 
 	// Input production only (owning machine), not simulation state
 	uint32 ScriptedButtons = 0;
