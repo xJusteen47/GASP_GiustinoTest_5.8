@@ -1008,12 +1008,18 @@ class _Run:
         return step
 
 
-_FORCES_RECONCILES = ('combat_spike', 'combat_lock', 'spike_stats', 'spike_triggers')
+_FORCES_RECONCILES = ('combat_spike', 'combat_lock', 'spike_stats', 'spike_triggers', 'hitstop_montage')
 
 
 def last_checks():
     """(verdict, [(ok, label, detail)]) of the last strict scenario (ok None = a note, not a check)."""
     return _last_run['verdict'], _last_run['results']
+
+
+def spread_in(run, side, t0, t1):
+    """Largest distance between two simulation-tick positions of `side` in [t0, t1] (cm); 1e9 without samples."""
+    pts = [x['loc'] for x in run._win(side, t0, t1, sim=True)]
+    return max((sum((a - b) ** 2 for a, b in zip(p, q)) ** 0.5 for p in pts for q in pts), default=1e9)
 
 
 def scenario_combat_spike(client=1, dash_button='Dash'):
@@ -1026,8 +1032,9 @@ def scenario_combat_spike(client=1, dash_button='Dash'):
     dash = button_mask(dash_button)
     try:
         hs = _combat_comp(client).get_editor_property('hitstop_test_button')
+        hs_frames = int(_combat_comp(client).get_editor_property('hitstop_test_frames'))
     except Exception:
-        hs = -1
+        hs, hs_frames = -1, 8
     run = _Run('combat_spike', client)
 
     def dash_checks(t0, t1):
@@ -1051,6 +1058,9 @@ def scenario_combat_spike(client=1, dash_button='Dash'):
     if hs >= 0:
         steps += [(1.6, lambda: ('hitstop', combat_tap(client, 1 << hs))),
                   (1.7, lambda: ('force reconcile during hitstop', force_reconcile(client, 10)))]
+        # The window is real (H7): the pawn is held still by the Mover freeze, the same on both machines, and moves again afterwards
+        window = hs_frames / 60.0
+        steps += [(2.3, run.at('hitstop: the pawn stood still in the window (owner)', lambda: (spread_in(run, 'cli', 1.6 + 0.05, 1.6 + window - 0.02) < 2.0, f"spread {spread_in(run, 'cli', 1.6 + 0.05, 1.6 + window - 0.02):.1f} cm")))]
     else:
         run.note('hitstop step skipped: HitstopTestButton is unset on the combat component')
     run.run(steps)
@@ -3318,9 +3328,246 @@ def scenario_wait_frames(client=1):
     run.run(steps)
 
 
+# ---- M4 H7 hitstop and freeze scenarios (combat-m4-hits 8). The debug hitstop button now opens the real window: the combat tick adds the
+# paused frames, pauses a playing synced montage, and asks the ability system for a Mover freeze (FGSTN_LayeredMove_Freeze) as long as the window.
+MONTAGE_BENCH = '/Game/Characters/UEFN_Mannequin/Animations/Interactions/Bench/M_interaction_bench_into_BR_LFoot_Montage'
+
+
+def _set_hitstop_debug(client, frames, montage=None):
+    """Window length and montage of the debug hitstop button, on the authority's copy and the owner's copy of the client's pawn (UFUNCTION setters:
+    a live component must not be edited with set_editor_property). montage None clears it."""
+    key = key_of_player(client)
+    for wi in sorted({0, client}):
+        c = comps(worlds()[wi]).get(key)
+        if c is None:
+            continue
+        combat = c.get_owner().get_component_by_class(unreal.GSTN_CombatSimComponent)
+        combat.set_hitstop_test_frames(frames)
+        combat.set_hitstop_test_montage(montage)
+
+
+def _montage_info(wi, key):
+    """(playing, time, latestFrame, hitstopStart, hitstopEnd) of the synced montage on world wi's copy of the pawn, or None"""
+    c = comps(worlds()[wi]).get(key)
+    if c is None:
+        return None
+    p = c.get_owner().get_component_by_class(unreal.GSTN_CombatSimComponent).get_hitstop_montage_info().split(',')
+    return int(p[0]), float(p[1]), int(p[2]), int(p[3]), int(p[4])
+
+
+def scenario_hitstop_montage(client=1, frames=40):
+    """H0c as a scenario: the debug hitstop button starts a synced montage on the frame it opens a window of `frames` frames. The montage holds
+    through the window and resumes after it; a reconcile forced inside the window leaves the montage time of the owner equal to the authority's
+    for every frame both have simulated (the per-frame trace of the combat component, GetHitstopMontageTrace; the window itself is read per editor tick)."""
+    run = _Run('hitstop_montage', client, judge_reconciles=False)
+    key, rec, h = run.key, [], {'h': None}
+    stop = 1 << 20
+
+    def sample(_dt):
+        try:
+            rec.append((run.now(), _montage_info(0, key), _montage_info(client, key)))
+        except Exception:
+            pass
+
+    def stop_sampling():
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+        return 'sampling stopped'
+
+    def begin():
+        _set_hitstop_debug(client, frames, unreal.load_asset(MONTAGE_BENCH))
+        h['h'] = unreal.register_slate_post_tick_callback(sample)
+        return 'montage set'
+
+    def trace(wi):
+        """{frame: montage time} the combat component recorded for every simulated frame (a re-simulated frame overwrites its entry)"""
+        c = comps(worlds()[wi]).get(key)
+        text = c.get_owner().get_component_by_class(unreal.GSTN_CombatSimComponent).get_hitstop_montage_trace()
+        return {int(f): float(t) for f, t in (e.split(':') for e in text.split(';') if e)}
+
+    def window():
+        for _, a, _b in rec:
+            if a and a[3] != -1 and a[4] > a[3] and a[0]:
+                return a[3], a[4]
+        return None
+
+    def both_played():
+        w = window()
+        return w is not None, f'authority window {w}'
+
+    def equal():
+        a, b = trace(0), trace(client)
+        common = sorted(set(a) & set(b))
+        worst = max((abs(a[f] - b[f]) for f in common), default=1e9)
+        return len(common) >= 40 and worst <= 0.001, f'{len(common)} frames compared, max difference {worst:.4f} s'
+
+    def held():
+        w, a = window(), trace(0)
+        if w is None:
+            return False, 'no window'
+        inside = [a[f] for f in sorted(a) if w[0] < f < w[1]]
+        after = [a[f] for f in sorted(a) if f >= w[1] + 3]
+        ok = len(inside) >= 20 and max(inside) - min(inside) <= 0.001 and bool(after) and max(after) > max(inside) + 0.03
+        return ok, f'window {w}: {len(inside)} frames inside, span {(max(inside) - min(inside)) if inside else -1:.4f} s, after the window up to {max(after) if after else -1:.3f} s'
+
+    def never_back():
+        bad = []
+        for name, d in (('authority', trace(0)), ('owner', trace(client))):
+            ts = [d[f] for f in sorted(d) if d[f] >= 0]
+            bad += [name for x, y in zip(ts, ts[1:]) if y < x - 0.0005]
+        return not bad, f'{len(bad)} backward steps ({set(bad)}) in the authority and owner montage times'
+
+    steps = [
+        (0.3, lambda: ('clear', combat_clear(client))),
+        (0.5, begin),
+        (1.0, lambda: ('hitstop + montage', combat_tap(client, stop))),
+        (1.0 + 0.25, lambda: ('force reconcile inside the window', force_reconcile(client, 15))),
+        (1.0 + frames / 60.0 + 1.0, stop_sampling),
+        (1.0 + frames / 60.0 + 1.2, run.at('the window opened with a montage playing', both_played)),
+        (1.0 + frames / 60.0 + 1.2, run.at('the montage held through the window and resumed after it (authority)', held)),
+        (1.0 + frames / 60.0 + 1.2, run.at('owner and authority agree on the montage time per frame after the forced reconcile', equal)),
+        (1.0 + frames / 60.0 + 1.2, run.at('the montage time never went back', never_back)),
+        (1.0 + frames / 60.0 + 1.4, lambda: ('restore', _set_hitstop_debug(client, 8, None))),
+        (1.0 + frames / 60.0 + 1.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_hit_on_wall(client=1, wall_x=1010.0, wall_y=-880.0, frames=90):
+    """First half of the wall scenario of the hits milestone: a hitstop freeze while the pawn is on the wall. The pawn is put in front of the wall
+    (the geometry of scenario_jump_wall), jumps at it and, as soon as it is WallSliding, the debug window of `frames` frames opens. In the window
+    the stick is held away from the wall and jump is pressed: without the wall lock that is a pull-away detach and a wall jump. Wanted: the pawn stays
+    WallSliding and does not move through the window on both machines, is still WallSliding after it, and both copies stand in the same place."""
+    run = _Run('hit_on_wall', client, judge_reconciles=False)
+    stop, ia_move = 1 << 20, unreal.load_asset(IA['move'])
+    st, h, win = {'phase': 'idle', 'tw': None, 'reached': False}, {'h': None}, frames / 60.0
+
+    def setup():
+        _set_hitstop_debug(client, frames, None)
+        c = comps(worlds()[0])[run.key]
+        sp = c.get_spawn_location()
+        c.server_reset_to_spawn(unreal.Vector(680.0 - sp.x, wall_y - sp.y, 0.0))
+        return 'in front of the wall'
+
+    def finish_driver(comp):
+        comp.stop_holding_input(ia_move)
+        st['phase'] = 'done'
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+
+    def drive(_dt):
+        try:
+            now = run.now()
+            _, pawn = _local_pawn(client)
+            comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
+            mode = str(pawn.get_component_by_class(unreal.CharacterMoverComponent).get_movement_mode_name())
+            x, ph = pawn.get_actor_location().x, st['phase']
+            into = (wall_x + 200.0, wall_y)
+            if ph == 'walk':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
+                if wall_x - x < 130.0 and mode == 'Walking':
+                    press(client, 'jump')
+                    st.update(phase='air', t1=now)
+                elif now - st['t1'] > 6.0:
+                    finish_driver(comp)
+            elif ph == 'air':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
+                if mode == 'WallSliding':
+                    st.update(phase='window', tw=now, reached=True)
+                    combat_tap(client, stop)
+                elif now - st['t1'] > 2.5:
+                    finish_driver(comp)
+            elif ph == 'window':
+                dt = now - st['tw']
+                if dt > 0.4:
+                    comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, (wall_x - 400.0, wall_y))))     # away from the wall
+                if dt > 0.7 and not st.get('jumped'):
+                    st['jumped'] = True
+                    press(client, 'jump')
+                if dt > win + 0.1:
+                    comp.stop_holding_input(ia_move)
+                    st['phase'] = 'after'
+            elif ph == 'after':
+                if now - st['tw'] > win + 0.8:
+                    finish_driver(comp)
+        except Exception as e:
+            unreal.log_error(f'GASNPP hit_on_wall driver: {e}')
+            st['phase'] = 'done'
+
+    def start_driver():
+        st.update(phase='walk', t1=run.now())
+        h['h'] = unreal.register_slate_post_tick_callback(drive)
+        return 'driving'
+
+    def locs(side, t0, t1):
+        return [s['loc'] for s in run._win(side, t0, t1, sim=True)]
+
+    def spread(pts):
+        return max((sum((a - b) ** 2 for a, b in zip(p, q)) ** 0.5 for p in pts for q in pts), default=1e9) if pts else 1e9
+
+    def on_wall():
+        return st['reached'], f"reached the wall: {st['reached']}"
+
+    def held_mode():
+        tw = st['tw']
+        if tw is None:
+            return False, 'never on the wall'
+        out, ok = [], True
+        for side in ('srv', 'cli'):
+            modes = [s['mode'] for s in run._win(side, tw + 0.45, tw + win - 0.1, sim=True)]
+            good = bool(modes) and all(m == 'WallSliding' for m in modes)
+            ok &= good
+            out.append(f'{side}: {len(modes)} samples, modes {sorted(set(modes))}')
+        return ok, '; '.join(out)
+
+    def held_still():
+        tw = st['tw']
+        if tw is None:
+            return False, 'never on the wall'
+        a, b = spread(locs('srv', tw + 0.45, tw + win - 0.1)), spread(locs('cli', tw + 0.45, tw + win - 0.1))
+        return a < 3.0 and b < 6.0, f'spread of the position in the window: authority {a:.1f} cm, owner {b:.1f} cm'
+
+    def still_on_wall_after():
+        tw = st['tw']
+        if tw is None:
+            return False, 'never on the wall'
+        out, ok = [], True
+        for side in ('srv', 'cli'):
+            modes = [s['mode'] for s in run._win(side, tw + win + 0.05, tw + win + 0.5, sim=True)]
+            ok &= bool(modes) and all(m == 'WallSliding' for m in modes)
+            out.append(f'{side}: modes after the window {sorted(set(modes))}')
+        return ok, '; '.join(out)
+
+    def same_place():
+        tw = st['tw']
+        if tw is None:
+            return False, 'never on the wall'
+        a, b = locs('srv', tw + win - 0.3, tw + win - 0.1), locs('cli', tw + win - 0.3, tw + win - 0.1)
+        d = sum((x - y) ** 2 for x, y in zip(a[-1], b[-1])) ** 0.5 if a and b else 1e9
+        return d < 6.0, f'authority {a[-1] if a else None}, owner {b[-1] if b else None}: {d:.1f} cm apart'
+
+    t_end = 1.5 + 6.0 + win + 1.5
+    steps = [
+        (0.3, lambda: ('clear', combat_clear(client))),
+        (0.5, setup),
+        (2.5, start_driver),
+        (t_end, lambda: ('restore', _set_hitstop_debug(client, 8, None))),
+        (t_end, run.at('the pawn reached the wall', on_wall)),
+        (t_end, run.at('WallSliding through the whole window on both, away-stick and jump press included', held_mode)),
+        (t_end, run.at('the pawn did not move in the window', held_still)),
+        (t_end, run.at('still WallSliding after the window', still_on_wall_after)),
+        (t_end, run.at('both copies stand in the same place at the end of the window', same_place)),
+        (t_end + 0.3, run.finish()),
+    ]
+    run.run(steps)
+
+
+
 # ---- Suite runner (C15): runs scenarios that report through _Run one after the other inside a single editor tick callback, so one python call
 # starts the whole batch and a later one reads suite_report(). reset_all() and a settle pause come before each; a scenario that does not
-# report within its timeout is recorded as TIMEOUT and the suite moves on. loadout_change goes last (its loadout outlives the scenario).
+# report within its timeout is recorded as TIMEOUT and the suite moves on. loadout_change goes next to last (its loadout outlives the scenario), then hit_on_wall and hitstop_montage: after hit_on_wall and after the 12 s montage of hitstop_montage the next scenario failed (command_set landing z, jump_squat rising tick), so nothing runs after them.
 # The scenarios that walk (weapon_switch, combat_context) come first: the later ones dash and drift the pawn into the corner of the map, and a
 # pawn against the wall cannot walk. The suite also walks the pawn back to where it started before each scenario.
 # One lane per pawn, 15 m apart: a dodge or a knockback moves a pawn a few metres, never far enough to reach a neighbour (the lanes were 5 m apart
@@ -3376,7 +3623,7 @@ def lanes_settled(targets):
 SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
                  'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
                  'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'dodge_blocked_in_hitstun', 'kit_without_dodge', 'interact_tap_hold',
-                 'hitstop', 'jump_squat', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'spike_stats', 'spike_grants', 'slide_jump', 'loadout_change']
+                 'hitstop', 'jump_squat', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'spike_stats', 'spike_grants', 'slide_jump', 'loadout_change', 'hit_on_wall', 'hitstop_montage']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 

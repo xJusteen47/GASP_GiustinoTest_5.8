@@ -10,6 +10,7 @@
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "Animation/AnimMontage.h"
 #include "AttributeSet.h"
 #include "GSTN_CombatNPTags.h"
 #include "Movement/GSTN_LayeredMove_Freeze.h"
@@ -800,6 +801,10 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		OutSync.Core.HitstopEndFrame = Frame + HitstopTestFrames;
 		// The Mover half of the window: the freeze runs for as many frames as the window, from this frame (the ability system's pre-tick executes it)
 		OutSync.Core.Requests.Add(EGSTN_RequestType::Freeze, Frame, static_cast<int16>(HitstopTestFrames));
+		if (HitstopTestMontage && AbilitySystem)
+		{
+			AbilitySystem->PlaySyncedMontage(HitstopTestMontage, 0.f, 1.f, NAME_None, 0.f);
+		}
 	}
 
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
@@ -913,6 +918,28 @@ void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, 
 	FGSTN_InputHostUtils::PublishOutbox(EventOutbox, GetOwner());
 }
 
+FString UGSTN_CombatSimComponent::GetHitstopMontageTrace() const
+{
+	TArray<int32> Frames;
+	HitstopMontageTrace.GetKeys(Frames);
+	Frames.Sort();
+	FString Out;
+	for (const int32 Frame : Frames)
+	{
+		Out += FString::Printf(TEXT("%d:%.4f;"), Frame, HitstopMontageTrace[Frame]);
+	}
+	return Out;
+}
+
+FString UGSTN_CombatSimComponent::GetHitstopMontageInfo() const
+{
+	const FGSTN_CombatSyncState* Sync = GetSyncState();
+	float Time = -1.f;
+	const bool bPlaying = AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) != nullptr;
+	return FString::Printf(TEXT("%d,%.4f,%d,%d,%d"), bPlaying ? 1 : 0, Time, Sync ? Sync->Core.Input.History.GetLatestFrame() : -1,
+		Sync ? Sync->Core.HitstopStartFrame : -1, Sync ? Sync->Core.HitstopEndFrame : -1);
+}
+
 void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect, int32 Frames, float StepMs)
 {
 	if (!AbilitySystem || !Effect || Frames <= 0)
@@ -1018,5 +1045,13 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	else if (Frame == Sync->Core.HitstopEndFrame)
 	{
 		AbilitySystem->ResumeCurrentSyncedMontage();
+	}
+
+	if (HitstopTestMontage)
+	{
+		float Time = -1.f;
+		AbilitySystem->GetPlayingSyncedMontage(Time);
+		HitstopMontageTrace.Add(Frame, Time);
+		HitstopMontageTrace.Remove(Frame - 256);
 	}
 }

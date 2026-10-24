@@ -33,6 +33,7 @@ class UGSTN_InputConfig;
 class UGSTN_InputContextProvider;
 class UGSTN_LoadoutComponent;
 class UGSTN_MoverSimStateTracker;
+class UAnimMontage;
 class UGameplayEffect;
 class UMoverComponent;
 class UNpAbilitySystemComponent;
@@ -289,6 +290,33 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "1"))
 	int32 HitstopTestFrames = 8;
 
+	/** Setter for the harness (see HitstopTestMontage): the length of the window the debug button opens */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	void SetHitstopTestFrames(int32 Frames) { HitstopTestFrames = FMath::Max(Frames, 1); }
+
+	/**
+	 * Montage the debug hitstop button starts on the same frame as the window (a synced montage, so it holds through the window like an
+	 * attack's). None = no montage. The harness sets it from Python through SetHitstopTestMontage (a live component must not be edited
+	 * with set_editor_property)
+	 */
+	UPROPERTY(EditAnywhere, Category = "Combat|Spike")
+	TObjectPtr<UAnimMontage> HitstopTestMontage = nullptr;
+
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	void SetHitstopTestMontage(UAnimMontage* Montage) { HitstopTestMontage = Montage; }
+
+	/** "playing,time,latestFrame,hitstopStart,hitstopEnd" of the synced montage and the window, for the harness: the same on the authority and the owner while the window is open */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	FString GetHitstopMontageInfo() const;
+
+	/**
+	 * "frame:time;frame:time;..." of the synced montage after each simulated frame (the last 256), written while HitstopTestMontage is set. A
+	 * re-simulated frame overwrites its entry, so the owner's trace after a reconcile is comparable with the authority's frame by frame, however
+	 * rarely the editor ticks
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	FString GetHitstopMontageTrace() const;
+
 	/**
 	 * Instant effect a Freeze request applies to this entity (combat-m4-hits 8): holds its Mover still for the window and restores the
 	 * velocity afterwards. Replace it with UGSTN_GE_FreezeZeroVelocity for a victim that leaves the freeze at rest. The duration travels
@@ -380,6 +408,9 @@ private:
 
 	/** Applies the freeze effect for Frames frames of StepMs each. Only from the ability system's pre-tick (rule 2: Mover is moved through a queued move) */
 	void ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect, int32 Frames, float StepMs);
+
+	/** Montage time per frame, see GetHitstopMontageTrace. Debug only: never read by the simulation */
+	TMap<int32, float> HitstopMontageTrace;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
