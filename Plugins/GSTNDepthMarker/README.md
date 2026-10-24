@@ -96,9 +96,21 @@ The approach marker never depends on the ground below: with no primary surface, 
 
 None declared (spec §6.4). The target filter reads `Surface.Behaviour.*` through a `FGameplayTagQuery` the caller supplies.
 
+## Toy look (prototype)
+
+A second, selectable look (`UGSTN_DepthMarkerStyle::PopulateToyPresenters`): a fake light along gravity. On a surface: a stained-glass
+decal (dark silhouette, coloured core) plus a tapered beam (`UGSTN_DepthPresenter_Cone`, tip at the character). In the air (no-ground
+ring, above, approach marker): the beam ends in a fog puff (`UGSTN_DepthPresenter_FogPuff`, camera-facing or plane-aligned quad).
+Colour per player: the settings `PlayerPalette` (red, blue, yellow, green) indexed by the **alphabetical rank of the player names**
+(case-insensitive, tie-break by player id; `FGSTN_DepthToy::ColorRankOf`), then `TeamPalette`, then the style tint; the component's
+`TintOverride` always wins. Beam and puff take the colour through custom primitive data (layout in `FGSTN_DepthToy`, base index
+`ToyCustomPrimitiveDataBase`), no per-frame dynamic material; the decal keeps a dynamic material (decals cannot read it).
+The plugin ships no content: the project names `ToyStyle` in its own ini; the assets come from `Tools/DepthMarker/setup_depth_marker_toy_look.py`.
+`DefaultLook` (Classic or Toy) is the default; `gstn.DepthMarker.Style toy|classic` overrides it per machine at runtime.
+
 ## Console variables
 
-`gstn.DepthMarker.Enable`, `gstn.DepthMarker.MaxMarkers`, `gstn.DepthMarker.TracesPerFrame` (negative = the settings). `.Debug` and
+`gstn.DepthMarker.Enable`, `gstn.DepthMarker.MaxMarkers`, `gstn.DepthMarker.TracesPerFrame` (negative = the settings), `gstn.DepthMarker.Style` (`toy`, `classic`, empty = settings). `.Debug` and
 `.Stats` of the spec are not built.
 
 ## Tests

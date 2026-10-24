@@ -13,6 +13,16 @@ class UGSTN_DepthTargetSelector;
 class UMaterialInterface;
 class UStaticMesh;
 
+/** Which look a machine uses by default (the console variable gstn.DepthMarker.Style toy|classic overrides it) */
+UENUM(BlueprintType)
+enum class EGSTN_DepthLook : uint8
+{
+	/** The current look: a component's style, DefaultStyle, then the built-in primitives */
+	Classic,
+	/** The toy look (ToyStyle): beam, fog puff, stained-glass decal, per player colours */
+	Toy
+};
+
 /**
  * Project Settings > Plugins > GSTN Depth Marker. Defaults ship in the plugin Config/DefaultGSTNDepthMarker.ini; a project
  * overrides them in its own Config/DefaultGSTNDepthMarker.ini. Presentation only: every machine may use different values
@@ -47,6 +57,35 @@ public:
 	/** The look used when a component names none. Empty = the built-in look made of engine primitives */
 	UPROPERTY(Config, EditAnywhere, Category = "Look")
 	TSoftObjectPtr<UGSTN_DepthMarkerStyle> DefaultStyle;
+
+	/** Default look when no console variable asks for one. Classic until the toy look has been checked */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy")
+	EGSTN_DepthLook DefaultLook = EGSTN_DepthLook::Classic;
+
+	/** The toy style asset (a project names its own /Game path in its Config; the plugin ships no content) */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy")
+	TSoftObjectPtr<UGSTN_DepthMarkerStyle> ToyStyle;
+
+	/** Mesh of the beam: a cone with its tip at local +Z (the bounds are read, any pivot works) */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy")
+	TSoftObjectPtr<UStaticMesh> ToyBeamMesh;
+
+	/** Mesh of the fog puff: a quad facing local +Z */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy")
+	TSoftObjectPtr<UStaticMesh> ToyPuffMesh;
+
+	/** First custom primitive data float the toy materials read (13 floats: colour, opacity, beam start, beam end) */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy", meta = (ClampMin = "0"))
+	int32 ToyCustomPrimitiveDataBase = 0;
+
+	/** Colour of the player by colour rank (alphabetical order of the players' names): red, blue, yellow, green. Extend freely; ranks wrap */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy")
+	TArray<FLinearColor> PlayerPalette = { FLinearColor(0.9f, 0.1f, 0.08f), FLinearColor(0.12f, 0.38f, 1.f),
+		FLinearColor(1.f, 0.82f, 0.05f), FLinearColor(0.15f, 0.8f, 0.22f) };
+
+	/** Colour by team id for pawns that have no player (AI, allies without a player state) */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy")
+	TMap<int32, FLinearColor> TeamPalette;
 
 	/** The selector used when a component brings none. Empty = the gravity selector */
 	UPROPERTY(Config, EditAnywhere, Category = "Look")

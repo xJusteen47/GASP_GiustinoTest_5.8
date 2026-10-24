@@ -47,6 +47,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Style", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float OccludedAlpha = 0.3f;
 
+	/** Tint comes from the settings' player palette (colour rank by player name) instead of DefaultTint; a component override still wins */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Style")
+	bool bUsePlayerPalette = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Style")
 	EGSTN_DepthLinkPolicy LinkPolicy = EGSTN_DepthLinkPolicy::Hide;
 
@@ -57,6 +61,14 @@ public:
 	/** The built-in approach look: a ring and a dashed line in another colour, drawn in the Approach state of the approach layer */
 	UFUNCTION(BlueprintCallable, Category = "DepthMarker")
 	void PopulateApproachPresenters();
+
+	/** The toy look: stained-glass decal and beam on a surface, beam and fog puff in the air. Materials are set by the asset (setup script) */
+	UFUNCTION(BlueprintCallable, Category = "DepthMarker")
+	void PopulateToyPresenters();
+
+	/** The toy approach look: beam and fog puff */
+	UFUNCTION(BlueprintCallable, Category = "DepthMarker")
+	void PopulateToyApproachPresenters();
 
 	/** Problems of the style as text; runtime-safe (an Editor module can wrap it in the data validator). True when none */
 	bool Validate(TArray<FText>& OutErrors) const;

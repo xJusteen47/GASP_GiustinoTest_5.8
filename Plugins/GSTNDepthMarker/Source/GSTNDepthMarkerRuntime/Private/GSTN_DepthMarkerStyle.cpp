@@ -1,6 +1,7 @@
 #include "GSTN_DepthMarkerStyle.h"
 
 #include "GSTN_DepthMarkerPresenter.h"
+#include "GSTN_DepthMarkerToy.h"
 
 void UGSTN_DepthMarkerStyle::PopulateDefaultPresenters()
 {
@@ -59,6 +60,53 @@ void UGSTN_DepthMarkerStyle::PopulateApproachPresenters()
 	Plane->Layer = EGSTN_DepthLayer::Approach;
 	Plane->ActiveStates = { EGSTN_DepthMarkerState::Approach };
 	Presenters.Add(Plane);
+}
+
+void UGSTN_DepthMarkerStyle::PopulateToyPresenters()
+{
+	Presenters.Reset();
+	bUsePlayerPalette = true;
+	const TArray<EGSTN_DepthMarkerState> BelowStates = { EGSTN_DepthMarkerState::Ground, EGSTN_DepthMarkerState::EdgeHold, EGSTN_DepthMarkerState::NoGround };
+
+	UGSTN_DepthPresenter_Decal* Decal = NewObject<UGSTN_DepthPresenter_Decal>(this);
+	Decal->RadiusMultiplier = 1.8f;
+	Presenters.Add(Decal);
+
+	UGSTN_DepthPresenter_Cone* Beam = NewObject<UGSTN_DepthPresenter_Cone>(this);
+	Beam->ActiveStates = BelowStates;
+	Presenters.Add(Beam);
+
+	UGSTN_DepthPresenter_FogPuff* Puff = NewObject<UGSTN_DepthPresenter_FogPuff>(this);
+	Puff->ActiveStates = { EGSTN_DepthMarkerState::NoGround };
+	Presenters.Add(Puff);
+
+	UGSTN_DepthPresenter_Cone* AboveBeam = NewObject<UGSTN_DepthPresenter_Cone>(this);
+	AboveBeam->Layer = EGSTN_DepthLayer::Above;
+	AboveBeam->ActiveStates = { EGSTN_DepthMarkerState::AboveReference };
+	AboveBeam->AlphaScale = 0.6f;
+	Presenters.Add(AboveBeam);
+
+	UGSTN_DepthPresenter_FogPuff* AbovePuff = NewObject<UGSTN_DepthPresenter_FogPuff>(this);
+	AbovePuff->Layer = EGSTN_DepthLayer::Above;
+	AbovePuff->ActiveStates = { EGSTN_DepthMarkerState::AboveReference };
+	AbovePuff->AlphaScale = 0.6f;
+	Presenters.Add(AbovePuff);
+}
+
+void UGSTN_DepthMarkerStyle::PopulateToyApproachPresenters()
+{
+	Presenters.Reset();
+	bUsePlayerPalette = true;
+
+	UGSTN_DepthPresenter_Cone* Beam = NewObject<UGSTN_DepthPresenter_Cone>(this);
+	Beam->Layer = EGSTN_DepthLayer::Approach;
+	Beam->ActiveStates = { EGSTN_DepthMarkerState::Approach };
+	Presenters.Add(Beam);
+
+	UGSTN_DepthPresenter_FogPuff* Puff = NewObject<UGSTN_DepthPresenter_FogPuff>(this);
+	Puff->Layer = EGSTN_DepthLayer::Approach;
+	Puff->ActiveStates = { EGSTN_DepthMarkerState::Approach };
+	Presenters.Add(Puff);
 }
 
 bool UGSTN_DepthMarkerStyle::Validate(TArray<FText>& OutErrors) const

@@ -9,6 +9,9 @@
 #include "GSTN_DepthMarkerPresenter.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "GSTN_DepthMarkerStyle.h"
+#include "GSTN_DepthMarkerToy.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
 #include "GSTN_DepthSubject.h"
 #include "GSTN_DepthTargetSelector.h"
 #include "GameFramework/Pawn.h"
@@ -20,6 +23,39 @@ namespace GSTNDepthMarkerSubsystemPrivate
 	static TAutoConsoleVariable<int32> CVarEnable(TEXT("gstn.DepthMarker.Enable"), 1, TEXT("0 turns every depth marker off on this machine."));
 	static TAutoConsoleVariable<int32> CVarMaxMarkers(TEXT("gstn.DepthMarker.MaxMarkers"), -1, TEXT("Markers drawn at once; negative uses the settings."));
 	static TAutoConsoleVariable<int32> CVarTraces(TEXT("gstn.DepthMarker.TracesPerFrame"), -1, TEXT("Traces issued per frame; negative uses the settings."));
+
+	static TAutoConsoleVariable<FString> CVarStyle(TEXT("gstn.DepthMarker.Style"), TEXT(""),
+		TEXT("toy or classic: the look of the depth markers on this machine. Empty uses the settings (DefaultLook)."));
+
+	static FGSTN_DepthPlayerKey MakePlayerKey(const APlayerState* State)
+	{
+		FGSTN_DepthPlayerKey Key;
+		Key.Name = State->GetPlayerName();
+		// Only the tie-break between equal names: the replicated player id is unique in the session (the same on every machine)
+		Key.UniqueId = FString::Printf(TEXT("%010d"), State->GetPlayerId());
+		return Key;
+	}
+
+	/** Colour rank of the owner's player among the players of the game, INDEX_NONE for a pawn with no player state */
+	static int32 ColorRankOfOwner(const AActor* Owner)
+	{
+		const APawn* Pawn = Cast<APawn>(Owner);
+		const APlayerState* State = Pawn ? Pawn->GetPlayerState() : nullptr;
+		const AGameStateBase* GameState = Owner && Owner->GetWorld() ? Owner->GetWorld()->GetGameState() : nullptr;
+		if (!State || !GameState)
+		{
+			return INDEX_NONE;
+		}
+		TArray<FGSTN_DepthPlayerKey> Players;
+		for (const APlayerState* Other : GameState->PlayerArray)
+		{
+			if (Other && !Other->IsABot() && !Other->IsSpectator())
+			{
+				Players.Add(MakePlayerKey(Other));
+			}
+		}
+		return FGSTN_DepthToy::ColorRankOf(Players, MakePlayerKey(State));
+	}
 
 	/** What a trace answers: the user data of an async query is (marker id << 2) | kind */
 	enum class EQueryKind : uint32
@@ -308,6 +344,16 @@ UGSTN_DepthMarkerStyle* UGSTN_DepthMarkerSubsystem::ResolveStyle(const UGSTN_Dep
 	{
 		return Best->Style.Get();
 	}
+	const UGSTN_DepthMarkerSettings& Settings = UGSTN_DepthMarkerSettings::Get();
+	// The console variable is the A/B switch: toy wins over a component's style, classic ignores the toy default of the settings
+	const EGSTN_DepthLookRequest Request = FGSTN_DepthToy::ParseLookRequest(CVarStyle.GetValueOnGameThread());
+	if (Request == EGSTN_DepthLookRequest::Toy && !Settings.ToyStyle.IsNull())
+	{
+		if (UGSTN_DepthMarkerStyle* Toy = Settings.ToyStyle.LoadSynchronous())
+		{
+			return Toy;
+		}
+	}
 	if (!Component.Style.IsNull())
 	{
 		if (UGSTN_DepthMarkerStyle* Style = Component.Style.LoadSynchronous())
@@ -315,7 +361,13 @@ UGSTN_DepthMarkerStyle* UGSTN_DepthMarkerSubsystem::ResolveStyle(const UGSTN_Dep
 			return Style;
 		}
 	}
-	const UGSTN_DepthMarkerSettings& Settings = UGSTN_DepthMarkerSettings::Get();
+	if (Request == EGSTN_DepthLookRequest::None && Settings.DefaultLook == EGSTN_DepthLook::Toy && !Settings.ToyStyle.IsNull())
+	{
+		if (UGSTN_DepthMarkerStyle* Toy = Settings.ToyStyle.LoadSynchronous())
+		{
+			return Toy;
+		}
+	}
 	if (!Settings.DefaultStyle.IsNull())
 	{
 		if (UGSTN_DepthMarkerStyle* Style = Settings.DefaultStyle.LoadSynchronous())
@@ -758,9 +810,18 @@ void UGSTN_DepthMarkerSubsystem::DriveMarker(FMarker& Marker, double Time, bool 
 	View.Approach = Result.Approach;
 	View.TimeSeconds = static_cast<float>(FMath::Fmod(Time, 10000.0));
 
+	const UGSTN_DepthMarkerSettings& TintSettings = UGSTN_DepthMarkerSettings::Get();
+	const FLinearColor* TintOverride = Component->bOverrideTint ? &Component->TintOverride : nullptr;
+	// Colour of the player for the styles that ask for it: override, then alphabetical rank of the player, then team, then the style
+	const FLinearColor PlayerColor = FGSTN_DepthToy::ResolveColor(TintSettings.PlayerPalette, ColorRankOfOwner(Component->GetOwner()),
+		TintSettings.TeamPalette, Subject.TeamId, TintOverride, Style->DefaultTint);
 	if (Component->bOverrideTint)
 	{
 		View.Tint = Component->TintOverride;
+	}
+	else if (Style->bUsePlayerPalette)
+	{
+		View.Tint = PlayerColor;
 	}
 	else if (const FLinearColor* TeamTint = Style->TeamTints.Find(Subject.TeamId))
 	{
@@ -856,7 +917,7 @@ void UGSTN_DepthMarkerSubsystem::DriveMarker(FMarker& Marker, double Time, bool 
 		View.bApproachVisible = bAllowed;
 		View.ApproachAlpha = ApproachAlpha * Result.Approach.EdgeAlpha * FMath::Clamp(ApproachBlend, 0.f, 1.f);
 		View.ApproachRadiusScale = ApproachRadius;
-		View.ApproachTint = ApproachStyle->DefaultTint;
+		View.ApproachTint = ApproachStyle->bUsePlayerPalette ? PlayerColor : ApproachStyle->DefaultTint;
 	}
 	for (TStrongObjectPtr<UGSTN_DepthMarkerPresenter>& Presenter : Marker.ApproachPresenters)
 	{
