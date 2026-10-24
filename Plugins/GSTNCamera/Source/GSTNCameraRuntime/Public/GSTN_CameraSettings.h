@@ -31,7 +31,7 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "General")
 	bool bEnabled = true;
 
-	/** The rule set when neither the component nor the active section names one. Empty = the built-in table (Aim to Shoulder, InSection to the section mode, else Follow) */
+	/** The rule set when neither the component nor the active section names one. Empty = the built-in table (Aim to Shoulder, opponents to Duel or Arena, InSection to the section mode, else Follow) */
 	UPROPERTY(Config, EditAnywhere, Category = "Rules")
 	TSoftObjectPtr<UGSTN_CameraRuleSet> DefaultRuleSet;
 
@@ -46,6 +46,10 @@ public:
 	/** A button: ease the heading behind the character facing (camera.md §2.4). Empty = none */
 	UPROPERTY(Config, EditAnywhere, Category = "Input")
 	TSoftObjectPtr<UInputAction> RecenterAction;
+
+	/** A button: swap the shoulder of the Shoulder mode (CAM.2). Empty = none (use SetShoulderSide / ToggleShoulderSide) */
+	UPROPERTY(Config, EditAnywhere, Category = "Input")
+	TSoftObjectPtr<UInputAction> SwapShoulderAction;
 
 	/** Added to the local player Enhanced Input subsystem so LookAction has a binding. Empty = the project binds the actions itself */
 	UPROPERTY(Config, EditAnywhere, Category = "Input")
@@ -106,7 +110,11 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Tuning")
 	FGSTN_CameraDuelTuning Duel;
 
-	/** Occlusion of Follow, Free, Section and Duel */
+	/** Shared Power Stone style framing for 2 or more opponents (3-4 players) */
+	UPROPERTY(Config, EditAnywhere, Category = "Tuning")
+	FGSTN_CameraArenaTuning Arena;
+
+	/** Occlusion of Follow, Free, Section, Duel and Arena */
 	UPROPERTY(Config, EditAnywhere, Category = "Tuning")
 	FGSTN_CameraOcclusionTuning Occlusion;
 
@@ -125,6 +133,10 @@ public:
 	/** Blend into Duel */
 	UPROPERTY(Config, EditAnywhere, Category = "Tuning")
 	FGSTN_CameraBlendTuning DuelBlend;
+
+	/** Blend into Arena */
+	UPROPERTY(Config, EditAnywhere, Category = "Tuning")
+	FGSTN_CameraBlendTuning ArenaBlend;
 
 	/** Blend into a section when the section itself names none (BlendInSeconds is on the section) */
 	UPROPERTY(Config, EditAnywhere, Category = "Tuning")

@@ -117,7 +117,16 @@ FGSTN_CameraView UGSTN_CameraMode_Shoulder::ComputeView_Implementation(const FGS
 	View.HeadingDeg = Context.Orbit.YawDeg;
 	View.PitchDeg = Context.Orbit.PitchDeg;
 	View.ArmCm = Tuning.ArmCm;
-	View.SideOffsetCm = Tuning.bRightShoulder ? Tuning.ShoulderOffsetCm : -Tuning.ShoulderOffsetCm;
+	// The side is a blend value, so a swap slides the camera across instead of snapping; the aim stays correct because the converged aim
+	// is computed from the resulting pose (the point under the view centre), whichever side the camera is on
+	const EGSTN_ShoulderSide Side = Context.bHasShoulderSideOverride ? Context.ShoulderSideOverride : Tuning.ShoulderSide;
+	if (!bHasSide)
+	{
+		SideBlend = Side == EGSTN_ShoulderSide::Right ? 1.f : -1.f;
+		bHasSide = true;
+	}
+	SideBlend = FGSTN_CameraMath::StepShoulderBlend(SideBlend, Side, Tuning.ShoulderSwapBlendTime, Context.DeltaSeconds);
+	View.SideOffsetCm = SideBlend * Tuning.ShoulderOffsetCm;
 	View.UpOffsetCm = Tuning.UpOffsetCm;
 	View.FovDeg = Tuning.FovDeg;
 	return View;
@@ -179,7 +188,7 @@ FGSTN_CameraView UGSTN_CameraMode_Duel::ComputeView_Implementation(const FGSTN_C
 		Damp(SmoothedPivot, bHasPivot, Context.Subject.Pivot, 0.2f, Context.DeltaSeconds);
 		FGSTN_CameraView Alone;
 		Alone.Pivot = SmoothedPivot;
-		Alone.HeadingDeg = bHasHeading ? HeadingDeg : Context.Orbit.YawDeg;
+		Alone.HeadingDeg = DuelState.bInitialised ? DuelState.HeadingDeg : Context.Orbit.YawDeg;
 		Alone.PitchDeg = Tuning.PitchDeg;
 		Alone.ArmCm = Tuning.DuelMinArmCm;
 		Alone.FovDeg = Tuning.FovDeg;
@@ -189,18 +198,10 @@ FGSTN_CameraView UGSTN_CameraMode_Duel::ComputeView_Implementation(const FGSTN_C
 	const FVector A = Context.Subject.Pivot;
 	const FVector B = Context.Opponent.Pivot;
 	const FVector Up = Context.Frame.Up;
-	const FVector Current = bHasHeading ? FGSTN_CameraMath::HeadingToDirection(Context.Frame, HeadingDeg) : FVector::ZeroVector;
-	FVector Direction = Current;
-	const bool bHaveAxis = FGSTN_CameraMath::DuelDirection(A, B, Up, Current, Tuning.bLocalPlayerOnLeft, Tuning.DuelMinAxisCm, Direction);
-	if (!bHasHeading)
-	{
-		HeadingDeg = bHaveAxis ? FGSTN_CameraMath::DirectionToHeading(Context.Frame, Direction) : Context.Orbit.YawDeg;
-		bHasHeading = true;
-	}
-	else if (bHaveAxis)
-	{
-		HeadingDeg = FGSTN_CameraMath::StepAngleToward(HeadingDeg, FGSTN_CameraMath::DirectionToHeading(Context.Frame, Direction), Tuning.DuelYawRateDegPerSecond * Context.DeltaSeconds);
-	}
+	// The axis follows the line between the fighters, the side of the line is held through a cross-over and the yaw rate is limited (CAM.8)
+	const bool bHaveHeading = FGSTN_CameraMath::StepDuelCamera(DuelState, Context.Frame, A, B, Tuning.bLocalPlayerOnLeft, Context.bBothGrounded,
+		Tuning.DuelMinSeparation, Tuning.DuelSideSwapDelay, Tuning.DuelSideSwapMaxDelay, Tuning.DuelMaxYawRateDegPerSec, Context.DeltaSeconds);
+	const float HeadingDeg = bHaveHeading ? DuelState.HeadingDeg : Context.Orbit.YawDeg;
 
 	const FVector Delta = B - A;
 	const double Vertical = FMath::Abs(FVector::DotProduct(Delta, Up));
@@ -213,6 +214,45 @@ FGSTN_CameraView UGSTN_CameraMode_Duel::ComputeView_Implementation(const FGSTN_C
 	View.PitchDeg = Tuning.PitchDeg;
 	View.FovDeg = Tuning.FovDeg;
 	View.ArmCm = FGSTN_CameraMath::DuelArm(static_cast<float>(Horizontal), static_cast<float>(Vertical), Tuning.DuelMarginCm, Tuning.FovDeg, Context.AspectRatio, Tuning.DuelMinArmCm, Tuning.DuelMaxArmCm);
+	return View;
+}
+
+// ---- Arena ----
+
+FGSTN_CameraView UGSTN_CameraMode_Arena::ComputeView_Implementation(const FGSTN_CameraModeContext& Context)
+{
+	// Every fighter, the local pawn first (it weighs more in the centroid)
+	TArray<FVector> Fighters;
+	Fighters.Reserve(Context.Opponents.Num() + 1);
+	Fighters.Add(Context.Subject.Pivot);
+	for (const FGSTN_CameraSubjectState& Opponent : Context.Opponents)
+	{
+		Fighters.Add(Opponent.Pivot);
+	}
+	const FBox Bounds = Context.bHasArenaBounds ? Context.ArenaBounds : FBox(ForceInit);
+	// The yaw depends on the arena only: no fighter position enters it
+	const float HeadingDeg = Context.ArenaBaseHeadingDeg + Tuning.YawDeg;
+
+	const FGSTN_ArenaFraming Wanted = FGSTN_CameraMath::ArenaFrameAll(Fighters, Context.Frame, HeadingDeg, Tuning, Context.AspectRatio, Bounds);
+	Damp(SmoothedFocus, bHasFocus, Wanted.Focus, Tuning.FocusDampingSeconds, Context.DeltaSeconds);
+	// The distance that fits is searched around the damped focus (the one the camera really looks at), then damped itself
+	const FGSTN_ArenaFraming Fit = FGSTN_CameraMath::ArenaFrameAll(Fighters, Context.Frame, HeadingDeg, Tuning, Context.AspectRatio, Bounds, &SmoothedFocus);
+	if (!bHasArm)
+	{
+		SmoothedArm = Fit.ArmCm;
+		bHasArm = true;
+	}
+	else
+	{
+		SmoothedArm = FGSTN_CameraMath::StepArenaZoom(SmoothedArm, Fit.ArmCm, Tuning.ZoomInSeconds, Tuning.ZoomOutSeconds, Context.DeltaSeconds);
+	}
+
+	FGSTN_CameraView View;
+	View.Pivot = SmoothedFocus;
+	View.HeadingDeg = HeadingDeg;
+	View.PitchDeg = FGSTN_CameraMath::ArenaPitchForArm(Tuning, SmoothedArm);
+	View.ArmCm = SmoothedArm;
+	View.FovDeg = Tuning.FovDeg;
 	return View;
 }
 
@@ -243,6 +283,23 @@ UGSTN_CameraRuleSet* UGSTN_CameraRuleSet::MakeDefault(UObject* Outer, const FGam
 
 	FGameplayTagQueryExpression SectionExpr;
 	SectionExpr.AllTagsMatch().AddTag(GSTNCameraTags::State_InSection);
+	// Group framing of the registered opponents (CAM.7): one is a duel, two or more an arena fight. Above the section, below the aim
+	FGameplayTagQueryExpression OneExpr;
+	OneExpr.AllTagsMatch().AddTag(GSTNCameraTags::State_OneOpponent);
+	FGSTN_CameraModeRule& Duel = Set->Rules.AddDefaulted_GetRef();
+	Duel.Query = FGameplayTagQuery::BuildQuery(OneExpr);
+	Duel.ModeTag = GSTNCameraTags::Mode_Duel;
+	Duel.Priority = 90;
+	Duel.ExitDelaySeconds = ExitDelaySeconds;
+
+	FGameplayTagQueryExpression ManyExpr;
+	ManyExpr.AllTagsMatch().AddTag(GSTNCameraTags::State_ManyOpponents);
+	FGSTN_CameraModeRule& Arena = Set->Rules.AddDefaulted_GetRef();
+	Arena.Query = FGameplayTagQuery::BuildQuery(ManyExpr);
+	Arena.ModeTag = GSTNCameraTags::Mode_Arena;
+	Arena.Priority = 90;
+	Arena.ExitDelaySeconds = ExitDelaySeconds;
+
 	FGSTN_CameraModeRule& InSection = Set->Rules.AddDefaulted_GetRef();
 	InSection.Query = FGameplayTagQuery::BuildQuery(SectionExpr);
 	InSection.bModeFromSection = true;

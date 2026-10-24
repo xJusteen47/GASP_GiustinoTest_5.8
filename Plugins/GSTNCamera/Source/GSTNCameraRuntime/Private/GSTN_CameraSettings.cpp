@@ -13,4 +13,5 @@ UGSTN_CameraSettings::UGSTN_CameraSettings()
 	ShoulderBlend.BlendSeconds = 0.25f;
 	ShoulderBlend.Function = EGSTN_CameraBlendFunction::EaseOut;
 	DuelBlend.BlendSeconds = 0.5f;
+	ArenaBlend.BlendSeconds = 0.5f;
 }

@@ -460,4 +460,119 @@ GSTN_CAM_RT_TEST(BuiltinTagsAndMathLibrary)
 	return true;
 }
 
+GSTN_CAM_RT_TEST(ShoulderSideSwapSlides)
+{
+	UGSTN_CameraMode_Shoulder* Shoulder = NewObject<UGSTN_CameraMode_Shoulder>(GetTransientPackage());
+	FGSTN_CameraModeContext Context;
+	Context.Frame = FGSTN_CameraMath::MakeFrame(FVector::UpVector, FVector::ZeroVector);
+	Context.DeltaSeconds = Dt;
+	Context.Subject = MakeSubject(FVector(0, 0, 100));
+	for (int32 Index = 0; Index < 5; ++Index)
+	{
+		Shoulder->ComputeView(Context);
+	}
+	TestTrue(TEXT("the default side is right"), FMath::IsNearlyEqual(Shoulder->ComputeView(Context).SideOffsetCm, Shoulder->Tuning.ShoulderOffsetCm, 1.0e-3f));
+
+	// The override swaps the side: the offset slides across in the swap time, never jumping
+	Context.bHasShoulderSideOverride = true;
+	Context.ShoulderSideOverride = EGSTN_ShoulderSide::Left;
+	float Previous = Shoulder->Tuning.ShoulderOffsetCm;
+	float Largest = 0.f;
+	int32 Frames = 0;
+	for (; Frames < 60; ++Frames)
+	{
+		const float Offset = Shoulder->ComputeView(Context).SideOffsetCm;
+		Largest = FMath::Max(Largest, Previous - Offset);
+		TestTrue(TEXT("monotonic"), Offset <= Previous + 1.0e-4f);
+		Previous = Offset;
+		if (FMath::IsNearlyEqual(Offset, -Shoulder->Tuning.ShoulderOffsetCm, 1.0e-3f))
+		{
+			break;
+		}
+	}
+	TestTrue(TEXT("it arrives on the left shoulder"), FMath::IsNearlyEqual(Previous, -Shoulder->Tuning.ShoulderOffsetCm, 1.0e-3f));
+	TestTrue(TEXT("in about the swap time"), Frames >= 10 && Frames <= 14);
+	TestTrue(TEXT("never a snap"), Largest < Shoulder->Tuning.ShoulderOffsetCm * 0.5f);
+
+	// The component API: the override, the toggle
+	FRig Rig;
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Rig.SpawnSubject(FVector(0, 0, 100)));
+	const EGSTN_ShoulderSide Default = UGSTN_CameraSettings::Get().Shoulder.ShoulderSide;
+	TestEqual(TEXT("the settings side by default"), Camera->GetShoulderSide(), Default);
+	Camera->ToggleShoulderSide();
+	TestTrue(TEXT("toggle flips"), Camera->GetShoulderSide() != Default);
+	Camera->SetShoulderSide(Default);
+	TestEqual(TEXT("set overrides"), Camera->GetShoulderSide(), Default);
+	return true;
+}
+
+GSTN_CAM_RT_TEST(RuleChoosesDuelOrArenaByCount)
+{
+	FRig Rig;
+	AActor* Self = Rig.SpawnSubject(FVector(0, 0, 100));
+	AActor* One = Rig.SpawnSubject(FVector(600, 0, 100));
+	AActor* Two = Rig.SpawnSubject(FVector(300, 600, 100));
+	AActor* Three = Rig.SpawnSubject(FVector(-300, 600, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Self);
+
+	Run(Camera, 0.5f);
+	TestTrue(TEXT("no opponent: Follow"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Follow.GetTag()));
+
+	Camera->SetOpponent(One);
+	Run(Camera, 1.5f);
+	TestTrue(TEXT("one opponent: Duel"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Duel.GetTag()));
+
+	Camera->SetOpponents({ One, Two });
+	Run(Camera, 1.5f);
+	TestTrue(TEXT("two opponents: Arena"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Arena.GetTag()));
+
+	Camera->SetOpponents({ One, Two, Three });
+	Run(Camera, 1.5f);
+	TestTrue(TEXT("three opponents: still Arena"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Arena.GetTag()));
+
+	Camera->SetOpponents({});
+	Run(Camera, 1.5f);
+	TestTrue(TEXT("none again: Follow"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Follow.GetTag()));
+
+	// Aim still wins over the group framing
+	Camera->SetOpponent(One);
+	Camera->SetRequestTags(AimTags());
+	Run(Camera, 1.5f);
+	TestTrue(TEXT("aim beats Duel"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Shoulder.GetTag()));
+	return true;
+}
+
+GSTN_CAM_RT_TEST(ArenaFramesEveryoneWithStableYaw)
+{
+	for (const FVector& Up : { FVector(0, 0, 1), FVector(1, 1, 1).GetSafeNormal() })
+	{
+		UGSTN_CameraMode_Arena* Arena = NewObject<UGSTN_CameraMode_Arena>(GetTransientPackage());
+		FGSTN_CameraModeContext Context;
+		Context.Frame = FGSTN_CameraMath::MakeFrame(Up, FVector::ZeroVector);
+		Context.DeltaSeconds = Dt;
+		const FVector Centre(10, 20, 30);
+		float FirstHeading = 0.f;
+		for (int32 Index = 0; Index < 240; ++Index)
+		{
+			// The three fighters circle the centre
+			const float Angle = Index * 3.f;
+			const FVector A = FGSTN_CameraMath::HeadingToDirection(Context.Frame, Angle);
+			const FVector B = FGSTN_CameraMath::HeadingToDirection(Context.Frame, Angle + 130.f);
+			const FVector C = FGSTN_CameraMath::HeadingToDirection(Context.Frame, Angle + 250.f);
+			Context.Subject = MakeSubject(Centre + A * 700.0, Up);
+			Context.Opponents = { MakeSubject(Centre + B * 700.0, Up), MakeSubject(Centre + C * 700.0, Up) };
+			const FGSTN_CameraView View = Arena->ComputeView(Context);
+			if (Index == 0)
+			{
+				FirstHeading = View.HeadingDeg;
+			}
+			TestTrue(TEXT("the yaw does not turn with the players"), FMath::IsNearlyEqual(View.HeadingDeg, FirstHeading, 1.0e-3f));
+			TestTrue(TEXT("the arm is inside its limits"), View.ArmCm >= Arena->Tuning.MinArmCm - 1.f && View.ArmCm <= Arena->Tuning.MaxArmCm + 1.f);
+			TestTrue(TEXT("the focus stays near the centre"), (View.Pivot - Centre).Size() < 700.0);
+		}
+		TestTrue(TEXT("the heading is the tuning yaw"), FMath::IsNearlyEqual(FirstHeading, Arena->Tuning.YawDeg, 1.0e-3f));
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

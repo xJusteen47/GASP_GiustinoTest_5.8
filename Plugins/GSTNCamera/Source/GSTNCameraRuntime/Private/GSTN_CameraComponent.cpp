@@ -108,7 +108,39 @@ void UGSTN_CameraComponent::RequestRecenter()
 
 void UGSTN_CameraComponent::SetOpponent(AActor* Opponent)
 {
-	OpponentActor = Opponent;
+	OpponentActors.Reset();
+	if (Opponent)
+	{
+		OpponentActors.Add(Opponent);
+	}
+}
+
+void UGSTN_CameraComponent::SetOpponents(const TArray<AActor*>& Opponents)
+{
+	OpponentActors.Reset();
+	for (AActor* Opponent : Opponents)
+	{
+		if (Opponent && Opponent != GetOwner())
+		{
+			OpponentActors.AddUnique(Opponent);
+		}
+	}
+}
+
+EGSTN_ShoulderSide UGSTN_CameraComponent::GetShoulderSide() const
+{
+	return bHasShoulderSideOverride ? ShoulderSideOverride : UGSTN_CameraSettings::Get().Shoulder.ShoulderSide;
+}
+
+void UGSTN_CameraComponent::SetShoulderSide(EGSTN_ShoulderSide Side)
+{
+	bHasShoulderSideOverride = true;
+	ShoulderSideOverride = Side;
+}
+
+void UGSTN_CameraComponent::ToggleShoulderSide()
+{
+	SetShoulderSide(GetShoulderSide() == EGSTN_ShoulderSide::Right ? EGSTN_ShoulderSide::Left : EGSTN_ShoulderSide::Right);
 }
 
 void UGSTN_CameraComponent::SetSubjectOverride(const FGSTN_CameraSubjectState& InState)
@@ -209,6 +241,14 @@ UGSTN_CameraModeDefinition* UGSTN_CameraComponent::GetBuiltinDefinition(const FG
 		Mode->Tuning = Settings.Duel;
 		Definition->Mode = Mode;
 		Definition->BlendIn = Settings.DuelBlend;
+		Definition->bAllowManualControl = false;
+	}
+	else if (Tag.MatchesTagExact(GSTNCameraTags::Mode_Arena.GetTag()))
+	{
+		UGSTN_CameraMode_Arena* Mode = NewObject<UGSTN_CameraMode_Arena>(Definition);
+		Mode->Tuning = Settings.Arena;
+		Definition->Mode = Mode;
+		Definition->BlendIn = Settings.ArenaBlend;
 		Definition->bAllowManualControl = false;
 	}
 	else
@@ -435,6 +475,18 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 					PendingLook += Input->GetActionValue(Look).Get<FVector2D>();
 				}
 			}
+			if (!Settings.SwapShoulderAction.IsNull())
+			{
+				if (const UInputAction* Swap = Settings.SwapShoulderAction.LoadSynchronous())
+				{
+					const bool bDown = Input->GetActionValue(Swap).Get<bool>();
+					if (bDown && !bSwapShoulderWasDown)
+					{
+						ToggleShoulderSide();
+					}
+					bSwapShoulderWasDown = bDown;
+				}
+			}
 			if (!Settings.RecenterAction.IsNull())
 			{
 				if (const UInputAction* Recenter = Settings.RecenterAction.LoadSynchronous())
@@ -560,9 +612,12 @@ void UGSTN_CameraComponent::ResolveOcclusion(const FGSTN_CameraView& View, const
 		// The pivot the camera orbits, with the shoulder offsets: the probe runs from it to the camera
 		const FVector EffectivePivot = InOutPose.Location + InOutPose.Forward * View.ArmCm;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNCameraOcclusion), false, GetOwner());
-		if (const AActor* Opponent = OpponentActor.Get())
+		for (const TWeakObjectPtr<AActor>& Opponent : OpponentActors)
 		{
-			Params.AddIgnoredActor(Opponent);
+			if (const AActor* OpponentPtr = Opponent.Get())
+			{
+				Params.AddIgnoredActor(OpponentPtr);
+			}
 		}
 		for (int32 Iteration = 0; Iteration < 4; ++Iteration)
 		{
@@ -750,6 +805,24 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 		}
 	}
 
+	// Group framing of the opponents the project registered (CAM.7): local tags, like InSection
+	{
+		int32 OpponentCount = 0;
+		for (const TWeakObjectPtr<AActor>& Opponent : OpponentActors)
+		{
+			OpponentCount += Opponent.IsValid() ? 1 : 0;
+		}
+		const EGSTN_CameraGroupFraming Group = FGSTN_CameraMath::ChooseGroupFraming(OpponentCount);
+		if (Group == EGSTN_CameraGroupFraming::Duel)
+		{
+			Tags.AddTag(GSTNCameraTags::State_OneOpponent);
+		}
+		else if (Group == EGSTN_CameraGroupFraming::Arena)
+		{
+			Tags.AddTag(GSTNCameraTags::State_ManyOpponents);
+		}
+	}
+
 	// 5. The rule table: highest priority match, debounced
 	UGSTN_CameraRuleSet* RuleSet = ChooseRuleSet();
 	if (RuleSet != CurrentRuleSet)
@@ -881,9 +954,31 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 	{
 		Context.Section = TopSection->Get();
 	}
-	if (const AActor* Opponent = OpponentActor.Get())
 	{
-		Context.bHasOpponent = FGSTN_CameraAdapterRegistry::Read(Opponent, Context.Opponent);
+		Context.bHasShoulderSideOverride = bHasShoulderSideOverride;
+		Context.ShoulderSideOverride = ShoulderSideOverride;
+		// Opponents: the readable ones in registration order; the first is the duel opponent
+		for (const TWeakObjectPtr<AActor>& Opponent : OpponentActors)
+		{
+			FGSTN_CameraSubjectState Read;
+			if (const AActor* Actor = Opponent.Get(); Actor && FGSTN_CameraAdapterRegistry::Read(Actor, Read))
+			{
+				Context.Opponents.Add(Read);
+			}
+		}
+		// The Arena mode takes its yaw base and its focus limit from the arena section, when it comes from one
+		if (Context.Section)
+		{
+			Context.ArenaBaseHeadingDeg = Context.Section->GetBaseHeading(Frame);
+			Context.bHasArenaBounds = Context.Section->GetWorldBounds(Context.ArenaBounds);
+		}
+		Context.bBothGrounded = Subject.bGrounded;
+		if (!Context.Opponents.IsEmpty())
+		{
+			Context.bHasOpponent = true;
+			Context.Opponent = Context.Opponents[0];
+			Context.bBothGrounded = Subject.bGrounded && Context.Opponent.bGrounded;
+		}
 	}
 	UGSTN_CameraMode* TopMode = GetTopModeInstance();
 	FGSTN_CameraView TopView;

@@ -111,6 +111,41 @@ struct GSTNCAMERACORE_API FGSTN_CameraMath
 	/** Arm that keeps a horizontal separation and a vertical extent inside the frame, clamped to the arm range. HorizontalFovDeg and AspectRatio as in the view */
 	static float DuelArm(float SeparationCm, float VerticalExtentCm, float MarginCm, float HorizontalFovDeg, float AspectRatio, float MinArmCm, float MaxArmCm);
 
+	/**
+	 * One step of the cross-over safe duel camera (CAM.8). The framing axis follows the line between the fighters projected on the plane
+	 * normal to Up, but the SIDE of that line the camera sits on is held: when a fighter jumps over the other the look direction stays put
+	 * (the fighters swap screen sides for a moment) and it only turns to the wanted screen sides after the fighters stayed crossed for
+	 * SideSwapDelaySeconds with both grounded (or SideSwapMaxDelaySeconds regardless). The heading never turns faster than MaxYawRateDegPerSecond.
+	 * Fighters closer than MinSeparationCm on the Up plane freeze the axis (state untouched, bFrozen set). Returns true when the state has a heading.
+	 */
+	static bool StepDuelCamera(FGSTN_DuelCameraState& InOutState, const FGSTN_CameraFrame& Frame, const FVector& A, const FVector& B, bool bAOnLeft, bool bBothGrounded,
+		float MinSeparationCm, float SideSwapDelaySeconds, float SideSwapMaxDelaySeconds, float MaxYawRateDegPerSecond, float DeltaSeconds);
+
+	// ---- Shoulder swap (CAM.2) ----
+
+	/** Move a side blend in [-1, 1] (+1 right, -1 left) towards the target side, crossing the whole range in BlendSeconds. 0 snaps */
+	static float StepShoulderBlend(float Current, EGSTN_ShoulderSide TargetSide, float BlendSeconds, float DeltaSeconds);
+
+	// ---- Group framing (CAM.7) ----
+
+	/** One opponent is a duel, two or more an arena fight, none no group framing */
+	static EGSTN_CameraGroupFraming ChooseGroupFraming(int32 OpponentCount);
+
+	/**
+	 * Shared arena framing (CAM.7, Power Stone): Fighters are the pivots of every fighter, the first one the local pawn (weight LocalPlayerWeight).
+	 * Focus is their weighted centroid clamped to Bounds (ignored when not valid; a world AABB, so under a tilted Up it is a coarse limit).
+	 * HeadingDeg is returned untouched: the yaw is arena relative and never depends on where the fighters are. The arm is the smallest within
+	 * MinArmCm..MaxArmCm that keeps a sphere of FighterRadiusCm around every fighter inside the screen with ScreenMargin (the pitch rises with
+	 * the arm, see ArenaPitchForArm); at the limit it is best effort. FocusOverride (the smoothed focus) replaces the computed focus for the fit.
+	 */
+	static FGSTN_ArenaFraming ArenaFrameAll(const TArray<FVector>& Fighters, const FGSTN_CameraFrame& Frame, float HeadingDeg, const FGSTN_CameraArenaTuning& Tuning, float AspectRatio, const FBox& Bounds, const FVector* FocusOverride = nullptr);
+
+	/** Pitch for an arm: PitchDeg at MinArmCm, MaxExtraPitchDeg lower (looking down more) at MaxArmCm */
+	static float ArenaPitchForArm(const FGSTN_CameraArenaTuning& Tuning, float ArmCm);
+
+	/** One damped zoom step: exponential, ZoomOutSeconds when the wanted arm is larger, ZoomInSeconds when smaller. 0 seconds snaps. Never overshoots */
+	static float StepArenaZoom(float CurrentArmCm, float WantedArmCm, float ZoomInSeconds, float ZoomOutSeconds, float DeltaSeconds);
+
 	// ---- Occlusion (camera.md §7.1) ----
 
 	static EGSTN_CameraOcclusionAction DecideOcclusion(EGSTN_CameraOcclusionPolicy Policy, bool bFadeable, float BlockerDistanceFromCameraCm, float NearClipSafeCm);

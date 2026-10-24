@@ -42,6 +42,32 @@ struct GSTNCAMERARUNTIME_API FGSTN_CameraModeContext
 	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
 	FGSTN_CameraSubjectState Opponent;
 
+	/** Every registered opponent that could be read, in registration order (Arena frames them all); the first one is also Opponent */
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	TArray<FGSTN_CameraSubjectState> Opponents;
+
+	/** Heading of the arena base (Arena): the facing of the active arena section about Up, 0 without one */
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	float ArenaBaseHeadingDeg = 0.f;
+
+	/** The active section volume as a world box that clamps the Arena focus; used when bHasArenaBounds */
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	bool bHasArenaBounds = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	FBox ArenaBounds = FBox(ForceInit);
+
+	/** Per player shoulder override (SetShoulderSide / ToggleShoulderSide / the swap action); when false the tuning side applies (Shoulder) */
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	bool bHasShoulderSideOverride = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	EGSTN_ShoulderSide ShoulderSideOverride = EGSTN_ShoulderSide::Right;
+
+	/** Both fighters stand on ground (Duel side swap) */
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	bool bBothGrounded = true;
+
 	/** Aspect ratio of the view, for framing */
 	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
 	float AspectRatio = 16.f / 9.f;
@@ -142,11 +168,16 @@ public:
 		OutMinDeg = Tuning.MinPitchDeg;
 		OutMaxDeg = Tuning.MaxPitchDeg;
 	}
-	virtual void ResetState() override { bHasPivot = false; }
+	virtual void ResetState() override { bHasPivot = false; bHasSide = false; }
+
+	/** Side blend in [-1, 1] (+1 right): what the last view used, for the tests and the debug draw */
+	float GetSideBlend() const { return SideBlend; }
 
 private:
 	FVector SmoothedPivot = FVector::ZeroVector;
 	bool bHasPivot = false;
+	float SideBlend = 1.f;
+	bool bHasSide = false;
 };
 
 /** The designer angle of the active section (camera.md §4.1): the Orbit, FixedPoint and Rail paths */
@@ -180,13 +211,43 @@ public:
 
 	virtual FGSTN_CameraView ComputeView_Implementation(const FGSTN_CameraModeContext& Context) override;
 	virtual float GetDefaultPitchDeg() const override { return Tuning.PitchDeg; }
-	virtual void ResetState() override { bHasHeading = false; bHasPivot = false; }
+	virtual void ResetState() override { DuelState = FGSTN_DuelCameraState(); bHasPivot = false; }
+
+	const FGSTN_DuelCameraState& GetDuelState() const { return DuelState; }
 
 private:
-	float HeadingDeg = 0.f;
-	bool bHasHeading = false;
+	FGSTN_DuelCameraState DuelState;
 	FVector SmoothedPivot = FVector::ZeroVector;
 	bool bHasPivot = false;
+};
+
+/**
+ * Shared framing camera for 3-4 players, Power Stone style (CAM.7): the local pawn and every registered opponent in one elevated 3/4 view.
+ * The yaw is arena relative (the arena section facing, else the frame reference forward, plus Tuning.YawDeg) and never turns with a player;
+ * the look-at point is a damped weighted centroid clamped to the section volume; the distance fits every fighter with screen margins, zooming
+ * out faster than in; the pitch rises with the distance. Under any gravity everything is in the local Up frame.
+ */
+UCLASS()
+class GSTNCAMERARUNTIME_API UGSTN_CameraMode_Arena : public UGSTN_CameraMode
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena")
+	FGSTN_CameraArenaTuning Tuning;
+
+	virtual FGSTN_CameraView ComputeView_Implementation(const FGSTN_CameraModeContext& Context) override;
+	virtual float GetDefaultPitchDeg() const override { return Tuning.PitchDeg; }
+	virtual void ResetState() override { bHasFocus = false; bHasArm = false; }
+
+	/** The damped arm of the last view, for the tests and the debug draw */
+	float GetSmoothedArm() const { return SmoothedArm; }
+
+private:
+	FVector SmoothedFocus = FVector::ZeroVector;
+	bool bHasFocus = false;
+	float SmoothedArm = 0.f;
+	bool bHasArm = false;
 };
 
 /**
@@ -281,6 +342,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Rules", meta = (ClampMin = "0", ForceUnits = "s"))
 	float MinDwellSeconds = 0.3f;
 
-	/** The built-in table: Aim to Shoulder (100) unless the section forbids it, InSection to the section mode (50), else the default mode (0) */
+	/** The built-in table: Aim to Shoulder (100) unless the section forbids it, one opponent to Duel and two or more to Arena (90), InSection to the section mode (50), else the default mode (0) */
 	static UGSTN_CameraRuleSet* MakeDefault(UObject* Outer, const FGameplayTag& DefaultModeTag, float ExitDelaySeconds, float MinDwellSeconds);
 };

@@ -49,6 +49,23 @@ enum class EGSTN_CameraFrameChangeReason : uint8
 	Other
 };
 
+/** Which shoulder the Shoulder mode looks over (CAM.2: the owner wants both and a switch) */
+UENUM(BlueprintType)
+enum class EGSTN_ShoulderSide : uint8
+{
+	Right,
+	Left
+};
+
+/** Which group framing the registered opponents call for (CAM.7): one opponent is a duel, two or more an arena fight */
+UENUM(BlueprintType)
+enum class EGSTN_CameraGroupFraming : uint8
+{
+	None,
+	Duel,
+	Arena
+};
+
 /** The camera frame: Up and a reference forward perpendicular to it. Headings are measured from RefForward about Up */
 USTRUCT(BlueprintType)
 struct GSTNCAMERACORE_API FGSTN_CameraFrame
@@ -364,8 +381,13 @@ struct GSTNCAMERACORE_API FGSTN_CameraShoulderTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shoulder", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float UpOffsetCm = 55.f;
 
+	/** The side used until the player (or the game) overrides it with SetShoulderSide / ToggleShoulderSide */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shoulder")
-	bool bRightShoulder = true;
+	EGSTN_ShoulderSide ShoulderSide = EGSTN_ShoulderSide::Right;
+
+	/** A change of side slides the camera across in this time; it never snaps (0 = snap) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shoulder", meta = (ClampMin = "0", ForceUnits = "s"))
+	float ShoulderSwapBlendTime = 0.2f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shoulder", meta = (ClampMin = "5", ClampMax = "170", ForceUnits = "deg"))
 	float FovDeg = 55.f;
@@ -395,8 +417,9 @@ struct GSTNCAMERACORE_API FGSTN_CameraDuelTuning
 {
 	GENERATED_BODY()
 
+	/** The camera yaw never turns faster than this, so a jump over the opponent cannot spin the view (CAM.8) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Duel", meta = (ClampMin = "1", ForceUnits = "deg/s"))
-	float DuelYawRateDegPerSecond = 120.f;
+	float DuelMaxYawRateDegPerSec = 90.f;
 
 	/** Free space kept around the fighters */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Duel", meta = (ClampMin = "0", ForceUnits = "cm"))
@@ -408,9 +431,17 @@ struct GSTNCAMERACORE_API FGSTN_CameraDuelTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Duel", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float DuelMaxArmCm = 1800.f;
 
-	/** Horizontal separation under this keeps the last heading */
+	/** Horizontal distance between the fighters (on the plane normal to Up) under which the framing axis is frozen, e.g. one fighter right above the other */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Duel", meta = (ClampMin = "0", ForceUnits = "cm"))
-	float DuelMinAxisCm = 30.f;
+	float DuelMinSeparation = 150.f;
+
+	/** After a cross-over the camera keeps its side of the line until the fighters stayed crossed this long with both grounded */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Duel", meta = (ClampMin = "0", ForceUnits = "s"))
+	float DuelSideSwapDelay = 0.5f;
+
+	/** The side swaps after this long crossed even if somebody is still airborne */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Duel", meta = (ClampMin = "0", ForceUnits = "s"))
+	float DuelSideSwapMaxDelay = 3.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Duel", meta = (ClampMin = "-89", ClampMax = "89", ForceUnits = "deg"))
 	float PitchDeg = -12.f;
@@ -421,6 +452,89 @@ struct GSTNCAMERACORE_API FGSTN_CameraDuelTuning
 	/** Local player on the left of its own screen (CAM.8 default) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Duel")
 	bool bLocalPlayerOnLeft = true;
+};
+
+/**
+ * Shared framing camera for 3-4 players, Power Stone style (CAM.7): all fighters in one frame from an elevated 3/4 view. The yaw is arena
+ * relative and never turns with a player; the look-at point is a smoothed weighted centroid; the distance is the smallest that keeps every
+ * fighter inside the screen with margins, damped (zoom in slower than out).
+ */
+USTRUCT(BlueprintType)
+struct GSTNCAMERACORE_API FGSTN_CameraArenaTuning
+{
+	GENERATED_BODY()
+
+	/** Heading of the view, added to the base heading: the facing of the arena section when the Arena mode comes from one, else the reference forward of the gravity frame */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ForceUnits = "deg"))
+	float YawDeg = 45.f;
+
+	/** Pitch at the minimum distance (negative looks down) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "-89", ClampMax = "89", ForceUnits = "deg"))
+	float PitchDeg = -35.f;
+
+	/** The camera rises (looks down more) by up to this much as it pulls back to the maximum distance */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "deg"))
+	float MaxExtraPitchDeg = 12.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "5", ClampMax = "170", ForceUnits = "deg"))
+	float FovDeg = 60.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float MinArmCm = 700.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float MaxArmCm = 3500.f;
+
+	/** Size of a fighter for the framing: a sphere of this radius around its pivot must fit */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float FighterRadiusCm = 80.f;
+
+	/** Free border kept at every screen edge, as a fraction of the half screen */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0", ClampMax = "0.8"))
+	float ScreenMargin = 0.12f;
+
+	/** Weight of the local pawn in the centroid (the others weigh 1): above 1 keeps the player a little nearer the screen centre */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0.1", ClampMax = "10"))
+	float LocalPlayerWeight = 1.5f;
+
+	/** Smoothing time of the look-at point */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0", ForceUnits = "s"))
+	float FocusDampingSeconds = 0.25f;
+
+	/** Smoothing time when the distance shrinks (zoom in): slow, so the view does not pump */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0", ForceUnits = "s"))
+	float ZoomInSeconds = 0.8f;
+
+	/** Smoothing time when the distance grows (zoom out): fast, so a fighter running away stays in the frame */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Arena", meta = (ClampMin = "0", ForceUnits = "s"))
+	float ZoomOutSeconds = 0.2f;
+};
+
+/** Plain state of the duel camera (pure, owned by the mode): the side of the line the camera sits on, the timers, the rate limited heading */
+struct FGSTN_DuelCameraState
+{
+	bool bInitialised = false;
+	/** True when the last step froze the axis (fighters closer than the minimum separation) */
+	bool bFrozen = false;
+	/** Unit horizontal look direction the camera wants (before the yaw rate limit); its side of the line only changes by the swap rule */
+	FVector Held = FVector::ForwardVector;
+	float HeadingDeg = 0.f;
+	/** Seconds crossed (A is on the wrong screen side) with both fighters grounded */
+	float StableCrossedSeconds = 0.f;
+	/** Seconds crossed, grounded or not */
+	float CrossedSeconds = 0.f;
+};
+
+/** Result of the shared arena framing */
+struct FGSTN_ArenaFraming
+{
+	bool bValid = false;
+	/** Weighted centroid of the fighters, clamped to the bounds when there are some */
+	FVector Focus = FVector::ZeroVector;
+	/** Heading of the view in the frame: the input yaw, whatever the fighters do */
+	float HeadingDeg = 0.f;
+	float ArmCm = 0.f;
+	float PitchDeg = 0.f;
 };
 
 /** Occlusion (camera.md §7.1, §10 Camera|Occlusion) */

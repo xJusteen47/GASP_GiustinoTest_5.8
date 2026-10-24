@@ -59,9 +59,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Camera")
 	void RequestRecenter();
 
-	/** The opponent of the Duel mode (project glue chooses it); null = none */
+	/** The opponent of the Duel mode (project glue chooses it); null = none. Same as SetOpponents with one entry */
 	UFUNCTION(BlueprintCallable, Category = "Camera")
 	void SetOpponent(AActor* Opponent);
+
+	/**
+	 * Every opponent of the local player (project glue chooses them). The default rules pick Duel for exactly one and Arena (shared framing of everybody) for two or more
+	 * (the tags Camera.State.OneOpponent / ManyOpponents are computed locally from this list)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void SetOpponents(const TArray<AActor*>& Opponents);
+
+	/** Per player shoulder override of the Shoulder mode; the camera slides across in ShoulderSwapBlendTime */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void SetShoulderSide(EGSTN_ShoulderSide Side);
+
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void ToggleShoulderSide();
+
+	/** The side in force: the override, else the settings default */
+	UFUNCTION(BlueprintPure, Category = "Camera")
+	EGSTN_ShoulderSide GetShoulderSide() const;
 
 	/** Tags the project feeds without implementing IGSTN_CameraTagSource (merged with them) */
 	UFUNCTION(BlueprintCallable, Category = "Camera")
@@ -190,7 +208,10 @@ private:
 	float LastSectionBlendOut = 0.8f;
 	EGSTN_CameraBlendFunction LastSectionBlendFunction = EGSTN_CameraBlendFunction::EaseInOut;
 
-	TWeakObjectPtr<AActor> OpponentActor;
+	TArray<TWeakObjectPtr<AActor>> OpponentActors;
+	bool bHasShoulderSideOverride = false;
+	EGSTN_ShoulderSide ShoulderSideOverride = EGSTN_ShoulderSide::Right;
+	bool bSwapShoulderWasDown = false;
 	FGSTN_CameraSubjectState SubjectOverride;
 	bool bHasSubjectOverride = false;
 

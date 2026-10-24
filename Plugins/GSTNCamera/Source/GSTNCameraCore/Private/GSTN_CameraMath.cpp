@@ -432,6 +432,159 @@ float FGSTN_CameraMath::DuelArm(float SeparationCm, float VerticalExtentCm, floa
 	return FMath::Clamp(FMath::Max(ForWidth, ForHeight), FMath::Min(MinArmCm, MaxArmCm), FMath::Max(MinArmCm, MaxArmCm));
 }
 
+bool FGSTN_CameraMath::StepDuelCamera(FGSTN_DuelCameraState& State, const FGSTN_CameraFrame& Frame, const FVector& A, const FVector& B, bool bAOnLeft, bool bBothGrounded,
+	float MinSeparationCm, float SideSwapDelaySeconds, float SideSwapMaxDelaySeconds, float MaxYawRateDegPerSecond, float DeltaSeconds)
+{
+	const FVector U = SafeUp(Frame.Up);
+	const FVector Axis = (B - A) - U * FVector::DotProduct(B - A, U);
+	State.bFrozen = Axis.Size() < FMath::Max(MinSeparationCm, 1.0e-3f);
+	if (!State.bFrozen)
+	{
+		const FVector Line = Axis.GetSafeNormal();
+		// Looking along Up x Line puts B on the left of the screen (A on the right); the opposite puts A on the left
+		const FVector Perp = FVector::CrossProduct(U, Line).GetSafeNormal();
+		const double Wanted = bAOnLeft ? -1.0 : 1.0;
+		if (!State.bInitialised)
+		{
+			State.Held = Perp * Wanted;
+			State.HeadingDeg = DirectionToHeading(Frame, State.Held);
+			State.bInitialised = true;
+		}
+		else
+		{
+			// The line may turn (or reverse when a fighter passes the other); the camera stays on the side it was on
+			const FVector Flat = ProjectOnUpPlane(State.Held, U);
+			const double Sign = (Flat.IsNearlyZero() ? Wanted : (FVector::DotProduct(Perp, Flat) >= 0.0 ? 1.0 : -1.0));
+			bool bSwap = false;
+			if (Sign != Wanted)
+			{
+				State.CrossedSeconds += DeltaSeconds;
+				State.StableCrossedSeconds = bBothGrounded ? State.StableCrossedSeconds + DeltaSeconds : 0.f;
+				bSwap = State.StableCrossedSeconds >= SideSwapDelaySeconds || State.CrossedSeconds >= SideSwapMaxDelaySeconds;
+			}
+			else
+			{
+				State.CrossedSeconds = 0.f;
+				State.StableCrossedSeconds = 0.f;
+			}
+			if (bSwap)
+			{
+				State.CrossedSeconds = 0.f;
+				State.StableCrossedSeconds = 0.f;
+			}
+			State.Held = Perp * (bSwap ? Wanted : Sign);
+		}
+	}
+	if (!State.bInitialised)
+	{
+		return false;
+	}
+	State.HeadingDeg = StepAngleToward(State.HeadingDeg, DirectionToHeading(Frame, State.Held), MaxYawRateDegPerSecond * DeltaSeconds);
+	return true;
+}
+
+float FGSTN_CameraMath::StepShoulderBlend(float Current, EGSTN_ShoulderSide TargetSide, float BlendSeconds, float DeltaSeconds)
+{
+	const float Target = TargetSide == EGSTN_ShoulderSide::Right ? 1.f : -1.f;
+	if (BlendSeconds <= UE_SMALL_NUMBER)
+	{
+		return Target;
+	}
+	const float Step = 2.f * DeltaSeconds / BlendSeconds;
+	return Current < Target ? FMath::Min(Current + Step, Target) : FMath::Max(Current - Step, Target);
+}
+
+EGSTN_CameraGroupFraming FGSTN_CameraMath::ChooseGroupFraming(int32 OpponentCount)
+{
+	return OpponentCount <= 0 ? EGSTN_CameraGroupFraming::None : (OpponentCount == 1 ? EGSTN_CameraGroupFraming::Duel : EGSTN_CameraGroupFraming::Arena);
+}
+
+float FGSTN_CameraMath::ArenaPitchForArm(const FGSTN_CameraArenaTuning& Tuning, float ArmCm)
+{
+	const float MinArm = FMath::Min(Tuning.MinArmCm, Tuning.MaxArmCm);
+	const float MaxArm = FMath::Max(Tuning.MinArmCm, Tuning.MaxArmCm);
+	const float Span = FMath::Max(MaxArm - MinArm, 1.0e-3f);
+	return Tuning.PitchDeg - Tuning.MaxExtraPitchDeg * FMath::Clamp((ArmCm - MinArm) / Span, 0.f, 1.f);
+}
+
+float FGSTN_CameraMath::StepArenaZoom(float CurrentArmCm, float WantedArmCm, float ZoomInSeconds, float ZoomOutSeconds, float DeltaSeconds)
+{
+	const float Seconds = WantedArmCm > CurrentArmCm ? ZoomOutSeconds : ZoomInSeconds;
+	if (Seconds <= UE_SMALL_NUMBER)
+	{
+		return WantedArmCm;
+	}
+	return CurrentArmCm + (WantedArmCm - CurrentArmCm) * (1.f - FMath::Exp(-FMath::Max(DeltaSeconds, 0.f) / Seconds));
+}
+
+FGSTN_ArenaFraming FGSTN_CameraMath::ArenaFrameAll(const TArray<FVector>& Fighters, const FGSTN_CameraFrame& Frame, float HeadingDeg, const FGSTN_CameraArenaTuning& Tuning, float AspectRatio, const FBox& Bounds, const FVector* FocusOverride)
+{
+	FGSTN_ArenaFraming Out;
+	if (Fighters.IsEmpty())
+	{
+		return Out;
+	}
+	Out.bValid = true;
+	Out.HeadingDeg = HeadingDeg;
+
+	// Weighted centroid: the first fighter is the local pawn
+	FVector Sum = FVector::ZeroVector;
+	double TotalWeight = 0.0;
+	for (int32 Index = 0; Index < Fighters.Num(); ++Index)
+	{
+		const double Weight = Index == 0 ? FMath::Max(Tuning.LocalPlayerWeight, 0.01f) : 1.0;
+		Sum += Fighters[Index] * Weight;
+		TotalWeight += Weight;
+	}
+	Out.Focus = Sum / TotalWeight;
+	if (Bounds.IsValid)
+	{
+		Out.Focus = FVector(FMath::Clamp(Out.Focus.X, Bounds.Min.X, Bounds.Max.X), FMath::Clamp(Out.Focus.Y, Bounds.Min.Y, Bounds.Max.Y), FMath::Clamp(Out.Focus.Z, Bounds.Min.Z, Bounds.Max.Z));
+	}
+	const FVector FitFocus = FocusOverride ? *FocusOverride : Out.Focus;
+
+	const float HalfTan = FMath::Max(0.01f, FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(Tuning.FovDeg, 5.f, 170.f) * 0.5f)));
+	const float HalfVerticalTan = HalfTan / FMath::Max(0.1f, AspectRatio);
+	const float Inner = 1.f - FMath::Clamp(Tuning.ScreenMargin, 0.f, 0.8f);
+	const float MinArm = FMath::Min(Tuning.MinArmCm, Tuning.MaxArmCm);
+	const float MaxArm = FMath::Max(Tuning.MinArmCm, Tuning.MaxArmCm);
+
+	// Exact test with the real pose (pitch and depths matter): the arm grows until every fighter sphere is inside the shrunk frustum
+	auto Fits = [&](float Arm)
+	{
+		FGSTN_CameraView View;
+		View.Pivot = FitFocus;
+		View.HeadingDeg = HeadingDeg;
+		View.PitchDeg = ArenaPitchForArm(Tuning, Arm);
+		View.ArmCm = Arm;
+		const FGSTN_CameraPose Pose = ComputePose(Frame, View);
+		const FVector Right = FVector::CrossProduct(Pose.Up, Pose.Forward).GetSafeNormal();
+		for (const FVector& Point : Fighters)
+		{
+			const FVector Local = Point - Pose.Location;
+			const double Depth = FVector::DotProduct(Local, Pose.Forward);
+			if (Depth <= 1.0)
+			{
+				return false;
+			}
+			if (FMath::Abs(FVector::DotProduct(Local, Right)) + Tuning.FighterRadiusCm > Inner * HalfTan * Depth
+				|| FMath::Abs(FVector::DotProduct(Local, Pose.Up)) + Tuning.FighterRadiusCm > Inner * HalfVerticalTan * Depth)
+			{
+				return false;
+			}
+		}
+		return true;
+	};
+	float Arm = MinArm;
+	for (int32 Iteration = 0; Iteration < 120 && Arm < MaxArm && !Fits(Arm); ++Iteration)
+	{
+		Arm = FMath::Min(Arm * 1.04f + 5.f, MaxArm);
+	}
+	Out.ArmCm = Arm;
+	Out.PitchDeg = ArenaPitchForArm(Tuning, Arm);
+	return Out;
+}
+
 EGSTN_CameraOcclusionAction FGSTN_CameraMath::DecideOcclusion(EGSTN_CameraOcclusionPolicy Policy, bool bFadeable, float BlockerDistanceFromCameraCm, float NearClipSafeCm)
 {
 	switch (Policy)

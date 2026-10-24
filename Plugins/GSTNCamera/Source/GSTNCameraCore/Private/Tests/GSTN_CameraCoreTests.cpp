@@ -552,6 +552,400 @@ GSTN_CAM_TEST(OcclusionDecision)
 	return true;
 }
 
+namespace GSTNCameraCoreTest
+{
+	/** One duel step with the spec defaults (150 cm axis freeze, 0.5 s swap delay, 3 s max delay, 90 deg/s) */
+	bool DuelStep(FGSTN_DuelCameraState& State, const FGSTN_CameraFrame& Frame, const FVector& A, const FVector& B, bool bGrounded, float Dt)
+	{
+		return FGSTN_CameraMath::StepDuelCamera(State, Frame, A, B, true, bGrounded, 150.f, 0.5f, 3.f, 90.f, Dt);
+	}
+}
+
+GSTN_CAM_TEST(DuelCrossOverDoesNotSpin)
+{
+	constexpr float Dt = 1.f / 60.f;
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(U, FVector::ZeroVector);
+		const FVector Axis = SomeFlatDirection(U);
+		const FVector Lateral = FVector::CrossProduct(U, Axis);
+		const FVector Origin(5, 6, 7);
+		const FVector B = Origin + Axis * 600.0;
+
+		FGSTN_DuelCameraState State;
+		CHECK(DuelStep(State, Frame, Origin, B, true, Dt));
+		const FVector Initial = State.Held;
+		const float InitialHeading = State.HeadingDeg;
+		float Previous = State.HeadingDeg;
+		float MaxStep = 0.f;
+		float MaxDeviation = 0.f;
+		auto Step = [&](const FVector& A, bool bGrounded)
+		{
+			DuelStep(State, Frame, A, B, bGrounded, Dt);
+			MaxStep = FMath::Max(MaxStep, FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Previous, State.HeadingDeg)));
+			Previous = State.HeadingDeg;
+			MaxDeviation = FMath::Max(MaxDeviation, FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(InitialHeading, State.HeadingDeg)));
+		};
+
+		// A jumps over B in one second, 40 cm to the side, and lands 600 cm behind it
+		for (int32 Index = 1; Index <= 60; ++Index)
+		{
+			const float S = Index / 60.f;
+			const FVector A = Origin + Axis * (1200.f * S) + Lateral * 40.0 + U * (800.f * S * (1.f - S));
+			Step(A, Index == 60);
+		}
+		const FVector Landed = Origin + Axis * 1200.0 + Lateral * 40.0;
+		// Landed, but the delay has not passed: the side holds
+		for (int32 Index = 0; Index < 24; ++Index)
+		{
+			Step(Landed, true);
+			CHECK(FVector::DotProduct(State.Held, Initial) > 0.99);
+		}
+		CHECK(MaxDeviation < 30.f);
+		// Past the delay the camera goes to the wanted screen sides, still under the rate limit
+		for (int32 Index = 0; Index < 200; ++Index)
+		{
+			Step(Landed, true);
+		}
+		CHECK(MaxStep <= 90.f * Dt + 1.0e-3f);
+		CHECK(FVector::DotProduct(State.Held, Initial) < -0.99);
+		CHECK(FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(State.HeadingDeg, FGSTN_CameraMath::DirectionToHeading(Frame, State.Held))) < 0.1f);
+	}
+	return true;
+}
+
+GSTN_CAM_TEST(DuelDegenerateAxisFrozen)
+{
+	constexpr float Dt = 1.f / 60.f;
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(U, FVector::ZeroVector);
+		const FVector Axis = SomeFlatDirection(U);
+		const FVector Lateral = FVector::CrossProduct(U, Axis);
+		const FVector A(5, 6, 7);
+		const FVector B = A + Axis * 600.0;
+
+		// Nothing to follow yet: no heading, nothing initialised
+		FGSTN_DuelCameraState Fresh;
+		CHECK(!DuelStep(Fresh, Frame, A, A + U * 300.0, true, Dt));
+		CHECK(!Fresh.bInitialised && Fresh.bFrozen);
+
+		FGSTN_DuelCameraState State;
+		CHECK(DuelStep(State, Frame, A, B, true, Dt));
+		const FVector Held = State.Held;
+		const float Heading = State.HeadingDeg;
+		// B right above A, then circling A inside the minimum separation: the axis does not move
+		for (int32 Index = 0; Index < 120; ++Index)
+		{
+			const float Angle = Index * 0.37f;
+			const FVector Above = A + U * 400.0 + (Axis * FMath::Cos(Angle) + Lateral * FMath::Sin(Angle)) * (Index % 3 == 0 ? 0.0 : 120.0);
+			DuelStep(State, Frame, A, Above, true, Dt);
+			CHECK(State.bFrozen);
+			CHECK(State.Held.Equals(Held, 1.0e-9));
+			CHECK(State.HeadingDeg == Heading);
+		}
+		// Far enough again: the axis is followed again
+		DuelStep(State, Frame, A, A + Lateral * 500.0, true, Dt);
+		CHECK(!State.bFrozen);
+	}
+	return true;
+}
+
+GSTN_CAM_TEST(DuelSideSwapsAfterDelay)
+{
+	constexpr float Dt = 1.f / 60.f;
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(U, FVector::ZeroVector);
+		const FVector Axis = SomeFlatDirection(U);
+		const FVector Origin(5, 6, 7);
+		const FVector B = Origin + Axis * 600.0;
+		const FVector Crossed = Origin + Axis * 1200.0;
+
+		// Both grounded: the side holds for the delay, then swaps
+		FGSTN_DuelCameraState State;
+		DuelStep(State, Frame, Origin, B, true, Dt);
+		const FVector Initial = State.Held;
+		for (int32 Index = 0; Index < 27; ++Index)
+		{
+			DuelStep(State, Frame, Crossed, B, true, Dt);
+		}
+		CHECK(FVector::DotProduct(State.Held, Initial) > 0.99);
+		for (int32 Index = 0; Index < 6; ++Index)
+		{
+			DuelStep(State, Frame, Crossed, B, true, Dt);
+		}
+		CHECK(FVector::DotProduct(State.Held, Initial) < -0.99);
+
+		// Crossing back before the delay resets it: no swap happens
+		FGSTN_DuelCameraState Back;
+		DuelStep(Back, Frame, Origin, B, true, Dt);
+		for (int32 Index = 0; Index < 20; ++Index)
+		{
+			DuelStep(Back, Frame, Crossed, B, true, Dt);
+		}
+		DuelStep(Back, Frame, Origin, B, true, Dt);
+		for (int32 Index = 0; Index < 20; ++Index)
+		{
+			DuelStep(Back, Frame, Crossed, B, true, Dt);
+		}
+		CHECK(FVector::DotProduct(Back.Held, Initial) > 0.99);
+
+		// Somebody stays airborne: the side swaps only at the maximum delay
+		FGSTN_DuelCameraState Air;
+		DuelStep(Air, Frame, Origin, B, true, Dt);
+		for (int32 Index = 0; Index < 170; ++Index)
+		{
+			DuelStep(Air, Frame, Crossed, B, false, Dt);
+		}
+		CHECK(FVector::DotProduct(Air.Held, Initial) > 0.99);
+		for (int32 Index = 0; Index < 20; ++Index)
+		{
+			DuelStep(Air, Frame, Crossed, B, false, Dt);
+		}
+		CHECK(FVector::DotProduct(Air.Held, Initial) < -0.99);
+	}
+	return true;
+}
+
+GSTN_CAM_TEST(ShoulderSwapBlendsAndAimStaysConverged)
+{
+	constexpr float Dt = 1.f / 60.f;
+	float Blend = 1.f;
+	float Previous = Blend;
+	int32 Frames = 0;
+	while (Blend > -1.f && Frames < 100)
+	{
+		Blend = FGSTN_CameraMath::StepShoulderBlend(Blend, EGSTN_ShoulderSide::Left, 0.2f, Dt);
+		TestTrue(TEXT("monotonic and never a snap"), Blend < Previous && Previous - Blend < 0.2f);
+		Previous = Blend;
+		++Frames;
+	}
+	TestTrue(TEXT("the swap takes the blend time"), Frames >= 11 && Frames <= 13);
+	TestEqual(TEXT("blend time 0 snaps"), FGSTN_CameraMath::StepShoulderBlend(1.f, EGSTN_ShoulderSide::Left, 0.f, Dt), -1.f);
+	TestEqual(TEXT("the side is held"), FGSTN_CameraMath::StepShoulderBlend(1.f, EGSTN_ShoulderSide::Right, 0.2f, Dt), 1.f);
+
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(U, FVector::ZeroVector);
+		FVector Dirs[2];
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			FGSTN_CameraView View;
+			View.Pivot = FVector(10, 20, 30);
+			View.HeadingDeg = 25.f;
+			View.PitchDeg = -8.f;
+			View.ArmCm = 220.f;
+			View.SideOffsetCm = Index == 0 ? 55.f : -55.f;
+			View.UpOffsetCm = 55.f;
+			const FGSTN_CameraPose Pose = FGSTN_CameraMath::ComputePose(Frame, View);
+			const FVector Hit = Pose.Location + Pose.Forward * 1500.0;
+			Dirs[Index] = FGSTN_CameraMath::ConvergedAimDirection(Pose.Location, Pose.Forward, View.Pivot, true, Hit, 300.f, 6000.f);
+			// The shot leaves the character and arrives on the point under the view centre, whichever side the camera is on
+			CHECK((View.Pivot + Dirs[Index] * FVector::Dist(View.Pivot, Hit)).Equals(Hit, 1.0e-2));
+		}
+		const FVector Heading = FGSTN_CameraMath::HeadingToDirection(Frame, 25.f);
+		const FVector Right = FVector::CrossProduct(U, Heading);
+		// Mirror images about the plane of the view. The point under the view centre lies on the camera's own side of the
+		// character (the view axis is offset by the shoulder), so the shot leaves towards the shoulder the camera is on
+		CHECK(FVector::DotProduct(Dirs[0], Right) > 0.0 && FVector::DotProduct(Dirs[1], Right) < 0.0);
+		CHECK(FMath::IsNearlyEqual(static_cast<float>(FVector::DotProduct(Dirs[0], Right)), -static_cast<float>(FVector::DotProduct(Dirs[1], Right)), 1.0e-4f));
+		CHECK(FMath::IsNearlyEqual(static_cast<float>(FVector::DotProduct(Dirs[0], Heading)), static_cast<float>(FVector::DotProduct(Dirs[1], Heading)), 1.0e-4f));
+	}
+	return true;
+}
+
+GSTN_CAM_TEST(ShoulderRightIsScreenRightForEveryUp)
+{
+	// Unreal is left handed: with Up +Z and heading 0 = +X the screen right is +Y = Cross(Up, Forward)
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(FVector(0, 0, 1), FVector::ZeroVector);
+		FGSTN_CameraView View;
+		View.Pivot = FVector::ZeroVector;
+		View.HeadingDeg = 0.f;
+		View.PitchDeg = 0.f;
+		View.UpOffsetCm = 0.f;
+		View.SideOffsetCm = 50.f;
+		View.ArmCm = 200.f;
+		const FGSTN_CameraPose Pose = FGSTN_CameraMath::ComputePose(Frame, View);
+		TestTrue(TEXT("positive side offset is +Y with Up +Z, heading +X"), Pose.Location.Equals(FVector(-200, 50, 0), 1.0e-3));
+	}
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(U, FVector::ZeroVector);
+		FGSTN_CameraView View;
+		View.HeadingDeg = 25.f;
+		View.PitchDeg = -8.f;
+		View.ArmCm = 220.f;
+		View.SideOffsetCm = 55.f;
+		const FGSTN_CameraPose Right = FGSTN_CameraMath::ComputePose(Frame, View);
+		View.SideOffsetCm = -55.f;
+		const FGSTN_CameraPose Left = FGSTN_CameraMath::ComputePose(Frame, View);
+		// Screen right of the camera is Cross(Up of the character, Forward): the pose's own up would rotate with pitch
+		const FVector ScreenRight = FVector::CrossProduct(U,FGSTN_CameraMath::HeadingToDirection(Frame, 25.f));
+		const FVector Offset = Right.Location - Left.Location;
+		CHECK(FVector::DotProduct(Offset, ScreenRight) > 100.0);
+		CHECK(FVector::DotProduct(Offset, Right.Forward) < 1.0e-3 && FVector::DotProduct(Offset, U) < 1.0e-3);
+		// The same relation seen from the camera: right = Cross(CameraUp, CameraForward) is the screen right in a left handed system
+		CHECK(FVector::DotProduct(FVector::CrossProduct(Right.Up, Right.Forward), Offset) > 100.0);
+	}
+	return true;
+}
+
+GSTN_CAM_TEST(GroupFramingByCount)
+{
+	TestEqual(TEXT("no opponent"), FGSTN_CameraMath::ChooseGroupFraming(0), EGSTN_CameraGroupFraming::None);
+	TestEqual(TEXT("one opponent"), FGSTN_CameraMath::ChooseGroupFraming(1), EGSTN_CameraGroupFraming::Duel);
+	TestEqual(TEXT("two opponents"), FGSTN_CameraMath::ChooseGroupFraming(2), EGSTN_CameraGroupFraming::Arena);
+	TestEqual(TEXT("three opponents"), FGSTN_CameraMath::ChooseGroupFraming(3), EGSTN_CameraGroupFraming::Arena);
+	return true;
+}
+
+namespace GSTNCameraCoreTest
+{
+	/** Fighters spread over the plane normal to Up around Centre, with some height, in a layout given by Radius */
+	TArray<FVector> ArenaFighters(const FVector& Up, const FVector& Centre, int32 Count, float Radius)
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(Up, FVector::ZeroVector);
+		TArray<FVector> Out;
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const FVector Flat = FGSTN_CameraMath::HeadingToDirection(Frame, 20.f + 360.f * Index / Count);
+			Out.Add(Centre + Flat * Radius + Up * (60.f * Index));
+		}
+		return Out;
+	}
+}
+
+GSTN_CAM_TEST(ArenaFramesAllFighters)
+{
+	const FGSTN_CameraArenaTuning Tuning;
+	const float Aspect = 16.f / 9.f;
+	const float HalfTan = FMath::Tan(FMath::DegreesToRadians(Tuning.FovDeg * 0.5f));
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(U, FVector::ZeroVector);
+		float PreviousArm = 0.f;
+		for (const int32 Count : { 3, 4 })
+		{
+			for (const float Radius : { 100.f, 500.f, 900.f })
+			{
+				const TArray<FVector> Fighters = ArenaFighters(U, FVector(10, 20, 30), Count, Radius);
+				const FGSTN_ArenaFraming Framing = FGSTN_CameraMath::ArenaFrameAll(Fighters, Frame, 37.f, Tuning, Aspect, FBox(ForceInit));
+				CHECK(Framing.bValid);
+				CHECK(Framing.ArmCm >= Tuning.MinArmCm - 1.0e-3f && Framing.ArmCm <= Tuning.MaxArmCm + 1.0e-3f);
+				CHECK(Framing.PitchDeg <= Tuning.PitchDeg + 1.0e-3f && Framing.PitchDeg >= Tuning.PitchDeg - Tuning.MaxExtraPitchDeg - 1.0e-3f);
+				// These layouts fit before the limit, so the margins must hold for every fighter
+				CHECK(Framing.ArmCm < Tuning.MaxArmCm - 1.f);
+
+				FGSTN_CameraView View;
+				View.Pivot = Framing.Focus;
+				View.HeadingDeg = Framing.HeadingDeg;
+				View.PitchDeg = Framing.PitchDeg;
+				View.ArmCm = Framing.ArmCm;
+				const FGSTN_CameraPose Pose = FGSTN_CameraMath::ComputePose(Frame, View);
+				const FVector Right = FVector::CrossProduct(Pose.Up, Pose.Forward);
+				const float Inner = 1.f - Tuning.ScreenMargin;
+				for (const FVector& Point : Fighters)
+				{
+					const FVector Local = Point - Pose.Location;
+					const double Depth = FVector::DotProduct(Local, Pose.Forward);
+					CHECK(Depth > 0.0);
+					CHECK(FMath::Abs(FVector::DotProduct(Local, Right)) + Tuning.FighterRadiusCm <= Inner * HalfTan * Depth + 1.0e-3);
+					CHECK(FMath::Abs(FVector::DotProduct(Local, Pose.Up)) + Tuning.FighterRadiusCm <= Inner * HalfTan / Aspect * Depth + 1.0e-3);
+				}
+				// The camera looks down from above the arena (elevated view)
+				CHECK(FVector::DotProduct(Pose.Forward, U) < -0.3);
+				// A wider spread never needs a closer camera
+				if (Count == 3)
+				{
+					CHECK(Framing.ArmCm + 1.0e-3f >= PreviousArm);
+					PreviousArm = Framing.ArmCm;
+				}
+			}
+		}
+		// Pitch rises with the arm
+		CHECK(FGSTN_CameraMath::ArenaPitchForArm(Tuning, Tuning.MaxArmCm) < FGSTN_CameraMath::ArenaPitchForArm(Tuning, Tuning.MinArmCm));
+	}
+	return true;
+}
+
+GSTN_CAM_TEST(ArenaYawStableWhenPlayersCircle)
+{
+	const FGSTN_CameraArenaTuning Tuning;
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(U, FVector::ZeroVector);
+		const FVector Centre(10, 20, 30);
+		const float Heading = 100.f + Tuning.YawDeg;
+		for (int32 Step = 0; Step < 36; ++Step)
+		{
+			// The whole group circles the centre (the local pawn first): the view must not follow any of them
+			const FVector Flat = FGSTN_CameraMath::HeadingToDirection(Frame, Step * 10.f);
+			const FVector Other = FGSTN_CameraMath::HeadingToDirection(Frame, Step * 10.f + 120.f);
+			const TArray<FVector> Fighters = { Centre + Flat * 600.0, Centre + Other * 600.0, Centre - Flat * 300.0 };
+			const FGSTN_ArenaFraming Framing = FGSTN_CameraMath::ArenaFrameAll(Fighters, Frame, Heading, Tuning, 16.f / 9.f, FBox(ForceInit));
+			CHECK(Framing.bValid && Framing.HeadingDeg == Heading);
+		}
+	}
+	return true;
+}
+
+GSTN_CAM_TEST(ArenaZoomDamped)
+{
+	const FGSTN_CameraArenaTuning Tuning;
+	const float Dt = 1.f / 60.f;
+	// Zoom out: monotonic, never past the wanted value, converges
+	float Arm = 1000.f;
+	for (int32 Step = 0; Step < 600; ++Step)
+	{
+		const float Next = FGSTN_CameraMath::StepArenaZoom(Arm, 2000.f, Tuning.ZoomInSeconds, Tuning.ZoomOutSeconds, Dt);
+		TestTrue(TEXT("zoom out grows without overshoot"), Next >= Arm && Next <= 2000.f);
+		Arm = Next;
+	}
+	TestTrue(TEXT("zoom out converges"), FMath::IsNearlyEqual(Arm, 2000.f, 1.f));
+	// Zoom in the same gap: the first step is smaller than the zoom out step (separate speeds)
+	const float OutStep = FGSTN_CameraMath::StepArenaZoom(1000.f, 2000.f, Tuning.ZoomInSeconds, Tuning.ZoomOutSeconds, Dt) - 1000.f;
+	const float InStep = 2000.f - FGSTN_CameraMath::StepArenaZoom(2000.f, 1000.f, Tuning.ZoomInSeconds, Tuning.ZoomOutSeconds, Dt);
+	TestTrue(TEXT("a step is partial"), OutStep > 0.f && OutStep < 1000.f && InStep > 0.f && InStep < 1000.f);
+	TestTrue(TEXT("zoom in is slower than zoom out"), InStep < OutStep);
+	// Frame rate independence: one 1/30 s step equals two 1/60 s steps
+	const float Once = FGSTN_CameraMath::StepArenaZoom(1000.f, 2000.f, 0.8f, 0.2f, 2.f * Dt);
+	const float Twice = FGSTN_CameraMath::StepArenaZoom(FGSTN_CameraMath::StepArenaZoom(1000.f, 2000.f, 0.8f, 0.2f, Dt), 2000.f, 0.8f, 0.2f, Dt);
+	TestTrue(TEXT("frame rate independent"), FMath::IsNearlyEqual(Once, Twice, 0.01f));
+	TestEqual(TEXT("zero seconds snaps"), FGSTN_CameraMath::StepArenaZoom(1000.f, 2000.f, 0.f, 0.f, Dt), 2000.f);
+	return true;
+}
+
+GSTN_CAM_TEST(ArenaFocusClampedToBounds)
+{
+	const FGSTN_CameraArenaTuning Tuning;
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FGSTN_CameraFrame Frame = FGSTN_CameraMath::MakeFrame(U, FVector::ZeroVector);
+		const FBox Bounds(FVector(-300, -300, -300), FVector(300, 300, 300));
+		// Inside: the plain weighted centroid
+		const TArray<FVector> Inside = { FVector(100, 0, 0), FVector(-50, 80, 0), FVector(0, -60, 40) };
+		const FGSTN_ArenaFraming Plain = FGSTN_CameraMath::ArenaFrameAll(Inside, Frame, 0.f, Tuning, 16.f / 9.f, Bounds);
+		const double W = Tuning.LocalPlayerWeight;
+		const FVector Expected = (Inside[0] * W + Inside[1] + Inside[2]) / (W + 2.0);
+		CHECK(Plain.Focus.Equals(Expected, 1.0e-3));
+		// Fighters far outside: the focus stays in the box, whatever the layout
+		for (const FVector& Offset : { FVector(5000, 0, 0), FVector(-4000, 3000, 0), FVector(0, 0, -6000), FVector(2000, 2000, 2000) })
+		{
+			const TArray<FVector> Outside = { Offset, Offset + FVector(200, 0, 0), Offset + FVector(0, 300, 100) };
+			const FGSTN_ArenaFraming Clamped = FGSTN_CameraMath::ArenaFrameAll(Outside, Frame, 0.f, Tuning, 16.f / 9.f, Bounds);
+			CHECK(Bounds.IsInside(Clamped.Focus) || Bounds.ExpandBy(1.0e-3).IsInside(Clamped.Focus));
+			// ...and the arm still grows to fit them (best effort at the limit)
+			CHECK(Clamped.ArmCm >= Tuning.MinArmCm - 1.0e-3f);
+		}
+		// No bounds: the centroid is free
+		const TArray<FVector> Far = { FVector(5000, 0, 0), FVector(5200, 0, 0) };
+		CHECK(FGSTN_CameraMath::ArenaFrameAll(Far, Frame, 0.f, Tuning, 16.f / 9.f, FBox(ForceInit)).Focus.X > 4000.0);
+	}
+	return true;
+}
+
 #undef CHECK
 
 #endif // WITH_DEV_AUTOMATION_TESTS

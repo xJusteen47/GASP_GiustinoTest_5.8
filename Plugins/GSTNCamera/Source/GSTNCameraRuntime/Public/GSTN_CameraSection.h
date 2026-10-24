@@ -218,6 +218,9 @@ public:
 	/** Volume measure used to break the last priority tie: smaller wins */
 	double GetVolumeSize() const;
 
+	/** The volume as a world box (brush bounds, else the box around the fallback extent); the Arena mode clamps its focus to it. False for an empty volume */
+	bool GetWorldBounds(FBox& OutBox) const;
+
 	/** The heading of the actor forward about Up, in the frame (the base the desired yaw is added to) */
 	float GetBaseHeading(const FGSTN_CameraFrame& Frame) const;
 

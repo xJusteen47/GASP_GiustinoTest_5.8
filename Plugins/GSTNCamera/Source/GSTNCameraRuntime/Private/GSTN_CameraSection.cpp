@@ -43,6 +43,24 @@ double AGSTN_CameraSection::GetVolumeSize() const
 	return FallbackExtent.X * FallbackExtent.Y * FallbackExtent.Z;
 }
 
+bool AGSTN_CameraSection::GetWorldBounds(FBox& OutBox) const
+{
+	const UBrushComponent* BrushComp = GetBrushComponent();
+	if (BrushComp && BrushComp->BrushBodySetup)
+	{
+		OutBox = BrushComp->Bounds.GetBox();
+		return OutBox.IsValid != 0;
+	}
+	OutBox = FBox(ForceInit);
+	const FTransform Transform = GetActorTransform();
+	for (int32 Corner = 0; Corner < 8; ++Corner)
+	{
+		const FVector Local((Corner & 1) ? FallbackExtent.X : -FallbackExtent.X, (Corner & 2) ? FallbackExtent.Y : -FallbackExtent.Y, (Corner & 4) ? FallbackExtent.Z : -FallbackExtent.Z);
+		OutBox += Transform.TransformPositionNoScale(Local);
+	}
+	return OutBox.IsValid != 0;
+}
+
 float AGSTN_CameraSection::GetBaseHeading(const FGSTN_CameraFrame& Frame) const
 {
 	const FVector Flat = FGSTN_CameraMath::ProjectOnUpPlane(GetActorForwardVector(), Frame.Up);
