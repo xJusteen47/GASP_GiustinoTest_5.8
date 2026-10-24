@@ -334,3 +334,10 @@ Deviations to know: a separate `HitPipeline` list on the rules (the activation `
 Pending: (1) asset `Plugins/GSTNCombat/Content/Rules/GSTN_CombatRules_Standard` (editor; `UGSTN_CombatSettings::DefaultRules` null falls back to `CreateStandard`, same values); (2) test `BlueprintStepRoundTrip` (needs a Blueprint step asset, H13); (3) H0 spikes (editor); (4) the "hurtbox reaction + part reaction" validator rule (needs GSTNParts); (5) nothing calls the applier / attacker outcome registries or reads `HitGroupMask` yet (H8, H9).
 Working tree note: `.mcp.json` (modified) and `.mcp.json.tmp` were already dirty before this session and are not part of any commit.
 NEXT: H0 spikes in the editor, then H5 (GAS damage, attributes, effects, events; fills the four effect classes of the rules).
+
+## HANDOVER 18 (laptop, 2026-10-24): M4 H0 spikes, static parts only
+
+Branch feature/gas-npp-5.8. No build, no tests, no editor, no code changes. The editor was never open: Rider sat on the Welcome screen with no project (the Rider MCP had no target), the command-line open of the .uproject did not work, the click route was denied, and after one Rider restart the Rider MCP disconnected from the session.
+Done: `docs/notes/m4-spike-report.md` with the source findings: H0b (a layered move can carry a Mover tag, `MoverComponent.cpp:693-740`) and H0e (`RewindActors/UnwindActors` and `UNetworkPredictionLagCompensation` exist in the fork).
+Pending (editor): H0a, H0c, H0d and the live parts of H0b/H0e (rollbacks per hit, montage divergence, buffer ms, freeze in each mode, rewind cost). NEXT: open the project in Rider, start the editor, run them, then H5.
+Working tree: `.mcp.json` and `.mcp.json.tmp` dirty as before, not committed.
