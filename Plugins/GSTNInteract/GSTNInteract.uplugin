@@ -20,6 +20,11 @@
 			"Name": "GSTNInteractCore",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNInteractRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
 		}
 	]
 }

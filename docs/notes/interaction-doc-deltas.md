@@ -46,3 +46,36 @@ INT.1 is a *Decision* in the spec (the character points). INT.2 to INT.6 are una
 - §8 no tag ini and no tag search path in Core: the plugin declares only the roots as native tags.
 - Providers: ids 1 (registry) and 16+ (consumers) are defined in `GSTNInteractProviders`, standing in for the central id file of
   modularity §5b until it exists.
+
+## I1 runtime (2026-10-24)
+
+- Section 7: `GSTNInteractRuntime` does not depend on `UMG`: the minimal presentation draws with the debug helpers. A real prompt widget is
+  a project presenter; add `UMG` when one ships in the plugin.
+- Section 5 not built: outline, overlay and ground-ring highlight, the style asset (`UGSTN_InteractStyle`) with `ActiveMeanings` queries,
+  nearby markers (`MaxNearbyMarkers`), the 80 ms cross-fade, the override stack. Presenters are listed in the settings instead of a style
+  asset; the owner asked for no visual polish.
+- Section 3.2: `UGSTN_InteractSubsystem::GetFrame()` is the game state's server world time times `FrameRateHz`. The spec assumed an accessor
+  for the server's sim frame from combat; this is the non-NP stand-in. `SetFrameOverride` exists for tests and replay tools. A bridge in
+  I2 must stamp with the NP frame instead; the two clocks must not be mixed in one world.
+- Section 3.2: spawned handles are `0x80000000 | serial`, stable-key handles clear the high bit, so the two never collide. Level-placed
+  handles hash `AActor::GetPathName(World)`; stability under World Partition is still *Unsure* (the registry rejects a duplicate and logs it).
+- Section 3.4: `UGSTN_InteractorComponent` is an `IGSTN_InteractFocusSource` (the interface is C++ only); `IGSTN_InteractPointingSource`
+  is a Blueprint-implementable interface with one event, `GetPointingInput`. Without it the interactor points with location, forward and,
+  as a stand-in for the stick, the planar velocity.
+- Section 3.4: `ServerInteract(Id, Verb)` is validated by `IsStillInteractable` with the owner's pointing origin and the component's
+  `CanInteractServer`; only registry records (components) are resolvable. Candidates of providers are the consumer's to act on.
+- Section 4: `ProbeEveryNFrames` is honoured by the component's tick stride.
+- Section 10: `GSTNInteract.Runtime.*` has six tests: the five named plus `SettingsAndRulesAssetAreSane`. `RecordReplicatesWithStamps` checks
+  the replicated property flags and that a client building a record from the stamp gets the server's record field for field; the actual
+  property replication path is for the later harness scenarios (`scenario_interact_late_spawn`), not for a headless test.
+- `FGSTN_InteractRecordStamp` replicates `COND_InitialOnly`; `UpdateRecord` therefore changes the server's local stamp only. A moved
+  replicated record needs a reliable multicast or a second stamp: left for the first consumer that moves records (M10).
+
+## What I2 needs (seams, not built)
+
+- Sync fragment `FGSTN_InteractFocusFragment` and the tick extension at the tag-projection hook (M3 section 7.2 step 10) with an explicit priority.
+- The `TargetKey` seam in `FGSTN_ActivationContext` (M2 7a / M3) so the ability reads the focus id the tag matched.
+- A sim-frame accessor usable by non-NP spawn code (or a bridge-owned clock) to replace `GetFrame()` for stamping.
+- Combat's snapshot reader to build the opaque `FGSTN_InteractHostContext` for snapshot providers, and the 16 bit yaw of the command to feed
+  `FGSTN_InteractQuery::StickDirection` (the Core re-quantises around `Up`).
+- The central provider-id file (modularity 5b) in place of `GSTNInteractProviders`.
