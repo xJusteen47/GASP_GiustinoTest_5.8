@@ -423,3 +423,24 @@ which held the slide at `BrakeMinSpeed`. In v2 `MapMoveIntentToWall` drops the v
 size, `UGSTN_WallControlUtils::IntoWallAmount` / `SuppressVerticalIntoWall`); the into-wall component is otherwise ignored, so pushing toward the wall does nothing special.
 Option kept, off by default: `HoldTowardWallTerminalScale` (1 = off) scales the terminal down speed with the push. `BrakeMinSpeed` is 80 cm/s and a held brake brings any
 slower or upward speed up to it, so the slide cannot freeze. Tests: `GSTN.Wall.Control.{PushIntoWallDoesNotChangeSlide, BrakeNeverBelowMinSpeed}`, `GSTN.Wall.V2.PushIntoWallDoesNotChangeSlide`.
+
+### 6.8 Inclined walls and overhangs (owner request, 2026-10-24)
+
+"Climbing is the other way round: the wall slide must also work on more or less inclined walls." Angles here are the angle between the surface normal and gravity-up
+(`Beta`): 90 is vertical, 60-85 a wall leaning back (normal tilts up, the upright capsule touches with its lower hemisphere), 95-120 an overhang (normal tilts down, upper hemisphere).
+
+- **Accepted range: 45 to 120 degrees**, for the slide v2 mode (`MinSurfaceAngle` / `MaxSurfaceAngle`) and, now, for the entry transition (its default minimum was 60, which
+  excluded 45-60 and put the usual 60 degree slant on a float knife edge). Below 45 is a floor (Mover's walkable limit), the floor rule (`IsFloorHit`, gravity-relative) is unchanged and does not
+  fire on 50-70 degree slants. A saved transition asset that overrides `MinSurfaceAngle` keeps its value.
+- **Entry confirmation trace**: it ran one radius horizontally from the capsule center, which never reaches a surface leaning back 60 degrees (the center is `support` away along the normal, 61 cm for the
+  default capsule, 70 cm horizontally). It now runs along the face normal for the capsule's extent along it (`+ ProbeDistance + 5`); identical on a vertical wall.
+- **Down the wall** is gravity projected on the proxy plane (`UGSTN_WallControlUtils::AdaptToSlope`): the gravity along the plane is `|g| sin(Beta)`, and the terminal down speed and `DownBoost` follow it
+  (`Control.SlopeTerminalScaling`, 1 = fully, 0 = off). An 60 degree wall slides at 87% of the vertical speed over the whole run, an 80 degree one at 98%. Overhangs use the same law
+  (`sin(110) = 0.94`); the velocity is always on the plane, so gravity pulling the character off an overhang is held only by the adhesion (`MaxAdhesionSpeed`), as on any wall.
+- **Inside corner fit test** (`CanFitOnWall`, `bKeepOrientation`): the legacy test lays a rotated capsule on the new wall; the v2 capsule stays upright, so the pose is the current orientation seated
+  by its own extent along the new normal. **Wrap around an outside edge** (`FindWallAroundConvexEdge`, `WallSupport`) dives from that extent instead of the radius. Both default to the legacy behaviour.
+- Already gravity-relative and unchanged: adhesion (a capsule sweep along the normal, so the gap is the hemisphere's), the look-ahead (`CapsuleSupportAlong`), corner and bump classification (angles
+  between normals, heights along the normal), the facing yaw.
+- Known limit: near a floor the adhesion sweep (along -N, which has a downward part on a slant) can hit the floor before the wall; that reads as "no wall" for the last ~1-2 ticks before the floor rule
+  takes over (grace time 0.15 s). Tests `GSTN.Wall.V2.{SlantedWallSlidesDown, OverhangKeepsContact, SlantSlowerThanVertical, SlantNotTreatedAsFloor, EntryAcceptsInclinedWalls, CornerOnSlantedWallCaps,
+  BumpOnSlantedWallSteppedOver, AdhesionGapOnTiltedContact, WrapFindsFaceAroundEdgeOnSlant}` (`GSTN_WallV2SlantTests.cpp`); written with the editor open, so not yet run.

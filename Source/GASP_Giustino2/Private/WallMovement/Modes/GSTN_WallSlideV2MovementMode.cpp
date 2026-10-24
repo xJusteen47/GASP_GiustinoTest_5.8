@@ -19,6 +19,9 @@ UGSTN_WallSlideV2MovementMode::UGSTN_WallSlideV2MovementMode(const FObjectInitia
 	WallJump.AwaySpeed = 400.f;
 	WallJump.UpSpeed = 300.f;
 
+	// Accepted surfaces, as the angle between their normal and gravity-up: 45 (anything flatter is a floor) to 120. That covers every inclined wall
+	// (a normal at 60, 70, 80: the wall leans back and the character slides down it), the vertical wall (90) and overhangs up to 30 degrees past it.
+	// The entry transition's defaults are the same range
 	MinSurfaceAngle = 45.f;
 	MaxSurfaceAngle = 120.f;
 	WallProbeDistance = 30.f;
@@ -61,8 +64,9 @@ FVector UGSTN_WallSlideV2MovementMode::ComputeWallVelocity(const FMoverTickStart
 	bool bBrakeTag = false;
 	if (const UMoverComponent* MoverComp = GetMoverComponent())
 	{
-		// Gravity along the wall (V is up on the plane): a slanted wall pulls less than a vertical one
-		Settings.GravityAcceleration = FMath::Max(FVector::DotProduct(MoverComp->GetGravityAcceleration(), -VAxis), 0.f);
+		// Gravity along the wall (V is up on the plane): an inclined wall pulls less than a vertical one, in proportion, and its terminal speed
+		// follows (SlopeTerminalScaling). Down the wall is the gravity tangent of the proxy plane, never world Z
+		Settings = UGSTN_WallControlUtils::AdaptToSlope(Control, MoverComp->GetGravityAcceleration(), VAxis);
 		// Mover tags of the simulated state, not the game thread's: a re-simulated frame reads its own
 		bBrakeTag = Brake.BrakeInputTag.IsValid() && MoverComp->HasGameplayTagInState(StartState.SyncState, Brake.BrakeInputTag, false);
 	}

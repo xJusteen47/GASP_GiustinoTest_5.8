@@ -127,11 +127,18 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 	{
 		return false;
 	}
-	const float CapsuleRadius = UpdatedPrimitive->GetCollisionShape().GetCapsuleRadius();
+	// The trace runs along the face normal, not the horizontal: on an inclined wall the capsule touches with a hemisphere and its center is
+	// further from the surface than a radius (a horizontal trace of one radius never got there at 60 degrees), and the same line is the
+	// horizontal one on a vertical wall. Its reach is the capsule's own extent along the normal
+	const FCollisionShape CapsuleShape = UpdatedPrimitive->GetCollisionShape();
+	const float CapsuleRadius = CapsuleShape.GetCapsuleRadius();
+	const float CapsuleHalfHeight = FMath::Max(CapsuleShape.GetCapsuleHalfHeight(), CapsuleRadius);
+	const float SupportOnNormal = FMath::Max(CapsuleHalfHeight - CapsuleRadius, 0.f)
+		* FMath::Abs(FVector::DotProduct(FaceNormal, UpdatedComponent->GetComponentQuat().GetUpVector())) + CapsuleRadius;
 	FHitResult CenterHit;
-	const FVector CenterEnd = Start - FlatNormal * (CapsuleRadius + ProbeDistance + 5.f);
+	const FVector CenterEnd = Start - FaceNormal * (SupportOnNormal + ProbeDistance + 5.f);
 	if (!World->LineTraceSingleByChannel(CenterHit, Start, CenterEnd, UpdatedPrimitive->GetCollisionObjectType(), QueryParams, ResponseParams)
-		|| FVector::DotProduct(CenterHit.ImpactNormal, FlatNormal) < 0.5f)
+		|| FVector::DotProduct(CenterHit.ImpactNormal, FaceNormal) < 0.5f)
 	{
 		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: no wall at capsule center height"));
 		return false;

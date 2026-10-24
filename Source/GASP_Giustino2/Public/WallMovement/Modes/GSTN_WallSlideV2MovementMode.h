@@ -13,6 +13,11 @@
  * this class only supplies the control model: ComputeWallVelocity is UGSTN_WallControlUtils::StepSlideVelocity, fed with the stick
  * on the plane (H, V) and the brake decision (FGSTN_WallBrakeInput).
  *
+ * Inclined walls and overhangs: the accepted surfaces are 45 to 120 degrees between their normal and gravity-up (MinSurfaceAngle / MaxSurfaceAngle,
+ * the same range as the entry transition). The capsule stays upright whatever the wall, "down the wall" is gravity projected on the proxy plane,
+ * so an inclined wall pulls and slides in proportion to sin(angle from the horizontal) (Control.SlopeTerminalScaling), the adhesion keeps the
+ * capsule at WallGap by its lower or upper hemisphere, and corners and bumps are measured against the wall's own normal.
+ *
  * Runs next to the legacy UGSTN_WallSlideMovementMode, which is untouched: register this one as "WallSlidingV2" on the Mover
  * component and pick which one the Falling entry transition targets (Tools/GAS/setup_wall_slide_modes.py --use v2|legacy).
  */

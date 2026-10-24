@@ -59,6 +59,22 @@ public:
 	static bool ResolveBrake(const FGSTN_WallBrakeInput& BrakeInput, const FVector2D& VelocityOnPlane, const FVector2D& InputOnPlane, bool bTagActive);
 
 	/**
+	 * Share of Gravity (cm/s^2, a vector) that acts along the wall toward "down the wall": its component on -Vertical, never negative. 100% of
+	 * |Gravity| on a vertical wall, sin(angle from the horizontal) of it on an inclined one or an overhang, 0 on a floor or a ceiling.
+	 * Vertical is the plane's V axis (gravity-up projected on the plane, MakePlaneAxes), so it works under any gravity direction
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static float GravityAlongPlane(const FVector& Gravity, const FVector& Vertical);
+
+	/**
+	 * The slide settings for a wall that is not vertical: GravityAcceleration becomes the gravity along the plane (GravityAlongPlane), and
+	 * TerminalDownSpeed and DownBoost are scaled by that share of |Gravity| as much as SlopeTerminalScaling says. A vertical wall returns
+	 * the settings with the full gravity (unchanged terminal speed), so the owner's vertical tuning is the 90 degree case of the same law
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static FGSTN_WallSlideControlSettings AdaptToSlope(const FGSTN_WallSlideControlSettings& Settings, const FVector& Gravity, const FVector& Vertical);
+
+	/**
 	 * One tick of the slide: slow-decaying low-control horizontal axis, soft-terminal gravity vertical axis, hard braking.
 	 * IntoWall (0..1) is how much the stick pushes into the wall; it only scales the terminal speed by HoldTowardWallTerminalScale
 	 * (off by default). Under the brake a speed below BrakeMinSpeed (slow, or upward) rises to it, so the slide never freezes

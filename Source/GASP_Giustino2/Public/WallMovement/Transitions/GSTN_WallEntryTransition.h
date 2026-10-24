@@ -75,9 +75,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float ProbeDistance = 30.f;
 
-	/** Grabbable surfaces: angle between their normal and gravity-up, from MinSurfaceAngle... */
+	/**
+	 * Grabbable surfaces: angle between their normal and gravity-up, from MinSurfaceAngle... The default range, 45 to 120, is the one the wall
+	 * modes accept: surfaces from 45 degrees off the horizontal (below that is a floor, the limit Mover walks on) through every inclined wall
+	 * (60, 70, 80 degrees: the normal tilts up), the vertical wall (90) and overhangs up to 30 degrees past it (the normal tilts down)
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection", meta = (ClampMin = "0", ClampMax = "180", ForceUnits = "deg"))
-	float MinSurfaceAngle = 60.f;
+	float MinSurfaceAngle = 45.f;
 
 	/** ...to MaxSurfaceAngle (90 = vertical, above = overhangs) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection", meta = (ClampMin = "0", ClampMax = "180", ForceUnits = "deg"))
@@ -164,6 +168,8 @@ protected:
 		FVector Normal = FVector::ZeroVector;
 		FVector Point = FVector::ZeroVector;
 	};
+
+	friend struct FGSTN_WallEntryTestAccess;
 
 	/** All the checks. Returns false (with the reason when logging) if the wall can't be grabbed now */
 	bool FindEntryWall(const FSimulationTickParams& Params, FEntryCandidate& OutCandidate) const;

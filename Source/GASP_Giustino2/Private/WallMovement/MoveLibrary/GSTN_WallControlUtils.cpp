@@ -71,6 +71,28 @@ bool UGSTN_WallControlUtils::ResolveBrake(const FGSTN_WallBrakeInput& BrakeInput
 	return BrakeInput.bStickAgainstMotion && InputOnPlane.Y * VelocityOnPlane.Y < 0.f;
 }
 
+float UGSTN_WallControlUtils::GravityAlongPlane(const FVector& Gravity, const FVector& Vertical)
+{
+	return FMath::Max(FVector::DotProduct(Gravity, -Vertical), 0.f);
+}
+
+FGSTN_WallSlideControlSettings UGSTN_WallControlUtils::AdaptToSlope(const FGSTN_WallSlideControlSettings& Settings, const FVector& Gravity, const FVector& Vertical)
+{
+	FGSTN_WallSlideControlSettings Adapted = Settings;
+	const float Along = GravityAlongPlane(Gravity, Vertical);
+	Adapted.GravityAcceleration = Along;
+
+	const float GravitySize = Gravity.Size();
+	if (GravitySize > UE_KINDA_SMALL_NUMBER)
+	{
+		const float Share = FMath::Clamp(Along / GravitySize, 0.f, 1.f);
+		const float Scale = FMath::Lerp(1.f, Share, FMath::Clamp(Settings.SlopeTerminalScaling, 0.f, 1.f));
+		Adapted.TerminalDownSpeed = Settings.TerminalDownSpeed * Scale;
+		Adapted.DownBoost = Settings.DownBoost * Scale;
+	}
+	return Adapted;
+}
+
 FVector2D UGSTN_WallControlUtils::StepSlideVelocity(const FGSTN_WallSlideControlSettings& Settings, const FVector2D& VelocityOnPlane, const FVector2D& InputOnPlane, bool bBrake, float DeltaSeconds, float IntoWall)
 {
 	if (DeltaSeconds <= 0.f)

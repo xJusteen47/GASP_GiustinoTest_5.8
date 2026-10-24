@@ -39,6 +39,12 @@ struct FGSTN_WallTraverseTestAccess;
  *     (the limits of the look-ahead: a feature narrower than the look can slip between two ticks and is then met by the move sweep)
  *  6. store the ridden base, write the sync state
  *
+ * Inclined walls (60-85 degrees off the horizontal) and overhangs (95-120) are walls like any other here. The capsule is upright, so its contact
+ * with the plane is on the lower (wall leaning back) or the upper (overhang) hemisphere: every distance to the plane is the capsule's extent
+ * along the wall normal (CapsuleSupportAlong), never its radius, and every angle is between two surface normals, never against world up. The only
+ * gravity-relative tests are the floor rule (a surface within MinSurfaceAngle of gravity-up is a floor) and the control model's "down the wall"
+ * (gravity-up projected on the plane).
+ *
  * Properties of the legacy base that this mode does not read (documented, not hidden: a later EditCondition can grey them out):
  * Horizontal, MaxSubstepDistance, MaxSubsteps, EntryMomentum, ProbeRadiusScale, ProbeVerticalSpread, MaxProbeDeviationAngle,
  * LookaheadTime, MinLookaheadDistance, UprightSharpness. Orientation settings (RotationSharpness, RotationSmoothingDistance,

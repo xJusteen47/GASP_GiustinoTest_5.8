@@ -385,10 +385,12 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 	bool bWrapped = false;
 	if (!bSensed && !bResolvedPenetration && !MovedDelta.IsNearlyZero())
 	{
-		// Wall lost: the face around the convex edge we just passed (two sweeps at most, only in this case)
+		// Wall lost: the face around the convex edge we just passed (two sweeps at most, only in this case). The upright capsule's center is
+		// further from the plane than its radius on an inclined wall, so the dive reaches behind the plane from its real extent
 		GSTN_WALL_QUERY_SCOPE();
 		GSTN_WALL_QUERY_SCOPE();
-		bWrapped = bSensed = UGSTN_WallQueryUtils::FindWallAroundConvexEdge(MovingComps, InOutState.WallNormal, MovedDelta, InOutState.GravityUp, CheckSettings, Probe);
+		const float WallSupport = UGSTN_WallEdgeUtils::CapsuleSupportAlong(CapsuleRadius, CapsuleHalfHeight, InOutState.Orientation, InOutState.WallNormal);
+		bWrapped = bSensed = UGSTN_WallQueryUtils::FindWallAroundConvexEdge(MovingComps, InOutState.WallNormal, MovedDelta, InOutState.GravityUp, CheckSettings, Probe, WallSupport);
 	}
 
 	if (bSensed)
@@ -444,8 +446,10 @@ bool UGSTN_WallTraverseModeBase::HandleMoveBlocked(const FMovingComponentSet& Mo
 	bool bIsConcaveCorner;
 	{
 		GSTN_WALL_QUERY_SCOPE();
+		// The angle is between the two surface normals, so an inclined wall meets its corners at the same angles as a vertical one; the fit test
+		// keeps the capsule upright (it never turns to the new wall)
 		bIsConcaveCorner = UGSTN_WallQueryUtils::IsConcaveCornerHit(MovingComps, Hit, MoveDelta, InOutState.Orientation, InOutState.WallNormal,
-			InOutState.GravityUp, NormalDeadzoneAngle, CheckSettings);
+			InOutState.GravityUp, NormalDeadzoneAngle, CheckSettings, /*bKeepOrientation*/ true);
 	}
 	const bool bIsFloor = !bIsConcaveCorner && UGSTN_WallQueryUtils::IsFloorHit(Hit, MoveDelta, InOutState.GravityUp, MinSurfaceAngle);
 	if (bIsFloor && !FloorModeName.IsNone())

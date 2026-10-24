@@ -47,6 +47,14 @@ struct GASP_GIUSTINO2_API FGSTN_WallSlideControlSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Vertical", meta = (ClampMin = "0"))
 	float GravityScale = 1.f;
 
+	/**
+	 * How much the terminal down speed follows the slope of the wall. 1 = the terminal speed (and DownBoost) scale with the share of gravity that
+	 * acts along the plane, so a wall leaning back 60 degrees from the horizontal slides at sin(60) = 87% of the vertical speed; 0 = the terminal
+	 * speed is the same on every wall and only the approach to it is slower (UGSTN_WallControlUtils::AdaptToSlope)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Vertical", meta = (ClampMin = "0", ClampMax = "1"))
+	float SlopeTerminalScaling = 1.f;
+
 	/** Downward speed the slide approaches softly (cm/s). Faster entry speed decays toward it, never abruptly */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Vertical", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float TerminalDownSpeed = 600.f;

@@ -241,7 +241,7 @@ bool UGSTN_WallQueryUtils::IsHitOnValidWall(const UWorld* World, const FHitResul
 }
 
 bool UGSTN_WallQueryUtils::CanFitOnWall(const FMovingComponentSet& MovingComps, const FQuat& CurrentQuat, const FVector& NewNormal,
-	const FVector& ContactPoint, float Radius, float HalfHeight, float WallGap)
+	const FVector& ContactPoint, float Radius, float HalfHeight, float WallGap, bool bKeepOrientation)
 {
 	const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
 	const UPrimitiveComponent* UpdatedPrimitive = MovingComps.UpdatedPrimitive.Get();
@@ -250,15 +250,25 @@ bool UGSTN_WallQueryUtils::CanFitOnWall(const FMovingComponentSet& MovingComps, 
 		return false;
 	}
 
-	FVector Up = FVector::VectorPlaneProject(CurrentQuat.GetUpVector(), NewNormal).GetSafeNormal();
-	if (Up.IsNearlyZero())
+	FQuat TestQuat = CurrentQuat;
+	float SeatDistance = Radius + WallGap;
+	if (bKeepOrientation)
 	{
-		Up = FVector::VectorPlaneProject(CurrentQuat.GetForwardVector(), NewNormal).GetSafeNormal();
+		// The capsule stays as it is: its nearest point to the new wall is on a hemisphere when the wall is inclined, so it sits further out
+		SeatDistance = FMath::Max(HalfHeight - Radius, 0.f) * FMath::Abs(FVector::DotProduct(NewNormal, CurrentQuat.GetUpVector())) + Radius + WallGap;
 	}
-	const FQuat TestQuat = FRotationMatrix::MakeFromXZ(-NewNormal, Up).ToQuat();
+	else
+	{
+		FVector Up = FVector::VectorPlaneProject(CurrentQuat.GetUpVector(), NewNormal).GetSafeNormal();
+		if (Up.IsNearlyZero())
+		{
+			Up = FVector::VectorPlaneProject(CurrentQuat.GetForwardVector(), NewNormal).GetSafeNormal();
+		}
+		TestQuat = FRotationMatrix::MakeFromXZ(-NewNormal, Up).ToQuat();
+	}
 
 	FVector TestLocation = UpdatedComponent->GetComponentLocation();
-	TestLocation += NewNormal * ((Radius + WallGap) - FVector::DotProduct(TestLocation - ContactPoint, NewNormal));
+	TestLocation += NewNormal * (SeatDistance - FVector::DotProduct(TestLocation - ContactPoint, NewNormal));
 
 	constexpr float FitTestShrink = 1.f;
 	const FCollisionShape TestShape = FCollisionShape::MakeCapsule(FMath::Max(Radius - FitTestShrink, 1.f), FMath::Max(HalfHeight - FitTestShrink, 1.f));
@@ -267,7 +277,7 @@ bool UGSTN_WallQueryUtils::CanFitOnWall(const FMovingComponentSet& MovingComps, 
 }
 
 bool UGSTN_WallQueryUtils::IsConcaveCornerHit(const FMovingComponentSet& MovingComps, const FHitResult& Hit, const FVector& MoveDelta, const FQuat& Orientation,
-	const FVector& WallNormal, const FVector& GravityUp, float MinCornerAngle, const FGSTN_WallCheckSettings& Settings)
+	const FVector& WallNormal, const FVector& GravityUp, float MinCornerAngle, const FGSTN_WallCheckSettings& Settings, bool bKeepOrientation)
 {
 	if (FVector::DotProduct(MoveDelta, Hit.Normal) >= 0.f)
 	{
@@ -288,7 +298,7 @@ bool UGSTN_WallQueryUtils::IsConcaveCornerHit(const FMovingComponentSet& MovingC
 
 	float Radius, HalfHeight;
 	GetCapsuleSize(Ctx.UpdatedPrimitive, Radius, HalfHeight);
-	return CanFitOnWall(MovingComps, Orientation, Hit.Normal, Hit.ImpactPoint, Radius, HalfHeight, Settings.WallGap);
+	return CanFitOnWall(MovingComps, Orientation, Hit.Normal, Hit.ImpactPoint, Radius, HalfHeight, Settings.WallGap, bKeepOrientation);
 }
 
 bool UGSTN_WallQueryUtils::IsFloorHit(const FHitResult& Hit, const FVector& MoveDelta, const FVector& GravityUp, float MinSurfaceAngle)
@@ -339,7 +349,7 @@ bool UGSTN_WallQueryUtils::FindWall(const FMovingComponentSet& MovingComps, cons
 }
 
 bool UGSTN_WallQueryUtils::FindWallAroundConvexEdge(const FMovingComponentSet& MovingComps, const FVector& WallNormal, const FVector& MoveDelta,
-	const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult)
+	const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult, float WallSupport)
 {
 	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallWrapProbe));
 	if (!Ctx.World || !Ctx.UpdatedPrimitive)
@@ -371,7 +381,8 @@ bool UGSTN_WallQueryUtils::FindWallAroundConvexEdge(const FMovingComponentSet& M
 	};
 
 	// Leg 1: dive "behind" the old wall plane, past where its surface used to be
-	const FVector DiveEnd = Center - WallNormal * (Radius + Settings.WallGap + Radius);
+	// Past where the old surface was: from the center, the seated distance to the plane (the capsule's extent along the normal) plus a radius
+	const FVector DiveEnd = Center - WallNormal * ((WallSupport >= 0.f ? WallSupport : Radius) + Settings.WallGap + Radius);
 	FHitResult Hit;
 	if (Ctx.World->SweepSingleByChannel(Hit, Center, DiveEnd, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams))
 	{
