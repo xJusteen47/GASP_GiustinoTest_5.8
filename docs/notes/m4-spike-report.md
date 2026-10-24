@@ -1,72 +1,111 @@
 # M4 H0 spike report (2026-10-24)
 
-Source: plan `m4-hits-plan.md` H0 and §4, spec `combat-m4-hits.md` §2, §8, §9.
-Status: **only the static (source) parts of H0b and H0e are done. H0a, H0c, H0d and the live parts of H0b/H0e are pending: editor.**
-Why: Rider had no project open (Welcome screen), so the Rider MCP (`ue_health`, `ue_execute_python`) had no target. A command-line
-launch with the .uproject did not open it, the click route was denied on the laptop, and after Rider was restarted once the
-Rider MCP disconnected from this session. No editor ran, no PIE, no number below is measured. No code was written or changed.
+Source: plan `m4-hits-plan.md` H0 and §4, spec `combat-m4-hits.md` §2, §8, §9. Run live on the laptop (HEAD 12a9601), PIE listen with
+3 players in one process unless noted. Editor frame rate during the runs was about 19 fps (3 viewports), so every wall-clock number
+below has a resolution of one editor frame (about 50 ms). Throwaway code (patch: `spikes/m4-h0-spike.patch`, applies on 12a9601) was
+reverted before this commit; scripts were scratch files.
 
-## H0a cross-entity cost: pending: editor
-Setup (not run): listen, 3 players, `m.net(0,0,0)` then `m.net(60,15,2)`; M0 hitstop debug button on client 1 writing a request
-into client 2's combat state on the authority (throwaway). Measure: client 2 rollbacks per hit, visible delay on client 1,
-host rollbacks (expected 0), bytes/s per client. Stop-and-ask: client 2 > 1 rollback per hit clean, or host reconciles.
-Verdict: **not measured**. Gates H9 acceptance 2 and H10.
+| Spike | Verdict against §4 | Gates |
+|---|---|---|
+| H0a cross-entity cost | pass: 1 rollback per hit on the victim, 0 on the host | H9 acc. 2, H10 |
+| H0b freeze + tag | pass: layered move carries the tag; freeze holds in Walking, Falling, WallSliding; reconcile inside is clean | H7 |
+| H0c hitstop with montage | **not measured**: editor crashed twice in a row, stopped by the rule | H7 (still open) |
+| H0d interpolation buffer | 80 ms matches 100 ms; 60 ms is worse | H10 |
+| H0e lag compensation | pass: rewinds the Mover pawn at 250 ms, 0.22 ms per rewind+unwind | H10 |
+
+## H0a cross-entity cost
+Setup: throwaway `Spike_ServerOpenHitstop(8)` on the host's copy of client 2's `UGSTN_CombatSimComponent`
+(`NetworkPredictionProxy.WriteSyncState`, the same call `ServerWriteLoadoutRevision` uses), standing in for "client 1 hit client 2,
+the host resolved it". 10 hits clean, 12 hits at `m.net(60, 15, 2)`, 1.6 s apart. Times are from the host call to the first editor
+frame where that world's copy of client 2 shows the new hitstop window.
+
+| Profile | Victim (c2) rollbacks / hit | Host reconciles | Window seen: host | Window seen: victim own copy | Window seen: attacker (c1) view of c2 |
+|---|---|---|---|---|---|
+| clean | 1.0 (10/10 hits) | 0 | 33-41 ms | same frame | same frame |
+| 60 ms, 15 ms jitter, 2 % loss | 1.0 (12/12 hits) | 0 | 33-42 ms | 101-146 ms (median 108) | 141-184 ms (median 172) |
+
+- Clean: in one process with no emulation the packet arrives in the same editor frame, so the clean "visible delay" is below the
+  resolution. At 60 ms the attacker sees the victim's reaction about 170 ms after the host decided: one way (about 60 ms) plus the
+  interpolation buffer (100 ms). Presentation was off.
+- c2 total rollbacks in the lossy run: 15 for 12 hits; the 3 extra are the known loss-induced mismatches (testing.md), none clean.
+- Bytes per second per client: **not measured** (no Python accessor for the net driver). From H6 (HANDOVER 20): a victim in hitstop
+  serializes 67 B against 37 B idle, so +30 B per state packet while the window is open.
+- Verdict: pass. Implication: H9 acceptance 2 can assert "victim 1 rollback per hit, host 0". The attacker-side delay is dominated by
+  the interpolation buffer, so H0d's lower value shortens it directly.
 
 ## H0b freeze + Mover tag
-Static result (done): **a layered move CAN expose a Mover gameplay tag; the stop-and-ask row does not apply.**
-- `UMoverComponent::HasGameplayTag` (`Plugins/EngineOverrides/Mover/Source/Mover/Private/MoverComponent.cpp:683`) forwards to
-  `HasGameplayTagInState` (`:693`) in the sync backend. That function checks, in order: external/loose tags (`:696-707`), the
-  active movement mode (`:710-716`, `UBaseMovementMode::HasGameplayTag`, `MovementMode.h:95`), movement modifiers in the sync
-  state (`:719-729`, `FMovementModifierBase::HasGameplayTag`, `MovementModifier.h:195`), and **active layered moves in the sync
-  state (`:732-738`, `FLayeredMoveBase::HasGameplayTag`, `LayeredMove.h:112`, virtual)**.
-- Existing layered moves override it (`AnimRootMotionLayeredMove.cpp:126`, `RootMotionAttributeLayeredMove.cpp:193`), so
-  `FGSTN_LayeredMove_Freeze` overriding it to return true for `Combat.Mover.Frozen` is the same pattern; no `FGSTN_FrozenModifier`
-  is needed. `CancelMovesByTag` (`LayeredMove.cpp:147`, `:405`) uses the same virtual, so a freeze could also be cancelled by tag.
-- Caveats: (1) the sync path reads `MoverSyncStateDoubleBuffer.GetReadable()` (`:690`), the last committed state, so a freeze
-  queued this frame is visible to `HasGameplayTag` only once active (CLAUDE.md rule 5: one-frame lag from Mover to abilities).
-  The wall lock inside the mover tick should use `HasGameplayTagInState(SimState.SyncState, ...)` (pattern at
-  `RootMotionAttributeLayeredMove.cpp:138`). (2) With `mover.UseSnapshotGameplayTagsForSyncBackend != 0` or an async backend the
-  result comes from the `AllGameplayTags` snapshot (`:685-688`, cvar at `:73-80`, default off): re-check if that is ever enabled.
-Live part (pending: editor): Freeze (OverrideAll, zero velocity) in Walking, Falling and each wall mode with forced reconciles
-inside the freeze; check the saved incoming velocity is restored after a reconcile.
-Verdict: **pass on the tag question (source); live freeze behaviour not measured**. Implication for H7: put the tag on the
-Freeze layered move; wall lock `IsMovementLocked` reads `HasGameplayTagInState` on the start sync state.
+Static result from the earlier session stands: `FLayeredMoveBase::HasGameplayTag` is read by `UMoverComponent::HasGameplayTagInState`,
+so `FGSTN_LayeredMove_Freeze` can carry `Combat.Mover.Frozen`; no modifier needed.
+Live: throwaway `FGSTN_LayeredMove_Freeze` (OverrideAll, zero velocity, 1000 ms; 800 ms in Falling) queued on the host copy and on
+client 1's copy in the same editor tick, `np.ForceReconcile` 0.5 s later, sampled on host, owner and the other client. Clean network.
 
-## H0c hitstop with a montage: pending: editor
-Setup (not run): M0 pause path (`scenario_combat_spike`, `HitstopTestButton`) with a real C10 montage, forced reconcile inside
-the window; compare montage position on the client before/after the reconcile and against the server. Stop-and-ask: divergence.
-Verdict: **not measured**. Gates H7.
+| Case | Auth drift in window (x / y / z cm) | Tag seen (auth / owner / other client) | Rollbacks on c1 | After the window |
+|---|---|---|---|---|
+| Walking, holding forward | 0 / 0 / 0 | 100 % / 79 % / 100 % | 2 | speed 0 -> 400 again (accelerates from zero) |
+| Falling, mid-air (up velocity 621) | 0 / 0 / 0 at z 140.5 | 100 % / 82 % / 94 % | 3 | falls from zero (-157 cm/s first sample) |
+| WallSliding (test pawn) | 0 / 5.7 / 0 (first sample presses into the wall) | 100 % / 87 % / 100 % | 3 | Falling from zero |
 
-## H0d interpolation buffer: pending: editor
-Setup (not run): `FixedTickInterpolationBufferedMS` 100 -> 80, 60, 50, 40 under 60 ms / 15 ms jitter / 2 % loss; sample the
-interpolated proxy position per editor tick for ~10 s, report max and p99 frame-to-frame jump and the count of backward/zero
-steps per value. The ini change is local only and must be reverted (owner OK needed, §6). Verdict: **not measured**; H10 keeps
-100 until measured.
+- Owner drift (up to 18.6 cm in Walking, 11 cm in Falling, 45 cm in WallSliding) and the owner/other-client tag fractions below 100 %
+  come from the two queue calls landing on different simulation frames; the reconcile pulls every copy to the authority's frozen
+  position (no copy ended apart). The other client's tag lingers 1-2 samples after the window (interpolation).
+- **Incoming velocity is not restored**: OverrideAll with zero velocity drops it, so after the window the pawn restarts from rest.
+  If hitstop must keep momentum, H7 has to save the velocity itself (sync state).
+- **The wall mode leaves during the freeze**: in the WallSliding case the authority went WallSliding -> Falling at about 0.95 s while
+  the tag was still set (position stayed fixed because of OverrideAll). Mode transitions keep running under a freeze, so the wall
+  lock must be an explicit gate (`HasGameplayTagInState` on the start sync state), not a side effect of the freeze.
+- Not exercised: Simple / Skidding / Controlled wall modes (registered on the shared `SandboxCharacter_Mover` Blueprint only; the
+  test pawn has WallSliding). The freeze is a layered move, independent of the mode, so no mode-specific risk is expected.
+- Verdict: pass (the tag question and the freeze). Implication for H7: put the tag on the Freeze layered move; save the velocity
+  if it must come back; keep the wall lock gate.
 
-## H0e lag compensation API
-Static result (done): the API **exists in the fork** and is built for Network Prediction actors.
-- `UNetworkPredictionLagCompensation` component: `Plugins/GASNPP/NetworkPrediction/Source/NetworkPrediction/Public/NetworkPredictionLagCompensation.h`
-  (`CaptureState` `:50`, `SetOwningActorState` `:57`, `CapturePreRewindState` `:62`; history struct picked by a `MetaStruct`
-  property `:32`, data type in `NePredictionLagCompensationData.h`).
-- `UNetworkPredictionWorldManager::RewindActors(AActor* Requesting, float RewindSimTimeMS)` / `UnwindActors()`:
-  `NetworkPredictionWorldManager.h:257,260`, body `NetworkPredictionWorldManager.cpp:918`. Registered components are rewound
-  except the requesting actor (`:958`); standalone returns false (`:925`); on the authority the time is clamped by
-  `ClampRewindingTime` (`:1111`) to `Settings.MaxRewindTimeMS` + interpolation delay + (`FixedTickDesiredBufferedInputCount`+1)
-  fixed steps (`GetMaxRewindDuration`, `:1127-1134`), so **a 250 ms window needs `MaxRewindTimeMS` set high enough**; the
-  rewind logs a warning when clamped (`:945`).
-- Already used by the fork's targeting: `AbilitySystemSimulation/.../TargetingLibrary.cpp:92-99` and
-  `TargetingPredictionTask.cpp:214-225` (rewind with `GetSyncedInterpolationTimeMS()`, then unwind), the same call shape spec §9 plans.
-- Not yet confirmed (pending: editor): that the default data struct captures the Mover transform of the test pawn (and not only
-  a physics body), the `MaxRewindTimeMS` default, and the host cost in ms of one rewind of 3 pawns.
-Verdict: **component present, not "missing"; "rewinds the wrong thing" not yet ruled out**. Implication for H10: plan to use
-`RewindActors`/`UnwindActors`; add `UNetworkPredictionLagCompensation` to the test pawn and verify before relying on it.
+## H0c hitstop with a montage
+Not measured. Prepared (throwaway, in the patch): `SpikeMontage` property played with `PlaySyncedMontage` on the M0 hitstop button,
+forced reconcile inside the window, montage position compared on host / owner / other client. The editor crashed twice in a row
+while the script ran (both `EXCEPTION_ACCESS_VIOLATION reading 0x38`, preceded by `Ensure IsBound` in
+`UNpAbilitySystemComponent::InitAbilityActorInfo` called from `UGSTN_AbilityInputComponent::TryBind`, i.e. a pawn being torn down;
+client 1's controlled pawn no longer had a combat component just before). Crash dirs: `Saved/Crashes/UECC-Windows-5C644DB3...` and
+`UECC-Windows-6753168E...`. The same sessions ran H0a/b/d/e without a crash. Per the rule (two crashes in a row) I stopped.
+Source reading only: `GSTN_CombatSimComponent.cpp` pauses the montage on every hitstop frame and resumes it on `HitstopEndFrame`
+(both from the sync state, so a re-simulation from a restored state takes the same branches); whether the montage position
+survives a reconcile inside the window is **unverified**. Verdict: open; H7 should not start its montage part before this runs.
+A retry needs only the patch, a full build and a PIE listen session; first check that the crash is not caused by loading the montage
+asset inside the running PIE (load it before PIE, or reproduce the crash with only `unreal.load_asset`).
 
-## Summary
+## H0d interpolation buffer
+Setup: `FixedTickInterpolationBufferedMS` set on the settings CDO from Python before each PIE start (in memory, not saved), listen,
+`m.net(60, 15, 2)`, client 1 walks +Y/-Y legs of 2.5 s (reversal transients skipped), client 2's world samples client 1's simulated
+proxy position each editor tick for 10 s, two runs per value. Jump = frame-to-frame displacement in cm (about 18-20 cm is the
+mean step at 19 fps); speed cv = stdev/mean of displacement / frame time.
 
-| Spike | Verdict | State |
-|---|---|---|
-| H0a | n/a | pending: editor |
-| H0b | pass on the tag question (layered move carries the tag) | live freeze pending: editor |
-| H0c | n/a | pending: editor |
-| H0d | n/a (keep 100 ms) | pending: editor |
-| H0e | API present | transform rewind and cost pending: editor |
+| Buffer ms | Max jump cm (run1/run2) | p99 jump cm | Speed cv | Backward steps | Zero steps |
+|---|---|---|---|---|---|
+| 100 | 31.6 / 27.2 | 28.3 / 27.1 | 0.26 / 0.27 | 0 / 0 | 3 / 5 |
+| 80 | 32.6 / 35.1 | 27.9 / 29.8 | 0.23 / 0.22 | 0 / 0 | 0 / 0 |
+| 70 | 33.5 / 36.5 | 24.7 / 24.0 | 0.13 / 0.16 | 0 / 0 | 0 / 0 |
+| 60 | 39.6 / 58.4 | 37.1 / 41.3 | 0.26 / 0.34 | 0 / 0 | 0 / 0 |
+
+50 and 40 ms were not run: 60 ms is already clearly worse (max jump +25 to +85 %), and the trend is monotone.
+70 ms also matches 100 ms (its runs had 21 fps against 19, which shrinks frame jumps), but it sits 10 ms above the visible
+degradation at 60 and has only two samples. Verdict: **80 ms** (saves 20 ms of every remote action's delay, which is the attacker-side
+170 ms above). Implication for H10: use 80; 70 is a candidate if a longer measurement on a lower-load machine confirms it.
+The ini is committed at 80 in its own commit.
+
+## H0e lag compensation
+Setup: throwaway `AddLagComp` (a `UNetworkPredictionLagCompensation` cannot be added to a pawn from Python) on the 3 pawns, host world;
+client 1 walks 3 s while its authoritative copy is sampled with `GetCurrentLagCompensationTimeMS`; then
+`RewindActors(hostPawn, now - 250)` / `UnwindActors()`. Clean network.
+
+| Measure | Value |
+|---|---|
+| Registered components | 3 (requester skipped by the manager) |
+| Window requested / effective | 250 ms; the pawn moved 106.4 cm back (about 425 cm/s x 250 ms), no clamp seen |
+| Rewound y vs recorded y at that sim time | 467.5 vs 473.9 cm (6.4 cm = about 15 ms of sampling error) |
+| Unwind | back to the exact present position (573.9) |
+| Cost of one rewind+unwind of the 3 pawns | 0.216 ms (mean of 30, from Python; call overhead 0.006 ms) |
+
+- The component captures and restores the actor transform, which is what Mover moves, so the "only physics bodies" stop-and-ask does
+  not apply. `MaxRewindTimeMS` default is 200, but the effective limit adds the interpolation buffer and the input buffer steps
+  (`GetMaxRewindDuration`), so 250 passed.
+- Not measured: rewind under 60 ms / 15 ms / 2 % (the clamp uses the interpolation time of the requester), rewind of a pawn mid-hitstop.
+- Verdict: pass. Implication for H10: use `RewindActors`/`UnwindActors`; the component must be added to the pawn Blueprint
+  (shared Blueprint: owner OK needed, §6); no own ring from `FGSTN_PoseHistory` needed for the transform.
