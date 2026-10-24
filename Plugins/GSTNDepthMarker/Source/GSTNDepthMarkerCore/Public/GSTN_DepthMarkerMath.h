@@ -80,6 +80,12 @@ struct GSTNDEPTHMARKERCORE_API FGSTN_DepthMarkerMath
 		const FGSTN_DepthReferenceOverride& Override, const FGSTN_DepthSelectorParams& Params, const FGameplayTagQuery& TargetBehaviours,
 		bool bProbed, double TimeSeconds);
 
+	/**
+	 * Dash growth of the line with its length: 1 up to NearCm, MaxScale from FarCm on, linear between (clamped). Dash length and gap are
+	 * both multiplied by it, so a long drop reads as a few long dashes instead of a busy comb.
+	 */
+	static float DashScale(float LengthCm, float NearCm, float FarCm, float MaxScale);
+
 	/** Re-expresses a stored plane with the hit component's CURRENT transform and re-projects the column: the marker follows moving bases between traces */
 	static FGSTN_DepthTarget ReprojectTarget(const FGSTN_DepthTarget& Target, const FTransform& CurrentComponentTransform,
 		const FVector& Feet, const FVector& Up);

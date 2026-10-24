@@ -915,6 +915,16 @@ void UGSTN_DepthMarkerSubsystem::RefreshMarker(FMarker& Marker, double Time, boo
 	if (bProbed || bRing)
 	{
 		Marker.LastBelow = Result.Below;
+		// The answer comes from a trace started a frame or more ago, on the column of that time: put it on the column of THIS frame
+		// like every in-between frame does, or the marker would jump sideways each time a probe lands
+		if (Result.Below.Kind == EGSTN_DepthTargetKind::Surface)
+		{
+			const TWeakObjectPtr<UPrimitiveComponent>* Hit = Marker.HitComponents.Find(Result.Below.SurfaceKey);
+			if (const UPrimitiveComponent* HitComponent = Hit ? Hit->Get() : nullptr)
+			{
+				Result.Below = FGSTN_DepthMarkerMath::ReprojectTarget(Result.Below, HitComponent->GetComponentTransform(), Subject.Feet, Subject.Up);
+			}
+		}
 	}
 	else if (Marker.LastBelow.Kind == EGSTN_DepthTargetKind::Surface)
 	{

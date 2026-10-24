@@ -271,7 +271,7 @@ GSTN_DMV_TEST(ToyHeights)
 	}
 	Scene.Box(FVector(0, 0, -5), FVector(1600, 900, 5));
 	const float Heights[] = { 20.f, 45.f, 70.f, 120.f, 220.f };
-	const FLinearColor Tints[] = { Red, Blue, Yellow, Green, Red };
+	const FLinearColor Tints[] = { GSTNDepthMarkerVisualTest::Red, GSTNDepthMarkerVisualTest::Blue, GSTNDepthMarkerVisualTest::Yellow, GSTNDepthMarkerVisualTest::Green, GSTNDepthMarkerVisualTest::Red };
 	for (int32 Index = 0; Index < 5; ++Index)
 	{
 		Scene.Character(FVector(0, -400.0 + 200.0 * Index, Heights[Index]), Tints[Index]);
@@ -303,10 +303,10 @@ GSTN_DMV_TEST(ToyWall)
 	}
 	Scene.Box(FVector(0, 0, -5), FVector(1600, 900, 5));
 	Scene.Box(FVector(38, 0, 300), FVector(40, 900, 300));
-	Scene.Character(FVector(-36, -450, 160), Red);
-	Scene.Character(FVector(-36, -150, 100), Blue);
-	Scene.Character(FVector(-140, 150, 160), Yellow);
-	Scene.Character(FVector(-36, 450, 260), Green);
+	Scene.Character(FVector(-36, -450, 160), GSTNDepthMarkerVisualTest::Red);
+	Scene.Character(FVector(-36, -150, 100), GSTNDepthMarkerVisualTest::Blue);
+	Scene.Character(FVector(-140, 150, 160), GSTNDepthMarkerVisualTest::Yellow);
+	Scene.Character(FVector(-36, 450, 260), GSTNDepthMarkerVisualTest::Green);
 	Scene.Tick(30);
 	const FString Path = Scene.Snapshot(TEXT("toy-wall"), FVector(-800, -50, 300), FVector(-20, 0, 120), 60.f);
 	AddInfo(Path);
@@ -324,8 +324,8 @@ GSTN_DMV_TEST(ToyAir)
 		return true;
 	}
 	Scene.Box(FVector(0, 0, -20), FVector(300, 300, 20));
-	ACharacter* Over = Scene.Character(FVector(0, -150, 200), Red);
-	ACharacter* Off = Scene.Character(FVector(0, 150, 3), Blue, false);
+	ACharacter* Over = Scene.Character(FVector(0, -150, 200), GSTNDepthMarkerVisualTest::Red);
+	ACharacter* Off = Scene.Character(FVector(0, 150, 3), GSTNDepthMarkerVisualTest::Blue, false);
 	Scene.Tick(15);
 	Off->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 	Scene.Place(Off, FVector(0, 450, -280));
@@ -351,9 +351,9 @@ GSTN_DMV_TEST(ToyCloseup)
 		return true;
 	}
 	Scene.Box(FVector(0, 0, -5), FVector(1200, 900, 5));
-	Scene.Character(FVector(0, -150, 60), Red);
-	Scene.Character(FVector(0, 0, 110), Blue);
-	Scene.Character(FVector(0, 150, 420), Yellow);
+	Scene.Character(FVector(0, -150, 60), GSTNDepthMarkerVisualTest::Red);
+	Scene.Character(FVector(0, 0, 110), GSTNDepthMarkerVisualTest::Blue);
+	Scene.Character(FVector(0, 150, 420), GSTNDepthMarkerVisualTest::Yellow);
 	Scene.Tick(20);
 	const FString Path = Scene.Snapshot(TEXT("toy-closeup"), FVector(-520, 0, 300), FVector(0, 0, 90), 52.f);
 	AddInfo(Path);
@@ -378,10 +378,10 @@ GSTN_DMV_TEST(ToyCrystal)
 		return true;
 	}
 	Scene.Box(FVector(0, 0, -5), FVector(1200, 900, 5));
-	Scene.Character(FVector(0, -330, 3), Red, false, Crystal);
-	Scene.Character(FVector(0, -110, 240), Red, true, Crystal);
-	Scene.Character(FVector(0, 110, 3), Blue, false, Shell);
-	Scene.Character(FVector(0, 330, 240), Blue, true, Shell);
+	Scene.Character(FVector(0, -330, 3), GSTNDepthMarkerVisualTest::Red, false, Crystal);
+	Scene.Character(FVector(0, -110, 240), GSTNDepthMarkerVisualTest::Red, true, Crystal);
+	Scene.Character(FVector(0, 110, 3), GSTNDepthMarkerVisualTest::Blue, false, Shell);
+	Scene.Character(FVector(0, 330, 240), GSTNDepthMarkerVisualTest::Blue, true, Shell);
 	Scene.Tick(30);
 	const FString Path = Scene.Snapshot(TEXT("toy-crystal"), FVector(-1000, 0, 230), FVector(0, 0, 190), 55.f);
 	AddInfo(Path);

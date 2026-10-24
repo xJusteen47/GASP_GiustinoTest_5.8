@@ -6,6 +6,8 @@
 void UGSTN_DepthMarkerStyle::PopulateDefaultPresenters()
 {
 	Presenters.Reset();
+	// The default look: a ring in the colour of the player on the target and a dashed line whose dashes grow with the drop
+	bUsePlayerPalette = true;
 	const TArray<EGSTN_DepthMarkerState> BelowStates = { EGSTN_DepthMarkerState::Ground, EGSTN_DepthMarkerState::EdgeHold, EGSTN_DepthMarkerState::NoGround };
 
 	UGSTN_DepthPresenter_Ring* GroundRing = NewObject<UGSTN_DepthPresenter_Ring>(this);

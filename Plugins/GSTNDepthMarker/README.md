@@ -41,12 +41,22 @@ A pawn can implement `IGSTN_DepthSubject` to report its own state; a project mov
 With no style set the subsystem uses a built-in style made of **engine primitives only**, named as soft references in
 `Config/DefaultGSTNDepthMarker.ini` (`/Engine/BasicShapes/Cube` and `/Engine/EngineDebugMaterials/DebugMeshMaterial`, parameters
 `Color` and `Opacity`): a hollow ring of flat cube segments and a dashed line of cube dashes, below the character on the first
-surface along its own gravity, a lighter ring plus line above it on the last platform's plane when it is mid-air below it, and a
+surface along its own gravity (both in the colour of the player, same rank logic as the toy look; the dashes grow with the drop:
+`DashGrowthMax` x4 between `GrowStartCm` 100 and `GrowEndCm` 1200, length and gap together, `FGSTN_DepthMarkerMath::DashScale`), a lighter ring plus line above it on the last platform's plane when it is mid-air below it, and a
 ring plus line in light blue on a nearby higher platform's plane (the approach marker).
 **No decal content ships**: `UGSTN_DepthPresenter_Decal` draws nothing until a style names a decal material (its
 `MaterialOverride`) or the settings do (`DefaultDecalMaterial`). Clear the two ini entries and the built-in presenters also draw
 nothing until a style names its own mesh and material. The debug material is an engine editor asset: a packaged game should
 point the settings at its own content.
+
+## Presented pose (no stepping)
+
+The marker follows the PRESENTED character, not the simulated one. Mover simulates the root at the fixed tick (62.5 Hz) and shows the character
+through a visual mesh that `UMoverComponent::FinalizeSmoothingFrame` (smoothing mode `VisualComponentOffset`) writes every frame; Network Prediction
+runs that in `OnWorldPreActorTick`, so the subsystem (`OnWorldPostActorTick`) already ticks after it. The jitter came from the adapters reading
+the root/capsule (`UGSTN_DepthSubjectAdapter::GetPresentedOffset` now adds the visual mesh offset from its archetype rest place to the feet; the
+Character mesh, else the first non-root mesh; `bFollowPresentedMesh` turns it off) and from a probe answer being applied on the column of the frame
+that issued it (it is now re-projected on the current column with `ReprojectTarget` on probed frames too, like the in-between ones).
 
 ## Approach marker and projection planes
 
@@ -174,10 +184,10 @@ the character (`BeamStartFraction`, 0.5 of the subject height above the feet), t
 
 ## Tests
 
-`GSTNDepthMarker.Core.*` (30): every test runs with several Up vectors (flipped, sideways, diagonal) so a hidden world-Z assumption
+`GSTNDepthMarker.Core.*` (31, with `DashScaleGrowsWithLengthAndClamps`): every test runs with several Up vectors (flipped, sideways, diagonal) so a hidden world-Z assumption
 fails; the approach marker has `ApproachMarkerOnHigherPlatformPlane`, `NoApproachWhenNotMovingToward`,
 `ApproachUsesVolumePlaneWhenPresent`, `ApproachHysteresisNoFlicker`, `ApproachNeverDuplicatesPrimaryPlane`, `ApproachProbePatternFollowsUp`.
-`GSTNDepthMarker.Runtime.*` (15, headless): scheduler cap, ranking, adapters, dedicated-server rule, replication flag, excluded hits,
+`GSTNDepthMarker.Runtime.*` (16, headless; `MarkerFollowsPresentedPoseNotSimulatedSteps` steps the root every 16 ms and moves the mesh every 4 ms and bounds the per-frame delta of feet and marker point): scheduler cap, ranking, adapters, dedicated-server rule, replication flag, excluded hits,
 style validation, a subsystem tick smoke test, the trace cap with approach probes, approach probes as lowest priority, plane component
 containment and projection, approach style validation.
 

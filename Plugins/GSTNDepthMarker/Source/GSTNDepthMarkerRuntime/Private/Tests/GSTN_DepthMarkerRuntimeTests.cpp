@@ -253,6 +253,78 @@ GSTN_DMR_TEST(StyleValidates)
 	return true;
 }
 
+GSTN_DMR_TEST(MarkerFollowsPresentedPoseNotSimulatedSteps)
+{
+	// A Mover pawn: the root is simulated at the fixed tick (steps every 16 ms), the visual mesh is smoothed every frame. The subject must
+	// report the mesh pose, and a probe answer taken on an older column must be put on the current column every frame
+	FRig Rig;
+	AActor* Actor = Rig.World->SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator);
+	USceneComponent* Root = NewObject<USceneComponent>(Actor, TEXT("Root"));
+	Actor->SetRootComponent(Root);
+	Root->RegisterComponent();
+	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Actor, TEXT("Visual"));
+	Visual->SetupAttachment(Root);
+	Visual->RegisterComponent();
+
+	const UGSTN_DepthSubjectAdapter* Adapter = GetDefault<UGSTN_DepthSubjectAdapter_Actor>();
+	const float Speed = 600.f;
+	const double FrameSeconds = 0.004;
+	const double FixedSeconds = 0.016;
+
+	FGSTN_DepthTarget Floor;
+	Floor.Kind = EGSTN_DepthTargetKind::Surface;
+	Floor.LocalPoint = FVector(0, 0, -100);
+	Floor.LocalNormal = FVector::UpVector;
+
+	double MaxFeetStep = 0.0;
+	double MaxPointStep = 0.0;
+	double MaxRootStep = 0.0;
+	double MaxError = 0.0;
+	FVector PreviousFeet = FVector::ZeroVector;
+	FVector PreviousPoint = FVector::ZeroVector;
+	FVector PreviousRoot = FVector::ZeroVector;
+	for (int32 Frame = 0; Frame < 200; ++Frame)
+	{
+		const double Time = Frame * FrameSeconds;
+		const FVector Presented(Speed * Time, 0.0, 0.0);
+		const FVector Simulated(Speed * FMath::FloorToDouble(Time / FixedSeconds) * FixedSeconds, 0.0, 0.0);
+		Root->SetWorldLocation(Simulated);
+		Visual->SetWorldLocation(Presented);
+
+		FGSTN_DepthSubjectState State;
+		if (!TestTrue(TEXT("the adapter reads the actor"), Adapter->ReadState(Actor, State)))
+		{
+			return false;
+		}
+		const FGSTN_DepthTarget Followed = FGSTN_DepthMarkerMath::ReprojectTarget(Floor, FTransform::Identity, State.Feet, State.Up);
+		MaxError = FMath::Max(MaxError, FMath::Abs(State.Feet.X - Presented.X));
+		if (Frame > 0)
+		{
+			MaxFeetStep = FMath::Max(MaxFeetStep, FMath::Abs(State.Feet.X - PreviousFeet.X));
+			MaxPointStep = FMath::Max(MaxPointStep, FMath::Abs(Followed.Point.X - PreviousPoint.X));
+			MaxRootStep = FMath::Max(MaxRootStep, FMath::Abs(Simulated.X - PreviousRoot.X));
+		}
+		PreviousFeet = State.Feet;
+		PreviousPoint = Followed.Point;
+		PreviousRoot = Simulated;
+	}
+	const double PerFrame = Speed * FrameSeconds;
+	TestTrue(TEXT("sanity: the simulated root really moves in steps"), MaxRootStep > PerFrame * 3.5);
+	TestTrue(TEXT("the feet are the presented pose"), MaxError < 0.01);
+	TestTrue(TEXT("the feet move by at most one frame of motion"), MaxFeetStep < PerFrame * 1.05);
+	TestTrue(TEXT("the marker point is on the current column and moves smoothly"), MaxPointStep < PerFrame * 1.05);
+
+	// Opting out reads the simulated root (no mesh smoothing for that actor)
+	UGSTN_DepthSubjectAdapter_Actor* Raw = NewObject<UGSTN_DepthSubjectAdapter_Actor>(GetTransientPackage());
+	Raw->bFollowPresentedMesh = false;
+	Root->SetWorldLocation(FVector(96, 0, 0));
+	Visual->SetWorldLocation(FVector(100, 0, 0));
+	FGSTN_DepthSubjectState RawState;
+	Raw->ReadState(Actor, RawState);
+	TestTrue(TEXT("opted out: the root"), FMath::IsNearlyEqual(static_cast<float>(RawState.Feet.X), 96.f, 0.01f));
+	return true;
+}
+
 GSTN_DMR_TEST(SubsystemTicksWithoutContent)
 {
 	FRig Rig;

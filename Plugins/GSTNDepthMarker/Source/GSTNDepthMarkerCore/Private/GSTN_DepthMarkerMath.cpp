@@ -376,6 +376,16 @@ FGSTN_DepthResult FGSTN_DepthMarkerMath::Evaluate(FGSTN_DepthSelectionState& Sta
 	return Result;
 }
 
+float FGSTN_DepthMarkerMath::DashScale(float LengthCm, float NearCm, float FarCm, float MaxScale)
+{
+	const float Max = FMath::Max(MaxScale, 1.f);
+	if (FarCm <= NearCm)
+	{
+		return LengthCm >= FarCm ? Max : 1.f;
+	}
+	return FMath::Lerp(1.f, Max, FMath::Clamp((LengthCm - NearCm) / (FarCm - NearCm), 0.f, 1.f));
+}
+
 FGSTN_DepthTarget FGSTN_DepthMarkerMath::ReprojectTarget(const FGSTN_DepthTarget& Target, const FTransform& Xf, const FVector& Feet, const FVector& Up)
 {
 	FGSTN_DepthTarget Out = Target;

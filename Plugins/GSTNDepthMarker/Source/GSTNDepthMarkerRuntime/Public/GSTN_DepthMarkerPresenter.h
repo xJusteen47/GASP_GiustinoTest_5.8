@@ -179,6 +179,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Line", meta = (ClampMin = "0.1", ForceUnits = "cm"))
 	float WidthCm = 2.5f;
 
+	/**
+	 * Dash length and gap grow with the line length: x1 up to GrowStartCm, x DashGrowthMax from GrowEndCm on, linear in between
+	 * (FGSTN_DepthMarkerMath::DashScale). A long drop reads as a few long dashes. DashGrowthMax 1 turns it off.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Line", meta = (ClampMin = "1.0"))
+	float DashGrowthMax = 4.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Line", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float GrowStartCm = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Line", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float GrowEndCm = 1200.f;
+
 	/** Dashes drift towards the target at this speed: a motion cue for "down" */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Line", meta = (ForceUnits = "cm/s"))
 	float MarchSpeed = 30.f;

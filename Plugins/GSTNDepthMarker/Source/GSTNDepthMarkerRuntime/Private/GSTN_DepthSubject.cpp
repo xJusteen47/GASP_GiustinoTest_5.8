@@ -3,6 +3,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "Components/MeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 namespace GSTNDepthMarkerSubjectPrivate
@@ -47,6 +48,38 @@ const UGSTN_DepthSubjectAdapter* FGSTN_DepthAdapterRegistry::Resolve(const AActo
 	return Best;
 }
 
+FVector UGSTN_DepthSubjectAdapter::GetPresentedOffset(const AActor* Actor)
+{
+	if (!Actor)
+	{
+		return FVector::ZeroVector;
+	}
+	const USceneComponent* Visual = nullptr;
+	if (const ACharacter* Character = Cast<ACharacter>(Actor))
+	{
+		Visual = Character->GetMesh();
+	}
+	if (!Visual)
+	{
+		TInlineComponentArray<const UMeshComponent*> Meshes(Actor);
+		for (const UMeshComponent* Mesh : Meshes)
+		{
+			if (Mesh != Actor->GetRootComponent() && Mesh->GetAttachParent())
+			{
+				Visual = Mesh;
+				break;
+			}
+		}
+	}
+	const USceneComponent* Parent = Visual ? Visual->GetAttachParent() : nullptr;
+	const USceneComponent* Archetype = Visual ? Cast<USceneComponent>(Visual->GetArchetype()) : nullptr;
+	if (!Parent || !Archetype || Archetype == Visual)
+	{
+		return FVector::ZeroVector;
+	}
+	return Visual->GetComponentLocation() - Parent->GetComponentTransform().TransformPosition(Archetype->GetRelativeLocation());
+}
+
 bool UGSTN_DepthSubjectAdapter_CharacterMovement::CanHandle(const AActor* Actor) const
 {
 	const ACharacter* Character = Cast<ACharacter>(Actor);
@@ -73,7 +106,7 @@ bool UGSTN_DepthSubjectAdapter_CharacterMovement::ReadState(const AActor* Actor,
 
 	OutState = FGSTN_DepthSubjectState();
 	OutState.Up = Up;
-	OutState.Feet = Capsule->GetComponentLocation() - Up * HalfHeight;
+	OutState.Feet = Capsule->GetComponentLocation() - Up * HalfHeight + (bFollowPresentedMesh ? GetPresentedOffset(Actor) : FVector::ZeroVector);
 	OutState.bAirborne = Movement->IsFalling();
 	OutState.bGrounded = Movement->IsMovingOnGround();
 	OutState.FootRadius = Capsule->GetScaledCapsuleRadius();
@@ -99,7 +132,7 @@ bool UGSTN_DepthSubjectAdapter_Actor::ReadState(const AActor* Actor, FGSTN_Depth
 
 	OutState = FGSTN_DepthSubjectState();
 	OutState.Up = GravityZ > 0.f ? FVector::DownVector : FVector::UpVector;
-	OutState.Feet = Actor->GetActorLocation();
+	OutState.Feet = Actor->GetActorLocation() + (bFollowPresentedMesh ? GetPresentedOffset(Actor) : FVector::ZeroVector);
 	OutState.Velocity = Actor->GetVelocity();
 	OutState.bAirborne = FMath::Abs(FVector::DotProduct(OutState.Velocity, OutState.Up)) > AirborneSpeed;
 	OutState.bGrounded = !OutState.bAirborne;

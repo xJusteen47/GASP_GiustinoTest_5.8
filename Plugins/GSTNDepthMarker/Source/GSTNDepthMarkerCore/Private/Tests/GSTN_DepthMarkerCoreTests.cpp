@@ -889,6 +889,26 @@ GSTN_DM_TEST(ApproachProbePatternFollowsUp)
 	return true;
 }
 
+GSTN_DM_TEST(DashScaleGrowsWithLengthAndClamps)
+{
+	TestTrue(TEXT("dash scale"), FMath::IsNearlyEqual(FGSTN_DepthMarkerMath::DashScale(0.f, 100.f, 1100.f, 4.f), 1.f));
+	TestTrue(TEXT("dash scale"), FMath::IsNearlyEqual(FGSTN_DepthMarkerMath::DashScale(100.f, 100.f, 1100.f, 4.f), 1.f));
+	TestTrue(TEXT("dash scale"), FMath::IsNearlyEqual(FGSTN_DepthMarkerMath::DashScale(600.f, 100.f, 1100.f, 4.f), 2.5f));
+	TestTrue(TEXT("dash scale"), FMath::IsNearlyEqual(FGSTN_DepthMarkerMath::DashScale(1100.f, 100.f, 1100.f, 4.f), 4.f));
+	TestTrue(TEXT("dash scale"), FMath::IsNearlyEqual(FGSTN_DepthMarkerMath::DashScale(99999.f, 100.f, 1100.f, 4.f), 4.f));
+	float Previous = 0.f;
+	for (float Length = 0.f; Length < 2000.f; Length += 25.f)
+	{
+		const float Scale = FGSTN_DepthMarkerMath::DashScale(Length, 100.f, 1100.f, 4.f);
+		TestTrue(TEXT("dash scale"), Scale >= Previous);
+		Previous = Scale;
+	}
+	// A degenerate range does not divide by zero
+	TestTrue(TEXT("dash scale"), FMath::IsNearlyEqual(FGSTN_DepthMarkerMath::DashScale(50.f, 300.f, 300.f, 3.f), 1.f));
+	TestTrue(TEXT("dash scale"), FMath::IsNearlyEqual(FGSTN_DepthMarkerMath::DashScale(500.f, 300.f, 300.f, 3.f), 3.f));
+	return true;
+}
+
 #undef CHECK
 
 #endif // WITH_DEV_AUTOMATION_TESTS

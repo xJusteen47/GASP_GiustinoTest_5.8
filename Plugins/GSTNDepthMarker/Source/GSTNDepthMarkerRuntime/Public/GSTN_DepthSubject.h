@@ -55,6 +55,22 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "DepthMarker")
 	int32 Priority = 0;
 
+	/**
+	 * The feet are read from the PRESENTED pose, not the simulated one: Mover (and Network Prediction in general) moves the root at the
+	 * fixed tick and shows the character through a visual mesh that is smoothed every frame (EMoverSmoothingMode::VisualComponentOffset
+	 * writes its world transform, the root stays in place). Reading the root makes the marker move in steps. With this on, the adapter adds
+	 * the offset of that mesh from its rest place (GetPresentedOffset) to the feet. Off for an actor whose mesh is not a visual of the root.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "DepthMarker")
+	bool bFollowPresentedMesh = true;
+
+	/**
+	 * How far the visual mesh of the actor is from where it would sit if it were rigidly attached to its parent (its archetype relative
+	 * location, which is what Mover's BaseVisualComponentTransform restores). Zero for an actor with no mesh under another component.
+	 * The mesh is the Character mesh, else the first mesh component that is not the root.
+	 */
+	static FVector GetPresentedOffset(const AActor* Actor);
+
 	virtual bool CanHandle(const AActor* Actor) const { return false; }
 
 	/** Fills OutState from the actor; false when it cannot (no feet this frame) */

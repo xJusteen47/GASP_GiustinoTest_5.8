@@ -4,6 +4,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "GSTN_DepthMarkerMath.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
@@ -208,8 +209,8 @@ void UGSTN_DepthPresenter_Line::OnMarkerUpdated_Implementation(const FGSTN_Depth
 	}
 
 	const FVector Direction = Delta / Length;
-	// A long line widens the period instead of growing the pool
-	const float Period = FMath::Max(DashPeriodCm, Length / MaxDashes);
+	// The period grows with the length (long drop = long dashes); a very long line still widens it instead of growing the pool
+	const float Period = FMath::Max(DashPeriodCm * FGSTN_DepthMarkerMath::DashScale(Length, GrowStartCm, GrowEndCm, DashGrowthMax), Length / MaxDashes);
 	const float DashLength = Period * DutyCycle;
 	const float March = FMath::Fmod(View.TimeSeconds * MarchSpeed, Period);
 	const FRotator Rotation = FRotationMatrix::MakeFromX(Direction).Rotator();
