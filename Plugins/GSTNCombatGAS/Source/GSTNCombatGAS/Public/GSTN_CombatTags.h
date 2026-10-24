@@ -51,6 +51,39 @@ namespace GSTNCombatTags
 	/** A super was used. Published by the combat tick on the authority. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_SuperUsed);
 
+	/** A hit landed. Outbox event on the attacker (CM 5.6), published once on the authority. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_HitLanded);
+
+	/** A hit was received. Outbox event on the victim, published once on the authority. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_HitReceived);
+
+	/** A combatant was knocked out; the KOReason tag says why. Published once by the combat tick on the authority. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_KO);
+
+	/** Gameplay event sent to the victim's abilities when it is hit (payload: FGSTN_HitEventPayload in the event's context). Not an outbox event. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Hit_Received);
+
+	/** Root of the surface impact events (splat, bounce, break). The leaves are declared by the surface impact checkpoint. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact);
+
+	// KO reasons (named on the KO event, never granted)
+
+	/** The combatant was knocked out by its health or damage cap. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(KOReason_Health);
+
+	/** The combatant was knocked out by entering a KO zone. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(KOReason_Zone);
+
+	// States (Hitstun and Hitstop belong to the combat core)
+
+	/** The combatant was launched hard enough to tumble. Projected by the combat tick once hits exist, never granted. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Tumble);
+
+	// Cues
+
+	/** Root of the hit cues. Leaf cues are designer content in a tag ini, code never names one. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cue_Hit);
+
 	// Activation sources (EGSTN_ActivationSource as tags, on the events that name how a timeline started)
 
 	/** A command started the timeline. */
@@ -66,6 +99,12 @@ namespace GSTNCombatTags
 
 	/** Set-by-caller key: the meter cost an effect spends. Set by the activating ability. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MeterCost);
+
+	/** Set-by-caller key: the damage of a hit, in the unit of the damage mode. Read by the damage execution. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Damage);
+
+	/** Set-by-caller key: the meter a gain effect adds. Set by whoever applies the effect. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Meter);
 
 	// Roots of designer tags: leaves are ini content, code never names one
 

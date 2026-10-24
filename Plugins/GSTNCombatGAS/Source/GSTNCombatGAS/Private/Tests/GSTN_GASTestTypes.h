@@ -7,6 +7,7 @@
 #include "Abilities/GameplayAbility.h"
 #include "NativeGameplayTags.h"
 #include "Effects/GSTN_GE_MeterCost.h"
+#include "Effects/GSTN_GE_MeterGain.h"
 #include "Effects/GSTN_GE_WeaponStats.h"
 #include "GSTN_GASTestTypes.generated.h"
 
@@ -38,6 +39,16 @@ class UGSTN_TestExMeterCost : public UGSTN_GE_MeterCost
 
 public:
 	UGSTN_TestExMeterCost();
+};
+
+/** Fills the EX meter by a set-by-caller amount. */
+UCLASS(Hidden)
+class UGSTN_TestExMeterGain : public UGSTN_GE_MeterGain
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_TestExMeterGain();
 };
 
 /** Spends the EX meter cost through the stock cost path: commits on activation, then ends. */

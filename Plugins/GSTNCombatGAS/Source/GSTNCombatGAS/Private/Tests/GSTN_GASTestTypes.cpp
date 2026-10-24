@@ -1,6 +1,7 @@
 #include "Tests/GSTN_GASTestTypes.h"
 #include "AbilitySystemComponent.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
+#include "Attributes/GSTN_HealthAttributeSet.h"
 #include "Attributes/GSTN_MeterAttributeSet.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -40,6 +41,7 @@ namespace GSTNCombatGASTest
 		ASC->InitAbilityActorInfo(Owner, Owner);
 		ASC->AddSet<UGSTN_CombatAttributeSet>();
 		ASC->AddSet<UGSTN_MeterAttributeSet>();
+		ASC->AddSet<UGSTN_HealthAttributeSet>();
 	}
 
 	FRig::~FRig()
@@ -62,6 +64,12 @@ UGSTN_TestExMeterCost::UGSTN_TestExMeterCost()
 {
 	Meter = UGSTN_MeterAttributeSet::GetExMeterAttribute();
 	Cost.SetValue(25.f);
+	RebuildModifiers();
+}
+
+UGSTN_TestExMeterGain::UGSTN_TestExMeterGain()
+{
+	Meter = UGSTN_MeterAttributeSet::GetExMeterAttribute();
 	RebuildModifiers();
 }
 
