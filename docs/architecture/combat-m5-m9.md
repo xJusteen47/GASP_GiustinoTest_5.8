@@ -5,6 +5,12 @@ performance numbers, designer feedback), so they are specified at the level of g
 questions. **Before starting one, expand it to the level of the M1–M4 specifications** (files, types, algorithms,
 tests, acceptance) in its own file, reusing this outline.
 
+> **Revision 2026-10-21 (full specifications):** each milestone now has its own specification, which supersedes the
+> outline below: [M5](combat-m5-editor.md), [M6](combat-m6-defence-links.md), [M7](combat-m7-piggyback.md),
+> [M8](combat-m8-minions.md), [M9](combat-m9-stock-gas.md), [M10 held objects](combat-m10-held-objects.md). Plugin
+> split and tag ownership: [modularity-and-tags.md](modularity-and-tags.md). Open questions for the owner:
+> [open-questions-m4-m10.md](open-questions-m4-m10.md).
+
 > **Revision 2026-10-19 (combat abilities):** "move" in this file means a **timeline ability**
 > (`UGSTN_GA_BaseCombat` and its timeline, combat.md §11); type names follow M3.
 
