@@ -6,6 +6,7 @@
 #include "GenericTeamAgentInterface.h"
 #include "Hits/GSTN_ReactionTypes.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
+#include "Simulation/GSTN_HitInbox.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "GSTN_StepSnapshot.generated.h"
@@ -113,6 +114,9 @@ public:
 
 	/** Fills Out for the snapshot of Frame (EntityId, Team and Hurtboxes are set already). False leaves the entity out of the step */
 	virtual bool ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntry& Out) = 0;
+
+	/** Delivers a hit to this entity's inbox (combat-m4-hits 7). False when the source takes none (the default) or does not tick on this machine */
+	virtual bool PostHit(const FGSTN_HitInboxEntry& Entry) { return false; }
 };
 
 /**

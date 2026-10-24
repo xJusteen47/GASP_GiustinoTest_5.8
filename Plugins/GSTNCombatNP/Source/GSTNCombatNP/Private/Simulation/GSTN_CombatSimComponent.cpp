@@ -35,6 +35,8 @@
 #include "NetworkPredictionWorldManager.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
+#include "Rules/GSTN_CombatRules.h"
+#include "Debug/GSTN_CombatDebugDraw.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Simulation/GSTN_LoadoutSwapLogic.h"
 #include "Loadout/GSTN_EntrySourceMask.h"
@@ -101,6 +103,10 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	PollLoadoutComponent();
 
 	ActiveHurtboxSet = HurtboxSet.LoadSynchronous();
+	if (!CombatRules)
+	{
+		CombatRules = const_cast<UGSTN_CombatRules*>(UGSTN_CombatSettings::Get().ResolveDefaultRules());
+	}
 	SetCombatWorldSubsystem(UGSTN_CombatWorldSubsystem::Get(GetWorld()));
 
 	if (ContextProvider)
@@ -609,6 +615,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	const int32 Frame = TimeStep.Frame;
 
+	// The step snapshot is built by the first combat tick of the frame, before this or any other entity writes its state of the frame: every
+	// read of it is the end of the previous frame, whoever ticks first (combat-m4-hits 5)
+	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
+	const FGSTN_StepSnapshot* StepSnapshot = World ? &World->EnsureSnapshot(Frame) : nullptr;
+
 	// The aim of this frame's command, kept for the ability system's tick that follows (GetAimRotation)
 	FrameAim.bHasAim = Input.Cmd->bHasAim;
 	FrameAim.Yaw = Input.Cmd->AimYaw;
@@ -657,7 +668,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// Hitstop (combat-m3 7.1): a frame inside the window of the previous state stands still on the combat clock. The window the
 	// debug button opens on frame F pauses from F+1 (F itself was simulated with the clock running when it opened)
 	const bool bHitstopFrame = OutSync.Core.AdvanceHitstopClock(Frame);
-	// The resolver of hits (M4 H8/H9) is not run on a hitstop frame either: it reads the same bHitstopFrame
+	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
 	{
@@ -697,6 +708,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Adopted))
 		{
 			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Adopted], TimelineOutput);
+			StampMoveOrigin(OutSync.Core, Frame);
 		}
 	}
 
@@ -708,6 +720,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
 	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
+
+	// The attacker side (combat-m4-hits 6), before the candidates: a hit of this frame confirms the run for the cancel gate of the same frame
+	if (!bHitstopFrame && !bFrameGateClosed)
+	{
+		RunAttackerStep(TimeStep, OutSync.Core, StepSnapshot, HookContext.HitGroupMask);
+	}
 
 	// Step 5a, the jump bookkeeping: before the input tick, because the gate asks whether a jump or an air jump is available this frame
 	StepJump(Frame, Input.Cmd->HeldButtons, OutSync.Core);
@@ -746,6 +764,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		const int32 Entry = FrameSet.BindingTimeline[Result.BindingIndex];
 		FGSTN_CombatTimelineLogic::Start(OutSync.Core, Frame, Entry, FrameCmd.ForcedCommand != 0 ? EGSTN_ActivationSource::Forced : EGSTN_ActivationSource::Command);
+		StampMoveOrigin(OutSync.Core, Frame);
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Entry))
 		{
 			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Entry], TimelineOutput);
@@ -840,6 +859,20 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		if (Pawn && Pawn->IsLocallyControlled())
 		{
 			DrawDebugString(GetWorld(), Pawn->GetActorLocation() + FVector(0.0, 0.0, 140.0), GetDebugString(), nullptr, FColor::White, 0.f, true);
+		}
+	}
+	if (GSTNCombatDebug::IsHitboxDrawOn())
+	{
+		GSTNCombatDebug::DrawHitboxes(GetWorld(), AttackerDebugShapes);
+	}
+	if (GSTNCombatDebug::IsHurtboxDrawOn() && RegisteredEntityId != INDEX_NONE)
+	{
+		if (const UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get())
+		{
+			if (const FGSTN_SnapshotEntry* Entry = Subsystem->GetSnapshot().Find(RegisteredEntityId))
+			{
+				GSTNCombatDebug::DrawHurtboxes(GetWorld(), *Entry);
+			}
 		}
 	}
 #endif

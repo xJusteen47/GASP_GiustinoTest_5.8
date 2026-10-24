@@ -116,6 +116,18 @@ struct FGSTN_HitSyncState
 	void SetPendingLaunch(const FVector& Velocity);
 	FVector GetPendingLaunch() const;
 
+	/**
+	 * A move starts: the targets, the confirm flags and the origin of the previous run are dead. The caller writes MoveOrigin afterwards
+	 * (it needs the pose of the attacker, which the sync state does not have)
+	 */
+	void ResetRun()
+	{
+		MoveOrigin = FGSTN_MoveOrigin();
+		HitTargetsHead = 0;
+		HitTargetsNum = 0;
+		HitConfirmFlags = 0;
+	}
+
 	/** Adds a target at the head of the ring; with the ring full the oldest is replaced. @return true when one was replaced */
 	bool AddHitTarget(int32 EntityId, int32 TimelineStartFrame, uint8 HitGroup);
 	bool HasHitTarget(int32 EntityId, int32 TimelineStartFrame, uint8 HitGroup) const;

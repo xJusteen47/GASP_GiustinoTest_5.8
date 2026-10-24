@@ -93,6 +93,13 @@ struct GSTNCOMBATCORE_API FGSTN_HitboxSpec
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox")
 	uint8 HitGroup = 0;
 
+	/**
+	 * Most distinct victims this hitbox's group may hit in one execution of the move (the attacker's HitTargets ring holds 8 in all, so more
+	 * than 8 is clamped). A sweeping attack that should not skewer a crowd lowers it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox", meta = (ClampMin = "1", ClampMax = "8"))
+	uint8 MaxTargetsPerGroup = 8;
+
 	/** Tests the sub-steps between the previous and the current frame, so a fast hitbox does not tunnel */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox")
 	bool bSweepBetweenFrames = false;

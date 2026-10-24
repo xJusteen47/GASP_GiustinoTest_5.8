@@ -31,6 +31,8 @@ namespace
 		Core.ActiveSource = Source;
 		Core.TimelineStartFrame = Frame;
 		Core.TimelinePausedFrames = 0;
+		// The hits of the previous run do not count for this one; the caller writes the move origin
+		Core.Hit.ResetRun();
 	}
 
 	void EvaluateInto(const FGSTN_CombatSyncCore& Core, int32 Frame, int32 PreviousFrame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output)
@@ -43,10 +45,22 @@ namespace
 		FGSTN_TimelinePlayer::Evaluate(Data, Params, Output);
 	}
 
-	bool ConditionHolds(EGSTN_CancelCondition Condition)
+	bool ConditionHolds(EGSTN_CancelCondition Condition, const FGSTN_CombatSyncCore& Core)
 	{
-		// Nothing can hit before M4: a hit or a block never happened, so "not hit yet" holds
-		return Condition == EGSTN_CancelCondition::Always || Condition == EGSTN_CancelCondition::OnWhiff;
+		// The confirm flags are the attacker side's (M4 H8): a hit of the running timeline sets one, a new timeline clears them.
+		// OnBlock stays false until shields exist (M6)
+		const bool bHit = Core.Hit.HitConfirmFlags != 0;
+		switch (Condition)
+		{
+		case EGSTN_CancelCondition::Always:
+			return true;
+		case EGSTN_CancelCondition::OnWhiff:
+			return !bHit;
+		case EGSTN_CancelCondition::OnHit:
+			return bHit;
+		default:
+			return false;
+		}
 	}
 }
 
@@ -121,7 +135,7 @@ bool FGSTN_CombatTimelineLogic::IsCommandAllowed(const FGSTN_CombatSyncCore& Cor
 
 	for (const FGSTN_TimelineTrack_CancelWindow* Window : Output.CancelWindows)
 	{
-		if (Window && ConditionHolds(Window->Condition) && Window->IntoCommands.Matches(CommandTags))
+		if (Window && ConditionHolds(Window->Condition, Core) && Window->IntoCommands.Matches(CommandTags))
 		{
 			return true;
 		}

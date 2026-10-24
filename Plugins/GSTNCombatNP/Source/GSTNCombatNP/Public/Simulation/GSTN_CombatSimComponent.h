@@ -14,6 +14,7 @@
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_HitInbox.h"
@@ -24,6 +25,7 @@
 #include "World/GSTN_StepSnapshot.h"
 #include "GSTN_CombatSimComponent.generated.h"
 
+class UGSTN_CombatRules;
 class UGSTN_CombatWorldSubsystem;
 class UGSTN_CommandBindingSet;
 class UGSTN_HurtboxSetDefinition;
@@ -101,7 +103,29 @@ public:
 	 * Delivers a hit to this victim (combat-m4-hits 7). Written only where the instance ticks, so a client never queues a hit for a
 	 * remote victim it only interpolates. @return false when nothing was queued
 	 */
-	bool PostHit(const FGSTN_HitInboxEntry& Entry);
+	virtual bool PostHit(const FGSTN_HitInboxEntry& Entry) override;
+
+	/**
+	 * The rules the attacker side runs the hit pipeline of, to predict the attacker's own hitstop and meter (combat-m4-hits 6). Resolved at
+	 * BeginPlay from the combat settings (the standard rules when none is set); a test or a game replaces them here, outside the simulation
+	 */
+	void SetCombatRules(UGSTN_CombatRules* Rules);
+	const UGSTN_CombatRules* GetCombatRules() const { return CombatRules; }
+
+	/**
+	 * "frame:victim:group:hitbox:hurtbox:ricochet:attackerHitstop;..." of the hits the attacker side made, the last 512 frames. Written
+	 * while gstn.Combat.Debug.HitLog is 1. A re-simulated frame replaces its entry, so an owner's log after a reconcile compares with the
+	 * authority's frame by frame. Debug only: never read by the simulation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetHitLog() const;
+
+	/**
+	 * "frame:hitbox:space:x,y,z;..." of the world centre of every open hitbox, the last 512 frames, written under the same switch as the hit
+	 * log. The harness checks the frame of a hit against the geometry with it
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetHitboxTrace() const;
 
 	/** The victim side's drain at the start of its combat tick of Frame: the entries stamped before it, in (AttackerId, hitbox) order, appended to Out */
 	void DrainHitInbox(int32 Frame, TArray<FGSTN_HitInboxEntry>& Out) { HitInbox.Drain(Frame, Out); }
@@ -491,6 +515,28 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGSTN_HurtboxSetDefinition> ActiveHurtboxSet;
+
+	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */
+	void RunAttackerStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncCore& Core, const FGSTN_StepSnapshot* Snapshot, const FGSTN_HitGroupMask& GroupMask);
+
+	/** The attacker's pose at the end of the previous frame from the Mover tracker (the actor's own without one). False without an owner */
+	bool ReadOwnPose(FTransform& OutTransform, FVector& OutUp);
+
+	/** A timeline that began this frame: its move origin is the pose the attacker is in now */
+	void StampMoveOrigin(FGSTN_CombatSyncCore& Core, int32 Frame);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_CombatRules> CombatRules;
+
+	/** Scratch of the attacker step, reused every frame */
+	FGSTN_TimelineFrameResult AttackerScratch;
+	TArray<FGSTN_AttackerHit> AttackerHits;
+	TArray<FGSTN_AttackerDebugShape> AttackerDebugShapes;
+	bool bLoggedTargetOverflow = false;
+
+	/** Debug mirrors of the attacker step, see GetHitLog / GetHitboxTrace. Not state */
+	TMap<int32, FString> HitLogByFrame;
+	TMap<int32, FString> HitboxTraceByFrame;
 
 	/** Hits waiting for this victim's next tick. Local data, not sync state: the attackers' re-simulation rebuilds it after a rollback */
 	FGSTN_HitInbox HitInbox;

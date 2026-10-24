@@ -161,6 +161,21 @@ void UGSTN_CombatWorldSubsystem::UnregisterProvider(IGSTN_HittableProvider* Prov
 	}
 }
 
+bool UGSTN_CombatWorldSubsystem::PostHit(int32 EntityId, const FGSTN_HitInboxEntry& Entry)
+{
+	const int32 Index = Algo::LowerBoundBy(Registry, EntityId, &FRegistryEntry::EntityId);
+	if (!Registry.IsValidIndex(Index) || Registry[Index].EntityId != EntityId)
+	{
+		return false;
+	}
+	const FRegistryEntry& Registered = Registry[Index];
+	if (Registered.bHasOwner && !Registered.Owner.IsValid())
+	{
+		return false;
+	}
+	return Registered.Source && Registered.Source->PostHit(Entry);
+}
+
 void UGSTN_CombatWorldSubsystem::InvalidateSnapshot()
 {
 	bSnapshotInvalid = true;

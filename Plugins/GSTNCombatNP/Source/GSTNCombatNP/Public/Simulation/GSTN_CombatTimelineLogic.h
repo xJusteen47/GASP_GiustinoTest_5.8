@@ -33,7 +33,7 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	/**
 	 * Step 6. May the command start now? Actionable: yes. Running: inside the cancellable tail yes; inside the startup override
 	 * window if the command matches OverrideInto (empty: its tier is above the running command's); in an open cancel window if
-	 * the command matches the window's query and its condition holds (OnHit/OnBlock never before M4, OnWhiff while nothing hit);
+	 * the command matches the window's query and its condition holds (OnHit once a hit of the run is confirmed, OnBlock never before M6, OnWhiff while nothing hit);
 	 * from the first actionable frame on yes; otherwise no. Output is the evaluation AdvanceClock made for this frame.
 	 */
 	static bool IsCommandAllowed(const FGSTN_CombatSyncCore& Core, const FGSTN_CombatTimelineData* Data, const FGSTN_TimelineOutput& Output,
