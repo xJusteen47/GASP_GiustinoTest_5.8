@@ -98,6 +98,17 @@ struct GSTNDEPTHMARKERRUNTIME_API FGSTN_DepthToyParams
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Beam", meta = (ClampMin = "0.05"))
 	float BeamTopFootMultiplier = 0.6f;
 
+	/**
+	 * Where the beam of the below layer starts, as a fraction of the subject height above the feet (0 feet, 0.5 the core of the body): the light
+	 * passes through the character, so it seems to leave its core (the cracks glow there). The minimum height still counts from the feet.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Beam", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float BeamStartFraction = 0.5f;
+
+	/** Time constant of the LightThrough value written to the character materials */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Character", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float LightThroughSeconds = 0.08f;
+
 	/** Peak opacity of the beam: it is a hint, the decal is the marker */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Toy|Beam", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float BeamOpacity = 0.24f;

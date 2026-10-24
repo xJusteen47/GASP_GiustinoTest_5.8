@@ -78,6 +78,26 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy", meta = (ClampMin = "0"))
 	int32 ToyCustomPrimitiveDataBase = 0;
 
+	/**
+	 * Character glow (toy look): the marker writes LightThrough (0 grounded or under the minimum height, 1 fully airborne) into the custom primitive
+	 * data of the owner's mesh components at this index, and the player colour (float4) at CharacterCPDIndexColor. A character material (the crack
+	 * glow function MF_DM_CrackGlow, or your own) reads them: the crystal colour shines through the cracks of the shell only when the light passes
+	 * through. Negative = off. The generated materials read 16 and 17..20.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy|Character", meta = (ClampMin = "-1"))
+	int32 CharacterCPDIndexLight = 16;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy|Character", meta = (ClampMin = "-1"))
+	int32 CharacterCPDIndexColor = 17;
+
+	/** gstn.DepthMarker.CrystalPreview 1: every mesh of the local pawns with a marker is drawn with this naked crystal material (prototype) */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy|Character")
+	TSoftObjectPtr<UMaterialInterface> CrystalPreviewMaterial;
+
+	/** gstn.DepthMarker.CrystalPreview 2: the same with a plain shell material that carries the crack glow layer on top of its normal look */
+	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy|Character")
+	TSoftObjectPtr<UMaterialInterface> CrackShellPreviewMaterial;
+
 	/** Colour of the player by colour rank (alphabetical order of the players' names): red, blue, yellow, green. Extend freely; ranks wrap */
 	UPROPERTY(Config, EditAnywhere, Category = "Look|Toy")
 	TArray<FLinearColor> PlayerPalette = { FLinearColor(0.9f, 0.1f, 0.08f), FLinearColor(0.12f, 0.38f, 1.f),

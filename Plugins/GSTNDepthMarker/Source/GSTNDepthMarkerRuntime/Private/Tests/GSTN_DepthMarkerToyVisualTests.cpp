@@ -104,7 +104,7 @@ namespace GSTNDepthMarkerVisualTest
 		}
 
 		/** A capsule character (the real adapter reads it) with a grey body and the real marker component; Falling or Walking, no gravity */
-		ACharacter* Character(const FVector& Feet, const FLinearColor& Tint, bool bFalling = true)
+		ACharacter* Character(const FVector& Feet, const FLinearColor& Tint, bool bFalling = true, UMaterialInterface* BodyOverride = nullptr)
 		{
 			ACharacter* Actor = World->SpawnActor<ACharacter>(Feet + FVector(0, 0, 88.0), FRotator::ZeroRotator);
 			Actor->GetCharacterMovement()->GravityScale = 0.f;
@@ -112,7 +112,11 @@ namespace GSTNDepthMarkerVisualTest
 			UStaticMeshComponent* Body = NewObject<UStaticMeshComponent>(Actor, TEXT("Body"));
 			Body->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")));
 			Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			if (UMaterialInterface* Debug = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
+			if (BodyOverride)
+			{
+				Body->SetMaterial(0, BodyOverride);
+			}
+			else if (UMaterialInterface* Debug = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
 			{
 				UMaterialInstanceDynamic* BodyMaterial = UMaterialInstanceDynamic::Create(Debug, Actor);
 				BodyMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.2f, 0.2f, 0.24f));
@@ -352,6 +356,34 @@ GSTN_DMV_TEST(ToyCloseup)
 	Scene.Character(FVector(0, 150, 420), Yellow);
 	Scene.Tick(20);
 	const FString Path = Scene.Snapshot(TEXT("toy-closeup"), FVector(-520, 0, 300), FVector(0, 0, 90), 52.f);
+	AddInfo(Path);
+	TestFalse(TEXT("snapshot written"), Path.IsEmpty());
+	return true;
+}
+
+/** The crack glow: a naked crystal body and a plain shell with the glow layer, each grounded and in the air (the glow follows the beam fade) */
+GSTN_DMV_TEST(ToyCrystal)
+{
+	FVisualScene Scene;
+	if (!Scene.IsUsable())
+	{
+		AddInfo(TEXT("Skipped: needs a real RHI and the toy style asset"));
+		return true;
+	}
+	UMaterialInterface* Crystal = UGSTN_DepthMarkerSettings::Get().CrystalPreviewMaterial.LoadSynchronous();
+	UMaterialInterface* Shell = UGSTN_DepthMarkerSettings::Get().CrackShellPreviewMaterial.LoadSynchronous();
+	if (!Crystal || !Shell)
+	{
+		AddInfo(TEXT("Skipped: the crystal preview materials are not generated"));
+		return true;
+	}
+	Scene.Box(FVector(0, 0, -5), FVector(1200, 900, 5));
+	Scene.Character(FVector(0, -330, 3), Red, false, Crystal);
+	Scene.Character(FVector(0, -110, 240), Red, true, Crystal);
+	Scene.Character(FVector(0, 110, 3), Blue, false, Shell);
+	Scene.Character(FVector(0, 330, 240), Blue, true, Shell);
+	Scene.Tick(30);
+	const FString Path = Scene.Snapshot(TEXT("toy-crystal"), FVector(-1000, 0, 230), FVector(0, 0, 190), 55.f);
 	AddInfo(Path);
 	TestFalse(TEXT("snapshot written"), Path.IsEmpty());
 	return true;

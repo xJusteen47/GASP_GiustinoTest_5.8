@@ -7,7 +7,7 @@ leaves 0 and logs 'Failed to compile Material' (also scan the log for it). Print
 import unreal
 
 FOLDER = "/Game/Blueprints/DepthMarker/"
-NAMES = ["M_DM_StainedGlass_Decal", "M_DM_Beam", "M_DM_FogPuff"]
+NAMES = ["M_DM_StainedGlass_Decal", "M_DM_Beam", "M_DM_FogPuff", "M_DM_CrystalCharacter", "M_DM_CrackShell"]
 lib = unreal.MaterialEditingLibrary
 failed = []
 

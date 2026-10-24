@@ -300,6 +300,171 @@ prop(p_depth, unreal.MaterialProperty.MP_OPACITY)
 finish(puff)
 
 # ---------------------------------------------------------------------------------------------------------------------------------
+# Character glow: the crystal colour shining through cracks in the shell, only when the light passes through (airborne).
+# The marker writes LightThrough (custom primitive data 16) and the player colour (17..20) into the meshes of the owner. MF_DM_CrackGlow is the
+# reusable layer: add its Emissive output to the emissive of any character material (CrackMask darkens the base a little along the cracks).
+# The cracks are voronoi cell edges in LOCAL space (they stick to the body parts); some cells stay whole; the interior glow is a fake
+# subsurface term (stronger where the surface faces the camera: more glass in front of the core). Grounded: Light = 0, nothing glows.
+# ---------------------------------------------------------------------------------------------------------------------------------
+CPD_LIGHT = 16
+CPD_COLOR = 17
+
+CRACK_CODE = """
+float3 p = LocalPos * 0.085;
+float3 cell = floor(p);
+float3 f = frac(p);
+float d1 = 8.0;
+float d2 = 8.0;
+float shade = 0.0;
+[unroll] for (int k = -1; k <= 1; k++)
+{
+    [unroll] for (int j = -1; j <= 1; j++)
+    {
+        [unroll] for (int i = -1; i <= 1; i++)
+        {
+            float3 o = float3(i, j, k);
+            float3 c = cell + o;
+            float3 h = frac(sin(float3(dot(c, float3(127.1, 311.7, 74.7)), dot(c, float3(269.5, 183.3, 246.1)), dot(c, float3(113.5, 271.9, 124.6)))) * 43758.5453);
+            float3 q = o + h - f;
+            float d = dot(q, q);
+            if (d < d1) { d2 = d1; d1 = d; shade = frac(sin(dot(c, float3(12.9898, 78.233, 37.719))) * 43758.5453); }
+            else if (d < d2) { d2 = d; }
+        }
+    }
+}
+float edge = sqrt(d2) - sqrt(d1);
+float crack = (1.0 - smoothstep(0.0, 0.07, edge)) * step(0.25, shade);
+float pulse = 0.85 + 0.15 * sin(Time * 2.2 + shade * 6.0);
+float interior = saturate(Facing) * Bias;
+float glow = Light * (crack * 3.5 + interior * 0.5 * pulse);
+return float4(Color.rgb * glow, crack);
+"""
+
+
+def new_function(name):
+    func = get_or_create(name, unreal.MaterialFunction, unreal.MaterialFunctionFactoryNew())
+    for _ in range(30):
+        try:
+            if lib.get_num_material_expressions_in_function(func) == 0:
+                break
+        except Exception:
+            pass
+        lib.delete_all_material_expressions_in_function(func)
+    return func
+
+
+def fnode(func, cls, x, y, **props):
+    expr = lib.create_material_expression_in_function(func, cls, x, y)
+    for key, value in props.items():
+        expr.set_editor_property(key, value)
+    return expr
+
+
+glow_fn = new_function("MF_DM_CrackGlow")
+f_light = fnode(glow_fn, unreal.MaterialExpressionScalarParameter, -900, 0, parameter_name="LightThrough", default_value=0.0,
+                use_custom_primitive_data=True, primitive_data_index=CPD_LIGHT)
+f_color = fnode(glow_fn, unreal.MaterialExpressionVectorParameter, -900, 150, parameter_name="GlowColor",
+                default_value=unreal.LinearColor(1.0, 0.8, 0.2, 1.0), use_custom_primitive_data=True, primitive_data_index=CPD_COLOR)
+f_bias = fnode(glow_fn, unreal.MaterialExpressionScalarParameter, -900, 300, parameter_name="InteriorBias", default_value=0.6)
+f_time = fnode(glow_fn, unreal.MaterialExpressionTime, -900, 450)
+f_local = fnode(glow_fn, unreal.MaterialExpressionLocalPosition, -900, 600)
+f_fresnel = fnode(glow_fn, unreal.MaterialExpressionFresnel, -900, 750, exponent=2.0)
+f_facing = fnode(glow_fn, unreal.MaterialExpressionOneMinus, -700, 750)
+link(f_fresnel, f_facing, 0)
+f_code = fnode(glow_fn, unreal.MaterialExpressionCustom, -500, 300, code=CRACK_CODE, description="DMCrack",
+               output_type=unreal.CustomMaterialOutputType.CMOT_FLOAT4)
+inputs = []
+for input_name in ("LocalPos", "Light", "Color", "Time", "Facing", "Bias"):
+    item = unreal.CustomInput()
+    item.set_editor_property("input_name", input_name)
+    inputs.append(item)
+f_code.set_editor_property("inputs", inputs)
+for index, src in enumerate((f_local, f_light, f_color, f_time, f_facing, f_bias)):
+    link(src, f_code, index)
+f_rgb = fnode(glow_fn, unreal.MaterialExpressionComponentMask, -250, 250, r=True, g=True, b=True, a=False)
+f_a = fnode(glow_fn, unreal.MaterialExpressionComponentMask, -250, 400, r=False, g=False, b=False, a=True)
+link(f_code, f_rgb, 0)
+link(f_code, f_a, 0)
+f_rgb_color = fnode(glow_fn, unreal.MaterialExpressionComponentMask, -250, 550, r=True, g=True, b=True, a=False)
+link(f_color, f_rgb_color, 0)
+for index, (name, src) in enumerate((("Emissive", f_rgb), ("CrackMask", f_a), ("Light", f_light), ("Color", f_rgb_color))):
+    out = fnode(glow_fn, unreal.MaterialExpressionFunctionOutput, 0, 150 * index, output_name=name)
+    link(src, out, 0)
+try:
+    lib.update_material_function(glow_fn, None)
+except Exception as exc:
+    problems.append("update_material_function: %s" % exc)
+unreal.EditorAssetLibrary.save_loaded_asset(glow_fn)
+log("built " + glow_fn.get_path_name())
+
+
+def call_glow(mat, x, y):
+    call = node(mat, unreal.MaterialExpressionMaterialFunctionCall, x, y)
+    try:
+        call.set_editor_property("material_function", glow_fn)
+    except Exception as exc:
+        problems.append("function call: %s" % exc)
+    return call
+
+
+def link_out(src, output, dst, input_index):
+    names = lib.get_material_expression_input_names(dst)
+    if input_index >= len(names) or not lib.connect_material_expressions(src, output, dst, names[input_index]):
+        problems.append("link %s failed into %s input %d" % (output, dst.get_class().get_name(), input_index))
+
+
+def prop_out(src, output, material_property):
+    if not lib.connect_material_property(src, output, material_property):
+        problems.append("property connect failed: %s %s" % (output, material_property))
+
+
+# M_DM_CrystalCharacter: the naked crystal man. Dark glassy body in the player colour, rim light always, cracks only dark lines on the ground;
+# in the air the cracks and the interior glow light up.
+crystal = new_material("M_DM_CrystalCharacter", unreal.MaterialDomain.MD_SURFACE, unreal.BlendMode.BLEND_OPAQUE,
+                       unreal.MaterialShadingModel.MSM_DEFAULT_LIT, False)
+c_call = call_glow(crystal, -800, 0)
+c_fresnel = node(crystal, unreal.MaterialExpressionFresnel, -800, 300, exponent=3.0)
+c_rim_gain = node(crystal, unreal.MaterialExpressionConstant, -800, 450, r=0.45)
+c_color_scale = node(crystal, unreal.MaterialExpressionConstant, -800, 600, r=0.3)
+c_base = node(crystal, unreal.MaterialExpressionMultiply, -300, 600)
+link_out(c_call, "Color", c_base, 0)
+link(c_color_scale, c_base, 1)
+c_dark = node(crystal, unreal.MaterialExpressionConstant, -300, 720, r=0.6)
+c_crack_dark = node(crystal, unreal.MaterialExpressionOneMinus, -300, 800)
+c_crack_scale = node(crystal, unreal.MaterialExpressionMultiply, -500, 800)
+link_out(c_call, "CrackMask", c_crack_scale, 0)
+link(c_dark, c_crack_scale, 1)
+link(c_crack_scale, c_crack_dark, 0)
+prop(mul(crystal, -100, 650, c_base, c_crack_dark), unreal.MaterialProperty.MP_BASE_COLOR)
+c_rim_color = node(crystal, unreal.MaterialExpressionMultiply, -500, 450)
+link(c_fresnel, c_rim_color, 0)
+link_out(c_call, "Color", c_rim_color, 1)
+c_rim_scaled = mul(crystal, -300, 450, c_rim_color, c_rim_gain)
+c_emissive = node(crystal, unreal.MaterialExpressionAdd, -100, 300)
+link_out(c_call, "Emissive", c_emissive, 0)
+link(c_rim_scaled, c_emissive, 1)
+prop(c_emissive, unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+prop(node(crystal, unreal.MaterialExpressionConstant, -100, 900, r=0.08), unreal.MaterialProperty.MP_ROUGHNESS)
+prop(node(crystal, unreal.MaterialExpressionConstant, -100, 980, r=0.9), unreal.MaterialProperty.MP_SPECULAR)
+finish(crystal)
+
+# M_DM_CrackShell: a plain opaque shell (the mannequin look) with the crack glow layer on top: what a normal character material does with MF_DM_CrackGlow
+shell = new_material("M_DM_CrackShell", unreal.MaterialDomain.MD_SURFACE, unreal.BlendMode.BLEND_OPAQUE,
+                     unreal.MaterialShadingModel.MSM_DEFAULT_LIT, False)
+s_call = call_glow(shell, -800, 0)
+s_base = node(shell, unreal.MaterialExpressionConstant3Vector, -800, 300, constant=unreal.LinearColor(0.72, 0.75, 0.82, 1.0))
+s_dark = node(shell, unreal.MaterialExpressionConstant, -800, 450, r=0.5)
+s_crack = node(shell, unreal.MaterialExpressionMultiply, -600, 450)
+link_out(s_call, "CrackMask", s_crack, 0)
+link(s_dark, s_crack, 1)
+s_inv = node(shell, unreal.MaterialExpressionOneMinus, -450, 450)
+link(s_crack, s_inv, 0)
+prop(mul(shell, -200, 350, s_base, s_inv), unreal.MaterialProperty.MP_BASE_COLOR)
+prop_out(s_call, "Emissive", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+prop(node(shell, unreal.MaterialExpressionConstant, -200, 600, r=0.55), unreal.MaterialProperty.MP_ROUGHNESS)
+finish(shell)
+
+# ---------------------------------------------------------------------------------------------------------------------------------
 # Styles: DMS_Toy (below / above layers) and DMS_Toy_Approach (approach marker), named in the project ini
 # ---------------------------------------------------------------------------------------------------------------------------------
 decal_mat = unreal.EditorAssetLibrary.load_asset(FOLDER + "/M_DM_StainedGlass_Decal")

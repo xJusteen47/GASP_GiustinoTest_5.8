@@ -84,3 +84,9 @@ New layer on top of the spec; the spec's section 2.7 above marker stays as it is
 - The CharacterMovement and Actor adapters do not set `FGSTN_DepthSubjectState::bOnWall` (still only a field a project adapter fills); the clearance sweep is what hides the beam next to a wall.
 - `Tools/DepthMarker/setup_depth_marker_toy_look.py`: `delete_all_material_expressions` leaves about half of the nodes behind in one call (it deletes while iterating), so a material that was regenerated kept dead nodes, some of them invalid; the script now repeats the call until the graph is empty and reports a node that survives.
 - A scene capture draws a material that is still compiling as the default material (or not at all): the visual tests wait for the shader compiler after the first capture and capture again.
+
+## Toy look: crack glow through the character (2026-10-24, owner direction)
+
+- New settings `CharacterCPDIndexLight` / `CharacterCPDIndexColor`, `CrystalPreviewMaterial`, `CrackShellPreviewMaterial`; new toy params `BeamStartFraction` and `LightThroughSeconds`. The marker writes `LightThrough` and the player colour to the custom primitive data of every `UMeshComponent` of the owner (not only skeletal ones, so a static proxy can be tested).
+- `MF_DM_CrackGlow`, `M_DM_CrystalCharacter`, `M_DM_CrackShell` come from the setup script; `gstn.DepthMarker.CrystalPreview` swaps the materials of the local pawns at runtime and restores them when the marker is released. The material function reads fixed custom primitive data indices (16, 17..20): if a project changes the settings it must change the function parameters too.
+- Not done: no real character asset was tested (the snapshots use capsule proxies); a skeletal mesh with many material slots gets the same material in every slot while the preview is on.

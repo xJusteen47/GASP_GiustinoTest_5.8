@@ -2,9 +2,11 @@
 
 #include "Camera/PlayerCameraManager.h"
 #include "Components/DecalComponent.h"
+#include "Components/MeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -172,6 +174,35 @@ float FGSTN_DepthToy::MoveClearance(float Current, float Target, float DeltaSeco
 	return bRise ? FMath::Min(Current + Step, Target) : FMath::Max(Current - Step, Target);
 }
 
+float FGSTN_DepthToy::LightThroughTarget(const FGSTN_DepthToyParams& Params, bool bAirborne, bool bGrounded, bool bHasGroundBelow, float HeightCm)
+{
+	if (!bAirborne || bGrounded)
+	{
+		return 0.f;
+	}
+	return bHasGroundBelow ? SizeFade(Params, HeightCm) : 1.f;
+}
+
+void FGSTN_DepthToy::WriteCharacterGlow(const AActor* Owner, int32 LightIndex, int32 ColorIndex, float LightThrough, const FLinearColor& Color)
+{
+	if (!Owner || (LightIndex < 0 && ColorIndex < 0))
+	{
+		return;
+	}
+	TInlineComponentArray<UMeshComponent*> Meshes(Owner);
+	for (UMeshComponent* Mesh : Meshes)
+	{
+		if (LightIndex >= 0)
+		{
+			Mesh->SetCustomPrimitiveDataFloat(LightIndex, LightThrough);
+		}
+		if (ColorIndex >= 0)
+		{
+			Mesh->SetCustomPrimitiveDataVector4(ColorIndex, FVector4(Color.R, Color.G, Color.B, Color.A));
+		}
+	}
+}
+
 float FGSTN_DepthToy::ApexExtension(float LengthCm, float TopRadius, float BaseRadius)
 {
 	return BaseRadius > TopRadius + UE_KINDA_SMALL_NUMBER ? FMath::Max(TopRadius, 0.f) * LengthCm / (BaseRadius - TopRadius) : 0.f;
@@ -264,6 +295,11 @@ void UGSTN_DepthPresenter_Cone::OnMarkerUpdated_Implementation(const FGSTN_Depth
 		// Toy: a soft column that ends where the decal is, never wider than it, fading with height and when geometry hugs it
 		Look = FGSTN_DepthToy::ResolveLook(View, Layer);
 		FGSTN_DepthToy::BeamEnds(View.Subject, Layer, Look.Point, Start, End);
+		if (Layer == EGSTN_DepthLayer::Below)
+		{
+			// The light passes through the character: the beam leaves its core, not the soles
+			Start += View.Subject.Up.GetSafeNormal() * (View.Subject.TopOffset * View.Toy.Params.BeamStartFraction);
+		}
 		Opacity *= Look.SizeFade * Look.BeamClearance * View.Toy.Params.BeamOpacity;
 		if (Opacity < 0.002f)
 		{

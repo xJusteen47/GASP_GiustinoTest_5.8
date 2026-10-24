@@ -389,8 +389,9 @@ GSTN_DMT_TEST(ToyBeamBaseMatchesDecalRadius)
 			const FVector Tip = Xf.TransformPosition(FVector(0, 0, ZMax));
 			TestTrue(TEXT("the beam base is on the landing spot"), Base.Equals(View.Toy.BeamEnd, 0.1));
 			TestTrue(TEXT("the base diameter is the landing diameter"), FMath::IsNearlyEqual(static_cast<float>(Xf.GetScale3D().X * 2.0 * MeshBounds.BoxExtent.X), Look.Radius * 2.f, 0.05f));
-			// The cone is linear: at the character (the beam start) its radius is the top radius, and the apex lies above the character
-			const double Along = FVector::DotProduct(View.Subject.Feet - Tip, (Base - Tip).GetSafeNormal());
+			// The cone is linear: at the beam start (the core of the character) its radius is the top radius, and the apex lies above it
+			const FVector BeamStart = View.Subject.Feet + FVector::UpVector * (View.Subject.TopOffset * View.Toy.Params.BeamStartFraction);
+			const double Along = FVector::DotProduct(BeamStart - Tip, (Base - Tip).GetSafeNormal());
 			const double RadiusAtStart = Look.Radius * Along / (Base - Tip).Size();
 			TestTrue(TEXT("radius at the character is the top radius"), FMath::IsNearlyEqual(static_cast<float>(RadiusAtStart), Look.TopRadius, 0.05f));
 			TestTrue(TEXT("never wider than the decal"), Look.TopRadius <= Look.Radius);
@@ -415,6 +416,25 @@ GSTN_DMT_TEST(ToyBeamBaseMatchesDecalRadius)
 	World->DestroyWorld(false);
 	World->RemoveFromRoot();
 	return bOk;
+}
+
+GSTN_DMT_TEST(ToyLightThroughFollowsTheBeamFade)
+{
+	const FGSTN_DepthToyParams Params;
+	TestEqual(TEXT("on the ground: nothing shines through"), FGSTN_DepthToy::LightThroughTarget(Params, false, true, true, 0.f), 0.f);
+	TestEqual(TEXT("airborne but still flagged grounded: nothing"), FGSTN_DepthToy::LightThroughTarget(Params, true, true, true, 300.f), 0.f);
+	TestEqual(TEXT("airborne a few cm up: nothing (under the minimum height)"), FGSTN_DepthToy::LightThroughTarget(Params, true, false, true, 5.f), 0.f);
+	TestEqual(TEXT("airborne high: fully lit"), FGSTN_DepthToy::LightThroughTarget(Params, true, false, true, 300.f), 1.f);
+	TestEqual(TEXT("airborne with no ground in range: fully lit"), FGSTN_DepthToy::LightThroughTarget(Params, true, false, false, 0.f), 1.f);
+	float Previous = 0.f;
+	for (float Height = 0.f; Height < 140.f; Height += 5.f)
+	{
+		const float Light = FGSTN_DepthToy::LightThroughTarget(Params, true, false, true, Height);
+		TestTrue(TEXT("rises with the beam, never drops"), Light >= Previous);
+		TestEqual(TEXT("the same fade as the beam"), Light, FGSTN_DepthToy::SizeFade(Params, Height));
+		Previous = Light;
+	}
+	return true;
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS

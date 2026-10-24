@@ -9,7 +9,9 @@
 #include "GSTN_DepthMarkerPresenter.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "GSTN_DepthMarkerStyle.h"
+#include "Components/MeshComponent.h"
 #include "GSTN_DepthMarkerToy.h"
+#include "Materials/MaterialInterface.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 #include "GSTN_DepthSubject.h"
@@ -23,6 +25,9 @@ namespace GSTNDepthMarkerSubsystemPrivate
 	static TAutoConsoleVariable<int32> CVarEnable(TEXT("gstn.DepthMarker.Enable"), 1, TEXT("0 turns every depth marker off on this machine."));
 	static TAutoConsoleVariable<int32> CVarMaxMarkers(TEXT("gstn.DepthMarker.MaxMarkers"), -1, TEXT("Markers drawn at once; negative uses the settings."));
 	static TAutoConsoleVariable<int32> CVarTraces(TEXT("gstn.DepthMarker.TracesPerFrame"), -1, TEXT("Traces issued per frame; negative uses the settings."));
+
+	static TAutoConsoleVariable<int32> CVarCrystalPreview(TEXT("gstn.DepthMarker.CrystalPreview"), 0,
+		TEXT("Prototype: 1 draws the meshes of local pawns with a marker as a naked crystal, 2 as a plain shell with the crack glow layer, 0 restores them. The glow follows the marker (airborne)."));
 
 	static TAutoConsoleVariable<FString> CVarStyle(TEXT("gstn.DepthMarker.Style"), TEXT(""),
 		TEXT("toy or classic: the look of the depth markers on this machine. Empty uses the settings (DefaultLook)."));
@@ -112,6 +117,20 @@ struct UGSTN_DepthMarkerSubsystem::FMarker
 
 	TStrongObjectPtr<UGSTN_DepthMarkerStyle> Style;
 	TArray<TStrongObjectPtr<UGSTN_DepthMarkerPresenter>> Presenters;
+
+	/** Character glow (toy look): the LightThrough value written to the owner's meshes, and the crystal preview material swap */
+	bool bLightInit = false;
+	double LightTime = 0.0;
+	float LightThrough = 0.f;
+	float WrittenLight = -1.f;
+	FLinearColor WrittenColor = FLinearColor(-1.f, -1.f, -1.f, -1.f);
+	int32 PreviewMode = 0;
+	struct FPreviewSlot
+	{
+		TWeakObjectPtr<UMeshComponent> Component;
+		TArray<TStrongObjectPtr<UMaterialInterface>> Originals;
+	};
+	TArray<FPreviewSlot> PreviewSlots;
 
 	/** Toy look state of the below layer: smoothed size and beam end (along Up only), the beam clearance and its sweep */
 	bool bToyInit = false;
@@ -474,8 +493,96 @@ void UGSTN_DepthMarkerSubsystem::BindApproachPresenters(FMarker& Marker, UGSTN_D
 	}
 }
 
+void UGSTN_DepthMarkerSubsystem::RestoreCrystalPreview(FMarker& Marker)
+{
+	for (FMarker::FPreviewSlot& Slot : Marker.PreviewSlots)
+	{
+		if (UMeshComponent* Mesh = Slot.Component.Get())
+		{
+			for (int32 Index = 0; Index < Slot.Originals.Num(); ++Index)
+			{
+				Mesh->SetMaterial(Index, Slot.Originals[Index].Get());
+			}
+		}
+	}
+	Marker.PreviewSlots.Reset();
+	Marker.PreviewMode = 0;
+}
+
+void UGSTN_DepthMarkerSubsystem::UpdateCrystalPreview(FMarker& Marker)
+{
+	const UGSTN_DepthMarkerComponent* Component = Marker.Component.Get();
+	const int32 Wanted = Marker.bLocal ? FMath::Clamp(CVarCrystalPreview.GetValueOnGameThread(), 0, 2) : 0;
+	if (Wanted == Marker.PreviewMode || !Component)
+	{
+		return;
+	}
+	RestoreCrystalPreview(Marker);
+	if (Wanted == 0)
+	{
+		return;
+	}
+	const UGSTN_DepthMarkerSettings& Settings = UGSTN_DepthMarkerSettings::Get();
+	UMaterialInterface* Replacement = (Wanted == 1 ? Settings.CrystalPreviewMaterial : Settings.CrackShellPreviewMaterial).LoadSynchronous();
+	if (!Replacement)
+	{
+		return;
+	}
+	TInlineComponentArray<UMeshComponent*> Meshes(Component->GetOwner());
+	for (UMeshComponent* Mesh : Meshes)
+	{
+		FMarker::FPreviewSlot& Slot = Marker.PreviewSlots.AddDefaulted_GetRef();
+		Slot.Component = Mesh;
+		for (int32 Index = 0; Index < Mesh->GetNumMaterials(); ++Index)
+		{
+			Slot.Originals.Add(TStrongObjectPtr<UMaterialInterface>(Mesh->GetMaterial(Index)));
+			Mesh->SetMaterial(Index, Replacement);
+		}
+	}
+	Marker.PreviewMode = Wanted;
+}
+
+void UGSTN_DepthMarkerSubsystem::UpdateCharacterGlow(FMarker& Marker, const FGSTN_DepthMarkerView& View, const FGSTN_DepthToyParams& Toy, bool bToy, double Time)
+{
+	const UGSTN_DepthMarkerComponent* Component = Marker.Component.Get();
+	if (!Component)
+	{
+		return;
+	}
+	const UGSTN_DepthMarkerSettings& Settings = UGSTN_DepthMarkerSettings::Get();
+	// The glow follows the beam: the same height fade, 0 on the ground; smoothed so it never pops
+	float Target = 0.f;
+	if (bToy)
+	{
+		const bool bHasGround = View.Below.IsValid() && View.Below.Kind == EGSTN_DepthTargetKind::Surface;
+		Target = FGSTN_DepthToy::LightThroughTarget(Toy, View.Subject.bAirborne, View.Subject.bGrounded, bHasGround, View.Below.Height);
+	}
+	const float Dt = Marker.bLightInit ? static_cast<float>(FMath::Clamp(Time - Marker.LightTime, 0.0, 0.1)) : 0.f;
+	Marker.LightThrough = Marker.bLightInit ? FGSTN_DepthToy::SmoothTowards(Marker.LightThrough, Target, Dt, Toy.LightThroughSeconds) : Target;
+	Marker.LightTime = Time;
+	Marker.bLightInit = true;
+	if (FMath::Abs(Marker.LightThrough - Marker.WrittenLight) > 0.002f || !View.Tint.Equals(Marker.WrittenColor, 0.001f))
+	{
+		FGSTN_DepthToy::WriteCharacterGlow(Component->GetOwner(), Settings.CharacterCPDIndexLight, Settings.CharacterCPDIndexColor, Marker.LightThrough, View.Tint);
+		Marker.WrittenLight = Marker.LightThrough;
+		Marker.WrittenColor = View.Tint;
+	}
+}
+
 void UGSTN_DepthMarkerSubsystem::ReleasePresenters(FMarker& Marker)
 {
+	RestoreCrystalPreview(Marker);
+	if (Marker.WrittenLight > 0.f)
+	{
+		// The character stops glowing when its marker goes away
+		if (const UGSTN_DepthMarkerComponent* Component = Marker.Component.Get())
+		{
+			FGSTN_DepthToy::WriteCharacterGlow(Component->GetOwner(), UGSTN_DepthMarkerSettings::Get().CharacterCPDIndexLight, -1, 0.f, FLinearColor::White);
+		}
+	}
+	Marker.WrittenLight = -1.f;
+	Marker.bLightInit = false;
+	Marker.LightThrough = 0.f;
 	BindApproachPresenters(Marker, nullptr);
 	Marker.ApproachCache.Reset();
 	Marker.LastApproachKey = 0;
@@ -980,6 +1087,9 @@ void UGSTN_DepthMarkerSubsystem::DriveMarker(FMarker& Marker, double Time, bool 
 			Marker.bClearanceBlocked = false;
 		}
 	}
+
+	UpdateCharacterGlow(Marker, View, Style->Toy, Style->Toy.bEnabled, Time);
+	UpdateCrystalPreview(Marker);
 
 	for (TStrongObjectPtr<UGSTN_DepthMarkerPresenter>& Presenter : Marker.Presenters)
 	{

@@ -12,6 +12,7 @@ class UMaterialInterface;
 class UPrimitiveComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
+class AActor;
 
 /** Which look the console variable gstn.DepthMarker.Style asks for */
 enum class EGSTN_DepthLookRequest : uint8
@@ -91,6 +92,15 @@ struct GSTNDEPTHMARKERRUNTIME_API FGSTN_DepthToy
 	static float SmoothTowards(float Current, float Target, float DeltaSeconds, float Tau);
 	/** Linear move of a 0..1 value towards Target taking OutSeconds to fall from 1 to 0 and InSeconds to rise from 0 to 1 */
 	static float MoveClearance(float Current, float Target, float DeltaSeconds, float OutSeconds, float InSeconds);
+
+	/**
+	 * Target of the LightThrough value the character materials read: 0 on the ground (or without being airborne), then the same fade as the beam over
+	 * the column height (so the glow rises with it), 1 when airborne with no ground in range. HeightCm is the column from the feet to the landing spot.
+	 */
+	static float LightThroughTarget(const FGSTN_DepthToyParams& Params, bool bAirborne, bool bGrounded, bool bHasGroundBelow, float HeightCm);
+
+	/** Writes LightThrough (at LightIndex) and the colour (at ColorIndex, 4 floats) into the custom primitive data of every mesh of Owner; a negative index skips it */
+	static void WriteCharacterGlow(const AActor* Owner, int32 LightIndex, int32 ColorIndex, float LightThrough, const FLinearColor& Color);
 
 	/**
 	 * How far above the beam start (the character) the cone mesh must extend so that its radius at the start is TopRadius and at the end BaseRadius
