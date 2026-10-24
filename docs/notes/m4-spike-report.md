@@ -9,7 +9,7 @@ reverted before this commit; scripts were scratch files.
 |---|---|---|
 | H0a cross-entity cost | pass: 1 rollback per hit on the victim, 0 on the host | H9 acc. 2, H10 |
 | H0b freeze + tag | pass: layered move carries the tag; freeze holds in Walking, Falling, WallSliding; reconcile inside is clean | H7 |
-| H0c hitstop with montage | **not measured**: editor crashed twice in a row, stopped by the rule | H7 (still open) |
+| H0c hitstop with montage | pass: the montage holds through the window and matches the authority after a forced reconcile inside it; a bystander client has no montage state | H7 |
 | H0d interpolation buffer | 80 ms matches 100 ms; 60 ms is worse | H10 |
 | H0e lag compensation | pass: rewinds the Mover pawn at 250 ms, 0.22 ms per rewind+unwind | H10 |
 
@@ -59,17 +59,39 @@ client 1's copy in the same editor tick, `np.ForceReconcile` 0.5 s later, sample
   if it must come back; keep the wall lock gate.
 
 ## H0c hitstop with a montage
-Not measured. Prepared (throwaway, in the patch): `SpikeMontage` property played with `PlaySyncedMontage` on the M0 hitstop button,
-forced reconcile inside the window, montage position compared on host / owner / other client. The editor crashed twice in a row
-while the script ran (both `EXCEPTION_ACCESS_VIOLATION reading 0x38`, preceded by `Ensure IsBound` in
-`UNpAbilitySystemComponent::InitAbilityActorInfo` called from `UGSTN_AbilityInputComponent::TryBind`, i.e. a pawn being torn down;
-client 1's controlled pawn no longer had a combat component just before). Crash dirs: `Saved/Crashes/UECC-Windows-5C644DB3...` and
-`UECC-Windows-6753168E...`. The same sessions ran H0a/b/d/e without a crash. Per the rule (two crashes in a row) I stopped.
-Source reading only: `GSTN_CombatSimComponent.cpp` pauses the montage on every hitstop frame and resumes it on `HitstopEndFrame`
-(both from the sync state, so a re-simulation from a restored state takes the same branches); whether the montage position
-survives a reconcile inside the window is **unverified**. Verdict: open; H7 should not start its montage part before this runs.
-A retry needs only the patch, a full build and a PIE listen session; first check that the crash is not caused by loading the montage
-asset inside the running PIE (load it before PIE, or reproduce the crash with only `unreal.load_asset`).
+Retried in the harness session of 2026-10-24 (HEAD ac98c3b, patch `spikes/m4-h0c-spike.patch`, reverted). Throwaway: `SpikeMontage` +
+`Spike_SetMontage` + `Spike_GetMontage` (ASC `GetPlayingSyncedMontage` time, latest frame, hitstop window) on `UGSTN_CombatSimComponent`, and
+`PlaySyncedMontage(SpikeMontage)` in the M0 hitstop trigger, so the montage starts inside the simulation on the same frame as the window.
+Montage: `M_interaction_bench_into_BR_LFoot_Montage` (12.3 s, a content montage: the project has no C10 attack montage yet). Listen, 3 players,
+`m.net(60, 15, 0)`; client 1 taps the test hitstop button (8 frames, the Blueprint value), `np.ForceReconcile` with extra frames fired while the
+window is open; montage time sampled on every editor tick on host, owner and the other client.
+
+| Run | Reconcile | Owner rollbacks / resim ticks | Frames compared host vs owner | Max difference | Montage time ever went back |
+|---|---|---|---|---|---|
+| 1 | 0.25 s after the tap (window frames 3099-3107), 10 extra frames | 1 / 13 | 25 | 0.000 s | no |
+| 2 | 0.12 s after the tap (window 7756-7764), 20 extra frames | 3 / 53 | 29 | 0.000 s | no |
+
+- On both machines the montage position stays at 0.000 s for every frame of the window and then advances 0.016 s per frame from the first
+  frame after `HitstopEndFrame`; the owner re-simulated the window and ended on exactly the authority's values. The pause path (pause on every
+  hitstop frame, resume at the end frame, both derived from the sync state) is rollback-safe for a montage started in the same frame.
+- The other client (simulated proxy) never shows a playing synced montage (0 of 100 samples): the montage state is simulation state of the ASC
+  and a proxy does not run it. If H7 needs the observer to see the montage frozen, that comes from presentation, not from this state.
+- Not measured: a montage started before the window and paused mid-way (the code takes the same branch on every frame), a reconcile that
+  restores a frame before the montage started, and loss (clean network).
+- Verdict: pass. No fork fix needed; H7's montage part can proceed.
+
+### The crashes of the first attempt
+Crash dirs `Saved/Crashes/UECC-Windows-5C644DB3...`, `...6753168E...` (and two more in this session, `...7348F507...`, `...8BBBE5B0...`). The
+first two: `Ensure this->IsBound()` ("Unable to bind delegate to 'OnOwnerActorDestroyed'") in `UAbilitySystemComponent::SetOwnerActor` <-
+`UNpAbilitySystemComponent::InitAbilityActorInfo` <- `UGSTN_AbilityInputComponent::TryBind` (tick), i.e. `RefreshAvatarActor` on a pawn whose
+owner is already pending kill, then an access violation at 0x38. The two in this session: the same address, in `UFallingMode::GenerateMove`
+(`FallingMode.cpp:80`, `CommonLegacySettings` null) called from `UMoverTrajectoryPredictor::Predict` (PoseSearch of the pawn's animation) on a
+pawn whose components were already invalid (`ObjectInstance is null` when Python touched them). Common step in all four: Python
+`set_editor_property` on a **live component instance** in a PIE world (`spike_montage`, `hitstop_test_frames`), together with a slate-tick
+callback that raised every frame (`NameError`, the exec globals are gone, see HANDOVER 21 lesson 1). The runs that did not crash set the montage
+through a `UFUNCTION` setter and sampled from a module-level callback that unregisters itself. Which of the two is the cause was not isolated
+(one factor changed at a time was not affordable); the safe rules are both. Not fixed in engine or fork code. Also seen: a locked
+`UnrealEditor-GASP_Giustino2.dll` after a crash (LNK1104) until the stale editor/crash reporter processes were gone.
 
 ## H0d interpolation buffer
 Setup: `FixedTickInterpolationBufferedMS` set on the settings CDO from Python before each PIE start (in memory, not saved), listen,
