@@ -1397,6 +1397,9 @@ il giocatore**? Se lo sceglie, cosa succede quando due giocatori vogliono lo ste
    Perché conta: un colore per posto è automatico e sempre distinguibile; la scelta libera richiede un menu e una regola per i conflitti.
    Ipotesi nella specifica: colore per posto da una tavolozza (posto assegnato all'ingresso, tenuto per tutta la partita); la scelta libera si
    aggiunge dopo, e in caso di conflitto chi entra dopo prende il primo colore libero.
+   **Risposta (2026-10-24):** Dipende dal numero del giocatore: 1 rosso, 2 blu, 3 giallo, 4 verde. L'ordine segue l'ordine alfabetico dei
+   nomi, così quattro amici che giocano sempre insieme hanno sempre lo stesso colore. Nella specifica: chi entra a partita iniziata prende il
+   primo numero libero e nessuno cambia colore durante la partita ([combat-parts.md](combat-parts.md) §6.0).
 
 CR.2. I **god rays** che partono dal personaggio sono soprattutto un **indicatore di profondità** (un fascio di luce che scende fino a dove
 atterri, al posto della linea tratteggiata), oppure **luce che esce dalle crepe** del corpo (più crepe, più raggi), oppure entrambe le cose?

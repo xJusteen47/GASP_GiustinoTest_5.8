@@ -233,6 +233,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 - Characters are human only outside; inside they are crystal (§5). **The inner crystal's colour differs per player.** Spec:
   [combat-parts.md](combat-parts.md) §6.0 (palette, colour slot per player, presentation only).
+- **Player 1 red, 2 blue, 3 yellow, 4 green**; player numbers follow the **alphabetical order of the names**, so friends who always
+  play together keep the same colours (01:08).
 - Idea for the depth cue: **god rays starting from the character** (the crystal's light), besides the usual **Mario-style shadow**,
   or **fog onto which the shadow falls**. Spec: [depth-marker.md](depth-marker.md) §4.1 (god rays and fog shadow as styles), §2.7 (fog
   as a soft receiver), §4.4 (marker tinted with the crystal colour).
@@ -498,3 +500,6 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > diverso).
 >
 > Oltre alla solita ombra  alla mario, o magari della nebbia su cui far cadere l'ombra.
+
+> il colore dipende da chi è giocatore 1, 2, 3, 4, etc... Giocatore 1 è rosso, 2 è blu, 3 è giallo, 4 è verde. L'ordine forse è meglio
+> deciderlo in base all'ordine alfabetico del nome, in modo che se 4 amici giocano sempre insieme, hanno sempre lo stesso colore. (01:08)

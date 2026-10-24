@@ -446,10 +446,20 @@ Characters are **human outside, crystal inside**, and **the inner crystal's colo
 wherever the crystal shows: the exposed-crystal blend of §6.1, flakes, stump caps and chunks (§6.2), shatter pieces (§6.3), and
 the optional light styles of the depth marker (god rays, [depth-marker.md](depth-marker.md) §4.1).
 
-- **Source** (*Proposal*): a palette data asset `UGSTN_CrystalPaletteDefinition` (per colour slot: crystal colour, emissive
-  strength, a pattern id for colour-blind players) and a **colour slot** per player. The slot is a replicated byte on the
-  player state, assigned by the game mode when the player joins (first free slot, kept for the whole match). It is plain
-  presentation data: ordinary property replication, never NP state, never read by the simulation, so it has no rollback rules.
+- **Source**: a palette data asset `UGSTN_CrystalPaletteDefinition` (per colour slot: crystal colour, emissive strength, a
+  pattern id for colour-blind players) and a **colour slot** per player, which is the player's number in the match.
+  **Owner decision (CR.1, 2026-10-24): player 1 is red, player 2 blue, player 3 yellow, player 4 green**; further slots are
+  designer entries in the palette. **Player numbers follow the alphabetical order of the players' names**, so a group of
+  friends who always play together always gets the same colours.
+- **Assigning the numbers** (*Proposal* for the details):
+  - The **host** sorts the players present when the match starts by display name, case-insensitive and culture-invariant,
+    ties broken by the unique net id. Only the host sorts, so every machine agrees whatever its language.
+  - The result is a replicated byte on each player state: ordinary property replication, never NP state, never read by the
+    simulation, so it has no rollback rules.
+  - A player who joins later takes the **first free number**; a player who leaves frees theirs. Numbers are never reshuffled
+    during a match, so nobody's colour changes mid-game.
+  - Red and green are the pair colour-blind players confuse most, so the palette's **pattern id** per slot stays (and the depth
+    marker's glyph, [depth-marker.md](depth-marker.md) §4.4).
 - **Coupling**: `UGSTN_PartsPresentationComponent` asks a **tint source** (an interface the project or the experience
   implements) for the colour; without one it falls back to the palette by player index, so the plugin still works alone. The
   depth marker reads the same colour through its own adapter (`GetTint`, [depth-marker.md](depth-marker.md) §4.4): neither plugin
