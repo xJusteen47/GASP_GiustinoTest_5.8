@@ -175,6 +175,9 @@ by default (§4). The four cases:
 | below | no (off-stage, recovering from under the lip) | the ring **above**, on the plane, line going up (screenshot 2) |
 | below | yes (dropping from a high platform onto a lower one) | **both**: the marker on the lower surface and the ring above |
 
+A **fog layer** (§4.1, owner idea of 2026-10-24) counts as a soft surface in this table: where the trace meets one, the shadow is
+drawn on the fog instead of the ring in the void. It is still "no ground" for the reference plane, which only real surfaces set.
+
 Options considered for the plane:
 
 | Option | Pros | Cons |
@@ -250,8 +253,15 @@ option (accessibility; not per-pawn data).
 | Dashed line | **Camera-facing quad** from the feet to the below marker point, and from the head (`Feet + Up * TopOffset`) to the above ring | One mesh, shader-driven dashes (§4.2); starting above the head keeps the up line off the character |
 | Shadow cone | Cone mesh, apex at the feet, base = disc radius on the target | The owner's "cono d'ombra"; combines disc and line |
 | Diegetic | A designer **presenter** (Blueprint) driving a Niagara system or actor | The owner's "something more diegetic", decided at the end |
+| God rays | **Additive mesh shaft** (cone or cylinder) from the character's chest to the target of the line, scrolling noise, depth fade where it meets the ground, tinted with the player's crystal colour (§4.4). Variant: short rays leaking from the body's cracks, driven by the damage glow ([combat-parts.md](combat-parts.md) §6.0). True **volumetric** shafts (a spot light inside the character, volumetric scattering in Exponential Height Fog) only as a high-quality option for the local player | Owner idea, 2026-10-24: light from the crystal inside. The mesh shaft is one translucent draw per marker and works in the void. *Unsure*: the cost of volumetric fog (fixed GPU cost per view plus one shadowed volumetric light per player) in 5.8; spike D4 measures it |
+| Fog shadow | A level-placed **fog layer** (`AGSTN_DepthFogLayer`: a translucent cloud plane or a local fog volume below the platforms) with query-only collision on the depth-marker trace channel only. The fog's material draws a soft dark blob at each marker position, from a small array written once per frame (≤ `MaxMarkers` entries, in a material parameter collection or the layer's own dynamic material instance) | Owner idea, 2026-10-24: "nebbia su cui far cadere l'ombra". A decal does not project onto translucent surfaces, so the fog draws the blob itself. The fog never counts as ground for Mover, pawns or gameplay |
 
 A style enables layers per state (a style may have only a cone). If decals are off (platform or quality), the mesh presenter draws a quad.
+
+**Owner direction (2026-10-24):** besides the usual Mario-style shadow (the ground disc), god rays from the character and fog that
+receives the shadow are wanted. *Proposal*: the default style stays disc, ring and line; a `Style_CrystalRays` style draws the
+god-rays shaft in place of the dashed line, ending where the line would (so the up case of §2.7 becomes a shaft up to the above
+ring); in levels with a fog layer, the fog shadow replaces the ring in the void (§2.7). Questions CR.2–CR.4.
 
 ### 4.2 Dashed line
 
@@ -271,7 +281,8 @@ plain depth-tested materials. A character hidden behind a pillar still shows a f
 ### 4.4 Colour and identity
 
 Tint per marker: the style's `TeamTints` by team id, a per-component `TintOverride`, or `GetTint` from the adapter; default per
-player index. Colour alone is not enough: the style may add a **glyph or pattern id** (custom primitive data) per player, for
+player index. For players the project's adapter returns the **player's crystal colour** ([combat-parts.md](combat-parts.md) §6.0, owner
+input 2026-10-24), so the marker, the god rays and the crystal match; the depth marker itself does not depend on the parts plugin. Colour alone is not enough: the style may add a **glyph or pattern id** (custom primitive data) per player, for
 colour-blind players. Tint, alpha, radius and dash length travel as **custom primitive data**, never one material instance per marker.
 
 ### 4.5 Cost and batching (stages)
@@ -415,7 +426,8 @@ The marker is not an ability (presentation), but per the owner rule **no switch 
 `NearerSurfaceSwitchesAtOnce`, `EdgeHoldWithinForgiveness`, `SwitchBeyondForgivenessWithBlend`, `MinDwellPreventsPingPong`,
 `PitUsesReferenceVolume`, `PitUsesLastGroundedPlane`, `NoReferenceMeansNone`, `RingAboveEntityWhenBelowPlane`, `GravityFlipUsesNewUp`,
 `SidewaysGravityPlane`, `UpResetOnlyOnJump`, `SlopeTiltClamped`, `MovingBaseLocalPlaneFollows`, `FadeCurvesMonotonic`,
-`AboveAndBelowWhenDroppingToLowerPlatform`, `AboveHysteresisAtLip`, `AboveClearedOnLanding`, `AboveFollowsGravityFlip`. Tests use several `Up` vectors, diagonal ones included, so a hidden
+`AboveAndBelowWhenDroppingToLowerPlatform`, `AboveHysteresisAtLip`, `AboveClearedOnLanding`, `AboveFollowsGravityFlip`,
+`FogLayerIsSoftReceiver`, `FogLayerNeverSetsReferencePlane`. Tests use several `Up` vectors, diagonal ones included, so a hidden
 world-Z assumption fails.
 
 **Automation, runtime (`GSTNDepthMarker.Runtime.*`, editor world):** `SchedulerRespectsTraceCap`, `RankingKeepsLocalPlayer`,
@@ -430,7 +442,8 @@ trampoline; a trigger volume, a pawn and a projectile under a platform (must not
 **Harness (listen host + 2 clients, then dedicated + 2 clients):** `scenario_depthmarker_remote` (a remote pawn's marker within 1 cm
 of its mesh at running speed, and **zero** bytes attributable to the plugin), `scenario_depthmarker_gravity` (flip during a jump:
 one cross-fade, no streak). Spikes: D1 tick group against NP interpolation (§3); D2 decal versus mesh ring on Nanite and Lumen
-scenes, 12 markers at 1080p; D3 async trace latency and cost at 8 traces per frame while the minion batch runs on the host.
+scenes, 12 markers at 1080p; D3 async trace latency and cost at 8 traces per frame while the minion batch runs on the host; D4 god-rays cost, mesh shaft
+against volumetric fog with four players, and the fog-shadow blob array on a fog layer.
 
 **Performance check with many enemies:** the M8 bench (150 population, about 60 awake, `MaxVisiblePuppets` 60) with 20 minion types
 opted in through the bridge: the subsystem must hold ≤ 12 markers and ≤ 8 traces per frame whatever the opted-in count, mean

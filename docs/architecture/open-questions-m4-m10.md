@@ -48,6 +48,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Indicatore di profondità | [depth-marker.md](depth-marker.md) |
 | Telecamera | [camera.md](camera.md) |
 | Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
+| Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
 
 
 ---
@@ -1384,3 +1385,40 @@ CAM.11. Il mirino ha più livelli di zoom da cambiare con un tasto? Mentre si mi
    Perché conta: la flessibilità della terza persona dipende da cosa resta permesso mentre si mira; i livelli di zoom richiedono un comando in più.
    Ipotesi nella specifica: zoom a uno o più livelli per arma (dati), ci si muove liberamente con velocità ridotta decisa dall'abilità di mira dell'arma; salti e muri a scelta del designer della singola arma.
    **Risposta (2026-10-23):** Dipende dall'abilità e dall'arma che usa il mirino: sono dati loro, non della telecamera.
+
+## Cristallo per giocatore, god rays, ombra sulla nebbia (24/10)
+
+Specifiche: [combat-parts.md](combat-parts.md) §6.0 e [depth-marker.md](depth-marker.md) §2.7, §4.1, §4.4. Già deciso da te il 24/10: dentro i
+personaggi sono di cristallo e il colore del cristallo cambia a seconda del giocatore; god rays dal personaggio e ombra sulla nebbia sono idee
+da tenere come opzioni accanto alla solita ombra alla Mario.
+
+CR.1. Il colore del cristallo è **legato al posto del giocatore** (giocatore 1 sempre blu, giocatore 2 sempre rosso...) oppure **lo sceglie
+il giocatore**? Se lo sceglie, cosa succede quando due giocatori vogliono lo stesso colore?
+   Perché conta: un colore per posto è automatico e sempre distinguibile; la scelta libera richiede un menu e una regola per i conflitti.
+   Ipotesi nella specifica: colore per posto da una tavolozza (posto assegnato all'ingresso, tenuto per tutta la partita); la scelta libera si
+   aggiunge dopo, e in caso di conflitto chi entra dopo prende il primo colore libero.
+
+CR.2. I **god rays** che partono dal personaggio sono soprattutto un **indicatore di profondità** (un fascio di luce che scende fino a dove
+atterri, al posto della linea tratteggiata), oppure **luce che esce dalle crepe** del corpo (più crepe, più raggi), oppure entrambe le cose?
+   Perché conta: il primo è uno stile dell'indicatore di profondità; il secondo fa parte dell'aspetto dei danni del personaggio.
+   Ipotesi nella specifica: entrambe come opzioni separate: uno stile `Style_CrystalRays` dell'indicatore e, a parte, un bagliore del cristallo
+   che cresce con i danni.
+
+CR.3. Il cristallo deve **brillare di più quando il personaggio è danneggiato** (luce dalle crepe che aumenta), oppure il colore resta fisso e
+si vedono solo le crepe?
+   Perché conta: un bagliore crescente aiuta a leggere la salute da lontano, ma con quattro giocatori molto danneggiati può diventare rumore.
+   Ipotesi nella specifica: sì, emissivo che cresce con il danno, con intensità massima regolabile dal designer.
+
+CR.4. La **nebbia su cui cade l'ombra** è qualcosa che il designer mette in certi livelli (un mare di nuvole sotto le piattaforme), oppure deve
+esserci sempre sotto ogni livello?
+   Perché conta: se il designer la piazza, i livelli senza nebbia usano l'anello nel vuoto; se c'è sempre, l'anello nel vuoto serve solo quando
+   si è sotto la piattaforma.
+   Ipotesi nella specifica: la piazza il designer (un attore "strato di nebbia"); dove c'è, l'ombra cade sulla nebbia al posto dell'anello nel
+   vuoto.
+
+CR.5. I **nemici** hanno un colore di cristallo per tipo di nemico (scelto dal designer), oppure tutti uguali, oppure il colore indica qualcosa
+(per esempio il punto debole)?
+   Perché conta: il colore per giocatore serve a riconoscersi; se anche i nemici usano colori vivi bisogna evitare che somiglino a quelli dei
+   giocatori.
+   Ipotesi nella specifica: colore per tipo di nemico, scelto dal designer, da una tavolozza separata da quella dei giocatori.
+

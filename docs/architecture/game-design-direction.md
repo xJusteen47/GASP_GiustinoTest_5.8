@@ -125,6 +125,7 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - Players and enemies are **crystal inside, covered in human "skin"**. As health drops, **pieces fly off**: small
   cosmetic chips, or whole limbs (tied to the part-breaking system of section 1).
 - Dead players and enemies **shatter into pieces**.
+- The **inner crystal's colour differs per player** (2026-10-24, §6h).
 
 ## 5b. Damage inside a part, detachment, players (owner input, 2026-10-22)
 
@@ -228,6 +229,14 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   attacks: **0 or as many as the designer wants**, per moveset. Spec: [combat-m6-defence-links.md](combat-m6-defence-links.md) §6.
 - **Pressing jump gets up** (16:23).
 
+## 6h. Crystal colour per player, god rays, fog shadow (owner input, 2026-10-24 00:58)
+
+- Characters are human only outside; inside they are crystal (§5). **The inner crystal's colour differs per player.** Spec:
+  [combat-parts.md](combat-parts.md) §6.0 (palette, colour slot per player, presentation only).
+- Idea for the depth cue: **god rays starting from the character** (the crystal's light), besides the usual **Mario-style shadow**,
+  or **fog onto which the shadow falls**. Spec: [depth-marker.md](depth-marker.md) §4.1 (god rays and fog shadow as styles), §2.7 (fog
+  as a soft receiver), §4.4 (marker tinted with the crystal colour).
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -240,6 +249,7 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
 | §6d: two PvE modes (designer levels, procedural expedition with missions); kit = stats, weapon = moveset; mid-match kit pickup; support weapons inherit kit stats; mods (cosmetic + moveset/specials); special swapping; implants; backpacks on the implant connector; depth marker; everything a pluggable ability | new specs [combat-loadout-mods.md](combat-loadout-mods.md) (M11), [game-modes.md](game-modes.md) (M12–M13), [depth-marker.md](depth-marker.md); M3 seams (loadout extensions, compile extension, mid-match apply); M4 hit data scalable by mods; M5 mod preview and validation; M6 interact probe (possible `GSTNInteract` plugin); [modularity-and-tags.md](modularity-and-tags.md) §1.1 goal 9, §3.6, §3.10, §4.2 |
+| §6h: per-player crystal colour; god rays from the character; fog that receives the shadow | [combat-parts.md](combat-parts.md) §6.0; [depth-marker.md](depth-marker.md) §2.7, §4.1, §4.4; questions CR.1–CR.5 |
 | §6f: lives pool and restart point per level; pointing with the character; Astro Bot free camera; Tekken-style PvP camera; scope zoom overlay | [game-modes.md](game-modes.md) §5, §8.1; [interaction.md](interaction.md) §2.1; [camera.md](camera.md) §2.4, §2.5, §6.1 |
 | §6e: interaction focus on what the player points at; depth marker above and below the last platform; far camera with shoulder aim and designer-set angles; shared lives, no revive; Expedition low priority | new [interaction.md](interaction.md) (`GSTNInteract`, replaces the probe part of M6 §8); [depth-marker.md](depth-marker.md) §2.7; new [camera.md](camera.md) (`GSTNCamera`); [game-modes.md](game-modes.md) §5, §6.2, §9.3 |
 | §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
@@ -480,3 +490,11 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > attack disponibili potrebbero essere 0 o quanti interessa a designer a seconda del moveset. Quindi di base, Niente tech.
 
 > Ci si rialza quando si preme salto comunque. (16:23)
+
+### Message of 2026-10-24, 00:58 (verbatim)
+
+> Avevo l'idea di far partire dei god rays dal personaggio (anche dato che i personaggi sono in pratica degli umani solo fuori, dentro
+> sono di cristallo, inoltre non ho detto ancora nelle spec che vorrei che a seconda del giocatore, il cristallo dentro fosse di colore
+> diverso).
+>
+> Oltre alla solita ombra  alla mario, o magari della nebbia su cui far cadere l'ombra.

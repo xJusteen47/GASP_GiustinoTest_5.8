@@ -440,6 +440,31 @@ Minions are not NP actors (M8). The bridge plugin gives the minion store optiona
 All of it lives in `GSTNPartsPresentation`, driven from `FinalizeFrame`/events, with **no feedback into gameplay**: no
 collision with pawns, no gameplay hits, no input, nothing the simulation reads.
 
+### 6.0 Crystal body and per-player crystal colour (owner input, 2026-10-24)
+
+Characters are **human outside, crystal inside**, and **the inner crystal's colour differs per player**. The colour shows
+wherever the crystal shows: the exposed-crystal blend of §6.1, flakes, stump caps and chunks (§6.2), shatter pieces (§6.3), and
+the optional light styles of the depth marker (god rays, [depth-marker.md](depth-marker.md) §4.1).
+
+- **Source** (*Proposal*): a palette data asset `UGSTN_CrystalPaletteDefinition` (per colour slot: crystal colour, emissive
+  strength, a pattern id for colour-blind players) and a **colour slot** per player. The slot is a replicated byte on the
+  player state, assigned by the game mode when the player joins (first free slot, kept for the whole match). It is plain
+  presentation data: ordinary property replication, never NP state, never read by the simulation, so it has no rollback rules.
+- **Coupling**: `UGSTN_PartsPresentationComponent` asks a **tint source** (an interface the project or the experience
+  implements) for the colour; without one it falls back to the palette by player index, so the plugin still works alone. The
+  depth marker reads the same colour through its own adapter (`GetTint`, [depth-marker.md](depth-marker.md) §4.4): neither plugin
+  depends on the other.
+- **Delivery**: one material for every character. The colour is set **once per character**, as a vector parameter on the dynamic
+  material instance that §6.1 already writes (or as custom primitive data); never one material per player. Pooled pieces
+  (flakes, chunks, shards) take the dying entity's colour when they spawn: Niagara particle colour or custom primitive data on
+  the chunk actor.
+- **Enemies and minions**: colour per enemy class (designer data on the presentation set); minions get it as per-instance
+  custom data from their type, with no wire bits.
+- **Damage glow** (*Proposal*, question CR.3): the crystal's emissive may grow with the §6.1 damage parameter, so a badly
+  damaged character leaks light through the cracks; the same value can drive the "rays from the cracks" variant of the god rays.
+- All of it is replaceable content (palette, material, Niagara) under §3.9 of [modularity-and-tags.md](modularity-and-tags.md).
+  Questions CR.1–CR.5 are in [open-questions-m4-m10.md](open-questions-m4-m10.md).
+
 ### 6.1 Damage inside a part: material only (diegetic health)
 
 Owner direction: inside a part, damage is **a material, a shader**, the diegetic way to show that part's health; nothing is
