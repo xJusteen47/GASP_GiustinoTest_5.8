@@ -364,8 +364,11 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 		// The proxy plane turns only for a real corner or a gentle change. A rounded edge normal of a bump or a facet would otherwise
 		// turn the plane toward it for a few ticks, which is exactly the snag on complex geometry
 		const bool bRealCorner = Ahead.Kind == EGSTN_WallEdgeKind::Concave || Ahead.Kind == EGSTN_WallEdgeKind::Convex || CornerHit.IsValid();
-		const bool bGentle = UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(Contact.Normal, InOutState.WallNormal) <= Edges.MaxSmoothAngle;
-		Probe.Normal = (bRealCorner || bGentle) ? FVector(Contact.Normal) : InOutState.WallNormal;
+		// "Gentle" is read from the geometry's own face normal, not the sweep's: touching the rounded corner of a bump with the curved capsule
+		// gives a normal that leans 10-20 degrees off the wall, and following it a tick at a time ratchets the plane around the bump
+		const FVector FaceNormal = Contact.ImpactNormal.IsNearlyZero() ? FVector(Contact.Normal) : FVector(Contact.ImpactNormal);
+		const bool bGentle = UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(FaceNormal, InOutState.WallNormal) <= Edges.MaxSmoothAngle;
+		Probe.Normal = bRealCorner ? FVector(Contact.Normal) : (bGentle ? FaceNormal : InOutState.WallNormal);
 		Probe.ContactPoint = Contact.ImpactPoint;
 		Probe.Component = Contact.GetComponent();
 		Probe.BoneName = Contact.BoneName;

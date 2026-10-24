@@ -28,7 +28,7 @@
 namespace GSTNWallEdgeWorld
 {
 	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
-	constexpr float Dt = 1.f / 60.f;
+	constexpr float EdgeDt = 1.f / 60.f;
 	constexpr float CapRadius = 34.f;
 	constexpr float CapHalfHeight = 88.f;
 	/** Depth and width of the second face of a corner wedge (cm) */
@@ -97,7 +97,7 @@ namespace GSTNWallEdgeWorld
 			Context.SetCurrentWorld(World);
 			World->InitializeActorsForPlay(FURL());
 			Mode.Reset(NewObject<UGSTN_WallSlideV2MovementMode>(GetTransientPackage()));
-			MoveRecord.SetDeltaSeconds(Dt);
+			MoveRecord.SetDeltaSeconds(EdgeDt);
 		}
 
 		~FEdgeScene()
@@ -188,7 +188,7 @@ namespace GSTNWallEdgeWorld
 		void Tick(const FVector& CanonVelocity)
 		{
 			State.Velocity = ToWorld(CanonVelocity);
-			FGSTN_WallTraverseTestAccess::Step(*Mode, FMovingComponentSet(Capsule), Dt, !CanonVelocity.IsNearlyZero(), State, MoveRecord);
+			FGSTN_WallTraverseTestAccess::Step(*Mode, FMovingComponentSet(Capsule), EdgeDt, !CanonVelocity.IsNearlyZero(), State, MoveRecord);
 		}
 
 		FGSTN_WallAheadResult Probe(const FVector& CanonVelocity)
@@ -201,7 +201,7 @@ namespace GSTNWallEdgeWorld
 	/** Feeds the speed the last tick ended with back as the next proposed velocity, regaining Gain cm/s^2 up to Target (the control model's pull) */
 	static FVector NextProposed(const FEdgeScene& Scene, const FVector& Direction, float Target, float Gain)
 	{
-		const float Speed = FMath::Min(Scene.State.Velocity.Size() + Gain * Dt, Target);
+		const float Speed = FMath::Min(Scene.State.Velocity.Size() + Gain * EdgeDt, Target);
 		return Direction * Speed;
 	}
 
@@ -345,7 +345,7 @@ bool FGSTN_WallV2ConvexCapTest::RunTest(const FString& Parameters)
 			Slowest = FMath::Min(Slowest, Now);
 			Proposed = NextProposed(Scene, FVector(0, 1, 0), Speed, 980.f);
 #if GSTN_WALL_DEBUG
-			GSTNWallDebug::FinishTick(ModeName, i * Dt, Now, 0.f);
+			GSTNWallDebug::FinishTick(ModeName, i * EdgeDt, Now, 0.f);
 #endif
 		}
 		TestTrue(*FString::Printf(TEXT("It slowed down (slowest %.0f, corner speed %.0f)"), Slowest, Corner), Slowest < Speed - 100.f && Slowest >= Corner - 2.f);
@@ -510,7 +510,7 @@ bool FGSTN_WallV2BumpStepTest::RunTest(const FString& Parameters)
 			const FBumpRun Run = RunSidewaysOverBump(Frame, Depth, Speed);
 			const FString What = FString::Printf(TEXT("%.0f cm bump"), Depth);
 			TestTrue(*FString::Printf(TEXT("%s: crossed (y %.0f)"), *What, Run.FinalY), Run.FinalY > 400.f);
-			TestTrue(*FString::Printf(TEXT("%s: no tick lost more than 10%% of its travel (worst %.2f of %.2f)"), *What, Run.MinProgress, Speed * Dt), Run.MinProgress >= 0.9f * Speed * Dt);
+			TestTrue(*FString::Printf(TEXT("%s: no tick lost more than 10%% of its travel (worst %.2f of %.2f)"), *What, Run.MinProgress, Speed * EdgeDt), Run.MinProgress >= 0.9f * Speed * EdgeDt);
 			TestFalse(*(What + TEXT(": mode not left")), Run.bLeft);
 			TestFalse(*(What + TEXT(": wall never lost")), Run.bLostWall);
 			TestTrue(*FString::Printf(TEXT("%s: seated back on the wall afterwards (gap %.2f)"), *What, Run.FinalGap), FMath::Abs(Run.FinalGap - 2.f) < 0.3f);
@@ -589,7 +589,11 @@ bool FGSTN_WallV2LedgeFloorTest::RunTest(const FString& Parameters)
 			const FString What = FString::Printf(TEXT("%.0f cm ledge"), Depth);
 			TestTrue(*(What + TEXT(": it is a floor, the mode is left")), Run.bLeft);
 			TestEqual(*(What + TEXT(": to the floor mode")), Run.NextMode, FName(DefaultModeNames::Walking));
-			TestTrue(*FString::Printf(TEXT("%s: stopped on top of it (z %.0f)"), *What, Run.EndZ), Run.EndZ > 30.f + CapHalfHeight - 6.f);
+			// The capsule's round bottom rests on the ledge's outer edge, not flat on it: its centre sits that much lower than a flat-bottomed
+			// capsule would (a 15 cm ledge lets the hemisphere dip about 7 cm)
+			const float EdgeOffset = CapRadius + GetDefault<UGSTN_WallSlideV2MovementMode>()->WallGap - Depth;
+			const float RestZ = 30.f + (CapHalfHeight - CapRadius) + FMath::Sqrt(FMath::Max(CapRadius * CapRadius - EdgeOffset * EdgeOffset, 0.f));
+			TestTrue(*FString::Printf(TEXT("%s: stopped on top of it (z %.1f, rest %.1f)"), *What, Run.EndZ, RestZ), Run.EndZ > RestZ - 2.f);
 		}
 	}
 	return true;
@@ -626,7 +630,7 @@ bool FGSTN_WallV2RecessTest::RunTest(const FString& Parameters)
 			Scene.AddBox(FVector(-50, 400, -4000), FVector(0, 2000, 4000));
 			Scene.PlaceCapsule(100, 300);
 
-			const float MaxPull = Scene.Mode->MaxAdhesionSpeed * Dt;
+			const float MaxPull = Scene.Mode->MaxAdhesionSpeed * EdgeDt;
 			float WorstStep = 0.f;
 			float Deepest = 0.f;
 			bool bLost = false;
@@ -682,8 +686,8 @@ bool FGSTN_WallV2PushIntoWallTest::RunTest(const FString& Parameters)
 		// The slide is the one without input: same velocity
 		const FVector Prior = H * 120.f - Up * 500.f;
 		const FMoverTickStartData StartState = MakeStartStateWithVelocity(Prior);
-		const FVector Idle = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, FVector::ZeroVector, Dt);
-		const FVector Pushing = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, Mapped, Dt);
+		const FVector Idle = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, FVector::ZeroVector, EdgeDt);
+		const FVector Pushing = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, Mapped, EdgeDt);
 		TestTrue(*FString::Printf(TEXT("Pushing into the wall changes nothing (%s vs %s)"), *Pushing.ToString(), *Idle.ToString()), Pushing.Equals(Idle, 0.05));
 
 		// Sideways still steers: right on the stick (camera looking at the wall: along the wall) gives horizontal control
@@ -712,7 +716,7 @@ bool FGSTN_WallV2QueryBudgetTest::RunTest(const FString& Parameters)
 	for (int32 i = 0; i < NumTicks; ++i)
 	{
 		Scene.Tick(FVector(100, 100 * ((i / 30) % 2 ? -1 : 1), -500));
-		GSTNWallDebug::FinishTick(ModeName, i * Dt, 500.f, 0.f);
+		GSTNWallDebug::FinishTick(ModeName, i * EdgeDt, 500.f, 0.f);
 	}
 
 	int32 Ticks;
@@ -720,6 +724,7 @@ bool FGSTN_WallV2QueryBudgetTest::RunTest(const FString& Parameters)
 	int32 Max;
 	GSTNWallDebug::GetQueryStats(ModeName, Ticks, Average, Max);
 	TestEqual(TEXT("Every tick was counted"), Ticks, NumTicks);
+	AddInfo(FString::Printf(TEXT("Measured wall queries per tick on a flat wall: average %.2f, max %d over %d ticks"), Average, Max, Ticks));
 	TestTrue(*FString::Printf(TEXT("Average queries per tick <= 3.5 (was %.2f)"), Average), Average <= 3.5);
 	TestTrue(*FString::Printf(TEXT("Max queries in a tick <= 9 (was %d)"), Max), Max <= 9);
 	TestTrue(TEXT("The wall was held all along"), Scene.State.bHasWall && !Scene.State.IsLeaving());

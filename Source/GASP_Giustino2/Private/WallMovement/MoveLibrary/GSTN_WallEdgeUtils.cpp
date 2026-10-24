@@ -19,6 +19,8 @@ namespace GSTNWallEdge
 	constexpr float MinProbeSpeed = 5.f;
 	/** How far behind the wall plane the far-face ray runs, so it travels inside the thickness of the wall that just ended (cm) */
 	constexpr float FarFaceDepth = 4.f;
+	/** The far-face ray runs this much past the look, so an edge exactly at the leading edge is crossed by the ray and not met at its very end (cm) */
+	constexpr float FarFaceOvershoot = 6.f;
 	/** Without a far face the distance to an ending wall is guessed as this fraction of the look distance */
 	constexpr float UnknownEdgeFraction = 0.5f;
 	/** How far into the blocking feature the bump probe steps along the movement (cm) */
@@ -241,7 +243,7 @@ FGSTN_WallAheadResult UGSTN_WallEdgeUtils::ProbeAhead(const FMovingComponentSet&
 	// 3. The wall ends (nothing there, or a surface the wall filter refuses): is there a face around the edge, behind the plane?
 	const FVector FarStart = End - WallNormal * GSTNWallEdge::FarFaceDepth;
 	FHitResult Far;
-	if (Ctx.Trace(Far, FarStart, FarStart - Dir * Look))
+	if (Ctx.Trace(Far, FarStart, FarStart - Dir * (Look + GSTNWallEdge::FarFaceOvershoot)))
 	{
 		if (Far.bStartPenetrating)
 		{
