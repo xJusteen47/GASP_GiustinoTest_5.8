@@ -100,14 +100,14 @@ def finish(mat):
 decal = new_material("M_DM_StainedGlass_Decal", unreal.MaterialDomain.MD_DEFERRED_DECAL, unreal.BlendMode.BLEND_TRANSLUCENT,
                      unreal.MaterialShadingModel.MSM_DEFAULT_LIT, False)
 alpha_code = """
-float2 p = Parameters.TexCoords[0].xy * 2.0 - 1.0;
+float2 p = UV.xy * 2.0 - 1.0;
 float r = length(p);
 float shadow = 1.0 - smoothstep(0.55, 1.0, r);
 float core = 1.0 - smoothstep(0.40, 0.48, r);
 return max(shadow * 0.55, core * 0.92);
 """
 glass_code = """
-float2 p = Parameters.TexCoords[0].xy * 2.0 - 1.0;
+float2 p = UV.xy * 2.0 - 1.0;
 float r = length(p);
 float core = 1.0 - smoothstep(0.34, 0.44, r);
 float2 g = p * 3.2;
@@ -132,8 +132,11 @@ float shade = 0.5;
 float lead = smoothstep(0.0, 0.14, sqrt(d2) - sqrt(d1));
 return core * lead * (0.5 + 0.5 * shade);
 """
-n_alpha = custom(decal, -700, -100, alpha_code)
-n_glass = custom(decal, -700, 100, glass_code)
+n_uv = node(decal, unreal.MaterialExpressionTextureCoordinate, -900, 0)  # Parameters.TexCoords does not exist in a decal / needs the node
+n_alpha = custom(decal, -700, -100, alpha_code, ("UV",))
+link(n_uv, n_alpha, 0)
+n_glass = custom(decal, -700, 100, glass_code, ("UV",))
+link(n_uv, n_glass, 0)
 n_color = vector_param(decal, -700, 300, "Color", unreal.LinearColor(1.0, 0.8, 0.2, 1.0))
 n_opacity = scalar_param(decal, -700, 450, "Opacity", 1.0)
 n_gain = node(decal, unreal.MaterialExpressionConstant, -500, 520, r=3.0)
@@ -186,7 +189,7 @@ finish(beam)
 puff = new_material("M_DM_FogPuff", unreal.MaterialDomain.MD_SURFACE, unreal.BlendMode.BLEND_TRANSLUCENT,
                     unreal.MaterialShadingModel.MSM_UNLIT, True)
 puff_code = """
-float2 uv = Parameters.TexCoords[0].xy * 2.0 - 1.0;
+float2 uv = UV.xy * 2.0 - 1.0;
 float r = length(uv);
 float t = Time * 0.12;
 float2 q = uv * 1.8 + float2(t, -0.7 * t);
@@ -211,8 +214,10 @@ return saturate(radial * smoothstep(0.2, 0.8, n + radial * 0.4));
 p_color = vector_param(puff, -900, -300, "Color", unreal.LinearColor(1.0, 0.9, 0.5, 1.0), 0)
 p_opacity = scalar_param(puff, -900, -150, "Opacity", 1.0, 4)
 p_time = node(puff, unreal.MaterialExpressionTime, -900, 0)
-p_mask = custom(puff, -600, 0, puff_code, ("Time",))
+p_uv = node(puff, unreal.MaterialExpressionTextureCoordinate, -900, 120)
+p_mask = custom(puff, -600, 0, puff_code, ("Time", "UV"))
 link(p_time, p_mask, 0)
+link(p_uv, p_mask, 1)
 p_strength = node(puff, unreal.MaterialExpressionConstant, -450, 150, r=0.75)
 p_alpha = mul(puff, -300, 0, mul(puff, -450, 0, p_mask, p_opacity), p_strength)
 p_depth = node(puff, unreal.MaterialExpressionDepthFade, -100, 0, fade_distance_default=45.0)
