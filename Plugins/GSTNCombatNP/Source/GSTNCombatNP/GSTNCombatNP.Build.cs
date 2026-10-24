@@ -13,6 +13,7 @@ public class GSTNCombatNP : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"AIModule",
 			"GameplayTags",
 			"GSTNInputCore",
 			"GSTNInputNP",

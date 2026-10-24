@@ -31,6 +31,7 @@
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
+#include "World/GSTN_CombatWorldSubsystem.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Simulation/GSTN_LoadoutSwapLogic.h"
 #include "Loadout/GSTN_EntrySourceMask.h"
@@ -94,6 +95,9 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	CompileInput();
 	BindAbilitySystem();
 	PollLoadoutComponent();
+
+	ActiveHurtboxSet = HurtboxSet.LoadSynchronous();
+	SetCombatWorldSubsystem(UGSTN_CombatWorldSubsystem::Get(GetWorld()));
 
 	if (ContextProvider)
 	{
@@ -230,6 +234,16 @@ const FGSTN_CommandTable& UGSTN_CombatSimComponent::GetCommandTable() const
 
 void UGSTN_CombatSimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get())
+	{
+		if (RegisteredEntityId != INDEX_NONE)
+		{
+			Subsystem->UnregisterEntity(RegisteredEntityId);
+		}
+	}
+	RegisteredEntityId = INDEX_NONE;
+	WorldSubsystem.Reset();
+
 	if (AbilitySystem && PreTickHandle.IsValid())
 	{
 		AbilitySystem->OnSimulationPreTick.Remove(PreTickHandle);
@@ -810,6 +824,7 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		TryQueueStatsModifier();
 	}
 	PollLoadoutComponent();
+	TryRegisterWithWorld();
 
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)
@@ -855,6 +870,11 @@ void UGSTN_CombatSimComponent::TryQueueStatsModifier()
 
 void UGSTN_CombatSimComponent::RestoreFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
 {
+	// A rollback restores every combat instance, and each one invalidates: a snapshot built from the state before it is never read again
+	if (UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get())
+	{
+		Subsystem->InvalidateSnapshot();
+	}
 	if (!Sync)
 	{
 		HitInbox.Reset();

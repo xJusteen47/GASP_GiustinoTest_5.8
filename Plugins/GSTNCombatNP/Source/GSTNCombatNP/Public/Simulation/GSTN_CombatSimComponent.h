@@ -21,9 +21,12 @@
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
+#include "World/GSTN_StepSnapshot.h"
 #include "GSTN_CombatSimComponent.generated.h"
 
+class UGSTN_CombatWorldSubsystem;
 class UGSTN_CommandBindingSet;
+class UGSTN_HurtboxSetDefinition;
 class UGSTN_GA_BaseCombat;
 class UGSTN_GA_PlatformJump;
 class UGSTN_InputConfig;
@@ -63,7 +66,7 @@ struct FAbilitySystemTimeStep;
  * Add it to a pawn that also has a UNpAbilitySystemComponent. Replicated; interpolated simulated proxies do not tick it.
  */
 UCLASS(ClassGroup = (Combat), Blueprintable, meta = (BlueprintSpawnableComponent))
-class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface
+class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface, public IGSTN_SnapshotSource
 {
 	GENERATED_BODY()
 
@@ -102,6 +105,16 @@ public:
 	void DrainHitInbox(int32 Frame, TArray<FGSTN_HitInboxEntry>& Out) { HitInbox.Drain(Frame, Out); }
 
 	const FGSTN_HitInbox& GetHitInbox() const { return HitInbox; }
+
+	// IGSTN_SnapshotSource. The entry of this entity for the step snapshot: the state at the end of the previous frame (the sync state and the
+	// Mover sim state tracker), or the presentation state of an interpolated proxy
+	virtual bool ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntry& Out) override;
+
+	/** The world subsystem this component registers with and invalidates on RestoreFrame. Bound at BeginPlay; a test binds one by hand */
+	void SetCombatWorldSubsystem(UGSTN_CombatWorldSubsystem* Subsystem);
+
+	/** Registers with the world subsystem once the NP proxy has its id (a client gets it from the replication of the proxy, after BeginPlay). Called until it has */
+	void TryRegisterWithWorld();
 
 	// IGSTN_InputSimHost
 	virtual float GetFacingYaw() const override;
@@ -264,6 +277,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
 	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
 
+	/** The hurtboxes this entity is hit through (combat-m4-hits 3). Soft: loaded once at BeginPlay. None = the entity cannot be hit */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSoftObjectPtr<UGSTN_HurtboxSetDefinition> HurtboxSet;
+
 	/** Button whose press opens a hitstop window. -1 = none */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "-1", ClampMax = "31"))
 	int32 HitstopTestButton = INDEX_NONE;
@@ -422,6 +439,15 @@ private:
 		uint16 Pitch = 0;
 	};
 	FFrameAim FrameAim;
+
+	/** The team of the owner or of its controller, NoTeam without one (read when registering and at every snapshot) */
+	FGenericTeamId ResolveTeam() const;
+
+	TWeakObjectPtr<UGSTN_CombatWorldSubsystem> WorldSubsystem;
+	int32 RegisteredEntityId = INDEX_NONE;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_HurtboxSetDefinition> ActiveHurtboxSet;
 
 	/** Hits waiting for this victim's next tick. Local data, not sync state: the attackers' re-simulation rebuilds it after a rollback */
 	FGSTN_HitInbox HitInbox;
