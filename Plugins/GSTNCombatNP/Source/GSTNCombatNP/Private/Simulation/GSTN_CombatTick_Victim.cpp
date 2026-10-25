@@ -339,26 +339,16 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 	}
 }
 
-void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame, bool& bInOutMovementLock)
+void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame)
 {
 	// Set, not added: nothing else grants these three, and a re-simulated frame must not inherit what the predicted future left behind
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstun, Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Splat ? 1 : 0);
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Tumble, Core.ActionState == EGSTN_ActionState::Tumble ? 1 : 0);
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstop, Core.IsInHitstop(Frame) ? 1 : 0);
 
-	const bool bLock = IsActionLocked(Core);
-	if (bLock != bInOutMovementLock)
-	{
-		if (bLock)
-		{
-			ASC.AddLooseGameplayTag(GSTNCombatTags::Lock_Movement);
-		}
-		else
-		{
-			ASC.RemoveLooseGameplayTag(GSTNCombatTags::Lock_Movement);
-		}
-		bInOutMovementLock = bLock;
-	}
+	// The reaction lock has a tag of its own, set from the state like the others: a member remembering "I hold the lock" is outside the rolled
+	// back state, so a resimulation from before the hit would skip the Add. Lock_Movement stays for whoever else roots the combatant
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::Lock_Reaction, IsActionLocked(Core) ? 1 : 0);
 }
 
 void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox)

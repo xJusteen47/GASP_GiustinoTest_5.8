@@ -186,12 +186,11 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 
 	/**
 	 * Projects the combat state onto the ability system for the frame (the pre-tick): Combat.State.Hitstun (hitstun or splat), Tumble and
-	 * Hitstop are set to what the state says, and Combat.Lock.Movement is held while the state locks the combatant (a hit reaction or a KO),
-	 * which stops the locomotion through the stats movement modifier; the stick feeds DI only. Idempotent: a function of the state, so a
-	 * re-simulated frame ends with the same tags. bInOutMovementLock is the caller's memory of the lock it holds, so a lock an ability or an
-	 * effect grants is never taken back
+	 * Hitstop are set to what the state says, and Combat.Lock.Reaction is held while the state locks the combatant (a hit reaction or a KO),
+	 * which stops the locomotion through the stats movement modifier; the stick feeds DI only. Idempotent and memberless: a function of the
+	 * state, so a re-simulated frame ends with the same tags. Lock.Movement is never touched, a lock an ability or an effect grants stays
 	 */
-	static void ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame, bool& bInOutMovementLock);
+	static void ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame);
 
 	/** The KO event: the instigator is the attacker for a Health KO (the victim itself for a zone), the target the combatant; KOReason as a tag */
 	static void AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox);

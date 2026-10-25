@@ -215,7 +215,7 @@ void UGSTN_CombatSimComponent::ProjectStateTags(const FGSTN_CombatSyncCore& Core
 {
 	if (AbilitySystem)
 	{
-		FGSTN_CombatVictim::ProjectStateTags(*AbilitySystem, Core, Frame, bMovementLockProjected);
+		FGSTN_CombatVictim::ProjectStateTags(*AbilitySystem, Core, Frame);
 	}
 }
 

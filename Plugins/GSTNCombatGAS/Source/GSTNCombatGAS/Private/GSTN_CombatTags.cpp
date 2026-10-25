@@ -8,6 +8,7 @@ namespace GSTNCombatTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_AwaitingAdoption, "Combat.Ability.AwaitingAdoption", "A triggered ability waits to be adopted by the timeline that spawned it. Owned by that ability while it waits");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Lock_Movement, "Combat.Lock.Movement", "Locks the combatant's movement. Granted by abilities and effects that root the combatant, read by the stats movement modifier");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Lock_Reaction, "Combat.Lock.Reaction", "Locks the movement of a combatant in a hit reaction or KO. Projected by the combat tick from the sync state, never granted");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Role_Primary, "Combat.Weapon.Role.Primary", "Role of the weapon the combatant uses by default. Granted by the stats effect of the active weapon");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Role_Support, "Combat.Weapon.Role.Support", "Role of the weapon the combatant can switch to. Granted by the stats effect of the active weapon");
@@ -49,7 +50,7 @@ namespace GSTNCombatTags
 		GetDeclaredCoreTags(OutTags);
 		OutTags.Append({
 			Ability_Timeline, Ability_AwaitingAdoption,
-			Lock_Movement,
+			Lock_Movement, Lock_Reaction,
 			Weapon_Role_Primary, Weapon_Role_Support,
 			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_LoadoutSwapped, Event_SuperUsed,
 			Event_HitLanded, Event_HitReceived, Event_KO, Event_Hit_Received, Event_Impact,

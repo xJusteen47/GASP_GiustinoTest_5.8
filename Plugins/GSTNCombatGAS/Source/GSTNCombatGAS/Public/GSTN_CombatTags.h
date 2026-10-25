@@ -28,6 +28,9 @@ namespace GSTNCombatTags
 	/** Locks the combatant's movement (read by the stats movement modifier). Granted by abilities and effects that root the combatant. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Lock_Movement);
 
+	/** Locks the movement of a combatant in a hit reaction or KO (read by the stats movement modifier). Projected from the combat state every frame, never granted */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Lock_Reaction);
+
 	// Weapon roles
 
 	/** Role of the weapon the combatant uses by default. Granted by the stats effect of the active weapon. */

@@ -616,39 +616,93 @@ bool FGSTN_VictimMovementLockedInHitstunTest::RunTest(const FString& Parameters)
 	auto Factor = [ASC]() { float Value = -1.f; FGSTN_StatsMovementModifier::ResolveSpeedFactor(*ASC, Value); return Value; };
 
 	FGSTN_CombatSyncCore Core;
-	bool bLock = false;
-	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10);
 	TestTrue(TEXT("free: the speed follows the stat"), Factor() > 0.f);
 
 	const EGSTN_ActionState Locked[] = { EGSTN_ActionState::Hitstun, EGSTN_ActionState::Tumble, EGSTN_ActionState::Splat, EGSTN_ActionState::KO };
 	for (const EGSTN_ActionState State : Locked)
 	{
 		Core.ActionState = State;
-		FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+		FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10);
 		TestEqual(*FString::Printf(TEXT("state %d: the locomotion speed is zero"), static_cast<int32>(State)), Factor(), 0.f);
 	}
 	Core.ActionState = EGSTN_ActionState::Hitstun;
-	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10);
 	TestTrue(TEXT("Hitstun tag in hitstun only"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstun) && !ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Tumble));
 	Core.ActionState = EGSTN_ActionState::Tumble;
-	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10);
 	TestTrue(TEXT("Tumble tag in tumble, the Hitstun tag gone"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Tumble) && !ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstun));
 	Core.HitstopStartFrame = 8;
 	Core.HitstopEndFrame = 12;
-	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10);
 	TestTrue(TEXT("Hitstop tag inside the window"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstop));
-	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 12, bLock);
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 12);
 	TestFalse(TEXT("and not on its end frame"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstop));
 
 	// Projecting the same frame again changes nothing (a re-simulation), and the end of the lock takes back only its own
-	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 12, bLock);
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 12);
 	ASC->AddLooseGameplayTag(GSTNCombatTags::Lock_Movement);
 	Core.ActionState = EGSTN_ActionState::Actionable;
-	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 13, bLock);
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 13);
 	TestFalse(TEXT("the hit tags are gone"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Tumble) || ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstun));
 	TestEqual(TEXT("a lock somebody else holds stays"), Factor(), 0.f);
 	ASC->RemoveLooseGameplayTag(GSTNCombatTags::Lock_Movement);
 	TestTrue(TEXT("and with it released the speed is back"), Factor() > 0.f);
+
+	GEngine->DestroyWorldContext(World);
+	World->DestroyWorld(false);
+	World->RemoveFromRoot();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimRollbackLockDeterministicTest, "GSTNCombat.NP.Hits.Victim.RollbackLockDeterministic", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimRollbackLockDeterministicTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("GSTNCombatNPVictimRollbackTestWorld"));
+	World->AddToRoot();
+	FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+	Context.SetCurrentWorld(World);
+	World->InitializeActorsForPlay(FURL());
+	AActor* Owner = World->SpawnActor<AActor>();
+	UAbilitySystemComponent* ASC = NewObject<UAbilitySystemComponent>(Owner);
+	ASC->RegisterComponent();
+	ASC->InitAbilityActorInfo(Owner, Owner);
+	ASC->AddSet<UGSTN_CombatAttributeSet>();
+	ASC->SetNumericAttributeBase(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), UGSTN_CombatSettings::Get().StatsReferenceWalkSpeed);
+
+	// Frames 0..5: free, free, hitstun x3, free. The sync state per frame is all the projection may depend on
+	const EGSTN_ActionState States[] = { EGSTN_ActionState::Actionable, EGSTN_ActionState::Actionable, EGSTN_ActionState::Hitstun, EGSTN_ActionState::Hitstun, EGSTN_ActionState::Hitstun, EGSTN_ActionState::Actionable };
+	auto Run = [&](int32 FromFrame, TArray<float>& OutFactors)
+	{
+		for (int32 Frame = FromFrame; Frame < UE_ARRAY_COUNT(States); ++Frame)
+		{
+			FGSTN_CombatSyncCore Core;
+			Core.ActionState = States[Frame];
+			FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, Frame);
+			float Factor = -1.f;
+			FGSTN_StatsMovementModifier::ResolveSpeedFactor(*ASC, Factor);
+			OutFactors.Add(Factor);
+		}
+	};
+
+	TArray<float> First;
+	Run(0, First);
+	// The rollback restores frame 3 (mid-hitstun) and resimulates: the ticks of the frames 0..2 are not re-run, whatever the projection
+	// remembered from the first pass must not matter. Then a second rollback to before the hit
+	TArray<float> FromMidHit;
+	Run(3, FromMidHit);
+	TArray<float> FromBeforeHit;
+	Run(1, FromBeforeHit);
+	for (int32 Index = 0; Index < FromMidHit.Num(); ++Index)
+	{
+		TestEqual(*FString::Printf(TEXT("resim from frame 3: frame %d"), Index + 3), FromMidHit[Index], First[Index + 3]);
+	}
+	for (int32 Index = 0; Index < FromBeforeHit.Num(); ++Index)
+	{
+		TestEqual(*FString::Printf(TEXT("resim from frame 1: frame %d"), Index + 1), FromBeforeHit[Index], First[Index + 1]);
+	}
+	TestEqual(TEXT("locked in hitstun"), First[3], 0.f);
+	TestTrue(TEXT("free after it"), First[5] > 0.f);
 
 	GEngine->DestroyWorldContext(World);
 	World->DestroyWorld(false);

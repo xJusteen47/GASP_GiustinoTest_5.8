@@ -576,7 +576,6 @@ private:
 
 	/** Projects Combat.State.{Hitstun,Tumble,Hitstop} and the movement lock from the sync state of the frame (the ability system's pre-tick). Idempotent: a function of the state only */
 	void ProjectStateTags(const FGSTN_CombatSyncCore& Core, int32 Frame);
-	bool bMovementLockProjected = false;
 
 	/** The KO events and the hit events of the victim step, appended to the outbox (every machine writes them, the authority publishes them) */
 	void AppendVictimEvents(int32 Frame);
