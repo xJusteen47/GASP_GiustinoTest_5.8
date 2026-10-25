@@ -225,6 +225,14 @@ public:
 	 */
 	static UGSTN_CombatRules* CreateStandard(UObject* Outer);
 
+	/**
+	 * Writes the standard rules into Rules (what CreateStandard does on a new object), replacing the pipeline, the model, the teams and
+	 * the weight curve: the one place that knows them, so the GSTN_CombatRules_Standard asset (made by Tools/GAS/setup_gas_assets.py) and the
+	 * built-in copy cannot drift. Fields the standard rules do not name (the damage effect, the impact table) are left as they are.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Rules")
+	static void FillStandard(UGSTN_CombatRules* Rules);
+
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif

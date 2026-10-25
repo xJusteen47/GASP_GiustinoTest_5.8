@@ -2,7 +2,10 @@
 #include "Timeline/GSTN_TimelineValidation.h"
 
 #if WITH_EDITOR
+#include "Input/GSTN_CombatSettings.h"
 #include "Misc/DataValidation.h"
+#include "Rules/GSTN_CombatRules.h"
+#include "Rules/GSTN_CombatRulesValidation.h"
 #endif
 
 FPrimaryAssetId UGSTN_CombatTimeline::GetPrimaryAssetId() const
@@ -29,6 +32,33 @@ EDataValidationResult UGSTN_CombatTimeline::IsDataValid(FDataValidationContext& 
 		else
 		{
 			Context.AddWarning(FText::FromString(Message.Text));
+		}
+	}
+
+	// What each hitbox does to the standard victims under the default rules, one column per hitbox (hit data matrix)
+	TArray<FGSTN_ReactionMatrixHit> Columns;
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
+	{
+		const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+		for (int32 Index = 0; HitboxTrack != nullptr && Index < HitboxTrack->Hitboxes.Num(); ++Index)
+		{
+			FGSTN_ReactionMatrixHit& Column = Columns.AddDefaulted_GetRef();
+			Column.Name = FString::Printf(TEXT("Hitbox %d"), Columns.Num() - 1);
+			Column.Hit = HitboxTrack->Hitboxes[Index].Data;
+		}
+	}
+	if (!Columns.IsEmpty())
+	{
+		if (const UGSTN_CombatRules* Rules = UGSTN_CombatSettings::Get().ResolveDefaultRules())
+		{
+			TArray<FGSTN_ReactionMatrixVictim> Victims;
+			for (const FGSTN_ReactionMatrixHit& Standard : FGSTN_CombatRulesValidation::MakeStandardMatrixHits())
+			{
+				FGSTN_ReactionMatrixVictim& Victim = Victims.AddDefaulted_GetRef();
+				Victim.Name = Standard.Name;
+				Victim.Weight = Standard.Name == TEXT("Light") ? 60.f : (Standard.Name == TEXT("Medium") ? 100.f : 160.f);
+			}
+			Context.AddMessage(EMessageSeverity::Info, FText::FromString(TEXT("Hit matrix against the default rules:\n") + FGSTN_CombatRulesValidation::PrintReactionMatrix(*Rules, Victims, Columns)));
 		}
 	}
 

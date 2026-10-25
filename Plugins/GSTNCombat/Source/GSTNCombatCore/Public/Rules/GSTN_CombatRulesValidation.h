@@ -9,6 +9,7 @@
 #include "Hits/GSTN_ReactionValidation.h"
 
 class UGSTN_CombatRules;
+class UGSTN_HurtboxSetDefinition;
 
 /** A victim row of the reaction matrix: the dials that decide which hits stagger it and how far */
 struct FGSTN_ReactionMatrixVictim
@@ -61,4 +62,29 @@ struct GSTNCOMBATCORE_API FGSTN_CombatRulesValidation
 	 * with a golden string and a designer reads it in the log.
 	 */
 	static FString PrintReactionMatrix(const UGSTN_CombatRules& Rules, const TArray<FGSTN_ReactionMatrixVictim>& Victims, const TArray<FGSTN_ReactionMatrixHit>& Hits);
+	/**
+	 * Hit columns every matrix printer shares, so two printouts of two assets can be compared: a light (damage 4, 450 cm/s), a medium (9, 900)
+	 * and a heavy hit (16, 1500 with growth). Fixed numbers; they are a ruler, not content
+	 */
+	static TArray<FGSTN_ReactionMatrixHit> MakeStandardMatrixHits();
+
+	/** The rules' matrix against three victim weights (light 60, medium 100, heavy 160) and the standard hit columns. IsDataValid of the rules prints it as an info message */
+	static FString PrintStandardMatrix(const UGSTN_CombatRules& Rules);
+
+	/**
+	 * The matrix of a hurtbox set: one row per hurtbox at the weight of a medium combatant (100) times the hurtbox's WeightScale, with the hurtbox's own
+	 * stagger threshold and reaction cap when it sets them and the set's otherwise (the other scales of a hurtbox are not applied: only the dials the tiers read).
+	 * IsDataValid of the set prints it as an info message, which is how a designer sees "this head launches, this foot never staggers" before a PIE
+	 */
+	static FString PrintHurtboxSetMatrix(const UGSTN_HurtboxSetDefinition& Set, const UGSTN_CombatRules& Rules);
+
+	/**
+	 * A hurtbox set:
+	 *  - no hurtbox, more than 255 (the index of a hit is a byte), an empty or duplicated name (errors)
+	 *  - a shape without volume (error), a hurtbox with no Combat.Hurtbox tag (warning: no modifier track can address it by tag)
+	 *  - a negative scale in a reaction scale (error)
+	 *  - a weight curve whose sample count is neither 0 nor 64 (error)
+	 *  - the pending "hurtbox + part" rule needs the part type of GSTNParts, which this branch does not have; the hook is this function
+	 */
+	static void ValidateHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, TArray<FGSTN_ReactionMessage>& OutMessages);
 };

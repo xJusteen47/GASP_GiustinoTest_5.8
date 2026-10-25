@@ -2,6 +2,7 @@
 
 #include "Rules/GSTN_CombatRulesValidation.h"
 
+#include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_KnockbackModel.h"
 #include "Rules/GSTN_CombatRules.h"
 
@@ -197,4 +198,103 @@ FString FGSTN_CombatRulesValidation::PrintReactionMatrix(const UGSTN_CombatRules
 		}
 	}
 	return Text;
+}
+
+TArray<FGSTN_ReactionMatrixHit> FGSTN_CombatRulesValidation::MakeStandardMatrixHits()
+{
+	TArray<FGSTN_ReactionMatrixHit> Hits;
+	auto AddHit = [&Hits](const TCHAR* Name, float Damage, float Base, float Growth)
+	{
+		FGSTN_ReactionMatrixHit& Hit = Hits.AddDefaulted_GetRef();
+		Hit.Name = Name;
+		Hit.Hit.Damage = Damage;
+		Hit.Hit.BaseKnockback = Base;
+		Hit.Hit.KnockbackGrowth = Growth;
+	};
+	AddHit(TEXT("Light"), 4.f, 450.f, 0.f);
+	AddHit(TEXT("Medium"), 9.f, 900.f, 0.f);
+	AddHit(TEXT("Heavy"), 16.f, 1000.f, 10.f);
+	return Hits;
+}
+
+FString FGSTN_CombatRulesValidation::PrintStandardMatrix(const UGSTN_CombatRules& Rules)
+{
+	TArray<FGSTN_ReactionMatrixVictim> Victims;
+	auto AddVictim = [&Victims](const TCHAR* Name, float Weight)
+	{
+		FGSTN_ReactionMatrixVictim& Victim = Victims.AddDefaulted_GetRef();
+		Victim.Name = Name;
+		Victim.Weight = Weight;
+	};
+	AddVictim(TEXT("Light"), 60.f);
+	AddVictim(TEXT("Medium"), 100.f);
+	AddVictim(TEXT("Heavy"), 160.f);
+	return PrintReactionMatrix(Rules, Victims, MakeStandardMatrixHits());
+}
+
+FString FGSTN_CombatRulesValidation::PrintHurtboxSetMatrix(const UGSTN_HurtboxSetDefinition& Set, const UGSTN_CombatRules& Rules)
+{
+	TArray<FGSTN_ReactionMatrixVictim> Victims;
+	for (const FGSTN_Hurtbox& Hurtbox : Set.Hurtboxes)
+	{
+		FGSTN_ReactionMatrixVictim& Victim = Victims.AddDefaulted_GetRef();
+		Victim.Name = Hurtbox.Name.ToString();
+		Victim.Weight = 100.f * Hurtbox.ReactionScale.WeightScale;
+		Victim.StaggerThreshold = Hurtbox.ReactionScale.StaggerThreshold.IsSet() ? Hurtbox.ReactionScale.StaggerThreshold : Set.StaggerThreshold;
+		Victim.MaxReaction = static_cast<EGSTN_HitReaction>(FMath::Min(static_cast<uint8>(Hurtbox.ReactionScale.MaxReaction), static_cast<uint8>(Set.MaxReaction)));
+	}
+	return PrintReactionMatrix(Rules, Victims, MakeStandardMatrixHits());
+}
+
+void FGSTN_CombatRulesValidation::ValidateHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, TArray<FGSTN_ReactionMessage>& OutMessages)
+{
+	if (Set.Hurtboxes.IsEmpty())
+	{
+		Add(OutMessages, true, TEXT("The set has no hurtbox: nothing could be hit"));
+	}
+	if (Set.Hurtboxes.Num() > 255)
+	{
+		Add(OutMessages, true, FString::Printf(TEXT("The set has %d hurtboxes, the index of a hit is a byte (255 at most)"), Set.Hurtboxes.Num()));
+	}
+
+	TSet<FName> Names;
+	for (int32 Index = 0; Index < Set.Hurtboxes.Num(); ++Index)
+	{
+		const FGSTN_Hurtbox& Hurtbox = Set.Hurtboxes[Index];
+		if (Hurtbox.Name.IsNone())
+		{
+			Add(OutMessages, true, FString::Printf(TEXT("Hurtbox %d has no name: a modifier track cannot address it"), Index));
+		}
+		else if (Names.Contains(Hurtbox.Name))
+		{
+			Add(OutMessages, true, FString::Printf(TEXT("Hurtbox %d: the name %s is used twice"), Index, *Hurtbox.Name.ToString()));
+		}
+		Names.Add(Hurtbox.Name);
+
+		bool bVolume = false;
+		switch (Hurtbox.Shape.Type)
+		{
+		case EGSTN_ShapeType::Sphere: bVolume = Hurtbox.Shape.Extent.X > 0.0; break;
+		case EGSTN_ShapeType::Capsule: bVolume = Hurtbox.Shape.Extent.X > 0.0 && Hurtbox.Shape.Extent.Z >= Hurtbox.Shape.Extent.X; break;
+		case EGSTN_ShapeType::Box: bVolume = Hurtbox.Shape.Extent.X > 0.0 && Hurtbox.Shape.Extent.Y > 0.0 && Hurtbox.Shape.Extent.Z > 0.0; break;
+		}
+		if (!bVolume)
+		{
+			Add(OutMessages, true, FString::Printf(TEXT("Hurtbox %d (%s): the shape has no volume"), Index, *Hurtbox.Name.ToString()));
+		}
+		if (Hurtbox.Tags.IsEmpty())
+		{
+			Add(OutMessages, false, FString::Printf(TEXT("Hurtbox %d (%s) has no Combat.Hurtbox tag: a modifier track cannot address it by tag"), Index, *Hurtbox.Name.ToString()));
+		}
+		const FGSTN_HitReactionModifiers& Scale = Hurtbox.ReactionScale;
+		if (Scale.WeightScale < 0.f || Scale.KnockbackScale < 0.f || Scale.HitstunScale < 0.f || Scale.HitstopScale < 0.f || Scale.StaggerScale < 0.f)
+		{
+			Add(OutMessages, true, FString::Printf(TEXT("Hurtbox %d (%s): a reaction scale is negative"), Index, *Hurtbox.Name.ToString()));
+		}
+	}
+
+	if (Set.WeightCurve.Samples.Num() != 0 && !Set.WeightCurve.IsAuthored())
+	{
+		Add(OutMessages, true, FString::Printf(TEXT("The weight curve needs %d samples, this one has %d"), FGSTN_BakedCurve::SampleCount, Set.WeightCurve.Samples.Num()));
+	}
 }

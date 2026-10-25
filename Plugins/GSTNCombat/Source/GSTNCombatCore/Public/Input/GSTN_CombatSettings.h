@@ -106,6 +106,14 @@ public:
 	const UGSTN_CombatRules* ResolveDefaultRules() const;
 
 	/**
+	 * Adds a UGSTN_CombatRulesComponent to the GameState of every game world through the Game Framework Component Manager (the
+	 * GSTNCombatGAS rules provider), so the match has a rules component without a Blueprint edit. A GameState that already has one keeps it.
+	 * Off = the project puts the component where it wants; the fallback to DefaultRules (the built-in rules when it is empty) is the same
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Rules")
+	bool bAutoAddRulesComponent = true;
+
+	/**
 	 * The ground speed, in cm/s, that the speeds of the character's movement modes are authored for. The stats movement modifier
 	 * scales them by the WalkSpeed stat divided by this, so a combatant whose WalkSpeed equals it moves at the authored speeds.
 	 * Equal to the WalkSpeed starting value of the combat attribute defaults unless a game changes one of them.

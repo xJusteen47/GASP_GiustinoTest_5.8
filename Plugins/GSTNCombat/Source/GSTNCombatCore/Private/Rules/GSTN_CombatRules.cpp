@@ -144,7 +144,18 @@ float UGSTN_CombatRules::GetDamageProgress(const FGSTN_HitVictimView& Victim) co
 UGSTN_CombatRules* UGSTN_CombatRules::CreateStandard(UObject* Outer)
 {
 	UGSTN_CombatRules* Rules = NewObject<UGSTN_CombatRules>(Outer);
+	FillStandard(Rules);
+	return Rules;
+}
 
+void UGSTN_CombatRules::FillStandard(UGSTN_CombatRules* Rules)
+{
+	if (Rules == nullptr)
+	{
+		return;
+	}
+
+	Rules->HittableRelationships.Reset();
 	Rules->HitPipeline = {
 		HitStep<UGSTN_HitStep_TeamFilter>(), HitStep<UGSTN_HitStep_HurtState>(), HitStep<UGSTN_HitStep_HurtboxReaction>(),
 		HitStep<UGSTN_HitStep_HealthWeight>(), HitStep<UGSTN_HitStep_ComputeKnockback>(), HitStep<UGSTN_HitStep_ApplyDamage>(),
@@ -168,7 +179,6 @@ UGSTN_CombatRules* UGSTN_CombatRules::CreateStandard(UObject* Outer)
 
 	Rules->ResolvePipeline();
 	Rules->ResolveHitPipeline();
-	return Rules;
 }
 
 #if WITH_EDITOR
@@ -199,6 +209,12 @@ EDataValidationResult UGSTN_CombatRules::IsDataValid(FDataValidationContext& Con
 		{
 			Context.AddWarning(FText::FromString(Message.Text));
 		}
+	}
+
+	// The matrix is for the designer: which weight and which hit stagger how far under these rules
+	if (KnockbackModel != nullptr)
+	{
+		Context.AddMessage(EMessageSeverity::Info, FText::FromString(TEXT("Reaction matrix:\n") + FGSTN_CombatRulesValidation::PrintStandardMatrix(*this)));
 	}
 
 	return Result == EDataValidationResult::NotValidated ? EDataValidationResult::Valid : Result;

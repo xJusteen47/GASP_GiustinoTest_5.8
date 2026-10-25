@@ -25,6 +25,7 @@
 #include "GameFramework/PlayerState.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "GSTN_CombatTags.h"
+#include "GSTN_CombatRulesComponent.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputConfig.h"
@@ -118,7 +119,10 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	ActiveHurtboxSet = HurtboxSet.LoadSynchronous();
 	if (!CombatRules)
 	{
-		CombatRules = const_cast<UGSTN_CombatRules*>(UGSTN_CombatSettings::Get().ResolveDefaultRules());
+		// The match's rules component (on the GameState, placed by the rules provider or a Blueprint) first; a client whose GameState has not
+		// arrived yet, or a world without one, plays the settings' rules, which are what an empty component resolves to as well
+		UGSTN_CombatRulesComponent* RulesComponent = UGSTN_CombatRulesComponent::Find(this);
+		CombatRules = const_cast<UGSTN_CombatRules*>(RulesComponent != nullptr ? RulesComponent->GetRules() : UGSTN_CombatSettings::Get().ResolveDefaultRules());
 	}
 	if (CombatRules && !ImpactTable && !CombatRules->SurfaceImpactTable.IsNull())
 	{

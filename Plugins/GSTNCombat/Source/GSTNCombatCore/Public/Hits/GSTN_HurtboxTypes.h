@@ -80,4 +80,9 @@ public:
 	/** Weight against progress of damage taken. Empty = the rules' curve */
 	UPROPERTY(EditAnywhere, Category = "Reaction")
 	FGSTN_BakedCurve WeightCurve;
+
+#if WITH_EDITOR
+	/** FGSTN_CombatRulesValidation::ValidateHurtboxSet, then the set's reaction matrix against the settings' rules as an info message */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
 };

@@ -37,6 +37,12 @@ void AGSTN_TestSurface::PostNetInit()
 	ApplyShape();
 }
 
+void AGSTN_TestSurface::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	ApplyShape();
+}
+
 FGSTN_SurfaceBehaviour AGSTN_TestSurface::GetSurfaceBehaviour_Implementation(const FGSTN_SurfaceQuery& Query) const
 {
 	FGSTN_SurfaceBehaviour Behaviour;
@@ -102,6 +108,11 @@ int32 UGSTN_ImpactTestLibrary::ClearTestSurfaces(UObject* WorldContext)
 	{
 		for (TActorIterator<AGSTN_TestSurface> It(World); It; ++It)
 		{
+			// The panels of the L_Test_Combat map belong to the level, the scenarios only clear what they spawned
+			if (It->IsNetStartupActor())
+			{
+				continue;
+			}
 			It->Destroy();
 			++Count;
 		}

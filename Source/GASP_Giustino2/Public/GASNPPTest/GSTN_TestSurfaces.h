@@ -30,11 +30,11 @@ public:
 	virtual FGSTN_SurfaceBehaviour GetSurfaceBehaviour_Implementation(const FGSTN_SurfaceQuery& Query) const override;
 	virtual void BreakSurface_Implementation() override;
 
-	/** The Surface.Type this box answers with */
-	UPROPERTY(Replicated)
+	/** The Surface.Type this box answers with. Editable so the L_Test_Combat map can place a glass panel (the scenarios spawn and set it from code) */
+	UPROPERTY(EditAnywhere, Replicated, Category = "Surface")
 	FGameplayTag SurfaceType;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(EditAnywhere, Replicated, Category = "Surface", meta = (ClampMin = "1", ForceUnits = "cm"))
 	FVector HalfExtent = FVector(50.0, 400.0, 600.0);
 
 	UPROPERTY(ReplicatedUsing = OnRep_Broken)
@@ -44,6 +44,8 @@ public:
 	int32 BreakCalls = 0;
 
 	virtual void PostNetInit() override;
+	/** A box placed in the level takes its extent from the placed value */
+	virtual void OnConstruction(const FTransform& Transform) override;
 
 private:
 	UFUNCTION()

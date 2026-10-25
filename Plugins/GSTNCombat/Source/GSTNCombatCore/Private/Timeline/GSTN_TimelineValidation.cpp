@@ -1,5 +1,6 @@
 #include "Timeline/GSTN_TimelineValidation.h"
 #include "Animation/AnimMontage.h"
+#include "Rules/GSTN_CombatRulesValidation.h"
 
 namespace
 {
@@ -43,6 +44,15 @@ namespace
 
 	void CheckHitData(const TCHAR* Where, int32 Index, int32 HitboxIndex, const FGSTN_HitData& Hit, TArray<FGSTN_TimelineMessage>& Out)
 	{
+		// The limit of a hitstop override is the tuning of the model the match plays; the data cannot see it, so the default tuning stands for it
+		// (the standard model): an override above it is clamped there too, and the designer should know before the playtest
+		TArray<FGSTN_ReactionMessage> HitstopMessages;
+		FGSTN_CombatRulesValidation::ValidateHitstopOverride(Hit, FGSTN_ReactionTuning(), HitstopMessages);
+		for (const FGSTN_ReactionMessage& HitstopMessage : HitstopMessages)
+		{
+			Add(Out, HitstopMessage.bError, FString::Printf(TEXT("Track %d, hitbox %d (%s): %s"), Index, HitboxIndex, Where, *HitstopMessage.Text));
+		}
+
 		// Only Normal hits have a pipeline path in M4: the other types are carried as data (plan assumption M4.13)
 		if (!Hit.IsNormalHitType())
 		{
