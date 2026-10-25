@@ -2,6 +2,7 @@
 
 #include "GSTNCombatEditorModule.h"
 
+#include "Bake/GSTN_BakeAll.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
 #include "Timeline/Details/GSTN_HitDataCustomization.h"
@@ -29,6 +30,9 @@ void FGSTN_CombatEditorModule::StartupModule()
 	// Window > GSTN Combat > Validation, and gstn.Combat.ValidateAll (E11)
 	GSTNValidationTab::Register();
 
+	// gstn.Combat.BakeAll (E8)
+	GSTNBakeAll::RegisterConsoleCommand();
+
 	// The Open Timeline Editor row of an FGSTN_CombatTimelineData, in the Class Defaults of an ability Blueprint and on a timeline asset (inline mode, E13)
 	FPropertyEditorModule& PropertyEditor = FModuleManager::LoadModuleChecked<FPropertyEditorModule>(TEXT("PropertyEditor"));
 	PropertyEditor.RegisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FGSTN_TimelineDataCustomization::MakeInstance));
@@ -45,6 +49,7 @@ void FGSTN_CombatEditorModule::ShutdownModule()
 		PropertyEditor->UnregisterCustomPropertyTypeLayout(FGSTN_HitDataCustomization::GetStructName());
 		PropertyEditor->UnregisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName());
 	}
+	GSTNBakeAll::UnregisterConsoleCommand();
 	GSTNValidationTab::Unregister();
 	GSTNValidationLog::UnregisterListing();
 	GSTNTrackEditors::UnregisterBuiltIns();

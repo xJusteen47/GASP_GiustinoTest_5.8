@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Bake/GSTN_SocketBaker.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
 #include "Widgets/SCompoundWidget.h"
 
@@ -23,6 +24,13 @@ public:
 
 		/** What Validate does. Unbound: the button is drawn disabled */
 		SLATE_EVENT(FSimpleDelegate, OnValidate)
+
+		/** What Bake sockets does. Unbound: the button is drawn disabled */
+		SLATE_EVENT(FSimpleDelegate, OnBake)
+
+		/** Where the bake stands (a yellow dot on the button when it needs a bake) and why, for the tooltip */
+		SLATE_ATTRIBUTE(EGSTN_BakeStatus, BakeStatus)
+		SLATE_ATTRIBUTE(FText, BakeReason)
 
 		/** The preview the subject picker drives. Unset: the picker is drawn disabled */
 		SLATE_ARGUMENT(TSharedPtr<FGSTN_PreviewController>, Preview)

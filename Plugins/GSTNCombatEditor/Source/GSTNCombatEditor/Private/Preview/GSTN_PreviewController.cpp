@@ -3,6 +3,7 @@
 #include "Preview/GSTN_PreviewController.h"
 
 #include "Animation/AnimMontage.h"
+#include "Animation/DebugSkelMeshComponent.h"
 #include "Settings/GSTN_CombatEditorSettings.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
 
@@ -83,6 +84,13 @@ void FGSTN_PreviewController::ApplySubject()
 	Problems.Append(SceneProblems);
 	UpdateMontage();
 	Refresh();
+	OnSubjectChanged.Broadcast();
+}
+
+USkeletalMesh* FGSTN_PreviewController::GetMainMesh() const
+{
+	const UDebugSkelMeshComponent* Component = Scene->GetMeshComponent();
+	return Component != nullptr ? Component->GetSkeletalMeshAsset() : nullptr;
 }
 
 void FGSTN_PreviewController::UpdateMontage()

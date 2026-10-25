@@ -10,6 +10,7 @@
 struct FPropertyChangedEvent;
 class FGSTN_TimelineEditorModel;
 class UAnimMontage;
+class USkeletalMesh;
 
 /**
  * Ties the preview scene to one open timeline editor: it owns the scene, holds the subject being previewed, keeps the montage and the pose in step
@@ -58,8 +59,17 @@ public:
 	/** The key the subject is stored under (null: nothing is stored) */
 	const FSoftObjectPath& GetStorageKey() const { return StorageKey; }
 
+	/** The montage the pose plays, loaded (null: the timeline has none, or it did not load). The socket baker needs it as the pose has it */
+	UAnimMontage* GetMontage() const { return Montage.Get(); }
+
+	/** The skeletal mesh of the main subject, null while there is none. What the baker reads sockets from */
+	USkeletalMesh* GetMainMesh() const;
+
 	/** The scene changed (a new subject, a new pose): the viewport repaints */
 	FSimpleMulticastDelegate OnPreviewChanged;
+
+	/** The subject was applied (picked, edited, or set): the mesh may be another one, which the bake status depends on. Not fired by a scrub */
+	FSimpleMulticastDelegate OnSubjectChanged;
 
 private:
 	FGSTN_PreviewController(const TSharedRef<FGSTN_TimelineEditorModel>& InModel, const FSoftObjectPath& InStorageKey);

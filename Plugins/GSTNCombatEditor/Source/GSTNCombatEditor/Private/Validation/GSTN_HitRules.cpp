@@ -352,6 +352,27 @@ void FGSTN_CombatValidators::CheckBakedSockets(const FGSTN_CombatTimelineData& D
 	}
 }
 
+void FGSTN_CombatValidators::CheckBakeStatus(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report)
+{
+	if (!Context.BakeStatus.IsSet())
+	{
+		return;
+	}
+	const FGSTN_BakeStatusResult& Status = Context.BakeStatus.GetValue();
+	if (Status.Status == EGSTN_BakeStatus::Stale)
+	{
+		// A frame-count mismatch is already BakedLength, with the hitbox named
+		if (!Report.HasCode(GSTNValidationCodes::BakedLength()))
+		{
+			AddFinding(Report, Context, EGSTN_Severity::Error, GSTNValidationCodes::BakedStale(), Status.Reason, FGSTN_FindingLocation());
+		}
+	}
+	else if (Status.Status == EGSTN_BakeStatus::BakedElsewhere)
+	{
+		AddFinding(Report, Context, EGSTN_Severity::Warning, GSTNValidationCodes::BakedStale(), Status.Reason, FGSTN_FindingLocation());
+	}
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Hurtbox set
 

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Bake/GSTN_SocketBaker.h"
 #include "Input/GSTN_InputSlot.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "Timeline/GSTN_TimelineValidation.h"
@@ -96,6 +97,12 @@ struct FGSTN_TimelineRuleContext
 	 */
 	const TSet<FName>* KnownHurtboxNames = nullptr;
 
+	/**
+	 * Where the baked sockets stand against their inputs (CheckBakeStatus). Unset = not checked: MakeTimelineContext fills it when it may load (it
+	 * reads the mesh the last bake recorded), a test fills it by hand, and the open editor overwrites it with the status of the mesh it previews
+	 */
+	TOptional<FGSTN_BakeStatusResult> BakeStatus;
+
 	/** The asset the findings belong to */
 	UObject* Asset = nullptr;
 };
@@ -167,6 +174,13 @@ struct FGSTN_CombatValidators
 	 * no hitbox uses (BakedStale, info). The hash half of BakedStale (the inputs of the bake changed) arrives with the baker.
 	 */
 	static void CheckBakedSockets(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
+
+	/**
+	 * The hash half of BakedStale: the frames were baked by the editor and an input changed since (montage data, section, play rate, length, tick rate,
+	 * mesh, sockets). An error, since a stale bake plays the wrong hitboxes. Frames baked by another tool (no record) are a warning: the editor cannot tell.
+	 * Reads Context.BakeStatus and does nothing while it is unset. A length mismatch is BakedLength's, not reported twice
+	 */
+	static void CheckBakeStatus(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
 
 	/** The Validate of the registered track editor of each track */
 	static void CheckTrackEditors(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);

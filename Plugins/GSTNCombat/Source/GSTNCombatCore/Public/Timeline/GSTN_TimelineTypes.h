@@ -400,6 +400,35 @@ struct GSTNCOMBATCORE_API FGSTN_RicochetResponse
 };
 
 /**
+ * What the socket baker (combat-m5-editor 7) used to fill FGSTN_CombatTimelineData::BakedSockets, so the editor can tell later that the
+ * frames no longer match their sources. Authoring data only: the member that holds it is WITH_EDITORONLY_DATA, so it is stripped from
+ * cooked builds and never reaches a simulation or the network. The struct type itself is always declared (UHT needs it either way).
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_BakeInfo
+{
+	GENERATED_BODY()
+
+	/** Hash of every input of the bake (montage data, section, rate, length, tick rate, mesh, sockets). 0 together with no When = never baked by the editor */
+	UPROPERTY(VisibleAnywhere, Category = "Bake")
+	uint32 InputHash = 0;
+
+	/** Frames per second of the simulation tick the frames were sampled at */
+	UPROPERTY(VisibleAnywhere, Category = "Bake")
+	float TickRateHz = 0.f;
+
+	/** The skeletal mesh the sockets were read from */
+	UPROPERTY(VisibleAnywhere, Category = "Bake", meta = (AllowedClasses = "/Script/Engine.SkeletalMesh"))
+	FSoftObjectPath Mesh;
+
+	/** UTC time of the bake. Zero ticks = never baked by the editor */
+	UPROPERTY(VisibleAnywhere, Category = "Bake")
+	FDateTime When = FDateTime(0);
+
+	bool IsSet() const { return When.GetTicks() != 0; }
+};
+
+/**
  * The frame-data source of truth of a combat ability, inline on the ability or in a UGSTN_CombatTimeline asset.
  */
 USTRUCT(BlueprintType)
@@ -455,6 +484,15 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	/** Root-relative transform of every socket a BakedSocket hitbox uses, one per timeline frame. Written by the baking tool */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Tracks")
 	TMap<FName, FGSTN_BakedSocketFrames> BakedSockets;
+
+#if WITH_EDITORONLY_DATA
+	/**
+	 * What the editor's baker used for BakedSockets (combat-m5-editor 7.3). Not read at run time and not in any serializer of the simulation;
+	 * absent from cooked data. Frames written by another tool have none, which the editor reports as "baked outside the editor".
+	 */
+	UPROPERTY(VisibleAnywhere, Category = "Timeline|Tracks")
+	FGSTN_BakeInfo BakeInfo;
+#endif
 
 	/** Optional recoil the timeline ends into when the attacker-outcome flag says ricochet */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet")

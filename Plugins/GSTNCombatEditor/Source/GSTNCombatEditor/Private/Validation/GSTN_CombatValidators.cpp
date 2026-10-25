@@ -6,6 +6,7 @@
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Animation/AnimMontage.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/AssetManager.h"
 #include "GameplayTagsManager.h"
 #include "Input/GSTN_ButtonMap.h"
@@ -217,6 +218,20 @@ FGSTN_TimelineRuleContext FGSTN_CombatValidators::MakeTimelineContext(const FGST
 	Context.Core = FGSTN_TimelineValidation::MakeContext(Data, TickRate, 0);
 	Context.bMontageHasRootMotion = Data.Montage.Get() && Data.Montage.Get()->HasRootMotion();
 	Context.Asset = Asset;
+
+	// The bake is checked against the mesh its own record names: the asset alone knows no preview. The open editor replaces this with the status of
+	// the mesh it shows
+	if (bLoadMontage)
+	{
+		FGSTN_BakeInputs Inputs;
+		Inputs.Montage = Data.Montage.Get();
+		Inputs.TickRateHz = TickRate;
+		if (Data.BakeInfo.IsSet())
+		{
+			Inputs.Mesh = Cast<USkeletalMesh>(Data.BakeInfo.Mesh.TryLoad());
+		}
+		Context.BakeStatus = GSTNBake::GetStatus(Data, Inputs);
+	}
 	return Context;
 }
 
@@ -236,6 +251,7 @@ void FGSTN_CombatValidators::ValidateTimeline(const FGSTN_CombatTimelineData& Da
 	CheckVariants(Data, Context, Report);
 	CheckHurtState(Data, Context, Report);
 	CheckBakedSockets(Data, Context, Report);
+	CheckBakeStatus(Data, Context, Report);
 	CheckTrackEditors(Data, Context, Report);
 }
 

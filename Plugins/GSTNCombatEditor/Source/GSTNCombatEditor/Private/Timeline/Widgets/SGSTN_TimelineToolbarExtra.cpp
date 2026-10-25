@@ -9,6 +9,7 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SSpinBox.h"
+#include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
@@ -20,6 +21,9 @@ void SGSTN_TimelineToolbarExtra::Construct(const FArguments& InArgs)
 	Model = InArgs._Model;
 	check(Model.IsValid());
 	const FSimpleDelegate OnValidate = InArgs._OnValidate;
+	const FSimpleDelegate OnBake = InArgs._OnBake;
+	const TAttribute<EGSTN_BakeStatus> BakeStatus = InArgs._BakeStatus;
+	const TAttribute<FText> BakeReason = InArgs._BakeReason;
 	const TSharedRef<FGSTN_TimelineEditorModel> M = Model.ToSharedRef();
 	const FGSTN_TimelineEditorCommands& Commands = FGSTN_TimelineEditorCommands::Get();
 
@@ -101,6 +105,49 @@ void SGSTN_TimelineToolbarExtra::Construct(const FArguments& InArgs)
 					[
 						SNew(STextBlock).Text(LOCTEXT("SubjectUnavailable", "Preview"))
 					])
+		]
+
+		// Bake sockets (E8): a yellow dot when the frames are missing or no longer match their sources, the reason in the tooltip
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+		[
+			SNew(SButton)
+			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
+			.IsEnabled(OnBake.IsBound())
+			.ToolTipText_Lambda([BakeReason]()
+			{
+				const FText Reason = BakeReason.IsSet() ? BakeReason.Get() : FText::GetEmpty();
+				return FText::Format(LOCTEXT("BakeTip", "Samples the montage at every frame and stores where each socket used by a baked-socket hitbox is, so the simulation can read it. Shortcut: {0}\n\n{1}"),
+					FGSTN_TimelineEditorCommands::Get().BakeSockets->GetInputText(), Reason);
+			})
+			.OnClicked_Lambda([OnBake]() -> FReply
+			{
+				OnBake.ExecuteIfBound();
+				return FReply::Handled();
+			})
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(STextBlock).Text(Commands.BakeSockets->GetLabel())
+				]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(4.f, 0.f, 0.f, 0.f))
+				[
+					SNew(SBox)
+					.WidthOverride(8.f)
+					.HeightOverride(8.f)
+					.Visibility_Lambda([BakeStatus]()
+					{
+						// Hidden, not collapsed: the button must not change width when the dot comes and goes
+						const EGSTN_BakeStatus Status = BakeStatus.IsSet() ? BakeStatus.Get() : EGSTN_BakeStatus::Unknown;
+						return (Status == EGSTN_BakeStatus::NeverBaked || Status == EGSTN_BakeStatus::Stale || Status == EGSTN_BakeStatus::BakedElsewhere) ? EVisibility::Visible : EVisibility::Hidden;
+					})
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
+						.BorderBackgroundColor(FLinearColor(0.95f, 0.8f, 0.1f))
+					]
+				]
+			]
 		]
 
 		// Validate (E10): the findings go to the Message Log, category GSTN Combat

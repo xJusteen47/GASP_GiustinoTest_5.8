@@ -3,6 +3,8 @@
 #include "Timeline/GSTN_TimelineEditorToolkit.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Engine/SkeletalMesh.h"
+#include "Settings/GSTN_CombatEditorSettings.h"
 #include "AssetToolsModule.h"
 #include "Containers/Ticker.h"
 #include "ContentBrowserModule.h"
@@ -95,6 +97,11 @@ void FGSTN_TimelineEditorToolkit::Release()
 	ObservedBlueprint.Reset();
 
 	CancelFindingsRefresh();
+	if (Preview.IsValid())
+	{
+		Preview->OnSubjectChanged.Remove(SubjectChangedHandle);
+	}
+	SubjectChangedHandle.Reset();
 
 	// The client first: it points at the model. The lease last: the target is free for another editor only when this one is gone
 	UndoClient.Reset();
@@ -182,6 +189,8 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 	Model = MakeShared<FGSTN_TimelineEditorModel>(Context);
 	// The preview scene follows the model's playhead and montage; its subject is stored per asset in the user's config
 	Preview = FGSTN_PreviewController::Create(Model.ToSharedRef());
+	// A different mesh is a different bake input: the status and the findings follow the subject
+	SubjectChangedHandle = Preview->OnSubjectChanged.AddSP(this, &FGSTN_TimelineEditorToolkit::HandleSubjectChanged);
 	UndoClient = MakeUnique<FGSTN_TimelineUndoClient>(*Model);
 	// Findings about the timeline as it was when Validate ran are marked out of date by the next edit (the model, and its delegate, go with this toolkit)
 	Model->OnDataChanged.AddSP(this, &FGSTN_TimelineEditorToolkit::HandleDataChanged);
@@ -202,6 +211,7 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 
 	// The chord of Validate (F7) lives on the toolkit, not on the panel's command list: the toolbar button and the chord do the same thing
 	ToolkitCommands->MapAction(FGSTN_TimelineEditorCommands::Get().ValidateNow, FExecuteAction::CreateSPLambda(this, [this]() { ValidateNow(); }));
+	ToolkitCommands->MapAction(FGSTN_TimelineEditorCommands::Get().BakeSockets, FExecuteAction::CreateSPLambda(this, [this]() { BakeSockets(); }));
 	return true;
 }
 
@@ -334,12 +344,120 @@ FGSTN_ValidationReport FGSTN_TimelineEditorToolkit::RefreshFindings()
 	{
 		return Report;
 	}
-	const FGSTN_TimelineRuleContext RuleContext = FGSTN_CombatValidators::MakeTimelineContext(*Data, Context.GetTarget(), Model->GetTickRate(), true);
+	FGSTN_TimelineRuleContext RuleContext = FGSTN_CombatValidators::MakeTimelineContext(*Data, Context.GetTarget(), Model->GetTickRate(), true);
+	// The bake is judged against the mesh the preview shows, the one a click on Bake sockets would use
+	RefreshBakeStatus();
+	RuleContext.BakeStatus = BakeStatus;
 	FGSTN_CombatValidators::ValidateTimeline(*Data, RuleContext, Report);
 	Findings->SetReport(Report);
 	// The lanes paint the markers from the store; they repaint on the model's view notification
 	Model->NotifyViewChanged();
 	return Report;
+}
+
+void FGSTN_TimelineEditorToolkit::HandleSubjectChanged()
+{
+	// The mesh is an input of the bake (and of its staleness). Re-validating now, not after the debounce: a subject change is one click, not a drag
+	if (Model.IsValid())
+	{
+		RefreshFindings();
+	}
+}
+
+FGSTN_BakeInputs FGSTN_TimelineEditorToolkit::MakeBakeInputs() const
+{
+	FGSTN_BakeInputs Inputs;
+	const FGSTN_CombatTimelineData* Data = Model.IsValid() ? Model->GetData() : nullptr;
+	Inputs.TickRateHz = Model.IsValid() ? Model->GetTickRate() : UGSTN_CombatEditorSettings::DefaultTickRateHz;
+	if (Preview.IsValid())
+	{
+		Inputs.Montage = Preview->GetMontage();
+		Inputs.Mesh = Preview->GetMainMesh();
+	}
+	if (Data != nullptr)
+	{
+		if (Inputs.Montage == nullptr && !Data->Montage.IsNull())
+		{
+			Inputs.Montage = Data->Montage.LoadSynchronous();
+		}
+		// No preview mesh: the status is that of the mesh the last bake used, which is the only one the asset can name
+		if (Inputs.Mesh == nullptr && Data->BakeInfo.IsSet())
+		{
+			Inputs.Mesh = Cast<USkeletalMesh>(Data->BakeInfo.Mesh.TryLoad());
+		}
+	}
+	return Inputs;
+}
+
+void FGSTN_TimelineEditorToolkit::RefreshBakeStatus()
+{
+	const FGSTN_CombatTimelineData* Data = Model.IsValid() ? Model->GetData() : nullptr;
+	if (Data == nullptr)
+	{
+		return;
+	}
+	BakeStatus = GSTNBake::GetStatus(*Data, MakeBakeInputs());
+	Model->NotifyViewChanged();
+}
+
+FGSTN_BakeResult FGSTN_TimelineEditorToolkit::BakeSockets()
+{
+	FGSTN_BakeResult Result;
+	const FGSTN_CombatTimelineData* Data = Model.IsValid() ? Model->GetData() : nullptr;
+	if (Data == nullptr || !Preview.IsValid())
+	{
+		return Result;
+	}
+
+	FGSTN_BakeInputs Inputs = MakeBakeInputs();
+	// The preview mesh, not the recorded one: what is baked is what is shown (a missing preview mesh is the first problem the baker names)
+	Inputs.Mesh = Preview->GetMainMesh();
+	Result = FGSTN_SocketBaker::Bake(*Data, Preview->GetScene()->GetPose(), Inputs);
+	// The baker moved the pose through the frames: put it back on the playhead
+	Preview->Refresh();
+
+	if (Result.bBaked)
+	{
+		Model->ApplyDataEdit([&Result](FGSTN_CombatTimelineData& Edited) { FGSTN_SocketBaker::Apply(Edited, Result); }, LOCTEXT("BakeSocketsTransaction", "Bake sockets"));
+		FNotificationInfo Info(Result.Sockets.IsEmpty()
+			? LOCTEXT("BakeNothing", "No hitbox uses a baked socket: nothing to bake.")
+			: FText::Format(LOCTEXT("BakeDone", "Baked {0} sockets over {1} frames ({2} ms)."), FText::AsNumber(Result.Sockets.Num()), FText::AsNumber(Result.FrameCount), FText::AsNumber(FMath::RoundToInt(Result.ElapsedMs))));
+		Info.ExpireDuration = 4.f;
+		FSlateNotificationManager::Get().AddNotification(Info);
+		for (const FText& Warning : Result.Warnings)
+		{
+			UE_LOG(LogGSTNCombatEditor, Warning, TEXT("Bake sockets (%s): %s"), *Context.GetDisplayName().ToString(), *Warning.ToString());
+		}
+	}
+	else
+	{
+		FGSTN_ValidationReport Report;
+		for (const FGSTN_BakeProblem& Problem : Result.Problems)
+		{
+			Report.Add(EGSTN_Severity::Error, GSTNValidationCodes::BakedSocketMissing(), Problem.Message, Context.GetTarget(),
+				Problem.TrackIndex != INDEX_NONE ? FGSTN_FindingLocation::OnTrack(Problem.TrackIndex) : FGSTN_FindingLocation());
+		}
+		GSTNValidationLog::WriteReport(Report, FText::Format(LOCTEXT("BakePageTitle", "Bake sockets {0}"), Context.GetDisplayName()), true, true);
+		FNotificationInfo Info(LOCTEXT("BakeFailed", "The sockets were not baked and the previous bake was kept. The Message Log lists why."));
+		Info.ExpireDuration = 6.f;
+		FSlateNotificationManager::Get().AddNotification(Info);
+	}
+	RefreshFindings();
+	return Result;
+}
+
+void FGSTN_TimelineEditorToolkit::SaveAsset_Execute()
+{
+	// Preference "Bake on save" (off by default): a stale bake is refreshed on the way to disk, so what is saved is current
+	if (UGSTN_CombatEditorSettings::Get().bBakeOnSave && Model.IsValid() && Preview.IsValid())
+	{
+		RefreshBakeStatus();
+		if (BakeStatus.NeedsBake() && Preview->GetMainMesh() != nullptr)
+		{
+			BakeSockets();
+		}
+	}
+	FAssetEditorToolkit::SaveAsset_Execute();
 }
 
 void FGSTN_TimelineEditorToolkit::GoToFinding(const FGSTN_ValidationFinding& Finding)
@@ -360,7 +478,9 @@ FGSTN_ValidationReport FGSTN_TimelineEditorToolkit::ValidateNow()
 	}
 
 	// The asset's own name on the page, so two validations of two timelines can be told apart in the log
-	const FGSTN_TimelineRuleContext RuleContext = FGSTN_CombatValidators::MakeTimelineContext(*Data, Context.GetTarget(), Model->GetTickRate(), true);
+	FGSTN_TimelineRuleContext RuleContext = FGSTN_CombatValidators::MakeTimelineContext(*Data, Context.GetTarget(), Model->GetTickRate(), true);
+	RefreshBakeStatus();
+	RuleContext.BakeStatus = BakeStatus;
 	FGSTN_CombatValidators::ValidateTimeline(*Data, RuleContext, Report);
 	// The log window pops up only when the Frame Data tab is closed: with it open the findings are already on screen
 	const bool bFrameDataOpen = TabManager.IsValid() && TabManager->FindExistingLiveTab(FrameDataTabId).IsValid();
@@ -471,6 +591,9 @@ TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnTimelineTab(const FSpawnT
 					.Model(Model)
 					.Preview(Preview)
 					.OnValidate(FSimpleDelegate::CreateSPLambda(this, [this]() { ValidateNow(); }))
+					.OnBake(FSimpleDelegate::CreateSPLambda(this, [this]() { BakeSockets(); }))
+					.BakeStatus_Lambda([this]() { return BakeStatus.Status; })
+					.BakeReason_Lambda([this]() { return BakeStatus.Reason; })
 				]
 			]
 		];

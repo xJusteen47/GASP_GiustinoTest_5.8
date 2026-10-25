@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Bake/GSTN_SocketBaker.h"
 #include "Containers/Ticker.h"
 #include "Timeline/GSTN_FindingsStore.h"
 #include "Timeline/GSTN_TimelineEditContext.h"
@@ -88,6 +89,22 @@ public:
 	void HandleBlueprintCompiled(UBlueprint* Blueprint);
 
 	/**
+	 * Bake sockets (Ctrl+B, combat-m5-editor 7): samples the montage at every timeline frame with the preview pose and stores the root-space
+	 * transform of each socket a BakedSocket hitbox uses, with the bake record, in one undo step. A bake that cannot happen (no preview mesh, a hitbox that
+	 * names a socket the mesh lacks) changes nothing, lists the reasons in the Message Log and says so in a notification. Returns the result for a test.
+	 */
+	FGSTN_BakeResult BakeSockets();
+
+	/** Where the bake stands against the inputs as the preview has them now. Cached: refreshed when the data, the subject or a bake changes, never on a scrub */
+	const FGSTN_BakeStatusResult& GetBakeStatus() const { return BakeStatus; }
+
+	/** Recomputes GetBakeStatus (GUIDs and paths only) and repaints the toolbar */
+	void RefreshBakeStatus();
+
+	/** What the bake reads now: the preview montage and mesh (the mesh of the last bake while no preview mesh is shown) and the model tick rate */
+	FGSTN_BakeInputs MakeBakeInputs() const;
+
+	/**
 	 * Inline mode: Extract to timeline asset. Asks where to put the asset (Content Browser save dialog), creates it, moves the inline
 	 * timeline into it with GSTNInlineTimeline::ExtractToAsset, closes this window and opens the asset in its own editor.
 	 */
@@ -102,6 +119,8 @@ public:
 	virtual FString GetWorldCentricTabPrefix() const override;
 	virtual FLinearColor GetWorldCentricTabColorScale() const override;
 	virtual void OnClose() override;
+	/** Bakes first when the preference "Bake on save" is on and the bake needs it */
+	virtual void SaveAsset_Execute() override;
 
 private:
 	TSharedRef<SDockTab> SpawnViewportTab(const FSpawnTabArgs& Args);
@@ -113,6 +132,9 @@ private:
 	void HandleDataChanged();
 
 	void CancelFindingsRefresh();
+
+	/** The preview subject changed: re-check the bake and the findings now */
+	void HandleSubjectChanged();
 
 	/** A finding of the Frame Data tab was double-clicked: select its track, put the playhead on its frame */
 	void GoToFinding(const FGSTN_ValidationFinding& Finding);
@@ -135,6 +157,11 @@ private:
 
 	/** What the last Validate found, for the Frame Data tab. Marked stale when the data changes, and refreshed 250 ms later */
 	TSharedRef<FGSTN_FindingsStore> Findings = MakeShared<FGSTN_FindingsStore>();
+
+	/** The status of the bake as of the last refresh */
+	FGSTN_BakeStatusResult BakeStatus;
+
+	FDelegateHandle SubjectChangedHandle;
 
 	/** Declared after the model it points at, so it is destroyed first */
 	TUniquePtr<FGSTN_TimelineUndoClient> UndoClient;

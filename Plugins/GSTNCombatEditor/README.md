@@ -6,8 +6,8 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.11)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
-model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
+Status: **experimental (0.12)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E8 (socket baking), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
 (E3, `FGSTN_TimelinePhases`, is in `GSTNCombatCore`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
@@ -74,7 +74,8 @@ with their scrollbar or with the wheel over the name column.
 | Frame All / Frame Selection | `Home` / `F` | yes |
 | Fit Length to Montage | none | yes, the explicit command |
 | Validate | `F7` | mapped by the toolkit (not the panel): the same as the toolbar button, see Validation |
-| Bake Sockets, Show Hitboxes/Hurtboxes/Movement Path | `Ctrl+B`, none | declared, mapped by the toolkits of E6, E8 |
+| Bake Sockets | `Ctrl+B` | mapped by the toolkit (E8) |
+| Show Hitboxes/Hurtboxes/Movement Path | none | declared, mapped when the overlays of E7 exist |
 
 ### The timeline editor window (E5)
 
@@ -259,8 +260,29 @@ registry. `Validate(Track, Data, Report)` adds the findings that are about your 
 its base's editor until it registers its own. Add a test: a registry case (listed, defaults applied by `AddTrack`) as in
 `GSTN_EditorTests_Registry.cpp`.
 
-Planned in this module, by checkpoint: gizmos (E7), baker (E8),
-hurtbox set editor (E9), the rest of the validation: M4 rules, the validation panel, Bake all (E11), details customizations (E12, E13).
+Planned in this module, by checkpoint: gizmos (E7), hurtbox set editor (E9).
+
+### Socket baking and staleness (E8)
+
+A hitbox in `BakedSocket` space follows a bone or socket of the attacker's mesh, and the simulation cannot ask an animation graph where that is. So the
+editor samples the montage once per timeline frame and stores, in `FGSTN_CombatTimelineData::BakedSockets`, the root-relative transform of every socket
+a `BakedSocket` hitbox uses; the runtime only indexes that array. **Bake sockets** (toolbar, `Ctrl+B`) does it in one undo step.
+
+- `FGSTN_SocketBaker` (`Private/Bake/`): `CollectUses` (the hitboxes that name a socket), `Bake(Data, Pose, Inputs)` (uses the open editor's preview pose, so what is baked is what is
+  shown), `BakeStandalone(Data, Mesh, Rate)` (own scene, for Bake all and scripts), `Apply` (writes `BakedSockets` and `BakeInfo`). The sampling is the preview's: montage time
+  `SectionStart + Frame / TickRate x PlayRate`, set not ticked, at the START of frame `f`; component space to root space with the mesh placement of the preview scene; scale 1.
+  Frames are independent, so two bakes of the same inputs are bit-identical. A bake that cannot happen (no preview mesh, a socket the mesh lacks, no length, a montage that
+  does not load) changes nothing, lists every reason in the Message Log and keeps the previous bake. No montage is allowed (the reference pose is baked, with a warning).
+- Staleness: `FGSTN_BakeInfo` (`GSTNCombatCore`, `WITH_EDITORONLY_DATA`, stripped from cooked data) records `InputHash`, `TickRateHz`, the mesh path and the time. `GSTNBake::GetStatus` gives
+  `NotNeeded / NeverBaked / BakedElsewhere / Fresh / Stale / Unknown` with a sentence. The hash covers the data model GUID and the segment timing of every animation the section
+  plays, the section, play rate, `TotalFrames`, tick rate, the mesh path and skeleton GUID, the sorted socket list and what the mesh says about each socket. It reads GUIDs and paths only.
+  The toolbar button shows a yellow dot when the frames are missing, stale or baked by another tool (the tooltip says why); the Frame Data tab and the validator report the same
+  (`BakedStale` is an error for the editor's own stale bake, a warning for frames with no record). Checked when the editor opens, after each edit (debounced) and when the preview subject changes.
+- **Bake on save** (setting `bBakeOnSave`, off): the toolkit bakes before it saves when the bake needs it and a preview mesh is shown.
+- **Bake all**: `gstn.Combat.BakeAll [save] [/Package/Path]` bakes every timeline asset whose bake is missing or stale, taking the mesh from the asset's stored preview subject, else from its
+  last bake, else from the settings' default skin (an asset with none is skipped and listed). Baked assets are left modified; `save` saves them. Timelines inline in ability Blueprints are baked from their own editor.
+- `UGSTN_CombatEditorUtils` (`BlueprintCallable`, development only): `GetTickRateHz`, `BakeTimeline(Timeline, Mesh, OutMessage)`, `IsBakeStale(Timeline, Mesh)`.
+- Tests `GSTNCombat.Editor.Bake.*` (11) and `GSTNCombat.Core.TimelineData.*` (2).
 
 ## Validation (E10)
 
@@ -307,7 +329,7 @@ the codes, and a test pins every one of its messages):
 | `HurtState` | `Armor` with a threshold of 0 or less that is not infinite (this replaces Core's softer "no threshold" warning); a modifier that names a hurtbox the known set lacks (only when the caller passes `KnownHurtboxNames`) | error |
 | `BakedSocketMissing` | a `BakedSocket` hitbox whose socket has no baked frames (replaces Core's warning), or names no socket | error |
 | `BakedLength` | baked frames of a socket are not `TotalFrames` long (replaces Core's warning) | error |
-| `BakedStale` | **info only**: a baked socket no hitbox uses. The hash half (the bake's inputs changed) needs the baker, E8 | info |
+| `BakedStale` | a baked socket no hitbox uses (info); frames baked by another tool, with no record of their inputs (warning); the editor's own bake whose inputs changed since (**error**, E8) | info / warning / error |
 
 **Hurtbox set** (`UGSTN_HurtboxSetValidator`, `FGSTN_CombatValidators::CheckHurtboxSet`): the set's own `ValidateHurtboxSet` classified into `Hurtbox.Empty`, `.DuplicateName`, `.Extent`, `.Tag` (no tag: warning) and `.Data`, plus `Hurtbox.Tag` (error) for a tag that is not under `Combat.Hurtbox`.
 The bone-absent check needs a preview mesh on the set (the hurtbox set editor, E9).
@@ -329,7 +351,7 @@ The timeline editor's **Frame Data** tab now follows the timeline: 250 ms after 
 silently (`FGSTN_TimelineEditorToolkit::RefreshFindings`, no Message Log), and the lanes mark each finding that has a track and frame: a thin line with a square on top,
 red for an error, yellow for a warning. The Validate button / F7 still writes the Message Log.
 
-**Not in E11.** *Bake all* and the hash half of `BakedStale` need the socket baker (E8). Stale bakes are therefore not yet a cook blocker.
+*Bake all* and the hash half of `BakedStale` came with the socket baker (E8, below): a stale bake is now an error.
 
 **Inline timelines (E13).** `UGSTN_AbilityTimelineValidator` reads `Timeline` from the default object of the Blueprint's generated class and runs exactly `FGSTN_CombatValidators::ValidateTimeline` on it (`ValidateAbilityTimeline`; the findings belong to the Blueprint), so an inline timeline and an asset get the same codes for the same data, including `FrameRange` for a Blueprint that was never given a length. When the ability names a `TimelineAsset`, the asset plays and has its own validator: the inline data is not checked, and if it still holds something (a length, a track or a montage) the warning `Ability.InlineIgnored` says it is dead data. A `TimelineAsset` that does not resolve (the asset was deleted or renamed, or is not a combat timeline) is the error `Ability.TimelineAssetUnresolved`: the reference wins over the inline data, so the ability would play no timeline. A loaded asset resolves; otherwise the asset registry is asked (no load) and, when the validator may load, the asset is loaded to prove it. A class that was never compiled has no default object to read and is not validated.
 
@@ -408,7 +430,7 @@ seconds.
 The editor is tooling, not simulation. A designer extends the **content** it edits (timelines, hurtbox sets, validation
 severities and colours in the settings) without C++. New tools (a track editor, a gizmo provider) are a C++ extension point
 (`IGSTN_TrackEditor`, "Adding a track editor" above); Editor Utility Widgets will call the Blueprint-callable `UGSTN_CombatEditorUtils` (tick rate,
-validate, bake) added in E8 and E11.
+validate, bake): `GetTickRateHz`, `BakeTimeline`, `IsBakeStale` (E8).
 
 ## Replacing content
 
@@ -450,6 +472,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.12.0 (2026-10-25, E8): the socket baker, the staleness record and check, the Bake sockets button with its dot, Bake on save, `gstn.Combat.BakeAll`, `UGSTN_CombatEditorUtils`, the `BakedStale` hash rule; `FGSTN_BakeInfo` in `GSTNCombatCore`; tests `Bake.*`.
 - 0.11.0 (2026-10-25, E12): the hit data row (groups, angle dial, tag combo, extension data, knockback preview); tests `HitData.*` and snapshot `GSTN.Visual.HitData.Row`; the plugin now depends on the engine plugin `GameplayTagsEditor`.
 - 0.10.0 (2026-10-25, E5b): the Hitbox and HurtboxModifier track editors, the hitbox keyed adapter with one lane per hitbox, key gestures that keep lanes, `GetTrackColor`; tests `Model.Hitbox*`, `Model.AutoKeyCreatesInterpolatedKey`, `Registry.HitboxAndHurtboxRows`, snapshot `GSTN.Visual.Timeline.HitboxRows`.
 - 0.9.0 (2026-10-25, E11): the M4 rules (hitbox keys and groups, hit data, variants, hurt states, baked sockets), the hurtbox set validator, `UGSTN_CombatValidatorBase::BuildReportForAsset`, Validate all (`gstn.Combat.ValidateAll`), the validation panel and its tab, the Frame Data tab that follows the timeline, lane markers; tests `Validate.*` (M4) and `GSTN.Visual.Validation.*`.
