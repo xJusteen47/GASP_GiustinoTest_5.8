@@ -1,4 +1,8 @@
 #include "Framework/Application/SlateApplication.h"
+#include "IDetailsView.h"
+#include "Modules/ModuleManager.h"
+#include "PropertyEditorModule.h"
+#include "Tests/GSTN_EditorTestTypes.h"
 #include "Misc/AutomationTest.h"
 #include "Styling/AppStyle.h"
 #include "Tests/GSTN_VisualSnapshot.h"
@@ -180,6 +184,31 @@ bool FGSTN_VisualHitboxRowsTest::RunTest(const FString& Parameters)
 			Model->NotifyViewChanged();
 		}
 	}).IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VisualHitDataRowTest, "GSTN.Visual.HitData.Row", GSTN_VISUAL_TEST_FLAGS)
+bool FGSTN_VisualHitDataRowTest::RunTest(const FString& Parameters)
+{
+	if (!GSTNVisualSnapshot::CanRender(*this))
+	{
+		return true;
+	}
+
+	// The hit data row in a real details view, as the timeline editor's Details tab and a hitbox show it
+	TStrongObjectPtr<UGSTN_TestHitHolder> Holder(NewObject<UGSTN_TestHitHolder>(GetTransientPackage()));
+	Holder->Hit.Damage = 6.f;
+	Holder->Hit.BaseKnockback = 400.f;
+	Holder->Hit.KnockbackGrowth = 10.f;
+	Holder->Hit.AngleDeg = 35.f;
+	Holder->Hit.HitType = FGameplayTag::RequestGameplayTag(TEXT("Combat.HitType.Normal"), false);
+
+	FPropertyEditorModule& PropertyEditor = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	FDetailsViewArgs Args;
+	Args.bAllowSearch = false;
+	const TSharedRef<IDetailsView> View = PropertyEditor.CreateDetailView(Args);
+	View->SetObject(Holder.Get());
+	TestFalse(TEXT("a snapshot was written"), GSTNVisualSnapshot::Render(*this, OnEditorPanel(View), FIntPoint(620, 760), TEXT("hit-data-row")).IsEmpty());
 	return true;
 }
 

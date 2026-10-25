@@ -6,7 +6,7 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.10)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+Status: **experimental (0.11)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
 model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
 (E3, `FGSTN_TimelinePhases`, is in `GSTNCombatCore`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
@@ -204,6 +204,26 @@ defaults for it: `GetLaneCount`, `GetKeyLane` and `AppendKeyInLane`; a caller th
 **HurtboxModifier.** A window coloured by the state it gives (`GSTNTimelineColors::HurtStateColor`: invincible blue, intangible violet, armor amber; the track editor's new
 `GetTrackColor(Track)` lets a colour depend on the data) and labelled `Armor >= 30: Torso, Arm_R` (the state, its threshold, then the hurtboxes it addresses by part, name or tag).
 
+### The hit data row and the knockback preview (E12)
+
+`FGSTN_HitDataCustomization` (`IPropertyTypeCustomization`, registered for `FGSTN_HitData` by the module) replaces the flat list of a hit's fields wherever a hit is edited: the
+Details tab of the timeline editor for a selected hitbox, the values of a relationship variant, a hit in any asset. The row opens by itself and shows a one-line summary
+(`Damage 6, knockback 400 + 10/dmg, 35 deg`). Groups: **Damage** (damage, shield damage), **Knockback** (base, growth, fixed, the **angle dial**, angle, special angle, yaw source), **Hitstun**, **Hitstop**,
+**Stagger**, **Hit** (priority, the hit type as a tag combo limited to `Combat.HitType`, extra effects, cue, custom data), **Impact**, **Extensions** (the standard array editor of the
+instanced structs, so the customization of a plugin's own extension struct shows inside it) and **Preview knockback**. Damage, Knockback and the preview start open.
+
+The **dial** (`SGSTN_AngleDial`) is a side view: the attacker at the pivot, the movement plane to the right, the elevation as the arc. Drag the needle to set `AngleDeg` (whole
+degrees; Shift 5, Ctrl 15; Esc puts the angle back); a drag is **one undo step** (a transaction opened on mouse-down, interactive writes through the property handle, the last write on
+mouse-up). Next to it the caption says the elevation and the direction it makes on the movement plane, `35 deg, above the plane: forward 0.82, up 0.57`. With the Sakurai special angle the
+dial is dimmed and takes no drag, since the rules' angle replaces it. A sentence under *Special Angle* and *Yaw Source* says what the chosen value does. The geometry is `GSTNHitDataDial`
+(`GSTN_HitDataMath.h`), the sentences `GSTNHitDataText`.
+
+The **preview** is `GSTNHitDataPreview::Compute`: this hit on a test victim (percent, weight and *Grounded* in the row; kept for the editor session, not saved) through
+`UGSTN_KnockbackModel::Compute` of the **default combat rules** (`UGSTN_CombatSettings`), with the input the pipeline's `UGSTN_HitStep_ComputeKnockback` builds (the Sakurai pre-pass, `UGSTN_HitMathUtils::LaunchDirection`, the rules' stagger threshold).
+It calls the model itself, so there is no second copy of any formula. The line reads `victim at 50 %, weight 100: knockback 460 cm/s, Launch; staggers (force 6), hitstun 12 f; hitstop 5 f (attacker 5 f). Attacker faces the victim;
+direction 35 deg above the plane.` The tier comes from the model's `FGSTN_ReactionTuning`. Assumed and said: the attacker faces the victim, no hurtbox scales, the hit is not in tumble. With no default rules or no model in them
+the line says so. Needs the plugin `GameplayTagsEditor` (the tag combo).
+
 ## Adding a track editor
 
 A new runtime track (`FMyShieldTrack : FGSTN_TimelineTrack` in a runtime module) becomes a row, an Add Track entry and a Details
@@ -333,11 +353,11 @@ Asset Manager and checks the loadout as the server will.
 ## Dependencies
 
 - Plugins: `GSTNCombat` (the timeline data), `GSTNInput` (the slot validator and the notation), `GSTNCombatGAS` (kit, weapon and loadout
-  data, and the `Combat.Hurtbox.*` tags the settings map to), `GSTNCombatNP` (since E13: the ability class `UGSTN_GA_BaseCombat`, see below) and the engine plugin `DataValidation`. Not `GSTNCombatDebug`: since E14 the debug plugin registers its own
+  data, and the `Combat.Hurtbox.*` tags the settings map to), `GSTNCombatNP` (since E13: the ability class `UGSTN_GA_BaseCombat`, see below) and the engine plugins `DataValidation` and (since E12, the tag combo of the hit type) `GameplayTagsEditor`. Not `GSTNCombatDebug`: since E14 the debug plugin registers its own
   editor tab, so the two plugins have no edge in either direction.
 - `GSTNCombatEditor` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore; private ApplicationCore (clipboard), AdvancedPreviewScene and AnimGraph (the preview scene and the anim instance montages play on, E6),
   AssetDefinition (`UAssetDefinition`; `UAssetDefinitionDefault` itself is in UnrealEd), DeveloperSettings, EditorFramework, InputCore,
-  PropertyEditor (the Details tab and the timeline data row), Slate, SlateCore, UnrealEd (the toolkit, `FBlueprintEditorUtils`, `FKismetEditorUtilities`), ContentBrowser and AssetTools (the save dialog of Extract), GSTNCombatGAS, GSTNCombatNP, GSTNInputCore, and for validation DataValidation
+  PropertyEditor (the Details tab, the timeline data row and the hit data row), GameplayTagsEditor (`SGameplayTagCombo`), WorkspaceMenuStructure (the validation tab's menu group), Slate, SlateCore, UnrealEd (the toolkit, `FBlueprintEditorUtils`, `FKismetEditorUtilities`), ContentBrowser and AssetTools (the save dialog of Extract), GSTNCombatGAS, GSTNCombatNP, GSTNInputCore, and for validation DataValidation
   (`UEditorValidatorBase`), MessageLog, AssetRegistry, Projects, GameplayAbilities (the ability base class `UGSTN_GA_BaseCombat`, and the test bindings, derive from `UGameplayAbility`). The module
   is compiled file by file (`bUseUnity = false`): the tests share helper names through file-scope using-directives. The other editor
   modules are added by the checkpoints that need them.
@@ -430,6 +450,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.11.0 (2026-10-25, E12): the hit data row (groups, angle dial, tag combo, extension data, knockback preview); tests `HitData.*` and snapshot `GSTN.Visual.HitData.Row`; the plugin now depends on the engine plugin `GameplayTagsEditor`.
 - 0.10.0 (2026-10-25, E5b): the Hitbox and HurtboxModifier track editors, the hitbox keyed adapter with one lane per hitbox, key gestures that keep lanes, `GetTrackColor`; tests `Model.Hitbox*`, `Model.AutoKeyCreatesInterpolatedKey`, `Registry.HitboxAndHurtboxRows`, snapshot `GSTN.Visual.Timeline.HitboxRows`.
 - 0.9.0 (2026-10-25, E11): the M4 rules (hitbox keys and groups, hit data, variants, hurt states, baked sockets), the hurtbox set validator, `UGSTN_CombatValidatorBase::BuildReportForAsset`, Validate all (`gstn.Combat.ValidateAll`), the validation panel and its tab, the Frame Data tab that follows the timeline, lane markers; tests `Validate.*` (M4) and `GSTN.Visual.Validation.*`.
 - 0.8.1 (2026-10-25, E3): the phase bar reads `FGSTN_TimelinePhases` of `GSTNCombatCore`.

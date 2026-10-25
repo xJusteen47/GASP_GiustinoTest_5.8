@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Hits/GSTN_HitData.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "Timeline/GSTN_KeyedTrackAccess.h"
@@ -60,6 +61,17 @@ class UGSTN_TestLoadoutHolder : public UObject
 public:
 	UPROPERTY()
 	FGSTN_LoadoutData Loadout;
+};
+
+/** An object that holds a hit, to show the hit data row in a details view */
+UCLASS(Transient)
+class UGSTN_TestHitHolder : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditAnywhere, Category = "Test")
+	FGSTN_HitData Hit;
 };
 
 /** The adapter a keyed track registers: linear interpolation of position and size for a new key, stable sort by frame */

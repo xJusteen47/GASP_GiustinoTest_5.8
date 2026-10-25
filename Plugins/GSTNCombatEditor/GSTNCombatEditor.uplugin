@@ -36,6 +36,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GameplayTagsEditor",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombatGAS",
 			"Enabled": true
 		},

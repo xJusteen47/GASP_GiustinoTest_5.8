@@ -4,6 +4,7 @@
 
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
+#include "Timeline/Details/GSTN_HitDataCustomization.h"
 #include "Timeline/Details/GSTN_TimelineDataCustomization.h"
 #include "Timeline/GSTN_TimelineEditorCommands.h"
 #include "Timeline/GSTN_TrackEditors.h"
@@ -31,6 +32,8 @@ void FGSTN_CombatEditorModule::StartupModule()
 	// The Open Timeline Editor row of an FGSTN_CombatTimelineData, in the Class Defaults of an ability Blueprint and on a timeline asset (inline mode, E13)
 	FPropertyEditorModule& PropertyEditor = FModuleManager::LoadModuleChecked<FPropertyEditorModule>(TEXT("PropertyEditor"));
 	PropertyEditor.RegisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FGSTN_TimelineDataCustomization::MakeInstance));
+	// The groups, the angle dial and the knockback preview of a hit (E12), wherever an FGSTN_HitData is edited
+	PropertyEditor.RegisterCustomPropertyTypeLayout(FGSTN_HitDataCustomization::GetStructName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FGSTN_HitDataCustomization::MakeInstance));
 	UE_LOG(LogGSTNCombatEditor, Verbose, TEXT("GSTN Combat Editor module started"));
 }
 
@@ -39,6 +42,7 @@ void FGSTN_CombatEditorModule::ShutdownModule()
 	// Reverse order of startup
 	if (FPropertyEditorModule* PropertyEditor = FModuleManager::GetModulePtr<FPropertyEditorModule>(TEXT("PropertyEditor")))
 	{
+		PropertyEditor->UnregisterCustomPropertyTypeLayout(FGSTN_HitDataCustomization::GetStructName());
 		PropertyEditor->UnregisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName());
 	}
 	GSTNValidationTab::Unregister();
