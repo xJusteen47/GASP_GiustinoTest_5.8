@@ -7,6 +7,7 @@
 #include "UObject/ObjectKey.h"
 #include "GSTN_PartEvents.generated.h"
 
+class AActor;
 struct FGSTN_PartHitOutcome;
 
 /**
@@ -115,6 +116,13 @@ struct GSTNPARTSGAS_API FGSTN_PartEvents
 
 	/** The same events, collected in a list instead of the outbox */
 	static void Make(const FGSTN_PartHitOutcome& Outcome, const FGSTN_SimEvent& HitEnvelope, TArray<FGSTN_SimEvent>& Out);
+
+	/**
+	 * The Restored events of one restore: one per restored part in ascending part index, payload (part index, the break serial after the restore,
+	 * no band), made without a hit: Target is the restored entity, Instigator the healer (may be null). Appended to Outbox; returns how many.
+	 * The key (entity, part, serial) is the same as a break's, so a consumer that deduplicates breaks can deduplicate these too
+	 */
+	static int32 AppendRestored(AActor* Target, AActor* Instigator, int32 Frame, uint16 RestoredMask, uint8 BreakSerial, FGSTN_SimEventOutbox& Outbox);
 
 	/** The dedupe key of a Broken or AllBroken event: its target as the entity and the payload's part and serial. Invalid target = a key with a null entity */
 	static FGSTN_PartEventKey MakeKey(const FGSTN_SimEvent& Event);

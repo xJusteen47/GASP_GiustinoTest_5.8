@@ -34,4 +34,18 @@ public:
 	/** The parts state of the actor's combat sync state as text ("mask=0x0008 serial=1 dmg=[0,0,0,255,0,0]"), "none" without a fragment, "no combat" without a combat component */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Debug")
 	static FString GetPartsStateString(const AActor* Actor);
+
+	/**
+	 * Starts recording the part events (Combat.Event.Part.*) this world's event subsystem publishes: the harness counts "Broken exactly once" with it.
+	 * Call it on every world; a second call on the same world clears the log. The listener lives until StopPartEventLog or the end of the world
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Debug")
+	static void StartPartEventLog(AActor* WorldContext);
+
+	/** The rows recorded since StartPartEventLog, "Type:Frame:PartIndex:BreakSerial:TargetName" separated by ';' (Type is the last tag segment: Broken, Restored...) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Debug")
+	static FString GetPartEventLog(AActor* WorldContext);
+
+	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Debug")
+	static void StopPartEventLog(AActor* WorldContext);
 };

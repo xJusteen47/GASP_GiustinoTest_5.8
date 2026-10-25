@@ -2,6 +2,10 @@
 
 #include "Sim/GSTN_PartsKitLibrary.h"
 
+#include "Events/GSTN_PartEvents.h"
+#include "Events/GSTN_SimEventSubsystem.h"
+#include "GSTN_PartsTags.h"
+
 #include "Data/GSTN_PartSetDefinition.h"
 #include "Data/GSTN_PartsKitExtension.h"
 #include "AbilitySystemGlobals.h"
@@ -10,6 +14,70 @@
 #include "Sim/GSTN_PartsAttach.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "State/GSTN_PartsFragment.h"
+
+namespace
+{
+	/** The part event rows of the worlds that asked for a log: debug only, outside the simulation */
+	struct FPartEventLog
+	{
+		TArray<FString> Rows;
+		FGSTN_SimEventListenerHandle Handle;
+	};
+
+	TMap<TWeakObjectPtr<UWorld>, FPartEventLog>& GetLogs()
+	{
+		static TMap<TWeakObjectPtr<UWorld>, FPartEventLog> Logs;
+		return Logs;
+	}
+}
+
+void UGSTN_PartsKitLibrary::StartPartEventLog(AActor* WorldContext)
+{
+	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(WorldContext);
+	if (!World || !Events)
+	{
+		return;
+	}
+	StopPartEventLog(WorldContext);
+	const TWeakObjectPtr<UWorld> Key(World);
+	FPartEventLog& Log = GetLogs().Add(Key);
+	FGameplayTagContainer Types;
+	Types.AddTag(GSTNPartsTags::Event_Part_Damaged);
+	Types.AddTag(GSTNPartsTags::Event_Part_WeakPointHit);
+	Types.AddTag(GSTNPartsTags::Event_Part_Ricochet);
+	Types.AddTag(GSTNPartsTags::Event_Part_Broken);
+	Types.AddTag(GSTNPartsTags::Event_Part_AllBroken);
+	Types.AddTag(GSTNPartsTags::Event_Part_Restored);
+	Log.Handle = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(Types), [Key](const FGSTN_SimEvent& Event)
+	{
+		if (FPartEventLog* Found = GetLogs().Find(Key))
+		{
+			const FGSTN_PartEventPayload Payload = FGSTN_PartEvents::GetPayload(Event);
+			Found->Rows.Add(FString::Printf(TEXT("%s:%d:%d:%d:%s"), *Event.EventType.GetTagLeafName().ToString(), Event.Frame, Payload.PartIndex, Payload.BreakSerial,
+				Event.Target.IsValid() ? *Event.Target->GetName() : TEXT("none")));
+		}
+	});
+}
+
+FString UGSTN_PartsKitLibrary::GetPartEventLog(AActor* WorldContext)
+{
+	const FPartEventLog* Log = WorldContext ? GetLogs().Find(WorldContext->GetWorld()) : nullptr;
+	return Log ? FString::Join(Log->Rows, TEXT(";")) : FString();
+}
+
+void UGSTN_PartsKitLibrary::StopPartEventLog(AActor* WorldContext)
+{
+	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (FPartEventLog* Log = World ? GetLogs().Find(World) : nullptr)
+	{
+		if (UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(WorldContext))
+		{
+			Events->StopListening(Log->Handle);
+		}
+		GetLogs().Remove(World);
+	}
+}
 
 bool UGSTN_PartsKitLibrary::SetKitPartSet(UGSTN_PrimaryKitDefinition* Kit, UGSTN_PartSetDefinition* Set)
 {

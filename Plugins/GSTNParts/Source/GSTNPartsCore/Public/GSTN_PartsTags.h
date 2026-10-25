@@ -50,6 +50,9 @@ namespace GSTNPartsTags
 	/** Every breakable part is now broken. Optional design hook. Published once per key by the combat outbox. */
 	GSTNPARTSCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Part_AllBroken);
 
+	/** A broken part was restored. Published by the combat outbox when the parts tick extension consumes a restore request; the payload is the part index and the new break serial. */
+	GSTNPARTSCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Part_Restored);
+
 	/** Message router channel for the UI: a part broke. Republished from the outbox event outside the simulation, never inside it. */
 	GSTNPARTSCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Message_PartBroken);
 

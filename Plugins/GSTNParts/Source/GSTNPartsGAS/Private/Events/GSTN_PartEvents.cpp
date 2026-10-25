@@ -115,6 +115,25 @@ int32 FGSTN_PartEvents::Append(const FGSTN_PartHitOutcome& Outcome, const FGSTN_
 	return Made.Num();
 }
 
+int32 FGSTN_PartEvents::AppendRestored(AActor* Target, AActor* Instigator, int32 Frame, uint16 RestoredMask, uint8 BreakSerial, FGSTN_SimEventOutbox& Outbox)
+{
+	int32 Count = 0;
+	while (RestoredMask != 0)
+	{
+		const int32 Index = FMath::CountTrailingZeros(static_cast<uint32>(RestoredMask));
+		RestoredMask = static_cast<uint16>(RestoredMask & (RestoredMask - 1));
+		FGSTN_SimEvent Event;
+		Event.EventType = GSTNPartsTags::Event_Part_Restored;
+		Event.Frame = Frame;
+		Event.Target = Target;
+		Event.Instigator = Instigator;
+		Event.Magnitude = FGSTN_PartEventPayload::Make(Index, BreakSerial, 255).Pack();
+		Outbox.Add(MoveTemp(Event));
+		++Count;
+	}
+	return Count;
+}
+
 FGSTN_PartEventKey FGSTN_PartEvents::MakeKey(const FGSTN_SimEvent& Event)
 {
 	const FGSTN_PartEventPayload Payload = GetPayload(Event);

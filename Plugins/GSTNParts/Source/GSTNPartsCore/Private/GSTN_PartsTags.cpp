@@ -14,6 +14,7 @@ namespace GSTNPartsTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Part_Ricochet, "Combat.Event.Part.Ricochet", "A hit landed on a penetration band that ricochets. Published once per key by the combat outbox; read by the spark cue and audio, the attacker recoil is its own ability");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Part_Broken, "Combat.Event.Part.Broken", "A part, or a child cascaded from a broken parent, broke. Published once per (entity, part index, break serial) by the combat outbox; read by presentation, UI and objectives");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Part_AllBroken, "Combat.Event.Part.AllBroken", "Every breakable part of the entity is broken. Published once per key by the combat outbox; an optional design hook");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Part_Restored, "Combat.Event.Part.Restored", "A broken part was restored (a healer effect or an explicit request). Published once per key by the combat outbox; the payload carries the part index and the new break serial");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Message_PartBroken, "Message.Combat.PartBroken", "Message router channel for the UI: a part broke. Republished from the outbox event outside the simulation by presentation or a UI bridge, never raised inside the simulation");
 
 	void GetDeclaredTags(TArray<FGameplayTag>& OutTags)
@@ -21,7 +22,7 @@ namespace GSTNPartsTags
 		OutTags.Append({
 			Part_Broken, Part_GrabLocked, Part_AllBroken, Part_Effect,
 			Entity_Destructible,
-			Event_Part_Damaged, Event_Part_WeakPointHit, Event_Part_Ricochet, Event_Part_Broken, Event_Part_AllBroken,
+			Event_Part_Damaged, Event_Part_WeakPointHit, Event_Part_Ricochet, Event_Part_Broken, Event_Part_AllBroken, Event_Part_Restored,
 			Message_PartBroken });
 	}
 }
