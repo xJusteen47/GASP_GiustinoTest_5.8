@@ -243,6 +243,50 @@ Mirror: chiave in spazio root, x -> -x, quat (x,y,z,w) -> (x,-y,-z,w)
 drag delle hurtbox). Totale suite: 884 verdi. \textbf{Da tarare}: il fattore 0{,}01 della scala. \textbf{Non fatto}: voci Mirror/Offset nel
 menu delle chiavi (ci sono pulsante e Shift), snap della scala, overlay delle hurtbox del kit nella timeline.
 
+\section{Muri in movimento: correzioni di rete che convergono (\code{1ba37ee})}
+\subsection{Causa}
+Sui muri che si muovono il personaggio ``cavalca'' la parete: ogni tick viene portato alla posa attuale della base moltiplicata per
+la sua posizione locale sulla parete (\code{FGSTN_WallBaseInfo::LocalPosition}). Quella posizione locale era scritta a fine tick in un
+\emph{rollback blackboard} di Mover. In una correzione, Network Prediction ripristina lo stato sincronizzato del server (la capsula torna
+dove la vuole il server), ma il blackboard torna al valore del frame prima \emph{come lo aveva predetto il client}: il primo tick
+risimulato riportava la capsula nel vecchio punto del client, annullando la correzione, e lo sfasamento (circa 20\,cm lungo la corsa
+del muro) restava per sempre. Non era l'aggancio in sé: qualunque correzione durante la cavalcata lo causava; un aggancio vicino
+al teletrasporto del test lo rendeva certo.
+
+\subsection{Correzione}
+La posizione locale non si conserva più: si ricava ogni tick dalla posizione sincronizzata e dalla posa della base al frame prima.
+Attivo sulle modalità v2 (\code{bRideFromSyncedLocation}, vero nel costruttore di \code{UGSTN_WallTraverseModeBase}); spento di default
+sulle modalità legacy, che quindi restano come prima.
+\begin{lstlisting}
+prec   = Blackboard[BaseInfo]                 // componente base e sua posa a fine frame precedente
+inizio = posizione dello stato sincronizzato all'inizio del tick
+locale = prec.Rotazione^-1 * (inizio - prec.Posizione)
+target = BaseOra.Posizione + BaseOra.Rotazione * locale
+sposta la capsula su target (non swept, come prima); ruota normale, velocità e capsula del delta di rotazione della base
+\end{lstlisting}
+È sicuro per il rollback perché dipende solo dallo stato sincronizzato e dalla posa della base, che è uguale su ogni macchina per
+basi posate dal tempo di simulazione (come \code{AGSTN_WallTestMover}). Senza correzioni il risultato è identico a prima.
+
+\subsection{Numeri}
+\begin{tabular}{lcc}
+\toprule
+Corsia, modalità & Prima (aggancio presto) & Dopo (presto / partenza normale) \\
+\midrule
+\code{h_moving150} v2 & 36 riconciliazioni & 3 / 1 (0 dopo 0{,}6\,s) \\
+\code{h_moving300} v2 & 85 riconciliazioni & 5 / 1 (0 dopo 0{,}6\,s) \\
+\code{h_moving150} legacy & 123 & 124 (non toccata) \\
+\bottomrule
+\end{tabular}
+
+\noindent Test: \code{GSTN.Wall.V2Net.CorrectionOnMovingWallConverges} (errore predetto 20{,}22\,cm, dopo la correzione 0{,}000\,cm;
+il controllo con la cavalcata vecchia resta a 20{,}22). Suite: 885 verdi. Nuova opzione del harness:
+\code{wall_ab.py --start-gap N}. Classi: \code{URollbackBlackboard}, \code{UMoverComponent::OnSimulationRollback},
+\code{FMoverDefaultSyncState}.
+
+\subsection{Aperto}
+Le modalità legacy hanno ancora il problema (opzione spenta: decisione tua). Basi la cui posa differisce tra macchine nello stesso
+frame (corpi fisici simulati) richiederebbero la base nello stato sincronizzato, come fa Mover: cambio di design non fatto.
+
 \section{Cosa controllare a mano stasera}\label{sec:controlli}
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Muri}: in \code{SandboxCharacter_Mover}, modalità WallSlidingV2, sezione \emph{Edges}: ci sono
@@ -267,6 +311,8 @@ menu delle chiavi (ci sono pulsante e Shift), snap della scala, overlay delle hu
     comoda?). Ctrl+\textasciitilde{} per Local/World (la scala resta locale). Su un frame senza chiave con auto-key: una chiave, un solo
     Ctrl+Z la toglie. Esc a metà drag ripristina tutto. Shift all'inizio sposta tutte le chiavi. Playhead fuori dalla finestra: il gizmo
     sparisce. Nell'editor delle hurtbox: clic, drag, undo ed Esc.
+  \item \textbf{Muri in movimento}: su \code{L_WallSlideAB}, corsie h, aggrappati subito dopo un salto o un dash sul muro che si muove:
+    niente scatti o tremolii lungo la corsa. Con \code{np.PrintReconciles 1} nessuna discrepanza ripetuta mentre scivoli.
   \item \textbf{Rete}: prima di unire M5, esegui lo scenario \code{scenario_hit_basic} del harness (il bake non è stato provato in PIE).
 \end{enumerate}
 
