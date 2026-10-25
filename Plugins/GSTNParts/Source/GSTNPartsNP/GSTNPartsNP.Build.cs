@@ -18,6 +18,7 @@ public class GSTNPartsNP : ModuleRules
 			"GameplayTags",
 			"GameplayAbilities",
 			"NetworkPrediction",
+			"GSTNInputCore",
 			"GSTNCombatCore",
 			"GSTNCombatGAS",
 			"GSTNCombatNP",

@@ -24,6 +24,9 @@
 #     HBS_Test_Pawn (torso / head / feet capsules, tag leaves of Config/Tags/GSTNCombat.ini), the weapon WPN_Test_Hits and the kit KIT_Test_Hits
 #     (Command.Attack.Neutral -> GSTN_GA_TestHitMove, whose frame data is in C++: a hitbox of each space), and BP_GASNPP_TestCharacter's
 #     combat component HurtboxSet -> HBS_Test_Pawn (the one shared Blueprint this step edits; backed up first).
+#  8. (opt-in, --parts-content) M4b P7 content (specs in parts_specs(); needs the GSTNParts plugin enabled): the hurtbox set HBS_Test_PawnParts (six hurtboxes), the part set PS_Test_Pawn,
+#     the rules GSTN_CombatRules_TestParts (the standard rules with PartResolve in place of HealthWeight and ApplyDamage) and the kit KIT_Test_Parts (a copy of KIT_Test_Hits
+#     carrying the FGSTN_PartsKitExtension). New assets only; KIT_Test_Hits, the standard rules, HBS_Test_Pawn and BP_GASNPP_TestCharacter are not touched.
 #  7. (opt-in, --h13-content) M4 H13a content (specs in h13_specs()): /GSTNCombat/Rules/GSTN_CombatRules_Standard (plugin content, the rules the match plays
 #     by default), the weight hurtbox sets HBS_Test_Light / Medium / Heavy, the baked-socket timeline TL_Test_HitBaked (the product of Tools/GAS/bake_sockets.py; the root / world / ally variants were removed in H13b: UGSTN_GA_TestHitMove covers the four hitbox spaces in the harness), the extension
 #     example Blueprints BP_*_Example and the physical materials, in /Game/GASNPPTest/Combat. Edits no shared Blueprint. The map L_Test_Combat is built by
@@ -1016,7 +1019,106 @@ def setup_h13_content():
     return ok
 
 
-def run(wall_transition=False, combat_input=False, test_character=False, combat_content=False, hits_content=False, h13_content=False):
+# ----------------------------------------------------------------------------------------------- 8. M4b P7 parts content
+
+def parts_specs():
+    """M4b P7 test content as plain data (needs the GSTNParts plugin enabled). The parts are the hurtboxes of HBS_Test_Pawn (torso / head / feet) plus
+    arms and a core, which HBS_Test_Pawn does not have: the set HBS_Test_PawnParts holds all six (the shared HBS_Test_Pawn stays as it is; the scenarios of
+    part 2 point the pawns' combat component at HBS_Test_PawnParts). (name, bone, tag, priority, radius, half height incl. the hemispheres, local x, y, z)"""
+    return {
+        'hurtbox_set': 'HBS_Test_PawnParts',
+        'hurtboxes': [
+            ('torso', 'spine_03', 'Combat.Hurtbox.Torso', 1, 35.0, 55.0, 0.0, 0.0, 15.0),
+            ('head', 'head', 'Combat.Hurtbox.Head', 2, 22.0, 22.0, 0.0, 0.0, 68.0),
+            ('feet', 'foot_l', 'Combat.Hurtbox.Feet', 0, 30.0, 30.0, 0.0, 0.0, -62.0),
+            ('arm_l', 'upperarm_l', 'Combat.Hurtbox.Torso', 3, 14.0, 32.0, 0.0, -42.0, 25.0),
+            ('arm_r', 'upperarm_r', 'Combat.Hurtbox.Torso', 3, 14.0, 32.0, 0.0, 42.0, 25.0),
+            ('core', 'spine_02', 'Combat.Hurtbox.Torso', 5, 10.0, 10.0, 30.0, 0.0, 25.0),
+        ],
+        'part_set': 'PS_Test_Pawn',
+        # (name, hurtbox, hardness, cap, main transfer, weak point, broken policy)
+        'parts': [
+            ('Torso', 'torso', 0, 120.0, 1.0, False, 'KEEP'),
+            ('Head', 'head', 1, 40.0, 2.0, True, 'KEEP'),
+            ('Legs', 'feet', 2, 60.0, 0.5, False, 'KEEP'),
+            ('ArmL', 'arm_l', 3, 50.0, 0.3, False, 'DISABLE'),
+            ('ArmR', 'arm_r', 3, 50.0, 0.3, False, 'DISABLE'),
+            ('Core', 'core', 1, 30.0, 1.5, True, 'KEEP'),
+        ],
+        # (part index, hit group mask): a lost arm stops its own hitboxes (the test attack uses hit group 1)
+        'disable_groups': [(3, 1 << 1), (4, 1 << 2)],
+        # (part index, add percent, kill): the core could kill, off by default (kill False, a flag to flip in a scenario)
+        'main_damage': [(5, 25.0, False)],
+        'rules': 'GSTN_CombatRules_TestParts',
+        'kit': ('KIT_Test_Parts', 'KIT_Test_Hits'),
+    }
+
+
+def setup_parts_content():
+    """Part set, hurtbox set with six hurtboxes, the rules variant with PartResolve and the parts test kit. New assets only: KIT_Test_Hits, the standard
+    rules, HBS_Test_Pawn and BP_GASNPP_TestCharacter are not touched. Rewrites every property from the specs on each run. Returns True when saved"""
+    if not hasattr(unreal, 'GSTN_PartSetDefinition'):
+        log('ERROR: the GSTNParts plugin is not enabled (no GSTN_PartSetDefinition): parts content skipped')
+        return False
+    specs = parts_specs()
+
+    hurtboxes, _ = _get_or_create(specs['hurtbox_set'], TEST_COMBAT_DIR, unreal.GSTN_HurtboxSetDefinition, unreal.DataAssetFactory())
+    boxes = []
+    for name, bone, tag, priority, radius, half_height, x, y, z in specs['hurtboxes']:
+        shape = unreal.GSTN_HitShape()
+        shape.set_editor_property('type', unreal.GSTN_ShapeType.CAPSULE)
+        shape.set_editor_property('extent', unreal.Vector(radius, radius, half_height))
+        shape.set_editor_property('local', unreal.Transform(location=unreal.Vector(x, y, z)))
+        box = unreal.GSTN_Hurtbox()
+        box.set_editor_property('name', name)
+        box.set_editor_property('bone', bone)
+        box.set_editor_property('shape', shape)
+        box.set_editor_property('tags', _tag_container([tag]))
+        box.set_editor_property('priority', priority)
+        boxes.append(box)
+    hurtboxes.set_editor_property('hurtboxes', boxes)
+    unreal.EditorAssetLibrary.save_loaded_asset(hurtboxes)
+
+    part_set, _ = _get_or_create(specs['part_set'], TEST_COMBAT_DIR, unreal.GSTN_PartSetDefinition, unreal.DataAssetFactory())
+    parts = []
+    for name, hurtbox, hardness, cap, transfer, weak, policy in specs['parts']:
+        part = unreal.GSTN_PartDefinition()
+        part.set_editor_property('name', name)
+        part.set_editor_property('hurtboxes', [hurtbox])
+        part.set_editor_property('hardness', hardness)
+        part.set_editor_property('part_cap', cap)
+        part.set_editor_property('main_transfer', transfer)
+        part.set_editor_property('weak_point', weak)
+        part.set_editor_property('broken_policy', getattr(unreal.GSTN_BrokenHurtboxPolicy, policy))
+        part.set_editor_property('on_break', [])
+        parts.append(part)
+    part_set.set_editor_property('parts', parts)
+    for index, mask in specs['disable_groups']:
+        unreal.GSTN_PartsContentLibrary.set_break_disable_hit_groups(part_set, index, mask)
+    for index, percent, kill in specs['main_damage']:
+        unreal.GSTN_PartsContentLibrary.set_break_main_damage(part_set, index, percent, kill)
+    unreal.EditorAssetLibrary.save_loaded_asset(part_set)
+
+    rules, _ = _get_or_create(specs['rules'], TEST_COMBAT_DIR, unreal.GSTN_CombatRules, unreal.DataAssetFactory())
+    unreal.GSTN_CombatRules.fill_standard(rules)
+    rules.set_editor_property('damage_effect', unreal.GSTN_GE_Damage)
+    unreal.GSTN_PartsContentLibrary.convert_rules_to_parts(rules)
+    unreal.EditorAssetLibrary.save_loaded_asset(rules)
+
+    kit_name, source_name = specs['kit']
+    if not unreal.EditorAssetLibrary.does_asset_exist(f'{TEST_COMBAT_DIR}/{kit_name}'):
+        if not unreal.EditorAssetLibrary.duplicate_asset(f'{TEST_COMBAT_DIR}/{source_name}', f'{TEST_COMBAT_DIR}/{kit_name}'):
+            log(f'ERROR: could not duplicate {source_name} (run --hits-content first)')
+            return False
+        log(f'created {TEST_COMBAT_DIR}/{kit_name} (copy of {source_name})')
+    kit = unreal.load_asset(f'{TEST_COMBAT_DIR}/{kit_name}')
+    unreal.GSTN_PartsKitLibrary.set_kit_part_set(kit, part_set)
+    unreal.EditorAssetLibrary.save_loaded_asset(kit)
+    log(f'parts content written under {TEST_COMBAT_DIR}: {specs["hurtbox_set"]}, {specs["part_set"]}, {specs["rules"]}, {kit_name}')
+    return True
+
+
+def run(wall_transition=False, combat_input=False, test_character=False, combat_content=False, hits_content=False, h13_content=False, parts_content=False):
     """Step 2 and step 3 change shared Blueprints (the test character, the sandbox character) and are opt-in; step 4 never does."""
     log(f'mapping context changed: {setup_mapping_context()}')
     if test_character:
@@ -1036,10 +1138,12 @@ def run(wall_transition=False, combat_input=False, test_character=False, combat_
         log(f'hits content changed: {setup_hits_content()}')
     if h13_content:
         log(f'H13 content changed: {setup_h13_content()}')
+    if parts_content:
+        log(f'parts content changed: {setup_parts_content()}')
 
 
 if __name__ == '__main__':
     import sys
     run(wall_transition='--wall-transition' in sys.argv, combat_input='--combat-input' in sys.argv,
         test_character='--test-character' in sys.argv, combat_content='--combat-content' in sys.argv,
-        hits_content='--hits-content' in sys.argv, h13_content='--h13-content' in sys.argv)
+        hits_content='--hits-content' in sys.argv, h13_content='--h13-content' in sys.argv, parts_content='--parts-content' in sys.argv)

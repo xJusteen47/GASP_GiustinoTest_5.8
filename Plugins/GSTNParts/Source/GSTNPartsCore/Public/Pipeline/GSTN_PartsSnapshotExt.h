@@ -16,9 +16,9 @@ struct FGSTN_HitVictimView;
  * before it trusts the pointer.
  *
  * The part set is a pointer here, not the id of the spec (PartSetId): the pure step cannot look an asset up by id without a
- * global registry, and the snapshot is rebuilt every frame by code that already holds the loaded set (the fragment's owner). The
- * set is valid for the frame of the snapshot only; a history that outlives a frame must hold the id and rebuild this struct
- * (P7 decides). Never serialised and never sent.
+ * global registry. The set is a data asset kept alive by the attach registry of GSTNPartsNP while any entity uses it, which is why
+ * the lag compensation history may keep a copy of this struct (a 32 byte blob in the combat snapshot) without owning the set. Never
+ * serialised and never sent. It is a trivially copyable struct of at most 32 bytes (static_assert below), the size of that blob.
  *
  * The NP adapter (GSTNPartsNP) fills it from the parts fragment; the minion bridge fills it from the minion store. An entity
  * without a part set simply has no extension, and the step does nothing for it.
@@ -33,6 +33,14 @@ struct GSTNPARTSCORE_API FGSTN_PartsSnapshotExt
 	uint8 PartDamage[GSTN_PartsLimits::MaxParts] = {};
 	uint8 BreakSerial = 0;
 
+	/** Derived bits (FlagGrabLocked), set by the snapshot contributor from the set and the mask; the step does not read them */
+	uint8 Flags = 0;
+
+	/** The grab gate of the set is unmet by the broken parts (Combat.Part.GrabLocked) */
+	static constexpr uint8 FlagGrabLocked = 1 << 0;
+
+	bool IsGrabLocked() const { return (Flags & FlagGrabLocked) != 0; }
+
 	/** The entity's part set, or null (the step then treats the entity as having none) */
 	const UGSTN_PartSetDefinition* PartSet = nullptr;
 
@@ -45,3 +53,5 @@ struct GSTNPARTSCORE_API FGSTN_PartsSnapshotExt
 	/** The extension a victim view carries, or null when it has none or the pointer is not a parts extension */
 	static const FGSTN_PartsSnapshotExt* FromView(const FGSTN_HitVictimView& Victim);
 };
+
+static_assert(TIsTriviallyCopyAssignable<FGSTN_PartsSnapshotExt>::Value && sizeof(FGSTN_PartsSnapshotExt) <= 32, "the parts extension is copied into the combat snapshot's 32 byte extension blob");

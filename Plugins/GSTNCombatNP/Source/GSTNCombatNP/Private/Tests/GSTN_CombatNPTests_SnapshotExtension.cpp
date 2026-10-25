@@ -37,7 +37,7 @@ namespace
 		uint8 TypeId;
 	};
 
-	bool NoPose(int32 EntityId, FTransform& OutPose)
+	bool SnapExtNoPose(int32 EntityId, FTransform& OutPose)
 	{
 		return false;
 	}
@@ -101,8 +101,8 @@ bool FGSTN_SnapshotExtOneTypeTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SnapshotExtHistoryTest, "GSTNCombat.NP.SnapshotExt.HistoryRewindsTheExtension", GSTN_NP_TEST_FLAGS)
 bool FGSTN_SnapshotExtHistoryTest::RunTest(const FString& Parameters)
 {
-	constexpr int32 VictimId = 7;
-	constexpr int32 AttackerId = 3;
+	constexpr int32 SnapExtVictimId = 7;
+	constexpr int32 SnapExtAttackerId = 3;
 	constexpr float StepMs = 16.f;
 	UGSTN_CombatWorldSubsystem* Subsystem = NewObject<UGSTN_CombatWorldSubsystem>(GetTransientPackage());
 	Subsystem->RequestHistory(400);
@@ -112,7 +112,7 @@ bool FGSTN_SnapshotExtHistoryTest::RunTest(const FString& Parameters)
 	{
 		FGSTN_StepSnapshot Snapshot;
 		Snapshot.Frame = Frame;
-		for (const int32 Id : { AttackerId, VictimId })
+		for (const int32 Id : { SnapExtAttackerId, SnapExtVictimId })
 		{
 			FGSTN_SnapshotEntry& Entry = Snapshot.Entries.AddDefaulted_GetRef();
 			Entry.EntityId = Id;
@@ -125,7 +125,7 @@ bool FGSTN_SnapshotExtHistoryTest::RunTest(const FString& Parameters)
 
 	FGSTN_StepSnapshot Present;
 	Present.Frame = 14;
-	for (const int32 Id : { AttackerId, VictimId })
+	for (const int32 Id : { SnapExtAttackerId, SnapExtVictimId })
 	{
 		FGSTN_SnapshotEntry& Entry = Present.Entries.AddDefaulted_GetRef();
 		Entry.EntityId = Id;
@@ -134,10 +134,10 @@ bool FGSTN_SnapshotExtHistoryTest::RunTest(const FString& Parameters)
 		Entry.Extension.Set(GSTNFeatureIds::TestA, Pod);
 	}
 	FGSTN_StepSnapshot Overlay;
-	GSTNLagComp::BuildOverlay(Present, AttackerId, 12 * StepMs, *Subsystem, &NoPose, Overlay);
+	GSTNLagComp::BuildOverlay(Present, SnapExtAttackerId, 12 * StepMs, *Subsystem, &SnapExtNoPose, Overlay);
 
-	const FGSTN_SnapshotEntry* Victim = Overlay.Find(VictimId);
-	const FGSTN_SnapshotEntry* Attacker = Overlay.Find(AttackerId);
+	const FGSTN_SnapshotEntry* Victim = Overlay.Find(SnapExtVictimId);
+	const FGSTN_SnapshotEntry* Attacker = Overlay.Find(SnapExtAttackerId);
 	TestNotNull(TEXT("the overlay holds the victim"), Victim);
 	TestNotNull(TEXT("and the attacker"), Attacker);
 	if (!Victim || !Attacker)
@@ -149,7 +149,7 @@ bool FGSTN_SnapshotExtHistoryTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the one of the rewound frame, not the current one"), Rewound ? Rewound->Value : 0u, 12u);
 	const FTestExtensionPod* Own = Attacker->Extension.Get<FTestExtensionPod>(GSTNFeatureIds::TestA);
 	TestEqual(TEXT("the attacker itself is not rewound"), Own ? Own->Value : 0u, 14u);
-	TestEqual(TEXT("the shared snapshot is untouched"), Present.Find(VictimId)->Extension.Get<FTestExtensionPod>(GSTNFeatureIds::TestA)->Value, 14u);
+	TestEqual(TEXT("the shared snapshot is untouched"), Present.Find(SnapExtVictimId)->Extension.Get<FTestExtensionPod>(GSTNFeatureIds::TestA)->Value, 14u);
 	return true;
 }
 
