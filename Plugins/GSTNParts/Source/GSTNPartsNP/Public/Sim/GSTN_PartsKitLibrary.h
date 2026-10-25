@@ -6,6 +6,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GSTN_PartsKitLibrary.generated.h"
 
+class AActor;
 class UGSTN_PartSetDefinition;
 class UGSTN_PrimaryKitDefinition;
 
@@ -22,4 +23,15 @@ public:
 	/** Sets (adds or replaces) the part set of the kit's FGSTN_PartsKitExtension; a null Set removes the entry. False for a null kit */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Content")
 	static bool SetKitPartSet(UGSTN_PrimaryKitDefinition* Kit, UGSTN_PartSetDefinition* Set);
+
+	/**
+	 * Attaches a part set to an actor on this machine by hand, the way the attach component does from a kit (a harness or an editor tool that has no
+	 * kit to carry it). Call it on every world that has the pawn. A null set detaches. Returns whether a set is attached afterwards
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Debug")
+	static bool AttachPartSetToActor(AActor* Actor, UGSTN_PartSetDefinition* Set);
+
+	/** The parts state of the actor's combat sync state as text ("mask=0x0008 serial=1 dmg=[0,0,0,255,0,0]"), "none" without a fragment, "no combat" without a combat component */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Debug")
+	static FString GetPartsStateString(const AActor* Actor);
 };

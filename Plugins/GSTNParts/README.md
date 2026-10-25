@@ -20,7 +20,7 @@ regenerate by themselves.
 |---|---|---|
 | `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve, the part state and the deterministic part math, and the part resolve step of the hit pipeline. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
 | `GSTNPartsGAS` | exists (Runtime, Default) | The one-shot break effects (`FGSTN_PartBreakEffectApplier`: the Stats effect per part through `UGSTN_GE_PartStats`, the launch request in the shape of the M4 reaction move, the stagger floor), the part events (`FGSTN_PartEvents`, `FGSTN_PartEventPayload`, the dedupe key and window) and the tag projection helpers (`FGSTN_PartTagProjection`). Stock GAS: no Network Prediction, Mover or `GSTNCombatNP`. Covered by `GSTNParts.GAS.*`. |
-| `GSTNPartsNP` | exists (Runtime, Default), P6 only | `FGSTN_PartsFragment` (the sync fragment, fixed type id 16, 3 + N bytes, empty = 0 bytes), its registration. Tick extension, snapshot contributor and outcome applier arrive with P7. Needs the GAS-NPP fork. Covered by `GSTNParts.NP.*`. |
+| `GSTNPartsNP` | exists (Runtime, Default), P6 + P7 part 1 | `FGSTN_PartsFragment` (fixed type id 16 of `GSTNFeatureIds`, 3 + N bytes, empty = 0 bytes) and the simulation hooks the module registers at startup: `FGSTN_PartsSnapshotContributor` (the parts at the end of F-1 in the combat snapshot extension blob, hurtboxes of broken Disable parts Intangible), `FGSTN_PartsTickExtension` (priority 100: hit groups before candidates, tags and stats as a projection of the mask), `FGSTN_PartsOutcomeApplier` (the only writer of the fragment, monotonic mask, makes the `Combat.Event.Part.*` events), `FGSTN_PartsAttach` and `UGSTN_PartsAttachComponent` (the part set from the kit extension through the loadout-applied event, same path on host and client, set mismatch refused), `UGSTN_PartsKitLibrary` (editor and harness helpers). Needs the GAS-NPP fork and the D9 snapshot seam of GSTNCombatNP. Covered by `GSTNParts.NP.*`. |
 | `GSTNPartsPresentation` | not built (P10-P12) | Damage material, hidden bones, chunks and shatter. Loaded by a listen-server host, skipped on a dedicated server. |
 | `GSTNPartsEditor` | not built (P13) | Validators and report. |
 
@@ -142,7 +142,7 @@ values are read by the simulation, so every machine of a match must run the same
 A new part set, a new penetration table and new break-effect entries need no C++ and no build: author the assets. Tuning structs
 are `BlueprintType` with `EditAnywhere, BlueprintReadOnly` fields (checked by `GSTNParts.Core.Data.StructsAreBlueprintTypes`) and
 tag fields carry `Categories`. A new kind of break effect derives from `FGSTN_PartBreakEffect` in your own plugin. The
-Blueprintable extension classes (the pipeline step, outcome appliers) arrive with their checkpoints.
+Blueprintable extension classes (the pipeline step, outcome appliers) arrive with their checkpoints. The simulation hooks of `GSTNPartsNP` (snapshot contributor, tick extension, native outcome applier) are C++ only by design: they run for every entity on every simulated and re-simulated frame. To give a pawn parts: put `UGSTN_PartsAttachComponent` on it and add `FGSTN_PartsKitExtension` to its kit (the helper `UGSTN_PartsKitLibrary.SetKitPartSet` does the second from Python); to use them in a match: `UGSTN_PartsContentLibrary.ConvertRulesToParts` turns a rules asset into one with `PartResolve` in place of `HealthWeight` and `ApplyDamage`.
 
 The Stats break effect needs one Blueprint class: a child of `UGSTN_GE_PartStats` (infinite) whose modifiers on the combat
 attribute set read `Combat.SetByCaller.Stat.*` magnitudes, exactly like a weapon stats effect. One class serves every part of an
@@ -169,9 +169,11 @@ applied and removed per part, magnitudes by set-by-caller key, the launch reques
 (payload round trip, dedupe key and window, the hit envelope on every event, two entries of a drain in either order),
 `Projection.*` (Broken, the removed base tag, GrabLocked, AllBroken counting breakable parts only). The canary build
 (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the canary script does not exist.
+`GSTNParts.NP.*` (P7 part 1): `Snapshot.*` (end of F-1, bytes, lag history), `Applier.*` (writes at F+1, the real victim drain rebuilds between entries, rollback redelivery, event keys, monotonic mask), `TickExtension.*` (order, tags from the mask, hit groups, hidden hurtboxes), `Attach.*`, `Content.*`.
 
 ## Changelog
 
+- 0.1 (2026-10-25): `GSTNPartsNP`: snapshot contributor, tick extension, outcome applier, attach, content helpers (plan P7 part 1).
 - 0.1 (2026-10-25): `GSTNPartsNP`: `FGSTN_PartsFragment` and its registration (plan P6).
 
 - 0.1 (2026-10-25): `GSTNPartsGAS`: break-effect applier (Stats per part, launch request, stagger floor), part events with the hit
