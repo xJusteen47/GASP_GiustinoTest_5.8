@@ -107,7 +107,7 @@ public:
 
 	/** The most the host rewinds a victim for lag compensation; M8's snapshot ring size */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Network", meta = (ClampMin = "0", ForceUnits = "ms"))
-	int32 MaxRewindMs = 250;
+	int32 MaxRewindMs = 400;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
 	FGSTN_DIParams DI;

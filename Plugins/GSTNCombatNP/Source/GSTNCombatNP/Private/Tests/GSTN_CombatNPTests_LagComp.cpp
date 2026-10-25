@@ -144,7 +144,7 @@ bool FGSTN_LagCompHostNeverRewindsTest::RunTest(const FString& Parameters)
 {
 	UGSTN_CombatRules* Rules = NewObject<UGSTN_CombatRules>(GetTransientPackage());
 	Rules->bUseLagCompensation = true;
-	Rules->MaxRewindMs = 250;
+	Rules->MaxRewindMs = 400;
 
 	TestTrue(TEXT("a remote player's pawn on the authority rewinds"), GSTNLagComp::ShouldRewind(ROLE_Authority, ROLE_AutonomousProxy, Rules));
 	// The listen-server host's own pawn and an AI pawn are authority with a simulated remote role: they hit the present they show
@@ -165,10 +165,10 @@ bool FGSTN_LagCompHostNeverRewindsTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LagCompCapAtMaxRewindTest, "GSTNCombat.NP.Hits.LagComp.CapAtMaxRewind", GSTN_NP_TEST_FLAGS)
 bool FGSTN_LagCompCapAtMaxRewindTest::RunTest(const FString& Parameters)
 {
-	TestEqual(TEXT("inside the window the request stands"), GSTNLagComp::ClampRewindTime(1000.f, 900.f, 250), 900.f);
-	TestEqual(TEXT("at the edge of the window"), GSTNLagComp::ClampRewindTime(1000.f, 750.f, 250), 750.f);
-	TestEqual(TEXT("older than the window: the oldest the rules allow"), GSTNLagComp::ClampRewindTime(1000.f, 100.f, 250), 750.f);
-	TestEqual(TEXT("a request in the future is the present"), GSTNLagComp::ClampRewindTime(1000.f, 1200.f, 250), 1000.f);
+	TestEqual(TEXT("inside the window the request stands"), GSTNLagComp::ClampRewindTime(1000.f, 900.f, 400), 900.f);
+	TestEqual(TEXT("at the edge of the window"), GSTNLagComp::ClampRewindTime(1000.f, 600.f, 400), 600.f);
+	TestEqual(TEXT("older than the window: the oldest the rules allow"), GSTNLagComp::ClampRewindTime(1000.f, 100.f, 400), 600.f);
+	TestEqual(TEXT("a request in the future is the present"), GSTNLagComp::ClampRewindTime(1000.f, 1200.f, 400), 1000.f);
 	TestEqual(TEXT("a window of 0 is the present"), GSTNLagComp::ClampRewindTime(1000.f, 500.f, 0), 1000.f);
 
 	// The ring holds MaxRewindMs of frames (plus a margin), not more
@@ -179,9 +179,9 @@ bool FGSTN_LagCompCapAtMaxRewindTest::RunTest(const FString& Parameters)
 	PlayFrames(*Subsystem, Victim, 1, 5);
 	TestEqual(TEXT("nothing recorded before the request"), Subsystem->GetNumHistoryRecords(VictimId), 0);
 
-	Subsystem->RequestHistory(250);
+	Subsystem->RequestHistory(400);
 	PlayFrames(*Subsystem, Victim, 6, 200);
-	const int32 Expected = FMath::CeilToInt32(250.f / LagStepMs) + 8;
+	const int32 Expected = FMath::CeilToInt32(400.f / LagStepMs) + 8;
 	TestEqual(TEXT("the ring is bounded by the window"), Subsystem->GetNumHistoryRecords(VictimId), Expected);
 
 	// A re-simulated frame replaces what was written from it on
