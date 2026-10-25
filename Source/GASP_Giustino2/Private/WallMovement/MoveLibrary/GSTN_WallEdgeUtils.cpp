@@ -25,6 +25,8 @@ namespace GSTNWallEdge
 	constexpr float FarFaceOvershoot = 6.f;
 	/** Without a far face the distance to an ending wall is guessed as this fraction of the look distance */
 	constexpr float UnknownEdgeFraction = 0.5f;
+	/** A turn of more than this many times MaxSmoothAngle within one look is a corner, not a curve worth the extra traces (a chain of 15 degree steps that sharp is a rounded corner) */
+	constexpr float MaxChainAngleFactor = 3.f;
 	/** Samples along the look that tell a curve from a crease (the surface under the capsule, then this many steps up to the end) */
 	constexpr int32 ChainSamples = 5;
 	/** A capsule within this of its seat on the contact is taken as seated (cm) */
@@ -275,7 +277,7 @@ FGSTN_WallAheadResult UGSTN_WallEdgeUtils::ProbeAhead(const FMovingComponentSet&
 		Result.Kind = Ctx.IsValidWall(Face, GravityUp, Check)
 			? ClassifyAhead(Edges, Check.MaxConcaveAngle, true, Result.Offset, Result.Angle, false, Face.Distance)
 			: EGSTN_WallEdgeKind::Blocked;
-		if (Result.Kind == EGSTN_WallEdgeKind::Concave)
+		if (Result.Kind == EGSTN_WallEdgeKind::Concave && Result.Angle <= Edges.MaxSmoothAngle * GSTNWallEdge::MaxChainAngleFactor)
 		{
 			// Curved or creased? The surface under the capsule, and one nearer than the face found: a ray lifted half as high, from the capsule itself (not from its
 			// leading edge, which may be inside the rising surface already), meets the surface nearer, at a smaller angle if it is an arc, at the same one if it is a crease
@@ -309,8 +311,9 @@ FGSTN_WallAheadResult UGSTN_WallEdgeUtils::ProbeAhead(const FMovingComponentSet&
 
 			// Curved or creased? The surface under the capsule and at a few points from there to the end of the look: an arc turns a little between each, a crease
 			// all of it in one. Five steps, so that a wall made of facets sees at most one of its (small) creases in each
-			float Previous;
-			bool bChain = GSTNWallEdge::SampleAngleAt(Ctx, Check, Seat, WallNormal, GravityUp, Lift, TraceDepth, Previous);
+			float Previous = 0.f;
+			bool bChain = Result.Angle <= Edges.MaxSmoothAngle * GSTNWallEdge::MaxChainAngleFactor
+				&& GSTNWallEdge::SampleAngleAt(Ctx, Check, Seat, WallNormal, GravityUp, Lift, TraceDepth, Previous);
 			for (int32 Step = 1; Step < GSTNWallEdge::ChainSamples && bChain; ++Step)
 			{
 				float Angle;
