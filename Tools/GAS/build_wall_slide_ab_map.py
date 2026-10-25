@@ -5,8 +5,8 @@
 #   UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GAS/build_wall_slide_ab_map.py" -unattended -nullrhi -nosplash -nosound -NoP4
 # or from the editor Python console:  import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import build_wall_slide_ab_map as b; b.run()
 #
-# Layout. Every lane is a wall whose face is the plane x = 0 (facing -X, towards the character), 8 m tall, 10 m wide along +Y; lanes are
-# LANE_PITCH cm apart along Y, on one big floor (z = 0). The character starts at x = -START_GAP, z = START_HEIGHT (4 m), facing +X, and is
+# Layout. Every lane is a wall whose face is the plane x = 0 (facing -X, towards the character), 12 m tall, 10 m wide along +Y; lanes are
+# LANE_PITCH cm apart along Y, on one big floor (z = 0). The character starts at x = -START_GAP, z = START_HEIGHT (10 m), facing +X, and is
 # launched into the wall (+X) and along it (+Y) so it grabs the wall while falling; a stick "right" is +Y for a control yaw of 0.
 # The feature of the lane (corner, bump, recess...) sits FEATURE_DY cm after the start along Y.
 # Geometry is plain engine cubes (/Engine/BasicShapes/Cube) used as thin plates behind the face (a plate has only its front face
@@ -24,13 +24,24 @@ SPEC_VERSION = 1
 
 LANE_PITCH = 1200.0
 LANE_WIDTH = 1000.0
-WALL_HEIGHT = 800.0
-START_HEIGHT = 400.0
+WALL_HEIGHT = 1200.0
+# The slide falls at up to 600 cm/s and runs along the wall at 350-480: from 4 m the character reached the floor right at the feature (3 m along the
+# lane) and the "after" window (80-200 cm past it) was never seen. From 10 m the feature is crossed at about 1 s of fall and the window at 1.4 s, with
+# 4 s of wall left under the 3.5 s runs
+START_HEIGHT = 1000.0
 START_GAP = 50.0
+# The moving walls start further from the wall: the teleport and the launch of the harness are applied to the server's and to the client's copy of the pawn
+# at different frames (the client is ~25 frames ahead), which makes its own correction for the first ~0.6 s. A grab inside that window starts the ride from a
+# state the correction is rewriting (the base record is rolled back with it) and the lane would measure the harness; at 300 cm/s into the wall the grab comes
+# after ~1 s
+MOVING_START_GAP = 300.0
 START_DY = 100.0
 FEATURE_DY = 300.0
 PLATE_T = 20.0
-CURVE_PLATE_T = 10.0
+# Plates behind a face that curves toward the character must be as thick as a wall: behind a thin one the look-ahead's lifted point is in the air and
+# reads "the wall ends" (a concave corner as an outside edge)
+CURVE_PLATE_T = 150.0
+CONCAVE_PLATE_T = 150.0
 FLOOR_THICK = 100.0
 
 LAUNCH_INTO = 300.0   # cm/s into the wall
@@ -118,7 +129,7 @@ def build_plan():
         for ang in (30, 45, 60, 90, 120):
             y0 = next_lane()
             lane = f'{group}_{"convex" if sign > 0 else "concave"}{ang}'
-            chain(plan, lane, y0, [(0, ye), (sign * ang, 400.0)])
+            chain(plan, lane, y0, [(0, ye), (sign * ang, 400.0)], thickness=(CONCAVE_PLATE_T if sign < 0 else PLATE_T))
             marker(plan, lane, group, y0, stick=SIDE_STICK)
 
     # d: bumps 2/5/10/15/25 cm deep: a vertical rib at the feature position (sideways) and a 30 cm tall ledge lower down (from above)
@@ -167,7 +178,8 @@ def build_plan():
         lane = f'h_moving{speed}'
         plan.movers.append({'name': lane, 'center': [50.0, y0 + LANE_WIDTH / 2.0, WALL_HEIGHT / 2.0], 'size': [100.0, 800.0, WALL_HEIGHT],
                             'axis': [0.0, 1.0, 0.0], 'speed': float(speed), 'dist': 250.0, 'yaw_rate': 20.0, 'yaw_range': 30.0})
-        marker(plan, lane, 'h', y0, offset_y=LANE_WIDTH / 2.0, launch=(LAUNCH_INTO, 0.0, 0.0), stick=INTO_STICK)
+        marker(plan, lane, 'h', y0, offset_y=LANE_WIDTH / 2.0, launch=(LAUNCH_INTO, 0.0, 0.0), stick=INTO_STICK,
+               loc=(-MOVING_START_GAP, y0 + LANE_WIDTH / 2.0, START_HEIGHT))
 
     # i: a 60 deg slanted wall and 100 / 110 deg overhangs (angle from the ground on the character's side)
     for beta, name in ((60, 'slant60'), (100, 'overhang100'), (110, 'overhang110')):
@@ -176,7 +188,7 @@ def build_plan():
         b = math.radians(beta)
         u = (math.cos(b), 0.0, math.sin(b))
         n = (-math.sin(b), 0.0, math.cos(b))
-        length = 1000.0
+        length = (START_HEIGHT + 300.0) / math.sin(b)   # reaches past the start point along the plate
         center = (u[0] * length / 2.0 - n[0] * PLATE_T / 2.0, y0 + LANE_WIDTH / 2.0, u[2] * length / 2.0 - n[2] * PLATE_T / 2.0)
         plan.box(lane, center, (PLATE_T, LANE_WIDTH, length), (beta - 90.0, 0.0, 0.0))
         s = START_HEIGHT / math.sin(b)

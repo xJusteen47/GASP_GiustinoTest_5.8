@@ -80,6 +80,7 @@ def summarize(rows, marker_y=None, has_feature=False, instrumented=True):
     if not rows:
         return out
     out['grab'] = any('grab' in r['events'] for r in rows)
+    out['modes_seen'] = sorted(set(r['mode'] for r in rows))
     out['wall_lost'] = sum(1 for r in rows if 'wall-lost' in r['events'])
     out['exits'] = sum(1 for r in rows if 'exit' in r['events'])
     out['switches'] = sum(1 for r in rows if 'mode-switch' in r['events'])
@@ -94,7 +95,10 @@ def summarize(rows, marker_y=None, has_feature=False, instrumented=True):
         out['q_max'] = max(q)
     if has_feature and marker_y is not None:
         fy = marker_y + FEATURE_DY
-        win = lambda lo, hi: [r['speed'] for r in rows if lo <= r['y'] <= hi]
+        # The tick that leaves the wall (landing: the floor exit drops the vertical speed) is not the feature's doing; it was what the first run read as
+        # "350 cm/s at the feature" on every lane whose character reached the floor there
+        flying = [r for r in rows if 'exit' not in r['events']]
+        win = lambda lo, hi: [r['speed'] for r in flying if lo <= r['y'] <= hi]
         out['before'] = _mean(win(fy - 200, fy - 80))
         at = win(fy - 40, fy + 40)
         out['at'] = min(at) if at else None
@@ -115,6 +119,8 @@ def table(results):
              '|---|---|---|---|---|---|---|---|---|---|']
     for r in results:
         s, rec = r['summary'], r['recon']
+        seen = s.get('modes_seen')
+        mode_cell = r['mode'] if not seen or seen == [r['mode']] else f"{r['mode']} (ran {' + '.join(seen)})"
         if not s.get('grab'):
             edge = '-'
         elif 'before' in s:
@@ -122,7 +128,7 @@ def table(results):
         else:
             edge = f"{fmt(s['speed_first'])} first, {fmt(s['speed_min'])} min, {fmt(s['speed_last'])} last"
         q = f"{fmt(s.get('q_avg'), 2)} / {fmt(s.get('q_max'))}" if 'q_avg' in s else '-'
-        lines.append(f"| {r['lane']} | {r['mode']} | {'yes' if s.get('grab') else 'NO'} | {edge} | {fmt(s.get('cross'), 2)} | {q} | "
+        lines.append(f"| {r['lane']} | {mode_cell} | {'yes' if s.get('grab') else 'NO'} | {edge} | {fmt(s.get('cross'), 2)} | {q} | "
                      f"{s.get('wall_lost', '-')} | {s.get('exits', '-')} | {s.get('switches', '-')} | {rec.get('mismatches', '-')} / {rec.get('unexplained', '-')} / {rec.get('late', '-')} |")
     return '\n'.join(lines)
 
@@ -152,7 +158,8 @@ def write_summary(results, meta):
     head = [f"# Wall slide A/B summary ({meta.get('when', '')})", '',
             f"Net: {meta.get('net', '')}. Seconds per run: {meta.get('seconds', '')}. Subject: the client's pawn (prediction side); rows de-duplicated per tick.",
             'Speeds are the total speed along the lane run; "before" = 200..80 cm before the feature, "at" = minimum within 40 cm of it, "after" = 80..200 cm past it',
-            '(lanes with a feature only; otherwise first / minimum / last speed of the run). Legacy modes are not query-instrumented. Reconciles are the',
+            '(lanes with a feature only; the tick that leaves the wall is left out of the windows; otherwise first / minimum / last speed of the run). Legacy modes are not',
+            'query-instrumented. Reconciles are the',
             'Network Prediction "Sync/Aux mismatch" lines of the client during the run (unexplained = not on a time-offset resync; "after 0.6 s" leaves out the',
             'first 0.6 s, where the teleport and the launch, queued on both the host and the client copy, make their own correction).', '']
     with open(SUMMARY, 'w', encoding='utf-8') as f:
@@ -222,6 +229,8 @@ class Driver:
                     continue
                 for tr in falling.get_editor_property('transitions'):
                     if isinstance(tr, (unreal.GSTN_WallSurfaceModeTransition, unreal.GSTN_AbilityWallSurfaceModeTransition)):
+                        if self.opts.get('log'):
+                            _log(f'transition {tr.get_name()} of {a.get_name()}: surface_filter={tr.get_editor_property("surface_filter")} entries={[str(e.get_editor_property("mode_name")) for e in tr.get_editor_property("surface_modes").get_editor_property("entries")]}')
                         lst = tr.get_editor_property('surface_modes')
                         lst.set_editor_property('unknown_surface_mode_name', mode)
                         tr.set_editor_property('surface_modes', lst)
@@ -255,6 +264,14 @@ class Driver:
         import gasnpp_test as t
         t.net(o['lag'], o['var'], o['loss'])
         self.cmd('np.PrintReconciles 1')
+        if o.get('log'):
+            self.cmd(f'gstn.Wall.Log {o["log"]}')
+        if o.get('freeze_movers'):
+            # Diagnostic: the moving walls stand still (every PIE world), to tell what the base riding does from what the motion does
+            for w in self.worlds():
+                for a in unreal.GameplayStatics.get_all_actors_of_class(w, unreal.GSTN_WallTestMover):
+                    a.set_editor_property('translation_speed', 0.0)
+                    a.set_editor_property('yaw_rate', 0.0)
         markers = self.markers()
         lanes = [l for l in sorted(markers, key=lambda k: (markers[k]['loc'].y, k)) if re.search(o['lanes'], l)]
         _log(f'{len(markers)} markers, {len(lanes)} lanes selected, modes {o["modes"]}')
@@ -288,6 +305,10 @@ class Driver:
                 self.cmd(f'gstn.Wall.Teleport {m["loc"].x} {m["loc"].y} {m["loc"].z} {m["yaw"]} {pid}')
                 self.cmd(f'gstn.Wall.Launch {L[0]} {L[1]} {L[2]} 0 {pid}')
                 yield 0.6
+                if stick[0] > 0.3 and stick[1] > 0.3:
+                    # The grab needed intent into the wall; the run along it does not. With the diagonal stick still held, a wall that bends away turns "into the wall"
+                    # into "up" (camera-relative mapping, wall-slide-v2.md 6.7) and the vertical brake holds the character: the lanes after a corner measure the stick
+                    self.cmd('gstn.Wall.DebugInput "stick 1.0 0.0"')
                 late_mark = t.mark_log()
                 yield max(o['seconds'] - 0.6, 0.5)
                 _, cpawn = self.pawn_of(1)
@@ -364,10 +385,10 @@ class Driver:
 _driver = None
 
 
-def start(lanes='.', modes=MODES, seconds=3.5, lag=60, var=15, loss=0, start_pie=False, quit=False):
+def start(lanes='.', modes=MODES, seconds=3.5, lag=60, var=15, loss=0, start_pie=False, quit=False, log=0, freeze_movers=False):
     """Starts the run on the editor tick and returns at once; the table is written when it finishes (log line 'wall_ab done')."""
     global _driver
-    _driver = Driver({'lanes': lanes, 'modes': tuple(modes), 'seconds': seconds, 'lag': lag, 'var': var, 'loss': loss, 'start_pie': start_pie, 'quit': quit})
+    _driver = Driver({'lanes': lanes, 'modes': tuple(modes), 'seconds': seconds, 'lag': lag, 'var': var, 'loss': loss, 'start_pie': start_pie, 'quit': quit, 'log': log, 'freeze_movers': freeze_movers})
     _driver.run()
     return _driver
 
@@ -402,7 +423,7 @@ def launch(opts):
         driver_script = os.path.join(METRICS_DIR, '_wall_ab_run.py')
         with open(driver_script, 'w', encoding='utf-8') as f:
             f.write("import sys\nsys.path.insert(0, r'%s')\nimport wall_ab\nwall_ab.start(**%r)\n" % (HERE, dict(
-                lanes=opts['lanes'], modes=tuple(opts['modes']), seconds=opts['seconds'], lag=opts['lag'], var=opts['var'], loss=opts['loss'], start_pie=True, quit=True)))
+                lanes=opts['lanes'], modes=tuple(opts['modes']), seconds=opts['seconds'], lag=opts['lag'], var=opts['var'], loss=opts['loss'], start_pie=True, quit=True, log=opts.get('log', 0), freeze_movers=opts.get('freeze_movers', False))))
         # The project path has a space and UE's -ExecCmds parser stops at an inner quote: the script path travels in the environment
         env = dict(os.environ, WALL_AB_BOOT=driver_script.replace(os.sep, '/'))
         args = [ENGINE, UPROJECT, MAP, "-ExecCmds=py import os;exec(open(os.environ['WALL_AB_BOOT']).read())", '-unattended', '-nullrhi', '-nosplash', '-nosound', '-NoP4', f'-abslog={log}']
@@ -435,5 +456,7 @@ if __name__ == '__main__':
         p.add_argument('--lag', type=int, default=60)
         p.add_argument('--var', type=int, default=15)
         p.add_argument('--loss', type=int, default=0)
+        p.add_argument('--log', type=int, default=0, help='gstn.Wall.Log verbosity for the run (1-2: entry decisions and the tick of the modes go to the editor log)')
+        p.add_argument('--freeze-movers', action='store_true', help='diagnostic: the moving walls of lanes h stand still')
         p.add_argument('--timeout', type=int, default=3600, help='seconds before the editor is killed')
         launch(vars(p.parse_args()))
