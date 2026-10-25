@@ -720,4 +720,39 @@ bool FGSTN_PipelineHitGroupMaskTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PipelineBlueprintStepTest, "GSTNCombat.Core.Hits.Pipeline.BlueprintStepRoundTrip", GSTN_CORE_TEST_FLAGS)
+
+bool FGSTN_PipelineBlueprintStepTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPipelineTest;
+	// BP_Step_Example (test content, made by Tools/GAS/setup_gas_assets.py --h13-content) is a Blueprint class compiled in the project content whose parent
+	// is UGSTN_HitResolutionStep. It must load, pass the validator and run through the runner like a C++ step; the default of its Resolve event
+	// writes nothing and continues, so the standard knockback step after it still decides the hit. A project without the test content skips the test.
+	UClass* BlueprintStep = LoadClass<UGSTN_HitResolutionStep>(nullptr, TEXT("/Game/GASNPPTest/Combat/BP_Step_Example.BP_Step_Example_C"));
+	if (BlueprintStep == nullptr)
+	{
+		AddInfo(TEXT("BP_Step_Example is not in this project's content: the Blueprint step round trip is skipped"));
+		return true;
+	}
+	TestFalse(TEXT("a Blueprint class is not native"), BlueprintStep->HasAnyClassFlags(CLASS_Native));
+
+	const auto Rules = MakeStandard({ Step(BlueprintStep), Step(UGSTN_HitStep_ComputeKnockback::StaticClass()) });
+	TArray<FGSTN_ReactionMessage> Messages;
+	FGSTN_CombatRulesValidation::Validate(*Rules, Messages);
+	int32 Errors = 0;
+	for (const FGSTN_ReactionMessage& Message : Messages)
+	{
+		Errors += Message.bError ? 1 : 0;
+	}
+	TestEqual(TEXT("the validator accepts the Blueprint step"), Errors, 0);
+
+	FGSTN_HitResolutionContext Context = MakeContext();
+	const FGSTN_HitRunResult Result = FGSTN_HitPipelineRunner::Run(*Rules, Context);
+	TestEqual(TEXT("both steps ran"), Result.StepsRun, 2);
+	TestFalse(TEXT("nothing stopped it"), Result.bStopped);
+	TestTrue(TEXT("the hit lands"), Context.Outcome.bHit);
+	TestTrue(TEXT("the knockback step after the Blueprint step decided the hit"), Context.Outcome.bHasKnockback);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

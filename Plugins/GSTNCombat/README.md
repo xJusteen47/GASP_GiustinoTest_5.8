@@ -305,7 +305,7 @@ Tags (`Hits/GSTN_CombatHitTags.h`, namespace `GSTNCombatHitTags`): native `Comba
 | `UGSTN_HitStep_*` (`Hits/GSTN_HitSteps.h`) | `TeamFilter`, `HurtState`, `HurtboxReaction`, `HealthWeight`, `ComputeKnockback`, `ApplyDamage`, `Hitstop`, `MeterGain`. `Shield`, `Parry` and `PartResolve` are placeholders known to the validator by name, not classes. |
 | `FGSTN_HitPipelineRunner` (`Hits/GSTN_HitRunner.h`) | `Run(Rules, Context)`, `Merge`, `MakeView`, and `AdvanceVictim` (moves the victim's damage by an outcome, so the next entry of the same inbox drain sees the weight the first one left). |
 | `UGSTN_CombatRules` (`Rules/GSTN_CombatRules.h`) | Completed: `HitPipeline` (soft step classes, resolved by `ResolveHitPipeline`), `KnockbackModel`, `DamageMode` + `MaxHealth`, `bFriendlyFire`, `HittableRelationships` (empty = Enemy and Neutral), `RelationshipResolver`, lag compensation (`bUseLagCompensation`, `MaxRewindMs` 400), `DI`, `Sakurai`, `StaggerThreshold`, `AirborneJuggleScale`, `MinStaggerLockFrames`, `DefaultWeightCurve`, `SurfaceImpactTable`, the four effect classes, meter gain, `OutcomeAppliers`, `AttackerOutcomes`, `RulesExtensions`. Every default is the identity (empty pipeline, no model). `CreateStandard` builds the standard rules in code. |
-| `UGSTN_CombatSettings::DefaultRules` | Soft rules asset; empty means the built-in standard rules (`ResolveDefaultRules`). The `GSTN_CombatRules_Standard` asset is pending (it needs the editor). |
+| `UGSTN_CombatSettings::DefaultRules` | Soft rules asset, `/GSTNCombat/Rules/GSTN_CombatRules_Standard` in the plugin's `Config/DefaultGSTNCombat.ini`; empty means the built-in standard rules (`ResolveDefaultRules`). Both come from `UGSTN_CombatRules::FillStandard`; the asset adds the native damage effect `GSTN_GE_Damage`, the built-in copy names none (the Core cannot see the GAS layer). `bAutoAddRulesComponent` (default on) lets the GSTNCombatGAS rules provider put the rules component on the GameState. |
 | `UGSTN_RelationshipResolver` | Blueprintable; the default rule is Self, same team Ally, no team Neutral, else Enemy. |
 | `FGSTN_CombatRulesValidation` (`Rules/GSTN_CombatRulesValidation.h`) | Pipeline entries (unknown skipped and reported, placeholders warned), order (what feeds the model before `ComputeKnockback`), duplicates, both weights, tuning, `PrintReactionMatrix` (per victim weight, which hits stagger and which tier). Also run by the asset's `IsDataValid`. |
 | `IGSTN_OutcomeExtensionApplier` + `FGSTN_OutcomeApplierRegistry`, `UGSTN_OutcomeApplier` (`Hits/GSTN_HitExtensions.h`) | Appliers by extension struct type, run in the order of a hash of the struct path (plugin load order cannot change it); the Blueprint adapter is instanced in the rules asset and returns events and effects only (simulated state is a C++ applier's fragment). |
@@ -315,3 +315,30 @@ Tags (`Hits/GSTN_CombatHitTags.h`, namespace `GSTNCombatHitTags`): native `Comba
 **Standard rules.** WeightDriven, `HealthWeight` in the pipeline (weight 1.0 falling to 0.6 over `MaxHealth`), push back at 0.3 x tumble (540 cm/s) and launch at 0.6 x tumble (1080 cm/s), friendly fire off, Enemy and Neutral hittable. `HitstunFactor` stays 0.02 frames per cm/s: a push back at 540 stuns 10 frames, a launch at 1080 21, a tumble at 1800 36, against a floor of 6.
 
 Tests: `GSTNCombat.Core.Hits.Pipeline.{StepOrderFromAsset, UnknownStepSkippedReported, StopHalts, FakeStepWritesModifiers, HurtboxReactionResolution, HealthWeightUsesDamageBeforeHit, TwoEntriesSeeEachOther, RelationshipResolverDefault, StandardRulesBuiltIn, ValidatorRulesMatrixGolden, FakeApplierRecordsCalls, ExtensionDataUnknownTypeIgnored, AttackerOutcomeDefaultNormal, FakeAttackerOutcomeRicochet, HitGroupMaskDefaultEmpty}`. `BlueprintStepRoundTrip` waits for the Blueprint test content (H13).
+
+## Extending in Blueprint (M4 H13a)
+
+Every hook of the hit pipeline can be authored without C++. Make a Blueprint of the parent class, override the event, and pick the class where the rules ask for it:
+
+| Extension | Blueprint parent | Event to override | Where it goes | Example (test content) |
+|---|---|---|---|---|
+| Hit step | `GSTN_HitResolutionStep` | `Resolve(View, Out)` | `UGSTN_CombatRules::HitPipeline` | `BP_Step_Example` |
+| Knockback model | `GSTN_KnockbackModel` (or a native model, to change its tuning) | `Compute(Input)` | `UGSTN_CombatRules::KnockbackModel` | `BP_KnockbackModel_Example` |
+| Outcome applier | `GSTN_OutcomeApplier` | `Apply(View, Extension)`, plus `ExtensionStruct` | `UGSTN_CombatRules::OutcomeAppliers` | `BP_OutcomeApplier_Example` |
+| Attacker outcome | `GSTN_AttackerOutcome` | `Evaluate(View)` | `UGSTN_CombatRules::AttackerOutcomes` | `BP_AttackerOutcome_Example` |
+| Relationship resolver | `GSTN_RelationshipResolver` | `Resolve(Query)` | `UGSTN_CombatRules::RelationshipResolver` | `BP_RelationshipResolver_Example` |
+
+Every one of them runs inside the simulation and again on every re-simulation: a pure function of its view (no world, actor or component reads, no latent nodes, no state, seeded random only). The step class is the class default object, shared by every pawn. The examples under `Content/GASNPPTest/Combat/` are parent class only (their events are the defaults: pass-through), made by `Tools/GAS/setup_gas_assets.py --h13-content`; the `BlueprintStepRoundTrip` test loads `BP_Step_Example` and runs it through the pipeline. The graph itself is authored in the Blueprint editor (see "Deviations" in `docs/notes/m4-doc-deltas.md`, H13a).
+
+## Settings and fork requirements (M4 H13a)
+
+| Setting (`GSTN_CombatSettings`, `Config/DefaultGSTNCombat.ini`) | Default | Meaning |
+|---|---|---|
+| `DefaultRules` | `/GSTNCombat/Rules/GSTN_CombatRules_Standard` | Rules every machine resolves when the rules component names none. Empty = built-in standard rules. |
+| `bAutoAddRulesComponent` | true | The rules provider adds `UGSTN_CombatRulesComponent` to the GameState (Game Framework Component Manager). |
+
+Fork requirements: `GSTNCombat` (Core) needs no fork. The rules provider and component live in `GSTNCombatGAS` and need the ModularGameplay plugin besides GameplayAbilities (stock-compatible). The simulation (`GSTNCombatNP`) needs the GAS-NPP fork (`NetworkPrediction`, `AbilitySystemSimulation`, the fork's `NpGameplayAbility` and the lag compensation component). The standard rules asset is plugin content: `.gitignore` has an exception for `Plugins/GSTNCombat/Content/`.
+
+## Content validation and tools (M4 H13a)
+
+`IsDataValid` of the rules prints the standard reaction matrix, of a hurtbox set the findings (empty or duplicated names, flat shapes, untagged hurtboxes, bad curves) and its matrix (rows = hurtboxes at weight 100 x `WeightScale`, with their stagger threshold and cap), of a timeline asset the hit matrix of its hitboxes and the hitstop override check. `Tools/GAS/validate_combat_content.py` runs them all headless. Tools: `make_hurtbox_set.py` (Physics Asset to hurtbox set), `bake_sockets.py` (animation to `BakedSockets`), `build_test_combat_map.py` (the test map). The "hurtbox + part" rule waits for GSTNParts (not in this branch); the hook is `FGSTN_CombatRulesValidation::ValidateHurtboxSet`.
