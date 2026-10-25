@@ -11,7 +11,10 @@
 #include "Hurtbox/SGSTN_HurtboxList.h"
 #include "Misc/MessageDialog.h"
 #include "PhysicsEngine/PhysicsAsset.h"
+#include "Hurtbox/GSTN_HurtboxGizmoTarget.h"
+#include "Preview/GSTN_HitboxHitProxy.h"
 #include "Preview/GSTN_PreviewController.h"
+#include "SceneManagement.h"
 #include "Preview/GSTN_PreviewDrawing.h"
 #include "Preview/SGSTN_TimelineViewport.h"
 #include "PropertyCustomizationHelpers.h"
@@ -351,7 +354,17 @@ void FGSTN_HurtboxSetEditorToolkit::DrawHurtboxes(FPrimitiveDrawInterface* PDI)
 	{
 		const bool bSelected = Selection.Contains(Index);
 		const FLinearColor Color = bSelected ? FLinearColor(1.f, 0.85f, 0.1f) : FLinearColor(0.15f, 0.8f, 0.75f);
+		// A click on the lines selects the hurtbox (HGSTN_HitboxProxy with Track 0 and Lane the position in the set, the hurtbox gizmo target's convention)
+		const bool bHitTesting = PDI->IsHitTesting();
+		if (bHitTesting)
+		{
+			PDI->SetHitProxy(new HGSTN_HitboxProxy(0, Index));
+		}
 		GSTNPreviewDrawing::DrawHitShape(PDI, (*Hurtboxes)[Index].Shape, FTransform::Identity, Color, bSelected ? 2.f : 0.f);
+		if (bHitTesting)
+		{
+			PDI->SetHitProxy(nullptr);
+		}
 	}
 }
 
@@ -434,6 +447,7 @@ TSharedRef<SDockTab> FGSTN_HurtboxSetEditorToolkit::SpawnViewportTab(const FSpaw
 			SNew(SGSTN_TimelineViewport)
 			.Controller(Preview)
 			.OnDrawExtra(FGSTN_ViewportDrawExtra::CreateSP(this, &FGSTN_HurtboxSetEditorToolkit::DrawHurtboxes))
+			.GizmoTarget(MakeShared<FGSTN_HurtboxGizmoTarget>(Model.ToSharedRef()))
 		];
 }
 

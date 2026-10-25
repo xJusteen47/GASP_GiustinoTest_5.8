@@ -6,8 +6,8 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.13)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
-model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E8 (socket baking), E9 (hurtbox set editor), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
+Status: **experimental (0.14)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E7 (gizmos and picking), E8 (socket baking), E9 (hurtbox set editor), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
 (E3, `FGSTN_TimelinePhases`, is in `GSTNCombatCore`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
@@ -128,9 +128,9 @@ component's preview instance (paused, no blend-in or blend-out) and evaluates on
 montage: the reference pose. Spike S1 (docs/notes/m5-spike-report.md) measured it: bit-identical across runs and backwards, the root bone's track (root
 motion) is not in the pose, the post process graph changed nothing it sampled.
 
-Overlays that need M4 (the hit and hurt shapes) register in `FGSTN_PreviewOverlayRegistry` (`IGSTN_PreviewOverlay`): the viewport calls every registered
-one at the playhead frame, none is built yet. Not in this checkpoint: the movement-path polyline and the motion trail (both toggles of the spec), the
-skin combo listing only the kit's compatible skins (the subject lists any skin and says in words when it does not match the kit's query), and gizmos (E7).
+Overlays register in `FGSTN_PreviewOverlayRegistry` (`IGSTN_PreviewOverlay`): the viewport calls every registered one at the playhead frame. The module registers
+the hitbox overlay (E7, below); the hurtbox overlay of a kit is not built. Not in this checkpoint: the movement-path polyline and the motion trail (both toggles of the spec), the
+skin combo listing only the kit's compatible skins (the subject lists any skin and says in words when it does not match the kit's query). The gizmos came with E7 (below).
 Camera: a plain camera, not the engine's orbit camera, whose stored rotation is read through its own orbit convention; Alt+drag orbits.
 
 ## Inline mode: the timeline of an ability Blueprint (E13)
@@ -256,11 +256,36 @@ void FMyEditorModule::ShutdownModule() { FGSTN_TrackEditorRegistry::Get().Unregi
 
 Only `GetTrackStruct` and `GetDisplayName` are required. The colour defaults to the one the settings list for the struct
 (`TrackColors`), so a designer re-colours it without code; override `GetColor` to fix one. `HasKeys` follows the keyed track access
-registry. `Validate(Track, Data, Report)` adds the findings that are about your track kind (see Validation); the default adds none. `DrawPreview` (E6) and `AsGizmoProvider` (E7) are declared and not called yet. A struct derived from a registered track keeps
+registry. `Validate(Track, Data, Report)` adds the findings that are about your track kind (see Validation); the default adds none. `DrawPreview` (E6) and `AsGizmoProvider` are declared and not called: the gizmos of E7 go through `IGSTN_GizmoTarget` (below), which is private to the module, and `AsGizmoProvider` is left for a plugin that adds a keyed track and needs the model's mutation surface published. A struct derived from a registered track keeps
 its base's editor until it registers its own. Add a test: a registry case (listed, defaults applied by `AddTrack`) as in
 `GSTN_EditorTests_Registry.cpp`.
 
-Planned in this module, by checkpoint: gizmos on hitbox keys and hurtbox shapes (E7).
+Gizmos on hitbox keys and hurtbox shapes: see Gizmos and viewport picking (E7), below.
+
+### Gizmos and viewport picking (E7)
+
+The viewport of the timeline editor and of the hurtbox set editor moves shapes with the engine's own transform widget. The code is split so that everything that can be
+wrong with the numbers is tested without a window:
+
+| Type | File (under `Private/Preview/`) | Role |
+|---|---|---|
+| `GSTNGizmo::*` | `GSTN_GizmoMath.h` | Pure maths, no widget or viewport: the space of a hitbox (`SpaceTransform`: Root, baked-else-live socket, WorldAtMoveStart, Projectile), the drag as one accumulated `FDragDelta`, world delta to key space (`WorldTranslationToKey`, `WorldRotationToKey`, `ApplyDragToKey`), scale to extent (`ScaleExtent`), `MirrorKeyAcrossRootYZ`, which key a drag edits (`ResolveDragKey`), ray against sphere, capsule and box (`RayVsShape`, `PickNearest`) and the hitboxes active at a frame (`CollectActiveHitboxes`, the same list the overlay draws and the click picks from). |
+| `IGSTN_GizmoTarget` | `GSTN_GizmoTarget.h` | What the gizmo moves: where the widget sits, the pickable shapes, Begin/Apply/End/Cancel of a drag, Add key, Mirror, a status line. Two implementations: |
+| `FGSTN_HitboxGizmoTarget` | `GSTN_HitboxGizmoTarget.*` | The hitbox key of the timeline editor's selection, written only through `FGSTN_TimelineEditorModel` (`SetKeyTransform`, `AddKey`, `ApplyTrackEdit` inside the model's drag). |
+| `FGSTN_HurtboxGizmoTarget` | `Hurtbox/GSTN_HurtboxGizmoTarget.*` | The single selected hurtbox, through an edit session of `FGSTN_HurtboxEditModel` (`SetShape`; Escape is `CancelEdit`). |
+| `FGSTN_TimelineViewportClient` | `GSTN_TimelineViewportClient.*` | All the wiring: widget, keys, mouse, Escape, click. |
+| `FGSTN_GizmoEdMode` | `GSTN_GizmoEdMode.*` | A do-nothing legacy `FEdMode`, registered by the module and activated on the client's mode tools: `FWidget` draws nothing unless an active mode says it uses the transform widget (spike S4). |
+| `HGSTN_HitboxProxy` | `GSTN_HitboxHitProxy.h` | Hit proxy (`Track`, `Lane`) set around each drawn hitbox or hurtbox. |
+| `GSTNHitboxOverlay` | `GSTN_HitboxOverlay.*` | The hitboxes active at the playhead frame, coloured by `HitGroup` (the selected one thicker), at the place the hit code puts them. The viewport's **Hitboxes** toggle. |
+
+**Using it.** Click a hitbox (its lines, or anywhere inside it) or a key in the timeline: the gizmo appears on the *path* of that hitbox at the playhead frame, in its space, and
+follows the shape when you scrub. `W` / `E` / `R` or the buttons: move, rotate, scale (`Ctrl+Tilde` or the Local button: gizmo axes in the key's space or the world; the scale handle is always
+local). A drag edits the key on the playhead frame. With **Auto-key** on (the default, `Shift+K`) a frame with no key gets one first, with the values the path has there (the function the runtime
+uses), in the same undo step as the drag; with it off the drag edits the nearest key (the status line names it). `K` or **Add key** adds a key at the playhead; **Mirror** mirrors the selected key
+across the root's YZ plane. `Shift` held when the drag starts moves **every** key of the hitbox by the same offset (the whole path). Scale changes the `Extent` of the hitbox's shape (a sphere
+scales uniformly, a capsule keeps radius and half height apart), never a transform scale. One drag is one undo step; `Escape` puts everything back, history included.
+The viewport's bottom-left line says what the gizmo is on and what a drag will do. The click also fires `OnKeySelected` of the model (the hook for the parts editor).
+Not built: moving keys across frames in the viewport (use the timeline), and the Mirror / Offset commands in the key context menu of the timeline (they are buttons and Shift in the viewport).
 
 ### Socket baking and staleness (E8)
 
@@ -303,7 +328,7 @@ skeleton works, a person or a turret: no bone name is assumed.
   forward axis (`MirrorForwardAxis`) and up, as a mirror (`M T M`, not a negative scale). The counterpart is created, or overwritten after a confirmation that names the hurtboxes. A name or bone with a side marker but no counterpart is reported in the
   Message Log, never guessed; a name with no marker is the middle and is skipped. With no mesh shown, the hurtbox names alone decide.
 - **Findings**: duplicate names, empty extents, tag outside `Combat.Hurtbox`, bone absent from the preview mesh, shape outside the sane radius; a double click on one selects its hurtbox.
-- Not in this checkpoint: gizmos on the selected shape (they belong to the viewport work of E7; until then a shape is edited in the details), a Physics Asset picker (the mesh's own Physics Asset is used), attachments in the set editor's own toolbar (the subject picker is the timeline editor's).
+- Gizmos on the selected shape came with E7 (below; the details panel still edits the same numbers). Not in this checkpoint: a Physics Asset picker (the mesh's own Physics Asset is used), attachments in the set editor's own toolbar (the subject picker is the timeline editor's).
 - Tests: `GSTNCombat.Editor.Hurtbox.*` (18) and the snapshot `GSTN.Visual.Hurtbox.Panel`.
 
 ## Validation (E10)
@@ -463,7 +488,7 @@ The plugin ships no content and references none by path. The preview kit, skin a
 
 ## Tests
 
-`Automation RunTests GSTNCombat.Editor`: `Preview.*` (E6, on the engine's own `SkeletalCube` and `BasicShapes` and a montage built in memory, so no project content): `PoseAtFrameMatchesSectionTime`, `EvaluateIsRepeatable`, `FollowRootFramesMesh`, `NonHumanoidSubjectHasNoBoneAssumptions` (placement and capsule for odd shapes, every bone reachable by its own name, no bone name in a literal of the preview sources), `AttachmentsHangFromSocketsWithFullTransform`, `KitSkinSubjectResolvesReadOnly`, `SubjectPersistsPerAsset` (a restart is `ReloadFromDisk`), `ControllerFollowsPlayheadAndMontage`, `OverlayRegistryDrawsRegistered`, and `Preview.Spike.MontageSampling` (S1, needs any project montage with a preview mesh, skips without). The snapshots `GSTN.Visual.Timeline.Preview` (viewport with a real montage and a sword, and the reference pose seen from the side) and `PreviewToolbar` need a renderer (`-RenderOffscreen`). `UiFixes.*` (UI test fixes: `PlayheadWorksWithoutLength`, `TotalFramesAndFafAreUndoable`, `EmptySpaceClickClearsSelection`, `TextIsReadableOnEveryBar`, `FindingsStoreAndList`, `GoToFindingSelectsAndMoves`, `LengthFieldsConstruct`), `Module.LoadsAndRegisters`, `Debug.NoDependencyOnDebugModule` (E14: no debug module, plugin or include in this plugin), `Settings.DefaultsFromPluginIni`,
+`Automation RunTests GSTNCombat.Editor`: `Gizmo.*` (E7, 7 tests, in `GSTN_EditorTests_Gizmo.cpp`: `DeltaToKeySpaceRoundTrip`, `ScaleMapsToExtentNotActorScale`, `AutoKeyOneTransaction`, `AutoKeyOffEditsNearestKey`, `PickingRayHitsNearestShape`, `MirrorAcrossRootYZ`, `HurtboxShapeDragIsOneStep`; no renderer needed), `Preview.*` (E6, on the engine's own `SkeletalCube` and `BasicShapes` and a montage built in memory, so no project content): `PoseAtFrameMatchesSectionTime`, `EvaluateIsRepeatable`, `FollowRootFramesMesh`, `NonHumanoidSubjectHasNoBoneAssumptions` (placement and capsule for odd shapes, every bone reachable by its own name, no bone name in a literal of the preview sources), `AttachmentsHangFromSocketsWithFullTransform`, `KitSkinSubjectResolvesReadOnly`, `SubjectPersistsPerAsset` (a restart is `ReloadFromDisk`), `ControllerFollowsPlayheadAndMontage`, `OverlayRegistryDrawsRegistered`, and `Preview.Spike.MontageSampling` (S1, needs any project montage with a preview mesh, skips without). The snapshots `GSTN.Visual.Timeline.Preview` (viewport with a real montage and a sword, and the reference pose seen from the side) and `PreviewToolbar` need a renderer (`-RenderOffscreen`). `UiFixes.*` (UI test fixes: `PlayheadWorksWithoutLength`, `TotalFramesAndFafAreUndoable`, `EmptySpaceClickClearsSelection`, `TextIsReadableOnEveryBar`, `FindingsStoreAndList`, `GoToFindingSelectsAndMoves`, `LengthFieldsConstruct`), `Module.LoadsAndRegisters`, `Debug.NoDependencyOnDebugModule` (E14: no debug module, plugin or include in this plugin), `Settings.DefaultsFromPluginIni`,
 `Settings.TickRateFromNetworkPrediction`, and `Model.*`: `EachMutationOnlyChangesWhatItSays`, `ClampsToTotalFrames`,
 `UndoRedoRestoresExactData`, `DragIsOneUndoStep`, `CancelledDragLeavesNoStep`, `SelectionRevalidatedAfterUndo`,
 `ClipboardRoundTrip`, `FitTotalFramesDoesNotRunSilently`, `TwoToolkitsOneTargetRefused`, `ViewTransformRoundTrip`. The model tests
@@ -496,6 +521,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.14.0 (2026-10-25, E7): gizmos and viewport picking: translate/rotate/scale on the hitbox key of the selection (auto-key, offset-all, mirror, Add key) and on the hurtbox shape in the hurtbox set editor, click or ray picking of shapes, the hitbox overlay with the Hitboxes toggle, `FGSTN_GizmoEdMode` (spike S4), `GSTNGizmo` maths and `GSTNCombat.Editor.Gizmo.*` (7 tests); `FGSTN_HurtboxEditModel::CancelEdit`.
 - 0.13.0 (2026-10-25, E9): the hurtbox set editor (viewport, list, details, findings), the Physics Asset generator with regeneration modes, the mirror with per-skeleton rules, `Hurtbox.BoneMissing` and `Hurtbox.Outside`, `PreviewMesh` on the hurtbox set (editor-only, `GSTNCombatCore`); the preview controller can run without a timeline; tests `Hurtbox.*`.
 - 0.12.0 (2026-10-25, E8): the socket baker, the staleness record and check, the Bake sockets button with its dot, Bake on save, `gstn.Combat.BakeAll`, `UGSTN_CombatEditorUtils`, the `BakedStale` hash rule; `FGSTN_BakeInfo` in `GSTNCombatCore`; tests `Bake.*`.
 - 0.11.0 (2026-10-25, E12): the hit data row (groups, angle dial, tag combo, extension data, knockback preview); tests `HitData.*` and snapshot `GSTN.Visual.HitData.Row`; the plugin now depends on the engine plugin `GameplayTagsEditor`.

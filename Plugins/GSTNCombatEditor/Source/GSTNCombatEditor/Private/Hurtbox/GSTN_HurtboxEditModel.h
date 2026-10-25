@@ -82,6 +82,14 @@ public:
 	/** The next mutations until EndEdit are one undo step. False if a session is already open */
 	bool BeginEdit(const FText& Description);
 	void EndEdit();
+
+	/**
+	 * Escape during a session (a gizmo drag): drops the session's undo record and puts the hurtboxes back as they were at BeginEdit, so the history is exactly
+	 * as before. The editor's CancelTransaction alone only drops the record and leaves the edited data. Restores the hurtbox array only, which is all
+	 * a shape edit touches. Does nothing when no session is open
+	 */
+	void CancelEdit();
+
 	bool IsEditing() const { return bSession; }
 
 	/** After an undo or redo that touched the set: drops the selection that no longer exists and tells the listeners */
@@ -103,6 +111,9 @@ private:
 	bool bSession = false;
 	FText SessionDescription;
 	TUniquePtr<FScopedTransaction> SessionTransaction;
+
+	/** The hurtboxes at BeginEdit, for CancelEdit */
+	TArray<FGSTN_Hurtbox> SessionSnapshot;
 };
 
 /** Connects a hurtbox set editor to the editor's undo: after an undo or redo that touched the set the model revalidates and tells its listeners */

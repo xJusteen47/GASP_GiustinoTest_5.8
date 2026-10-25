@@ -15,6 +15,9 @@ struct FGSTN_PreviewDrawContext
 	const FGSTN_TimelineEditorModel* Model = nullptr;
 	const FGSTN_TimelinePreviewScene* Scene = nullptr;
 	int32 Frame = 0;
+
+	/** The viewport's Hitboxes toggle: the hitbox overlay draws nothing when it is off */
+	bool bShowHitboxes = true;
 };
 
 /**

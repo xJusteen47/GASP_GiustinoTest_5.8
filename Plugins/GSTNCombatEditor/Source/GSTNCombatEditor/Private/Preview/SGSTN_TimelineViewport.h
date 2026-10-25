@@ -6,6 +6,7 @@
 #include "SEditorViewport.h"
 
 class FGSTN_PreviewController;
+class IGSTN_GizmoTarget;
 class FGSTN_TimelineViewportClient;
 class FPrimitiveDrawInterface;
 
@@ -25,6 +26,9 @@ public:
 
 		/** Called from the viewport's Draw, after the fixed drawing. Unbound: nothing extra */
 		SLATE_EVENT(FGSTN_ViewportDrawExtra, OnDrawExtra)
+
+		/** What the gizmos move. Unset: the hitbox keys of the controller's timeline model, or no gizmo for a controller that has none */
+		SLATE_ARGUMENT(TSharedPtr<IGSTN_GizmoTarget>, GizmoTarget)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -43,8 +47,10 @@ private:
 
 	TSharedPtr<FGSTN_PreviewController> Controller;
 	TSharedPtr<FGSTN_TimelineViewportClient> TimelineClient;
+	TSharedPtr<IGSTN_GizmoTarget> GizmoTarget;
 	FGSTN_ViewportDrawExtra DrawExtra;
 	FDelegateHandle PreviewChangedHandle;
+	FDelegateHandle SelectionChangedHandle;
 
 	/** The scene had a mesh the last time the camera framed it; a subject that just got a mesh frames again */
 	bool bFramedSubject = false;

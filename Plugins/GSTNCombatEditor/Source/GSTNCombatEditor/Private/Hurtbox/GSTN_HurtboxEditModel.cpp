@@ -97,6 +97,8 @@ bool FGSTN_HurtboxEditModel::BeginEdit(const FText& Description)
 	}
 	bSession = true;
 	SessionDescription = Description;
+	const TArray<FGSTN_Hurtbox>* Hurtboxes = GetHurtboxes();
+	SessionSnapshot = Hurtboxes != nullptr ? *Hurtboxes : TArray<FGSTN_Hurtbox>();
 	return true;
 }
 
@@ -104,6 +106,32 @@ void FGSTN_HurtboxEditModel::EndEdit()
 {
 	bSession = false;
 	SessionTransaction.Reset();
+	SessionSnapshot.Reset();
+}
+
+void FGSTN_HurtboxEditModel::CancelEdit()
+{
+	if (!bSession)
+	{
+		return;
+	}
+	const bool bOpen = SessionTransaction.IsValid();
+	if (bOpen)
+	{
+		SessionTransaction->Cancel();
+	}
+	bSession = false;
+	SessionTransaction.Reset();
+
+	// The record is gone and the data is not: put the copy back, outside any transaction, so nothing new reaches the history
+	if (UGSTN_HurtboxSetDefinition* Resolved = Set.Get(); Resolved != nullptr && bOpen)
+	{
+		Resolved->Hurtboxes = SessionSnapshot;
+		Resolved->PostEditChange();
+		Revalidate();
+		OnChanged.Broadcast();
+	}
+	SessionSnapshot.Reset();
 }
 
 bool FGSTN_HurtboxEditModel::Mutate(const FText& Description, TFunctionRef<bool(UGSTN_HurtboxSetDefinition&)> Edit)

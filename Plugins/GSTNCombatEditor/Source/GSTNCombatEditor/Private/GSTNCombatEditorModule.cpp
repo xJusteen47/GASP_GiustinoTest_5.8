@@ -4,6 +4,8 @@
 
 #include "Bake/GSTN_BakeAll.h"
 #include "Modules/ModuleManager.h"
+#include "Preview/GSTN_GizmoEdMode.h"
+#include "Preview/GSTN_HitboxOverlay.h"
 #include "PropertyEditorModule.h"
 #include "Timeline/Details/GSTN_HitDataCustomization.h"
 #include "Timeline/Details/GSTN_TimelineDataCustomization.h"
@@ -33,6 +35,10 @@ void FGSTN_CombatEditorModule::StartupModule()
 	// gstn.Combat.BakeAll (E8)
 	GSTNBakeAll::RegisterConsoleCommand();
 
+	// The edit mode that lets the preview viewports show the transform widget, and the hitbox drawing they pick from (E7)
+	FGSTN_GizmoEdMode::Register();
+	GSTNHitboxOverlay::Register();
+
 	// The Open Timeline Editor row of an FGSTN_CombatTimelineData, in the Class Defaults of an ability Blueprint and on a timeline asset (inline mode, E13)
 	FPropertyEditorModule& PropertyEditor = FModuleManager::LoadModuleChecked<FPropertyEditorModule>(TEXT("PropertyEditor"));
 	PropertyEditor.RegisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FGSTN_TimelineDataCustomization::MakeInstance));
@@ -49,6 +55,8 @@ void FGSTN_CombatEditorModule::ShutdownModule()
 		PropertyEditor->UnregisterCustomPropertyTypeLayout(FGSTN_HitDataCustomization::GetStructName());
 		PropertyEditor->UnregisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName());
 	}
+	GSTNHitboxOverlay::Unregister();
+	FGSTN_GizmoEdMode::Unregister();
 	GSTNBakeAll::UnregisterConsoleCommand();
 	GSTNValidationTab::Unregister();
 	GSTNValidationLog::UnregisterListing();

@@ -9,7 +9,7 @@ Scratch notes of the M5 editor work, not design docs. Paths are relative to the 
 | S1 | Montage sampling | PASS (test `GSTNCombat.Editor.Preview.Spike.MontageSampling`, real RHI): the pose can be set per frame; repeatable and backward-equal to 0 cm; root motion absent from the pose; about 1 to 8 ms per 60 frames x 3 sockets |
 | S2 | Tick rate source | PASS by source read, confirmed by an editor test: readable from the settings CDO with no world, 62.5 Hz |
 | S3 | Insights / Rewind Debugger | not done (needs PIE with the sim running) |
-| S4 | Gizmo in a custom viewport | not done (needs an editor session) |
+| S4 | Gizmo in a custom viewport | PASS by source read and build (E7, 2026-10-25); the on-screen behaviour is the manual checklist of E7, not run in a rendering editor |
 
 ## S2 Tick rate source (source read, then confirmed by `GSTNCombat.Editor.Settings.TickRateFromNetworkPrediction`)
 
@@ -104,3 +104,18 @@ Things E8 must know:
 2. Whether the runtime's `PlaySyncedMontage` (M3-C10) puts the montage at the same position at frame 0 (blend-in, section start, play rate): the preview assumes position = section start at frame 0,
    weight 1. To confirm at E8 as planned.
 3. The post process graph question above, if a hitbox ever depends on a bone the graph moves (foot IK). Not an issue for hand and weapon sockets.
+
+## S4 Gizmo in a custom viewport (source read of UE 5.8, used by E7)
+
+- `FEditorViewportClient::Draw` renders `Widget` when `bShowWidget`, and `FWidget::Render` (`UnrealWidgetRender.cpp`) returns early, drawing nothing and giving the handles no hit proxies, unless
+  `EditorModeTools->UsesTransformWidget()` is true. That function asks the **active edit modes** (`FEditorModeTools::UsesTransformWidget`, `EditorModeManager.cpp`) and is false with none. So a client
+  that only overrides `GetWidgetLocation` shows no gizmo. The Physics Asset editor and Paper2D both solve it with an edit mode (`FPhysicsAssetEditorEditMode`, `FSpriteGeometryEditMode`): E7 does the same
+  with the smallest one possible, `FGSTN_GizmoEdMode : FEdMode` (default `FEdMode::UsesTransformWidget` is true), registered with `FEditorModeRegistry::RegisterMode<>` and activated in the client with
+  `ModeTools->SetDefaultMode / ActivateDefaultMode`. The fallback of the plan (a dummy component) was not needed.
+- The new ITF gizmos are not used: `FWidget::Render` draws the legacy widget when `UEditorInteractiveGizmoManager::AreEditorGizmosAllowed(ModeTools)` is false, and it is for a mode tools object that does not
+  support the viewport ITF, which is the case of a client that makes its own `FEditorModeTools` (the default of `FEditorViewportClient(nullptr, ...)`).
+- What the client overrides: `GetWidgetLocation`, `GetWidgetCoordSystem` (a rotation matrix for local, identity for world), `GetWidgetCoordSystemSpace` (scale is forced local), `InputWidgetDelta`,
+  `TrackingStopped`, `AbortTracking` (Escape while tracking calls it; `StopTracking` ends the drag with no other hook), `ProcessClick`, `InputKey`. `ShowWidget(false)` hides the widget when nothing is selected.
+- The units of `InputWidgetDelta` (`UnrealWidget.cpp`): `Drag` is in world space (`CustomCoordSystem.TransformPosition(OutDrag)`), `Rot` is the rotation expressed as a world rotation
+  (`CustomCoordSystem.Inverse() * Rotation * CustomCoordSystem`), `Scale` is the dragged pixels along each axis of the widget's own (local) axes. E7 turns scale into `1 + units * 0.01` per axis; that factor is a
+  guess at what feels right, to be checked by hand (`GSTNGizmo::ScalePerWidgetUnit`).
