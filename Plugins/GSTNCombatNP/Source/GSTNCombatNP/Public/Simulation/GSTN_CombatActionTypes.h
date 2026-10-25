@@ -5,11 +5,19 @@
 #include "CoreMinimal.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 
-/** What the combatant is doing, as far as the combat model is concerned. Hitstun and the rest come with the hit milestone (M4) */
+/**
+ * What the combatant is doing, as far as the combat model is concerned. The hit states are written by the victim side of M4 (H9):
+ * Hitstun is the locked part of a stagger, Tumble a launch that cannot act until it lands, Splat the reaction to a wall impact.
+ * KO is terminal: the combatant was knocked out (the health cap or a KO zone) and nothing leaves the state but a respawn
+ */
 enum class EGSTN_ActionState : uint8
 {
 	Actionable = 0,
 	InTimeline = 1,
+	Hitstun = 2,
+	Tumble = 3,
+	Splat = 4,
+	KO = 5,
 
 	Count UMETA(Hidden)
 };
@@ -43,6 +51,25 @@ enum class EGSTN_RequestType : uint8
 	SetFacing = 6,
 	Cue = 7,
 
+	// ---- The hit milestone (M4): what the victim side asks of the ability system when a hit resolves. Arg is an index the
+	// executor resolves (an outcome slot, a table row), never a pointer or a tag
+	ApplyDamage = 8,
+	ApplyEffect = 9,
+	Freeze = 10,
+	Knockback = 11,
+	PushBack = 12,
+	MeterGain = 13,
+	ImpactSurface = 14,
+
+	/** The victim's own hitstop freeze (Arg = frames), separate from the attacker's Freeze so a trade frame holds both */
+	VictimFreeze = 15,
+
+	/** Damage of a surface impact (Arg = the whole points): the executor applies the rules' damage effect to the victim itself */
+	ImpactDamage = 16,
+
+	/** A burst ended the combatant's hit reaction in this frame (state already rewritten): the executor removes the freezes of the window */
+	EndReaction = 17,
+
 	Count UMETA(Hidden)
 };
 
@@ -64,11 +91,12 @@ struct FGSTN_CombatRequest
  * (the ability system executes it in that frame's pre-tick): the combat tick calls PruneBefore at the top of every frame, so a
  * state at the end of a frame holds that frame's requests and nothing older, and the wire never carries a dead one.
  *
- * Wire format: 3 bits count (0 to Capacity), then per request 3 bits type, the frame as a packed integer, 16 bits argument.
+ * Wire format: 4 bits count (0 to Capacity), then per request 5 bits type, the frame as a packed integer, 16 bits argument.
  */
 struct FGSTN_CombatRequests
 {
-	static constexpr int32 Capacity = 4;
+	/** A hit frame of a victim that also attacked holds: damage, effects, cue, victim freeze, attacker freeze, meter gain, plus a cancel and a start */
+	static constexpr int32 Capacity = 8;
 
 	FGSTN_CombatRequest Slots[Capacity];
 
@@ -94,7 +122,7 @@ struct FGSTN_CombatRequests
 		return Count;
 	}
 
-	/** False when the array is full: the request is dropped (a full array is a bug in the caller, nothing makes four requests in one frame yet) */
+	/** False when the array is full: the request is dropped (a full array is a bug in the caller, a frame never makes more than Capacity) */
 	bool Add(EGSTN_RequestType Type, int32 Frame, int16 Arg = 0)
 	{
 		if (Type == EGSTN_RequestType::None)
@@ -210,7 +238,7 @@ struct FGSTN_CombatRequests
 		}
 
 		uint8 Count = static_cast<uint8>(LocalCount);
-		Ar.SerializeBits(&Count, 3);
+		Ar.SerializeBits(&Count, 4);
 		if (Count > Capacity)
 		{
 			Ar.SetError();
@@ -221,7 +249,7 @@ struct FGSTN_CombatRequests
 		{
 			FGSTN_CombatRequest& Request = Local[Index];
 			uint8 Type = static_cast<uint8>(Request.Type);
-			Ar.SerializeBits(&Type, 3);
+			Ar.SerializeBits(&Type, 5);
 			uint32 FramePlusOne = static_cast<uint32>(FMath::Max(Request.Frame + 1, 0));
 			Ar.SerializeIntPacked(FramePlusOne);
 			uint16 Arg = static_cast<uint16>(Request.Arg);

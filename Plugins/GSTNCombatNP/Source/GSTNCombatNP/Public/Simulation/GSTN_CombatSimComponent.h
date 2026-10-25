@@ -13,22 +13,34 @@
 #include "Jump/GSTN_JumpLogic.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutData.h"
+#include "Presentation/GSTN_HitPresentation.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Simulation/GSTN_CombatAttacker.h"
+#include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
+#include "Simulation/GSTN_HitInbox.h"
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
+#include "World/GSTN_StepSnapshot.h"
 #include "GSTN_CombatSimComponent.generated.h"
 
+class UGSTN_CombatRules;
+class UGSTN_CombatWorldSubsystem;
 class UGSTN_CommandBindingSet;
+class UGSTN_HurtboxSetDefinition;
+class UGSTN_SurfaceImpactTable;
+class UPrimitiveComponent;
 class UGSTN_GA_BaseCombat;
 class UGSTN_GA_PlatformJump;
 class UGSTN_InputConfig;
 class UGSTN_InputContextProvider;
 class UGSTN_LoadoutComponent;
 class UGSTN_MoverSimStateTracker;
+class UAnimMontage;
+class UGameplayEffect;
 class UMoverComponent;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
@@ -62,7 +74,7 @@ struct FAbilitySystemTimeStep;
  * Add it to a pawn that also has a UNpAbilitySystemComponent. Replicated; interpolated simulated proxies do not tick it.
  */
 UCLASS(ClassGroup = (Combat), Blueprintable, meta = (BlueprintSpawnableComponent))
-class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface
+class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface, public IGSTN_SnapshotSource
 {
 	GENERATED_BODY()
 
@@ -78,6 +90,139 @@ public:
 	void ProduceInput(const int32 DeltaTimeMS, FGSTN_InputCmd* Cmd);
 	void SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_CombatStateTypes>& Input, const TNetSimOutput<FGSTN_CombatStateTypes>& Output);
 	void FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux);
+
+	/**
+	 * Network Prediction calls it on every instance of the model, whenever the simulation rolls back to a state. Drops the hits that
+	 * were written for frames the re-simulation will run again (their attackers write them again)
+	 */
+	void RestoreFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux);
+
+	/**
+	 * Whether this instance runs the combat tick on this machine: the authority and the locally controlled pawn do, an interpolated
+	 * simulated proxy never does. This is where hits are delivered, not a branch of the simulation: nothing a tick computes depends on it
+	 */
+	bool TicksOnThisMachine() const;
+
+	/**
+	 * Delivers a hit to this victim (combat-m4-hits 7). Written only where the instance ticks, so a client never queues a hit for a
+	 * remote victim it only interpolates. @return false when nothing was queued
+	 */
+	virtual bool PostHit(const FGSTN_HitInboxEntry& Entry) override;
+
+	/**
+	 * The rules the attacker side runs the hit pipeline of, to predict the attacker's own hitstop and meter (combat-m4-hits 6). Resolved at
+	 * BeginPlay from the combat settings (the standard rules when none is set); a test or a game replaces them here, outside the simulation
+	 */
+	void SetCombatRules(UGSTN_CombatRules* Rules);
+	const UGSTN_CombatRules* GetCombatRules() const { return CombatRules; }
+
+	/**
+	 * The surface layer of the impact rules this victim decides with (combat-m4-hits 7b). Resolved from the rules' soft SurfaceImpactTable when the
+	 * rules are set; a test or a game replaces it here, outside the simulation, and every machine must run the same table. None: no impacts
+	 */
+	void SetImpactTable(UGSTN_SurfaceImpactTable* Table) { ImpactTable = Table; }
+	const UGSTN_SurfaceImpactTable* GetImpactTable() const { return ImpactTable; }
+
+	/**
+	 * The probe of a tumbling victim's knockback move found a face on this frame: remembers the collider, for the break request that
+	 * executes outside the simulation. Local data: no decision reads it, a resimulated frame writes it again
+	 */
+	void NoteContactSurface(int32 Frame, UPrimitiveComponent* Component);
+
+	/** "frame,outcome,surfaceTypeIndex,speed,damage" of the latest impact the victim step resolved on this machine, for the harness. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetImpactInfo() const;
+
+	/**
+	 * "count,frame,vx,vy,vz,typeIndex,incoming" of the launches the surface probe queued on this machine: the count and the latest one, for
+	 * the harness (counts re-simulated frames too). Not state
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetSurfaceLaunchInfo() const;
+
+	/** Count of impacts resolved by outcome since the component began, "splat,bounce,break". Counts re-simulated frames too. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetImpactCounts() const;
+
+	/** "table,notes,tumbleFrames,contactFrames,lastContact" for diagnosing the impact path. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetImpactDebug() const;
+
+	/** The rules asset the component runs, for the harness to tune between scenarios (never while hits are in flight: the machines would run different numbers) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	UGSTN_CombatRules* GetCombatRulesForTest() const { return CombatRules; }
+
+	/**
+	 * The command and the move of a hit's attacker as tags (the command tag, the timeline ability's asset tags), for the outbox events of
+	 * the victim side. Timeline and Binding are the indices the hit inbox entry carries; an invalid index adds nothing
+	 */
+	void AppendMoveTags(int32 Timeline, int32 Binding, FGameplayTagContainer& OutTags) const;
+
+	/**
+	 * Server only, from outside the simulation (like the loadout revision write): a knocked out combatant is Actionable again. The
+	 * respawn of a game replaces it; the harness uses it to reuse a pawn after a KO
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|KO")
+	bool ServerRespawn();
+
+	/** "frame,action,hitstopStart,hitstopEnd,hitstunEnd,pendingReaction" of the pending simulation state, for the harness. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetVictimInfo() const;
+
+	/** "frame,action,activeTimeline,timelineStart,recoilStart" of the pending simulation state (recoilStart -1 = no recoil), for the harness. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetRecoilInfo() const;
+
+	/**
+	 * "frame:victim:group:hitbox:hurtbox:ricochet:attackerHitstop;..." of the hits the attacker side made, the last 512 frames. Written
+	 * while gstn.Combat.Debug.HitLog is 1. A re-simulated frame replaces its entry, so an owner's log after a reconcile compares with the
+	 * authority's frame by frame. Debug only: never read by the simulation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetHitLog() const;
+
+	/**
+	 * Harness knobs (a live component must not be edited with set_editor_property): the team the snapshot and the attacker side see for this
+	 * entity (-1 = the owner's own, none for a player pawn), and the rules' friendly fire switch. Set on every machine while nothing is hitting,
+	 * not from inside the simulation: a team that differs between two machines is a different simulation. The rules object is shared by the process
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	void SetTestTeam(int32 TeamId) { TestTeam = TeamId; }
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	void SetTestFriendlyFire(bool bEnabled);
+
+	/**
+	 * "rewinds,requestedMs,appliedMs,currentMs" of the last rewound attacker step of this pawn on the authority (M4 H10), for the harness.
+	 * The rewinds counter counts the steps that built an overlay. Not state
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetLagCompInfo() const;
+
+	/** What the inbox of this victim received, one entry per drained hit, the last 512 frames. Under the same switch as the hit log */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetInboxLog() const;
+
+	/**
+	 * "frame:hitbox:space:x,y,z;..." of the world centre of every open hitbox, the last 512 frames, written under the same switch as the hit
+	 * log. The harness checks the frame of a hit against the geometry with it
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetHitboxTrace() const;
+
+	/** The victim side's drain at the start of its combat tick of Frame: the entries stamped before it, in (AttackerId, hitbox) order, appended to Out */
+	void DrainHitInbox(int32 Frame, TArray<FGSTN_HitInboxEntry>& Out) { HitInbox.Drain(Frame, Out); }
+
+	const FGSTN_HitInbox& GetHitInbox() const { return HitInbox; }
+
+	// IGSTN_SnapshotSource. The entry of this entity for the step snapshot: the state at the end of the previous frame (the sync state and the
+	// Mover sim state tracker), or the presentation state of an interpolated proxy
+	virtual bool ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntry& Out) override;
+
+	/** The world subsystem this component registers with and invalidates on RestoreFrame. Bound at BeginPlay; a test binds one by hand */
+	void SetCombatWorldSubsystem(UGSTN_CombatWorldSubsystem* Subsystem);
+
+	/** Registers with the world subsystem once the NP proxy has its id (a client gets it from the replication of the proxy, after BeginPlay). Called until it has */
+	void TryRegisterWithWorld();
 
 	// IGSTN_InputSimHost
 	virtual float GetFacingYaw() const override;
@@ -130,6 +275,16 @@ public:
 	 * frame it started on (the ability compares it with the one it started on to notice a replacement by the same class)
 	 */
 	bool IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame) const;
+
+	/**
+	 * Whether the combat state of the frame being simulated says the running timeline ended into a ricochet recoil (M4 H12), the frame the
+	 * recoil's frame 0 is on (it moves later by the hitstop frames) and the response it plays: the attack's own, else the active weapon's,
+	 * else the kit's. The ability that owns the timeline plays the montage, the cue and the push back from it. Simulation read
+	 */
+	bool GetRecoil(int32& OutStartFrame, const FGSTN_RicochetResponse*& OutResponse) const;
+
+	/** The push back of a recoil (see GSTN_GA_BaseCombat): queued on Mover through the push back effect. Called by the ability, inside the simulation */
+	void ExecuteRecoilMove(const FGSTN_TimelineTrack_Movement& Track, int32 RecoilFrames, float StepMs);
 
 	/**
 	 * The camera aim of the command of the frame being simulated (UGSTN_InputConfig::bSendCameraAim, combat-m3 7.10): control
@@ -251,12 +406,51 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
 	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
 
+	/** The hurtboxes this entity is hit through (combat-m4-hits 3). Soft: loaded once at BeginPlay. None = the entity cannot be hit */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSoftObjectPtr<UGSTN_HurtboxSetDefinition> HurtboxSet;
+
 	/** Button whose press opens a hitstop window. -1 = none */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "-1", ClampMax = "31"))
 	int32 HitstopTestButton = INDEX_NONE;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "1"))
 	int32 HitstopTestFrames = 8;
+
+	/** Setter for the harness (see HitstopTestMontage): the length of the window the debug button opens */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	void SetHitstopTestFrames(int32 Frames) { HitstopTestFrames = FMath::Max(Frames, 1); }
+
+	/**
+	 * Montage the debug hitstop button starts on the same frame as the window (a synced montage, so it holds through the window like an
+	 * attack's). None = no montage. The harness sets it from Python through SetHitstopTestMontage (a live component must not be edited
+	 * with set_editor_property)
+	 */
+	UPROPERTY(EditAnywhere, Category = "Combat|Spike")
+	TObjectPtr<UAnimMontage> HitstopTestMontage = nullptr;
+
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	void SetHitstopTestMontage(UAnimMontage* Montage) { HitstopTestMontage = Montage; }
+
+	/** "playing,time,latestFrame,hitstopStart,hitstopEnd" of the synced montage and the window, for the harness: the same on the authority and the owner while the window is open */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	FString GetHitstopMontageInfo() const;
+
+	/**
+	 * "frame:time;frame:time;..." of the synced montage after each simulated frame (the last 256), written while HitstopTestMontage is set. A
+	 * re-simulated frame overwrites its entry, so the owner's trace after a reconcile is comparable with the authority's frame by frame, however
+	 * rarely the editor ticks
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	FString GetHitstopMontageTrace() const;
+
+	/**
+	 * Instant effect a Freeze request applies to this entity (combat-m4-hits 8): holds its Mover still for the window and restores the
+	 * velocity afterwards. Replace it with UGSTN_GE_FreezeZeroVelocity for a victim that leaves the freeze at rest. The duration travels
+	 * as the SetByCaller Combat.SetByCaller.FreezeSeconds
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> FreezeEffect;
 
 	/**
 	 * Server only, from outside the simulation (a plain game thread call, like the loadout component's apply): writes the revision
@@ -286,6 +480,9 @@ public:
 
 	/** The stats effect entries of a resolved loadout's weapons, in loadout order (a weapon without a stats effect leaves its Effect empty) */
 	static TArray<FGSTN_WeaponStatsEntry> BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved);
+
+	/** The ricochet fallbacks of a resolved loadout (M4 H12): one per weapon in loadout order, and the kit's. An entry with no recoil frames is not authored */
+	static void BuildRicochetFallbacks(const FGSTN_ResolvedLoadout& Resolved, TArray<FGSTN_RicochetResponse>& OutWeapons, FGSTN_RicochetResponse& OutKit);
 
 protected:
 	virtual void InitializeNetworkPredictionProxy() override;
@@ -338,6 +535,12 @@ private:
 	bool bStatsModifierQueued = false;
 
 	void HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep);
+
+	/** Applies the freeze effect for Frames frames of StepMs each. Only from the ability system's pre-tick (rule 2: Mover is moved through a queued move) */
+	void ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect, int32 Frames, float StepMs);
+
+	/** Montage time per frame, see GetHitstopMontageTrace. Debug only: never read by the simulation */
+	TMap<int32, float> HitstopMontageTrace;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
@@ -409,6 +612,158 @@ private:
 		uint16 Pitch = 0;
 	};
 	FFrameAim FrameAim;
+
+	/** The team of the owner or of its controller, NoTeam without one (read when registering and at every snapshot) */
+	FGenericTeamId ResolveTeam() const;
+	int32 TestTeam = INDEX_NONE;
+
+	TWeakObjectPtr<UGSTN_CombatWorldSubsystem> WorldSubsystem;
+	int32 RegisteredEntityId = INDEX_NONE;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_HurtboxSetDefinition> ActiveHurtboxSet;
+
+	/**
+	 * The victim side of the combat tick for the frame being simulated (GSTN_CombatSimVictim.cpp): drains the inbox, resolves it, writes the
+	 * sync state and the requests the ability system's pre-tick executes. Under gstn.Combat.Debug.HitLog the drain is logged as
+	 * "frame:attacker:hitbox:hurtbox:hurtState:ricochet:relationship:damage;..." (GetInboxLog)
+	 */
+	void RunVictimStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncState& Sync, const FGSTN_StepSnapshot* Snapshot, const FGSTN_InputCmd& Cmd);
+	TArray<FGSTN_HitInboxEntry> InboxScratch;
+	TMap<int32, FString> InboxLogByFrame;
+
+	/**
+	 * What the victim step of the latest simulated frame decided that the ability system executes in the pre-tick of the same frame (damage,
+	 * effects, cue, event, freeze, the reaction move). Local data rewritten by every tick, never read across frames: a re-simulated frame
+	 * writes it again before its pre-tick runs. VictimFrame says which frame it belongs to
+	 */
+	FGSTN_VictimResult VictimResult;
+	FGSTN_ReactionMove ReactionMove;
+	int32 VictimFrame = INDEX_NONE;
+
+	/** The surface impact the victim step decided this frame (same lifetime and rules as VictimResult) */
+	FGSTN_ImpactStepResult ImpactResult;
+
+	/** The latest contact record in the knockback moves of Mover's tracked state (the end of the previous frame) */
+	FGSTN_TumbleContactSyncState ReadTumbleContact();
+
+	void AppendImpactEvent(int32 Frame);
+	void ExecuteImpactDamage(float Damage);
+	void ExecuteSurfaceBreaks();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_SurfaceImpactTable> ImpactTable;
+
+	/** The victim layer of the kit (FGSTN_ImpactResponseExtension), when it has one; the rules' otherwise */
+	TOptional<FGSTN_ImpactResponse> KitImpactResponse;
+
+	/** Colliders the probe touched by contact frame, and the breaks the victim step requested by frame. Local data, see NoteContactSurface */
+	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> ContactSurfaces;
+	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> BreakRequests;
+
+	FString LastImpactInfo = TEXT("-1,0,0,0,0");
+
+	/** Debug counters of the impact path: probe notes, tumble frames, frames with a record seen, the latest record. Not state */
+	int32 DebugNotes = 0;
+	int32 DebugTumbleFrames = 0;
+	int32 DebugContactFrames = 0;
+	FString DebugLastContact = TEXT("none");
+	FString DebugBreaks;
+	int32 ImpactCounts[3] = { 0, 0, 0 };
+
+	/** The victim step took a hit this frame: the buffer event Input.BufferEvent.Interrupted of the frame (AppendFrameEvents) */
+	bool bFrameInterrupted = false;
+
+	/** Projects Combat.State.{Hitstun,Tumble,Hitstop} and the movement lock from the sync state of the frame (the ability system's pre-tick). Idempotent: a function of the state only */
+	void ProjectStateTags(const FGSTN_CombatSyncCore& Core, int32 Frame);
+
+	/** The KO events and the hit events of the victim step, appended to the outbox (every machine writes them, the authority publishes them) */
+	void AppendVictimEvents(int32 Frame);
+
+	void ExecuteVictimHits(int32 Frame);
+	void ExecuteVictimEffects(int32 Frame);
+	void ExecuteVictimCues(int32 Frame);
+	void ExecuteReactionMove(float StepMs);
+	void ExecuteMeterGain(int32 Amount);
+
+	/** Spec of an effect class from the attacker (when it is found) onto this entity: the damage execution captures the attacker's multipliers */
+	bool ApplyHitEffect(const TSoftClassPtr<UObject>& Effect, const FGSTN_VictimHit& Hit, float DamageMagnitude);
+	FGameplayEffectContextHandle MakeHitContext(const FGSTN_VictimHit& Hit) const;
+	AActor* FindAttackerActor(const FGSTN_VictimHit& Hit) const;
+
+	/**
+	 * The surface launch of a combatant that is not tumbling (GSTN_CombatSimSurfaceLaunch.cpp), decided in the ability system's pre-tick from the
+	 * tracked Mover state, so it needs no sync state of its own: the queued layered move is what Mover keeps and rolls back
+	 */
+	void StepSurfaceLaunch(const FAbilitySystemTimeStep& TimeStep, const FGSTN_CombatSyncCore& Core);
+
+	/** Instant effect of the surface launch; replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> SurfaceLaunchEffect;
+
+	int32 SurfaceLaunchCount = 0;
+	FString LastSurfaceLaunchInfo = TEXT("0,-1,0,0,0,0,0");
+
+	/** Tag the latest launching surface named, for kits that react. Local data, never state */
+	FGameplayTag LastSurfaceLaunchTag;
+
+	/** Instant effects of the reaction moves; replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> KnockbackEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> PushBackEffect;
+
+	/** The freeze of a victim that stays in place: leaves the freeze at rest */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> FreezeAtRestEffect;
+
+	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */
+	void RunAttackerStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncCore& Core, const FGSTN_StepSnapshot* Snapshot, const FGSTN_HitGroupMask& GroupMask);
+
+	/**
+	 * The snapshot this attacker hits against: the shared one, or for a remote player's pawn on the authority (rules with lag compensation) an
+	 * overlay of it rewound to the interpolation time of the input being simulated (GSTN_LagCompensation.cpp). Never writes the shared snapshot
+	 */
+	const FGSTN_StepSnapshot* ResolveAttackerSnapshot(const FNetSimTimeStep& TimeStep, const FGSTN_StepSnapshot* Shared);
+
+	/** The attacker's pose at the end of the previous frame from the Mover tracker (the actor's own without one). False without an owner */
+	bool ReadOwnPose(FTransform& OutTransform, FVector& OutUp);
+
+	/**
+	 * What the attacker side predicted about each hit of the last frames, for the presentation component of this pawn (M4 H10). Local data
+	 * rewritten by every tick and re-simulation; the simulation never reads it
+	 */
+	TArray<FGSTN_PredictedHitView> PredictedHits;
+	TWeakObjectPtr<class UGSTN_HitPresentationComponent> HitPresentation;
+	bool bHitPresentationSearched = false;
+	float LastStepMs = 1000.f / 60.f;
+
+	/** The per-attacker rewound view, reused every frame it is needed. Local data, not state */
+	FGSTN_StepSnapshot LagCompOverlay;
+	int32 LagCompRewinds = 0;
+	float LagCompLastRequestedMs = 0.f;
+	float LagCompLastAppliedMs = 0.f;
+	float LagCompLastCurrentMs = 0.f;
+
+	/** A timeline that began this frame: its move origin is the pose the attacker is in now */
+	void StampMoveOrigin(FGSTN_CombatSyncCore& Core, int32 Frame);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_CombatRules> CombatRules;
+
+	/** Scratch of the attacker step, reused every frame */
+	FGSTN_TimelineFrameResult AttackerScratch;
+	TArray<FGSTN_AttackerHit> AttackerHits;
+	TArray<FGSTN_AttackerDebugShape> AttackerDebugShapes;
+	bool bLoggedTargetOverflow = false;
+
+	/** Debug mirrors of the attacker step, see GetHitLog / GetHitboxTrace. Not state */
+	TMap<int32, FString> HitLogByFrame;
+	TMap<int32, FString> HitboxTraceByFrame;
+
+	/** Hits waiting for this victim's next tick. Local data, not sync state: the attackers' re-simulation rebuilds it after a rollback */
+	FGSTN_HitInbox HitInbox;
 
 	// Input production only (owning machine), not simulation state
 	uint32 ScriptedButtons = 0;

@@ -2,6 +2,8 @@
 
 #include "Movement/GSTN_MoveTimelines.h"
 
+#include "Hits/GSTN_CombatHitTags.h"
+
 int32 FGSTN_MoveTimelines::InvincibleFramesFor(int32 AirFrames, float Fraction)
 {
 	if (AirFrames <= 0)
@@ -28,12 +30,16 @@ FGSTN_CombatTimelineData FGSTN_MoveTimelines::Make(const FGSTN_MoveTimelineParam
 	Movement.LandingLagFrames = Params.LandingLagFrames;
 	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Movement>(Movement));
 
-	if (Params.InvincibleFrames > 0)
+	if (Params.HurtboxFrames > 0)
 	{
 		FGSTN_TimelineTrack_HurtboxModifier Hurtbox;
 		Hurtbox.StartFrame = 0;
-		Hurtbox.EndFrame = FMath::Min(Params.InvincibleFrames, Params.TotalFrames);
-		Hurtbox.Part.GroupName = Params.HurtboxGroup;
+		Hurtbox.EndFrame = FMath::Min(Params.HurtboxFrames, Params.TotalFrames);
+		// By tag: a hurtbox has no group of its own, and the tag is what the set's designer classifies the feet with
+		if (Params.HurtboxTag.IsValid())
+		{
+			Hurtbox.AffectedTags.AddTag(Params.HurtboxTag);
+		}
 		Hurtbox.Kind = Params.HurtboxKind;
 		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_HurtboxModifier>(Hurtbox));
 	}
@@ -84,7 +90,8 @@ FGSTN_MoveTimelineParams FGSTN_MoveTimelines::GroundDodgeParams(const FGSTN_Dash
 	Params.FirstActionableFrame = Params.TotalFrames;
 	Params.bCancelOnLand = true;
 	Params.LandingLagFrames = 0;
-	Params.InvincibleFrames = InvincibleFramesFor(Arc.AirFrames, DefaultInvincibleFraction);
+	Params.HurtboxFrames = InvincibleFramesFor(Arc.AirFrames, DefaultInvincibleFraction);
+	Params.HurtboxTag = GSTNCombatHitTags::Hurtbox_Feet.GetTag();
 	return Params;
 }
 
@@ -95,6 +102,7 @@ FGSTN_MoveTimelineParams FGSTN_MoveTimelines::AirDodgeParams()
 	Params.FirstActionableFrame = 90;
 	Params.bCancelOnLand = true;
 	Params.LandingLagFrames = 6;
-	Params.InvincibleFrames = InvincibleFramesFor(30, DefaultInvincibleFraction);
+	Params.HurtboxFrames = InvincibleFramesFor(30, DefaultInvincibleFraction);
+	Params.HurtboxTag = GSTNCombatHitTags::Hurtbox_Feet.GetTag();
 	return Params;
 }

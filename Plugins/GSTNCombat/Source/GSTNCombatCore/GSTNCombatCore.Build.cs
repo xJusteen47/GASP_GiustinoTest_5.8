@@ -16,7 +16,11 @@ public class GSTNCombatCore : ModuleRules
 			"Engine",
 			"GameplayTags",
 			"GSTNInputCore",
+			"GSTNSurfaceCore",
 			"DeveloperSettings"
 		});
+
+		// The module registers the plugin's tag ini folder at startup
+		PrivateDependencyModuleNames.Add("Projects");
 	}
 }

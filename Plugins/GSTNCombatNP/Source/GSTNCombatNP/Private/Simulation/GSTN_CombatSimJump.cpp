@@ -8,6 +8,8 @@
 #include "Attributes/GSTN_CombatAttributeSet.h"
 #include "GameFramework/Actor.h"
 #include "Input/GSTN_CombatSettings.h"
+#include "Movement/GSTN_LayeredMove_Launch.h"
+#include "Movement/GSTN_SurfaceLaunch.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
 #include "MoverTypes.h"
@@ -73,8 +75,28 @@ void UGSTN_CombatSimComponent::StepJump(int32 Frame, uint32 HeldButtons, FGSTN_C
 	const int32 Button = Core.Jump.Button;
 	const bool bHeld = Button >= 0 && Button < 32 && (HeldButtons & (1u << Button)) != 0;
 	const UGSTN_GA_PlatformJump* TableJumpData = Tables().TableJumpData;
-	const FGSTN_JumpResetRules& JumpRules = TableJumpData && TableJumpData->bOverrideResetRules ? TableJumpData->ResetRules : UGSTN_CombatSettings::Get().JumpResetRules;
+	FGSTN_JumpResetRules JumpRules = TableJumpData && TableJumpData->bOverrideResetRules ? TableJumpData->ResetRules : UGSTN_CombatSettings::Get().JumpResetRules;
+
+	// A surface launch carries its own reset flags, read from the move in the tracked state (a rollback restores them with the rest)
+	bool bRestartCoyote = false;
+	if (FrameJumpSample.bExternalLaunch)
+	{
+		for (const TSharedPtr<FLayeredMoveBase>& Move : Tracker->GetSyncState().LayeredMoves.GetActiveMoves())
+		{
+			if (Move.IsValid() && Move->GetScriptStruct() == FGSTN_LayeredMove_Launch::StaticStruct())
+			{
+				const FGSTN_LayeredMove_Launch& Launch = static_cast<const FGSTN_LayeredMove_Launch&>(*Move);
+				JumpRules = FGSTN_SurfaceLaunch::ResetRulesFor(JumpRules, Launch.bResetAirJumps, Launch.bResetCoyote);
+				bRestartCoyote = Launch.bResetCoyote;
+				break;
+			}
+		}
+	}
 	Core.Jump = FGSTN_JumpLogic::Step(Core.Jump, Frame, FrameJumpSample, bHeld, FrameJumpParams, JumpRules);
+	if (bRestartCoyote)
+	{
+		Core.Jump.CoyoteFramesLeft = static_cast<uint8>(FMath::Clamp(FrameJumpParams.CoyoteFrames, 0, 255));
+	}
 }
 
 bool UGSTN_CombatSimComponent::IsJumpBindingAllowed(int32 BindingIndex) const

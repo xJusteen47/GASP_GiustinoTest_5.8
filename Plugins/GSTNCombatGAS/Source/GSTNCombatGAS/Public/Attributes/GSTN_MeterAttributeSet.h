@@ -18,7 +18,7 @@
  * to it. Bars are a UI division of the value (see FGSTN_MeterSetup), never stored here.
  *
  * A kit init effect must write a maximum before its meter: the meter is clamped to the maximum that is current at that
- * moment. There is no health here (per-part health is a later milestone). Starting values come from
+ * moment. Health lives in UGSTN_HealthAttributeSet (per-part health is a later milestone). Starting values come from
  * UGSTN_CombatGASSettings::AttributeDefaults. Nothing replicates: Network Prediction does that in the fork.
  */
 UCLASS()

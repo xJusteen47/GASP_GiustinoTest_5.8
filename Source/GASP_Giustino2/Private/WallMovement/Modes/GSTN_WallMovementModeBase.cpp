@@ -251,13 +251,26 @@ void UGSTN_WallMovementModeBase::SimulationTick_Implementation(const FSimulation
 	UGSTN_WallMovementUtils::TryMoveToFaceWall(MovingComps, TickState.WallNormal, MoveRecord);
 	TickState.Orientation = UpdatedComponent->GetComponentQuat();
 
+	// Held in place from outside (hitstop): no voluntary exit, and the timers stand still
+	const bool bLocked = IsMovementLocked(Params.StartState);
+	const float LockedTimeWithoutWall = TickState.TimeWithoutWall;
+	const float LockedPullAwayTime = TickState.PullAwayTime;
+
 	// Leaving on purpose (subclasses: wall jump, detach)
-	CheckForWallExit(Params, TickState);
+	if (!bLocked)
+	{
+		CheckForWallExit(Params, TickState);
+	}
 	const bool bLeftOnPurpose = TickState.IsLeaving();
 
 	if (!bLeftOnPurpose)
 	{
 		MoveAlongWall(Params, TickState, MoveRecord);
+		if (bLocked && !TickState.IsLeaving())
+		{
+			TickState.TimeWithoutWall = LockedTimeWithoutWall;
+			TickState.PullAwayTime = LockedPullAwayTime;
+		}
 	}
 
 	UpdateMovementBase(Params, TickState);
@@ -293,6 +306,17 @@ FGSTN_WallTickState UGSTN_WallMovementModeBase::MakeTickState(const FSimulationT
 	State.Orientation = StartQuat;
 	State.GravityUp = GetMoverComponent()->GetUpDirection();
 	return State;
+}
+
+bool UGSTN_WallMovementModeBase::IsMovementLocked(const FMoverTickStartData& StartState) const
+{
+	static FGameplayTag FrozenTag;
+	if (!FrozenTag.IsValid())
+	{
+		FrozenTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.Mover.Frozen"), false);
+	}
+	const UMoverComponent* MoverComp = GetMoverComponent();
+	return FrozenTag.IsValid() && MoverComp && MoverComp->HasGameplayTagInState(StartState.SyncState, FrozenTag, true);
 }
 
 void UGSTN_WallMovementModeBase::CheckForWallExit(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState) const

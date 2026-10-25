@@ -187,7 +187,8 @@ bool FGSTN_MoveTimelinesTest::RunTest(const FString& Parameters)
 	{
 		TestEqual(TEXT("it starts at take-off"), Hurtbox->StartFrame, 0);
 		TestEqual(TEXT("it ends at 40 % of the airborne frames"), Hurtbox->EndFrame, FMath::RoundToInt32(Arc.AirFrames * 0.4f));
-		TestEqual(TEXT("it addresses the feet group, not the whole body"), Hurtbox->Part.GroupName, FName(TEXT("Feet")));
+		TestEqual(TEXT("it is intangible, not invincible"), Hurtbox->Kind, EGSTN_HurtboxModifierKind::Intangible);
+		TestTrue(TEXT("it addresses the feet by tag, not the whole body"), Hurtbox->AffectedTags.HasTag(FGameplayTag::RequestGameplayTag(TEXT("Combat.Hurtbox.Feet"))) && Hurtbox->Part.IsEmpty());
 		TestTrue(TEXT("it ends before the landing"), Hurtbox->EndFrame < Arc.AirFrames);
 	}
 	if (TestNotNull(TEXT("the ground dodge has a movement track"), Movement))
@@ -201,7 +202,7 @@ bool FGSTN_MoveTimelinesTest::RunTest(const FString& Parameters)
 	const FGSTN_MoveTimelineParams Air = FGSTN_MoveTimelines::AirDodgeParams();
 	TestTrue(TEXT("the air dodge ends on landing"), Air.bCancelOnLand);
 	TestTrue(TEXT("with a landing lag"), Air.LandingLagFrames > 0);
-	TestTrue(TEXT("the dash has no invincibility"), FGSTN_MoveTimelines::DashParams().InvincibleFrames == 0);
+	TestTrue(TEXT("the dash has no invincibility"), FGSTN_MoveTimelines::DashParams().HurtboxFrames == 0);
 	return true;
 }
 

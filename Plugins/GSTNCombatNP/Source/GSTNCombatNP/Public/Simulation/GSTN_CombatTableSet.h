@@ -8,8 +8,11 @@
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 #include "UObject/Object.h"
 #include "GSTN_CombatTableSet.generated.h"
+
+class UGameplayAbility;
 
 class UGSTN_CombatSettings;
 class UGSTN_GA_BaseCombat;
@@ -61,6 +64,19 @@ public:
 	/** Per binding: EGSTN_PlatformJumpRole + 1 for a UGSTN_GA_PlatformJump binding, 0 for any other */
 	TArray<uint8> BindingJumpRole;
 
+	/**
+	 * Per binding: the ability's reaction flags (ReactionIgnoresHitstun, ReactionEndsReaction), read from the class defaults when the set is built.
+	 * The gate reads them every frame, so they are data of the loadout and not looked up on the class in the simulation
+	 */
+	TArray<uint8> BindingReaction;
+
+	static constexpr uint8 ReactionIgnoresHitstun = 1;
+	static constexpr uint8 ReactionEndsReaction = 2;
+
+	/** The flags of an ability class: Combat.Ability.IgnoreHitstunOnActivation in its tags, UGSTN_GA_Base::bEndReactionOnActivation */
+	static uint8 MakeReactionFlags(const UClass* AbilityClass);
+	static uint8 MakeReactionFlags(const UGameplayAbility* Default);
+
 	/** Per registry entry: the priority tier of the first command bound to it (the running tier of the override rule) and its default window */
 	TArray<int32> TimelineTier;
 	TArray<int32> TimelineDefaultOverride;
@@ -71,6 +87,27 @@ public:
 	/** The stats effect of each weapon, in loadout order (0 = primary; an entry may leave Effect empty) */
 	UPROPERTY(Transient)
 	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
+
+	/**
+	 * The ricochet fallbacks of the loadout (combat-m4-hits 3b, M4 H12): one per weapon in loadout order, then the kit's. An attack that
+	 * authors no response of its own recoils with the active weapon's, else the kit's. RecoilFrames 0 = not authored. Their montages are
+	 * in TimelineContent
+	 */
+	UPROPERTY(Transient)
+	TArray<FGSTN_RicochetResponse> WeaponRicochet;
+
+	UPROPERTY(Transient)
+	FGSTN_RicochetResponse KitRicochet;
+
+	/** The fallback for an attack that runs with the weapon at WeaponIndex: the weapon's when authored, else the kit's, null when neither is */
+	const FGSTN_RicochetResponse* GetRicochetFallback(int32 WeaponIndex) const
+	{
+		if (WeaponRicochet.IsValidIndex(WeaponIndex) && WeaponRicochet[WeaponIndex].IsAuthored())
+		{
+			return &WeaponRicochet[WeaponIndex];
+		}
+		return KitRicochet.IsAuthored() ? &KitRicochet : nullptr;
+	}
 
 	/** The loadout's reserved extension block (mods, backpacks), kept so its CRC is part of the checksum */
 	TArray<uint8> ReservedExtension;
@@ -113,6 +150,8 @@ struct GSTNCOMBATNP_API FGSTN_CombatTableConvertInput
 	TFunction<UClass*(const FSoftObjectPath&)> LoadClass;
 
 	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
+	TArray<FGSTN_RicochetResponse> WeaponRicochet;
+	FGSTN_RicochetResponse KitRicochet;
 	TArray<uint8> ReservedExtension;
 };
 

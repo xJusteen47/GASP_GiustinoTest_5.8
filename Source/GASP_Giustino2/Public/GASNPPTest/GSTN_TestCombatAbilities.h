@@ -31,6 +31,25 @@ public:
 };
 
 /**
+ * The test move of the attacker side (combat-m4-hits 6, M4 H8): bound to Command.Attack.Neutral by WPN_Test_Hits / KIT_Test_Hits. A 32 frame
+ * timeline with a hitbox track of each space, every hit with an authored hitstop (8 frames for the victim, 6 for the attacker), and a cancel
+ * window into the special commands that opens only on a hit. The geometry is relative to an attacker at the origin facing +X:
+ *   frames  4..7   Root           sphere r 50, group 0, sweeps from 80 to 170 cm ahead (keys over the track), swept between frames
+ *   frames 10..13  BakedSocket    sphere r 45, group 1, socket hand_r baked to run from (100, 260) to (100, 140) cm
+ *   frames 16..19  WorldAtMoveStart sphere r 60, group 2, at (200, -160) cm of where the move started
+ *   frames 20..23  Root           sphere r 140 around the attacker, group 3, with an Ally variant (damage 3)
+ * Owns Test.State.HitMove while the timeline runs.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestHitMove : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestHitMove(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
  * A timeline ability no command starts: the owned tag Test.Probe.TagTrigger (granted by the tag raiser probe, which a press of the
  * buff button activates from inside the simulation) triggers it, and the combat tick adopts it (combat-m3 7.4, scenario_triggered_timeline).
  * It owns Test.State.Triggered while the timeline runs. 12 frames, no startup override window, free from frame 12. The test
@@ -161,6 +180,74 @@ public:
 	UGSTN_GA_TestEscapeDodge(const FObjectInitializer& ObjectInitializer);
 };
 
+/**
+ * Plain ability that may start in a hit reaction (Combat.Ability.IgnoreHitstunOnActivation) and leaves the reaction alone: owns Test.State.Peek for a
+ * few combat frames. The control of the burst: it starts in hitstun and the hitstun goes on. Bound to Command.Special.Neutral by KIT_Test_HitsBurst
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestReactionPeek : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestReactionPeek(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
+ * The burst building block as data: the same plain ability with bEndReactionOnActivation on, so it ends the reaction in the frame it starts.
+ * Owns Test.State.Burst. Bound to Command.Defence.Dodge (grounded) by KIT_Test_HitsBurst
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestBurst : public UGSTN_GA_TestReactionPeek
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestBurst(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
+ * The ground dodge with the take-off left out (M4 H12 test content): the same timeline, hurtbox window and blocked tags, but the character stays
+ * where it stands, so a hitbox fixed in the world meets the same feet at every frame of the window. The test binding set binds it to
+ * Command.Defence.Dodge for a grounded pawn that owns Test.State.Planted (the default dodge ignores that tag). Never a kit ability: the base
+ * dodges have no spot variant (design direction 6)
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestPlantedGroundDodge : public UGSTN_GA_GroundDodge
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestPlantedGroundDodge(const FObjectInitializer& ObjectInitializer);
+
+protected:
+	virtual void OnTimelineBegan(int32 StateStartFrame) override;
+};
+
+/**
+ * A long low attack for the dodge scenarios (M4 H12): one sphere (r 20) 175 cm ahead and 75 cm below the root, over the feet of a victim standing
+ * at 205 cm and clear of its torso, open from frame 2 to frame 150 (group 0, one hit). Bound to Command.Attack.CrouchNeutral on the ground. The
+ * victim's feet are the only hurtbox it can touch, so its first hit lands on the first frame the feet are hittable. Authors a ricochet response too.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestFeetProbe : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestFeetProbe(const FObjectInitializer& ObjectInitializer);
+};
+
+/** Infinite: grants Test.State.Planted, the requirement of the planted dodge binding (the ignore tag of the default ground dodge) */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestPlanted : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_TestPlanted();
+};
+
 /** Infinite: grants Combat.State.Hitstun to the owner. Stands in for the hit reaction of M4, which projects the tag from the combat tick */
 UCLASS()
 class GASP_GIUSTINO2_API UGSTN_GE_TestHitstun : public UGameplayEffect
@@ -169,6 +256,16 @@ class GASP_GIUSTINO2_API UGSTN_GE_TestHitstun : public UGameplayEffect
 
 public:
 	UGSTN_GE_TestHitstun();
+};
+
+/** Infinite: grants Combat.Lock.Movement to the owner: it cannot walk, the stick still feeds DI. Test hook of the DI scenario */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestMovementLock : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_TestMovementLock();
 };
 
 /** Infinite: grants Test.State.Escape, the requirement of the escape dodge binding (the ignore tag of the default dodge) */

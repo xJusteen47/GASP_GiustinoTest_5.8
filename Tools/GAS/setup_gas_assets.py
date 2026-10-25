@@ -20,6 +20,14 @@
 #  5. (opt-in, --combat-content) C15 loadout test content in /Game/GASNPPTest/Combat (specs in combat_content_specs()): the kits
 #     KIT_Test_Alpha / KIT_Test_Beta and the weapons WPN_Test_Blade / Spear / Support. New assets only. Needs the tags of
 #     Config/Tags/GSTNCombatTest.ini and step 4's slot set.
+#  6. (opt-in, --hits-content) M4 H8 hit test content in /Game/GASNPPTest/Combat (specs in hits_content_specs()): the hurtbox set
+#     HBS_Test_Pawn (torso / head / feet capsules, tag leaves of Config/Tags/GSTNCombat.ini), the weapon WPN_Test_Hits and the kit KIT_Test_Hits
+#     (Command.Attack.Neutral -> GSTN_GA_TestHitMove, whose frame data is in C++: a hitbox of each space), and BP_GASNPP_TestCharacter's
+#     combat component HurtboxSet -> HBS_Test_Pawn (the one shared Blueprint this step edits; backed up first).
+#  7. (opt-in, --h13-content) M4 H13a content (specs in h13_specs()): /GSTNCombat/Rules/GSTN_CombatRules_Standard (plugin content, the rules the match plays
+#     by default), the weight hurtbox sets HBS_Test_Light / Medium / Heavy, the move variant timelines TL_Test_HitRoot / Baked / World / Ally, the extension
+#     example Blueprints BP_*_Example and the physical materials, in /Game/GASNPPTest/Combat. Edits no shared Blueprint. The map L_Test_Combat is built by
+#     build_test_combat_map.py (needs the editor with a world); hurtbox sets from a Physics Asset by make_hurtbox_set.py; baked sockets by bake_sockets.py.
 # The Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
 #
 # Current layout (2026-10-17, set by hand from the editor, not by this script): the NpAbilitySystem (GA_Jump, GA_WallSlide)
@@ -262,8 +270,10 @@ def combat_test_specs():
                 # C14 movement kit (plugin abilities, granted by the harness with ServerSetMoveKit). The dodge is one command bound by context;
                 # the escape dodge (a kit with the blocks dropped as data) takes over when the pawn owns Test.State.Escape
                 ('Command.Movement.Dash', [], [], 'GSTN_GA_Dash'),
-                ('Command.Defence.Dodge', ['Input.Context.Grounded'], ['Test.State.Escape'], 'GSTN_GA_GroundDodge'),
+                ('Command.Defence.Dodge', ['Input.Context.Grounded'], ['Test.State.Escape', 'Test.State.Planted'], 'GSTN_GA_GroundDodge'),
                 ('Command.Defence.Dodge', ['Input.Context.Grounded', 'Test.State.Escape'], [], 'GSTN_GA_TestEscapeDodge'),
+                # M4 H12: the ground dodge without its take-off, for the dodge scenarios (a hitbox fixed in the world meets the same feet at every frame)
+                ('Command.Defence.Dodge', ['Input.Context.Grounded', 'Test.State.Planted'], [], 'GSTN_GA_TestPlantedGroundDodge'),
                 ('Command.Defence.Dodge', ['Input.Context.Airborne'], [], 'GSTN_GA_AirDodge'),
                 ('Command.Interact.Grab', [], [], 'GSTN_GA_TestGrab'),
                 ('Command.Interact.PickUp', [], [], 'GSTN_GA_TestPickUp'),
@@ -671,7 +681,317 @@ def setup_combat_content_c18():
     log('C18 combat content written (scheme, supers, kits Gamma / Delta / Sigma / Omega)')
     return True
 
-def run(wall_transition=False, combat_input=False, test_character=False, combat_content=False):
+
+# ---------------------------------------------------------------------------------------------------- 6. hit test content
+
+def hits_content_specs():
+    """M4 H8 test content as plain data. Hurtboxes are capsules in the local space of the pawn (the actor origin is the middle of its capsule).
+    (name, bone, tag, priority, radius, half height incl. the hemispheres, local z)"""
+    return {
+        'hurtbox_set': 'HBS_Test_Pawn',
+        'hurtboxes': [
+            ('torso', 'spine_03', 'Combat.Hurtbox.Torso', 1, 35.0, 55.0, 15.0),
+            ('head', 'head', 'Combat.Hurtbox.Head', 2, 22.0, 22.0, 68.0),
+            ('feet', 'foot_l', 'Combat.Hurtbox.Feet', 0, 30.0, 30.0, -62.0),
+        ],
+        # M4 H12: the low attack of the dodge scenarios sits on crouch + attack
+        'weapon': ('WPN_Test_Hits', 'Weapon.Test.Hits', 'Test.Role.Primary', [('Command.Attack.Neutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestHitMove'),
+                                                                               ('Command.Attack.CrouchNeutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestFeetProbe')]),
+        'kit': ('KIT_Test_Hits', 'Kit.Test.Hits', 'WPN_Test_Hits', {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
+                [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'),
+                 # M4 H12: the base dodges are kit data like the rest: bound by context, blocked in hitstun and hitstop by their own data
+                 ('Command.Defence.Dodge', ['Input.Context.Grounded'], [], 'GSTN_GA_GroundDodge'),
+                 ('Command.Defence.Dodge', ['Input.Context.Airborne'], [], 'GSTN_GA_AirDodge')]),
+        # M4 H12: the same kit with a special escape in place of the ground dodge: its blocked tags are dropped as data (dodges in hitstun)
+        'escape_kit': ('KIT_Test_HitsEscape', 'Kit.Test.HitsEscape', 'WPN_Test_Hits', {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
+                       [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'),
+                        ('Command.Defence.Dodge', ['Input.Context.Grounded'], [], 'GSTN_GA_TestEscapeDodge'),
+                        ('Command.Defence.Dodge', ['Input.Context.Airborne'], [], 'GSTN_GA_AirDodge')]),
+        # M4 H13b: the burst test kit. Special starts a plain ability that is allowed in a hit reaction and leaves it alone (the control), the
+        # ground dodge button starts the one that ends the reaction (UGSTN_GA_Base::bEndReactionOnActivation)
+        'burst_kit': ('KIT_Test_HitsBurst', 'Kit.Test.HitsBurst', 'WPN_Test_Hits', {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
+                      [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestReactionPeek'),
+                       ('Command.Defence.Dodge', ['Input.Context.Grounded'], [], 'GSTN_GA_TestBurst')]),
+    }
+
+
+def setup_hits_content():
+    """Creates/updates the hurtbox set, the hit weapon and kit, and points the test character's combat component at the set. Rewrites every
+    property from the specs on each run (a rerun converges). Returns True when something was saved."""
+    specs = hits_content_specs()
+    base = combat_content_specs()
+    changed = False
+
+    set_asset, _ = _get_or_create(specs['hurtbox_set'], TEST_COMBAT_DIR, unreal.GSTN_HurtboxSetDefinition, unreal.DataAssetFactory())
+    boxes = []
+    for name, bone, tag, priority, radius, half_height, z in specs['hurtboxes']:
+        shape = unreal.GSTN_HitShape()
+        shape.set_editor_property('type', unreal.GSTN_ShapeType.CAPSULE)
+        shape.set_editor_property('extent', unreal.Vector(radius, radius, half_height))
+        shape.set_editor_property('local', unreal.Transform(location=unreal.Vector(0.0, 0.0, z)))
+        box = unreal.GSTN_Hurtbox()
+        box.set_editor_property('name', name)
+        box.set_editor_property('bone', bone)
+        box.set_editor_property('shape', shape)
+        box.set_editor_property('tags', _tag_container([tag]))
+        box.set_editor_property('priority', priority)
+        boxes.append(box)
+    set_asset.set_editor_property('hurtboxes', boxes)
+    unreal.EditorAssetLibrary.save_loaded_asset(set_asset)
+    changed = True
+
+    name, identity, role, bindings = specs['weapon']
+    weapon, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_WeaponDefinition, unreal.DataAssetFactory())
+    weapon.set_editor_property('display_name', name)
+    weapon.set_editor_property('weapon_tags', _tag_container([identity, role]))
+    weapon.set_editor_property('bindings', [b for b in (_binding(*row) for row in bindings) if b])
+    weapon.set_editor_property('stats_effect', None)
+    weapon.set_editor_property('stat_modifiers', [])
+    unreal.EditorAssetLibrary.save_loaded_asset(weapon)
+
+    for kit_key in ('kit', 'escape_kit', 'burst_kit'):
+        name, identity, weapon_name, stat_values, bindings = specs[kit_key]
+        kit, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_PrimaryKitDefinition, unreal.DataAssetFactory())
+        kit.set_editor_property('kit_tags', _tag_container([identity]))
+        kit.set_editor_property('primary_weapon', unreal.load_asset(f'{TEST_COMBAT_DIR}/{weapon_name}'))
+        kit.set_editor_property('allowed_additional_weapons', _any_tag_query(base['allowed_support_role']))
+        kit.set_editor_property('max_additional_weapons', 1)
+        values = []
+        for tag, value in stat_values.items():
+            stat = unreal.GSTN_StatValue()
+            stat.set_editor_property('stat', _make_tag(tag))
+            stat.set_editor_property('value', value)
+            values.append(stat)
+        stats = unreal.GSTN_KitStats()
+        stats.set_editor_property('values', values)
+        kit.set_editor_property('stats', stats)
+        kit.set_editor_property('init_stats_effect', getattr(unreal, base['init_effect'], None))
+        command_set = unreal.GSTN_CommandSet()
+        command_set.set_editor_property('base_set', unreal.load_asset(base['base_slot_set']))
+        kit.set_editor_property('command_set', command_set)
+        kit.set_editor_property('kit_bindings', [b for b in (_binding(*row) for row in bindings) if b])
+        unreal.EditorAssetLibrary.save_loaded_asset(kit)
+
+    # The one shared Blueprint of this step (owner approved 2026-10-24): the combat component's hurtbox set, nothing else
+    bp = unreal.load_asset(TEST_CHAR)
+    comp = next((obj for _, obj in blueprint_components(bp) if isinstance(obj, unreal.GSTN_CombatSimComponent)), None)
+    if not comp:
+        log(f'ERROR: no GSTN_CombatSimComponent on {TEST_CHAR}')
+    elif comp.get_editor_property('hurtbox_set') != set_asset:
+        backup(TEST_CHAR)
+        comp.set_editor_property('hurtbox_set', set_asset)
+        unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+        unreal.EditorAssetLibrary.save_loaded_asset(bp)
+        log(f'{TEST_CHAR}: combat component HurtboxSet -> {specs["hurtbox_set"]}')
+    # M4 H10 (owner approved 2026-10-24): the attacker's hit presentation and the fork's lag compensation component, nothing else
+    for component_class in (unreal.GSTN_HitPresentationComponent, unreal.NetworkPredictionLagCompensation):
+        if any(isinstance(obj, component_class) for _, obj in blueprint_components(bp)):
+            continue
+        backup(TEST_CHAR)
+        root = subobjects.k2_gather_subobject_data_for_blueprint(bp)[0]
+        params = unreal.AddNewSubobjectParams(parent_handle=root, new_class=component_class, blueprint_context=bp)
+        _, fail = subobjects.add_new_subobject(params)
+        if not fail.is_empty():
+            log(f'ERROR adding {component_class.__name__}: {fail}')
+        else:
+            unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+            unreal.EditorAssetLibrary.save_loaded_asset(bp)
+            log(f'{TEST_CHAR}: added {component_class.__name__}')
+    log(f'hit content written under {TEST_COMBAT_DIR}')
+    return changed
+
+
+# ----------------------------------------------------------------------------------------------- 7. H13a combat content
+
+RULES_DIR = '/GSTNCombat/Rules'
+STANDARD_RULES = 'GSTN_CombatRules_Standard'
+
+
+def h13_specs():
+    """M4 H13a test content as plain data. The three weight sets are the HBS_Test_Pawn hurtboxes with a different weight scale: light 0.6, medium 1.0
+    and heavy 1.8 (a heavy combatant is harder to launch; its reaction is capped at PushBack), and the heavy set has one armoured chest (a high stagger
+    threshold on the torso hurtbox: weak hits never stagger it)"""
+    return {
+        'weight_sets': [
+            # (asset, weight scale, set MaxReaction, {hurtbox name: stagger threshold})
+            ('HBS_Test_Light', 0.6, 'LAUNCH', {}),
+            ('HBS_Test_Medium', 1.0, 'LAUNCH', {}),
+            ('HBS_Test_Heavy', 1.8, 'PUSH_BACK', {'torso': 30.0}),
+        ],
+        # Timeline assets (UGSTN_CombatTimeline) of the four move variants: (asset, space, radius, hit group, (start, end) frame, keys, socket)
+        'timelines': [
+            ('TL_Test_HitRoot', 'ROOT', 50.0, 0, (4, 8), [(0, (80.0, 0.0, 0.0)), (3, (170.0, 0.0, 0.0))], None),
+            ('TL_Test_HitBaked', 'BAKED_SOCKET', 45.0, 1, (10, 14), [], 'hand_r'),
+            ('TL_Test_HitWorld', 'WORLD_AT_MOVE_START', 60.0, 2, (16, 20), [(0, (200.0, -160.0, 0.0))], None),
+            ('TL_Test_HitAlly', 'ROOT', 140.0, 3, (20, 24), [], None),
+        ],
+        'blueprints': [
+            # (asset, parent class name)
+            ('BP_Step_Example', 'GSTN_HitResolutionStep'),
+            ('BP_KnockbackModel_Example', 'GSTN_KnockbackModel_WeightDriven'),
+            ('BP_OutcomeApplier_Example', 'GSTN_OutcomeApplier'),
+            ('BP_AttackerOutcome_Example', 'GSTN_AttackerOutcome'),
+            ('BP_RelationshipResolver_Example', 'GSTN_RelationshipResolver'),
+        ],
+        'physical_materials': ['PM_Test_Wall', 'PM_Test_Glass'],
+    }
+
+
+def setup_standard_rules():
+    """/GSTNCombat/Rules/GSTN_CombatRules_Standard: UGSTN_CombatRules::FillStandard (the one place that knows the standard values, shared with the
+    built-in copy) plus the native damage effect. The built-in standard rules (CreateStandard) name no damage effect because the Core cannot see the
+    GAS layer; an asset can, and without one DamageMode is a number nothing applies. Returns True when saved"""
+    asset, _ = _get_or_create(STANDARD_RULES, RULES_DIR, unreal.GSTN_CombatRules, unreal.DataAssetFactory())
+    if asset is None:
+        log(f'ERROR: could not create {RULES_DIR}/{STANDARD_RULES} (is the GSTNCombat plugin content folder mounted? it needs Plugins/GSTNCombat/Content)')
+        return False
+    unreal.GSTN_CombatRules.fill_standard(asset)
+    asset.set_editor_property('damage_effect', unreal.GSTN_GE_Damage)
+    unreal.EditorAssetLibrary.save_loaded_asset(asset)
+    log(f'{RULES_DIR}/{STANDARD_RULES} written (damage effect GSTN_GE_Damage)')
+    return True
+
+
+def setup_weight_hurtbox_sets():
+    """HBS_Test_Light / Medium / Heavy from the HBS_Test_Pawn specs (hits_content_specs): same hurtboxes, other weight scale, reaction cap and thresholds"""
+    hits = hits_content_specs()
+    for name, weight, max_reaction, thresholds in h13_specs()['weight_sets']:
+        asset, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_HurtboxSetDefinition, unreal.DataAssetFactory())
+        boxes = []
+        for box_name, bone, tag, priority, radius, half_height, z in hits['hurtboxes']:
+            shape = unreal.GSTN_HitShape()
+            shape.set_editor_property('type', unreal.GSTN_ShapeType.CAPSULE)
+            shape.set_editor_property('extent', unreal.Vector(radius, radius, half_height))
+            shape.set_editor_property('local', unreal.Transform(location=unreal.Vector(0.0, 0.0, z)))
+            reaction = unreal.GSTN_HitReactionModifiers()
+            reaction.set_editor_property('weight_scale', weight)
+            if box_name in thresholds:
+                threshold = unreal.GSTN_StaggerThreshold()
+                threshold.set_editor_property('value', thresholds[box_name])
+                reaction.set_editor_property('stagger_threshold', threshold)
+            box = unreal.GSTN_Hurtbox()
+            box.set_editor_property('name', box_name)
+            box.set_editor_property('bone', bone)
+            box.set_editor_property('shape', shape)
+            box.set_editor_property('tags', _tag_container([tag]))
+            box.set_editor_property('priority', priority)
+            box.set_editor_property('reaction_scale', reaction)
+            boxes.append(box)
+        asset.set_editor_property('hurtboxes', boxes)
+        asset.set_editor_property('max_reaction', getattr(unreal.GSTN_HitReaction, max_reaction))
+        unreal.EditorAssetLibrary.save_loaded_asset(asset)
+    log('weight hurtbox sets written')
+    return True
+
+
+def _hit_data(damage):
+    hit = unreal.GSTN_HitData()
+    hit.set_editor_property('damage', damage)
+    hit.set_editor_property('base_knockback', 500.0)
+    hit.set_editor_property('angle_deg', 30.0)
+    hit.set_editor_property('hitstop_mode', unreal.GSTN_HitstopMode.OVERRIDE)
+    hit.set_editor_property('hitstop_frames_override', 8)
+    hit.set_editor_property('attacker_hitstop_frames_override', 6)
+    return hit
+
+
+def setup_move_timelines():
+    """The four hit move variants as timeline assets (UGSTN_CombatTimeline): a root hitbox with keys, a baked-socket hitbox (the frames come from
+    bake_sockets.py, or a synthetic arc here), a WorldAtMoveStart hitbox and the Ally variant (half shape, no hitstun). An ability points its TimelineAsset at one.
+    Rewritten on every run; IsDataValid of each prints the hit matrix"""
+    part = unreal.GSTN_PartSelector()
+    part.set_editor_property('group_name', 'Body')
+    for name, space, radius, group, (start, end), keys, socket in h13_specs()['timelines']:
+        asset, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_CombatTimeline, unreal.DataAssetFactory())
+        data = unreal.GSTN_CombatTimelineData()
+        data.set_editor_property('total_frames', 32)
+        data.set_editor_property('first_actionable_frame', 28)
+        data.set_editor_property('override_frames', 0)
+        spec = unreal.GSTN_HitboxSpec()
+        shape = unreal.GSTN_HitShape()
+        shape.set_editor_property('type', unreal.GSTN_ShapeType.SPHERE)
+        shape.set_editor_property('extent', unreal.Vector(radius, radius, radius))
+        spec.set_editor_property('shape', shape)
+        spec.set_editor_property('space', getattr(unreal.GSTN_HitboxSpace, space))
+        spec.set_editor_property('hit_group', group)
+        spec.set_editor_property('data', _hit_data(6.0 if name == 'TL_Test_HitAlly' else 8.0))
+        if keys:
+            key_list = []
+            for frame, offset in keys:
+                key = unreal.GSTN_HitboxKey()
+                key.set_editor_property('frame', frame)
+                key.set_editor_property('offset', unreal.Vector(*offset))
+                key_list.append(key)
+            spec.set_editor_property('keys', key_list)
+            spec.set_editor_property('sweep_between_frames', space == 'ROOT')
+        if socket:
+            spec.set_editor_property('socket', socket)
+            # A synthetic arc until bake_sockets.py is run on a real animation: the hand sweeps from (100, 260) to (100, 140)
+            frames = []
+            for frame in range(32):
+                frames.append(unreal.Transform(location=unreal.Vector(100.0, max(140.0, min(260.0, 260.0 - 40.0 * (frame - start))), 0.0)))
+            baked = unreal.GSTN_BakedSocketFrames()
+            baked.set_editor_property('frames', frames)
+            data.set_editor_property('baked_sockets', {socket: baked})
+        if name == 'TL_Test_HitAlly':
+            # The ally takes half the shape and no hitstun (the hit still lands: damage and hitstop apply)
+            variant = unreal.GSTN_HitVariant()
+            variant.set_editor_property('shape_scale', 0.5)
+            override = variant.get_editor_property('override')
+            override.set_editor_property('fields', 1 << 7)  # EGSTN_HitDataField::HitstunMultiplier
+            values = override.get_editor_property('values')
+            values.set_editor_property('hitstun_multiplier', 0.0)
+            override.set_editor_property('values', values)
+            variant.set_editor_property('override', override)
+            ally = unreal.GameplayTag()
+            ally.import_text('(TagName="Combat.Relationship.Ally")')
+            spec.set_editor_property('relationship_variants', {ally: variant})
+        data = unreal.GSTN_TimelineUtils.add_hitbox_track(data, start, end, part, [spec])
+        asset.set_editor_property('data', data)
+        unreal.EditorAssetLibrary.save_loaded_asset(asset)
+    log('move timelines written')
+    return True
+
+
+def setup_example_blueprints():
+    """One Blueprint per extension class under TEST_COMBAT_DIR: proof that a step / model / applier / attacker outcome / resolver can be authored without C++.
+    Created once (a rerun leaves an existing Blueprint, a designer's graph, alone)"""
+    changed = False
+    for name, parent_name in h13_specs()['blueprints']:
+        if unreal.load_asset(f'{TEST_COMBAT_DIR}/{name}'):
+            continue
+        factory = unreal.BlueprintFactory()
+        factory.set_editor_property('parent_class', getattr(unreal, parent_name).static_class())
+        bp = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, TEST_COMBAT_DIR, unreal.Blueprint, factory)
+        if bp is None:
+            log(f'ERROR: could not create {name}')
+            continue
+        unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+        unreal.EditorAssetLibrary.save_loaded_asset(bp)
+        log(f'created {TEST_COMBAT_DIR}/{name} (parent {parent_name})')
+        changed = True
+    return changed
+
+
+def setup_physical_materials():
+    """PM_Test_Wall and PM_Test_Glass under TEST_COMBAT_DIR, the materials the L_Test_Combat map puts on its meshes"""
+    for name in h13_specs()['physical_materials']:
+        _get_or_create(name, TEST_COMBAT_DIR, unreal.PhysicalMaterial, unreal.PhysicalMaterialFactoryNew())
+        unreal.EditorAssetLibrary.save_asset(f'{TEST_COMBAT_DIR}/{name}')
+    return True
+
+
+def setup_h13_content():
+    """Rules asset, weight hurtbox sets, move timelines, extension Blueprints, physical materials. Never edits a shared Blueprint"""
+    ok = setup_standard_rules()
+    ok = setup_weight_hurtbox_sets() and ok
+    ok = setup_move_timelines() and ok
+    ok = setup_example_blueprints() or ok
+    ok = setup_physical_materials() and ok
+    return ok
+
+
+def run(wall_transition=False, combat_input=False, test_character=False, combat_content=False, hits_content=False, h13_content=False):
     """Step 2 and step 3 change shared Blueprints (the test character, the sandbox character) and are opt-in; step 4 never does."""
     log(f'mapping context changed: {setup_mapping_context()}')
     if test_character:
@@ -687,9 +1007,14 @@ def run(wall_transition=False, combat_input=False, test_character=False, combat_
     if combat_content:
         log(f'combat content changed: {setup_combat_content()}')
         log(f'C18 combat content changed: {setup_combat_content_c18()}')
+    if hits_content:
+        log(f'hits content changed: {setup_hits_content()}')
+    if h13_content:
+        log(f'H13 content changed: {setup_h13_content()}')
 
 
 if __name__ == '__main__':
     import sys
     run(wall_transition='--wall-transition' in sys.argv, combat_input='--combat-input' in sys.argv,
-        test_character='--test-character' in sys.argv, combat_content='--combat-content' in sys.argv)
+        test_character='--test-character' in sys.argv, combat_content='--combat-content' in sys.argv,
+        hits_content='--hits-content' in sys.argv, h13_content='--h13-content' in sys.argv)

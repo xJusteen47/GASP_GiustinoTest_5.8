@@ -75,6 +75,33 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	bool ServerResetToSpawn(FVector Offset);
 
+	/**
+	 * Authority only: teleports the pawn to exactly this world location (no floor search, orientation kept) and stops it, through Mover instant effects like
+	 * ServerResetToSpawn. The trampoline scenario drops the pawn onto a surface from a height with it
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	bool ServerTeleportExact(FVector Location);
+
+	/** Where this pawn spawned (the origin its lane is measured from); zero before BeginPlay */
+	UFUNCTION(BlueprintPure, Category = "GASNPP Test")
+	FVector GetSpawnLocation() const { return SpawnLocation; }
+
+	/**
+	 * Authority only: the harness's per scenario reset. ServerResetToSpawn plus velocity zero (the teleport keeps the velocity of the previous scenario), and the server-side test state a scenario can leave behind: probe and bulk abilities, the bulk and stats effects,
+	 * hitstun and escape, both weapons' stat effects, the EX and super meters. The loadout (kit) is not touched: scenarios count its revision from
+	 * where it is. Everything goes through queued moves or out-of-band ability system changes, like the helpers it calls.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	bool ServerResetTestState(FVector Offset);
+
+	/**
+	 * The step snapshot entry (H6) of this entity as a JSON object: tracker pose, velocity, up, hitstop flag, action state, the hurt state of every hurtbox
+	 * of the set, the reaction flags and the damage percent. Frame INDEX_NONE (or any negative) reads the latest input history frame. Empty string when
+	 * the pawn has no combat component or no sync state yet. Valid on every machine (an interpolated proxy shows its presentation pose).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	FString ReadSnapshotEntry(int32 Frame = -1);
+
 	UFUNCTION(BlueprintPure, Category = "GASNPP Test")
 	bool IsTestInputReady() const { return bInputReady; }
 
@@ -125,9 +152,28 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerSetHitstun(bool bApply);
 
+	/** Applies (true) or removes (false) an infinite effect granting Combat.Lock.Movement: the locomotion speed is zero but the stick still reaches the combat tick (DI). Authority only */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerSetMovementLock(bool bApply);
+
 	/** Applies (true) or removes (false) an infinite effect granting Test.State.Escape: the pawn then uses the escape dodge, which is not blocked in hitstun. Authority only */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerSetEscapeKit(bool bApply);
+
+	/** Applies (true) or removes (false) an infinite effect granting Test.State.Planted: a grounded pawn then dodges with the planted ground dodge (no take-off). Authority only */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerSetPlanted(bool bApply);
+
+	/**
+	 * Makes the attacker outcome of the process answer Ricochet for every hit (true) or Normal (false). The outcome registry is one per process, so every
+	 * PIE world and every machine of it decides the same way: switch it between attacks, never while a hit is in flight
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	static void SetForceRicochet(bool bForce);
+
+	/** "start,end" of the hurtbox window (frames from the start of the timeline) of the default ground (false) or air (true) dodge, read from the class data; "-1,-1" if none */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	static FString GetDodgeWindow(bool bAir);
 
 	/**
 	 * Sets Mover's gravity override (acceleration in cm/s^2 world space) on THIS machine's copy of the pawn, or clears it. Call it on every
@@ -198,6 +244,20 @@ public:
 
 	/** Server only: puts the loadout component on the PlayerState if there is none yet (clients get it by replication). Null without a PlayerState */
 	UGSTN_LoadoutComponent* EnsureLoadoutComponent();
+
+	/** Server only: sets the DamagePercent of the health set (the hit scenarios start victims at a damage). An out-of-band attribute write that the owner reconciles */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	bool ServerSetDamagePercent(float Percent);
+
+	/**
+	 * The combat events this world published about this pawn since the last clear (only the authority's world publishes), one per entry as
+	 * "role:type:frame:magnitude:tag,tag..." with role I (the pawn was the instigator) or T (the pawn was the target), type HitLanded, HitReceived or KO
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	FString GetHitEventLog() const;
+
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	void ClearHitEventLog() { HitEventLog.Reset(); }
 
 	/** Same as setting bStatsProbeEnabled, for Python (the harness calls it on every copy of the pawn, in every world) */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
@@ -272,6 +332,10 @@ private:
 	TMap<FName, int32> TimelineStartedCounts;
 	int32 TimelineStartedListener = INDEX_NONE;
 
+	/** HitLanded, HitReceived and KO events about this pawn (GetHitEventLog) and the listener ids */
+	TArray<FString> HitEventLog;
+	int32 HitEventListener = INDEX_NONE;
+
 	/** WeaponSwitched events the authority published for this pawn (nothing on a client) */
 	int32 WeaponSwitchedCount = 0;
 	int32 WeaponSwitchedListener = INDEX_NONE;
@@ -287,7 +351,9 @@ private:
 	FActiveGameplayEffectHandle BulkEffectHandle;
 	FActiveGameplayEffectHandle StatsEffectHandle;
 	FActiveGameplayEffectHandle HitstunEffectHandle;
+	FActiveGameplayEffectHandle MovementLockEffectHandle;
 	FActiveGameplayEffectHandle EscapeEffectHandle;
+	FActiveGameplayEffectHandle PlantedEffectHandle;
 
 	// Stats probe: the values captured before the first rewrite, and what was written last
 	bool bStatsBaseCaptured = false;

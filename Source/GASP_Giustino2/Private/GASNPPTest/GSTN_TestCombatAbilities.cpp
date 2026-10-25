@@ -4,7 +4,9 @@
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "Attributes/GSTN_MeterAttributeSet.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
+#include "GSTN_CombatTags.h"
 #include "GSTN_CombatCoreTags.h"
+#include "Hits/GSTN_CombatHitTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatLockTags.h"
 #include "NativeGameplayTags.h"
@@ -28,9 +30,18 @@ namespace
 		"Owned while the placeholder grab ability (interact tap) is active: the harness reads which interact command fired");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_PickUp, "Test.State.PickUp",
 		"Owned while the placeholder pick up ability (interact hold) is active");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Peek, "Test.State.Peek",
+		"Owned while the reaction peek ability (starts in a hit reaction, leaves it alone) is active");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Burst, "Test.State.Burst",
+		"Owned while the burst test ability (starts in a hit reaction and ends it) is active");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Escape, "Test.State.Escape",
 		"Granted by the harness to give the pawn a kit with a special escape dodge: the default ground dodge ignores it, the escape dodge requires it");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Planted, "Test.State.Planted",
+		"Granted by the harness to make the ground dodge a spot dodge (no take-off): the default ground dodge ignores it, the planted dodge requires it");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_FeetProbe, "Test.State.FeetProbe", "Owned while the low attack of the dodge scenarios runs");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_HitMove, "Test.State.HitMove", "Owned while the test hit move (KIT_Test_Hits) runs");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_GammaMove, "Test.State.GammaMove", "Owned while the added command of KIT_Test_Gamma runs");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_JumpSquat, "Test.State.JumpSquat", "Owned from the jump request to the take-off of the squat jump of KIT_Test_Squat");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Special, "Test.State.Special", "Owned while the plain special of KIT_Test_Delta runs");
@@ -57,6 +68,115 @@ UGSTN_GA_TestAttack::UGSTN_GA_TestAttack(const FObjectInitializer& ObjectInitial
 	FGSTN_TimelineTrack_CancelWindow Window;
 	Window.StartFrame = 8;
 	Window.EndFrame = 14;
+	Window.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCommandTags::Special));
+	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Window));
+}
+
+UGSTN_GA_TestHitMove::UGSTN_GA_TestHitMove(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.AddTag(TAG_Test_State_HitMove);
+
+	Timeline.TotalFrames = 32;
+	Timeline.FirstActionableFrame = 28;
+	Timeline.OverrideFrames = 0;
+
+	// A ricochet (forced by the harness' fake outcome) ends the move into a recoil that outlasts it: 40 frames against the 32 of the move
+	Timeline.bHasRicochetResponse = true;
+	Timeline.RicochetResponse.RecoilFrames = 40;
+
+	// What every hit of the move does: an authored hitstop so the scenarios know the windows (8 frames victim, 6 attacker)
+	auto MakeHit = [](float Damage)
+	{
+		FGSTN_HitData Hit;
+		Hit.Damage = Damage;
+		Hit.BaseKnockback = 500.f;
+		Hit.AngleDeg = 30.f;
+		Hit.HitstopMode = EGSTN_HitstopMode::Override;
+		Hit.HitstopFramesOverride = 8;
+		Hit.AttackerHitstopFramesOverride = 6;
+		return Hit;
+	};
+	auto MakeSphere = [](double Radius, uint8 Group, EGSTN_HitboxSpace Space)
+	{
+		FGSTN_HitboxSpec Spec;
+		Spec.Shape.Type = EGSTN_ShapeType::Sphere;
+		Spec.Shape.Extent = FVector(Radius);
+		Spec.HitGroup = Group;
+		Spec.Space = Space;
+		return Spec;
+	};
+
+	// Root: a sphere that travels forward over the track, swept so it cannot jump over a thin hurtbox
+	{
+		FGSTN_TimelineTrack_Hitbox Track;
+		Track.StartFrame = 4;
+		Track.EndFrame = 8;
+		FGSTN_HitboxSpec Spec = MakeSphere(50.0, 0, EGSTN_HitboxSpace::Root);
+		FGSTN_HitboxKey From;
+		From.Frame = 0;
+		From.Offset = FVector(80.0, 0.0, 0.0);
+		FGSTN_HitboxKey To;
+		To.Frame = 3;
+		To.Offset = FVector(170.0, 0.0, 0.0);
+		Spec.Keys = { From, To };
+		Spec.bSweepBetweenFrames = true;
+		Spec.Data = MakeHit(8.f);
+		Track.Hitboxes.Add(Spec);
+		Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Track));
+	}
+	// BakedSocket: hand_r runs along the left side of the attacker (baked below)
+	{
+		FGSTN_TimelineTrack_Hitbox Track;
+		Track.StartFrame = 10;
+		Track.EndFrame = 14;
+		FGSTN_HitboxSpec Spec = MakeSphere(45.0, 1, EGSTN_HitboxSpace::BakedSocket);
+		Spec.Socket = TEXT("hand_r");
+		Spec.Data = MakeHit(8.f);
+		Track.Hitboxes.Add(Spec);
+		Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Track));
+
+		FGSTN_BakedSocketFrames Baked;
+		for (int32 Frame = 0; Frame < Timeline.TotalFrames; ++Frame)
+		{
+			const double Y = FMath::Clamp(260.0 - 40.0 * (Frame - 10), 140.0, 260.0);
+			Baked.Frames.Add(FTransform(FVector(100.0, Y, 0.0)));
+		}
+		Timeline.BakedSockets.Add(TEXT("hand_r"), Baked);
+	}
+	// WorldAtMoveStart: a sphere left where the move started
+	{
+		FGSTN_TimelineTrack_Hitbox Track;
+		Track.StartFrame = 16;
+		Track.EndFrame = 20;
+		FGSTN_HitboxSpec Spec = MakeSphere(60.0, 2, EGSTN_HitboxSpace::WorldAtMoveStart);
+		FGSTN_HitboxKey Key;
+		Key.Offset = FVector(200.0, -160.0, 0.0);
+		Spec.Keys = { Key };
+		Spec.Data = MakeHit(8.f);
+		Track.Hitboxes.Add(Spec);
+		Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Track));
+	}
+	// A spin around the attacker, the same whichever way anyone faces: the trade, the friendly fire and the self variant use it
+	{
+		FGSTN_TimelineTrack_Hitbox Track;
+		Track.StartFrame = 20;
+		Track.EndFrame = 24;
+		FGSTN_HitboxSpec Spec = MakeSphere(140.0, 3, EGSTN_HitboxSpace::Root);
+		Spec.Data = MakeHit(6.f);
+		FGSTN_HitVariant AllyVariant;
+		AllyVariant.Override.Fields = static_cast<int32>(EGSTN_HitDataField::Damage);
+		AllyVariant.Override.Values.Damage = 3.f;
+		Spec.RelationshipVariants.Add(GSTNCombatHitTags::Relationship_Ally.GetTag(), AllyVariant);
+		Track.Hitboxes.Add(Spec);
+		Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Track));
+	}
+
+	// Cancellable into the special commands from frame 6, but only once a hit confirmed the run
+	FGSTN_TimelineTrack_CancelWindow Window;
+	Window.StartFrame = 6;
+	Window.EndFrame = 28;
+	Window.Condition = EGSTN_CancelCondition::OnHit;
 	Window.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCommandTags::Special));
 	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Window));
 }
@@ -191,8 +311,81 @@ UGSTN_GA_TestPickUp::UGSTN_GA_TestPickUp(const FObjectInitializer& ObjectInitial
 UGSTN_GA_TestEscapeDodge::UGSTN_GA_TestEscapeDodge(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// The special escape: the same dodge, free to start in hitstun and hitstop. Data, not code
+	// The special escape: the same dodge, free to start in hitstun and hitstop. Data, not code. The tag opens the combat gate, the empty blocked
+	// tags are the ability's own word on hitstun and hitstop
 	ActivationBlockedTags.Reset();
+	AbilityTags.AddTag(GSTNCombatTags::Ability_IgnoreHitstunOnActivation);
+}
+
+UGSTN_GA_TestReactionPeek::UGSTN_GA_TestReactionPeek(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_Peek);
+	ActivationBlockedTags.Reset();
+	AbilityTags.AddTag(GSTNCombatTags::Ability_IgnoreHitstunOnActivation);
+}
+
+UGSTN_GA_TestBurst::UGSTN_GA_TestBurst(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_Burst);
+	bEndReactionOnActivation = true;
+}
+
+UGSTN_GA_TestPlantedGroundDodge::UGSTN_GA_TestPlantedGroundDodge(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+void UGSTN_GA_TestPlantedGroundDodge::OnTimelineBegan(int32 StateStartFrame)
+{
+	// The dodge without its impulse: straight to the base of the timeline, which starts the montage and nothing else
+	UGSTN_GA_BaseCombat::OnTimelineBegan(StateStartFrame);
+}
+
+UGSTN_GA_TestFeetProbe::UGSTN_GA_TestFeetProbe(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.AddTag(TAG_Test_State_FeetProbe);
+
+	Timeline.TotalFrames = 160;
+	Timeline.FirstActionableFrame = 156;
+	Timeline.OverrideFrames = 0;
+	Timeline.bHasRicochetResponse = true;
+	Timeline.RicochetResponse.RecoilFrames = 40;
+
+	FGSTN_TimelineTrack_Hitbox Track;
+	Track.StartFrame = 2;
+	Track.EndFrame = 150;
+	FGSTN_HitboxSpec Spec;
+	Spec.Shape.Type = EGSTN_ShapeType::Sphere;
+	Spec.Shape.Extent = FVector(20.0);
+	Spec.HitGroup = 0;
+	Spec.Space = EGSTN_HitboxSpace::Root;
+	FGSTN_HitboxKey Key;
+	Key.Frame = 0;
+	Key.Offset = FVector(175.0, 0.0, -75.0);
+	Spec.Keys = { Key };
+	Spec.Data.Damage = 4.f;
+	Spec.Data.BaseKnockback = 300.f;
+	Spec.Data.AngleDeg = 30.f;
+	Spec.Data.HitstopMode = EGSTN_HitstopMode::Override;
+	Spec.Data.HitstopFramesOverride = 8;
+	Spec.Data.AttackerHitstopFramesOverride = 6;
+	Track.Hitboxes.Add(Spec);
+	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Track));
+}
+
+UGSTN_GE_TestPlanted::UGSTN_GE_TestPlanted()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
+	FInheritedTagContainer Tags;
+	Tags.Added.AddTag(TAG_Test_State_Planted);
+	TargetTags->SetAndApplyTargetTagChanges(Tags);
+	GEComponents.Add(TargetTags);
 }
 
 UGSTN_GE_TestHitstun::UGSTN_GE_TestHitstun()
@@ -201,6 +394,16 @@ UGSTN_GE_TestHitstun::UGSTN_GE_TestHitstun()
 	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
 	FInheritedTagContainer Tags;
 	Tags.Added.AddTag(GSTNCombatTags::State_Hitstun);
+	TargetTags->SetAndApplyTargetTagChanges(Tags);
+	GEComponents.Add(TargetTags);
+}
+
+UGSTN_GE_TestMovementLock::UGSTN_GE_TestMovementLock()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
+	FInheritedTagContainer Tags;
+	Tags.Added.AddTag(GSTNCombatTags::Lock_Movement);
 	TargetTags->SetAndApplyTargetTagChanges(Tags);
 	GEComponents.Add(TargetTags);
 }

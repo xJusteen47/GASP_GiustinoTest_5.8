@@ -23,17 +23,32 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 * Step 2. Evaluates the running timeline at Frame into Output. If it reached its end, or its ability is gone (cancelled by
 	 * something else; checked only after the start frame, because the ability system activates it later in the start frame),
 	 * the combatant goes back to Actionable. A commit crossed by this evaluation adds a CommitTimeline request.
+	 * With a recoil under way (Core.RecoilStartFrame) the recoil is evaluated instead, and its end is the end of the timeline: the recoil
+	 * frames are the locked part, the combatant is Actionable from the next frame (the rest of the recoil montage is the cancellable tail).
 	 * A hitstop frame (bHitstopFrame) adds one to TimelinePausedFrames first: the timeline frame stands still, so nothing keyed
 	 * to a frame fires again and the timeline ends later by as many frames as the hitstop lasted.
 	 * @return true if a timeline is still running after the step
 	 */
 	static bool AdvanceClock(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, int32 DefaultOverrideFrames,
-		bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame = false);
+		bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame = false, const FGSTN_RicochetResponse* RicochetFallback = nullptr);
+
+	/**
+	 * Ricochet (M4 H12). The recoil of the attack: its own response, else Fallback (the weapon's, else the kit's: the caller resolves which
+	 * one), null when neither is authored. A ricochet with no response changes nothing about the attacker
+	 */
+	static const FGSTN_RicochetResponse* ResolveRicochet(const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback);
+
+	/**
+	 * The attacker side decided a ricochet on Frame: the timeline ends into the recoil, which begins on Frame + 1 (the clock step of Frame
+	 * ran before the attacker step). Does nothing when no timeline runs, a recoil is under way, or no response exists.
+	 * @return true when the recoil was started
+	 */
+	static bool StartRecoil(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback);
 
 	/**
 	 * Step 6. May the command start now? Actionable: yes. Running: inside the cancellable tail yes; inside the startup override
 	 * window if the command matches OverrideInto (empty: its tier is above the running command's); in an open cancel window if
-	 * the command matches the window's query and its condition holds (OnHit/OnBlock never before M4, OnWhiff while nothing hit);
+	 * the command matches the window's query and its condition holds (OnHit once a hit of the run is confirmed, OnBlock never before M6, OnWhiff while nothing hit);
 	 * from the first actionable frame on yes; otherwise no. Output is the evaluation AdvanceClock made for this frame.
 	 */
 	static bool IsCommandAllowed(const FGSTN_CombatSyncCore& Core, const FGSTN_CombatTimelineData* Data, const FGSTN_TimelineOutput& Output,

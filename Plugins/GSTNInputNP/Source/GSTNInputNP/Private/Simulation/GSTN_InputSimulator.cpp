@@ -98,6 +98,7 @@ FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args
 	Out.PrevContext = Fingerprint;
 
 	FGSTN_BufferResetRules::Apply(Out.History, *Args.Buttons, Args.GlobalResetRules, Events, Frame);
+	FGSTN_BufferResetRules::ApplyInterrupted(Out.History, Events, Frame);
 	if (Table.ResetRules)
 	{
 		FGSTN_BufferResetRules::Apply(Out.History, *Args.Buttons, *Table.ResetRules, Events, Frame);

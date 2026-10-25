@@ -59,3 +59,11 @@ Rule 3 = MT 3.8 Blueprint extension, rule 4 = MT 3.9 replaceable content, rule 5
 ## Known deviation: GSTNCombatNP depends on GSTNCombatGAS (2026-10-24)
 
 `GSTNCombatNP.Build.cs` lists `GSTNCombatGAS` (the timeline ability tags, the combat attribute set the stats modifier reads, `UGSTN_GE_WeaponStats`/`FGSTN_StatValue` in the weapon stats entries, the loadout component). The loadout table swap (C17) does not widen it: the converter, the table set and the swap logic use Core and InputNP types only (plus the weapon stats entry type, already there); GAS is touched in the component's `BindLoadoutComponent` / `BuildWeaponStats` glue.
+
+## New edge: GSTNCombatCore -> GSTNSurfaceCore (H11, 2026-10-25)
+
+`GSTNCombatCore.Build.cs` (private use in `Hits/GSTN_ImpactMath.cpp`, the tests) and `GSTNCombat.uplugin` depend on `GSTNSurface`. Core -> Core, planned in the GSTNSurface README (traversal-surfaces.md §3, TS.1): the impact table keys its rows by the GSTNSurface type index, and `Surface.Type` (root and leaves Wall, Glass, Crate, Trampoline) lives in GSTNSurface, not in combat. GSTNSurfaceCore has no GAS, Network Prediction or Mover, so the Core purity of combat is unchanged. The duplicate `Surface.Type` root and leaves H3 had put in `GSTNCombatCore` were removed.
+
+## New edge: GSTNLevelObjects -> GSTNSurfaceCore, GSTNCombatCore (H11b, 2026-10-25)
+
+New plugin `GSTNLevelObjects` (Build.cs: engine modules, `GSTNSurfaceCore`, `GSTNCombatCore`; uplugin: GSTNSurface, GSTNCombat). Core -> Core, never GSTNCombatNP. The launch consumer lives in GSTNCombatNP, which already depends on GSTNSurfaceCore. The project module gets a private dependency on `GSTNLevelObjects` for the harness spawn helper only.

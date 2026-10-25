@@ -41,7 +41,7 @@ bool FGSTN_StatsMovementModifier::ResolveSpeedFactor(const UAbilitySystemCompone
 	{
 		return false;
 	}
-	OutFactor = ASC.HasMatchingGameplayTag(GSTNCombatTags::Lock_Movement)
+	OutFactor = (ASC.HasMatchingGameplayTag(GSTNCombatTags::Lock_Movement) || ASC.HasMatchingGameplayTag(GSTNCombatTags::Lock_Reaction))
 		? 0.f
 		: FGSTN_StatsScaling::ComputeFactor(WalkSpeed, UGSTN_CombatSettings::Get().StatsReferenceWalkSpeed);
 	return true;

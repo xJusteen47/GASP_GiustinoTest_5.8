@@ -4,6 +4,7 @@
 
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
+#include "Attributes/GSTN_HealthAttributeSet.h"
 #include "Attributes/GSTN_MeterAttributeSet.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DefaultMovementSet/InstantMovementEffects/BasicInstantMovementEffects.h"
@@ -11,6 +12,7 @@
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Dom/JsonObject.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
 #include "EnhancedInputSubsystems.h"
 #include "Events/GSTN_SimEventSubsystem.h"
 #include "GameFramework/Pawn.h"
@@ -32,7 +34,10 @@
 #include "MoverComponent.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
+#include "HAL/ThreadSafeBool.h"
+#include "Hits/GSTN_HitExtensions.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "World/GSTN_StepSnapshot.h"
 
 UGSTN_GASNPPTestComponent::UGSTN_GASNPPTestComponent()
 {
@@ -54,6 +59,9 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 		// The meters of the C18 scenarios (ex_meter, super_code): the same early creation
 		Asc->DefaultAttributes.AddUnique(UGSTN_MeterAttributeSet::StaticClass());
 		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_MeterAttributeSet::StaticClass());
+		// The health set of the hit scenarios (M4 H9): damage percent, health, the resistances the victim side reads
+		Asc->DefaultAttributes.AddUnique(UGSTN_HealthAttributeSet::StaticClass());
+		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_HealthAttributeSet::StaticClass());
 		// The ability system may have initialised its simulation already (components initialise in their own order): create it
 		// now as well, the lookup by class keeps it from being added twice
 		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_CombatAttributeSet::StaticClass());
@@ -122,6 +130,23 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 					++TimelineStartedCounts.FindOrAdd(Source);
 				}
 			}).Id;
+		HitEventListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer::CreateFromArray(TArray<FGameplayTag>{ GSTNCombatTags::Event_HitLanded, GSTNCombatTags::Event_HitReceived, GSTNCombatTags::Event_KO, GSTNCombatTags::Event_Impact_Bounce })),
+			[this](const FGSTN_SimEvent& Event)
+			{
+				const bool bTarget = Event.Target.Get() == GetOwner();
+				const bool bInstigator = Event.Instigator.Get() == GetOwner();
+				if (!bTarget && !bInstigator)
+				{
+					return;
+				}
+				const TCHAR* Type = Event.EventType == GSTNCombatTags::Event_HitLanded ? TEXT("HitLanded") : Event.EventType == GSTNCombatTags::Event_HitReceived ? TEXT("HitReceived") : Event.EventType == GSTNCombatTags::Event_Impact_Bounce ? TEXT("ImpactBounce") : TEXT("KO");
+				TArray<FString> Names;
+				for (const FGameplayTag& Tag : Event.Tags)
+				{
+					Names.Add(Tag.ToString());
+				}
+				HitEventLog.Add(FString::Printf(TEXT("%c:%s:%d:%.1f:%s"), bTarget ? TEXT('T') : TEXT('I'), Type, Event.Frame, Event.Magnitude, *FString::Join(Names, TEXT(","))));
+			}).Id;
 		WeaponSwitchedListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCombatTags::Event_WeaponSwitched)),
 			[this](const FGSTN_SimEvent& Event)
 			{
@@ -153,6 +178,16 @@ void UGSTN_GASNPPTestComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 			Events->StopListening(Handle);
 		}
 		TimelineStartedListener = INDEX_NONE;
+	}
+	if (HitEventListener != INDEX_NONE)
+	{
+		if (UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(this))
+		{
+			FGSTN_SimEventListenerHandle Handle;
+			Handle.Id = HitEventListener;
+			Events->StopListening(Handle);
+		}
+		HitEventListener = INDEX_NONE;
 	}
 	if (WeaponSwitchedListener != INDEX_NONE)
 	{
@@ -285,9 +320,11 @@ void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& Ti
 			AbilitySystem->GetOwnedGameplayTags(OwnedTags);
 			for (const FGameplayTag& Tag : OwnedTags)
 			{
-				if (Tag.ToString().StartsWith(TEXT("Test.")))
+				// The test state, and the combat state and lock the victim side projects (M4 H9)
+				const FString Name = Tag.ToString();
+				if (Name.StartsWith(TEXT("Test.")) || Name.StartsWith(TEXT("Combat.State.")) || Name.StartsWith(TEXT("Combat.Lock.")))
 				{
-					Entry.Tags.Add(Tag.ToString());
+					Entry.Tags.Add(Name);
 				}
 			}
 		}
@@ -518,7 +555,7 @@ int32 UGSTN_GASNPPTestComponent::ServerSetMoveKit(bool bDash, bool bDodge, bool 
 		return Changed;
 	};
 	int32 Changed = Apply(bDash, { UGSTN_GA_Dash::StaticClass() });
-	Changed += Apply(bDodge, { UGSTN_GA_GroundDodge::StaticClass(), UGSTN_GA_AirDodge::StaticClass(), UGSTN_GA_TestEscapeDodge::StaticClass() });
+	Changed += Apply(bDodge, { UGSTN_GA_GroundDodge::StaticClass(), UGSTN_GA_AirDodge::StaticClass(), UGSTN_GA_TestEscapeDodge::StaticClass(), UGSTN_GA_TestPlantedGroundDodge::StaticClass() });
 	Changed += Apply(bInteract, { UGSTN_GA_TestGrab::StaticClass(), UGSTN_GA_TestPickUp::StaticClass() });
 	return Changed;
 }
@@ -541,6 +578,24 @@ bool UGSTN_GASNPPTestComponent::ServerSetHitstun(bool bApply)
 	return !bApply || HitstunEffectHandle.IsValid();
 }
 
+bool UGSTN_GASNPPTestComponent::ServerSetMovementLock(bool bApply)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (MovementLockEffectHandle.IsValid())
+	{
+		AbilitySystem->RemoveActiveGameplayEffect(MovementLockEffectHandle);
+		MovementLockEffectHandle = FActiveGameplayEffectHandle();
+	}
+	if (bApply)
+	{
+		MovementLockEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestMovementLock>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
+	return !bApply || MovementLockEffectHandle.IsValid();
+}
+
 bool UGSTN_GASNPPTestComponent::ServerSetEscapeKit(bool bApply)
 {
 	if (!AbilitySystem || !GetOwner()->HasAuthority())
@@ -557,6 +612,65 @@ bool UGSTN_GASNPPTestComponent::ServerSetEscapeKit(bool bApply)
 		EscapeEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestEscapeKit>(), 1.f, AbilitySystem->MakeEffectContext());
 	}
 	return !bApply || EscapeEffectHandle.IsValid();
+}
+
+bool UGSTN_GASNPPTestComponent::ServerSetPlanted(bool bApply)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (PlantedEffectHandle.IsValid())
+	{
+		AbilitySystem->RemoveActiveGameplayEffect(PlantedEffectHandle);
+		PlantedEffectHandle = FActiveGameplayEffectHandle();
+	}
+	if (bApply)
+	{
+		PlantedEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestPlanted>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
+	return !bApply || PlantedEffectHandle.IsValid();
+}
+
+namespace
+{
+	/** The harness' fake attacker outcome (M4 H12): every hit bounces while the switch is on. The registry and the switch are process-wide, like the registry */
+	struct FGSTN_TestForcedRicochet : IGSTN_AttackerOutcomeExtension
+	{
+		virtual FName GetName() const override { return TEXT("Test.ForcedRicochet"); }
+		virtual EGSTN_AttackerHitOutcome Evaluate(const FGSTN_HitContextView& View) const override
+		{
+			return bForce ? EGSTN_AttackerHitOutcome::Ricochet : EGSTN_AttackerHitOutcome::Normal;
+		}
+		FThreadSafeBool bForce { false };
+	};
+
+	FGSTN_TestForcedRicochet& ForcedRicochet()
+	{
+		static FGSTN_TestForcedRicochet Instance;
+		static const bool bRegistered = FGSTN_AttackerOutcomeRegistry::Get().Register(&Instance);
+		(void)bRegistered;
+		return Instance;
+	}
+}
+
+void UGSTN_GASNPPTestComponent::SetForceRicochet(bool bForce)
+{
+	ForcedRicochet().bForce = bForce;
+}
+
+FString UGSTN_GASNPPTestComponent::GetDodgeWindow(bool bAir)
+{
+	const UGSTN_GA_MoveTimeline* Dodge = bAir ? static_cast<const UGSTN_GA_MoveTimeline*>(GetDefault<UGSTN_GA_AirDodge>()) : GetDefault<UGSTN_GA_GroundDodge>();
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Dodge->GetTimelineData().Tracks)
+	{
+		const FGSTN_TimelineTrack* Base = Track.GetPtr<FGSTN_TimelineTrack>();
+		if (Base && Base->GetKind() == EGSTN_TimelineTrackKind::HurtboxModifier)
+		{
+			return FString::Printf(TEXT("%d,%d"), Base->StartFrame, Base->EndFrame);
+		}
+	}
+	return TEXT("-1,-1");
 }
 
 bool UGSTN_GASNPPTestComponent::SetTestGravity(FVector Acceleration, bool bEnable)
@@ -645,10 +759,151 @@ bool UGSTN_GASNPPTestComponent::ServerResetToSpawn(FVector Offset)
 	}
 	TSharedPtr<FTeleportEffect> Teleport = MakeShared<FTeleportEffect>();
 	Teleport->TargetLocation = SpawnLocation + Offset;
+	// The spawn is a little above the floor and a lane may sit on other ground: stand the capsule on the floor under the lane, or the pawn would be
+	// left floating in Walking (the mode does not look for a floor while it stands still) and the first move of the scenario would start with a fall
+	FHitResult Floor;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GASNPPTestReset), false, GetOwner());
+	if (GetWorld()->LineTraceSingleByChannel(Floor, Teleport->TargetLocation + FVector(0.0, 0.0, 50.0), Teleport->TargetLocation - FVector(0.0, 0.0, 600.0), ECC_Visibility, Params))
+	{
+		Teleport->TargetLocation.Z = Floor.ImpactPoint.Z + GetOwner()->GetSimpleCollisionHalfHeight() + 1.0;
+	}
 	Teleport->bUseActorRotation = true;
 	Mover->QueueInstantMovementEffect(Teleport);
 
 	return true;
+}
+
+bool UGSTN_GASNPPTestComponent::ServerTeleportExact(FVector Location)
+{
+	if (!Mover || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	TSharedPtr<FTeleportEffect> Teleport = MakeShared<FTeleportEffect>();
+	Teleport->TargetLocation = Location;
+	Teleport->bUseActorRotation = true;
+	Mover->QueueInstantMovementEffect(Teleport);
+
+	TSharedPtr<FApplyVelocityEffect> Stop = MakeShared<FApplyVelocityEffect>();
+	Stop->VelocityToApply = FVector::ZeroVector;
+	Stop->bAdditiveVelocity = false;
+	// A pawn left in Walking in the air does not look for a floor while it stands still: it has to fall
+	Stop->ForceMovementMode = TEXT("Falling");
+	Mover->QueueInstantMovementEffect(Stop);
+	return true;
+}
+
+
+bool UGSTN_GASNPPTestComponent::ServerResetTestState(FVector Offset)
+{
+	if (!ServerResetToSpawn(Offset))
+	{
+		return false;
+	}
+	// The teleport keeps the velocity, and a pawn left in the air would land wherever it was going. The mode is not forced: a forced Walking leaves the
+	// pawn without the floor result of a mode that arrived by itself and the first ground move of the scenario (a dodge) did nothing; the harness
+	// waits until the sim reports Walking at rest instead
+	TSharedPtr<FApplyVelocityEffect> Stop = MakeShared<FApplyVelocityEffect>();
+	Stop->VelocityToApply = FVector::ZeroVector;
+	Stop->bAdditiveVelocity = false;
+	Mover->QueueInstantMovementEffect(Stop);
+
+	ServerRevokeProbes();
+	ServerRevokeBulk();
+	ServerSetBulkEffect(false);
+	ServerSetStatsPreset(0);
+	ServerSetHitstun(false);
+	ServerSetMovementLock(false);
+	ServerSetEscapeKit(false);
+	ServerSetPlanted(false);
+	SetForceRicochet(false);
+	ServerEquipPrimaryWeapon(false);
+	bStatsProbeEnabled = false;
+	HitEventLog.Reset();
+	if (UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
+	{
+		// A knocked out pawn plays again
+		Combat->ServerRespawn();
+	}
+	if (AbilitySystem)
+	{
+		// The damage a hit scenario left on the victim
+		ServerSetDamagePercent(0.f);
+		if (AbilitySystem->HasAttributeSetForAttribute(UGSTN_HealthAttributeSet::GetHealthAttribute()))
+		{
+			const float MaxHealth = AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetMaxHealthAttribute());
+			if (AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetHealthAttribute()) < MaxHealth)
+			{
+				AbilitySystem->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetHealthAttribute(), MaxHealth);
+			}
+		}
+		// Only a meter that is not empty: a write is an out-of-band change that the owner reconciles
+		for (const FGameplayAttribute& Meter : { UGSTN_MeterAttributeSet::GetExMeterAttribute(), UGSTN_MeterAttributeSet::GetSuperMeterAttribute() })
+		{
+			if (AbilitySystem->HasAttributeSetForAttribute(Meter) && AbilitySystem->GetNumericAttribute(Meter) > 0.f)
+			{
+				AbilitySystem->SetNumericAttributeBase(Meter, 0.f);
+			}
+		}
+	}
+	return true;
+}
+
+bool UGSTN_GASNPPTestComponent::ServerSetDamagePercent(float Percent)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority() || !AbilitySystem->HasAttributeSetForAttribute(UGSTN_HealthAttributeSet::GetDamagePercentAttribute()))
+	{
+		return false;
+	}
+	// Only a change: a write is an out-of-band change that the owner reconciles
+	if (!FMath::IsNearlyEqual(AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), Percent))
+	{
+		AbilitySystem->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetDamagePercentAttribute(), Percent);
+	}
+	return true;
+}
+
+FString UGSTN_GASNPPTestComponent::GetHitEventLog() const
+{
+	return FString::Join(HitEventLog, TEXT(";"));
+}
+
+FString UGSTN_GASNPPTestComponent::ReadSnapshotEntry(int32 Frame)
+{
+	UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>();
+	const FGSTN_CombatSyncState* State = Combat ? Combat->GetSyncState() : nullptr;
+	if (!State)
+	{
+		return FString();
+	}
+	FGSTN_SnapshotEntry Entry;
+	Entry.Hurtboxes = Combat->HurtboxSet.LoadSynchronous();
+	const int32 ReadFrame = Frame >= 0 ? Frame : State->Core.Input.History.GetLatestFrame();
+	if (!Combat->ReadSnapshotEntry(ReadFrame, Entry))
+	{
+		return FString();
+	}
+	auto Vec = [](const FVector& V) { return TArray<TSharedPtr<FJsonValue>>{ MakeShared<FJsonValueNumber>(V.X), MakeShared<FJsonValueNumber>(V.Y), MakeShared<FJsonValueNumber>(V.Z) }; };
+	TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+	Json->SetNumberField(TEXT("frame"), ReadFrame);
+	Json->SetArrayField(TEXT("loc"), Vec(Entry.Transform.GetLocation()));
+	Json->SetArrayField(TEXT("vel"), Vec(Entry.Velocity));
+	Json->SetArrayField(TEXT("up"), Vec(Entry.Up));
+	Json->SetArrayField(TEXT("facing"), Vec(Entry.Facing));
+	Json->SetBoolField(TEXT("inHitstop"), Entry.bInHitstop);
+	Json->SetNumberField(TEXT("actionState"), static_cast<int32>(Entry.ActionState));
+	TArray<TSharedPtr<FJsonValue>> Hurt;
+	for (const FGSTN_HurtboxFrameState& H : Entry.HurtStates)
+	{
+		Hurt.Add(MakeShared<FJsonValueNumber>(static_cast<int32>(H.State)));
+	}
+	Json->SetArrayField(TEXT("hurtStates"), Hurt);
+	Json->SetNumberField(TEXT("reactionFlags"), Entry.Reaction.Flags);
+	Json->SetNumberField(TEXT("damagePercent"), Entry.Reaction.GetDamagePercent());
+	FString Out;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Out);
+	FJsonSerializer::Serialize(Json, Writer);
+	return Out;
 }
 
 UGSTN_LoadoutComponent* UGSTN_GASNPPTestComponent::EnsureLoadoutComponent()

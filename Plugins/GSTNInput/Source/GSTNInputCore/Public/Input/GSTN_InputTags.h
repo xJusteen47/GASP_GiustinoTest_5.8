@@ -43,6 +43,9 @@ namespace GSTNInputTags
 	/** The character landed this frame */
 	GSTNINPUTCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(BufferEvent_Landed);
 
+	/** The character was interrupted by something outside its control (a hit received, a stun, a grab). Raised by whichever system interrupts it; a reset rule decides what the buffer forgets */
+	GSTNINPUTCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(BufferEvent_Interrupted);
+
 	// Authoritative events
 
 	/** A command was executed (published through the authoritative event stream) */

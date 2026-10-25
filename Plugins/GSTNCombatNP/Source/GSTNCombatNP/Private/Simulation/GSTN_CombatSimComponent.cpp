@@ -10,7 +10,14 @@
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "Animation/AnimMontage.h"
 #include "AttributeSet.h"
+#include "GSTN_CombatNPTags.h"
+#include "Movement/GSTN_LayeredMove_Freeze.h"
+#include "Movement/GSTN_LayeredMove_Knockback.h"
+#include "Movement/GSTN_LayeredMove_Launch.h"
+#include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
@@ -18,6 +25,7 @@
 #include "GameFramework/PlayerState.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "GSTN_CombatTags.h"
+#include "GSTN_CombatRulesComponent.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputConfig.h"
@@ -30,8 +38,16 @@
 #include "NetworkPredictionProxyInit.h"
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
+#include "Curves/CurveVector.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
+#include "Presentation/GSTN_HitPresentationComponent.h"
+#include "World/GSTN_CombatWorldSubsystem.h"
+#include "Hits/GSTN_ImpactTypes.h"
+#include "Kits/GSTN_PrimaryKitDefinition.h"
+#include "Rules/GSTN_CombatRules.h"
+#include "Debug/GSTN_CombatDebugDraw.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
+#include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_LoadoutSwapLogic.h"
 #include "Loadout/GSTN_EntrySourceMask.h"
 #include "Simulation/GSTN_InputHostUtils.h"
@@ -69,6 +85,11 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
 	bWantsInitializeComponent = true;
 	SetIsReplicatedByDefault(true);
+	FreezeEffect = UGSTN_GE_Freeze::StaticClass();
+	FreezeAtRestEffect = UGSTN_GE_FreezeZeroVelocity::StaticClass();
+	KnockbackEffect = UGSTN_GE_Knockback::StaticClass();
+	SurfaceLaunchEffect = UGSTN_GE_SurfaceLaunch::StaticClass();
+	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -94,6 +115,20 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	CompileInput();
 	BindAbilitySystem();
 	PollLoadoutComponent();
+
+	ActiveHurtboxSet = HurtboxSet.LoadSynchronous();
+	if (!CombatRules)
+	{
+		// The match's rules component (on the GameState, placed by the rules provider or a Blueprint) first; a client whose GameState has not
+		// arrived yet, or a world without one, plays the settings' rules, which are what an empty component resolves to as well
+		UGSTN_CombatRulesComponent* RulesComponent = UGSTN_CombatRulesComponent::Find(this);
+		CombatRules = const_cast<UGSTN_CombatRules*>(RulesComponent != nullptr ? RulesComponent->GetRules() : UGSTN_CombatSettings::Get().ResolveDefaultRules());
+	}
+	if (CombatRules && !ImpactTable && !CombatRules->SurfaceImpactTable.IsNull())
+	{
+		ImpactTable = CombatRules->SurfaceImpactTable.LoadSynchronous();
+	}
+	SetCombatWorldSubsystem(UGSTN_CombatWorldSubsystem::Get(GetWorld()));
 
 	if (ContextProvider)
 	{
@@ -230,6 +265,16 @@ const FGSTN_CommandTable& UGSTN_CombatSimComponent::GetCommandTable() const
 
 void UGSTN_CombatSimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get())
+	{
+		if (RegisteredEntityId != INDEX_NONE)
+		{
+			Subsystem->UnregisterEntity(RegisteredEntityId);
+		}
+	}
+	RegisteredEntityId = INDEX_NONE;
+	WorldSubsystem.Reset();
+
 	if (AbilitySystem && PreTickHandle.IsValid())
 	{
 		AbilitySystem->OnSimulationPreTick.Remove(PreTickHandle);
@@ -311,12 +356,34 @@ TArray<FGSTN_WeaponStatsEntry> UGSTN_CombatSimComponent::BuildWeaponStats(const 
 	return Entries;
 }
 
+void UGSTN_CombatSimComponent::BuildRicochetFallbacks(const FGSTN_ResolvedLoadout& Resolved, TArray<FGSTN_RicochetResponse>& OutWeapons, FGSTN_RicochetResponse& OutKit)
+{
+	OutWeapons.Reset();
+	for (const UGSTN_WeaponDefinition* Weapon : Resolved.Weapons)
+	{
+		const FGSTN_RicochetResponse* Fallback = Weapon ? Weapon->GetRicochetFallback() : nullptr;
+		OutWeapons.Add(Fallback ? *Fallback : FGSTN_RicochetResponse());
+	}
+	const FGSTN_RicochetResponse* KitFallback = Resolved.Kit ? Resolved.Kit->GetRicochetFallback() : nullptr;
+	OutKit = KitFallback ? *KitFallback : FGSTN_RicochetResponse();
+}
+
 void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision)
 {
 	if (!Component || !Component->HasLoadout())
 	{
 		return;
 	}
+	// The victim layer of the surface impacts is the kit's, when it authors one
+	KitImpactResponse.Reset();
+	if (const UGSTN_PrimaryKitDefinition* Kit = Component->GetResolvedLoadout().Kit)
+	{
+		if (const FGSTN_ImpactResponseExtension* Extension = Kit->Extensions.Find<FGSTN_ImpactResponseExtension>())
+		{
+			KitImpactResponse = Extension->Response;
+		}
+	}
+
 	const FGSTN_CompiledBindingTable& Compiled = Component->GetCompiledTable();
 	if (Compiled.Entries.IsEmpty())
 	{
@@ -336,6 +403,7 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	Input.GlobalResetRules = ResetRules;
 	Input.Adoptable = AdoptableTimelines;
 	Input.WeaponStats = BuildWeaponStats(Component->GetResolvedLoadout());
+	BuildRicochetFallbacks(Component->GetResolvedLoadout(), Input.WeaponRicochet, Input.KitRicochet);
 	Input.ReservedExtension = Component->GetApplied().ReservedExtension;
 
 	FGSTN_CompileReport Report;
@@ -455,10 +523,71 @@ bool UGSTN_CombatSimComponent::IsTimelineRunning(const UClass* AbilityClass, int
 	return Current.TimelineRegistry[Sync->Core.ActiveTimeline] == AbilityClass;
 }
 
+bool UGSTN_CombatSimComponent::GetRecoil(int32& OutStartFrame, const FGSTN_RicochetResponse*& OutResponse) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline || Sync->Core.RecoilStartFrame == INDEX_NONE)
+	{
+		return false;
+	}
+	const UGSTN_CombatTableSet& Current = Tables();
+	OutResponse = FGSTN_CombatTimelineLogic::ResolveRicochet(GetRegistryTimeline(Current, Sync->Core.ActiveTimeline), Current.GetRicochetFallback(Sync->Core.ActiveWeaponIndex));
+	OutStartFrame = Sync->Core.RecoilStartFrame;
+	return OutResponse != nullptr;
+}
+
+void UGSTN_CombatSimComponent::ExecuteRecoilMove(const FGSTN_TimelineTrack_Movement& Track, int32 RecoilFrames, float StepMs)
+{
+	// A push back, the slide of the victim side reused (S 3b: "optional push-back movement track"): the curve's value at its start is the
+	// initial velocity in the local space of the pose the previous frame ended on, and it falls linearly to zero over the track. The
+	// curve is loaded with the response (never here): a curve that is not in memory is no movement
+	const UCurveVector* Curve = Track.VelocityCurve.Get();
+	FTransform Pose;
+	FVector Up;
+	if (!AbilitySystem || !PushBackEffect || !Curve || !ReadOwnPose(Pose, Up))
+	{
+		return;
+	}
+	const int32 Frames = FMath::Clamp(Track.EndFrame - Track.StartFrame, 1, FMath::Max(RecoilFrames - Track.StartFrame, 1));
+	const FVector Velocity = Pose.TransformVectorNoScale(Curve->GetVectorValue(0.f));
+	const FGameplayEffectSpecHandle Spec = AbilitySystem->MakeOutgoingSpec(PushBackEffect, 1.f, AbilitySystem->MakeEffectContext());
+	if (!Spec.IsValid())
+	{
+		return;
+	}
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityX, Velocity.X);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityY, Velocity.Y);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, Velocity.Z);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, 1.f / Frames);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, Track.GravityScale);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, Frames * StepMs * 0.001f);
+	AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+}
+
 bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 {
 	// Outside the combat tick (or with no timeline running) nothing gates: only a running timeline closes commands
+	// A victim in hitstun or tumble acts again when its state says Actionable; the first frame of that state is the first frame of the tail
 	const UGSTN_CombatTableSet& Current = Tables();
+	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
+	{
+		// The one exception: an ability tagged Combat.Ability.IgnoreHitstunOnActivation, in a reaction (a KO is never bypassed). The gate only asks
+		// whether the command has such a binding; CanExecuteBinding checks the binding the context actually picks, and the ability's own blocked tags decide
+		if (!FGSTN_CombatVictim::IsInReaction(*GateCore) || !Current.Table.Commands.IsValidIndex(CommandIndex))
+		{
+			return false;
+		}
+		const FGSTN_CommandTable::FCommand& Locked = Current.Table.Commands[CommandIndex];
+		for (int32 Offset = 0; Offset < Locked.NumBindings; ++Offset)
+		{
+			const int32 Binding = Locked.FirstBinding + Offset;
+			if (Current.BindingReaction.IsValidIndex(Binding) && (Current.BindingReaction[Binding] & UGSTN_CombatTableSet::ReactionIgnoresHitstun))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !Current.Table.Commands.IsValidIndex(CommandIndex))
 	{
 		return true;
@@ -553,6 +682,10 @@ uint8 UGSTN_CombatSimComponent::GetContextFingerprint() const
 
 void UGSTN_CombatSimComponent::AppendFrameEvents(uint8 PreviousFingerprint, uint8 CurrentFingerprint, FGSTN_BufferFrameEvents& Events) const
 {
+	if (bFrameInterrupted)
+	{
+		Events.EventTags.AddTag(GSTNInputTags::BufferEvent_Interrupted);
+	}
 	if (ContextProvider)
 	{
 		ContextProvider->AppendFrameEvents(PreviousFingerprint, CurrentFingerprint, Events);
@@ -564,6 +697,16 @@ bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 	if (!IsJumpBindingAllowed(BindingIndex))
 	{
 		return false;
+	}
+	// In a hit reaction only an ability that says so may start (the gate of IsCommandAllowed passed the command, not necessarily this binding)
+	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
+	{
+		const UGSTN_CombatTableSet& Current = Tables();
+		if (!FGSTN_CombatVictim::IsInReaction(*GateCore) || !Current.BindingReaction.IsValidIndex(BindingIndex)
+			|| !(Current.BindingReaction[BindingIndex] & UGSTN_CombatTableSet::ReactionIgnoresHitstun))
+		{
+			return false;
+		}
 	}
 	// On the end-of-previous-frame state, like the ability system's own check at execution
 	return FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, GetCommandTable(), BindingIndex);
@@ -591,6 +734,15 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	const int32 Frame = TimeStep.Frame;
 
+	// The step snapshot is built by the first combat tick of the frame, before this or any other entity writes its state of the frame: every
+	// read of it is the end of the previous frame, whoever ticks first (combat-m4-hits 5)
+	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
+	if (World && CombatRules && CombatRules->bUseLagCompensation && GetOwner() && GetOwner()->HasAuthority())
+	{
+		World->RequestHistory(CombatRules->MaxRewindMs);
+	}
+	const FGSTN_StepSnapshot* StepSnapshot = World ? &World->EnsureSnapshot(Frame, static_cast<float>(TimeStep.TotalSimulationTime), static_cast<float>(TimeStep.StepMS)) : nullptr;
+
 	// The aim of this frame's command, kept for the ability system's tick that follows (GetAimRotation)
 	FrameAim.bHasAim = Input.Cmd->bHasAim;
 	FrameAim.Yaw = Input.Cmd->AimYaw;
@@ -598,6 +750,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	// Requests older than this frame are dead (the ability system executed them in their own frame's pre-tick)
 	OutSync.Core.Requests.PruneBefore(Frame);
+
+	// The victim side (combat-m4-hits 7): the hits the attackers wrote on the previous frame are resolved before anything else of this frame, so
+	// the hitstop window they open already stands this frame (its first frame is the frame after the hit, like the attacker's), and a cancelled
+	// move or a hitstun state is what the rest of the tick sees
+	RunVictimStep(TimeStep, OutSync, StepSnapshot, *Input.Cmd);
 
 	// The loadout table swap (loadout-table-swap-design 2c). The active table is the set of the demanded revision; the frame that first has
 	// it is the boundary on every machine, and every later step of the frame (clock, adoption, jump, input, step 8) reads that one table.
@@ -638,11 +795,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	// Hitstop (combat-m3 7.1): a frame inside the window of the previous state stands still on the combat clock. The window the
 	// debug button opens on frame F pauses from F+1 (F itself was simulated with the clock running when it opened)
-	const bool bHitstopFrame = InSync.Core.IsInHitstop(Frame);
-	if (bHitstopFrame)
-	{
-		++OutSync.Core.PausedFramesTotal;
-	}
+	const bool bHitstopFrame = OutSync.Core.AdvanceHitstopClock(Frame);
+	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
 	{
@@ -656,7 +810,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		const bool bWasRunning = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline;
 		const int32 StartBefore = OutSync.Core.TimelineStartFrame;
 		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(FrameSet, Running),
-			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame);
+			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame,
+			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex));
 		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,
@@ -682,6 +837,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Adopted))
 		{
 			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Adopted], TimelineOutput);
+			StampMoveOrigin(OutSync.Core, Frame);
 		}
 	}
 
@@ -693,6 +849,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
 	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
+
+	// The attacker side (combat-m4-hits 6), before the candidates: a hit of this frame confirms the run for the cancel gate of the same frame
+	if (!bHitstopFrame && !bFrameGateClosed)
+	{
+		RunAttackerStep(TimeStep, OutSync.Core, StepSnapshot, HookContext.HitGroupMask);
+	}
 
 	// Step 5a, the jump bookkeeping: before the input tick, because the gate asks whether a jump or an air jump is available this frame
 	StepJump(Frame, Input.Cmd->HeldButtons, OutSync.Core);
@@ -714,6 +876,15 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
 
+	// A burst: the ability that starts in a reaction and says it ends it. The state is rewritten here, in the frame of the request, so it rolls
+	// back with the rest; the ability system's pre-tick removes the freeze of the window (EndReaction request)
+	if (Result.HasRequest() && FGSTN_CombatVictim::IsInReaction(OutSync.Core) && FrameSet.BindingReaction.IsValidIndex(Result.BindingIndex)
+		&& (FrameSet.BindingReaction[Result.BindingIndex] & UGSTN_CombatTableSet::ReactionEndsReaction))
+	{
+		FGSTN_CombatVictim::EndReaction(OutSync.Core, Frame);
+		OutSync.Core.Requests.Add(EGSTN_RequestType::EndReaction, Frame, 0);
+	}
+
 	// Step 5b: a jump or fast fall command that the gate let through changes the jump state in the frame of the request
 	if (Result.HasRequest())
 	{
@@ -731,6 +902,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		const int32 Entry = FrameSet.BindingTimeline[Result.BindingIndex];
 		FGSTN_CombatTimelineLogic::Start(OutSync.Core, Frame, Entry, FrameCmd.ForcedCommand != 0 ? EGSTN_ActivationSource::Forced : EGSTN_ActivationSource::Command);
+		StampMoveOrigin(OutSync.Core, Frame);
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Entry))
 		{
 			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Entry], TimelineOutput);
@@ -784,6 +956,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		OutSync.Core.HitstopStartFrame = Frame;
 		OutSync.Core.HitstopEndFrame = Frame + HitstopTestFrames;
+		// The Mover half of the window: the freeze runs for as many frames as the window, from this frame (the ability system's pre-tick executes it)
+		OutSync.Core.Requests.Add(EGSTN_RequestType::Freeze, Frame, static_cast<int16>(HitstopTestFrames));
+		if (HitstopTestMontage && AbilitySystem)
+		{
+			AbilitySystem->PlaySyncedMontage(HitstopTestMontage, 0.f, 1.f, NAME_None, 0.f);
+		}
 	}
 
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
@@ -810,6 +988,7 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		TryQueueStatsModifier();
 	}
 	PollLoadoutComponent();
+	TryRegisterWithWorld();
 
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)
@@ -818,6 +997,20 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		if (Pawn && Pawn->IsLocallyControlled())
 		{
 			DrawDebugString(GetWorld(), Pawn->GetActorLocation() + FVector(0.0, 0.0, 140.0), GetDebugString(), nullptr, FColor::White, 0.f, true);
+		}
+	}
+	if (GSTNCombatDebug::IsHitboxDrawOn())
+	{
+		GSTNCombatDebug::DrawHitboxes(GetWorld(), AttackerDebugShapes);
+	}
+	if (GSTNCombatDebug::IsHurtboxDrawOn() && RegisteredEntityId != INDEX_NONE)
+	{
+		if (const UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get())
+		{
+			if (const FGSTN_SnapshotEntry* Entry = Subsystem->GetSnapshot().Find(RegisteredEntityId))
+			{
+				GSTNCombatDebug::DrawHurtboxes(GetWorld(), *Entry);
+			}
 		}
 	}
 #endif
@@ -853,11 +1046,105 @@ void UGSTN_CombatSimComponent::TryQueueStatsModifier()
 	}
 }
 
+void UGSTN_CombatSimComponent::RestoreFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
+{
+	// A rollback restores every combat instance, and each one invalidates: a snapshot built from the state before it is never read again
+	if (UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get())
+	{
+		Subsystem->InvalidateSnapshot();
+	}
+	if (!Sync)
+	{
+		HitInbox.Reset();
+		return;
+	}
+	// The restored state is the end of its latest frame; the re-simulation starts on the next one
+	HitInbox.TrimFrom(Sync->Core.Input.History.GetLatestFrame() + 1);
+}
+
+bool UGSTN_CombatSimComponent::TicksOnThisMachine() const
+{
+	const AActor* Owner = GetOwner();
+	return Owner && Owner->GetLocalRole() != ROLE_SimulatedProxy;
+}
+
+bool UGSTN_CombatSimComponent::PostHit(const FGSTN_HitInboxEntry& Entry)
+{
+	if (!TicksOnThisMachine())
+	{
+		return false;
+	}
+	if (!HitInbox.Add(Entry))
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: hit inbox full (%d entries), a hit from %d at frame %d is dropped"), *GetPathName(), FGSTN_HitInbox::MaxEntries, Entry.AttackerId, Entry.Frame);
+		return false;
+	}
+	return true;
+}
+
 void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
 {
 	// Outside the simulation: the authority (a dedicated server, or the listen-server host's own pawn) publishes each event
 	// once; a predicting client drops what its predictions and re-simulations wrote
 	FGSTN_InputHostUtils::PublishOutbox(EventOutbox, GetOwner());
+
+	// The surfaces a victim broke (combat-m4-hits 7b): the authority breaks each once, here, outside the simulation. A predicting client drops
+	// the requests its predictions wrote; the surface replicates its own state
+	if (!BreakRequests.IsEmpty())
+	{
+		ExecuteSurfaceBreaks();
+	}
+
+	// The attacker's own presentation (M4 H10): the locally controlled pawn shows its predicted hits at once and cancels the ones a correction removes
+	if (Sync && TicksOnThisMachine())
+	{
+		if (!bHitPresentationSearched)
+		{
+			bHitPresentationSearched = true;
+			HitPresentation = GetOwner()->FindComponentByClass<UGSTN_HitPresentationComponent>();
+		}
+		const APawn* Pawn = Cast<APawn>(GetOwner());
+		if (HitPresentation.IsValid() && Pawn && Pawn->IsLocallyControlled())
+		{
+			HitPresentation->OnAttackerFrame(Sync->Core, Sync->Core.Input.History.GetLatestFrame(), RegisteredEntityId, PredictedHits, LastStepMs);
+		}
+	}
+}
+
+FString UGSTN_CombatSimComponent::GetHitstopMontageTrace() const
+{
+	TArray<int32> Frames;
+	HitstopMontageTrace.GetKeys(Frames);
+	Frames.Sort();
+	FString Out;
+	for (const int32 Frame : Frames)
+	{
+		Out += FString::Printf(TEXT("%d:%.4f;"), Frame, HitstopMontageTrace[Frame]);
+	}
+	return Out;
+}
+
+FString UGSTN_CombatSimComponent::GetHitstopMontageInfo() const
+{
+	const FGSTN_CombatSyncState* Sync = GetSyncState();
+	float Time = -1.f;
+	const bool bPlaying = AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) != nullptr;
+	return FString::Printf(TEXT("%d,%.4f,%d,%d,%d"), bPlaying ? 1 : 0, Time, Sync ? Sync->Core.Input.History.GetLatestFrame() : -1,
+		Sync ? Sync->Core.HitstopStartFrame : -1, Sync ? Sync->Core.HitstopEndFrame : -1);
+}
+
+void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect, int32 Frames, float StepMs)
+{
+	if (!AbilitySystem || !Effect || Frames <= 0)
+	{
+		return;
+	}
+	const FGameplayEffectSpecHandle Spec = AbilitySystem->MakeOutgoingSpec(Effect, 1.f, AbilitySystem->MakeEffectContext());
+	if (Spec.IsValid())
+	{
+		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_FreezeSeconds, Frames * StepMs * 0.001f);
+		AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+	}
 }
 
 void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep)
@@ -870,6 +1157,8 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	}
 
 	const int32 Frame = TimeStep.ServerFrame;
+
+	ProjectStateTags(Sync->Core, Frame);
 
 	// The tables of this frame (the combat tick of the same frame set them). A CancelTimeline names a slot of the registry the timeline
 	// was started in, which on a swap frame is the previous set
@@ -912,6 +1201,68 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		}
 	}
 
+	// A freeze of this frame (a hit's hitstop, or the debug window): queued on Mover before it ticks, for as many frames as the window
+	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
+	{
+		if (Slot.Frame != Frame)
+		{
+			continue;
+		}
+		switch (Slot.Type)
+		{
+		case EGSTN_RequestType::Freeze:
+			ExecuteFreeze(FreezeEffect, Slot.Arg, TimeStep.StepMs);
+			break;
+		case EGSTN_RequestType::VictimFreeze:
+			// A victim that stays in place leaves the freeze at rest; any other keeps the velocity it came with until its move replaces it
+			ExecuteFreeze(VictimResult.bFreezeZeroVelocity && VictimFrame == Frame ? FreezeAtRestEffect : FreezeEffect, Slot.Arg, TimeStep.StepMs);
+			break;
+		case EGSTN_RequestType::EndReaction:
+			// The Mover half of a window that ended early: the freezes of the hitstop go with it (the state half was rewritten by the combat tick)
+			if (AbilitySystem)
+			{
+				for (const TSubclassOf<UGameplayEffect>& Freeze : {FreezeEffect, FreezeAtRestEffect})
+				{
+					if (Freeze)
+					{
+						AbilitySystem->RemoveActiveGameplayEffectBySourceEffect(Freeze, AbilitySystem);
+					}
+				}
+			}
+			break;
+		case EGSTN_RequestType::MeterGain:
+			ExecuteMeterGain(Slot.Arg);
+			break;
+		case EGSTN_RequestType::ApplyDamage:
+			ExecuteVictimHits(Frame);
+			break;
+		case EGSTN_RequestType::ApplyEffect:
+			ExecuteVictimEffects(Frame);
+			break;
+		case EGSTN_RequestType::Cue:
+			ExecuteVictimCues(Frame);
+			break;
+		case EGSTN_RequestType::ImpactDamage:
+			if (VictimFrame == Frame)
+			{
+				ExecuteImpactDamage(ImpactResult.Damage);
+			}
+			break;
+		case EGSTN_RequestType::Knockback:
+		case EGSTN_RequestType::PushBack:
+			if (VictimFrame == Frame)
+			{
+				ExecuteReactionMove(TimeStep.StepMs);
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
+	// A surface that launches, met by a combatant that is not tumbling: queued on Mover before it ticks, before a jump of this frame starts
+	StepSurfaceLaunch(TimeStep, Sync->Core);
+
 	// A request made on this frame starts its ability here, inside the ability system's tick
 	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, bFrameGateClosed ? EmptyTableSet->Table : FrameSet.Table, Sync->Core.Input, Frame);
 
@@ -942,5 +1293,13 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	else if (Frame == Sync->Core.HitstopEndFrame)
 	{
 		AbilitySystem->ResumeCurrentSyncedMontage();
+	}
+
+	if (HitstopTestMontage)
+	{
+		float Time = -1.f;
+		AbilitySystem->GetPlayingSyncedMontage(Time);
+		HitstopMontageTrace.Add(Frame, Time);
+		HitstopMontageTrace.Remove(Frame - 256);
 	}
 }

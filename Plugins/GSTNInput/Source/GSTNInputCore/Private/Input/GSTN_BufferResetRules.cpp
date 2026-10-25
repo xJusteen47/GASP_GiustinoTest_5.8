@@ -3,6 +3,7 @@
 #include "Input/GSTN_BufferResetRules.h"
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_InputHistory.h"
+#include "Input/GSTN_InputTags.h"
 
 bool FGSTN_BufferResetRule_AfterIdleFrames::ShouldFlush(const FGSTN_BufferFrameEvents& Events, const FGSTN_InputHistory& History, int32 Now) const
 {
@@ -34,6 +35,16 @@ bool FGSTN_BufferResetRules::Apply(FGSTN_InputHistory& History, const FGSTN_Butt
 		}
 	}
 	return bFired;
+}
+
+bool FGSTN_BufferResetRules::ApplyInterrupted(FGSTN_InputHistory& History, const FGSTN_BufferFrameEvents& Events, int32 Now)
+{
+	if (!Events.EventTags.HasTagExact(GSTNInputTags::BufferEvent_Interrupted))
+	{
+		return false;
+	}
+	History.FlushPresses(MAX_uint32, Now);
+	return true;
 }
 
 void FGSTN_BufferResetRules::GetWatchedTags(TConstArrayView<TInstancedStruct<FGSTN_BufferResetRule>> Rules, FGameplayTagContainer& OutTags)

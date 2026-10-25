@@ -13,5 +13,6 @@ namespace GSTNInputTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BufferEvent, "Input.BufferEvent", "Root of the frame events reset rules listen to");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BufferEvent_AbilityActivated, "Input.BufferEvent.AbilityActivated", "An ability started from a command this frame");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BufferEvent_Landed, "Input.BufferEvent.Landed", "The character landed this frame");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BufferEvent_Interrupted, "Input.BufferEvent.Interrupted", "The character was interrupted from outside this frame (a hit received, a stun)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_CommandExecuted, "Input.Event.CommandExecuted", "A command was executed (published through the authoritative event stream)");
 }

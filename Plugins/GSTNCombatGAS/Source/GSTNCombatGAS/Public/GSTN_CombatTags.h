@@ -23,10 +23,20 @@ namespace GSTNCombatTags
 	/** Marks a triggered ability that waits to be adopted by the timeline that spawned it. Owned by that ability while it waits. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_AwaitingAdoption);
 
+	/**
+	 * Lets an ability start while its owner is in a hit reaction (hitstun, tumble, splat): the combat gate that refuses every activation in a reaction
+	 * stands aside for an ability that carries this tag in its AbilityTags, and the ability's own ActivationBlockedTags (Combat.State.Hitstun /
+	 * Hitstop) then decide alone. Read on activation only: a reaction that starts after the ability began does not touch it. A KO is never bypassed.
+	 */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_IgnoreHitstunOnActivation);
+
 	// Locks
 
 	/** Locks the combatant's movement (read by the stats movement modifier). Granted by abilities and effects that root the combatant. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Lock_Movement);
+
+	/** Locks the movement of a combatant in a hit reaction or KO (read by the stats movement modifier). Projected from the combat state every frame, never granted */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Lock_Reaction);
 
 	// Weapon roles
 
@@ -50,6 +60,48 @@ namespace GSTNCombatTags
 
 	/** A super was used. Published by the combat tick on the authority. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_SuperUsed);
+
+	/** A hit landed. Outbox event on the attacker (CM 5.6), published once on the authority. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_HitLanded);
+
+	/** A hit was received. Outbox event on the victim, published once on the authority. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_HitReceived);
+
+	/** A combatant was knocked out; the KOReason tag says why. Published once by the combat tick on the authority. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_KO);
+
+	/** Gameplay event sent to the victim's abilities when it is hit (payload: FGSTN_HitEventPayload in the event's context). Not an outbox event. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Hit_Received);
+
+	/** Root of the surface impact events (splat, bounce, break). */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact);
+
+	/** A launched victim was pinned to a surface (outbox event on the victim; the tags carry the surface type). */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Splat);
+
+	/** A launched victim bounced off a surface (outbox event on the victim). */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Bounce);
+
+	/** A launched victim broke the surface it hit and went through (outbox event on the victim). */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Break);
+
+	// KO reasons (named on the KO event, never granted)
+
+	/** The combatant was knocked out by its health or damage cap. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(KOReason_Health);
+
+	/** The combatant was knocked out by entering a KO zone. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(KOReason_Zone);
+
+	// States (Hitstun and Hitstop belong to the combat core)
+
+	/** The combatant was launched hard enough to tumble. Projected by the combat tick once hits exist, never granted. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Tumble);
+
+	// Cues
+
+	/** Root of the hit cues. Leaf cues are designer content in a tag ini, code never names one. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cue_Hit);
 
 	// Activation sources (EGSTN_ActivationSource as tags, on the events that name how a timeline started)
 
@@ -86,6 +138,12 @@ namespace GSTNCombatTags
 
 	/** Set-by-caller key: the meter cost an effect spends. Set by the activating ability. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MeterCost);
+
+	/** Set-by-caller key: the damage of a hit, in the unit of the damage mode. Read by the damage execution. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Damage);
+
+	/** Set-by-caller key: the meter a gain effect adds. Set by whoever applies the effect. */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Meter);
 
 	// Roots of designer tags: leaves are ini content, code never names one
 

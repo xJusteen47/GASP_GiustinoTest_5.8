@@ -10,7 +10,7 @@
 /**
  * Movement and jump stats of a combatant. Kit stats set them (instant init effect), the active weapon modifies them
  * (infinite stats effect), and the combat movement modifier reads them every Mover tick. Meters live in
- * UGSTN_MeterAttributeSet, and there is deliberately no health here (per-part health is a later milestone).
+ * UGSTN_MeterAttributeSet, and health lives in UGSTN_HealthAttributeSet (per-part health is a later milestone).
  *
  * Replication is Network Prediction's job in the GAS-NPP fork, so nothing here replicates. Values change only through
  * gameplay effects, never by a direct setter from simulated code.

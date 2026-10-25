@@ -34,10 +34,16 @@ Native, declared in `Public/GSTN_CombatTags.h` (namespace `GSTNCombatTags`), one
 |---|---|---|
 | `Combat.Ability.*` | `Timeline AwaitingAdoption` | Ability identity. |
 | `Combat.Source.*` | `Command Forced Adopted` | How a timeline started (`EGSTN_ActivationSource`), on the `TimelineStarted` event. |
-| `Combat.Lock.Movement` | | Read by the stats movement modifier. |
+| `Combat.Lock.Movement` | | Read by the stats movement modifier. Granted by abilities and effects that root a combatant. |
+| `Combat.Lock.Reaction` | | Read by the stats movement modifier. Projected by the combat tick from the sync state while a hit reaction or a KO locks the combatant (M4 H9c), never granted. |
 | `Combat.Weapon.Role.*` | `Primary Support` | Granted by the stats effect of the active weapon. |
-| `Combat.Event.*` | `TimelineStarted TimelineFinished WeaponSwitched SuperUsed` | Authoritative outbox events. |
-| `Combat.SetByCaller.MeterCost` | | Set-by-caller key. |
+| `Combat.Event.*` | `TimelineStarted TimelineFinished WeaponSwitched SuperUsed HitLanded HitReceived KO` | Authoritative outbox events. `HitLanded`/`HitReceived`/`KO` are the M4 hit events. |
+| `Combat.Event.Hit.Received` | | Gameplay event sent to the victim's abilities (payload: `FGSTN_HitEventPayload` in the event's hit context). Not an outbox event. |
+| `Combat.Event.Impact` | | Root of the surface impact events; the leaves (`Splat`, `Bounce`, `Break`) come with H11. |
+| `Combat.KOReason.*` | `Health Zone` | Named on the KO event only, never granted. |
+| `Combat.State.Tumble` | | Projected by the combat tick, never granted (`Hitstun` and `Hitstop` belong to the core). |
+| `GameplayCue.Combat.Hit` | | Root of the hit cues; leaf cues are designer content. |
+| `Combat.SetByCaller.MeterCost` `.Damage` `.Meter` | | Set-by-caller keys (cost, hit damage, meter gain). |
 
 Not here: the input vocabulary (`Input.Button/Context/Lock.Command/BufferEvent.*`, `Command.*` families) belongs to
 `GSTNInputCore` and `GSTNCombatCore`. The `Combat.State.*` tags (`Busy InTimeline SuperInput CancelWindow OverrideWindow Falling`, projected by the
@@ -54,6 +60,13 @@ combat tick, never granted) and the designer roots (`Weapon`, `Kit`, `Super`, `L
 | `FGSTN_StatValue`, `FGSTN_KitStats` | `Attributes/GSTN_KitStats.h` | A designer number keyed by a `Combat.SetByCaller.Stat.*` leaf. `FGSTN_KitStats::ApplyTo(ASC, InitEffect)` fills the spec and applies the kit's instant init effect; `Validate` reports empty, duplicate and out-of-root tags. |
 | `FGSTN_MeterSetup`, `UGSTN_MeterUtils` | `Attributes/GSTN_MeterSetup.h` | `{Meter tag (Combat.Meter), Value, Max, PointsPerBar, Bars}` and BlueprintPure readers (`FindMeterSetup`, `GetFullBars`, `GetMeterAmount`, `GetMeterMax`). |
 | `UGSTN_GE_MeterCost` | `Effects/` | Instant cost: pick the meter attribute and set `Cost` (an `FScalableFloat`, positive; a curve table scales it by ability level) on a Blueprint child and the additive modifier is built from both, negated. The cost is data because the stock `CheckCost`/`ApplyCost` build the spec themselves; the ability's cost effect class is how a kit or weapon sets a move's cost. `CheckCost` blocks an unaffordable activation; applying without it stops at 0. |
+| `UGSTN_HealthAttributeSet` | `Attributes/` | `MaxHealth`, `Health`, `DamagePercent`, `OutgoingDamageMultiplier`, `IncomingDamageMultiplier`, `KnockbackResistance`, `HitstunResistance`. Health stays in [0, MaxHealth] (lowering the maximum through an instant effect pulls it down); the rest are >= 0. The set does not know the damage mode: the `PercentCapped` cap is applied by the damage execution. Add the sets in the same order on every machine (Combat, Meter, Health). |
+| `UGSTN_GE_Damage`, `UGSTN_DamageExecution` | `Effects/` | Instant damage effect. The execution scales the set-by-caller `Combat.SetByCaller.Damage` by the attacker's outgoing and the victim's incoming multiplier and writes `DamagePercent` (+, `Percent`), `DamagePercent` up to `MaxHealth` (`PercentCapped`) or `Health` (-, `Health`) by the `DamageMode` of the rules in the hit context; no rules in the context means `Percent`. Negative damage counts as 0. |
+| `UGSTN_GE_MeterGain` | `Effects/` | Instant meter fill: pick the meter attribute on a Blueprint child; the amount is the set-by-caller `Combat.SetByCaller.Meter`. |
+| `FGSTN_HitEffectContext` | `GSTN_HitEffectContext.h` | `FGameplayEffectContext` of a hit: timeline/hitbox index + start frame (the hit id), location, relationship, `Reaction`, `bStaggered`, hurtbox index, `KOReason` (all net serialized) and a local, unserialized weak pointer to the rules. Build it with `FGSTN_HitEffectContext::Make`; no AbilitySystemGlobals subclass is required. |
+| `FGSTN_HitEventPayload` | `Events/GSTN_HitEvents.h` | View of the hit context for the `Combat.Event.Hit.Received` gameplay event: `MakeEventData` / `FromEventData`. |
+| `UGSTN_CombatRulesProvider` | `GSTN_CombatRulesProvider.h` | Game instance subsystem (M4 H13a): a component request on the Game Framework Component Manager (ModularGameplay) adds `UGSTN_CombatRulesComponent` to every `AGameStateBase` on the authority, and registers each game state as a receiver (a plain `AGameStateBase` does not do it itself). No GameState Blueprint edit. Off with `UGSTN_CombatSettings::bAutoAddRulesComponent`. |
+| `UGSTN_CombatRulesComponent` | `GSTN_CombatRulesComponent.h` | Component for the **GameState**: replicated soft `RulesAsset`, resolved (asset load + hit pipeline) in `BeginPlay` on every machine, in `OnRep_RulesAsset`, and directly in `SetRulesAsset` on the authority (a host never gets its own OnRep). Empty or unloadable means the rules of `UGSTN_CombatSettings`. `GetRules()`, `Find(WorldContext)`. |
 | `UGSTN_GE_WeaponStats` | `Effects/` | Infinite base of a weapon stats effect. `Apply`/`Remove`/`IsApplied` find the effect by class (no stored handle); `Apply` returns the live effect instead of stacking. One stats class per weapon. |
 | `UGSTN_CombatGASSettings` | `Settings/` | Starting values of the attributes by property name (`AttributeDefaults`), defaults in `Config/DefaultGSTNCombatGAS.ini`. A kit init effect overwrites them. |
 
@@ -179,7 +192,7 @@ Add one `+PrimaryAssetTypesToScan=(PrimaryAssetType="...",AssetBaseClass="/Scrip
 
 ## Testing
 
-Automation tests `GSTNCombat.GAS.*`: `Tags.AllRegisteredAndDocumented`, `Attributes.Clamp`, `Attributes.KitStatsInitEffect`,
+Automation tests `GSTNCombat.GAS.*` (M4 H5 adds `Damage.PercentModeAdds`, `HealthModeSubtracts`, `PercentCappedClampsAtMax`, `MultipliersApplied`, `EffectContextNetSerializeRoundTrip`, `MeterGainSetByCaller`, `RulesComponentHostAppliesWithoutOnRep`, `TagsRegisteredAndDocumented`): `Tags.AllRegisteredAndDocumented`, `Attributes.Clamp`, `Attributes.KitStatsInitEffect`,
 `Attributes.MeterCostData`, `Effects.MeterCostCheckApply` (cost deducted and activation blocked through the real ability CheckCost/ApplyCost), `Attributes.WeaponStatsApplyRemoveByClass`, `Data.BindingInheritance`,
 `Data.BindingToRemovedCommandIsError`, `Data.UnknownExtensionIgnored`, `Data.KitIdentityExactlyOne`, `Data.WeaponIdentityExactlyOne`, `Table.AssembleFromDefinitions`
 (kit and weapon assets through the assembly into the compiler and rules), `Loadout.SaveRoundTrip` (presets through the subsystem and the save game

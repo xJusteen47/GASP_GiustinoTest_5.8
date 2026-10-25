@@ -276,6 +276,14 @@ protected:
 	virtual void CheckForWallExit(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState) const;
 
 	/**
+	 * Whether the pawn is held in place from outside (hitstop): a locked tick skips CheckForWallExit (so no wall jump, no detach, no
+	 * pull-away) and does not advance TimeWithoutWall / PullAwayTime, so the mode is still the same one when the lock ends. Read from
+	 * the start sync state like every simulation input. Base: Mover carries the tag Combat.Mover.Frozen (a freeze layered move of the
+	 * combat plugin); the tag is looked up by name so this module does not depend on the plugin. Unlocked ticks behave as before
+	 */
+	virtual bool IsMovementLocked(const FMoverTickStartData& StartState) const;
+
+	/**
 	 * Capsule up the orientation chases on the wall: parallel transport of the current frame plus the upright bias.
 	 * The target orientation faces the wall (X = -WallNormal) with this up
 	 */

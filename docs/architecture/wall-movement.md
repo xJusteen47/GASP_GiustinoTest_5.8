@@ -88,6 +88,7 @@ Nothing the simulation reads may live outside the sync state or a rollback-aware
 - **New math or query**: add a static function to `*Utils` (stateless, `BlueprintPure`), not to the mode.
 - **New tunable group**: add a `USTRUCT` in `GSTN_WallMovementTypes.h` and a `Category = "Wall|<Section>"` property on the mode.
 - Gravity can be any direction and walls can move/rotate: always use the gravity-up from the movement plane / Mover, never `FVector::UpVector`. Check `bUseMovementBases` paths when changing position or velocity.
+- **Held from outside (hitstop)**: `IsMovementLocked(const FMoverTickStartData&)` is a protected virtual. Default: the Mover sync state of the tick start carries `Combat.Mover.Frozen` (a combat freeze layered move; looked up by tag name, so this module does not depend on the combat plugin). A locked tick skips `CheckForWallExit` (wall jump, button detach, pull-away) and leaves `TimeWithoutWall` / `PullAwayTime` as they were; an unlocked tick is unchanged. Override it for another kind of lock.
 - Register the mode on the Mover component (Blueprint `SandboxCharacter_Mover`, `Modes` map) and add transitions to the source mode's `Transitions`.
 
 ## Entry rules

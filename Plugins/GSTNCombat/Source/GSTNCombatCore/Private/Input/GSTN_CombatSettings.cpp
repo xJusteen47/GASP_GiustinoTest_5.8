@@ -3,10 +3,32 @@
 #include "Input/GSTN_CombatSettings.h"
 
 #include "Input/GSTN_InputSettings.h"
+#include "Rules/GSTN_CombatRules.h"
+#include "UObject/StrongObjectPtr.h"
 
 UGSTN_CombatSettings::UGSTN_CombatSettings()
 {
 	CategoryName = TEXT("Plugins");
+}
+
+const UGSTN_CombatRules* UGSTN_CombatSettings::ResolveDefaultRules() const
+{
+	if (UGSTN_CombatRules* Rules = DefaultRules.LoadSynchronous())
+	{
+		// An asset is resolved once here so the simulation only runs the resolved lists
+		if (Rules->GetResolvedHitPipeline().IsEmpty() && !Rules->HitPipeline.IsEmpty())
+		{
+			Rules->ResolveHitPipeline();
+		}
+		return Rules;
+	}
+
+	static TStrongObjectPtr<UGSTN_CombatRules> BuiltIn;
+	if (!BuiltIn.IsValid())
+	{
+		BuiltIn.Reset(UGSTN_CombatRules::CreateStandard(GetTransientPackage()));
+	}
+	return BuiltIn.Get();
 }
 
 FName UGSTN_CombatSettings::GetContributionSource()

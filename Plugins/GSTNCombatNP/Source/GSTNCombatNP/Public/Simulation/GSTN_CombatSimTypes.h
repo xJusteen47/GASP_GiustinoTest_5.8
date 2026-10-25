@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Jump/GSTN_JumpTypes.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
+#include "Simulation/GSTN_CombatHitState.h"
 #include "Simulation/GSTN_InputSimTypes.h"
 #include "Sync/GSTN_SyncFragment.h"
 #include "NetworkPredictionReplicationProxy.h"
@@ -31,6 +32,18 @@ struct FGSTN_CombatSyncCore
 
 	bool IsInHitstop(int32 Frame) const { return Frame >= HitstopStartFrame && Frame < HitstopEndFrame; }
 
+	/**
+	 * The move clock of a frame (combat-m4-hits 8): a frame inside the window of the previous state adds one to PausedFramesTotal, so
+	 * the combat clock (frame minus paused frames) stands still. Returns whether the frame was a hitstop frame. Deterministic: it reads
+	 * and writes this state only
+	 */
+	bool AdvanceHitstopClock(int32 Frame)
+	{
+		const bool bHitstopFrame = IsInHitstop(Frame);
+		PausedFramesTotal += bHitstopFrame ? 1 : 0;
+		return bHitstopFrame;
+	}
+
 	// ---- The action part (combat-m3 7.1): what the combatant is doing, the timeline it runs and the requests of this frame.
 	// An idle combatant holds the defaults and costs one bit on the wire.
 
@@ -47,6 +60,14 @@ struct FGSTN_CombatSyncCore
 	/** Every hitstop frame of the combatant so far: combat clock = F - PausedFramesTotal. Constant outside hitstop */
 	int32 PausedFramesTotal = 0;
 
+	/**
+	 * The ricochet recoil (combat-m4-hits 3b, M4 H12): the frame recoil frame 0 falls on, INDEX_NONE while the timeline plays normally. The
+	 * attacker side writes it as Frame + 1 on the frame a ricochet is decided; from then on the running timeline's own frames are replaced by
+	 * the recoil's (FGSTN_TimelinePlayer, Params.bRicochet). A hitstop frame moves it one frame later, which is how the recoil pauses like a
+	 * timeline does. Cleared with the timeline, so the recoil ends where the state returns to Actionable
+	 */
+	int32 RecoilStartFrame = INDEX_NONE;
+
 	/** 0 = the primary weapon, 1.. = the additional weapons in loadout order */
 	uint8 ActiveWeaponIndex = 0;
 
@@ -62,12 +83,30 @@ struct FGSTN_CombatSyncCore
 	/** The requests of the frame being simulated; PruneBefore at the top of every frame keeps older ones off the wire */
 	FGSTN_CombatRequests Requests;
 
+	/**
+	 * The hit part (combat-m4-hits 11): the attacker's targets and move origin, the victim's windows and pending launch. Its fields
+	 * expire by their own end frames, so it belongs to the action part only while something in it is live (IsActionPartDefault)
+	 */
+	FGSTN_HitSyncState Hit;
+
+	/** The frame and timeline facts the hit part needs to tell live fields from expired ones */
+	FGSTN_HitLiveContext GetHitContext() const
+	{
+		FGSTN_HitLiveContext Context;
+		Context.Frame = Input.History.GetLatestFrame();
+		Context.bInTimeline = ActionState == EGSTN_ActionState::InTimeline;
+		Context.TimelineStartFrame = TimelineStartFrame;
+		Context.bTumbling = ActionState == EGSTN_ActionState::Tumble;
+		Context.HitstopEndFrame = HitstopEndFrame;
+		return Context;
+	}
+
 	/** True when every field of the action part holds its default (an idle combatant that never had a loadout applied) */
 	bool IsActionPartDefault() const
 	{
 		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
-			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && ActiveWeaponIndex == 0
-			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty();
+			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && ActiveWeaponIndex == 0
+			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty() && Hit.IsDefault(GetHitContext());
 	}
 
 	/**
@@ -96,7 +135,7 @@ struct FGSTN_CombatSyncCore
 		}
 
 		uint8 Action = static_cast<uint8>(ActionState);
-		Ar.SerializeBits(&Action, 2);
+		Ar.SerializeBits(&Action, 3);
 		uint8 Source = static_cast<uint8>(ActiveSource);
 		Ar.SerializeBits(&Source, 2);
 		// +1 so that INDEX_NONE (-1) is 0 and the packed form stays small
@@ -108,6 +147,8 @@ struct FGSTN_CombatSyncCore
 		Ar.SerializeIntPacked(Paused);
 		uint32 PausedTotal = static_cast<uint32>(FMath::Max(PausedFramesTotal, 0));
 		Ar.SerializeIntPacked(PausedTotal);
+		uint32 RecoilPlusOne = static_cast<uint32>(FMath::Max(RecoilStartFrame + 1, 0));
+		Ar.SerializeIntPacked(RecoilPlusOne);
 		Ar << ActiveWeaponIndex;
 		Ar << LoadoutRevision;
 		Ar << TableRevision;
@@ -127,7 +168,11 @@ struct FGSTN_CombatSyncCore
 			TimelineStartFrame = static_cast<int32>(StartPlusOne) - 1;
 			TimelinePausedFrames = static_cast<int32>(Paused);
 			PausedFramesTotal = static_cast<int32>(PausedTotal);
+			RecoilStartFrame = static_cast<int32>(RecoilPlusOne) - 1;
 		}
+
+		// After the fields it reads its context from: the loaded state has them by now
+		Hit.NetSerialize(Ar, GetHitContext());
 	}
 
 	void ResetActionPart()
@@ -138,10 +183,12 @@ struct FGSTN_CombatSyncCore
 		TimelineStartFrame = INDEX_NONE;
 		TimelinePausedFrames = 0;
 		PausedFramesTotal = 0;
+		RecoilStartFrame = INDEX_NONE;
 		ActiveWeaponIndex = 0;
 		LoadoutRevision = 0;
 		TableRevision = 0;
 		Requests = FGSTN_CombatRequests();
+		Hit = FGSTN_HitSyncState();
 	}
 
 	bool ShouldReconcile(const FGSTN_CombatSyncCore& AuthorityState) const
@@ -160,10 +207,13 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(TimelineStartFrame != AuthorityState.TimelineStartFrame, "TimelineStartFrame:");
 		UE_NP_TRACE_RECONCILE(TimelinePausedFrames != AuthorityState.TimelinePausedFrames, "TimelinePausedFrames:");
 		UE_NP_TRACE_RECONCILE(PausedFramesTotal != AuthorityState.PausedFramesTotal, "PausedFramesTotal:");
+		UE_NP_TRACE_RECONCILE(RecoilStartFrame != AuthorityState.RecoilStartFrame, "RecoilStartFrame:");
 		UE_NP_TRACE_RECONCILE(ActiveWeaponIndex != AuthorityState.ActiveWeaponIndex, "ActiveWeaponIndex:");
 		UE_NP_TRACE_RECONCILE(LoadoutRevision != AuthorityState.LoadoutRevision, "LoadoutRevision:");
 		UE_NP_TRACE_RECONCILE(TableRevision != AuthorityState.TableRevision, "TableRevision:");
 		UE_NP_TRACE_RECONCILE(!(Requests == AuthorityState.Requests), "Requests:");
+		// Compared in canonical form: a window that ran out is not a difference, and the quantised fields compare as integers
+		UE_NP_TRACE_RECONCILE(!(Hit.Canonical(GetHitContext()) == AuthorityState.Hit.Canonical(AuthorityState.GetHitContext())), "Hit:");
 		return false;
 	}
 
@@ -177,8 +227,9 @@ struct FGSTN_CombatSyncCore
 		}
 		if (!IsActionPartDefault())
 		{
-			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Weapon: %d Loadout: %d Table: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision), static_cast<int32>(TableRevision));
+			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Recoil: %d Weapon: %d Loadout: %d Table: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, RecoilStartFrame, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision), static_cast<int32>(TableRevision));
 			Requests.ToString(Out);
+			Hit.Canonical(GetHitContext()).ToString(Out);
 		}
 		Out.Append("\n");
 	}
@@ -219,10 +270,11 @@ struct FGSTN_CombatSyncState
 		FGSTN_SyncFragmentList::ToString(Fragments, Out);
 	}
 
-	/** The fixed part is discrete: interpolated proxies just take the newer frame. Fragments may blend (FGSTN_SyncFragment::Interpolate) */
+	/** The fixed part is discrete: interpolated proxies just take the newer frame, except the move origin of the hit part, which blends. Fragments may blend (FGSTN_SyncFragment::Interpolate) */
 	void Interpolate(const FGSTN_CombatSyncState* From, const FGSTN_CombatSyncState* To, float PCT)
 	{
 		Core = To->Core;
+		Core.Hit = FGSTN_HitSyncState::Interpolated(From ? &From->Core.Hit : nullptr, To->Core.Hit, PCT);
 		FGSTN_SyncFragmentList::Interpolate(Fragments, From ? &From->Fragments : nullptr, To->Fragments, PCT);
 	}
 };
