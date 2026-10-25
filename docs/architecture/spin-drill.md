@@ -138,6 +138,9 @@ All tuning is data; nothing below is a C++ constant. Content is soft-referenced 
   3. default: not drillable (the drill then behaves as "hittable, not drillable", §7.6).
   The response is copied into the per-step snapshot by `FGSTN_DrillSnapshotExtension` (seam `FGSTN_SnapshotExtension`, already
   used by M4b), so the attacker side decides latching from snapshot data only.
+  Note (2026-10-25 19:40): the M4b thread is adding the contributor registry for snapshot extensions (iterated by type id) and a
+  fixed 20-byte POD extension memory in the lag-comp history record; the drill response must therefore stay a small POD (≤ 20 B,
+  today ~8 B) and registers as one more contributor, no further core change.
 - **Drill hit data**: the tip hitbox is an ordinary `FGSTN_HitboxSpec` with `HitType = Combat.HitType.Drill` (leaf of
   `GSTNSpinDrillCore`), so the resolution pipeline, parts, hardness/penetration, teams and relationship variants all apply
   unchanged. Low knockback, low hitstun by default, attacker hitstop small (a drill grinds, it does not pop).
