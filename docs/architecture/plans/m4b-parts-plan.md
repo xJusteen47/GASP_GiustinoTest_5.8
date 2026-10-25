@@ -446,6 +446,14 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
 - Add the parts dummy to TM2 `L_Test_Combat` (station 8) after P12, and the parts boss to TM3 `L_Test_Enemies` (station 5) after P16, as in
   [test-maps.md](test-maps.md). Content only, built by Ludus AI or a person from primitives. Size: S.
 
+### P18 Hurtbox openings (`GSTNCombatCore`, `GSTNParts`) — size S (added 2026-10-25, after P17)
+
+- Spec: [combat-m4-hits.md](../combat-m4-hits.md) §9c B and [combat-parts.md](../combat-parts.md) §3.4. Optional `FGSTN_HurtboxOpening`
+  on `FGSTN_Hurtbox` (additive field, default none, so existing sets are unchanged), the mouth and pass-radius test inside the part
+  selection of `UGSTN_HitStep_PartResolve`, the hurtbox editor drawing (M5).
+- Tests: `CavityReachedOnlyThroughMouth`, `BulkyHitboxFallsToArmour`, `ProjectileRadiusFits`, `NoOpeningKeepsPriorityRule`.
+  TM3 parts boss (station 5) gets a leg with an armoured shell and a hollow cavity.
+
 ## 4. Spikes first and stop-and-ask conditions
 
 Spikes are P0 (above). Summary of stop conditions (do not continue past them without the owner or lead):

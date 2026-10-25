@@ -49,6 +49,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Telecamera | [camera.md](camera.md) |
 | Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
 | Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
+| Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [input.md](input.md) §9 |
 
 
 ---
@@ -1425,3 +1426,50 @@ CR.5. I **nemici** hanno un colore di cristallo per tipo di nemico (scelto dal d
    giocatori.
    Ipotesi nella specifica: colore per tipo di nemico, scelto dal designer, da una tavolozza separata da quella dei giocatori.
 
+## Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi (25/10)
+
+Specifiche: [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c, [combat-parts.md](combat-parts.md) §3.4, [input.md](input.md) §9. Le parti
+del trapano sono in [spin-drill.md](spin-drill.md) §13b (PR #15).
+
+DEM.1. La forza di demolizione è un **numero a passi di 10** come in Helldivers 2 (10 un pugno, 20 un colpo pesante, 30 il trapano, 40 un
+esplosivo), oppure **pochi livelli con un nome** (leggera, media, pesante, esplosiva)?
+   Perché conta: i numeri lasciano spazio fine al bilanciamento; i livelli con nome sono più facili da leggere per un designer.
+   Ipotesi nella specifica: numeri interi a passi di 10; l'editor può mostrare un nome per ogni fascia.
+
+DEM.2. Sotto la soglia l'oggetto **non subisce nulla** e si sente un colpo sordo, oppure l'attacco **rimbalza** come con la durezza delle parti?
+   Perché conta: un rimbalzo punisce chi colpisce la cosa sbagliata, ma interrompe la combo.
+   Ipotesi nella specifica: nessun danno e un suono sordo, nessun rimbalzo; solo il trapano rimbalza, perché non riesce ad agganciarsi.
+
+DEM.3. Un **nemico lanciato** contro una cassa la rompe? Con quale forza?
+   Perché conta: decide se i lanci servono anche a distruggere cose.
+   Ipotesi nella specifica: la forza la decide l'attacco che lo ha lanciato (un campo dell'impatto), di base uguale alla forza di
+   demolizione di quel colpo.
+
+DEM.4. Un oggetto distruttibile si rompe **al primo colpo** sopra la soglia, oppure ha **più punti vita**?
+   Perché conta: casse da un colpo rendono il trapano e i colpi pesanti immediati; muri da più colpi fanno durare l'aggancio del trapano.
+   Ipotesi nella specifica: punti vita per oggetto, 1 di base.
+
+HV.1. Lo stick tenuto durante lo swing si legge **rispetto al personaggio** (verso la sua destra o sinistra) o **rispetto allo schermo**?
+   Perché conta: con la telecamera lontana e girata, "destra" sullo schermo e destra del personaggio possono essere diverse.
+   Ipotesi nella specifica: rispetto a dove guarda il personaggio, come gli altri comandi di combattimento.
+
+HV.2. Se lasci lo stick, la spada **torna verticale** o **resta inclinata** dove era arrivata? E da un certo momento l'angolo si **blocca**?
+   Perché conta: decide quanto si può correggere il colpo all'ultimo momento.
+   Ipotesi nella specifica: resta dove era, e si blocca al frame scelto dal designer (di solito il primo frame attivo).
+
+KB.1. A-S-D vale come spin in un senso e D-S-A nell'altro? Vanno premuti nello stesso tempo concesso allo spin con lo stick?
+   Perché conta: decide se la scorciatoia funziona in entrambi i sensi e quanto deve essere veloce.
+   Ipotesi nella specifica: sì a entrambe; A-S-D è antiorario, D-S-A orario.
+
+KB.2. La scorciatoia vale anche per il **d-pad** del controller, e la stessa idea va usata per altri gesti difficili da tastiera?
+   Perché conta: il d-pad ha gli stessi limiti della tastiera.
+   Ipotesi nella specifica: vale per tutti gli ingressi digitali (tastiera e d-pad), gesto per gesto.
+
+COL.1. I colpi corpo a corpo devono **fermarsi contro i muri** di base, oppure solo dove il designer lo attiva per una mossa?
+   Perché conta: oggi un colpo attraversa un muro sottile e colpisce chi c'è dietro; bloccarlo costa un controllo in più per colpo.
+   Ipotesi nella specifica: spento nei dati di M4 per non cambiare nulla, acceso nelle mosse del set standard dopo H16.
+
+COL.2. Per colpire la cavità dentro la gamba corazzata basta **toccare l'apertura** con un'arma abbastanza sottile, oppure l'arma deve
+**entrare** nel buco?
+   Perché conta: "toccare" è più semplice e generoso, "entrare" è più preciso ma più difficile da ottenere con uno swing.
+   Ipotesi nella specifica: basta toccare l'apertura con un'arma che ci passa.

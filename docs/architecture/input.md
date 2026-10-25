@@ -211,3 +211,19 @@ Redirects in `Config/DefaultEngine.ini`:
 
 Tools: `setup_gas_assets.py` and `gasnpp_test.py` keep `GSTN_CombatSimComponent` (the class stays); the input config
 asset is created by the setup script; testing.md lists the new test prefixes.
+
+## 9. Planned: keyboard shortcuts for stick gestures (owner, 2026-10-25)
+
+Owner idea: on keyboard the spin, a stick rotation, gets a **shortcut such as A-S-D without W**, a partial rotation that is easy to
+roll with three fingers. *Proposal*, not built:
+
+- The `Spin` condition already counts rotation in degrees with a sense. A slot gains `DigitalMinDegrees` (default: its normal
+  threshold), used when the direction samples in the window came from **digital** directions. A-S-D is left, down, right: 180°
+  counterclockwise seen from above with forward at the top. D-S-A is the clockwise one. Eight-way samples (A, A+S, S, S+D, D) feed
+  the same accumulator.
+- The input source writes one bit per frame, `bDigitalDirection`, from the device that last changed the direction (keyboard or
+  d-pad). The bit is part of the input frame, so history, prediction and rollback see the same value on every machine; the
+  simulation never asks which device is plugged in.
+- The same per-slot threshold serves other gestures that are hard on keys. A dedicated spin button stays possible
+  ([spin-drill.md](spin-drill.md) §5).
+- Questions KB.1–KB.2 in [open-questions-m4-m10.md](open-questions-m4-m10.md).
