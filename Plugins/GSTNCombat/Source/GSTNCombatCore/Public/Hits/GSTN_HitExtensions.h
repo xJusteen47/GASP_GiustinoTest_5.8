@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Events/GSTN_SimEvent.h"
 #include "Hits/GSTN_HitResolution.h"
 #include "Sync/GSTN_SyncFragment.h"
 #include "GSTN_HitExtensions.generated.h"
@@ -83,6 +84,13 @@ public:
 
 	/** Called once for each OutcomeExtensions entry of that struct, in the order of the entries */
 	virtual void Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const = 0;
+
+	/**
+	 * Appends the events this extension stands for to Outbox, with the hit's event as their envelope (tags of the move, the hit type, the
+	 * relationship; frame, instigator and target). Called once per hit by the victim step after the hit events, for each entry of that struct,
+	 * on every machine and every re-simulation; the authority publishes the outbox once. The default appends nothing
+	 */
+	virtual void AppendEvents(const FInstancedStruct& Extension, const FGSTN_SimEvent& Envelope, FGSTN_SimEventOutbox& Outbox) const {}
 };
 
 /**
@@ -129,6 +137,9 @@ public:
 	 * ignored. Rules may be null.
 	 */
 	void ApplyAll(const UGSTN_CombatRules* Rules, const TArray<FInstancedStruct>& Extensions, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const;
+
+	/** Calls AppendEvents of every native applier for the entries of Extensions it owns, in registry order. No Blueprint applier makes events */
+	void AppendEvents(const TArray<FInstancedStruct>& Extensions, const FGSTN_SimEvent& Envelope, FGSTN_SimEventOutbox& Outbox) const;
 
 private:
 	struct FEntry

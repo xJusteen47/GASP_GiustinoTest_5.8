@@ -30,6 +30,9 @@ struct FGSTN_VictimHit
 	FGSTN_HitContextView View;
 	FGSTN_HitOutcome Outcome;
 
+	/** The outcome extensions the steps produced for the appliers: a plugin makes its events from them, after the hit events (AppendEvents of the applier) */
+	TArray<FInstancedStruct> OutcomeExtensions;
+
 	bool bStaggered = false;
 	EGSTN_HitReaction Reaction = EGSTN_HitReaction::StaggerInPlace;
 

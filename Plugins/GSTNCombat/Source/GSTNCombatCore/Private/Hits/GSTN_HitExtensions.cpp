@@ -162,3 +162,22 @@ EGSTN_AttackerHitOutcome FGSTN_AttackerOutcomeRegistry::Evaluate(const UGSTN_Com
 	}
 	return EGSTN_AttackerHitOutcome::Normal;
 }
+
+void FGSTN_OutcomeApplierRegistry::AppendEvents(const TArray<FInstancedStruct>& Extensions, const FGSTN_SimEvent& Envelope, FGSTN_SimEventOutbox& Outbox) const
+{
+	if (Extensions.IsEmpty())
+	{
+		return;
+	}
+	for (const FEntry& Entry : Entries)
+	{
+		const UScriptStruct* Struct = Entry.Applier->GetExtensionStruct();
+		for (const FInstancedStruct& Extension : Extensions)
+		{
+			if (Extension.IsValid() && Extension.GetScriptStruct() == Struct)
+			{
+				Entry.Applier->AppendEvents(Extension, Envelope, Outbox);
+			}
+		}
+	}
+}

@@ -33,6 +33,7 @@ FGSTN_HitVictimView FGSTN_CombatVictim::MakeVictimView(const FGSTN_SnapshotEntry
 	View.bInHitstop = Victim.bInHitstop;
 	View.ReactionState = Victim.Reaction;
 	View.HealthFraction = Victim.HealthFraction;
+	View.SnapshotExtension = Victim.Extension.GetData();
 	if (Rules && Rules->DamageMode != EGSTN_DamageMode::Health)
 	{
 		// The percent modes derive the fraction from the damage taken
@@ -99,7 +100,10 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 	const int32 Frame = In.Frame;
 
 	// The victim the pipeline reads: the snapshot's, moved on by each landed entry so the next one sees the damage the first one did
+	// A copy of the snapshot extension the view points at: the appliers move it on between entries (below), the snapshot stays the end of the previous frame
+	FGSTN_SnapshotExtensionBlob VictimExtension = Self.Extension;
 	FGSTN_HitVictimView VictimView = MakeVictimView(Self, Rules);
+	VictimView.SnapshotExtension = VictimExtension.GetData();
 
 	const int32 WindowEndBefore = Core.IsInHitstop(Frame) ? Core.HitstopEndFrame : INDEX_NONE;
 	bool bWindowChanged = false;
@@ -163,6 +167,20 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		FGSTN_OutcomeApplierRegistry::Get().ApplyAll(Rules, Context.OutcomeExtensions, Hit.View, ApplyContext);
 		Hit.Outcome.Events.Append(ApplyContext.Result.Events);
 		Hit.Outcome.Effects.Append(ApplyContext.Result.Effects);
+		Hit.OutcomeExtensions = Context.OutcomeExtensions;
+
+		// The extension the next entry reads is rebuilt from the fragments the appliers just wrote (the earlier entry's result), the way AdvanceVictim
+		// moves the damage; the view of the stored hit must not keep a pointer into this function's copy
+		Hit.View.Victim.SnapshotExtension = nullptr;
+		if (In.Fragments && VictimExtension.IsSet())
+		{
+			FGSTN_SnapshotContributorContext Rebuild;
+			Rebuild.Frame = Frame;
+			Rebuild.Fragments = In.Fragments;
+			Rebuild.Previous = &Self.Extension;
+			FGSTN_SnapshotContributorRegistry::Get().Rebuild(Rebuild, VictimExtension);
+			VictimView.SnapshotExtension = VictimExtension.GetData();
+		}
 
 		const FGSTN_KnockbackResult& Knockback = Hit.Outcome.Knockback;
 		Hit.bStaggered = Hit.Outcome.bHasKnockback && Knockback.bStaggered;
@@ -425,7 +443,10 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 	if (!Hit.bRicochet)
 	{
 		Event.EventType = GSTNCombatTags::Event_HitReceived;
+		const FGSTN_SimEvent Envelope = Event;
 		Outbox.Add(MoveTemp(Event));
+		// The events of the optional plugins that own an outcome extension of this hit, with the hit event as their envelope, after it
+		FGSTN_OutcomeApplierRegistry::Get().AppendEvents(Hit.OutcomeExtensions, Envelope, Outbox);
 	}
 }
 
