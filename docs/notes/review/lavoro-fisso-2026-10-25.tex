@@ -162,6 +162,62 @@ dal plugin \code{GameplayTagsEditor}), transazioni dell'editor e \code{IProperty
 \code{GSTN.Visual.HitData.Row}. \textbf{Limiti}: la vittima di prova (peso, percentuale) vive nella riga ed è solo di sessione;
 l'anteprima ignora scale delle hurtbox, DI, tumble e yaw diversi dall'orientamento dell'attaccante; usa solo le regole di default.
 
+\subsection{E8: bake dei socket e controllo di freschezza (\code{931dc89})}
+\paragraph{Ragionamento.} Le hitbox in spazio \code{BakedSocket} seguono un socket (la mano, la lama) senza leggere la mesh durante
+la simulazione: le posizioni per frame si calcolano nell'editor e si salvano nella timeline (\code{BakedSockets}). Il baker usa la
+stessa posa dell'anteprima (\code{FGSTN_PreviewPose}), quindi ciò che si vede è ciò che si salva; ogni frame si valuta da solo
+(tempo del montage impostato, mai fatto avanzare), quindi due bake sono identici bit per bit. Un bake rifiutato (mesh mancante,
+socket assente, montage non caricabile) non scrive nulla e tiene il precedente. Il registro del bake (\code{FGSTN_BakeInfo}) è
+solo editor (\code{WITH_EDITORONLY_DATA}), non arriva nel gioco.
+\begin{lstlisting}
+usi = hitbox con Space == BakedSocket e un socket ; socket = distinti, in ordine
+per f in 0..TotalFrames-1:
+    tempo montage = InizioSezione + f / TickRate * PlayRate   // inizio del frame f, limitato alla durata
+    Posa.Valuta(tempo) ; per ogni socket: T = socket in spazio componente * MeshToRoot ; scala 1 ; aggiungi
+Info = {hash degli input, tick rate, mesh, data}
+hash = CRC32 di: frame, tick rate, play rate, sezione, montage e suoi segmenti (GUID dei dati animazione),
+       mesh + GUID dello scheletro, socket ordinati con osso e trasformazione
+stato: nessun uso -> NonServe ; frame mancanti -> MaiBaked ; nessun registro -> BakedAltrove (avviso)
+       frame != TotalFrames, tick rate, mesh o hash diversi -> Vecchio (errore) ; altrimenti Fresco
+\end{lstlisting}
+Verificato sul codice del fork che \code{PlaySyncedMontage} avanza il montage di 16\,ms per tick a 62{,}5\,Hz con lo stesso play
+rate: la formula coincide. Restano due differenze accettate: il blend-in del montage in gioco (il bake è a peso pieno) e un possibile
+frame di sfasamento all'attivazione, da confermare con BakeCheck (E16).
+\paragraph{Unreal.} \code{UDebugSkelMeshComponent}, sezioni e segmenti di \code{UAnimMontage}, \code{IAnimationDataModel::GenerateGuid}
+(\code{GetRawDataGuid} è deprecato in 5.8), \code{USkeletalMeshSocket}, \code{FCrc::StrCrc32}, \code{FScopedSlowTask}, comando
+\code{gstn.Combat.BakeAll}. Nella toolkit: pulsante ``Bake sockets'' con pallino giallo, Ctrl+B, un solo undo, bake al salvataggio.
+\textbf{Test}: 13 (\code{GSTNCombat.Editor.Bake.*}, \code{GSTNCombat.Core.TimelineData.*}).
+\paragraph{Non fatto.} Voce di menu di Bake all (c'è il comando da console), bake dei socket delle mesh allegate (solo mesh principale),
+timeline inline nei Blueprint dentro Bake all (si fanno dal loro editor). Lo scenario di rete \code{scenario_hit_basic} va eseguito
+prima di unire M5 (serve il PIE).
+
+\subsection{E9: editor dei set di hurtbox, generatore e specchio (\code{4b325c8})}
+\paragraph{Ragionamento.} Un set di hurtbox si apre con doppio clic in un editor con viewport, lista, dettagli e problemi. Il generatore
+legge il Physics Asset della mesh di anteprima e tratta ogni scheletro allo stesso modo (un ragno come una persona: nel codice non c'è
+nessun nome di osso). Rigenerare non deve cancellare il lavoro a mano: di default aggiunge solo le hurtbox mancanti, ``Update shapes''
+aggiorna forma e osso tenendo tag e priorità, ``Replace all'' chiede conferma; l'ordine dell'array non cambia (un colpo porta l'indice).
+Lo specchio segue la tua risposta 2A: solo se lo scheletro ha coppie sinistra/destra riconoscibili (Auto), disattivabile o con coppie
+proprie per scheletro nelle impostazioni; altrimenti il pulsante è disattivo e il tooltip dice perché. La mesh di anteprima del set è
+versionata, perché il validatore controlla le ossa su di essa.
+\begin{lstlisting}
+generatore: per ogni corpo del Physics Asset, per ogni primitiva:
+   sfera r -> Sfera(r) ; box (X,Y,Z) -> Box(X/2,Y/2,Z/2) ; capsula (R,L) -> Capsula(R, R + L/2)
+   convessa -> capsula sul lato più lungo del suo bounding box + avviso ; affusolata -> raggio maggiore + avviso
+   Locale = PrimitivaLocale * OssoInSpazioComponente * MeshToRoot ; estensione * margine
+   nome = osso (osso_N se più di una) ; tag = prima regola di zona il cui frammento è nel nome dell'osso
+specchio, nomi: cerca il frammento della coppia ("_l" / "_r", "Left" / "Right"...) a confine di parola
+   ("_l" accoppia arm_l ma non arm_lower), sostituisci mantenendo le maiuscole
+specchio, forma: asse laterale = Y se l'avanti è +/-X, altrimenti X ; posizione: nega la componente laterale
+   rotazione (x,y,z,w) -> (-x,y,-z,w) ; se la controparte esiste già: sovrascrive dopo conferma
+\end{lstlisting}
+\paragraph{Unreal.} \code{UPhysicsAsset}, \code{USkeletalBodySetup} (\code{FKSphereElem}, \code{FKBoxElem}, \code{FKSphylElem},
+\code{FKConvexElem}, \code{FKTaperedCapsuleElem}), \code{FReferenceSkeleton}, \code{FAssetEditorToolkit}, \code{UAssetDefinitionDefault},
+\code{IStructureDetailsView}, \code{SListView}, \code{FEditorUndoClient}. Il validatore aggiunge \code{Hurtbox.BoneMissing} e
+\code{Hurtbox.Outside}. \textbf{Test}: 18 (\code{GSTNCombat.Editor.Hurtbox.*}, scheletri e Physics Asset costruiti in memoria) e
+l'istantanea \code{GSTN.Visual.Hurtbox.Panel}. Totale suite: 877 verdi.
+\paragraph{Non fatto.} I gizmo per spostare le forme nel viewport sono di E7 (per ora le forme si modificano a numeri nel Details);
+nessun selettore di Physics Asset (si usa quello della mesh); il pannello di validazione apre il set ma non seleziona la hurtbox.
+
 \section{Cosa controllare a mano stasera}\label{sec:controlli}
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Muri}: in \code{SandboxCharacter_Mover}, modalità WallSlidingV2, sezione \emph{Edges}: ci sono
@@ -175,6 +231,13 @@ l'anteprima ignora scale delle hurtbox, DI, tumble e yaw diversi dall'orientamen
     scheda Frame Data e la linea sulla corsia. Premi F7 e controlla il Message Log.
   \item \textbf{Validate all}: Window, GSTN Combat, Validation, ``Validate all'', poi doppio clic su un problema di un asset timeline
     e di una timeline inline in un Blueprint di abilità: playhead e selezione devono finire sul frame giusto.
+  \item \textbf{Bake dei socket}: apri una timeline con una hitbox \code{BakedSocket} e una mesh di anteprima. Il pulsante ``Bake sockets''
+    ha il pallino giallo se mancano i frame; clic o Ctrl+B e il pallino sparisce; cambia sezione o play rate e torna; Edit, Undo
+    ripristina il bake vecchio; confronta la hitbox con la mano nel viewport. In console: \code{gstn.Combat.BakeAll}.
+  \item \textbf{Hurtbox set}: doppio clic su un Hurtbox Set, scegli la mesh di un personaggio con Physics Asset, Generate, Add missing:
+    le forme stanno sul corpo. Prova Update shapes e Replace all (conferma). Seleziona una hurtbox sinistra e Mirror: compare dall'altro
+    lato. Su uno scheletro senza sinistra/destra (nemico, torretta) Mirror è disattivo con il motivo. Undo dopo ogni azione.
+  \item \textbf{Rete}: prima di unire M5, esegui lo scenario \code{scenario_hit_basic} del harness (il bake non è stato provato in PIE).
 \end{enumerate}
 
 \end{document}
