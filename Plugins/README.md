@@ -126,8 +126,8 @@ tags (Mover: `Mover.*` state flags in `MoverTypes.cpp`); those are not project t
 
 ## On the parallel branch `claude/project-thread-v1plhd` (not merged yet)
 
-Four more GSTN plugins exist on that branch only. They are not in this tree yet, so their folders are absent here; their READMEs
-can be read with `git show origin/claude/project-thread-v1plhd:Plugins/<name>/README.md`. All four are experimental and
+Six more GSTN plugins exist on that branch only. They are not in this tree yet, so their folders are absent here; their READMEs
+can be read with `git show origin/claude/project-thread-v1plhd:Plugins/<name>/README.md`. All six are experimental and
 `EnabledByDefault: false`, and the branch enables them in `GASP_Giustino2.uproject`. When it merges, move them into the tables
 above and extend the dependency overview and the tag table.
 
@@ -138,6 +138,7 @@ above and extend the dependency overview and the tag table.
 | `GSTNParts` | 0.1 | `GSTNPartsCore` (Runtime); GAS, NP, presentation and editor modules are planned, not built | Destructible body parts: part sets, penetration table, break effects as data, integer-quantised hit math. | GSTNCombat | `Part.Type.*` and `GameplayCue.Combat.Part.*` (ini), `Combat.Part.*`, `Combat.Entity.Destructible`, `Combat.Event.Part.*`, `Message.Combat.PartBroken` (native) |
 | `GSTNCombatEditor` | 0.7 | `GSTNCombatEditor` (Editor) | Timeline editor (edit context, model, panel, track editors), validation, socket baking, hurtbox set editor. | GSTNCombat, GSTNInput, GSTNCombatGAS, GSTNCombatNP, DataValidation | none of its own |
 | `GSTNCombatDebug` | 0.2 | `GSTNCombatDebug` (Runtime, denied in Shipping) | PIE and development tooling: the input display widget; Gameplay Debugger category, debug draw and state trace are planned. | GSTNCombat, GSTNInput, GSTNInputNP, GSTNCombatNP | none |
+| [`GSTNPlatform`](GSTNPlatform/README.md) | 0.1 | `GSTNPlatformCore` (Runtime), `GSTNPlatformRuntime` (Runtime) | Enemies as platforms for fighters (traversal plan T3): kinematic unattached colliders posed at one point per simulation step (Mover's pre-simulation tick), pose history, collision channel `GSTN_EnemyPlatform` (plugin `Config/Engine.ini`). No minion proxy. | GSTNSurface, Mover | `Platform`, `Platform.State.*`, `Platform.Event.*` (native) |
 
 The same branch adds the `Combat.Hurtbox.{Head,Torso,Arm,Leg,Hand,Foot}` tags to `GSTNCombatGAS` and a few const accessors to
 `UGSTN_CombatSimComponent`. Nothing in the runtime plugins depends on `GSTNCombatEditor` or `GSTNCombatDebug`.
