@@ -255,6 +255,10 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (19:39) **Animation that changes with input over time** (an aerial that rotates, attack variations) and **hitbox interpolation**
   as in platform fighters. Spec: [combat-m4-hits.md](combat-m4-hits.md) §3 (steer track for hitboxes, animation, facing and
   branches; interpolation status and four gaps), plans H15 and H17.
+- (19:56) **Per move**: some moves allow turning a few degrees during startup, some allow walking during startup. Example: a
+  vertical swing in the air; the first input sets the direction, a small angle correction in the first part of startup, a diagonal
+  during the swing. In the air one usually moves but does not turn, apart from these small corrections. Spec: control track in
+  [combat-m4-hits.md](combat-m4-hits.md) §3.
 
 ## 7. Consequences for the specifications
 
@@ -549,3 +553,9 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 > Una cosa: abbiamo preso in considerazione nei piani attacchi la cui animazione cambia a seconda degli input nel tempo (Rotazione
 > attacco in aria in alcuni casi, variazione attacco etc…), e hitbox interpolation? (Sta nei platform fighter) (19:39)
+
+> Di base pensavo che ci sono mosse dove durante il loro startup si puo limitatamente girare il personaggio di alcuni gradi, alcune dove si
+> puo camminare durante lo startup etc... cambia a seconda della mossa. Un esempio è uno swing vertical in aria. L'input iniziale decide la
+> direzione, magari si puo cambiare limitatamente l'angolazione durante la prima parte dello startup, e durante lo swing si puo farlo andare
+> in diagonale a destra o sinistra. (In genere durante le mosse in aria ci si puo muovere ma non girarsi, eccetto fare queste piccole
+> correzioni, che potrebero cambiare a seconda della mossa). (19:56)

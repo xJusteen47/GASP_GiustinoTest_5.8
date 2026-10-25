@@ -172,6 +172,27 @@ attack variations): the value is not a hitbox field but a **timeline track**, so
 - `Extension` is a C++ driver (`FGSTN_SteerDriver`, instanced struct; per-frame code stays C++, modularity §3.8) for other factors:
   charge time, an attribute, a tag. Questions HV.1–HV.3.
 
+**Turning and moving during a move, per move (owner, 2026-10-25 19:56).** Some moves let the character **turn a few degrees** during
+startup, some let it **walk** during startup; it changes per move. In the air the character can usually **move but not turn**, apart
+from these small corrections. Today the timeline has `AimPolicy` and `MaxTurnDegrees` (the turn at the start; `TurnUntilFrame` only for
+the camera policy) and `FGSTN_TimelineTrack_Movement::bLockFacing`; nothing lets stick input turn or move the character inside a window.
+*Proposal* (part of H15):
+- **`FGSTN_TimelineTrack_Control`** (frame window, several per timeline) { `float MaxTurnDegrees` (total, relative to the facing at the
+  window start); `float TurnRateDegPerFrame`; `float MoveInputScale` (0 = no locomotion from the stick, 1 = full walk on the ground or
+  full air drift in the air); `bool bTurnFromMovement = false` (moving does not rotate the character) }.
+- The stick is read from the input history in the attacker's facing space, as the steer track. Turn and movement go through the
+  timeline's movement path (one queued layered move, combat.md §11), never by setting the rotation or the velocity directly.
+- **Defaults** (*Proposal*): ground moves without a control track keep today's behaviour (no turn, no walk). Aerials get the air
+  drift of the jump with turning locked (`MoveInputScale = 1`, `bTurnFromMovement = false`), so they match the owner's rule.
+- **The owner's example**, a vertical swing in the air:
+
+| Frames | Track | Effect |
+|---|---|---|
+| 0 | `AimPolicy = SnapToStick` | the first input decides the direction |
+| 1–6 (first part of startup) | Control: `MaxTurnDegrees` 20, `TurnRateDegPerFrame` 4 | small correction of the angle |
+| whole move | Control: `MoveInputScale` 1, no turning from movement | air drift without turning |
+| active frames | Steer: `StickLateralHeld`, latched at the last active frame | the swing goes diagonal right or left (blend of hitboxes and animation) |
+
 **Hitbox interpolation between frames (owner question, 2026-10-25 19:39; platform fighters).** Status in the M4 code on
 `feature/gas-npp-5.8`: keys interpolate linearly between key frames (`UGSTN_HitShapeUtils::EvaluateKeys`), and `bSweepBetweenFrames`
 tests sub-steps between the previous and the current frame along the arc (rotation slerped, so a swing's middle is covered, test

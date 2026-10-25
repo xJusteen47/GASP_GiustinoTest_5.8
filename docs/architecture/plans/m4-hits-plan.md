@@ -468,13 +468,14 @@ launch direction, tilt etc. may differ per instance.
   `EntitiesIgnoreDemolitionByDefault`. Harness `scenario_destructible_crate` (attacker client, crate on the host; a character standing
   on it counts corrections). TM2 station 4 gets crates with thresholds 10, 20 and 30.
 
-### H15 Steer track: input-driven hitboxes, animation and facing (`GSTNCombatCore`, `GSTNCombatNP`) — size M (added 2026-10-25, after H13)
+### H15 Steer and control tracks: input-driven hitboxes, animation, turning and walking (`GSTNCombatCore`, `GSTNCombatNP`) — size M (added 2026-10-25, after H13)
 
 - Spec: [combat-m4-hits.md](../combat-m4-hits.md) §3, "Hitboxes that change with other factors". `FGSTN_TimelineTrack_Steer`,
   `KeysAtMin`/`KeysAtMax` and `SteerIndex` on hitboxes, the value in the timeline sync state, the input-history driver, the
   presentation blend parameter, facing rotation through the `Movement` track, branches (after seam S2 of spin-drill.md).
 - Tests: `SteerBlendsKeys`, `SteerReplaysAfterRollback`, `LatchFrameFreezesValue`, `ReturnWhenReleasedDrifts`, `FacingSpaceDriver`,
-  `FacingRotatesThroughQueuedMove`, `BranchJumpsInRange`. M5 adds the slider preview and the validator later (M5 plan).
+  `FacingRotatesThroughQueuedMove`, `BranchJumpsInRange`; control track: `ControlTurnCappedAtMaxDegrees`, `ControlWalkScale`,
+  `AerialDriftWithoutTurning`, `NoControlTrackKeepsTodayBehaviour`. M5 adds the slider preview and the validator later (M5 plan).
 
 ### H17 Hitbox sweep completeness (`GSTNCombatCore`, `GSTNCombatNP`) — size S/M (added 2026-10-25, after H13)
 

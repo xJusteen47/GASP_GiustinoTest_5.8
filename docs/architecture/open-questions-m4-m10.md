@@ -1469,6 +1469,10 @@ HV.3. Quali attacchi **ruotano il personaggio** mentre tieni lo stick (per esemp
 stick finché lo tieni, oppure si sceglie solo una volta (all'inizio o in un momento preciso, come girarsi all'indietro)?
    Perché conta: una rotazione continua cambia dove colpisce l'attacco mentre è attivo; una scelta singola è più leggibile.
    Ipotesi nella specifica: entrambe possibili per singola mossa, decise dal designer con la stessa traccia che inclina lo swing.
+   **Risposta (2026-10-25 19:56):** Dipende dalla mossa. In alcune durante lo startup ci si gira di pochi gradi, in altre si cammina. Esempio:
+   swing verticale in aria, la direzione la decide l'input iniziale, nella prima parte dello startup si corregge un po' l'angolo, durante lo
+   swing lo si porta in diagonale. In aria di solito ci si muove ma non ci si gira, salvo queste piccole correzioni
+   ([combat-m4-hits.md](combat-m4-hits.md) §3, traccia `Control`).
 
 INTP.1. L'interpolazione delle hitbox tra un frame e l'altro (come nei platform fighter) va **accesa di base** su tutti i colpi, oppure solo
 dove il designer la attiva?
