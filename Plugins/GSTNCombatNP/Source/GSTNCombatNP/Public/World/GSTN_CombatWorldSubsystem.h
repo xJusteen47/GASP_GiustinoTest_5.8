@@ -5,10 +5,12 @@
 #include "CoreMinimal.h"
 #include "GenericTeamAgentInterface.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "World/GSTN_KOZone.h"
 #include "World/GSTN_StepSnapshot.h"
 #include "GSTN_CombatWorldSubsystem.generated.h"
 
 class UGSTN_HurtboxSetDefinition;
+class AGSTN_KOZone;
 
 /**
  * The hittable entities of a world and the per-step snapshot the attackers hit against (combat-m4-hits 5).
@@ -69,6 +71,15 @@ public:
 
 	int32 GetNumRegisteredEntities() const { return Registry.Num(); }
 
+	/**
+	 * KO zones (AGSTN_KOZone): static boxes, read once at registration. A combatant whose simulated position is inside one is knocked out by
+	 * its combat tick. The transform and extent are copied, so the answer depends on nothing that can move between machines
+	 */
+	void RegisterKOZone(const AGSTN_KOZone* Zone, const FTransform& Transform, const FVector& HalfExtent);
+	void UnregisterKOZone(const AGSTN_KOZone* Zone);
+	bool IsInKOZone(const FVector& Location) const;
+	int32 GetNumKOZones() const { return KOZones.Num(); }
+
 	/** The radius of a sphere around the root that holds every hurtbox of the set, 0 for none */
 	static double ComputeBoundRadius(const UGSTN_HurtboxSetDefinition* Hurtboxes);
 
@@ -85,6 +96,13 @@ private:
 
 	/** Sorted by EntityId */
 	TArray<FRegistryEntry> Registry;
+
+	struct FKOZoneEntry
+	{
+		TWeakObjectPtr<const AGSTN_KOZone> Zone;
+		FGSTN_KOZoneBounds Bounds;
+	};
+	TArray<FKOZoneEntry> KOZones;
 
 	/** Sorted by provider id */
 	TArray<IGSTN_HittableProvider*> Providers;

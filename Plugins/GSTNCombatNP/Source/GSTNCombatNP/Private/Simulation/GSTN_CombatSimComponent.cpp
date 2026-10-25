@@ -41,6 +41,7 @@
 #include "Rules/GSTN_CombatRules.h"
 #include "Debug/GSTN_CombatDebugDraw.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
+#include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_LoadoutSwapLogic.h"
 #include "Loadout/GSTN_EntrySourceMask.h"
 #include "Simulation/GSTN_InputHostUtils.h"
@@ -1017,6 +1018,8 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	}
 
 	const int32 Frame = TimeStep.ServerFrame;
+
+	ProjectStateTags(Sync->Core, Frame);
 
 	// The tables of this frame (the combat tick of the same frame set them). A CancelTimeline names a slot of the registry the timeline
 	// was started in, which on a swap frame is the previous set

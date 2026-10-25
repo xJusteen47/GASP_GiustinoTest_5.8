@@ -7,7 +7,8 @@
 
 /**
  * What the combatant is doing, as far as the combat model is concerned. The hit states are written by the victim side of M4 (H9):
- * Hitstun is the locked part of a stagger, Tumble a launch that cannot act until it lands, Splat the reaction to a wall impact
+ * Hitstun is the locked part of a stagger, Tumble a launch that cannot act until it lands, Splat the reaction to a wall impact.
+ * KO is terminal: the combatant was knocked out (the health cap or a KO zone) and nothing leaves the state but a respawn
  */
 enum class EGSTN_ActionState : uint8
 {
@@ -16,6 +17,7 @@ enum class EGSTN_ActionState : uint8
 	Hitstun = 2,
 	Tumble = 3,
 	Splat = 4,
+	KO = 5,
 
 	Count UMETA(Hidden)
 };

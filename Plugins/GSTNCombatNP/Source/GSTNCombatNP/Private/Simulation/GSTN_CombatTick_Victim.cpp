@@ -2,6 +2,9 @@
 
 #include "Simulation/GSTN_CombatVictim.h"
 
+#include "AbilitySystemComponent.h"
+#include "GSTN_CombatNPTags.h"
+#include "GSTN_CombatTags.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitMathUtils.h"
 #include "Hits/GSTN_HitRunner.h"
@@ -82,7 +85,10 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 	Out.FreezeFrames = 0;
 	Out.bFreezeZeroVelocity = false;
 	Out.bCancelledMove = false;
-	if (!In.Self || In.Entries.IsEmpty())
+	Out.KO = EGSTN_KOCause::None;
+	Out.KOHitIndex = INDEX_NONE;
+	// Knocked out is terminal: nothing resolves any more
+	if (!In.Self || In.Entries.IsEmpty() || Core.ActionState == EGSTN_ActionState::KO)
 	{
 		return;
 	}
@@ -224,6 +230,26 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		Hit.HealthFractionAfter = VictimView.HealthFraction;
 	}
 
+	// The cap: the first hit that left the victim at it knocks it out. The reaction that hit chose still plays (a KO flies away), so only
+	// the action state is overwritten, after the reaction was written; KO is the state the hitstun end cannot leave
+	for (int32 Index = 0; Index < Out.Hits.Num() && Out.KO == EGSTN_KOCause::None; ++Index)
+	{
+		if (ReachedCap(Rules, Out.Hits[Index]))
+		{
+			Out.KO = EGSTN_KOCause::Health;
+			Out.KOHitIndex = Index;
+		}
+	}
+	if (Out.KO == EGSTN_KOCause::Health)
+	{
+		if (Core.ActionState == EGSTN_ActionState::InTimeline)
+		{
+			FGSTN_CombatTimelineLogic::CancelForOtherCommand(Core, Frame);
+			Out.bCancelledMove = true;
+		}
+		Core.ActionState = EGSTN_ActionState::KO;
+	}
+
 	if (bAnyStaggered)
 	{
 		// A stagger without a hitstop window starts its hitstun now
@@ -240,6 +266,110 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 			Out.FreezeFrames = FMath::Max(Core.HitstopEndFrame - Frame, 0);
 		}
 	}
+}
+
+bool FGSTN_CombatVictim::ApplyZoneKO(FGSTN_CombatSyncCore& Core, int32 Frame, bool bInZone, bool& bCancelledMove)
+{
+	if (!bInZone || Core.ActionState == EGSTN_ActionState::KO)
+	{
+		return false;
+	}
+	if (Core.ActionState == EGSTN_ActionState::InTimeline)
+	{
+		FGSTN_CombatTimelineLogic::CancelForOtherCommand(Core, Frame);
+		bCancelledMove = true;
+	}
+	Core.ActionState = EGSTN_ActionState::KO;
+	return true;
+}
+
+bool FGSTN_CombatVictim::ReachedCap(const UGSTN_CombatRules* Rules, const FGSTN_VictimHit& Hit)
+{
+	if (!Rules || Hit.bRicochet || !Hit.Outcome.bHit)
+	{
+		return false;
+	}
+	switch (Rules->DamageMode)
+	{
+	case EGSTN_DamageMode::Health:
+		return Hit.HealthFractionAfter <= 0.f;
+	case EGSTN_DamageMode::PercentCapped:
+		return Rules->MaxHealth > 0.f && Hit.DamagePercentAfter >= Rules->MaxHealth;
+	default:
+		return false;
+	}
+}
+
+void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame, AActor* Attacker, AActor* Victim, const FGameplayTagContainer& MoveTags, FGSTN_SimEventOutbox& Outbox)
+{
+	FGSTN_SimEvent Event;
+	Event.Frame = Frame;
+	Event.Instigator = Attacker ? Attacker : Victim;
+	Event.Target = Victim;
+	Event.Magnitude = Hit.Entry.Hit.Damage;
+	Event.Tags.AppendTags(MoveTags);
+	Event.Tags.AddTag(Hit.Entry.Hit.IsNormalHitType() ? GSTNCombatHitTags::HitType_Normal.GetTag() : Hit.Entry.Hit.HitType);
+	const FGameplayTag Relationship = GSTNHitRelationship::FromIndex(Hit.Entry.Relationship);
+	if (Relationship.IsValid())
+	{
+		Event.Tags.AddTag(Relationship);
+	}
+	if (Hit.bStaggered)
+	{
+		Event.Tags.AddTag(GSTNCombatNPTags::EventHit_Staggered);
+		switch (Hit.Reaction)
+		{
+		case EGSTN_HitReaction::PushBack: Event.Tags.AddTag(GSTNCombatNPTags::EventHit_Reaction_PushBack); break;
+		case EGSTN_HitReaction::Launch: Event.Tags.AddTag(GSTNCombatNPTags::EventHit_Reaction_Launch); break;
+		default: Event.Tags.AddTag(GSTNCombatNPTags::EventHit_Reaction_StaggerInPlace); break;
+		}
+		if (Hit.bTumble)
+		{
+			Event.Tags.AddTag(GSTNCombatNPTags::EventHit_Tumble);
+		}
+	}
+
+	FGSTN_SimEvent Landed = Event;
+	Landed.EventType = GSTNCombatTags::Event_HitLanded;
+	Outbox.Add(MoveTemp(Landed));
+	if (!Hit.bRicochet)
+	{
+		Event.EventType = GSTNCombatTags::Event_HitReceived;
+		Outbox.Add(MoveTemp(Event));
+	}
+}
+
+void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame, bool& bInOutMovementLock)
+{
+	// Set, not added: nothing else grants these three, and a re-simulated frame must not inherit what the predicted future left behind
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstun, Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Splat ? 1 : 0);
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Tumble, Core.ActionState == EGSTN_ActionState::Tumble ? 1 : 0);
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstop, Core.IsInHitstop(Frame) ? 1 : 0);
+
+	const bool bLock = IsActionLocked(Core);
+	if (bLock != bInOutMovementLock)
+	{
+		if (bLock)
+		{
+			ASC.AddLooseGameplayTag(GSTNCombatTags::Lock_Movement);
+		}
+		else
+		{
+			ASC.RemoveLooseGameplayTag(GSTNCombatTags::Lock_Movement);
+		}
+		bInOutMovementLock = bLock;
+	}
+}
+
+void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox)
+{
+	FGSTN_SimEvent Event;
+	Event.EventType = GSTNCombatTags::Event_KO;
+	Event.Frame = Frame;
+	Event.Instigator = Cause == EGSTN_KOCause::Health && Attacker ? Attacker : Victim;
+	Event.Target = Victim;
+	Event.Tags.AddTag(Cause == EGSTN_KOCause::Zone ? GSTNCombatTags::KOReason_Zone : GSTNCombatTags::KOReason_Health);
+	Outbox.Add(MoveTemp(Event));
 }
 
 FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInput& In, FGSTN_CombatSyncCore& Core)

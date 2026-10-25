@@ -9,6 +9,7 @@
 #include "MoverSimulationTypes.h"
 #include "NetworkPredictionTickState.h"
 #include "Rules/GSTN_CombatRules.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatAttacker, Log, All);
@@ -99,6 +100,20 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	FGSTN_CombatAttacker::Tick(In, Core, AttackerScratch, AttackerHits);
 
 	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
+	int16 BindingOfTimeline = INDEX_NONE;
+	if (!AttackerHits.IsEmpty())
+	{
+		// The binding that started the running timeline, for the tags of the victim's events (the first one that names it)
+		const UGSTN_CombatTableSet& Set = Tables();
+		for (int32 Index = 0; Index < Set.BindingTimeline.Num(); ++Index)
+		{
+			if (Set.BindingTimeline[Index] == Core.ActiveTimeline)
+			{
+				BindingOfTimeline = static_cast<int16>(Index);
+				break;
+			}
+		}
+	}
 	for (const FGSTN_AttackerHit& Hit : AttackerHits)
 	{
 		if (Hit.bReplacedTarget && !bLoggedTargetOverflow)
@@ -110,7 +125,10 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 		// Also on a ricochet: the victim still gets the entry for its cue and event. A victim that does not tick here refuses it
 		if (World)
 		{
-			World->PostHit(Hit.VictimId, Hit.Entry);
+			FGSTN_HitInboxEntry Entry = Hit.Entry;
+			Entry.AttackerTimeline = Core.ActiveTimeline;
+			Entry.AttackerBinding = BindingOfTimeline;
+			World->PostHit(Hit.VictimId, Entry);
 		}
 	}
 

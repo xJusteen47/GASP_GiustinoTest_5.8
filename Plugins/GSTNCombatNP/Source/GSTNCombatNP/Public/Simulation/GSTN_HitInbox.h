@@ -45,6 +45,10 @@ struct FGSTN_HitInboxEntry
 	/** EGSTN_HurtState of the hurtbox as the attacker saw it: Invincible means the hit registered on the attacker but the victim takes no damage or reaction */
 	uint8 HurtState = 0;
 
+	/** The attacker's running timeline (registry index) and the binding that started it (table index), -1 for none: for the tags of the outbox events only, never read by the simulation */
+	int16 AttackerTimeline = -1;
+	int16 AttackerBinding = -1;
+
 	/** Set when the attacker's outcome was a ricochet: the victim still gets the entry for its cue and event, nothing else */
 	bool bRicochet = false;
 };

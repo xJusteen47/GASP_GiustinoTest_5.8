@@ -135,6 +135,9 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 			Threshold = FGSTN_StaggerThreshold::Max(Threshold, Hurt.ArmorThreshold);
 		}
 	}
+	// A knocked out combatant cannot be hit any more: attackers see it as intangible
+	bAllIntangible |= Core.ActionState == EGSTN_ActionState::KO;
+	bAllInvincible |= Core.ActionState == EGSTN_ActionState::KO;
 	Flags |= bAllIntangible ? GSTNVictimReactionFlags::Intangible : 0;
 	Flags |= bAllInvincible ? GSTNVictimReactionFlags::Invincible : 0;
 	Flags |= Out.bInHitstop ? GSTNVictimReactionFlags::InHitstop : 0;

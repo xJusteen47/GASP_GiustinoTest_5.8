@@ -114,6 +114,23 @@ public:
 	const UGSTN_CombatRules* GetCombatRules() const { return CombatRules; }
 
 	/**
+	 * The command and the move of a hit's attacker as tags (the command tag, the timeline ability's asset tags), for the outbox events of
+	 * the victim side. Timeline and Binding are the indices the hit inbox entry carries; an invalid index adds nothing
+	 */
+	void AppendMoveTags(int32 Timeline, int32 Binding, FGameplayTagContainer& OutTags) const;
+
+	/**
+	 * Server only, from outside the simulation (like the loadout revision write): a knocked out combatant is Actionable again. The
+	 * respawn of a game replaces it; the harness uses it to reuse a pawn after a KO
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|KO")
+	bool ServerRespawn();
+
+	/** "frame,action,hitstopStart,hitstopEnd,hitstunEnd,pendingReaction" of the pending simulation state, for the harness. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetVictimInfo() const;
+
+	/**
 	 * "frame:victim:group:hitbox:hurtbox:ricochet:attackerHitstop;..." of the hits the attacker side made, the last 512 frames. Written
 	 * while gstn.Combat.Debug.HitLog is 1. A re-simulated frame replaces its entry, so an owner's log after a reconcile compares with the
 	 * authority's frame by frame. Debug only: never read by the simulation
@@ -552,6 +569,13 @@ private:
 
 	/** The victim step took a hit this frame: the buffer event Input.BufferEvent.Interrupted of the frame (AppendFrameEvents) */
 	bool bFrameInterrupted = false;
+
+	/** Projects Combat.State.{Hitstun,Tumble,Hitstop} and the movement lock from the sync state of the frame (the ability system's pre-tick). Idempotent: a function of the state only */
+	void ProjectStateTags(const FGSTN_CombatSyncCore& Core, int32 Frame);
+	bool bMovementLockProjected = false;
+
+	/** The KO events and the hit events of the victim step, appended to the outbox (every machine writes them, the authority publishes them) */
+	void AppendVictimEvents(int32 Frame);
 
 	void ExecuteVictimHits(int32 Frame);
 	void ExecuteVictimEffects(int32 Frame);

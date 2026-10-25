@@ -5,11 +5,13 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Hits/GSTN_HitExtensions.h"
+#include "Events/GSTN_SimEvent.h"
 #include "Hits/GSTN_HitResolution.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_HitInbox.h"
 #include "World/GSTN_StepSnapshot.h"
 
+class UAbilitySystemComponent;
 class UGSTN_CombatRules;
 class UGSTN_HurtboxSetDefinition;
 
@@ -61,10 +63,24 @@ struct FGSTN_VictimTickInput
 	FGSTN_SyncFragmentArray* Fragments = nullptr;
 };
 
+/** Why a combatant was knocked out; None for a frame that knocked nobody out */
+enum class EGSTN_KOCause : uint8
+{
+	None,
+	/** The health ran out, or the damage reached the cap of the rules */
+	Health,
+	/** The combatant's position was inside a KO zone */
+	Zone
+};
+
 /** What the victim step did, besides the sync state it wrote */
 struct FGSTN_VictimResult
 {
 	TArray<FGSTN_VictimHit, TInlineAllocator<4>> Hits;
+
+	/** This frame's step knocked the combatant out (the state is KO now); for Health, KOHitIndex is the hit that did it */
+	EGSTN_KOCause KO = EGSTN_KOCause::None;
+	int32 KOHitIndex = INDEX_NONE;
 
 	/** The victim's freeze, in frames from this frame; 0 for none (no hitstop, or a window that already covered it) */
 	int32 FreezeFrames = 0;
@@ -141,8 +157,44 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	/** The combat state locks commands: a victim in hitstun, tumble or a surface impact reaction cannot act until it is Actionable again */
 	static bool IsActionLocked(const FGSTN_CombatSyncCore& Core)
 	{
+		return Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Tumble || Core.ActionState == EGSTN_ActionState::Splat
+			|| Core.ActionState == EGSTN_ActionState::KO;
+	}
+
+	/** The part of the lock that is a hit reaction (not a KO): the stick feeds DI and nothing else, and the locomotion is held (the movement lock tag is projected from it) */
+	static bool IsInReaction(const FGSTN_CombatSyncCore& Core)
+	{
 		return Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Tumble || Core.ActionState == EGSTN_ActionState::Splat;
 	}
+
+	/**
+	 * A combatant found inside a KO zone at the end of the previous frame is knocked out: the running move is cancelled and the state is the
+	 * terminal KO. Does nothing to one that is out already. @return true when this call knocked it out; bCancelledMove says a move was cancelled
+	 */
+	static bool ApplyZoneKO(FGSTN_CombatSyncCore& Core, int32 Frame, bool bInZone, bool& bCancelledMove);
+
+	/** The cap a hit left the victim at: Health reaches zero, PercentCapped reaches MaxHealth. The Percent mode has no cap and never knocks out */
+	static bool ReachedCap(const UGSTN_CombatRules* Rules, const FGSTN_VictimHit& Hit);
+
+	/**
+	 * The outbox events of one resolved hit (combat.md 5.6): HitLanded (for the attacker's listeners) and HitReceived (the victim's), the
+	 * second only when the hit was not a ricochet. Both carry the hit type, the relationship, bStaggered, the tumble and the reaction as tags,
+	 * the damage as the magnitude, and MoveTags (the attacker's command and move) when the caller has them. Appended unconditionally: the
+	 * host's FinalizeFrame publishes them on the authority, once
+	 */
+	static void AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame, AActor* Attacker, AActor* Victim, const FGameplayTagContainer& MoveTags, FGSTN_SimEventOutbox& Outbox);
+
+	/**
+	 * Projects the combat state onto the ability system for the frame (the pre-tick): Combat.State.Hitstun (hitstun or splat), Tumble and
+	 * Hitstop are set to what the state says, and Combat.Lock.Movement is held while the state locks the combatant (a hit reaction or a KO),
+	 * which stops the locomotion through the stats movement modifier; the stick feeds DI only. Idempotent: a function of the state, so a
+	 * re-simulated frame ends with the same tags. bInOutMovementLock is the caller's memory of the lock it holds, so a lock an ability or an
+	 * effect grants is never taken back
+	 */
+	static void ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame, bool& bInOutMovementLock);
+
+	/** The KO event: the instigator is the attacker for a Health KO (the victim itself for a zone), the target the combatant; KOReason as a tag */
+	static void AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox);
 
 	/** The stick on the plane normal to Up: forward is the camera's, turned about Up (never world Z) */
 	static FVector StickToPlane(const FVector2D& Stick, double CameraYawDegrees, const FVector& Up);

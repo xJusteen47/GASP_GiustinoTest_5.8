@@ -98,6 +98,33 @@ void FGSTN_StepSnapshot::QueryCandidates(const FBox& Box, TArray<int32>& OutEntr
 	});
 }
 
+void UGSTN_CombatWorldSubsystem::RegisterKOZone(const AGSTN_KOZone* Zone, const FTransform& Transform, const FVector& HalfExtent)
+{
+	UnregisterKOZone(Zone);
+	FKOZoneEntry& Entry = KOZones.AddDefaulted_GetRef();
+	Entry.Zone = Zone;
+	Entry.Bounds.Transform = Transform;
+	Entry.Bounds.Transform.SetScale3D(FVector::OneVector);
+	Entry.Bounds.HalfExtent = HalfExtent;
+}
+
+void UGSTN_CombatWorldSubsystem::UnregisterKOZone(const AGSTN_KOZone* Zone)
+{
+	KOZones.RemoveAll([Zone](const FKOZoneEntry& Entry) { return !Entry.Zone.IsValid() || Entry.Zone.Get() == Zone; });
+}
+
+bool UGSTN_CombatWorldSubsystem::IsInKOZone(const FVector& Location) const
+{
+	for (const FKOZoneEntry& Entry : KOZones)
+	{
+		if (Entry.Bounds.Contains(Location))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 UGSTN_CombatWorldSubsystem* UGSTN_CombatWorldSubsystem::Get(const UWorld* World)
 {
 	return World ? World->GetSubsystem<UGSTN_CombatWorldSubsystem>() : nullptr;

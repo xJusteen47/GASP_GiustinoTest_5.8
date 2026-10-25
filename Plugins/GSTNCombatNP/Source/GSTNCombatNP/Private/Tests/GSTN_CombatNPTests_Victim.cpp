@@ -2,6 +2,19 @@
 // the steps are the pure functions FGSTN_CombatVictim::Resolve and StepReaction over a sync core.
 
 #include "Misc/AutomationTest.h"
+#include "AbilitySystemComponent.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "GSTN_CombatNPTags.h"
+#include "GSTN_CombatTags.h"
+#include "Input/GSTN_BufferResetRules.h"
+#include "Input/GSTN_CombatSettings.h"
+#include "Input/GSTN_InputHistory.h"
+#include "Input/GSTN_InputTags.h"
+#include "Movement/GSTN_StatsMovementModifier.h"
+#include "World/GSTN_KOZone.h"
 #include "GSTN_VictimTestTypes.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitExtensions.h"
@@ -461,6 +474,229 @@ bool FGSTN_VictimRollbackReDeliversTest::RunTest(const FString& Parameters)
 	Again.Run(11);
 	TestTrue(TEXT("the re-delivered hit gives the same state"), Again.Core.Hit == Resolved.Hit && Again.Core.ActionState == Resolved.ActionState
 		&& Again.Core.HitstopStartFrame == Resolved.HitstopStartFrame && Again.Core.HitstopEndFrame == Resolved.HitstopEndFrame && Again.Core.Requests == Resolved.Requests);
+	return true;
+}
+
+// ---- H9b: KO, outbox, state tags, movement lock, the Interrupted reset
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimKOByHealthCapTest, "GSTNCombat.NP.Hits.Victim.KOByHealthCap", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimKOByHealthCapTest::RunTest(const FString& Parameters)
+{
+	// PercentCapped: the cap is MaxHealth percent points; the standard rules do 10 per test hit
+	FVictimFixture Fixture;
+	Fixture.Rules->DamageMode = EGSTN_DamageMode::PercentCapped;
+	Fixture.Rules->MaxHealth = 15.f;
+	Fixture.Entries = { FVictimFixture::MakeEntry(10, 600.f) };
+	Fixture.Run(11);
+	TestTrue(TEXT("the first hit stays under the cap"), Fixture.Result.KO == EGSTN_KOCause::None && Fixture.Core.ActionState != EGSTN_ActionState::KO);
+
+	// The second one reaches it (two hits in one drain would too): KO is terminal and the reaction it chose is still pending
+	Fixture.Entries = { FVictimFixture::MakeEntry(20, 600.f) };
+	Fixture.Self.Reaction = FGSTN_VictimReactionState::Make(10.0, 1.0, 0, FGSTN_StaggerThreshold());
+	Fixture.Run(21);
+	TestTrue(TEXT("the cap knocks it out"), Fixture.Result.KO == EGSTN_KOCause::Health && Fixture.Result.KOHitIndex == 0);
+	TestTrue(TEXT("the state is the terminal KO"), Fixture.Core.ActionState == EGSTN_ActionState::KO && FGSTN_CombatVictim::IsActionLocked(Fixture.Core) && !FGSTN_CombatVictim::IsInReaction(Fixture.Core));
+	TestTrue(TEXT("the reaction the hit chose still plays"), Fixture.Core.Hit.HasPendingReaction());
+
+	// The hitstun end cannot leave it
+	Fixture.Step(Fixture.Core.HitstopEndFrame);
+	Fixture.Step(Fixture.Core.Hit.HitstunEndFrame + 5);
+	TestTrue(TEXT("KO stays"), Fixture.Core.ActionState == EGSTN_ActionState::KO);
+
+	// Nothing resolves on a knocked out combatant
+	Fixture.Entries = { FVictimFixture::MakeEntry(40, 600.f) };
+	Fixture.Run(41);
+	TestTrue(TEXT("no more hits, no second KO"), Fixture.Result.Hits.IsEmpty() && Fixture.Result.KO == EGSTN_KOCause::None && Fixture.Core.ActionState == EGSTN_ActionState::KO);
+
+	// The Percent mode has no cap, however high the damage goes
+	FVictimFixture Uncapped;
+	Uncapped.Rules->MaxHealth = 5.f;
+	Uncapped.Entries = { FVictimFixture::MakeEntry(10, 600.f) };
+	Uncapped.Run(11);
+	TestTrue(TEXT("Percent never knocks out"), Uncapped.Result.KO == EGSTN_KOCause::None);
+
+	// The Health mode: a hit that leaves no health. The cap check reads what the hit left
+	FGSTN_VictimHit Left;
+	Left.Outcome.bHit = true;
+	Left.HealthFractionAfter = 0.f;
+	Fixture.Rules->DamageMode = EGSTN_DamageMode::Health;
+	TestTrue(TEXT("zero health is the cap"), FGSTN_CombatVictim::ReachedCap(Fixture.Rules.Get(), Left));
+	Left.HealthFractionAfter = 0.01f;
+	TestFalse(TEXT("a sliver of health is not"), FGSTN_CombatVictim::ReachedCap(Fixture.Rules.Get(), Left));
+	Left.HealthFractionAfter = 0.f;
+	Left.bRicochet = true;
+	TestFalse(TEXT("and a ricochet never is"), FGSTN_CombatVictim::ReachedCap(Fixture.Rules.Get(), Left));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimKOByZoneTest, "GSTNCombat.NP.Hits.Victim.KOByZone", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimKOByZoneTest::RunTest(const FString& Parameters)
+{
+	// The bounds: an oriented box, edge inclusive
+	FGSTN_KOZoneBounds Zone;
+	Zone.Transform = FTransform(FRotator(0.0, 45.0, 0.0), FVector(1000.0, 0.0, 0.0));
+	Zone.HalfExtent = FVector(100.0, 50.0, 100.0);
+	TestTrue(TEXT("the centre is inside"), Zone.Contains(FVector(1000.0, 0.0, 0.0)));
+	TestTrue(TEXT("along the box's own long axis (45 degrees)"), Zone.Contains(FVector(1000.0, 0.0, 0.0) + FVector(70.0, 70.0, 0.0)));
+	TestFalse(TEXT("along its short axis the same distance is outside"), Zone.Contains(FVector(1000.0, 0.0, 0.0) + FVector(-70.0, 70.0, 0.0)));
+	TestFalse(TEXT("above it"), Zone.Contains(FVector(1000.0, 0.0, 101.0)));
+
+	// The state: a combatant in a zone is out, its move is cancelled, and it is out for good
+	FGSTN_CombatSyncCore Core;
+	bool bCancelled = false;
+	TestFalse(TEXT("outside: nothing"), FGSTN_CombatVictim::ApplyZoneKO(Core, 10, false, bCancelled));
+	Core.ActionState = EGSTN_ActionState::InTimeline;
+	Core.ActiveTimeline = 0;
+	Core.TimelineStartFrame = 5;
+	TestTrue(TEXT("inside: knocked out"), FGSTN_CombatVictim::ApplyZoneKO(Core, 10, true, bCancelled));
+	TestTrue(TEXT("the running move was cancelled"), bCancelled && Core.ActionState == EGSTN_ActionState::KO && Core.Requests.Find(EGSTN_RequestType::CancelTimeline, 10) != nullptr);
+	TestFalse(TEXT("a second time does nothing"), FGSTN_CombatVictim::ApplyZoneKO(Core, 11, true, bCancelled));
+
+	// The KO event: the reason is a tag and the instigator the victim itself for a zone
+	FGSTN_SimEventOutbox Outbox;
+	FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause::Zone, 10, nullptr, nullptr, Outbox);
+	TestTrue(TEXT("one KO event with the Zone reason"), Outbox.Events.Num() == 1 && Outbox.Events[0].EventType == GSTNCombatTags::Event_KO && Outbox.Events[0].Tags.HasTagExact(GSTNCombatTags::KOReason_Zone));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimOutboxOncePerHitOnHostTest, "GSTNCombat.NP.Hits.Victim.OutboxOncePerHitOnHost", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimOutboxOncePerHitOnHostTest::RunTest(const FString& Parameters)
+{
+	FVictimFixture Fixture;
+	FGSTN_HitInboxEntry Ricochet = FVictimFixture::MakeEntry(10, 600.f, 3);
+	Ricochet.bRicochet = true;
+	Fixture.Entries = { FVictimFixture::MakeEntry(10, 1500.f), Ricochet };
+	Fixture.Run(11);
+	TestEqual(TEXT("both entries came back"), Fixture.Result.Hits.Num(), 2);
+
+	FGSTN_SimEventOutbox Outbox;
+	FGameplayTagContainer MoveTags;
+	MoveTags.AddTag(GSTNCombatTags::State_Busy);
+	for (const FGSTN_VictimHit& Hit : Fixture.Result.Hits)
+	{
+		FGSTN_CombatVictim::AppendHitEvents(Hit, 11, nullptr, nullptr, MoveTags, Outbox);
+	}
+	TestEqual(TEXT("a landed hit and a received one, a ricochet only the landed"), Outbox.Events.Num(), 3);
+	const FGSTN_SimEvent& Landed = Outbox.Events[0];
+	TestTrue(TEXT("the first is HitLanded with the hit's facts as tags"), Landed.EventType == GSTNCombatTags::Event_HitLanded && Landed.Tags.HasTagExact(GSTNCombatHitTags::HitType_Normal)
+		&& Landed.Tags.HasTagExact(GSTNCombatHitTags::Relationship_Enemy) && Landed.Tags.HasTagExact(GSTNCombatTags::State_Busy) && Landed.Tags.HasTagExact(GSTNCombatNPTags::EventHit_Staggered));
+	TestTrue(TEXT("with the reaction tier"), Landed.Tags.HasTagExact(GSTNCombatNPTags::EventHit_Reaction_Launch) || Landed.Tags.HasTagExact(GSTNCombatNPTags::EventHit_Reaction_PushBack));
+	TestEqual(TEXT("and the damage"), Landed.Magnitude, 10.f);
+	TestTrue(TEXT("the second is the victim's HitReceived"), Outbox.Events[1].EventType == GSTNCombatTags::Event_HitReceived && Outbox.Events[2].EventType == GSTNCombatTags::Event_HitLanded);
+
+	// The host publishes each once; the second flush has nothing
+	int32 Published = 0;
+	TestEqual(TEXT("the authority publishes three"), Outbox.Flush(true, [&Published](FGSTN_SimEvent&) { ++Published; }), 3);
+	TestEqual(TEXT("the second flush publishes none"), Outbox.Flush(true, [&Published](FGSTN_SimEvent&) { ++Published; }), 0);
+	TestEqual(TEXT("three calls in all"), Published, 3);
+
+	// A predicting client writes the same events (and again after a re-simulation) and publishes none
+	FGSTN_CombatVictim::AppendHitEvents(Fixture.Result.Hits[0], 11, nullptr, nullptr, MoveTags, Outbox);
+	FGSTN_CombatVictim::AppendHitEvents(Fixture.Result.Hits[0], 11, nullptr, nullptr, MoveTags, Outbox);
+	TestEqual(TEXT("a client publishes nothing"), Outbox.Flush(false, [&Published](FGSTN_SimEvent&) { ++Published; }), 0);
+	TestTrue(TEXT("and keeps nothing"), Outbox.IsEmpty() && Published == 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimMovementLockedInHitstunTest, "GSTNCombat.NP.Hits.Victim.MovementLockedInHitstun", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimMovementLockedInHitstunTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("GSTNCombatNPVictimTestWorld"));
+	World->AddToRoot();
+	FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+	Context.SetCurrentWorld(World);
+	World->InitializeActorsForPlay(FURL());
+	AActor* Owner = World->SpawnActor<AActor>();
+	UAbilitySystemComponent* ASC = NewObject<UAbilitySystemComponent>(Owner);
+	ASC->RegisterComponent();
+	ASC->InitAbilityActorInfo(Owner, Owner);
+	ASC->AddSet<UGSTN_CombatAttributeSet>();
+	ASC->SetNumericAttributeBase(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), UGSTN_CombatSettings::Get().StatsReferenceWalkSpeed);
+
+	auto Factor = [ASC]() { float Value = -1.f; FGSTN_StatsMovementModifier::ResolveSpeedFactor(*ASC, Value); return Value; };
+
+	FGSTN_CombatSyncCore Core;
+	bool bLock = false;
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+	TestTrue(TEXT("free: the speed follows the stat"), Factor() > 0.f);
+
+	const EGSTN_ActionState Locked[] = { EGSTN_ActionState::Hitstun, EGSTN_ActionState::Tumble, EGSTN_ActionState::Splat, EGSTN_ActionState::KO };
+	for (const EGSTN_ActionState State : Locked)
+	{
+		Core.ActionState = State;
+		FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+		TestEqual(*FString::Printf(TEXT("state %d: the locomotion speed is zero"), static_cast<int32>(State)), Factor(), 0.f);
+	}
+	Core.ActionState = EGSTN_ActionState::Hitstun;
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+	TestTrue(TEXT("Hitstun tag in hitstun only"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstun) && !ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Tumble));
+	Core.ActionState = EGSTN_ActionState::Tumble;
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+	TestTrue(TEXT("Tumble tag in tumble, the Hitstun tag gone"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Tumble) && !ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstun));
+	Core.HitstopStartFrame = 8;
+	Core.HitstopEndFrame = 12;
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 10, bLock);
+	TestTrue(TEXT("Hitstop tag inside the window"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstop));
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 12, bLock);
+	TestFalse(TEXT("and not on its end frame"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstop));
+
+	// Projecting the same frame again changes nothing (a re-simulation), and the end of the lock takes back only its own
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 12, bLock);
+	ASC->AddLooseGameplayTag(GSTNCombatTags::Lock_Movement);
+	Core.ActionState = EGSTN_ActionState::Actionable;
+	FGSTN_CombatVictim::ProjectStateTags(*ASC, Core, 13, bLock);
+	TestFalse(TEXT("the hit tags are gone"), ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Tumble) || ASC->HasMatchingGameplayTag(GSTNCombatTags::State_Hitstun));
+	TestEqual(TEXT("a lock somebody else holds stays"), Factor(), 0.f);
+	ASC->RemoveLooseGameplayTag(GSTNCombatTags::Lock_Movement);
+	TestTrue(TEXT("and with it released the speed is back"), Factor() > 0.f);
+
+	GEngine->DestroyWorldContext(World);
+	World->DestroyWorld(false);
+	World->RemoveFromRoot();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimInterruptedClearsBufferTest, "GSTNCombat.NP.Hits.Victim.InterruptedClearsBuffer", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimInterruptedClearsBufferTest::RunTest(const FString& Parameters)
+{
+	auto LivePresses = [](const FGSTN_InputHistory& History)
+	{
+		int32 Count = 0;
+		for (int32 Age = 0; Age < History.GetNumButtonEvents(); ++Age)
+		{
+			const FGSTN_ButtonEvent& Event = History.GetButtonEvent(History.GetButtonSlot(Age));
+			Count += (!Event.bRelease && !Event.bConsumed) ? 1 : 0;
+		}
+		return Count;
+	};
+	auto Press = [](FGSTN_InputHistory& History, int32 Frame, uint32 Button)
+	{
+		FGSTN_InputSample Sample;
+		Sample.Frame = Frame;
+		Sample.Held = Button;
+		Sample.Pressed = Button;
+		History.Append(Sample);
+	};
+
+	FGSTN_InputHistory History;
+	Press(History, 5, 1u << 0);
+	Press(History, 6, 1u << 1);
+	TestEqual(TEXT("two presses wait in the buffer"), LivePresses(History), 2);
+
+	FGSTN_BufferFrameEvents Quiet;
+	TestFalse(TEXT("a frame without the event keeps them"), FGSTN_BufferResetRules::ApplyInterrupted(History, Quiet, 7));
+	TestEqual(TEXT("still two"), LivePresses(History), 2);
+
+	FGSTN_BufferFrameEvents Interrupted;
+	Interrupted.EventTags.AddTag(GSTNInputTags::BufferEvent_Interrupted);
+	TestTrue(TEXT("the hit frame fires the rule"), FGSTN_BufferResetRules::ApplyInterrupted(History, Interrupted, 7));
+	TestEqual(TEXT("every press made before it is gone"), LivePresses(History), 0);
+
+	// A press during the hitstun buffers normally and only the next hit would take it
+	Press(History, 20, 1u << 0);
+	TestEqual(TEXT("a press made later is kept"), LivePresses(History), 1);
+	TestFalse(TEXT("a quiet frame keeps it"), FGSTN_BufferResetRules::ApplyInterrupted(History, Quiet, 21));
+	TestEqual(TEXT("and it is there at hitstun end"), LivePresses(History), 1);
 	return true;
 }
 

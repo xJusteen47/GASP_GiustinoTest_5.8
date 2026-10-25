@@ -4,6 +4,7 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 
 #include "Abilities/GameplayAbility.h"
+#include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "Debug/GSTN_CombatDebugDraw.h"
 #include "Abilities/NpAbilitySystemComponent.h"
@@ -20,6 +21,7 @@
 #include "Movement/GSTN_LayeredMove_Freeze.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Rules/GSTN_CombatRules.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatVictim, Log, All);
@@ -71,6 +73,20 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 	In.bOnWall = bOnWall;
 	In.Fragments = &Sync.Fragments;
 	FGSTN_CombatVictim::Resolve(In, Core, VictimResult);
+
+	// A KO zone: the position at the end of the previous frame against the static zones of the world. A hit that knocked it out this frame
+	// stands (the reason is Health), the zone only knocks out what is not out yet
+	if (Self && VictimResult.KO == EGSTN_KOCause::None)
+	{
+		const UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
+		bool bCancelledMove = false;
+		if (World && FGSTN_CombatVictim::ApplyZoneKO(Core, Frame, World->IsInKOZone(Self->Transform.GetLocation()), bCancelledMove))
+		{
+			VictimResult.KO = EGSTN_KOCause::Zone;
+			VictimResult.bCancelledMove |= bCancelledMove;
+		}
+	}
+	AppendVictimEvents(Frame);
 
 	if (!InboxScratch.IsEmpty() && !Self)
 	{
@@ -130,6 +146,76 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 	if (ReactionMove.Kind != FGSTN_ReactionMove::EKind::None)
 	{
 		Core.Requests.Add(ReactionMove.Kind == FGSTN_ReactionMove::EKind::Launch ? EGSTN_RequestType::Knockback : EGSTN_RequestType::PushBack, Frame, 0);
+	}
+}
+
+void UGSTN_CombatSimComponent::AppendVictimEvents(int32 Frame)
+{
+	for (const FGSTN_VictimHit& Hit : VictimResult.Hits)
+	{
+		AActor* Attacker = FindAttackerActor(Hit);
+		FGameplayTagContainer MoveTags;
+		if (const UGSTN_CombatSimComponent* AttackerCombat = Attacker ? Attacker->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr)
+		{
+			AttackerCombat->AppendMoveTags(Hit.Entry.AttackerTimeline, Hit.Entry.AttackerBinding, MoveTags);
+		}
+		FGSTN_CombatVictim::AppendHitEvents(Hit, Frame, Attacker, GetOwner(), MoveTags, EventOutbox);
+	}
+	if (VictimResult.KO != EGSTN_KOCause::None)
+	{
+		AActor* Attacker = VictimResult.KOHitIndex != INDEX_NONE ? FindAttackerActor(VictimResult.Hits[VictimResult.KOHitIndex]) : nullptr;
+		FGSTN_CombatVictim::AppendKOEvent(VictimResult.KO, Frame, Attacker, GetOwner(), EventOutbox);
+	}
+}
+
+void UGSTN_CombatSimComponent::AppendMoveTags(int32 Timeline, int32 Binding, FGameplayTagContainer& OutTags) const
+{
+	const UGSTN_CombatTableSet& Set = Tables();
+	if (Set.Table.Bindings.IsValidIndex(Binding))
+	{
+		const int32 CommandIndex = Set.Table.Bindings[Binding].CommandIndex;
+		if (Set.Table.Commands.IsValidIndex(CommandIndex))
+		{
+			OutTags.AddTag(Set.Table.Commands[CommandIndex].Tag);
+		}
+	}
+	if (Set.TimelineRegistry.IsValidIndex(Timeline) && Set.TimelineRegistry[Timeline])
+	{
+		OutTags.AppendTags(Set.TimelineRegistry[Timeline]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetAssetTags());
+	}
+}
+
+bool UGSTN_CombatSimComponent::ServerRespawn()
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	return NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([](FGSTN_CombatSyncState& Sync)
+	{
+		if (Sync.Core.ActionState == EGSTN_ActionState::KO)
+		{
+			Sync.Core.ActionState = EGSTN_ActionState::Actionable;
+		}
+	}, "Respawn") != nullptr;
+}
+
+FString UGSTN_CombatSimComponent::GetVictimInfo() const
+{
+	const FGSTN_CombatSyncState* Sync = GetSyncState();
+	if (!Sync)
+	{
+		return TEXT("-1,0,-1,-1,-1,0");
+	}
+	return FString::Printf(TEXT("%d,%d,%d,%d,%d,%d"), Sync->Core.Input.History.GetLatestFrame(), static_cast<int32>(Sync->Core.ActionState), Sync->Core.HitstopStartFrame,
+		Sync->Core.HitstopEndFrame, Sync->Core.Hit.HitstunEndFrame, Sync->Core.Hit.HasPendingReaction() ? static_cast<int32>(Sync->Core.Hit.GetPendingReaction()) + 1 : 0);
+}
+
+void UGSTN_CombatSimComponent::ProjectStateTags(const FGSTN_CombatSyncCore& Core, int32 Frame)
+{
+	if (AbilitySystem)
+	{
+		FGSTN_CombatVictim::ProjectStateTags(*AbilitySystem, Core, Frame, bMovementLockProjected);
 	}
 }
 

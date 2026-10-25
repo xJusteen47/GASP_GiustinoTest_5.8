@@ -29,4 +29,14 @@ namespace GSTNCombatNPTags
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveDecay);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveGravityScale);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveSeconds);
+
+	/**
+	 * Tags of the HitLanded and HitReceived outbox events beyond the hit type and the relationship (which reuse Combat.HitType.* and
+	 * Combat.Relationship.*): whether the hit staggered, whether it made the victim tumble, and the reaction it chose
+	 */
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_Staggered);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_Tumble);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_Reaction_StaggerInPlace);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_Reaction_PushBack);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_Reaction_Launch);
 }
