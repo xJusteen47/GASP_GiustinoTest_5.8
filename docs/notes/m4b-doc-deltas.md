@@ -158,3 +158,31 @@ One line each: where, what differs, why. Collected per checkpoint; folded into `
 - Tests: 12 `GSTNParts.Core.Step.*` (the plan's eleven plus `OutcomeCarriesTheResultState`); the stagger, tier and hitstop tests run the real `ComputeKnockback` and
   `Hitstop` steps with the weight driven model through `FGSTN_HitPipelineRunner`. The plan's "M4 fake-step pipeline test still green" is the combat suite (396 unchanged).
   Not done: a byte-for-byte state compare of the M4 scenarios with the plugin loaded and no part set (needs the PIE harness; the plugin adds nothing to the pipeline of the standard rules, whose pipeline does not list `PartResolve`).
+
+## P5 GSTNPartsGAS (laptop, 2026-10-25)
+
+- m4b-parts-plan.md P5 / combat-parts.md 5.4: the simulation event type (`FGSTN_SimEvent`, GSTNInputCore) has no payload slot, so `FGSTN_PartEventPayload { PartIndex, BreakSerial, Band }` travels packed in
+  `Magnitude` (three bytes, below 2^24, exact in a float; 255 = none). The hit's damage is therefore not on a part event. Why: adding a payload field to the input
+  core event is a change outside this plugin. A consumer reads it with `FGSTN_PartEvents::GetPayload`. Assumption: none (A-ids unchanged).
+- Dedupe (spec 5.4 rule 4): the key is `(EntityRef, PartIndex, BreakSerial)` with the entity as an `FObjectKey` of the event's target (there is no entity id type in the
+  combat plugin), and it applies to the break events only (Broken, AllBroken). Damaged, WeakPointHit and Ricochet legitimately repeat for one part and one serial (every hit),
+  so keying them would drop real hits. The window (`FGSTN_PartEventDedupe`, 64 keys, oldest forgotten first) is bounded because the serial is 4 bits and wraps; it lives in the
+  consumer (presentation, HUD), not in the sync state.
+- Event order of one outcome entry: Ricochet, or Damaged then WeakPointHit; one Broken per newly broken part in ascending index; AllBroken last. The Broken payload carries the
+  outcome's `ResultBreakSerial` (the serial advances once per hit that breaks, so a cascade shares it) and the band of the hit; AllBroken and the hit events carry the hit's part.
+- Launch (spec 3.3, "through the knockback layered move like M4 7"): the layered move needs Mover, so this module stops at `FGSTN_PartLaunchRequest`, the shape of M4's
+  `FGSTN_ReactionMove` (velocity, decay, gravity scale, frames), plus `MakeLaunchSpec`, which sets the six set-by-caller magnitudes the way `ExecuteReactionMove` does. The keys
+  (`Combat.SetByCaller.MoveVelocityX...`) are declared in GSTNCombatNP, so the caller passes them in (`FGSTN_PartLaunchKeys`); P7 fills them. The launch fields were open in the
+  spec: velocity = hit direction projected on the plane normal to Up times `Speed x (1 - UpFraction)` plus Up times `Speed x UpFraction` (component split, not an angle). Several
+  launches in one hit: the highest speed wins, ties the lowest part index (one move, no sum).
+- Stagger: `GetMinimumStaggerFrames` is the longest Stagger entry among the newly broken parts (negative counts as 0); `ApplyMinimumHitstun` is a max. How the floor reaches the victim's
+  hitstun is the P7 applier's business (no hitstun tag exists, handover 37).
+- Stats: `UGSTN_GE_PartStats` (infinite) is found by class AND part, the part index riding in the spec level (index + 1). Chosen over a per-part tag (no new tags) or a stored handle
+  (state outside the sync state). Stats entries of one part are merged by key (equal keys add up). A Blueprint child must read only keys every Stats entry sets, because the engine logs an
+  error for an unset set-by-caller key (found by the first test run); documented on the class and in the README.
+- Which GE class applies is not data of the part set: the caller passes the class (P7 reads it from a setting or the kit). No new setting in P5.
+- Projection: `FGSTN_PartTagProjection::Apply` SETS (0 or 1) every tag of the universe (native three, all Granted tags of the set's Tags effects, the base tags passed in) each frame,
+  so a restore clears a granted tag with no memory of the previous frame. A base tag must not be granted by anyone else. `Removed` uses `MatchesAny`: a removed parent suppresses its
+  children (the first test run showed `HasTag` has the opposite direction).
+- Module dependencies: the uplugin now lists GSTNCombatGAS, GSTNInput and GameplayAbilities, so enabling GSTNParts needs those plugins; the Core module itself still needs none.
+- Tests: 12 `GSTNParts.GAS.*` as the plan lists them, on a transient world with a stock ASC and the combat attribute set; the test effect and the test stat leaves live in the test files.

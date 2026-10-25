@@ -27,7 +27,7 @@ Network Prediction, so the Core can be reused in a project without the GAS-NPP f
 | [GSTNCombatGAS](GSTNCombatGAS/README.md) | GAS | `GSTNCombatGAS` | Combat ability tags, attribute sets, kit stats, meter and weapon effects, kit/weapon/super assets, the loadout component, loadout presets (save game) and the skin component. | No (stock GAS works) |
 | [GSTNCombatNP](GSTNCombatNP/README.md) | NP adapter | `GSTNCombatNP` | The combat NP model (`UGSTN_CombatSimComponent`), sync fragments and tick extensions. | Yes |
 | [GSTNLevelObjects](GSTNLevelObjects/README.md) | Level objects | `GSTNLevelObjects` | Placeable objects that offer traversal surfaces: the adjustable trampoline (`AGSTN_Trampoline`), a GSTNSurface provider. Depends on GSTNSurface and GSTNCombat Core only. | No |
-| [GSTNParts](GSTNParts/README.md) | Core (combat extension) | `GSTNPartsCore` | Destructible body parts: native part tags, settings, tag ini, plus the part set data, penetration table, validators and the pure integer part math (P1-P3, imported from the desktop branch). Optional, `EnabledByDefault` false. | No |
+| [GSTNParts](GSTNParts/README.md) | Core (combat extension) | `GSTNPartsCore`, `GSTNPartsGAS` | Destructible body parts: native part tags, settings, tag ini, plus the part set data, penetration table, validators and the pure integer part math (P1-P4), and the GAS half: one-shot break effects, part events, tag projection (P5). Optional, `EnabledByDefault` false. | No |
 
 ## GAS-NPP fork
 
@@ -89,7 +89,7 @@ GSTNInputNP -----------------+--- GSTNCombatNP
 | `GSTNCombatGAS` | GSTNCombat, GSTNInput, GameplayAbilities | `GSTNCombatCore`, `GSTNInputCore` |
 | `GSTNInputNP` | GSTNInput, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, EnhancedInput, Mover | `GSTNInputCore` |
 | `GSTNCombatNP` | GSTNCombat, GSTNCombatGAS, GSTNInputNP, GSTNInput, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, EnhancedInput, Mover | `GSTNCombatCore`, `GSTNCombatGAS`, `GSTNInputCore`, `GSTNInputNP` |
-| `GSTNParts` | GSTNCombat | `GSTNCombatCore` |
+| `GSTNParts` | GSTNCombat | `GSTNCombatCore`, `GSTNCombatGAS`, `GSTNInputCore` |
 | `AbilitySystemSimulation` | GameplayAbilities, NetworkPrediction, NetworkPredictionExtras, EnhancedInput, Mover, MotionWarping | none |
 | `GameplayAbilities` | EngineAssetDefinitions, GameplayTagsEditor, Niagara, DataRegistry | none (does not depend on NetworkPrediction) |
 | `NetworkPrediction` | none | none |
@@ -137,7 +137,7 @@ above and extend the dependency overview and the tag table.
 | Plugin | Version | Module (type) | What it is | Plugin dependencies | Tags it owns |
 |---|---|---|---|---|---|
 | `GSTNSurface` | 0.1 | `GSTNSurfaceCore` (Runtime) | Traversal surface data contract: which mechanics a collider offers (wall slide, climb, launch, stand), impact class, launch parameters, one stateless resolver. | none | `Surface.Type.*` (ini, `Config/Tags/GSTNSurface.ini`), `Surface.Behaviour.{WallSlide,WallClimb,Launch,Stand,Slippery,OneWay}`, `Surface.Event.Launched` (native) |
-| `GSTNParts` | 0.1 | `GSTNPartsCore` (Runtime); GAS, NP, presentation and editor modules are planned, not built | Destructible body parts: part sets, penetration table, break effects as data, integer-quantised hit math. | GSTNCombat | `Part.Type.*` and `GameplayCue.Combat.Part.*` (ini), `Combat.Part.*`, `Combat.Entity.Destructible`, `Combat.Event.Part.*`, `Message.Combat.PartBroken` (native) |
+| `GSTNParts` | 0.1 | `GSTNPartsCore`, `GSTNPartsGAS` (Runtime); NP, presentation and editor modules are planned, not built | Destructible body parts: part sets, penetration table, break effects as data, integer-quantised hit math. | GSTNCombat | `Part.Type.*` and `GameplayCue.Combat.Part.*` (ini), `Combat.Part.*`, `Combat.Entity.Destructible`, `Combat.Event.Part.*`, `Message.Combat.PartBroken` (native) |
 | `GSTNCombatEditor` | 0.7 | `GSTNCombatEditor` (Editor) | Timeline editor (edit context, model, panel, track editors), validation, socket baking, hurtbox set editor. | GSTNCombat, GSTNInput, GSTNCombatGAS, GSTNCombatNP, DataValidation | none of its own |
 | `GSTNCombatDebug` | 0.2 | `GSTNCombatDebug` (Runtime, denied in Shipping) | PIE and development tooling: the input display widget; Gameplay Debugger category, debug draw and state trace are planned. | GSTNCombat, GSTNInput, GSTNInputNP, GSTNCombatNP | none |
 

@@ -5,11 +5,11 @@ main pool), the penetration table that turns a hit's penetration against a part'
 effects as data, and the pure, integer-quantised math that applies a hit to a part. An entity without a part set behaves as it
 did before the plugin.
 
-Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P3 of
-[m4b-parts-plan.md](../../docs/architecture/plans/m4b-parts-plan.md) are built (skeleton and tags, data, pure math); the design is
-[combat-parts.md](../../docs/architecture/combat-parts.md). The hit pipeline step (P4), the GAS appliers (P5), the NP sync
-fragment, tick extension and applier (P6, P7), hit feel (P8) and the presentation (P10-P12) are not built: they wait for the hit
-pipeline of M4 (see "Waiting for M4"). Owner direction in
+Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P5 of
+[m4b-parts-plan.md](../../docs/architecture/plans/m4b-parts-plan.md) are built (skeleton and tags, data, pure math, the pipeline
+step, the GAS half); the design is
+[combat-parts.md](../../docs/architecture/combat-parts.md). The NP sync fragment, tick extension and applier (P6, P7), hit feel (P8)
+and the presentation (P10-P12) are not built. Owner direction in
 [game-design-direction.md](../../docs/architecture/game-design-direction.md) wins over the spec: hardness acts on damage only
 (three bands: above, equal about 65 %, below ricochets), a player is a single part and its break is death, parts do not
 regenerate by themselves.
@@ -19,7 +19,7 @@ regenerate by themselves.
 | Module | State | What it is |
 |---|---|---|
 | `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve, the part state and the deterministic part math, and the part resolve step of the hit pipeline. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
-| `GSTNPartsGAS` | not built (P5) | Break-effect appliers, events, tag projection helpers. |
+| `GSTNPartsGAS` | exists (Runtime, Default) | The one-shot break effects (`FGSTN_PartBreakEffectApplier`: the Stats effect per part through `UGSTN_GE_PartStats`, the launch request in the shape of the M4 reaction move, the stagger floor), the part events (`FGSTN_PartEvents`, `FGSTN_PartEventPayload`, the dedupe key and window) and the tag projection helpers (`FGSTN_PartTagProjection`). Stock GAS: no Network Prediction, Mover or `GSTNCombatNP`. Covered by `GSTNParts.GAS.*`. |
 | `GSTNPartsNP` | not built (P6-P8) | Sync fragment, tick extension, snapshot contributor, outcome applier. Needs the GAS-NPP fork. |
 | `GSTNPartsPresentation` | not built (P10-P12) | Damage material, hidden bones, chunks and shatter. Loaded by a listen-server host, skipped on a dedicated server. |
 | `GSTNPartsEditor` | not built (P13) | Validators and report. |
@@ -30,9 +30,12 @@ would otherwise be missing.
 
 ## Dependencies
 
-- Plugins: `GSTNCombat` (its `GSTNCombatCore` module only).
+- Plugins: `GSTNCombat` (`GSTNCombatCore`), and for the GAS half `GSTNCombatGAS`, `GSTNInput` (`GSTNInputCore`, the simulation event type)
+  and `GameplayAbilities`.
 - `GSTNPartsCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, DeveloperSettings, GSTNCombatCore; private
   Projects (to find the plugin's own folder). No edge to the project module, to a sibling plugin or to GAS, NP and Mover.
+- `GSTNPartsGAS` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, GSTNInputCore, GSTNCombatCore,
+  GSTNCombatGAS, GSTNPartsCore. No NetworkPrediction, AbilitySystemSimulation, Mover or `GSTNCombatNP` (grep gate in the P5 commit).
 - `GSTNCombat` builds and passes its tests with this plugin absent: the plugin adds behaviour by registering into the combat
   extension surface (modularity-and-tags.md §5b), never by editing the combat core.
 
@@ -141,6 +144,12 @@ are `BlueprintType` with `EditAnywhere, BlueprintReadOnly` fields (checked by `G
 tag fields carry `Categories`. A new kind of break effect derives from `FGSTN_PartBreakEffect` in your own plugin. The
 Blueprintable extension classes (the pipeline step, outcome appliers) arrive with their checkpoints.
 
+The Stats break effect needs one Blueprint class: a child of `UGSTN_GE_PartStats` (infinite) whose modifiers on the combat
+attribute set read `Combat.SetByCaller.Stat.*` magnitudes, exactly like a weapon stats effect. One class serves every part of an
+entity (the part index rides in the spec level), and its modifiers must read only keys that every Stats entry of the set
+defines, because the engine logs an error for a key the spec never set. Parts that need a different set of stats use a second
+child class. The effect is applied once per broken part and removed only by a restore; a part's `OnBreak` list needs no C++.
+
 ## Replacing content
 
 The plugin ships no content yet; every reference between assets is soft (checked by `GSTNParts.Core.Data.NoHardContentReferences`). A game adds its own `Part.Type.*` and `GameplayCue.Combat.Part.*` leaves in its own
@@ -155,11 +164,16 @@ lookup from -8 to +8, ignore hardness, one band, empty table, sorted bands), `Co
 integer only), `Core.Math.*` (quantise rule and hand values, golden hit sequence, cascade, weak point, ricochet, overflow, the
 three broken-hurtbox policies, nonzero hit moves the byte, single-part player, inbox order, restore, projection, AllBroken,
 no allocation), `Core.GrabGate.Evaluation`, `Core.Determinism.*` (2000 random sequences with a pinned fingerprint, weight
-curve against hand values, weight clamp). The canary build
+curve against hand values, weight clamp). `GSTNParts.GAS.*` (stock ability system component, no fork): `Effects.*` (Stats
+applied and removed per part, magnitudes by set-by-caller key, the launch request shape, the stagger floor), `Events.*`
+(payload round trip, dedupe key and window, the hit envelope on every event, two entries of a drain in either order),
+`Projection.*` (Broken, the removed base tag, GrabLocked, AllBroken counting breakable parts only). The canary build
 (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the canary script does not exist.
 
 ## Changelog
 
+- 0.1 (2026-10-25): `GSTNPartsGAS`: break-effect applier (Stats per part, launch request, stagger floor), part events with the hit
+  envelope and the dedupe key, tag projection helpers (plan P5).
 - 0.1 (2026-10-25): the part resolve step, its snapshot extension and outcome entry, the pipeline validator (plan P4).
 - 0.1 (2026-10-23): part state, quantisation, hit application, cascade, weight, projection, grab gate and restore math
   (plan P3); plugin skeleton, native tags, ini vocabulary, settings (plan P1); part set, penetration table, break
