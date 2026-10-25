@@ -4939,6 +4939,86 @@ def scenario_stagger_threshold(client=1):
     run.run(steps)
 
 
+def _presentation_comp(wi, key):
+    return _hit_comp(wi, key).get_owner().get_component_by_class(unreal.GSTN_HitPresentationComponent)
+
+
+def _presentation_info(wi, key):
+    """(started, cancelled, cues played, cues suppressed, active effects, last hitstop ms) of the attacker's presentation component on world wi"""
+    return tuple(float(x) for x in _presentation_comp(wi, key).get_presentation_info().split(','))
+
+
+def _lagcomp_info(wi, key):
+    """(rewinds, requested ms, applied ms, current ms) of the last rewound attacker step of a pawn on world wi's authority"""
+    return tuple(float(x) for x in _hit_comp(wi, key).get_lag_comp_info().split(','))
+
+
+def scenario_hit_lagcomp(client=1):
+    """M4 H10, lag compensation and presentation of the attacker side. The remote client attacks the other client (three hits); the authority resolves
+    the attacker against the victims as it saw them (rewound view, capped at the rules' MaxRewindMs). Judged on:
+      - the authority built rewound views for the attacker (its counter moved, the applied time is inside the cap) and never for the host pawn
+      - the attacker's client showed each hit through its presentation component (started == hits, the meshes it paused were released)
+      - the attacker's predicted hitstop window equals the authority's (the clean case; a mismatch is logged, a hit that was corrected is not a failure)
+      - the victim's client rolled back at most once per hit (median); the number of rollbacks per hit is the count of hits on the local player that
+        arrived as corrections (input to the CM 12.7 decision)
+    Numbers are logged in the check details."""
+    rig = _HitRig('hit_lagcomp', client)
+    run, akey, vkey = rig.run, rig.akey, rig.vkey
+    names = ('a', 'b', 'c')
+    st = {}
+    steps = [rig.setup_step()]
+    steps += [(rig.cursor, lambda: ('baseline', st.update(lc0=_lagcomp_info(0, akey), pr0=_presentation_info(client, akey))))]
+    for n in names:
+        steps += rig.shot(n)
+    S = rig.shots
+
+    def rewound():
+        lc = _lagcomp_info(0, akey)
+        ok = lc[0] - st['lc0'][0] >= len(names) and 0 < lc[2] and lc[3] - lc[2] <= 250 + 1e-3
+        return ok, f'rewound attacker steps {st["lc0"][0]:.0f} -> {lc[0]:.0f}, requested {lc[1]:.1f} ms, applied {lc[2]:.1f} ms, current {lc[3]:.1f} ms (depth {lc[3] - lc[2]:.1f} ms, cap 250; the view the attacker showed was {lc[3] - lc[1]:.1f} ms behind)'
+
+    def host_never():
+        info = _lagcomp_info(0, key_of_player(0)) if detected_mode() == 'listen' else (0.0,)
+        return info[0] == 0.0, f'the host pawn rewound steps: {info[0]:.0f}'
+
+    def shown():
+        pr = _presentation_info(client, akey)
+        started, cancelled = pr[0] - st['pr0'][0], pr[1] - st['pr0'][1]
+        paused = _presentation_comp(client, akey).get_num_paused_meshes()
+        return started >= len(names) and paused == 0, f'presentation on the attacker\'s client: started {started:.0f}, cancelled {cancelled:.0f}, cues played {pr[2]:.0f}, active {pr[4]:.0f}, paused meshes {paused}, last hitstop {pr[5]:.0f} ms'
+
+    def hitstop_equal():
+        seen = []
+        for n in names:
+            hits = S[n]['hits']
+            seen.append((n, hits[0][6] if hits else None))
+        # The windows of the pawn on the authority and on the attacker's client after the last shot
+        a, o = _hit_window(0, akey), _hit_window(client, akey)
+        pred = [h for _, h in seen if h]
+        return len(pred) == len(names) and a == o, f'attacker hitstop frames per hit (predicted, from its log) {seen}; last window authority {a}, attacker {o}'
+
+    def victim_hit_only():
+        # The test move can also touch the host pawn standing beside the lane (an unrelated hit, the same without lag compensation): the victim's hit is
+        # the one its HitReceived follows one frame later
+        for n in names:
+            frames = {e[2] for e in S[n]['recv']}
+            S[n]['hits'] = [h for h in S[n]['hits'] if h[0] + 1 in frames]
+
+    t = rig.cursor + 0.1
+    steps += [
+        (t, lambda: ('victim hit of each shot', victim_hit_only())),
+        (t, run.at('one hit per shot', lambda: (all(rig.one_hit(n)[0] for n in names), '; '.join(rig.one_hit(n)[1] for n in names)))),
+        (t, run.at('the authority resolved the attacker against a rewound view inside the cap', rewound)),
+        (t, run.at('the host pawn never rewinds', host_never)),
+        (t, run.at('the attacker\'s client showed every hit and released its paused meshes', shown)),
+        (t, run.at('the attacker\'s predicted hitstop equals the authority\'s', hitstop_equal)),
+        (t, run.at('at most one rollback per hit on the victim\'s client (median); the counts are the corrections of hits on the local player', lambda: rig.at_most_one_rollback(names))),
+        (t, run.at('windows of the three hits equal on the authority and the victim\'s client', lambda: (all(rig.window(n)[0] for n in names), '; '.join(rig.window(n)[1] for n in names)))),
+    ]
+    rig.cursor = t
+    steps += rig.end_steps()
+    run.run(steps)
+
 def scenario_reaction_tiers(client=1):
     """M4 H9c, the reaction tiers. The tier is the knockback K against the thresholds, capped by the hurtbox set's MaxReaction; the harness moves the
     thresholds (K itself is a few hundred cm/s for a Root hit on a fresh victim) so each tier is hit with the same blow:
@@ -5223,7 +5303,7 @@ SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'comba
                  'hitstop', 'jump_squat', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'spike_stats', 'spike_grants', 'slide_jump',
                  # the hit scenarios: the attacker carries KIT_Test_Hits from here on; the victim (client 2) stays kit-free until hit_trade, so the real dodge in
                  # hitstun (a pawn with no loadout) runs before it
-                 'hit_basic', 'stagger_threshold', 'reaction_tiers', 'di', 'ko_zone', 'dodge_blocked_in_hitstun', 'hit_trade', 'friendly_fire', 'hit_host',
+                 'hit_basic', 'stagger_threshold', 'reaction_tiers', 'di', 'ko_zone', 'dodge_blocked_in_hitstun', 'hit_trade', 'friendly_fire', 'hit_host', 'hit_lagcomp',
                  'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'hitstop_montage']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
