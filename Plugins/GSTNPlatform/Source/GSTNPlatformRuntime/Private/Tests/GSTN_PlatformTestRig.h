@@ -13,7 +13,7 @@
 
 namespace GSTNPlatformTest
 {
-	constexpr EAutomationTestFlags Flags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+	constexpr EAutomationTestFlags PlatformTestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	/** A throwaway game world with the platform subsystem; nothing ticks, the tests call the pose point themselves */
 	struct FRig

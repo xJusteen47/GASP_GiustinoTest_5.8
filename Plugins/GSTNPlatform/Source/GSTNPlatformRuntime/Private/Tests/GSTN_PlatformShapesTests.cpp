@@ -63,7 +63,7 @@ namespace GSTNPlatformShapesTest
 
 using namespace GSTNPlatformShapesTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformMaskDisablesShapesTest, "GSTNPlatform.Shapes.MaskDisablesShapes", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformMaskDisablesShapesTest, "GSTNPlatform.Shapes.MaskDisablesShapes", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformMaskDisablesShapesTest::RunTest(const FString& Parameters)
 {
 	FRig Rig;
@@ -105,7 +105,7 @@ bool FGSTN_PlatformMaskDisablesShapesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformCollisionDerivedTest, "GSTNPlatform.Shapes.CollisionDerivedFromBehaviour", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformCollisionDerivedTest, "GSTNPlatform.Shapes.CollisionDerivedFromBehaviour", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformCollisionDerivedTest::RunTest(const FString& Parameters)
 {
 	using namespace GSTNSurfaceTags;
@@ -176,7 +176,7 @@ bool FGSTN_PlatformCollisionDerivedTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformPartNameWarningTest, "GSTNPlatform.Shapes.PartNameWarningWithoutParts", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformPartNameWarningTest, "GSTNPlatform.Shapes.PartNameWarningWithoutParts", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformPartNameWarningTest::RunTest(const FString& Parameters)
 {
 	FGSTN_PlatformSpec Spec;
@@ -204,7 +204,7 @@ bool FGSTN_PlatformPartNameWarningTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformBreakingGraceTest, "GSTNPlatform.Shapes.BreakingGraceThenOff", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformBreakingGraceTest, "GSTNPlatform.Shapes.BreakingGraceThenOff", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformBreakingGraceTest::RunTest(const FString& Parameters)
 {
 	// The timeline itself
@@ -277,7 +277,7 @@ bool FGSTN_PlatformBreakingGraceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformPoseOncePerStepTest, "GSTNPlatform.Shapes.PoseAppliedOncePerStep", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformPoseOncePerStepTest, "GSTNPlatform.Shapes.PoseAppliedOncePerStep", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformPoseOncePerStepTest::RunTest(const FString& Parameters)
 {
 	FRig Rig;
@@ -325,7 +325,7 @@ bool FGSTN_PlatformPoseOncePerStepTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformValidatorBoneCapsuleTest, "GSTNPlatform.Shapes.ValidatorRejectsBoneAndCapsule", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformValidatorBoneCapsuleTest, "GSTNPlatform.Shapes.ValidatorRejectsBoneAndCapsule", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformValidatorBoneCapsuleTest::RunTest(const FString& Parameters)
 {
 	using namespace GSTNSurfaceTags;
@@ -382,7 +382,7 @@ bool FGSTN_PlatformValidatorBoneCapsuleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformScriptedPathTest, "GSTNPlatform.Shapes.ScriptedPathIsAFunctionOfTime", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformScriptedPathTest, "GSTNPlatform.Shapes.ScriptedPathIsAFunctionOfTime", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformScriptedPathTest::RunTest(const FString& Parameters)
 {
 	FGSTN_PlatformScriptedPath Path;

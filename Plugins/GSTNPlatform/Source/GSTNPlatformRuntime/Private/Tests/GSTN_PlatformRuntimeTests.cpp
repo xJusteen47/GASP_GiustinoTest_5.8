@@ -14,7 +14,7 @@
 
 using namespace GSTNPlatformTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformSmokeTest, "GSTNPlatform.Runtime.Smoke", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformSmokeTest, "GSTNPlatform.Runtime.Smoke", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformSmokeTest::RunTest(const FString& Parameters)
 {
 	TestTrue(TEXT("GSTNPlatformCore is loaded"), FModuleManager::Get().IsModuleLoaded(TEXT("GSTNPlatformCore")));
@@ -22,7 +22,7 @@ bool FGSTN_PlatformSmokeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformChannelTest, "GSTNPlatform.Runtime.ChannelResolvedByName", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformChannelTest, "GSTNPlatform.Runtime.ChannelResolvedByName", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformChannelTest::RunTest(const FString& Parameters)
 {
 	const UGSTN_PlatformSettings& Settings = UGSTN_PlatformSettings::Get();
@@ -35,7 +35,7 @@ bool FGSTN_PlatformChannelTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformCollidersTest, "GSTNPlatform.Runtime.CollidersUnattachedNamedAddressable", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformCollidersTest, "GSTNPlatform.Runtime.CollidersUnattachedNamedAddressable", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformCollidersTest::RunTest(const FString& Parameters)
 {
 	FRig Rig;
@@ -82,7 +82,7 @@ bool FGSTN_PlatformCollidersTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformPosePointTest, "GSTNPlatform.Runtime.PosePointFollowsOwner", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformPosePointTest, "GSTNPlatform.Runtime.PosePointFollowsOwner", GSTNPlatformTest::PlatformTestFlags)
 bool FGSTN_PlatformPosePointTest::RunTest(const FString& Parameters)
 {
 	FRig Rig;

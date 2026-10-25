@@ -10,7 +10,7 @@
 
 namespace GSTNPlatformCoreTest
 {
-	constexpr EAutomationTestFlags Flags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+	constexpr EAutomationTestFlags PlatformCoreTestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	FGSTN_PlatformShape MakeBox(uint8 Id, const FVector& Extent = FVector(50.0, 50.0, 10.0))
 	{
@@ -24,7 +24,7 @@ namespace GSTNPlatformCoreTest
 
 using namespace GSTNPlatformCoreTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformTagsDeclaredOnceTest, "GSTNPlatform.Core.TagsDeclaredOnce", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformTagsDeclaredOnceTest, "GSTNPlatform.Core.TagsDeclaredOnce", PlatformCoreTestFlags)
 bool FGSTN_PlatformTagsDeclaredOnceTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
@@ -42,7 +42,7 @@ bool FGSTN_PlatformTagsDeclaredOnceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformShapeNamesTest, "GSTNPlatform.Core.ShapeComponentNames", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformShapeNamesTest, "GSTNPlatform.Core.ShapeComponentNames", PlatformCoreTestFlags)
 bool FGSTN_PlatformShapeNamesTest::RunTest(const FString& Parameters)
 {
 	TestEqual(TEXT("Shape 0"), GSTNPlatform::GetShapeComponentName(0).ToString(), FString(TEXT("Surface0")));
@@ -50,7 +50,7 @@ bool FGSTN_PlatformShapeNamesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformSpecIdsTest, "GSTNPlatform.Core.SpecShapeIds", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformSpecIdsTest, "GSTNPlatform.Core.SpecShapeIds", PlatformCoreTestFlags)
 bool FGSTN_PlatformSpecIdsTest::RunTest(const FString& Parameters)
 {
 	FGSTN_PlatformSpec Spec;
@@ -83,7 +83,7 @@ bool FGSTN_PlatformSpecIdsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformShapeComposeTest, "GSTNPlatform.Core.ShapeComposeIgnoresScale", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PlatformShapeComposeTest, "GSTNPlatform.Core.ShapeComposeIgnoresScale", PlatformCoreTestFlags)
 bool FGSTN_PlatformShapeComposeTest::RunTest(const FString& Parameters)
 {
 	FGSTN_PlatformShape Shape = MakeBox(0);
@@ -95,7 +95,7 @@ bool FGSTN_PlatformShapeComposeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PoseHistorySampleTest, "GSTNPlatform.Core.PoseHistory.SampleExactFrame", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PoseHistorySampleTest, "GSTNPlatform.Core.PoseHistory.SampleExactFrame", PlatformCoreTestFlags)
 bool FGSTN_PoseHistorySampleTest::RunTest(const FString& Parameters)
 {
 	FGSTN_PoseHistory History;
@@ -123,7 +123,7 @@ bool FGSTN_PoseHistorySampleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PoseHistoryVelocityTest, "GSTNPlatform.Core.PoseHistory.VelocityFromTwoFrames", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PoseHistoryVelocityTest, "GSTNPlatform.Core.PoseHistory.VelocityFromTwoFrames", PlatformCoreTestFlags)
 bool FGSTN_PoseHistoryVelocityTest::RunTest(const FString& Parameters)
 {
 	FGSTN_PoseHistory History;
