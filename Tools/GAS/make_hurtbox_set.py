@@ -52,22 +52,11 @@ def _shape(kind, extent, local):
 
 
 def primitives(physics_asset):
-    """Yields (bone, kind, extent, local Transform in the space of the bone) for every primitive of the physics asset"""
-    for body in physics_asset.get_editor_property('skeletal_body_setups'):
-        bone = str(body.get_editor_property('bone_name'))
-        geom = body.get_editor_property('agg_geom')
-        for sphere in geom.get_editor_property('sphere_elems'):
-            r = sphere.get_editor_property('radius')
-            yield bone, unreal.GSTN_ShapeType.SPHERE, unreal.Vector(r, r, r), unreal.Transform(location=sphere.get_editor_property('center'))
-        for sphyl in geom.get_editor_property('sphyl_elems'):
-            r = sphyl.get_editor_property('radius')
-            half = sphyl.get_editor_property('length') * 0.5 + r
-            yield bone, unreal.GSTN_ShapeType.CAPSULE, unreal.Vector(r, r, half), \
-                unreal.Transform(location=sphyl.get_editor_property('center'), rotation=sphyl.get_editor_property('rotation'))
-        for box in geom.get_editor_property('box_elems'):
-            extent = unreal.Vector(box.get_editor_property('x') * 0.5, box.get_editor_property('y') * 0.5, box.get_editor_property('z') * 0.5)
-            yield bone, unreal.GSTN_ShapeType.BOX, extent, \
-                unreal.Transform(location=box.get_editor_property('center'), rotation=box.get_editor_property('rotation'))
+    """Yields (bone, shape type, extent, local Transform in the space of the bone) for every primitive of the physics asset. The body setups of a
+    physics asset are not reflected to Python, so the list comes from UGSTN_PhysicsAssetUtils.list_primitives (GSTNCombatCore)"""
+    for primitive in unreal.GSTN_PhysicsAssetUtils.list_primitives(physics_asset):
+        shape = primitive.get_editor_property('shape')
+        yield str(primitive.get_editor_property('bone')), shape.get_editor_property('type'), shape.get_editor_property('extent'), shape.get_editor_property('local')
 
 
 def from_physics_asset(physics_path, out_path, tag_map=None, default_tag='Combat.Hurtbox.Torso', priority_map=None,

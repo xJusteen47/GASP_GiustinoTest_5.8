@@ -25,7 +25,7 @@
 #     (Command.Attack.Neutral -> GSTN_GA_TestHitMove, whose frame data is in C++: a hitbox of each space), and BP_GASNPP_TestCharacter's
 #     combat component HurtboxSet -> HBS_Test_Pawn (the one shared Blueprint this step edits; backed up first).
 #  7. (opt-in, --h13-content) M4 H13a content (specs in h13_specs()): /GSTNCombat/Rules/GSTN_CombatRules_Standard (plugin content, the rules the match plays
-#     by default), the weight hurtbox sets HBS_Test_Light / Medium / Heavy, the move variant timelines TL_Test_HitRoot / Baked / World / Ally, the extension
+#     by default), the weight hurtbox sets HBS_Test_Light / Medium / Heavy, the baked-socket timeline TL_Test_HitBaked (the product of Tools/GAS/bake_sockets.py; the root / world / ally variants were removed in H13b: UGSTN_GA_TestHitMove covers the four hitbox spaces in the harness), the extension
 #     example Blueprints BP_*_Example and the physical materials, in /Game/GASNPPTest/Combat. Edits no shared Blueprint. The map L_Test_Combat is built by
 #     build_test_combat_map.py (needs the editor with a world); hurtbox sets from a Physics Asset by make_hurtbox_set.py; baked sockets by bake_sockets.py.
 # The Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
@@ -820,10 +820,7 @@ def h13_specs():
         ],
         # Timeline assets (UGSTN_CombatTimeline) of the four move variants: (asset, space, radius, hit group, (start, end) frame, keys, socket)
         'timelines': [
-            ('TL_Test_HitRoot', 'ROOT', 50.0, 0, (4, 8), [(0, (80.0, 0.0, 0.0)), (3, (170.0, 0.0, 0.0))], None),
             ('TL_Test_HitBaked', 'BAKED_SOCKET', 45.0, 1, (10, 14), [], 'hand_r'),
-            ('TL_Test_HitWorld', 'WORLD_AT_MOVE_START', 60.0, 2, (16, 20), [(0, (200.0, -160.0, 0.0))], None),
-            ('TL_Test_HitAlly', 'ROOT', 140.0, 3, (20, 24), [], None),
         ],
         'blueprints': [
             # (asset, parent class name)
@@ -926,13 +923,16 @@ def setup_move_timelines():
             spec.set_editor_property('sweep_between_frames', space == 'ROOT')
         if socket:
             spec.set_editor_property('socket', socket)
+            previous = unreal.load_asset(f'{TEST_COMBAT_DIR}/{name}')
+            kept = previous.get_editor_property('data').get_editor_property('baked_sockets') if previous else {}
             # A synthetic arc until bake_sockets.py is run on a real animation: the hand sweeps from (100, 260) to (100, 140)
             frames = []
             for frame in range(32):
                 frames.append(unreal.Transform(location=unreal.Vector(100.0, max(140.0, min(260.0, 260.0 - 40.0 * (frame - start))), 0.0)))
             baked = unreal.GSTN_BakedSocketFrames()
             baked.set_editor_property('frames', frames)
-            data.set_editor_property('baked_sockets', {socket: baked})
+            # A rerun keeps a bake that bake_sockets.py made
+            data.set_editor_property('baked_sockets', kept if kept else {socket: baked})
         if name == 'TL_Test_HitAlly':
             # The ally takes half the shape and no hitstun (the hit still lands: damage and hitstop apply)
             variant = unreal.GSTN_HitVariant()
@@ -970,7 +970,32 @@ def setup_example_blueprints():
         unreal.EditorAssetLibrary.save_loaded_asset(bp)
         log(f'created {TEST_COMBAT_DIR}/{name} (parent {parent_name})')
         changed = True
-    return changed
+    return setup_step_example_graph() or changed
+
+
+def setup_step_example_graph():
+    """BP_Step_Example gets a visible effect: an override of Resolve whose Out pin default is (KnockbackScale=2). The override graph and its entry/result
+    nodes come from BlueprintEditorLibrary.add_function_override, the struct default from BlueprintGraphPin.set_pin_value, so no node is hand-built.
+    The GSTNCombat.Core.Hits.Pipeline.BlueprintStepRoundTrip test asserts the doubled knockback. Idempotent."""
+    path = f'{TEST_COMBAT_DIR}/BP_Step_Example'
+    bp = unreal.load_asset(path)
+    if bp is None:
+        return False
+    library = unreal.BlueprintEditorLibrary
+    library.add_function_override(bp, 'Resolve')
+    result = unreal.find_object(None, f'{path}.BP_Step_Example:Resolve.K2Node_FunctionResult_0')
+    pin = library.find_input_pin(result, 'Out') if result else None
+    want = '(KnockbackScale=2.000000)'
+    if pin is None or not pin.is_valid():
+        log('ERROR: BP_Step_Example has no Out pin on its Resolve override')
+        return False
+    if pin.get_pin_value() == want:
+        return False
+    pin.set_pin_value(want)
+    library.compile_blueprint(bp)
+    unreal.EditorAssetLibrary.save_loaded_asset(bp)
+    log('BP_Step_Example: Resolve override writes KnockbackScale = 2')
+    return True
 
 
 def setup_physical_materials():
