@@ -715,6 +715,8 @@ config (C):
 `FGSTN_HurtboxOpening { FGSTN_HitShape Mouth; float MaxPassRadiusCm; }` (mouth root-relative, at the hole). A hurtbox with an opening
 counts as overlapped only if the hitbox also overlaps the `Mouth` **and** its pass radius is at most `MaxPassRadiusCm`; otherwise the
 selection falls to the next candidate by `Priority` (the armour). Pure shapes, no world query.
+**Dynamic variant, wounds** (owner, 2026-10-25 23:16): a hurtbox can also start inactive and be opened by an ability; its state is a
+bit of the parts fragment ([combat-parts.md](combat-parts.md) §3.4, "Wounds"), and the rewound hit reads the bit of its frame.
 
 **C. Channels and profiles** (project config, no plugin names a channel):
 - The combat developer settings gain `HitOcclusionChannel` and `ProjectileChannel`, default `ECC_Visibility`, so the plugin works
