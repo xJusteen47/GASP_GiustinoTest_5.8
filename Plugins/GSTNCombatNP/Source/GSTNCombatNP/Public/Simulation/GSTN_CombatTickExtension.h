@@ -8,6 +8,7 @@
 
 class AActor;
 class UAbilitySystemComponent;
+struct FGSTN_SimEventOutbox;
 
 /**
  * The fixed points of the combat tick where an extension can run (combat-m3 7.2). They are part of the contract: a point is
@@ -59,6 +60,12 @@ struct FGSTN_CombatTickContext
 	 */
 	AActor* Owner = nullptr;
 	UAbilitySystemComponent* AbilitySystem = nullptr;
+
+	/**
+	 * The outbox of the frame, for an event the extension makes without a hit (a restored part). The component publishes it on the authority only,
+	 * once per frame, so an extension appends unconditionally and a re-simulated frame never publishes twice. Null in a test
+	 */
+	FGSTN_SimEventOutbox* Outbox = nullptr;
 
 	FGSTN_CombatTickContext(int32 InFrame, const FGSTN_CombatSyncState& InState, FGSTN_CombatSyncState& OutState)
 		: Frame(InFrame), In(InState), Out(OutState)
