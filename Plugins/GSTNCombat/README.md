@@ -259,6 +259,7 @@ Dash, ground dodge, air dodge and interact are **default kit content**, not fram
 - A kit without a dodge lists `Command.Defence.Dodge` in `CommandSet.RemovedCommands`, or simply does not grant the abilities: the command then starts nothing and reserves nothing.
 - Tags added: buttons `Input.Button.Dodge/Sprint/Interact`, commands `Command.Movement.Dash`, `Command.Defence.Dodge`, `Command.Interact.Grab/PickUp`, states `Combat.State.Hitstun/Hitstop` (projected by the M4 hit reaction; the default dodges block on them).
 - Tests: `GSTNCombat.Core.Dash.*`, `GSTNCombat.Core.Dodge.*`, `GSTNCombat.Core.MovementSlots.*`.
+- The default dodge window (M4 H12) is an `Intangible` hurtbox modifier on `AffectedTags = Combat.Hurtbox.Feet` (a native tag, `GSTNCombatHitTags::Hurtbox_Feet`: the ability defaults are built before the ini tags exist), from take-off to 40 % of the airborne frames. Only the feet, only the initial part; the frames are data a designer edits in the ability's `Timeline`. A hurtbox is addressed by name or tag, never by `Part.GroupName`.
 
 ## Hits: geometry and data (`Hits/`, added in M4 H1)
 
