@@ -197,6 +197,14 @@ through its hole: a bulky swing that overlaps the leg from outside would otherwi
 radius that fits), and only a hitbox that overlaps the mouth and fits counts on it; everything else falls to the armour. Rule and
 types: [combat-m4-hits.md](combat-m4-hits.md) §9c B (M4b checkpoint P18).
 
+**One part, several hardnesses (owner, 2026-10-25 23:21; the Helldivers 2 charger's abdomen).** Medium hardness on top, light
+underneath, and destroying either side destroys the whole abdomen. Model: **one part** (one damage pool, one `PartCap`, one break)
+with several hurtboxes mapped to it, plus an optional **per-hurtbox hardness override** in the part set
+(`TMap<FName, int32> HurtboxHardnessOverride` on `FGSTN_PartDefinition`, keyed by hurtbox name), which wins over the part's `Hardness`
+when set. `UGSTN_HitStep_PartResolve` already knows the hurtbox the hit chose, so it reads the override there. It is static data, so
+the attacker's ricochet prediction stays exact. A small extension of the P2 data, built in P14 or P18. Rejected: two linked parts
+with a group-break rule (two pools to keep in step and an extra rule for one shared break).
+
 **Wounds: an ability lowers the hardness where it hits (owner, 2026-10-25 23:16 and 23:18, low priority).** The owner wants the
 **ability to decide where** the wound goes. Two levels:
 1. **Per-part wound (default, recommended).** A new `uint16 WoundedMask` in the parts fragment (+2 B) and a per-part
