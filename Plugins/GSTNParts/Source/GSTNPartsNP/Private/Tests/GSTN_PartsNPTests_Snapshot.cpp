@@ -24,7 +24,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsSnapshotEndOfFrameMinusOneTest, "GSTNParts.NP.Snapshot.ReadsEndOfFrameMinusOne", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsSnapshotEndOfFrameMinusOneTest, "GSTNParts.NP.Snapshot.ReadsEndOfFrameMinusOne", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsSnapshotEndOfFrameMinusOneTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;
@@ -80,7 +80,7 @@ bool FGSTN_PartsSnapshotEndOfFrameMinusOneTest::RunTest(const FString& Parameter
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsSnapshotBytesTest, "GSTNParts.NP.Snapshot.BytesWithinBudget", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsSnapshotBytesTest, "GSTNParts.NP.Snapshot.BytesWithinBudget", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsSnapshotBytesTest::RunTest(const FString& Parameters)
 {
 	// The spec budget (§5.2) is 20 bytes of state per entity: the type word and the set pointer are the plumbing around it
@@ -92,7 +92,7 @@ bool FGSTN_PartsSnapshotBytesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsSnapshotLagHistoryTest, "GSTNParts.NP.Snapshot.LagHistoryMemory", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsSnapshotLagHistoryTest, "GSTNParts.NP.Snapshot.LagHistoryMemory", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsSnapshotLagHistoryTest::RunTest(const FString& Parameters)
 {
 	constexpr int32 VictimId = 7;

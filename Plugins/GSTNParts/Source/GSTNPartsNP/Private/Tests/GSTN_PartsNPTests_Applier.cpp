@@ -140,7 +140,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierWritesAtFPlusOneTest, "GSTNParts.NP.Applier.WritesAtFPlus1", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierWritesAtFPlusOneTest, "GSTNParts.NP.Applier.WritesAtFPlus1", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsApplierWritesAtFPlusOneTest::RunTest(const FString& Parameters)
 {
 	FDrainFixture Fixture;
@@ -172,7 +172,7 @@ bool FGSTN_PartsApplierWritesAtFPlusOneTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierDrainTest, "GSTNParts.NP.Applier.DrainRebuildsBetweenEntries", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierDrainTest, "GSTNParts.NP.Applier.DrainRebuildsBetweenEntries", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsApplierDrainTest::RunTest(const FString& Parameters)
 {
 	// Two hits of 30 on a head that takes 40: the second breaks it only if it is resolved against what the first left
@@ -207,7 +207,7 @@ bool FGSTN_PartsApplierDrainTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierRollbackTest, "GSTNParts.NP.Applier.RollbackRedeliveryCreatesBreakOnce", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierRollbackTest, "GSTNParts.NP.Applier.RollbackRedeliveryCreatesBreakOnce", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsApplierRollbackTest::RunTest(const FString& Parameters)
 {
 	AActor* Target = MakeOwner();
@@ -245,7 +245,7 @@ bool FGSTN_PartsApplierRollbackTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierEventsKeyTest, "GSTNParts.NP.Applier.EventsOncePerKey", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierEventsKeyTest, "GSTNParts.NP.Applier.EventsOncePerKey", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsApplierEventsKeyTest::RunTest(const FString& Parameters)
 {
 	AActor* Target = MakeOwner();
@@ -294,7 +294,7 @@ bool FGSTN_PartsApplierEventsKeyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierMonotonicTest, "GSTNParts.NP.Applier.MaskMonotonicWithinHit", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsApplierMonotonicTest, "GSTNParts.NP.Applier.MaskMonotonicWithinHit", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsApplierMonotonicTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;

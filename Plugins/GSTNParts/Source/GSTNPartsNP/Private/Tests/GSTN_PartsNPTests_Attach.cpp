@@ -10,7 +10,7 @@
 
 using namespace GSTNPartsNPTest;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsAttachHostTest, "GSTNParts.NP.Attach.HostWithoutOnRep", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsAttachHostTest, "GSTNParts.NP.Attach.HostWithoutOnRep", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsAttachHostTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;
@@ -34,7 +34,7 @@ bool FGSTN_PartsAttachHostTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsAttachClientTest, "GSTNParts.NP.Attach.ClientAfterRep", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsAttachClientTest, "GSTNParts.NP.Attach.ClientAfterRep", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsAttachClientTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;
@@ -69,7 +69,7 @@ bool FGSTN_PartsAttachClientTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsAttachMismatchTest, "GSTNParts.NP.Attach.SetMismatchRefused", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsAttachMismatchTest, "GSTNParts.NP.Attach.SetMismatchRefused", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsAttachMismatchTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;

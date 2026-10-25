@@ -23,7 +23,7 @@
 
 namespace GSTNPartsNPTest
 {
-	constexpr EAutomationTestFlags Flags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	/** Part indices of the fixture set */
 	constexpr int32 Torso = 0;

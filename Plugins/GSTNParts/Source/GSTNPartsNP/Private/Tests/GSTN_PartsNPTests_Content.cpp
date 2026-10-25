@@ -21,7 +21,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsContentRulesTest, "GSTNParts.NP.Content.ConvertRulesToParts", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsContentRulesTest, "GSTNParts.NP.Content.ConvertRulesToParts", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsContentRulesTest::RunTest(const FString& Parameters)
 {
 	TStrongObjectPtr<UGSTN_CombatRules> Rules(UGSTN_CombatRules::CreateStandard(GetTransientPackage()));
@@ -43,7 +43,7 @@ bool FGSTN_PartsContentRulesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsContentEffectsTest, "GSTNParts.NP.Content.BreakEffectsAreIdempotent", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsContentEffectsTest, "GSTNParts.NP.Content.BreakEffectsAreIdempotent", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsContentEffectsTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;
@@ -66,7 +66,7 @@ bool FGSTN_PartsContentEffectsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsContentKitTest, "GSTNParts.NP.Content.KitPartSet", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsContentKitTest, "GSTNParts.NP.Content.KitPartSet", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsContentKitTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;

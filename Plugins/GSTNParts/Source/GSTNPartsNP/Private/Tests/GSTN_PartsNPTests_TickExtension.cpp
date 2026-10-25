@@ -51,7 +51,7 @@ namespace
 	};
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickOrderTest, "GSTNParts.NP.TickExtension.OrderByPriority", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickOrderTest, "GSTNParts.NP.TickExtension.OrderByPriority", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsTickOrderTest::RunTest(const FString& Parameters)
 {
 	FGSTN_PartsTickExtension Parts;
@@ -80,7 +80,7 @@ bool FGSTN_PartsTickOrderTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickTagsTest, "GSTNParts.NP.TickExtension.ProjectsTagsFromMask", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickTagsTest, "GSTNParts.NP.TickExtension.ProjectsTagsFromMask", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsTickTagsTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;
@@ -121,7 +121,7 @@ bool FGSTN_PartsTickTagsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickHitGroupsTest, "GSTNParts.NP.TickExtension.HitGroupMaskFromBroken", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickHitGroupsTest, "GSTNParts.NP.TickExtension.HitGroupMaskFromBroken", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsTickHitGroupsTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;
@@ -169,7 +169,7 @@ bool FGSTN_PartsTickHitGroupsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickHiddenHurtboxTest, "GSTNParts.NP.TickExtension.HiddenHurtboxPolicy", GSTNPartsNPTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickHiddenHurtboxTest, "GSTNParts.NP.TickExtension.HiddenHurtboxPolicy", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsTickHiddenHurtboxTest::RunTest(const FString& Parameters)
 {
 	FPartsFixture Fixture;
