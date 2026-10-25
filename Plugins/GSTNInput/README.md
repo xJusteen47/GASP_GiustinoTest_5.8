@@ -169,7 +169,7 @@ See the [GSTNInputNP README](../GSTNInputNP/README.md) (embedding the simulation
 
 Native, declared in `Public/Input/GSTN_InputTags.h` (`GSTNInputTags`): the roots `Input.Button`, `Command`, `Input.Lock.Command`, `Input.BufferEvent`,
 the movement contexts `Input.Context.{Grounded, Airborne, OnWall}` (`OnWall` is true in a wall movement mode and, with `Airborne`, identifies
-the wall bindings), the buffer events `Input.BufferEvent.{AbilityActivated, Landed}` and the event `Input.Event.CommandExecuted`. The plugin has
+the wall bindings), the buffer events `Input.BufferEvent.{AbilityActivated, Landed, Interrupted}` and the event `Input.Event.CommandExecuted`. The plugin has
 no game vocabulary: the Core automation tests declare their own small set under a `Test` sub-root in `Private/Tests/GSTN_TestTags.h` (compiled
 only with automation tests), and a game's buttons, commands and lock tags are tag-ini leaves.
 
