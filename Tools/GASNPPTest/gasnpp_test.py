@@ -6072,6 +6072,291 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
     run.run(steps)
 
 
+# ---- M4 H12: base dodges, ricochet response, dodge gating. The dodge window is kit data (a hurtbox modifier track of the ability class, Intangible, AffectedTags
+# Combat.Hurtbox.Feet, take-off to 40 % of the airborne frames); the ricochet is forced by the fake attacker outcome of the test component (one switch per process).
+
+def _recoil_info(wi, key):
+    """(frame, action state, active timeline, timeline start, recoil start) of world wi's copy of a pawn; -1 = none"""
+    return tuple(int(x) for x in _hit_comp(wi, key).get_recoil_info().split(','))
+
+
+def _dodge_window(air):
+    return tuple(int(x) for x in unreal.GSTN_GASNPPTestComponent.get_dodge_window(air).split(','))
+
+
+def scenario_dodge_feet(client=1):
+    """M4 H12 / S 12 4b. `client` attacks the other client, who dodges with the planted ground dodge (the real timeline and window, no take-off, so a hitbox fixed
+    in the world meets the same feet at every frame). A: the low attack (feet only) is open before the window ends: the feet are missed for the rest of the
+    window and hit on the first frame after it (the window is the ability's data: read from the class). B: the same dodge against the plain attack (torso):
+    hit inside the window. Same hits on the authority and on the attacker's client."""
+    dodger = 2 if client == 1 else 1
+    run = _Run('dodge_feet', dodger, judge_reconciles=False)
+    dkey, akey, st = run.key, key_of_player(client), {}
+    dodge, attack, crouch = button_mask('Dodge'), button_mask('Attack'), button_mask('Crouch')
+    TA, TB = 2.0, 6.0
+    win = _dodge_window(False)
+
+    def prepare():
+        _kit(dkey, False, True, False)
+        _srv(dkey).server_set_planted(True)
+        hit_rules_setup()
+        set_damage(dkey, 0)
+        st['kit'] = _apply_loadout(akey, HIT_KIT)
+        _hit_logging(True)
+        seen['h'] = unreal.register_slate_post_tick_callback(sampler)
+        return 'planted dodge kit, rules, attacker kit', st['kit']
+
+    seen = {'h': None, 'starts': []}
+
+    def sampler(_dt):
+        try:
+            d0 = _recoil_info(0, dkey)[3]
+            if d0 >= 0 and d0 not in seen['starts']:
+                seen['starts'].append(d0)
+        except Exception:
+            pass
+
+    def record(tag):
+        # The dodge timeline is cancelled by the hit it lets through, so its start is taken from the samples of the run, not read afterwards
+        def f():
+            later = [d for d in seen['starts'] if d >= st['tap'] - 40 and (tag == 'A' or d > st['A'][0])]
+            st[tag] = (later[0] if later else -1, st['tap'])
+            return 'dodge timeline start, attack tap frame', st[tag]
+        return f
+
+    def hits_since(wi, since):
+        return [r for r in _hit_log(wi, akey) if r[0] >= since]
+
+    def feet_check():
+        d0, a0 = st['A']
+        hits, owner = hits_since(0, a0), hits_since(client, a0)
+        if d0 < 0 or a0 < 0 or len(hits) != 1:
+            return False, f'dodge start {d0}, attack start {a0}, hits {hits}'
+        frame, _, group, hitbox, hurtbox, ricochet, _ = hits[0]
+        early = a0 + 3 <= d0 + win[1] - 3
+        # The attacker's client sees the dodger through its rewound view of a remote pawn, which lags: it may predict the hit on the feet earlier than the
+        # authority decides (the presentation cancels it). The authority's hit is the one judged, and the owner ends with it
+        ok = hurtbox == 2 and ricochet == 0 and d0 + win[1] <= frame <= d0 + win[1] + 3 and early and hits[0] in owner
+        return ok, f'window {win}, dodge start {d0}, attack tap {a0} (hitbox open from about {a0 + 2}), authority hit {hits[0]}, owner {owner}'
+
+    def torso_check():
+        d0, a0 = st['B']
+        hits, owner = hits_since(0, a0), hits_since(client, a0)
+        if d0 < 0 or a0 < 0 or not hits:
+            return False, f'dodge start {d0}, attack start {a0}, hits {hits}'
+        frame, hurtbox = hits[0][0], hits[0][4]
+        ok = hurtbox == 0 and d0 <= frame < d0 + win[1] and hits[0] in owner
+        return ok, f'window {win}, dodge start {d0}, hit {hits[0]} (torso is hurtbox 0), owner {owner}'
+
+    def cleanup():
+        combat_clear(dodger)
+        _srv(dkey).server_set_planted(False)
+        _kit(dkey, False, False, False)
+        set_damage(dkey, 0)
+        hit_rules_setup()
+        _hit_logging(False)
+        if seen['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(seen['h'])
+            seen['h'] = None
+        return 'cleanup'
+
+    steps = [
+        (0.3, prepare),
+        (0.6, lambda: ('dodger in front of the attacker', _place_near(client, dkey, (205.0, 0.0)))),
+        (TA, lambda: ('A: dodge', combat_tap(dodger, dodge))),
+        (TA - 0.3, lambda: ('A: crouch held', combat_hold(client, crouch))),
+        (TA + 0.1, lambda: ('A: low attack', (st.__setitem__('tap', _latest_frame(0, akey)), combat_tap(client, attack)))),
+        (TA + 0.2, lambda: ('release', combat_clear(client))),
+        (TA + 0.5, record('A')),
+        (TA + 1.9, run.at('A: the feet were missed during the window and hit right after it', feet_check)),
+        (TB - 1.5, lambda: ('dodger back in front of the attacker', (set_damage(dkey, 0), _place_near(client, dkey, (205.0, 0.0))))),
+        (TB - 0.1, run.at('B: the dodger is actionable again', lambda: (victim_info(0, dkey)[1] == 0, f'victim info {victim_info(0, dkey)}'))),
+        (TB, lambda: ('B: dodge', combat_tap(dodger, dodge))),
+        (TB + 0.1, lambda: ('B: plain attack', (st.__setitem__('tap', _latest_frame(0, akey)), combat_tap(client, attack)))),
+        (TB + 0.9, record('B')),
+        (TB + 1.5, run.at('B: the torso is hit inside the window', torso_check)),
+        (TB + 1.6, cleanup),
+        (TB + 1.7, run.at('the attacker kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
+        (TB + 2.6, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_air_dodge_feet(client=1):
+    """M4 H12: the window of the air dodge, read from the snapshot entry of the dodger (the hurt state of every hurtbox) together with the start of its
+    timeline, on the authority and on the owner. The editor tick samples the newest simulated frame only, so every sample is judged alone: the feet are
+    intangible exactly while (frame - timeline start) lies in the data window, the torso and the head never are, and the two copies agree on the frames
+    they share. Both the inside and the outside of the window must have been sampled."""
+    run = _Run('air_dodge_feet', client)
+    key = run.key
+    dodge = button_mask('Dodge')
+    T = 2.0
+    win = _dodge_window(True)
+    rec = {'srv': {}, 'cli': {}}
+    h = {'h': None}
+
+    def sampler(_dt):
+        try:
+            for side, wi in (('srv', 0), ('cli', client)):
+                j = json.loads(comps(worlds()[wi])[key].read_snapshot_entry(-1))
+                info = _recoil_info(wi, key)
+                if info[1] == 1 and info[3] >= 0 and j['frame'] == info[0]:
+                    rec[side][j['frame']] = (info[3], tuple(j['hurtStates']))
+        except Exception:
+            pass
+
+    def judge():
+        out, ok = [], True
+        for side in ('srv', 'cli'):
+            inside = outside = wrong = 0
+            for f, (d0, hs) in rec[side].items():
+                want = win[0] <= f - d0 < win[1]
+                good = len(hs) == 3 and hs[0] == 0 and hs[1] == 0 and (hs[2] == 1) == want
+                wrong += 0 if good else 1
+                inside += 1 if want else 0
+                outside += 0 if want else 1
+            ok &= wrong == 0 and inside >= 2 and outside >= 2
+            out.append(f'{side}: {inside} samples inside the window {win}, {outside} outside (timeline frames), {wrong} wrong')
+        common = set(rec['srv']) & set(rec['cli'])
+        diff = [f for f in common if rec['srv'][f] != rec['cli'][f]]
+        ok &= not diff
+        out.append(f'{len(common)} frames in common, {len(diff)} differ {diff[:5]}')
+        return ok, '; '.join(out)
+
+    def start():
+        _kit(key)
+        _srv(key).server_set_jump_kit(True)
+        h['h'] = unreal.register_slate_post_tick_callback(sampler)
+        return 'movement and jump kits, sampler'
+
+    def stop():
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+        combat_clear(client)
+        _kit(key, False, False, False)
+        _srv(key).server_set_jump_kit(False)
+        return 'cleanup'
+
+    steps = [
+        (0.3, start),
+        (T, lambda: ('jump', _jump_tap(client, 0.3))),
+        (T + 0.3, lambda: ('release', combat_clear(client))),
+        (T + 0.55, lambda: ('air dodge', combat_tap(client, dodge))),
+        (T + 4.0, run.at('the feet are intangible for the data window, nothing else', judge)),
+        (T + 4.1, stop),
+        (T + 5.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_ricochet(client=1):
+    """M4 H12 / S 3b. `client` attacks the other client. Control: a normal hit (attacker hitstop 6, damage, no recoil). Then the fake attacker outcome of the test
+    component forces Ricochet: the move ends into the 40 frame recoil of the attack's response (it outlives the 32 frame move), the attacker gets no hitstop and
+    no hit-confirm, the victim gets the flagged inbox entry and nothing else (no damage, no hitstop, no hitstun), host and client agree."""
+    victim_index = 2 if client == 1 else 1
+    vkey = key_of_player(victim_index)
+    run = _Run('ricochet', client, judge_reconciles=False)
+    akey, st = run.key, {}
+    attack = button_mask('Attack')
+    T1, T2 = 2.0, 5.0
+
+    def prepare():
+        hit_rules_setup()
+        set_damage(vkey, 0)
+        st['kit'] = _apply_loadout(akey, HIT_KIT)
+        _hit_logging(True)
+        return 'rules, attacker kit', st['kit']
+
+    def mark(tag):
+        def f():
+            st[tag] = _latest_frame(0, akey)
+            return tag, st[tag]
+        return f
+
+    def rows(wi, tag):
+        return [r for r in _hit_log(wi, akey) if r[0] >= st[tag]]
+
+    def control():
+        hits, owner = rows(0, 'F1'), rows(client, 'F1')
+        info = (_recoil_info(0, akey)[4], _recoil_info(client, akey)[4])
+        ok = len(hits) >= 1 and hits[0][5] == 0 and hits[0][6] == HIT_ATTACKER_HITSTOP and owner == hits and info == (-1, -1)
+        st['w1'] = _hit_window(0, akey)
+        st['vw1'] = _hit_window(0, vkey)
+        return ok, f'hits {hits}, owner {owner}, recoil start {info}, damage {damage_of(0, vkey)}, attacker window {st["w1"]}'
+
+    def bounced():
+        hits, owner = rows(0, 'F2'), rows(client, 'F2')
+        ra, rc = _recoil_info(0, akey), _recoil_info(client, akey)
+        inbox = [e for e in _inbox_log(0, vkey) if e[0] > st['F2']]
+        ok = (len(hits) == 1 and hits[0][5] == 1 and hits[0][6] == 0 and owner == hits and ra[4] == hits[0][0] + 1 and rc[4] == ra[4]
+              and len(inbox) == 1 and inbox[0][5] == 1)
+        return ok, f'hits {hits}, owner {owner}, recoil start authority {ra}, owner {rc}, victim inbox {inbox}'
+
+    def nothing_else():
+        va = victim_info(0, vkey)
+        ok = (_hit_window(0, akey) == st['w1'] and _hit_window(client, akey) == st['w1'] and _hit_window(0, vkey) == st['vw1'] and va[1] == 0
+              and damage_of(0, vkey) == 0)
+        return ok, f'attacker window {_hit_window(0, akey)} (was {st["w1"]}), owner {_hit_window(client, akey)}, victim window {_hit_window(0, vkey)} (was {st["vw1"]}), victim info {va}, damage {damage_of(0, vkey)}'
+
+    def cleanup():
+        unreal.GSTN_GASNPPTestComponent.set_force_ricochet(False)
+        combat_clear(client)
+        set_damage(vkey, 0)
+        hit_rules_setup()
+        _hit_logging(False)
+        return 'cleanup'
+
+    steps = [
+        (0.3, prepare),
+        (0.6, lambda: ('victim in front of the attacker', _place_near(client, vkey, (205.0, 0.0)))),
+        (T1 - 0.05, mark('F1')),
+        (T1, lambda: ('control attack', combat_tap(client, attack))),
+        (T1 + 1.5, run.at('control: a normal hit, no recoil', control)),
+        (T2 - 1.0, lambda: ('victim back, damage cleared', (set_damage(vkey, 0), _place_near(client, vkey, (205.0, 0.0))))),
+        (T2 - 0.3, lambda: ('force the ricochet', unreal.GSTN_GASNPPTestComponent.set_force_ricochet(True))),
+        (T2 - 0.05, mark('F2')),
+        (T2, lambda: ('attack', combat_tap(client, attack))),
+        (T2 + 0.3, run.at('the hit bounced: flagged, no attacker hitstop, recoil starts the next frame on both', bounced)),
+        (T2 + 0.32, run.at('no hitstop on either side, the victim untouched', nothing_else)),
+        (T2 + 0.72, _in_timeline_seen(run, 'the recoil outlives the 32 frame move', T2 + 0.6, T2 + 0.7)),
+        (T2 + 1.5, _in_timeline_seen(run, 'and it ends: the attacker is actionable again', T2 + 1.2, T2 + 1.5, want=False)),
+        (T2 + 1.55, cleanup),
+        (T2 + 1.6, run.at('the attacker kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
+        (T2 + 2.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_kit_escape_in_hitstun(client=1):
+    """M4 H12 / S 6: a kit whose dodge ability has its blocked tags dropped as data dodges with the hitstun hook on. The kit comes through a loadout
+    (KIT_Test_HitsEscape), not through the harness grant of dodge_blocked_in_hitstun part C. No control with the base kit: SetLooseGameplayTagCount in
+    the state tag projection zeroes the whole count of Combat.State.Hitstun, the hook's effect included, every frame, so the hook cannot hold the tag
+    long enough to block anything, and a real hitstun is refused by the combat gate before the tags are asked. The blocked tags of the base dodges are
+    checked as data by GSTNCombat.NP.Dodge.BlockedTagsAreData."""
+    dodger = 2 if client == 1 else 1
+    run = _Run('kit_escape_in_hitstun', dodger, judge_reconciles=False)
+    dkey, st = run.key, {}
+    dodge = button_mask('Dodge')
+    TB = 3.0
+
+    def cleanup():
+        combat_clear(dodger)
+        _srv(dkey).server_set_hitstun(False)
+        return 'cleanup'
+
+    steps = [
+        (0.3, lambda: ('escape kit', st.__setitem__('esc', _apply_loadout(dkey, 'KIT_Test_HitsEscape')))),
+        (TB - 1.0, lambda: ('hitstun hook on', _srv(dkey).server_set_hitstun(True))),
+        (TB, lambda: ('dodge in hitstun with the escape kit', combat_tap(dodger, dodge))),
+        (TB + 3.0, _landing_pair(run, st, 'escape dodge in hitstun', TB - 0.05, TB + 3.0, floor=200.0, tol=2.0)),
+        (TB + 3.1, cleanup),
+        (TB + 3.2, run.at('the escape kit was accepted', lambda: (st.get('esc') == 'OK', f'ServerApplyTestLoadout -> {st.get("esc")}'))),
+        (TB + 4.1, run.finish()),
+    ]
+    run.run(steps)
+
+
 SUITE_DEFAULT = ['weapon_switch','combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
                  'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
                  'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'kit_without_dodge', 'interact_tap_hold',
@@ -6079,7 +6364,9 @@ SUITE_DEFAULT = ['weapon_switch','combat_context', 'combat_main_inputs', 'combat
                  # the hit scenarios: the attacker carries KIT_Test_Hits from here on; the victim (client 2) stays kit-free until hit_trade, so the real dodge in
                  # hitstun (a pawn with no loadout) runs before it
                  'hit_basic', 'stagger_threshold', 'reaction_tiers', 'di', 'ko_zone', 'dodge_blocked_in_hitstun', 'hit_trade', 'friendly_fire', 'hit_host', 'hit_lagcomp',
-                 'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'impact_wall', 'impact_wall_mode', 'trampoline', 'hitstop_montage']
+                 'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'impact_wall', 'impact_wall_mode', 'trampoline', 'hitstop_montage',
+                 # M4 H12: the dodge window against real hits, the ricochet, the kit that dodges in hitstun (the last one swaps the dodger's loadout)
+                 'dodge_feet', 'air_dodge_feet', 'ricochet', 'kit_escape_in_hitstun']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 
