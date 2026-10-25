@@ -106,7 +106,7 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 	{
 		Out.HurtStates.SetNum(Set->Hurtboxes.Num());
 		const UGSTN_CombatTableSet* Tables = FindTableSet(Core.TableRevision);
-		const FGSTN_CombatTimelineData* Timeline = Core.ActionState == EGSTN_ActionState::InTimeline && Tables ? GetRegistryTimeline(*Tables, Core.ActiveTimeline) : nullptr;
+		const FGSTN_CombatTimelineData* Timeline = Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE && Tables ? GetRegistryTimeline(*Tables, Core.ActiveTimeline) : nullptr;
 		if (Timeline)
 		{
 			const int32 EvaluatedFrame = Core.IsInHitstop(Frame) ? Frame - 1 : Frame;

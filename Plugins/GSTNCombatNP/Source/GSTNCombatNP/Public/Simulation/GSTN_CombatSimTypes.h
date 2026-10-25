@@ -60,6 +60,14 @@ struct FGSTN_CombatSyncCore
 	/** Every hitstop frame of the combatant so far: combat clock = F - PausedFramesTotal. Constant outside hitstop */
 	int32 PausedFramesTotal = 0;
 
+	/**
+	 * The ricochet recoil (combat-m4-hits 3b, M4 H12): the frame recoil frame 0 falls on, INDEX_NONE while the timeline plays normally. The
+	 * attacker side writes it as Frame + 1 on the frame a ricochet is decided; from then on the running timeline's own frames are replaced by
+	 * the recoil's (FGSTN_TimelinePlayer, Params.bRicochet). A hitstop frame moves it one frame later, which is how the recoil pauses like a
+	 * timeline does. Cleared with the timeline, so the recoil ends where the state returns to Actionable
+	 */
+	int32 RecoilStartFrame = INDEX_NONE;
+
 	/** 0 = the primary weapon, 1.. = the additional weapons in loadout order */
 	uint8 ActiveWeaponIndex = 0;
 
@@ -97,7 +105,7 @@ struct FGSTN_CombatSyncCore
 	bool IsActionPartDefault() const
 	{
 		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
-			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && ActiveWeaponIndex == 0
+			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && ActiveWeaponIndex == 0
 			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty() && Hit.IsDefault(GetHitContext());
 	}
 
@@ -139,6 +147,8 @@ struct FGSTN_CombatSyncCore
 		Ar.SerializeIntPacked(Paused);
 		uint32 PausedTotal = static_cast<uint32>(FMath::Max(PausedFramesTotal, 0));
 		Ar.SerializeIntPacked(PausedTotal);
+		uint32 RecoilPlusOne = static_cast<uint32>(FMath::Max(RecoilStartFrame + 1, 0));
+		Ar.SerializeIntPacked(RecoilPlusOne);
 		Ar << ActiveWeaponIndex;
 		Ar << LoadoutRevision;
 		Ar << TableRevision;
@@ -158,6 +168,7 @@ struct FGSTN_CombatSyncCore
 			TimelineStartFrame = static_cast<int32>(StartPlusOne) - 1;
 			TimelinePausedFrames = static_cast<int32>(Paused);
 			PausedFramesTotal = static_cast<int32>(PausedTotal);
+			RecoilStartFrame = static_cast<int32>(RecoilPlusOne) - 1;
 		}
 
 		// After the fields it reads its context from: the loaded state has them by now
@@ -172,6 +183,7 @@ struct FGSTN_CombatSyncCore
 		TimelineStartFrame = INDEX_NONE;
 		TimelinePausedFrames = 0;
 		PausedFramesTotal = 0;
+		RecoilStartFrame = INDEX_NONE;
 		ActiveWeaponIndex = 0;
 		LoadoutRevision = 0;
 		TableRevision = 0;
@@ -195,6 +207,7 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(TimelineStartFrame != AuthorityState.TimelineStartFrame, "TimelineStartFrame:");
 		UE_NP_TRACE_RECONCILE(TimelinePausedFrames != AuthorityState.TimelinePausedFrames, "TimelinePausedFrames:");
 		UE_NP_TRACE_RECONCILE(PausedFramesTotal != AuthorityState.PausedFramesTotal, "PausedFramesTotal:");
+		UE_NP_TRACE_RECONCILE(RecoilStartFrame != AuthorityState.RecoilStartFrame, "RecoilStartFrame:");
 		UE_NP_TRACE_RECONCILE(ActiveWeaponIndex != AuthorityState.ActiveWeaponIndex, "ActiveWeaponIndex:");
 		UE_NP_TRACE_RECONCILE(LoadoutRevision != AuthorityState.LoadoutRevision, "LoadoutRevision:");
 		UE_NP_TRACE_RECONCILE(TableRevision != AuthorityState.TableRevision, "TableRevision:");
@@ -214,7 +227,7 @@ struct FGSTN_CombatSyncCore
 		}
 		if (!IsActionPartDefault())
 		{
-			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Weapon: %d Loadout: %d Table: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision), static_cast<int32>(TableRevision));
+			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Recoil: %d Weapon: %d Loadout: %d Table: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, RecoilStartFrame, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision), static_cast<int32>(TableRevision));
 			Requests.ToString(Out);
 			Hit.Canonical(GetHitContext()).ToString(Out);
 		}

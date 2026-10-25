@@ -37,6 +37,7 @@
 #include "NetworkPredictionProxyInit.h"
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
+#include "Curves/CurveVector.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Presentation/GSTN_HitPresentationComponent.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
@@ -351,6 +352,18 @@ TArray<FGSTN_WeaponStatsEntry> UGSTN_CombatSimComponent::BuildWeaponStats(const 
 	return Entries;
 }
 
+void UGSTN_CombatSimComponent::BuildRicochetFallbacks(const FGSTN_ResolvedLoadout& Resolved, TArray<FGSTN_RicochetResponse>& OutWeapons, FGSTN_RicochetResponse& OutKit)
+{
+	OutWeapons.Reset();
+	for (const UGSTN_WeaponDefinition* Weapon : Resolved.Weapons)
+	{
+		const FGSTN_RicochetResponse* Fallback = Weapon ? Weapon->GetRicochetFallback() : nullptr;
+		OutWeapons.Add(Fallback ? *Fallback : FGSTN_RicochetResponse());
+	}
+	const FGSTN_RicochetResponse* KitFallback = Resolved.Kit ? Resolved.Kit->GetRicochetFallback() : nullptr;
+	OutKit = KitFallback ? *KitFallback : FGSTN_RicochetResponse();
+}
+
 void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision)
 {
 	if (!Component || !Component->HasLoadout())
@@ -386,6 +399,7 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	Input.GlobalResetRules = ResetRules;
 	Input.Adoptable = AdoptableTimelines;
 	Input.WeaponStats = BuildWeaponStats(Component->GetResolvedLoadout());
+	BuildRicochetFallbacks(Component->GetResolvedLoadout(), Input.WeaponRicochet, Input.KitRicochet);
 	Input.ReservedExtension = Component->GetApplied().ReservedExtension;
 
 	FGSTN_CompileReport Report;
@@ -503,6 +517,47 @@ bool UGSTN_CombatSimComponent::IsTimelineRunning(const UClass* AbilityClass, int
 	}
 	OutStartFrame = Sync->Core.TimelineStartFrame;
 	return Current.TimelineRegistry[Sync->Core.ActiveTimeline] == AbilityClass;
+}
+
+bool UGSTN_CombatSimComponent::GetRecoil(int32& OutStartFrame, const FGSTN_RicochetResponse*& OutResponse) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline || Sync->Core.RecoilStartFrame == INDEX_NONE)
+	{
+		return false;
+	}
+	const UGSTN_CombatTableSet& Current = Tables();
+	OutResponse = FGSTN_CombatTimelineLogic::ResolveRicochet(GetRegistryTimeline(Current, Sync->Core.ActiveTimeline), Current.GetRicochetFallback(Sync->Core.ActiveWeaponIndex));
+	OutStartFrame = Sync->Core.RecoilStartFrame;
+	return OutResponse != nullptr;
+}
+
+void UGSTN_CombatSimComponent::ExecuteRecoilMove(const FGSTN_TimelineTrack_Movement& Track, int32 RecoilFrames, float StepMs)
+{
+	// A push back, the slide of the victim side reused (S 3b: "optional push-back movement track"): the curve's value at its start is the
+	// initial velocity in the local space of the pose the previous frame ended on, and it falls linearly to zero over the track. The
+	// curve is loaded with the response (never here): a curve that is not in memory is no movement
+	const UCurveVector* Curve = Track.VelocityCurve.Get();
+	FTransform Pose;
+	FVector Up;
+	if (!AbilitySystem || !PushBackEffect || !Curve || !ReadOwnPose(Pose, Up))
+	{
+		return;
+	}
+	const int32 Frames = FMath::Clamp(Track.EndFrame - Track.StartFrame, 1, FMath::Max(RecoilFrames - Track.StartFrame, 1));
+	const FVector Velocity = Pose.TransformVectorNoScale(Curve->GetVectorValue(0.f));
+	const FGameplayEffectSpecHandle Spec = AbilitySystem->MakeOutgoingSpec(PushBackEffect, 1.f, AbilitySystem->MakeEffectContext());
+	if (!Spec.IsValid())
+	{
+		return;
+	}
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityX, Velocity.X);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityY, Velocity.Y);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, Velocity.Z);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, 1.f / Frames);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, Track.GravityScale);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, Frames * StepMs * 0.001f);
+	AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 }
 
 bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
@@ -726,7 +781,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		const bool bWasRunning = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline;
 		const int32 StartBefore = OutSync.Core.TimelineStartFrame;
 		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(FrameSet, Running),
-			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame);
+			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame,
+			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex));
 		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,

@@ -273,6 +273,16 @@ public:
 	bool IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame) const;
 
 	/**
+	 * Whether the combat state of the frame being simulated says the running timeline ended into a ricochet recoil (M4 H12), the frame the
+	 * recoil's frame 0 is on (it moves later by the hitstop frames) and the response it plays: the attack's own, else the active weapon's,
+	 * else the kit's. The ability that owns the timeline plays the montage, the cue and the push back from it. Simulation read
+	 */
+	bool GetRecoil(int32& OutStartFrame, const FGSTN_RicochetResponse*& OutResponse) const;
+
+	/** The push back of a recoil (see GSTN_GA_BaseCombat): queued on Mover through the push back effect. Called by the ability, inside the simulation */
+	void ExecuteRecoilMove(const FGSTN_TimelineTrack_Movement& Track, int32 RecoilFrames, float StepMs);
+
+	/**
 	 * The camera aim of the command of the frame being simulated (UGSTN_InputConfig::bSendCameraAim, combat-m3 7.10): control
 	 * rotation pitch and yaw, roll 0. The simulation keeps it on its way past the ability system's tick of the same frame, rewritten
 	 * every simulated frame, so a re-simulation reads the command it replays. Zero when the command carries no aim (HasAim)
@@ -455,6 +465,9 @@ public:
 
 	/** The stats effect entries of a resolved loadout's weapons, in loadout order (a weapon without a stats effect leaves its Effect empty) */
 	static TArray<FGSTN_WeaponStatsEntry> BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved);
+
+	/** The ricochet fallbacks of a resolved loadout (M4 H12): one per weapon in loadout order, and the kit's. An entry with no recoil frames is not authored */
+	static void BuildRicochetFallbacks(const FGSTN_ResolvedLoadout& Resolved, TArray<FGSTN_RicochetResponse>& OutWeapons, FGSTN_RicochetResponse& OutKit);
 
 protected:
 	virtual void InitializeNetworkPredictionProxy() override;

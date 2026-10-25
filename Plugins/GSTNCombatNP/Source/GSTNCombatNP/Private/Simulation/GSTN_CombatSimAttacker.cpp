@@ -10,6 +10,7 @@
 #include "NetworkPredictionTickState.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Simulation/GSTN_CombatTableSet.h"
+#include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatAttacker, Log, All);
@@ -90,12 +91,13 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	In.AttackerId = RegisteredEntityId;
 	In.AttackerTeam = ResolveTeam();
 	// A remote player's pawn on the authority hits the victims as that player saw them (M4 H10); every other attacker the shared snapshot
-	In.Snapshot = Core.ActionState == EGSTN_ActionState::InTimeline ? ResolveAttackerSnapshot(TimeStep, Snapshot) : Snapshot;
+	In.Snapshot = Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE ? ResolveAttackerSnapshot(TimeStep, Snapshot) : Snapshot;
 	In.Rules = CombatRules;
 	In.GroupMask = GroupMask;
 	In.StepSeconds = TimeStep.StepMS * 0.001f;
 	In.DebugShapes = (bLog || bDraw) ? &AttackerDebugShapes : nullptr;
-	if (Core.ActionState == EGSTN_ActionState::InTimeline)
+	// A timeline that ended into its recoil has no hitboxes any more
+	if (Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE)
 	{
 		In.Timeline = GetRegistryTimeline(Tables(), Core.ActiveTimeline);
 		In.TimelineFrame = FMath::Max(Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames, 0);
@@ -120,6 +122,16 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 				BindingOfTimeline = static_cast<int16>(Index);
 				break;
 			}
+		}
+	}
+	// A ricochet ends the timeline into its recoil (M4 H12). No hitstop, confirm or meter were given to the attacker (the tick wrote none)
+	for (const FGSTN_AttackerHit& Hit : AttackerHits)
+	{
+		if (Hit.bRicochet)
+		{
+			const UGSTN_CombatTableSet& Set = Tables();
+			FGSTN_CombatTimelineLogic::StartRecoil(Core, Frame, GetRegistryTimeline(Set, Core.ActiveTimeline), Set.GetRicochetFallback(Core.ActiveWeaponIndex));
+			break;
 		}
 	}
 	for (const FGSTN_AttackerHit& Hit : AttackerHits)

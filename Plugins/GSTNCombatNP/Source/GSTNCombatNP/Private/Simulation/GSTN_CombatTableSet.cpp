@@ -171,6 +171,24 @@ uint32 UGSTN_CombatTableSet::ComputeChecksum() const
 		}
 	}
 
+	// The ricochet fallbacks: what changes the recoil two machines would play (the movement is not part of it: one curve and a flag decide the push)
+	auto WriteRicochet = [&Ar](const FGSTN_RicochetResponse& Response)
+	{
+		int32 Frames = Response.RecoilFrames;
+		Ar << Frames;
+		uint8 bMovement = Response.bHasMovement ? 1 : 0;
+		Ar << bMovement;
+		WriteString(Ar, Response.RecoilMontage.ToSoftObjectPath().ToString());
+		WriteTag(Ar, Response.CueTag);
+	};
+	Count = WeaponRicochet.Num();
+	Ar << Count;
+	for (const FGSTN_RicochetResponse& Response : WeaponRicochet)
+	{
+		WriteRicochet(Response);
+	}
+	WriteRicochet(KitRicochet);
+
 	uint32 ExtensionCrc = ReservedExtension.IsEmpty() ? 0 : FCrc::MemCrc32(ReservedExtension.GetData(), ReservedExtension.Num());
 	Ar << ExtensionCrc;
 	return FCrc::MemCrc32(Bytes.GetData(), Bytes.Num());
@@ -193,6 +211,20 @@ UGSTN_CombatTableSet* FGSTN_CombatTableConverter::Convert(UObject* Outer, const 
 	Set->Revision = Compiled.Revision;
 	Set->Compiled = Compiled;
 	Set->WeaponStats = Input.WeaponStats;
+	Set->WeaponRicochet = Input.WeaponRicochet;
+	Set->KitRicochet = Input.KitRicochet;
+	// The recoil montages are played from plain pointers by the simulation: loaded here, kept by the set, never loaded in a tick
+	for (const FGSTN_RicochetResponse& Response : Set->WeaponRicochet)
+	{
+		if (Response.IsAuthored())
+		{
+			UGSTN_GA_BaseCombat::LoadRecoilContent(Response, Set->TimelineContent);
+		}
+	}
+	if (Set->KitRicochet.IsAuthored())
+	{
+		UGSTN_GA_BaseCombat::LoadRecoilContent(Set->KitRicochet, Set->TimelineContent);
+	}
 	Set->ReservedExtension = Input.ReservedExtension;
 
 	auto Error = [OutReport](const FString& Text)

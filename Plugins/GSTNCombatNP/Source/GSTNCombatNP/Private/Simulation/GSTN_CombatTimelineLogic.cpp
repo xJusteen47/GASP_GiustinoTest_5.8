@@ -31,6 +31,7 @@ namespace
 		Core.ActiveSource = Source;
 		Core.TimelineStartFrame = Frame;
 		Core.TimelinePausedFrames = 0;
+		Core.RecoilStartFrame = INDEX_NONE;
 		// The hits of the previous run do not count for this one; the caller writes the move origin
 		Core.Hit.ResetRun();
 	}
@@ -71,10 +72,34 @@ void FGSTN_CombatTimelineLogic::ClearTimeline(FGSTN_CombatSyncCore& Core)
 	Core.ActiveSource = EGSTN_ActivationSource::Command;
 	Core.TimelineStartFrame = INDEX_NONE;
 	Core.TimelinePausedFrames = 0;
+	Core.RecoilStartFrame = INDEX_NONE;
+}
+
+bool FGSTN_CombatTimelineLogic::StartRecoil(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback)
+{
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.RecoilStartFrame != INDEX_NONE || !ResolveRicochet(Data, Fallback))
+	{
+		return false;
+	}
+	// The tick's clock step of this frame has run already: the recoil is evaluated from the next one
+	Core.RecoilStartFrame = Frame + 1;
+	return true;
+}
+
+const FGSTN_RicochetResponse* FGSTN_CombatTimelineLogic::ResolveRicochet(const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback)
+{
+	if (Data)
+	{
+		if (const FGSTN_RicochetResponse* Own = Data->GetRicochetResponse())
+		{
+			return Own;
+		}
+	}
+	return Fallback && Fallback->IsAuthored() ? Fallback : nullptr;
 }
 
 bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, int32 DefaultOverrideFrames,
-	bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame)
+	bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame, const FGSTN_RicochetResponse* RicochetFallback)
 {
 	Output.Reset();
 	if (Core.ActionState != EGSTN_ActionState::InTimeline)
@@ -85,6 +110,44 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	{
 		ClearTimeline(Core);
 		return false;
+	}
+
+	if (Core.RecoilStartFrame != INDEX_NONE)
+	{
+		// The recoil replaces the timeline (the response is resolved by the attacker side before it writes the start; a response that is gone
+		// ends the recoil as if it were over). A hitstop frame moves the start a frame later, which keeps the recoil frame where it was
+		const FGSTN_RicochetResponse* Response = ResolveRicochet(Data, RicochetFallback);
+		const int32 PreviousRecoil = Frame - 1 - Core.RecoilStartFrame;
+		if (bHitstopFrame)
+		{
+			++Core.RecoilStartFrame;
+		}
+		const int32 RecoilFrame = Frame - Core.RecoilStartFrame;
+		if (!Response)
+		{
+			ClearTimeline(Core);
+			return false;
+		}
+		if (RecoilFrame < 0)
+		{
+			// Hitstop on the very frame the recoil was to begin: it begins when the hitstop is out
+			Output.TotalFrames = Response->RecoilFrames;
+			Output.bRecoil = true;
+			Output.bBusy = true;
+			return true;
+		}
+		FGSTN_TimelineEvalParams Params;
+		Params.bRicochet = true;
+		Params.RecoilFrame = RecoilFrame;
+		Params.PreviousRecoilFrame = PreviousRecoil >= 0 ? PreviousRecoil : INDEX_NONE;
+		Params.RicochetFallback = RicochetFallback;
+		FGSTN_TimelinePlayer::Evaluate(*Data, Params, Output);
+		if (Output.bFinished || (Frame > Core.TimelineStartFrame && !bAbilityActive))
+		{
+			ClearTimeline(Core);
+			return false;
+		}
+		return true;
 	}
 
 	// The previous evaluation was the frame before this one (the start frame was evaluated by EvaluateStart)

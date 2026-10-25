@@ -1,9 +1,10 @@
-// Combat abilities (GAS-NPP fork).
+﻿// Combat abilities (GAS-NPP fork).
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
 
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
+#include "Curves/CurveVector.h"
 #include "GSTN_CombatTags.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Timeline/GSTN_CombatTimeline.h"
@@ -26,6 +27,9 @@ UGSTN_GA_BaseCombat::UGSTN_GA_BaseCombat(const FObjectInitializer& ObjectInitial
 	StartFrame.Value = INDEX_NONE;
 	bAwaitingAdoption.Value = false;
 	AwaitSinceFrame.Value = INDEX_NONE;
+	bRecoilPlayed.Value = false;
+	RecoilStartClock.Value = INDEX_NONE;
+	RecoilLength.Value = 0;
 }
 
 const FGSTN_CombatTimelineData& UGSTN_GA_BaseCombat::GetTimelineData() const
@@ -51,6 +55,22 @@ void UGSTN_GA_BaseCombat::LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKe
 	if (!Data.Montage.IsNull())
 	{
 		OutKeep.AddUnique(Data.Montage.LoadSynchronous());
+	}
+	if (const FGSTN_RicochetResponse* Recoil = Data.GetRicochetResponse())
+	{
+		LoadRecoilContent(*Recoil, OutKeep);
+	}
+}
+
+void UGSTN_GA_BaseCombat::LoadRecoilContent(const FGSTN_RicochetResponse& Response, TArray<TObjectPtr<UObject>>& OutKeep)
+{
+	if (!Response.RecoilMontage.IsNull())
+	{
+		OutKeep.AddUnique(Response.RecoilMontage.LoadSynchronous());
+	}
+	if (Response.bHasMovement && !Response.Movement.VelocityCurve.IsNull())
+	{
+		OutKeep.AddUnique(Response.Movement.VelocityCurve.LoadSynchronous());
 	}
 }
 
@@ -101,6 +121,9 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	StartClock.Value = INDEX_NONE;
 	StartFrame.Value = INDEX_NONE;
 	AwaitSinceFrame.Value = INDEX_NONE;
+	bRecoilPlayed.Value = false;
+	RecoilStartClock.Value = INDEX_NONE;
+	RecoilLength.Value = 0;
 
 	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
 	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
@@ -141,6 +164,50 @@ void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 		AbilitySystem->PlaySyncedMontage(Montage, 0.f, Data.MontagePlayRate, Data.MontageSection, 1.f);
 	}
 	OnTimelineBegan(StateStart);
+}
+
+void UGSTN_GA_BaseCombat::BeginRecoil(const FGSTN_RicochetResponse& Response, float StepMs)
+{
+	UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	if (!Combat || !AbilitySystem)
+	{
+		return;
+	}
+	bRecoilPlayed.Value = true;
+	RecoilStartClock.Value = Combat->GetCombatClock();
+	RecoilLength.Value = Response.RecoilFrames;
+
+	// The timeline's own montage gives way to the recoil's
+	UAnimMontage* TimelineMontage = GetTimelineData().Montage.Get();
+	float Time = 0.f;
+	if (TimelineMontage && AbilitySystem->GetPlayingSyncedMontage(Time) == TimelineMontage)
+	{
+		AbilitySystem->StopSyncedMontage(TimelineMontage, true);
+	}
+	RecoilMontagePlayed = Response.RecoilMontage.Get();
+	if (RecoilMontagePlayed)
+	{
+		AbilitySystem->PlaySyncedMontage(RecoilMontagePlayed, 0.f, 1.f, NAME_None, 1.f);
+	}
+	if (Response.CueTag.IsValid())
+	{
+		AbilitySystem->ExecuteGameplayCue(Response.CueTag, AbilitySystem->MakeEffectContext());
+	}
+	if (Response.bHasMovement)
+	{
+		Combat->ExecuteRecoilMove(Response.Movement, Response.RecoilFrames, StepMs);
+	}
+}
+
+void UGSTN_GA_BaseCombat::StopRecoilMontage(bool bWasCancelled)
+{
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	float Time = 0.f;
+	if (RecoilMontagePlayed && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == RecoilMontagePlayed)
+	{
+		AbilitySystem->StopSyncedMontage(RecoilMontagePlayed, bWasCancelled);
+	}
 }
 
 void UGSTN_GA_BaseCombat::ClearAwaitingAdoption()
@@ -190,6 +257,18 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 		return;
 	}
 
+	// A ricochet: the combat state ended the timeline into its recoil, which this ability plays from the frame the state says it begins on
+	if (!bRecoilPlayed.Value)
+	{
+		UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+		int32 RecoilStart = INDEX_NONE;
+		const FGSTN_RicochetResponse* Response = nullptr;
+		if (Combat && IsStillTheRunningTimeline() && Combat->GetRecoil(RecoilStart, Response) && Combat->GetSimulationFrame() >= RecoilStart)
+		{
+			BeginRecoil(*Response, static_cast<float>(TimeStep.StepMs));
+		}
+	}
+
 	// The combat state no longer names this timeline: it ended, was replaced or was cancelled
 	if (!IsStillTheRunningTimeline())
 	{
@@ -216,6 +295,17 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 		if (Montage && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == Montage)
 		{
 			AbilitySystem->StopSyncedMontage(Montage, bWasCancelled);
+		}
+		if (bRecoilPlayed.Value)
+		{
+			// The locked frames of the recoil are over when the clock moved that far: the montage then plays on as the cancellable tail. An
+			// end before that (a hit, another ability) cuts the recoil short, and its montage with it
+			const bool bLockedOver = !bWasCancelled && FGSTN_CombatClock::Elapsed(GetCombatClock(), RecoilStartClock.Value) >= RecoilLength.Value;
+			if (!bLockedOver)
+			{
+				StopRecoilMontage(bWasCancelled);
+			}
+			bRecoilPlayed.Value = false;
 		}
 		bStarted.Value = false;
 	}

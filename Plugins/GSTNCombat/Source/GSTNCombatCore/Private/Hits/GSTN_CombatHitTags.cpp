@@ -4,6 +4,7 @@
 
 namespace GSTNCombatHitTags
 {
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hurtbox_Feet, "Combat.Hurtbox.Feet", "Hurtboxes of the feet: the part the base dodges make intangible (native because the ability defaults name it at construction, before the ini tags are registered)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Root_Hurtbox, "Combat.Hurtbox", "Root of the hurtbox classification tags. Leaves (Feet, Head, Torso) are designer content in the plugin tag ini, code never names one");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Normal, "Combat.HitType.Normal", "A hit that damages and moves its victim. An unset hit type means the same");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Grab, "Combat.HitType.Grab", "A grab. Data only until a grab path exists");
@@ -16,7 +17,7 @@ namespace GSTNCombatHitTags
 
 	void GetDeclaredHitTags(TArray<FGameplayTag>& OutTags)
 	{
-		OutTags.Append({ Root_Hurtbox, HitType_Normal, HitType_Grab, HitType_Projectile, HitType_Unblockable,
+		OutTags.Append({ Root_Hurtbox, Hurtbox_Feet, HitType_Normal, HitType_Grab, HitType_Projectile, HitType_Unblockable,
 			Relationship_Self, Relationship_Ally, Relationship_Enemy, Relationship_Neutral });
 	}
 }

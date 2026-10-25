@@ -5,12 +5,16 @@
 #include "NativeGameplayTags.h"
 
 /**
- * Hit vocabulary the core owns because code switches on it (combat-m4-hits 3). The hurtbox leaves (Combat.Hurtbox.Feet,
- * Head, Torso) are designer content in Config/Tags/GSTNCombat.ini and are never named in C++: only the root is declared so
- * tag pickers can filter on it. No tag is ever stored in a sync state or a snapshot (indices only).
+ * Hit vocabulary the core owns because code switches on it (combat-m4-hits 3). The hurtbox leaves (Head, Torso) are designer
+ * content in Config/Tags/GSTNCombat.ini and are never named in C++: only the root is declared so tag pickers can filter on it.
+ * The one exception is Feet: the base dodges ship their intangible window as ability data that names it, and an ability default is built
+ * before the ini tags exist (M4 H12). No tag is ever stored in a sync state or a snapshot (indices only).
  */
 namespace GSTNCombatHitTags
 {
+	/** The feet hurtboxes: the part the window of the base dodges addresses (Combat.Hurtbox.Feet) */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Hurtbox_Feet);
+
 	/** Root of the hurtbox classification tags. Leaves are ini content, code never names one */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Root_Hurtbox);
 

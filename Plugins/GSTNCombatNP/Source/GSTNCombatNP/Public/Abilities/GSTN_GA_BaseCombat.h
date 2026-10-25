@@ -27,6 +27,13 @@ class UGSTN_CombatTimeline;
  * after MaxAdoptionWaitFrames. The frame data comes from TimelineAsset when it is set,
  * else from Timeline; both are read from the class default object by the combat component, never from an instance, because the
  * component needs it before the ability runs.
+ *
+ * Ricochet (combat-m4-hits 3b, M4 H12): when the attacker side decides that a hit of the timeline bounced, the combat tick ends the timeline
+ * into a recoil (FGSTN_RicochetResponse: the attack's own, else the weapon's, else the kit's). The combat state keeps naming this ability
+ * while the recoil lasts, and the ability plays it: the recoil montage replaces the timeline's on the synced montage slot, the cue fires, and
+ * the optional movement is a push back (the slide of the victim side, through the queued-move path). RecoilFrames are locked; the combatant is
+ * actionable after them and the rest of the recoil montage plays on as the cancellable tail (the next synced montage replaces it, a hit stops it).
+ * Nothing here knows about the server or about re-simulation: every read is the combat state of the frame, every variable a sync variable.
  */
 UCLASS(Abstract, Blueprintable)
 class GSTNCOMBATNP_API UGSTN_GA_BaseCombat : public UGSTN_GA_Base
@@ -55,6 +62,9 @@ public:
 	 * component does this for every registry class, because it reads the class default object, which holds nothing. Not in a tick
 	 */
 	void LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKeep) const;
+
+	/** The montage and the movement curve of a ricochet response, appended to OutKeep (the table set does it for the weapon and kit fallbacks). Not in a tick */
+	static void LoadRecoilContent(const FGSTN_RicochetResponse& Response, TArray<TObjectPtr<UObject>>& OutKeep);
 
 	/**
 	 * The commit of a timeline that just started (cost and cooldown): when the ability refuses it (the meter dropped since the
@@ -97,6 +107,12 @@ private:
 	/** Starts the timeline whose start the combat state shows: sync variables, montage */
 	void BeginTimeline(int32 StateStart);
 
+	/** The combat state shows the recoil of a ricochet from this frame on: plays the montage, the cue and the push back, once */
+	void BeginRecoil(const FGSTN_RicochetResponse& Response, float StepMs);
+
+	/** The montage the recoil plays is still the one on the synced slot: stops it (a recoil that was cut short) */
+	void StopRecoilMontage(bool bWasCancelled);
+
 	/** Drops the waiting state and its loose tag, if it holds them */
 	void ClearAwaitingAdoption();
 
@@ -114,6 +130,21 @@ private:
 	/** Simulation frame the combat state said the timeline started on */
 	UPROPERTY(Transient)
 	FSyncInteger StartFrame;
+
+	/** True once the recoil of a ricochet was started by this ability (sync var) */
+	UPROPERTY(Transient)
+	FSyncBool bRecoilPlayed;
+
+	/** Combat clock at the start of the recoil, and its locked length: the recoil ended when the clock moved that far (a recoil cut short stops its montage) */
+	UPROPERTY(Transient)
+	FSyncInteger RecoilStartClock;
+
+	UPROPERTY(Transient)
+	FSyncInteger RecoilLength;
+
+	/** The montage the recoil plays (kept alive by the ability or the table set), to find it on the slot when the ability ends. Not state: only read to stop it */
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> RecoilMontagePlayed;
 
 	/** True from an activation that waits for adoption until it is adopted, cancelled or ended */
 	UPROPERTY(Transient)
