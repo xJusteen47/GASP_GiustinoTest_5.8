@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
+#include "Rules/GSTN_KitExtension.h"
 #include "GSTN_ImpactTypes.generated.h"
 
 /** What a launched victim undergoes on a surface (combat-m4-hits 7b) */
@@ -45,6 +46,23 @@ struct GSTNCOMBATCORE_API FGSTN_ImpactProfile
 	/** Scales the impact speed the contact is judged with */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact", meta = (ClampMin = "0.0"))
 	float SpeedScale = 1.f;
+
+	/** Reserved for M6 (tech): the impact cannot be teched. Nothing reads it in M4 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
+	bool bNoTech = false;
+
+	/** Bits of the packed form that carry the speed scale */
+	static constexpr uint16 SpeedScaleUnitsPerOne = 32;
+
+	/**
+	 * The profile as the 16 bits the victim keeps in its sync state while it tumbles (combat-m4-hits 11, the profile of the hit that
+	 * launched it): Force (2 bits), Forbid mask (3), bForceIgnoresSurface, bNoTech, and the speed scale in 1/32 (8 bits, up to 7.97)
+	 * stored against the default, so the default profile packs to 0 and an idle combatant pays nothing on the wire. Lossy by design:
+	 * a scale is rounded to 1/32, a duplicate in Forbid is one bit; Unpack(Pack(P)) is the profile every machine decides with
+	 */
+	uint16 Pack() const;
+	static FGSTN_ImpactProfile Unpack(uint16 Packed);
+	bool IsDefault() const { return Pack() == 0; }
 };
 
 /** Which outcomes a surface or a victim lets through (None is always allowed) */
@@ -114,6 +132,10 @@ struct GSTNCOMBATCORE_API FGSTN_SurfaceImpactRow
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface", meta = (ClampMin = "0.0"))
 	float ImpactDamageScale = 1.f;
+
+	/** For BreakSurface: the fraction of its speed the victim keeps when it goes through */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface", meta = (ClampMin = "0.0"))
+	float ResidualSpeedScale = 0.7f;
 };
 
 /**
@@ -251,4 +273,21 @@ struct GSTNCOMBATCORE_API FGSTN_ImpactResult
 	/** Surface scale times the victim's */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
 	float ImpactDamageScale = 1.f;
+
+	/** For BreakSurface: the surface's fraction of the speed that is kept */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
+	float ResidualSpeedScale = 0.7f;
+};
+
+/**
+ * The victim layer of the impact rules as kit data (combat-m4-hits 7b): what this kit's fighter can undergo on each surface type. A kit
+ * without it uses the rules' ImpactResponse. Data only.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_ImpactResponseExtension : public FGSTN_KitExtension
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
+	FGSTN_ImpactResponse Response;
 };

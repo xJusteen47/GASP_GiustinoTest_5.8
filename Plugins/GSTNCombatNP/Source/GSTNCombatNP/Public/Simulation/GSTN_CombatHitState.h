@@ -22,6 +22,9 @@ struct FGSTN_HitLiveContext
 
 	int32 TimelineStartFrame = INDEX_NONE;
 
+	/** The state says the combatant tumbles (EGSTN_ActionState::Tumble): the impact profile of the hit that launched it is live */
+	bool bTumbling = false;
+
 	/** The core's hitstop window end: the launch and the reaction chosen by a hit are pending until it */
 	int32 HitstopEndFrame = INDEX_NONE;
 };
@@ -72,8 +75,8 @@ struct FGSTN_MoveOrigin
  * second ago equals one that never was, and the combat tick never has to clear a window that ran out. The hit part is
  * serialized inside the action part of the core, which makes a combatant with nothing live pay no bit for it at all.
  *
- * Wire format (inside the action part, after the requests): 1 bit "hit part live"; then 7 bits of presence (move origin, targets,
- * confirm flags, hitstun end, impact end, pending launch, SDI), 2 bits of pending reaction, and the blocks that are present.
+ * Wire format (inside the action part, after the requests): 1 bit "hit part live"; then 8 bits of presence (move origin, targets,
+ * confirm flags, hitstun end, impact end, pending launch, SDI, impact profile), 2 bits of pending reaction, and the blocks that are present.
  */
 struct FGSTN_HitSyncState
 {
@@ -95,6 +98,12 @@ struct FGSTN_HitSyncState
 
 	/** The wall splat or other surface impact reaction lasts until this frame (exclusive) */
 	int32 ImpactEndFrame = INDEX_NONE;
+
+	/**
+	 * The impact profile of the hit that launched a tumbling victim, packed (FGSTN_ImpactProfile::Pack, 0 = the default profile): what the
+	 * hit asked of the surface the victim will hit (combat-m4-hits 7b layer 1). Live while the combatant tumbles; the plan's "ImpactProfileIndex"
+	 */
+	uint16 ImpactProfileQ = 0;
 
 	/** The launch velocity chosen by the hit, in cm/s divided by 4, applied when the hitstop ends. State at F + 1 like the reaction */
 	int16 PendingLaunchQ[3] = { 0, 0, 0 };

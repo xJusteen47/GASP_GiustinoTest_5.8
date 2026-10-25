@@ -7,6 +7,8 @@
 #include "Hits/GSTN_HitExtensions.h"
 #include "Events/GSTN_SimEvent.h"
 #include "Hits/GSTN_HitResolution.h"
+#include "Hits/GSTN_ImpactTypes.h"
+#include "Movement/GSTN_TumbleContact.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_HitInbox.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -14,6 +16,7 @@
 class UAbilitySystemComponent;
 class UGSTN_CombatRules;
 class UGSTN_HurtboxSetDefinition;
+class UGSTN_SurfaceImpactTable;
 
 /** One entry of the drain after the rules resolved it, for the layer that applies effects and raises events (the component) */
 struct FGSTN_VictimHit
@@ -106,6 +109,47 @@ struct FGSTN_ReactionMove
 	int32 Frames = 0;
 };
 
+/** What the impact step reads (combat-m4-hits 7b). Everything is a value of the end of the previous frame or constant data */
+struct FGSTN_ImpactStepInput
+{
+	int32 Frame = INDEX_NONE;
+	const UGSTN_CombatRules* Rules = nullptr;
+	const UGSTN_SurfaceImpactTable* Table = nullptr;
+
+	/** The victim layer: the kit's FGSTN_ImpactResponseExtension, else the rules'. Null reads as "anything goes" */
+	const FGSTN_ImpactResponse* Response = nullptr;
+
+	/** The latest contact record of the victim's knockback moves, in Mover's sync state at the end of the previous frame */
+	FGSTN_TumbleContactSyncState Contact;
+
+	/** The victim's velocity at the end of the previous frame (after Mover slid it along the face) */
+	FVector Velocity = FVector::ZeroVector;
+
+	/** A hit staggered the victim on this frame: its new reaction wins over the contact of the frame before */
+	bool bStaggeredThisFrame = false;
+};
+
+/** What the impact step decided, besides the sync state it wrote */
+struct FGSTN_ImpactStepResult
+{
+	EGSTN_ImpactOutcome Outcome = EGSTN_ImpactOutcome::None;
+	FGSTN_ImpactResult Resolved;
+	uint8 SurfaceTypeIndex = 0;
+
+	/** The contact normal, to tell the event and the presentation which way the surface faces */
+	FVector Normal = FVector::UpVector;
+
+	/** Bounce: the launch move that replaces the victim's velocity (the pre-impact velocity reflected about the normal, times the restitution) */
+	FGSTN_ReactionMove Move;
+
+	/** Splat and break: the victim holds still for this many frames from this frame (the freeze runs at rest) */
+	int32 FreezeFrames = 0;
+	bool bFreezeAtRest = false;
+
+	/** Splat and bounce: the impact damage, 0 for none */
+	float Damage = 0.f;
+};
+
 struct FGSTN_ReactionStepInput
 {
 	int32 Frame = INDEX_NONE;
@@ -153,6 +197,22 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 * the pending reaction. Then hitstun end: Actionable, or Tumble until the victim lands. Does nothing for a combatant that is not in hitstun
 	 */
 	static FGSTN_ReactionMove StepReaction(const FGSTN_ReactionStepInput& In, FGSTN_CombatSyncCore& Core);
+
+	/** The shortest flight a bounce is given when the hitstun is nearly over (frames), so the relaunched move has a lifetime to fly in */
+	static constexpr int32 MinBounceFrames = 20;
+
+	/**
+	 * The surface impact of a tumbling victim (combat-m4-hits 7b, M4 H11): reads the contact record of the frame before and resolves it through
+	 * UGSTN_ImpactMath::Resolve, with the hit's profile kept in the sync state (Core.Hit.ImpactProfileQ), the victim's response and the surface
+	 * table. Acts only on a victim in Tumble, outside a hitstop, whose record was made on exactly the previous frame (so a contact resolves once)
+	 * and that no hit staggered this frame. Floors and ceilings resolve only on a surface whose row forces its outcome (a trampoline).
+	 *  - Splat: ActionState Splat until ImpactEndFrame, held at rest by a freeze of that many frames; extra damage in Out.Damage;
+	 *  - Bounce: Out.Move relaunches the victim; the state stays Tumble and the hitstun end moves to cover the flight;
+	 *  - BreakSurface: a one frame hitstop window, then the pending launch (the pre-impact velocity times the surface's ResidualSpeedScale)
+	 *    goes out like any reaction, so the surface is broken (outside the simulation, at the end of this frame) before the victim moves on.
+	 * Pure: a function of its inputs and the core.
+	 */
+	static void StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_CombatSyncCore& Core, FGSTN_ImpactStepResult& Out);
 
 	/** The combat state locks commands: a victim in hitstun, tumble or a surface impact reaction cannot act until it is Actionable again */
 	static bool IsActionLocked(const FGSTN_CombatSyncCore& Core)

@@ -37,7 +37,8 @@ namespace
 		PartImpact = 1 << 4,
 		PartLaunch = 1 << 5,
 		PartSDI = 1 << 6,
-		PartCount = 7
+		PartProfile = 1 << 7,
+		PartCount = 8
 	};
 
 	void SerializeFramePlusOne(FArchive& Ar, int32& Frame)
@@ -162,6 +163,10 @@ FGSTN_HitSyncState FGSTN_HitSyncState::Canonical(const FGSTN_HitLiveContext& Con
 	{
 		Out.ImpactEndFrame = ImpactEndFrame;
 	}
+	if (Context.bTumbling)
+	{
+		Out.ImpactProfileQ = ImpactProfileQ;
+	}
 	if (Context.HitstopEndFrame > Context.Frame)
 	{
 		Out.PendingReaction = PendingReaction;
@@ -178,7 +183,7 @@ bool FGSTN_HitSyncState::operator==(const FGSTN_HitSyncState& Other) const
 {
 	if (!(MoveOrigin == Other.MoveOrigin) || HitTargetsNum != Other.HitTargetsNum || HitConfirmFlags != Other.HitConfirmFlags
 		|| HitstunEndFrame != Other.HitstunEndFrame || ImpactEndFrame != Other.ImpactEndFrame || PendingReaction != Other.PendingReaction
-		|| SDICount != Other.SDICount)
+		|| SDICount != Other.SDICount || ImpactProfileQ != Other.ImpactProfileQ)
 	{
 		return false;
 	}
@@ -229,6 +234,7 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 		Mask |= Local.ImpactEndFrame != INDEX_NONE ? PartImpact : 0;
 		Mask |= (Local.PendingLaunchQ[0] | Local.PendingLaunchQ[1] | Local.PendingLaunchQ[2]) != 0 ? PartLaunch : 0;
 		Mask |= Local.SDICount != 0 ? PartSDI : 0;
+		Mask |= Local.ImpactProfileQ != 0 ? PartProfile : 0;
 	}
 	Ar.SerializeBits(&Mask, PartCount);
 	uint8 Reaction = Local.PendingReaction;
@@ -296,6 +302,10 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 	{
 		Ar << Local.SDICount;
 	}
+	if (Mask & PartProfile)
+	{
+		Ar << Local.ImpactProfileQ;
+	}
 
 	if (Ar.IsLoading())
 	{
@@ -326,8 +336,8 @@ FGSTN_HitSyncState FGSTN_HitSyncState::Interpolated(const FGSTN_HitSyncState* Fr
 
 void FGSTN_HitSyncState::ToString(FAnsiStringBuilderBase& Out) const
 {
-	Out.Appendf(" Hit: targets %d confirm %d stun->%d impact->%d pending %d launch(%d,%d,%d)", static_cast<int32>(HitTargetsNum),
-		static_cast<int32>(HitConfirmFlags), HitstunEndFrame, ImpactEndFrame, static_cast<int32>(PendingReaction),
+	Out.Appendf(" Hit: targets %d confirm %d stun->%d impact->%d profile %d pending %d launch(%d,%d,%d)", static_cast<int32>(HitTargetsNum),
+		static_cast<int32>(HitConfirmFlags), HitstunEndFrame, ImpactEndFrame, static_cast<int32>(ImpactProfileQ), static_cast<int32>(PendingReaction),
 		static_cast<int32>(PendingLaunchQ[0]), static_cast<int32>(PendingLaunchQ[1]), static_cast<int32>(PendingLaunchQ[2]));
 	if (MoveOrigin.bSet)
 	{

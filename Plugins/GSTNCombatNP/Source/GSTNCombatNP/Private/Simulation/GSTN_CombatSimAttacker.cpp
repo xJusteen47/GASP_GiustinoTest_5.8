@@ -25,6 +25,11 @@ void UGSTN_CombatSimComponent::SetTestFriendlyFire(bool bEnabled)
 void UGSTN_CombatSimComponent::SetCombatRules(UGSTN_CombatRules* Rules)
 {
 	CombatRules = Rules;
+	// The surface layer of the impacts is part of the rules asset, loaded here and never inside the simulation. A table set by hand stays
+	if (CombatRules && !CombatRules->SurfaceImpactTable.IsNull())
+	{
+		ImpactTable = CombatRules->SurfaceImpactTable.LoadSynchronous();
+	}
 }
 
 bool UGSTN_CombatSimComponent::ReadOwnPose(FTransform& OutTransform, FVector& OutUp)

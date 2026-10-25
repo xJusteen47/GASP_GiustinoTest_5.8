@@ -18,7 +18,10 @@
 #include "GameFramework/Actor.h"
 #include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputTags.h"
+#include "GSTN_SurfaceProvider.h"
+#include "GSTN_SurfaceUtils.h"
 #include "Movement/GSTN_LayeredMove_Freeze.h"
+#include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Simulation/GSTN_CombatTableSet.h"
@@ -86,6 +89,42 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 			VictimResult.bCancelledMove |= bCancelledMove;
 		}
 	}
+	// The surface impact of a tumbling victim: the contact the knockback move's probe made on the frame before, from Mover's tracked state
+	ImpactResult = FGSTN_ImpactStepResult();
+	if (Self && ImpactTable && Core.ActionState == EGSTN_ActionState::Tumble)
+	{
+		FGSTN_ImpactStepInput ImpactIn;
+		ImpactIn.Frame = Frame;
+		ImpactIn.Rules = CombatRules;
+		ImpactIn.Table = ImpactTable;
+		ImpactIn.Response = KitImpactResponse.IsSet() ? &KitImpactResponse.GetValue() : (CombatRules ? &CombatRules->ImpactResponse : nullptr);
+		ImpactIn.Contact = ReadTumbleContact();
+		ImpactIn.Velocity = Self->Velocity;
+		for (const FGSTN_VictimHit& Hit : VictimResult.Hits)
+		{
+			ImpactIn.bStaggeredThisFrame |= Hit.bStaggered;
+		}
+		FGSTN_CombatVictim::StepImpact(ImpactIn, Core, ImpactResult);
+		if (ImpactResult.Outcome != EGSTN_ImpactOutcome::None)
+		{
+			AppendImpactEvent(Frame);
+			if (ImpactResult.Outcome == EGSTN_ImpactOutcome::BreakSurface)
+			{
+				if (const TWeakObjectPtr<UPrimitiveComponent>* Surface = ContactSurfaces.Find(ImpactIn.Contact.ContactFrame))
+				{
+					BreakRequests.Add(Frame, *Surface);
+				}
+			}
+			if (VictimResult.FreezeFrames == 0 && ImpactResult.FreezeFrames > 0)
+			{
+				VictimResult.FreezeFrames = ImpactResult.FreezeFrames;
+				VictimResult.bFreezeZeroVelocity = ImpactResult.bFreezeAtRest;
+			}
+			LastImpactInfo = FString::Printf(TEXT("%d,%d,%d,%d,%d"), Frame, static_cast<int32>(ImpactResult.Outcome), static_cast<int32>(ImpactResult.SurfaceTypeIndex),
+				FMath::RoundToInt(ImpactResult.Resolved.JudgedSpeed), FMath::RoundToInt(ImpactResult.Damage));
+			++ImpactCounts[FMath::Clamp(static_cast<int32>(ImpactResult.Outcome) - 1, 0, 2)];
+		}
+	}
 	AppendVictimEvents(Frame);
 
 	if (!InboxScratch.IsEmpty() && !Self)
@@ -143,10 +182,119 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 		Reaction.KnockbackResistance = AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetKnockbackResistanceAttribute());
 	}
 	ReactionMove = FGSTN_CombatVictim::StepReaction(Reaction, Core);
+	if (ReactionMove.Kind == FGSTN_ReactionMove::EKind::None && ImpactResult.Move.Kind != FGSTN_ReactionMove::EKind::None)
+	{
+		// A bounce: the relaunch of the victim off the surface goes out like the launch of a hit
+		ReactionMove = ImpactResult.Move;
+	}
+	if (ImpactResult.Damage > 0.f)
+	{
+		Core.Requests.Add(EGSTN_RequestType::ImpactDamage, Frame, static_cast<int16>(FMath::Clamp(FMath::RoundToInt(ImpactResult.Damage), 1, 32767)));
+	}
 	if (ReactionMove.Kind != FGSTN_ReactionMove::EKind::None)
 	{
 		Core.Requests.Add(ReactionMove.Kind == FGSTN_ReactionMove::EKind::Launch ? EGSTN_RequestType::Knockback : EGSTN_RequestType::PushBack, Frame, 0);
 	}
+}
+
+FGSTN_TumbleContactSyncState UGSTN_CombatSimComponent::ReadTumbleContact()
+{
+	FGSTN_TumbleContactSyncState Latest;
+	const UGSTN_MoverSimStateTracker* Tracker = GetJumpTracker();
+	if (!Tracker)
+	{
+		return Latest;
+	}
+	// Every knockback move alive in the tracked state carries a record (a bounce starts a second one beside the first): the newest wins
+	for (const TSharedPtr<FLayeredMoveBase>& Move : Tracker->GetSyncState().LayeredMoves.GetActiveMoves())
+	{
+		if (Move.IsValid() && Move->GetScriptStruct() == FGSTN_LayeredMove_Knockback::StaticStruct())
+		{
+			const FGSTN_TumbleContactSyncState& Contact = static_cast<const FGSTN_LayeredMove_Knockback&>(*Move).Contact;
+			if (Contact.IsSet() && (!Latest.IsSet() || Contact.ContactFrame > Latest.ContactFrame))
+			{
+				Latest = Contact;
+			}
+		}
+	}
+	return Latest;
+}
+
+void UGSTN_CombatSimComponent::NoteContactSurface(int32 Frame, UPrimitiveComponent* Component)
+{
+	ContactSurfaces.Add(Frame, Component);
+	ContactSurfaces.Remove(Frame - 64);
+}
+
+FString UGSTN_CombatSimComponent::GetImpactInfo() const
+{
+	return LastImpactInfo;
+}
+
+FString UGSTN_CombatSimComponent::GetImpactCounts() const
+{
+	return FString::Printf(TEXT("%d,%d,%d"), ImpactCounts[0], ImpactCounts[1], ImpactCounts[2]);
+}
+
+void UGSTN_CombatSimComponent::AppendImpactEvent(int32 Frame)
+{
+	FGSTN_SimEvent Event;
+	switch (ImpactResult.Outcome)
+	{
+	case EGSTN_ImpactOutcome::Splat: Event.EventType = GSTNCombatTags::Event_Impact_Splat; break;
+	case EGSTN_ImpactOutcome::Bounce: Event.EventType = GSTNCombatTags::Event_Impact_Bounce; break;
+	case EGSTN_ImpactOutcome::BreakSurface: Event.EventType = GSTNCombatTags::Event_Impact_Break; break;
+	default: return;
+	}
+	Event.Frame = Frame;
+	Event.Instigator = GetOwner();
+	Event.Target = GetOwner();
+	Event.Magnitude = ImpactResult.Resolved.JudgedSpeed;
+	// The surface type names the surface to the presentation (a thud, a shatter); the tag is made from the index here, outside any state
+	const FGameplayTag SurfaceType = UGSTN_SurfaceUtils::GetSurfaceTypeFromIndex(ImpactResult.SurfaceTypeIndex);
+	if (SurfaceType.IsValid())
+	{
+		Event.Tags.AddTag(SurfaceType);
+	}
+	EventOutbox.Add(MoveTemp(Event));
+}
+
+void UGSTN_CombatSimComponent::ExecuteImpactDamage(float Damage)
+{
+	UClass* Class = CombatRules && !CombatRules->DamageEffect.IsNull() ? CombatRules->DamageEffect.LoadSynchronous() : nullptr;
+	if (!AbilitySystem || !Class || !Class->IsChildOf(UGameplayEffect::StaticClass()) || Damage <= 0.f)
+	{
+		return;
+	}
+	const FGameplayEffectSpecHandle Spec = AbilitySystem->MakeOutgoingSpec(Class, 1.f, AbilitySystem->MakeEffectContext());
+	if (Spec.IsValid())
+	{
+		Spec.Data->SetSetByCallerMagnitude(GSTNCombatTags::SetByCaller_Damage, Damage);
+		AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+	}
+}
+
+void UGSTN_CombatSimComponent::ExecuteSurfaceBreaks()
+{
+	const bool bAuthority = GetOwner() && GetOwner()->HasAuthority();
+	for (const TPair<int32, TWeakObjectPtr<UPrimitiveComponent>>& Request : BreakRequests)
+	{
+		UPrimitiveComponent* Collider = bAuthority ? Request.Value.Get() : nullptr;
+		if (!Collider)
+		{
+			continue;
+		}
+		// The collider answers for itself, else its actor (the same order the surface resolution uses)
+		if (Collider->Implements<UGSTN_SurfaceProvider>())
+		{
+			IGSTN_SurfaceProvider::Execute_BreakSurface(Collider);
+		}
+		else if (AActor* Owner = Collider->GetOwner(); Owner && Owner->Implements<UGSTN_SurfaceProvider>())
+		{
+			IGSTN_SurfaceProvider::Execute_BreakSurface(Owner);
+		}
+	}
+	BreakRequests.Reset();
 }
 
 void UGSTN_CombatSimComponent::AppendVictimEvents(int32 Frame)

@@ -9,6 +9,7 @@
 #include "Hits/GSTN_HitExtensions.h"
 #include "Hits/GSTN_HitMathUtils.h"
 #include "Hits/GSTN_HitResolution.h"
+#include "Hits/GSTN_ImpactTypes.h"
 #include "Hits/GSTN_KnockbackModel.h"
 #include "Hits/GSTN_ReactionTypes.h"
 #include "Hits/GSTN_RelationshipResolver.h"
@@ -135,6 +136,14 @@ public:
 	/** Surface impact responses (M4 7b). Soft: loaded outside the simulation */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
 	TSoftObjectPtr<UGSTN_SurfaceImpactTable> SurfaceImpactTable;
+
+	/** The victim layer of the surface impacts when the kit has no FGSTN_ImpactResponseExtension: everything allowed, the surface's values */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
+	FGSTN_ImpactResponse ImpactResponse;
+
+	/** Damage of a surface impact before the surface's and the victim's ImpactDamageScale. 0 = impacts do no damage (they still stun) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0.0"))
+	float BaseImpactDamage = 0.f;
 
 	/** The gameplay effect the damage request applies (filled by the GAS layer, H5) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Effects")

@@ -66,8 +66,17 @@ namespace GSTNCombatTags
 	/** Gameplay event sent to the victim's abilities when it is hit (payload: FGSTN_HitEventPayload in the event's context). Not an outbox event. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Hit_Received);
 
-	/** Root of the surface impact events (splat, bounce, break). The leaves are declared by the surface impact checkpoint. */
+	/** Root of the surface impact events (splat, bounce, break). */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact);
+
+	/** A launched victim was pinned to a surface (outbox event on the victim; the tags carry the surface type). */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Splat);
+
+	/** A launched victim bounced off a surface (outbox event on the victim). */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Bounce);
+
+	/** A launched victim broke the surface it hit and went through (outbox event on the victim). */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Break);
 
 	// KO reasons (named on the KO event, never granted)
 

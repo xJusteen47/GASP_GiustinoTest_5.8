@@ -88,6 +88,7 @@ struct FGSTN_CombatSyncCore
 		Context.Frame = Input.History.GetLatestFrame();
 		Context.bInTimeline = ActionState == EGSTN_ActionState::InTimeline;
 		Context.TimelineStartFrame = TimelineStartFrame;
+		Context.bTumbling = ActionState == EGSTN_ActionState::Tumble;
 		Context.HitstopEndFrame = HitstopEndFrame;
 		return Context;
 	}

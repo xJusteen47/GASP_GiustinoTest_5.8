@@ -31,6 +31,8 @@ class UGSTN_CombatRules;
 class UGSTN_CombatWorldSubsystem;
 class UGSTN_CommandBindingSet;
 class UGSTN_HurtboxSetDefinition;
+class UGSTN_SurfaceImpactTable;
+class UPrimitiveComponent;
 class UGSTN_GA_BaseCombat;
 class UGSTN_GA_PlatformJump;
 class UGSTN_InputConfig;
@@ -113,6 +115,27 @@ public:
 	 */
 	void SetCombatRules(UGSTN_CombatRules* Rules);
 	const UGSTN_CombatRules* GetCombatRules() const { return CombatRules; }
+
+	/**
+	 * The surface layer of the impact rules this victim decides with (combat-m4-hits 7b). Resolved from the rules' soft SurfaceImpactTable when the
+	 * rules are set; a test or a game replaces it here, outside the simulation, and every machine must run the same table. None: no impacts
+	 */
+	void SetImpactTable(UGSTN_SurfaceImpactTable* Table) { ImpactTable = Table; }
+	const UGSTN_SurfaceImpactTable* GetImpactTable() const { return ImpactTable; }
+
+	/**
+	 * The probe of a tumbling victim's knockback move found a face on this frame: remembers the collider, for the break request that
+	 * executes outside the simulation. Local data: no decision reads it, a resimulated frame writes it again
+	 */
+	void NoteContactSurface(int32 Frame, UPrimitiveComponent* Component);
+
+	/** "frame,outcome,surfaceTypeIndex,speed,damage" of the latest impact the victim step resolved on this machine, for the harness. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetImpactInfo() const;
+
+	/** Count of impacts resolved by outcome since the component began, "splat,bounce,break". Counts re-simulated frames too. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetImpactCounts() const;
 
 	/** The rules asset the component runs, for the harness to tune between scenarios (never while hits are in flight: the machines would run different numbers) */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
@@ -578,6 +601,29 @@ private:
 	FGSTN_VictimResult VictimResult;
 	FGSTN_ReactionMove ReactionMove;
 	int32 VictimFrame = INDEX_NONE;
+
+	/** The surface impact the victim step decided this frame (same lifetime and rules as VictimResult) */
+	FGSTN_ImpactStepResult ImpactResult;
+
+	/** The latest contact record in the knockback moves of Mover's tracked state (the end of the previous frame) */
+	FGSTN_TumbleContactSyncState ReadTumbleContact();
+
+	void AppendImpactEvent(int32 Frame);
+	void ExecuteImpactDamage(float Damage);
+	void ExecuteSurfaceBreaks();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_SurfaceImpactTable> ImpactTable;
+
+	/** The victim layer of the kit (FGSTN_ImpactResponseExtension), when it has one; the rules' otherwise */
+	TOptional<FGSTN_ImpactResponse> KitImpactResponse;
+
+	/** Colliders the probe touched by contact frame, and the breaks the victim step requested by frame. Local data, see NoteContactSurface */
+	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> ContactSurfaces;
+	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> BreakRequests;
+
+	FString LastImpactInfo = TEXT("-1,0,0,0,0");
+	int32 ImpactCounts[3] = { 0, 0, 0 };
 
 	/** The victim step took a hit this frame: the buffer event Input.BufferEvent.Interrupted of the frame (AppendFrameEvents) */
 	bool bFrameInterrupted = false;

@@ -18,6 +18,41 @@ const FGSTN_ImpactResponseEntry& FGSTN_ImpactResponse::Find(const FGameplayTag& 
 	return Default;
 }
 
+uint16 FGSTN_ImpactProfile::Pack() const
+{
+	uint16 Bits = static_cast<uint16>(Force) & 0x3;
+	for (const EGSTN_ImpactOutcome Outcome : Forbid)
+	{
+		const uint8 Index = static_cast<uint8>(Outcome);
+		if (Index >= 1 && Index <= 3)
+		{
+			Bits |= static_cast<uint16>(1u << (1 + Index));
+		}
+	}
+	Bits |= bForceIgnoresSurface ? (1u << 5) : 0u;
+	Bits |= bNoTech ? (1u << 6) : 0u;
+	const int32 Scale = FMath::Clamp(FMath::RoundToInt(SpeedScale * SpeedScaleUnitsPerOne), 0, 255);
+	Bits |= static_cast<uint16>((Scale ^ SpeedScaleUnitsPerOne) << 8);
+	return Bits;
+}
+
+FGSTN_ImpactProfile FGSTN_ImpactProfile::Unpack(uint16 Packed)
+{
+	FGSTN_ImpactProfile Profile;
+	Profile.Force = static_cast<EGSTN_ImpactOutcome>(Packed & 0x3);
+	for (uint8 Index = 1; Index <= 3; ++Index)
+	{
+		if (Packed & (1u << (1 + Index)))
+		{
+			Profile.Forbid.Add(static_cast<EGSTN_ImpactOutcome>(Index));
+		}
+	}
+	Profile.bForceIgnoresSurface = (Packed & (1u << 5)) != 0;
+	Profile.bNoTech = (Packed & (1u << 6)) != 0;
+	Profile.SpeedScale = static_cast<float>(((Packed >> 8) & 0xFF) ^ SpeedScaleUnitsPerOne) / static_cast<float>(SpeedScaleUnitsPerOne);
+	return Profile;
+}
+
 void UGSTN_SurfaceImpactTable::Compile()
 {
 	IndexByTag.Reset();
@@ -123,5 +158,6 @@ FGSTN_ImpactResult UGSTN_ImpactMath::Resolve(const FGSTN_ImpactInput& Input, con
 	Result.Restitution = Victim.Restitution >= 0.f ? Victim.Restitution : Row->Restitution;
 	Result.SplatFrames = Victim.SplatFrames >= 0 ? Victim.SplatFrames : Row->SplatFrames;
 	Result.ImpactDamageScale = Row->ImpactDamageScale * Victim.ImpactDamageScale;
+	Result.ResidualSpeedScale = Row->ResidualSpeedScale;
 	return Result;
 }

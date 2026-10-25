@@ -5,6 +5,9 @@
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverTypes.h"
+#include "Components/PrimitiveComponent.h"
+#include "Engine/World.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 
 FGSTN_LayeredMove_Knockback::FGSTN_LayeredMove_Knockback()
 {
@@ -24,6 +27,7 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 		OutProposedMove.MixMode = EMoveMixMode::OverrideVelocity;
 		OutProposedMove.LinearVelocity = Velocity;
 		OutProposedMove.PreferredMode = ForceMovementMode;
+		ProbeContact(StartState, TimeStep, MoverComp, Velocity);
 		return true;
 	}
 
@@ -40,7 +44,58 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 	}
 	OutProposedMove.MixMode = EMoveMixMode::AdditiveVelocity;
 	OutProposedMove.LinearVelocity = Extra;
+
+	// The velocity the mode moves with this frame: what it started with, the horizontal drag of this move and one step of gravity
+	FVector FrameVelocity = Current + Extra;
+	if (MoverComp)
+	{
+		FrameVelocity += MoverComp->GetGravityAcceleration() * Dt;
+	}
+	ProbeContact(StartState, TimeStep, MoverComp, FrameVelocity);
 	return true;
+}
+
+void FGSTN_LayeredMove_Knockback::ProbeContact(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, const FVector& FrameVelocity)
+{
+	const FMoverDefaultSyncState* Sync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+	UPrimitiveComponent* Primitive = MoverComp ? Cast<UPrimitiveComponent>(MoverComp->GetUpdatedComponent()) : nullptr;
+	UWorld* World = Primitive ? Primitive->GetWorld() : nullptr;
+	const double Dt = FMath::Max<double>(TimeStep.StepMs, UE_SMALL_NUMBER) * 0.001;
+	const FVector Delta = FrameVelocity * Dt;
+	if (!Sync || !World || Delta.SquaredLength() < 1.0)
+	{
+		return;
+	}
+
+	// The start pose is the sync state's, not the component's, so a resimulated frame sweeps from where the original did
+	const FVector Start = Sync->GetLocation_WorldSpace();
+	const FVector End = Start + Delta + Delta.GetSafeNormal() * ProbeMarginCm;
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(GSTNTumbleContact), false, MoverComp->GetOwner());
+	Query.bReturnPhysicalMaterial = true;
+	FCollisionResponseParams Response;
+	Primitive->InitSweepCollisionParams(Query, Response);
+	FHitResult Hit;
+	if (!World->SweepSingleByChannel(Hit, Start, End, Sync->GetOrientation_WorldSpace().Quaternion(), Primitive->GetCollisionObjectType(), Primitive->GetCollisionShape(), Query, Response)
+		|| !Hit.bBlockingHit || Hit.bStartPenetrating)
+	{
+		return;
+	}
+
+	const FGSTN_TumbleContactSyncState Found = FGSTN_TumbleContactSyncState::FromHit(Hit, FrameVelocity, MoverComp->GetUpDirection(), TimeStep.ServerFrame);
+	if (!Found.IsSet())
+	{
+		return;
+	}
+	Contact = Found;
+
+	// The object the surface belongs to, for the break request the combat component executes outside the simulation. Local data: nothing decides from it
+	if (AActor* Owner = MoverComp->GetOwner())
+	{
+		if (UGSTN_CombatSimComponent* Combat = Owner->FindComponentByClass<UGSTN_CombatSimComponent>())
+		{
+			Combat->NoteContactSurface(Contact.ContactFrame, Hit.GetComponent());
+		}
+	}
 }
 
 FLayeredMoveBase* FGSTN_LayeredMove_Knockback::Clone() const
@@ -56,6 +111,7 @@ void FGSTN_LayeredMove_Knockback::NetSerialize(FArchive& Ar)
 	Ar << GravityScale;
 	Ar << ElapsedFrames;
 	Ar << ForceMovementMode;
+	Contact.NetSerialize(Ar);
 }
 
 UScriptStruct* FGSTN_LayeredMove_Knockback::GetScriptStruct() const

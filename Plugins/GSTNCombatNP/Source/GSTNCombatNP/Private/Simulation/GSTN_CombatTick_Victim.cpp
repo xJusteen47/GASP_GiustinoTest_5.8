@@ -9,6 +9,7 @@
 #include "Hits/GSTN_HitMathUtils.h"
 #include "Hits/GSTN_HitRunner.h"
 #include "Hits/GSTN_HitShapeUtils.h"
+#include "Hits/GSTN_ImpactMath.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
@@ -203,6 +204,7 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 			}
 			Core.ActionState = Hit.bTumble ? EGSTN_ActionState::Tumble : EGSTN_ActionState::Hitstun;
 			Core.Hit.SetPendingReaction(Hit.Reaction);
+			Core.Hit.ImpactProfileQ = Entry.Hit.Impact.Pack();
 			Core.Hit.SetPendingLaunch(Hit.Reaction == EGSTN_HitReaction::StaggerInPlace ? FVector::ZeroVector : LaunchVelocity);
 			bAnyStaggered = true;
 			LastHitstunFrames = Hit.HitstunFrames;
@@ -265,6 +267,82 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		{
 			Out.FreezeFrames = FMath::Max(Core.HitstopEndFrame - Frame, 0);
 		}
+	}
+}
+
+void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_CombatSyncCore& Core, FGSTN_ImpactStepResult& Out)
+{
+	Out = FGSTN_ImpactStepResult();
+	const FGSTN_TumbleContactSyncState& Contact = In.Contact;
+	const int32 Frame = In.Frame;
+	if (Core.ActionState != EGSTN_ActionState::Tumble || In.bStaggeredThisFrame || Core.IsInHitstop(Frame) || !In.Table || !Contact.IsSet()
+		|| Contact.ContactFrame != Frame - 1)
+	{
+		return;
+	}
+	const FGSTN_SurfaceImpactRow* Row = In.Table->GetRow(Contact.SurfaceTypeIndex);
+	if (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !Row->bForceDefault))
+	{
+		return;
+	}
+
+	static const FGSTN_ImpactResponse AnythingGoes;
+	const FGSTN_ImpactProfile Profile = FGSTN_ImpactProfile::Unpack(Core.Hit.ImpactProfileQ);
+	const FGSTN_ImpactResult Resolved = UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(Contact.SurfaceTypeIndex, Contact.ImpactSpeedQ),
+		In.Table, In.Response ? *In.Response : AnythingGoes, Profile);
+	if (Resolved.Outcome == EGSTN_ImpactOutcome::None)
+	{
+		return;
+	}
+
+	Out.Outcome = Resolved.Outcome;
+	Out.Resolved = Resolved;
+	Out.SurfaceTypeIndex = Contact.SurfaceTypeIndex;
+	Out.Normal = Contact.GetNormal();
+	const double Speed = Contact.ImpactSpeedQ;
+	const FVector Tangent = In.Velocity - Out.Normal * In.Velocity.Dot(Out.Normal);
+	if (In.Rules && Resolved.Outcome != EGSTN_ImpactOutcome::BreakSurface)
+	{
+		Out.Damage = In.Rules->BaseImpactDamage * Resolved.ImpactDamageScale;
+	}
+
+	switch (Resolved.Outcome)
+	{
+	case EGSTN_ImpactOutcome::Splat:
+	{
+		const int32 Frames = FMath::Max(Resolved.SplatFrames, 1);
+		Core.ActionState = EGSTN_ActionState::Splat;
+		Core.Hit.ImpactEndFrame = Frame + Frames;
+		Core.Hit.ImpactProfileQ = 0;
+		Core.Hit.ClearPendingReaction();
+		Out.FreezeFrames = Frames;
+		Out.bFreezeAtRest = true;
+		break;
+	}
+	case EGSTN_ImpactOutcome::Bounce:
+	{
+		// The pre-impact velocity is the slid one plus the speed into the face; reflected about the normal that is the tangent plus the same
+		// speed out of it, and the restitution scales all of it
+		const int32 Frames = FMath::Max(Core.Hit.HitstunEndFrame - Frame, MinBounceFrames);
+		Out.Move.Kind = FGSTN_ReactionMove::EKind::Launch;
+		Out.Move.Velocity = (Tangent + Out.Normal * Speed) * Resolved.Restitution;
+		Out.Move.Frames = Frames;
+		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
+		break;
+	}
+	case EGSTN_ImpactOutcome::BreakSurface:
+	{
+		// The victim stops for one frame while the surface breaks, then goes on with a fraction of the speed it came with
+		Core.HitstopStartFrame = Frame - 1;
+		Core.HitstopEndFrame = Frame + 1;
+		Core.Hit.SetPendingReaction(EGSTN_HitReaction::Launch);
+		Core.Hit.SetPendingLaunch((Tangent - Out.Normal * Speed) * Resolved.ResidualSpeedScale);
+		Core.Requests.Add(EGSTN_RequestType::ImpactSurface, Frame, static_cast<int16>(Contact.SurfaceTypeIndex));
+		Out.FreezeFrames = 1;
+		break;
+	}
+	default:
+		break;
 	}
 }
 
@@ -370,6 +448,17 @@ FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInpu
 		return Move;
 	}
 	const int32 Frame = In.Frame;
+
+	if (Core.ActionState == EGSTN_ActionState::Splat)
+	{
+		// Pinned to a surface: the freeze of the splat holds the body, the state follows its end frame
+		if (Frame >= Core.Hit.ImpactEndFrame)
+		{
+			Core.ActionState = EGSTN_ActionState::Actionable;
+			Core.Hit.ImpactEndFrame = INDEX_NONE;
+		}
+		return Move;
+	}
 
 	// One frame after the window: the freeze of the hitstop finishes on the first frame outside it, and Mover hands the finish velocity of a
 	// finishing layered move back over whatever the tick proposes, so a move started on that frame would be overwritten (found in PIE). The

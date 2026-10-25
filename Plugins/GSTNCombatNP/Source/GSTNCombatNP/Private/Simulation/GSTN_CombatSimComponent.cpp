@@ -39,6 +39,8 @@
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Presentation/GSTN_HitPresentationComponent.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
+#include "Hits/GSTN_ImpactTypes.h"
+#include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Debug/GSTN_CombatDebugDraw.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
@@ -114,6 +116,10 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	if (!CombatRules)
 	{
 		CombatRules = const_cast<UGSTN_CombatRules*>(UGSTN_CombatSettings::Get().ResolveDefaultRules());
+	}
+	if (CombatRules && !ImpactTable && !CombatRules->SurfaceImpactTable.IsNull())
+	{
+		ImpactTable = CombatRules->SurfaceImpactTable.LoadSynchronous();
 	}
 	SetCombatWorldSubsystem(UGSTN_CombatWorldSubsystem::Get(GetWorld()));
 
@@ -349,6 +355,16 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	{
 		return;
 	}
+	// The victim layer of the surface impacts is the kit's, when it authors one
+	KitImpactResponse.Reset();
+	if (const UGSTN_PrimaryKitDefinition* Kit = Component->GetResolvedLoadout().Kit)
+	{
+		if (const FGSTN_ImpactResponseExtension* Extension = Kit->Extensions.Find<FGSTN_ImpactResponseExtension>())
+		{
+			KitImpactResponse = Extension->Response;
+		}
+	}
+
 	const FGSTN_CompiledBindingTable& Compiled = Component->GetCompiledTable();
 	if (Compiled.Entries.IsEmpty())
 	{
@@ -976,6 +992,13 @@ void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, 
 	// once; a predicting client drops what its predictions and re-simulations wrote
 	FGSTN_InputHostUtils::PublishOutbox(EventOutbox, GetOwner());
 
+	// The surfaces a victim broke (combat-m4-hits 7b): the authority breaks each once, here, outside the simulation. A predicting client drops
+	// the requests its predictions wrote; the surface replicates its own state
+	if (!BreakRequests.IsEmpty())
+	{
+		ExecuteSurfaceBreaks();
+	}
+
 	// The attacker's own presentation (M4 H10): the locally controlled pawn shows its predicted hits at once and cancels the ones a correction removes
 	if (Sync && TicksOnThisMachine())
 	{
@@ -1109,6 +1132,12 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 			break;
 		case EGSTN_RequestType::Cue:
 			ExecuteVictimCues(Frame);
+			break;
+		case EGSTN_RequestType::ImpactDamage:
+			if (VictimFrame == Frame)
+			{
+				ExecuteImpactDamage(ImpactResult.Damage);
+			}
 			break;
 		case EGSTN_RequestType::Knockback:
 		case EGSTN_RequestType::PushBack:

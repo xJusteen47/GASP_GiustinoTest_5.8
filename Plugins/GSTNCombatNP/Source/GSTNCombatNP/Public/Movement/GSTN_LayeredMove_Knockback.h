@@ -6,6 +6,7 @@
 #include "EffectsComponents/ApplyMoveGameplayEffectComponent.h"
 #include "GameplayEffect.h"
 #include "LayeredMove.h"
+#include "Movement/GSTN_TumbleContact.h"
 #include "GSTN_LayeredMove_Knockback.generated.h"
 
 /**
@@ -17,6 +18,11 @@
  * of the frame, so a rolled back Mover re-derives it. ElapsedFrames is written for display and the trace, never read back.
  *
  * Horizontal and vertical are relative to the up direction of the Mover component (minus its gravity), never world Z.
+ *
+ * The move is also the contact probe of a tumbling victim (combat-m4-hits 7b, M4 H11): every frame it lives it sweeps the victim's
+ * collision along the velocity the frame will move with and, on a blocking hit, writes the contact into Contact (face kind, normal, speed
+ * into the face, frame, GSTNSurface type index). The combat tick reads the record one frame later and decides the impact from it; the
+ * move itself never reacts to a contact, so the physics of an unresolved hit is what Mover does (slide).
  */
 USTRUCT()
 struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
@@ -46,12 +52,23 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
 	UPROPERTY()
 	FName ForceMovementMode = TEXT("Falling");
 
+	/** The latest contact the probe found; read by the combat tick (UGSTN_CombatSimComponent) from Mover's sync state. Part of the move, so a rollback restores it */
+	UPROPERTY()
+	FGSTN_TumbleContactSyncState Contact;
+
+	/** Extra distance the probe sweeps past the frame's movement, so a victim resting against a face still registers it */
+	static constexpr double ProbeMarginCm = 1.0;
+
 	virtual bool SupportsAsync() const override { return false; }
 	virtual bool GenerateMove(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, UMoverBlackboard* SimBlackboard, FProposedMove& OutProposedMove) override;
 	virtual FLayeredMoveBase* Clone() const override;
 	virtual void NetSerialize(FArchive& Ar) override;
 	virtual UScriptStruct* GetScriptStruct() const override;
 	virtual FString ToSimpleString() const override;
+
+private:
+	/** Sweeps the victim from its start-of-frame pose along the frame's velocity and writes Contact when a face blocks it */
+	void ProbeContact(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, const FVector& FrameVelocity);
 };
 
 template<>

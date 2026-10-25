@@ -23,7 +23,10 @@ namespace GSTNCombatTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_HitReceived, "Combat.Event.HitReceived", "A hit was received. Outbox event on the victim, published once on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_KO, "Combat.Event.KO", "A combatant was knocked out; the KOReason tag says why. Published once by the combat tick on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Hit_Received, "Combat.Event.Hit.Received", "Gameplay event sent to the victim's abilities when it is hit. The payload is in the event's effect context");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact, "Combat.Event.Impact", "Root of the surface impact events (splat, bounce, break). The leaves are declared by the surface impact checkpoint");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact, "Combat.Event.Impact", "Root of the surface impact events (splat, bounce, break)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact_Splat, "Combat.Event.Impact.Splat", "A launched victim was pinned to a surface. Outbox event on the victim, published once on the authority");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact_Bounce, "Combat.Event.Impact.Bounce", "A launched victim bounced off a surface. Outbox event on the victim, published once on the authority");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact_Break, "Combat.Event.Impact.Break", "A launched victim broke the surface it hit. Outbox event on the victim, published once on the authority");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(KOReason_Health, "Combat.KOReason.Health", "KO reason: the health or the damage cap was reached. Named on the KO event only");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(KOReason_Zone, "Combat.KOReason.Zone", "KO reason: the combatant entered a KO zone. Named on the KO event only");
@@ -53,7 +56,7 @@ namespace GSTNCombatTags
 			Lock_Movement, Lock_Reaction,
 			Weapon_Role_Primary, Weapon_Role_Support,
 			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_LoadoutSwapped, Event_SuperUsed,
-			Event_HitLanded, Event_HitReceived, Event_KO, Event_Hit_Received, Event_Impact,
+			Event_HitLanded, Event_HitReceived, Event_KO, Event_Hit_Received, Event_Impact, Event_Impact_Splat, Event_Impact_Bounce, Event_Impact_Break,
 			KOReason_Health, KOReason_Zone,
 			State_Tumble,
 			Cue_Hit,

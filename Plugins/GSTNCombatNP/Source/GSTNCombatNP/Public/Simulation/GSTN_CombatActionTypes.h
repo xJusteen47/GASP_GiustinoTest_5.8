@@ -64,6 +64,9 @@ enum class EGSTN_RequestType : uint8
 	/** The victim's own hitstop freeze (Arg = frames), separate from the attacker's Freeze so a trade frame holds both */
 	VictimFreeze = 15,
 
+	/** Damage of a surface impact (Arg = the whole points): the executor applies the rules' damage effect to the victim itself */
+	ImpactDamage = 16,
+
 	Count UMETA(Hidden)
 };
 
