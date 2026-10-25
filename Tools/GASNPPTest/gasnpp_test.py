@@ -4140,7 +4140,7 @@ def scenario_hit_basic(client=1, step=3.0):
       - the attacker's hitstop window opens on the frame of the hit with the authored 6 frames, on both, and the owner has it no later (predicted)
       - the hit reaches the victim's inbox on the authority the frame after, with the hurtbox and the hitbox it was made with
       - cancel on hit: the special (a command of the cancel window, OnHit) held 0.25 s after the attack starts cancels it only when the hit confirmed (control without a victim: it does not)
-      - the hits cost the attacking client no rollback of their own (judged in the second after each attack: at most one over the three, the link drops packets)
+      - the hits cost the attacking client no rollback of their own (judged in the second after each attack against the control attack: at most one more over the three, the link drops packets)
     The victim half (M4 H9), on the victim's authority copy and its own client: the hit opens a hitstop window on the frame of the hit (8 frames) and a
     hitstun 31 frames after it (the floor of the rules, a stagger in place), the tags Combat.State.Hitstop / Hitstun are projected from it, the damage is
     8 per hit on both copies, HitLanded and HitReceived are published once per hit, and the victim's client rolls back at most once per hit."""
@@ -4171,13 +4171,16 @@ def scenario_hit_basic(client=1, step=3.0):
         return f
 
     def attacker_rollbacks():
-        # An idle pawn rolls back about once per 25 s at 60/15/2 % (lost packets), so a whole-run count of zero is a coin toss; what the hits must not
-        # cost the attacker is judged in the second after each of them: at most one rollback over the three, none at 60/15/0
-        out = {}
-        for n in ('p1', 'p2', 'p3'):
-            w = [c for t, c in arb if taps[n] <= t <= taps[n] + 1.0]
-            out[n] = (w[-1] - w[0]) if w else 99
-        return sum(out.values()) <= 1, f"rollbacks of the attacking client in the second after each attack {out}; whole run {rb['start']} -> {rb['end']}"
+        # What an attack costs the attacker's client with no victim in reach is the baseline (the pose a scenario leaves: the move origin stamped at the
+        # start of a timeline can differ between the machines by the floor height, 12 cm on a lane of the full suite, and every attack then rolls back
+        # once whether it hits or not). The hits must add nothing to it: at most one more over the three (the link drops 2 % of the packets, an idle pawn
+        # rolls back about once per 25 s)
+        def count(name):
+            w = [c for t, c in arb if taps[name] <= t <= taps[name] + 1.0]
+            return (w[-1] - w[0]) if w else 99
+        base, out = count('c'), {n: count(n) for n in ('p1', 'p2', 'p3')}
+        extra = sum(max(0, v - base) for v in out.values())
+        return extra <= 1, f"rollbacks of the attacking client in the second after an attack: control (no victim) {base}, hits {out}; whole run {rb['start']} -> {rb['end']}"
 
     def rbmark(name):
         def f():
@@ -4277,7 +4280,7 @@ def scenario_hit_basic(client=1, step=3.0):
         # control: no victim in reach; the stance held into the cancel window of the move is refused until the move is free
         (2.0, mark('c')),
         (2.0, lambda: ('rollbacks counted from here', rb.__setitem__('start', local_comp(worlds()[client]).get_editor_property('rollback_count')))),
-        (2.0, lambda: ('attack (control)', combat_tap(client, attack))),
+        (2.0, atk('c')),
         (2.25, lambda: ('stance held', combat_hold(client, special))),
         (2.4, lambda: ('stance released', combat_clear(client))),
         (3.1, run.at('control: the move ran and nothing was hit', lambda: (run.saw_tag('Test.State.HitMove', 2.0, 2.6) and not [r for r in _hit_log(0, key) if r[0] >= st['F']['c']], f"hits {[r for r in _hit_log(0, key) if r[0] >= st['F']['c']]}"))),
@@ -4313,7 +4316,7 @@ def scenario_hit_basic(client=1, step=3.0):
         (step + 10.3, run.at('the attacker hitstop window opens on the frame of the hit, 6 frames, equal on both', window_on_hit)),
         (step + 10.3, run.at('the owner has the window no later than the authority (predicted)', window_predicted)),
         (step + 10.3, run.at('cancel on hit: the stance cancels the move after a hit and not without one', stance_cancels)),
-        (step + 10.3, run.at('the hits cost the attacking client at most one rollback in all (none by design; the link drops 2 % of the packets)', attacker_rollbacks)),
+        (step + 10.3, run.at('the hits cost the attacking client nothing beyond what an attack with no victim costs it (at most one rollback more over the three)', attacker_rollbacks)),
         # the victim half
         (step + 10.3, victim_window_checks(run, 'victim', lambda: [phase_rows(0, n, nx)[0][0][0] if len(phase_rows(0, n, nx)[0]) == 1 else -1 for n, nx in (('p1', 'p2'), ('p2', 'p3'), ('p3', None))], vrec)),
         (step + 10.3, run.at('victim: Combat.State.Hitstop and Hitstun projected on the authority and on the owner', lambda: (

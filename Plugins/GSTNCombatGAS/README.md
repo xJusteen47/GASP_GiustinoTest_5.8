@@ -34,7 +34,8 @@ Native, declared in `Public/GSTN_CombatTags.h` (namespace `GSTNCombatTags`), one
 |---|---|---|
 | `Combat.Ability.*` | `Timeline AwaitingAdoption` | Ability identity. |
 | `Combat.Source.*` | `Command Forced Adopted` | How a timeline started (`EGSTN_ActivationSource`), on the `TimelineStarted` event. |
-| `Combat.Lock.Movement` | | Read by the stats movement modifier. |
+| `Combat.Lock.Movement` | | Read by the stats movement modifier. Granted by abilities and effects that root a combatant. |
+| `Combat.Lock.Reaction` | | Read by the stats movement modifier. Projected by the combat tick from the sync state while a hit reaction or a KO locks the combatant (M4 H9c), never granted. |
 | `Combat.Weapon.Role.*` | `Primary Support` | Granted by the stats effect of the active weapon. |
 | `Combat.Event.*` | `TimelineStarted TimelineFinished WeaponSwitched SuperUsed HitLanded HitReceived KO` | Authoritative outbox events. `HitLanded`/`HitReceived`/`KO` are the M4 hit events. |
 | `Combat.Event.Hit.Received` | | Gameplay event sent to the victim's abilities (payload: `FGSTN_HitEventPayload` in the event's hit context). Not an outbox event. |
