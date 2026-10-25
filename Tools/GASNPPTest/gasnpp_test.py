@@ -4003,7 +4003,11 @@ def scenario_hit_host(client=0):
       - the hit reaches the victim client's pawn inbox on the authority the frame after
       - the host's hitstop window (6 frames, starting on the hit) is the one the clients see on their copy of the host pawn
       - the clients' copies of the host pawn made no hit of their own (they interpolate it: nothing is predicted there)
-    Pending H9: the victim client's reaction (its expected reconcile), and how late the clients see it."""
+    Pending H9: the victim client's reaction (its expected reconcile), and how late the clients see it.
+    Listen server only: a dedicated server has no pawn to play (the suite records a skip)."""
+    if detected_mode() != 'listen':
+        _last_run.update(name='hit_host', results=[(None, 'skipped: the host plays only in a listen server', '')], verdict='PASS 0 checks (skipped)')
+        return
     run = _Run('hit_host', client)
     hkey, vkey = run.key, key_of_player(1)
     attack = button_mask('Attack')
