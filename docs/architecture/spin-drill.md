@@ -267,6 +267,14 @@ Owner rule 2026-10-24: no aesthetics work now; but the **logic** of animation mu
   change**: hitbox keys and `BakedSocket` frames are baked from the ability's **reference** timeline montage and the simulation
   never reads the skin's montage (combat.md §12.1: no animation evaluated at runtime). The skin montage is presentation only and is
   validated (same length or a declared time remap) so the visual stays in step with the frame data.
+- **Names from that pattern** (`docs/architecture/anim-layers.md`, branch `claude/project-thread-2vuw3f`; part B still needs the owner
+  OK): the abilities name only their animation-set tags `Anim.Set.Spin` and `Anim.Set.Drill`, never assets. A
+  `UGSTN_AnimSetDefinition` per set holds the layer class and the montage overrides (`Reference` → `Visual`); skins, weapons and kits
+  pick the winner through `UGSTN_AnimSetCollection` rules (skin > weapon > kit > character), and `UGSTN_AnimSetComponent` resolves
+  the visual montage at runtime. The procedural wobble and the bore loop live in a linked layer `ALI_GSTN_Drill` whose C++ parent
+  implements `IGSTN_OverrideLayerSource` (part A, already built). Timelines, hitboxes and `BakedSocket` read only the `Reference`
+  montage; the editor validator of that pattern checks section names, lengths (within 1 frame) and root motion. The `Anim.Set.*`
+  leaves belong to that plugin's tag rules (it decides who declares them).
 - **Procedural layer** `UGSTN_DrillPresentationComponent` (on every rendering machine, including the listen host; never read by the
   simulation): rotates the mesh around the drill axis at `VisualSpinRps` and applies the **radial wobble**: the axis precesses
   around the seated axis with angle `θ(t) = WobbleCurve(t)` and phase `2π·PrecessionHz·t`, `t = (Frame − LatchFrame)·dt`, so every
