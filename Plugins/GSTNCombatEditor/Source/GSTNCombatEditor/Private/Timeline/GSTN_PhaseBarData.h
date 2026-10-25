@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Timeline/GSTN_TimelinePhases.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 
 /** What a stretch of the phase bar is */
@@ -32,9 +33,8 @@ struct FGSTN_PhaseSegment
  * The frame data of a timeline as the phase bar and the summary line show it: startup, active, recovery, first actionable
  * frame, total, and the cancellable tail.
  *
- * THIS IS A STAND-IN. The spec puts this computation in GSTNCombatCore as FGSTN_TimelinePhases (checkpoint E3, so the runtime
- * debug draw and the harness share it). E3 is not in yet and this branch does not touch Core, so the editor keeps this small
- * private copy; when E3 lands the phase bar calls FGSTN_TimelinePhases::Compute and this file is deleted (m5-doc-deltas.md).
+ * The numbers come from FGSTN_TimelinePhases (GSTNCombatCore, E3), which the runtime debug draw and the harness share; this struct only
+ * adds what drawing needs: the bar segments in order. It is a view model, not a second computation.
  *
  * Rules (combat-m5-editor 5.3): the active ranges are the merged [StartFrame, EndFrame) of every Hitbox track; startup is the
  * number of frames before the first one (the 1-based first hit frame is startup + 1); recovery runs from the last active frame to

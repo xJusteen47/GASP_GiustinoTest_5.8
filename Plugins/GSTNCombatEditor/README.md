@@ -8,7 +8,7 @@ details panel.
 
 Status: **experimental (0.7)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
 model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E10 (validation) and E13 (inline mode) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
-(E3 is not built: the phase bar reads a private stand-in, `FGSTN_PhaseBarData`, until `GSTNCombatCore` gets `FGSTN_TimelinePhases`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
+(E3, `FGSTN_TimelinePhases`, is in `GSTNCombatCore`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
 
@@ -46,7 +46,7 @@ widget-free classes and runs in the automation tests without a window; the Slate
 | `FGSTN_TimelineLayout` | `GSTN_TimelineLayout.h` | Hit-testing a lane (keys before edges before body), box select, ruler tick and label spacing, milliseconds text, previous/next key or edge, selection span, wheel scroll and zoom, frame all/selection. `FGSTN_PlaybackClock`: whole frames from real time at the tick rate, looped. |
 | `FGSTN_TimelineGesture` | `GSTN_TimelineGesture.h` | The mouse as a state machine over the model: move the selected windows (one shared clamp), resize an edge, move or Ctrl+duplicate keys, box select, the FAF marker, the tail start. |
 | `FGSTN_TimelineActions` | same | Double-click (key or new track), Delete, K, copy, paste, duplicate and previous/next edge as model calls. |
-| `FGSTN_PhaseBarData` | `GSTN_PhaseBarData.h` | Startup, active, recovery and actionable stretches, the tail and the summary line. **A stand-in for `FGSTN_TimelinePhases` of E3 (Core)**, deleted when E3 lands. |
+| `FGSTN_PhaseBarData` | `GSTN_PhaseBarData.h` | Startup, active, recovery and actionable stretches, the tail and the summary line. The bar's view model: segments laid out from `FGSTN_TimelinePhases` (E3, `GSTNCombatCore`), which owns the numbers and the summary line. |
 | `FGSTN_TimelineEditorCommands` | `GSTN_TimelineEditorCommands.h` | The `TCommands<>` set, registered by the module. |
 | `SGSTN_TimelinePanel`, `SGSTN_TimelineRuler`, `SGSTN_PhaseBar`, `SGSTN_TimelineTrackRow`, `SGSTN_TimelineLane`, `SGSTN_FrameDataSummary` | `Widgets/` | The widgets. Lanes, ruler and phase bar paint in `OnPaint` (no child widget per key). |
 

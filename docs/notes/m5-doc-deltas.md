@@ -319,3 +319,12 @@ One line each: where, what differs from the spec, why. Checkpoints in `docs/arch
   preview sources for literals that start with a character bone name.
 - Build.cs: `AdvancedPreviewScene` and `AnimGraph` (the engine's `UAnimPreviewInstance` lives in AnimGraph). No new plugin edge.
 - Reading the montage: the preview loads the timeline's montage itself, synchronously, the first time it needs it; the "editor never loads the montage on its own" remark of the model applies to the length checks only.
+
+## E3 derived frame data (2026-10-25)
+
+- combat-m5-editor 5.3 / plan E3: `FGSTN_TimelinePhases` is in `GSTNCombatCore` (`Timeline/GSTN_TimelinePhases.h`). Fields: `Total`, `FirstActionableFrame`, `bHasActive`, `StartupEnd`, `ActiveStart`, `ActiveEnd` (exclusive), `RecoveryEnd` (= FAF), `FirstHitFrame1Based`, `ActiveRanges`, plus `TailStart` and `TailBlendOutFrames`
+  (the spec's struct had no tail; the phase bar needs it and the data has it). The spec says active ranges are the merged `[StartFrame, EndFrame]` (inclusive end); the data type is half open (`[StartFrame, EndFrame)`, M3), so the ranges are half open and `ActiveEnd` is one past the last active frame.
+- "Ignoring windows muted by a relationship variant": a hitbox spec is muted only when its `RelationshipVariants` has `bIgnore` for all four relationship tags (Self, Ally, Enemy, Neutral); a window counts when any spec is not muted. A hitbox track with no spec at all still counts (an authored shell; the E11 `HitboxKeys` rule reports it).
+- The editor's `FGSTN_PhaseBarData` is **not deleted** as the E4 note planned: it stays as the phase bar's view model (segment layout) and calls `FGSTN_TimelinePhases::Compute` for every number and for the summary line. Deleting it would have put drawing segments into Core.
+- `FormatSummary` returns `FText` (Core namespace `GSTNCombatCore`), not a string: the editor shows it as is. At 62.5 Hz 30 frames print `480 ms` (the spec example says 484, which is 30 / 62 Hz); the test pins 480.
+- Tests: `GSTNCombat.Core.TimelinePhases.*` (10, on the real `FGSTN_TimelineTrack_Hitbox`), the existing `Editor.Timeline.PhaseBarData` now covers the adapter. Baseline 806 -> 816.

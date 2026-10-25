@@ -13,7 +13,7 @@
  * The phase bar under the ruler (combat-m5-editor 5.2): startup, active, recovery and actionable stretches in the same frame
  * scale as the lanes, with the FAF marker you drag to write FirstActionableFrame, and below it the cancellable tail as a hatched
  * band from its start handle to the end, which you drag to move the tail start. Read-only except for those two handles; the
- * numbers come from FGSTN_PhaseBarData (E3's FGSTN_TimelinePhases replaces it). Hovering shows the frame data line.
+ * numbers come from FGSTN_PhaseBarData, a layout of Core's FGSTN_TimelinePhases. Hovering shows the frame data line.
  */
 class SGSTN_PhaseBar : public SLeafWidget
 {
