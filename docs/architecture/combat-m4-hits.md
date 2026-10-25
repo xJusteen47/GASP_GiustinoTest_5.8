@@ -160,7 +160,7 @@ attack variations): the value is not a hitbox field but a **timeline track**, so
 - **Animation**: presentation reads `V` and feeds `AnimBlendParameter` (a 1D blend of, for example, the vertical and the two diagonal
   swings, or an aim offset for an angled attack), so what is seen and what hits agree on every machine.
 - **Facing rotation** (the rotating aerial): with `FacingYawRateDegPerFrame` > 0 the attacker's yaw turns by `V / 1000 × rate` each
-  frame through the timeline's `Movement` track (one queued layered move, combat.md §8: abilities never set the rotation directly).
+  frame through the timeline's `Movement` track (one queued layered move, combat.md §11: abilities never set the rotation directly).
   `Root`-space hitboxes and the montage turn with the character, so nothing else needs to know. A turn-around (flip facing in a
   window when the stick is held back) is the same track with a latched `StickAngle` driver and a 180° snap, as `AimPolicy` already
   allows at the start of a move.
