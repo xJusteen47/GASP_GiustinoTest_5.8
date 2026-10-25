@@ -415,6 +415,8 @@ bool UGSTN_WallMovementUtils::AdhereAndSense(const FMovingComponentSet& MovingCo
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GSTN_WallContactAdhere), false, UpdatedComponent->GetOwner());
 	FCollisionResponseParams ResponseParams;
 	UMovementUtils::InitCollisionParams(UpdatedPrimitive, QueryParams, ResponseParams);
+	// The contact sweep must not stop on another pawn standing between the capsule and the wall, nor adopt it as the wall
+	UGSTN_WallQueryUtils::ApplyPawnFilter(Settings, ResponseParams);
 
 	const FVector Start = UpdatedComponent->GetComponentLocation();
 	const FVector End = Start - WallNormal * (Settings.WallGap + Settings.WallProbeDistance);

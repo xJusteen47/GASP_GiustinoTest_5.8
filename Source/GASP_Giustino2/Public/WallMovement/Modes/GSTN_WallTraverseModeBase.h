@@ -158,6 +158,15 @@ protected:
 	 */
 	void UpdateSurfaceVote(const FMoverSyncState& SyncState, FGSTN_WallTickState& InOutState) const;
 
+	/**
+	 * Whether the pawn is held in place from outside (hitstop, a freeze) this tick. Locked: no voluntary exit (CheckForWallExit is skipped, so no wall
+	 * jump, no detach), no floor or no-wall exit, no surface-mode switch and no timer advances (TimeWithoutWall, the vote count), while base riding
+	 * and adhesion still run: the wall may move under a frozen character and the capsule must stay on it. Default: the Mover state carries
+	 * Combat.Mover.Frozen (looked up by name, the same rule as the legacy base's lock on feature/gas-npp-5.8, M4 H7; when the two branches meet, this
+	 * declaration and the base's are the same override point and this one can go). Read from the start sync state only
+	 */
+	virtual bool IsMovementLocked(const FMoverTickStartData& StartState) const;
+
 	/** Final kind of what the look-ahead found. Base: the kind the probe already set */
 	virtual EGSTN_WallEdgeKind ClassifyAhead(const FGSTN_WallAheadResult& Ahead) const;
 

@@ -6,6 +6,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "MoverDataModelTypes.h"
+#include "MoverSimulationTypes.h"
 #include "WallMovement/Modes/GSTN_WallClimbV2MovementMode.h"
 #include "WallMovement/Modes/GSTN_WallSlideV2MovementMode.h"
 
@@ -48,6 +49,22 @@ struct FGSTN_WallTraverseTestAccess
 	static FVector MapMoveIntentToWall(const UGSTN_WallSlideV2MovementMode& Mode, const FCharacterDefaultInputs& Inputs, const FVector& MoveIntent, const FGSTN_WallMovementPlane& Plane)
 	{
 		return Mode.MapMoveIntentToWall(Inputs, MoveIntent, Plane);
+	}
+
+	static bool IsMovementLocked(const UGSTN_WallTraverseModeBase& Mode, const FMoverTickStartData& StartState)
+	{
+		return Mode.IsMovementLocked(StartState);
+	}
+
+	/** The base riding and the base bookkeeping of the tick, called as SimulationTick calls them (GSTN_WallV2NetTests.cpp) */
+	static void ApplyBase(const UGSTN_WallTraverseModeBase& Mode, const FSimulationTickParams& Params, FGSTN_WallTickState& State, FMovementRecord& MoveRecord)
+	{
+		Mode.ApplyMovementBase(Params, State, MoveRecord);
+	}
+
+	static void UpdateBase(const UGSTN_WallTraverseModeBase& Mode, const FSimulationTickParams& Params, FGSTN_WallTickState& State)
+	{
+		Mode.UpdateMovementBase(Params, State);
 	}
 
 	static float ComputeEdgeSpeedCap(const UGSTN_WallTraverseModeBase& Mode, const FGSTN_WallAheadResult& Ahead)

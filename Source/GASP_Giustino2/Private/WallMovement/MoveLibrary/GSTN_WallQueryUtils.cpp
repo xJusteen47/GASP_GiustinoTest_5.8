@@ -26,7 +26,7 @@ namespace GSTNWallQuery
 		FCollisionResponseParams ResponseParams;
 
 		/** Takes SCENE_QUERY_STAT(Name), which expands to the trace tag and the stat id */
-		FQueryContext(const FMovingComponentSet& MovingComps, const FName TraceTag, const TStatId& StatId)
+		FQueryContext(const FMovingComponentSet& MovingComps, const FName TraceTag, const TStatId& StatId, bool bIgnorePawns = false)
 			: UpdatedComponent(MovingComps.UpdatedComponent.Get())
 			, UpdatedPrimitive(MovingComps.UpdatedPrimitive.Get())
 			, QueryParams(TraceTag, StatId, false, UpdatedComponent ? UpdatedComponent->GetOwner() : nullptr)
@@ -36,6 +36,10 @@ namespace GSTNWallQuery
 			{
 				Channel = UpdatedPrimitive->GetCollisionObjectType();
 				UMovementUtils::InitCollisionParams(UpdatedPrimitive, QueryParams, ResponseParams);
+				if (bIgnorePawns)
+				{
+					ResponseParams.CollisionResponse.SetResponse(ECC_Pawn, ECR_Ignore);
+				}
 			}
 		}
 	};
@@ -212,9 +216,28 @@ bool UGSTN_WallQueryUtils::PassesSurfaceFilter(const FHitResult& Hit, const FGST
 	return false;
 }
 
+bool UGSTN_WallQueryUtils::IsPawnHit(const FHitResult& Hit)
+{
+	const UPrimitiveComponent* Component = Hit.GetComponent();
+	return Component && Component->GetCollisionObjectType() == ECC_Pawn;
+}
+
+void UGSTN_WallQueryUtils::ApplyPawnFilter(const FGSTN_WallCheckSettings& Settings, FCollisionResponseParams& InOutResponseParams)
+{
+	if (Settings.bIgnorePawns)
+	{
+		InOutResponseParams.CollisionResponse.SetResponse(ECC_Pawn, ECR_Ignore);
+	}
+}
+
 bool UGSTN_WallQueryUtils::IsHitOnValidWall(const UWorld* World, const FHitResult& Hit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings,
 	ECollisionChannel Channel, const FCollisionQueryParams& QueryParams, const FCollisionResponseParams& ResponseParams)
 {
+	// Another character is not a wall, whatever its capsule's normal says (it is where the owner's simulation put it, not where this one did)
+	if (Settings.bIgnorePawns && IsPawnHit(Hit))
+	{
+		return false;
+	}
 	if (!IsValidWallNormal(Hit.Normal, GravityUp, Settings.MinSurfaceAngle, Settings.MaxSurfaceAngle)
 		|| !IsValidWallNormal(Hit.ImpactNormal, GravityUp, Settings.MinSurfaceAngle, Settings.MaxSurfaceAngle))
 	{
@@ -302,7 +325,7 @@ bool UGSTN_WallQueryUtils::IsConcaveCornerHit(const FMovingComponentSet& MovingC
 		return false;
 	}
 
-	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallEdgeCheck));
+	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallEdgeCheck), Settings.bIgnorePawns);
 	if (!IsHitOnValidWall(Ctx.World, Hit, GravityUp, Settings, Ctx.Channel, Ctx.QueryParams, Ctx.ResponseParams))
 	{
 		return false;
@@ -322,7 +345,7 @@ bool UGSTN_WallQueryUtils::IsFloorHit(const FHitResult& Hit, const FVector& Move
 bool UGSTN_WallQueryUtils::FindWall(const FMovingComponentSet& MovingComps, const FQuat& Orientation, const FVector& WallNormal, const FVector& Velocity,
 	const FGSTN_WallCornerHit& CornerHit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult)
 {
-	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallProbe));
+	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallProbe), Settings.bIgnorePawns);
 	if (!Ctx.World || !Ctx.UpdatedPrimitive)
 	{
 		return false;
@@ -363,7 +386,7 @@ bool UGSTN_WallQueryUtils::FindWall(const FMovingComponentSet& MovingComps, cons
 bool UGSTN_WallQueryUtils::FindWallAroundConvexEdge(const FMovingComponentSet& MovingComps, const FVector& WallNormal, const FVector& MoveDelta,
 	const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult, float WallSupport)
 {
-	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallWrapProbe));
+	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallWrapProbe), Settings.bIgnorePawns);
 	if (!Ctx.World || !Ctx.UpdatedPrimitive)
 	{
 		return false;

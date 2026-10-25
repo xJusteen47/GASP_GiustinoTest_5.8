@@ -467,3 +467,26 @@ functions (`UGSTN_WallSurfaceModeUtils`: `PickMode`, `StepVote`, `ChooseModeForH
   (returns `TargetModeName`) and the candidate's hit; `UGSTN_GA_WallSlide::WallModeNames` lists `WallClimbingV2`.
 - Setup: `Tools/GAS/setup_wall_slide_modes.py --use v2climb` registers the climb mode and swaps the Falling entry transition for its surface-driven twin (`v2` / `legacy` swap it back). Tests
   `GSTN.Wall.V2Climb.*` (`GSTN_WallClimbV2Tests.cpp`) and the sync state round trip. Not covered headless: `Activate`'s in-place path and the transitions' `Evaluate` (PIE).
+
+### 6.10 W5 status: pawns, the movement lock and moving walls (2026-10-25)
+
+Code, all additive (the legacy modes' behaviour is unchanged by construction: the new switches default to off for them).
+
+- **Pawns are never walls in v2** (finding 15). `FGSTN_WallCheckSettings::bIgnorePawns` (default false) is filled from `FGSTN_WallEdgeSettings::bIgnorePawns` (default true) by the traverse base's `GetWallCheckSettings`.
+  It does three things: the contact sweep (`AdhereAndSense`), the corner / wrap queries (`FQueryContext`) and the look-ahead / step probes (`FProbeContext`, already) ignore the Pawn channel in their response params, so a character between the capsule
+  and the real wall does not hide it; and `UGSTN_WallQueryUtils::IsHitOnValidWall`, where every acceptance ends, refuses a hit on a Pawn-type component, so the move sweep's blocking hit on a neighbour is never read as an inside corner.
+  The pawn still blocks the move itself (ordinary collision) and a landing on a pawn's head is still a floor. Not covered: the entry transition (core, owner's Q5: separate commit after the tests) and `CanFitOnWall`'s overlap test, which still counts a pawn as an obstacle.
+- **`IsMovementLocked`** is a protected virtual of `UGSTN_WallTraverseModeBase`, because the base on this branch does not have the H7 one (`48c2a99` on `feature/gas-npp-5.8`, not merged here). Same signature and the same default as H7
+  (`Combat.Mover.Frozen` in the start sync state, looked up by name): when the branches meet, this declaration and the base's are one override point and the traverse one can be deleted. Locked tick: `CheckForWallExit` skipped (no wall jump, no detach),
+  no floor exit, no no-wall exit and `TimeWithoutWall` standing still, no surface-mode vote or switch; base riding, the move, adhesion and the plane filter still run (the wall may move under a frozen character). The flag is the tick-local `FGSTN_WallTickState::bMovementLocked`.
+- **Moving walls** use the legacy base path unchanged (`ApplyMovementBase` before the exits, `UpdateMovementBase` after, the ridden wall in the rollback blackboard); the v2 contact sweep names the base through `LastProbe.Component`. The exit adds
+  `GetPhysicsLinearVelocityAtPoint` of the base (`bAddBaseVelocityOnExit`).
+- Tests `GSTN.Wall.V2Net.{PawnsNeverWalls, LockedSkipsExitsKeepsAdhesion, RidesMovingWall, ExitVelocityIncludesBase, SyncStateRoundTripWithSurfaceSwitch}` (`GSTN_WallV2NetTests.cpp`); every one has a control that must show the opposite behaviour (legacy switch,
+  unlocked, riding off). The base tests drive a real rollback blackboard frame by frame. The kinematic wall is teleported (physics) between ticks, as the physics step would have left it; the exit-velocity test uses a gravity-less simulated body so the headless world reports a velocity at once.
+  A kinematic TS-A collider moved by actor location gets its velocity from the physics step (Chaos kinematic target): the PIE lane h is what proves that path.
+- **PIE harness, `WALL_MODE = 'WallSlidingV2'` (listen host + 2 clients, 60/15 ms, editor started headless by a driver, 2026-10-25).** Client 1 grabs the harness wall three times per run (ground jump, jump at the wall, wall jump), slides to the floor each time (about 1.3 s per grab);
+  host, client 1 and client 2 show the same mode timeline within the latency. During the first grab a server-only dash and buff are applied to the pawn on the wall, during the second `force_reconcile_on_mode(1, 'WallSlidingV2')` forces a reconcile in the mode (it reconciled: rollbacks 2 -> 4).
+  Result, at 0 % and at 2 % loss alike: client 1 had exactly the reconciles those three events cause (the server dash: one ASC plus one Mover mismatch on the same frame; the buff: one ASC mismatch; the forced one) and none of its own; client 2 (idle) and the host 0; `report()` CMP 6/6 both times.
+  Not run: a moving wall (the harness map has no kinematic collider) and two pawns on the wall together; the headless tests cover both. How it was driven: `UnrealEditor.exe <uproject> /Game/Levels/DefaultLevel_Harness -ExecCmds="py <driver>.py" -unattended -nullrhi -abslog=<log>` with `PlayNumberOfClients=3`
+  (listen, one process) in `Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini`, the driver being a state machine on `register_slate_post_tick_callback` that calls `setup_editor(True)`, `LevelEditorSubsystem.editor_request_begin_play()`, `np.PrintReconciles 1`, the scenarios and `QUIT_EDITOR`.
+  `-ExecutePythonScript` is no use for this: with `-unattended` the editor quits as soon as the script returns, before the first tick callback. Editor not touched afterwards, the ini restored.

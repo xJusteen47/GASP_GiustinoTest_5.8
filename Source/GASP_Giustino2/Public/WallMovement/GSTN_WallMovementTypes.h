@@ -363,6 +363,13 @@ struct GASP_GIUSTINO2_API FGSTN_WallCheckSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
 	FGSTN_WallSurfaceFilter SurfaceFilter;
 
+	/**
+	 * Other pawns are never walls: their capsules are ignored by the contact, corner and wrap queries and refused by IsHitOnValidWall. Off for the
+	 * legacy modes (unchanged behaviour); the v2 modes fill it from FGSTN_WallEdgeSettings::bIgnorePawns (wall-slide-v2.md W5, finding 15)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	bool bIgnorePawns = false;
+
 	/** Draw the probes */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
 	bool bDrawDebug = false;
@@ -593,6 +600,9 @@ struct FGSTN_WallTickState
 	/** The contact of this tick's adhesion sweep (a wall found by the sweep itself, not a wrap or a corner), for the surface-driven mode choice */
 	FHitResult Contact;
 	bool bHasContact = false;
+
+	/** Held in place from outside this tick (IsMovementLocked of the v2 modes): no exits, no timers. Tick-local, not part of the sync state */
+	bool bMovementLocked = false;
 
 	/** Ticks in a row the surface asked for another mode (FGSTN_WallMovementSyncState::SurfaceSwitchTicks) */
 	uint8 SurfaceSwitchTicks = 0;

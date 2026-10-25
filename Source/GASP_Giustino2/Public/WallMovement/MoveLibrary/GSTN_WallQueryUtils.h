@@ -36,6 +36,12 @@ public:
 	 */
 	static bool PassesSurfaceFilter(const FHitResult& Hit, const FGSTN_WallSurfaceFilter& Filter);
 
+	/** Whether the hit is on another pawn (the hit component's object type is Pawn). Pawns are never walls for the modes that set FGSTN_WallCheckSettings::bIgnorePawns */
+	static bool IsPawnHit(const FHitResult& Hit);
+
+	/** Makes the response params of a wall query ignore pawns when Settings.bIgnorePawns (the capsule's own responses are otherwise kept) */
+	static void ApplyPawnFilter(const FGSTN_WallCheckSettings& Settings, FCollisionResponseParams& InOutResponseParams);
+
 	/**
 	 * Whether a sweep hit lies on climbable geometry. On edges a sphere/capsule sweep returns a "rounded" normal blended between
 	 * the two faces: that is only trusted if both faces are walls, so the lip of a floor or roof can't tilt the capsule toward it.

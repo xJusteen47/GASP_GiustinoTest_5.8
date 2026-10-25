@@ -83,6 +83,8 @@ bool UGSTN_WallTraverseModeBase::IsInPlaceSwitchFrom(FName PrevModeName) const
 FGSTN_WallCheckSettings UGSTN_WallTraverseModeBase::GetWallCheckSettings() const
 {
 	FGSTN_WallCheckSettings Settings = Super::GetWallCheckSettings();
+	// Other pawns are never walls in v2 (contact, corner and wrap queries; the look-ahead traces read Edges directly)
+	Settings.bIgnorePawns = Edges.bIgnorePawns;
 	if (!SurfaceModes.IsActive())
 	{
 		return Settings;
@@ -126,8 +128,9 @@ FName UGSTN_WallTraverseModeBase::ChooseSurfaceMode(const FHitResult& Contact, c
 
 void UGSTN_WallTraverseModeBase::UpdateSurfaceVote(const FMoverSyncState& SyncState, FGSTN_WallTickState& InOutState) const
 {
-	// A mode that is not registered has no name to compare with; one that is leaving already decided; no contact this tick = no opinion
-	if (InOutState.IsLeaving())
+	// A mode that is not registered has no name to compare with; one that is leaving already decided; no contact this tick = no opinion.
+	// A held character (IsMovementLocked) neither votes nor switches: the count stands still, like the other timers
+	if (InOutState.IsLeaving() || InOutState.bMovementLocked)
 	{
 		return;
 	}
@@ -153,6 +156,19 @@ void UGSTN_WallTraverseModeBase::UpdateSurfaceVote(const FMoverSyncState& SyncSt
 		GSTN_WALL_LOG(1, TEXT("v2 surface asks for %s (from %s) for %d ticks: switching in place"), *Wanted.ToString(), *RegisteredModeName.ToString(), InOutState.SurfaceSwitchTicks);
 		InOutState.LeaveTo(Wanted, 0.f);
 	}
+}
+
+bool UGSTN_WallTraverseModeBase::IsMovementLocked(const FMoverTickStartData& StartState) const
+{
+	// Same lookup as the legacy base's H7 lock (feature/gas-npp-5.8), by tag name so this module does not depend on the combat plugin: a freeze
+	// layered move of the combat plugin puts Combat.Mover.Frozen in the Mover state. Read from the start sync state, as every simulation input
+	static FGameplayTag FrozenTag;
+	if (!FrozenTag.IsValid())
+	{
+		FrozenTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.Mover.Frozen"), false);
+	}
+	const UMoverComponent* MoverComp = GetMoverComponent();
+	return FrozenTag.IsValid() && MoverComp && MoverComp->HasGameplayTagInState(StartState.SyncState, FrozenTag, true);
 }
 
 FVector UGSTN_WallTraverseModeBase::ComputeEntryVelocity(const FVector& InVelocity, const FVector& WallNormal) const
@@ -359,13 +375,19 @@ void UGSTN_WallTraverseModeBase::SimulationTick_Implementation(const FSimulation
 	const FQuat StartQuat = UpdatedComponent->GetComponentQuat();
 	FGSTN_WallTickState TickState = MakeTickState(Params, StartQuat);
 	const FVector StartWallNormal = TickState.WallNormal;
+	// Held in place from outside (hitstop, a freeze): the wall may still move and the capsule is still kept on it, but nothing ends the mode
+	// and no timer advances. Decided from the start state only, so a re-simulated frame decides the same
+	TickState.bMovementLocked = IsMovementLocked(Params.StartState);
 
 	// 1. Ride the dynamic wall, then the voluntary exits (wall jump, detach)
 	if (bUseMovementBases)
 	{
 		ApplyMovementBase(Params, TickState, MoveRecord);
 	}
-	CheckForWallExit(Params, TickState);
+	if (!TickState.bMovementLocked)
+	{
+		CheckForWallExit(Params, TickState);
+	}
 	const bool bLeftOnPurpose = TickState.IsLeaving();
 
 	// 2-5. The final proposed velocity (layered and queued moves included) moves the character
@@ -507,7 +529,7 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 		// Length preserving: the cap of the edge hook is what removes speed at a corner, never the transport
 		InOutState.Velocity = UGSTN_WallMovementUtils::TransportVelocity(InOutState.Velocity, PrevWallNormal, InOutState.WallNormal);
 	}
-	else if (!bResolvedPenetration)
+	else if (!bResolvedPenetration && !InOutState.bMovementLocked)
 	{
 		InOutState.bHasWall = false;
 		InOutState.TimeWithoutWall += DeltaSeconds;
@@ -551,7 +573,7 @@ bool UGSTN_WallTraverseModeBase::HandleMoveBlocked(const FMovingComponentSet& Mo
 			InOutState.GravityUp, NormalDeadzoneAngle, CheckSettings, /*bKeepOrientation*/ true);
 	}
 	const bool bIsFloor = !bIsConcaveCorner && UGSTN_WallQueryUtils::IsFloorHit(Hit, MoveDelta, InOutState.GravityUp, MinSurfaceAngle);
-	if (bIsFloor && !FloorModeName.IsNone())
+	if (bIsFloor && !FloorModeName.IsNone() && !InOutState.bMovementLocked)
 	{
 		InOutState.LeaveTo(FloorModeName, (1.f - Hit.Time) * DeltaSeconds);
 		InOutState.Velocity = FVector::VectorPlaneProject(InOutState.Velocity, InOutState.GravityUp);
