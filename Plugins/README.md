@@ -27,6 +27,7 @@ Network Prediction, so the Core can be reused in a project without the GAS-NPP f
 | [GSTNCombatGAS](GSTNCombatGAS/README.md) | GAS | `GSTNCombatGAS` | Combat ability tags, attribute sets, kit stats, meter and weapon effects, kit/weapon/super assets, the loadout component, loadout presets (save game) and the skin component. | No (stock GAS works) |
 | [GSTNCombatNP](GSTNCombatNP/README.md) | NP adapter | `GSTNCombatNP` | The combat NP model (`UGSTN_CombatSimComponent`), sync fragments and tick extensions. | Yes |
 | [GSTNLevelObjects](GSTNLevelObjects/README.md) | Level objects | `GSTNLevelObjects` | Placeable objects that offer traversal surfaces: the adjustable trampoline (`AGSTN_Trampoline`), a GSTNSurface provider. Depends on GSTNSurface and GSTNCombat Core only. | No |
+| [GSTNParts](GSTNParts/README.md) | Core (combat extension) | `GSTNPartsCore` | Destructible body parts: native part tags, settings, tag ini (skeleton; part data and math follow). Optional, `EnabledByDefault` false. | No |
 
 ## GAS-NPP fork
 
@@ -88,6 +89,7 @@ GSTNInputNP -----------------+--- GSTNCombatNP
 | `GSTNCombatGAS` | GSTNCombat, GSTNInput, GameplayAbilities | `GSTNCombatCore`, `GSTNInputCore` |
 | `GSTNInputNP` | GSTNInput, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, EnhancedInput, Mover | `GSTNInputCore` |
 | `GSTNCombatNP` | GSTNCombat, GSTNCombatGAS, GSTNInputNP, GSTNInput, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, EnhancedInput, Mover | `GSTNCombatCore`, `GSTNCombatGAS`, `GSTNInputCore`, `GSTNInputNP` |
+| `GSTNParts` | GSTNCombat | `GSTNCombatCore` |
 | `AbilitySystemSimulation` | GameplayAbilities, NetworkPrediction, NetworkPredictionExtras, EnhancedInput, Mover, MotionWarping | none |
 | `GameplayAbilities` | EngineAssetDefinitions, GameplayTagsEditor, Niagara, DataRegistry | none (does not depend on NetworkPrediction) |
 | `NetworkPrediction` | none | none |
@@ -120,6 +122,7 @@ Native tags are declared with `UE_DEFINE_GAMEPLAY_TAG*` in the module named belo
 | `GSTNInputCore` | `Input.Button` (root), `Command` (root), `Input.Lock.Command` (root), `Input.Context.{Grounded,Airborne,OnWall}`, `Input.BufferEvent.{AbilityActivated,Landed}` (+ the `Input.BufferEvent` root), `Input.Event.CommandExecuted`, and the `*.Test.*` tags used by its tests (`Input.Button.Test.*`, `Command.Test.*`, `Input.Lock.Command.Test.*`) | `Private/GSTN_InputTags.cpp`; test tags in `Private/Tests/` |
 | `GSTNCombatCore` | `Combat.State.{Busy,InTimeline,SuperInput,CancelWindow,OverrideWindow,Falling}`; standard commands `Command.{Attack,Strong,Special,Combo}.*` and `Command.Super.Slot1..8`; their locks `Input.Lock.Command.{Attack,Strong,Special,Combo,Super}`; standard buttons `Input.Button.{Attack,Strong,Special,Crouch,Shield,Jump}` (under the root the input plugin owns); identity roots `Weapon`, `Kit`, `Super`, `Loadout`, `Skin` | `Private/GSTN_Combat*Tags.cpp` |
 | `GSTNCombatGAS` | `Combat.Ability.*`, `Combat.Source.{Command,Forced,Adopted}`, `Combat.Lock.Movement`, `Combat.Weapon.Role.*`, `Combat.Event.{TimelineStarted,TimelineFinished,WeaponSwitched,SuperUsed}`, `Combat.SetByCaller.*`, and the designer roots `Combat.Stat`, `Combat.Meter` | `Private/GSTN_CombatTags.cpp` |
+| `GSTNPartsCore` | `Combat.Part.{Broken,GrabLocked,AllBroken,Effect}`, `Combat.Entity.Destructible`, `Combat.Event.Part.{Damaged,WeakPointHit,Ricochet,Broken,AllBroken}`, `Message.Combat.PartBroken`; ini: `Part.Type.*`, `GameplayCue.Combat.Part.*` | `Private/GSTN_PartsTags.cpp` |
 
 `GSTNCombatGAS` also declares the test tags of its own automation tests. The engine plugins in `EngineOverrides` define their own
 tags (Mover: `Mover.*` state flags in `MoverTypes.cpp`); those are not project tags.

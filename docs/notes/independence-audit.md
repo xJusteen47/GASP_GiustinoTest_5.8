@@ -67,3 +67,7 @@ Rule 3 = MT 3.8 Blueprint extension, rule 4 = MT 3.9 replaceable content, rule 5
 ## New edge: GSTNLevelObjects -> GSTNSurfaceCore, GSTNCombatCore (H11b, 2026-10-25)
 
 New plugin `GSTNLevelObjects` (Build.cs: engine modules, `GSTNSurfaceCore`, `GSTNCombatCore`; uplugin: GSTNSurface, GSTNCombat). Core -> Core, never GSTNCombatNP. The launch consumer lives in GSTNCombatNP, which already depends on GSTNSurfaceCore. The project module gets a private dependency on `GSTNLevelObjects` for the harness spawn helper only.
+
+## New edge: GSTNPartsCore -> GSTNCombatCore (M4b P1, 2026-10-25)
+
+New plugin `GSTNParts` (`EnabledByDefault` false; uplugin: GSTNCombat only). `GSTNPartsCore.Build.cs`: Core, CoreUObject, GameplayTags, DeveloperSettings, `GSTNCombatCore`, private Projects. Core -> Core, no GAS, NP or Mover header (grep gate in the P1 commit). Own settings (`UGSTN_PartsSettings`, `Config/DefaultGSTNParts.ini`), own tag ini registered by the module, no `/Game/` path, no project include. GSTNCombat builds and passes its 396 tests with the plugin disabled and enabled (398 enabled with the two parts tests).

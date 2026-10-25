@@ -1,0 +1,31 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Parts",
+	"Description": "Destructible body parts for GSTN Combat: part sets, the penetration table, break effects as data and the tags of the part vocabulary. GSTNPartsCore is pure (no GAS, Network Prediction or Mover). Optional: GSTNCombat builds and passes its tests without it, and the combat seams it uses stay inert when it is disabled.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"EnabledByDefault": false,
+	"Modules": [
+		{
+			"Name": "GSTNPartsCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		}
+	]
+}
