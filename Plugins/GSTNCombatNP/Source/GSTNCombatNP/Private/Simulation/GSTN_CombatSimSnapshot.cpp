@@ -22,6 +22,10 @@ void UGSTN_CombatSimComponent::SetCombatWorldSubsystem(UGSTN_CombatWorldSubsyste
 
 FGenericTeamId UGSTN_CombatSimComponent::ResolveTeam() const
 {
+	if (TestTeam >= 0)
+	{
+		return FGenericTeamId(static_cast<uint8>(FMath::Min(TestTeam, 254)));
+	}
 	const AActor* Owner = GetOwner();
 	if (const IGenericTeamAgentInterface* Agent = Cast<IGenericTeamAgentInterface>(Owner))
 	{

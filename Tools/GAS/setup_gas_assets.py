@@ -690,7 +690,7 @@ def hits_content_specs():
         ],
         'weapon': ('WPN_Test_Hits', 'Weapon.Test.Hits', 'Test.Role.Primary', [('Command.Attack.Neutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestHitMove')]),
         'kit': ('KIT_Test_Hits', 'Kit.Test.Hits', 'WPN_Test_Hits', {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
-                [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump')]),
+                [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial')]),
     }
 
 

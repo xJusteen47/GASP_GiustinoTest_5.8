@@ -13,6 +13,14 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatAttacker, Log, All);
 
+void UGSTN_CombatSimComponent::SetTestFriendlyFire(bool bEnabled)
+{
+	if (CombatRules)
+	{
+		CombatRules->bFriendlyFire = bEnabled;
+	}
+}
+
 void UGSTN_CombatSimComponent::SetCombatRules(UGSTN_CombatRules* Rules)
 {
 	CombatRules = Rules;
@@ -144,7 +152,8 @@ void UGSTN_CombatSimComponent::DrainInboxForNow(int32 Frame)
 	FString Log;
 	for (const FGSTN_HitInboxEntry& Entry : InboxScratch)
 	{
-		Log += FString::Printf(TEXT("%d:%d:%d:%d:%d:%d;"), Frame, Entry.AttackerId, Entry.AttackerHitboxIndex, Entry.HurtboxIndex, Entry.HurtState, Entry.bRicochet ? 1 : 0);
+		Log += FString::Printf(TEXT("%d:%d:%d:%d:%d:%d:%d:%d;"), Frame, Entry.AttackerId, Entry.AttackerHitboxIndex, Entry.HurtboxIndex, Entry.HurtState,
+			Entry.bRicochet ? 1 : 0, Entry.Relationship, FMath::RoundToInt(Entry.Hit.Damage));
 	}
 	if (!Log.IsEmpty())
 	{

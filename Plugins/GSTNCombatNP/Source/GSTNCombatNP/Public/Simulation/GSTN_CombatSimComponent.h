@@ -120,6 +120,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetHitLog() const;
 
+	/**
+	 * Harness knobs (a live component must not be edited with set_editor_property): the team the snapshot and the attacker side see for this
+	 * entity (-1 = the owner's own, none for a player pawn), and the rules' friendly fire switch. Set on every machine while nothing is hitting,
+	 * not from inside the simulation: a team that differs between two machines is a different simulation. The rules object is shared by the process
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	void SetTestTeam(int32 TeamId) { TestTeam = TeamId; }
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	void SetTestFriendlyFire(bool bEnabled);
+
 	/** What the inbox of this victim received, one entry per drained hit, the last 512 frames. Under the same switch as the hit log */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetInboxLog() const;
@@ -513,6 +523,7 @@ private:
 
 	/** The team of the owner or of its controller, NoTeam without one (read when registering and at every snapshot) */
 	FGenericTeamId ResolveTeam() const;
+	int32 TestTeam = INDEX_NONE;
 
 	TWeakObjectPtr<UGSTN_CombatWorldSubsystem> WorldSubsystem;
 	int32 RegisteredEntityId = INDEX_NONE;
@@ -522,7 +533,7 @@ private:
 
 	/**
 	 * Until the victim side exists (H9) the entries of the inbox are drained and dropped at the top of every tick, so the inbox never fills; under
-	 * gstn.Combat.Debug.HitLog the drain is logged as "frame:attacker:hitbox:hurtbox:hurtState:ricochet;..." (GetInboxLog)
+	 * gstn.Combat.Debug.HitLog the drain is logged as "frame:attacker:hitbox:hurtbox:hurtState:ricochet:relationship:damage;..." (GetInboxLog)
 	 */
 	void DrainInboxForNow(int32 Frame);
 	TArray<FGSTN_HitInboxEntry> InboxScratch;
