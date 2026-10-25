@@ -142,6 +142,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNSurface",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombat",
 			"Enabled": true
 		},

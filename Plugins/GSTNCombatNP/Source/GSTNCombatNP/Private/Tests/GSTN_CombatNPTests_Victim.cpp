@@ -70,11 +70,11 @@ namespace
 		}
 
 		/** An entry from attacker 1, stamped Frame, with damage 10 and a knockback bracket of BaseKnockback + 20 x 10 (the weight is 100, so K is the bracket) */
-		static FGSTN_HitInboxEntry MakeEntry(int32 Frame, float BaseKnockback, int32 AttackerId = 1)
+		static FGSTN_HitInboxEntry MakeEntry(int32 Frame, float BaseKnockback, int32 InAttackerId = 1)
 		{
 			FGSTN_HitInboxEntry Entry;
 			Entry.Frame = Frame;
-			Entry.AttackerId = AttackerId;
+			Entry.AttackerId = InAttackerId;
 			Entry.AttackerTeam = 1;
 			Entry.Hit.Damage = 10.f;
 			Entry.Hit.BaseKnockback = BaseKnockback;
