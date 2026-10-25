@@ -177,9 +177,12 @@ startup, some let it **walk** during startup; it changes per move. In the air th
 from these small corrections. Today the timeline has `AimPolicy` and `MaxTurnDegrees` (the turn at the start; `TurnUntilFrame` only for
 the camera policy) and `FGSTN_TimelineTrack_Movement::bLockFacing`; nothing lets stick input turn or move the character inside a window.
 *Proposal* (part of H15):
-- **`FGSTN_TimelineTrack_Control`** (frame window, several per timeline) { `float MaxTurnDegrees` (total, relative to the facing at the
-  window start); `float TurnRateDegPerFrame`; `float MoveInputScale` (0 = no locomotion from the stick, 1 = full walk on the ground or
-  full air drift in the air); `bool bTurnFromMovement = false` (moving does not rotate the character) }.
+- **`FGSTN_TimelineTrack_Control`** (frame window, several per timeline, on any frames: startup, active or recovery) { `float
+  MaxTurnDegrees` (total, relative to the facing at the window start; 0 = no limit, a full rotation); `float TurnRateDegPerSecond`
+  (`ForceUnits = "deg/s"`, converted to a per-frame step at the fixed tick); `float MoveInputScale` (0 = no locomotion from the stick,
+  1 = full walk on the ground or full air drift in the air); `bool bTurnFromMovement = false` (moving does not rotate the character) }.
+  Owner, 19:57: a move may also allow a **full rotation** at a set speed, or **full movement during the active frames**; the vertical
+  swing below is the more common case.
 - The stick is read from the input history in the attacker's facing space, as the steer track. Turn and movement go through the
   timeline's movement path (one queued layered move, combat.md §11), never by setting the rotation or the velocity directly.
 - **Defaults** (*Proposal*): ground moves without a control track keep today's behaviour (no turn, no walk). Aerials get the air
@@ -189,7 +192,7 @@ the camera policy) and `FGSTN_TimelineTrack_Movement::bLockFacing`; nothing lets
 | Frames | Track | Effect |
 |---|---|---|
 | 0 | `AimPolicy = SnapToStick` | the first input decides the direction |
-| 1–6 (first part of startup) | Control: `MaxTurnDegrees` 20, `TurnRateDegPerFrame` 4 | small correction of the angle |
+| 1–6 (first part of startup) | Control: `MaxTurnDegrees` 20, `TurnRateDegPerSecond` 250 | small correction of the angle |
 | whole move | Control: `MoveInputScale` 1, no turning from movement | air drift without turning |
 | active frames | Steer: `StickLateralHeld`, latched at the last active frame | the swing goes diagonal right or left (blend of hitboxes and animation) |
 

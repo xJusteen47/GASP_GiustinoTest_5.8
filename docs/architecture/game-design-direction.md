@@ -259,6 +259,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   vertical swing in the air; the first input sets the direction, a small angle correction in the first part of startup, a diagonal
   during the swing. In the air one usually moves but does not turn, apart from these small corrections. Spec: control track in
   [combat-m4-hits.md](combat-m4-hits.md) §3.
+- (19:57) A move may also allow a full rotation at a set number of degrees per second, or full movement during the active frames;
+  the vertical swing stays the more common case.
 
 ## 7. Consequences for the specifications
 
@@ -559,3 +561,6 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > direzione, magari si puo cambiare limitatamente l'angolazione durante la prima parte dello startup, e durante lo swing si puo farlo andare
 > in diagonale a destra o sinistra. (In genere durante le mosse in aria ci si puo muovere ma non girarsi, eccetto fare queste piccole
 > correzioni, che potrebero cambiare a seconda della mossa). (19:56)
+
+> Potrebbe anche essere possibile rotazione completa, entro certi gradi per secondo, oppure movimento completo durante i frame attivi.
+> Dipende dalla mossa. Ma un esempio ben piu comune sarebbe probabilmente quello dello swing verticale. (19:57)
