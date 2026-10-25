@@ -304,16 +304,16 @@ bool FGSTN_VictimHitstopEndLaunchWithDITest::RunTest(const FString& Parameters)
 	const int32 End = Fixture.Core.HitstopEndFrame;
 	const FVector Launch = Fixture.Core.Hit.GetPendingLaunch();
 
-	TestTrue(TEXT("nothing moves during the window"), Fixture.Step(End - 1).Kind == FGSTN_ReactionMove::EKind::None && Fixture.Core.Hit.HasPendingReaction());
+	TestTrue(TEXT("nothing moves during the window, nor on the frame its freeze finishes on"), Fixture.Step(End - 1).Kind == FGSTN_ReactionMove::EKind::None && Fixture.Step(End).Kind == FGSTN_ReactionMove::EKind::None && Fixture.Core.Hit.HasPendingReaction());
 
 	FVictimFixture WithDI = Fixture;
-	const FGSTN_ReactionMove Plain = Fixture.Step(End);
+	const FGSTN_ReactionMove Plain = Fixture.Step(End + 1);
 	TestTrue(TEXT("the launch is requested when the window ends"), Plain.Kind == FGSTN_ReactionMove::EKind::Launch);
 	TestTrue(TEXT("and clears the pending reaction"), !Fixture.Core.Hit.HasPendingReaction() && Fixture.Core.ActionState == EGSTN_ActionState::Hitstun);
 	TestTrue(TEXT("with no stick it is the launch of the hit"), Plain.Velocity.Equals(Launch, 1.0));
-	TestEqual(TEXT("it lasts the hitstun that is left"), Plain.Frames, Fixture.Core.Hit.HitstunEndFrame - End);
+	TestEqual(TEXT("it lasts the hitstun that is left"), Plain.Frames, Fixture.Core.Hit.HitstunEndFrame - (End + 1));
 
-	const FGSTN_ReactionMove Turned = WithDI.Step(End, FVector2D(1.0, 0.0));
+	const FGSTN_ReactionMove Turned = WithDI.Step(End + 1, FVector2D(1.0, 0.0));
 	TestTrue(TEXT("a stick across the launch turns it"), !Turned.Velocity.Equals(Plain.Velocity, 10.0));
 	TestTrue(TEXT("without changing the speed"), FMath::IsNearlyEqual(Turned.Velocity.Size(), Plain.Velocity.Size(), 1.0));
 
@@ -326,7 +326,7 @@ bool FGSTN_VictimHitstopEndLaunchWithDITest::RunTest(const FString& Parameters)
 	Tilted.Core.Hit.SetPendingLaunch(FVector(1000.0, 800.0, 0.0));
 	const FVector Plane = FGSTN_CombatVictim::StickToPlane(FVector2D(1.0, 1.0), 0.0, Tilted.Self.Up);
 	TestTrue(TEXT("the stick lies in the plane normal to up"), FMath::IsNearlyZero(Plane.Dot(Tilted.Self.Up), 1e-6));
-	const FGSTN_ReactionMove TiltedMove = Tilted.Step(End, FVector2D(0.0, 1.0));
+	const FGSTN_ReactionMove TiltedMove = Tilted.Step(End + 1, FVector2D(0.0, 1.0));
 	TestTrue(TEXT("a launch on a tilted gravity keeps its speed"), TiltedMove.Kind == FGSTN_ReactionMove::EKind::Launch && FMath::IsNearlyEqual(TiltedMove.Velocity.Size(), FVector(1000.0, 800.0, 0.0).Size(), 5.0));
 
 	// The knockback resistance scales the speed
@@ -334,7 +334,7 @@ bool FGSTN_VictimHitstopEndLaunchWithDITest::RunTest(const FString& Parameters)
 	Resisted.Core.ActionState = EGSTN_ActionState::Hitstun;
 	Resisted.Core.Hit.SetPendingReaction(EGSTN_HitReaction::Launch);
 	Resisted.Core.Hit.SetPendingLaunch(Launch);
-	TestTrue(TEXT("resistance 0.5 halves it"), FMath::IsNearlyEqual(Resisted.Step(End, FVector2D::ZeroVector, 0.5f).Velocity.Size(), Launch.Size() * 0.5, 2.0));
+	TestTrue(TEXT("resistance 0.5 halves it"), FMath::IsNearlyEqual(Resisted.Step(End + 1, FVector2D::ZeroVector, 0.5f).Velocity.Size(), Launch.Size() * 0.5, 2.0));
 	return true;
 }
 
@@ -348,7 +348,7 @@ bool FGSTN_VictimPushBackStaysGroundedTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the lock is at least the floor of the rules"), Fixture.Result.Hits[0].HitstunFrames >= Fixture.Rules->MinStaggerLockFrames);
 
 	const int32 End = Fixture.Core.HitstopEndFrame;
-	const FGSTN_ReactionMove Move = Fixture.Step(End, FVector2D(1.0, 0.0));
+	const FGSTN_ReactionMove Move = Fixture.Step(End + 1, FVector2D(1.0, 0.0));
 	TestTrue(TEXT("a push back, no DI"), Move.Kind == FGSTN_ReactionMove::EKind::PushBack);
 	TestTrue(TEXT("horizontal on the victim's plane"), FMath::IsNearlyZero(Move.Velocity.Dot(Fixture.Self.Up), 1e-3) && Move.Velocity.X > 100.0);
 	TestTrue(TEXT("the speed falls to zero by the end of the hitstun"), FMath::IsNearlyEqual(Move.DecayPerFrame * Move.Frames, 1.f, 1e-4f));
@@ -368,7 +368,7 @@ bool FGSTN_VictimStaggerInPlaceZeroVelocityTest::RunTest(const FString& Paramete
 	TestTrue(TEXT("nothing is pending to launch"), Fixture.Core.Hit.GetPendingLaunch().IsNearlyZero());
 	TestTrue(TEXT("the lock is the floor of the rules"), Fixture.Core.Hit.HitstunEndFrame - Fixture.Core.HitstopEndFrame == Fixture.Rules->MinStaggerLockFrames);
 
-	const FGSTN_ReactionMove Move = Fixture.Step(Fixture.Core.HitstopEndFrame);
+	const FGSTN_ReactionMove Move = Fixture.Step(Fixture.Core.HitstopEndFrame + 1);
 	TestTrue(TEXT("no move at the end of the window"), Move.Kind == FGSTN_ReactionMove::EKind::None && !Fixture.Core.Hit.HasPendingReaction());
 	return true;
 }

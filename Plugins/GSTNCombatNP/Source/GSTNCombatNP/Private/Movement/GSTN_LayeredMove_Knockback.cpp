@@ -19,6 +19,8 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 
 	if (ElapsedFrames == 0)
 	{
+		// The preferred mode is honoured on the first tick of a move only, so the launch is made here: the combat tick starts the move on a
+		// frame no hitstop freeze finishes on, because Mover applies a finishing move's velocity over whatever the tick proposes
 		OutProposedMove.MixMode = EMoveMixMode::OverrideVelocity;
 		OutProposedMove.LinearVelocity = Velocity;
 		OutProposedMove.PreferredMode = ForceMovementMode;

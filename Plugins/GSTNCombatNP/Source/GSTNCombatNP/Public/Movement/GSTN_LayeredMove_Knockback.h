@@ -9,8 +9,8 @@
 #include "GSTN_LayeredMove_Knockback.generated.h"
 
 /**
- * The launch a hit gives its victim when the hitstop ends: the launch velocity as the first frame's velocity, forcing Falling, and,
- * while the move lives, a drag on the horizontal speed and a scaled gravity. With the defaults (no decay, gravity scale 1) it is the
+ * The launch a hit gives its victim after the hitstop: the launch velocity as the first frame's velocity, forcing Falling (Mover honours
+ * the preferred mode on the first tick of a move only), and, while the move lives, a drag on the horizontal speed and a scaled gravity. With the defaults (no decay, gravity scale 1) it is the
  * launch move and Falling does the rest.
  *
  * Stateless in the sense Network Prediction needs: every frame is derived from the move's fields, the step time and the start velocity

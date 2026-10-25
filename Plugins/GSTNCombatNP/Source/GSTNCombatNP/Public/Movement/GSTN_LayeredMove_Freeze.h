@@ -15,7 +15,8 @@
  *
  * The velocity the pawn had when the freeze was queued is kept (IncomingVelocity) and set back when the freeze finishes, so an
  * attacker, or a victim that is not staggered, carries on as if time had stopped. A staggered victim's knockback or push replaces it
- * (it is a later move, resolved after the freeze), and a stagger-in-place victim sets bZeroVelocityOnFinish: it leaves the freeze with
+ * (it is a later move, started one frame after the window: Mover applies the finish velocity of a freeze over the proposed move of the
+ * tick it finishes on, which is the first frame outside the window), and a stagger-in-place victim sets bZeroVelocityOnFinish: it leaves the freeze with
  * zero velocity. The restore uses the finish velocity settings of the layered move, which Mover already serializes, so no extra state
  * is needed to survive a rollback.
  */

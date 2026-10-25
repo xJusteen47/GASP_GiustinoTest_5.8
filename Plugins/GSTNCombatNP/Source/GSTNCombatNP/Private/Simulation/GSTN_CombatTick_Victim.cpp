@@ -381,7 +381,10 @@ FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInpu
 	}
 	const int32 Frame = In.Frame;
 
-	if (Core.Hit.HasPendingReaction() && Frame >= Core.HitstopEndFrame)
+	// One frame after the window: the freeze of the hitstop finishes on the first frame outside it, and Mover hands the finish velocity of a
+	// finishing layered move back over whatever the tick proposes, so a move started on that frame would be overwritten (found in PIE). The
+	// move also keeps its preferred mode only on its own first tick
+	if (Core.Hit.HasPendingReaction() && Frame > Core.HitstopEndFrame)
 	{
 		const FVector Launch = Core.Hit.GetPendingLaunch();
 		const float Pass = 1.f - FMath::Clamp(In.KnockbackResistance, 0.f, 1.f);

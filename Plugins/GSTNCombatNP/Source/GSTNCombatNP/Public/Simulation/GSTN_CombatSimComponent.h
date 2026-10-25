@@ -113,6 +113,10 @@ public:
 	void SetCombatRules(UGSTN_CombatRules* Rules);
 	const UGSTN_CombatRules* GetCombatRules() const { return CombatRules; }
 
+	/** The rules asset the component runs, for the harness to tune between scenarios (never while hits are in flight: the machines would run different numbers) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
+	UGSTN_CombatRules* GetCombatRulesForTest() const { return CombatRules; }
+
 	/**
 	 * The command and the move of a hit's attacker as tags (the command tag, the timeline ability's asset tags), for the outbox events of
 	 * the victim side. Timeline and Binding are the indices the hit inbox entry carries; an invalid index adds nothing
