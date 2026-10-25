@@ -327,6 +327,36 @@ No string tags in code; all through `UE_DECLARE_GAMEPLAY_TAG_EXTERN`.
 - New end rule: a Blueprint `UGSTN_DrillEndRule` (pure `BlueprintNativeEvent`, evaluated by the bore at end frames only; the
   per-frame loop stays C++).
 
+## 13b. Owner answers of 2026-10-25 19:22 (they win over the text above where they differ)
+
+- **Steering in the dive**: limited left/right movement while plunging (`SteerFraction` is lateral only, on the plane normal to
+  the dive direction; default 15 %).
+- **Exit (SD.10 answered)**: releasing crouch **before the maximum bore time** gives the **small hop out** (`DetachPopSpeed`);
+  `MinBoreFramesForLaunch` is dropped. The maximum bore time **may depend on what is drilled** (`MaxBoreFramesOverride` on the
+  target response, or from the part/prop data). **Pressing or holding jump close to the exit** (a window of `JumpBoostWindowFrames`
+  before the exit frame, read from the input history so it is buffered and rollback-safe) turns the exit into the **higher jump**
+  (`DrillLaunch`). Reaching the maximum time without a jump input: *Proposal* the small hop (same as release).
+- **Not invincible by default**: no `HurtboxModifier` on the drill timelines unless a kit adds one. While latched the driller can
+  be hit; being staggered detaches (§7.4 order unchanged).
+- **Players are drillable (SD.8 answered)**: the latch is in practice a **hit-grab**. Consequence: on players and fighters the latch
+  should be a **link** of the M6 system (`GSTNLink`, `Body` channel, new link type `Combat.Link.Type.Drill` with roles
+  `Driller`/`Drilled`, declared by this plugin), so the grab rules, immunity, break rules and the watchdog of M6 apply and the
+  drilled player is server-authoritative. Until M6 exists, v1 latches only on non-player targets with the fragment of §7.1; the
+  fragment layout already uses `FGSTN_EntityRef` so the move to a link keeps the data.
+- **What is drillable = balance (SD.4 / §6 revised)**: no hand-set `bDrillable` flag as the main rule. The drill tip carries a
+  **penetration** like any hit; a part is drillable when penetration ≥ its hardness (combat-parts §3.4, e.g. heavy armour refuses a
+  weak drill: ricochet/bounce as §7.6). `FGSTN_DrillTargetResponse` keeps only the overrides (max time, seat scale, `bLatchMoves`)
+  and an explicit `bNeverDrillable` for special cases.
+- **Demolition force** (Helldivers 2; new general mechanic, passed to the planning thread): props and meshes may require a minimum
+  demolition force to be destroyed; it usually does not apply to enemies. The drill will carry a `DemolitionForce` value on its hit
+  data once that mechanic exists; the drill does not define it.
+- **Keyboard spin**: likely a shortcut such as A-S-D without W (a partial rotation). The `Spin` input condition takes the rotation in
+  degrees, so a 180° slot (left-down-right) covers it; the general shortcut design goes to the planning thread (SD.1 partly
+  answered: stick rotation + keyboard shortcut, button still open).
+- **Input-dependent hitboxes** (e.g. a vertical swing that turns diagonal while the stick is held): a general timeline feature,
+  passed to the planning thread; nothing in the drill needs it.
+- **Sequencing**: these general items go to planning first; the detailed design of the individual abilities resumes after that.
+
 ## 14. Domande per Giustino (italiano)
 
 Ognuna ha una mia proposta; se non rispondi, il piano usa la proposta (colonna "se non rispondi" nel piano).
