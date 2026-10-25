@@ -1,6 +1,7 @@
 // Combat simulation (GAS-NPP fork): the attacker side of the combat tick (combat-m4-hits 6, M4 H8).
 
 #include "Simulation/GSTN_CombatAttacker.h"
+#include "Simulation/GSTN_CombatVictim.h"
 
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitRunner.h"
@@ -8,6 +9,23 @@
 #include "Rules/GSTN_CombatRules.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "World/GSTN_StepSnapshot.h"
+
+FGameplayTag GSTNHitRelationship::FromIndex(uint8 Index)
+{
+	switch (Index)
+	{
+	case 0:
+		return GSTNCombatHitTags::Relationship_Self.GetTag();
+	case 1:
+		return GSTNCombatHitTags::Relationship_Ally.GetTag();
+	case 2:
+		return GSTNCombatHitTags::Relationship_Enemy.GetTag();
+	case 3:
+		return GSTNCombatHitTags::Relationship_Neutral.GetTag();
+	default:
+		return FGameplayTag::EmptyTag;
+	}
+}
 
 uint8 GSTNHitRelationship::ToIndex(const FGameplayTag& Relationship)
 {
@@ -303,15 +321,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		// The snapshot does not say whether the victim stands on something; only a Sakurai angle reads it, and the authority recomputes it
 		Incoming.bVictimGrounded = false;
 
-		FGSTN_HitVictimView& View = Context.Victim;
-		View.EntityId = Victim.EntityId;
-		View.TeamId = Victim.Team.GetId();
-		View.Location = Victim.Transform.GetLocation();
-		View.Velocity = Victim.Velocity;
-		View.FacingYaw = Victim.Facing.Rotation().Yaw;
-		View.bInHitstop = Victim.bInHitstop;
-		View.ReactionState = Victim.Reaction;
-		View.HealthFraction = In.Rules ? FMath::Clamp(1.f - In.Rules->GetDamageProgress(View), 0.f, 1.f) : 1.f;
+		Context.Victim = FGSTN_CombatVictim::MakeVictimView(Victim, In.Rules);
 
 		Context.HurtboxIndex = static_cast<uint8>(Candidate.HurtboxIndex);
 		Context.HurtState = Candidate.HurtState;
@@ -362,6 +372,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		FGSTN_HitInboxEntry& Entry = Hit.Entry;
 		Entry.Frame = In.Frame;
 		Entry.AttackerId = In.AttackerId;
+		Entry.AttackerTeam = In.AttackerTeam.GetId();
 		Entry.Hit = Candidate.Hit;
 		Entry.HitLocation = Candidate.HitLocation;
 		Entry.HitboxVelocity = Candidate.HitboxVelocity;

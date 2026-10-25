@@ -19,6 +19,9 @@ namespace GSTNHitRelationship
 {
 	/** Index of a Combat.Relationship.* tag in the inbox entry: 0 Self, 1 Ally, 2 Enemy, 3 Neutral, 255 for a tag a custom resolver made up */
 	GSTNCOMBATNP_API uint8 ToIndex(const FGameplayTag& Relationship);
+
+	/** The tag of an index ToIndex wrote; the empty tag for 255 (a tag a custom resolver made up: the pipeline resolves it again) */
+	GSTNCOMBATNP_API FGameplayTag FromIndex(uint8 Index);
 }
 
 /** World shape of an active hitbox at a frame, for the debug draw and the harness trace */

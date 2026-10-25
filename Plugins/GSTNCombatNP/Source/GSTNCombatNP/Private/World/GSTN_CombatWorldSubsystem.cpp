@@ -248,3 +248,19 @@ const FGSTN_StepSnapshot& UGSTN_CombatWorldSubsystem::EnsureSnapshot(int32 Frame
 	++SnapshotBuildCount;
 	return Snapshot;
 }
+
+AActor* UGSTN_CombatWorldSubsystem::FindOwnerActor(int32 EntityId) const
+{
+	for (const FRegistryEntry& Entry : Registry)
+	{
+		if (Entry.EntityId == EntityId)
+		{
+			if (const UActorComponent* Component = Cast<UActorComponent>(Entry.Owner.Get()))
+			{
+				return Component->GetOwner();
+			}
+			return Cast<AActor>(Entry.Owner.Get());
+		}
+	}
+	return nullptr;
+}

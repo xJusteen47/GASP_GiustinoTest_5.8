@@ -36,6 +36,9 @@ struct FGSTN_HitInboxEntry
 	/** Which hurtbox the overlap picked (the rule of combat-m4-hits 3b item 2); the victim never re-derives it */
 	uint8 HurtboxIndex = 0;
 
+	/** The attacker's team id (255 = none), for the relationship rules of a pipeline that resolves it itself */
+	uint8 AttackerTeam = 255;
+
 	/** Which hitbox of the attacker's timeline made the hit: the second key of the drain order */
 	uint8 AttackerHitboxIndex = 0;
 

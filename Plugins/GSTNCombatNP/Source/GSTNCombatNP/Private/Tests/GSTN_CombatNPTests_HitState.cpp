@@ -136,6 +136,18 @@ bool FGSTN_HitStateRoundTripTest::RunTest(const FString& Parameters)
 	const int64 BusyBits = HitStateBits(Busy);
 	const int64 AttackerBits = HitStateBits(Attacker);
 	const int64 VictimBits = HitStateBits(Victim);
+	// A trade frame: the victim's damage, cue and freeze plus the attacker's freeze and meter gain, and a cancel of the move that was running
+	FGSTN_CombatSyncState HitFrame = Victim;
+	const int32 RequestFrame = HitFrame.Core.Input.History.GetLatestFrame();
+	HitFrame.Core.Requests = FGSTN_CombatRequests();
+	HitFrame.Core.Requests.Add(EGSTN_RequestType::ApplyDamage, RequestFrame, 1);
+	HitFrame.Core.Requests.Add(EGSTN_RequestType::Cue, RequestFrame, 1);
+	HitFrame.Core.Requests.Add(EGSTN_RequestType::VictimFreeze, RequestFrame, 6);
+	HitFrame.Core.Requests.Add(EGSTN_RequestType::Freeze, RequestFrame, 6);
+	HitFrame.Core.Requests.Add(EGSTN_RequestType::MeterGain, RequestFrame, 3);
+	HitFrame.Core.Requests.Add(EGSTN_RequestType::CancelTimeline, RequestFrame, 3);
+	const int64 HitFrameBits = HitStateBits(HitFrame);
+	AddInfo(FString::Printf(TEXT("hit frame with six requests: %lld bits (%lld bytes)"), HitFrameBits, (HitFrameBits + 7) / 8));
 	AddInfo(FString::Printf(TEXT("sync state size: idle %lld bits (%lld bytes), running a move with no hit %lld bits (%lld bytes), attacker with one hit %lld bits (%lld bytes), victim in hitstop with a tumbling launch %lld bits (%lld bytes)"),
 		IdleBits, (IdleBits + 7) / 8, BusyBits, (BusyBits + 7) / 8, AttackerBits, (AttackerBits + 7) / 8, VictimBits, (VictimBits + 7) / 8));
 	return true;

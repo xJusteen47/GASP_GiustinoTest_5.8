@@ -61,6 +61,9 @@ public:
 	/** The snapshot as it is, without building: for presentation and tests */
 	const FGSTN_StepSnapshot& GetSnapshot() const { return Snapshot; }
 
+	/** The actor that owns the registered entity (a combat component's owner), or null for a provider's entity or one that is gone. For effect contexts, never for simulation state */
+	AActor* FindOwnerActor(int32 EntityId) const;
+
 	/** Snapshots built so far (diagnostic): equals the number of frames simulated plus the rebuilds a rollback forced */
 	int32 GetSnapshotBuildCount() const { return SnapshotBuildCount; }
 

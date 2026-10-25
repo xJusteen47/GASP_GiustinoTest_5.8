@@ -67,6 +67,9 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 	/** The compact state the attacker needs to compute the hitstop the authority computes (percent, weight, flags, threshold) */
 	FGSTN_VictimReactionState Reaction;
 
+	/** 1 = full health, from the health attribute set (1 without one). Only the Health damage mode reads it */
+	float HealthFraction = 1.f;
+
 	/** Data of optional plugins, each a struct derived from FGSTN_SnapshotExtension. Empty by default */
 	TArray<FInstancedStruct> Extensions;
 };

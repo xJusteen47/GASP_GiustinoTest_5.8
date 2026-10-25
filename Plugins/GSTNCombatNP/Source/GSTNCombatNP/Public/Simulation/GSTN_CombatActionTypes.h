@@ -59,6 +59,9 @@ enum class EGSTN_RequestType : uint8
 	MeterGain = 13,
 	ImpactSurface = 14,
 
+	/** The victim's own hitstop freeze (Arg = frames), separate from the attacker's Freeze so a trade frame holds both */
+	VictimFreeze = 15,
+
 	Count UMETA(Hidden)
 };
 
@@ -80,11 +83,12 @@ struct FGSTN_CombatRequest
  * (the ability system executes it in that frame's pre-tick): the combat tick calls PruneBefore at the top of every frame, so a
  * state at the end of a frame holds that frame's requests and nothing older, and the wire never carries a dead one.
  *
- * Wire format: 3 bits count (0 to Capacity), then per request 4 bits type, the frame as a packed integer, 16 bits argument.
+ * Wire format: 4 bits count (0 to Capacity), then per request 5 bits type, the frame as a packed integer, 16 bits argument.
  */
 struct FGSTN_CombatRequests
 {
-	static constexpr int32 Capacity = 4;
+	/** A hit frame of a victim that also attacked holds: damage, effects, cue, victim freeze, attacker freeze, meter gain, plus a cancel and a start */
+	static constexpr int32 Capacity = 8;
 
 	FGSTN_CombatRequest Slots[Capacity];
 
@@ -110,7 +114,7 @@ struct FGSTN_CombatRequests
 		return Count;
 	}
 
-	/** False when the array is full: the request is dropped (a full array is a bug in the caller, nothing makes four requests in one frame yet) */
+	/** False when the array is full: the request is dropped (a full array is a bug in the caller, a frame never makes more than Capacity) */
 	bool Add(EGSTN_RequestType Type, int32 Frame, int16 Arg = 0)
 	{
 		if (Type == EGSTN_RequestType::None)
@@ -226,7 +230,7 @@ struct FGSTN_CombatRequests
 		}
 
 		uint8 Count = static_cast<uint8>(LocalCount);
-		Ar.SerializeBits(&Count, 3);
+		Ar.SerializeBits(&Count, 4);
 		if (Count > Capacity)
 		{
 			Ar.SetError();
@@ -237,7 +241,7 @@ struct FGSTN_CombatRequests
 		{
 			FGSTN_CombatRequest& Request = Local[Index];
 			uint8 Type = static_cast<uint8>(Request.Type);
-			Ar.SerializeBits(&Type, 4);
+			Ar.SerializeBits(&Type, 5);
 			uint32 FramePlusOne = static_cast<uint32>(FMath::Max(Request.Frame + 1, 0));
 			Ar.SerializeIntPacked(FramePlusOne);
 			uint16 Arg = static_cast<uint16>(Request.Arg);

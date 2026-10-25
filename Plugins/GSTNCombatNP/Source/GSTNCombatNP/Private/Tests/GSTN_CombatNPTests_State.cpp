@@ -127,7 +127,7 @@ bool FGSTN_StateRequestsStaleDroppedTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("fills"), Full.Add(EGSTN_RequestType::Cue, 200, static_cast<int16>(Index)));
 	}
-	TestFalse(TEXT("the fifth is refused"), Full.Add(EGSTN_RequestType::Cue, 200, 9));
+	TestFalse(TEXT("the one past Capacity is refused"), Full.Add(EGSTN_RequestType::Cue, 200, 9));
 	TestEqual(TEXT("and nothing was overwritten"), static_cast<int32>(Full.Slots[0].Arg), 0);
 	return true;
 }

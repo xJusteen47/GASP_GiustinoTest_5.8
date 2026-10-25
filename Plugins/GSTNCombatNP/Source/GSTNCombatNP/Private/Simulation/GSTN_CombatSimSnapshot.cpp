@@ -145,6 +145,14 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 	{
 		DamagePercent = AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetDamagePercentAttribute());
 	}
-	Out.Reaction = FGSTN_VictimReactionState::Make(DamagePercent, 1.0, Flags, Threshold);
+	Out.HealthFraction = 1.f;
+	if (AbilitySystem && AbilitySystem->HasAttributeSetForAttribute(UGSTN_HealthAttributeSet::GetHealthAttribute()))
+	{
+		const float MaxHealth = AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetMaxHealthAttribute());
+		Out.HealthFraction = MaxHealth > 0.f ? FMath::Clamp(AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetHealthAttribute()) / MaxHealth, 0.f, 1.f) : 1.f;
+	}
+	// The weight the health weight curve gives the victim now: the attacker's machine reads it from the snapshot like the rest of the reaction state
+	const double WeightScale = FGSTN_CombatVictim::ComputeWeightScale(CombatRules, Set, DamagePercent, Out.HealthFraction);
+	Out.Reaction = FGSTN_VictimReactionState::Make(DamagePercent, WeightScale, Flags, Threshold);
 	return true;
 }

@@ -18,4 +18,15 @@ namespace GSTNCombatNPTags
 
 	/** SetByCaller key of the freeze effect: the freeze duration in seconds (UGSTN_FreezeMoveCreator) */
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_FreezeSeconds);
+
+	/**
+	 * SetByCaller keys of the knockback and push back effects (UGSTN_KnockbackMoveCreator, UGSTN_PushBackMoveCreator): the velocity in world
+	 * space (cm/s), the decay per frame (a fraction of the horizontal speed), the gravity scale, and the lifetime in seconds
+	 */
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveVelocityX);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveVelocityY);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveVelocityZ);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveDecay);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveGravityScale);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveSeconds);
 }

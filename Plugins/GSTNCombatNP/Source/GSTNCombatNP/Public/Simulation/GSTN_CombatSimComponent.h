@@ -15,6 +15,7 @@
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatAttacker.h"
+#include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_HitInbox.h"
@@ -532,12 +533,47 @@ private:
 	TObjectPtr<UGSTN_HurtboxSetDefinition> ActiveHurtboxSet;
 
 	/**
-	 * Until the victim side exists (H9) the entries of the inbox are drained and dropped at the top of every tick, so the inbox never fills; under
-	 * gstn.Combat.Debug.HitLog the drain is logged as "frame:attacker:hitbox:hurtbox:hurtState:ricochet:relationship:damage;..." (GetInboxLog)
+	 * The victim side of the combat tick for the frame being simulated (GSTN_CombatSimVictim.cpp): drains the inbox, resolves it, writes the
+	 * sync state and the requests the ability system's pre-tick executes. Under gstn.Combat.Debug.HitLog the drain is logged as
+	 * "frame:attacker:hitbox:hurtbox:hurtState:ricochet:relationship:damage;..." (GetInboxLog)
 	 */
-	void DrainInboxForNow(int32 Frame);
+	void RunVictimStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncState& Sync, const FGSTN_StepSnapshot* Snapshot, const FGSTN_InputCmd& Cmd);
 	TArray<FGSTN_HitInboxEntry> InboxScratch;
 	TMap<int32, FString> InboxLogByFrame;
+
+	/**
+	 * What the victim step of the latest simulated frame decided that the ability system executes in the pre-tick of the same frame (damage,
+	 * effects, cue, event, freeze, the reaction move). Local data rewritten by every tick, never read across frames: a re-simulated frame
+	 * writes it again before its pre-tick runs. VictimFrame says which frame it belongs to
+	 */
+	FGSTN_VictimResult VictimResult;
+	FGSTN_ReactionMove ReactionMove;
+	int32 VictimFrame = INDEX_NONE;
+
+	/** The victim step took a hit this frame: the buffer event Input.BufferEvent.Interrupted of the frame (AppendFrameEvents) */
+	bool bFrameInterrupted = false;
+
+	void ExecuteVictimHits(int32 Frame);
+	void ExecuteVictimEffects(int32 Frame);
+	void ExecuteVictimCues(int32 Frame);
+	void ExecuteReactionMove(float StepMs);
+	void ExecuteMeterGain(int32 Amount);
+
+	/** Spec of an effect class from the attacker (when it is found) onto this entity: the damage execution captures the attacker's multipliers */
+	bool ApplyHitEffect(const TSoftClassPtr<UObject>& Effect, const FGSTN_VictimHit& Hit, float DamageMagnitude);
+	FGameplayEffectContextHandle MakeHitContext(const FGSTN_VictimHit& Hit) const;
+	AActor* FindAttackerActor(const FGSTN_VictimHit& Hit) const;
+
+	/** Instant effects of the reaction moves; replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> KnockbackEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> PushBackEffect;
+
+	/** The freeze of a victim that stays in place: leaves the freeze at rest */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> FreezeAtRestEffect;
 
 	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */
 	void RunAttackerStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncCore& Core, const FGSTN_StepSnapshot* Snapshot, const FGSTN_HitGroupMask& GroupMask);

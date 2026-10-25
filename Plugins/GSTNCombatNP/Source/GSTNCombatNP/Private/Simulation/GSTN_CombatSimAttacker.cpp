@@ -140,28 +140,6 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	}
 }
 
-void UGSTN_CombatSimComponent::DrainInboxForNow(int32 Frame)
-{
-	InboxScratch.Reset();
-	DrainHitInbox(Frame, InboxScratch);
-	if (!GSTNCombatDebug::IsHitLogOn())
-	{
-		return;
-	}
-	InboxLogByFrame.Remove(Frame);
-	FString Log;
-	for (const FGSTN_HitInboxEntry& Entry : InboxScratch)
-	{
-		Log += FString::Printf(TEXT("%d:%d:%d:%d:%d:%d:%d:%d;"), Frame, Entry.AttackerId, Entry.AttackerHitboxIndex, Entry.HurtboxIndex, Entry.HurtState,
-			Entry.bRicochet ? 1 : 0, Entry.Relationship, FMath::RoundToInt(Entry.Hit.Damage));
-	}
-	if (!Log.IsEmpty())
-	{
-		InboxLogByFrame.Add(Frame, Log);
-		InboxLogByFrame.Remove(Frame - 512);
-	}
-}
-
 FString UGSTN_CombatSimComponent::GetInboxLog() const
 {
 	TArray<int32> Frames;

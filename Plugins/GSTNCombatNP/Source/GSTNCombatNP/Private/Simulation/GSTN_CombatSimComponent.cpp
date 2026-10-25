@@ -14,6 +14,9 @@
 #include "AttributeSet.h"
 #include "GSTN_CombatNPTags.h"
 #include "Movement/GSTN_LayeredMove_Freeze.h"
+#include "Movement/GSTN_LayeredMove_Knockback.h"
+#include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DrawDebugHelpers.h"
@@ -76,6 +79,9 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	bWantsInitializeComponent = true;
 	SetIsReplicatedByDefault(true);
 	FreezeEffect = UGSTN_GE_Freeze::StaticClass();
+	FreezeAtRestEffect = UGSTN_GE_FreezeZeroVelocity::StaticClass();
+	KnockbackEffect = UGSTN_GE_Knockback::StaticClass();
+	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -482,6 +488,11 @@ bool UGSTN_CombatSimComponent::IsTimelineRunning(const UClass* AbilityClass, int
 bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 {
 	// Outside the combat tick (or with no timeline running) nothing gates: only a running timeline closes commands
+	// A victim in hitstun or tumble acts again when its state says Actionable; the first frame of that state is the first frame of the tail
+	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
+	{
+		return false;
+	}
 	const UGSTN_CombatTableSet& Current = Tables();
 	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !Current.Table.Commands.IsValidIndex(CommandIndex))
 	{
@@ -577,6 +588,10 @@ uint8 UGSTN_CombatSimComponent::GetContextFingerprint() const
 
 void UGSTN_CombatSimComponent::AppendFrameEvents(uint8 PreviousFingerprint, uint8 CurrentFingerprint, FGSTN_BufferFrameEvents& Events) const
 {
+	if (bFrameInterrupted)
+	{
+		Events.EventTags.AddTag(GSTNInputTags::BufferEvent_Interrupted);
+	}
 	if (ContextProvider)
 	{
 		ContextProvider->AppendFrameEvents(PreviousFingerprint, CurrentFingerprint, Events);
@@ -620,9 +635,6 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
 	const FGSTN_StepSnapshot* StepSnapshot = World ? &World->EnsureSnapshot(Frame) : nullptr;
 
-	// Hits written for this frame by the attackers of the previous one. Nobody resolves them before H9
-	DrainInboxForNow(Frame);
-
 	// The aim of this frame's command, kept for the ability system's tick that follows (GetAimRotation)
 	FrameAim.bHasAim = Input.Cmd->bHasAim;
 	FrameAim.Yaw = Input.Cmd->AimYaw;
@@ -630,6 +642,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	// Requests older than this frame are dead (the ability system executed them in their own frame's pre-tick)
 	OutSync.Core.Requests.PruneBefore(Frame);
+
+	// The victim side (combat-m4-hits 7): the hits the attackers wrote on the previous frame are resolved before anything else of this frame, so
+	// the hitstop window they open already stands this frame (its first frame is the frame after the hit, like the attacker's), and a cancelled
+	// move or a hitstun state is what the rest of the tick sees
+	RunVictimStep(TimeStep, OutSync, StepSnapshot, *Input.Cmd);
 
 	// The loadout table swap (loadout-table-swap-design 2c). The active table is the set of the demanded revision; the frame that first has
 	// it is the boundary on every machine, and every later step of the frame (clock, adoption, jump, input, step 8) reads that one table.
@@ -1045,9 +1062,40 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	// A freeze of this frame (a hit's hitstop, or the debug window): queued on Mover before it ticks, for as many frames as the window
 	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
 	{
-		if (Slot.Type == EGSTN_RequestType::Freeze && Slot.Frame == Frame)
+		if (Slot.Frame != Frame)
 		{
+			continue;
+		}
+		switch (Slot.Type)
+		{
+		case EGSTN_RequestType::Freeze:
 			ExecuteFreeze(FreezeEffect, Slot.Arg, TimeStep.StepMs);
+			break;
+		case EGSTN_RequestType::VictimFreeze:
+			// A victim that stays in place leaves the freeze at rest; any other keeps the velocity it came with until its move replaces it
+			ExecuteFreeze(VictimResult.bFreezeZeroVelocity && VictimFrame == Frame ? FreezeAtRestEffect : FreezeEffect, Slot.Arg, TimeStep.StepMs);
+			break;
+		case EGSTN_RequestType::MeterGain:
+			ExecuteMeterGain(Slot.Arg);
+			break;
+		case EGSTN_RequestType::ApplyDamage:
+			ExecuteVictimHits(Frame);
+			break;
+		case EGSTN_RequestType::ApplyEffect:
+			ExecuteVictimEffects(Frame);
+			break;
+		case EGSTN_RequestType::Cue:
+			ExecuteVictimCues(Frame);
+			break;
+		case EGSTN_RequestType::Knockback:
+		case EGSTN_RequestType::PushBack:
+			if (VictimFrame == Frame)
+			{
+				ExecuteReactionMove(TimeStep.StepMs);
+			}
+			break;
+		default:
+			break;
 		}
 	}
 

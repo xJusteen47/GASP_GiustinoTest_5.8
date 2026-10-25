@@ -1,0 +1,85 @@
+// The launch of a staggered victim (combat-m4-hits 7, M4 H9).
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "EffectsComponents/ApplyMoveGameplayEffectComponent.h"
+#include "GameplayEffect.h"
+#include "LayeredMove.h"
+#include "GSTN_LayeredMove_Knockback.generated.h"
+
+/**
+ * The launch a hit gives its victim when the hitstop ends: the launch velocity as the first frame's velocity, forcing Falling, and,
+ * while the move lives, a drag on the horizontal speed and a scaled gravity. With the defaults (no decay, gravity scale 1) it is the
+ * launch move and Falling does the rest.
+ *
+ * Stateless in the sense Network Prediction needs: every frame is derived from the move's fields, the step time and the start velocity
+ * of the frame, so a rolled back Mover re-derives it. ElapsedFrames is written for display and the trace, never read back.
+ *
+ * Horizontal and vertical are relative to the up direction of the Mover component (minus its gravity), never world Z.
+ */
+USTRUCT()
+struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
+{
+	GENERATED_BODY()
+
+	FGSTN_LayeredMove_Knockback();
+	virtual ~FGSTN_LayeredMove_Knockback() = default;
+
+	/** World space launch velocity, cm/s (after DI and the victim's knockback resistance) */
+	UPROPERTY()
+	FVector Velocity = FVector::ZeroVector;
+
+	/** Fraction of the horizontal speed lost per frame after the first, 0 = none */
+	UPROPERTY()
+	float DecayPerFrame = 0.f;
+
+	/** 1 = the gravity of the movement mode; the move adds the difference as an extra acceleration */
+	UPROPERTY()
+	float GravityScale = 1.f;
+
+	/** Frames since the move started, as of the last GenerateMove */
+	UPROPERTY()
+	int32 ElapsedFrames = 0;
+
+	/** The mode the launch forces on the first frame */
+	UPROPERTY()
+	FName ForceMovementMode = TEXT("Falling");
+
+	virtual bool SupportsAsync() const override { return false; }
+	virtual bool GenerateMove(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, UMoverBlackboard* SimBlackboard, FProposedMove& OutProposedMove) override;
+	virtual FLayeredMoveBase* Clone() const override;
+	virtual void NetSerialize(FArchive& Ar) override;
+	virtual UScriptStruct* GetScriptStruct() const override;
+	virtual FString ToSimpleString() const override;
+};
+
+template<>
+struct TStructOpsTypeTraits<FGSTN_LayeredMove_Knockback> : public TStructOpsTypeTraitsBase2<FGSTN_LayeredMove_Knockback>
+{
+	enum { WithCopy = true };
+};
+
+/**
+ * Queues a knockback on the target's Mover once. The numbers travel as SetByCaller magnitudes of the spec (Combat.SetByCaller.Move*),
+ * the lifetime as Combat.SetByCaller.MoveSeconds. Without a velocity the move does nothing.
+ */
+UCLASS(DisplayName = "GSTN Knockback Move Creator")
+class GSTNCOMBATNP_API UGSTN_KnockbackMoveCreator : public UBaseMoveEffectCreator
+{
+	GENERATED_BODY()
+
+public:
+	virtual FEffectMoveContainer MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+		const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const override;
+};
+
+/** Instant: launches the target with the SetByCaller velocity (the request the combat tick makes when a launched victim's hitstop ends) */
+UCLASS()
+class GSTNCOMBATNP_API UGSTN_GE_Knockback : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_Knockback();
+};
