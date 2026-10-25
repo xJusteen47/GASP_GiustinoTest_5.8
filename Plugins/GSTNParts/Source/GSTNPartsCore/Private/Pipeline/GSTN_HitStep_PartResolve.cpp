@@ -139,8 +139,9 @@ EGSTN_StepResult UGSTN_HitStep_PartResolve::Resolve_Implementation(const FGSTN_H
 
 	if (Result.bRicochet)
 	{
-		// Nothing lands: no damage, no freeze on either side, no flinch. The pipeline ends here; the attacker's recoil is the attacker outcome seam's
-		Out.bHit = false;
+		// Nothing lands: no damage, no knockback, no freeze on either side, no flinch. The pipeline ends here, but the hit still HAPPENED: the
+		// attacker's loop drops a hit the pipeline refused (bHit false) before it asks the attacker outcome seam, and the ricochet is exactly what
+		// that seam must see to start the recoil. The entry above is what it reads
 		return EGSTN_StepResult::Stop;
 	}
 
@@ -155,6 +156,8 @@ EGSTN_StepResult UGSTN_HitStep_PartResolve::Resolve_Implementation(const FGSTN_H
 	{
 		Weight *= PartReaction->JuggleFactor;
 	}
+	// No airborne term here: the combat rules' AirborneJuggleScale already scales the knockback of a victim that is tumbling (ComputeKnockback), and
+	// the per-part juggle factor above is the "where" of the same dial, so the two multiply with no second global in the parts plugin (A9)
 	Out.WeightScale = Weight;
 
 	const FGSTN_PartReaction& Hitting = PartReaction ? *PartReaction : Body;

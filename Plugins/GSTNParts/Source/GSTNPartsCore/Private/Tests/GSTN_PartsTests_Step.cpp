@@ -319,7 +319,7 @@ bool FGSTN_PartsStepRicochetTest::RunTest(const FString& Parameters)
 	FGSTN_HitResolutionContext Context = Fixture.MakeContext(ArmBox, 10.f, 500.f, 0);
 	const FGSTN_HitRunResult Run = FGSTN_HitPipelineRunner::Run(*Fixture.Rules, Context);
 	TestTrue(TEXT("the pipeline stopped at the part step"), Run.bStopped && Run.StoppedAtStep == 0);
-	TestFalse(TEXT("the hit did not land"), Context.Outcome.bHit);
+	TestTrue(TEXT("the hit happened (the attacker's seam must still see it) but nothing landed"), Context.Outcome.bHit && !Context.Outcome.bHasKnockback);
 	TestEqual(TEXT("no damage"), Context.Outcome.Damage, 0.f);
 	TestTrue(TEXT("no request, so no freeze on either side"), Context.Outcome.Requests.IsEmpty());
 	TestFalse(TEXT("no knockback, no stagger"), Context.Outcome.bHasKnockback);

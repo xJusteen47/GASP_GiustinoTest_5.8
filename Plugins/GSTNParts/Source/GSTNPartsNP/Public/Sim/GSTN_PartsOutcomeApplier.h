@@ -19,8 +19,8 @@
  *    reproduces exactly.
  *
  * Break effects: the derived ones (tags, hit groups, stats) are projections of the mask made by the tick extension. The one-shot
- * launch and stagger of a break have no seam on an applier today (it has neither the victim's reaction state nor an ability system):
- * see m4b-doc-deltas.md "P7 part 1".
+ * launch and stagger of a break are a reaction request on the apply context (FGSTN_ReactionRequest): this applier collects them for the
+ * parts the hit newly broke and the victim step merges them into the hit's own reaction, as a hit of that strength would (P8).
  *
  * No world, no component, no net mode: its only inputs are the extension, the view and the victim's fragment array.
  */
