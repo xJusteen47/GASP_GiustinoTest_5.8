@@ -6329,31 +6329,183 @@ def scenario_ricochet(client=1):
     run.run(steps)
 
 
+def _victim_action_is(run, key, label, want, t_max=None):
+    """Check: the combat action state (EGSTN_ActionState value) of the victim on the authority and on its owner's copy equals `want`."""
+    def f():
+        def side(sd):
+            wi = 0 if sd == 'srv' else run.client
+            got = victim_info(wi, key)[1]
+            return got == want, f'action state {got} (want {want})'
+        return _both(run, side)
+    return run.at(label, f)
+
+
+def _tag_on_both(run, tag, t0, t1, want=True):
+    def f():
+        def side(sd):
+            seen = run.saw_tag(tag, t0, t1, sd)
+            return seen == want, f'{tag} seen {seen} (want {want})'
+        return _both(run, side)
+    return f
+
+
 def scenario_kit_escape_in_hitstun(client=1):
-    """M4 H12 / S 6: a kit whose dodge ability has its blocked tags dropped as data dodges with the hitstun hook on. The kit comes through a loadout
-    (KIT_Test_HitsEscape), not through the harness grant of dodge_blocked_in_hitstun part C. No control with the base kit: SetLooseGameplayTagCount in
-    the state tag projection zeroes the whole count of Combat.State.Hitstun, the hook's effect included, every frame, so the hook cannot hold the tag
-    long enough to block anything, and a real hitstun is refused by the combat gate before the tags are asked. The blocked tags of the base dodges are
-    checked as data by GSTNCombat.NP.Dodge.BlockedTagsAreData."""
+    """M4 H12 / H13b, S 6 and S 12 acceptance 1: a kit whose dodge carries Combat.Ability.IgnoreHitstunOnActivation dodges in a REAL hitstun (a real hit
+    of the attacker, not the harness hook: ProjectStateTags wipes the hook's tag every frame), on the authority and on the owner alike. The control
+    comes first in the same run: the same hit and the same press with the base kit (KIT_Test_Hits) is refused by the combat gate, nothing moves and no
+    timeline starts. `client` is the attacker; the dodger is the other client."""
     dodger = 2 if client == 1 else 1
     run = _Run('kit_escape_in_hitstun', dodger, judge_reconciles=False)
-    dkey, st = run.key, {}
-    dodge = button_mask('Dodge')
-    TB = 3.0
+    key, akey, st = run.key, key_of_player(client), {}
+    dodge, attack = button_mask('Dodge'), button_mask('Attack')
+    TH1, TA = 2.0, 2.9           # the control: base kit, hit, dodge in the hitstun
+    TL = 5.4                     # the hitstun (150 frames) is over; swap the dodger to the escape kit
+    TH2, TB = 6.4, 7.3           # the escape kit: hit, dodge in the hitstun
+
+    def prepare():
+        hit_rules_setup()
+        set_tuning(min_hitstun_frames=150)
+        st['akit'] = _apply_loadout(akey, HIT_KIT)
+        st['base'] = _apply_loadout(key, HIT_KIT)
+        _hit_logging(True)
+        return 'rules, long hitstun, attacker kit, base kit on the dodger', (st['akit'], st['base'])
+
+    def mark(name):
+        def f():
+            st[name] = _latest_frame(0, akey)
+            return 'mark', st[name]
+        return f
+
+    def hit_landed(name, t):
+        def f():
+            hits = [r for r in _hit_log(0, akey) if r[0] >= st[name]]
+            seen = {sd: run.saw_tag('Combat.State.Hitstun', t - 0.3, t + 0.1, sd) for sd in ('srv', 'cli')}
+            return len(hits) >= 1 and all(seen.values()), f'hits {hits}, Combat.State.Hitstun on the dodger {seen}'
+        return f
+
+    def swap():
+        st['esc'] = _apply_loadout(key, 'KIT_Test_HitsEscape')
+        set_damage(key, 0)
+        return 'escape kit on the dodger', st['esc']
+
+    def remark():
+        run.log_mark = mark_log()
+        return 'judge window starts after the swap', True
 
     def cleanup():
         combat_clear(dodger)
-        _srv(dkey).server_set_hitstun(False)
+        set_damage(key, 0)
+        hit_rules_setup()
+        _hit_logging(False)
         return 'cleanup'
 
     steps = [
-        (0.3, lambda: ('escape kit', st.__setitem__('esc', _apply_loadout(dkey, 'KIT_Test_HitsEscape')))),
-        (TB - 1.0, lambda: ('hitstun hook on', _srv(dkey).server_set_hitstun(True))),
-        (TB, lambda: ('dodge in hitstun with the escape kit', combat_tap(dodger, dodge))),
-        (TB + 3.0, _landing_pair(run, st, 'escape dodge in hitstun', TB - 0.05, TB + 3.0, floor=200.0, tol=2.0)),
+        (0.3, prepare),
+        (0.5, lambda: ('dodger in front of the attacker', _place_near(client, key, (205.0, 0.0)))),
+        (TH1 - 0.05, mark('F1')),
+        (TH1, lambda: ('hit', combat_tap(client, attack))),
+        (TA - 0.05, run.at('control: the hit landed, the dodger is in a real hitstun', hit_landed('F1', TA))),
+        (TA - 0.04, _victim_action_is(run, key, 'control: the combat state is Hitstun (2) on both', 2)),
+        (TA, lambda: ('control: dodge in hitstun, base kit', combat_tap(dodger, dodge))),
+        (TA + 1.0, _no_move(run, 'control: refused by the combat gate, nothing moved', TA - 0.05, TA + 1.0)),
+        (TA + 1.0, _in_timeline_seen(run, 'control: no timeline started', TA, TA + 1.0, want=False)),
+        (TL - 0.3, _victim_action_is(run, key, 'the hitstun is over before the swap', 0)),
+        (TL, swap),
+        (TL + 0.5, lambda: ('dodger in front of the attacker again', _place_near(client, key, (205.0, 0.0)))),
+        (TL + 0.6, remark),
+        (TH2 - 0.05, mark('F2')),
+        (TH2, lambda: ('hit', combat_tap(client, attack))),
+        (TB - 0.05, run.at('escape: the hit landed, the dodger is in a real hitstun', hit_landed('F2', TB))),
+        (TB - 0.04, _victim_action_is(run, key, 'escape: the combat state is Hitstun (2) on both', 2)),
+        (TB, lambda: ('escape: dodge in hitstun, escape kit', combat_tap(dodger, dodge))),
+        (TB + 3.0, _landing_pair(run, st, 'escape dodge in a real hitstun', TB - 0.05, TB + 3.0, floor=200.0, tol=2.0)),
+        (TB + 3.0, _in_timeline_seen(run, 'escape: the dodge timeline started on both', TB, TB + 1.0, want=True)),
         (TB + 3.1, cleanup),
-        (TB + 3.2, run.at('the escape kit was accepted', lambda: (st.get('esc') == 'OK', f'ServerApplyTestLoadout -> {st.get("esc")}'))),
+        (TB + 3.2, run.at('both kits were accepted', lambda: (st.get('akit') == 'OK' and st.get('base') == 'OK' and st.get('esc') == 'OK',
+                                                                f'attacker {st.get("akit")}, base {st.get("base")}, escape {st.get("esc")}'))),
         (TB + 4.1, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_burst_ends_reaction(client=1):
+    """M4 H13b: bEndReactionOnActivation. KIT_Test_HitsBurst on the dodger: Special starts a plain ability that is let into a hit reaction by
+    Combat.Ability.IgnoreHitstunOnActivation and leaves the reaction alone (the control: it starts and the hitstun goes on), the dodge button starts
+    the one that also ends the reaction. The burst must end the hitstun in its own frame on the authority and on the owner (the hitstun tag is
+    gone in the first sample that owns Test.State.Burst), leave the combatant Actionable, and cost no more rollbacks than the control second."""
+    dodger = 2 if client == 1 else 1
+    run = _Run('burst_ends_reaction', dodger, judge_reconciles=False)
+    key, akey, st = run.key, key_of_player(client), {}
+    special, dodge, attack = button_mask('Special'), button_mask('Dodge'), button_mask('Attack')
+    TH, TP, TB = 2.0, 3.0, 3.9
+
+    def prepare():
+        hit_rules_setup()
+        set_tuning(min_hitstun_frames=200)
+        st['akit'] = _apply_loadout(akey, HIT_KIT)
+        st['burst'] = _apply_loadout(key, 'KIT_Test_HitsBurst')
+        _hit_logging(True)
+        return 'rules, long hitstun, attacker kit, burst kit', (st['akit'], st['burst'])
+
+    def landed():
+        hits = [r for r in _hit_log(0, akey) if r[0] >= st['F']]
+        seen = {sd: run.saw_tag('Combat.State.Hitstun', TP - 0.4, TP - 0.05, sd) for sd in ('srv', 'cli')}
+        return len(hits) >= 1 and all(seen.values()), f'hits {hits}, Combat.State.Hitstun on the dodger {seen}'
+
+    def rb_mark(name):
+        def f():
+            st[name] = rollbacks(dodger)
+            return 'rollbacks', st[name]
+        return f
+
+    def same_frame():
+        def side(sd):
+            w = run._win(sd, TB - 0.1, TB + 0.8, sim=True)
+            first = next((i for i, s in enumerate(w) if 'Test.State.Burst' in s['tags']), None)
+            if first is None:
+                return False, 'the burst ability never owned Test.State.Burst'
+            at = w[first]['tags']
+            before = w[first - 1]['tags'] if first > 0 else set()
+            ended = 'Combat.State.Hitstun' not in at and 'Combat.Lock.Reaction' not in at
+            was = 'Combat.State.Hitstun' in before
+            return ended and was, f'in the first burst sample: hitstun {"Combat.State.Hitstun" in at}, reaction lock {"Combat.Lock.Reaction" in at}; the sample before had hitstun {was}'
+        return _both(run, side)
+
+    def rollbacks_ok():
+        control = st['rb_p1'] - st['rb_p0']
+        burst = rollbacks(dodger) - st['rb_b0']
+        return burst <= max(control, 0) + 1, f'rollbacks of the dodger: control second {control}, burst second {burst} (want at most the control + 1; the link drops packets)'
+
+    def cleanup():
+        combat_clear(dodger)
+        set_damage(key, 0)
+        hit_rules_setup()
+        _hit_logging(False)
+        return 'cleanup'
+
+    steps = [
+        (0.3, prepare),
+        (0.5, lambda: ('dodger in front of the attacker', _place_near(client, key, (205.0, 0.0)))),
+        (TH - 0.05, lambda: ('mark', st.__setitem__('F', _latest_frame(0, akey)))),
+        (TH, lambda: ('hit', combat_tap(client, attack))),
+        (TP - 0.05, run.at('the hit landed, the dodger is in a real hitstun', landed)),
+        (TP - 0.05, rb_mark('rb_p0')),
+        (TP, lambda: ('control: Special, the ability that stays out of the reaction', combat_tap(dodger, special))),
+        (TP + 0.6, run.at('control: it started in the hitstun (Test.State.Peek on both)', _tag_on_both(run, 'Test.State.Peek', TP, TP + 0.6))),
+        (TP + 0.6, run.at('control: and the hitstun goes on', _tag_on_both(run, 'Combat.State.Hitstun', TP + 0.3, TP + 0.6))),
+        (TP + 0.6, _victim_action_is(run, key, 'control: the combat state is still Hitstun (2)', 2)),
+        (TP + 0.65, rb_mark('rb_p1')),
+        (TB - 0.05, rb_mark('rb_b0')),
+        (TB - 0.04, run.at('the burst finds the dodger still in hitstun', _tag_on_both(run, 'Combat.State.Hitstun', TB - 0.3, TB - 0.05))),
+        (TB, lambda: ('burst: the dodge button', combat_tap(dodger, dodge))),
+        (TB + 0.9, run.at('burst: the ability started in the reaction (Test.State.Burst on both)', _tag_on_both(run, 'Test.State.Burst', TB, TB + 0.9))),
+        (TB + 0.9, run.at('burst: the reaction ended in the frame of the activation, on both', same_frame)),
+        (TB + 0.9, run.at('burst: and no hitstun tag in the rest of the second', _tag_on_both(run, 'Combat.State.Hitstun', TB + 0.3, TB + 0.9, want=False))),
+        (TB + 0.9, _victim_action_is(run, key, 'burst: the combat state is Actionable (0) on both', 0)),
+        (TB + 0.95, run.at('burst: no extra rollbacks', rollbacks_ok)),
+        (TB + 1.0, cleanup),
+        (TB + 1.1, run.at('both kits were accepted', lambda: (st.get('akit') == 'OK' and st.get('burst') == 'OK', f'attacker {st.get("akit")}, burst {st.get("burst")}'))),
+        (TB + 2.0, run.finish()),
     ]
     run.run(steps)
 
@@ -6367,7 +6519,9 @@ SUITE_DEFAULT = ['weapon_switch','combat_context', 'combat_main_inputs', 'combat
                  'hit_basic', 'stagger_threshold', 'reaction_tiers', 'di', 'ko_zone', 'dodge_blocked_in_hitstun', 'hit_trade', 'friendly_fire', 'hit_host', 'hit_lagcomp',
                  'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'impact_wall', 'impact_wall_mode', 'trampoline', 'hitstop_montage',
                  # M4 H12: the dodge window against real hits, the ricochet, the kit that dodges in hitstun (the last one swaps the dodger's loadout)
-                 'dodge_feet', 'air_dodge_feet', 'ricochet', 'kit_escape_in_hitstun']
+                 'dodge_feet', 'air_dodge_feet', 'ricochet', 'kit_escape_in_hitstun',
+                 # M4 H13b: the burst flag (swaps the dodger's loadout)
+                 'burst_ends_reaction']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 
