@@ -18,6 +18,8 @@ using UnrealBuildTool;
 // Inline mode (E13) adds AssetTools and ContentBrowser (the save dialog and the unique name of Extract to timeline asset) and
 // GSTNCombatNP (above). The Blueprint calls (FBlueprintEditorUtils, FKismetEditorUtilities) are in UnrealEd.
 //
+// The validation panel (E11) adds WorkspaceMenuStructure (the Window > GSTN Combat group its tab sits in).
+//
 // UMG, RenderCore and RHI are for the offscreen snapshot tests (GSTN.Visual.*, Tests/GSTN_VisualSnapshot.h): FWidgetRenderer and the read-back.
 //
 // Slate arrived with the timeline panel (E4), the toolkit (UnrealEd), the asset definition (AssetDefinition) and the details panel
@@ -65,6 +67,7 @@ public class GSTNCombatEditor : ModuleRules
 			"RHI",
 			"SlateCore",
 			"UnrealEd",
+			"WorkspaceMenuStructure",
 			"GameplayAbilities",
 			"GSTNCombatGAS",
 			"GSTNCombatNP",

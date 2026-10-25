@@ -91,4 +91,8 @@ namespace GSTNTimelineColors
 	{
 		return FLinearColor(0.02f, 0.13f, 0.42f, 1.f);
 	}
+
+	/** The marker of a validation error / warning on a lane (E11): saturated, because it sits on dark bars of any track colour */
+	inline FLinearColor FindingError() { return FLinearColor(0.95f, 0.18f, 0.18f, 1.f); }
+	inline FLinearColor FindingWarning() { return FLinearColor(0.95f, 0.78f, 0.15f, 1.f); }
 }

@@ -73,6 +73,27 @@ namespace
 	/** Which rule a message of Core's timeline validation belongs to. The texts are Core's; GSTNCombat.Editor.Validate.CoreMessagesClassified pins every one of them */
 	FName ClassifyCoreMessage(const FString& Text)
 	{
+		// The hitbox messages (M4, E11). The baked ones are replaced by the rules of GSTN_HitRules.cpp (see IsSupersededByHitRules)
+		if (Text.Contains(TEXT("has no baked frames yet")) || Text.Contains(TEXT("a BakedSocket hitbox names no socket")))
+		{
+			return GSTNValidationCodes::BakedSocketMissing();
+		}
+		if (Text.Contains(TEXT("frames, the timeline has")))
+		{
+			return GSTNValidationCodes::BakedLength();
+		}
+		if (Text.Contains(TEXT(": the shape has no volume")) || Text.Contains(TEXT("the keys are not sorted")))
+		{
+			return GSTNValidationCodes::HitboxKeys();
+		}
+		if (Text.Contains(TEXT("is data only in M4")) || Text.Contains(TEXT("A hitstop override above")))
+		{
+			return GSTNValidationCodes::HitData();
+		}
+		if (Text.Contains(TEXT("an Armor window with no ArmorThreshold")))
+		{
+			return GSTNValidationCodes::HurtState();
+		}
 		if (Text.Contains(TEXT("ricochet response is enabled")) || Text.StartsWith(TEXT("The recoil movement")))
 		{
 			return GSTNValidationCodes::Ricochet();
@@ -99,6 +120,16 @@ namespace
 			return GSTNValidationCodes::FrameRange();
 		}
 		return GSTNValidationCodes::CoreOther();
+	}
+
+	/**
+	 * Core words as a warning what the spec makes an error with a clearer sentence: a socket with no baked frames, frames of the wrong length and
+	 * an Armor window with no threshold. The rules of GSTN_HitRules.cpp report these, so Core's version is left out instead of listed twice.
+	 */
+	bool IsSupersededByHitRules(FName Code, const FString& Text)
+	{
+		return (Code == GSTNValidationCodes::BakedLength()) || (Code == GSTNValidationCodes::HurtState())
+			|| (Code == GSTNValidationCodes::BakedSocketMissing() && Text.Contains(TEXT("has no baked frames yet")));
 	}
 
 	/** "Track 3 ..." -> 3; INDEX_NONE for a message that is not about a track */
@@ -199,6 +230,12 @@ void FGSTN_CombatValidators::ValidateTimeline(const FGSTN_CombatTimelineData& Da
 	CheckTagsTrack(Data, Context, Report);
 	CheckAimTurn(Data, Context, Report);
 	CheckUnknownTracks(Data, Context, Report);
+	CheckHitboxKeys(Data, Context, Report);
+	CheckHitboxOverlap(Data, Context, Report);
+	CheckHitData(Data, Context, Report);
+	CheckVariants(Data, Context, Report);
+	CheckHurtState(Data, Context, Report);
+	CheckBakedSockets(Data, Context, Report);
 	CheckTrackEditors(Data, Context, Report);
 }
 
@@ -263,6 +300,11 @@ void FGSTN_CombatValidators::CheckCoreRules(const FGSTN_CombatTimelineData& Data
 	FGSTN_TimelineValidation::Validate(Data, Context.Core, Messages);
 	for (const FGSTN_TimelineMessage& Message : Messages)
 	{
+		const FName Code = ClassifyCoreMessage(Message.Text);
+		if (IsSupersededByHitRules(Code, Message.Text))
+		{
+			continue;
+		}
 		FGSTN_FindingLocation Where;
 		Where.TrackIndex = ParseTrackIndex(Message.Text);
 		if (const FGSTN_TimelineTrack* Track = GetTrack(Data, Where.TrackIndex))
@@ -273,7 +315,7 @@ void FGSTN_CombatValidators::CheckCoreRules(const FGSTN_CombatTimelineData& Data
 		{
 			Where.TrackIndex = INDEX_NONE;
 		}
-		AddFinding(Report, Context, Message.bError ? EGSTN_Severity::Error : EGSTN_Severity::Warning, ClassifyCoreMessage(Message.Text), FText::FromString(Message.Text), Where);
+		AddFinding(Report, Context, Message.bError ? EGSTN_Severity::Error : EGSTN_Severity::Warning, Code, FText::FromString(Message.Text), Where);
 	}
 }
 
@@ -376,7 +418,7 @@ void FGSTN_CombatValidators::CheckOverlapSameKind(const FGSTN_CombatTimelineData
 			}
 
 			default:
-				// Hitboxes may overlap (multi-hit); the same-group part of the rule arrives with the hitbox rules of E11
+				// Hitboxes may overlap (multi-hit); the same-group, same-shape part of the rule is CheckHitboxOverlap
 				break;
 			}
 		}

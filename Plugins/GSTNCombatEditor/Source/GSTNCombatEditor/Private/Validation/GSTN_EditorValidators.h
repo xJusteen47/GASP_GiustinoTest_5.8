@@ -32,11 +32,29 @@ public:
 	 * Public and static so the Validate button and the tests can reuse the mapping.
 	 */
 	static EDataValidationResult AddReportToContext(const FGSTN_ValidationReport& Report, const FAssetData& AssetData, FDataValidationContext& Context);
+
+	/**
+	 * Runs the rules of whichever validator takes the asset (timeline, ability Blueprint, hurtbox set, kit, weapon, anything holding a loadout) into
+	 * a report, with no Data Validation context: what Validate all and the panel call, so they show what Data Validation would. The validators
+	 * below run the same code. False, with nothing added, when no combat validator applies to the asset.
+	 */
+	static bool BuildReportForAsset(UObject* Asset, FGSTN_ValidationReport& OutReport);
 };
 
 /** A UGSTN_CombatTimeline asset: the timeline rules at the project's tick rate, with the montage loaded */
 UCLASS()
 class UGSTN_TimelineValidator : public UGSTN_CombatValidatorBase
+{
+	GENERATED_BODY()
+
+protected:
+	virtual bool CanValidateAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) const override;
+	virtual EDataValidationResult ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) override;
+};
+
+/** A hurtbox set: its own checks classified into the Hurtbox.* codes, and the tags that sit outside Combat.Hurtbox */
+UCLASS()
+class UGSTN_HurtboxSetValidator : public UGSTN_CombatValidatorBase
 {
 	GENERATED_BODY()
 

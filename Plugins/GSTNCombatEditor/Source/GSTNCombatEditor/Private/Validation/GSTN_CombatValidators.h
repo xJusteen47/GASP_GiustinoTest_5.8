@@ -12,6 +12,7 @@
 
 class UGSTN_CombatTimeline;
 class UGSTN_GA_BaseCombat;
+class UGSTN_HurtboxSetDefinition;
 class UGSTN_InputSettings;
 class UGSTN_LoadoutRules;
 class UGSTN_PrimaryKitDefinition;
@@ -31,6 +32,22 @@ namespace GSTNValidationCodes
 	inline FName TagsTrack() { return TEXT("Timeline.TagsTrack"); }
 	inline FName AimTurn() { return TEXT("Timeline.AimTurn"); }
 	inline FName UnknownTrack() { return TEXT("Timeline.UnknownTrack"); }
+
+	// The rules of the hit data (M4, E11)
+	inline FName BakedStale() { return TEXT("Timeline.BakedStale"); }
+	inline FName BakedSocketMissing() { return TEXT("Timeline.BakedSocketMissing"); }
+	inline FName BakedLength() { return TEXT("Timeline.BakedLength"); }
+	inline FName HitboxKeys() { return TEXT("Timeline.HitboxKeys"); }
+	inline FName HitData() { return TEXT("Timeline.HitData"); }
+	inline FName HurtState() { return TEXT("Timeline.HurtState"); }
+	inline FName Variants() { return TEXT("Timeline.Variants"); }
+
+	// A hurtbox set asset
+	inline FName HurtboxEmpty() { return TEXT("Hurtbox.Empty"); }
+	inline FName HurtboxDuplicateName() { return TEXT("Hurtbox.DuplicateName"); }
+	inline FName HurtboxExtent() { return TEXT("Hurtbox.Extent"); }
+	inline FName HurtboxTag() { return TEXT("Hurtbox.Tag"); }
+	inline FName HurtboxData() { return TEXT("Hurtbox.Data"); }
 
 	// Findings of the checks of Core that the spec's table has no row for
 	inline FName PartSelector() { return TEXT("Timeline.PartSelector"); }
@@ -72,6 +89,12 @@ struct FGSTN_TimelineRuleContext
 	 * The scan loads kits, so only a caller that has time for it fills this.
 	 */
 	const TArray<FGameplayTag>* KnownCommands = nullptr;
+
+	/**
+	 * The names of the hurtboxes of the set the ability's kit uses, for HurtState (a modifier that names a hurtbox the set does not have).
+	 * Null = no set known, the rule does not check names. Like KnownCommands it needs a scan of the kits, so only a caller that has the set fills it.
+	 */
+	const TSet<FName>* KnownHurtboxNames = nullptr;
 
 	/** The asset the findings belong to */
 	UObject* Asset = nullptr;
@@ -120,6 +143,31 @@ struct FGSTN_CombatValidators
 	/** A track struct with no track editor (it is shown as a generic row) */
 	static void CheckUnknownTracks(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
 
+	/**
+	 * Hitbox keys (HitboxKeys): a key outside the track's window, keys out of order, a shape with no volume (the last two are Core's wording,
+	 * classified), and two hitboxes of one HitGroup that overlap in time and could tie (same Priority, different hit data, different place).
+	 * A hitbox with no key is not reported: M4 defines it as a shape that stays where its space puts it.
+	 */
+	static void CheckHitboxKeys(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
+
+	/** The hitbox half of OverlapSameKind: two hitboxes of one HitGroup that overlap in time and have the same shape (the second adds nothing) */
+	static void CheckHitboxOverlap(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
+
+	/** Negative damage, knockback, multipliers or stagger; a fixed knockback next to growth; an unregistered hit type or cue; of the base hit and of each variant that overrides fields */
+	static void CheckHitData(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
+
+	/** A relationship variant under another root than Combat.Relationship, a scale of 0 or less that does not ignore, a negative multiplier */
+	static void CheckVariants(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
+
+	/** Armor with no positive threshold; a modifier naming a hurtbox that the known set lacks */
+	static void CheckHurtState(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
+
+	/**
+	 * Baked sockets: a hitbox whose socket has no frames (BakedSocketMissing), frames that are not TotalFrames long (BakedLength), and frames of a socket
+	 * no hitbox uses (BakedStale, info). The hash half of BakedStale (the inputs of the bake changed) arrives with the baker.
+	 */
+	static void CheckBakedSockets(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
+
 	/** The Validate of the registered track editor of each track */
 	static void CheckTrackEditors(const FGSTN_CombatTimelineData& Data, const FGSTN_TimelineRuleContext& Context, FGSTN_ValidationReport& Report);
 
@@ -138,6 +186,14 @@ struct FGSTN_CombatValidators
 
 	/** Does the inline timeline hold anything: a length, a track or a montage? A default timeline is the empty state of a Blueprint that uses TimelineAsset */
 	static bool HasInlineContent(const FGSTN_CombatTimelineData& Data);
+
+	// ---- Hurtbox set
+
+	/**
+	 * The set's own checks (FGSTN_CombatRulesValidation::ValidateHurtboxSet) classified into the Hurtbox.* codes, then what they lack: a tag that is not
+	 * under Combat.Hurtbox. The spec's "bone absent from the preview mesh" needs a mesh on the set, which arrives with the hurtbox set editor.
+	 */
+	static void CheckHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, UObject* Asset, FGSTN_ValidationReport& Report);
 
 	// ---- Kit, weapon, loadout
 

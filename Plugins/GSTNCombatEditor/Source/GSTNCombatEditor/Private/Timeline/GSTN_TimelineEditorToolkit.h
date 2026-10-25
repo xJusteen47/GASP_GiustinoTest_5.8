@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/Ticker.h"
 #include "Timeline/GSTN_FindingsStore.h"
 #include "Timeline/GSTN_TimelineEditContext.h"
 #include "Toolkits/AssetEditorToolkit.h"
@@ -54,6 +55,9 @@ public:
 
 	const TSharedPtr<FGSTN_TimelineEditorModel>& GetModel() const { return Model; }
 
+	/** The open editor of a target (the timeline asset, or the Blueprint in inline mode), null when none is open. The validation panel goes to a finding through it */
+	static TSharedPtr<FGSTN_TimelineEditorToolkit> FindOpenFor(const UObject* Target);
+
 	/** The findings of the last Validate, listed by the Frame Data tab */
 	const TSharedRef<FGSTN_FindingsStore>& GetFindings() const { return Findings; }
 	const FGSTN_TimelineEditContext& GetContext() const { return Context; }
@@ -64,6 +68,18 @@ public:
 	* and F7 call it. Returns the report so a test can read it; nothing is changed in the data.
 	 */
 	FGSTN_ValidationReport ValidateNow();
+
+	/**
+	 * Runs the same rules as ValidateNow, silently: the Frame Data tab and the lane markers are updated and the Message Log is left alone. The toolkit
+	 * calls it 250 ms after the last edit (and once when it opens), so the tab shows the findings of the timeline as it is without a button press.
+	 */
+	FGSTN_ValidationReport RefreshFindings();
+
+	/** Delay between the last edit and the silent re-validation */
+	static constexpr float FindingsDebounceSeconds = 0.25f;
+
+	/** Is a silent re-validation waiting for its 250 ms? For a test */
+	bool IsFindingsRefreshPending() const { return FindingsTickerHandle.IsValid(); }
 
 	/** The standalone default layout, apart so a test can read its shape without opening a window */
 	static TSharedRef<FTabManager::FLayout> MakeDefaultLayout();
@@ -93,8 +109,10 @@ private:
 	TSharedRef<SDockTab> SpawnDetailsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnFrameDataTab(const FSpawnTabArgs& Args);
 
-	/** The data changed: the findings of the last Validate describe the timeline as it was */
+	/** The data changed: the findings describe the timeline as it was, and a refresh is scheduled for after the edits settle */
 	void HandleDataChanged();
+
+	void CancelFindingsRefresh();
 
 	/** A finding of the Frame Data tab was double-clicked: select its track, put the playhead on its frame */
 	void GoToFinding(const FGSTN_ValidationFinding& Finding);
@@ -112,7 +130,10 @@ private:
 	/** The preview scene and its subject. Declared after the model it listens to, so it is destroyed first */
 	TSharedPtr<FGSTN_PreviewController> Preview;
 
-	/** What the last Validate found, for the Frame Data tab. Marked stale when the data changes afterwards */
+	/** The pending debounced refresh, invalid when there is none */
+	FTSTicker::FDelegateHandle FindingsTickerHandle;
+
+	/** What the last Validate found, for the Frame Data tab. Marked stale when the data changes, and refreshed 250 ms later */
 	TSharedRef<FGSTN_FindingsStore> Findings = MakeShared<FGSTN_FindingsStore>();
 
 	/** Declared after the model it points at, so it is destroyed first */

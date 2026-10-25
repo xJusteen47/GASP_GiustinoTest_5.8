@@ -11,6 +11,7 @@ void SGSTN_TimelineLane::Construct(const FArguments& InArgs)
 	Model = InArgs._Model;
 	Gesture = InArgs._Gesture;
 	PaintStats = InArgs._PaintStats;
+	Findings = InArgs._Findings;
 	FocusTarget = InArgs._FocusTarget;
 	TrackIndex = InArgs._TrackIndex;
 	check(Model.IsValid() && Gesture.IsValid());
@@ -135,6 +136,30 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 				DrawDiamond(OutDrawElements, LayerId + 9, AllottedGeometry, FVector2D(KeyX, CentreY), HalfSize + 2.0, SelectionOutline());
 			}
 			DrawDiamond(OutDrawElements, LayerId + 10, AllottedGeometry, FVector2D(KeyX, CentreY), HalfSize, FLinearColor(0.98f, 0.9f, 0.55f));
+		}
+	}
+
+	// The frames the last validation flagged on this track: a thin line over the full height with a square on top, red for an error, yellow for a warning.
+	// Errors are drawn after warnings so a frame with both shows red
+	if (Findings.IsValid())
+	{
+		for (const EGSTN_Severity Severity : { EGSTN_Severity::Warning, EGSTN_Severity::Error })
+		{
+			for (const FGSTN_ValidationFinding& Finding : Findings->GetReport().Findings)
+			{
+				if (Finding.Severity != Severity || Finding.Where.TrackIndex != TrackIndex || Finding.Where.Frame == INDEX_NONE)
+				{
+					continue;
+				}
+				const double MarkerX = View.FrameToPixel(static_cast<double>(Finding.Where.Frame) + 0.5);
+				if (MarkerX < -4.0 || MarkerX > Size.X + 4.0)
+				{
+					continue;
+				}
+				const FLinearColor MarkerColor = Severity == EGSTN_Severity::Error ? GSTNTimelineColors::FindingError() : GSTNTimelineColors::FindingWarning();
+				DrawVerticalLine(OutDrawElements, LayerId + 10, AllottedGeometry, MarkerX, 0.0, Size.Y, MarkerColor, 2.0);
+				DrawRect(OutDrawElements, LayerId + 10, AllottedGeometry, FVector2D(MarkerX - 3.0, 0.0), FVector2D(6.0, 6.0), MarkerColor);
+			}
 		}
 	}
 

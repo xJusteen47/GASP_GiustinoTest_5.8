@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Widgets/SLeafWidget.h"
+#include "Timeline/GSTN_FindingsStore.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
 #include "Timeline/GSTN_TimelineGesture.h"
 #include "Timeline/Widgets/GSTN_TimelineWidgetCommon.h"
@@ -21,6 +22,7 @@ public:
 		SLATE_ARGUMENT(TSharedPtr<FGSTN_TimelineEditorModel>, Model)
 		SLATE_ARGUMENT(TSharedPtr<FGSTN_TimelineGesture>, Gesture)
 		SLATE_ARGUMENT(TSharedPtr<FGSTN_TimelinePaintStats>, PaintStats)
+		SLATE_ARGUMENT(TSharedPtr<FGSTN_FindingsStore>, Findings)
 		SLATE_ARGUMENT(TWeakPtr<SWidget>, FocusTarget)
 		SLATE_ARGUMENT(int32, TrackIndex)
 	SLATE_END_ARGS()
@@ -47,6 +49,7 @@ private:
 	TSharedPtr<FGSTN_TimelineEditorModel> Model;
 	TSharedPtr<FGSTN_TimelineGesture> Gesture;
 	TSharedPtr<FGSTN_TimelinePaintStats> PaintStats;
+	TSharedPtr<FGSTN_FindingsStore> Findings;
 	TWeakPtr<SWidget> FocusTarget;
 	TUniquePtr<FGSTN_TimelineRepaintHook> RepaintHook;
 	int32 TrackIndex = INDEX_NONE;

@@ -29,6 +29,7 @@ void SGSTN_TimelinePanel::Construct(const FArguments& InArgs)
 	using namespace GSTNTimelineWidgets;
 
 	Model = InArgs._Model;
+	Findings = InArgs._Findings;
 	check(Model.IsValid());
 	Gesture = MakeShared<FGSTN_TimelineGesture>();
 	PaintStats = MakeShared<FGSTN_TimelinePaintStats>();
@@ -282,6 +283,7 @@ TSharedRef<ITableRow> SGSTN_TimelinePanel::OnGenerateRow(TSharedPtr<FGSTN_Timeli
 		.Model(Model)
 		.Gesture(Gesture)
 		.PaintStats(PaintStats)
+		.Findings(Findings)
 		.FocusTarget(StaticCastSharedRef<SWidget>(AsShared()))
 		.TrackIndex(Item.IsValid() ? Item->TrackIndex : INDEX_NONE);
 }

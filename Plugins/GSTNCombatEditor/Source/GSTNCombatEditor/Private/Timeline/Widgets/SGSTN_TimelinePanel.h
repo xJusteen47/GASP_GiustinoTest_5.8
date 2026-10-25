@@ -7,6 +7,7 @@
 #include "Framework/Commands/UICommandList.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Views/SListView.h"
+#include "Timeline/GSTN_FindingsStore.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
 #include "Timeline/GSTN_TimelineGesture.h"
 #include "Timeline/GSTN_TimelineLayout.h"
@@ -30,6 +31,8 @@ class SGSTN_TimelinePanel : public SCompoundWidget
 public:
 	SLATE_BEGIN_ARGS(SGSTN_TimelinePanel) {}
 		SLATE_ARGUMENT(TSharedPtr<FGSTN_TimelineEditorModel>, Model)
+		/** The findings the lanes mark at their frame (red for errors, yellow for warnings). Optional: without it the lanes draw no markers */
+		SLATE_ARGUMENT(TSharedPtr<FGSTN_FindingsStore>, Findings)
 		/** Shows the paint time of the last repaint in the footer (the acceptance readout of E4) */
 		SLATE_ARGUMENT(bool, bShowPaintStats)
 		/** Controls the host adds to the end of the toolbar (the toolkit: loop range, preview skin and kit, validate). The panel knows nothing of them */
@@ -75,6 +78,7 @@ private:
 	TSharedPtr<FGSTN_TimelineEditorModel> Model;
 	TSharedPtr<FGSTN_TimelineGesture> Gesture;
 	TSharedPtr<FGSTN_TimelinePaintStats> PaintStats;
+	TSharedPtr<FGSTN_FindingsStore> Findings;
 	TSharedRef<FUICommandList> CommandList = MakeShared<FUICommandList>();
 
 	TArray<TSharedPtr<FGSTN_TimelineRowData>> Rows;

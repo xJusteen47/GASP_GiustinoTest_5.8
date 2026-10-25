@@ -166,6 +166,7 @@ void SGSTN_TimelineTrackRow::Construct(const FArguments& InArgs, const TSharedRe
 					.Model(InArgs._Model)
 					.Gesture(InArgs._Gesture)
 					.PaintStats(InArgs._PaintStats)
+					.Findings(InArgs._Findings)
 					.FocusTarget(InArgs._FocusTarget)
 					.TrackIndex(TrackIndex)
 				]

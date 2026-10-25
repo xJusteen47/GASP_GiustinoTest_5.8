@@ -6,8 +6,8 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.7)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
-model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E10 (validation) and E13 (inline mode) of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
+Status: **experimental (0.9)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
 (E3, `FGSTN_TimelinePhases`, is in `GSTNCombatCore`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
@@ -257,7 +257,40 @@ the codes, and a test pins every one of its messages):
 | `AimTurn` | `TurnUntilFrame` past the end (camera policy); `MaxTurnDegrees` not positive for a policy that turns | error |
 | `UnknownTrack` | a track struct with no track editor (shown as a generic row) | warning |
 
-The Hitbox same-group overlap, the baked-socket and hitbox rules arrive with E11 (they need M4).
+**M4 rules (E11)**, in `Private/Validation/GSTN_HitRules.cpp`, same shape as above:
+
+| Code | Rule | Severity |
+|---|---|---|
+| `HitboxKeys` | a key at or past the window length (keys count from the track's first frame); keys out of order and a shape with no volume (Core's wording, classified); two hitboxes of one `HitGroup` open together with the same `Priority`, different hit data and different shape (a tie nobody chose). Different priorities are a sweetspot, silent. A hitbox with no key is allowed (M4: the shape stays where its space puts it) | error, error, error, warning |
+| `OverlapSameKind` (hitbox half) | two hitboxes of one group open together with the same shape, space, socket and key path | warning |
+| `HitData` | negative damage, knockback, growth, shield damage, multipliers, stagger force or hitstop frames; `FixedKnockback` together with growth; a hit type or cue that is not registered; Core's hitstop clamp and "data only in M4" notes; for the base hit and every variant that overrides fields | error, warning, error, as Core |
+| `Variants` | a variant key outside `Combat.Relationship`; `ShapeScale` 0 or less without `bIgnore`; a negative multiplier | error |
+| `HurtState` | `Armor` with a threshold of 0 or less that is not infinite (this replaces Core's softer "no threshold" warning); a modifier that names a hurtbox the known set lacks (only when the caller passes `KnownHurtboxNames`) | error |
+| `BakedSocketMissing` | a `BakedSocket` hitbox whose socket has no baked frames (replaces Core's warning), or names no socket | error |
+| `BakedLength` | baked frames of a socket are not `TotalFrames` long (replaces Core's warning) | error |
+| `BakedStale` | **info only**: a baked socket no hitbox uses. The hash half (the bake's inputs changed) needs the baker, E8 | info |
+
+**Hurtbox set** (`UGSTN_HurtboxSetValidator`, `FGSTN_CombatValidators::CheckHurtboxSet`): the set's own `ValidateHurtboxSet` classified into `Hurtbox.Empty`, `.DuplicateName`, `.Extent`, `.Tag` (no tag: warning) and `.Data`, plus `Hurtbox.Tag` (error) for a tag that is not under `Combat.Hurtbox`.
+The bone-absent check needs a preview mesh on the set (the hurtbox set editor, E9).
+
+### Validate all and the validation panel (E11)
+
+`GSTNValidateAll::Run` collects every combat asset in the Asset Registry (timelines, hurtbox sets, kits, weapons, classes that hold a
+`FGSTN_LoadoutData`, and Blueprints whose generated class derives from the ability, found by the registry without loading), loads each and runs
+`UGSTN_CombatValidatorBase::BuildReportForAsset`, which is the code the Data Validation validators run: the panel shows what Data Validation would.
+Default scope is everything except `/Engine` and `/Temp`; a path prefix narrows it. `gstn.Combat.ValidateAll [prefix]` does the same from the console or `-ExecCmds`
+and writes one page to the Message Log (category `GSTNCombat`); the panel's **Validate all** button does it with a progress dialog.
+
+`SGSTN_ValidationPanel` (nomad tab *Window > GSTN Combat > Validation*, `GSTNValidationTab`) is a tree grouped by asset (worst severity first) with
+severity icons, filters for errors, warnings and notes, and a text filter on code, message and asset name. A double click opens the asset; for a timeline finding
+(an asset, or the inline timeline of an ability Blueprint) the timeline editor opens, selects the track (and key) and puts the playhead on the frame
+(`GSTNValidationNavigation::OpenFinding`, `FGSTN_TimelineActions::GoToFinding`). All state is in `FGSTN_ValidationPanelModel`, which the tests read.
+
+The timeline editor's **Frame Data** tab now follows the timeline: 250 ms after the last edit (debounced, restarted by each edit of a drag) the rules run again
+silently (`FGSTN_TimelineEditorToolkit::RefreshFindings`, no Message Log), and the lanes mark each finding that has a track and frame: a thin line with a square on top,
+red for an error, yellow for a warning. The Validate button / F7 still writes the Message Log.
+
+**Not in E11.** *Bake all* and the hash half of `BakedStale` need the socket baker (E8). Stale bakes are therefore not yet a cook blocker.
 
 **Inline timelines (E13).** `UGSTN_AbilityTimelineValidator` reads `Timeline` from the default object of the Blueprint's generated class and runs exactly `FGSTN_CombatValidators::ValidateTimeline` on it (`ValidateAbilityTimeline`; the findings belong to the Blueprint), so an inline timeline and an asset get the same codes for the same data, including `FrameRange` for a Blueprint that was never given a length. When the ability names a `TimelineAsset`, the asset plays and has its own validator: the inline data is not checked, and if it still holds something (a length, a track or a montage) the warning `Ability.InlineIgnored` says it is dead data. A `TimelineAsset` that does not resolve (the asset was deleted or renamed, or is not a combat timeline) is the error `Ability.TimelineAssetUnresolved`: the reference wins over the inline data, so the ability would play no timeline. A loaded asset resolves; otherwise the asset registry is asked (no load) and, when the validator may load, the asset is loaded to prove it. A class that was never compiled has no default object to read and is not validated.
 
@@ -378,6 +411,8 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.9.0 (2026-10-25, E11): the M4 rules (hitbox keys and groups, hit data, variants, hurt states, baked sockets), the hurtbox set validator, `UGSTN_CombatValidatorBase::BuildReportForAsset`, Validate all (`gstn.Combat.ValidateAll`), the validation panel and its tab, the Frame Data tab that follows the timeline, lane markers; tests `Validate.*` (M4) and `GSTN.Visual.Validation.*`.
+- 0.8.1 (2026-10-25, E3): the phase bar reads `FGSTN_TimelinePhases` of `GSTNCombatCore`.
 - 0.8.0 (2026-10-23, E6): the preview scene: a generic subject (kit and skin, or any skeletal mesh) with attachments, stored per asset in the user's config; the pose set per frame by `FGSTN_PreviewPose`; camera presets, root capsule, facing arrow, overlay registry for M4; tests `Preview.*` and the snapshots `GSTN.Visual.Timeline.Preview*`.
 - 0.7.3 (2026-10-23, UI test fixes): the playhead works while `TotalFrames` is 0, `Length` and `FAF` fields (timeline panel and Frame Data tab), readable bar, phase and header colours with distinct phase colours, the findings of Validate listed in the Frame Data tab, a click on empty space clears the selection; test file `GSTN_EditorTests_UiFixes.cpp` (`GSTNCombat.Editor.UiFixes.*`).
 - 0.7.2 (2026-10-23, review fixes): an unresolvable `TimelineAsset` on an ability is the error `Ability.TimelineAssetUnresolved`; a `SwapFrame` typed in the details panel moves the weapon switch window's `StartFrame` with it; a header comment about the weapon switch frame.

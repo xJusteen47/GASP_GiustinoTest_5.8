@@ -6,6 +6,7 @@
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Engine/Blueprint.h"
+#include "Hits/GSTN_HurtboxTypes.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
@@ -56,6 +57,98 @@ namespace
 	{
 		return UGSTN_InputSettings::Get();
 	}
+
+	// One function per kind of asset: the validator class and BuildReportForAsset call the same body, so Validate all shows what Data Validation does
+
+	void ReportTimelineAsset(const UGSTN_CombatTimeline& Timeline, UObject* Asset, FGSTN_ValidationReport& Report)
+	{
+		const FGSTN_TimelineRuleContext Context = FGSTN_CombatValidators::MakeTimelineContext(Timeline.Data, Asset, UGSTN_CombatEditorSettings::GetSimulationTickRate(), true);
+		FGSTN_CombatValidators::ValidateTimeline(Timeline.Data, Context, Report);
+	}
+
+	/** False when the Blueprint has no default object to read (never built) */
+	bool ReportAbilityBlueprint(UObject* Asset, FGSTN_ValidationReport& Report)
+	{
+		const UBlueprint* Blueprint = Cast<UBlueprint>(Asset);
+		const UClass* Class = Blueprint ? Blueprint->GeneratedClass.Get() : nullptr;
+
+		// The default object is the one that holds the inline values; it is never created here, a class that was never built has none to read
+		const UGSTN_GA_BaseCombat* Ability = Class ? Cast<UGSTN_GA_BaseCombat>(Class->GetDefaultObject(false)) : nullptr;
+		if (Ability == nullptr)
+		{
+			return false;
+		}
+		FGSTN_CombatValidators::ValidateAbilityTimeline(*Ability, Asset, UGSTN_CombatEditorSettings::GetSimulationTickRate(), true, Report);
+		return true;
+	}
+
+	void ReportWeapon(const UGSTN_WeaponDefinition& Weapon, FGSTN_ValidationReport& Report)
+	{
+		FGSTN_CombatValidators::CheckWeaponData(Weapon, Report);
+
+		// Every kit that can carry the weapon: its slots are on top of the kit's, and that is where they can collide
+		TArray<FAssetData> Kits;
+		IAssetRegistry::GetChecked().GetAssetsByClass(UGSTN_PrimaryKitDefinition::StaticClass()->GetClassPathName(), Kits, true);
+		for (const FAssetData& KitData : Kits)
+		{
+			const UGSTN_PrimaryKitDefinition* Kit = Cast<UGSTN_PrimaryKitDefinition>(KitData.GetAsset());
+			if (Kit && FGSTN_CombatValidators::KitCanCarryWeapon(*Kit, Weapon))
+			{
+				FGSTN_CombatValidators::CheckWeaponOnKit(Weapon, *Kit, GetInputSettings(), Report);
+			}
+		}
+	}
+
+	/** False when the object holds no loadout */
+	bool ReportLoadouts(UObject* Asset, FGSTN_ValidationReport& Report)
+	{
+		TArray<TPair<FName, const FGSTN_LoadoutData*>> Loadouts;
+		UGSTN_LoadoutPresetValidator::GatherLoadouts(*Asset, Loadouts);
+		for (const TPair<FName, const FGSTN_LoadoutData*>& Loadout : Loadouts)
+		{
+			FGSTN_ResolvedLoadout Resolved;
+			TArray<TStrongObjectPtr<UObject>> Hold;
+			FGSTN_CombatValidators::ResolveLoadoutData(*Loadout.Value, Resolved, Hold);
+			FGSTN_CombatValidators::CheckLoadout(Resolved, GetInputSettings(), *GetDefault<UGSTN_LoadoutRules>(), Asset, Report);
+		}
+		return !Loadouts.IsEmpty();
+	}
+}
+
+bool UGSTN_CombatValidatorBase::BuildReportForAsset(UObject* Asset, FGSTN_ValidationReport& OutReport)
+{
+	if (Asset == nullptr)
+	{
+		return false;
+	}
+	bool bValidated = false;
+	if (const UGSTN_CombatTimeline* Timeline = Cast<UGSTN_CombatTimeline>(Asset))
+	{
+		ReportTimelineAsset(*Timeline, Asset, OutReport);
+		bValidated = true;
+	}
+	if (UGSTN_AbilityTimelineValidator::IsAbilityBlueprint(Asset))
+	{
+		bValidated |= ReportAbilityBlueprint(Asset, OutReport);
+	}
+	if (const UGSTN_HurtboxSetDefinition* Set = Cast<UGSTN_HurtboxSetDefinition>(Asset))
+	{
+		FGSTN_CombatValidators::CheckHurtboxSet(*Set, Asset, OutReport);
+		bValidated = true;
+	}
+	if (const UGSTN_PrimaryKitDefinition* Kit = Cast<UGSTN_PrimaryKitDefinition>(Asset))
+	{
+		FGSTN_CombatValidators::CheckKit(*Kit, GetInputSettings(), OutReport);
+		bValidated = true;
+	}
+	if (const UGSTN_WeaponDefinition* Weapon = Cast<UGSTN_WeaponDefinition>(Asset))
+	{
+		ReportWeapon(*Weapon, OutReport);
+		bValidated = true;
+	}
+	bValidated |= ReportLoadouts(Asset, OutReport);
+	OutReport.SetAssetWhereMissing(Asset);
+	return bValidated;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -74,8 +167,28 @@ EDataValidationResult UGSTN_TimelineValidator::ValidateLoadedAsset_Implementatio
 	}
 
 	FGSTN_ValidationReport Report;
-	const FGSTN_TimelineRuleContext Context = FGSTN_CombatValidators::MakeTimelineContext(Timeline->Data, InAsset, UGSTN_CombatEditorSettings::GetSimulationTickRate(), true);
-	FGSTN_CombatValidators::ValidateTimeline(Timeline->Data, Context, Report);
+	ReportTimelineAsset(*Timeline, InAsset, Report);
+	return AddReportToContext(Report, InAssetData, InContext);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+bool UGSTN_HurtboxSetValidator::CanValidateAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) const
+{
+	return Cast<UGSTN_HurtboxSetDefinition>(InAsset) != nullptr;
+}
+
+EDataValidationResult UGSTN_HurtboxSetValidator::ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext)
+{
+	const UGSTN_HurtboxSetDefinition* Set = Cast<UGSTN_HurtboxSetDefinition>(InAsset);
+	if (!Set)
+	{
+		return EDataValidationResult::NotValidated;
+	}
+
+	// The set's own IsDataValid already said the same texts through the context; AddReportToContext leaves those out and adds the new ones
+	FGSTN_ValidationReport Report;
+	FGSTN_CombatValidators::CheckHurtboxSet(*Set, InAsset, Report);
 	return AddReportToContext(Report, InAssetData, InContext);
 }
 
@@ -94,18 +207,11 @@ bool UGSTN_AbilityTimelineValidator::CanValidateAsset_Implementation(const FAsse
 
 EDataValidationResult UGSTN_AbilityTimelineValidator::ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext)
 {
-	const UBlueprint* Blueprint = Cast<UBlueprint>(InAsset);
-	const UClass* Class = Blueprint ? Blueprint->GeneratedClass.Get() : nullptr;
-
-	// The default object is the one that holds the inline values; it is never created here, a class that was never built has none to read
-	const UGSTN_GA_BaseCombat* Ability = Class ? Cast<UGSTN_GA_BaseCombat>(Class->GetDefaultObject(false)) : nullptr;
-	if (Ability == nullptr)
+	FGSTN_ValidationReport Report;
+	if (!ReportAbilityBlueprint(InAsset, Report))
 	{
 		return EDataValidationResult::NotValidated;
 	}
-
-	FGSTN_ValidationReport Report;
-	FGSTN_CombatValidators::ValidateAbilityTimeline(*Ability, InAsset, UGSTN_CombatEditorSettings::GetSimulationTickRate(), true, Report);
 	return AddReportToContext(Report, InAssetData, InContext);
 }
 
@@ -145,19 +251,7 @@ EDataValidationResult UGSTN_WeaponValidator::ValidateLoadedAsset_Implementation(
 	}
 
 	FGSTN_ValidationReport Report;
-	FGSTN_CombatValidators::CheckWeaponData(*Weapon, Report);
-
-	// Every kit that can carry the weapon: its slots are on top of the kit's, and that is where they can collide
-	TArray<FAssetData> Kits;
-	IAssetRegistry::GetChecked().GetAssetsByClass(UGSTN_PrimaryKitDefinition::StaticClass()->GetClassPathName(), Kits, true);
-	for (const FAssetData& KitData : Kits)
-	{
-		const UGSTN_PrimaryKitDefinition* Kit = Cast<UGSTN_PrimaryKitDefinition>(KitData.GetAsset());
-		if (Kit && FGSTN_CombatValidators::KitCanCarryWeapon(*Kit, *Weapon))
-		{
-			FGSTN_CombatValidators::CheckWeaponOnKit(*Weapon, *Kit, GetInputSettings(), Report);
-		}
-	}
+	ReportWeapon(*Weapon, Report);
 	return AddReportToContext(Report, InAssetData, InContext);
 }
 
@@ -191,17 +285,9 @@ EDataValidationResult UGSTN_LoadoutPresetValidator::ValidateLoadedAsset_Implemen
 	{
 		return EDataValidationResult::NotValidated;
 	}
-	TArray<TPair<FName, const FGSTN_LoadoutData*>> Loadouts;
-	GatherLoadouts(*InAsset, Loadouts);
 
 	FGSTN_ValidationReport Report;
-	for (const TPair<FName, const FGSTN_LoadoutData*>& Loadout : Loadouts)
-	{
-		FGSTN_ResolvedLoadout Resolved;
-		TArray<TStrongObjectPtr<UObject>> Hold;
-		FGSTN_CombatValidators::ResolveLoadoutData(*Loadout.Value, Resolved, Hold);
-		FGSTN_CombatValidators::CheckLoadout(Resolved, GetInputSettings(), *GetDefault<UGSTN_LoadoutRules>(), InAsset, Report);
-	}
+	ReportLoadouts(InAsset, Report);
 	return AddReportToContext(Report, InAssetData, InContext);
 }
 

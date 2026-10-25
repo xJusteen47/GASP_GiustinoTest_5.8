@@ -55,6 +55,28 @@ namespace
 {
 	/** The app identifier the asset editor subsystem files this editor under */
 	const FName TimelineEditorAppIdentifier(TEXT("GSTNTimelineEditorApp"));
+
+	/** Every toolkit that holds a target, weakly: a closed window drops out by itself */
+	TArray<TWeakPtr<FGSTN_TimelineEditorToolkit>>& GetOpenToolkits()
+	{
+		static TArray<TWeakPtr<FGSTN_TimelineEditorToolkit>> Open;
+		return Open;
+	}
+}
+
+TSharedPtr<FGSTN_TimelineEditorToolkit> FGSTN_TimelineEditorToolkit::FindOpenFor(const UObject* Target)
+{
+	TArray<TWeakPtr<FGSTN_TimelineEditorToolkit>>& Open = GetOpenToolkits();
+	Open.RemoveAll([](const TWeakPtr<FGSTN_TimelineEditorToolkit>& Toolkit) { return !Toolkit.IsValid(); });
+	for (const TWeakPtr<FGSTN_TimelineEditorToolkit>& Weak : Open)
+	{
+		const TSharedPtr<FGSTN_TimelineEditorToolkit> Toolkit = Weak.Pin();
+		if (Toolkit.IsValid() && Toolkit->Model.IsValid() && Toolkit->Context.GetTarget() == Target)
+		{
+			return Toolkit;
+		}
+	}
+	return nullptr;
 }
 
 FGSTN_TimelineEditorToolkit::FGSTN_TimelineEditorToolkit() = default;
@@ -71,6 +93,8 @@ void FGSTN_TimelineEditorToolkit::Release()
 		Blueprint->OnCompiled().RemoveAll(this);
 	}
 	ObservedBlueprint.Reset();
+
+	CancelFindingsRefresh();
 
 	// The client first: it points at the model. The lease last: the target is free for another editor only when this one is gone
 	UndoClient.Reset();
@@ -147,6 +171,7 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 	}
 
 	Context = InContext;
+	GetOpenToolkits().Add(StaticCastSharedRef<FGSTN_TimelineEditorToolkit>(AsShared()));
 
 	// An asset that was not created transactional (an old one, a script) would record nothing and undo would have nothing to restore
 	if (UObject* Owner = Context.GetOwner())
@@ -171,6 +196,9 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 		ObservedBlueprint = Blueprint;
 		Blueprint->OnCompiled().AddSP(this, &FGSTN_TimelineEditorToolkit::HandleBlueprintCompiled);
 	}
+
+	// The first findings, so the Frame Data tab and the lane markers are not empty until someone presses Validate
+	RefreshFindings();
 
 	// The chord of Validate (F7) lives on the toolkit, not on the panel's command list: the toolbar button and the chord do the same thing
 	ToolkitCommands->MapAction(FGSTN_TimelineEditorCommands::Get().ValidateNow, FExecuteAction::CreateSPLambda(this, [this]() { ValidateNow(); }));
@@ -274,6 +302,44 @@ void FGSTN_TimelineEditorToolkit::ExtractToAsset()
 void FGSTN_TimelineEditorToolkit::HandleDataChanged()
 {
 	Findings->MarkStale();
+
+	// Debounced: every edit of a drag restarts the wait, so the rules run once when the hand stops, not on each mouse move
+	CancelFindingsRefresh();
+	const TWeakPtr<FGSTN_TimelineEditorToolkit> WeakSelf = StaticCastSharedRef<FGSTN_TimelineEditorToolkit>(AsShared());
+	FindingsTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakSelf](float) -> bool
+	{
+		if (const TSharedPtr<FGSTN_TimelineEditorToolkit> Pinned = WeakSelf.Pin())
+		{
+			Pinned->FindingsTickerHandle.Reset();
+			Pinned->RefreshFindings();
+		}
+		return false;
+	}), FindingsDebounceSeconds);
+}
+
+void FGSTN_TimelineEditorToolkit::CancelFindingsRefresh()
+{
+	if (FindingsTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(FindingsTickerHandle);
+		FindingsTickerHandle.Reset();
+	}
+}
+
+FGSTN_ValidationReport FGSTN_TimelineEditorToolkit::RefreshFindings()
+{
+	FGSTN_ValidationReport Report;
+	const FGSTN_CombatTimelineData* Data = Model.IsValid() ? Model->GetData() : nullptr;
+	if (!Data)
+	{
+		return Report;
+	}
+	const FGSTN_TimelineRuleContext RuleContext = FGSTN_CombatValidators::MakeTimelineContext(*Data, Context.GetTarget(), Model->GetTickRate(), true);
+	FGSTN_CombatValidators::ValidateTimeline(*Data, RuleContext, Report);
+	Findings->SetReport(Report);
+	// The lanes paint the markers from the store; they repaint on the model's view notification
+	Model->NotifyViewChanged();
+	return Report;
 }
 
 void FGSTN_TimelineEditorToolkit::GoToFinding(const FGSTN_ValidationFinding& Finding)
@@ -398,6 +464,7 @@ TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnTimelineTab(const FSpawnT
 			[
 				SNew(SGSTN_TimelinePanel)
 				.Model(Model)
+				.Findings(Findings)
 				.ToolbarExtra()
 				[
 					SNew(SGSTN_TimelineToolbarExtra)
