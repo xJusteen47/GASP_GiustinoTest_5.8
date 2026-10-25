@@ -197,7 +197,19 @@ bool UGSTN_WallQueryUtils::PassesSurfaceFilter(const FHitResult& Hit, const FGST
 	{
 		return Filter.bUnknownSurfacesPass;
 	}
-	return Surface.MatchesBehaviours(Filter.RequiredBehaviours);
+	// A surface passes on the required query (when there is one) or on any alternative; an empty alternative accepts everything
+	if (!Filter.RequiredBehaviours.IsEmpty() && Surface.MatchesBehaviours(Filter.RequiredBehaviours))
+	{
+		return true;
+	}
+	for (const FGameplayTagQuery& Alternative : Filter.AlternativeBehaviours)
+	{
+		if (Surface.MatchesBehaviours(Alternative))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool UGSTN_WallQueryUtils::IsHitOnValidWall(const UWorld* World, const FHitResult& Hit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings,

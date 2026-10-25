@@ -128,6 +128,21 @@ bool FGSTN_WallSyncStateSerializeTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Unset reset time is restored"), Out.MemoryResetTimeMs < 0.0);
 	}
 
+	// The surface-switch vote of the v2 modes travels only when it is non-zero, and is restored to zero over a stale value
+	{
+		FGSTN_WallMovementSyncState In;
+		In.SurfaceSwitchTicks = 4;
+		FGSTN_WallMovementSyncState Out;
+		TestTrue(TEXT("Round trip succeeds with a vote"), RoundTrip(In, Out));
+		TestEqual(TEXT("SurfaceSwitchTicks survives"), static_cast<int32>(Out.SurfaceSwitchTicks), 4);
+
+		FGSTN_WallMovementSyncState Zero;
+		FGSTN_WallMovementSyncState Stale;
+		Stale.SurfaceSwitchTicks = 3;
+		TestTrue(TEXT("Round trip succeeds without a vote"), RoundTrip(Zero, Stale));
+		TestEqual(TEXT("A zero vote is restored"), static_cast<int32>(Stale.SurfaceSwitchTicks), 0);
+	}
+
 	return true;
 }
 

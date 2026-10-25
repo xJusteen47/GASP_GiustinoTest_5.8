@@ -97,6 +97,7 @@ void UGSTN_WallMovementModeBase::Activate(const FMoverEventContext& Context, FNa
 	WallState.TimeWithoutWall = 0.f;
 	WallState.bIsSkidding = false;
 	WallState.PullAwayTime = 0.f;
+	WallState.SurfaceSwitchTicks = 0;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -274,6 +275,7 @@ FGSTN_WallTickState UGSTN_WallMovementModeBase::MakeTickState(const FSimulationT
 	State.bHasWall = StartWallState ? StartWallState->bHasWall : false;
 	State.TimeWithoutWall = StartWallState ? StartWallState->TimeWithoutWall : 0.f;
 	State.PullAwayTime = StartWallState ? StartWallState->PullAwayTime : 0.f;
+	State.SurfaceSwitchTicks = StartWallState ? StartWallState->SurfaceSwitchTicks : 0;
 	State.Velocity = Params.ProposedMove.LinearVelocity;
 	State.Orientation = StartQuat;
 	State.GravityUp = GetMoverComponent()->GetUpDirection();
@@ -477,6 +479,8 @@ void UGSTN_WallMovementModeBase::CaptureFinalState(const FSimulationTickParams& 
 	OutputWallState.TimeWithoutWall = State.TimeWithoutWall;
 	OutputWallState.PullAwayTime = State.PullAwayTime;
 	OutputWallState.bIsSkidding = false;
+	// The surface-switch vote does not outlive a mode change (the mode that takes over starts counting from zero)
+	OutputWallState.SurfaceSwitchTicks = State.IsLeaving() ? 0 : State.SurfaceSwitchTicks;
 
 	// The intended (transported) velocity is used instead of the positional delta: the latter includes adhesion corrections and would jitter
 	OutputSyncState.MoveDirectionIntent = Params.ProposedMove.bHasDirIntent ? Params.ProposedMove.DirectionIntent : FVector::ZeroVector;

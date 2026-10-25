@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "WallMovement/GSTN_WallEdgeTypes.h"
+#include "WallMovement/GSTN_WallSurfaceModeTypes.h"
 #include "WallMovement/Modes/GSTN_ControlledWallMovementMode.h"
 #include "GSTN_WallTraverseModeBase.generated.h"
 
@@ -38,12 +39,22 @@ struct FGSTN_WallTraverseTestAccess;
  *     Edges.MaxSmoothAngle; a bump or a facet beyond that never turns it
  *     (the limits of the look-ahead: a feature narrower than the look can slip between two ticks and is then met by the move sweep)
  *  6. store the ridden base, write the sync state
+ *  7. the surface-driven mode choice (SurfaceModes, UpdateSurfaceVote, after the world part): the contact of step 4 is resolved to a surface, the priority list
+ *     says which registered mode handles it, and when that is not this mode for HysteresisTicks ticks in a row the mode requests the other one, keeping
+ *     the velocity (below)
  *
  * Inclined walls (60-85 degrees off the horizontal) and overhangs (95-120) are walls like any other here. The capsule is upright, so its contact
  * with the plane is on the lower (wall leaning back) or the upper (overhang) hemisphere: every distance to the plane is the capsule's extent
  * along the wall normal (CapsuleSupportAlong), never its radius, and every angle is between two surface normals, never against world up. The only
  * gravity-relative tests are the floor rule (a surface within MinSurfaceAngle of gravity-up is a floor) and the control model's "down the wall"
  * (gravity-up projected on the plane).
+ *
+ * Slide and climb are interchangeable in place (wall-slide-v2.md 6.3). They share this core and the sync state, so the hand-over is a plain mode change
+ * that keeps everything: Activate recognises it (IsInPlaceSwitchFrom) and leaves the sync state, velocity, wall and facing untouched. The decision is a pure
+ * function of the contact resolved THIS tick (never of the game thread or of a cached surface), and its hysteresis counter lives in the wall sync state
+ * (SurfaceSwitchTicks), so a re-simulated frame votes the same. While SurfaceModes is enabled the probes accept every surface any listed, available mode
+ * could take over (GetWallCheckSettings fills the filter's AlternativeBehaviours), otherwise the contact sweep would drop the wall at the seam before the
+ * vote could finish; the mode's own SurfaceFilter is then not consulted.
  *
  * Properties of the legacy base that this mode does not read (documented, not hidden: a later EditCondition can grey them out):
  * Horizontal, MaxSubstepDistance, MaxSubsteps, EntryMomentum, ProbeRadiusScale, ProbeVerticalSpread, MaxProbeDeviationAngle,
@@ -75,6 +86,23 @@ public:
 	/** Edge look-ahead, corner speed cap and step-over tuning (wall-slide-v2.md 2.3) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Edges")
 	FGSTN_WallEdgeSettings Edges;
+
+	/**
+	 * Which mode handles the surface under the character, and the in-place hand-over between slide and climb (see the class comment). Defaults: WallClimb ->
+	 * WallClimbingV2, WallSlide -> WallSlidingV2, unmarked surfaces -> the slide. Does nothing on a mode that is not registered on a Mover component, and
+	 * a listed mode that is not registered is skipped, so a project with only the slide registered behaves as before. Disable for a mode that must never hand over
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Surface Mode")
+	FGSTN_WallSurfaceModeList SurfaceModes;
+
+	/** The probes' parameters: the legacy ones with the surface filter widened by the surface mode list (see SurfaceModes) */
+	virtual FGSTN_WallCheckSettings GetWallCheckSettings() const override;
+
+	/**
+	 * True if PrevModeName is another mode of the surface mode list: the character is handing over between slide and climb on the wall, not grabbing it.
+	 * Activate then keeps the sync state as the previous mode left it
+	 */
+	bool IsInPlaceSwitchFrom(FName PrevModeName) const;
 
 	/**
 	 * The velocity a character grabbing the wall starts with, from the velocity it arrives with. Base: turned onto the plane
@@ -115,6 +143,20 @@ protected:
 	 * counted, IsHitOnValidWall on every hit, pawns ignored). Kind None without a query when the velocity on the plane is ~0
 	 */
 	virtual FGSTN_WallAheadResult ProbeAhead(const FMovingComponentSet& MovingComps, const FGSTN_WallTickState& State, const FGSTN_WallCheckSettings& CheckSettings) const;
+
+	/**
+	 * Which mode the contact surface asks for, from SurfaceModes: UGSTN_SurfaceUtils::Resolve on the hit, then UGSTN_WallSurfaceModeUtils::PickMode with
+	 * the Mover component's registered modes and the tags of SyncState (the stamina hook). None = no opinion (stay). bOutBlocked: entries matched but all
+	 * were blocked, the caller sends the character to SurfaceModes.BlockedModeName
+	 */
+	virtual FName ChooseSurfaceMode(const FHitResult& Contact, const FMoverSyncState& SyncState, bool& bOutBlocked) const;
+
+	/**
+	 * The vote of the tick, after the world part: resolves the contact of this tick (State.Contact) to a mode, counts consecutive ticks that ask for a
+	 * mode other than this one (State.SurfaceSwitchTicks) and calls State.LeaveTo when the count reaches SurfaceModes.HysteresisTicks. No contact this
+	 * tick, a surface with no opinion or one that asks for this mode clears the count. Velocity, wall and facing are left as they are
+	 */
+	void UpdateSurfaceVote(const FMoverSyncState& SyncState, FGSTN_WallTickState& InOutState) const;
 
 	/** Final kind of what the look-ahead found. Base: the kind the probe already set */
 	virtual EGSTN_WallEdgeKind ClassifyAhead(const FGSTN_WallAheadResult& Ahead) const;

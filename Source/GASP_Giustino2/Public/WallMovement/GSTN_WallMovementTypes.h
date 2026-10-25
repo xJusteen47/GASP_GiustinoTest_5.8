@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/HitResult.h"
 #include "GameplayTagContainer.h"
 #include "MoverTypes.h"
 #include "GSTN_WallMovementTypes.generated.h"
@@ -293,7 +294,16 @@ struct GASP_GIUSTINO2_API FGSTN_WallSurfaceFilter
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
 	bool bUnknownSurfacesPass = true;
 
-	bool IsEmpty() const { return RequiredBehaviours.IsEmpty(); }
+	/**
+	 * More ways to pass: a surface is a wall if it matches RequiredBehaviours (when that is set) OR any of these. Empty by default, which is the old
+	 * single-query behaviour exactly. The v2 modes fill it from their surface mode list (UGSTN_WallTraverseModeBase::GetWallCheckSettings) so that a
+	 * climb mode riding on a wall also accepts the surfaces it can hand over to, without the probes dropping the wall before the switch. An empty query
+	 * in this list matches every surface
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	TArray<FGameplayTagQuery> AlternativeBehaviours;
+
+	bool IsEmpty() const { return RequiredBehaviours.IsEmpty() && AlternativeBehaviours.IsEmpty(); }
 };
 
 /**
@@ -486,6 +496,15 @@ struct GASP_GIUSTINO2_API FGSTN_WallMovementSyncState : public FMoverDataStructB
 	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
 	double MemoryResetTimeMs = -1.0;
 
+	/**
+	 * Consecutive ticks the contact surface asked for another wall mode than the active one (UGSTN_WallTraverseModeBase, wall-slide-v2.md 6.3): the
+	 * hysteresis of the in-place switch between slide and climb. In the sync state, not on the mode, so a re-simulated frame counts the same
+	 * ticks. Reset on every attachment and on every switch. Sent only when non-zero; not compared by ShouldReconcile (a mode difference is reconciled
+	 * through the mode name itself)
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	uint8 SurfaceSwitchTicks = 0;
+
 	virtual FMoverDataStructBase* Clone() const override;
 	virtual bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess) override;
 	virtual UScriptStruct* GetScriptStruct() const override { return StaticStruct(); }
@@ -570,6 +589,13 @@ struct FGSTN_WallTickState
 
 	/** Last successful probe: its component is the movement base candidate for next tick */
 	FGSTN_WallProbeResult LastProbe;
+
+	/** The contact of this tick's adhesion sweep (a wall found by the sweep itself, not a wrap or a corner), for the surface-driven mode choice */
+	FHitResult Contact;
+	bool bHasContact = false;
+
+	/** Ticks in a row the surface asked for another mode (FGSTN_WallMovementSyncState::SurfaceSwitchTicks) */
+	uint8 SurfaceSwitchTicks = 0;
 
 	/** Mode switch decided this tick, with the simulation time it leaves unused */
 	FName NextModeName = NAME_None;

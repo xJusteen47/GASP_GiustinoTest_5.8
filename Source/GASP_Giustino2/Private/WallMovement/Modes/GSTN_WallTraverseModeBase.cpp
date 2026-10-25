@@ -3,6 +3,8 @@
 #include "WallMovement/Modes/GSTN_WallTraverseModeBase.h"
 
 #include "Components/PrimitiveComponent.h"
+#include "GSTN_SurfaceTypes.h"
+#include "GSTN_SurfaceUtils.h"
 #include "MoveLibrary/MovementRecord.h"
 #include "MoveLibrary/MovementUtils.h"
 #include "MoverComponent.h"
@@ -13,6 +15,7 @@
 #include "WallMovement/MoveLibrary/GSTN_WallEdgeUtils.h"
 #include "WallMovement/MoveLibrary/GSTN_WallMovementUtils.h"
 #include "WallMovement/MoveLibrary/GSTN_WallQueryUtils.h"
+#include "WallMovement/MoveLibrary/GSTN_WallSurfaceModeUtils.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallTraverseModeBase)
 
@@ -20,6 +23,7 @@ UGSTN_WallTraverseModeBase::UGSTN_WallTraverseModeBase(const FObjectInitializer&
 	: Super(ObjectInitializer)
 {
 	// Detach and wall jump are the controlled mode's; subclasses enable what they offer
+	SurfaceModes = UGSTN_WallSurfaceModeUtils::MakeDefaultList();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -28,6 +32,15 @@ UGSTN_WallTraverseModeBase::UGSTN_WallTraverseModeBase(const FObjectInitializer&
 
 void UGSTN_WallTraverseModeBase::Activate(const FMoverEventContext& Context, FName PrevModeName, const FMoverSimContext& SimContext, const FMoverTickStartData& StartState, FMoverSyncState* OutSyncState, FMoverAuxStateContext* OutAuxState)
 {
+	if (IsInPlaceSwitchFrom(PrevModeName))
+	{
+		// Slide <-> climb on the wall: one core, one sync state. What the previous mode wrote at the end of its tick (velocity, wall normal and contact,
+		// facing, wall memory, the ridden base in the blackboard) is exactly what this one must start from, so nothing is read, zeroed or re-derived
+		UBaseMovementMode::Activate(Context, PrevModeName, SimContext, StartState, OutSyncState, OutAuxState);
+		GSTN_WALL_LOG(1, TEXT("ACTIVATE v2 in place from %s"), *PrevModeName.ToString());
+		return;
+	}
+
 	// The velocity the character arrives with, before the legacy entry momentum (EntryMomentum, per-axis scales) touches it
 	FVector InVelocity = FVector::ZeroVector;
 	if (OutSyncState)
@@ -60,6 +73,86 @@ void UGSTN_WallTraverseModeBase::Activate(const FMoverEventContext& Context, FNa
 	DefaultSync->SetTransforms_WorldSpace(DefaultSync->GetLocation_WorldSpace(), Facing.Rotator(), NewVelocity, DefaultSync->GetAngularVelocityDegrees_WorldSpace(), nullptr);
 
 	GSTN_WALL_LOG(1, TEXT("ACTIVATE v2 from %s inVel=%s -> vel=%s"), *PrevModeName.ToString(), *GSTNWallDebug::Vec(InVelocity), *GSTNWallDebug::Vec(NewVelocity));
+}
+
+bool UGSTN_WallTraverseModeBase::IsInPlaceSwitchFrom(FName PrevModeName) const
+{
+	return SurfaceModes.bEnabled && !PrevModeName.IsNone() && PrevModeName != RegisteredModeName && SurfaceModes.ContainsMode(PrevModeName);
+}
+
+FGSTN_WallCheckSettings UGSTN_WallTraverseModeBase::GetWallCheckSettings() const
+{
+	FGSTN_WallCheckSettings Settings = Super::GetWallCheckSettings();
+	if (!SurfaceModes.IsActive())
+	{
+		return Settings;
+	}
+
+	// A wall is whatever any listed mode that can run here would take over: the vote needs the contact to survive the seam. Modes that are not
+	// registered contribute nothing, so a lone slide keeps rejecting what only a (missing) climb would take
+	const UMoverComponent* MoverComp = GetMoverComponent();
+	auto IsAvailable = [this, MoverComp](FName ModeName)
+	{
+		return !ModeName.IsNone() && (ModeName == RegisteredModeName || UGSTN_WallSurfaceModeUtils::IsModeRegistered(MoverComp, ModeName));
+	};
+
+	FGSTN_WallSurfaceFilter Widened;
+	for (const FGSTN_WallSurfaceModeEntry& Entry : SurfaceModes.Entries)
+	{
+		if (IsAvailable(Entry.ModeName))
+		{
+			Widened.AlternativeBehaviours.Add(Entry.Behaviours);
+		}
+	}
+	if (Widened.AlternativeBehaviours.IsEmpty())
+	{
+		return Settings;
+	}
+	Widened.bUnknownSurfacesPass = IsAvailable(SurfaceModes.UnknownSurfaceModeName);
+	Settings.SurfaceFilter = MoveTemp(Widened);
+	return Settings;
+}
+
+FName UGSTN_WallTraverseModeBase::ChooseSurfaceMode(const FHitResult& Contact, const FMoverSyncState& SyncState, bool& bOutBlocked) const
+{
+	// Static configuration of the surface under the contact (components, settings, providers answering from replicated state): the same in a re-simulated frame
+	const FGSTN_SurfaceView Surface = UGSTN_SurfaceUtils::Resolve(Contact);
+	const UMoverComponent* MoverComp = GetMoverComponent();
+	return UGSTN_WallSurfaceModeUtils::PickMode(SurfaceModes, Surface.Behaviours, Surface.Source == EGSTN_SurfaceSource::Default,
+		[this, MoverComp](FName ModeName) { return ModeName == RegisteredModeName || UGSTN_WallSurfaceModeUtils::IsModeRegistered(MoverComp, ModeName); },
+		[MoverComp, &SyncState](const FGameplayTagQuery& Query) { return UGSTN_WallSurfaceModeUtils::IsBlockedByStateTags(MoverComp, SyncState, Query); },
+		bOutBlocked);
+}
+
+void UGSTN_WallTraverseModeBase::UpdateSurfaceVote(const FMoverSyncState& SyncState, FGSTN_WallTickState& InOutState) const
+{
+	// A mode that is not registered has no name to compare with; one that is leaving already decided; no contact this tick = no opinion
+	if (InOutState.IsLeaving())
+	{
+		return;
+	}
+	if (!SurfaceModes.IsActive() || RegisteredModeName.IsNone() || !InOutState.bHasContact)
+	{
+		InOutState.SurfaceSwitchTicks = 0;
+		return;
+	}
+
+	bool bBlocked = false;
+	FName Wanted = ChooseSurfaceMode(InOutState.Contact, SyncState, bBlocked);
+	if (Wanted.IsNone() && bBlocked)
+	{
+		// Out of stamina on a surface that only this kind of mode handles
+		Wanted = SurfaceModes.BlockedModeName;
+	}
+
+	bool bSwitch = false;
+	InOutState.SurfaceSwitchTicks = UGSTN_WallSurfaceModeUtils::StepVote(InOutState.SurfaceSwitchTicks, !Wanted.IsNone() && Wanted != RegisteredModeName,
+		SurfaceModes.HysteresisTicks, bSwitch);
+	if (bSwitch)
+	{
+		GSTN_WALL_LOG(1, TEXT("v2 surface asks for %s (from %s) for %d ticks: switching in place"), *Wanted.ToString(), *RegisteredModeName.ToString(), InOutState.SurfaceSwitchTicks);
+		InOutState.LeaveTo(Wanted, 0.f);
+	}
 }
 
 FVector UGSTN_WallTraverseModeBase::ComputeEntryVelocity(const FVector& InVelocity, const FVector& WallNormal) const
@@ -279,6 +372,8 @@ void UGSTN_WallTraverseModeBase::SimulationTick_Implementation(const FSimulation
 	if (!bLeftOnPurpose)
 	{
 		TraverseStep(MovingComps, DeltaSeconds, Params.ProposedMove.bHasDirIntent, TickState, MoveRecord);
+		// 5b. The surface under the contact of this tick chooses between slide and climb (a leave decided by the step wins)
+		UpdateSurfaceVote(Params.StartState.SyncState, TickState);
 	}
 
 	// 6. Ridden base, sync state
@@ -303,6 +398,7 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 		return;
 	}
 
+	InOutState.bHasContact = false;
 	float CapsuleRadius, CapsuleHalfHeight;
 	UGSTN_WallQueryUtils::GetCapsuleSize(UpdatedPrimitive, CapsuleRadius, CapsuleHalfHeight);
 	const FGSTN_WallCheckSettings CheckSettings = GetWallCheckSettings();
@@ -356,6 +452,9 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 		CheckSettings, MaxAdhesionSpeed, DeltaSeconds, MoveRecord, Contact);
 	// Overlapping something (resolved by the sweep): neither a wall found nor a wall lost this tick
 	const bool bResolvedPenetration = !bContact && Contact.bStartPenetrating;
+	// What the surface-driven mode choice reads: the wall the adhesion sweep itself found (not a wrap, not a corner hit)
+	InOutState.bHasContact = bContact;
+	InOutState.Contact = bContact ? Contact : FHitResult();
 
 	FGSTN_WallProbeResult Probe;
 	bool bSensed = bContact || CornerHit.IsValid();

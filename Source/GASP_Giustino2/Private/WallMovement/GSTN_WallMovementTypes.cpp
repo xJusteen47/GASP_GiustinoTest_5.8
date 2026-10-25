@@ -73,8 +73,8 @@ bool FGSTN_WallMovementSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, b
 	// The reset time is sent whenever it is set, even without memory: the predicted and the authority state must agree on it
 	// (ShouldReconcile compares it), and a later wall grab can only make it stale, never wrong
 	const bool bHasResetTime = MemoryResetTimeMs >= 0.0;
-	uint8 Flags = (bHasWall ? 1 : 0) | (bIsSkidding ? 2 : 0) | (bHasWallMemory ? 4 : 0) | (bHasResetTime ? 8 : 0);
-	Ar.SerializeBits(&Flags, 4);
+	uint8 Flags = (bHasWall ? 1 : 0) | (bIsSkidding ? 2 : 0) | (bHasWallMemory ? 4 : 0) | (bHasResetTime ? 8 : 0) | (SurfaceSwitchTicks > 0 ? 16 : 0);
+	Ar.SerializeBits(&Flags, 5);
 	bHasWall = (Flags & 1) != 0;
 	bIsSkidding = (Flags & 2) != 0;
 	bHasWallMemory = (Flags & 4) != 0;
@@ -104,6 +104,15 @@ bool FGSTN_WallMovementSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, b
 	else if (Ar.IsLoading())
 	{
 		MemoryResetTimeMs = -1.0;
+	}
+
+	if ((Flags & 16) != 0)
+	{
+		Ar << SurfaceSwitchTicks;
+	}
+	else if (Ar.IsLoading())
+	{
+		SurfaceSwitchTicks = 0;
 	}
 
 	bOutSuccess = true;
@@ -190,4 +199,5 @@ void FGSTN_WallMovementSyncState::Interpolate(const FMoverDataStructBase& From, 
 	LastWallHeight = ToState.LastWallHeight;
 	LastWallTimeMs = ToState.LastWallTimeMs;
 	MemoryResetTimeMs = ToState.MemoryResetTimeMs;
+	SurfaceSwitchTicks = ToState.SurfaceSwitchTicks;
 }

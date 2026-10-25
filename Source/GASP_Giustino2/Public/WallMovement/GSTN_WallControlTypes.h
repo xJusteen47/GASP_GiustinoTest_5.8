@@ -112,7 +112,10 @@ struct GASP_GIUSTINO2_API FGSTN_WallBrakeInput
 	FGameplayTag BrakeInputTag;
 };
 
-/** Control model of the wall climb: full 2D control on the plane, no gravity slide (wall-slide-v2.md 6.3) */
+/**
+ * Control model of the wall climb: full 2D control on the plane, no gravity slide (wall-slide-v2.md 6.3). The stick sets a target velocity on the plane
+ * (UGSTN_WallControlUtils::StepClimbVelocity): released, the target is zero and the strong brake stops the character, so the climb holds still on the wall.
+ */
 USTRUCT(BlueprintType)
 struct GASP_GIUSTINO2_API FGSTN_WallClimbControlSettings
 {
@@ -132,4 +135,15 @@ struct GASP_GIUSTINO2_API FGSTN_WallClimbControlSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Climb", meta = (ClampMin = "0", ClampMax = "1"))
 	float InputDeadzone = 0.1f;
+
+	/**
+	 * Fraction of the incoming speed kept when grabbing the wall (1 = the whole run and fall). The brake (ClimbBrake) then takes it down to what the
+	 * stick asks for, so a fast arrival is a short skid, never an instant stop
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Climb|Entry", meta = (ClampMin = "0", ClampMax = "1"))
+	float EntrySpeedKeep = 1.f;
+
+	/** Upper bound of the speed after entry (cm/s) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Control|Climb|Entry", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float MaxEntrySpeed = 1500.f;
 };

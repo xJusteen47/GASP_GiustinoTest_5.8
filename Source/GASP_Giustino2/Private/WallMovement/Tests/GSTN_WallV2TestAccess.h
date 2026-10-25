@@ -6,6 +6,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "MoverDataModelTypes.h"
+#include "WallMovement/Modes/GSTN_WallClimbV2MovementMode.h"
 #include "WallMovement/Modes/GSTN_WallSlideV2MovementMode.h"
 
 struct FGSTN_WallTraverseTestAccess
@@ -14,6 +15,23 @@ struct FGSTN_WallTraverseTestAccess
 		const FVector& WallIntent, float DeltaSeconds)
 	{
 		return Mode.ComputeWallVelocity(StartState, Plane, WallIntent, DeltaSeconds);
+	}
+
+	static FVector ComputeWallVelocity(const UGSTN_WallClimbV2MovementMode& Mode, const FMoverTickStartData& StartState, const FGSTN_WallMovementPlane& Plane,
+		const FVector& WallIntent, float DeltaSeconds)
+	{
+		return Mode.ComputeWallVelocity(StartState, Plane, WallIntent, DeltaSeconds);
+	}
+
+	/** Pretends the mode was registered on a Mover component under this name (the vote does nothing without one) */
+	static void SetRegisteredName(UGSTN_WallTraverseModeBase& Mode, FName ModeName)
+	{
+		Mode.RegisteredModeName = ModeName;
+	}
+
+	static void Vote(const UGSTN_WallTraverseModeBase& Mode, const FMoverSyncState& SyncState, FGSTN_WallTickState& State)
+	{
+		Mode.UpdateSurfaceVote(SyncState, State);
 	}
 
 	static void Step(const UGSTN_WallTraverseModeBase& Mode, const FMovingComponentSet& MovingComps, float DeltaSeconds, bool bHasDirIntent,

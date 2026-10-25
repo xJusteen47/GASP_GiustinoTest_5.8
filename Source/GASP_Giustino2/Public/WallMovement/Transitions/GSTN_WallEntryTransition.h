@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/HitResult.h"
 #include "GameplayTagContainer.h"
 #include "MovementModeTransition.h"
 #include "WallMovement/GSTN_WallMovementTypes.h"
@@ -167,9 +168,17 @@ protected:
 	{
 		FVector Normal = FVector::ZeroVector;
 		FVector Point = FVector::ZeroVector;
+		/** The sweep hit that found the wall (its component is what a surface-driven subclass resolves) */
+		FHitResult Hit;
 	};
 
 	friend struct FGSTN_WallEntryTestAccess;
+
+	/**
+	 * The mode to enter for a wall FindEntryWall accepted. Base: TargetModeName, so a transition behaves exactly as before. Subclasses that choose the
+	 * mode by what they found (UGSTN_WallSurfaceModeTransition, the wall's surface) override it; None = refuse the wall
+	 */
+	virtual FName ResolveEntryMode(const FEntryCandidate& Candidate, const FSimulationTickParams& Params) const;
 
 	/** All the checks. Returns false (with the reason when logging) if the wall can't be grabbed now */
 	bool FindEntryWall(const FSimulationTickParams& Params, FEntryCandidate& OutCandidate) const;

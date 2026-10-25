@@ -328,8 +328,8 @@ protected:
 	/** Target capsule orientation: facing the wall, with ComputeTargetUp as up */
 	FQuat ComputeTargetOrientation(const FQuat& CurrentQuat, const FVector& WallNormal, const FVector& GravityUp, const FVector& Velocity, float DeltaSeconds) const;
 
-	/** Query parameters from the Surface Detection and Adhesion settings */
-	FGSTN_WallCheckSettings GetWallCheckSettings() const;
+	/** Query parameters from the Surface Detection and Adhesion settings. Virtual so a mode can widen what it accepts (the v2 modes' surface mode list) */
+	virtual FGSTN_WallCheckSettings GetWallCheckSettings() const;
 
 	/** Wall normal of the sync state, or the capsule's back if there is none yet */
 	static FVector GetWallNormal(const FGSTN_WallMovementSyncState* WallState, const FQuat& FallbackOrientation);

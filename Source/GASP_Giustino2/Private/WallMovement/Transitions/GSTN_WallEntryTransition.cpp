@@ -26,7 +26,17 @@ UGSTN_WallEntryTransition::UGSTN_WallEntryTransition(const FObjectInitializer& O
 FTransitionEvalResult UGSTN_WallEntryTransition::Evaluate_Implementation(const FSimulationTickParams& Params) const
 {
 	FEntryCandidate Candidate;
-	return FindEntryWall(Params, Candidate) ? FTransitionEvalResult(TargetModeName) : FTransitionEvalResult::NoTransition;
+	if (!FindEntryWall(Params, Candidate))
+	{
+		return FTransitionEvalResult::NoTransition;
+	}
+	const FName ModeName = ResolveEntryMode(Candidate, Params);
+	return ModeName.IsNone() ? FTransitionEvalResult::NoTransition : FTransitionEvalResult(ModeName);
+}
+
+FName UGSTN_WallEntryTransition::ResolveEntryMode(const FEntryCandidate& Candidate, const FSimulationTickParams& Params) const
+{
+	return TargetModeName;
 }
 
 void UGSTN_WallEntryTransition::Trigger_Implementation(const FSimulationTickParams& Params)
@@ -255,6 +265,7 @@ bool UGSTN_WallEntryTransition::FindEntryWall(const FSimulationTickParams& Param
 
 	OutCandidate.Normal = WallNormal;
 	OutCandidate.Point = Hit.ImpactPoint;
+	OutCandidate.Hit = Hit;
 	GSTN_WALL_LOG(1, TEXT("ENTRY -> %s wallN=%s vSpeed=%.0f memReset=%d"), *TargetModeName.ToString(),
 		*GSTNWallDebug::Vec(WallNormal), VerticalSpeed, bMemoryWasReset ? 1 : 0);
 	return true;

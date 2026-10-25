@@ -444,3 +444,26 @@ slower or upward speed up to it, so the slide cannot freeze. Tests: `GSTN.Wall.C
 - Known limit: near a floor the adhesion sweep (along -N, which has a downward part on a slant) can hit the floor before the wall; that reads as "no wall" for the last ~1-2 ticks before the floor rule
   takes over (grace time 0.15 s). Tests `GSTN.Wall.V2.{SlantedWallSlidesDown, OverhangKeepsContact, SlantSlowerThanVertical, SlantNotTreatedAsFloor, EntryAcceptsInclinedWalls, CornerOnSlantedWallCaps,
   BumpOnSlantedWallSteppedOver, AdhesionGapOnTiltedContact, WrapFindsFaceAroundEdgeOnSlant}` (`GSTN_WallV2SlantTests.cpp`); written with the editor open, so not yet run.
+
+### 6.9 W4b status: the climb mode and the surface-driven choice (2026-10-25)
+
+Built: `UGSTN_WallClimbV2MovementMode` (`ComputeWallVelocity` = `StepClimbVelocity`, `FGSTN_WallClimbControlSettings` incl. entry keep/clamp, filter default `Surface.Behaviour.WallClimb`
+with unmarked surfaces refused, `bAllowCapsuleTilt` declared and inert: the capsule never rotates in v2), the priority list `FGSTN_WallSurfaceModeList` (`GSTN_WallSurfaceModeTypes.h`:
+`{Behaviours, ModeName, BlockedWhen}` entries, default WallClimb -> `WallClimbingV2`, WallSlide -> `WallSlidingV2`, unmarked surfaces -> the slide, 6 ticks of hysteresis), its pure
+functions (`UGSTN_WallSurfaceModeUtils`: `PickMode`, `StepVote`, `ChooseModeForHit`), and two entry transitions that choose the mode by the hit's surface:
+`UGSTN_WallSurfaceModeTransition` (plain) and `UGSTN_AbilityWallSurfaceModeTransition` (the same behind the ability check; the sandbox character's Falling transition is the ability one).
+
+- **Unmarked surfaces are slide walls.** The plugin's catch-all default offers WallClimb too, so reading its behaviours would turn every unauthored wall into a climb wall; `PickMode` treats
+  `Source == Default` apart (`UnknownSurfaceModeName`). Climbing is authored with a `UGSTN_SurfaceBehaviourComponent` offering `WallClimb`.
+- **In-place switch** (`UGSTN_WallTraverseModeBase::UpdateSurfaceVote`, after the world part of the tick): the contact of the adhesion sweep is resolved, `PickMode` names the mode (registered and
+  not blocked), and when it is not this mode for `HysteresisTicks` consecutive ticks the mode `LeaveTo`s it with no time given back. The counter is `FGSTN_WallMovementSyncState::SurfaceSwitchTicks`
+  (rolled back with the state; sent only when non-zero; not compared by `ShouldReconcile`, the mode name is). `Activate` recognises the hand-over (`IsInPlaceSwitchFrom`) and leaves the sync state,
+  velocity, wall and base untouched. While the list is enabled the probes accept every surface any available listed mode takes (`FGSTN_WallSurfaceFilter::AlternativeBehaviours`, filled by the
+  overridden `GetWallCheckSettings`); the mode's own `SurfaceFilter` applies when the list is disabled or only one of its modes is registered.
+- **Stamina hook** is data: `BlockedWhen` on a list entry is a tag query over the Mover tags of the tick's start state. A blocked climb is skipped; a surface whose only matches are blocked sends a
+  character on a wall to `BlockedModeName` (Falling) and refuses the entry. No GAS in the mode: an ability grants the tag.
+- Changes outside the v2 files, all additive and default-off for the legacy modes: `UGSTN_WallMovementModeBase::GetWallCheckSettings` virtual; `FGSTN_WallSurfaceFilter::AlternativeBehaviours` (empty = old
+  behaviour); `FGSTN_WallTickState` contact and vote fields and the sync state's `SurfaceSwitchTicks` (always 0 for legacy modes; one more flag bit on the wire); `UGSTN_WallEntryTransition::ResolveEntryMode`
+  (returns `TargetModeName`) and the candidate's hit; `UGSTN_GA_WallSlide::WallModeNames` lists `WallClimbingV2`.
+- Setup: `Tools/GAS/setup_wall_slide_modes.py --use v2climb` registers the climb mode and swaps the Falling entry transition for its surface-driven twin (`v2` / `legacy` swap it back). Tests
+  `GSTN.Wall.V2Climb.*` (`GSTN_WallClimbV2Tests.cpp`) and the sync state round trip. Not covered headless: `Activate`'s in-place path and the transitions' `Evaluate` (PIE).
