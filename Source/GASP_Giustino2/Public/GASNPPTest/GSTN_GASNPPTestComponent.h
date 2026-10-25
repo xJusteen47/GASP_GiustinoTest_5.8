@@ -75,6 +75,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	bool ServerResetToSpawn(FVector Offset);
 
+	/**
+	 * Authority only: teleports the pawn to exactly this world location (no floor search, orientation kept) and stops it, through Mover instant effects like
+	 * ServerResetToSpawn. The trampoline scenario drops the pawn onto a surface from a height with it
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	bool ServerTeleportExact(FVector Location);
+
 	/** Where this pawn spawned (the origin its lane is measured from); zero before BeginPlay */
 	UFUNCTION(BlueprintPure, Category = "GASNPP Test")
 	FVector GetSpawnLocation() const { return SpawnLocation; }

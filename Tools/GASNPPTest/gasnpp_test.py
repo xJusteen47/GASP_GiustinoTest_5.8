@@ -5243,6 +5243,259 @@ def scenario_ko_zone(client=1):
     run.run(steps)
 
 
+# ---- M4 H11b: the trampoline (GSTNLevelObjects). A trampoline is static level data, so the scenario spawns the same one in every world of the process
+# (UGSTN_TrampolineTestLibrary) with the same arguments, as a level would carry them; it is not replicated.
+TRAMPOLINE_KINDS = (
+    # name, lean of the launch face towards the pawn's facing (degrees from world up), size (depth, width, height) in cm, launch speed cm/s,
+    # height of the capsule centre above the face the pawn is dropped from. The wall one is a face 70 degrees from the horizontal: running into a vertical
+    # face needs a stick direction relative to a camera the harness cannot rely on, so the pawn is dropped on a steep face instead
+    ('flat', 0.0, (400.0, 400.0, 60.0), 1100.0, 220.0),
+    ('tilted', 20.0, (300.0, 300.0, 80.0), 1000.0, 240.0),
+    ('wall', 70.0, (500.0, 260.0, 60.0), 900.0, 260.0),
+)
+
+
+def _surface_launch(wi, key):
+    """(count, frame, vx, vy, vz, surface type index, incoming speed) of the launches the surface probe of world wi's copy queued; the count includes
+    re-simulated frames on a client"""
+    p = _hit_comp(wi, key).get_surface_launch_info().split(',')
+    return int(p[0]), int(p[1]), float(p[2]), float(p[3]), float(p[4]), int(p[5]), float(p[6])
+
+
+def _trampolines_everywhere(center, up, size, speed):
+    return [unreal.GSTN_TrampolineTestLibrary.spawn_test_trampoline(w, unreal.Vector(*center), unreal.Vector(*up), unreal.Vector(*size), speed,
+                                                                    unreal.Vector(0.0, 0.0, 1.0), False, True, False) for w in worlds()]
+
+
+def _clear_trampolines():
+    return [unreal.GSTN_TrampolineTestLibrary.clear_test_trampolines(w) for w in worlds()]
+
+
+def _lane_state(key):
+    """((x, y) of the pawn's lane, floor z under it, yaw) from the pawn at rest on its lane"""
+    c = comps(worlds()[0])[key]
+    off, sp = lane_offset(lane_keys().index(key)), c.get_spawn_location()
+    a = snap(worlds()[0])[key]
+    hh = c.get_owner().get_component_by_class(unreal.CapsuleComponent).get_scaled_capsule_half_height()
+    return (sp.x + off.x, sp.y + off.y), a['location'][2] - hh, a['yaw']
+
+
+def scenario_trampoline(client=1, shot_time=5.0):
+    """M4 H11b, the trampoline (GSTNLevelObjects) and the launch of a combatant that is not tumbling. Two pawns (the client's, and the host's in a listen
+    session or the second client's on a dedicated server) are dropped onto a flat, a tilted and a steep trampoline of different sizes and speeds, each
+    pawn on its own lane. Wanted per pawn and trampoline: the surface probe queued one launch on the authority, with the velocity along the trampoline's up
+    at its speed and the Surface.Type.Trampoline index; a predicting client queued the same velocity; the client's trajectory equals the authority's
+    (max distance at equal simulation times) from the launch on, and where the pawn comes to rest the two agree; a host pawn rolled back 0 times. Last
+    shot: a TUMBLING victim thrown into a trampoline wall by a real hit bounces once (one Combat.Event.Impact.Bounce on the host, one bounce counted by
+    its step) and the surface probe does not launch it."""
+    rig = _HitRig('trampoline', client)
+    run, vi = rig.run, rig.vi
+    listen = detected_mode() == 'listen'
+    pawns = [('A', rig.akey, client, 'srv', 'cli')]
+    if listen:
+        hk = key_of_player(0)
+        run.extra += [('h_srv', 0, hk), ('h_prox', client, hk)]
+        pawns.append(('H', hk, 0, 'h_srv', 'h_prox'))
+    else:
+        pawns.append(('V', rig.vkey, vi, 'v_srv', 'v_cli'))
+    trampoline_type = None
+    try:
+        trampoline_type = unreal.GSTN_SurfaceUtils.get_surface_type_index(unreal.GameplayTagLibrary.make_literal_gameplay_tag(unreal.GameplayTag('Surface.Type.Trampoline')))
+    except Exception:
+        pass
+    S = {}   # kind -> {'up': {label: up}, 'speed', 'launch': {label: (auth, own)}, 'win': {label: {side: [...]}}, 'rb': {label: n}}
+
+    def shot_start(kind):
+        name, lean, size, speed, drop = kind
+        s = S[name] = {'up': {}, 'speed': speed, 'launch': {}, 'win': {}, 'rb': {}, 'n0': {}, 'drop': drop, 'size': size}
+
+        def f():
+            _clear_trampolines()
+            s['t0'] = run.now()
+            for label, key, oi, _, _ in pawns:
+                (x, y), floor, yaw = _lane_state(key)
+                a = math.radians(lean)
+                up = (math.cos(math.radians(yaw)) * math.sin(a), math.sin(math.radians(yaw)) * math.sin(a), math.cos(a))
+                centre = (x, y, floor + size[2] / 2.0) if lean == 0.0 else (x, y, floor + 300.0)
+                face = tuple(centre[i] + up[i] * size[2] / 2.0 for i in range(3))
+                _trampolines_everywhere(centre, up, size, speed)
+                s['up'][label] = up
+                s['n0'][label] = _surface_launch(0, key)[0]
+                s['rb'][label] = rollbacks(oi) if oi else rollbacks(0)
+                comps(worlds()[0])[key].server_teleport_exact(unreal.Vector(face[0], face[1], face[2] + drop))
+            return 'dropped', name
+        return f
+
+    def shot_first_launch(name):
+        def f():
+            s = S[name]
+            for label, key, oi, _, _ in pawns:
+                s['launch'][label] = (_surface_launch(0, key), _surface_launch(oi, key) if oi else None)
+            return 'first launch read', name
+        return f
+
+    def shot_collect(name):
+        def f():
+            s = S[name]
+            t0, t1 = s['t0'] + 1.0, run.now()
+            for label, key, oi, a, b in pawns:
+                s['win'][label] = {a: run._win(a, t0, t1, sim=True), b: run._win(b, t0, t1, sim=(b != 'h_prox'))}  # a proxy runs no simulation: editor-tick samples
+                s['rb'][label] = (s['rb'][label], rollbacks(oi) if oi else rollbacks(0))
+            return 'collected', name
+        return f
+
+    def traj(entries):
+        out = {}
+        for e in entries:
+            out[e['ms']] = e   # the last entry of a simulation time is the one that stood (a resimulated tick comes later)
+        return out
+
+    def check_launch(name, label):
+        def f():
+            s = S[name]
+            (auth, own) = s['launch'][label]
+            n = auth[0] - s['n0'][label]
+            want = tuple(u * s['speed'] for u in s['up'][label])
+            dv = math.dist(auth[2:5], want)
+            ok = n == 1 and dv < 1.0 and (trampoline_type is None or auth[5] == trampoline_type)
+            detail = f'launches queued on the authority {n}, velocity {tuple(round(v, 1) for v in auth[2:5])} wanted {tuple(round(v, 1) for v in want)} (off by {dv:.2f}), type index {auth[5]} (Trampoline {trampoline_type}), arrival speed {auth[6]:.0f}'
+            if own is not None:
+                dv_own = math.dist(own[2:5], auth[2:5])
+                ok = ok and own[0] >= 1 and own[1] == auth[1] and dv_own < 1.0
+                detail += f'; owner: count {own[0]} (re-simulated frames count), frame {own[1]} vs {auth[1]}, velocity off by {dv_own:.2f}'
+            return ok, detail
+        return f
+
+    def check_traj(name, label, a, b):
+        def f():
+            w = S[name]['win'][label]
+            ta, tb = traj(w[a]), traj(w[b])
+            common = sorted(set(ta) & set(tb))
+            if len(common) < 60:
+                return False, f'only {len(common)} simulation times in common'
+            worst = max(math.dist(ta[m]['loc'], tb[m]['loc']) for m in common)
+            peak = max(math.dist(e['vel'], (0, 0, 0)) for e in ta.values())
+            return worst < 3.0 and peak > 0.4 * S[name]["speed"], f'{len(common)} equal-time ticks, worst distance authority vs owner {worst:.2f} cm, peak speed {peak:.0f} (launch {S[name]["speed"]:.0f})'
+        return f
+
+    def check_rest(name, label, a, b):
+        def f():
+            w = S[name]['win'][label]
+            ta, tb = traj(w[a]), traj(w[b])
+            last = max(set(ta) & set(tb), default=None)
+            if last is None:
+                return False, 'no common tick'
+            d = math.dist(ta[last]['loc'], tb[last]['loc'])
+            moved = math.dist(ta[min(ta)]['loc'], ta[last]['loc'])
+            return d < 3.0, f'last common tick {last}: distance {d:.2f} cm between {a} and {b}, authority moved {moved:.0f} cm from the first sample, mode {ta[last]["mode"]}'
+        return f
+
+    def check_proxy(name, label, a, b):
+        # the host's pawn as a simulated proxy on the client: interpolated and delayed, so only where it comes to rest is compared (xy)
+        def f():
+            w = S[name]['win'][label]
+            ea, eb = w[a][-1] if w[a] else None, w[b][-1] if w[b] else None
+            if not ea or not eb:
+                return False, 'no samples'
+            d = math.dist(ea['loc'][:2], eb['loc'][:2])
+            return d < 40.0, f'host pawn xy: authority {tuple(round(v) for v in ea["loc"][:2])}, proxy on the client {tuple(round(v) for v in eb["loc"][:2])}, {d:.0f} cm apart'
+        return f
+
+    def check_host_rollbacks(name, label):
+        def f():
+            r0, r1 = S[name]['rb'][label]
+            return r1 - r0 == 0, f'host pawn rollbacks during the shot {r1 - r0}'
+        return f
+
+    def check_client_rollbacks(name, label):
+        def f():
+            r0, r1 = S[name]['rb'][label]
+            return r1 - r0 <= 3, f'rollbacks of the predicting client during the shot {r1 - r0} (the teleport that drops the pawn is the server\'s: one correction, a few more at 2 % loss)'
+        return f
+
+    # ---- the tumbling victim thrown into a trampoline wall
+    B = {}
+
+    def bounce_prep():
+        _clear_trampolines()
+        combat_clear(client)
+        set_damage(rig.vkey, IMPACT_DAMAGE)
+        a = snap(worlds()[0])[rig.akey]
+        fwd = (math.cos(math.radians(a['yaw'])), math.sin(math.radians(a['yaw'])))
+        centre = IMPACT_FACE + 50.0
+        c = (a['location'][0] + fwd[0] * centre, a['location'][1] + fwd[1] * centre, a['location'][2] + 200.0)
+        up = (-fwd[0], -fwd[1], 0.0)   # the launch face looks at the attacker
+        B['names'] = _trampolines_everywhere(c, up, (1000.0, 1000.0, 100.0), 1100.0)
+        B['counts0'] = (_impact_counts(0, rig.vkey), _impact_counts(vi, rig.vkey))
+        B['launch0'] = _surface_launch(0, rig.vkey)[0]
+        B['fwd'] = fwd
+        for other in [k for k in comps(worlds()[0]) if k not in (rig.akey, rig.vkey)]:
+            _place_near(client, other, (-350.0, 350.0))
+        return 'trampoline wall', B['names']
+
+    def bounce_setup():
+        hit_rules_setup()
+        set_tuning(push_back_threshold=50.0, launch_threshold=100.0, tumble_threshold=200.0)
+        B['rows'] = unreal.GSTN_ImpactTestLibrary.configure_impact_table(IMPACT_ROWS)
+        unreal.GSTN_ImpactTestLibrary.set_hit_impact_profile(0, 0, False, 1.0)
+        return 'impact table on', B['rows']
+
+    def bounce_collect():
+        B['counts1'] = (_impact_counts(0, rig.vkey), _impact_counts(vi, rig.vkey))
+        B['launch1'] = _surface_launch(0, rig.vkey)[0]
+        B['events'] = [e for e in event_log(rig.vkey, 0) if e[1] == 'ImpactBounce' and e[2] >= rig.shots['bounce']['F0']]
+        return 'bounce collected'
+
+    def check_bounce():
+        s = rig.shots['bounce']
+        d = tuple(b - a for a, b in zip(B['counts0'][0], B['counts1'][0]))
+        yaw_f = B['fwd']
+        vx = [e['vel'][0] * yaw_f[0] + e['vel'][1] * yaw_f[1] for e in s['srv']]
+        out, back = max(vx, default=0.0), min(vx, default=0.0)
+        ok = d == (0, 1, 0) and len(B['events']) == 1 and out > 150.0 and back < -150.0
+        return ok, f'impacts (splat, bounce, break) on the authority {d}, Combat.Event.Impact.Bounce events on the host {len(B["events"])}, speed along the attacker facing: out up to {out:.0f}, back down to {back:.0f}'
+
+    def check_no_launch_while_tumbling():
+        return B['launch1'] == B['launch0'], f'surface launches queued for the tumbling victim: {B["launch1"] - B["launch0"]} (the row bounces it, the probe leaves it alone)'
+
+    def end():
+        _clear_trampolines()
+        unreal.GSTN_ImpactTestLibrary.set_hit_impact_profile(0, 0, False, 1.0)
+        unreal.GSTN_ImpactTestLibrary.configure_impact_table('')
+        set_damage(rig.vkey, 0)
+        hit_rules_setup()
+        return 'trampolines removed'
+
+    steps = [rig.setup_step(), (0.5, bounce_setup)]
+    t = 2.0
+    for kind in TRAMPOLINE_KINDS:
+        name = kind[0]
+        steps += [(t, shot_start(kind)), (t + 1.4, shot_first_launch(name)), (t + shot_time, shot_collect(name))]
+        t += shot_time + 0.6
+    steps += [(t, lambda: (_clear_trampolines(), 'cleared')[1]), (t + 0.2, lambda: ('lanes', len(reset_lanes())))]
+    rig.cursor = t + 3.5
+    steps += rig.shot('bounce', prep=bounce_prep, wait=3.6)
+    t = rig.cursor
+    steps += [(t, bounce_collect)]
+    for kind in TRAMPOLINE_KINDS:
+        name = kind[0]
+        for label, key, oi, a, b in pawns:
+            who = f'pawn {label}'
+            steps += [(t, run.at(f'{name}: {who} launched once along the trampoline up at its speed, the owner queued the same', check_launch(name, label)))]
+            if oi:
+                steps += [(t, run.at(f'{name}: {who} trajectory equals the authority\'s on its predicting client', check_traj(name, label, a, b))),
+                          (t, run.at(f'{name}: {who} lands where the authority does', check_rest(name, label, a, b))),
+                          (t, run.at(f'{name}: {who} client rollbacks', check_client_rollbacks(name, label)))]
+            else:
+                steps += [(t, run.at(f'{name}: {who} (host) comes to rest where its proxy on the client does', check_proxy(name, label, a, b))),
+                          (t, run.at(f'{name}: {who} (host) rolled back 0 times', check_host_rollbacks(name, label)))]
+    steps += [(t, run.at('a tumbling victim bounces once off a trampoline wall (one Combat.Event.Impact.Bounce)', check_bounce)),
+              (t, run.at('the surface probe does not launch a tumbling victim', check_no_launch_while_tumbling))]
+    rig.cursor = t
+    steps += rig.end_steps(extra=[end])
+    run.run(steps)
+
+
 # ---- Suite runner (C15): runs scenarios that report through _Run one after the other inside a single editor tick callback, so one python call
 # starts the whole batch and a later one reads suite_report(). reset_all() and a settle pause come before each; a scenario that does not
 # report within its timeout is recorded as TIMEOUT and the suite moves on. loadout_change goes next to last (its loadout outlives the scenario), then hit_on_wall and hitstop_montage: after hit_on_wall and after the 12 s montage of hitstop_montage the next scenario failed (command_set landing z, jump_squat rising tick), so nothing runs after them.
@@ -5253,7 +5506,7 @@ def scenario_ko_zone(client=1):
 # (the wall of scenario_jump_wall is on the +X side, x about 1000); +Y of it there are props, so the third lane goes to -Y, not +Y.
 LANE_SPACING = 1500.0
 LANE_POSE_TOL = 30.0       # cm, horizontal: the pose the sim confirms before a scenario starts (a teleport next to a prop is nudged a few cm)
-LANE_Z_TOL = 80.0
+LANE_Z_TOL = 120.0   # a dedicated session recorded the spawn at z 0.3 (the pawn stands at 87): the pose, not the height, is what the reset check is for
 
 
 def lane_offset(lane):
@@ -5826,7 +6079,7 @@ SUITE_DEFAULT = ['weapon_switch','combat_context', 'combat_main_inputs', 'combat
                  # the hit scenarios: the attacker carries KIT_Test_Hits from here on; the victim (client 2) stays kit-free until hit_trade, so the real dodge in
                  # hitstun (a pawn with no loadout) runs before it
                  'hit_basic', 'stagger_threshold', 'reaction_tiers', 'di', 'ko_zone', 'dodge_blocked_in_hitstun', 'hit_trade', 'friendly_fire', 'hit_host', 'hit_lagcomp',
-                 'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'impact_wall', 'impact_wall_mode', 'hitstop_montage']
+                 'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'impact_wall', 'impact_wall_mode', 'trampoline', 'hitstop_montage']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 

@@ -128,7 +128,7 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 					++TimelineStartedCounts.FindOrAdd(Source);
 				}
 			}).Id;
-		HitEventListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer::CreateFromArray(TArray<FGameplayTag>{ GSTNCombatTags::Event_HitLanded, GSTNCombatTags::Event_HitReceived, GSTNCombatTags::Event_KO })),
+		HitEventListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer::CreateFromArray(TArray<FGameplayTag>{ GSTNCombatTags::Event_HitLanded, GSTNCombatTags::Event_HitReceived, GSTNCombatTags::Event_KO, GSTNCombatTags::Event_Impact_Bounce })),
 			[this](const FGSTN_SimEvent& Event)
 			{
 				const bool bTarget = Event.Target.Get() == GetOwner();
@@ -137,7 +137,7 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 				{
 					return;
 				}
-				const TCHAR* Type = Event.EventType == GSTNCombatTags::Event_HitLanded ? TEXT("HitLanded") : Event.EventType == GSTNCombatTags::Event_HitReceived ? TEXT("HitReceived") : TEXT("KO");
+				const TCHAR* Type = Event.EventType == GSTNCombatTags::Event_HitLanded ? TEXT("HitLanded") : Event.EventType == GSTNCombatTags::Event_HitReceived ? TEXT("HitReceived") : Event.EventType == GSTNCombatTags::Event_Impact_Bounce ? TEXT("ImpactBounce") : TEXT("KO");
 				TArray<FString> Names;
 				for (const FGameplayTag& Tag : Event.Tags)
 				{
@@ -711,6 +711,27 @@ bool UGSTN_GASNPPTestComponent::ServerResetToSpawn(FVector Offset)
 
 	return true;
 }
+
+bool UGSTN_GASNPPTestComponent::ServerTeleportExact(FVector Location)
+{
+	if (!Mover || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	TSharedPtr<FTeleportEffect> Teleport = MakeShared<FTeleportEffect>();
+	Teleport->TargetLocation = Location;
+	Teleport->bUseActorRotation = true;
+	Mover->QueueInstantMovementEffect(Teleport);
+
+	TSharedPtr<FApplyVelocityEffect> Stop = MakeShared<FApplyVelocityEffect>();
+	Stop->VelocityToApply = FVector::ZeroVector;
+	Stop->bAdditiveVelocity = false;
+	// A pawn left in Walking in the air does not look for a floor while it stands still: it has to fall
+	Stop->ForceMovementMode = TEXT("Falling");
+	Mover->QueueInstantMovementEffect(Stop);
+	return true;
+}
+
 
 bool UGSTN_GASNPPTestComponent::ServerResetTestState(FVector Offset)
 {
