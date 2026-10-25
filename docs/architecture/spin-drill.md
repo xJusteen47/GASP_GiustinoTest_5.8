@@ -355,6 +355,15 @@ No string tags in code; all through `UE_DECLARE_GAMEPLAY_TAG_EXTERN`.
   answered: stick rotation + keyboard shortcut, button still open).
 - **Input-dependent hitboxes** (e.g. a vertical swing that turns diagonal while the stick is held): a general timeline feature,
   passed to the planning thread; nothing in the drill needs it.
+- **Where the general items now live** (planning thread, commit e84fb7b on the PR #4 branch): demolition force in
+  `combat-m4-hits.md` §7c (`FGSTN_HitData::DemolitionForce`, `UGSTN_DestructibleComponent` in `GSTNLevelObjects`, plan H14): the drill
+  tip carries its own value, and below a prop's threshold the drill bounces as "not drillable" (§7.6); hitboxes that change with
+  other factors in `combat-m4-hits.md` §3 (plan H15); keyboard spin in `input.md` §9 (`DigitalMinDegrees` per slot plus a
+  `bDigitalDirection` bit in the input frame; A-S-D is counter-clockwise, D-S-A clockwise); the reserved link row
+  `Combat.Link.Type.Drill` (roles `Driller`/`Drilled`, owner `GSTNSpinDrill`) in `combat-m6-defence-links.md`; drillability by
+  penetration vs hardness referenced from `combat-parts.md` §3.4. New rule that affects the tip: world occlusion with a pass-through
+  radius and hurtbox openings (`combat-m4-hits.md` §9c, plans H16, P18): a thin tip can enter cavities that have an opening, a
+  thick one stays on the armour, so the tip's pass radius is part of the drill data.
 - **Sequencing**: these general items go to planning first; the detailed design of the individual abilities resumes after that.
 
 ## 14. Domande per Giustino (italiano)
