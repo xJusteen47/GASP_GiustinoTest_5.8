@@ -13,6 +13,10 @@ class UScriptStruct;
  * clamping, selection) and the track's adapter owns the layout of the keys, so the keyed tracks that arrive with M4 and
  * M4b plug in with one registration and no change to the model.
  *
+ * A track may keep its keys in several lanes (the hitbox track: one lane per hitbox spec, each with its own path). Key indices stay flat over
+ * the track, lane after lane, each lane sorted by frame, so a selection is still (track, key index). The lane API below has defaults for a track
+ * with one lane, so an adapter that has none ignores it.
+ *
  * Contract:
  *  - Frames are absolute timeline frames. An adapter whose keys store a frame relative to the track's window converts.
  *  - Nothing here opens a transaction, notifies or clamps: the model does, so every adapter behaves the same way.
@@ -42,6 +46,17 @@ public:
 	 * added on the curve does not change the curve.
 	 */
 	virtual int32 AppendKey(FGSTN_TimelineTrack& Track, int32 Frame, const void* KeyData) const = 0;
+
+	/** How many lanes the track keeps its keys in; the lane of a key is GetKeyLane. 1 for a track with one path */
+	virtual int32 GetLaneCount(const FGSTN_TimelineTrack& Track) const { return 1; }
+
+	virtual int32 GetKeyLane(const FGSTN_TimelineTrack& Track, int32 KeyIndex) const { return 0; }
+
+	/**
+	 * AppendKey into a lane. The returned index is where the key is in the track after the call, and the keys of later lanes have moved up by one:
+	 * a caller that appends several keys does it in ascending lane order, so the indices it holds stay valid. Default: the only lane.
+	 */
+	virtual int32 AppendKeyInLane(FGSTN_TimelineTrack& Track, int32 Lane, int32 Frame, const void* KeyData) const { return AppendKey(Track, Frame, KeyData); }
 
 	virtual void RemoveKey(FGSTN_TimelineTrack& Track, int32 KeyIndex) const = 0;
 

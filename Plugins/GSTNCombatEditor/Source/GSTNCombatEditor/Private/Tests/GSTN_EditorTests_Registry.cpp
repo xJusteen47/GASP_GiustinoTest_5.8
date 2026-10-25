@@ -195,8 +195,8 @@ bool FGSTN_RegistryGenericRowTest::RunTest(const FString& Parameters)
 	// Add Track offers the tracks that have no editor, as generic rows, and not the ones that have
 	TArray<const UScriptStruct*> Others;
 	Registry.GetUnregisteredTrackStructs(Others);
-	TestTrue(TEXT("the declared hitbox shell has no editor yet"), Others.Contains(FGSTN_TimelineTrack_Hitbox::StaticStruct()));
-	TestTrue(TEXT("nor the hurtbox modifier shell"), Others.Contains(FGSTN_TimelineTrack_HurtboxModifier::StaticStruct()));
+	TestFalse(TEXT("the hitbox track has its editor since E5b"), Others.Contains(FGSTN_TimelineTrack_Hitbox::StaticStruct()));
+	TestFalse(TEXT("so has the hurtbox modifier"), Others.Contains(FGSTN_TimelineTrack_HurtboxModifier::StaticStruct()));
 	TestFalse(TEXT("a track with an editor is not offered twice"), Others.Contains(FGSTN_TimelineTrack_Movement::StaticStruct()));
 	TestFalse(TEXT("hidden test tracks are not offered"), Others.Contains(Unknown));
 	TestFalse(TEXT("the base struct is not a track kind"), Others.Contains(FGSTN_TimelineTrack::StaticStruct()));
@@ -262,7 +262,8 @@ bool FGSTN_RegistryBuiltInsTest::RunTest(const FString& Parameters)
 	FGSTN_TimelineTrack_Movement Move;
 	TestTrue(TEXT("a movement without a curve says so"), Registry.FindOrGeneric(FGSTN_TimelineTrack_Movement::StaticStruct())->GetRowLabel(Move).ToString().Contains(TEXT("no curve")));
 
-	TestFalse(TEXT("the hitbox shell has no editor before E5b"), Registry.IsRegistered(FGSTN_TimelineTrack_Hitbox::StaticStruct()));
+	TestTrue(TEXT("the hitbox track has an editor (E5b)"), Registry.IsRegistered(FGSTN_TimelineTrack_Hitbox::StaticStruct()));
+	TestTrue(TEXT("and the hurtbox modifier"), Registry.IsRegistered(FGSTN_TimelineTrack_HurtboxModifier::StaticStruct()));
 
 	// The test tab and its console command are gone
 	TestNull(TEXT("no panel test command"), IConsoleManager::Get().FindConsoleObject(TEXT("gstn.Combat.OpenTimelinePanelTest")));
@@ -456,7 +457,7 @@ bool FGSTN_RegistryAddTrackTest::RunTest(const FString& Parameters)
 	}
 
 	// Without an editor a track is added as the struct's own defaults
-	const int32 HitboxIndex = F.Model->AddTrack(FGSTN_TimelineTrack_Hitbox::StaticStruct(), 7, 3);
+	const int32 HitboxIndex = F.Model->AddTrack(FGSTN_TestKeyedTrack::StaticStruct(), 7, 3);
 	const FGSTN_TimelineTrack* Hitbox = F.Model->GetTrack(HitboxIndex);
 	TestTrue(TEXT("a track nobody has an editor for is still added"), Hitbox != nullptr && Hitbox->StartFrame == 7 && Hitbox->EndFrame == 10);
 

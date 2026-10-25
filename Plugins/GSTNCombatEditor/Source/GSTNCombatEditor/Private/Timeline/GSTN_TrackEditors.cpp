@@ -2,6 +2,8 @@
 
 #include "Timeline/GSTN_TrackEditors.h"
 
+#include "Timeline/GSTN_HitboxKeyedAccess.h"
+#include "Timeline/GSTN_TimelineColors.h"
 #include "Timeline/GSTN_TimelineTrackEditor.h"
 #include "UObject/Class.h"
 
@@ -159,6 +161,138 @@ namespace GSTNTrackEditors
 			}
 		};
 
+		/** The part a hitbox or a hurtbox modifier is attached to, as words: the name, the group or the leaf of the tag */
+		FText DescribeSelector(const FGSTN_PartSelector& Part)
+		{
+			TArray<FString> Words;
+			if (!Part.PartName.IsNone())
+			{
+				Words.Add(Part.PartName.ToString());
+			}
+			if (!Part.GroupName.IsNone())
+			{
+				Words.Add(Part.GroupName.ToString());
+			}
+			if (Part.PartTag.IsValid())
+			{
+				Words.Add(LeafOf(Part.PartTag));
+			}
+			return Words.IsEmpty() ? LOCTEXT("NoPart", "(no part)") : FText::FromString(FString::Join(Words, TEXT("/")));
+		}
+
+		/** Hitbox: one window, several hitboxes. The label names the part and each hitbox by its group and where its space is */
+		class FHitboxTrackEditor final : public IGSTN_TrackEditor
+		{
+		public:
+			virtual const UScriptStruct* GetTrackStruct() const override { return StructOf<FGSTN_TimelineTrack_Hitbox>(); }
+			virtual FText GetDisplayName() const override { return LOCTEXT("HitboxName", "Hitbox"); }
+			virtual FName GetIconBrushName() const override { return TEXT("Icons.Target"); }
+			virtual int32 GetDefaultLength() const override { return 3; }
+
+			virtual void InitNewTrack(FGSTN_TimelineTrack& Track, int32 AddedAtFrame, const FGSTN_CombatTimelineData& Data) const override
+			{
+				// A hitbox track with no hitbox hits nothing and has no lane to put a key on: it starts with the default sphere in front of the root.
+				// The part is left empty on purpose: it is the designer's choice, and the validator asks for it
+				static_cast<FGSTN_TimelineTrack_Hitbox&>(Track).Hitboxes.Add(FGSTN_HitboxKeyedAccess::MakeDefaultSpec());
+			}
+
+			virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const override
+			{
+				const FGSTN_TimelineTrack_Hitbox& Hitbox = static_cast<const FGSTN_TimelineTrack_Hitbox&>(Track);
+				const FText Part = DescribeSelector(Hitbox.Part);
+				if (Hitbox.Hitboxes.IsEmpty())
+				{
+					return FText::Format(LOCTEXT("HitboxNoSpecs", "{0}: no hitbox"), Part);
+				}
+				TArray<FString> Specs;
+				const int32 Shown = FMath::Min(Hitbox.Hitboxes.Num(), MaxLeavesShown);
+				for (int32 Index = 0; Index < Shown; ++Index)
+				{
+					Specs.Add(DescribeSpec(Hitbox.Hitboxes[Index]).ToString());
+				}
+				const FText More = Hitbox.Hitboxes.Num() > Shown ? FText::Format(LOCTEXT("HitboxMore", " +{0}"), FText::AsNumber(Hitbox.Hitboxes.Num() - Shown)) : FText::GetEmpty();
+				return FText::Format(LOCTEXT("HitboxLabel", "{0}: {1}{2}"), Part, FText::FromString(FString::Join(Specs, TEXT(", "))), More);
+			}
+
+		private:
+			/** "G0" for a hitbox in root space, "G1 @hand_r" for a baked socket, with the zone when it is not the plain one */
+			static FText DescribeSpec(const FGSTN_HitboxSpec& Spec)
+			{
+				FString Text = FString::Printf(TEXT("G%d"), static_cast<int32>(Spec.HitGroup));
+				switch (Spec.Space)
+				{
+				case EGSTN_HitboxSpace::BakedSocket: Text += Spec.Socket.IsNone() ? FString(TEXT(" @?")) : FString(TEXT(" @")) + Spec.Socket.ToString(); break;
+				case EGSTN_HitboxSpace::WorldAtMoveStart: Text += TEXT(" world"); break;
+				case EGSTN_HitboxSpace::Projectile: Text += TEXT(" projectile"); break;
+				default: break;
+				}
+				if (Spec.Zone == EGSTN_HitboxZone::Sweet)
+				{
+					Text += TEXT(" sweet");
+				}
+				else if (Spec.Zone == EGSTN_HitboxZone::Sour)
+				{
+					Text += TEXT(" sour");
+				}
+				return FText::FromString(Text);
+			}
+		};
+
+		/** HurtboxModifier: a window coloured by the state it gives, labelled with the state and the hurtboxes it addresses */
+		class FHurtboxModifierTrackEditor final : public IGSTN_TrackEditor
+		{
+		public:
+			virtual const UScriptStruct* GetTrackStruct() const override { return StructOf<FGSTN_TimelineTrack_HurtboxModifier>(); }
+			virtual FText GetDisplayName() const override { return LOCTEXT("HurtboxModifierName", "Hurtbox Modifier"); }
+			virtual FName GetIconBrushName() const override { return TEXT("Icons.Lock"); }
+			virtual int32 GetDefaultLength() const override { return 8; }
+
+			virtual FLinearColor GetTrackColor(const FGSTN_TimelineTrack& Track) const override
+			{
+				return GSTNTimelineColors::HurtStateColor(static_cast<const FGSTN_TimelineTrack_HurtboxModifier&>(Track).Kind);
+			}
+
+			virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const override
+			{
+				const FGSTN_TimelineTrack_HurtboxModifier& Modifier = static_cast<const FGSTN_TimelineTrack_HurtboxModifier&>(Track);
+				FText State;
+				switch (Modifier.Kind)
+				{
+				case EGSTN_HurtboxModifierKind::Intangible: State = LOCTEXT("StateIntangible", "Intangible"); break;
+				case EGSTN_HurtboxModifierKind::Armor:
+					State = Modifier.ArmorThreshold.bInfinite ? LOCTEXT("StateSuperArmor", "Super armor")
+						: Modifier.ArmorThreshold.IsSet() ? FText::Format(LOCTEXT("StateArmor", "Armor >= {0}"), FText::AsNumber(Modifier.ArmorThreshold.Value))
+						: LOCTEXT("StateArmorUnset", "Armor (no threshold)");
+					break;
+				default: State = LOCTEXT("StateInvincible", "Invincible"); break;
+				}
+
+				// The hurtboxes it addresses: the selector, the names and the leaves of the tags, a few of them
+				TArray<FString> Targets;
+				if (!Modifier.Part.IsEmpty())
+				{
+					Targets.Add(DescribeSelector(Modifier.Part).ToString());
+				}
+				for (const FName Name : Modifier.AffectedHurtboxes)
+				{
+					Targets.Add(Name.ToString());
+				}
+				for (const FGameplayTag& Tag : Modifier.AffectedTags)
+				{
+					Targets.Add(LeafOf(Tag));
+				}
+				if (Targets.IsEmpty())
+				{
+					return FText::Format(LOCTEXT("HurtboxModifierNoTarget", "{0}: (no hurtbox)"), State);
+				}
+				const int32 Shown = FMath::Min(Targets.Num(), MaxLeavesShown);
+				const FString Joined = FString::Join(TArrayView<const FString>(Targets.GetData(), Shown), TEXT(", "));
+				return Targets.Num() > Shown
+					? FText::Format(LOCTEXT("HurtboxModifierMore", "{0}: {1} +{2}"), State, FText::FromString(Joined), FText::AsNumber(Targets.Num() - Shown))
+					: FText::Format(LOCTEXT("HurtboxModifierLabel", "{0}: {1}"), State, FText::FromString(Joined));
+			}
+		};
+
 		TArray<const UScriptStruct*>& RegisteredByBuiltIns()
 		{
 			static TArray<const UScriptStruct*> Instance;
@@ -194,10 +328,16 @@ namespace GSTNTrackEditors
 		RegisterOne(MakeShared<FTagsTrackEditor>());
 		RegisterOne(MakeShared<FEventTrackEditor>());
 		RegisterOne(MakeShared<FWeaponSwitchTrackEditor>());
+
+		// The tracks of M4 (E5b). The hitbox track keeps its keys in lanes, one per hitbox: the model reaches them through this adapter
+		RegisterOne(MakeShared<FHitboxTrackEditor>());
+		RegisterOne(MakeShared<FHurtboxModifierTrackEditor>());
+		FGSTN_KeyedTrackAccessRegistry::Register(FGSTN_TimelineTrack_Hitbox::StaticStruct(), MakeShared<FGSTN_HitboxKeyedAccess>());
 	}
 
 	void UnregisterBuiltIns()
 	{
+		FGSTN_KeyedTrackAccessRegistry::Unregister(FGSTN_TimelineTrack_Hitbox::StaticStruct());
 		for (const UScriptStruct* Struct : RegisteredByBuiltIns())
 		{
 			FGSTN_TrackEditorRegistry::Get().Unregister(Struct);

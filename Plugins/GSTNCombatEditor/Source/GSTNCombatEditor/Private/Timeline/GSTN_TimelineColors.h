@@ -92,6 +92,20 @@ namespace GSTNTimelineColors
 		return FLinearColor(0.02f, 0.13f, 0.42f, 1.f);
 	}
 
+	/**
+	 * The bar of a hurtbox modifier by the state it gives its hurtboxes (EGSTN_HurtState): invincible blue, intangible violet, armor amber. The kinds
+	 * of EGSTN_HurtboxModifierKind map one to one onto the states. Fixed like the phase colours: the state is what the colour says
+	 */
+	inline FLinearColor HurtStateColor(EGSTN_HurtboxModifierKind Kind)
+	{
+		switch (Kind)
+		{
+		case EGSTN_HurtboxModifierKind::Intangible: return FLinearColor(0.62f, 0.45f, 0.95f, 1.f);
+		case EGSTN_HurtboxModifierKind::Armor: return FLinearColor(0.92f, 0.62f, 0.18f, 1.f);
+		default: return FLinearColor(0.25f, 0.65f, 0.95f, 1.f);
+		}
+	}
+
 	/** The marker of a validation error / warning on a lane (E11): saturated, because it sits on dark bars of any track colour */
 	inline FLinearColor FindingError() { return FLinearColor(0.95f, 0.18f, 0.18f, 1.f); }
 	inline FLinearColor FindingWarning() { return FLinearColor(0.95f, 0.78f, 0.15f, 1.f); }

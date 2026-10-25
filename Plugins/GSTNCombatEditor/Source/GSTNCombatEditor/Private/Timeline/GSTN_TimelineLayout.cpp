@@ -51,6 +51,38 @@ int32 FGSTN_TimelineLayout::GetKeyFrame(const FGSTN_CombatTimelineData& Data, in
 	return (Track && KeyIndex >= 0 && KeyIndex < Access->GetKeyCount(*Track)) ? Access->GetKeyFrame(*Track, KeyIndex) : INDEX_NONE;
 }
 
+int32 FGSTN_TimelineLayout::GetLaneCount(const FGSTN_CombatTimelineData& Data, int32 TrackIndex)
+{
+	const IGSTN_KeyedTrackAccess* Access = FindLayoutKeyAccess(Data, TrackIndex);
+	const FGSTN_TimelineTrack* Track = Access ? Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack>() : nullptr;
+	return Track ? FMath::Max(Access->GetLaneCount(*Track), 1) : 1;
+}
+
+double FGSTN_TimelineLayout::GetLaneY(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, int32 Lane)
+{
+	const int32 Lanes = GetLaneCount(Data, TrackIndex);
+	if (Lanes <= 1)
+	{
+		return RowHeight * 0.5;
+	}
+	// The sub-lanes share the height of the row minus a margin: at most 7 px apart, closer when there are many
+	const double Step = FMath::Min((RowHeight - 10.0) / static_cast<double>(Lanes - 1), 7.0);
+	return RowHeight * 0.5 - Step * static_cast<double>(Lanes - 1) * 0.5 + Step * static_cast<double>(FMath::Clamp(Lane, 0, Lanes - 1));
+}
+
+double FGSTN_TimelineLayout::GetKeyY(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, int32 KeyIndex)
+{
+	const IGSTN_KeyedTrackAccess* Access = FindLayoutKeyAccess(Data, TrackIndex);
+	const FGSTN_TimelineTrack* Track = Access ? Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack>() : nullptr;
+	const int32 Lane = (Track && KeyIndex >= 0 && KeyIndex < Access->GetKeyCount(*Track)) ? Access->GetKeyLane(*Track, KeyIndex) : 0;
+	return GetLaneY(Data, TrackIndex, Lane);
+}
+
+double FGSTN_TimelineLayout::GetKeyHalfSize(const FGSTN_CombatTimelineData& Data, int32 TrackIndex)
+{
+	return GetLaneCount(Data, TrackIndex) > 1 ? 4.0 : 5.0;
+}
+
 bool FGSTN_TimelineLayout::IsKeyedTrack(const FGSTN_CombatTimelineData& Data, int32 TrackIndex)
 {
 	return FindLayoutKeyAccess(Data, TrackIndex) != nullptr;
@@ -107,7 +139,7 @@ EGSTN_LaneHitKind FGSTN_TimelineLayout::HitTestWindow(int32 StartFrame, int32 En
 	return (X > X0 && X < X1) ? EGSTN_LaneHitKind::Body : EGSTN_LaneHitKind::None;
 }
 
-FGSTN_LaneHit FGSTN_TimelineLayout::HitTestTrack(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, const FGSTN_TimelineViewTransform& View, double X)
+FGSTN_LaneHit FGSTN_TimelineLayout::HitTestTrack(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, const FGSTN_TimelineViewTransform& View, double X, double LocalY)
 {
 	FGSTN_LaneHit Hit;
 	const FGSTN_TimelineTrack* Track = Data.Tracks.IsValidIndex(TrackIndex) ? Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack>() : nullptr;
@@ -119,10 +151,17 @@ FGSTN_LaneHit FGSTN_TimelineLayout::HitTestTrack(const FGSTN_CombatTimelineData&
 
 	// Keys sit on top of the bar: the nearest diamond within reach wins
 	const int32 KeyCount = GetKeyCount(Data, TrackIndex);
-	double BestDistance = KeyHalfPixels;
+	// With several lanes and a known y the keys of one frame are told apart by their sub-lane; the x reach is the same
+	const bool bUseY = LocalY >= 0.0 && GetLaneCount(Data, TrackIndex) > 1;
+	double BestDistance = bUseY ? TNumericLimits<double>::Max() : KeyHalfPixels;
 	for (int32 KeyIndex = 0; KeyIndex < KeyCount; ++KeyIndex)
 	{
-		const double Distance = FMath::Abs(X - LayoutFrameCentre(View, GetKeyFrame(Data, TrackIndex, KeyIndex)));
+		const double DistanceX = FMath::Abs(X - LayoutFrameCentre(View, GetKeyFrame(Data, TrackIndex, KeyIndex)));
+		if (DistanceX > KeyHalfPixels)
+		{
+			continue;
+		}
+		const double Distance = bUseY ? FMath::Sqrt(DistanceX * DistanceX + FMath::Square(LocalY - GetKeyY(Data, TrackIndex, KeyIndex))) : DistanceX;
 		if (Distance <= BestDistance)
 		{
 			BestDistance = Distance;

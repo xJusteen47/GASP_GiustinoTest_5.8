@@ -276,8 +276,12 @@ public:
 
 	// Keys (tracks that have a registered FGSTN_KeyedTrackAccess)
 
-	/** Adds a key at Frame with values interpolated from its neighbours, and selects it. Returns its index, INDEX_NONE if the track has no keys or the frame is outside the timeline */
-	int32 AddKey(int32 TrackIndex, int32 Frame);
+	/**
+	 * Adds a key at Frame with values interpolated from its neighbours, and selects it. Returns its index, INDEX_NONE if the track has no keys or the
+	 * frame is outside the timeline. Lane is the lane of a track that keeps several (the hitbox track: the hitbox the key belongs to); INDEX_NONE takes the
+	 * lane of the first selected key of the track, or the first lane
+	 */
+	int32 AddKey(int32 TrackIndex, int32 Frame, int32 Lane = INDEX_NONE);
 
 	/** Moves the selected keys together by DeltaFrames, clamped so the earliest and latest stay inside. Returns how many keys moved. The selection follows the keys through the re-sort */
 	int32 MoveKeys(TConstArrayView<FGSTN_Selection> Keys, int32 DeltaFrames);

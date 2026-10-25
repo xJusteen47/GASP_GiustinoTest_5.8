@@ -116,4 +116,71 @@ bool FGSTN_VisualLaneMarkersTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VisualHitboxRowsTest, "GSTN.Visual.Timeline.HitboxRows", GSTN_VISUAL_TEST_FLAGS)
+bool FGSTN_VisualHitboxRowsTest::RunTest(const FString& Parameters)
+{
+	if (!GSTNVisualSnapshot::CanRender(*this))
+	{
+		return true;
+	}
+
+	TStrongObjectPtr<UGSTN_CombatTimeline> Timeline(NewObject<UGSTN_CombatTimeline>(GetTransientPackage(), NAME_None, RF_Transactional));
+	FGSTN_CombatTimelineData& Data = Timeline->Data;
+	Data.TotalFrames = 40;
+	Data.FirstActionableFrame = 28;
+
+	auto Key = [](int32 Frame, double X)
+	{
+		FGSTN_HitboxKey Result;
+		Result.Frame = Frame;
+		Result.Offset = FVector(X, 0.0, 0.0);
+		return Result;
+	};
+	FGSTN_TimelineTrack_Hitbox Hitbox;
+	Hitbox.StartFrame = 8;
+	Hitbox.EndFrame = 20;
+	Hitbox.Part.GroupName = TEXT("Hands");
+	FGSTN_HitboxSpec Blade;
+	Blade.HitGroup = 0;
+	Blade.Keys = { Key(0, 0.0), Key(4, 40.0), Key(9, 90.0) };
+	FGSTN_HitboxSpec Tip;
+	Tip.HitGroup = 1;
+	Tip.Space = EGSTN_HitboxSpace::BakedSocket;
+	Tip.Socket = TEXT("blade_tip");
+	Tip.Zone = EGSTN_HitboxZone::Sweet;
+	Tip.Keys = { Key(2, 0.0), Key(6, 10.0) };
+	FGSTN_HitboxSpec Guard;
+	Guard.HitGroup = 2;
+	Guard.Keys = { Key(0, 0.0), Key(11, 0.0) };
+	Hitbox.Hitboxes = { Blade, Tip, Guard };
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Hitbox));
+
+	for (const EGSTN_HurtboxModifierKind Kind : { EGSTN_HurtboxModifierKind::Invincible, EGSTN_HurtboxModifierKind::Intangible, EGSTN_HurtboxModifierKind::Armor })
+	{
+		FGSTN_TimelineTrack_HurtboxModifier Modifier;
+		Modifier.StartFrame = 2;
+		Modifier.EndFrame = 14;
+		Modifier.Kind = Kind;
+		Modifier.ArmorThreshold.Value = 30.f;
+		Modifier.AffectedHurtboxes = { TEXT("Torso"), TEXT("Arm_R") };
+		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_HurtboxModifier>(Modifier));
+	}
+
+	const TSharedRef<FGSTN_TimelineEditorModel> Model = MakeShared<FGSTN_TimelineEditorModel>(FGSTN_TimelineEditContext::ForAsset(Timeline.Get()));
+	Model->SetTickRate(62.5f);
+	Model->SetSelection({ FGSTN_Selection::Key(0, 1), FGSTN_Selection::Key(0, 4) });
+	Model->SetPlayhead(12);
+	const TSharedRef<SGSTN_TimelinePanel> Panel = SNew(SGSTN_TimelinePanel).Model(Model);
+	TestFalse(TEXT("a snapshot was written"), GSTNVisualSnapshot::Render(*this, OnEditorPanel(Panel), FIntPoint(1000, 300), TEXT("timeline-hitbox-rows"), [&](int32)
+	{
+		const double LaneWidth = Panel->GetLaneWidth();
+		if (LaneWidth > 0.0)
+		{
+			FGSTN_TimelineLayout::FrameAll(Model->ViewTransform, LaneWidth, Model->GetPlayableFrames());
+			Model->NotifyViewChanged();
+		}
+	}).IsEmpty());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -117,7 +117,7 @@ public:
 	 * Double-click on empty lane space: a key on a keyed track, else a new track of the same kind at Frame, as long as its track
 	 * editor says (IGSTN_TrackEditor::GetDefaultLength; one frame for a track that fires on a single frame). Returns whether something was added
 	 */
-	static bool AddAtFrame(FGSTN_TimelineEditorModel& Model, int32 TrackIndex, int32 Frame);
+	static bool AddAtFrame(FGSTN_TimelineEditorModel& Model, int32 TrackIndex, int32 Frame, int32 Lane = INDEX_NONE);
 
 	/** Delete: the selected keys, or, with no key selected, the selected tracks. Returns how many things were removed */
 	static int32 DeleteSelection(FGSTN_TimelineEditorModel& Model);

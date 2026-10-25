@@ -6,7 +6,7 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.9)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+Status: **experimental (0.10)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
 model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
 (E3, `FGSTN_TimelinePhases`, is in `GSTNCombatCore`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
@@ -92,10 +92,11 @@ the editor. A second toolkit on an open asset is refused and the open one comes 
 | `SGSTN_MontageLengthBar` | same | Warning bar when the montage and `TotalFrames` disagree, with **Fit Total Frames to montage** (undoable, explicit, never automatic). |
 | `SGSTN_TimelineToolbarExtra` | same | Loop range (editor state, not saved), the preview subject picker (E6), Validate (runs the timeline rules, E10). |
 | `IGSTN_TrackEditor`, `FGSTN_TrackEditorRegistry`, `IGSTN_GizmoProvider`, `FGSTN_TrackPreviewContext` | `Public/Timeline/GSTN_TimelineTrackEditor.h` | The extension point (below). |
-| `GSTNTrackEditors` | `Private/Timeline/GSTN_TrackEditors.cpp` | The built-in track editors: CancelWindow, Movement, Tags, Event, WeaponSwitch. |
+| `GSTNTrackEditors` | `Private/Timeline/GSTN_TrackEditors.cpp` | The built-in track editors: CancelWindow, Movement, Tags, Event, WeaponSwitch, and (E5b) Hitbox and HurtboxModifier. |
+| `FGSTN_HitboxKeyedAccess` | `Private/Timeline/GSTN_HitboxKeyedAccess.h` | The keyed adapter of the hitbox track (E5b), below. |
 
 The names, colours, icons, bar labels and default lengths of the rows come from the track editors. A track struct nobody registered
-(the Hitbox and HurtboxModifier shells until E5b, or a game's own track) gets the **generic row**: a window bar named by the struct,
+(a game's own track) gets the **generic row**: a window bar named by the struct,
 its fields in the Details tab. Add Track lists the registered editors, then "Other track types" for the unregistered structs.
 
 ### The preview scene (E6)
@@ -185,6 +186,24 @@ refuses in that case unless it is given a confirmation callback that answers yes
 - The inline editor edits `Timeline` even when `TimelineAsset` is set (the strip says it does not play); it never changes `TimelineAsset`
   except through Extract, which asks first when one is set.
 
+### The Hitbox and HurtboxModifier rows (E5b)
+
+**Hitbox.** One row per track (one window, several hitboxes). The bar is labelled `Part: G0, G1 @hand_r sweet` (the part or group, then each hitbox by its `HitGroup`, where its
+space is and its zone; more than three end in `+N`; the full text is the tooltip of the name column) and the label is drawn where no key covers it. The keys of each hitbox are
+diamonds in their own **sub-lane** of the row (one lane per `FGSTN_HitboxSpec`, a little smaller than the keys of a one-lane track), and a click picks the key
+nearest in x and then in y, so two hitboxes with a key on the same frame are told apart by the height of the click. A double click on a lane adds a key to **the lane under the cursor**;
+`K` and the `+` of the name column add to the lane of the selected key (the first lane when nothing is selected); paste and Ctrl+drag copies go to the lane they came from. A key added on
+a path takes the values the runtime evaluates there (`UGSTN_HitShapeUtils::EvaluateKeys`, the function the hit code reads), so adding a key never changes the path. A track with no hitbox gets
+one with its first key; a new track starts with a default sphere in front of the root. The part, shape, space, socket, group and hit data are edited in the Details tab (the hit data
+customization is E12).
+
+`FGSTN_HitboxKeyedAccess` is the adapter: key indices are flat over the track (the keys of hitbox 0, then hitbox 1, ...), each lane sorted by frame, and the frame the model sees is
+absolute (`FGSTN_HitboxKey::Frame` counts from the track's first frame, so moving the window moves its keys without re-keying). `IGSTN_KeyedTrackAccess` got three
+defaults for it: `GetLaneCount`, `GetKeyLane` and `AppendKeyInLane`; a caller that appends several keys does it in ascending lane order.
+
+**HurtboxModifier.** A window coloured by the state it gives (`GSTNTimelineColors::HurtStateColor`: invincible blue, intangible violet, armor amber; the track editor's new
+`GetTrackColor(Track)` lets a colour depend on the data) and labelled `Armor >= 30: Torso, Arm_R` (the state, its threshold, then the hurtboxes it addresses by part, name or tag).
+
 ## Adding a track editor
 
 A new runtime track (`FMyShieldTrack : FGSTN_TimelineTrack` in a runtime module) becomes a row, an Add Track entry and a Details
@@ -220,7 +239,7 @@ registry. `Validate(Track, Data, Report)` adds the findings that are about your 
 its base's editor until it registers its own. Add a test: a registry case (listed, defaults applied by `AddTrack`) as in
 `GSTN_EditorTests_Registry.cpp`.
 
-Planned in this module, by checkpoint: hitbox and hurtbox-modifier track editors (E5b), gizmos (E7), baker (E8),
+Planned in this module, by checkpoint: gizmos (E7), baker (E8),
 hurtbox set editor (E9), the rest of the validation: M4 rules, the validation panel, Bake all (E11), details customizations (E12, E13).
 
 ## Validation (E10)
@@ -411,6 +430,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.10.0 (2026-10-25, E5b): the Hitbox and HurtboxModifier track editors, the hitbox keyed adapter with one lane per hitbox, key gestures that keep lanes, `GetTrackColor`; tests `Model.Hitbox*`, `Model.AutoKeyCreatesInterpolatedKey`, `Registry.HitboxAndHurtboxRows`, snapshot `GSTN.Visual.Timeline.HitboxRows`.
 - 0.9.0 (2026-10-25, E11): the M4 rules (hitbox keys and groups, hit data, variants, hurt states, baked sockets), the hurtbox set validator, `UGSTN_CombatValidatorBase::BuildReportForAsset`, Validate all (`gstn.Combat.ValidateAll`), the validation panel and its tab, the Frame Data tab that follows the timeline, lane markers; tests `Validate.*` (M4) and `GSTN.Visual.Validation.*`.
 - 0.8.1 (2026-10-25, E3): the phase bar reads `FGSTN_TimelinePhases` of `GSTNCombatCore`.
 - 0.8.0 (2026-10-23, E6): the preview scene: a generic subject (kit and skin, or any skeletal mesh) with attachments, stored per asset in the user's config; the pose set per frame by `FGSTN_PreviewPose`; camera presets, root capsule, facing arrow, overlay registry for M4; tests `Preview.*` and the snapshots `GSTN.Visual.Timeline.Preview*`.

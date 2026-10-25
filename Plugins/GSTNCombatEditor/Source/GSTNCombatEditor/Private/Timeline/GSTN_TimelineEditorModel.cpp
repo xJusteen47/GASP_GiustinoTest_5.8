@@ -96,6 +96,21 @@ namespace GSTNTimelineModel
 		return Entries;
 	}
 
+	/** The lane of the first selected key of the track, 0 when none is selected. A new key goes where the one being worked on is */
+	int32 GetSelectedLaneOf(const FGSTN_CombatTimelineData& Data, TConstArrayView<FGSTN_Selection> Selection, int32 TrackIndex)
+	{
+		const IGSTN_KeyedTrackAccess* Access = FindAccess(Data, TrackIndex);
+		const FGSTN_TimelineTrack* Track = Access ? Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack>() : nullptr;
+		for (const FGSTN_Selection& Item : Selection)
+		{
+			if (Track != nullptr && Item.IsKey() && Item.TrackIndex == TrackIndex && Item.KeyIndex >= 0 && Item.KeyIndex < Access->GetKeyCount(*Track))
+			{
+				return Access->GetKeyLane(*Track, Item.KeyIndex);
+			}
+		}
+		return 0;
+	}
+
 	/** Shift that keeps every entry on [0, Last], starting from the wanted one */
 	int32 ClampKeyDelta(const TArray<FKeyEntry>& Entries, int32 Wanted, int32 LastFrame)
 	{
@@ -659,7 +674,7 @@ bool FGSTN_TimelineEditorModel::ApplyDataEdit(TFunctionRef<void(FGSTN_CombatTime
 
 // Keys
 
-int32 FGSTN_TimelineEditorModel::AddKey(int32 TrackIndex, int32 Frame)
+int32 FGSTN_TimelineEditorModel::AddKey(int32 TrackIndex, int32 Frame, int32 Lane)
 {
 	FGSTN_CombatTimelineData* Data = Context.Get();
 	const IGSTN_KeyedTrackAccess* Access = Data ? FindAccess(*Data, TrackIndex) : nullptr;
@@ -672,7 +687,7 @@ int32 FGSTN_TimelineEditorModel::AddKey(int32 TrackIndex, int32 Frame)
 	int32 NewIndex = INDEX_NONE;
 	{
 		FChangeScope Scope(*this, LOCTEXT("AddKey", "Add key"));
-		NewIndex = Access->AppendKey(*Track, Frame, nullptr);
+		NewIndex = Access->AppendKeyInLane(*Track, Lane != INDEX_NONE ? Lane : GetSelectedLaneOf(*Data, GetSelection(), TrackIndex), Frame, nullptr);
 		TArray<int32> OldToNew;
 		Access->SortKeys(*Track, OldToNew);
 		RemapSelectionKeys(TrackIndex, OldToNew);
@@ -734,8 +749,10 @@ int32 FGSTN_TimelineEditorModel::DuplicateKeys(TConstArrayView<FGSTN_Selection> 
 	const int32 LastFrame = Data->TotalFrames > 0 ? Data->TotalFrames - 1 : UnboundedFrames;
 	const int32 Delta = ClampKeyDelta(Entries, DeltaFrames, LastFrame);
 
-	// Copy every key before the first insertion: appending to a track can move the memory the originals live in
+	// Copy every key before the first insertion: appending to a track can move the memory the originals live in. The lane of each is read now too:
+	// a copy goes into the lane of its original
 	TArray<TSharedPtr<FStructOnScope>> Copies;
+	TArray<int32> Lanes;
 	for (const FKeyEntry& Entry : Entries)
 	{
 		const IGSTN_KeyedTrackAccess* Access = FindAccess(*Data, Entry.Track);
@@ -743,6 +760,7 @@ int32 FGSTN_TimelineEditorModel::DuplicateKeys(TConstArrayView<FGSTN_Selection> 
 		TSharedPtr<FStructOnScope> Copy = MakeShared<FStructOnScope>(Access->GetKeyStruct());
 		Access->GetKeyStruct()->CopyScriptStruct(Copy->GetStructMemory(), Access->GetKey(*Track, Entry.Key));
 		Copies.Add(Copy);
+		Lanes.Add(Access->GetKeyLane(*Track, Entry.Key));
 	}
 
 	TArray<FGSTN_Selection> Duplicates;
@@ -755,9 +773,20 @@ int32 FGSTN_TimelineEditorModel::DuplicateKeys(TConstArrayView<FGSTN_Selection> 
 			FGSTN_TimelineTrack* Track = MutableTrack(Data, TrackIndex);
 			TArray<int32> NewIndices;
 			int32 Next = First;
-			for (; Next < Entries.Num() && Entries[Next].Track == TrackIndex; ++Next)
+			while (Next < Entries.Num() && Entries[Next].Track == TrackIndex)
 			{
-				NewIndices.Add(Access->AppendKey(*Track, Entries[Next].Frame + Delta, Copies[Next]->GetStructMemory()));
+				++Next;
+			}
+			// Ascending lane order: an insert into a lane moves the keys of the lanes after it, never the ones already inserted before it
+			TArray<int32> Order;
+			for (int32 Index = First; Index < Next; ++Index)
+			{
+				Order.Add(Index);
+			}
+			Order.StableSort([&Lanes](int32 A, int32 B) { return Lanes[A] < Lanes[B]; });
+			for (const int32 Index : Order)
+			{
+				NewIndices.Add(Access->AppendKeyInLane(*Track, Lanes[Index], Entries[Index].Frame + Delta, Copies[Index]->GetStructMemory()));
 			}
 			TArray<int32> OldToNew;
 			Access->SortKeys(*Track, OldToNew);
@@ -948,10 +977,12 @@ int32 FGSTN_TimelineEditorModel::PasteKeysFromText(int32 TrackIndex, int32 Frame
 	TArray<int32> NewIndices;
 	TArray<int32> OldToNew;
 	{
+		// The clipboard carries no lane: the keys go to the lane of the key being worked on in the target, else the first
+		const int32 Lane = GetSelectedLaneOf(*Data, GetSelection(), TrackIndex);
 		FChangeScope Scope(*this, LOCTEXT("PasteKeys", "Paste keys"));
 		for (const FPastedKey& Entry : Pasted)
 		{
-			NewIndices.Add(Access->AppendKey(*Track, FMath::Clamp(Frame + Entry.RelativeFrame, 0, LastFrame), Entry.Key->GetStructMemory()));
+			NewIndices.Add(Access->AppendKeyInLane(*Track, Lane, FMath::Clamp(Frame + Entry.RelativeFrame, 0, LastFrame), Entry.Key->GetStructMemory()));
 		}
 		Access->SortKeys(*Track, OldToNew);
 		RemapSelectionKeys(TrackIndex, OldToNew);

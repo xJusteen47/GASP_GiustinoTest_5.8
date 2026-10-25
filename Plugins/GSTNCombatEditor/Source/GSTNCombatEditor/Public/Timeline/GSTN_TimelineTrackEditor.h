@@ -97,6 +97,12 @@ public:
 	virtual FLinearColor GetColor() const;
 
 	/**
+	 * The colour of this track's bar, when it depends on the track's data (the hurtbox modifier by the state it gives). Default: GetColor(),
+	 * the colour of the kind. Called on every paint: keep it cheap
+	 */
+	virtual FLinearColor GetTrackColor(const FGSTN_TimelineTrack& Track) const { return GetColor(); }
+
+	/**
 	 * Name of the Slate brush in the editor style (FAppStyle) drawn in the name column, NAME_None for none. A name, not a brush,
 	 * so this header needs no Slate and a brush that does not exist in a later engine version only loses its icon.
 	 */

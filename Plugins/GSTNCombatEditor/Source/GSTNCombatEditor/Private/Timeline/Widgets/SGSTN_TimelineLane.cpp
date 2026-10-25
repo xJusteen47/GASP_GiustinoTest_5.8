@@ -71,7 +71,7 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 	if (Track != nullptr && TrackStruct != nullptr)
 	{
 		const TSharedRef<const IGSTN_TrackEditor> TrackEditor = FGSTN_TrackEditorRegistry::Get().FindOrGeneric(TrackStruct);
-		const FLinearColor TrackColor = TrackEditor->GetColor();
+		const FLinearColor TrackColor = TrackEditor->GetTrackColor(*Track);
 		const bool bWindowSelected = Model->GetSelection().ContainsByPredicate([this](const FGSTN_Selection& Item) { return Item.TrackIndex == TrackIndex && !Item.IsKey(); });
 		const bool bPoint = FGSTN_TimelineEditorModel::IsPointTrack(*Track);
 		int32 Start = 0;
@@ -113,9 +113,41 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 				}
 				else if (BarSize.X > 30.0)
 				{
-					OutDrawElements.PushClip(FSlateClippingZone(AllottedGeometry.ToPaintGeometry(FVector2f(BarSize), FSlateLayoutTransform(FVector2f(BarPosition)))));
-					DrawLabel(OutDrawElements, LayerId + 7, AllottedGeometry, FVector2D(BarPosition.X + 4.0, 6.0), TrackEditor->GetRowLabel(*Track).ToString(), GSTNTimelineColors::ReadableTextOn(Fill));
-					OutDrawElements.PopClip();
+					// The label goes where no key diamond covers it: left of the first key, else right of the last one, else nowhere (the name
+					// column's tooltip has it). A track without keys has the whole bar
+					double LabelX0 = BarPosition.X + 4.0;
+					double LabelX1 = BarPosition.X + BarSize.X;
+					const int32 LabelKeyCount = FGSTN_TimelineLayout::GetKeyCount(*Data, TrackIndex);
+					if (LabelKeyCount > 0)
+					{
+						double FirstKeyX = TNumericLimits<double>::Max();
+						double LastKeyX = -TNumericLimits<double>::Max();
+						for (int32 KeyIndex = 0; KeyIndex < LabelKeyCount; ++KeyIndex)
+						{
+							const double LabelKeyX = View.FrameToPixel(static_cast<double>(FGSTN_TimelineLayout::GetKeyFrame(*Data, TrackIndex, KeyIndex)) + 0.5);
+							FirstKeyX = FMath::Min(FirstKeyX, LabelKeyX);
+							LastKeyX = FMath::Max(LastKeyX, LabelKeyX);
+						}
+						constexpr double MinLabelWidth = 48.0;
+						if (FirstKeyX - 8.0 - LabelX0 >= MinLabelWidth)
+						{
+							LabelX1 = FirstKeyX - 8.0;
+						}
+						else if (LabelX1 - (LastKeyX + 8.0) >= MinLabelWidth)
+						{
+							LabelX0 = LastKeyX + 8.0;
+						}
+						else
+						{
+							LabelX1 = LabelX0;
+						}
+					}
+					if (LabelX1 > LabelX0)
+					{
+						OutDrawElements.PushClip(FSlateClippingZone(AllottedGeometry.ToPaintGeometry(FVector2f(FVector2D(LabelX1 - LabelX0, BarSize.Y)), FSlateLayoutTransform(FVector2f(FVector2D(LabelX0, BarPosition.Y))))));
+						DrawLabel(OutDrawElements, LayerId + 7, AllottedGeometry, FVector2D(LabelX0, 6.0), TrackEditor->GetRowLabel(*Track).ToString(), GSTNTimelineColors::ReadableTextOn(Fill));
+						OutDrawElements.PopClip();
+					}
 				}
 			}
 		}
@@ -130,12 +162,15 @@ int32 SGSTN_TimelineLane::OnPaint(const FPaintArgs& Args, const FGeometry& Allot
 			{
 				continue;
 			}
-			const double HalfSize = KeyFrame == Model->GetPlayhead() ? 7.0 : 5.0;
+			// A track with several lanes (hitboxes) puts each lane's keys at their own height and draws them a little smaller
+			const double LaneHalf = FGSTN_TimelineLayout::GetKeyHalfSize(*Data, TrackIndex);
+			const double HalfSize = KeyFrame == Model->GetPlayhead() ? LaneHalf + 2.0 : LaneHalf;
+			const FVector2D KeyCentre(KeyX, FGSTN_TimelineLayout::GetKeyY(*Data, TrackIndex, KeyIndex));
 			if (Model->IsSelected(FGSTN_Selection::Key(TrackIndex, KeyIndex)))
 			{
-				DrawDiamond(OutDrawElements, LayerId + 9, AllottedGeometry, FVector2D(KeyX, CentreY), HalfSize + 2.0, SelectionOutline());
+				DrawDiamond(OutDrawElements, LayerId + 9, AllottedGeometry, KeyCentre, HalfSize + 2.0, SelectionOutline());
 			}
-			DrawDiamond(OutDrawElements, LayerId + 10, AllottedGeometry, FVector2D(KeyX, CentreY), HalfSize, FLinearColor(0.98f, 0.9f, 0.55f));
+			DrawDiamond(OutDrawElements, LayerId + 10, AllottedGeometry, KeyCentre, HalfSize, FLinearColor(0.98f, 0.9f, 0.55f));
 		}
 	}
 
@@ -212,7 +247,7 @@ FReply SGSTN_TimelineLane::OnMouseButtonDown(const FGeometry& MyGeometry, const 
 	}
 
 	const FVector2D Content = ToContent(MyGeometry, MouseEvent);
-	const FGSTN_LaneHit Hit = FGSTN_TimelineLayout::HitTestTrack(*Data, TrackIndex, Model->ViewTransform, Content.X);
+	const FGSTN_LaneHit Hit = FGSTN_TimelineLayout::HitTestTrack(*Data, TrackIndex, Model->ViewTransform, Content.X, Content.Y - TrackIndex * FGSTN_TimelineLayout::RowHeight);
 	if (Hit.IsHit())
 	{
 		Gesture->BeginOnHit(*Model, Hit, Content.X, MouseEvent.IsShiftDown(), MouseEvent.IsControlDown());
@@ -269,9 +304,26 @@ FReply SGSTN_TimelineLane::OnMouseButtonDoubleClick(const FGeometry& MyGeometry,
 	}
 	const FGSTN_CombatTimelineData* Data = Model->GetData();
 	const FVector2D Content = ToContent(MyGeometry, MouseEvent);
-	if (Data != nullptr && !FGSTN_TimelineLayout::HitTestTrack(*Data, TrackIndex, Model->ViewTransform, Content.X).IsHit())
+	const double LocalY = Content.Y - TrackIndex * FGSTN_TimelineLayout::RowHeight;
+	if (Data != nullptr && !FGSTN_TimelineLayout::HitTestTrack(*Data, TrackIndex, Model->ViewTransform, Content.X, LocalY).IsHit())
 	{
-		FGSTN_TimelineActions::AddAtFrame(*Model, TrackIndex, Model->ViewTransform.PixelToFrameIndex(Content.X));
+		// On a track with several lanes the double click adds the key to the lane under the cursor
+		const int32 Lanes = FGSTN_TimelineLayout::GetLaneCount(*Data, TrackIndex);
+		int32 Lane = INDEX_NONE;
+		if (Lanes > 1)
+		{
+			double Nearest = TNumericLimits<double>::Max();
+			for (int32 Candidate = 0; Candidate < Lanes; ++Candidate)
+			{
+				const double Y = FGSTN_TimelineLayout::GetLaneY(*Data, TrackIndex, Candidate);
+				if (FMath::Abs(Y - LocalY) < Nearest)
+				{
+					Nearest = FMath::Abs(Y - LocalY);
+					Lane = Candidate;
+				}
+			}
+		}
+		FGSTN_TimelineActions::AddAtFrame(*Model, TrackIndex, Model->ViewTransform.PixelToFrameIndex(Content.X), Lane);
 	}
 	return GSTNTimelineWidgets::WithPanelFocus(FReply::Handled(), FocusTarget);
 }
@@ -300,6 +352,6 @@ FCursorReply SGSTN_TimelineLane::OnCursorQuery(const FGeometry& MyGeometry, cons
 		return FCursorReply::Unhandled();
 	}
 	const FVector2D Local = MyGeometry.AbsoluteToLocal(CursorEvent.GetScreenSpacePosition());
-	const EGSTN_LaneHitKind Kind = FGSTN_TimelineLayout::HitTestTrack(*Data, TrackIndex, Model->ViewTransform, Local.X).Kind;
+	const EGSTN_LaneHitKind Kind = FGSTN_TimelineLayout::HitTestTrack(*Data, TrackIndex, Model->ViewTransform, Local.X, Local.Y).Kind;
 	return (Kind == EGSTN_LaneHitKind::StartEdge || Kind == EGSTN_LaneHitKind::EndEdge) ? FCursorReply::Cursor(EMouseCursor::ResizeLeftRight) : FCursorReply::Unhandled();
 }

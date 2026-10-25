@@ -2,6 +2,7 @@
 
 #include "Timeline/GSTN_TimelineGesture.h"
 
+#include "Timeline/GSTN_KeyedTrackAccess.h"
 #include "Timeline/GSTN_TimelineTrackEditor.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
@@ -14,11 +15,18 @@ namespace
 		return Model.GetSelection().ContainsByPredicate([TrackIndex](const FGSTN_Selection& Item) { return Item.TrackIndex == TrackIndex && !Item.IsKey(); });
 	}
 
-	bool HasKeyAtFrame(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, int32 Frame)
+	/** Is there a key on the frame? On a track with several lanes only the keys of Lane count (INDEX_NONE: any lane) */
+	bool HasKeyAtFrame(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, int32 Frame, int32 Lane = INDEX_NONE)
 	{
 		const int32 KeyCount = FGSTN_TimelineLayout::GetKeyCount(Data, TrackIndex);
+		const IGSTN_KeyedTrackAccess* Access = Lane != INDEX_NONE ? FGSTN_KeyedTrackAccessRegistry::Find(Data.Tracks[TrackIndex].GetScriptStruct()) : nullptr;
+		const FGSTN_TimelineTrack* Track = Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack>();
 		for (int32 KeyIndex = 0; KeyIndex < KeyCount; ++KeyIndex)
 		{
+			if (Access != nullptr && Track != nullptr && Access->GetKeyLane(*Track, KeyIndex) != Lane)
+			{
+				continue;
+			}
 			if (FGSTN_TimelineLayout::GetKeyFrame(Data, TrackIndex, KeyIndex) == Frame)
 			{
 				return true;
@@ -372,7 +380,7 @@ int32 FGSTN_TimelineActions::FindKeyedSelectionTrack(const FGSTN_TimelineEditorM
 	return INDEX_NONE;
 }
 
-bool FGSTN_TimelineActions::AddAtFrame(FGSTN_TimelineEditorModel& Model, int32 TrackIndex, int32 Frame)
+bool FGSTN_TimelineActions::AddAtFrame(FGSTN_TimelineEditorModel& Model, int32 TrackIndex, int32 Frame, int32 Lane)
 {
 	const FGSTN_CombatTimelineData* Data = Model.GetData();
 	const FGSTN_TimelineTrack* Track = Model.GetTrack(TrackIndex);
@@ -382,7 +390,7 @@ bool FGSTN_TimelineActions::AddAtFrame(FGSTN_TimelineEditorModel& Model, int32 T
 	}
 	if (FGSTN_TimelineLayout::IsKeyedTrack(*Data, TrackIndex))
 	{
-		return !HasKeyAtFrame(*Data, TrackIndex, Frame) && Model.AddKey(TrackIndex, Frame) != INDEX_NONE;
+		return !HasKeyAtFrame(*Data, TrackIndex, Frame, Lane) && Model.AddKey(TrackIndex, Frame, Lane) != INDEX_NONE;
 	}
 	const UScriptStruct* TrackStruct = Data->Tracks[TrackIndex].GetScriptStruct();
 	const int32 Length = FGSTN_TimelineEditorModel::IsPointTrack(*Track) ? 1 : FGSTN_TrackEditorRegistry::Get().FindOrGeneric(TrackStruct)->GetDefaultLength();

@@ -68,8 +68,12 @@ public:
 
 	// Hit testing
 
-	/** What lane x touches on the track. Keys come before edges, edges before the body. A track that does not exist is a miss */
-	static FGSTN_LaneHit HitTestTrack(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, const FGSTN_TimelineViewTransform& View, double X);
+	/**
+	 * What lane x touches on the track. Keys come before edges, edges before the body. A track that does not exist is a miss. LocalY is the
+	 * y inside the row [0, RowHeight), for a track that keeps its keys in several lanes (hitboxes): of the keys within reach of x, the one nearest
+	 * in y wins. Negative = unknown, nearest in x
+	 */
+	static FGSTN_LaneHit HitTestTrack(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, const FGSTN_TimelineViewTransform& View, double X, double LocalY = -1.0);
 
 	/** The part of a window [Start, End) at x: edges within the grab zone, the body between. Point windows (one frame) are all body */
 	static EGSTN_LaneHitKind HitTestWindow(int32 StartFrame, int32 EndFrame, bool bPoint, const FGSTN_TimelineViewTransform& View, double X);
@@ -87,6 +91,18 @@ public:
 
 	/** Absolute frame of a key, INDEX_NONE when the key does not exist */
 	static int32 GetKeyFrame(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, int32 KeyIndex);
+
+	/** Lanes the track keeps its keys in (1 for most tracks, the number of hitboxes for the hitbox track) */
+	static int32 GetLaneCount(const FGSTN_CombatTimelineData& Data, int32 TrackIndex);
+
+	/** The y inside the row of a lane: the middle for a one-lane track */
+	static double GetLaneY(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, int32 Lane);
+
+	/** Where a key sits inside its row, y in [0, RowHeight): the middle for a one-lane track, else one sub-lane per lane, spread around the middle */
+	static double GetKeyY(const FGSTN_CombatTimelineData& Data, int32 TrackIndex, int32 KeyIndex);
+
+	/** Half the size of the key's diamond as drawn: a little smaller when the row has several lanes */
+	static double GetKeyHalfSize(const FGSTN_CombatTimelineData& Data, int32 TrackIndex);
 
 	/** Does the track have keys (an adapter is registered for its struct)? */
 	static bool IsKeyedTrack(const FGSTN_CombatTimelineData& Data, int32 TrackIndex);
