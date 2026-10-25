@@ -122,7 +122,7 @@ Override); float HitstopMultiplier; float AttackerHitstopMultiplier; int32 Hitst
 AttackerHitstopFramesOverride (−1 = same as HitstopFramesOverride); float ShieldDamage; int32 Priority; FGameplayTag HitType (Combat.HitType.Normal/Grab/
 Projectile/Unblockable); TArray<TSubclassOf<UGameplayEffect>> ExtraEffects (applied to victim); FGameplayTag CueTag;
 FInstancedStruct CustomData; EGSTN_StaggerForceMode StaggerForceMode (Derived / Override); float StaggerForce (the override
-value); float StaggerForceScale = 1; FGSTN_ImpactProfile Impact (§7b);
+value); float StaggerForceScale = 1; FGSTN_ImpactProfile Impact (§7b); int32 DemolitionForce = 0 (§7c, added 2026-10-25);
 TArray<FInstancedStruct> ExtensionData (base struct FGSTN_HitExtension, modularity-and-tags.md §5b; empty by default); }`.
 The **stagger force** is the "what hits" input of the hitstun condition and the hitstop fields feed the model's hitstop rule
 (both in the knockback model below).
@@ -142,6 +142,22 @@ but keeps its size). **Sweetspots and sourspots** are several hitboxes of the **
 strong tip, a weak base): when more than one of them overlaps the same victim in the same frame, the highest `Data.Priority` wins, ties
 by the lower array index, and the group then counts as hit (step 5 of §6). `Zone` changes no rule: it drives editor colours and lets cues
 pick a sweetspot sound or effect.
+**Hitboxes that change with other factors (owner, 2026-10-25 19:22).** Example: a vertical sword swing that turns diagonal to the
+right or to the left the longer the stick is held that way. *Proposal* (checkpoint H15, after H13):
+- `FGSTN_HitboxTrack` gains an optional `FGSTN_HitboxVariation { EGSTN_HitboxVariationDriver Driver (None, StickLateralHeld,
+  StickAngle, HeldFrames, Extension); int16 RatePerFrame; bool bReturnWhenReleased; int32 LatchFrame = -1; FName AnimBlendParameter; }`
+  and each `FGSTN_HitboxSpec` gains `TArray<FGSTN_HitboxKey> KeysAtMin, KeysAtMax` (same frames as `Keys`; empty = not affected).
+- The variation value `V` is an integer in −1000..1000 stored in the ability's **timeline sync state**, so a rollback replays it
+  exactly. Each frame it moves by `RatePerFrame` towards the driver's sign, read from the **input history** (stick lateral axis in the
+  attacker's facing space, combat.md §9.1, the same history the slots read), never from Mover queries or the camera. With
+  `LatchFrame` ≥ 0 the value freezes at that frame (usually the first active frame); `bReturnWhenReleased` drifts it back to 0.
+- Keys blend: `V < 0` lerps offsets and slerps rotations from `Keys` towards `KeysAtMin`, `V > 0` towards `KeysAtMax`. Shape,
+  `HitGroup`, `Data` and the reach rules above stay the hitbox's own.
+- **Animation follows the same value**: presentation reads `V` from the same sync state and feeds `AnimBlendParameter` (a 1D blend
+  of the vertical and the two diagonal swings), so what is seen and what hits agree on every machine. M5 previews `V` with a slider
+  and warns when a hitbox has `KeysAtMin`/`KeysAtMax` but the track names no blend parameter.
+- `Extension` is a C++ driver (`FGSTN_HitboxVariationDriver`, instanced struct; per-frame code stays C++, modularity §3.8) for other
+  factors: charge time, an attribute, a tag. Questions HV.1–HV.2.
 `FGSTN_HitVariant { bool bIgnore; float ShapeScale = 1; FGSTN_HitDataOverride Override (per-field optional values and
 multipliers); }`. `BakedSocket` uses `FGSTN_CombatTimelineData::BakedSockets (TMap<FName, TArray<FTransform>>)` — one
 root-relative transform per frame, written by the M5 baking tool; in M4 a Python helper bakes them (section 10).
@@ -520,6 +536,32 @@ give a non-`None` outcome; with no data the M6 defaults apply unchanged. Hit dat
 unavoidable (*Proposal*, unset by default). Splat ends in `Actionable` after `SplatFrames` (no tech from a splat in the first
 version).
 
+## 7c. Demolition force (owner, 2026-10-25 19:22)
+
+As in Helldivers 2, some objects break only under a **minimum demolition force**. It applies to **props and level meshes** and
+generally **not to enemies**: enemies and their parts keep hardness against penetration ([combat-parts.md](combat-parts.md) §3.4).
+*Proposal* (checkpoint H14, after H13):
+
+- **Attacker side**: `FGSTN_HitData::DemolitionForce` (`int32`, default 0). Designer scale in steps of 10 (for example 10 a punch,
+  20 a heavy swing, 30 the drill, 40 an explosive; question DEM.1). Kit mods scale it like other hit data (M11). The drill carries
+  it on its tip hit data ([spin-drill.md](spin-drill.md) §13b, PR #15).
+- **Object side**: `UGSTN_DestructibleComponent` in the optional plugin `GSTNLevelObjects` (Blueprintable). It makes any actor a
+  **hittable entity** with a hurtbox set, registered like other victims, plus `FGSTN_DestructibleResponse { int32 DemolitionThreshold;
+  int32 HitPoints = 1; soft references to the broken version and the destruction effect; FGameplayTagContainer Tags; }`.
+- **Rule** (pure, integer, in `GSTNCombatCore`): a hit **damages the object only if `DemolitionForce >= DemolitionThreshold`**; each
+  such hit removes one hit point. Below the threshold the object takes nothing and plays a refusal cue
+  (`GameplayCue.Combat.Demolition.Refused`, a dull clank); the drill bounces off as not drillable (spin-drill.md §7.6). Threshold 0
+  means any hit counts.
+- **Impacts** (§7b): `BreakSurface` also needs the impact's demolition force to reach the object's threshold. The impact force is
+  `FGSTN_ImpactProfile::DemolitionForce` of the hit that launched the victim (default: that hit's `DemolitionForce`), so the designer
+  decides which launches smash a crate with a body (question DEM.3).
+- **Enemies**: entities ignore demolition by default. A part can opt in as data (`bUsesDemolition`, for example an armour plate
+  that only explosives break).
+- **Network**: destruction is a victim reaction, server-authoritative like every victim (combat.md §12.7). The attacker's machine
+  predicts the hit feedback; the object's collision goes away when the confirmed destruction event arrives, so a character standing
+  on a crate that breaks gets one correction. *Unsure*: how visible that is; the harness scenario of H14 measures it.
+- Tags (native, `GSTNLevelObjects`): `Combat.Event.Destructible.Destroyed`, `GameplayCue.Combat.Demolition.Refused`.
+
 ## 8. Hitstop for both sides
 
 - Move clock: `MovePausedFrames++` on every hitstop frame.
@@ -584,6 +626,50 @@ the authority and how we measure it. A dedicated server stays supported.
 - Spike 2.1 and the harness cover both configurations: **listen-server (host + 2 clients)** and dedicated + 2 clients. Host as
   attacker (clients show about one RTT/2 + interpolation delay later), client as attacker against the host (the host's victim is
   authoritative: expected zero rollbacks on the host, one correction on nobody), client against client (as before).
+
+## 9c. Movement collision and hit collision (owner, 2026-10-25 19:26)
+
+Movement and hits already use separate geometry. **Movement** is Mover's capsule against the level's simple collision. **Hits** are
+hitbox shapes against hurtbox shapes, pure maths with no world query: the M4 and M4b code on `feature/gas-npp-5.8` has no trace or
+sweep in `GSTNCombat` or `GSTNParts`. So today a hitbox ignores walls (a swing hits through a thin wall), and a hurtbox inside
+another one can be reached through it. The owner's edge cases need two additive, opt-in, deterministic rules (A, B) and some project
+config (C):
+
+| Case | Character | Bulky hitbox (hammer) | Thin hitbox (stab) | Projectile | Decided by |
+|---|---|---|---|---|---|
+| Grate or fence with small holes | blocked | blocked | passes if it fits | passes | A |
+| Slit smaller than the capsule | blocked | blocked | passes | passes | A |
+| Hollow medium-hardness cavity inside a heavy-armour leg | (not a passage) | hits the armour | hits the cavity through its opening | hits the cavity through its opening | B |
+| Invisible wall | blocked | passes | passes | passes | C |
+
+**A. World occlusion with a pass radius** (checkpoint H16):
+- `FGSTN_HitboxSpec` gains `bool bOccludedByWorld = false` (false keeps today's behaviour), `float PassRadiusCm = 0` (0 = derived:
+  sphere radius, capsule radius or the box's smallest half-size) and `EGSTN_OcclusionAnchor OcclusionAnchor` (`PreviousFrame`,
+  `AttackerRoot`, `Socket`).
+- After the shape overlap, a candidate hit of such a hitbox counts only if a **sphere sweep of radius `PassRadiusCm`** from the anchor
+  to the contact point is clear on the hit-occlusion channel, against **complex** collision. Size alone then decides: a 30 cm hammer
+  stops at a grate with 5 cm holes, a 2 cm stab or a 1 cm bullet goes through, and no level object needs a special flag.
+- Cost: one sweep per candidate pair of a flagged hitbox, capped per attacker per frame (*Proposal*: 8; extra candidates are
+  refused and counted in the stats). It runs in the combat tick against static level geometry, which is the same on every machine.
+  *Unsure*: complex sweeps can disagree near an edge between machines; the victim is server-authoritative (combat.md §12.7), so a
+  disagreement costs one correction. Destructible geometry (§7c) is seen as each machine knows it.
+- Projectiles (the `Projectile` space here, thrown objects in M10) already trace the world as they move; they use the projectile
+  channel with their own radius, so a bullet passes holes that a thrown crate does not.
+
+**B. Hurtbox openings** ([combat-parts.md](combat-parts.md) §3.4, M4b checkpoint P18): `FGSTN_Hurtbox` gains an optional
+`FGSTN_HurtboxOpening { FGSTN_HitShape Mouth; float MaxPassRadiusCm; }` (mouth root-relative, at the hole). A hurtbox with an opening
+counts as overlapped only if the hitbox also overlaps the `Mouth` **and** its pass radius is at most `MaxPassRadiusCm`; otherwise the
+selection falls to the next candidate by `Priority` (the armour). Pure shapes, no world query.
+
+**C. Channels and profiles** (project config, no plugin names a channel):
+- The combat developer settings gain `HitOcclusionChannel` and `ProjectileChannel`, default `ECC_Visibility`, so the plugin works
+  alone. The project declares two trace channels in `Config/DefaultEngine.ini` (`GSTN_HitOcclusion`, `GSTN_Projectile`) and points
+  the settings at them.
+- Level meshes keep both simple collision (movement) and complex collision (hits and projectiles): "Use Complex Collision As Simple"
+  stays off on meshes with holes. Example profiles: `GSTN_InvisibleWall` (blocks pawns only), `GSTN_BulletproofGlass` (blocks pawns,
+  occlusion and projectiles), `GSTN_Grate` (simple box blocks pawns; complex mesh with holes for hits and projectiles).
+- Hurtboxes and hitboxes are never physics bodies, so they never block movement; Mover's capsule never answers the hit channels.
+- Questions COL.1–COL.2.
 
 ## 10. Content, tools, harness
 

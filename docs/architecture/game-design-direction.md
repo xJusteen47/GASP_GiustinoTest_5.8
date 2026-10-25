@@ -239,6 +239,20 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   or **fog onto which the shadow falls**. Spec: [depth-marker.md](depth-marker.md) §4.1 (god rays and fog shadow as styles), §2.7 (fog
   as a soft receiver), §4.4 (marker tinted with the crystal colour).
 
+## 6i. Drill, demolition force, varying hitboxes, keyboard spin, hit collision (owner input, 2026-10-25 19:22–19:26)
+
+- Drill details (steering, exit, jump boost, not invincible, players drillable as a hit-grab, drillability = penetration against
+  armour): [spin-drill.md](spin-drill.md) §13b (PR #15).
+- **Demolition force** (Helldivers 2): some objects break only above a given demolition force; it applies to props and meshes,
+  generally not to enemies. Spec: [combat-m4-hits.md](combat-m4-hits.md) §7c, plan H14.
+- **Hitboxes that change with other factors**, for example a vertical swing turning diagonal right or left while the stick is held.
+  Spec: [combat-m4-hits.md](combat-m4-hits.md) §3, plan H15.
+- **Keyboard spin**: a shortcut such as A-S-D skipping W. Spec: [input.md](input.md) §9.
+- **Movement collision and hit collision**: already separate, but with edge cases: holes that projectiles pass and the character
+  and bulky hitboxes do not; holes that hitboxes pass and the character does not (a hollow medium-penetration cavity inside a
+  heavy-armour leg). Spec: [combat-m4-hits.md](combat-m4-hits.md) §9c, plans H16 and P18.
+- **Sequencing**: these general items go to planning first; the detailed design of individual abilities resumes at the end.
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -251,6 +265,7 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
 | §6d: two PvE modes (designer levels, procedural expedition with missions); kit = stats, weapon = moveset; mid-match kit pickup; support weapons inherit kit stats; mods (cosmetic + moveset/specials); special swapping; implants; backpacks on the implant connector; depth marker; everything a pluggable ability | new specs [combat-loadout-mods.md](combat-loadout-mods.md) (M11), [game-modes.md](game-modes.md) (M12–M13), [depth-marker.md](depth-marker.md); M3 seams (loadout extensions, compile extension, mid-match apply); M4 hit data scalable by mods; M5 mod preview and validation; M6 interact probe (possible `GSTNInteract` plugin); [modularity-and-tags.md](modularity-and-tags.md) §1.1 goal 9, §3.6, §3.10, §4.2 |
+| §6i: demolition force; input-driven hitbox variation; keyboard spin shortcut; world occlusion with a pass radius and hurtbox openings; drill as hit-grab | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [combat-parts.md](combat-parts.md) §3.4; [combat-m6-defence-links.md](combat-m6-defence-links.md) link tags; [input.md](input.md) §9; plans H14–H16, P18; questions DEM, HV, KB, COL |
 | §6h: per-player crystal colour; god rays from the character; fog that receives the shadow | [combat-parts.md](combat-parts.md) §6.0; [depth-marker.md](depth-marker.md) §2.7, §4.1, §4.4; questions CR.1–CR.5 |
 | §6f: lives pool and restart point per level; pointing with the character; Astro Bot free camera; Tekken-style PvP camera; scope zoom overlay | [game-modes.md](game-modes.md) §5, §8.1; [interaction.md](interaction.md) §2.1; [camera.md](camera.md) §2.4, §2.5, §6.1 |
 | §6e: interaction focus on what the player points at; depth marker above and below the last platform; far camera with shoulder aim and designer-set angles; shared lives, no revive; Expedition low priority | new [interaction.md](interaction.md) (`GSTNInteract`, replaces the probe part of M6 §8); [depth-marker.md](depth-marker.md) §2.7; new [camera.md](camera.md) (`GSTNCamera`); [game-modes.md](game-modes.md) §5, §6.2, §9.3 |
@@ -503,3 +518,28 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 > il colore dipende da chi è giocatore 1, 2, 3, 4, etc... Giocatore 1 è rosso, 2 è blu, 3 è giallo, 4 è verde. L'ordine forse è meglio
 > deciderlo in base all'ordine alfabetico del nome, in modo che se 4 amici giocano sempre insieme, hanno sempre lo stesso colore. (01:08)
+
+### Messages of 2026-10-25, 19:22 and 19:26 (verbatim, from the spin and drill thread)
+
+> Allora. Il trapano può muoversi limitatamente a destra e sinistra durante la discesa. Se si lascia il tasto per abbassarsi prima della
+> durata massima (potrebbe cambiare a secondo di ciò che colpiamo), si fa il saltino fuori. Se si preme il tasto di salto o si tiene
+> premuto (all’incirca quando si sta per uscire dal drill) il salto è più alto.
+>
+> Il drill non è invincibile di default. I giocatori sono drillabili (è una hitgrab in pratica). Cosa è drillabile o no penso dipende da
+> bilanciamento. Per esempio penetrazione armatura pesante?
+>
+> Mi sono forse scordato nelle specifiche di aggiungere la forza di demolizione come caratteristica di helldivers 2( alcuni oggetti
+> possono esssere distrutti solo da tot forza di demolizione, generalmente non si applica ai nemici, ma solo a prop e mesh).
+>
+> Inoltre si apre la porta ad attacchi le cui hitbox cambiano a seconda di altri fattori (e.g. swing di spada verticale che diventa
+> diagonale a destra/sinistra man mano che si tiene premuto lo stick in una direzione).
+>
+> Per quanto riguarda lo spin su tastiera, probabilmente introdurrò una shortcut del tipo ASD saltando la W.
+>
+> Probabilmente queste specifiche dovrebbero essere inviate a un thread di pianificazione, e si dovrebbe riprendere con la progettazione
+> di abilità individuali alla fine.
+
+> Altri problemi a cui ho pensato: accortezza sulla differenza tra collisioni per il movimento e collisioni per le hitbox di base
+> dovrebbero essere già separate per come abbiamo pianificato. Ma ci potrebbero essere casi limite come: proiettili stile sparatutto e
+> collisioni complesse (buchi dove il personaggio non passa e neanche le hitbox più ingombranti, i proiettili si) oppure buchi dove il
+> personaggio non passa, ma le hitbox si (caso buco cavo a penetrazione media dentro una gamba di un nemico a penetrazione pesante)

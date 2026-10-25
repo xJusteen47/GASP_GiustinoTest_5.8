@@ -69,7 +69,7 @@ M10 (held objects) and M11 (pickups).
 | 1 | Dummy row | five yellow dummies 4 m apart: light, medium and heavy weight; one with a high stagger threshold; one with super armour | hit, hitstun, knockback tiers, stagger resistance |
 | 2 | Knockback lane | 30 m lane with 1 m marks in front of one medium dummy, a 10 m height ruler beside it | launch distance and height, DI |
 | 3 | Damage scale | three medium dummies with health preset at 0 %, 50 % and 100 % of the cap (if the test tools allow) | weight dropping with damage (`WeightDriven`) |
-| 4 | Walls and glass | a concrete wall, a glass panel and a bouncy wall, each 3 m from a dummy | splat, bounce, destruction |
+| 4 | Walls and glass | a concrete wall, a glass panel and a bouncy wall, each 3 m from a dummy; three crates with demolition thresholds 10, 20 and 30 (after H14); a grate, a slit wall and an invisible wall in front of dummies (after H16) | splat, bounce, destruction, demolition force, hits through holes |
 | 5 | KO zone | an arena edge over a red KO zone | ring-out KO |
 | 6 | Trampolines | three green trampolines with different launch strengths | launch surfaces (H11b) |
 | 7 | Ally dummy | a dummy on the player's team | `Ally` variant (half shape, no hitstun) |

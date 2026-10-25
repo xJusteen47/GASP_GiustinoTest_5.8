@@ -153,6 +153,7 @@ combat tick** under `Combat.State.*` (combat.md §5.4) and nothing else grants t
 | `Combat.Link.Type.Grab` | native | GSTNLinkGAS | Link type identity (also on events) | on definition assets, event tags |
 | `Combat.Link.Type.Mount`, `Combat.Link.Type.Ride` (reserved) | native | `GSTNPiggyback` (M7) | Link type of piggyback | same |
 | `Combat.Link.Type.Held`, `Combat.Link.Type.Minion` (reserved) | native | `GSTNHeld` (M10) / `GSTNMinion` (M8, later) | Link type holder-object / grabbed minion | same |
+| `Combat.Link.Type.Drill` (reserved), roles `Driller` / `Drilled` | native | `GSTNSpinDrill` ([spin-drill.md](spin-drill.md) §13b) | Drill latch on players and fighters: a hit-grab on the `Body` channel | same |
 | `Combat.Link.Role.Grabber` / `.Grabbed` | native | GSTNLinkGAS | Role for binding requirements and `ActivationBlockedTags` | projected from `Link.Role` |
 | `Combat.Link.Role.Carrier` / `.Rider` | native | `GSTNPiggyback` (M7) | Roles of the mount link | projected from `Link.Role` |
 | `Combat.Link.Role.Holder` / `.HeldObject` | native | `GSTNHeld` (M10) | Roles of the held link (objects have no ASC: `HeldObject` only in events and rules) | `Holder` projected from `Link.Role`; `HeldObject` never a loose tag |

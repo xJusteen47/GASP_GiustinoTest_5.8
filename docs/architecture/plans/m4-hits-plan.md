@@ -460,6 +460,29 @@ launch direction, tilt etc. may differ per instance.
   fork requirements), plugin tag ini documented.
 - Acceptance (S §12 1, 5): everything green; Blueprint-only authoring of a new step/model/applier verified; CM updated.
 
+### H14 Demolition force and destructible props (`GSTNCombatCore`, `GSTNLevelObjects`) — size S/M (added 2026-10-25, after H13)
+
+- Spec: [combat-m4-hits.md](../combat-m4-hits.md) §7c. `FGSTN_HitData::DemolitionForce`, `FGSTN_ImpactProfile::DemolitionForce`, pure
+  rule `UGSTN_DemolitionMath::Allows`, `UGSTN_DestructibleComponent` + `FGSTN_DestructibleResponse` in `GSTNLevelObjects`, the two tags.
+- Tests: `DemolitionBelowThresholdRefused`, `ThresholdZeroAnyHit`, `HitPointsCountOnlyQualifyingHits`, `ImpactUsesLaunchingForce`,
+  `EntitiesIgnoreDemolitionByDefault`. Harness `scenario_destructible_crate` (attacker client, crate on the host; a character standing
+  on it counts corrections). TM2 station 4 gets crates with thresholds 10, 20 and 30.
+
+### H15 Hitbox variation driven by input (`GSTNCombatCore`, `GSTNCombatNP`) — size M (added 2026-10-25, after H13)
+
+- Spec: [combat-m4-hits.md](../combat-m4-hits.md) §3, "Hitboxes that change with other factors". `FGSTN_HitboxVariation`,
+  `KeysAtMin`/`KeysAtMax`, the value in the timeline sync state, the input-history driver, the presentation blend parameter.
+- Tests: `VariationBlendsKeys`, `VariationReplaysAfterRollback`, `LatchFrameFreezesValue`, `ReturnWhenReleasedDrifts`,
+  `FacingSpaceDriver`. M5 adds the slider preview and the validator later (M5 plan).
+
+### H16 World occlusion with a pass radius (`GSTNCombatCore`, `GSTNCombatNP`) — size M (added 2026-10-25, after H13)
+
+- Spec: [combat-m4-hits.md](../combat-m4-hits.md) §9c A and C. Hitbox fields, the per-attacker sweep cap, the two channel settings,
+  the project's channels and example profiles in `Config/DefaultEngine.ini` (project config, owner OK needed like any shared config).
+- Tests: `OcclusionOffKeepsTodayBehaviour`, `BulkyHitboxStopsAtGrate`, `ThinHitboxPassesSlit`, `SweepCapRefusesExtraCandidates`,
+  `DerivedPassRadiusPerShape`. Harness `scenario_hit_through_grate` (host and client agree). TM2 gets a grate, a slit wall and an
+  invisible wall in front of dummies.
+
 ## 4. Spikes first (H0) and stop-and-ask conditions
 
 | Spike | Gates | Stop and ask when |

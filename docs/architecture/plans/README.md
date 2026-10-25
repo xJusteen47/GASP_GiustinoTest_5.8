@@ -38,6 +38,14 @@ The interaction plugin ([`../interaction.md`](../interaction.md) §3.3, owner an
 `uint64 TargetKey` in `FGSTN_ActivationContext`, stamped when a binding requires an `Interact.Target.*` tag (combat never names interaction).
 Cheap now, a fallback accessor exists if it is refused; the probe text of M6 §8 that the M6 plan will use is superseded by interaction.md.
 
+### Owner direction of 2026-10-25 on these plans (added by the milestone-planning thread)
+
+General mechanics from the spin and drill thread ([`../spin-drill.md`](../spin-drill.md) §13b, PR #15) and a collision note, all after H13 so
+no running checkpoint changes: **H14** demolition force and destructible props, **H15** hitboxes that vary with input, **H16** world
+occlusion with a pass radius (M4 plan); **P18** hurtbox openings (M4b plan); a reserved link type `Combat.Link.Type.Drill` in M6; keyboard
+shortcuts for stick gestures in [`../input.md`](../input.md) §9. Owner sequencing: these general specs come first, the detailed design of
+individual abilities resumes at the end.
+
 ### Test maps (owner request, 2026-10-23)
 
 After the related milestones, three test maps are built from primitives by Ludus AI (an editor AI assistant) or a person,

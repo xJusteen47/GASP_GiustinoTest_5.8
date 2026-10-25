@@ -185,6 +185,18 @@ The victim gets only the spark cue and the `Combat.Event.Part.Ricochet` event. T
 hardness decides damage, not hitstun (owner, 2026-10-22, 11:20; M4 §3 three dials), and a designer may lower it so a hit that barely
 penetrates staggers less. A table with fewer bands is valid; an empty band set is a validation error.
 
+**Drill and demolition (owner, 2026-10-25).** What a drill can bore is a balance question, not a flag: the drill's tip hit carries
+a penetration like any hit, so a part is drillable when penetration reaches its hardness (heavy armour refuses a weak drill, which
+bounces off). Players are drillable; the latch is a hit-grab and becomes an M6 link (`Combat.Link.Type.Drill`). Details:
+[spin-drill.md](spin-drill.md) §13b. Demolition force (combat-m4-hits.md §7c) is for props and level meshes; parts use it only when
+they opt in.
+
+**Hollow parts behind armour (owner, 2026-10-25 19:26).** A medium-hardness cavity inside a heavy-armour leg must be reached only
+through its hole: a bulky swing that overlaps the leg from outside would otherwise also overlap the cavity inside it, pick it by
+`Priority` and hit soft material through the armour. The cavity hurtbox gets an **opening** (a mouth shape plus the largest pass
+radius that fits), and only a hitbox that overlaps the mouth and fits counts on it; everything else falls to the armour. Rule and
+types: [combat-m4-hits.md](combat-m4-hits.md) §9c B (M4b checkpoint P18).
+
 ### 3.5 Entity's own hitboxes while parts are broken
 
 The attacker side (M4 §6 step 1) asks the tick-extension point "before candidates" for a `HitGroupMask`; `GSTNPartsNP`
