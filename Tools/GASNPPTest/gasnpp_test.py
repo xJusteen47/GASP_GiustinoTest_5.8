@@ -5297,14 +5297,533 @@ def lanes_settled(targets):
     return not bad, '; '.join(bad)
 
 
-SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
+# ---- M4 H11: surface impacts of a tumbling victim (combat-m4-hits 7b). The attacker (client) hits the other client with the Root box of the test move;
+# the thresholds are lowered so the hit is a tumble, and the victim flies along the attacker's facing into a box the scenario spawns at run time
+# (AGSTN_TestSurface, a GSTNSurface provider with a chosen Surface.Type, replicated: no map edit). The impact table is built from rows here
+# (UGSTN_ImpactTestLibrary.configure_impact_table) and handed to every combat component of every world.
+IMPACT_ROWS = ('Wall,1,100,0.5,20,1,0,7,0.7;'          # splat (20 frames), bounce and break allowed
+               'Glass,3,100,0.6,30,1,0,4,0.7;'         # breaks, allows only that
+               'Trampoline,2,0,1.2,30,1,1,7,0.7')      # forced bounce
+IMPACT_DISTANCE = 205.0   # the victim stands here ahead of the attacker: only the Root box reaches it
+IMPACT_FACE = 455.0       # the face of the surface ahead of the attacker. The victim carries IMPACT_DAMAGE percent, which lightens it (the standard weight
+                          # curve): the hit launches it at about 740 cm/s at 30 degrees, so it reaches the face (250 cm past it) in the air, 70 cm above
+                          # where it stood. A launch that stays within 40 cm of the floor lands at once instead (Mover's Falling mode grounds it)
+IMPACT_DAMAGE = 80.0
+
+
+def _impact_counts(wi, key):
+    return tuple(int(x) for x in _hit_comp(wi, key).get_impact_counts().split(','))
+
+
+def _impact_info(wi, key):
+    """(frame, outcome, surface type index, judged speed, damage) of the latest impact the victim step of world wi's copy resolved"""
+    return tuple(int(x) for x in _hit_comp(wi, key).get_impact_info().split(','))
+
+
+def _impact_response(**allowed):
+    """Sets the default allowed flags of the rules' victim impact response (splat=False...); returns the previous values to restore"""
+    r = hit_rules()
+    resp = r.get_editor_property('impact_response')
+    d = resp.get_editor_property('default')
+    a = d.get_editor_property('allowed')
+    old = {k: a.get_editor_property(k) for k in allowed}
+    for k, v in allowed.items():
+        a.set_editor_property(k, v)
+    d.set_editor_property('allowed', a)
+    resp.set_editor_property('default', d)
+    r.set_editor_property('impact_response', resp)
+    return old
+
+
+def _impact_clear_spot(key, run=900.0):
+    """An offset from the pawn's spawn where it stands on the floor with `run` cm of free capsule travel ahead (along its yaw, pawns and the test
+    surfaces ignored), a floor under the far end of a flight, and room behind it for the other pawns; None if the lane's surroundings have none"""
+    w = worlds()[0]
+    ctx = comps(w)[key]
+    a = snap(w)[key]
+    sp = ctx.get_spawn_location()
+    yaw = math.radians(a['yaw'])
+    fwd = unreal.Vector(math.cos(yaw), math.sin(yaw), 0.0)
+    lib = unreal.GSTN_ImpactTestLibrary
+    for r in (0.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0):
+        for deg in (range(0, 360, 30) if r else (0,)):
+            dx, dy = r * math.cos(math.radians(deg)), r * math.sin(math.radians(deg))
+            start = unreal.Vector(sp.x + dx, sp.y + dy, a['location'][2] + 10.0)
+            if not lib.has_floor_below(ctx, start, 80.0):
+                continue
+            if lib.sweep_clear_distance(ctx, start, fwd, run) < run - 1.0 or lib.sweep_clear_distance(ctx, start, -fwd, 450.0) < 449.0:
+                continue
+            if not lib.has_floor_below(ctx, unreal.Vector(start.x + fwd.x * 700.0, start.y + fwd.y * 700.0, start.z), 400.0):
+                continue
+            return (dx, dy)
+    return None
+
+
+_impact_dbg = {'rows': [], 'handle': None}
+
+
+def impact_trace(client=1, leaf='Glass', fire_at=1.5):
+    """Debug helper (not a scenario): one shot like the scenarios' (surface of type `leaf` ahead of the attacker, hit at `fire_at` s) with the victim's
+    combat state and position sampled on every editor tick into _impact_dbg['rows'] [(t, victim_info on the authority, x, y, z)]; read it with
+    impact_trace_rows() a few seconds later. Needs the impact table and the kit set (the first part of scenario_impact_wall's setup)"""
+    vi = 2 if client == 1 else 1
+    vkey, key = key_of_player(vi), key_of_player(client)
+    ctx = comps(worlds()[0])[key]
+    combat_clear(client)
+    set_damage(vkey, 0)
+    a = snap(worlds()[0])[key]
+    fwd = (math.cos(math.radians(a['yaw'])), math.sin(math.radians(a['yaw'])))
+    c = (a['location'][0] + fwd[0] * (IMPACT_FACE + 50.0), a['location'][1] + fwd[1] * (IMPACT_FACE + 50.0), a['location'][2] + 200.0)
+    unreal.GSTN_ImpactTestLibrary.clear_test_surfaces(ctx)
+    unreal.GSTN_ImpactTestLibrary.spawn_test_surface(ctx, unreal.Vector(*c), unreal.Vector(50.0, 500.0, 500.0), a['yaw'], leaf)
+    _place_near(client, vkey, (IMPACT_DISTANCE, 0.0))
+    if _impact_dbg['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(_impact_dbg['handle'])
+    t0, fired, rows = time.time(), {'f': False}, []
+    _impact_dbg['rows'] = rows
+
+    def tick(_dt):
+        try:
+            t = time.time() - t0
+            if t > fire_at and not fired['f']:
+                fired['f'] = True
+                combat_tap(client, button_mask('Attack'))
+            loc = snap(worlds()[0])[vkey]['location']
+            rows.append((round(t, 2), victim_info(0, vkey), round(loc[0]), round(loc[1]), round(loc[2])))
+        except Exception as e:
+            rows.append(str(e))
+    _impact_dbg['handle'] = unreal.register_slate_post_tick_callback(tick)
+    return 'tracing'
+
+
+def impact_trace_rows():
+    if _impact_dbg['handle'] is not None:
+        unreal.unregister_slate_post_tick_callback(_impact_dbg['handle'])
+        _impact_dbg['handle'] = None
+    out, last = [], None
+    for r in _impact_dbg['rows']:
+        if isinstance(r, str):
+            out.append(r)
+            continue
+        k = (r[1][1:], r[2:])
+        if k != last:
+            out.append(r)
+        last = k
+    return out
+
+
+def scenario_impact_wall(client=1, shot_time=5.5):
+    """Surface impacts of a launched victim (M4 H11, combat-m4-hits 7b), the client `client` attacks the other. Six shots, each a real hit that tumbles
+    the victim into a box of a given surface type:
+      - Wall: splat. Wanted on the authority and the victim's own client: one Splat impact (the state Splat lasts the row's 20 frames and ends Actionable),
+        the victim pinned (it does not move through the splat), the impact damage (the rules' 7 times the row's scale) added to the hit's 8 on both copies;
+      - Trampoline: bounce, forced by the row: velocity reflected (the victim comes back), still Tumble right after the impact;
+      - Glass: break: the surface is broken once, on the authority (BreakSurface called outside the simulation), the victim goes through it;
+      - Wall with the hit data forcing a bounce, with the hit data forbidding a splat (nothing happens, the victim slides), and with the victim's response
+        forbidding a splat (the same): the precedence of the three layers.
+    Judged on the impact counters of the victim step of both copies (re-simulated frames count on the owner, so the owner's may be higher), the last
+    impact (outcome and surface index equal on both) and the victim's samples in the attacker's frame."""
+    vi = 2 if client == 1 else 1
+    vkey = key_of_player(vi)
+    run = _Run('impact_wall', client, judge_reconciles=False, extra=[('v_srv', 0, vkey), ('v_cli', vi, vkey)])
+    key = run.key
+    attack = button_mask('Attack')
+    st, h = {'kit': None, 'shots': {}}, {'h': None}
+    rec = []  # (t, victim info authority, victim info owner)
+
+    def sampler(_dt):
+        try:
+            rec.append((run.now(), victim_info(0, vkey), victim_info(vi, vkey)))
+        except Exception:
+            pass
+
+    def setup():
+        hit_rules_setup()
+        # a tumble from a hit of the test move (500 base knockback + damage scaling): thresholds low enough for it, and an impact damage to see
+        set_tuning(push_back_threshold=50.0, launch_threshold=100.0, tumble_threshold=200.0)
+        hit_rules().set_editor_property('base_impact_damage', 7.0)
+        st['rows'] = unreal.GSTN_ImpactTestLibrary.configure_impact_table(IMPACT_ROWS)
+        unreal.GSTN_ImpactTestLibrary.set_hit_impact_profile(0, 0, False, 1.0)
+        _hit_logging(True)
+        st['kit'] = _apply_loadout(key, HIT_KIT)
+        h['h'] = unreal.register_slate_post_tick_callback(sampler)
+        st['spot'] = _impact_clear_spot(key)
+        if st['spot'] is not None:
+            comps(worlds()[0])[key].server_reset_to_spawn(unreal.Vector(st['spot'][0], st['spot'][1], 0.0))
+        return 'impact table on', st['rows'], 'components; attacker spot', st['spot']
+
+    def prepare(name, leaf, profile=None, victim_forbids=False):
+        def f():
+            ctx = comps(worlds()[0])[key]
+            unreal.GSTN_ImpactTestLibrary.clear_test_surfaces(ctx)
+            combat_clear(client)
+            set_damage(vkey, IMPACT_DAMAGE)
+            a = snap(worlds()[0])[key]
+            yaw = a['yaw']
+            fwd = (math.cos(math.radians(yaw)), math.sin(math.radians(yaw)))
+            half = (50.0, 500.0, 500.0)
+            centre = IMPACT_FACE + half[0]
+            c = (a['location'][0] + fwd[0] * centre, a['location'][1] + fwd[1] * centre, a['location'][2] + 200.0)
+            st['shots'][name] = {'surface': unreal.GSTN_ImpactTestLibrary.spawn_test_surface(ctx, unreal.Vector(*c), unreal.Vector(*half), yaw, leaf)}
+            unreal.GSTN_ImpactTestLibrary.set_hit_impact_profile(*(profile or (0, 0, False, 1.0)))
+            st['old_allowed'] = _impact_response(splat=False) if victim_forbids else None
+            # the third pawn (the host in a listen suite) is moved behind the attacker: it stood in the path of the flight on some lane assignments
+            for other in [k for k in comps(worlds()[0]) if k not in (key, vkey)]:
+                _place_near(client, other, (-350.0, 350.0))
+            _place_near(client, vkey, (IMPACT_DISTANCE, 0.0))
+            return 'prepared', name, st['shots'][name]['surface']
+        return f
+
+    def fire(name):
+        def f():
+            s = st['shots'][name]
+            s['t_fire'] = run.now()
+            s['counts0'] = (_impact_counts(0, vkey), _impact_counts(vi, vkey))
+            s['dmg0'] = (damage_of(0, vkey), damage_of(vi, vkey))
+            s['F'] = _latest_frame(0, key)
+            combat_tap(client, attack)
+            return 'attack', name
+        return f
+
+    def collect(name):
+        def f():
+            s = st['shots'][name]
+            t0, t1 = s['t_fire'], run.now()
+            s['t_end'] = t1
+            s['counts1'] = (_impact_counts(0, vkey), _impact_counts(vi, vkey))
+            s['info'] = (_impact_info(0, vkey), _impact_info(vi, vkey))
+            s['dmg1'] = (damage_of(0, vkey), damage_of(vi, vkey))
+            s['surfaces'] = unreal.GSTN_ImpactTestLibrary.get_test_surfaces(comps(worlds()[0])[key])
+            # the victim's path on the authority, in the attacker's frame (x ahead, y left, z)
+            a = snap(worlds()[0])[key]
+            yaw = math.radians(a['yaw'])
+            path = []
+            for smp in run._win('v_srv', t0, t1, sim=True):
+                dx, dy = smp['loc'][0] - a['location'][0], smp['loc'][1] - a['location'][1]
+                vx = smp['vel'][0] * math.cos(yaw) + smp['vel'][1] * math.sin(yaw)
+                path.append((smp['ms'], dx * math.cos(yaw) + dy * math.sin(yaw), smp['loc'][2], vx, smp['mode'], tuple(sorted(t for t in smp['tags'] if t.startswith('Combat.State')))))
+            s['path'] = path
+            frames = {}
+            for t, ia, io in rec:
+                if t0 <= t <= t1:
+                    frames[ia[0]] = ia[1]
+            s['actions'] = [frames[k] for k in sorted(frames)]
+            splat = [k for k in frames if frames[k] == 4]
+            s['splat_frames'] = (max(splat) - min(splat) + 1) if splat else 0
+            s['hits'] = [r for r in _hit_log(0, key) if r[0] >= s['F']]
+            return 'collected', name
+        return f
+
+    def delta(s, side):
+        return tuple(b - a for a, b in zip(s['counts0'][side], s['counts1'][side]))
+
+    def counts_check(name, want):
+        def f():
+            s = st['shots'][name]
+            auth, own = delta(s, 0), delta(s, 1)
+            ok = auth == want and all(o >= a for o, a in zip(own, auth)) and sum(own) >= sum(want)
+            outcome_eq = want == (0, 0, 0) or (s['info'][0][1:3] == s['info'][1][1:3])
+            return ok and outcome_eq, f"impacts (splat, bounce, break) authority {auth}, owner {own} (re-simulated frames count there), wanted {want}; last impact authority {s['info'][0]}, owner {s['info'][1]}, hits {s.get('hits')}"
+        return f
+
+    def splat_check():
+        s = st['shots']['splat']
+        n = s['splat_frames']
+        end = s['actions'][-1] if s['actions'] else None
+        face_gap = IMPACT_FACE - max((p[1] for p in s['path']), default=0.0)
+        # the state is sampled once per editor tick, which is slower than the 60 Hz simulation: the first and last frames can fall between two ticks
+        ok = 17 <= n <= 21 and end == 0 and face_gap < 80.0
+        return ok, f"frames in Splat {n} (want 20, sampled per editor tick so up to 2 short), final action state {end}, closest approach to the face {face_gap:.0f} cm (the capsule radius is about 35)"
+
+    def pinned_check():
+        s = st['shots']['splat']
+        t_splat = [t for t, ia, io in rec if s['t_fire'] <= t <= s['t_end'] and ia[1] == 4]
+        if not t_splat:
+            return False, 'no splat window sampled'
+        w = [p for p in run._win('v_srv', t_splat[0] + 0.05, t_splat[-1] - 0.05, sim=True)]
+        spread = max((math.dist(p['loc'], q['loc']) for p in w for q in w), default=1e9)
+        spd = max((math.dist(p['vel'], (0, 0, 0)) for p in w), default=1e9)
+        return spread < 6.0 and spd < 15.0, f'{len(w)} ticks inside the splat, position spread {spread:.1f} cm, peak speed {spd:.0f} cm/s'
+
+    def damage_check(name, want):
+        def f():
+            s = st['shots'][name]
+            d = (s['dmg1'][0] - s['dmg0'][0], s['dmg1'][1] - s['dmg0'][1])
+            return abs(d[0] - want) < 0.6 and abs(d[1] - want) < 0.6, f'damage taken authority {d[0]:.1f}, owner {d[1]:.1f}, wanted {want} (8 from the hit, 7 per unit of the row scale for an impact)'
+        return f
+
+    def bounce_check():
+        s = st['shots']['bounce']
+        vx = [p[3] for p in s['path']]
+        out, back = max(vx, default=0.0), min(vx, default=0.0)
+        tumbling = any(a == 3 for a in s['actions'])
+        return out > 150.0 and back < -150.0 and tumbling, f'speed along the attacker facing: out up to {out:.0f}, back down to {back:.0f}; Tumble seen {tumbling}; action states {sorted(set(s["actions"]))}'
+
+    def break_check():
+        s = st['shots']['break']
+        rows = [r.split(',') for r in s['surfaces'].split(';') if r]
+        broken = bool(rows) and rows[0][1] == '1' and rows[0][2] == '1'
+        beyond = max((p[1] for p in s['path']), default=0.0)
+        return broken and beyond > IMPACT_FACE + 10.0, f"surfaces (name, broken, BreakSurface calls) on the authority {s['surfaces']}, farthest point of the victim {beyond:.0f} cm ahead (the face is at {IMPACT_FACE:.0f}: a capsule centre past it is inside where the glass was)"
+
+    def slid_check(name):
+        def f():
+            s = st['shots'][name]
+            reach = max((p[1] for p in s['path']), default=0.0)
+            return all(a != 4 for a in s['actions']) and reach < IMPACT_FACE, f"action states {sorted(set(s['actions']))} (no Splat), farthest point {reach:.0f} cm (the face is at {IMPACT_FACE:.0f})"
+        return f
+
+    def restore():
+        if st.get('old_allowed'):
+            _impact_response(**st['old_allowed'])
+            st['old_allowed'] = None
+        return 'response restored'
+
+    def end():
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+        unreal.GSTN_ImpactTestLibrary.clear_test_surfaces(comps(worlds()[0])[key])
+        unreal.GSTN_ImpactTestLibrary.set_hit_impact_profile(0, 0, False, 1.0)
+        unreal.GSTN_ImpactTestLibrary.configure_impact_table('')
+        _impact_response(splat=True)
+        hit_rules().set_editor_property('base_impact_damage', 0.0)
+        set_damage(vkey, 0)
+        hit_rules_setup()
+        _hit_logging(False)
+        return 'restored'
+
+    shots = [
+        ('splat', 'Wall', None, False),
+        ('bounce', 'Trampoline', None, False),
+        ('break', 'Glass', None, False),
+        ('force_bounce', 'Wall', (2, 0, False, 1.0), False),     # the hit forces a bounce
+        ('forbid_splat', 'Wall', (0, 1, False, 1.0), False),     # the hit forbids a splat
+        ('victim_forbids', 'Wall', None, True),                  # the victim's response forbids a splat
+    ]
+    steps = [(0.3, lambda: ('clear', combat_clear(client))), (0.5, setup)]
+    t = 2.5
+    for name, leaf, profile, vf in shots:
+        steps += [(t, prepare(name, leaf, profile, vf)), (t + 1.3, fire(name)), (t + shot_time, collect(name)), (t + shot_time + 0.1, restore)]
+        t += shot_time + 1.0
+    t_end = t
+    steps += [
+        (t_end, run.at('the attacker kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
+        (t_end, run.at('Wall: one splat on the authority and the owner, the same outcome and surface', counts_check('splat', (1, 0, 0)))),
+        (t_end, run.at('Wall: Splat lasts the row frames, ends Actionable, the victim stopped at the face', splat_check)),
+        (t_end, run.at('Wall: the victim is pinned through the splat (no movement)', pinned_check)),
+        (t_end, run.at('Wall: impact damage added to the hit damage on both copies', damage_check('splat', 15.0))),
+        (t_end, run.at('Trampoline: one bounce, forced by the row', counts_check('bounce', (0, 1, 0)))),
+        (t_end, run.at('Trampoline: the velocity is reflected and the victim stays Tumble', bounce_check)),
+        (t_end, run.at('Glass: one break, on the authority, outside the simulation', counts_check('break', (0, 0, 1)))),
+        (t_end, run.at('Glass: broken once (BreakSurface called once) and the victim went through', break_check)),
+        (t_end, run.at('Glass: no impact damage for a break (the hit only)', damage_check('break', 8.0))),
+        (t_end, run.at('Wall with a hit that forces a bounce: bounce, not splat', counts_check('force_bounce', (0, 1, 0)))),
+        (t_end, run.at('Wall with a hit that forbids a splat: no impact', counts_check('forbid_splat', (0, 0, 0)))),
+        (t_end, run.at('Wall with a hit that forbids a splat: never in the Splat state', slid_check('forbid_splat'))),
+        (t_end, run.at('Wall with a victim that forbids a splat: no impact', counts_check('victim_forbids', (0, 0, 0)))),
+        (t_end, run.at('Wall with a victim that forbids a splat: never in the Splat state', slid_check('victim_forbids'))),
+        (t_end + 0.2, end),
+        (t_end + 0.4, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_impact_wall_mode(client=1, tap_delay=2.0):
+    """Second half of the wall scenario of the hits milestone, for the surface impacts (M4 H11, combat-m4-hits 7b): a victim wall sliding on a wall is
+    launched INTO it. `client` is the climber, the other client the attacker. A wall (an AGSTN_TestSurface box of the Wall type, which the wall mode slides on
+    like any collider) is spawned ahead of the attacker, whose test move launches along its facing; the climber walks to the wall, jumps, rises along it
+    to about 330 cm and starts to slide down; the attack is tapped on the way down, and the spin of the test move (20 frames later, 140 cm around the attacker)
+    hits it while it still slides. Wanted: the hit lands once while the climber is WallSliding; the climber is launched
+    (Tumble) and its knockback move's probe finds the wall at once: one Splat impact on the authority and the owner, the state Splat for the row's 20 frames,
+    the impact damage added to the hit's; afterwards Actionable. What the wall mode does after is reported."""
+    att = 2 if client == 1 else 1
+    run = _Run('impact_wall_mode', client, judge_reconciles=False)
+    key, akey = run.key, key_of_player(att)
+    ia_move, attack = unreal.load_asset(IA['move']), button_mask('Attack')
+    st, h = {'phase': 'idle', 'tw': None, 'reached': False}, {'h': None, 'v': None}
+    rec = []
+    dist = 135.0   # the face of the wall ahead of the attacker: the climber slides at about 100, inside the 140 cm radius of the spin
+
+    def vsampler(_dt):
+        try:
+            rec.append((run.now(), victim_info(0, key), victim_info(client, key)))
+        except Exception:
+            pass
+
+    def frame_x(loc):
+        a = snap(worlds()[0])[akey]
+        yaw = math.radians(a['yaw'])
+        return (loc[0] - a['location'][0]) * math.cos(yaw) + (loc[1] - a['location'][1]) * math.sin(yaw)
+
+    def setup():
+        hit_rules_setup()
+        set_tuning(push_back_threshold=50.0, launch_threshold=100.0, tumble_threshold=200.0)
+        hit_rules().set_editor_property('base_impact_damage', 7.0)
+        st['rows'] = unreal.GSTN_ImpactTestLibrary.configure_impact_table(IMPACT_ROWS)
+        unreal.GSTN_ImpactTestLibrary.set_hit_impact_profile(0, 0, False, 1.0)
+        _hit_logging(True)
+        st['kit'] = _apply_loadout(akey, HIT_KIT)
+        h['v'] = unreal.register_slate_post_tick_callback(vsampler)
+        st['spot'] = _impact_clear_spot(akey)
+        if st['spot'] is not None:
+            comps(worlds()[0])[akey].server_reset_to_spawn(unreal.Vector(st['spot'][0], st['spot'][1], 0.0))
+        return 'attacker spot', st['spot']
+
+    def build():
+        ctx = comps(worlds()[0])[akey]
+        unreal.GSTN_ImpactTestLibrary.clear_test_surfaces(ctx)
+        a = snap(worlds()[0])[akey]
+        fwd = (math.cos(math.radians(a['yaw'])), math.sin(math.radians(a['yaw'])))
+        half = (50.0, 500.0, 500.0)
+        c = (a['location'][0] + fwd[0] * (dist + half[0]), a['location'][1] + fwd[1] * (dist + half[0]), a['location'][2] + 200.0)
+        st['wall'] = unreal.GSTN_ImpactTestLibrary.spawn_test_surface(ctx, unreal.Vector(*c), unreal.Vector(*half), a['yaw'], 'Wall')
+        for other in [k for k in comps(worlds()[0]) if k not in (key, akey)]:
+            _place_near(att, other, (-350.0, 350.0))
+        _place_near(att, key, (70.0, 0.0))
+        set_damage(key, IMPACT_DAMAGE)
+        return 'wall', st['wall']
+
+    def finish_driver(comp):
+        comp.stop_holding_input(ia_move)
+        st['phase'] = 'done'
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+
+    def drive(_dt):
+        try:
+            now = run.now()
+            _, pawn = _local_pawn(client)
+            comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
+            mode = str(pawn.get_component_by_class(unreal.CharacterMoverComponent).get_movement_mode_name())
+            loc = pawn.get_actor_location()
+            a = snap(worlds()[0])[akey]
+            fwd = (math.cos(math.radians(a['yaw'])), math.sin(math.radians(a['yaw'])))
+            ahead = frame_x((loc.x, loc.y))
+            into = (loc.x + fwd[0] * 400.0, loc.y + fwd[1] * 400.0)
+            ph = st['phase']
+            if ph == 'walk':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
+                if dist - ahead < 130.0 and mode == 'Walking':
+                    press(client, 'jump')
+                    st.update(phase='air', t1=now)
+                elif now - st['t1'] > 6.0:
+                    finish_driver(comp)
+            elif ph == 'air':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
+                if mode == 'WallSliding':
+                    st.update(phase='hit', tw=now, reached=True)
+                elif now - st['t1'] > 2.5:
+                    finish_driver(comp)
+            elif ph == 'hit':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
+                # The climber rises along the wall to about 330 cm, then slides down faster and faster (400 cm/s at the floor). The spin of the test move opens 20
+                # frames (0.35 s) after the tap and reaches 140 cm around the attacker (height 88), the feet of the climber are 62 cm under its centre: tap just
+                # after the top of the rise, so the spin finds the climber about 230 cm up, still on the wall
+                if now - st['tw'] > 0.2 and mode == 'WallSliding' and snap(worlds()[0])[key]['velocity'][2] < -20.0 and loc.z < 265.0 and 'F' not in st:
+                    st['F'] = _latest_frame(0, akey)
+                    st['t_tap'] = now
+                    st['d0'] = (damage_of(0, key), damage_of(client, key))
+                    st['c0'] = (_impact_counts(0, key), _impact_counts(client, key))
+                    st['p_tap'] = (round(frame_x((loc.x, loc.y)), 1), round(loc.z, 1), mode)
+                    combat_tap(att, attack)
+                if hits() and 'backed' not in st:
+                    # the first hit landed: the attacker steps back so the rest of its move (the spin, 20 frames in) does not hit the splatted climber again
+                    st['backed'] = now
+                    sp = comps(worlds()[0])[akey].get_spawn_location()
+                    comps(worlds()[0])[akey].server_reset_to_spawn(unreal.Vector(a['location'][0] - fwd[0] * 350.0 - sp.x, a['location'][1] - fwd[1] * 350.0 - sp.y, 0.0))
+                if now - st['tw'] > tap_delay + 1.5:
+                    finish_driver(comp)
+        except Exception as e:
+            unreal.log_error(f'GASNPP impact_wall_mode driver: {e}')
+            st['phase'] = 'done'
+
+    def start_driver():
+        st.update(phase='walk', t1=run.now())
+        h['h'] = unreal.register_slate_post_tick_callback(drive)
+        return 'driving'
+
+    def hits():
+        return [r for r in _hit_log(0, akey) if r[0] >= st.get('F', 10 ** 9)]
+
+    def hit_on_wall():
+        hs = hits()
+        # the mode the climber is in when the hit freezes it: the first simulation tick with the hitstop tag
+        stop = next((s for s in run._win('srv', st['t_tap'], st['t_tap'] + 1.5, sim=True) if 'Combat.State.Hitstop' in s['tags']), None) if st.get('t_tap') is not None else None
+        return st['reached'] and len(hs) == 1 and stop is not None and stop['mode'] == 'WallSliding', f"reached the wall {st['reached']}, hits {hs} (group 0 is the Root box, 3 the spin), climber at the tap (x ahead of the attacker, z, mode) {st.get('p_tap')}, mode when the hitstop opened {stop['mode'] if stop else None}"
+
+    def impact_check():
+        c1 = (_impact_counts(0, key), _impact_counts(client, key))
+        auth = tuple(b - a for a, b in zip(st['c0'][0], c1[0]))
+        own = tuple(b - a for a, b in zip(st['c0'][1], c1[1]))
+        info = (_impact_info(0, key), _impact_info(client, key))
+        return auth == (1, 0, 0) and own[0] >= 1 and own[1:] == (0, 0), f'impacts (splat, bounce, break) authority {auth}, owner {own}; last impact {info}'
+
+    def sequence_check():
+        frames = {}
+        for t, ia, io in rec:
+            if t >= st['tw']:
+                frames[ia[0]] = ia[1]
+        seq = []
+        for k in sorted(frames):
+            if not seq or seq[-1] != frames[k]:
+                seq.append(frames[k])
+        n = sum(1 for k in frames if frames[k] == 4)
+        return 3 in seq and 4 in seq and seq.index(3) < seq.index(4) and seq[-1] == 0, f'combat action states in order {seq} (0 Actionable, 3 Tumble, 4 Splat), frames sampled in Splat {n}'
+
+    def damage_check():
+        d = (damage_of(0, key) - st['d0'][0], damage_of(client, key) - st['d0'][1])
+        hit = [e for e in _inbox_log(0, key) if e[0] >= st.get('F', 10 ** 9)]
+        want = (hit[0][7] if hit else 0) + 7.0
+        return abs(d[0] - want) < 0.6 and abs(d[1] - want) < 0.6, f'damage taken authority {d[0]:.1f}, owner {d[1]:.1f}, wanted {want:.0f} ({want - 7:.0f} from the hit by the inbox, and 7 from the splat)'
+
+    def after():
+        seq = []
+        for s in run._win('srv', st['tw'], st['tw'] + tap_delay + 3.5, sim=True):
+            if not seq or seq[-1] != s['mode']:
+                seq.append(s['mode'])
+        return True, f'mode sequence of the climber on the authority from the start of the slide: {seq}'
+
+    def end():
+        for hd in ('v',):
+            if h[hd] is not None:
+                unreal.unregister_slate_post_tick_callback(h[hd])
+                h[hd] = None
+        unreal.GSTN_ImpactTestLibrary.clear_test_surfaces(comps(worlds()[0])[akey])
+        unreal.GSTN_ImpactTestLibrary.configure_impact_table('')
+        hit_rules().set_editor_property('base_impact_damage', 0.0)
+        set_damage(key, 0)
+        hit_rules_setup()
+        _hit_logging(False)
+        return 'restored'
+
+    t_end = 2.5 + 8.5 + tap_delay + 4.0
+    steps = [
+        (0.3, lambda: ('clear', combat_clear(client))),
+        (0.5, setup),
+        (2.0, build),
+        (4.0, start_driver),
+        (t_end, run.at('the attacker kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
+        (t_end, run.at('the climber reached the wall and the attack hit it once while it was wall sliding', hit_on_wall)),
+        (t_end, run.at('launched into the wall: one splat on the authority and the owner', impact_check)),
+        (t_end, run.at('Tumble, then Splat, then Actionable', sequence_check)),
+        (t_end, run.at('impact damage added to the hit damage on both copies', damage_check)),
+        (t_end, run.at('what the wall mode does after the splat (reported)', after)),
+        (t_end + 0.2, end),
+        (t_end + 0.4, run.finish()),
+    ]
+    run.run(steps)
+
+
+SUITE_DEFAULT = ['weapon_switch','combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
                  'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
                  'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'kit_without_dodge', 'interact_tap_hold',
                  'hitstop', 'jump_squat', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'spike_stats', 'spike_grants', 'slide_jump',
                  # the hit scenarios: the attacker carries KIT_Test_Hits from here on; the victim (client 2) stays kit-free until hit_trade, so the real dodge in
                  # hitstun (a pawn with no loadout) runs before it
                  'hit_basic', 'stagger_threshold', 'reaction_tiers', 'di', 'ko_zone', 'dodge_blocked_in_hitstun', 'hit_trade', 'friendly_fire', 'hit_host', 'hit_lagcomp',
-                 'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'hitstop_montage']
+                 'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'impact_wall', 'impact_wall_mode', 'hitstop_montage']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 
