@@ -1,8 +1,9 @@
 using UnrealBuildTool;
 
-// Pure part logic: part sets, penetration table, break-effect data, native tags. Like GSTNCombatCore it must never depend on
-// GameplayAbilities, AbilitySystemSimulation, NetworkPrediction or Mover (those arrive in GSTNPartsGAS and GSTNPartsNP), and the
-// only other plugin module it may link is GSTNCombatCore.
+// Destructible parts, pure part (combat-parts.md §2, modularity-and-tags.md §3.2 layer L3b). Allowed edges: engine modules and
+// the Core module of the combat plugin (GSTNCombatCore), nothing else. It must never depend on GameplayAbilities,
+// AbilitySystemSimulation, NetworkPrediction, Mover, an Editor module, another optional sibling (GSTNMinion, GSTNDefence,
+// GSTNLink) or the project module: the GAS, NP and presentation halves are separate modules that depend on this one.
 public class GSTNPartsCore : ModuleRules
 {
 	public GSTNPartsCore(ReadOnlyTargetRules Target) : base(Target)
@@ -13,13 +14,13 @@ public class GSTNPartsCore : ModuleRules
 		{
 			"Core",
 			"CoreUObject",
+			"Engine",
 			"GameplayTags",
-			"GSTNCombatCore",
-			// UDeveloperSettings (GSTN_PartsSettings.h); Engine comes through GSTNCombatCore
-			"DeveloperSettings"
+			"DeveloperSettings",
+			"GSTNCombatCore"
 		});
 
-		// The module registers the plugin's tag ini folder at startup
+		// Finds the plugin's own Config/Tags folder to register it with the tag manager
 		PrivateDependencyModuleNames.Add("Projects");
 	}
 }

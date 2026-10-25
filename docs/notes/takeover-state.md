@@ -499,3 +499,10 @@ BUILD AND TESTS: full UBT build (Development Editor Win64) succeeded with the pl
 LOCAL ONLY: `GASP_Giustino2.uproject` has `GSTNParts` enabled in the working tree and is NOT committed (owner-OK item); `git status` shows it modified, plus `.mcp.json` / `.mcp.json.tmp` as before. Without the enable the plugin is not built.
 PENDING: owner OK to enable the plugin in the `.uproject`; the merge with `claude/project-thread-v1plhd` (it already has a larger GSTNParts); P0a reading of the 0.1 % line (HANDOVER 34).
 NEXT: P2 (part set data, penetration table, break-effect structs, validators).
+
+## HANDOVER 36 (laptop, 2026-10-25): GSTNParts P1-P3 imported from the desktop branch
+Branch feature/gas-npp-5.8. Commit "Import GSTNParts P1-P3 from the desktop branch" on top of 0119e79: `Plugins/GSTNParts` replaced verbatim by origin/claude/project-thread-v1plhd at 98d0bc7 (P1, P2, P3 and the review fixes); the laptop skeleton of HANDOVER 35 is superseded. NO adaptation was needed: the desktop plugin compiled unchanged against the post-M4 GSTNCombatCore (its only combat include is Rules/GSTN_KitExtension.h). Docs: m4b-doc-deltas.md (our P0 entry first, the desktop P1-P3 and review entries verbatim, plus the lead's decision on P0a), Plugins/README row text, independence-audit edge line.
+BUILD AND TESTS (editor closed): full UBT build succeeded with the plugin enabled and disabled. Headless `RunTests GSTN`: enabled 451/451 (396 combat + 55 `GSTNParts.*`), disabled 396/396. Grep gate clean (no GAS/NP/Mover, no `/Game/`, no ConstructorHelpers).
+LOCAL ONLY: the `.uproject` enable is still uncommitted (owner approval pending).
+NOTE: the tag namespace is `GSTNPartsTags` (not `GSTN_PartsTags`); `FGSTN_PartsBakedCurve` and `EGSTN_PartReactionTier` are stand-ins that P4 should replace by the M4 `FGSTN_BakedCurve` and `EGSTN_HitReaction`, and `FGSTN_PartHitData` / `FGSTN_PartsRulesExtension` must get their M4 bases (`FGSTN_HitExtension`, `FGSTN_RulesExtension`).
+NEXT: P4 (`UGSTN_HitStep_PartResolve`).
