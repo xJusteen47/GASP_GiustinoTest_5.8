@@ -266,8 +266,10 @@ def combat_test_specs():
                 # C14 movement kit (plugin abilities, granted by the harness with ServerSetMoveKit). The dodge is one command bound by context;
                 # the escape dodge (a kit with the blocks dropped as data) takes over when the pawn owns Test.State.Escape
                 ('Command.Movement.Dash', [], [], 'GSTN_GA_Dash'),
-                ('Command.Defence.Dodge', ['Input.Context.Grounded'], ['Test.State.Escape'], 'GSTN_GA_GroundDodge'),
+                ('Command.Defence.Dodge', ['Input.Context.Grounded'], ['Test.State.Escape', 'Test.State.Planted'], 'GSTN_GA_GroundDodge'),
                 ('Command.Defence.Dodge', ['Input.Context.Grounded', 'Test.State.Escape'], [], 'GSTN_GA_TestEscapeDodge'),
+                # M4 H12: the ground dodge without its take-off, for the dodge scenarios (a hitbox fixed in the world meets the same feet at every frame)
+                ('Command.Defence.Dodge', ['Input.Context.Grounded', 'Test.State.Planted'], [], 'GSTN_GA_TestPlantedGroundDodge'),
                 ('Command.Defence.Dodge', ['Input.Context.Airborne'], [], 'GSTN_GA_AirDodge'),
                 ('Command.Interact.Grab', [], [], 'GSTN_GA_TestGrab'),
                 ('Command.Interact.PickUp', [], [], 'GSTN_GA_TestPickUp'),
@@ -688,9 +690,19 @@ def hits_content_specs():
             ('head', 'head', 'Combat.Hurtbox.Head', 2, 22.0, 22.0, 68.0),
             ('feet', 'foot_l', 'Combat.Hurtbox.Feet', 0, 30.0, 30.0, -62.0),
         ],
-        'weapon': ('WPN_Test_Hits', 'Weapon.Test.Hits', 'Test.Role.Primary', [('Command.Attack.Neutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestHitMove')]),
+        # M4 H12: the low attack of the dodge scenarios sits on crouch + attack
+        'weapon': ('WPN_Test_Hits', 'Weapon.Test.Hits', 'Test.Role.Primary', [('Command.Attack.Neutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestHitMove'),
+                                                                               ('Command.Attack.CrouchNeutral', ['Input.Context.Grounded'], [], 'GSTN_GA_TestFeetProbe')]),
         'kit': ('KIT_Test_Hits', 'Kit.Test.Hits', 'WPN_Test_Hits', {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
-                [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial')]),
+                [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'),
+                 # M4 H12: the base dodges are kit data like the rest: bound by context, blocked in hitstun and hitstop by their own data
+                 ('Command.Defence.Dodge', ['Input.Context.Grounded'], [], 'GSTN_GA_GroundDodge'),
+                 ('Command.Defence.Dodge', ['Input.Context.Airborne'], [], 'GSTN_GA_AirDodge')]),
+        # M4 H12: the same kit with a special escape in place of the ground dodge: its blocked tags are dropped as data (dodges in hitstun)
+        'escape_kit': ('KIT_Test_HitsEscape', 'Kit.Test.HitsEscape', 'WPN_Test_Hits', {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
+                       [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'),
+                        ('Command.Defence.Dodge', ['Input.Context.Grounded'], [], 'GSTN_GA_TestEscapeDodge'),
+                        ('Command.Defence.Dodge', ['Input.Context.Airborne'], [], 'GSTN_GA_AirDodge')]),
     }
 
 
@@ -728,27 +740,28 @@ def setup_hits_content():
     weapon.set_editor_property('stat_modifiers', [])
     unreal.EditorAssetLibrary.save_loaded_asset(weapon)
 
-    name, identity, weapon_name, stat_values, bindings = specs['kit']
-    kit, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_PrimaryKitDefinition, unreal.DataAssetFactory())
-    kit.set_editor_property('kit_tags', _tag_container([identity]))
-    kit.set_editor_property('primary_weapon', unreal.load_asset(f'{TEST_COMBAT_DIR}/{weapon_name}'))
-    kit.set_editor_property('allowed_additional_weapons', _any_tag_query(base['allowed_support_role']))
-    kit.set_editor_property('max_additional_weapons', 1)
-    values = []
-    for tag, value in stat_values.items():
-        stat = unreal.GSTN_StatValue()
-        stat.set_editor_property('stat', _make_tag(tag))
-        stat.set_editor_property('value', value)
-        values.append(stat)
-    stats = unreal.GSTN_KitStats()
-    stats.set_editor_property('values', values)
-    kit.set_editor_property('stats', stats)
-    kit.set_editor_property('init_stats_effect', getattr(unreal, base['init_effect'], None))
-    command_set = unreal.GSTN_CommandSet()
-    command_set.set_editor_property('base_set', unreal.load_asset(base['base_slot_set']))
-    kit.set_editor_property('command_set', command_set)
-    kit.set_editor_property('kit_bindings', [b for b in (_binding(*row) for row in bindings) if b])
-    unreal.EditorAssetLibrary.save_loaded_asset(kit)
+    for kit_key in ('kit', 'escape_kit'):
+        name, identity, weapon_name, stat_values, bindings = specs[kit_key]
+        kit, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_PrimaryKitDefinition, unreal.DataAssetFactory())
+        kit.set_editor_property('kit_tags', _tag_container([identity]))
+        kit.set_editor_property('primary_weapon', unreal.load_asset(f'{TEST_COMBAT_DIR}/{weapon_name}'))
+        kit.set_editor_property('allowed_additional_weapons', _any_tag_query(base['allowed_support_role']))
+        kit.set_editor_property('max_additional_weapons', 1)
+        values = []
+        for tag, value in stat_values.items():
+            stat = unreal.GSTN_StatValue()
+            stat.set_editor_property('stat', _make_tag(tag))
+            stat.set_editor_property('value', value)
+            values.append(stat)
+        stats = unreal.GSTN_KitStats()
+        stats.set_editor_property('values', values)
+        kit.set_editor_property('stats', stats)
+        kit.set_editor_property('init_stats_effect', getattr(unreal, base['init_effect'], None))
+        command_set = unreal.GSTN_CommandSet()
+        command_set.set_editor_property('base_set', unreal.load_asset(base['base_slot_set']))
+        kit.set_editor_property('command_set', command_set)
+        kit.set_editor_property('kit_bindings', [b for b in (_binding(*row) for row in bindings) if b])
+        unreal.EditorAssetLibrary.save_loaded_asset(kit)
 
     # The one shared Blueprint of this step (owner approved 2026-10-24): the combat component's hurtbox set, nothing else
     bp = unreal.load_asset(TEST_CHAR)
