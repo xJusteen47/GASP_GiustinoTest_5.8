@@ -90,7 +90,11 @@ int32 FGSTN_InputHostUtils::PublishOutbox(FGSTN_SimEventOutbox& Outbox, AActor* 
 
 	return Outbox.Flush(bAuthority && Subsystem != nullptr, [Owner, Subsystem](FGSTN_SimEvent& Event)
 	{
-		Event.Instigator = Owner;
+		// An event that names its own instigator (a hit's attacker) keeps it; the others are the owner's
+		if (!Event.Instigator.IsValid())
+		{
+			Event.Instigator = Owner;
+		}
 		Subsystem->Broadcast(Event);
 	});
 }

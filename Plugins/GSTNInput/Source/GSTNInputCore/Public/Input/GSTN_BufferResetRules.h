@@ -109,6 +109,13 @@ struct GSTNINPUTCORE_API FGSTN_BufferResetRules
 	static bool Apply(FGSTN_InputHistory& History, const FGSTN_ButtonMap& Buttons,
 		TConstArrayView<TInstancedStruct<FGSTN_BufferResetRule>> Rules, const FGSTN_BufferFrameEvents& Events, int32 Now);
 
+	/**
+	 * The rule every combatant has whatever its data says: a frame with Input.BufferEvent.Interrupted (a hit received, a stun) throws away
+	 * the unconsumed presses of every button, so a press made before the hit never fires after the hitstun. Presses made later buffer
+	 * normally. Applied after the global list. @return true if it fired
+	 */
+	static bool ApplyInterrupted(FGSTN_InputHistory& History, const FGSTN_BufferFrameEvents& Events, int32 Now);
+
 	/** Adds the tags the rules of a list listen to */
 	static void GetWatchedTags(TConstArrayView<TInstancedStruct<FGSTN_BufferResetRule>> Rules, FGameplayTagContainer& OutTags);
 };
