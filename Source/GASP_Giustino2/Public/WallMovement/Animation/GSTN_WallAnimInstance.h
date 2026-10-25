@@ -17,7 +17,9 @@ class UMoverComponent;
  * skin, or removed, without touching the main graph.
  *
  * Every frame on the game thread, before the graph runs, it gathers the Mover presentation state (UGSTN_WallAnimUtils::GatherInputs) and
- * steps WallAnim (UGSTN_WallAnimUtils::StepWallAnimState). Presentation only: it reads Mover, never writes to it.
+ * steps WallAnim (UGSTN_WallAnimUtils::StepWallAnimState). Then it probes the wall under each hand and foot for the limb contact rig
+ * (WallLimbContact, limb-contact-ik.md): the layer graph ends with a Control Rig node that pulls the limbs the clip brings near the wall
+ * onto it. Presentation only: it reads Mover and the world, never writes to the simulation.
  */
 UCLASS(Abstract, Blueprintable)
 class GASP_GIUSTINO2_API UGSTN_WallAnimInstance : public UAnimInstance, public IGSTN_OverrideLayerSource
@@ -36,6 +38,14 @@ public:
 	/** What the layer graph reads: phase, loop state, speeds on the wall */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Wall|Animation")
 	FGSTN_WallAnimState WallAnim;
+
+	/** Probe bones and per-mode weights of the limb contact rig */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wall|Animation|Limb Contact")
+	FGSTN_WallLimbContactSettings LimbContactSettings;
+
+	/** What the limb contact Control Rig node reads: one surface per limb (component space) and the hand and foot weights */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Wall|Animation|Limb Contact")
+	FGSTN_WallLimbContactState WallLimbContact;
 
 	//~ Begin IGSTN_OverrideLayerSource
 	virtual bool IsOverrideLayerActive() const override { return WallAnim.bIsActive; }

@@ -49,3 +49,9 @@ Main ABP (`SandboxCharacter_Mover_ABP`): reparent to `GSTN_CharacterAnimInstance
 blend time `OverrideBlendTime`, inertialization) between the GASP pose and a `Linked Anim Layer` node `WallLayer`. The layer class comes from data: an anim set
 `DA_AnimSet_Wall` (`SetTag` `Anim.Set.Wall`, `LayerClass` `ABP_GSTN_WallLayer`) in the character's default collection on its `UGSTN_AnimSetComponent`; heavy or
 female variants are child layers in sets of the same slot, picked by the skin's collection (anim-layers.md part B).
+
+## Limbs on the wall (Control Rig)
+
+The layer graph ends with a Control Rig node (`CR_GSTN_WallLimbContact`) that pulls the hands and feet the clip keeps near the wall onto it.
+The layer instance fills `WallLimbContact` (one probed surface per limb, hand and foot weights) from `LimbContactSettings`. Visual only.
+Details, tuning and editor steps: [limb-contact-ik.md](limb-contact-ik.md).
