@@ -160,6 +160,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerSetEscapeKit(bool bApply);
 
+	/** Applies (true) or removes (false) an infinite effect granting Test.State.Planted: a grounded pawn then dodges with the planted ground dodge (no take-off). Authority only */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerSetPlanted(bool bApply);
+
+	/**
+	 * Makes the attacker outcome of the process answer Ricochet for every hit (true) or Normal (false). The outcome registry is one per process, so every
+	 * PIE world and every machine of it decides the same way: switch it between attacks, never while a hit is in flight
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	static void SetForceRicochet(bool bForce);
+
+	/** "start,end" of the hurtbox window (frames from the start of the timeline) of the default ground (false) or air (true) dodge, read from the class data; "-1,-1" if none */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	static FString GetDodgeWindow(bool bAir);
+
 	/**
 	 * Sets Mover's gravity override (acceleration in cm/s^2 world space) on THIS machine's copy of the pawn, or clears it. Call it on every
 	 * machine, while the pawn stands still: gravity is a Mover component setting, not simulated state, so every copy must hold the same value
@@ -338,6 +353,7 @@ private:
 	FActiveGameplayEffectHandle HitstunEffectHandle;
 	FActiveGameplayEffectHandle MovementLockEffectHandle;
 	FActiveGameplayEffectHandle EscapeEffectHandle;
+	FActiveGameplayEffectHandle PlantedEffectHandle;
 
 	// Stats probe: the values captured before the first rewrite, and what was written last
 	bool bStatsBaseCaptured = false;

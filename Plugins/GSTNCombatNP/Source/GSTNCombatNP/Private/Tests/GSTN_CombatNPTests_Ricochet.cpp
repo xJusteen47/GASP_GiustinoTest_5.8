@@ -19,7 +19,7 @@
 
 namespace
 {
-	const FGSTN_TimelineTrack_HurtboxModifier* FindHurtboxTrack(const FGSTN_CombatTimelineData& Data)
+	const FGSTN_TimelineTrack_HurtboxModifier* RcFindHurtboxTrack(const FGSTN_CombatTimelineData& Data)
 	{
 		for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
 		{
@@ -32,7 +32,7 @@ namespace
 		return nullptr;
 	}
 
-	FGSTN_Hurtbox MakeHurtbox(const TCHAR* Name, const TCHAR* Tag)
+	FGSTN_Hurtbox RcMakeHurtbox(const TCHAR* Name, const TCHAR* Tag)
 	{
 		FGSTN_Hurtbox Box;
 		Box.Name = Name;
@@ -40,7 +40,7 @@ namespace
 		return Box;
 	}
 
-	EGSTN_HurtState StateAt(const FGSTN_CombatTimelineData& Data, int32 Frame, const FGSTN_Hurtbox& Box)
+	EGSTN_HurtState RcStateAt(const FGSTN_CombatTimelineData& Data, int32 Frame, const FGSTN_Hurtbox& Box)
 	{
 		FGSTN_TimelineFrameResult Result;
 		Result.Reserve(Data);
@@ -49,7 +49,7 @@ namespace
 	}
 
 	/** A 60 frame attack that authors a 20 frame recoil (so the recoil and the timeline end on different frames) */
-	FGSTN_CombatTimelineData MakeAttack(bool bWithResponse = true)
+	FGSTN_CombatTimelineData RcMakeAttack(bool bWithResponse = true)
 	{
 		FGSTN_CombatTimelineData Data;
 		Data.TotalFrames = 60;
@@ -60,7 +60,7 @@ namespace
 		return Data;
 	}
 
-	FGSTN_CombatSyncCore MakeRunning(int32 StartFrame)
+	FGSTN_CombatSyncCore RcMakeRunning(int32 StartFrame)
 	{
 		FGSTN_CombatSyncCore Core;
 		FGSTN_CombatTimelineLogic::Start(Core, StartFrame, 2, EGSTN_ActivationSource::Command);
@@ -71,14 +71,14 @@ namespace
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPDodgeFeetWindowTest, "GSTNCombat.NP.Hits.Dodge.FeetWindowFromData", GSTN_NP_TEST_FLAGS)
 bool FGSTN_NPDodgeFeetWindowTest::RunTest(const FString& Parameters)
 {
-	const FGSTN_Hurtbox Feet = MakeHurtbox(TEXT("feet"), TEXT("Combat.Hurtbox.Feet"));
-	const FGSTN_Hurtbox Torso = MakeHurtbox(TEXT("torso"), TEXT("Combat.Hurtbox.Torso"));
+	const FGSTN_Hurtbox Feet = RcMakeHurtbox(TEXT("feet"), TEXT("Combat.Hurtbox.Feet"));
+	const FGSTN_Hurtbox Torso = RcMakeHurtbox(TEXT("torso"), TEXT("Combat.Hurtbox.Torso"));
 	const UGSTN_GA_MoveTimeline* Dodges[] = { GetDefault<UGSTN_GA_GroundDodge>(), GetDefault<UGSTN_GA_AirDodge>() };
 	for (const UGSTN_GA_MoveTimeline* Dodge : Dodges)
 	{
 		const FString Name = Dodge->GetName();
 		const FGSTN_CombatTimelineData& Data = Dodge->GetTimelineData();
-		const FGSTN_TimelineTrack_HurtboxModifier* Window = FindHurtboxTrack(Data);
+		const FGSTN_TimelineTrack_HurtboxModifier* Window = RcFindHurtboxTrack(Data);
 		if (!TestNotNull(*(Name + TEXT(" carries a hurtbox window")), Window))
 		{
 			continue;
@@ -89,12 +89,12 @@ bool FGSTN_NPDodgeFeetWindowTest::RunTest(const FString& Parameters)
 		TestTrue(*(Name + TEXT(" window ends before the timeline does")), Window->EndFrame > 0 && Window->EndFrame < Data.TotalFrames);
 
 		// Only the feet, only the initial part (S section 12 4b)
-		TestEqual(*(Name + TEXT(" feet intangible at take-off")), StateAt(Data, 0, Feet), EGSTN_HurtState::Intangible);
-		TestEqual(*(Name + TEXT(" feet intangible on the last window frame")), StateAt(Data, Window->EndFrame - 1, Feet), EGSTN_HurtState::Intangible);
-		TestEqual(*(Name + TEXT(" feet hittable after the window")), StateAt(Data, Window->EndFrame, Feet), EGSTN_HurtState::Normal);
+		TestEqual(*(Name + TEXT(" feet intangible at take-off")), RcStateAt(Data, 0, Feet), EGSTN_HurtState::Intangible);
+		TestEqual(*(Name + TEXT(" feet intangible on the last window frame")), RcStateAt(Data, Window->EndFrame - 1, Feet), EGSTN_HurtState::Intangible);
+		TestEqual(*(Name + TEXT(" feet hittable after the window")), RcStateAt(Data, Window->EndFrame, Feet), EGSTN_HurtState::Normal);
 		for (const int32 Frame : { 0, Window->EndFrame - 1, Window->EndFrame, Data.TotalFrames - 1 })
 		{
-			TestEqual(*FString::Printf(TEXT("%s torso hittable at frame %d"), *Name, Frame), StateAt(Data, Frame, Torso), EGSTN_HurtState::Normal);
+			TestEqual(*FString::Printf(TEXT("%s torso hittable at frame %d"), *Name, Frame), RcStateAt(Data, Frame, Torso), EGSTN_HurtState::Normal);
 		}
 
 		// The window is data: a designer who moves its end moves the hittable frame, and nothing else decides it
@@ -106,8 +106,8 @@ bool FGSTN_NPDodgeFeetWindowTest::RunTest(const FString& Parameters)
 				Base->EndFrame = Window->EndFrame + 5;
 			}
 		}
-		TestEqual(*(Name + TEXT(" reshaped window keeps the feet intangible five frames longer")), StateAt(Reshaped, Window->EndFrame + 4, Feet), EGSTN_HurtState::Intangible);
-		TestEqual(*(Name + TEXT(" and ends where the data says")), StateAt(Reshaped, Window->EndFrame + 5, Feet), EGSTN_HurtState::Normal);
+		TestEqual(*(Name + TEXT(" reshaped window keeps the feet intangible five frames longer")), RcStateAt(Reshaped, Window->EndFrame + 4, Feet), EGSTN_HurtState::Intangible);
+		TestEqual(*(Name + TEXT(" and ends where the data says")), RcStateAt(Reshaped, Window->EndFrame + 5, Feet), EGSTN_HurtState::Normal);
 	}
 	return true;
 }
@@ -115,8 +115,8 @@ bool FGSTN_NPDodgeFeetWindowTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPRicochetEndsTimelineTest, "GSTNCombat.NP.Hits.Ricochet.EndsTimelineIntoRecoil", GSTN_NP_TEST_FLAGS)
 bool FGSTN_NPRicochetEndsTimelineTest::RunTest(const FString& Parameters)
 {
-	const FGSTN_CombatTimelineData Data = MakeAttack();
-	FGSTN_CombatSyncCore Core = MakeRunning(100);
+	const FGSTN_CombatTimelineData Data = RcMakeAttack();
+	FGSTN_CombatSyncCore Core = RcMakeRunning(100);
 	FGSTN_TimelineOutput Output;
 	Output.Reserve(Data);
 	FGSTN_CombatTimelineLogic::EvaluateStart(Core, 100, Data, 0, Output);
@@ -150,8 +150,8 @@ bool FGSTN_NPRicochetEndsTimelineTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("and the recoil is forgotten"), Core.RecoilStartFrame, static_cast<int32>(INDEX_NONE));
 
 	// No response, no recoil: the bounce changes nothing about the attacker
-	const FGSTN_CombatTimelineData Plain = MakeAttack(false);
-	FGSTN_CombatSyncCore Other = MakeRunning(100);
+	const FGSTN_CombatTimelineData Plain = RcMakeAttack(false);
+	FGSTN_CombatSyncCore Other = RcMakeRunning(100);
 	TestFalse(TEXT("an attack with no response and no fallback does not recoil"), FGSTN_CombatTimelineLogic::StartRecoil(Other, 110, &Plain, nullptr));
 	TestEqual(TEXT("nothing was written"), Other.RecoilStartFrame, static_cast<int32>(INDEX_NONE));
 	FGSTN_RicochetResponse Fallback;
@@ -188,8 +188,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPRicochetTailTest, "GSTNCombat.NP.Hits.R
 bool FGSTN_NPRicochetTailTest::RunTest(const FString& Parameters)
 {
 	// RecoilFrames is the locked part (S 7: the attacker is punishable only then); what the montage has left is the cancellable tail
-	const FGSTN_CombatTimelineData Data = MakeAttack();
-	FGSTN_CombatSyncCore Core = MakeRunning(100);
+	const FGSTN_CombatTimelineData Data = RcMakeAttack();
+	FGSTN_CombatSyncCore Core = RcMakeRunning(100);
 	FGSTN_TimelineOutput Output;
 	Output.Reserve(Data);
 	FGSTN_CombatTimelineLogic::EvaluateStart(Core, 100, Data, 0, Output);
@@ -209,7 +209,7 @@ bool FGSTN_NPRicochetTailTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("and any command is allowed"), FGSTN_CombatTimelineLogic::IsCommandAllowed(Core, &Data, Output, Command, 0, 0));
 
 	// A hitstop frame pauses the recoil like it pauses a timeline: the locked part ends one frame later per paused frame
-	FGSTN_CombatSyncCore Paused = MakeRunning(100);
+	FGSTN_CombatSyncCore Paused = RcMakeRunning(100);
 	FGSTN_CombatTimelineLogic::EvaluateStart(Paused, 100, Data, 0, Output);
 	FGSTN_CombatTimelineLogic::StartRecoil(Paused, 100, &Data, nullptr);
 	int32 EndFrame = INDEX_NONE;
@@ -246,8 +246,8 @@ bool FGSTN_NPRicochetFallbackTest::RunTest(const FString& Parameters)
 	Set->KitRicochet = FGSTN_RicochetResponse();
 	TestNull(TEXT("nothing authored, nothing to fall to"), Set->GetRicochetFallback(0));
 
-	const FGSTN_CombatTimelineData Own = MakeAttack();
-	const FGSTN_CombatTimelineData None = MakeAttack(false);
+	const FGSTN_CombatTimelineData Own = RcMakeAttack();
+	const FGSTN_CombatTimelineData None = RcMakeAttack(false);
 	TestEqual(TEXT("the attack's own response wins over every fallback"), FGSTN_CombatTimelineLogic::ResolveRicochet(&Own, &Weapon)->RecoilFrames, 20);
 	TestEqual(TEXT("without one the fallback answers"), FGSTN_CombatTimelineLogic::ResolveRicochet(&None, &Weapon)->RecoilFrames, 8);
 	TestNull(TEXT("and with neither there is none"), FGSTN_CombatTimelineLogic::ResolveRicochet(&None, nullptr));

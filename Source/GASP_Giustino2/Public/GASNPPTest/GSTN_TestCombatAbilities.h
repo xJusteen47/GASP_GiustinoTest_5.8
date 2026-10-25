@@ -180,6 +180,48 @@ public:
 	UGSTN_GA_TestEscapeDodge(const FObjectInitializer& ObjectInitializer);
 };
 
+/**
+ * The ground dodge with the take-off left out (M4 H12 test content): the same timeline, hurtbox window and blocked tags, but the character stays
+ * where it stands, so a hitbox fixed in the world meets the same feet at every frame of the window. The test binding set binds it to
+ * Command.Defence.Dodge for a grounded pawn that owns Test.State.Planted (the default dodge ignores that tag). Never a kit ability: the base
+ * dodges have no spot variant (design direction 6)
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestPlantedGroundDodge : public UGSTN_GA_GroundDodge
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestPlantedGroundDodge(const FObjectInitializer& ObjectInitializer);
+
+protected:
+	virtual void OnTimelineBegan(int32 StateStartFrame) override;
+};
+
+/**
+ * A long low attack for the dodge scenarios (M4 H12): one sphere (r 20) 175 cm ahead and 75 cm below the root, over the feet of a victim standing
+ * at 205 cm and clear of its torso, open from frame 2 to frame 150 (group 0, one hit). Bound to Command.Attack.CrouchNeutral on the ground. The
+ * victim's feet are the only hurtbox it can touch, so its first hit lands on the first frame the feet are hittable. Authors a ricochet response too.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestFeetProbe : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestFeetProbe(const FObjectInitializer& ObjectInitializer);
+};
+
+/** Infinite: grants Test.State.Planted, the requirement of the planted dodge binding (the ignore tag of the default ground dodge) */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestPlanted : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_TestPlanted();
+};
+
 /** Infinite: grants Combat.State.Hitstun to the owner. Stands in for the hit reaction of M4, which projects the tag from the combat tick */
 UCLASS()
 class GASP_GIUSTINO2_API UGSTN_GE_TestHitstun : public UGameplayEffect

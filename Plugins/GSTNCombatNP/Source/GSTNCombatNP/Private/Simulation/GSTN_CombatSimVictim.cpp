@@ -380,6 +380,17 @@ FString UGSTN_CombatSimComponent::GetVictimInfo() const
 		Sync->Core.HitstopEndFrame, Sync->Core.Hit.HitstunEndFrame, Sync->Core.Hit.HasPendingReaction() ? static_cast<int32>(Sync->Core.Hit.GetPendingReaction()) + 1 : 0);
 }
 
+FString UGSTN_CombatSimComponent::GetRecoilInfo() const
+{
+	const FGSTN_CombatSyncState* Sync = GetSyncState();
+	if (!Sync)
+	{
+		return TEXT("-1,0,-1,-1,-1");
+	}
+	return FString::Printf(TEXT("%d,%d,%d,%d,%d"), Sync->Core.Input.History.GetLatestFrame(), static_cast<int32>(Sync->Core.ActionState), static_cast<int32>(Sync->Core.ActiveTimeline),
+		Sync->Core.TimelineStartFrame, Sync->Core.RecoilStartFrame);
+}
+
 void UGSTN_CombatSimComponent::ProjectStateTags(const FGSTN_CombatSyncCore& Core, int32 Frame)
 {
 	if (AbilitySystem)

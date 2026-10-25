@@ -33,6 +33,10 @@ namespace
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Escape, "Test.State.Escape",
 		"Granted by the harness to give the pawn a kit with a special escape dodge: the default ground dodge ignores it, the escape dodge requires it");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Planted, "Test.State.Planted",
+		"Granted by the harness to make the ground dodge a spot dodge (no take-off): the default ground dodge ignores it, the planted dodge requires it");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_FeetProbe, "Test.State.FeetProbe", "Owned while the low attack of the dodge scenarios runs");
+
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_HitMove, "Test.State.HitMove", "Owned while the test hit move (KIT_Test_Hits) runs");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_GammaMove, "Test.State.GammaMove", "Owned while the added command of KIT_Test_Gamma runs");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_JumpSquat, "Test.State.JumpSquat", "Owned from the jump request to the take-off of the squat jump of KIT_Test_Squat");
@@ -72,6 +76,10 @@ UGSTN_GA_TestHitMove::UGSTN_GA_TestHitMove(const FObjectInitializer& ObjectIniti
 	Timeline.TotalFrames = 32;
 	Timeline.FirstActionableFrame = 28;
 	Timeline.OverrideFrames = 0;
+
+	// A ricochet (forced by the harness' fake outcome) ends the move into a recoil that outlasts it: 40 frames against the 32 of the move
+	Timeline.bHasRicochetResponse = true;
+	Timeline.RicochetResponse.RecoilFrames = 40;
 
 	// What every hit of the move does: an authored hitstop so the scenarios know the windows (8 frames victim, 6 attacker)
 	auto MakeHit = [](float Damage)
@@ -301,6 +309,60 @@ UGSTN_GA_TestEscapeDodge::UGSTN_GA_TestEscapeDodge(const FObjectInitializer& Obj
 {
 	// The special escape: the same dodge, free to start in hitstun and hitstop. Data, not code
 	ActivationBlockedTags.Reset();
+}
+
+UGSTN_GA_TestPlantedGroundDodge::UGSTN_GA_TestPlantedGroundDodge(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+void UGSTN_GA_TestPlantedGroundDodge::OnTimelineBegan(int32 StateStartFrame)
+{
+	// The dodge without its impulse: straight to the base of the timeline, which starts the montage and nothing else
+	UGSTN_GA_BaseCombat::OnTimelineBegan(StateStartFrame);
+}
+
+UGSTN_GA_TestFeetProbe::UGSTN_GA_TestFeetProbe(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.AddTag(TAG_Test_State_FeetProbe);
+
+	Timeline.TotalFrames = 160;
+	Timeline.FirstActionableFrame = 156;
+	Timeline.OverrideFrames = 0;
+	Timeline.bHasRicochetResponse = true;
+	Timeline.RicochetResponse.RecoilFrames = 40;
+
+	FGSTN_TimelineTrack_Hitbox Track;
+	Track.StartFrame = 2;
+	Track.EndFrame = 150;
+	FGSTN_HitboxSpec Spec;
+	Spec.Shape.Type = EGSTN_ShapeType::Sphere;
+	Spec.Shape.Extent = FVector(20.0);
+	Spec.HitGroup = 0;
+	Spec.Space = EGSTN_HitboxSpace::Root;
+	FGSTN_HitboxKey Key;
+	Key.Frame = 0;
+	Key.Offset = FVector(175.0, 0.0, -75.0);
+	Spec.Keys = { Key };
+	Spec.Data.Damage = 4.f;
+	Spec.Data.BaseKnockback = 300.f;
+	Spec.Data.AngleDeg = 30.f;
+	Spec.Data.HitstopMode = EGSTN_HitstopMode::Override;
+	Spec.Data.HitstopFramesOverride = 8;
+	Spec.Data.AttackerHitstopFramesOverride = 6;
+	Track.Hitboxes.Add(Spec);
+	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Track));
+}
+
+UGSTN_GE_TestPlanted::UGSTN_GE_TestPlanted()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
+	FInheritedTagContainer Tags;
+	Tags.Added.AddTag(TAG_Test_State_Planted);
+	TargetTags->SetAndApplyTargetTagChanges(Tags);
+	GEComponents.Add(TargetTags);
 }
 
 UGSTN_GE_TestHitstun::UGSTN_GE_TestHitstun()

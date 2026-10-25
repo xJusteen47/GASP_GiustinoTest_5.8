@@ -34,6 +34,8 @@
 #include "MoverComponent.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
+#include "HAL/ThreadSafeBool.h"
+#include "Hits/GSTN_HitExtensions.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "World/GSTN_StepSnapshot.h"
 
@@ -553,7 +555,7 @@ int32 UGSTN_GASNPPTestComponent::ServerSetMoveKit(bool bDash, bool bDodge, bool 
 		return Changed;
 	};
 	int32 Changed = Apply(bDash, { UGSTN_GA_Dash::StaticClass() });
-	Changed += Apply(bDodge, { UGSTN_GA_GroundDodge::StaticClass(), UGSTN_GA_AirDodge::StaticClass(), UGSTN_GA_TestEscapeDodge::StaticClass() });
+	Changed += Apply(bDodge, { UGSTN_GA_GroundDodge::StaticClass(), UGSTN_GA_AirDodge::StaticClass(), UGSTN_GA_TestEscapeDodge::StaticClass(), UGSTN_GA_TestPlantedGroundDodge::StaticClass() });
 	Changed += Apply(bInteract, { UGSTN_GA_TestGrab::StaticClass(), UGSTN_GA_TestPickUp::StaticClass() });
 	return Changed;
 }
@@ -610,6 +612,65 @@ bool UGSTN_GASNPPTestComponent::ServerSetEscapeKit(bool bApply)
 		EscapeEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestEscapeKit>(), 1.f, AbilitySystem->MakeEffectContext());
 	}
 	return !bApply || EscapeEffectHandle.IsValid();
+}
+
+bool UGSTN_GASNPPTestComponent::ServerSetPlanted(bool bApply)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (PlantedEffectHandle.IsValid())
+	{
+		AbilitySystem->RemoveActiveGameplayEffect(PlantedEffectHandle);
+		PlantedEffectHandle = FActiveGameplayEffectHandle();
+	}
+	if (bApply)
+	{
+		PlantedEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestPlanted>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
+	return !bApply || PlantedEffectHandle.IsValid();
+}
+
+namespace
+{
+	/** The harness' fake attacker outcome (M4 H12): every hit bounces while the switch is on. The registry and the switch are process-wide, like the registry */
+	struct FGSTN_TestForcedRicochet : IGSTN_AttackerOutcomeExtension
+	{
+		virtual FName GetName() const override { return TEXT("Test.ForcedRicochet"); }
+		virtual EGSTN_AttackerHitOutcome Evaluate(const FGSTN_HitContextView& View) const override
+		{
+			return bForce ? EGSTN_AttackerHitOutcome::Ricochet : EGSTN_AttackerHitOutcome::Normal;
+		}
+		FThreadSafeBool bForce { false };
+	};
+
+	FGSTN_TestForcedRicochet& ForcedRicochet()
+	{
+		static FGSTN_TestForcedRicochet Instance;
+		static const bool bRegistered = FGSTN_AttackerOutcomeRegistry::Get().Register(&Instance);
+		(void)bRegistered;
+		return Instance;
+	}
+}
+
+void UGSTN_GASNPPTestComponent::SetForceRicochet(bool bForce)
+{
+	ForcedRicochet().bForce = bForce;
+}
+
+FString UGSTN_GASNPPTestComponent::GetDodgeWindow(bool bAir)
+{
+	const UGSTN_GA_MoveTimeline* Dodge = bAir ? static_cast<const UGSTN_GA_MoveTimeline*>(GetDefault<UGSTN_GA_AirDodge>()) : GetDefault<UGSTN_GA_GroundDodge>();
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Dodge->GetTimelineData().Tracks)
+	{
+		const FGSTN_TimelineTrack* Base = Track.GetPtr<FGSTN_TimelineTrack>();
+		if (Base && Base->GetKind() == EGSTN_TimelineTrackKind::HurtboxModifier)
+		{
+			return FString::Printf(TEXT("%d,%d"), Base->StartFrame, Base->EndFrame);
+		}
+	}
+	return TEXT("-1,-1");
 }
 
 bool UGSTN_GASNPPTestComponent::SetTestGravity(FVector Acceleration, bool bEnable)
@@ -754,6 +815,8 @@ bool UGSTN_GASNPPTestComponent::ServerResetTestState(FVector Offset)
 	ServerSetHitstun(false);
 	ServerSetMovementLock(false);
 	ServerSetEscapeKit(false);
+	ServerSetPlanted(false);
+	SetForceRicochet(false);
 	ServerEquipPrimaryWeapon(false);
 	bStatsProbeEnabled = false;
 	HitEventLog.Reset();

@@ -169,6 +169,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetVictimInfo() const;
 
+	/** "frame,action,activeTimeline,timelineStart,recoilStart" of the pending simulation state (recoilStart -1 = no recoil), for the harness. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetRecoilInfo() const;
+
 	/**
 	 * "frame:victim:group:hitbox:hurtbox:ricochet:attackerHitstop;..." of the hits the attacker side made, the last 512 frames. Written
 	 * while gstn.Combat.Debug.HitLog is 1. A re-simulated frame replaces its entry, so an owner's log after a reconcile compares with the
