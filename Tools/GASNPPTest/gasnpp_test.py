@@ -3605,7 +3605,7 @@ def scenario_hit_on_wall(client=1, wall_x=1010.0, wall_y=-880.0, frames=90):
 
 
 
-def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1.0):
+def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1.1):
     """Second half of the wall scenario of the hits milestone (M4 H9c): a real hit while the pawn is wall sliding. `client` is the climber, the other
     client the attacker: it stands on the floor beside the wall (clear of the climber's path) and spins the moment the climber is WallSliding. The spin is a
     sphere around the attacker, so it reaches the sliding pawn from below. Wanted, on the authority and the owner: the hit lands once on the climber while it
@@ -4974,8 +4974,9 @@ def scenario_hit_lagcomp(client=1):
 
     def rewound():
         lc = _lagcomp_info(0, akey)
-        ok = lc[0] - st['lc0'][0] >= len(names) and 0 < lc[2] and lc[3] - lc[2] <= 250 + 1e-3
-        return ok, f'rewound attacker steps {st["lc0"][0]:.0f} -> {lc[0]:.0f}, requested {lc[1]:.1f} ms, applied {lc[2]:.1f} ms, current {lc[3]:.1f} ms (depth {lc[3] - lc[2]:.1f} ms, cap 250; the view the attacker showed was {lc[3] - lc[1]:.1f} ms behind)'
+        cap = float(hit_rules().get_editor_property('max_rewind_ms'))
+        ok = lc[0] - st['lc0'][0] >= len(names) and 0 < lc[2] and lc[3] - lc[2] <= cap + 1e-3
+        return ok, f'rewound attacker steps {st["lc0"][0]:.0f} -> {lc[0]:.0f}, requested {lc[1]:.1f} ms, applied {lc[2]:.1f} ms, current {lc[3]:.1f} ms (depth {lc[3] - lc[2]:.1f} ms, cap {cap:.0f}; the view the attacker showed was {lc[3] - lc[1]:.1f} ms behind)'
 
     def host_never():
         info = _lagcomp_info(0, key_of_player(0)) if detected_mode() == 'listen' else (0.0,)
@@ -5355,6 +5356,8 @@ def _impact_clear_spot(key, run=900.0):
                 continue
             if not lib.has_floor_below(ctx, unreal.Vector(start.x + fwd.x * 700.0, start.y + fwd.y * 700.0, start.z), 400.0):
                 continue
+            if not lib.has_floor_below(ctx, unreal.Vector(start.x - fwd.x * 400.0, start.y - fwd.y * 400.0, start.z), 80.0):
+                continue
             return (dx, dy)
     return None
 
@@ -5732,7 +5735,7 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
                     # the first hit landed: the attacker steps back so the rest of its move (the spin, 20 frames in) does not hit the splatted climber again
                     st['backed'] = now
                     sp = comps(worlds()[0])[akey].get_spawn_location()
-                    comps(worlds()[0])[akey].server_reset_to_spawn(unreal.Vector(a['location'][0] - fwd[0] * 350.0 - sp.x, a['location'][1] - fwd[1] * 350.0 - sp.y, 0.0))
+                    comps(worlds()[0])[akey].server_reset_to_spawn(unreal.Vector(a['location'][0] - fwd[0] * 130.0 - sp.x, a['location'][1] - fwd[1] * 130.0 - sp.y, 0.0))
                 if now - st['tw'] > tap_delay + 1.5:
                     finish_driver(comp)
         except Exception as e:
