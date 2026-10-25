@@ -5,6 +5,7 @@
 namespace GSTNCombatTags
 {
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Timeline, "Combat.Ability.Timeline", "Identifies an ability that plays a combat timeline. Set in the ability's AbilityTags");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_IgnoreHitstunOnActivation, "Combat.Ability.IgnoreHitstunOnActivation", "The ability may start in a hit reaction: the combat gate lets it through and its own blocked tags decide. Set in the ability's AbilityTags");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_AwaitingAdoption, "Combat.Ability.AwaitingAdoption", "A triggered ability waits to be adopted by the timeline that spawned it. Owned by that ability while it waits");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Lock_Movement, "Combat.Lock.Movement", "Locks the combatant's movement. Granted by abilities and effects that root the combatant, read by the stats movement modifier");
@@ -52,7 +53,7 @@ namespace GSTNCombatTags
 	{
 		GetDeclaredCoreTags(OutTags);
 		OutTags.Append({
-			Ability_Timeline, Ability_AwaitingAdoption,
+			Ability_Timeline, Ability_AwaitingAdoption, Ability_IgnoreHitstunOnActivation,
 			Lock_Movement, Lock_Reaction,
 			Weapon_Role_Primary, Weapon_Role_Support,
 			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_LoadoutSwapped, Event_SuperUsed,

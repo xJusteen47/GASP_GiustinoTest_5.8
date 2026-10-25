@@ -12,6 +12,8 @@
 #include "UObject/Object.h"
 #include "GSTN_CombatTableSet.generated.h"
 
+class UGameplayAbility;
+
 class UGSTN_CombatSettings;
 class UGSTN_GA_BaseCombat;
 class UGSTN_GA_PlatformJump;
@@ -61,6 +63,19 @@ public:
 
 	/** Per binding: EGSTN_PlatformJumpRole + 1 for a UGSTN_GA_PlatformJump binding, 0 for any other */
 	TArray<uint8> BindingJumpRole;
+
+	/**
+	 * Per binding: the ability's reaction flags (ReactionIgnoresHitstun, ReactionEndsReaction), read from the class defaults when the set is built.
+	 * The gate reads them every frame, so they are data of the loadout and not looked up on the class in the simulation
+	 */
+	TArray<uint8> BindingReaction;
+
+	static constexpr uint8 ReactionIgnoresHitstun = 1;
+	static constexpr uint8 ReactionEndsReaction = 2;
+
+	/** The flags of an ability class: Combat.Ability.IgnoreHitstunOnActivation in its tags, UGSTN_GA_Base::bEndReactionOnActivation */
+	static uint8 MakeReactionFlags(const UClass* AbilityClass);
+	static uint8 MakeReactionFlags(const UGameplayAbility* Default);
 
 	/** Per registry entry: the priority tier of the first command bound to it (the running tier of the override rule) and its default window */
 	TArray<int32> TimelineTier;

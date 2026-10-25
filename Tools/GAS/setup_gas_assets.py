@@ -707,6 +707,11 @@ def hits_content_specs():
                        [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestSpecial'),
                         ('Command.Defence.Dodge', ['Input.Context.Grounded'], [], 'GSTN_GA_TestEscapeDodge'),
                         ('Command.Defence.Dodge', ['Input.Context.Airborne'], [], 'GSTN_GA_AirDodge')]),
+        # M4 H13b: the burst test kit. Special starts a plain ability that is allowed in a hit reaction and leaves it alone (the control), the
+        # ground dodge button starts the one that ends the reaction (UGSTN_GA_Base::bEndReactionOnActivation)
+        'burst_kit': ('KIT_Test_HitsBurst', 'Kit.Test.HitsBurst', 'WPN_Test_Hits', {'Combat.SetByCaller.Stat.WalkSpeed': 600.0, 'Combat.SetByCaller.Stat.JumpVelocity': 700.0},
+                      [('Command.Movement.Jump', [], [], 'GSTN_GA_PlatformJump'), ('Command.Special.Neutral', [], [], 'GSTN_GA_TestReactionPeek'),
+                       ('Command.Defence.Dodge', ['Input.Context.Grounded'], [], 'GSTN_GA_TestBurst')]),
     }
 
 
@@ -744,7 +749,7 @@ def setup_hits_content():
     weapon.set_editor_property('stat_modifiers', [])
     unreal.EditorAssetLibrary.save_loaded_asset(weapon)
 
-    for kit_key in ('kit', 'escape_kit'):
+    for kit_key in ('kit', 'escape_kit', 'burst_kit'):
         name, identity, weapon_name, stat_values, bindings = specs[kit_key]
         kit, _ = _get_or_create(name, TEST_COMBAT_DIR, unreal.GSTN_PrimaryKitDefinition, unreal.DataAssetFactory())
         kit.set_editor_property('kit_tags', _tag_container([identity]))

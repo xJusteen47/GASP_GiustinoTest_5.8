@@ -231,6 +231,12 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	}
 
 	/**
+	 * Ends the current hit reaction in this frame (a burst, UGSTN_GA_Base::bEndReactionOnActivation): hitstun, tumble or splat become Actionable,
+	 * the pending reaction and its launch are dropped and the hitstop window closes at this frame. Pure: rewrites the core only. Does nothing to a KO
+	 */
+	static void EndReaction(FGSTN_CombatSyncCore& Core, int32 Frame);
+
+	/**
 	 * A combatant found inside a KO zone at the end of the previous frame is knocked out: the running move is cancelled and the state is the
 	 * terminal KO. Does nothing to one that is out already. @return true when this call knocked it out; bCancelledMove says a move was cancelled
 	 */

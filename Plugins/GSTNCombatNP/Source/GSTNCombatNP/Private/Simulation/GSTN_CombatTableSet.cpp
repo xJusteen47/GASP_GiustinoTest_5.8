@@ -3,6 +3,7 @@
 #include "Simulation/GSTN_CombatTableSet.h"
 
 #include "Abilities/GameplayAbility.h"
+#include "Abilities/GSTN_GA_Base.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Abilities/GSTN_GA_PlatformJump.h"
 #include "Algo/StableSort.h"
@@ -10,6 +11,7 @@
 #include "Input/GSTN_CommandLocks.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Loadout/GSTN_EntrySourceMask.h"
+#include "GSTN_CombatTags.h"
 #include "Misc/Crc.h"
 #include "Serialization/MemoryWriter.h"
 
@@ -62,12 +64,31 @@ int32 UGSTN_CombatTableSet::AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat> Ti
 	return Index;
 }
 
+uint8 UGSTN_CombatTableSet::MakeReactionFlags(const UClass* AbilityClass)
+{
+	return MakeReactionFlags(AbilityClass && AbilityClass->IsChildOf(UGameplayAbility::StaticClass()) ? AbilityClass->GetDefaultObject<UGameplayAbility>() : nullptr);
+}
+
+uint8 UGSTN_CombatTableSet::MakeReactionFlags(const UGameplayAbility* Default)
+{
+	if (!Default)
+	{
+		return 0;
+	}
+	uint8 Flags = 0;
+	Flags |= Default->GetAssetTags().HasTagExact(GSTNCombatTags::Ability_IgnoreHitstunOnActivation.GetTag()) ? ReactionIgnoresHitstun : 0;
+	const UGSTN_GA_Base* Combat = Cast<UGSTN_GA_Base>(Default);
+	Flags |= Combat && Combat->bEndReactionOnActivation ? ReactionEndsReaction : 0;
+	return Flags;
+}
+
 void UGSTN_CombatTableSet::DeriveFromBindings(const UGSTN_InputSettings& InputSettings, const UGSTN_CombatSettings& CombatSettings)
 {
 	TimelineRegistry.Reset();
 	TimelineContent.Reset();
 	BindingTimeline.Reset();
 	BindingJumpRole.Reset();
+	BindingReaction.Reset();
 	TableJumpData = nullptr;
 	TimelineTier.Reset();
 	TimelineDefaultOverride.Reset();
@@ -87,6 +108,7 @@ void UGSTN_CombatTableSet::DeriveFromBindings(const UGSTN_InputSettings& InputSe
 		const UClass* AbilityClass = Binding.Ability.Get();
 		const UGSTN_GA_PlatformJump* JumpDefault = AbilityClass && AbilityClass->IsChildOf(UGSTN_GA_PlatformJump::StaticClass()) ? AbilityClass->GetDefaultObject<UGSTN_GA_PlatformJump>() : nullptr;
 		BindingJumpRole.Add(JumpDefault ? static_cast<uint8>(JumpDefault->Role) + 1 : 0);
+		BindingReaction.Add(UGSTN_CombatTableSet::MakeReactionFlags(AbilityClass));
 		if (JumpDefault && JumpDefault->Role == EGSTN_PlatformJumpRole::Jump && !TableJumpData)
 		{
 			TableJumpData = JumpDefault;
@@ -346,6 +368,7 @@ UGSTN_CombatTableSet* FGSTN_CombatTableConverter::Convert(UObject* Outer, const 
 		const UClass* AbilityClass = Binding.Ability.Get();
 		const UGSTN_GA_PlatformJump* JumpDefault = AbilityClass->IsChildOf(UGSTN_GA_PlatformJump::StaticClass()) ? AbilityClass->GetDefaultObject<UGSTN_GA_PlatformJump>() : nullptr;
 		Set->BindingJumpRole.Add(JumpDefault ? static_cast<uint8>(JumpDefault->Role) + 1 : 0);
+		Set->BindingReaction.Add(UGSTN_CombatTableSet::MakeReactionFlags(Binding.Ability.Get()));
 		if (JumpDefault && JumpDefault->Role == EGSTN_PlatformJumpRole::Jump && !Set->TableJumpData)
 		{
 			Set->TableJumpData = JumpDefault;

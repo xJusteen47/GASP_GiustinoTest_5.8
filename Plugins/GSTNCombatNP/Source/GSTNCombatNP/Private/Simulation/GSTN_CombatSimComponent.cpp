@@ -568,11 +568,26 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 {
 	// Outside the combat tick (or with no timeline running) nothing gates: only a running timeline closes commands
 	// A victim in hitstun or tumble acts again when its state says Actionable; the first frame of that state is the first frame of the tail
+	const UGSTN_CombatTableSet& Current = Tables();
 	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
 	{
+		// The one exception: an ability tagged Combat.Ability.IgnoreHitstunOnActivation, in a reaction (a KO is never bypassed). The gate only asks
+		// whether the command has such a binding; CanExecuteBinding checks the binding the context actually picks, and the ability's own blocked tags decide
+		if (!FGSTN_CombatVictim::IsInReaction(*GateCore) || !Current.Table.Commands.IsValidIndex(CommandIndex))
+		{
+			return false;
+		}
+		const FGSTN_CommandTable::FCommand& Locked = Current.Table.Commands[CommandIndex];
+		for (int32 Offset = 0; Offset < Locked.NumBindings; ++Offset)
+		{
+			const int32 Binding = Locked.FirstBinding + Offset;
+			if (Current.BindingReaction.IsValidIndex(Binding) && (Current.BindingReaction[Binding] & UGSTN_CombatTableSet::ReactionIgnoresHitstun))
+			{
+				return true;
+			}
+		}
 		return false;
 	}
-	const UGSTN_CombatTableSet& Current = Tables();
 	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !Current.Table.Commands.IsValidIndex(CommandIndex))
 	{
 		return true;
@@ -682,6 +697,16 @@ bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 	if (!IsJumpBindingAllowed(BindingIndex))
 	{
 		return false;
+	}
+	// In a hit reaction only an ability that says so may start (the gate of IsCommandAllowed passed the command, not necessarily this binding)
+	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
+	{
+		const UGSTN_CombatTableSet& Current = Tables();
+		if (!FGSTN_CombatVictim::IsInReaction(*GateCore) || !Current.BindingReaction.IsValidIndex(BindingIndex)
+			|| !(Current.BindingReaction[BindingIndex] & UGSTN_CombatTableSet::ReactionIgnoresHitstun))
+		{
+			return false;
+		}
 	}
 	// On the end-of-previous-frame state, like the ability system's own check at execution
 	return FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, GetCommandTable(), BindingIndex);
@@ -850,6 +875,15 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Args.Outbox = &EventOutbox;
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
+
+	// A burst: the ability that starts in a reaction and says it ends it. The state is rewritten here, in the frame of the request, so it rolls
+	// back with the rest; the ability system's pre-tick removes the freeze of the window (EndReaction request)
+	if (Result.HasRequest() && FGSTN_CombatVictim::IsInReaction(OutSync.Core) && FrameSet.BindingReaction.IsValidIndex(Result.BindingIndex)
+		&& (FrameSet.BindingReaction[Result.BindingIndex] & UGSTN_CombatTableSet::ReactionEndsReaction))
+	{
+		FGSTN_CombatVictim::EndReaction(OutSync.Core, Frame);
+		OutSync.Core.Requests.Add(EGSTN_RequestType::EndReaction, Frame, 0);
+	}
 
 	// Step 5b: a jump or fast fall command that the gate let through changes the jump state in the frame of the request
 	if (Result.HasRequest())
@@ -1182,6 +1216,19 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		case EGSTN_RequestType::VictimFreeze:
 			// A victim that stays in place leaves the freeze at rest; any other keeps the velocity it came with until its move replaces it
 			ExecuteFreeze(VictimResult.bFreezeZeroVelocity && VictimFrame == Frame ? FreezeAtRestEffect : FreezeEffect, Slot.Arg, TimeStep.StepMs);
+			break;
+		case EGSTN_RequestType::EndReaction:
+			// The Mover half of a window that ended early: the freezes of the hitstop go with it (the state half was rewritten by the combat tick)
+			if (AbilitySystem)
+			{
+				for (const TSubclassOf<UGameplayEffect>& Freeze : {FreezeEffect, FreezeAtRestEffect})
+				{
+					if (Freeze)
+					{
+						AbilitySystem->RemoveActiveGameplayEffectBySourceEffect(Freeze, AbilitySystem);
+					}
+				}
+			}
 			break;
 		case EGSTN_RequestType::MeterGain:
 			ExecuteMeterGain(Slot.Arg);

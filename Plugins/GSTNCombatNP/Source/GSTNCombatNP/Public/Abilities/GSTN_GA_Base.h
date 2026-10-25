@@ -44,6 +44,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Activation")
 	bool bEndOnTriggerRelease = false;
 
+	/**
+	 * Ends the activator's current hit reaction (hitstun, tumble, splat and the hitstop window) in the frame this ability is activated, written into the
+	 * combat sync state so it rolls back with it. OFF by default. This is the building block of a burst (Guilty Gear style): a burst ability also
+	 * wants Combat.Ability.IgnoreHitstunOnActivation (otherwise the gate never lets it start in a reaction), a full-body Intangible hurtbox window
+	 * on its timeline, and a stagger-resistance modifier (hurtbox threshold / MaxReaction) for the frames after it
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Activation")
+	bool bEndReactionOnActivation = false;
+
 	/** What this ability does when it is started by something other than a command while a timeline runs */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Activation")
 	EGSTN_InterruptPolicy InterruptPolicy = EGSTN_InterruptPolicy::SkipIfBusy;

@@ -30,6 +30,10 @@ namespace
 		"Owned while the placeholder grab ability (interact tap) is active: the harness reads which interact command fired");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_PickUp, "Test.State.PickUp",
 		"Owned while the placeholder pick up ability (interact hold) is active");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Peek, "Test.State.Peek",
+		"Owned while the reaction peek ability (starts in a hit reaction, leaves it alone) is active");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Burst, "Test.State.Burst",
+		"Owned while the burst test ability (starts in a hit reaction and ends it) is active");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(TAG_Test_State_Escape, "Test.State.Escape",
 		"Granted by the harness to give the pawn a kit with a special escape dodge: the default ground dodge ignores it, the escape dodge requires it");
 
@@ -307,8 +311,27 @@ UGSTN_GA_TestPickUp::UGSTN_GA_TestPickUp(const FObjectInitializer& ObjectInitial
 UGSTN_GA_TestEscapeDodge::UGSTN_GA_TestEscapeDodge(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// The special escape: the same dodge, free to start in hitstun and hitstop. Data, not code
+	// The special escape: the same dodge, free to start in hitstun and hitstop. Data, not code. The tag opens the combat gate, the empty blocked
+	// tags are the ability's own word on hitstun and hitstop
 	ActivationBlockedTags.Reset();
+	AbilityTags.AddTag(GSTNCombatTags::Ability_IgnoreHitstunOnActivation);
+}
+
+UGSTN_GA_TestReactionPeek::UGSTN_GA_TestReactionPeek(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_Peek);
+	ActivationBlockedTags.Reset();
+	AbilityTags.AddTag(GSTNCombatTags::Ability_IgnoreHitstunOnActivation);
+}
+
+UGSTN_GA_TestBurst::UGSTN_GA_TestBurst(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	ActivationOwnedTags.Reset();
+	ActivationOwnedTags.AddTag(TAG_Test_State_Burst);
+	bEndReactionOnActivation = true;
 }
 
 UGSTN_GA_TestPlantedGroundDodge::UGSTN_GA_TestPlantedGroundDodge(const FObjectInitializer& ObjectInitializer)

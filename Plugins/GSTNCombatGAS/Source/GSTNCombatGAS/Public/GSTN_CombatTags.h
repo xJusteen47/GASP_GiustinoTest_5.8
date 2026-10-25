@@ -23,6 +23,13 @@ namespace GSTNCombatTags
 	/** Marks a triggered ability that waits to be adopted by the timeline that spawned it. Owned by that ability while it waits. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_AwaitingAdoption);
 
+	/**
+	 * Lets an ability start while its owner is in a hit reaction (hitstun, tumble, splat): the combat gate that refuses every activation in a reaction
+	 * stands aside for an ability that carries this tag in its AbilityTags, and the ability's own ActivationBlockedTags (Combat.State.Hitstun /
+	 * Hitstop) then decide alone. Read on activation only: a reaction that starts after the ability began does not touch it. A KO is never bypassed.
+	 */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_IgnoreHitstunOnActivation);
+
 	// Locks
 
 	/** Locks the combatant's movement (read by the stats movement modifier). Granted by abilities and effects that root the combatant. */

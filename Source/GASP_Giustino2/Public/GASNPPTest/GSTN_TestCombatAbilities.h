@@ -181,6 +181,32 @@ public:
 };
 
 /**
+ * Plain ability that may start in a hit reaction (Combat.Ability.IgnoreHitstunOnActivation) and leaves the reaction alone: owns Test.State.Peek for a
+ * few combat frames. The control of the burst: it starts in hitstun and the hitstun goes on. Bound to Command.Special.Neutral by KIT_Test_HitsBurst
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestReactionPeek : public UGSTN_GA_TestGrab
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestReactionPeek(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
+ * The burst building block as data: the same plain ability with bEndReactionOnActivation on, so it ends the reaction in the frame it starts.
+ * Owns Test.State.Burst. Bound to Command.Defence.Dodge (grounded) by KIT_Test_HitsBurst
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GA_TestBurst : public UGSTN_GA_TestReactionPeek
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_TestBurst(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
  * The ground dodge with the take-off left out (M4 H12 test content): the same timeline, hurtbox window and blocked tags, but the character stays
  * where it stands, so a hitbox fixed in the world meets the same feet at every frame of the window. The test binding set binds it to
  * Command.Defence.Dodge for a grounded pawn that owns Test.State.Planted (the default dodge ignores that tag). Never a kit ability: the base

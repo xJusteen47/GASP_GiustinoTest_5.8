@@ -67,6 +67,9 @@ enum class EGSTN_RequestType : uint8
 	/** Damage of a surface impact (Arg = the whole points): the executor applies the rules' damage effect to the victim itself */
 	ImpactDamage = 16,
 
+	/** A burst ended the combatant's hit reaction in this frame (state already rewritten): the executor removes the freezes of the window */
+	EndReaction = 17,
+
 	Count UMETA(Hidden)
 };
 

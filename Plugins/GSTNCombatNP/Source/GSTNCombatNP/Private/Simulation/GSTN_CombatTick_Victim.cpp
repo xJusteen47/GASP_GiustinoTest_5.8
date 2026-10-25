@@ -452,6 +452,22 @@ void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor*
 	Outbox.Add(MoveTemp(Event));
 }
 
+void FGSTN_CombatVictim::EndReaction(FGSTN_CombatSyncCore& Core, int32 Frame)
+{
+	if (!IsInReaction(Core))
+	{
+		return;
+	}
+	Core.ActionState = EGSTN_ActionState::Actionable;
+	Core.Hit.ClearPendingReaction();
+	Core.Hit.HitstunEndFrame = Frame;
+	Core.Hit.ImpactEndFrame = INDEX_NONE;
+	if (Core.IsInHitstop(Frame))
+	{
+		Core.HitstopEndFrame = Frame;
+	}
+}
+
 FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInput& In, FGSTN_CombatSyncCore& Core)
 {
 	FGSTN_ReactionMove Move;
