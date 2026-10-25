@@ -4,15 +4,16 @@
 
 #include "Modules/ModuleManager.h"
 #include "State/GSTN_PartsFragment.h"
+#include "Sync/GSTN_SyncFragment.h"
 
 bool FGSTN_PartsFragmentRegistration::Register()
 {
-	return FGSTN_SyncFragmentRegistry::Register<FGSTN_PartsFragment>(GSTNPartsFeatureIds::Parts);
+	return FGSTN_SyncFragmentRegistry::Register<FGSTN_PartsFragment>(GSTNFeatureIds::Parts);
 }
 
 void FGSTN_PartsFragmentRegistration::Unregister()
 {
-	FGSTN_SyncFragmentRegistry::Unregister(GSTNPartsFeatureIds::Parts);
+	FGSTN_SyncFragmentRegistry::Unregister(GSTNFeatureIds::Parts);
 }
 
 /**

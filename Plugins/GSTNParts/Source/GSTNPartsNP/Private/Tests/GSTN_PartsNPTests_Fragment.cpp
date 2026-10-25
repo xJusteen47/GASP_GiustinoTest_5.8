@@ -125,7 +125,7 @@ bool FGSTN_PartsFragmentRoundTrip0Test::RunTest(const FString& Parameters)
 {
 	FScopedFragments Registered;
 	TestTrue(TEXT("the module registered the fragment under its fixed id"),
-		FGSTN_SyncFragmentRegistry::FindStruct(GSTNPartsFeatureIds::Parts) == FGSTN_PartsFragment::StaticStruct());
+		FGSTN_SyncFragmentRegistry::FindStruct(GSTNFeatureIds::Parts) == FGSTN_PartsFragment::StaticStruct());
 
 	// No fragments: exactly the one bit, which the plugin being loaded does not change
 	FGSTN_SyncFragmentArray State;
@@ -193,7 +193,7 @@ bool FGSTN_PartsFragmentRoundTrip2Test::RunTest(const FString& Parameters)
 	const FGSTN_PartsFragment Sent = MakeFragment(6, 7);
 	FGSTN_SyncFragmentList::FindOrAdd<FGSTN_PartsFragment>(State) = Sent;
 	TestEqual(TEXT("two fragments"), State.Num(), 2);
-	TestEqual(TEXT("sorted by type id: parts first"), FGSTN_SyncFragmentRegistry::FindId(State[0].GetScriptStruct()), GSTNPartsFeatureIds::Parts);
+	TestEqual(TEXT("sorted by type id: parts first"), FGSTN_SyncFragmentRegistry::FindId(State[0].GetScriptStruct()), GSTNFeatureIds::Parts);
 
 	// 1 flag bit, packed count (8), then per fragment id (8), length (8), payload: 9 bytes for N = 6, 5 for the test fragment
 	const int64 Bits = BitsOfList(State);
@@ -408,7 +408,7 @@ bool FGSTN_PartsFragmentUnknownTest::RunTest(const FString& Parameters)
 		BadWriter.SerializeBits(&bHas, 1);
 		uint32 FragmentCount = 1;
 		BadWriter.SerializeIntPacked(FragmentCount);
-		uint8 Id = GSTNPartsFeatureIds::Parts;
+		uint8 Id = GSTNFeatureIds::Parts;
 		BadWriter << Id;
 		uint32 Length = static_cast<uint32>(Bad.Num());
 		BadWriter.SerializeIntPacked(Length);

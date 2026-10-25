@@ -19,6 +19,9 @@ namespace GSTNFeatureIds
 {
 	constexpr uint8 Invalid = 0;
 
+	/** FGSTN_PartsFragment (GSTNPartsNP): the destructible parts of an entity */
+	constexpr uint8 Parts = 16;
+
 	constexpr uint8 FirstGame = 128;
 	constexpr uint8 FirstTest = 240;
 	constexpr uint8 TestA = 240;
