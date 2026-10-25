@@ -46,6 +46,11 @@ struct FGSTN_WallTraverseTestAccess
 		return Mode.ProbeAhead(MovingComps, State, Mode.GetWallCheckSettings());
 	}
 
+	static FGSTN_WallCheckSettings GetWallCheckSettings(const UGSTN_WallTraverseModeBase& Mode)
+	{
+		return Mode.GetWallCheckSettings();
+	}
+
 	static FVector MapMoveIntentToWall(const UGSTN_WallSlideV2MovementMode& Mode, const FCharacterDefaultInputs& Inputs, const FVector& MoveIntent, const FGSTN_WallMovementPlane& Plane)
 	{
 		return Mode.MapMoveIntentToWall(Inputs, MoveIntent, Plane);

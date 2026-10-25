@@ -734,4 +734,270 @@ bool FGSTN_WallV2QueryBudgetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------------------
+// The lanes of the A/B map (wall-slide-v2.md 6.11): what the design says never costs speed, run as the harness runs it
+// -------------------------------------------------------------------------------------------------------------------------------------
+
+namespace GSTNWallEdgeWorld
+{
+	/** What a run along a feature did to the speed: the proposed velocity is fed in unchanged every tick, so any loss is the mode's */
+	struct FLaneRun
+	{
+		float WorstRatio = 1.f;
+		float WorstAtY = 0.f;
+		float FinalY = 0.f;
+		float FinalTravel = 0.f;
+		float WorstTurnDeg = 0.f;
+		bool bLeft = false;
+		bool bLostWall = false;
+		TSet<int32> Kinds;
+		/** One line per tick that lost speed: where, what the look saw (kind, angle, offset, distance) and how much speed was left */
+		TArray<FString> LossLog;
+	};
+
+	/**
+	 * Slides until EndY (or MaxTravel cm along the ground, or MaxTicks), ticking the mode with a proposed velocity of the same speed every tick. Like the control
+	 * model, the direction of the proposal is the velocity the last tick ended with (it follows the plane when the wall turns), only the speed is restored: any
+	 * ratio under 1 is what the tick itself took away
+	 */
+	static FLaneRun RunLane(FEdgeScene& Scene, const FVector& Proposed, float EndY, int32 MaxTicks = 200, float MaxTravel = 1.e9f)
+	{
+		FLaneRun Run;
+		FVector Direction = Proposed.GetSafeNormal();
+		float Travel = 0.f;
+		for (int32 i = 0; i < MaxTicks && Scene.Pos().Y < EndY && Travel < MaxTravel && !Scene.State.IsLeaving(); ++i)
+		{
+			const FVector Wanted = Direction * Proposed.Size();
+			const FVector Before = Scene.Pos();
+			const FGSTN_WallAheadResult Ahead = Scene.Probe(Wanted);
+			Run.Kinds.Add(static_cast<int32>(Ahead.Kind));
+			Scene.Tick(Wanted);
+			Travel += FVector2D(Scene.Pos() - Before).Size();
+			const float Ratio = Scene.State.Velocity.Size() / Proposed.Size();
+			if (Ratio < 0.98f && Run.LossLog.Num() < 12)
+			{
+				Run.LossLog.Add(FString::Printf(TEXT("y %.0f kind %d angle %.1f offset %.1f dist %.1f ratio %.3f"), Scene.Pos().Y, static_cast<int32>(Ahead.Kind), Ahead.Angle, Ahead.Offset, Ahead.Distance, Ratio));
+			}
+			if (Ratio < Run.WorstRatio)
+			{
+				Run.WorstRatio = Ratio;
+				Run.WorstAtY = Scene.Pos().Y;
+			}
+			Run.WorstTurnDeg = FMath::Max(Run.WorstTurnDeg, Scene.PlaneTurnDeg());
+			Run.bLostWall |= !Scene.State.bHasWall;
+			if (!Scene.Velocity().IsNearlyZero())
+			{
+				Direction = Scene.Velocity().GetSafeNormal();
+			}
+		}
+		Run.bLeft = Scene.State.IsLeaving();
+		Run.FinalY = Scene.Pos().Y;
+		Run.FinalTravel = Travel;
+		return Run;
+	}
+
+	/** A polyline wall in the canonical frame, heading +Y from (0, Y0): Segments are (turn deg, length), a turn > 0 bends the surface away from the character (convex) */
+	static void AddChain(FEdgeScene& Scene, float Y0, const TArray<FVector2D>& Segments, float Thickness)
+	{
+		FVector2D P(0.f, Y0);
+		float Heading = 0.f;
+		for (const FVector2D& Segment : Segments)
+		{
+			Heading += Segment.X;
+			const float H = FMath::DegreesToRadians(Heading);
+			const FVector2D D(-FMath::Sin(H), FMath::Cos(H));
+			const FVector2D N(FMath::Cos(H), FMath::Sin(H));
+			const FVector2D Center = P + D * (Segment.Y * 0.5f) - N * (Thickness * 0.5f);
+			Scene.AddBoxCentered(FVector(Center.X, Center.Y, 0.f), FVector(Thickness * 0.5f, Segment.Y * 0.5f, 4000.f), Heading);
+			P += D * Segment.Y;
+		}
+	}
+
+	/** The curved lanes of the map: a flat wall up to Feature, then a 90 degree arc of Radius made of 10 degree chords (the first and last are half), Sign as AddChain */
+	static void AddArc(FEdgeScene& Scene, float Feature, float Radius, float Sign)
+	{
+		constexpr float Step = 10.f;
+		constexpr int32 Chords = 9;
+		const float Chord = 2.f * Radius * FMath::Sin(FMath::DegreesToRadians(Step * 0.5f));
+		TArray<FVector2D> Segments;
+		Segments.Add(FVector2D(0.f, Feature + 2000.f));
+		Segments.Add(FVector2D(Sign * Step * 0.5f, Chord));
+		for (int32 i = 1; i < Chords; ++i)
+		{
+			Segments.Add(FVector2D(Sign * Step, Chord));
+		}
+		Segments.Add(FVector2D(Sign * Step * 0.5f, 400.f));
+		// Thick, like a wall: behind a thin plate that curves toward the character the look-ahead's lifted point is in the air, not in the wall
+		AddChain(Scene, -2000.f, Segments, 200.f);
+	}
+
+	static FString DescribeKinds(const FLaneRun& Run)
+	{
+		FString Out;
+		for (int32 Kind : Run.Kinds)
+		{
+			Out += FString::Printf(TEXT("%d "), Kind);
+		}
+		return Out;
+	}
+
+	constexpr float LaneFeature = 300.f;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2LaneNoCapTest, "GSTN.Wall.V2.Lane.FeaturesThatNeverCapKeepTheirSpeed", GSTNWallEdgeWorld::TestFlags)
+bool FGSTN_WallV2LaneNoCapTest::RunTest(const FString& Parameters)
+{
+	// The harness character: 350 cm/s along the wall, falling at 450 (a proposed speed of 570), from high up; a mostly sideways run; and the faster fall it
+	// reaches later (the terminal speed of the slide is 600 down, so these are all speeds the slide really has)
+	const FVector Velocities[] = { FVector(0, 350, -450), FVector(0, 500, -100), FVector(0, 450, -540) };
+	constexpr float StartZ = 1500.f;
+	constexpr float Feature = LaneFeature;
+	// Straight lanes are crossed when the capsule is 280 cm past the feature; the arcs turn the path, so they run a fixed time (2.3 s) and must get past the start of the arc
+	constexpr float PastFeature = Feature + 280.f;
+	constexpr float NoEnd = 1.e9f;
+	// An arc is a 90 degree turn of the path: it is run for the length of the arc and a bit (the lane's flat tail would end the wall)
+	constexpr float ArcTravel = Feature + 450.f;
+
+	struct FCase
+	{
+		const TCHAR* Name;
+		TFunction<void(FEdgeScene&)> Build;
+		float EndY;
+		float MustReachY;
+	};
+	const TArray<FCase> Cases = {
+		{ TEXT("bump 5 cm (a rib across the lane)"), [](FEdgeScene& S) { S.AddWall(); S.AddBox(FVector(0, Feature - 10, -4000), FVector(5, Feature + 10, 4000)); }, PastFeature, PastFeature },
+		{ TEXT("bump 10 cm"), [](FEdgeScene& S) { S.AddWall(); S.AddBox(FVector(0, Feature - 10, -4000), FVector(10, Feature + 10, 4000)); }, PastFeature, PastFeature },
+		{ TEXT("recess 5 cm"), [](FEdgeScene& S) {
+			S.AddBox(FVector(-50, -2000, -4000), FVector(0, Feature, 4000));
+			S.AddBox(FVector(-50, Feature, -4000), FVector(-5, Feature + 100, 4000));
+			S.AddBox(FVector(-50, Feature + 100, -4000), FVector(0, 2000, 4000)); }, PastFeature, PastFeature },
+		// The wedge of a facet is 400 cm long: stop 200 past the feature, before the look reaches its far end
+		{ TEXT("facet 15 deg away"), [](FEdgeScene& S) { S.AddConvexCorner(Feature, 15.f); }, Feature + 200.f, Feature + 200.f },
+		{ TEXT("facet 15 deg toward"), [](FEdgeScene& S) { S.AddConcaveCorner(Feature, 15.f); }, Feature + 200.f, Feature + 200.f },
+		{ TEXT("curve r300 outside"), [](FEdgeScene& S) { AddArc(S, Feature, 300.f, 1.f); }, NoEnd, Feature + 100.f },
+		{ TEXT("curve r300 inside"), [](FEdgeScene& S) { AddArc(S, Feature, 300.f, -1.f); }, NoEnd, Feature + 100.f },
+	};
+
+	for (const FVector& Proposed : Velocities)
+	for (const FQuat& Frame : Frames())
+	{
+		for (const FCase& Case : Cases)
+		{
+			FEdgeScene Scene(Frame);
+			Case.Build(Scene);
+			Scene.PlaceCapsule(0, StartZ);
+			const FLaneRun Run = RunLane(Scene, Proposed, Case.EndY, 400, Case.EndY >= NoEnd ? ArcTravel : 1.e9f);
+			TestTrue(*FString::Printf(TEXT("%s: got past the start of the feature (y %.0f)"), Case.Name, Run.FinalY), Run.FinalY >= Case.MustReachY);
+			TestTrue(*FString::Printf(TEXT("%s: no speed lost (worst %.3f of the proposed speed at y %.0f; kinds seen %s)"), Case.Name, Run.WorstRatio, Run.WorstAtY, *DescribeKinds(Run)),
+				Run.WorstRatio >= 0.98f);
+			TestFalse(*FString::Printf(TEXT("%s: mode not left"), Case.Name), Run.bLeft);
+			TestFalse(*FString::Printf(TEXT("%s: wall never lost"), Case.Name), Run.bLostWall);
+			if (Run.WorstRatio < 0.98f)
+			{
+				for (const FString& Line : Run.LossLog)
+				{
+					AddInfo(FString::Printf(TEXT("%s: %s"), Case.Name, *Line));
+				}
+			}
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2LaneCreaseVsCurveTest, "GSTN.Wall.V2.Lane.ACreaseCapsAndACurveDoesNot", GSTNWallEdgeWorld::TestFlags)
+bool FGSTN_WallV2LaneCreaseVsCurveTest::RunTest(const FString& Parameters)
+{
+	// The same 90 degrees of turn: one crease caps, a r300 arc of 10 degree chords does not, a r100 arc (a rounded corner: 10 degrees in 17 cm) may
+	// Fast enough to be above the corner speeds of the small angles (the terminal speed of the slide is 600)
+	const FVector Proposed(0, 600, -450);
+	const FGSTN_WallEdgeSettings Edges;
+	const float Corner = UGSTN_WallEdgeUtils::EdgeSpeedCap(Edges, EGSTN_WallEdgeKind::Convex, 90.f, FGSTN_WallSlideControlSettings().TerminalDownSpeed);
+	for (const FQuat& Frame : Frames())
+	{
+		{
+			FEdgeScene Scene(Frame);
+			Scene.AddConvexCorner(LaneFeature, 90.f);
+			Scene.PlaceCapsule(0, 1500.f);
+			const FLaneRun Run = RunLane(Scene, Proposed, LaneFeature + 20.f);
+			TestTrue(*FString::Printf(TEXT("A 90 degree crease caps (worst %.3f)"), Run.WorstRatio), Run.WorstRatio < 0.8f && Run.WorstRatio * Proposed.Size() >= Corner - 5.f);
+		}
+		{
+			FEdgeScene Scene(Frame);
+			Scene.AddConcaveCorner(LaneFeature, 90.f);
+			Scene.PlaceCapsule(0, 1500.f);
+			const FLaneRun Run = RunLane(Scene, Proposed, LaneFeature + 20.f);
+			TestTrue(*FString::Printf(TEXT("A 90 degree inside crease caps (worst %.3f)"), Run.WorstRatio), Run.WorstRatio < 0.8f);
+		}
+		{
+			// 25 degrees in one step is a corner (past the smooth angle), even though it is small
+			FEdgeScene Scene(Frame);
+			Scene.AddConvexCorner(LaneFeature, 25.f);
+			Scene.PlaceCapsule(0, 1500.f);
+			const FLaneRun Run = RunLane(Scene, Proposed, LaneFeature + 20.f);
+			TestTrue(*FString::Printf(TEXT("A 25 degree crease caps (worst %.3f; kinds %s)"), Run.WorstRatio, *DescribeKinds(Run)), Run.WorstRatio < 0.9f);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2LaneDeepRecessTest, "GSTN.Wall.V2.Lane.RecessDeeperThanAStepIsACornerOnTheWayOut", GSTNWallEdgeWorld::TestFlags)
+bool FGSTN_WallV2LaneDeepRecessTest::RunTest(const FString& Parameters)
+{
+	// wall-slide-v2.md 6.6: a recess deeper than MaxStepHeight that the capsule has dived into is left over a face taller than a step, which is an inside
+	// corner. The slowdown is the corner's (never under the corner speed), the wall is kept and the slide goes on
+	const FVector Proposed(0, 350, -450);
+	const FGSTN_WallEdgeSettings Edges;
+	const float CornerSpeed = UGSTN_WallEdgeUtils::EdgeSpeedCap(Edges, EGSTN_WallEdgeKind::Concave, 90.f, FGSTN_WallSlideControlSettings().TerminalDownSpeed);
+	for (const FQuat& Frame : Frames())
+	{
+		FEdgeScene Scene(Frame);
+		Scene.AddBox(FVector(-50, -2000, -4000), FVector(0, LaneFeature, 4000));
+		Scene.AddBox(FVector(-50, LaneFeature, -4000), FVector(-15, LaneFeature + 100, 4000));
+		Scene.AddBox(FVector(-50, LaneFeature + 100, -4000), FVector(0, 2000, 4000));
+		Scene.PlaceCapsule(0, 1500.f);
+		const FLaneRun Run = RunLane(Scene, Proposed, LaneFeature + 280.f);
+		TestTrue(*FString::Printf(TEXT("Crossed the recess (y %.0f)"), Run.FinalY), Run.FinalY >= LaneFeature + 280.f);
+		TestTrue(*FString::Printf(TEXT("Never slower than the corner speed (worst %.1f cm/s, corner %.1f)"), Run.WorstRatio * Proposed.Size(), CornerSpeed), Run.WorstRatio * Proposed.Size() >= CornerSpeed - 5.f);
+		TestFalse(TEXT("Mode not left"), Run.bLeft);
+		TestFalse(TEXT("Wall never lost"), Run.bLostWall);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2LaneFirstTicksTest, "GSTN.Wall.V2.Lane.UnseatedCapsuleReadsNoFeatureOnFlatWall", GSTNWallEdgeWorld::TestFlags)
+bool FGSTN_WallV2LaneFirstTicksTest::RunTest(const FString& Parameters)
+{
+	// The first ticks after a grab: the capsule is a few cm off its seat (the entry sweep reaches further than WallGap and the pull-in is rate limited), the
+	// last contact is the entry's. The wall ahead is flat: reading the gap error as a bump or slope is a wrong label
+	const FVector Velocity(0, 350, -450);
+	for (const FQuat& Frame : Frames())
+	{
+		for (float Gap : { 6.f, 9.f, 14.f, 20.f })
+		{
+			FEdgeScene Scene(Frame);
+			Scene.AddWall();
+			Scene.PlaceCapsule(0, 300, Gap);
+			Scene.State.bHasWall = false;
+			const float GapError = Gap - Scene.Mode->WallGap;
+			const FGSTN_WallAheadResult Ahead = Scene.Probe(Velocity);
+			TestEqual(*FString::Printf(TEXT("Flat wall, capsule %.0f cm off its seat: nothing ahead"), GapError), static_cast<int32>(Ahead.Kind), static_cast<int32>(EGSTN_WallEdgeKind::None));
+
+			// The control: from the seat assumption alone (no contact) the same scene is read as a feature, so the test sees what it guards
+			if (GapError > Scene.Mode->Edges.MaxStepHeight * 0.5f)
+			{
+				const FGSTN_WallAheadResult Blind = UGSTN_WallEdgeUtils::ProbeAhead(FMovingComponentSet(Scene.Capsule), Scene.Mode->Edges,
+					FGSTN_WallTraverseTestAccess::GetWallCheckSettings(*Scene.Mode), Scene.State.WallNormal, Scene.State.GravityUp, Scene.ToWorld(Velocity));
+				TestTrue(*FString::Printf(TEXT("Control: without the contact a %.0f cm gap error reads as a feature"), GapError), Blind.Kind != EGSTN_WallEdgeKind::None);
+			}
+
+			// A contact that is nowhere near (an old wall) is not believed: the seat assumption stands, which reads this flat wall as the control does
+			Scene.State.WallContactPoint = Scene.ToWorld(FVector(-500, 4000, 4000));
+			TestTrue(TEXT("A stale contact point does not make up a corner"), Scene.Probe(Velocity).Kind != EGSTN_WallEdgeKind::Concave);
+		}
+	}
+	return true;
+}
+
+
 #endif // WITH_DEV_AUTOMATION_TESTS

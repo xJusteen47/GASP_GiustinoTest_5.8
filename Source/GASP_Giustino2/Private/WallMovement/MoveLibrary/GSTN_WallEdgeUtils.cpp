@@ -15,6 +15,8 @@ namespace GSTNWallEdge
 	constexpr float FlatOffsetTolerance = 0.1f;
 	/** Slack on the offset a smooth slope explains over the sampled distance (cm) */
 	constexpr float SlopeOffsetTolerance = 1.f;
+	/** A face this much past MaxSmoothAngle is still smooth: a facet authored at exactly the limit must not flip to a corner on float noise (deg) */
+	constexpr float SmoothAngleTolerance = 0.25f;
 	/** Velocities along the plane below this have no direction worth looking at (cm/s) */
 	constexpr float MinProbeSpeed = 5.f;
 	/** How far behind the wall plane the far-face ray runs, so it travels inside the thickness of the wall that just ended (cm) */
@@ -23,6 +25,10 @@ namespace GSTNWallEdge
 	constexpr float FarFaceOvershoot = 6.f;
 	/** Without a far face the distance to an ending wall is guessed as this fraction of the look distance */
 	constexpr float UnknownEdgeFraction = 0.5f;
+	/** Samples along the look that tell a curve from a crease (the surface under the capsule, then this many steps up to the end) */
+	constexpr int32 ChainSamples = 5;
+	/** A capsule within this of its seat on the contact is taken as seated (cm) */
+	constexpr float SeatTolerance = 1.5f;
 	/** How far into the blocking feature the bump probe steps along the movement (cm) */
 	constexpr float BumpProbeInset = 1.f;
 
@@ -67,6 +73,37 @@ namespace GSTNWallEdge
 			return UGSTN_WallQueryUtils::IsHitOnValidWall(World, Hit, GravityUp, Check, Channel, QueryParams, ResponseParams);
 		}
 	};
+
+	/** True when AngleDeg is within the smooth limit (plus the float noise allowance) */
+	inline bool IsSmooth(const FGSTN_WallEdgeSettings& Edges, float AngleDeg)
+	{
+		return AngleDeg <= Edges.MaxSmoothAngle + SmoothAngleTolerance;
+	}
+
+	/**
+	 * A surface that turns away (or toward) the character in steps of at most MaxSmoothAngle is a curve, a chain of small slopes, not a corner. One angle
+	 * cannot tell them apart (a crease and an arc both read "20 degrees at 100 cm"), several can: the angle of the surface under the capsule and at points up to the
+	 * end of the look. A crease puts all of its angle in one of the steps between them, an arc spreads it. The angles are measured from the proxy plane, which
+	 * lags a curve by a few degrees, so only the steps count, not the angles themselves
+	 */
+	inline bool IsChainOfSmallTurns(const FGSTN_WallEdgeSettings& Edges, float AngleNear, float AngleFar)
+	{
+		return IsSmooth(Edges, FMath::Abs(AngleFar - AngleNear));
+	}
+
+	/** The angle between the wall normal and the surface found by a trace straight down toward the wall at Column (a point on the wall plane): false when nothing valid is there */
+	inline bool SampleAngleAt(const FProbeContext& Ctx, const FGSTN_WallCheckSettings& Check, const FVector& Column, const FVector& WallNormal, const FVector& GravityUp,
+		float Lift, float Depth, float& OutAngle)
+	{
+		const FVector Origin = Column + WallNormal * Lift;
+		FHitResult Hit;
+		if (!Ctx.Trace(Hit, Origin, Origin - WallNormal * Depth) || Hit.bStartPenetrating || !Ctx.IsValidWall(Hit, GravityUp, Check))
+		{
+			return false;
+		}
+		OutAngle = UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(Hit.ImpactNormal, WallNormal);
+		return true;
+	}
 }
 
 float UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(const FVector& A, const FVector& B)
@@ -83,7 +120,7 @@ EGSTN_WallEdgeKind UGSTN_WallEdgeUtils::ClassifyAhead(const FGSTN_WallEdgeSettin
 {
 	if (bHitAhead)
 	{
-		const bool bSmooth = AngleDeg <= Settings.MaxSmoothAngle;
+		const bool bSmooth = AngleDeg <= Settings.MaxSmoothAngle + GSTNWallEdge::SmoothAngleTolerance;
 		const float AbsOffset = FMath::Abs(Offset);
 		if (AbsOffset <= Settings.MaxStepHeight)
 		{
@@ -119,7 +156,7 @@ EGSTN_WallEdgeKind UGSTN_WallEdgeUtils::ClassifyAhead(const FGSTN_WallEdgeSettin
 	{
 		return EGSTN_WallEdgeKind::Convex;
 	}
-	if (AngleDeg <= Settings.MaxSmoothAngle)
+	if (AngleDeg <= Settings.MaxSmoothAngle + GSTNWallEdge::SmoothAngleTolerance)
 	{
 		return EGSTN_WallEdgeKind::Slope;
 	}
@@ -169,7 +206,7 @@ float UGSTN_WallEdgeUtils::CapsuleSupportAlong(float Radius, float HalfHeight, c
 }
 
 FGSTN_WallAheadResult UGSTN_WallEdgeUtils::ProbeAhead(const FMovingComponentSet& MovingComps, const FGSTN_WallEdgeSettings& Edges, const FGSTN_WallCheckSettings& Check,
-	const FVector& WallNormal, const FVector& GravityUp, const FVector& Velocity)
+	const FVector& WallNormal, const FVector& GravityUp, const FVector& Velocity, const FVector* KnownPlanePoint)
 {
 	FGSTN_WallAheadResult Result;
 	const GSTNWallEdge::FProbeContext Ctx(MovingComps, Edges, SCENE_QUERY_STAT(GSTN_WallAhead));
@@ -185,22 +222,40 @@ FGSTN_WallAheadResult UGSTN_WallEdgeUtils::ProbeAhead(const FMovingComponentSet&
 	UGSTN_WallQueryUtils::GetCapsuleSize(Ctx.UpdatedPrimitive, Radius, HalfHeight);
 	const FQuat Quat = Ctx.UpdatedComponent->GetComponentQuat();
 
-	// The wall plane under the capsule, as it is seated (WallGap), and the leading edge of the capsule along the movement. Both come from
-	// the capsule, not from the last contact: they are valid on the first tick and cannot lag behind a rate-limited pull-in
+	// The wall plane under the capsule and the leading edge of the capsule along the movement. The plane is where the capsule would be seated
+	// (WallGap), unless a point on the real surface is known: the capsule is not seated yet on the first ticks after a grab (the entry sweep
+	// reaches several cm, the pull-in is rate limited), and measuring the wall ahead from a plane that is not there reads the gap error as a
+	// feature (a "bump" or "slope" on a flat wall)
 	const float SupportOnNormal = CapsuleSupportAlong(Radius, HalfHeight, Quat, WallNormal);
 	const float Lead = CapsuleSupportAlong(Radius, HalfHeight, Quat, Dir);
-	const FVector Seat = Ctx.UpdatedComponent->GetComponentLocation() - WallNormal * (SupportOnNormal + Check.WallGap);
+	const FVector CapsuleLocation = Ctx.UpdatedComponent->GetComponentLocation();
+	float SeatDistance = SupportOnNormal + Check.WallGap;
+	if (KnownPlanePoint)
+	{
+		// Only a plausible point (one the sweeps could have found: a stale point of an old wall must not move the plane), and only when the capsule
+		// is really off its seat. A seated capsule keeps the plane of the seat: the contact of the last tick is up to a tick of travel behind, which
+		// on a facet or a curve is a different depth than the plane under the capsule now
+		const float Known = FVector::DotProduct(CapsuleLocation - *KnownPlanePoint, WallNormal);
+		if (Known >= SupportOnNormal * 0.5f && Known <= SeatDistance + Check.WallProbeDistance && FMath::Abs(Known - SeatDistance) > GSTNWallEdge::SeatTolerance)
+		{
+			SeatDistance = Known;
+		}
+	}
+	const FVector Seat = CapsuleLocation - WallNormal * SeatDistance;
 	const FVector Front = Seat + Dir * Lead;
 	const float Look = LookaheadDistance(Edges, Speed);
 	const float Lift = Edges.MaxStepHeight + Edges.StepMargin;
 
 	Result.Distance = Look;
 
-	// 1. Down toward the wall from the end point, lifted off the plane
+	// 1. Down toward the wall from the end point, lifted off the plane. It reaches RecessDepth below the plane plus what a smooth slope that began at the capsule
+	// has receded by the end point: a 15 degree facet is 30 cm behind the plane 110 cm along, and that is a slope to follow, not the end of the wall
 	const FVector End = Front + Dir * Look;
 	const FVector Origin = End + WallNormal * Lift;
+	const float SlopeReach = (Lead + Look) * FMath::Tan(FMath::DegreesToRadians(Edges.MaxSmoothAngle + GSTNWallEdge::SmoothAngleTolerance));
+	const float TraceDepth = Lift + Edges.RecessDepth + SlopeReach;
 	FHitResult Hit;
-	const bool bHit = Ctx.Trace(Hit, Origin, Origin - WallNormal * (Lift + Edges.RecessDepth));
+	const bool bHit = Ctx.Trace(Hit, Origin, Origin - WallNormal * TraceDepth);
 
 	if (bHit && Hit.bStartPenetrating)
 	{
@@ -220,6 +275,21 @@ FGSTN_WallAheadResult UGSTN_WallEdgeUtils::ProbeAhead(const FMovingComponentSet&
 		Result.Kind = Ctx.IsValidWall(Face, GravityUp, Check)
 			? ClassifyAhead(Edges, Check.MaxConcaveAngle, true, Result.Offset, Result.Angle, false, Face.Distance)
 			: EGSTN_WallEdgeKind::Blocked;
+		if (Result.Kind == EGSTN_WallEdgeKind::Concave)
+		{
+			// Curved or creased? The surface under the capsule, and one nearer than the face found: a ray lifted half as high, from the capsule itself (not from its
+			// leading edge, which may be inside the rising surface already), meets the surface nearer, at a smaller angle if it is an arc, at the same one if it is a crease
+			float AngleUnder;
+			const FVector LowStart = Seat + WallNormal * (Lift * 0.5f);
+			FHitResult Near;
+			if (GSTNWallEdge::SampleAngleAt(Ctx, Check, Seat, WallNormal, GravityUp, Lift, TraceDepth, AngleUnder)
+				&& Ctx.Trace(Near, LowStart, LowStart + Dir * (Lead + Look)) && !Near.bStartPenetrating && Near.Distance + 1.f < Lead + Face.Distance && Ctx.IsValidWall(Near, GravityUp, Check)
+				&& GSTNWallEdge::IsChainOfSmallTurns(Edges, AngleUnder, AngleBetweenNormalsDeg(Near.ImpactNormal, WallNormal))
+				&& GSTNWallEdge::IsChainOfSmallTurns(Edges, AngleBetweenNormalsDeg(Near.ImpactNormal, WallNormal), Result.Angle))
+			{
+				Result.Kind = EGSTN_WallEdgeKind::Slope;
+			}
+		}
 		return Result;
 	}
 
@@ -236,6 +306,22 @@ FGSTN_WallAheadResult UGSTN_WallEdgeUtils::ProbeAhead(const FMovingComponentSet&
 			// Where the corner is: the surface found is a ramp that started at the plane, Offset / tan(Angle) before the end point
 			const float Run = FMath::Abs(Result.Offset) / FMath::Tan(FMath::DegreesToRadians(Result.Angle));
 			Result.Distance = FMath::Clamp(Look - Run, 0.f, Look);
+
+			// Curved or creased? The surface under the capsule and at a few points from there to the end of the look: an arc turns a little between each, a crease
+			// all of it in one. Five steps, so that a wall made of facets sees at most one of its (small) creases in each
+			float Previous;
+			bool bChain = GSTNWallEdge::SampleAngleAt(Ctx, Check, Seat, WallNormal, GravityUp, Lift, TraceDepth, Previous);
+			for (int32 Step = 1; Step < GSTNWallEdge::ChainSamples && bChain; ++Step)
+			{
+				float Angle;
+				bChain = GSTNWallEdge::SampleAngleAt(Ctx, Check, Seat + Dir * ((Lead + Look) * Step / GSTNWallEdge::ChainSamples), WallNormal, GravityUp, Lift, TraceDepth, Angle)
+					&& GSTNWallEdge::IsChainOfSmallTurns(Edges, Previous, Angle);
+				Previous = Angle;
+			}
+			if (bChain && GSTNWallEdge::IsChainOfSmallTurns(Edges, Previous, Result.Angle))
+			{
+				Result.Kind = EGSTN_WallEdgeKind::Slope;
+			}
 		}
 		return Result;
 	}

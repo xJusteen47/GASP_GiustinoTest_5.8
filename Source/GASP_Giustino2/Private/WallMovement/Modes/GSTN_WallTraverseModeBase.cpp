@@ -251,7 +251,9 @@ float UGSTN_WallTraverseModeBase::GetEdgeReferenceSpeed() const
 
 FGSTN_WallAheadResult UGSTN_WallTraverseModeBase::ProbeAhead(const FMovingComponentSet& MovingComps, const FGSTN_WallTickState& State, const FGSTN_WallCheckSettings& CheckSettings) const
 {
-	return UGSTN_WallEdgeUtils::ProbeAhead(MovingComps, Edges, CheckSettings, State.WallNormal, State.GravityUp, State.Velocity);
+	// The last contact is the surface under the capsule: it keeps the look-ahead honest while the capsule is still pulling in (the first ticks of a grab)
+	const FVector* KnownPlanePoint = State.WallContactPoint.IsNearlyZero() ? nullptr : &State.WallContactPoint;
+	return UGSTN_WallEdgeUtils::ProbeAhead(MovingComps, Edges, CheckSettings, State.WallNormal, State.GravityUp, State.Velocity, KnownPlanePoint);
 }
 
 EGSTN_WallEdgeKind UGSTN_WallTraverseModeBase::ClassifyAhead(const FGSTN_WallAheadResult& Ahead) const
@@ -385,7 +387,10 @@ void UGSTN_WallTraverseModeBase::SimulationTick_Implementation(const FSimulation
 	// 1. Ride the dynamic wall, then the voluntary exits (wall jump, detach)
 	if (bUseMovementBases)
 	{
+		const FVector BeforeBase = UpdatedComponent->GetComponentLocation();
 		ApplyMovementBase(Params, TickState, MoveRecord);
+		// The remembered contact rides with the wall like the capsule does (the look-ahead measures from it)
+		TickState.WallContactPoint += UpdatedComponent->GetComponentLocation() - BeforeBase;
 	}
 	if (!TickState.bMovementLocked)
 	{

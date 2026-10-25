@@ -80,9 +80,12 @@ public:
 	 *  3. only when the wall ends: a ray back toward the capsule, just behind the plane, gives the far face of an outside edge
 	 * Every accepted hit goes through IsHitOnValidWall (T5 surface filter); pawns are ignored when Edges.bIgnorePawns.
 	 * Distance is measured from the capsule's leading edge. Kind None and no query when the velocity along the plane is ~0.
+	 * KnownPlanePoint (optional): a point on the surface under the capsule, the contact of the last sweep. The plane is then taken where it really is
+	 * and not where a capsule seated at WallGap would have it, so a capsule that is still pulling in (first ticks after a grab, after a recess) does
+	 * not read its own gap as a feature. Ignored when it does not lie within the reach of the contact sweep.
 	 */
 	static FGSTN_WallAheadResult ProbeAhead(const FMovingComponentSet& MovingComps, const FGSTN_WallEdgeSettings& Edges, const FGSTN_WallCheckSettings& Check,
-		const FVector& WallNormal, const FVector& GravityUp, const FVector& Velocity);
+		const FVector& WallNormal, const FVector& GravityUp, const FVector& Velocity, const FVector* KnownPlanePoint = nullptr);
 
 	/**
 	 * Sizes the feature the capsule was just blocked by (one line trace): steps Inset along Dir into the hit point, lifts off the capsule's
