@@ -15,6 +15,7 @@
 #include "GSTN_CombatNPTags.h"
 #include "Movement/GSTN_LayeredMove_Freeze.h"
 #include "Movement/GSTN_LayeredMove_Knockback.h"
+#include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
@@ -85,6 +86,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	FreezeEffect = UGSTN_GE_Freeze::StaticClass();
 	FreezeAtRestEffect = UGSTN_GE_FreezeZeroVelocity::StaticClass();
 	KnockbackEffect = UGSTN_GE_Knockback::StaticClass();
+	SurfaceLaunchEffect = UGSTN_GE_SurfaceLaunch::StaticClass();
 	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
@@ -1150,6 +1152,9 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 			break;
 		}
 	}
+
+	// A surface that launches, met by a combatant that is not tumbling: queued on Mover before it ticks, before a jump of this frame starts
+	StepSurfaceLaunch(TimeStep, Sync->Core);
 
 	// A request made on this frame starts its ability here, inside the ability system's tick
 	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, bFrameGateClosed ? EmptyTableSet->Table : FrameSet.Table, Sync->Core.Input, Frame);

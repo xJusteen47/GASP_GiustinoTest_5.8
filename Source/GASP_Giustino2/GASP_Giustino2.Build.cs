@@ -11,7 +11,7 @@ public class GASP_Giustino2 : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "Mover", "GameplayTags", "NetCore", "GameplayAbilities", "AbilitySystemSimulation", "GSTNCombatNP", "GSTNCombatCore", "GSTNInputCore", "GSTNInputNP" });
 
 		// GAS + Network Prediction (GAS-NPP fork) test harness
-		PrivateDependencyModuleNames.AddRange(new string[] { "GSTNCombatGAS", "GSTNSurfaceCore", "GameplayTasks", "NetworkPrediction", "EnhancedInput", "Json" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "GSTNCombatGAS", "GSTNSurfaceCore", "GSTNLevelObjects", "GameplayTasks", "NetworkPrediction", "EnhancedInput", "Json" });
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

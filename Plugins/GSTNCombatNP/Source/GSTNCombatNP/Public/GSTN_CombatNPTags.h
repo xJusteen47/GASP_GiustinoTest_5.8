@@ -29,6 +29,8 @@ namespace GSTNCombatNPTags
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveDecay);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveGravityScale);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveSeconds);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_LaunchResetAirJumps);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_LaunchResetCoyote);
 
 	/**
 	 * Tags of the HitLanded and HitReceived outbox events beyond the hit type and the relationship (which reuse Combat.HitType.* and

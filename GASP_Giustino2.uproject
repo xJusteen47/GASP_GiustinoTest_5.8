@@ -146,6 +146,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNLevelObjects",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombat",
 			"Enabled": true
 		},

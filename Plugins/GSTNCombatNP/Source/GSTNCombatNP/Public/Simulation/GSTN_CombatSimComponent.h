@@ -133,6 +133,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetImpactInfo() const;
 
+	/**
+	 * "count,frame,vx,vy,vz,typeIndex,incoming" of the launches the surface probe queued on this machine: the count and the latest one, for
+	 * the harness (counts re-simulated frames too). Not state
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetSurfaceLaunchInfo() const;
+
 	/** Count of impacts resolved by outcome since the component began, "splat,bounce,break". Counts re-simulated frames too. Not state */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetImpactCounts() const;
@@ -655,6 +662,22 @@ private:
 	bool ApplyHitEffect(const TSoftClassPtr<UObject>& Effect, const FGSTN_VictimHit& Hit, float DamageMagnitude);
 	FGameplayEffectContextHandle MakeHitContext(const FGSTN_VictimHit& Hit) const;
 	AActor* FindAttackerActor(const FGSTN_VictimHit& Hit) const;
+
+	/**
+	 * The surface launch of a combatant that is not tumbling (GSTN_CombatSimSurfaceLaunch.cpp), decided in the ability system's pre-tick from the
+	 * tracked Mover state, so it needs no sync state of its own: the queued layered move is what Mover keeps and rolls back
+	 */
+	void StepSurfaceLaunch(const FAbilitySystemTimeStep& TimeStep, const FGSTN_CombatSyncCore& Core);
+
+	/** Instant effect of the surface launch; replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
+	TSubclassOf<UGameplayEffect> SurfaceLaunchEffect;
+
+	int32 SurfaceLaunchCount = 0;
+	FString LastSurfaceLaunchInfo = TEXT("0,-1,0,0,0,0,0");
+
+	/** Tag the latest launching surface named, for kits that react. Local data, never state */
+	FGameplayTag LastSurfaceLaunchTag;
 
 	/** Instant effects of the reaction moves; replace for a game with its own */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
