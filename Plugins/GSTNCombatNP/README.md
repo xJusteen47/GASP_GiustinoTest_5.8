@@ -311,3 +311,10 @@ A launched (Tumble) victim that runs into a surface splats, bounces or breaks it
 - **Recoil:** when the attacker side decides `Ricochet` and a response exists (the attack's `RicochetResponse`, else the active weapon's, else the kit's: `UGSTN_CombatTableSet::GetRicochetFallback`), `FGSTN_CombatSyncCore::RecoilStartFrame` is set to the next frame (`FGSTN_CombatTimelineLogic::StartRecoil`). `AdvanceClock` evaluates the recoil in place of the timeline (a hitstop frame moves the start later), the attacker step and the hurt-state snapshot treat the combatant as out of its timeline, and the state returns to Actionable after `RecoilFrames` (the locked part). `UGSTN_GA_BaseCombat` keeps running and plays the recoil montage on the synced slot, the response cue and the optional push back (`UGSTN_CombatSimComponent::ExecuteRecoilMove`, the `UGSTN_GE_PushBack` effect). The rest of the montage is the cancellable tail. No hitstop, confirm or meter reach the attacker; the victim still gets the flagged inbox entry (cue and event).
 - **Dodges:** `UGSTN_GA_GroundDodge` / `UGSTN_GA_AirDodge` carry the feet window as data (see GSTNCombat). The snapshot reads it for the hit pipeline of every attacker, so the feet are missed during the window and the torso is not.
 - Harness hooks (not API): `GetRecoilInfo`, `UGSTN_GASNPPTestComponent::SetForceRicochet / GetDodgeWindow / ServerSetPlanted`. Tests: `GSTNCombat.NP.Hits.Dodge.FeetWindowFromData`, `GSTNCombat.NP.Hits.Ricochet.*`. Details and deviations: `docs/notes/m4-doc-deltas.md` "H12".
+
+## Reaction gate and burst (M4 H13b)
+
+`UGSTN_CombatSimComponent::IsCommandAllowed` / `CanExecuteBinding` let an ability through a hit reaction when its class carries
+`Combat.Ability.IgnoreHitstunOnActivation`, from `UGSTN_CombatTableSet::BindingReaction` (flags built from the class defaults with the table set).
+`bEndReactionOnActivation` on `UGSTN_GA_Base` makes the combat tick call `FGSTN_CombatVictim::EndReaction` in the frame of the request and queue the
+`EGSTN_RequestType::EndReaction` request (the executor removes the freeze effects). Fork requirements are unchanged: `UNpGameplayAbility` parents only.

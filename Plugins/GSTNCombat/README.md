@@ -342,3 +342,16 @@ Fork requirements: `GSTNCombat` (Core) needs no fork. The rules provider and com
 ## Content validation and tools (M4 H13a)
 
 `IsDataValid` of the rules prints the standard reaction matrix, of a hurtbox set the findings (empty or duplicated names, flat shapes, untagged hurtboxes, bad curves) and its matrix (rows = hurtboxes at weight 100 x `WeightScale`, with their stagger threshold and cap), of a timeline asset the hit matrix of its hitboxes and the hitstop override check. `Tools/GAS/validate_combat_content.py` runs them all headless. Tools: `make_hurtbox_set.py` (Physics Asset to hurtbox set), `bake_sockets.py` (animation to `BakedSockets`), `build_test_combat_map.py` (the test map). The "hurtbox + part" rule waits for GSTNParts (not in this branch); the hook is `FGSTN_CombatRulesValidation::ValidateHurtboxSet`.
+
+## Hit reactions and activation (M4 H13b)
+
+The native tag `Combat.Ability.IgnoreHitstunOnActivation` (declared by GSTNCombatGAS, set in an ability's `AbilityTags`) lets that ability start while its
+owner is in Hitstun, Tumble or Splat; the combat gate refuses every other activation there. The ability's own `ActivationBlockedTags`
+(`Combat.State.Hitstun`, `Combat.State.Hitstop`) decide alone afterwards, so an escape is the tag plus empty blocked tags. A hit that arrives after the
+ability started does not touch it, and a KO is never bypassed. `UGSTN_GA_Base::bEndReactionOnActivation` (Category `Combat|Activation`, off by default)
+also ends the reaction and the hitstop window in the frame of the activation, in the combat sync state: it is the burst building block. A burst wants
+three things in data: the tag, that flag, a full-body `Intangible` hurtbox window on its timeline and a stagger-resistance modifier (hurtbox threshold /
+`MaxReaction`) for the frames after it. Tests `GSTNCombat.NP.Hits.Gate.*`, scenarios `kit_escape_in_hitstun` and `burst_ends_reaction`.
+
+Tag ini: `Config/Tags/GSTNCombat.ini` holds the leaves `Combat.Hurtbox.Head` and `Combat.Hurtbox.Torso` (designer content, code never names them);
+`Combat.Hurtbox.Feet` and `Combat.Ability.*` are native because an ability default is built before the plugin's ini tags register.

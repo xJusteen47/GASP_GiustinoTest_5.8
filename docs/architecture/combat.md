@@ -777,6 +777,40 @@ timers — added by subclass/extension point, per wall-movement.md rules.
 - **Grabs** are links (12b): a `Grab` hitbox creates a grabber/grabbed link; throws are slots active only for the
   grabber role. **Needs the link spike before building.**
 
+### 12.8 As built (M4, H1 to H13b)
+
+What the code does, where it differs from the design text above is listed in `docs/notes/m4-doc-deltas.md` (one entry per checkpoint).
+
+- **Data**: `FGSTN_HitboxSpec` tracks and `FGSTN_TimelineTrack_HurtboxModifier` live in the timeline (`Timeline/GSTN_TimelineTypes.h`); hurtboxes are
+  `UGSTN_HurtboxSetDefinition` assets (`HBS_Test_Light/Medium/Heavy` carry weight scales; `Tools/GAS/make_hurtbox_set.py` builds one from a Physics Asset
+  through `UGSTN_PhysicsAssetUtils::ListPrimitives`). `BakedSocket` hitboxes read `BakedSockets` of the timeline data, filled by `Tools/GAS/bake_sockets.py`.
+- **Rules**: `UGSTN_CombatRules` (default `GSTN_CombatRules_Standard`, plugin content under `/GSTNCombat/Rules`, shipped with the plugin) holds the
+  pipeline steps, knockback model, DI, impact response and rewind window (400 ms). `UGSTN_CombatRulesProvider` adds the rules component to the game
+  state. Steps, knockback model, outcome appliers, attacker outcomes and relationship resolvers are all extension classes that a Blueprint can
+  derive from (`BP_*_Example` under `/Game/GASNPPTest/Combat/`; `BP_Step_Example` overrides `Resolve` and doubles the knockback scale).
+- **Sync state**: hit window, hitstun end, pending reaction and launch, recoil start frame, impact end frame and the request ring are in
+  `FGSTN_CombatSyncCore`; nothing a hit does lives outside it.
+- **Dodges**: the ground and air dodge are kit data. The `Intangible` window addresses `Combat.Hurtbox.Feet` only (torso and head stay hittable) and is the
+  `Timeline` default of the ability class, replaceable in a Blueprint child.
+- **Activation in a hit reaction** (H13b). The combat gate refuses every command while the combatant is in Hitstun, Tumble, Splat or KO (it asks before
+  the ability's own blocked tags). `Combat.Ability.IgnoreHitstunOnActivation` in an ability's `AbilityTags` lets that ability start in a Hitstun,
+  Tumble or Splat reaction (a KO is never bypassed); the ability's own `ActivationBlockedTags` (`Combat.State.Hitstun` / `Combat.State.Hitstop`) then
+  decide alone, so an escape is "tag + empty blocked tags" and a base dodge stays refused through its blocked tags. The tag is read on activation only:
+  a hit that arrives after the ability began is not affected by it. The gate reads `UGSTN_CombatTableSet::BindingReaction`, flags built from the class
+  defaults when the set is built (deterministic, no state outside the sync state): `IsCommandAllowed` lets a command through if any of its bindings has
+  the flag, `CanExecuteBinding` checks the binding the context picked.
+- **Burst building block** (H13b). `UGSTN_GA_Base::bEndReactionOnActivation` (Category `Combat|Activation`, off by default) ends the activator's reaction
+  in the frame of the request: `FGSTN_CombatVictim::EndReaction` rewrites the sync core (Actionable, pending reaction dropped, hitstun end and impact end
+  cleared, the hitstop window closed at this frame) and queues an `EndReaction` request whose executor removes the freeze effects of the window. A burst
+  also wants the tag above, a full-body `Intangible` hurtbox window on its timeline and a stagger-resistance modifier for the frames after it (hurtbox
+  threshold / `MaxReaction`, which the H12 data already allows). A timeline ability replaces the action state by its own when it starts, so the tag
+  alone already leaves Hitstun for a timeline ability; the flag is what also drops the pending launch and the window, and is the only one of the two
+  that matters for a plain ability. Limit: a launch already handed to Mover keeps its layered move (the flag cancels the freeze, not a flying victim).
+- **Tools**: `Tools/GAS/setup_gas_assets.py --combat-input --hits-content --h13-content`, `build_test_combat_map.py`, `validate_combat_content.py`,
+  `bake_sockets.py`, `make_hurtbox_set.py` (command lines in `Tools/README.md`).
+- **Settings and fork requirements**: `Config/DefaultGSTNCombat.ini` (plugin) names the default rules; the lag-compensation component and the hit
+  presentation component are on `BP_GASNPP_TestCharacter`; hit scenarios need the GAS-NPP fork (`GSTNCombatNP`).
+
 ## 12b. Links: piggyback, grabs, held objects (*Decision*: one system)
 
 A **link** is a relation between two entities, each with a role: `Combat.Link.Mount` (carrier / rider),
@@ -909,6 +943,19 @@ hitstop window; server and client states converge; **no reconciles besides the f
 
 Not verified yet: hitstop with a montage actually playing; Mover freeze; anything cross-entity; `scenario_jump_wall`
 (it is calibrated for another spawn point and does not reach the wall on `DefaultLevel`'s current spawn).
+
+### 17b. H0 spike results for the hit milestone (2026-10-24, full report `docs/notes/m4-spike-report.md`)
+
+| Spike | Result | Consequence |
+|---|---|---|
+| H0a cross-entity cost | 1 rollback per hit on the victim, 0 on the host (10 hits clean, 12 at 60/15/2 %) | acceptance "victim 1 rollback per hit, host 0"; a hit costs a victim +30 B per state packet while the window is open |
+| H0b freeze + tag | `FGSTN_LayeredMove_Freeze` carries `Combat.Mover.Frozen`; holds in Walking, Falling, WallSliding | incoming velocity is not restored (save it in the sync state if needed); wall modes keep leaving during a freeze, so the wall lock is an explicit gate |
+| H0c hitstop with montage | montage holds through the window and matches the authority after a forced reconcile inside it | proxies never show the montage (presentation, not state) |
+| H0d interpolation buffer | 80 ms matches 100 ms, 60 ms is worse | `FixedTickInterpolationBufferedMS` = 80 |
+| H0e lag compensation | `RewindActors`/`UnwindActors` rewind a Mover pawn 250 ms in 0.22 ms | component on the pawn Blueprint; the later rewind window is 400 ms |
+
+Crashes of the first spike attempt: Python `set_editor_property` on a live component of a PIE world together with a slate-tick callback that raised
+every frame. Safe rules: UFUNCTION setters and self-unregistering callbacks.
 
 ## 18. Roadmap
 
