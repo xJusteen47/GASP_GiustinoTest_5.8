@@ -164,6 +164,7 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		// The registered outcome appliers, for staggered and unstaggered hits alike; what they return joins the outcome
 		FGSTN_OutcomeApplyContext ApplyContext;
 		ApplyContext.VictimFragments = In.Fragments;
+		ApplyContext.Reaction.Frame = Entry.Frame;
 		FGSTN_OutcomeApplierRegistry::Get().ApplyAll(Rules, Context.OutcomeExtensions, Hit.View, ApplyContext);
 		Hit.Outcome.Events.Append(ApplyContext.Result.Events);
 		Hit.Outcome.Effects.Append(ApplyContext.Result.Effects);
@@ -189,6 +190,36 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		Hit.HitstunFrames = Knockback.HitstunFrames;
 		Hit.HitstopFrames = Hit.Outcome.bHasKnockback ? FMath::Max(Knockback.HitstopFrames, 0) : 0;
 		FVector LaunchVelocity = Knockback.LaunchVelocity;
+
+		// What an applier asked for (a break's launch and stagger) merges as a hit of that strength would: a launch faster than the hit's own
+		// replaces it, a hitstun floor longer than the hit's lengthens it, and either makes a hit that did not stagger stagger
+		const FGSTN_ReactionRequest& Request = ApplyContext.Reaction;
+		if (Request.IsSet())
+		{
+			if (Request.HasLaunch() && (!Hit.bStaggered || Hit.Reaction != EGSTN_HitReaction::Launch || Request.LaunchVelocity.SizeSquared() > LaunchVelocity.SizeSquared()))
+			{
+				Hit.bStaggered = true;
+				Hit.Reaction = EGSTN_HitReaction::Launch;
+				LaunchVelocity = Request.LaunchVelocity;
+				const UGSTN_KnockbackModel* Model = Rules->KnockbackModel.Get();
+				Hit.bTumble = Model && LaunchVelocity.Size() >= Model->Tuning.TumbleThreshold;
+				if (Model)
+				{
+					// The lock of a launch of that speed, as the model gives a hit with that knockback; without it a launch would end its hitstun on the frame it starts
+					const int32 LaunchFrames = FMath::Max(Model->Tuning.MinHitstunFrames, FMath::FloorToInt(LaunchVelocity.Size() * Model->Tuning.HitstunFactor));
+					Hit.HitstunFrames = FMath::Max(Hit.HitstunFrames, LaunchFrames);
+				}
+			}
+			if (Request.MinHitstunFrames > 0)
+			{
+				if (!Hit.bStaggered)
+				{
+					Hit.bStaggered = true;
+					Hit.Reaction = EGSTN_HitReaction::StaggerInPlace;
+				}
+				Hit.HitstunFrames = FMath::Max(Hit.HitstunFrames, Request.MinHitstunFrames);
+			}
+		}
 
 		if (Hit.bStaggered)
 		{
