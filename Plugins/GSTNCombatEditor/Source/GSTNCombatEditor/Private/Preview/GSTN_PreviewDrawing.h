@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Hits/GSTN_HitShape.h"
 #include "Preview/GSTN_TimelinePreviewScene.h"
 
 class FPrimitiveDrawInterface;
@@ -52,6 +53,15 @@ namespace GSTNPreviewDrawing
 
 	/** The wireframe capsule of the root (root space is world space in the preview) */
 	void DrawRootCapsule(FPrimitiveDrawInterface* PDI, const FGSTN_PreviewCapsule& Capsule);
+
+	/**
+	 * The extents of a shape once its Local scale is applied, the way the hit maths reads them (combat-m4-hits 3): a sphere's radius by the largest scale
+	 * component, a capsule's radius by the larger of X and Y and its half height by Z, a box per axis. Pure, so a test pins it
+	 */
+	FVector GetEffectiveExtent(const FGSTN_HitShape& Shape);
+
+	/** A hit or hurt shape as a wireframe. The shape sits at Shape.Local x Carrier (the preview's root space is world space: pass identity) */
+	void DrawHitShape(FPrimitiveDrawInterface* PDI, const FGSTN_HitShape& Shape, const FTransform& Carrier, const FLinearColor& Color, float Thickness = 0.f);
 
 	/** An arrow from the middle of the capsule along +X, the direction the character faces, as long as the capsule is high */
 	void DrawFacingArrow(FPrimitiveDrawInterface* PDI, const FGSTN_PreviewCapsule& Capsule);

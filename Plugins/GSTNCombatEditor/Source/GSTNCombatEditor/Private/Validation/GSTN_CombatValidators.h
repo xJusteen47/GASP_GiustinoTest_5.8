@@ -18,6 +18,7 @@ class UGSTN_InputSettings;
 class UGSTN_LoadoutRules;
 class UGSTN_PrimaryKitDefinition;
 class UGSTN_WeaponDefinition;
+class USkeletalMesh;
 struct FGSTN_LoadoutData;
 struct FGSTN_ResolvedLoadout;
 
@@ -49,6 +50,10 @@ namespace GSTNValidationCodes
 	inline FName HurtboxExtent() { return TEXT("Hurtbox.Extent"); }
 	inline FName HurtboxTag() { return TEXT("Hurtbox.Tag"); }
 	inline FName HurtboxData() { return TEXT("Hurtbox.Data"); }
+	inline FName HurtboxBone() { return TEXT("Hurtbox.BoneMissing"); }
+	inline FName HurtboxOutside() { return TEXT("Hurtbox.Outside"); }
+	inline FName HurtboxGenerate() { return TEXT("Hurtbox.Generate"); }
+	inline FName HurtboxMirror() { return TEXT("Hurtbox.Mirror"); }
 
 	// Findings of the checks of Core that the spec's table has no row for
 	inline FName PartSelector() { return TEXT("Timeline.PartSelector"); }
@@ -205,9 +210,11 @@ struct FGSTN_CombatValidators
 
 	/**
 	 * The set's own checks (FGSTN_CombatRulesValidation::ValidateHurtboxSet) classified into the Hurtbox.* codes, then what they lack: a tag that is not
-	 * under Combat.Hurtbox. The spec's "bone absent from the preview mesh" needs a mesh on the set, which arrives with the hurtbox set editor.
+	 * under Combat.Hurtbox, a shape further from the root than the settings' sane radius (Hurtbox.Outside, warning) and a hurtbox on a bone the mesh does not
+	 * have (Hurtbox.BoneMissing, warning). The mesh is MeshOverride (the open editor's preview), else the set's PreviewMesh; with neither the bone check is skipped.
+	 * A finding about one hurtbox carries its position in Where.TrackIndex.
 	 */
-	static void CheckHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, UObject* Asset, FGSTN_ValidationReport& Report);
+	static void CheckHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, UObject* Asset, FGSTN_ValidationReport& Report, const USkeletalMesh* MeshOverride = nullptr);
 
 	// ---- Kit, weapon, loadout
 

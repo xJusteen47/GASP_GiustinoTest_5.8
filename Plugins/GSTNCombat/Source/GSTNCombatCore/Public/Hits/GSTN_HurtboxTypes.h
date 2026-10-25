@@ -9,6 +9,8 @@
 #include "Hits/GSTN_ReactionTypes.h"
 #include "GSTN_HurtboxTypes.generated.h"
 
+class USkeletalMesh;
+
 /** How a hurtbox takes hits at one frame, after the hurtbox modifier tracks of the running timeline are applied */
 UENUM(BlueprintType)
 enum class EGSTN_HurtState : uint8
@@ -80,6 +82,15 @@ public:
 	/** Weight against progress of damage taken. Empty = the rules' curve */
 	UPROPERTY(EditAnywhere, Category = "Reaction")
 	FGSTN_BakedCurve WeightCurve;
+
+#if WITH_EDITORONLY_DATA
+	/**
+	 * The mesh the hurtboxes were authored on: what the hurtbox set editor shows them over, and what the validator checks the bones against.
+	 * Authoring data only (stripped from cooked builds, never read by a simulation). Empty: the editor falls back to its preview subject
+	 */
+	UPROPERTY(EditAnywhere, Category = "Preview")
+	TSoftObjectPtr<USkeletalMesh> PreviewMesh;
+#endif
 
 #if WITH_EDITOR
 	/** FGSTN_CombatRulesValidation::ValidateHurtboxSet, then the set's reaction matrix against the settings' rules as an info message */

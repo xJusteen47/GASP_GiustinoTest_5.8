@@ -22,6 +22,13 @@ TSharedRef<FGSTN_PreviewController> FGSTN_PreviewController::Create(const TShare
 	return Controller;
 }
 
+TSharedRef<FGSTN_PreviewController> FGSTN_PreviewController::CreateWithoutTimeline(const FSoftObjectPath& StorageKey)
+{
+	TSharedRef<FGSTN_PreviewController> Controller = MakeShareable(new FGSTN_PreviewController(nullptr, StorageKey));
+	Controller->Initialize();
+	return Controller;
+}
+
 TSharedRef<FGSTN_PreviewController> FGSTN_PreviewController::CreateUnstored(const TSharedRef<FGSTN_TimelineEditorModel>& Model)
 {
 	TSharedRef<FGSTN_PreviewController> Controller = MakeShareable(new FGSTN_PreviewController(Model, FSoftObjectPath()));
@@ -29,7 +36,7 @@ TSharedRef<FGSTN_PreviewController> FGSTN_PreviewController::CreateUnstored(cons
 	return Controller;
 }
 
-FGSTN_PreviewController::FGSTN_PreviewController(const TSharedRef<FGSTN_TimelineEditorModel>& InModel, const FSoftObjectPath& InStorageKey)
+FGSTN_PreviewController::FGSTN_PreviewController(const TSharedPtr<FGSTN_TimelineEditorModel>& InModel, const FSoftObjectPath& InStorageKey)
 	: Model(InModel)
 	, Scene(MakeShared<FGSTN_TimelinePreviewScene>())
 	, StorageKey(InStorageKey)
@@ -38,8 +45,11 @@ FGSTN_PreviewController::FGSTN_PreviewController(const TSharedRef<FGSTN_Timeline
 
 FGSTN_PreviewController::~FGSTN_PreviewController()
 {
-	Model->OnPlayheadChanged.Remove(PlayheadHandle);
-	Model->OnDataChanged.Remove(DataHandle);
+	if (Model.IsValid())
+	{
+		Model->OnPlayheadChanged.Remove(PlayheadHandle);
+		Model->OnDataChanged.Remove(DataHandle);
+	}
 }
 
 void FGSTN_PreviewController::Initialize()
@@ -55,8 +65,11 @@ void FGSTN_PreviewController::Initialize()
 			Subject.Skin = Settings.DefaultPreviewSkin;
 		}
 	}
-	PlayheadHandle = Model->OnPlayheadChanged.AddSP(this, &FGSTN_PreviewController::HandlePlayheadChanged);
-	DataHandle = Model->OnDataChanged.AddSP(this, &FGSTN_PreviewController::HandleDataChanged);
+	if (Model.IsValid())
+	{
+		PlayheadHandle = Model->OnPlayheadChanged.AddSP(this, &FGSTN_PreviewController::HandlePlayheadChanged);
+		DataHandle = Model->OnDataChanged.AddSP(this, &FGSTN_PreviewController::HandleDataChanged);
+	}
 	ApplySubject();
 }
 
@@ -73,6 +86,21 @@ void FGSTN_PreviewController::SetSubject(const FGSTN_PreviewSubject& NewSubject)
 {
 	Subject = NewSubject;
 	SubjectEdited();
+}
+
+void FGSTN_PreviewController::SetMainMesh(const TSoftObjectPtr<USkeletalMesh>& Mesh)
+{
+	if (Mesh.IsNull())
+	{
+		return;
+	}
+	FGSTN_PreviewSubject Changed = Subject;
+	Changed.Kind = EGSTN_PreviewSubjectKind::SkeletalMesh;
+	Changed.Mesh = Mesh;
+	if (Changed != Subject)
+	{
+		SetSubject(Changed);
+	}
 }
 
 void FGSTN_PreviewController::ApplySubject()
@@ -95,7 +123,7 @@ USkeletalMesh* FGSTN_PreviewController::GetMainMesh() const
 
 void FGSTN_PreviewController::UpdateMontage()
 {
-	const FGSTN_CombatTimelineData* Data = Model->GetData();
+	const FGSTN_CombatTimelineData* Data = Model.IsValid() ? Model->GetData() : nullptr;
 	UAnimMontage* Played = nullptr;
 	FName Section = NAME_None;
 	float PlayRate = 1.f;
@@ -111,12 +139,12 @@ void FGSTN_PreviewController::UpdateMontage()
 		Section = Data->MontageSection;
 		PlayRate = Data->MontagePlayRate;
 	}
-	Scene->GetPose().SetMontage(Played, Section, PlayRate, Model->GetTickRate());
+	Scene->GetPose().SetMontage(Played, Section, PlayRate, Model.IsValid() ? Model->GetTickRate() : UGSTN_CombatEditorSettings::GetSimulationTickRate());
 }
 
 void FGSTN_PreviewController::Refresh()
 {
-	Scene->GetPose().Evaluate(Model->GetPlayhead());
+	Scene->GetPose().Evaluate(Model.IsValid() ? Model->GetPlayhead() : 0);
 	OnPreviewChanged.Broadcast();
 }
 

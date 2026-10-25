@@ -28,12 +28,18 @@ public:
 	 * (the timeline asset, or the Blueprint of an inline timeline). A null path stores nothing (a transient timeline).
 	 */
 	static TSharedRef<FGSTN_PreviewController> Create(const TSharedRef<FGSTN_TimelineEditorModel>& Model, const FSoftObjectPath& StorageKey = FSoftObjectPath());
+	/**
+	 * A controller with no timeline behind it: the hurtbox set editor shows a mesh, not a montage, so the pose is the reference pose at frame 0. The subject
+	 * is stored under StorageKey like a timeline's (the key is the hurtbox set asset). A null key stores nothing
+	 */
+	static TSharedRef<FGSTN_PreviewController> CreateWithoutTimeline(const FSoftObjectPath& StorageKey = FSoftObjectPath());
 	/** A controller that stores nothing: the subject lives and dies with it. For tests and previews of timelines that are not assets */
 	static TSharedRef<FGSTN_PreviewController> CreateUnstored(const TSharedRef<FGSTN_TimelineEditorModel>& Model);
 	~FGSTN_PreviewController();
 
 	const TSharedRef<FGSTN_TimelinePreviewScene>& GetScene() const { return Scene; }
-	const TSharedRef<FGSTN_TimelineEditorModel>& GetModel() const { return Model; }
+	/** The timeline model, null for a controller made without a timeline */
+	const TSharedPtr<FGSTN_TimelineEditorModel>& GetModel() const { return Model; }
 
 	const FGSTN_PreviewSubject& GetSubject() const { return Subject; }
 
@@ -46,6 +52,9 @@ public:
 
 	/** Replaces the subject, applies it and stores it for the asset */
 	void SetSubject(const FGSTN_PreviewSubject& NewSubject);
+
+	/** Makes any skeletal mesh the main subject, keeping the attachments the user set. A null mesh changes nothing */
+	void SetMainMesh(const TSoftObjectPtr<USkeletalMesh>& Mesh);
 
 	/** Short name of what is shown, for the toolbar */
 	FText GetSubjectLabel() const { return Label; }
@@ -72,7 +81,7 @@ public:
 	FSimpleMulticastDelegate OnSubjectChanged;
 
 private:
-	FGSTN_PreviewController(const TSharedRef<FGSTN_TimelineEditorModel>& InModel, const FSoftObjectPath& InStorageKey);
+	FGSTN_PreviewController(const TSharedPtr<FGSTN_TimelineEditorModel>& InModel, const FSoftObjectPath& InStorageKey);
 	void Initialize();
 	void ApplySubject();
 	void HandlePlayheadChanged(int32 Frame);
@@ -81,7 +90,7 @@ private:
 	/** Loads the timeline's montage if it changed and hands montage, section, rate and tick rate to the pose */
 	void UpdateMontage();
 
-	TSharedRef<FGSTN_TimelineEditorModel> Model;
+	TSharedPtr<FGSTN_TimelineEditorModel> Model;
 	TSharedRef<FGSTN_TimelinePreviewScene> Scene;
 	FSoftObjectPath StorageKey;
 	FGSTN_PreviewSubject Subject;

@@ -19,6 +19,7 @@
 void SGSTN_TimelineViewport::Construct(const FArguments& InArgs)
 {
 	Controller = InArgs._Controller;
+	DrawExtra = InArgs._OnDrawExtra;
 	check(Controller.IsValid());
 	SEditorViewport::Construct(SEditorViewport::FArguments());
 	bFramedSubject = Controller->GetScene()->GetMeshComponent() != nullptr;
@@ -43,7 +44,8 @@ SGSTN_TimelineViewport::~SGSTN_TimelineViewport()
 
 TSharedRef<FEditorViewportClient> SGSTN_TimelineViewport::MakeEditorViewportClient()
 {
-	TimelineClient = MakeShared<FGSTN_TimelineViewportClient>(Controller->GetScene(), SharedThis(this), Controller->GetModel().ToSharedPtr());
+	TimelineClient = MakeShared<FGSTN_TimelineViewportClient>(Controller->GetScene(), SharedThis(this), Controller->GetModel());
+	TimelineClient->SetExtraDraw(DrawExtra);
 	return TimelineClient.ToSharedRef();
 }
 

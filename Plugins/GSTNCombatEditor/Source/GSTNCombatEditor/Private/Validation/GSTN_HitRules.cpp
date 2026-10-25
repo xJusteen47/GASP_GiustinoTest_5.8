@@ -5,9 +5,11 @@
 
 #include "Validation/GSTN_CombatValidators.h"
 
+#include "Engine/SkeletalMesh.h"
 #include "GameplayTagsManager.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Rules/GSTN_CombatRulesValidation.h"
+#include "Settings/GSTN_CombatEditorSettings.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
@@ -376,7 +378,7 @@ void FGSTN_CombatValidators::CheckBakeStatus(const FGSTN_CombatTimelineData& Dat
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Hurtbox set
 
-void FGSTN_CombatValidators::CheckHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, UObject* Asset, FGSTN_ValidationReport& Report)
+void FGSTN_CombatValidators::CheckHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, UObject* Asset, FGSTN_ValidationReport& Report, const USkeletalMesh* MeshOverride)
 {
 	TArray<FGSTN_ReactionMessage> Messages;
 	FGSTN_CombatRulesValidation::ValidateHurtboxSet(Set, Messages);
@@ -413,6 +415,44 @@ void FGSTN_CombatValidators::CheckHurtboxSet(const UGSTN_HurtboxSetDefinition& S
 			{
 				Report.Add(EGSTN_Severity::Error, GSTNValidationCodes::HurtboxTag(),
 					FText::Format(LOCTEXT("HurtboxTagRoot", "Hurtbox {0} ({1}) carries the tag {2}, which is not under Combat.Hurtbox."), Num(Index), FText::FromName(Set.Hurtboxes[Index].Name), FText::FromName(Tag.GetTagName())), Asset);
+			}
+		}
+	}
+
+	// Where each shape sits: a Physics Asset in another unit, a mesh placed wrongly or a typo puts a hurtbox metres from the character
+	const double SaneRadius = UGSTN_CombatEditorSettings::Get().HurtboxSaneRadiusCm;
+	for (int32 Index = 0; Index < Set.Hurtboxes.Num(); ++Index)
+	{
+		const FGSTN_Hurtbox& Hurtbox = Set.Hurtboxes[Index];
+		const double Distance = Hurtbox.Shape.Local.GetLocation().Size();
+		if (Distance > SaneRadius)
+		{
+			Report.Add(EGSTN_Severity::Warning, GSTNValidationCodes::HurtboxOutside(),
+				FText::Format(LOCTEXT("HurtboxOutside", "Hurtbox {0} ({1}) is {2} cm from the root, further than the {3} cm the settings call plausible. Check the mesh placement and the units of the Physics Asset."),
+					Num(Index), FText::FromName(Hurtbox.Name), FText::AsNumber(FMath::RoundToInt(Distance)), FText::AsNumber(FMath::RoundToInt(SaneRadius))),
+				Asset, FGSTN_FindingLocation::OnTrack(Index));
+		}
+	}
+
+	// The bones against the mesh the set was authored on (optional: no mesh, no check)
+	const USkeletalMesh* Mesh = MeshOverride;
+#if WITH_EDITORONLY_DATA
+	if (Mesh == nullptr && !Set.PreviewMesh.IsNull())
+	{
+		Mesh = Set.PreviewMesh.LoadSynchronous();
+	}
+#endif
+	if (Mesh != nullptr)
+	{
+		for (int32 Index = 0; Index < Set.Hurtboxes.Num(); ++Index)
+		{
+			const FGSTN_Hurtbox& Hurtbox = Set.Hurtboxes[Index];
+			if (!Hurtbox.Bone.IsNone() && Mesh->GetRefSkeleton().FindBoneIndex(Hurtbox.Bone) == INDEX_NONE)
+			{
+				Report.Add(EGSTN_Severity::Warning, GSTNValidationCodes::HurtboxBone(),
+					FText::Format(LOCTEXT("HurtboxBoneMissing", "Hurtbox {0} ({1}) names the bone {2}, which {3} does not have."),
+						Num(Index), FText::FromName(Hurtbox.Name), FText::FromName(Hurtbox.Bone), FText::FromString(Mesh->GetName())),
+					Asset, FGSTN_FindingLocation::OnTrack(Index));
 			}
 		}
 	}

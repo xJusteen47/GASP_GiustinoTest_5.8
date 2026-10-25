@@ -6,8 +6,8 @@ of typing frame numbers in a details panel. Everything the tooling writes is the
 (`FGSTN_CombatTimelineData`, the hurtbox data): the runtime never knows the editor exists, and assets stay editable in the
 details panel.
 
-Status: **experimental (0.12)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
-model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E8 (socket baking), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
+Status: **experimental (0.13)**, `EnabledByDefault: false`, editor only. Checkpoints E1 (skeleton), E2 (edit context and
+model), E4 (timeline panel), E5 (toolkit, track editors), E6 (preview scene), E8 (socket baking), E9 (hurtbox set editor), E10 and E11 (validation), E13 (inline mode) and E14 of [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md)
 (E3, `FGSTN_TimelinePhases`, is in `GSTNCombatCore`; E14, the input display, lives in `GSTNInputDebug` (plugin GSTNInput) with its combat adapter in `GSTNCombatDebug`); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md). Disabling the plugin changes nothing in the game, the
 harness or cooked data.
@@ -260,7 +260,7 @@ registry. `Validate(Track, Data, Report)` adds the findings that are about your 
 its base's editor until it registers its own. Add a test: a registry case (listed, defaults applied by `AddTrack`) as in
 `GSTN_EditorTests_Registry.cpp`.
 
-Planned in this module, by checkpoint: gizmos (E7), hurtbox set editor (E9).
+Planned in this module, by checkpoint: gizmos on hitbox keys and hurtbox shapes (E7).
 
 ### Socket baking and staleness (E8)
 
@@ -283,6 +283,28 @@ a `BakedSocket` hitbox uses; the runtime only indexes that array. **Bake sockets
   last bake, else from the settings' default skin (an asset with none is skipped and listed). Baked assets are left modified; `save` saves them. Timelines inline in ability Blueprints are baked from their own editor.
 - `UGSTN_CombatEditorUtils` (`BlueprintCallable`, development only): `GetTickRateHz`, `BakeTimeline(Timeline, Mesh, OutMessage)`, `IsBakeStale(Timeline, Mesh)`.
 - Tests `GSTNCombat.Editor.Bake.*` (11) and `GSTNCombat.Core.TimelineData.*` (2).
+
+### The hurtbox set editor (E9)
+
+Double click a `Hurtbox Set` (`UGSTN_HurtboxSetDefinition`) to open `FGSTN_HurtboxSetEditorToolkit`: the preview viewport of the timeline editor with the set's shapes drawn over the
+mesh (the selected ones thicker and yellow), a **Hurtboxes** list (position, name, bone, zone tags, priority), the **Details** of the selected hurtbox, and the live **Findings**. Every edit goes
+through `FGSTN_HurtboxEditModel` (no UI types; one transaction each; a slider dragged in the details is one undo step), so undo is the editor's.
+The mesh is the set's editor-only `PreviewMesh` (saved with the set, stripped from cooked data), or the preview subject (kit and skin, or any skeletal mesh, with attachments) the timeline editor also uses. Any
+skeleton works, a person or a turret: no bone name is assumed.
+
+- **Generate from Physics Asset** (`GSTNHurtboxGenerator::FromPhysicsAsset`, pure): per primitive of every body, a sphyl is a Capsule, a sphere a Sphere, a box a Box; a convex body or a tapered capsule is the capsule that
+  bounds it, with a warning. The shape is the primitive in the bone's space, then the bone's reference pose in component space, then the preview scene's placement of the mesh: root-relative, the frame the baker uses. The
+  name is the bone's (`bone_N` when a bone has several primitives), the zone tag is suggested by the settings' `HurtboxZoneRules` and empty when nothing matches. Options: skip kinematic bodies (off by default: a count a designer can check by eye),
+  a scale margin, merge bodies smaller than N cm into the nearest ancestor that has a bigger one (the ancestor's shape grows to contain them). Regenerating **adds missing hurtboxes** and leaves the existing ones exactly as they are
+  (hand edits survive, matched by name); **Update shapes** also takes the Physics Asset shape and bone for the same names but keeps tags, priority and reaction scale; **Replace all** asks first and discards the hand-made.
+  Existing hurtboxes keep their position (a hit carries the index); a hurtbox the Physics Asset does not make is kept and counted.
+- **Mirror selection** (`GSTNHurtboxMirror`, pure): offered only when the skeleton has recognisable pairs under the pairs in force; the tooltip says why when it is off. The pairs are `MirrorNamePairs` of the settings or the
+  `SkeletonMirrorRules` entry of that skeleton, which can also switch the skeleton off. A fragment must sit on a word boundary (`_l` pairs `arm_l`, not `arm_lower`) and keeps its case (`_L` gives `_R`). The shape crosses the plane that contains the
+  forward axis (`MirrorForwardAxis`) and up, as a mirror (`M T M`, not a negative scale). The counterpart is created, or overwritten after a confirmation that names the hurtboxes. A name or bone with a side marker but no counterpart is reported in the
+  Message Log, never guessed; a name with no marker is the middle and is skipped. With no mesh shown, the hurtbox names alone decide.
+- **Findings**: duplicate names, empty extents, tag outside `Combat.Hurtbox`, bone absent from the preview mesh, shape outside the sane radius; a double click on one selects its hurtbox.
+- Not in this checkpoint: gizmos on the selected shape (they belong to the viewport work of E7; until then a shape is edited in the details), a Physics Asset picker (the mesh's own Physics Asset is used), attachments in the set editor's own toolbar (the subject picker is the timeline editor's).
+- Tests: `GSTNCombat.Editor.Hurtbox.*` (18) and the snapshot `GSTN.Visual.Hurtbox.Panel`.
 
 ## Validation (E10)
 
@@ -332,7 +354,7 @@ the codes, and a test pins every one of its messages):
 | `BakedStale` | a baked socket no hitbox uses (info); frames baked by another tool, with no record of their inputs (warning); the editor's own bake whose inputs changed since (**error**, E8) | info / warning / error |
 
 **Hurtbox set** (`UGSTN_HurtboxSetValidator`, `FGSTN_CombatValidators::CheckHurtboxSet`): the set's own `ValidateHurtboxSet` classified into `Hurtbox.Empty`, `.DuplicateName`, `.Extent`, `.Tag` (no tag: warning) and `.Data`, plus `Hurtbox.Tag` (error) for a tag that is not under `Combat.Hurtbox`.
-The bone-absent check needs a preview mesh on the set (the hurtbox set editor, E9).
+Since E9 two more codes: `Hurtbox.BoneMissing` (warning: a hurtbox names a bone the preview mesh lacks; the mesh is the set's `PreviewMesh`, or the one the open editor shows, and with neither nothing is checked) and `Hurtbox.Outside` (warning: a shape further from the root than `HurtboxSaneRadiusCm`). Both point at the hurtbox by its position in `Where.TrackIndex`.
 
 ### Validate all and the validation panel (E11)
 
@@ -414,6 +436,8 @@ Project Settings > Plugins > GSTN Combat Editor (`UGSTN_CombatEditorSettings`, `
 | `TrackColors`, `GenericTrackColor` | one per M3 track kind | Row colours by track struct name |
 | `FallbackTickRateHz` | 62.5 | Used only when the Network Prediction settings object cannot be read |
 | `MirrorNamePairs`, `MirrorForwardAxis` | `_l/_r`, `Left/Right`, `.L/.R`; +X | Hurtbox mirroring (E9) |
+| `SkeletonMirrorRules` | empty (every skeleton Auto, global pairs) | Per skeleton: switch mirroring `Off`, or give it its own name pairs (E9) |
+| `HurtboxSaneRadiusCm` | 600 | Farther than this from the root a hurtbox is reported as probably misplaced (E9) |
 | `HurtboxZoneRules` | bone fragment to `Combat.Hurtbox.*` | Zone suggested by the Physics Asset generator (E9) |
 | `DebuggerKey` | NumPad 5 | Gameplay Debugger category key (E15) |
 
@@ -472,6 +496,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.13.0 (2026-10-25, E9): the hurtbox set editor (viewport, list, details, findings), the Physics Asset generator with regeneration modes, the mirror with per-skeleton rules, `Hurtbox.BoneMissing` and `Hurtbox.Outside`, `PreviewMesh` on the hurtbox set (editor-only, `GSTNCombatCore`); the preview controller can run without a timeline; tests `Hurtbox.*`.
 - 0.12.0 (2026-10-25, E8): the socket baker, the staleness record and check, the Bake sockets button with its dot, Bake on save, `gstn.Combat.BakeAll`, `UGSTN_CombatEditorUtils`, the `BakedStale` hash rule; `FGSTN_BakeInfo` in `GSTNCombatCore`; tests `Bake.*`.
 - 0.11.0 (2026-10-25, E12): the hit data row (groups, angle dial, tag combo, extension data, knockback preview); tests `HitData.*` and snapshot `GSTN.Visual.HitData.Row`; the plugin now depends on the engine plugin `GameplayTagsEditor`.
 - 0.10.0 (2026-10-25, E5b): the Hitbox and HurtboxModifier track editors, the hitbox keyed adapter with one lane per hitbox, key gestures that keep lanes, `GetTrackColor`; tests `Model.Hitbox*`, `Model.AutoKeyCreatesInterpolatedKey`, `Registry.HitboxAndHurtboxRows`, snapshot `GSTN.Visual.Timeline.HitboxRows`.

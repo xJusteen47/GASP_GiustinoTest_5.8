@@ -126,4 +126,5 @@ void FGSTN_TimelineViewportClient::Draw(const FSceneView* View, FPrimitiveDrawIn
 	Context.Scene = Pinned.Get();
 	Context.Frame = Context.Model ? Context.Model->GetPlayhead() : 0;
 	FGSTN_PreviewOverlayRegistry::DrawAll(Context, PDI);
+	ExtraDraw.ExecuteIfBound(PDI);
 }

@@ -8,6 +8,7 @@
 #include "InputCoreTypes.h"
 #include "GSTN_CombatEditorSettings.generated.h"
 
+class USkeleton;
 class UGSTN_PrimaryKitDefinition;
 class UGSTN_SkinDefinition;
 
@@ -50,6 +51,37 @@ struct FGSTN_MirrorNamePair
 	/** Off for "_l/_r" (rigs disagree on case), on for ".L/.R" where the case is the whole point */
 	UPROPERTY(Config, EditAnywhere, Category = "Mirror")
 	bool bCaseSensitive = false;
+};
+
+/** What the hurtbox editor does with left/right mirroring for one skeleton */
+UENUM()
+enum class EGSTN_SkeletonMirrorMode : uint8
+{
+	/** On when the skeleton has bone names that pair up under the pairs in force; off otherwise (an enemy with no left and right, a turret) */
+	Auto,
+
+	/** Never offered for this skeleton, even if some bone names look like a pair */
+	Off
+};
+
+/**
+ * Mirroring settings of one skeleton (owner requirement, 2026-10-23: mirror only where the skeleton has recognisable pairs, configurable per
+ * skeleton). A skeleton without an entry uses Auto and the global MirrorNamePairs.
+ */
+USTRUCT()
+struct FGSTN_SkeletonMirrorRule
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Config, EditAnywhere, Category = "Mirror")
+	TSoftObjectPtr<USkeleton> Skeleton;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Mirror")
+	EGSTN_SkeletonMirrorMode Mode = EGSTN_SkeletonMirrorMode::Auto;
+
+	/** Pairs for this skeleton. Empty = the global list */
+	UPROPERTY(Config, EditAnywhere, Category = "Mirror")
+	TArray<FGSTN_MirrorNamePair> NamePairs;
 };
 
 /**
@@ -133,6 +165,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Hurtbox")
 	TArray<FGSTN_MirrorNamePair> MirrorNamePairs;
 
+	/** Per-skeleton mirroring: switch it off for a skeleton, or give it its own name pairs. A skeleton not listed is Auto with the global pairs */
+	UPROPERTY(Config, EditAnywhere, Category = "Hurtbox")
+	TArray<FGSTN_SkeletonMirrorRule> SkeletonMirrorRules;
+
 	/** The direction the character faces in root space. The mirror plane contains it and the up axis */
 	UPROPERTY(Config, EditAnywhere, Category = "Hurtbox")
 	EGSTN_MirrorForwardAxis MirrorForwardAxis = EGSTN_MirrorForwardAxis::PositiveX;
@@ -140,6 +176,10 @@ public:
 	/** Bone-name fragments to hurtbox zone tags, first match wins */
 	UPROPERTY(Config, EditAnywhere, Category = "Hurtbox")
 	TArray<FGSTN_HurtboxZoneRule> HurtboxZoneRules;
+
+	/** A hurtbox further than this from the root is reported as probably misplaced (a bad Physics Asset, a wrong mesh placement) */
+	UPROPERTY(Config, EditAnywhere, Category = "Hurtbox", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float HurtboxSaneRadiusCm = 600.f;
 
 	// Debug
 

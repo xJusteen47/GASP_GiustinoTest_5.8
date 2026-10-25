@@ -7,6 +7,10 @@
 
 class FGSTN_PreviewController;
 class FGSTN_TimelineViewportClient;
+class FPrimitiveDrawInterface;
+
+/** Something else to draw over the scene each redraw (the hurtbox set editor's shapes). Root space is world space in the preview */
+DECLARE_DELEGATE_OneParam(FGSTN_ViewportDrawExtra, FPrimitiveDrawInterface*);
 
 /**
  * The Viewport tab of the timeline editor: the 3D preview of the controller's scene with a small toolbar (camera presets, frame, follow root,
@@ -18,6 +22,9 @@ class SGSTN_TimelineViewport : public SEditorViewport
 public:
 	SLATE_BEGIN_ARGS(SGSTN_TimelineViewport) {}
 		SLATE_ARGUMENT(TSharedPtr<FGSTN_PreviewController>, Controller)
+
+		/** Called from the viewport's Draw, after the fixed drawing. Unbound: nothing extra */
+		SLATE_EVENT(FGSTN_ViewportDrawExtra, OnDrawExtra)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -36,6 +43,7 @@ private:
 
 	TSharedPtr<FGSTN_PreviewController> Controller;
 	TSharedPtr<FGSTN_TimelineViewportClient> TimelineClient;
+	FGSTN_ViewportDrawExtra DrawExtra;
 	FDelegateHandle PreviewChangedHandle;
 
 	/** The scene had a mesh the last time the camera framed it; a subject that just got a mesh frames again */

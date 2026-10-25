@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "EditorViewportClient.h"
 #include "Preview/GSTN_PreviewCamera.h"
+#include "Preview/SGSTN_TimelineViewport.h"
 
 class FGSTN_TimelineEditorModel;
 class FGSTN_TimelinePreviewScene;
@@ -39,6 +40,9 @@ public:
 	void SetRootShown(bool bShown);
 
 	bool IsLit() const { return bLit; }
+
+	/** Something more to draw after the fixed parts and the registered overlays (the hurtbox set editor draws its shapes here) */
+	void SetExtraDraw(const FGSTN_ViewportDrawExtra& InExtra) { ExtraDraw = InExtra; }
 	void SetLit(bool bInLit);
 
 	//~ FEditorViewportClient
@@ -48,6 +52,8 @@ public:
 private:
 	TWeakPtr<FGSTN_TimelinePreviewScene> Scene;
 	TWeakPtr<FGSTN_TimelineEditorModel> Model;
+
+	FGSTN_ViewportDrawExtra ExtraDraw;
 
 	EGSTN_PreviewCameraPreset Preset = EGSTN_PreviewCameraPreset::ThreeQuarter;
 	bool bFollowRoot = true;
