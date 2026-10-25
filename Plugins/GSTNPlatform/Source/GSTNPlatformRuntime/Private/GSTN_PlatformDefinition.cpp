@@ -2,6 +2,7 @@
 
 #include "GSTN_PlatformDefinition.h"
 
+#include "GSTN_PlatformSettings.h"
 #include "Misc/DataValidation.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_PlatformDefinition)
@@ -11,7 +12,7 @@ EDataValidationResult UGSTN_PlatformDefinition::IsDataValid(FDataValidationConte
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
 	TArray<FText> Errors, Warnings;
-	Spec.CollectFindings(Errors, Warnings);
+	Spec.CollectFindings(Errors, Warnings, UGSTN_PlatformSettings::Get().MakeValidationContext());
 	for (const FText& Warning : Warnings)
 	{
 		Context.AddWarning(Warning);

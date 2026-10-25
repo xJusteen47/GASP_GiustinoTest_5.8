@@ -28,6 +28,32 @@ namespace GSTNPlatformSettingsPrivate
 	}
 }
 
+UGSTN_PlatformSettings::UGSTN_PlatformSettings()
+{
+	MoverChannels = { ECC_Pawn };
+	WallProbeChannels = { ECC_Pawn };
+}
+
+TArray<FGSTN_PlatformCollisionRule> UGSTN_PlatformSettings::GetCollisionRules() const
+{
+	if (bUseCustomCollisionRules)
+	{
+		return CustomCollisionRules;
+	}
+	// Built on use, not in the constructor: native tags may not be registered when the settings object is constructed
+	return GSTNPlatformCollision::MakeDefaultRules(MoverChannels, WallProbeChannels, StandAndLaunchExtraChannels);
+}
+
+FGSTN_PlatformValidationContext UGSTN_PlatformSettings::MakeValidationContext() const
+{
+	FGSTN_PlatformValidationContext Context;
+	Context.MinWallSurfaceAngle = MinWallSurfaceAngle;
+	Context.MaxWallSurfaceAngle = MaxWallSurfaceAngle;
+	Context.MaxStandAngle = MaxStandAngle;
+	Context.bPartNamesResolved = false;
+	return Context;
+}
+
 ECollisionChannel UGSTN_PlatformSettings::GetPlatformObjectChannel() const
 {
 	ECollisionChannel Channel = ECC_WorldDynamic;

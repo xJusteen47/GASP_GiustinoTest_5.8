@@ -115,3 +115,66 @@ Collected per the plan's rule (one docs commit at T9). Each line: where, what ch
   `CollectFindings` / `IsDataValid`. `ResolveQuery` uses `FindFor`.
 - Test nit: `GetTableNeverLoadsAssets` adds a warning (`VACUOUS: ...`) when no unloaded engine asset is found under `/Engine/EngineMaterials`,
   instead of an info line; it still checks the table contents.
+
+## T3 platform shapes with behaviours (2026-10-25, desktop branch `claude/project-thread-v1plhd`; owner approved T3 2026-10-25)
+
+`GSTNPlatform` did not exist: T3 created it with the fighter minimum (first commit) and then the shapes. Deviations from
+many-enemies-replication.md §4 (PL), traversal-surfaces.md §4 (TS), modularity-and-tags.md and the plan:
+
+- **Modules.** `GSTNPlatformCore` (pure) and `GSTNPlatformRuntime` (components, colliders, pose point), not the plan's `GSTNPlatform`
+  module nor modularity's `GSTNPlatformNP`: the runtime has no Network Prediction code (it reads Mover's time step), so "NP" would be
+  wrong, and `*Runtime` is the pattern of `GSTNInteract` and `GSTNDepthMarker`. Dependencies are `GSTNSurfaceCore` and Mover only (plan
+  T3 acceptance); modularity §3.5/§3.6's `GSTNCombatCore` (lag-compensation time) and the fork are not needed before T7 and are not
+  linked. Modularity §3.5 table and §3.6 row to update at T9.
+- **Pose point driver (PL §4.3, TS §4.2).** There is no NP post-fixed-tick hook yet (combat-m8-minions.md spike 2) and the plugin may
+  not depend on NP, so the pose point runs at the start of every Mover simulation tick of the world (`OnPreSimulationTick`), once per
+  frame (deduplicated on frame and time), posing the end of frame F-1 with `Frame = ServerFrame - 1`, `TimeMs = BaseSimTimeMs`
+  (server timespace, the same number on the server, a predicting client and a re-simulation). Consequences: simulation that ticks
+  before Mover in the same frame (combat 47, ASC 48) sees the platforms one frame older, and on the first frame of a re-simulation at
+  the newest pose; none of it sweeps against platforms today. When the hook exists it calls `UGSTN_PlatformSubsystem::ApplyPosePoint`
+  and nothing else changes. On clients the spec's "interpolation sample once per game tick before physics" becomes "the same pose
+  point, reading the owner's (interpolated) transform at that moment" for approach B; approach C (scripted) is exact.
+- **Approach C as a component.** `UGSTN_ScriptedPlatformComponent` (pose = `FGSTN_PlatformScriptedPath::Evaluate(origin, frame
+  time)`, origin replicated initial-only, owner root moved with the colliders) is how the scripted test fighter meets wall-slide-v2.md
+  §6.14's requirement (base pose of a frame identical on every machine). It is the `AGSTN_WallTestMover` idea moved into the pose point.
+- **Collision channel (PL §4.3, plan §6).** In the plugin's `Config/Engine.ini` (merged by the engine's plugin modification layer
+  `{PLUGIN}/Config/{TYPE}.ini`; a plugin `DefaultEngine.ini` is **not** merged, checked: the channel test failed with it), slot
+  `GameTraceChannel4`, found by name. The project's `DefaultEngine.ini` is untouched.
+- **Collision from behaviour (TS §4.1).** A table of `FGSTN_PlatformCollisionRule { FGameplayTagQuery When; BlockChannels }` in
+  `UGSTN_PlatformSettings` (shipped rules built from `MoverChannels`, `WallProbeChannels`, `StandAndLaunchExtraChannels`), so neither
+  channels nor behaviour leaves are hard-coded (modularity §3.7 rule 4). This project's wall modes probe with the capsule's object type
+  (Pawn), the same channel as the capsule: collision cannot keep a Stand-only top from being a wall; the surface the wall entry
+  resolves does (no `WallSlide`). Collision is query-only (no physics body interacts with a collider that teleports every frame).
+- **Colliders (plan `UGSTN_PlatformShapeComponent`).** Three classes, `UGSTN_Platform{Box,Sphere,Capsule}Collider`, because the
+  engine's primitives are separate classes and GSTNSurface looks for the provider on the hit component's class; a C++ interface
+  `IGSTN_PlatformCollider` finds the platform and shape id. Convex is not supported; Stand requires a Box.
+- **`SetShapeMask(uint8, EGSTN_PlatformShapeState)`**: the second argument is how disabled shapes go (`Breaking` = with the grace
+  telegraph, `Inactive` = at once); shapes turned on are Active at once. A second input `SetActionState(EGSTN_PlatformActionState)`
+  carries PL §4.2's `ActiveActionStates` (spec default, per-shape override); T7 maps combat state onto it. States are **timelines by
+  frame** (`FGSTN_PlatformShapeStates`): a request is stamped with the next frame the pose point simulates, and a re-simulated frame
+  gets the collision it had the first time (a stepped state would stay off during the replay). `Braced` is reserved (no producer).
+- **Spec fields (PL §4.2).** `bIgnoreBaseRotation` and `bImpartVelocityOnLeave` are not in the spec (they are the pawn modes' settings,
+  nothing in the platform would read them); `MaxSpeedWhileOccupied` and `BraceTimelineOnMount` moved into `FGSTN_OccupantResponse`
+  (TS.4), data only; `OnOccupantChanged` needs occupancy and is T7. Shape ids 0..7, names `Surface0..7` (TS §4.1).
+- **"Never a bone or the capsule" (TS §4.1, test `ValidatorRejectsBoneAndCapsule`).** Shapes are always new primitives, so the enemy's
+  capsule or mesh cannot be one. The validator rejects a shape whose `Bone` is set (a field that must stay None, kept so hurtbox-style
+  data pasted into a shape list fails loudly) and Stand on a sphere or capsule (its top fails the walkable test at the edges). The wall
+  angle check is a warning; with the default 45..120 range a box always has a face in range, so it only fires for narrow ranges.
+- **Part names (TS §4.1).** A warning in `GSTNPlatform` alone (the shape behaves as body); the bridge (T6) makes unknown names errors.
+- **Surface velocity (TS §4.3).** `GetSurfaceVelocityAt(ShapeId, Point)` = rigid-frame velocity of the owner between the end of the
+  frame before and the end of the frame the colliders hold, from `FGSTN_PoseHistory` (24 frames, in `GSTNPlatformCore`, not in the
+  `GSTNCore` of modularity §3.6, which does not exist). Zero for an inactive shape. It reaches GSTNSurface through the provider's
+  `GetSurfaceVelocity`. **Gap:** the colliders are teleported, so their physics velocity is zero and the wall modes'
+  `bAddBaseVelocityOnExit` and Mover's leave-base velocity add nothing on leaving a platform shape; reading the provider's velocity
+  there is a mode subclass (T7) or T4 for launches, never a core edit.
+- **A shape's surface can be shadowed.** A `UGSTN_SurfaceBehaviourComponent` on the enemy wins over every shape (resolution step 1):
+  the platform's validation and its registration log warn about it.
+- **Scenario finding (TS §4.3, T2).** Re-grabbing the same moving shape after sliding off it reconciled on the client (ASC
+  `GA_WallSlide`/`GA_Jump` plus Mover) until the harness reset the wall memory: the entry's same-wall `HeightCap` policy is judged
+  differently on the two machines when the wall moves. This is exactly what T2's `UGSTN_SurfaceWallEntryTransition` (moving base ->
+  `ReentryCooldown` only) is for; T2 is not built on this branch. The scenario resets the memory (`gstn.Wall.ResetMemory`) before each
+  grab, as `wall_ab.py` does.
+- **`.uproject`.** `GSTNPlatform` is enabled (plan §6 lists it as an owner-OK edit; taken as covered by the T3 approval, as for the other
+  GSTN plugins of this branch). Remove that one entry to keep the plugin off.
+- Not done in T3: the canary build and the `check_modules.py` layers entry (neither script exists), the dedicated-server run of the
+  scenario (listen only), the presentation component (TS §8).
