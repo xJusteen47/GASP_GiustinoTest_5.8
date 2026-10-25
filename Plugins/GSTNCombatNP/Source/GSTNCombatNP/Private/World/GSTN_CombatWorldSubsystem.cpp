@@ -222,7 +222,79 @@ double UGSTN_CombatWorldSubsystem::ComputeBoundRadius(const UGSTN_HurtboxSetDefi
 	return Radius;
 }
 
-const FGSTN_StepSnapshot& UGSTN_CombatWorldSubsystem::EnsureSnapshot(int32 Frame)
+void UGSTN_CombatWorldSubsystem::RequestHistory(int32 InHistoryMs)
+{
+	HistoryMs = FMath::Max(HistoryMs, InHistoryMs);
+}
+
+void UGSTN_CombatWorldSubsystem::RecordHistory(const FGSTN_StepSnapshot& Source, float SimTimeMs, float StepMs)
+{
+	// A frame at or before the newest record is a re-simulation: what the ring holds from there on was written by state that no longer exists
+	const int32 MaxRecords = FMath::CeilToInt32(static_cast<float>(HistoryMs) / FMath::Max(StepMs, 1.f)) + 8;
+	for (const FGSTN_SnapshotEntry& Entry : Source.Entries)
+	{
+		TArray<FGSTN_EntityHistoryRecord>& Ring = History.FindOrAdd(Entry.EntityId);
+		while (!Ring.IsEmpty() && Ring.Last().Frame >= Source.Frame)
+		{
+			Ring.Pop(EAllowShrinking::No);
+		}
+		FGSTN_EntityHistoryRecord& Record = Ring.AddDefaulted_GetRef();
+		Record.Frame = Source.Frame;
+		Record.SimTimeMs = SimTimeMs;
+		Record.Transform = Entry.Transform;
+		Record.Velocity = Entry.Velocity;
+		Record.Reaction = Entry.Reaction;
+		if (Ring.Num() > MaxRecords)
+		{
+			Ring.RemoveAt(0, Ring.Num() - MaxRecords, EAllowShrinking::No);
+		}
+	}
+	// An entity that left the registry keeps no ring
+	for (auto It = History.CreateIterator(); It; ++It)
+	{
+		if (!Source.Find(It.Key()))
+		{
+			It.RemoveCurrent();
+		}
+	}
+}
+
+bool UGSTN_CombatWorldSubsystem::SampleHistory(int32 EntityId, float SimTimeMs, FGSTN_EntityHistoryRecord& Out, bool bInterpolateTransform) const
+{
+	const TArray<FGSTN_EntityHistoryRecord>* Ring = History.Find(EntityId);
+	if (!Ring || Ring->IsEmpty())
+	{
+		return false;
+	}
+	int32 Index = 0;
+	for (int32 Candidate = Ring->Num() - 1; Candidate > 0; --Candidate)
+	{
+		if ((*Ring)[Candidate].SimTimeMs <= SimTimeMs)
+		{
+			Index = Candidate;
+			break;
+		}
+	}
+	Out = (*Ring)[Index];
+	if (bInterpolateTransform && Ring->IsValidIndex(Index + 1) && SimTimeMs > Out.SimTimeMs)
+	{
+		const FGSTN_EntityHistoryRecord& Next = (*Ring)[Index + 1];
+		const float Span = Next.SimTimeMs - Out.SimTimeMs;
+		const float Alpha = Span > UE_SMALL_NUMBER ? FMath::Clamp((SimTimeMs - Out.SimTimeMs) / Span, 0.f, 1.f) : 0.f;
+		const FTransform From = Out.Transform;
+		Out.Transform.Blend(From, Next.Transform, Alpha);
+		Out.Velocity = FMath::Lerp(Out.Velocity, Next.Velocity, Alpha);
+	}
+	return true;
+}
+
+int32 UGSTN_CombatWorldSubsystem::GetNumHistoryRecords(int32 EntityId) const
+{
+	const TArray<FGSTN_EntityHistoryRecord>* Ring = History.Find(EntityId);
+	return Ring ? Ring->Num() : 0;
+}
+
+const FGSTN_StepSnapshot& UGSTN_CombatWorldSubsystem::EnsureSnapshot(int32 Frame, float SimTimeMs, float StepMs)
 {
 	if (!bSnapshotInvalid && Snapshot.Frame == Frame)
 	{
@@ -273,6 +345,10 @@ const FGSTN_StepSnapshot& UGSTN_CombatWorldSubsystem::EnsureSnapshot(int32 Frame
 
 	bSnapshotInvalid = false;
 	++SnapshotBuildCount;
+	if (HistoryMs > 0 && SimTimeMs >= 0.f)
+	{
+		RecordHistory(Snapshot, SimTimeMs, StepMs);
+	}
 	return Snapshot;
 }
 

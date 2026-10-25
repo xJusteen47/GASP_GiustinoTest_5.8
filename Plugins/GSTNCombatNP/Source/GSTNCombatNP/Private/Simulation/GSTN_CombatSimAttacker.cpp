@@ -82,7 +82,8 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	In.Frame = Frame;
 	In.AttackerId = RegisteredEntityId;
 	In.AttackerTeam = ResolveTeam();
-	In.Snapshot = Snapshot;
+	// A remote player's pawn on the authority hits the victims as that player saw them (M4 H10); every other attacker the shared snapshot
+	In.Snapshot = Core.ActionState == EGSTN_ActionState::InTimeline ? ResolveAttackerSnapshot(TimeStep, Snapshot) : Snapshot;
 	In.Rules = CombatRules;
 	In.GroupMask = GroupMask;
 	In.StepSeconds = TimeStep.StepMS * 0.001f;

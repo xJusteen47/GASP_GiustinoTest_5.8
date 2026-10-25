@@ -634,7 +634,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// The step snapshot is built by the first combat tick of the frame, before this or any other entity writes its state of the frame: every
 	// read of it is the end of the previous frame, whoever ticks first (combat-m4-hits 5)
 	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
-	const FGSTN_StepSnapshot* StepSnapshot = World ? &World->EnsureSnapshot(Frame) : nullptr;
+	if (World && CombatRules && CombatRules->bUseLagCompensation && GetOwner() && GetOwner()->HasAuthority())
+	{
+		World->RequestHistory(CombatRules->MaxRewindMs);
+	}
+	const FGSTN_StepSnapshot* StepSnapshot = World ? &World->EnsureSnapshot(Frame, static_cast<float>(TimeStep.TotalSimulationTime), static_cast<float>(TimeStep.StepMS)) : nullptr;
 
 	// The aim of this frame's command, kept for the ability system's tick that follows (GetAimRotation)
 	FrameAim.bHasAim = Input.Cmd->bHasAim;

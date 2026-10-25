@@ -152,6 +152,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
 	void SetTestFriendlyFire(bool bEnabled);
 
+	/**
+	 * "rewinds,requestedMs,appliedMs,currentMs" of the last rewound attacker step of this pawn on the authority (M4 H10), for the harness.
+	 * The rewinds counter counts the steps that built an overlay. Not state
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetLagCompInfo() const;
+
 	/** What the inbox of this victim received, one entry per drained hit, the last 512 frames. Under the same switch as the hit log */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetInboxLog() const;
@@ -605,8 +612,21 @@ private:
 	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */
 	void RunAttackerStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncCore& Core, const FGSTN_StepSnapshot* Snapshot, const FGSTN_HitGroupMask& GroupMask);
 
+	/**
+	 * The snapshot this attacker hits against: the shared one, or for a remote player's pawn on the authority (rules with lag compensation) an
+	 * overlay of it rewound to the interpolation time of the input being simulated (GSTN_LagCompensation.cpp). Never writes the shared snapshot
+	 */
+	const FGSTN_StepSnapshot* ResolveAttackerSnapshot(const FNetSimTimeStep& TimeStep, const FGSTN_StepSnapshot* Shared);
+
 	/** The attacker's pose at the end of the previous frame from the Mover tracker (the actor's own without one). False without an owner */
 	bool ReadOwnPose(FTransform& OutTransform, FVector& OutUp);
+
+	/** The per-attacker rewound view, reused every frame it is needed. Local data, not state */
+	FGSTN_StepSnapshot LagCompOverlay;
+	int32 LagCompRewinds = 0;
+	float LagCompLastRequestedMs = 0.f;
+	float LagCompLastAppliedMs = 0.f;
+	float LagCompLastCurrentMs = 0.f;
 
 	/** A timeline that began this frame: its move origin is the pose the attacker is in now */
 	void StampMoveOrigin(FGSTN_CombatSyncCore& Core, int32 Frame);

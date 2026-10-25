@@ -13,6 +13,22 @@ class UGSTN_HurtboxSetDefinition;
 class AGSTN_KOZone;
 
 /**
+ * One entity at the end of one simulated frame, as the history ring of the world subsystem keeps it for lag compensation (combat-m4-hits 9).
+ * Plain data, a few dozen bytes: the reaction state is the compact one the attacker's hitstop needs, so it rewinds with the transform.
+ */
+struct FGSTN_EntityHistoryRecord
+{
+	int32 Frame = INDEX_NONE;
+
+	/** Simulation time the state is the end of (the start time of Frame), in the time base of the fork's lag compensation history */
+	float SimTimeMs = 0.f;
+
+	FTransform Transform;
+	FVector Velocity = FVector::ZeroVector;
+	FGSTN_VictimReactionState Reaction;
+};
+
+/**
  * The hittable entities of a world and the per-step snapshot the attackers hit against (combat-m4-hits 5).
  *
  * Registry: one entry per entity, sorted by entity id (the NP proxy id), so every machine walks the same order whatever order the
@@ -52,7 +68,26 @@ public:
 	 * every frame; the others get the same snapshot back. Never call it with a frame older than the held one without an
 	 * invalidation in between (a rollback that did not reach RestoreFrame): that is reported in development builds
 	 */
-	const FGSTN_StepSnapshot& EnsureSnapshot(int32 Frame);
+	const FGSTN_StepSnapshot& EnsureSnapshot(int32 Frame, float SimTimeMs = -1.f, float StepMs = 0.f);
+
+	/**
+	 * Turns the per-entity history on and sizes it for at least HistoryMs of rewind. Called by the combat components of an authority whose rules
+	 * use lag compensation; a client never records. The depth only grows. With it off (the default) EnsureSnapshot records nothing
+	 */
+	void RequestHistory(int32 HistoryMs);
+	bool IsRecordingHistory() const { return HistoryMs > 0; }
+
+	/** Appends the entities of Snapshot to the ring at (Frame, SimTimeMs); records of this frame or later (a rollback) are dropped first. Public for tests */
+	void RecordHistory(const FGSTN_StepSnapshot& Snapshot, float SimTimeMs, float StepMs);
+
+	/**
+	 * The record of EntityId at SimTimeMs: the latest one at or before it (the oldest when asked for a time before the ring), so discrete state
+	 * reads the step function it was. With bInterpolateTransform the transform and velocity blend towards the next record. False without records
+	 */
+	bool SampleHistory(int32 EntityId, float SimTimeMs, FGSTN_EntityHistoryRecord& Out, bool bInterpolateTransform) const;
+
+	/** Records held for an entity (diagnostic and tests) */
+	int32 GetNumHistoryRecords(int32 EntityId) const;
 
 	/** The next EnsureSnapshot builds again. Called by every combat component's RestoreFrame, and by anything that changes an entity out of the tick */
 	void InvalidateSnapshot();
@@ -106,6 +141,10 @@ private:
 
 	/** Sorted by provider id */
 	TArray<IGSTN_HittableProvider*> Providers;
+
+	/** Per entity id, ascending in frame and time. Never read by the simulation of the entity, only by an attacker's rewound view */
+	TMap<int32, TArray<FGSTN_EntityHistoryRecord>> History;
+	int32 HistoryMs = 0;
 
 	FGSTN_StepSnapshot Snapshot;
 	bool bSnapshotInvalid = true;
