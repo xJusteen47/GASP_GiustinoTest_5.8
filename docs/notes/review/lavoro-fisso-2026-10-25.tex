@@ -1,0 +1,180 @@
+% Revisione del lavoro parallelo sul fisso, 25 ottobre 2026.
+% Compilare con: pdflatex lavoro-fisso-2026-10-25.tex (due volte, per l'indice)
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,columns=fullflexible,
+  keywordstyle=\bfseries,commentstyle=\itshape\color{gray},
+  literate={à}{{\`a}}1 {è}{{\`e}}1 {é}{{\'e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{\`u}}1}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+\title{Lavoro parallelo sul fisso\\\large Ragionamento, pseudocodice e strumenti Unreal}
+\author{Ramo \code{claude/project-thread-v1plhd}}
+\date{25 ottobre 2026}
+
+\begin{document}
+\sloppy
+\maketitle
+\tableofcontents
+
+\section{Cosa c'è in questo documento}
+Il lavoro fatto sul fisso mentre il portatile porta avanti M4: lo step up/step down dei muri, l'unione del ramo M4 e i passi
+dell'editor dei combattimenti (M5) che aspettavano i dati di M4. Per ogni parte: perché è fatta così, lo pseudocodice della
+logica principale, le classi e gli strumenti di Unreal usati, i test e cosa resta da controllare a mano nell'editor
+(sezione~\ref{sec:controlli}).
+
+\section{Muri: step up e step down separati}
+\subsection{Ragionamento}
+Il look-ahead del wall slide v2 guarda la parete davanti al personaggio e classifica ciò che trova (\code{EGSTN_WallEdgeKind}):
+\emph{Bump} (continuo, si scavalca), \emph{Slope}, \emph{Concave} (angolo interno), \emph{Convex} (spigolo esterno),
+\emph{Blocked}. Prima c'era un solo limite, \code{MaxStepHeight}, usato sia per ciò che sporge dal muro sia per ciò che rientra.
+Come nella modalità di camminata, ora i limiti sono due: \textbf{step up} (\code{MaxStepHeight}, mostrato come
+``Max Step Up Height'') e \textbf{step down} (\code{MaxStepDownDepth}), entrambi 10\,cm di default, quindi il comportamento
+non cambia finché un designer non li modifica. Il nome della proprietà esistente è rimasto lo stesso, così i valori già
+salvati nei Blueprint si caricano senza redirect.
+
+Nota sulla rientranza da 15\,cm: il personaggio ci entra (l'adesione lo tira verso la parete) e ne esce risalendo di 15\,cm;
+quella risalita è uno \emph{step up}. Per attraversarla senza rallentare va alzato lo step up a 15\,cm o più.
+
+\subsection{Pseudocodice}
+\begin{lstlisting}
+ClassifyAhead(Offset, Angolo, ...):
+  // Offset < 0: la superficie sporge verso il personaggio; > 0: rientra
+  Limite = (Offset <= 0) ? MaxStepHeight : MaxStepDownDepth
+  se |Offset| <= Limite:
+      se l'angolo non è dolce            -> Bump (si scavalca, mai angolo)
+      se |Offset| quasi zero              -> None
+      se l'offset è quello di un pendio   -> Slope, altrimenti Bump
+  altrimenti se angolo dolce             -> Slope
+  altrimenti se angolo oltre il limite   -> Blocked
+  altrimenti                             -> Offset > 0 ? Convex : Concave
+\end{lstlisting}
+
+\subsection{Strumenti Unreal}
+\code{USTRUCT} \code{FGSTN_WallEdgeSettings} con \code{UPROPERTY(EditAnywhere, meta=(DisplayName, ClampMin, ForceUnits="cm"))};
+la funzione pura in \code{UGSTN_WallEdgeUtils} (\code{UBlueprintFunctionLibrary}); test con \code{IMPLEMENT_SIMPLE_AUTOMATION_TEST}.
+
+\subsection{Test}
+\code{GSTN.Wall.Edge.StepUpAndDownAreSeparate} (classificazione con limiti diversi) e
+\code{GSTN.Wall.V2.Lane.RecessWithinTheStepUpIsNotACorner} (la rientranza da 15\,cm, con i limiti a 20\,cm, si attraversa a
+velocità piena). 74 test dei muri verdi. Commit \code{8be7b4d}.
+
+\subsection{Costo delle query}
+Il campionamento che distingue una curva da uno spigolo porta il v2 a 5--5{,}7 query per tick (massimo 9) sulle corsie con
+curve e angoli, contro le 3{,}5 della parete piatta. Accettato per ora; se il wall slide comparirà in un profilo, i primi
+interventi sono campionare la catena un tick sì e uno no e tenerla in cache finché lo stesso angolo resta nel look-ahead
+(\code{wall-slide-v2.md} §6.13).
+
+\section{Unione del ramo M4}
+Il ramo del portatile (\code{feature/gas-npp-5.8}, M4 fino a H13b) è stato unito nel ramo del fisso (\code{5d0b7da}).
+Un solo conflitto, l'elenco dei tag di combattimento in \code{GSTN_CombatTags.cpp}: tenuti i tag di entrambi i lati.
+\code{Plugins/GSTNSurface} è identico sui due rami. 806 test verdi dopo l'unione.
+
+\section{Editor dei combattimenti (M5): i passi che aspettavano M4}
+Quattro passi del piano \code{m5-editor-plan.md}, uno per commit, tutti sul plugin \code{GSTNCombatEditor} tranne E3
+(che vive nel Core di combattimento). Test: da 806 a 846, tutti verdi. Le deviazioni dal piano sono in
+\code{docs/notes/m5-doc-deltas.md}.
+
+\subsection{E3: fasi derivate del colpo (\code{f100773})}
+\paragraph{Ragionamento.} Startup, attivo e recovery di una mossa non si scrivono a mano: si ricavano dalle tracce hitbox della
+timeline, così il dato mostrato non può divergere da ciò che il gioco esegue. \code{FGSTN_TimelinePhases} sta nel Core
+(\code{GSTNCombatCore}, \code{Timeline/GSTN_TimelinePhases.h}) perché è logica pura, utile anche fuori dall'editor; la barra delle
+fasi dell'editor (\code{FGSTN_PhaseBarData}) resta solo un modello di disegno e legge questi numeri senza ricalcolarli.
+Una traccia hitbox senza specifiche conta come attiva (è un guscio creato da un autore: lo segnala il validatore); una traccia
+le cui varianti ignorano tutte e quattro le relazioni non conta.
+\begin{lstlisting}
+finestre = [(max(inizio,0), fine) per ogni traccia Hitbox con fine > inizio e ContaComeAttiva(traccia)]
+ordina per inizio; unisci se prossima.inizio <= ultima.fine
+Attivo = prima.inizio .. ultima.fine ; Startup = prima.inizio ; PrimoColpo (1-based) = prima.inizio + 1
+Recovery = max(FAF - FineAttivo, 0) ; nessuna finestra -> bHasActive = false
+\end{lstlisting}
+\paragraph{Unreal.} \code{USTRUCT} nel Core, \code{FText} per il riassunto (\code{FormatSummary(TickRate)}), array riservato una
+volta sola (nessuna allocazione per mosse senza hitbox). \textbf{Test}: \code{GSTNCombat.Core.TimelinePhases.*} (10).
+\paragraph{Da notare.} A 62{,}5\,Hz 30 frame sono 480\,ms; l'esempio della specifica diceva 484 (calcolato a 62\,Hz).
+
+\subsection{E11: regole di validazione M4, ``Validate all'' e pannello (\code{5a31adc})}
+\paragraph{Ragionamento.} Stesso schema di E10: funzioni pure che riempiono un report, chiamate sia dalla Data Validation di
+Unreal sia dal pannello, così pannello e salvataggio dicono sempre la stessa cosa (\code{UGSTN_CombatValidatorBase::BuildReportForAsset}).
+Dove il Core avvisa già (socket non baked, lunghezza del bake, Armor senza soglia) il suo messaggio viene classificato e non duplicato.
+\begin{lstlisting}
+HitboxKeys: frame della chiave < 0 o >= lunghezza finestra -> errore
+  stesso HitGroup, finestre sovrapposte, stessa Priority, Data diversi, forma diversa -> avviso
+HitData: danno/knockback/crescita/moltiplicatori/stagger/hitstop negativi -> errore
+  FixedKnockback >= 0 insieme a crescita -> avviso; HitType o Cue non registrati -> errore
+  le varianti che sovrascrivono campi sono controllate allo stesso modo
+Varianti: chiave fuori da Combat.Relationship, ShapeScale <= 0 senza ignore -> errore
+HurtState: Armor con soglia <= 0 e non infinita -> errore
+BakedSocketMissing / BakedLength -> errore ; BakedStale -> info
+Hurtbox set: vuoto, nomi doppi, estensioni, tag fuori da Combat.Hurtbox -> errore
+\end{lstlisting}
+\paragraph{Pannello.} \code{GSTNValidateAll} raccoglie gli asset (salta \code{/Engine} e \code{/Temp}) e trova i Blueprint di
+abilità tramite \code{GetDerivedClassNames} e il tag \code{GeneratedClass} dell'Asset Registry, \emph{senza caricarli}.
+Il modello \code{FGSTN_ValidationPanelModel} non ha widget (testabile da solo); \code{SGSTN_ValidationPanel} è un
+\code{SCompoundWidget} con \code{STreeView}. Doppio clic: apre l'asset e porta la timeline sul frame e sulla chiave del problema.
+La scheda Frame Data rivalida 250\,ms dopo l'ultima modifica (\code{FTSTicker}) e le corsie mostrano una linea rossa o gialla.
+Registrazione: scheda nomade nel gruppo ``GSTN Combat'', comando \code{gstn.Combat.ValidateAll}, pagina del Message Log.
+\paragraph{Test.} \code{GSTNCombat.Editor.Validate.*} (14) e le istantanee \code{GSTN.Visual.Validation.Panel}, \code{.LaneMarkers}.
+\paragraph{Rimandato.} ``Bake all'' e la parte hash di \code{BakedStale} (servono il baker di E8); controlli su scheletro e ossa
+(servono la mesh dell'hurtbox set, E9); la fascia ``clank'' della Priority (è di M6).
+
+\subsection{E5b: righe Hitbox e HurtboxModifier nella timeline (\code{281fa38})}
+\paragraph{Ragionamento.} Una riga per traccia con una sotto-corsia per ogni hitbox, invece di una riga per hitbox: la matematica
+di righe, selezione e trascinamento del modello E2/E4 assume righe da 24\,px, e cambiarla avrebbe toccato tutto il modello. Le
+chiavi restano relative all'inizio della traccia (\code{FGSTN_HitboxKey::Frame}), quindi spostare la finestra sposta le chiavi.
+\begin{lstlisting}
+AddKey su un percorso: chiave = UGSTN_HitShapeUtils::EvaluateKeys(chiavi della corsia, frame relativo)
+   // la stessa funzione del runtime: aggiungere una chiave non cambia il percorso
+AddKey senza corsia: corsia della prima chiave selezionata sulla traccia, altrimenti corsia 0
+Duplica / incolla: le copie restano nella corsia d'origine, in ordine di corsia crescente
+Nuova traccia Hitbox: una sfera e una chiave; parte vuota di proposito, quindi nasce come errore
+\end{lstlisting}
+\paragraph{Unreal.} Interfaccia dell'adapter estesa con \code{GetLaneCount}, \code{GetKeyLane}, \code{AppendKeyInLane} (con default),
+colore per stato tramite il nuovo virtuale \code{GetTrackColor}. \textbf{Test}: 8 sul modello e sulla registry, istantanea
+\code{GSTN.Visual.Timeline.HitboxRows}. \textbf{Limiti}: con cinque o più hitbox la riga è affollata (il pannello Details ha
+la lista completa); una chiave trascinata può uscire dalla finestra (lo segnala \code{HitboxKeys}).
+
+\subsection{E12: riga dei dati del colpo e anteprima del knockback (\code{58af658})}
+\paragraph{Ragionamento.} \code{FGSTN_HitDataCustomization} (\code{IPropertyTypeCustomization} per \code{FGSTN_HitData}) raggruppa i
+campi (danno, knockback, hitstun, hitstop, stagger, colpo, impatto, estensioni, anteprima) con un riassunto su una riga e una frase
+che spiega Special Angle e Yaw Source. Le estensioni usano l'editor di array standard, così la customization di un altro plugin
+compare dentro. Il quadrante dell'angolo (\code{SGSTN_AngleDial}) è un solo passo di undo: transazione aperta alla pressione,
+scritture interattive, chiusura al rilascio; Esc ripristina.
+\paragraph{Anteprima.} Non reimplementa la formula: costruisce lo stesso input del passo runtime
+\code{UGSTN_HitStep_ComputeKnockback} e chiama il modello delle regole di default, quindi non può dare numeri diversi dal gioco.
+\begin{lstlisting}
+input = {colpo, su=+Z, peso, percentuale, salute 1, soglia stagger = regole.StaggerThreshold}
+se Sakurai: K = modello(input con direzione nulla).Knockback
+input.Direzione = LaunchDirection(yaw, angolo, angolo speciale, su, avanti=+X, a terra, K, regole.Sakurai)
+risultato = modello.Compute(input)   // knockback, tier, stagger, hitstun, hitstop, angolo effettivo
+\end{lstlisting}
+\paragraph{Unreal.} \code{IPropertyTypeCustomization}, \code{SGameplayTagCombo} filtrato su \code{Combat.HitType} (nuova dipendenza
+dal plugin \code{GameplayTagsEditor}), transazioni dell'editor e \code{IPropertyHandle::SetValue} per il quadrante.
+\textbf{Test}: \code{GSTNCombat.Editor.HitData.*} (4, compreso il caso a mano $K=(400+10\cdot6)\cdot100/50=920$) e l'istantanea
+\code{GSTN.Visual.HitData.Row}. \textbf{Limiti}: la vittima di prova (peso, percentuale) vive nella riga ed è solo di sessione;
+l'anteprima ignora scale delle hurtbox, DI, tumble e yaw diversi dall'orientamento dell'attaccante; usa solo le regole di default.
+
+\section{Cosa controllare a mano stasera}\label{sec:controlli}
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Muri}: in \code{SandboxCharacter_Mover}, modalità WallSlidingV2, sezione \emph{Edges}: ci sono
+    ``Max Step Up Height'' e ``Max Step Down Depth''. Sulla mappa \code{L_WallSlideAB}, corsia delle rientranze: con lo step up a
+    15--20\,cm la rientranza da 15\,cm non deve più rallentare.
+  \item \textbf{Timeline, righe hitbox}: apri un asset timeline, aggiungi una traccia Hitbox con doppio clic, trascina le chiavi tra
+    le sotto-corsie, premi K con una chiave selezionata, Ctrl+trascina per copiare, poi annulla e ripeti.
+  \item \textbf{Dati del colpo}: seleziona un hitbox; nel Details trascina il quadrante dell'angolo (un solo undo, Esc ripristina),
+    cambia il tag HitType, aggiungi un'estensione, leggi la riga di anteprima del knockback.
+  \item \textbf{Validazione}: crea un errore apposta (danno negativo o chiave oltre la finestra); entro circa 250\,ms reagiscono la
+    scheda Frame Data e la linea sulla corsia. Premi F7 e controlla il Message Log.
+  \item \textbf{Validate all}: Window, GSTN Combat, Validation, ``Validate all'', poi doppio clic su un problema di un asset timeline
+    e di una timeline inline in un Blueprint di abilità: playhead e selezione devono finire sul frame giusto.
+\end{enumerate}
+
+\end{document}
