@@ -190,6 +190,16 @@ public:
 	UGSTN_GE_TestHitstun();
 };
 
+/** Infinite: grants Combat.Lock.Movement to the owner: it cannot walk, the stick still feeds DI. Test hook of the DI scenario */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestMovementLock : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_TestMovementLock();
+};
+
 /** Infinite: grants Test.State.Escape, the requirement of the escape dodge binding (the ignore tag of the default dodge) */
 UCLASS()
 class GASP_GIUSTINO2_API UGSTN_GE_TestEscapeKit : public UGameplayEffect

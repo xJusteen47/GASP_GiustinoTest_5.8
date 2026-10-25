@@ -2732,36 +2732,76 @@ def scenario_air_dodge(client=1):
 
 
 def scenario_dodge_blocked_in_hitstun(client=1):
-    """C14 owner rule 3: no dodging in hitstun by default (blocked tag data of the ability). A: hitstun on, dodge pressed: nothing happens. B: hitstun off,
-    dodge works. C: hitstun on and the kit has the escape dodge (blocks dropped as data): it works. Judged on the authority and the owner."""
-    run = _Run('dodge_blocked_in_hitstun', client)
-    key, st = run.key, {}
-    dodge = button_mask('Dodge')
-    TA, TB, TC = 2.0, 6.0, 10.5
+    """C14 owner rule 3, real since M4 H9c. `client` is the attacker (like every hit scenario); the dodger is the other client, a pawn that carries no
+    loadout (the suite runs this after hit_basic, whose kit sits on the attacker). A: the attacker's hit puts the dodger in hitstun (a long one: the
+    harness raises the hitstun floor), the dodge pressed in it does nothing (the blocked tags of the ability: Combat.State.Hitstun is projected from the
+    real state). B: the hitstun over, the dodge works. C: hitstun on through the harness hook and the kit has the escape dodge (blocks dropped as data): it
+    works; the hook does not touch the combat state, so the combat gate (commands are refused in a real hitstun) does not stand in the way."""
+    dodger = 2 if client == 1 else 1
+    run = _Run('dodge_blocked_in_hitstun', dodger, judge_reconciles=False)
+    key, akey, st = run.key, key_of_player(client), {}
+    dodge, attack = button_mask('Dodge'), button_mask('Attack')
+    TH, TA, TB, TC = 2.0, 2.9, 5.8, 10.5
 
     def back_to_lane():
-        # B's dodge (6.0 to 9.0 s) slides the pawn 2 to 3 m and C's goes on from there; back on the lane, C starts from the same pose as B.
+        # B's dodge (5.8 to 8.8 s) slides the pawn 2 to 3 m and C's goes on from there; back on the lane, C starts from the same pose as B.
         lane = sorted(comps(worlds()[0]), key=str).index(key)
         return 'back to the lane', comps(worlds()[0])[key].server_reset_to_spawn(lane_offset(lane))
+
+    def prepare():
+        _kit(key, False, True, False)
+        hit_rules_setup()
+        set_tuning(min_hitstun_frames=150)
+        st['kit'] = _apply_loadout(akey, HIT_KIT)
+        _hit_logging(True)
+        return 'movement kit, rules, long hitstun, attacker kit', st['kit']
+
+    def mark_hit():
+        st['F'] = _latest_frame(0, akey)
+        return 'mark', st['F']
+
+    def in_hitstun():
+        hits = [r for r in _hit_log(0, akey) if r[0] >= st['F']]
+        seen = {sd: run.saw_tag('Combat.State.Hitstun', TA - 0.3, TA + 0.1, sd) for sd in ('srv', 'cli')}
+        return len(hits) == 1 and all(seen.values()), f'hits {hits}, Combat.State.Hitstun on the dodger {seen}'
+
+    def hitstun_over():
+        seen = {sd: run.saw_tag('Combat.State.Hitstun', TB - 0.4, TB - 0.05, sd) for sd in ('srv', 'cli')}
+        return not any(seen.values()), f'Combat.State.Hitstun just before B {seen}'
 
     def remark():
         run.log_mark = mark_log()
         return 'judge window starts after the teleport', True
+
+    def cleanup():
+        combat_clear(dodger)
+        _srv(key).server_set_hitstun(False)
+        _srv(key).server_set_escape_kit(False)
+        _kit(key, False, False, False)
+        set_damage(key, 0)
+        hit_rules_setup()
+        _hit_logging(False)
+        return 'cleanup'
+
     steps = [
-        (0.3, lambda: ('grant the movement kit', _kit(key, False, True, False))),
-        (TA - 0.5, lambda: ('hitstun on', _srv(key).server_set_hitstun(True))),
-        (TA, lambda: ('A: dodge in hitstun', combat_tap(client, dodge))),
-        (TA + 2.0, _no_move(run, 'A: blocked in hitstun, nothing moved', TA - 0.05, TA + 2.0)),
-        (TA + 2.0, _in_timeline_seen(run, 'A: no timeline started', TA, TA + 2.0, want=False)),
-        (TB - 0.5, lambda: ('hitstun off', _srv(key).server_set_hitstun(False))),
-        (TB, lambda: ('B: dodge without hitstun', combat_tap(client, dodge))),
-        (TB + 3.0, _landing_pair(run, st, 'B: free dodge', TB - 0.05, TB + 3.0, floor=200.0)),
+        (0.3, prepare),
+        (0.5, lambda: ('dodger in front of the attacker', _place_near(client, key, (205.0, 0.0)))),
+        (TH - 0.05, mark_hit),
+        (TH, lambda: ('hit', combat_tap(client, attack))),
+        (TA - 0.05, run.at('A: the hit landed and the dodger is in hitstun', in_hitstun)),
+        (TA, lambda: ('A: dodge in hitstun', combat_tap(dodger, dodge))),
+        (TA + 1.0, _no_move(run, 'A: blocked in hitstun, nothing moved', TA - 0.05, TA + 1.0)),
+        (TA + 1.0, _in_timeline_seen(run, 'A: no timeline started', TA, TA + 1.0, want=False)),
+        (TB - 0.05, run.at('B: the hitstun is over', hitstun_over)),
+        (TB, lambda: ('B: dodge after the hitstun', combat_tap(dodger, dodge))),
+        (TB + 3.0, _landing_pair(run, st, 'B: free dodge', TB - 0.05, TB + 3.0, floor=200.0, tol=2.0)),
         (TB + 3.1, back_to_lane),
         (TB + 3.2, remark),
         (TC - 1.5, lambda: ('hitstun on, escape kit on', (_srv(key).server_set_hitstun(True), _srv(key).server_set_escape_kit(True)))),
-        (TC, lambda: ('C: dodge in hitstun with the escape kit', combat_tap(client, dodge))),
-        (TC + 3.0, _landing_pair(run, st, 'C: escape dodge in hitstun', TC - 0.05, TC + 3.0, floor=200.0)),
-        (TC + 3.1, lambda: ('cleanup', (combat_clear(client), _srv(key).server_set_hitstun(False), _srv(key).server_set_escape_kit(False), _kit(key, False, False, False)))),
+        (TC, lambda: ('C: dodge in hitstun with the escape kit', combat_tap(dodger, dodge))),
+        (TC + 3.0, _landing_pair(run, st, 'C: escape dodge in hitstun', TC - 0.05, TC + 3.0, floor=200.0, tol=2.0)),
+        (TC + 3.1, cleanup),
+        (TC + 3.2, run.at('the attacker kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
         (TC + 4.1, run.finish()),
     ]
     run.run(steps)
@@ -3565,6 +3605,184 @@ def scenario_hit_on_wall(client=1, wall_x=1010.0, wall_y=-880.0, frames=90):
 
 
 
+def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1.0):
+    """Second half of the wall scenario of the hits milestone (M4 H9c): a real hit while the pawn is wall sliding. `client` is the climber, the other
+    client the attacker: it stands on the floor beside the wall (clear of the climber's path) and spins the moment the climber is WallSliding. The spin is a
+    sphere around the attacker, so it reaches the sliding pawn from below. Wanted, on the authority and the owner: the hit lands once on the climber while it
+    is WallSliding; its hitstop window opens on the frame of the hit and, through the window, the pawn stays WallSliding and does not move; the tags
+    Combat.State.Hitstop / Hitstun are projected; the damage of the hit is taken on both copies; and the two copies agree on the pawn's place at the end of
+    the window. What the wall pawn does after its hitstun is reported (the stagger in place keeps it where it is)."""
+    att = 2 if client == 1 else 1
+    run = _Run('hit_on_wall_hit', client, judge_reconciles=False)
+    key, akey = run.key, key_of_player(att)
+    ia_move, attack = unreal.load_asset(IA['move']), button_mask('Attack')
+    st, h = {'phase': 'idle', 'tw': None, 'reached': False, 'rec': []}, {'h': None, 'v': None}
+
+    def vsampler(_dt):
+        try:
+            st['rec'].append((run.now(), victim_info(0, key), victim_info(client, key)))
+        except Exception:
+            pass
+
+    def setup():
+        hit_rules_setup()
+        _hit_logging(True)
+        st['kit'] = _apply_loadout(akey, HIT_KIT)
+        h['v'] = unreal.register_slate_post_tick_callback(vsampler)
+        c = comps(worlds()[0])[key]
+        sp = c.get_spawn_location()
+        c.server_reset_to_spawn(unreal.Vector(680.0 - sp.x, wall_y - sp.y, 0.0))
+        a = comps(worlds()[0])[akey]
+        sa = a.get_spawn_location()
+        a.server_reset_to_spawn(unreal.Vector(wall_x - 50.0 - sa.x, wall_y + 76.0 - sa.y, 0.0))
+        return 'climber in front of the wall, attacker beside it'
+
+    def finish_driver(comp):
+        comp.stop_holding_input(ia_move)
+        st['phase'] = 'done'
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+
+    def drive(_dt):
+        try:
+            now = run.now()
+            _, pawn = _local_pawn(client)
+            comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
+            mode = str(pawn.get_component_by_class(unreal.CharacterMoverComponent).get_movement_mode_name())
+            x, ph = pawn.get_actor_location().x, st['phase']
+            into = (wall_x + 200.0, wall_y)
+            if ph == 'walk':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
+                if wall_x - x < 130.0 and mode == 'Walking':
+                    press(client, 'jump')
+                    st.update(phase='air', t1=now)
+                elif now - st['t1'] > 6.0:
+                    finish_driver(comp)
+            elif ph == 'air':
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
+                if mode == 'WallSliding':
+                    st.update(phase='hit', tw=now, reached=True)
+                elif now - st['t1'] > 2.5:
+                    finish_driver(comp)
+            elif ph == 'hit':
+                # straight into the wall from where the pawn is: a fixed vector would slide it along the wall
+                comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, (wall_x + 200.0, pawn.get_actor_location().y))))
+                if now - st['tw'] > tap_delay - 0.6 and 'moved' not in st:
+                    # The pawn drifts along the wall while it slides: put the attacker where it will be when the spin opens (0.33 s of the move plus
+                    # the latency after the tap), on the side it drifts toward so the two capsules never touch on the way
+                    st['moved'] = True
+                    v = snap(worlds()[0])[key]
+                    horizon = 0.6 + 0.5
+                    px, py = v['location'][0] + v['velocity'][0] * horizon, v['location'][1] + v['velocity'][1] * horizon
+                    a = comps(worlds()[0])[akey]
+                    sa = a.get_spawn_location()
+                    side = -1.0 if v['velocity'][1] < -5.0 else 1.0
+                    a.server_reset_to_spawn(unreal.Vector(wall_x - 55.0 - sa.x, py + side * 76.0 - sa.y, 0.0))
+                if now - st['tw'] > tap_delay and 'F' not in st:
+                    st['F'] = _latest_frame(0, akey)
+                    st['d0'] = (damage_of(0, key), damage_of(client, key))
+                    v = snap(worlds()[0])
+                    st['p_tap'] = (tuple(round(x) for x in v[key]['location']), tuple(round(x) for x in v[akey]['location']))
+                    combat_tap(att, attack)
+                if now - st['tw'] > tap_delay + 0.3 and 'p_late' not in st:
+                    v = snap(worlds()[0])
+                    st['p_late'] = (tuple(round(x) for x in v[key]['location']), tuple(round(x) for x in v[akey]['location']), sorted(t for t in v[akey].get('tags', []) if 'Test' in t))
+                if now - st['tw'] > 3.0:
+                    finish_driver(comp)
+        except Exception as e:
+            unreal.log_error(f'GASNPP hit_on_wall_hit driver: {e}')
+            st['phase'] = 'done'
+
+    def start_driver():
+        st.update(phase='walk', t1=run.now())
+        h['h'] = unreal.register_slate_post_tick_callback(drive)
+        return 'driving'
+
+    def hits():
+        return [r for r in _hit_log(0, akey) if r[0] >= st.get('F', 10 ** 9)]
+
+    def win():
+        hs = hits()
+        if len(hs) != 1:
+            return None
+        auth, own = _victim_windows(st['rec'], 1, hs[0][0])
+        return hs[0][0], auth, own
+
+    def landed_on_wall():
+        hs, w = hits(), win()
+        if not st['reached'] or len(hs) != 1 or not w:
+            return False, f"reached the wall {st['reached']}, hits {hs}, (climber, attacker) at the tap {st.get('p_tap')}, 0.3 s later {st.get('p_late')}"
+        t0 = st['tw']
+        modes = {sd: sorted({s['mode'] for s in run._win(sd, t0, t0 + 0.2, sim=True)}) for sd in ('srv', 'cli')}
+        return hs[0][2] == 3, f'hit {hs[0]}, climber modes right after the attack {modes}'
+
+    def window_on_wall():
+        w = win()
+        if not w:
+            return False, f'hits {hits()}'
+        fr, auth, own = w
+        ok = len(auth) == 1 and auth[0][0] == fr and auth[0][1] - auth[0][0] >= HIT_ATTACKER_HITSTOP and own[-1:] == [auth[0][:2]]
+        return ok, f'hit frame {fr}, window authority {auth}, owner {own}'
+
+    def held_in_window():
+        w = win()
+        if not w or not w[1]:
+            return False, f'hits {hits()}'
+        lo, hi = w[1][0][0], w[1][0][1]
+        out, ok = [], True
+        for sd in ('srv', 'cli'):
+            ticks = [s for s in run.sim if s.get(sd) and s[sd]['tags'] and 'Combat.State.Hitstop' in s[sd]['tags']]
+            modes = sorted({s[sd]['mode'] for s in ticks})
+            pts = [s[sd]['loc'] for s in ticks]
+            spread = max((math.dist(p, q) for p in pts for q in pts), default=1e9)
+            good = bool(ticks) and modes == ['WallSliding'] and spread < (5.0 if sd == 'srv' else 8.0)
+            ok &= good
+            out.append(f'{sd}: {len(ticks)} hitstop ticks, modes {modes}, spread {spread:.1f} cm')
+        return ok, '; '.join(out)
+
+    def tags_and_damage():
+        seen = {sd: {t for s in run._win(sd, st['tw'], st['tw'] + 3.0, sim=True) for t in s['tags'] if t.startswith('Combat.State.')} for sd in ('srv', 'cli')}
+        d = (damage_of(0, key) - st['d0'][0], damage_of(client, key) - st['d0'][1])
+        ok = all({'Combat.State.Hitstop', 'Combat.State.Hitstun'} <= t for t in seen.values()) and d[0] == d[1] > 0
+        return ok, f'tags srv {sorted(seen["srv"])}, owner {sorted(seen["cli"])}, damage change {d}'
+
+    def after():
+        seq = {sd: [] for sd in ('srv', 'cli')}
+        for sd in seq:
+            for s in run._win(sd, st['tw'], st['tw'] + 3.0, sim=True):
+                if not seq[sd] or seq[sd][-1] != s['mode']:
+                    seq[sd].append(s['mode'])
+        zs = [round(s['loc'][2]) for s in run._win('srv', st['tw'], st['tw'] + 3.0, sim=True)]
+        return True, f'mode sequence after the attack: authority {seq["srv"]}, owner {seq["cli"]}; height of the climber every 10th tick {zs[::10]}'
+
+    def end():
+        for hd in ('v',):
+            if h[hd] is not None:
+                unreal.unregister_slate_post_tick_callback(h[hd])
+                h[hd] = None
+        set_damage(key, 0)
+        hit_rules_setup()
+        _hit_logging(False)
+        return 'restored'
+
+    t_end = 2.5 + 6.0 + 4.5
+    steps = [
+        (0.3, lambda: ('clear', combat_clear(client))),
+        (0.5, setup),
+        (2.5, start_driver),
+        (t_end, run.at('the attacker kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
+        (t_end, run.at('the pawn reached the wall and the spin hit it once while it was wall sliding', landed_on_wall)),
+        (t_end, run.at('the hitstop window opens on the frame of the hit, equal on the owner', window_on_wall)),
+        (t_end, run.at('WallSliding through the whole window on both, and the pawn did not move', held_in_window)),
+        (t_end, run.at('Hitstop and Hitstun projected, the damage taken on both copies', tags_and_damage)),
+        (t_end, run.at('what the pawn does after its hitstun (reported)', after)),
+        (t_end + 0.2, end),
+        (t_end + 0.4, run.finish()),
+    ]
+    run.run(steps)
+
+
 # ---- M4 H8: the attacker side of hits (combat-m4-hits 6). The attacker plays UGSTN_GA_TestHitMove (KIT_Test_Hits; the geometry is in its header),
 # the victims are the other pawns, with the hurtbox set HBS_Test_Pawn. The victim side (damage, reaction, hitstun) is H9: the checks that need it are
 # marked "pending H9" in each docstring. What is judged here is what the attacker side decides and writes: which frame a hitbox touches a
@@ -3782,7 +4000,7 @@ def probe_rows(compact=True):
 # ---- M4 H9: the rules, the hurtbox set and the victim for the hit scenarios. The rules object (GetCombatRulesForTest) and the hurtbox set asset are shared
 # by every pawn of the process, so a change is the same on all machines; make it between hits, never while one is in flight. The standard rules ship no
 # damage effect (the pending GSTN_CombatRules_Standard asset): the harness sets the native one.
-TUNING_DEFAULT = {'push_back_threshold': 540.0, 'launch_threshold': 1080.0, 'tumble_threshold': 1800.0}
+TUNING_DEFAULT = {'push_back_threshold': 540.0, 'launch_threshold': 1080.0, 'tumble_threshold': 1800.0, 'min_hitstun_frames': 31}
 
 
 def hit_rules(wi=0):
@@ -3922,7 +4140,7 @@ def scenario_hit_basic(client=1, step=3.0):
       - the attacker's hitstop window opens on the frame of the hit with the authored 6 frames, on both, and the owner has it no later (predicted)
       - the hit reaches the victim's inbox on the authority the frame after, with the hurtbox and the hitbox it was made with
       - cancel on hit: the special (a command of the cancel window, OnHit) held 0.25 s after the attack starts cancels it only when the hit confirmed (control without a victim: it does not)
-      - zero rollbacks on the attacking client
+      - the hits cost the attacking client no rollback of their own (judged in the second after each attack: at most one over the three, the link drops packets)
     The victim half (M4 H9), on the victim's authority copy and its own client: the hit opens a hitstop window on the frame of the hit (8 frames) and a
     hitstun 31 frames after it (the floor of the rules, a stagger in place), the tags Combat.State.Hitstop / Hitstun are projected from it, the damage is
     8 per hit on both copies, HitLanded and HitReceived are published once per hit, and the victim's client rolls back at most once per hit."""
@@ -3935,13 +4153,31 @@ def scenario_hit_basic(client=1, step=3.0):
     rb = {}   # rollbacks of the attacking client are counted from the control on: the loadout change before it reconciles once, by design
     rbv = {}  # rollbacks of the victim's client per phase, from after the placement settled to just before the next one
     vrec = []
+    arb, taps = [], {}   # (time, rollbacks of the attacking client) per editor tick, and the time of each attack
 
     def sampler(_dt):
         try:
             rec.append((run.now(), _hit_window(0, key), _hit_window(client, key)))
             vrec.append((run.now(), victim_info(0, vkey), victim_info(victim_index, vkey)))
+            arb.append((run.now(), rollbacks(client)))
         except Exception:
             pass
+
+    def atk(name):
+        def f():
+            taps[name] = run.now()
+            combat_tap(client, attack)
+            return 'attack', name
+        return f
+
+    def attacker_rollbacks():
+        # An idle pawn rolls back about once per 25 s at 60/15/2 % (lost packets), so a whole-run count of zero is a coin toss; what the hits must not
+        # cost the attacker is judged in the second after each of them: at most one rollback over the three, none at 60/15/0
+        out = {}
+        for n in ('p1', 'p2', 'p3'):
+            w = [c for t, c in arb if taps[n] <= t <= taps[n] + 1.0]
+            out[n] = (w[-1] - w[0]) if w else 99
+        return sum(out.values()) <= 1, f"rollbacks of the attacking client in the second after each attack {out}; whole run {rb['start']} -> {rb['end']}"
 
     def rbmark(name):
         def f():
@@ -4050,7 +4286,7 @@ def scenario_hit_basic(client=1, step=3.0):
         (step + 1.6, locate('p1')),
         (step + 1.65, rbmark('p1s')),
         (step + 1.7, mark('p1')),
-        (step + 1.7, lambda: ('attack (Root)', combat_tap(client, attack))),
+        (step + 1.7, atk('p1')),
         (step + 1.95, lambda: ('stance held', combat_hold(client, special))),
         (step + 2.1, lambda: ('stance released', combat_clear(client))),
         # phase 2: BakedSocket
@@ -4059,14 +4295,14 @@ def scenario_hit_basic(client=1, step=3.0):
         (step + 4.9, locate('p2')),
         (step + 4.95, rbmark('p2s')),
         (step + 5.0, mark('p2')),
-        (step + 5.0, lambda: ('attack (BakedSocket)', combat_tap(client, attack))),
+        (step + 5.0, atk('p2')),
         # phase 3: WorldAtMoveStart
         (step + 7.1, rbmark('p2e')),
         (step + 7.2, place('p3', (200.0, -110.0))),
         (step + 8.5, locate('p3')),
         (step + 8.55, rbmark('p3s')),
         (step + 8.6, mark('p3')),
-        (step + 8.6, lambda: ('attack (WorldAtMoveStart)', combat_tap(client, attack))),
+        (step + 8.6, atk('p3')),
         (step + 10.1, rbmark('p3e')),
         (step + 10.2, stop),
         (step + 10.3, run.at('the kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
@@ -4077,7 +4313,7 @@ def scenario_hit_basic(client=1, step=3.0):
         (step + 10.3, run.at('the attacker hitstop window opens on the frame of the hit, 6 frames, equal on both', window_on_hit)),
         (step + 10.3, run.at('the owner has the window no later than the authority (predicted)', window_predicted)),
         (step + 10.3, run.at('cancel on hit: the stance cancels the move after a hit and not without one', stance_cancels)),
-        (step + 10.3, run.at('zero rollbacks on the attacking client', lambda: (rb['end'] == rb['start'], f"rollback_count {rb['start']} -> {rb['end']}"))),
+        (step + 10.3, run.at('the hits cost the attacking client at most one rollback in all (none by design; the link drops 2 % of the packets)', attacker_rollbacks)),
         # the victim half
         (step + 10.3, victim_window_checks(run, 'victim', lambda: [phase_rows(0, n, nx)[0][0][0] if len(phase_rows(0, n, nx)[0]) == 1 else -1 for n, nx in (('p1', 'p2'), ('p2', 'p3'), ('p3', None))], vrec)),
         (step + 10.3, run.at('victim: Combat.State.Hitstop and Hitstun projected on the authority and on the owner', lambda: (
@@ -4094,70 +4330,204 @@ def scenario_hit_basic(client=1, step=3.0):
     run.run(steps)
 
 
+def _victim_windows(rec, col, lo=0, hi=10 ** 9):
+    """Windows (hitstop start, end, hitstun end) of one pawn from the samples rec = [(t, ..., auth info, owner info, ...)]: col is the index of the
+    authority's info, the owner's is the next one. Returns (authority windows, owner (start, end) pairs) whose start frame is in [lo, hi)"""
+    rows = [(r[0], r[col], r[col + 1]) for r in rec]
+    auth = [w for w in windows_seen(rows, 1) if lo <= w[0] < hi]
+    own = []
+    for w in windows_seen(rows, 2):
+        if lo <= w[0] < hi and (not own or own[-1] != w[:2]):
+            own.append(w[:2])
+    return auth, own
+
+
 def scenario_hit_trade(client=1):
-    """M4 H8, a trade: the two clients stand side by side (neither is in front of the other, so only the spin of the move, a sphere around the
-    attacker, connects) and attack at the same moment. Judged on the authority's copies: each attacker made one hit on the other (group 3), both inbox
-    entries arrived the frame after their own hit, both attackers opened their hitstop window, and the two hit frames are within 2 frames (the taps
-    are one editor tick apart; the sorting of the inbox makes the order of the ticks irrelevant to the result, unit-tested).
-    Pending H9: both victims reacting from the same frame, damage on both."""
+    """M4 H8 + H9c, a trade: the two clients stand side by side (neither is in front of the other, so only the spin of the move, a sphere around the
+    attacker, connects) and attack at the same moment. Two rounds on a clean link (the taps land on frames up to two apart under emulated jitter, and a
+    hit cancels the victim's move one frame later, so a trade is only a trade when the frames meet):
+      - round 1, the hurtboxes never stagger (a flinch): neither move is cancelled, so both hits land (group 3; the first hit freezes its victim for 8 frames and a frozen move does not advance, so the second comes 0 to 8 frames later) and both victims
+        react the same way: a hitstop window from the frame of their hit (merged with their own attacker window), the damage of their inbox entry on
+        the authority and on the owner, HitReceived and HitLanded once for each of the two hits, both inbox entries delivered the frame after
+      - round 2, the standard staggering: whatever the taps' frames made of it (a trade, or the first hit cancelling the other move), every hit that
+        landed has its victim reacting from the frame of the hit with hitstun 31 frames after the window, the damage of the inbox entry taken, events
+        once; a move cancelled before its hit made no hit and its pawn lost nothing it was not dealt. The outcome is reported."""
     a_index, b_index = (1, 2) if client == 1 else (2, 1)
-    run = _Run('hit_trade', client, extra=[('b_srv', 0, key_of_player(b_index)), ('b_cli', b_index, key_of_player(b_index))])
+    run = _Run('hit_trade', client, judge_reconciles=False, extra=[('b_srv', 0, key_of_player(b_index)), ('b_cli', b_index, key_of_player(b_index))])
     akey, bkey = key_of_player(a_index), key_of_player(b_index)
     attack = button_mask('Attack')
-    st = {}
+    st, h = {'rec': [], 'F': {}, 'd0': {}}, {'h': None}
+
+    def sampler(_dt):
+        try:
+            st['rec'].append((run.now(), victim_info(0, akey), victim_info(a_index, akey), victim_info(0, bkey), victim_info(b_index, bkey)))
+        except Exception:
+            pass
 
     def setup():
+        st['net'] = _cfg.get('net', (0, 0, 0))
+        net(0, 0, 0)
+        hit_rules_setup()
         _hit_logging(True)
         st['kits'] = (_apply_loadout(akey, HIT_KIT), _apply_loadout(bkey, HIT_KIT))
+        h['h'] = unreal.register_slate_post_tick_callback(sampler)
         return 'kits', st['kits']
 
-    def both_tap():
-        st['F'] = _latest_frame(0, akey)
-        combat_tap(a_index, attack)
-        combat_tap(b_index, attack)
-        return 'both attack'
+    def both_tap(rnd):
+        def f():
+            st['F'][rnd] = _latest_frame(0, akey)
+            st['d0'][rnd] = (damage_of(0, akey), damage_of(a_index, akey), damage_of(0, bkey), damage_of(b_index, bkey))
+            combat_tap(a_index, attack)
+            combat_tap(b_index, attack)
+            return 'both attack', rnd
+        return f
+
+    def hits(rnd):
+        lo = st['F'][rnd]
+        hi = st['F'].get(rnd + 1, 10 ** 9)
+        return [r for r in _hit_log(0, akey) if lo <= r[0] < hi], [r for r in _hit_log(0, bkey) if lo <= r[0] < hi]
+
+    def inbox_damage(key, frame):
+        return next((e[7] for e in _inbox_log(0, key) if e[0] == frame + 1), None)
 
     def trade():
-        a, b = [r for r in _hit_log(0, akey) if r[0] >= st['F']], [r for r in _hit_log(0, bkey) if r[0] >= st['F']]
+        # The first hit freezes its victim for the 8 frames of the window, and a frozen move does not advance: the second hit of a flinch trade comes up to
+        # 8 frames after the first (the same frame when the taps meet)
+        a, b = hits(1)
         if len(a) != 1 or len(b) != 1:
             return False, f'A hits {a}, B hits {b}'
         ia, ib = _inbox_log(0, akey), _inbox_log(0, bkey)
-        ok = (a[0][2] == 3 and b[0][2] == 3 and a[0][1] != b[0][1] and abs(a[0][0] - b[0][0]) <= 2
+        ok = (a[0][2] == 3 and b[0][2] == 3 and a[0][1] != b[0][1] and abs(a[0][0] - b[0][0]) <= 10
               and any(e[0] == b[0][0] + 1 and e[2] == 0 for e in ia) and any(e[0] == a[0][0] + 1 and e[2] == 0 for e in ib))
-        return ok, f'A hit {a[0]}, B hit {b[0]}, inbox of A {ia}, inbox of B {ib}'
+        return ok, f'A hit {a[0]}, B hit {b[0]}, inbox of A {ia[-1:]}, inbox of B {ib[-1:]}'
 
-    def windows():
-        wa, wb = _hit_window(0, akey), _hit_window(0, bkey)
-        return wa[1] - wa[0] == HIT_ATTACKER_HITSTOP and wb[1] - wb[0] == HIT_ATTACKER_HITSTOP, f'windows A {wa}, B {wb}'
+    def has_window(wins, frame, length=6):
+        return any(w[0] == frame and w[1] - w[0] >= length for w in wins)
+
+    def attacker_windows():
+        a, b = hits(1)
+        if len(a) != 1 or len(b) != 1:
+            return False, f'A hits {a}, B hits {b}'
+        lo, hi = st['F'][1], st['F'].get(2, 10 ** 9)
+        wa, wb = window_of(1, lo, hi)[0], window_of(3, lo, hi)[0]
+        return has_window(wa, a[0][0], HIT_ATTACKER_HITSTOP) and has_window(wb, b[0][0], HIT_ATTACKER_HITSTOP), f'windows of A {wa}, of B {wb}, own hit frames A {a[0][0]}, B {b[0][0]}'
+
+    def window_of(col, lo, hi=10 ** 9):
+        return _victim_windows(st['rec'], col, lo, hi)
+
+    def flinch_both():
+        a, b = hits(1)
+        if len(a) != 1 or len(b) != 1:
+            return False, f'A hits {a}, B hits {b}'
+        out, ok = [], True
+        lo, hi = st['F'][1], st['F'].get(2, 10 ** 9)
+        for name, col, fr in (('A', 1, b[0][0]), ('B', 3, a[0][0])):
+            auth, own = window_of(col, lo, hi)
+            # The owner's state shows the window of its latest frame only: a window of 8 frames that ends before the correction arrives (the second
+            # hit comes up to 8 frames later) is never on its screen, so the owner is compared on the last window
+            good = has_window(auth, fr, 8) and own[-1:] == [auth[-1][:2]]
+            ok &= good
+            out.append(f'{name} (hit on it at {fr}): authority {auth}, owner {own}')
+        return ok, '; '.join(out)
+
+    def damage(rnd, want_both=True):
+        a, b = hits(rnd)
+        da = inbox_damage(akey, b[0][0]) if b else None
+        db = inbox_damage(bkey, a[0][0]) if a else None
+        d0 = st['d0'][rnd]
+        got = (damage_of(0, akey) - d0[0], damage_of(a_index, akey) - d0[1], damage_of(0, bkey) - d0[2], damage_of(b_index, bkey) - d0[3])
+        if rnd == 1:
+            got = (got[0], got[1], got[2], got[3])
+        want = (da or 0, da or 0, db or 0, db or 0)
+        return got == want and (not want_both or (da and db)), f'inbox damage A {da}, B {db}; change on (A authority, A owner, B authority, B owner) {got}'
+
+    def events(rnd):
+        a, b = hits(rnd)
+        out, ok = [], True
+        for key, got_hit, dealt in ((akey, b, a), (bkey, a, b)):
+            ev = [e for e in event_log(key) if st['F'][rnd] <= e[2] < st['F'].get(rnd + 1, 10 ** 9)]
+            n = (len([e for e in ev if e[0] == 'T' and e[1] == 'HitReceived']), len([e for e in ev if e[0] == 'I' and e[1] == 'HitLanded']))
+            ok &= n == (len(got_hit), len(dealt))
+            out.append(n)
+        return ok, f'(HitReceived as target, HitLanded as instigator) for A and B: {out}'
+
+    def stagger_round():
+        a, b = hits(2)
+        out, ok = [], True
+        if not a and not b:
+            return False, 'no hit at all'
+        for name, col, hit_on_it, other in (('A', 1, b, 'B'), ('B', 3, a, 'A')):
+            auth, own = window_of(col, st['F'][2])
+            if hit_on_it:
+                fr = hit_on_it[0][0]
+                good = bool(auth) and any(w[0] == fr and w[2] - w[1] == 31 for w in auth) and any(o[0] == fr for o in own)
+            else:
+                good = True
+            ok &= bool(good)
+            out.append(f'{name}: hit on it {[r[0] for r in hit_on_it]}, windows {auth}')
+        kind = 'a trade (both hits landed)' if a and b else 'the first hit cancelled the other move'
+        return ok, f'{kind}: A dealt {[r[0] for r in a]}, B dealt {[r[0] for r in b]}; ' + '; '.join(out)
+
+    def end():
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+        set_damage(akey, 0)
+        set_damage(bkey, 0)
+        hit_rules_setup()
+        net(*st['net'])
+        return 'restored'
 
     steps = [
         (0.3, setup),
+        (0.5, lambda: ('hurtboxes never stagger', set_hurtbox(infinite=True))),
         (2.0, lambda: ('B beside A', _place_near(a_index, bkey, _side_spot(a_index, bkey)))),
-        (3.3, both_tap),
-        (5.0, run.at('each attacker hit the other once with the spin; inbox entries delivered; frames within 2', trade)),
-        (5.0, run.at('both attackers opened their hitstop window', windows)),
-        (5.2, lambda: ('logging off', _hit_logging(False))),
-        (5.3, run.finish()),
+        (3.3, both_tap(1)),
+        (5.0, run.at('round 1: each attacker hit the other once with the spin; inbox entries delivered; the hits at most 10 frames apart', trade)),
+        (5.0, run.at('round 1: both attackers opened their hitstop window on their hit', attacker_windows)),
+        (5.0, run.at('round 1: both victims reacted: a window from the frame of their hit, equal on the owner (a flinch)', flinch_both)),
+        (5.0, run.at('round 1: both lost the damage of their inbox entry on the authority and on the owner', lambda: damage(1))),
+        (5.0, run.at('round 1: HitReceived and HitLanded once for each of the two hits', lambda: events(1))),
+        (5.1, lambda: ('standard hurtboxes', set_hurtbox(stagger=-1.0, infinite=False))),
+        (5.5, lambda: ('B beside A', _place_near(a_index, bkey, _side_spot(a_index, bkey)))),
+        (7.5, both_tap(2)),
+        (9.5, run.at('round 2: every hit that landed staggered its victim from the frame of the hit, hitstun 31 frames after the window', stagger_round)),
+        (9.5, run.at('round 2: the damage dealt was taken on both copies', lambda: damage(2, want_both=False))),
+        (9.5, run.at('round 2: HitReceived and HitLanded once per hit that landed', lambda: events(2))),
+        (9.6, end),
+        (9.7, run.at('the kits were accepted', lambda: (st.get('kits') == ('OK', 'OK'), f'ServerApplyTestLoadout -> {st.get("kits")}'))),
+        (9.8, lambda: ('logging off', _hit_logging(False))),
+        (9.9, run.finish()),
     ]
     run.run(steps)
 
 
 def scenario_friendly_fire(client=1):
-    """M4 H8, relationships through the spin of the move (it has an Ally variant: damage 3; no variant: 6). The two clients are put on the same
+    """M4 H8 + H9c, relationships through the spin of the move (it has an Ally variant: damage 3; no variant: 6). The two clients are put on the same
     team (the harness knob SetTestTeam), side by side:
-      - friendly fire off: the ally is not hit (the move ran: Test.State.HitMove seen)
-      - friendly fire on: the ally is hit, the inbox entry says Ally and carries the variant's damage 3
-      - different teams: an Enemy hit with the move's own damage 6
-    Pending H9: what the victim does with an Ally hit."""
+      - friendly fire off: the ally is not hit (the move ran: Test.State.HitMove seen), and the victim does not react: no damage, no window, no events
+      - friendly fire on: the ally is hit, the inbox entry says Ally and carries the variant's damage 3; the victim loses 3, opens its window from the
+        frame of the hit, is staggered, and the events say Ally
+      - different teams: an Enemy hit with the move's own damage 6, the victim loses 6 and reacts, the events say Enemy
+    Judged on the victim's authority copy and its client."""
     a_index, b_index = (1, 2) if client == 1 else (2, 1)
-    run = _Run('friendly_fire', client)
+    run = _Run('friendly_fire', client, judge_reconciles=False)
     akey, bkey = run.key, key_of_player(b_index)
     attack = button_mask('Attack')
-    st = {'F': {}}
+    st = {'F': {}, 'd': {}, 'rec': []}
+    h = {'h': None}
+
+    def sampler(_dt):
+        try:
+            st['rec'].append((run.now(), victim_info(0, bkey), victim_info(b_index, bkey)))
+        except Exception:
+            pass
 
     def setup():
+        hit_rules_setup()
         _hit_logging(True)
         st['kit'] = _apply_loadout(akey, HIT_KIT)
+        h['h'] = unreal.register_slate_post_tick_callback(sampler)
         return 'kit', st['kit']
 
     def friendly(on):
@@ -4176,14 +4546,28 @@ def scenario_friendly_fire(client=1):
     def mark(name):
         def f():
             st['F'][name] = _latest_frame(0, akey)
+            st['d'][name] = (damage_of(0, bkey), damage_of(b_index, bkey))
             return name, st['F'][name]
         return f
 
     def rows(lo, hi=10 ** 9):
         return [r for r in _hit_log(0, akey) if lo <= r[0] < hi]
 
+    def events(lo, hi=10 ** 9):
+        return [e for e in event_log(bkey) if e[0] == 'T' and e[1] == 'HitReceived' and lo <= e[2] < hi]
+
+    def damage_since(name, nxt=None):
+        end = st['d'][nxt] if nxt else (damage_of(0, bkey), damage_of(b_index, bkey))
+        return end[0] - st['d'][name][0], end[1] - st['d'][name][1]
+
+    def windows(lo, hi):
+        return _victim_windows(st['rec'], 1, lo, hi)
+
     def ally_off():
-        return not rows(st['F']['off'], st['F']['on']) and run.saw_tag('Test.State.HitMove', 3.4, 4.2), f'hits {rows(st["F"]["off"], st["F"]["on"])}'
+        lo, hi = st['F']['off'], st['F']['on']
+        auth, own = windows(lo, hi)
+        ok = not rows(lo, hi) and run.saw_tag('Test.State.HitMove', 3.4, 4.2) and not events(lo, hi) and damage_since('off', 'on') == (0, 0) and not auth and not own
+        return ok, f'hits {rows(lo, hi)}, events {events(lo, hi)}, damage change {damage_since("off", "on")}, windows {auth} / {own}'
 
     def ally_on():
         hits = rows(st['F']['on'], st['F']['enemy'])
@@ -4196,6 +4580,24 @@ def scenario_friendly_fire(client=1):
         inbox = [e for e in _inbox_log(0, bkey) if hits and e[0] == hits[0][0] + 1]
         ok = len(hits) == 1 and hits[0][2] == 3 and len(inbox) == 1 and inbox[0][6] == 2 and inbox[0][7] == 6
         return ok, f'hits {hits}, inbox {inbox}'
+
+    def victim(name, lo, hi, damage_want, relation, nxt=None):
+        def f():
+            hits, ev = rows(lo, hi), events(lo, hi)
+            auth, own = windows(lo, hi)
+            fr = hits[0][0] if hits else -1
+            ok = (len(hits) == 1 and len(ev) == 1 and relation in ev[0][4] and 'Combat.Event.Hit.Staggered' in ev[0][4] and damage_since(name, nxt) == (damage_want, damage_want)
+                  and len(auth) == 1 and auth[0][0] == fr and auth[0][2] - auth[0][1] == 31 and own == [auth[0][:2]])
+            return ok, f'hit {hits}, events {[(e[2], sorted(e[4])) for e in ev]}, damage change {damage_since(name, nxt)}, windows {auth} / {own}'
+        return f
+
+    def end():
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+        set_damage(bkey, 0)
+        hit_rules_setup()
+        return 'restored'
 
     steps = [
         (0.3, setup),
@@ -4212,13 +4614,16 @@ def scenario_friendly_fire(client=1):
         (6.8, mark('enemy')),
         (6.8, lambda: ('attack, different teams', combat_tap(a_index, attack))),
         (8.3, run.at('the kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
-        (8.3, run.at('friendly fire off: the ally is not hit', ally_off)),
+        (8.3, run.at('friendly fire off: the ally is not hit and does not react', ally_off)),
         (8.3, run.at('friendly fire on: an Ally hit with the Ally variant (damage 3)', ally_on)),
         (8.3, run.at('different teams: an Enemy hit with the move\'s damage (6)', enemy)),
+        (8.3, run.at('friendly fire on: the ally loses 3, reacts from the frame of the hit, events say Ally', lambda: victim('on', st['F']['on'], st['F']['enemy'], 3.0, 'Combat.Relationship.Ally', 'enemy')())),
+        (8.3, run.at('different teams: the enemy loses 6, reacts from the frame of the hit, events say Enemy', lambda: victim('enemy', st['F']['enemy'], 10 ** 9, 6.0, 'Combat.Relationship.Enemy')())),
         (8.4, teams(-1, -1)),
         (8.4, friendly(False)),
-        (8.5, lambda: ('logging off', _hit_logging(False))),
-        (8.6, run.finish()),
+        (8.5, end),
+        (8.6, lambda: ('logging off', _hit_logging(False))),
+        (8.7, run.finish()),
     ]
     run.run(steps)
 
@@ -4230,20 +4635,34 @@ def scenario_hit_host(client=0):
       - the hit reaches the victim client's pawn inbox on the authority the frame after
       - the host's hitstop window (6 frames, starting on the hit) is the one the clients see on their copy of the host pawn
       - the clients' copies of the host pawn made no hit of their own (they interpolate it: nothing is predicted there)
-    Pending H9: the victim client's reaction (its expected reconcile), and how late the clients see it.
+    The victim half (M4 H9c): the victim client reacts as in hit_basic (window from the frame of the hit, damage), and then the host is the victim: client 1
+    hits the host, whose window opens on the frame of the hit, equal on both clients' copies of the host pawn, the damage on all three machines, one
+    HitReceived, and the host rolls back zero times (it is its own authority).
     Listen server only: a dedicated server has no pawn to play (the suite records a skip)."""
     if detected_mode() != 'listen':
         _last_run.update(name='hit_host', results=[(None, 'skipped: the host plays only in a listen server', '')], verdict='PASS 0 checks (skipped)')
         return
-    run = _Run('hit_host', client)
+    run = _Run('hit_host', client, judge_reconciles=False)
     hkey, vkey = run.key, key_of_player(1)
     attack = button_mask('Attack')
     st = {'F': {}}
 
+    ckey = key_of_player(1)
+    rec, h = [], {'h': None}
+
+    def sampler(_dt):
+        try:
+            rec.append((run.now(), victim_info(0, ckey), victim_info(1, ckey), victim_info(0, hkey), victim_info(1, hkey), victim_info(2, hkey)))
+        except Exception:
+            pass
+
     def setup():
+        hit_rules_setup()
         _hit_logging(True)
         st['kit'] = _apply_loadout(hkey, HIT_KIT)
-        return 'kit', st['kit']
+        st['kit1'] = _apply_loadout(ckey, HIT_KIT)
+        h['h'] = unreal.register_slate_post_tick_callback(sampler)
+        return 'kits', (st['kit'], st['kit1'])
 
     def place():
         _place_near(0, vkey, (205.0, 0.0))
@@ -4273,19 +4692,470 @@ def scenario_hit_host(client=0):
         logs = [(w, _hit_log(w, hkey)) for w in range(1, len(worlds()))]
         return all(not log for _, log in logs), f'clients\' hit logs of the host pawn: {logs}'
 
+    def victim_client():
+        hits = [r for r in _hit_log(0, hkey) if r[0] >= st['F']['p']]
+        if len(hits) != 1:
+            return False, f'hits {hits}'
+        fr = hits[0][0]
+        auth, own = _victim_windows(rec, 1, fr)
+        ok = len(auth) == 1 and auth[0][:2] == (fr, fr + 8) and auth[0][2] - auth[0][1] == 31 and own[:1] == [auth[0][:2]]
+        return ok and damage_of(0, ckey) - st['d1'][0] == 8 and damage_of(1, ckey) - st['d1'][1] == 8, f'hit {fr}, windows {auth} / {own}, damage change {damage_of(0, ckey) - st["d1"][0]} / {damage_of(1, ckey) - st["d1"][1]}'
+
+    def host_victim():
+        hits = [r for r in _hit_log(0, ckey) if r[0] >= st['F']['v']]
+        if len(hits) != 1:
+            return False, f'client hits on the host {hits}'
+        fr = hits[0][0]
+        auth, _ = _victim_windows(rec, 3, fr)
+        own = [(w[:2]) for w in windows_seen([(r[0], r[4], r[5]) for r in rec], 1) if w[0] >= fr]
+        c1 = [w[:2] for w in windows_seen([(r[0], r[4], r[4]) for r in rec], 2) if w[0] >= fr]
+        c2 = [w[:2] for w in windows_seen([(r[0], r[5], r[5]) for r in rec], 2) if w[0] >= fr]
+        win = (fr, fr + 8)
+        ok = len(auth) == 1 and auth[0][:2] == win and auth[0][2] - auth[0][1] == 31 and win in c1 and win in c2
+        return ok, f'hit {fr}, host window {auth}, seen by client 1 {c1}, by client 2 {c2}'
+
+    def host_damage():
+        d = [damage_of(w, hkey) - st['d0'][w] for w in range(len(worlds()))]
+        return d == [8, 8, 8], f'damage change of the host pawn on host / client 1 / client 2: {d}'
+
+    def host_events():
+        ev = [e for e in event_log(hkey) if e[0] == 'T' and e[1] == 'HitReceived' and e[2] >= st['F']['v']]
+        late = [(w, [e for e in event_log(hkey, w) if e[2] >= st['F']['v']]) for w in range(1, len(worlds()))]
+        return len(ev) == 1 and all(not rows for _, rows in late), f'host events {[(e[2], sorted(e[4])) for e in ev]}, clients\' {late}'
+
+    def end():
+        if h['h'] is not None:
+            unreal.unregister_slate_post_tick_callback(h['h'])
+            h['h'] = None
+        set_damage(hkey, 0)
+        set_damage(ckey, 0)
+        hit_rules_setup()
+        return 'restored'
+
     steps = [
         (0.3, setup),
         (1.5, place),
         (2.8, lambda: ('located', st.__setitem__('vloc', tuple(snap(worlds()[0])[vkey]['location'])))),
+        (2.85, lambda: ('damage baseline', st.__setitem__('d1', (damage_of(0, ckey), damage_of(1, ckey))))),
         (2.9, lambda: ('mark', st['F'].__setitem__('p', _latest_frame(0, hkey)))),
         (2.9, lambda: ('attack (Root)', combat_tap(0, attack))),
         (4.8, run.at('the kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
         (4.8, run.at('first touch frame, hurtbox and delivery to the victim inbox', check_hit)),
         (4.8, run.at('the host hitstop window is the one the clients see', windows)),
         (4.8, run.at('the clients made no hit on their copy of the host pawn', proxies_silent)),
-        (4.9, lambda: ('logging off', _hit_logging(False))),
-        (5.0, run.finish()),
+        (4.8, run.at('the victim client reacts: window from the frame of the hit, hitstun 31 frames after it, 8 damage on both copies', victim_client)),
+        (5.0, lambda: ('mark the damage and the rollbacks of the host', st.update(d0=[damage_of(w, hkey) for w in range(len(worlds()))], rb0=rollbacks(0)))),
+        (5.1, lambda: ('the host in front of client 1', _place_near(1, hkey, (205.0, 0.0)))),
+        (6.6, lambda: ('mark', st['F'].__setitem__('v', _latest_frame(0, ckey)))),
+        (6.65, lambda: ('client 1 attacks the host', combat_tap(1, attack))),
+        (9.2, run.at('the host as the victim: window from the frame of the hit, hitstun 31 frames after it, equal on both clients\' copies', host_victim)),
+        (9.2, run.at('the host as the victim: 8 damage on the host and on both clients', host_damage)),
+        (9.2, run.at('the host as the victim: one HitReceived, published by the host only', host_events)),
+        (9.2, run.at('the host rolled back zero times', lambda: (rollbacks(0) == st['rb0'], f'host rollbacks {st["rb0"]} -> {rollbacks(0)}'))),
+        (9.2, run.at('the client kit was accepted', lambda: (st.get('kit1') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit1")}'))),
+        (9.3, end),
+        (9.4, lambda: ('logging off', _hit_logging(False))),
+        (9.5, run.finish()),
     ]
+    run.run(steps)
+
+
+# ---- M4 H9c: the victim scenarios. One hit rig: the attacker (client `client`) lands the Root box of the test move on the other client, one "shot" per
+# hit, the knobs (rules, thresholds, hurtbox set, damage percent) set between shots. Judged on the sim ticks of the victim's authority copy and its
+# own client's copy (the _Run extra samples), the victim_info windows, the published events and the rollbacks of the victim's client.
+class _HitRig:
+    def __init__(self, name, client=1, judge_reconciles=False):
+        self.client = client
+        self.vi = 2 if client == 1 else 1
+        self.akey, self.vkey = key_of_player(client), key_of_player(self.vi)
+        self.run = _Run(name, client, judge_reconciles=judge_reconciles, extra=[('v_srv', 0, self.vkey), ('v_cli', self.vi, self.vkey)])
+        self.shots, self.vinfo, self.cursor, self.kit = {}, [], 0.3, None
+        self.handle = unreal.register_slate_post_tick_callback(self._tick)
+
+    def _tick(self, _dt):
+        try:
+            self.vinfo.append((self.run.now(), victim_info(0, self.vkey), victim_info(self.vi, self.vkey)))
+        except Exception:
+            pass
+
+    def setup_step(self):
+        def f():
+            hit_rules_setup()
+            _hit_logging(True)
+            self.kit = _apply_loadout(self.akey, HIT_KIT)
+            return 'kit', self.kit
+        return (self.cursor, f)
+
+    def end_steps(self, extra=None):
+        """Checks the kit, restores the rules and the damage, stops sampling. `extra` = more restore callables"""
+        def restore():
+            if self.handle is not None:
+                unreal.unregister_slate_post_tick_callback(self.handle)
+                self.handle = None
+            hit_rules_setup()
+            set_damage(self.vkey, 0)
+            for fn in extra or ():
+                fn()
+            _hit_logging(False)
+            return 'restored'
+        t = self.cursor + 0.2
+        return [(t, self.run.at('the kit was accepted', lambda: (self.kit == 'OK', f'ServerApplyTestLoadout -> {self.kit}'))), (t, restore), (t + 0.2, self.run.finish())]
+
+    def shot(self, name, prep=None, spot=(205.0, 0.0), wait=3.6, hold=None, release=None):
+        """Timeline steps of one hit; advances the cursor. prep() runs 1.7 s before the attack (rules / damage), the victim is placed 1.6 s before it.
+        hold() runs at the mark (the victim's stick), release() at the end"""
+        st = {'name': name}
+        self.shots[name] = st
+        t = self.cursor
+
+        def do_prep():
+            if prep:
+                prep()
+            return 'prep', name
+
+        def place():
+            _place_near(self.client, self.vkey, spot)
+            return 'placed', name
+
+        def mark():
+            st.update(F0=_latest_frame(0, self.akey), t0=self.run.now(), rb0=rollbacks(self.vi))
+            st['dmg0'] = (damage_of(0, self.vkey), damage_of(self.vi, self.vkey))
+            if hold:
+                hold()
+            return 'mark', st['F0']
+
+        def attack():
+            combat_tap(self.client, button_mask('Attack'))
+            return 'attack', name
+
+        def collect():
+            F0, t0, t1 = st['F0'], st['t0'], self.run.now()
+            st['hits'] = [r for r in _hit_log(0, self.akey) if r[0] >= F0]
+            ev = [e for e in event_log(self.vkey) if e[2] >= F0]
+            st['recv'] = [e for e in ev if e[0] == 'T' and e[1] == 'HitReceived']
+            st['kos'] = [e for e in ev if e[1] == 'KO']
+            st['srv'], st['cli'] = self.run._win('v_srv', t0, t1, sim=True), self.run._win('v_cli', t0, t1, sim=True)
+            st['vinfo'] = [r for r in self.vinfo if r[0] >= t0]
+            st['rb'] = rollbacks(self.vi) - st['rb0']
+            st['dmg'] = (damage_of(0, self.vkey) - st['dmg0'][0], damage_of(self.vi, self.vkey) - st['dmg0'][1])
+            if release:
+                release()
+            return 'collected', name, len(st['srv'])
+
+        self.cursor = t + 1.75 + wait + 0.1
+        return [(t, do_prep), (t + 0.1, place), (t + 1.7, mark), (t + 1.75, attack), (t + 1.75 + wait, collect)]
+
+    # -- readers of a collected shot
+    @staticmethod
+    def tags(samples):
+        return set().union(*[s['tags'] for s in samples] or [set()])
+
+    def hit_tags(self, name):
+        r = self.shots[name]['recv']
+        return r[0][4] if r else set()
+
+    def displacement(self, name, side='srv'):
+        s = self.shots[name][side]
+        if not s:
+            return 1e9
+        p0 = s[0]['loc']
+        return max(math.dist(p0[:2], x['loc'][:2]) for x in s)
+
+    def modes(self, name, side='srv'):
+        return {s['mode'] for s in self.shots[name][side]}
+
+    def one_hit(self, name):
+        s = self.shots[name]
+        ok = len(s['hits']) == 1 and len(s['recv']) == 1
+        return ok, f"hits {s['hits']}, HitReceived {[(e[2], sorted(e[4])) for e in s['recv']]}"
+
+    def window(self, name, hitstop=8):
+        """(ok, detail): one victim window that starts on the hit frame and is `hitstop` frames long, equal on the owner"""
+        s = self.shots[name]
+        if len(s['hits']) != 1:
+            return False, f"hits {s['hits']}"
+        fr = s['hits'][0][0]
+        auth = [w for w in windows_seen(s['vinfo'], 1) if w[0] >= fr]
+        own = [w[:2] for w in windows_seen(s['vinfo'], 2) if w[0] >= fr]
+        pairs = []
+        for w in own:
+            if not pairs or pairs[-1] != w:
+                pairs.append(w)
+        return [w[:2] for w in auth] == [(fr, fr + hitstop)] and pairs == [(fr, fr + hitstop)], f'hit frame {fr}, authority {auth}, owner {own}'
+
+    def at_most_one_rollback(self, names):
+        """The typical hit costs the victim's client at most one rollback: the median over the shots. A single shot may count more under packet loss
+        (an idle pawn rolls back about once per 30 s at 60/15/2 %, so the 3.6 s window of a shot catches one now and then); hit_basic judges every
+        hit strictly, and a systematic double rollback would show here as a median of 2"""
+        counts = sorted(self.shots[n]['rb'] for n in names)
+        return counts[len(counts) // 2] <= 1, f"rollbacks of the victim's client per hit {[(n, self.shots[n]['rb']) for n in names]} (median {counts[len(counts) // 2]})"
+
+
+def scenario_stagger_threshold(client=1):
+    """M4 H9c, the stagger test (force against the hurtbox set's threshold; the standard stagger force is the damage x 1, so 8 for a Root hit).
+    A threshold of 9: a flinch only (hitstop window, damage, no hitstun, no displacement), the move would resume. Exactly 8: staggered (>=): hitstun
+    31 frames after the window. Infinite (super armor): a flinch. Judged on the authority and the owner, one rollback per hit at most."""
+    rig = _HitRig('stagger_threshold', client)
+    run, vkey = rig.run, rig.vkey
+    steps = [rig.setup_step()]
+    steps += rig.shot('below', prep=lambda: set_hurtbox(stagger=9.0, infinite=False))
+    steps += rig.shot('equal', prep=lambda: set_hurtbox(stagger=8.0, infinite=False))
+    steps += rig.shot('infinite', prep=lambda: set_hurtbox(stagger=8.0, infinite=True))
+    S = rig.shots
+
+    def flinch(name):
+        def f():
+            ok1, d1 = rig.one_hit(name)
+            tags = {side: rig.tags(S[name][side]) for side in ('srv', 'cli')}
+            actions = {r[1][1] for r in S[name]['vinfo']} | {r[2][1] for r in S[name]['vinfo']}
+            ok = (ok1 and 'Combat.Event.Hit.Staggered' not in rig.hit_tags(name) and all('Combat.State.Hitstop' in t and 'Combat.State.Hitstun' not in t and 'Combat.Lock.Reaction' not in t for t in tags.values())
+                  and not actions & {2, 3, 4} and S[name]['dmg'] == (8.0, 8.0) and rig.displacement(name) < 5.0)
+            return ok, f"{d1}; tags srv {sorted(t for t in tags['srv'] if 'Combat' in t)}, owner {sorted(t for t in tags['cli'] if 'Combat' in t)}, actions {sorted(actions)}, damage {S[name]['dmg']}, moved {rig.displacement(name):.1f} cm"
+        return f
+
+    def staggered():
+        ok1, d1 = rig.one_hit('equal')
+        hits = S['equal']['hits']
+        fr = hits[0][0] if hits else -1
+        wins = {side: [w for w in windows_seen(S['equal']['vinfo'], side) if w[0] >= fr] for side in (1, 2)}
+        tags = {side: rig.tags(S['equal'][side]) for side in ('srv', 'cli')}
+        ok = (ok1 and 'Combat.Event.Hit.Staggered' in rig.hit_tags('equal') and wins[1] == [(fr, fr + 8, fr + 8 + 31)] and [w[:2] for w in wins[2]][0] == (fr, fr + 8)
+              and all('Combat.State.Hitstun' in t for t in tags.values()) and S['equal']['dmg'] == (8.0, 8.0))
+        return ok, f'{d1}; windows authority {wins[1]}, owner {wins[2]}'
+
+    t = rig.cursor + 0.1
+    steps += [
+        (t, run.at('threshold 9 (force 8): a flinch only: window, damage, no hitstun, no displacement', flinch('below'))),
+        (t, run.at('threshold 8 (force 8): staggered, hitstun 31 frames after the window, the same on the owner', staggered)),
+        (t, run.at('infinite threshold: a flinch only', flinch('infinite'))),
+        (t, run.at('the flinch window is 8 frames from the frame of the hit, equal on the owner', lambda: (rig.window('below')[0] and rig.window('infinite')[0], f"{rig.window('below')[1]} / {rig.window('infinite')[1]}"))),
+        (t, run.at('at most one rollback per hit on the victim\'s client', lambda: rig.at_most_one_rollback(('below', 'equal', 'infinite')))),
+    ]
+    rig.cursor = t
+    steps += rig.end_steps()
+    run.run(steps)
+
+
+def scenario_reaction_tiers(client=1):
+    """M4 H9c, the reaction tiers. The tier is the knockback K against the thresholds, capped by the hurtbox set's MaxReaction; the harness moves the
+    thresholds (K itself is a few hundred cm/s for a Root hit on a fresh victim) so each tier is hit with the same blow:
+      - StaggerInPlace: no displacement, stays walking
+      - PushBack: slides on the ground, never leaves Walking, no tumble
+      - Launch: leaves the ground (Falling), no tumble below the tumble threshold
+      - Tumble: Launch above the tumble threshold, Combat.State.Tumble projected, the event says Tumble
+      - MaxReaction caps a launch to a push back and a push back to a stagger
+    One rollback per hit at most on the victim's client."""
+    rig = _HitRig('reaction_tiers', client)
+    run = rig.run
+    far = 1.0e6
+    R = unreal.GSTN_HitReaction
+
+    def tiers(push, launch, tumble=far, cap=None):
+        def f():
+            set_tuning(push_back_threshold=push, launch_threshold=launch, tumble_threshold=tumble)
+            set_hurtbox(max_reaction=cap or R.LAUNCH)
+        return f
+    steps = [rig.setup_step()]
+    steps += rig.shot('stagger', prep=tiers(far, far))
+    steps += rig.shot('pushback', prep=tiers(0.0, far))
+    steps += rig.shot('launch', prep=tiers(0.0, 0.0))
+    steps += rig.shot('tumble', prep=tiers(0.0, 0.0, 0.0))
+    steps += rig.shot('cap_push', prep=tiers(0.0, 0.0, 0.0, R.PUSH_BACK))
+    steps += rig.shot('cap_stagger', prep=tiers(0.0, 0.0, 0.0, R.STAGGER_IN_PLACE))
+    S = rig.shots
+    TAG = 'Combat.Event.Hit.Reaction.'
+
+    def tier(name, tag, walking_only, moves, tumble=False, state_tumble=False):
+        def f():
+            ok1, d1 = rig.one_hit(name)
+            tg = rig.hit_tags(name)
+            others = {TAG + 'StaggerInPlace', TAG + 'PushBack', TAG + 'Launch'} - {TAG + tag}
+            seen = {side: rig.tags(S[name][side]) for side in ('srv', 'cli')}
+            moved = {side: rig.displacement(name, side) for side in ('srv', 'cli')}
+            modes = {side: rig.modes(name, side) for side in ('srv', 'cli')}
+            ok = (ok1 and TAG + tag in tg and not tg & others and ('Combat.Event.Hit.Tumble' in tg) == tumble
+                  and all(('Combat.State.Tumble' in t) == state_tumble for t in seen.values())
+                  and all((m > 25.0) == moves for m in moved.values())
+                  and all((modes[s] <= {'Walking'}) == walking_only for s in modes))
+            return ok, f'{d1}; moved {moved}, modes {modes}, tumble state {[("Combat.State.Tumble" in t) for t in seen.values()]}'
+        return f
+    t = rig.cursor + 0.1
+    steps += [
+        (t, run.at('StaggerInPlace: no displacement, still walking', tier('stagger', 'StaggerInPlace', True, False))),
+        (t, run.at('PushBack: slides on the ground (> 25 cm), never airborne', tier('pushback', 'PushBack', True, True))),
+        (t, run.at('Launch: leaves the ground, no tumble', tier('launch', 'Launch', False, True))),
+        (t, run.at('Tumble: Launch above the tumble threshold, state and event', tier('tumble', 'Launch', False, True, tumble=True, state_tumble=True))),
+        (t, run.at('MaxReaction PushBack caps a launch: slides, stays on the ground', tier('cap_push', 'PushBack', True, True, tumble=False))),
+        (t, run.at('MaxReaction StaggerInPlace caps a push back: no displacement', tier('cap_stagger', 'StaggerInPlace', True, False))),
+        (t, run.at('at most one rollback per hit on the victim\'s client', lambda: rig.at_most_one_rollback(tuple(S)))),
+    ]
+    rig.cursor = t
+    steps += rig.end_steps()
+    run.run(steps)
+
+
+def _yaw_elev(v):
+    """(yaw degrees of the horizontal part, elevation degrees) of a velocity"""
+    h = math.hypot(v[0], v[1])
+    return math.degrees(math.atan2(v[1], v[0])), math.degrees(math.atan2(v[2], h))
+
+
+def _launch_velocity(samples):
+    """Velocity of the first sim tick of a launch (the first Falling tick of the victim with a real horizontal speed)"""
+    for s in samples:
+        if s['mode'] == 'Falling' and math.hypot(s['vel'][0], s['vel'][1]) > 100.0:
+            return s['vel']
+    return None
+
+
+def scenario_di(client=1):
+    """M4 H9c, directional influence: the stick the victim holds when the hitstop ends bends the launch (at most 15 degrees of yaw across it; along it
+    the elevation moves, in and out opposite ways). Same blow every time (Launch forced through the thresholds), the victim locked in place (it cannot walk, the stick feeds DI only), the stick held from the attack on:
+    neutral, left, right (across the launch), toward the attacker, away. Judged on the victim's authority copy at the first airborne tick; the owner's
+    copy must show the same launch (within a degree). Tilted gravity (Up not Z) is not driven by this scenario: the Core tests cover ApplyDI with a
+    rotated frame (GSTNCombat.Core.Impact.*), the harness has no per-victim gravity yet."""
+    rig = _HitRig('di', client)
+    run, S = rig.run, rig.shots
+    far = 1.0e6
+
+    def prep():
+        # The victim cannot walk (movement lock effect, the stats modifier zeroes the speed) but its stick reaches the combat tick: it stays in the blow
+        set_tuning(push_back_threshold=0.0, launch_threshold=0.0, tumble_threshold=far)
+        comps(worlds()[0])[rig.vkey].server_set_movement_lock(True)
+
+    def unlock():
+        comps(worlds()[0])[rig.vkey].server_set_movement_lock(False)
+
+    def stick(kind):
+        def f():
+            v = snap(worlds()[0])
+            a, p = v[rig.akey]['location'], v[rig.vkey]['location']
+            n = max(math.hypot(p[0] - a[0], p[1] - a[1]), 1e-3)
+            d = ((p[0] - a[0]) / n, (p[1] - a[1]) / n)
+            left = (-d[1], d[0])
+            tgt = {'left': (p[0] + 300 * left[0], p[1] + 300 * left[1]), 'right': (p[0] - 300 * left[0], p[1] - 300 * left[1]),
+                   'in': (p[0] - 300 * d[0], p[1] - 300 * d[1]), 'out': (p[0] + 300 * d[0], p[1] + 300 * d[1])}[kind]
+            hold(rig.vi, 'move', _steer_value(rig.vi, tgt))
+        return f
+
+    def let_go():
+        release(rig.vi, 'move')
+
+    steps = [rig.setup_step()]
+    steps += rig.shot('neutral', prep=prep)
+    for kind in ('left', 'right', 'in', 'out'):
+        steps += rig.shot(kind, prep=prep, hold=stick(kind), release=let_go)
+
+    def launch(name, side='srv'):
+        v = _launch_velocity(S[name][side])
+        return _yaw_elev(v) if v else None
+
+    def across():
+        n, l, r = launch('neutral'), launch('left'), launch('right')
+        if not (n and l and r) or any(len(S[k]['hits']) != 1 for k in ('neutral', 'left', 'right')):
+            return False, f'launches neutral {n}, left {l}, right {r}, hits {[len(S[k]["hits"]) for k in ("neutral", "left", "right")]}'
+        dl, dr = (l[0] - n[0] + 180) % 360 - 180, (r[0] - n[0] + 180) % 360 - 180
+        return dl * dr < 0 and 10.0 <= abs(dl) <= 25.0 and 10.0 <= abs(dr) <= 25.0, f'yaw change left {dl:.1f}, right {dr:.1f} degrees (neutral {n[0]:.1f}, elevations {n[1]:.1f} / {l[1]:.1f} / {r[1]:.1f})'
+
+    def along():
+        n, i, o = launch('neutral'), launch('in'), launch('out')
+        if not (n and i and o) or any(len(S[k]['hits']) != 1 for k in ('in', 'out')):
+            return False, f'launches neutral {n}, in {i}, out {o}'
+        di, do = i[1] - n[1], o[1] - n[1]
+        return di * do < 0 and abs(di) > 2.0 and abs(do) > 2.0 and abs((i[0] - n[0] + 180) % 360 - 180) < 6.0, f'elevation change in {di:.1f}, out {do:.1f} degrees (neutral {n[1]:.1f}), yaw change in {i[0] - n[0]:.1f}'
+
+    def owner_launched():
+        out = [(n, launch(n, 'cli') is not None) for n in S]
+        return all(ok for _, ok in out), f'the owner copy was airborne after each blow: {out} (its first airborne tick is predicted and re-simulated, so the launch is judged on the authority)'
+
+    t = rig.cursor + 0.1
+    steps += [
+        (t, run.at('each blow launched the victim (Falling, one hit)', lambda: (all(launch(n) is not None and len(S[n]['hits']) == 1 for n in S), f'{[(n, launch(n) is not None, len(S[n]["hits"])) for n in S]}'))),
+        (t, run.at('stick across the launch: yaw bent to opposite sides by 10 to 25 degrees (the rules limit is 15)', across)),
+        (t, run.at('stick along the launch: the elevation moves, in and out opposite ways, yaw kept', along)),
+        (t, run.at('the owner copy was airborne after each blow', owner_launched)),
+        (t, run.at('at most one rollback per hit on the victim\'s client', lambda: rig.at_most_one_rollback(tuple(S)))),
+    ]
+    rig.cursor = t
+    steps += rig.end_steps(extra=[let_go, unlock])
+    run.run(steps)
+
+
+def scenario_ko_zone(client=1):
+    """M4 H9c, knock-outs. A control hit that stays under the damage cap: no KO. A KO zone spawned on every machine (SpawnZone) with the victim
+    teleported into it: one Combat.Event.KO with KOReason.Zone published by the host (none on the clients), the victim in the KO state on the authority
+    and on its own client. After the respawn (reset) the state is Actionable again. The health cap: a hit that takes the damage past the rules' max health
+    knocks out with KOReason.Health, the attacker being the instigator. Zones are removed at the end."""
+    rig = _HitRig('ko_zone', client)
+    run, S = rig.run, rig.shots
+    KO = 5
+    st = {}
+
+    def lane_pos():
+        lane = lane_keys().index(rig.vkey)
+        c = comps(worlds()[0])[rig.vkey]
+        sp, off = c.get_spawn_location(), lane_offset(lane)
+        return off, (sp.x + off.x, sp.y + off.y, sp.z + off.z)
+
+    def spawn_zone():
+        off, p = lane_pos()
+        centre = unreal.Vector(p[0] + 600.0, p[1], p[2])
+        for w in worlds():
+            unreal.GSTN_KOZone.spawn_zone(w, centre, unreal.Vector(150.0, 150.0, 400.0))
+        st['zone_f'] = _latest_frame(0, rig.akey)
+        comps(worlds()[0])[rig.vkey].server_reset_to_spawn(unreal.Vector(off.x + 600.0, off.y, off.z))
+        return 'zone at', (centre.x, centre.y)
+
+    def clear_zones():
+        for w in worlds():
+            unreal.GSTN_KOZone.destroy_all_zones(w)
+        return 'zones removed'
+
+    def respawn():
+        off, _ = lane_pos()
+        comps(worlds()[0])[rig.vkey].server_reset_test_state(off)
+        set_damage(rig.vkey, 0)
+        return 'respawned'
+
+    def kos(wi, key, since):
+        return [e for e in event_log(key, wi) if e[1] == 'KO' and e[2] >= since]
+
+    def zone_ko():
+        ev = kos(0, rig.vkey, st['zone_f'])
+        clients = [(w, kos(w, rig.vkey, st['zone_f'])) for w in range(1, len(worlds()))]
+        acts = (victim_info(0, rig.vkey)[1], victim_info(rig.vi, rig.vkey)[1])
+        ok = len(ev) == 1 and 'Combat.KOReason.Zone' in ev[0][4] and all(not c for _, c in clients) and acts == (KO, KO)
+        return ok, f'host events {ev}, clients {clients}, action state (authority, owner) {acts}'
+
+    def alive_again():
+        acts = (victim_info(0, rig.vkey)[1], victim_info(rig.vi, rig.vkey)[1])
+        return acts == (0, 0), f'action state (authority, owner) {acts}'
+
+    def no_ko_control():
+        s = S['control']
+        return len(s['hits']) == 1 and not s['kos'] and victim_info(0, rig.vkey)[1] != KO, f"hits {s['hits']}, KO events {s['kos']}, damage {s['dmg']}"
+
+    def health_ko():
+        s = S['cap']
+        att = [e for e in event_log(rig.akey) if e[1] == 'KO' and e[2] >= s['F0']]
+        ok = (len(s['hits']) == 1 and len(s['kos']) == 1 and 'Combat.KOReason.Health' in s['kos'][0][4] and len(att) == 1 and att[0][0] == 'I'
+              and victim_info(0, rig.vkey)[1] == KO and victim_info(rig.vi, rig.vkey)[1] == KO and not kos(1, rig.vkey, s['F0']) and not kos(2, rig.vkey, s['F0']))
+        return ok, f"hits {s['hits']}, victim's KO events {s['kos']}, attacker's {att}, states ({victim_info(0, rig.vkey)[1]}, {victim_info(rig.vi, rig.vkey)[1]}), damage {s['dmg']}"
+
+    steps = [rig.setup_step()]
+    steps += rig.shot('control', prep=lambda: (hit_rules().set_editor_property('damage_mode', unreal.GSTN_DamageMode.PERCENT_CAPPED), set_damage(rig.vkey, 60)))
+    t = rig.cursor
+    steps += [(t, run.at('a hit that stays under the cap does not knock out', no_ko_control)), (t, respawn)]
+    t += 1.0
+    steps += [(t, spawn_zone), (t + 2.0, run.at('zone: one KO with KOReason.Zone on the host, none on the clients, KO state on both copies', zone_ko)),
+              (t + 2.1, clear_zones), (t + 2.2, respawn), (t + 4.5, run.at('after the respawn the victim is Actionable again on both copies', alive_again))]
+    rig.cursor = t + 4.6
+    steps += rig.shot('cap', prep=lambda: (hit_rules().set_editor_property('damage_mode', unreal.GSTN_DamageMode.PERCENT_CAPPED), set_damage(rig.vkey, 95)))
+    t = rig.cursor
+    steps += [(t, run.at('health cap: one KO with KOReason.Health, the attacker is its instigator, host only, KO state on both copies', health_ko)),
+              (t, run.at('at most one rollback per hit on the victim\'s client', lambda: rig.at_most_one_rollback(('control', 'cap'))))]
+    rig.cursor = t
+    steps += rig.end_steps(extra=[clear_zones, respawn])
     run.run(steps)
 
 
@@ -4346,9 +5216,12 @@ def lanes_settled(targets):
 
 SUITE_DEFAULT = ['weapon_switch', 'combat_context', 'combat_main_inputs', 'combat_spike', 'combat_lock', 'camera_aim', 'timeline_cancel',
                  'triggered_timeline', 'combat_activation', 'variable_jump', 'air_jump_fastfall', 'tilted_gravity_jump', 'external_launch_jump',
-                 'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'dodge_blocked_in_hitstun', 'kit_without_dodge', 'interact_tap_hold',
-                 'hitstop', 'jump_squat', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'spike_stats', 'spike_grants', 'slide_jump', 'loadout_change', 'hit_on_wall', 'hitstop_montage',
-                 'hit_basic', 'hit_trade', 'friendly_fire', 'hit_host']
+                 'dash', 'dash_tilted_gravity', 'ground_dodge', 'air_dodge', 'kit_without_dodge', 'interact_tap_hold',
+                 'hitstop', 'jump_squat', 'command_set', 'ex_meter', 'super_code', 'wait_frames', 'spike_stats', 'spike_grants', 'slide_jump',
+                 # the hit scenarios: the attacker carries KIT_Test_Hits from here on; the victim (client 2) stays kit-free until hit_trade, so the real dodge in
+                 # hitstun (a pawn with no loadout) runs before it
+                 'hit_basic', 'stagger_threshold', 'reaction_tiers', 'di', 'ko_zone', 'dodge_blocked_in_hitstun', 'hit_trade', 'friendly_fire', 'hit_host',
+                 'loadout_change', 'hit_on_wall', 'hit_on_wall_hit', 'hitstop_montage']
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 

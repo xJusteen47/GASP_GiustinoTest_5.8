@@ -576,6 +576,24 @@ bool UGSTN_GASNPPTestComponent::ServerSetHitstun(bool bApply)
 	return !bApply || HitstunEffectHandle.IsValid();
 }
 
+bool UGSTN_GASNPPTestComponent::ServerSetMovementLock(bool bApply)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+	if (MovementLockEffectHandle.IsValid())
+	{
+		AbilitySystem->RemoveActiveGameplayEffect(MovementLockEffectHandle);
+		MovementLockEffectHandle = FActiveGameplayEffectHandle();
+	}
+	if (bApply)
+	{
+		MovementLockEffectHandle = AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGSTN_GE_TestMovementLock>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
+	return !bApply || MovementLockEffectHandle.IsValid();
+}
+
 bool UGSTN_GASNPPTestComponent::ServerSetEscapeKit(bool bApply)
 {
 	if (!AbilitySystem || !GetOwner()->HasAuthority())
@@ -713,6 +731,7 @@ bool UGSTN_GASNPPTestComponent::ServerResetTestState(FVector Offset)
 	ServerSetBulkEffect(false);
 	ServerSetStatsPreset(0);
 	ServerSetHitstun(false);
+	ServerSetMovementLock(false);
 	ServerSetEscapeKit(false);
 	ServerEquipPrimaryWeapon(false);
 	bStatsProbeEnabled = false;

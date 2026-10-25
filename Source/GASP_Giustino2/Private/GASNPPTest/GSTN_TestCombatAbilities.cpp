@@ -4,6 +4,7 @@
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "Attributes/GSTN_MeterAttributeSet.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
+#include "GSTN_CombatTags.h"
 #include "GSTN_CombatCoreTags.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
@@ -308,6 +309,16 @@ UGSTN_GE_TestHitstun::UGSTN_GE_TestHitstun()
 	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
 	FInheritedTagContainer Tags;
 	Tags.Added.AddTag(GSTNCombatTags::State_Hitstun);
+	TargetTags->SetAndApplyTargetTagChanges(Tags);
+	GEComponents.Add(TargetTags);
+}
+
+UGSTN_GE_TestMovementLock::UGSTN_GE_TestMovementLock()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	UTargetTagsGameplayEffectComponent* TargetTags = CreateDefaultSubobject<UTargetTagsGameplayEffectComponent>(TEXT("TargetTags"));
+	FInheritedTagContainer Tags;
+	Tags.Added.AddTag(GSTNCombatTags::Lock_Movement);
 	TargetTags->SetAndApplyTargetTagChanges(Tags);
 	GEComponents.Add(TargetTags);
 }

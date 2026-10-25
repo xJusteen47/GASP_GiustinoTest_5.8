@@ -145,6 +145,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerSetHitstun(bool bApply);
 
+	/** Applies (true) or removes (false) an infinite effect granting Combat.Lock.Movement: the locomotion speed is zero but the stick still reaches the combat tick (DI). Authority only */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
+	bool ServerSetMovementLock(bool bApply);
+
 	/** Applies (true) or removes (false) an infinite effect granting Test.State.Escape: the pawn then uses the escape dodge, which is not blocked in hitstun. Authority only */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	bool ServerSetEscapeKit(bool bApply);
@@ -325,6 +329,7 @@ private:
 	FActiveGameplayEffectHandle BulkEffectHandle;
 	FActiveGameplayEffectHandle StatsEffectHandle;
 	FActiveGameplayEffectHandle HitstunEffectHandle;
+	FActiveGameplayEffectHandle MovementLockEffectHandle;
 	FActiveGameplayEffectHandle EscapeEffectHandle;
 
 	// Stats probe: the values captured before the first rewrite, and what was written last
