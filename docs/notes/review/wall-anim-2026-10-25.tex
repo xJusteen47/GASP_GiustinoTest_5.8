@@ -1,0 +1,193 @@
+% Revisione: stati di animazione della wall slide e layer d'animazione disaccoppiati, 25 ottobre 2026.
+% Compilare con: pdflatex wall-anim-2026-10-25.tex (due volte, per l'indice)
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,columns=fullflexible,
+  keywordstyle=\bfseries,commentstyle=\itshape\color{gray},
+  literate={à}{{\`a}}1 {è}{{\`e}}1 {é}{{\'e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{\`u}}1}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+\title{Animare la wall slide\\\large Stati di animazione e layer disaccoppiati dall'ABP}
+\author{Ramo \code{claude/project-thread-2vuw3f} (da \code{claude/project-thread-v1plhd})}
+\date{25 ottobre 2026}
+
+\begin{document}
+\sloppy
+\maketitle
+\tableofcontents
+
+\section{Cosa c'è in questo documento}
+La wall slide v2 (\code{WallSlidingV2}, \code{WallClimbingV2}) ora espone all'animazione tutto ciò che serve per più stati:
+entrata, uscita, scivolata da fermo, verso sinistra, verso destra e skid sopra una certa velocità. In più c'è il primo pezzo
+dello schema generale che hai chiesto: le funzionalità portano le loro animazioni in \emph{layer} separati, scelti da dati,
+e l'ABP principale non le nomina mai, e il plugin \code{GSTNAnimation} che sceglie le varianti per skin con regole a tag
+(la tua scelta, sezione~\ref{sec:domande}), con hitbox identiche.
+
+La parte A è stata compilata sul fisso (905/905 test verdi). Il plugin (parte B) è scritto nel cloud e \textbf{va ancora compilato}
+(sezione~\ref{sec:controlli}).
+Le modifiche all'ABP non sono fatte: l'ABP è un Blueprint condiviso e l'editor del fisso è in uso dall'altro thread.
+
+\section{Stati della wall slide}
+\subsection{Ragionamento}
+L'animazione non fa parte della simulazione: si ricava a ogni frame, sul game thread, dallo stato di presentazione di Mover
+(lo stato sincronizzato già smussato sui proxy). Per questo può tenere i suoi timer (durata dell'entrata e dell'uscita) senza
+toccare predizione e rollback, e le modalità di movimento non sanno nulla dell'animazione.
+
+``Sul muro'' significa: la modalità attiva è della classe \code{UGSTN_WallTraverseModeBase} (slide e climb v2). Così il passaggio
+slide $\leftrightarrow$ climb sul posto non è un'uscita seguita da un'entrata. Le modalità legacy sono ignorate, come hai chiesto,
+ma basta cambiare la classe nelle impostazioni per includerle.
+
+La velocità viene scomposta sul piano del muro: \emph{laterale} (positiva verso la destra del personaggio, che guarda il muro),
+\emph{verticale} (lungo la gravità proiettata sul muro, positiva in su; funziona con qualsiasi direzione della gravità) e
+\emph{velocità sul piano}. Lo skid è una regola di velocità perché il freno non è nello stato sincronizzato: un'entrata veloce
+frena e passa attraverso lo skid in modo naturale. Ogni soglia ha un'isteresi, così lo stato non sfarfalla al confine.
+
+\subsection{Pseudocodice}
+\begin{lstlisting}
+ogni frame (game thread, prima del grafo):
+  ingressi = modalità attiva, velocità, normale filtrata del muro, gravità
+  fase:
+    None/Exit e sul muro       -> Enter (o Active se EnterDuration = 0)
+    Enter da EnterDuration     -> Active
+    Enter/Active e non sul muro -> Exit (salva la modalità che subentra)
+    Exit da ExitDuration       -> None
+  se sul muro:
+    (laterale, verticale, velocità) = scomponi(velocità, normale, gravità)
+    se non climb e velocità >= (skid prima ? 650 : 750)      -> Skid
+    altrimenti se |laterale| >= (stesso lato prima ? 80 : 120) -> SlideLeft / SlideRight
+    altrimenti                                               -> Idle
+  fuori dal muro: stato e velocità restano gli ultimi (l'uscita può sceglierne la variante)
+\end{lstlisting}
+
+\subsection{Classi e strumenti Unreal}
+\begin{itemize}[leftmargin=*]
+\item \code{FGSTN_WallAnimSettings}, \code{FGSTN_WallAnimState}, \code{FGSTN_WallAnimInputs}, enum \code{EGSTN_WallAnimPhase}
+  e \code{EGSTN_WallSlideAnimState} (\code{WallMovement/Animation/GSTN_WallAnimTypes.h}).
+\item \code{UGSTN_WallAnimUtils} (\code{UBlueprintFunctionLibrary}, senza stato): \code{SplitWallVelocity}, \code{ClassifySlide},
+  \code{StepWallAnimState}, \code{GatherInputs} (legge \code{UMoverComponent::GetMovementMode}, \code{GetVelocity},
+  \code{GetUpDirection} e \code{FGSTN_WallMovementSyncState::WallNormal}).
+\item \code{UGSTN_WallAnimInstance} (\code{UAnimInstance}): genitore C++ del layer della wall slide. In
+  \code{NativeUpdateAnimation} aggiorna \code{WallAnim}; il grafo lo legge con \emph{Property Access} (thread safe).
+\item Test \code{GSTN.Wall.Anim.*}: scomposizione con gravità diverse, classificazione con isteresi, passi di fase
+  (entrata, slide$\to$climb senza uscita, ripresa durante l'uscita, durate a zero).
+\end{itemize}
+
+\subsection{Il grafo del layer (con animazioni segnaposto)}
+\begin{lstlisting}
+ABP_GSTN_WallLayer (genitore GSTN_WallAnimInstance, implementa ALI_GSTN_Wall), layer WallLayer:
+  Enter --(Phase == Active)--> Loop
+  Loop = macchina interna su SlideState: Idle / SlideLeft / SlideRight / Skid
+         (sequenze o blend space su LateralAlpha, VerticalAlpha)
+  Loop o Enter --(Phase == Exit)--> Exit
+  Exit --(Phase == Enter)--> Enter   (ripresa del muro durante l'uscita)
+\end{lstlisting}
+
+\section{Animazioni per funzionalità, disaccoppiate dall'ABP}\label{sec:layer}
+\subsection{Ragionamento}
+Hai chiesto che wall slide, spin, trapano e simili portino le proprie animazioni senza legarle all'ABP, e che una skin (o
+qualche sua caratteristica) possa cambiarle lasciando identica la hitbox. È lo schema di Lyra: ogni funzionalità ha un
+\emph{linked anim layer} (un anim Blueprint a parte, con la sua interfaccia), collegato con \code{LinkAnimClassLayers};
+una variante è un anim Blueprint figlio. In più la scelta avviene per tag, per priorità tra le sorgenti.
+
+\subsection{Parte A (fatta)}
+\begin{itemize}[leftmargin=*]
+\item \code{IGSTN_OverrideLayerSource}: un layer dice se vuole prendere la posa (\code{IsOverrideLayerActive}), con quale
+  tempo di blend e con che priorità.
+\item \code{UGSTN_CharacterAnimInstance}: genitore C++ dell'ABP principale. Non conosce nessuna funzionalità: a ogni frame chiede
+  ai layer collegati (\code{GetLinkedAnimInstances}) chi è attivo ed espone \code{bOverrideLayerActive} e
+  \code{OverrideBlendTime}. I layer collegati si aggiornano prima dell'istanza principale, quindi la risposta è del frame corrente.
+\item Nell'ABP principale servono solo: il reparent, un \emph{Blend Poses by bool} e un nodo \emph{Linked Anim Layer} per ogni
+  interfaccia di layer. Nessuna modifica per ogni nuova variante.
+\end{itemize}
+
+\subsection{Parte B (fatta): il plugin GSTNAnimation}
+\begin{lstlisting}
+plugin GSTNAnimation, modulo GSTNAnimationCore (puro: Engine, GameplayTags)
+UGSTN_AnimSetDefinition (data asset): SetTag (Anim.Set.Wall/Spin/Drill), LayerClass,
+                                      MontageOverrides { Reference, Visual }
+FGSTN_AnimSetRule: Set, When (query sui tag cosmetici: SkinTags + Anim.Trait.*), Priority
+UGSTN_AnimSetCollection: Rules           (su personaggio, kit, arma, skin)
+UGSTN_AnimSetComponent (solo presentazione):
+  a ogni cambio di sorgente o di tag (mai a ogni frame):
+    per ogni SetTag: vincitore = max(priorità sorgente, priorità regola) tra le regole che combaciano
+    carica in asincrono, LinkAnimClassLayers(LayerClass), mappa Reference -> Visual
+  ResolveVisualMontage(Reference)
+\end{lstlisting}
+
+\subsection{La hitbox non cambia: le regole}
+\begin{enumerate}[leftmargin=*]
+\item La simulazione (timeline, finestre di hit e hurtbox, \code{BakedSocket}, mosse in coda di Mover) legge solo il montage
+  \emph{di riferimento} e non dipende dal componente degli anim set.
+\item I socket si fanno bake solo dal montage di riferimento; una variante visiva non si fa mai bake.
+\item Un validatore dell'editor richiede che ogni variante abbia le stesse sezioni, le stesse durate (entro un frame), lo stesso
+  play rate e nessun root motion diverso.
+\item Le hurtbox seguono l'\code{HurtboxSet} del kit, non la skin.
+\end{enumerate}
+
+\section{Le tue scelte e gli esempi}\label{sec:domande}
+Hai scelto le \textbf{regole a tag}: le skin restano invariate e le loro caratteristiche sono tag. Con la scelta vanno il plugin a
+parte e la regola delle stesse sezioni e durate. I tuoi esempi, maschile/femminile e pesante/esile, sono i tratti d'esempio del plugin
+(\code{Config/Tags/GSTNAnimation.ini}): \code{Anim.Trait.Body.Male}, \code{Anim.Trait.Body.Female}, \code{Anim.Trait.Build.Heavy},
+\code{Anim.Trait.Build.Slim}. Le regole si combinano:
+\begin{lstlisting}
+collezione della skin:
+  Anim.Set.Wall -> DA_AnimSet_Wall_Heavy        quando Heavy
+  Anim.Set.Wall -> DA_AnimSet_Wall_HeavyFemale  quando Heavy E Female   (priorità 1: più specifica)
+skin pesante maschile   -> Heavy
+skin pesante femminile  -> HeavyFemale
+skin esile              -> la wall slide base del personaggio
+\end{lstlisting}
+Una variante che cambia solo i montage (nessun layer) lascia collegato il layer della sorgente sotto: per esempio una skin femminile
+che cambia solo lo spin tiene il layer della wall slide del personaggio.
+
+\subsection{Classi del plugin}
+\begin{itemize}[leftmargin=*]
+\item \code{UGSTN_AnimSetDefinition}, \code{FGSTN_MontageOverride}, \code{FGSTN_AnimSetRule}, \code{UGSTN_AnimSetCollection}
+  (\code{GSTN_AnimSetTypes.h}); la validazione dei dati controlla sezioni, durate, play rate e root motion delle varianti.
+\item \code{UGSTN_AnimSetUtils}: \code{ResolveWinners}, \code{ResolveLayerClasses}, \code{ValidateMontageOverride}.
+\item \code{UGSTN_AnimSetComponent}: sorgenti, tag cosmetici, caricamento asincrono con \code{FStreamableManager} in due passi,
+  \code{LinkAnimClassLayers} / \code{UnlinkAnimClassLayers}, ricollegamento su \code{OnAnimInitialized} quando una skin cambia
+  l'\code{AnimClass}, \code{ResolveVisualMontage}.
+\item Tag nativi \code{Anim}, \code{Anim.Set}, \code{Anim.Trait}; \code{Anim.Set.Wall} è nel modulo del progetto.
+\item Test \code{GSTNAnimation.Core.*}: priorità delle sorgenti e delle regole, scelta per tratti (anche combinati), layer di ripiego.
+\end{itemize}
+Da fare dopo: collegare kit, arma e skin al componente nel punto dove oggi si applica il loadout (B3).
+
+\section{Cosa controllare a mano}\label{sec:controlli}
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Compilazione}: build completa (nuovo plugin \code{GSTNAnimation} abilitato nel \code{.uproject}), poi Session
+  Frontend \code{GSTN.Wall.Anim} (3 test) e \code{GSTNAnimation.Core} (3 test).
+\item \textbf{Editor}, quando è libero (Blueprint condiviso, faccio io o tu):
+  \begin{enumerate}
+  \item creare \code{ALI_GSTN_Wall} con il layer \code{WallLayer};
+  \item creare \code{ABP_GSTN_WallLayer} (genitore \code{GSTN_WallAnimInstance}) con il grafo della sezione 2.4 e clip GASP
+    segnaposto;
+  \item fare il reparent di \code{SandboxCharacter_Mover_ABP} a \code{GSTN_CharacterAnimInstance}, aggiungere il blend e il
+    nodo \code{WallLayer};
+  \item creare \code{DA_AnimSet_Wall} (\code{Anim.Set.Wall}, layer \code{ABP_GSTN_WallLayer}) e una collezione del personaggio
+    che lo usa, poi aggiungere \code{GSTN_AnimSetComponent} a \code{SandboxCharacter_Mover} con quella collezione;
+  \item (prova delle varianti) un layer figlio con clip diverse, un set \code{Anim.Set.Wall} con quel layer e una regola
+    \code{Anim.Trait.Build.Heavy}; aggiungere il tratto ai \code{DefaultCosmeticTags} del componente e vedere il layer cambiare.
+  \end{enumerate}
+\item \textbf{PIE}, mappa \code{L_WallSlideAB}, con \code{showdebug animation} o il debugger dell'ABP sul layer:
+  \begin{enumerate}
+  \item salto contro il muro da fermo: Enter, poi Active/Idle;
+  \item stick a destra e a sinistra: SlideRight / SlideLeft, nessuno sfarfallio vicino a 80--120\,cm/s;
+  \item entrata in corsa veloce: Skid, che finisce sotto 650\,cm/s;
+  \item passaggio su una superficie da climb: resta Active (nessuna uscita), \code{bIsClimbing} vero, niente skid;
+  \item salto dal muro o atterraggio: Exit con \code{ExitModeName} giusto, poi None;
+  \item in listen server, un client che guarda un altro giocatore: stessi stati (lo stato viene dalla presentazione smussata).
+  \end{enumerate}
+\end{enumerate}
+
+\end{document}
