@@ -1465,6 +1465,16 @@ KB.2. La scorciatoia vale anche per il **d-pad** del controller, e la stessa ide
    Perché conta: il d-pad ha gli stessi limiti della tastiera.
    Ipotesi nella specifica: vale per tutti gli ingressi digitali (tastiera e d-pad), gesto per gesto.
 
+HV.3. Quali attacchi **ruotano il personaggio** mentre tieni lo stick (per esempio alcuni attacchi in aria)? La rotazione segue lo
+stick finché lo tieni, oppure si sceglie solo una volta (all'inizio o in un momento preciso, come girarsi all'indietro)?
+   Perché conta: una rotazione continua cambia dove colpisce l'attacco mentre è attivo; una scelta singola è più leggibile.
+   Ipotesi nella specifica: entrambe possibili per singola mossa, decise dal designer con la stessa traccia che inclina lo swing.
+
+INTP.1. L'interpolazione delle hitbox tra un frame e l'altro (come nei platform fighter) va **accesa di base** su tutti i colpi, oppure solo
+dove il designer la attiva?
+   Perché conta: accesa ovunque evita i colpi "bucati" dagli attacchi veloci, ma costa qualche controllo in più per colpo.
+   Ipotesi nella specifica: accesa in tutte le mosse del set standard, e l'editor avvisa quando una hitbox veloce è senza.
+
 COL.1. I colpi corpo a corpo devono **fermarsi contro i muri** di base, oppure solo dove il designer lo attiva per una mossa?
    Perché conta: oggi un colpo attraversa un muro sottile e colpisce chi c'è dietro; bloccarlo costa un controllo in più per colpo.
    Ipotesi nella specifica: spento nei dati di M4 per non cambiare nulla, acceso nelle mosse del set standard dopo H16.

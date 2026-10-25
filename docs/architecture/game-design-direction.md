@@ -252,6 +252,9 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   and bulky hitboxes do not; holes that hitboxes pass and the character does not (a hollow medium-penetration cavity inside a
   heavy-armour leg). Spec: [combat-m4-hits.md](combat-m4-hits.md) §9c, plans H16 and P18.
 - **Sequencing**: these general items go to planning first; the detailed design of individual abilities resumes at the end.
+- (19:39) **Animation that changes with input over time** (an aerial that rotates, attack variations) and **hitbox interpolation**
+  as in platform fighters. Spec: [combat-m4-hits.md](combat-m4-hits.md) §3 (steer track for hitboxes, animation, facing and
+  branches; interpolation status and four gaps), plans H15 and H17.
 
 ## 7. Consequences for the specifications
 
@@ -543,3 +546,6 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > dovrebbero essere già separate per come abbiamo pianificato. Ma ci potrebbero essere casi limite come: proiettili stile sparatutto e
 > collisioni complesse (buchi dove il personaggio non passa e neanche le hitbox più ingombranti, i proiettili si) oppure buchi dove il
 > personaggio non passa, ma le hitbox si (caso buco cavo a penetrazione media dentro una gamba di un nemico a penetrazione pesante)
+
+> Una cosa: abbiamo preso in considerazione nei piani attacchi la cui animazione cambia a seconda degli input nel tempo (Rotazione
+> attacco in aria in alcuni casi, variazione attacco etc…), e hitbox interpolation? (Sta nei platform fighter) (19:39)

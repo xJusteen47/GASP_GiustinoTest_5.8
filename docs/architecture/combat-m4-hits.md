@@ -144,20 +144,51 @@ by the lower array index, and the group then counts as hit (step 5 of §6). `Zon
 pick a sweetspot sound or effect.
 **Hitboxes that change with other factors (owner, 2026-10-25 19:22).** Example: a vertical sword swing that turns diagonal to the
 right or to the left the longer the stick is held that way. *Proposal* (checkpoint H15, after H13):
-- `FGSTN_HitboxTrack` gains an optional `FGSTN_HitboxVariation { EGSTN_HitboxVariationDriver Driver (None, StickLateralHeld,
-  StickAngle, HeldFrames, Extension); int16 RatePerFrame; bool bReturnWhenReleased; int32 LatchFrame = -1; FName AnimBlendParameter; }`
-  and each `FGSTN_HitboxSpec` gains `TArray<FGSTN_HitboxKey> KeysAtMin, KeysAtMax` (same frames as `Keys`; empty = not affected).
-- The variation value `V` is an integer in −1000..1000 stored in the ability's **timeline sync state**, so a rollback replays it
-  exactly. Each frame it moves by `RatePerFrame` towards the driver's sign, read from the **input history** (stick lateral axis in the
-  attacker's facing space, combat.md §9.1, the same history the slots read), never from Mover queries or the camera. With
-  `LatchFrame` ≥ 0 the value freezes at that frame (usually the first active frame); `bReturnWhenReleased` drifts it back to 0.
-- Keys blend: `V < 0` lerps offsets and slerps rotations from `Keys` towards `KeysAtMin`, `V > 0` towards `KeysAtMax`. Shape,
-  `HitGroup`, `Data` and the reach rules above stay the hitbox's own.
-- **Animation follows the same value**: presentation reads `V` from the same sync state and feeds `AnimBlendParameter` (a 1D blend
-  of the vertical and the two diagonal swings), so what is seen and what hits agree on every machine. M5 previews `V` with a slider
-  and warns when a hitbox has `KeysAtMin`/`KeysAtMax` but the track names no blend parameter.
-- `Extension` is a C++ driver (`FGSTN_HitboxVariationDriver`, instanced struct; per-frame code stays C++, modularity §3.8) for other
-  factors: charge time, an attribute, a tag. Questions HV.1–HV.2.
+Revised 2026-10-25 19:39 (owner: attacks whose **animation** changes with input over time, such as an aerial that rotates, and
+attack variations): the value is not a hitbox field but a **timeline track**, so hitboxes, animation and facing read the same number.
+- **`FGSTN_TimelineTrack_Steer`** (new track, `GSTNCombatCore`) { `EGSTN_SteerDriver Driver` (None, StickLateralHeld, StickAngle,
+  HeldFrames, Extension); `int16 RatePerFrame`; `bool bReturnWhenReleased`; `int32 LatchFrame = -1`; `FName AnimBlendParameter`;
+  `float FacingYawRateDegPerFrame = 0`; `TArray<FGSTN_SteerBranch> Branches` }. At most two steer tracks per timeline (values `V0`, `V1`).
+- The value `V` is an integer in −1000..1000 stored in the ability's **timeline sync state**, so a rollback replays it exactly and
+  simulated proxies receive it with the rest of the sync state. Each frame it moves by `RatePerFrame` towards the driver's sign, read
+  from the **input history** (stick lateral axis in the attacker's facing space, combat.md §9.1, the same history the slots read), never
+  from Mover queries or the camera. With `LatchFrame` ≥ 0 the value freezes at that frame (`LatchFrame = 0` gives Smash-style angled
+  attacks chosen at the start); `bReturnWhenReleased` drifts it back to 0.
+- **Hitboxes**: each `FGSTN_HitboxSpec` gains `TArray<FGSTN_HitboxKey> KeysAtMin, KeysAtMax` (same frames as `Keys`; empty = not
+  affected) and `uint8 SteerIndex`. `V < 0` lerps offsets and slerps rotations from `Keys` towards `KeysAtMin`, `V > 0` towards
+  `KeysAtMax`. Shape, `HitGroup`, `Data` and the reach rules above stay the hitbox's own.
+- **Animation**: presentation reads `V` and feeds `AnimBlendParameter` (a 1D blend of, for example, the vertical and the two diagonal
+  swings, or an aim offset for an angled attack), so what is seen and what hits agree on every machine.
+- **Facing rotation** (the rotating aerial): with `FacingYawRateDegPerFrame` > 0 the attacker's yaw turns by `V / 1000 × rate` each
+  frame through the timeline's `Movement` track (one queued layered move, combat.md §8: abilities never set the rotation directly).
+  `Root`-space hitboxes and the montage turn with the character, so nothing else needs to know. A turn-around (flip facing in a
+  window when the stick is held back) is the same track with a latched `StickAngle` driver and a 180° snap, as `AimPolicy` already
+  allows at the start of a move.
+- **Variations**: `FGSTN_SteerBranch { int32 Frame; int16 MinValue, MaxValue; FName Section; }` jumps the timeline to another
+  section when `V` is in range at `Frame` (a held direction picks a different finisher). It uses the loop and section mechanism that
+  spin-drill.md asks the core for (seam S2). Discrete follow-ups on a new press stay cancel windows, as today.
+- M5 previews `V` with a slider (hitboxes, montage blend and facing together) and warns when a hitbox has `KeysAtMin`/`KeysAtMax`
+  but its steer track names no blend parameter.
+- `Extension` is a C++ driver (`FGSTN_SteerDriver`, instanced struct; per-frame code stays C++, modularity §3.8) for other factors:
+  charge time, an attribute, a tag. Questions HV.1–HV.3.
+
+**Hitbox interpolation between frames (owner question, 2026-10-25 19:39; platform fighters).** Status in the M4 code on
+`feature/gas-npp-5.8`: keys interpolate linearly between key frames (`UGSTN_HitShapeUtils::EvaluateKeys`), and `bSweepBetweenFrames`
+tests sub-steps between the previous and the current frame along the arc (rotation slerped, so a swing's middle is covered, test
+`SweptCatchesFastBox`), with the step count from the distance over the shape's smallest extent, capped at `MaxSweepSubsteps = 4`.
+Four gaps, *Proposal* (checkpoint H17, after H13):
+1. **The character's own movement is not swept**: the previous carrier keeps the current root ("the root of the previous frame is not
+   state", attacker tick). A fast dash attack or a fast-falling aerial can pass through a victim. Fix: while a timeline with sweeping
+   hitboxes is active, the combat attacker sync state keeps the previous root (`PrevRootLocation` quantised to 1/10 cm and
+   `PrevRootYaw` as 16 bits, about 8 bytes, dirty only while sweeping) and the sweep runs on the whole carrier, root included.
+2. **The step cap**: past 4 steps a very fast hitbox still skips. A sphere moving in a straight line is exactly a capsule, so sphere
+   hitboxes use that exact test (as platform fighters stretch hitboxes between frames); other shapes keep sub-steps, with the cap
+   as a setting and a stats counter for clamped sweeps.
+3. **The first active frame**: today it sweeps from where the baked socket was one frame earlier, before the hitbox existed. Platform
+   fighters do not interpolate on a hitbox's first frame: `bSweepFirstFrame = false` by default.
+4. **Off by default**: `bSweepBetweenFrames` stays false in data for compatibility; the standard set turns it on, and the M5
+   validator warns when a hitbox moves more than its smallest extent in one frame with the sweep off (question INTP.1).
+Hurtboxes are not swept (a fast victim through a still hitbox), as in platform fighters; accepted.
 `FGSTN_HitVariant { bool bIgnore; float ShapeScale = 1; FGSTN_HitDataOverride Override (per-field optional values and
 multipliers); }`. `BakedSocket` uses `FGSTN_CombatTimelineData::BakedSockets (TMap<FName, TArray<FTransform>>)` — one
 root-relative transform per frame, written by the M5 baking tool; in M4 a Python helper bakes them (section 10).
