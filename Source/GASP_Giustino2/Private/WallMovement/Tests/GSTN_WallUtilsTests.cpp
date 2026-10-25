@@ -194,6 +194,40 @@ bool FGSTN_WallDebugQueryCounterTest::RunTest(const FString& Parameters)
 	Var->Set(Old);
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallDebugMetricsCsvTest, "GSTN.Wall.Debug.MetricsCsv", GSTNWallUtilsCharTest::TestFlags)
+bool FGSTN_WallDebugMetricsCsvTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("Header"), GSTNWallDebug::MetricsCsvHeader(), FString(TEXT("time,mode,speed,hspeed,vspeed,dnormal_deg,queries,edge_ahead,events,x,y,z,source")));
+
+	GSTNWallDebug::FMetricsRow Row;
+	Row.Time = 1.25;
+	Row.Mode = TEXT("WallSlidingV2");
+	Row.Speed = 500.f;
+	Row.HorizontalSpeed = 300.f;
+	Row.VerticalSpeed = -400.f;
+	Row.NormalChangeDeg = 12.5f;
+	Row.Queries = 3;
+	Row.EdgeAhead = EGSTN_WallEdgeKind::Convex;
+	Row.Events = GSTNWallDebug::Ev_Grab | GSTNWallDebug::Ev_WallLost;
+	Row.Location = FVector(10.0, -20.5, 300.0);
+	Row.Source = TEXT("Pawn,1@client");
+	TestEqual(TEXT("Row"), GSTNWallDebug::FormatMetricsRow(Row), FString(TEXT("1.250,WallSlidingV2,500.0,300.0,-400.0,12.50,3,convex,grab|wall-lost,10.0,-20.5,300.0,Pawn;1@client")));
+
+	Row.Events = GSTNWallDebug::Ev_None;
+	Row.EdgeAhead = EGSTN_WallEdgeKind::None;
+	TestTrue(TEXT("No events: empty column"), GSTNWallDebug::FormatMetricsRow(Row).Contains(TEXT(",3,none,,")));
+	TArray<FString> Cols;
+	TestEqual(TEXT("Every column present"), GSTNWallDebug::FormatMetricsRow(Row).ParseIntoArray(Cols, TEXT(","), false), 13);
+
+	const FName A(TEXT("A")), B(TEXT("B"));
+	TestTrue(TEXT("First tick of a source is a grab"), GSTNWallDebug::IsGrabTick(false, 0.0, NAME_None, 1.0, A));
+	TestFalse(TEXT("Next tick is not"), GSTNWallDebug::IsGrabTick(true, 1.0, A, 1.016, A));
+	TestTrue(TEXT("A gap is a new grab"), GSTNWallDebug::IsGrabTick(true, 1.0, A, 1.5, A));
+	TestTrue(TEXT("Another mode is a new grab"), GSTNWallDebug::IsGrabTick(true, 1.0, A, 1.016, B));
+	TestFalse(TEXT("A re-simulated tick is never a grab"), GSTNWallDebug::IsGrabTick(true, 1.0, A, 0.9, A));
+	return true;
+}
+
 #endif
 
 #endif // WITH_DEV_AUTOMATION_TESTS

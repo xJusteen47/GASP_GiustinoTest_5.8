@@ -237,6 +237,9 @@ void UGSTN_WallMovementModeBase::SimulationTick_Implementation(const FSimulation
 
 	const FQuat StartQuat = UpdatedComponent->GetComponentQuat();
 	FGSTN_WallTickState TickState = MakeTickState(Params, StartQuat);
+#if GSTN_WALL_DEBUG
+	const FVector StartWallNormal = TickState.WallNormal;
+#endif
 
 	// Ride the dynamic wall: move/rotate with it before anything else, carrying the movement plane and the velocity along
 	if (bUseMovementBases)
@@ -260,6 +263,16 @@ void UGSTN_WallMovementModeBase::SimulationTick_Implementation(const FSimulation
 	UpdateMovementBase(Params, TickState);
 	CaptureFinalState(Params, StartQuat, TickState, bLeftOnPurpose, OutputState);
 
+#if GSTN_WALL_DEBUG
+	// Metrics CSV only (A/B tooling): the legacy tick is not instrumented otherwise and nothing here feeds back into the simulation
+	if (TickState.IsLeaving())
+	{
+		GSTNWallDebug::NoteEvent(GSTNWallDebug::Ev_Exit);
+	}
+	GSTNWallDebug::FinishTick(RegisteredModeName, (Params.TimeStep.BaseSimTimeMs + Params.TimeStep.StepMs) * 0.001, TickState.Velocity, TickState.GravityUp,
+		FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(StartWallNormal.GetSafeNormal() | TickState.WallNormal.GetSafeNormal()), -1.f, 1.f))),
+		UpdatedComponent->GetComponentLocation(), GSTNWallDebug::MetricsSource(MoverComp));
+#endif
 #if ENABLE_DRAW_DEBUG
 	DrawWallDebug(MovingComps, TickState);
 #endif

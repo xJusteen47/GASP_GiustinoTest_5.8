@@ -8,6 +8,7 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "WallMovement/MoveLibrary/GSTN_WallMovementLibrary.h"
 #include "HAL/IConsoleManager.h"
@@ -22,8 +23,8 @@ namespace GSTNWallDebug
 	static std::atomic<bool> bJumpRequested = false;
 	static std::atomic<bool> bDetachHeld = false;
 
-	/** Calls Fn on the Mover component of every player pawn in PIE/game worlds */
-	static void ForEachPlayerMover(TFunctionRef<void(UMoverComponent&)> Fn)
+	/** Calls Fn on the Mover component of every player pawn in PIE/game worlds (PlayerId >= 0: only the pawn of the player with that PlayerState id) */
+	static void ForEachPlayerMover(TFunctionRef<void(UMoverComponent&)> Fn, int32 PlayerId = -1)
 	{
 		for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
 		{
@@ -35,6 +36,10 @@ namespace GSTNWallDebug
 			for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 			{
 				const APawn* Pawn = It->IsValid() ? (*It)->GetPawn() : nullptr;
+				if (PlayerId >= 0 && !(Pawn && Pawn->GetPlayerState() && Pawn->GetPlayerState()->GetPlayerId() == PlayerId))
+				{
+					continue;
+				}
 				if (UMoverComponent* Mover = Pawn ? Pawn->FindComponentByClass<UMoverComponent>() : nullptr)
 				{
 					Fn(*Mover);
@@ -44,7 +49,7 @@ namespace GSTNWallDebug
 	}
 
 	static FAutoConsoleCommand CmdLaunch(TEXT("gstn.Wall.Launch"),
-		TEXT("gstn.Wall.Launch X Y Z [Additive=0]: sets (or adds) the player pawn's velocity through Mover's ApplyVelocity effect"),
+		TEXT("gstn.Wall.Launch X Y Z [Additive=0] [PlayerId=-1]: sets (or adds) the player pawn's velocity through Mover's ApplyVelocity effect (PlayerId: only that player's pawn)"),
 		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
 		{
 			if (Args.Num() < 3)
@@ -53,6 +58,7 @@ namespace GSTNWallDebug
 			}
 			const FVector Velocity(FCString::Atof(*Args[0]), FCString::Atof(*Args[1]), FCString::Atof(*Args[2]));
 			const bool bAdditive = Args.Num() > 3 && FCString::Atoi(*Args[3]) != 0;
+			const int32 PlayerId = Args.Num() > 4 ? FCString::Atoi(*Args[4]) : -1;
 			ForEachPlayerMover([&](UMoverComponent& Mover)
 			{
 				TSharedPtr<FApplyVelocityEffect> Effect = MakeShared<FApplyVelocityEffect>();
@@ -60,7 +66,33 @@ namespace GSTNWallDebug
 				Effect->bAdditiveVelocity = bAdditive;
 				Mover.QueueInstantMovementEffect(Effect);
 				UE_LOG(LogGSTNWall, Log, TEXT("Launch %s additive=%d"), *Velocity.ToCompactString(), bAdditive ? 1 : 0);
-			});
+			}, PlayerId);
+		}));
+
+	static FAutoConsoleCommand CmdTeleport(TEXT("gstn.Wall.Teleport"),
+		TEXT("gstn.Wall.Teleport X Y Z [Yaw=0] [PlayerId=-1]: teleports the player pawn through Mover's Teleport effect and stops it (A/B harness: lane starts). Run it on every world, as Launch"),
+		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+		{
+			if (Args.Num() < 3)
+			{
+				return;
+			}
+			const FVector Location(FCString::Atof(*Args[0]), FCString::Atof(*Args[1]), FCString::Atof(*Args[2]));
+			const float Yaw = Args.Num() > 3 ? FCString::Atof(*Args[3]) : 0.f;
+			const int32 PlayerId = Args.Num() > 4 ? FCString::Atoi(*Args[4]) : -1;
+			ForEachPlayerMover([&](UMoverComponent& Mover)
+			{
+				TSharedPtr<FTeleportEffect> Teleport = MakeShared<FTeleportEffect>();
+				Teleport->TargetLocation = Location;
+				Teleport->bUseActorRotation = false;
+				Teleport->TargetRotation = FRotator(0.f, Yaw, 0.f);
+				Mover.QueueInstantMovementEffect(Teleport);
+				TSharedPtr<FApplyVelocityEffect> Stop = MakeShared<FApplyVelocityEffect>();
+				Stop->VelocityToApply = FVector::ZeroVector;
+				Stop->bAdditiveVelocity = false;
+				Mover.QueueInstantMovementEffect(Stop);
+				UE_LOG(LogGSTNWall, Log, TEXT("Teleport %s yaw=%.1f"), *Location.ToCompactString(), Yaw);
+			}, PlayerId);
 		}));
 
 	static FAutoConsoleCommand CmdJump(TEXT("gstn.Wall.Jump"),
@@ -142,6 +174,200 @@ namespace GSTNWallDebug
 		if (CVarMetrics.GetValueOnAnyThread() != 0)
 		{
 			UE_LOG(LogGSTNWall, Log, TEXT("Metrics t=%.3f mode=%s speed=%.1f dNormal=%.2fdeg queries=%d"), TimeSeconds, *ModeName.ToString(), Speed, NormalChangeDeg, Queries);
+		}
+	}
+
+	namespace
+	{
+		std::atomic<int32> NotedEdge = 0;
+		std::atomic<int32> NotedEvents = 0;
+
+		struct FMetricsSink
+		{
+			FCriticalSection Lock;
+			/** Timestamp shared by the files of one run; empty = no run open */
+			FString RunStamp;
+			TMap<FName, FString> Pending;
+			TMap<FName, bool> HeaderWritten;
+			TMap<FString, TPair<double, FName>> LastSeen;
+		};
+		FMetricsSink Sink;
+
+		FString MetricsPath(FName Mode, const FString& Stamp)
+		{
+			return FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Metrics") / FString::Printf(TEXT("wallslide-%s-%s.csv"), *Mode.ToString(), *Stamp));
+		}
+
+		/** Appends the buffered rows of one mode to its file (caller holds the lock) */
+		void WriteMode(FName Mode)
+		{
+			FString* Text = Sink.Pending.Find(Mode);
+			if (!Text || Text->IsEmpty())
+			{
+				return;
+			}
+			FString Out;
+			bool& bHeader = Sink.HeaderWritten.FindOrAdd(Mode);
+			if (!bHeader)
+			{
+				Out = MetricsCsvHeader() + TEXT("\n");
+				bHeader = true;
+			}
+			Out += *Text;
+			Text->Reset();
+			FFileHelper::SaveStringToFile(Out, *MetricsPath(Mode, Sink.RunStamp), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		}
+
+		/** Closes the files of the open run on gstn.Wall.Metrics 0 (or 1 again: a new run) and at exit */
+		struct FMetricsLifetime
+		{
+			FMetricsLifetime()
+			{
+				CVarMetrics->AsVariable()->SetOnChangedCallback(FConsoleVariableDelegate::CreateLambda([](IConsoleVariable*) { FlushMetrics(); }));
+				FCoreDelegates::OnEnginePreExit.AddLambda([]() { FlushMetrics(); });
+			}
+		};
+		FMetricsLifetime MetricsLifetime;
+	}
+
+	FString MetricsSource(const UMoverComponent* Mover)
+	{
+		const AActor* Owner = Mover ? Mover->GetOwner() : nullptr;
+		if (!Owner)
+		{
+			return TEXT("unknown");
+		}
+		const TCHAR* Side = TEXT("standalone");
+		switch (Owner->GetNetMode())
+		{
+		case NM_Client: Side = TEXT("client"); break;
+		case NM_DedicatedServer: Side = TEXT("server"); break;
+		case NM_ListenServer: Side = TEXT("listen"); break;
+		default: break;
+		}
+		return FString::Printf(TEXT("%s@%s"), *Owner->GetName(), Side);
+	}
+
+	void FlushMetrics()
+	{
+		FScopeLock Lock(&Sink.Lock);
+		TArray<FName> Modes;
+		Sink.Pending.GetKeys(Modes);
+		for (const FName Mode : Modes)
+		{
+			WriteMode(Mode);
+		}
+		Sink.RunStamp.Reset();
+		Sink.Pending.Reset();
+		Sink.HeaderWritten.Reset();
+		Sink.LastSeen.Reset();
+	}
+
+	void NoteEdgeKind(EGSTN_WallEdgeKind Kind)
+	{
+		NotedEdge = static_cast<int32>(Kind);
+	}
+
+	void NoteEvent(uint8 EventMask)
+	{
+		NotedEvents |= EventMask;
+	}
+
+	FString MetricsCsvHeader()
+	{
+		return TEXT("time,mode,speed,hspeed,vspeed,dnormal_deg,queries,edge_ahead,events,x,y,z,source");
+	}
+
+	const TCHAR* EdgeKindName(EGSTN_WallEdgeKind Kind)
+	{
+		switch (Kind)
+		{
+		case EGSTN_WallEdgeKind::None: return TEXT("none");
+		case EGSTN_WallEdgeKind::Bump: return TEXT("bump");
+		case EGSTN_WallEdgeKind::Slope: return TEXT("slope");
+		case EGSTN_WallEdgeKind::Concave: return TEXT("concave");
+		case EGSTN_WallEdgeKind::Convex: return TEXT("convex");
+		case EGSTN_WallEdgeKind::Blocked: return TEXT("blocked");
+		}
+		return TEXT("none");
+	}
+
+	FString EventsToString(uint8 Events)
+	{
+		TArray<FString> Names;
+		if (Events & Ev_Grab) { Names.Add(TEXT("grab")); }
+		if (Events & Ev_Exit) { Names.Add(TEXT("exit")); }
+		if (Events & Ev_WallLost) { Names.Add(TEXT("wall-lost")); }
+		if (Events & Ev_ModeSwitch) { Names.Add(TEXT("mode-switch")); }
+		return FString::Join(Names, TEXT("|"));
+	}
+
+	FString FormatMetricsRow(const FMetricsRow& Row)
+	{
+		return FString::Printf(TEXT("%.3f,%s,%.1f,%.1f,%.1f,%.2f,%d,%s,%s,%.1f,%.1f,%.1f,%s"), Row.Time, *Row.Mode.ToString(), Row.Speed, Row.HorizontalSpeed, Row.VerticalSpeed,
+			Row.NormalChangeDeg, Row.Queries, EdgeKindName(Row.EdgeAhead), *EventsToString(Row.Events), Row.Location.X, Row.Location.Y, Row.Location.Z, *Row.Source.Replace(TEXT(","), TEXT(";")));
+	}
+
+	bool IsGrabTick(bool bHasPrevious, double PrevTime, FName PrevMode, double Time, FName Mode, double MaxGapSeconds)
+	{
+		if (!bHasPrevious || PrevMode != Mode)
+		{
+			return true;
+		}
+		if (Time <= PrevTime)
+		{
+			return false;
+		}
+		return Time - PrevTime > MaxGapSeconds;
+	}
+
+	void FinishTick(FName ModeName, double TimeSeconds, const FVector& Velocity, const FVector& GravityUp, float NormalChangeDeg, const FVector& Location, const FString& Source)
+	{
+		const int32 EdgeAhead = NotedEdge.exchange(0);
+		uint8 Events = static_cast<uint8>(NotedEvents.exchange(0));
+		const int32 Queries = TickQueries.load();
+		const float Speed = static_cast<float>(Velocity.Size());
+		// Stats and the log line; resets the query counter
+		FinishTick(ModeName, TimeSeconds, Speed, NormalChangeDeg);
+
+		if (CVarMetrics.GetValueOnAnyThread() == 0)
+		{
+			return;
+		}
+		FMetricsRow Row;
+		Row.Time = TimeSeconds;
+		Row.Mode = ModeName;
+		Row.Speed = Speed;
+		Row.VerticalSpeed = static_cast<float>(Velocity | GravityUp);
+		Row.HorizontalSpeed = static_cast<float>(FVector::VectorPlaneProject(Velocity, GravityUp).Size());
+		Row.NormalChangeDeg = NormalChangeDeg;
+		Row.Queries = Queries;
+		Row.EdgeAhead = static_cast<EGSTN_WallEdgeKind>(EdgeAhead);
+		Row.Location = Location;
+		Row.Source = Source;
+
+		FScopeLock Lock(&Sink.Lock);
+		if (Sink.RunStamp.IsEmpty())
+		{
+			Sink.RunStamp = FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S"));
+		}
+		const TPair<double, FName>* Prev = Sink.LastSeen.Find(Source);
+		if (IsGrabTick(Prev != nullptr, Prev ? Prev->Key : 0.0, Prev ? Prev->Value : FName(), TimeSeconds, ModeName))
+		{
+			Events |= Ev_Grab;
+		}
+		Sink.LastSeen.Add(Source, TPair<double, FName>(TimeSeconds, ModeName));
+		if ((Events & Ev_ModeSwitch) != 0)
+		{
+			// A switch is also a way out of the mode: reported once, as the switch
+			Events &= ~Ev_Exit;
+		}
+		Row.Events = Events;
+		FString& Text = Sink.Pending.FindOrAdd(ModeName);
+		Text += FormatMetricsRow(Row) + TEXT("\n");
+		if (Text.Len() > 16 * 1024)
+		{
+			WriteMode(ModeName);
 		}
 	}
 

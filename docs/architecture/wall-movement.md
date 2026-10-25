@@ -14,17 +14,23 @@ UBaseMovementMode
           │  └ UGSTN_SimpleWallMovementMode    climbing: stick drives the vertical axis (GetVerticalMovement, ComputeTargetUp)
           ├ UGSTN_WallSlideMovementMode        gravity drives the vertical axis (ComputeVerticalSpeed)
           └ UGSTN_WallTraverseModeBase (abstract)  v2 family, lean pipeline (wall-slide-v2.md 6): capsule never rotates, proxy plane, one move sweep + one contact/adhesion sweep
-             └ UGSTN_WallSlideV2MovementMode       control model = UGSTN_WallControlUtils::StepSlideVelocity; registered as "WallSlidingV2" next to the legacy slide
+             ├ UGSTN_WallSlideV2MovementMode       slide v2: control model = UGSTN_WallControlUtils::StepSlideVelocity; registered as "WallSlidingV2" next to the legacy slide
+             └ UGSTN_WallClimbV2MovementMode       climb v2: stick drives both axes (StepClimbVelocity); registered as "WallClimbingV2"; capsule never tilts
 UBaseMovementModeTransition
- └ UGSTN_WallEntryTransition                   Falling -> wall mode (decides WHETHER to grab)
-    └ UGSTN_AbilityWallEntryTransition         (GAS/) same, but only if the wall ability can activate
+ ├ UGSTN_WallEntryTransition                   Falling -> wall mode (decides WHETHER to grab; the mode is TargetModeName)
+ │  └ UGSTN_AbilityWallEntryTransition         (GAS/) same, but only if the wall ability can activate
+ └ UGSTN_WallSurfaceModeTransition             Falling -> the wall mode the surface asks for (slide / climb by Surface.Behaviour.*, FGSTN_WallSurfaceModeList)
+    └ UGSTN_AbilityWallSurfaceModeTransition   (GAS/) same behind the wall ability check
 UBlueprintFunctionLibrary
  ├ UGSTN_WallMovementUtils                     stateless math: movement plane, per-axis speed, entry/jump velocity, velocity transport
  ├ UGSTN_WallQueryUtils                        stateless queries: wall validation, multi-probe detection, corner checks
+ ├ UGSTN_WallEdgeUtils                         v2: look-ahead probes (ProbeAhead) and the pure edge classification / speed cap (FGSTN_WallEdgeSettings)
+ ├ UGSTN_WallControlUtils                      v2: slide / climb velocity steps (FGSTN_WallControlSettings, FGSTN_WallClimbControlSettings)
+ ├ UGSTN_WallSurfaceModeUtils                  v2: PickMode / StepVote / ChooseModeForHit (slide vs climb, hysteresis)
  └ UGSTN_WallMovementLibrary                   Blueprint-facing helpers (e.g. ResetWallMemory)
 ```
 
-Tree verified against the headers on 2026-10-17; re-check with `get_class_hierarchy` if the classes were refactored since.
+Tree verified against the headers on 2026-10-17 (v2 family added 2026-10-25, design and status in [wall-slide-v2.md](wall-slide-v2.md); A/B tooling: `Tools/GASNPPTest/wall_ab.py`, map `L_WallSlideAB`, `gstn.Wall.Metrics` CSV); re-check with `get_class_hierarchy` if the classes were refactored since.
 
 ## Data
 

@@ -154,6 +154,9 @@ void UGSTN_WallTraverseModeBase::UpdateSurfaceVote(const FMoverSyncState& SyncSt
 	if (bSwitch)
 	{
 		GSTN_WALL_LOG(1, TEXT("v2 surface asks for %s (from %s) for %d ticks: switching in place"), *Wanted.ToString(), *RegisteredModeName.ToString(), InOutState.SurfaceSwitchTicks);
+#if GSTN_WALL_DEBUG
+		GSTNWallDebug::NoteEvent(GSTNWallDebug::Ev_ModeSwitch);
+#endif
 		InOutState.LeaveTo(Wanted, 0.f);
 	}
 }
@@ -403,8 +406,12 @@ void UGSTN_WallTraverseModeBase::SimulationTick_Implementation(const FSimulation
 	CaptureFinalState(Params, StartQuat, TickState, bLeftOnPurpose, OutputState);
 
 #if GSTN_WALL_DEBUG
-	GSTNWallDebug::FinishTick(RegisteredModeName, (Params.TimeStep.BaseSimTimeMs + Params.TimeStep.StepMs) * 0.001, TickState.Velocity.Size(),
-		UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(StartWallNormal.GetSafeNormal(), TickState.WallNormal.GetSafeNormal()));
+	if (TickState.IsLeaving())
+	{
+		GSTNWallDebug::NoteEvent(GSTNWallDebug::Ev_Exit);
+	}
+	GSTNWallDebug::FinishTick(RegisteredModeName, (Params.TimeStep.BaseSimTimeMs + Params.TimeStep.StepMs) * 0.001, TickState.Velocity, TickState.GravityUp,
+		UGSTN_WallEdgeUtils::AngleBetweenNormalsDeg(StartWallNormal.GetSafeNormal(), TickState.WallNormal.GetSafeNormal()), UpdatedComponent->GetComponentLocation(), GSTNWallDebug::MetricsSource(MoverComp));
 #endif
 #if ENABLE_DRAW_DEBUG
 	DrawWallDebug(MovingComps, TickState);
@@ -428,6 +435,9 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 	// Edge hooks: what is ahead, and the speed it allows. The cap clamps the proposed velocity here, the one place geometry may touch speed
 	FGSTN_WallAheadResult Ahead = ProbeAhead(MovingComps, InOutState, CheckSettings);
 	Ahead.Kind = ClassifyAhead(Ahead);
+#if GSTN_WALL_DEBUG
+	GSTNWallDebug::NoteEdgeKind(Ahead.Kind);
+#endif
 	const float SpeedCap = ComputeEdgeSpeedCap(Ahead);
 	const float Speed = InOutState.Velocity.Size();
 	if (Speed > SpeedCap && Speed > UE_KINDA_SMALL_NUMBER)
@@ -533,6 +543,13 @@ void UGSTN_WallTraverseModeBase::TraverseStep(const FMovingComponentSet& MovingC
 	{
 		InOutState.bHasWall = false;
 		InOutState.TimeWithoutWall += DeltaSeconds;
+#if GSTN_WALL_DEBUG
+		if (InOutState.TimeWithoutWall <= DeltaSeconds * 1.5f)
+		{
+			// The tick the contact is lost, not every tick of the grace time
+			GSTNWallDebug::NoteEvent(GSTNWallDebug::Ev_WallLost);
+		}
+#endif
 		GSTN_WALL_LOG(1, TEXT("v2 NO WALL loc=%s vel=%s wallN=%s t=%.3f"), *GSTNWallDebug::Vec(UpdatedComponent->GetComponentLocation()),
 			*GSTNWallDebug::Vec(InOutState.Velocity), *GSTNWallDebug::Vec(InOutState.WallNormal), InOutState.TimeWithoutWall);
 		if (InOutState.TimeWithoutWall >= NoWallGraceTime && !NoWallModeName.IsNone())
