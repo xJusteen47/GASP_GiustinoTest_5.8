@@ -9,6 +9,8 @@
 #include "Engine/World.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 
+FGSTN_LayeredMove_Knockback::FProbeStats FGSTN_LayeredMove_Knockback::ProbeStats;
+
 FGSTN_LayeredMove_Knockback::FGSTN_LayeredMove_Knockback()
 {
 	MixMode = EMoveMixMode::OverrideVelocity;
@@ -62,8 +64,10 @@ void FGSTN_LayeredMove_Knockback::ProbeContact(const FMoverTickStartData& StartS
 	UWorld* World = Primitive ? Primitive->GetWorld() : nullptr;
 	const double Dt = FMath::Max<double>(TimeStep.StepMs, UE_SMALL_NUMBER) * 0.001;
 	const FVector Delta = FrameVelocity * Dt;
+	++ProbeStats.Calls;
 	if (!Sync || !World || Delta.SquaredLength() < 1.0)
 	{
+		++ProbeStats.NoSweep;
 		return;
 	}
 
@@ -76,17 +80,28 @@ void FGSTN_LayeredMove_Knockback::ProbeContact(const FMoverTickStartData& StartS
 	Primitive->InitSweepCollisionParams(Query, Response);
 	FHitResult Hit;
 	if (!World->SweepSingleByChannel(Hit, Start, End, Sync->GetOrientation_WorldSpace().Quaternion(), Primitive->GetCollisionObjectType(), Primitive->GetCollisionShape(), Query, Response)
-		|| !Hit.bBlockingHit || Hit.bStartPenetrating)
+		|| !Hit.bBlockingHit)
 	{
+		++ProbeStats.NoHit;
+		return;
+	}
+	if (Hit.bStartPenetrating)
+	{
+		++ProbeStats.Penetrating;
+		ProbeStats.Last = FString::Printf(TEXT("pen@%d:%s"), TimeStep.ServerFrame, *GetNameSafe(Hit.GetComponent()));
 		return;
 	}
 
 	const FGSTN_TumbleContactSyncState Found = FGSTN_TumbleContactSyncState::FromHit(Hit, FrameVelocity, MoverComp->GetUpDirection(), TimeStep.ServerFrame);
 	if (!Found.IsSet())
 	{
+		++ProbeStats.Unset;
+		ProbeStats.Last = FString::Printf(TEXT("unset@%d:%s"), TimeStep.ServerFrame, *GetNameSafe(Hit.GetComponent()));
 		return;
 	}
 	Contact = Found;
+	++ProbeStats.Found;
+	ProbeStats.Last = FString::Printf(TEXT("found@%d:%s:k%d:s%d:t%d"), TimeStep.ServerFrame, *GetNameSafe(Hit.GetComponent()), static_cast<int32>(Found.Kind), Found.ImpactSpeedQ, Found.SurfaceTypeIndex);
 
 	// The object the surface belongs to, for the break request the combat component executes outside the simulation. Local data: nothing decides from it
 	if (AActor* Owner = MoverComp->GetOwner())

@@ -100,6 +100,17 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 		ImpactIn.Response = KitImpactResponse.IsSet() ? &KitImpactResponse.GetValue() : (CombatRules ? &CombatRules->ImpactResponse : nullptr);
 		ImpactIn.Contact = ReadTumbleContact();
 		ImpactIn.Velocity = Self->Velocity;
+		++DebugTumbleFrames;
+		if (ImpactIn.Contact.IsSet())
+		{
+			++DebugContactFrames;
+			const FString Seen = FString::Printf(TEXT("c%d:k%d:s%d:t%d"), ImpactIn.Contact.ContactFrame, static_cast<int32>(ImpactIn.Contact.Kind), ImpactIn.Contact.ImpactSpeedQ, ImpactIn.Contact.SurfaceTypeIndex);
+			if (!DebugLastContact.EndsWith(Seen))
+			{
+				// Every distinct record the decision saw, with the frame it was first read on
+				DebugLastContact = (DebugLastContact == TEXT("none") ? FString() : DebugLastContact.Right(900) + TEXT("|")) + FString::Printf(TEXT("r%d>"), Frame) + Seen;
+			}
+		}
 		for (const FGSTN_VictimHit& Hit : VictimResult.Hits)
 		{
 			ImpactIn.bStaggeredThisFrame |= Hit.bStaggered;
@@ -113,6 +124,7 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 				if (const TWeakObjectPtr<UPrimitiveComponent>* Surface = ContactSurfaces.Find(ImpactIn.Contact.ContactFrame))
 				{
 					BreakRequests.Add(Frame, *Surface);
+					DebugBreaks = (DebugBreaks + FString::Printf(TEXT("req%d@sim%d "), Frame, GetSimulationFrame())).Right(400);
 				}
 			}
 			if (VictimResult.FreezeFrames == 0 && ImpactResult.FreezeFrames > 0)
@@ -222,6 +234,7 @@ FGSTN_TumbleContactSyncState UGSTN_CombatSimComponent::ReadTumbleContact()
 
 void UGSTN_CombatSimComponent::NoteContactSurface(int32 Frame, UPrimitiveComponent* Component)
 {
+	++DebugNotes;
 	ContactSurfaces.Add(Frame, Component);
 	ContactSurfaces.Remove(Frame - 64);
 }
@@ -229,6 +242,13 @@ void UGSTN_CombatSimComponent::NoteContactSurface(int32 Frame, UPrimitiveCompone
 FString UGSTN_CombatSimComponent::GetImpactInfo() const
 {
 	return LastImpactInfo;
+}
+
+FString UGSTN_CombatSimComponent::GetImpactDebug() const
+{
+	const FGSTN_LayeredMove_Knockback::FProbeStats& P = FGSTN_LayeredMove_Knockback::ProbeStats;
+	return FString::Printf(TEXT("%d,%d,%d,%d,%s,breaks %s,probe calls %d nosweep %d nohit %d pen %d unset %d found %d last %s"), ImpactTable ? 1 : 0, DebugNotes, DebugTumbleFrames, DebugContactFrames, *DebugLastContact, *DebugBreaks,
+		P.Calls, P.NoSweep, P.NoHit, P.Penetrating, P.Unset, P.Found, *P.Last);
 }
 
 FString UGSTN_CombatSimComponent::GetImpactCounts() const
@@ -284,6 +304,7 @@ void UGSTN_CombatSimComponent::ExecuteSurfaceBreaks()
 		{
 			continue;
 		}
+		DebugBreaks = (DebugBreaks + FString::Printf(TEXT("exec%d@sim%d "), Request.Key, GetSimulationFrame())).Right(400);
 		// The collider answers for itself, else its actor (the same order the surface resolution uses)
 		if (Collider->Implements<UGSTN_SurfaceProvider>())
 		{

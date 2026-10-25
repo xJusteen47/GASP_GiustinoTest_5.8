@@ -56,6 +56,19 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
 	UPROPERTY()
 	FGSTN_TumbleContactSyncState Contact;
 
+	/** Counters of the probe, for diagnosing a missing contact in the harness. Not state: written by every machine and every resimulation */
+	struct FProbeStats
+	{
+		int32 Calls = 0;
+		int32 NoSweep = 0;
+		int32 NoHit = 0;
+		int32 Penetrating = 0;
+		int32 Unset = 0;
+		int32 Found = 0;
+		FString Last;
+	};
+	static FProbeStats ProbeStats;
+
 	/** Extra distance the probe sweeps past the frame's movement, so a victim resting against a face still registers it */
 	static constexpr double ProbeMarginCm = 1.0;
 

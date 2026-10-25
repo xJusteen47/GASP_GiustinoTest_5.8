@@ -137,6 +137,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetImpactCounts() const;
 
+	/** "table,notes,tumbleFrames,contactFrames,lastContact" for diagnosing the impact path. Not state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetImpactDebug() const;
+
 	/** The rules asset the component runs, for the harness to tune between scenarios (never while hits are in flight: the machines would run different numbers) */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
 	UGSTN_CombatRules* GetCombatRulesForTest() const { return CombatRules; }
@@ -623,6 +627,13 @@ private:
 	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> BreakRequests;
 
 	FString LastImpactInfo = TEXT("-1,0,0,0,0");
+
+	/** Debug counters of the impact path: probe notes, tumble frames, frames with a record seen, the latest record. Not state */
+	int32 DebugNotes = 0;
+	int32 DebugTumbleFrames = 0;
+	int32 DebugContactFrames = 0;
+	FString DebugLastContact = TEXT("none");
+	FString DebugBreaks;
 	int32 ImpactCounts[3] = { 0, 0, 0 };
 
 	/** The victim step took a hit this frame: the buffer event Input.BufferEvent.Interrupted of the frame (AppendFrameEvents) */

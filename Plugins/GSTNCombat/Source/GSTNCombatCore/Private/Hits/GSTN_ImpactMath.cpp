@@ -159,5 +159,6 @@ FGSTN_ImpactResult UGSTN_ImpactMath::Resolve(const FGSTN_ImpactInput& Input, con
 	Result.SplatFrames = Victim.SplatFrames >= 0 ? Victim.SplatFrames : Row->SplatFrames;
 	Result.ImpactDamageScale = Row->ImpactDamageScale * Victim.ImpactDamageScale;
 	Result.ResidualSpeedScale = Row->ResidualSpeedScale;
+	Result.BreakStopFrames = Row->BreakStopFrames;
 	return Result;
 }

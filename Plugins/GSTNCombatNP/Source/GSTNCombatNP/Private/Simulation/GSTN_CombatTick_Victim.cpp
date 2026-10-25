@@ -280,6 +280,13 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 	{
 		return;
 	}
+	// The move that was flying into the surface goes on probing on the frame its replacement launches the victim away (and through the frames of
+	// a break's stop): those records belong to the contact that was just decided. A bounce or a break stamps the first frame a new contact can
+	// be made on in ImpactEndFrame, which means nothing else while the victim tumbles
+	if (Core.Hit.ImpactEndFrame != INDEX_NONE && Contact.ContactFrame < Core.Hit.ImpactEndFrame)
+	{
+		return;
+	}
 	const FGSTN_SurfaceImpactRow* Row = In.Table->GetRow(Contact.SurfaceTypeIndex);
 	if (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !Row->bForceDefault))
 	{
@@ -326,19 +333,24 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 		const int32 Frames = FMath::Max(Core.Hit.HitstunEndFrame - Frame, MinBounceFrames);
 		Out.Move.Kind = FGSTN_ReactionMove::EKind::Launch;
 		Out.Move.Velocity = (Tangent + Out.Normal * Speed) * Resolved.Restitution;
-		Out.Move.Frames = Frames;
+		Out.Move.Frames = FMath::Max(Frames, TumbleProbeFrames);
 		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
+		Core.Hit.ImpactEndFrame = Frame + 1;
 		break;
 	}
 	case EGSTN_ImpactOutcome::BreakSurface:
 	{
-		// The victim stops for one frame while the surface breaks, then goes on with a fraction of the speed it came with
+		// The victim stops while the surface breaks, then goes on (the frame after the stop, like any reaction) with a fraction of the speed it came
+		// with. The surface is gone at the end of the first frame of the stop on the authority; the stop is the margin for the machine that
+		// finalises frames late. Contacts made up to the relaunch frame belong to the contact just decided
+		const int32 Stop = FMath::Max(Resolved.BreakStopFrames, 2);
 		Core.HitstopStartFrame = Frame - 1;
-		Core.HitstopEndFrame = Frame + 1;
+		Core.HitstopEndFrame = Frame - 1 + Stop;
+		Core.Hit.ImpactEndFrame = Core.HitstopEndFrame + 2;
 		Core.Hit.SetPendingReaction(EGSTN_HitReaction::Launch);
 		Core.Hit.SetPendingLaunch((Tangent - Out.Normal * Speed) * Resolved.ResidualSpeedScale);
 		Core.Requests.Add(EGSTN_RequestType::ImpactSurface, Frame, static_cast<int16>(Contact.SurfaceTypeIndex));
-		Out.FreezeFrames = 1;
+		Out.FreezeFrames = Core.HitstopEndFrame - Frame;
 		break;
 	}
 	default:
@@ -478,7 +490,8 @@ FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInpu
 			Move.Kind = FGSTN_ReactionMove::EKind::Launch;
 			Move.Velocity = UGSTN_HitMathUtils::ApplyDI(Launch, Plane, In.Up, Fallback, DIParams) * Pass;
 			Move.GravityScale = 1.f;
-			Move.Frames = Frames;
+			// A tumbling victim keeps the contact probe of its knockback move until it lands, which can be long after the hitstun
+			Move.Frames = Core.ActionState == EGSTN_ActionState::Tumble ? FMath::Max(Frames, TumbleProbeFrames) : Frames;
 			break;
 		}
 		case EGSTN_HitReaction::PushBack:

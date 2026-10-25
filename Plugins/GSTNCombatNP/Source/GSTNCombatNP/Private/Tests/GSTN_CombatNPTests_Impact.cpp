@@ -234,9 +234,15 @@ bool FGSTN_ImpactBounceKeepsTumbleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a launch move"), Result.Move.Kind == FGSTN_ReactionMove::EKind::Launch);
 	// Reflected about the normal and scaled by the restitution: (tangent + n * speed) * 1.2
 	TestTrue(TEXT("the reflected velocity"), Result.Move.Velocity.Equals(FVector(-1200.0, 0.0, -240.0), 0.5));
-	TestEqual(TEXT("the flight is at least the minimum"), Result.Move.Frames, FGSTN_CombatVictim::MinBounceFrames);
-	TestTrue(TEXT("the hitstun covers the flight"), F.Core.Hit.HitstunEndFrame >= 11 + Result.Move.Frames);
+	TestEqual(TEXT("the relaunched move lives as long as a tumble's probe"), Result.Move.Frames, FGSTN_CombatVictim::TumbleProbeFrames);
+	TestTrue(TEXT("the hitstun covers the minimum flight (not the whole life of the probe: the victim lands before that)"), F.Core.Hit.HitstunEndFrame == 11 + FGSTN_CombatVictim::MinBounceFrames);
 	TestEqual(TEXT("no freeze"), Result.FreezeFrames, 0);
+
+	// The move that was flying into the wall probes once more on the frame of the relaunch: that record is the contact just decided, not a new one
+	F.In.Contact.ContactFrame = 11;
+	TestTrue(TEXT("the probe record of the relaunch frame is not a second impact"), F.Step(12).Outcome == EGSTN_ImpactOutcome::None);
+	F.In.Contact.ContactFrame = 12;
+	TestTrue(TEXT("a contact made after it is"), F.Step(13).Outcome == EGSTN_ImpactOutcome::Bounce);
 
 	// The wall row forced to bounce by the hit data
 	FImpactFixture Forced;
@@ -262,8 +268,8 @@ bool FGSTN_ImpactBreakRequestOutsideSimTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the request is in the sync state"), F.Core.Requests.Find(EGSTN_RequestType::ImpactSurface, 11, static_cast<int16>(TypeIndex(TEXT("Glass")))) != nullptr);
 	TestEqual(TEXT("a break does no impact damage"), Result.Damage, 0.f);
 	TestTrue(TEXT("the victim keeps tumbling"), F.Core.ActionState == EGSTN_ActionState::Tumble);
-	TestTrue(TEXT("a one frame stop while the surface breaks"), F.Core.IsInHitstop(11) && !F.Core.IsInHitstop(12));
-	TestEqual(TEXT("frozen for it"), Result.FreezeFrames, 1);
+	TestTrue(TEXT("a stop of the row's frames while the surface breaks"), F.Core.IsInHitstop(11) && F.Core.IsInHitstop(15) && !F.Core.IsInHitstop(16));
+	TestEqual(TEXT("frozen for the rest of it"), Result.FreezeFrames, 5);
 
 	// The launch goes out after the stop with ResidualSpeedScale of the speed it came with: (tangent - n * speed) * 0.7 = (700, 0, -140)
 	TestTrue(TEXT("a pending launch"), F.Core.Hit.HasPendingReaction() && F.Core.Hit.GetPendingReaction() == EGSTN_HitReaction::Launch);
@@ -272,11 +278,22 @@ bool FGSTN_ImpactBreakRequestOutsideSimTest::RunTest(const FString& Parameters)
 	FGSTN_ReactionStepInput Reaction;
 	Reaction.Rules = F.Rules.Get();
 	Reaction.bGrounded = false;
-	Reaction.Frame = 12;
+	Reaction.Frame = 16;
 	TestTrue(TEXT("nothing moves while the window is open or the frame after it"), FGSTN_CombatVictim::StepReaction(Reaction, F.Core).Kind == FGSTN_ReactionMove::EKind::None);
-	Reaction.Frame = 13;
+	Reaction.Frame = 17;
 	const FGSTN_ReactionMove Move = FGSTN_CombatVictim::StepReaction(Reaction, F.Core);
 	TestTrue(TEXT("the victim goes on through the broken surface"), Move.Kind == FGSTN_ReactionMove::EKind::Launch && Move.Velocity.Equals(FVector(700.0, 0.0, -140.0), 4.0));
+
+	// The old move probes the glass on the frames of the stop (the glass breaks at the end of the first): those records are not new contacts
+	FImpactFixture Again;
+	Again.SetContact(TEXT("Glass"), 1000.0, 10);
+	TestTrue(TEXT("break"), Again.Step(11).Outcome == EGSTN_ImpactOutcome::BreakSurface);
+	Again.Core.ActionState = EGSTN_ActionState::Tumble;
+	Again.Core.HitstopStartFrame = Again.Core.HitstopEndFrame = INDEX_NONE;
+	Again.In.Contact.ContactFrame = 17;
+	TestTrue(TEXT("the record of the relaunch frame is not a second break"), Again.Step(18).Outcome == EGSTN_ImpactOutcome::None);
+	Again.In.Contact.ContactFrame = 18;
+	TestTrue(TEXT("a contact after it is"), Again.Step(19).Outcome == EGSTN_ImpactOutcome::BreakSurface);
 
 	// Slower than the glass needs: it holds
 	FImpactFixture Slow;

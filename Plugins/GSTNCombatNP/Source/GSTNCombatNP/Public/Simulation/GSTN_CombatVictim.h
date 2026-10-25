@@ -201,6 +201,9 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	/** The shortest flight a bounce is given when the hitstun is nearly over (frames), so the relaunched move has a lifetime to fly in */
 	static constexpr int32 MinBounceFrames = 20;
 
+	/** The life of the knockback move of a tumbling victim (frames): it carries the contact probe, so it outlasts the hitstun until the victim lands */
+	static constexpr int32 TumbleProbeFrames = 240;
+
 	/**
 	 * The surface impact of a tumbling victim (combat-m4-hits 7b, M4 H11): reads the contact record of the frame before and resolves it through
 	 * UGSTN_ImpactMath::Resolve, with the hit's profile kept in the sync state (Core.Hit.ImpactProfileQ), the victim's response and the surface

@@ -136,6 +136,14 @@ struct GSTNCOMBATCORE_API FGSTN_SurfaceImpactRow
 	/** For BreakSurface: the fraction of its speed the victim keeps when it goes through */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface", meta = (ClampMin = "0.0"))
 	float ResidualSpeedScale = 0.7f;
+
+	/**
+	 * For BreakSurface: the frames the victim stops while the surface breaks. The surface is broken outside the simulation, at the end of the
+	 * frame the stop opens on (the authority; a client's copy goes when the surface replicates), so the stop has to outlast the frames until it
+	 * is gone, or the victim goes on into a surface that is still there
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface", meta = (ClampMin = "2", ForceUnits = "Frames"))
+	int32 BreakStopFrames = 6;
 };
 
 /**
@@ -277,6 +285,10 @@ struct GSTNCOMBATCORE_API FGSTN_ImpactResult
 	/** For BreakSurface: the surface's fraction of the speed that is kept */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
 	float ResidualSpeedScale = 0.7f;
+
+	/** For BreakSurface: the surface's stop while it breaks */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
+	int32 BreakStopFrames = 6;
 };
 
 /**
