@@ -151,6 +151,8 @@ class Driver:
         t.net(o['lag'], o['var'], o['loss'])
         self.cmd('np.PrintReconciles 1')
         self.cmd('gstn.Platform.Draw 1')
+        if o.get('log', 0):
+            self.cmd(f"gstn.Wall.Log {o['log']}")
         _log(f'entry transitions pointed at WallSlidingV2: {self.set_entry_mode("WallSlidingV2")}')
 
         self.cmd('gstn.Platform.SpawnTestFighter %.0f %.0f %.0f 0' % FIGHTER_AT, self.worlds()[0])
@@ -190,9 +192,10 @@ class Driver:
         t._set_yaw(i, 0.0)
         self.cmd('gstn.Wall.DebugInput ""')
         self.cmd(f'gstn.Wall.Teleport {face_x - 300.0} {origin_y} 120 0 {pid}')
-        # The wall memory of the previous run (same collider, HeightCap) would refuse the grab on one machine and not on the other: the same-wall
-        # policy compares world heights, meaningless on a moving base (traversal-surfaces.md 4.3, the T2 entry transition). wall_ab does the same
-        self.cmd('gstn.Wall.ResetMemory')
+        # T3 reset the wall memory here (the re-grab of the same moving shape reconciled); T2 fixed the cause, so the default keeps the memory and
+        # the re-grab is what the scenario checks. --reset-memory restores the old workaround (comparison runs)
+        if self.opts.get('reset_memory', False):
+            self.cmd('gstn.Wall.ResetMemory')
         yield 1.5
         self.cmd('gstn.Wall.DebugInput "stick 0 1"')
         mark_launch = t.mark_log()
@@ -331,7 +334,8 @@ def write_summary(results, opts, error):
     cols = ['subject', 'rep', 'wall_mode', 'wall_grab_s', 'wall_recon_launch_to_grab', 'wall_recon_on', 'wall_rel_y_drift', 'wall_mode_after_jump', 'wall_recon_jump',
             'stand_landed', 'stand_recon_landing', 'stand_base', 'stand_base_server', 'stand_recon_on', 'stand_rel_y_drift', 'stand_travel_y', 'stand_z', 'stand_mode_after_jump', 'stand_recon_jump']
     lines = [f"# scenario_surface_wallslide_enemy ({datetime.datetime.now().strftime('%Y-%m-%d %H:%M')})", '',
-             f"{opts['lag']} ms lag, {opts['var']} ms jitter, {opts['loss']} % loss, listen host + 1 client, map {MAP}, fighter at {FIGHTER_AT} (300 cm/s, +-300 cm along Y)", '']
+             f"{opts['lag']} ms lag, {opts['var']} ms jitter, {opts['loss']} % loss, listen host + 1 client, map {MAP}, fighter at {FIGHTER_AT} (300 cm/s, +-300 cm along Y), "
+             f"wall memory {'reset before each grab' if opts.get('reset_memory') else 'kept'}", '']
     if error:
         lines += ['**Error:** ' + error.splitlines()[0], '']
     lines.append('| pass | ' + ' | '.join(cols) + ' |')
@@ -349,11 +353,11 @@ def write_summary(results, opts, error):
 _driver = None
 
 
-def start(lag=60, var=15, loss=0, subjects='both', repeats=2, start_pie=False, quit=False, phases=('wall', 'stand'), jumps=True):
+def start(lag=60, var=15, loss=0, subjects='both', repeats=2, start_pie=False, quit=False, phases=('wall', 'stand'), jumps=True, reset_memory=False, log=0):
     """Starts the scenario on the editor tick and returns at once (log line 'surface_scenarios done' at the end)."""
     global _driver
     _driver = Driver({'lag': lag, 'var': var, 'loss': loss, 'subjects': subjects, 'repeats': repeats, 'start_pie': start_pie, 'quit': quit,
-                      'phases': tuple(phases), 'jumps': jumps})
+                      'phases': tuple(phases), 'jumps': jumps, 'reset_memory': reset_memory, 'log': log})
     _driver.run()
     return _driver
 
@@ -389,7 +393,7 @@ def launch(opts):
         with open(driver_script, 'w', encoding='utf-8') as f:
             f.write("import sys\nsys.path.insert(0, r'%s')\nimport surface_scenarios\nsurface_scenarios.start(**%r)\n" % (HERE, dict(
                 lag=opts['lag'], var=opts['var'], loss=opts['loss'], subjects=opts['subjects'], repeats=opts['repeats'], start_pie=True, quit=True,
-                phases=tuple(opts['phases']), jumps=not opts['no_jumps'])))
+                phases=tuple(opts['phases']), jumps=not opts['no_jumps'], reset_memory=opts['reset_memory'], log=opts['log'])))
         # The project path has a space and UE's -ExecCmds parser stops at an inner quote: the script path travels in the environment
         env = dict(os.environ, SURFACE_SCENARIOS_BOOT=driver_script.replace(os.sep, '/'))
         args = [ENGINE, UPROJECT, MAP, "-ExecCmds=py import os;exec(open(os.environ['SURFACE_SCENARIOS_BOOT']).read())", '-unattended', '-nullrhi', '-nosplash', '-nosound', '-NoP4', f'-abslog={log}']
@@ -421,5 +425,7 @@ if __name__ == '__main__':
         p.add_argument('--repeats', type=int, default=2)
         p.add_argument('--phases', nargs='+', default=['wall', 'stand'], choices=('wall', 'stand'))
         p.add_argument('--no-jumps', action='store_true', help='leave the flank by sliding to the floor and the top by staying on it (no jump input)')
+        p.add_argument('--reset-memory', action='store_true', help='reset the wall memory before each grab (the T3 workaround, for comparison runs)')
+        p.add_argument('--log', type=int, default=0, help='gstn.Wall.Log level for the run (2 prints every refused entry)')
         p.add_argument('--timeout', type=int, default=900, help='seconds before the editor is killed')
         launch(vars(p.parse_args()))

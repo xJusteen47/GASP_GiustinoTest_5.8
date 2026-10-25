@@ -178,3 +178,46 @@ many-enemies-replication.md §4 (PL), traversal-surfaces.md §4 (TS), modularity
   GSTN plugins of this branch). Remove that one entry to keep the plugin off.
 - Not done in T3: the canary build and the `check_modules.py` layers entry (neither script exists), the dedicated-server run of the
   scenario (listen only), the presentation component (TS §8).
+
+## T2 wall movement on moving surfaces (2026-10-25, desktop branch `claude/project-thread-v1plhd`; owner approved T2 2026-10-25, "ignore the legacy wall slide")
+
+- **Root cause (plan T2 and TS §4.3 assumed the world-height `HeightCap`; it was not that).** The T3 fighter moves sideways only, so world and wall-relative
+  heights are the same. The reconcile came from the memory **reset**: "the character went through `MemoryResetModes` after the wall" reads Mover's
+  `CommonBlackboard::LastModeChangeRecord`, a rollback blackboard entry (`InvalidatedOnRollback`, `MoverComponent.cpp`). The harness's teleport (applied to both copies
+  of the pawn at different frames) makes a correction right after the take-off; when the client rolls back to a frame after the server's take-off and before its own, its
+  take-off record is erased and the re-simulation (already in the air) never writes it again. Server: record `Walking -> Falling` after the wall, memory reset, grab.
+  Client: the older record (`Falling -> Walking`, the landing), no reset, `HeightCap` refuses (log: client `ENTRY rejected: height cap (486.2 > 126.7)` every tick,
+  server `ENTRY -> WallSlidingV2 ... memReset=1`), then the mode, GA_WallSlide and the position reconcile. Static walls have the same hazard; moving shapes only made it
+  visible because the scenario re-grabs the same face.
+- **Design.** No `UGSTN_SurfaceWallEntryTransition` (the plan's class): the transitions in use are the surface-driven twins, and the rules are needed by both. The
+  re-entry rules moved from `FindEntryWall` into the pure `UGSTN_WallReentryUtils::Judge` (same order and answers; test `LegacyRulesUnchanged` compares it with a copy of
+  the old code on 13 824 cases) with two switches, off in `UGSTN_WallEntryTransition` and on in `UGSTN_WallSurfaceModeTransition` and
+  `UGSTN_AbilityWallSurfaceModeTransition` (constructor defaults; the Blueprint needs no edit, `setup_wall_slide_modes.py --check` confirmed):
+  - `bInferModeChangeLostToRollback`: a record whose mode is not the start sync state's mode (the authority's) is stale; the lost change left the record's mode
+    after its time, so a reset mode entered after `LastWallTimeMs` still resets. Not recovered: two or more lost changes in one rollback window (a landing and a take-off
+    within ~0.5 s of a correction: the client keeps the memory, one reconcile); a false reset needs three lost changes through a non-reset mode.
+  - `bBaseRelativeHeightCap` (the plan's intent kept, not cooldown-only): on a Movable hit the cap compares the capsule's height above the wall's origin with the same
+    quantity at the exit. The v2 modes (`bRecordWallBaseInMemory`, default off in the base mode) store the wall origin's height in the synced memory
+    (`FGSTN_WallMovementSyncState::bLastWallOnMovingBase`, `LastWallBaseHeight`: one more flag bit, a float only when set, compared with the 2 cm height tolerance), from
+    the probe's component or, on a tick that leaves before probing (a wall jump), from the base ridden at the start of the tick (`FGSTN_WallTickState::RiddenBase`,
+    tick-local). A memory without a wall frame and a moving wall: cooldown only (the plan's proposal, now the fallback). Static walls keep world heights. Rejected:
+    cooldown-only on every moving wall (it lets a player climb a moving wall by wall-jumping and re-grabbing) and storing the base component itself in the sync state (an
+    object reference on the wire for an identity the "same wall" rule never had: walls are "the same" by facing).
+- **Plan T2 settings verified, not changed** (`setup_wall_slide_modes.py --check`, read-only, on `SandboxCharacter_Mover`): `WallSlidingV2` and `WallClimbingV2` have
+  `bUseMovementBases = true`, `BaseRotation = FollowExceptRoll`, `bAddBaseVelocityOnExit = true`, `bRideFromSyncedLocation = true`, `bRecordWallBaseInMemory = true`; the
+  Falling transition (`GSTN_AbilityWallSurfaceModeTransition`) has both switches on, `HeightCap`, 30 deg, 10 cm, 0.25 s, reset mode `Walking`. `--fix-t2` sets them if a
+  later edit loses them. The script no longer copies `ride_from_synced_location` / `record_wall_base_in_memory` from the legacy mode into a new v2 mode, nor the T2 switches
+  from a plain transition into a surface-driven one (both would have switched the C++ defaults off), and the climb mode's tilt flag skip now uses the Python name
+  (`allow_capsule_tilt`; it was `b_allow_capsule_tilt`, which matched nothing).
+- **Optional `UGSTN_WallSlideOnBaseMode`: not needed.** TS-B (a disabled base) is handled by the existing exit path; nothing in T3's runs kept a stale base.
+- **Edits outside `WallMovement/`**: one, `Private/GAS/GSTN_AbilityWallSurfaceModeTransition.cpp` (two constructor lines turning the switches on), because the ability
+  twin is the transition the character uses and it lives in `GAS/`.
+- **`bAddBaseVelocityOnExit` on platform shapes** still adds nothing (T3 gap: the colliders are teleported, physics velocity zero): unchanged, T4/T7.
+- Harness: `surface_scenarios.py` keeps the memory by default (`--reset-memory` restores the T3 workaround, `--log N` sets `gstn.Wall.Log`). `wall_ab.py` still resets it
+  per lane: each lane is an independent wall test, not a re-grab test.
+- **Harness, `scenario_surface_wallslide_enemy`** (listen host + 1 client, 60/15 ms, 0 % loss, 3 reps per subject, memory kept). Before: client reps 1 and 2 failed,
+  `launch_to_grab` 3 unexplained reconciles each (Mover 2, ASC 1), the client refused the grab (height cap) and was put on the wall by the correction (relative drift -48 / +62 cm).
+  After: 6/6 pass, client `launch_to_grab` 1 unexplained per rep (the harness's own dual-teleport correction, the same as rep 0 before), `on` 0, host 0; 4 of 18 grabs logged
+  `memReset=1 (mode (record lost to a rollback))`, i.e. the inference fired exactly where the old rule diverged.
+- **Not run (paused by the owner 2026-10-25):** the scenario at 2 % loss, `wall_ab.py --lanes "^h_" --modes WallSlidingV2` (moving lanes) and the standard v2 wall scenarios on
+  `DefaultLevel_Harness` (jump at the wall, re-grab after landing, `force_reconcile_on_mode`); wall-slide-v2.md has no 6.15 section yet.
