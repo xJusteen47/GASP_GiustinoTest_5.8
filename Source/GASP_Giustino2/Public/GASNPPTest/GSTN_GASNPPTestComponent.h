@@ -219,6 +219,20 @@ public:
 	/** Server only: puts the loadout component on the PlayerState if there is none yet (clients get it by replication). Null without a PlayerState */
 	UGSTN_LoadoutComponent* EnsureLoadoutComponent();
 
+	/** Server only: sets the DamagePercent of the health set (the hit scenarios start victims at a damage). An out-of-band attribute write that the owner reconciles */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	bool ServerSetDamagePercent(float Percent);
+
+	/**
+	 * The combat events this world published about this pawn since the last clear (only the authority's world publishes), one per entry as
+	 * "role:type:frame:magnitude:tag,tag..." with role I (the pawn was the instigator) or T (the pawn was the target), type HitLanded, HitReceived or KO
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	FString GetHitEventLog() const;
+
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Hits")
+	void ClearHitEventLog() { HitEventLog.Reset(); }
+
 	/** Same as setting bStatsProbeEnabled, for Python (the harness calls it on every copy of the pawn, in every world) */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Probe")
 	void SetStatsProbeEnabled(bool bEnabled) { bStatsProbeEnabled = bEnabled; }
@@ -291,6 +305,10 @@ private:
 	/** TimelineStarted events the authority published for this pawn, by source name (adopted, command, forced). Empty on a client: nothing is published there */
 	TMap<FName, int32> TimelineStartedCounts;
 	int32 TimelineStartedListener = INDEX_NONE;
+
+	/** HitLanded, HitReceived and KO events about this pawn (GetHitEventLog) and the listener ids */
+	TArray<FString> HitEventLog;
+	int32 HitEventListener = INDEX_NONE;
 
 	/** WeaponSwitched events the authority published for this pawn (nothing on a client) */
 	int32 WeaponSwitchedCount = 0;

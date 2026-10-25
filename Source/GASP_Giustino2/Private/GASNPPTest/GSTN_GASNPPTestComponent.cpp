@@ -4,6 +4,7 @@
 
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
+#include "Attributes/GSTN_HealthAttributeSet.h"
 #include "Attributes/GSTN_MeterAttributeSet.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "DefaultMovementSet/InstantMovementEffects/BasicInstantMovementEffects.h"
@@ -56,6 +57,9 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 		// The meters of the C18 scenarios (ex_meter, super_code): the same early creation
 		Asc->DefaultAttributes.AddUnique(UGSTN_MeterAttributeSet::StaticClass());
 		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_MeterAttributeSet::StaticClass());
+		// The health set of the hit scenarios (M4 H9): damage percent, health, the resistances the victim side reads
+		Asc->DefaultAttributes.AddUnique(UGSTN_HealthAttributeSet::StaticClass());
+		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_HealthAttributeSet::StaticClass());
 		// The ability system may have initialised its simulation already (components initialise in their own order): create it
 		// now as well, the lookup by class keeps it from being added twice
 		Asc->GetOrCreateAttributeSubobject_Mutable(UGSTN_CombatAttributeSet::StaticClass());
@@ -124,6 +128,23 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 					++TimelineStartedCounts.FindOrAdd(Source);
 				}
 			}).Id;
+		HitEventListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer::CreateFromArray(TArray<FGameplayTag>{ GSTNCombatTags::Event_HitLanded, GSTNCombatTags::Event_HitReceived, GSTNCombatTags::Event_KO })),
+			[this](const FGSTN_SimEvent& Event)
+			{
+				const bool bTarget = Event.Target.Get() == GetOwner();
+				const bool bInstigator = Event.Instigator.Get() == GetOwner();
+				if (!bTarget && !bInstigator)
+				{
+					return;
+				}
+				const TCHAR* Type = Event.EventType == GSTNCombatTags::Event_HitLanded ? TEXT("HitLanded") : Event.EventType == GSTNCombatTags::Event_HitReceived ? TEXT("HitReceived") : TEXT("KO");
+				TArray<FString> Names;
+				for (const FGameplayTag& Tag : Event.Tags)
+				{
+					Names.Add(Tag.ToString());
+				}
+				HitEventLog.Add(FString::Printf(TEXT("%c:%s:%d:%.1f:%s"), bTarget ? TEXT('T') : TEXT('I'), Type, Event.Frame, Event.Magnitude, *FString::Join(Names, TEXT(","))));
+			}).Id;
 		WeaponSwitchedListener = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCombatTags::Event_WeaponSwitched)),
 			[this](const FGSTN_SimEvent& Event)
 			{
@@ -155,6 +176,16 @@ void UGSTN_GASNPPTestComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 			Events->StopListening(Handle);
 		}
 		TimelineStartedListener = INDEX_NONE;
+	}
+	if (HitEventListener != INDEX_NONE)
+	{
+		if (UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(this))
+		{
+			FGSTN_SimEventListenerHandle Handle;
+			Handle.Id = HitEventListener;
+			Events->StopListening(Handle);
+		}
+		HitEventListener = INDEX_NONE;
 	}
 	if (WeaponSwitchedListener != INDEX_NONE)
 	{
@@ -287,9 +318,11 @@ void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& Ti
 			AbilitySystem->GetOwnedGameplayTags(OwnedTags);
 			for (const FGameplayTag& Tag : OwnedTags)
 			{
-				if (Tag.ToString().StartsWith(TEXT("Test.")))
+				// The test state, and the combat state and lock the victim side projects (M4 H9)
+				const FString Name = Tag.ToString();
+				if (Name.StartsWith(TEXT("Test.")) || Name.StartsWith(TEXT("Combat.State.")) || Name.StartsWith(TEXT("Combat.Lock.")))
 				{
-					Entry.Tags.Add(Tag.ToString());
+					Entry.Tags.Add(Name);
 				}
 			}
 		}
@@ -683,8 +716,24 @@ bool UGSTN_GASNPPTestComponent::ServerResetTestState(FVector Offset)
 	ServerSetEscapeKit(false);
 	ServerEquipPrimaryWeapon(false);
 	bStatsProbeEnabled = false;
+	HitEventLog.Reset();
+	if (UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
+	{
+		// A knocked out pawn plays again
+		Combat->ServerRespawn();
+	}
 	if (AbilitySystem)
 	{
+		// The damage a hit scenario left on the victim
+		ServerSetDamagePercent(0.f);
+		if (AbilitySystem->HasAttributeSetForAttribute(UGSTN_HealthAttributeSet::GetHealthAttribute()))
+		{
+			const float MaxHealth = AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetMaxHealthAttribute());
+			if (AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetHealthAttribute()) < MaxHealth)
+			{
+				AbilitySystem->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetHealthAttribute(), MaxHealth);
+			}
+		}
 		// Only a meter that is not empty: a write is an out-of-band change that the owner reconciles
 		for (const FGameplayAttribute& Meter : { UGSTN_MeterAttributeSet::GetExMeterAttribute(), UGSTN_MeterAttributeSet::GetSuperMeterAttribute() })
 		{
@@ -695,6 +744,25 @@ bool UGSTN_GASNPPTestComponent::ServerResetTestState(FVector Offset)
 		}
 	}
 	return true;
+}
+
+bool UGSTN_GASNPPTestComponent::ServerSetDamagePercent(float Percent)
+{
+	if (!AbilitySystem || !GetOwner()->HasAuthority() || !AbilitySystem->HasAttributeSetForAttribute(UGSTN_HealthAttributeSet::GetDamagePercentAttribute()))
+	{
+		return false;
+	}
+	// Only a change: a write is an out-of-band change that the owner reconciles
+	if (!FMath::IsNearlyEqual(AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetDamagePercentAttribute()), Percent))
+	{
+		AbilitySystem->SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetDamagePercentAttribute(), Percent);
+	}
+	return true;
+}
+
+FString UGSTN_GASNPPTestComponent::GetHitEventLog() const
+{
+	return FString::Join(HitEventLog, TEXT(";"));
 }
 
 FString UGSTN_GASNPPTestComponent::ReadSnapshotEntry(int32 Frame)

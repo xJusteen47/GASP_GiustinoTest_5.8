@@ -3715,6 +3715,204 @@ def _team_everywhere(keys, team):
                 c.get_owner().get_component_by_class(unreal.GSTN_CombatSimComponent).set_test_team(team)
 
 
+def _tag(name):
+    """A GameplayTag struct from its name (TagName is read-only from Python: the text form)"""
+    tag = unreal.GameplayTag()
+    tag.import_text(f'(TagName="{name}")')
+    return tag
+
+
+_PROBE_TAGS = ('Combat.State.Hitstun', 'Combat.State.Tumble', 'Combat.State.Hitstop', 'Combat.Lock.Movement')
+
+
+class _VictimProbe:
+    """Per editor tick, the victim's combat state on the given worlds: (time, [(victim info, location, velocity, mode, hit tags)] per world).
+    victim info = "frame,action,hitstopStart,hitstopEnd,hitstunEnd,pendingReaction+1" (GetVictimInfo). Debug aid of the H9 scenarios and the
+    judge of the numbers they check (frames are the simulation's, the time only orders the rows)"""
+
+    def __init__(self, key, world_indices):
+        self.key, self.worlds_, self.rows, self.t0, self.handle = key, tuple(world_indices), [], time.time(), None
+        self.handle = unreal.register_slate_post_tick_callback(self._tick)
+
+    def _tick(self, _dt):
+        try:
+            row = [time.time() - self.t0]
+            for wi in self.worlds_:
+                c = comps(worlds()[wi])[self.key]
+                cc = c.get_owner().get_component_by_class(unreal.GSTN_CombatSimComponent)
+                v = json.loads(c.get_state_snapshot())
+                info = [int(x) for x in cc.get_victim_info().split(',')]
+                asc = c.get_owner().get_component_by_class(unreal.AbilitySystemComponent)
+                tags = list(v.get('tags', [])) + [n for n in _PROBE_TAGS if asc.has_matching_gameplay_tag(_tag(n))]
+                row.append((info, tuple(v['location']), tuple(v.get('velocity', (0, 0, 0))), v.get('mode'), tags))
+            self.rows.append(row)
+        except Exception:
+            pass
+
+    def stop(self):
+        if self.handle is not None:
+            unreal.unregister_slate_post_tick_callback(self.handle)
+            self.handle = None
+        return self.rows
+
+
+_probe = {}
+
+
+def probe_start(key, world_indices=(0,)):
+    if _probe.get('p'):
+        _probe['p'].stop()
+    _probe['p'] = _VictimProbe(key, world_indices)
+    return 'probing'
+
+
+def probe_rows(compact=True):
+    p = _probe.get('p')
+    if not p:
+        return []
+    out, last = [], None
+    for row in p.rows:
+        key = tuple((e[0][1], e[0][2], e[0][3], e[0][4], e[0][5], e[3], tuple(sorted(t for t in e[4] if t.startswith('Combat.')))) for e in row[1:])
+        if key != last or not compact:
+            out.append((round(row[0], 2), [(e[0][0], e[0][1], e[0][2], e[0][3], e[0][4], e[0][5], tuple(round(x) for x in e[1]), tuple(round(x) for x in e[2]), e[3], tuple(sorted(t[7:] for t in e[4] if t.startswith('Combat.')))) for e in row[1:]]))
+        last = key
+    return out
+
+
+# ---- M4 H9: the rules, the hurtbox set and the victim for the hit scenarios. The rules object (GetCombatRulesForTest) and the hurtbox set asset are shared
+# by every pawn of the process, so a change is the same on all machines; make it between hits, never while one is in flight. The standard rules ship no
+# damage effect (the pending GSTN_CombatRules_Standard asset): the harness sets the native one.
+TUNING_DEFAULT = {'push_back_threshold': 540.0, 'launch_threshold': 1080.0, 'tumble_threshold': 1800.0}
+
+
+def hit_rules(wi=0):
+    """The combat rules of world wi's pawns (any pawn: they share one object)"""
+    return _hit_comp(wi, next(iter(comps(worlds()[wi])))).get_combat_rules_for_test()
+
+
+def hit_rules_setup():
+    """Damage through the native damage effect, the standard thresholds, no friendly fire, the hurtbox set at its defaults. Returns what it set"""
+    r = hit_rules()
+    r.set_editor_property('damage_effect', unreal.GSTN_GE_Damage)
+    r.set_editor_property('damage_mode', unreal.GSTN_DamageMode.PERCENT)
+    r.set_editor_property('max_health', 100.0)
+    set_tuning(**TUNING_DEFAULT)
+    set_hurtbox(stagger=-1.0, infinite=False, max_reaction=unreal.GSTN_HitReaction.LAUNCH)
+    return 'rules ready'
+
+
+def set_tuning(**values):
+    """Sets fields of the knockback model's tuning (push_back_threshold, launch_threshold, tumble_threshold, min_hitstun_frames...)"""
+    km = hit_rules().get_editor_property('knockback_model')
+    t = km.get_editor_property('tuning')
+    for k, v in values.items():
+        t.set_editor_property(k, v)
+    km.set_editor_property('tuning', t)
+    return values
+
+
+def set_hurtbox(stagger=None, infinite=None, max_reaction=None):
+    """The hurtbox set of the test pawns (HBS_Test_Pawn): the stagger threshold and the cap of the reaction tier. In memory only, never saved"""
+    hs = unreal.load_asset('/Game/GASNPPTest/Combat/HBS_Test_Pawn')
+    if stagger is not None or infinite is not None:
+        th = hs.get_editor_property('stagger_threshold')
+        if stagger is not None:
+            th.set_editor_property('value', stagger)
+        if infinite is not None:
+            th.set_editor_property('infinite', infinite)
+        hs.set_editor_property('stagger_threshold', th)
+    if max_reaction is not None:
+        hs.set_editor_property('max_reaction', max_reaction)
+    return 'hurtbox set'
+
+
+def set_damage(vkey, percent):
+    """The damage percent of a pawn (server write; the owner reconciles once)"""
+    return comps(worlds()[0])[vkey].server_set_damage_percent(percent)
+
+
+def victim_info(wi, key):
+    """(frame, action, hitstopStart, hitstopEnd, hitstunEnd, pending reaction + 1) of world wi's copy of a pawn"""
+    return tuple(int(x) for x in _hit_comp(wi, key).get_victim_info().split(','))
+
+
+def event_log(key, wi=0):
+    """[(role, type, frame, damage, set of tags)] the authority published about a pawn (role I = instigator, T = target)"""
+    out = []
+    for row in comps(worlds()[wi])[key].get_hit_event_log().split(';'):
+        if row:
+            role, kind, frame, damage, tags = row.split(':', 4)
+            out.append((role, kind, int(frame), float(damage), set(tags.split(','))))
+    return out
+
+
+def damage_of(wi, key):
+    return json.loads(comps(worlds()[wi])[key].read_snapshot_entry(-1))['damagePercent']
+
+
+def rollbacks(wi):
+    """Rollbacks of the pawn world wi controls"""
+    return local_comp(worlds()[wi]).get_editor_property('rollback_count')
+
+
+def sim_rows(key, wi=0, limit=60, drain=True):
+    """The simulation ticks of a pawn since the last drain, condensed to the ticks where velocity, mode or the combat tags changed:
+    [(sim ms, velocity, location, mode, combat tags)]"""
+    ticks = json.loads(comps(worlds()[wi])[key].drain_sim_history()) if drain else []
+    out, last = [], None
+    for e in ticks:
+        row = (tuple(round(x) for x in e['vel']), e['mode'], tuple(sorted(t[7:] for t in e['tags'] if t.startswith('Combat.'))))
+        if row != last:
+            out.append((e['t'], row[0], tuple(round(x, 1) for x in e['loc']), row[1], row[2]))
+        last = row
+    return out[:limit]
+
+
+def windows_seen(rec, which):
+    """The distinct (hitstop start, hitstop end, hitstun end) of a victim's windows in the order they appeared, from samples
+    rec = [(t, info on the authority, info on the owner)] (victim_info tuples); which 1 = authority, 2 = owner"""
+    out = []
+    for row in rec:
+        info = row[which]
+        w = (info[2], info[3], info[4])
+        if w[0] >= 0 and (not out or out[-1] != w):
+            out.append(w)
+    return out
+
+
+def victim_window_checks(run, label, hit_frames, rec, hitstop=8, lock=31):
+    """Timeline checks of the victim half of a series of hits (hit frames of the attacker's log): one window per hit that starts on the frame of the
+    hit and is `hitstop` frames long, hitstun `lock` frames after it (the floor of the rules for a stagger in place), the same on the owner's copy"""
+    def f():
+        frames = hit_frames() if callable(hit_frames) else hit_frames
+        want = [(fr, fr + hitstop, fr + hitstop + lock) for fr in frames]
+        # Windows of earlier runs stay in the state (absolute frames) and the owner's copy drops an expired hitstun end (canonical form): compare the
+        # windows of these hits, the owner on the window and, while it still holds one, the hitstun end
+        auth = [w for w in windows_seen(rec, 1) if frames and w[0] >= min(frames)]
+        own = [w for w in windows_seen(rec, 2) if frames and w[0] >= min(frames)]
+        own_pairs = []
+        for w in own:
+            if not own_pairs or own_pairs[-1] != w[:2]:
+                own_pairs.append(w[:2])
+        ok = auth == want and own_pairs == [w[:2] for w in want] and all(w in want or w[2] == -1 for w in own)
+        return ok, f'authority {auth}, owner {own}, wanted {want}'
+    return run.at(f'{label}: hitstop window on the frame of each hit ({hitstop} frames), hitstun {lock} frames after it, equal on the owner', f)
+
+
+def hit_events_check(run, label, vkey, count, extra_tags=()):
+    """Timeline check: the authority published exactly `count` HitLanded and `count` HitReceived about the victim, once per hit, each with the
+    hit type, the relationship and the given tags"""
+    def f():
+        ev = event_log(vkey)
+        landed = [e for e in ev if e[0] == 'T' and e[1] == 'HitLanded']
+        received = [e for e in ev if e[0] == 'T' and e[1] == 'HitReceived']
+        base = {'Combat.HitType.Normal'}
+        ok = len(landed) == count and len(received) == count and all(base <= e[4] and all(t in e[4] for t in extra_tags) for e in landed + received)
+        frames = [e[2] for e in landed]
+        return ok and len(set(frames)) == count, f'HitLanded {len(landed)}, HitReceived {len(received)} (want {count} each), frames {frames}, first tags {sorted(received[0][4]) if received else None}'
+    return run.at(f'{label}: HitLanded and HitReceived once per hit with their tags', f)
+
+
 def scenario_hit_basic(client=1, step=3.0):
     """M4 H8 attacker side, the client `client` attacks the other client. Control, then the three hitbox spaces one by one (the victim is placed
     where only one track of the move can reach it, see UGSTN_GA_TestHitMove), judged on the authority's copy of the attacker and the attacker's own:
@@ -3725,21 +3923,34 @@ def scenario_hit_basic(client=1, step=3.0):
       - the hit reaches the victim's inbox on the authority the frame after, with the hurtbox and the hitbox it was made with
       - cancel on hit: the special (a command of the cancel window, OnHit) held 0.25 s after the attack starts cancels it only when the hit confirmed (control without a victim: it does not)
       - zero rollbacks on the attacking client
-    Pending H9 (victim side): damage, reaction and hitstun of the victim, the expected reconcile of the victim's client."""
+    The victim half (M4 H9), on the victim's authority copy and its own client: the hit opens a hitstop window on the frame of the hit (8 frames) and a
+    hitstun 31 frames after it (the floor of the rules, a stagger in place), the tags Combat.State.Hitstop / Hitstun are projected from it, the damage is
+    8 per hit on both copies, HitLanded and HitReceived are published once per hit, and the victim's client rolls back at most once per hit."""
     victim_index = 2 if client == 1 else 1
-    run = _Run('hit_basic', client)
-    key, vkey = run.key, key_of_player(victim_index)
+    vkey = key_of_player(victim_index)
+    run = _Run('hit_basic', client, judge_reconciles=False, extra=[('v_srv', 0, vkey), ('v_cli', victim_index, vkey)])
+    key = run.key
     attack, special = button_mask('Attack'), button_mask('Special')
     st, rec, h = {'F': {}, 'vloc': {}}, [], {'h': None}
     rb = {}   # rollbacks of the attacking client are counted from the control on: the loadout change before it reconciles once, by design
+    rbv = {}  # rollbacks of the victim's client per phase, from after the placement settled to just before the next one
+    vrec = []
 
     def sampler(_dt):
         try:
             rec.append((run.now(), _hit_window(0, key), _hit_window(client, key)))
+            vrec.append((run.now(), victim_info(0, vkey), victim_info(victim_index, vkey)))
         except Exception:
             pass
 
+    def rbmark(name):
+        def f():
+            rbv[name] = rollbacks(victim_index)
+            return name, rbv[name]
+        return f
+
     def setup():
+        hit_rules_setup()
         _hit_logging(True)
         st['kit'] = _apply_loadout(key, HIT_KIT)
         h['h'] = unreal.register_slate_post_tick_callback(sampler)
@@ -3833,24 +4044,30 @@ def scenario_hit_basic(client=1, step=3.0):
         (2.0, lambda: ('attack (control)', combat_tap(client, attack))),
         (2.25, lambda: ('stance held', combat_hold(client, special))),
         (2.4, lambda: ('stance released', combat_clear(client))),
-        (3.1, run.at('control: the move ran and nothing was hit', lambda: (run.saw_tag('Test.State.HitMove', 2.0, 2.6) and not _hit_log(0, key), f'hits {_hit_log(0, key)}'))),
+        (3.1, run.at('control: the move ran and nothing was hit', lambda: (run.saw_tag('Test.State.HitMove', 2.0, 2.6) and not [r for r in _hit_log(0, key) if r[0] >= st['F']['c']], f"hits {[r for r in _hit_log(0, key) if r[0] >= st['F']['c']]}"))),
         # phase 1: Root
         (step + 0.3, place('p1', (205.0, 0.0))),
         (step + 1.6, locate('p1')),
+        (step + 1.65, rbmark('p1s')),
         (step + 1.7, mark('p1')),
         (step + 1.7, lambda: ('attack (Root)', combat_tap(client, attack))),
         (step + 1.95, lambda: ('stance held', combat_hold(client, special))),
         (step + 2.1, lambda: ('stance released', combat_clear(client))),
         # phase 2: BakedSocket
+        (step + 3.5, rbmark('p1e')),
         (step + 3.6, place('p2', (100.0, 170.0))),
         (step + 4.9, locate('p2')),
+        (step + 4.95, rbmark('p2s')),
         (step + 5.0, mark('p2')),
         (step + 5.0, lambda: ('attack (BakedSocket)', combat_tap(client, attack))),
         # phase 3: WorldAtMoveStart
+        (step + 7.1, rbmark('p2e')),
         (step + 7.2, place('p3', (200.0, -110.0))),
         (step + 8.5, locate('p3')),
+        (step + 8.55, rbmark('p3s')),
         (step + 8.6, mark('p3')),
         (step + 8.6, lambda: ('attack (WorldAtMoveStart)', combat_tap(client, attack))),
+        (step + 10.1, rbmark('p3e')),
         (step + 10.2, stop),
         (step + 10.3, run.at('the kit was accepted', lambda: (st.get('kit') == 'OK', f'ServerApplyTestLoadout -> {st.get("kit")}'))),
         (step + 10.3, run.at('Root: first touch frame, hurtbox, group, hitstop; owner == authority', phase_check('p1', 'p2', 0, (205.0, 0.0)))),
@@ -3861,6 +4078,16 @@ def scenario_hit_basic(client=1, step=3.0):
         (step + 10.3, run.at('the owner has the window no later than the authority (predicted)', window_predicted)),
         (step + 10.3, run.at('cancel on hit: the stance cancels the move after a hit and not without one', stance_cancels)),
         (step + 10.3, run.at('zero rollbacks on the attacking client', lambda: (rb['end'] == rb['start'], f"rollback_count {rb['start']} -> {rb['end']}"))),
+        # the victim half
+        (step + 10.3, victim_window_checks(run, 'victim', lambda: [phase_rows(0, n, nx)[0][0][0] if len(phase_rows(0, n, nx)[0]) == 1 else -1 for n, nx in (('p1', 'p2'), ('p2', 'p3'), ('p3', None))], vrec)),
+        (step + 10.3, run.at('victim: Combat.State.Hitstop and Hitstun projected on the authority and on the owner', lambda: (
+            all(run.saw_tag(t, 0.0, 99.0, sd) for t in ('Combat.State.Hitstop', 'Combat.State.Hitstun') for sd in ('v_srv', 'v_cli')),
+            f"authority {sorted({t for s in run._win('v_srv', 0, 99, sim=True) for t in s['tags'] if 'Combat' in t})}, owner {sorted({t for s in run._win('v_cli', 0, 99, sim=True) for t in s['tags'] if 'Combat' in t})}"))),
+        (step + 10.3, run.at('victim: 24 damage (3 x 8) on the authority and on the owner', lambda: (
+            damage_of(0, vkey) == 24 and damage_of(victim_index, vkey) == 24, f'authority {damage_of(0, vkey)}, owner {damage_of(victim_index, vkey)}'))),
+        (step + 10.3, hit_events_check(run, 'victim', vkey, 3, ('Combat.Event.Hit.Staggered', 'Combat.Event.Hit.Reaction.StaggerInPlace'))),
+        (step + 10.3, run.at('victim: at most one rollback per hit on the victim\'s client', lambda: (
+            all(rbv[n + 'e'] - rbv[n + 's'] <= 1 for n in ('p1', 'p2', 'p3')), f"rollbacks per hit {[(n, rbv[n + 'e'] - rbv[n + 's']) for n in ('p1', 'p2', 'p3')]}"))),
         (step + 10.5, lambda: ('logging off', _hit_logging(False))),
         (step + 10.6, run.finish()),
     ]
