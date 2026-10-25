@@ -496,6 +496,22 @@ struct GASP_GIUSTINO2_API FGSTN_WallMovementSyncState : public FMoverDataStructB
 	double LastWallTimeMs = 0.0;
 
 	/**
+	 * True when the last wall was a moving one (a Movable component) and the mode records base-relative memory
+	 * (UGSTN_WallMovementModeBase::bRecordWallBaseInMemory, the v2 modes): LastWallBaseHeight is then meaningful. Always false for the legacy modes
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	bool bLastWallOnMovingBase = false;
+
+	/**
+	 * Height (along gravity-up) of the last wall's component origin on the last tick spent on it. With LastWallHeight it gives the height the wall was
+	 * left at in the wall's own frame (LastWallHeight - LastWallBaseHeight), which is what the entry's height cap compares on a moving wall
+	 * (traversal-surfaces.md 4.3, T2): world heights mean nothing on a wall that rises or sinks. The base pose of a frame is the same on every
+	 * machine (posed from the simulation time), so the value is too. Sent only with bLastWallOnMovingBase
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	float LastWallBaseHeight = 0.f;
+
+	/**
 	 * Simulation time (ms) of the last manual wall memory reset (FGSTN_ResetWallMemoryEffect / UGSTN_WallMovementLibrary::ResetWallMemory),
 	 * negative if none. Walls left before it are forgotten. It lives here, not on the Mover blackboard, so it is predicted,
 	 * rolled back and replicated with the rest of the wall state
@@ -596,6 +612,9 @@ struct FGSTN_WallTickState
 
 	/** Last successful probe: its component is the movement base candidate for next tick */
 	FGSTN_WallProbeResult LastProbe;
+
+	/** The dynamic wall ridden at the start of this tick (ApplyMovementBase), if any: the wall memory's base when the tick leaves before probing (a wall jump) */
+	TWeakObjectPtr<UPrimitiveComponent> RiddenBase;
 
 	/** The contact of this tick's adhesion sweep (a wall found by the sweep itself, not a wrap or a corner), for the surface-driven mode choice */
 	FHitResult Contact;

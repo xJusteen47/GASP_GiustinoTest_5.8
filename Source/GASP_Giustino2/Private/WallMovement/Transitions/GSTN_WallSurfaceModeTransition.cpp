@@ -16,6 +16,9 @@ UGSTN_WallSurfaceModeTransition::UGSTN_WallSurfaceModeTransition(const FObjectIn
 	SurfaceModes = UGSTN_WallSurfaceModeUtils::MakeDefaultList();
 	// The base class refuses an empty target; the real one is chosen per surface
 	TargetModeName = UGSTN_WallSurfaceModeUtils::SlideModeName;
+	// Traversal T2: the re-entry rules that hold on moving walls and after a correction (UGSTN_WallReentryUtils)
+	bInferModeChangeLostToRollback = true;
+	bBaseRelativeHeightCap = true;
 }
 
 FName UGSTN_WallSurfaceModeTransition::ChooseModeForHit(const FHitResult& Hit, const FMoverSyncState* SyncState) const

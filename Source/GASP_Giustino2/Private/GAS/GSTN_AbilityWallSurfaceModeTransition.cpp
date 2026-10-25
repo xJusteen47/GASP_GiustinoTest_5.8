@@ -15,6 +15,9 @@ UGSTN_AbilityWallSurfaceModeTransition::UGSTN_AbilityWallSurfaceModeTransition(c
 {
 	SurfaceModes = UGSTN_WallSurfaceModeUtils::MakeDefaultList();
 	TargetModeName = UGSTN_WallSurfaceModeUtils::SlideModeName;
+	// Traversal T2: the re-entry rules that hold on moving walls and after a correction (UGSTN_WallReentryUtils)
+	bInferModeChangeLostToRollback = true;
+	bBaseRelativeHeightCap = true;
 }
 
 FName UGSTN_AbilityWallSurfaceModeTransition::ResolveEntryMode(const FEntryCandidate& Candidate, const FSimulationTickParams& Params) const

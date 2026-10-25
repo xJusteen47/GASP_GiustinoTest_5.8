@@ -77,6 +77,14 @@ struct FGSTN_WallTraverseTestAccess
 	{
 		return Mode.ComputeEdgeSpeedCap(Ahead);
 	}
+
+	/** The end of the tick: the sync state (wall memory included) written from the tick state (GSTN_WallReentryTests.cpp) */
+	static void Capture(const UGSTN_WallTraverseModeBase& Mode, const FSimulationTickParams& Params, const FGSTN_WallTickState& State, bool bLeftOnPurpose,
+		FMoverTickEndData& OutputState)
+	{
+		Mode.CaptureFinalState(Params, Params.MovingComps.UpdatedComponent.IsValid() ? Params.MovingComps.UpdatedComponent->GetComponentQuat() : FQuat::Identity,
+			State, bLeftOnPurpose, OutputState);
+	}
 };
 
 /** Friend of the entry transition (one definition: the class befriends this name) */

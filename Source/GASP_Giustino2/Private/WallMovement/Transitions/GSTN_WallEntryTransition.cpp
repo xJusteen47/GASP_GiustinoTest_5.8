@@ -13,6 +13,7 @@
 #include "WallMovement/GSTN_WallMovementDebug.h"
 #include "WallMovement/GSTN_WallMovementTypes.h"
 #include "WallMovement/MoveLibrary/GSTN_WallQueryUtils.h"
+#include "WallMovement/MoveLibrary/GSTN_WallReentryUtils.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallEntryTransition)
 
@@ -232,46 +233,56 @@ bool UGSTN_WallEntryTransition::FindEntryWall(const FSimulationTickParams& Param
 	// by going through a reset mode (landing), by a reset tag, or manually (UGSTN_WallMovementLibrary::ResetWallMemory).
 	// Evaluate runs more than once per tick (and again when re-simulating), so this is a pure function of the start state, the
 	// rollback blackboard and the tags: it writes nothing
+	// The rules themselves are UGSTN_WallReentryUtils::Judge (pure, tested): the original order and answers, plus the two T2 switches when set
 	const FGSTN_WallMovementSyncState* WallState = Params.StartState.SyncState.SyncStateCollection.FindDataByType<FGSTN_WallMovementSyncState>();
-	const bool bMemoryWasReset = WallState
-		&& ((bHasModeChange && MemoryResetModes.Contains(ModeChange.PrevModeName) && ModeChange.SimTimeMs >= WallState->LastWallTimeMs)
-			// Manual reset: recorded in the sync state by FGSTN_ResetWallMemoryEffect (predicted and rolled back with the state)
-			// (half a millisecond of slack: the reset time and LastWallTimeMs are the same instant computed along different paths)
-			|| (WallState->MemoryResetTimeMs >= 0.0 && WallState->MemoryResetTimeMs + 0.5 >= WallState->LastWallTimeMs)
-			// Tag reset: while the tag is present. It is not latched (that would need a write from here); an ability that must
-			// forget the wall for good queues FGSTN_ResetWallMemoryEffect instead
-			|| HasMemoryResetTag(Params.StartState.SyncState));
-	if (WallState && WallState->bHasWallMemory && !bMemoryWasReset)
-	{
-		const FVector LastFlatNormal = FVector::VectorPlaneProject(WallState->LastWallNormal, GravityUp).GetSafeNormal();
-		const bool bSameWall = !LastFlatNormal.IsNearlyZero() && !FlatWallNormal.IsNearlyZero()
-			&& FVector::DotProduct(LastFlatNormal, FlatWallNormal) >= FMath::Cos(FMath::DegreesToRadians(SameWallAngle));
+	FGSTN_WallReentryRules Rules;
+	Rules.SameWallPolicy = SameWallPolicy;
+	Rules.SameWallAngle = SameWallAngle;
+	Rules.HeightCapTolerance = HeightCapTolerance;
+	Rules.ReentryCooldown = ReentryCooldown;
+	Rules.MemoryResetModes = MemoryResetModes;
+	Rules.bInferModeChangeLostToRollback = bInferModeChangeLostToRollback;
+	Rules.bBaseRelativeHeightCap = bBaseRelativeHeightCap;
 
-		if (bSameWall)
-		{
-			if (ReentryCooldown > 0.f && (NowMs - WallState->LastWallTimeMs) < ReentryCooldown * 1000.0)
-			{
-				GSTN_WALL_LOG(2, TEXT("ENTRY rejected: same wall, cooldown"));
-				return false;
-			}
-			if (SameWallPolicy == EGSTN_SameWallPolicy::Deny)
-			{
-				GSTN_WALL_LOG(2, TEXT("ENTRY rejected: same wall denied"));
-				return false;
-			}
-			const float Height = FVector::DotProduct(UpdatedComponent->GetComponentLocation(), GravityUp);
-			if (SameWallPolicy == EGSTN_SameWallPolicy::HeightCap && Height > WallState->LastWallHeight + HeightCapTolerance)
-			{
-				GSTN_WALL_LOG(2, TEXT("ENTRY rejected: height cap (%.1f > %.1f)"), Height, WallState->LastWallHeight + HeightCapTolerance);
-				return false;
-			}
-		}
+	FGSTN_WallReentryQuery Query;
+	Query.Memory = WallState;
+	Query.bHasModeChange = bHasModeChange;
+	Query.ChangePrevMode = ModeChange.PrevModeName;
+	Query.ChangeMode = ModeChange.ModeName;
+	Query.ChangeTimeMs = ModeChange.SimTimeMs;
+	Query.CurrentMode = Params.StartState.SyncState.MovementMode;
+	// Tag reset: while the tag is present. It is not latched (that would need a write from here); an ability that must
+	// forget the wall for good queues FGSTN_ResetWallMemoryEffect instead
+	Query.bResetTagPresent = WallState && HasMemoryResetTag(Params.StartState.SyncState);
+	Query.NowMs = NowMs;
+	Query.GravityUp = GravityUp;
+	Query.WallNormal = WallNormal;
+	Query.Height = FVector::DotProduct(UpdatedComponent->GetComponentLocation(), GravityUp);
+	Query.bWallMoving = UGSTN_WallReentryUtils::GetMovingWallHeight(Hit.GetComponent(), GravityUp, Query.WallBaseHeight);
+
+	const FGSTN_WallReentryResult Reentry = UGSTN_WallReentryUtils::Judge(Rules, Query);
+	switch (Reentry.Verdict)
+	{
+	case EGSTN_WallReentryVerdict::Cooldown:
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: same wall, cooldown"));
+		return false;
+	case EGSTN_WallReentryVerdict::Denied:
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: same wall denied"));
+		return false;
+	case EGSTN_WallReentryVerdict::HeightCap:
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: height cap%s (%.1f > %.1f) record=%s->%s@%.0f mode=%s lastWall@%.0f"), Reentry.bBaseRelative ? TEXT(" on the moving wall") : TEXT(""),
+			Reentry.ComparedHeight, Reentry.ComparedCap, *Query.ChangePrevMode.ToString(), *Query.ChangeMode.ToString(), Query.ChangeTimeMs, *Query.CurrentMode.ToString(),
+			WallState ? WallState->LastWallTimeMs : 0.0);
+		return false;
+	default:
+		break;
 	}
 
 	OutCandidate.Normal = WallNormal;
 	OutCandidate.Point = Hit.ImpactPoint;
 	OutCandidate.Hit = Hit;
-	GSTN_WALL_LOG(1, TEXT("ENTRY -> %s wallN=%s vSpeed=%.0f memReset=%d"), *TargetModeName.ToString(),
-		*GSTNWallDebug::Vec(WallNormal), VerticalSpeed, bMemoryWasReset ? 1 : 0);
+	GSTN_WALL_LOG(1, TEXT("ENTRY -> %s wallN=%s vSpeed=%.0f memReset=%d (%s)%s%s"), *TargetModeName.ToString(),
+		*GSTNWallDebug::Vec(WallNormal), VerticalSpeed, Reentry.Reset != EGSTN_WallMemoryReset::None ? 1 : 0, UGSTN_WallReentryUtils::LexReset(Reentry.Reset),
+		Reentry.bBaseRelative ? TEXT(" cap on the moving wall") : TEXT(""), Reentry.bHeightCapSkipped ? TEXT(" moving wall: cooldown only") : TEXT(""));
 	return true;
 }

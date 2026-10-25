@@ -119,6 +119,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall|Movement Bases", meta = (EditCondition = "bUseMovementBases"))
 	bool bRideFromSyncedLocation = false;
 
+	/**
+	 * Record in the wall memory the height of the wall's own origin when the wall is a moving one (a Movable component: an enemy's platform shape,
+	 * a moving wall), FGSTN_WallMovementSyncState::LastWallBaseHeight. The entry transition then judges its height cap in the wall's frame
+	 * (UGSTN_WallEntryTransition::bBaseRelativeHeightCap, traversal T2): with world heights a wall that rises refuses a re-grab lower on it and one
+	 * that sinks lets the character climb it by re-grabbing. Off by default here (legacy modes unchanged), on in the v2 traverse modes
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall|Movement Bases")
+	bool bRecordWallBaseInMemory = false;
+
 	// ---------------------------------------------------------------- Surface Detection
 	// What the probes accept and where they look. Output: the RAW PROBE NORMAL (and contact point) of this substep.
 	// These shape which wall the character is on and how corners are sensed; they do not smooth anything by themselves.

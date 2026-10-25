@@ -12,6 +12,7 @@
 #include "MoverSimulationTypes.h"
 #include "WallMovement/GSTN_WallMovementDebug.h"
 #include "WallMovement/MoveLibrary/GSTN_WallMovementUtils.h"
+#include "WallMovement/MoveLibrary/GSTN_WallReentryUtils.h"
 #include "WallMovement/MoveLibrary/GSTN_WallQueryUtils.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallMovementModeBase)
@@ -499,6 +500,8 @@ void UGSTN_WallMovementModeBase::CaptureFinalState(const FSimulationTickParams& 
 	OutputWallState.LastWallNormal = StartWallState ? StartWallState->LastWallNormal : FVector::ZeroVector;
 	OutputWallState.LastWallHeight = StartWallState ? StartWallState->LastWallHeight : 0.f;
 	OutputWallState.LastWallTimeMs = StartWallState ? StartWallState->LastWallTimeMs : 0.0;
+	OutputWallState.bLastWallOnMovingBase = StartWallState && StartWallState->bLastWallOnMovingBase;
+	OutputWallState.LastWallBaseHeight = StartWallState ? StartWallState->LastWallBaseHeight : 0.f;
 	// Written by FGSTN_ResetWallMemoryEffect only; carried through every tick
 	OutputWallState.MemoryResetTimeMs = StartWallState ? StartWallState->MemoryResetTimeMs : -1.0;
 	if (State.bHasWall || bLeftOnPurpose)
@@ -507,6 +510,14 @@ void UGSTN_WallMovementModeBase::CaptureFinalState(const FSimulationTickParams& 
 		OutputWallState.LastWallNormal = State.WallNormal;
 		OutputWallState.LastWallHeight = FVector::DotProduct(FinalLocation, State.GravityUp);
 		OutputWallState.LastWallTimeMs = Params.TimeStep.BaseSimTimeMs + Params.TimeStep.StepMs;
+		// The wall's own frame, when it moves (T2): the component of the last probe, as posed for this frame (the same pose on every machine)
+		OutputWallState.bLastWallOnMovingBase = false;
+		OutputWallState.LastWallBaseHeight = 0.f;
+		if (bRecordWallBaseInMemory)
+		{
+			const UPrimitiveComponent* MemoryWall = State.LastProbe.Component.IsValid() ? State.LastProbe.Component.Get() : State.RiddenBase.Get();
+			OutputWallState.bLastWallOnMovingBase = UGSTN_WallReentryUtils::GetMovingWallHeight(MemoryWall, State.GravityUp, OutputWallState.LastWallBaseHeight);
+		}
 	}
 
 	// Attachment
@@ -566,6 +577,7 @@ void UGSTN_WallMovementModeBase::ApplyMovementBase(const FSimulationTickParams& 
 	FGSTN_WallBaseInfo BaseInfo;
 	if (Params.SimContext.Blackboard.TryGet(GSTNWallBlackboard::BaseInfo, BaseInfo) && BaseInfo.Base.IsValid())
 	{
+		InOutState.RiddenBase = BaseInfo.Base;
 		// The start sync state's location when there is one (it is what a correction writes), else the capsule's, which Mover keeps on it
 		FVector RideFrom = FVector::ZeroVector;
 		if (bRideFromSyncedLocation)
