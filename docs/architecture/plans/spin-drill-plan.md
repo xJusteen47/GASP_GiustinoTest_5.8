@@ -67,8 +67,8 @@ D8 onward depends on D6–D7.
 | SD.8 | Players not drillable by default |
 | SD.9 | Static test prop in the test module first; bridge plugins later |
 | SD.10 | Early release = pop without jump; launch refreshes the air spin |
-| SD.11 | **No assumption**: D6–D7 do not start without the owner OK |
-| SD.12 | After M4b |
+| SD.11 | **Approved 2026-10-25 19:39**: D6–D7 after M4b P14 |
+| SD.12 | **Approved 2026-10-25 19:39**: after M4b; D1–D5, D11 may run on the desktop in parallel with M5 |
 
 ## 6. Edits needing the owner's OK
 

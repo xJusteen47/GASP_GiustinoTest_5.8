@@ -366,6 +366,12 @@ No string tags in code; all through `UE_DECLARE_GAMEPLAY_TAG_EXTERN`.
   thick one stays on the armour, so the tip's pass radius is part of the drill data.
 - **Sequencing**: these general items go to planning first; the detailed design of the individual abilities resumes after that.
 
+**Owner OK of 2026-10-25 19:39** ("va bene a tutte"): SD.11 approved (core seams S1–S6, scheduled after M4b P14) and SD.12
+approved (after M4b; the parts that do not touch the core may run on the desktop in parallel with M5). The proposals of the other
+SD questions not already answered in §13b stand as decisions: SD.2 opposite rotation stops the spin, SD.3 low gravity only during the
+air spin with a parameter to extend it, SD.5 no damage during the seat, SD.6 gravity direction only in v1, SD.7 final jump when the
+target breaks (option to keep plunging), SD.9 both level props and enemies, a static block first. SD.1 button slot: kept optional.
+
 ## 14. Domande per Giustino (italiano)
 
 Ognuna ha una mia proposta; se non rispondi, il piano usa la proposta (colonna "se non rispondi" nel piano).
