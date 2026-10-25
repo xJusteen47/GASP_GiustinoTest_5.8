@@ -761,6 +761,20 @@ def setup_hits_content():
         unreal.BlueprintEditorLibrary.compile_blueprint(bp)
         unreal.EditorAssetLibrary.save_loaded_asset(bp)
         log(f'{TEST_CHAR}: combat component HurtboxSet -> {specs["hurtbox_set"]}')
+    # M4 H10 (owner approved 2026-10-24): the attacker's hit presentation and the fork's lag compensation component, nothing else
+    for component_class in (unreal.GSTN_HitPresentationComponent, unreal.NetworkPredictionLagCompensation):
+        if any(isinstance(obj, component_class) for _, obj in blueprint_components(bp)):
+            continue
+        backup(TEST_CHAR)
+        root = subobjects.k2_gather_subobject_data_for_blueprint(bp)[0]
+        params = unreal.AddNewSubobjectParams(parent_handle=root, new_class=component_class, blueprint_context=bp)
+        _, fail = subobjects.add_new_subobject(params)
+        if not fail.is_empty():
+            log(f'ERROR adding {component_class.__name__}: {fail}')
+        else:
+            unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+            unreal.EditorAssetLibrary.save_loaded_asset(bp)
+            log(f'{TEST_CHAR}: added {component_class.__name__}')
     log(f'hit content written under {TEST_COMBAT_DIR}')
     return changed
 
