@@ -218,6 +218,31 @@ l'istantanea \code{GSTN.Visual.Hurtbox.Panel}. Totale suite: 877 verdi.
 \paragraph{Non fatto.} I gizmo per spostare le forme nel viewport sono di E7 (per ora le forme si modificano a numeri nel Details);
 nessun selettore di Physics Asset (si usa quello della mesh); il pannello di validazione apre il set ma non seleziona la hurtbox.
 
+\subsection{E7: gizmo e selezione nel viewport (\code{25c1878})}
+\paragraph{Ragionamento.} Le forme si spostano, ruotano e scalano con il gizmo standard di Unreal, sia nella timeline (hitbox) sia
+nell'editor dei set di hurtbox (che così non è più solo numerico). Il gizmo di Unreal non si disegna senza una modalità di editing
+attiva: come il Physics Asset editor, il viewport registra una piccola \code{FEdMode} propria. Il gizmo sta sul percorso della hitbox
+al frame del playhead (non su una chiave) e compare solo dentro la finestra della traccia. Il trascinamento accumula i delta dal
+momento della pressione e applica il totale allo stato iniziale: niente deriva da arrotondamenti, ed Esc ripristina esattamente.
+La scala scrive l'estensione della forma (condivisa da tutte le chiavi), mai una scala di trasformazione. Aggiunto anche il disegno
+delle hitbox attive nel viewport (colorate per gruppo), che E6 non faceva.
+\begin{lstlisting}
+Click: proxy sotto il cursore -> seleziona ; altrimenti raggio contro le forme attive
+       -> la più vicina (a pari distanza la più piccola) ; seleziona la chiave al playhead o la più vicina
+Inizio drag: chiave sul frame -> modificala ; nessuna e auto-key -> crea la chiave (stesso passo di undo)
+             nessuna e auto-key spento -> modifica la più vicina ; Shift -> sposta tutte le chiavi della corsia
+Durante il drag, S = spazio della hitbox (Root, socket baked o vivo, origine della mossa):
+   Offset = Inizio + S.InverseTransformVector(deltaMondo)
+   Rot    = S.rot^-1 * rotMondo * S.rot * Inizio.Rot
+   Estensione = ScalaEstensione(formaIniziale, unità)        // 1 + unità * 0.01 per asse
+Mirror: chiave in spazio root, x -> -x, quat (x,y,z,w) -> (x,-y,-z,w)
+\end{lstlisting}
+\paragraph{Unreal.} \code{FEditorViewportClient} (\code{InputWidgetDelta}, \code{ProcessClick}, \code{AbortTracking}, \code{GetWidgetLocation}),
+\code{UE::Widget::EWidgetMode}, \code{HHitProxy}/\code{DECLARE_HIT_PROXY}, \code{HWidgetAxis}, \code{FEdMode} con \code{FEditorModeRegistry},
+\code{FScopedTransaction}. \textbf{Test}: 7 (conversioni di spazio, scala sull'estensione, auto-key in un solo undo, selezione, mirror,
+drag delle hurtbox). Totale suite: 884 verdi. \textbf{Da tarare}: il fattore 0{,}01 della scala. \textbf{Non fatto}: voci Mirror/Offset nel
+menu delle chiavi (ci sono pulsante e Shift), snap della scala, overlay delle hurtbox del kit nella timeline.
+
 \section{Cosa controllare a mano stasera}\label{sec:controlli}
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Muri}: in \code{SandboxCharacter_Mover}, modalità WallSlidingV2, sezione \emph{Edges}: ci sono
@@ -237,6 +262,11 @@ nessun selettore di Physics Asset (si usa quello della mesh); il pannello di val
   \item \textbf{Hurtbox set}: doppio clic su un Hurtbox Set, scegli la mesh di un personaggio con Physics Asset, Generate, Add missing:
     le forme stanno sul corpo. Prova Update shapes e Replace all (conferma). Seleziona una hurtbox sinistra e Mirror: compare dall'altro
     lato. Su uno scheletro senza sinistra/destra (nemico, torretta) Mirror è disattivo con il motivo. Undo dopo ogni azione.
+  \item \textbf{Gizmo (E7)}: timeline con traccia Hitbox, kit e skin; playhead dentro la finestra, spunta ``Hitboxes'': si vedono le
+    forme. Clic sulle linee o dentro il volume: si evidenzia la chiave e compare il gizmo. W/E/R e trascina ogni maniglia (la scala è
+    comoda?). Ctrl+\textasciitilde{} per Local/World (la scala resta locale). Su un frame senza chiave con auto-key: una chiave, un solo
+    Ctrl+Z la toglie. Esc a metà drag ripristina tutto. Shift all'inizio sposta tutte le chiavi. Playhead fuori dalla finestra: il gizmo
+    sparisce. Nell'editor delle hurtbox: clic, drag, undo ed Esc.
   \item \textbf{Rete}: prima di unire M5, esegui lo scenario \code{scenario_hit_basic} del harness (il bake non è stato provato in PIE).
 \end{enumerate}
 
