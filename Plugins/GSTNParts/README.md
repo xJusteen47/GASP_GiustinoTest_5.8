@@ -18,7 +18,7 @@ regenerate by themselves.
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve, the part state and the deterministic part math. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
+| `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve, the part state and the deterministic part math, and the part resolve step of the hit pipeline. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
 | `GSTNPartsGAS` | not built (P5) | Break-effect appliers, events, tag projection helpers. |
 | `GSTNPartsNP` | not built (P6-P8) | Sync fragment, tick extension, snapshot contributor, outcome applier. Needs the GAS-NPP fork. |
 | `GSTNPartsPresentation` | not built (P10-P12) | Damage material, hidden bones, chunks and shatter. Loaded by a listen-server host, skipped on a dedicated server. |
@@ -89,6 +89,26 @@ of the sync fragment and the snapshot; no floats, tags or pointers):
 Blueprint gets the stateless helpers (`GetPenetrationBandIndex`, `QuantisePartDamage`, `DequantisePartDamage`, `IsPartBroken`,
 `CountBrokenParts`, `GetEffectiveWeight`); `ApplyHit` is C++ only (hot path, MT section 3.8).
 
+## The part resolve step
+
+`UGSTN_HitStep_PartResolve` (`Pipeline/`) is the pipeline step of the combat plugin's hit resolution (combat-parts.md 4.2, 4.4, 5.3). Put it in
+the rules asset's `HitPipeline` after `TeamFilter`, `HurtState`, `HurtboxReaction`, `Parry` and `Shield` and before `ComputeKnockback`. It
+**replaces `HealthWeight` and `ApplyDamage`**: it writes the weight (the health weight and the mass lost by broken parts), and it requests the damage
+itself, because `ApplyDamage` requests the hit's own damage and would ignore the part's share. For an entity without a part set it writes exactly what
+`ApplyDamage` writes, so one pipeline serves both kinds of entity.
+
+- Reads the victim only through the view: `FGSTN_PartsSnapshotExt` (`Pipeline/`), the broken mask, the damage bytes and the part set, handed over as
+  `FGSTN_HitVictimView::SnapshotExtension` (a `const void*` the extension identifies by a type word). The NP adapter fills it (P7); a test fills it by hand.
+- The part comes from `HurtboxIndex` (the attacker's choice, never re-derived) through the part's hurtbox names; a hurtbox no part names is the body.
+- Writes the reaction modifiers (weight scale times the juggle factors, knockback and hitstop scales, the band's stagger scale, the part's stagger threshold
+  else the body's else unset, the lower reaction cap), the main pool damage, and one `FGSTN_PartHitOutcome` (the state the hit left, the events as flags) for the outcome applier.
+- A ricochet band stops the pipeline (`bHit` false): no damage, no freeze on either side, no flinch.
+- The table is the set's, else the rules extension's (`FGSTN_PartsRulesExtension`, in `UGSTN_CombatRules::RulesExtensions`), else the settings', else the built-in three bands.
+- `FGSTN_PartsPipelineValidator` reports `PartResolve` before `Parry`/`Shield`, `ApplyDamage` next to it, and a part set under rules without the step. The
+  combat rules validator already reports it after `ComputeKnockback` and next to `HealthWeight`.
+
+`FGSTN_PartHitData` is a `FGSTN_HitExtension` (an entry of `FGSTN_HitData::ExtensionData`) and `FGSTN_PartsRulesExtension` a `FGSTN_RulesExtension`.
+
 ## Gameplay tags
 
 | Tags | Source | Declared in |
@@ -140,6 +160,7 @@ curve against hand values, weight clamp). The canary build
 
 ## Changelog
 
+- 0.1 (2026-10-25): the part resolve step, its snapshot extension and outcome entry, the pipeline validator (plan P4).
 - 0.1 (2026-10-23): part state, quantisation, hit application, cascade, weight, projection, grab gate and restore math
   (plan P3); plugin skeleton, native tags, ini vocabulary, settings (plan P1); part set, penetration table, break
   effects, hit data, kit and rules extensions, validators, baked curve (plan P2).

@@ -132,3 +132,29 @@ One line each: where, what differs, why. Collected per checkpoint; folded into `
   fingerprint check at connect would cover it), `bWeakPointHit` on an already broken part, `Penetration` clamping in `Make`, FString vs FText
   messages in the validators, the `Mask == 0` meaning of "all" in `RestoreParts`, and the test hygiene items (`UCLASS(Hidden)` test types
   outside a test guard, the counting allocator, tests that read the project's ini defaults).
+
+## P4 part resolve step (laptop, 2026-10-25; not in the desktop plugin)
+
+- m4b-parts-plan.md P4 / combat-parts.md 4.2: the step **replaces `ApplyDamage`** in a pipeline that uses parts, besides `HealthWeight`. In M4 as built,
+  `ApplyDamage` writes `DamageAdd = Hit.Damage` and a damage request with `Magnitude = Hit.Damage`, and the GAS layer applies the request's magnitude, not
+  `Outcome.Damage` (which only advances the victim view). The plan's "ApplyDamage adds Outcome.Damage unchanged" is not how it is built, so a step that only
+  wrote `Outcome.Damage` would leave the full hit on the victim. `PartResolve` therefore writes the damage and the request itself (and the hit's extra
+  effects) and `FGSTN_PartsPipelineValidator` reports `ApplyDamage` next to it as an error. For an entity without a part set the step writes what `ApplyDamage`
+  writes (test `Step.IdentityWithoutPartSet`), so the plan's "no part set = identity" still holds. No change in GSTNCombat.
+- Plan P4 files: `Pipeline/GSTN_HitStep_PartResolve`, `GSTN_PartHitOutcome` (as `FGSTN_PartHitOutcome`), `GSTN_PartsPipelineValidator`, plus
+  `GSTN_PartsSnapshotExt`. The snapshot extension holds a `const UGSTN_PartSetDefinition*` instead of the spec's `PartSetId` and starts with a type word,
+  because `FGSTN_HitVictimView::SnapshotExtension` is a `const void*` and nothing else identifies it. A lag compensation history that outlives a frame must
+  keep the id and rebuild the pointer (P7). `FGSTN_PartHitOutcome` carries the whole resulting state (mask, bytes, serial) and not only a delta, so the applier
+  writes with one assignment; every member is a UPROPERTY because an `FInstancedStruct` copies property by property.
+- Weight: read from the state **before** the hit (like `HealthWeight`; a break of this hit does not make this hit's launch stronger). Juggle: part times body.
+  Knockback and hitstop scale: the hit part's (the body's for a body hit), not both. Threshold: part, else body, else unset. Cap: lower of part and body.
+  `EGSTN_PartReactionTier` is mapped to `EGSTN_HitReaction` by value (static_assert); `FGSTN_PartsBakedCurve` was NOT replaced by `FGSTN_BakedCurve` (the
+  part math keeps its own 16 bit curve, the combat one is Q2.14 and has no shared evaluation): left as is.
+- A ricochet returns `Stop` with `bHit` false and an outcome entry flagged `Ricochet`; the attacker side decides the recoil through `IGSTN_AttackerOutcomeExtension` (P8).
+- The tick-order note for P7: `FGSTN_HitPipelineRunner::AdvanceVictim` advances only the health or percent, not the parts extension (it is a `const void*`), so the
+  second hit of one inbox drain would see the parts of the first hit's start. P7 has to rebuild the extension between the entries from the previous entry's
+  `FGSTN_PartHitOutcome::GetResultState()` (the test `Step.OutcomeCarriesTheResultState` chains two hits that way).
+- Base structs: `FGSTN_PartHitData` now derives from `FGSTN_HitExtension` and `FGSTN_PartsRulesExtension` from `FGSTN_RulesExtension` (source-level, assets keep loading).
+- Tests: 12 `GSTNParts.Core.Step.*` (the plan's eleven plus `OutcomeCarriesTheResultState`); the stagger, tier and hitstop tests run the real `ComputeKnockback` and
+  `Hitstop` steps with the weight driven model through `FGSTN_HitPipelineRunner`. The plan's "M4 fake-step pipeline test still green" is the combat suite (396 unchanged).
+  Not done: a byte-for-byte state compare of the M4 scenarios with the plugin loaded and no part set (needs the PIE harness; the plugin adds nothing to the pipeline of the standard rules, whose pipeline does not list `PartResolve`).
