@@ -644,6 +644,13 @@ Clean = state snapshots equal and no reconciles beyond the expected one per hit 
 - **Minion wire growth** if many minion types use parts: cap 8 parts, ext byte only for those types, measured in the bench.
 - **Host-only costs** (listen server): hit resolution, minions and presentation share the host's frame, and host upload limits clients; host advantage on instant breaks (§5.5b).
 - **Chunk and shard budget** on low-end clients and hosts: tier rules of §6.4, quality scalability settings.
+- **Open item: bosses with more than 16 parts** (owner question, 2026-10-25 23:08, Helldivers 2's swarm lord as the example). The cap
+  of §3 stays 16 (`uint16` mask). *Proposal*, intended path: **composition**. A multi-segment boss is several linked entities
+  (segments), each with its own part set and its own parts fragment. A segment's part hits transfer `MainDamage` to the boss's
+  shared main health instead of the segment's own pool (the transfer of §4.2 with a different target). Linking, the shared pool
+  and how segments move together sit with M8 ([combat-m8-minions.md](combat-m8-minions.md) §15). A per-set mask width (16, 32
+  or 64 bits) is possible as an isolated format change of the fragment and the minion wire, but is not recommended as the default:
+  it grows every entity's state for a rare case. Not designed yet; it needs its own spec before a boss of this kind is built.
 
 ### 8.6 How to extend
 

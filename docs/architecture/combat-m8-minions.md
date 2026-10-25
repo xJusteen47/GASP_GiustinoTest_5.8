@@ -856,6 +856,12 @@ host replication CPU for the same 150 (≈ 6 µs per actor-connection update × 
 - **Lag compensation drift**: the interpolation buffer, pack rate and rewind clamp must agree; if the minion render time
   diverges from the player's (e.g. a lower buffer for minions), the single-number property is lost. Any change to the
   buffer must re-run `scenario_minion_lagcomp`.
+- **Open item: multi-segment boss composition** (owner question, 2026-10-25 23:08: an enemy with more than 16 parts, such as
+  Helldivers 2's swarm lord). Parts cap one entity at 16 ([combat-parts.md](combat-parts.md) §8.5). Intended path: the boss is
+  several linked entities (segments), each with its own part set and fragment, whose part hits transfer `MainDamage` to one shared
+  main health. To design here: how segments link and follow each other (a chain of followers or one driver with offsets), where the
+  shared pool lives and replicates, how KO of the pool KOs every segment, LOD and relevancy as one unit, and whether segments are
+  minions or fighters. Not designed yet.
 - **Puppet cost on clients** may dominate before the server does; `MaxVisiblePuppets`, puppet LOD and animation sharing are
   planned, not free (R6); the host pays it in the same frame as the batch.
 - **Sync-state and pipeline refactors** (`HitTargets` 16 entries, `FGSTN_HitVictimView`, `FGSTN_TimelinePlayer`) touch M3/M4
