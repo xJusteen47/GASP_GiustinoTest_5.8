@@ -124,7 +124,9 @@ EGSTN_WallEdgeKind UGSTN_WallEdgeUtils::ClassifyAhead(const FGSTN_WallEdgeSettin
 	{
 		const bool bSmooth = AngleDeg <= Settings.MaxSmoothAngle + GSTNWallEdge::SmoothAngleTolerance;
 		const float AbsOffset = FMath::Abs(Offset);
-		if (AbsOffset <= Settings.MaxStepHeight)
+		// A negative offset stands out of the plane (step up), a positive one recedes from it (step down)
+		const float StepLimit = Offset <= 0.f ? Settings.MaxStepHeight : Settings.MaxStepDownDepth;
+		if (AbsOffset <= StepLimit)
 		{
 			// Step-up has precedence over the angle: continuous within step height
 			if (!bSmooth)

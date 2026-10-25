@@ -965,6 +965,29 @@ bool FGSTN_WallV2LaneDeepRecessTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2LaneRecessWithinStepTest, "GSTN.Wall.V2.Lane.RecessWithinTheStepUpIsNotACorner", GSTNWallEdgeWorld::TestFlags)
+bool FGSTN_WallV2LaneRecessWithinStepTest::RunTest(const FString& Parameters)
+{
+	// The same 15 cm recess with the step up and down raised to 20 cm (owner, 2026-10-25): the rise out of it is a step, so it is crossed at full speed
+	const FVector Proposed(0, 350, -450);
+	for (const FQuat& Frame : Frames())
+	{
+		FEdgeScene Scene(Frame);
+		Scene.Mode->Edges.MaxStepHeight = 20.f;
+		Scene.Mode->Edges.MaxStepDownDepth = 20.f;
+		Scene.AddBox(FVector(-50, -2000, -4000), FVector(0, LaneFeature, 4000));
+		Scene.AddBox(FVector(-50, LaneFeature, -4000), FVector(-15, LaneFeature + 100, 4000));
+		Scene.AddBox(FVector(-50, LaneFeature + 100, -4000), FVector(0, 2000, 4000));
+		Scene.PlaceCapsule(0, 1500.f);
+		const FLaneRun Run = RunLane(Scene, Proposed, LaneFeature + 280.f);
+		TestTrue(*FString::Printf(TEXT("Crossed the recess (y %.0f)"), Run.FinalY), Run.FinalY >= LaneFeature + 280.f);
+		TestTrue(*FString::Printf(TEXT("No corner slowdown (worst ratio %.3f)"), Run.WorstRatio), Run.WorstRatio >= 0.95f);
+		TestFalse(TEXT("Mode not left"), Run.bLeft);
+		TestFalse(TEXT("Wall never lost"), Run.bLostWall);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2LaneFirstTicksTest, "GSTN.Wall.V2.Lane.UnseatedCapsuleReadsNoFeatureOnFlatWall", GSTNWallEdgeWorld::TestFlags)
 bool FGSTN_WallV2LaneFirstTicksTest::RunTest(const FString& Parameters)
 {
@@ -984,7 +1007,7 @@ bool FGSTN_WallV2LaneFirstTicksTest::RunTest(const FString& Parameters)
 			TestEqual(*FString::Printf(TEXT("Flat wall, capsule %.0f cm off its seat: nothing ahead"), GapError), static_cast<int32>(Ahead.Kind), static_cast<int32>(EGSTN_WallEdgeKind::None));
 
 			// The control: from the seat assumption alone (no contact) the same scene is read as a feature, so the test sees what it guards
-			if (GapError > Scene.Mode->Edges.MaxStepHeight * 0.5f)
+			if (GapError > Scene.Mode->Edges.MaxStepDownDepth * 0.5f)
 			{
 				const FGSTN_WallAheadResult Blind = UGSTN_WallEdgeUtils::ProbeAhead(FMovingComponentSet(Scene.Capsule), Scene.Mode->Edges,
 					FGSTN_WallTraverseTestAccess::GetWallCheckSettings(*Scene.Mode), Scene.State.WallNormal, Scene.State.GravityUp, Scene.ToWorld(Velocity));

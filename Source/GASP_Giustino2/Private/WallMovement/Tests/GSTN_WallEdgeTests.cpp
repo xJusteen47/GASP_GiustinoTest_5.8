@@ -27,7 +27,7 @@ bool FGSTN_WallEdgeBumpWinsTest::RunTest(const FString& Parameters)
 	for (float Angle : { 20.f, 45.f, 75.f, 89.f })
 	{
 		TestEqual(TEXT("Bump within step height at any angle"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -S.MaxStepHeight, Angle, false), EGSTN_WallEdgeKind::Bump);
-		TestEqual(TEXT("Recess within step height too"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, S.MaxStepHeight * 0.5f, Angle, false), EGSTN_WallEdgeKind::Bump);
+		TestEqual(TEXT("Recess within step height too"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, S.MaxStepDownDepth * 0.5f, Angle, false), EGSTN_WallEdgeKind::Bump);
 	}
 	// Taller than the step: the angle decides
 	TestEqual(TEXT("Tall + 45 deg = concave"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -S.MaxStepHeight - 1.f, 45.f, false), EGSTN_WallEdgeKind::Concave);
@@ -37,6 +37,23 @@ bool FGSTN_WallEdgeBumpWinsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Far face in band = convex"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, false, 0.f, 60.f, true), EGSTN_WallEdgeKind::Convex);
 	TestEqual(TEXT("Far face beyond limit = blocked"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, false, 0.f, 85.f, true), EGSTN_WallEdgeKind::Blocked);
 	TestEqual(TEXT("Flush flat wall"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, 0.f, 0.f, false), EGSTN_WallEdgeKind::None);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallEdgeStepUpDownTest, "GSTN.Wall.Edge.StepUpAndDownAreSeparate", GSTNWallEdgeTest::TestFlags)
+bool FGSTN_WallEdgeStepUpDownTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNWallEdgeTest;
+	FGSTN_WallEdgeSettings S;
+	TestEqual(TEXT("Same default for step up and step down"), S.MaxStepDownDepth, S.MaxStepHeight);
+	S.MaxStepHeight = 5.f;
+	S.MaxStepDownDepth = 20.f;
+	TestEqual(TEXT("A 15 cm recess is within the step down"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, 15.f, 45.f, false), EGSTN_WallEdgeKind::Bump);
+	TestEqual(TEXT("A 15 cm bump is beyond the step up"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -15.f, 45.f, false), EGSTN_WallEdgeKind::Concave);
+	S.MaxStepHeight = 20.f;
+	S.MaxStepDownDepth = 5.f;
+	TestEqual(TEXT("A 15 cm bump is within the step up"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, -15.f, 45.f, false), EGSTN_WallEdgeKind::Bump);
+	TestEqual(TEXT("A 15 cm recess is beyond the step down"), UGSTN_WallEdgeUtils::ClassifyAhead(S, MaxEdge, true, 15.f, 45.f, false), EGSTN_WallEdgeKind::Convex);
 	return true;
 }
 

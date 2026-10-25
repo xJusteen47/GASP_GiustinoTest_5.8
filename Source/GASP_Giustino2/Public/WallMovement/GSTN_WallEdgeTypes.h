@@ -16,7 +16,7 @@ enum class EGSTN_WallEdgeKind : uint8
 {
 	/** Flat continuation, nothing to react to */
 	None,
-	/** Ledge or rib no taller than MaxStepHeight: stepped over, never a corner and never a floor */
+	/** Ledge or rib no taller than MaxStepHeight (step up), or a recess no deeper than MaxStepDownDepth: continuous, never a corner and never a floor */
 	Bump,
 	/** Gentle change of plane (angle <= MaxSmoothAngle): the proxy plane follows, no speed cap */
 	Slope,
@@ -41,9 +41,19 @@ struct GASP_GIUSTINO2_API FGSTN_WallEdgeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Edges", meta = (ClampMin = "0", ClampMax = "89", ForceUnits = "deg"))
 	float MaxSmoothAngle = 15.f;
 
-	/** Bumps and ledges up to this height are stepped over (cm) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Edges", meta = (ClampMin = "0", ForceUnits = "cm"))
+	/**
+	 * Step up: bumps, ribs and ledges that stand out of the wall up to this height are stepped over (cm). Also the rise out of a recess the
+	 * capsule has dived into: a deeper rise is an inside corner, so to cross a recess without slowing this must reach its depth
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Edges", meta = (DisplayName = "Max Step Up Height", ClampMin = "0", ForceUnits = "cm"))
 	float MaxStepHeight = 10.f;
+
+	/**
+	 * Step down: a surface that recedes from the wall plane up to this depth (a recess, a groove, the far side of a bump) is continuous wall,
+	 * never an outside edge (cm). Same default as the step up; separate so a designer can tune them apart
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Edges", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float MaxStepDownDepth = 10.f;
 
 	/** Extra clearance added to the step lift (cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Edges", meta = (ClampMin = "0", ForceUnits = "cm"))

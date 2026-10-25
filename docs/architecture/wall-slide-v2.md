@@ -209,7 +209,8 @@ radius per tick" (≈ 2000 cm/s at 60 Hz), enforced by clamping, not by substeps
 ```
 FGSTN_WallEdgeSettings   (Category "Wall|Edges")
   float MaxSmoothAngle = 15 deg      slope changes up to this are continuous: no cap
-  float MaxStepHeight  = 10 cm       bumps/ledges up to this are stepped over, never a corner, never a floor
+  float MaxStepHeight  = 10 cm       step up: bumps/ledges up to this are stepped over, never a corner, never a floor
+  float MaxStepDownDepth = 10 cm     step down: a surface receding up to this is continuous wall, never an outside edge (6.13)
   float StepMargin     = 2 cm
   float LookaheadTime  = 0.15 s      LookaheadDistance = max(MinLookahead, |v| * LookaheadTime)
   float MinLookahead   = 20 cm
@@ -539,3 +540,13 @@ The first run (6.11) listed five problems. What each one was:
 
 Harness: the end-of-run summary leaves the leaving tick out of the speed windows, shows which mode ran (`WallSlidingV2 (ran WallClimbingV2)`), `--log N` sets `gstn.Wall.Log` for the run, `--freeze-movers` stops the moving walls (diagnostic), and after the first 0.6 s a diagonal stick becomes a pure sideways one: the grab needs intent into the wall, but a wall that bends away turns "into the wall" into "up" (6.7) and the vertical brake held the character after every corner.
 
+### 6.13 Step up and step down, query cost (owner, 2026-10-25)
+
+- **Separate step limits.** `FGSTN_WallEdgeSettings` has a step up (`MaxStepHeight`, shown as "Max Step Up Height") and a step down (`MaxStepDownDepth`),
+  10 cm each by default, like the walking mode's step height. `ClassifyAhead` uses the step up for a feature that stands out of the plane (negative offset)
+  and the step down for one that recedes (positive offset). The rise out of a recess the capsule has dived into is a step up: to cross the 15 cm recess of
+  lane e without the corner slowdown, raise the step up to 15 cm or more (test `GSTN.Wall.V2.Lane.RecessWithinTheStepUpIsNotACorner`, both at 20 cm).
+  Defaults equal, so behaviour is unchanged.
+- **Query cost on curves and near corners: accepted for now, revisit if needed.** The arc/crease sampling of 6.12 brings v2 to 5-5.7 queries per tick on
+  average (max 9) on the curve and corner lanes, against the 3.5 target of the flat lane. The owner accepted it for now (2026-10-25); if the wall slide shows
+  up in a profile, the first candidates are sampling the chain every other tick and caching it while the same corner stays in the look.
