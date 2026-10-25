@@ -13,6 +13,7 @@
 #include "Jump/GSTN_JumpLogic.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutData.h"
+#include "Presentation/GSTN_HitPresentation.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatVictim.h"
@@ -620,6 +621,15 @@ private:
 
 	/** The attacker's pose at the end of the previous frame from the Mover tracker (the actor's own without one). False without an owner */
 	bool ReadOwnPose(FTransform& OutTransform, FVector& OutUp);
+
+	/**
+	 * What the attacker side predicted about each hit of the last frames, for the presentation component of this pawn (M4 H10). Local data
+	 * rewritten by every tick and re-simulation; the simulation never reads it
+	 */
+	TArray<FGSTN_PredictedHitView> PredictedHits;
+	TWeakObjectPtr<class UGSTN_HitPresentationComponent> HitPresentation;
+	bool bHitPresentationSearched = false;
+	float LastStepMs = 1000.f / 60.f;
 
 	/** The per-attacker rewound view, reused every frame it is needed. Local data, not state */
 	FGSTN_StepSnapshot LagCompOverlay;

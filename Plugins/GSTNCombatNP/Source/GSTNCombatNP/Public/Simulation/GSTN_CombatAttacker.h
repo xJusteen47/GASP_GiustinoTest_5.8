@@ -7,6 +7,7 @@
 #include "GenericTeamAgentInterface.h"
 #include "Hits/GSTN_HitExtensions.h"
 #include "Hits/GSTN_HitShape.h"
+#include "Hits/GSTN_ReactionTypes.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_HitInbox.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
@@ -86,6 +87,15 @@ struct FGSTN_AttackerHit
 
 	/** The ring was full and the oldest target was replaced by this one */
 	bool bReplacedTarget = false;
+
+	/**
+	 * What the attacker predicted the victim would do, for the presentation of its own machine (M4 H10): the knockback of the pipeline
+	 * (tier, hitstun, launch velocity before the victim's DI) and the hit's cue and place. Never read by the simulation
+	 */
+	bool bHasKnockback = false;
+	FGSTN_KnockbackResult Knockback;
+	FGameplayTag CueTag;
+	FVector HitLocation = FVector::ZeroVector;
 };
 
 /**

@@ -37,6 +37,7 @@
 #include "NetworkPredictionProxyWrite.h"
 #include "NetworkPredictionWorldManager.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
+#include "Presentation/GSTN_HitPresentationComponent.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Debug/GSTN_CombatDebugDraw.h"
@@ -974,6 +975,21 @@ void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, 
 	// Outside the simulation: the authority (a dedicated server, or the listen-server host's own pawn) publishes each event
 	// once; a predicting client drops what its predictions and re-simulations wrote
 	FGSTN_InputHostUtils::PublishOutbox(EventOutbox, GetOwner());
+
+	// The attacker's own presentation (M4 H10): the locally controlled pawn shows its predicted hits at once and cancels the ones a correction removes
+	if (Sync && TicksOnThisMachine())
+	{
+		if (!bHitPresentationSearched)
+		{
+			bHitPresentationSearched = true;
+			HitPresentation = GetOwner()->FindComponentByClass<UGSTN_HitPresentationComponent>();
+		}
+		const APawn* Pawn = Cast<APawn>(GetOwner());
+		if (HitPresentation.IsValid() && Pawn && Pawn->IsLocallyControlled())
+		{
+			HitPresentation->OnAttackerFrame(Sync->Core, Sync->Core.Input.History.GetLatestFrame(), RegisteredEntityId, PredictedHits, LastStepMs);
+		}
+	}
 }
 
 FString UGSTN_CombatSimComponent::GetHitstopMontageTrace() const

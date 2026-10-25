@@ -72,6 +72,8 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	const bool bDraw = GSTNCombatDebug::IsHitboxDrawOn();
 	AttackerDebugShapes.Reset();
 	AttackerHits.Reset();
+	LastStepMs = static_cast<float>(TimeStep.StepMS);
+	PredictedHits.RemoveAll([Frame](const FGSTN_PredictedHitView& View) { return View.Frame >= Frame || View.Frame < Frame - 240; });
 	if (bLog)
 	{
 		HitLogByFrame.Remove(Frame);
@@ -122,6 +124,20 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 			bLoggedTargetOverflow = true;
 			UE_LOG(LogGSTNCombatAttacker, Warning, TEXT("%s: the hit target ring (%d) is full, the oldest target of the move was replaced; a hitbox group that hits more victims than that can hit the first ones again"),
 				*GetPathName(), FGSTN_HitSyncState::MaxHitTargets);
+		}
+		if (!Hit.bRicochet)
+		{
+			FGSTN_PredictedHitView& View = PredictedHits.AddDefaulted_GetRef();
+			View.Frame = Frame;
+			View.VictimId = Hit.VictimId;
+			View.HitGroup = Hit.HitGroup;
+			View.Timeline = Core.ActiveTimeline;
+			View.HitboxIndex = Hit.Entry.AttackerHitboxIndex;
+			View.AttackerHitstopFrames = Hit.AttackerHitstopFrames;
+			View.bHasKnockback = Hit.bHasKnockback;
+			View.Knockback = Hit.Knockback;
+			View.CueTag = Hit.CueTag;
+			View.HitLocation = Hit.HitLocation;
 		}
 		// Also on a ricochet: the victim still gets the entry for its cue and event. A victim that does not tick here refuses it
 		if (World)

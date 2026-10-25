@@ -343,6 +343,10 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		FGSTN_AttackerHit& Hit = OutHits.AddDefaulted_GetRef();
 		Hit.VictimId = Victim.EntityId;
 		Hit.HitGroup = Group;
+		Hit.bHasKnockback = Context.Outcome.bHasKnockback;
+		Hit.Knockback = Context.Outcome.Knockback;
+		Hit.CueTag = Candidate.Hit.CueTag;
+		Hit.HitLocation = Candidate.HitLocation;
 		Hit.bReplacedTarget = Core.Hit.AddHitTarget(Victim.EntityId, StartFrame, Group);
 
 		FGSTN_HitContextView ContextView;

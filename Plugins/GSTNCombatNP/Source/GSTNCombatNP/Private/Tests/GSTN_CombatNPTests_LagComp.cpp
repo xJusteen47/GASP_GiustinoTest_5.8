@@ -3,6 +3,7 @@
 // entities are stand-ins that implement the snapshot source interface.
 
 #include "Misc/AutomationTest.h"
+#include "Presentation/GSTN_HitPresentation.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Simulation/GSTN_LagCompensation.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
@@ -190,6 +191,64 @@ bool FGSTN_LagCompCapAtMaxRewindTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the newest record is readable"), Subsystem->SampleHistory(VictimId, 1.0e9f, Newest, false));
 	TestEqual(TEXT("a rollback dropped the frames after it"), Newest.Frame, 190);
 	TestEqual(TEXT("and kept the ring bounded"), Subsystem->GetNumHistoryRecords(VictimId) <= Expected, true);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LagCompPresentationCancelledTest, "GSTNCombat.NP.Hits.LagComp.PresentationCancelledOnCorrection", GSTN_NP_TEST_FLAGS)
+bool FGSTN_LagCompPresentationCancelledTest::RunTest(const FString& Parameters)
+{
+	FGSTN_HitPresentationTracker Tracker;
+	FGSTN_HitPresentationTracker::FDelta Delta;
+	FGSTN_HitSyncState Hit;
+
+	Tracker.Update(Hit, true, 10, Delta);
+	TestEqual(TEXT("nothing hit: nothing started"), Delta.Started.Num(), 0);
+
+	Hit.AddHitTarget(VictimId, 10, 0);
+	Tracker.Update(Hit, true, 10, Delta);
+	TestEqual(TEXT("a new target starts one effect"), Delta.Started.Num(), 1);
+	Tracker.Update(Hit, true, 10, Delta);
+	TestEqual(TEXT("and only once"), Delta.Started.Num(), 0);
+
+	// The authority did not confirm the hit: the corrected state has no target while the same move still runs
+	FGSTN_HitSyncState Corrected;
+	Tracker.Update(Corrected, true, 10, Delta);
+	TestEqual(TEXT("the vanished target cancels its effect"), Delta.Cancelled.Num(), 1);
+	TestEqual(TEXT("nothing is left active"), Tracker.GetActive().Num(), 0);
+
+	// A move that ends takes its targets with it: not a correction
+	Tracker.Update(Hit, true, 10, Delta);
+	Tracker.Update(Corrected, false, 10, Delta);
+	TestEqual(TEXT("the end of the move cancels nothing"), Delta.Cancelled.Num(), 0);
+	// Nor does another move starting
+	Tracker.Update(Hit, true, 10, Delta);
+	Tracker.Update(Corrected, true, 40, Delta);
+	TestEqual(TEXT("a new move cancels nothing"), Delta.Cancelled.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LagCompCueDedupTest, "GSTNCombat.NP.Hits.LagComp.CueDedupByHitId", GSTN_NP_TEST_FLAGS)
+bool FGSTN_LagCompCueDedupTest::RunTest(const FString& Parameters)
+{
+	const uint32 Id = GSTNHitPresentation::MakeHitId(100, 200, 3, 1);
+	TestEqual(TEXT("the id is stable"), Id, GSTNHitPresentation::MakeHitId(100, 200, 3, 1));
+	TestNotEqual(TEXT("another victim, another id"), Id, GSTNHitPresentation::MakeHitId(100, 201, 3, 1));
+	TestNotEqual(TEXT("another hitbox, another id"), Id, GSTNHitPresentation::MakeHitId(100, 200, 3, 2));
+
+	FGSTN_HitCueDedup Dedup;
+	TestFalse(TEXT("no local cue: the real one plays"), Dedup.ConsumeLocal(Id));
+	Dedup.NoteLocal(Id, 10);
+	TestFalse(TEXT("another hit's real cue plays"), Dedup.ConsumeLocal(Id + 1));
+	TestTrue(TEXT("the real cue of a hit already played locally is skipped"), Dedup.ConsumeLocal(Id));
+	TestFalse(TEXT("once"), Dedup.ConsumeLocal(Id));
+
+	Dedup.NoteLocal(Id, 10);
+	Dedup.Forget(Id);
+	TestFalse(TEXT("a cancelled prediction leaves the real cue alone"), Dedup.ConsumeLocal(Id));
+
+	Dedup.NoteLocal(Id, 10);
+	Dedup.Prune(10 + FGSTN_HitCueDedup::MaxAgeFrames + 1);
+	TestEqual(TEXT("old records are forgotten"), Dedup.Num(), 0);
 	return true;
 }
 

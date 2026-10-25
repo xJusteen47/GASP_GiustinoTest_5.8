@@ -236,6 +236,9 @@ FGameplayEffectContextHandle UGSTN_CombatSimComponent::MakeHitContext(const FGST
 		Context->Reaction = Hit.Reaction;
 		Context->bStaggered = Hit.bStaggered;
 		Context->HurtboxIndex = Hit.Entry.HurtboxIndex;
+		// With the attacker and the victim these identify the hit for the attacker's own presentation (UGSTN_HitPresentationComponent::MakeHitId)
+		Context->TimelineIndex = Hit.Entry.AttackerTimeline;
+		Context->HitboxIndex = Hit.Entry.AttackerHitboxIndex;
 	}
 	return Handle;
 }
