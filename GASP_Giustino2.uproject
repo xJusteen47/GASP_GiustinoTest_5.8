@@ -150,6 +150,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNAnimation",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombat",
 			"Enabled": true
 		},

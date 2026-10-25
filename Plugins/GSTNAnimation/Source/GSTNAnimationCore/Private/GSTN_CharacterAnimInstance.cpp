@@ -1,8 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Feature animation decoupled from the main graph (no GAS, no Network Prediction, no Mover).
 
-#include "Animation/GSTN_CharacterAnimInstance.h"
+#include "GSTN_CharacterAnimInstance.h"
 
-#include "Animation/GSTN_OverrideLayerSource.h"
+#include "GSTN_OverrideLayerSource.h"
 #include "Components/SkeletalMeshComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_CharacterAnimInstance)

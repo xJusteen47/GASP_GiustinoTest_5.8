@@ -21,4 +21,7 @@ namespace GSTNAbilityTags
 
 	/** Grant it (e.g. from an effect) to prevent jumping */
 	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Movement_JumpBlocked);
+
+	/** Anim set slot of the wall modes' animation layer (GSTNAnimation, anim-layers.md): the wall layer and its skin variants fill it */
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(AnimSet_Wall);
 }

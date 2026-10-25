@@ -1,7 +1,8 @@
 # Animation per feature, decoupled from the main graph (anim layers and anim sets)
 
-Status: **proposal** (2026-10-25). Part A (the override-layer seam and the wall layer) is implemented on `claude/project-thread-2vuw3f`;
-part B (the `GSTNAnimation` plugin with anim sets and skin rules) waits for the owner's answers in section 7.
+Status (2026-10-25, branch `claude/project-thread-2vuw3f`): part A (the override-layer seam and the wall layer) and part B (the
+`GSTNAnimation` plugin with anim sets and skin rules, [README](../../Plugins/GSTNAnimation/README.md)) are implemented. Owner's choice: skin
+variants by **tag rules** (section 7). Still open: the editor assets (A2) and the loadout hook (B3).
 
 ## 1. Goal
 
@@ -35,8 +36,8 @@ Anim set component (part B)      resolves sets per tag from the sources, links t
 
 | Piece | Kind | Where | Part |
 |---|---|---|---|
-| `IGSTN_OverrideLayerSource` | C++ interface: `IsOverrideLayerActive`, `GetOverrideBlendTime`, `GetOverridePriority` | project `Animation/` (moves to the plugin in B) | A |
-| `UGSTN_CharacterAnimInstance` | C++ parent of the main ABP: polls linked layers, exposes `bOverrideLayerActive`, `OverrideBlendTime`, `ActiveOverrideLayerClass` | project `Animation/` (moves in B) | A |
+| `IGSTN_OverrideLayerSource` | C++ interface: `IsOverrideLayerActive`, `GetOverrideBlendTime`, `GetOverridePriority` | plugin `GSTNAnimation`, module `GSTNAnimationCore` | A |
+| `UGSTN_CharacterAnimInstance` | C++ parent of the main ABP: polls linked layers, exposes `bOverrideLayerActive`, `OverrideBlendTime`, `ActiveOverrideLayerClass` | same | A |
 | `UGSTN_WallAnimInstance` | C++ parent of the wall layer ABP: `WallAnim` (wall-anim.md) | project `WallMovement/Animation/` (stays: it reads Mover wall state) | A |
 | `ALI_GSTN_Wall`, `ABP_GSTN_WallLayer` | assets (interface + layer graph, placeholder clips) | `Content/Blueprints/Animation/` | A, editor step |
 | `UGSTN_AnimSetDefinition` | `UPrimaryDataAsset`, type `GSTN_AnimSet` | plugin `GSTNAnimation`, module `GSTNAnimationCore` | B |
@@ -54,7 +55,7 @@ Anim set component (part B)      resolves sets per tag from the sources, links t
   a second node and the bool becomes "which interface" (an int from `ActiveOverrideLayerClass` or a slot tag). That is the only main-graph edit per new interface,
   and none per new variant.
 
-## 4. Part B: anim sets (proposal)
+## 4. Part B: anim sets (implemented)
 
 ```cpp
 // GSTNAnimationCore (pure: Engine, GameplayTags; no GAS, no fork, no project)
@@ -120,14 +121,13 @@ Who calls what:
 |---|---|---|
 | A1 | `IGSTN_OverrideLayerSource`, `UGSTN_CharacterAnimInstance`, wall anim state + tests | done (cloud, build not yet verified) |
 | A2 | Editor: `ALI_GSTN_Wall`, `ABP_GSTN_WallLayer` (placeholders), reparent main ABP, one blend + one linked layer node | editor free, owner told (shared Blueprint) |
-| B1 | Plugin `GSTNAnimation` (Core): set definition, rule, collection, component, native roots, README; move A's two generic classes there | owner OK (section 7) |
-| B2 | Validator of montage overrides (editor module), tests of the resolve order | B1 |
+| B1 | Plugin `GSTNAnimation` (Core): set definition, rule, collection, component, native roots, README; A's two generic classes moved there | done |
+| B2 | Montage override check in the set's data validation (`ValidateMontageOverride`), tests `GSTNAnimation.Core.*` of the resolve order | done |
 | B3 | Hook kit / weapon / skin collections in the loadout apply path (where `AnimClass` / `LocomotionAnimLayer` are applied today) | B1, M3 loadout code |
 | B4 | Spin/drill (thread "Aggiungere spin e trapano") use `Anim.Set.Spin` / `Anim.Set.Drill` | B1 |
 
-## 7. Questions for the owner
+## 7. Decisions
 
-1. **New plugin `GSTNAnimation`** (recommended) or keep the anim set types in the project module?
-2. **Skin variants by tag rules** in collections (recommended: skins stay untouched, traits are tags) or a direct list of anim sets on each skin?
-3. **Montage overrides must keep the same sections and lengths** (recommended, it is what keeps hitboxes honest) or allow different lengths with
-   retiming to the reference frames?
+Owner, 2026-10-25: **tag rules** (option A of the card, which carried the recommended plugin and same-timing rule). Examples given by the owner:
+male vs female and heavy vs slim characters, for some animations. They are the ini example traits `Anim.Trait.Body.Male/Female` and
+`Anim.Trait.Build.Heavy/Slim`; a rule can combine them (`MatchAllTags(Heavy, Female)` with a higher priority than `Heavy` alone).

@@ -45,6 +45,7 @@ ABP_GSTN_WallLayer (parent GSTN_WallAnimInstance, implements ALI_GSTN_Wall), lay
   entry state: Enter; all rules read WallAnim through property access (thread safe)
 ```
 
-Main ABP (`SandboxCharacter_Mover_ABP`): reparent to `GSTN_CharacterAnimInstance`, then one `Blend Poses by bool` (`bOverrideLayerActive`, blend time
-`OverrideBlendTime`, inertialization) between the GASP pose and a `Linked Anim Layer` node `WallLayer`, with `ABP_GSTN_WallLayer` as its instance class until
-anim sets link it by data (anim-layers.md part B).
+Main ABP (`SandboxCharacter_Mover_ABP`): reparent to `GSTN_CharacterAnimInstance` (plugin GSTNAnimation), then one `Blend Poses by bool` (`bOverrideLayerActive`,
+blend time `OverrideBlendTime`, inertialization) between the GASP pose and a `Linked Anim Layer` node `WallLayer`. The layer class comes from data: an anim set
+`DA_AnimSet_Wall` (`SetTag` `Anim.Set.Wall`, `LayerClass` `ABP_GSTN_WallLayer`) in the character's default collection on its `UGSTN_AnimSetComponent`; heavy or
+female variants are child layers in sets of the same slot, picked by the skin's collection (anim-layers.md part B).

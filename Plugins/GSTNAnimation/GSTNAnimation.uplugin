@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Animation",
+	"Description": "Feature animation decoupled from the main anim graph: linked anim layers that take over the pose when their feature asks (override layer seam), and anim sets (layer class + presentation montage overrides) chosen per feature tag (Anim.Set.*) from prioritized sources, with skin variants picked by cosmetic tags (Anim.Trait.*). Presentation only: simulation, timelines and hitboxes always read the reference montage. No GAS, Network Prediction or Mover.",
+	"Category": "Animation",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNAnimationCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

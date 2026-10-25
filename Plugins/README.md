@@ -26,6 +26,7 @@ Network Prediction, so the Core can be reused in a project without the GAS-NPP f
 | [GSTNCombat](GSTNCombat/README.md) | Core | `GSTNCombatCore` | Default combat command set, combat tags and settings, timelines, loadout data and rules, sync fragment format. | No |
 | [GSTNCombatGAS](GSTNCombatGAS/README.md) | GAS | `GSTNCombatGAS` | Combat ability tags, attribute sets, kit stats, meter and weapon effects, kit/weapon/super assets, the loadout component, loadout presets (save game) and the skin component. | No (stock GAS works) |
 | [GSTNCombatNP](GSTNCombatNP/README.md) | NP adapter | `GSTNCombatNP` | The combat NP model (`UGSTN_CombatSimComponent`), sync fragments and tick extensions. | Yes |
+| [GSTNAnimation](GSTNAnimation/README.md) | Core | `GSTNAnimationCore` | Feature animation decoupled from the main graph: override layers, anim sets per feature tag (`Anim.Set.*`), skin variants by cosmetic tags (`Anim.Trait.*`); presentation only, hitboxes unchanged. | No |
 | [GSTNLevelObjects](GSTNLevelObjects/README.md) | Level objects | `GSTNLevelObjects` | Placeable objects that offer traversal surfaces: the adjustable trampoline (`AGSTN_Trampoline`), a GSTNSurface provider. Depends on GSTNSurface and GSTNCombat Core only. | No |
 
 ## GAS-NPP fork

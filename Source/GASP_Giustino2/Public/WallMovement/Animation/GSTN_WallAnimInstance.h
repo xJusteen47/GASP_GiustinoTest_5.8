@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
-#include "Animation/GSTN_OverrideLayerSource.h"
+#include "GSTN_OverrideLayerSource.h"
 #include "WallMovement/Animation/GSTN_WallAnimTypes.h"
 #include "GSTN_WallAnimInstance.generated.h"
 
