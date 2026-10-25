@@ -108,6 +108,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement Bases", meta = (EditCondition = "bUseMovementBases"))
 	bool bAddBaseVelocityOnExit = true;
 
+	/**
+	 * Ride the wall from where the tick STARTS (the start sync state, which a correction restores) instead of from the character's position in the
+	 * base's frame recorded by the previous tick. The record lives in the rollback blackboard, which a rollback rewinds to what THIS machine predicted
+	 * for the frame before: after a correction the recorded position is the abandoned prediction's, and riding to it undoes the correction (server and
+	 * client then keep a constant offset that no later correction removes, wall-slide-v2.md 6.14). With this on, only the base and its pose at the end
+	 * of the previous frame come from the record; the character's own position is always the synced one. Off by default here (legacy modes unchanged),
+	 * on in the v2 traverse modes
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall|Movement Bases", meta = (EditCondition = "bUseMovementBases"))
+	bool bRideFromSyncedLocation = false;
+
 	// ---------------------------------------------------------------- Surface Detection
 	// What the probes accept and where they look. Output: the RAW PROBE NORMAL (and contact point) of this substep.
 	// These shape which wall the character is on and how corners are sensed; they do not smooth anything by themselves.

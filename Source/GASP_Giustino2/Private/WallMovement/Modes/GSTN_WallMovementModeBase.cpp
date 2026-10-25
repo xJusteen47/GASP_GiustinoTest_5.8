@@ -560,11 +560,22 @@ FQuat UGSTN_WallMovementModeBase::ComputeTargetOrientation(const FQuat& CurrentQ
 
 void UGSTN_WallMovementModeBase::ApplyMovementBase(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const
 {
-	// Rollback blackboard: a re-simulation reads the base recorded by the frame before it, not the one the abandoned prediction left
+	// Rollback blackboard: a re-simulation reads the base recorded by the frame before it, not the one the abandoned prediction left. But that record
+	// is still THIS machine's prediction of that frame, and a correction has just replaced the location it recorded: bRideFromSyncedLocation takes
+	// the character's place on the base from the synced start location instead (Mover's rollback put the component there), see 6.14
 	FGSTN_WallBaseInfo BaseInfo;
 	if (Params.SimContext.Blackboard.TryGet(GSTNWallBlackboard::BaseInfo, BaseInfo) && BaseInfo.Base.IsValid())
 	{
-		UGSTN_WallMovementUtils::TryMoveWithWallBase(Params.MovingComps, BaseInfo, BaseRotation, InOutState.WallNormal, InOutState.Velocity, MoveRecord);
+		// The start sync state's location when there is one (it is what a correction writes), else the capsule's, which Mover keeps on it
+		FVector RideFrom = FVector::ZeroVector;
+		if (bRideFromSyncedLocation)
+		{
+			const FMoverDefaultSyncState* StartSync = Params.StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+			const USceneComponent* UpdatedComponent = Params.MovingComps.UpdatedComponent.Get();
+			RideFrom = StartSync ? StartSync->GetLocation_WorldSpace() : (UpdatedComponent ? UpdatedComponent->GetComponentLocation() : FVector::ZeroVector);
+		}
+		UGSTN_WallMovementUtils::TryMoveWithWallBase(Params.MovingComps, BaseInfo, BaseRotation, InOutState.WallNormal, InOutState.Velocity, MoveRecord,
+			bRideFromSyncedLocation ? &RideFrom : nullptr);
 	}
 }
 

@@ -153,10 +153,12 @@ public:
 
 	/**
 	 * Moves/rotates the capsule, the wall normal and the velocity with the dynamic wall described by BaseInfo, according to
-	 * BaseRotation. Returns true if the base moved
+	 * BaseRotation. Returns true if the base moved.
+	 * RideFrom (optional): the rigid motion of the base since BaseInfo was recorded is applied to this location (the synced start of the tick)
+	 * instead of moving the capsule to BaseInfo.LocalPosition, so a correction applied between the two ticks is kept (wall-slide-v2.md 6.14)
 	 */
 	static bool TryMoveWithWallBase(const FMovingComponentSet& MovingComps, const FGSTN_WallBaseInfo& BaseInfo, EGSTN_WallBaseRotation BaseRotation,
-		FVector& InOutWallNormal, FVector& InOutVelocity, FMovementRecord& MoveRecord);
+		FVector& InOutWallNormal, FVector& InOutVelocity, FMovementRecord& MoveRecord, const FVector* RideFrom = nullptr);
 
 	/** Builds the info to ride Base next tick. False if it isn't a dynamic movement base */
 	static bool MakeWallBaseInfo(UPrimitiveComponent* Base, FName BoneName, const FVector& CharacterLocation, FGSTN_WallBaseInfo& OutBaseInfo);

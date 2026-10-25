@@ -302,7 +302,10 @@ class Driver:
                 self.cmd('gstn.Wall.Metrics 1')
                 self.cmd(f'gstn.Wall.DebugInput "stick {stick[0]} {stick[1]}"')
                 L = m['launch']
-                self.cmd(f'gstn.Wall.Teleport {m["loc"].x} {m["loc"].y} {m["loc"].z} {m["yaw"]} {pid}')
+                # --start-gap: the moving lanes start this far from the wall face (x = 0) instead of the marker's 3 m, so the grab can be put inside the
+                # correction window of the teleport and the launch (wall-slide-v2.md 6.14; 50 = the other lanes' gap, a grab ~0.1 s after the launch)
+                sx = -o['start_gap'] if (o.get('start_gap') is not None and m['group'] == 'h') else m['loc'].x
+                self.cmd(f'gstn.Wall.Teleport {sx} {m["loc"].y} {m["loc"].z} {m["yaw"]} {pid}')
                 self.cmd(f'gstn.Wall.Launch {L[0]} {L[1]} {L[2]} 0 {pid}')
                 yield 0.6
                 if stick[0] > 0.3 and stick[1] > 0.3:
@@ -385,10 +388,10 @@ class Driver:
 _driver = None
 
 
-def start(lanes='.', modes=MODES, seconds=3.5, lag=60, var=15, loss=0, start_pie=False, quit=False, log=0, freeze_movers=False):
+def start(lanes='.', modes=MODES, seconds=3.5, lag=60, var=15, loss=0, start_pie=False, quit=False, log=0, freeze_movers=False, start_gap=None):
     """Starts the run on the editor tick and returns at once; the table is written when it finishes (log line 'wall_ab done')."""
     global _driver
-    _driver = Driver({'lanes': lanes, 'modes': tuple(modes), 'seconds': seconds, 'lag': lag, 'var': var, 'loss': loss, 'start_pie': start_pie, 'quit': quit, 'log': log, 'freeze_movers': freeze_movers})
+    _driver = Driver({'lanes': lanes, 'modes': tuple(modes), 'seconds': seconds, 'lag': lag, 'var': var, 'loss': loss, 'start_pie': start_pie, 'quit': quit, 'log': log, 'freeze_movers': freeze_movers, 'start_gap': start_gap})
     _driver.run()
     return _driver
 
@@ -423,7 +426,7 @@ def launch(opts):
         driver_script = os.path.join(METRICS_DIR, '_wall_ab_run.py')
         with open(driver_script, 'w', encoding='utf-8') as f:
             f.write("import sys\nsys.path.insert(0, r'%s')\nimport wall_ab\nwall_ab.start(**%r)\n" % (HERE, dict(
-                lanes=opts['lanes'], modes=tuple(opts['modes']), seconds=opts['seconds'], lag=opts['lag'], var=opts['var'], loss=opts['loss'], start_pie=True, quit=True, log=opts.get('log', 0), freeze_movers=opts.get('freeze_movers', False))))
+                lanes=opts['lanes'], modes=tuple(opts['modes']), seconds=opts['seconds'], lag=opts['lag'], var=opts['var'], loss=opts['loss'], start_pie=True, quit=True, log=opts.get('log', 0), freeze_movers=opts.get('freeze_movers', False), start_gap=opts.get('start_gap'))))
         # The project path has a space and UE's -ExecCmds parser stops at an inner quote: the script path travels in the environment
         env = dict(os.environ, WALL_AB_BOOT=driver_script.replace(os.sep, '/'))
         args = [ENGINE, UPROJECT, MAP, "-ExecCmds=py import os;exec(open(os.environ['WALL_AB_BOOT']).read())", '-unattended', '-nullrhi', '-nosplash', '-nosound', '-NoP4', f'-abslog={log}']
@@ -458,5 +461,6 @@ if __name__ == '__main__':
         p.add_argument('--loss', type=int, default=0)
         p.add_argument('--log', type=int, default=0, help='gstn.Wall.Log verbosity for the run (1-2: entry decisions and the tick of the modes go to the editor log)')
         p.add_argument('--freeze-movers', action='store_true', help='diagnostic: the moving walls of lanes h stand still')
+        p.add_argument('--start-gap', type=float, default=None, help='cm from the wall face the moving lanes (h) start at, instead of the 3 m of the map (50: grab inside the launch correction)')
         p.add_argument('--timeout', type=int, default=3600, help='seconds before the editor is killed')
         launch(vars(p.parse_args()))

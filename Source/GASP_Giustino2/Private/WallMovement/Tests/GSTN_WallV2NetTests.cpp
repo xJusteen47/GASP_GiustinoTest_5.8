@@ -7,6 +7,7 @@
 //  - PawnsNeverWalls: other pawns are never wall geometry (finding 15) in the contact sweep, the look-ahead, the wrap and the corner logic
 //  - LockedSkipsExitsKeepsAdhesion: IsMovementLocked holds the mode (no exit by wall loss, no surface switch, no timers) while adhesion works
 //  - RidesMovingWall / ExitVelocityIncludesBase: a kinematic wall that moves, rotates; the velocity of the base is added when leaving
+//  - CorrectionOnMovingWallConverges: a correction (rollback of the blackboard, the authority's state restored) while riding converges (6.14)
 //  - SyncStateRoundTripWithSurfaceSwitch: the sync state with the surface-switch vote survives the wire, tick after tick
 // Not covered here (PIE): Activate, the sync state capture, the real freeze layered move (the Combat.Mover.Frozen tag), a base that is a TS-A collider.
 
@@ -527,7 +528,128 @@ bool FGSTN_WallV2NetRidesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2NetExitBaseVelocityTest, "GSTN.Wall.V2Net.ExitVelocityIncludesBase", GSTNWallNetTest::NetTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2NetCorrectionOnMovingWallTest, "GSTN.Wall.V2Net.CorrectionOnMovingWallConverges", GSTNWallNetTest::NetTestFlags)
+bool FGSTN_WallV2NetCorrectionOnMovingWallTest::RunTest(const FString& Parameters)
+{
+	// wall-slide-v2.md 6.14. The "server" rides a moving wall from a start Offset away from the "client"'s. At frame CorrectAt the client receives the
+	// server's state of the frame before: Mover's rollback puts the capsule (and the rest of the sync state) there and rewinds the rollback blackboard,
+	// whose base record of that frame is still the CLIENT's own prediction. The client then re-simulates. Converged = from then on the client's
+	// capsule and base record equal the server's. The legacy ride (bRideFromSyncedLocation off, the control) goes back to the client's recorded place
+	// on the wall and keeps the offset for good: what the PIE harness showed as ~20 cm and a reconcile every few frames.
+	constexpr int32 Frames = 40;
+	constexpr int32 CorrectAt = 20;
+	const FVector Offset(0.0, 20.0, 3.0);
+	const FVector Slide(0, 0, -100);
+	const FVector WallVelocity(0, 300, 0);
+	constexpr float YawRate = 20.f;
+	const FVector Pivot(0, 400, 0);
+
+	struct FFrameSnap
+	{
+		FTransform Capsule;
+		FTransform Wall;
+		FGSTN_WallTickState State;
+	};
+
+	// Every frame: the wall moves as the physics step would have left it, then the tick rides it. Same sequence on both machines
+	auto RunFrame = [&](GSTNWallNetTest::FNetScene& Scene)
+	{
+		Scene.MoveWall(WallVelocity * NetDt, YawRate * NetDt, Pivot);
+		Scene.RideTick(Slide);
+	};
+	auto Snap = [](const GSTNWallNetTest::FNetScene& Scene)
+	{
+		return FFrameSnap{ Scene.Capsule->GetComponentTransform(), Scene.Wall->GetComponentTransform(), Scene.State };
+	};
+
+	// The server, never corrected: its frames are the reference
+	TArray<FFrameSnap> Server;
+	FGSTN_WallBaseInfo ServerRecord;
+	bool bServerRidesWall = false;
+	{
+		FNetScene Scene;
+		Scene.MakeWall(/*bMovable*/ true);
+		Scene.MakeCapsule(Scene.Mode->WallGap, 300.f);
+		Scene.Capsule->SetWorldLocation(Scene.Capsule->GetComponentLocation() + Offset);
+		Scene.RideTick(Slide);   // the grab: first record
+		for (int32 i = 0; i < Frames; ++i)
+		{
+			RunFrame(Scene);
+			Server.Add(Snap(Scene));
+		}
+		ServerRecord = Scene.ReadBaseInfo();
+		bServerRidesWall = ServerRecord.Base.Get() == Scene.Wall;
+	}
+
+	for (const bool bRideFromSynced : { true, false })
+	{
+		FNetScene Scene;
+		Scene.Mode->bRideFromSyncedLocation = bRideFromSynced;
+		Scene.MakeWall(/*bMovable*/ true);
+		Scene.MakeCapsule(Scene.Mode->WallGap, 300.f);
+		Scene.RideTick(Slide);
+		const int32 FirstFrame = Scene.Frame;
+		TArray<FFrameSnap> Client;
+		for (int32 i = 0; i < Frames; ++i)
+		{
+			RunFrame(Scene);
+			Client.Add(Snap(Scene));
+		}
+		const double PredictedError = (Client[CorrectAt - 1].Capsule.GetLocation() - Server[CorrectAt - 1].Capsule.GetLocation()).Size();
+
+		// The correction: the authority's state of frame CorrectAt - 1 is restored, the blackboard and the wall go back to the end of that frame
+		FMoverTimeStep Rewind;
+		Rewind.ServerFrame = FirstFrame + CorrectAt;
+		Rewind.BaseSimTimeMs = Rewind.ServerFrame * NetDt * 1000.0;
+		Rewind.StepMs = NetDt * 1000.f;
+		Rewind.bIsResimulating = true;
+		Scene.Blackboard->BeginRollback(Rewind);
+		Scene.Blackboard->EndRollback();
+		Scene.Frame = Rewind.ServerFrame;
+		const FFrameSnap& Authority = Server[CorrectAt - 1];
+		Scene.Capsule->SetWorldTransform(Authority.Capsule, false, nullptr, ETeleportType::TeleportPhysics);
+		Scene.Wall->SetWorldTransform(Client[CorrectAt - 1].Wall, false, nullptr, ETeleportType::TeleportPhysics);
+		// What a sync state carries (MakeTickState); the probe and the contact are tick-local and point into the server's world
+		Scene.State = FGSTN_WallTickState();
+		Scene.State.WallNormal = Authority.State.WallNormal;
+		Scene.State.WallContactPoint = Authority.State.WallContactPoint;
+		Scene.State.bHasWall = Authority.State.bHasWall;
+		Scene.State.TimeWithoutWall = Authority.State.TimeWithoutWall;
+		Scene.State.PullAwayTime = Authority.State.PullAwayTime;
+		Scene.State.SurfaceSwitchTicks = Authority.State.SurfaceSwitchTicks;
+		Scene.State.Orientation = Authority.Capsule.GetRotation();
+		Scene.State.GravityUp = Authority.State.GravityUp;
+
+		// Re-simulation up to the present
+		double MaxError = 0.0;
+		for (int32 i = CorrectAt; i < Frames; ++i)
+		{
+			RunFrame(Scene);
+			MaxError = FMath::Max(MaxError, (Scene.Capsule->GetComponentLocation() - Server[i].Capsule.GetLocation()).Size());
+		}
+		const FGSTN_WallBaseInfo Record = Scene.ReadBaseInfo();
+		const double RecordError = (Record.LocalPosition - ServerRecord.LocalPosition).Size();
+		const bool bSameBase = Record.Base.Get() == Scene.Wall && bServerRidesWall;
+
+		AddInfo(FString::Printf(TEXT("%s: predicted error %.2f cm, after the correction max %.3f cm, base record %.3f cm"),
+			bRideFromSynced ? TEXT("ride from synced location") : TEXT("legacy ride"), PredictedError, MaxError, RecordError));
+		TestTrue(TEXT("The client's prediction really differed before the correction (not vacuous)"), PredictedError > 15.0);
+		TestTrue(TEXT("The wall is still the ridden base after the re-simulation"), bSameBase);
+		if (bRideFromSynced)
+		{
+			TestTrue(*FString::Printf(TEXT("Re-simulated frames equal the server's (max error %.3f cm)"), MaxError), MaxError < 0.1);
+			TestTrue(*FString::Printf(TEXT("Base record equals the server's (error %.3f cm)"), RecordError), RecordError < 0.1);
+		}
+		else
+		{
+			TestTrue(*FString::Printf(TEXT("Control (legacy ride): the correction is undone, the offset stays (max error %.1f cm)"), MaxError), MaxError > 15.0);
+			TestTrue(*FString::Printf(TEXT("Control (legacy ride): the base record keeps the client's own place (error %.1f cm)"), RecordError), RecordError > 15.0);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2NetExitBaseVelocityTest,"GSTN.Wall.V2Net.ExitVelocityIncludesBase", GSTNWallNetTest::NetTestFlags)
 bool FGSTN_WallV2NetExitBaseVelocityTest::RunTest(const FString& Parameters)
 {
 	// A wall with a velocity (a body simulated without gravity, so the headless world reports it at once). Leaving it adds the velocity of the

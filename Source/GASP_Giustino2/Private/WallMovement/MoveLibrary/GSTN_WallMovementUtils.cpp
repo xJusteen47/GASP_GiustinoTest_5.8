@@ -470,7 +470,7 @@ bool UGSTN_WallMovementUtils::AdhereAndSense(const FMovingComponentSet& MovingCo
 }
 
 bool UGSTN_WallMovementUtils::TryMoveWithWallBase(const FMovingComponentSet& MovingComps, const FGSTN_WallBaseInfo& BaseInfo, EGSTN_WallBaseRotation BaseRotation,
-	FVector& InOutWallNormal, FVector& InOutVelocity, FMovementRecord& MoveRecord)
+	FVector& InOutWallNormal, FVector& InOutVelocity, FMovementRecord& MoveRecord, const FVector* RideFrom)
 {
 	const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
 	if (!UpdatedComponent || !BaseInfo.Base.IsValid())
@@ -485,10 +485,13 @@ bool UGSTN_WallMovementUtils::TryMoveWithWallBase(const FMovingComponentSet& Mov
 		return false;
 	}
 
-	// Rigid motion of the base since last tick
+	// Rigid motion of the base since last tick. The character's place in the base's frame is either the recorded one or, rollback-safe, the one of
+	// its synced start location in the base's PREVIOUS frame: after a correction only the latter agrees with the authority (wall-slide-v2.md 6.14)
+	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
+	const FVector LocalPosition = RideFrom ? BaseInfo.BaseRotation.UnrotateVector(*RideFrom - BaseInfo.BaseLocation) : BaseInfo.LocalPosition;
 	const FQuat DeltaRotation = BaseQuat * BaseInfo.BaseRotation.Inverse();
-	const FVector TargetLocation = BaseLocation + BaseQuat.RotateVector(BaseInfo.LocalPosition);
-	const FVector Delta = TargetLocation - UpdatedComponent->GetComponentLocation();
+	const FVector TargetLocation = BaseLocation + BaseQuat.RotateVector(LocalPosition);
+	const FVector Delta = TargetLocation - CurrentLocation;
 	if (Delta.IsNearlyZero(0.01f) && DeltaRotation.Equals(FQuat::Identity, 1e-6f))
 	{
 		return false;

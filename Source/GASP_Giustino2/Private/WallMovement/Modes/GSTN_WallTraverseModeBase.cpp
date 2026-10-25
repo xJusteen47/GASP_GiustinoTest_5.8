@@ -24,6 +24,8 @@ UGSTN_WallTraverseModeBase::UGSTN_WallTraverseModeBase(const FObjectInitializer&
 {
 	// Detach and wall jump are the controlled mode's; subclasses enable what they offer
 	SurfaceModes = UGSTN_WallSurfaceModeUtils::MakeDefaultList();
+	// A grab inside a correction window must converge on a moving wall (wall-slide-v2.md 6.14)
+	bRideFromSyncedLocation = true;
 }
 
 // ------------------------------------------------------------------------------------------------
