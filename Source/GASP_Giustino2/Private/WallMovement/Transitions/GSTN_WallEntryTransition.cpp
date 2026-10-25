@@ -39,6 +39,11 @@ FName UGSTN_WallEntryTransition::ResolveEntryMode(const FEntryCandidate& Candida
 	return TargetModeName;
 }
 
+const FGSTN_WallSurfaceFilter& UGSTN_WallEntryTransition::GetEntrySurfaceFilter() const
+{
+	return SurfaceFilter;
+}
+
 void UGSTN_WallEntryTransition::Trigger_Implementation(const FSimulationTickParams& Params)
 {
 	// Hand the wall to the mode (consumed by its Activate), so it starts aligned to it instead of guessing from the facing
@@ -124,7 +129,7 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 
 	// A surface that does not offer what the target mode needs is not a wall to grab (after the angle test, as in the mode's
 	// probes). Nothing is resolved with an empty filter
-	if (!UGSTN_WallQueryUtils::PassesSurfaceFilter(OutHit, SurfaceFilter))
+	if (!UGSTN_WallQueryUtils::PassesSurfaceFilter(OutHit, GetEntrySurfaceFilter()))
 	{
 		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: surface filter"));
 		return false;
@@ -155,7 +160,7 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 	}
 	// The mode's probes start from the capsule center: if the surface they would find there is forbidden, the mode would
 	// exit at once and the transition grab again, every tick
-	if (!UGSTN_WallQueryUtils::PassesSurfaceFilter(CenterHit, SurfaceFilter))
+	if (!UGSTN_WallQueryUtils::PassesSurfaceFilter(CenterHit, GetEntrySurfaceFilter()))
 	{
 		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: surface filter at capsule center height"));
 		return false;

@@ -28,15 +28,6 @@
 #include "WallMovement/Transitions/GSTN_WallEntryTransition.h"
 #include "GSTN_WallV2TestAccess.h"
 
-// Friend of the entry transition for the headless tests (one definition: the class befriends this name)
-struct FGSTN_WallEntryTestAccess
-{
-	static bool SweepForWall(const UGSTN_WallEntryTransition& Transition, const FSimulationTickParams& Params, const FVector& Direction, const FVector& GravityUp, FHitResult& OutHit)
-	{
-		return Transition.SweepForWall(Params, Direction, GravityUp, OutHit);
-	}
-};
-
 namespace GSTNWallSlantWorld
 {
 	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;

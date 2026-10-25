@@ -1,4 +1,4 @@
-// Friend of the v2 wall modes for the headless tests (GSTN_WallV2Tests.cpp, GSTN_WallV2EdgeTests.cpp): one definition, because the
+// Friend of the v2 wall modes and of the entry transition for the headless tests (GSTN_WallV2*Tests.cpp): one definition, because the
 // classes befriend this name and a second definition in another test file would clash in a unity build.
 
 #pragma once
@@ -9,6 +9,7 @@
 #include "MoverSimulationTypes.h"
 #include "WallMovement/Modes/GSTN_WallClimbV2MovementMode.h"
 #include "WallMovement/Modes/GSTN_WallSlideV2MovementMode.h"
+#include "WallMovement/Transitions/GSTN_WallEntryTransition.h"
 
 struct FGSTN_WallTraverseTestAccess
 {
@@ -75,6 +76,15 @@ struct FGSTN_WallTraverseTestAccess
 	static float ComputeEdgeSpeedCap(const UGSTN_WallTraverseModeBase& Mode, const FGSTN_WallAheadResult& Ahead)
 	{
 		return Mode.ComputeEdgeSpeedCap(Ahead);
+	}
+};
+
+/** Friend of the entry transition (one definition: the class befriends this name) */
+struct FGSTN_WallEntryTestAccess
+{
+	static bool SweepForWall(const UGSTN_WallEntryTransition& Transition, const FSimulationTickParams& Params, const FVector& Direction, const FVector& GravityUp, FHitResult& OutHit)
+	{
+		return Transition.SweepForWall(Params, Direction, GravityUp, OutHit);
 	}
 };
 

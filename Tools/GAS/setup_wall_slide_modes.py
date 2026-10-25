@@ -49,6 +49,9 @@ V2_ONLY = {'control', 'brake', 'edges', 'max_move_radii', 'surface_modes'}
 CLIMB_ONLY = V2_ONLY | {'surface_filter', 'b_allow_capsule_tilt'}
 # Properties of a transition that are not copied when its class changes: the surface-driven one has no fixed target and its own list
 TRANSITION_ONLY = {'target_mode_name', 'surface_modes'}
+# ...and a surface-driven transition does not take the surface filter of the plain one it replaces: its mode list is the filter (the C++ ignores the field
+# there; the first A/B run found the WallSlide-only filter of the old transition on the swapped one, and no climb-only wall was ever grabbed)
+SURFACE_TRANSITION_SKIP = {'surface_filter'}
 
 subobjects = unreal.get_engine_subsystem(unreal.SubobjectDataSubsystem)
 sdl = unreal.SubobjectDataBlueprintFunctionLibrary
@@ -156,9 +159,10 @@ def make_transition(old, use, outer):
     cls = transition_class(old, use)
     new = unreal.new_object(cls, outer=outer)
     new_names = set(editor_property_names(cls))
+    skip = TRANSITION_ONLY | (SURFACE_TRANSITION_SKIP if wants_surface_transition(use) else set())
     copied = 0
     for name in editor_property_names(type(old)):
-        if name in TRANSITION_ONLY or name not in new_names:
+        if name in skip or name not in new_names:
             continue
         try:
             new.set_editor_property(name, old.get_editor_property(name))

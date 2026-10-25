@@ -340,6 +340,60 @@ bool FGSTN_WallV2ClimbOnlyClimbSurfacesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2ClimbEntryIgnoresInheritedFilterTest, "GSTN.Wall.V2Climb.SurfaceTransitionIgnoresInheritedSurfaceFilter", GSTNWallClimbTest::ClimbTestFlags)
+bool FGSTN_WallV2ClimbEntryIgnoresInheritedFilterTest::RunTest(const FString& Parameters)
+{
+	// setup_wall_slide_modes.py --use v2climb copied the replaced transition's SurfaceFilter (WallSlide only) into the surface-driven one, which then refused every
+	// climb-only wall before its mode list was asked: the A/B lane j_climb_only never grabbed. The list is the filter; the inherited one is not read
+	TStrongObjectPtr<UGSTN_WallSurfaceModeTransition> Surface(NewObject<UGSTN_WallSurfaceModeTransition>(GetTransientPackage()));
+	TStrongObjectPtr<UGSTN_WallEntryTransition> Plain(NewObject<UGSTN_WallEntryTransition>(GetTransientPackage()));
+	Surface->SurfaceFilter.RequiredBehaviours = FGameplayTagQuery::MakeQuery_MatchTag(GSTNSurfaceTags::Behaviour_WallSlide);
+	Plain->SurfaceFilter.RequiredBehaviours = FGameplayTagQuery::MakeQuery_MatchTag(GSTNSurfaceTags::Behaviour_WallSlide);
+
+	const TArray<FGameplayTag> Neither = { GSTNSurfaceTags::Behaviour_Stand };
+	struct FCase
+	{
+		const TCHAR* Label;
+		const TArray<FGameplayTag>* Behaviours;
+		bool bSurfaceGrabs;
+		bool bPlainGrabs;
+	};
+	const FCase Cases[] = {
+		{ TEXT("climb-only wall"), &ClimbOnly(), true, false },
+		{ TEXT("slide-only wall"), &SlideOnly(), true, true },
+		// The sweep does not choose a mode: a wall that offers neither is still found here, and refused by the list (below)
+		{ TEXT("wall offering neither"), &Neither, true, false },
+	};
+	for (const FCase& Case : Cases)
+	{
+		FClimbScene Scene;
+		Scene.MakeWall(Case.Behaviours);
+		Scene.MakeCapsule(8.f, 300.f);
+		FSimulationTickParams Params;
+		Params.MovingComps = FMovingComponentSet(Scene.Capsule);
+
+		FHitResult Hit;
+		TestEqual(*FString::Printf(TEXT("%s: the surface-driven transition finds the wall whatever filter it inherited"), Case.Label),
+			FGSTN_WallEntryTestAccess::SweepForWall(*Surface, Params, -Scene.WallNormal, FVector::UpVector, Hit), Case.bSurfaceGrabs);
+		FHitResult PlainHit;
+		TestEqual(*FString::Printf(TEXT("%s: the plain transition still applies its filter"), Case.Label),
+			FGSTN_WallEntryTestAccess::SweepForWall(*Plain, Params, -Scene.WallNormal, FVector::UpVector, PlainHit), Case.bPlainGrabs);
+		if (Case.bSurfaceGrabs)
+		{
+			const FName Mode = Surface->ChooseModeForHit(Hit, nullptr);
+			if (Case.Behaviours == &ClimbOnly())
+			{
+				TestEqual(TEXT("climb-only wall: the list hands it to the climb"), Mode, UGSTN_WallSurfaceModeUtils::ClimbModeName);
+			}
+			else if (Case.Behaviours == &Neither)
+			{
+				TestTrue(TEXT("wall offering neither: refused by the list, for that reason"), Mode.IsNone());
+			}
+		}
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallV2ClimbTransitionPicksClimbTest, "GSTN.Wall.V2Climb.TransitionPicksClimbOnClimbSurface", GSTNWallClimbTest::ClimbTestFlags)
 bool FGSTN_WallV2ClimbTransitionPicksClimbTest::RunTest(const FString& Parameters)
 {

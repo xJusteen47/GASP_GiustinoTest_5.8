@@ -180,6 +180,13 @@ protected:
 	 */
 	virtual FName ResolveEntryMode(const FEntryCandidate& Candidate, const FSimulationTickParams& Params) const;
 
+	/**
+	 * The filter SweepForWall applies to the surface it finds. Base: SurfaceFilter. The surface-driven twins return an empty one: their mode list decides what
+	 * is a wall, and the filter such a transition inherited when it replaced a plain one (setup_wall_slide_modes.py copied the old transition's, WallSlide
+	 * only) refused every climb-only surface before the list was asked
+	 */
+	virtual const FGSTN_WallSurfaceFilter& GetEntrySurfaceFilter() const;
+
 	/** All the checks. Returns false (with the reason when logging) if the wall can't be grabbed now */
 	bool FindEntryWall(const FSimulationTickParams& Params, FEntryCandidate& OutCandidate) const;
 

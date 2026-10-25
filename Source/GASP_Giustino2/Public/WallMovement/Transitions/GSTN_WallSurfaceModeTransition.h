@@ -16,7 +16,7 @@
  * wall), and a surface that offers neither is not a wall at all. If the climb mode is not registered the list falls through to the slide, so adding the
  * transition to a project that only has the slide changes nothing.
  *
- * TargetModeName (and SurfaceFilter) of the base class are not used to pick the mode: leave SurfaceFilter empty, the list is the filter. While a character is
+ * TargetModeName and SurfaceFilter of the base class are not used to pick the mode (SurfaceFilter is ignored: the list is the filter). While a character is
  * on the wall the modes themselves keep the list (UGSTN_WallTraverseModeBase::SurfaceModes): keep the two lists equal.
  *
  * Add it to the Falling mode's Transitions in place of UGSTN_WallEntryTransition (Tools/GAS/setup_wall_slide_modes.py --use v2climb). Where the entry is a
@@ -44,4 +44,7 @@ public:
 protected:
 	/** The surface's mode (ChooseModeForHit on the hit that found the wall); None refuses the wall */
 	virtual FName ResolveEntryMode(const FEntryCandidate& Candidate, const FSimulationTickParams& Params) const override;
+
+	/** Empty: the list is the filter, whatever SurfaceFilter holds */
+	virtual const FGSTN_WallSurfaceFilter& GetEntrySurfaceFilter() const override;
 };

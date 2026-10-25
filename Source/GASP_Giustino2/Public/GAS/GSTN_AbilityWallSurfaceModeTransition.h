@@ -26,4 +26,7 @@ public:
 
 protected:
 	virtual FName ResolveEntryMode(const FEntryCandidate& Candidate, const FSimulationTickParams& Params) const override;
+
+	/** Empty: the list is the filter, whatever SurfaceFilter holds */
+	virtual const FGSTN_WallSurfaceFilter& GetEntrySurfaceFilter() const override;
 };

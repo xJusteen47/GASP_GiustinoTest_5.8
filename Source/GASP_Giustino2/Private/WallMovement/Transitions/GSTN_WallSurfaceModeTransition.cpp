@@ -32,3 +32,9 @@ FName UGSTN_WallSurfaceModeTransition::ResolveEntryMode(const FEntryCandidate& C
 	}
 	return ModeName;
 }
+
+const FGSTN_WallSurfaceFilter& UGSTN_WallSurfaceModeTransition::GetEntrySurfaceFilter() const
+{
+	static const FGSTN_WallSurfaceFilter NoFilter;
+	return NoFilter;
+}
