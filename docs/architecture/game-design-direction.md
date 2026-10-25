@@ -259,8 +259,9 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   vertical swing in the air; the first input sets the direction, a small angle correction in the first part of startup, a diagonal
   during the swing. In the air one usually moves but does not turn, apart from these small corrections. Spec: control track in
   [combat-m4-hits.md](combat-m4-hits.md) §3.
-- (23:16, low priority) **Wounds**: an ability may wound a spot to lower its hardness; the parts system covers it with a lower-hardness
-  hurtbox of higher priority that the ability opens, and the mesh may show it. Spec: [combat-parts.md](combat-parts.md) §3.4, plan P18.
+- (23:16–23:18, low priority) **Wounds**: an ability may wound a spot to lower its hardness, and the **ability decides where**. Per-part
+  wound by default (the part the hit chose), free-position wound as an extension; the mesh may show it. Spec:
+  [combat-parts.md](combat-parts.md) §3.4, plan P18.
 - (19:57) A move may also allow a full rotation at a set number of degrees per second, or full movement during the active frames;
   the vertical swing stays the more common case.
 
@@ -571,3 +572,5 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > caso limite nel caso di alcune abilità. Mettiamo caso un'abilità che puo indurre una ferita in un punto diciamo per abassarne la
 > "durezza". Penso che il sistema a parti vada bene anche in quel caso, basterebbe aggiungere una hurtbox a penetrazione inferiore che ha la
 > priorità sull'hurtbox della parte normale. E maagari la mesh riflette cio. non ha chissà che priorità, ma ci si potrebbe pensare. (23:16)
+
+> Beh, ma se voglio che l'abilità decida dove porre la ferita? (23:18)

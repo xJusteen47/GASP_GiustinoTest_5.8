@@ -453,10 +453,13 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
   selection of `UGSTN_HitStep_PartResolve`, the hurtbox editor drawing (M5).
 - Tests: `CavityReachedOnlyThroughMouth`, `BulkyHitboxFallsToArmour`, `ProjectileRadiusFits`, `NoOpeningKeepsPriorityRule`.
   TM3 parts boss (station 5) gets a leg with an armoured shell and a hollow cavity.
-- **Dynamic variant, wounds** (owner, 2026-10-25 23:16, low priority; [combat-parts.md](../combat-parts.md) §3.4 "Wounds"): wound parts
-  inactive until a bit of the new `OpenMask` in `FGSTN_PartsFragment`; `FGSTN_PartBreakEffect_OpenWound`; the skin material reads the
-  bit. **Prerequisite**: hurtbox states in the lag-compensation history (open residue of P7 part 1, handover item 40). Tests:
-  `WoundInactiveUntilOpened`, `OpenWoundWinsByPriority`, `RicochetPredictionSeesOpenMask`, `RewoundHitReadsWoundStateOfItsFrame`.
+- **Dynamic variant, wounds** (owner, 2026-10-25 23:16–23:18, low priority; [combat-parts.md](../combat-parts.md) §3.4 "Wounds"), two
+  levels. **Level 1, per part (default)**: `WoundedMask` (+2 B) in `FGSTN_PartsFragment`, `WoundedHardness` per part,
+  `FGSTN_PartBreakEffect_Wound` sets the bit of the part the hit chose, `UGSTN_HitStep_PartResolve` reads it, the skin material shows it.
+  **Level 2, free position (extension, only on need)**: a few dynamic hurtbox slots per entity (bone, quantised offset, radius, about
+  6–8 B each) written by the applier at F+1 from the impact point; needs a cost estimate first. **Prerequisite for both**: hurtbox
+  states in the lag-compensation history (open residue of P7 part 1, handover item 40). Tests (level 1): `WoundSetsChosenPart`,
+  `WoundedHardnessUsedWhileBitOn`, `RicochetPredictionSeesWoundedMask`, `RewoundHitReadsWoundStateOfItsFrame`.
 
 ## 4. Spikes first and stop-and-ask conditions
 

@@ -197,14 +197,22 @@ through its hole: a bulky swing that overlaps the leg from outside would otherwi
 radius that fits), and only a hitbox that overlaps the mouth and fits counts on it; everything else falls to the armour. Rule and
 types: [combat-m4-hits.md](combat-m4-hits.md) §9c B (M4b checkpoint P18).
 
-**Wounds: openings that an ability opens (owner, 2026-10-25 23:16, low priority).** An ability may wound a spot to lower its hardness.
-Same model, made dynamic: the set has a **wound part** with low hardness whose hurtbox overlaps the normal part's hurtbox with a
-higher `Priority`, **inactive** until its bit in a new `uint16 OpenMask` of the parts fragment is set. A hit opens it through a break
-effect of §3.3 (`FGSTN_PartBreakEffect_OpenWound { uint8 WoundPartIndex; }`), so the rule stays in the parts pipeline. The bit
-replicates like `BrokenMask`, so the attacker's ricochet prediction stays exact, and the skin material reads the same bit to show
-the wound (§6.1). Closing a wound (time, heal, never) is open. Minions: not in v1 (their wire carries only the broken mask, §5.5).
-Prerequisite: **hurtbox states in the lag-compensation history** (open residue of P7 part 1, handover item 40), so a rewound hit
-sees whether the wound was open at that frame.
+**Wounds: an ability lowers the hardness where it hits (owner, 2026-10-25 23:16 and 23:18, low priority).** The owner wants the
+**ability to decide where** the wound goes. Two levels:
+1. **Per-part wound (default, recommended).** A new `uint16 WoundedMask` in the parts fragment (+2 B) and a per-part
+   `WoundedHardness` in `FGSTN_PartDefinition`. A hit whose data carries `FGSTN_PartBreakEffect_Wound` sets the bit of **the part that
+   hit chose** (from the inbox entry's `HurtboxIndex`, §3.4); while the bit is on, `UGSTN_HitStep_PartResolve` uses `WoundedHardness`
+   instead of `Hardness`. The bit replicates like `BrokenMask`, so the attacker's ricochet prediction stays exact, and the part's
+   skin material reads it to show the wound (§6.1). A designer who wants a precise weak spot authors it as a small part with a
+   higher `Priority` and a low `WoundedHardness`: the ability wounds it only when the hit lands on it.
+2. **Free-position wound (extension, only if an ability needs it).** A few fixed slots per entity of **dynamic hurtboxes**
+   (`{ uint8 BoneIndex; int16 LocalOffset[3] (quantised); uint8 RadiusCm; uint8 PartIndex; }`, about 6–8 B each), written by the
+   applier at F+1 from the hit's impact point, with the highest `Priority` in part choice and the wounded hardness of their part. It
+   needs hurtbox states in the lag-compensation history and a cost estimate (wire per slot, overlap tests per hit) before it is built.
+
+Closing a wound (time, heal, never) is open. Minions: not in v1 (their wire carries only the broken mask, §5.5). Both levels need
+**hurtbox states in the lag-compensation history** (open residue of P7 part 1, handover item 40), so a rewound hit sees whether a
+part was wounded at that frame.
 
 ### 3.5 Entity's own hitboxes while parts are broken
 
@@ -336,7 +344,7 @@ A `FGSTN_SyncFragment` (§5b) registered with a fixed type id from the central r
 carry **no fragment: zero bytes and no compare cost**.
 
 ```
-FGSTN_PartsFragment { uint16 BrokenMask; uint8 PartDamage[N]; uint8 BreakSerial (4 bits used); uint16 OpenMask (wounds, P18, planned); }
+FGSTN_PartsFragment { uint16 BrokenMask; uint8 PartDamage[N]; uint8 BreakSerial (4 bits used); uint16 WoundedMask (wounds, P18, planned); }
 ```
 
 `PartDamage[i]` = part damage / `PartCap` quantised to 8 bits (0 = pristine, 255 = at the cap). Rule: stored =
