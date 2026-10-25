@@ -6,6 +6,8 @@
 #include "Hits/GSTN_HitMathUtils.h"
 #include "Hits/GSTN_ImpactMath.h"
 #include "Hits/GSTN_ImpactTypes.h"
+#include "GSTN_SurfaceTags.h"
+#include "GSTN_SurfaceUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -38,7 +40,7 @@ namespace GSTNImpactTest
 
 	/**
 	 * Wall (splat, min 300, allows all), Glass (break, min 600, allows only break), Crate (nothing, min 400, allows nothing),
-	 * Trampoline (bounce forced, restitution 1.2). Indices 0 to 3 in that order.
+	 * Trampoline (bounce forced, restitution 1.2). Row 0 to 3 in that order (the rows are found through the GSTNSurface type index of their tag, whatever the order).
 	 */
 	TStrongObjectPtr<UGSTN_SurfaceImpactTable> MakeTable()
 	{
@@ -73,9 +75,16 @@ namespace GSTNImpactTest
 		return Profile;
 	}
 
+	/** The contact input of a test row: the GSTNSurface type index of the row's tag; a row that does not exist is used as a raw index */
+	FGSTN_ImpactInput InputOf(const UGSTN_SurfaceImpactTable* Table, int32 Row, double Speed)
+	{
+		const uint8 TypeIndex = Table->Rows.IsValidIndex(Row) ? UGSTN_SurfaceUtils::GetSurfaceTypeIndex(Table->Rows[Row].Surface) : static_cast<uint8>(Row);
+		return FGSTN_ImpactInput::Make(TypeIndex, Speed);
+	}
+
 	EGSTN_ImpactOutcome Outcome(const UGSTN_SurfaceImpactTable* Table, int32 Row, double Speed, const FGSTN_ImpactResponse& Response, const FGSTN_ImpactProfile& Profile)
 	{
-		return UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(static_cast<uint8>(Row), Speed), Table, Response, Profile).Outcome;
+		return UGSTN_ImpactMath::Resolve(InputOf(Table, Row, Speed), Table, Response, Profile).Outcome;
 	}
 
 	bool NearlyEqual(const FVector& A, const FVector& B, double Tolerance = 1.0e-9)
@@ -333,7 +342,7 @@ bool FGSTN_ImpactPrecedenceTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("forbidding another outcome changes nothing"), Outcome(Table.Get(), Wall, 1000.0, Anyone, NoBounce), EGSTN_ImpactOutcome::Splat);
 
 	// The result carries the row's numbers, then the victim's where it sets them
-	FGSTN_ImpactResult Result = UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(0, 1000.0), Table.Get(), Anyone, Nothing);
+	FGSTN_ImpactResult Result = UGSTN_ImpactMath::Resolve(InputOf(Table.Get(), 0, 1000.0), Table.Get(), Anyone, Nothing);
 	TestEqual(TEXT("splat frames of the surface"), Result.SplatFrames, 20);
 	TestEqual(TEXT("restitution of the surface"), Result.Restitution, 0.5f);
 	FGSTN_ImpactResponse Heavy;
@@ -341,12 +350,12 @@ bool FGSTN_ImpactPrecedenceTest::RunTest(const FString& Parameters)
 	Heavy.PerSurface[0].Surface = Surface(TEXT("Wall"));
 	Heavy.PerSurface[0].SplatFrames = 5;
 	Heavy.PerSurface[0].ImpactDamageScale = 0.5f;
-	Result = UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(0, 1000.0), Table.Get(), Heavy, Nothing);
+	Result = UGSTN_ImpactMath::Resolve(InputOf(Table.Get(), 0, 1000.0), Table.Get(), Heavy, Nothing);
 	TestEqual(TEXT("splat frames of the victim"), Result.SplatFrames, 5);
 	TestEqual(TEXT("damage scales multiply"), Result.ImpactDamageScale, 0.5f);
 
 	TestEqual(TEXT("an unknown surface index resolves to None"), Outcome(Table.Get(), 77, 1000.0, Anyone, Nothing), EGSTN_ImpactOutcome::None);
-	TestEqual(TEXT("so does no table"), UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(0, 1000.0), nullptr, Anyone, Nothing).Outcome, EGSTN_ImpactOutcome::None);
+	TestEqual(TEXT("so does no table"), UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(1, 1000.0), nullptr, Anyone, Nothing).Outcome, EGSTN_ImpactOutcome::None);
 	return true;
 }
 
@@ -413,7 +422,7 @@ bool FGSTN_ImpactMinSpeedGivesNoneTest::RunTest(const FString& Parameters)
 	FGSTN_ImpactProfile Weak;
 	Weak.SpeedScale = 0.5f;
 	TestEqual(TEXT("scaled speed 250 < 300"), Outcome(Table.Get(), 0, 500.0, Anyone, Weak), EGSTN_ImpactOutcome::None);
-	TestEqual(TEXT("the judged speed is reported"), UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(0, 500.0), Table.Get(), Anyone, Weak).JudgedSpeed, 250.f);
+	TestEqual(TEXT("the judged speed is reported"), UGSTN_ImpactMath::Resolve(InputOf(Table.Get(), 0, 500.0), Table.Get(), Anyone, Weak).JudgedSpeed, 250.f);
 
 	// Glass needs more than a wall
 	TestEqual(TEXT("glass at 500: none"), Outcome(Table.Get(), 1, 500.0, Anyone, Nothing), EGSTN_ImpactOutcome::None);
@@ -434,14 +443,14 @@ bool FGSTN_ImpactTrampolineRowForcesBounceTest::RunTest(const FString& Parameter
 	Hostile.Forbid = { EGSTN_ImpactOutcome::Bounce };
 
 	TestEqual(TEXT("bounces whatever the victim and the attack prefer"), Outcome(Table.Get(), Trampoline, 100.0, NoBounceVictim, Hostile), EGSTN_ImpactOutcome::Bounce);
-	const FGSTN_ImpactResult Result = UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(3, 100.0), Table.Get(), FGSTN_ImpactResponse(), FGSTN_ImpactProfile());
+	const FGSTN_ImpactResult Result = UGSTN_ImpactMath::Resolve(InputOf(Table.Get(), 3, 100.0), Table.Get(), FGSTN_ImpactResponse(), FGSTN_ImpactProfile());
 	TestEqual(TEXT("the trampoline's own restitution"), Result.Restitution, 1.2f);
 	TestEqual(TEXT("no speed, no impact"), Outcome(Table.Get(), Trampoline, 0.0, FGSTN_ImpactResponse(), FGSTN_ImpactProfile()), EGSTN_ImpactOutcome::None);
 
 	// Row lookup: exact tag, unknown tag, invalid tag
 	TestEqual(TEXT("trampoline index"), Table->FindRowIndex(Surface(TEXT("Trampoline"))), 3);
 	TestEqual(TEXT("an invalid tag finds nothing"), Table->FindRowIndex(FGameplayTag()), static_cast<int32>(INDEX_NONE));
-	TestEqual(TEXT("a root tag finds nothing"), Table->FindRowIndex(GSTNCombatHitTags::Root_SurfaceType.GetTag()), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("a root tag finds nothing"), Table->FindRowIndex(GSTNSurfaceTags::Root_Type.GetTag()), static_cast<int32>(INDEX_NONE));
 	return true;
 }
 

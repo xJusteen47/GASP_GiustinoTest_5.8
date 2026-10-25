@@ -5,7 +5,6 @@
 namespace GSTNCombatHitTags
 {
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Root_Hurtbox, "Combat.Hurtbox", "Root of the hurtbox classification tags. Leaves (Feet, Head, Torso) are designer content in the plugin tag ini, code never names one");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Root_SurfaceType, "Surface.Type", "Root of the surface type tags a contact is classified by. Leaves (Wall, Glass, Crate, Trampoline) are designer content in the plugin tag ini, code never names one");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Normal, "Combat.HitType.Normal", "A hit that damages and moves its victim. An unset hit type means the same");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Grab, "Combat.HitType.Grab", "A grab. Data only until a grab path exists");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Projectile, "Combat.HitType.Projectile", "A projectile hit. Data only until projectiles exist");
@@ -17,7 +16,7 @@ namespace GSTNCombatHitTags
 
 	void GetDeclaredHitTags(TArray<FGameplayTag>& OutTags)
 	{
-		OutTags.Append({ Root_Hurtbox, Root_SurfaceType, HitType_Normal, HitType_Grab, HitType_Projectile, HitType_Unblockable,
+		OutTags.Append({ Root_Hurtbox, HitType_Normal, HitType_Grab, HitType_Projectile, HitType_Unblockable,
 			Relationship_Self, Relationship_Ally, Relationship_Enemy, Relationship_Neutral });
 	}
 }

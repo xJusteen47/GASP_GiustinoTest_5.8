@@ -117,9 +117,10 @@ struct GSTNCOMBATCORE_API FGSTN_SurfaceImpactRow
 };
 
 /**
- * The surface layer of the impact rules: rows by surface type tag, compiled to an index table at load so a contact carries a
- * byte (the index of its row) and no tag is ever stored in a sync state or snapshot. Rows are looked up by exact tag, then by
- * the nearest parent tag.
+ * The surface layer of the impact rules: rows by surface type tag. A contact carries the GSTNSurface type index of its surface
+ * (UGSTN_SurfaceUtils::GetSurfaceTypeIndex, 0 = no type) and no tag is ever stored in a sync state or snapshot. The table compiles
+ * a lookup from every type index to its row (exact tag, else the nearest parent tag) at load, and again when the surface type
+ * list changes, so the order of Rows does not matter.
  */
 UCLASS(BlueprintType)
 class GSTNCOMBATCORE_API UGSTN_SurfaceImpactTable : public UDataAsset
@@ -127,17 +128,18 @@ class GSTNCOMBATCORE_API UGSTN_SurfaceImpactTable : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	/** The row index is the SurfaceTypeIndex of a contact (at most 254 rows: 255 means "no surface type") */
+	/** Rows by surface type tag, in any order. A tag with two rows uses the first */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surfaces")
 	TArray<FGSTN_SurfaceImpactRow> Rows;
 
-	/** Builds the tag to index table. Called at load and after an edit; call it after filling Rows from code */
+	/** Builds the tag and surface type index lookups. Called at load and after an edit; call it after filling Rows from code */
 	void Compile();
 
 	/** The row index of a surface type (exact tag, else the nearest parent), or INDEX_NONE */
 	int32 FindRowIndex(const FGameplayTag& Surface) const;
 
-	const FGSTN_SurfaceImpactRow* GetRow(int32 Index) const { return Rows.IsValidIndex(Index) && Index < 255 ? &Rows[Index] : nullptr; }
+	/** The row of a contact's surface type index (GSTNSurface), or null for no type, an unknown index or a type without a row */
+	const FGSTN_SurfaceImpactRow* GetRow(int32 SurfaceTypeIndex) const;
 
 	virtual void PostLoad() override;
 #if WITH_EDITOR
@@ -146,6 +148,15 @@ public:
 
 private:
 	TMap<FGameplayTag, int32> IndexByTag;
+
+	/** Row index by surface type index, INDEX_NONE for none; sized to the surface type list when compiled */
+	mutable TArray<int32> RowBySurfaceIndex;
+
+	/** Checksum of the surface type list RowBySurfaceIndex was built for; a different one means the indices moved */
+	mutable uint32 CompiledTypeChecksum = 0;
+	mutable bool bCompiledOnce = false;
+
+	void BuildSurfaceIndexLookup() const;
 };
 
 /** Layer 2 for one surface type: what this victim can undergo there. Negative numbers mean "the surface's value" */
@@ -201,8 +212,8 @@ struct GSTNCOMBATCORE_API FGSTN_ImpactResponse
  */
 struct GSTNCOMBATCORE_API FGSTN_ImpactInput
 {
-	/** Index into the surface table's rows; 255 = no surface type */
-	uint8 SurfaceTypeIndex = 255;
+	/** GSTNSurface type index of the surface (UGSTN_SurfaceUtils::GetSurfaceTypeIndex); 0 = no surface type */
+	uint8 SurfaceTypeIndex = 0;
 
 	/** Impact speed along the contact normal in whole cm/s */
 	uint16 ImpactSpeedQ = 0;

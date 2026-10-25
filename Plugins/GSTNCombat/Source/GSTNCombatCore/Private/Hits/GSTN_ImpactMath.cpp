@@ -1,6 +1,7 @@
 // Pure combat logic (no GAS, no Network Prediction).
 
 #include "Hits/GSTN_ImpactMath.h"
+#include "GSTN_SurfaceUtils.h"
 
 const FGSTN_ImpactResponseEntry& FGSTN_ImpactResponse::Find(const FGameplayTag& Surface) const
 {
@@ -20,7 +21,7 @@ const FGSTN_ImpactResponseEntry& FGSTN_ImpactResponse::Find(const FGameplayTag& 
 void UGSTN_SurfaceImpactTable::Compile()
 {
 	IndexByTag.Reset();
-	for (int32 Index = 0; Index < Rows.Num() && Index < 255; ++Index)
+	for (int32 Index = 0; Index < Rows.Num(); ++Index)
 	{
 		if (Rows[Index].Surface.IsValid())
 		{
@@ -28,6 +29,36 @@ void UGSTN_SurfaceImpactTable::Compile()
 			IndexByTag.FindOrAdd(Rows[Index].Surface, Index);
 		}
 	}
+	BuildSurfaceIndexLookup();
+}
+
+void UGSTN_SurfaceImpactTable::BuildSurfaceIndexLookup() const
+{
+	RowBySurfaceIndex.Reset();
+	RowBySurfaceIndex.Init(INDEX_NONE, 256);
+	// Index 0 is "no type"; the type list ends at the first index that names no tag
+	for (int32 TypeIndex = 1; TypeIndex < 256; ++TypeIndex)
+	{
+		const FGameplayTag Type = UGSTN_SurfaceUtils::GetSurfaceTypeFromIndex(static_cast<uint8>(TypeIndex));
+		if (!Type.IsValid())
+		{
+			break;
+		}
+		RowBySurfaceIndex[TypeIndex] = FindRowIndex(Type);
+	}
+	CompiledTypeChecksum = UGSTN_SurfaceUtils::GetSurfaceTypeTableChecksum();
+	bCompiledOnce = true;
+}
+
+const FGSTN_SurfaceImpactRow* UGSTN_SurfaceImpactTable::GetRow(int32 SurfaceTypeIndex) const
+{
+	// The surface type table can bake after this asset loaded (and the editor rebuilds it when tags change): follow it
+	if (!bCompiledOnce || CompiledTypeChecksum != UGSTN_SurfaceUtils::GetSurfaceTypeTableChecksum())
+	{
+		BuildSurfaceIndexLookup();
+	}
+	const int32 RowIndex = RowBySurfaceIndex.IsValidIndex(SurfaceTypeIndex) ? RowBySurfaceIndex[SurfaceTypeIndex] : INDEX_NONE;
+	return Rows.IsValidIndex(RowIndex) ? &Rows[RowIndex] : nullptr;
 }
 
 int32 UGSTN_SurfaceImpactTable::FindRowIndex(const FGameplayTag& Surface) const

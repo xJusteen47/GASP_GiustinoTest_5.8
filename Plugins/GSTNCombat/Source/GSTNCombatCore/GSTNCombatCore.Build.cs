@@ -16,6 +16,7 @@ public class GSTNCombatCore : ModuleRules
 			"Engine",
 			"GameplayTags",
 			"GSTNInputCore",
+			"GSTNSurfaceCore",
 			"DeveloperSettings"
 		});
 
