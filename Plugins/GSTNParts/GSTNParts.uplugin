@@ -25,6 +25,11 @@
 			"Name": "GSTNPartsGAS",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNPartsNP",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [
@@ -41,7 +46,15 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
 			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "NetworkPrediction",
 			"Enabled": true
 		}
 	]

@@ -75,3 +75,7 @@ New plugin `GSTNParts` (`EnabledByDefault` false; uplugin: GSTNCombat only). `GS
 ## New edge: GSTNPartsGAS -> GSTNCombatGAS (M4b P5, 2026-10-25)
 
 New module `GSTNPartsGAS` in plugin `GSTNParts`. `GSTNPartsGAS.Build.cs`: Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, `GSTNInputCore` (the simulation event type), `GSTNCombatCore`, `GSTNCombatGAS`, `GSTNPartsCore`. The uplugin lists GSTNCombatGAS, GSTNInput and GameplayAbilities. GAS -> GAS, never GSTNCombatNP, NetworkPrediction, AbilitySystemSimulation or Mover (grep gate in the P5 commit: only comments name them). The knockback set-by-caller keys of GSTNCombatNP reach the module as parameters (`FGSTN_PartLaunchKeys`), not as an include. No project include, no `/Game/` path, no ini key of the project.
+
+## New edge: GSTNPartsNP -> GSTNCombatNP (M4b P6, 2026-10-25)
+
+New module `GSTNPartsNP` in plugin `GSTNParts`. `GSTNPartsNP.Build.cs`: Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, NetworkPrediction, GSTNCombatCore, GSTNCombatGAS, GSTNCombatNP, GSTNPartsCore, GSTNPartsGAS. The uplugin gains GSTNCombatNP and NetworkPrediction. NP -> NP/GAS/Core only; no Mover or project include of its own, no `/Game/` path. The fragment itself uses only GSTNCombatCore's registry (`Sync/GSTN_SyncFragment.h`); the NP dependency is for P7. The fragment type id (16) is declared in the plugin, pending its move into the central `GSTNFeatureIds`.

@@ -5,10 +5,10 @@ main pool), the penetration table that turns a hit's penetration against a part'
 effects as data, and the pure, integer-quantised math that applies a hit to a part. An entity without a part set behaves as it
 did before the plugin.
 
-Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P5 of
+Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P6 of
 [m4b-parts-plan.md](../../docs/architecture/plans/m4b-parts-plan.md) are built (skeleton and tags, data, pure math, the pipeline
-step, the GAS half); the design is
-[combat-parts.md](../../docs/architecture/combat-parts.md). The NP sync fragment, tick extension and applier (P6, P7), hit feel (P8)
+step, the GAS half, the sync fragment); the design is
+[combat-parts.md](../../docs/architecture/combat-parts.md). The NP tick extension and applier (P7), hit feel (P8)
 and the presentation (P10-P12) are not built. Owner direction in
 [game-design-direction.md](../../docs/architecture/game-design-direction.md) wins over the spec: hardness acts on damage only
 (three bands: above, equal about 65 %, below ricochets), a player is a single part and its break is death, parts do not
@@ -20,7 +20,7 @@ regenerate by themselves.
 |---|---|---|
 | `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve, the part state and the deterministic part math, and the part resolve step of the hit pipeline. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
 | `GSTNPartsGAS` | exists (Runtime, Default) | The one-shot break effects (`FGSTN_PartBreakEffectApplier`: the Stats effect per part through `UGSTN_GE_PartStats`, the launch request in the shape of the M4 reaction move, the stagger floor), the part events (`FGSTN_PartEvents`, `FGSTN_PartEventPayload`, the dedupe key and window) and the tag projection helpers (`FGSTN_PartTagProjection`). Stock GAS: no Network Prediction, Mover or `GSTNCombatNP`. Covered by `GSTNParts.GAS.*`. |
-| `GSTNPartsNP` | not built (P6-P8) | Sync fragment, tick extension, snapshot contributor, outcome applier. Needs the GAS-NPP fork. |
+| `GSTNPartsNP` | exists (Runtime, Default), P6 only | `FGSTN_PartsFragment` (the sync fragment, fixed type id 16, 3 + N bytes, empty = 0 bytes), its registration. Tick extension, snapshot contributor and outcome applier arrive with P7. Needs the GAS-NPP fork. Covered by `GSTNParts.NP.*`. |
 | `GSTNPartsPresentation` | not built (P10-P12) | Damage material, hidden bones, chunks and shatter. Loaded by a listen-server host, skipped on a dedicated server. |
 | `GSTNPartsEditor` | not built (P13) | Validators and report. |
 
@@ -171,6 +171,8 @@ applied and removed per part, magnitudes by set-by-caller key, the launch reques
 (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the canary script does not exist.
 
 ## Changelog
+
+- 0.1 (2026-10-25): `GSTNPartsNP`: `FGSTN_PartsFragment` and its registration (plan P6).
 
 - 0.1 (2026-10-25): `GSTNPartsGAS`: break-effect applier (Stats per part, launch request, stagger floor), part events with the hit
   envelope and the dedupe key, tag projection helpers (plan P5).

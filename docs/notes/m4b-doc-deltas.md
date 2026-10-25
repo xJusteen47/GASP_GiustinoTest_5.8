@@ -186,3 +186,22 @@ One line each: where, what differs, why. Collected per checkpoint; folded into `
   children (the first test run showed `HasTag` has the opposite direction).
 - Module dependencies: the uplugin now lists GSTNCombatGAS, GSTNInput and GameplayAbilities, so enabling GSTNParts needs those plugins; the Core module itself still needs none.
 - Tests: 12 `GSTNParts.GAS.*` as the plan lists them, on a transient world with a stock ASC and the combat attribute set; the test effect and the test stat leaves live in the test files.
+
+## P6 GSTNPartsNP: the parts sync fragment (laptop, 2026-10-25)
+
+- Wire format = the P0c byte encoding, not the spec 5.1 bit table: payload `uint16 BrokenMask, N x uint8 PartDamage, uint8 BreakSerial` (3 + N bytes), and an EMPTY fragment (mask 0, serial 0, no
+  damage) is a ZERO-byte payload, so the "1-bit empty flag" of the plan is not a bit inside the fragment: the list's length byte (0) is the flag. The payload is byte-aligned because the
+  registry hands the fragment a `FMemoryWriter` (bits would round up anyway). N is derived from `Ar.TotalSize() - 3` on read; a size of 1, 2 or above 19 bytes, or a serial above 15, sets
+  the archive error and the registry drops the fragment (warning) without moving the reader. Numbers (test `BytesMatchTable`): N = 6 payload 9 B (spec 8 B), N = 8: 11 B (10 B), N = 16: 19 B (19 B);
+  in the list (flag bit + count + id + length + payload) 13 / 15 / 23 B; empty 25 bits (4 B); no fragment 1 bit. The test asserts payload = 3 + N and at most 2 B above the spec bit count.
+- `PartCount` (N) is an instance field the owner sets (`SetState(State, N)`), used only to write the damage bytes; it is not state and not compared. `GetWireCount()` raises it to cover the
+  highest damaged part or broken bit, so a fragment whose count was never set is never cut short. An empty fragment still travels (4 B incl. the list flag) and reads back as present and empty.
+  P7 should therefore add the fragment at attach only if it wants the 4 B per part-bearing entity from frame 0; the alternative is to add it at the first damage (then "has a part set" must come from the kit, not from the fragment).
+- Type id: `GSTNPartsFeatureIds::Parts = 16` in `Public/GSTN_PartsFragmentRegistration.h`, NOT in the central `GSTNFeatureIds` (GSTNCombatCore, off limits). STOP item: move the line into the central file when GSTNCombat is next
+  touched (1..127 is the GSTN range; nothing else uses 16). The module registers it at startup and unregisters at shutdown (`FGSTN_PartsFragmentRegistration`).
+- SEAM FINDING (STOP item for GSTNCombat): `FGSTN_HitSyncState` (GSTNCombatNP) has no export macro, so `FGSTN_CombatSyncState`/`FGSTN_CombatSyncCore` cannot be instantiated from another module (inline
+  constructor and `ShouldReconcile` do not link: LNK2019 on `FGSTN_HitSyncState::NetSerialize/Canonical/IsDefault/operator==/Interpolated/ToString`). The P6 tests go through `FGSTN_SyncFragmentList` (what the state delegates to); the
+  state-level wire cost stays pinned by `GSTNCombat.NP.Fragments.*`. P7 must not touch `FGSTN_CombatSyncState` members from GSTNPartsNP until the macro is added (needs `GSTNCOMBATNP_API` on `FGSTN_HitSyncState` and `GSTNINPUTCORE` linkage of `FGSTN_InputHistory`, which is already exported).
+- GSTNPartsNP.Build.cs lists GSTNCombatNP and NetworkPrediction (P7 needs them); the uplugin lists GSTNCombatNP and NetworkPrediction, so enabling GSTNParts now pulls the NP fork in.
+- Tests: 9 `GSTNParts.NP.Fragment.*` (RoundTrip0/1/2, N1_8_16EmptyAndFull, ShouldReconcileExact, BytesMatchTable, ZeroPartsZeroBytes, UnknownTypeIdIgnored, ToStringStable), with the list instead of the combat state (see above); the malformed-payload case is inside UnknownTypeIdIgnored.
+- Per-client sync bytes report: no entity carries a part set before P7, so the measured bytes with the plugin enabled equal those without (the list is the same single bit). The harness cannot read `stat net`; the per-send cost of a part-bearing entity is the table above (+13 / 15 / 23 B for a damaged N = 6 / 8 / 16 fragment, +4 B empty). Host bytes/s = per-client x clients (listen).
