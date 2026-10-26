@@ -123,6 +123,8 @@ AttackerHitstopFramesOverride (−1 = same as HitstopFramesOverride); float Shie
 Projectile/Unblockable); TArray<TSubclassOf<UGameplayEffect>> ExtraEffects (applied to victim); FGameplayTag CueTag;
 FInstancedStruct CustomData; EGSTN_StaggerForceMode StaggerForceMode (Derived / Override); float StaggerForce (the override
 value); float StaggerForceScale = 1; FGSTN_ImpactProfile Impact (§7b); int32 DemolitionForce = 0 (§7c, added 2026-10-25);
+int8 TurnSense = 0; uint8 TurnSteps = 1 (rotation of the hit around the attacker's up axis, +1 clockwise seen from above, set by spin
+and drill hitboxes; read by screw parts, combat-parts.md §3.4, added 2026-10-26);
 TArray<FInstancedStruct> ExtensionData (base struct FGSTN_HitExtension, modularity-and-tags.md §5b; empty by default); }`.
 The **stagger force** is the "what hits" input of the hitstun condition and the hitstop fields feed the model's hitstop rule
 (both in the knockback model below).

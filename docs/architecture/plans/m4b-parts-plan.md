@@ -465,6 +465,14 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
   states in the lag-compensation history (open residue of P7 part 1, handover item 40). Tests (level 1): `WoundSetsChosenPart`,
   `WoundedHardnessUsedWhileBitOn`, `RicochetPredictionSeesWoundedMask`, `RewoundHitReadsWoundStateOfItsFrame`.
 
+### P19 Screws on mechanical enemies (`GSTNCombatCore`, `GSTNParts`) — size S (added 2026-10-26, after P18)
+
+- Spec: [combat-parts.md](../combat-parts.md) §3.4 "Screws and bolts". Additive fields: `TurnSense`/`TurnSteps` on `FGSTN_HitData`
+  (default 0, so no existing hit turns anything), `FGSTN_PartScrewRule` and `HeldBy`/`HeldByRule` on `FGSTN_PartDefinition`; the
+  turning rule and the held-by pass in `UGSTN_HitStep_PartResolve` and the break pass. No new fragment bytes.
+- Needs the spin and drill hitboxes to author `TurnSense` (spin-drill plan) to be playable; testable before that with a test hitbox.
+- Tests: the six `Screws (P19)` tests of combat-parts.md §8.1. TM3 parts boss (station 5) gets a plate held by two screws on its back.
+
 ## 4. Spikes first and stop-and-ask conditions
 
 Spikes are P0 (above). Summary of stop conditions (do not continue past them without the owner or lead):

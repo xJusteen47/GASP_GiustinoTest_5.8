@@ -31,7 +31,7 @@ Questions FLP.1–FLP.6 are in [open-questions-m4-m10.md](open-questions-m4-m10.
 
 | Concept | What it is |
 |---|---|
-| **Trigger** | An action of an entity at a frame: `Activation.Trigger.Jump`, `.Land`, `.GroundPound`, `.Spin` (with its sense), `.Drill`, `.Hit`, `.Interact`, `.Enter`, `.Leave`, designer leaves in ini |
+| **Trigger** | An action of an entity at a frame: `Activation.Trigger.Jump`, `.Land`, `.GroundPound`, `.Spin`, `.Drill` (both with a sense, below), `.Hit`, `.Interact`, `.Enter`, `.Leave`, designer leaves in ini |
 | **Zone** (`AGSTN_ActivationZone`) | A set of member objects plus an optional volume. It holds **one state**, **one owner** and the trigger rules. The panels of one area are one zone; one controllable platform is one zone |
 | **Owner** (claim) | The one player whose triggers count. How the owner is chosen is the zone's `ClaimRule` |
 | **Value** | The zone's state: an integer that each accepted trigger changes by a step, at a scheduled frame. Panels read its parity, a platform on a track reads it as a position, a door as open or closed |
@@ -48,6 +48,11 @@ Triggers are read from confirmed or predicted simulation state, never from anima
 - **Ground pound, spin, drill, hit, interact**: combat outbox events, which needs seam **D-1** (an authoritative event key on the
   timeline, [game-modes.md](game-modes.md) §2) for ability actions. Until D-1 exists only jump, land, enter and hit are available, so
   objects driven by a spin wait for D-1 and the panels do not.
+- **Sense** of spin and drill triggers: `int8 Sense` on the trigger event, +1 clockwise and −1 counter-clockwise, seen from above along
+  the acting character's up axis (opposite to its gravity). Hit data uses the same convention (`FGSTN_HitData::TurnSense`), and the
+  spin's own state (`Combat.State.Spinning.Clockwise/.CounterClockwise`, spin-drill spec) maps onto it one to one.
+- **Not here: screws on enemies.** Screws and bolts on mechanical enemies are parts of the enemy, turned by hits, and they hold an
+  armour part ([combat-parts.md](combat-parts.md) §3.4 "Screws and bolts"). Zones stay level objects; they are never hosted by enemies.
 
 ## 4. Owner: one player at a time (owner idea)
 
@@ -105,6 +110,7 @@ FGSTN_ActivationRule {
     int32 ReleaseFrames = 120;
     int32 DelayFrames = 20;
     int32 CooldownFrames = 0;
+    EGSTN_TriggerSense Sense = Any;         // Any, Clockwise, CounterClockwise (spin and drill triggers)
     int8 Step = 1;                          // negative for the opposite direction (spin sense, lever side)
     bool bRequireInsideZone = true;         // the trigger must start in the zone, question FLP.3
     int16 MinValue, MaxValue;               // clamp, or wrap when bWrapValue
@@ -131,7 +137,7 @@ Building the two examples by hand:
 - **Panels**: one zone with `Trigger = Jump`, `ClaimRule = FirstToStand`, `DelayFrames = 20`; each panel has a collision response
   (red or blue table) and a Blueprint that blinks on `OnStepScheduled` and tints itself on `OnClaimed`.
 - **A platform only one player controls**: one zone with `ClaimRule = Assigned` (slot 1, red), a trigger the designer picks (for
-  example `Spin.Clockwise` +1 and `Spin.Anticlockwise` −1), `DelayFrames = 0`; the platform has a track response on its spline and a
+  example `Spin` clockwise +1 and `Spin` counter-clockwise −1), `DelayFrames = 0`; the platform has a track response on its spline and a
   Blueprint that shows the owner's emblem and colour on `OnClaimed`. The player rides it with Mover's based movement, like any moving
   platform.
 
