@@ -375,31 +375,27 @@ target breaks (option to keep plunging), SD.9 both level props and enemies, a st
 ## 13c. Spin-driven interactables: screws and knobs (owner brainstorm 2026-10-26 09:52, *Proposal*)
 
 Owner idea: **screw switches** that screw in or out depending on the **spin sense**, and **knobs/valves** that turn but never come
-off (New Super Mario Bros. Wii). Both are level objects whose state is an angle driven by spins and drills.
+off (New Super Mario Bros. Wii).
 
-- **Plugin**: bridge `GSTNSpinDrillLevelObjects` (already planned in §4, D12), next to `AGSTN_DrillableProp`. Actors
-  `AGSTN_SpinScrew` and `AGSTN_SpinKnob` share one component `UGSTN_SpinReceiverComponent`; `GSTNSpinDrill` and `GSTNCombat` name
-  neither.
-- **How a spin reaches them**: through the normal hit pipeline, no special path. The spin and drill hitboxes carry a small hit-data
-  extension `FGSTN_SpinHitData { int8 Sense; uint8 TurnStrength }` (declared in `GSTNSpinDrillCore`); the receiver has a hurtbox and
-  an outcome applier (`IGSTN_OutcomeExtensionApplier`, existing M4b seam) that turns the hit into torque: a **spin hit** = one step of
-  `StepDegrees × TurnStrength` in the spin's sense; a **drill latched on it** = continuous turning while bored (`DegreesPerRehit` per
-  multi-hit tick), sense = the spin sense recorded in the drill fragment. Demolition force and penetration do not apply to receivers
-  (they are not destroyed), unless the designer gives them a break threshold.
-- **State and data** (`FGSTN_SpinReceiverDef`, designer-editable): `AngleMin/AngleMax` (knob: clamp, never detaches; screw: travel
-  along its axis = angle × `PitchCmPerTurn`), `bDetachAtMax` (screw comes off at full unscrew: becomes a free prop, a platform, or
-  just stops, data), `ReturnSpeed` (spring back when nobody turns it, 0 = stays), `Resistance` (degrees lost per frame), `Sense
-  mapping` (which sense tightens), output `Value 0..1` exposed to linked objects (door, platform, bridge, water level) through a
-  `BlueprintNativeEvent` and a `Message.SpinReceiver.Changed` message, so designers wire it in Blueprint.
-- **Network**: the receiver is a level object, **server-authoritative**, not predicted (like M4 surface destruction); its angle
-  replicates as one quantised `int16` + detached flag, clients interpolate. The player's own spin and drill stay predicted; only
-  the object's response arrives after about one round trip, accepted for switches. A screw **under the player's feet** that moves them
-  (a lift) is a moving base: it uses the based-movement path of `GSTNPlatform` / traversal surfaces, not a new one.
-- **Several players**: torques add up in the frame (two players spinning in opposite senses cancel out: a tug of war). *Open:*
-  §14 SD.15.
-- **Tags**: `Message.SpinReceiver.Changed`, `.Detached`, `.LimitReached` (owned by the bridge).
-- **Tests**: harness `screw_spin_steps`, `screw_drill_continuous`, `knob_clamps_no_detach`, `screw_detach_at_max`,
-  `receiver_two_players_opposite`, listen server.
+They are **not** a drill-specific system: they are members of an activation zone of the generic level-activation base
+([level-activation.md](level-activation.md), plugin `GSTNActivation`). This plugin adds nothing on the object side; it only
+**emits triggers**:
+
+- A screw/knob = a zone with two rules, `Activation.Trigger.Spin` clockwise → +1, anticlockwise → −1 (tags and sense encoding of
+  level-activation.md §2, reused here, no tags of our own), and a `UGSTN_ActivationRotationResponse` (knob: clamp at the ends, never
+  detaches) or a `UGSTN_ActivationTrackResponse` for the screw's travel along its axis. The zone has one owner (first to stand,
+  standing now, or assigned) and shows the owner's colour, which answers most of the "several players" case.
+- **Spin trigger**: `UGSTN_GA_Spin` posts one `Activation.Trigger.Spin` event with its sense through the combat outbox, at an
+  authoritative event key on its timeline. That needs seam **D-1** (game-modes.md §2), so D-1 joins the core seams of §8 (scheduled
+  with S1–S6 after M4b P14). The spin's internal sense (`Combat.State.Spinning.Clockwise/.CounterClockwise`) maps 1:1 onto the
+  activation encoding.
+- **Drill trigger**: a drill latched on a zone member posts `Activation.Trigger.Drill` with the sense on every multi-hit tick
+  (continuous turning while held). A member is latchable when it has a target response (§6) or is marked as a drill receiver in its
+  zone data.
+- **Network**: as level-activation.md §5 (server-authoritative zone state, responses computed from the replicated value). The
+  player's own spin and drill stay predicted.
+- **Tests**: harness `screw_spin_steps`, `screw_drill_continuous`, `knob_clamps_no_detach` live with the activation plugin's tests and
+  use the spin abilities of this plugin.
 
 ## 14. Domande per Giustino (italiano)
 
@@ -437,7 +433,7 @@ Ognuna ha una mia proposta; se non rispondi, il piano usa la proposta (colonna "
 - **SD.14 Vite svitata del tutto.** Quando si svita fino in fondo cosa succede: si stacca e cade (diventa un oggetto o una
   piattaforma), oppure si ferma al limite? E le manopole tornano indietro da sole quando smetti (a molla)? *Proposta:* scelta per
   oggetto nei dati; di default la vite si ferma al limite e la manopola non torna indietro.
-- **SD.15 Più giocatori.** Se due giocatori girano la stessa vite in versi opposti si annullano (tiro alla fune), o vince il primo
-  arrivato come nella tua idea delle piattaforme rosse e blu? *Proposta:* si sommano (tiro alla fune), con l'opzione "primo
-  arrivato" nei dati se il thread di pianificazione la definisce come regola generale di attivazione.
+- **SD.15 Più giocatori.** Viti e manopole usano la base generica di attivazione (level-activation.md), quindi hanno un
+  "proprietario" come le piattaforme rosse e blu: conta solo chi ci è salito per primo (o chi ci sta sopra ora). Ti va bene anche
+  per le viti, o vuoi un "tiro alla fune" (versi opposti si annullano)? *Proposta:* proprietario come le piattaforme.
 

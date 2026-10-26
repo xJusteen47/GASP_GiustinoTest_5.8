@@ -25,7 +25,7 @@ agent session per checkpoint (cheapest model that fits), HANDOVER entry in `docs
 | D4 | Ground spin + air spin (timelines, hop, low gravity inside the timeline, once per airtime, refresh rules), harness `spin_ground_hits_ring`, `spin_air_hop_low_gravity`, `air_spin_once_per_airtime` | No | SD.3 |
 | D5 | Opposite-spin cancel (`UGSTN_GA_SpinCancel`, projected sense tags, bindings), harness `spin_opposite_cancel` | No | SD.2 |
 | D6 | Core seams S1 (re-hit interval) and S2 (loop section) in `GSTNCombatCore` / timeline player, with their own unit tests and the existing 396+ tests green | **Yes** | SD.11 + after M4b P14 |
-| D7 | Core seams S3 (attacker root override) and S4 (attacker hit notify), S6 (gravity contributor) if SD.3 wants it | **Yes** | SD.11 |
+| D7 | Core seams S3 (attacker root override) and S4 (attacker hit notify), S6 (gravity contributor) if SD.3 wants it; D-1 (authoritative timeline event key, game-modes.md §2) if not built yet, for spin/drill activation triggers (spec §13c) | **Yes** | SD.11 |
 | D8 | Dive: plunge along gravity, ground lag via the movement track, non-drillable bounce; harness `drill_ground_lag`, `drill_nondrillable_bounce`, `drill_tilted_gravity` | No (uses D6–D7) | SD.4, SD.6 |
 | D9 | Latch + bore on **static** targets: snapshot extension, latched movement mode, seat, multi-hit loop, end conditions, launch, detach pop; test prop in the test module; harness `drill_latch_static_prop_multi_hit`, `drill_release_early_pop`, `drill_launch_after_bore`, `drill_target_destroyed` | No | SD.5, SD.7, SD.10 |
 | D10 | Moving targets (`bLatchMoves`): derived transform for hitbox (S3), exit placement, camera target; harness `drill_latch_moving_enemy`, `drill_hit_while_latched_detaches`; count corrections per latch | No | — |
