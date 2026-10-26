@@ -260,8 +260,10 @@ Gaps, *Proposal*:
    instead the charge is relative to **where it started**. *Proposal*: a new space `EGSTN_DirectionSpace::ChargeAnchor`. When the stick
    enters the tilt zone with no charge running, the tracker stores the stick's angle in `Stick` space (the physical stick, so a camera
    turn does not break the charge) as `AnchorAngle`. The charge keeps counting while the stick stays within `MaxDeviationDeg` of the
-   anchor (*Proposal*: 50°, per slot, question CH.4); past it the charge restarts with a new anchor. **The anchor drifts with time**
-   (owner, 09:55): each frame it moves towards the stick by at most `AnchorDriftDegPerSecond` (*Proposal*: 90°/s, per slot), so a
+   anchor (50°, per slot, owner answer CH.4); past it the charge restarts with a new anchor. **The anchor drifts with time**
+   (owner, 09:55): each frame it moves towards the stick by at most `AnchorDriftDegPerSecond` (default **45°/s**, a full turn in 8 s;
+   per slot, 0 = no drift; owner CH.4 10:23: 90°/s is too fast for some moves, so a move that needs another rate declares its own
+   slot), so a
    stick turned very slowly keeps the charge, even through a full 360°, while a quick turn breaks it. The release reads the anchor
    of the frame it happens on. The release step of the move reads
    its direction in the same space: "forward" means **opposite to the anchor** within its own tolerance, so "hold one way, then push
@@ -277,4 +279,4 @@ Gaps, *Proposal*:
    whether it then turns towards the opponent is the move's aim policy, like any other charge move. A move that wants the Street
    Fighter rule (charge lost on a side switch) uses the `Facing` set instead; that is data on the command.
 
-Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); CH.1–CH.3 answered, CH.4 open.
+Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); all answered.

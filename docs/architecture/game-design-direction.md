@@ -281,6 +281,7 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (09:55) The same charge can also hit **forward** if the character turns right after; it depends on the ability.
 - (09:56) **CH.2 approved** (40 frames, 8 frames of release tolerance, per move). CH.1 and CH.3 to be inferred from the above: the charge
   is anchor-relative everywhere, so a duel cross-up keeps it; the move fires opposite to the anchor and its facing is the ability's choice.
+- (10:23) CH.4: 50° is fine; 90°/s drift may be too fast for some moves. Spec: default 45°/s, per move, 0 allowed.
 
 ## 6k. Zones of objects one player activates (owner brainstorm, 2026-10-26 09:52)
 
@@ -641,6 +642,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > La piattaforma te l'ho data per darti l'idea del fatto che può essere controllata solo da Mario, e assume il colore rosso di Mario. (10:00)
 >
 > Flp 1 è deciso dal designer. Le altre domande hanno già un'ottima risposta. (10:13)
+>
+> Beh si penso vada bene. Forse 90 al secondo è troppo veloce per alcune cose. (10:23, CH.4)
 
 > Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
 > mooolto lentamente per non perdere la carica (09:55)

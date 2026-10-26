@@ -1524,6 +1524,9 @@ seguire lo stick (tu hai detto: anche un giro intero, ma muovendo lo stick molto
    valida in qualunque direzione.
    Ipotesi nella specifica: 50 gradi da ogni lato, e la direzione segue lo stick a 90 gradi al secondo al massimo (un giro intero in 4
    secondi); tutto regolabile mossa per mossa.
+   **Risposta (2026-10-26 10:23):** Va bene, ma forse 90 gradi al secondo è troppo veloce per alcune cose. Nella specifica: 50 gradi;
+   la direzione segue lo stick a **45 gradi al secondo** di base (un giro intero in 8 secondi), regolabile mossa per mossa, anche 0
+   (direzione fissa).
 
 ## Zone di oggetti attivabili da un solo giocatore (26/10)
 
