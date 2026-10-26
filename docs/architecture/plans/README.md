@@ -50,6 +50,10 @@ individual abilities resumes at the end.
 Charge inputs (owner question, 2026-10-26): the `Charge` condition exists; a charge tracker in the input state of `GSTNInputNP`
 ([`../input.md`](../input.md) §10, size S) should land before the first charge move ships.
 
+Level activation (owner brainstorm, 2026-10-26): new spec [`../level-activation.md`](../level-activation.md), plugin `GSTNActivation`
+(a generic base for zones of objects one player activates with an action; the owner builds the objects by hand). No plan yet; jump, land, enter and hit triggers need no combat seam, ability
+triggers need D-1. Spike A1 (Mover resimulation against geometry that changes with the frame) comes first.
+
 ### Test maps (owner request, 2026-10-23)
 
 After the related milestones, three test maps are built from primitives by Ludus AI (an editor AI assistant) or a person,

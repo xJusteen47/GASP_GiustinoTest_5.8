@@ -238,7 +238,8 @@ no duration, and a tag derived from Mover's crouch would be seen one frame late 
 What the condition does today:
 - `Directions`: a **set** of directions that all count as charging (for example back and down-back), in a chosen `Space`
   (`Facing` by default).
-- `MinFrames` (default 30): how long the stick must stay inside the set.
+- `MinFrames` (default 30): how long the stick must stay inside the set. Standard charge moves use **40 frames** (about 0.65 s) and
+  `MaxReleaseFrames` 8, set per move (owner answer CH.2, 2026-10-26).
 - `MaxReleaseFrames` (default 8): the **tolerance after release**: the stick may have left the set at most this many frames before the
   move's anchor, so "charge back, then forward + punch" works.
 - `MinZone`: how far the stick must be tilted to count.
@@ -249,14 +250,31 @@ Gaps, *Proposal*:
 1. **The history keeps the last 16 direction events** (`FGSTN_InputHistory::MaxEvents`). A new event is recorded whenever the stick
    sector, the zone, the facing or the camera yaw changes the stick's direction, so a charge held while the camera turns, or while
    the stick wobbles between back and down-back, can push the start of the run out of the ring: the charge then looks shorter than it
-   was and the move fails. Fix: a small **charge tracker** in the input state of `GSTNInputNP`. For each charge set declared by the
-   command set (at most 4), it keeps `uint8 HeldFrames` (saturating at 255) and `uint8 FramesSinceRelease`, updated every frame from
-   the current stick. It is part of the predicted input state, so rollback replays it; cost 8 bytes. The `Charge` condition reads the
-   tracker when its set is declared and falls back to the event scan otherwise.
-2. **"Back" in 3D**: in free movement the character turns towards the stick, so "back relative to facing" cannot be held. Back-charges
-   make sense where facing is locked (the Duel camera, a lock-on or strafe) or in `Stick`/`Camera` space; elsewhere down-charges
-   (crouch held) work as they are. Question CH.1.
-3. **Side switches**: when a duel cross-up flips facing, a back-charge held in the same world direction becomes forward and is lost,
-   as in Street Fighter. Kept; question CH.3.
+   was and the move fails. Fix: a small **charge tracker** in the input state of `GSTNInputNP`. For each charge slot declared by the
+   command set (at most 4), it keeps `uint8 AnchorAngle` (256 steps, item 2), `uint8 HeldFrames` (saturating at 255) and
+   `uint8 FramesSinceRelease`, updated every frame from the current stick. It is part of the predicted input state, so rollback
+   replays it; cost 12 bytes. The `Charge` condition reads the tracker when its slot is declared and falls back to the event scan
+   otherwise.
+2. **"Back" in 3D (owner answer CH.1, 2026-10-26 09:53)**: the back-charge works in 3D; the charge holds **as long as the stick stays
+   within a limited angle**. In free movement the character turns towards the stick, so "back relative to facing" cannot be held;
+   instead the charge is relative to **where it started**. *Proposal*: a new space `EGSTN_DirectionSpace::ChargeAnchor`. When the stick
+   enters the tilt zone with no charge running, the tracker stores the stick's angle in `Stick` space (the physical stick, so a camera
+   turn does not break the charge) as `AnchorAngle`. The charge keeps counting while the stick stays within `MaxDeviationDeg` of the
+   anchor (*Proposal*: 50°, per slot, question CH.4); past it the charge restarts with a new anchor. **The anchor drifts with time**
+   (owner, 09:55): each frame it moves towards the stick by at most `AnchorDriftDegPerSecond` (*Proposal*: 90°/s, per slot), so a
+   stick turned very slowly keeps the charge, even through a full 360°, while a quick turn breaks it. The release reads the anchor
+   of the frame it happens on. The release step of the move reads
+   its direction in the same space: "forward" means **opposite to the anchor** within its own tolerance, so "hold one way, then push
+   the other way + punch" fires the move towards the push. Where facing is locked (the Duel camera, a lock-on) the classic `Facing`
+   set (back and down-back) keeps working. Down-charges (crouch held) need neither.
+   **Which way the move faces (owner, 09:54)**: while charging, the character usually faces the charge direction, so a move may also
+   have its **hitboxes behind** the character instead of in front. That is the timeline's choice, not the input's: `AimPolicy =
+   KeepFacing` with hitboxes authored behind the root (negative X in `Root` space) hits towards the push without turning;
+   `SnapToStick` turns towards the push and hits forward (owner, 09:55: "it depends on the ability"). Both are data on the move
+   (combat.md §6.3, `AimPolicy`).
+3. **Side switches (CH.3, inferred from the owner's answers, 2026-10-26 09:56)**: standard charge moves use `ChargeAnchor` in the
+   duel too, so the charge does not depend on facing and a cross-up does not erase it. The move still fires opposite to the anchor;
+   whether it then turns towards the opponent is the move's aim policy, like any other charge move. A move that wants the Street
+   Fighter rule (charge lost on a side switch) uses the `Facing` set instead; that is data on the command.
 
-Questions CH.1–CH.3 in [open-questions-m4-m10.md](open-questions-m4-m10.md).
+Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); CH.1–CH.3 answered, CH.4 open.

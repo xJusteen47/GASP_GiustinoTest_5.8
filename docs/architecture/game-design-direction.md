@@ -271,7 +271,28 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 - The owner asked whether a tag on crouch press and release, read by an ability, is enough for Street Fighter charge moves. The input
   plugin already has a `Charge` condition on the input history (direction set, minimum duration, tolerance after release); the gaps are
-  the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.3.
+  the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.4.
+- (09:53) **Back-charge works in 3D**: the charge holds while the stick stays within a limited angle. Spec: charge relative to the
+  direction where it started, release opposite to it ([input.md](input.md) §10).
+- (09:55) The charge direction may **shift with time**: a full 360° turn keeps the charge if the stick moves very slowly. Spec: the anchor
+  drifts towards the stick at a capped rate ([input.md](input.md) §10).
+- (09:54) Charge moves may have **hitboxes behind** the character instead of in front (it faces the charge direction): `KeepFacing`
+  with hitboxes authored behind the root, or a turn towards the push; per move.
+- (09:55) The same charge can also hit **forward** if the character turns right after; it depends on the ability.
+- (09:56) **CH.2 approved** (40 frames, 8 frames of release tolerance, per move). CH.1 and CH.3 to be inferred from the above: the charge
+  is anchor-relative everywhere, so a duel cross-up keeps it; the move fires opposite to the anchor and its facing is the ability's choice.
+
+## 6k. Zones of objects one player activates (owner brainstorm, 2026-10-26 09:52)
+
+- Mario 3D Land's red and blue panels that flip on jump, as the first case of a reusable activation mechanism for different objects.
+- Multiplayer idea: grouped panels react only to the jumps of the first player who stepped on them and take that player's colour; a
+  short delay before they flip lets the others react. Spec: [level-activation.md](level-activation.md), questions FLP.1–FLP.6.
+- Drill screw switches (turn by spin direction) and Mario Bros Wii knobs go to the spin and drill thread; they can be activators with
+  a spin trigger.
+- (09:58) What matters is the **generic base**: a zone of objects activated by one player's action, and only by that player. The owner
+  builds the panels by hand on top of it. (09:59–10:00) Example: the New Super Mario Bros. Wii platform that only Mario can control and
+  that shows Mario's red. Spec: zones with an owner (first to stand, first to enter, standing now, or assigned at start), owner colour,
+  generic C++ responses (collision, track, rotation), no finished objects in the plugin.
 
 ## 7. Consequences for the specifications
 
@@ -591,3 +612,34 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Un’altra cosa. Non abbiamo considerato gli input a carica alla Guile di street fighter. In teoria però basterebbe aggiungere un tag o
 > qualcosa quando si preme il tasto per abbassarsi ad esempio e quando si lascia si leva? Poi un’abilità lo usa? Dovrebbe funzionare bene
 > già così, no?
+
+> Allora, farei che la carica indietro funziona in 3d, basta far mantenere la carica entro una certa limitazione dei gradi dello stick. (09:53)
+
+> Inoltre si potrebbero avere mosse che hanno hitbox all’indietro. Invece che in avanti. A tal fine. (09:54)
+
+### Message of 2026-10-26, 09:52 (verbatim)
+
+> Per quanto riguarda la trivella predico già che ci sarà qualche interruttore a “vite” dove si svita o avvita una vite in base alla
+> direzione dello spin. Oppure dove si fa girare una manopola che non si svita (Mario bros Wii).
+>
+> Un’altra cosa sarebbero le piattaforme rosse e blu di Mario 3d land. Volevo vedere come usare cose come il salto per attivare degli
+> oggetti funzionerebbe. Magari ci sono alcune zone di queste piattaforme raggruppate che reagiscono solo al salto del primo che ci è salito
+> per la prima volta, e assumono il colore del giocatore corrispondente, in modo da evitare che più giocatori saltino insieme e muovano
+> troppo quelle piattaforme. Questa è un’idea. Magari possono avere un piccolo delay prima di cambiare lato, in modo da permettere agli altri
+> giocatori di avere tempo di saltare su reazione.
+> Più brain-storming che altro, e questo metodo di attivazione potrebbe essere usato per oggetti differenti.
+>
+> Per le piattaforme intendevo una zona di oggetti generica che sono attivabili attraverso un azione di un giocatore e solo da un giocatore.
+> Le piattaforme le implemento a mano poi. L'importante è la base per implementarle. (09:58)
+>
+> Un esempio è [screenshot of New Super Mario Bros. Wii: a girder platform with Mario's emblem] (09:59)
+>
+> La piattaforma te l'ho data per darti l'idea del fatto che può essere controllata solo da Mario, e assume il colore rosso di Mario. (10:00)
+
+> Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
+> mooolto lentamente per non perdere la carica (09:55)
+>
+> Comunque con lo stesso metodo potrebbero benissimo colpire in avanti, basta che il personaggio si giri subito dopo. Dipende penso
+> dall'abilità. (09:55)
+>
+> Ch2 va bene. Ch3 e ch1 puoi inferirli da quello che ho appena detto (09:56)
