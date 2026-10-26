@@ -569,3 +569,23 @@ TESTS (measured: `Select-String -Pattern 'Test Completed. Result=\{Success\}' | 
 DEVIATIONS: P10-P12 skipped, so no presentation dependency; MinionMaskOver8 not written (no minion flag in the data, P15); extra test EmptyTableRejected; the validator's path-prefixed findings come in addition to the asset's own IsDataValid findings; balance report definitions in the deltas. No PIE run (editor code only).
 OPEN: the owner's decision on P10-P12; MinionMaskOver8 with the minion bridge (P15); STOP items (2)-(3) of HANDOVER 40; `scenario_part_grabbable` waits for M6.
 NEXT: P14 (sample content) or P10 per the owner's decision. LOCAL ONLY: the `.uproject` enable stays uncommitted (restored after the disabled run). Editor closed.
+
+## HANDOVER 46 (laptop, 2026-10-26): M4b P14 done (sample content, full sweep, docs)
+Branch feature/gas-npp-5.8 on top of 6bf06e1. Commits: "M4b P14: sample content and setup script" (4ecbe26) and the docs commit. No sweep fix commit (nothing needed fixing). Details and deviations: m4b-doc-deltas.md "P14".
+CONTENT: `Plugins/GSTNParts/Content/Samples` (PT_Sample_Default, PS_Sample_Fighter with 6 parts, weak points and a Thickness 0.5 part, PS_Sample_Player, BP_PartStats_Example, BP_HitStep_PartResolve_Example) from `Tools/GAS/setup_parts_sample_content.py`; rerun gave an identical PS_Sample_Fighter hash. Validator `Saved/Logs/p14-validate.log`: 13 assets, 0 errors, 0 warnings.
+TESTS (measured with `Select-String -Pattern 'Test Completed. Result=\{Success\}' | Measure-Object`, same for `Result=\{Fail`): headless `RunTests GSTN` enabled `Saved/Logs/headless-p14-on.log` 537 Success, 0 Fail (01:12-01:13 UTC; no new test); disabled `Saved/Logs/headless-p14-off.log` 401 Success, 0 Fail. Builds: `build-p14-off.log` and `build-p14-reenabled.log` both "Result: Succeeded".
+SWEEP (harness level, reports under `Saved/Logs/p14-sweep/`, first line is the UTC save time):
+| Scenario set | Config | Verdict | Log |
+|---|---|---|---|
+| SUITE_PARTS (10) | listen 3 players, 60/15/0 | 10 PASS | parts-listen-0pct.log |
+| SUITE_PARTS (10) | listen, 60/15/2 | 10 PASS | parts-listen-2pct.log |
+| SUITE_PARTS (10) | dedicated 2 clients, 60/15/0 | 10 PASS (part_host skipped by design) | parts-dedicated-0pct.log |
+| SUITE_PARTS (10) | dedicated, 60/15/2 | 10 PASS (same) | parts-dedicated-2pct.log |
+| SUITE_DEFAULT (50) | listen, plugin enabled, 60/15/0 | 49 PASS, weapon_switch FAIL once ("peak speed 0"), PASS on a fresh-PIE rerun | default-listen-on.log, default-listen-on-rerun-weapon_switch.log |
+| SUITE_DEFAULT (50) | listen, plugin disabled, 60/15/0 | 47 PASS, combat_spike, di, impact_wall_mode FAIL once; all three PASS on a fresh-PIE rerun (combat_spike, hit_basic, di, impact_wall_mode in order) | default-listen-off.log, default-listen-off-rerun.log |
+Check counts per SUITE_PARTS scenario: break 15, cap 8, hitgroups 9, rollback 8, host 10, restore 17, ricochet 12, stagger 7, weakpoint 8, break_launch 10.
+BYTES: fragment in the list 13 B (N = 6), 15 B (N = 8), 23 B (N = 16) from the `Fragment bytes` lines of `headless-p14-on.log`; no parts = 1 flag bit (`ZeroPartsZeroBytes` passed). N = 1 not logged. Host bytes per second: the harness does not report it, so not measured.
+DEVIATIONS: presentation content and the shatter scenario skipped (P10-P12); shared assets untouched pending the owner's OK; the "break effect Blueprint" is a child of `UGSTN_GE_PartStats` (a break effect is a struct); M4b row is in combat.md §18 (§12 is Hits); the weapon_switch, combat_spike, di, impact_wall_mode reds were not seen in the repeat. Details in the deltas.
+OPEN: owner decision on P10-P12; MinionMaskOver8 with P15; STOP items (2)-(3) of HANDOVER 40; `scenario_part_grabbable` waits for M6; the sample parts are not yet attached to a pawn by default (use `SetKitPartSet`).
+PROCESS: two editor crashes inside the RiderLink script executor (logs `p14-editor-crash1.log`, `p14-editor-crash2.log`), not the project; relaunched and left alone a minute after "Editor ready". LOCAL ONLY: the `.uproject` enable stays uncommitted (re-enabled and rebuilt). Editor closed.
+NEXT: P10-P12 per owner decision, else M4b logic closed; P15/P16 after M8; P18 later.

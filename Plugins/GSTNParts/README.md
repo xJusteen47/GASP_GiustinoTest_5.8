@@ -144,7 +144,7 @@ values are read by the simulation, so every machine of a match must run the same
 A new part set, a new penetration table and new break-effect entries need no C++ and no build: author the assets. Tuning structs
 are `BlueprintType` with `EditAnywhere, BlueprintReadOnly` fields (checked by `GSTNParts.Core.Data.StructsAreBlueprintTypes`) and
 tag fields carry `Categories`. A new kind of break effect derives from `FGSTN_PartBreakEffect` in your own plugin. The
-Blueprintable extension classes (the pipeline step, outcome appliers) arrive with their checkpoints. The simulation hooks of `GSTNPartsNP` (snapshot contributor, tick extension, native outcome applier) are C++ only by design: they run for every entity on every simulated and re-simulated frame. To give a pawn parts: put `UGSTN_PartsAttachComponent` on it and add `FGSTN_PartsKitExtension` to its kit (the helper `UGSTN_PartsKitLibrary.SetKitPartSet` does the second from Python); to use them in a match: `UGSTN_PartsContentLibrary.ConvertRulesToParts` turns a rules asset into one with `PartResolve` in place of `HealthWeight` and `ApplyDamage`.
+pipeline step `UGSTN_HitStep_PartResolve` and the Stats effect `UGSTN_GE_PartStats` are Blueprintable (examples under Sample content). The simulation hooks of `GSTNPartsNP` (snapshot contributor, tick extension, native outcome applier) are C++ only by design: they run for every entity on every simulated and re-simulated frame. To give a pawn parts: put `UGSTN_PartsAttachComponent` on it and add `FGSTN_PartsKitExtension` to its kit (the helper `UGSTN_PartsKitLibrary.SetKitPartSet` does the second from Python); to use them in a match: `UGSTN_PartsContentLibrary.ConvertRulesToParts` turns a rules asset into one with `PartResolve` in place of `HealthWeight` and `ApplyDamage`.
 
 The Stats break effect needs one Blueprint class: a child of `UGSTN_GE_PartStats` (infinite) whose modifiers on the combat
 attribute set read `Combat.SetByCaller.Stat.*` magnitudes, exactly like a weapon stats effect. One class serves every part of an
@@ -160,9 +160,22 @@ rollback re-derives it). The plugin does not touch the grab code: a designer add
 `FGSTN_GrabRules::Requirements` in the M6 grab rules asset, and a boss keeps `Combat.Immunity.Grab` and no gate. The grab scenario waits for
 the M6 grab ability.
 
+## How to extend
+
+The four extension points, none of which edits the plugin:
+
+1. **A new break effect.** Derive a struct from `FGSTN_PartBreakEffect` in your own plugin (`USTRUCT(BlueprintType)`, tunable fields `EditAnywhere, BlueprintReadOnly`) and write the code that applies it where the effects are collected (the applier in `GSTNPartsGAS` walks the entries of a part's `OnBreak` list). One-shot effects must leave nothing to undo; an effect with a lasting result is an infinite gameplay effect removed by the restore mask. Unknown entries are reported by the validator.
+2. **A new pipeline step.** Derive from `UGSTN_HitResolutionStep` (C++ or a Blueprint) and place it in the rules asset next to or in place of `PartResolve`. A step is pure: the view in, the result out, no world, no state of its own. `FGSTN_PartsPipelineValidator` checks the order against the steps that stop a hit.
+3. **A new part set.** A `UGSTN_PartSetDefinition` data asset: up to 16 parts, each naming hurtboxes of the entity's hurtbox set. No C++, no build. Attach it to a kit with `UGSTN_PartsKitLibrary.SetKitPartSet`.
+4. **A new penetration table.** A `UGSTN_PenetrationTable` data asset (bands matched from the highest `MinDelta` down), referenced from the part set's `Table` or the settings default.
+
+## Sample content
+
+`Content/Samples` is written by `Tools/GAS/setup_parts_sample_content.py` (editor Python or headless `-run=pythonscript`; idempotent, data assets are rewritten from the specs in the script, Blueprints are left alone once created): `PT_Sample_Default` (the three default bands), `PS_Sample_Fighter` (six parts: Torso, Head and Core as weak points, ArmL and ArmR that disable their hit groups, Legs that launch the victim on break, Core with `Thickness` 0.5), `PS_Sample_Player` (a single part, whose break is death), `BP_PartStats_Example` (a Blueprint child of `UGSTN_GE_PartStats`, the class a Stats break effect needs) and `BP_HitStep_PartResolve_Example` (a Blueprint child of `UGSTN_HitStep_PartResolve`). Every reference between them is soft and none points into `/Game/`; the part sets name the hurtboxes of the project's test pawn set (`torso`, `head`, `feet`, `arm_l`, `arm_r`, `core`). `Tools/GAS/validate_combat_content.py --parts` validates them.
+
 ## Replacing content
 
-The plugin ships no content yet; every reference between assets is soft (checked by `GSTNParts.Core.Data.NoHardContentReferences`). A game adds its own `Part.Type.*` and `GameplayCue.Combat.Part.*` leaves in its own
+The plugin ships only the sample content above; every reference between assets is soft (checked by `GSTNParts.Core.Data.NoHardContentReferences`). A game adds its own `Part.Type.*` and `GameplayCue.Combat.Part.*` leaves in its own
 `Config/Tags` ini and its own part sets and penetration tables as assets; the defaults are soft references in the settings.
 
 ## Hit feel (P8)
@@ -202,6 +215,7 @@ Parts never heal by themselves; an explicit restore clears broken bits and gives
 
 ## Changelog
 
+- 0.1 (2026-10-26): P14: plugin-owned sample content and its setup script, full sweep (see HANDOVER 46). Presentation (P10-P12) still pending.
 - 0.1 (2026-10-26): P13: `GSTNPartsEditor` (asset validator, balance report and `GSTN.Parts.BalanceReport`, Physics Asset draft helper); tests `GSTNParts.Editor.*`. P10-P12 (presentation) are skipped for now.
 - 0.1 (2026-10-26): P9: part `Thickness` and hit `DeepDamage`, grab gate projection test, per-hitbox penetration test; the victim now receives `Combat.Event.Part.Ricochet`.
 - 0.1 (2026-10-25): hit feel through parts (plan P8): `FGSTN_PartsAttackerOutcome` (ricochet prediction), break Launch/Stagger through the reaction request, `AirborneJuggleScale` is the combat rules'; the ricochet step keeps `bHit`; tests `GSTNParts.NP.{Ricochet,Hitstop,Reaction,BreakEffects}.*`; scenarios `part_ricochet/stagger/weakpoint/break_launch`; content: ArmR plate, Head threshold, Legs break launch.

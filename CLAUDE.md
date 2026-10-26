@@ -14,6 +14,7 @@ Read the linked docs only when the task touches that area. Every plugin has a RE
 | Wall movement modes, transitions, math/query libs | `.../WallMovement/` | [wall-movement.md](docs/architecture/wall-movement.md) |
 | Input plugin (commands, buffer, priority, bindings; embeddable NP input simulation) and the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`, `GSTNInputNP/Mover/`) | `Plugins/GSTNInput/` (Core), `Plugins/GSTNInputNP/` (NP adapter) | [input.md](docs/architecture/input.md) |
 | Combat plugin (default command set, combat tags and settings; pure, no fork), its GAS layer (ability tags, no NP) and its NP adapter (own NP model, combat abilities, hits; needs the fork) | `Plugins/GSTNCombat/` (Core), `Plugins/GSTNCombatGAS/` (GAS), `Plugins/GSTNCombatNP/` (NP adapter) | [combat.md](docs/architecture/combat.md), [gas-npp.md](docs/architecture/gas-npp.md) |
+| Destructible parts plugin (part sets, penetration table, break effects, `PartResolve` step, sync fragment; Core/GAS/NP/Editor, optional, off by default) and its sample content | `Plugins/GSTNParts/` | [its README](Plugins/GSTNParts/README.md), [combat.md](docs/architecture/combat.md) §3, §15 |
 | Network test harness (C++ side) | `.../GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | Editor Python tooling | `Tools/GAS/`, `Tools/GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | GAS-NPP plugin forks (GameplayAbilities, NetworkPrediction, AbilitySystemSimulation...) | `Plugins/GASNPP/` | [gas-npp.md](docs/architecture/gas-npp.md) |
