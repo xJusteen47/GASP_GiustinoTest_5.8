@@ -395,7 +395,7 @@ They are **not** a drill-specific system: they are members of an activation zone
 - **Network**: as level-activation.md §5 (server-authoritative zone state, responses computed from the replicated value). The
   player's own spin and drill stay predicted.
 - **Owner answers 2026-10-26 10:08**: SD.15 settled (one owner per zone, as the panels). SD.14: per object (data on each screw or
-  knob: detach or stop at the end, spring back or not). SD.13 still open (proposal stands: spin = steps, latched drill = continuous).
+  knob: detach or stop at the end, spring back or not). SD.13 answered 10:14: **designer's choice per object** (data on the screw/knob: which of spin hits and latched drill turn it, step size or continuous rate).
 - **Screws on mechanical enemies** (owner idea, 10:08): specified by the planning thread in [combat-parts.md](combat-parts.md) §3.4
   "Screws and bolts" (plan checkpoint P19): the screw is a **part** with `FGSTN_PartScrewRule`; its progress reuses the part damage
   byte and it breaks at full; the armour part above it (`HeldBy` + `HeldByRule`) breaks in the same frame whatever its hardness.
