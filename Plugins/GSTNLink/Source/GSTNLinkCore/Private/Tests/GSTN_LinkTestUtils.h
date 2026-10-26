@@ -6,6 +6,8 @@
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GSTN_LinkTags.h"
 #include "Misc/AutomationTest.h"
+#include "Placement/GSTN_ExitCollisionQuery.h"
+#include "State/GSTN_LinkState.h"
 #include "UObject/Package.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -42,6 +44,38 @@ namespace GSTNLinkTest
 		Definition->TargetRole.RoleTag = GSTNLinkTags::Role_Latched.GetTag();
 		Definition->TargetRole.bActsWhileLinked = true;
 		return Definition;
+	}
+
+	/** A request context for a definition at frame 100: two distinct standard-weight entities with no tags and no links */
+	inline FGSTN_LinkRequestContext MakeContext(const UGSTN_LinkTypeDefinition* Definition)
+	{
+		FGSTN_LinkRequestContext Context;
+		Context.Frame = 100;
+		Context.LinkType = Definition != nullptr ? Definition->LinkType : FGameplayTag();
+		Context.Definition = Definition;
+		Context.Initiator.EntityId = 1;
+		Context.Target.EntityId = 2;
+		return Context;
+	}
+
+	/** A world that blocks every capsule for which the predicate says so; counts the questions it was asked */
+	class FFakeExitQuery : public IGSTN_ExitCollisionQuery
+	{
+	public:
+		TFunction<bool(const FVector& Location)> IsBlocked;
+		mutable int32 QueryCount = 0;
+
+		virtual bool IsCapsuleFree(const FVector& Location, const FQuat& Rotation, float Radius, float HalfHeight) const override
+		{
+			++QueryCount;
+			return !(IsBlocked && IsBlocked(Location));
+		}
+	};
+
+	/** Whether two transforms are exactly equal, translation, rotation and scale: placers promise bit-equal results for equal inputs */
+	inline bool ExactlyEqual(const FTransform& A, const FTransform& B)
+	{
+		return A.Equals(B, 0.0);
 	}
 
 	/** Whether any message contains the fragment */

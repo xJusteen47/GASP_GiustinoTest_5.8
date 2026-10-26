@@ -2,6 +2,9 @@
 
 #include "Data/GSTN_LinkTypeDefinition.h"
 
+#include "Placement/GSTN_Placer_Ring.h"
+#include "Rules/GSTN_LinkRule.h"
+
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
 #endif
@@ -29,6 +32,11 @@ namespace
 			OutErrors.Add(FString::Printf(TEXT("%s: the %s role's socket offset is not a valid transform."), *Name, Label));
 		}
 	}
+}
+
+const UGSTN_LinkExitPlacer* UGSTN_LinkTypeDefinition::GetExitPlacer() const
+{
+	return ExitPlacer != nullptr ? ExitPlacer.Get() : GetDefault<UGSTN_Placer_Ring>();
 }
 
 int32 UGSTN_LinkTypeDefinition::GetParkedRoleIndex() const
@@ -111,6 +119,14 @@ void UGSTN_LinkTypeDefinition::Validate(TArray<FString>& OutErrors) const
 		if (HitBreak.MinKnockbackToBreak < 0.f)
 		{
 			OutErrors.Add(FString::Printf(TEXT("%s: a hit break for '%s' has a negative knockback threshold."), *Name, *HitBreak.RoleTag.ToString()));
+		}
+	}
+
+	for (int32 RuleIndex = 0; RuleIndex < Rules.Num(); ++RuleIndex)
+	{
+		if (Rules[RuleIndex] == nullptr)
+		{
+			OutErrors.Add(FString::Printf(TEXT("%s: request rule %d is empty."), *Name, RuleIndex));
 		}
 	}
 

@@ -19,6 +19,9 @@ namespace GSTNLinkAssetTypes
 	inline FPrimaryAssetType LinkType() { return FPrimaryAssetType(TEXT("GSTN_LinkType")); }
 }
 
+class UGSTN_LinkExitPlacer;
+class UGSTN_LinkRule;
+
 /** Limits the wire form of the link state relies on */
 namespace GSTNLinkLimits
 {
@@ -163,6 +166,20 @@ public:
 	FGSTN_TagRequirements RequestRequirements;
 
 	/**
+	 * The request rules, run in order on the target side after the shared checks; the first refusal wins. A grab lists a grab rule, a
+	 * latch a latch rule, a plugin's type its own subclass. Instanced: each definition tunes its rules without a subclass
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category = "Link|Request")
+	TArray<TObjectPtr<UGSTN_LinkRule>> Rules;
+
+	/**
+	 * Where the parked entity lands when the link ends. Instanced, so the definition tunes the placer (a ring radius) without a
+	 * subclass. Empty = the ring placer with its defaults
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category = "Link|Exit")
+	TObjectPtr<UGSTN_LinkExitPlacer> ExitPlacer;
+
+	/**
 	 * Body-channel link types this type cannot be formed or kept alongside. Meaningful on Hand-channel types only (a mount allows a
 	 * Hand link, so a rider can hold and throw; a grab does not): a Body type lists none
 	 */
@@ -186,6 +203,9 @@ public:
 
 	/** Role 1 or 2 (any other index gives role 2's definition clamped), for code that indexes roles as the link state does */
 	const FGSTN_LinkRoleDef& GetRoleDef(int32 RoleIndex) const { return RoleIndex == 1 ? InitiatorRole : TargetRole; }
+
+	/** The definition's exit placer, or the default ring placer when it names none. Never null */
+	const UGSTN_LinkExitPlacer* GetExitPlacer() const;
 
 	/** Index (1 or 2) of the parked role, or 0 when the type parks nobody */
 	int32 GetParkedRoleIndex() const;
