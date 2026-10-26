@@ -375,14 +375,29 @@ bool FGSTN_PartsRicochetVictimTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("no hitstun, no action lock"), Victim.Core.ActionState == EGSTN_ActionState::Actionable && !Victim.Core.Hit.HasPendingReaction());
 	TestTrue(TEXT("the parts fragment was not written"), ReadState(Victim.Fragments) == FGSTN_PartsState());
 
-	// The cue and the event: the hit event of the victim goes out with the ricochet marked, the received event does not
+	// The events of the victim: the landed one and, from the outcome extension the victim step now keeps for a flagged entry, the one Ricochet event of
+	// the part (once: dedupe by part and serial), and no HitReceived
 	FGSTN_SimEventOutbox Outbox;
 	FGSTN_CombatVictim::AppendHitEvents(Hit, 10, nullptr, nullptr, FGameplayTagContainer(), Outbox);
-	TestEqual(TEXT("one event"), Outbox.Events.Num(), 1);
-	TestTrue(TEXT("the landed one"), Outbox.Events.Num() == 1 && Outbox.Events[0].EventType == GSTNCombatTags::Event_HitLanded.GetTag());
+	int32 Landed = 0;
+	int32 Ricochets = 0;
+	int32 Received = 0;
+	for (const FGSTN_SimEvent& Event : Outbox.Events)
+	{
+		Landed += Event.EventType == GSTNCombatTags::Event_HitLanded.GetTag() ? 1 : 0;
+		Received += Event.EventType == GSTNCombatTags::Event_HitReceived.GetTag() ? 1 : 0;
+		if (Event.EventType == GSTNPartsTags::Event_Part_Ricochet.GetTag())
+		{
+			++Ricochets;
+			TestEqual(TEXT("with the arm as its part"), FGSTN_PartEvents::GetPayload(Event).PartIndex, Arm);
+		}
+	}
+	TestEqual(TEXT("the landed event"), Landed, 1);
+	TestEqual(TEXT("the victim receives the Ricochet event once"), Ricochets, 1);
+	TestEqual(TEXT("and no HitReceived"), Received, 0);
+	TestTrue(TEXT("nothing else: landed and ricochet"), Outbox.Events.Num() == 2);
 
-	// The part event of a ricochet is made from the outcome entry the part step writes when the pipeline does run for it (see the deltas: the
-	// victim step skips the pipeline for a flagged entry, so today only an unflagged one reaches the applier). It is the one Ricochet event, alone
+	// The part event made straight from the outcome entry of the part step is the same one Ricochet event, alone
 	FFeelFixture Fixture;
 	FGSTN_HitResolutionContext Context = Fixture.MakeContext(ArmBox, Weak);
 	const FGSTN_HitContextView View = Fixture.Run(Context);

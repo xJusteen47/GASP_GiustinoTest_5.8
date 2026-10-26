@@ -116,9 +116,9 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		FGSTN_VictimHit& Hit = Out.Hits.AddDefaulted_GetRef();
 		Hit.Entry = Entry;
 		Hit.bRicochet = Entry.bRicochet;
-		if (Entry.bRicochet || !Rules)
+		if (!Rules)
 		{
-			// A ricochet still informs the victim for its cue and event, nothing else; without rules nothing says what a hit does
+			// Without rules nothing says what a hit does
 			continue;
 		}
 
@@ -151,6 +151,13 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		}
 		Context.HurtboxSet = Self.Hurtboxes;
 		FGSTN_HitPipelineRunner::Run(*Rules, Context);
+		if (Entry.bRicochet)
+		{
+			// A ricochet informs the victim for its cue and events, nothing else: the pipeline ran only so the plugins that own an outcome extension
+			// can tell the victim the hit was refused (AppendHitEvents). Damage, knockback, hitstop and the appliers (state writes) are skipped
+			Hit.OutcomeExtensions = Context.OutcomeExtensions;
+			continue;
+		}
 		if (!Context.Outcome.bHit)
 		{
 			// A step of the rules refused the hit after all (the attacker's own run had the same answer, so this is a rare disagreement)
@@ -471,14 +478,15 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 	FGSTN_SimEvent Landed = Event;
 	Landed.EventType = GSTNCombatTags::Event_HitLanded;
 	Outbox.Add(MoveTemp(Landed));
+	Event.EventType = GSTNCombatTags::Event_HitReceived;
+	const FGSTN_SimEvent Envelope = Event;
 	if (!Hit.bRicochet)
 	{
-		Event.EventType = GSTNCombatTags::Event_HitReceived;
-		const FGSTN_SimEvent Envelope = Event;
 		Outbox.Add(MoveTemp(Event));
-		// The events of the optional plugins that own an outcome extension of this hit, with the hit event as their envelope, after it
-		FGSTN_OutcomeApplierRegistry::Get().AppendEvents(Hit.OutcomeExtensions, Envelope, Outbox);
 	}
+	// The events of the optional plugins that own an outcome extension of this hit, with the hit event as their envelope, after it. A ricochet
+	// still runs them (a plugin tells the victim the hit was refused, e.g. Combat.Event.Part.Ricochet) but gets no HitReceived of its own
+	FGSTN_OutcomeApplierRegistry::Get().AppendEvents(Hit.OutcomeExtensions, Envelope, Outbox);
 }
 
 void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame)

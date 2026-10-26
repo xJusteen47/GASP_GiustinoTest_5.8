@@ -317,3 +317,11 @@ The spike (M4b P0) counted D9 as present because `FGSTN_SnapshotEntry::Extension
 - Tests: `GSTNCombat.NP.SnapshotExt.{NeutralWithoutContributor, ViewPointsAtTheEntryBlob, OneTypeAtATime, HistoryRewindsTheExtension}`. Headless `RunTests GSTN`: 488 green (484 + 4), nothing registered anywhere in the combat tests.
 - **`FGSTN_CombatTickContext::Outbox`** (M4b P7b, own commit, additive): the frame's `FGSTN_SimEventOutbox`, set by `UGSTN_CombatSimComponent`, so an extension can publish an event that is not a hit event (`Combat.Event.Part.Restored`). Null in tests; no behaviour change.
 - **`FGSTN_ReactionRequest` on `FGSTN_OutcomeApplyContext`** (M4b P8, own commit): an applier can ask the victim step for a reaction (minimum hitstun frames, launch velocity, stamped with the hit's frame); `FGSTN_CombatVictim::Resolve` merges it as a hit of that strength would (longer floor, faster launch, the model's hitstun for a launch of that speed), neutral when unset. Test `GSTNCombat.NP.Hits.Victim.ReactionRequestMergesLikeAHit`. Open: a flagged ricochet entry skips the pipeline, so an extension cannot make an event for it (see m4b-doc-deltas.md P8).
+
+## P9 follow-up (from M4b P9): `Combat.Event.Part.Ricochet` on the victim
+
+Lead-approved M4 debt, own commit, no behaviour change without an outcome extension (no parts contributor, no extension, nothing new in the outbox):
+
+- **`FGSTN_CombatVictim::Resolve`** no longer skips a flagged ricochet entry before the pipeline: it runs the pipeline and keeps only `Context.OutcomeExtensions` in `FGSTN_VictimHit::OutcomeExtensions`, then continues. `Hit.Outcome`, the applier `ApplyAll` and every state write stay skipped, so damage, knockback, hitstop and reaction are exactly what they were. The cost is one pipeline run per ricochet entry (read only).
+- **`FGSTN_CombatVictim::AppendHitEvents`** runs the registry's `AppendEvents` for a ricochet too, with the `HitReceived` event as envelope; the ricochet still gets `HitLanded` only (no `HitReceived`).
+- Test: `GSTNParts.NP.Ricochet.VictimGetsCueAndEventOnly` now proves the victim outbox holds `HitLanded` and one `Combat.Event.Part.Ricochet` (arm as the part), no `HitReceived`; consumers still dedupe by entity, part and serial (`FGSTN_PartEventDedupe`).
