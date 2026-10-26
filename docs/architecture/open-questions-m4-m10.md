@@ -1533,6 +1533,10 @@ nel plugin di input, e la pressione può far partire un attacco normale mentre l
 insieme** (per esempio tenere tre pugni e rilasciarli insieme, come nei giochi più vecchi)?
    Perché conta: un tasto solo funziona già; più tasti insieme richiedono una piccola condizione nuova.
    Ipotesi nella specifica: solo un tasto per ora; la condizione per più tasti si aggiunge quando una mossa la chiede.
+   **Risposta (2026-10-26 10:26):** "Considera anche come funziona l'EX Zonk". Nella specifica: sì, serve. L'EX Zonk si carica tenendo
+   **due pugni insieme** e rilasciandoli insieme, consuma la barra EX e senza barra diventa lo Zonk normale. Lo Zonk normale si carica
+   su un pugno qualsiasi, con **tre livelli** secondo quanto lo tieni (circa 1, 1,5 e 2 secondi). Ogni tasto si carica per conto suo, e
+   altre pressioni nel frattempo non accorciano la carica ([input.md](input.md) §10).
 
 ## Zone di oggetti attivabili da un solo giocatore (26/10)
 

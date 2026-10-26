@@ -284,6 +284,10 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (10:23) CH.4: 50° is fine; 90°/s drift may be too fast for some moves. Spec: default 45°/s, per move, 0 allowed.
 - (10:25) **Charged normal buttons** (Cody's Zonk Knuckle, SFV): already `Release` with `MinHeldFrames`; gap: button slots in the
   charge tracker so other presses cannot shorten the charge; several buttons together = question CB.1 ([input.md](input.md) §10).
+- (10:26) Consider how the **EX Zonk** works: two punches held and released together, EX meter, falls through to the plain Zonk
+  without meter; plain Zonk on any punch with three levels by hold time. Spec: `ReleaseChord`, `AlsoButtons`, level bands, button
+  slots ([input.md](input.md) §10).
+- (10:28) Confirmed: EX Zonk = two buttons together; that is the edge case to cover.
 
 ## 6k. Zones of objects one player activates (owner brainstorm, 2026-10-26 09:52)
 
@@ -648,6 +652,10 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Beh si penso vada bene. Forse 90 al secondo è troppo veloce per alcune cose. (10:23, CH.4)
 >
 > Comunque abbiamo preso in considerazione la possibilità di caricare anche la pressione dei tasti normali? Esempio: Zonk di Cody sf5 (10:25)
+>
+> Considera anche come L'EX zonk funziona (10:26)
+>
+> Funziona con 2 tasti insieme. È quello bene o male un caso limite (10:28)
 
 > Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
 > mooolto lentamente per non perdere la carica (09:55)

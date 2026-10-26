@@ -279,22 +279,37 @@ Gaps, *Proposal*:
    whether it then turns towards the opponent is the move's aim policy, like any other charge move. A move that wants the Street
    Fighter rule (charge lost on a side switch) uses the `Facing` set instead; that is data on the command.
 
-**Charged buttons (owner question, 2026-10-26 10:25; Cody's Zonk Knuckle in Street Fighter V)**: hold a normal attack button for a
-while, release it to fire the special. What exists today: `FGSTN_InputCondition_Release` with `MinHeldFrames` (the negative edge;
-`MaxHeldFrames` gives the tap slot on the same button, and a tap slot and a hold slot never match the same release). The release
-does not need an unconsumed press, so the press can fire a normal attack and the hold keeps charging through other moves, walking or
-blocking, as in Street Fighter. A release during another move is buffered like any command. Gaps, *Proposal*:
+**Charged buttons (owner question, 2026-10-26 10:25 and 10:26; Cody's Zonk Knuckle and EX Zonk Knuckle)**: hold a normal attack
+button for a while, release it to fire the special. Reference behaviour (Street Fighter IV data; Street Fighter V keeps the idea):
+the plain Zonk charges on **any one punch** and has **three levels by hold time** (about 60, 90 and 120 frames: more damage and a
+longer upper-body invulnerability); the **EX Zonk** charges on **two punches held together**, released together, about 60 frames,
+costs EX meter, hits twice and is fully invulnerable during startup.
+
+What exists today: `FGSTN_InputCondition_Release` with `MinHeldFrames` (the negative edge; `MaxHeldFrames` gives the tap slot on the
+same button, and a tap slot and a hold slot never match the same release). The release does not need an unconsumed press, so the
+press can fire a normal attack and the hold keeps charging through other moves, walking or blocking, as in Street Fighter. A release
+during another move is buffered like any command. The EX meter fall-through already exists in the resolver (M3 C17–C18): without
+meter, a command marked EX falls through to its plain version. Gaps, *Proposal*:
 1. **The 16-event button ring**: if the press of the held button drops out of the ring, `Release` counts the hold as longer than the
    history (`MAX_int32`), which is right for a long hold but wrong when the press was pushed out early by **other button presses**:
    eight presses and releases of other buttons while charging push it out, and a 120-frame charge could fire after 30 frames. Fix:
-   the charge tracker of gap 1 gets **button slots**: a slot declares either a stick charge or a button, and for a button it keeps
-   `uint8 HeldFrames` (saturating at 255, about 4 s) of the current press. Same 4 slots, same 12 bytes, predicted and rolled back.
-   `Release` and `Hold` read the slot when the button has one, and keep the event scan otherwise.
-2. **Several buttons charged together** (holding three punches, as in older games): `Release` reads one button. A `ReleaseChord`
-   condition (all listed buttons released within `WithinFrames`, each held at least `MinHeldFrames`) is a small addition, only if a
-   move needs it (question CB.1).
-3. **"Charge ready" feedback** (a flash when the charge is full): presentation reads the slot's `HeldFrames`; no simulation change.
-4. The charge stays ready as long as the button is held (no automatic release). A move that fires by itself after a maximum hold uses
+   the charge tracker of gap 1 gets **button slots**: `uint8 HeldFrames` (saturating at 255, about 4 s) of the current press, one byte
+   per declared button, up to 4 (so the three punches of a Zonk character fit next to its stick slots; tracker 12 + 4 = 16 bytes),
+   predicted and rolled back. `Release`, `Hold` and the chord below read the slot when the button has one, and keep the event scan
+   otherwise. Each button charges on its own, so releasing one of two held punches fires the plain Zonk and the other keeps charging.
+2. **Any one of several buttons**: `Release` gets an optional `AlsoButtons` set (any one of them counts; the default stays one
+   button), so one command covers "any punch" instead of three slots.
+3. **Charge levels by hold time**: one command per level with `MinHeldFrames`/`MaxHeldFrames` bands (60–89, 90–119, 120+), each
+   pointing at its own timeline or at one timeline with level data. The bands never overlap, so one release matches one level.
+4. **EX: several buttons released together** (owner, 10:26): a new `ReleaseChord` condition, the mirror of `Chord`: every listed
+   button (or any `Count` of a set, for "two of the three punches") released within `WithinFrames` (default 3) of each other, each held
+   at least `MinHeldFrames`. Anchor = the newest release. Specificity 10 per button, so the EX chord (20) wins over a plain `Release`
+   (10) on the same frames, as `Chord` does for presses. The EX command is marked EX, so without meter it falls through to the plain
+   Zonk of the level the hold reached. Releases are never consumed, so the plain `Release` slots must not fire on the same
+   releases: the resolver's existing one-activation-per-frame rule handles the same frame, and the plain slot's `MaxReleaseLagFrames`
+   (new, default 0) stops it from firing a frame later from the second button of the chord.
+5. **"Charge ready" feedback** (a flash per level): presentation reads the slots' `HeldFrames`; no simulation change.
+6. The charge stays ready as long as the button is held (no automatic release). A move that fires by itself after a maximum hold uses
    a `Hold` condition with that `MinFrames` instead, or the timeline's `Charge` track (loop while held, Smash style).
 
-Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); all answered. Question CB.1 is open.
+Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); all answered. CB.1 answered (two-button release needed for EX).
