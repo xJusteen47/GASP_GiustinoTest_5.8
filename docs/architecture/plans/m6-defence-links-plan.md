@@ -36,6 +36,12 @@ Owner direction folded in (DD wins over M6 where they differ; M6 revisions of 20
   name), both data (M6 §8).
 - **Listen server is the reference topology**; the host is a link partner in the spike and in every scenario (DD §6b).
 - Armor and poise need nothing from M6 (DD §2f). No rolling movement mode.
+- **Latch grabs on big enemies (owner, 2026-10-26 10:05Z):** grabs must also work on enemies too big to lift, where it is the
+  **player who attaches to the enemy** (to impale it, for example) and the enemy keeps moving. In link terms: a link type whose
+  **initiator's role is the parked one** (the player rides the enemy's socket) and whose target role is not parked and keeps acting.
+  `spin-drill.md` §13b already reserves `Combat.Link.Type.Drill` as "a hit-grab on the Body channel": the drill is one latch.
+
+**Owner approval (2026-10-26 10:05Z):** every item of section 6 is approved as written.
 
 ## 0. Ground rules for every checkpoint
 
@@ -87,7 +93,7 @@ Owner direction folded in (DD wins over M6 where they differ; M6 revisions of 20
 
 | Statement | Consequence in this plan |
 |---|---|
-| Host is one of the link partners (DD §6b) | `scenario_link_spike` and every link scenario run **three pairings**: host grabber, host grabbed, client vs client; `place_pair` takes the host as either partner (F0, F10) |
+| Host is one of the link partners (DD §6b) | `scenario_link_spike` and every link scenario run **three pairings**: host grabber, host grabbed, client vs client; `place_pair` takes the host as either partner (F0, F10). The latch adds the pairing "parked initiator on a moving partner" (host as either) |
 | Host has no prediction and no corrections | Link formation and break frames are the same on the host (F+1 / F+2, break at F+1 after the watchdog); the host's only difference is no network delay; no topology branch (M6 §2.1) |
 | Watchdog is a server world subsystem at `FinalizeFrame` time | On the host it reads the host's own finalized frame F like any other instance; its cost is measured on the host (F0 S1) |
 | Shield bubble predicted by the attacker from replicated state | On an interpolated victim a bubble-edge disagreement is a normal correction; the rate is measured (F0 S5) and the attacker's prediction never reads live components |
@@ -154,7 +160,10 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   B inside the link: `np.PrintReconciles` per client, B's rollbacks/s, presentation error of B's mesh against the server socket
   (p50/p95/max cm) on A's and on B's client **and on the host**, extra bytes/s on B's sync state, host frame time with the watchdog
   stub running. Also record: a queued modifier carrying a tag forces the Mover mode (reuse M4 spike 2.2), and the
-  `FinalizeFrame`-time watchdog sees both entities' state of frame F on the server.
+  `FinalizeFrame`-time watchdog sees both entities' state of frame F on the server. **Latch pairing**: the parked side is the
+  initiator (player) on the socket of a partner that walks, turns and jumps (a big test pawn driven by a server command); same
+  measurements, same thresholds, on the player's own client (predicting its own parked state against an interpolated partner) and on
+  the observer.
   **Pass for P**: zero unforced reconciles on A and B during the walk; exactly one correction at link start and one at link end per
   client; presentation error p95 ≤ 10 cm on A's client, ≤ 25 cm on B's, max ≤ 60 cm; forced reconciles inside the link converge in
   ≤ 2 frames. **STOP and ask** if P fails: F is the fallback and §7 is redesigned (forward prediction of the partner needs fork patches).
@@ -274,7 +283,14 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   (FGSTN_LinkState per channel, FGSTN_LinkActions, FGSTN_LinkRequestContext views), GSTN_LinkMath.h (MashInitialFrames, MashProgress,
   break evaluator, ParkedTransform(partner transform, role def))}, Public/Host/{GSTN_LinkHost.h (IGSTN_LinkHost), GSTN_FakeLinkHost.h
   (FGSTN_FakeLinkHost: holds link states, executes requests synchronously, no NP)}}`.
-- Tags (native, declared in `GSTNLinkCore`): `Combat.Link.Linked/Pending`, `Combat.Link.Type.Grab`, `Combat.Link.Role.Grabber/Grabbed`,
+- **Latch (owner 2026-10-26)**: the role definition already says which role is parked (`FGSTN_LinkRoleDef::bParked`), so a latch is a
+  definition whose **role 1 (initiator) is parked** on the partner's socket and whose role 2 is free: `bActsWhileLinked` on the role (no
+  action veto, candidates allowed, movement unchanged), `bCollisionWithPartner` false, `SocketOnPartner` on the enemy (a part socket when
+  `GSTNParts` is present, by name). `UGSTN_LinkRule_Latch`: accepted only on a victim whose effective weight is **≥ `MinLatchWeight`**
+  (the mirror of the grab's `MaxGrabWeight`), tag requirements with their own immunity (`Combat.Immunity.Latch`, bosses that must not be
+  ridden), `Combat.Part.GrabLocked` optional by data as for grabs. One latcher per partner in M6 (A19).
+- Tags (native, declared in `GSTNLinkCore`): `Combat.Link.Linked/Pending`, `Combat.Link.Type.Grab`, `Combat.Link.Type.Latch`,
+  `Combat.Link.Role.Grabber/Grabbed`, `Combat.Link.Role.Latcher/Latched`, `Combat.Immunity.Latch`, `Combat.Link.BreakReason.ShakeOff`,
   `Combat.Link.BreakReason.{Timeout, Distance, OwnDeath, PartnerDeath, Hit, PartnerState, Escape, Release, Throw, Forced}`,
   `Combat.Lock.Link`, `Combat.HitType.Grab/Throw/Pummel`, `Combat.Immunity.Grab`, `Combat.Mover.Linked`, `Interact.Target.Grab`
   (declared here per IN: `GSTNLink` keeps declaring its own target tag), `Command.Link.Grab/Pummel/Release/Throw.Forward/Back/Up/Down`,
@@ -285,10 +301,12 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   `GSTNLink.Core.Mash.{InitialFramesByDamage, ProgressAndCap, FlicksCount}`, `GSTNLink.Core.Break.{Timeout, Distance, HitByRole,
   PartnerHitsNeverBreak, PartnerState, Forced}`, `GSTNLink.Core.Placer.{RingOrder, BlockedCandidatesFallback, AtSocketVelocity,
   DeterministicForEqualInputs}`, `GSTNLink.Core.Rule.Grab.{Requirements, Weight, ImmunityFrame, GrabLockedByName}`,
+  `GSTNLink.Core.Rule.Latch.{MinWeight, ImmunityLatch, OnePerPartner}`, `GSTNLink.Core.State.ParkedInitiatorTransform` (parked transform
+  derived for role 1 as for role 2),
   `GSTNLink.Core.FakeHost.{FormBreakSynchronous, OrphanDetected}`.
 - Acceptance: builds with the plugin disabled and enabled; tests run with only `GSTNLinkCore` + `GSTNCombatCore`; a new link type
   definition works with no C++ (a test-only definition asset registered from the test).
-- Spec: M6 §1b, §1c, §3 "Links", §7.0, §7.1, §7.5, §7.7, §8 (rules only). Size: L (split into F5a data/tags and F5b rules/placers/host if
+- Spec: M6 §1b, §1c, §3 "Links", §7.0, §7.1, §7.5, §7.7, §8 (rules only); owner 2026-10-26 (latch). Size: L (split into F5a data/tags and F5b rules/placers/host if
   a session cannot finish it).
 
 ### F6 `GSTNDefenceGAS`: attribute mirror, shield / tech / bounce / get-up abilities, GEs, kit extension consumption
@@ -381,7 +399,8 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   GrabImmunityEnd, immunity bits; anchor substitution of a parked role's hurtbox transform from the partner's snapshot transform × socket ×
   offset, deterministic, baked socket only), GSTN_LinkTickExtension.h (prio 120: after inbox drain: nothing; after clocks: link tick
   (request timeouts, role input flags, PendingBreak on Release); before candidates: BlocksActions for Role.Grabbed and no candidates;
-  tag projection: Combat.Link.* from Role, Interact.Target.Grab through the provider), GSTN_LinkInboxKinds.h (LinkResponse and
+  tag projection: Combat.Link.* from Role, Interact.Target.Grab through the provider; a role with bActsWhileLinked gets no veto and
+  keeps its candidates: the latched enemy fights on), GSTN_LinkInboxKinds.h (LinkResponse and
   LinkCommand handlers: formation at F+2 on the initiator, break/place at F+1 on both sides, Serial idempotence)}, Public/Pipeline/
   {GSTN_HitStep_GrabImmunity.h, GSTN_HitStep_LinkRequest.h (Grab: rule chain of the definition → accept: target Link written, ActionState
   Linked, EnterLinked request, cancel timeline, OutgoingEntries += LinkResponse{accepted}; refuse: LinkResponse{refused}; Throw/Pummel:
@@ -391,9 +410,9 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   attached; camera and aim consumers are the owner-OK item of section 6), Public/GSTN_LinkDebugDraw.h (gstn.Combat.Debug.Links 1)}`.
 - Tags: none new.
 - Tests: `GSTNLink.NP.Fragment.{RoundTripIdleOneBit, TwoChannelsBytes, Interpolate}`, `GSTNLink.NP.Formation.{AcceptedAtF1ResponseAtF2,
-  RefusedWhiffsNoHitstop, SimultaneousFirstWins, ChainRefused, PredictedClearedOnTimeout, SerialIdempotentAfterRollback}`,
-  `GSTNLink.NP.Parked.{ModeEnteredByTag, HurtboxFromPartnerSocket, NoInputNoGravity}`, `GSTNLink.NP.Tick.{GrabbedHasNoCandidates,
-  TagsFromRole}`.
+  RefusedWhiffsNoHitstop, SimultaneousFirstWins, ChainRefused, PredictedClearedOnTimeout, SerialIdempotentAfterRollback,
+  LatchParksInitiator}`, `GSTNLink.NP.Parked.{ModeEnteredByTag, HurtboxFromPartnerSocket, NoInputNoGravity, InitiatorFollowsMovingPartner}`,
+  `GSTNLink.NP.Tick.{GrabbedHasNoCandidates, LatchedKeepsCandidates, TagsFromRole}`.
 - Harness (`link_scenarios.py`, three pairings, listen + dedicated, loss 0/2 %): `scenario_link_spike` (the S1 measurement as a
   permanent scenario with its thresholds), `scenario_link_rollback` (forced reconciles on each client over formation frames).
 - Acceptance: S1 thresholds hold with the real mode; formation at F+1/F+2 on host and clients alike; a client with `GSTNLink` disabled
@@ -419,7 +438,12 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
 ### F12 Grabs: commands, pummel, throws, mash, immunity, grab gate (closes M4b's deferred grab scenario)
 
 - Files: `GSTNLinkCore` slot set extension (`UGSTN_StandardSlots` + the grabber slots of M6 §8 as data: Pummel, Throw.Forward/Back/Up/Down,
-  Release = Press(Interact) requiring Role.Grabber; Grab = Press(Interact) requiring Interact.Target.Grab), `GSTNLinkNP/Public/Sim/
+  Release = Press(Interact) requiring Role.Grabber; Grab = Press(Interact) requiring Interact.Target.Grab; **latcher slots**:
+  `Command.Link.Latch.Attack` = Press(Attack) requiring Role.Latcher (a timeline whose hitbox has `LinkFilter LinkedPartnerOnly`, e.g. an
+  impale: heavy penetration on the part under the socket, data of the kit), Release = Press(Interact) requiring Role.Latcher; the latch
+  itself is the same tap on a target that projects `Interact.Target.Grab`: the provider picks grab or latch by the victim's weight, so
+  one button serves both), `GSTN_LinkShakeOff.h` (the latched enemy breaks the link by its own ability: a Forced request that sets
+  `PendingBreak` with reason `ShakeOff`; the watchdog does the rest; mash on the enemy side is not built, AI decides), `GSTNLinkNP/Public/Sim/
   GSTN_LinkThrow.h` (FGSTN_LinkOutcomeTrack key at the release frame: direct `Throw` hit entry to the partner's inbox, own Link cleared with
   outcome Throw, Placer_AtSocket, GrabImmunityEndFrame on the partner through the break command, grabber cooldown), `GSTN_LinkMash.h` (link
   tick: raw press events and flicks newer than MashProcessedFrame reduce EndFrame; initial EndFrame from FGSTN_MashRule × GrabResistance),
@@ -428,12 +452,16 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   an opaque reserved slot for M10's `FGSTN_ThrownBodyExtension` (ignored with a warning when `GSTNHeld` is off).
 - Tags: none new.
 - Tests: `GSTNLink.NP.Grab.{PummelKeepsLink, ThrowDirectHitNoOverlap, ThrowSkipsParryShield, MashEscapeFrameDeterministic,
-  ImmunityAfterReleaseAndThrow, GrabberCooldown, WeightGate, GrabLockedByNameWithParts, GrabLockedAbsentWithoutParts}`.
+  ImmunityAfterReleaseAndThrow, GrabberCooldown, WeightGate, GrabLockedByNameWithParts, GrabLockedAbsentWithoutParts}`,
+  `GSTNLink.NP.Latch.{WeightPicksLatchOverGrab, AttackHitsPartnerOnly, ShakeOffBreaksThroughWatchdog, LatchedEnemyKeepsActing}`.
 - Harness: `scenario_grab_throw`, `scenario_grab_mash` (forced reconcile mid-mash), `scenario_grab_shield` (real grab through the bubble),
   `scenario_grab_interact` (tap = grab, tap as grabber = release; the hold/pickup rows only with `GSTNHeld`, else asserted absent),
   `scenario_grab_gate` (heavy enemy refused while `GrabLocked` or above `MaxGrabWeight`, accepted after the parts break / weight falls; with
   and without `GSTNParts`: this is M4b's deferred `scenario_part_grabbable`), `scenario_throw_at_enemy` only as "plain M6 launch with
-  `GSTNHeld` off" (the hand-off itself is M10).
+  `GSTNHeld` off" (the hand-off itself is M10), `scenario_latch_big_enemy` (a heavy test pawn above `MinLatchWeight` walks and turns
+  under a server command: the player's tap latches, the player rides the socket on host and clients within the S1 thresholds, the
+  enemy keeps moving and attacking, the latch attack hits only the partner (and, with `GSTNParts`, the part under the socket), release
+  and shake-off break through the watchdog, no unforced reconciles; three pairings).
 - Acceptance: all link states equal on host and clients after pummels and a throw; escape on the predicted frame; grab passes through
   a shield; M4b's P9 grab gate closes.
 - Spec: M6 §8, §7.0 item 5 (actions block), §9 steps 3, 4, M10 §6b (reserved). Size: L.
@@ -510,8 +538,12 @@ name. A = assumption id used in the commit bodies.
 | A16 Gameplay Debugger rows | After the desktop merge (M5 category); console draws in F13 | F13 | Low |
 | A17 Bubble ignore list | Non-blockable hit types = `Unblockable`, `Grab`, `Throw`, from a rules-owned list (not a flag on each hit) | F1, F7 | Low |
 | A18 Shield mirror cadence | Mirror written on events and every 16 frames while changing | F7 | Low |
+| A19 Latch (owner 2026-10-26) | One latcher per partner; the latch is the same interact tap, chosen by the victim's weight (`≥ MinLatchWeight` latch, `≤ MaxGrabWeight` grab, neither = refused); the latched enemy keeps acting, breaks by `ShakeOff` (its own ability), `Release`, `Timeout`, death; the latcher's attacks hit only the partner; what an impale does to a part is `GSTNParts` data (penetration), not link code | F5, F10, F12 | Low: data on the definition and the rules; several latchers on one boss is an M8 item (`MaxPartnersPerChannel`) |
+| A20 Latch and minions | Big enemies that are M8 minions latch through M8's hit flow once `FGSTN_EntityRef::Kind = Minion` exists; in M6 the test partner is a heavy fighter pawn | F12, M8 | Medium: M8 wire |
 
 ## 6. Blueprint and shared-asset edits that need the owner's OK before they happen
+
+**Status: all items below approved by the owner on 2026-10-26 10:05Z** ("per ora tutto ciò che hai messo nella sezione 6 è a posto").
 
 - Enabling `GSTNDefence` and `GSTNLink` in the `.uproject` (both `EnabledByDefault: false`); until then enabled locally for tests, never
   committed (as with `GSTNParts`).
