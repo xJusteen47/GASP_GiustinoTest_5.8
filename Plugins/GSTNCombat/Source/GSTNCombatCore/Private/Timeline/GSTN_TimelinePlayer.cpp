@@ -89,6 +89,7 @@ void FGSTN_TimelineOutput::Reset()
 	MovementEnds.Reset();
 	Events.Reset();
 	WeaponSwitches.Reset();
+	StampedWindows.Reset();
 }
 
 bool FGSTN_TimelinePlayer::IsInTail(const FGSTN_CombatTimelineData& Data, int32 Frame)

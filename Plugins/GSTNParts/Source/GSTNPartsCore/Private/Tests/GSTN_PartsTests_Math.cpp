@@ -783,4 +783,54 @@ bool FGSTN_PartsWeightClampTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/** The torso of the enemy (hardness 0, transfer 1) with a thickness, hit at penetration 6 so the top band applies whatever the hardness */
+	float ThicknessMainDelta(float Thickness, float Damage, float DeepDamage)
+	{
+		TArray<FGSTN_PartDefinition> Parts = GSTNPartsTest::MakeEnemyParts();
+		Parts[0].Thickness = Thickness;
+		FGSTN_PartsState State;
+		FGSTN_PartHitInput Input = GSTNPartsTest::Hit(Damage, 0, 6);
+		Input.DeepDamage = DeepDamage;
+		return UGSTN_PartMath::ApplyHit(Parts, UGSTN_PenetrationTable::MakeDefaultBands(), State, Input).MainDelta;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsThicknessZeroTest, "GSTNParts.Core.PartMath.Thickness.ZeroIsUnchanged", GSTNPartsTest::Flags)
+bool FGSTN_PartsThicknessZeroTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("thickness 0 ignores the deep damage"), ThicknessMainDelta(0.f, 10.f, 80.f), 10.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsThicknessFullTest, "GSTNParts.Core.PartMath.Thickness.OneUsesDeepDamageOnly", GSTNPartsTest::Flags)
+bool FGSTN_PartsThicknessFullTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("thickness 1 takes the deep damage"), ThicknessMainDelta(1.f, 10.f, 30.f), 30.f);
+	TestEqual(TEXT("... even when it is smaller than the surface damage"), ThicknessMainDelta(1.f, 10.f, 2.f), 2.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsThicknessBlendTest, "GSTNParts.Core.PartMath.Thickness.HalfBlends", GSTNPartsTest::Flags)
+bool FGSTN_PartsThicknessBlendTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("10 * 0.5 + 30 * 0.5"), ThicknessMainDelta(0.5f, 10.f, 30.f), 20.f, 1e-4f);
+	TestEqual(TEXT("10 * 0.75 + 30 * 0.25"), ThicknessMainDelta(0.25f, 10.f, 30.f), 15.f, 1e-4f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsThicknessDefaultTest, "GSTNParts.Core.PartMath.Thickness.DeepDamageDefaultsToDamage", GSTNPartsTest::Flags)
+bool FGSTN_PartsThicknessDefaultTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("a negative deep damage is the hit's damage, at any thickness"), ThicknessMainDelta(0.6f, 10.f, -1.f), 10.f, 1e-4f);
+	const FGSTN_PartHitData Untouched;
+	TestEqual(TEXT("the authored default is the sentinel"), Untouched.DeepDamage, -1.f);
+	TestEqual(TEXT("Make carries it into the input"), FGSTN_PartHitInput::Make(10.f, 0, &Untouched).DeepDamage, -1.f);
+	FGSTN_PartHitData Authored;
+	Authored.DeepDamage = 25.f;
+	TestEqual(TEXT("an authored one too"), FGSTN_PartHitInput::Make(10.f, 0, &Authored).DeepDamage, 25.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

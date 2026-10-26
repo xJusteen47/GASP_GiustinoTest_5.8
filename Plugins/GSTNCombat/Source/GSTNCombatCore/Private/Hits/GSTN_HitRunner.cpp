@@ -56,6 +56,7 @@ void FGSTN_HitPipelineRunner::Merge(const FGSTN_StepResult& Result, FGSTN_HitRes
 	Outcome.Effects.Append(Result.Effects);
 	Outcome.Requests.Append(Result.Requests);
 	Context.OutcomeExtensions.Append(Result.OutcomeExtensions);
+	Context.OutgoingEntries.Append(Result.OutgoingEntries);
 }
 
 FGSTN_HitRunResult FGSTN_HitPipelineRunner::Run(const UGSTN_CombatRules& Rules, FGSTN_HitResolutionContext& Context)

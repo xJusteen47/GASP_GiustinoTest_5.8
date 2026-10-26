@@ -26,6 +26,12 @@ struct FGSTN_EntityHistoryRecord
 	FTransform Transform;
 	FVector Velocity = FVector::ZeroVector;
 	FGSTN_VictimReactionState Reaction;
+
+	/** The plugin extension of the entry (broken parts): a rewind hands the step the one of the rewound frame */
+	FGSTN_SnapshotExtensionBlob Extension;
+
+	/** The extra hurtboxes of the entry (a shield bubble): a rewind hands the step the ones of the rewound frame, so a hit lands on the bubble the victim had then */
+	FGSTN_ExtraHurtboxList ExtraHurtboxes;
 };
 
 /**
@@ -92,7 +98,10 @@ public:
 	/** The next EnsureSnapshot builds again. Called by every combat component's RestoreFrame, and by anything that changes an entity out of the tick */
 	void InvalidateSnapshot();
 
-	/** Hands a hit to the entity's inbox through its source. False for an unknown id, a source that is gone or one that takes none */
+	/** Hands a message of any inbox kind to the entity's inbox through its source. False for an unknown id, a source that is gone or one that takes none or does not tick here */
+	bool PostToInbox(int32 EntityId, const FGSTN_InboxEntry& Entry);
+
+	/** A hit: PostToInbox of the entry wrapped as kind Hit */
 	bool PostHit(int32 EntityId, const FGSTN_HitInboxEntry& Entry);
 
 	/** The snapshot as it is, without building: for presentation and tests */

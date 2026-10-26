@@ -35,3 +35,22 @@ public:
 		return EGSTN_StepResult::Continue;
 	}
 };
+
+/** Sends one entry of an open kind back to the attacker of the hit (FGSTN_StepResult::OutgoingEntries), carrying a test payload */
+UCLASS(Hidden)
+class UGSTN_TestOutgoingStep : public UGSTN_HitResolutionStep
+{
+	GENERATED_BODY()
+
+public:
+	virtual EGSTN_StepResult Resolve_Implementation(const FGSTN_HitContextView& View, FGSTN_StepResult& Out) const override
+	{
+		FGSTN_TestVictimExtension Payload;
+		Payload.Value = 7;
+		FGSTN_InboxEntry Entry;
+		Entry.Kind = GSTNInboxKinds::FirstDefence;
+		Entry.Payload = FInstancedStruct::Make(Payload);
+		Out.OutgoingEntries.Add(MoveTemp(Entry));
+		return EGSTN_StepResult::Continue;
+	}
+};

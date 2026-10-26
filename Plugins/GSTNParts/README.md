@@ -5,11 +5,11 @@ main pool), the penetration table that turns a hit's penetration against a part'
 effects as data, and the pure, integer-quantised math that applies a hit to a part. An entity without a part set behaves as it
 did before the plugin.
 
-Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P3 of
-[m4b-parts-plan.md](../../docs/architecture/plans/m4b-parts-plan.md) are built (skeleton and tags, data, pure math); the design is
-[combat-parts.md](../../docs/architecture/combat-parts.md). The hit pipeline step (P4), the GAS appliers (P5), the NP sync
-fragment, tick extension and applier (P6, P7), hit feel (P8) and the presentation (P10-P12) are not built: they wait for the hit
-pipeline of M4 (see "Waiting for M4"). Owner direction in
+Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P6 of
+[m4b-parts-plan.md](../../docs/architecture/plans/m4b-parts-plan.md) are built (skeleton and tags, data, pure math, the pipeline
+step, the GAS half, the sync fragment); the design is
+[combat-parts.md](../../docs/architecture/combat-parts.md). The NP tick extension and applier (P7), hit feel (P8)
+and the presentation (P10-P12) are not built. Owner direction in
 [game-design-direction.md](../../docs/architecture/game-design-direction.md) wins over the spec: hardness acts on damage only
 (three bands: above, equal about 65 %, below ricochets), a player is a single part and its break is death, parts do not
 regenerate by themselves.
@@ -18,11 +18,11 @@ regenerate by themselves.
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve, the part state and the deterministic part math. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
-| `GSTNPartsGAS` | not built (P5) | Break-effect appliers, events, tag projection helpers. |
-| `GSTNPartsNP` | not built (P6-P8) | Sync fragment, tick extension, snapshot contributor, outcome applier. Needs the GAS-NPP fork. |
+| `GSTNPartsCore` | exists (Runtime, Default) | Native tags, settings, the part set and penetration table data, break-effect and hit-data structs, validators, the integer baked curve, the part state and the deterministic part math, and the part resolve step of the hit pipeline. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNParts.Core.*`. |
+| `GSTNPartsGAS` | exists (Runtime, Default) | The one-shot break effects (`FGSTN_PartBreakEffectApplier`: the Stats effect per part through `UGSTN_GE_PartStats`, the launch request in the shape of the M4 reaction move, the stagger floor), the part events (`FGSTN_PartEvents`, `FGSTN_PartEventPayload`, the dedupe key and window) and the tag projection helpers (`FGSTN_PartTagProjection`). Stock GAS: no Network Prediction, Mover or `GSTNCombatNP`. Covered by `GSTNParts.GAS.*`. |
+| `GSTNPartsNP` | exists (Runtime, Default), P6 + P7 | `FGSTN_PartsFragment` (fixed type id 16 of `GSTNFeatureIds`, 3 + N bytes, empty = 0 bytes) and the simulation hooks the module registers at startup: `FGSTN_PartsSnapshotContributor` (the parts at the end of F-1 in the combat snapshot extension blob, hurtboxes of broken Disable parts Intangible), `FGSTN_PartsTickExtension` (priority 100: hit groups before candidates, tags and stats as a projection of the mask), `FGSTN_PartsOutcomeApplier` (the only writer of the fragment, monotonic mask, makes the `Combat.Event.Part.*` events), `FGSTN_PartsAttach` and `UGSTN_PartsAttachComponent` (the part set from the kit extension through the loadout-applied event, same path on host and client, set mismatch refused), `UGSTN_PartsKitLibrary` (editor and harness helpers). Needs the GAS-NPP fork and the D9 snapshot seam of GSTNCombatNP. Covered by `GSTNParts.NP.*`. |
 | `GSTNPartsPresentation` | not built (P10-P12) | Damage material, hidden bones, chunks and shatter. Loaded by a listen-server host, skipped on a dedicated server. |
-| `GSTNPartsEditor` | not built (P13) | Validators and report. |
+| `GSTNPartsEditor` | exists (Editor, PostEngineInit), P13 | The asset validator, the balance report and its console command, the Physics Asset draft helper. Depends on `GSTNPartsCore` and engine editor modules only; no runtime module names it. Covered by `GSTNParts.Editor.*`. |
 
 The module class (`Private/GSTNPartsCoreModule.cpp`) registers the plugin's `Config/Tags` folder with the tag manager: the
 engine reads `Config/Tags` only for the project and for Game Feature plugins, not for ordinary plugins, so the ini vocabulary
@@ -30,9 +30,12 @@ would otherwise be missing.
 
 ## Dependencies
 
-- Plugins: `GSTNCombat` (its `GSTNCombatCore` module only).
+- Plugins: `GSTNCombat` (`GSTNCombatCore`), and for the GAS half `GSTNCombatGAS`, `GSTNInput` (`GSTNInputCore`, the simulation event type)
+  and `GameplayAbilities`.
 - `GSTNPartsCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, DeveloperSettings, GSTNCombatCore; private
   Projects (to find the plugin's own folder). No edge to the project module, to a sibling plugin or to GAS, NP and Mover.
+- `GSTNPartsGAS` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, GSTNInputCore, GSTNCombatCore,
+  GSTNCombatGAS, GSTNPartsCore. No NetworkPrediction, AbilitySystemSimulation, Mover or `GSTNCombatNP` (grep gate in the P5 commit).
 - `GSTNCombat` builds and passes its tests with this plugin absent: the plugin adds behaviour by registering into the combat
   extension surface (modularity-and-tags.md §5b), never by editing the combat core.
 
@@ -71,7 +74,9 @@ of the sync fragment and the snapshot; no floats, tags or pointers):
   byte): a weapon that lands many tiny hits breaks a part a little sooner than its nominal damage says. Chosen so a nonzero hit
   always moves the state; weigh it when tuning multi-hit or damage-over-time attacks.
 - **`ApplyHit`.** `PartDelta = D x band part scale x hit scale x part scale`, `MainDelta = D x band main scale x MainTransfer`
-  (`BrokenMainTransfer` on a stump). Overflow beyond the cap is not carried to the main pool. Children of a broken part break in
+  (`BrokenMainTransfer` on a stump). A part with `Thickness` T (0..1, independent of hardness) takes `D' = D x (1 - T) + DeepDamage x T`
+  in place of D, once the band has decided the hit gets through; `DeepDamage` is the hit's own (`FGSTN_PartHitData`, negative = D), so
+  a blunt blow can be shallow and a piercing tip deep on the same part; T = 0 skips the blend and is the formula above bit for bit. Overflow beyond the cap is not carried to the main pool. Children of a broken part break in
   the same hit (also unbreakable ones: they go with the limb) and each newly broken part adds its `MainDamage` effects once, in
   index order. A ricochet band changes nothing and reports zero stagger and hitstop scales. A hit on the body, or on a broken part
   whose policy is `Disable`, is the full damage. `Replace` damages like `Keep` (its shape is not declared yet).
@@ -89,6 +94,26 @@ of the sync fragment and the snapshot; no floats, tags or pointers):
 Blueprint gets the stateless helpers (`GetPenetrationBandIndex`, `QuantisePartDamage`, `DequantisePartDamage`, `IsPartBroken`,
 `CountBrokenParts`, `GetEffectiveWeight`); `ApplyHit` is C++ only (hot path, MT section 3.8).
 
+## The part resolve step
+
+`UGSTN_HitStep_PartResolve` (`Pipeline/`) is the pipeline step of the combat plugin's hit resolution (combat-parts.md 4.2, 4.4, 5.3). Put it in
+the rules asset's `HitPipeline` after `TeamFilter`, `HurtState`, `HurtboxReaction`, `Parry` and `Shield` and before `ComputeKnockback`. It
+**replaces `HealthWeight` and `ApplyDamage`**: it writes the weight (the health weight and the mass lost by broken parts), and it requests the damage
+itself, because `ApplyDamage` requests the hit's own damage and would ignore the part's share. For an entity without a part set it writes exactly what
+`ApplyDamage` writes, so one pipeline serves both kinds of entity.
+
+- Reads the victim only through the view: `FGSTN_PartsSnapshotExt` (`Pipeline/`), the broken mask, the damage bytes and the part set, handed over as
+  `FGSTN_HitVictimView::SnapshotExtension` (a `const void*` the extension identifies by a type word). The NP adapter fills it (P7); a test fills it by hand.
+- The part comes from `HurtboxIndex` (the attacker's choice, never re-derived) through the part's hurtbox names; a hurtbox no part names is the body.
+- Writes the reaction modifiers (weight scale times the juggle factors, knockback and hitstop scales, the band's stagger scale, the part's stagger threshold
+  else the body's else unset, the lower reaction cap), the main pool damage, and one `FGSTN_PartHitOutcome` (the state the hit left, the events as flags) for the outcome applier.
+- A ricochet band stops the pipeline (`bHit` stays true, no damage, no knockback): no freeze on either side, no flinch.
+- The table is the set's, else the rules extension's (`FGSTN_PartsRulesExtension`, in `UGSTN_CombatRules::RulesExtensions`), else the settings', else the built-in three bands.
+- `FGSTN_PartsPipelineValidator` reports `PartResolve` before `Parry`/`Shield`, `ApplyDamage` next to it, and a part set under rules without the step. The
+  combat rules validator already reports it after `ComputeKnockback` and next to `HealthWeight`.
+
+`FGSTN_PartHitData` is a `FGSTN_HitExtension` (an entry of `FGSTN_HitData::ExtensionData`) and `FGSTN_PartsRulesExtension` a `FGSTN_RulesExtension`.
+
 ## Gameplay tags
 
 | Tags | Source | Declared in |
@@ -96,7 +121,7 @@ Blueprint gets the stateless helpers (`GetPenetrationBandIndex`, `QuantisePartDa
 | `Combat.Part.Broken`, `.GrabLocked`, `.AllBroken` | native, **projected** from the broken mask, never granted | `Public/GSTN_PartsTags.h`, namespace `GSTNPartsTags` |
 | `Combat.Part.Effect` (root; leaves such as `ArmLost` are content) | native root | same |
 | `Combat.Entity.Destructible` | native (marker in the victim view) | same |
-| `Combat.Event.Part.Damaged`, `.WeakPointHit`, `.Ricochet`, `.Broken`, `.AllBroken` | native | same |
+| `Combat.Event.Part.Damaged`, `.WeakPointHit`, `.Ricochet`, `.Broken`, `.AllBroken`, `.Restored` | native | same |
 | `Message.Combat.PartBroken` | native (UI channel, raised outside the simulation) | same |
 | `Part.Type.Head`, `.Torso`, `.Arm`, `.Leg`, `.Weapon`, `.Armour`, `.Crystal` | ini, designer vocabulary | `Config/Tags/GSTNParts.ini` |
 | `GameplayCue.Combat.Part.Hit`, `.Break`, `.Ricochet`, `.Shatter` | ini, designer vocabulary | same |
@@ -119,12 +144,54 @@ values are read by the simulation, so every machine of a match must run the same
 A new part set, a new penetration table and new break-effect entries need no C++ and no build: author the assets. Tuning structs
 are `BlueprintType` with `EditAnywhere, BlueprintReadOnly` fields (checked by `GSTNParts.Core.Data.StructsAreBlueprintTypes`) and
 tag fields carry `Categories`. A new kind of break effect derives from `FGSTN_PartBreakEffect` in your own plugin. The
-Blueprintable extension classes (the pipeline step, outcome appliers) arrive with their checkpoints.
+pipeline step `UGSTN_HitStep_PartResolve` and the Stats effect `UGSTN_GE_PartStats` are Blueprintable (examples under Sample content). The simulation hooks of `GSTNPartsNP` (snapshot contributor, tick extension, native outcome applier) are C++ only by design: they run for every entity on every simulated and re-simulated frame. To give a pawn parts: put `UGSTN_PartsAttachComponent` on it and add `FGSTN_PartsKitExtension` to its kit (the helper `UGSTN_PartsKitLibrary.SetKitPartSet` does the second from Python); to use them in a match: `UGSTN_PartsContentLibrary.ConvertRulesToParts` turns a rules asset into one with `PartResolve` in place of `HealthWeight` and `ApplyDamage`.
+
+The Stats break effect needs one Blueprint class: a child of `UGSTN_GE_PartStats` (infinite) whose modifiers on the combat
+attribute set read `Combat.SetByCaller.Stat.*` magnitudes, exactly like a weapon stats effect. One class serves every part of an
+entity (the part index rides in the spec level), and its modifiers must read only keys that every Stats entry of the set
+defines, because the engine logs an error for a key the spec never set. Parts that need a different set of stats use a second
+child class. The effect is applied once per broken part and removed only by a restore; a part's `OnBreak` list needs no C++.
+
+## Grab gate (P9)
+
+`FGSTN_GrabGate` on the part set (`MinBrokenParts`, `RequiredParts`, `bAnyOf`; an empty gate never locks) decides when a large entity can be
+grabbed. The tick extension projects `Combat.Part.GrabLocked` every frame while a non-empty gate is unmet (from the broken mask only, so a
+rollback re-derives it). The plugin does not touch the grab code: a designer adds `Combat.Part.GrabLocked` to the ignore list of
+`FGSTN_GrabRules::Requirements` in the M6 grab rules asset, and a boss keeps `Combat.Immunity.Grab` and no gate. The grab scenario waits for
+the M6 grab ability.
+
+## How to extend
+
+The four extension points, none of which edits the plugin:
+
+1. **A new break effect.** Derive a struct from `FGSTN_PartBreakEffect` in your own plugin (`USTRUCT(BlueprintType)`, tunable fields `EditAnywhere, BlueprintReadOnly`) and write the code that applies it where the effects are collected (the applier in `GSTNPartsGAS` walks the entries of a part's `OnBreak` list). One-shot effects must leave nothing to undo; an effect with a lasting result is an infinite gameplay effect removed by the restore mask. Unknown entries are reported by the validator.
+2. **A new pipeline step.** Derive from `UGSTN_HitResolutionStep` (C++ or a Blueprint) and place it in the rules asset next to or in place of `PartResolve`. A step is pure: the view in, the result out, no world, no state of its own. `FGSTN_PartsPipelineValidator` checks the order against the steps that stop a hit.
+3. **A new part set.** A `UGSTN_PartSetDefinition` data asset: up to 16 parts, each naming hurtboxes of the entity's hurtbox set. No C++, no build. Attach it to a kit with `UGSTN_PartsKitLibrary.SetKitPartSet`.
+4. **A new penetration table.** A `UGSTN_PenetrationTable` data asset (bands matched from the highest `MinDelta` down), referenced from the part set's `Table` or the settings default.
+
+## Sample content
+
+`Content/Samples` is written by `Tools/GAS/setup_parts_sample_content.py` (editor Python or headless `-run=pythonscript`; idempotent, data assets are rewritten from the specs in the script, Blueprints are left alone once created): `PT_Sample_Default` (the three default bands), `PS_Sample_Fighter` (six parts: Torso, Head and Core as weak points, ArmL and ArmR that disable their hit groups, Legs that launch the victim on break, Core with `Thickness` 0.5), `PS_Sample_Player` (a single part, whose break is death), `BP_PartStats_Example` (a Blueprint child of `UGSTN_GE_PartStats`, the class a Stats break effect needs) and `BP_HitStep_PartResolve_Example` (a Blueprint child of `UGSTN_HitStep_PartResolve`). Every reference between them is soft and none points into `/Game/`; the part sets name the hurtboxes of the project's test pawn set (`torso`, `head`, `feet`, `arm_l`, `arm_r`, `core`). `Tools/GAS/validate_combat_content.py --parts` validates them.
 
 ## Replacing content
 
-The plugin ships no content yet; every reference between assets is soft (checked by `GSTNParts.Core.Data.NoHardContentReferences`). A game adds its own `Part.Type.*` and `GameplayCue.Combat.Part.*` leaves in its own
+The plugin ships only the sample content above; every reference between assets is soft (checked by `GSTNParts.Core.Data.NoHardContentReferences`). A game adds its own `Part.Type.*` and `GameplayCue.Combat.Part.*` leaves in its own
 `Config/Tags` ini and its own part sets and penetration tables as assets; the defaults are soft references in the settings.
+
+## Hit feel (P8)
+
+- **Ricochet prediction.** `FGSTN_PartsAttackerOutcome` (`GSTNPartsNP`, registered by the module in `FGSTN_AttackerOutcomeRegistry`) returns `Ricochet` when the part resolve step's outcome entry of the attacker's own pipeline run carries the Ricochet flag, i.e. the chosen part's penetration band has `bRicochet`. Everything it rests on is static (hit penetration, part hardness, table) or replicated (the part set and the broken mask in the snapshot extension), so the attacker predicts it exactly. The step ends a ricochet with `Stop` but leaves `bHit` true: the attacker's loop drops a hit the pipeline refused before it asks the seam. The combat core then does the rest: the recoil of the attack's `FGSTN_RicochetResponse`, no hitstop and no hit confirm on the attacker, a flagged inbox entry (cue and `HitLanded` event) and nothing else on the victim. `Combat.Event.Part.Ricochet` is NOT published for a flagged entry yet: the victim step skips the pipeline for it (open item in `docs/notes/m4b-doc-deltas.md`, "P8").
+- **Hitstop.** The part contributes only `band.HitstopScale x part.Reaction.HitstopScale` (static data) to the modifiers. The combat knockback model applies it to `Auto` hitstop only; an authored `Override` is final, on both sides. Never the broken mask, the damage or the weight (the knockback term of the combat's own Auto formula stays M4's dial).
+- **Reaction.** The effective weight falls with the damage taken and the mass broken parts lost (`LostMassFraction`, never below `MinWeightScale` 0.35), times the body's and the part's `JuggleFactor`. The airborne dial is the combat rules' own `AirborneJuggleScale` (default 1, scales the knockback of a tumbling victim), there is no second one here. Hitstun is the hit's stagger force against the part's threshold; the hitstun length comes from the knockback only.
+- **Break Launch and Stagger.** The outcome applier collects the `Launch` and `Stagger` effects of the parts a hit newly broke and puts them in `FGSTN_OutcomeApplyContext::Reaction` (an `FGSTN_ReactionRequest`); the victim step merges it as a hit of that strength would (longer floor, faster launch, the hitstun of a launch of that speed). The horizontal direction follows the hit, the vertical one is the victim's up.
+
+## Editor module
+
+`GSTNPartsEditor` (P13, editor only; not compiled into a game target):
+
+- **Validator.** `UGSTN_PartSetValidator` (an `UEditorValidatorBase`) validates part sets and penetration tables through their `IsDataValid` and prefixes every finding with the asset path (`[/Game/.../PS_Boss.PS_Boss] ...`). The engine still runs the asset's own `IsDataValid`, so the same finding also shows once without the path. `UGSTN_PartSetValidator::ValidateAsset(Asset, Context, KnownBones)` is the same pass as a function; a bone list replaces the preview mesh. The 8 part minion limit is not checked yet: the part set has no minion flag, so the rule waits for the minion bridge (P15) and its own call of `FGSTN_PartsValidation`.
+- **Balance report.** `UGSTN_PartBalanceReport::Compute(PartSet, Table, HitData, Damage, MainPool, StaggerForce)` runs the real `ApplyHit` on a fresh state per part and returns `FGSTN_PartBalanceRow`s: hits to break, hits to kill (identical hits until the damage the main pool takes reaches `MainPool`; default the sum of the breakable caps), hits to stagger (1 when the hit's stagger force times the band's stagger scale reaches the part's threshold, else never; stagger is a per-hit test) and an unbreakable flag. Loops stop at 10000 hits ("never"). `FormatReport` makes the text table. Console: `GSTN.Parts.BalanceReport <PartSetPath> <TablePath|None> <Damage> <Penetration> [StaggerForce]` logs it to `LogGSTNPartsEditor`.
+- **Physics Asset draft.** `UGSTN_PhysicsAssetToPartSet::MakeDraftParts(PhysicsAsset)` returns one draft part per body: `Name` the bone name made unique (`spine_01`, `spine_01_1`, ...), `Bones` that bone, defaults otherwise. No UI.
 
 ## Tests
 
@@ -134,12 +201,31 @@ unknown effect, asset helpers, extensions, Blueprint types, no hard references, 
 lookup from -8 to +8, ignore hardness, one band, empty table, sorted bands), `Core.BakedCurve.*` (hand values, monotonic,
 integer only), `Core.Math.*` (quantise rule and hand values, golden hit sequence, cascade, weak point, ricochet, overflow, the
 three broken-hurtbox policies, nonzero hit moves the byte, single-part player, inbox order, restore, projection, AllBroken,
-no allocation), `Core.GrabGate.Evaluation`, `Core.Determinism.*` (2000 random sequences with a pinned fingerprint, weight
-curve against hand values, weight clamp). The canary build
+no allocation), `Core.GrabGate.Evaluation`, `Core.PartMath.Thickness.*` (T = 0 unchanged, T = 1 deep damage only, blends, DeepDamage defaults to damage), `Core.Step.PerHitboxPenetrationThroughVariantOverride`, `Core.Determinism.*` (2000 random sequences with a pinned fingerprint, weight
+curve against hand values, weight clamp). `GSTNParts.GAS.*` (stock ability system component, no fork): `Effects.*` (Stats
+applied and removed per part, magnitudes by set-by-caller key, the launch request shape, the stagger floor), `Events.*`
+(payload round trip, dedupe key and window, the hit envelope on every event, two entries of a drain in either order),
+`Projection.*` (Broken, the removed base tag, GrabLocked, AllBroken counting breakable parts only). The canary build
 (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the canary script does not exist.
+`GSTNParts.Editor.*` (P13, editor context: duplicate hurtbox, parent cycle, mask over 16, missing bone, empty table, balance report numbers against hand values, Physics Asset draft names). `GSTNParts.NP.{Ricochet,Hitstop,Reaction,BreakEffects}.*` (P8: the attacker predicts the ricochet from static data and the mask, no hitstop or confirm either side, the victim only gets the entry; the part's hitstop scale reaches Auto only, Override is final; weight tier with broken limbs, juggle factor, the rules' airborne scale; break Launch and Stagger through the reaction request). `GSTNParts.NP.Restore.*` and `GSTNParts.GAS.Restore.*` (P7b: mask cleared at F+1, rollback redelivery restores once, restore then break is a new serial, one-shots stay, the GE component requests). `GSTNParts.NP.*` (P7 part 1): `Snapshot.*` (end of F-1, bytes, lag history), `Applier.*` (writes at F+1, the real victim drain rebuilds between entries, rollback redelivery, event keys, monotonic mask), `TickExtension.*` (order, tags from the mask, hit groups, hidden hurtboxes), `GrabGate.TagProjected`, `Attach.*`, `Content.*`.
+
+## Restoring parts
+
+Parts never heal by themselves; an explicit restore clears broken bits and gives back damage. The request is an INFINITE gameplay effect on the target carrying `UGSTN_GEComponent_RestoreParts` (fields `PartMask`, 0 = every part, and `DamageFraction`, 0 = full repair); `UGSTN_GE_PartRestore` is the native default and any Blueprint effect with the component works, so a healer enemy's simulated ability just applies it. `UGSTN_PartsLibrary::RequestRestore(Target, PartMask, DamageFraction, EffectClass, Instigator)` does the same from authority code outside the simulation. The parts tick extension consumes the effect at the target's next combat tick (hit of the same frame first), restores the fragment, publishes `Combat.Event.Part.Restored` (part index and the new break serial, so restore then break again is a new event key) and removes the effect; rollback re-delivers it and gets the same result. The wire format is unchanged. Derived effects (tags, hit groups, hidden hurtboxes, Stats effects) reverse with the mask; one-shot effects (MainDamage, Launch, Stagger) leave nothing to undo. A knocked out single-part set (a player) is not restored: KO wins.
 
 ## Changelog
 
+- 0.1 (2026-10-26): P14: plugin-owned sample content and its setup script, full sweep (see HANDOVER 46). Presentation (P10-P12) still pending.
+- 0.1 (2026-10-26): P13: `GSTNPartsEditor` (asset validator, balance report and `GSTN.Parts.BalanceReport`, Physics Asset draft helper); tests `GSTNParts.Editor.*`. P10-P12 (presentation) are skipped for now.
+- 0.1 (2026-10-26): P9: part `Thickness` and hit `DeepDamage`, grab gate projection test, per-hitbox penetration test; the victim now receives `Combat.Event.Part.Ricochet`.
+- 0.1 (2026-10-25): hit feel through parts (plan P8): `FGSTN_PartsAttackerOutcome` (ricochet prediction), break Launch/Stagger through the reaction request, `AirborneJuggleScale` is the combat rules'; the ricochet step keeps `bHit`; tests `GSTNParts.NP.{Ricochet,Hitstop,Reaction,BreakEffects}.*`; scenarios `part_ricochet/stagger/weakpoint/break_launch`; content: ArmR plate, Head threshold, Legs break launch.
+- 0.1 (2026-10-25): part restore (plan P7b): `UGSTN_GEComponent_RestoreParts`, `UGSTN_GE_PartRestore`, `UGSTN_PartsLibrary`, `Combat.Event.Part.Restored`, the consumer in the tick extension; harness scenarios `part_break/cap/hitgroups/rollback/host/restore` (plan P7 part 2) and the part event log hooks of `UGSTN_PartsKitLibrary`.
+- 0.1 (2026-10-25): `GSTNPartsNP`: snapshot contributor, tick extension, outcome applier, attach, content helpers (plan P7 part 1).
+- 0.1 (2026-10-25): `GSTNPartsNP`: `FGSTN_PartsFragment` and its registration (plan P6).
+
+- 0.1 (2026-10-25): `GSTNPartsGAS`: break-effect applier (Stats per part, launch request, stagger floor), part events with the hit
+  envelope and the dedupe key, tag projection helpers (plan P5).
+- 0.1 (2026-10-25): the part resolve step, its snapshot extension and outcome entry, the pipeline validator (plan P4).
 - 0.1 (2026-10-23): part state, quantisation, hit application, cascade, weight, projection, grab gate and restore math
   (plan P3); plugin skeleton, native tags, ini vocabulary, settings (plan P1); part set, penetration table, break
   effects, hit data, kit and rules extensions, validators, baked curve (plan P2).

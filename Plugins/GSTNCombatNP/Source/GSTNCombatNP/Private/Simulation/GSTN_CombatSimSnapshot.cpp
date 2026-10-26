@@ -157,5 +157,12 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 	// The weight the health weight curve gives the victim now: the attacker's machine reads it from the snapshot like the rest of the reaction state
 	const double WeightScale = FGSTN_CombatVictim::ComputeWeightScale(CombatRules, Set, DamagePercent, Out.HealthFraction);
 	Out.Reaction = FGSTN_VictimReactionState::Make(DamagePercent, WeightScale, Flags, Threshold);
+
+	// The data optional plugins add (broken parts...): from the same end-of-previous-frame state, in ascending feature id order; nothing registered leaves it empty
+	FGSTN_SnapshotContributorContext Contribution;
+	Contribution.Frame = Frame;
+	Contribution.Owner = Owner;
+	Contribution.Fragments = &Sync->Fragments;
+	FGSTN_SnapshotContributorRegistry::Get().Fill(Contribution, Out);
 	return true;
 }

@@ -426,16 +426,49 @@ int32 UGSTN_HitShapeUtils::PickHurtbox(const TArray<int32>& Overlapped, const UG
 
 int32 UGSTN_HitShapeUtils::PickHurtboxIndex(TConstArrayView<int32> Overlapped, TConstArrayView<FGSTN_Hurtbox> Hurtboxes)
 {
+	return PickHurtboxIndex(Overlapped, Hurtboxes, TConstArrayView<FGSTN_ExtraHurtbox>(), FGameplayTag());
+}
+
+int32 UGSTN_HitShapeUtils::PickHurtboxIndex(TConstArrayView<int32> Overlapped, TConstArrayView<FGSTN_Hurtbox> Hurtboxes, TConstArrayView<FGSTN_ExtraHurtbox> Extras, const FGameplayTag& HitType)
+{
 	int32 Best = INDEX_NONE;
+	int32 BestPriority = 0;
+	bool bBestExtra = false;
 	for (const int32 Index : Overlapped)
 	{
-		if (!Hurtboxes.IsValidIndex(Index))
+		const bool bExtra = Index >= GSTNHurtboxIndex::ExtraIndexBase;
+		int32 Priority = 0;
+		if (bExtra)
 		{
-			continue;
+			const int32 Position = GSTNHurtboxIndex::ToExtraPosition(Index);
+			if (!Extras.IsValidIndex(Position))
+			{
+				continue;
+			}
+			const FGSTN_ExtraHurtbox& Extra = Extras[Position];
+			if (HitType.IsValid() && HitType.MatchesAny(Extra.IgnoreHitTypes))
+			{
+				continue;
+			}
+			Priority = Extra.Priority;
 		}
-		if (Best == INDEX_NONE || Hurtboxes[Index].Priority > Hurtboxes[Best].Priority || (Hurtboxes[Index].Priority == Hurtboxes[Best].Priority && Index < Best))
+		else
+		{
+			if (!Hurtboxes.IsValidIndex(Index))
+			{
+				continue;
+			}
+			Priority = Hurtboxes[Index].Priority;
+		}
+
+		// Higher priority; on a tie an extra over a set hurtbox; then the lower index (extras are ordered among themselves by position, the set by index)
+		const bool bBeats = Best == INDEX_NONE || Priority > BestPriority
+			|| (Priority == BestPriority && ((bExtra && !bBestExtra) || (bExtra == bBestExtra && Index < Best)));
+		if (bBeats)
 		{
 			Best = Index;
+			BestPriority = Priority;
+			bBestExtra = bExtra;
 		}
 	}
 	return Best;

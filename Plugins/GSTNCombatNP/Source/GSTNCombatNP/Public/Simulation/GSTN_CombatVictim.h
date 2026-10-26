@@ -30,6 +30,9 @@ struct FGSTN_VictimHit
 	FGSTN_HitContextView View;
 	FGSTN_HitOutcome Outcome;
 
+	/** The outcome extensions the steps produced for the appliers: a plugin makes its events from them, after the hit events (AppendEvents of the applier) */
+	TArray<FInstancedStruct> OutcomeExtensions;
+
 	bool bStaggered = false;
 	EGSTN_HitReaction Reaction = EGSTN_HitReaction::StaggerInPlace;
 
@@ -76,10 +79,25 @@ enum class EGSTN_KOCause : uint8
 	Zone
 };
 
+/** A message a resolved hit sends back (FGSTN_HitResolutionContext::OutgoingEntries), stamped by the victim step and ready for PostToInbox */
+struct FGSTN_VictimOutgoing
+{
+	/** The entity it is for: the attacker of the hit that produced it */
+	int32 TargetId = INDEX_NONE;
+
+	FGSTN_InboxEntry Entry;
+};
+
 /** What the victim step did, besides the sync state it wrote */
 struct FGSTN_VictimResult
 {
 	TArray<FGSTN_VictimHit, TInlineAllocator<4>> Hits;
+
+	/**
+	 * The reverse deliveries of the hits that stood (not a ricochet, not a hit a step refused), in the order of the drain. The component posts them after
+	 * the step, so they reach the attacker's inbox stamped with this frame and are drained on the next one
+	 */
+	TArray<FGSTN_VictimOutgoing, TInlineAllocator<2>> Outgoing;
 
 	/** This frame's step knocked the combatant out (the state is KO now); for Health, KOHitIndex is the hit that did it */
 	EGSTN_KOCause KO = EGSTN_KOCause::None;

@@ -2,10 +2,17 @@
 
 #include "Hits/GSTN_HitData.h"
 #include "Hits/GSTN_CombatHitTags.h"
+#include "Rules/GSTN_CombatRules.h"
 
 bool FGSTN_HitData::IsNormalHitType() const
 {
 	return !HitType.IsValid() || HitType == GSTNCombatHitTags::HitType_Normal.GetTag();
+}
+
+bool FGSTN_HitData::IsBlockable(const UGSTN_CombatRules& Rules) const
+{
+	// An unset type is a Normal hit: it is blockable unless the rules list Normal itself
+	return !HitType.IsValid() ? !Rules.NonBlockableHitTypes.Contains(GSTNCombatHitTags::HitType_Normal.GetTag()) : !Rules.NonBlockableHitTypes.Contains(HitType);
 }
 
 FGSTN_HitData UGSTN_HitDataUtils::ApplyVariant(const FGSTN_HitData& Hit, const FGSTN_HitVariant& Variant)

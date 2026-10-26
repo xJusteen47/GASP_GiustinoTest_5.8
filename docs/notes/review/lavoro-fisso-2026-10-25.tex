@@ -349,6 +349,54 @@ non ancora fatto; lo scenario azzera la memoria del muro prima di ogni aggancio.
 all'uscita da una forma (disponibile per T4/T7), occupanti e stato Braced (T7), ponte con le parti (T6), stati di combattimento (T7),
 minion (T8), forme convesse. Effetto collaterale: chi tickka prima di Mover nel frame vede le piattaforme di un frame prima.
 
+\section{Aggiornamento del 26 ottobre}
+\subsection{T2: riaggancio alla stessa superficie in movimento (\code{3c3d9ee}, \code{4041401}, \code{447fc2d})}
+\paragraph{Causa.} Non erano le altezze in coordinate del mondo. L'azzeramento della memoria del muro (``sei passato da terra'')
+leggeva il registro dell'ultimo cambio di modalità di Mover (\code{LastModeChangeRecord}), che un rollback cancella e niente riscrive:
+se la correzione tornava a un frame dopo il decollo del server ma prima di quello del client, il client perdeva il decollo, teneva la
+memoria e il limite di altezza rifiutava l'aggancio che il server accettava. Nel log: client \code{ENTRY rejected: height cap},
+server \code{ENTRY -> WallSlidingV2 memReset=1}.
+\paragraph{Correzione.} Le regole di rientro sono una funzione pura (\code{UGSTN_WallReentryUtils::Judge}) con due opzioni, accese
+solo sulle transizioni guidate dalla superficie (legacy invariato, verificato su 13.824 casi):
+\begin{lstlisting}
+bInferModeChangeLostToRollback:
+  se Registro.Modalità != StatoIniziale.Modalità e Registro.Modalità azzera la memoria
+     e Registro.Tempo >= UltimoMuro.Tempo  -> azzera la memoria (il cambio perso nel rollback)
+bBaseRelativeHeightCap (muro in movimento):
+  confronta l'altezza sopra l'origine della base, ora contro all'uscita
+  (memorizzata nello stato sincronizzato: bLastWallOnMovingBase, LastWallBaseHeight)
+  memoria senza riferimento della base -> solo cooldown
+\end{lstlisting}
+Scartati: solo cooldown su ogni muro mobile (permette di salire all'infinito con salto + riaggancio) e la base come riferimento a
+oggetto nello stato sincronizzato (byte in rete per un'identità che la regola non usa).
+\paragraph{Numeri.} Scenario del combattente in movimento: prima 1 ripetizione su 3 riuscita sul client, dopo 6/6 allo 0\,\% e al 2\,\%
+di perdita, 0 riconciliazioni sul muro e sulla cima. Corsie mobili: 0 dopo 0{,}6\,s, con partenza normale e con aggancio presto.
+Scenari standard sul muro: CMP 6/6 allo 0\,\% e al 2\,\%, nessuna riconciliazione oltre quelle causate apposta. Test: 8 nuovi, 910 poi 916.
+Dettagli in \code{wall-slide-v2.md} §6.15. Caso non recuperato: atterraggio e decollo entrambi persi nella stessa finestra di correzione
+(circa 0{,}5\,s), costa una riconciliazione.
+
+\subsection{Layer di animazione del muro (\code{311db7c}, \code{12b6fed}, \code{6a0e42c})}
+Unito il lavoro del thread delle animazioni (plugin \code{GSTNAnimation}). Gli asset sono stati creati da script
+(\code{Tools/GAS/setup_wall_anim_layer.py}, idempotente, con backup): Python non sa costruire grafi di animazione, quindi un nuovo modulo
+editor \code{GSTNAnimationEditor} offre funzioni ``trova o aggiungi'' (state machine, stati, transizioni con regola
+\emph{proprietà == valore enum}, sequence player, blend, linked layer) che lo script chiama.
+\begin{itemize}[leftmargin=*]
+  \item \code{ALI_GSTN_Wall} (layer \code{WallLayer}); \code{ABP_GSTN_WallLayer} con \code{WallPhases} (Enter, Loop, Exit) e dentro Loop
+    \code{SlideStates} (Idle, SlideLeft, SlideRight, Skid), regole su \code{WallAnim.Phase}/\code{SlideState} via Property Access.
+  \item \code{SandboxCharacter_Mover_ABP} rigenitorato a \code{GSTN_CharacterAnimInstance}; un \emph{Blend Poses by bool} tra la posa GASP e il
+    layer, prima del Pose History (così il motion matching registra la posa mostrata), più un nodo Inertialization.
+  \item \code{DA_AnimSet_Wall}, la collezione del personaggio e il componente \code{GSTN_AnimSetComponent} su \code{SandboxCharacter_Mover};
+    variante di prova \code{ABP_GSTN_WallLayer_Heavy} (regola \code{Anim.Trait.Build.Heavy}).
+  \item Clip segnaposto GASP: Enter = atterraggio leggero, Exit = partenza salto, Idle = caduta in loop, SlideLeft/Right = camminata
+    laterale, Skid = scivolata.
+\end{itemize}
+Tutti i Blueprint compilano senza errori; 916 test verdi; in PIE headless il layer è collegato su host e client e la fase va
+None, Enter, Active, Exit, None.
+
+\subsection{Crash in chiusura (\code{2f556cf})}
+Ogni esecuzione headless dell'editor usciva con codice 3: il registro delle tracce dell'editor dei combattimenti costruiva un puntatore
+debole a uno \code{UScriptStruct} dopo lo smontaggio degli UObject. Ora a quel punto svuota il registro e basta.
+
 \section{Cosa controllare a mano stasera}\label{sec:controlli}
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Muri}: in \code{SandboxCharacter_Mover}, modalità WallSlidingV2, sezione \emph{Edges}: ci sono
@@ -379,6 +427,12 @@ minion (T8), forme convesse. Effetto collaterale: chi tickka prima di Mover nel 
     \code{gstn.Platform.SpawnTestFighter -2000 1500 0} e \code{gstn.Platform.Draw 1}: fianco e cima verdi che si muovono lungo Y;
     scivola sulla faccia -X del fianco e stai in piedi sulla cima. \code{gstn.Platform.SetMask 2}: il fianco diventa arancione e
     dopo 20 frame grigio. Opzionale, a editor chiuso: \code{python Tools/GASNPPTest/surface_scenarios.py} (anche \code{--loss 2}).
+  \item \textbf{T2}: con un client a circa 100\,ms, salta via da una piattaforma in movimento e riaggrappati alla stessa faccia dopo
+    l'atterraggio (niente sfarfallio di modalità o scatti); scivola su un muro mobile mentre un dash o un buff del server ti colpisce;
+    stacca da un muro fermo e riaggrappati più in alto: il limite di altezza deve ancora rifiutare.
+  \item \textbf{Layer del muro}: PIE su \code{L_WallSlideAB} con il debugger dell'ABP sul layer: Enter, poi Idle/SlideLeft/SlideRight,
+    Skid in entrata veloce, Exit al salto. Aggiungi \code{Anim.Trait.Build.Heavy} ai \code{DefaultCosmeticTags} del componente
+    \code{AnimSets} e verifica che l'Idle cambi clip.
   \item \textbf{Rete}: prima di unire M5, esegui lo scenario \code{scenario_hit_basic} del harness (il bake non è stato provato in PIE).
 \end{enumerate}
 

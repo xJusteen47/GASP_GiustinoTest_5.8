@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Events/GSTN_SimEvent.h"
 #include "Hits/GSTN_HitResolution.h"
 #include "Sync/GSTN_SyncFragment.h"
 #include "GSTN_HitExtensions.generated.h"
@@ -58,6 +59,37 @@ struct GSTNCOMBATCORE_API FGSTN_OutcomeApplyResult
 	TArray<TSoftClassPtr<UObject>> Effects;
 };
 
+/**
+ * A reaction an applier asks the victim step to undergo, besides the one the hit's own knockback decided (a limb that breaks buckles
+ * and flies). The victim step merges it as it would a hit of that strength: the hitstun floors take the longer, a launch replaces the
+ * hit's when it is faster (or makes one where the hit only staggered or did not stagger at all). Unset it is neutral. Plain data of the
+ * simulation: filled from the view and static data only, so a re-simulated hit asks for the same thing.
+ */
+struct FGSTN_ReactionRequest
+{
+	/** Hitstun frames the victim is locked for at least; 0 = no request */
+	int32 MinHitstunFrames = 0;
+
+	/** Launch velocity; zero = no launch. A launch makes the reaction a Launch, tumble included when it is fast enough */
+	FVector LaunchVelocity = FVector::ZeroVector;
+
+	/** The frame of the hit the request belongs to; stamped by the victim step before the appliers run, INDEX_NONE outside it */
+	int32 Frame = INDEX_NONE;
+
+	bool HasLaunch() const { return !LaunchVelocity.IsNearlyZero(); }
+	bool IsSet() const { return MinHitstunFrames > 0 || HasLaunch(); }
+
+	/** Adds a request of another source: the longer floor, the faster launch */
+	void Merge(int32 InMinHitstunFrames, const FVector& InLaunchVelocity)
+	{
+		MinHitstunFrames = FMath::Max(MinHitstunFrames, InMinHitstunFrames);
+		if (InLaunchVelocity.SizeSquared() > LaunchVelocity.SizeSquared())
+		{
+			LaunchVelocity = InLaunchVelocity;
+		}
+	}
+};
+
 /** What a native applier reads and writes besides the view */
 struct FGSTN_OutcomeApplyContext
 {
@@ -65,6 +97,9 @@ struct FGSTN_OutcomeApplyContext
 	FGSTN_SyncFragmentArray* VictimFragments = nullptr;
 
 	FGSTN_OutcomeApplyResult Result;
+
+	/** The reaction the appliers ask for, merged into the hit's by the victim step (the one-shot launch and stagger of a broken part). Neutral when unset */
+	FGSTN_ReactionRequest Reaction;
 };
 
 /**
@@ -83,6 +118,13 @@ public:
 
 	/** Called once for each OutcomeExtensions entry of that struct, in the order of the entries */
 	virtual void Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const = 0;
+
+	/**
+	 * Appends the events this extension stands for to Outbox, with the hit's event as their envelope (tags of the move, the hit type, the
+	 * relationship; frame, instigator and target). Called once per hit by the victim step after the hit events, for each entry of that struct,
+	 * on every machine and every re-simulation; the authority publishes the outbox once. The default appends nothing
+	 */
+	virtual void AppendEvents(const FInstancedStruct& Extension, const FGSTN_SimEvent& Envelope, FGSTN_SimEventOutbox& Outbox) const {}
 };
 
 /**
@@ -129,6 +171,9 @@ public:
 	 * ignored. Rules may be null.
 	 */
 	void ApplyAll(const UGSTN_CombatRules* Rules, const TArray<FInstancedStruct>& Extensions, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const;
+
+	/** Calls AppendEvents of every native applier for the entries of Extensions it owns, in registry order. No Blueprint applier makes events */
+	void AppendEvents(const TArray<FInstancedStruct>& Extensions, const FGSTN_SimEvent& Envelope, FGSTN_SimEventOutbox& Outbox) const;
 
 private:
 	struct FEntry

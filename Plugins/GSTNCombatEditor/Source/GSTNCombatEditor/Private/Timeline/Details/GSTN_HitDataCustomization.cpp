@@ -59,6 +59,8 @@ TArray<FName> FGSTN_HitDataCustomization::GetLaidOutProperties()
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, StaggerForceMode), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, StaggerForce), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, StaggerForceScale),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, Priority), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, HitType), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, ExtraEffects),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, CueTag), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, CustomData),
+		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, bParryable), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, bDisableDI),
+		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, LinkFilter), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, LinkType),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, Impact), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, ExtensionData) };
 }
 
@@ -332,6 +334,13 @@ void FGSTN_HitDataCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> P
 			];
 	}
 	AddRows(Kind, { GET_MEMBER_NAME_CHECKED(FGSTN_HitData, ExtraEffects), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, CueTag), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, CustomData) });
+
+	// Fields the defence and link plugins read; the combat core only carries them, so they are plain rows
+	IDetailGroup& Defence = ChildBuilder.AddGroup(TEXT("Defence"), LOCTEXT("GroupDefence", "Defence"));
+	AddRows(Defence, { GET_MEMBER_NAME_CHECKED(FGSTN_HitData, bParryable), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, bDisableDI) });
+
+	IDetailGroup& Link = ChildBuilder.AddGroup(TEXT("Link"), LOCTEXT("GroupLink", "Link"));
+	AddRows(Link, { GET_MEMBER_NAME_CHECKED(FGSTN_HitData, LinkFilter), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, LinkType) });
 
 	IDetailGroup& Impact = ChildBuilder.AddGroup(TEXT("Impact"), LOCTEXT("GroupImpact", "Impact"));
 	AddRows(Impact, { GET_MEMBER_NAME_CHECKED(FGSTN_HitData, Impact) });

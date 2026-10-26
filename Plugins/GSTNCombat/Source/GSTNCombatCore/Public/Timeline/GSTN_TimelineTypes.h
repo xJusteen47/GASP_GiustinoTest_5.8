@@ -31,14 +31,18 @@ enum class EGSTN_AimPolicy : uint8
 	Camera
 };
 
-/** Condition of a cancel window. OnHit/OnBlock are false until hits exist (M4); OnWhiff is "not hit yet". */
+/**
+ * Condition of a cancel window. OnHit/OnBlock are false until hits exist (M4); OnWhiff is "not hit yet". OnParry is the value of the
+ * defence plugin (M6): it is data only here, false in every state this module writes, so a plugin that raises the parry confirm gives it a meaning.
+ */
 UENUM(BlueprintType)
 enum class EGSTN_CancelCondition : uint8
 {
 	Always,
 	OnHit,
 	OnBlock,
-	OnWhiff
+	OnWhiff,
+	OnParry
 };
 
 /** Whether the movement track adds to the velocity of the character or replaces it */

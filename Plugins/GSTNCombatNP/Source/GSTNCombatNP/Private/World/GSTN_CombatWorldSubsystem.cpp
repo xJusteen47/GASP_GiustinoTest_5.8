@@ -190,6 +190,11 @@ void UGSTN_CombatWorldSubsystem::UnregisterProvider(IGSTN_HittableProvider* Prov
 
 bool UGSTN_CombatWorldSubsystem::PostHit(int32 EntityId, const FGSTN_HitInboxEntry& Entry)
 {
+	return PostToInbox(EntityId, Entry.ToInboxEntry());
+}
+
+bool UGSTN_CombatWorldSubsystem::PostToInbox(int32 EntityId, const FGSTN_InboxEntry& Entry)
+{
 	const int32 Index = Algo::LowerBoundBy(Registry, EntityId, &FRegistryEntry::EntityId);
 	if (!Registry.IsValidIndex(Index) || Registry[Index].EntityId != EntityId)
 	{
@@ -200,7 +205,7 @@ bool UGSTN_CombatWorldSubsystem::PostHit(int32 EntityId, const FGSTN_HitInboxEnt
 	{
 		return false;
 	}
-	return Registered.Source && Registered.Source->PostHit(Entry);
+	return Registered.Source && Registered.Source->PostToInbox(Entry);
 }
 
 void UGSTN_CombatWorldSubsystem::InvalidateSnapshot()
@@ -244,6 +249,8 @@ void UGSTN_CombatWorldSubsystem::RecordHistory(const FGSTN_StepSnapshot& Source,
 		Record.Transform = Entry.Transform;
 		Record.Velocity = Entry.Velocity;
 		Record.Reaction = Entry.Reaction;
+		Record.Extension = Entry.Extension;
+		Record.ExtraHurtboxes = Entry.ExtraHurtboxes;
 		if (Ring.Num() > MaxRecords)
 		{
 			Ring.RemoveAt(0, Ring.Num() - MaxRecords, EAllowShrinking::No);
@@ -331,6 +338,11 @@ const FGSTN_StepSnapshot& UGSTN_CombatWorldSubsystem::EnsureSnapshot(int32 Frame
 		if (Entry.BoundRadius <= 0.f)
 		{
 			Entry.BoundRadius = static_cast<float>(ComputeBoundRadius(Hurtboxes));
+		}
+		if (!Entry.ExtraHurtboxes.IsEmpty())
+		{
+			// A bubble reaches past the body: the broadphase must find the entity for a hitbox that only touches the extra
+			Entry.BoundRadius = FMath::Max(Entry.BoundRadius, static_cast<float>(GSTNExtraHurtboxes::ComputeBoundRadius(Entry.ExtraHurtboxes)));
 		}
 	}
 

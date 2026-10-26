@@ -70,6 +70,14 @@ enum class EGSTN_RequestType : uint8
 	/** A burst ended the combatant's hit reaction in this frame (state already rewritten): the executor removes the freezes of the window */
 	EndReaction = 17,
 
+	// ---- The generic kinds of the link plugin (M6 F2). Data only: the model has no handler for them, the plugin's executor resolves Arg (a link
+	// type index, a role) in the ability system's pre-tick. They use the free slots of the array: its wire size grows with the requests present, never with the capacity
+	EnterLinked = 18,
+	ExitLink = 19,
+	ApplyLinkEffect = 20,
+	RemoveLinkEffect = 21,
+	LaunchLinked = 22,
+
 	Count UMETA(Hidden)
 };
 

@@ -9,6 +9,20 @@
 #include "Hits/GSTN_ImpactTypes.h"
 #include "GSTN_HitData.generated.h"
 
+class UGSTN_CombatRules;
+
+/** Which link state of the hit's attacker and victim lets a hit land (the link plugins fill the meaning in; the combat core only carries it) */
+UENUM(BlueprintType)
+enum class EGSTN_LinkFilter : uint8
+{
+	/** The hit lands whatever the link state (the default, and the only behaviour before any link plugin exists) */
+	Any,
+	/** The hit lands only on the victim linked to the attacker (a pummel on the held fighter) */
+	LinkedPartnerOnly,
+	/** The hit never lands on the victim linked to the attacker (an attack must not hit the fighter it holds) */
+	ExcludeLinkedPartner
+};
+
 /** How the launch direction is turned to the victim on the movement plane */
 UENUM(BlueprintType)
 enum class EGSTN_YawSource : uint8
@@ -115,6 +129,21 @@ struct GSTNCOMBATCORE_API FGSTN_HitData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit", meta = (Categories = "Combat.HitType"))
 	FGameplayTag HitType;
 
+	/** Whether a parry may stop this hit. The defence plugin reads it; the combat core only carries it, and a hit that nobody reads it on behaves as before */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Defence")
+	bool bParryable = true;
+
+	/** Whether the victim's directional influence is ignored for this hit. Carried for the defence plugin; the core's own launch math does not read it yet */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Defence")
+	bool bDisableDI = false;
+
+	/** Which link state of attacker and victim lets the hit land. Any is the identity; carried for the link plugin */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Link")
+	EGSTN_LinkFilter LinkFilter = EGSTN_LinkFilter::Any;
+
+	/** The link type (Combat.Link.Type.*) this hit forms or requires. Invalid = none. Carried for the link plugin */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Link", meta = (Categories = "Combat.Link.Type"))
+	FGameplayTag LinkType;
 	/**
 	 * Gameplay effect classes applied to the victim, kept as soft UObject classes because Core has no GameplayAbilities
 	 * dependency: the GAS layer resolves them and rejects anything that is not a gameplay effect.
@@ -149,6 +178,12 @@ struct GSTNCOMBATCORE_API FGSTN_HitData
 
 	/** True for an unset type or Combat.HitType.Normal */
 	bool IsNormalHitType() const;
+
+	/**
+	 * Whether a block or a shield may stop this hit: false when HitType is one of the rules' non-blockable hit types. Derived, not
+	 * authored, so a type added to the rules' list changes every hit of that type without touching a timeline
+	 */
+	bool IsBlockable(const UGSTN_CombatRules& Rules) const;
 
 	/** The attacker's hitstop override once -1 is resolved */
 	int32 GetAttackerHitstopFramesOverride() const { return AttackerHitstopFramesOverride >= 0 ? AttackerHitstopFramesOverride : HitstopFramesOverride; }

@@ -76,6 +76,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
 	TArray<TSoftClassPtr<UGSTN_HitResolutionStep>> HitPipeline;
 
+	/**
+	 * Hit types (Combat.HitType.*) that a block or a shield cannot stop: FGSTN_HitData::IsBlockable reads this list. Unblockable by default;
+	 * the link plugin adds Grab and Throw by data. An unset hit type counts as Normal
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (Categories = "Combat.HitType"))
+	TArray<FGameplayTag> NonBlockableHitTypes;
+
 	/** Turns one hit on one victim into a reaction. None = the ComputeKnockback step writes nothing */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category = "Rules|Hits")
 	TObjectPtr<UGSTN_KnockbackModel> KnockbackModel;

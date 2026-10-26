@@ -569,6 +569,11 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 	// Outside the combat tick (or with no timeline running) nothing gates: only a running timeline closes commands
 	// A victim in hitstun or tumble acts again when its state says Actionable; the first frame of that state is the first frame of the tail
 	const UGSTN_CombatTableSet& Current = Tables();
+	if (bFrameActionsBlocked)
+	{
+		// An extension's state forbids acting (BlocksActions): no command starts, whatever the reaction or the timeline would allow
+		return false;
+	}
 	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
 	{
 		// The one exception: an ability tagged Combat.Ability.IgnoreHitstunOnActivation, in a reaction (a KO is never bypassed). The gate only asks
@@ -846,9 +851,15 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	// Extension hooks at the fixed points of the tick. With nothing registered every call is an empty loop
 	FGSTN_CombatTickContext HookContext(Frame, InSync, OutSync);
+	HookContext.Owner = GetOwner();
+	HookContext.AbilitySystem = AbilitySystem;
+	HookContext.Outbox = &EventOutbox;
+	HookContext.Timeline = &TimelineOutput;
 	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
 	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
+	// The can-act veto of the extensions, from the fragments as the hooks above left them; it closes the gate the candidates ask
+	bFrameActionsBlocked = Extensions.BlocksActions(HookContext);
 
 	// The attacker side (combat-m4-hits 6), before the candidates: a hit of this frame confirms the run for the cancel gate of the same frame
 	if (!bHitstopFrame && !bFrameGateClosed)
@@ -875,6 +886,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Args.Outbox = &EventOutbox;
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
+	bFrameActionsBlocked = false;
 
 	// A burst: the ability that starts in a reaction and says it ends it. The state is rewritten here, in the frame of the request, so it rolls
 	// back with the rest; the ability system's pre-tick removes the freeze of the window (EndReaction request)
@@ -1055,11 +1067,11 @@ void UGSTN_CombatSimComponent::RestoreFrame(const FGSTN_CombatSyncState* Sync, c
 	}
 	if (!Sync)
 	{
-		HitInbox.Reset();
+		Inbox.Reset();
 		return;
 	}
 	// The restored state is the end of its latest frame; the re-simulation starts on the next one
-	HitInbox.TrimFrom(Sync->Core.Input.History.GetLatestFrame() + 1);
+	Inbox.TrimFrom(Sync->Core.Input.History.GetLatestFrame() + 1);
 }
 
 bool UGSTN_CombatSimComponent::TicksOnThisMachine() const
@@ -1068,18 +1080,32 @@ bool UGSTN_CombatSimComponent::TicksOnThisMachine() const
 	return Owner && Owner->GetLocalRole() != ROLE_SimulatedProxy;
 }
 
-bool UGSTN_CombatSimComponent::PostHit(const FGSTN_HitInboxEntry& Entry)
+bool UGSTN_CombatSimComponent::PostToInbox(const FGSTN_InboxEntry& Entry)
 {
 	if (!TicksOnThisMachine())
 	{
 		return false;
 	}
-	if (!HitInbox.Add(Entry))
+	const uint8 Kind = Entry.Kind;
+	const int32 SenderId = Entry.SenderId;
+	const int32 Frame = Entry.Frame;
+	if (!Inbox.Add(Entry))
 	{
-		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: hit inbox full (%d entries), a hit from %d at frame %d is dropped"), *GetPathName(), FGSTN_HitInbox::MaxEntries, Entry.AttackerId, Entry.Frame);
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: combat inbox full (%d entries), an entry of kind %d from %d at frame %d is dropped"), *GetPathName(), FGSTN_CombatInbox::MaxEntries, Kind, SenderId, Frame);
 		return false;
 	}
 	return true;
+}
+
+bool UGSTN_CombatSimComponent::PostToInbox(int32 TargetId, const FGSTN_InboxEntry& Entry)
+{
+	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
+	return World && World->PostToInbox(TargetId, Entry);
+}
+
+bool UGSTN_CombatSimComponent::PostHit(const FGSTN_HitInboxEntry& Entry)
+{
+	return PostToInbox(Entry.ToInboxEntry());
 }
 
 void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)

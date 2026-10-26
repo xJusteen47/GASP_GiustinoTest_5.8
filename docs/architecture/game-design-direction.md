@@ -125,6 +125,7 @@ consequences for the design. Items marked *Reading* are interpretations to confi
 - Players and enemies are **crystal inside, covered in human "skin"**. As health drops, **pieces fly off**: small
   cosmetic chips, or whole limbs (tied to the part-breaking system of section 1).
 - Dead players and enemies **shatter into pieces**.
+- The **inner crystal's colour differs per player** (2026-10-24, §6h).
 
 ## 5b. Damage inside a part, detachment, players (owner input, 2026-10-22)
 
@@ -228,6 +229,92 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   attacks: **0 or as many as the designer wants**, per moveset. Spec: [combat-m6-defence-links.md](combat-m6-defence-links.md) §6.
 - **Pressing jump gets up** (16:23).
 
+## 6h. Crystal colour per player, god rays, fog shadow (owner input, 2026-10-24 00:58)
+
+- Characters are human only outside; inside they are crystal (§5). **The inner crystal's colour differs per player.** Spec:
+  [combat-parts.md](combat-parts.md) §6.0 (palette, colour slot per player, presentation only).
+- **Player 1 red, 2 blue, 3 yellow, 4 green**; player numbers follow the **alphabetical order of the names**, so friends who always
+  play together keep the same colours (01:08).
+- Idea for the depth cue: **god rays starting from the character** (the crystal's light), besides the usual **Mario-style shadow**,
+  or **fog onto which the shadow falls**. Spec: [depth-marker.md](depth-marker.md) §4.1 (god rays and fog shadow as styles), §2.7 (fog
+  as a soft receiver), §4.4 (marker tinted with the crystal colour).
+
+## 6i. Drill, demolition force, varying hitboxes, keyboard spin, hit collision (owner input, 2026-10-25 19:22–19:26)
+
+- Drill details (steering, exit, jump boost, not invincible, players drillable as a hit-grab, drillability = penetration against
+  armour): [spin-drill.md](spin-drill.md) §13b (PR #15).
+- **Demolition force** (Helldivers 2): some objects break only above a given demolition force; it applies to props and meshes,
+  generally not to enemies. Spec: [combat-m4-hits.md](combat-m4-hits.md) §7c, plan H14.
+- **Hitboxes that change with other factors**, for example a vertical swing turning diagonal right or left while the stick is held.
+  Spec: [combat-m4-hits.md](combat-m4-hits.md) §3, plan H15.
+- **Keyboard spin**: a shortcut such as A-S-D skipping W. Spec: [input.md](input.md) §9.
+- **Movement collision and hit collision**: already separate, but with edge cases: holes that projectiles pass and the character
+  and bulky hitboxes do not; holes that hitboxes pass and the character does not (a hollow medium-penetration cavity inside a
+  heavy-armour leg). Spec: [combat-m4-hits.md](combat-m4-hits.md) §9c, plans H16 and P18.
+- **Sequencing**: these general items go to planning first; the detailed design of individual abilities resumes at the end.
+- (19:39) **Animation that changes with input over time** (an aerial that rotates, attack variations) and **hitbox interpolation**
+  as in platform fighters. Spec: [combat-m4-hits.md](combat-m4-hits.md) §3 (steer track for hitboxes, animation, facing and
+  branches; interpolation status and four gaps), plans H15 and H17.
+- (19:56) **Per move**: some moves allow turning a few degrees during startup, some allow walking during startup. Example: a
+  vertical swing in the air; the first input sets the direction, a small angle correction in the first part of startup, a diagonal
+  during the swing. In the air one usually moves but does not turn, apart from these small corrections. Spec: control track in
+  [combat-m4-hits.md](combat-m4-hits.md) §3.
+- (23:21) **One part, several hardnesses** (Helldivers 2 charger's abdomen: medium on top, light underneath, destroying either destroys
+  the whole abdomen): one part with a per-hurtbox hardness override. Spec: [combat-parts.md](combat-parts.md) §3.4, plan P18.
+- (23:16–23:18, low priority) **Wounds**: an ability may wound a spot to lower its hardness, and the **ability decides where**. Per-part
+  wound by default (the part the hit chose), free-position wound as an extension; the mesh may show it. Spec:
+  [combat-parts.md](combat-parts.md) §3.4, plan P18.
+- (19:57) A move may also allow a full rotation at a set number of degrees per second, or full movement during the active frames;
+  the vertical swing stays the more common case.
+
+## 6j. Charge inputs, Guile style (owner question, 2026-10-26 09:47)
+
+- The owner asked whether a tag on crouch press and release, read by an ability, is enough for Street Fighter charge moves. The input
+  plugin already has a `Charge` condition on the input history (direction set, minimum duration, tolerance after release); the gaps are
+  the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.4.
+- (09:53) **Back-charge works in 3D**: the charge holds while the stick stays within a limited angle. Spec: charge relative to the
+  direction where it started, release opposite to it ([input.md](input.md) §10).
+- (09:55) The charge direction may **shift with time**: a full 360° turn keeps the charge if the stick moves very slowly. Spec: the anchor
+  drifts towards the stick at a capped rate ([input.md](input.md) §10).
+- (09:54) Charge moves may have **hitboxes behind** the character instead of in front (it faces the charge direction): `KeepFacing`
+  with hitboxes authored behind the root, or a turn towards the push; per move.
+- (09:55) The same charge can also hit **forward** if the character turns right after; it depends on the ability.
+- (09:56) **CH.2 approved** (40 frames, 8 frames of release tolerance, per move). CH.1 and CH.3 to be inferred from the above: the charge
+  is anchor-relative everywhere, so a duel cross-up keeps it; the move fires opposite to the anchor and its facing is the ability's choice.
+- (10:23) CH.4: 50° is fine; 90°/s drift may be too fast for some moves. Spec: default 45°/s, per move, 0 allowed.
+- (10:25) **Charged normal buttons** (Cody's Zonk Knuckle, SFV): already `Release` with `MinHeldFrames`; gap: button slots in the
+  charge tracker so other presses cannot shorten the charge; several buttons together = question CB.1 ([input.md](input.md) §10).
+- (10:26) Consider how the **EX Zonk** works: two punches held and released together, EX meter, falls through to the plain Zonk
+  without meter; plain Zonk on any punch with three levels by hold time. Spec: `ReleaseChord`, `AlsoButtons`, level bands, button
+  slots ([input.md](input.md) §10).
+- (10:28) Confirmed: EX Zonk = two buttons together; that is the edge case to cover.
+
+## 6k. Zones of objects one player activates (owner brainstorm, 2026-10-26 09:52)
+
+- Mario 3D Land's red and blue panels that flip on jump, as the first case of a reusable activation mechanism for different objects.
+- Multiplayer idea: grouped panels react only to the jumps of the first player who stepped on them and take that player's colour; a
+  short delay before they flip lets the others react. Spec: [level-activation.md](level-activation.md), questions FLP.1–FLP.6.
+- Drill screw switches (turn by spin direction) and Mario Bros Wii knobs go to the spin and drill thread; they can be activators with
+  a spin trigger.
+- (09:58) What matters is the **generic base**: a zone of objects activated by one player's action, and only by that player. The owner
+  builds the panels by hand on top of it. (09:59–10:00) Example: the New Super Mario Bros. Wii platform that only Mario can control and
+  that shows Mario's red. Spec: zones with an owner (first to stand, first to enter, standing now, or assigned at start), owner colour,
+  generic C++ responses (collision, track, rotation), no finished objects in the plugin.
+- (10:08, spin and drill thread) Screws on **mechanical enemies** that, once unscrewed, remove a high-hardness armour part above them.
+  Spec: the screw is a part turned by spin and drill hits with the right sense; the armour is held by its screws and breaks whatever
+  its hardness ([combat-parts.md](combat-parts.md) §3.4, plan P19).
+- (10:13) FLP.1: when a zone is released is the **designer's choice**; FLP.2–FLP.6: the proposals are accepted.
+
+## 6l. Gravity volumes, Super Mario Galaxy style (owner request, 2026-10-26 17:21)
+
+- Volumes where gravity changes, as in Mario Galaxy: planets, flipped and sideways areas, and so on. Builds on §2d (up is always the
+  opposite of local gravity). Spec: [gravity-volumes.md](gravity-volumes.md) (plugin `GSTNGravity`): fields with a region and a pull
+  rule (directional, point, line, ring, box, spline, zero), priorities, gravity as a pure function of position and frame computed in
+  the simulation every frame, smooth turning only in presentation; questions GRV.1–GRV.4.
+- (20:54) GRV.1 yes (model 720°/s, camera 90°/s); GRV.2 "Galaxy": outside every field the last gravity stays; GRV.3 enemies on
+  round planets low priority. (20:56) GRV.4: a crate should be a throwable object, so pick-up/throwable objects (M10) follow the
+  field in the simulation; only debris, fragments and decoration are visual.
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -240,6 +327,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 | Crystal shattering, flying chips and limbs | new spec combat-parts.md (presentation side), M4 hit presentation |
 | Kit-dependent dodge and shield; base dodge = long jump / dive with foot-only invincibility; air dive roll | M3 movement abilities (kit data), M4 dodges, M6 shield |
 | §6d: two PvE modes (designer levels, procedural expedition with missions); kit = stats, weapon = moveset; mid-match kit pickup; support weapons inherit kit stats; mods (cosmetic + moveset/specials); special swapping; implants; backpacks on the implant connector; depth marker; everything a pluggable ability | new specs [combat-loadout-mods.md](combat-loadout-mods.md) (M11), [game-modes.md](game-modes.md) (M12–M13), [depth-marker.md](depth-marker.md); M3 seams (loadout extensions, compile extension, mid-match apply); M4 hit data scalable by mods; M5 mod preview and validation; M6 interact probe (possible `GSTNInteract` plugin); [modularity-and-tags.md](modularity-and-tags.md) §1.1 goal 9, §3.6, §3.10, §4.2 |
+| §6i: demolition force; input-driven hitbox variation; keyboard spin shortcut; world occlusion with a pass radius and hurtbox openings; drill as hit-grab | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [combat-parts.md](combat-parts.md) §3.4; [combat-m6-defence-links.md](combat-m6-defence-links.md) link tags; [input.md](input.md) §9; plans H14–H16, P18; questions DEM, HV, KB, COL |
+| §6h: per-player crystal colour; god rays from the character; fog that receives the shadow | [combat-parts.md](combat-parts.md) §6.0; [depth-marker.md](depth-marker.md) §2.7, §4.1, §4.4; questions CR.1–CR.5 |
 | §6f: lives pool and restart point per level; pointing with the character; Astro Bot free camera; Tekken-style PvP camera; scope zoom overlay | [game-modes.md](game-modes.md) §5, §8.1; [interaction.md](interaction.md) §2.1; [camera.md](camera.md) §2.4, §2.5, §6.1 |
 | §6e: interaction focus on what the player points at; depth marker above and below the last platform; far camera with shoulder aim and designer-set angles; shared lives, no revive; Expedition low priority | new [interaction.md](interaction.md) (`GSTNInteract`, replaces the probe part of M6 §8); [depth-marker.md](depth-marker.md) §2.7; new [camera.md](camera.md) (`GSTNCamera`); [game-modes.md](game-modes.md) §5, §6.2, §9.3 |
 | §2h: hardness → damage, stagger resistance → hitstun, weight → knockback strength; weight drops with damage; standard logic | M4 §3 (`WeightDriven` model, three-dials table, standard `HealthWeight`, standard rules asset thresholds), [combat-parts.md](combat-parts.md) §3.4 (bands on damage only), §4.1, M8 §3 |
@@ -480,3 +569,114 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > attack disponibili potrebbero essere 0 o quanti interessa a designer a seconda del moveset. Quindi di base, Niente tech.
 
 > Ci si rialza quando si preme salto comunque. (16:23)
+
+### Message of 2026-10-24, 00:58 (verbatim)
+
+> Avevo l'idea di far partire dei god rays dal personaggio (anche dato che i personaggi sono in pratica degli umani solo fuori, dentro
+> sono di cristallo, inoltre non ho detto ancora nelle spec che vorrei che a seconda del giocatore, il cristallo dentro fosse di colore
+> diverso).
+>
+> Oltre alla solita ombra  alla mario, o magari della nebbia su cui far cadere l'ombra.
+
+> il colore dipende da chi è giocatore 1, 2, 3, 4, etc... Giocatore 1 è rosso, 2 è blu, 3 è giallo, 4 è verde. L'ordine forse è meglio
+> deciderlo in base all'ordine alfabetico del nome, in modo che se 4 amici giocano sempre insieme, hanno sempre lo stesso colore. (01:08)
+
+### Messages of 2026-10-25, 19:22 and 19:26 (verbatim, from the spin and drill thread)
+
+> Allora. Il trapano può muoversi limitatamente a destra e sinistra durante la discesa. Se si lascia il tasto per abbassarsi prima della
+> durata massima (potrebbe cambiare a secondo di ciò che colpiamo), si fa il saltino fuori. Se si preme il tasto di salto o si tiene
+> premuto (all’incirca quando si sta per uscire dal drill) il salto è più alto.
+>
+> Il drill non è invincibile di default. I giocatori sono drillabili (è una hitgrab in pratica). Cosa è drillabile o no penso dipende da
+> bilanciamento. Per esempio penetrazione armatura pesante?
+>
+> Mi sono forse scordato nelle specifiche di aggiungere la forza di demolizione come caratteristica di helldivers 2( alcuni oggetti
+> possono esssere distrutti solo da tot forza di demolizione, generalmente non si applica ai nemici, ma solo a prop e mesh).
+>
+> Inoltre si apre la porta ad attacchi le cui hitbox cambiano a seconda di altri fattori (e.g. swing di spada verticale che diventa
+> diagonale a destra/sinistra man mano che si tiene premuto lo stick in una direzione).
+>
+> Per quanto riguarda lo spin su tastiera, probabilmente introdurrò una shortcut del tipo ASD saltando la W.
+>
+> Probabilmente queste specifiche dovrebbero essere inviate a un thread di pianificazione, e si dovrebbe riprendere con la progettazione
+> di abilità individuali alla fine.
+
+> Altri problemi a cui ho pensato: accortezza sulla differenza tra collisioni per il movimento e collisioni per le hitbox di base
+> dovrebbero essere già separate per come abbiamo pianificato. Ma ci potrebbero essere casi limite come: proiettili stile sparatutto e
+> collisioni complesse (buchi dove il personaggio non passa e neanche le hitbox più ingombranti, i proiettili si) oppure buchi dove il
+> personaggio non passa, ma le hitbox si (caso buco cavo a penetrazione media dentro una gamba di un nemico a penetrazione pesante)
+
+> Una cosa: abbiamo preso in considerazione nei piani attacchi la cui animazione cambia a seconda degli input nel tempo (Rotazione
+> attacco in aria in alcuni casi, variazione attacco etc…), e hitbox interpolation? (Sta nei platform fighter) (19:39)
+
+> Di base pensavo che ci sono mosse dove durante il loro startup si puo limitatamente girare il personaggio di alcuni gradi, alcune dove si
+> puo camminare durante lo startup etc... cambia a seconda della mossa. Un esempio è uno swing vertical in aria. L'input iniziale decide la
+> direzione, magari si puo cambiare limitatamente l'angolazione durante la prima parte dello startup, e durante lo swing si puo farlo andare
+> in diagonale a destra o sinistra. (In genere durante le mosse in aria ci si puo muovere ma non girarsi, eccetto fare queste piccole
+> correzioni, che potrebero cambiare a seconda della mossa). (19:56)
+
+> Potrebbe anche essere possibile rotazione completa, entro certi gradi per secondo, oppure movimento completo durante i frame attivi.
+> Dipende dalla mossa. Ma un esempio ben piu comune sarebbe probabilmente quello dello swing verticale. (19:57)
+
+> un'ultima cosa: ho notato che il sistema di penetrazione etc... basato su parti funziona bene nel 99% dei casi. Pero potrebbe esserci un
+> caso limite nel caso di alcune abilità. Mettiamo caso un'abilità che puo indurre una ferita in un punto diciamo per abassarne la
+> "durezza". Penso che il sistema a parti vada bene anche in quel caso, basterebbe aggiungere una hurtbox a penetrazione inferiore che ha la
+> priorità sull'hurtbox della parte normale. E maagari la mesh riflette cio. non ha chissà che priorità, ma ci si potrebbe pensare. (23:16)
+
+> Beh, ma se voglio che l'abilità decida dove porre la ferita? (23:18)
+
+> Per quanto riguarda qualcosa come l'addome di un charger di helldivers? Ossia sopra ha durezza media, sotto leggere, ma distruggere una
+> delle due distrugge tutto l'addome. (23:21)
+
+### Message of 2026-10-26, 09:47 (verbatim)
+
+> Un’altra cosa. Non abbiamo considerato gli input a carica alla Guile di street fighter. In teoria però basterebbe aggiungere un tag o
+> qualcosa quando si preme il tasto per abbassarsi ad esempio e quando si lascia si leva? Poi un’abilità lo usa? Dovrebbe funzionare bene
+> già così, no?
+
+> Allora, farei che la carica indietro funziona in 3d, basta far mantenere la carica entro una certa limitazione dei gradi dello stick. (09:53)
+
+> Inoltre si potrebbero avere mosse che hanno hitbox all’indietro. Invece che in avanti. A tal fine. (09:54)
+
+### Message of 2026-10-26, 09:52 (verbatim)
+
+> Per quanto riguarda la trivella predico già che ci sarà qualche interruttore a “vite” dove si svita o avvita una vite in base alla
+> direzione dello spin. Oppure dove si fa girare una manopola che non si svita (Mario bros Wii).
+>
+> Un’altra cosa sarebbero le piattaforme rosse e blu di Mario 3d land. Volevo vedere come usare cose come il salto per attivare degli
+> oggetti funzionerebbe. Magari ci sono alcune zone di queste piattaforme raggruppate che reagiscono solo al salto del primo che ci è salito
+> per la prima volta, e assumono il colore del giocatore corrispondente, in modo da evitare che più giocatori saltino insieme e muovano
+> troppo quelle piattaforme. Questa è un’idea. Magari possono avere un piccolo delay prima di cambiare lato, in modo da permettere agli altri
+> giocatori di avere tempo di saltare su reazione.
+> Più brain-storming che altro, e questo metodo di attivazione potrebbe essere usato per oggetti differenti.
+>
+> Per le piattaforme intendevo una zona di oggetti generica che sono attivabili attraverso un azione di un giocatore e solo da un giocatore.
+> Le piattaforme le implemento a mano poi. L'importante è la base per implementarle. (09:58)
+>
+> Un esempio è [screenshot of New Super Mario Bros. Wii: a girder platform with Mario's emblem] (09:59)
+>
+> La piattaforma te l'ho data per darti l'idea del fatto che può essere controllata solo da Mario, e assume il colore rosso di Mario. (10:00)
+>
+> Flp 1 è deciso dal designer. Le altre domande hanno già un'ottima risposta. (10:13)
+>
+> Beh si penso vada bene. Forse 90 al secondo è troppo veloce per alcune cose. (10:23, CH.4)
+>
+> Comunque abbiamo preso in considerazione la possibilità di caricare anche la pressione dei tasti normali? Esempio: Zonk di Cody sf5 (10:25)
+>
+> Considera anche come L'EX zonk funziona (10:26)
+>
+> Funziona con 2 tasti insieme. È quello bene o male un caso limite (10:28)
+>
+> Comunque aggiungi alle specifiche volumi dove la gravità cambia alla Mario galaxy. (17:21)
+>
+> non ho capito il 4. 1. si 3. Low priority 2. Galaxy (20:54)
+>
+> che intendi per "cassa"? Non dovrebbe essere un oggetto lanciabile? (20:56)
+
+> Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
+> mooolto lentamente per non perdere la carica (09:55)
+>
+> Comunque con lo stesso metodo potrebbero benissimo colpire in avanti, basta che il personaggio si giri subito dopo. Dipende penso
+> dall'abilità. (09:55)
+>
+> Ch2 va bene. Ch3 e ch1 puoi inferirli da quello che ho appena detto (09:56)

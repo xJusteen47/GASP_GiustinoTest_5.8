@@ -78,7 +78,7 @@ struct FGSTN_MoveOrigin
  * Wire format (inside the action part, after the requests): 1 bit "hit part live"; then 8 bits of presence (move origin, targets,
  * confirm flags, hitstun end, impact end, pending launch, SDI, impact profile), 2 bits of pending reaction, and the blocks that are present.
  */
-struct FGSTN_HitSyncState
+struct GSTNCOMBATNP_API FGSTN_HitSyncState
 {
 	static constexpr int32 MaxHitTargets = 8;
 

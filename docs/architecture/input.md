@@ -345,3 +345,105 @@ Redirects (added in S2a in `Config/DefaultEngine.ini`; now in the input plugin's
 
 Tools: `setup_gas_assets.py` and `gasnpp_test.py` keep `GSTN_CombatSimComponent` (the class stays); the input config
 asset is created by the setup script; testing.md lists the new test prefixes.
+
+## 9. Planned: keyboard shortcuts for stick gestures (owner, 2026-10-25)
+
+Owner idea: on keyboard the spin, a stick rotation, gets a **shortcut such as A-S-D without W**, a partial rotation that is easy to
+roll with three fingers. *Proposal*, not built:
+
+- The `Spin` condition already counts rotation in degrees with a sense. A slot gains `DigitalMinDegrees` (default: its normal
+  threshold), used when the direction samples in the window came from **digital** directions. A-S-D is left, down, right: 180°
+  counterclockwise seen from above with forward at the top. D-S-A is the clockwise one. Eight-way samples (A, A+S, S, S+D, D) feed
+  the same accumulator.
+- The input source writes one bit per frame, `bDigitalDirection`, from the device that last changed the direction (keyboard or
+  d-pad). The bit is part of the input frame, so history, prediction and rollback see the same value on every machine; the
+  simulation never asks which device is plugged in.
+- The same per-slot threshold serves other gestures that are hard on keys. A dedicated spin button stays possible
+  ([spin-drill.md](spin-drill.md) §5).
+- Questions KB.1–KB.2 in [open-questions-m4-m10.md](open-questions-m4-m10.md).
+
+## 10. Charge inputs, Guile style (owner question, 2026-10-26)
+
+The owner asked whether a tag added on crouch press and removed on release, read by an ability, is enough for Street Fighter charge
+moves. **The plugin already has it, in a better place**: `FGSTN_InputCondition_Charge` (`GSTNInputCore`, test `ConditionCharge`) reads
+the **input history**, which is part of the predicted state, so a resimulation after a rollback gets the same answer. A tag alone has
+no duration, and a tag derived from Mover's crouch would be seen one frame late and is a Mover query (CLAUDE.md rules 1 and 5).
+
+What the condition does today:
+- `Directions`: a **set** of directions that all count as charging (for example back and down-back), in a chosen `Space`
+  (`Facing` by default).
+- `MinFrames` (default 30): how long the stick must stay inside the set. Standard charge moves use **40 frames** (about 0.65 s) and
+  `MaxReleaseFrames` 8, set per move (owner answer CH.2, 2026-10-26).
+- `MaxReleaseFrames` (default 8): the **tolerance after release**: the stick may have left the set at most this many frames before the
+  move's anchor, so "charge back, then forward + punch" works.
+- `MinZone`: how far the stick must be tilted to count.
+- A charged **button** is `Release` with `MinHeldFrames`; a move that loops while a button is held is the timeline's `Charge` track.
+- Charging is input only, so it continues while the character walks, crouches, blocks or attacks, as in Street Fighter.
+
+Gaps, *Proposal*:
+1. **The history keeps the last 16 direction events** (`FGSTN_InputHistory::MaxEvents`). A new event is recorded whenever the stick
+   sector, the zone, the facing or the camera yaw changes the stick's direction, so a charge held while the camera turns, or while
+   the stick wobbles between back and down-back, can push the start of the run out of the ring: the charge then looks shorter than it
+   was and the move fails. Fix: a small **charge tracker** in the input state of `GSTNInputNP`. For each charge slot declared by the
+   command set (at most 4), it keeps `uint8 AnchorAngle` (256 steps, item 2), `uint8 HeldFrames` (saturating at 255) and
+   `uint8 FramesSinceRelease`, updated every frame from the current stick. It is part of the predicted input state, so rollback
+   replays it; cost 12 bytes. The `Charge` condition reads the tracker when its slot is declared and falls back to the event scan
+   otherwise.
+2. **"Back" in 3D (owner answer CH.1, 2026-10-26 09:53)**: the back-charge works in 3D; the charge holds **as long as the stick stays
+   within a limited angle**. In free movement the character turns towards the stick, so "back relative to facing" cannot be held;
+   instead the charge is relative to **where it started**. *Proposal*: a new space `EGSTN_DirectionSpace::ChargeAnchor`. When the stick
+   enters the tilt zone with no charge running, the tracker stores the stick's angle in `Stick` space (the physical stick, so a camera
+   turn does not break the charge) as `AnchorAngle`. The charge keeps counting while the stick stays within `MaxDeviationDeg` of the
+   anchor (50°, per slot, owner answer CH.4); past it the charge restarts with a new anchor. **The anchor drifts with time**
+   (owner, 09:55): each frame it moves towards the stick by at most `AnchorDriftDegPerSecond` (default **45°/s**, a full turn in 8 s;
+   per slot, 0 = no drift; owner CH.4 10:23: 90°/s is too fast for some moves, so a move that needs another rate declares its own
+   slot), so a
+   stick turned very slowly keeps the charge, even through a full 360°, while a quick turn breaks it. The release reads the anchor
+   of the frame it happens on. The release step of the move reads
+   its direction in the same space: "forward" means **opposite to the anchor** within its own tolerance, so "hold one way, then push
+   the other way + punch" fires the move towards the push. Where facing is locked (the Duel camera, a lock-on) the classic `Facing`
+   set (back and down-back) keeps working. Down-charges (crouch held) need neither.
+   **Which way the move faces (owner, 09:54)**: while charging, the character usually faces the charge direction, so a move may also
+   have its **hitboxes behind** the character instead of in front. That is the timeline's choice, not the input's: `AimPolicy =
+   KeepFacing` with hitboxes authored behind the root (negative X in `Root` space) hits towards the push without turning;
+   `SnapToStick` turns towards the push and hits forward (owner, 09:55: "it depends on the ability"). Both are data on the move
+   (combat.md §6.3, `AimPolicy`).
+3. **Side switches (CH.3, inferred from the owner's answers, 2026-10-26 09:56)**: standard charge moves use `ChargeAnchor` in the
+   duel too, so the charge does not depend on facing and a cross-up does not erase it. The move still fires opposite to the anchor;
+   whether it then turns towards the opponent is the move's aim policy, like any other charge move. A move that wants the Street
+   Fighter rule (charge lost on a side switch) uses the `Facing` set instead; that is data on the command.
+
+**Charged buttons (owner question, 2026-10-26 10:25 and 10:26; Cody's Zonk Knuckle and EX Zonk Knuckle)**: hold a normal attack
+button for a while, release it to fire the special. Reference behaviour (Street Fighter IV data; Street Fighter V keeps the idea):
+the plain Zonk charges on **any one punch** and has **three levels by hold time** (about 60, 90 and 120 frames: more damage and a
+longer upper-body invulnerability); the **EX Zonk** charges on **two punches held together**, released together, about 60 frames,
+costs EX meter, hits twice and is fully invulnerable during startup.
+
+What exists today: `FGSTN_InputCondition_Release` with `MinHeldFrames` (the negative edge; `MaxHeldFrames` gives the tap slot on the
+same button, and a tap slot and a hold slot never match the same release). The release does not need an unconsumed press, so the
+press can fire a normal attack and the hold keeps charging through other moves, walking or blocking, as in Street Fighter. A release
+during another move is buffered like any command. The EX meter fall-through already exists in the resolver (M3 C17–C18): without
+meter, a command marked EX falls through to its plain version. Gaps, *Proposal*:
+1. **The 16-event button ring**: if the press of the held button drops out of the ring, `Release` counts the hold as longer than the
+   history (`MAX_int32`), which is right for a long hold but wrong when the press was pushed out early by **other button presses**:
+   eight presses and releases of other buttons while charging push it out, and a 120-frame charge could fire after 30 frames. Fix:
+   the charge tracker of gap 1 gets **button slots**: `uint8 HeldFrames` (saturating at 255, about 4 s) of the current press, one byte
+   per declared button, up to 4 (so the three punches of a Zonk character fit next to its stick slots; tracker 12 + 4 = 16 bytes),
+   predicted and rolled back. `Release`, `Hold` and the chord below read the slot when the button has one, and keep the event scan
+   otherwise. Each button charges on its own, so releasing one of two held punches fires the plain Zonk and the other keeps charging.
+2. **Any one of several buttons**: `Release` gets an optional `AlsoButtons` set (any one of them counts; the default stays one
+   button), so one command covers "any punch" instead of three slots.
+3. **Charge levels by hold time**: one command per level with `MinHeldFrames`/`MaxHeldFrames` bands (60–89, 90–119, 120+), each
+   pointing at its own timeline or at one timeline with level data. The bands never overlap, so one release matches one level.
+4. **EX: several buttons released together** (owner, 10:26): a new `ReleaseChord` condition, the mirror of `Chord`: every listed
+   button (or any `Count` of a set, for "two of the three punches") released within `WithinFrames` (default 3) of each other, each held
+   at least `MinHeldFrames`. Anchor = the newest release. Specificity 10 per button, so the EX chord (20) wins over a plain `Release`
+   (10) on the same frames, as `Chord` does for presses. The EX command is marked EX, so without meter it falls through to the plain
+   Zonk of the level the hold reached. Releases are never consumed, so the plain `Release` slots must not fire on the same
+   releases: the resolver's existing one-activation-per-frame rule handles the same frame, and the plain slot's `MaxReleaseLagFrames`
+   (new, default 0) stops it from firing a frame later from the second button of the chord.
+5. **"Charge ready" feedback** (a flash per level): presentation reads the slots' `HeldFrames`; no simulation change.
+6. The charge stays ready as long as the button is held (no automatic release). A move that fires by itself after a maximum hold uses
+   a `Hold` condition with that `MinFrames` instead, or the timeline's `Charge` track (loop while held, Smash style).
+
+Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); all answered. CB.1 answered (two-button release needed for EX).

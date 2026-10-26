@@ -219,5 +219,4 @@ many-enemies-replication.md §4 (PL), traversal-surfaces.md §4 (TS), modularity
   `launch_to_grab` 3 unexplained reconciles each (Mover 2, ASC 1), the client refused the grab (height cap) and was put on the wall by the correction (relative drift -48 / +62 cm).
   After: 6/6 pass, client `launch_to_grab` 1 unexplained per rep (the harness's own dual-teleport correction, the same as rep 0 before), `on` 0, host 0; 4 of 18 grabs logged
   `memReset=1 (mode (record lost to a rollback))`, i.e. the inference fired exactly where the old rule diverged.
-- **Not run (paused by the owner 2026-10-25):** the scenario at 2 % loss, `wall_ab.py --lanes "^h_" --modes WallSlidingV2` (moving lanes) and the standard v2 wall scenarios on
-  `DefaultLevel_Harness` (jump at the wall, re-grab after landing, `force_reconcile_on_mode`); wall-slide-v2.md has no 6.15 section yet.
+- **Network checks completed 2026-10-26:** the scenario at 2 % loss, the moving lanes (`wall_ab.py --lanes "^h_"`) and the standard v2 wall scenarios at 0 % and 2 %; numbers in wall-slide-v2.md 6.15.

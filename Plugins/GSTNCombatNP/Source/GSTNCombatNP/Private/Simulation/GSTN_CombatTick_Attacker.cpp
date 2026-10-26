@@ -244,8 +244,27 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 					Overlapped.Add(HurtIndex);
 				}
 			}
-			const int32 Picked = UGSTN_HitShapeUtils::PickHurtboxIndex(Overlapped, Hurtboxes);
-			if (Picked == INDEX_NONE)
+			// The extras of the snapshot (a shield bubble) are tested like the body; they have no hurt state, so nothing makes them intangible
+			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
+			{
+				const FGSTN_HitShape& ExtraShape = Victim.ExtraHurtboxes[ExtraPosition].Shape;
+				const bool bTouches = Spec.bSweepBetweenFrames
+					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, ExtraShape, Victim.Transform)
+					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, ExtraShape, Victim.Transform);
+				if (bTouches)
+				{
+					Overlapped.Add(GSTNHurtboxIndex::FromExtraPosition(ExtraPosition));
+				}
+			}
+			if (Overlapped.IsEmpty())
+			{
+				continue;
+			}
+			// The hit with the variant applied: its type decides which extras let it through, so it is resolved before the pick
+			const FGSTN_HitData VariantHit = Variant ? UGSTN_HitDataUtils::ApplyVariant(Spec.Data, *Variant) : Spec.Data;
+			const int32 Picked = UGSTN_HitShapeUtils::PickHurtboxIndex(Overlapped, Hurtboxes, Victim.ExtraHurtboxes, VariantHit.HitType);
+			const FGSTN_HitShape* PickedShape = Victim.FindHurtboxShape(Picked);
+			if (Picked == INDEX_NONE || !PickedShape)
 			{
 				continue;
 			}
@@ -254,12 +273,12 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			Candidate.EntryIndex = EntryIndex;
 			Candidate.HitboxIndex = HitboxIndex;
 			Candidate.Spec = &Spec;
-			Candidate.Hit = Variant ? UGSTN_HitDataUtils::ApplyVariant(Spec.Data, *Variant) : Spec.Data;
+			Candidate.Hit = VariantHit;
 			Candidate.Relationship = Relationship;
 			Candidate.HurtboxIndex = Picked;
 			Candidate.HurtState = Victim.HurtStates.IsValidIndex(Picked) ? Victim.HurtStates[Picked].State : EGSTN_HurtState::Normal;
 			Candidate.HitboxCenter = HitboxCenter;
-			Candidate.HitLocation = (HitboxCenter + ShapeCenter(Hurtboxes[Picked].Shape, Victim.Transform)) * 0.5;
+			Candidate.HitLocation = (HitboxCenter + ShapeCenter(*PickedShape, Victim.Transform)) * 0.5;
 			Candidate.HitboxVelocity = HitboxVelocity;
 
 			bool bReplaced = false;
@@ -315,7 +334,8 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		Incoming.Relationship = Candidate.Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Candidate.Relationship;
 		Incoming.Up = In.Up;
 		Incoming.AttackerFacing = AttackerFacing;
-		const FVector VictimCenter = ShapeCenter(Victim.Hurtboxes->Hurtboxes[Candidate.HurtboxIndex].Shape, Victim.Transform);
+		const FGSTN_HitShape* VictimShape = Victim.FindHurtboxShape(Candidate.HurtboxIndex);
+		const FVector VictimCenter = VictimShape ? ShapeCenter(*VictimShape, Victim.Transform) : Victim.Transform.GetLocation();
 		Incoming.HitboxToVictim = (VictimCenter - Candidate.HitboxCenter).GetSafeNormal(UE_SMALL_NUMBER, AttackerFacing);
 		Incoming.HitboxVelocity = Candidate.HitboxVelocity;
 		// The snapshot does not say whether the victim stands on something; only a Sakurai angle reads it, and the authority recomputes it

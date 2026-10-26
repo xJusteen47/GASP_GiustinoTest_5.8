@@ -29,6 +29,9 @@ struct GSTNPARTSCORE_API FGSTN_PartHitInput
 	/** Penetration tier compared with the part's hardness */
 	int32 Penetration = 0;
 
+	/** The hit's damage against the depth of the part (Thickness). Negative = Damage */
+	float DeepDamage = -1.f;
+
 	/** The hit's own multiplier of the damage that goes to the part */
 	float PartDamageScale = 1.f;
 

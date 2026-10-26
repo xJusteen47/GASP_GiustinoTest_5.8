@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Hits/GSTN_HitExtensions.h"
 #include "GSTN_PartHitData.generated.h"
 
 /** Switches of a hit's part data (combat-parts.md §3.2) */
@@ -24,12 +25,12 @@ ENUM_CLASS_FLAGS(EGSTN_PartHitFlags);
  *
  * There is no stagger field: the stagger force is the hit's own, one source of truth that also works without parts.
  *
- * Intended to be an entry of the hit data's extension array (a struct derived from the hit extension base of the hit pipeline).
- * That base is not declared yet, so this struct stands alone until the pipeline step arrives; adding the base is a source-level
- * change that keeps assets loading.
+ * An entry of the hit data's extension array (FGSTN_HitData::ExtensionData): it derives from the hit extension base of the hit
+ * pipeline, so the combat core carries it, a relationship variant can replace it by struct type, and the part resolve step finds it
+ * by type.
  */
 USTRUCT(BlueprintType)
-struct GSTNPARTSCORE_API FGSTN_PartHitData
+struct GSTNPARTSCORE_API FGSTN_PartHitData : public FGSTN_HitExtension
 {
 	GENERATED_BODY()
 
@@ -40,6 +41,13 @@ struct GSTNPARTSCORE_API FGSTN_PartHitData
 	/** Multiplier of the damage that goes to the part */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Part Hit", meta = (ClampMin = 0))
 	float PartDamageScale = 1.f;
+
+	/**
+	 * Damage this hit deals to a part's depth (the part's Thickness), as a damage value like the hit's own. Negative = the hit's Damage, so a
+	 * hit that never sets it is unchanged whatever the thickness. A piercing tip sets a high one; a blunt blow a low one
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Part Hit")
+	float DeepDamage = -1.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Part Hit", meta = (Bitmask, BitmaskEnum = "/Script/GSTNPartsCore.EGSTN_PartHitFlags"))
 	uint8 Flags = 0;

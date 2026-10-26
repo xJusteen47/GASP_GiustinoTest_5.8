@@ -185,6 +185,70 @@ The victim gets only the spark cue and the `Combat.Event.Part.Ricochet` event. T
 hardness decides damage, not hitstun (owner, 2026-10-22, 11:20; M4 §3 three dials), and a designer may lower it so a hit that barely
 penetrates staggers less. A table with fewer bands is valid; an empty band set is a validation error.
 
+**Drill and demolition (owner, 2026-10-25).** What a drill can bore is a balance question, not a flag: the drill's tip hit carries
+a penetration like any hit, so a part is drillable when penetration reaches its hardness (heavy armour refuses a weak drill, which
+bounces off). Players are drillable; the latch is a hit-grab and becomes an M6 link (`Combat.Link.Type.Drill`). Details:
+[spin-drill.md](spin-drill.md) §13b. Demolition force (combat-m4-hits.md §7c) is for props and level meshes; parts use it only when
+they opt in.
+
+**Hollow parts behind armour (owner, 2026-10-25 19:26).** A medium-hardness cavity inside a heavy-armour leg must be reached only
+through its hole: a bulky swing that overlaps the leg from outside would otherwise also overlap the cavity inside it, pick it by
+`Priority` and hit soft material through the armour. The cavity hurtbox gets an **opening** (a mouth shape plus the largest pass
+radius that fits), and only a hitbox that overlaps the mouth and fits counts on it; everything else falls to the armour. Rule and
+types: [combat-m4-hits.md](combat-m4-hits.md) §9c B (M4b checkpoint P18).
+
+**One part, several hardnesses (owner, 2026-10-25 23:21; the Helldivers 2 charger's abdomen).** Medium hardness on top, light
+underneath, and destroying either side destroys the whole abdomen. Model: **one part** (one damage pool, one `PartCap`, one break)
+with several hurtboxes mapped to it, plus an optional **per-hurtbox hardness override** in the part set
+(`TMap<FName, int32> HurtboxHardnessOverride` on `FGSTN_PartDefinition`, keyed by hurtbox name), which wins over the part's `Hardness`
+when set. `UGSTN_HitStep_PartResolve` already knows the hurtbox the hit chose, so it reads the override there. It is static data, so
+the attacker's ricochet prediction stays exact. A small extension of the P2 data, built in P14 or P18. Rejected: two linked parts
+with a group-break rule (two pools to keep in step and an extra rule for one shared break).
+
+**Wounds: an ability lowers the hardness where it hits (owner, 2026-10-25 23:16 and 23:18, low priority).** The owner wants the
+**ability to decide where** the wound goes. Two levels:
+1. **Per-part wound (default, recommended).** A new `uint16 WoundedMask` in the parts fragment (+2 B) and a per-part
+   `WoundedHardness` in `FGSTN_PartDefinition`. A hit whose data carries `FGSTN_PartBreakEffect_Wound` sets the bit of **the part that
+   hit chose** (from the inbox entry's `HurtboxIndex`, §3.4); while the bit is on, `UGSTN_HitStep_PartResolve` uses `WoundedHardness`
+   instead of `Hardness`. The bit replicates like `BrokenMask`, so the attacker's ricochet prediction stays exact, and the part's
+   skin material reads it to show the wound (§6.1). A designer who wants a precise weak spot authors it as a small part with a
+   higher `Priority` and a low `WoundedHardness`: the ability wounds it only when the hit lands on it.
+2. **Free-position wound (extension, only if an ability needs it).** A few fixed slots per entity of **dynamic hurtboxes**
+   (`{ uint8 BoneIndex; int16 LocalOffset[3] (quantised); uint8 RadiusCm; uint8 PartIndex; }`, about 6–8 B each), written by the
+   applier at F+1 from the hit's impact point, with the highest `Priority` in part choice and the wounded hardness of their part. It
+   needs hurtbox states in the lag-compensation history and a cost estimate (wire per slot, overlap tests per hit) before it is built.
+
+Closing a wound (time, heal, never) is open. Minions: not in v1 (their wire carries only the broken mask, §5.5). Both levels need
+**hurtbox states in the lag-compensation history** (open residue of P7 part 1, handover item 40), so a rewound hit sees whether a
+part was wounded at that frame.
+
+**Screws and bolts on mechanical enemies (owner, 2026-10-26 10:08).** Some mechanical enemies carry screws or bolts that, once
+unscrewed by a spin or a drill, remove a **high-hardness armour part** above them: a way past armour that weapons cannot penetrate.
+*Proposal*: the screw is a **part** of the enemy, turned by hits, and the armour is **held by** it. Everything stays inside the parts
+simulation, so it is predicted, lag-compensated and rollback-safe like any other hit, and it needs no seam D-1.
+1. **Turning**: an optional `FGSTN_PartScrewRule Screw` on `FGSTN_PartDefinition`:
+   `{ bool bEnabled = false; int8 LoosenSense = -1; uint8 TurnsToRelease = 8; bool bOppositeTightens = true; }`. A hit on a screw part
+   whose `FGSTN_HitData::TurnSense` (combat-m4-hits.md, added 2026-10-26: −1, 0 or +1, seen from above along the attacker's up axis,
+   the same convention as the activation triggers) equals `LoosenSense` moves the screw out by `TurnSteps`; the opposite sense moves
+   it back in when `bOppositeTightens`. Hits without a sense do nothing to the screw (they still deal main damage through
+   `MainTransfer`, and the screw's `Hardness` still decides ricochets). Turning ignores hardness: that is the point.
+2. **State, no new bytes**: the screw's progress is its existing `PartDamage[i]` byte. A turning hit adds
+   `ceil(255 × TurnSteps / TurnsToRelease)` (or subtracts it, never below 0); at 255 the screw part **breaks** like any part, with
+   its own `OnBreak` (the screw falls off: presentation, §6.2). A latched drill turns it on every re-hit (spin-drill seam S1), a spin
+   once per hit.
+3. **Armour held by screws**: `TArray<FName> HeldBy` and `EGSTN_HeldByRule HeldByRule = AllBroken` (or `AnyBroken`) on
+   `FGSTN_PartDefinition`. When the rule becomes true, the part breaks **in the same frame**, in the same deterministic pass that
+   breaks children (`ParentIndex`, by index), **whatever its `Hardness` and even with `PartCap <= 0`** (an unbreakable plate). Its own
+   `OnBreak` runs: detach the plate's bones (presentation), `DisableHurtbox` to expose the soft part underneath, tags, stats.
+   `ParentIndex` alone is not enough: a plate held by four screws has four holders, and the plate keeps its own parent.
+4. **Costs and limits**: every screw is a part, so a plate with four screws uses five of the 16 parts (bosses with more parts: §8.5
+   open item). Minions are not in v1 (their wire carries only the broken mask, §5.5); a minion screw would be a one-hit screw
+   (`TurnsToRelease = 1`). The screw's mesh turns and rises with its progress byte, presentation only (§6).
+5. **Rejected: an activation zone hosted on the enemy** ([level-activation.md](level-activation.md)). Zones are level objects with a
+   server-scheduled value and a delay; an enemy's armour lives in the predicted parts fragment, so a zone would add a second state
+   model on the same entity and a bridge writing into the simulation from outside it, plus zones on moving hosts. Level screws and
+   knobs stay activation zones; screws on enemies are parts. Both read the same spin sense convention.
+
 ### 3.5 Entity's own hitboxes while parts are broken
 
 The attacker side (M4 §6 step 1) asks the tick-extension point "before candidates" for a `HitGroupMask`; `GSTNPartsNP`
@@ -315,7 +379,7 @@ A `FGSTN_SyncFragment` (§5b) registered with a fixed type id from the central r
 carry **no fragment: zero bytes and no compare cost**.
 
 ```
-FGSTN_PartsFragment { uint16 BrokenMask; uint8 PartDamage[N]; uint8 BreakSerial (4 bits used); }
+FGSTN_PartsFragment { uint16 BrokenMask; uint8 PartDamage[N]; uint8 BreakSerial (4 bits used); uint16 WoundedMask (wounds, P18, planned); }
 ```
 
 `PartDamage[i]` = part damage / `PartCap` quantised to 8 bits (0 = pristine, 255 = at the cap). Rule: stored =
@@ -440,6 +504,41 @@ Minions are not NP actors (M8). The bridge plugin gives the minion store optiona
 All of it lives in `GSTNPartsPresentation`, driven from `FinalizeFrame`/events, with **no feedback into gameplay**: no
 collision with pawns, no gameplay hits, no input, nothing the simulation reads.
 
+### 6.0 Crystal body and per-player crystal colour (owner input, 2026-10-24)
+
+Characters are **human outside, crystal inside**, and **the inner crystal's colour differs per player**. The colour shows
+wherever the crystal shows: the exposed-crystal blend of §6.1, flakes, stump caps and chunks (§6.2), shatter pieces (§6.3), and
+the optional light styles of the depth marker (god rays, [depth-marker.md](depth-marker.md) §4.1).
+
+- **Source**: a palette data asset `UGSTN_CrystalPaletteDefinition` (per colour slot: crystal colour, emissive strength, a
+  pattern id for colour-blind players) and a **colour slot** per player, which is the player's number in the match.
+  **Owner decision (CR.1, 2026-10-24): player 1 is red, player 2 blue, player 3 yellow, player 4 green**; further slots are
+  designer entries in the palette. **Player numbers follow the alphabetical order of the players' names**, so a group of
+  friends who always play together always gets the same colours.
+- **Assigning the numbers** (*Proposal* for the details):
+  - The **host** sorts the players present when the match starts by display name, case-insensitive and culture-invariant,
+    ties broken by the unique net id. Only the host sorts, so every machine agrees whatever its language.
+  - The result is a replicated byte on each player state: ordinary property replication, never NP state, never read by the
+    simulation, so it has no rollback rules.
+  - A player who joins later takes the **first free number**; a player who leaves frees theirs. Numbers are never reshuffled
+    during a match, so nobody's colour changes mid-game.
+  - Red and green are the pair colour-blind players confuse most, so the palette's **pattern id** per slot stays (and the depth
+    marker's glyph, [depth-marker.md](depth-marker.md) §4.4).
+- **Coupling**: `UGSTN_PartsPresentationComponent` asks a **tint source** (an interface the project or the experience
+  implements) for the colour; without one it falls back to the palette by player index, so the plugin still works alone. The
+  depth marker reads the same colour through its own adapter (`GetTint`, [depth-marker.md](depth-marker.md) §4.4): neither plugin
+  depends on the other.
+- **Delivery**: one material for every character. The colour is set **once per character**, as a vector parameter on the dynamic
+  material instance that §6.1 already writes (or as custom primitive data); never one material per player. Pooled pieces
+  (flakes, chunks, shards) take the dying entity's colour when they spawn: Niagara particle colour or custom primitive data on
+  the chunk actor.
+- **Enemies and minions**: colour per enemy class (designer data on the presentation set); minions get it as per-instance
+  custom data from their type, with no wire bits.
+- **Damage glow** (*Proposal*, question CR.3): the crystal's emissive may grow with the §6.1 damage parameter, so a badly
+  damaged character leaks light through the cracks; the same value can drive the "rays from the cracks" variant of the god rays.
+- All of it is replaceable content (palette, material, Niagara) under §3.9 of [modularity-and-tags.md](modularity-and-tags.md).
+  Questions CR.1–CR.5 are in [open-questions-m4-m10.md](open-questions-m4-m10.md).
+
 ### 6.1 Damage inside a part: material only (diegetic health)
 
 Owner direction: inside a part, damage is **a material, a shader**, the diegetic way to show that part's health; nothing is
@@ -554,7 +653,10 @@ same projected tag drives the minion path (the store mask feeds the same functio
 - **Events/dedupe**: key `(EntityRef, PartIndex, BreakSerial)`; two entries in one drain are order independent.
 - **Presentation (Runtime)**: damage material follows the replicated value (also after a rollback), idempotent hidden-bone set from the mask, pool never exceeds the
   budget, recycle order.
-- **Validators**: duplicate hurtbox, parent cycle, mask > 16 (> 8 for minions), missing bone.
+- **Validators**: duplicate hurtbox, parent cycle, mask > 16 (> 8 for minions), missing bone, cycle through `HeldBy` and `ParentIndex`,
+  `HeldBy` naming the part itself.
+- **Screws (P19)**: `ScrewTurnsOnlyWithLoosenSense`, `OppositeSenseTightens`, `ScrewIgnoresHardnessAndOrdinaryDamage`,
+  `HeldByAllBrokenBreaksPlateSameFrame`, `HeldByIgnoresHardnessAndUnbreakableCap`, `RewoundTurnReadsProgressOfItsFrame`.
 
 ### 8.2 Harness scenarios (`Tools/GASNPPTest/parts_scenarios.py`, imports `gasnpp_test`; 60/15 ms, with and without 2 % loss)
 
@@ -597,6 +699,13 @@ Clean = state snapshots equal and no reconciles beyond the expected one per hit 
 - **Minion wire growth** if many minion types use parts: cap 8 parts, ext byte only for those types, measured in the bench.
 - **Host-only costs** (listen server): hit resolution, minions and presentation share the host's frame, and host upload limits clients; host advantage on instant breaks (§5.5b).
 - **Chunk and shard budget** on low-end clients and hosts: tier rules of §6.4, quality scalability settings.
+- **Open item: bosses with more than 16 parts** (owner question, 2026-10-25 23:08, Helldivers 2's swarm lord as the example). The cap
+  of §3 stays 16 (`uint16` mask). *Proposal*, intended path: **composition**. A multi-segment boss is several linked entities
+  (segments), each with its own part set and its own parts fragment. A segment's part hits transfer `MainDamage` to the boss's
+  shared main health instead of the segment's own pool (the transfer of §4.2 with a different target). Linking, the shared pool
+  and how segments move together sit with M8 ([combat-m8-minions.md](combat-m8-minions.md) §15). A per-set mask width (16, 32
+  or 64 bits) is possible as an isolated format change of the fragment and the minion wire, but is not recommended as the default:
+  it grows every entity's state for a rare case. Not designed yet; it needs its own spec before a boss of this kind is built.
 
 ### 8.6 How to extend
 

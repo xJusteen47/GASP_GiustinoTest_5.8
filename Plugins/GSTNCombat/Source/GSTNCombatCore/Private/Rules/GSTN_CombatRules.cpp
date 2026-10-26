@@ -46,6 +46,7 @@ namespace
 UGSTN_CombatRules::UGSTN_CombatRules()
 {
 	Pipeline.Add(TSoftClassPtr<UGSTN_CombatStep>(UGSTN_CombatStep_Activation::StaticClass()));
+	NonBlockableHitTypes.Add(GSTNCombatHitTags::HitType_Unblockable.GetTag());
 }
 
 void UGSTN_CombatRules::ResolvePipeline()

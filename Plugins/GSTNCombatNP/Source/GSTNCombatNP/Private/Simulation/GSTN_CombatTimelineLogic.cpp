@@ -2,6 +2,8 @@
 
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 
+#include "Simulation/GSTN_TimelineTrackHook.h"
+
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatTimeline, Log, All);
 
 namespace
@@ -153,11 +155,22 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	// The previous evaluation was the frame before this one (the start frame was evaluated by EvaluateStart)
 	// (the pause count as of that frame, so before this frame's own pause is added)
 	const int32 Previous = Frame - 1 - Core.TimelineStartFrame - Core.TimelinePausedFrames;
-	if (bHitstopFrame)
+
+	// The track hooks of the plugins (a hold stalls the timeline, a parry track stamps a window): asked before the pause is counted, with the frame the timeline is on.
+	// A stall is a pause like the hitstop's, but it does not touch PausedFramesTotal, so the combat clock and the buffers keep running
+	bool bStall = bHitstopFrame;
+	FGSTN_StampedWindowList Stamped;
+	const FGSTN_TimelineTrackHookRegistry& Hooks = FGSTN_TimelineTrackHookRegistry::Get();
+	if (!Hooks.IsEmpty())
+	{
+		bStall |= Hooks.Run(*Data, Frame, Core.TimelineStartFrame, FMath::Max(Previous, 0), bHitstopFrame, Core.Input, Stamped);
+	}
+	if (bStall)
 	{
 		++Core.TimelinePausedFrames;
 	}
 	EvaluateInto(Core, Frame, Previous >= 0 ? Previous : INDEX_NONE, *Data, DefaultOverrideFrames, Output);
+	Output.StampedWindows = MoveTemp(Stamped);
 
 	if (Output.bFinished || (Frame > Core.TimelineStartFrame && !bAbilityActive))
 	{
@@ -259,6 +272,15 @@ int32 FGSTN_CombatTimelineLogic::Adopt(FGSTN_CombatSyncCore& Core, int32 Frame, 
 void FGSTN_CombatTimelineLogic::EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output)
 {
 	EvaluateInto(Core, Frame, INDEX_NONE, Data, DefaultOverrideFrames, Output);
+	// Hooks see the first frame too, so a window that opens on it is stamped on it. A stall is not honoured here: the evaluation of frame 0 is done and the
+	// next tick's previous-frame arithmetic assumes no pause was counted since (a hold on frame 0 starts with the tick after)
+	const FGSTN_TimelineTrackHookRegistry& Hooks = FGSTN_TimelineTrackHookRegistry::Get();
+	if (!Hooks.IsEmpty())
+	{
+		FGSTN_StampedWindowList Stamped;
+		Hooks.Run(Data, Frame, Core.TimelineStartFrame, 0, false, Core.Input, Stamped);
+		Output.StampedWindows = MoveTemp(Stamped);
+	}
 	if (Output.bCommitThisFrame)
 	{
 		AddRequest(Core, EGSTN_RequestType::CommitTimeline, Frame, Core.ActiveTimeline);

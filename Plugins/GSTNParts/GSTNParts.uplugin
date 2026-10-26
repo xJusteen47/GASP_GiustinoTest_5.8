@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Parts",
-	"Description": "Destructible body parts for the GSTN combat: part sets (hardness, caps, transfer to the main pool), the penetration table, break effects as data, and the pure integer-quantised math that applies a hit to a part (GSTNPartsCore). Pure data and stateless functions: no GAS, Network Prediction or Mover, so this module needs no fork. Later modules (GAS appliers, NP sync fragment and tick extension, presentation) are not built yet. Enabling it changes nothing until an entity is given a part set.",
+	"Description": "Destructible body parts for the GSTN combat: part sets (hardness, caps, transfer to the main pool), the penetration table, break effects as data, and the pure integer-quantised math that applies a hit to a part (GSTNPartsCore, no fork); the ability-system half (GSTNPartsGAS: one-shot break effects, part events, tag projection; stock GAS, no Network Prediction) and the Network Prediction half (GSTNPartsNP: the sync fragment; needs the GAS-NPP fork). Enabling it changes nothing until an entity is given a part set.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -20,11 +20,46 @@
 			"Name": "GSTNPartsCore",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNPartsGAS",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNPartsNP",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNPartsEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
 		}
 	],
 	"Plugins": [
 		{
 			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "NetworkPrediction",
 			"Enabled": true
 		}
 	]

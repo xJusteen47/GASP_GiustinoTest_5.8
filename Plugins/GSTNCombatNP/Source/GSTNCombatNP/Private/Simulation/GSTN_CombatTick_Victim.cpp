@@ -33,6 +33,8 @@ FGSTN_HitVictimView FGSTN_CombatVictim::MakeVictimView(const FGSTN_SnapshotEntry
 	View.bInHitstop = Victim.bInHitstop;
 	View.ReactionState = Victim.Reaction;
 	View.HealthFraction = Victim.HealthFraction;
+	View.SnapshotExtension = Victim.Extension.GetData();
+	View.ExtraHurtboxes = Victim.ExtraHurtboxes;
 	if (Rules && Rules->DamageMode != EGSTN_DamageMode::Health)
 	{
 		// The percent modes derive the fraction from the damage taken
@@ -83,6 +85,7 @@ FVector FGSTN_CombatVictim::StickToPlane(const FVector2D& Stick, double CameraYa
 void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSyncCore& Core, FGSTN_VictimResult& Out)
 {
 	Out.Hits.Reset();
+	Out.Outgoing.Reset();
 	Out.FreezeFrames = 0;
 	Out.bFreezeZeroVelocity = false;
 	Out.bCancelledMove = false;
@@ -99,7 +102,10 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 	const int32 Frame = In.Frame;
 
 	// The victim the pipeline reads: the snapshot's, moved on by each landed entry so the next one sees the damage the first one did
+	// A copy of the snapshot extension the view points at: the appliers move it on between entries (below), the snapshot stays the end of the previous frame
+	FGSTN_SnapshotExtensionBlob VictimExtension = Self.Extension;
 	FGSTN_HitVictimView VictimView = MakeVictimView(Self, Rules);
+	VictimView.SnapshotExtension = VictimExtension.GetData();
 
 	const int32 WindowEndBefore = Core.IsInHitstop(Frame) ? Core.HitstopEndFrame : INDEX_NONE;
 	bool bWindowChanged = false;
@@ -112,9 +118,9 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		FGSTN_VictimHit& Hit = Out.Hits.AddDefaulted_GetRef();
 		Hit.Entry = Entry;
 		Hit.bRicochet = Entry.bRicochet;
-		if (Entry.bRicochet || !Rules)
+		if (!Rules)
 		{
-			// A ricochet still informs the victim for its cue and event, nothing else; without rules nothing says what a hit does
+			// Without rules nothing says what a hit does
 			continue;
 		}
 
@@ -131,9 +137,9 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		Incoming.HitboxVelocity = Entry.HitboxVelocity;
 		Incoming.bVictimGrounded = In.bGrounded;
 		FVector VictimCenter = Self.Transform.GetLocation();
-		if (Self.Hurtboxes && Self.Hurtboxes->Hurtboxes.IsValidIndex(Entry.HurtboxIndex))
+		if (const FGSTN_HitShape* HurtShape = Self.FindHurtboxShape(Entry.HurtboxIndex))
 		{
-			VictimCenter = ShapeCenterOf(Self.Hurtboxes->Hurtboxes[Entry.HurtboxIndex].Shape, Self.Transform);
+			VictimCenter = ShapeCenterOf(*HurtShape, Self.Transform);
 		}
 		// HitLocation is the middle of the two centres (the attacker wrote it so), which makes this the direction the attacker computed
 		Incoming.HitboxToVictim = (VictimCenter - Entry.HitLocation).GetSafeNormal(UE_SMALL_NUMBER, Incoming.AttackerFacing);
@@ -147,6 +153,13 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		}
 		Context.HurtboxSet = Self.Hurtboxes;
 		FGSTN_HitPipelineRunner::Run(*Rules, Context);
+		if (Entry.bRicochet)
+		{
+			// A ricochet informs the victim for its cue and events, nothing else: the pipeline ran only so the plugins that own an outcome extension
+			// can tell the victim the hit was refused (AppendHitEvents). Damage, knockback, hitstop and the appliers (state writes) are skipped
+			Hit.OutcomeExtensions = Context.OutcomeExtensions;
+			continue;
+		}
 		if (!Context.Outcome.bHit)
 		{
 			// A step of the rules refused the hit after all (the attacker's own run had the same answer, so this is a rare disagreement)
@@ -157,12 +170,37 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		FGSTN_HitPipelineRunner::MakeView(Rules, Context, Hit.View);
 		Hit.Outcome = Context.Outcome;
 
+		// What the steps sent back to the attacker (a parry's punish): stamped here, posted by the component once the step is done
+		for (FGSTN_InboxEntry& Outgoing : Context.OutgoingEntries)
+		{
+			Outgoing.Frame = Frame;
+			Outgoing.SenderId = Self.EntityId;
+			FGSTN_VictimOutgoing& Reply = Out.Outgoing.AddDefaulted_GetRef();
+			Reply.TargetId = Entry.AttackerId;
+			Reply.Entry = MoveTemp(Outgoing);
+		}
+
 		// The registered outcome appliers, for staggered and unstaggered hits alike; what they return joins the outcome
 		FGSTN_OutcomeApplyContext ApplyContext;
 		ApplyContext.VictimFragments = In.Fragments;
+		ApplyContext.Reaction.Frame = Entry.Frame;
 		FGSTN_OutcomeApplierRegistry::Get().ApplyAll(Rules, Context.OutcomeExtensions, Hit.View, ApplyContext);
 		Hit.Outcome.Events.Append(ApplyContext.Result.Events);
 		Hit.Outcome.Effects.Append(ApplyContext.Result.Effects);
+		Hit.OutcomeExtensions = Context.OutcomeExtensions;
+
+		// The extension the next entry reads is rebuilt from the fragments the appliers just wrote (the earlier entry's result), the way AdvanceVictim
+		// moves the damage; the view of the stored hit must not keep a pointer into this function's copy
+		Hit.View.Victim.SnapshotExtension = nullptr;
+		if (In.Fragments && VictimExtension.IsSet())
+		{
+			FGSTN_SnapshotContributorContext Rebuild;
+			Rebuild.Frame = Frame;
+			Rebuild.Fragments = In.Fragments;
+			Rebuild.Previous = &Self.Extension;
+			FGSTN_SnapshotContributorRegistry::Get().Rebuild(Rebuild, VictimExtension);
+			VictimView.SnapshotExtension = VictimExtension.GetData();
+		}
 
 		const FGSTN_KnockbackResult& Knockback = Hit.Outcome.Knockback;
 		Hit.bStaggered = Hit.Outcome.bHasKnockback && Knockback.bStaggered;
@@ -171,6 +209,36 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		Hit.HitstunFrames = Knockback.HitstunFrames;
 		Hit.HitstopFrames = Hit.Outcome.bHasKnockback ? FMath::Max(Knockback.HitstopFrames, 0) : 0;
 		FVector LaunchVelocity = Knockback.LaunchVelocity;
+
+		// What an applier asked for (a break's launch and stagger) merges as a hit of that strength would: a launch faster than the hit's own
+		// replaces it, a hitstun floor longer than the hit's lengthens it, and either makes a hit that did not stagger stagger
+		const FGSTN_ReactionRequest& Request = ApplyContext.Reaction;
+		if (Request.IsSet())
+		{
+			if (Request.HasLaunch() && (!Hit.bStaggered || Hit.Reaction != EGSTN_HitReaction::Launch || Request.LaunchVelocity.SizeSquared() > LaunchVelocity.SizeSquared()))
+			{
+				Hit.bStaggered = true;
+				Hit.Reaction = EGSTN_HitReaction::Launch;
+				LaunchVelocity = Request.LaunchVelocity;
+				const UGSTN_KnockbackModel* Model = Rules->KnockbackModel.Get();
+				Hit.bTumble = Model && LaunchVelocity.Size() >= Model->Tuning.TumbleThreshold;
+				if (Model)
+				{
+					// The lock of a launch of that speed, as the model gives a hit with that knockback; without it a launch would end its hitstun on the frame it starts
+					const int32 LaunchFrames = FMath::Max(Model->Tuning.MinHitstunFrames, FMath::FloorToInt(LaunchVelocity.Size() * Model->Tuning.HitstunFactor));
+					Hit.HitstunFrames = FMath::Max(Hit.HitstunFrames, LaunchFrames);
+				}
+			}
+			if (Request.MinHitstunFrames > 0)
+			{
+				if (!Hit.bStaggered)
+				{
+					Hit.bStaggered = true;
+					Hit.Reaction = EGSTN_HitReaction::StaggerInPlace;
+				}
+				Hit.HitstunFrames = FMath::Max(Hit.HitstunFrames, Request.MinHitstunFrames);
+			}
+		}
 
 		if (Hit.bStaggered)
 		{
@@ -422,11 +490,15 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 	FGSTN_SimEvent Landed = Event;
 	Landed.EventType = GSTNCombatTags::Event_HitLanded;
 	Outbox.Add(MoveTemp(Landed));
+	Event.EventType = GSTNCombatTags::Event_HitReceived;
+	const FGSTN_SimEvent Envelope = Event;
 	if (!Hit.bRicochet)
 	{
-		Event.EventType = GSTNCombatTags::Event_HitReceived;
 		Outbox.Add(MoveTemp(Event));
 	}
+	// The events of the optional plugins that own an outcome extension of this hit, with the hit event as their envelope, after it. A ricochet
+	// still runs them (a plugin tells the victim the hit was refused, e.g. Combat.Event.Part.Ricochet) but gets no HitReceived of its own
+	FGSTN_OutcomeApplierRegistry::Get().AppendEvents(Hit.OutcomeExtensions, Envelope, Outbox);
 }
 
 void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame)

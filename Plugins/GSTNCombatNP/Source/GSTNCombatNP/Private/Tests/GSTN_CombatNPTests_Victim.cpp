@@ -24,6 +24,7 @@
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_HitInbox.h"
+#include "Tests/GSTN_CombatNPTests_InboxHelpers.h"
 #include "UObject/StrongObjectPtr.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -140,13 +141,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimDrainAtNextFrameTest, "GSTNCombat.N
 bool FGSTN_VictimDrainAtNextFrameTest::RunTest(const FString& Parameters)
 {
 	FVictimFixture Fixture;
-	FGSTN_HitInbox Inbox;
-	Inbox.Add(FVictimFixture::MakeEntry(10, 600.f));
+	FGSTN_CombatInbox Inbox;
+	GSTNInboxTestUtils::AddHit(Inbox, FVictimFixture::MakeEntry(10, 600.f));
 
 	TArray<FGSTN_HitInboxEntry> Drained;
-	Inbox.Drain(10, Drained);
+	GSTNInboxTestUtils::DrainHits(Inbox, 10, Drained);
 	TestEqual(TEXT("the frame of the hit does not see it"), Drained.Num(), 0);
-	Inbox.Drain(11, Drained);
+	GSTNInboxTestUtils::DrainHits(Inbox, 11, Drained);
 	TestEqual(TEXT("the next frame does"), Drained.Num(), 1);
 
 	Fixture.Entries = Drained;
@@ -270,7 +271,94 @@ bool FGSTN_VictimAppliersCalledPerExtensionTest::RunTest(const FString& Paramete
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimPushBackPromotedWhenAirborneTest, "GSTNCombat.NP.Hits.Victim.PushBackPromotedWhenAirborne", GSTN_NP_TEST_FLAGS)
+namespace
+{
+	/** Asks the victim step for a reaction, the way the break of a part does */
+	struct FRequestingApplier : IGSTN_OutcomeExtensionApplier
+	{
+		int32 Frames = 0;
+		FVector Launch = FVector::ZeroVector;
+		mutable int32 StampedFrame = INDEX_NONE;
+
+		virtual const UScriptStruct* GetExtensionStruct() const override { return FGSTN_TestVictimExtension::StaticStruct(); }
+		virtual void Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const override
+		{
+			StampedFrame = Context.Reaction.Frame;
+			Context.Reaction.Merge(Frames, Launch);
+		}
+	};
+
+	FGSTN_VictimHit RunWithRequest(FRequestingApplier& Applier, float Knockback, bool bBelowThreshold, FVictimFixture& Fixture)
+	{
+		FGSTN_OutcomeApplierRegistry::Get().Register(&Applier);
+		Fixture.Rules->HitPipeline.Add(UGSTN_TestVictimExtensionStep::StaticClass());
+		Fixture.Rules->ResolveHitPipeline();
+		Fixture.Entries = { FVictimFixture::MakeEntry(10, Knockback, 1) };
+		if (bBelowThreshold)
+		{
+			Fixture.Entries[0].Hit.StaggerForceMode = EGSTN_StaggerForceMode::Override;
+			Fixture.Entries[0].Hit.StaggerForce = 0.f;
+			Fixture.Rules->StaggerThreshold = 5.f;
+		}
+		Fixture.Run(11);
+		FGSTN_OutcomeApplierRegistry::Get().Unregister(&Applier);
+		return Fixture.Result.Hits.IsEmpty() ? FGSTN_VictimHit() : Fixture.Result.Hits[0];
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimReactionRequestMergesLikeAHitTest, "GSTNCombat.NP.Hits.Victim.ReactionRequestMergesLikeAHit", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimReactionRequestMergesLikeAHitTest::RunTest(const FString& Parameters)
+{
+	{
+		// A hit that did not stagger: the request makes it stagger with the floor and the launch it asks for
+		FRequestingApplier Applier;
+		Applier.Frames = 40;
+		Applier.Launch = FVector(0.0, 0.0, 900.0);
+		FVictimFixture Fixture;
+		const FGSTN_VictimHit Hit = RunWithRequest(Applier, 1500.f, true, Fixture);
+		TestTrue(TEXT("the request staggers a hit that did not"), Hit.bStaggered && Hit.Reaction == EGSTN_HitReaction::Launch);
+		TestTrue(TEXT("the launch is the requested one"), Fixture.Core.Hit.GetPendingLaunch().Equals(FVector(0.0, 0.0, 900.0), 1.0));
+		TestTrue(TEXT("and it locks the victim for the hitstun of a launch of that speed"), Hit.HitstunFrames >= Fixture.Rules->KnockbackModel->Tuning.MinHitstunFrames);
+		TestTrue(TEXT("the hitstun floor holds"), Hit.HitstunFrames >= 40);
+		TestEqual(TEXT("the request was stamped with the frame of the hit"), Applier.StampedFrame, 10);
+	}
+	{
+		// A hitstun floor alone: stagger in place for at least that long
+		FRequestingApplier Applier;
+		Applier.Frames = 60;
+		FVictimFixture Fixture;
+		const FGSTN_VictimHit Hit = RunWithRequest(Applier, 100.f, true, Fixture);
+		TestTrue(TEXT("a floor without a launch staggers in place"), Hit.bStaggered && Hit.Reaction == EGSTN_HitReaction::StaggerInPlace);
+		TestEqual(TEXT("for at least the floor"), Hit.HitstunFrames, FMath::Max(60, Fixture.Rules->MinStaggerLockFrames));
+	}
+	{
+		// A launch slower than the hit's own changes nothing
+		FRequestingApplier Applier;
+		Applier.Launch = FVector(0.0, 0.0, 10.0);
+		FVictimFixture Fixture;
+		const FGSTN_VictimHit Hit = RunWithRequest(Applier, 1500.f, false, Fixture);
+		TestTrue(TEXT("the stronger launch of the hit stands"), Hit.Reaction == EGSTN_HitReaction::Launch && Fixture.Core.Hit.GetPendingLaunch().X > 1000.0);
+	}
+	{
+		// A faster one replaces it
+		FRequestingApplier Applier;
+		Applier.Launch = FVector(0.0, 0.0, 5000.0);
+		FVictimFixture Fixture;
+		const FGSTN_VictimHit Hit = RunWithRequest(Applier, 1500.f, false, Fixture);
+		TestTrue(TEXT("a faster launch replaces the hit's"), Fixture.Core.Hit.GetPendingLaunch().Equals(FVector(0.0, 0.0, 5000.0), 1.0));
+		TestTrue(TEXT("and tumbles when it is fast enough"), Hit.bTumble && Fixture.Core.ActionState == EGSTN_ActionState::Tumble);
+	}
+	{
+		// Unset it is neutral
+		FRequestingApplier Applier;
+		FVictimFixture Fixture;
+		const FGSTN_VictimHit Hit = RunWithRequest(Applier, 1500.f, true, Fixture);
+		TestFalse(TEXT("nothing requested, nothing staggers"), Hit.bStaggered);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimPushBackPromotedWhenAirborneTest,"GSTNCombat.NP.Hits.Victim.PushBackPromotedWhenAirborne", GSTN_NP_TEST_FLAGS)
 bool FGSTN_VictimPushBackPromotedWhenAirborneTest::RunTest(const FString& Parameters)
 {
 	// K = 600 + 200 = 800: the push back tier
@@ -456,9 +544,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimRollbackReDeliversTest, "GSTNCombat
 bool FGSTN_VictimRollbackReDeliversTest::RunTest(const FString& Parameters)
 {
 	// The state before the hit is restored, the inbox drops what the re-simulation re-delivers, and the same entry gives the same state
-	FGSTN_HitInbox Inbox;
-	Inbox.Add(FVictimFixture::MakeEntry(8, 600.f));
-	Inbox.Add(FVictimFixture::MakeEntry(10, 1500.f));
+	FGSTN_CombatInbox Inbox;
+	GSTNInboxTestUtils::AddHit(Inbox, FVictimFixture::MakeEntry(8, 600.f));
+	GSTNInboxTestUtils::AddHit(Inbox, FVictimFixture::MakeEntry(10, 1500.f));
 	Inbox.TrimFrom(10);
 	TestEqual(TEXT("entries from the first re-simulated frame on are dropped, earlier ones are kept"), Inbox.Num(), 1);
 

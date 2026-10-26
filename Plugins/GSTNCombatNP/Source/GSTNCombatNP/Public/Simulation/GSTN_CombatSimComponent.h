@@ -19,6 +19,7 @@
 #include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
+#include "Simulation/GSTN_CombatInbox.h"
 #include "Simulation/GSTN_HitInbox.h"
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
@@ -104,10 +105,19 @@ public:
 	bool TicksOnThisMachine() const;
 
 	/**
-	 * Delivers a hit to this victim (combat-m4-hits 7). Written only where the instance ticks, so a client never queues a hit for a
-	 * remote victim it only interpolates. @return false when nothing was queued
+	 * Delivers a message to THIS entity's inbox (combat-m4-hits 7, open kinds M6 F1). Written only where the instance ticks, so a client never
+	 * queues an entry for a remote entity it only interpolates. @return false when nothing was queued (the instance does not tick, or the inbox is full)
 	 */
-	virtual bool PostHit(const FGSTN_HitInboxEntry& Entry) override;
+	virtual bool PostToInbox(const FGSTN_InboxEntry& Entry) override;
+
+	/**
+	 * Posts Entry to the inbox of another combat entity from this entity's tick (the sender side of any inbox kind). The target's own
+	 * PostToInbox decides, so the refusal rule is the one the hits always had. @return false when the target is unknown, gone or does not tick on this machine
+	 */
+	bool PostToInbox(int32 TargetId, const FGSTN_InboxEntry& Entry);
+
+	/** Delivers a hit: PostToInbox of the hit wrapped as an entry of kind Hit */
+	bool PostHit(const FGSTN_HitInboxEntry& Entry);
 
 	/**
 	 * The rules the attacker side runs the hit pipeline of, to predict the attacker's own hitstop and meter (combat-m4-hits 6). Resolved at
@@ -209,10 +219,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetHitboxTrace() const;
 
-	/** The victim side's drain at the start of its combat tick of Frame: the entries stamped before it, in (AttackerId, hitbox) order, appended to Out */
-	void DrainHitInbox(int32 Frame, TArray<FGSTN_HitInboxEntry>& Out) { HitInbox.Drain(Frame, Out); }
+	/** The receiver side's drain at the start of its combat tick of Frame: the entries of every kind stamped before it, in (SenderId, kind, the kind's key) order, appended to Out */
+	void DrainInbox(int32 Frame, TArray<FGSTN_InboxEntry>& Out) { Inbox.Drain(Frame, Out); }
 
-	const FGSTN_HitInbox& GetHitInbox() const { return HitInbox; }
+	const FGSTN_CombatInbox& GetInbox() const { return Inbox; }
 
 	// IGSTN_SnapshotSource. The entry of this entity for the step snapshot: the state at the end of the previous frame (the sync state and the
 	// Mover sim state tracker), or the presentation state of an interpolated proxy
@@ -573,6 +583,9 @@ private:
 	/** Whether the frame ran with the gate closed. Same lifetime as FrameTables */
 	bool bFrameGateClosed = false;
 
+	/** An extension's BlocksActions closed the can-act rule for this frame (a held shield): IsCommandAllowed refuses every command. Rewritten every tick, never state */
+	bool bFrameActionsBlocked = false;
+
 	int32 GateClosedFrames = 0;
 
 	/** The set the frame is on, else the one of the latest state, else the empty one. Never null after BeginPlay */
@@ -630,6 +643,7 @@ private:
 	 */
 	void RunVictimStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncState& Sync, const FGSTN_StepSnapshot* Snapshot, const FGSTN_InputCmd& Cmd);
 	TArray<FGSTN_HitInboxEntry> InboxScratch;
+	TArray<FGSTN_InboxEntry> InboxEntryScratch;
 	TMap<int32, FString> InboxLogByFrame;
 
 	/**
@@ -762,8 +776,8 @@ private:
 	TMap<int32, FString> HitLogByFrame;
 	TMap<int32, FString> HitboxTraceByFrame;
 
-	/** Hits waiting for this victim's next tick. Local data, not sync state: the attackers' re-simulation rebuilds it after a rollback */
-	FGSTN_HitInbox HitInbox;
+	/** Messages (hits and entries of the other kinds) waiting for this entity's next tick. Local data, not sync state: the senders' re-simulation rebuilds it after a rollback */
+	FGSTN_CombatInbox Inbox;
 
 	// Input production only (owning machine), not simulation state
 	uint32 ScriptedButtons = 0;
