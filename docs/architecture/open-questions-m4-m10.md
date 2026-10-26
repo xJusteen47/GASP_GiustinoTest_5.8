@@ -49,6 +49,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Telecamera | [camera.md](camera.md) |
 | Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
 | Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
+| Input a carica (stile Guile) | [input.md](input.md) §10 |
 | Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [input.md](input.md) §9 |
 
 
@@ -1465,6 +1466,20 @@ KB.2. La scorciatoia vale anche per il **d-pad** del controller, e la stessa ide
    Perché conta: il d-pad ha gli stessi limiti della tastiera.
    Ipotesi nella specifica: vale per tutti gli ingressi digitali (tastiera e d-pad), gesto per gesto.
 
+HV.3. Quali attacchi **ruotano il personaggio** mentre tieni lo stick (per esempio alcuni attacchi in aria)? La rotazione segue lo
+stick finché lo tieni, oppure si sceglie solo una volta (all'inizio o in un momento preciso, come girarsi all'indietro)?
+   Perché conta: una rotazione continua cambia dove colpisce l'attacco mentre è attivo; una scelta singola è più leggibile.
+   Ipotesi nella specifica: entrambe possibili per singola mossa, decise dal designer con la stessa traccia che inclina lo swing.
+   **Risposta (2026-10-25 19:56):** Dipende dalla mossa. In alcune durante lo startup ci si gira di pochi gradi, in altre si cammina. Esempio:
+   swing verticale in aria, la direzione la decide l'input iniziale, nella prima parte dello startup si corregge un po' l'angolo, durante lo
+   swing lo si porta in diagonale. In aria di solito ci si muove ma non ci si gira, salvo queste piccole correzioni
+   ([combat-m4-hits.md](combat-m4-hits.md) §3, traccia `Control`).
+
+INTP.1. L'interpolazione delle hitbox tra un frame e l'altro (come nei platform fighter) va **accesa di base** su tutti i colpi, oppure solo
+dove il designer la attiva?
+   Perché conta: accesa ovunque evita i colpi "bucati" dagli attacchi veloci, ma costa qualche controllo in più per colpo.
+   Ipotesi nella specifica: accesa in tutte le mosse del set standard, e l'editor avvisa quando una hitbox veloce è senza.
+
 COL.1. I colpi corpo a corpo devono **fermarsi contro i muri** di base, oppure solo dove il designer lo attiva per una mossa?
    Perché conta: oggi un colpo attraversa un muro sottile e colpisce chi c'è dietro; bloccarlo costa un controllo in più per colpo.
    Ipotesi nella specifica: spento nei dati di M4 per non cambiare nulla, acceso nelle mosse del set standard dopo H16.
@@ -1473,3 +1488,22 @@ COL.2. Per colpire la cavità dentro la gamba corazzata basta **toccare l'apertu
 **entrare** nel buco?
    Perché conta: "toccare" è più semplice e generoso, "entrare" è più preciso ma più difficile da ottenere con uno swing.
    Ipotesi nella specifica: basta toccare l'apertura con un'arma che ci passa.
+
+## Input a carica, stile Guile (26/10)
+
+Specifica: [input.md](input.md) §10. Il plugin di input ha già la condizione `Charge` (insieme di direzioni, durata minima, tolleranza dopo
+il rilascio); qui ci sono solo le scelte di gioco.
+
+CH.1. In 3D, fuori dal duello, il personaggio si gira verso lo stick, quindi "tenere indietro" non si può fare. Le cariche **indietro**
+valgono solo dove la direzione è bloccata (telecamera da duello, aggancio al bersaglio), e altrove si usano le cariche **in basso**
+(tenendo premuto abbassarsi)? Oppure "indietro" va inteso rispetto alla telecamera?
+   Perché conta: cambia quali mosse a carica si possono dare ai kit usati nei livelli.
+   Ipotesi nella specifica: cariche indietro solo con la direzione bloccata, cariche in basso ovunque.
+
+CH.2. Quanto deve durare la carica? In Street Fighter è circa tre quarti di secondo o poco più.
+   Perché conta: è il ritmo di tutte le mosse a carica.
+   Ipotesi nella specifica: valore per singola mossa, di base 40 frame (circa 0,65 s), con 8 frame di tolleranza dopo il rilascio.
+
+CH.3. Nel duello, se l'avversario ti salta dall'altra parte, la carica indietro si perde (come in Street Fighter) o viene conservata?
+   Perché conta: conservarla rende più facile difendersi dai salti incrociati con una mossa a carica.
+   Ipotesi nella specifica: si perde, come in Street Fighter.

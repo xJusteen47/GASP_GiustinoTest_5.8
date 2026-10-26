@@ -252,6 +252,26 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   and bulky hitboxes do not; holes that hitboxes pass and the character does not (a hollow medium-penetration cavity inside a
   heavy-armour leg). Spec: [combat-m4-hits.md](combat-m4-hits.md) §9c, plans H16 and P18.
 - **Sequencing**: these general items go to planning first; the detailed design of individual abilities resumes at the end.
+- (19:39) **Animation that changes with input over time** (an aerial that rotates, attack variations) and **hitbox interpolation**
+  as in platform fighters. Spec: [combat-m4-hits.md](combat-m4-hits.md) §3 (steer track for hitboxes, animation, facing and
+  branches; interpolation status and four gaps), plans H15 and H17.
+- (19:56) **Per move**: some moves allow turning a few degrees during startup, some allow walking during startup. Example: a
+  vertical swing in the air; the first input sets the direction, a small angle correction in the first part of startup, a diagonal
+  during the swing. In the air one usually moves but does not turn, apart from these small corrections. Spec: control track in
+  [combat-m4-hits.md](combat-m4-hits.md) §3.
+- (23:21) **One part, several hardnesses** (Helldivers 2 charger's abdomen: medium on top, light underneath, destroying either destroys
+  the whole abdomen): one part with a per-hurtbox hardness override. Spec: [combat-parts.md](combat-parts.md) §3.4, plan P18.
+- (23:16–23:18, low priority) **Wounds**: an ability may wound a spot to lower its hardness, and the **ability decides where**. Per-part
+  wound by default (the part the hit chose), free-position wound as an extension; the mesh may show it. Spec:
+  [combat-parts.md](combat-parts.md) §3.4, plan P18.
+- (19:57) A move may also allow a full rotation at a set number of degrees per second, or full movement during the active frames;
+  the vertical swing stays the more common case.
+
+## 6j. Charge inputs, Guile style (owner question, 2026-10-26 09:47)
+
+- The owner asked whether a tag on crouch press and release, read by an ability, is enough for Street Fighter charge moves. The input
+  plugin already has a `Charge` condition on the input history (direction set, minimum duration, tolerance after release); the gaps are
+  the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.3.
 
 ## 7. Consequences for the specifications
 
@@ -543,3 +563,31 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > dovrebbero essere già separate per come abbiamo pianificato. Ma ci potrebbero essere casi limite come: proiettili stile sparatutto e
 > collisioni complesse (buchi dove il personaggio non passa e neanche le hitbox più ingombranti, i proiettili si) oppure buchi dove il
 > personaggio non passa, ma le hitbox si (caso buco cavo a penetrazione media dentro una gamba di un nemico a penetrazione pesante)
+
+> Una cosa: abbiamo preso in considerazione nei piani attacchi la cui animazione cambia a seconda degli input nel tempo (Rotazione
+> attacco in aria in alcuni casi, variazione attacco etc…), e hitbox interpolation? (Sta nei platform fighter) (19:39)
+
+> Di base pensavo che ci sono mosse dove durante il loro startup si puo limitatamente girare il personaggio di alcuni gradi, alcune dove si
+> puo camminare durante lo startup etc... cambia a seconda della mossa. Un esempio è uno swing vertical in aria. L'input iniziale decide la
+> direzione, magari si puo cambiare limitatamente l'angolazione durante la prima parte dello startup, e durante lo swing si puo farlo andare
+> in diagonale a destra o sinistra. (In genere durante le mosse in aria ci si puo muovere ma non girarsi, eccetto fare queste piccole
+> correzioni, che potrebero cambiare a seconda della mossa). (19:56)
+
+> Potrebbe anche essere possibile rotazione completa, entro certi gradi per secondo, oppure movimento completo durante i frame attivi.
+> Dipende dalla mossa. Ma un esempio ben piu comune sarebbe probabilmente quello dello swing verticale. (19:57)
+
+> un'ultima cosa: ho notato che il sistema di penetrazione etc... basato su parti funziona bene nel 99% dei casi. Pero potrebbe esserci un
+> caso limite nel caso di alcune abilità. Mettiamo caso un'abilità che puo indurre una ferita in un punto diciamo per abassarne la
+> "durezza". Penso che il sistema a parti vada bene anche in quel caso, basterebbe aggiungere una hurtbox a penetrazione inferiore che ha la
+> priorità sull'hurtbox della parte normale. E maagari la mesh riflette cio. non ha chissà che priorità, ma ci si potrebbe pensare. (23:16)
+
+> Beh, ma se voglio che l'abilità decida dove porre la ferita? (23:18)
+
+> Per quanto riguarda qualcosa come l'addome di un charger di helldivers? Ossia sopra ha durezza media, sotto leggere, ma distruggere una
+> delle due distrugge tutto l'addome. (23:21)
+
+### Message of 2026-10-26, 09:47 (verbatim)
+
+> Un’altra cosa. Non abbiamo considerato gli input a carica alla Guile di street fighter. In teoria però basterebbe aggiungere un tag o
+> qualcosa quando si preme il tasto per abbassarsi ad esempio e quando si lascia si leva? Poi un’abilità lo usa? Dovrebbe funzionare bene
+> già così, no?

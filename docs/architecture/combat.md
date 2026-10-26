@@ -235,7 +235,8 @@ Test scripting (`SetScriptedButtons`, `TapScriptedButtons`) exists on the compon
   in M2 it moves into the input plugin (`GSTNInputNP/Mover/`; the project then uses the plugin's).
 - Each timeline ability has an `AimPolicy` (`KeepFacing | SnapToStick | SnapIfAimOrTilt | Camera`, max turn angle,
   last frame turning is allowed): a directional attack goes **towards the stick's world direction**; `Camera` turns to
-  the camera's aim (11.6); rotation goes through Mover, not the actor.
+  the camera's aim (11.6); rotation goes through Mover, not the actor. Turning and walking inside windows of a move, and
+  stick-driven variations: planned `FGSTN_TimelineTrack_Control` and `FGSTN_TimelineTrack_Steer` (combat-m4-hits.md §3, H15).
 
 ### 6.4 History (*Decision*, in sync state)
 

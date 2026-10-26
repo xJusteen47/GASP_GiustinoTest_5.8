@@ -42,10 +42,13 @@ Cheap now, a fallback accessor exists if it is refused; the probe text of M6 §8
 ### Owner direction of 2026-10-25 on these plans (added by the milestone-planning thread)
 
 General mechanics from the spin and drill thread ([`../spin-drill.md`](../spin-drill.md) §13b, PR #15) and a collision note, all after H13 so
-no running checkpoint changes: **H14** demolition force and destructible props, **H15** hitboxes that vary with input, **H16** world
-occlusion with a pass radius (M4 plan); **P18** hurtbox openings (M4b plan); a reserved link type `Combat.Link.Type.Drill` in M6; keyboard
+no running checkpoint changes: **H14** demolition force and destructible props, **H15** steer track (hitboxes, animation and facing that vary with input), **H16** world
+occlusion with a pass radius, **H17** hitbox sweep completeness (M4 plan); **P18** hurtbox openings (M4b plan); a reserved link type `Combat.Link.Type.Drill` in M6; keyboard
 shortcuts for stick gestures in [`../input.md`](../input.md) §9. Owner sequencing: these general specs come first, the detailed design of
 individual abilities resumes at the end.
+
+Charge inputs (owner question, 2026-10-26): the `Charge` condition exists; a charge tracker in the input state of `GSTNInputNP`
+([`../input.md`](../input.md) §10, size S) should land before the first charge move ships.
 
 ### Test maps (owner request, 2026-10-23)
 

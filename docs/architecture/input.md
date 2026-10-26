@@ -227,3 +227,36 @@ roll with three fingers. *Proposal*, not built:
 - The same per-slot threshold serves other gestures that are hard on keys. A dedicated spin button stays possible
   ([spin-drill.md](spin-drill.md) §5).
 - Questions KB.1–KB.2 in [open-questions-m4-m10.md](open-questions-m4-m10.md).
+
+## 10. Charge inputs, Guile style (owner question, 2026-10-26)
+
+The owner asked whether a tag added on crouch press and removed on release, read by an ability, is enough for Street Fighter charge
+moves. **The plugin already has it, in a better place**: `FGSTN_InputCondition_Charge` (`GSTNInputCore`, test `ConditionCharge`) reads
+the **input history**, which is part of the predicted state, so a resimulation after a rollback gets the same answer. A tag alone has
+no duration, and a tag derived from Mover's crouch would be seen one frame late and is a Mover query (CLAUDE.md rules 1 and 5).
+
+What the condition does today:
+- `Directions`: a **set** of directions that all count as charging (for example back and down-back), in a chosen `Space`
+  (`Facing` by default).
+- `MinFrames` (default 30): how long the stick must stay inside the set.
+- `MaxReleaseFrames` (default 8): the **tolerance after release**: the stick may have left the set at most this many frames before the
+  move's anchor, so "charge back, then forward + punch" works.
+- `MinZone`: how far the stick must be tilted to count.
+- A charged **button** is `Release` with `MinHeldFrames`; a move that loops while a button is held is the timeline's `Charge` track.
+- Charging is input only, so it continues while the character walks, crouches, blocks or attacks, as in Street Fighter.
+
+Gaps, *Proposal*:
+1. **The history keeps the last 16 direction events** (`FGSTN_InputHistory::MaxEvents`). A new event is recorded whenever the stick
+   sector, the zone, the facing or the camera yaw changes the stick's direction, so a charge held while the camera turns, or while
+   the stick wobbles between back and down-back, can push the start of the run out of the ring: the charge then looks shorter than it
+   was and the move fails. Fix: a small **charge tracker** in the input state of `GSTNInputNP`. For each charge set declared by the
+   command set (at most 4), it keeps `uint8 HeldFrames` (saturating at 255) and `uint8 FramesSinceRelease`, updated every frame from
+   the current stick. It is part of the predicted input state, so rollback replays it; cost 8 bytes. The `Charge` condition reads the
+   tracker when its set is declared and falls back to the event scan otherwise.
+2. **"Back" in 3D**: in free movement the character turns towards the stick, so "back relative to facing" cannot be held. Back-charges
+   make sense where facing is locked (the Duel camera, a lock-on or strafe) or in `Stick`/`Camera` space; elsewhere down-charges
+   (crouch held) work as they are. Question CH.1.
+3. **Side switches**: when a duel cross-up flips facing, a back-charge held in the same world direction becomes forward and is lost,
+   as in Street Fighter. Kept; question CH.3.
+
+Questions CH.1–CH.3 in [open-questions-m4-m10.md](open-questions-m4-m10.md).

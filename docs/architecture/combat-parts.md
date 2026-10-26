@@ -197,6 +197,31 @@ through its hole: a bulky swing that overlaps the leg from outside would otherwi
 radius that fits), and only a hitbox that overlaps the mouth and fits counts on it; everything else falls to the armour. Rule and
 types: [combat-m4-hits.md](combat-m4-hits.md) §9c B (M4b checkpoint P18).
 
+**One part, several hardnesses (owner, 2026-10-25 23:21; the Helldivers 2 charger's abdomen).** Medium hardness on top, light
+underneath, and destroying either side destroys the whole abdomen. Model: **one part** (one damage pool, one `PartCap`, one break)
+with several hurtboxes mapped to it, plus an optional **per-hurtbox hardness override** in the part set
+(`TMap<FName, int32> HurtboxHardnessOverride` on `FGSTN_PartDefinition`, keyed by hurtbox name), which wins over the part's `Hardness`
+when set. `UGSTN_HitStep_PartResolve` already knows the hurtbox the hit chose, so it reads the override there. It is static data, so
+the attacker's ricochet prediction stays exact. A small extension of the P2 data, built in P14 or P18. Rejected: two linked parts
+with a group-break rule (two pools to keep in step and an extra rule for one shared break).
+
+**Wounds: an ability lowers the hardness where it hits (owner, 2026-10-25 23:16 and 23:18, low priority).** The owner wants the
+**ability to decide where** the wound goes. Two levels:
+1. **Per-part wound (default, recommended).** A new `uint16 WoundedMask` in the parts fragment (+2 B) and a per-part
+   `WoundedHardness` in `FGSTN_PartDefinition`. A hit whose data carries `FGSTN_PartBreakEffect_Wound` sets the bit of **the part that
+   hit chose** (from the inbox entry's `HurtboxIndex`, §3.4); while the bit is on, `UGSTN_HitStep_PartResolve` uses `WoundedHardness`
+   instead of `Hardness`. The bit replicates like `BrokenMask`, so the attacker's ricochet prediction stays exact, and the part's
+   skin material reads it to show the wound (§6.1). A designer who wants a precise weak spot authors it as a small part with a
+   higher `Priority` and a low `WoundedHardness`: the ability wounds it only when the hit lands on it.
+2. **Free-position wound (extension, only if an ability needs it).** A few fixed slots per entity of **dynamic hurtboxes**
+   (`{ uint8 BoneIndex; int16 LocalOffset[3] (quantised); uint8 RadiusCm; uint8 PartIndex; }`, about 6–8 B each), written by the
+   applier at F+1 from the hit's impact point, with the highest `Priority` in part choice and the wounded hardness of their part. It
+   needs hurtbox states in the lag-compensation history and a cost estimate (wire per slot, overlap tests per hit) before it is built.
+
+Closing a wound (time, heal, never) is open. Minions: not in v1 (their wire carries only the broken mask, §5.5). Both levels need
+**hurtbox states in the lag-compensation history** (open residue of P7 part 1, handover item 40), so a rewound hit sees whether a
+part was wounded at that frame.
+
 ### 3.5 Entity's own hitboxes while parts are broken
 
 The attacker side (M4 §6 step 1) asks the tick-extension point "before candidates" for a `HitGroupMask`; `GSTNPartsNP`
@@ -327,7 +352,7 @@ A `FGSTN_SyncFragment` (§5b) registered with a fixed type id from the central r
 carry **no fragment: zero bytes and no compare cost**.
 
 ```
-FGSTN_PartsFragment { uint16 BrokenMask; uint8 PartDamage[N]; uint8 BreakSerial (4 bits used); }
+FGSTN_PartsFragment { uint16 BrokenMask; uint8 PartDamage[N]; uint8 BreakSerial (4 bits used); uint16 WoundedMask (wounds, P18, planned); }
 ```
 
 `PartDamage[i]` = part damage / `PartCap` quantised to 8 bits (0 = pristine, 255 = at the cap). Rule: stored =
@@ -644,6 +669,13 @@ Clean = state snapshots equal and no reconciles beyond the expected one per hit 
 - **Minion wire growth** if many minion types use parts: cap 8 parts, ext byte only for those types, measured in the bench.
 - **Host-only costs** (listen server): hit resolution, minions and presentation share the host's frame, and host upload limits clients; host advantage on instant breaks (§5.5b).
 - **Chunk and shard budget** on low-end clients and hosts: tier rules of §6.4, quality scalability settings.
+- **Open item: bosses with more than 16 parts** (owner question, 2026-10-25 23:08, Helldivers 2's swarm lord as the example). The cap
+  of §3 stays 16 (`uint16` mask). *Proposal*, intended path: **composition**. A multi-segment boss is several linked entities
+  (segments), each with its own part set and its own parts fragment. A segment's part hits transfer `MainDamage` to the boss's
+  shared main health instead of the segment's own pool (the transfer of §4.2 with a different target). Linking, the shared pool
+  and how segments move together sit with M8 ([combat-m8-minions.md](combat-m8-minions.md) §15). A per-set mask width (16, 32
+  or 64 bits) is possible as an isolated format change of the fragment and the minion wire, but is not recommended as the default:
+  it grows every entity's state for a rare case. Not designed yet; it needs its own spec before a boss of this kind is built.
 
 ### 8.6 How to extend
 
