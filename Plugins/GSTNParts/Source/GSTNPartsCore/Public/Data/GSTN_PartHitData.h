@@ -42,6 +42,13 @@ struct GSTNPARTSCORE_API FGSTN_PartHitData : public FGSTN_HitExtension
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Part Hit", meta = (ClampMin = 0))
 	float PartDamageScale = 1.f;
 
+	/**
+	 * Damage this hit deals to a part's depth (the part's Thickness), as a damage value like the hit's own. Negative = the hit's Damage, so a
+	 * hit that never sets it is unchanged whatever the thickness. A piercing tip sets a high one; a blunt blow a low one
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Part Hit")
+	float DeepDamage = -1.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Part Hit", meta = (Bitmask, BitmaskEnum = "/Script/GSTNPartsCore.EGSTN_PartHitFlags"))
 	uint8 Flags = 0;
 

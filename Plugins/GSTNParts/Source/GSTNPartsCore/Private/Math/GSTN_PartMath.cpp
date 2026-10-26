@@ -41,6 +41,7 @@ FGSTN_PartHitInput FGSTN_PartHitInput::Make(float InDamage, int32 InPartIndex, c
 	if (Data)
 	{
 		Input.Penetration = Data->Penetration;
+		Input.DeepDamage = Data->DeepDamage;
 		Input.PartDamageScale = Data->PartDamageScale;
 		Input.bIgnoreHardness = Data->HasFlag(EGSTN_PartHitFlags::IgnoreHardness);
 		Input.bMainOnly = Data->HasFlag(EGSTN_PartHitFlags::MainOnly);
@@ -129,7 +130,7 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 {
 	FGSTN_PartHitResult Result;
 	const int32 Num = AddressableParts(Parts);
-	const float Damage = (Hit.Damage > 0.f && FMath::IsFinite(Hit.Damage)) ? Hit.Damage : 0.f;
+	const float SurfaceDamage = (Hit.Damage > 0.f && FMath::IsFinite(Hit.Damage)) ? Hit.Damage : 0.f;
 
 	int32 PartIndex = ValidPartIndex(Hit.PartIndex, Num);
 	const bool bWasBroken = PartIndex != INDEX_NONE && State.IsBroken(PartIndex);
@@ -143,8 +144,8 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 	if (PartIndex == INDEX_NONE)
 	{
 		// The body has no armour and no state: the full hit goes to the main pool and the bands are not consulted
-		Result.HitMainDelta = Damage;
-		Result.MainDelta = Damage;
+		Result.HitMainDelta = SurfaceDamage;
+		Result.MainDelta = SurfaceDamage;
 		return Result;
 	}
 
@@ -164,6 +165,16 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 		Result.HitstopScale = 0.f;
 		Result.NewPartDamage = State.PartDamage[PartIndex];
 		return Result;
+	}
+
+	// The band decided the hit gets through; the thickness then blends the surface damage with the deep one. Thickness 0 keeps Damage bit for bit
+	// (the blend is skipped, not just multiplied by zero, so no float rounding differs from a part without the field)
+	const float Thickness = FMath::Clamp(NonNegative(Part.Thickness), 0.f, 1.f);
+	float Damage = SurfaceDamage;
+	if (Thickness > 0.f)
+	{
+		const float Deep = (Hit.DeepDamage >= 0.f && FMath::IsFinite(Hit.DeepDamage)) ? Hit.DeepDamage : SurfaceDamage;
+		Damage = SurfaceDamage * (1.f - Thickness) + Deep * Thickness;
 	}
 
 	const float PartScale = Band ? NonNegative(Band->PartScale) : 1.f;
