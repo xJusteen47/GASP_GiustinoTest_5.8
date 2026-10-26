@@ -3,6 +3,7 @@
 #include "Timeline/GSTN_KeyedTrackAccess.h"
 
 #include "UObject/Class.h"
+#include "UObject/UObjectGlobals.h"
 
 namespace
 {
@@ -23,6 +24,13 @@ void FGSTN_KeyedTrackAccessRegistry::Register(const UScriptStruct* TrackStruct, 
 
 void FGSTN_KeyedTrackAccessRegistry::Unregister(const UScriptStruct* TrackStruct)
 {
+	// Editor modules shut down after the UObject system on exit: building the weak key then asserts inside the object array.
+	// Nothing can look the adapters up any more at that point, so drop them wholesale
+	if (!UObjectInitialized())
+	{
+		Adapters().Reset();
+		return;
+	}
 	Adapters().Remove(TrackStruct);
 }
 
