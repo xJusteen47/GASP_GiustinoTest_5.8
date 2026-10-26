@@ -4,6 +4,7 @@
 #include "Data/GSTN_PartHitData.h"
 #include "Data/GSTN_PartSetDefinition.h"
 #include "GSTN_PartsTestUtils.h"
+#include "Hits/GSTN_HitData.h"
 #include "Hits/GSTN_HitRunner.h"
 #include "Hits/GSTN_HitSteps.h"
 #include "Hits/GSTN_HurtboxTypes.h"
@@ -467,6 +468,36 @@ bool FGSTN_PartsStepOutcomeTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("the second hit breaks the arm and its hand"), (SecondOutcome->NewlyBrokenMask & 0b0110) == 0b0110 && (SecondOutcome->ResultBrokenMask & 0b0110) == 0b0110);
 	TestTrue(TEXT("the break moved the serial"), SecondOutcome->ResultBreakSerial != FirstOutcome->ResultBreakSerial);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsStepHitboxPenetrationTest, "GSTNParts.Core.Step.PerHitboxPenetrationThroughVariantOverride", GSTNPartsTest::Flags)
+bool FGSTN_PartsStepHitboxPenetrationTest::RunTest(const FString& Parameters)
+{
+	// One weapon, two hitboxes: the blade carries penetration 0 and the tip a variant override with penetration 6. The same blow on the armoured
+	// arm (hardness 4) ricochets off the blade and gets through with the tip
+	FStepFixture Fixture;
+	const FGSTN_HitResolutionContext Blade = Fixture.MakeContext(ArmBox, 10.f, 30.f, 0);
+
+	FGSTN_PartHitData TipData;
+	TipData.Penetration = 6;
+	FGSTN_HitVariant Variant;
+	Variant.Override.ExtensionOverrides.Add(FInstancedStruct::Make(TipData));
+	FGSTN_HitResolutionContext Tip = Blade;
+	Tip.Incoming.Hit = UGSTN_HitDataUtils::ApplyVariant(Blade.Incoming.Hit, Variant);
+
+	const FGSTN_StepResult BladeResult = Fixture.RunStep(Blade);
+	const FGSTN_StepResult TipResult = Fixture.RunStep(Tip);
+	const FGSTN_PartHitOutcome* BladeOutcome = FindOutcome(BladeResult);
+	const FGSTN_PartHitOutcome* TipOutcome = FindOutcome(TipResult);
+	if (!TestTrue(TEXT("both wrote an outcome entry"), BladeOutcome && TipOutcome))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the blade ricochets"), BladeOutcome->HasFlag(GSTNPartOutcomeFlags::Ricochet));
+	TestFalse(TEXT("the tip does not"), TipOutcome->HasFlag(GSTNPartOutcomeFlags::Ricochet));
+	TestTrue(TEXT("and lands on the arm"), TipOutcome->PartIndex == ArmBox && TipOutcome->NewPartDamage > 0);
+	TestEqual(TEXT("the replaced entry is the only part data of the tip hit"), Tip.Incoming.Hit.ExtensionData.Num(), 1);
 	return true;
 }
 
