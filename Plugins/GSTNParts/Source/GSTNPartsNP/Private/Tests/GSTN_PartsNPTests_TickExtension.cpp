@@ -121,6 +121,36 @@ bool FGSTN_PartsTickTagsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsGrabGateTagTest, "GSTNParts.NP.GrabGate.TagProjected", GSTNPartsNPTest::TestFlags)
+bool FGSTN_PartsGrabGateTagTest::RunTest(const FString& Parameters)
+{
+	// The gate asks for the head: only that break opens it, whatever else is broken. The grab abilities of M6 read the tag, nothing here grabs
+	FPartsFixture Fixture;
+	Fixture.Set->GrabGate = FGSTN_GrabGate();
+	Fixture.Set->GrabGate.RequiredParts.Add(Head);
+	FRig Rig;
+	FGSTN_PartsAttach::ApplyPartSet(Rig.Owner, Fixture.Set.Get(), Rig.ASC);
+
+	FGSTN_PartsTickExtension Parts;
+	FGSTN_CombatSyncState In, Out;
+	FGSTN_CombatTickContext Context(5, In, Out);
+	Context.Owner = Rig.Owner;
+	Context.AbilitySystem = Rig.ASC;
+	auto Project = [&](uint32 Mask, int32 Serial)
+	{
+		SetFragment(Out.Fragments, MakeState(Mask, Serial), Fixture.Num());
+		Parts.OnCombatHook(EGSTN_CombatHookPoint::BeforeTagProjection, Context);
+		return Rig.ASC->GetTagCount(GSTNPartsTags::Part_GrabLocked);
+	};
+
+	TestEqual(TEXT("intact: locked"), Project(0, 0), 1);
+	TestEqual(TEXT("another part broke: still locked"), Project(1u << Arm, 1), 1);
+	TestEqual(TEXT("the required part broke: the tag is gone"), Project((1u << Arm) | (1u << Head), 2), 0);
+	TestEqual(TEXT("the same state projected again: still open, nothing stacks"), Project((1u << Arm) | (1u << Head), 2), 0);
+	TestEqual(TEXT("a rollback to before the break: locked again"), Project(1u << Arm, 1), 1);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsTickHitGroupsTest, "GSTNParts.NP.TickExtension.HitGroupMaskFromBroken", GSTNPartsNPTest::TestFlags)
 bool FGSTN_PartsTickHitGroupsTest::RunTest(const FString& Parameters)
 {
