@@ -23,7 +23,8 @@ SPIKE_HURTBOXES = (
     ('shoulder', 'Combat.Hurtbox.Arm', 2, 20.0, 20.0, 0.0, 35.0),      # same Priority as head: tie goes to the lower index
 )
 
-_acc = {'rows': [], 'inbox': [], 'cycles': 0, 'missing': 0}
+_acc = {'rows': [], 'inbox': [], 'cycles': 0, 'missing': 0, 'rb': []}
+_spike_parts = {'on': False}
 _saved = {}
 
 
@@ -49,10 +50,14 @@ def _set_spike_hurtboxes():
         box.set_editor_property('priority', priority)
         boxes.append(box)
     hs.set_editor_property('hurtboxes', boxes)
+    if _spike_parts['on']:
+        _set_spike_parts()
     return 'six hurtboxes'
 
 
 def _restore_hurtboxes():
+    if _spike_parts['on']:
+        parts_reset()
     if 'boxes' in _saved:
         hs = unreal.load_asset('/Game/GASNPPTest/Combat/HBS_Test_Pawn')
         hs.set_editor_property('hurtboxes', _saved.pop('boxes'))
@@ -73,6 +78,7 @@ def spike_overlap_part(client=1, cycles=120, cycle_s=3.2):
         st = {}
 
         def place():
+            st['rb0'] = g.rollbacks(client)
             g.set_damage(vkey, 0)
             g._place_near(client, vkey, (rng.uniform(110.0, 170.0), rng.uniform(-35.0, 35.0)))
             return 'placed', i
@@ -97,6 +103,7 @@ def spike_overlap_part(client=1, cycles=120, cycle_s=3.2):
             _acc['rows'].append((i, srv, cli))
             _acc['inbox'].append((i, ibs, ibc))
             _acc['cycles'] += 1
+            _acc['rb'].append((i, g.rollbacks(client) - st['rb0']))
             return 'collected', i, len(srv), len(cli)
 
         return [(0.0, place), (1.0, mark), (2.2, lambda: (g.release(vi, "move"), "stick released")[1]), (cycle_s - 0.05, collect)]
@@ -144,9 +151,56 @@ def spike_report(reset=False):
     text = (f"cycles {_acc['cycles']}; authority hits {n}; matched on the client copy {agree + dis} (agree {agree}, DISAGREE {dis}); only on the authority {only_srv}, "
             f"only on the client {only_cli}; chosen index histogram {dict(sorted(by_idx.items()))}; authority inbox rows {ib_n}, "
             f"missing on the victim's client {ib_missing}, differing hurtbox {ib_dis}; disagreements {dis_rows[:6]}")
+    # P8: does a wrong index change the attacker's predicted ricochet? Among the matched hits, the flagged bit (row field 5) of the two copies
+    ric_n = ric_dis = ric_idx_dis = 0
+    ric_rows = []
+    for i, srv, cli in _acc['rows']:
+        cmap = {(r[0], r[1], r[2], r[3]): r for r in cli}
+        for r in srv:
+            c = cmap.get((r[0], r[1], r[2], r[3]))
+            if c is None:
+                continue
+            ric_n += r[5] == 1
+            if c[5] != r[5]:
+                ric_dis += 1
+                ric_rows.append((i, r, c))
+            if c[4] != r[4]:
+                ric_idx_dis += 1
+    rb_cycles = [x for x in _acc['rb'] if x[1] > 0]
+    text += (f"; ricochet-flag disagreements among matched hits {ric_dis} (authority ricochets {ric_n}, index disagreements {ric_idx_dis}); attacker-client rollbacks: "
+             f"{sum(x[1] for x in _acc['rb'])} in {len(rb_cycles)} of {len(_acc['rb'])} cycles; flag-disagreement rows {ric_rows[:6]}")
     if reset:
-        _acc.update(rows=[], inbox=[], cycles=0)
+        _acc.update(rows=[], inbox=[], cycles=0, rb=[])
     return text
+
+
+def _set_spike_parts():
+    """P8 re-measure: the part set of the pawns in memory has one part per spike hurtbox, hard (hardness 5: the test move's penetration 0 bounces) and soft
+    ones alternating, so a wrong overlap choice between neighbours flips the ricochet the attacker predicts"""
+    part_set = unreal.load_asset(PARTS_DIR + 'PS_Test_Pawn')
+    if 'parts' not in _ps_saved:
+        _ps_saved['parts'] = list(part_set.get_editor_property('parts'))
+    parts = []
+    for name, hardness in (('torso', 0), ('head', 5), ('feet', 0), ('chest', 5), ('weak', 0), ('shoulder', 5)):
+        part = unreal.GSTN_PartDefinition()
+        part.set_editor_property('name', name.capitalize())
+        part.set_editor_property('hurtboxes', [name])
+        part.set_editor_property('hardness', hardness)
+        part.set_editor_property('part_cap', 500.0)
+        parts.append(part)
+    part_set.set_editor_property('parts', parts)
+    if 'rules' not in _ps_saved:
+        unreal.GSTN_PartsContentLibrary.convert_rules_to_parts(g.hit_rules())
+        _ps_saved['rules'] = True
+    attach_everywhere(part_set)
+    return 'spike part set attached'
+
+
+def scenario_p0a_ricochet(client=1, cycles=130, cycle_s=2.8):
+    """P8 re-measure of P0a: spike_overlap_part with the spike part set, so the attacker's ricochet prediction depends on the chosen part. Accumulates in
+    the spike report (spike_report()), chunk after chunk, each chunk in a fresh PIE through parts_batch(['p0a_ricochet'] * n)"""
+    _spike_parts['on'] = True
+    return spike_overlap_part(client, cycles, cycle_s)
 
 
 # ======================================================================================================================================================
@@ -172,7 +226,7 @@ import time
 PARTS_DIR = '/Game/GASNPPTest/Combat/'
 PART_INDEX = {'Torso': 0, 'Head': 1, 'Legs': 2, 'ArmL': 3, 'ArmR': 4, 'Core': 5}
 AT_CAP = 255
-SUITE_PARTS = ['part_break', 'part_cap', 'part_hitgroups', 'part_rollback', 'part_host', 'part_restore']
+SUITE_PARTS = ['part_break', 'part_cap', 'part_hitgroups', 'part_rollback', 'part_host', 'part_restore', 'part_ricochet', 'part_stagger', 'part_weakpoint', 'part_break_launch']
 _ps_saved = {}
 
 
@@ -630,6 +684,248 @@ def scenario_part_restore(client=1, cap=12.0, fraction=0.25):
             len(rig.shots['r1']['hits']) == 1 and len(rig.shots['r2']['hits']) == 1, f"hits {[rig.shots[n]['hits'] for n in ('r1', 'r2', 'r3')]}"))),
         (t, run.at('Combat.Part.Broken is back after the second break', lambda: (has_tag(0, rig.vkey, 'Combat.Part.Broken') and has_tag(rig.vi, rig.vkey, 'Combat.Part.Broken'), 'tags'))),
         (t, run.at('at most one rollback per hit on the victim\'s client', lambda: rig.at_most_one_rollback(['b1', 'b2', 'b3', 'r1', 'r2', 'r3']))),
+        (t, rig.kits_ok()),
+    ]
+    steps += rig.end_steps()
+    run.run(steps)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------------
+# P8: hit feel through parts. The test move hits with 8 damage (stagger force 8 with StaggerPerDamage 1), a bracket of 500 and an authored hitstop (8 frames
+# victim, 6 attacker). ArmR is the armoured plate (stagger threshold 100, MaxReaction PushBack, hardness 3 in the content: a hit of penetration 0 bounces),
+# Head the weak point (threshold 5, main transfer 2), Legs break into a 900 cm/s launch. A scenario that wants a part to take the hit lowers its hardness in memory.
+STAGGERED_ACTIONS = {2, 3, 4}
+
+
+def _stagger_tuning(per_damage=1.0, push=540.0, launch=1080.0):
+    return g.set_tuning(stagger_per_damage=per_damage, push_back_threshold=push, launch_threshold=launch)
+
+
+def _tuning_reset():
+    return g.set_tuning(stagger_per_damage=1.0, **g.TUNING_DEFAULT)
+
+
+def _actions(rig, name):
+    """(authority, owner) sets of the victim's action states during the shot"""
+    v = rig.shots[name]['vinfo']
+    return {r[1][1] for r in v}, {r[2][1] for r in v}
+
+
+def _staggered_on(rig, name):
+    a, o = _actions(rig, name)
+    return bool(a & STAGGERED_ACTIONS), bool(o & STAGGERED_ACTIONS)
+
+
+def _windows_after_hit(rig, name):
+    """(authority, owner) distinct (hitstop start, hitstop end, hitstun end) windows from the frame of the hit on"""
+    s = rig.shots[name]
+    fr = s['hits'][0][0] if s['hits'] else 10 ** 9
+    return ([w for w in g.windows_seen(s['vinfo'], 1) if w[0] >= fr], [w for w in g.windows_seen(s['vinfo'], 2) if w[0] >= fr])
+
+
+def _rise(samples):
+    return (max(x['loc'][2] for x in samples) - samples[0]['loc'][2]) if samples else 0.0
+
+
+def scenario_part_ricochet(client=1):
+    """P8. c1 hits c2's armoured plate (ArmR, hardness 3) with the light test move (penetration 0): the band below ricochets. Judged on the authority, the
+    attacker's client and the victim: one hit flagged as a ricochet, predicted identically on the attacker's client (same row); the attacker recoils (recoil
+    start the frame after the hit on both copies, the recoil outlives the 32 frame move), no hitstop window opened on either side, no part damage and no
+    damage percent, the part state untouched on every world, no hitstun, the victim's inbox holds the flagged entry; no Part.Damaged or Part.Broken. The
+    attacker's client does not roll back during the shot (the recoil is predicted, not corrected)."""
+    victim = 2 if client == 1 else 1
+    rig = _PartsRig('part_ricochet', client, victim, 'ArmR', cap=500.0, hardness=3)
+    run = rig.run
+    st = {}
+
+    def mark():
+        st['w_att'] = (g._hit_window(0, rig.akey), g._hit_window(rig.client, rig.akey))
+        st['w_vic'] = g._hit_window(0, rig.vkey)
+        st['rb0'] = g.rollbacks(rig.client)
+        st['f0'] = g._latest_frame(0, rig.akey)
+        st['part0'] = parts_states(rig.vkey)
+        return 'mark', st['f0']
+
+    def release():
+        st['rb1'] = g.rollbacks(rig.client)
+        st['w_att1'] = (g._hit_window(0, rig.akey), g._hit_window(rig.client, rig.akey))
+        st['w_vic1'] = g._hit_window(0, rig.vkey)
+        return 'released'
+
+    def recoil():
+        rows = [r for r in g._hit_log(0, rig.akey) if r[0] >= st['f0']]
+        st['rows'] = rows
+        st['owner_rows'] = [r for r in g._hit_log(rig.client, rig.akey) if r[0] >= st['f0']]
+        st['recoil'] = (g._recoil_info(0, rig.akey), g._recoil_info(rig.client, rig.akey))
+        return 'recoil', st['recoil']
+
+    steps = [rig.setup_step()]
+    t0 = rig.cursor
+    steps += rig.shot('bounce', hold=mark, release=release)
+    t_attack = t0 + 1.75
+    steps.append((t_attack + 0.6, recoil))
+    t = rig.cursor
+    s = lambda: rig.shots['bounce']
+    steps += [
+        (t, run.at('one hit, on the armoured plate, flagged as a ricochet, no attacker hitstop in the log', lambda: (
+            len(s()['hits']) == 1 and s()['hits'][0][4] == PART_INDEX['ArmR'] and s()['hits'][0][5] == 1 and s()['hits'][0][6] == 0, f"hits {s()['hits']}"))),
+        (t, run.at('predicted on the attacker\'s client: the same row as the authority\'s', lambda: (
+            len(st['rows']) == 1 and st['owner_rows'] == st['rows'], f"authority {st['rows']}, owner {st['owner_rows']}"))),
+        (t, run.at('the attacker recoils: recoil start is the frame after the hit, equal on the authority and the owner', lambda: (
+            len(st['rows']) == 1 and st['recoil'][0][4] == st['rows'][0][0] + 1 and st['recoil'][1][4] == st['recoil'][0][4], f"rows {st['rows']}, recoil {st['recoil']}"))),
+        (t, g._in_timeline_seen(run, 'the recoil outlives the 32 frame move (still in the timeline)', t_attack + 0.64, t_attack + 0.72)),
+        (t, run.at('no hitstop window on either side', lambda: (
+            st['w_att1'] == st['w_att'] and st['w_vic1'] == st['w_vic'], f"attacker (authority, owner) {st['w_att']} -> {st['w_att1']}, victim {st['w_vic']} -> {st['w_vic1']}"))),
+        (t, run.at('no damage percent and no hitstun on the victim', lambda: (
+            s()['dmg'] == (0, 0) and not any(_staggered_on(rig, 'bounce')) and not s()['recv'], f"damage {s()['dmg']}, actions {_actions(rig, 'bounce')}, received {s()['recv']}"))),
+        (t, run.at('the part state is untouched on every world (no fragment written, or all zero)', lambda: (all(x == 'none' or (parse_state(x)[0] == 0 and not any(parse_state(x)[2])) for x in parts_states(rig.vkey)), f'{parts_states(rig.vkey)}'))),
+        (t, run.at('the victim\'s inbox holds the flagged entry (cue and event only)', lambda: (
+            len([e for e in g._inbox_log(0, rig.vkey) if e[5] == 1 and e[3] == PART_INDEX['ArmR']]) == 1, f'{g._inbox_log(0, rig.vkey)}'))),
+        (t, run.at('no Part.Damaged, no Part.Broken', lambda: (not _kinds(0, rig.vkey, 'Damaged') and not _kinds(0, rig.vkey, 'Broken'), f'{part_events(0, rig.vkey)}'))),
+        (t, run.at('the attacker\'s client did not roll back during the shot (the recoil is predicted)', lambda: (
+            st['rb1'] - st['rb0'] == 0, f"rollbacks of the attacker's client {st['rb0']} -> {st['rb1']}"))),
+        (t, rig.kits_ok()),
+    ]
+    steps += rig.end_steps()
+    run.run(steps)
+
+
+def scenario_part_stagger(client=1):
+    """P8, the stagger test per part (force against the part's threshold; hitstun length comes from the knockback only). Light blow (force 8) on the armoured
+    plate (threshold 100): damage and a flinch, no hitstun. Heavy blow (StaggerPerDamage 20, force 160) on the plate: hitstun, and MaxReaction PushBack caps
+    the tier (the bracket 500 would launch with the thresholds used here): a push back on the ground, no launch. Light blow on the weak point (threshold 5):
+    hitstun. Judged on the authority and the owner: the same action states and windows, at most one rollback per hit on the victim's client."""
+    victim = 2 if client == 1 else 1
+    rig = _PartsRig('part_stagger', client, victim, 'ArmR', cap=500.0, hardness=0)
+    run = rig.run
+    S = rig.shots
+
+    def prep(target, per_damage):
+        return lambda: (parts_setup(target, 500.0, 0), _stagger_tuning(per_damage, push=300.0, launch=400.0))
+
+    steps = [rig.setup_step()]
+    steps += rig.shot('light_armour', prep=prep('ArmR', 1.0))
+    steps += rig.shot('heavy_armour', prep=prep('ArmR', 20.0))
+    steps += rig.shot('light_weak', prep=prep('Head', 1.0))
+    t = rig.cursor
+
+    def one(name, part):
+        return len(S[name]['hits']) == 1 and S[name]['hits'][0][4] == PART_INDEX[part] and not S[name]['hits'][0][5], f"{name}: hits {S[name]['hits']}"
+
+    def flinch():
+        ok, d = one('light_armour', 'ArmR')
+        stag = _staggered_on(rig, 'light_armour')
+        return ok and not any(stag) and S['light_armour']['dmg'][0] > 0 and S['light_armour']['dmg'][0] == S['light_armour']['dmg'][1] and rig.displacement('light_armour') < 5.0, \
+            f"{d}; staggered (authority, owner) {stag}, damage {S['light_armour']['dmg']}, moved {rig.displacement('light_armour'):.1f} cm"
+
+    def pushed():
+        ok, d = one('heavy_armour', 'ArmR')
+        stag = _staggered_on(rig, 'heavy_armour')
+        tags = rig.hit_tags('heavy_armour')
+        modes = (rig.modes('heavy_armour'), rig.modes('heavy_armour', 'cli'))
+        ok = ok and all(stag) and 'Combat.Event.Hit.Staggered' in tags and 'Combat.Event.Hit.Reaction.PushBack' in tags and 'Combat.Event.Hit.Reaction.Launch' not in tags
+        ok = ok and rig.displacement('heavy_armour') > 20.0 and _rise(S['heavy_armour']['srv']) < 5.0 and _rise(S['heavy_armour']['cli']) < 5.0
+        return ok, f"{d}; staggered {stag}, tags {sorted(t for t in tags if 'Reaction' in t or 'Stag' in t)}, moved {rig.displacement('heavy_armour'):.1f} cm, rise {_rise(S['heavy_armour']['srv']):.1f} / {_rise(S['heavy_armour']['cli']):.1f}, modes {modes}"
+
+    def weak():
+        ok, d = one('light_weak', 'Head')
+        stag = _staggered_on(rig, 'light_weak')
+        return ok and all(stag) and 'Combat.Event.Hit.Staggered' in rig.hit_tags('light_weak'), f"{d}; staggered {stag}, tags {sorted(rig.hit_tags('light_weak'))}"
+
+    def equal(name):
+        def f():
+            a, o = _windows_after_hit(rig, name)
+            return bool(a) and [w[:2] for w in o][:1] == [w[:2] for w in a][:1] and _actions(rig, name)[0] == _actions(rig, name)[1], f'authority {a}, owner {o}, actions {_actions(rig, name)}'
+        return f
+
+    steps += [
+        (t, run.at('light blow on the armour: damage, a flinch, no hitstun, no displacement', flinch)),
+        (t, run.at('heavy blow on the armour: hitstun and a grounded push back (MaxReaction caps the launch)', pushed)),
+        (t, run.at('light blow on the weak point: hitstun', weak)),
+        (t, run.at('the windows and action states are equal on the authority and the owner, in all three', lambda: (
+            all(equal(n)()[0] for n in ('light_armour', 'heavy_armour', 'light_weak')), '; '.join(equal(n)()[1] for n in ('light_armour', 'heavy_armour', 'light_weak'))))),
+        (t, run.at('at most one rollback per hit on the victim\'s client', lambda: rig.at_most_one_rollback(['light_armour', 'heavy_armour', 'light_weak']))),
+        (t, rig.kits_ok()),
+    ]
+    steps += rig.end_steps(extra=[_tuning_reset])
+    run.run(steps)
+
+
+def scenario_part_weakpoint(client=1):
+    """P8. The same light blow on the torso and on the head (weak point, main transfer 2): both take the equal band (hardness 0 against penetration 0), so the
+    head takes twice the torso's main damage. Judged on the authority and the owner: damage percent per blow, Part.WeakPointHit once (head), published by the
+    authority only, none for the torso."""
+    victim = 2 if client == 1 else 1
+    rig = _PartsRig('part_weakpoint', client, victim, 'Torso', cap=500.0, hardness=0)
+    run = rig.run
+    S = rig.shots
+    steps = [rig.setup_step()]
+    steps += rig.shot('torso', prep=lambda: parts_setup('Torso', 500.0, 0))
+    steps += rig.shot('head', prep=lambda: parts_setup('Head', 500.0, 0))
+    t = rig.cursor
+
+    def damage():
+        a, b = S['torso']['dmg'], S['head']['dmg']
+        ok = a[0] > 0 and abs(b[0] - 2.0 * a[0]) < 0.2 and abs(b[1] - 2.0 * a[1]) < 0.2 and abs(a[0] - a[1]) < 0.01 and abs(b[0] - b[1]) < 0.01
+        return ok, f'damage percent per blow: torso {a}, head {b} (authority, owner)'
+
+    steps += [
+        (t, run.at('one hit each, on the torso and on the head', lambda: (
+            len(S['torso']['hits']) == 1 and S['torso']['hits'][0][4] == PART_INDEX['Torso'] and len(S['head']['hits']) == 1 and S['head']['hits'][0][4] == PART_INDEX['Head'],
+            f"torso {S['torso']['hits']}, head {S['head']['hits']}"))),
+        (t, run.at('the head takes twice the torso\'s main damage, equal on the authority and the owner', damage)),
+        (t, run.at('Part.WeakPointHit once (the head, serial 0), authority only', lambda: _authority_only(rig.vkey, 'WeakPointHit', [(PART_INDEX['Head'], 0)]))),
+        (t, run.at('Part.Damaged for each blow', lambda: (len(_kinds(0, rig.vkey, 'Damaged')) == 2, f'{part_events(0, rig.vkey)}'))),
+        (t, _states_equal(rig, 'the part state is equal on every world and nothing broke', mask=0)),
+        (t, run.at('at most one rollback per hit on the victim\'s client', lambda: rig.at_most_one_rollback(['torso', 'head']))),
+        (t, rig.kits_ok()),
+    ]
+    steps += rig.end_steps()
+    run.run(steps)
+
+
+def scenario_part_break_launch(client=1, cap=12.0):
+    """P8. The light blows do not stagger (the hurtbox threshold is up). c1 breaks c2's Legs (cap 12: the third blow), whose break throws the victim 900 cm/s,
+    60 % of it up. Judged on the authority and the owner: blows one and two flinch only; the breaking blow staggers and launches (the pawn rises, one hitstun
+    window, equal on both); a blow on the stump launches nothing; Part.Broken once; every world agrees on where the victim ends up."""
+    victim = 2 if client == 1 else 1
+    rig = _PartsRig('part_break_launch', client, victim, 'Legs', cap, hardness=0)
+    run = rig.run
+    S = rig.shots
+    steps = [rig.setup_step()]
+    steps += rig.shot('h1', prep=lambda: g.set_hurtbox(stagger=1000.0, infinite=False))
+    steps += rig.shot('h2') + rig.shot('h3') + rig.shot('h4')
+    t = rig.cursor
+
+    def calm(name):
+        def f():
+            stag = _staggered_on(rig, name)
+            return not any(stag) and rig.displacement(name) < 5.0 and len(S[name]['hits']) == 1, f"{name}: staggered {stag}, moved {rig.displacement(name):.1f}, hits {S[name]['hits']}"
+        return f
+
+    def launched():
+        stag = _staggered_on(rig, 'h3')
+        wins = _windows_after_hit(rig, 'h3')
+        rises = (_rise(S['h3']['srv']), _rise(S['h3']['cli']))
+        speed = (max((x['vel'][2] for x in S['h3']['srv']), default=0.0), max((x['vel'][2] for x in S['h3']['cli']), default=0.0))
+        ok = all(stag) and len(S['h3']['hits']) == 1 and len(wins[0]) == 1 and len(wins[1]) == 1 and wins[0][0][:2] == wins[1][0][:2]
+        ok = ok and min(rises) > 30.0 and min(speed) > 300.0
+        return ok, f"staggered {stag}, windows {wins}, rise (authority, owner) {rises}, peak vertical speed {speed}, hits {S['h3']['hits']}"
+
+    def same_place():
+        spots = [tuple(g.snap(g.worlds()[w])[rig.vkey]['location']) for w in range(len(g.worlds()))]
+        spread = max(math.dist(a, b) for a in spots for b in spots)
+        return spread < 15.0, f'victim position on every world {[tuple(round(x) for x in p) for p in spots]}, spread {spread:.1f} cm'
+
+    steps += [
+        (t, run.at('blow one: a flinch only', calm('h1'))),
+        (t, run.at('blow two: a flinch only', calm('h2'))),
+        (t, run.at('blow three breaks the legs and launches the victim, equal on the authority and the owner', launched)),
+        (t, run.at('blow four hits the stump and launches nothing', lambda: (not any(_staggered_on(rig, 'h4')) and len(S['h4']['hits']) == 1, f"staggered {_staggered_on(rig, 'h4')}, hits {S['h4']['hits']}"))),
+        (t, run.at('Part.Broken once for the legs (part 2, serial 1), authority only', lambda: _authority_only(rig.vkey, 'Broken', [(PART_INDEX['Legs'], 1)]))),
+        (t, _states_equal(rig, 'the legs are broken (0x0004, serial 1), equal on every world', mask=0x4, serial=1)),
+        (t, run.at('the victim ends up in the same place on every world', same_place)),
+        (t, run.at('at most one rollback per hit on the victim\'s client', lambda: rig.at_most_one_rollback(['h1', 'h2', 'h3', 'h4']))),
         (t, rig.kits_ok()),
     ]
     steps += rig.end_steps()
