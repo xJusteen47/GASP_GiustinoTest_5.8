@@ -49,6 +49,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Telecamera | [camera.md](camera.md) |
 | Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
 | Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
+| Input a carica (stile Guile) | [input.md](input.md) §10 |
 | Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [input.md](input.md) §9 |
 
 
@@ -1487,3 +1488,22 @@ COL.2. Per colpire la cavità dentro la gamba corazzata basta **toccare l'apertu
 **entrare** nel buco?
    Perché conta: "toccare" è più semplice e generoso, "entrare" è più preciso ma più difficile da ottenere con uno swing.
    Ipotesi nella specifica: basta toccare l'apertura con un'arma che ci passa.
+
+## Input a carica, stile Guile (26/10)
+
+Specifica: [input.md](input.md) §10. Il plugin di input ha già la condizione `Charge` (insieme di direzioni, durata minima, tolleranza dopo
+il rilascio); qui ci sono solo le scelte di gioco.
+
+CH.1. In 3D, fuori dal duello, il personaggio si gira verso lo stick, quindi "tenere indietro" non si può fare. Le cariche **indietro**
+valgono solo dove la direzione è bloccata (telecamera da duello, aggancio al bersaglio), e altrove si usano le cariche **in basso**
+(tenendo premuto abbassarsi)? Oppure "indietro" va inteso rispetto alla telecamera?
+   Perché conta: cambia quali mosse a carica si possono dare ai kit usati nei livelli.
+   Ipotesi nella specifica: cariche indietro solo con la direzione bloccata, cariche in basso ovunque.
+
+CH.2. Quanto deve durare la carica? In Street Fighter è circa tre quarti di secondo o poco più.
+   Perché conta: è il ritmo di tutte le mosse a carica.
+   Ipotesi nella specifica: valore per singola mossa, di base 40 frame (circa 0,65 s), con 8 frame di tolleranza dopo il rilascio.
+
+CH.3. Nel duello, se l'avversario ti salta dall'altra parte, la carica indietro si perde (come in Street Fighter) o viene conservata?
+   Perché conta: conservarla rende più facile difendersi dai salti incrociati con una mossa a carica.
+   Ipotesi nella specifica: si perde, come in Street Fighter.

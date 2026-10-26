@@ -267,6 +267,12 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (19:57) A move may also allow a full rotation at a set number of degrees per second, or full movement during the active frames;
   the vertical swing stays the more common case.
 
+## 6j. Charge inputs, Guile style (owner question, 2026-10-26 09:47)
+
+- The owner asked whether a tag on crouch press and release, read by an ability, is enough for Street Fighter charge moves. The input
+  plugin already has a `Charge` condition on the input history (direction set, minimum duration, tolerance after release); the gaps are
+  the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.3.
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -579,3 +585,9 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 > Per quanto riguarda qualcosa come l'addome di un charger di helldivers? Ossia sopra ha durezza media, sotto leggere, ma distruggere una
 > delle due distrugge tutto l'addome. (23:21)
+
+### Message of 2026-10-26, 09:47 (verbatim)
+
+> Un’altra cosa. Non abbiamo considerato gli input a carica alla Guile di street fighter. In teoria però basterebbe aggiungere un tag o
+> qualcosa quando si preme il tasto per abbassarsi ad esempio e quando si lascia si leva? Poi un’abilità lo usa? Dovrebbe funzionare bene
+> già così, no?

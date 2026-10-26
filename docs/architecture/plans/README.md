@@ -46,6 +46,9 @@ occlusion with a pass radius, **H17** hitbox sweep completeness (M4 plan); **P18
 shortcuts for stick gestures in [`../input.md`](../input.md) §9. Owner sequencing: these general specs come first, the detailed design of
 individual abilities resumes at the end.
 
+Charge inputs (owner question, 2026-10-26): the `Charge` condition exists; a charge tracker in the input state of `GSTNInputNP`
+([`../input.md`](../input.md) §10, size S) should land before the first charge move ships.
+
 ### Test maps (owner request, 2026-10-23)
 
 After the related milestones, three test maps are built from primitives by Ludus AI (an editor AI assistant) or a person,
