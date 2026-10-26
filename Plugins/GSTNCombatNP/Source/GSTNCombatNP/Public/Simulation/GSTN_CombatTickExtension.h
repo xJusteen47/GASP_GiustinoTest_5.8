@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Hits/GSTN_HitExtensions.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Timeline/GSTN_TimelinePlayer.h"
 
 class AActor;
 class UAbilitySystemComponent;
@@ -55,6 +56,12 @@ struct FGSTN_CombatTickContext
 	FGSTN_HitGroupMask HitGroupMask;
 
 	/**
+	 * What the clock step evaluated this frame, for the windows the track hooks stamped (FGSTN_TimelineOutput::StampedWindows): an extension writes them into its own
+	 * fragment at AfterClocks. Valid for this tick only; null in a test
+	 */
+	const FGSTN_TimelineOutput* Timeline = nullptr;
+
+	/**
 	 * The entity's actor and ability system, for an extension that must reach content or the tags of the entity (it projects tags from its
 	 * fragment at BeforeTagProjection). Null in a test. Read-only use of content: an extension never reads simulation state from them
 	 */
@@ -94,6 +101,14 @@ public:
 	virtual int32 GetPriority() const { return 0; }
 
 	virtual void OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_CombatTickContext& Context) = 0;
+
+	/**
+	 * Does the extension's state forbid the entity to start any command this frame (a held shield, a grab)? OR-ed over every extension into the
+	 * can-act rule, asked once per frame after the BeforeCandidates point and before the candidates are collected, so an extension that
+	 * changed its fragment there is seen. It closes the gate the way a hit reaction does: nothing starts, the input is recorded and aged as usual. A pure
+	 * read of Context.Out (and In), no side effect. Default: never
+	 */
+	virtual bool BlocksActions(const FGSTN_CombatTickContext& Context) const { return false; }
 };
 
 /**
@@ -114,6 +129,9 @@ public:
 
 	/** Calls every extension's hook for Point, in order */
 	void Run(EGSTN_CombatHookPoint Point, FGSTN_CombatTickContext& Context) const;
+
+	/** True when any extension's BlocksActions says so (every extension is asked, in order, so none depends on another's answer) */
+	bool BlocksActions(const FGSTN_CombatTickContext& Context) const;
 
 private:
 	struct FEntry

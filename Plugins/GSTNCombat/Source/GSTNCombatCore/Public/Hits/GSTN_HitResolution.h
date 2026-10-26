@@ -10,6 +10,7 @@
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_ReactionTypes.h"
 #include "Rules/GSTN_CombatStep.h"
+#include "Sync/GSTN_InboxEntry.h"
 #include "GSTN_HitResolution.generated.h"
 
 class UGSTN_CombatRules;
@@ -199,6 +200,13 @@ struct GSTNCOMBATCORE_API FGSTN_HitResolutionContext
 
 	/** Data of optional plugins the outcome carries to the appliers (FGSTN_HitExtension structs); steps of those plugins append */
 	TArray<FInstancedStruct> OutcomeExtensions;
+
+	/**
+	 * Messages the hit sends back to its attacker (a parry's punish, M6 F2): appended by the steps, posted by the victim step after the pipeline
+	 * through PostToInbox once the hit stands. The victim step stamps Frame and SenderId, so a step leaves them unset. Only the victim's run
+	 * delivers them; the attacker's prediction of the same hit ignores them (a reverse delivery exists on a machine that ticks the attacker)
+	 */
+	TArray<FGSTN_InboxEntry> OutgoingEntries;
 };
 
 /**
@@ -326,6 +334,9 @@ struct GSTNCOMBATCORE_API FGSTN_StepResult
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Step|Outcome")
 	TArray<FGSTN_HitRequest> Requests;
+
+	/** Appended to the context's OutgoingEntries. C++ steps only: an inbox entry is not a reflected type, so a Blueprint step cannot write it */
+	TArray<FGSTN_InboxEntry> OutgoingEntries;
 
 	/** Appended to the context's OutcomeExtensions (FGSTN_HitExtension structs for the appliers) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Step|Outcome")

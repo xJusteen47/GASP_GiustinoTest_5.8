@@ -93,6 +93,12 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 	In.bOnWall = bOnWall;
 	In.Fragments = &Sync.Fragments;
 	FGSTN_CombatVictim::Resolve(In, Core, VictimResult);
+	// The reverse deliveries of the hits that stood. A target that does not tick on this machine (an interpolated proxy of the attacker) refuses
+	// the entry, so on a client they only reach an attacker it predicts, as the hits themselves do
+	for (const FGSTN_VictimOutgoing& Reply : VictimResult.Outgoing)
+	{
+		PostToInbox(Reply.TargetId, Reply.Entry);
+	}
 
 	// A KO zone: the position at the end of the previous frame against the static zones of the world. A hit that knocked it out this frame
 	// stands (the reason is Health), the zone only knocks out what is not out yet

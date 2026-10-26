@@ -58,6 +58,52 @@ struct GSTNCOMBATCORE_API FGSTN_Hurtbox
 };
 
 /**
+ * A hurtbox a plugin contributes to an entity for one snapshot, on top of its set (a shield bubble, M6 5.3 "Contact"). Not part of
+ * the set asset: it is derived every frame from replicated state, so it follows the entity through the lag compensation history and
+ * is the same on every machine that reads the same state. The shape is root-relative like a set hurtbox's.
+ *
+ * An extra shares the priority scale of the body: the highest Priority among the overlapped hurtboxes wins and a tie goes to the extra
+ * (so a bubble at priority 0 still sits above the body it covers). Its index in a hit is ExtraIndexBase + position in the list.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_ExtraHurtbox
+{
+	GENERATED_BODY()
+
+	/** Root-relative, like FGSTN_Hurtbox::Shape */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
+	FGSTN_HitShape Shape;
+
+	/** Same scale as FGSTN_Hurtbox::Priority; on a tie the extra wins (the lower position among extras) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
+	uint8 Priority = 0;
+
+	/** Hit types this extra lets through (the hit passes it as if it were not there): matched hierarchically, an unset hit type is never ignored */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox", meta = (Categories = "Combat.HitType"))
+	FGameplayTagContainer IgnoreHitTypes;
+
+	/** Who contributed it: the contributor's feature id (GSTNFeatureIds), so a step can tell a bubble from another extra without a tag */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
+	uint8 Source = 0;
+};
+
+/** The extras of one entity in a snapshot or a history record: inline, because there are at most MaxExtraHurtboxes and most frames none */
+using FGSTN_ExtraHurtboxList = TArray<FGSTN_ExtraHurtbox, TInlineAllocator<2>>;
+
+/** Hurtbox indices of a hit: the set takes [0, ExtraIndexBase), the extras of the snapshot take ExtraIndexBase + position */
+namespace GSTNHurtboxIndex
+{
+	constexpr int32 ExtraIndexBase = 0x80;
+
+	/** Extras one entity carries; a contributor that appends more is truncated, identically on every machine */
+	constexpr int32 MaxExtraHurtboxes = 2;
+
+	inline bool IsExtra(int32 Index) { return Index >= ExtraIndexBase && Index < ExtraIndexBase + MaxExtraHurtboxes; }
+	inline int32 ToExtraPosition(int32 Index) { return Index - ExtraIndexBase; }
+	inline int32 FromExtraPosition(int32 Position) { return ExtraIndexBase + Position; }
+}
+
+/**
  * The hurtboxes of one kind of combatant (combat-m4-hits 3), referenced by soft reference from the character data. The
  * threshold and the reaction cap here are the entity defaults, so a whole enemy type gets them without touching each hurtbox.
  */
@@ -67,7 +113,7 @@ class GSTNCOMBATCORE_API UGSTN_HurtboxSetDefinition : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	/** Index in this array is the HurtboxIndex a hit carries (at most 255 entries) */
+	/** Index in this array is the HurtboxIndex a hit carries (at most 128 entries: the indices from GSTNHurtboxIndex::ExtraIndexBase are the extras') */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtboxes")
 	TArray<FGSTN_Hurtbox> Hurtboxes;
 

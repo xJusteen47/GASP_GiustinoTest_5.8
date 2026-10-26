@@ -252,9 +252,10 @@ void FGSTN_CombatRulesValidation::ValidateHurtboxSet(const UGSTN_HurtboxSetDefin
 	{
 		Add(OutMessages, true, TEXT("The set has no hurtbox: nothing could be hit"));
 	}
-	if (Set.Hurtboxes.Num() > 255)
+	if (Set.Hurtboxes.Num() > GSTNHurtboxIndex::ExtraIndexBase)
 	{
-		Add(OutMessages, true, FString::Printf(TEXT("The set has %d hurtboxes, the index of a hit is a byte (255 at most)"), Set.Hurtboxes.Num()));
+		Add(OutMessages, true, FString::Printf(TEXT("The set has %d hurtboxes, the index of a hit is a byte and the indices from %d are reserved for extra hurtboxes (%d at most)"),
+			Set.Hurtboxes.Num(), GSTNHurtboxIndex::ExtraIndexBase, GSTNHurtboxIndex::ExtraIndexBase));
 	}
 
 	TSet<FName> Names;

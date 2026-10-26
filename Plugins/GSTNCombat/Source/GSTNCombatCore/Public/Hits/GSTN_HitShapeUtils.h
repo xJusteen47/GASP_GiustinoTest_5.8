@@ -56,6 +56,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GSTN|Hits")
 	static int32 PickHurtbox(const TArray<int32>& Overlapped, const UGSTN_HurtboxSetDefinition* Set);
 
-	/** PickHurtbox over plain arrays, for code that holds no set asset */
+	/** PickHurtbox over plain arrays, for code that holds no set asset. Indices from GSTNHurtboxIndex::ExtraIndexBase are not set hurtboxes (the set holds at most 128) */
 	static int32 PickHurtboxIndex(TConstArrayView<int32> Overlapped, TConstArrayView<FGSTN_Hurtbox> Hurtboxes);
+
+	/**
+	 * PickHurtboxIndex over the set and the extras of the entity's snapshot. An overlapped index from GSTNHurtboxIndex::ExtraIndexBase is
+	 * an extra (position = index - base). The highest Priority wins over both kinds; a tie goes to an extra over the set, then to the lower
+	 * index. An extra that ignores HitType is skipped as if it had not overlapped. With no extras this is the overload above, bit for bit.
+	 */
+	static int32 PickHurtboxIndex(TConstArrayView<int32> Overlapped, TConstArrayView<FGSTN_Hurtbox> Hurtboxes, TConstArrayView<FGSTN_ExtraHurtbox> Extras, const FGameplayTag& HitType);
 };

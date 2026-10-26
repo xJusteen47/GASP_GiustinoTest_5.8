@@ -583,6 +583,9 @@ private:
 	/** Whether the frame ran with the gate closed. Same lifetime as FrameTables */
 	bool bFrameGateClosed = false;
 
+	/** An extension's BlocksActions closed the can-act rule for this frame (a held shield): IsCommandAllowed refuses every command. Rewritten every tick, never state */
+	bool bFrameActionsBlocked = false;
+
 	int32 GateClosedFrames = 0;
 
 	/** The set the frame is on, else the one of the latest state, else the empty one. Never null after BeginPlay */

@@ -34,6 +34,7 @@ FGSTN_HitVictimView FGSTN_CombatVictim::MakeVictimView(const FGSTN_SnapshotEntry
 	View.ReactionState = Victim.Reaction;
 	View.HealthFraction = Victim.HealthFraction;
 	View.SnapshotExtension = Victim.Extension.GetData();
+	View.ExtraHurtboxes = Victim.ExtraHurtboxes;
 	if (Rules && Rules->DamageMode != EGSTN_DamageMode::Health)
 	{
 		// The percent modes derive the fraction from the damage taken
@@ -84,6 +85,7 @@ FVector FGSTN_CombatVictim::StickToPlane(const FVector2D& Stick, double CameraYa
 void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSyncCore& Core, FGSTN_VictimResult& Out)
 {
 	Out.Hits.Reset();
+	Out.Outgoing.Reset();
 	Out.FreezeFrames = 0;
 	Out.bFreezeZeroVelocity = false;
 	Out.bCancelledMove = false;
@@ -135,9 +137,9 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		Incoming.HitboxVelocity = Entry.HitboxVelocity;
 		Incoming.bVictimGrounded = In.bGrounded;
 		FVector VictimCenter = Self.Transform.GetLocation();
-		if (Self.Hurtboxes && Self.Hurtboxes->Hurtboxes.IsValidIndex(Entry.HurtboxIndex))
+		if (const FGSTN_HitShape* HurtShape = Self.FindHurtboxShape(Entry.HurtboxIndex))
 		{
-			VictimCenter = ShapeCenterOf(Self.Hurtboxes->Hurtboxes[Entry.HurtboxIndex].Shape, Self.Transform);
+			VictimCenter = ShapeCenterOf(*HurtShape, Self.Transform);
 		}
 		// HitLocation is the middle of the two centres (the attacker wrote it so), which makes this the direction the attacker computed
 		Incoming.HitboxToVictim = (VictimCenter - Entry.HitLocation).GetSafeNormal(UE_SMALL_NUMBER, Incoming.AttackerFacing);
@@ -167,6 +169,16 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 
 		FGSTN_HitPipelineRunner::MakeView(Rules, Context, Hit.View);
 		Hit.Outcome = Context.Outcome;
+
+		// What the steps sent back to the attacker (a parry's punish): stamped here, posted by the component once the step is done
+		for (FGSTN_InboxEntry& Outgoing : Context.OutgoingEntries)
+		{
+			Outgoing.Frame = Frame;
+			Outgoing.SenderId = Self.EntityId;
+			FGSTN_VictimOutgoing& Reply = Out.Outgoing.AddDefaulted_GetRef();
+			Reply.TargetId = Entry.AttackerId;
+			Reply.Entry = MoveTemp(Outgoing);
+		}
 
 		// The registered outcome appliers, for staggered and unstaggered hits alike; what they return joins the outcome
 		FGSTN_OutcomeApplyContext ApplyContext;

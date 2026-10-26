@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_ReactionTypes.h"
 #include "GSTN_HitVictimView.generated.h"
 
@@ -120,6 +121,13 @@ struct GSTNCOMBATCORE_API FGSTN_HitVictimView
 	 * frame the view was read, the core never dereferences it.
 	 */
 	const void* SnapshotExtension = nullptr;
+
+	/**
+	 * The extra hurtboxes the victim's snapshot carries (a shield bubble), so a step can read what the hit landed on when HurtboxIndex is
+	 * from GSTNHurtboxIndex::ExtraIndexBase. A copy (at most GSTNHurtboxIndex::MaxExtraHurtboxes), empty for almost every hit
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Victim")
+	TArray<FGSTN_ExtraHurtbox> ExtraHurtboxes;
 
 	/** The value of a stat of the victim as a whole, or Default when it has none of that tag */
 	float GetStat(const FGameplayTag& Stat, float Default = 0.f) const

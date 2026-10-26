@@ -44,6 +44,7 @@ void FGSTN_SnapshotContributorRegistry::Unregister(IGSTN_SnapshotContributor* Co
 void FGSTN_SnapshotContributorRegistry::Fill(const FGSTN_SnapshotContributorContext& Context, FGSTN_SnapshotEntry& Entry) const
 {
 	Entry.Extension.Reset();
+	Entry.ExtraHurtboxes.Reset();
 	for (const IGSTN_SnapshotContributor* Contributor : Contributors)
 	{
 		Contributor->Contribute(Context, Entry.Extension);
@@ -51,7 +52,24 @@ void FGSTN_SnapshotContributorRegistry::Fill(const FGSTN_SnapshotContributorCont
 		{
 			Contributor->ModifyEntry(Context, Entry);
 		}
+		Contributor->AppendExtraHurtboxes(Context, Entry.ExtraHurtboxes);
 	}
+	// The index of a hit holds two extras: the ones past that would be silently unhittable, and the same cut on every machine keeps them equal
+	if (Entry.ExtraHurtboxes.Num() > GSTNHurtboxIndex::MaxExtraHurtboxes)
+	{
+		Entry.ExtraHurtboxes.SetNum(GSTNHurtboxIndex::MaxExtraHurtboxes, EAllowShrinking::No);
+	}
+}
+
+double GSTNExtraHurtboxes::ComputeBoundRadius(TConstArrayView<FGSTN_ExtraHurtbox> Extras)
+{
+	double Radius = 0.0;
+	for (const FGSTN_ExtraHurtbox& Extra : Extras)
+	{
+		const FTransform& Local = Extra.Shape.Local;
+		Radius = FMath::Max(Radius, Local.GetLocation().Size() + Extra.Shape.Extent.GetMax() * Local.GetScale3D().GetAbsMax());
+	}
+	return Radius;
 }
 
 void FGSTN_SnapshotContributorRegistry::Rebuild(const FGSTN_SnapshotContributorContext& Context, FGSTN_SnapshotExtensionBlob& Blob) const

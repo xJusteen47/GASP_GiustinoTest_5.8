@@ -7,6 +7,22 @@
 #include "Timeline/GSTN_TimelineTypes.h"
 
 /**
+ * A window a track hook stamped on the frame it was evaluated (M6 F2): the plugin that owns the track says what the window is (a parry window) in
+ * its own terms, the clock only carries it. Frames are simulation frames, [StartFrame, EndFrame), so the plugin writes them into its own fragment as they are
+ */
+struct FGSTN_StampedWindow
+{
+	int32 StartFrame = INDEX_NONE;
+	int32 EndFrame = INDEX_NONE;
+
+	/** An index into the owning plugin's profile table (never a tag, never a pointer) */
+	uint8 Profile = 0;
+};
+
+/** Windows stamped by one evaluation: a timeline has at most a couple of tracks of one kind open at once, so the list lives inline */
+using FGSTN_StampedWindowList = TArray<FGSTN_StampedWindow, TInlineAllocator<2>>;
+
+/**
  * What the player reports for one frame. Allocated once (Reserve) and reused every frame: Evaluate only resets the lengths,
  * so a running timeline costs no heap traffic, which matters for a listen host that simulates every pawn. The track
  * pointers point into the evaluated timeline data (or its ricochet response), which therefore must outlive the output's use
@@ -73,6 +89,9 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineOutput
 
 	/** Weapon swaps whose frame was crossed by this evaluation */
 	TArray<const FGSTN_TimelineTrack_WeaponSwitch*> WeaponSwitches;
+
+	/** Windows the track hooks of the combat clock stamped on this frame (empty without a hook: the player itself never writes it) */
+	FGSTN_StampedWindowList StampedWindows;
 
 	/**
 	 * Grows the arrays to what a timeline (and its recoil) can report, once. Evaluate calls it, and it is a no-op once the

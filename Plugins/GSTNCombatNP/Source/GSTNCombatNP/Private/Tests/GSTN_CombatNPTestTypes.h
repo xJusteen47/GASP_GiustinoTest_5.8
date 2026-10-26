@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Sync/GSTN_SyncFragment.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 #include "GSTN_CombatNPTestTypes.generated.h"
 
 /** Two integers, discrete state (the default Interpolate: the newer frame) */
@@ -52,4 +53,11 @@ struct FGSTN_TestFragmentB : public FGSTN_SyncFragment
 	{
 		Out.Appendf("B value %d", Value);
 	}
+};
+
+/** A track of no kind the model knows: the clock's track hook is registered for this struct (M6 F2) */
+USTRUCT()
+struct FGSTN_TestHoldTrack : public FGSTN_TimelineTrack
+{
+	GENERATED_BODY()
 };

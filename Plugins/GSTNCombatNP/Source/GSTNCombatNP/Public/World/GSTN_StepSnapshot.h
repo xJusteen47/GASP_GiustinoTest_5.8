@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GenericTeamAgentInterface.h"
+#include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_ReactionTypes.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
 #include "Simulation/GSTN_CombatInbox.h"
@@ -119,7 +120,31 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 
 	/** The data of the optional plugin that contributes to the snapshot (empty when none does); see FGSTN_SnapshotContributorRegistry */
 	FGSTN_SnapshotExtensionBlob Extension;
+
+	/**
+	 * Hurtboxes plugins add on top of Hurtboxes for this snapshot (a shield bubble), at most GSTNHurtboxIndex::MaxExtraHurtboxes. They are a value of
+	 * the end of the previous frame like the rest of the entry, and the lag compensation history keeps them with the record. An entity with no
+	 * Hurtboxes set cannot be hit, whatever it carries here
+	 */
+	FGSTN_ExtraHurtboxList ExtraHurtboxes;
+
+	/** The shape of the hurtbox a hit carries the index of: a set hurtbox, or an extra from GSTNHurtboxIndex::ExtraIndexBase. Null for an index that is neither */
+	const FGSTN_HitShape* FindHurtboxShape(int32 HurtboxIndex) const
+	{
+		if (GSTNHurtboxIndex::IsExtra(HurtboxIndex))
+		{
+			const int32 Position = GSTNHurtboxIndex::ToExtraPosition(HurtboxIndex);
+			return ExtraHurtboxes.IsValidIndex(Position) ? &ExtraHurtboxes[Position].Shape : nullptr;
+		}
+		return Hurtboxes && Hurtboxes->Hurtboxes.IsValidIndex(HurtboxIndex) ? &Hurtboxes->Hurtboxes[HurtboxIndex].Shape : nullptr;
+	}
 };
+
+namespace GSTNExtraHurtboxes
+{
+	/** The radius around the entity's root that holds every extra (its offset plus its largest world extent), for the broadphase */
+	GSTNCOMBATNP_API double ComputeBoundRadius(TConstArrayView<FGSTN_ExtraHurtbox> Extras);
+}
 
 /**
  * The hittable entities of one simulation step, sorted by entity id, with a uniform grid for the broadphase. Built by the first
@@ -219,6 +244,13 @@ public:
 
 	/** Lets the contributor change the entry the snapshot build just filled (the hurtbox states of broken parts). Not called at a rebuild */
 	virtual void ModifyEntry(const FGSTN_SnapshotContributorContext& Context, FGSTN_SnapshotEntry& Entry) const {}
+
+	/**
+	 * Appends the extra hurtboxes the entity has this frame (a shield bubble from the replicated shield state), computed from the context
+	 * only, so the attacker's machine, the authority and a lag compensation rewind of the history record give the same shapes. Called by the
+	 * snapshot build after Contribute, whether or not the blob is set; what it appends beyond GSTNHurtboxIndex::MaxExtraHurtboxes is dropped. Not called at a rebuild
+	 */
+	virtual void AppendExtraHurtboxes(const FGSTN_SnapshotContributorContext& Context, FGSTN_ExtraHurtboxList& Out) const {}
 };
 
 /**
@@ -239,7 +271,7 @@ public:
 
 	int32 Num() const { return Contributors.Num(); }
 
-	/** The snapshot build: fills Entry.Extension, then lets the contributor modify the entry. Resets the extension first; neutral with nothing registered */
+	/** The snapshot build: fills Entry.Extension, lets the contributor modify the entry and collects its extra hurtboxes. Resets both first; neutral with nothing registered */
 	void Fill(const FGSTN_SnapshotContributorContext& Context, FGSTN_SnapshotEntry& Entry) const;
 
 	/** The victim drain: rebuilds Blob from the fragments as they stand now. Neutral with nothing registered */

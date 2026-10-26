@@ -250,6 +250,7 @@ void UGSTN_CombatWorldSubsystem::RecordHistory(const FGSTN_StepSnapshot& Source,
 		Record.Velocity = Entry.Velocity;
 		Record.Reaction = Entry.Reaction;
 		Record.Extension = Entry.Extension;
+		Record.ExtraHurtboxes = Entry.ExtraHurtboxes;
 		if (Ring.Num() > MaxRecords)
 		{
 			Ring.RemoveAt(0, Ring.Num() - MaxRecords, EAllowShrinking::No);
@@ -337,6 +338,11 @@ const FGSTN_StepSnapshot& UGSTN_CombatWorldSubsystem::EnsureSnapshot(int32 Frame
 		if (Entry.BoundRadius <= 0.f)
 		{
 			Entry.BoundRadius = static_cast<float>(ComputeBoundRadius(Hurtboxes));
+		}
+		if (!Entry.ExtraHurtboxes.IsEmpty())
+		{
+			// A bubble reaches past the body: the broadphase must find the entity for a hitbox that only touches the extra
+			Entry.BoundRadius = FMath::Max(Entry.BoundRadius, static_cast<float>(GSTNExtraHurtboxes::ComputeBoundRadius(Entry.ExtraHurtboxes)));
 		}
 	}
 

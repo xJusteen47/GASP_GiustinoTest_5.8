@@ -52,3 +52,13 @@ void FGSTN_CombatTickExtensionRegistry::Run(EGSTN_CombatHookPoint Point, FGSTN_C
 		Entry.Extension->OnCombatHook(Point, Context);
 	}
 }
+
+bool FGSTN_CombatTickExtensionRegistry::BlocksActions(const FGSTN_CombatTickContext& Context) const
+{
+	bool bBlocked = false;
+	for (const FEntry& Entry : Entries)
+	{
+		bBlocked |= Entry.Extension->BlocksActions(Context);
+	}
+	return bBlocked;
+}

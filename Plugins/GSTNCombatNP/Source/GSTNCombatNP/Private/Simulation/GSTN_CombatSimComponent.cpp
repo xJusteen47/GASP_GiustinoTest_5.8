@@ -569,6 +569,11 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 	// Outside the combat tick (or with no timeline running) nothing gates: only a running timeline closes commands
 	// A victim in hitstun or tumble acts again when its state says Actionable; the first frame of that state is the first frame of the tail
 	const UGSTN_CombatTableSet& Current = Tables();
+	if (bFrameActionsBlocked)
+	{
+		// An extension's state forbids acting (BlocksActions): no command starts, whatever the reaction or the timeline would allow
+		return false;
+	}
 	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
 	{
 		// The one exception: an ability tagged Combat.Ability.IgnoreHitstunOnActivation, in a reaction (a KO is never bypassed). The gate only asks
@@ -849,9 +854,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	HookContext.Owner = GetOwner();
 	HookContext.AbilitySystem = AbilitySystem;
 	HookContext.Outbox = &EventOutbox;
+	HookContext.Timeline = &TimelineOutput;
 	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
 	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
+	// The can-act veto of the extensions, from the fragments as the hooks above left them; it closes the gate the candidates ask
+	bFrameActionsBlocked = Extensions.BlocksActions(HookContext);
 
 	// The attacker side (combat-m4-hits 6), before the candidates: a hit of this frame confirms the run for the cancel gate of the same frame
 	if (!bHitstopFrame && !bFrameGateClosed)
@@ -878,6 +886,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Args.Outbox = &EventOutbox;
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
+	bFrameActionsBlocked = false;
 
 	// A burst: the ability that starts in a reaction and says it ends it. The state is rewritten here, in the frame of the request, so it rolls
 	// back with the rest; the ability system's pre-tick removes the freeze of the window (EndReaction request)

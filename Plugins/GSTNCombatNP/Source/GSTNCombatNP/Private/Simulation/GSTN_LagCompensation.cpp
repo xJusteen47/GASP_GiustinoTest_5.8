@@ -51,6 +51,12 @@ void GSTNLagComp::BuildOverlay(const FGSTN_StepSnapshot& Source, int32 AttackerI
 		Entry.Velocity = Record.Velocity;
 		Entry.Reaction = Record.Reaction;
 		Entry.Extension = Record.Extension;
+		Entry.ExtraHurtboxes = Record.ExtraHurtboxes;
+		if (!Entry.ExtraHurtboxes.IsEmpty())
+		{
+			// The rewound bubble can be larger than the present one the entry's radius was built from; the radius never shrinks, so the broadphase stays a superset
+			Entry.BoundRadius = FMath::Max(Entry.BoundRadius, static_cast<float>(GSTNExtraHurtboxes::ComputeBoundRadius(Entry.ExtraHurtboxes)));
+		}
 		Entry.bInHitstop = Record.Reaction.HasFlag(GSTNVictimReactionFlags::InHitstop);
 	}
 	Out.BuildGrid(UGSTN_CombatWorldSubsystem::DefaultCellSize);
