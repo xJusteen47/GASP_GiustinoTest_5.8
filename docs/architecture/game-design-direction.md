@@ -271,7 +271,9 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 
 - The owner asked whether a tag on crouch press and release, read by an ability, is enough for Street Fighter charge moves. The input
   plugin already has a `Charge` condition on the input history (direction set, minimum duration, tolerance after release); the gaps are
-  the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.3.
+  the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.4.
+- (09:53) **Back-charge works in 3D**: the charge holds while the stick stays within a limited angle. Spec: charge relative to the
+  direction where it started, release opposite to it ([input.md](input.md) §10).
 
 ## 7. Consequences for the specifications
 
@@ -591,3 +593,5 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Un’altra cosa. Non abbiamo considerato gli input a carica alla Guile di street fighter. In teoria però basterebbe aggiungere un tag o
 > qualcosa quando si preme il tasto per abbassarsi ad esempio e quando si lascia si leva? Poi un’abilità lo usa? Dovrebbe funzionare bene
 > già così, no?
+
+> Allora, farei che la carica indietro funziona in 3d, basta far mantenere la carica entro una certa limitazione dei gradi dello stick. (09:53)

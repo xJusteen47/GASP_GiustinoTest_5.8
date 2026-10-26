@@ -1499,6 +1499,9 @@ valgono solo dove la direzione è bloccata (telecamera da duello, aggancio al be
 (tenendo premuto abbassarsi)? Oppure "indietro" va inteso rispetto alla telecamera?
    Perché conta: cambia quali mosse a carica si possono dare ai kit usati nei livelli.
    Ipotesi nella specifica: cariche indietro solo con la direzione bloccata, cariche in basso ovunque.
+   **Risposta (2026-10-26 09:53):** La carica indietro funziona in 3D: basta mantenerla finché lo stick resta entro un certo limite di gradi.
+   Nella specifica: la carica è relativa alla direzione in cui è iniziata, e "avanti" vuol dire l'opposto di quella direzione
+   ([input.md](input.md) §10).
 
 CH.2. Quanto deve durare la carica? In Street Fighter è circa tre quarti di secondo o poco più.
    Perché conta: è il ritmo di tutte le mosse a carica.
@@ -1507,3 +1510,7 @@ CH.2. Quanto deve durare la carica? In Street Fighter è circa tre quarti di sec
 CH.3. Nel duello, se l'avversario ti salta dall'altra parte, la carica indietro si perde (come in Street Fighter) o viene conservata?
    Perché conta: conservarla rende più facile difendersi dai salti incrociati con una mossa a carica.
    Ipotesi nella specifica: si perde, come in Street Fighter.
+
+CH.4. Di quanti gradi può spostarsi lo stick dalla direzione iniziale senza perdere la carica?
+   Perché conta: un angolo stretto fa perdere la carica a chi muove un po' lo stick; uno largo la fa tenere anche girando quasi di lato.
+   Ipotesi nella specifica: 50 gradi da ogni lato, regolabile mossa per mossa.
