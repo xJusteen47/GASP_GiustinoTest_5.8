@@ -51,6 +51,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
 | Input a carica (stile Guile) | [input.md](input.md) §10 |
 | Zone di oggetti attivabili da un solo giocatore | [level-activation.md](level-activation.md) |
+| Volumi di gravità alla Mario Galaxy | [gravity-volumes.md](gravity-volumes.md) |
 | Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [input.md](input.md) §9 |
 
 
@@ -1579,3 +1580,35 @@ FLP.5. Quali **altre azioni** vuoi che attivino gli oggetti? Schianto a terra, s
 FLP.6. I **nemici** possono attivare questi oggetti (per esempio un nemico che salta sulle piattaforme)?
    Ipotesi nella specifica: no di base, solo i giocatori; il designer può aprirlo per un oggetto.
    **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
+
+## Volumi di gravità alla Mario Galaxy (26/10)
+
+Specifica: [gravity-volumes.md](gravity-volumes.md). Campi di gravità piazzati nel livello: direzione fissa (zone capovolte o di lato),
+verso un punto (pianeti rotondi), verso un asse (cilindri, tubi), verso un anello, verso una scatola (pianeti cubici), lungo una spline, e
+gravità zero. Dove due campi si sovrappongono vince quello con priorità più alta. La gravità si calcola ogni frame dalla posizione, dentro
+la simulazione, quindi online è coerente senza dati in più. Oggi la gravità è solo un'impostazione del componente Mover, quindi questa è
+una parte nuova.
+
+GRV.1. Quando la gravità cambia, il movimento usa **subito** la nuova gravità, mentre il **modello** del personaggio e la **telecamera**
+ruotano in modo morbido. Va bene una rotazione del modello rapida (proposta: 720 gradi al secondo, un capovolgimento in un quarto di
+secondo) e la telecamera più lenta (90 gradi al secondo, come già nella specifica della telecamera)?
+   Perché conta: girare subito anche il modello è più leggibile ma brusco; girarlo lentamente è più morbido ma il personaggio sembra
+   storto per un attimo.
+   Ipotesi nella specifica: modello 720 gradi al secondo, telecamera 90 gradi al secondo, regolabili per livello.
+
+GRV.2. **Fuori da ogni campo**, cosa succede: torna la gravità normale del livello, oppure resta l'ultima gravità che avevi (come nello
+spazio di Galaxy, dove tra un pianeta e l'altro continui verso dove stavi andando)?
+   Perché conta: con l'ultima gravità i livelli spaziali non hanno bisogno di coprire tutto il vuoto con campi; con quella del livello
+   tutto è più prevedibile.
+   Ipotesi nella specifica: gravità del livello di base, "tieni l'ultima" come opzione per livello (non costa dati in più).
+
+GRV.3. I **nemici sui pianeti rotondi**: la navmesh di Unreal funziona solo con l'alto verso Z, quindi sui pianeti i nemici avrebbero
+bisogno di un loro sistema di movimento sulla superficie. Li vuoi già nella prima versione, oppure per ora i nemici stanno solo nelle zone
+a gravità con direzione fissa (anche capovolte o di lato)?
+   Perché conta: il movimento dei nemici su superfici curve è un lavoro a parte, abbastanza grande.
+   Ipotesi nella specifica: prima versione solo zone a direzione fissa; pianeti con nemici più avanti.
+
+GRV.4. Gli **oggetti fisici liberi** (casse, detriti) dentro i campi: seguono la gravità del campo solo come effetto visivo, oppure fanno
+parte del gioco (per esempio una cassa che rotola verso di te su un pianeta)?
+   Perché conta: farli contare nel gioco online costa molto; come effetto visivo è economico.
+   Ipotesi nella specifica: effetto visivo; gli oggetti presi e lanciati (M10) invece seguono la gravità nella simulazione.
