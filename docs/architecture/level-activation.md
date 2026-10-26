@@ -12,7 +12,8 @@ that the base is enough:
   marked with Mario's emblem that **only Mario can control**, shown in **Mario's red**. The point is exclusive control and the owner's
   colour, not the platform's own mechanism.
 
-Questions FLP.1–FLP.6 are in [open-questions-m4-m10.md](open-questions-m4-m10.md). Nothing here is built.
+Owner answers FLP.1–FLP.6 (2026-10-26 10:13) are in [open-questions-m4-m10.md](open-questions-m4-m10.md): FLP.1 (when a zone is
+released) is designer data per zone, FLP.2–FLP.6 accept the proposals below. Nothing here is built.
 
 ## 1. Goals
 
@@ -66,9 +67,10 @@ Triggers are read from confirmed or predicted simulation state, never from anima
   - `Team`: any player of the owner's team.
   - `None`: anyone's trigger counts (opt-in, for shared switches).
 - The server decides ties by player slot (the alphabetical order of [combat-parts.md](combat-parts.md) §6.0).
-- Release (*Proposal*, question FLP.1): the claim ends when the owner has not stood in the zone for `ReleaseFrames` (default 120,
-  about 2 s), or on the owner's KO or respawn.
-- Other players can stand and walk on a claimed zone; their triggers do nothing (question FLP.4).
+- Release is **designer data per zone** (owner answer FLP.1): `EGSTN_ClaimRelease ReleaseOn` flags `Idle` (the owner has not been in
+  the zone for `ReleaseFrames`), `OwnerKO` (KO or respawn), or none (the claim holds until the level ends). Default `Idle | OwnerKO`
+  with `ReleaseFrames = 120` (about 2 s). `Assigned` zones never release.
+- Other players can stand and walk on a claimed zone; their triggers do nothing (FLP.4, accepted).
 - The zone exposes the **owner's crystal colour** to its members (presentation only, through a colour provider the project
   implements, as the depth marker does). Without the provider it uses a neutral colour.
 
@@ -92,7 +94,7 @@ Zones are **server-authoritative objects with scheduled steps**.
 6. The server rejects a predicted trigger it does not confirm (a jump the server did not see); the predicting machine rolls the
    telegraph back.
 
-**Choosing the delay** (question FLP.2). It depends on who the object affects:
+**Choosing the delay** (designer data per zone, FLP.2 accepted). It depends on who the object affects:
 - an object that changes the ground **under other players** (the panels) needs a delay that covers the latency (*Proposal*: 20
   frames, about 0.32 s at 62.5 Hz, which covers a 150 ms one-way trip) so everyone sees the flip on the same frame. The owner's delay
   idea is exactly this, and the telegraph (blink, shake in the owner's colour) makes it readable;
@@ -107,12 +109,13 @@ FGSTN_ActivationRule {
     FGameplayTagQuery Trigger;              // Activation.Trigger.*
     EGSTN_ActivatorFilter Filter;           // Players (default), Anyone, TaggedEntities
     EGSTN_ClaimRule ClaimRule = FirstToStand;
+    EGSTN_ClaimRelease ReleaseOn = Idle | OwnerKO;   // flags, designer choice (FLP.1)
     int32 ReleaseFrames = 120;
     int32 DelayFrames = 20;
     int32 CooldownFrames = 0;
     EGSTN_TriggerSense Sense = Any;         // Any, Clockwise, CounterClockwise (spin and drill triggers)
     int8 Step = 1;                          // negative for the opposite direction (spin sense, lever side)
-    bool bRequireInsideZone = true;         // the trigger must start in the zone, question FLP.3
+    bool bRequireInsideZone = true;         // the trigger must start in the zone (FLP.3, accepted)
     int16 MinValue, MaxValue;               // clamp, or wrap when bWrapValue
     bool bWrapValue = false;
 }

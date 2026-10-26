@@ -1537,25 +1537,32 @@ FLP.1. Quando una zona **torna libera** per un altro giocatore? Quando il propri
 finché resta nel livello? (Non vale per le zone con proprietario assegnato.)
    Perché conta: se non si libera mai, un giocatore lontano blocca la zona per tutti.
    Ipotesi nella specifica: si libera dopo circa 2 secondi che il proprietario non ci sta sopra, o quando va KO.
+   **Risposta (2026-10-26 10:13):** Lo decide il designer. Nella specifica: per ogni zona si sceglie se si libera dopo un tempo senza il
+   proprietario, quando il proprietario va KO, entrambe le cose (valore di base) oppure mai.
 
 FLP.2. Il **ritardo** prima che l'oggetto reagisca va bene come valore per zona, con 20 frame di base (circa 0,3 s) per gli oggetti che
 cambiano il terreno sotto gli altri giocatori e 0 per quelli che portano solo il proprietario? Vale anche giocando da soli?
    Perché conta: con 0,3 secondi online tutti vedono il cambio nello stesso momento; da soli può sembrare lento.
    Ipotesi nella specifica: sì, deciso dal designer zona per zona, con gli oggetti che lampeggiano nel colore del proprietario durante
    l'attesa; da soli lo stesso valore, salvo che tu non preferisca 0.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
 
 FLP.3. L'azione del proprietario conta **ovunque si trovi** (come il salto in Mario 3D Land) oppure solo se la fa **dentro la zona** o
 stando sopra?
    Perché conta: "ovunque" permette di attivare da lontano per aiutare gli altri, "dentro" lega la zona a chi la sta usando.
    Ipotesi nella specifica: opzione del designer per zona, di base "dentro la zona".
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
 
 FLP.4. Gli **altri giocatori** possono fare qualcosa su una zona occupata (per esempio salirci senza farla reagire), oppure la zona li
 ignora del tutto?
-   Ipotesi nella specifica: ci possono stare sopra e camminare, i loro salti non contano finché il gruppo è occupato.
+   Ipotesi nella specifica: ci possono stare sopra e camminare, le loro azioni non contano finché la zona è occupata.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
 
 FLP.5. Quali **altre azioni** vuoi che attivino gli oggetti? Schianto a terra, spin, trapano, colpo, interazione, entrare in una zona?
    Ipotesi nella specifica: tutte, scelte dal designer oggetto per oggetto; salto, atterraggio, entrata e colpo funzionano subito, le altre
    dopo una piccola aggiunta al sistema delle abilità.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
 
 FLP.6. I **nemici** possono attivare questi oggetti (per esempio un nemico che salta sulle piattaforme)?
    Ipotesi nella specifica: no di base, solo i giocatori; il designer può aprirlo per un oggetto.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.

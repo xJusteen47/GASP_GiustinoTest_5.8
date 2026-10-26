@@ -296,6 +296,7 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (10:08, spin and drill thread) Screws on **mechanical enemies** that, once unscrewed, remove a high-hardness armour part above them.
   Spec: the screw is a part turned by spin and drill hits with the right sense; the armour is held by its screws and breaks whatever
   its hardness ([combat-parts.md](combat-parts.md) §3.4, plan P19).
+- (10:13) FLP.1: when a zone is released is the **designer's choice**; FLP.2–FLP.6: the proposals are accepted.
 
 ## 7. Consequences for the specifications
 
@@ -638,6 +639,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Un esempio è [screenshot of New Super Mario Bros. Wii: a girder platform with Mario's emblem] (09:59)
 >
 > La piattaforma te l'ho data per darti l'idea del fatto che può essere controllata solo da Mario, e assume il colore rosso di Mario. (10:00)
+>
+> Flp 1 è deciso dal designer. Le altre domande hanno già un'ottima risposta. (10:13)
 
 > Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
 > mooolto lentamente per non perdere la carica (09:55)
