@@ -32,6 +32,10 @@
 # The ability's WallModeNames (UGSTN_GA_WallSlide) must list "WallSlidingV2" and "WallClimbingV2" too for the ability to stay active on them:
 # that is a C++ default, not an asset, and both names are there.
 # The Blueprint is copied to Saved/Backups/GAS (timestamped) before it is changed (Content is only partly under version control).
+#
+# --check (read-only) reports the moving-surface settings of traversal T2 on the wall modes and the Falling wall entry transitions; --fix-t2 sets the ones that
+# differ on the v2 modes and the surface-driven transitions (backup first; the legacy mode is reported, never changed):
+#   UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GAS/setup_wall_slide_modes.py --check"
 import os, shutil, re, time
 import unreal
 
@@ -43,15 +47,27 @@ CLIMB_MODE = 'WallClimbingV2'
 # use -> TargetModeName of a plain entry transition, or None for the surface-driven transition (which has no fixed target)
 USE_TARGETS = {'v2': V2_MODE, 'legacy': LEGACY_MODE, 'v2climb': None}
 
-# Properties of a v2 mode that are NOT copied from the legacy mode: its own control model, edge settings and surface mode list
-V2_ONLY = {'control', 'brake', 'edges', 'max_move_radii', 'surface_modes'}
+# Properties of a v2 mode that are NOT copied from the legacy mode: its own control model, edge settings and surface mode list, and the switches the v2
+# modes turn on in C++ while the legacy mode keeps them off (wall-slide-v2.md 6.14 riding from the synced location, traversal T2 wall frame in the memory):
+# copying them would switch them off on a new v2 mode
+# (Python names: UE drops the b of bool properties, bRideFromSyncedLocation is ride_from_synced_location)
+V2_ONLY = {'control', 'brake', 'edges', 'max_move_radii', 'surface_modes', 'ride_from_synced_location', 'record_wall_base_in_memory'}
 # The climb mode keeps its own WallClimb surface filter too (the legacy one is empty) and its own tilt flag
-CLIMB_ONLY = V2_ONLY | {'surface_filter', 'b_allow_capsule_tilt'}
+CLIMB_ONLY = V2_ONLY | {'surface_filter', 'allow_capsule_tilt'}
 # Properties of a transition that are not copied when its class changes: the surface-driven one has no fixed target and its own list
 TRANSITION_ONLY = {'target_mode_name', 'surface_modes'}
 # ...and a surface-driven transition does not take the surface filter of the plain one it replaces: its mode list is the filter (the C++ ignores the field
 # there; the first A/B run found the WallSlide-only filter of the old transition on the swapped one, and no climb-only wall was ever grabbed)
-SURFACE_TRANSITION_SKIP = {'surface_filter'}
+# The same for the T2 re-entry switches, on in the surface-driven twins and off in the plain ones
+SURFACE_TRANSITION_SKIP = {'surface_filter', 'infer_mode_change_lost_to_rollback', 'base_relative_height_cap'}
+
+# What the moving-surface checkpoint (traversal T2) expects on the v2 modes and on the surface-driven entry transitions (--check reports, --fix-t2 sets).
+# Base riding: bUseMovementBases, BaseRotation FollowExceptRoll, bAddBaseVelocityOnExit (traversal plan T2 settings), riding from the synced location (6.14)
+# and the wall frame in the memory (T2). Transitions: the stale mode-change record and the base-relative height cap (T2)
+T2_MODE_EXPECT = {'use_movement_bases': True, 'base_rotation': 'FOLLOW_EXCEPT_ROLL', 'add_base_velocity_on_exit': True,
+                  'ride_from_synced_location': True, 'record_wall_base_in_memory': True}
+T2_TRANSITION_EXPECT = {'infer_mode_change_lost_to_rollback': True, 'base_relative_height_cap': True}
+T2_REPORT_TRANSITION = ('same_wall_policy', 'same_wall_angle', 'height_cap_tolerance', 'reentry_cooldown', 'memory_reset_modes', 'memory_reset_tags')
 
 subobjects = unreal.get_engine_subsystem(unreal.SubobjectDataSubsystem)
 sdl = unreal.SubobjectDataBlueprintFunctionLibrary
@@ -209,6 +225,68 @@ def switch_entry_transitions(mover, use):
     return changed
 
 
+def _value_matches(value, expected):
+    if isinstance(expected, str):
+        return expected.lower() in str(value).lower()
+    return value == expected
+
+
+def check_t2(fix=False):
+    """Reports (and with fix=True sets, after a backup) the traversal T2 settings of the v2 modes and of the surface-driven Falling transitions.
+    Read-only without fix. Returns the list of (owner, property, value, expected) that differ."""
+    bp = unreal.load_asset(SANDBOX_CHAR)
+    mover = find_mover(bp) if bp else None
+    if not mover:
+        log(f'ERROR: no Mover component on {SANDBOX_CHAR}')
+        return None
+    modes = mover.get_editor_property('movement_modes')
+    wrong = []
+    targets = []
+    for name in (LEGACY_MODE, V2_MODE, CLIMB_MODE):
+        mode = modes.get(name)
+        if not mode:
+            log(f'check: no "{name}" mode')
+            continue
+        values = {p: mode.get_editor_property(p) for p in T2_MODE_EXPECT if p in editor_property_names(type(mode))}
+        log(f'check: {name} ({type(mode).__name__}) ' + ', '.join(f'{p}={v}' for p, v in values.items()))
+        if name == LEGACY_MODE:
+            continue  # the legacy mode is reported, never changed (owner decision 2026-10-25: ignore the legacy wall slide)
+        for p, expected in T2_MODE_EXPECT.items():
+            if p in values and not _value_matches(values[p], expected):
+                wrong.append((name, p, values[p], expected))
+                targets.append((mode, p, expected))
+    falling = modes.get(FALLING_MODE)
+    for i, transition in enumerate(falling.get_editor_property('transitions') if falling else []):
+        if not isinstance(transition, unreal.GSTN_WallEntryTransition):
+            continue
+        names = set(editor_property_names(type(transition)))
+        report = {p: transition.get_editor_property(p) for p in T2_REPORT_TRANSITION + tuple(T2_TRANSITION_EXPECT) if p in names}
+        log(f'check: {FALLING_MODE} transition {i} ({type(transition).__name__}) ' + ', '.join(f'{p}={v}' for p, v in report.items()))
+        if not is_surface_transition(transition):
+            continue
+        for p, expected in T2_TRANSITION_EXPECT.items():
+            if p in report and not _value_matches(report[p], expected):
+                wrong.append((f'{FALLING_MODE}[{i}]', p, report[p], expected))
+                targets.append((transition, p, expected))
+    for owner, p, value, expected in wrong:
+        log(f'check: DIFFERS {owner}.{p} = {value} (expected {expected})')
+    if not wrong:
+        log('check: T2 settings as expected')
+    if fix and targets:
+        backup(SANDBOX_CHAR)
+        for obj, p, expected in targets:
+            if isinstance(expected, str):
+                expected = getattr(unreal.GSTN_WallBaseRotation, expected)
+            obj.set_editor_property(p, expected)
+        if falling:
+            falling.set_editor_property('transitions', list(falling.get_editor_property('transitions')))
+        mover.set_editor_property('movement_modes', modes)
+        unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+        unreal.EditorAssetLibrary.save_loaded_asset(bp)
+        log(f'check: {len(targets)} T2 settings fixed, {SANDBOX_CHAR} saved')
+    return wrong
+
+
 def run(use=None):
     """use: 'v2' | 'legacy' | 'v2climb' | None (None only registers the v2 slide mode; v2climb also registers the climb mode)."""
     if use is not None and use not in USE_TARGETS:
@@ -252,4 +330,7 @@ if __name__ == '__main__':
     if '--use' in sys.argv:
         idx = sys.argv.index('--use')
         chosen = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else None
-    run(use=chosen)
+    if '--check' in sys.argv or '--fix-t2' in sys.argv:
+        check_t2(fix='--fix-t2' in sys.argv)
+    else:
+        run(use=chosen)

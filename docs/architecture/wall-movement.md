@@ -47,6 +47,7 @@ Both structs derive from `FMoverDataStructBase` and carry `TStructOpsTypeTraits`
 | `TimeWithoutWall`, `PullAwayTime` | float | differs by > 0.02 s |
 | `LastWallNormal`, `LastWallHeight`, `LastWallTimeMs` | only with `bHasWallMemory` | with memory: angle > ~5 deg / > 2 cm / > 1 ms |
 | `MemoryResetTimeMs` | 1 bit flag, +8 bytes (double) only when set (>= 0) | set vs unset, or > 1 ms apart |
+| `bLastWallOnMovingBase`, `LastWallBaseHeight` (T2) | 1 bit flag (only with memory), +4 bytes (float) when set | with memory: flag differs, or > 2 cm |
 
 ## Prediction rules for wall state
 
@@ -56,9 +57,15 @@ Nothing the simulation reads may live outside the sync state or a rollback-aware
 - **Entry handoff (`EntryInfo`) and the ridden dynamic wall (`BaseInfo`)** are entries of Mover's rollback blackboard (`SimContext.Blackboard`, `GSTNWallBlackboard::EnsureEntries`): 64 slots, persistent, `InvalidatedOnRollback`. The entry cannot be unset, so "none" is an empty struct (zero normal, invalid `Base`). Modes create the entries in `OnRegistered`, the entry transition on first use. A rewound entry holds this machine's prediction of the frame before, not the authority's: the v2 modes (`bRideFromSyncedLocation`) take only the base and its previous pose from `BaseInfo` and the character's place on it from the start sync state, so a correction while riding is kept (wall-slide-v2.md 6.14).
 - **`UGSTN_WallEntryTransition::Evaluate` is read-only.** Mover calls it more than once per tick and again when re-simulating; the only write of the transition is in `Trigger` (entry handoff). The decision depends on the start sync state, `CommonBlackboard::LastModeChangeRecord` (rollback blackboard) and tags.
 - `MemoryResetTags` resets only **while** the tag is present (it is no longer latched into a time). Use the reset effect for a permanent forget.
+- **`LastModeChangeRecord` can be stale after a correction** (traversal T2). It is `InvalidatedOnRollback` and nothing rewrites it: a rollback to a frame after the authority's
+  take-off but before this machine's own erases the record of the take-off, and the re-simulation starts already in the air. The "went through `MemoryResetModes`" reset
+  then differs between server and client and the next grab of the same wall reconciles. `bInferModeChangeLostToRollback` (on in the surface-driven transitions) reads a
+  record whose mode is not the start state's mode as "the change out of the record's mode was lost": a reset mode entered after the wall still resets the memory. Two lost
+  changes (land and take off inside one rollback window) are not recovered.
 
 ## Tests
 
+`Private/WallMovement/Tests/GSTN_WallReentryTests.cpp`: `GSTN.Wall.V2Surface.*`, the re-entry rules (`UGSTN_WallReentryUtils`, pure) with and without the T2 switches, the moving-wall memory and its wire format.
 `Private/WallMovement/Tests/GSTN_WallMovementSyncStateTests.cpp`: automation tests `GSTN.Wall.SyncState.*` for `ShouldReconcile` (every field, in and out of tolerance) and the `NetSerialize` round trip. Rollback behavior of the blackboard entries and of the reset effect needs the network harness (testing.md): `scenario_jump_wall`, `scenario_server_correction` on the wall, `force_reconcile_on_mode`.
 
 ## The four quantities (do not mix them)
@@ -94,4 +101,8 @@ Nothing the simulation reads may live outside the sync state or a rollback-aware
 ## Entry rules
 
 `UGSTN_WallEntryTransition` is added to the Transitions of the Falling mode. It decides whether to grab (probe distance, surface angle range, vertical policy `EGSTN_WallEntryVertical`, same-wall policy `EGSTN_SameWallPolicy`). How momentum is kept is configured on the **target mode** (`EntryMomentum`). Wall memory is read from `FGSTN_WallMovementSyncState`, which every wall mode updates; it resets when the character passes a `MemoryResetModes` mode, while a `MemoryResetTags` tag is present (Mover tags of the simulated sync state, plus owner tags), via `UGSTN_WallMovementLibrary::ResetWallMemory` (`FGSTN_ResetWallMemoryEffect`, stored in the sync state), or by grabbing a different wall. See "Prediction rules for wall state".
+The re-entry rules themselves (reset, same wall, cooldown, deny, height cap) are the pure `UGSTN_WallReentryUtils::Judge` (`MoveLibrary/GSTN_WallReentryUtils.h`). Two switches,
+off in the plain transitions and on in the surface-driven ones (traversal T2, wall-slide-v2.md 6.15): `bInferModeChangeLostToRollback` (above) and `bBaseRelativeHeightCap`:
+on a moving wall (a Movable component) the height cap compares heights in the wall's own frame, using the wall origin's height that modes with `bRecordWallBaseInMemory`
+(the v2 modes) store in the memory; a memory without it and a moving wall give cooldown only; static walls keep world heights.
 Debug drawing: `Private/WallMovement/GSTN_WallMovementDebug.{h,cpp}` (private, module-internal).

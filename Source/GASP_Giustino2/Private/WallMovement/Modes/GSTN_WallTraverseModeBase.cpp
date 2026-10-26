@@ -26,6 +26,8 @@ UGSTN_WallTraverseModeBase::UGSTN_WallTraverseModeBase(const FObjectInitializer&
 	SurfaceModes = UGSTN_WallSurfaceModeUtils::MakeDefaultList();
 	// A grab inside a correction window must converge on a moving wall (wall-slide-v2.md 6.14)
 	bRideFromSyncedLocation = true;
+	// The entry's height cap is judged in a moving wall's own frame (traversal T2)
+	bRecordWallBaseInMemory = true;
 }
 
 // ------------------------------------------------------------------------------------------------

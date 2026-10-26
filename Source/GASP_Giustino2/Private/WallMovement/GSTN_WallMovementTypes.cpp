@@ -73,8 +73,11 @@ bool FGSTN_WallMovementSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, b
 	// The reset time is sent whenever it is set, even without memory: the predicted and the authority state must agree on it
 	// (ShouldReconcile compares it), and a later wall grab can only make it stale, never wrong
 	const bool bHasResetTime = MemoryResetTimeMs >= 0.0;
-	uint8 Flags = (bHasWall ? 1 : 0) | (bIsSkidding ? 2 : 0) | (bHasWallMemory ? 4 : 0) | (bHasResetTime ? 8 : 0) | (SurfaceSwitchTicks > 0 ? 16 : 0);
-	Ar.SerializeBits(&Flags, 5);
+	// Bit 32: base-relative memory (T2), only together with the memory itself
+	const bool bSendBaseMemory = bHasWallMemory && bLastWallOnMovingBase;
+	uint8 Flags = (bHasWall ? 1 : 0) | (bIsSkidding ? 2 : 0) | (bHasWallMemory ? 4 : 0) | (bHasResetTime ? 8 : 0) | (SurfaceSwitchTicks > 0 ? 16 : 0)
+		| (bSendBaseMemory ? 32 : 0);
+	Ar.SerializeBits(&Flags, 6);
 	bHasWall = (Flags & 1) != 0;
 	bIsSkidding = (Flags & 2) != 0;
 	bHasWallMemory = (Flags & 4) != 0;
@@ -95,6 +98,16 @@ bool FGSTN_WallMovementSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, b
 		LastWallNormal = FVector::ZeroVector;
 		LastWallHeight = 0.f;
 		LastWallTimeMs = 0.0;
+	}
+
+	bLastWallOnMovingBase = (Flags & 32) != 0;
+	if (bLastWallOnMovingBase)
+	{
+		Ar << LastWallBaseHeight;
+	}
+	else if (Ar.IsLoading())
+	{
+		LastWallBaseHeight = 0.f;
 	}
 
 	if ((Flags & 8) != 0)
@@ -129,6 +142,10 @@ void FGSTN_WallMovementSyncState::ToString(FAnsiStringBuilderBase& Out) const
 	if (bHasWallMemory)
 	{
 		Out.Appendf("LastWall: N=(%.2f %.2f %.2f) H=%.1f T=%.0fms\n", LastWallNormal.X, LastWallNormal.Y, LastWallNormal.Z, LastWallHeight, LastWallTimeMs);
+		if (bLastWallOnMovingBase)
+		{
+			Out.Appendf("LastWallBase: H=%.1f (height on the wall %.1f)\n", LastWallBaseHeight, LastWallHeight - LastWallBaseHeight);
+		}
 	}
 	if (MemoryResetTimeMs >= 0.0)
 	{
@@ -179,6 +196,14 @@ bool FGSTN_WallMovementSyncState::ShouldReconcile(const FMoverDataStructBase& Au
 		return true;
 	}
 
+	// Base-relative memory (T2): it decides the height cap on a moving wall, so it is compared like the height itself
+	if (bHasWallMemory
+		&& (bLastWallOnMovingBase != Authority.bLastWallOnMovingBase
+			|| (bLastWallOnMovingBase && !FMath::IsNearlyEqual(LastWallBaseHeight, Authority.LastWallBaseHeight, HeightToleranceCm))))
+	{
+		return true;
+	}
+
 	return MemoryResetTimeMs >= 0.0 && !FMath::IsNearlyEqual(MemoryResetTimeMs, Authority.MemoryResetTimeMs, TimeToleranceMs);
 }
 
@@ -198,6 +223,8 @@ void FGSTN_WallMovementSyncState::Interpolate(const FMoverDataStructBase& From, 
 	LastWallNormal = ToState.LastWallNormal;
 	LastWallHeight = ToState.LastWallHeight;
 	LastWallTimeMs = ToState.LastWallTimeMs;
+	bLastWallOnMovingBase = ToState.bLastWallOnMovingBase;
+	LastWallBaseHeight = ToState.LastWallBaseHeight;
 	MemoryResetTimeMs = ToState.MemoryResetTimeMs;
 	SurfaceSwitchTicks = ToState.SurfaceSwitchTicks;
 }

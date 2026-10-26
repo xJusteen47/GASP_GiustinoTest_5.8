@@ -287,6 +287,68 @@ il controllo con la cavalcata vecchia resta a 20{,}22). Suite: 885 verdi. Nuova 
 Le modalità legacy hanno ancora il problema (opzione spenta: decisione tua). Basi la cui posa differisce tra macchine nello stesso
 frame (corpi fisici simulati) richiederebbero la base nello stato sincronizzato, come fa Mover: cambio di design non fatto.
 
+\section{Superfici di traversata T3: forme dei combattenti (\code{a7b51ff}, \code{c815278}, \code{6aeec5c})}
+\subsection{Cosa c'è}
+Nuovo plugin \code{GSTNPlatform} (spento di default, dipende solo da GSTNSurface e Mover; l'ho abilitato nel \code{.uproject}:
+togli quella riga se lo vuoi spento). Un combattente riceve \emph{forme} (box, sfera, capsula) ciascuna con un comportamento di
+superficie (\code{FGSTN_SurfaceBehaviour}: WallSlide, WallClimb, Stand, Launch), definite in un data asset
+(\code{UGSTN_PlatformDefinition}) senza C++.
+\begin{itemize}[leftmargin=*]
+  \item \code{GSTNPlatformCore}: dati e matematica pura (\code{FGSTN_PlatformSpec}, \code{FGSTN_PlatformShape}, stati per forma
+    \code{EGSTN_PlatformShapeState}, storia on/off per frame, regole di collisione, \code{FGSTN_PoseHistory} di 24 frame,
+    percorso scriptato).
+  \item \code{GSTNPlatformRuntime}: \code{UGSTN_EnemyPlatformComponent}, collider \code{UGSTN_Platform\{Box,Sphere,Capsule\}Collider}
+    che implementano \code{IGSTN_SurfaceProvider}, il punto di posa \code{UGSTN_PlatformSubsystem}, un combattente di prova
+    \code{AGSTN_PlatformTestFighter} (fianco WallSlide, cima Stand, avanti e indietro di 3\,m a 300\,cm/s) e i comandi
+    \code{gstn.Platform.SpawnTestFighter}, \code{.Draw}, \code{.SetMask}.
+  \item Canale di collisione \code{GSTN_EnemyPlatform} dichiarato nel \code{Config/Engine.ini} del plugin e cercato per nome.
+\end{itemize}
+
+\subsection{Ragionamento}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Collider non attaccati, mobili, cinematici, solo query, indirizzabili in rete} (\code{Surface<Id>}): lo stato di
+    Mover si riferisce alla base per riferimento a oggetto, quindi il client deve risolvere il \code{Surface1} del server nel proprio.
+    Se fossero attaccati alla mesh, la loro posa dipenderebbe dall'ordine dei tick e dall'interpolazione di ogni client.
+  \item \textbf{Punto di posa}: il fork non ha un hook dopo il fixed tick e il plugin non può dipendere da NP; la posa si applica in
+    \code{OnPreSimulationTick} di Mover, una volta per frame, con \code{ServerFrame-1} e \code{BaseSimTimeMs}, che sono gli stessi
+    numeri sul server, sul client che predice e in una risimulazione. È la condizione del §6.14 dei muri: la posa della base in un
+    frame è identica su ogni macchina, quindi il wall slide v2 ci scivola sopra senza riconciliazioni e senza modifiche al suo codice.
+  \item \textbf{Stati delle forme come storia per frame}, non stato che avanza: un frame risimulato ritrova la collisione che aveva.
+  \item \textbf{Collisione da una tabella di regole} (tag query nelle impostazioni): nessun canale o tag scritto nel codice.
+  \item \textbf{Velocità dalla storia delle pose}, mai dalla fisica: i collider vengono teletrasportati.
+\end{itemize}
+
+\subsection{Pseudocodice}
+\begin{lstlisting}
+OnPreSimulationTick(step): ctx = {Frame = step.ServerFrame - 1, TempoMs = step.BaseSimTimeMs}
+  se ctx == ultimo: esci                        // altri pawn, stesso frame
+  per ogni piattaforma: posa = PosaProprietario(ctx)   // scriptata: Percorso.Valuta(origine, TempoMs)
+     storia.Registra(Frame, posa)
+     per ogni forma: collisione = solida(stato(forma, Frame)) ? SoloQuery : Nessuna
+                     collider.Teletrasporta(posa * forma.Locale)
+SetShapeMask(maschera) / SetActionState(s):
+  voluto = forme & maschera & mascheraAzione(s) ; timbro F = ultimoFrame + 1
+  accesa -> Active da F ; spenta -> Breaking fino a F + grazia, poi Inactive
+stato(f) = f < FrameCambio ? prima : accesa ? Active : f < FrameSpento ? Breaking : Inactive
+Risposte: tutto Ignore ; {Stand|WallSlide|WallClimb|Launch} -> Block canali di Mover (Pawn)
+          {WallSlide|WallClimb} -> Block canali delle sonde a muro
+VelocitàSuperficie(id, p) = (L[F]-L[F-1])/dt + omega(R[F] R[F-1]^-1)/dt x (p - L[F])   // 0 se la forma è spenta
+\end{lstlisting}
+
+\subsection{Test e rete}
+17 test nuovi (i sei del piano \code{GSTNPlatform.Shapes.*} più core e runtime); suite totale 902 verdi (905 con le animazioni del
+wall slide dell'altro thread, compilate e provate qui). Scenario \code{scenario_surface_wallslide_enemy}
+(\code{Tools/GASNPPTest/surface_scenarios.py}, host + 1 client, 60/15\,ms, combattente creato dal driver, nessuna modifica alla mappa):
+6/6 riusciti allo 0\,\% e al 2\,\% di perdita; 0 riconciliazioni sul fianco, sulla cima per 1{,}5\,s e nei salti via; deriva rispetto al
+combattente 0{,}0\,cm; 1--2 riconciliazioni all'atterraggio sulla cima, dovute al teletrasporto del test.
+
+\subsection{Trovato e aperto}
+Riagganciarsi alla stessa forma in movimento riconciliava sul client: il controllo ``stesso muro'' della transizione d'ingresso
+misura l'altezza in coordinate del mondo e su una base che si muove sbaglia. È il compito di T2 (transizione per superfici mobili),
+non ancora fatto; lo scenario azzera la memoria del muro prima di ogni aggancio. Non fatti (passi successivi): velocità della base
+all'uscita da una forma (disponibile per T4/T7), occupanti e stato Braced (T7), ponte con le parti (T6), stati di combattimento (T7),
+minion (T8), forme convesse. Effetto collaterale: chi tickka prima di Mover nel frame vede le piattaforme di un frame prima.
+
 \section{Cosa controllare a mano stasera}\label{sec:controlli}
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Muri}: in \code{SandboxCharacter_Mover}, modalità WallSlidingV2, sezione \emph{Edges}: ci sono
@@ -313,6 +375,10 @@ frame (corpi fisici simulati) richiederebbero la base nello stato sincronizzato,
     sparisce. Nell'editor delle hurtbox: clic, drag, undo ed Esc.
   \item \textbf{Muri in movimento}: su \code{L_WallSlideAB}, corsie h, aggrappati subito dopo un salto o un dash sul muro che si muove:
     niente scatti o tremolii lungo la corsa. Con \code{np.PrintReconciles 1} nessuna discrepanza ripetuta mentre scivoli.
+  \item \textbf{Piattaforme (T3)}: decidi se tenere \code{GSTNPlatform} abilitato nel \code{.uproject}. In PIE su \code{L_WallSlideAB}:
+    \code{gstn.Platform.SpawnTestFighter -2000 1500 0} e \code{gstn.Platform.Draw 1}: fianco e cima verdi che si muovono lungo Y;
+    scivola sulla faccia -X del fianco e stai in piedi sulla cima. \code{gstn.Platform.SetMask 2}: il fianco diventa arancione e
+    dopo 20 frame grigio. Opzionale, a editor chiuso: \code{python Tools/GASNPPTest/surface_scenarios.py} (anche \code{--loss 2}).
   \item \textbf{Rete}: prima di unire M5, esegui lo scenario \code{scenario_hit_basic} del harness (il bake non è stato provato in PIE).
 \end{enumerate}
 

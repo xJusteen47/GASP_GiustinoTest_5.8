@@ -156,6 +156,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Re-entry")
 	FGameplayTagContainer MemoryResetTags;
 
+	/**
+	 * Read MemoryResetModes from a mode change record that a rollback left stale (its mode is not the start state's mode: the change into the current
+	 * mode was erased with the frames after the rollback and not written again), instead of ignoring the reset. Without it, a correction near a
+	 * take-off makes the client keep a wall memory the server has forgotten, and the next grab of the same wall is refused on the client only: a
+	 * reconcile at every re-grab (traversal T2, found re-grabbing a moving enemy shape; nothing about moving walls). See UGSTN_WallReentryUtils.
+	 * Off by default here (legacy transitions unchanged), on in the surface-driven transitions of the v2 modes
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall Entry|Re-entry")
+	bool bInferModeChangeLostToRollback = false;
+
+	/**
+	 * HeightCap on a moving wall (a Movable component) is judged in the wall's own frame: the height above the wall's origin now against the one the
+	 * wall was left at (recorded by modes with bRecordWallBaseInMemory, the v2 modes). A memory with no such frame (a static wall, a legacy mode) and a
+	 * moving wall: cooldown only. Static walls keep world heights. Off by default here (legacy transitions unchanged), on in the surface-driven
+	 * transitions (traversal-surfaces.md 4.3, T2)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall Entry|Re-entry", meta = (EditCondition = "SameWallPolicy == EGSTN_SameWallPolicy::HeightCap"))
+	bool bBaseRelativeHeightCap = false;
+
 protected:
 	/**
 	 * Whether any MemoryResetTags is present in the simulated state (Mover's own tags) or on the owner. Owner tags are
