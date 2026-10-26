@@ -372,6 +372,35 @@ SD questions not already answered in §13b stand as decisions: SD.2 opposite rot
 air spin with a parameter to extend it, SD.5 no damage during the seat, SD.6 gravity direction only in v1, SD.7 final jump when the
 target breaks (option to keep plunging), SD.9 both level props and enemies, a static block first. SD.1 button slot: kept optional.
 
+## 13c. Spin-driven interactables: screws and knobs (owner brainstorm 2026-10-26 09:52, *Proposal*)
+
+Owner idea: **screw switches** that screw in or out depending on the **spin sense**, and **knobs/valves** that turn but never come
+off (New Super Mario Bros. Wii). Both are level objects whose state is an angle driven by spins and drills.
+
+- **Plugin**: bridge `GSTNSpinDrillLevelObjects` (already planned in §4, D12), next to `AGSTN_DrillableProp`. Actors
+  `AGSTN_SpinScrew` and `AGSTN_SpinKnob` share one component `UGSTN_SpinReceiverComponent`; `GSTNSpinDrill` and `GSTNCombat` name
+  neither.
+- **How a spin reaches them**: through the normal hit pipeline, no special path. The spin and drill hitboxes carry a small hit-data
+  extension `FGSTN_SpinHitData { int8 Sense; uint8 TurnStrength }` (declared in `GSTNSpinDrillCore`); the receiver has a hurtbox and
+  an outcome applier (`IGSTN_OutcomeExtensionApplier`, existing M4b seam) that turns the hit into torque: a **spin hit** = one step of
+  `StepDegrees × TurnStrength` in the spin's sense; a **drill latched on it** = continuous turning while bored (`DegreesPerRehit` per
+  multi-hit tick), sense = the spin sense recorded in the drill fragment. Demolition force and penetration do not apply to receivers
+  (they are not destroyed), unless the designer gives them a break threshold.
+- **State and data** (`FGSTN_SpinReceiverDef`, designer-editable): `AngleMin/AngleMax` (knob: clamp, never detaches; screw: travel
+  along its axis = angle × `PitchCmPerTurn`), `bDetachAtMax` (screw comes off at full unscrew: becomes a free prop, a platform, or
+  just stops, data), `ReturnSpeed` (spring back when nobody turns it, 0 = stays), `Resistance` (degrees lost per frame), `Sense
+  mapping` (which sense tightens), output `Value 0..1` exposed to linked objects (door, platform, bridge, water level) through a
+  `BlueprintNativeEvent` and a `Message.SpinReceiver.Changed` message, so designers wire it in Blueprint.
+- **Network**: the receiver is a level object, **server-authoritative**, not predicted (like M4 surface destruction); its angle
+  replicates as one quantised `int16` + detached flag, clients interpolate. The player's own spin and drill stay predicted; only
+  the object's response arrives after about one round trip, accepted for switches. A screw **under the player's feet** that moves them
+  (a lift) is a moving base: it uses the based-movement path of `GSTNPlatform` / traversal surfaces, not a new one.
+- **Several players**: torques add up in the frame (two players spinning in opposite senses cancel out: a tug of war). *Open:*
+  §14 SD.15.
+- **Tags**: `Message.SpinReceiver.Changed`, `.Detached`, `.LimitReached` (owned by the bridge).
+- **Tests**: harness `screw_spin_steps`, `screw_drill_continuous`, `knob_clamps_no_detach`, `screw_detach_at_max`,
+  `receiver_two_players_opposite`, listen server.
+
 ## 14. Domande per Giustino (italiano)
 
 Ognuna ha una mia proposta; se non rispondi, il piano usa la proposta (colonna "se non rispondi" nel piano).
@@ -403,3 +432,12 @@ Ognuna ha una mia proposta; se non rispondi, il piano usa la proposta (colonna "
   (dati, tag, matematica, spin a terra).
 - **SD.12 Priorità.** Dove va nella roadmap: subito dopo M4b, o dopo M5 (editor)? *Proposta:* dopo M4b, in parallelo a M5 sul
   fisso per i pezzi che non toccano il core.
+- **SD.13 Come si gira una vite.** Basta colpirla con lo spin (ogni spin = un passo), oppure bisogna starci sopra / trapanarla per
+  girarla in continuo? *Proposta:* entrambe: lo spin la gira a scatti, il trapano agganciato la gira in continuo finché tieni premuto.
+- **SD.14 Vite svitata del tutto.** Quando si svita fino in fondo cosa succede: si stacca e cade (diventa un oggetto o una
+  piattaforma), oppure si ferma al limite? E le manopole tornano indietro da sole quando smetti (a molla)? *Proposta:* scelta per
+  oggetto nei dati; di default la vite si ferma al limite e la manopola non torna indietro.
+- **SD.15 Più giocatori.** Se due giocatori girano la stessa vite in versi opposti si annullano (tiro alla fune), o vince il primo
+  arrivato come nella tua idea delle piattaforme rosse e blu? *Proposta:* si sommano (tiro alla fune), con l'opzione "primo
+  arrivato" nei dati se il thread di pianificazione la definisce come regola generale di attivazione.
+
