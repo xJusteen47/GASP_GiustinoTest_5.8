@@ -35,4 +35,12 @@ public:
 	/** Gives a part a MainDamage break effect (extra percent on the main pool, and whether it kills), replacing the one it has. False for an invalid index */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Content")
 	static bool SetBreakMainDamage(UGSTN_PartSetDefinition* Set, int32 PartIndex, float AddPercent, bool bKill);
+
+	/** Gives a part a Launch break effect (speed in cm/s, share of it along the entity's up), replacing the one it has. False for an invalid index */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Content")
+	static bool SetBreakLaunch(UGSTN_PartSetDefinition* Set, int32 PartIndex, float Speed, float UpFraction);
+
+	/** Gives a part a Stagger break effect (minimum hitstun frames), replacing the one it has. False for an invalid index */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Parts|Content")
+	static bool SetBreakStagger(UGSTN_PartSetDefinition* Set, int32 PartIndex, int32 Frames);
 };

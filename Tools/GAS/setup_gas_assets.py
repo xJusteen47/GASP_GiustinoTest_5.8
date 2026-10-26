@@ -26,7 +26,7 @@
 #     combat component HurtboxSet -> HBS_Test_Pawn (the one shared Blueprint this step edits; backed up first).
 #  8. (opt-in, --parts-content) M4b P7 content (specs in parts_specs(); needs the GSTNParts plugin enabled): the hurtbox set HBS_Test_PawnParts (six hurtboxes), the part set PS_Test_Pawn,
 #     the rules GSTN_CombatRules_TestParts (the standard rules with PartResolve in place of HealthWeight and ApplyDamage) and the kit KIT_Test_Parts (a copy of KIT_Test_Hits
-#     carrying the FGSTN_PartsKitExtension). New assets only; KIT_Test_Hits, the standard rules, HBS_Test_Pawn and BP_GASNPP_TestCharacter are not touched.
+#     carrying the FGSTN_PartsKitExtension). P8 adds the reaction data of the armoured ArmR plate and the weak-point Head and a break Launch on the Legs. New assets only; KIT_Test_Hits, the standard rules, HBS_Test_Pawn and BP_GASNPP_TestCharacter are not touched.
 #  7. (opt-in, --h13-content) M4 H13a content (specs in h13_specs()): /GSTNCombat/Rules/GSTN_CombatRules_Standard (plugin content, the rules the match plays
 #     by default), the weight hurtbox sets HBS_Test_Light / Medium / Heavy, the baked-socket timeline TL_Test_HitBaked (the product of Tools/GAS/bake_sockets.py; the root / world / ally variants were removed in H13b: UGSTN_GA_TestHitMove covers the four hitbox spaces in the harness), the extension
 #     example Blueprints BP_*_Example and the physical materials, in /Game/GASNPPTest/Combat. Edits no shared Blueprint. The map L_Test_Combat is built by
@@ -1049,6 +1049,15 @@ def parts_specs():
         'disable_groups': [(3, 1 << 1), (4, 1 << 2)],
         # (part index, add percent, kill): the core could kill, off by default (kill False, a flag to flip in a scenario)
         'main_damage': [(5, 25.0, False)],
+        # P8 hit feel. part name -> (field, value): ArmR is the armoured plate (hardness 3 bounces the light test move, whose penetration is 0; a scenario that
+        # wants the plate to take the hit lowers the hardness in memory), stagger force 100 to flinch and a push back at most; the head is a weak point that
+        # flinches on a light blow (threshold 5, main transfer 2 above). Fields not named keep the data default
+        'reactions': {
+            'ArmR': {'stagger_threshold': 100.0, 'max_reaction': 'PUSH_BACK'},
+            'Head': {'stagger_threshold': 5.0},
+        },
+        # (part index, speed cm/s, share along up): breaking the legs throws the victim (Legs is index 2)
+        'break_launch': [(2, 900.0, 0.6)],
         'rules': 'GSTN_CombatRules_TestParts',
         'kit': ('KIT_Test_Parts', 'KIT_Test_Hits'),
     }
@@ -1091,12 +1100,22 @@ def setup_parts_content():
         part.set_editor_property('weak_point', weak)
         part.set_editor_property('broken_policy', getattr(unreal.GSTN_BrokenHurtboxPolicy, policy))
         part.set_editor_property('on_break', [])
+        reaction_values = specs['reactions'].get(name)
+        if reaction_values:
+            reaction = part.get_editor_property('reaction')
+            for field, value in reaction_values.items():
+                if field == 'max_reaction':
+                    value = getattr(unreal.GSTN_PartReactionTier, value)
+                reaction.set_editor_property(field, value)
+            part.set_editor_property('reaction', reaction)
         parts.append(part)
     part_set.set_editor_property('parts', parts)
     for index, mask in specs['disable_groups']:
         unreal.GSTN_PartsContentLibrary.set_break_disable_hit_groups(part_set, index, mask)
     for index, percent, kill in specs['main_damage']:
         unreal.GSTN_PartsContentLibrary.set_break_main_damage(part_set, index, percent, kill)
+    for index, speed, up_fraction in specs['break_launch']:
+        unreal.GSTN_PartsContentLibrary.set_break_launch(part_set, index, speed, up_fraction)
     unreal.EditorAssetLibrary.save_loaded_asset(part_set)
 
     rules, _ = _get_or_create(specs['rules'], TEST_COMBAT_DIR, unreal.GSTN_CombatRules, unreal.DataAssetFactory())

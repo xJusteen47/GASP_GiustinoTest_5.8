@@ -90,3 +90,30 @@ bool UGSTN_PartsContentLibrary::SetBreakMainDamage(UGSTN_PartSetDefinition* Set,
 	Set->MarkPackageDirty();
 	return true;
 }
+
+bool UGSTN_PartsContentLibrary::SetBreakLaunch(UGSTN_PartSetDefinition* Set, int32 PartIndex, float Speed, float UpFraction)
+{
+	if (!Set || !Set->Parts.IsValidIndex(PartIndex))
+	{
+		return false;
+	}
+	FGSTN_PartBreakEffect_Launch Effect;
+	Effect.Speed = FMath::Max(Speed, 0.f);
+	Effect.UpFraction = FMath::Clamp(UpFraction, 0.f, 1.f);
+	SetEffect(Set->Parts[PartIndex], Effect);
+	Set->MarkPackageDirty();
+	return true;
+}
+
+bool UGSTN_PartsContentLibrary::SetBreakStagger(UGSTN_PartSetDefinition* Set, int32 PartIndex, int32 Frames)
+{
+	if (!Set || !Set->Parts.IsValidIndex(PartIndex))
+	{
+		return false;
+	}
+	FGSTN_PartBreakEffect_Stagger Effect;
+	Effect.Frames = FMath::Max(Frames, 0);
+	SetEffect(Set->Parts[PartIndex], Effect);
+	Set->MarkPackageDirty();
+	return true;
+}
