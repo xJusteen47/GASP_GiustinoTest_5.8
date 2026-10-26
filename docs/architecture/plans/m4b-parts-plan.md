@@ -446,6 +446,33 @@ Output `Saved/Notes/m4b-spike-report.md` (to become combat.md §17). Four sub-st
 - Add the parts dummy to TM2 `L_Test_Combat` (station 8) after P12, and the parts boss to TM3 `L_Test_Enemies` (station 5) after P16, as in
   [test-maps.md](test-maps.md). Content only, built by Ludus AI or a person from primitives. Size: S.
 
+### P18 Hurtbox openings (`GSTNCombatCore`, `GSTNParts`) — size S (added 2026-10-25, after P17)
+
+- Spec: [combat-m4-hits.md](../combat-m4-hits.md) §9c B and [combat-parts.md](../combat-parts.md) §3.4. Optional `FGSTN_HurtboxOpening`
+  on `FGSTN_Hurtbox` (additive field, default none, so existing sets are unchanged), the mouth and pass-radius test inside the part
+  selection of `UGSTN_HitStep_PartResolve`, the hurtbox editor drawing (M5).
+- Tests: `CavityReachedOnlyThroughMouth`, `BulkyHitboxFallsToArmour`, `ProjectileRadiusFits`, `NoOpeningKeepsPriorityRule`.
+  TM3 parts boss (station 5) gets a leg with an armoured shell and a hollow cavity.
+- **Per-hurtbox hardness override** (owner, 2026-10-25 23:21, the charger's abdomen; [combat-parts.md](../combat-parts.md) §3.4): one
+  part, several hurtboxes, optional `HurtboxHardnessOverride` on `FGSTN_PartDefinition` read by `UGSTN_HitStep_PartResolve`. Small
+  P2-data extension, built here or in P14. Tests: `OverrideWinsOverPartHardness`, `EitherSideBreaksTheWholePart`,
+  `RicochetPredictionUsesOverride`.
+- **Dynamic variant, wounds** (owner, 2026-10-25 23:16–23:18, low priority; [combat-parts.md](../combat-parts.md) §3.4 "Wounds"), two
+  levels. **Level 1, per part (default)**: `WoundedMask` (+2 B) in `FGSTN_PartsFragment`, `WoundedHardness` per part,
+  `FGSTN_PartBreakEffect_Wound` sets the bit of the part the hit chose, `UGSTN_HitStep_PartResolve` reads it, the skin material shows it.
+  **Level 2, free position (extension, only on need)**: a few dynamic hurtbox slots per entity (bone, quantised offset, radius, about
+  6–8 B each) written by the applier at F+1 from the impact point; needs a cost estimate first. **Prerequisite for both**: hurtbox
+  states in the lag-compensation history (open residue of P7 part 1, handover item 40). Tests (level 1): `WoundSetsChosenPart`,
+  `WoundedHardnessUsedWhileBitOn`, `RicochetPredictionSeesWoundedMask`, `RewoundHitReadsWoundStateOfItsFrame`.
+
+### P19 Screws on mechanical enemies (`GSTNCombatCore`, `GSTNParts`) — size S (added 2026-10-26, after P18)
+
+- Spec: [combat-parts.md](../combat-parts.md) §3.4 "Screws and bolts". Additive fields: `TurnSense`/`TurnSteps` on `FGSTN_HitData`
+  (default 0, so no existing hit turns anything), `FGSTN_PartScrewRule` and `HeldBy`/`HeldByRule` on `FGSTN_PartDefinition`; the
+  turning rule and the held-by pass in `UGSTN_HitStep_PartResolve` and the break pass. No new fragment bytes.
+- Needs the spin and drill hitboxes to author `TurnSense` (spin-drill plan) to be playable; testable before that with a test hitbox.
+- Tests: the six `Screws (P19)` tests of combat-parts.md §8.1. TM3 parts boss (station 5) gets a plate held by two screws on its back.
+
 ## 4. Spikes first and stop-and-ask conditions
 
 Spikes are P0 (above). Summary of stop conditions (do not continue past them without the owner or lead):

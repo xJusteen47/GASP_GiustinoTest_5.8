@@ -38,6 +38,26 @@ The interaction plugin ([`../interaction.md`](../interaction.md) §3.3, owner an
 `uint64 TargetKey` in `FGSTN_ActivationContext`, stamped when a binding requires an `Interact.Target.*` tag (combat never names interaction).
 Cheap now, a fallback accessor exists if it is refused; the probe text of M6 §8 that the M6 plan will use is superseded by interaction.md.
 
+### Owner direction of 2026-10-25 on these plans (added by the milestone-planning thread)
+
+General mechanics from the spin and drill thread ([`../spin-drill.md`](../spin-drill.md) §13b, PR #15) and a collision note, all after H13 so
+no running checkpoint changes: **H14** demolition force and destructible props, **H15** steer track (hitboxes, animation and facing that vary with input), **H16** world
+occlusion with a pass radius, **H17** hitbox sweep completeness (M4 plan); **P18** hurtbox openings (M4b plan); a reserved link type `Combat.Link.Type.Drill` in M6; keyboard
+shortcuts for stick gestures in [`../input.md`](../input.md) §9. Owner sequencing: these general specs come first, the detailed design of
+individual abilities resumes at the end.
+
+Charge inputs (owner question, 2026-10-26): the `Charge` condition exists; a charge tracker in the input state of `GSTNInputNP`
+([`../input.md`](../input.md) §10, size S) should land before the first charge move ships.
+
+Level activation (owner brainstorm, 2026-10-26): new spec [`../level-activation.md`](../level-activation.md), plugin `GSTNActivation`
+(a generic base for zones of objects one player activates with an action; the owner builds the objects by hand). No plan yet; jump, land, enter and hit triggers need no combat seam, ability
+triggers need D-1. Spike A1 (Mover resimulation against geometry that changes with the frame) comes first.
+
+Gravity volumes (owner request, 2026-10-26 17:21): new spec [`../gravity-volumes.md`](../gravity-volumes.md), plugin `GSTNGravity`
+(Mario Galaxy fields: directional, point, line, ring, box, spline, zero; gravity as a pure function of position and frame). No plan
+yet; Core and Runtime are parallel-safe, then spikes G1 (gravity written on resimulated frames) and G2 (GASP character on a planet),
+then the combat base-source seam, which needs the owner's OK.
+
 ### Test maps (owner request, 2026-10-23)
 
 After the related milestones, three test maps are built from primitives by Ludus AI (an editor AI assistant) or a person,

@@ -49,7 +49,8 @@ sections (camera.md C3) and the depth marker.
 | 9 | Stacked platforms | three platforms stacked at 2, 4 and 6 m with 1.5 m overlap; a 20 cm thin platform | depth marker below, edge hold |
 | 10 | Pit | a 10 m wide gap with a red KO zone 15 m below, plus a depth reference volume at the lip | KO, above ring of the depth marker |
 | 11 | Mover lift | a 4×4 m platform moving 6 m up and down every 4 s (only if a kinematic mover exists) | standing on moving bases |
-| 12 | Gravity | a gravity-flip volume and a sideways-gravity volume (only once gravity volumes exist) | arbitrary gravity |
+| 12 | Gravity | flip and sideways volumes, a small round planet, a cube planet, two planets with a jump gap, a zero gravity bubble, an arrow switch on an activation zone (after `GSTNGravity`, [gravity-volumes.md](../gravity-volumes.md)) | arbitrary gravity, field changes, camera and input continuity |
+| 14 | Activation zones | test objects only: six panels over a pit that flip on the owner's jump after a short delay, and a platform on a track assigned to player 1 (after `GSTNActivation`, [level-activation.md](../level-activation.md)) | owner rules (first to stand, assigned), colour, delay, network sync |
 | 13 | Camera | camera sections: one fixed angle with manual control locked, one rail, one orbit with limits (after camera C3) | camera sections, stick hold on cuts |
 
 **Acceptance:**
@@ -69,7 +70,7 @@ M10 (held objects) and M11 (pickups).
 | 1 | Dummy row | five yellow dummies 4 m apart: light, medium and heavy weight; one with a high stagger threshold; one with super armour | hit, hitstun, knockback tiers, stagger resistance |
 | 2 | Knockback lane | 30 m lane with 1 m marks in front of one medium dummy, a 10 m height ruler beside it | launch distance and height, DI |
 | 3 | Damage scale | three medium dummies with health preset at 0 %, 50 % and 100 % of the cap (if the test tools allow) | weight dropping with damage (`WeightDriven`) |
-| 4 | Walls and glass | a concrete wall, a glass panel and a bouncy wall, each 3 m from a dummy | splat, bounce, destruction |
+| 4 | Walls and glass | a concrete wall, a glass panel and a bouncy wall, each 3 m from a dummy; three crates with demolition thresholds 10, 20 and 30 (after H14); a grate, a slit wall and an invisible wall in front of dummies (after H16) | splat, bounce, destruction, demolition force, hits through holes |
 | 5 | KO zone | an arena edge over a red KO zone | ring-out KO |
 | 6 | Trampolines | three green trampolines with different launch strengths | launch surfaces (H11b) |
 | 7 | Ally dummy | a dummy on the player's team | `Ally` variant (half shape, no hitstun) |

@@ -48,6 +48,11 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Indicatore di profondità | [depth-marker.md](depth-marker.md) |
 | Telecamera | [camera.md](camera.md) |
 | Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
+| Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
+| Input a carica (stile Guile) | [input.md](input.md) §10 |
+| Zone di oggetti attivabili da un solo giocatore | [level-activation.md](level-activation.md) |
+| Volumi di gravità alla Mario Galaxy | [gravity-volumes.md](gravity-volumes.md) |
+| Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [input.md](input.md) §9 |
 
 
 ---
@@ -1384,3 +1389,232 @@ CAM.11. Il mirino ha più livelli di zoom da cambiare con un tasto? Mentre si mi
    Perché conta: la flessibilità della terza persona dipende da cosa resta permesso mentre si mira; i livelli di zoom richiedono un comando in più.
    Ipotesi nella specifica: zoom a uno o più livelli per arma (dati), ci si muove liberamente con velocità ridotta decisa dall'abilità di mira dell'arma; salti e muri a scelta del designer della singola arma.
    **Risposta (2026-10-23):** Dipende dall'abilità e dall'arma che usa il mirino: sono dati loro, non della telecamera.
+
+## Cristallo per giocatore, god rays, ombra sulla nebbia (24/10)
+
+Specifiche: [combat-parts.md](combat-parts.md) §6.0 e [depth-marker.md](depth-marker.md) §2.7, §4.1, §4.4. Già deciso da te il 24/10: dentro i
+personaggi sono di cristallo e il colore del cristallo cambia a seconda del giocatore; god rays dal personaggio e ombra sulla nebbia sono idee
+da tenere come opzioni accanto alla solita ombra alla Mario.
+
+CR.1. Il colore del cristallo è **legato al posto del giocatore** (giocatore 1 sempre blu, giocatore 2 sempre rosso...) oppure **lo sceglie
+il giocatore**? Se lo sceglie, cosa succede quando due giocatori vogliono lo stesso colore?
+   Perché conta: un colore per posto è automatico e sempre distinguibile; la scelta libera richiede un menu e una regola per i conflitti.
+   Ipotesi nella specifica: colore per posto da una tavolozza (posto assegnato all'ingresso, tenuto per tutta la partita); la scelta libera si
+   aggiunge dopo, e in caso di conflitto chi entra dopo prende il primo colore libero.
+   **Risposta (2026-10-24):** Dipende dal numero del giocatore: 1 rosso, 2 blu, 3 giallo, 4 verde. L'ordine segue l'ordine alfabetico dei
+   nomi, così quattro amici che giocano sempre insieme hanno sempre lo stesso colore. Nella specifica: chi entra a partita iniziata prende il
+   primo numero libero e nessuno cambia colore durante la partita ([combat-parts.md](combat-parts.md) §6.0).
+
+CR.2. I **god rays** che partono dal personaggio sono soprattutto un **indicatore di profondità** (un fascio di luce che scende fino a dove
+atterri, al posto della linea tratteggiata), oppure **luce che esce dalle crepe** del corpo (più crepe, più raggi), oppure entrambe le cose?
+   Perché conta: il primo è uno stile dell'indicatore di profondità; il secondo fa parte dell'aspetto dei danni del personaggio.
+   Ipotesi nella specifica: entrambe come opzioni separate: uno stile `Style_CrystalRays` dell'indicatore e, a parte, un bagliore del cristallo
+   che cresce con i danni.
+
+CR.3. Il cristallo deve **brillare di più quando il personaggio è danneggiato** (luce dalle crepe che aumenta), oppure il colore resta fisso e
+si vedono solo le crepe?
+   Perché conta: un bagliore crescente aiuta a leggere la salute da lontano, ma con quattro giocatori molto danneggiati può diventare rumore.
+   Ipotesi nella specifica: sì, emissivo che cresce con il danno, con intensità massima regolabile dal designer.
+
+CR.4. La **nebbia su cui cade l'ombra** è qualcosa che il designer mette in certi livelli (un mare di nuvole sotto le piattaforme), oppure deve
+esserci sempre sotto ogni livello?
+   Perché conta: se il designer la piazza, i livelli senza nebbia usano l'anello nel vuoto; se c'è sempre, l'anello nel vuoto serve solo quando
+   si è sotto la piattaforma.
+   Ipotesi nella specifica: la piazza il designer (un attore "strato di nebbia"); dove c'è, l'ombra cade sulla nebbia al posto dell'anello nel
+   vuoto.
+
+CR.5. I **nemici** hanno un colore di cristallo per tipo di nemico (scelto dal designer), oppure tutti uguali, oppure il colore indica qualcosa
+(per esempio il punto debole)?
+   Perché conta: il colore per giocatore serve a riconoscersi; se anche i nemici usano colori vivi bisogna evitare che somiglino a quelli dei
+   giocatori.
+   Ipotesi nella specifica: colore per tipo di nemico, scelto dal designer, da una tavolozza separata da quella dei giocatori.
+
+## Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi (25/10)
+
+Specifiche: [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c, [combat-parts.md](combat-parts.md) §3.4, [input.md](input.md) §9. Le parti
+del trapano sono in [spin-drill.md](spin-drill.md) §13b (PR #15).
+
+DEM.1. La forza di demolizione è un **numero a passi di 10** come in Helldivers 2 (10 un pugno, 20 un colpo pesante, 30 il trapano, 40 un
+esplosivo), oppure **pochi livelli con un nome** (leggera, media, pesante, esplosiva)?
+   Perché conta: i numeri lasciano spazio fine al bilanciamento; i livelli con nome sono più facili da leggere per un designer.
+   Ipotesi nella specifica: numeri interi a passi di 10; l'editor può mostrare un nome per ogni fascia.
+
+DEM.2. Sotto la soglia l'oggetto **non subisce nulla** e si sente un colpo sordo, oppure l'attacco **rimbalza** come con la durezza delle parti?
+   Perché conta: un rimbalzo punisce chi colpisce la cosa sbagliata, ma interrompe la combo.
+   Ipotesi nella specifica: nessun danno e un suono sordo, nessun rimbalzo; solo il trapano rimbalza, perché non riesce ad agganciarsi.
+
+DEM.3. Un **nemico lanciato** contro una cassa la rompe? Con quale forza?
+   Perché conta: decide se i lanci servono anche a distruggere cose.
+   Ipotesi nella specifica: la forza la decide l'attacco che lo ha lanciato (un campo dell'impatto), di base uguale alla forza di
+   demolizione di quel colpo.
+
+DEM.4. Un oggetto distruttibile si rompe **al primo colpo** sopra la soglia, oppure ha **più punti vita**?
+   Perché conta: casse da un colpo rendono il trapano e i colpi pesanti immediati; muri da più colpi fanno durare l'aggancio del trapano.
+   Ipotesi nella specifica: punti vita per oggetto, 1 di base.
+
+HV.1. Lo stick tenuto durante lo swing si legge **rispetto al personaggio** (verso la sua destra o sinistra) o **rispetto allo schermo**?
+   Perché conta: con la telecamera lontana e girata, "destra" sullo schermo e destra del personaggio possono essere diverse.
+   Ipotesi nella specifica: rispetto a dove guarda il personaggio, come gli altri comandi di combattimento.
+
+HV.2. Se lasci lo stick, la spada **torna verticale** o **resta inclinata** dove era arrivata? E da un certo momento l'angolo si **blocca**?
+   Perché conta: decide quanto si può correggere il colpo all'ultimo momento.
+   Ipotesi nella specifica: resta dove era, e si blocca al frame scelto dal designer (di solito il primo frame attivo).
+
+KB.1. A-S-D vale come spin in un senso e D-S-A nell'altro? Vanno premuti nello stesso tempo concesso allo spin con lo stick?
+   Perché conta: decide se la scorciatoia funziona in entrambi i sensi e quanto deve essere veloce.
+   Ipotesi nella specifica: sì a entrambe; A-S-D è antiorario, D-S-A orario.
+
+KB.2. La scorciatoia vale anche per il **d-pad** del controller, e la stessa idea va usata per altri gesti difficili da tastiera?
+   Perché conta: il d-pad ha gli stessi limiti della tastiera.
+   Ipotesi nella specifica: vale per tutti gli ingressi digitali (tastiera e d-pad), gesto per gesto.
+
+HV.3. Quali attacchi **ruotano il personaggio** mentre tieni lo stick (per esempio alcuni attacchi in aria)? La rotazione segue lo
+stick finché lo tieni, oppure si sceglie solo una volta (all'inizio o in un momento preciso, come girarsi all'indietro)?
+   Perché conta: una rotazione continua cambia dove colpisce l'attacco mentre è attivo; una scelta singola è più leggibile.
+   Ipotesi nella specifica: entrambe possibili per singola mossa, decise dal designer con la stessa traccia che inclina lo swing.
+   **Risposta (2026-10-25 19:56):** Dipende dalla mossa. In alcune durante lo startup ci si gira di pochi gradi, in altre si cammina. Esempio:
+   swing verticale in aria, la direzione la decide l'input iniziale, nella prima parte dello startup si corregge un po' l'angolo, durante lo
+   swing lo si porta in diagonale. In aria di solito ci si muove ma non ci si gira, salvo queste piccole correzioni
+   ([combat-m4-hits.md](combat-m4-hits.md) §3, traccia `Control`).
+
+INTP.1. L'interpolazione delle hitbox tra un frame e l'altro (come nei platform fighter) va **accesa di base** su tutti i colpi, oppure solo
+dove il designer la attiva?
+   Perché conta: accesa ovunque evita i colpi "bucati" dagli attacchi veloci, ma costa qualche controllo in più per colpo.
+   Ipotesi nella specifica: accesa in tutte le mosse del set standard, e l'editor avvisa quando una hitbox veloce è senza.
+
+COL.1. I colpi corpo a corpo devono **fermarsi contro i muri** di base, oppure solo dove il designer lo attiva per una mossa?
+   Perché conta: oggi un colpo attraversa un muro sottile e colpisce chi c'è dietro; bloccarlo costa un controllo in più per colpo.
+   Ipotesi nella specifica: spento nei dati di M4 per non cambiare nulla, acceso nelle mosse del set standard dopo H16.
+
+COL.2. Per colpire la cavità dentro la gamba corazzata basta **toccare l'apertura** con un'arma abbastanza sottile, oppure l'arma deve
+**entrare** nel buco?
+   Perché conta: "toccare" è più semplice e generoso, "entrare" è più preciso ma più difficile da ottenere con uno swing.
+   Ipotesi nella specifica: basta toccare l'apertura con un'arma che ci passa.
+
+## Input a carica, stile Guile (26/10)
+
+Specifica: [input.md](input.md) §10. Il plugin di input ha già la condizione `Charge` (insieme di direzioni, durata minima, tolleranza dopo
+il rilascio); qui ci sono solo le scelte di gioco.
+
+CH.1. In 3D, fuori dal duello, il personaggio si gira verso lo stick, quindi "tenere indietro" non si può fare. Le cariche **indietro**
+valgono solo dove la direzione è bloccata (telecamera da duello, aggancio al bersaglio), e altrove si usano le cariche **in basso**
+(tenendo premuto abbassarsi)? Oppure "indietro" va inteso rispetto alla telecamera?
+   Perché conta: cambia quali mosse a carica si possono dare ai kit usati nei livelli.
+   Ipotesi nella specifica: cariche indietro solo con la direzione bloccata, cariche in basso ovunque.
+   **Risposta (2026-10-26 09:53):** La carica indietro funziona in 3D: basta mantenerla finché lo stick resta entro un certo limite di gradi.
+   Nella specifica: la carica è relativa alla direzione in cui è iniziata, e "avanti" vuol dire l'opposto di quella direzione
+   ([input.md](input.md) §10). Poi (09:54, 09:55): una mossa può avere le hitbox all'indietro, oppure girare subito il personaggio e
+   colpire in avanti; lo decide l'abilità.
+
+CH.2. Quanto deve durare la carica? In Street Fighter è circa tre quarti di secondo o poco più.
+   Perché conta: è il ritmo di tutte le mosse a carica.
+   Ipotesi nella specifica: valore per singola mossa, di base 40 frame (circa 0,65 s), con 8 frame di tolleranza dopo il rilascio.
+   **Risposta (2026-10-26 09:56):** Va bene. Nella specifica: 40 frame di base, 8 di tolleranza, regolabili mossa per mossa.
+
+CH.3. Nel duello, se l'avversario ti salta dall'altra parte, la carica indietro si perde (come in Street Fighter) o viene conservata?
+   Perché conta: conservarla rende più facile difendersi dai salti incrociati con una mossa a carica.
+   Ipotesi nella specifica: si perde, come in Street Fighter.
+   **Risposta (2026-10-26 09:56, ricavata dalle tue risposte a CH.1):** La carica è relativa alla direzione in cui è iniziata, non a
+   dove guarda il personaggio, quindi un salto incrociato **non la fa perdere**. La mossa parte comunque nel verso opposto alla carica, e
+   se si gira verso l'avversario lo decide l'abilità. Una mossa che vuole la regola di Street Fighter può ancora usare la carica relativa
+   allo sguardo ([input.md](input.md) §10).
+
+CH.4. Di quanti gradi può spostarsi lo stick dalla direzione della carica senza perderla, e quanto velocemente quella direzione può
+seguire lo stick (tu hai detto: anche un giro intero, ma muovendo lo stick molto lentamente)?
+   Perché conta: un angolo stretto fa perdere la carica a chi muove un po' lo stick; una direzione che segue troppo in fretta rende la carica
+   valida in qualunque direzione.
+   Ipotesi nella specifica: 50 gradi da ogni lato, e la direzione segue lo stick a 90 gradi al secondo al massimo (un giro intero in 4
+   secondi); tutto regolabile mossa per mossa.
+   **Risposta (2026-10-26 10:23):** Va bene, ma forse 90 gradi al secondo è troppo veloce per alcune cose. Nella specifica: 50 gradi;
+   la direzione segue lo stick a **45 gradi al secondo** di base (un giro intero in 8 secondi), regolabile mossa per mossa, anche 0
+   (direzione fissa).
+
+CB.1. Cariche sui **tasti normali** (tua domanda delle 10:25, lo Zonk Knuckle di Cody): tenere premuto un tasto e rilasciarlo esiste già
+nel plugin di input, e la pressione può far partire un attacco normale mentre la carica continua. Ti servono anche cariche su **più tasti
+insieme** (per esempio tenere tre pugni e rilasciarli insieme, come nei giochi più vecchi)?
+   Perché conta: un tasto solo funziona già; più tasti insieme richiedono una piccola condizione nuova.
+   Ipotesi nella specifica: solo un tasto per ora; la condizione per più tasti si aggiunge quando una mossa la chiede.
+   **Risposta (2026-10-26 10:26):** "Considera anche come funziona l'EX Zonk". Nella specifica: sì, serve. L'EX Zonk si carica tenendo
+   **due pugni insieme** e rilasciandoli insieme, consuma la barra EX e senza barra diventa lo Zonk normale. Lo Zonk normale si carica
+   su un pugno qualsiasi, con **tre livelli** secondo quanto lo tieni (circa 1, 1,5 e 2 secondi). Ogni tasto si carica per conto suo, e
+   altre pressioni nel frattempo non accorciano la carica ([input.md](input.md) §10).
+
+## Zone di oggetti attivabili da un solo giocatore (26/10)
+
+Specifica: [level-activation.md](level-activation.md). Come hai chiarito (09:58, 10:00), è la **base generica**: una zona di oggetti che un
+solo giocatore attiva con un'azione e che prende il suo colore; le piattaforme rosse e blu e la piattaforma "solo Mario" sono esempi che
+costruirai tu sopra. Nella base: il proprietario può essere il primo che sale, il primo che entra, chi ci sta sopra in quel momento, oppure
+un giocatore **assegnato** in partenza (come la piattaforma di Mario). Il ritardo prima del cambio aiuta anche online, perché dà il tempo
+a tutte le macchine di sapere quando avverrà.
+
+FLP.1. Quando una zona **torna libera** per un altro giocatore? Quando il proprietario non ci sta sopra da un po', quando muore, oppure mai
+finché resta nel livello? (Non vale per le zone con proprietario assegnato.)
+   Perché conta: se non si libera mai, un giocatore lontano blocca la zona per tutti.
+   Ipotesi nella specifica: si libera dopo circa 2 secondi che il proprietario non ci sta sopra, o quando va KO.
+   **Risposta (2026-10-26 10:13):** Lo decide il designer. Nella specifica: per ogni zona si sceglie se si libera dopo un tempo senza il
+   proprietario, quando il proprietario va KO, entrambe le cose (valore di base) oppure mai.
+
+FLP.2. Il **ritardo** prima che l'oggetto reagisca va bene come valore per zona, con 20 frame di base (circa 0,3 s) per gli oggetti che
+cambiano il terreno sotto gli altri giocatori e 0 per quelli che portano solo il proprietario? Vale anche giocando da soli?
+   Perché conta: con 0,3 secondi online tutti vedono il cambio nello stesso momento; da soli può sembrare lento.
+   Ipotesi nella specifica: sì, deciso dal designer zona per zona, con gli oggetti che lampeggiano nel colore del proprietario durante
+   l'attesa; da soli lo stesso valore, salvo che tu non preferisca 0.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
+
+FLP.3. L'azione del proprietario conta **ovunque si trovi** (come il salto in Mario 3D Land) oppure solo se la fa **dentro la zona** o
+stando sopra?
+   Perché conta: "ovunque" permette di attivare da lontano per aiutare gli altri, "dentro" lega la zona a chi la sta usando.
+   Ipotesi nella specifica: opzione del designer per zona, di base "dentro la zona".
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
+
+FLP.4. Gli **altri giocatori** possono fare qualcosa su una zona occupata (per esempio salirci senza farla reagire), oppure la zona li
+ignora del tutto?
+   Ipotesi nella specifica: ci possono stare sopra e camminare, le loro azioni non contano finché la zona è occupata.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
+
+FLP.5. Quali **altre azioni** vuoi che attivino gli oggetti? Schianto a terra, spin, trapano, colpo, interazione, entrare in una zona?
+   Ipotesi nella specifica: tutte, scelte dal designer oggetto per oggetto; salto, atterraggio, entrata e colpo funzionano subito, le altre
+   dopo una piccola aggiunta al sistema delle abilità.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
+
+FLP.6. I **nemici** possono attivare questi oggetti (per esempio un nemico che salta sulle piattaforme)?
+   Ipotesi nella specifica: no di base, solo i giocatori; il designer può aprirlo per un oggetto.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
+
+## Volumi di gravità alla Mario Galaxy (26/10)
+
+Specifica: [gravity-volumes.md](gravity-volumes.md). Campi di gravità piazzati nel livello: direzione fissa (zone capovolte o di lato),
+verso un punto (pianeti rotondi), verso un asse (cilindri, tubi), verso un anello, verso una scatola (pianeti cubici), lungo una spline, e
+gravità zero. Dove due campi si sovrappongono vince quello con priorità più alta. La gravità si calcola ogni frame dalla posizione, dentro
+la simulazione, quindi online è coerente senza dati in più. Oggi la gravità è solo un'impostazione del componente Mover, quindi questa è
+una parte nuova.
+
+GRV.1. Quando la gravità cambia, il movimento usa **subito** la nuova gravità, mentre il **modello** del personaggio e la **telecamera**
+ruotano in modo morbido. Va bene una rotazione del modello rapida (proposta: 720 gradi al secondo, un capovolgimento in un quarto di
+secondo) e la telecamera più lenta (90 gradi al secondo, come già nella specifica della telecamera)?
+   Perché conta: girare subito anche il modello è più leggibile ma brusco; girarlo lentamente è più morbido ma il personaggio sembra
+   storto per un attimo.
+   Ipotesi nella specifica: modello 720 gradi al secondo, telecamera 90 gradi al secondo, regolabili per livello.
+   **Risposta (2026-10-26 20:54):** Sì.
+
+GRV.2. **Fuori da ogni campo**, cosa succede: torna la gravità normale del livello, oppure resta l'ultima gravità che avevi (come nello
+spazio di Galaxy, dove tra un pianeta e l'altro continui verso dove stavi andando)?
+   Perché conta: con l'ultima gravità i livelli spaziali non hanno bisogno di coprire tutto il vuoto con campi; con quella del livello
+   tutto è più prevedibile.
+   Ipotesi nella specifica: gravità del livello di base, "tieni l'ultima" come opzione per livello (non costa dati in più).
+   **Risposta (2026-10-26 20:54):** Come in Galaxy. Nella specifica: fuori dai campi resta l'ultima gravità; la gravità normale del
+   livello resta come opzione.
+
+GRV.3. I **nemici sui pianeti rotondi**: la navmesh di Unreal funziona solo con l'alto verso Z, quindi sui pianeti i nemici avrebbero
+bisogno di un loro sistema di movimento sulla superficie. Li vuoi già nella prima versione, oppure per ora i nemici stanno solo nelle zone
+a gravità con direzione fissa (anche capovolte o di lato)?
+   Perché conta: il movimento dei nemici su superfici curve è un lavoro a parte, abbastanza grande.
+   Ipotesi nella specifica: prima versione solo zone a direzione fissa; pianeti con nemici più avanti.
+   **Risposta (2026-10-26 20:54):** Bassa priorità.
+
+GRV.4. Gli **oggetti fisici liberi** (casse, detriti) dentro i campi: seguono la gravità del campo solo come effetto visivo, oppure fanno
+parte del gioco (per esempio una cassa che rotola verso di te su un pianeta)?
+   Perché conta: farli contare nel gioco online costa molto; come effetto visivo è economico.
+   Ipotesi nella specifica: effetto visivo; gli oggetti presi e lanciati (M10) invece seguono la gravità nella simulazione.
+   **Risposta (2026-10-26 20:56):** "Una cassa non dovrebbe essere un oggetto lanciabile?" Sì: tutto ciò che si può prendere o lanciare
+   è un oggetto di M10 e segue la gravità nella simulazione; solo detriti, frammenti e decorazioni sono effetto visivo.
