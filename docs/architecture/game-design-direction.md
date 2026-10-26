@@ -311,6 +311,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   opposite of local gravity). Spec: [gravity-volumes.md](gravity-volumes.md) (plugin `GSTNGravity`): fields with a region and a pull
   rule (directional, point, line, ring, box, spline, zero), priorities, gravity as a pure function of position and frame computed in
   the simulation every frame, smooth turning only in presentation; questions GRV.1–GRV.4.
+- (20:54) GRV.1 yes (model 720°/s, camera 90°/s); GRV.2 "Galaxy": outside every field the last gravity stays; GRV.3 enemies on
+  round planets low priority; GRV.4 not understood, re-explained.
 
 ## 7. Consequences for the specifications
 
@@ -665,6 +667,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Funziona con 2 tasti insieme. È quello bene o male un caso limite (10:28)
 >
 > Comunque aggiungi alle specifiche volumi dove la gravità cambia alla Mario galaxy. (17:21)
+>
+> non ho capito il 4. 1. si 3. Low priority 2. Galaxy (20:54)
 
 > Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
 > mooolto lentamente per non perdere la carica (09:55)

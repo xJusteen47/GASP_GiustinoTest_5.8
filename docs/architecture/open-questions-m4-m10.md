@@ -1595,18 +1595,22 @@ secondo) e la telecamera più lenta (90 gradi al secondo, come già nella specif
    Perché conta: girare subito anche il modello è più leggibile ma brusco; girarlo lentamente è più morbido ma il personaggio sembra
    storto per un attimo.
    Ipotesi nella specifica: modello 720 gradi al secondo, telecamera 90 gradi al secondo, regolabili per livello.
+   **Risposta (2026-10-26 20:54):** Sì.
 
 GRV.2. **Fuori da ogni campo**, cosa succede: torna la gravità normale del livello, oppure resta l'ultima gravità che avevi (come nello
 spazio di Galaxy, dove tra un pianeta e l'altro continui verso dove stavi andando)?
    Perché conta: con l'ultima gravità i livelli spaziali non hanno bisogno di coprire tutto il vuoto con campi; con quella del livello
    tutto è più prevedibile.
    Ipotesi nella specifica: gravità del livello di base, "tieni l'ultima" come opzione per livello (non costa dati in più).
+   **Risposta (2026-10-26 20:54):** Come in Galaxy. Nella specifica: fuori dai campi resta l'ultima gravità; la gravità normale del
+   livello resta come opzione.
 
 GRV.3. I **nemici sui pianeti rotondi**: la navmesh di Unreal funziona solo con l'alto verso Z, quindi sui pianeti i nemici avrebbero
 bisogno di un loro sistema di movimento sulla superficie. Li vuoi già nella prima versione, oppure per ora i nemici stanno solo nelle zone
 a gravità con direzione fissa (anche capovolte o di lato)?
    Perché conta: il movimento dei nemici su superfici curve è un lavoro a parte, abbastanza grande.
    Ipotesi nella specifica: prima versione solo zone a direzione fissa; pianeti con nemici più avanti.
+   **Risposta (2026-10-26 20:54):** Bassa priorità.
 
 GRV.4. Gli **oggetti fisici liberi** (casse, detriti) dentro i campi: seguono la gravità del campo solo come effetto visivo, oppure fanno
 parte del gioco (per esempio una cassa che rotola verso di te su un pianeta)?

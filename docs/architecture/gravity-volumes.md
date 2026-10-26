@@ -3,7 +3,8 @@
 Status: **specification, 2026-10-26.** Owner request (17:21): "aggiungi alle specifiche volumi dove la gravità cambia alla Mario
 Galaxy". Verbatim in [game-design-direction.md](game-design-direction.md) §6l. It builds on the standing direction of §2d: gravity
 can change arbitrarily, and "up" is always the opposite of the entity's local gravity at that frame, never world Z. Questions
-GRV.1–GRV.4 are in [open-questions-m4-m10.md](open-questions-m4-m10.md). Nothing here is built.
+GRV.1–GRV.4 are in [open-questions-m4-m10.md](open-questions-m4-m10.md): GRV.1–GRV.3 answered on 2026-10-26 20:54, GRV.4 open.
+Nothing here is built.
 
 ## 1. What exists today (checked on `feature/gas-npp-5.8`)
 
@@ -57,8 +58,10 @@ FGSTN_GravityFieldSpec {
 
 **Which field applies** (pure, deterministic): among the fields whose region contains P, the highest `Priority`; on a tie, the one
 whose pull target (centre, axis, box surface) is nearest to P; then the lower **registry order**. The registry is sorted once at load by
-the actor's level path and name, so every machine builds the same order. Outside every field the level's default applies (question
-GRV.2).
+the actor's level path and name, so every machine builds the same order. **Outside every field the last gravity stays**, as in Galaxy
+(owner answer GRV.2): its direction is minus the pawn's current up, read from the orientation in the sync state (the simulation's up
+snaps to gravity, §4, so it is the last field's direction), and its strength is the level's `OutsideStrength` (default 980). No extra
+state. A level may pick its plain default gravity instead (`EGSTN_OutsideGravity::LevelDefault`).
 
 **Moving and switching fields.** Fields are static, or move only as a pure function of the frame: a field attached to an activation
 zone member follows its track or rotation response, and a **gravity switch** (Galaxy's arrow panels) is a `Directional` field whose
@@ -80,7 +83,7 @@ Mover's gravity override before the movement modes run. Because P and F come fro
 
 **Up and orientation.** The simulation's up is `−g` at once: floor checks, movement plane, jumps and hits use the new gravity on the
 frame it changes, which keeps them simple and deterministic. What turns smoothly is **presentation**: the mesh rotates towards the new
-up at `MeshUpRateDegPerSecond` (*Proposal* 720, question GRV.1) through a mesh offset, like Mover smoothing, and the camera already
+up at `MeshUpRateDegPerSecond` (720, owner answer GRV.1) through a mesh offset, like Mover smoothing, and the camera already
 rate-limits its up (camera.md §7.2, 90°/s). Velocity is kept in world space across a change, as in Galaxy, so a jump between two planets
 carries its momentum.
 
@@ -107,7 +110,7 @@ except `Spline` (nearest point on pre-sampled points, 64 by default). Minions ca
 | [camera.md](camera.md) §7.2 | none in principle: up is rate-limited and forward transported. Add test `CameraYawContinuousAroundPlanet` (the deterministic reference direction for `CameraYaw` must not jump while running around a planet; encoder and simulation share it) |
 | [input.md](input.md) | the stick-reference hold already planned for the camera (follow-up in PR #4) keeps "forward" steady while up turns around a planet |
 | combat jump phases (`FGSTN_GravityBase`) | optional base source seam (§4); owner OK needed, it edits `GSTNCombatCore` |
-| [combat-m8-minions.md](combat-m8-minions.md) | lightweight movement calls `Evaluate(P, F)`. Enemies on round planets cannot use the navmesh (it assumes world Z up): question GRV.3 |
+| [combat-m8-minions.md](combat-m8-minions.md) | lightweight movement calls `Evaluate(P, F)`. Enemies on round planets cannot use the navmesh (it assumes world Z up): **low priority** (owner answer GRV.3), v1 enemies only on `Directional` fields |
 | [combat-m10-held-objects.md](combat-m10-held-objects.md) | in `Directional` fields thrown objects keep their analytic segments; in curved fields (planets) they integrate per frame, within the host budget |
 | [depth-marker.md](depth-marker.md) | unchanged: straight along the local gravity at the character (towards the centre on a planet) |
 | [game-modes.md](game-modes.md) | gravity levels **disable the world `KillZ`** (it is world Z) and use KO volumes shaped for the level |
@@ -134,7 +137,7 @@ while in a zero field, for ability requirements), `Gravity.Event.FieldChanged` (
 |---|---|
 | Gravity override written at the wrong point of a resimulated frame | G1 (§4) |
 | GASP animation assumes world Z (motion matching trajectory, foot traces, Mover smoothing) | **G2**: the GASP character on a small planet and a cube planet; fix what assumes Z in the project's anim layer, never in the sample content |
-| Navmesh on curved surfaces | question GRV.3; v1 enemies only on `Directional` fields |
+| Navmesh on curved surfaces | low priority (GRV.3); v1 enemies only on `Directional` fields |
 | Corrections at region boundaries | harness count; hysteresis byte only if needed (§5) |
 | Engine `KillZ` and physics volumes along world Z | disable `KillZ` in gravity levels; fields never use engine physics volumes |
 
