@@ -2,7 +2,7 @@
 
 Status (2026-10-25, branch `claude/project-thread-2vuw3f`): part A (the override-layer seam and the wall layer) and part B (the
 `GSTNAnimation` plugin with anim sets and skin rules, [README](../../Plugins/GSTNAnimation/README.md)) are implemented. Owner's choice: skin
-variants by **tag rules** (section 7). Still open: the editor assets (A2) and the loadout hook (B3).
+variants by **tag rules** (section 7). A2 (the editor assets) done 2026-10-26 by script, see wall-anim.md "Layer graph". Still open: the loadout hook (B3).
 
 ## 1. Goal
 
@@ -120,7 +120,7 @@ Who calls what:
 | Step | What | Needs |
 |---|---|---|
 | A1 | `IGSTN_OverrideLayerSource`, `UGSTN_CharacterAnimInstance`, wall anim state + tests | done (cloud, build not yet verified) |
-| A2 | Editor: `ALI_GSTN_Wall`, `ABP_GSTN_WallLayer` (placeholders), reparent main ABP, one blend + one linked layer node | editor free, owner told (shared Blueprint) |
+| A2 | Editor: `ALI_GSTN_Wall`, `ABP_GSTN_WallLayer` (placeholders), reparent main ABP, one blend + one linked layer node | done 2026-10-26, `Tools/GAS/setup_wall_anim_layer.py` (module `GSTNAnimationEditor`) |
 | B1 | Plugin `GSTNAnimation` (Core): set definition, rule, collection, component, native roots, README; A's two generic classes moved there | done |
 | B2 | Montage override check in the set's data validation (`ValidateMontageOverride`), tests `GSTNAnimation.Core.*` of the resolve order | done |
 | B3 | Hook kit / weapon / skin collections in the loadout apply path (where `AnimClass` / `LocomotionAnimLayer` are applied today) | B1, M3 loadout code |
