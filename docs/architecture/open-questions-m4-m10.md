@@ -1528,6 +1528,12 @@ seguire lo stick (tu hai detto: anche un giro intero, ma muovendo lo stick molto
    la direzione segue lo stick a **45 gradi al secondo** di base (un giro intero in 8 secondi), regolabile mossa per mossa, anche 0
    (direzione fissa).
 
+CB.1. Cariche sui **tasti normali** (tua domanda delle 10:25, lo Zonk Knuckle di Cody): tenere premuto un tasto e rilasciarlo esiste già
+nel plugin di input, e la pressione può far partire un attacco normale mentre la carica continua. Ti servono anche cariche su **più tasti
+insieme** (per esempio tenere tre pugni e rilasciarli insieme, come nei giochi più vecchi)?
+   Perché conta: un tasto solo funziona già; più tasti insieme richiedono una piccola condizione nuova.
+   Ipotesi nella specifica: solo un tasto per ora; la condizione per più tasti si aggiunge quando una mossa la chiede.
+
 ## Zone di oggetti attivabili da un solo giocatore (26/10)
 
 Specifica: [level-activation.md](level-activation.md). Come hai chiarito (09:58, 10:00), è la **base generica**: una zona di oggetti che un

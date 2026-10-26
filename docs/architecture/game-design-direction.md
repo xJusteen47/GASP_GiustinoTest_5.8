@@ -282,6 +282,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (09:56) **CH.2 approved** (40 frames, 8 frames of release tolerance, per move). CH.1 and CH.3 to be inferred from the above: the charge
   is anchor-relative everywhere, so a duel cross-up keeps it; the move fires opposite to the anchor and its facing is the ability's choice.
 - (10:23) CH.4: 50° is fine; 90°/s drift may be too fast for some moves. Spec: default 45°/s, per move, 0 allowed.
+- (10:25) **Charged normal buttons** (Cody's Zonk Knuckle, SFV): already `Release` with `MinHeldFrames`; gap: button slots in the
+  charge tracker so other presses cannot shorten the charge; several buttons together = question CB.1 ([input.md](input.md) §10).
 
 ## 6k. Zones of objects one player activates (owner brainstorm, 2026-10-26 09:52)
 
@@ -644,6 +646,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Flp 1 è deciso dal designer. Le altre domande hanno già un'ottima risposta. (10:13)
 >
 > Beh si penso vada bene. Forse 90 al secondo è troppo veloce per alcune cose. (10:23, CH.4)
+>
+> Comunque abbiamo preso in considerazione la possibilità di caricare anche la pressione dei tasti normali? Esempio: Zonk di Cody sf5 (10:25)
 
 > Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
 > mooolto lentamente per non perdere la carica (09:55)

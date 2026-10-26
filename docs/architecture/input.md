@@ -279,4 +279,22 @@ Gaps, *Proposal*:
    whether it then turns towards the opponent is the move's aim policy, like any other charge move. A move that wants the Street
    Fighter rule (charge lost on a side switch) uses the `Facing` set instead; that is data on the command.
 
-Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); all answered.
+**Charged buttons (owner question, 2026-10-26 10:25; Cody's Zonk Knuckle in Street Fighter V)**: hold a normal attack button for a
+while, release it to fire the special. What exists today: `FGSTN_InputCondition_Release` with `MinHeldFrames` (the negative edge;
+`MaxHeldFrames` gives the tap slot on the same button, and a tap slot and a hold slot never match the same release). The release
+does not need an unconsumed press, so the press can fire a normal attack and the hold keeps charging through other moves, walking or
+blocking, as in Street Fighter. A release during another move is buffered like any command. Gaps, *Proposal*:
+1. **The 16-event button ring**: if the press of the held button drops out of the ring, `Release` counts the hold as longer than the
+   history (`MAX_int32`), which is right for a long hold but wrong when the press was pushed out early by **other button presses**:
+   eight presses and releases of other buttons while charging push it out, and a 120-frame charge could fire after 30 frames. Fix:
+   the charge tracker of gap 1 gets **button slots**: a slot declares either a stick charge or a button, and for a button it keeps
+   `uint8 HeldFrames` (saturating at 255, about 4 s) of the current press. Same 4 slots, same 12 bytes, predicted and rolled back.
+   `Release` and `Hold` read the slot when the button has one, and keep the event scan otherwise.
+2. **Several buttons charged together** (holding three punches, as in older games): `Release` reads one button. A `ReleaseChord`
+   condition (all listed buttons released within `WithinFrames`, each held at least `MinHeldFrames`) is a small addition, only if a
+   move needs it (question CB.1).
+3. **"Charge ready" feedback** (a flash when the charge is full): presentation reads the slot's `HeldFrames`; no simulation change.
+4. The charge stays ready as long as the button is held (no automatic release). A move that fires by itself after a maximum hold uses
+   a `Hold` condition with that `MinFrames` instead, or the timeline's `Charge` track (loop while held, Smash style).
+
+Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); all answered. Question CB.1 is open.
