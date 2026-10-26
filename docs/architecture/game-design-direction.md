@@ -274,6 +274,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.4.
 - (09:53) **Back-charge works in 3D**: the charge holds while the stick stays within a limited angle. Spec: charge relative to the
   direction where it started, release opposite to it ([input.md](input.md) §10).
+- (09:54) Charge moves may have **hitboxes behind** the character instead of in front (it faces the charge direction): `KeepFacing`
+  with hitboxes authored behind the root, or a turn towards the push; per move.
 
 ## 7. Consequences for the specifications
 
@@ -595,3 +597,5 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > già così, no?
 
 > Allora, farei che la carica indietro funziona in 3d, basta far mantenere la carica entro una certa limitazione dei gradi dello stick. (09:53)
+
+> Inoltre si potrebbero avere mosse che hanno hitbox all’indietro. Invece che in avanti. A tal fine. (09:54)

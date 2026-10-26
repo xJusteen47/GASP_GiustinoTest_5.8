@@ -263,6 +263,10 @@ Gaps, *Proposal*:
    its direction in the same space: "forward" means **opposite to the anchor** within its own tolerance, so "hold one way, then push
    the other way + punch" fires the move towards the push. Where facing is locked (the Duel camera, a lock-on) the classic `Facing`
    set (back and down-back) keeps working. Down-charges (crouch held) need neither.
+   **Which way the move faces (owner, 09:54)**: while charging, the character usually faces the charge direction, so a move may also
+   have its **hitboxes behind** the character instead of in front. That is the timeline's choice, not the input's: `AimPolicy =
+   KeepFacing` with hitboxes authored behind the root (negative X in `Root` space) hits towards the push without turning;
+   `SnapToStick` turns towards the push and hits forward. Both are data on the move (combat.md §6.3, `AimPolicy`).
 3. **Side switches**: when a duel cross-up flips facing, a back-charge held in the same world direction becomes forward and is lost,
    as in Street Fighter. Kept; question CH.3.
 
