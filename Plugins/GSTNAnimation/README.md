@@ -13,6 +13,7 @@ First user: the wall layer of the project ([wall-anim.md](../../docs/architectur
 | Module | State | What it is |
 |---|---|---|
 | `GSTNAnimationCore` | exists (Runtime, Default) | The override layer seam, the anim set data, the pure resolution and the component that applies it. No GAS, Network Prediction or Mover. Covered by `GSTNAnimation.Core.*`. |
+| `GSTNAnimationEditor` | exists (Editor, Default) | `UGSTN_AnimGraphAuthoringLibrary`: anim graph authoring for Python scripts (layer interfaces, state machines, rules on an enum through Property Access, sequence players, the override-layer blend in a main graph, child asset overrides, a text dump of the graphs and a compile report). Knows no feature; nothing at runtime depends on it. Used by `Tools/GAS/setup_wall_anim_layer.py`. |
 
 ## Classes
 
@@ -47,6 +48,8 @@ Default source priorities (`GSTNAnimSet`): character 0, kit 100, weapon 200, ski
 
 - Plugins: none.
 - `GSTNAnimationCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags; private Projects (finds the plugin's `Config/Tags`).
+- `GSTNAnimationEditor` (`Build.cs`): public Core, CoreUObject, Engine; private UnrealEd, BlueprintGraph, AnimGraph, AnimGraphRuntime, KismetCompiler.
+  The Property Access node of a rule (plugin PropertyAccessNode, class private to its module) is created by class name with its `Path` set by reflection.
 - Dependents: the project module (wall layer). Planned: the loadout apply path (kit / weapon / skin collections), spin and drill.
 
 ## Gameplay tags

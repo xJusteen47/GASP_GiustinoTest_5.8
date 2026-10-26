@@ -20,6 +20,11 @@
 			"Name": "GSTNAnimationCore",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNAnimationEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	]
 }
