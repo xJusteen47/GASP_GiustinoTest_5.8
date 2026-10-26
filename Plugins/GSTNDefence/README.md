@@ -4,9 +4,9 @@ Defence for the GSTN combat on Unreal Engine 5.8: a **fixed-size shield bubble**
 shield's perfect shield and a move's parry window), the optional **tech**, the downed state and get-up, and the **DI and SDI**
 rules, as data and pure integer-safe math. An entity whose kit and mode carry no defence data behaves as it did before the plugin.
 
-Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoint F3 of
-[m6-defence-links-plan.md](../../docs/architecture/plans/m6-defence-links-plan.md) is built (skeleton, data, tags, tracks); the pure
-math (F4) is next. The GAS module (F6) and the Network Prediction module (F7, F8) are not built. The design is
+Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints F3 and F4 of
+[m6-defence-links-plan.md](../../docs/architecture/plans/m6-defence-links-plan.md) are built (skeleton, data, tags, tracks, and the pure
+math with goldens). The GAS module (F6) and the Network Prediction module (F7, F8) are not built. The design is
 [combat-m6-defence-links.md](../../docs/architecture/combat-m6-defence-links.md).
 
 ## The shield decision (owner, 2026-10-26)
@@ -21,7 +21,7 @@ carried tilt, shrink or arc (`ArcDegrees`, `ElevationLimit`, `TurnRate`, `Radius
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNDefenceCore` | exists (Runtime, Default) | Native tags, settings, the rules asset and its structs (shield, parry, tech, DI, SDI, landing), the integer curve, the kit and rules extensions, the timeline tracks, and the pure math (F4). No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNDefence.Core.*`. |
+| `GSTNDefenceCore` | exists (Runtime, Default) | Native tags, settings, the rules asset and its structs (shield, parry, tech, DI, SDI, landing), the integer curve, the kit and rules extensions, the timeline tracks, and the pure math (shield value and bubble, parry, tech, DI, SDI, ground bounce). No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNDefence.Core.*`. |
 | `GSTNDefenceGAS` | not built (F6) | Attribute mirror, shield / tech / ground bounce / get-up abilities, effects. Stock GAS. |
 | `GSTNDefenceNP` | not built (F7, F8) | Sync fragment, shield bubble contribution, `Parry` and `Shield` steps, tech and landing, DI and SDI wiring. Needs the GAS-NPP fork. |
 
@@ -53,6 +53,20 @@ otherwise be missing.
 | `FGSTN_DefenceKitExtension` | Entry of a kit's extension array: own rules, `ShieldAbility` (empty = no shield), `FGSTN_TechSet` (empty = no tech), `FGSTN_GetupSet`. Ability classes are soft `UObject` classes because Core has no GameplayAbilities dependency. |
 | `FGSTN_DefenceRulesExtension` | Entry of the combat rules asset's extension array naming the mode's `UGSTN_DefenceRules`. |
 | `FGSTN_HoldWindowTrack`, `FGSTN_ParryWindowTrack` | Timeline track structs (children of `FGSTN_TimelineTrack`). The parry track's `ProfileName` is baked to `ProfileIndex` by `Bake`; the core's closed track kind enum is untouched (the combat clock finds them by struct). |
+
+## Math
+
+Stateless, deterministic functions (doubles and integers, no world, actor or component reads); the same inputs give the same result
+on every machine and in a resimulation. Views (`GSTN_DefenceViews.h`) are plain structs holding frames and flags, never tags.
+
+| Library | What it does |
+|---|---|
+| `UGSTN_DefenceMath` | `IsShieldAvailable` (mode flag x kit), the analytic shield value (`ShieldValueAt`, `RaiseShield`, `ReleaseShield`, `ApplyShieldDamage`, `RestampShield` for a rate change), `ShieldDamageOf`, the fixed bubble (`ShieldCentreAt` along the entity's local up, `MakeShieldBubble`, `MakeShieldBubbleHurtbox` as the extra hurtbox), `ShieldStunFrames`, `PushbackSpeedOf`, `EvaluateParryWindow` (anchor `Release` or `Press`), `ResolveParry` (one decision for the sources shield and move, shield first), `MoveWindowEndAfterParry`, `AttackerStunFramesOf`, the by-name tag reads (`HasParryImmunity`, `IsGrabLikeHitType`), the tech press rule and `EvaluateTech`, and `GroundBounceVelocity`. |
+| `UGSTN_DIRulesMath` | The rules overload of M4's `ApplyDI`: strength curve, elevation curve, minimum knockback, victim scales, the hit's DI switch. |
+| `UGSTN_SDIMath` | `NextDisplacement`: one frame of held-direction drift, limited to `MaxDistanceCmPerHit`. |
+
+The bubble functions take no shield value and no stick: the radius is `RadiusCm` at any value (the fixed-bubble decision).
+Deferred to F8, which has the contact record: picking the tech kind (in place, roll, wall) from the stick and the contact normal.
 
 ## Tags
 
