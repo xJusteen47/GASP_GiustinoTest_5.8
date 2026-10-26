@@ -105,6 +105,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
 	static UEdGraphNode* FindOrInsertPoseNodeBeforeOutput(UEdGraph* Graph, const FString& NodeClassPath, const TMap<FString, FString>& NodeMembers);
 
+	/**
+	 * Shows the optional input pin PinName of an anim graph node (a node struct member, or a custom property such as a Control Rig's public
+	 * variable) and feeds it from a "get VariableName" of the node's Blueprint, placed left of the node. Kept when the pin is already fed by
+	 * that variable. Use it when a value must reach a node every update without a property binding: a Control Rig node's InputMapping maps
+	 * rig variables to animation curves only, so a struct variable is passed this way. Returns false if the pin or the variable is missing
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool ExposePinFromVariable(UEdGraphNode* Node, FName PinName, FName VariableName);
+
 	//~ Child anim Blueprints (skin variants, anim-layers.md part B)
 
 	/**

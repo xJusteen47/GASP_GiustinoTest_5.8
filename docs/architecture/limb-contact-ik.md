@@ -46,7 +46,7 @@ Game thread, UGSTN_WallAnimInstance::NativeUpdateAnimation (wall layer)
   WallLimbContact = { HandLeft, HandRight, FootLeft, FootRight, HandWeight, FootWeight }
 
 Worker thread, ABP_GSTN_WallLayer anim graph
-  wall state machine -> Control Rig node (CR_GSTN_WallLimbContact, input mapping WallLimbContact -> WallLimbContact) -> Output Pose
+  wall state machine -> Control Rig node (CR_GSTN_WallLimbContact, pin WallLimbContact <- get WallLimbContact) -> Output Pose
 
 CR_GSTN_WallLimbContact, Forwards Solve
   GSTN Limb Contact IK (upperarm_l, lowerarm_l, hand_l, HandLeft,  Weight = HandWeight, Hand settings)
@@ -94,14 +94,15 @@ Networking: simulated proxies run the same code on their smoothed presentation s
 
 The wall layer (`ABP_GSTN_WallLayer`) is made by `setup_wall_anim_layer.py`; this script runs after it.
 
-1. Build (new modules `GSTNAnimationRig` and the authoring helper `FindOrInsertPoseNodeBeforeOutput` in `GSTNAnimationEditor`; the plugin
+1. Build (new modules `GSTNAnimationRig` and the authoring helpers `FindOrInsertPoseNodeBeforeOutput` and `ExposePinFromVariable` in `GSTNAnimationEditor`; the plugin
    now depends on ControlRig, enabled by default in the engine). Run `GSTNAnimation.Core.LimbContact` and `GSTN.Wall.Anim` tests.
 2. Run the script. It makes `Content/Blueprints/Animation/CR_GSTN_WallLimbContact` (bones of the character's skeleton) with one public
    variable `WallLimbContact` (`GSTN_WallLimbContactState`) and the four `GSTN Limb Contact IK` nodes of section 3 in the Forwards Solve, their
    `Surface` and `Weight` pins linked to the variable's members.
-3. It puts a `Control Rig` node with that rig at the end of the `WallLayer` graph (state machine -> Control Rig -> Output Pose), with the input
-   mapping `WallLimbContact` -> `WallLimbContact`: the node copies the layer instance's property into the rig variable each update. One struct
-   instead of six pins keeps the layer graph to one node and the binding by name.
+3. It puts a `Control Rig` node with that rig at the end of the `WallLayer` graph (state machine -> Control Rig -> Output Pose), shows the
+   rig variable `WallLimbContact` as a pin on it and feeds the pin from a get of the layer instance's `WallLimbContact`: the node copies it
+   into the rig variable each update. One struct instead of six pins keeps the layer graph to one node and one link. Not the node's
+   `InputMapping`: in 5.8 it maps rig variables to animation curves (floats) only, so a struct cannot go through it.
 4. Check in PIE: slide and climb on a flat wall, a curved wall and a corner; toggle `LimbContactSettings.bEnabled` on the layer's class defaults
    to compare; the nodes' `Alpha` and `Target` outputs can be watched in the rig editor's debug view.
 5. Find the right `ContactAxis` for hand and foot (section 4) and set it in the script's `HAND` / `FOOT`, then run it again.

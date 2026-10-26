@@ -15,11 +15,12 @@
 #       hand_r: upperarm_r, lowerarm_r, hand_r, Surface = WallLimbContact.HandRight, Weight = WallLimbContact.HandWeight, HAND settings
 #       foot_l: thigh_l,    calf_l,     foot_l, Surface = WallLimbContact.FootLeft,  Weight = WallLimbContact.FootWeight, FOOT settings
 #       foot_r: thigh_r,    calf_r,     foot_r, Surface = WallLimbContact.FootRight, Weight = WallLimbContact.FootWeight, FOOT settings
-#  2. ABP_GSTN_WallLayer, graph WallLayer: a Control Rig node (that rig) between the WallPhases state machine and the Output Pose, with the
-#     input mapping WallLimbContact -> WallLimbContact (the layer instance's property, filled on the game thread).
+#  2. ABP_GSTN_WallLayer, graph WallLayer: a Control Rig node (that rig) between the WallPhases state machine and the Output Pose, its
+#     WallLimbContact pin shown and fed by a get of the layer instance's WallLimbContact (filled on the game thread). Not InputMapping:
+#     in 5.8 it maps rig variables to animation curves only.
 #
-# First version written without an editor at hand: the RigVM controller calls follow the engine's Python API of 5.x and may need small
-# fixes on the first run (pin paths, the variable's C++ type string). Every failure is logged with the step.
+# Checked on 5.8 (2026-10-26): a rig made from a skeleton by script has an empty graph, so the Forwards Solve node is added here; the
+# node's rig is the FControlRigAssetStrongReference member ControlRigAssetReference. Every failure is logged with the step.
 import sys
 import unreal
 
@@ -32,6 +33,7 @@ LAYER = 'WallLayer'
 VARIABLE = 'WallLimbContact'
 VARIABLE_TYPE_PATH = '/Script/GASP_Giustino2.GSTN_WallLimbContactState'
 UNIT_PATH = '/Script/GSTNAnimationRig.GSTN_RigUnit_LimbContactIK'
+BEGIN_EXECUTION_PATH = '/Script/ControlRig.RigUnit_BeginExecution'
 CONTROL_RIG_NODE = '/Script/ControlRigDeveloper.AnimGraphNode_ControlRig'
 
 # Node name -> (root, joint, effector, surface member, weight member, settings)
@@ -93,11 +95,14 @@ def ensure_rig(skeleton):
     graph = controller.get_graph()
     names = {str(n.get_name()) for n in graph.get_nodes()}
 
-    # The Forwards Solve event of a new rig
+    # The Forwards Solve event. In 5.8 a rig made from a skeleton by script starts with an empty graph, so it is added when missing
     event = next((n for n in graph.get_nodes() if 'BeginExecution' in str(n.get_name())), None)
     if not event:
-        fail('no Forwards Solve (BeginExecution) node in the rig')
-        return rig
+        event = controller.add_unit_node_from_struct_path(BEGIN_EXECUTION_PATH, 'Execute', unreal.Vector2D(0, 0), 'BeginExecution')
+        if not event:
+            fail('could not add the Forwards Solve (BeginExecution) node to the rig')
+            return rig
+        log('node BeginExecution')
 
     getter = 'GetWallLimbContact'
     if getter not in names:
@@ -107,12 +112,14 @@ def ensure_rig(skeleton):
     previous_exec = f'{event.get_name()}.ExecuteContext'
     for index, (node, root, joint, effector, surface, weight, settings) in enumerate(LIMBS):
         if node not in names:
-            controller.add_unit_node_from_struct_path(UNIT_PATH, 'Execute', unreal.Vector2D(300 + index * 350, 0), node)
+            if not controller.add_unit_node_from_struct_path(UNIT_PATH, 'Execute', unreal.Vector2D(300 + index * 350, 0), node):
+                fail(f'could not add {node} ({UNIT_PATH})')
+                continue
             log(f'node {node}')
-        controller.set_pin_default_value(f'{node}.Root', f'(Type=Bone,Name="{root}")', True)
-        controller.set_pin_default_value(f'{node}.Joint', f'(Type=Bone,Name="{joint}")', True)
-        controller.set_pin_default_value(f'{node}.Effector', f'(Type=Bone,Name="{effector}")', True)
-        controller.set_pin_default_value(f'{node}.Settings', settings, True)
+        for pin, value in (('Root', f'(Type=Bone,Name="{root}")'), ('Joint', f'(Type=Bone,Name="{joint}")'),
+                           ('Effector', f'(Type=Bone,Name="{effector}")'), ('Settings', settings)):
+            if not controller.set_pin_default_value(f'{node}.{pin}', value, True):
+                fail(f'default {node}.{pin} = {value}')
         for source, target in ((previous_exec, f'{node}.ExecuteContext'),
                                (f'{getter}.Value.{surface}', f'{node}.Surface'),
                                (f'{getter}.Value.{weight}', f'{node}.Weight')):
@@ -122,9 +129,18 @@ def ensure_rig(skeleton):
                     fail(f'link {source} -> {target}')
         previous_exec = f'{node}.ExecuteContext'
 
-    unreal.BlueprintEditorLibrary.compile_blueprint(rig)
+    report_compile(rig)
     save(rig)
     return rig
+
+
+def report_compile(blueprint):
+    report, ok = lib.compile_with_report(blueprint)
+    for line in report.splitlines():
+        if not line.startswith('Info:'):
+            (fail if line.startswith('Error') else log)(f'compile {blueprint.get_name()}: {line}')
+    if not ok:
+        fail(f'{blueprint.get_name()} does not compile')
 
 
 # 2. Control Rig node in the wall layer -----------------------------------------------------------------------------------------------
@@ -136,18 +152,21 @@ def ensure_layer_node(rig):
         return
     graph = lib.find_graph(layer_bp, LAYER)
     rig_class = rig.generated_class() if callable(getattr(rig, 'generated_class', None)) else rig.get_editor_property('generated_class')
+    # 5.8: the node's rig is an FControlRigAssetStrongReference (ControlRigClass is deprecated); a Blueprint rig goes in its legacy
+    # BlueprintRigClass member
     members = {
-        'ControlRigClass': rig_class.get_path_name(),
-        'InputMapping': f'(("{VARIABLE}", "{VARIABLE}"))',
+        'ControlRigAssetReference': f'(BlueprintRigClass="{rig_class.get_path_name()}")',
+        # InputMapping maps rig variables to animation curves (floats), not to instance properties: cleared, the struct goes in by pin
+        'InputMapping': '()',
     }
     node = lib.find_or_insert_pose_node_before_output(graph, CONTROL_RIG_NODE, members)
     if not node:
         fail('Control Rig node not placed in the wall layer')
         return
-    report, ok = lib.compile_with_report(layer_bp)
-    for line in report.splitlines():
-        if not line.startswith('Info:'):
-            (fail if line.startswith('Error') else log)(f'compile {layer_bp.get_name()}: {line}')
+    # The rig's public variable shown as a pin on the node, fed by the layer instance's property of the same name each update
+    if not lib.expose_pin_from_variable(node, VARIABLE, VARIABLE):
+        fail(f'Control Rig node pin {VARIABLE} not fed by the layer property {VARIABLE}')
+    report_compile(layer_bp)
     save(layer_bp)
 
 
@@ -162,8 +181,12 @@ def run(check=False):
         rig = load(f'{ANIM_DIR}/{RIG_NAME}')
         layer_bp = load(LAYER_ABP)
         if rig:
-            for n in rig.get_controller_by_name('RigVMModel').get_graph().get_nodes():
+            graph = rig.get_controller_by_name('RigVMModel').get_graph()
+            log(f'rig variables {[f"{v.name}: {v.cpp_type}" for v in rig.get_member_variables()]}')
+            for n in graph.get_nodes():
                 log(f'rig node {n.get_name()}')
+            for link in graph.get_links():
+                log(f'rig link {link.get_pin_path_representation()}')
         if layer_bp:
             log(lib.describe_graphs(layer_bp))
         return True

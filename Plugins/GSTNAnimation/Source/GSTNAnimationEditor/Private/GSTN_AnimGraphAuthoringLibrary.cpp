@@ -670,6 +670,87 @@ UEdGraphNode* UGSTN_AnimGraphAuthoringLibrary::FindOrInsertPoseNodeBeforeOutput(
 	return bMembersOk ? Node : nullptr;
 }
 
+bool UGSTN_AnimGraphAuthoringLibrary::ExposePinFromVariable(UEdGraphNode* Node, FName PinName, FName VariableName)
+{
+	UAnimGraphNode_Base* AnimNode = Cast<UAnimGraphNode_Base>(Node);
+	UBlueprint* Blueprint = AnimNode ? GetBlueprint(AnimNode->GetGraph()) : nullptr;
+	if (!Blueprint)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("ExposePinFromVariable: needs an anim graph node inside a Blueprint"));
+		return false;
+	}
+
+	UEdGraphPin* Pin = AnimNode->FindPin(PinName, EGPD_Input);
+	if (!Pin)
+	{
+		// Optional pins live in ShowPinForProperties (node struct members) or CustomPinProperties (custom property nodes, protected): both
+		// arrays of FOptionalPinFromProperty, found by reflection as the details panel's expose checkbox would change them
+		bool bFound = false;
+		for (const TCHAR* ArrayName : { TEXT("ShowPinForProperties"), TEXT("CustomPinProperties") })
+		{
+			const FArrayProperty* ArrayProperty = FindFProperty<FArrayProperty>(AnimNode->GetClass(), ArrayName);
+			const FStructProperty* Inner = ArrayProperty ? CastField<FStructProperty>(ArrayProperty->Inner) : nullptr;
+			if (!Inner || Inner->Struct != FOptionalPinFromProperty::StaticStruct())
+			{
+				continue;
+			}
+			FScriptArrayHelper Array(ArrayProperty, ArrayProperty->ContainerPtrToValuePtr<void>(AnimNode));
+			for (int32 Index = 0; Index < Array.Num(); ++Index)
+			{
+				FOptionalPinFromProperty* Optional = reinterpret_cast<FOptionalPinFromProperty*>(Array.GetRawPtr(Index));
+				if (Optional->PropertyName == PinName)
+				{
+					AnimNode->Modify();
+					Optional->bShowPin = true;
+					bFound = true;
+				}
+			}
+		}
+		if (bFound)
+		{
+			AnimNode->ReconstructNode();
+			Pin = AnimNode->FindPin(PinName, EGPD_Input);
+		}
+	}
+	if (!Pin)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("ExposePinFromVariable: %s has no optional pin %s"), *AnimNode->GetName(), *PinName.ToString());
+		return false;
+	}
+
+	// Already fed by that variable
+	if (const UEdGraphPin* Source = LinkedPin(Pin))
+	{
+		const UK2Node_VariableGet* Get = Cast<UK2Node_VariableGet>(Source->GetOwningNode());
+		if (Get && Get->GetVarName() == VariableName)
+		{
+			return true;
+		}
+	}
+
+	UEdGraph* Graph = AnimNode->GetGraph();
+	UK2Node_VariableGet* Get = NewObject<UK2Node_VariableGet>(Graph, NAME_None, RF_Transactional);
+	Get->VariableReference.SetSelfMember(VariableName);
+	Graph->AddNode(Get, false, false);
+	Get->CreateNewGuid();
+	Get->PostPlacedNewNode();
+	Get->AllocateDefaultPins();
+	Get->NodePosX = AnimNode->NodePosX - 320;
+	Get->NodePosY = AnimNode->NodePosY + 160;
+
+	UEdGraphPin* Value = Get->FindPin(VariableName, EGPD_Output);
+	if (!Value)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("ExposePinFromVariable: %s has no variable %s"), *Blueprint->GetName(), *VariableName.ToString());
+		Graph->RemoveNode(Get);
+		return false;
+	}
+	Pin->BreakAllPinLinks();
+	const bool bOk = Connect(Value, Pin);
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+	return bOk;
+}
+
 bool UGSTN_AnimGraphAuthoringLibrary::SetChildAssetOverride(UAnimBlueprint* ChildBlueprint, FName StateName, UAnimationAsset* Asset)
 {
 	UAnimBlueprint* Parent = ChildBlueprint ? UAnimBlueprint::GetParentAnimBlueprint(ChildBlueprint) : nullptr;
