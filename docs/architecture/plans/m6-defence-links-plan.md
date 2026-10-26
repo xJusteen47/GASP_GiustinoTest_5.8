@@ -25,8 +25,9 @@ Owner direction folded in (DD wins over M6 where they differ; M6 revisions of 20
 
 - **Shield only where the game mode enables it** (PvP yes, PvE no): `UGSTN_DefenceRules::bShieldEnabled` and the kit's shield entry
   must both exist; the shield slot is free for kits in PvE (M6 §1d).
-- **Shield works like Super Smash Bros. Ultimate in 3D**: spherical bubble that shrinks with shield health, tilt, poke, break with an
-  upward launch, shield stun and pushback by damage, out-of-shield options, grabs beat it, grounded only (M6 §5.3).
+- **Shield works like Rivals of Aether 2, in 3D** (owner direction 2026-10-26, after spike S5): spherical bubble of **fixed size**, no
+  stick tilt, no shrink, no poke, no arc variant; break with an upward launch, shield stun and pushback by damage, out-of-shield options,
+  grabs beat it, grounded only (M6 §5.3).
 - **Parry = one resolution, two sources** (the shield's release-anchored perfect shield and the `ParryWindow` track of any move), in
   every mode (M6 §5.4).
 - **No tech by default**: landing from tumble = stick-steered mini bounce, then the downed state (`Knockdown`), get-up roll by stick,
@@ -181,7 +182,9 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   client; on an interpolated victim report the rate and the radius/centre error that causes it), extra hit-detection cost per frame with
   8 shielding entities, and M4's hurtbox selection unchanged with no bubble. **Pass**: zero disagreements for (a), (c), (d) on the owner,
   ≤ 1 per 100 hits on an interpolated victim, cost < 0.1 ms. **STOP** if it fails: the fallback is the contact-point test, which cannot
-  block hits that only touch the bubble (owner decision).
+  block hits that only touch the bubble (owner decision). **Result (2026-10-26, `docs/notes/m6-spike-report.md`)**: pass for (a), (c),
+  (d) on every observer; (b) tilting failed on an interpolated victim (2 per 100). **Owner decision 2026-10-26**: the shield has no tilt
+  and a fixed size (Rivals of Aether 2 style), so (b) and (d) no longer exist and the bubble stays an extra hurtbox.
 - Acceptance: report with numbers; each STOP condition evaluated. Gates F2 (S5), F7 (S3, S5), F8 (S2), F10 (S1), F12 (S4). Size: M.
 
 ### F1 `GSTNCombat` follow-up 1: open inbox kinds, `PostToInbox`, entity ref, hit-data fields (neutral)
@@ -239,7 +242,7 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   (FGSTN_HoldWindowTrack, FGSTN_ParryWindowTrack with ProfileName baked to an index at load)}`.
 - Tags (native, `GSTNDefenceCore` for commands/locks, the rest declared here but documented as GAS-owned per M6 §1c): `Combat.State.
   Shielding/ShieldStun/ShieldBroken/ParryWindow/ParryRecovery/Parried/Teching/Knockdown/Tech.Lockout`, `Combat.Mover.Tumble`,
-  `Combat.Immunity.Parry/Shield`, `Command.Defence.Shield`, `Input.Lock.Command.Defence`, `Combat.Event.Blocked/Parried/ShieldPoked/
+  `Combat.Immunity.Parry/Shield`, `Command.Defence.Shield`, `Input.Lock.Command.Defence`, `Combat.Event.Blocked/Parried/
   ShieldBroken/Teched/KnockedDown`, `Combat.SetByCaller.ShieldDamage`. (Declaring every defence tag in Core keeps GAS and NP free of tag
   definitions; the M6 §1c "owner" column names the writer, not the declaring module. *Deviation to record if the lead prefers the
   split by module.*)
@@ -250,16 +253,16 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
   GAS/NP/Mover/Link header.
 - Spec: M6 §1b, §1c, §1d, §3 (rules, tracks). Size: M.
 
-### F4 `GSTNDefenceCore` math: shield value and bubble, arc, parry, tech, DI/SDI (pure, goldens)
+### F4 `GSTNDefenceCore` math: shield value and bubble, parry, tech, DI/SDI (pure, goldens)
 
-- Files: `Public/Math/{GSTN_DefenceMath.h (IsShieldAvailable, ShieldValueAt, ShieldRadiusAt, ShieldCentreAt, MakeShieldBubble,
-  ShieldStunFrames, PushbackSpeed, IsInShieldArc, EvaluateParryWindow, ResolveParry → FGSTN_ParryDecision, EvaluateTech,
+- Files: `Public/Math/{GSTN_DefenceMath.h (IsShieldAvailable, ShieldValueAt, ShieldCentreAt, MakeShieldBubble (fixed `RadiusCm`, centre
+  on the entity's local up, no tilt), ShieldStunFrames, PushbackSpeed, EvaluateParryWindow, ResolveParry → FGSTN_ParryDecision, EvaluateTech,
   GroundBounceVelocity), GSTN_SDIMath.h (NextDisplacement, limiter), GSTN_DIRulesMath.h (ApplyDI rules overload, StrengthCurve,
   ElevationDeltaByElevation, ScaleByVictimTag)}`, `Public/Math/GSTN_DefenceViews.h` (`FGSTN_ParryContext`, `FGSTN_ShieldView`,
   `FGSTN_TechState` plain views used by the NP module and by tests; doubles, identical on every machine).
 - Tags: none.
 - Tests (goldens from hand values): `GSTNDefence.Core.Shield.{AvailableFlagTimesKit, ValueDrainRegenDelayClamp, RateChangeRestamp,
-  RadiusByFraction, CentreTiltBoundRateArbitraryUp, StunAndPushbackScaleWithDamage, ArcBoundaryBehindAbove, ArcProjectileSourceDir}`,
+  RadiusFixedAtAnyValue, CentreArbitraryUp, StunAndPushbackScaleWithDamage}`,
   `GSTNDefence.Core.Parry.{ReleaseAnchorEdges, PressAnchorEdges, MinHeldFrames, ResolveBothSourcesEqualProfile, ShieldSourceFirst,
   MoveWindowEdges, CloseOnParry, HurtboxSelection, NotParryableFlag, ImmunityTagByName, ProjectileFlag}`, `GSTNDefence.Core.Tech.
   {PressInWindow, EarlyPressLockout, MashDoesNotExtend, LatePress, HitstopExcluded, ContactSameFrame, NoTechInHitstun}`,
@@ -332,24 +335,24 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
 
 - Files: `Source/GSTNDefenceNP/{Build.cs (GSTNDefenceGAS, GSTNCombatNP), Public/Sim/{GSTN_DefenceFragment.h (feature id 17: the M6 §5.1
   fields of the shield, move parry window, stuns, tech, knockdown, punish; NetSerialize/ShouldReconcile/Interpolate/ToString; idle =
-  defaults = one bit), GSTN_DefenceSnapshotContributor.h (RulesIndex with bShieldEnabled and bKitHasShield, shield stamp/press/release/
-  tilt/yaw, move parry stamps, immunity tags as bits; AppendExtraHurtboxes contributes the bubble with IgnoreHitTypes from the rules'
-  non-blockable list), GSTN_DefenceTickExtension.h (prio 110: after clocks: defence clocks, tilt from the stick, hold stall and parry
+  defaults = one bit), GSTN_DefenceSnapshotContributor.h (RulesIndex with bShieldEnabled and bKitHasShield, shield stamp/press/release,
+  move parry stamps, immunity tags as bits; AppendExtraHurtboxes contributes the bubble with IgnoreHitTypes from the rules'
+  non-blockable list), GSTN_DefenceTickExtension.h (prio 110: after clocks: defence clocks, hold stall and parry
   window stamp through the F2 track hook; before candidates: BlocksActions for ShieldStun/ShieldBroken/Punished/Knockdown; tag
   projection), GSTN_DefenceInboxKinds.h (Punish kind handler: ActionState Punished until PunishEndFrame, cancel timeline, hitstop)},
   Public/Pipeline/{GSTN_HitStep_Parry.h (ResolveParry on the snapshot: nullify, hitstop both, meter, event Parried with source,
   LastParryFrame, OutgoingEntries += Punish; defender side by source), GSTN_HitStep_Shield.h (bubble hit: block, shield damage,
   re-stamp lower, shieldstun, pushback through the reaction request seam as a no-tumble knockback, hitstop × multiplier, meter; body
-  hit while Raised: ShieldPoked event + Continue; break: ShieldBroken state, BreakLaunch up via the reaction request, event)},
+  hit while Raised (only a kit radius that leaves a hurtbox uncovered): Continue as an ordinary hit, no event; break: ShieldBroken state, BreakLaunch up via the reaction request, event)},
   Public/GSTN_DefenceOutcomeApplier.h (state writes at F+1: stamps, mirror requests every 16 frames while changing; AppendEvents)}`.
   `OnParry` cancel condition registered from `LastParryFrame` (X11).
 - Tags: none new.
 - Tests: `GSTNDefence.NP.Fragment.{RoundTripIdleOneBit, ActiveBytesWithinTable, Interpolate}`, `GSTNDefence.NP.Snapshot.{BubbleContributed,
   NoBubbleWhenUnavailableOrHitstunOrBroken, RulesIndexPerEntity}`, `GSTNDefence.NP.Steps.{ParryBeforeShieldOrder, ShieldBlockNoDamage,
-  PokeContinuesWithEvent, BreakLaunchUp, GrabPassesThroughBubble, ModeOffSkipsShieldNotParry, OutgoingPunishPosted}`, `GSTNDefence.NP.
-  Tick.{HoldStallsTimelineNotClock, TiltWritten, VetoWhileStunned, TagsProjected}`, plus a forced-rollback test on the fragment.
+  BodyHitWhileRaisedContinues, BreakLaunchUp, GrabPassesThroughBubble, ModeOffSkipsShieldNotParry, OutgoingPunishPosted}`, `GSTNDefence.NP.
+  Tick.{HoldStallsTimelineNotClock, VetoWhileStunned, TagsProjected}`, plus a forced-rollback test on the fragment.
 - Harness (`defence_scenarios.py`, listen + dedicated, loss 0 and 2 %): `scenario_shield_block`, `scenario_shield_bubble`,
-  `scenario_shield_poke`, `scenario_shield_oos`, `scenario_shield_break`, `scenario_shield_mode_off`, `scenario_grab_shield` (needs F12:
+  `scenario_shield_oos`, `scenario_shield_break`, `scenario_shield_mode_off`, `scenario_grab_shield` (needs F12:
   stubbed with a `Grab` hit type until then), `scenario_parry`, `scenario_parry_move`.
 - Acceptance: blocked hit identical on server and both clients (value, radius, stun); parry costs the attacker one rollback and both
   sources give the same outcome and rollback count; with the PvE rules asset nothing of the shield exists and the counter move still
@@ -470,12 +473,12 @@ Output: a report with numbers per sub-step, pass/fail against the thresholds, la
 
 - Content (plugin-owned under `Plugins/GSTNDefence/Content` and `Plugins/GSTNLink/Content`, soft refs, LFS): `DA_DefenceRules_Test`
   (PvP, `bShieldEnabled = true`, short numbers: shield 100, drain 0.4/frame, perfect-shield window 5, tech window 20, lockout 40) and
-  `DA_DefenceRules_TestPvE` (`bShieldEnabled = false`), an arc variant (`ArcDegrees = 140`), `GA_Shield_Test`, `GA_CounterTest`
+  `DA_DefenceRules_TestPvE` (`bShieldEnabled = false`), `GA_Shield_Test`, `GA_CounterTest`
   (ParryWindow + OnParry cancel), tech set (InPlace, Roll, WallTech), bounce/get-up set, `DA_LinkType_Grab`, grab move, pummel, four
   throws, `FGSTN_MashRule` test values (grab base 90 frames). Built by `Tools/GAS/setup_defence_link_content.py` (idempotent, backs up,
   same style as `setup_gas_assets.py --parts-content`). **Shared test kit/character edits need the owner's OK (section 6)**: until
   then the harness attaches the kit extensions to the test character at runtime like `attach_part_set_to_actor` does for parts.
-- Debug: `gstn.Combat.Debug.Shield 1` (bubble with tilt and radius, arc wedge, value bar, parry window colour by source), `...Links 1`
+- Debug: `gstn.Combat.Debug.Shield 1` (bubble sphere, value bar, parry window colour by source), `...Links 1`
   (line between partners, socket gizmo, serial, remaining frames), `...Tech 1` (window/lockout bar), console-only; the Gameplay Debugger
   rows follow M5's category (X19) after the desktop merge.
 - Validators: `IsDataValid` on rules and link definitions already exist (F3, F5); a `validate_defence_content.py` pass like M4b's.
