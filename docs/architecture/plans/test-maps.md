@@ -50,7 +50,7 @@ sections (camera.md C3) and the depth marker.
 | 10 | Pit | a 10 m wide gap with a red KO zone 15 m below, plus a depth reference volume at the lip | KO, above ring of the depth marker |
 | 11 | Mover lift | a 4×4 m platform moving 6 m up and down every 4 s (only if a kinematic mover exists) | standing on moving bases |
 | 12 | Gravity | a gravity-flip volume and a sideways-gravity volume (only once gravity volumes exist) | arbitrary gravity |
-| 14 | Flip panels | a group of six red and blue panels over a pit that flip on the owner's jump after a short delay (after `GSTNActivation`, [level-activation.md](../level-activation.md)) | claim by the first player, colour, delay, network sync |
+| 14 | Activation zones | test objects only: six panels over a pit that flip on the owner's jump after a short delay, and a platform on a track assigned to player 1 (after `GSTNActivation`, [level-activation.md](../level-activation.md)) | owner rules (first to stand, assigned), colour, delay, network sync |
 | 13 | Camera | camera sections: one fixed angle with manual control locked, one rail, one orbit with limits (after camera C3) | camera sections, stick hold on cuts |
 
 **Acceptance:**

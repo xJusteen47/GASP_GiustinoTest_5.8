@@ -238,7 +238,8 @@ no duration, and a tag derived from Mover's crouch would be seen one frame late 
 What the condition does today:
 - `Directions`: a **set** of directions that all count as charging (for example back and down-back), in a chosen `Space`
   (`Facing` by default).
-- `MinFrames` (default 30): how long the stick must stay inside the set.
+- `MinFrames` (default 30): how long the stick must stay inside the set. Standard charge moves use **40 frames** (about 0.65 s) and
+  `MaxReleaseFrames` 8, set per move (owner answer CH.2, 2026-10-26).
 - `MaxReleaseFrames` (default 8): the **tolerance after release**: the stick may have left the set at most this many frames before the
   move's anchor, so "charge back, then forward + punch" works.
 - `MinZone`: how far the stick must be tilted to count.
@@ -269,8 +270,11 @@ Gaps, *Proposal*:
    **Which way the move faces (owner, 09:54)**: while charging, the character usually faces the charge direction, so a move may also
    have its **hitboxes behind** the character instead of in front. That is the timeline's choice, not the input's: `AimPolicy =
    KeepFacing` with hitboxes authored behind the root (negative X in `Root` space) hits towards the push without turning;
-   `SnapToStick` turns towards the push and hits forward. Both are data on the move (combat.md §6.3, `AimPolicy`).
-3. **Side switches**: when a duel cross-up flips facing, a back-charge held in the same world direction becomes forward and is lost,
-   as in Street Fighter. Kept; question CH.3.
+   `SnapToStick` turns towards the push and hits forward (owner, 09:55: "it depends on the ability"). Both are data on the move
+   (combat.md §6.3, `AimPolicy`).
+3. **Side switches (CH.3, inferred from the owner's answers, 2026-10-26 09:56)**: standard charge moves use `ChargeAnchor` in the
+   duel too, so the charge does not depend on facing and a cross-up does not erase it. The move still fires opposite to the anchor;
+   whether it then turns towards the opponent is the move's aim policy, like any other charge move. A move that wants the Street
+   Fighter rule (charge lost on a side switch) uses the `Facing` set instead; that is data on the command.
 
-Questions CH.1–CH.3 in [open-questions-m4-m10.md](open-questions-m4-m10.md).
+Questions CH.1–CH.4 in [open-questions-m4-m10.md](open-questions-m4-m10.md); CH.1–CH.3 answered, CH.4 open.

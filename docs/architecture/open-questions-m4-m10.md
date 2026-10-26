@@ -50,7 +50,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
 | Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
 | Input a carica (stile Guile) | [input.md](input.md) §10 |
-| Oggetti attivati da azioni (piattaforme rosse e blu) | [level-activation.md](level-activation.md) |
+| Zone di oggetti attivabili da un solo giocatore | [level-activation.md](level-activation.md) |
 | Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [input.md](input.md) §9 |
 
 
@@ -1502,15 +1502,21 @@ valgono solo dove la direzione è bloccata (telecamera da duello, aggancio al be
    Ipotesi nella specifica: cariche indietro solo con la direzione bloccata, cariche in basso ovunque.
    **Risposta (2026-10-26 09:53):** La carica indietro funziona in 3D: basta mantenerla finché lo stick resta entro un certo limite di gradi.
    Nella specifica: la carica è relativa alla direzione in cui è iniziata, e "avanti" vuol dire l'opposto di quella direzione
-   ([input.md](input.md) §10).
+   ([input.md](input.md) §10). Poi (09:54, 09:55): una mossa può avere le hitbox all'indietro, oppure girare subito il personaggio e
+   colpire in avanti; lo decide l'abilità.
 
 CH.2. Quanto deve durare la carica? In Street Fighter è circa tre quarti di secondo o poco più.
    Perché conta: è il ritmo di tutte le mosse a carica.
    Ipotesi nella specifica: valore per singola mossa, di base 40 frame (circa 0,65 s), con 8 frame di tolleranza dopo il rilascio.
+   **Risposta (2026-10-26 09:56):** Va bene. Nella specifica: 40 frame di base, 8 di tolleranza, regolabili mossa per mossa.
 
 CH.3. Nel duello, se l'avversario ti salta dall'altra parte, la carica indietro si perde (come in Street Fighter) o viene conservata?
    Perché conta: conservarla rende più facile difendersi dai salti incrociati con una mossa a carica.
    Ipotesi nella specifica: si perde, come in Street Fighter.
+   **Risposta (2026-10-26 09:56, ricavata dalle tue risposte a CH.1):** La carica è relativa alla direzione in cui è iniziata, non a
+   dove guarda il personaggio, quindi un salto incrociato **non la fa perdere**. La mossa parte comunque nel verso opposto alla carica, e
+   se si gira verso l'avversario lo decide l'abilità. Una mossa che vuole la regola di Street Fighter può ancora usare la carica relativa
+   allo sguardo ([input.md](input.md) §10).
 
 CH.4. Di quanti gradi può spostarsi lo stick dalla direzione della carica senza perderla, e quanto velocemente quella direzione può
 seguire lo stick (tu hai detto: anche un giro intero, ma muovendo lo stick molto lentamente)?
@@ -1519,28 +1525,31 @@ seguire lo stick (tu hai detto: anche un giro intero, ma muovendo lo stick molto
    Ipotesi nella specifica: 50 gradi da ogni lato, e la direzione segue lo stick a 90 gradi al secondo al massimo (un giro intero in 4
    secondi); tutto regolabile mossa per mossa.
 
-## Oggetti attivati da azioni: piattaforme rosse e blu (26/10)
+## Zone di oggetti attivabili da un solo giocatore (26/10)
 
-Specifica: [level-activation.md](level-activation.md). Le tue idee (gruppo che reagisce solo al salto del primo giocatore salito, colore di
-quel giocatore, piccolo ritardo prima di cambiare lato) sono nella specifica; il ritardo aiuta anche online, perché dà il tempo a tutte le
-macchine di sapere quando avverrà il cambio.
+Specifica: [level-activation.md](level-activation.md). Come hai chiarito (09:58, 10:00), è la **base generica**: una zona di oggetti che un
+solo giocatore attiva con un'azione e che prende il suo colore; le piattaforme rosse e blu e la piattaforma "solo Mario" sono esempi che
+costruirai tu sopra. Nella base: il proprietario può essere il primo che sale, il primo che entra, chi ci sta sopra in quel momento, oppure
+un giocatore **assegnato** in partenza (come la piattaforma di Mario). Il ritardo prima del cambio aiuta anche online, perché dà il tempo
+a tutte le macchine di sapere quando avverrà.
 
-FLP.1. Quando il gruppo **torna libero** per un altro giocatore? Quando il proprietario non ci sta sopra da un po', quando muore, oppure mai
-finché resta nel livello?
-   Perché conta: se non si libera mai, un giocatore lontano blocca le piattaforme per tutti.
+FLP.1. Quando una zona **torna libera** per un altro giocatore? Quando il proprietario non ci sta sopra da un po', quando muore, oppure mai
+finché resta nel livello? (Non vale per le zone con proprietario assegnato.)
+   Perché conta: se non si libera mai, un giocatore lontano blocca la zona per tutti.
    Ipotesi nella specifica: si libera dopo circa 2 secondi che il proprietario non ci sta sopra, o quando va KO.
 
-FLP.2. Quanto dura il **ritardo** prima del cambio di lato? E vale anche giocando da soli (in Mario 3D Land il cambio è immediato)?
+FLP.2. Il **ritardo** prima che l'oggetto reagisca va bene come valore per zona, con 20 frame di base (circa 0,3 s) per gli oggetti che
+cambiano il terreno sotto gli altri giocatori e 0 per quelli che portano solo il proprietario? Vale anche giocando da soli?
    Perché conta: con 0,3 secondi online tutti vedono il cambio nello stesso momento; da soli può sembrare lento.
-   Ipotesi nella specifica: valore per livello, di base 20 frame (circa 0,3 s) con le piattaforme che lampeggiano nel colore del proprietario;
-   da soli lo stesso, salvo che tu non preferisca 0.
+   Ipotesi nella specifica: sì, deciso dal designer zona per zona, con gli oggetti che lampeggiano nel colore del proprietario durante
+   l'attesa; da soli lo stesso valore, salvo che tu non preferisca 0.
 
-FLP.3. Il salto del proprietario fa cambiare le piattaforme **ovunque si trovi** (come in Mario 3D Land) oppure solo se salta **stando
-sopra** al gruppo?
-   Perché conta: "ovunque" permette di cambiarle da lontano per aiutare gli altri, "sopra" le lega a chi le sta usando.
-   Ipotesi nella specifica: ovunque nel raggio del gruppo, con un'opzione per il designer.
+FLP.3. L'azione del proprietario conta **ovunque si trovi** (come il salto in Mario 3D Land) oppure solo se la fa **dentro la zona** o
+stando sopra?
+   Perché conta: "ovunque" permette di attivare da lontano per aiutare gli altri, "dentro" lega la zona a chi la sta usando.
+   Ipotesi nella specifica: opzione del designer per zona, di base "dentro la zona".
 
-FLP.4. Gli **altri giocatori** possono fare qualcosa sul gruppo occupato (per esempio salirci senza farlo cambiare), oppure il gruppo li
+FLP.4. Gli **altri giocatori** possono fare qualcosa su una zona occupata (per esempio salirci senza farla reagire), oppure la zona li
 ignora del tutto?
    Ipotesi nella specifica: ci possono stare sopra e camminare, i loro salti non contano finché il gruppo è occupato.
 
