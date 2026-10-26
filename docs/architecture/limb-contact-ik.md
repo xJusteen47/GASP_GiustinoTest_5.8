@@ -24,6 +24,7 @@ with a Control Rig, instead of floating in front of it or sinking into it.
 | `FGSTN_LimbSurface`, `FGSTN_LimbContactSettings`, `FGSTN_LimbContactResult`, `FGSTN_LimbProbeSettings` | data (generic, any surface) | plugin `GSTNAnimation`, module `GSTNAnimationCore`, `GSTN_LimbContactTypes.h` |
 | `UGSTN_LimbContactUtils` | function library: `ComputeContact`, `StepContactAlpha`, `AlignAxisToSurface`, `InverseTransformSurface`, `ProbeSurface` | same, tests `GSTNAnimation.Core.LimbContact.*` |
 | `FGSTN_RigUnit_LimbContactIK` | Control Rig node "GSTN Limb Contact IK" (two-bone IK onto a surface, one per limb) | plugin `GSTNAnimation`, new module `GSTNAnimationRig` (depends on ControlRig, RigVM, AnimationCore) |
+| `FGSTN_RigUnit_PreviewLimbSurface`, `UGSTN_LimbContactUtils::SurfaceFromTransform` | Control Rig node "GSTN Preview Limb Surface": a wall placed by a control, editor preview only (section 5b) | same |
 | `FGSTN_WallLimbContactSettings`, `FGSTN_WallLimbContactState` | wall data: probe bones, per-mode weights; per-limb surfaces + weights for the rig | project, `WallMovement/Animation/GSTN_WallAnimTypes.h` |
 | `UGSTN_WallAnimUtils::ComputeLimbWeights`, `GatherLimbContact` | wall side: weights from the wall phase and mode, probes | project, test `GSTN.Wall.Anim.LimbContactWeights` |
 | `UGSTN_WallAnimInstance::LimbContactSettings`, `WallLimbContact` | what the layer exposes to its Control Rig node | project |
@@ -110,6 +111,22 @@ The wall layer (`ABP_GSTN_WallLayer`) is made by `setup_wall_anim_layer.py`; thi
 The node is inside the wall layer, not in the main ABP between its Inertialization and Pose History nodes: the data lives on the layer
 instance, the main graph keeps knowing nothing about walls, and a variant layer (child anim Blueprint) inherits the node. The layer output
 already carries the IK, so the Pose History records the pose that was shown.
+
+## 5b. Preview wall (checking without final clips)
+
+Owner, 2026-10-26: without real wall clips there is nothing to look at in PIE, so the rig carries a **virtual wall as a control**.
+
+- `CR_GSTN_WallLimbContact` has a control `PreviewWall` (a flat square; its X axis is the wall normal, 45 cm in front of the character at
+  chest height) and, per limb, a `GSTN Preview Limb Surface` node between the `WallLimbContact` variable and the IK node.
+- In an **editor preview world** (the Control Rig editor, an anim Blueprint editor) the node replaces the limb's surface with the control's
+  plane and its weight with 1. In game and PIE it passes the anim instance's data through (`bOnlyInEditorPreview`), so nothing changes at
+  runtime and the preview can stay on in the saved asset. `bEnabled` on each node turns it off for that limb.
+- How to check: open `CR_GSTN_WallLimbContact`, select `PreviewWall` and move or turn it towards a hand or a foot. The limb attaches once the
+  wall is within `ReleaseDistance` (25 cm) of where the pose puts it and the shoulder or hip is farther from the wall than the hand or foot.
+  In the reference pose the arms hang at the sides, so bring the wall in from the side, or set a preview animation in the rig editor
+  (Preview Scene Settings: animation, e.g. a GASP idle or one of the wall placeholders) to see the limbs come and go.
+- The tuning pins (`Settings` on each IK node: offsets, distances, `RotationAlpha`, `ContactAxis`) can be edited live while looking at it.
+  Once good, copy them into `HAND` / `FOOT` of the script so a rerun keeps them.
 
 ## 6. Possible next steps (not done)
 

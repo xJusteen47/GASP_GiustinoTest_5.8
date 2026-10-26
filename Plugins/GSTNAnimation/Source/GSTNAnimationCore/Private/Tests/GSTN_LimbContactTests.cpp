@@ -149,4 +149,16 @@ bool FGSTN_LimbContactSpaceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LimbContactPreviewWallTest, "GSTNAnimation.Core.LimbContact.SurfaceFromTransform", GSTNLimbContactTest::TestFlags)
+bool FGSTN_LimbContactPreviewWallTest::RunTest(const FString& Parameters)
+{
+	// A preview wall control 45 cm in front of a mannequin (component forward +Y), turned so its X axis faces the character (-Y)
+	const FTransform Control(FRotator(0.f, -90.f, 0.f), FVector(0.f, 45.f, 100.f));
+	const FGSTN_LimbSurface Surface = UGSTN_LimbContactUtils::SurfaceFromTransform(Control);
+	TestTrue(TEXT("Valid"), Surface.bValid);
+	TestTrue(TEXT("Point at the control"), Surface.Point.Equals(FVector(0.f, 45.f, 100.f), 0.01f));
+	TestTrue(TEXT("Normal is the control's X axis"), Surface.Normal.Equals(FVector(0.f, -1.f, 0.f), 1.e-3f));
+	return true;
+}
+
 #endif

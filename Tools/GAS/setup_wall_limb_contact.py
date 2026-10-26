@@ -15,6 +15,9 @@
 #       hand_r: upperarm_r, lowerarm_r, hand_r, Surface = WallLimbContact.HandRight, Weight = WallLimbContact.HandWeight, HAND settings
 #       foot_l: thigh_l,    calf_l,     foot_l, Surface = WallLimbContact.FootLeft,  Weight = WallLimbContact.FootWeight, FOOT settings
 #       foot_r: thigh_r,    calf_r,     foot_r, Surface = WallLimbContact.FootRight, Weight = WallLimbContact.FootWeight, FOOT settings
+#     Preview wall (limb-contact-ik.md "Preview wall"): a control PreviewWall (X axis = wall normal, 45 cm in front of the character) and one
+#     GSTN Preview Limb Surface node per limb between the variable and the IK node, so moving the control in the rig editor shows the
+#     limbs attaching. The preview only acts in editor preview worlds; in game and PIE the variable's surfaces and weights pass through.
 #  2. ABP_GSTN_WallLayer, graph WallLayer: a Control Rig node (that rig) between the WallPhases state machine and the Output Pose, its
 #     WallLimbContact pin shown and fed by a get of the layer instance's WallLimbContact (filled on the game thread). Not InputMapping:
 #     in 5.8 it maps rig variables to animation curves only.
@@ -33,6 +36,12 @@ LAYER = 'WallLayer'
 VARIABLE = 'WallLimbContact'
 VARIABLE_TYPE_PATH = '/Script/GASP_Giustino2.GSTN_WallLimbContactState'
 UNIT_PATH = '/Script/GSTNAnimationRig.GSTN_RigUnit_LimbContactIK'
+PREVIEW_UNIT_PATH = '/Script/GSTNAnimationRig.GSTN_RigUnit_PreviewLimbSurface'
+PREVIEW_CONTROL = 'PreviewWall'
+# Component space of the mannequin: forward is +Y. The wall faces the character, so its X axis points to -Y (yaw -90)
+PREVIEW_LOCATION = unreal.Vector(0.0, 45.0, 110.0)
+PREVIEW_ROTATION = unreal.Rotator(roll=0.0, pitch=0.0, yaw=-90.0)
+PREVIEW_SHAPE_SCALE = unreal.Vector(6.0, 6.0, 6.0)
 BEGIN_EXECUTION_PATH = '/Script/ControlRig.RigUnit_BeginExecution'
 CONTROL_RIG_NODE = '/Script/ControlRigDeveloper.AnimGraphNode_ControlRig'
 
@@ -91,6 +100,8 @@ def ensure_rig(skeleton):
         rig.add_member_variable(VARIABLE, VARIABLE_TYPE_PATH, True, False, '')
         log(f'variable {VARIABLE}')
 
+    ensure_preview_control(rig)
+
     controller = rig.get_controller_by_name('RigVMModel')
     graph = controller.get_graph()
     names = {str(n.get_name()) for n in graph.get_nodes()}
@@ -120,18 +131,59 @@ def ensure_rig(skeleton):
                            ('Effector', f'(Type=Bone,Name="{effector}")'), ('Settings', settings)):
             if not controller.set_pin_default_value(f'{node}.{pin}', value, True):
                 fail(f'default {node}.{pin} = {value}')
+        preview = f'Preview{node}'
+        if preview not in names:
+            if not controller.add_unit_node_from_struct_path(PREVIEW_UNIT_PATH, 'Execute', unreal.Vector2D(300 + index * 350, 300), preview):
+                fail(f'could not add {preview} ({PREVIEW_UNIT_PATH})')
+                continue
+            log(f'node {preview}')
+        if not controller.set_pin_default_value(f'{preview}.Wall', f'(Type=Control,Name="{PREVIEW_CONTROL}")', True):
+            fail(f'default {preview}.Wall')
+        # variable -> preview -> IK. A link the first version made straight from the variable to the IK is replaced
         for source, target in ((previous_exec, f'{node}.ExecuteContext'),
-                               (f'{getter}.Value.{surface}', f'{node}.Surface'),
-                               (f'{getter}.Value.{weight}', f'{node}.Weight')):
+                               (f'{getter}.Value.{surface}', f'{preview}.Surface'),
+                               (f'{getter}.Value.{weight}', f'{preview}.Weight'),
+                               (f'{preview}.ResultSurface', f'{node}.Surface'),
+                               (f'{preview}.ResultWeight', f'{node}.Weight')):
             pin = graph.find_pin(target)
-            if pin and not pin.get_linked_source_pins():
-                if not controller.add_link(source, target):
-                    fail(f'link {source} -> {target}')
+            if not pin:
+                fail(f'no pin {target}')
+                continue
+            linked = [str(p.get_pin_path()) for p in pin.get_linked_source_pins()]
+            if linked == [source]:
+                continue
+            if linked:
+                controller.break_all_links(target, True)
+            if not controller.add_link(source, target):
+                fail(f'link {source} -> {target}')
         previous_exec = f'{node}.ExecuteContext'
 
     report_compile(rig)
     save(rig)
     return rig
+
+
+def ensure_preview_control(rig):
+    """The control that places the preview wall: a transform control with a flat square shape lying in the wall plane."""
+    hierarchy = rig.get_hierarchy()
+    key = unreal.RigElementKey(type=unreal.RigElementType.CONTROL, name=PREVIEW_CONTROL)
+    if hierarchy.contains(key):
+        return
+    settings = unreal.RigControlSettings()
+    settings.control_type = unreal.RigControlType.EULER_TRANSFORM
+    settings.display_name = PREVIEW_CONTROL
+    settings.shape_name = 'Square'
+    settings.shape_color = unreal.LinearColor(0.1, 0.6, 0.6, 1.0)
+    value = hierarchy.make_control_value_from_euler_transform(
+        unreal.EulerTransform(location=PREVIEW_LOCATION, rotation=PREVIEW_ROTATION, scale=unreal.Vector(1.0, 1.0, 1.0)))
+    created = rig.get_hierarchy_controller().add_control(PREVIEW_CONTROL, unreal.RigElementKey(), settings, value)
+    if not created or not hierarchy.contains(key):
+        fail(f'could not add the control {PREVIEW_CONTROL}')
+        return
+    # The square shape lies in its own XY plane: turned 90 deg so it lies in the wall plane (normal = the control's X axis)
+    hierarchy.set_control_shape_transform(key, unreal.Transform(rotation=unreal.Rotator(roll=0.0, pitch=90.0, yaw=0.0),
+                                                                scale=PREVIEW_SHAPE_SCALE), True)
+    log(f'control {PREVIEW_CONTROL}')
 
 
 def report_compile(blueprint):

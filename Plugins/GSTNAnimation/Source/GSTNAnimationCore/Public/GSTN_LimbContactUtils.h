@@ -44,6 +44,13 @@ public:
 	 */
 	static FQuat AlignAxisToSurface(const FQuat& Rotation, const FVector& LocalAxis, const FVector& SurfaceNormal, float Alpha);
 
+	/**
+	 * A flat surface from a transform: Point = its location, Normal = its X axis (the side the character is on). Used by the preview wall
+	 * of the limb contact rigs (a control moved in the rig editor, limb-contact-ik.md "Preview wall")
+	 */
+	UFUNCTION(BlueprintPure, Category = "GSTN|Limb Contact")
+	static FGSTN_LimbSurface SurfaceFromTransform(const FTransform& Transform);
+
 	/** The surface moved into the space of SpaceTransform (e.g. world to component: pass the component's world transform) */
 	UFUNCTION(BlueprintPure, Category = "GSTN|Limb Contact")
 	static FGSTN_LimbSurface InverseTransformSurface(const FGSTN_LimbSurface& Surface, const FTransform& SpaceTransform);

@@ -87,6 +87,15 @@ FQuat UGSTN_LimbContactUtils::AlignAxisToSurface(const FQuat& Rotation, const FV
 	return FQuat::Slerp(Rotation, Aligned, ClampedAlpha).GetNormalized();
 }
 
+FGSTN_LimbSurface UGSTN_LimbContactUtils::SurfaceFromTransform(const FTransform& Transform)
+{
+	FGSTN_LimbSurface Surface;
+	Surface.bValid = true;
+	Surface.Point = Transform.GetLocation();
+	Surface.Normal = Transform.GetUnitAxis(EAxis::X);
+	return Surface;
+}
+
 FGSTN_LimbSurface UGSTN_LimbContactUtils::InverseTransformSurface(const FGSTN_LimbSurface& Surface, const FTransform& SpaceTransform)
 {
 	FGSTN_LimbSurface Local = Surface;

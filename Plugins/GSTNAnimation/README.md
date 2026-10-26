@@ -16,7 +16,7 @@ It also has **limb contact IK**: a Control Rig node that pulls a hand or a foot 
 | Module | State | What it is |
 |---|---|---|
 | `GSTNAnimationCore` | exists (Runtime, Default) | The override layer seam, the anim set data, the pure resolution and the component that applies it; the limb contact data, rules and probe. No GAS, Network Prediction or Mover. Covered by `GSTNAnimation.Core.*`. |
-| `GSTNAnimationRig` | exists (Runtime, Default) | Control Rig units: `GSTN Limb Contact IK`. Depends on ControlRig, RigVM, AnimationCore and `GSTNAnimationCore`. |
+| `GSTNAnimationRig` | exists (Runtime, Default) | Control Rig units: `GSTN Limb Contact IK`, `GSTN Preview Limb Surface`. Depends on ControlRig, RigVM, AnimationCore and `GSTNAnimationCore`. |
 | `GSTNAnimationEditor` | exists (Editor, Default) | `UGSTN_AnimGraphAuthoringLibrary`: anim graph authoring for Python scripts (layer interfaces, state machines, rules on an enum through Property Access, sequence players, the override-layer blend in a main graph, child asset overrides, a text dump of the graphs and a compile report). Knows no feature; nothing at runtime depends on it. Used by `Tools/GAS/setup_wall_anim_layer.py`. |
 
 ## Classes
@@ -32,6 +32,7 @@ It also has **limb contact IK**: a Control Rig node that pulls a hand or a foot 
 | `FGSTN_LimbSurface`, `FGSTN_LimbContactSettings`, `FGSTN_LimbProbeSettings` | data | A surface (point, normal) a limb may touch; how one limb attaches; how the game thread probes. |
 | `UGSTN_LimbContactUtils` | function library | `ComputeContact` (gap, target, weight), `StepContactAlpha`, `AlignAxisToSurface`, `InverseTransformSurface`, `ProbeSurface` (game thread). |
 | `FGSTN_RigUnit_LimbContactIK` | Control Rig node "GSTN Limb Contact IK" | Two-bone IK of one limb onto its surface, smoothed weight, palm/sole alignment. One node per limb. |
+| `FGSTN_RigUnit_PreviewLimbSurface` | Control Rig node "GSTN Preview Limb Surface" | In editor preview worlds only, a wall placed by a control stands in for the probed surface, to check the IK without clips. |
 
 ## How it resolves
 
