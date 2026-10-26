@@ -957,6 +957,8 @@ Not verified yet: hitstop with a montage actually playing; Mover freeze; anythin
 Crashes of the first spike attempt: Python `set_editor_property` on a live component of a PIE world together with a slate-tick callback that raised
 every frame. Safe rules: UFUNCTION setters and self-unregistering callbacks.
 
+Parts (P9): a part's damage is `Damage x (1 - Thickness) + DeepDamage x Thickness` once the penetration band lets the hit through (`DeepDamage` defaults to the hit's `Damage`, `Thickness` to 0), so hardness decides whether a hit gets in and thickness how deep it goes.
+
 ## 18. Roadmap
 
 Each milestone ends with a build, its tests and the harness run clean (testing.md), and with this document updated
