@@ -44,3 +44,34 @@ run at the drain, which is the same moment).
 
 Build: `Saved/Logs/build-baseline.log` (Development Editor Win64, `Result: Succeeded`, 400.84 s, fresh Intermediate). Headless `Automation RunTests GSTN`: `Saved/Logs/headless-f1-baseline.log` (opened 11:37:51, exit 11:38:37 on 2026-10-26): **1002** `Result={Success}`, **0** `Result={Fail`. This is the reference for every later M6 count; `GSTNParts` is enabled in the committed .uproject.
 
+
+## S5 shield bubble as an extra hurtbox (F2 code, 2026-10-26)
+
+**Verdict: FAIL on the interpolated-victim threshold for tilting. STOP: owner decision (fallback is the contact-point test); no fallback was implemented.** The other thresholds pass, with one caveat on cost.
+
+**Method (read this before the numbers).** A throwaway automation test (kept outside git in `Saved/s5-spike/`, never committed) runs the REAL F2 code: the snapshot contributor registry with a contributor that returns the analytic bubble (sphere, radius 18 to 60 cm from the shield value, centre shifted up to 20 cm by the tilt, priority 255, ignores Grab) from a shield sync fragment of integers (value 0..1000, tilt -1000..1000); the fragment wire (`FGSTN_SyncFragmentList::NetSerialize`) and its `Interpolate`; the lag compensation history (`RecordHistory`, `BuildOverlay`); and the real `FGSTN_CombatAttacker::Tick` (overlap, `PickHurtboxIndex`, pipeline) to classify each hit as miss, poke (body) or block (bubble). **It is an in-process model, not a network run**: the shield timelines are generated (400 frames at 60 Hz), and the observers are: the SERVER, which rewinds to the fractional time the attacker's client showed the victim at and takes the history record at or before it (what `SampleHistory` does; it interpolates only the transform); the EXACT observer (the host, or the victim's owner client), which has the same integer frame after the wire; and the INTERPOLATED observer (the attacker's client), which has the victim blended between two server frames by the fragment's `Interpolate`. 20000 random hitbox positions per scenario (sphere of radius 25 cm, uniform in a ball of 130 cm around the victim's chest; body = one sphere of radius 45 cm), a random fractional time each. No packet loss, no jitter model: the fraction is uniform in [0, 1). Log: `Saved/Logs/s5-spike2.log` (`LogGSTNSpikeS5: S5RESULT`), headless `Automation RunTests GSTNSpike`, build `build-f2-s5d.log` "Result: Succeeded". The first run `s5-spike.log` was invalid (the fragment was stored as the base type, so no bubble was ever emitted and the wire dropped it: `wire_mismatches=400`, no cost difference); it is not used.
+
+| Scenario | Connecting hits | Owner/exact disagreements | Interpolated disagreements | Per 100 hits | Radius error (cm) | Centre error (cm) |
+|---|---|---|---|---|---|---|
+| (a) standing | 5501 | 0 | 0 | 0.000 | 0 | 0 |
+| (b) tilting, full circle every 0.8 s | 5764 | 0 | 119 | **2.065** | 0 | mean 1.30, max 2.63 |
+| (b) tilting, flick in 3 frames | 5605 | 0 | 75 | **1.338** | 0 | mean 0.96, max 13.34 |
+| (c) draining 125/s while held | 3625 | 0 | 4 | 0.110 | mean 0.044, max 0.126 | 0 |
+| (d) minimum radius | 3231 | 0 | 0 | 0.000 | 0 | 0 |
+
+Wire round trip of the fragment: 0 mismatches in every scenario. The disagreements of (b) are block against miss at the edge of the bubble (circle: 56 block->miss and 56 miss->block, 6 poke->block, 1 block->poke). Cause: the server's `SampleHistory` copies the record at or before the rewound time, so it tests the bubble of frame k; the attacker's client shows the blended state k + alpha, and a tilting bubble has moved by up to 2.6 cm (13 cm for a flick) between the two. Draining changes the radius by 0.09 cm per frame, which is why (c) is almost clean.
+
+**Pass criteria.** Zero disagreements for (a), (c), (d) on the owner: **pass** (0 in all). At most 1 per 100 on an interpolated victim: **pass for (a), (c), (d)**, **fail for (b)** (2.07 and 1.34 per 100). A way out that this spike did not build: have the history keep the victim's fragments and re-contribute with `Interpolate` at the rewound fraction (so the server tests the same blended bubble the client showed); that is the decision to take with the owner together with the contact-point fallback.
+
+**M4 hurtbox selection with no bubble.** 20000 random hits through the real attacker step: contributor registered but the shield down vs no contributor, 0 differences in outcome and hurtbox index; against the M4 rule written out (a hit lands iff it overlaps the single body hurtbox), 0 differences. Together with `GSTNCombat.Core.Hurtbox.NoExtraIdenticalToM4` (every subset of seven candidates): unchanged.
+
+**Cost of 8 shielding entities** (Development Editor build, 20000 iterations after 1000 warm-up, three rounds, microseconds per frame; noise about 0.3 us):
+
+| Geometry | Snapshot build, extra | Attacker step (4 hitboxes against 8 victims), extra | One attacker, total extra | Eight attackers, total extra |
+|---|---|---|---|---|
+| Out of reach, broadphase only (ring 120 cm, 0 hits) | +0.93 (2.26 vs 1.33) | +0.7 (4.6 vs 3.8) | 1.7 | 6.5 to 7.2 |
+| In contact (ring 55 cm, 32 hits resolved by the pipeline) | +0.94 | +20.4 to 20.6 (64.3 vs 43.7) | 21.3 to 21.6 | 164 to 166 |
+
+Pass is < 100 us per frame: **pass for one attacker in any geometry and for eight attackers with no contact; 165 us for the artificial case of eight attackers each resolving 32 hits in the same frame** (a landed hit opens hitstop, so this does not repeat frame after frame). Most of the 20 us is the copy of the extras into the victim view of each candidate hit (`MakeVictimView`); a pointer instead of a copy would remove it if it ever matters.
+
+**STOP conditions evaluated:** S5 (interpolated rate for tilting above 1 per 100): hit. Owner decision needed. Not evaluated here: S1 to S4 (other checkpoints), a real listen-server or lossy run of S5 (the model has no jitter or loss), and what players feel at 2 hits in 100 on a tilting shield.
