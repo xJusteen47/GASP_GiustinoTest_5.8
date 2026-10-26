@@ -33,3 +33,27 @@ Full entry: `docs/notes/m4-doc-deltas.md`, "M6 follow-up 2 (F2)" (it touches M4'
 - **Extra hurtboxes.** Priority scale shared with the body, a tie goes to the extra (the bubble at priority 0 still sits above the body it covers), ignore tags match hierarchically, an unset hit type is never ignored, two extras per entity (`GSTNHurtboxIndex::MaxExtraHurtboxes`), cut at the snapshot build. The set holds 128 hurtboxes at most now (validator). `AppendExtraHurtboxes` is called by the snapshot build only (not by the rebuild between inbox entries: the victim step resolves against the extras of the end of the previous frame, like the hurt states). `FGSTN_HitVictimView::ExtraHurtboxes` is a copy, empty for almost every hit.
 - **Request slots.** The array had eight slots already (plan: four to six); no capacity change. `EnterLinked`, `ExitLink`, `ApplyLinkEffect`, `RemoveLinkEffect`, `LaunchLinked` = 18 to 22, data only. `EGSTN_CancelCondition::OnParry` = 4, data only (`ConditionHolds` returns false for it, as for `OnBlock`).
 - **Tests**: `GSTNCombat.Core.Hurtbox.{ExtraWinsByPriority, ExtraIgnoredByHitType, NoExtraIdenticalToM4, IndexRangeReserved}`, `GSTNCombat.NP.Snapshot.ExtraHurtboxInHistory`, `GSTNCombat.NP.Clock.{TrackHookStallsTimelineNotClock, HookStampsWindow}`, `GSTNCombat.NP.Tick.BlocksActionsVeto`, `GSTNCombat.NP.Victim.OutgoingEntriesPosted`, `GSTNCombat.NP.Requests.EightSlotsRoundTrip` (named after the real slot count).
+
+## Shield decision (owner, 2026-10-26)
+
+After spike S5 (tilt failed on an interpolated victim) the owner fixed the shield as a **spherical bubble of fixed size, as in Rivals of Aether 2**: no stick tilt, no shrink with the shield's health, no directional arc variant, no poke mechanic and no `ShieldPoked` event. Shield health only decides shield stun, pushback and the break. The spec and plan were updated on `claude/project-thread-mvizq6` (commit b77b878); S5b is dropped; the bubble stays an extra hurtbox as F2 built it. For combat.md and the M6 spec (folded by F14): `ShieldCentreAt`/`MakeShieldBubble` take the rules and the entity transform only; the fields `ArcDegrees`, `ElevationLimit`, `TurnRate`, `RadiusByFraction` and `Tilt*` do not exist; the plan's F4 tests `RadiusFixedAtAnyValue` and `CentreArbitraryUp` replace the tilt and shrink tests.
+
+## F3: GSTNDefence skeleton, data, tags, tracks
+
+- All defence tags are declared in `GSTNDefenceCore` (accepted layout, stated in the README); there is no `ShieldPoked` tag and a test asserts it.
+- Added beyond the plan's field list: `FGSTN_ShieldRules::MaxShield` (the attribute default needs a home), `FGSTN_SDIRules::bSDIAllowedWhenArmored` and `bSDIInStaggerInPlace` (spec 5.5, needed by `SDI.ArmoredBlocked`), `FGSTN_ParryProfile::Name` (what a parry window track names), `EGSTN_ParryAnchor`, `EGSTN_TechType`, `GSTNDefenceLimits::MaxParryProfiles = 16`.
+- `Build.cs` lists Engine, DeveloperSettings and (private) Projects besides the plan's modules: engine modules the data assets, settings and the tag-folder registration need. No GAS, NP, Mover, Link, Editor or project module.
+- Ability classes in `FGSTN_DefenceKitExtension` (`ShieldAbility`, tech set, get-up set) are `TSoftClassPtr<UObject>` because Core has no GameplayAbilities dependency; F6 checks the class when it resolves them (and may add a `MetaClass` filter).
+- The two tracks derive `FGSTN_TimelineTrack` and report kind `None`; F2's hook registry keys them by struct. `FGSTN_ParryWindowTrack::ProfileIndex` is `Transient` and baked by `Bake(Rules)`; `Validate` reports an unbaked or unknown profile.
+- `FGSTN_Curve1D`: X in 1/4096, Y in Q2.14, round half up; an empty curve is the identity. Quantisation means the factor at 0.8 reads 3277/4096 = 0.800048828125.
+- `Config/Tags/GSTNDefence.ini` holds the five cue leaves only.
+
+## F4: GSTNDefenceCore math
+
+- `ResolveParry(Context, Rules)` takes the rules asset as well as the context (the projectile flag lives on the profile, which depends on the source); the context carries flags, no tags. The move source reads a precomputed `bMoveCoversHurtbox` (from `FGSTN_ParryWindowTrack::Affects`).
+- `MakeShieldBubble(Rules, Transform)` returns the world sphere; `MakeShieldBubbleHurtbox(Rules, IgnoreHitTypes)` returns the root-relative extra hurtbox (priority 255, source `GSTNFeatureIds::Defence`).
+- Shield value: a released view regenerates from `max(ReleaseFrame + RegenDelayFrames, StampFrame)`, so a damage re-stamp after regeneration began restarts it from the hit; a view never raised regenerates from `StampFrame + RegenDelayFrames`.
+- `EvaluateTech` takes the history's press frames, the newest contact, the hitstop end and whether the entity tumbles; `RegisterTechPress` is the single press rule. **Picking the tech kind from the stick and the contact normal is deferred to F8** (it needs the contact record).
+- SDI: `bScaleByHitstopFrames` is implemented as a speed cap of `MaxDistance / (HitstopFrames x FrameSeconds)` (spreads the maximum over the hitstop); residue below 1e-9 cm ends the drift. `FrameSeconds` defaults to 0.016.
+- `UGSTN_DIRulesMath::ApplyDI` rescales the stick to `min(1, |stick| x curve(|stick|) x victim scale)` and scales `MaxDIElevationDot` by the elevation curve, then calls M4's `ApplyDI`.
+- Tests: Shield 6, Parry 11, Tech 7, DI 3, SDI 3, Bounce 1 (31) plus F3's 8 = 39 `GSTNDefence.Core.*`.

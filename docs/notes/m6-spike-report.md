@@ -75,3 +75,7 @@ Wire round trip of the fragment: 0 mismatches in every scenario. The disagreemen
 Pass is < 100 us per frame: **pass for one attacker in any geometry and for eight attackers with no contact; 165 us for the artificial case of eight attackers each resolving 32 hits in the same frame** (a landed hit opens hitstop, so this does not repeat frame after frame). Most of the 20 us is the copy of the extras into the victim view of each candidate hit (`MakeVictimView`); a pointer instead of a copy would remove it if it ever matters.
 
 **STOP conditions evaluated:** S5 (interpolated rate for tilting above 1 per 100): hit. Owner decision needed. Not evaluated here: S1 to S4 (other checkpoints), a real listen-server or lossy run of S5 (the model has no jitter or loss), and what players feel at 2 hits in 100 on a tilting shield.
+
+## S5 outcome (2026-10-26)
+
+The owner removed tilt and shrink on 2026-10-26 (shield: fixed-size bubble, Rivals of Aether 2 style, no arc, no poke). S5 therefore passes for the remaining scenarios (standing, draining while held: 0 disagreements on the owner and the exact observer, within the 1 per 100 limit on an interpolated victim), the scenarios that failed (tilting) and (d) minimum radius no longer exist, and the bubble stays an extra hurtbox. S5b (history re-contribution) is dropped.
