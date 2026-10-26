@@ -50,6 +50,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Interazione (cosa si sta puntando) | [interaction.md](interaction.md) |
 | Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
 | Input a carica (stile Guile) | [input.md](input.md) §10 |
+| Oggetti attivati da azioni (piattaforme rosse e blu) | [level-activation.md](level-activation.md) |
 | Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [input.md](input.md) §9 |
 
 
@@ -1514,3 +1515,35 @@ CH.3. Nel duello, se l'avversario ti salta dall'altra parte, la carica indietro 
 CH.4. Di quanti gradi può spostarsi lo stick dalla direzione iniziale senza perdere la carica?
    Perché conta: un angolo stretto fa perdere la carica a chi muove un po' lo stick; uno largo la fa tenere anche girando quasi di lato.
    Ipotesi nella specifica: 50 gradi da ogni lato, regolabile mossa per mossa.
+
+## Oggetti attivati da azioni: piattaforme rosse e blu (26/10)
+
+Specifica: [level-activation.md](level-activation.md). Le tue idee (gruppo che reagisce solo al salto del primo giocatore salito, colore di
+quel giocatore, piccolo ritardo prima di cambiare lato) sono nella specifica; il ritardo aiuta anche online, perché dà il tempo a tutte le
+macchine di sapere quando avverrà il cambio.
+
+FLP.1. Quando il gruppo **torna libero** per un altro giocatore? Quando il proprietario non ci sta sopra da un po', quando muore, oppure mai
+finché resta nel livello?
+   Perché conta: se non si libera mai, un giocatore lontano blocca le piattaforme per tutti.
+   Ipotesi nella specifica: si libera dopo circa 2 secondi che il proprietario non ci sta sopra, o quando va KO.
+
+FLP.2. Quanto dura il **ritardo** prima del cambio di lato? E vale anche giocando da soli (in Mario 3D Land il cambio è immediato)?
+   Perché conta: con 0,3 secondi online tutti vedono il cambio nello stesso momento; da soli può sembrare lento.
+   Ipotesi nella specifica: valore per livello, di base 20 frame (circa 0,3 s) con le piattaforme che lampeggiano nel colore del proprietario;
+   da soli lo stesso, salvo che tu non preferisca 0.
+
+FLP.3. Il salto del proprietario fa cambiare le piattaforme **ovunque si trovi** (come in Mario 3D Land) oppure solo se salta **stando
+sopra** al gruppo?
+   Perché conta: "ovunque" permette di cambiarle da lontano per aiutare gli altri, "sopra" le lega a chi le sta usando.
+   Ipotesi nella specifica: ovunque nel raggio del gruppo, con un'opzione per il designer.
+
+FLP.4. Gli **altri giocatori** possono fare qualcosa sul gruppo occupato (per esempio salirci senza farlo cambiare), oppure il gruppo li
+ignora del tutto?
+   Ipotesi nella specifica: ci possono stare sopra e camminare, i loro salti non contano finché il gruppo è occupato.
+
+FLP.5. Quali **altre azioni** vuoi che attivino gli oggetti? Schianto a terra, spin, trapano, colpo, interazione, entrare in una zona?
+   Ipotesi nella specifica: tutte, scelte dal designer oggetto per oggetto; salto, atterraggio, entrata e colpo funzionano subito, le altre
+   dopo una piccola aggiunta al sistema delle abilità.
+
+FLP.6. I **nemici** possono attivare questi oggetti (per esempio un nemico che salta sulle piattaforme)?
+   Ipotesi nella specifica: no di base, solo i giocatori; il designer può aprirlo per un oggetto.

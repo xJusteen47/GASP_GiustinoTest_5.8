@@ -277,6 +277,14 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (09:54) Charge moves may have **hitboxes behind** the character instead of in front (it faces the charge direction): `KeepFacing`
   with hitboxes authored behind the root, or a turn towards the push; per move.
 
+## 6k. Objects activated by actions: red and blue panels (owner brainstorm, 2026-10-26 09:52)
+
+- Mario 3D Land's red and blue panels that flip on jump, as the first case of a reusable activation mechanism for different objects.
+- Multiplayer idea: grouped panels react only to the jumps of the first player who stepped on them and take that player's colour; a
+  short delay before they flip lets the others react. Spec: [level-activation.md](level-activation.md), questions FLP.1–FLP.6.
+- Drill screw switches (turn by spin direction) and Mario Bros Wii knobs go to the spin and drill thread; they can be activators with
+  a spin trigger.
+
 ## 7. Consequences for the specifications
 
 | Topic | Affects |
@@ -599,3 +607,15 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Allora, farei che la carica indietro funziona in 3d, basta far mantenere la carica entro una certa limitazione dei gradi dello stick. (09:53)
 
 > Inoltre si potrebbero avere mosse che hanno hitbox all’indietro. Invece che in avanti. A tal fine. (09:54)
+
+### Message of 2026-10-26, 09:52 (verbatim)
+
+> Per quanto riguarda la trivella predico già che ci sarà qualche interruttore a “vite” dove si svita o avvita una vite in base alla
+> direzione dello spin. Oppure dove si fa girare una manopola che non si svita (Mario bros Wii).
+>
+> Un’altra cosa sarebbero le piattaforme rosse e blu di Mario 3d land. Volevo vedere come usare cose come il salto per attivare degli
+> oggetti funzionerebbe. Magari ci sono alcune zone di queste piattaforme raggruppate che reagiscono solo al salto del primo che ci è salito
+> per la prima volta, e assumono il colore del giocatore corrispondente, in modo da evitare che più giocatori saltino insieme e muovano
+> troppo quelle piattaforme. Questa è un’idea. Magari possono avere un piccolo delay prima di cambiare lato, in modo da permettere agli altri
+> giocatori di avere tempo di saltare su reazione.
+> Più brain-storming che altro, e questo metodo di attivazione potrebbe essere usato per oggetti differenti.
