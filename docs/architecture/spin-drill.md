@@ -394,6 +394,15 @@ They are **not** a drill-specific system: they are members of an activation zone
   zone data.
 - **Network**: as level-activation.md §5 (server-authoritative zone state, responses computed from the replicated value). The
   player's own spin and drill stay predicted.
+- **Owner answers 2026-10-26 10:08**: SD.15 settled (one owner per zone, as the panels). SD.14: per object (data on each screw or
+  knob: detach or stop at the end, spring back or not). SD.13 still open (proposal stands: spin = steps, latched drill = continuous).
+- **Screws on mechanical enemies** (owner idea, 10:08): some mechanical enemies carry screws or bolts that, once unscrewed, remove
+  a **high-hardness armour part** above them, a way past armour the weapons cannot penetrate. *Proposal*: the screw is a **part** of
+  the enemy (combat-parts, `GSTNParts`) with a small screw state (angle in its part fragment slot, or the activation value with the
+  enemy as the zone's host); reaching the end raises that part's `Broken`, and a break effect on the armour part
+  (`FGSTN_PartBreakEffect`, existing M4b mechanism) detaches the armour, whatever its hardness. Spin and drill turn it through the
+  same triggers as level screws. This needs the activation base to accept **moving entities as zone hosts** (today it is written for
+  level objects) or a parts-side receiver: passed to the planning thread, which owns both level-activation.md and combat-parts.md.
 - **Tests**: harness `screw_spin_steps`, `screw_drill_continuous`, `knob_clamps_no_detach` live with the activation plugin's tests and
   use the spin abilities of this plugin.
 
