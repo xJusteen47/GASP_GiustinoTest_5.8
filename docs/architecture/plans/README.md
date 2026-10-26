@@ -9,6 +9,7 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | [m4-hits-plan.md](m4-hits-plan.md) | M4 Hits (`GSTNCombatCore/GAS/NP`) | H0..H13 | `../combat-m4-hits.md` |
 | [m4b-parts-plan.md](m4b-parts-plan.md) | M4b destructible parts (`GSTNParts*`) | P0..P16 | `../combat-parts.md` |
 | [m5-editor-plan.md](m5-editor-plan.md) | M5 editor and debug (`GSTNCombatEditor`, `GSTNCombatDebug`) | E0..E19 | `../combat-m5-editor.md` |
+| [m6-defence-links-plan.md](m6-defence-links-plan.md) (added 2026-10-26) | M6 defence and links (`GSTNDefence`, `GSTNLink`; two neutral `GSTNCombat` follow-ups first) | F0..F14 | `../combat-m6-defence-links.md` |
 | [traversal-surfaces-plan.md](traversal-surfaces-plan.md) (added 2026-10-22 evening) | Traversal surfaces: wall-slide / trampoline surfaces on level objects and enemy body parts (`GSTNSurface`, `GSTNPlatform`, `GSTNPlatformParts`) | T0..T9 | `../traversal-surfaces.md` |
 
 `../game-design-direction.md` wins over every spec and plan. `../modularity-and-tags.md` §3.7-3.9, §4, §5b are binding.
