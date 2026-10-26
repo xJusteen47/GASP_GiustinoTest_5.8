@@ -1616,3 +1616,5 @@ GRV.4. Gli **oggetti fisici liberi** (casse, detriti) dentro i campi: seguono la
 parte del gioco (per esempio una cassa che rotola verso di te su un pianeta)?
    Perché conta: farli contare nel gioco online costa molto; come effetto visivo è economico.
    Ipotesi nella specifica: effetto visivo; gli oggetti presi e lanciati (M10) invece seguono la gravità nella simulazione.
+   **Risposta (2026-10-26 20:56):** "Una cassa non dovrebbe essere un oggetto lanciabile?" Sì: tutto ciò che si può prendere o lanciare
+   è un oggetto di M10 e segue la gravità nella simulazione; solo detriti, frammenti e decorazioni sono effetto visivo.

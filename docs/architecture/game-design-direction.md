@@ -312,7 +312,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   rule (directional, point, line, ring, box, spline, zero), priorities, gravity as a pure function of position and frame computed in
   the simulation every frame, smooth turning only in presentation; questions GRV.1–GRV.4.
 - (20:54) GRV.1 yes (model 720°/s, camera 90°/s); GRV.2 "Galaxy": outside every field the last gravity stays; GRV.3 enemies on
-  round planets low priority; GRV.4 not understood, re-explained.
+  round planets low priority. (20:56) GRV.4: a crate should be a throwable object, so pick-up/throwable objects (M10) follow the
+  field in the simulation; only debris, fragments and decoration are visual.
 
 ## 7. Consequences for the specifications
 
@@ -669,6 +670,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Comunque aggiungi alle specifiche volumi dove la gravità cambia alla Mario galaxy. (17:21)
 >
 > non ho capito il 4. 1. si 3. Low priority 2. Galaxy (20:54)
+>
+> che intendi per "cassa"? Non dovrebbe essere un oggetto lanciabile? (20:56)
 
 > Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
 > mooolto lentamente per non perdere la carica (09:55)

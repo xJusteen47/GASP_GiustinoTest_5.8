@@ -3,7 +3,7 @@
 Status: **specification, 2026-10-26.** Owner request (17:21): "aggiungi alle specifiche volumi dove la gravità cambia alla Mario
 Galaxy". Verbatim in [game-design-direction.md](game-design-direction.md) §6l. It builds on the standing direction of §2d: gravity
 can change arbitrarily, and "up" is always the opposite of the entity's local gravity at that frame, never world Z. Questions
-GRV.1–GRV.4 are in [open-questions-m4-m10.md](open-questions-m4-m10.md): GRV.1–GRV.3 answered on 2026-10-26 20:54, GRV.4 open.
+GRV.1–GRV.4 are in [open-questions-m4-m10.md](open-questions-m4-m10.md): all answered on 2026-10-26 (20:54, 20:56).
 Nothing here is built.
 
 ## 1. What exists today (checked on `feature/gas-npp-5.8`)
@@ -116,7 +116,7 @@ except `Spline` (nearest point on pre-sampled points, 64 by default). Minions ca
 | [game-modes.md](game-modes.md) | gravity levels **disable the world `KillZ`** (it is world Z) and use KO volumes shaped for the level |
 | [wall-movement.md](wall-movement.md) | walls are classified against the local up; spike G2 checks a curved floor and a cube planet edge |
 | [level-activation.md](level-activation.md) | gravity switches through `GSTNGravityActivation` (§3) |
-| physics props | loose debris follows the field as a per-body force, presentation only; question GRV.4 |
+| physics props | owner answer GRV.4 (20:56): anything that can be picked up or thrown (a crate) is a held object of M10 and follows the field in the simulation; only debris, shatter fragments and decoration follow it as a per-body force, presentation only |
 
 ## 7. Plugin layout and tags
 
