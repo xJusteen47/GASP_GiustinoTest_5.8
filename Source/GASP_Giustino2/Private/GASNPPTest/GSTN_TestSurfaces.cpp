@@ -6,6 +6,7 @@
 #include "GameFramework/Pawn.h"
 #include "EngineUtils.h"
 #include "GASNPPTest/GSTN_TestCombatAbilities.h"
+#include "GSTN_SurfaceTags.h"
 #include "Hits/GSTN_ImpactTypes.h"
 #include "Net/UnrealNetwork.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
@@ -47,6 +48,11 @@ FGSTN_SurfaceBehaviour AGSTN_TestSurface::GetSurfaceBehaviour_Implementation(con
 {
 	FGSTN_SurfaceBehaviour Behaviour;
 	Behaviour.SurfaceType = SurfaceType;
+	// A provider's answer is authored: a surface without WallSlide forbids the slide (GSTN_SurfaceTypes.h). The box stands for an
+	// ordinary wall (impact_wall_mode slides on it), so it offers what a plain collider is used for: its faces are slid on, its top
+	// stood on. Climbing stays an opt-in (an empty answer made the surface-driven wall entry refuse every test surface)
+	Behaviour.Behaviours.AddTag(GSTNSurfaceTags::Behaviour_WallSlide);
+	Behaviour.Behaviours.AddTag(GSTNSurfaceTags::Behaviour_Stand);
 	return Behaviour;
 }
 

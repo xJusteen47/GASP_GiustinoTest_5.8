@@ -435,9 +435,31 @@ def scenario_accounting(client=2, player_key=None):
 
 # ------------------------------------------------------------------------------------------------ GA_Jump / GA_WallSlide
 WALL_SLIDING_TAG = 'State.Movement.WallSliding'
-# Mover mode the wall scenarios expect ('WallSliding' = legacy slide, 'WallSlidingV2' = slide v2; set it before running a scenario,
-# and point the Falling entry transition at the same mode with Tools/GAS/setup_wall_slide_modes.py --use v2|legacy)
-WALL_MODE = 'WallSliding'
+# Mover mode the wall scenarios expect on the harness wall. None (the default) reads it from the pawn: the mode its Falling wall entry
+# transition grabs on an unmarked wall (wall_mode()), so the scenarios follow Tools/GAS/setup_wall_slide_modes.py --use v2|legacy|v2climb
+# and whatever wall_ab / surface_scenarios point the transitions at in memory. Set a name ('WallSliding' = legacy slide, 'WallSlidingV2' =
+# slide v2) to force it. A hard-coded 'WallSliding' made every wall scenario report "never on the wall" once SandboxCharacter_Mover's
+# Falling transition became the surface-driven one (it grabs WallSlidingV2).
+WALL_MODE = None
+
+
+def wall_mode(world_index=0):
+    """The Mover mode the wall scenarios wait for: WALL_MODE when set, else the target of the first pawn's Falling wall entry transition
+    (a surface-driven transition's unknown_surface_mode_name, a plain one's target_mode_name), read from the live pawn in `world_index`.
+    Falls back to 'WallSliding' when PIE has no pawn with such a transition."""
+    if WALL_MODE:
+        return WALL_MODE
+    surface_classes = tuple(getattr(unreal, n) for n in ('GSTN_WallSurfaceModeTransition', 'GSTN_AbilityWallSurfaceModeTransition') if hasattr(unreal, n))
+    ws = worlds()
+    for c in (comps(ws[world_index]).values() if len(ws) > world_index else ()):
+        mover = c.get_owner().get_component_by_class(unreal.MoverComponent) if c else None
+        falling = mover.get_editor_property('movement_modes').get('Falling') if mover else None
+        for tr in (falling.get_editor_property('transitions') if falling else ()):
+            if surface_classes and isinstance(tr, surface_classes):
+                return str(tr.get_editor_property('surface_modes').get_editor_property('unknown_surface_mode_name'))
+            if isinstance(tr, unreal.GSTN_WallEntryTransition):
+                return str(tr.get_editor_property('target_mode_name'))
+    return 'WallSliding'
 
 
 def _has_tag(actor, tag_name):
@@ -523,6 +545,7 @@ def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=130
     The pawn must start further than jump_distance from the wall (walk_back()); a jump from 220 cm lands short of it.
     Steering re-aims the move input every tick. Run start_mode_log() first and read stop_mode_log() + report() after."""
     ia_move = unreal.load_asset(IA['move'])
+    wm = wall_mode()
     target = (wall_x + 200.0, wall_y)
     st = {'phase': 'ground_jump' if ground_jump_first else 'walk', 't0': time.time(), 'log': []}
 
@@ -550,7 +573,7 @@ def scenario_jump_wall(client=1, wall_x=1010.0, wall_y=-880.0, jump_distance=130
                     st.update(phase='air', t1=now)
             elif st['phase'] == 'air':
                 comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, target)))
-                if mode == WALL_MODE:
+                if mode == wm:
                     note(f'on wall tag={_has_tag(pawn, WALL_SLIDING_TAG)}')
                     st.update(phase='wall', t1=now)
                 elif now - st['t1'] > 2.0:
@@ -594,7 +617,7 @@ def force_reconcile_on_mode(client=1, mode=None, extra_frames=15):
     up, so the other client may get an extra reconcile too."""
     if client == 0:
         raise RuntimeError('world 0 is the host/server: it never reconciles, pick a client (index >= 1)')
-    mode = mode or WALL_MODE
+    mode = mode or wall_mode()
     _force_on_mode['log'] = []
     st = {'start_rb': None}
 
@@ -3484,6 +3507,7 @@ def scenario_hit_on_wall(client=1, wall_x=1010.0, wall_y=-880.0, frames=90):
     the stick is held away from the wall and jump is pressed: without the wall lock that is a pull-away detach and a wall jump. Wanted: the pawn stays
     WallSliding and does not move through the window on both machines, is still WallSliding after it, and both copies stand in the same place."""
     run = _Run('hit_on_wall', client, judge_reconciles=False)
+    wm = wall_mode()
     stop, ia_move = 1 << 20, unreal.load_asset(IA['move'])
     st, h, win = {'phase': 'idle', 'tw': None, 'reached': False}, {'h': None}, frames / 60.0
 
@@ -3518,7 +3542,7 @@ def scenario_hit_on_wall(client=1, wall_x=1010.0, wall_y=-880.0, frames=90):
                     finish_driver(comp)
             elif ph == 'air':
                 comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
-                if mode == 'WallSliding':
+                if mode == wm:
                     st.update(phase='window', tw=now, reached=True)
                     combat_tap(client, stop)
                 elif now - st['t1'] > 2.5:
@@ -3561,7 +3585,7 @@ def scenario_hit_on_wall(client=1, wall_x=1010.0, wall_y=-880.0, frames=90):
         out, ok = [], True
         for side in ('srv', 'cli'):
             modes = [s['mode'] for s in run._win(side, tw + 0.45, tw + win - 0.1, sim=True)]
-            good = bool(modes) and all(m == 'WallSliding' for m in modes)
+            good = bool(modes) and all(m == wm for m in modes)
             ok &= good
             out.append(f'{side}: {len(modes)} samples, modes {sorted(set(modes))}')
         return ok, '; '.join(out)
@@ -3580,7 +3604,7 @@ def scenario_hit_on_wall(client=1, wall_x=1010.0, wall_y=-880.0, frames=90):
         out, ok = [], True
         for side in ('srv', 'cli'):
             modes = [s['mode'] for s in run._win(side, tw + win + 0.05, tw + win + 0.5, sim=True)]
-            ok &= bool(modes) and all(m == 'WallSliding' for m in modes)
+            ok &= bool(modes) and all(m == wm for m in modes)
             out.append(f'{side}: modes after the window {sorted(set(modes))}')
         return ok, '; '.join(out)
 
@@ -3618,6 +3642,7 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
     the window. What the wall pawn does after its hitstun is reported (the stagger in place keeps it where it is)."""
     att = 2 if client == 1 else 1
     run = _Run('hit_on_wall_hit', client, judge_reconciles=False)
+    wm = wall_mode()
     key, akey = run.key, key_of_player(att)
     ia_move, attack = unreal.load_asset(IA['move']), button_mask('Attack')
     st, h = {'phase': 'idle', 'tw': None, 'reached': False, 'rec': []}, {'h': None, 'v': None}
@@ -3665,7 +3690,7 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
                     finish_driver(comp)
             elif ph == 'air':
                 comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
-                if mode == 'WallSliding':
+                if mode == wm:
                     st.update(phase='hit', tw=now, reached=True)
                 elif now - st['t1'] > 2.5:
                     finish_driver(comp)
@@ -3683,7 +3708,14 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
                     sa = a.get_spawn_location()
                     side = -1.0 if v['velocity'][1] < -5.0 else 1.0
                     a.server_reset_to_spawn(unreal.Vector(wall_x - 55.0 - sa.x, py + side * 76.0 - sa.y, 0.0))
-                if now - st['tw'] > tap_delay and 'F' not in st:
+                # Tap on the way down, a little after the top of the rise, and at the latest at tap_delay. The v2 slide keeps the entry momentum
+                # (wall-slide-v2.md 6.2): the climber rises to about 375 cm and is back on the floor about 0.8 s after the top, so the fixed 1.1 s tap
+                # of the legacy slide put the spin on the landing. From the tap the spin opens about 30 frames later on the authority (20 frames of the
+                # move plus the attacker's latency), and the lag-compensated hit sees the climber where the attacker saw it, some frames earlier
+                # (higher): at 200 cm/s down (about 20 cm under the top) the spin falls in the middle of the frames that are both in its reach as seen
+                # and still on the wall. The legacy slide comes down slower and taps at tap_delay
+                vz = snap(worlds()[0])[key]['velocity'][2]
+                if 'moved' in st and 'F' not in st and (now - st['tw'] > tap_delay or (now - st['tw'] > 0.6 and vz < -200.0)):
                     st['F'] = _latest_frame(0, akey)
                     st['d0'] = (damage_of(0, key), damage_of(client, key))
                     v = snap(worlds()[0])
@@ -3740,7 +3772,7 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
             modes = sorted({s[sd]['mode'] for s in ticks})
             pts = [s[sd]['loc'] for s in ticks]
             spread = max((math.dist(p, q) for p in pts for q in pts), default=1e9)
-            good = bool(ticks) and modes == ['WallSliding'] and spread < (5.0 if sd == 'srv' else 8.0)
+            good = bool(ticks) and modes == [wm] and spread < (5.0 if sd == 'srv' else 8.0)
             ok &= good
             out.append(f'{sd}: {len(ticks)} hitstop ticks, modes {modes}, spread {spread:.1f} cm')
         return ok, '; '.join(out)
@@ -5903,6 +5935,7 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
     the impact damage added to the hit's; afterwards Actionable. What the wall mode does after is reported."""
     att = 2 if client == 1 else 1
     run = _Run('impact_wall_mode', client, judge_reconciles=False)
+    wm = wall_mode()
     key, akey = run.key, key_of_player(att)
     ia_move, attack = unreal.load_asset(IA['move']), button_mask('Attack')
     st, h = {'phase': 'idle', 'tw': None, 'reached': False}, {'h': None, 'v': None}
@@ -5976,7 +6009,7 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
                     finish_driver(comp)
             elif ph == 'air':
                 comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
-                if mode == 'WallSliding':
+                if mode == wm:
                     st.update(phase='hit', tw=now, reached=True)
                 elif now - st['t1'] > 2.5:
                     finish_driver(comp)
@@ -5985,7 +6018,7 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
                 # The climber rises along the wall to about 330 cm, then slides down faster and faster (400 cm/s at the floor). The spin of the test move opens 20
                 # frames (0.35 s) after the tap and reaches 140 cm around the attacker (height 88), the feet of the climber are 62 cm under its centre: tap just
                 # after the top of the rise, so the spin finds the climber about 230 cm up, still on the wall
-                if now - st['tw'] > 0.2 and mode == 'WallSliding' and snap(worlds()[0])[key]['velocity'][2] < -20.0 and loc.z < 265.0 and 'F' not in st:
+                if now - st['tw'] > 0.2 and mode == wm and snap(worlds()[0])[key]['velocity'][2] < -20.0 and loc.z < 265.0 and 'F' not in st:
                     st['F'] = _latest_frame(0, akey)
                     st['t_tap'] = now
                     st['d0'] = (damage_of(0, key), damage_of(client, key))
@@ -6015,7 +6048,7 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
         hs = hits()
         # the mode the climber is in when the hit freezes it: the first simulation tick with the hitstop tag
         stop = next((s for s in run._win('srv', st['t_tap'], st['t_tap'] + 1.5, sim=True) if 'Combat.State.Hitstop' in s['tags']), None) if st.get('t_tap') is not None else None
-        return st['reached'] and len(hs) == 1 and stop is not None and stop['mode'] == 'WallSliding', f"reached the wall {st['reached']}, hits {hs} (group 0 is the Root box, 3 the spin), climber at the tap (x ahead of the attacker, z, mode) {st.get('p_tap')}, mode when the hitstop opened {stop['mode'] if stop else None}"
+        return st['reached'] and len(hs) == 1 and stop is not None and stop['mode'] == wm, f"reached the wall {st['reached']}, hits {hs} (group 0 is the Root box, 3 the spin), climber at the tap (x ahead of the attacker, z, mode) {st.get('p_tap')}, mode when the hitstop opened {stop['mode'] if stop else None}"
 
     def impact_check():
         c1 = (_impact_counts(0, key), _impact_counts(client, key))
