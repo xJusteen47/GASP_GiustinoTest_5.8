@@ -134,7 +134,70 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInputNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNSurface",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNLevelObjects",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNAnimation",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNSurface",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatEditor",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "GSTNCombatDebug",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNParts",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNDepthMarker",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCamera",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInteract",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPlatform",
 			"Enabled": true
 		}
 	],

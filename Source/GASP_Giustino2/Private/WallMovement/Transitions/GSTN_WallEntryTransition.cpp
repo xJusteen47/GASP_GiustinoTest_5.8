@@ -13,6 +13,7 @@
 #include "WallMovement/GSTN_WallMovementDebug.h"
 #include "WallMovement/GSTN_WallMovementTypes.h"
 #include "WallMovement/MoveLibrary/GSTN_WallQueryUtils.h"
+#include "WallMovement/MoveLibrary/GSTN_WallReentryUtils.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallEntryTransition)
 
@@ -26,21 +27,36 @@ UGSTN_WallEntryTransition::UGSTN_WallEntryTransition(const FObjectInitializer& O
 FTransitionEvalResult UGSTN_WallEntryTransition::Evaluate_Implementation(const FSimulationTickParams& Params) const
 {
 	FEntryCandidate Candidate;
-	return FindEntryWall(Params, Candidate) ? FTransitionEvalResult(TargetModeName) : FTransitionEvalResult::NoTransition;
+	if (!FindEntryWall(Params, Candidate))
+	{
+		return FTransitionEvalResult::NoTransition;
+	}
+	const FName ModeName = ResolveEntryMode(Candidate, Params);
+	return ModeName.IsNone() ? FTransitionEvalResult::NoTransition : FTransitionEvalResult(ModeName);
+}
+
+FName UGSTN_WallEntryTransition::ResolveEntryMode(const FEntryCandidate& Candidate, const FSimulationTickParams& Params) const
+{
+	return TargetModeName;
+}
+
+const FGSTN_WallSurfaceFilter& UGSTN_WallEntryTransition::GetEntrySurfaceFilter() const
+{
+	return SurfaceFilter;
 }
 
 void UGSTN_WallEntryTransition::Trigger_Implementation(const FSimulationTickParams& Params)
 {
 	// Hand the wall to the mode (consumed by its Activate), so it starts aligned to it instead of guessing from the facing
+	// (rollback blackboard: a re-simulated frame never reads a handoff left by an abandoned prediction)
 	FEntryCandidate Candidate;
-	const UMoverComponent* MoverComp = GetMoverComponent();
-	UMoverBlackboard* SimBlackboard = MoverComp ? MoverComp->GetSimBlackboard_Mutable() : nullptr;
-	if (SimBlackboard && FindEntryWall(Params, Candidate))
+	if (FindEntryWall(Params, Candidate))
 	{
 		FGSTN_WallEntryInfo EntryInfo;
 		EntryInfo.Normal = Candidate.Normal;
 		EntryInfo.Point = Candidate.Point;
-		SimBlackboard->Set(GSTNWallBlackboard::EntryInfo, EntryInfo);
+		GSTNWallBlackboard::EnsureEntries(Params.SimContext.Blackboard);
+		Params.SimContext.Blackboard.TrySet(GSTNWallBlackboard::EntryInfo, EntryInfo);
 	}
 }
 
@@ -112,6 +128,14 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 		return false;
 	}
 
+	// A surface that does not offer what the target mode needs is not a wall to grab (after the angle test, as in the mode's
+	// probes). Nothing is resolved with an empty filter
+	if (!UGSTN_WallQueryUtils::PassesSurfaceFilter(OutHit, GetEntrySurfaceFilter()))
+	{
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: surface filter"));
+		return false;
+	}
+
 	// The capsule can touch just a lip (top edge, under the feet) that the mode's probes, cast from the capsule center,
 	// don't see: grabbing it would bounce between this transition and the mode's "no wall" exit. Confirm at center height
 	const FVector FlatNormal = FVector::VectorPlaneProject(FaceNormal, GravityUp).GetSafeNormal();
@@ -119,13 +143,27 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 	{
 		return false;
 	}
-	const float Radius = UpdatedPrimitive->GetCollisionShape().GetCapsuleRadius();
+	// The trace runs along the face normal, not the horizontal: on an inclined wall the capsule touches with a hemisphere and its center is
+	// further from the surface than a radius (a horizontal trace of one radius never got there at 60 degrees), and the same line is the
+	// horizontal one on a vertical wall. Its reach is the capsule's own extent along the normal
+	const FCollisionShape CapsuleShape = UpdatedPrimitive->GetCollisionShape();
+	const float CapsuleRadius = CapsuleShape.GetCapsuleRadius();
+	const float CapsuleHalfHeight = FMath::Max(CapsuleShape.GetCapsuleHalfHeight(), CapsuleRadius);
+	const float SupportOnNormal = FMath::Max(CapsuleHalfHeight - CapsuleRadius, 0.f)
+		* FMath::Abs(FVector::DotProduct(FaceNormal, UpdatedComponent->GetComponentQuat().GetUpVector())) + CapsuleRadius;
 	FHitResult CenterHit;
-	const FVector CenterEnd = Start - FlatNormal * (Radius + ProbeDistance + 5.f);
+	const FVector CenterEnd = Start - FaceNormal * (SupportOnNormal + ProbeDistance + 5.f);
 	if (!World->LineTraceSingleByChannel(CenterHit, Start, CenterEnd, UpdatedPrimitive->GetCollisionObjectType(), QueryParams, ResponseParams)
-		|| FVector::DotProduct(CenterHit.ImpactNormal, FlatNormal) < 0.5f)
+		|| FVector::DotProduct(CenterHit.ImpactNormal, FaceNormal) < 0.5f)
 	{
 		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: no wall at capsule center height"));
+		return false;
+	}
+	// The mode's probes start from the capsule center: if the surface they would find there is forbidden, the mode would
+	// exit at once and the transition grab again, every tick
+	if (!UGSTN_WallQueryUtils::PassesSurfaceFilter(CenterHit, GetEntrySurfaceFilter()))
+	{
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: surface filter at capsule center height"));
 		return false;
 	}
 	return true;
@@ -192,52 +230,59 @@ bool UGSTN_WallEntryTransition::FindEntryWall(const FSimulationTickParams& Param
 	}
 
 	// Re-entry rules from the wall memory, unless it was reset after leaving the last wall:
-	// by going through a reset mode (landing), by a reset tag, or manually (UGSTN_WallMovementLibrary::ResetWallMemory)
+	// by going through a reset mode (landing), by a reset tag, or manually (UGSTN_WallMovementLibrary::ResetWallMemory).
+	// Evaluate runs more than once per tick (and again when re-simulating), so this is a pure function of the start state, the
+	// rollback blackboard and the tags: it writes nothing
+	// The rules themselves are UGSTN_WallReentryUtils::Judge (pure, tested): the original order and answers, plus the two T2 switches when set
 	const FGSTN_WallMovementSyncState* WallState = Params.StartState.SyncState.SyncStateCollection.FindDataByType<FGSTN_WallMovementSyncState>();
-	UMoverBlackboard* SimBlackboard = MoverComp->GetSimBlackboard_Mutable();
-	if (SimBlackboard && HasMemoryResetTag(Params.StartState.SyncState))
-	{
-		// Recorded as a time, so the reset outlives the tag
-		SimBlackboard->Set(GSTNWallBlackboard::MemoryResetTimeMs, NowMs);
-	}
-	double ManualResetTimeMs = -1.0;
-	if (SimBlackboard)
-	{
-		SimBlackboard->TryGet(GSTNWallBlackboard::MemoryResetTimeMs, ManualResetTimeMs);
-	}
-	const bool bMemoryWasReset = WallState
-		&& ((bHasModeChange && MemoryResetModes.Contains(ModeChange.PrevModeName) && ModeChange.SimTimeMs >= WallState->LastWallTimeMs)
-			|| ManualResetTimeMs >= WallState->LastWallTimeMs);
-	if (WallState && WallState->bHasWallMemory && !bMemoryWasReset)
-	{
-		const FVector LastFlatNormal = FVector::VectorPlaneProject(WallState->LastWallNormal, GravityUp).GetSafeNormal();
-		const bool bSameWall = !LastFlatNormal.IsNearlyZero() && !FlatWallNormal.IsNearlyZero()
-			&& FVector::DotProduct(LastFlatNormal, FlatWallNormal) >= FMath::Cos(FMath::DegreesToRadians(SameWallAngle));
+	FGSTN_WallReentryRules Rules;
+	Rules.SameWallPolicy = SameWallPolicy;
+	Rules.SameWallAngle = SameWallAngle;
+	Rules.HeightCapTolerance = HeightCapTolerance;
+	Rules.ReentryCooldown = ReentryCooldown;
+	Rules.MemoryResetModes = MemoryResetModes;
+	Rules.bInferModeChangeLostToRollback = bInferModeChangeLostToRollback;
+	Rules.bBaseRelativeHeightCap = bBaseRelativeHeightCap;
 
-		if (bSameWall)
-		{
-			if (ReentryCooldown > 0.f && (NowMs - WallState->LastWallTimeMs) < ReentryCooldown * 1000.0)
-			{
-				GSTN_WALL_LOG(2, TEXT("ENTRY rejected: same wall, cooldown"));
-				return false;
-			}
-			if (SameWallPolicy == EGSTN_SameWallPolicy::Deny)
-			{
-				GSTN_WALL_LOG(2, TEXT("ENTRY rejected: same wall denied"));
-				return false;
-			}
-			const float Height = FVector::DotProduct(UpdatedComponent->GetComponentLocation(), GravityUp);
-			if (SameWallPolicy == EGSTN_SameWallPolicy::HeightCap && Height > WallState->LastWallHeight + HeightCapTolerance)
-			{
-				GSTN_WALL_LOG(2, TEXT("ENTRY rejected: height cap (%.1f > %.1f)"), Height, WallState->LastWallHeight + HeightCapTolerance);
-				return false;
-			}
-		}
+	FGSTN_WallReentryQuery Query;
+	Query.Memory = WallState;
+	Query.bHasModeChange = bHasModeChange;
+	Query.ChangePrevMode = ModeChange.PrevModeName;
+	Query.ChangeMode = ModeChange.ModeName;
+	Query.ChangeTimeMs = ModeChange.SimTimeMs;
+	Query.CurrentMode = Params.StartState.SyncState.MovementMode;
+	// Tag reset: while the tag is present. It is not latched (that would need a write from here); an ability that must
+	// forget the wall for good queues FGSTN_ResetWallMemoryEffect instead
+	Query.bResetTagPresent = WallState && HasMemoryResetTag(Params.StartState.SyncState);
+	Query.NowMs = NowMs;
+	Query.GravityUp = GravityUp;
+	Query.WallNormal = WallNormal;
+	Query.Height = FVector::DotProduct(UpdatedComponent->GetComponentLocation(), GravityUp);
+	Query.bWallMoving = UGSTN_WallReentryUtils::GetMovingWallHeight(Hit.GetComponent(), GravityUp, Query.WallBaseHeight);
+
+	const FGSTN_WallReentryResult Reentry = UGSTN_WallReentryUtils::Judge(Rules, Query);
+	switch (Reentry.Verdict)
+	{
+	case EGSTN_WallReentryVerdict::Cooldown:
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: same wall, cooldown"));
+		return false;
+	case EGSTN_WallReentryVerdict::Denied:
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: same wall denied"));
+		return false;
+	case EGSTN_WallReentryVerdict::HeightCap:
+		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: height cap%s (%.1f > %.1f) record=%s->%s@%.0f mode=%s lastWall@%.0f"), Reentry.bBaseRelative ? TEXT(" on the moving wall") : TEXT(""),
+			Reentry.ComparedHeight, Reentry.ComparedCap, *Query.ChangePrevMode.ToString(), *Query.ChangeMode.ToString(), Query.ChangeTimeMs, *Query.CurrentMode.ToString(),
+			WallState ? WallState->LastWallTimeMs : 0.0);
+		return false;
+	default:
+		break;
 	}
 
 	OutCandidate.Normal = WallNormal;
 	OutCandidate.Point = Hit.ImpactPoint;
-	GSTN_WALL_LOG(1, TEXT("ENTRY -> %s wallN=%s vSpeed=%.0f memReset=%d"), *TargetModeName.ToString(),
-		*GSTNWallDebug::Vec(WallNormal), VerticalSpeed, bMemoryWasReset ? 1 : 0);
+	OutCandidate.Hit = Hit;
+	GSTN_WALL_LOG(1, TEXT("ENTRY -> %s wallN=%s vSpeed=%.0f memReset=%d (%s)%s%s"), *TargetModeName.ToString(),
+		*GSTNWallDebug::Vec(WallNormal), VerticalSpeed, Reentry.Reset != EGSTN_WallMemoryReset::None ? 1 : 0, UGSTN_WallReentryUtils::LexReset(Reentry.Reset),
+		Reentry.bBaseRelative ? TEXT(" cap on the moving wall") : TEXT(""), Reentry.bHeightCapSkipped ? TEXT(" moving wall: cooldown only") : TEXT(""));
 	return true;
 }

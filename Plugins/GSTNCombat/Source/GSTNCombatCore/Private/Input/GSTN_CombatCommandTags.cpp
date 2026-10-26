@@ -25,7 +25,10 @@ namespace GSTNCommandTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_Directional, "Command.Combo.AttackSpecial.Directional", "Attack + special chord, stick tilted");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_CrouchNeutral, "Command.Combo.AttackSpecial.CrouchNeutral", "Attack + special chord, crouch held, stick neutral or lightly tilted");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combo_AttackSpecial_CrouchDirectional, "Command.Combo.AttackSpecial.CrouchDirectional", "Attack + special chord, crouch held, stick tilted");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_Grounded, "Combat.Context.Grounded", "The character is on the ground");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_Airborne, "Combat.Context.Airborne", "The character is in the air (falling or rising, not on a wall)");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_OnWall, "Combat.Context.OnWall", "The character is in a wall movement mode; with Airborne it identifies wall bindings");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_Jump, "Command.Movement.Jump", "Jump: ground jump, coyote jump or air jump, decided by the movement state");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_FastFall, "Command.Movement.FastFall", "Fast fall while descending");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_Dash, "Command.Movement.Dash", "Dash: a burst of speed along the facing, perpendicular to the local gravity");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Defence_Dodge, "Command.Defence.Dodge", "Dodge: a ground dodge when grounded, an air dodge when airborne (two bindings by context)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_Grab, "Command.Interact.Grab", "Interact, short press: grab in the default movement set");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_PickUp, "Command.Interact.PickUp", "Interact, long press: pick up in the default movement set");
 }

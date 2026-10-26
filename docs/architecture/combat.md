@@ -1,7 +1,7 @@
 # Combat system (`GSTNCombat` plugin)
 
 Design document for a fighting-game / platform-fighter combat layer on top of GAS, simulated by Network Prediction
-(the GAS-NPP fork, see [gas-npp.md](gas-npp.md)). Source: `Plugins/GSTNCombat/`.
+(the GAS-NPP fork, see [gas-npp.md](gas-npp.md)). Source: `Plugins/GSTNCombat/` (`GSTNCombatCore`, usable without the fork) and `Plugins/GSTNCombatNP/` (`GSTNCombatNP`, the fork adapter).
 
 Status (2026-10-19): **M0 (risk spike) done and verified**, M1 implemented, M2 in progress; the rest is design. This
 file is the architecture; each milestone has its own implementation specification (section 18). Sections marked
@@ -63,7 +63,7 @@ weapons + super slots**, skins separate; stats are GAS attributes, weapons modif
 | # | Fact | Consequence |
 |---|---|---|
 | 1 | `FAbilitySimSyncState` is hard-coded; `InternalSimulationTick`/`FillSyncState` are not virtual. | Combat state lives in **its own NP model** on a component. |
-| 2 | Sort priorities: ASC = `PreKinematicMovers - 2` (48), Mover = 50. | Combat model at **47**: before the ASC and Mover. |
+| 2 | Sort priorities: ASC = `PreKinematicMovers - 2` (48), Mover = 50. | Combat model at **47**: before the ASC and Mover. The standalone input model of GSTNInput is at 46 (never on the same pawn, but Network Prediction warns when two models share a priority). |
 | 3 | Fork input: 5 bools per `UInputAction`, no axes, no history; `TryActivateAbilitiesFromInput` tries only the first matching ability; `GetSynced*` getters read the wrong frame during resim. | Combat has **its own input command**; combat abilities never use `ActivationInputs`. |
 | 4 | GE durations and `UWaitForDurationPredictionTask` use absolute sim time; NPP has no per-entity freeze. | **Every combat timing is a frame count in the combat sync state** (pauses in hitstop). GEs only for attributes, tags, cues. |
 | 5 | Nothing runs on simulated proxies (`SimulatedProxyNetworkLOD=Interpolated`): `ApplyGameplayEffectSpecToSelf` and `TryActivateAbility` return early. | Victim reactions are server-authoritative; the attacker predicts only its own side. |
@@ -79,14 +79,25 @@ by `ShouldReconcile` when no montage plays.
 
 ## 3. Modules
 
-`Plugins/GSTNCombat/` (type prefix `GSTN_`, like the project).
+`Plugins/GSTNCombat/` (`GSTNCombatCore`; its descriptor depends only on `GSTNInput`) and `Plugins/GSTNCombatNP/` (`GSTNCombatNP`; depends on `GSTNCombat`, `GSTNInputNP`, `GSTNInput`, the fork plugins, EnhancedInput and Mover, all non-optional). Module names did not change with the split, so `/Script/GSTNCombatNP.*` paths stay valid and no redirect exists. Type prefix `GSTN_`, like the project.
 
 | Module | Depends on | Contents |
 |---|---|---|
 | `GSTNCombatCore` (Runtime) | Core, CoreUObject, Engine, GameplayTags, **GSTNInputCore** | Combat content that is **pure and deterministic**, built on the input core: the six standard button tags, the default command set (`UGSTN_StandardSlots`, command tags), later hit shapes and knockback models. No GAS, no NPP. Covered by Automation tests. The input layer itself is `GSTNInputCore` ([input.md](input.md)). |
-| `GSTNCombatGAS` (Runtime) | Core, GameplayAbilities, GameplayTasks | Native tags, `UGSTN_CombatAttributeSet`, damage GE and execution, hit effect context, weapons, loadouts, loadout component. Compiles against stock GAS and the fork (same module name). |
-| `GSTNCombatNP` (Runtime, **exists**) | Core, GAS, NetworkPrediction, AbilitySystemSimulation, Mover, **GSTNInputNP** | **Fork adapter**: combat NP model (embeds the input simulation of `GSTNInputNP` and is its host), simulation component, `UGSTN_GA_Base` and `UGSTN_GA_BaseCombat`, freeze/knockback layered moves, hit resolution. Input command, sources, tracker and binding set come from `GSTNInputNP`. |
+| `GSTNCombatGAS` (Runtime, **exists**, plugin `GSTNCombatGAS`; so far only the tags) | Core, GameplayAbilities, GameplayTasks, GSTNCombatCore | Native tags, `UGSTN_CombatAttributeSet`, damage GE and execution, hit effect context, weapons, loadouts, loadout component. Compiles against stock GAS and the fork (same module name). |
+| `GSTNCombatNP` (Runtime, **exists**, plugin `GSTNCombatNP`) | Core, GAS, NetworkPrediction, AbilitySystemSimulation, Mover, **GSTNInputNP** | **Fork adapter**: combat NP model (embeds the input simulation of `GSTNInputNP` and is its host), simulation component, `UGSTN_GA_Base` and `UGSTN_GA_BaseCombat`, freeze/knockback layered moves, hit resolution. Input command, sources, tracker and binding set come from `GSTNInputNP`. |
 | `GSTNCombatEditor` (Editor) | all | Timeline editor (timeline assets and inline timelines; viewport), socket baking, slot conflict validator UI, debug draw. |
+
+The destructible-parts plugin `Plugins/GSTNParts/` (M4b; usage in its README, decisions and deviations in `docs/notes/m4b-doc-deltas.md`) is an optional layer on top of the hit pipeline; enabling it changes nothing until an entity is given a part set:
+
+| Module | Depends on | Contents |
+|---|---|---|
+| `GSTNPartsCore` (Runtime) | Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore | **Pure, no fork**: native tags and settings, part set and penetration table data, break-effect and hit-data structs, validators, the integer part math, the `PartResolve` pipeline step. |
+| `GSTNPartsGAS` (Runtime) | GameplayAbilities, GSTNPartsCore, GSTNCombatGAS | One-shot break effects (Stats effect per part, launch and stagger requests), part events, tag projection. Stock GAS, no Network Prediction. |
+| `GSTNPartsNP` (Runtime) | GSTNPartsCore, GSTNPartsGAS, GSTNCombatNP, the fork | `FGSTN_PartsFragment` in the combat sync state, tick extension, snapshot contributor, outcome applier, attach component. **Needs the fork.** |
+| `GSTNPartsEditor` (Editor) | GSTNPartsCore, UnrealEd, DataValidation | Asset validator, balance report, Physics Asset draft. |
+
+The presentation module (damage material, hidden bones, chunks) is not built (P10-P12 pending an owner decision). Sample content lives in `Plugins/GSTNParts/Content/Samples` (`Tools/GAS/setup_parts_sample_content.py`).
 
 A future `GSTNCombatStockGAS` would replace only `GSTNCombatNP` (same data, simulation through prediction keys).
 
@@ -167,7 +178,9 @@ re-fires tag delegates and `MonitoredTagChanged` is not guarded); cancels are ex
 2. No `HasAuthority`/resim branches; server-only behaviour comes from where the instance ticks (inbox, section 12.4).
 3. Prefer **end-frame stamps over countdowns**: an idle entity's state then does not change frame to frame (cheap
    delta serialization, section 15).
-4. Every sync state field is in `NetSerialize`, `ShouldReconcile`, `ToString` and `Interpolate`.
+4. Every sync state field is in `NetSerialize`, `ShouldReconcile`, `ToString` and `Interpolate`. That includes the embedded
+   input state: `FGSTN_CombatSyncCore::ShouldReconcile` returns the result of `Input.ShouldReconcile` (the input state is
+   authoritative, see input.md 5.1).
 
 ### 5.6 Authoritative combat events (*Decision*)
 
@@ -187,6 +200,9 @@ produced.
   `HitReceived`, `KO` (M4), `LinkFormed/Broken`, `PairMove` (M6–M7).
 - Clients that need feedback (UI flashes, tutorial prompts) use replicated results or predicted presentation, never
   these events. A client-side mirror can be added later from replicated server events if a feature needs it.
+- *As implemented (M2 S2d):* the subsystem lives in `GSTNInputCore` and is not server-only by construction but by use: the
+  host publishes from `FinalizeFrame` when `HasAuthority()`, which includes the **listen-server host's own pawn** (authority
+  with a local player). Nothing may infer authority from "no local player". See [input.md](input.md) §5.6.
 
 ## 6. Input
 
@@ -231,8 +247,8 @@ Test scripting (`SetScriptedButtons`, `TapScriptedButtons`) exists on the compon
 - Plus a **zone** from the magnitude, the same in every space: `Neutral` (dead zone) → `Aim` (light tilt: aims a
   "standing" attack without making it directional) → `Tilt` (directional). A **flick** flag marks entering `Tilt` from
   `Neutral`/`Aim` within `FlickFrames` (smash inputs). The world yaw (256 steps) is kept for aiming.
-- Facing comes from Mover's simulated state at end of F-1. The project's `UGSTN_MoverSimStateTracker` is project code:
-  in M2 it moves into the input plugin (`GSTNInputNP/Mover/`; the project then uses the plugin's).
+- Facing comes from Mover's simulated state at end of F-1. `UGSTN_MoverSimStateTracker` lives in the
+  input plugin (`GSTNInputNP/Mover/`; the project uses the plugin's).
 - Each timeline ability has an `AimPolicy` (`KeepFacing | SnapToStick | SnapIfAimOrTilt | Camera`, max turn angle,
   last frame turning is allowed): a directional attack goes **towards the stick's world direction**; `Camera` turns to
   the camera's aim (11.6); rotation goes through Mover, not the actor. Turning and walking inside windows of a move, and
@@ -300,7 +316,7 @@ special, crouch variants...). The resolver orders them deterministically:
    `Oldest`). The terminal presses of the matching commands are grouped: presses within `SimultaneousFrames` (default
    2) of the newest one form the newest group. Only commands anchored in that group compete; older presses lose (a
    player who pressed attack and then changed their mind and pressed special gets the special).
-2. **Tier** of the command, from the command tag root, configured in the settings (`CommandTiers`: tag → tier), e.g.
+2. **Tier** of the command, from the command tag root, configured in the settings (`CommandTiers`: tag → tier; the combat values are `UGSTN_CombatSettings` in the combat plugin, contributed to the input settings), e.g.
    `Command.Super` 400 > `Command.Special` 300 > `Command.Strong` 200 > `Command.Attack` 100, movement and defensive
    roots as the game needs. Attack and special pressed together → the special, as in Smash.
 3. **Specificity** of the pattern (automatic): inside a tier, crouch + direction > crouch + neutral > direction >
@@ -489,7 +505,7 @@ FGSTN_LoadoutData (what a player owns and saves)
 - **`UGSTN_MeterAttributeSet`**: `ExMeter`, `ExMeterMax`, `SuperMeter`, `SuperMeterMax` (two generic meters; the kit
   names them and sets bars × points per bar). A kit that needs more meters adds an attribute set; the meter API refers
   to meters by `FGameplayAttribute`, so no code assumes two.
-- **Spending** = standard GAS cost: `UGSTN_GE_MeterCost` (instant, SetByCaller `Combat.SetByCaller.MeterCost`) set as
+- **Spending** = standard GAS cost: `UGSTN_GE_MeterCost` (instant, amount in its `Cost` data) set as
   the ability's cost; `CanActivateAbility` checks it as usual, so the resolver's `CanExecute` rejects an
   unaffordable EX move.
 - **Gaining** = GEs applied by the hit pipeline (on hit dealt, hit taken, blocked, whiff) with rates from the kit's
@@ -660,7 +676,7 @@ FGSTN_LoadoutData (what a player owns and saves)
   | `MaxFallSpeed`, `FastFallSpeed`, `FastFallGravityScale` | Terminal speeds and fast-fall. |
   | `MinJumpHoldFrames` | Frames before a release starts cutting (the minimum hop). |
   | `AirJumpCount`, `AirJumpVelocity` | Multi-jump. |
-  | `JumpSquatFrames` | Ground startup before take-off (0 = immediate). |
+  | `JumpSquatFrames` | Not read (C19): the squat is data on the jump ability (`SquatFrames`), default in `UGSTN_CombatSettings`. |
 
 - **Jump state lives in the combat sync state** (`JumpPhase`, `JumpStartFrame`, `bJumpCut`, `AirJumpsUsed`,
   `bFastFalling`); "held" is read from the input history (the jump press still held continuously), so it is
@@ -750,7 +766,7 @@ timers — added by subclass/extension point, per wall-movement.md rules.
   player costs a rollback of about RTT/16 ms frames** (budget it).
 - `UGSTN_HitPresentationComponent` plays flash/sparks/visual freeze on the interpolated victim immediately on the
   attacker's client (essential in PvE), cancelled if not confirmed.
-- **Forward prediction of simulated proxies** (spike S-FP, 2026-10-19; report in `Saved/Notes/spike-sfp-report.md`,
+- **Forward prediction of simulated proxies** (spike S-FP, 2026-10-19; report in `docs/notes/spike-sfp-report.md`,
   not versioned). Feasible with small fork patches, **not worth enabling as it stands**: with dedicated server + 2
   clients at 60/15 ms and 2 % loss the observer saw a remote dash 40–50 ms earlier (73–82 ms instead of 108–132), which
   is mostly the interpolation buffer removed (`FixedTickInterpolationBufferedMS` = 100). Costs: every new input of the
@@ -772,6 +788,40 @@ timers — added by subclass/extension point, per wall-movement.md rules.
   (*Decision*). The spike code stays in the fork, inert with its cvars at 0 (`np.Spike.*`).
 - **Grabs** are links (12b): a `Grab` hitbox creates a grabber/grabbed link; throws are slots active only for the
   grabber role. **Needs the link spike before building.**
+
+### 12.8 As built (M4, H1 to H13b)
+
+What the code does, where it differs from the design text above is listed in `docs/notes/m4-doc-deltas.md` (one entry per checkpoint).
+
+- **Data**: `FGSTN_HitboxSpec` tracks and `FGSTN_TimelineTrack_HurtboxModifier` live in the timeline (`Timeline/GSTN_TimelineTypes.h`); hurtboxes are
+  `UGSTN_HurtboxSetDefinition` assets (`HBS_Test_Light/Medium/Heavy` carry weight scales; `Tools/GAS/make_hurtbox_set.py` builds one from a Physics Asset
+  through `UGSTN_PhysicsAssetUtils::ListPrimitives`). `BakedSocket` hitboxes read `BakedSockets` of the timeline data, filled by `Tools/GAS/bake_sockets.py`.
+- **Rules**: `UGSTN_CombatRules` (default `GSTN_CombatRules_Standard`, plugin content under `/GSTNCombat/Rules`, shipped with the plugin) holds the
+  pipeline steps, knockback model, DI, impact response and rewind window (400 ms). `UGSTN_CombatRulesProvider` adds the rules component to the game
+  state. Steps, knockback model, outcome appliers, attacker outcomes and relationship resolvers are all extension classes that a Blueprint can
+  derive from (`BP_*_Example` under `/Game/GASNPPTest/Combat/`; `BP_Step_Example` overrides `Resolve` and doubles the knockback scale).
+- **Sync state**: hit window, hitstun end, pending reaction and launch, recoil start frame, impact end frame and the request ring are in
+  `FGSTN_CombatSyncCore`; nothing a hit does lives outside it.
+- **Dodges**: the ground and air dodge are kit data. The `Intangible` window addresses `Combat.Hurtbox.Feet` only (torso and head stay hittable) and is the
+  `Timeline` default of the ability class, replaceable in a Blueprint child.
+- **Activation in a hit reaction** (H13b). The combat gate refuses every command while the combatant is in Hitstun, Tumble, Splat or KO (it asks before
+  the ability's own blocked tags). `Combat.Ability.IgnoreHitstunOnActivation` in an ability's `AbilityTags` lets that ability start in a Hitstun,
+  Tumble or Splat reaction (a KO is never bypassed); the ability's own `ActivationBlockedTags` (`Combat.State.Hitstun` / `Combat.State.Hitstop`) then
+  decide alone, so an escape is "tag + empty blocked tags" and a base dodge stays refused through its blocked tags. The tag is read on activation only:
+  a hit that arrives after the ability began is not affected by it. The gate reads `UGSTN_CombatTableSet::BindingReaction`, flags built from the class
+  defaults when the set is built (deterministic, no state outside the sync state): `IsCommandAllowed` lets a command through if any of its bindings has
+  the flag, `CanExecuteBinding` checks the binding the context picked.
+- **Burst building block** (H13b). `UGSTN_GA_Base::bEndReactionOnActivation` (Category `Combat|Activation`, off by default) ends the activator's reaction
+  in the frame of the request: `FGSTN_CombatVictim::EndReaction` rewrites the sync core (Actionable, pending reaction dropped, hitstun end and impact end
+  cleared, the hitstop window closed at this frame) and queues an `EndReaction` request whose executor removes the freeze effects of the window. A burst
+  also wants the tag above, a full-body `Intangible` hurtbox window on its timeline and a stagger-resistance modifier for the frames after it (hurtbox
+  threshold / `MaxReaction`, which the H12 data already allows). A timeline ability replaces the action state by its own when it starts, so the tag
+  alone already leaves Hitstun for a timeline ability; the flag is what also drops the pending launch and the window, and is the only one of the two
+  that matters for a plain ability. Limit: a launch already handed to Mover keeps its layered move (the flag cancels the freeze, not a flying victim).
+- **Tools**: `Tools/GAS/setup_gas_assets.py --combat-input --hits-content --h13-content`, `build_test_combat_map.py`, `validate_combat_content.py`,
+  `bake_sockets.py`, `make_hurtbox_set.py` (command lines in `Tools/README.md`).
+- **Settings and fork requirements**: `Config/DefaultGSTNCombat.ini` (plugin) names the default rules; the lag-compensation component and the hit
+  presentation component are on `BP_GASNPP_TestCharacter`; hit scenarios need the GAS-NPP fork (`GSTNCombatNP`).
 
 ## 12b. Links: piggyback, grabs, held objects (*Decision*: one system)
 
@@ -862,6 +912,7 @@ unless a design needs prediction.
 - End-frame stamps instead of countdowns (5.5) make an idle entity's state constant: about one bit per frame.
 - History serialized with saturated uint8 deltas, rings capped at 16 events.
 - Minions are outside NPP (section 13).
+- Parts (M4b): `FGSTN_PartsFragment` writes 3 + N payload bytes (N = part count, 16 at most); inside the sync fragment list that is 13 B at N = 6, 15 B at N = 8 and 23 B at N = 16 (177 bits: 1 flag + count + id + length + payload), within the 24 B ceiling of the plan. An entity without a part set writes the flag bit only (1 bit); a pristine fragment has a zero-byte payload (framing 25 bits). Measured by `GSTNParts.NP.Fragment.*` (log `Saved/Logs/headless-p14-on.log`, lines "Fragment bytes"). The harness does not report host bytes per second, so no with/without-parts rate is recorded.
 
 ## 16. Project integration
 
@@ -906,6 +957,25 @@ hitstop window; server and client states converge; **no reconciles besides the f
 Not verified yet: hitstop with a montage actually playing; Mover freeze; anything cross-entity; `scenario_jump_wall`
 (it is calibrated for another spawn point and does not reach the wall on `DefaultLevel`'s current spawn).
 
+### 17b. H0 spike results for the hit milestone (2026-10-24, full report `docs/notes/m4-spike-report.md`)
+
+| Spike | Result | Consequence |
+|---|---|---|
+| H0a cross-entity cost | 1 rollback per hit on the victim, 0 on the host (10 hits clean, 12 at 60/15/2 %) | acceptance "victim 1 rollback per hit, host 0"; a hit costs a victim +30 B per state packet while the window is open |
+| H0b freeze + tag | `FGSTN_LayeredMove_Freeze` carries `Combat.Mover.Frozen`; holds in Walking, Falling, WallSliding | incoming velocity is not restored (save it in the sync state if needed); wall modes keep leaving during a freeze, so the wall lock is an explicit gate |
+| H0c hitstop with montage | montage holds through the window and matches the authority after a forced reconcile inside it | proxies never show the montage (presentation, not state) |
+| H0d interpolation buffer | 80 ms matches 100 ms, 60 ms is worse | `FixedTickInterpolationBufferedMS` = 80 |
+| H0e lag compensation | `RewindActors`/`UnwindActors` rewind a Mover pawn 250 ms in 0.22 ms | component on the pawn Blueprint; the later rewind window is 400 ms |
+
+Crashes of the first spike attempt: Python `set_editor_property` on a live component of a PIE world together with a slate-tick callback that raised
+every frame. Safe rules: UFUNCTION setters and self-unregistering callbacks.
+
+### 17c. M4b spike results
+
+The parts spikes (P0a overlap-part agreement under lag compensation, P0c fragment encoding and bytes, ricochet re-measure) are in `docs/notes/m4b-spike-report.md`.
+
+Parts (P9): a part's damage is `Damage x (1 - Thickness) + DeepDamage x Thickness` once the penetration band lets the hit through (`DeepDamage` defaults to the hit's `Damage`, `Thickness` to 0), so hardness decides whether a hit gets in and thickness how deep it goes.
+
 ## 18. Roadmap
 
 Each milestone ends with a build, its tests and the harness run clean (testing.md), and with this document updated
@@ -914,10 +984,11 @@ where the implementation differs. Milestones are sequential: each spec assumes t
 | # | Milestone | Content | Specification |
 |---|---|---|---|
 | M0 | Risk spike | **Done** (section 17). | — |
-| M1 | Core input layer | `GSTNCombatCore`, moving to `GSTNInputCore` ([input.md](input.md) §8 S1): samples, classifier, history, conditions, matcher, buffer, reset rules, slots, validation, Automation tests. | [combat-m1-core-input.md](combat-m1-core-input.md) |
+| M1 | Core input layer | `GSTNInputCore` (moved out of `GSTNCombatCore` in S1, [input.md](input.md) §8): samples, classifier, history, conditions, matcher, buffer, reset rules, slots, validation, Automation tests. | [combat-m1-core-input.md](combat-m1-core-input.md) |
 | M2 | Input in the simulation | History and classifier state in the combat sync state, stick + `ForcedCommand` in the command, player/AI input sources, Mover state reader moved into the plugin, command bindings → activation of any GAS ability, unbound commands, command lock tags, activation context, harness scenarios. | [combat-m2-sim-input.md](combat-m2-sim-input.md) |
 | M3 | Combat abilities, kits, weapons, loadouts, jump | `GSTNCombatGAS`, attributes (stats, meters), stats → Mover modifier (incl. jump gravity phases, movement lock), `UGSTN_GA_Base`, `UGSTN_GA_BaseCombat` and timelines with synced montage, adoption of triggered abilities, combat clock, camera aim input, cancel windows, movement track, variable jump, air jumps, fast fall, dash, primary kit, support weapon and predicted switch, EX moves, supers, compiled table, `LoadoutRevision`, loadout component and save, skins. | [combat-m3-moves-kits.md](combat-m3-moves-kits.md) |
 | M4 | Hits | Hurtboxes, hitboxes, snapshot, inbox, resolution pipeline, damage and meter gain, hitstop (Mover freeze, wall lock), hitstun/knockback/DI, teams and variants, lag compensation, hit presentation, dodges (intangibility). | [combat-m4-hits.md](combat-m4-hits.md) |
+| M4b | Destructible parts | `Plugins/GSTNParts` (Core, GAS, NP, Editor): part sets, penetration table, break effects, `PartResolve` step, sync fragment, restore, grab gate, thickness, validator and balance report, sample content. **Status: logic complete, presentation P10-P12 pending.** | plugin README, `docs/notes/m4b-doc-deltas.md` |
 | M5 | Editor | Timeline editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M6 | Defence and links | Shield, parry, tech, SDI; link system spike, links, grabs/throws. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M7 | Piggyback and pair moves | Mount link, riding mode, role-only bindings, carry load, pair moves. | [combat-m5-m9.md](combat-m5-m9.md) |

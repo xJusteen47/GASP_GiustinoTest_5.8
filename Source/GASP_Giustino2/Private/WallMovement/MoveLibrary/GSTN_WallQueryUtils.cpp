@@ -7,6 +7,8 @@
 #include "Engine/World.h"
 #include "MoveLibrary/MovementUtils.h"
 #include "MoveLibrary/MovementUtilsTypes.h"
+#include "GSTN_SurfaceTypes.h"
+#include "GSTN_SurfaceUtils.h"
 #include "WallMovement/GSTN_WallMovementDebug.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallQueryUtils)
@@ -24,7 +26,7 @@ namespace GSTNWallQuery
 		FCollisionResponseParams ResponseParams;
 
 		/** Takes SCENE_QUERY_STAT(Name), which expands to the trace tag and the stat id */
-		FQueryContext(const FMovingComponentSet& MovingComps, const FName TraceTag, const TStatId& StatId)
+		FQueryContext(const FMovingComponentSet& MovingComps, const FName TraceTag, const TStatId& StatId, bool bIgnorePawns = false)
 			: UpdatedComponent(MovingComps.UpdatedComponent.Get())
 			, UpdatedPrimitive(MovingComps.UpdatedPrimitive.Get())
 			, QueryParams(TraceTag, StatId, false, UpdatedComponent ? UpdatedComponent->GetOwner() : nullptr)
@@ -34,6 +36,10 @@ namespace GSTNWallQuery
 			{
 				Channel = UpdatedPrimitive->GetCollisionObjectType();
 				UMovementUtils::InitCollisionParams(UpdatedPrimitive, QueryParams, ResponseParams);
+				if (bIgnorePawns)
+				{
+					ResponseParams.CollisionResponse.SetResponse(ECC_Pawn, ECR_Ignore);
+				}
 			}
 		}
 	};
@@ -180,11 +186,67 @@ bool UGSTN_WallQueryUtils::IsValidWallNormal(const FVector& Normal, const FVecto
 	return AngleDeg >= MinSurfaceAngle && AngleDeg <= MaxSurfaceAngle;
 }
 
+bool UGSTN_WallQueryUtils::PassesSurfaceFilter(const FHitResult& Hit, const FGSTN_WallSurfaceFilter& Filter)
+{
+	// Empty query: today's behaviour, and the surface is not resolved at all (no cost for modes that do not use the filter)
+	if (Filter.IsEmpty())
+	{
+		return true;
+	}
+
+	// Static configuration only (components, settings, providers answering from replicated state): the same answer in a
+	// re-simulated frame, so there is nothing to cache or to roll back
+	const FGSTN_SurfaceView Surface = UGSTN_SurfaceUtils::Resolve(Hit);
+	if (Surface.Source == EGSTN_SurfaceSource::Default)
+	{
+		return Filter.bUnknownSurfacesPass;
+	}
+	// A surface passes on the required query (when there is one) or on any alternative; an empty alternative accepts everything
+	if (!Filter.RequiredBehaviours.IsEmpty() && Surface.MatchesBehaviours(Filter.RequiredBehaviours))
+	{
+		return true;
+	}
+	for (const FGameplayTagQuery& Alternative : Filter.AlternativeBehaviours)
+	{
+		if (Surface.MatchesBehaviours(Alternative))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UGSTN_WallQueryUtils::IsPawnHit(const FHitResult& Hit)
+{
+	const UPrimitiveComponent* Component = Hit.GetComponent();
+	return Component && Component->GetCollisionObjectType() == ECC_Pawn;
+}
+
+void UGSTN_WallQueryUtils::ApplyPawnFilter(const FGSTN_WallCheckSettings& Settings, FCollisionResponseParams& InOutResponseParams)
+{
+	if (Settings.bIgnorePawns)
+	{
+		InOutResponseParams.CollisionResponse.SetResponse(ECC_Pawn, ECR_Ignore);
+	}
+}
+
 bool UGSTN_WallQueryUtils::IsHitOnValidWall(const UWorld* World, const FHitResult& Hit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings,
 	ECollisionChannel Channel, const FCollisionQueryParams& QueryParams, const FCollisionResponseParams& ResponseParams)
 {
+	// Another character is not a wall, whatever its capsule's normal says (it is where the owner's simulation put it, not where this one did)
+	if (Settings.bIgnorePawns && IsPawnHit(Hit))
+	{
+		return false;
+	}
 	if (!IsValidWallNormal(Hit.Normal, GravityUp, Settings.MinSurfaceAngle, Settings.MaxSurfaceAngle)
 		|| !IsValidWallNormal(Hit.ImpactNormal, GravityUp, Settings.MinSurfaceAngle, Settings.MaxSurfaceAngle))
+	{
+		return false;
+	}
+
+	// Angle is fine: does the surface allow this kind of wall? Done before the edge trace below, which is the costly part.
+	// An edge hit is judged by the component it touched, not by the neighbouring face the trace may find
+	if (!PassesSurfaceFilter(Hit, Settings.SurfaceFilter))
 	{
 		return false;
 	}
@@ -214,7 +276,7 @@ bool UGSTN_WallQueryUtils::IsHitOnValidWall(const UWorld* World, const FHitResul
 }
 
 bool UGSTN_WallQueryUtils::CanFitOnWall(const FMovingComponentSet& MovingComps, const FQuat& CurrentQuat, const FVector& NewNormal,
-	const FVector& ContactPoint, float Radius, float HalfHeight, float WallGap)
+	const FVector& ContactPoint, float Radius, float HalfHeight, float WallGap, bool bKeepOrientation)
 {
 	const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
 	const UPrimitiveComponent* UpdatedPrimitive = MovingComps.UpdatedPrimitive.Get();
@@ -223,15 +285,25 @@ bool UGSTN_WallQueryUtils::CanFitOnWall(const FMovingComponentSet& MovingComps, 
 		return false;
 	}
 
-	FVector Up = FVector::VectorPlaneProject(CurrentQuat.GetUpVector(), NewNormal).GetSafeNormal();
-	if (Up.IsNearlyZero())
+	FQuat TestQuat = CurrentQuat;
+	float SeatDistance = Radius + WallGap;
+	if (bKeepOrientation)
 	{
-		Up = FVector::VectorPlaneProject(CurrentQuat.GetForwardVector(), NewNormal).GetSafeNormal();
+		// The capsule stays as it is: its nearest point to the new wall is on a hemisphere when the wall is inclined, so it sits further out
+		SeatDistance = FMath::Max(HalfHeight - Radius, 0.f) * FMath::Abs(FVector::DotProduct(NewNormal, CurrentQuat.GetUpVector())) + Radius + WallGap;
 	}
-	const FQuat TestQuat = FRotationMatrix::MakeFromXZ(-NewNormal, Up).ToQuat();
+	else
+	{
+		FVector Up = FVector::VectorPlaneProject(CurrentQuat.GetUpVector(), NewNormal).GetSafeNormal();
+		if (Up.IsNearlyZero())
+		{
+			Up = FVector::VectorPlaneProject(CurrentQuat.GetForwardVector(), NewNormal).GetSafeNormal();
+		}
+		TestQuat = FRotationMatrix::MakeFromXZ(-NewNormal, Up).ToQuat();
+	}
 
 	FVector TestLocation = UpdatedComponent->GetComponentLocation();
-	TestLocation += NewNormal * ((Radius + WallGap) - FVector::DotProduct(TestLocation - ContactPoint, NewNormal));
+	TestLocation += NewNormal * (SeatDistance - FVector::DotProduct(TestLocation - ContactPoint, NewNormal));
 
 	constexpr float FitTestShrink = 1.f;
 	const FCollisionShape TestShape = FCollisionShape::MakeCapsule(FMath::Max(Radius - FitTestShrink, 1.f), FMath::Max(HalfHeight - FitTestShrink, 1.f));
@@ -240,7 +312,7 @@ bool UGSTN_WallQueryUtils::CanFitOnWall(const FMovingComponentSet& MovingComps, 
 }
 
 bool UGSTN_WallQueryUtils::IsConcaveCornerHit(const FMovingComponentSet& MovingComps, const FHitResult& Hit, const FVector& MoveDelta, const FQuat& Orientation,
-	const FVector& WallNormal, const FVector& GravityUp, float MinCornerAngle, const FGSTN_WallCheckSettings& Settings)
+	const FVector& WallNormal, const FVector& GravityUp, float MinCornerAngle, const FGSTN_WallCheckSettings& Settings, bool bKeepOrientation)
 {
 	if (FVector::DotProduct(MoveDelta, Hit.Normal) >= 0.f)
 	{
@@ -253,7 +325,7 @@ bool UGSTN_WallQueryUtils::IsConcaveCornerHit(const FMovingComponentSet& MovingC
 		return false;
 	}
 
-	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallEdgeCheck));
+	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallEdgeCheck), Settings.bIgnorePawns);
 	if (!IsHitOnValidWall(Ctx.World, Hit, GravityUp, Settings, Ctx.Channel, Ctx.QueryParams, Ctx.ResponseParams))
 	{
 		return false;
@@ -261,7 +333,7 @@ bool UGSTN_WallQueryUtils::IsConcaveCornerHit(const FMovingComponentSet& MovingC
 
 	float Radius, HalfHeight;
 	GetCapsuleSize(Ctx.UpdatedPrimitive, Radius, HalfHeight);
-	return CanFitOnWall(MovingComps, Orientation, Hit.Normal, Hit.ImpactPoint, Radius, HalfHeight, Settings.WallGap);
+	return CanFitOnWall(MovingComps, Orientation, Hit.Normal, Hit.ImpactPoint, Radius, HalfHeight, Settings.WallGap, bKeepOrientation);
 }
 
 bool UGSTN_WallQueryUtils::IsFloorHit(const FHitResult& Hit, const FVector& MoveDelta, const FVector& GravityUp, float MinSurfaceAngle)
@@ -273,7 +345,7 @@ bool UGSTN_WallQueryUtils::IsFloorHit(const FHitResult& Hit, const FVector& Move
 bool UGSTN_WallQueryUtils::FindWall(const FMovingComponentSet& MovingComps, const FQuat& Orientation, const FVector& WallNormal, const FVector& Velocity,
 	const FGSTN_WallCornerHit& CornerHit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult)
 {
-	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallProbe));
+	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallProbe), Settings.bIgnorePawns);
 	if (!Ctx.World || !Ctx.UpdatedPrimitive)
 	{
 		return false;
@@ -312,9 +384,9 @@ bool UGSTN_WallQueryUtils::FindWall(const FMovingComponentSet& MovingComps, cons
 }
 
 bool UGSTN_WallQueryUtils::FindWallAroundConvexEdge(const FMovingComponentSet& MovingComps, const FVector& WallNormal, const FVector& MoveDelta,
-	const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult)
+	const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult, float WallSupport)
 {
-	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallWrapProbe));
+	const GSTNWallQuery::FQueryContext Ctx(MovingComps, SCENE_QUERY_STAT(GSTN_WallWrapProbe), Settings.bIgnorePawns);
 	if (!Ctx.World || !Ctx.UpdatedPrimitive)
 	{
 		return false;
@@ -344,7 +416,8 @@ bool UGSTN_WallQueryUtils::FindWallAroundConvexEdge(const FMovingComponentSet& M
 	};
 
 	// Leg 1: dive "behind" the old wall plane, past where its surface used to be
-	const FVector DiveEnd = Center - WallNormal * (Radius + Settings.WallGap + Radius);
+	// Past where the old surface was: from the center, the seated distance to the plane (the capsule's extent along the normal) plus a radius
+	const FVector DiveEnd = Center - WallNormal * ((WallSupport >= 0.f ? WallSupport : Radius) + Settings.WallGap + Radius);
 	FHitResult Hit;
 	if (Ctx.World->SweepSingleByChannel(Hit, Center, DiveEnd, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams))
 	{

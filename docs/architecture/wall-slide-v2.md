@@ -209,7 +209,8 @@ radius per tick" (≈ 2000 cm/s at 60 Hz), enforced by clamping, not by substeps
 ```
 FGSTN_WallEdgeSettings   (Category "Wall|Edges")
   float MaxSmoothAngle = 15 deg      slope changes up to this are continuous: no cap
-  float MaxStepHeight  = 10 cm       bumps/ledges up to this are stepped over, never a corner, never a floor
+  float MaxStepHeight  = 10 cm       step up: bumps/ledges up to this are stepped over, never a corner, never a floor
+  float MaxStepDownDepth = 10 cm     step down: a surface receding up to this is continuous wall, never an outside edge (6.13)
   float StepMargin     = 2 cm
   float LookaheadTime  = 0.15 s      LookaheadDistance = max(MinLookahead, |v| * LookaheadTime)
   float MinLookahead   = 20 cm
@@ -309,3 +310,300 @@ bumps (1-5), any visible snap. Decision inputs: lanes b/c/d are the owner's requ
    v2 adesso; il core dopo i test, in un commit separato.
 6. **Niente substep in v2**: un solo sweep per tick, limite implicito "un raggio di capsula per tick" (≈ 2000 cm/s a 60 Hz,
    ben oltre i 400-800 della slide). Accetti il limite al posto del loop di substep? *Default*: sì.
+
+## 6. Owner direction of 2026-10-24 and the resulting design (supersedes §2 where they differ)
+
+Owner, 2026-10-24 (verbatim): "il wallslide dovrebbe mantenere il momentum in entrata, avere supporto alle basi di movimento,
+avere poco movimento di base (tipo mario), ma grande capacità di frenata. Inoltre vorrei che fosse intercambiabile con una modalità
+di climbing con parametri aggiustabili su alcune superfici dedicate che consentono il climbing vero. Hopefully, dovrebbero
+praticamente avere la logica di base in comune, ed essere estendibili tramite proposed move e quant altro. [...] il ragionamento
+degli sviluppatori di warframe: la geometria dei loro tileset è troppo complessa, e quindi non possono introdurre un wall run
+fluido. Il wallslide dell'ultima volta rallenta, si intoppa, e il modo in cui avviene il girarsi causa l'inceppamento su piccoli
+dislivelli o geometria complessa. Vorrei un modo per evitare ciò."
+
+### 6.1 Why the current slide snags (the Warframe problem), and the rule that removes it
+
+1. **The collision shape turns with the wall.** `ComputeTargetUp`/`OrientToWall` tilt and yaw the capsule toward each new normal;
+   a capsule rotated into complex geometry overlaps it, the orientation step needs overlap tests and pushes, and a small ledge or
+   facet makes it jam or pop. **Rule: the collision capsule never rotates on a wall.** Its axis stays gravity-up (a capsule is
+   symmetric about that axis, so facing the wall needs no collision rotation at all); facing is presentation (mesh/actor yaw for
+   animation), written to the sync state as a yaw only. Climbing overhangs, where tilting is unavoidable, is the climb mode's
+   opt-in, never the slide's.
+2. **Motion follows the raw surface.** Every facet normal changes the movement plane and the velocity transport, so a ribbed or
+   tiled wall turns into dozens of tiny corners, each braking or deflecting. **Rule: the character moves on a proxy plane**, not on
+   the raw surface: the proxy normal is the contact sweep's normal filtered (deadzone + rate limit, as today) **and** stabilised by
+   the lookahead (the classification of §2.2 step 5: `Bump` and `Slope` never change the proxy's plane abruptly, only real
+   `Concave`/`Convex` edges do, and then through a rate-limited turn). Small features are absorbed by adhesion (the capsule stays at
+   `WallGap` from the real surface, pulled in unswept, pushed out swept) and by step-over along the wall normal, never by a turn.
+3. **Speed is lost in many places.** Today friction, axis braking, transport and substep slides each take a share. **Rule: one
+   place decides speed** (the control model, §6.2); geometry may only cap speed ahead of real corners (§2.2 step 6), transport is
+   length-preserving, and a blocked sweep slides along the surface without a separate friction term.
+
+### 6.2 Control model (slide): momentum in, little control, strong braking
+
+Velocity on the wall is split into the along-gravity axis `V` and the horizontal-on-wall axis `H` of the proxy plane.
+
+- **Entry**: the falling velocity is projected onto the proxy plane at grab time, keeping its length (`EntrySpeedKeep = 1.0`,
+  tunable, with `MaxEntrySpeed` clamp): you keep the horizontal run and the vertical speed you had. Nothing is zeroed.
+- **Horizontal `H`, Mario style**: momentum decays slowly (`HorizontalDrag`, low); stick input along `H` adds only a small
+  acceleration (`HorizontalControlAccel`, low, and capped at `HorizontalControlMaxSpeed`); stick **against** the current `H`
+  brakes hard (`HorizontalBrakeDecel`, high).
+- **Vertical `V`**: gravity along the wall scaled (`GravityScale`) toward a terminal speed (`TerminalDownSpeed`) with a soft
+  approach; upward entry speed decays under gravity (no instant stop). Stick **down** (toward gravity) is "let go faster"
+  (`DownBoost`, optional); stick **up** or a dedicated brake button brakes hard (`VerticalBrakeDecel`, high) down to
+  `BrakeMinSpeed`. Which input brakes is data (`FGSTN_WallBrakeInput`: stick-against-motion, stick-up, an input tag), so
+  the input layer and the GA can decide.
+- All of it is a pure function `UGSTN_WallControlUtils::StepSlideVelocity(Settings, VelocityOnPlane, InputOnPlane, Brake, Dt)`,
+  testable without a world, and called from `GenerateMove` (it builds the `FProposedMove`), not from the tick.
+
+### 6.3 One core, two modes (slide and climb), extended through the proposed move
+
+- `UGSTN_WallTraverseModeBase` (new, abstract): the lean pipeline of §2.2 (base riding, exit checks, lookahead/classify, cap,
+  single move sweep, step-over, contact+adhesion in one sweep, proxy plane, presentation yaw, capture) — no control model of its own.
+- `GenerateMove` builds the `FProposedMove` from a virtual `ComputeWallVelocity(StartState, Plane, Input, Dt)`; Mover's layered
+  moves and queued moves (abilities, knockback, launches) combine with it as for any mode, and the tick moves by the **final**
+  proposed velocity. Extension = override `ComputeWallVelocity` (or the edge hooks of §2.6), or add a layered move; never the tick.
+- `UGSTN_WallSlideV2MovementMode`: `ComputeWallVelocity` = §6.2. `UGSTN_WallClimbV2MovementMode`: full 2D stick control on the
+  proxy plane (`ClimbSpeed`, `ClimbAccel`, `ClimbBrake`, optional stamina hook as a tag query, no gravity slide while holding),
+  allowed only on surfaces whose `Surface.Behaviour` has `WallClimb` (T5 filter on the mode and on its entry transition), with
+  `bAllowCapsuleTilt` (off by default) for overhangs. Both share every tunable struct except their control settings.
+- **Interchangeable**: the entry transition resolves the hit's surface (`UGSTN_SurfaceUtils::Resolve`) and picks the climb mode
+  when the surface offers `WallClimb` and the climb mode is registered, else the slide (a priority list of `{TagQuery, ModeName}`
+  on the transition, data). While on a wall, crossing from a climb-only surface onto a slide-only one switches mode in place with
+  the velocity kept (same core, same sync state).
+
+### 6.4 Plan update
+
+W0-W1 unchanged (instrumentation, pure edge math) plus `UGSTN_WallControlUtils` and its tests in W1. W2 builds the shared base and
+the slide on it; W3-W4 unchanged (corners, bumps); **W4b** the climb mode and the surface-driven transition; W5-W6 unchanged. The
+current modes stay as they are for the A/B test.
+
+### 6.5 W2 status (code only, 2026-10-24)
+
+Built: `UGSTN_WallTraverseModeBase` and `UGSTN_WallSlideV2MovementMode` (derived from `UGSTN_ControlledWallMovementMode`, so the legacy modes are untouched),
+`UGSTN_WallMovementUtils::AdhereAndSense`, `Tools/GAS/setup_wall_slide_modes.py` (written, NOT run: it edits `SandboxCharacter_Mover`), `WALL_MODE` in the harness.
+The edge hooks of 2.6 (`ProbeAhead`, `ClassifyAhead`, `ComputeEdgeSpeedCap`, `TryStepOverBump`) are declared and wired into the tick with no-op defaults, and
+`Edges` (`FGSTN_WallEdgeSettings`) is stored but inert until W3/W4. Facing is written as the capsule's yaw about gravity-up (the default sync state's orientation),
+no new sync-state field. Not yet done: pawns excluded from the contact sweep (W5), `IsMovementLocked` (H7), `IsHitOnValidWall` on the ahead traces (W3).
+Needed outside this checkpoint: `UGSTN_GA_WallSlide::WallModeNames` (`GAS/GSTN_GA_WallSlide.cpp:14`) must also list `WallSlidingV2`, otherwise the ability ends at once
+on the v2 mode; it was left unchanged (GAS territory).
+
+
+### 6.6 W3 and W4 status (code, 2026-10-24)
+
+Built in `UGSTN_WallTraverseModeBase` and `UGSTN_WallEdgeUtils` (tests `GSTN.Wall.V2.*` in `GSTN_WallV2EdgeTests.cpp`, pure ones in `GSTN_WallEdgeTests.cpp`).
+Not yet run in the editor (the owner's editor was open): compile-checked on the game target only.
+
+- **Look-ahead** (`ProbeAhead`): the capsule is taken as seated on the wall plane at `WallGap`, the plane is read at `LookaheadDistance` past the capsule's
+  *leading edge* (`CapsuleSupportAlong`, so a slide down looks from the feet, not from the centre). Trace 1 (always, the only one on a flat wall): lifted
+  `MaxStepHeight + StepMargin` off the plane at the end point, down toward the wall, `RecessDepth` deep (the v2 slide sets it to `WallProbeDistance`).
+  Trace 2 only if trace 1 starts inside geometry (something taller than the step: an inside corner): a ray along the movement from the lifted leading edge
+  gives the face, angle and distance. Trace 3 only if the wall ends: a ray back from just behind the plane gives the far face of an outside edge (no face: a
+  90 degree edge at half the look). Every accepted hit goes through `IsHitOnValidWall`; a refused surface counts as "the wall ends"; pawns are ignored by
+  response (`bIgnorePawns`). This replaces the single-trace description of 2.2 step 4, which could not see an inside corner (its end point is inside the corner).
+- **Classification refinements** (`ClassifyAhead`): a face within the smooth angle is a `Slope` only if its offset is what such a slope makes over the sampled
+  distance, otherwise it is a step (`Bump`): a ledge face is parallel to the wall. Past step height the sign of the offset decides: rising = `Concave`,
+  receding = `Convex`.
+- **Cap**: `ComputeEdgeSpeedCap` = corner speed (`GetEdgeReferenceSpeed()`, the slide's `TerminalDownSpeed`, times the angle scale) raised along the approach
+  curve by the distance to the edge; it clamps the proposed velocity in `TraverseStep`, transport stays length preserving. `Bump`, `Slope`, `Blocked`: no cap.
+- **Proxy plane**: the contact normal turns it only if the look-ahead said `Concave`/`Convex` this tick, the move met an inside corner, or the contact normal is
+  within `MaxSmoothAngle` of the plane (curves, facets); the wrap around a convex edge (unchanged, two sweeps only when the wall is lost) always may.
+- **Blocked**: never capped, never a reason to turn, never stepped; the move sweep then slides along it or, for a floor, leaves to `FloorModeName`.
+- **Step-over** (`TryStepOverBump`, tried on every blocking hit): a line trace at the hit (`ProbeBumpAt`) sizes the feature; if it is a `Bump` (up to
+  `MaxStepHeight`) and the look-ahead did not name an inside corner, the capsule is lifted along the wall normal by `StepLiftFor` (height above the seat plus
+  `StepMargin`, swept), the rest of the move is redone (swept), adhesion pulls back in. Anything that does not clear is undone. A ledge below up to the step
+  height is therefore stepped (never `FloorModeName`); taller ones fall through to the floor rule. A recess is absorbed by the rate-limited unswept pull-in; a
+  recess deeper than `MaxStepHeight` that the capsule has dived into is exited as a corner, not as a bump.
+- Known limits for PIE: a curved wall (lane g) shows a growing angle at the end of the look; since 6.12 a few extra samples tell an arc (steps of at most `MaxSmoothAngle`) from a crease and an arc is a `Slope`; a recess
+  deeper than `RecessDepth` is read as an outside edge; features narrower than the look slip between two ticks and are met by the move sweep (then step-over).
+
+### 6.7 Stick into the wall (owner PIE report, 2026-10-24)
+
+Facing the wall, "stick forward" was mapped by the camera-relative mapping onto the plane's up axis and read as the vertical brake (stick against the fall),
+which held the slide at `BrakeMinSpeed`. In v2 `MapMoveIntentToWall` drops the vertical part of a stick that mostly pushes into the wall (more than half of its
+size, `UGSTN_WallControlUtils::IntoWallAmount` / `SuppressVerticalIntoWall`); the into-wall component is otherwise ignored, so pushing toward the wall does nothing special.
+Option kept, off by default: `HoldTowardWallTerminalScale` (1 = off) scales the terminal down speed with the push. `BrakeMinSpeed` is 80 cm/s and a held brake brings any
+slower or upward speed up to it, so the slide cannot freeze. Tests: `GSTN.Wall.Control.{PushIntoWallDoesNotChangeSlide, BrakeNeverBelowMinSpeed}`, `GSTN.Wall.V2.PushIntoWallDoesNotChangeSlide`.
+
+### 6.8 Inclined walls and overhangs (owner request, 2026-10-24)
+
+"Climbing is the other way round: the wall slide must also work on more or less inclined walls." Angles here are the angle between the surface normal and gravity-up
+(`Beta`): 90 is vertical, 60-85 a wall leaning back (normal tilts up, the upright capsule touches with its lower hemisphere), 95-120 an overhang (normal tilts down, upper hemisphere).
+
+- **Accepted range: 45 to 120 degrees**, for the slide v2 mode (`MinSurfaceAngle` / `MaxSurfaceAngle`) and, now, for the entry transition (its default minimum was 60, which
+  excluded 45-60 and put the usual 60 degree slant on a float knife edge). Below 45 is a floor (Mover's walkable limit), the floor rule (`IsFloorHit`, gravity-relative) is unchanged and does not
+  fire on 50-70 degree slants. A saved transition asset that overrides `MinSurfaceAngle` keeps its value.
+- **Entry confirmation trace**: it ran one radius horizontally from the capsule center, which never reaches a surface leaning back 60 degrees (the center is `support` away along the normal, 61 cm for the
+  default capsule, 70 cm horizontally). It now runs along the face normal for the capsule's extent along it (`+ ProbeDistance + 5`); identical on a vertical wall.
+- **Down the wall** is gravity projected on the proxy plane (`UGSTN_WallControlUtils::AdaptToSlope`): the gravity along the plane is `|g| sin(Beta)`, and the terminal down speed and `DownBoost` follow it
+  (`Control.SlopeTerminalScaling`, 1 = fully, 0 = off). An 60 degree wall slides at 87% of the vertical speed over the whole run, an 80 degree one at 98%. Overhangs use the same law
+  (`sin(110) = 0.94`); the velocity is always on the plane, so gravity pulling the character off an overhang is held only by the adhesion (`MaxAdhesionSpeed`), as on any wall.
+- **Inside corner fit test** (`CanFitOnWall`, `bKeepOrientation`): the legacy test lays a rotated capsule on the new wall; the v2 capsule stays upright, so the pose is the current orientation seated
+  by its own extent along the new normal. **Wrap around an outside edge** (`FindWallAroundConvexEdge`, `WallSupport`) dives from that extent instead of the radius. Both default to the legacy behaviour.
+- Already gravity-relative and unchanged: adhesion (a capsule sweep along the normal, so the gap is the hemisphere's), the look-ahead (`CapsuleSupportAlong`), corner and bump classification (angles
+  between normals, heights along the normal), the facing yaw.
+- Known limit: near a floor the adhesion sweep (along -N, which has a downward part on a slant) can hit the floor before the wall; that reads as "no wall" for the last ~1-2 ticks before the floor rule
+  takes over (grace time 0.15 s). Tests `GSTN.Wall.V2.{SlantedWallSlidesDown, OverhangKeepsContact, SlantSlowerThanVertical, SlantNotTreatedAsFloor, EntryAcceptsInclinedWalls, CornerOnSlantedWallCaps,
+  BumpOnSlantedWallSteppedOver, AdhesionGapOnTiltedContact, WrapFindsFaceAroundEdgeOnSlant}` (`GSTN_WallV2SlantTests.cpp`); written with the editor open, so not yet run.
+
+### 6.9 W4b status: the climb mode and the surface-driven choice (2026-10-25)
+
+Built: `UGSTN_WallClimbV2MovementMode` (`ComputeWallVelocity` = `StepClimbVelocity`, `FGSTN_WallClimbControlSettings` incl. entry keep/clamp, filter default `Surface.Behaviour.WallClimb`
+with unmarked surfaces refused, `bAllowCapsuleTilt` declared and inert: the capsule never rotates in v2), the priority list `FGSTN_WallSurfaceModeList` (`GSTN_WallSurfaceModeTypes.h`:
+`{Behaviours, ModeName, BlockedWhen}` entries, default WallClimb -> `WallClimbingV2`, WallSlide -> `WallSlidingV2`, unmarked surfaces -> the slide, 6 ticks of hysteresis), its pure
+functions (`UGSTN_WallSurfaceModeUtils`: `PickMode`, `StepVote`, `ChooseModeForHit`), and two entry transitions that choose the mode by the hit's surface:
+`UGSTN_WallSurfaceModeTransition` (plain) and `UGSTN_AbilityWallSurfaceModeTransition` (the same behind the ability check; the sandbox character's Falling transition is the ability one).
+
+- **Unmarked surfaces are slide walls.** The plugin's catch-all default offers WallClimb too, so reading its behaviours would turn every unauthored wall into a climb wall; `PickMode` treats
+  `Source == Default` apart (`UnknownSurfaceModeName`). Climbing is authored with a `UGSTN_SurfaceBehaviourComponent` offering `WallClimb`.
+- **In-place switch** (`UGSTN_WallTraverseModeBase::UpdateSurfaceVote`, after the world part of the tick): the contact of the adhesion sweep is resolved, `PickMode` names the mode (registered and
+  not blocked), and when it is not this mode for `HysteresisTicks` consecutive ticks the mode `LeaveTo`s it with no time given back. The counter is `FGSTN_WallMovementSyncState::SurfaceSwitchTicks`
+  (rolled back with the state; sent only when non-zero; not compared by `ShouldReconcile`, the mode name is). `Activate` recognises the hand-over (`IsInPlaceSwitchFrom`) and leaves the sync state,
+  velocity, wall and base untouched. While the list is enabled the probes accept every surface any available listed mode takes (`FGSTN_WallSurfaceFilter::AlternativeBehaviours`, filled by the
+  overridden `GetWallCheckSettings`); the mode's own `SurfaceFilter` applies when the list is disabled or only one of its modes is registered.
+- **Stamina hook** is data: `BlockedWhen` on a list entry is a tag query over the Mover tags of the tick's start state. A blocked climb is skipped; a surface whose only matches are blocked sends a
+  character on a wall to `BlockedModeName` (Falling) and refuses the entry. No GAS in the mode: an ability grants the tag.
+- Changes outside the v2 files, all additive and default-off for the legacy modes: `UGSTN_WallMovementModeBase::GetWallCheckSettings` virtual; `FGSTN_WallSurfaceFilter::AlternativeBehaviours` (empty = old
+  behaviour); `FGSTN_WallTickState` contact and vote fields and the sync state's `SurfaceSwitchTicks` (always 0 for legacy modes; one more flag bit on the wire); `UGSTN_WallEntryTransition::ResolveEntryMode`
+  (returns `TargetModeName`) and the candidate's hit; `UGSTN_GA_WallSlide::WallModeNames` lists `WallClimbingV2`.
+- Setup: `Tools/GAS/setup_wall_slide_modes.py --use v2climb` registers the climb mode and swaps the Falling entry transition for its surface-driven twin (`v2` / `legacy` swap it back). Tests
+  `GSTN.Wall.V2Climb.*` (`GSTN_WallClimbV2Tests.cpp`) and the sync state round trip. Not covered headless: `Activate`'s in-place path and the transitions' `Evaluate` (PIE).
+
+### 6.10 W5 status: pawns, the movement lock and moving walls (2026-10-25)
+
+Code, all additive (the legacy modes' behaviour is unchanged by construction: the new switches default to off for them).
+
+- **Pawns are never walls in v2** (finding 15). `FGSTN_WallCheckSettings::bIgnorePawns` (default false) is filled from `FGSTN_WallEdgeSettings::bIgnorePawns` (default true) by the traverse base's `GetWallCheckSettings`.
+  It does three things: the contact sweep (`AdhereAndSense`), the corner / wrap queries (`FQueryContext`) and the look-ahead / step probes (`FProbeContext`, already) ignore the Pawn channel in their response params, so a character between the capsule
+  and the real wall does not hide it; and `UGSTN_WallQueryUtils::IsHitOnValidWall`, where every acceptance ends, refuses a hit on a Pawn-type component, so the move sweep's blocking hit on a neighbour is never read as an inside corner.
+  The pawn still blocks the move itself (ordinary collision) and a landing on a pawn's head is still a floor. Not covered: the entry transition (core, owner's Q5: separate commit after the tests) and `CanFitOnWall`'s overlap test, which still counts a pawn as an obstacle.
+- **`IsMovementLocked`** is a protected virtual of `UGSTN_WallTraverseModeBase`, because the base on this branch does not have the H7 one (`48c2a99` on `feature/gas-npp-5.8`, not merged here). Same signature and the same default as H7
+  (`Combat.Mover.Frozen` in the start sync state, looked up by name): when the branches meet, this declaration and the base's are one override point and the traverse one can be deleted. Locked tick: `CheckForWallExit` skipped (no wall jump, no detach),
+  no floor exit, no no-wall exit and `TimeWithoutWall` standing still, no surface-mode vote or switch; base riding, the move, adhesion and the plane filter still run (the wall may move under a frozen character). The flag is the tick-local `FGSTN_WallTickState::bMovementLocked`.
+- **Moving walls** use the legacy base path unchanged (`ApplyMovementBase` before the exits, `UpdateMovementBase` after, the ridden wall in the rollback blackboard); the v2 contact sweep names the base through `LastProbe.Component`. The exit adds
+  `GetPhysicsLinearVelocityAtPoint` of the base (`bAddBaseVelocityOnExit`).
+- Tests `GSTN.Wall.V2Net.{PawnsNeverWalls, LockedSkipsExitsKeepsAdhesion, RidesMovingWall, ExitVelocityIncludesBase, SyncStateRoundTripWithSurfaceSwitch}` (`GSTN_WallV2NetTests.cpp`); every one has a control that must show the opposite behaviour (legacy switch,
+  unlocked, riding off). The base tests drive a real rollback blackboard frame by frame. The kinematic wall is teleported (physics) between ticks, as the physics step would have left it; the exit-velocity test uses a gravity-less simulated body so the headless world reports a velocity at once.
+  A kinematic TS-A collider moved by actor location gets its velocity from the physics step (Chaos kinematic target): the PIE lane h is what proves that path.
+- **PIE harness, `WALL_MODE = 'WallSlidingV2'` (listen host + 2 clients, 60/15 ms, editor started headless by a driver, 2026-10-25).** Client 1 grabs the harness wall three times per run (ground jump, jump at the wall, wall jump), slides to the floor each time (about 1.3 s per grab);
+  host, client 1 and client 2 show the same mode timeline within the latency. During the first grab a server-only dash and buff are applied to the pawn on the wall, during the second `force_reconcile_on_mode(1, 'WallSlidingV2')` forces a reconcile in the mode (it reconciled: rollbacks 2 -> 4).
+  Result, at 0 % and at 2 % loss alike: client 1 had exactly the reconciles those three events cause (the server dash: one ASC plus one Mover mismatch on the same frame; the buff: one ASC mismatch; the forced one) and none of its own; client 2 (idle) and the host 0; `report()` CMP 6/6 both times.
+  Not run: a moving wall (the harness map has no kinematic collider) and two pawns on the wall together; the headless tests cover both. How it was driven: `UnrealEditor.exe <uproject> /Game/Levels/DefaultLevel_Harness -ExecCmds="py <driver>.py" -unattended -nullrhi -abslog=<log>` with `PlayNumberOfClients=3`
+  (listen, one process) in `Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini`, the driver being a state machine on `register_slate_post_tick_callback` that calls `setup_editor(True)`, `LevelEditorSubsystem.editor_request_begin_play()`, `np.PrintReconciles 1`, the scenarios and `QUIT_EDITOR`.
+  `-ExecutePythonScript` is no use for this: with `-unattended` the editor quits as soon as the script returns, before the first tick callback. Editor not touched afterwards, the ini restored.
+
+### 6.11 W6 status: A/B tooling (2026-10-25)
+
+Built, all additive (the legacy modes' behaviour is unchanged: the metrics hook at the end of the legacy tick only feeds the CSV).
+
+- **Metrics CSV.** `gstn.Wall.Metrics 1` starts a run and `0` closes it; one file per run and mode, `Saved/Metrics/wallslide-<mode>-<yyyymmdd-HHMMSS>.csv` (written when the run is closed, at 16 KB of buffer and at engine exit).
+  Columns: `time,mode,speed,hspeed,vspeed,dnormal_deg,queries,edge_ahead,events,x,y,z,source` (speed in cm/s, `vspeed` along the up axis, `dnormal_deg` = filtered normal change this tick, `queries` as `gstn.Wall.CountQueries`,
+  `edge_ahead` = kind of the look-ahead of the tick (v2 only, `none` for the legacy slide), `events` = `grab|exit|wall-lost|mode-switch`, `source` = `<pawn>@<client|listen|server|standalone>` because a PIE host and its clients share one sink).
+  `grab` is derived by the sink (first tick of a source in a mode, a gap over 0.1 s, or a mode change; a re-simulated tick is never a grab); `wall-lost` is the first tick without contact; `mode-switch` is the surface vote.
+  The pure formatter (`GSTNWallDebug::FormatMetricsRow`, `IsGrabTick`) has `GSTN.Wall.Debug.MetricsCsv`. The legacy tick now calls `FinishTick` too (debug builds only), so both modes produce rows; it is not query-instrumented (queries read 0, the summary prints `-`).
+  New console command `gstn.Wall.Teleport X Y Z [Yaw] [PlayerId]` (Mover teleport + stop) and an optional PlayerId on `gstn.Wall.Launch`, so a harness moves one player's pawn (the command reaches every world: both copies of the pawn get the effect).
+- **Moving wall actor** `AGSTN_WallTestMover` (`Public/WallMovement/Debug/`, kept next to the wall code because `GASNPPTest/` holds the harness's ability content, not map content): a Movable cube that ping-pongs `TranslationSpeed` over +-`TravelDistance` along `TravelAxis` and turns +-`YawRange`
+  at `YawRate`, the pose a pure function of `UWorld::GetTimeSeconds` and of the BeginPlay pose (triangle waves; `GSTN.Wall.TestMover.Pose`). A constant 20 deg/s yaw would turn the wall away from the character for good, hence the back and forth.
+- **Map** `Content/Levels/L_WallSlideAB.umap`, built by `Tools/GAS/build_wall_slide_ab_map.py` (idempotent: the lane table is hashed into a tag on a `Spec` actor, a run that finds the same hash does nothing; headless recipe in the script header). Lanes along +Y, 12 m apart, wall face on the plane x = 0:
+  a flat, b convex 30/45/60/90/120, c concave 30/45/60/90/120, d bump 2/5/10/15/25 cm (a rib crossed sideways and a 30 cm ledge landed on, second marker `_down` over the ledge), e recess 5/15 cm, f facets 5/10/15/25 deg,
+  g curves r100/r300 outside and inside (chains of 10 deg chords), h moving wall 150/300 cm/s with 20 deg/s yaw, i slant 60 and overhang 100/110, j a climb-only wall and a wall that offers neither slide nor climb (`UGSTN_SurfaceBehaviourComponent`).
+  Plain engine cubes as thin plates behind each face (only the face is in play), default material, one sun and sky light. 38 `TargetPoint` markers tagged `WallABLane`, `lane:<id>`, `group:<x>`, `launch:<x,y,z>`, `stick:<r,f>` at 4 m height, 50 cm from the wall; the world settings carry `GM_GASNPPTest`.
+- **Driver** `Tools/GASNPPTest/wall_ab.py`: for every lane and for `WallSliding` / `WallSlidingV2` it sets the entry mode of the pawn's Falling transitions in memory (assets untouched; surface-driven transitions through `UnknownSurfaceModeName`), teleports the client's pawn to the marker,
+  launches it (`gstn.Wall.Launch`), sets the stick (`gstn.Wall.DebugInput`: into the wall plus a side part, because the grab needs intent into the wall), records for `--seconds`, reads the CSV and the reconcile lines, and writes `Saved/Metrics/wallslide-ab-summary.md`. The host's own pawn is parked.
+
+**How the owner runs the A/B.** Editor closed: `python Tools/GASNPPTest/wall_ab.py` (all lanes, both modes, about 10 minutes; `--lanes "^b_"` for a regex on lane ids, `--modes WallSlidingV2`, `--seconds`, `--lag/--var/--loss`). It starts a headless editor on the map (listen host + 1 client, one process, ini patched for the run and restored)
+and prints the table. For the feel (the subjective columns of section 4) open `L_WallSlideAB` in the editor, play it with the sandbox character, and use `gstn.Wall.Metrics 1`, `gstn.Wall.CountQueries 1`, `gstn.Wall.QueryStats` by hand; the CSV lands in `Saved/Metrics`. Rebuild the map after a change of the lane table with
+`UnrealEditor-Cmd <uproject> -run=pythonscript -script=Tools/GAS/build_wall_slide_ab_map.py -unattended -nullrhi -nosplash -nosound -NoP4`.
+
+**First full run (2026-10-25, listen host + 1 client, 60/15 ms, 0 % loss, 3.5 s per run, all 38 lanes, both modes; table in `Saved/Metrics/wallslide-ab-summary.md`, not versioned).** What it says, and what it does not:
+
+- Grabs on every lane except the two surface lanes. Query counter of v2: 3.1 to 4.0 queries per tick on average (max 4 to 11); the legacy slide is not instrumented.
+- Corner speed ("before / at" in cm/s, v2 vs legacy): convex 30 deg 501 / 238 vs 434 / 472; convex 90 deg 501 / 154 vs 434 / 387; concave 90 deg 501 / 112 vs 435 / 387; facets 5 to 15 deg and bumps 2 to 15 cm: 501 / 350 (no cap beyond the flat-wall value of 350) vs 434 / 472.
+  The v2 cap works at corners and leaves small slope changes and bumps alone; the legacy slide keeps its speed through every corner.
+- Reconciles on the client are 3 to 5 in the first 0.6 s of every run, 0 afterwards (the teleport and the launch go to both copies of the pawn: a harness artefact, equal for both modes); the moving-wall lanes keep reconciling while riding (legacy 37 to 50 after 0.6 s, v2 4 to 16): the wall pose is a function of each machine's own `GetTimeSeconds`, which differ by the connection latency,
+  so a ridden wall is a prediction error source in this harness. A mover for production levels should be driven by a replicated pose.
+- Not answered by this run: the "after" and "cross" columns are empty for v2 because at 4 m height and 3 m to the feature the capped character reaches the floor first (lower `FEATURE_DY` or raise the start in the builder to see past the edge); the climb-only and no-slide lanes show no grab (see below).
+- Open: `j_climb_only` (the surface-driven entry should hand a WallClimb surface to `WallClimbingV2`) and `j_no_slide` did not grab at all in the harness, so the climb entry is unconfirmed here (the unit tests cover the choice, PIE by hand is needed); the v2 look-ahead reports `slope` / `bump` on the first ticks of the flat lane (the wall start is part of what it sees).
+
+### 6.12 Findings of the first A/B run, and what was done (2026-10-25)
+
+The first run (6.11) listed five problems. What each one was:
+
+1. **"v2 slows from 501 to 350 cm/s on lanes with no cap".** Not a cap. The trajectories of the bump, recess, facet and curve lanes were bit identical to the flat lane up to the feature; the 350 was the floor-exit tick (the character, started at 4 m, reached the floor right at the feature, 3 m along the lane, and the exit drops the vertical speed), which the "at" window picked up as its minimum. The harness now leaves the leaving tick out of the windows, and the lanes start at 10 m (`START_HEIGHT` 1000, walls 12 m) so the "after" and "cross" columns fill. Headless lane tests (`GSTN.Wall.V2.Lane.*`, `GSTN_WallV2EdgeTests.cpp`) slide a capsule diagonally across each feature with a constant proposed speed (350 along and 450 down, 500 / 100, 450 / 540; four gravity frames) and demand that the tick takes nothing away. They found three real faults in the look-ahead, all fixed in `UGSTN_WallEdgeUtils::ProbeAhead`:
+   - **A curve was read as a corner.** A r300 wall of 10 degree chords showed 20-30 degrees at the end of the look and capped the slide to the corner speed (a 5 to 20 % dip, more with the wall turning under a fixed stick). One angle cannot tell a crease from an arc; the candidate corner is now sampled from the capsule to the end of the look (five steps: down traces on the convex side, lifted rays on the concave side) and only a single step of more than `MaxSmoothAngle` between two samples is a corner. A chain of small steps is a `Slope` (no cap; the plane follows it through the gentle-normal rule). Only for turns up to 3 x `MaxSmoothAngle` within the look (a sharper turn is a rounded corner and keeps the cap), at the cost of up to five extra traces while such a corner is in the look.
+   - **A receding facet was read as the end of the wall.** The down trace reached `RecessDepth` below the plane; a 15 degree facet is 30 cm behind it 110 cm along, so it missed and the far-face ray missed too ("a 90 degree outside edge", capped). The trace now also reaches what a smooth slope that began at the capsule has receded by. A face exactly at `MaxSmoothAngle` no longer flips to a corner on float noise (0.25 degree allowance).
+   - **The first ticks after a grab read the gap error as a feature** (finding 2: `slope` / `bump` on the flat lane). The capsule is a few cm off its seat (entry sweep reach, rate limited pull-in) and the plane was assumed seated at `WallGap`. The last contact point (ridden with the base) now gives the plane when the capsule is more than 1.5 cm off its seat; a seated capsule keeps the seat plane.
+   - **By design, not changed:** a recess deeper than `MaxStepHeight` (lane e, 15 cm) that the capsule has dived into is left over a face taller than a step, which is an inside corner (6.6); the test `RecessDeeperThanAStepIsACornerOnTheWayOut` documents it (never below the corner speed, wall kept). In the second run it reads 560 / 548 cm/s, i.e. nearly nothing. If the owner wants a deeper recess bridged, that is a decision about the adhesion (a limit on how far the capsule dives below its seat), not about classification.
+2. **Climb-only wall never grabbed.** The cause was data: `setup_wall_slide_modes.py --use v2climb` copied the replaced transition's `SurfaceFilter` (RequiredBehaviours = WallSlide) into the surface-driven twin, which applied it in its sweep before the mode list was asked ("ENTRY rejected: surface filter" every tick). Not the harness stick, the surface component, the mode transition or the ability. The surface-driven transitions now ignore `SurfaceFilter` (`GetEntrySurfaceFilter()`, the list is the filter), so the shared Blueprint needed no edit; the script no longer copies the filter. Result: `j_climb_only` is grabbed by `WallClimbingV2` and climbs to the top of the wall; `j_no_slide` is refused for the list's own reason ("no registered, unblocked wall mode takes this surface", `--log 2`).
+3. **Moving walls kept reconciling.** `AGSTN_WallTestMover` now poses from the simulation time of each Mover tick (`OnPreSimulationTick`, `FMoverTimeStep::BaseSimTimeMs`, server timespace), which is what a client predicting 25-48 frames ahead and a re-simulation both need; the server's clock alone (`GetServerWorldTimeSeconds`) would not do, and is only the fallback when no simulation ticks. The poses of a given sim time are identical on host and client (checked from the logs). That was not enough: with the walls frozen the lanes still reconciled 35-60 times. The grab of the first run came ~0.1 s after the harness's teleport and launch, inside the ~0.6 s in which those two commands, applied to the server's and to the client's copy of the pawn at frames 25 apart, make their own correction; the ridden-wall record (a rollback blackboard entry) is rewritten by that correction and the ride starts from a wrong record (server and client held different base records from the grab on, a constant ~20 cm offset that no later correction removes). The moving lanes now start 3 m from the wall, so the grab comes after ~1 s. Reconciles after the run's first 0.6 s: 1 per run on both moving lanes and both modes (was v2 4-16, legacy 37-50). ~~Open: a grab on a moving wall inside a correction window leaves a base record the next corrections do not repair (a real prediction weakness of the base riding, now only reachable by a grab during a correction).~~ Fixed for the v2 modes in 6.14 (the cause was any correction while riding, not the grab).
+4. **Builder.** `START_HEIGHT` 1000, `WALL_HEIGHT` 1200, slant plates long enough for the new start, concave chains and curves built from 150 cm plates (behind a thin plate that curves toward the character the look's lifted point is in the air and reads "the wall ends"), moving walls start 3 m out. The map is regenerated by `build_wall_slide_ab_map.py` (idempotent: a second run found it up to date).
+
+Harness: the end-of-run summary leaves the leaving tick out of the speed windows, shows which mode ran (`WallSlidingV2 (ran WallClimbingV2)`), `--log N` sets `gstn.Wall.Log` for the run, `--freeze-movers` stops the moving walls (diagnostic), and after the first 0.6 s a diagonal stick becomes a pure sideways one: the grab needs intent into the wall, but a wall that bends away turns "into the wall" into "up" (6.7) and the vertical brake held the character after every corner.
+
+### 6.13 Step up and step down, query cost (owner, 2026-10-25)
+
+- **Separate step limits.** `FGSTN_WallEdgeSettings` has a step up (`MaxStepHeight`, shown as "Max Step Up Height") and a step down (`MaxStepDownDepth`),
+  10 cm each by default, like the walking mode's step height. `ClassifyAhead` uses the step up for a feature that stands out of the plane (negative offset)
+  and the step down for one that recedes (positive offset). The rise out of a recess the capsule has dived into is a step up: to cross the 15 cm recess of
+  lane e without the corner slowdown, raise the step up to 15 cm or more (test `GSTN.Wall.V2.Lane.RecessWithinTheStepUpIsNotACorner`, both at 20 cm).
+  Defaults equal, so behaviour is unchanged.
+- **Query cost on curves and near corners: accepted for now, revisit if needed.** The arc/crease sampling of 6.12 brings v2 to 5-5.7 queries per tick on
+  average (max 9) on the curve and corner lanes, against the 3.5 target of the flat lane. The owner accepted it for now (2026-10-25); if the wall slide shows
+  up in a profile, the first candidates are sampling the chain every other tick and caching it while the same corner stays in the look.
+
+### 6.14 Corrections while riding a moving wall (6.12 item 3, 2026-10-25)
+
+- **Cause.** The ride (`ApplyMovementBase` -> `UGSTN_WallMovementUtils::TryMoveWithWallBase`) moved the capsule to `BaseNow * LocalPosition`, where `LocalPosition` (the character in the base's frame)
+  was written at the end of the previous tick into `GSTNWallBlackboard::BaseInfo`, a Mover rollback blackboard entry. On a correction Network Prediction restores the authority's sync
+  state (`UMoverComponent::OnSimulationRollback` -> `SetFrameStateFromContext` puts the capsule there) and the blackboard rewinds to the frame before, but the value it rewinds to is **this machine's own prediction** of
+  that frame. The first re-simulated tick then rode the capsule back to the client's recorded place on the wall: the correction was undone and every later state differed from the
+  server's by the same offset. Nothing about the grab: any correction while riding did it; a grab inside the launch correction just made one certain. Evidence (A/B harness, lanes h,
+  start 50 cm from the wall, `--start-gap 50`, grab ~0.1 s after the launch): v2 reconciles 36 (33 after the first 0.6 s) on `h_moving150` and 85 (64) on `h_moving300`; a mismatch
+  printout of `h_moving300`: received `Loc Y=32858.90 Z=848.84`, local `Y=32877.70 Z=851.26` (the ~20 cm along the wall's travel).
+- **Fix.** `UGSTN_WallMovementModeBase::bRideFromSyncedLocation` (advanced, default off: the legacy modes are unchanged; on in `UGSTN_WallTraverseModeBase`, i.e. both v2 modes).
+  With it the ride takes the character's place on the base from the **start sync state's location** (what a correction writes), seen in the base's frame of the previous tick;
+  only the base component and its pose at the end of the previous frame come from the record:
+
+      prev  = Blackboard[BaseInfo]                     // base, its pose at the end of the previous frame
+      start = StartState.MoverDefaultSyncState.Location   // the capsule's component location when there is none
+      local = prev.BaseRotation^-1 * (start - prev.BaseLocation)
+      move capsule by (BaseNow.Location + BaseNow.Rotation * local) - capsule; rotate normal, velocity, capsule by BaseNow.Rotation * prev.BaseRotation^-1
+
+  Rollback-safe because the ride is now a function of synced state (the location) and of the base's own pose history; the pose of a frame is the same on every machine when the
+  base is posed from the simulation time (`AGSTN_WallTestMover`, 6.12). The one record that can still disagree is "was there a base at the frame before": a client that grabbed a
+  frame later than the server skips one frame of riding after the correction (at most one frame of wall motion, 2.5-5 cm on lanes h), which nothing stores, so the next correction
+  repairs it. In steady state the start location is the location `LocalPosition` was recorded from, so the ride is the same as before up to float rounding (the normal-start lanes below are unchanged). Not done: putting the base and its pose in
+  the sync state as Mover's own based movement does (`FMoverDefaultSyncState::MovementBase*`, rebased in `SetFrameStateFromContext`); only needed for a base whose pose differs between
+  machines for the same frame (simulated physics bodies), a decision for when such walls exist.
+- **Test.** `GSTN.Wall.V2Net.CorrectionOnMovingWallConverges`: a "server" rides a translating and turning wall from a start 20 cm away from the "client"'s; at frame 20 the client gets the
+  server's state of frame 19 (blackboard `BeginRollback`, capsule and synced fields restored, wall back to its frame-19 pose) and re-simulates. Ride from the synced location: re-simulated
+  frames and the final base record equal the server's (0.000 cm); legacy ride (the control): 20.22 cm for good, the record keeps the client's own place. Automation 885/885.
+- **Harness, after** (listen host + 1 client, 60/15 ms, 0 % loss; reconciles all / after 0.6 s). Early grab (`--start-gap 50`): v2 `h_moving150` 3 / 0, `h_moving300` 5 / 0 (were 36 / 33
+  and 85 / 64); the legacy slide, untouched, still 124 / 101 on `h_moving150` (1 / 0 on `h_moving300`). Normal start (3 m, the map as built): 1 / 0 on both lanes and both modes, as in 6.12.
+  Standard wall scenarios (`DefaultLevel_Harness`, listen host + 2 clients, `WALL_MODE = 'WallSlidingV2'`, entry transitions pointed at it in memory): jump at the wall, server dash and
+  buff on the wall, `force_reconcile_on_mode` (reconciled), at 0 % and 2 % loss: `report()` CMP 6/6 before and after both; the static wall has no dynamic base, so the change is a no-op there.
+  The 3 m start of the moving lanes is kept (the map is not rebuilt); `wall_ab.py --start-gap N` moves the start of lanes h for a run.
+
+### 6.15 Re-entry rules on moving walls (T2, 2026-10-26)
+
+- **Cause.** A client re-grabbing the same moving wall after a take-off refused the grab (`ENTRY rejected: height cap (486.2 > 126.7)` every tick) while the server accepted it, and the correction then put the client on the wall.
+  The rule "the character went through a reset mode after the wall" reads Mover's `CommonBlackboard::LastModeChangeRecord`, a rollback blackboard entry (`InvalidatedOnRollback`). When the client rolls back to a frame after the server's take-off and before its own,
+  its take-off record is erased and the re-simulation (already in the air) never writes it again: the server saw `Walking -> Falling` after the wall and reset the memory, the client saw the older landing record, kept the memory and applied `HeightCap`.
+  Not the world-height cap the plan assumed (the T3 fighter moves sideways only, so world and wall-relative heights coincide); static walls have the same hazard.
+- **Design.** The re-entry rules are the pure `UGSTN_WallReentryUtils::Judge` (same order and answers as the old `FindEntryWall` code; test `LegacyRulesUnchanged` compares both on 13 824 cases). Two switches, off in `UGSTN_WallEntryTransition`,
+  on in `UGSTN_WallSurfaceModeTransition` and `UGSTN_AbilityWallSurfaceModeTransition` (constructor defaults, no Blueprint edit):
+  - `bInferModeChangeLostToRollback`: a record whose mode differs from the start sync state's mode (the authority's) is stale, so a reset mode entered after `LastWallTimeMs` still resets the memory. Not recovered: two or more lost changes in one rollback window (one reconcile, then consistent).
+  - `bBaseRelativeHeightCap`: on a Movable hit the cap compares the capsule's height above the wall's origin with the same quantity at the exit. The v2 modes (`bRecordWallBaseInMemory`) keep the wall origin's height in the synced memory
+    (`FGSTN_WallMovementSyncState::bLastWallOnMovingBase`, `LastWallBaseHeight`, one more flag bit, a float only when set, compared with the 2 cm tolerance), taken from the probe's component or, on a tick that leaves before probing (a wall jump), from the base ridden at the start of the tick (tick-local `RiddenBase`).
+    A memory without a wall frame on a moving wall falls back to the cooldown only. Static walls keep world heights.
+  - Rejected: cooldown-only on every moving wall (a player could climb a moving wall by wall-jumping and re-grabbing) and storing the base component in the sync state (an object reference on the wire for an identity the "same wall" rule never had; walls are "the same" by facing).
+- **Numbers (2026-10-26, headless harness, 60/15 ms).**
+  - `surface_scenarios.py` (`scenario_surface_wallslide_enemy`, listen host + 1 client, 3 reps per subject, memory kept): before, client reps 1 and 2 failed (`launch_to_grab` 3 unexplained reconciles each, height cap refusal, drift -48 / +62 cm); after, 0 % loss: 6/6, client `launch_to_grab` 1 unexplained per rep (the harness's dual-teleport correction), `on` 0, host 0.
+    2 % loss: same, client `launch_to_grab` 1 per rep, `on` 0 unexplained on wall and stand, host 0 everywhere, drift 0.0, stand base `Surface1` on both. 4 of 18 grabs at 0 % logged `memReset=1 (mode (record lost to a rollback))`: the inference fired where the old rule diverged.
+  - `wall_ab.py --lanes "^h_" --modes WallSlidingV2` (moving walls, listen host + 1 client, 0 % loss; reconciles all / after 0.6 s): normal start (3 m) `h_moving150` 1 / 0, `h_moving300` 1 / 0; `--start-gap 50` (grab inside the launch correction) `h_moving150` 6 / 0, `h_moving300` 1 / 0
+    (6.14: 3 / 0 and 5 / 0; the counts before 0.6 s are the harness's launch correction and vary from run to run, the figure that matters is 0 afterwards).
+  - Standard v2 wall scenarios on `DefaultLevel_Harness` (listen host + 2 clients, `WallSlidingV2` set as entry mode in memory; one warm-up run, then the dash/buff run, the forced-reconcile run and a plain run; the warm-up has the first walk-back teleport's correction: 3 Mover mismatches at 0 %, 4 at 2 %):
+    0 %: dash/buff/cost run 3 ASC mismatches (server events), forced-reconcile run 0 mismatches and 1 forced reconcile (rollbacks 7 -> 9), plain run 0; `report()` CMP 6/6.
+    2 %: dash/buff/cost run 6 (ASC 4, Mover 1, combat 1, all on the server events), forced-reconcile run 0 and 1 forced (10 -> 12), plain run 0; CMP 6/6. No reconcile outside the server events and the forced one.
+  - No code changed in this check, so the automation suite was not re-run (baseline 916). The ini was restored with an identical hash after every harness run.
+- **Harness notes.** `/Game/...` map arguments are mangled by Git Bash (`C:/Program Files/Git/Game/...`): export `MSYS_NO_PATHCONV=1` or launch from PowerShell. The standard-scenario driver must not use the sandbox pawn override (`report()` and `comps()` need the harness pawn) and must point the entry transitions at the mode (`wall_ab.Driver(...).set_entry_mode`).

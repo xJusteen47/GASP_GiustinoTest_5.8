@@ -4,6 +4,8 @@
 #include "GAS/GSTN_AbilityTags.h"
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "MoverComponent.h"
+#include "GameFramework/Actor.h"
+#include "WallMovement/GSTN_WallMovementDebug.h"
 
 UGSTN_AbilityWallEntryTransition::UGSTN_AbilityWallEntryTransition(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -48,6 +50,7 @@ FTransitionEvalResult UGSTN_AbilityWallEntryTransition::Evaluate_Implementation(
 	{
 		if (!FindActivatableWallAbility(AbilitySystem).IsValid())
 		{
+			GSTN_WALL_LOG(2, TEXT("ENTRY(ability) t=%.0f no activatable wall ability"), Params.TimeStep.BaseSimTimeMs);
 			return FTransitionEvalResult::NoTransition;
 		}
 	}
@@ -74,6 +77,7 @@ void UGSTN_AbilityWallEntryTransition::Trigger_Implementation(const FSimulationT
 	if (Spec && !Spec->IsActive())
 	{
 		// Simulated proxies are refused by the ability system: their state comes from the server
-		AbilitySystem->TryActivateAbility(Handle);
+		const bool bActivated = AbilitySystem->TryActivateAbility(Handle);
+		GSTN_WALL_LOG(1, TEXT("ENTRY(ability) t=%.0f activate=%d role=%d"), Params.TimeStep.BaseSimTimeMs, bActivated ? 1 : 0, (int32)AbilitySystem->GetOwner()->GetLocalRole());
 	}
 }

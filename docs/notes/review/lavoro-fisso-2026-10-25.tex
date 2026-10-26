@@ -1,0 +1,439 @@
+% Revisione del lavoro parallelo sul fisso, 25 ottobre 2026.
+% Compilare con: pdflatex lavoro-fisso-2026-10-25.tex (due volte, per l'indice)
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,columns=fullflexible,
+  keywordstyle=\bfseries,commentstyle=\itshape\color{gray},
+  literate={à}{{\`a}}1 {è}{{\`e}}1 {é}{{\'e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{\`u}}1}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+\title{Lavoro parallelo sul fisso\\\large Ragionamento, pseudocodice e strumenti Unreal}
+\author{Ramo \code{claude/project-thread-v1plhd}}
+\date{25 ottobre 2026}
+
+\begin{document}
+\sloppy
+\maketitle
+\tableofcontents
+
+\section{Cosa c'è in questo documento}
+Il lavoro fatto sul fisso mentre il portatile porta avanti M4: lo step up/step down dei muri, l'unione del ramo M4 e i passi
+dell'editor dei combattimenti (M5) che aspettavano i dati di M4. Per ogni parte: perché è fatta così, lo pseudocodice della
+logica principale, le classi e gli strumenti di Unreal usati, i test e cosa resta da controllare a mano nell'editor
+(sezione~\ref{sec:controlli}).
+
+\section{Muri: step up e step down separati}
+\subsection{Ragionamento}
+Il look-ahead del wall slide v2 guarda la parete davanti al personaggio e classifica ciò che trova (\code{EGSTN_WallEdgeKind}):
+\emph{Bump} (continuo, si scavalca), \emph{Slope}, \emph{Concave} (angolo interno), \emph{Convex} (spigolo esterno),
+\emph{Blocked}. Prima c'era un solo limite, \code{MaxStepHeight}, usato sia per ciò che sporge dal muro sia per ciò che rientra.
+Come nella modalità di camminata, ora i limiti sono due: \textbf{step up} (\code{MaxStepHeight}, mostrato come
+``Max Step Up Height'') e \textbf{step down} (\code{MaxStepDownDepth}), entrambi 10\,cm di default, quindi il comportamento
+non cambia finché un designer non li modifica. Il nome della proprietà esistente è rimasto lo stesso, così i valori già
+salvati nei Blueprint si caricano senza redirect.
+
+Nota sulla rientranza da 15\,cm: il personaggio ci entra (l'adesione lo tira verso la parete) e ne esce risalendo di 15\,cm;
+quella risalita è uno \emph{step up}. Per attraversarla senza rallentare va alzato lo step up a 15\,cm o più.
+
+\subsection{Pseudocodice}
+\begin{lstlisting}
+ClassifyAhead(Offset, Angolo, ...):
+  // Offset < 0: la superficie sporge verso il personaggio; > 0: rientra
+  Limite = (Offset <= 0) ? MaxStepHeight : MaxStepDownDepth
+  se |Offset| <= Limite:
+      se l'angolo non è dolce            -> Bump (si scavalca, mai angolo)
+      se |Offset| quasi zero              -> None
+      se l'offset è quello di un pendio   -> Slope, altrimenti Bump
+  altrimenti se angolo dolce             -> Slope
+  altrimenti se angolo oltre il limite   -> Blocked
+  altrimenti                             -> Offset > 0 ? Convex : Concave
+\end{lstlisting}
+
+\subsection{Strumenti Unreal}
+\code{USTRUCT} \code{FGSTN_WallEdgeSettings} con \code{UPROPERTY(EditAnywhere, meta=(DisplayName, ClampMin, ForceUnits="cm"))};
+la funzione pura in \code{UGSTN_WallEdgeUtils} (\code{UBlueprintFunctionLibrary}); test con \code{IMPLEMENT_SIMPLE_AUTOMATION_TEST}.
+
+\subsection{Test}
+\code{GSTN.Wall.Edge.StepUpAndDownAreSeparate} (classificazione con limiti diversi) e
+\code{GSTN.Wall.V2.Lane.RecessWithinTheStepUpIsNotACorner} (la rientranza da 15\,cm, con i limiti a 20\,cm, si attraversa a
+velocità piena). 74 test dei muri verdi. Commit \code{8be7b4d}.
+
+\subsection{Costo delle query}
+Il campionamento che distingue una curva da uno spigolo porta il v2 a 5--5{,}7 query per tick (massimo 9) sulle corsie con
+curve e angoli, contro le 3{,}5 della parete piatta. Accettato per ora; se il wall slide comparirà in un profilo, i primi
+interventi sono campionare la catena un tick sì e uno no e tenerla in cache finché lo stesso angolo resta nel look-ahead
+(\code{wall-slide-v2.md} §6.13).
+
+\section{Unione del ramo M4}
+Il ramo del portatile (\code{feature/gas-npp-5.8}, M4 fino a H13b) è stato unito nel ramo del fisso (\code{5d0b7da}).
+Un solo conflitto, l'elenco dei tag di combattimento in \code{GSTN_CombatTags.cpp}: tenuti i tag di entrambi i lati.
+\code{Plugins/GSTNSurface} è identico sui due rami. 806 test verdi dopo l'unione.
+
+\section{Editor dei combattimenti (M5): i passi che aspettavano M4}
+Quattro passi del piano \code{m5-editor-plan.md}, uno per commit, tutti sul plugin \code{GSTNCombatEditor} tranne E3
+(che vive nel Core di combattimento). Test: da 806 a 846, tutti verdi. Le deviazioni dal piano sono in
+\code{docs/notes/m5-doc-deltas.md}.
+
+\subsection{E3: fasi derivate del colpo (\code{f100773})}
+\paragraph{Ragionamento.} Startup, attivo e recovery di una mossa non si scrivono a mano: si ricavano dalle tracce hitbox della
+timeline, così il dato mostrato non può divergere da ciò che il gioco esegue. \code{FGSTN_TimelinePhases} sta nel Core
+(\code{GSTNCombatCore}, \code{Timeline/GSTN_TimelinePhases.h}) perché è logica pura, utile anche fuori dall'editor; la barra delle
+fasi dell'editor (\code{FGSTN_PhaseBarData}) resta solo un modello di disegno e legge questi numeri senza ricalcolarli.
+Una traccia hitbox senza specifiche conta come attiva (è un guscio creato da un autore: lo segnala il validatore); una traccia
+le cui varianti ignorano tutte e quattro le relazioni non conta.
+\begin{lstlisting}
+finestre = [(max(inizio,0), fine) per ogni traccia Hitbox con fine > inizio e ContaComeAttiva(traccia)]
+ordina per inizio; unisci se prossima.inizio <= ultima.fine
+Attivo = prima.inizio .. ultima.fine ; Startup = prima.inizio ; PrimoColpo (1-based) = prima.inizio + 1
+Recovery = max(FAF - FineAttivo, 0) ; nessuna finestra -> bHasActive = false
+\end{lstlisting}
+\paragraph{Unreal.} \code{USTRUCT} nel Core, \code{FText} per il riassunto (\code{FormatSummary(TickRate)}), array riservato una
+volta sola (nessuna allocazione per mosse senza hitbox). \textbf{Test}: \code{GSTNCombat.Core.TimelinePhases.*} (10).
+\paragraph{Da notare.} A 62{,}5\,Hz 30 frame sono 480\,ms; l'esempio della specifica diceva 484 (calcolato a 62\,Hz).
+
+\subsection{E11: regole di validazione M4, ``Validate all'' e pannello (\code{5a31adc})}
+\paragraph{Ragionamento.} Stesso schema di E10: funzioni pure che riempiono un report, chiamate sia dalla Data Validation di
+Unreal sia dal pannello, così pannello e salvataggio dicono sempre la stessa cosa (\code{UGSTN_CombatValidatorBase::BuildReportForAsset}).
+Dove il Core avvisa già (socket non baked, lunghezza del bake, Armor senza soglia) il suo messaggio viene classificato e non duplicato.
+\begin{lstlisting}
+HitboxKeys: frame della chiave < 0 o >= lunghezza finestra -> errore
+  stesso HitGroup, finestre sovrapposte, stessa Priority, Data diversi, forma diversa -> avviso
+HitData: danno/knockback/crescita/moltiplicatori/stagger/hitstop negativi -> errore
+  FixedKnockback >= 0 insieme a crescita -> avviso; HitType o Cue non registrati -> errore
+  le varianti che sovrascrivono campi sono controllate allo stesso modo
+Varianti: chiave fuori da Combat.Relationship, ShapeScale <= 0 senza ignore -> errore
+HurtState: Armor con soglia <= 0 e non infinita -> errore
+BakedSocketMissing / BakedLength -> errore ; BakedStale -> info
+Hurtbox set: vuoto, nomi doppi, estensioni, tag fuori da Combat.Hurtbox -> errore
+\end{lstlisting}
+\paragraph{Pannello.} \code{GSTNValidateAll} raccoglie gli asset (salta \code{/Engine} e \code{/Temp}) e trova i Blueprint di
+abilità tramite \code{GetDerivedClassNames} e il tag \code{GeneratedClass} dell'Asset Registry, \emph{senza caricarli}.
+Il modello \code{FGSTN_ValidationPanelModel} non ha widget (testabile da solo); \code{SGSTN_ValidationPanel} è un
+\code{SCompoundWidget} con \code{STreeView}. Doppio clic: apre l'asset e porta la timeline sul frame e sulla chiave del problema.
+La scheda Frame Data rivalida 250\,ms dopo l'ultima modifica (\code{FTSTicker}) e le corsie mostrano una linea rossa o gialla.
+Registrazione: scheda nomade nel gruppo ``GSTN Combat'', comando \code{gstn.Combat.ValidateAll}, pagina del Message Log.
+\paragraph{Test.} \code{GSTNCombat.Editor.Validate.*} (14) e le istantanee \code{GSTN.Visual.Validation.Panel}, \code{.LaneMarkers}.
+\paragraph{Rimandato.} ``Bake all'' e la parte hash di \code{BakedStale} (servono il baker di E8); controlli su scheletro e ossa
+(servono la mesh dell'hurtbox set, E9); la fascia ``clank'' della Priority (è di M6).
+
+\subsection{E5b: righe Hitbox e HurtboxModifier nella timeline (\code{281fa38})}
+\paragraph{Ragionamento.} Una riga per traccia con una sotto-corsia per ogni hitbox, invece di una riga per hitbox: la matematica
+di righe, selezione e trascinamento del modello E2/E4 assume righe da 24\,px, e cambiarla avrebbe toccato tutto il modello. Le
+chiavi restano relative all'inizio della traccia (\code{FGSTN_HitboxKey::Frame}), quindi spostare la finestra sposta le chiavi.
+\begin{lstlisting}
+AddKey su un percorso: chiave = UGSTN_HitShapeUtils::EvaluateKeys(chiavi della corsia, frame relativo)
+   // la stessa funzione del runtime: aggiungere una chiave non cambia il percorso
+AddKey senza corsia: corsia della prima chiave selezionata sulla traccia, altrimenti corsia 0
+Duplica / incolla: le copie restano nella corsia d'origine, in ordine di corsia crescente
+Nuova traccia Hitbox: una sfera e una chiave; parte vuota di proposito, quindi nasce come errore
+\end{lstlisting}
+\paragraph{Unreal.} Interfaccia dell'adapter estesa con \code{GetLaneCount}, \code{GetKeyLane}, \code{AppendKeyInLane} (con default),
+colore per stato tramite il nuovo virtuale \code{GetTrackColor}. \textbf{Test}: 8 sul modello e sulla registry, istantanea
+\code{GSTN.Visual.Timeline.HitboxRows}. \textbf{Limiti}: con cinque o più hitbox la riga è affollata (il pannello Details ha
+la lista completa); una chiave trascinata può uscire dalla finestra (lo segnala \code{HitboxKeys}).
+
+\subsection{E12: riga dei dati del colpo e anteprima del knockback (\code{58af658})}
+\paragraph{Ragionamento.} \code{FGSTN_HitDataCustomization} (\code{IPropertyTypeCustomization} per \code{FGSTN_HitData}) raggruppa i
+campi (danno, knockback, hitstun, hitstop, stagger, colpo, impatto, estensioni, anteprima) con un riassunto su una riga e una frase
+che spiega Special Angle e Yaw Source. Le estensioni usano l'editor di array standard, così la customization di un altro plugin
+compare dentro. Il quadrante dell'angolo (\code{SGSTN_AngleDial}) è un solo passo di undo: transazione aperta alla pressione,
+scritture interattive, chiusura al rilascio; Esc ripristina.
+\paragraph{Anteprima.} Non reimplementa la formula: costruisce lo stesso input del passo runtime
+\code{UGSTN_HitStep_ComputeKnockback} e chiama il modello delle regole di default, quindi non può dare numeri diversi dal gioco.
+\begin{lstlisting}
+input = {colpo, su=+Z, peso, percentuale, salute 1, soglia stagger = regole.StaggerThreshold}
+se Sakurai: K = modello(input con direzione nulla).Knockback
+input.Direzione = LaunchDirection(yaw, angolo, angolo speciale, su, avanti=+X, a terra, K, regole.Sakurai)
+risultato = modello.Compute(input)   // knockback, tier, stagger, hitstun, hitstop, angolo effettivo
+\end{lstlisting}
+\paragraph{Unreal.} \code{IPropertyTypeCustomization}, \code{SGameplayTagCombo} filtrato su \code{Combat.HitType} (nuova dipendenza
+dal plugin \code{GameplayTagsEditor}), transazioni dell'editor e \code{IPropertyHandle::SetValue} per il quadrante.
+\textbf{Test}: \code{GSTNCombat.Editor.HitData.*} (4, compreso il caso a mano $K=(400+10\cdot6)\cdot100/50=920$) e l'istantanea
+\code{GSTN.Visual.HitData.Row}. \textbf{Limiti}: la vittima di prova (peso, percentuale) vive nella riga ed è solo di sessione;
+l'anteprima ignora scale delle hurtbox, DI, tumble e yaw diversi dall'orientamento dell'attaccante; usa solo le regole di default.
+
+\subsection{E8: bake dei socket e controllo di freschezza (\code{931dc89})}
+\paragraph{Ragionamento.} Le hitbox in spazio \code{BakedSocket} seguono un socket (la mano, la lama) senza leggere la mesh durante
+la simulazione: le posizioni per frame si calcolano nell'editor e si salvano nella timeline (\code{BakedSockets}). Il baker usa la
+stessa posa dell'anteprima (\code{FGSTN_PreviewPose}), quindi ciò che si vede è ciò che si salva; ogni frame si valuta da solo
+(tempo del montage impostato, mai fatto avanzare), quindi due bake sono identici bit per bit. Un bake rifiutato (mesh mancante,
+socket assente, montage non caricabile) non scrive nulla e tiene il precedente. Il registro del bake (\code{FGSTN_BakeInfo}) è
+solo editor (\code{WITH_EDITORONLY_DATA}), non arriva nel gioco.
+\begin{lstlisting}
+usi = hitbox con Space == BakedSocket e un socket ; socket = distinti, in ordine
+per f in 0..TotalFrames-1:
+    tempo montage = InizioSezione + f / TickRate * PlayRate   // inizio del frame f, limitato alla durata
+    Posa.Valuta(tempo) ; per ogni socket: T = socket in spazio componente * MeshToRoot ; scala 1 ; aggiungi
+Info = {hash degli input, tick rate, mesh, data}
+hash = CRC32 di: frame, tick rate, play rate, sezione, montage e suoi segmenti (GUID dei dati animazione),
+       mesh + GUID dello scheletro, socket ordinati con osso e trasformazione
+stato: nessun uso -> NonServe ; frame mancanti -> MaiBaked ; nessun registro -> BakedAltrove (avviso)
+       frame != TotalFrames, tick rate, mesh o hash diversi -> Vecchio (errore) ; altrimenti Fresco
+\end{lstlisting}
+Verificato sul codice del fork che \code{PlaySyncedMontage} avanza il montage di 16\,ms per tick a 62{,}5\,Hz con lo stesso play
+rate: la formula coincide. Restano due differenze accettate: il blend-in del montage in gioco (il bake è a peso pieno) e un possibile
+frame di sfasamento all'attivazione, da confermare con BakeCheck (E16).
+\paragraph{Unreal.} \code{UDebugSkelMeshComponent}, sezioni e segmenti di \code{UAnimMontage}, \code{IAnimationDataModel::GenerateGuid}
+(\code{GetRawDataGuid} è deprecato in 5.8), \code{USkeletalMeshSocket}, \code{FCrc::StrCrc32}, \code{FScopedSlowTask}, comando
+\code{gstn.Combat.BakeAll}. Nella toolkit: pulsante ``Bake sockets'' con pallino giallo, Ctrl+B, un solo undo, bake al salvataggio.
+\textbf{Test}: 13 (\code{GSTNCombat.Editor.Bake.*}, \code{GSTNCombat.Core.TimelineData.*}).
+\paragraph{Non fatto.} Voce di menu di Bake all (c'è il comando da console), bake dei socket delle mesh allegate (solo mesh principale),
+timeline inline nei Blueprint dentro Bake all (si fanno dal loro editor). Lo scenario di rete \code{scenario_hit_basic} va eseguito
+prima di unire M5 (serve il PIE).
+
+\subsection{E9: editor dei set di hurtbox, generatore e specchio (\code{4b325c8})}
+\paragraph{Ragionamento.} Un set di hurtbox si apre con doppio clic in un editor con viewport, lista, dettagli e problemi. Il generatore
+legge il Physics Asset della mesh di anteprima e tratta ogni scheletro allo stesso modo (un ragno come una persona: nel codice non c'è
+nessun nome di osso). Rigenerare non deve cancellare il lavoro a mano: di default aggiunge solo le hurtbox mancanti, ``Update shapes''
+aggiorna forma e osso tenendo tag e priorità, ``Replace all'' chiede conferma; l'ordine dell'array non cambia (un colpo porta l'indice).
+Lo specchio segue la tua risposta 2A: solo se lo scheletro ha coppie sinistra/destra riconoscibili (Auto), disattivabile o con coppie
+proprie per scheletro nelle impostazioni; altrimenti il pulsante è disattivo e il tooltip dice perché. La mesh di anteprima del set è
+versionata, perché il validatore controlla le ossa su di essa.
+\begin{lstlisting}
+generatore: per ogni corpo del Physics Asset, per ogni primitiva:
+   sfera r -> Sfera(r) ; box (X,Y,Z) -> Box(X/2,Y/2,Z/2) ; capsula (R,L) -> Capsula(R, R + L/2)
+   convessa -> capsula sul lato più lungo del suo bounding box + avviso ; affusolata -> raggio maggiore + avviso
+   Locale = PrimitivaLocale * OssoInSpazioComponente * MeshToRoot ; estensione * margine
+   nome = osso (osso_N se più di una) ; tag = prima regola di zona il cui frammento è nel nome dell'osso
+specchio, nomi: cerca il frammento della coppia ("_l" / "_r", "Left" / "Right"...) a confine di parola
+   ("_l" accoppia arm_l ma non arm_lower), sostituisci mantenendo le maiuscole
+specchio, forma: asse laterale = Y se l'avanti è +/-X, altrimenti X ; posizione: nega la componente laterale
+   rotazione (x,y,z,w) -> (-x,y,-z,w) ; se la controparte esiste già: sovrascrive dopo conferma
+\end{lstlisting}
+\paragraph{Unreal.} \code{UPhysicsAsset}, \code{USkeletalBodySetup} (\code{FKSphereElem}, \code{FKBoxElem}, \code{FKSphylElem},
+\code{FKConvexElem}, \code{FKTaperedCapsuleElem}), \code{FReferenceSkeleton}, \code{FAssetEditorToolkit}, \code{UAssetDefinitionDefault},
+\code{IStructureDetailsView}, \code{SListView}, \code{FEditorUndoClient}. Il validatore aggiunge \code{Hurtbox.BoneMissing} e
+\code{Hurtbox.Outside}. \textbf{Test}: 18 (\code{GSTNCombat.Editor.Hurtbox.*}, scheletri e Physics Asset costruiti in memoria) e
+l'istantanea \code{GSTN.Visual.Hurtbox.Panel}. Totale suite: 877 verdi.
+\paragraph{Non fatto.} I gizmo per spostare le forme nel viewport sono di E7 (per ora le forme si modificano a numeri nel Details);
+nessun selettore di Physics Asset (si usa quello della mesh); il pannello di validazione apre il set ma non seleziona la hurtbox.
+
+\subsection{E7: gizmo e selezione nel viewport (\code{25c1878})}
+\paragraph{Ragionamento.} Le forme si spostano, ruotano e scalano con il gizmo standard di Unreal, sia nella timeline (hitbox) sia
+nell'editor dei set di hurtbox (che così non è più solo numerico). Il gizmo di Unreal non si disegna senza una modalità di editing
+attiva: come il Physics Asset editor, il viewport registra una piccola \code{FEdMode} propria. Il gizmo sta sul percorso della hitbox
+al frame del playhead (non su una chiave) e compare solo dentro la finestra della traccia. Il trascinamento accumula i delta dal
+momento della pressione e applica il totale allo stato iniziale: niente deriva da arrotondamenti, ed Esc ripristina esattamente.
+La scala scrive l'estensione della forma (condivisa da tutte le chiavi), mai una scala di trasformazione. Aggiunto anche il disegno
+delle hitbox attive nel viewport (colorate per gruppo), che E6 non faceva.
+\begin{lstlisting}
+Click: proxy sotto il cursore -> seleziona ; altrimenti raggio contro le forme attive
+       -> la più vicina (a pari distanza la più piccola) ; seleziona la chiave al playhead o la più vicina
+Inizio drag: chiave sul frame -> modificala ; nessuna e auto-key -> crea la chiave (stesso passo di undo)
+             nessuna e auto-key spento -> modifica la più vicina ; Shift -> sposta tutte le chiavi della corsia
+Durante il drag, S = spazio della hitbox (Root, socket baked o vivo, origine della mossa):
+   Offset = Inizio + S.InverseTransformVector(deltaMondo)
+   Rot    = S.rot^-1 * rotMondo * S.rot * Inizio.Rot
+   Estensione = ScalaEstensione(formaIniziale, unità)        // 1 + unità * 0.01 per asse
+Mirror: chiave in spazio root, x -> -x, quat (x,y,z,w) -> (x,-y,-z,w)
+\end{lstlisting}
+\paragraph{Unreal.} \code{FEditorViewportClient} (\code{InputWidgetDelta}, \code{ProcessClick}, \code{AbortTracking}, \code{GetWidgetLocation}),
+\code{UE::Widget::EWidgetMode}, \code{HHitProxy}/\code{DECLARE_HIT_PROXY}, \code{HWidgetAxis}, \code{FEdMode} con \code{FEditorModeRegistry},
+\code{FScopedTransaction}. \textbf{Test}: 7 (conversioni di spazio, scala sull'estensione, auto-key in un solo undo, selezione, mirror,
+drag delle hurtbox). Totale suite: 884 verdi. \textbf{Da tarare}: il fattore 0{,}01 della scala. \textbf{Non fatto}: voci Mirror/Offset nel
+menu delle chiavi (ci sono pulsante e Shift), snap della scala, overlay delle hurtbox del kit nella timeline.
+
+\section{Muri in movimento: correzioni di rete che convergono (\code{1ba37ee})}
+\subsection{Causa}
+Sui muri che si muovono il personaggio ``cavalca'' la parete: ogni tick viene portato alla posa attuale della base moltiplicata per
+la sua posizione locale sulla parete (\code{FGSTN_WallBaseInfo::LocalPosition}). Quella posizione locale era scritta a fine tick in un
+\emph{rollback blackboard} di Mover. In una correzione, Network Prediction ripristina lo stato sincronizzato del server (la capsula torna
+dove la vuole il server), ma il blackboard torna al valore del frame prima \emph{come lo aveva predetto il client}: il primo tick
+risimulato riportava la capsula nel vecchio punto del client, annullando la correzione, e lo sfasamento (circa 20\,cm lungo la corsa
+del muro) restava per sempre. Non era l'aggancio in sé: qualunque correzione durante la cavalcata lo causava; un aggancio vicino
+al teletrasporto del test lo rendeva certo.
+
+\subsection{Correzione}
+La posizione locale non si conserva più: si ricava ogni tick dalla posizione sincronizzata e dalla posa della base al frame prima.
+Attivo sulle modalità v2 (\code{bRideFromSyncedLocation}, vero nel costruttore di \code{UGSTN_WallTraverseModeBase}); spento di default
+sulle modalità legacy, che quindi restano come prima.
+\begin{lstlisting}
+prec   = Blackboard[BaseInfo]                 // componente base e sua posa a fine frame precedente
+inizio = posizione dello stato sincronizzato all'inizio del tick
+locale = prec.Rotazione^-1 * (inizio - prec.Posizione)
+target = BaseOra.Posizione + BaseOra.Rotazione * locale
+sposta la capsula su target (non swept, come prima); ruota normale, velocità e capsula del delta di rotazione della base
+\end{lstlisting}
+È sicuro per il rollback perché dipende solo dallo stato sincronizzato e dalla posa della base, che è uguale su ogni macchina per
+basi posate dal tempo di simulazione (come \code{AGSTN_WallTestMover}). Senza correzioni il risultato è identico a prima.
+
+\subsection{Numeri}
+\begin{tabular}{lcc}
+\toprule
+Corsia, modalità & Prima (aggancio presto) & Dopo (presto / partenza normale) \\
+\midrule
+\code{h_moving150} v2 & 36 riconciliazioni & 3 / 1 (0 dopo 0{,}6\,s) \\
+\code{h_moving300} v2 & 85 riconciliazioni & 5 / 1 (0 dopo 0{,}6\,s) \\
+\code{h_moving150} legacy & 123 & 124 (non toccata) \\
+\bottomrule
+\end{tabular}
+
+\noindent Test: \code{GSTN.Wall.V2Net.CorrectionOnMovingWallConverges} (errore predetto 20{,}22\,cm, dopo la correzione 0{,}000\,cm;
+il controllo con la cavalcata vecchia resta a 20{,}22). Suite: 885 verdi. Nuova opzione del harness:
+\code{wall_ab.py --start-gap N}. Classi: \code{URollbackBlackboard}, \code{UMoverComponent::OnSimulationRollback},
+\code{FMoverDefaultSyncState}.
+
+\subsection{Aperto}
+Le modalità legacy hanno ancora il problema (opzione spenta: decisione tua). Basi la cui posa differisce tra macchine nello stesso
+frame (corpi fisici simulati) richiederebbero la base nello stato sincronizzato, come fa Mover: cambio di design non fatto.
+
+\section{Superfici di traversata T3: forme dei combattenti (\code{a7b51ff}, \code{c815278}, \code{6aeec5c})}
+\subsection{Cosa c'è}
+Nuovo plugin \code{GSTNPlatform} (spento di default, dipende solo da GSTNSurface e Mover; l'ho abilitato nel \code{.uproject}:
+togli quella riga se lo vuoi spento). Un combattente riceve \emph{forme} (box, sfera, capsula) ciascuna con un comportamento di
+superficie (\code{FGSTN_SurfaceBehaviour}: WallSlide, WallClimb, Stand, Launch), definite in un data asset
+(\code{UGSTN_PlatformDefinition}) senza C++.
+\begin{itemize}[leftmargin=*]
+  \item \code{GSTNPlatformCore}: dati e matematica pura (\code{FGSTN_PlatformSpec}, \code{FGSTN_PlatformShape}, stati per forma
+    \code{EGSTN_PlatformShapeState}, storia on/off per frame, regole di collisione, \code{FGSTN_PoseHistory} di 24 frame,
+    percorso scriptato).
+  \item \code{GSTNPlatformRuntime}: \code{UGSTN_EnemyPlatformComponent}, collider \code{UGSTN_Platform\{Box,Sphere,Capsule\}Collider}
+    che implementano \code{IGSTN_SurfaceProvider}, il punto di posa \code{UGSTN_PlatformSubsystem}, un combattente di prova
+    \code{AGSTN_PlatformTestFighter} (fianco WallSlide, cima Stand, avanti e indietro di 3\,m a 300\,cm/s) e i comandi
+    \code{gstn.Platform.SpawnTestFighter}, \code{.Draw}, \code{.SetMask}.
+  \item Canale di collisione \code{GSTN_EnemyPlatform} dichiarato nel \code{Config/Engine.ini} del plugin e cercato per nome.
+\end{itemize}
+
+\subsection{Ragionamento}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Collider non attaccati, mobili, cinematici, solo query, indirizzabili in rete} (\code{Surface<Id>}): lo stato di
+    Mover si riferisce alla base per riferimento a oggetto, quindi il client deve risolvere il \code{Surface1} del server nel proprio.
+    Se fossero attaccati alla mesh, la loro posa dipenderebbe dall'ordine dei tick e dall'interpolazione di ogni client.
+  \item \textbf{Punto di posa}: il fork non ha un hook dopo il fixed tick e il plugin non può dipendere da NP; la posa si applica in
+    \code{OnPreSimulationTick} di Mover, una volta per frame, con \code{ServerFrame-1} e \code{BaseSimTimeMs}, che sono gli stessi
+    numeri sul server, sul client che predice e in una risimulazione. È la condizione del §6.14 dei muri: la posa della base in un
+    frame è identica su ogni macchina, quindi il wall slide v2 ci scivola sopra senza riconciliazioni e senza modifiche al suo codice.
+  \item \textbf{Stati delle forme come storia per frame}, non stato che avanza: un frame risimulato ritrova la collisione che aveva.
+  \item \textbf{Collisione da una tabella di regole} (tag query nelle impostazioni): nessun canale o tag scritto nel codice.
+  \item \textbf{Velocità dalla storia delle pose}, mai dalla fisica: i collider vengono teletrasportati.
+\end{itemize}
+
+\subsection{Pseudocodice}
+\begin{lstlisting}
+OnPreSimulationTick(step): ctx = {Frame = step.ServerFrame - 1, TempoMs = step.BaseSimTimeMs}
+  se ctx == ultimo: esci                        // altri pawn, stesso frame
+  per ogni piattaforma: posa = PosaProprietario(ctx)   // scriptata: Percorso.Valuta(origine, TempoMs)
+     storia.Registra(Frame, posa)
+     per ogni forma: collisione = solida(stato(forma, Frame)) ? SoloQuery : Nessuna
+                     collider.Teletrasporta(posa * forma.Locale)
+SetShapeMask(maschera) / SetActionState(s):
+  voluto = forme & maschera & mascheraAzione(s) ; timbro F = ultimoFrame + 1
+  accesa -> Active da F ; spenta -> Breaking fino a F + grazia, poi Inactive
+stato(f) = f < FrameCambio ? prima : accesa ? Active : f < FrameSpento ? Breaking : Inactive
+Risposte: tutto Ignore ; {Stand|WallSlide|WallClimb|Launch} -> Block canali di Mover (Pawn)
+          {WallSlide|WallClimb} -> Block canali delle sonde a muro
+VelocitàSuperficie(id, p) = (L[F]-L[F-1])/dt + omega(R[F] R[F-1]^-1)/dt x (p - L[F])   // 0 se la forma è spenta
+\end{lstlisting}
+
+\subsection{Test e rete}
+17 test nuovi (i sei del piano \code{GSTNPlatform.Shapes.*} più core e runtime); suite totale 902 verdi (905 con le animazioni del
+wall slide dell'altro thread, compilate e provate qui). Scenario \code{scenario_surface_wallslide_enemy}
+(\code{Tools/GASNPPTest/surface_scenarios.py}, host + 1 client, 60/15\,ms, combattente creato dal driver, nessuna modifica alla mappa):
+6/6 riusciti allo 0\,\% e al 2\,\% di perdita; 0 riconciliazioni sul fianco, sulla cima per 1{,}5\,s e nei salti via; deriva rispetto al
+combattente 0{,}0\,cm; 1--2 riconciliazioni all'atterraggio sulla cima, dovute al teletrasporto del test.
+
+\subsection{Trovato e aperto}
+Riagganciarsi alla stessa forma in movimento riconciliava sul client: il controllo ``stesso muro'' della transizione d'ingresso
+misura l'altezza in coordinate del mondo e su una base che si muove sbaglia. È il compito di T2 (transizione per superfici mobili),
+non ancora fatto; lo scenario azzera la memoria del muro prima di ogni aggancio. Non fatti (passi successivi): velocità della base
+all'uscita da una forma (disponibile per T4/T7), occupanti e stato Braced (T7), ponte con le parti (T6), stati di combattimento (T7),
+minion (T8), forme convesse. Effetto collaterale: chi tickka prima di Mover nel frame vede le piattaforme di un frame prima.
+
+\section{Aggiornamento del 26 ottobre}
+\subsection{T2: riaggancio alla stessa superficie in movimento (\code{3c3d9ee}, \code{4041401}, \code{447fc2d})}
+\paragraph{Causa.} Non erano le altezze in coordinate del mondo. L'azzeramento della memoria del muro (``sei passato da terra'')
+leggeva il registro dell'ultimo cambio di modalità di Mover (\code{LastModeChangeRecord}), che un rollback cancella e niente riscrive:
+se la correzione tornava a un frame dopo il decollo del server ma prima di quello del client, il client perdeva il decollo, teneva la
+memoria e il limite di altezza rifiutava l'aggancio che il server accettava. Nel log: client \code{ENTRY rejected: height cap},
+server \code{ENTRY -> WallSlidingV2 memReset=1}.
+\paragraph{Correzione.} Le regole di rientro sono una funzione pura (\code{UGSTN_WallReentryUtils::Judge}) con due opzioni, accese
+solo sulle transizioni guidate dalla superficie (legacy invariato, verificato su 13.824 casi):
+\begin{lstlisting}
+bInferModeChangeLostToRollback:
+  se Registro.Modalità != StatoIniziale.Modalità e Registro.Modalità azzera la memoria
+     e Registro.Tempo >= UltimoMuro.Tempo  -> azzera la memoria (il cambio perso nel rollback)
+bBaseRelativeHeightCap (muro in movimento):
+  confronta l'altezza sopra l'origine della base, ora contro all'uscita
+  (memorizzata nello stato sincronizzato: bLastWallOnMovingBase, LastWallBaseHeight)
+  memoria senza riferimento della base -> solo cooldown
+\end{lstlisting}
+Scartati: solo cooldown su ogni muro mobile (permette di salire all'infinito con salto + riaggancio) e la base come riferimento a
+oggetto nello stato sincronizzato (byte in rete per un'identità che la regola non usa).
+\paragraph{Numeri.} Scenario del combattente in movimento: prima 1 ripetizione su 3 riuscita sul client, dopo 6/6 allo 0\,\% e al 2\,\%
+di perdita, 0 riconciliazioni sul muro e sulla cima. Corsie mobili: 0 dopo 0{,}6\,s, con partenza normale e con aggancio presto.
+Scenari standard sul muro: CMP 6/6 allo 0\,\% e al 2\,\%, nessuna riconciliazione oltre quelle causate apposta. Test: 8 nuovi, 910 poi 916.
+Dettagli in \code{wall-slide-v2.md} §6.15. Caso non recuperato: atterraggio e decollo entrambi persi nella stessa finestra di correzione
+(circa 0{,}5\,s), costa una riconciliazione.
+
+\subsection{Layer di animazione del muro (\code{311db7c}, \code{12b6fed}, \code{6a0e42c})}
+Unito il lavoro del thread delle animazioni (plugin \code{GSTNAnimation}). Gli asset sono stati creati da script
+(\code{Tools/GAS/setup_wall_anim_layer.py}, idempotente, con backup): Python non sa costruire grafi di animazione, quindi un nuovo modulo
+editor \code{GSTNAnimationEditor} offre funzioni ``trova o aggiungi'' (state machine, stati, transizioni con regola
+\emph{proprietà == valore enum}, sequence player, blend, linked layer) che lo script chiama.
+\begin{itemize}[leftmargin=*]
+  \item \code{ALI_GSTN_Wall} (layer \code{WallLayer}); \code{ABP_GSTN_WallLayer} con \code{WallPhases} (Enter, Loop, Exit) e dentro Loop
+    \code{SlideStates} (Idle, SlideLeft, SlideRight, Skid), regole su \code{WallAnim.Phase}/\code{SlideState} via Property Access.
+  \item \code{SandboxCharacter_Mover_ABP} rigenitorato a \code{GSTN_CharacterAnimInstance}; un \emph{Blend Poses by bool} tra la posa GASP e il
+    layer, prima del Pose History (così il motion matching registra la posa mostrata), più un nodo Inertialization.
+  \item \code{DA_AnimSet_Wall}, la collezione del personaggio e il componente \code{GSTN_AnimSetComponent} su \code{SandboxCharacter_Mover};
+    variante di prova \code{ABP_GSTN_WallLayer_Heavy} (regola \code{Anim.Trait.Build.Heavy}).
+  \item Clip segnaposto GASP: Enter = atterraggio leggero, Exit = partenza salto, Idle = caduta in loop, SlideLeft/Right = camminata
+    laterale, Skid = scivolata.
+\end{itemize}
+Tutti i Blueprint compilano senza errori; 916 test verdi; in PIE headless il layer è collegato su host e client e la fase va
+None, Enter, Active, Exit, None.
+
+\subsection{Crash in chiusura (\code{2f556cf})}
+Ogni esecuzione headless dell'editor usciva con codice 3: il registro delle tracce dell'editor dei combattimenti costruiva un puntatore
+debole a uno \code{UScriptStruct} dopo lo smontaggio degli UObject. Ora a quel punto svuota il registro e basta.
+
+\section{Cosa controllare a mano stasera}\label{sec:controlli}
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Muri}: in \code{SandboxCharacter_Mover}, modalità WallSlidingV2, sezione \emph{Edges}: ci sono
+    ``Max Step Up Height'' e ``Max Step Down Depth''. Sulla mappa \code{L_WallSlideAB}, corsia delle rientranze: con lo step up a
+    15--20\,cm la rientranza da 15\,cm non deve più rallentare.
+  \item \textbf{Timeline, righe hitbox}: apri un asset timeline, aggiungi una traccia Hitbox con doppio clic, trascina le chiavi tra
+    le sotto-corsie, premi K con una chiave selezionata, Ctrl+trascina per copiare, poi annulla e ripeti.
+  \item \textbf{Dati del colpo}: seleziona un hitbox; nel Details trascina il quadrante dell'angolo (un solo undo, Esc ripristina),
+    cambia il tag HitType, aggiungi un'estensione, leggi la riga di anteprima del knockback.
+  \item \textbf{Validazione}: crea un errore apposta (danno negativo o chiave oltre la finestra); entro circa 250\,ms reagiscono la
+    scheda Frame Data e la linea sulla corsia. Premi F7 e controlla il Message Log.
+  \item \textbf{Validate all}: Window, GSTN Combat, Validation, ``Validate all'', poi doppio clic su un problema di un asset timeline
+    e di una timeline inline in un Blueprint di abilità: playhead e selezione devono finire sul frame giusto.
+  \item \textbf{Bake dei socket}: apri una timeline con una hitbox \code{BakedSocket} e una mesh di anteprima. Il pulsante ``Bake sockets''
+    ha il pallino giallo se mancano i frame; clic o Ctrl+B e il pallino sparisce; cambia sezione o play rate e torna; Edit, Undo
+    ripristina il bake vecchio; confronta la hitbox con la mano nel viewport. In console: \code{gstn.Combat.BakeAll}.
+  \item \textbf{Hurtbox set}: doppio clic su un Hurtbox Set, scegli la mesh di un personaggio con Physics Asset, Generate, Add missing:
+    le forme stanno sul corpo. Prova Update shapes e Replace all (conferma). Seleziona una hurtbox sinistra e Mirror: compare dall'altro
+    lato. Su uno scheletro senza sinistra/destra (nemico, torretta) Mirror è disattivo con il motivo. Undo dopo ogni azione.
+  \item \textbf{Gizmo (E7)}: timeline con traccia Hitbox, kit e skin; playhead dentro la finestra, spunta ``Hitboxes'': si vedono le
+    forme. Clic sulle linee o dentro il volume: si evidenzia la chiave e compare il gizmo. W/E/R e trascina ogni maniglia (la scala è
+    comoda?). Ctrl+\textasciitilde{} per Local/World (la scala resta locale). Su un frame senza chiave con auto-key: una chiave, un solo
+    Ctrl+Z la toglie. Esc a metà drag ripristina tutto. Shift all'inizio sposta tutte le chiavi. Playhead fuori dalla finestra: il gizmo
+    sparisce. Nell'editor delle hurtbox: clic, drag, undo ed Esc.
+  \item \textbf{Muri in movimento}: su \code{L_WallSlideAB}, corsie h, aggrappati subito dopo un salto o un dash sul muro che si muove:
+    niente scatti o tremolii lungo la corsa. Con \code{np.PrintReconciles 1} nessuna discrepanza ripetuta mentre scivoli.
+  \item \textbf{Piattaforme (T3)}: decidi se tenere \code{GSTNPlatform} abilitato nel \code{.uproject}. In PIE su \code{L_WallSlideAB}:
+    \code{gstn.Platform.SpawnTestFighter -2000 1500 0} e \code{gstn.Platform.Draw 1}: fianco e cima verdi che si muovono lungo Y;
+    scivola sulla faccia -X del fianco e stai in piedi sulla cima. \code{gstn.Platform.SetMask 2}: il fianco diventa arancione e
+    dopo 20 frame grigio. Opzionale, a editor chiuso: \code{python Tools/GASNPPTest/surface_scenarios.py} (anche \code{--loss 2}).
+  \item \textbf{T2}: con un client a circa 100\,ms, salta via da una piattaforma in movimento e riaggrappati alla stessa faccia dopo
+    l'atterraggio (niente sfarfallio di modalità o scatti); scivola su un muro mobile mentre un dash o un buff del server ti colpisce;
+    stacca da un muro fermo e riaggrappati più in alto: il limite di altezza deve ancora rifiutare.
+  \item \textbf{Layer del muro}: PIE su \code{L_WallSlideAB} con il debugger dell'ABP sul layer: Enter, poi Idle/SlideLeft/SlideRight,
+    Skid in entrata veloce, Exit al salto. Aggiungi \code{Anim.Trait.Build.Heavy} ai \code{DefaultCosmeticTags} del componente
+    \code{AnimSets} e verifica che l'Idle cambi clip.
+  \item \textbf{Rete}: prima di unire M5, esegui lo scenario \code{scenario_hit_basic} del harness (il bake non è stato provato in PIE).
+\end{enumerate}
+
+\end{document}

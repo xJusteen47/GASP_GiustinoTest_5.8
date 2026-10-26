@@ -3,7 +3,7 @@
 Unreal Engine **5.8** project built on the Game Animation Sample (GASP). One C++ module, `GASP_Giustino2` (prefix `GSTN_`).
 Focus: wall movement for **Mover**, driven by **Gameplay Abilities** simulated by **Network Prediction** (the "GAS-NPP fork").
 
-Read the linked docs only when the task touches that area. Do not read the whole `Plugins/` tree: it is engine-level code.
+Read the linked docs only when the task touches that area. Every plugin has a README next to its `.uplugin`; the index is [Plugins/README.md](Plugins/README.md). Do not read the whole `Plugins/` tree: it is engine-level code.
 
 ## Where things are
 
@@ -12,12 +12,17 @@ Read the linked docs only when the task touches that area. Do not read the whole
 | Project C++ | `Source/GASP_Giustino2/{Public,Private}/` | this file |
 | Abilities, tags, ability input | `.../GAS/` | [gas-npp.md](docs/architecture/gas-npp.md) |
 | Wall movement modes, transitions, math/query libs | `.../WallMovement/` | [wall-movement.md](docs/architecture/wall-movement.md) |
-| Input plugin (commands, buffer, priority, bindings; embeddable NP input simulation) and the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`, `GSTNInputNP/Mover/`) | `Plugins/GSTNInput/` | [input.md](docs/architecture/input.md) |
-| Combat plugin (default command set, combat abilities, hits; own NP model) | `Plugins/GSTNCombat/` | [combat.md](docs/architecture/combat.md), [gas-npp.md](docs/architecture/gas-npp.md) |
+| Input plugin (commands, buffer, priority, bindings; embeddable NP input simulation) and the Mover sim-state tracker (`UGSTN_MoverSimStateTracker`, `GSTNInputNP/Mover/`) | `Plugins/GSTNInput/` (Core), `Plugins/GSTNInputNP/` (NP adapter) | [input.md](docs/architecture/input.md) |
+| Combat plugin (default command set, combat tags and settings; pure, no fork), its GAS layer (ability tags, no NP) and its NP adapter (own NP model, combat abilities, hits; needs the fork) | `Plugins/GSTNCombat/` (Core), `Plugins/GSTNCombatGAS/` (GAS), `Plugins/GSTNCombatNP/` (NP adapter) | [combat.md](docs/architecture/combat.md), [gas-npp.md](docs/architecture/gas-npp.md) |
+| Destructible parts plugin (part sets, penetration table, break effects, `PartResolve` step, sync fragment; Core/GAS/NP/Editor, optional, off by default) and its sample content | `Plugins/GSTNParts/` | [its README](Plugins/GSTNParts/README.md), [combat.md](docs/architecture/combat.md) §3, §15 |
+| Combat editor tooling (timeline editor, validators; editor only) and combat debug adapter (not in Shipping); the input display itself is `GSTNInputDebug` in `Plugins/GSTNInput/` | `Plugins/GSTNCombatEditor/`, `Plugins/GSTNCombatDebug/` | [combat-m5-editor.md](docs/architecture/combat-m5-editor.md), [m5-doc-deltas.md](docs/notes/m5-doc-deltas.md) |
+| Traversal surface data contract (what a collider offers: wall slide, climb, launch, stand; `Surface.*` tags; resolution from a hit) | `Plugins/GSTNSurface/` (Core) | [traversal-surfaces.md](docs/architecture/traversal-surfaces.md) |
+| Animation plugin (main ABP parent, override layers, anim sets and skin variants) and the wall slide anim state for the wall layer | `Plugins/GSTNAnimation/` (Core), `Source/GASP_Giustino2/.../WallMovement/Animation/` | [anim-layers.md](docs/architecture/anim-layers.md), [wall-anim.md](docs/architecture/wall-anim.md) |
 | Network test harness (C++ side) | `.../GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | Editor Python tooling | `Tools/GAS/`, `Tools/GASNPPTest/` | [testing.md](docs/architecture/testing.md) |
 | GAS-NPP plugin forks (GameplayAbilities, NetworkPrediction, AbilitySystemSimulation...) | `Plugins/GASNPP/` | [gas-npp.md](docs/architecture/gas-npp.md) |
 | Mover / ChaosMover / SmartObjects overrides of engine plugins | `Plugins/EngineOverrides/` | |
+| Working notes, plans, spike reports and the current handover (`takeover-state.md`, last entries) | `docs/notes/` | [README](docs/notes/README.md) |
 
 Headers carry long doc comments that explain intent and invariants: read the header of a class before its `.cpp`.
 

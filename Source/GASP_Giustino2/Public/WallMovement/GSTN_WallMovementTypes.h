@@ -3,10 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/HitResult.h"
+#include "GameplayTagContainer.h"
 #include "MoverTypes.h"
 #include "GSTN_WallMovementTypes.generated.h"
 
 class UPrimitiveComponent;
+struct FRollbackBlackboardSimWrapper;
 
 /** How 2D move input is mapped onto the wall plane. */
 UENUM(BlueprintType)
@@ -263,6 +266,47 @@ struct GASP_GIUSTINO2_API FGSTN_WallJump
 };
 
 /**
+ * Which surfaces a wall mode (or the entry transition) accepts as a wall, on top of the angle test. The surface of a hit comes
+ * from UGSTN_SurfaceUtils::Resolve (GSTNSurface plugin, traversal-surfaces.md §5.2): a UGSTN_SurfaceBehaviourComponent on the
+ * collider's actor, a provider, or the physical material table. A surface without the behaviour is simply not a wall for this
+ * mode: it still blocks the character, who slides along it or lands on it like on any geometry.
+ *
+ * Read-only configuration (no state, no cache): a re-simulated frame resolves the same surface. An empty query is the old
+ * behaviour exactly: every hit passes and the surface is not even resolved.
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallSurfaceFilter
+{
+	GENERATED_BODY()
+
+	/**
+	 * Behaviours (Surface.Behaviour.*) a surface must offer to count as a wall, e.g. WallSlide for the slide mode and WallClimb
+	 * for the climb mode. Empty = no filter
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	FGameplayTagQuery RequiredBehaviours;
+
+	/**
+	 * Surfaces nothing marked (no surface component, provider or material entry: they resolve to the plugin's default) pass
+	 * without the query being evaluated, so level geometry that was never authored keeps working as before. Turn off to make
+	 * only authored surfaces walls. Ignored while RequiredBehaviours is empty
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	bool bUnknownSurfacesPass = true;
+
+	/**
+	 * More ways to pass: a surface is a wall if it matches RequiredBehaviours (when that is set) OR any of these. Empty by default, which is the old
+	 * single-query behaviour exactly. The v2 modes fill it from their surface mode list (UGSTN_WallTraverseModeBase::GetWallCheckSettings) so that a
+	 * climb mode riding on a wall also accepts the surfaces it can hand over to, without the probes dropping the wall before the switch. An empty query
+	 * in this list matches every surface
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	TArray<FGameplayTagQuery> AlternativeBehaviours;
+
+	bool IsEmpty() const { return RequiredBehaviours.IsEmpty() && AlternativeBehaviours.IsEmpty(); }
+};
+
+/**
  * Parameters of the wall queries (UGSTN_WallQueryUtils), built by the wall modes from their Surface Detection and
  * Adhesion settings. Same role as FFloorCheckSettings for the ground modes
  */
@@ -314,6 +358,17 @@ struct GASP_GIUSTINO2_API FGSTN_WallCheckSettings
 	/** Minimum lookahead distance (cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall", meta = (ForceUnits = "cm"))
 	float MinLookaheadDistance = 15.f;
+
+	/** Which surfaces count as a wall besides the angle test. Default: all */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	FGSTN_WallSurfaceFilter SurfaceFilter;
+
+	/**
+	 * Other pawns are never walls: their capsules are ignored by the contact, corner and wrap queries and refused by IsHitOnValidWall. Off for the
+	 * legacy modes (unchanged behaviour); the v2 modes fill it from FGSTN_WallEdgeSettings::bIgnorePawns (wall-slide-v2.md W5, finding 15)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
+	bool bIgnorePawns = false;
 
 	/** Draw the probes */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall")
@@ -440,6 +495,39 @@ struct GASP_GIUSTINO2_API FGSTN_WallMovementSyncState : public FMoverDataStructB
 	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
 	double LastWallTimeMs = 0.0;
 
+	/**
+	 * True when the last wall was a moving one (a Movable component) and the mode records base-relative memory
+	 * (UGSTN_WallMovementModeBase::bRecordWallBaseInMemory, the v2 modes): LastWallBaseHeight is then meaningful. Always false for the legacy modes
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	bool bLastWallOnMovingBase = false;
+
+	/**
+	 * Height (along gravity-up) of the last wall's component origin on the last tick spent on it. With LastWallHeight it gives the height the wall was
+	 * left at in the wall's own frame (LastWallHeight - LastWallBaseHeight), which is what the entry's height cap compares on a moving wall
+	 * (traversal-surfaces.md 4.3, T2): world heights mean nothing on a wall that rises or sinks. The base pose of a frame is the same on every
+	 * machine (posed from the simulation time), so the value is too. Sent only with bLastWallOnMovingBase
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	float LastWallBaseHeight = 0.f;
+
+	/**
+	 * Simulation time (ms) of the last manual wall memory reset (FGSTN_ResetWallMemoryEffect / UGSTN_WallMovementLibrary::ResetWallMemory),
+	 * negative if none. Walls left before it are forgotten. It lives here, not on the Mover blackboard, so it is predicted,
+	 * rolled back and replicated with the rest of the wall state
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	double MemoryResetTimeMs = -1.0;
+
+	/**
+	 * Consecutive ticks the contact surface asked for another wall mode than the active one (UGSTN_WallTraverseModeBase, wall-slide-v2.md 6.3): the
+	 * hysteresis of the in-place switch between slide and climb. In the sync state, not on the mode, so a re-simulated frame counts the same
+	 * ticks. Reset on every attachment and on every switch. Sent only when non-zero; not compared by ShouldReconcile (a mode difference is reconciled
+	 * through the mode name itself)
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mover|Wall")
+	uint8 SurfaceSwitchTicks = 0;
+
 	virtual FMoverDataStructBase* Clone() const override;
 	virtual bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess) override;
 	virtual UScriptStruct* GetScriptStruct() const override { return StaticStruct(); }
@@ -469,7 +557,10 @@ struct FGSTN_WallEntryInfo
 	FVector Point = FVector::ZeroVector;
 };
 
-/** Dynamic wall the character rides, stored on the sim blackboard between ticks */
+/**
+ * Dynamic wall the character rides, stored between ticks in a Mover rollback blackboard entry (GSTNWallBlackboard::BaseInfo,
+ * InvalidatedOnRollback, one value per frame). An invalid Base means "not riding anything".
+ */
 struct FGSTN_WallBaseInfo
 {
 	TWeakObjectPtr<UPrimitiveComponent> Base;
@@ -522,6 +613,19 @@ struct FGSTN_WallTickState
 	/** Last successful probe: its component is the movement base candidate for next tick */
 	FGSTN_WallProbeResult LastProbe;
 
+	/** The dynamic wall ridden at the start of this tick (ApplyMovementBase), if any: the wall memory's base when the tick leaves before probing (a wall jump) */
+	TWeakObjectPtr<UPrimitiveComponent> RiddenBase;
+
+	/** The contact of this tick's adhesion sweep (a wall found by the sweep itself, not a wrap or a corner), for the surface-driven mode choice */
+	FHitResult Contact;
+	bool bHasContact = false;
+
+	/** Held in place from outside this tick (IsMovementLocked of the v2 modes): no exits, no timers. Tick-local, not part of the sync state */
+	bool bMovementLocked = false;
+
+	/** Ticks in a row the surface asked for another mode (FGSTN_WallMovementSyncState::SurfaceSwitchTicks) */
+	uint8 SurfaceSwitchTicks = 0;
+
 	/** Mode switch decided this tick, with the simulation time it leaves unused */
 	FName NextModeName = NAME_None;
 	float UnusedSeconds = 0.f;
@@ -537,10 +641,18 @@ struct FGSTN_WallTickState
 
 namespace GSTNWallBlackboard
 {
-	/** FGSTN_WallEntryInfo written by entry transitions, consumed by the mode's Activate */
+	/**
+	 * FGSTN_WallEntryInfo written by entry transitions (Trigger), consumed by the mode's Activate (which overwrites it with an
+	 * empty one). A zero normal means "none".
+	 */
 	extern GASP_GIUSTINO2_API const FName EntryInfo;
-	/** FGSTN_WallBaseInfo of the dynamic wall being ridden */
+	/** FGSTN_WallBaseInfo of the dynamic wall being ridden (invalid Base = none) */
 	extern GASP_GIUSTINO2_API const FName BaseInfo;
-	/** double: sim time (ms) of the last manual wall memory reset. Walls left before it are forgotten (no height cap) */
-	extern GASP_GIUSTINO2_API const FName MemoryResetTimeMs;
+
+	/**
+	 * Both entries are Mover rollback blackboard entries (not the plain SimBlackboard, which is never rewound): one value per
+	 * frame for as many frames as a rollback can rewind (Network Prediction's 64 frame buffer), invalidated on rollback.
+	 * Idempotent: modes create them in OnRegistered, the entry transition on first use.
+	 */
+	GASP_GIUSTINO2_API void EnsureEntries(FRollbackBlackboardSimWrapper& Blackboard);
 }

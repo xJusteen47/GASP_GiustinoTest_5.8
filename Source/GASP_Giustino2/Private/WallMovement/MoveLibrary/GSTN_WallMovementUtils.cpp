@@ -399,8 +399,78 @@ void UGSTN_WallMovementUtils::TryMoveToAdhereToWall(const FMovingComponentSet& M
 	GSTNWallMovement::SafeMoveIrrelevant(MovingComps, Correction, Orientation, true, MoveRecord);
 }
 
+bool UGSTN_WallMovementUtils::AdhereAndSense(const FMovingComponentSet& MovingComps, const FQuat& Orientation, const FVector& WallNormal, const FVector& GravityUp,
+	const FGSTN_WallCheckSettings& Settings, float MaxAdhesionSpeed, float DeltaSeconds, FMovementRecord& MoveRecord, FHitResult& OutContact)
+{
+	OutContact = FHitResult(1.f);
+
+	const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
+	const UPrimitiveComponent* UpdatedPrimitive = MovingComps.UpdatedPrimitive.Get();
+	const UWorld* World = UpdatedComponent ? UpdatedComponent->GetWorld() : nullptr;
+	if (!World || !UpdatedPrimitive)
+	{
+		return false;
+	}
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GSTN_WallContactAdhere), false, UpdatedComponent->GetOwner());
+	FCollisionResponseParams ResponseParams;
+	UMovementUtils::InitCollisionParams(UpdatedPrimitive, QueryParams, ResponseParams);
+	// The contact sweep must not stop on another pawn standing between the capsule and the wall, nor adopt it as the wall
+	UGSTN_WallQueryUtils::ApplyPawnFilter(Settings, ResponseParams);
+
+	const FVector Start = UpdatedComponent->GetComponentLocation();
+	const FVector End = Start - WallNormal * (Settings.WallGap + Settings.WallProbeDistance);
+
+	FHitResult Hit;
+	{
+		GSTN_WALL_QUERY_SCOPE();
+		if (!World->SweepSingleByChannel(Hit, Start, End, Orientation, UpdatedPrimitive->GetCollisionObjectType(), UpdatedPrimitive->GetCollisionShape(), QueryParams, ResponseParams))
+		{
+			return false;
+		}
+	}
+	OutContact = Hit;
+
+	if (Hit.bStartPenetrating)
+	{
+		// Same rule as TryMoveToAdhereToWall: resolve along the real penetration direction, never along the wall normal
+		MoveRecord.LockRelevancy(false);
+		UMovementUtils::TryMoveToResolvePenetration(MovingComps, MOVECOMP_NoFlags, UMovementUtils::ComputePenetrationAdjustment(Hit), Hit, Orientation, MoveRecord);
+		MoveRecord.UnlockRelevancy();
+		return false;
+	}
+
+	// IsHitOnValidWall only traces on an edge contact (rounded normal): count that one too
+	constexpr float EdgeCosThreshold = 0.9994f;
+	if (FVector::DotProduct(Hit.Normal, Hit.ImpactNormal) < EdgeCosThreshold)
+	{
+		GSTN_WALL_QUERY_SCOPE();
+	}
+	if (!UGSTN_WallQueryUtils::IsHitOnValidWall(World, Hit, GravityUp, Settings, UpdatedPrimitive->GetCollisionObjectType(), QueryParams, ResponseParams))
+	{
+		return false;
+	}
+
+	const float Error = Hit.Distance - Settings.WallGap; // > 0: too far, < 0: too close
+	if (Error > 0.f)
+	{
+		// The sweep proved the way to the wall free up to Hit.Distance: no need to sweep again for the pull-in
+		const float Step = FMath::Min(Error, MaxAdhesionSpeed * DeltaSeconds);
+		if (Step > 0.01f)
+		{
+			GSTNWallMovement::SafeMoveIrrelevant(MovingComps, -WallNormal * Step, Orientation, false, MoveRecord);
+		}
+	}
+	else if (Error < -0.01f)
+	{
+		GSTN_WALL_QUERY_SCOPE();
+		GSTNWallMovement::SafeMoveIrrelevant(MovingComps, -WallNormal * Error, Orientation, true, MoveRecord);
+	}
+	return true;
+}
+
 bool UGSTN_WallMovementUtils::TryMoveWithWallBase(const FMovingComponentSet& MovingComps, const FGSTN_WallBaseInfo& BaseInfo, EGSTN_WallBaseRotation BaseRotation,
-	FVector& InOutWallNormal, FVector& InOutVelocity, FMovementRecord& MoveRecord)
+	FVector& InOutWallNormal, FVector& InOutVelocity, FMovementRecord& MoveRecord, const FVector* RideFrom)
 {
 	const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
 	if (!UpdatedComponent || !BaseInfo.Base.IsValid())
@@ -415,10 +485,13 @@ bool UGSTN_WallMovementUtils::TryMoveWithWallBase(const FMovingComponentSet& Mov
 		return false;
 	}
 
-	// Rigid motion of the base since last tick
+	// Rigid motion of the base since last tick. The character's place in the base's frame is either the recorded one or, rollback-safe, the one of
+	// its synced start location in the base's PREVIOUS frame: after a correction only the latter agrees with the authority (wall-slide-v2.md 6.14)
+	const FVector CurrentLocation = UpdatedComponent->GetComponentLocation();
+	const FVector LocalPosition = RideFrom ? BaseInfo.BaseRotation.UnrotateVector(*RideFrom - BaseInfo.BaseLocation) : BaseInfo.LocalPosition;
 	const FQuat DeltaRotation = BaseQuat * BaseInfo.BaseRotation.Inverse();
-	const FVector TargetLocation = BaseLocation + BaseQuat.RotateVector(BaseInfo.LocalPosition);
-	const FVector Delta = TargetLocation - UpdatedComponent->GetComponentLocation();
+	const FVector TargetLocation = BaseLocation + BaseQuat.RotateVector(LocalPosition);
+	const FVector Delta = TargetLocation - CurrentLocation;
 	if (Delta.IsNearlyZero(0.01f) && DeltaRotation.Equals(FQuat::Identity, 1e-6f))
 	{
 		return false;

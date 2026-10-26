@@ -1,6 +1,8 @@
 // Gameplay Ability System setup (GAS-NPP fork).
 
 #include "GAS/GSTN_GA_Jump.h"
+#include "AbilitySystemComponent.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
 #include "GAS/GSTN_AbilityTags.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverTypes.h"
@@ -13,6 +15,17 @@ FEffectMoveContainer UGSTN_JumpImpulseMoveCreator::MakeMove_Implementation(UMove
 {
 	FJumpImpulseEffect JumpMove;
 	JumpMove.UpwardsSpeed = UpwardsSpeed;
+
+	// A character with the combat stats jumps as high as its JumpVelocity says, so this jump and the plugin's UGSTN_GA_PlatformJump agree
+	if (JumpMove.UpwardsSpeed <= 0.f && TargetAbilitySystemComponent)
+	{
+		bool bFound = false;
+		const float StatSpeed = TargetAbilitySystemComponent->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetJumpVelocityAttribute(), bFound);
+		if (bFound && StatSpeed > 0.f)
+		{
+			JumpMove.UpwardsSpeed = StatSpeed;
+		}
+	}
 	if (JumpMove.UpwardsSpeed <= 0.f && TargetMoverComponent)
 	{
 		if (const UCommonLegacyMovementSettings* CommonSettings = TargetMoverComponent->FindSharedSettings<UCommonLegacyMovementSettings>())
@@ -41,7 +54,8 @@ UGSTN_GA_Jump::UGSTN_GA_Jump(const FObjectInitializer& ObjectInitializer)
 	ActivationBlockedTags.AddTag(GSTNAbilityTags::State_Movement_WallSliding);
 
 	JumpEffect = UGSTN_GE_Jump::StaticClass();
-	AddActivationInput(TEXT("/Game/Input/IA_Jump.IA_Jump"));
+	// The action (IA_Jump) comes from ActivationInput, set in DefaultGame.ini
+	bRequiresActivationInput = true;
 }
 
 bool UGSTN_GA_Jump::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,

@@ -30,8 +30,22 @@ public:
 	static bool IsValidWallNormal(const FVector& Normal, const FVector& GravityUp, float MinSurfaceAngle, float MaxSurfaceAngle);
 
 	/**
+	 * Whether the surface of a hit is accepted by the filter (traversal-surfaces.md §5.2): the hit's behaviours, from
+	 * UGSTN_SurfaceUtils::Resolve, must match RequiredBehaviours. An empty query passes everything without resolving (the old
+	 * behaviour); a surface nothing marked passes if bUnknownSurfacesPass. Stateless: resolves once per call, caches nothing.
+	 */
+	static bool PassesSurfaceFilter(const FHitResult& Hit, const FGSTN_WallSurfaceFilter& Filter);
+
+	/** Whether the hit is on another pawn (the hit component's object type is Pawn). Pawns are never walls for the modes that set FGSTN_WallCheckSettings::bIgnorePawns */
+	static bool IsPawnHit(const FHitResult& Hit);
+
+	/** Makes the response params of a wall query ignore pawns when Settings.bIgnorePawns (the capsule's own responses are otherwise kept) */
+	static void ApplyPawnFilter(const FGSTN_WallCheckSettings& Settings, FCollisionResponseParams& InOutResponseParams);
+
+	/**
 	 * Whether a sweep hit lies on climbable geometry. On edges a sphere/capsule sweep returns a "rounded" normal blended between
 	 * the two faces: that is only trusted if both faces are walls, so the lip of a floor or roof can't tilt the capsule toward it.
+	 * The surface filter of Settings is evaluated right after the angle test of the hit's own normals.
 	 */
 	static bool IsHitOnValidWall(const UWorld* World, const FHitResult& Hit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings,
 		ECollisionChannel Channel, const FCollisionQueryParams& QueryParams, const FCollisionResponseParams& ResponseParams);
@@ -40,17 +54,21 @@ public:
 	 * Whether the capsule fits on a new wall met at an inside corner: turned to face it and placed at WallGap from it,
 	 * it must not overlap anything. Rejects faces narrower than the capsule (small steps, slanted niches), which would
 	 * otherwise be accepted as walls and leave the capsule wedged half-rotated between the two surfaces.
+	 * bKeepOrientation: the capsule does not turn to the new wall (the v2 modes: it stays gravity-up). The test pose is then the
+	 * current orientation, seated WallGap from the new wall by the capsule's own extent along the new normal (the lower or upper
+	 * hemisphere on an inclined wall), instead of a capsule lying on the wall
 	 */
 	static bool CanFitOnWall(const FMovingComponentSet& MovingComps, const FQuat& CurrentQuat, const FVector& NewNormal,
-		const FVector& ContactPoint, float Radius, float HalfHeight, float WallGap);
+		const FVector& ContactPoint, float Radius, float HalfHeight, float WallGap, bool bKeepOrientation = false);
 
 	/**
 	 * Whether a blocking hit of a move along the wall is an inside (concave) corner the character can move onto: another
 	 * climbable surface, turned more than MinCornerAngle (deg) from the current wall and no more than MaxConcaveAngle,
-	 * that the capsule fits on.
+	 * that the capsule fits on (bKeepOrientation: see CanFitOnWall). The corner angle is between the two surface normals, so it is the
+	 * same on a vertical, an inclined or an overhanging wall.
 	 */
 	static bool IsConcaveCornerHit(const FMovingComponentSet& MovingComps, const FHitResult& Hit, const FVector& MoveDelta, const FQuat& Orientation,
-		const FVector& WallNormal, const FVector& GravityUp, float MinCornerAngle, const FGSTN_WallCheckSettings& Settings);
+		const FVector& WallNormal, const FVector& GravityUp, float MinCornerAngle, const FGSTN_WallCheckSettings& Settings, bool bKeepOrientation = false);
 
 	/** Whether a blocking hit of a move along the wall is a floor: moving down into a surface flatter than a wall */
 	static bool IsFloorHit(const FHitResult& Hit, const FVector& MoveDelta, const FVector& GravityUp, float MinSurfaceAngle);
@@ -65,9 +83,14 @@ public:
 	static bool FindWall(const FMovingComponentSet& MovingComps, const FQuat& Orientation, const FVector& WallNormal, const FVector& Velocity,
 		const FGSTN_WallCornerHit& CornerHit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult);
 
-	/** Looks for the face around an outside (convex) edge the capsule just moved past: dives behind the old wall plane, then sweeps back */
+	/**
+	 * Looks for the face around an outside (convex) edge the capsule just moved past: dives behind the old wall plane, then sweeps back.
+	 * WallSupport: how far the capsule's center is from the wall plane when it is seated (its extent along the wall normal). A capsule
+	 * lying on the wall has its radius (the default, < 0); an upright capsule on an inclined wall has more, and the dive must reach
+	 * that much further to get behind the plane
+	 */
 	static bool FindWallAroundConvexEdge(const FMovingComponentSet& MovingComps, const FVector& WallNormal, const FVector& MoveDelta,
-		const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult);
+		const FVector& GravityUp, const FGSTN_WallCheckSettings& Settings, FGSTN_WallProbeResult& OutResult, float WallSupport = -1.f);
 
 	/** Radius and half height of the updated primitive's collision shape (box extents are approximated) */
 	UFUNCTION(BlueprintPure, Category = "Mover|Wall")

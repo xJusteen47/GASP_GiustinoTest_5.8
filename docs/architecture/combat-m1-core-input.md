@@ -51,10 +51,10 @@ Plugins/GSTNInput/Source/GSTNInputCore/
                                       context tags Input.Context.Grounded/Airborne/OnWall (projected by the Mover context
                                       provider in M2, read by bindings)
     Input/GSTN_CommandBindings.h      FGSTN_TagRequirements, UGSTN_CommandBindingUtils::SelectBinding / FindBindingConflicts (M1.7)
-    (stays in GSTNCombatCore, see below: GSTN_CombatButtonTags.h with Input.Button.Attack/Strong/Special/Crouch/Shield/Jump,
-     GSTN_CombatCommandTags.h with Command.Attack/Strong/Special.<Shape>, Command.Combo.AttackSpecial.<Shape>, and
-     GSTN_StandardSlots.h with UGSTN_StandardSlots::Build(): the standard slot set of combat.md §9.1 in code; tests use
-     it and an editor action creates the asset from it)
+    (stays in GSTNCombatCore, see below: GSTN_CombatButtonTags.h (namespace GSTNCombatButtonTags) with
+     Input.Button.Attack/Strong/Special/Crouch/Shield/Jump, GSTN_CombatCommandTags.h with Command.Attack/Strong/Special.<Shape>,
+     Command.Combo.AttackSpecial.<Shape>, and GSTN_StandardSlots.h with UGSTN_StandardSlots::Build(): the standard slot set of
+     combat.md §9.1 in code; tests use it and UGSTN_StandardSlots::FillSlotSet(Set) creates the asset from it)
   Private/
     GSTNInputCoreModule.cpp
     Input/*.cpp
@@ -91,8 +91,8 @@ determinism constraints, tuning as `UPROPERTY(EditAnywhere/EditDefaultsOnly)` wi
 | `MaxHoldBufferFrames` | 0 | 0 = unlimited while held. |
 | `SimultaneousFrames` | 2 | Presses within this many frames of the newest terminal press form one press group (combat.md §8.2). |
 | `BufferConflictPolicy` | `MostRecent` | Which press group competes: `MostRecent`, `HighestPriority` (all groups, priority only), `Oldest`. |
-| `CommandTiers` | empty in the plugin; combat values (project `Config/DefaultGame.ini`, section `[/Script/GSTNInputCore.GSTN_InputSettings]`): `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400 | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
-| `ExclusiveButtons` | empty in the plugin; combat value (same ini section): Attack, Strong, Special | Button tags whose presses in the winner's press group are consumed with it. |
+| `CommandTiers` | empty in the plugin; combat values (the combat plugin's `UGSTN_CombatSettings`, `Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini`, contributed to the input settings at startup; first kept in the project's `DefaultGame.ini`): `Command.Attack` 100, `Command.Strong` 200, `Command.Special` 300, `Command.Combo` 350, `Command.Super` 400 | Tier per command tag root (`TMap<FGameplayTag, int32>`); a command's tier is the one of its nearest configured ancestor, found by walking `RequestDirectParent()` (deterministic, no map iteration); unlisted = 0. |
+| `ExclusiveButtons` | empty in the plugin; combat value (same settings): Attack, Strong, Special | Button tags whose presses in the winner's press group are consumed with it. |
 | `bChordGraceByDefault` | false | Legacy wait before single-button commands (combat.md §8.3); off because the startup override handles chords. |
 | `ChordGraceFrames` | 3 | Only used when chord grace is on. |
 | `DefaultSimultaneityFrames` | 3 | Tolerance inside a step (e.g. direction vs press). |
@@ -227,8 +227,8 @@ Algorithm:
 
 *Implementation notes (M1.4):*
 
-- **Buttons are bound through `FGSTN_ButtonMap`** (tag -> bit, built by `UGSTN_InputConfig::MakeButtonMap()` or
-  `FGSTN_ButtonMap::MakeStandard()`), passed in `FGSTN_MatchParams::Buttons` and looked up at evaluation (at most 32 integer
+- **Buttons are bound through `FGSTN_ButtonMap`** (tag -> bit, built by `UGSTN_InputConfig::MakeButtonMap()`; the
+  `FGSTN_ButtonMap::MakeStandard()` shortcut was removed in S1), passed in `FGSTN_MatchParams::Buttons` and looked up at evaluation (at most 32 integer
   compares per reference), instead of resolving conditions in place when a slot set is bound: the same slot data serves
   every config and nothing mutates shared assets. A compiled form can come with the M3 table if profiling asks. Unknown
   tag = mask 0 = the condition never holds (the validator reports it through `GetReferencedButtons`).
@@ -363,7 +363,7 @@ M3's move sets:
   { BindingA, BindingB, Message }`. Bindings without a valid command are skipped (their owner reports them).
 - Native tags: `Input.Context.Grounded/Airborne/OnWall` next to the command tags; `Command.Air.*` and the airborne tier
   roots are removed. Standard set: 12 + 4 commands, `CommandTiers` = Attack 100, Strong 200, Special 300,
-  Combo 350, Super 400 (empty by default in `UGSTN_InputSettings`; the combat values live in the project's `Config/DefaultGame.ini`, section `[/Script/GSTNInputCore.GSTN_InputSettings]`).
+  Combo 350, Super 400 (empty by default in `UGSTN_InputSettings`; the combat values live in the combat plugin's own settings and config file, `Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini`, see input.md section 4.2).
 - Linking note: the project module lists `GSTNInputCore` and `GSTNCombatCore` themselves next to `GSTNCombatNP`: the linker does not take the
   Core import library from the plugin's public dependency.
 
@@ -386,8 +386,8 @@ Used by tests, the validator and later the input display. Space-separated tokens
 - `FGSTN_InputScript` is a value: `Parse` adds events, `Advance(History, Settings, UntilFrame)` plays frames up to a
   frame and continues where it stopped (copying the script forks the session, the rollback stand-in of the determinism
   tests); `Build(Notation, Settings, History, LastFrame)` is parse + play to the last token. Buttons resolve by letter
-  (`A` = bit 0), `#n`, or the last part of the tag name through the script's button tags (the script's button tags are a
-  parameter, no default; combat tests pass the six standard buttons in that order). `Describe(History, MaxEvents)` prints a history in this notation (stick events as numpad key +
+  (`A` = bit 0), `#n`, or the last part of the tag name through the script's button tags (`FGSTN_InputScript` has no
+  default constructor: the constructor and `Build` take the button tags; combat tests pass the six standard buttons in that order). `Describe(History, MaxEvents)` prints a history in this notation (stick events as numpad key +
   zone letter, `!` for a flick, `?` for a frame too old to know); M2's `ToString` uses it.
 - `Build(const FString&, FGSTN_InputHistory&, int32& OutLastFrame)` fails loudly on syntax errors and impossible
   sequences (pressing a held button, releasing a released one): it logs an error and returns false.
@@ -408,8 +408,10 @@ Used by tests, the validator and later the input display. Space-separated tokens
 | Validation | Two identical patterns with equal priority → Ambiguous; A vs Dir+A → no conflict (different priority) and A not reported shadowed; a slot fully covered by a higher one → Shadowed; the same command tag twice → DuplicateCommand; a slot without command or without anchor → InvalidSlot. (Slots have no context since M1.7.) |
 | Determinism | Same script resolved twice → identical results; copy the history mid-script, resolve the rest on both copies → identical (rollback stand-in). |
 
-Run headless:
-`UnrealEditor-Cmd.exe "<project>/GASP_Giustino2.uproject" -ExecCmds="Automation RunTests GSTNInput;Automation RunTests GSTNCombat;Quit" -unattended -nullrhi -nopause -log`
+The suite has 63 tests: 56 `GSTNInput.Core.*` and 7 `GSTNCombat.Core.*` (the standard slots row).
+
+Run headless (one `RunTests` with both prefixes: a second `RunTests` in the same `-ExecCmds` can be dropped):
+`UnrealEditor-Cmd.exe "<project>/GASP_Giustino2.uproject" -ExecCmds="Automation RunTests GSTNInput+GSTNCombat;Quit" -unattended -nullrhi -nopause -log`
 (or the Session Frontend). Add the command to testing.md.
 
 ## 6. Acceptance criteria

@@ -1,0 +1,88 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
+#include "WallMovement/GSTN_WallControlTypes.h"
+#include "GSTN_WallControlUtils.generated.h"
+
+/**
+ * GSTN_WallControlUtils: the control model of the v2 wall modes as pure functions (wall-slide-v2.md 6.2-6.3). Called from
+ * GenerateMove to build the proposed velocity; no world, no state, deterministic (rollback-safe).
+ * Plane coordinates are (X = H horizontal along the wall, Y = V along the gravity-tangent, up positive), the stick uses the same axes.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_WallControlUtils : public UBlueprintFunctionLibrary
+{
+	GENERATED_BODY()
+
+public:
+	/**
+	 * Axes of the movement plane: V = gravity-up projected on the plane (falls back to an arbitrary tangent on a ceiling/floor),
+	 * H = V x N. Both unit, orthogonal to the wall normal.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static void MakePlaneAxes(const FVector& WallNormal, const FVector& GravityUp, FVector& OutHorizontal, FVector& OutVertical);
+
+	/** World vector on the plane -> (H, V) */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static FVector2D ToPlane(const FVector& WorldVector, const FVector& Horizontal, const FVector& Vertical);
+
+	/** (H, V) -> world vector on the plane */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static FVector FromPlane(const FVector2D& PlaneVector, const FVector& Horizontal, const FVector& Vertical);
+
+	/**
+	 * Entry: the velocity is turned onto the plane keeping its length (times EntrySpeedKeep, clamped to MaxEntrySpeed).
+	 * Nothing is zeroed: the horizontal run and the fall carry in. A velocity along the normal (no tangent part) gives zero.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static FVector ProjectEntryVelocity(const FGSTN_WallSlideControlSettings& Settings, const FVector& Velocity, const FVector& WallNormal);
+
+	/**
+	 * How much of the stick pushes into the wall (0..1): its component along the horizontal part of -WallNormal. This is the one
+	 * component that must never become vertical input: facing the wall, "forward" is into it, not up it
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static float IntoWallAmount(const FVector& MoveIntent, const FVector& WallNormal, const FVector& GravityUp);
+
+	/**
+	 * The stick on the plane (H, V) with its vertical part dropped when the stick mostly pushes into the wall (IntoAmount above
+	 * MostlyIntoFraction of the stick's size): hold-on never reads as a vertical command, so it cannot brake the slide
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static FVector2D SuppressVerticalIntoWall(const FVector2D& InputOnPlane, float IntoAmount, float StickSize, float MostlyIntoFraction = 0.5f);
+
+	/** Whether the vertical brake is engaged by this stick / tag state */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static bool ResolveBrake(const FGSTN_WallBrakeInput& BrakeInput, const FVector2D& VelocityOnPlane, const FVector2D& InputOnPlane, bool bTagActive);
+
+	/**
+	 * Share of Gravity (cm/s^2, a vector) that acts along the wall toward "down the wall": its component on -Vertical, never negative. 100% of
+	 * |Gravity| on a vertical wall, sin(angle from the horizontal) of it on an inclined one or an overhang, 0 on a floor or a ceiling.
+	 * Vertical is the plane's V axis (gravity-up projected on the plane, MakePlaneAxes), so it works under any gravity direction
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static float GravityAlongPlane(const FVector& Gravity, const FVector& Vertical);
+
+	/**
+	 * The slide settings for a wall that is not vertical: GravityAcceleration becomes the gravity along the plane (GravityAlongPlane), and
+	 * TerminalDownSpeed and DownBoost are scaled by that share of |Gravity| as much as SlopeTerminalScaling says. A vertical wall returns
+	 * the settings with the full gravity (unchanged terminal speed), so the owner's vertical tuning is the 90 degree case of the same law
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static FGSTN_WallSlideControlSettings AdaptToSlope(const FGSTN_WallSlideControlSettings& Settings, const FVector& Gravity, const FVector& Vertical);
+
+	/**
+	 * One tick of the slide: slow-decaying low-control horizontal axis, soft-terminal gravity vertical axis, hard braking.
+	 * IntoWall (0..1) is how much the stick pushes into the wall; it only scales the terminal speed by HoldTowardWallTerminalScale
+	 * (off by default). Under the brake a speed below BrakeMinSpeed (slow, or upward) rises to it, so the slide never freezes
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static FVector2D StepSlideVelocity(const FGSTN_WallSlideControlSettings& Settings, const FVector2D& VelocityOnPlane, const FVector2D& InputOnPlane, bool bBrake, float DeltaSeconds, float IntoWall = 0.f);
+
+	/** One tick of the climb: velocity moves toward InputOnPlane * ClimbSpeed (full 2D control), no gravity */
+	UFUNCTION(BlueprintPure, Category = "Mover|Wall")
+	static FVector2D StepClimbVelocity(const FGSTN_WallClimbControlSettings& Settings, const FVector2D& VelocityOnPlane, const FVector2D& InputOnPlane, float DeltaSeconds);
+};

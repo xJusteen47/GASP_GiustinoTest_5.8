@@ -54,6 +54,11 @@ Level activation (owner brainstorm, 2026-10-26): new spec [`../level-activation.
 (a generic base for zones of objects one player activates with an action; the owner builds the objects by hand). No plan yet; jump, land, enter and hit triggers need no combat seam, ability
 triggers need D-1. Spike A1 (Mover resimulation against geometry that changes with the frame) comes first.
 
+Gravity volumes (owner request, 2026-10-26 17:21): new spec [`../gravity-volumes.md`](../gravity-volumes.md), plugin `GSTNGravity`
+(Mario Galaxy fields: directional, point, line, ring, box, spline, zero; gravity as a pure function of position and frame). No plan
+yet; Core and Runtime are parallel-safe, then spikes G1 (gravity written on resimulated frames) and G2 (GASP character on a planet),
+then the combat base-source seam, which needs the owner's OK.
+
 ### Test maps (owner request, 2026-10-23)
 
 After the related milestones, three test maps are built from primitives by Ludus AI (an editor AI assistant) or a person,

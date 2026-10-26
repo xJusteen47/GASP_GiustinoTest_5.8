@@ -108,6 +108,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Movement Bases", meta = (EditCondition = "bUseMovementBases"))
 	bool bAddBaseVelocityOnExit = true;
 
+	/**
+	 * Ride the wall from where the tick STARTS (the start sync state, which a correction restores) instead of from the character's position in the
+	 * base's frame recorded by the previous tick. The record lives in the rollback blackboard, which a rollback rewinds to what THIS machine predicted
+	 * for the frame before: after a correction the recorded position is the abandoned prediction's, and riding to it undoes the correction (server and
+	 * client then keep a constant offset that no later correction removes, wall-slide-v2.md 6.14). With this on, only the base and its pose at the end
+	 * of the previous frame come from the record; the character's own position is always the synced one. Off by default here (legacy modes unchanged),
+	 * on in the v2 traverse modes
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall|Movement Bases", meta = (EditCondition = "bUseMovementBases"))
+	bool bRideFromSyncedLocation = false;
+
+	/**
+	 * Record in the wall memory the height of the wall's own origin when the wall is a moving one (a Movable component: an enemy's platform shape,
+	 * a moving wall), FGSTN_WallMovementSyncState::LastWallBaseHeight. The entry transition then judges its height cap in the wall's frame
+	 * (UGSTN_WallEntryTransition::bBaseRelativeHeightCap, traversal T2): with world heights a wall that rises refuses a re-grab lower on it and one
+	 * that sinks lets the character climb it by re-grabbing. Off by default here (legacy modes unchanged), on in the v2 traverse modes
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall|Movement Bases")
+	bool bRecordWallBaseInMemory = false;
+
 	// ---------------------------------------------------------------- Surface Detection
 	// What the probes accept and where they look. Output: the RAW PROBE NORMAL (and contact point) of this substep.
 	// These shape which wall the character is on and how corners are sensed; they do not smooth anything by themselves.
@@ -168,6 +188,14 @@ public:
 	/** [Raw normal] Minimum lookahead distance, so corners are anticipated even when moving slowly */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Surface Detection", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float MinLookaheadDistance = 15.f;
+
+	/**
+	 * Which surfaces count as a wall for this mode besides the angle: the probes, the corner checks and the wrap probe ignore
+	 * a hit whose surface lacks the required behaviours (a wall slide mode asks Surface.Behaviour.WallSlide, a climb mode
+	 * WallClimb). Empty by default = every surface, as before. See FGSTN_WallSurfaceFilter
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Surface Detection")
+	FGSTN_WallSurfaceFilter SurfaceFilter;
 
 	// ---------------------------------------------------------------- Normal Filter
 	// Raw probe normal -> FILTERED NORMAL (sync state). This is the movement plane: velocity, input mapping, adhesion
@@ -268,6 +296,14 @@ protected:
 	virtual void CheckForWallExit(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState) const;
 
 	/**
+	 * Whether the pawn is held in place from outside (hitstop): a locked tick skips CheckForWallExit (so no wall jump, no detach, no
+	 * pull-away) and does not advance TimeWithoutWall / PullAwayTime, so the mode is still the same one when the lock ends. Read from
+	 * the start sync state like every simulation input. Base: Mover carries the tag Combat.Mover.Frozen (a freeze layered move of the
+	 * combat plugin); the tag is looked up by name so this module does not depend on the plugin. Unlocked ticks behave as before
+	 */
+	virtual bool IsMovementLocked(const FMoverTickStartData& StartState) const;
+
+	/**
 	 * Capsule up the orientation chases on the wall: parallel transport of the current frame plus the upright bias.
 	 * The target orientation faces the wall (X = -WallNormal) with this up
 	 */
@@ -287,7 +323,7 @@ protected:
 	FGSTN_WallTickState MakeTickState(const FSimulationTickParams& Params, const FQuat& StartQuat) const;
 
 	/** Moves/rotates the capsule, the wall normal and the velocity with the dynamic wall it is riding */
-	void ApplyMovementBase(const FMovingComponentSet& MovingComps, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
+	void ApplyMovementBase(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
 
 	/** Substepped move along the wall: translate, sense, filter the normal, orient, adhere, transport the velocity */
 	void MoveAlongWall(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
@@ -309,8 +345,8 @@ protected:
 	/** Turns the capsule toward the target orientation, smoothed, around the wall contact point */
 	void OrientToWall(const FMovingComponentSet& MovingComps, float DistanceTravelled, float DeltaSeconds, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const;
 
-	/** Stores the dynamic wall to ride next tick, or adds its velocity and forgets it when leaving */
-	void UpdateMovementBase(const FMovingComponentSet& MovingComps, FGSTN_WallTickState& InOutState) const;
+	/** Stores the dynamic wall to ride next tick (rollback blackboard, GSTNWallBlackboard::BaseInfo), or adds its velocity and forgets it when leaving */
+	void UpdateMovementBase(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState) const;
 
 	/** Writes the tick result into the default and wall sync states, and the mode switch if any */
 	void CaptureFinalState(const FSimulationTickParams& Params, const FQuat& StartQuat, const FGSTN_WallTickState& State, bool bLeftOnPurpose, FMoverTickEndData& OutputState) const;
@@ -320,8 +356,8 @@ protected:
 	/** Target capsule orientation: facing the wall, with ComputeTargetUp as up */
 	FQuat ComputeTargetOrientation(const FQuat& CurrentQuat, const FVector& WallNormal, const FVector& GravityUp, const FVector& Velocity, float DeltaSeconds) const;
 
-	/** Query parameters from the Surface Detection and Adhesion settings */
-	FGSTN_WallCheckSettings GetWallCheckSettings() const;
+	/** Query parameters from the Surface Detection and Adhesion settings. Virtual so a mode can widen what it accepts (the v2 modes' surface mode list) */
+	virtual FGSTN_WallCheckSettings GetWallCheckSettings() const;
 
 	/** Wall normal of the sync state, or the capsule's back if there is none yet */
 	static FVector GetWallNormal(const FGSTN_WallMovementSyncState* WallState, const FQuat& FallbackOrientation);

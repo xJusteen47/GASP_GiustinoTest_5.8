@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/NpGameplayAbility.h"
+#include "GAS/GSTN_AbilityActivationInput.h"
 #include "GSTN_GameplayAbility.generated.h"
 
 class UMoverComponent;
@@ -23,7 +24,7 @@ class UGSTN_MoverSimStateTracker;
  * To read the movement state (mode, on ground...) from the simulation use GetMoverSimState, not the Mover component's own
  * queries: those return the game frame state, which is wrong while re-simulating (see UGSTN_MoverSimStateTracker).
  */
-UCLASS(Abstract)
+UCLASS(Abstract, Config = Game)
 class GASP_GIUSTINO2_API UGSTN_GameplayAbility : public UNpGameplayAbility
 {
 	GENERATED_BODY()
@@ -45,6 +46,14 @@ protected:
 	/** Mover's simulation state as of the last simulated frame. Null if the avatar has no Mover component */
 	static const UGSTN_MoverSimStateTracker* GetMoverSimState(const FGameplayAbilityActorInfo* ActorInfo);
 
-	/** Adds an input action activation trigger. Constructor only (uses ConstructorHelpers) */
-	void AddActivationInput(const TCHAR* InputActionPath, ETriggerEvent TriggerEvent = ETriggerEvent::Started);
+	/**
+	 * The input action that activates this ability (UNpGameplayAbility::ActivationInputs is filled from it when the ability is
+	 * granted). Config, so a class names its action in its ini section (Config/DefaultGame.ini, [/Script/GASP_Giustino2.<Class>]
+	 * ActivationInput=(Action=...,Trigger=...)) or a Blueprint child sets it in its defaults; no content path in C++.
+	 */
+	UPROPERTY(Config, EditDefaultsOnly, Category = "Ability|Activation")
+	FGSTN_SoftActivationInput ActivationInput;
+
+	/** True for an ability that is activated by ActivationInput: an unset action is then logged as an error when it is granted */
+	bool bRequiresActivationInput = false;
 };

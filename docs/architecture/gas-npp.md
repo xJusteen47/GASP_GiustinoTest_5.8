@@ -9,7 +9,7 @@ Source: `Source/GASP_Giustino2/{Public,Private}/GAS/`, plugins in `Plugins/GASNP
 - Ability-side per-tick logic goes in `OnSimulationTick(const FAbilitySystemTimeStep&)`. Waiting is done with `*PredictionTask` classes (`Tasks/GASTasks/`) rather than stock `UAbilityTask`s.
 - Ability state that must survive a rollback is a **sync variable** (`FSyncInteger`, ... in `DataTypes/SyncedvariableTypes/BasicSyncedVariablesTypes.h`). A plain member is not rolled back. Example: `FramesSinceActivation` in `UGSTN_GA_WallSlide`.
 - Input: abilities declare `ActivationInputs`; the ability system binds the Enhanced Input actions of the mapping contexts listed in Project Settings > Ability Simulation Settings (`AbilitySystemMappingContexts` in `Config/DefaultGame.ini`) and sends their state with the predicted input.
-- Local patches to the fork (details in [combat.md](combat.md) section 17): on rollback every instance's state view is set to the restored frame before re-simulation; `UNpAbilitySystemComponent::OnSimulationPreTick` lets another simulation drive the ASC from inside its tick; the montage pause flag counts in `ShouldReconcile` only while a montage plays.
+- Local patches to the fork (full list in [PATCHES.md](../../Plugins/GASNPP/PATCHES.md); the forward-prediction spike is in [combat.md](combat.md) section 12.7): on rollback every instance's state view is set to the restored frame before re-simulation; `UNpAbilitySystemComponent::OnSimulationPreTick` lets another simulation drive the ASC from inside its tick; the montage pause flag counts in `ShouldReconcile` only while a montage plays.
 - Stock GAS docs (README in `Plugins/GASNPP/GameplayAbilities/README.md`, tranek's GASDocumentation) still describe concepts (attributes, tags, effects, cues) correctly. They are **wrong for prediction, replication and ability tasks** in this project.
 
 ## Tick order (important)
@@ -23,7 +23,7 @@ Fixed tick: **ability system first, then Mover**.
 
 | Class | Role |
 |---|---|
-| `UGSTN_GameplayAbility` (abstract) | Base of all project abilities. Helpers: `GetMoverComponentFromActorInfo`, `GetCharacterMoverFromActorInfo`, `GetMoverSimState`, `AddActivationInput` (constructor only). |
+| `UGSTN_GameplayAbility` (abstract) | Base of all project abilities. Helpers: `GetMoverComponentFromActorInfo`, `GetCharacterMoverFromActorInfo`, `GetMoverSimState`, and the config property `ActivationInput` (`FGSTN_SoftActivationInput`: the input action and trigger event that activate the ability, resolved into the fork's `ActivationInputs` when the ability is granted; set `bRequiresActivationInput` in the constructor so an unset action is logged). The action is named in `Config/DefaultGame.ini` under `[/Script/GASP_Giustino2.<Class>]` or in a Blueprint child's defaults, never as a content path in C++. |
 | `UGSTN_GA_Jump` | Ground jump. Applies `UGSTN_GE_Jump` whose `UGSTN_JumpImpulseMoveCreator` queues Mover's jump impulse. Turns off `UCharacterMoverComponent` built-in jump on the avatar (`bTakeOverMoverJump`). |
 | `UGSTN_GA_WallSlide` | "Being on a wall". No input. Owns `State.Movement.WallSliding`; ends when Mover leaves `WallModeNames`. Movement itself stays in the wall modes. |
 | `UGSTN_AbilityWallEntryTransition` | Mover transition (Falling -> wall mode) that grabs a wall only if an ability with `AbilityTags` is granted and `CanActivate`, then activates it. |

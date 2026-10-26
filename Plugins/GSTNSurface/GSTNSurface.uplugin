@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Surface",
+	"Description": "Traversal surface data contract: which mechanics a collider offers (wall slide, wall climb, launch, stand), its impact class (Surface.Type.*) and its launch parameters, resolved from a hit by component, provider interface, physical material table or default. Pure data and stateless resolution (GSTNSurfaceCore): no GAS, Network Prediction or Mover, so it needs no fork. Enabling it changes nothing until a designer marks a surface.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNSurfaceCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

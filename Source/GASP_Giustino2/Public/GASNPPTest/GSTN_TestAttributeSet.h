@@ -38,6 +38,25 @@ public:
 	FGameplayAttributeData MaxStamina;
 	GSTN_ATTRIBUTE_ACCESSORS(UGSTN_TestAttributeSet, MaxStamina)
 
+	// Probe attributes (M3 spikes). The two counters are bumped by instant effects from the triggered probe abilities, so a
+	// double or phantom activation shows in the synced attribute state. The two scales are driven by infinite effects and
+	// read every tick by the stats probe on UGSTN_GASNPPTestComponent.
+	UPROPERTY(BlueprintReadOnly, Category = "Test|Probe")
+	FGameplayAttributeData ProbeEventCount;
+	GSTN_ATTRIBUTE_ACCESSORS(UGSTN_TestAttributeSet, ProbeEventCount)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Test|Probe")
+	FGameplayAttributeData ProbeTagCount;
+	GSTN_ATTRIBUTE_ACCESSORS(UGSTN_TestAttributeSet, ProbeTagCount)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Test|Probe")
+	FGameplayAttributeData ProbeSpeedScale;
+	GSTN_ATTRIBUTE_ACCESSORS(UGSTN_TestAttributeSet, ProbeSpeedScale)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Test|Probe")
+	FGameplayAttributeData ProbeGravityScale;
+	GSTN_ATTRIBUTE_ACCESSORS(UGSTN_TestAttributeSet, ProbeGravityScale)
+
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 	virtual void PreAttributeBaseChange(const FGameplayAttribute& Attribute, float& NewValue) const override;
 

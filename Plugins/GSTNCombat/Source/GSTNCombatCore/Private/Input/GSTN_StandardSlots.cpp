@@ -2,7 +2,7 @@
 
 #include "Input/GSTN_StandardSlots.h"
 #include "Input/GSTN_CombatCommandTags.h"
-#include "Input/GSTN_CombatInputTags.h"
+#include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputConditions.h"
 
 namespace
@@ -33,7 +33,7 @@ namespace
 	FCondition MakeCrouchHeld()
 	{
 		FGSTN_InputCondition_Hold Condition;
-		Condition.Button = GSTNInputTags::Button_Crouch.GetTag();
+		Condition.Button = GSTNCombatButtonTags::Button_Crouch.GetTag();
 		Condition.MinFrames = 0;
 		return MakeInstance(Condition);
 	}
@@ -76,9 +76,9 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 		const FNativeGameplayTag* Commands[4];
 	};
 	const FFamily Families[] = {
-		{ GSTNInputTags::Button_Attack, { &Attack_Neutral, &Attack_Directional, &Attack_CrouchNeutral, &Attack_CrouchDirectional } },
-		{ GSTNInputTags::Button_Strong, { &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional } },
-		{ GSTNInputTags::Button_Special, { &Special_Neutral, &Special_Directional, &Special_CrouchNeutral, &Special_CrouchDirectional } },
+		{ GSTNCombatButtonTags::Button_Attack, { &Attack_Neutral, &Attack_Directional, &Attack_CrouchNeutral, &Attack_CrouchDirectional } },
+		{ GSTNCombatButtonTags::Button_Strong, { &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional } },
+		{ GSTNCombatButtonTags::Button_Special, { &Special_Neutral, &Special_Directional, &Special_CrouchNeutral, &Special_CrouchDirectional } },
 	};
 	const FNativeGameplayTag* Combos[] = { &Combo_AttackSpecial_Neutral, &Combo_AttackSpecial_Directional,
 		&Combo_AttackSpecial_CrouchNeutral, &Combo_AttackSpecial_CrouchDirectional };
@@ -95,10 +95,30 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 	for (int32 Shape = 0; Shape < 4; ++Shape)
 	{
 		FGSTN_InputCondition_Chord Chord;
-		Chord.Buttons.AddTag(GSTNInputTags::Button_Attack.GetTag());
-		Chord.Buttons.AddTag(GSTNInputTags::Button_Special.GetTag());
+		Chord.Buttons.AddTag(GSTNCombatButtonTags::Button_Attack.GetTag());
+		Chord.Buttons.AddTag(GSTNCombatButtonTags::Button_Special.GetTag());
 		Chord.WithinFrames = 2;
 		Slots.Add(MakeSlot(Combos[Shape]->GetTag(), MakeInstance(Chord), static_cast<EShape>(Shape)));
 	}
 	return Slots;
 }
+
+#if WITH_EDITOR
+void UGSTN_StandardSlots::FillSlotSet(UGSTN_InputSlotSet* Set)
+{
+	if (!Set)
+	{
+		return;
+	}
+
+	Set->Modify();
+	Set->Slots.Reset();
+	for (const FGSTN_InputSlotSpec& Spec : Build())
+	{
+		FGSTN_InputSlotEntry Entry;
+		Entry.Inline = Spec;
+		Set->Slots.Add(MoveTemp(Entry));
+	}
+	Set->MarkPackageDirty();
+}
+#endif

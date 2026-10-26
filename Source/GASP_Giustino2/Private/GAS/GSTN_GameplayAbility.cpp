@@ -4,8 +4,6 @@
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
-#include "InputAction.h"
-#include "UObject/ConstructorHelpers.h"
 
 UGSTN_GameplayAbility::UGSTN_GameplayAbility(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -31,6 +29,9 @@ void UGSTN_GameplayAbility::OnAvatarSet(const FGameplayAbilityActorInfo* ActorIn
 
 	// Start tracking before the first simulation frame that uses it
 	GetMoverSimState(ActorInfo);
+
+	// The ability system reads the activation inputs of the class default object, which is what the spec points at
+	ActivationInput.Resolve(Cast<UNpGameplayAbility>(Spec.Ability), bRequiresActivationInput);
 }
 
 UMoverComponent* UGSTN_GameplayAbility::GetMoverComponentFromActorInfo() const
@@ -43,14 +44,3 @@ UCharacterMoverComponent* UGSTN_GameplayAbility::GetCharacterMoverFromActorInfo(
 	return Cast<UCharacterMoverComponent>(GetMoverComponentFromActorInfo());
 }
 
-void UGSTN_GameplayAbility::AddActivationInput(const TCHAR* InputActionPath, ETriggerEvent TriggerEvent)
-{
-	ConstructorHelpers::FObjectFinder<UInputAction> InputActionFinder(InputActionPath);
-	if (InputActionFinder.Succeeded())
-	{
-		FAbilityActivationTrigger Trigger;
-		Trigger.InputAction = InputActionFinder.Object;
-		Trigger.TriggerEvent = TriggerEvent;
-		ActivationInputs.Add(Trigger);
-	}
-}

@@ -238,8 +238,18 @@ void FNetworkPredictionTrace::TraceNetRecv(int32 Frame, int32 TimeMS)
 		<< NetRecv.TimeMS(TimeMS);
 }
 
+// Dev diagnostic: the trace names the field that asked for a reconcile only inside an Insights capture. With this on, the
+// first mismatching field of every ShouldReconcile is also logged, so a reconcile dump in the log can be attributed
+static TAutoConsoleVariable<bool> CVarLogReconcileField(TEXT("np.LogReconcileField"), false,
+	TEXT("Log the name of the field that made ShouldReconcile return true (editor and test builds)"), ECVF_Default);
+
 void FNetworkPredictionTrace::TraceReconcile(const FAnsiStringView& StrView)
 {
+	if (CVarLogReconcileField.GetValueOnAnyThread())
+	{
+		UE_LOG(LogNetworkPrediction, Warning, TEXT("ReconcileField: %hs"), FAnsiString(StrView).GetCharArray().GetData());
+	}
+
 	UE_TRACE_LOG(NetworkPrediction, Reconcile, NetworkPredictionChannel)
 		<< Reconcile.UserString(StrView.GetData(), StrView.Len());
 }

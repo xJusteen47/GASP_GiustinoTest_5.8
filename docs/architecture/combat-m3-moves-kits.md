@@ -60,7 +60,7 @@ Public/
   GSTN_CombatTags.h                     native tags (section 4)
   Attributes/GSTN_MovementAttributeSet.h
   Attributes/GSTN_MeterAttributeSet.h
-  Effects/GSTN_GE_MeterCost.h           instant cost GE (SetByCaller)
+  Effects/GSTN_GE_MeterCost.h           instant cost GE (Cost data)
   Effects/GSTN_GE_WeaponStats.h         base class for weapon stat GEs (infinite)
   Abilities/GSTN_CombatTimeline.h       FGSTN_CombatTimelineData, UGSTN_CombatTimeline, track structs (section 6.3)
   Abilities/GSTN_ActivationContext.h    FGSTN_ActivationContext, EGSTN_ActivationSource, EGSTN_InterruptPolicy
@@ -192,8 +192,8 @@ this ability's, remove the loose tag if present.
 | `DeferredCommitFrame` | Derived = `OverrideFrames`. Validation: no hitbox, event, movement track, projectile or cost before it. |
 | `BufferResetRules` | Appended while the timeline runs. |
 
-Costs (meter, cooldown) are the ability's ordinary GAS cost and cooldown; `UGSTN_GE_MeterCost` with SetByCaller per
-meter attribute.
+Costs (meter, cooldown) are the ability's ordinary GAS cost and cooldown; `UGSTN_GE_MeterCost` per
+meter attribute, the amount in its `Cost` (FScalableFloat).
 
 Track structs in M3 (base `FGSTN_TimelineTrack { int32 StartFrame; int32 EndFrame; }`):
 
@@ -422,16 +422,22 @@ The same table feeds the resolver (entries filtered by source per frame), adopti
 
 ## 10. Loadout component, application, save
 
-- `UGSTN_LoadoutComponent` (PlayerState): `ServerRequestLoadout(FGSTN_LoadoutData)` (reliable) → rules → store as
-  `Applied` (replicated, `OnRep`) → if the pawn is alive and the game allows it, apply now, else on next spawn.
-- **Apply** (server, outside the simulation, at possession/respawn): remove previous grants (handles kept by the
-  component, server only), grant the table's ability classes, triggered abilities, passives, kit init GE, primary weapon
-  stats GE, `Revision++`, OOB write of the revision (7.8), set the combat component's table.
-- **`UGSTN_LoadoutSubsystem`** (LocalPlayer): `SaveLoadout(SlotName, Data)`, `LoadLoadout(SlotName)`,
-  `ListLoadouts()`; `UGSTN_LoadoutSaveGame { TMap<FString, FGSTN_LoadoutData> Loadouts; int32 Version; }`. On load,
-  unknown asset ids are dropped with a warning (content changes between versions).
-- **Skins**: `UGSTN_SkinComponent` on the pawn applies `Applied.Skin` (mesh, materials, anim class) on spawn and
-  `OnRep`; no simulation code reads it.
+- `UGSTN_LoadoutComponent` (PlayerState): `ServerRequestLoadout(FGSTN_LoadoutData)` (reliable) → `AcceptLoadout` (resolve, compile,
+  rules; a refusal goes back to the client as `OnLoadoutRejected`) → store as `Applied` (replicated with the `Revision`, `OnRep`) →
+  `ApplyAppliedLoadout()`: called directly on the server (a listen host never gets its own OnRep) and by the OnRep on a client. It
+  resolves the ids once, compiles the table on every machine and, on the server only, grants. A pawn that is not there yet leaves the
+  grant pending until `OnPawnSet` (applied one tick later) or a manual `ApplyAppliedLoadout()`.
+- **Apply** (server, outside the simulation, at accept and at possession/respawn): remove what the previous apply granted (handles
+  kept by the component, server only), kit init GE, primary weapon stats GE, grant the table's ability classes (which include the
+  triggered abilities and passives) plus the primary weapon's passives. `Revision` goes up when a loadout is accepted (not again on a
+  respawn: a new pawn starts from its own state), is replicated with `Applied`, and is a plain value in this component; the OOB write
+  of the revision into the combat sync state (7.8) and setting the combat component's table are the NP adapter's (C8).
+- **`UGSTN_LoadoutSubsystem`** (LocalPlayer): `SaveLoadout(PresetName, Data)`, `LoadLoadout(PresetName, Out)`, `DeleteLoadout`,
+  `HasLoadout`, `ListLoadouts()`, `RequestLoadout(PresetName, Component)`; `UGSTN_LoadoutSaveGame { TMap<FString, FGSTN_LoadoutData>
+  Loadouts; int32 SaveVersion; }`. On load, unknown asset ids are dropped with a warning (content changes between versions), on a copy:
+  the file keeps what was saved.
+- **Skins**: `UGSTN_SkinComponent` on the pawn applies the loadout's resolved skin (mesh, materials, anim class) on spawn and whenever
+  `OnLoadoutApplied` fires (it follows the PlayerState's loadout component); no simulation code reads it, nothing runs on a dedicated server.
 
 ## 11. Test content and harness
 

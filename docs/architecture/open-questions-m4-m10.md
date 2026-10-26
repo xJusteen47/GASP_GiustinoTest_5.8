@@ -51,6 +51,7 @@ Le quindici domande ancora aperte la cui risposta cambia di più l'architettura 
 | Cristallo per giocatore, god rays, ombra sulla nebbia | [combat-parts.md](combat-parts.md) §6.0, [depth-marker.md](depth-marker.md) §4.1 |
 | Input a carica (stile Guile) | [input.md](input.md) §10 |
 | Zone di oggetti attivabili da un solo giocatore | [level-activation.md](level-activation.md) |
+| Volumi di gravità alla Mario Galaxy | [gravity-volumes.md](gravity-volumes.md) |
 | Demolizione, hitbox variabili, spin da tastiera, collisioni dei colpi | [combat-m4-hits.md](combat-m4-hits.md) §3, §7c, §9c; [input.md](input.md) §9 |
 
 
@@ -1524,6 +1525,19 @@ seguire lo stick (tu hai detto: anche un giro intero, ma muovendo lo stick molto
    valida in qualunque direzione.
    Ipotesi nella specifica: 50 gradi da ogni lato, e la direzione segue lo stick a 90 gradi al secondo al massimo (un giro intero in 4
    secondi); tutto regolabile mossa per mossa.
+   **Risposta (2026-10-26 10:23):** Va bene, ma forse 90 gradi al secondo è troppo veloce per alcune cose. Nella specifica: 50 gradi;
+   la direzione segue lo stick a **45 gradi al secondo** di base (un giro intero in 8 secondi), regolabile mossa per mossa, anche 0
+   (direzione fissa).
+
+CB.1. Cariche sui **tasti normali** (tua domanda delle 10:25, lo Zonk Knuckle di Cody): tenere premuto un tasto e rilasciarlo esiste già
+nel plugin di input, e la pressione può far partire un attacco normale mentre la carica continua. Ti servono anche cariche su **più tasti
+insieme** (per esempio tenere tre pugni e rilasciarli insieme, come nei giochi più vecchi)?
+   Perché conta: un tasto solo funziona già; più tasti insieme richiedono una piccola condizione nuova.
+   Ipotesi nella specifica: solo un tasto per ora; la condizione per più tasti si aggiunge quando una mossa la chiede.
+   **Risposta (2026-10-26 10:26):** "Considera anche come funziona l'EX Zonk". Nella specifica: sì, serve. L'EX Zonk si carica tenendo
+   **due pugni insieme** e rilasciandoli insieme, consuma la barra EX e senza barra diventa lo Zonk normale. Lo Zonk normale si carica
+   su un pugno qualsiasi, con **tre livelli** secondo quanto lo tieni (circa 1, 1,5 e 2 secondi). Ogni tasto si carica per conto suo, e
+   altre pressioni nel frattempo non accorciano la carica ([input.md](input.md) §10).
 
 ## Zone di oggetti attivabili da un solo giocatore (26/10)
 
@@ -1537,25 +1551,70 @@ FLP.1. Quando una zona **torna libera** per un altro giocatore? Quando il propri
 finché resta nel livello? (Non vale per le zone con proprietario assegnato.)
    Perché conta: se non si libera mai, un giocatore lontano blocca la zona per tutti.
    Ipotesi nella specifica: si libera dopo circa 2 secondi che il proprietario non ci sta sopra, o quando va KO.
+   **Risposta (2026-10-26 10:13):** Lo decide il designer. Nella specifica: per ogni zona si sceglie se si libera dopo un tempo senza il
+   proprietario, quando il proprietario va KO, entrambe le cose (valore di base) oppure mai.
 
 FLP.2. Il **ritardo** prima che l'oggetto reagisca va bene come valore per zona, con 20 frame di base (circa 0,3 s) per gli oggetti che
 cambiano il terreno sotto gli altri giocatori e 0 per quelli che portano solo il proprietario? Vale anche giocando da soli?
    Perché conta: con 0,3 secondi online tutti vedono il cambio nello stesso momento; da soli può sembrare lento.
    Ipotesi nella specifica: sì, deciso dal designer zona per zona, con gli oggetti che lampeggiano nel colore del proprietario durante
    l'attesa; da soli lo stesso valore, salvo che tu non preferisca 0.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
 
 FLP.3. L'azione del proprietario conta **ovunque si trovi** (come il salto in Mario 3D Land) oppure solo se la fa **dentro la zona** o
 stando sopra?
    Perché conta: "ovunque" permette di attivare da lontano per aiutare gli altri, "dentro" lega la zona a chi la sta usando.
    Ipotesi nella specifica: opzione del designer per zona, di base "dentro la zona".
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
 
 FLP.4. Gli **altri giocatori** possono fare qualcosa su una zona occupata (per esempio salirci senza farla reagire), oppure la zona li
 ignora del tutto?
-   Ipotesi nella specifica: ci possono stare sopra e camminare, i loro salti non contano finché il gruppo è occupato.
+   Ipotesi nella specifica: ci possono stare sopra e camminare, le loro azioni non contano finché la zona è occupata.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
 
 FLP.5. Quali **altre azioni** vuoi che attivino gli oggetti? Schianto a terra, spin, trapano, colpo, interazione, entrare in una zona?
    Ipotesi nella specifica: tutte, scelte dal designer oggetto per oggetto; salto, atterraggio, entrata e colpo funzionano subito, le altre
    dopo una piccola aggiunta al sistema delle abilità.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
 
 FLP.6. I **nemici** possono attivare questi oggetti (per esempio un nemico che salta sulle piattaforme)?
    Ipotesi nella specifica: no di base, solo i giocatori; il designer può aprirlo per un oggetto.
+   **Risposta (2026-10-26 10:13):** L'ipotesi va bene.
+
+## Volumi di gravità alla Mario Galaxy (26/10)
+
+Specifica: [gravity-volumes.md](gravity-volumes.md). Campi di gravità piazzati nel livello: direzione fissa (zone capovolte o di lato),
+verso un punto (pianeti rotondi), verso un asse (cilindri, tubi), verso un anello, verso una scatola (pianeti cubici), lungo una spline, e
+gravità zero. Dove due campi si sovrappongono vince quello con priorità più alta. La gravità si calcola ogni frame dalla posizione, dentro
+la simulazione, quindi online è coerente senza dati in più. Oggi la gravità è solo un'impostazione del componente Mover, quindi questa è
+una parte nuova.
+
+GRV.1. Quando la gravità cambia, il movimento usa **subito** la nuova gravità, mentre il **modello** del personaggio e la **telecamera**
+ruotano in modo morbido. Va bene una rotazione del modello rapida (proposta: 720 gradi al secondo, un capovolgimento in un quarto di
+secondo) e la telecamera più lenta (90 gradi al secondo, come già nella specifica della telecamera)?
+   Perché conta: girare subito anche il modello è più leggibile ma brusco; girarlo lentamente è più morbido ma il personaggio sembra
+   storto per un attimo.
+   Ipotesi nella specifica: modello 720 gradi al secondo, telecamera 90 gradi al secondo, regolabili per livello.
+   **Risposta (2026-10-26 20:54):** Sì.
+
+GRV.2. **Fuori da ogni campo**, cosa succede: torna la gravità normale del livello, oppure resta l'ultima gravità che avevi (come nello
+spazio di Galaxy, dove tra un pianeta e l'altro continui verso dove stavi andando)?
+   Perché conta: con l'ultima gravità i livelli spaziali non hanno bisogno di coprire tutto il vuoto con campi; con quella del livello
+   tutto è più prevedibile.
+   Ipotesi nella specifica: gravità del livello di base, "tieni l'ultima" come opzione per livello (non costa dati in più).
+   **Risposta (2026-10-26 20:54):** Come in Galaxy. Nella specifica: fuori dai campi resta l'ultima gravità; la gravità normale del
+   livello resta come opzione.
+
+GRV.3. I **nemici sui pianeti rotondi**: la navmesh di Unreal funziona solo con l'alto verso Z, quindi sui pianeti i nemici avrebbero
+bisogno di un loro sistema di movimento sulla superficie. Li vuoi già nella prima versione, oppure per ora i nemici stanno solo nelle zone
+a gravità con direzione fissa (anche capovolte o di lato)?
+   Perché conta: il movimento dei nemici su superfici curve è un lavoro a parte, abbastanza grande.
+   Ipotesi nella specifica: prima versione solo zone a direzione fissa; pianeti con nemici più avanti.
+   **Risposta (2026-10-26 20:54):** Bassa priorità.
+
+GRV.4. Gli **oggetti fisici liberi** (casse, detriti) dentro i campi: seguono la gravità del campo solo come effetto visivo, oppure fanno
+parte del gioco (per esempio una cassa che rotola verso di te su un pianeta)?
+   Perché conta: farli contare nel gioco online costa molto; come effetto visivo è economico.
+   Ipotesi nella specifica: effetto visivo; gli oggetti presi e lanciati (M10) invece seguono la gravità nella simulazione.
+   **Risposta (2026-10-26 20:56):** "Una cassa non dovrebbe essere un oggetto lanciabile?" Sì: tutto ciò che si può prendere o lanciare
+   è un oggetto di M10 e segue la gravità nella simulazione; solo detriti, frammenti e decorazioni sono effetto visivo.

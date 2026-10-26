@@ -2,15 +2,21 @@
 
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "DefaultMovementSet/LayeredMoves/BasicLayeredMoves.h"
 
 namespace GSTNTestTags
 {
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Dash, "Test.Cooldown.Dash");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_WalkSpeed, "Combat.SetByCaller.Stat.WalkSpeed");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_JumpVelocity, "Combat.SetByCaller.Stat.JumpVelocity");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Buff, "Test.Cooldown.Buff");
 	UE_DEFINE_GAMEPLAY_TAG(State_Dashing, "Test.State.Dashing");
 	UE_DEFINE_GAMEPLAY_TAG(State_Buffed, "Test.State.Buffed");
+	UE_DEFINE_GAMEPLAY_TAG(Probe_Event, "Test.Probe.Event");
+	UE_DEFINE_GAMEPLAY_TAG(Probe_TagTrigger, "Test.Probe.TagTrigger");
+	UE_DEFINE_GAMEPLAY_TAG(Probe_Bulk, "Test.Probe.Bulk");
 }
 
 namespace
@@ -101,4 +107,75 @@ UGSTN_GE_StaminaRegen::UGSTN_GE_StaminaRegen()
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
 	Period = FScalableFloat(0.25f);
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetStaminaAttribute(), 2.f));
+}
+
+UGSTN_GE_ProbeTagGrant::UGSTN_GE_ProbeTagGrant()
+{
+	DurationPolicy = EGameplayEffectDurationType::HasDuration;
+	DurationMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(1.f));
+	GrantTag(this, GEComponents, GSTNTestTags::Probe_TagTrigger);
+}
+
+UGSTN_GE_ProbeCountEvent::UGSTN_GE_ProbeCountEvent()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeEventCountAttribute(), 1.f));
+}
+
+UGSTN_GE_ProbeCountTag::UGSTN_GE_ProbeCountTag()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeTagCountAttribute(), 1.f));
+}
+
+UGSTN_GE_ProbeBulk::UGSTN_GE_ProbeBulk()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	GrantTag(this, GEComponents, GSTNTestTags::Probe_Bulk);
+}
+
+UGSTN_GE_ProbeStatsFast::UGSTN_GE_ProbeStatsFast()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeSpeedScaleAttribute(), 1.f));
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), -0.5f));
+	// The real stats modifier follows the combat WalkSpeed stat (600 by default): +600 doubles it
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), 600.f));
+}
+
+UGSTN_GE_ProbeStatsSlow::UGSTN_GE_ProbeStatsSlow()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeSpeedScaleAttribute(), -0.5f));
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_TestAttributeSet::GetProbeGravityScaleAttribute(), 1.f));
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), -300.f));
+}
+
+UGSTN_GE_TestPrimaryWeaponStats::UGSTN_GE_TestPrimaryWeaponStats()
+{
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), 300.f));
+}
+
+UGSTN_GE_TestSupportWeaponStats::UGSTN_GE_TestSupportWeaponStats()
+{
+	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), -300.f));
+}
+
+UGSTN_GE_TestKitInit::UGSTN_GE_TestKitInit()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	const TPair<FGameplayAttribute, FGameplayTag> Stats[] = {
+		{ UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), GSTNTestTags::Stat_WalkSpeed },
+		{ UGSTN_CombatAttributeSet::GetJumpVelocityAttribute(), GSTNTestTags::Stat_JumpVelocity },
+	};
+	for (const TPair<FGameplayAttribute, FGameplayTag>& Stat : Stats)
+	{
+		FGameplayModifierInfo Modifier;
+		Modifier.Attribute = Stat.Key;
+		Modifier.ModifierOp = EGameplayModOp::Override;
+		FSetByCallerFloat SetByCaller;
+		SetByCaller.DataTag = Stat.Value;
+		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(SetByCaller);
+		Modifiers.Add(Modifier);
+	}
 }

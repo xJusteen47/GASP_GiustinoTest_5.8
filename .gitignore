@@ -38,3 +38,7 @@ Plugins/**/Intermediate/
 Plugins/**/Content/
 
 __pycache__/
+
+# GSTN plugins whose Content is project-owned (the standard combat rules asset); the rule above is for engine-level plugin copies
+!Plugins/GSTNCombat/Content/
+!Plugins/GSTNParts/Content/

@@ -8,9 +8,9 @@
  * Native tags of the standard commands (combat.md section 9.1). A command is an input combination identified by a tag
  * under "Command."; bindings, cancel windows, AI requests and events refer to the tag, never to the input, so changing
  * how a command is entered touches only its slot. A command is the same on the ground, in the air or on a wall: which
- * move it starts depends on the context tags below, checked by the bindings (section 9.2). Roots carry the priority tier
- * (UGSTN_CombatInputSettings::CommandTiers). Game-specific commands made by designers live in
- * Config/Tags/GSTNCombatCommands.ini instead.
+ * move it starts depends on the Input.Context.* tags (GSTNInputTags), checked by the bindings (section 9.2). Roots carry the priority tier
+ * (UGSTN_InputSettings::CommandTiers). Game-specific commands made by designers live in
+ * Config/Tags/GSTNCommands.ini instead.
  */
 namespace GSTNCommandTags
 {
@@ -83,14 +83,27 @@ namespace GSTNCommandTags
 	/** Attack + special chord, crouch held, stick tilted */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combo_AttackSpecial_CrouchDirectional);
 
-	// Context tags the combat model projects from the owner's and Mover's state each frame (M2), for bindings to require
+	// Movement commands: no tier root of their own (they lose to every attack command pressed with them). The default command set does not
+	// fill a slot for them; a kit adds the slot (Press of the jump button, a down press for the fast fall) and binds the ability.
 
-	/** The character is on the ground */
-	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_Grounded);
+	/** Jump: ground jump, coyote jump or air jump, decided by the movement state (UGSTN_GA_PlatformJump) */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Movement_Jump);
 
-	/** The character is in the air (falling or rising, not on a wall) */
-	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_Airborne);
+	/** Fast fall while descending (UGSTN_GA_PlatformFastFall) */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Movement_FastFall);
 
-	/** The character is in a wall movement mode; with Airborne it identifies wall bindings */
-	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_OnWall);
+	// Defence, movement and interaction commands of the default movement set (UGSTN_MovementSlots). Like the jump commands they are
+	// kit content: a kit removes them (CommandSet.RemovedCommands) or binds other abilities to them.
+
+	/** Dash: a burst of speed along the facing, in the plane perpendicular to the local gravity (UGSTN_GA_Dash) */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Movement_Dash);
+
+	/** Dodge: bound twice by context, a ground dodge (long jump arc) when grounded and an air dodge (dive roll) when airborne */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Defence_Dodge);
+
+	/** Interact, short press: grab in the default movement set */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact_Grab);
+
+	/** Interact, long press: pick up in the default movement set */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact_PickUp);
 }

@@ -12,6 +12,7 @@
 #include "MoverSimulationTypes.h"
 #include "WallMovement/GSTN_WallMovementDebug.h"
 #include "WallMovement/MoveLibrary/GSTN_WallMovementUtils.h"
+#include "WallMovement/MoveLibrary/GSTN_WallReentryUtils.h"
 #include "WallMovement/MoveLibrary/GSTN_WallQueryUtils.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_WallMovementModeBase)
@@ -28,6 +29,9 @@ void UGSTN_WallMovementModeBase::OnRegistered(const FName ModeName, const FMover
 {
 	Super::OnRegistered(ModeName, SimContext);
 	RegisteredModeName = ModeName;
+
+	// Rollback-aware per-frame entries (entry handoff, ridden base); see GSTNWallBlackboard
+	GSTNWallBlackboard::EnsureEntries(SimContext.Blackboard);
 
 	// Mover drops every sync state struct that isn't persistent as soon as a mode that doesn't write it runs (Falling,
 	// Walking...). The wall memory must outlive the wall mode, so the entry transition can read it in the air
@@ -51,23 +55,20 @@ void UGSTN_WallMovementModeBase::Activate(const FMoverEventContext& Context, FNa
 	}
 
 	const UMoverComponent* MoverComp = GetMoverComponent();
-	UMoverBlackboard* SimBlackboard = MoverComp ? MoverComp->GetSimBlackboard_Mutable() : nullptr;
 	const FVector GravityUp = MoverComp ? MoverComp->GetUpDirection() : FVector::UpVector;
 
 	// Starting wall: the one an entry transition found, else assume it is in front of the capsule until the first probe
 	FVector WallNormal = FVector::ZeroVector;
 	FVector WallPoint = FVector::ZeroVector;
 	FGSTN_WallEntryInfo EntryInfo;
-	if (SimBlackboard && SimBlackboard->TryGet(GSTNWallBlackboard::EntryInfo, EntryInfo) && !EntryInfo.Normal.IsNearlyZero())
+	if (SimContext.Blackboard.TryGet(GSTNWallBlackboard::EntryInfo, EntryInfo) && !EntryInfo.Normal.IsNearlyZero())
 	{
 		WallNormal = EntryInfo.Normal.GetSafeNormal();
 		WallPoint = EntryInfo.Point;
 	}
-	if (SimBlackboard)
-	{
-		SimBlackboard->Invalidate(GSTNWallBlackboard::EntryInfo);
-		SimBlackboard->Invalidate(GSTNWallBlackboard::BaseInfo);
-	}
+	// Consumed: these entries keep their last value across frames, so overwrite them with "none" (zero normal / no base)
+	SimContext.Blackboard.TrySet(GSTNWallBlackboard::EntryInfo, FGSTN_WallEntryInfo());
+	SimContext.Blackboard.TrySet(GSTNWallBlackboard::BaseInfo, FGSTN_WallBaseInfo());
 
 	FMoverDefaultSyncState* DefaultSync = OutSyncState->SyncStateCollection.FindMutableDataByType<FMoverDefaultSyncState>();
 	if (WallNormal.IsNearlyZero())
@@ -97,6 +98,7 @@ void UGSTN_WallMovementModeBase::Activate(const FMoverEventContext& Context, FNa
 	WallState.TimeWithoutWall = 0.f;
 	WallState.bIsSkidding = false;
 	WallState.PullAwayTime = 0.f;
+	WallState.SurfaceSwitchTicks = 0;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -236,29 +238,55 @@ void UGSTN_WallMovementModeBase::SimulationTick_Implementation(const FSimulation
 
 	const FQuat StartQuat = UpdatedComponent->GetComponentQuat();
 	FGSTN_WallTickState TickState = MakeTickState(Params, StartQuat);
+#if GSTN_WALL_DEBUG
+	const FVector StartWallNormal = TickState.WallNormal;
+#endif
 
 	// Ride the dynamic wall: move/rotate with it before anything else, carrying the movement plane and the velocity along
 	if (bUseMovementBases)
 	{
-		ApplyMovementBase(MovingComps, TickState, MoveRecord);
+		ApplyMovementBase(Params, TickState, MoveRecord);
 	}
 
 	// Facing away from the wall (e.g. grabbing it with the back): turn the heading first, the usual smoothing handles the tilt
 	UGSTN_WallMovementUtils::TryMoveToFaceWall(MovingComps, TickState.WallNormal, MoveRecord);
 	TickState.Orientation = UpdatedComponent->GetComponentQuat();
 
+	// Held in place from outside (hitstop): no voluntary exit, and the timers stand still
+	const bool bLocked = IsMovementLocked(Params.StartState);
+	const float LockedTimeWithoutWall = TickState.TimeWithoutWall;
+	const float LockedPullAwayTime = TickState.PullAwayTime;
+
 	// Leaving on purpose (subclasses: wall jump, detach)
-	CheckForWallExit(Params, TickState);
+	if (!bLocked)
+	{
+		CheckForWallExit(Params, TickState);
+	}
 	const bool bLeftOnPurpose = TickState.IsLeaving();
 
 	if (!bLeftOnPurpose)
 	{
 		MoveAlongWall(Params, TickState, MoveRecord);
+		if (bLocked && !TickState.IsLeaving())
+		{
+			TickState.TimeWithoutWall = LockedTimeWithoutWall;
+			TickState.PullAwayTime = LockedPullAwayTime;
+		}
 	}
 
-	UpdateMovementBase(MovingComps, TickState);
+	UpdateMovementBase(Params, TickState);
 	CaptureFinalState(Params, StartQuat, TickState, bLeftOnPurpose, OutputState);
 
+#if GSTN_WALL_DEBUG
+	// Metrics CSV only (A/B tooling): the legacy tick is not instrumented otherwise and nothing here feeds back into the simulation
+	if (TickState.IsLeaving())
+	{
+		GSTNWallDebug::NoteEvent(GSTNWallDebug::Ev_Exit);
+	}
+	GSTNWallDebug::FinishTick(RegisteredModeName, (Params.TimeStep.BaseSimTimeMs + Params.TimeStep.StepMs) * 0.001, TickState.Velocity, TickState.GravityUp,
+		FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(StartWallNormal.GetSafeNormal() | TickState.WallNormal.GetSafeNormal()), -1.f, 1.f))),
+		UpdatedComponent->GetComponentLocation(), GSTNWallDebug::MetricsSource(MoverComp));
+#endif
 #if ENABLE_DRAW_DEBUG
 	DrawWallDebug(MovingComps, TickState);
 #endif
@@ -274,10 +302,22 @@ FGSTN_WallTickState UGSTN_WallMovementModeBase::MakeTickState(const FSimulationT
 	State.bHasWall = StartWallState ? StartWallState->bHasWall : false;
 	State.TimeWithoutWall = StartWallState ? StartWallState->TimeWithoutWall : 0.f;
 	State.PullAwayTime = StartWallState ? StartWallState->PullAwayTime : 0.f;
+	State.SurfaceSwitchTicks = StartWallState ? StartWallState->SurfaceSwitchTicks : 0;
 	State.Velocity = Params.ProposedMove.LinearVelocity;
 	State.Orientation = StartQuat;
 	State.GravityUp = GetMoverComponent()->GetUpDirection();
 	return State;
+}
+
+bool UGSTN_WallMovementModeBase::IsMovementLocked(const FMoverTickStartData& StartState) const
+{
+	static FGameplayTag FrozenTag;
+	if (!FrozenTag.IsValid())
+	{
+		FrozenTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.Mover.Frozen"), false);
+	}
+	const UMoverComponent* MoverComp = GetMoverComponent();
+	return FrozenTag.IsValid() && MoverComp && MoverComp->HasGameplayTagInState(StartState.SyncState, FrozenTag, true);
 }
 
 void UGSTN_WallMovementModeBase::CheckForWallExit(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState) const
@@ -460,12 +500,24 @@ void UGSTN_WallMovementModeBase::CaptureFinalState(const FSimulationTickParams& 
 	OutputWallState.LastWallNormal = StartWallState ? StartWallState->LastWallNormal : FVector::ZeroVector;
 	OutputWallState.LastWallHeight = StartWallState ? StartWallState->LastWallHeight : 0.f;
 	OutputWallState.LastWallTimeMs = StartWallState ? StartWallState->LastWallTimeMs : 0.0;
+	OutputWallState.bLastWallOnMovingBase = StartWallState && StartWallState->bLastWallOnMovingBase;
+	OutputWallState.LastWallBaseHeight = StartWallState ? StartWallState->LastWallBaseHeight : 0.f;
+	// Written by FGSTN_ResetWallMemoryEffect only; carried through every tick
+	OutputWallState.MemoryResetTimeMs = StartWallState ? StartWallState->MemoryResetTimeMs : -1.0;
 	if (State.bHasWall || bLeftOnPurpose)
 	{
 		OutputWallState.bHasWallMemory = true;
 		OutputWallState.LastWallNormal = State.WallNormal;
 		OutputWallState.LastWallHeight = FVector::DotProduct(FinalLocation, State.GravityUp);
 		OutputWallState.LastWallTimeMs = Params.TimeStep.BaseSimTimeMs + Params.TimeStep.StepMs;
+		// The wall's own frame, when it moves (T2): the component of the last probe, as posed for this frame (the same pose on every machine)
+		OutputWallState.bLastWallOnMovingBase = false;
+		OutputWallState.LastWallBaseHeight = 0.f;
+		if (bRecordWallBaseInMemory)
+		{
+			const UPrimitiveComponent* MemoryWall = State.LastProbe.Component.IsValid() ? State.LastProbe.Component.Get() : State.RiddenBase.Get();
+			OutputWallState.bLastWallOnMovingBase = UGSTN_WallReentryUtils::GetMovingWallHeight(MemoryWall, State.GravityUp, OutputWallState.LastWallBaseHeight);
+		}
 	}
 
 	// Attachment
@@ -475,6 +527,8 @@ void UGSTN_WallMovementModeBase::CaptureFinalState(const FSimulationTickParams& 
 	OutputWallState.TimeWithoutWall = State.TimeWithoutWall;
 	OutputWallState.PullAwayTime = State.PullAwayTime;
 	OutputWallState.bIsSkidding = false;
+	// The surface-switch vote does not outlive a mode change (the mode that takes over starts counting from zero)
+	OutputWallState.SurfaceSwitchTicks = State.IsLeaving() ? 0 : State.SurfaceSwitchTicks;
 
 	// The intended (transported) velocity is used instead of the positional delta: the latter includes adhesion corrections and would jitter
 	OutputSyncState.MoveDirectionIntent = Params.ProposedMove.bHasDirIntent ? Params.ProposedMove.DirectionIntent : FVector::ZeroVector;
@@ -515,52 +569,58 @@ FQuat UGSTN_WallMovementModeBase::ComputeTargetOrientation(const FQuat& CurrentQ
 // tick: the base is NOT put in FMoverDefaultSyncState (that would switch Mover's based tick on), it lives on the sim
 // blackboard as the base transform plus the character's position in the base's frame.
 
-void UGSTN_WallMovementModeBase::ApplyMovementBase(const FMovingComponentSet& MovingComps, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const
+void UGSTN_WallMovementModeBase::ApplyMovementBase(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState, FMovementRecord& MoveRecord) const
 {
-	const UMoverComponent* MoverComp = GetMoverComponent();
-	UMoverBlackboard* SimBlackboard = MoverComp ? MoverComp->GetSimBlackboard_Mutable() : nullptr;
-
+	// Rollback blackboard: a re-simulation reads the base recorded by the frame before it, not the one the abandoned prediction left. But that record
+	// is still THIS machine's prediction of that frame, and a correction has just replaced the location it recorded: bRideFromSyncedLocation takes
+	// the character's place on the base from the synced start location instead (Mover's rollback put the component there), see 6.14
 	FGSTN_WallBaseInfo BaseInfo;
-	if (SimBlackboard && SimBlackboard->TryGet(GSTNWallBlackboard::BaseInfo, BaseInfo))
+	if (Params.SimContext.Blackboard.TryGet(GSTNWallBlackboard::BaseInfo, BaseInfo) && BaseInfo.Base.IsValid())
 	{
-		UGSTN_WallMovementUtils::TryMoveWithWallBase(MovingComps, BaseInfo, BaseRotation, InOutState.WallNormal, InOutState.Velocity, MoveRecord);
+		InOutState.RiddenBase = BaseInfo.Base;
+		// The start sync state's location when there is one (it is what a correction writes), else the capsule's, which Mover keeps on it
+		FVector RideFrom = FVector::ZeroVector;
+		if (bRideFromSyncedLocation)
+		{
+			const FMoverDefaultSyncState* StartSync = Params.StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+			const USceneComponent* UpdatedComponent = Params.MovingComps.UpdatedComponent.Get();
+			RideFrom = StartSync ? StartSync->GetLocation_WorldSpace() : (UpdatedComponent ? UpdatedComponent->GetComponentLocation() : FVector::ZeroVector);
+		}
+		UGSTN_WallMovementUtils::TryMoveWithWallBase(Params.MovingComps, BaseInfo, BaseRotation, InOutState.WallNormal, InOutState.Velocity, MoveRecord,
+			bRideFromSyncedLocation ? &RideFrom : nullptr);
 	}
 }
 
-void UGSTN_WallMovementModeBase::UpdateMovementBase(const FMovingComponentSet& MovingComps, FGSTN_WallTickState& InOutState) const
+void UGSTN_WallMovementModeBase::UpdateMovementBase(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState) const
 {
-	const UMoverComponent* MoverComp = GetMoverComponent();
-	const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
-	UMoverBlackboard* SimBlackboard = MoverComp ? MoverComp->GetSimBlackboard_Mutable() : nullptr;
-	if (!UpdatedComponent || !SimBlackboard)
+	const USceneComponent* UpdatedComponent = Params.MovingComps.UpdatedComponent.Get();
+	if (!UpdatedComponent)
 	{
 		return;
 	}
 
+	// The entry is never "unset": no base is an empty FGSTN_WallBaseInfo (invalid Base)
 	FGSTN_WallBaseInfo BaseInfo;
 	if (InOutState.IsLeaving())
 	{
 		// Leaving: carry the moving wall's own velocity at the contact point, then forget the base
 		FVector BaseVelocity;
-		if (bUseMovementBases && bAddBaseVelocityOnExit && SimBlackboard->TryGet(GSTNWallBlackboard::BaseInfo, BaseInfo) && BaseInfo.Base.IsValid()
+		if (bUseMovementBases && bAddBaseVelocityOnExit && Params.SimContext.Blackboard.TryGet(GSTNWallBlackboard::BaseInfo, BaseInfo) && BaseInfo.Base.IsValid()
 			&& UBasedMovementUtils::GetMovementBaseVelocityAtPoint(BaseInfo.Base.Get(), UpdatedComponent->GetComponentLocation(), BaseVelocity))
 		{
 			InOutState.Velocity += BaseVelocity;
 		}
-		SimBlackboard->Invalidate(GSTNWallBlackboard::BaseInfo);
+		Params.SimContext.Blackboard.TrySet(GSTNWallBlackboard::BaseInfo, FGSTN_WallBaseInfo());
 		return;
 	}
 
 	// Staying: the wall component of the last probe is the base to ride next tick, if it is a dynamic one
-	if (bUseMovementBases && InOutState.bHasWall
-		&& UGSTN_WallMovementUtils::MakeWallBaseInfo(InOutState.LastProbe.Component.Get(), InOutState.LastProbe.BoneName, UpdatedComponent->GetComponentLocation(), BaseInfo))
+	BaseInfo = FGSTN_WallBaseInfo();
+	if (bUseMovementBases && InOutState.bHasWall)
 	{
-		SimBlackboard->Set(GSTNWallBlackboard::BaseInfo, BaseInfo);
+		UGSTN_WallMovementUtils::MakeWallBaseInfo(InOutState.LastProbe.Component.Get(), InOutState.LastProbe.BoneName, UpdatedComponent->GetComponentLocation(), BaseInfo);
 	}
-	else
-	{
-		SimBlackboard->Invalidate(GSTNWallBlackboard::BaseInfo);
-	}
+	Params.SimContext.Blackboard.TrySet(GSTNWallBlackboard::BaseInfo, BaseInfo);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -581,6 +641,7 @@ FGSTN_WallCheckSettings UGSTN_WallMovementModeBase::GetWallCheckSettings() const
 	Settings.MaxConvexAngle = MaxConvexAngle;
 	Settings.LookaheadTime = LookaheadTime;
 	Settings.MinLookaheadDistance = MinLookaheadDistance;
+	Settings.SurfaceFilter = SurfaceFilter;
 	Settings.bDrawDebug = bDrawDebug;
 	return Settings;
 }

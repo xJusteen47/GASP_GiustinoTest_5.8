@@ -281,6 +281,13 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (09:55) The same charge can also hit **forward** if the character turns right after; it depends on the ability.
 - (09:56) **CH.2 approved** (40 frames, 8 frames of release tolerance, per move). CH.1 and CH.3 to be inferred from the above: the charge
   is anchor-relative everywhere, so a duel cross-up keeps it; the move fires opposite to the anchor and its facing is the ability's choice.
+- (10:23) CH.4: 50° is fine; 90°/s drift may be too fast for some moves. Spec: default 45°/s, per move, 0 allowed.
+- (10:25) **Charged normal buttons** (Cody's Zonk Knuckle, SFV): already `Release` with `MinHeldFrames`; gap: button slots in the
+  charge tracker so other presses cannot shorten the charge; several buttons together = question CB.1 ([input.md](input.md) §10).
+- (10:26) Consider how the **EX Zonk** works: two punches held and released together, EX meter, falls through to the plain Zonk
+  without meter; plain Zonk on any punch with three levels by hold time. Spec: `ReleaseChord`, `AlsoButtons`, level bands, button
+  slots ([input.md](input.md) §10).
+- (10:28) Confirmed: EX Zonk = two buttons together; that is the edge case to cover.
 
 ## 6k. Zones of objects one player activates (owner brainstorm, 2026-10-26 09:52)
 
@@ -296,6 +303,17 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 - (10:08, spin and drill thread) Screws on **mechanical enemies** that, once unscrewed, remove a high-hardness armour part above them.
   Spec: the screw is a part turned by spin and drill hits with the right sense; the armour is held by its screws and breaks whatever
   its hardness ([combat-parts.md](combat-parts.md) §3.4, plan P19).
+- (10:13) FLP.1: when a zone is released is the **designer's choice**; FLP.2–FLP.6: the proposals are accepted.
+
+## 6l. Gravity volumes, Super Mario Galaxy style (owner request, 2026-10-26 17:21)
+
+- Volumes where gravity changes, as in Mario Galaxy: planets, flipped and sideways areas, and so on. Builds on §2d (up is always the
+  opposite of local gravity). Spec: [gravity-volumes.md](gravity-volumes.md) (plugin `GSTNGravity`): fields with a region and a pull
+  rule (directional, point, line, ring, box, spline, zero), priorities, gravity as a pure function of position and frame computed in
+  the simulation every frame, smooth turning only in presentation; questions GRV.1–GRV.4.
+- (20:54) GRV.1 yes (model 720°/s, camera 90°/s); GRV.2 "Galaxy": outside every field the last gravity stays; GRV.3 enemies on
+  round planets low priority. (20:56) GRV.4: a crate should be a throwable object, so pick-up/throwable objects (M10) follow the
+  field in the simulation; only debris, fragments and decoration are visual.
 
 ## 7. Consequences for the specifications
 
@@ -638,6 +656,22 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > Un esempio è [screenshot of New Super Mario Bros. Wii: a girder platform with Mario's emblem] (09:59)
 >
 > La piattaforma te l'ho data per darti l'idea del fatto che può essere controllata solo da Mario, e assume il colore rosso di Mario. (10:00)
+>
+> Flp 1 è deciso dal designer. Le altre domande hanno già un'ottima risposta. (10:13)
+>
+> Beh si penso vada bene. Forse 90 al secondo è troppo veloce per alcune cose. (10:23, CH.4)
+>
+> Comunque abbiamo preso in considerazione la possibilità di caricare anche la pressione dei tasti normali? Esempio: Zonk di Cody sf5 (10:25)
+>
+> Considera anche come L'EX zonk funziona (10:26)
+>
+> Funziona con 2 tasti insieme. È quello bene o male un caso limite (10:28)
+>
+> Comunque aggiungi alle specifiche volumi dove la gravità cambia alla Mario galaxy. (17:21)
+>
+> non ho capito il 4. 1. si 3. Low priority 2. Galaxy (20:54)
+>
+> che intendi per "cassa"? Non dovrebbe essere un oggetto lanciabile? (20:56)
 
 > Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
 > mooolto lentamente per non perdere la carica (09:55)
