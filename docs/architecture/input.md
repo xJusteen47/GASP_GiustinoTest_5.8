@@ -259,7 +259,10 @@ Gaps, *Proposal*:
    instead the charge is relative to **where it started**. *Proposal*: a new space `EGSTN_DirectionSpace::ChargeAnchor`. When the stick
    enters the tilt zone with no charge running, the tracker stores the stick's angle in `Stick` space (the physical stick, so a camera
    turn does not break the charge) as `AnchorAngle`. The charge keeps counting while the stick stays within `MaxDeviationDeg` of the
-   anchor (*Proposal*: 50°, per slot, question CH.4); past it the charge restarts with a new anchor. The release step of the move reads
+   anchor (*Proposal*: 50°, per slot, question CH.4); past it the charge restarts with a new anchor. **The anchor drifts with time**
+   (owner, 09:55): each frame it moves towards the stick by at most `AnchorDriftDegPerSecond` (*Proposal*: 90°/s, per slot), so a
+   stick turned very slowly keeps the charge, even through a full 360°, while a quick turn breaks it. The release reads the anchor
+   of the frame it happens on. The release step of the move reads
    its direction in the same space: "forward" means **opposite to the anchor** within its own tolerance, so "hold one way, then push
    the other way + punch" fires the move towards the push. Where facing is locked (the Duel camera, a lock-on) the classic `Facing`
    set (back and down-back) keeps working. Down-charges (crouch held) need neither.

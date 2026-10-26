@@ -1512,9 +1512,12 @@ CH.3. Nel duello, se l'avversario ti salta dall'altra parte, la carica indietro 
    Perché conta: conservarla rende più facile difendersi dai salti incrociati con una mossa a carica.
    Ipotesi nella specifica: si perde, come in Street Fighter.
 
-CH.4. Di quanti gradi può spostarsi lo stick dalla direzione iniziale senza perdere la carica?
-   Perché conta: un angolo stretto fa perdere la carica a chi muove un po' lo stick; uno largo la fa tenere anche girando quasi di lato.
-   Ipotesi nella specifica: 50 gradi da ogni lato, regolabile mossa per mossa.
+CH.4. Di quanti gradi può spostarsi lo stick dalla direzione della carica senza perderla, e quanto velocemente quella direzione può
+seguire lo stick (tu hai detto: anche un giro intero, ma muovendo lo stick molto lentamente)?
+   Perché conta: un angolo stretto fa perdere la carica a chi muove un po' lo stick; una direzione che segue troppo in fretta rende la carica
+   valida in qualunque direzione.
+   Ipotesi nella specifica: 50 gradi da ogni lato, e la direzione segue lo stick a 90 gradi al secondo al massimo (un giro intero in 4
+   secondi); tutto regolabile mossa per mossa.
 
 ## Oggetti attivati da azioni: piattaforme rosse e blu (26/10)
 

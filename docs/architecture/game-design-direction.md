@@ -274,6 +274,8 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   the 16-event history ring and what "back" means in 3D. Spec: [input.md](input.md) §10, questions CH.1–CH.4.
 - (09:53) **Back-charge works in 3D**: the charge holds while the stick stays within a limited angle. Spec: charge relative to the
   direction where it started, release opposite to it ([input.md](input.md) §10).
+- (09:55) The charge direction may **shift with time**: a full 360° turn keeps the charge if the stick moves very slowly. Spec: the anchor
+  drifts towards the stick at a capped rate ([input.md](input.md) §10).
 - (09:54) Charge moves may have **hitboxes behind** the character instead of in front (it faces the charge direction): `KeepFacing`
   with hitboxes authored behind the root, or a turn towards the push; per move.
 
@@ -619,3 +621,6 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
 > troppo quelle piattaforme. Questa è un’idea. Magari possono avere un piccolo delay prima di cambiare lato, in modo da permettere agli altri
 > giocatori di avere tempo di saltare su reazione.
 > Più brain-storming che altro, e questo metodo di attivazione potrebbe essere usato per oggetti differenti.
+
+> Penso si possa anche shiftare l’angolo con il tempo. Nel senso che si può anche fare un giro di 360 gradi, ma bisogna muovere lo stick
+> mooolto lentamente per non perdere la carica (09:55)
