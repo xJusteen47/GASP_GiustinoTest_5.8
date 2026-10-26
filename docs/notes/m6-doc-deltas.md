@@ -57,3 +57,23 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
 - SDI: `bScaleByHitstopFrames` is implemented as a speed cap of `MaxDistance / (HitstopFrames x FrameSeconds)` (spreads the maximum over the hitstop); residue below 1e-9 cm ends the drift. `FrameSeconds` defaults to 0.016.
 - `UGSTN_DIRulesMath::ApplyDI` rescales the stick to `min(1, |stick| x curve(|stick|) x victim scale)` and scales `MaxDIElevationDot` by the elevation curve, then calls M4's `ApplyDI`.
 - Tests: Shield 6, Parry 11, Tech 7, DI 3, SDI 3, Bounce 1 (31) plus F3's 8 = 39 `GSTNDefence.Core.*`.
+
+## F5a: GSTNLink skeleton, definitions, rules data, tags
+
+- `Combat.HitType.Grab` is declared by `GSTNCombatCore` (`GSTNCombatHitTags::HitType_Grab`) already, so the plugin reads it and does not redeclare it; the plan's tag list and the spec's owner column should say "read" for it. 38 native tags in `GSTN_LinkTags.h`, cues ini-only.
+- The state tags of the other optional plugins (`Combat.State.Tumble`, `.Knockdown`, `.ShieldBroken`, `.Intangible`) are `FGSTN_GrabRules::IgnoreTagNames` (`TArray<FName>`), resolved with `RequestGameplayTag(..., false)` when the request is decided, not `FGSTN_TagRequirements` entries: a constructor may run before the declaring plugin registered its tags, and a name no loaded plugin declares is skipped. `Combat.Part.GrabLocked` is read the same way behind `bRespectGrabLocked` (grab default on, latch default off).
+- Primary asset type `GSTN_LinkType` comes from `GetPrimaryAssetId`; the project has not yet listed it under `PrimaryAssetTypesToScan` in `Config/DefaultGame.ini` (a root ini, owner edit: F9, when the registry first scans).
+- `Build.cs` lists Engine, DeveloperSettings and (private) Projects besides the plan's modules, as `GSTNDefenceCore` does; the module class registers `Config/Tags` with the tag manager. No GAS, NP, Mover, Editor, GSTNDefence or project module.
+- `FGSTN_LatchRules` (requirements, `MinLatchWeight` 250, `bRespectGrabLocked`, `ImmunityFramesAfterLatch`) sits next to the grab rules, and `FGSTN_LinkKitExtension` carries both.
+- `GSTN_LinkKitExtension.h` and the outcome track are header-level data only; nothing consumes them before F9.
+
+## F5b: GSTNLinkCore rules, placers, state, math, fake host
+
+- **One latcher per partner is the shared busy-slot check**, not a rule of its own: `UGSTN_LinkRule::CheckCommon` refuses a target whose channel already holds a link (`TargetBusy`), and a latch occupies the partner's Body slot, so `Rule.Latch.OnePerPartner` passes through it. A pending request occupies the slot too.
+- `EGSTN_LinkRefusal` (NoDefinition, SelfLink, InitiatorBusy, TargetBusy, CoexistForbidden, TargetLocked, RequestRequirements, Requirements, GrabLocked, TooHeavy, TooLight, Immunity) is for logs, tests and UI; it never reaches the wire. The kit's rules in `FGSTN_LinkRequestContext` (`InitiatorGrabRules` / `InitiatorLatchRules`, raw pointers, not reflected) win over the rule's own copy.
+- `FGSTN_LinkState` is plain data (type index, role 1/2, phase, partner `FGSTN_EntityRef`, serial, link frame, end frame, flags, break reason, payload, quantised yaw); idle serialises to one byte. Serials are an 8-bit circle, `IsSerialNewer` counts half the circle as later, `NextSerial` is one after the newer of the two and never 0. The break reason enum reserves `FirstPlugin = 16` for a plugin's own reasons.
+- `UGSTN_LinkMath::EvaluateBreak` order: pending (Forced if unnamed), own death, partner death, partner state, hit (per own role; a partner's hit breaks only with `bPartnerHitsBreak`), distance, escape (mash end), timeout. `MashProgress` never pulls the end before the current frame.
+- The parked transform is `SocketOffset * SocketRootRelative * PartnerTransform` for whichever role `bParked` names (`TryGetParkedTransform` refuses the other role), so a latch parks role 1 with the grab's code.
+- Placers: `FGSTN_ExitQuery` carries a non-reflected `IGSTN_ExitCollisionQuery*` (null = no collision check, first candidate wins); the ring is the preferred direction then seven 45-degree turns counter-clockwise about the local up, then above, then the fallback reported invalid; the at-socket placer keeps the throw's knockback as velocity even on the fallback. A Blueprint placer cannot reach the query.
+- `IGSTN_LinkHost` / `FGSTN_FakeLinkHost` (entity views as values, link slots, definitions by index, immunity stamps, placement, one event per formation or break) are the host contract the NP module implements in F10.
+- Tests: the plan's 31 names, unchanged (`GSTNLink.Core.*`: Tags 2, Data 3, State 4, Mash 3, Break 6, Placer 4, Rule.Grab 4, Rule.Latch 3, FakeHost 2).
