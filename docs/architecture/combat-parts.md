@@ -222,6 +222,33 @@ Closing a wound (time, heal, never) is open. Minions: not in v1 (their wire carr
 **hurtbox states in the lag-compensation history** (open residue of P7 part 1, handover item 40), so a rewound hit sees whether a
 part was wounded at that frame.
 
+**Screws and bolts on mechanical enemies (owner, 2026-10-26 10:08).** Some mechanical enemies carry screws or bolts that, once
+unscrewed by a spin or a drill, remove a **high-hardness armour part** above them: a way past armour that weapons cannot penetrate.
+*Proposal*: the screw is a **part** of the enemy, turned by hits, and the armour is **held by** it. Everything stays inside the parts
+simulation, so it is predicted, lag-compensated and rollback-safe like any other hit, and it needs no seam D-1.
+1. **Turning**: an optional `FGSTN_PartScrewRule Screw` on `FGSTN_PartDefinition`:
+   `{ bool bEnabled = false; int8 LoosenSense = -1; uint8 TurnsToRelease = 8; bool bOppositeTightens = true; }`. A hit on a screw part
+   whose `FGSTN_HitData::TurnSense` (combat-m4-hits.md, added 2026-10-26: −1, 0 or +1, seen from above along the attacker's up axis,
+   the same convention as the activation triggers) equals `LoosenSense` moves the screw out by `TurnSteps`; the opposite sense moves
+   it back in when `bOppositeTightens`. Hits without a sense do nothing to the screw (they still deal main damage through
+   `MainTransfer`, and the screw's `Hardness` still decides ricochets). Turning ignores hardness: that is the point.
+2. **State, no new bytes**: the screw's progress is its existing `PartDamage[i]` byte. A turning hit adds
+   `ceil(255 × TurnSteps / TurnsToRelease)` (or subtracts it, never below 0); at 255 the screw part **breaks** like any part, with
+   its own `OnBreak` (the screw falls off: presentation, §6.2). A latched drill turns it on every re-hit (spin-drill seam S1), a spin
+   once per hit.
+3. **Armour held by screws**: `TArray<FName> HeldBy` and `EGSTN_HeldByRule HeldByRule = AllBroken` (or `AnyBroken`) on
+   `FGSTN_PartDefinition`. When the rule becomes true, the part breaks **in the same frame**, in the same deterministic pass that
+   breaks children (`ParentIndex`, by index), **whatever its `Hardness` and even with `PartCap <= 0`** (an unbreakable plate). Its own
+   `OnBreak` runs: detach the plate's bones (presentation), `DisableHurtbox` to expose the soft part underneath, tags, stats.
+   `ParentIndex` alone is not enough: a plate held by four screws has four holders, and the plate keeps its own parent.
+4. **Costs and limits**: every screw is a part, so a plate with four screws uses five of the 16 parts (bosses with more parts: §8.5
+   open item). Minions are not in v1 (their wire carries only the broken mask, §5.5); a minion screw would be a one-hit screw
+   (`TurnsToRelease = 1`). The screw's mesh turns and rises with its progress byte, presentation only (§6).
+5. **Rejected: an activation zone hosted on the enemy** ([level-activation.md](level-activation.md)). Zones are level objects with a
+   server-scheduled value and a delay; an enemy's armour lives in the predicted parts fragment, so a zone would add a second state
+   model on the same entity and a bridge writing into the simulation from outside it, plus zones on moving hosts. Level screws and
+   knobs stay activation zones; screws on enemies are parts. Both read the same spin sense convention.
+
 ### 3.5 Entity's own hitboxes while parts are broken
 
 The attacker side (M4 §6 step 1) asks the tick-extension point "before candidates" for a `HitGroupMask`; `GSTNPartsNP`
@@ -626,7 +653,10 @@ same projected tag drives the minion path (the store mask feeds the same functio
 - **Events/dedupe**: key `(EntityRef, PartIndex, BreakSerial)`; two entries in one drain are order independent.
 - **Presentation (Runtime)**: damage material follows the replicated value (also after a rollback), idempotent hidden-bone set from the mask, pool never exceeds the
   budget, recycle order.
-- **Validators**: duplicate hurtbox, parent cycle, mask > 16 (> 8 for minions), missing bone.
+- **Validators**: duplicate hurtbox, parent cycle, mask > 16 (> 8 for minions), missing bone, cycle through `HeldBy` and `ParentIndex`,
+  `HeldBy` naming the part itself.
+- **Screws (P19)**: `ScrewTurnsOnlyWithLoosenSense`, `OppositeSenseTightens`, `ScrewIgnoresHardnessAndOrdinaryDamage`,
+  `HeldByAllBrokenBreaksPlateSameFrame`, `HeldByIgnoresHardnessAndUnbreakableCap`, `RewoundTurnReadsProgressOfItsFrame`.
 
 ### 8.2 Harness scenarios (`Tools/GASNPPTest/parts_scenarios.py`, imports `gasnpp_test`; 60/15 ms, with and without 2 % loss)
 

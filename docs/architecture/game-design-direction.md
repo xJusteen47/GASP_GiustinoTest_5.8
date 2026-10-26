@@ -293,6 +293,9 @@ For later implementation. Specs: [combat-loadout-mods.md](combat-loadout-mods.md
   builds the panels by hand on top of it. (09:59–10:00) Example: the New Super Mario Bros. Wii platform that only Mario can control and
   that shows Mario's red. Spec: zones with an owner (first to stand, first to enter, standing now, or assigned at start), owner colour,
   generic C++ responses (collision, track, rotation), no finished objects in the plugin.
+- (10:08, spin and drill thread) Screws on **mechanical enemies** that, once unscrewed, remove a high-hardness armour part above them.
+  Spec: the screw is a part turned by spin and drill hits with the right sense; the armour is held by its screws and breaks whatever
+  its hardness ([combat-parts.md](combat-parts.md) §3.4, plan P19).
 
 ## 7. Consequences for the specifications
 
