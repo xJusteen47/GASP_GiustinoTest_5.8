@@ -1,7 +1,7 @@
 # Limb contact IK (hands and feet on the wall)
 
-Status (2026-10-25, branch `claude/project-thread-69tz7u`, stacked on the wall anim branch `claude/project-thread-2vuw3f`): C++ written,
-**not compiled yet**; editor assets pending (section 5).
+Status (2026-10-26, branch `claude/project-thread-69tz7u`, on top of `claude/project-thread-v1plhd` with the wall layer): C++ and the asset
+script written, **not compiled or run yet** (section 5).
 
 Owner, 2026-10-25: during climbing and wall slide, the limbs that the animation keeps next to the wall must **attach to the wall in front**
 with a Control Rig, instead of floating in front of it or sinking into it.
@@ -27,7 +27,7 @@ with a Control Rig, instead of floating in front of it or sinking into it.
 | `FGSTN_WallLimbContactSettings`, `FGSTN_WallLimbContactState` | wall data: probe bones, per-mode weights; per-limb surfaces + weights for the rig | project, `WallMovement/Animation/GSTN_WallAnimTypes.h` |
 | `UGSTN_WallAnimUtils::ComputeLimbWeights`, `GatherLimbContact` | wall side: weights from the wall phase and mode, probes | project, test `GSTN.Wall.Anim.LimbContactWeights` |
 | `UGSTN_WallAnimInstance::LimbContactSettings`, `WallLimbContact` | what the layer exposes to its Control Rig node | project |
-| `CR_GSTN_WallLimbContact` | Control Rig asset (4 nodes) | `Content/Blueprints/Animation/`, editor step |
+| `CR_GSTN_WallLimbContact` | Control Rig asset (4 nodes, variable `WallLimbContact`) | `Content/Blueprints/Animation/`, made by `Tools/GAS/setup_wall_limb_contact.py` |
 
 The generic part (rule, node, probe) knows no wall: a ledge hang or a ladder can reuse it with its own surfaces.
 
@@ -46,7 +46,7 @@ Game thread, UGSTN_WallAnimInstance::NativeUpdateAnimation (wall layer)
   WallLimbContact = { HandLeft, HandRight, FootLeft, FootRight, HandWeight, FootWeight }
 
 Worker thread, ABP_GSTN_WallLayer anim graph
-  wall state machine -> Control Rig node (CR_GSTN_WallLimbContact, inputs bound to WallLimbContact) -> Output Pose
+  wall state machine -> Control Rig node (CR_GSTN_WallLimbContact, input mapping WallLimbContact -> WallLimbContact) -> Output Pose
 
 CR_GSTN_WallLimbContact, Forwards Solve
   GSTN Limb Contact IK (upperarm_l, lowerarm_l, hand_l, HandLeft,  Weight = HandWeight, Hand settings)
@@ -90,20 +90,25 @@ Networking: simulated proxies run the same code on their smoothed presentation s
 | `bKeepDuringExit` | off | on if the exit clip pushes off the wall with the hands |
 | Probe: channel / distance / radius / max angle | Visibility / 120 / 4 / 40 deg | the walls must block the channel |
 
-## 5. Editor steps (pending)
+## 5. Editor steps (scripted: `Tools/GAS/setup_wall_limb_contact.py`)
 
-The desktop thread owns the wall layer editor steps (`ALI_GSTN_Wall`, `ABP_GSTN_WallLayer`, main ABP reparent). These steps come **after** it,
-in the same editor session or a later one, never in parallel on the same Blueprint.
+The wall layer (`ABP_GSTN_WallLayer`) is made by `setup_wall_anim_layer.py`; this script runs after it.
 
-1. Build (new module `GSTNAnimationRig`; the plugin now depends on ControlRig, enabled by default in the engine).
-2. Create `Content/Blueprints/Animation/CR_GSTN_WallLimbContact` (Control Rig, skeleton of the GASP character, `SK_Mannequin`).
-   Variables (input): `HandLeft`, `HandRight`, `FootLeft`, `FootRight` (`GSTN_LimbSurface`), `HandWeight`, `FootWeight` (float).
-   Forwards Solve: the four `GSTN Limb Contact IK` nodes of section 3, chained; hand and foot settings set on the pins.
-3. In `ABP_GSTN_WallLayer`, inside the `WallLayer` graph: state machine -> `Control Rig` node (class `CR_GSTN_WallLimbContact`) -> output.
-   Expose the six variables as pins and bind them to `WallLimbContact` members (property access).
-4. Check in PIE: slide and climb on a flat wall, a curved wall and a corner; toggle `LimbContactSettings.bEnabled` to compare; `Alpha` and
-   `Target` outputs can be drawn with the rig's debug draw nodes.
-5. Find the right `ContactAxis` for hand and foot (section 4).
+1. Build (new modules `GSTNAnimationRig` and the authoring helper `FindOrInsertPoseNodeBeforeOutput` in `GSTNAnimationEditor`; the plugin
+   now depends on ControlRig, enabled by default in the engine). Run `GSTNAnimation.Core.LimbContact` and `GSTN.Wall.Anim` tests.
+2. Run the script. It makes `Content/Blueprints/Animation/CR_GSTN_WallLimbContact` (bones of the character's skeleton) with one public
+   variable `WallLimbContact` (`GSTN_WallLimbContactState`) and the four `GSTN Limb Contact IK` nodes of section 3 in the Forwards Solve, their
+   `Surface` and `Weight` pins linked to the variable's members.
+3. It puts a `Control Rig` node with that rig at the end of the `WallLayer` graph (state machine -> Control Rig -> Output Pose), with the input
+   mapping `WallLimbContact` -> `WallLimbContact`: the node copies the layer instance's property into the rig variable each update. One struct
+   instead of six pins keeps the layer graph to one node and the binding by name.
+4. Check in PIE: slide and climb on a flat wall, a curved wall and a corner; toggle `LimbContactSettings.bEnabled` on the layer's class defaults
+   to compare; the nodes' `Alpha` and `Target` outputs can be watched in the rig editor's debug view.
+5. Find the right `ContactAxis` for hand and foot (section 4) and set it in the script's `HAND` / `FOOT`, then run it again.
+
+The node is inside the wall layer, not in the main ABP between its Inertialization and Pose History nodes: the data lives on the layer
+instance, the main graph keeps knowing nothing about walls, and a variant layer (child anim Blueprint) inherits the node. The layer output
+already carries the IK, so the Pose History records the pose that was shown.
 
 ## 6. Possible next steps (not done)
 

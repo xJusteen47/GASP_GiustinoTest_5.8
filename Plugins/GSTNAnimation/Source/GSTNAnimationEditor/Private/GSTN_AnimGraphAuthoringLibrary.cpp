@@ -5,6 +5,7 @@
 #include "Animation/AnimBlueprint.h"
 #include "Animation/AnimLayerInterface.h"
 #include "Animation/AnimSequenceBase.h"
+#include "AnimGraphNode_Base.h"
 #include "AnimGraphNode_BlendListByBool.h"
 #include "AnimGraphNode_Inertialization.h"
 #include "AnimGraphNode_LinkedAnimLayer.h"
@@ -616,6 +617,57 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerBlend(UAnimBlueprint* A
 		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerBlend: some links failed on %s, see above"), *AnimBlueprint->GetName());
 	}
 	return bOk;
+}
+
+UEdGraphNode* UGSTN_AnimGraphAuthoringLibrary::FindOrInsertPoseNodeBeforeOutput(UEdGraph* Graph, const FString& NodeClassPath, const TMap<FString, FString>& NodeMembers)
+{
+	UClass* NodeClass = FindObject<UClass>(nullptr, *NodeClassPath);
+	UEdGraphNode* Result = FindResultNode(Graph);
+	UEdGraphPin* ResultIn = FindPosePin(Result, EGPD_Input);
+	if (!NodeClass || !NodeClass->IsChildOf(UAnimGraphNode_Base::StaticClass()) || !ResultIn)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("FindOrInsertPoseNodeBeforeOutput: needs a graph with a result node and an anim graph node class (%s %s)"),
+			*NodeClassPath, NodeClass ? TEXT("is not an anim graph node") : TEXT("not found: is its plugin enabled?"));
+		return nullptr;
+	}
+
+	// Already there: the result is fed by a node of that class
+	UEdGraphNode* Node = LinkedPin(ResultIn) ? LinkedPin(ResultIn)->GetOwningNode() : nullptr;
+	if (!Node || Node->GetClass() != NodeClass)
+	{
+		UEdGraphPin* Previous = LinkedPin(ResultIn);
+		Node = SpawnNode<UAnimGraphNode_Base>(Graph, FVector2D(Result->NodePosX - 300, Result->NodePosY), NodeClass);
+		Result->Modify();
+		ResultIn->BreakAllPinLinks();
+		bool bOk = Connect(FindPosePin(Node, EGPD_Output), ResultIn);
+		if (Previous)
+		{
+			bOk &= Connect(Previous, FindPosePin(Node, EGPD_Input));
+		}
+		if (!bOk)
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("FindOrInsertPoseNodeBeforeOutput: could not wire %s in front of the result"), *NodeClass->GetName());
+			return nullptr;
+		}
+	}
+
+	bool bMembersOk = true;
+	for (const TPair<FString, FString>& Member : NodeMembers)
+	{
+		bMembersOk &= SetNodeStructMember(Node, *Member.Key, *Member.Value);
+	}
+	if (!bMembersOk)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("FindOrInsertPoseNodeBeforeOutput: some members of %s were not set, see above"), *NodeClass->GetName());
+	}
+
+	// Pins that depend on the members (a Control Rig's exposed variables) appear on reconstruction; the pose links are kept by pin name
+	Node->ReconstructNode();
+	if (UBlueprint* Blueprint = GetBlueprint(Graph))
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+	}
+	return bMembersOk ? Node : nullptr;
 }
 
 bool UGSTN_AnimGraphAuthoringLibrary::SetChildAssetOverride(UAnimBlueprint* ChildBlueprint, FName StateName, UAnimationAsset* Asset)
