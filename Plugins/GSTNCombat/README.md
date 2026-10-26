@@ -88,7 +88,9 @@ simulation that uses them is in [GSTNCombatNP](../GSTNCombatNP/README.md).
 
 | Type | What it is |
 |---|---|
-| `GSTNFeatureIds` | The one central file of fixed feature ids (1 to 127 GSTN plugins, 128 to 239 games, 240 to 255 tests). A feature's sync fragment and tick extension share its id. An id is added here once and never renumbered or reused: it goes on the wire. |
+| `GSTNFeatureIds` | The one central file of fixed feature ids (1 to 127 GSTN plugins, 128 to 239 games, 240 to 255 tests). A feature's sync fragment and tick extension share its id. An id is added here once and never renumbered or reused: it goes on the wire. Assigned: `Parts = 16`. Reserved, no code yet: `Defence = 17` (`GSTNDefence`), `Link = 18` (`GSTNLink`). |
+| `GSTNInboxKinds` | Same file: the fixed ids of the combat inbox kinds (`FGSTN_InboxEntry::Kind`, M6 F1). `Hit = 0`; 1 to 15 reserved for `GSTNCombat`, 16 to 31 for `GSTNDefence` (the parry punish), 32 to 47 for `GSTNLink` (link response and command), 48 to 127 other GSTN plugins, 128 and up games, 240 and up tests. Inboxes are local data, but the drain order depends on the kind. |
+| `GSTNEntityKinds` / `FGSTN_EntityRef` | Same file / `Sync/GSTN_EntityRef.h` (M6 F1): `FGSTN_EntityRef { uint8 Kind; uint16 Id; uint8 Serial }` is a reference to a combat entity small enough for a fragment or the wire (`NetSerialize` in 32 bits, `operator==`, `GetTypeHash`, `ToString`; the default value is null, kind `None = 255`). Kinds: `Fighter = 0`; `Minion = 1` and `Object = 2` are reserved names, no code yet. The serial belongs to the kind's table. |
 | `FGSTN_SyncFragment` | Base of per-entity state a feature adds to the combat sync state. Virtual `NetSerialize`, `ShouldReconcile` (default: compares the serialized forms), `Interpolate` (default: takes the newer frame) and `ToString`. Integers and frames only. |
 | `FGSTN_SyncFragmentRegistry` | Maps the ids to the fragment structs; the owner registers on module startup and unregisters on shutdown. |
 | `FGSTN_SyncFragmentList` | Reads and writes a `TArray<TInstancedStruct<FGSTN_SyncFragment>>` kept sorted by id: `FindOrAdd<T>`, `Find<T>`, and the four state operations. |
