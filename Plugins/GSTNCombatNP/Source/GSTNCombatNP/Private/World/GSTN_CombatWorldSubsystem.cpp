@@ -190,6 +190,11 @@ void UGSTN_CombatWorldSubsystem::UnregisterProvider(IGSTN_HittableProvider* Prov
 
 bool UGSTN_CombatWorldSubsystem::PostHit(int32 EntityId, const FGSTN_HitInboxEntry& Entry)
 {
+	return PostToInbox(EntityId, Entry.ToInboxEntry());
+}
+
+bool UGSTN_CombatWorldSubsystem::PostToInbox(int32 EntityId, const FGSTN_InboxEntry& Entry)
+{
 	const int32 Index = Algo::LowerBoundBy(Registry, EntityId, &FRegistryEntry::EntityId);
 	if (!Registry.IsValidIndex(Index) || Registry[Index].EntityId != EntityId)
 	{
@@ -200,7 +205,7 @@ bool UGSTN_CombatWorldSubsystem::PostHit(int32 EntityId, const FGSTN_HitInboxEnt
 	{
 		return false;
 	}
-	return Registered.Source && Registered.Source->PostHit(Entry);
+	return Registered.Source && Registered.Source->PostToInbox(Entry);
 }
 
 void UGSTN_CombatWorldSubsystem::InvalidateSnapshot()

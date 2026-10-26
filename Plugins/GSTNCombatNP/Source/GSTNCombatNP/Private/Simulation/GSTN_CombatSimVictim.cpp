@@ -37,9 +37,26 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 	bFrameInterrupted = false;
 	ReactionMove = FGSTN_ReactionMove();
 
-	// Hits written for this frame by the attackers of the previous one, in (attacker, hitbox, hurtbox) order
+	// Messages written for this frame by the senders of the previous one, in (sender, kind, hitbox, hurtbox) order. The entries of the other kinds
+	// go to their handlers now, before the frame's hits are resolved; the hits are collected for the victim step as one batch
 	InboxScratch.Reset();
-	DrainHitInbox(Frame, InboxScratch);
+	InboxEntryScratch.Reset();
+	DrainInbox(Frame, InboxEntryScratch);
+	FGSTN_InboxDispatchContext InboxContext;
+	InboxContext.Frame = Frame;
+	InboxContext.Sync = &Sync;
+	InboxContext.Receiver = this;
+	for (const FGSTN_InboxEntry& InboxEntry : InboxEntryScratch)
+	{
+		if (const FGSTN_HitInboxEntry* HitEntry = FGSTN_HitInboxEntry::FromInboxEntry(InboxEntry))
+		{
+			InboxScratch.Add(*HitEntry);
+		}
+		else
+		{
+			FGSTN_InboxKindRegistry::Get().Dispatch(InboxEntry, InboxContext);
+		}
+	}
 	if (GSTNCombatDebug::IsHitLogOn())
 	{
 		InboxLogByFrame.Remove(Frame);

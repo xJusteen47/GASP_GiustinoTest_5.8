@@ -22,11 +22,63 @@ namespace GSTNFeatureIds
 	/** FGSTN_PartsFragment (GSTNPartsNP): the destructible parts of an entity */
 	constexpr uint8 Parts = 16;
 
+	/** Reserved for the GSTNDefence plugin (shield, parry, tech). Not assigned to any code yet: the id is fixed here so no other feature takes it */
+	constexpr uint8 Defence = 17;
+
+	/** Reserved for the GSTNLink plugin (grabs and other links). Not assigned to any code yet, same reason */
+	constexpr uint8 Link = 18;
+
 	constexpr uint8 FirstGame = 128;
 	constexpr uint8 FirstTest = 240;
 	constexpr uint8 TestA = 240;
 	constexpr uint8 TestB = 241;
 	constexpr uint8 TestC = 242;
+}
+
+/**
+ * Inbox kind ids: what a combat inbox entry carries (GSTNCombatNP FGSTN_InboxEntry). An inbox is local data, never on the wire, but
+ * the drain order depends on the kind, so a kind id is as fixed as a feature id: assigned here once, never renumbered or reused.
+ *
+ * 0 is the hit. 1 to 15 are reserved for GSTNCombat itself, 16 to 31 for GSTNDefence (the parry punish), 32 to 47 for GSTNLink (the
+ * link response and command), 48 to 127 for other GSTN plugins, 128 to 239 for a game or third-party plugins, 240 to 255 for
+ * automation tests only. The ranges are reservations: nothing registers a kind in them until its plugin exists.
+ */
+namespace GSTNInboxKinds
+{
+	/** A hit on its way to a victim (FGSTN_HitInboxEntry) */
+	constexpr uint8 Hit = 0;
+
+	constexpr uint8 FirstDefence = 16;
+	constexpr uint8 LastDefence = 31;
+	constexpr uint8 FirstLink = 32;
+	constexpr uint8 LastLink = 47;
+	constexpr uint8 FirstGame = 128;
+	constexpr uint8 FirstTest = 240;
+	constexpr uint8 TestA = 240;
+	constexpr uint8 TestB = 241;
+}
+
+/**
+ * Entity kind ids of FGSTN_EntityRef: what sort of thing a reference points at. An id is as fixed as a feature id. 0 is the
+ * fighter, the only kind that exists today; the names after it are reserved for the plugins that will add them and are not used by
+ * any code yet.
+ */
+namespace GSTNEntityKinds
+{
+	/** A combat entity with a pawn: a player or an AI fighter */
+	constexpr uint8 Fighter = 0;
+
+	/** Reserved for GSTNMinion: a spawned follower of a fighter */
+	constexpr uint8 Minion = 1;
+
+	/** Reserved for GSTNHeld: an object a fighter holds, throws or is linked to */
+	constexpr uint8 Object = 2;
+
+	constexpr uint8 FirstGame = 128;
+	constexpr uint8 FirstTest = 240;
+
+	/** The kind of the null reference (FGSTN_EntityRef::Null): points at nothing */
+	constexpr uint8 None = 255;
 }
 
 /**

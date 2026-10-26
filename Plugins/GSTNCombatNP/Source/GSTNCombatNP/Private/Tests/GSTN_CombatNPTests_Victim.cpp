@@ -24,6 +24,7 @@
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_HitInbox.h"
+#include "Tests/GSTN_CombatNPTests_InboxHelpers.h"
 #include "UObject/StrongObjectPtr.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -140,13 +141,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimDrainAtNextFrameTest, "GSTNCombat.N
 bool FGSTN_VictimDrainAtNextFrameTest::RunTest(const FString& Parameters)
 {
 	FVictimFixture Fixture;
-	FGSTN_HitInbox Inbox;
-	Inbox.Add(FVictimFixture::MakeEntry(10, 600.f));
+	FGSTN_CombatInbox Inbox;
+	GSTNInboxTestUtils::AddHit(Inbox, FVictimFixture::MakeEntry(10, 600.f));
 
 	TArray<FGSTN_HitInboxEntry> Drained;
-	Inbox.Drain(10, Drained);
+	GSTNInboxTestUtils::DrainHits(Inbox, 10, Drained);
 	TestEqual(TEXT("the frame of the hit does not see it"), Drained.Num(), 0);
-	Inbox.Drain(11, Drained);
+	GSTNInboxTestUtils::DrainHits(Inbox, 11, Drained);
 	TestEqual(TEXT("the next frame does"), Drained.Num(), 1);
 
 	Fixture.Entries = Drained;
@@ -543,9 +544,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimRollbackReDeliversTest, "GSTNCombat
 bool FGSTN_VictimRollbackReDeliversTest::RunTest(const FString& Parameters)
 {
 	// The state before the hit is restored, the inbox drops what the re-simulation re-delivers, and the same entry gives the same state
-	FGSTN_HitInbox Inbox;
-	Inbox.Add(FVictimFixture::MakeEntry(8, 600.f));
-	Inbox.Add(FVictimFixture::MakeEntry(10, 1500.f));
+	FGSTN_CombatInbox Inbox;
+	GSTNInboxTestUtils::AddHit(Inbox, FVictimFixture::MakeEntry(8, 600.f));
+	GSTNInboxTestUtils::AddHit(Inbox, FVictimFixture::MakeEntry(10, 1500.f));
 	Inbox.TrimFrom(10);
 	TestEqual(TEXT("entries from the first re-simulated frame on are dropped, earlier ones are kept"), Inbox.Num(), 1);
 

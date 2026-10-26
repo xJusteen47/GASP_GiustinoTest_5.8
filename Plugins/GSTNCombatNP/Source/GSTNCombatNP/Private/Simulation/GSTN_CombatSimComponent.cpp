@@ -1058,11 +1058,11 @@ void UGSTN_CombatSimComponent::RestoreFrame(const FGSTN_CombatSyncState* Sync, c
 	}
 	if (!Sync)
 	{
-		HitInbox.Reset();
+		Inbox.Reset();
 		return;
 	}
 	// The restored state is the end of its latest frame; the re-simulation starts on the next one
-	HitInbox.TrimFrom(Sync->Core.Input.History.GetLatestFrame() + 1);
+	Inbox.TrimFrom(Sync->Core.Input.History.GetLatestFrame() + 1);
 }
 
 bool UGSTN_CombatSimComponent::TicksOnThisMachine() const
@@ -1071,18 +1071,32 @@ bool UGSTN_CombatSimComponent::TicksOnThisMachine() const
 	return Owner && Owner->GetLocalRole() != ROLE_SimulatedProxy;
 }
 
-bool UGSTN_CombatSimComponent::PostHit(const FGSTN_HitInboxEntry& Entry)
+bool UGSTN_CombatSimComponent::PostToInbox(const FGSTN_InboxEntry& Entry)
 {
 	if (!TicksOnThisMachine())
 	{
 		return false;
 	}
-	if (!HitInbox.Add(Entry))
+	const uint8 Kind = Entry.Kind;
+	const int32 SenderId = Entry.SenderId;
+	const int32 Frame = Entry.Frame;
+	if (!Inbox.Add(Entry))
 	{
-		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: hit inbox full (%d entries), a hit from %d at frame %d is dropped"), *GetPathName(), FGSTN_HitInbox::MaxEntries, Entry.AttackerId, Entry.Frame);
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: combat inbox full (%d entries), an entry of kind %d from %d at frame %d is dropped"), *GetPathName(), FGSTN_CombatInbox::MaxEntries, Kind, SenderId, Frame);
 		return false;
 	}
 	return true;
+}
+
+bool UGSTN_CombatSimComponent::PostToInbox(int32 TargetId, const FGSTN_InboxEntry& Entry)
+{
+	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
+	return World && World->PostToInbox(TargetId, Entry);
+}
+
+bool UGSTN_CombatSimComponent::PostHit(const FGSTN_HitInboxEntry& Entry)
+{
+	return PostToInbox(Entry.ToInboxEntry());
 }
 
 void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
