@@ -60,6 +60,22 @@ Process notes: the PIE went to `RagdollLevel` / `NPCLevel` twice (`Cmd: ServerTr
 walked on a random stick for 2.2 s per cycle; I did not find the trigger (a level transition volume or an input mapping of the sample content
 reachable from the harness level is the likely cause), shortening the stick to 1.2 s removed it. The runs before the fix are listed above as partial.
 
+### P0a re-measure with the ricochet prediction (M4b P8, laptop, 2026-10-26)
+
+Same setup (listen host + 2 clients, 60/15/2 %, the six overlapping spike hurtboxes of `HBS_Test_Pawn` in memory, remote client 1 attacks client 2, 2.8 s cycles, stick held 1.2 s), but now with the real prediction: the pawns carry an in-memory part set with one part per hurtbox, hard ones (`head`, `chest`, `shoulder`, hardness 5: the test move's penetration 0 bounces) alternating with soft ones (`torso`, `feet`, `weak`, hardness 0), the rules converted to parts, `FGSTN_PartsAttackerOutcome` registered. So a wrong overlap choice between a hard and a soft neighbour flips the ricochet the attacker predicts. Harness: `scenario_p0a_ricochet` (`parts_batch(['p0a_ricochet'] * 14)`, a fresh PIE per chunk of 130 cycles), numbers from `spike_report()`.
+
+| Cycles | Predicted hits (authority) | Matched on the attacker's client | Index disagreements | Ricochets (authority) | Ricochet-flag disagreements |
+|---|---|---|---|---|---|
+| 1820 | **3014** | 3014 | **1 (0.033 %)** | 926 | **1** |
+
+Chosen index histogram: torso 490, chest 925, weak 1598, shoulder 1 (head and feet are not reached at these spots). The one disagreement: frame 12347, group 0, hitbox 0, authority `chest` (3, hard: ricochet), the attacker's client `torso` (0, soft: a normal hit with an attacker hitstop of 6) - the same kind of edge case as the one of the first run (a moving victim seen through two views). It DID change the attacker's predicted ricochet, and it shows as the correction the plan expects: in that cycle the attacker's client rolled back twice (the rest of the cycles: see below). The authority's value won (its inbox row carries the ricochet flag and the chest), so no damage or part state was affected; the visible effect is one wrong prediction (a normal hit with a hitstop and no recoil) corrected into the recoil.
+
+Attacker-client rollbacks: 270 over 1820 cycles in 214 cycles. They are not caused by the ricochet: 93 of 926 cycles with a ricochet (10.0 %) against 121 of 894 cycles without (13.5 %); a walking victim and 2 % loss produce them anyway. The recoil of a correctly predicted ricochet did not cost a rollback beyond that baseline.
+
+Reading against the 0.1 % line: 1 in 3014 = 0.033 % (95 % upper bound about 0.18 %, rule of three on a count of one), below the line. The earlier 0.29 % was a small-sample overestimate. Option (b) of the earlier STOP evaluation (predict only when all overlapped parts agree) is not needed.
+(`missing on the victim's client` reads 100 % in this run: the harness reads the victim's inbox on the victim's client copy, which only drains on the authority in this configuration; the authority's inbox rows had 0 hurtbox differences against the attacker's rows.)
+
+
 ## P0b Presentation cost
 
 Not run as specified. The two assets the spike needs cannot be authored from the editor Python of this project: a Niagara system with a mesh

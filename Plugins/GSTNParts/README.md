@@ -105,7 +105,7 @@ itself, because `ApplyDamage` requests the hit's own damage and would ignore the
 - The part comes from `HurtboxIndex` (the attacker's choice, never re-derived) through the part's hurtbox names; a hurtbox no part names is the body.
 - Writes the reaction modifiers (weight scale times the juggle factors, knockback and hitstop scales, the band's stagger scale, the part's stagger threshold
   else the body's else unset, the lower reaction cap), the main pool damage, and one `FGSTN_PartHitOutcome` (the state the hit left, the events as flags) for the outcome applier.
-- A ricochet band stops the pipeline (`bHit` false): no damage, no freeze on either side, no flinch.
+- A ricochet band stops the pipeline (`bHit` stays true, no damage, no knockback): no freeze on either side, no flinch.
 - The table is the set's, else the rules extension's (`FGSTN_PartsRulesExtension`, in `UGSTN_CombatRules::RulesExtensions`), else the settings', else the built-in three bands.
 - `FGSTN_PartsPipelineValidator` reports `PartResolve` before `Parry`/`Shield`, `ApplyDamage` next to it, and a part set under rules without the step. The
   combat rules validator already reports it after `ComputeKnockback` and next to `HealthWeight`.
@@ -155,6 +155,13 @@ child class. The effect is applied once per broken part and removed only by a re
 The plugin ships no content yet; every reference between assets is soft (checked by `GSTNParts.Core.Data.NoHardContentReferences`). A game adds its own `Part.Type.*` and `GameplayCue.Combat.Part.*` leaves in its own
 `Config/Tags` ini and its own part sets and penetration tables as assets; the defaults are soft references in the settings.
 
+## Hit feel (P8)
+
+- **Ricochet prediction.** `FGSTN_PartsAttackerOutcome` (`GSTNPartsNP`, registered by the module in `FGSTN_AttackerOutcomeRegistry`) returns `Ricochet` when the part resolve step's outcome entry of the attacker's own pipeline run carries the Ricochet flag, i.e. the chosen part's penetration band has `bRicochet`. Everything it rests on is static (hit penetration, part hardness, table) or replicated (the part set and the broken mask in the snapshot extension), so the attacker predicts it exactly. The step ends a ricochet with `Stop` but leaves `bHit` true: the attacker's loop drops a hit the pipeline refused before it asks the seam. The combat core then does the rest: the recoil of the attack's `FGSTN_RicochetResponse`, no hitstop and no hit confirm on the attacker, a flagged inbox entry (cue and `HitLanded` event) and nothing else on the victim. `Combat.Event.Part.Ricochet` is NOT published for a flagged entry yet: the victim step skips the pipeline for it (open item in `docs/notes/m4b-doc-deltas.md`, "P8").
+- **Hitstop.** The part contributes only `band.HitstopScale x part.Reaction.HitstopScale` (static data) to the modifiers. The combat knockback model applies it to `Auto` hitstop only; an authored `Override` is final, on both sides. Never the broken mask, the damage or the weight (the knockback term of the combat's own Auto formula stays M4's dial).
+- **Reaction.** The effective weight falls with the damage taken and the mass broken parts lost (`LostMassFraction`, never below `MinWeightScale` 0.35), times the body's and the part's `JuggleFactor`. The airborne dial is the combat rules' own `AirborneJuggleScale` (default 1, scales the knockback of a tumbling victim), there is no second one here. Hitstun is the hit's stagger force against the part's threshold; the hitstun length comes from the knockback only.
+- **Break Launch and Stagger.** The outcome applier collects the `Launch` and `Stagger` effects of the parts a hit newly broke and puts them in `FGSTN_OutcomeApplyContext::Reaction` (an `FGSTN_ReactionRequest`); the victim step merges it as a hit of that strength would (longer floor, faster launch, the hitstun of a launch of that speed). The horizontal direction follows the hit, the vertical one is the victim's up.
+
 ## Tests
 
 `Automation RunTests GSTNParts`: `Core.Smoke`, `Core.Tags.*` (documented, no state tag, owned subtrees, ini vocabulary),
@@ -169,7 +176,7 @@ applied and removed per part, magnitudes by set-by-caller key, the launch reques
 (payload round trip, dedupe key and window, the hit envelope on every event, two entries of a drain in either order),
 `Projection.*` (Broken, the removed base tag, GrabLocked, AllBroken counting breakable parts only). The canary build
 (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the canary script does not exist.
-`GSTNParts.NP.Restore.*` and `GSTNParts.GAS.Restore.*` (P7b: mask cleared at F+1, rollback redelivery restores once, restore then break is a new serial, one-shots stay, the GE component requests). `GSTNParts.NP.*` (P7 part 1): `Snapshot.*` (end of F-1, bytes, lag history), `Applier.*` (writes at F+1, the real victim drain rebuilds between entries, rollback redelivery, event keys, monotonic mask), `TickExtension.*` (order, tags from the mask, hit groups, hidden hurtboxes), `Attach.*`, `Content.*`.
+`GSTNParts.NP.{Ricochet,Hitstop,Reaction,BreakEffects}.*` (P8: the attacker predicts the ricochet from static data and the mask, no hitstop or confirm either side, the victim only gets the entry; the part's hitstop scale reaches Auto only, Override is final; weight tier with broken limbs, juggle factor, the rules' airborne scale; break Launch and Stagger through the reaction request). `GSTNParts.NP.Restore.*` and `GSTNParts.GAS.Restore.*` (P7b: mask cleared at F+1, rollback redelivery restores once, restore then break is a new serial, one-shots stay, the GE component requests). `GSTNParts.NP.*` (P7 part 1): `Snapshot.*` (end of F-1, bytes, lag history), `Applier.*` (writes at F+1, the real victim drain rebuilds between entries, rollback redelivery, event keys, monotonic mask), `TickExtension.*` (order, tags from the mask, hit groups, hidden hurtboxes), `Attach.*`, `Content.*`.
 
 ## Restoring parts
 
@@ -177,6 +184,7 @@ Parts never heal by themselves; an explicit restore clears broken bits and gives
 
 ## Changelog
 
+- 0.1 (2026-10-25): hit feel through parts (plan P8): `FGSTN_PartsAttackerOutcome` (ricochet prediction), break Launch/Stagger through the reaction request, `AirborneJuggleScale` is the combat rules'; the ricochet step keeps `bHit`; tests `GSTNParts.NP.{Ricochet,Hitstop,Reaction,BreakEffects}.*`; scenarios `part_ricochet/stagger/weakpoint/break_launch`; content: ArmR plate, Head threshold, Legs break launch.
 - 0.1 (2026-10-25): part restore (plan P7b): `UGSTN_GEComponent_RestoreParts`, `UGSTN_GE_PartRestore`, `UGSTN_PartsLibrary`, `Combat.Event.Part.Restored`, the consumer in the tick extension; harness scenarios `part_break/cap/hitgroups/rollback/host/restore` (plan P7 part 2) and the part event log hooks of `UGSTN_PartsKitLibrary`.
 - 0.1 (2026-10-25): `GSTNPartsNP`: snapshot contributor, tick extension, outcome applier, attach, content helpers (plan P7 part 1).
 - 0.1 (2026-10-25): `GSTNPartsNP`: `FGSTN_PartsFragment` and its registration (plan P6).
