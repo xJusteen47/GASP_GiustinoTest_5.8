@@ -41,6 +41,8 @@ PREVIEW_CONTROL = 'PreviewWall'
 # Component space of the mannequin: forward is +Y. The wall faces the character, so its X axis points to -Y (yaw -90)
 PREVIEW_LOCATION = unreal.Vector(0.0, 45.0, 110.0)
 PREVIEW_ROTATION = unreal.Rotator(roll=0.0, pitch=0.0, yaw=-90.0)
+# Shape names of the 5.8 default library (DefaultGizmoLibraryNormalized): there is no plain 'Square'. Thin square = 10 cm, so scale 6 = 60 cm
+PREVIEW_SHAPE = 'Square_Thin'
 PREVIEW_SHAPE_SCALE = unreal.Vector(6.0, 6.0, 6.0)
 BEGIN_EXECUTION_PATH = '/Script/ControlRig.RigUnit_BeginExecution'
 CONTROL_RIG_NODE = '/Script/ControlRigDeveloper.AnimGraphNode_ControlRig'
@@ -167,23 +169,32 @@ def ensure_preview_control(rig):
     """The control that places the preview wall: a transform control with a flat square shape lying in the wall plane."""
     hierarchy = rig.get_hierarchy()
     key = unreal.RigElementKey(type=unreal.RigElementType.CONTROL, name=PREVIEW_CONTROL)
-    if hierarchy.contains(key):
-        return
-    settings = unreal.RigControlSettings()
-    settings.control_type = unreal.RigControlType.EULER_TRANSFORM
-    settings.display_name = PREVIEW_CONTROL
-    settings.shape_name = 'Square'
-    settings.shape_color = unreal.LinearColor(0.1, 0.6, 0.6, 1.0)
-    value = hierarchy.make_control_value_from_euler_transform(
-        unreal.EulerTransform(location=PREVIEW_LOCATION, rotation=PREVIEW_ROTATION, scale=unreal.Vector(1.0, 1.0, 1.0)))
-    created = rig.get_hierarchy_controller().add_control(PREVIEW_CONTROL, unreal.RigElementKey(), settings, value)
-    if not created or not hierarchy.contains(key):
-        fail(f'could not add the control {PREVIEW_CONTROL}')
-        return
-    # The square shape lies in its own XY plane: turned 90 deg so it lies in the wall plane (normal = the control's X axis)
-    hierarchy.set_control_shape_transform(key, unreal.Transform(rotation=unreal.Rotator(roll=0.0, pitch=90.0, yaw=0.0),
-                                                                scale=PREVIEW_SHAPE_SCALE), True)
-    log(f'control {PREVIEW_CONTROL}')
+    if not hierarchy.contains(key):
+        settings = unreal.RigControlSettings()
+        settings.control_type = unreal.RigControlType.EULER_TRANSFORM
+        settings.display_name = PREVIEW_CONTROL
+        settings.shape_name = PREVIEW_SHAPE
+        settings.shape_color = unreal.LinearColor(0.1, 0.6, 0.6, 1.0)
+        value = hierarchy.make_control_value_from_euler_transform(
+            unreal.EulerTransform(location=PREVIEW_LOCATION, rotation=PREVIEW_ROTATION, scale=unreal.Vector(1.0, 1.0, 1.0)))
+        created = rig.get_hierarchy_controller().add_control(PREVIEW_CONTROL, unreal.RigElementKey(), settings, value)
+        if not created or not hierarchy.contains(key):
+            fail(f'could not add the control {PREVIEW_CONTROL}')
+            return
+        log(f'control {PREVIEW_CONTROL}')
+    # Kept right on every run, so a control made by an older version of the script (shape name 'Square', which 5.8 does not have) is fixed
+    settings = hierarchy.get_control_settings(key)
+    if str(settings.shape_name) != PREVIEW_SHAPE:
+        settings.shape_name = PREVIEW_SHAPE
+        hierarchy.set_control_settings(key, settings)
+        log(f'control {PREVIEW_CONTROL} shape {PREVIEW_SHAPE}')
+    # The square mesh lies in its own XY plane (normal Z): pitch 90 turns that normal onto the control's X axis, the wall normal
+    shape = unreal.Transform(rotation=unreal.Rotator(roll=0.0, pitch=90.0, yaw=0.0), scale=PREVIEW_SHAPE_SCALE)
+    current = hierarchy.get_local_control_shape_transform(key, True)
+    if not current.is_near_equal(shape, 0.001):
+        for initial in (True, False):
+            hierarchy.set_control_shape_transform(key, shape, initial)
+        log(f'control {PREVIEW_CONTROL} shape transform')
 
 
 def report_compile(blueprint):
@@ -235,6 +246,15 @@ def run(check=False):
         if rig:
             graph = rig.get_controller_by_name('RigVMModel').get_graph()
             log(f'rig variables {[f"{v.name}: {v.cpp_type}" for v in rig.get_member_variables()]}')
+            hierarchy = rig.get_hierarchy()
+            key = unreal.RigElementKey(type=unreal.RigElementType.CONTROL, name=PREVIEW_CONTROL)
+            if hierarchy.contains(key):
+                shape = hierarchy.get_local_control_shape_transform(key, True)
+                log(f'rig control {PREVIEW_CONTROL}: shape {hierarchy.get_control_settings(key).shape_name}, '
+                    f'at {hierarchy.get_global_transform(key, True).translation}, rotation {hierarchy.get_global_transform(key, True).rotation.rotator()}, '
+                    f'shape rotation {shape.rotation.rotator()} scale {shape.scale3d}')
+            else:
+                log(f'rig control {PREVIEW_CONTROL} missing')
             for n in graph.get_nodes():
                 log(f'rig node {n.get_name()}')
             for link in graph.get_links():
