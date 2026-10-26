@@ -4,21 +4,21 @@
 
 #include "CoreMinimal.h"
 #include "GSTN_PartsPresentationBudget.h"
+#include "Rules/GSTN_CombatRules.h"
 #include "GSTN_PartsRulesExtension.generated.h"
 
 class UGSTN_PenetrationTable;
 
 /**
  * Game-wide values of the parts plugin that belong to a match's combat rules rather than to one entity (combat-parts.md §2):
- * the default penetration table, the weight defaults and the debris budget. It is meant to be an entry of the rules asset's
- * extension array, so the rules asset never grows a property that names parts. That array's base struct is not declared yet,
- * so this struct stands alone until the pipeline step arrives.
+ * the default penetration table, the weight defaults and the debris budget. It is an entry of the rules asset's extension
+ * array (UGSTN_CombatRules::RulesExtensions), so the rules asset never grows a property that names parts.
  *
  * Every field falls back on the plugin's settings when left at its "inherit" value, so an empty extension changes nothing.
  * Override order, lowest to highest: plugin settings, this extension, the part set's own value.
  */
 USTRUCT(BlueprintType)
-struct GSTNPARTSCORE_API FGSTN_PartsRulesExtension
+struct GSTNPARTSCORE_API FGSTN_PartsRulesExtension : public FGSTN_RulesExtension
 {
 	GENERATED_BODY()
 

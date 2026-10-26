@@ -9,7 +9,7 @@
 import unreal
 
 FOLDERS = ['/GSTNCombat/Rules', '/Game/GASNPPTest/Combat']
-CLASSES = ('GSTN_CombatRules', 'GSTN_HurtboxSetDefinition', 'GSTN_CombatTimeline')
+CLASSES = ('GSTN_CombatRules', 'GSTN_HurtboxSetDefinition', 'GSTN_CombatTimeline', 'GSTN_PartSetDefinition', 'GSTN_PenetrationTable')
 
 
 def run(folders=FOLDERS):
@@ -38,4 +38,6 @@ def run(folders=FOLDERS):
 
 
 if __name__ == '__main__':
-    run()
+    import sys
+    # --parts validates the GSTNParts sample content only (P14), plus the combat folders as before
+    run(FOLDERS + ['/GSTNParts/Samples'] if '--parts' in sys.argv else FOLDERS)

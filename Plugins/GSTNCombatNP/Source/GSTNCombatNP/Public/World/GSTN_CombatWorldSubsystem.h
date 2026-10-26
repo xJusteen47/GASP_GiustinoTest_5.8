@@ -26,6 +26,9 @@ struct FGSTN_EntityHistoryRecord
 	FTransform Transform;
 	FVector Velocity = FVector::ZeroVector;
 	FGSTN_VictimReactionState Reaction;
+
+	/** The plugin extension of the entry (broken parts): a rewind hands the step the one of the rewound frame */
+	FGSTN_SnapshotExtensionBlob Extension;
 };
 
 /**

@@ -128,6 +128,11 @@ FString UGSTN_ImpactTestLibrary::GetTestSurfaces(UObject* WorldContext)
 	{
 		for (TActorIterator<AGSTN_TestSurface> It(World); It; ++It)
 		{
+			// Only what the scenario spawned: the panels of the L_Test_Combat map belong to the level and are not its props
+			if (It->IsNetStartupActor())
+			{
+				continue;
+			}
 			Out += FString::Printf(TEXT("%s,%d,%d;"), *It->GetName(), It->bBroken ? 1 : 0, It->BreakCalls);
 		}
 	}

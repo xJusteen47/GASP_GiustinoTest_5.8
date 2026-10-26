@@ -244,6 +244,7 @@ void UGSTN_CombatWorldSubsystem::RecordHistory(const FGSTN_StepSnapshot& Source,
 		Record.Transform = Entry.Transform;
 		Record.Velocity = Entry.Velocity;
 		Record.Reaction = Entry.Reaction;
+		Record.Extension = Entry.Extension;
 		if (Ring.Num() > MaxRecords)
 		{
 			Ring.RemoveAt(0, Ring.Num() - MaxRecords, EAllowShrinking::No);

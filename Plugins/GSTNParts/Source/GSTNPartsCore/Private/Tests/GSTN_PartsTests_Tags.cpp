@@ -21,7 +21,7 @@ bool FGSTN_PartsTagsDocumentedTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
 	GSTNPartsTags::GetDeclaredTags(Tags);
-	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 11);
+	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 12);
 
 	const UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
 	TSet<FGameplayTag> Seen;

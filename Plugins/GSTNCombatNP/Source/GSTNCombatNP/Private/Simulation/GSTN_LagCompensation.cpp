@@ -50,6 +50,7 @@ void GSTNLagComp::BuildOverlay(const FGSTN_StepSnapshot& Source, int32 AttackerI
 		Entry.Facing = Rewound.GetUnitAxis(EAxis::X);
 		Entry.Velocity = Record.Velocity;
 		Entry.Reaction = Record.Reaction;
+		Entry.Extension = Record.Extension;
 		Entry.bInHitstop = Record.Reaction.HasFlag(GSTNVictimReactionFlags::InHitstop);
 	}
 	Out.BuildGrid(UGSTN_CombatWorldSubsystem::DefaultCellSize);

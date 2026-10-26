@@ -6,6 +6,10 @@
 #include "Hits/GSTN_HitExtensions.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 
+class AActor;
+class UAbilitySystemComponent;
+struct FGSTN_SimEventOutbox;
+
 /**
  * The fixed points of the combat tick where an extension can run (combat-m3 7.2). They are part of the contract: a point is
  * never moved relative to the others, and a new one is added, not inserted in the middle of the existing meaning.
@@ -49,6 +53,19 @@ struct FGSTN_CombatTickContext
 	 * it before the attacker side exists (M4 H8)
 	 */
 	FGSTN_HitGroupMask HitGroupMask;
+
+	/**
+	 * The entity's actor and ability system, for an extension that must reach content or the tags of the entity (it projects tags from its
+	 * fragment at BeforeTagProjection). Null in a test. Read-only use of content: an extension never reads simulation state from them
+	 */
+	AActor* Owner = nullptr;
+	UAbilitySystemComponent* AbilitySystem = nullptr;
+
+	/**
+	 * The outbox of the frame, for an event the extension makes without a hit (a restored part). The component publishes it on the authority only,
+	 * once per frame, so an extension appends unconditionally and a re-simulated frame never publishes twice. Null in a test
+	 */
+	FGSTN_SimEventOutbox* Outbox = nullptr;
 
 	FGSTN_CombatTickContext(int32 InFrame, const FGSTN_CombatSyncState& InState, FGSTN_CombatSyncState& OutState)
 		: Frame(InFrame), In(InState), Out(OutState)

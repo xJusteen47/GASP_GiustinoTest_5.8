@@ -752,6 +752,15 @@ bool FGSTN_PipelineBlueprintStepTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("nothing stopped it"), Result.bStopped);
 	TestTrue(TEXT("the hit lands"), Context.Outcome.bHit);
 	TestTrue(TEXT("the knockback step after the Blueprint step decided the hit"), Context.Outcome.bHasKnockback);
+
+	// The visible effect: the graph of the Resolve override writes KnockbackScale = 2 (made by setup_gas_assets.py --h13-content), so the same hit
+	// through the same standard step carries twice the knockback of the run without the Blueprint step
+	const auto ControlRules = MakeStandard({ Step(UGSTN_HitStep_ComputeKnockback::StaticClass()) });
+	FGSTN_HitResolutionContext Control = MakeContext();
+	FGSTN_HitPipelineRunner::Run(*ControlRules, Control);
+	TestTrue(TEXT("the control has a knockback to compare with"), Control.Outcome.Knockback.Knockback > 0.f);
+	TestEqual(TEXT("the Blueprint step doubled the knockback scale"), Context.Reaction.KnockbackScale, 2.f * Control.Reaction.KnockbackScale);
+	TestEqual(TEXT("and the knockback the model computed"), Context.Outcome.Knockback.Knockback, 2.f * Control.Outcome.Knockback.Knockback, 0.01f);
 	return true;
 }
 
