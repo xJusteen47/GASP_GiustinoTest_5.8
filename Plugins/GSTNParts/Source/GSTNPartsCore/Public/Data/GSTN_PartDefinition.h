@@ -142,7 +142,7 @@ struct GSTNPARTSCORE_API FGSTN_PartDefinition
 	 * How deep the part is, 0..1. The damage the part takes is Damage * (1 - Thickness) + DeepDamage * Thickness, where DeepDamage is the hit's own
 	 * (it defaults to Damage). Independent of Hardness: hardness decides whether a hit gets through, thickness what it does once through
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parts|Damage", meta = (ClampMin = 0, ClampMax = 1))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Damage", meta = (ClampMin = 0, ClampMax = 1))
 	float Thickness = 0.f;
 
 	/** Part damage at which the part breaks. 0 or less = unbreakable (an armour plate that only reduces) */
