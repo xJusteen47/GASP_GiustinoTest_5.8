@@ -15,6 +15,7 @@
 #include "Kits/GSTN_SuperDefinition.h"
 #include "Kits/GSTN_SuperInputScheme.h"
 #include "Kits/GSTN_WeaponDefinition.h"
+#include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Loadout/GSTN_LoadoutRules.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
@@ -106,6 +107,7 @@ void UGSTN_LoadoutComponent::ResolveLoadout(const FGSTN_LoadoutData& Data, FGSTN
 {
 	OutResolved = FGSTN_ResolvedLoadout();
 	OutResolved.Loadout = Data;
+	OutResolved.WorldContext = this;
 
 	auto Hold = [&OutHold](UObject* Object) -> UObject*
 	{
@@ -272,6 +274,8 @@ void UGSTN_LoadoutComponent::ClearGranted()
 {
 	if (UAbilitySystemComponent* Old = GrantedOn.Get())
 	{
+		// The extensions undo their grants first, while the abilities they may rely on are still there
+		FGSTN_LoadoutExtensionRegistry::RunOnCleared(*Old);
 		for (const FGameplayAbilitySpecHandle& Handle : GrantedHandles)
 		{
 			Old->ClearAbility(Handle);
@@ -343,4 +347,10 @@ void UGSTN_LoadoutComponent::GrantToAbilitySystem(UAbilitySystemComponent& ASC)
 			GrantedHandles.Add(Handle);
 		}
 	}
+
+	// The extensions grant last (an attribute set, a passive effect), after the abilities of the table they may read
+	FGSTN_LoadoutExtensionContext Context;
+	Context.Resolved = &Resolved;
+	Context.WorldContext = this;
+	FGSTN_LoadoutExtensionRegistry::RunOnGranted(Context, ASC);
 }

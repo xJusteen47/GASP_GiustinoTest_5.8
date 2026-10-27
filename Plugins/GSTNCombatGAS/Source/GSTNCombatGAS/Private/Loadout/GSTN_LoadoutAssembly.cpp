@@ -9,6 +9,7 @@
 #include "Kits/GSTN_SuperDefinition.h"
 #include "Kits/GSTN_SuperInputScheme.h"
 #include "Kits/GSTN_WeaponDefinition.h"
+#include "Loadout/GSTN_LoadoutExtensions.h"
 
 namespace
 {
@@ -101,6 +102,12 @@ void FGSTN_LoadoutAssembly::BuildCompileInput(const FGSTN_ResolvedLoadout& Resol
 			Out.Requirements = Super->Requirements;
 		}
 	}
+
+	// Last, so an extension sees the whole input and adds to it (a binding, a triggered ability) without changing what the kit authored
+	FGSTN_LoadoutExtensionContext Context;
+	Context.Resolved = &Resolved;
+	Context.WorldContext = Resolved.WorldContext;
+	FGSTN_LoadoutExtensionRegistry::RunContributeCompileInput(Context, OutInput);
 }
 
 void FGSTN_LoadoutAssembly::BuildRulesView(const FGSTN_ResolvedLoadout& Resolved, const FGSTN_CompiledBindingTable& Table, const FGSTN_CompileReport& Report, FGSTN_LoadoutRulesView& OutView)

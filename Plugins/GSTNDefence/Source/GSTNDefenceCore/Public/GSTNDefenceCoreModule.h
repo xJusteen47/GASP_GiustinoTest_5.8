@@ -4,4 +4,4 @@
 
 #include "Logging/LogMacros.h"
 
-DECLARE_LOG_CATEGORY_EXTERN(LogGSTNDefence, Log, All);
+GSTNDEFENCECORE_API DECLARE_LOG_CATEGORY_EXTERN(LogGSTNDefence, Log, All);

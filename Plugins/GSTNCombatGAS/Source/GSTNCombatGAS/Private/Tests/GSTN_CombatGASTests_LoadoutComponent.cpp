@@ -19,6 +19,7 @@
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
+#include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Loadout/GSTN_LoadoutSaveGame.h"
 #include "Loadout/GSTN_LoadoutSubsystem.h"
 #include "Tests/GSTN_GASTestTypes.h"
@@ -384,6 +385,90 @@ bool FGSTN_LoadoutApplyOnHostWithoutOnRepTest::RunTest(const FString& Parameters
 	TestTrue(TEXT("and the abilities are granted"), Fixture.HasAbility(UGSTN_TestGrantAbilityA::StaticClass()));
 	TestTrue(TEXT("with the weapon's passive"), Fixture.HasAbility(UGSTN_TestGrantAbilityC::StaticClass()));
 	TestEqual(TEXT("under the same revision"), Late->GetRevision(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LoadoutExtensionHooksTest, "GSTNCombat.GAS.Loadout.ExtensionHooks", LoadoutComponentTestFlags)
+bool FGSTN_LoadoutExtensionHooksTest::RunTest(const FString& Parameters)
+{
+	// Two extensions registered in the "wrong" order: they must run in id order, whatever the registration order
+	struct FScopedExtensions
+	{
+		TArray<FName> ContributeOrder;
+		int32 GrantedCount = 0;
+		int32 ClearedCount = 0;
+		const UGSTN_PrimaryKitDefinition* GrantedKit = nullptr;
+		const UObject* GrantedContext = nullptr;
+		const UObject* CompileContext = nullptr;
+
+		FScopedExtensions()
+		{
+			FGSTN_LoadoutExtension Second;
+			Second.ContributeCompileInput = [this](const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input)
+			{
+				ContributeOrder.Add(TEXT("B.Second"));
+			};
+			FGSTN_LoadoutExtensionRegistry::Register(TEXT("B.Second"), MoveTemp(Second));
+
+			FGSTN_LoadoutExtension First;
+			First.ContributeCompileInput = [this](const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input)
+			{
+				ContributeOrder.Add(TEXT("A.First"));
+				CompileContext = Context.WorldContext;
+				// Contributes an ability the kit did not author, so the grant shows the contribution reached the table
+				Input.Kit.TriggeredAbilities.AddUnique(AbilityC().ToSoftObjectPath());
+			};
+			First.OnGranted = [this](const FGSTN_LoadoutExtensionContext& Context, UAbilitySystemComponent& ASC)
+			{
+				++GrantedCount;
+				GrantedKit = Context.Resolved ? Context.Resolved->Kit : nullptr;
+				GrantedContext = Context.WorldContext;
+			};
+			First.OnCleared = [this](UAbilitySystemComponent& ASC) { ++ClearedCount; };
+			FGSTN_LoadoutExtensionRegistry::Register(TEXT("A.First"), MoveTemp(First));
+		}
+
+		~FScopedExtensions()
+		{
+			FGSTN_LoadoutExtensionRegistry::Unregister(TEXT("A.First"));
+			FGSTN_LoadoutExtensionRegistry::Unregister(TEXT("B.Second"));
+		}
+	};
+
+	const int32 Before = FGSTN_LoadoutExtensionRegistry::GetCount();
+	FScopedExtensions Extensions;
+	TestEqual(TEXT("two extensions registered"), FGSTN_LoadoutExtensionRegistry::GetCount(), Before + 2);
+	TestTrue(TEXT("by id"), FGSTN_LoadoutExtensionRegistry::IsRegistered(TEXT("A.First")));
+
+	FLoadoutFixture Fixture;
+	UGSTN_TestLoadoutComponent& Component = *Fixture.Component;
+	UAbilitySystemComponent& ASC = *Fixture.Rig.ASC;
+	TArray<FString> Errors;
+
+	// Kit B has no weapon, so ability C is granted only through the extension's contribution
+	TestTrue(TEXT("kit B is accepted"), Component.AcceptLoadout(Fixture.RequestKit(TEXT("KitB")), Errors));
+	TestTrue(TEXT("the contributed ability is granted"), Fixture.HasAbility(UGSTN_TestGrantAbilityC::StaticClass()));
+	TestTrue(TEXT("the kit's own triggered ability too"), Fixture.HasAbility(UGSTN_TestGrantAbilityB::StaticClass()));
+	TestEqual(TEXT("granted once"), Extensions.GrantedCount, 1);
+	TestEqual(TEXT("nothing cleared yet"), Extensions.ClearedCount, 0);
+	TestTrue(TEXT("the grant hook sees the resolved kit"), Extensions.GrantedKit == Fixture.KitB.Get());
+	TestTrue(TEXT("and the component as world context"), Extensions.GrantedContext == &Component);
+	TestTrue(TEXT("the compile hook sees the same context"), Extensions.CompileContext == &Component);
+
+	// Id order, not registration order; the validation compile and the apply compile both ran the hooks
+	TestTrue(TEXT("the hooks ran"), Extensions.ContributeOrder.Num() >= 2);
+	bool bOrdered = Extensions.ContributeOrder.Num() % 2 == 0;
+	for (int32 Index = 0; bOrdered && Index < Extensions.ContributeOrder.Num(); Index += 2)
+	{
+		bOrdered = Extensions.ContributeOrder[Index] == TEXT("A.First") && Extensions.ContributeOrder[Index + 1] == TEXT("B.Second");
+	}
+	TestTrue(TEXT("in id order"), bOrdered);
+
+	// A new loadout clears the old grants through the hook before granting again
+	TestTrue(TEXT("kit A is accepted"), Component.AcceptLoadout(Fixture.RequestKit(TEXT("KitA")), Errors));
+	TestEqual(TEXT("cleared once"), Extensions.ClearedCount, 1);
+	TestEqual(TEXT("granted again"), Extensions.GrantedCount, 2);
+	TestTrue(TEXT("with the new kit"), Extensions.GrantedKit == Fixture.KitA.Get());
 	return true;
 }
 
