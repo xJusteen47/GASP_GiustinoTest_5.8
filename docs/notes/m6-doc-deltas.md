@@ -77,3 +77,43 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
 - Placers: `FGSTN_ExitQuery` carries a non-reflected `IGSTN_ExitCollisionQuery*` (null = no collision check, first candidate wins); the ring is the preferred direction then seven 45-degree turns counter-clockwise about the local up, then above, then the fallback reported invalid; the at-socket placer keeps the throw's knockback as velocity even on the fallback. A Blueprint placer cannot reach the query.
 - `IGSTN_LinkHost` / `FGSTN_FakeLinkHost` (entity views as values, link slots, definitions by index, immunity stamps, placement, one event per formation or break) are the host contract the NP module implements in F10.
 - Tests: the plan's 31 names, unchanged (`GSTNLink.Core.*`: Tags 2, Data 3, State 4, Mash 3, Break 6, Placer 4, Rule.Grab 4, Rule.Latch 3, FakeHost 2).
+
+## F6: GSTNDefenceGAS attributes, effects, shield ability data, loadout contribution
+
+- **The ability classes are not in the GAS module.** `UGSTN_GA_BaseCombat` (and `UGSTN_GA_Base`) live in `GSTNCombatNP`, so a class of
+  `GSTNDefenceGAS` cannot derive from them without the forbidden NP edge (spec 1b, plan ground rules). F6 ships what the abilities are made
+  of, NP-free and tested: the shield timeline as data (`FGSTN_ShieldAbilitySpec::BuildTimeline`: startup, ONE `FGSTN_HoldWindowTrack` on
+  `Input.Button.Shield` with `bEndOnZeroShield`, release, one cancel window per out-of-shield option over the hold window), the shield
+  `CanExecute` decision (`UGSTN_DefenceLibrary::CanExecuteShield`: available, value > 0, not breaking, grounded; `EGSTN_ShieldRefusal`),
+  the get-up requirement (`GetupNeutralRequirements`: `Combat.State.Knockdown`), the class-checked tech and get-up set resolution, and the
+  loadout contribution. `UGSTN_GA_Shield`, `UGSTN_GA_Tech`, `UGSTN_GA_GroundBounce`, `UGSTN_GA_GetupRoll` and `UGSTN_GA_GetupNeutral` are
+  thin `UGSTN_GA_BaseCombat` children of **F7** (`GSTNDefenceNP`) that plug these in. The spec's 1b table ("`GSTNDefenceGAS`: ...
+  `UGSTN_GA_Shield`, `UGSTN_GA_Tech`") and the plan's F6 file list should move those classes to the NP row (folded by F14).
+- **Loadout builder hook added to `GSTNCombatGAS`** (the plan's F6 names one; none existed): `FGSTN_LoadoutExtensionRegistry`
+  (`Loadout/GSTN_LoadoutExtensions.h`), the same shape as `UGSTN_LoadoutRules::RegisterValidator`: `FGSTN_LoadoutExtension` with three
+  optional callbacks, `ContributeCompileInput` (run at the end of `FGSTN_LoadoutAssembly::BuildCompileInput`, every machine), `OnGranted`
+  (after `UGSTN_LoadoutComponent::GrantToAbilitySystem` gave the table's abilities, authority) and `OnCleared` (before `ClearGranted` removes
+  them), run in lexical id order. `FGSTN_ResolvedLoadout::WorldContext` (the loadout component, null in tools and tests) lets an extension find
+  the match's rules component. Test `GSTNCombat.GAS.Loadout.ExtensionHooks` (+1 to the GSTNCombat count). The combat-m3 loadout text
+  (combat.md 10, modularity-and-tags 5b) gains this seam (F14).
+- The defence contribution (`UGSTN_DefenceLibrary::ContributeToLoadout`, id `GSTNDefence`): the `Command.Defence.Shield` binding only where
+  `IsShieldAvailable(rules, kit has a shield)`, as a **slot override** `Press(Shield)` + `Hold(Shield, 0)` requiring `Input.Context.Grounded`
+  (the standard slot set has no shield slot, and the slot must stay free for kits where the shield is unavailable, spec 1d); the neutral get-up
+  as a `Command.Movement.Jump` binding requiring `Combat.State.Knockdown` on the kit's own jump slot; the Forced-started classes (ground
+  bounce, roll, get-up attacks, the tech set in kind order) as kit triggered abilities, so they are granted and enter the timeline registry.
+  `GrantDefence` adds `UGSTN_DefenceAttributeSet` initialised from the rules where the shield is available and removes it otherwise. The rules
+  resolve kit extension first, then the match's `FGSTN_DefenceRulesExtension` through `UGSTN_CombatRulesComponent::Find(WorldContext)`, then
+  `UGSTN_DefenceSettings::DefaultRules`.
+- `FGSTN_GetupSet::GroundBounce` added (Core): the spec's `UGSTN_GA_GroundBounce` had no slot in the kit extension; the landing bounce is
+  kit data like the roll and the neutral get-up.
+- Effects. `UGSTN_GE_ShieldDamage`: instant, additive on `ShieldHealth` through `UGSTN_ShieldDamageMagnitude` (reads the set-by-caller
+  `Combat.SetByCaller.ShieldDamage`) with a -1 coefficient; `ApplyMirror(ASC, Value)` writes an absolute mirror value through the same
+  modifier (loss = base - value), so one class serves the damage and the sparse mirror. `UGSTN_GE_ShieldRestore`: instant, additive by the
+  set-by-caller **name** key `GSTN.Defence.ShieldRestore.Amount` (no new tag, as F6 allows none); `RequestedDelta(ASC, LastMirrored)` is the
+  request the model reads (mirror base value minus the last value it mirrored; positive = restore, negative = a hand-applied loss, 0 = nothing).
+  `UGSTN_GE_ShieldBreak`: instant and empty, a Blueprint child adds the cue. The attribute set clamps `ShieldHealth` in `[0, Max]` on base
+  and current value and pulls the health down when the maximum drops (`PostAttributeChange`).
+- `LogGSTNDefence` is now exported from `GSTNDefenceCore` (`GSTNDEFENCECORE_API`), for the GAS and NP modules.
+- Tests: `GSTNDefence.GAS.{AttributeClamp, ShieldBindingOmittedWhenUnavailable, ShieldAbilityRefusesWhenUnavailable, TechSetPerKit,
+  GetupNeutralRequiresKnockdown, ShieldRestoreSeenAsRequest}` (the plan's six names; the ability tests exercise the decisions and data the
+  F7 ability classes call) plus `GSTNCombat.GAS.Loadout.ExtensionHooks`.
