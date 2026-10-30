@@ -6,8 +6,9 @@ entity whose hits and kits carry no link type behaves as it did before the plugi
 
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints F5a and F5b of
 [m6-defence-links-plan.md](../../docs/architecture/plans/m6-defence-links-plan.md) are built (skeleton, tags, settings, link type
-definitions, rules data, the outcome track, the request rules, exit placers, link state, mash and break math, and the fake host).
-The GAS module (F9) and the Network Prediction module (F10 onwards) are not built. The design is
+definitions, rules data, the outcome track, the request rules, exit placers, link state, mash and break math, and the fake host), and
+F9 adds the GAS module (link type registry, request checks, the grab candidate provider of the interact probe, anim layers by role).
+The Network Prediction module (F10 onwards) is not built. The design is
 [combat-m6-defence-links.md](../../docs/architecture/combat-m6-defence-links.md).
 
 ## Modules
@@ -15,19 +16,23 @@ The GAS module (F9) and the Network Prediction module (F10 onwards) are not buil
 | Module | State | What it is |
 |---|---|---|
 | `GSTNLinkCore` | exists (Runtime, Default) | Native tags, settings, the link type definition asset and the rules structs (grab, latch, mash, break), the kit extension and the outcome track; the request rules, the exit placers, the link state types, the mash and break math, and the host interface with its test double. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNLink.Core.*`. |
-| `GSTNLinkGAS` | not built (F9) | Link registry (type tag to wire index), requirement checks, interact provider, animation selection. Stock GAS. |
+| `GSTNLinkGAS` | exists (Runtime, Default) | `UGSTN_LinkRegistry` (engine subsystem: every link type definition the asset manager finds plus code-added ones, type tag to wire index sorted by tag name, roles, channel, the break reason table with plugin reasons), `UGSTN_LinkRequirementLibrary` (the request checks: common checks then the definition's rules, other-channel resolution, kit rules, the roles that block actions), `FGSTN_LinkInteractProvider` (the `GSTNInteract` candidate provider of grabbable entities, pre-filtered by the type's own rules, and the one-tag projection), `UGSTN_LinkAnimSelection` (the anim layer of a role from the weapon's then the kit's link extension). No NP, no Mover. Covered by `GSTNLink.GAS.*`. |
 | `GSTNLinkNP` | not built (F10 onwards) | Link sync fragment, the `LinkRequest` / `GrabImmunity` / `LinkBreakOnHit` steps, the parked movement mode, the watchdog. Needs the GAS-NPP fork. |
 
 The module class (`Private/GSTNLinkCoreModule.cpp`) registers the plugin's `Config/Tags` folder with the tag manager: the engine
 reads `Config/Tags` only for the project and for Game Feature plugins, not for ordinary plugins, so the ini vocabulary would
-otherwise be missing.
+otherwise be missing. It also registers the primary asset type `GSTN_LinkType` with the asset manager once the manager exists, over
+the plugin's content and `LinkTypeDirectories` (always cooked), so the project's `DefaultGame.ini` does not list the type: a
+`PrimaryAssetTypesToScan` line naming this plugin's class trips an engine ensure in every build where the plugin is disabled.
 
 ## Dependencies
 
-- Plugins: `GSTNCombat` (`GSTNCombatCore`) and `GSTNInput` (`GSTNInputCore`).
+- Plugins: `GSTNCombat` (`GSTNCombatCore`), `GSTNCombatGAS`, `GSTNInput` (`GSTNInputCore`) and `GSTNInteract` (`GSTNInteractCore`).
 - `GSTNLinkCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, DeveloperSettings, GSTNInputCore, GSTNCombatCore;
   private Projects (to find the plugin's own folder). No edge to the project module, to the sibling plugin `GSTNDefence`, or to GAS, NP
   and Mover.
+- `GSTNLinkGAS` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNInputCore, GSTNCombatCore, GSTNCombatGAS,
+  GSTNInteractCore, GSTNLinkCore. No NetworkPrediction, AbilitySystemSimulation, Mover, GSTNCombatNP, GSTNDefence, Editor or project module.
 - `GSTNCombat` builds and passes its tests with this plugin absent: the plugin adds behaviour by registering into the combat
   extension surface, never by editing the combat core.
 
@@ -77,7 +82,14 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
 ## How to extend
 
 - **A new link type** (a mount, a held object, a drill): a new `UGSTN_LinkTypeDefinition` asset and the tags it needs, declared by the
-  plugin that ships it. No change in this plugin. A definition whose tags are not registered fails validation and is skipped.
+  plugin that ships it. No change in this plugin. A definition whose tags are not registered fails validation and is skipped. The
+  registry gives it a wire index by its tag name; a definition made by code joins through `UGSTN_LinkRegistry::AddDefinition`. Assets
+  outside the plugin's content need their folder in `LinkTypeDirectories`.
+- **A new break reason**: declare its tag in your plugin and call `UGSTN_LinkRegistry::RegisterPluginReason(TagName)` from your
+  module startup; it takes an index from `EGSTN_LinkBreakReason::FirstPlugin` on, in tag name order.
+- **A type the interact button forms** (the drill's latch variant): one more `FGSTN_LinkInteractOffer` (definition, `Interact.Target`
+  meaning, reach) in the source the link tick extension hands the probe; the offer's rules pre-filter its candidates.
+- **A role's animation**: an `AnimsByRole` entry in the kit's (or weapon's) `FGSTN_LinkKitExtension`.
 - **A heavier or lighter grabber**: give the kit a `FGSTN_LinkKitExtension` with its own `FGSTN_GrabRules`.
 - **A new request rule**: subclass `UGSTN_LinkRule` (C++ or Blueprint), override `Evaluate`, list it in the definition's `Rules`. Call
   `CheckCommon` first.
@@ -91,7 +103,13 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
 |---|---|
 | `RequestTimeoutFrames` | Frames a predicted link waits for its response (12). |
 | `OrphanGraceFrames` | Frames after a formation during which a one-sided link is not an orphan (3). |
+| `LinkTypeDirectories` | Content folders, besides the plugin's own, scanned for link type definitions (empty). Read when the asset manager is created. |
 
 ## Tests
 
 `GSTNLink.Core.*`: `Tags.*`, `Data.*` (F5a); `State.*`, `Mash.*`, `Break.*`, `Placer.*`, `Rule.Grab.*`, `Rule.Latch.*`, `FakeHost.*` (F5b). They run with only this plugin and `GSTNCombatCore` loaded: no GAS, no NP, no world.
+
+`GSTNLink.GAS.*` (F9): `Registry.{IndicesStableAcrossLoadOrder, UnknownTagSkipped, ReasonTableAppend}`,
+`Interact.{ProviderFiltersUngrabbable, OneTargetTagPerFrame}`, `Anim.LayerByRole`. No world: registries are fresh objects, definitions
+transient. A test-only link type, its roles and two break reasons (`Combat.Link.*.GSTNTestOnly*`) are declared in the test file, in
+builds with automation tests only, to prove a type from outside the plugin gets an index and roles.

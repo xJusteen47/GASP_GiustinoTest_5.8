@@ -246,3 +246,69 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
 - Tests (12 NP): `GSTNDefence.NP.Landing.{BounceSteered, DownedThenGetupRoll, GetupAttackFromSlot, JumpGetsUp, MaxDownedFrames,
   TechSuccessCancelsImpact, TechFailureResolvesImpactFirst, NoTechSetNoLockout}`, `.DI.RulesOverloadApplied`,
   `.SDI.{DriftSweptByMover, MaxDistancePerHit, ThrowBlocksSDI}`. The move effects check the avatar has a Mover first (a test rig has none).
+
+## F9: GSTNLinkGAS registry, requirements, interact provider, anims by role
+
+- **Asset scanning (Step 0, 0942df4) is plugin-owned, not a root ini line.** `GSTNLinkCore`'s module registers the primary asset type
+  `GSTN_LinkType` when the asset manager is created (`UAssetManager::CallOrRegister_OnAssetManagerCreated`,
+  `ScanPathsForPrimaryAssets` over `/GSTNLink` when that mount exists plus the new setting `UGSTN_LinkSettings::LinkTypeDirectories`,
+  base class `UGSTN_LinkTypeDefinition`, no Blueprint classes, not editor only, `CookRule = AlwaysCook`). Reason: a
+  `PrimaryAssetTypesToScan` line in `Config/DefaultGame.ini` naming `/Script/GSTNLinkCore.GSTN_LinkTypeDefinition` makes the engine
+  `ensure` ("Failed to load class ... for Primary Asset Type", `FPrimaryAssetTypeInfo::FillRuntimeData`) in every build where GSTNLink
+  is disabled, which is the default. No root ini changed; `/Game/GASNPPTest` is not scanned yet because no link type asset lives there:
+  the project adds it with one `+LinkTypeDirectories=(Path="/Game/GASNPPTest")` line in its own `Config/DefaultGSTNLink.ini` when the
+  first one does (F11/F12). Closes HANDOVER 50 open item (3) and the F5a delta "owner edit: F9". If a project also lists the type in its
+  ini it must use the same base class and flags, or the asset manager reports a mismatch.
+- **`GSTNInteractCore` exists on the branch**, so the provider implements `IGSTN_InteractCandidateProvider` and the plan's fallback
+  projection is not built. `GSTNLink.uplugin` now depends on the `GSTNCombatGAS` and `GSTNInteract` plugins (GSTNInteract is enabled in
+  the committed `.uproject` already). Provider id `GSTNInteractProviders::LinkEntities = FirstConsumer` (16) is allocated in the central
+  id list of `GSTN_InteractTypes.h` (one line in GSTNInteract, the file its comment names as the only place for ids).
+- **`UGSTN_LinkRegistry` is an engine subsystem**, not a world one: the table is content, shared by a listen host and its PIE clients in
+  one process. It builds when the asset manager completes its first scan (`CallOrRegister_OnCompletedInitialScan`) and on demand
+  (`Get()` builds if needed, `RebuildFromAssetManager`), never by itself afterwards, so it cannot change under a match. Code-made
+  definitions join through `AddDefinition` / `RemoveDefinition` (the acceptance path: a test module registers a type without touching
+  GSTNLink); `Build(Definitions)` is the pure entry point. Wire index = 1-based rank of the type tag's name (case-sensitive), so it depends
+  on the set, never on load order; duplicates keep the definition whose path sorts first; more than `MaxLinkTypes` (255) are reported.
+  `GetSignature()` (CRC of the table and the plugin reasons) tells two machines with different sets apart; nothing compares it yet (F10's
+  content signature can).
+- **Skipped definitions**: the registry runs `UGSTN_LinkTypeDefinition::Validate`, the same function the asset's `IsDataValid` reports
+  (F5a), logs `Link registry: Skipped <path>: <problem>` as a warning and keeps the lines in `GetBuildErrors()`. No editor-only validator
+  was added: the definition's own `IsDataValid` already reports unregistered tags.
+- **Reason table** `FGSTN_LinkReasonTable`: generic reasons keep the `EGSTN_LinkBreakReason` indices (through `UGSTN_LinkMath::BreakReasonTag`
+  / `BreakReasonFromTag`, so the core's break math needs no lookup); plugin reasons take `FirstPlugin` (16) on, sorted by tag name, so
+  the registration order does not matter. Plugins register by tag NAME from their module startup (`UGSTN_LinkRegistry::RegisterPluginReason`,
+  a static list, because no registry exists that early); each build appends the names that resolve. An append re-sorts, so indices are
+  fixed only once the registry is built (before a match).
+- **Requirement library** (`UGSTN_LinkRequirementLibrary`): `EvaluateRequest` = `UGSTN_LinkRule::CheckCommon` then the definition's rules in
+  order (first refusal wins; a definition with no rule is decided by the common checks), `ResolveDefinitions` (definition from the
+  registry, each side's `OtherChannelDefinition` from its other channel's type index), `ApplyKitRules`, `FindKitExtension`, `IsLinkLocked`
+  (`Combat.Lock.Link`, which `CheckCommon` already refuses as `TargetLocked`), `MeetsRequirements`, and `GetActionBlockingRoleTags`: the roles
+  that are parked AND do not act while linked (the grabbed; not the latcher, not the grabber whose pummels and throws are abilities), for the
+  base ability's activation block in F10/F11, so a plugin's parked role is blocked without being named. Everything per link type is data:
+  the drill's latch variant (spin-drill-plan 2b) is a definition plus its own `UGSTN_LinkRule` subclass, with no change here.
+- **Interact provider** (`FGSTN_LinkInteractProvider`, plain C++ implementing the interface): reads a `FGSTN_LinkInteractSource` through
+  `FGSTN_InteractQuery::HostContext` (type name `GSTNLinkInteractSource`): the interactor as a `FGSTN_LinkRequestSide`, the entities
+  (request side, location, radius) and the OFFERS (definition, `Interact.Target` meaning, reach, kit rules) in priority order. An entity is
+  offered under the first offer whose `EvaluateRequest` accepts it, so the pre-filter is exactly the target's LinkRequest decision
+  (`GrabLocked` by name, `Combat.Immunity.Grab`, immunity frames, weight, busy channels, `Combat.Lock.Link`). Candidate id
+  `{LinkEntities, entity id}`, reach override = the offer's reach (the kit's `InteractReachCm` for a grab), radius = the capsule, live for
+  every frame (the snapshot is the stamp). Arc, scoring, ties and the focus stay the probe's (`UGSTN_InteractMath`). `MakeGrabOffer` builds
+  the standard offer; a latch offer is the same struct with another definition and meaning. `ProjectTargetTag` (static) removes every
+  `Interact.Target` tag and adds the focus meaning only when actionable: the "one tag per frame" rule as a pure function the F10 link tick
+  extension calls (the plan put the projection in the tick extension; the function lives here so it is tested without NP).
+- **Anim selection** (`UGSTN_LinkAnimSelection`): `FGSTN_KitLinkAnims` per role tag already lived in `GSTNLinkCore` (F5a's
+  `FGSTN_LinkKitExtension::AnimsByRole`), so `GSTN_LinkAnimSelection.h` holds the selection only: weapon extension first, then kit (the M3
+  weapon anim layer being the more specific), soft classes never loaded; `SelectForLinkState` maps a state's type index and role through the
+  registry; `GatherRoleAnimLayers` lists them for a client preload. No runtime consumer of M3's kit/weapon anim layers exists yet
+  (`LocomotionAnimLayer` / `AnimLayer` are read by the editor preview only), so "consumed by the M3 anim pattern" means the same soft-class
+  data shape; the presentation link is F10/F11.
+- `LogGSTNLink` is now exported from `GSTNLinkCore` (`GSTNLINKCORE_API`) for the GAS module, as F6 did for `LogGSTNDefence`.
+- **Tests: six, one more than the plan's five**: `GSTNLink.GAS.Registry.{IndicesStableAcrossLoadOrder, UnknownTagSkipped, ReasonTableAppend}`,
+  `GSTNLink.GAS.Interact.{ProviderFiltersUngrabbable, OneTargetTagPerFrame}` and `GSTNLink.GAS.Anim.LayerByRole` (the anim selection had no
+  test name in the plan). The acceptance (a test-only type gets an index and roles without touching GSTNLink) is inside
+  `IndicesStableAcrossLoadOrder`: the test file declares `Combat.Link.Type.GSTNTestOnly`, `Combat.Link.Role.GSTNTestOnlyA/B` and
+  `Combat.Link.BreakReason.GSTNTestOnlyA/B` with `UE_DEFINE_GAMEPLAY_TAG_STATIC` under `WITH_DEV_AUTOMATION_TESTS` (test builds only; "no new
+  tags" holds for production). `ProviderFiltersUngrabbable` checks the `Combat.Part.GrabLocked` case only when GSTNParts registered the tag.
+- Gates (named logs in `Saved/Logs`): `build-f9-1` (Step 0), `build-f9-2`, `build-f9-link-off`, `build-f9-final` Succeeded;
+  `headless-f9-on-1.log` 1133 / 0 (1127 + 6, GSTNLink 37, GSTNDefence 75, no asset-manager ensure); `headless-f9-link-off.log` 1096 / 0,
+  no GSTNLink line, GSTNDefence 75, no ensure. PIE sweep skipped: nothing registers the provider or reads the registry at runtime before F10.
