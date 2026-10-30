@@ -31,7 +31,9 @@ RULES_PVE = DEF_DIR + 'DA_DefenceRules_TestPvE'
 KIT_PATH = '/Game/GASNPPTest/Combat/' + g.HIT_KIT
 SHIELD_BUTTON = 'Input.Button.Shield'
 BUBBLE = 0x80
-SUITE_DEFENCE = ['shield_block', 'shield_bubble', 'shield_oos', 'shield_break', 'shield_mode_off', 'grab_shield', 'parry', 'parry_move']
+SUITE_DEFENCE = ['shield_block', 'shield_bubble', 'shield_oos', 'shield_break', 'shield_mode_off', 'grab_shield', 'parry', 'parry_move',
+                 'landing_bounce', 'landing_getup', 'tech_ground', 'tech_wall', 'sdi']
+NEVER = 2147483647   # KnockdownEndFrame of a downed state with no automatic get-up (MaxDownedFrames 0)
 _saved = {}
 _batch = {'handle': None, 'results': [], 'status': 'idle', 'report': None}
 Lib = unreal.GSTN_DefenceContentLibrary
@@ -75,8 +77,11 @@ def _set_struct(asset, prop, **values):
     return old
 
 
-def defence_setup(rules_path=RULES_PVP, shield=True, counter=False, shield_values=None, parry_values=None):
-    """The in-memory content of a scenario (see the header). Returns what it set"""
+def defence_setup(rules_path=RULES_PVP, shield=True, counter=False, shield_values=None, parry_values=None, landing=False, tech_set=False,
+                  tech_values=None, sdi_values=None, ground_values=None):
+    """The in-memory content of a scenario (see the header). F8: landing / tech_set give the kit the plugin's native landing and tech abilities
+    (UGSTN_DefenceContentLibrary.set_kit_defence_moves); tech_values / sdi_values / ground_values shorten numbers of the rules' tech, SDI and ground
+    bounce structs. Returns what it set"""
     kit = unreal.load_asset(KIT_PATH)
     rules = _rules(rules_path)
     if 'kit_bindings' not in _saved:
@@ -85,7 +90,12 @@ def defence_setup(rules_path=RULES_PVP, shield=True, counter=False, shield_value
         _saved.setdefault('shield', (rules_path, _set_struct(rules, 'shield', **shield_values)))
     if parry_values:
         _saved.setdefault('parry', (rules_path, _set_struct(rules, 'parry', **parry_values)))
+    for prop, values in (('tech', tech_values), ('sdi', sdi_values), ('ground_bounce', ground_values)):
+        if values:
+            _saved.setdefault(prop, (rules_path, _set_struct(rules, prop, **values)))
     Lib.set_kit_defence_extension(kit, rules, unreal.GSTN_GA_Shield.static_class() if shield else None)
+    if landing or tech_set:
+        Lib.set_kit_defence_moves(kit, landing, tech_set)
     if counter:
         bindings = list(kit.get_editor_property('kit_bindings'))
         for b in bindings:
@@ -104,7 +114,7 @@ def defence_reset():
     if 'kit_bindings' in _saved:
         kit.set_editor_property('kit_bindings', _saved.pop('kit_bindings'))
         msgs.append('kit')
-    for prop in ('shield', 'parry'):
+    for prop in ('shield', 'parry', 'tech', 'sdi', 'ground_bounce'):
         if prop in _saved:
             path, old = _saved.pop(prop)
             _set_struct(_rules(path), prop, **old)
@@ -512,6 +522,371 @@ def scenario_parry_move(client=1):
 
 
 # ---- batch -------------------------------------------------------------------------------------------------------------------------------------
+# ---- M6 F8: landing, tech, SDI ---------------------------------------------------------------------------------------------------------------------
+# The test move of KIT_Test_Hits launches the victim; with the thresholds at 0 every launch tumbles. The landing scenarios give the kit the plugin's
+# native landing abilities (set_kit_defence_moves), the tech ones its tech set too. Presses of the shield button come from the victim's own client,
+# timed from its own copy of the hitstop (a press before the hitstop end never counts). Every check that reads the defence state compares the state
+# string of the victim on the host and both clients.
+import math
+
+
+def _tumble_tuning():
+    g.set_tuning(push_back_threshold=0.0, launch_threshold=0.0, tumble_threshold=0.0)
+
+
+def _across(rig, side=1.0):
+    """The world direction across the attacker -> victim line (left for side 1) and a stick target 300 cm that way from the victim"""
+    v = g.snap(g.worlds()[0])
+    a, p = v[rig.akey]['location'], v[rig.vkey]['location']
+    n = max(math.hypot(p[0] - a[0], p[1] - a[1]), 1e-3)
+    d = ((p[0] - a[0]) / n, (p[1] - a[1]) / n)
+    left = (-d[1] * side, d[0] * side)
+    return left, (p[0] + 300.0 * left[0], p[1] + 300.0 * left[1])
+
+
+def _starts(key):
+    """(forced, command) timeline starts the authority published for the pawn"""
+    c = (g.snap(g.worlds()[0])[key].get('combat') or {}).get('timelineStarted') or {}
+    return int(c.get('forced', 0)), int(c.get('command', 0))
+
+
+def _event_count(rig, kind, since_frame, until_frame=None):
+    """(authority events, clients' events) of a defence event about the victim in [since_frame, until_frame)"""
+    def inside(e):
+        return e[1] >= since_frame and (until_frame is None or e[1] < until_frame)
+    auth = [e for e in _kinds(rig.vkey, kind, 0) if inside(e)]
+    clients = {w: [e for e in _kinds(rig.vkey, kind, w) if inside(e)] for w in range(1, len(g.worlds()))}
+    return auth, clients
+
+
+def _tagged(samples, tag):
+    return [s for s in samples if tag in s['tags']]
+
+
+def _tap_after_hitstop(rig, st, key, delay_frames=2):
+    """A slate callback: once the victim's own copy is past a NEW hitstop end by delay_frames and tumbling, its client taps the shield once"""
+    def tick(_dt):
+        try:
+            if st.get(key) is not None or st.get(key + '_armed') is None:
+                return
+            info = g.victim_info(rig.vi, rig.vkey)
+            frame, action, end = info[0], info[1], info[3]
+            if end > st[key + '_armed'] and action == 3 and frame >= end + delay_frames:
+                g.combat_tap(rig.vi, _shield_mask())
+                st[key] = frame
+        except Exception:
+            pass
+    return tick
+
+
+def scenario_landing_bounce(client=1):
+    """M6 F8, the landing of a kit WITHOUT a tech set (spec 6, owner revision), shot 'steered': the victim holds the stick across the launch from the
+    attack on. At the landing the mini bounce goes the stick's way (the first rising tick after the landing moves along the stick), the victim is
+    downed (Combat.State.Knockdown on the authority and the owner; Combat.Event.KnockedDown once, authority only), and with the stick still held once the
+    bounce is over the get-up roll starts by itself (the authority's Forced starts +2: the bounce and the roll; downed no more). Zero rollbacks of the
+    host. The lying and jump get-up half is scenario_landing_getup (its own PIE: the first shot leaves the attacker turned)."""
+    _landing_scenario('landing_bounce', client, steered=True)
+
+
+def scenario_landing_getup(client=1):
+    """M6 F8, the downed state of a kit without a tech set, shot 'lying': no input, still downed 1.5 s after the landing (no automatic get-up: down
+    = never on every world, Combat.State.Knockdown on the authority and the owner), then a jump press gets up (a command start, downed no more, the
+    defence state equal on every world). Zero rollbacks of the host."""
+    _landing_scenario('landing_getup', client, steered=False)
+
+
+def _landing_scenario(name, client, steered):
+    rig = _DefenceRig(name, client, 2 if client == 1 else 1, landing=True)
+    run, S = rig.run, rig.shots
+    st = {}
+    steps = [rig.setup_step()]
+
+    def hold_across():
+        st['dir'], target = _across(rig)
+        st['starts0'] = _starts(rig.vkey)
+        g.hold(rig.vi, 'move', g._steer_value(rig.vi, target))
+
+    def let_go():
+        g.release(rig.vi, 'move')
+        st['starts1'] = _starts(rig.vkey)
+    if steered:
+        steps += rig.shot('steered', prep=_tumble_tuning, hold=hold_across, release=let_go, wait=4.2)
+
+    def lying_mark():
+        st['lying'] = (states(rig.vkey), has_tag(0, rig.vkey, 'Combat.State.Knockdown'), has_tag(rig.vi, rig.vkey, 'Combat.State.Knockdown'), _starts(rig.vkey))
+        return 'lying', st['lying'][0][0]
+
+    def jump():
+        # The combat button (Input.Button.Jump), not the movement input action: the get-up is a combat command on the kit's jump slot
+        g.combat_tap(rig.vi, g.button_mask('Jump'))
+        return 'jump', rig.vi
+
+    def up_mark():
+        st['up'] = (states(rig.vkey), has_tag(0, rig.vkey, 'Combat.State.Knockdown'), has_tag(rig.vi, rig.vkey, 'Combat.State.Knockdown'), _starts(rig.vkey))
+        return 'up', st['up'][0][0]
+    if not steered:
+        steps += rig.shot('lying', prep=_tumble_tuning, wait=3.6)
+        t = rig.cursor
+        steps += [(t, lying_mark), (t + 0.1, jump), (t + 1.2, up_mark)]
+        rig.cursor = t + 1.3
+
+    def landed(name):
+        def f():
+            s = S[name]
+            srv, cli = _tagged(s['srv'], 'Combat.State.Knockdown'), _tagged(s['cli'], 'Combat.State.Knockdown')
+            auth, clients = _event_count(rig, 'KnockedDown', s['F0'])
+            ok = bool(srv) and bool(cli) and len(auth) == 1 and not any(clients.values())
+            seen = sorted({t for x in s['srv'] for t in x['tags'] if t.startswith('Combat.State.')})
+            return ok, (f'downed ticks authority {len(srv)}, owner {len(cli)}; KnockedDown authority {auth}, clients {clients}; hits {len(s["hits"])}, '
+                        f'authority states seen {seen}, modes {sorted({x["mode"] for x in s["srv"]})}')
+        return f
+
+    def bounce_steered():
+        s = S['steered']
+        down = sorted(_tagged(s['srv'], 'Combat.State.Knockdown'), key=lambda x: x['fr'])
+        if not down or 'dir' not in st:
+            return False, 'no landing'
+        f0 = down[0]['fr']
+        rising = [x for x in sorted(s['srv'], key=lambda x: x['fr']) if x['fr'] >= f0 and x['vel'][2] > 30.0]
+        if not rising:
+            return False, f'no rising tick after the landing frame {f0}'
+        v = rising[0]['vel']
+        h = math.hypot(v[0], v[1])
+        along = (v[0] * st['dir'][0] + v[1] * st['dir'][1]) / max(h, 1e-3)
+        return h > 20.0 and along > 0.7, f'landing frame {f0}, first rising tick {rising[0]["fr"]} velocity {tuple(round(x) for x in v)}, along the stick {along:.2f}'
+
+    def rolled():
+        a0, a1 = st.get('starts0', (0, 0)), st.get('starts1', (0, 0))
+        last_srv = sorted(S['steered']['srv'], key=lambda x: x['fr'])[-1:]
+        last_cli = sorted(S['steered']['cli'], key=lambda x: x['fr'])[-1:]
+        still = [bool(x and 'Combat.State.Knockdown' in x[0]['tags']) for x in (last_srv, last_cli)]
+        return a1[0] - a0[0] >= 2 and not any(still), f'Forced starts {a0} -> {a1} (bounce + roll), downed at the end (authority, owner) {still}'
+
+    def lying():
+        ss, a, o, _ = st.get('lying', ([], False, False, None))
+        p = parse(ss[0]) if ss else None
+        return bool(ss) and len(set(ss)) == 1 and p is not None and p.get('down') == NEVER and a and o, f'states {ss}, Knockdown tag (authority, owner) ({a}, {o})'
+
+    def got_up():
+        ss, a, o, starts = st.get('up', ([], True, True, None))
+        p = parse(ss[0]) if ss else None
+        cmd = (starts[1] - st['lying'][3][1]) if starts and 'lying' in st else 0
+        return (bool(ss) and len(set(ss)) == 1 and p is not None and p.get('down') not in (None, NEVER) and not a and not o and cmd >= 1,
+                f'states {ss}, Knockdown tag (authority, owner) ({a}, {o}), command starts +{cmd}')
+
+    t = rig.cursor + 0.1
+    if steered:
+        steps += [
+            (t, run.at('steered shot: landed downed on the authority and the owner, KnockedDown once from the authority', landed('steered'))),
+            (t, run.at('the mini bounce follows the stick', bounce_steered)),
+            (t, run.at('stick held after the bounce: the get-up roll starts by itself, downed no more', rolled)),
+        ]
+    else:
+        steps += [
+            (t, run.at('lying shot: landed downed', landed('lying'))),
+            (t, run.at('no input: still downed 1.5 s after the landing, equal on every world (no automatic get-up)', lying)),
+            (t, run.at('a jump press gets up (a command), equal on every world', got_up)),
+        ]
+    steps.append((t, rig.kits_ok()))
+    rig.cursor = t
+    steps += rig.end_steps()
+    run.run(steps)
+
+
+def _tech_scenario(name, client, wall):
+    """The tech scenarios: a kit with a tech set, the window widened in memory to 60 frames so a press at the victim's hitstop end + 2 frames reaches
+    a contact up to a second later. Shot 'teched': the press (and a forced reconcile of the victim's client 3 frames after it); shot 'missed': no press"""
+    vi = 2 if client == 1 else 1
+    rig = _DefenceRig(name, client, vi, landing=True, tech_set=True, tech_values={'window_frames': 60, 'lockout_frames': 120})
+    run, S = rig.run, rig.shots
+    st = {}
+    h = {'tap': unreal.register_slate_post_tick_callback(_tap_after_hitstop(rig, st, 'press'))}
+
+    def prep():
+        if wall:
+            g.set_tuning(push_back_threshold=50.0, launch_threshold=100.0, tumble_threshold=200.0)
+            st['rows'] = unreal.GSTN_ImpactTestLibrary.configure_impact_table(g.IMPACT_ROWS)
+            unreal.GSTN_ImpactTestLibrary.set_hit_impact_profile(0, 0, False, 1.0)
+        else:
+            _tumble_tuning()
+
+    def surface():
+        if not wall:
+            return 'floor'
+        ctx = g.comps(g.worlds()[0])[rig.akey]
+        unreal.GSTN_ImpactTestLibrary.clear_test_surfaces(ctx)
+        a = g.snap(g.worlds()[0])[rig.akey]
+        yaw = a['yaw']
+        fwd = (math.cos(math.radians(yaw)), math.sin(math.radians(yaw)))
+        half = (50.0, 500.0, 500.0)
+        c = (a['location'][0] + fwd[0] * (g.IMPACT_FACE + half[0]), a['location'][1] + fwd[1] * (g.IMPACT_FACE + half[0]), a['location'][2] + 200.0)
+        unreal.GSTN_ImpactTestLibrary.spawn_test_surface(ctx, unreal.Vector(*c), unreal.Vector(*half), yaw, 'Wall')
+        for other in [k for k in g.comps(g.worlds()[0]) if k not in (rig.akey, rig.vkey)]:
+            g._place_near(client, other, (-350.0, 350.0))
+        g.set_damage(rig.vkey, g.IMPACT_DAMAGE)
+        return 'wall'
+
+    def arm(label, press):
+        def f():
+            surface()
+            st['counts0_' + label] = (g._impact_counts(0, rig.vkey), g._impact_counts(vi, rig.vkey))
+            st['starts0_' + label] = _starts(rig.vkey)
+            st['press'] = None
+            st['press_armed'] = g.victim_info(vi, rig.vkey)[3] if press else None
+            return 'armed', label, press
+        return f
+
+    def reconcile_after_press(_dt):
+        try:
+            if st.get('press') is not None and st.get('reconciled') is None and g.victim_info(vi, rig.vkey)[0] >= st['press'] + 3:
+                st['reconciled'] = g.rollbacks(vi)
+                g.force_reconcile(vi, 10)
+        except Exception:
+            pass
+    h['rc'] = unreal.register_slate_post_tick_callback(reconcile_after_press)
+
+    def done(label):
+        def f():
+            st['press_armed'] = None
+            st['counts1_' + label] = (g._impact_counts(0, rig.vkey), g._impact_counts(vi, rig.vkey))
+            st['starts1_' + label] = _starts(rig.vkey)
+            st['states_' + label] = states(rig.vkey)
+            st['press_' + label] = st.get('press')
+            return 'done', label, st['states_' + label][0]
+        return f
+    spot = (g.IMPACT_DISTANCE, 0.0) if wall else (205.0, 0.0)
+    steps = [rig.setup_step()]
+    steps += rig.shot('teched', prep=prep, spot=spot, hold=arm('teched', True), release=done('teched'), wait=3.0)
+    steps += rig.shot('missed', prep=prep, spot=spot, hold=arm('missed', False), release=done('missed'), wait=3.0)
+
+    def teched():
+        s = S['teched']
+        auth, clients = _event_count(rig, 'Teched', s['F0'], S['missed'].get('F0'))
+        ss = st.get('states_teched', [])
+        p = parse(ss[0]) if ss else None
+        want = 4 if wall else 1   # WallTech / InPlace
+        tags = (bool(_tagged(s['srv'], 'Combat.State.Teching')), bool(_tagged(s['cli'], 'Combat.State.Teching')))
+        ok = (st.get('press_teched') is not None and len(auth) == 1 and not any(clients.values()) and auth[0][2] == want and p is not None
+              and p.get('techtype') == want and len(set(ss)) == 1 and all(tags))
+        return ok, f'press frame {st.get("press_teched")}, Teched authority {auth}, clients {clients}; Teching tag (authority, owner) {tags}; states {ss}'
+
+    def cancelled():
+        s = S['teched']
+        c0, c1 = st.get('counts0_teched'), st.get('counts1_teched')
+        down = _event_count(rig, 'KnockedDown', s['F0'], S['missed'].get('F0'))[0]
+        kd = (bool(_tagged(s['srv'], 'Combat.State.Knockdown')), bool(_tagged(s['cli'], 'Combat.State.Knockdown')))
+        return c0 == c1 and not down and not any(kd), f'impact counts (authority, owner) {c0} -> {c1}; KnockedDown {down}; downed ticks {kd}'
+
+    def missed():
+        s = S['missed']
+        c0, c1 = st.get('counts0_missed'), st.get('counts1_missed')
+        auth = _event_count(rig, 'Teched', s['F0'])[0]
+        if wall:
+            # The M4 impact is unchanged: the splat of the Wall row on both copies
+            splat = c1 is not None and c0 is not None and c1[0][0] - c0[0][0] == 1 and c1[1][0] - c0[1][0] >= 1
+            return splat and not auth, f'impact counts (splat, bounce, break) authority/owner {c0} -> {c1}; Teched {auth}'
+        down = _event_count(rig, 'KnockedDown', s['F0'])[0]
+        return len(down) == 1 and not auth, f'KnockedDown {down}; Teched {auth}; states {st.get("states_missed")}'
+
+    def reconciled():
+        return st.get('reconciled') is not None, f"forced reconcile of the victim's client after the press (rollbacks before it {st.get('reconciled')})"
+
+    def stop():
+        for k in ('tap', 'rc'):
+            if h.get(k) is not None:
+                unreal.unregister_slate_post_tick_callback(h[k])
+                h[k] = None
+        if wall:
+            unreal.GSTN_ImpactTestLibrary.clear_test_surfaces(g.comps(g.worlds()[0])[rig.akey])
+            unreal.GSTN_ImpactTestLibrary.configure_impact_table('')
+        return 'stopped'
+
+    kind = 'wall' if wall else 'ground'
+    t = rig.cursor + 0.1
+    steps += [
+        (t, run.at(kind + ' tech: Teched once from the authority, its kind on every world, Teching on the authority and the owner, through a forced reconcile', teched)),
+        (t, run.at('the forced reconcile ran', reconciled)),
+        (t, run.at('the tech cancelled the impact: no impact, no knockdown', cancelled)),
+        (t, run.at('no press: ' + ('the M4 splat, unchanged' if wall else 'downed after the landing'), missed)),
+        (t, rig.kits_ok()),
+    ]
+    rig.cursor = t
+    steps += rig.end_steps(extra=[stop])
+    run.run(steps)
+
+
+def scenario_tech_ground(client=1):
+    """M6 F8, the optional tech on the floor: a kit with a tech set; the victim presses the shield after its hitstop (its own client), the window
+    widened to 60 frames in memory. Teched (InPlace) once from the authority, equal on every world and through a forced reconcile of the victim's
+    client; no knockdown. Without the press: downed after the landing."""
+    _tech_scenario('tech_ground', client, wall=False)
+
+
+def scenario_tech_wall(client=1):
+    """M6 F8, the wall tech: the impact_wall layout (a Wall test surface, which the wall mode slides on like any collider, ahead of the attacker; the
+    victim at 80 % damage flies into it), a kit with a tech set. With the press: WallTech, and the impact table's splat never happens (impact counts
+    unchanged on the authority and the owner). Without it: the M4 splat, unchanged."""
+    _tech_scenario('tech_wall', client, wall=True)
+
+
+def scenario_sdi(client=1):
+    """M6 F8, held-direction SDI with the rules asset's values (DA_DefenceRules_Test): a launch, the victim (locked in place, so its stick only feeds the
+    combat tick) holding the stick across it from the attack on. During the hitstop the victim drifts that way: the drift used is above 0 and at most
+    the rules' maximum, equal on the authority and the owner, and the victim's hitstop ticks move along the stick by about that much. A control shot with
+    a neutral stick drifts nothing."""
+    rig = _DefenceRig('sdi', client, 2 if client == 1 else 1)
+    run, S = rig.run, rig.shots
+    st = {}
+    steps = [rig.setup_step()]
+
+    def hold_across():
+        st['dir'], target = _across(rig)
+        g.hold(rig.vi, 'move', g._steer_value(rig.vi, target))
+
+    def read(label):
+        def f():
+            st[label] = (Lib.get_sdi_distance_used(_actor(0, rig.vkey)), Lib.get_sdi_distance_used(_actor(rig.vi, rig.vkey)))
+            g.release(rig.vi, 'move')
+            return 'sdi', label, st[label]
+        return f
+
+    def prep():
+        _tumble_tuning()
+        g.comps(g.worlds()[0])[rig.vkey].server_set_movement_lock(True)
+    steps += rig.shot('held', prep=prep, hold=hold_across, release=read('held'), wait=1.2)
+    steps += rig.shot('neutral', prep=prep, release=read('neutral'), wait=1.2)
+
+    def drift():
+        rules = _rules(RULES_PVP).get_editor_property('sdi')
+        cap = rules.get_editor_property('max_distance_cm_per_hit')
+        used = st.get('held')
+        ticks = sorted(_tagged(S['held']['srv'], 'Combat.State.Hitstop'), key=lambda x: x['fr'])
+        moved = 0.0
+        if len(ticks) >= 2 and 'dir' in st:
+            a, b = ticks[0]['loc'], ticks[-1]['loc']
+            moved = (b[0] - a[0]) * st['dir'][0] + (b[1] - a[1]) * st['dir'][1]
+        ok = used is not None and used[0] > 0.0 and used[0] <= cap + 1e-3 and abs(used[0] - used[1]) < 1e-3 and 0.0 < moved <= cap + 2.0
+        return ok, f'drift used (authority, owner) {used}, cap {cap} cm; hitstop ticks moved {moved:.2f} cm along the stick over {len(ticks)} ticks'
+
+    def neutral():
+        used = st.get('neutral')
+        return used is not None and used[0] == 0.0 and used[1] == 0.0, f'drift used with a neutral stick {used}'
+
+    def unlock():
+        g.comps(g.worlds()[0])[rig.vkey].server_set_movement_lock(False)
+        return 'unlocked'
+
+    t = rig.cursor + 0.1
+    steps += [
+        (t, run.at("held stick: the victim drifts along it during the hitstop, at most the rules' maximum, equal on the owner", drift)),
+        (t, run.at('neutral stick: no drift', neutral)),
+        (t, rig.kits_ok()),
+    ]
+    rig.cursor = t
+    steps += rig.end_steps(extra=[unlock])
+    run.run(steps)
+
+
 def defence_batch(names=None, lag=60, jitter=15, loss=0, settle=3.0, ready_timeout=90.0, timeout=120.0, report=None, module=None):
     """Runs the scenarios one by one, each in a fresh PIE (20 s between stop and play). Non-blocking: poll defence_batch_report(). The play settings
     are the ones the editor has now (listen, 3 players, one process). report = a path under Saved/Logs written at the end (first line: UTC time).

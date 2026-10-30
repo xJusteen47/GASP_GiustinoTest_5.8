@@ -34,6 +34,18 @@ public:
 	static bool ClearKitDefenceExtension(UGSTN_PrimaryKitDefinition* Kit);
 
 	/**
+	 * F8: fills the kit's defence extension (added with no rules and no shield when the kit has none) with the plugin's native landing and tech
+	 * abilities: with bLanding the get-up set (UGSTN_GA_GroundBounce, UGSTN_GA_GetupRoll, UGSTN_GA_GetupNeutral), with bTechSet the tech set
+	 * (UGSTN_GA_Tech for InPlace, RollLeft, RollRight, WallTech, WallJumpTech); false clears that part. For the harness and tests (in memory)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static bool SetKitDefenceMoves(UGSTN_PrimaryKitDefinition* Kit, bool bLanding, bool bTechSet);
+
+	/** The held-direction drift used in the actor's current hitstop, cm (the combat state's Hit.SDIDistanceUsed); -1 without a combat state */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Debug")
+	static float GetSDIDistanceUsed(const AActor* Actor);
+
+	/**
 	 * Attaches defence rules to an actor on this machine by hand, the way the loadout does from a kit (the bubble ignores the hit types of
 	 * the actor's combat rules). Call it on every world that has the pawn. A null Rules detaches. Returns whether data is attached afterwards
 	 */

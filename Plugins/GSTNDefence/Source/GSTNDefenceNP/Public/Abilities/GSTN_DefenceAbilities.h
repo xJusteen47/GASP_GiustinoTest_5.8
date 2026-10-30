@@ -18,6 +18,15 @@ class GSTNDEFENCENP_API UGSTN_GA_Tech : public UGSTN_GA_BaseCombat
 
 public:
 	UGSTN_GA_Tech(const FObjectInitializer& ObjectInitializer);
+
+	/** Length of the timeline (F8 default 20); the class or its Blueprint child sets its own, and its tracks (movement, intangibility) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "1", ForceUnits = "Frames"))
+	int32 TotalFrames = 20;
+
+	virtual void PostInitProperties() override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 };
 
 /**
@@ -31,6 +40,15 @@ class GSTNDEFENCENP_API UGSTN_GA_GroundBounce : public UGSTN_GA_BaseCombat
 
 public:
 	UGSTN_GA_GroundBounce(const FObjectInitializer& ObjectInitializer);
+
+	/** Length of the timeline (F8 default 24); the class or its Blueprint child sets its own, and its tracks (movement, intangibility) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "1", ForceUnits = "Frames"))
+	int32 TotalFrames = 24;
+
+	virtual void PostInitProperties() override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 };
 
 /**
@@ -44,6 +62,15 @@ class GSTNDEFENCENP_API UGSTN_GA_GetupRoll : public UGSTN_GA_BaseCombat
 
 public:
 	UGSTN_GA_GetupRoll(const FObjectInitializer& ObjectInitializer);
+
+	/** Length of the timeline (F8 default 30); the class or its Blueprint child sets its own, and its tracks (movement, intangibility) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "1", ForceUnits = "Frames"))
+	int32 TotalFrames = 30;
+
+	virtual void PostInitProperties() override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 };
 
 /**
@@ -57,6 +84,15 @@ class GSTNDEFENCENP_API UGSTN_GA_GetupNeutral : public UGSTN_GA_BaseCombat
 
 public:
 	UGSTN_GA_GetupNeutral(const FObjectInitializer& ObjectInitializer);
+
+	/** Length of the timeline (F8 default 20); the class or its Blueprint child sets its own, and its tracks (movement, intangibility) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "1", ForceUnits = "Frames"))
+	int32 TotalFrames = 20;
+
+	virtual void PostInitProperties() override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 };
 
 /**

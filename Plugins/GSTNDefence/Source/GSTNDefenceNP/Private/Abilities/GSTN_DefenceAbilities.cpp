@@ -78,6 +78,19 @@ bool UGSTN_GA_Shield::CanActivateAbility(const FGameplayAbilitySpecHandle Handle
 	return UGSTN_DefenceLibrary::CanExecuteShield(Data->Rules, Data->bKitHasShield, Value, Frag.IsBreaking(), bGrounded, Reason);
 }
 
+namespace
+{
+	/** The plain timeline of a thin defence ability: TotalFrames long, actionable at its end, no track (content adds its own) */
+	void BuildFixedTimeline(FGSTN_CombatTimelineData& Timeline, int32 TotalFrames)
+	{
+		if (Timeline.Tracks.IsEmpty())
+		{
+			Timeline.TotalFrames = FMath::Max(TotalFrames, 1);
+			Timeline.FirstActionableFrame = Timeline.TotalFrames;
+		}
+	}
+}
+
 UGSTN_GA_Tech::UGSTN_GA_Tech(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -139,5 +152,61 @@ void UGSTN_GA_CounterSample::PostEditChangeProperty(FPropertyChangedEvent& Prope
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 	RebuildTimeline();
+}
+#endif
+
+void UGSTN_GA_Tech::PostInitProperties()
+{
+	Super::PostInitProperties();
+	BuildFixedTimeline(Timeline, TotalFrames);
+}
+
+#if WITH_EDITOR
+void UGSTN_GA_Tech::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	BuildFixedTimeline(Timeline, TotalFrames);
+}
+#endif
+
+void UGSTN_GA_GroundBounce::PostInitProperties()
+{
+	Super::PostInitProperties();
+	BuildFixedTimeline(Timeline, TotalFrames);
+}
+
+#if WITH_EDITOR
+void UGSTN_GA_GroundBounce::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	BuildFixedTimeline(Timeline, TotalFrames);
+}
+#endif
+
+void UGSTN_GA_GetupRoll::PostInitProperties()
+{
+	Super::PostInitProperties();
+	BuildFixedTimeline(Timeline, TotalFrames);
+}
+
+#if WITH_EDITOR
+void UGSTN_GA_GetupRoll::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	BuildFixedTimeline(Timeline, TotalFrames);
+}
+#endif
+
+void UGSTN_GA_GetupNeutral::PostInitProperties()
+{
+	Super::PostInitProperties();
+	BuildFixedTimeline(Timeline, TotalFrames);
+}
+
+#if WITH_EDITOR
+void UGSTN_GA_GetupNeutral::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	BuildFixedTimeline(Timeline, TotalFrames);
 }
 #endif

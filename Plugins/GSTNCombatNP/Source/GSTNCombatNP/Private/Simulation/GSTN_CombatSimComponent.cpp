@@ -584,6 +584,8 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 		{
 			bAdmitted = IsBindingAdmitted(Current.Table, Admitting->FirstBinding + Offset);
 		}
+		UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s: command %d (%s) %s while only bindings requiring %s are admitted"), *GetNameSafe(GetOwner()), CommandIndex,
+			Admitting ? *Admitting->Tag.ToString() : TEXT("?"), bAdmitted ? TEXT("admitted") : TEXT("refused"), *FrameAdmitTag.ToString());
 		if (!bAdmitted)
 		{
 			return false;
@@ -716,6 +718,8 @@ bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 {
 	if (!IsJumpBindingAllowed(BindingIndex) || !IsBindingAdmitted(Tables().Table, BindingIndex))
 	{
+		UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s: binding %d refused (jump gate %d, admitted %d)"), *GetNameSafe(GetOwner()), BindingIndex, IsJumpBindingAllowed(BindingIndex) ? 1 : 0,
+			IsBindingAdmitted(Tables().Table, BindingIndex) ? 1 : 0);
 		return false;
 	}
 	// In a hit reaction only an ability that says so may start (the gate of IsCommandAllowed passed the command, not necessarily this binding)
@@ -729,7 +733,9 @@ bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 		}
 	}
 	// On the end-of-previous-frame state, like the ability system's own check at execution
-	return FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, GetCommandTable(), BindingIndex);
+	const bool bCanExecute = FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, GetCommandTable(), BindingIndex);
+	UE_CLOG(!bCanExecute && FrameAdmitTag.IsValid(), LogGSTNCombatSim, Verbose, TEXT("%s: binding %d cannot execute (its ability refuses)"), *GetNameSafe(GetOwner()), BindingIndex);
+	return bCanExecute;
 }
 
 FGSTN_ActivationContext UGSTN_CombatSimComponent::GetActivationContext() const
@@ -1378,7 +1384,15 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(FrameSet.TimelineRegistry[Slot.Arg]);
 			if (Spec && !Spec->IsActive())
 			{
-				AbilitySystem->TryActivateAbility(Spec->Handle);
+				// Activated as the model's own request, like a command's: the timeline it belongs to is already the running one, which an
+				// activation from outside the model (a trigger, an effect) would be refused for (UGSTN_GA_Base's interrupt policy)
+				const FGameplayAbilitySpecHandle Handle = Spec->Handle;
+				const FGSTN_CommandActivationScope CommandScope(Handle);
+				if (!AbilitySystem->TryActivateAbility(Handle))
+				{
+					UE_LOG(LogGSTNCombatSim, Log, TEXT("%s frame %d: forced timeline %d (%s) did not activate"), *GetNameSafe(GetOwner()), Frame, static_cast<int32>(Slot.Arg),
+						*GetNameSafe(FrameSet.TimelineRegistry[Slot.Arg].Get()));
+				}
 			}
 		}
 	}

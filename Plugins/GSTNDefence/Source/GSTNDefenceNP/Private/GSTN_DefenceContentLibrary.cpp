@@ -20,6 +20,7 @@
 #include "Sim/GSTN_DefenceAttach.h"
 #include "Sim/GSTN_DefenceFragment.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Abilities/GSTN_DefenceAbilities.h"
 
 bool UGSTN_DefenceContentLibrary::SetKitDefenceExtension(UGSTN_PrimaryKitDefinition* Kit, UGSTN_DefenceRules* Rules, TSubclassOf<UObject> ShieldAbility)
 {
@@ -62,6 +63,46 @@ bool UGSTN_DefenceContentLibrary::ClearKitDefenceExtension(UGSTN_PrimaryKitDefin
 	return Removed > 0;
 }
 
+bool UGSTN_DefenceContentLibrary::SetKitDefenceMoves(UGSTN_PrimaryKitDefinition* Kit, bool bLanding, bool bTechSet)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	TArray<FInstancedStruct>& Data = Kit->Extensions.ExtensionData;
+	int32 Existing = Data.IndexOfByPredicate([](const FInstancedStruct& Entry) { return Entry.GetPtr<FGSTN_DefenceKitExtension>() != nullptr; });
+	if (Existing == INDEX_NONE)
+	{
+		Existing = Data.Add(FInstancedStruct::Make(FGSTN_DefenceKitExtension()));
+	}
+	FGSTN_DefenceKitExtension Extension = *Data[Existing].GetPtr<FGSTN_DefenceKitExtension>();
+	Extension.GetupSet = FGSTN_GetupSet();
+	if (bLanding)
+	{
+		Extension.GetupSet.GroundBounce = UGSTN_GA_GroundBounce::StaticClass();
+		Extension.GetupSet.Roll = UGSTN_GA_GetupRoll::StaticClass();
+		Extension.GetupSet.Neutral = UGSTN_GA_GetupNeutral::StaticClass();
+	}
+	Extension.Tech = FGSTN_TechSet();
+	if (bTechSet)
+	{
+		for (const EGSTN_TechType Type : { EGSTN_TechType::InPlace, EGSTN_TechType::RollLeft, EGSTN_TechType::RollRight, EGSTN_TechType::WallTech, EGSTN_TechType::WallJumpTech })
+		{
+			Extension.Tech.Abilities.Add(Type, UGSTN_GA_Tech::StaticClass());
+		}
+	}
+	Data[Existing] = FInstancedStruct::Make(Extension);
+	Kit->MarkPackageDirty();
+	return true;
+}
+
+float UGSTN_DefenceContentLibrary::GetSDIDistanceUsed(const AActor* Actor)
+{
+	const UGSTN_CombatSimComponent* Combat = Actor ? Actor->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	const FGSTN_CombatSyncState* Sync = Combat ? Combat->GetSyncState() : nullptr;
+	return Sync ? static_cast<float>(Sync->Core.Hit.SDIDistanceUsed / FGSTN_HitSyncState::SDIUnitsPerCm) : -1.f;
+}
+
 bool UGSTN_DefenceContentLibrary::AttachDefenceToActor(AActor* Actor, UGSTN_DefenceRules* Rules, bool bKitHasShield)
 {
 	if (!Actor)
@@ -86,10 +127,11 @@ FString UGSTN_DefenceContentLibrary::GetDefenceStateString(const AActor* Actor)
 		return TEXT("none");
 	}
 	const FGSTN_DefenceFragment& F = *Fragment;
-	return FString::Printf(TEXT("value=%d.%02d@%d flags=%d press=%d release=%d stun=%d recovery=%d break=%d parry=[%d,%d)p%d last=%d punish=%d push=%d"),
+	return FString::Printf(TEXT("value=%d.%02d@%d flags=%d press=%d release=%d stun=%d recovery=%d break=%d parry=[%d,%d)p%d last=%d punish=%d push=%d techlock=%d techpress=%d techend=%d techtype=%d down=%d hitflags=%d"),
 		F.ShieldValueQ / 4, (F.ShieldValueQ % 4) * 25, F.ShieldStampFrame, static_cast<int32>(F.ShieldFlags), F.ShieldPressFrame, F.ShieldReleaseFrame,
 		F.ShieldStunEndFrame, F.ParryRecoveryEndFrame, F.BreakEndFrame, F.MoveParryStartFrame, F.MoveParryEndFrame, static_cast<int32>(F.MoveParryProfile),
-		F.LastParryFrame, F.PunishEndFrame, F.PushbackStartFrame);
+		F.LastParryFrame, F.PunishEndFrame, F.PushbackStartFrame, F.TechLockoutEndFrame, F.LastTechPressFrame, F.TechEndFrame, static_cast<int32>(F.TechType),
+		F.KnockdownEndFrame, static_cast<int32>(F.HitFlags));
 }
 
 float UGSTN_DefenceContentLibrary::GetShieldMirror(const AActor* Actor)
@@ -190,6 +232,8 @@ void UGSTN_DefenceContentLibrary::StartDefenceEventLog(AActor* WorldContext)
 	Types.AddTag(GSTNDefenceTags::Event_Parried);
 	Types.AddTag(GSTNDefenceTags::Event_Blocked);
 	Types.AddTag(GSTNDefenceTags::Event_ShieldBroken);
+	Types.AddTag(GSTNDefenceTags::Event_Teched);
+	Types.AddTag(GSTNDefenceTags::Event_KnockedDown);
 	Log.Handle = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(Types), [Key](const FGSTN_SimEvent& Event)
 	{
 		if (FDefenceEventLog* Found = GetDefenceLogs().Find(Key))
