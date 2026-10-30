@@ -126,6 +126,9 @@ public:
 	void SetCombatRules(UGSTN_CombatRules* Rules);
 	const UGSTN_CombatRules* GetCombatRules() const { return CombatRules; }
 
+	/** The hurtbox set this entity is hit through (content, resolved at setup; null without one) */
+	const UGSTN_HurtboxSetDefinition* GetHurtboxSet() const { return ActiveHurtboxSet; }
+
 	/**
 	 * The surface layer of the impact rules this victim decides with (combat-m4-hits 7b). Resolved from the rules' soft SurfaceImpactTable when the
 	 * rules are set; a test or a game replaces it here, outside the simulation, and every machine must run the same table. None: no impacts
@@ -585,6 +588,9 @@ private:
 
 	/** An extension's BlocksActions closed the can-act rule for this frame (a held shield): IsCommandAllowed refuses every command. Rewritten every tick, never state */
 	bool bFrameActionsBlocked = false;
+
+	/** The cancel conditions the extensions hold this frame (IGSTN_CombatTickExtension::HeldCancelConditions), read by the gate with the cancel windows. Rewritten every tick, never state */
+	uint32 FrameCancelConditions = 0;
 
 	int32 GateClosedFrames = 0;
 

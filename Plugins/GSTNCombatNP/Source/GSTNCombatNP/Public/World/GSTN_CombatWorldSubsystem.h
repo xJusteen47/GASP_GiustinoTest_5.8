@@ -28,7 +28,7 @@ struct FGSTN_EntityHistoryRecord
 	FGSTN_VictimReactionState Reaction;
 
 	/** The plugin extension of the entry (broken parts): a rewind hands the step the one of the rewound frame */
-	FGSTN_SnapshotExtensionBlob Extension;
+	FGSTN_SnapshotExtensionSet Extension;
 
 	/** The extra hurtboxes of the entry (a shield bubble): a rewind hands the step the ones of the rewound frame, so a hit lands on the bubble the victim had then */
 	FGSTN_ExtraHurtboxList ExtraHurtboxes;

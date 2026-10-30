@@ -7,6 +7,8 @@
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 
+struct FGSTN_TrackHookEnvironment;
+
 /**
  * The timeline part of the combat tick (combat-m3 7.2 steps 2, 6, 8 and 9), as functions of the sync state and the timeline
  * data so it is tested without a world: the component gathers the data, the settings and the ability system facts, calls
@@ -30,7 +32,8 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 * @return true if a timeline is still running after the step
 	 */
 	static bool AdvanceClock(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, int32 DefaultOverrideFrames,
-		bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame = false, const FGSTN_RicochetResponse* RicochetFallback = nullptr);
+		bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame = false, const FGSTN_RicochetResponse* RicochetFallback = nullptr,
+		const FGSTN_TrackHookEnvironment* HookEnvironment = nullptr);
 
 	/**
 	 * Ricochet (M4 H12). The recoil of the attack: its own response, else Fallback (the weapon's, else the kit's: the caller resolves which
@@ -52,7 +55,7 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 * from the first actionable frame on yes; otherwise no. Output is the evaluation AdvanceClock made for this frame.
 	 */
 	static bool IsCommandAllowed(const FGSTN_CombatSyncCore& Core, const FGSTN_CombatTimelineData* Data, const FGSTN_TimelineOutput& Output,
-		const FGameplayTag& Command, int32 CommandTier, int32 RunningTier);
+		const FGameplayTag& Command, int32 CommandTier, int32 RunningTier, uint32 ExtensionConditions = 0);
 
 	/**
 	 * Step 8. A timeline command won: ends the running one (a CancelTimeline request for the old registry entry), writes the
@@ -78,7 +81,8 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	static int32 Adopt(FGSTN_CombatSyncCore& Core, int32 Frame, TConstArrayView<int32> Awaiting);
 
 	/** Evaluates frame 0 of the timeline Start just began, so a commit on the first frame is requested in the same tick */
-	static void EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output);
+	static void EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output,
+		const FGSTN_TrackHookEnvironment* HookEnvironment = nullptr);
 
 	/** Back to Actionable with no timeline */
 	static void ClearTimeline(FGSTN_CombatSyncCore& Core);

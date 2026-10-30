@@ -53,6 +53,16 @@ void FGSTN_CombatTickExtensionRegistry::Run(EGSTN_CombatHookPoint Point, FGSTN_C
 	}
 }
 
+uint32 FGSTN_CombatTickExtensionRegistry::HeldCancelConditions(const FGSTN_CombatTickContext& Context) const
+{
+	uint32 Mask = 0;
+	for (const FEntry& Entry : Entries)
+	{
+		Mask |= Entry.Extension->HeldCancelConditions(Context);
+	}
+	return Mask;
+}
+
 bool FGSTN_CombatTickExtensionRegistry::BlocksActions(const FGSTN_CombatTickContext& Context) const
 {
 	bool bBlocked = false;

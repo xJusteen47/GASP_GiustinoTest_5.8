@@ -40,6 +40,7 @@
 #include "NetworkPredictionWorldManager.h"
 #include "Curves/CurveVector.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
+#include "Simulation/GSTN_TimelineTrackHook.h"
 #include "Presentation/GSTN_HitPresentationComponent.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "Hits/GSTN_ImpactTypes.h"
@@ -600,7 +601,7 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 	const FGameplayTag& Command = Current.Table.Commands[CommandIndex].Tag;
 	const int32 Running = GateCore->ActiveTimeline;
 	return FGSTN_CombatTimelineLogic::IsCommandAllowed(*GateCore, GetRegistryTimeline(Current, Running), TimelineOutput, Command,
-		UGSTN_InputSettings::Get().GetCommandTier(Command), Current.TimelineTier.IsValidIndex(Running) ? Current.TimelineTier[Running] : 0);
+		UGSTN_InputSettings::Get().GetCommandTier(Command), Current.TimelineTier.IsValidIndex(Running) ? Current.TimelineTier[Running] : 0, FrameCancelConditions);
 }
 
 int32 UGSTN_CombatSimComponent::GetCombatClock() const
@@ -801,6 +802,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// Hitstop (combat-m3 7.1): a frame inside the window of the previous state stands still on the combat clock. The window the
 	// debug button opens on frame F pauses from F+1 (F itself was simulated with the clock running when it opened)
 	const bool bHitstopFrame = OutSync.Core.AdvanceHitstopClock(Frame);
+
+	// What the track hooks of the plugins may read besides the input: the button map and the fragments as this frame writes them (M6 F7)
+	FGSTN_TrackHookEnvironment HookEnvironment;
+	HookEnvironment.Buttons = &ButtonMap;
+	HookEnvironment.Fragments = &OutSync.Fragments;
 	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
@@ -816,7 +822,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		const int32 StartBefore = OutSync.Core.TimelineStartFrame;
 		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(FrameSet, Running),
 			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame,
-			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex));
+			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex), &HookEnvironment);
 		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,
@@ -841,7 +847,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		const int32 Adopted = FGSTN_CombatTimelineLogic::Adopt(OutSync.Core, Frame, Awaiting);
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Adopted))
 		{
-			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Adopted], TimelineOutput);
+			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Adopted], TimelineOutput, &HookEnvironment);
 			StampMoveOrigin(OutSync.Core, Frame);
 		}
 	}
@@ -860,6 +866,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
 	// The can-act veto of the extensions, from the fragments as the hooks above left them; it closes the gate the candidates ask
 	bFrameActionsBlocked = Extensions.BlocksActions(HookContext);
+	FrameCancelConditions = Extensions.HeldCancelConditions(HookContext);
 
 	// The attacker side (combat-m4-hits 6), before the candidates: a hit of this frame confirms the run for the cancel gate of the same frame
 	if (!bHitstopFrame && !bFrameGateClosed)
@@ -887,6 +894,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
 	bFrameActionsBlocked = false;
+	FrameCancelConditions = 0;
 
 	// A burst: the ability that starts in a reaction and says it ends it. The state is rewritten here, in the frame of the request, so it rolls
 	// back with the rest; the ability system's pre-tick removes the freeze of the window (EndReaction request)
@@ -917,7 +925,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		StampMoveOrigin(OutSync.Core, Frame);
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Entry))
 		{
-			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Entry], TimelineOutput);
+			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Entry], TimelineOutput, &HookEnvironment);
 		}
 	}
 	// A timeline that reached its commit is a timeline that started: the event of the one that was replaced inside its startup

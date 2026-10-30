@@ -33,7 +33,7 @@ FGSTN_HitVictimView FGSTN_CombatVictim::MakeVictimView(const FGSTN_SnapshotEntry
 	View.bInHitstop = Victim.bInHitstop;
 	View.ReactionState = Victim.Reaction;
 	View.HealthFraction = Victim.HealthFraction;
-	View.SnapshotExtension = Victim.Extension.GetData();
+	SetViewExtensions(View, Victim.Extension);
 	View.ExtraHurtboxes = Victim.ExtraHurtboxes;
 	if (Rules && Rules->DamageMode != EGSTN_DamageMode::Health)
 	{
@@ -41,6 +41,22 @@ FGSTN_HitVictimView FGSTN_CombatVictim::MakeVictimView(const FGSTN_SnapshotEntry
 		View.HealthFraction = FMath::Clamp(1.f - Rules->GetDamageProgress(View), 0.f, 1.f);
 	}
 	return View;
+}
+
+void FGSTN_CombatVictim::SetViewExtensions(FGSTN_HitVictimView& View, const FGSTN_SnapshotExtensionSet& Set)
+{
+	FGSTN_HitVictimView::FSnapshotExtensionRef Refs[FGSTN_SnapshotExtensionSet::MaxBlobs];
+	int32 Num = 0;
+	for (const FGSTN_SnapshotExtensionBlob& Blob : Set.Blobs)
+	{
+		if (Blob.IsSet())
+		{
+			Refs[Num].TypeId = Blob.TypeId;
+			Refs[Num].Data = Blob.GetData();
+			++Num;
+		}
+	}
+	View.SetSnapshotExtensions(Refs, Num);
 }
 
 float FGSTN_CombatVictim::ComputeWeightScale(const UGSTN_CombatRules* Rules, const UGSTN_HurtboxSetDefinition* Hurtboxes, double DamagePercent, float HealthFraction)
@@ -103,9 +119,9 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 
 	// The victim the pipeline reads: the snapshot's, moved on by each landed entry so the next one sees the damage the first one did
 	// A copy of the snapshot extension the view points at: the appliers move it on between entries (below), the snapshot stays the end of the previous frame
-	FGSTN_SnapshotExtensionBlob VictimExtension = Self.Extension;
+	FGSTN_SnapshotExtensionSet VictimExtension = Self.Extension;
 	FGSTN_HitVictimView VictimView = MakeVictimView(Self, Rules);
-	VictimView.SnapshotExtension = VictimExtension.GetData();
+	SetViewExtensions(VictimView, VictimExtension);
 
 	const int32 WindowEndBefore = Core.IsInHitstop(Frame) ? Core.HitstopEndFrame : INDEX_NONE;
 	bool bWindowChanged = false;
@@ -127,6 +143,7 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		FGSTN_HitResolutionContext Context;
 		FGSTN_ResolvedHit& Incoming = Context.Incoming;
 		Incoming.Hit = Entry.Hit;
+		Incoming.Frame = Entry.Frame;
 		Incoming.AttackerEntityId = Entry.AttackerId;
 		Incoming.AttackerTeamId = Entry.AttackerTeam;
 		// The attacker predicted a Self hit as an ordinary enemy hit (TeamFilter refuses Self): the victim runs the same pipeline on the same input
@@ -191,15 +208,15 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 
 		// The extension the next entry reads is rebuilt from the fragments the appliers just wrote (the earlier entry's result), the way AdvanceVictim
 		// moves the damage; the view of the stored hit must not keep a pointer into this function's copy
-		Hit.View.Victim.SnapshotExtension = nullptr;
+		Hit.View.Victim.ClearSnapshotExtensions();
 		if (In.Fragments && VictimExtension.IsSet())
 		{
 			FGSTN_SnapshotContributorContext Rebuild;
 			Rebuild.Frame = Frame;
 			Rebuild.Fragments = In.Fragments;
-			Rebuild.Previous = &Self.Extension;
+			Rebuild.ActionState = Core.ActionState;
 			FGSTN_SnapshotContributorRegistry::Get().Rebuild(Rebuild, VictimExtension);
-			VictimView.SnapshotExtension = VictimExtension.GetData();
+			SetViewExtensions(VictimView, VictimExtension);
 		}
 
 		const FGSTN_KnockbackResult& Knockback = Hit.Outcome.Knockback;
@@ -221,7 +238,8 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 				Hit.Reaction = EGSTN_HitReaction::Launch;
 				LaunchVelocity = Request.LaunchVelocity;
 				const UGSTN_KnockbackModel* Model = Rules->KnockbackModel.Get();
-				Hit.bTumble = Model && LaunchVelocity.Size() >= Model->Tuning.TumbleThreshold;
+				// A request may ask for a launch that never tumbles (a shield break goes up and lands on its feet, M6 F7)
+				Hit.bTumble = !Request.bNoTumble && Model && LaunchVelocity.Size() >= Model->Tuning.TumbleThreshold;
 				if (Model)
 				{
 					// The lock of a launch of that speed, as the model gives a hit with that knockback; without it a launch would end its hitstun on the frame it starts

@@ -48,10 +48,11 @@ namespace
 		FGSTN_TimelinePlayer::Evaluate(Data, Params, Output);
 	}
 
-	bool ConditionHolds(EGSTN_CancelCondition Condition, const FGSTN_CombatSyncCore& Core)
+	bool ConditionHolds(EGSTN_CancelCondition Condition, const FGSTN_CombatSyncCore& Core, uint32 ExtensionConditions)
 	{
 		// The confirm flags are the attacker side's (M4 H8): a hit of the running timeline sets one, a new timeline clears them.
-		// OnBlock stays false until shields exist (M6)
+		// The conditions the core does not know (OnParry, OnBlock) are answered by the tick extensions of the frame: one bit per
+		// condition value, 0 where no plugin holds it (M6 F7)
 		const bool bHit = Core.Hit.HitConfirmFlags != 0;
 		switch (Condition)
 		{
@@ -62,7 +63,7 @@ namespace
 		case EGSTN_CancelCondition::OnHit:
 			return bHit;
 		default:
-			return false;
+			return (ExtensionConditions & (1u << static_cast<uint32>(Condition))) != 0;
 		}
 	}
 }
@@ -101,7 +102,7 @@ const FGSTN_RicochetResponse* FGSTN_CombatTimelineLogic::ResolveRicochet(const F
 }
 
 bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, int32 DefaultOverrideFrames,
-	bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame, const FGSTN_RicochetResponse* RicochetFallback)
+	bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame, const FGSTN_RicochetResponse* RicochetFallback, const FGSTN_TrackHookEnvironment* HookEnvironment)
 {
 	Output.Reset();
 	if (Core.ActionState != EGSTN_ActionState::InTimeline)
@@ -163,7 +164,7 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	const FGSTN_TimelineTrackHookRegistry& Hooks = FGSTN_TimelineTrackHookRegistry::Get();
 	if (!Hooks.IsEmpty())
 	{
-		bStall |= Hooks.Run(*Data, Frame, Core.TimelineStartFrame, FMath::Max(Previous, 0), bHitstopFrame, Core.Input, Stamped);
+		bStall |= Hooks.Run(*Data, Frame, Core.TimelineStartFrame, FMath::Max(Previous, 0), bHitstopFrame, Core.Input, Stamped, HookEnvironment);
 	}
 	if (bStall)
 	{
@@ -186,7 +187,7 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 }
 
 bool FGSTN_CombatTimelineLogic::IsCommandAllowed(const FGSTN_CombatSyncCore& Core, const FGSTN_CombatTimelineData* Data, const FGSTN_TimelineOutput& Output,
-	const FGameplayTag& Command, int32 CommandTier, int32 RunningTier)
+	const FGameplayTag& Command, int32 CommandTier, int32 RunningTier, uint32 ExtensionConditions)
 {
 	if (Core.ActionState != EGSTN_ActionState::InTimeline || !Data)
 	{
@@ -211,7 +212,7 @@ bool FGSTN_CombatTimelineLogic::IsCommandAllowed(const FGSTN_CombatSyncCore& Cor
 
 	for (const FGSTN_TimelineTrack_CancelWindow* Window : Output.CancelWindows)
 	{
-		if (Window && ConditionHolds(Window->Condition, Core) && Window->IntoCommands.Matches(CommandTags))
+		if (Window && ConditionHolds(Window->Condition, Core, ExtensionConditions) && Window->IntoCommands.Matches(CommandTags))
 		{
 			return true;
 		}
@@ -269,7 +270,7 @@ int32 FGSTN_CombatTimelineLogic::Adopt(FGSTN_CombatSyncCore& Core, int32 Frame, 
 	return Awaiting[0];
 }
 
-void FGSTN_CombatTimelineLogic::EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output)
+void FGSTN_CombatTimelineLogic::EvaluateStart(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Data, int32 DefaultOverrideFrames, FGSTN_TimelineOutput& Output, const FGSTN_TrackHookEnvironment* HookEnvironment)
 {
 	EvaluateInto(Core, Frame, INDEX_NONE, Data, DefaultOverrideFrames, Output);
 	// Hooks see the first frame too, so a window that opens on it is stamped on it. A stall is not honoured here: the evaluation of frame 0 is done and the
@@ -278,7 +279,7 @@ void FGSTN_CombatTimelineLogic::EvaluateStart(FGSTN_CombatSyncCore& Core, int32 
 	if (!Hooks.IsEmpty())
 	{
 		FGSTN_StampedWindowList Stamped;
-		Hooks.Run(Data, Frame, Core.TimelineStartFrame, 0, false, Core.Input, Stamped);
+		Hooks.Run(Data, Frame, Core.TimelineStartFrame, 0, false, Core.Input, Stamped, HookEnvironment);
 		Output.StampedWindows = MoveTemp(Stamped);
 	}
 	if (Output.bCommitThisFrame)

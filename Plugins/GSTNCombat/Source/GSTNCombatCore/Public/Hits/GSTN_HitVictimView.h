@@ -117,10 +117,48 @@ struct GSTNCOMBATCORE_API FGSTN_HitVictimView
 	FGSTN_VictimReactionState ReactionState;
 
 	/**
-	 * The snapshot's extension POD of the optional plugins (broken parts...), or null. Not owned and not reflected: valid for the
-	 * frame the view was read, the core never dereferences it.
+	 * The snapshot's extension POD of the optional plugin with the lowest feature id (broken parts...), or null. Not owned and not reflected:
+	 * valid for the frame the view was read, the core never dereferences it. A reader validates the type word the POD starts with.
 	 */
 	const void* SnapshotExtension = nullptr;
+
+	/** One slot per contributing plugin: the feature id (GSTNFeatureIds) and its POD. Not reflected, same lifetime as SnapshotExtension */
+	struct FSnapshotExtensionRef
+	{
+		uint8 TypeId = 0;
+		const void* Data = nullptr;
+	};
+	static constexpr int32 MaxSnapshotExtensions = 2;
+	FSnapshotExtensionRef SnapshotExtensions[MaxSnapshotExtensions];
+
+	/** The POD of a plugin by its feature id, or null (M6 F7: two plugins may contribute to one entity) */
+	const void* FindSnapshotExtension(uint8 TypeId) const
+	{
+		for (const FSnapshotExtensionRef& Ref : SnapshotExtensions)
+		{
+			if (Ref.TypeId == TypeId && Ref.Data)
+			{
+				return Ref.Data;
+			}
+		}
+		return nullptr;
+	}
+
+	/** Writes every extension slot and the single pointer from the slots: the lowest id first */
+	void SetSnapshotExtensions(const FSnapshotExtensionRef* Refs, int32 Num)
+	{
+		SnapshotExtension = nullptr;
+		for (int32 Index = 0; Index < MaxSnapshotExtensions; ++Index)
+		{
+			SnapshotExtensions[Index] = Index < Num ? Refs[Index] : FSnapshotExtensionRef();
+		}
+		SnapshotExtension = SnapshotExtensions[0].Data;
+	}
+
+	void ClearSnapshotExtensions()
+	{
+		SetSnapshotExtensions(nullptr, 0);
+	}
 
 	/**
 	 * The extra hurtboxes the victim's snapshot carries (a shield bubble), so a step can read what the hit landed on when HurtboxIndex is

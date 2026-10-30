@@ -334,6 +334,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		Incoming.Relationship = Candidate.Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Candidate.Relationship;
 		Incoming.Up = In.Up;
 		Incoming.AttackerFacing = AttackerFacing;
+		Incoming.Frame = In.Frame;
 		const FGSTN_HitShape* VictimShape = Victim.FindHurtboxShape(Candidate.HurtboxIndex);
 		const FVector VictimCenter = VictimShape ? ShapeCenter(*VictimShape, Victim.Transform) : Victim.Transform.GetLocation();
 		Incoming.HitboxToVictim = (VictimCenter - Candidate.HitboxCenter).GetSafeNormal(UE_SMALL_NUMBER, AttackerFacing);

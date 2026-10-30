@@ -109,6 +109,13 @@ public:
 	 * read of Context.Out (and In), no side effect. Default: never
 	 */
 	virtual bool BlocksActions(const FGSTN_CombatTickContext& Context) const { return false; }
+
+	/**
+	 * The cancel conditions of the closed enum that the core cannot evaluate (EGSTN_CancelCondition::OnParry, OnBlock) and that the extension's
+	 * state says hold this frame, as a mask of (1 << condition value). Asked with BlocksActions, after the BeforeCandidates point, OR-ed over
+	 * every extension and handed to the cancel windows of the running timeline (M6 F7). A pure read of Context.Out (and In). Default: none
+	 */
+	virtual uint32 HeldCancelConditions(const FGSTN_CombatTickContext& Context) const { return 0; }
 };
 
 /**
@@ -132,6 +139,9 @@ public:
 
 	/** True when any extension's BlocksActions says so (every extension is asked, in order, so none depends on another's answer) */
 	bool BlocksActions(const FGSTN_CombatTickContext& Context) const;
+
+	/** The OR of every extension's HeldCancelConditions */
+	uint32 HeldCancelConditions(const FGSTN_CombatTickContext& Context) const;
 
 private:
 	struct FEntry

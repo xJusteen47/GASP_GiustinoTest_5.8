@@ -92,6 +92,10 @@ struct GSTNCOMBATCORE_API FGSTN_ResolvedHit
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
 	FGSTN_HitData Hit;
 
+	/** The simulation frame the overlap was made on (the inbox entry's stamp; the attacker's own frame in its prediction): what a window of the victim is tested against, never the resolution frame. INDEX_NONE when unknown */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
+	int32 Frame = INDEX_NONE;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
 	int32 AttackerEntityId = INDEX_NONE;
 

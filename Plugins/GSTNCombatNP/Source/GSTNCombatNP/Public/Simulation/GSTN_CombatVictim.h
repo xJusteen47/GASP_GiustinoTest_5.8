@@ -200,6 +200,9 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 */
 	static FGSTN_HitVictimView MakeVictimView(const FGSTN_SnapshotEntry& Victim, const UGSTN_CombatRules* Rules);
 
+	/** Points the view's extension slots (and its single pointer, the lowest id) at the blobs of Set, which must outlive the view's use */
+	static void SetViewExtensions(FGSTN_HitVictimView& View, const FGSTN_SnapshotExtensionSet& Set);
+
 	/** The weight scale the health weight curve gives a victim with this damage, 1 when no curve applies. Written into the snapshot for the attacker's machine */
 	static float ComputeWeightScale(const UGSTN_CombatRules* Rules, const UGSTN_HurtboxSetDefinition* Hurtboxes, double DamagePercent, float HealthFraction);
 

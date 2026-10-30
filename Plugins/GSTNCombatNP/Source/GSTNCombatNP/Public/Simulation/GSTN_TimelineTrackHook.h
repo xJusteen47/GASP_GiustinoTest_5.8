@@ -3,17 +3,32 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Sync/GSTN_SyncFragment.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 
+struct FGSTN_ButtonMap;
 struct FGSTN_InputSimState;
 struct FGSTN_TimelineTrack;
 class UScriptStruct;
 
+/**
+ * What the combat component lends the track hooks of a tick besides the input state (M6 F7): the button map of its input config (a hold
+ * track names its button by tag and the history holds bits) and the entity's sync fragments as the frame is writing them (a plugin's hook
+ * reads its own fragment: a stun that keeps a hold stalled, a value that ends it). Both are content or state the component owns for the
+ * tick; null in a test that lends nothing, which a hook must accept
+ */
+struct FGSTN_TrackHookEnvironment
+{
+	const FGSTN_ButtonMap* Buttons = nullptr;
+	const FGSTN_SyncFragmentArray* Fragments = nullptr;
+};
+
 /** What the combat clock hands a track hook for one track of the running timeline */
 struct FGSTN_TrackHookContext
 {
-	/** The track the hook was registered for */
+	/** The track the hook was registered for, and its index in the timeline data's track array (what a stamp may name, so the plugin finds the track again) */
 	const FGSTN_TimelineTrack& Track;
+	int32 TrackIndex = INDEX_NONE;
 
 	/** The simulation frame being ticked */
 	int32 Frame = INDEX_NONE;
@@ -32,6 +47,12 @@ struct FGSTN_TrackHookContext
 
 	/** The entity's input state at the end of the previous frame, history included: the held buttons a hold track reads. Never written */
 	const FGSTN_InputSimState& Input;
+
+	/** Tag to bit of the entity's buttons; null when the caller lends none (a test) */
+	const FGSTN_ButtonMap* Buttons = nullptr;
+
+	/** The entity's sync fragments as the frame is writing them (the victim step of the frame ran already); null when the caller lends none. Read only */
+	const FGSTN_SyncFragmentArray* Fragments = nullptr;
 
 	FGSTN_TrackHookContext(const FGSTN_TimelineTrack& InTrack, const FGSTN_InputSimState& InInput)
 		: Track(InTrack), Input(InInput)
@@ -88,7 +109,7 @@ public:
 	 * @return true when any hook asked for a stall. The windows the hooks stamped are appended to OutWindows (two at most: more are dropped)
 	 */
 	bool Run(const FGSTN_CombatTimelineData& Data, int32 Frame, int32 TimelineStartFrame, int32 TimelineFrame, bool bHitstopFrame, const FGSTN_InputSimState& Input,
-		FGSTN_StampedWindowList& OutWindows) const;
+		FGSTN_StampedWindowList& OutWindows, const FGSTN_TrackHookEnvironment* Environment = nullptr) const;
 
 private:
 	struct FEntry
