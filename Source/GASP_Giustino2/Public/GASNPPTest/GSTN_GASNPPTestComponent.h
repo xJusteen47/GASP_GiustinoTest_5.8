@@ -307,6 +307,14 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMoverComponent> Mover;
 
+	/**
+	 * Mover's state as of the frame being simulated. The sim history and the mode log read velocity and mode here, not from Mover's own
+	 * queries: those return the presentation copy, which re-simulated ticks do not update (a re-simulated tick then reported the
+	 * pre-rollback mode and velocity next to its re-simulated position, and the harness saw mode flips and speeds that never happened).
+	 */
+	UPROPERTY(Transient)
+	TObjectPtr<class UGSTN_MoverSimStateTracker> SimState;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
 
@@ -318,6 +326,7 @@ private:
 		FVector Location = FVector::ZeroVector;
 		FVector Velocity = FVector::ZeroVector;
 		FName Mode;
+		bool bResimulating = false;
 		TArray<FString> Tags;
 	};
 	TArray<FSimHistoryEntry> SimHistory;
