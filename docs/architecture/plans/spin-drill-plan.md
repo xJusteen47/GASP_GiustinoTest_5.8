@@ -36,7 +36,24 @@ agent session per checkpoint (cheapest model that fits), HANDOVER entry in `docs
 D1–D5 can start at once (they touch nothing owned by other threads). D6–D7 wait for M4b P14 on the laptop and for SD.11.
 D8 onward depends on D6–D7.
 
-## 3. Coordination
+## 2b. Placement in the roadmap (owner 2026-10-30 14:43: "after the link, or wherever it is safest")
+
+**The whole spin and drill work starts after M6 is complete (F14)**, not in parallel with it:
+
+- M6 F12 builds the **latch** link (a parked initiator that follows a big moving partner, `Combat.Link.Type.Latch`, `ShakeOff`
+  break, `UGSTN_LinkRule_Latch`), and the M6 plan already states that the drill is one latch. Building the drill on it removes most
+  of this plan's risk: seam S3 (attacker root override) and the moving-target placement of D10 become the link's parked transform and
+  exit placer, players become drillable for free (the drill is a hit-grab), and the static-only v1 restriction goes away.
+- M6 edits `GSTNCombat*` now (F7–F11 on the laptop); doing D6–D7 at the same time would collide on the same files. After F14 the core
+  is quiet again.
+- D1–D5 (spin without core seams) could run earlier, but the spin is cheap and the owner prefers no parallel risk: they move after
+  M6 too, as the first checkpoints of this plan.
+
+New order after M6: D0 → D1 → D2 → D3 → D4 → D5 → D6/D7 (S1, S2, S4, S5, S6, D-1; **S3 dropped**, replaced by the latch's parked
+transform) → D8 → **D9+D10 merged** (latch on static and moving targets through `Combat.Link.Type.Drill`, a latch variant whose
+initiator is the driller) → D11 → D12 → D13.
+
+
 
 - **M4b thread (laptop, `GSTNCombat*`/`GSTNParts`)**: D6–D7 edit the combat core; run them only after P14, or in a window that thread
   agrees to. D12's parts bridge waits for M4b complete.

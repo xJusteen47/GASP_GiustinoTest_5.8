@@ -217,6 +217,11 @@ Nothing in the extension reads components, the world or the ability system (gas-
   `MinBoreFramesForLaunch` → detach pop; crouch released after it, or `MaxBoreFrames` reached → `DrillLaunch` adopted.
 - **Launch**: `FGSTN_LayeredMove_Launch` (existing, via GE) along `LaunchDirection`; refreshes `AirSpinsUsed`.
 
+**Update 2026-10-30 (placement after M6):** the latch is built on the M6 **latch link** (M6 plan F12: parked initiator following a
+moving partner). `Combat.Link.Type.Drill` is a latch variant whose initiator is the driller; the parked transform, exit placer and
+break rules come from `GSTNLink`, so seam S3 is no longer needed and the fragment of §7.1 keeps only the drill's own data (phase,
+sense, seat time, hits). See plan §2b.
+
 ### 7.5 Prediction and listen server
 
 - Owning client predicts spin, cancel, dive, latch, bore phase changes and launch (all are its own state). Damage to the target is
