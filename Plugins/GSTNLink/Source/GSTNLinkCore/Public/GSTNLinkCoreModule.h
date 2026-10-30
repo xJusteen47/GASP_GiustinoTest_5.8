@@ -4,4 +4,4 @@
 
 #include "Logging/LogMacros.h"
 
-DECLARE_LOG_CATEGORY_EXTERN(LogGSTNLink, Log, All);
+GSTNLINKCORE_API DECLARE_LOG_CATEGORY_EXTERN(LogGSTNLink, Log, All);

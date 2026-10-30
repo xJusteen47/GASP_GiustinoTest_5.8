@@ -72,6 +72,8 @@ namespace GSTNInteractProviders
 	constexpr uint8 Registry = 1;
 	/** First id free for a snapshot provider of a consumer plugin */
 	constexpr uint8 FirstConsumer = 16;
+	/** GSTNLink's grabbable entities (FGSTN_LinkInteractProvider, GSTNLinkGAS). The next consumer takes FirstConsumer + 1 */
+	constexpr uint8 LinkEntities = FirstConsumer;
 }
 
 /**
