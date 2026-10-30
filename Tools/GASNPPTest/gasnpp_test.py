@@ -896,7 +896,7 @@ class _Run:
         self.name, self.client, self.sample = name, client, sample
         self.key = key_of_player(client) if sample else None
         self.extra, self.judge_reconciles = list(extra or []), judge_reconciles
-        self.results, self.samples, self.sim, self.handle = [], [], [], None
+        self.results, self.samples, self.sim, self.handle, self._seq = [], [], [], None, 0
         self.rb0 = _total_rollbacks()
         self.log_mark = None
         try:
@@ -948,8 +948,10 @@ class _Run:
                 continue
             newest = ticks[-1]['t']
             for e in ticks:
+                self._seq += 1
                 self.sim.append({'t': editor_sample['t'] - (newest - e['t']) / 1000.0, side: {'ms': e['t'], 'tags': set(e['tags']), 'loc': tuple(e['loc']),
-                                                                                              'vel': tuple(e['vel']), 'mode': e['mode']}})
+                                                                                              'vel': tuple(e['vel']), 'mode': e['mode'],
+                                                                                              'rs': bool(e.get('rs')), 'seq': self._seq}})
 
     def run(self, steps):
         """Restarts the clock and runs the timeline; the last step must be finish()."""
@@ -962,6 +964,16 @@ class _Run:
     def _win(self, side, t0, t1, sim=False):
         """Samples of `side` in [t0, t1]: the editor ticks, or with sim=True the simulation ticks (loc / vel / mode / tags / ms only)."""
         return [s[side] for s in (self.sim if sim else self.samples) if t0 <= s['t'] <= t1 and s.get(side)]
+
+    def final_sim(self, side, t0, t1):
+        """The simulation ticks of `side` in [t0, t1] as the copy finally simulated them: one tick per sim time, the one drained last (a re-simulation
+        after a correction replaces the prediction of the same frame). _win(sim=True) holds both, sorted by an estimated time, so a predicted tick and
+        its re-simulation sit side by side: a mode sequence read from it alternates wherever the correction changed the mode."""
+        last = {}
+        for s in self._win(side, t0, t1, sim=True):
+            if s['ms'] not in last or s.get('seq', 0) >= last[s['ms']].get('seq', 0):
+                last[s['ms']] = s
+        return [last[ms] for ms in sorted(last)]
 
     def saw_tag(self, tag, t0, t1, side='srv'):
         return any(tag in s['tags'] for s in self._win(side, t0, t1, sim=True))
@@ -3784,13 +3796,21 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
         return ok, f'tags srv {sorted(seen["srv"])}, owner {sorted(seen["cli"])}, damage change {d}'
 
     def after():
-        seq = {sd: [] for sd in ('srv', 'cli')}
+        # From the final timelines (final_sim): the owner's raw sim ticks hold each corrected frame twice, prediction and re-simulation, and read
+        # as WallSliding <-> Walking flips that its simulation never made. A grab is Falling -> wall mode. The owner cannot predict the hit, so its
+        # prediction slides off the wall before the authority (held by the hit) does; the correction puts it back on the wall (Walking -> wall,
+        # a restored state, no grab: the wall log shows one ACTIVATE per world) and it leaves on the authority's frame. When the correction's
+        # base frame is after the predicted exit, those predicted Walking frames stay in the final timeline: a second wall segment, not a grab.
+        seq, grabs = {sd: [] for sd in ('srv', 'cli')}, {}
         for sd in seq:
-            for s in run._win(sd, st['tw'], st['tw'] + 3.0, sim=True):
+            ticks = run.final_sim(sd, st['tw'] - 1.0, st['tw'] + 3.0)
+            grabs[sd] = sum(1 for a, b in zip(ticks, ticks[1:]) if a['mode'] == 'Falling' and b['mode'] == wm)
+            for s in ticks:
                 if not seq[sd] or seq[sd][-1] != s['mode']:
                     seq[sd].append(s['mode'])
-        zs = [round(s['loc'][2]) for s in run._win('srv', st['tw'], st['tw'] + 3.0, sim=True)]
-        return True, f'mode sequence after the attack: authority {seq["srv"]}, owner {seq["cli"]}; height of the climber every 10th tick {zs[::10]}'
+        zs = [round(s['loc'][2]) for s in run.final_sim('srv', st['tw'], st['tw'] + 3.0)]
+        return grabs['srv'] == grabs['cli'] == 1, (f'wall grabs (authority, owner) ({grabs["srv"]}, {grabs["cli"]}); mode sequence: '
+                                                  f'authority {seq["srv"]}, owner {seq["cli"]}; height of the climber every 10th tick {zs[::10]}')
 
     def end():
         for hd in ('v',):
@@ -3812,7 +3832,7 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
         (t_end, run.at('the hitstop window opens on the frame of the hit, equal on the owner', window_on_wall)),
         (t_end, run.at('WallSliding through the whole window on both, and the pawn did not move', held_in_window)),
         (t_end, run.at('Hitstop and Hitstun projected, the damage taken on both copies', tags_and_damage)),
-        (t_end, run.at('what the pawn does after its hitstun (reported)', after)),
+        (t_end, run.at('one wall grab on the authority and the owner (final timelines; mode sequence reported)', after)),
         (t_end + 0.2, end),
         (t_end + 0.4, run.finish()),
     ]

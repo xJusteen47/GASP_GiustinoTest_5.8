@@ -31,6 +31,7 @@
 #include "Kits/GSTN_CombatAssetTypes.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -103,6 +104,7 @@ void UGSTN_GASNPPTestComponent::BeginPlay()
 
 	if (Mover)
 	{
+		SimState = UGSTN_MoverSimStateTracker::FindOrAdd(Mover);
 		Mover->OnPreSimulationTick.AddDynamic(this, &UGSTN_GASNPPTestComponent::HandlePreSimulationTick);
 		Mover->OnPostSimulationRollback.AddDynamic(this, &UGSTN_GASNPPTestComponent::HandlePostSimulationRollback);
 	}
@@ -293,13 +295,13 @@ void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& Ti
 	{
 		FHitResult Floor;
 		const bool bFloor = Mover->TryGetFloorCheckHitResult(Floor);
-		const FName Mode = Mover->GetMovementModeName();
+		const FName Mode = SimState ? SimState->GetMovementModeName() : Mover->GetMovementModeName();
 		if (Mode != LoggedMode || bFloor != bLoggedFloor)
 		{
 			UE_LOG(LogTemp, Display, TEXT("GASNPP_MODE %s role=%d frame=%d resim=%d mode=%s->%s floor=%d->%d blocking=%d walkable=%d z=%.2f vel=%s"),
 				*GetNameSafe(GetOwner()), static_cast<int32>(GetOwner()->GetLocalRole()), TimeStep.ServerFrame, TimeStep.bIsResimulating ? 1 : 0,
 				*LoggedMode.ToString(), *Mode.ToString(), bLoggedFloor ? 1 : 0, bFloor ? 1 : 0, Floor.bBlockingHit ? 1 : 0,
-				Floor.bBlockingHit && Floor.IsValidBlockingHit() ? 1 : 0, GetOwner()->GetActorLocation().Z, *GetOwner()->GetVelocity().ToCompactString());
+				Floor.bBlockingHit && Floor.IsValidBlockingHit() ? 1 : 0, GetOwner()->GetActorLocation().Z, *(SimState ? SimState->GetVelocity() : Mover->GetVelocity()).ToCompactString());
 			LoggedMode = Mode;
 			bLoggedFloor = bFloor;
 		}
@@ -309,7 +311,13 @@ void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& Ti
 		FSimHistoryEntry& Entry = SimHistory.AddDefaulted_GetRef();
 		Entry.SimTimeMs = TimeStep.BaseSimTimeMs;
 		Entry.Location = GetOwner()->GetActorLocation();
-		if (Mover)
+		Entry.bResimulating = TimeStep.bIsResimulating;
+		if (SimState)
+		{
+			Entry.Velocity = SimState->GetVelocity();
+			Entry.Mode = SimState->GetMovementModeName();
+		}
+		else if (Mover)
 		{
 			Entry.Velocity = Mover->GetVelocity();
 			Entry.Mode = Mover->GetMovementModeName();
@@ -1036,6 +1044,7 @@ FString UGSTN_GASNPPTestComponent::DrainSimHistory()
 		Json->SetArrayField(TEXT("loc"), Vec(Entry.Location));
 		Json->SetArrayField(TEXT("vel"), Vec(Entry.Velocity));
 		Json->SetStringField(TEXT("mode"), Entry.Mode.ToString());
+		Json->SetBoolField(TEXT("rs"), Entry.bResimulating);
 		TArray<TSharedPtr<FJsonValue>> Tags;
 		for (const FString& Tag : Entry.Tags)
 		{
