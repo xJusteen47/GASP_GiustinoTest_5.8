@@ -192,3 +192,57 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
   `.Snapshot.{BubbleContributed, NoBubbleWhenUnavailableOrHitstunOrBroken, RulesIndexPerEntity}`, `.Tick.{HoldStallsTimelineNotClock,
   VetoWhileStunned, TagsProjected}`, `.Steps.{ParryBeforeShieldOrder, ShieldBlockNoDamage, BodyHitWhileRaisedContinues, BreakLaunchUp,
   GrabPassesThroughBubble, ModeOffSkipsShieldNotParry, OutgoingPunishPosted}`.
+
+## F8: GSTNDefenceNP part 2 (landing, downed, get-ups, optional tech, DI rules, SDI drift)
+
+- **Core seams added to GSTNCombatNP (neutral, no defence knowledge)**:
+  - `FGSTN_LayeredMove_Freeze::DriftVelocity` (OverrideAll velocity of a freeze, one bit on the wire when zero) and
+    `UGSTN_FreezeMoveCreator::bDriftFromSetByCaller` (the drift from `Combat.SetByCaller.Move.Velocity.X/Y/Z`, priority 1 above the hitstop
+    freeze, finish keeps the velocity).
+  - `FGSTN_HitSyncState::SDICount` (uint8, reserved) renamed `SDIDistanceUsed` and widened to uint16 in 1/8 cm (`SDIUnitsPerCm`); the
+    victim step resets it on every staggering hit. Test `GSTNCombat.NP...HitState` updated for the rename only.
+  - `FGSTN_CombatTickContext` gains `StickOnPlane`, `Stick` (the frame's command), `Up`, `Buttons` and `Services`
+    (`IGSTN_CombatTickServices::StartForcedTimeline`, implemented by the combat component: step 8's start with source Forced plus an
+    `ActivateEntry` request). The pre-tick now executes `ActivateEntry` (it existed as a type with no executor), under the command
+    activation scope: a non-command activation is refused by `UGSTN_GA_Base`'s interrupt policy while a timeline runs, and the forced
+    timeline is already the running one when its ability activates (found in PIE: the bounce timeline ended after one frame).
+  - `IGSTN_CombatTickExtension` gains `AdmitsOnlyBindingsRequiring` (the gate passes only bindings whose requirements hold the tag),
+    `ConsumeTumbleContact` / `OnTumbleContactResolved` (called by the victim step around `StepImpact` for a new contact, same conditions as
+    the impact; the hooks run before the frame's tables are chosen, so their context has no services) and `OverrideDI` (wired through
+    `FGSTN_ReactionStepInput::DIOverride` into `StepReaction`, the existing hit-state path at the hitstop end). `RunVictimStep` takes the
+    frame's input state and reads the contact whenever an extension is registered, not only with an impact table.
+- **Downed state is not a veto** (F7 had Knockdown in `BlocksActions`): it admits only the bindings that require
+  `Combat.State.Knockdown`, so the neutral get-up (jump slot) and the get-up attacks can start; F7's test `Tick.VetoWhileStunned` now
+  checks this. The downed movement lock is an infinite effect `UGSTN_GE_DownedLock` (`Combat.Lock.Movement`, read by the stats movement
+  modifier), applied and removed on the tag projection from `IsKnockedDown`.
+- **No contact modifier**: the spec's `FGSTN_TumbleContactModifier` is not added; M4's knockback probe already records floor and wall
+  contacts (`FGSTN_TumbleContactSyncState`), and F8 reads that record through the hooks. `Combat.Mover.Tumble` stays unused.
+- **Landing rules**: no tech set: `KnockdownEndFrame` = contact + `MaxDownedFrames`, or never (MAX_int32) for 0; a kit with a tech set
+  that missed: contact + `KnockdownFrames` + `NoTechKnockdownBonusFrames` (spec 6 algorithm). The bounce stick is the command of the
+  frame the model sees the contact (contact + 1). The bounce is a knockback move (flight time from the rise), the ground bounce ability
+  starts Forced at AfterClocks of the same frame (the decision is carried in the fragment's pending start, empty at the end of the tick).
+  Holding the stick (|stick| >= 0.5) once the bounce timeline is over starts the get-up roll Forced; the roll's direction is content
+  (the thin class has no movement track).
+- **Tech**: presses come from the history up to the end of the previous frame, so `LateFrames` presses after the contact cannot count
+  (evaluated at contact + 1; the default is 0). The kind: wall -> WallTech, or WallJumpTech with the stick away from the wall (dot > 0.5);
+  floor -> InPlace with a neutral stick, else RollRight/RollLeft by the physical stick's x; a kind without an ability falls back to
+  InPlace/WallTech. Tech moves: in place and wall techs hold still (the core's at-rest freeze) for their frames, a roll slides
+  `RollDistance` over `RollFrames`, the wall jump tech launches off the wall at the same speed (no rule fields for its motion yet). A wall
+  tech failure with no impact outcome keeps M4's behaviour (no extra reflect).
+- **SDI**: drift frames are the victim's hitstop frames but the last (the hitstop freeze hands back its velocity on the frame after; a drift
+  finishing with it would fight it); the used distance is stored rounded up to 1/8 cm, so the quantised total never passes the cap.
+  `SDIBlocked` (throw, armored unless allowed, stagger-in-place tier per the rules) and `DIDisabled` are recorded at every hit in the
+  fragment's `HitFlags` by the outcome applier: the Parry step now appends a pass-through outcome (Result None) for every hit it lets go
+  on, so the applier sees it (the step tests read the deciding outcome, the last one).
+- **Fragment**: + `HitFlags`, `PendingStartFrame/Kind` (presence bits 10 and 11; everything live 2 + 91 bytes).
+- **Attach data**: + the kit's ground bounce, roll and tech classes (`FGSTN_DefenceAttach::SetKitMoves`, loaded where the loadout compiles).
+- **Content and harness**: `UGSTN_DefenceContentLibrary::SetKitDefenceMoves` (the native landing and tech classes on a kit, in memory) and
+  `GetSDIDistanceUsed`; the state string gains `techlock techpress techend techtype down hitflags`; the defence event log records Teched and
+  KnockedDown. The four thin classes get a plain `TotalFrames` timeline. Scenarios `landing_bounce` and `landing_getup` (the plan's one
+  landing scenario split in two: its second shot found the attacker turned by the first), `tech_ground`, `tech_wall` (the impact_wall
+  layout: a Wall test surface the wall mode slides on), `sdi` (the asset's SDI values); the tech scenarios widen the window to 60 frames in
+  memory and force a reconcile of the victim's client after the press. The get-up press is the combat button (`combat_tap` of Jump): the
+  `press('jump')` helper drives the movement input action only.
+- Tests (12 NP): `GSTNDefence.NP.Landing.{BounceSteered, DownedThenGetupRoll, GetupAttackFromSlot, JumpGetsUp, MaxDownedFrames,
+  TechSuccessCancelsImpact, TechFailureResolvesImpactFirst, NoTechSetNoLockout}`, `.DI.RulesOverloadApplied`,
+  `.SDI.{DriftSweptByMover, MaxDistancePerHit, ThrowBlocksSDI}`. The move effects check the avatar has a Mover first (a test rig has none).
