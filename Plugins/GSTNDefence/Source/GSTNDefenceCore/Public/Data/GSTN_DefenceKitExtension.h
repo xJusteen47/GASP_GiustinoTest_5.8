@@ -27,16 +27,20 @@ struct GSTNDEFENCECORE_API FGSTN_TechSet
 };
 
 /**
- * The abilities of getting up from the downed state (m6 spec 6). All three are data of the base ability set or the kit, so
- * changing the rule later is a data change. Core has no GameplayAbilities dependency, so the types are plain UObject classes
- * that the GAS layer checks when it resolves them.
+ * The landing and the abilities of getting up from the downed state (m6 spec 6): the mini bounce, the roll, the neutral get-up
+ * and the get-up attacks. All are data of the base ability set or the kit, so changing the rule later is a data change. Core
+ * has no GameplayAbilities dependency, so the types are plain UObject classes that the GAS layer checks when it resolves them.
  */
 USTRUCT(BlueprintType)
 struct GSTNDEFENCECORE_API FGSTN_GetupSet
 {
 	GENERATED_BODY()
 
-	/** Get-up roll started by holding the stick in a direction */
+	/** The mini ground bounce a tumbling entity lands with before the downed state; started Forced by the model at the contact */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Getup")
+	TSoftClassPtr<UObject> GroundBounce;
+
+	/** Get-up roll started by holding the stick in a direction (the model starts it Forced from the stick) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Getup")
 	TSoftClassPtr<UObject> Roll;
 

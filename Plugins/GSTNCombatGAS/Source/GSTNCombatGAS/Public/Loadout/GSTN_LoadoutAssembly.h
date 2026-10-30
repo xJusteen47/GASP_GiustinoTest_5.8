@@ -36,6 +36,12 @@ struct GSTNCOMBATGAS_API FGSTN_ResolvedLoadout
 	const UGSTN_SuperInputScheme* SuperScheme = nullptr;
 
 	const UGSTN_SkinDefinition* Skin = nullptr;
+
+	/**
+	 * An object of the world the loadout is applied in (the loadout component), for the loadout extensions that need the match's
+	 * rules. Null in tools and tests: the extensions must accept that
+	 */
+	const UObject* WorldContext = nullptr;
 };
 
 /**
@@ -56,8 +62,8 @@ struct GSTNCOMBATGAS_API FGSTN_LoadoutAssembly
 
 	/**
 	 * Fills the compiler input: the kit's command set (its base set is resolved here, which loads it), the kit's bindings, each
-	 * weapon's bindings after inheritance along its parent chain, the filled super slots and the customisations.
-	 * The timeline predicate is IsTimelineAbilityClass.
+	 * weapon's bindings after inheritance along its parent chain, the filled super slots and the customisations, then what the
+	 * registered loadout extensions add (FGSTN_LoadoutExtensionRegistry). The timeline predicate is IsTimelineAbilityClass.
 	 */
 	static void BuildCompileInput(const FGSTN_ResolvedLoadout& Resolved, int32 Revision, FGSTN_CompileInput& OutInput);
 
