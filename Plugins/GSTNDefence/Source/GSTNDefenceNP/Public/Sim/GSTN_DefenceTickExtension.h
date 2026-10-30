@@ -29,8 +29,13 @@ struct FGSTN_DefenceFragment;
  *  - BeforeTagProjection: Combat.State.Shielding (the bubble blocks), ShieldStun, ShieldBroken, ParryWindow (either source open),
  *    ParryRecovery, Parried, Teching, Knockdown and Tech.Lockout are SET from the fragment the frame wrote, never added, so a re-simulated
  *    frame ends with the same tags and Mover sees them in the same frame.
- *  - BlocksActions: ShieldStun, ShieldBroken, Punished and Knockdown forbid every command (the can-act veto of F2).
+ *  - BlocksActions: ShieldStun, ShieldBroken and Punished forbid every command (the can-act veto of F2). The downed state admits only the
+ *    bindings that require Combat.State.Knockdown (AdmitsOnlyBindingsRequiring, F8), so its get-ups can start.
  *  - HeldCancelConditions: OnParry holds while the running timeline parried (LastParryFrame at or after its start).
+ *  - F8 (FGSTN_TumbleLanding, FGSTN_DIWiring, FGSTN_SDIDrift): the tech and the landing on a new tumble contact (ConsumeTumbleContact,
+ *    OnTumbleContactResolved), the starts they decided and the get-up roll at AfterClocks, the held-direction drift of a hitstop frame at
+ *    AfterClocks, a get-up command ending the downed state at AfterExecute, the downed movement lock at BeforeTagProjection, the DI rules
+ *    at the end of a launch's hitstop (OverrideDI).
  *
  * Simulation code: deterministic, no net mode, no resimulation branch, state only in the fragment. The attached data, the ability system's
  * attribute values (the rates at the end of F-1) and the running timeline's track are content, never state. Effects it applies (the mirror,
@@ -53,6 +58,11 @@ public:
 	virtual void OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_CombatTickContext& Context) override;
 	virtual bool BlocksActions(const FGSTN_CombatTickContext& Context) const override;
 	virtual uint32 HeldCancelConditions(const FGSTN_CombatTickContext& Context) const override;
+	virtual FGameplayTag AdmitsOnlyBindingsRequiring(const FGSTN_CombatTickContext& Context) const override;
+	virtual bool ConsumeTumbleContact(FGSTN_CombatTickContext& Context, const FGSTN_TumbleContactSyncState& Contact) override;
+	virtual void OnTumbleContactResolved(FGSTN_CombatTickContext& Context, const FGSTN_TumbleContactSyncState& Contact, EGSTN_ImpactOutcome Outcome) override;
+	virtual bool OverrideDI(const FGSTN_CombatTickContext& Context, const FVector& Launch, const FVector& StickOnPlane, const FVector& Up, const FVector& YawFallback,
+		FVector& OutVelocity) const override;
 
 	/** The rates the model drains and regenerates with: the attribute set's where the entity has one, else the rules' */
 	static FGSTN_ShieldRates ReadRates(const UAbilitySystemComponent* AbilitySystem, const UGSTN_DefenceRules& Rules);

@@ -122,8 +122,8 @@ bool FGSTN_HitStateRoundTripTest::RunTest(const FString& Parameters)
 
 	// The reserved SDI count keeps its value
 	FGSTN_CombatSyncState Sdi = MakeVictimWithHit();
-	Sdi.Core.Hit.SDICount = 3;
-	TestEqual(TEXT("the SDI count survives the wire"), static_cast<int32>(HitStateReadBack(Sdi, bError).Core.Hit.SDICount), 3);
+	Sdi.Core.Hit.SDIDistanceUsed = 3;
+	TestEqual(TEXT("the SDI count survives the wire"), static_cast<int32>(HitStateReadBack(Sdi, bError).Core.Hit.SDIDistanceUsed), 3);
 
 	// The byte counts the host upload budget is read from (combat-m4-hits 9b)
 	FGSTN_CombatSyncState Idle;
@@ -172,7 +172,7 @@ bool FGSTN_HitStateIdleZeroCostTest::RunTest(const FString& Parameters)
 	Stale.Core.Hit.ImpactEndFrame = HitStateFrame;
 	Stale.Core.Hit.SetPendingReaction(EGSTN_HitReaction::PushBack);
 	Stale.Core.Hit.SetPendingLaunch(FVector(400.0, 0.0, 0.0));
-	Stale.Core.Hit.SDICount = 2;
+	Stale.Core.Hit.SDIDistanceUsed = 2;
 	Stale.Core.Hit.HitConfirmFlags = 0xFF;
 	Stale.Core.Hit.MoveOrigin = FGSTN_MoveOrigin::Make(FTransform(FVector(10.0, 20.0, 30.0)));
 	Stale.Core.Hit.AddHitTarget(5, HitTimelineStart, 0);
@@ -308,7 +308,7 @@ bool FGSTN_HitStateShouldReconcileTest::RunTest(const FString& Parameters)
 		Other.Core.Hit.SetPendingReaction(EGSTN_HitReaction::PushBack);
 		TestTrue(TEXT("another pending reaction reconciles"), Victim.ShouldReconcile(Other));
 		Other = MakeVictimWithHit();
-		Other.Core.Hit.SDICount = 1;
+		Other.Core.Hit.SDIDistanceUsed = 1;
 		TestTrue(TEXT("a set SDI count reconciles"), Victim.ShouldReconcile(Other));
 		Other = MakeVictimWithHit();
 		Other.Core.ActionState = EGSTN_ActionState::Hitstun;

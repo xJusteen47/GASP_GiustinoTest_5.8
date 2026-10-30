@@ -111,8 +111,14 @@ struct GSTNCOMBATNP_API FGSTN_HitSyncState
 	/** 0 = none, otherwise EGSTN_HitReaction + 1. Two bits on the wire */
 	uint8 PendingReaction = 0;
 
-	/** Reserved for the SDI of M6; nothing writes it in M4 */
-	uint8 SDICount = 0;
+	/**
+	 * Held-direction SDI (M6 F8, was M4's reserved SDICount): the distance the victim drifted in the current hitstop, in units of
+	 * 1 / SDIUnitsPerCm cm. Reset by a hit that staggers; the defence plugin adds each frame's drift up to its rules' maximum. 16 bits on the
+	 * wire when non-zero
+	 */
+	uint16 SDIDistanceUsed = 0;
+
+	static constexpr double SDIUnitsPerCm = 8.0;
 
 	// ---- Accessors
 

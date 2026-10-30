@@ -26,6 +26,19 @@ struct GSTNDEFENCENP_API FGSTN_DefenceEntityData
 
 	/** The hit types the bubble lets through: the mode's non-blockable list plus the grab-like types (m6 spec 5.3 "Contact") */
 	FGameplayTagContainer BubbleIgnoreHitTypes;
+
+	// ---- F8: the kit's landing and tech abilities (FGSTN_DefenceKitExtension::GetupSet, Tech), loaded when attached. Started Forced by the tick
+	// extension through the model (they are kit triggered abilities, so they are in the timeline registry). Null = the kit has none
+
+	TWeakObjectPtr<UClass> GroundBounce;
+	TWeakObjectPtr<UClass> GetupRoll;
+
+	/** By EGSTN_TechType (index 0, None, unused). All null = the kit has no tech: no lockout, no window, the button does nothing in tumble */
+	TWeakObjectPtr<UClass> TechAbilities[6];
+	bool bHasTechSet = false;
+
+	/** The tech ability of a kind, null when the kit has none */
+	UClass* GetTechAbility(uint8 Type) const { return Type < UE_ARRAY_COUNT(TechAbilities) ? TechAbilities[Type].Get() : nullptr; }
 };
 
 /**
@@ -55,6 +68,12 @@ public:
 	 * (MakeBubbleIgnoreHitTypes). Returns whether data is attached after the call
 	 */
 	static bool Apply(AActor* Owner, const UGSTN_DefenceRules* Rules, bool bKitHasShield, const FGameplayTagContainer& IgnoreHitTypes);
+
+	/**
+	 * F8: records the kit's landing and tech abilities on Owner's entry (loaded here, outside any tick: they are the classes the loadout grants).
+	 * Call after Apply; nothing happens for an owner without an entry. A null extension clears them
+	 */
+	static void SetKitMoves(const AActor* Owner, const struct FGSTN_DefenceKitExtension* Extension);
 
 	static void Clear(AActor* Owner);
 

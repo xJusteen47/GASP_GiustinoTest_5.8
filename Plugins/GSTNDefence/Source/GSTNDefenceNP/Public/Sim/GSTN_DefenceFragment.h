@@ -7,6 +7,26 @@
 #include "Sync/GSTN_SyncFragment.h"
 #include "GSTN_DefenceFragment.generated.h"
 
+/** Bits of FGSTN_DefenceFragment::HitFlags: what the last hit allows the victim's DI and SDI (written by the outcome applier at every hit) */
+namespace GSTNDefenceHitFlags
+{
+	/** The hit data's bDisableDI: no DI at the end of its hitstop */
+	constexpr uint8 DIDisabled = 1 << 0;
+
+	/** No held-direction drift for this hit: a throw (or grab-like hit), an armored victim (unless the rules allow it), or the stagger-in-place tier (when the rules say so) */
+	constexpr uint8 SDIBlocked = 1 << 1;
+}
+
+/** What the tick extension starts at AfterClocks for a decision of the victim step of the same frame (FGSTN_DefenceFragment::PendingStartKind) */
+namespace GSTNDefencePendingStart
+{
+	constexpr uint8 None = 0;
+	/** The landing: the kit's ground bounce, Forced */
+	constexpr uint8 GroundBounce = 1;
+	/** A successful tech: the tech set's ability of TechType, Forced */
+	constexpr uint8 Tech = 2;
+}
+
 /** Bits of FGSTN_DefenceFragment::ShieldFlags */
 namespace GSTNShieldFlags
 {
@@ -35,8 +55,8 @@ namespace GSTNShieldFlags
  * Wire format: nothing at all for a fragment at its defaults (IsDefault; the list framing says 0 bytes), else a 16 bit presence mask and
  * the groups that are present, each as plain integers: shield (value 2, stamp 4, flags 1, press 4, release 4), move parry window (start 4,
  * end 4, profile 1, hurtbox mask 2), last parry 4, stuns (shield stun 4, parry recovery 4, break 4), punish (end 4, kind 1), tech (lockout 4,
- * last press 4, end 4, type 1), knockdown 4, grab immunity 4, pushback (start 4, velocity 6, frames 1), mirror (value 2, frame 4). A shield that
- * is only raised costs 2 + 15 bytes; everything live at once 2 + 85.
+ * last press 4, end 4, type 1), knockdown 4, grab immunity 4, pushback (start 4, velocity 6, frames 1), mirror (value 2, frame 4), hit flags 1 (F8),
+ * pending start (frame 4, kind 1; F8, empty at the end of every tick). A shield that is only raised costs 2 + 15 bytes; everything live at once 2 + 91.
  */
 USTRUCT()
 struct GSTNDEFENCENP_API FGSTN_DefenceFragment : public FGSTN_SyncFragment
@@ -93,8 +113,17 @@ struct GSTNDEFENCENP_API FGSTN_DefenceFragment : public FGSTN_SyncFragment
 	int32 LastTechPressFrame = INDEX_NONE;
 	int32 TechEndFrame = INDEX_NONE;
 	uint8 TechType = 0;
+	/** The downed state ends here (exclusive); MAX_int32 = downed until a get-up (MaxDownedFrames 0, the default) */
 	int32 KnockdownEndFrame = INDEX_NONE;
 	int32 GrabImmunityEndFrame = INDEX_NONE;
+
+	// ---- F8: the last hit's DI/SDI flags (GSTNDefenceHitFlags), and a start the victim step decided for the tick extension of the same frame
+
+	uint8 HitFlags = 0;
+
+	/** The frame a decision of the victim step asks the tick extension to start something (always this frame; cleared when consumed) */
+	int32 PendingStartFrame = INDEX_NONE;
+	uint8 PendingStartKind = 0;
 
 	// ---- The pushback of a blocked hit: queued by the applier at the hit's frame plus one, consumed by the tick extension on its frame
 

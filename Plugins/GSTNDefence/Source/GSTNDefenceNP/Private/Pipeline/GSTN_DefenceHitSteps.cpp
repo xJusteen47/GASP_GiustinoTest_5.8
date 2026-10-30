@@ -111,6 +111,10 @@ EGSTN_StepResult UGSTN_HitStep_Parry::Resolve_Implementation(const FGSTN_HitCont
 	const FGSTN_ParryDecision Decision = UGSTN_DefenceMath::ResolveParry(Parry, Rules);
 	if (!Decision.IsParry() || !Rules->ParryProfiles.IsValidIndex(Decision.ProfileIndex))
 	{
+		// Not parried: the hit goes on, and the applier still records what it allows the victim's DI and SDI (F8: Result None, its hit frame)
+		FGSTN_DefenceHitOutcome Passed;
+		Passed.HitFrame = HitFrame;
+		Out.OutcomeExtensions.Add(FInstancedStruct::Make(Passed));
 		return EGSTN_StepResult::Continue;
 	}
 	const FGSTN_ParryProfile& Profile = Rules->ParryProfiles[Decision.ProfileIndex];

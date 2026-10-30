@@ -20,6 +20,9 @@
 #include "Sim/GSTN_DefenceAttach.h"
 #include "Sim/GSTN_DefenceFragment.h"
 #include "Sim/GSTN_DefenceTrackHooks.h"
+#include "Sim/GSTN_DIWiring.h"
+#include "Sim/GSTN_SDIDrift.h"
+#include "Sim/GSTN_TumbleLanding.h"
 #include "Pipeline/GSTN_DefenceHitOutcome.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
@@ -55,16 +58,23 @@ void FGSTN_DefenceTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN
 		if (Data && Data->Rules)
 		{
 			StepClocks(Context, *Data);
+			FGSTN_TumbleLanding::AfterClocks(Context, *Data);
+			FGSTN_SDIDrift::Run(Context, *Data);
 		}
 		break;
 	case EGSTN_CombatHookPoint::AfterExecute:
 		if (Data && Data->Rules)
 		{
 			ConsumeStamps(Context, *Data);
+			FGSTN_TumbleLanding::AfterExecute(Context);
 		}
 		break;
 	case EGSTN_CombatHookPoint::BeforeTagProjection:
 		ProjectTags(Context, Data);
+		if (Data || FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments))
+		{
+			FGSTN_TumbleLanding::SyncDownedLock(Context);
+		}
 		break;
 	default:
 		break;
@@ -79,7 +89,32 @@ bool FGSTN_DefenceTickExtension::BlocksActions(const FGSTN_CombatTickContext& Co
 		return false;
 	}
 	const int32 Frame = Context.Frame;
-	return Fragment->IsShieldStunned(Frame) || Fragment->IsBreaking() || Fragment->IsPunished(Frame) || Fragment->IsKnockedDown(Frame);
+	// Not the downed state: it admits its get-ups (AdmitsOnlyBindingsRequiring)
+	return Fragment->IsShieldStunned(Frame) || Fragment->IsBreaking() || Fragment->IsPunished(Frame);
+}
+
+FGameplayTag FGSTN_DefenceTickExtension::AdmitsOnlyBindingsRequiring(const FGSTN_CombatTickContext& Context) const
+{
+	return FGSTN_TumbleLanding::AdmitsOnly(Context);
+}
+
+bool FGSTN_DefenceTickExtension::ConsumeTumbleContact(FGSTN_CombatTickContext& Context, const FGSTN_TumbleContactSyncState& Contact)
+{
+	const FGSTN_DefenceEntityData* Data = FGSTN_DefenceAttach::Find(Context.Owner);
+	return Data && Data->Rules && FGSTN_TumbleLanding::ConsumeContact(Context, *Data, Contact);
+}
+
+void FGSTN_DefenceTickExtension::OnTumbleContactResolved(FGSTN_CombatTickContext& Context, const FGSTN_TumbleContactSyncState& Contact, EGSTN_ImpactOutcome Outcome)
+{
+	if (const FGSTN_DefenceEntityData* Data = FGSTN_DefenceAttach::Find(Context.Owner))
+	{
+		FGSTN_TumbleLanding::OnContactResolved(Context, *Data, Contact, Outcome);
+	}
+}
+
+bool FGSTN_DefenceTickExtension::OverrideDI(const FGSTN_CombatTickContext& Context, const FVector& Launch, const FVector& StickOnPlane, const FVector& Up, const FVector& YawFallback, FVector& OutVelocity) const
+{
+	return FGSTN_DIWiring::OverrideDI(Context, Launch, StickOnPlane, Up, YawFallback, OutVelocity);
 }
 
 uint32 FGSTN_DefenceTickExtension::HeldCancelConditions(const FGSTN_CombatTickContext& Context) const

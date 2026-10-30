@@ -218,7 +218,15 @@ bool FGSTN_DefenceTickVetoTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("broken: vetoed"), VetoAt(200, [](FGSTN_DefenceFragment& F) { F.ShieldFlags = GSTNShieldFlags::Breaking; F.BreakEndFrame = 250; }));
 	TestTrue(TEXT("punished: vetoed"), VetoAt(130, [](FGSTN_DefenceFragment& F) { F.PunishEndFrame = 140; }));
 	TestFalse(TEXT("punished: free at the end"), VetoAt(140, [](FGSTN_DefenceFragment& F) { F.PunishEndFrame = 140; }));
-	TestTrue(TEXT("knocked down: vetoed"), VetoAt(130, [](FGSTN_DefenceFragment& F) { F.KnockdownEndFrame = 170; }));
+	// F8: the downed state is not a veto, it admits only the bindings that require Combat.State.Knockdown (its get-ups)
+	TestFalse(TEXT("knocked down: not vetoed"), VetoAt(130, [](FGSTN_DefenceFragment& F) { F.KnockdownEndFrame = 170; }));
+	{
+		FGSTN_DefenceFragment Downed;
+		Downed.KnockdownEndFrame = 170;
+		SetFragment(Out.Fragments, Downed);
+		FGSTN_CombatTickContext At(130, In, Out);
+		TestTrue(TEXT("knocked down: admits only the get-ups"), Extension.AdmitsOnlyBindingsRequiring(At) == GSTNDefenceTags::State_Knockdown.GetTag());
+	}
 	TestFalse(TEXT("parry recovery is not a veto (the defender may cancel into anything)"), VetoAt(130, [](FGSTN_DefenceFragment& F) { F.ParryRecoveryEndFrame = 134; }));
 
 	// Through the registry, as the component asks: the OR of every extension

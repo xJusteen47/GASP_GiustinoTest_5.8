@@ -81,7 +81,9 @@ namespace
 		{
 			for (const FInstancedStruct& Extension : Context.OutcomeExtensions)
 			{
-				if (const FGSTN_DefenceHitOutcome* Outcome = Extension.GetPtr<FGSTN_DefenceHitOutcome>())
+				// The deciding outcome: the Parry step also hands a pass-through one (Result None, F8's hit flags) for every hit it lets go on
+				const FGSTN_DefenceHitOutcome* Outcome = Extension.GetPtr<FGSTN_DefenceHitOutcome>();
+				if (Outcome && Outcome->Result != EGSTN_DefenceHitResult::None)
 				{
 					return Outcome;
 				}
@@ -189,7 +191,7 @@ bool FGSTN_DefenceStepsBlockTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("no reaction request: a block never staggers"), Applied.Reaction.IsSet());
 
 	FGSTN_SimEventOutbox Outbox;
-	FGSTN_DefenceOutcomeApplier().AppendEvents(Hit.OutcomeExtensions[0], FGSTN_SimEvent(), Outbox);
+	FGSTN_DefenceOutcomeApplier().AppendEvents(Hit.OutcomeExtensions.Last(), FGSTN_SimEvent(), Outbox);
 	TestTrue(TEXT("Combat.Event.Blocked"), Outbox.Events.Num() == 1 && Outbox.Events[0].EventType == GSTNDefenceTags::Event_Blocked.GetTag());
 	return true;
 }
@@ -242,7 +244,7 @@ bool FGSTN_DefenceStepsBreakTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("no bubble while broken"), FGSTN_DefenceSnapshotContributor::BubbleExistsAt(After, 151, Rig.Rules->Shield.ReleaseFrames));
 
 	FGSTN_SimEventOutbox Outbox;
-	FGSTN_DefenceOutcomeApplier().AppendEvents(Hit.OutcomeExtensions[0], FGSTN_SimEvent(), Outbox);
+	FGSTN_DefenceOutcomeApplier().AppendEvents(Hit.OutcomeExtensions.Last(), FGSTN_SimEvent(), Outbox);
 	TestTrue(TEXT("Combat.Event.ShieldBroken"), Outbox.Events.Num() == 1 && Outbox.Events[0].EventType == GSTNDefenceTags::Event_ShieldBroken.GetTag());
 	return true;
 }

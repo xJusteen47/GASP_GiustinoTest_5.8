@@ -18,6 +18,7 @@
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_CombatTableSet.h"
+#include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CommandSourceInterface.h"
 #include "Simulation/GSTN_CombatInbox.h"
 #include "Simulation/GSTN_HitInbox.h"
@@ -45,6 +46,7 @@ class UGameplayEffect;
 class UMoverComponent;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
+struct FGSTN_TrackHookEnvironment;
 
 /**
  * Runs the combat Network Prediction model of its actor and drives the actor's ability system from it.
@@ -75,7 +77,7 @@ struct FAbilitySystemTimeStep;
  * Add it to a pawn that also has a UNpAbilitySystemComponent. Replicated; interpolated simulated proxies do not tick it.
  */
 UCLASS(ClassGroup = (Combat), Blueprintable, meta = (BlueprintSpawnableComponent))
-class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface, public IGSTN_SnapshotSource
+class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface, public IGSTN_SnapshotSource, public IGSTN_CombatTickServices
 {
 	GENERATED_BODY()
 
@@ -592,6 +594,26 @@ private:
 	/** The cancel conditions the extensions hold this frame (IGSTN_CombatTickExtension::HeldCancelConditions), read by the gate with the cancel windows. Rewritten every tick, never state */
 	uint32 FrameCancelConditions = 0;
 
+	/** The tag an extension admits only the bindings requiring (IGSTN_CombatTickExtension::AdmitsOnlyBindingsRequiring, M6 F8): the gate passes no other binding. Rewritten every tick, never state */
+	FGameplayTag FrameAdmitTag;
+
+	/** Whether the binding requires FrameAdmitTag (always true while no tag is set) */
+	bool IsBindingAdmitted(const FGSTN_CommandTable& Table, int32 BindingIndex) const;
+
+	/**
+	 * What StartForcedTimeline works on: the state, frame and hook environment of the combat tick under way, set before the extension hooks and
+	 * cleared at the end of the tick. Valid only inside it, never state
+	 */
+	FGSTN_CombatSyncState* ServiceSync = nullptr;
+	int32 ServiceFrame = INDEX_NONE;
+	const FGSTN_TrackHookEnvironment* ServiceHookEnvironment = nullptr;
+
+	// IGSTN_CombatTickServices
+	virtual bool StartForcedTimeline(const UClass* AbilityClass) override;
+
+	/** Fills what an extension hook of this tick reads besides the states: owner, ability system, outbox, the stick on the plane, up, the button map */
+	void FillHookContext(FGSTN_CombatTickContext& Context, const FGSTN_InputCmd& Cmd, const FVector& Up);
+
 	int32 GateClosedFrames = 0;
 
 	/** The set the frame is on, else the one of the latest state, else the empty one. Never null after BeginPlay */
@@ -647,7 +669,7 @@ private:
 	 * sync state and the requests the ability system's pre-tick executes. Under gstn.Combat.Debug.HitLog the drain is logged as
 	 * "frame:attacker:hitbox:hurtbox:hurtState:ricochet:relationship:damage;..." (GetInboxLog)
 	 */
-	void RunVictimStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncState& Sync, const FGSTN_StepSnapshot* Snapshot, const FGSTN_InputCmd& Cmd);
+	void RunVictimStep(const FNetSimTimeStep& TimeStep, const FGSTN_CombatSyncState& InSync, FGSTN_CombatSyncState& Sync, const FGSTN_StepSnapshot* Snapshot, const FGSTN_InputCmd& Cmd);
 	TArray<FGSTN_HitInboxEntry> InboxScratch;
 	TArray<FGSTN_InboxEntry> InboxEntryScratch;
 	TMap<int32, FString> InboxLogByFrame;

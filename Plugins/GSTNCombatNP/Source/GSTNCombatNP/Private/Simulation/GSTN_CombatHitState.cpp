@@ -174,7 +174,7 @@ FGSTN_HitSyncState FGSTN_HitSyncState::Canonical(const FGSTN_HitLiveContext& Con
 		{
 			Out.PendingLaunchQ[Axis] = PendingLaunchQ[Axis];
 		}
-		Out.SDICount = SDICount;
+		Out.SDIDistanceUsed = SDIDistanceUsed;
 	}
 	return Out;
 }
@@ -183,7 +183,7 @@ bool FGSTN_HitSyncState::operator==(const FGSTN_HitSyncState& Other) const
 {
 	if (!(MoveOrigin == Other.MoveOrigin) || HitTargetsNum != Other.HitTargetsNum || HitConfirmFlags != Other.HitConfirmFlags
 		|| HitstunEndFrame != Other.HitstunEndFrame || ImpactEndFrame != Other.ImpactEndFrame || PendingReaction != Other.PendingReaction
-		|| SDICount != Other.SDICount || ImpactProfileQ != Other.ImpactProfileQ)
+		|| SDIDistanceUsed != Other.SDIDistanceUsed || ImpactProfileQ != Other.ImpactProfileQ)
 	{
 		return false;
 	}
@@ -233,7 +233,7 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 		Mask |= Local.HitstunEndFrame != INDEX_NONE ? PartHitstun : 0;
 		Mask |= Local.ImpactEndFrame != INDEX_NONE ? PartImpact : 0;
 		Mask |= (Local.PendingLaunchQ[0] | Local.PendingLaunchQ[1] | Local.PendingLaunchQ[2]) != 0 ? PartLaunch : 0;
-		Mask |= Local.SDICount != 0 ? PartSDI : 0;
+		Mask |= Local.SDIDistanceUsed != 0 ? PartSDI : 0;
 		Mask |= Local.ImpactProfileQ != 0 ? PartProfile : 0;
 	}
 	Ar.SerializeBits(&Mask, PartCount);
@@ -300,7 +300,7 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 	}
 	if (Mask & PartSDI)
 	{
-		Ar << Local.SDICount;
+		Ar << Local.SDIDistanceUsed;
 	}
 	if (Mask & PartProfile)
 	{

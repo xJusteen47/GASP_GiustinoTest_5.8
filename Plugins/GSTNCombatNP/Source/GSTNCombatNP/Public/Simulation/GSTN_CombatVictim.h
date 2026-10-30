@@ -184,6 +184,12 @@ struct FGSTN_ReactionStepInput
 
 	/** Fraction of the knockback the victim resists (the KnockbackResistance attribute) */
 	float KnockbackResistance = 0.f;
+
+	/**
+	 * Optional DI in place of the rules' (M6 F8: a tick extension's OverrideDI, the defence's DI rules): (Launch, StickOnPlane, Up, YawFallback,
+	 * OutVelocity) -> whether it decided. Unset or false: UGSTN_HitMathUtils::ApplyDI with Rules->DI. Pure, like the step
+	 */
+	TFunction<bool(const FVector&, const FVector&, const FVector&, const FVector&, FVector&)> DIOverride;
 };
 
 /**

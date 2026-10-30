@@ -5,6 +5,7 @@
 #include "GSTN_DefenceTags.h"
 #include "Pipeline/GSTN_DefenceHitOutcome.h"
 #include "Sim/GSTN_DefenceFragment.h"
+#include "Sim/GSTN_DIWiring.h"
 #include "Sim/GSTN_DefenceInboxKinds.h"
 #include "Simulation/GSTN_CombatInbox.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
@@ -18,8 +19,19 @@ const UScriptStruct* FGSTN_DefenceOutcomeApplier::GetExtensionStruct() const
 void FGSTN_DefenceOutcomeApplier::Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const
 {
 	const FGSTN_DefenceHitOutcome* Outcome = Extension.GetPtr<FGSTN_DefenceHitOutcome>();
-	if (!Outcome || !Context.VictimFragments || Outcome->Result == EGSTN_DefenceHitResult::None)
+	if (!Outcome || !Context.VictimFragments)
 	{
+		return;
+	}
+	if (Outcome->Result == EGSTN_DefenceHitResult::None)
+	{
+		// A hit that goes on (F8): what it allows the DI at its hitstop end and the drift during it, from the resolved hit (the reaction tier is known here)
+		const uint8 Flags = FGSTN_DIWiring::MakeHitFlags(View);
+		FGSTN_DefenceFragment* Existing = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(*Context.VictimFragments);
+		if (Flags != 0 || (Existing && Existing->HitFlags != 0))
+		{
+			FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(*Context.VictimFragments).HitFlags = Flags;
+		}
 		return;
 	}
 	FGSTN_DefenceFragment& Fragment = FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(*Context.VictimFragments);

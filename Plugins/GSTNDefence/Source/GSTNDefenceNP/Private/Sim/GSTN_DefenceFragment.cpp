@@ -17,7 +17,9 @@ namespace
 		constexpr uint16 GrabImmunity = 1 << 7;
 		constexpr uint16 Pushback = 1 << 8;
 		constexpr uint16 Mirror = 1 << 9;
-		constexpr uint16 All = (1 << 10) - 1;
+		constexpr uint16 HitFlags = 1 << 10;
+		constexpr uint16 PendingStart = 1 << 11;
+		constexpr uint16 All = (1 << 12) - 1;
 	}
 
 	bool SamePushback(const FGSTN_DefenceFragment& A, const FGSTN_DefenceFragment& B)
@@ -100,7 +102,8 @@ bool FGSTN_DefenceFragment::operator==(const FGSTN_DefenceFragment& Other) const
 		&& TechLockoutEndFrame == Other.TechLockoutEndFrame && LastTechPressFrame == Other.LastTechPressFrame && TechEndFrame == Other.TechEndFrame && TechType == Other.TechType
 		&& KnockdownEndFrame == Other.KnockdownEndFrame && GrabImmunityEndFrame == Other.GrabImmunityEndFrame
 		&& SamePushback(*this, Other)
-		&& MirrorValueQ == Other.MirrorValueQ && MirrorFrame == Other.MirrorFrame;
+		&& MirrorValueQ == Other.MirrorValueQ && MirrorFrame == Other.MirrorFrame
+		&& HitFlags == Other.HitFlags && PendingStartFrame == Other.PendingStartFrame && PendingStartKind == Other.PendingStartKind;
 }
 
 void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
@@ -123,6 +126,8 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 		Mask |= GrabImmunityEndFrame != INDEX_NONE ? Presence::GrabImmunity : 0;
 		Mask |= !SamePushback(*this, Defaults) ? Presence::Pushback : 0;
 		Mask |= (MirrorValueQ != 0 || MirrorFrame != INDEX_NONE) ? Presence::Mirror : 0;
+		Mask |= HitFlags != 0 ? Presence::HitFlags : 0;
+		Mask |= (PendingStartFrame != INDEX_NONE || PendingStartKind != 0) ? Presence::PendingStart : 0;
 		Ar << Mask;
 		if (Mask & Presence::Shield)
 		{
@@ -163,6 +168,14 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 		if (Mask & Presence::Mirror)
 		{
 			Ar << MirrorValueQ << MirrorFrame;
+		}
+		if (Mask & Presence::HitFlags)
+		{
+			Ar << HitFlags;
+		}
+		if (Mask & Presence::PendingStart)
+		{
+			Ar << PendingStartFrame << PendingStartKind;
 		}
 		return;
 	}
@@ -222,6 +235,14 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 	{
 		Ar << MirrorValueQ << MirrorFrame;
 	}
+	if (Mask & Presence::HitFlags)
+	{
+		Ar << HitFlags;
+	}
+	if (Mask & Presence::PendingStart)
+	{
+		Ar << PendingStartFrame << PendingStartKind;
+	}
 	if (Ar.IsError())
 	{
 		*this = FGSTN_DefenceFragment();
@@ -275,5 +296,13 @@ void FGSTN_DefenceFragment::ToString(FAnsiStringBuilderBase& Out) const
 	if (MirrorFrame != INDEX_NONE)
 	{
 		Out.Appendf(" mirror %d@%d", MirrorValueQ, MirrorFrame);
+	}
+	if (HitFlags != 0)
+	{
+		Out.Appendf(" hitflags 0x%X", static_cast<int32>(HitFlags));
+	}
+	if (PendingStartFrame != INDEX_NONE)
+	{
+		Out.Appendf(" start %d@%d", static_cast<int32>(PendingStartKind), PendingStartFrame);
 	}
 }

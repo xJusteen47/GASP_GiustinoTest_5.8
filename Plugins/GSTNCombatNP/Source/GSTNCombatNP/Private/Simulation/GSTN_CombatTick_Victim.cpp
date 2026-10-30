@@ -292,6 +292,8 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 			Core.Hit.SetPendingReaction(Hit.Reaction);
 			Core.Hit.ImpactProfileQ = Entry.Hit.Impact.Pack();
 			Core.Hit.SetPendingLaunch(Hit.Reaction == EGSTN_HitReaction::StaggerInPlace ? FVector::ZeroVector : LaunchVelocity);
+			// A new staggering hit starts its own held-direction drift budget (M6 F8)
+			Core.Hit.SDIDistanceUsed = 0;
 			bAnyStaggered = true;
 			LastHitstunFrames = Hit.HitstunFrames;
 			LastReaction = Hit.Reaction;
@@ -594,7 +596,12 @@ FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInpu
 			const FVector Plane = StickToPlane(In.Stick, In.CameraYawDegrees, In.Up);
 			const FVector Fallback = UGSTN_HitMathUtils::ProjectOnPlane(In.Facing, In.Up).GetSafeNormal();
 			Move.Kind = FGSTN_ReactionMove::EKind::Launch;
-			Move.Velocity = UGSTN_HitMathUtils::ApplyDI(Launch, Plane, In.Up, Fallback, DIParams) * Pass;
+			FVector Influenced;
+			if (!In.DIOverride || !In.DIOverride(Launch, Plane, In.Up, Fallback, Influenced))
+			{
+				Influenced = UGSTN_HitMathUtils::ApplyDI(Launch, Plane, In.Up, Fallback, DIParams);
+			}
+			Move.Velocity = Influenced * Pass;
 			Move.GravityScale = 1.f;
 			// A tumbling victim keeps the contact probe of its knockback move until it lands, which can be long after the hitstun
 			Move.Frames = Core.ActionState == EGSTN_ActionState::Tumble ? FMath::Max(Frames, TumbleProbeFrames) : Frames;

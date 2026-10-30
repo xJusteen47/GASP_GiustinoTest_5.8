@@ -29,7 +29,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatVictim, Log, All);
 
-void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncState& Sync, const FGSTN_StepSnapshot* Snapshot, const FGSTN_InputCmd& Cmd)
+void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, const FGSTN_CombatSyncState& InSync, FGSTN_CombatSyncState& Sync, const FGSTN_StepSnapshot* Snapshot, const FGSTN_InputCmd& Cmd)
 {
 	const int32 Frame = TimeStep.Frame;
 	FGSTN_CombatSyncCore& Core = Sync.Core;
@@ -112,9 +112,27 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 			VictimResult.bCancelledMove |= bCancelledMove;
 		}
 	}
+	// The tick extensions' view of the victim step (M6 F8: the landing and the tech read the contact, the DI rules the launch). No services: the
+	// frame's tables are chosen after this step
+	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
+	FGSTN_CombatTickContext VictimContext(Frame, InSync, Sync);
+	{
+		FVector Up = FVector::UpVector;
+		if (Self)
+		{
+			Up = Self->Up;
+		}
+		else
+		{
+			FTransform Pose;
+			ReadOwnPose(Pose, Up);
+		}
+		FillHookContext(VictimContext, Cmd, Up);
+	}
+
 	// The surface impact of a tumbling victim: the contact the knockback move's probe made on the frame before, from Mover's tracked state
 	ImpactResult = FGSTN_ImpactStepResult();
-	if (Self && ImpactTable && Core.ActionState == EGSTN_ActionState::Tumble)
+	if (Self && (ImpactTable || !Extensions.IsEmpty()) && Core.ActionState == EGSTN_ActionState::Tumble)
 	{
 		FGSTN_ImpactStepInput ImpactIn;
 		ImpactIn.Frame = Frame;
@@ -138,7 +156,19 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 		{
 			ImpactIn.bStaggeredThisFrame |= Hit.bStaggered;
 		}
-		FGSTN_CombatVictim::StepImpact(ImpactIn, Core, ImpactResult);
+		// A contact the impact step would decide this frame (the same conditions): the extensions see it before (a tech consumes it) and after
+		const FGSTN_TumbleContactSyncState& Contact = ImpactIn.Contact;
+		const bool bNewContact = Contact.IsSet() && Contact.ContactFrame == Frame - 1 && !ImpactIn.bStaggeredThisFrame && !Core.IsInHitstop(Frame)
+			&& !(Core.Hit.ImpactEndFrame != INDEX_NONE && Contact.ContactFrame < Core.Hit.ImpactEndFrame);
+		const bool bConsumed = bNewContact && Extensions.ConsumeTumbleContact(VictimContext, Contact);
+		if (!bConsumed && ImpactTable)
+		{
+			FGSTN_CombatVictim::StepImpact(ImpactIn, Core, ImpactResult);
+		}
+		if (bNewContact && !bConsumed)
+		{
+			Extensions.OnTumbleContactResolved(VictimContext, Contact, ImpactResult.Outcome);
+		}
 		if (ImpactResult.Outcome != EGSTN_ImpactOutcome::None)
 		{
 			AppendImpactEvent(Frame);
@@ -215,6 +245,13 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, FG
 	if (AbilitySystem && AbilitySystem->HasAttributeSetForAttribute(UGSTN_HealthAttributeSet::GetKnockbackResistanceAttribute()))
 	{
 		Reaction.KnockbackResistance = AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetKnockbackResistanceAttribute());
+	}
+	if (!Extensions.IsEmpty())
+	{
+		Reaction.DIOverride = [&Extensions, &VictimContext](const FVector& Launch, const FVector& Plane, const FVector& Up, const FVector& Fallback, FVector& Out)
+		{
+			return Extensions.OverrideDI(VictimContext, Launch, Plane, Up, Fallback, Out);
+		};
 	}
 	ReactionMove = FGSTN_CombatVictim::StepReaction(Reaction, Core);
 	if (ReactionMove.Kind == FGSTN_ReactionMove::EKind::None && ImpactResult.Move.Kind != FGSTN_ReactionMove::EKind::None)

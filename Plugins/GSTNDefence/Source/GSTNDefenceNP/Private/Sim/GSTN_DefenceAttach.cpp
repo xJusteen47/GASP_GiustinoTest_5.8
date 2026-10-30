@@ -77,6 +77,38 @@ bool FGSTN_DefenceAttach::Apply(AActor* Owner, const UGSTN_DefenceRules* Rules, 
 	return true;
 }
 
+void FGSTN_DefenceAttach::SetKitMoves(const AActor* Owner, const FGSTN_DefenceKitExtension* Extension)
+{
+	FGSTN_DefenceEntityData* Data = Owner ? State().Attached.Find(FObjectKey(Owner)) : nullptr;
+	if (!Data)
+	{
+		return;
+	}
+	Data->GroundBounce = nullptr;
+	Data->GetupRoll = nullptr;
+	for (TWeakObjectPtr<UClass>& Tech : Data->TechAbilities)
+	{
+		Tech = nullptr;
+	}
+	Data->bHasTechSet = false;
+	if (!Extension)
+	{
+		return;
+	}
+	// Soft classes of the kit: resolved here, where the loadout is compiled, never in a tick
+	Data->GroundBounce = Extension->GetupSet.GroundBounce.IsNull() ? nullptr : Cast<UClass>(Extension->GetupSet.GroundBounce.LoadSynchronous());
+	Data->GetupRoll = Extension->GetupSet.Roll.IsNull() ? nullptr : Cast<UClass>(Extension->GetupSet.Roll.LoadSynchronous());
+	for (const TPair<EGSTN_TechType, TSoftClassPtr<UObject>>& Entry : Extension->Tech.Abilities)
+	{
+		const uint8 Type = static_cast<uint8>(Entry.Key);
+		if (Type > 0 && Type < UE_ARRAY_COUNT(Data->TechAbilities) && !Entry.Value.IsNull())
+		{
+			Data->TechAbilities[Type] = Cast<UClass>(Entry.Value.LoadSynchronous());
+			Data->bHasTechSet |= Data->TechAbilities[Type].IsValid();
+		}
+	}
+}
+
 void FGSTN_DefenceAttach::Clear(AActor* Owner)
 {
 	if (Owner)
@@ -163,7 +195,10 @@ void FGSTN_DefenceAttach::AttachFromLoadout(const FGSTN_LoadoutExtensionContext&
 	}
 	const UGSTN_DefenceRules* Rules = UGSTN_DefenceLibrary::ResolveRules(Extension, WorldContext);
 	UGSTN_CombatRulesComponent* RulesComponent = UGSTN_CombatRulesComponent::Find(WorldContext);
-	Apply(Owner, Rules, Extension->HasShield(), MakeBubbleIgnoreHitTypes(RulesComponent ? RulesComponent->GetRules() : nullptr));
+	if (Apply(Owner, Rules, Extension->HasShield(), MakeBubbleIgnoreHitTypes(RulesComponent ? RulesComponent->GetRules() : nullptr)))
+	{
+		SetKitMoves(Owner, Extension);
+	}
 }
 
 FName FGSTN_DefenceAttach::GetLoadoutExtensionId()

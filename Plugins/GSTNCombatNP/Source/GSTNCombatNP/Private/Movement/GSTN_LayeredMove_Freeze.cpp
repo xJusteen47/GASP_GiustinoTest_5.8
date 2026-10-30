@@ -24,7 +24,7 @@ void FGSTN_LayeredMove_Freeze::Setup(const FVector& InIncomingVelocity, float In
 bool FGSTN_LayeredMove_Freeze::GenerateMove(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, UMoverBlackboard* SimBlackboard, FProposedMove& OutProposedMove)
 {
 	OutProposedMove.MixMode = EMoveMixMode::OverrideAll;
-	OutProposedMove.LinearVelocity = FVector::ZeroVector;
+	OutProposedMove.LinearVelocity = DriftVelocity;
 	OutProposedMove.AngularVelocityDegrees = FVector::ZeroVector;
 	return true;
 }
@@ -52,6 +52,16 @@ void FGSTN_LayeredMove_Freeze::NetSerialize(FArchive& Ar)
 	uint8 bZero = bZeroVelocityOnFinish ? 1 : 0;
 	Ar.SerializeBits(&bZero, 1);
 	bZeroVelocityOnFinish = bZero != 0;
+	uint8 bDrift = DriftVelocity.IsZero() ? 0 : 1;
+	Ar.SerializeBits(&bDrift, 1);
+	if (bDrift)
+	{
+		Ar << DriftVelocity;
+	}
+	else if (Ar.IsLoading())
+	{
+		DriftVelocity = FVector::ZeroVector;
+	}
 }
 
 UScriptStruct* FGSTN_LayeredMove_Freeze::GetScriptStruct() const
@@ -76,6 +86,15 @@ FEffectMoveContainer UGSTN_FreezeMoveCreator::MakeMove_Implementation(UMoverComp
 
 	FGSTN_LayeredMove_Freeze Freeze;
 	Freeze.Setup(TargetMoverComponent ? TargetMoverComponent->GetVelocity() : FVector::ZeroVector, Seconds * 1000.f, bZeroVelocityOnFinish);
+	if (bDriftFromSetByCaller && EffectSpec.IsValid() && EffectSpec.Data.IsValid())
+	{
+		const FGameplayEffectSpec& Spec = *EffectSpec.Data.Get();
+		Freeze.DriftVelocity = FVector(Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityX, false, 0.f),
+			Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityY, false, 0.f), Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, false, 0.f));
+		// Above the hitstop freeze it rides on (the higher override wins), and it leaves the velocity to that freeze
+		Freeze.Priority = 1;
+		Freeze.FinishVelocitySettings.FinishVelocityMode = ELayeredMoveFinishVelocityMode::MaintainLastRootMotionVelocity;
+	}
 	return FEffectMoveContainer(&Freeze);
 }
 
