@@ -117,3 +117,70 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
 - Tests: `GSTNDefence.GAS.{AttributeClamp, ShieldBindingOmittedWhenUnavailable, ShieldAbilityRefusesWhenUnavailable, TechSetPerKit,
   GetupNeutralRequiresKnockdown, ShieldRestoreSeenAsRequest}` (the plan's six names; the ability tests exercise the decisions and data the
   F7 ability classes call) plus `GSTNCombat.GAS.Loadout.ExtensionHooks`.
+
+## F7: GSTNDefenceNP part 1 (F7a fragment, snapshot, clocks, abilities; F7b steps, applier, punish)
+
+- **Module deps**: `GSTNDefenceNP` also lists `AbilitySystemSimulation` (the `UNpGameplayAbility` base of `UGSTN_GA_BaseCombat`, needed to link
+  the five ability classes) and `Mover` (the push back move); the uplugin lists both plugins. No GSTNLink module.
+- **Action states are derived, not stored** (spec 5.1 adds `ShieldStun`, `ShieldBroken`, `Punished`, `Knockdown` to `EGSTN_ActionState`):
+  the core enum is untouched; the states are the frame against the fragment's end stamps and the `Breaking` flag, `BlocksActions` (F2) vetoes
+  every command while any holds, and the tags are projected from them. A window that runs out needs no clearing.
+- **Combat seams** (GSTNCombatNP/Core): the snapshot entry and the victim view carry one blob per contributor (`FGSTN_SnapshotExtensionSet`,
+  two at most, ascending type id; parts and defence both contribute; `MaxContributors` 2); `FGSTN_TrackHookEnvironment` (the button map and
+  the entity's fragments) and the track index reach the track hooks; `IGSTN_CombatTickExtension::HeldCancelConditions` (OnParry) feeds the
+  cancel gate; `FGSTN_ReactionRequest::bNoTumble`; `FGSTN_ResolvedHit::Frame` (the hit's stamped frame, what every defence window is
+  tested against); `FGSTN_SnapshotContributorContext::ActionState` (no bubble in a hit reaction).
+- **Hold stall**: the hold hook stalls the timeline ON the hold frame (the frame the previous tick evaluated) while the button is held or
+  the shield is stunned, so the out-of-shield cancel windows of that frame stay open; the button is read from the history at the end of F-1
+  (the combat tick samples input after the clock step): a release is seen one frame late, the same on every machine.
+- **Push back is not a reaction request**: the request seam always staggers (a launch or a hitstun floor), which would end the shield. The
+  block's push back is queued in the fragment and given at the hitstop end as `UGSTN_GE_PushBack` (the victim side push back move: a slide,
+  no tumble). The break's upward launch does use the request (`bNoTumble`).
+- **Shield value at the hit**: the snapshot's value at the snapshot frame minus the shield damage, re-stamped at the hit frame (at most one
+  frame of drain apart from the exact value; identical on every machine, which read the same snapshot).
+- **Restore request**: `RequestedDelta` is applied by the tick extension at the frame it is seen (after clocks), not by the applier at F+1.
+- **Meter**: a blocked hit gives the attacker the combat rules' per-damage meter; the defender's small gain (block and parry) is not applied,
+  the victim side has no meter request path yet (F14 or a combat seam).
+- **Parry immunity**: only the victim's `Combat.Immunity.Parry` (snapshot bit); `FGSTN_HitData` has no tag container for the hit side.
+- **`bCloseOnParry`** of the parry track rides in bit 7 of `MoveParryProfile` (fragment and snapshot); profiles stay below 16.
+- **Perfect shield advantage**: the tick extension ends the shield timeline at `ParryRecoveryEndFrame` (the spec's "actionable early"), so no
+  cancel window content is needed. A move parry keeps playing; its `OnParry` cancel windows open from `LastParryFrame`.
+- **Punish**: inbox kind `GSTNDefenceInboxKinds::Punish` = 16 (the first defence id); `PunishEndFrame = max(hitstop end, frame) + stun`,
+  the running timeline cancelled, the hitstop extended (with a freeze request) only where the attacker's own prediction did not open it.
+  A profile with no attacker stun sends no entry ("advantage only"). A parried hit no longer sets the attacker's hit confirm (OnHit
+  cancels); a blocked one does (OnBlock stays unimplemented).
+- **Events**: `Combat.Event.Parried` (magnitude = `EGSTN_ParrySource`), `Combat.Event.Blocked`, `Combat.Event.ShieldBroken`, from the
+  applier's `AppendEvents`; the core's `HitLanded`/`HitReceived` still fire for a blocked or parried hit.
+- **Step placement**: `UGSTN_DefenceContentLibrary::AddDefenceStepsToRules` puts Parry then Shield after `HurtboxReaction` (the core's
+  placeholder note), so before `HealthWeight`/`PartResolve` and `ComputeKnockback`. Both steps live in `GSTNDefenceNP` (they read the NP
+  snapshot extension), not in Core like `PartResolve`.
+- **The bubble is any extra hurtbox** of the entity (only the defence contributes extras today); a second contributor of extras would need
+  the bubble's position in the extension.
+- **Snapshot build reads the ASC** (immunity tags, the attribute set's rates and multiplier) at the end of F-1, as the spec states; the
+  steps and the applier read only the snapshot and the fragment. `ResolveParryTrack` reads the combat component's table set (content) to
+  find the running track.
+- **The shield ability's frames** are class defaults (`StartupFrames`, `ReleaseFrames` on `UGSTN_GA_Shield`, timeline built on the CDO),
+  not built from the rules at grant: a kit whose rules differ names a child class with the matching frames.
+- **Found by the harness and fixed in F7**: (1) the F6 shield binding `Press(Shield)` + `Hold(Shield, 0)` in one step was refused by the loadout
+  validator (its canonical input pressed a held button), so no kit with a shield loaded: now `Press(Shield)` only (the hold is the timeline's
+  hold window), test `GSTNDefence.GAS.ShieldBindingMatchesPress`; (2) `UGSTN_GA_Shield::CanActivateAbility` read `Input.Context.Grounded` from
+  the ability system, where it never is (it is a context tag of the input provider): the binding's requirement owns it now; (3) the mirror was
+  written unquantised and any difference >= 0.01 read as a restore request, so the regenerating shield was re-stamped at machine-dependent
+  frames: the mirror gets the quantised value and a request is at least one quantum (0.25 point).
+- **Test content**: two data assets, `/GSTNDefence/Test/DA_DefenceRules_Test` (PvP) and `DA_DefenceRules_TestPvE`, from
+  `Tools/GAS/setup_defence_link_content.py` (`.gitignore` gains `!Plugins/GSTNDefence/Content/`). No `GA_Shield_Test` / `GA_CounterTest`
+  Blueprints: the native `UGSTN_GA_Shield` matches the test rules' frames and `UGSTN_GA_CounterSample` (new, `GSTNDefenceNP`: parry window over
+  frames 2..14, profile "Counter", `OnParry` cancel into `Command.Attack`) is the counter move. The bubble radius of the test rules is 95 cm
+  at the capsule middle (the test pawn's origin), so it covers `HBS_Test_Pawn`.
+- **Harness** (`defence_scenarios.py`): the kit, the input config (`Input.Button.Shield` appended, before PIE) and the combat pipeline are
+  changed in memory only; the parry scenario widens the perfect-shield window and the bubble's release frames to 30 frames in memory so a
+  scripted release survives 60/15 ms (and 2 % loss); the break scenario uses a 7 point shield draining 0.02 a frame. `scenario_grab_shield`
+  is a stub (pure grab-type checks) until F12. A hit the attacker lands on a just-broken bubble through lag compensation resolves on the victim
+  as a body hit (the victim's own snapshot has no bubble): accepted behaviour.
+- `UGSTN_DefenceContentLibrary` gains `AddDefenceStepsToRules`/`RemoveDefenceStepsFromRules` and a per-world defence event log
+  (`StartDefenceEventLog`, `GetDefenceEventLog`, `StopDefenceEventLog`; debug only).
+- **Open after F7**: `part_break_launch` (SUITE_PARTS) fails with GSTNDefence enabled and passes with it disabled (HANDOVER 52); not yet explained.
+- Tests (17 NP + 1 GAS): `GSTNDefence.NP.Fragment.{RoundTripIdleOneBit, ActiveBytesWithinTable, Interpolate, ForcedRollbackTakesAuthority}`,
+  `.Snapshot.{BubbleContributed, NoBubbleWhenUnavailableOrHitstunOrBroken, RulesIndexPerEntity}`, `.Tick.{HoldStallsTimelineNotClock,
+  VetoWhileStunned, TagsProjected}`, `.Steps.{ParryBeforeShieldOrder, ShieldBlockNoDamage, BodyHitWhileRaisedContinues, BreakLaunchUp,
+  GrabPassesThroughBubble, ModeOffSkipsShieldNotParry, OutgoingPunishPosted}`.
