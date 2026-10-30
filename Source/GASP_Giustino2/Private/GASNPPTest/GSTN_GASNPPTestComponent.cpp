@@ -310,6 +310,7 @@ void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& Ti
 	{
 		FSimHistoryEntry& Entry = SimHistory.AddDefaulted_GetRef();
 		Entry.SimTimeMs = TimeStep.BaseSimTimeMs;
+		Entry.ServerFrame = TimeStep.ServerFrame;
 		Entry.Location = GetOwner()->GetActorLocation();
 		Entry.bResimulating = TimeStep.bIsResimulating;
 		if (SimState)
@@ -1041,6 +1042,7 @@ FString UGSTN_GASNPPTestComponent::DrainSimHistory()
 	{
 		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
 		Json->SetNumberField(TEXT("t"), Entry.SimTimeMs);
+		Json->SetNumberField(TEXT("fr"), Entry.ServerFrame);
 		Json->SetArrayField(TEXT("loc"), Vec(Entry.Location));
 		Json->SetArrayField(TEXT("vel"), Vec(Entry.Velocity));
 		Json->SetStringField(TEXT("mode"), Entry.Mode.ToString());

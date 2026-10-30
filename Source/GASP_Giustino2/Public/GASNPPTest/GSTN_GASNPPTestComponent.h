@@ -62,7 +62,8 @@ public:
 	void ResetCounters();
 
 	/** Every simulation tick since the last call (resimulated ticks included), as a JSON array of
-	    {t: BaseSimTimeMs, loc, vel, mode, tags: Test.* tags}, then forgets them. The harness judges heights, speeds and tag spans on
+	    {t: BaseSimTimeMs, fr: ServerFrame, loc, vel, mode, rs: resimulated, tags: Test.* tags}, then forgets them. fr is the frame index every
+	    copy of a pawn shares (the authority's frame), so an owner's tick lines up with the authority's frame for frame. The harness judges heights, speeds and tag spans on
 	    these, not on the editor tick, so a check does not depend on how many sim steps one editor frame holds. */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	FString DrainSimHistory();
@@ -323,6 +324,7 @@ private:
 	struct FSimHistoryEntry
 	{
 		int32 SimTimeMs = 0;
+		int32 ServerFrame = 0;
 		FVector Location = FVector::ZeroVector;
 		FVector Velocity = FVector::ZeroVector;
 		FName Mode;
