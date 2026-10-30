@@ -179,7 +179,15 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
   as a body hit (the victim's own snapshot has no bubble): accepted behaviour.
 - `UGSTN_DefenceContentLibrary` gains `AddDefenceStepsToRules`/`RemoveDefenceStepsFromRules` and a per-world defence event log
   (`StartDefenceEventLog`, `GetDefenceEventLog`, `StopDefenceEventLog`; debug only).
-- **Open after F7**: `part_break_launch` (SUITE_PARTS) fails with GSTNDefence enabled and passes with it disabled (HANDOVER 52); not yet explained.
+- **`part_break_launch` with GSTNDefence enabled (HANDOVER 52 open item, closed in HANDOVER 53)**: not a defence regression. Every defence
+  piece (tick extension, contributor, hooks, applier, punish handler) early-outs for an entity with no defence data, which is the parts test
+  pawn. The failing quantity was the owner's peak vertical speed, a latency reading: the owner learns of the hit after the launch frame and
+  re-simulates the rise, and the test recorder samples Mover velocity and mode in `PreSimulationTick`, where a re-simulated tick still reports
+  the pre-rollback state (Walking, 0 cm/s) while its position already matches the authority's to 0.1 cm. The owner's peak was therefore the
+  speed of its first forward tick, 540 - 15.68 per tick of lead (9 to 16 ticks across the P14 and F7 sweeps; > 300 fails past 15). The check
+  now keeps the speed threshold on the authority and asks the owner to follow the authority's first 16 rising ticks within 1 cm
+  (`_owner_follows_rise`); owner windows are compared on the hitstop only, as `_HitRig` does (a correction after the hitstun end arrives
+  canonical, hitstun end -1). Any harness check that reads owner velocity or mode from re-simulated sim ticks has the same blind spot.
 - Tests (17 NP + 1 GAS): `GSTNDefence.NP.Fragment.{RoundTripIdleOneBit, ActiveBytesWithinTable, Interpolate, ForcedRollbackTakesAuthority}`,
   `.Snapshot.{BubbleContributed, NoBubbleWhenUnavailableOrHitstunOrBroken, RulesIndexPerEntity}`, `.Tick.{HoldStallsTimelineNotClock,
   VetoWhileStunned, TagsProjected}`, `.Steps.{ParryBeforeShieldOrder, ShieldBlockNoDamage, BodyHitWhileRaisedContinues, BreakLaunchUp,
