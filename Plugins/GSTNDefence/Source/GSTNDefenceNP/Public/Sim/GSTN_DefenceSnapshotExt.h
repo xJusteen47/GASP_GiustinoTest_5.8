@@ -52,7 +52,7 @@ struct GSTNDEFENCENP_API FGSTN_DefenceSnapshotExt
 	uint32 Type = TypeWord;
 	uint8 Flags = 0;
 
-	/** Index into the rules' ParryProfiles of the open move window */
+	/** The fragment's MoveParryProfile: profile index in bits 0..6, bit 7 = close on parry */
 	uint8 MoveParryProfile = 0;
 
 	/** The victim's IncomingShieldDamageMultiplier in 1/16 (16 = 1) */

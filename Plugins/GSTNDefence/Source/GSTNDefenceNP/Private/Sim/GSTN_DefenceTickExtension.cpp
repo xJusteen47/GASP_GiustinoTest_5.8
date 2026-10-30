@@ -20,6 +20,8 @@
 #include "Sim/GSTN_DefenceAttach.h"
 #include "Sim/GSTN_DefenceFragment.h"
 #include "Sim/GSTN_DefenceTrackHooks.h"
+#include "Pipeline/GSTN_DefenceHitOutcome.h"
+#include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Timeline/GSTN_TimelineTypes.h"
@@ -186,14 +188,21 @@ void FGSTN_DefenceTickExtension::StepClocks(FGSTN_CombatTickContext& Context, co
 		WriteMirror(AbilitySystem, *Fragment, UGSTN_DefenceMath::ShieldValueAt(Fragment->MakeShieldView(Rates), Frame, Rates), Frame);
 	}
 
-	// The pushback of a blocked hit starts on its frame (the end of the hit's hitstop); a frame past it (a stale stamp) is dropped
+	// The pushback of a blocked hit starts at the end of the hit's hitstop, or on the first tick after it when the applier wrote it later
+	// (a hit without hitstop: the applier runs after this hook on the frame after the hit). Given once, then cleared
 	if (Fragment->PushbackStartFrame != INDEX_NONE && Frame >= Fragment->PushbackStartFrame)
 	{
-		if (Frame == Fragment->PushbackStartFrame)
-		{
-			ApplyPushback(AbilitySystem, *Fragment);
-		}
+		ApplyPushback(AbilitySystem, *Fragment);
 		Fragment->ClearPushback();
+	}
+
+	// A perfect shield's advantage (m6 spec 5.4, source Shield): the shield timeline ends when the parry recovery does, so the defender acts
+	// before its release frames would have let it
+	FGSTN_CombatSyncCore& Core = Context.Out.Core;
+	if (Fragment->ParryRecoveryEndFrame != INDEX_NONE && Frame == Fragment->ParryRecoveryEndFrame && Core.ActionState == EGSTN_ActionState::InTimeline
+		&& Fragment->ShieldPressFrame != INDEX_NONE && Core.TimelineStartFrame == Fragment->ShieldPressFrame)
+	{
+		FGSTN_CombatTimelineLogic::CancelForOtherCommand(Core, Frame);
 	}
 }
 
@@ -222,6 +231,10 @@ void FGSTN_DefenceTickExtension::ResolveParryTrack(const FGSTN_CombatTickContext
 		Profile = Data.Rules->FindProfileIndex(Track->ProfileName);
 	}
 	OutProfile = static_cast<uint8>(FMath::Clamp(Profile, 0, GSTNDefenceLimits::MaxParryProfiles - 1));
+	if (Track->bCloseOnParry)
+	{
+		OutProfile |= FGSTN_DefenceStepUtils::CloseOnParryBit;
+	}
 	// The hurtbox selector against the entity's set: bit 15 says a selector exists, bits 0..14 the hurtboxes it covers; nothing = any hurtbox
 	if (Track->AffectedHurtboxes.IsEmpty() && Track->AffectedTags.IsEmpty())
 	{

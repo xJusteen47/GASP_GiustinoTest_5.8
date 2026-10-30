@@ -68,7 +68,7 @@ struct GSTNDEFENCENP_API FGSTN_DefenceFragment : public FGSTN_SyncFragment
 	int32 MoveParryStartFrame = INDEX_NONE;
 	int32 MoveParryEndFrame = INDEX_NONE;
 
-	/** Index into the rules' ParryProfiles */
+	/** Index into the rules' ParryProfiles (bits 0..6); bit 7 = the track closes the window on a parry (FGSTN_DefenceStepUtils::CloseOnParryBit) */
 	uint8 MoveParryProfile = 0;
 
 	/** Bit i = the window covers hurtbox i of the entity's set (i < 16); 0 = any hurtbox */

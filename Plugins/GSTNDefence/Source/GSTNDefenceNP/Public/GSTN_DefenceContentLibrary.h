@@ -7,6 +7,7 @@
 #include "GSTN_DefenceContentLibrary.generated.h"
 
 class AActor;
+class UGSTN_CombatRules;
 class UGSTN_DefenceRules;
 class UGSTN_PrimaryKitDefinition;
 
@@ -46,6 +47,18 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Debug")
 	static FString GetDefenceStateString(const AActor* Actor);
+
+	/**
+	 * Puts the defence steps into a combat rules pipeline (m6 spec 9 steps 5, 6): Parry then Shield, after HurtboxReaction (else after
+	 * HurtState, else first) and so before HealthWeight, PartResolve and ComputeKnockback. Idempotent; resolves the pipeline again. Returns
+	 * whether the rules now hold both steps. The harness adds them in memory (never saved); content adds them to its rules asset
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static bool AddDefenceStepsToRules(UGSTN_CombatRules* Rules);
+
+	/** Removes the Parry and Shield steps again (the harness reset); true when one was removed */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static bool RemoveDefenceStepsFromRules(UGSTN_CombatRules* Rules);
 
 	/** The mirror attribute of the actor's ability system (ShieldHealth), -1 without the set */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Debug")

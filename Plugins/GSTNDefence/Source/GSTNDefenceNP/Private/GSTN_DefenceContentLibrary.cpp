@@ -1,6 +1,10 @@
 // Defence, Network Prediction half.
 
 #include "GSTN_DefenceContentLibrary.h"
+#include "Hits/GSTN_HitSteps.h"
+#include "Pipeline/GSTN_HitStep_Parry.h"
+#include "Pipeline/GSTN_HitStep_Shield.h"
+#include "Rules/GSTN_CombatRules.h"
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
@@ -90,4 +94,64 @@ float UGSTN_DefenceContentLibrary::GetShieldMirror(const AActor* Actor)
 	const UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor);
 	const UGSTN_DefenceAttributeSet* Set = UGSTN_DefenceLibrary::FindDefenceAttributeSet(ASC);
 	return Set ? Set->GetShieldHealth() : -1.f;
+}
+
+namespace
+{
+	bool IsDefenceStepOf(const TSoftClassPtr<UGSTN_HitResolutionStep>& Step, const UClass* Class)
+	{
+		return Step.ToSoftObjectPath() == FSoftObjectPath(Class);
+	}
+}
+
+bool UGSTN_DefenceContentLibrary::AddDefenceStepsToRules(UGSTN_CombatRules* Rules)
+{
+	if (!Rules)
+	{
+		return false;
+	}
+	TArray<TSoftClassPtr<UGSTN_HitResolutionStep>>& Pipeline = Rules->HitPipeline;
+	const bool bHasParry = Pipeline.ContainsByPredicate([](const TSoftClassPtr<UGSTN_HitResolutionStep>& Step) { return IsDefenceStepOf(Step, UGSTN_HitStep_Parry::StaticClass()); });
+	const bool bHasShield = Pipeline.ContainsByPredicate([](const TSoftClassPtr<UGSTN_HitResolutionStep>& Step) { return IsDefenceStepOf(Step, UGSTN_HitStep_Shield::StaticClass()); });
+	if (bHasParry && bHasShield)
+	{
+		return true;
+	}
+	RemoveDefenceStepsFromRules(Rules);
+	int32 At = 0;
+	for (int32 Index = 0; Index < Pipeline.Num(); ++Index)
+	{
+		if (IsDefenceStepOf(Pipeline[Index], UGSTN_HitStep_HurtboxReaction::StaticClass()))
+		{
+			At = Index + 1;
+			break;
+		}
+		if (IsDefenceStepOf(Pipeline[Index], UGSTN_HitStep_HurtState::StaticClass()))
+		{
+			At = Index + 1;
+		}
+	}
+	Pipeline.Insert(TSoftClassPtr<UGSTN_HitResolutionStep>(UGSTN_HitStep_Shield::StaticClass()), At);
+	Pipeline.Insert(TSoftClassPtr<UGSTN_HitResolutionStep>(UGSTN_HitStep_Parry::StaticClass()), At);
+	Rules->ResolveHitPipeline();
+	Rules->MarkPackageDirty();
+	return true;
+}
+
+bool UGSTN_DefenceContentLibrary::RemoveDefenceStepsFromRules(UGSTN_CombatRules* Rules)
+{
+	if (!Rules)
+	{
+		return false;
+	}
+	const int32 Removed = Rules->HitPipeline.RemoveAll([](const TSoftClassPtr<UGSTN_HitResolutionStep>& Step)
+	{
+		return IsDefenceStepOf(Step, UGSTN_HitStep_Parry::StaticClass()) || IsDefenceStepOf(Step, UGSTN_HitStep_Shield::StaticClass());
+	});
+	if (Removed > 0)
+	{
+		Rules->ResolveHitPipeline();
+		Rules->MarkPackageDirty();
+	}
+	return Removed > 0;
 }

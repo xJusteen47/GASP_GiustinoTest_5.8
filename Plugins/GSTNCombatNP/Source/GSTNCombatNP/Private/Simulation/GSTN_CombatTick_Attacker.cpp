@@ -376,9 +376,12 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 
 		if (!Hit.bRicochet)
 		{
-			// The consequences the attacker predicts: the hit is confirmed (the gate of OnHit cancels) and its own hitstop opens. OnBlock stays
-			// false until shields exist (M6)
-			Core.Hit.HitConfirmFlags |= GetConfirmBit(Group);
+			// The consequences the attacker predicts: the hit is confirmed (the gate of OnHit cancels) and its own hitstop opens. A parried hit
+			// confirms nothing (M6 F7: the punish follows; OnBlock stays false, a blocked hit confirms like a hit)
+			if (!Context.Outcome.bParried)
+			{
+				Core.Hit.HitConfirmFlags |= GetConfirmBit(Group);
+			}
 			if (Context.Outcome.bHasKnockback)
 			{
 				Hit.AttackerHitstopFrames = FMath::Max(Context.Outcome.Knockback.AttackerHitstopFrames, 0);
