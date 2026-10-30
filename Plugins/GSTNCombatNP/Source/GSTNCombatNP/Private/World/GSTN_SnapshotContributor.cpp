@@ -21,7 +21,7 @@ bool FGSTN_SnapshotContributorRegistry::Register(IGSTN_SnapshotContributor* Cont
 			return false;
 		}
 	}
-	// One extension pointer in the victim view: a second contributor would be silently invisible to the steps, so refuse it loudly
+	// The entry and the victim view hold MaxContributors blobs: one more would be silently invisible to the steps, so refuse it loudly
 	if (!ensureMsgf(Contributors.Num() < MaxContributors, TEXT("Only %d snapshot extension type(s) are supported at once"), MaxContributors))
 	{
 		return false;
@@ -86,5 +86,13 @@ void FGSTN_SnapshotContributorRegistry::Rebuild(const FGSTN_SnapshotContributorC
 		FGSTN_SnapshotExtensionBlob Blob;
 		Contributor->Contribute(Own, Blob);
 		Set.Assign(TypeId, Blob);
+	}
+}
+
+void FGSTN_SnapshotContributorRegistry::Finalize(int32 Frame, TArrayView<FGSTN_SnapshotEntry> Entries) const
+{
+	for (const IGSTN_SnapshotContributor* Contributor : Contributors)
+	{
+		Contributor->FinalizeSnapshot(Frame, Entries);
 	}
 }

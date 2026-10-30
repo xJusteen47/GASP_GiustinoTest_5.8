@@ -884,6 +884,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		FillHookContext(HookContext, FrameCmd, Up);
 	}
 	HookContext.Timeline = &TimelineOutput;
+	HookContext.Snapshot = StepSnapshot;
 	// What an extension may ask the model to do in this tick (StartForcedTimeline): this frame's state, tables and hook environment
 	ServiceSync = &OutSync;
 	ServiceFrame = Frame;
@@ -901,6 +902,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	if (!bHitstopFrame && !bFrameGateClosed)
 	{
 		RunAttackerStep(TimeStep, OutSync.Core, StepSnapshot, HookContext.HitGroupMask);
+		// The hits of this frame, for the extensions' AfterExecute point (the scratch array lives on the component until the next attacker step)
+		HookContext.AttackerHits = AttackerHits;
 	}
 
 	// Step 5a, the jump bookkeeping: before the input tick, because the gate asks whether a jump or an air jump is available this frame
@@ -1024,6 +1027,7 @@ void UGSTN_CombatSimComponent::FillHookContext(FGSTN_CombatTickContext& Context,
 {
 	Context.Owner = GetOwner();
 	Context.AbilitySystem = AbilitySystem;
+	Context.EntityId = RegisteredEntityId;
 	Context.Outbox = &EventOutbox;
 	Context.Up = Up;
 	Context.Stick = FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));

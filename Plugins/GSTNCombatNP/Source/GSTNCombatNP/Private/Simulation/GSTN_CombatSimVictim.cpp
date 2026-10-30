@@ -92,6 +92,7 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 	In.bGrounded = bGrounded;
 	In.bOnWall = bOnWall;
 	In.Fragments = &Sync.Fragments;
+	In.Snapshot = Snapshot;
 	FGSTN_CombatVictim::Resolve(In, Core, VictimResult);
 	// The reverse deliveries of the hits that stood. A target that does not tick on this machine (an interpolated proxy of the attacker) refuses
 	// the entry, so on a client they only reach an attacker it predicts, as the hits themselves do

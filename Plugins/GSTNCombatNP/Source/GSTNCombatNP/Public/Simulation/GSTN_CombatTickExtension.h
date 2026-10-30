@@ -11,7 +11,9 @@
 
 class AActor;
 class UAbilitySystemComponent;
+struct FGSTN_AttackerHit;
 struct FGSTN_ButtonMap;
+struct FGSTN_StepSnapshot;
 struct FGSTN_SimEventOutbox;
 struct FGSTN_TumbleContactSyncState;
 
@@ -88,6 +90,8 @@ struct FGSTN_CombatTickContext
 	 */
 	AActor* Owner = nullptr;
 	UAbilitySystemComponent* AbilitySystem = nullptr;
+	/** The entity's combat id (its snapshot entry, the sender id of what it posts; M6 F10). INDEX_NONE before registration and in a test that sets none */
+	int32 EntityId = INDEX_NONE;
 
 	/**
 	 * The outbox of the frame, for an event the extension makes without a hit (a restored part). The component publishes it on the authority only,
@@ -111,6 +115,16 @@ struct FGSTN_CombatTickContext
 
 	/** The model's services (StartForcedTimeline). Null in a test and in the victim step's hooks, which run before the frame's tables are chosen */
 	IGSTN_CombatTickServices* Services = nullptr;
+	/**
+	 * The step snapshot of the frame (every entity at the end of the previous frame), for an extension that reads other entities the way the
+	 * steps do (M6 F10: the grab candidates of the interact probe). Null in a test that has none and in the victim step's hooks
+	 */
+	const FGSTN_StepSnapshot* Snapshot = nullptr;
+	/**
+	 * The hits the entity's own attacker step made this frame (M6 F10: a grab marks its predicted link), set from the AfterExecute point on;
+	 * empty before it, on a frame the attacker step did not run (hitstop, closed gate) and in a test
+	 */
+	TConstArrayView<FGSTN_AttackerHit> AttackerHits;
 
 	FGSTN_CombatTickContext(int32 InFrame, const FGSTN_CombatSyncState& InState, FGSTN_CombatSyncState& OutState)
 		: Frame(InFrame), In(InState), Out(OutState)

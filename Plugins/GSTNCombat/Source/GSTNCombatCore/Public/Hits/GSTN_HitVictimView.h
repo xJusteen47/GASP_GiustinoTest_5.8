@@ -128,10 +128,10 @@ struct GSTNCOMBATCORE_API FGSTN_HitVictimView
 		uint8 TypeId = 0;
 		const void* Data = nullptr;
 	};
-	static constexpr int32 MaxSnapshotExtensions = 2;
+	static constexpr int32 MaxSnapshotExtensions = 3;
 	FSnapshotExtensionRef SnapshotExtensions[MaxSnapshotExtensions];
 
-	/** The POD of a plugin by its feature id, or null (M6 F7: two plugins may contribute to one entity) */
+	/** The POD of a plugin by its feature id, or null (M6 F7: several plugins may contribute to one entity; three since M6 F10) */
 	const void* FindSnapshotExtension(uint8 TypeId) const
 	{
 		for (const FSnapshotExtensionRef& Ref : SnapshotExtensions)

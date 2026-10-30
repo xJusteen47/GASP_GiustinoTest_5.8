@@ -33,7 +33,7 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotExtension
  * The per-entity data of ONE optional plugin in the snapshot (combat-m4-hits 3b item 7, spec seam D9): a fixed, trivially copyable
  * buffer with the feature's type id (GSTNFeatureIds). No heap, no tag and no container, so the lag compensation history copies it with
  * the record and a rewind hands the step the extension of the rewound frame. An entry holds one blob per registered contributor
- * (FGSTN_SnapshotExtensionSet, two at most since M6 F7); the victim view exposes each by type id.
+ * (FGSTN_SnapshotExtensionSet, three at most since M6 F10); the victim view exposes each by type id.
  *
  * MaxBytes is the smallest size that holds the parts extension (type word, mask, 16 damage bytes, serial, set pointer): 32 B, 40 B
  * with the header. A pointer in it is allowed only for content that outlives every entity (a data asset kept alive by its owner).
@@ -76,25 +76,36 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotExtensionBlob
 
 /**
  * The blobs of every registered contributor for one entity, in ascending type id order (M6 F7: the parts and the defence plugin both
- * contribute). A fixed array of MaxBlobs, trivially copyable like the blob, so the history record and the victim drain copy it as they
- * copied the single blob. Set and Get take the type id, so a contributor never sees another's bytes; GetData keeps the single-pointer
- * reading of the victim view (the lowest id) for a step that validates the type word itself.
+ * contribute; M6 F10: the link plugin is the third). A fixed array of MaxBlobs, trivially copyable like the blob, so the history record and
+ * the victim drain copy it as they copied the single blob. The set blobs are packed at the front in ascending type id, the same slots on
+ * every machine whatever the registration order. Set and Get take the type id, so a contributor never sees another's bytes; GetData keeps
+ * the single-pointer reading of the victim view (the lowest id) for a step that validates the type word itself.
  */
 struct GSTNCOMBATNP_API FGSTN_SnapshotExtensionSet
 {
-	static constexpr int32 MaxBlobs = 2;
+	static constexpr int32 MaxBlobs = 3;
 
 	FGSTN_SnapshotExtensionBlob Blobs[MaxBlobs];
 
-	/** Any blob set */
-	bool IsSet() const { return Blobs[0].IsSet() || Blobs[1].IsSet(); }
+	/** Any blob set (the set ones are packed at the front) */
+	bool IsSet() const { return Blobs[0].IsSet(); }
 
-	int32 Num() const { return (Blobs[0].IsSet() ? 1 : 0) + (Blobs[1].IsSet() ? 1 : 0); }
+	int32 Num() const
+	{
+		int32 Count = 0;
+		while (Count < MaxBlobs && Blobs[Count].IsSet())
+		{
+			++Count;
+		}
+		return Count;
+	}
 
 	void Reset()
 	{
-		Blobs[0].Reset();
-		Blobs[1].Reset();
+		for (FGSTN_SnapshotExtensionBlob& Blob : Blobs)
+		{
+			Blob.Reset();
+		}
 	}
 
 	/** The blob of a type id, or null */
@@ -111,31 +122,35 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotExtensionSet
 	}
 
 	/**
-	 * The slot a type id is written into: its own when it has one, else a free slot kept so that the ids stay ascending (the same slot
-	 * on every machine, whatever the registration order). With both slots taken by other ids the last one is reused: the registry
-	 * refuses a third contributor, so that never happens with registered ids
+	 * The slot a type id is written into: its own when it has one, else a slot opened at its place in ascending id order (the later ones
+	 * move up by one). With every slot taken by other ids the last one is reused: the registry refuses a contributor past MaxBlobs, so that
+	 * never happens with registered ids
 	 */
 	FGSTN_SnapshotExtensionBlob& SlotFor(uint8 InTypeId)
 	{
-		if (Blobs[0].IsSet() && Blobs[0].TypeId == InTypeId)
+		int32 Count = 0;
+		for (; Count < MaxBlobs && Blobs[Count].IsSet(); ++Count)
 		{
-			return Blobs[0];
+			if (Blobs[Count].TypeId == InTypeId)
+			{
+				return Blobs[Count];
+			}
 		}
-		if (Blobs[1].IsSet() && Blobs[1].TypeId == InTypeId)
+		if (Count == MaxBlobs)
 		{
-			return Blobs[1];
+			return Blobs[MaxBlobs - 1];
 		}
-		if (!Blobs[0].IsSet())
+		int32 At = 0;
+		while (At < Count && Blobs[At].TypeId < InTypeId)
 		{
-			return Blobs[0];
+			++At;
 		}
-		if (InTypeId < Blobs[0].TypeId)
+		for (int32 Index = Count; Index > At; --Index)
 		{
-			Blobs[1] = Blobs[0];
-			Blobs[0].Reset();
-			return Blobs[0];
+			Blobs[Index] = Blobs[Index - 1];
 		}
-		return Blobs[1];
+		Blobs[At].Reset();
+		return Blobs[At];
 	}
 
 	/** Writes the blob of InTypeId from Value; what the slot held of another id is replaced */
@@ -145,19 +160,22 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotExtensionSet
 		SlotFor(InTypeId).Set(InTypeId, Value);
 	}
 
-	/** Copies a whole blob into the slot of its type id; an empty blob removes the id's slot and packs the other down */
+	/** Copies a whole blob into the slot of its type id; an empty blob removes the id's slot and packs the later ones down */
 	void Assign(uint8 InTypeId, const FGSTN_SnapshotExtensionBlob& Blob)
 	{
 		if (!Blob.IsSet())
 		{
-			if (Blobs[0].IsSet() && Blobs[0].TypeId == InTypeId)
+			for (int32 Index = 0; Index < MaxBlobs; ++Index)
 			{
-				Blobs[0] = Blobs[1];
-				Blobs[1].Reset();
-			}
-			else if (Blobs[1].IsSet() && Blobs[1].TypeId == InTypeId)
-			{
-				Blobs[1].Reset();
+				if (Blobs[Index].IsSet() && Blobs[Index].TypeId == InTypeId)
+				{
+					for (int32 Move = Index; Move + 1 < MaxBlobs; ++Move)
+					{
+						Blobs[Move] = Blobs[Move + 1];
+					}
+					Blobs[MaxBlobs - 1].Reset();
+					return;
+				}
 			}
 			return;
 		}
@@ -368,6 +386,14 @@ public:
 	 * snapshot build after Contribute, whether or not the blob is set; what it appends beyond GSTNHurtboxIndex::MaxExtraHurtboxes is dropped. Not called at a rebuild
 	 */
 	virtual void AppendExtraHurtboxes(const FGSTN_SnapshotContributorContext& Context, FGSTN_ExtraHurtboxList& Out) const {}
+
+	/**
+	 * Lets the contributor change entries from OTHER entries of the same snapshot (M6 F10: a parked entity's transform is derived from its
+	 * partner's, so the hurtboxes of a grabbed fighter sit on the grabber's socket). Called by the snapshot build once per build, after every
+	 * entry is filled and sorted by entity id and before the broadphase grid and the history record; never at a rebuild in the victim drain.
+	 * Deterministic: it reads the entries (their blobs and transforms) only, so every machine and a lag compensation rewind see the same result
+	 */
+	virtual void FinalizeSnapshot(int32 Frame, TArrayView<FGSTN_SnapshotEntry> Entries) const {}
 };
 
 /**
@@ -396,6 +422,9 @@ public:
 	 * as Context.Previous (the caller's Previous is ignored). Neutral with nothing registered
 	 */
 	void Rebuild(const FGSTN_SnapshotContributorContext& Context, FGSTN_SnapshotExtensionSet& Set) const;
+
+	/** The snapshot build's last pass: every contributor's FinalizeSnapshot, in type id order. Neutral with nothing registered */
+	void Finalize(int32 Frame, TArrayView<FGSTN_SnapshotEntry> Entries) const;
 
 private:
 	TArray<IGSTN_SnapshotContributor*> Contributors;

@@ -329,6 +329,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		Incoming.Hit = Candidate.Hit;
 		Incoming.AttackerEntityId = In.AttackerId;
 		Incoming.AttackerTeamId = In.AttackerTeam.GetId();
+		FGSTN_CombatVictim::SetAttackerExtensions(Incoming, Snapshot.Find(In.AttackerId));
 		// The TeamFilter step refuses Self, and the hitbox's Self variant already decided this hit may happen: the prediction runs it as an
 		// ordinary enemy hit. The inbox entry keeps the real relationship
 		Incoming.Relationship = Candidate.Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Candidate.Relationship;

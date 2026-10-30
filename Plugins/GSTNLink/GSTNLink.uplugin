@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Link",
-	"Description": "Links between two combat entities for the GSTN combat: grabs, pummels and throws, and latches onto large enemies, as data-driven link types with roles, request rules, break rules, exit placers and mash, all pure and integer-safe (GSTNLinkCore, no fork), with the link type registry, request checks, the grab candidate provider of the interact probe and the anim layers by role (GSTNLinkGAS). Enabling it changes nothing until a hit or a kit carries a link type.",
+	"Description": "Links between two combat entities for the GSTN combat: grabs, pummels and throws, and latches onto large enemies, as data-driven link types with roles, request rules, break rules, exit placers and mash, all pure and integer-safe (GSTNLinkCore, no fork), with the link type registry, request checks, the grab candidate provider of the interact probe and the anim layers by role (GSTNLinkGAS), and the link fragment, the parked movement mode, formation through the combat inbox and the link presentation (GSTNLinkNP, over the GAS-NPP fork). Enabling it changes nothing until a hit or a kit carries a link type.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -25,6 +25,11 @@
 			"Name": "GSTNLinkGAS",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNLinkNP",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [
@@ -34,6 +39,22 @@
 		},
 		{
 			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "NetworkPrediction",
+			"Enabled": true
+		},
+		{
+			"Name": "Mover",
 			"Enabled": true
 		},
 		{

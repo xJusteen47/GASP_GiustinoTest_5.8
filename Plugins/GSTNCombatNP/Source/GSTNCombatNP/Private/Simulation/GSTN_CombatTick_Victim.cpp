@@ -59,6 +59,27 @@ void FGSTN_CombatVictim::SetViewExtensions(FGSTN_HitVictimView& View, const FGST
 	View.SetSnapshotExtensions(Refs, Num);
 }
 
+void FGSTN_CombatVictim::SetAttackerExtensions(FGSTN_ResolvedHit& Incoming, const FGSTN_SnapshotEntry* Attacker)
+{
+	int32 Num = 0;
+	if (Attacker)
+	{
+		for (const FGSTN_SnapshotExtensionBlob& Blob : Attacker->Extension.Blobs)
+		{
+			if (Blob.IsSet() && Num < FGSTN_HitVictimView::MaxSnapshotExtensions)
+			{
+				Incoming.AttackerExtensions[Num].TypeId = Blob.TypeId;
+				Incoming.AttackerExtensions[Num].Data = Blob.GetData();
+				++Num;
+			}
+		}
+	}
+	for (; Num < FGSTN_HitVictimView::MaxSnapshotExtensions; ++Num)
+	{
+		Incoming.AttackerExtensions[Num] = FGSTN_HitVictimView::FSnapshotExtensionRef();
+	}
+}
+
 float FGSTN_CombatVictim::ComputeWeightScale(const UGSTN_CombatRules* Rules, const UGSTN_HurtboxSetDefinition* Hurtboxes, double DamagePercent, float HealthFraction)
 {
 	if (!Rules)
@@ -146,6 +167,8 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		Incoming.Frame = Entry.Frame;
 		Incoming.AttackerEntityId = Entry.AttackerId;
 		Incoming.AttackerTeamId = Entry.AttackerTeam;
+		// The attacker's plugin data of the same snapshot (the link request reads the initiator's link state from it)
+		SetAttackerExtensions(Incoming, In.Snapshot ? In.Snapshot->Find(Entry.AttackerId) : nullptr);
 		// The attacker predicted a Self hit as an ordinary enemy hit (TeamFilter refuses Self): the victim runs the same pipeline on the same input
 		const FGameplayTag Relationship = GSTNHitRelationship::FromIndex(Entry.Relationship);
 		Incoming.Relationship = Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Relationship;

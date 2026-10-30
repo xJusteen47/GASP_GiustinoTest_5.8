@@ -122,6 +122,27 @@ struct GSTNCOMBATCORE_API FGSTN_ResolvedHit
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
 	bool bVictimGrounded = false;
+
+	/**
+	 * The ATTACKER's snapshot extension PODs (M6 F10: the link request reads the initiator's link state and kit through them), from the same
+	 * snapshot of the end of the previous frame as the victim's: the victim step finds the attacker's entry by AttackerEntityId, the attacker's
+	 * prediction reads its own. Empty when the attacker has no entry on this machine (then a step that needs them decides without). Not
+	 * reflected, not owned: valid for the run only, like FGSTN_HitVictimView::SnapshotExtensions
+	 */
+	FGSTN_HitVictimView::FSnapshotExtensionRef AttackerExtensions[FGSTN_HitVictimView::MaxSnapshotExtensions];
+
+	/** The attacker's POD of a plugin by its feature id, or null */
+	const void* FindAttackerExtension(uint8 TypeId) const
+	{
+		for (const FGSTN_HitVictimView::FSnapshotExtensionRef& Ref : AttackerExtensions)
+		{
+			if (Ref.TypeId == TypeId && Ref.Data)
+			{
+				return Ref.Data;
+			}
+		}
+		return nullptr;
+	}
 };
 
 /**
