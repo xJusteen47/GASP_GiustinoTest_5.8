@@ -159,17 +159,14 @@ FGSTN_BindingInput UGSTN_DefenceLibrary::MakeShieldBindingInput(const FSoftObjec
 	Binding.Requirements.RequireTags.AddTag(GSTNInputTags::Context_Grounded.GetTag());
 	Binding.Ability = ShieldAbility;
 
-	// Hold(Shield, 0) anchored by the press: the press is the anchor the matcher looks for, the hold with no minimum says the
-	// button is still down at that frame, which is what a raise means (a tap still raises; the hold window then ends it)
+	// Press(Shield): the press is the anchor and the button is down on that frame, which is what a raise means (a tap still raises; the
+	// hold window then ends it). A Hold condition in the same step would make the loadout validator's canonical input press a button it
+	// already holds, so the binding would be refused (found by the M6 F7 harness)
 	FGSTN_InputCondition_Press Press;
 	Press.Buttons.AddTag(GSTNCombatButtonTags::Button_Shield.GetTag());
-	FGSTN_InputCondition_Hold Hold;
-	Hold.Button = GSTNCombatButtonTags::Button_Shield.GetTag();
-	Hold.MinFrames = 0;
 
 	FGSTN_InputStep Step;
 	Step.AllOf.Add(FCondition::Make<FGSTN_InputCondition_Press>(Press));
-	Step.AllOf.Add(FCondition::Make<FGSTN_InputCondition_Hold>(Hold));
 
 	Binding.bHasSlotOverride = true;
 	Binding.SlotOverride.Command = Binding.Command;

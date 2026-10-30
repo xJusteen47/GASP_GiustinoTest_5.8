@@ -103,8 +103,8 @@ public:
 	// ---- Loadout contribution (the registered loadout extension; FGSTN_LoadoutExtensionRegistry) ----
 
 	/**
-	 * The shield binding: Command.Defence.Shield, requiring Input.Context.Grounded, anchored on the press of Input.Button.Shield with
-	 * the button held (Hold(Shield, 0), spec 5.3) as a slot override, so the kit's command set needs no shield slot of its own
+	 * The shield binding: Command.Defence.Shield, requiring Input.Context.Grounded, anchored on the press of Input.Button.Shield
+	 * (Press(Shield), spec 5.3; the hold is the timeline's hold window) as a slot override, so the kit's command set needs no shield slot of its own
 	 */
 	static FGSTN_BindingInput MakeShieldBindingInput(const FSoftObjectPath& ShieldAbility);
 

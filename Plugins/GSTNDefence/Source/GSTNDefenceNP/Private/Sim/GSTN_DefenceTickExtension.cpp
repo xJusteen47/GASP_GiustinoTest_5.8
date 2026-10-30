@@ -96,11 +96,12 @@ uint32 FGSTN_DefenceTickExtension::HeldCancelConditions(const FGSTN_CombatTickCo
 
 void FGSTN_DefenceTickExtension::WriteMirror(UAbilitySystemComponent* AbilitySystem, FGSTN_DefenceFragment& Fragment, double Value, int32 Frame)
 {
+	// The mirror gets the quantised value, exactly what the fragment remembers, so the restore check reads no difference of its own
+	Fragment.MirrorValueQ = FGSTN_DefenceFragment::QuantizeValue(Value);
 	if (AbilitySystem && UGSTN_DefenceLibrary::FindDefenceAttributeSet(AbilitySystem))
 	{
-		UGSTN_GE_ShieldDamage::ApplyMirror(*AbilitySystem, nullptr, static_cast<float>(Value));
+		UGSTN_GE_ShieldDamage::ApplyMirror(*AbilitySystem, nullptr, static_cast<float>(FGSTN_DefenceFragment::DequantizeValue(Fragment.MirrorValueQ)));
 	}
-	Fragment.MirrorValueQ = FGSTN_DefenceFragment::QuantizeValue(Value);
 	Fragment.MirrorFrame = Frame;
 }
 
@@ -155,7 +156,8 @@ void FGSTN_DefenceTickExtension::StepClocks(FGSTN_CombatTickContext& Context, co
 	if (AbilitySystem && Fragment->MirrorFrame != INDEX_NONE)
 	{
 		const double Delta = UGSTN_GE_ShieldRestore::RequestedDelta(*AbilitySystem, static_cast<float>(FGSTN_DefenceFragment::DequantizeValue(Fragment->MirrorValueQ)));
-		if (FMath::Abs(Delta) >= 0.01)
+		// A request is at least one quantum of the fragment's value: anything smaller is float noise of the mirror, never a pickup
+		if (FMath::Abs(Delta) >= 1.0 / FGSTN_DefenceFragment::ValueUnitsPerPoint)
 		{
 			FGSTN_ShieldView View = Fragment->MakeShieldView(Rates);
 			View.Value = FMath::Clamp(UGSTN_DefenceMath::ShieldValueAt(View, Frame, Rates) + Delta, 0.0, Rates.Max);

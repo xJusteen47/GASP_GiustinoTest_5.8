@@ -2,6 +2,8 @@
 
 #include "Abilities/GSTN_DefenceAbilities.h"
 #include "Abilities/GSTN_GA_Shield.h"
+#include "Data/GSTN_DefenceTracks.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 
 #include "AbilitySystemComponent.h"
 #include "Data/GSTN_DefenceRules.h"
@@ -69,7 +71,9 @@ bool UGSTN_GA_Shield::CanActivateAbility(const FGameplayAbilitySpecHandle Handle
 	const FGSTN_ShieldRates Rates = FGSTN_DefenceTickExtension::ReadRates(AbilitySystem, *Data->Rules);
 	const int32 Frame = Sync ? Sync->Core.Input.History.GetLatestFrame() : 0;
 	const double Value = UGSTN_DefenceMath::ShieldValueAt(Frag.MakeShieldView(Rates), FMath::Max(Frame, 0), Rates);
-	const bool bGrounded = AbilitySystem->HasMatchingGameplayTag(GSTNInputTags::Context_Grounded);
+	// Grounded is the binding's requirement (Input.Context.Grounded of the input context provider, not an ability system tag): a command that
+	// reached the ability met it on this frame
+	const bool bGrounded = true;
 	EGSTN_ShieldRefusal Reason = EGSTN_ShieldRefusal::None;
 	return UGSTN_DefenceLibrary::CanExecuteShield(Data->Rules, Data->bKitHasShield, Value, Frag.IsBreaking(), bGrounded, Reason);
 }
@@ -93,3 +97,47 @@ UGSTN_GA_GetupNeutral::UGSTN_GA_GetupNeutral(const FObjectInitializer& ObjectIni
 	: Super(ObjectInitializer)
 {
 }
+
+UGSTN_GA_CounterSample::UGSTN_GA_CounterSample(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	AttackCommands.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Command.Attack"), false));
+}
+
+void UGSTN_GA_CounterSample::RebuildTimeline()
+{
+	const int32 Total = FMath::Max(TotalFrames, 1);
+	const int32 Start = FMath::Clamp(ParryStartFrame, 0, Total - 1);
+	const int32 End = FMath::Clamp(ParryEndFrame, Start + 1, Total);
+	Timeline = FGSTN_CombatTimelineData();
+	Timeline.TotalFrames = Total;
+	Timeline.FirstActionableFrame = Total;
+
+	FGSTN_ParryWindowTrack Parry;
+	Parry.StartFrame = Start;
+	Parry.EndFrame = End;
+	Parry.ProfileName = ProfileName;
+	Parry.bCloseOnParry = true;
+	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_ParryWindowTrack>(Parry));
+
+	FGSTN_TimelineTrack_CancelWindow Counter;
+	Counter.StartFrame = Start;
+	Counter.EndFrame = Total;
+	Counter.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(AttackCommands);
+	Counter.Condition = EGSTN_CancelCondition::OnParry;
+	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Counter));
+}
+
+void UGSTN_GA_CounterSample::PostInitProperties()
+{
+	Super::PostInitProperties();
+	RebuildTimeline();
+}
+
+#if WITH_EDITOR
+void UGSTN_GA_CounterSample::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	RebuildTimeline();
+}
+#endif

@@ -40,6 +40,9 @@ otherwise be missing.
 - `GSTNDefenceGAS` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, GSTNInputCore, GSTNCombatCore,
   GSTNCombatGAS, GSTNDefenceCore. No NetworkPrediction, AbilitySystemSimulation, Mover, GSTNCombatNP, GSTNLink, Editor or project
   module. The ability classes therefore live in the NP module: `UGSTN_GA_BaseCombat` is a `GSTNCombatNP` class.
+- `GSTNDefenceNP` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, NetworkPrediction,
+  AbilitySystemSimulation, Mover, GSTNInputCore, GSTNInputNP, GSTNCombatCore, GSTNCombatGAS, GSTNCombatNP, GSTNDefenceCore, GSTNDefenceGAS.
+  Needs the GAS-NPP fork. No GSTNLink, Editor or project module.
 - `GSTNCombat` builds and passes its tests with this plugin absent: the plugin adds behaviour by registering into the combat
   extension surface (modularity-and-tags.md 5b), never by editing the combat core.
 
@@ -68,7 +71,7 @@ otherwise be missing.
 | `UGSTN_GE_ShieldRestore` | Instant, additive on `ShieldHealth` by the set-by-caller NAME key `GetAmountKey()` (no new tag). A pickup applies it; the model reads `RequestedDelta(ASC, LastMirrored)` at its next tick (the mirror's base value minus the last value it mirrored) and applies that as a request, then mirrors the result. |
 | `UGSTN_GE_ShieldBreak` | Instant, empty: a Blueprint child adds the break cue and presentation tags. The break state itself is sync state (`Combat.State.ShieldBroken` is projected). |
 | `FGSTN_ShieldAbilitySpec`, `FGSTN_OutOfShieldOption`, `EGSTN_ShieldRefusal` | The shield ability's timeline as data: `BuildTimeline(ShieldRules)` gives startup frames, ONE `FGSTN_HoldWindowTrack` on `Input.Button.Shield` with `bEndOnZeroShield`, release frames, and one M3 cancel window per out-of-shield option over the hold window. The refusal reasons of `CanExecuteShield`. |
-| `UGSTN_DefenceLibrary` | `ResolveRules` (kit extension, else the match's combat rules extension, else the settings' default), `IsShieldAvailableForKit`, `CanExecuteShield` (available, value > 0, not breaking, grounded), `GetupNeutralRequirements` (`Combat.State.Knockdown`), `ResolveAbilityClass` / `ResolveTechSet` / `ResolveGetupSet` (class-checked, a non-ability is dropped with a warning), `MakeShieldBindingInput` (`Command.Defence.Shield`, grounded, slot override `Press(Shield)` + `Hold(Shield, 0)`), `MakeGetupNeutralBindingInput`, and the loadout extension: `ContributeToLoadout`, `GrantDefence`, `RevokeDefence`. |
+| `UGSTN_DefenceLibrary` | `ResolveRules` (kit extension, else the match's combat rules extension, else the settings' default), `IsShieldAvailableForKit`, `CanExecuteShield` (available, value > 0, not breaking, grounded), `GetupNeutralRequirements` (`Combat.State.Knockdown`), `ResolveAbilityClass` / `ResolveTechSet` / `ResolveGetupSet` (class-checked, a non-ability is dropped with a warning), `MakeShieldBindingInput` (`Command.Defence.Shield`, grounded, slot override `Press(Shield)`; F7 dropped the `Hold(Shield, 0)` of F6, which the loadout validator refused), `MakeGetupNeutralBindingInput`, and the loadout extension: `ContributeToLoadout`, `GrantDefence`, `RevokeDefence`. |
 
 ### Network Prediction half (`GSTNDefenceNP`)
 
@@ -147,10 +150,30 @@ Every contribution depends only on the resolved assets, so every machine compile
 |---|---|
 | `DefaultRules` | Rules asset for a mode whose combat rules carry no defence extension. Empty = no defence rules. |
 
+## Pipeline steps (`GSTNDefenceNP`, spec 9 steps 5 and 6)
+
+| Step | What it does |
+|---|---|
+| `UGSTN_HitStep_Parry` | One `ResolveParry` for both sources (perfect shield on the bubble, a move's `ParryWindow` track) at the hit's stamped frame: nullify, the profile's hitstop on both sides, a `Punish` inbox entry back to the attacker (none when the profile has no attacker stun), `Combat.Event.Parried` (magnitude = source). Runs in every mode. |
+| `UGSTN_HitStep_Shield` | Only where the shield is available and blocks at the hit frame: a hit on the bubble is blocked (shield damage, stun, push back, hitstop x `ShieldHitstopMultiplier`, `Combat.Event.Blocked`) or breaks it (`Combat.Event.ShieldBroken`, an upward launch that never tumbles); a body hit while raised continues as an ordinary hit. |
+
+`UGSTN_DefenceContentLibrary::AddDefenceStepsToRules` puts both after `HurtboxReaction` (Parry first). `FGSTN_DefenceOutcomeApplier` writes the
+fragment at the hit frame plus one; the `Punish` kind (`GSTNDefenceInboxKinds::Punish` = 16) punishes the attacker and cancels its move.
+
+## Harness
+
+`Tools/GASNPPTest/defence_scenarios.py` (`SUITE_DEFENCE`): `shield_block`, `shield_bubble`, `shield_oos`, `shield_break`, `shield_mode_off`,
+`grab_shield` (a stub until F12), `parry`, `parry_move`, each in a fresh PIE through `defence_batch()`. Content: `Tools/GAS/setup_defence_link_content.py`
+writes `/GSTNDefence/Test/DA_DefenceRules_Test` (PvP) and `DA_DefenceRules_TestPvE`; the kit, input config and combat rules are adjusted in memory
+(never saved); the abilities are `UGSTN_GA_Shield` and `UGSTN_GA_CounterSample` (a counter stance sample with a parry window and an `OnParry`
+cancel).
+
 ## Tests
 
+`GSTNDefence.NP.*` (F7): `Fragment.*`, `Snapshot.*`, `Tick.*`, `Steps.*` (17 tests, list in docs/notes/m6-doc-deltas.md F7).
+
 `GSTNDefence.GAS.*` (F6): `AttributeClamp`, `ShieldBindingOmittedWhenUnavailable`, `ShieldAbilityRefusesWhenUnavailable`, `TechSetPerKit`,
-`GetupNeutralRequiresKnockdown`, `ShieldRestoreSeenAsRequest`: on a stock ability system in a transient world, no NP, no asset from disk.
+`GetupNeutralRequiresKnockdown`, `ShieldRestoreSeenAsRequest`, and (F7) `ShieldBindingMatchesPress`: on a stock ability system in a transient world, no NP, no asset from disk.
 
 `GSTNDefence.Core.*`: `Tags.*`, `Data.*` (F3); F4 adds `Shield.*`, `Parry.*`, `Tech.*`, `DI.*`, `SDI.*`, `Bounce.*`. They run with only
 this plugin and `GSTNCombatCore` loaded: no GAS, no NP, no world.

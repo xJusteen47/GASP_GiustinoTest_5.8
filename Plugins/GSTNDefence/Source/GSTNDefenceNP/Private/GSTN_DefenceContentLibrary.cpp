@@ -5,6 +5,9 @@
 #include "Pipeline/GSTN_HitStep_Parry.h"
 #include "Pipeline/GSTN_HitStep_Shield.h"
 #include "Rules/GSTN_CombatRules.h"
+#include "Events/GSTN_SimEventSubsystem.h"
+#include "GSTN_DefenceTags.h"
+#include "Engine/World.h"
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
@@ -154,4 +157,64 @@ bool UGSTN_DefenceContentLibrary::RemoveDefenceStepsFromRules(UGSTN_CombatRules*
 		Rules->MarkPackageDirty();
 	}
 	return Removed > 0;
+}
+
+namespace
+{
+	/** The defence event rows of the worlds that asked for a log: debug only, outside the simulation */
+	struct FDefenceEventLog
+	{
+		TArray<FString> Rows;
+		FGSTN_SimEventListenerHandle Handle;
+	};
+
+	TMap<TWeakObjectPtr<UWorld>, FDefenceEventLog>& GetDefenceLogs()
+	{
+		static TMap<TWeakObjectPtr<UWorld>, FDefenceEventLog> Logs;
+		return Logs;
+	}
+}
+
+void UGSTN_DefenceContentLibrary::StartDefenceEventLog(AActor* WorldContext)
+{
+	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(WorldContext);
+	if (!World || !Events)
+	{
+		return;
+	}
+	StopDefenceEventLog(WorldContext);
+	const TWeakObjectPtr<UWorld> Key(World);
+	FDefenceEventLog& Log = GetDefenceLogs().Add(Key);
+	FGameplayTagContainer Types;
+	Types.AddTag(GSTNDefenceTags::Event_Parried);
+	Types.AddTag(GSTNDefenceTags::Event_Blocked);
+	Types.AddTag(GSTNDefenceTags::Event_ShieldBroken);
+	Log.Handle = Events->ListenNative(FGameplayTagQuery::MakeQuery_MatchAnyTags(Types), [Key](const FGSTN_SimEvent& Event)
+	{
+		if (FDefenceEventLog* Found = GetDefenceLogs().Find(Key))
+		{
+			Found->Rows.Add(FString::Printf(TEXT("%s:%d:%d:%s"), *Event.EventType.GetTagLeafName().ToString(), Event.Frame, FMath::RoundToInt(Event.Magnitude),
+				Event.Target.IsValid() ? *Event.Target->GetName() : TEXT("none")));
+		}
+	});
+}
+
+FString UGSTN_DefenceContentLibrary::GetDefenceEventLog(AActor* WorldContext)
+{
+	const FDefenceEventLog* Log = WorldContext ? GetDefenceLogs().Find(WorldContext->GetWorld()) : nullptr;
+	return Log ? FString::Join(Log->Rows, TEXT(";")) : FString();
+}
+
+void UGSTN_DefenceContentLibrary::StopDefenceEventLog(AActor* WorldContext)
+{
+	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (FDefenceEventLog* Log = World ? GetDefenceLogs().Find(World) : nullptr)
+	{
+		if (UGSTN_SimEventSubsystem* Events = UGSTN_SimEventSubsystem::Get(WorldContext))
+		{
+			Events->StopListening(Log->Handle);
+		}
+		GetDefenceLogs().Remove(World);
+	}
 }

@@ -60,6 +60,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
 	static bool RemoveDefenceStepsFromRules(UGSTN_CombatRules* Rules);
 
+	/**
+	 * Starts (or restarts) a log of the defence events (Parried, Blocked, ShieldBroken) the world of WorldContext publishes, rows
+	 * "Type:frame:magnitude:target name" (debug and harness only, outside the simulation; the authority publishes, so a client world logs nothing)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Debug")
+	static void StartDefenceEventLog(AActor* WorldContext);
+
+	/** The rows since StartDefenceEventLog, joined with ";" */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Debug")
+	static FString GetDefenceEventLog(AActor* WorldContext);
+
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Debug")
+	static void StopDefenceEventLog(AActor* WorldContext);
+
 	/** The mirror attribute of the actor's ability system (ShieldHealth), -1 without the set */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Debug")
 	static float GetShieldMirror(const AActor* Actor);

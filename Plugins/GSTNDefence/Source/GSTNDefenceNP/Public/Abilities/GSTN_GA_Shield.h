@@ -21,7 +21,7 @@
  * "built from the rules at grant", recorded in F7's deltas).
  *
  * CanActivateAbility adds the shield's own refusals (UGSTN_DefenceLibrary::CanExecuteShield): the shield is available for the entity,
- * its value is above zero, it is not breaking, the entity is grounded. The values come from the combat sync state of the frame and the
+ * its value is above zero, it is not breaking (grounded is the binding's requirement). The values come from the combat sync state of the frame and the
  * attached rules, so the answer is the same on every machine.
  */
 UCLASS(Blueprintable)

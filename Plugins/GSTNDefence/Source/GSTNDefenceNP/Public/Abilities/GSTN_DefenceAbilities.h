@@ -58,3 +58,42 @@ class GSTNDEFENCENP_API UGSTN_GA_GetupNeutral : public UGSTN_GA_BaseCombat
 public:
 	UGSTN_GA_GetupNeutral(const FObjectInitializer& ObjectInitializer);
 };
+
+/**
+ * A counter stance as content (m6 spec 5.4, source Move): a timeline with one FGSTN_ParryWindowTrack over [ParryStartFrame, ParryEndFrame)
+ * (profile ProfileName, closes on a parry) and an OnParry cancel window from the window's start to the end into AttackCommands, so a
+ * parried hit lets the counter-attack start at once. Works in every mode, with or without a shield. The sample the harness binds
+ * (scenario_parry_move) and a starting point for a kit's counter: a Blueprint child sets the frames. Built on the class default object
+ * like the shield's timeline; never writes sync state.
+ */
+UCLASS(Blueprintable)
+class GSTNDEFENCENP_API UGSTN_GA_CounterSample : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_CounterSample(const FObjectInitializer& ObjectInitializer);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Counter", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 ParryStartFrame = 2;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Counter", meta = (ClampMin = "1", ForceUnits = "Frames"))
+	int32 ParryEndFrame = 14;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Counter", meta = (ClampMin = "1", ForceUnits = "Frames"))
+	int32 TotalFrames = 30;
+
+	/** A name of the rules' ParryProfiles (profile 0, the shield's, when the rules have no such name) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Counter")
+	FName ProfileName = TEXT("Counter");
+
+	/** The commands the OnParry window cancels into */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Counter")
+	FGameplayTagContainer AttackCommands;
+
+	void RebuildTimeline();
+	virtual void PostInitProperties() override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+};
