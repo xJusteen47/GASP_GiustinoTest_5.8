@@ -11,8 +11,8 @@
 
 /**
  * Primary asset types of the link plugin. A link type definition returns one from GetPrimaryAssetId so the asset manager finds
- * every link type, whichever plugin ships it (m6 spec 7.0 item 3); code never lists them. A project registers the type under
- * PrimaryAssetTypesToScan (a project decision: the plugin does not edit the project's DefaultGame.ini).
+ * every link type, whichever plugin ships it (m6 spec 7.0 item 3); code never lists them. The module registers the type itself over
+ * the plugin's content and UGSTN_LinkSettings::LinkTypeDirectories, so the project's DefaultGame.ini does not list it.
  */
 namespace GSTNLinkAssetTypes
 {
