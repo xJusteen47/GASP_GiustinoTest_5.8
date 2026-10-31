@@ -151,11 +151,13 @@ private:
 	 * RPC, and the net driver silently drops unreliable RPCs on a saturated connection (UNetDriver::ProcessRemoteFunction),
 	 * which the server can only fill with copies of older inputs. So a new frame is sent only when the connection can take it,
 	 * otherwise it waits for the next engine frame (UNetworkPredictionPlayerControllerComponent::NextInputFrameToSend), in
-	 * order; the FixedTickInputSendCount - 1 redundant copies of older frames (for packet loss) are sent only while there is
-	 * no such backlog, and once per fixed tick (not on engine frames that ran none). After a hitch the catch-up frames then
-	 * reach the server within a few engine frames, none lost.
+	 * order. Redundant copies of older frames (for packet loss) cover the last FixedTickInputSendCount frames and every new frame
+	 * of the previous send, so one lost packet is always re-sent whole even when an engine frame runs several fixed ticks (a slow
+	 * client, a one-process PIE at 20 fps packs 3 to 6 frames per packet). They are sent only on engine frames that ran a fixed
+	 * tick and not after a send the connection held back. After a hitch the catch-up frames then reach the server within a few
+	 * engine frames, none lost. NumTicksThisFrame and EngineFrameMS feed np.Spike.LogInputSend only.
 	 */
-	void SendFixedTickInputsToServer(const bool bTickedThisFrame);
+	void SendFixedTickInputsToServer(const bool bTickedThisFrame, const int32 NumTicksThisFrame = 1, const float EngineFrameMS = 0.f);
 
 	FDelegateHandle PreTickDispatchHandle;
 	FDelegateHandle PostTickDispatchHandle;

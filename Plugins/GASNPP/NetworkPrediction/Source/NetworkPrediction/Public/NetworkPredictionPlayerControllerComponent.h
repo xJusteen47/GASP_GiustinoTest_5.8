@@ -74,6 +74,11 @@ public:
 	// Client: oldest local input frame not yet sent to the server, see UNetworkPredictionWorldManager::SendFixedTickInputsToServer
 	int32 NextInputFrameToSend = INDEX_NONE;
 
+	// Client: the first new frame of the previous engine frame's send (its redundant copies must cover it), and whether that send
+	// held frames back because the connection was not net ready (then no copies: they would only add to the saturation)
+	int32 PreviousSendFirstFrame = INDEX_NONE;
+	bool bPreviousSendHeld = false;
+
 	// Register by ID directly
 	void RegisterInputReceiver(int32 ID, TFunction<void(
 		const int32&, const float&, const FSimulationReplicatedInput&,
