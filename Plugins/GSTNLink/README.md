@@ -10,7 +10,8 @@ definitions, rules data, the outcome track, the request rules, exit placers, lin
 F9 adds the GAS module (link type registry, request checks, the grab candidate provider of the interact probe, anim layers by role).
 F10 adds the Network Prediction module part 1 (the link fragment, the parked movement mode, formation through the combat inbox, the
 presentation transform, the debug draw); F11 adds part 2 (the watchdog, the break rules as it runs them, exit placement and its teleport,
-`LinkBreakOnHit`). The grab commands, pummel, throws and mash (F12) are not built. The design is
+`LinkBreakOnHit`); F12 adds the grab commands, pummel, throws, mash, immunity and the grab gate (F12a) and the latch on big enemies
+(F12b). The design is
 [combat-m6-defence-links.md](../../docs/architecture/combat-m6-defence-links.md).
 
 ## Modules
@@ -19,7 +20,12 @@ presentation transform, the debug draw); F11 adds part 2 (the watchdog, the brea
 |---|---|---|
 | `GSTNLinkCore` | exists (Runtime, Default) | Native tags, settings, the link type definition asset and the rules structs (grab, latch, mash, break), the kit extension and the outcome track; the request rules, the exit placers, the link state types, the mash and break math, and the host interface with its test double. No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNLink.Core.*`. |
 | `GSTNLinkGAS` | exists (Runtime, Default) | `UGSTN_LinkRegistry` (engine subsystem: every link type definition the asset manager finds plus code-added ones, type tag to wire index sorted by tag name, roles, channel, the break reason table with plugin reasons), `UGSTN_LinkRequirementLibrary` (the request checks: common checks then the definition's rules, other-channel resolution, kit rules, the roles that block actions), `FGSTN_LinkInteractProvider` (the `GSTNInteract` candidate provider of grabbable entities, pre-filtered by the type's own rules, and the one-tag projection), `UGSTN_LinkAnimSelection` (the anim layer of a role from the weapon's then the kit's link extension). No NP, no Mover. Covered by `GSTNLink.GAS.*`. |
-| `GSTNLinkNP` | part 1 (F10; Runtime, Default) | `FGSTN_LinkFragment` (feature id 18: both channels, link actions, grab immunity, mash frame; idle = the list's one bit), `FGSTN_LinkSnapshotContributor` (the link summary, request tags as a mask over `FGSTN_LinkRequestTags`, the body content index; its finalize pass puts a parked role's hurtbox anchor on the partner's baked socket), `FGSTN_LinkTickExtension` (priority 120: request timeouts, the predicted flag of a grab-like hit, the action veto of a non-acting parked role and its timeline cancel, the parked modifier's edges, `Combat.Link.*` tags, `Interact.Target.Grab` through the GAS provider for kits with a link extension), the `LinkResponse` / `LinkCommand` inbox kinds, the `GrabImmunity` and `LinkRequest` steps with their outcome applier, `UGSTN_LinkedMovementMode` + `FGSTN_LinkedModifier` + `UGSTN_LinkedModeTransition`, `FGSTN_LinkAttach` (per-entity content: reference-pose sockets, kit link extension), `UGSTN_LinkPresentationComponent` (`GetLinkedTransform`, mesh on the partner's socket), `FGSTN_LinkDebugDraw` (`gstn.Combat.Debug.Links 1`), `UGSTN_LinkContentLibrary` (harness and content helpers). Part 2 (F11): `UGSTN_LinkWatchdog` (the only break authority: a world subsystem that works on the server only, after the actor tick of every engine frame; it reads every combat entity's finalized state and runs `FGSTN_LinkWatchdogLogic`: Serial-matched pairs through `UGSTN_LinkMath::EvaluateBreak` with the type's break rules, orphans after `OrphanGraceFrames`, the parked side's exit from the type's placer through `FGSTN_WorldExitCollisionQuery`, `LinkCommand{Break}` stamped F to both inboxes, events `LinkBroken` / `GrabEscaped`), the `LinkBreakOnHit` step and its applier (PendingBreak, reason Hit, per the type's `HitBreaks`), `FGSTN_LinkExitRequest` (the teleport as a Mover instant move through `UGSTN_GE_LinkExit` on the frame the command's exit record is written). Needs the GAS-NPP fork. Covered by `GSTNLink.NP.*`. |
+| `GSTNLinkNP` | part 1 (F10; Runtime, Default) | `FGSTN_LinkFragment` (feature id 18: both channels, link actions, grab immunity, mash frame; idle = the list's one bit), `FGSTN_LinkSnapshotContributor` (the link summary, request tags as a mask over `FGSTN_LinkRequestTags`, the body content index; its finalize pass puts a parked role's hurtbox anchor on the partner's baked socket), `FGSTN_LinkTickExtension` (priority 120: request timeouts, the predicted flag of a grab-like hit, the action veto of a non-acting parked role and its timeline cancel, the parked modifier's edges, `Combat.Link.*` tags, `Interact.Target.Grab` through the GAS provider for kits with a link extension), the `LinkResponse` / `LinkCommand` inbox kinds, the `GrabImmunity` and `LinkRequest` steps with their outcome applier, `UGSTN_LinkedMovementMode` + `FGSTN_LinkedModifier` + `UGSTN_LinkedModeTransition`, `FGSTN_LinkAttach` (per-entity content: reference-pose sockets, kit link extension), `UGSTN_LinkPresentationComponent` (`GetLinkedTransform`, mesh on the partner's socket), `FGSTN_LinkDebugDraw` (`gstn.Combat.Debug.Links 1`), `UGSTN_LinkContentLibrary` (harness and content helpers). Part 2 (F11): `UGSTN_LinkWatchdog` (the only break authority: a world subsystem that works on the server only, after the actor tick of every engine frame; it reads every combat entity's finalized state and runs `FGSTN_LinkWatchdogLogic`: Serial-matched pairs through `UGSTN_LinkMath::EvaluateBreak` with the type's break rules, orphans after `OrphanGraceFrames`, the parked side's exit from the type's placer through `FGSTN_WorldExitCollisionQuery`, `LinkCommand{Break}` stamped F to both inboxes, events `LinkBroken` / `GrabEscaped`), the `LinkBreakOnHit` step and its applier (PendingBreak, reason Hit, per the type's `HitBreaks`), `FGSTN_LinkExitRequest` (the teleport as a Mover instant move through `UGSTN_GE_LinkExit` on the frame the command's exit record is written). Part 3 (F12): the commands in the link tick extension (`Release` through the
+role's release reason, `Throw` as a direct hit posted to the partner, the mash step), `FGSTN_LinkThrow` (the throw entry and outcome: both
+sides end in the simulation with reason Throw, the thrown side placed at the thrower's socket and launched, grab immunity, the thrower's
+cooldown), `FGSTN_LinkMash` (presses and stick flicks bring the escape frame closer), `FGSTN_LinkShakeOff` (a role's `ReleaseBreakReason`), a hit's
+`LinkFilter` (`LinkedPartnerOnly` / `ExcludeLinkedPartner`), pummel and `bNoReaction` on the partner, the type's `Alternatives` tried
+before it (a grab on a fighter too heavy to grab forms the latch), the harness test abilities (`UGSTN_GA_LinkTest*`). Needs the GAS-NPP fork. Covered by `GSTNLink.NP.*`. |
 
 The module class (`Private/GSTNLinkCoreModule.cpp`) registers the plugin's `Config/Tags` folder with the tag manager: the engine
 reads `Config/Tags` only for the project and for Game Feature plugins, not for ordinary plugins, so the ini vocabulary would
@@ -32,7 +38,8 @@ the plugin's content and `LinkTypeDirectories` (always cooked), so the project's
 - Plugins: `GSTNCombat` (`GSTNCombatCore`), `GSTNCombatGAS`, `GSTNCombatNP`, `GSTNInput` (`GSTNInputCore`), `GSTNInteract`
   (`GSTNInteractCore`, `GSTNInteractRuntime`), and the fork's `GameplayAbilities`, `NetworkPrediction` and `Mover`.
 - `GSTNLinkCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, DeveloperSettings, GSTNInputCore, GSTNCombatCore;
-  private Projects (to find the plugin's own folder). No edge to the project module, to the sibling plugin `GSTNDefence`, or to GAS, NP
+  private Projects (to find the plugin's own folder). F12 adds `UGSTN_LinkSlots` (the standard link input slots and bindings), `FGSTN_LinkHitData` (hit extension:
+`bNoReaction`) and the `Command.Link` tier contribution to the input settings. No edge to the project module, to the sibling plugin `GSTNDefence`, or to GAS, NP
   and Mover.
 - `GSTNLinkGAS` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GSTNInputCore, GSTNCombatCore, GSTNCombatGAS,
   GSTNInteractCore, GSTNLinkCore. No NetworkPrediction, AbilitySystemSimulation, Mover, GSTNCombatNP, GSTNDefence, Editor or project module.
@@ -46,7 +53,7 @@ the plugin's content and `LinkTypeDirectories` (always cooked), so the project's
 
 | Type | What it is |
 |---|---|
-| `UGSTN_LinkTypeDefinition` | A link type, a `PrimaryDataAsset` of primary asset type `GSTN_LinkType`: the type tag, the channel (`Body` parks the entity, `Hand` never does), two `FGSTN_LinkRoleDef`, `FGSTN_LinkBreakRules`, `RequestRequirements`, `ForbiddenWithBody`, `bInitiatorPredicts`, `MaxFrames`, `DebugColor`. `Validate` is pure; `IsDataValid` forwards it. The asset manager finds every definition; code never lists them. |
+| `UGSTN_LinkTypeDefinition` | A link type, a `PrimaryDataAsset` of primary asset type `GSTN_LinkType`: the type tag, the channel (`Body` parks the entity, `Hand` never does), two `FGSTN_LinkRoleDef`, `FGSTN_LinkBreakRules`, `RequestRequirements`, `ForbiddenWithBody`, `bInitiatorPredicts`, `MaxFrames`, `DebugColor`, `Alternatives` (F12: other type tags a request of this type tries first, in order; the grab lists the latch). A role's `ReleaseBreakReason` (F12) is the reason its Release command ends the link with (the latched side's is `ShakeOff`). `Validate` is pure; `IsDataValid` forwards it. The asset manager finds every definition; code never lists them. |
 | `FGSTN_LinkRoleDef` | One role: its tag, `bParked`, `bActsWhileLinked`, `bCollisionWithPartner`, the socket of the partner it is placed on (by name) and the offset. A grab parks role 2; a latch parks role 1. |
 | `FGSTN_LinkBreakRules` | `MaxDistanceCm`, `HitBreaks` per role (`MinKnockbackToBreak`, `bPartnerHitsBreak`), death flags, `PartnerMustNot` state tags. |
 | `FGSTN_GrabRules`, `FGSTN_MashRule` | The grab data of a kit: requirements, weight limit, input timings, immunity frames, pummel delay, the mash. |
@@ -60,6 +67,8 @@ the plugin's content and `LinkTypeDirectories` (always cooked), so the project's
 | `FGSTN_LinkState`, `FGSTN_LinkStates`, `FGSTN_LinkActions` | Plain sync value types: indices and ticks only, no tag; one state per channel; idle serialises to one byte; serial rules make every inbox entry idempotent. |
 | `FGSTN_LinkRequestContext` | The const view a rule reads: both entities as values (tags, weight, link slots, immunity frames), the definition, the kit rules. |
 | `UGSTN_LinkMath` | `MashInitialFrames`, `MashProgress`, `MashEscaped`, `EvaluateBreak` (one reason wins, in a fixed order), `ParkedTransform` / `TryGetParkedTransform` (same derivation for whichever role is parked), reason tags. |
+| `UGSTN_LinkSlots` | The standard link input slots (Grab and Release on Interact, Pummel, the four throws, `Latch.Attack`) at the `Command.Link` tier, each `bFallThroughWhenUnavailable`, role slots `RoleSlotPriorityOffset` (100) above, and `DefaultBindings()` (the Release bindings of each role ignore the other roles). |
+| `FGSTN_LinkHitData` | Hit extension: `bNoReaction` (a hit on the linked partner deals its damage with no reaction, the latch attack and pummel). |
 | `IGSTN_LinkHost`, `FGSTN_FakeLinkHost` | What a link needs from its host, and the double that holds entities and link states and executes requests, breaks and exits synchronously with no NP, for tests of plugins built on links. |
 
 ## Tags
@@ -77,7 +86,7 @@ Designer vocabulary (the `GameplayCue.Combat.Link.*`, `.Pummel` and `.Throw` cue
 | `Combat.HitType.Throw`, `Combat.HitType.Pummel` | The hit data |
 | `Combat.Mover.Linked` | The linked modifier |
 | `Interact.Target.Grab` | The link tick extension, from the interact probe |
-| `Command.Link.Grab`, `.Pummel`, `.Release`, `.Throw.Forward`, `.Back`, `.Up`, `.Down`, `Input.Lock.Command.Link` | The standard command set, abilities and effects |
+| `Command.Link.Grab`, `.Pummel`, `.Release`, `.Throw.Forward`, `.Back`, `.Up`, `.Down`, `.Latch.Attack` (F12), `Input.Lock.Command.Link` | The standard command set, abilities and effects |
 | `Combat.Event.LinkFormed`, `.LinkBroken`, `.Throw`, `.GrabEscaped` | The watchdog and the combat outbox on the authority |
 
 `Combat.HitType.Grab` is declared by `GSTNCombatCore`, so this plugin reads it and does not declare it. The link subtree tags reserved
@@ -102,7 +111,10 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
 - **A second latch type** (the drill: a parked initiator on a possibly moving partner): a definition whose `InitiatorRole` is
   `bParked` (and `bActsWhileLinked`), its `SocketOnPartner` and offset, and its own `UGSTN_LinkRule` subclass. The `LinkRequest` step,
   the response, the parked mode, the anchor of the hurtboxes and the presentation are the same code for every type; nothing in
-  `GSTNLinkNP` names a type.
+  `GSTNLinkNP` names a type. To have the interact tap form it, list its tag in another type's `Alternatives` (as the grab lists the
+  latch) and give the latched role a `ReleaseBreakReason`; its attack is an ability whose hit carries `LinkFilter = LinkedPartnerOnly`.
+- **A link command on another button**: a slot from `UGSTN_LinkSlots::Build()` with your own binding; keep it at the `Command.Link`
+  tier (`CommandTiers` in the settings) so it is not shadowed by attack and strong commands of the same button.
 - **Formation in the pipeline**: put `UGSTN_HitStep_GrabImmunity` then `UGSTN_HitStep_LinkRequest` after `HurtState` in the rules'
   `HitPipeline` (`UGSTN_LinkContentLibrary::AddLinkStepsToRules` does it); a hit whose data names a registered `LinkType` is a request.
 - **The parked mode on a pawn**: author `UGSTN_LinkedModeTransition` as a global transition of the pawn's Mover (or let
@@ -118,6 +130,7 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
 | `RequestTimeoutFrames` | Frames a predicted link waits for its response before the link tick clears it (12). |
 | `OrphanGraceFrames` | Frames after a formation during which a one-sided link is not an orphan (3). |
 | `LinkTypeDirectories` | Content folders, besides the plugin's own, scanned for link type definitions (empty). Read when the asset manager is created. |
+| `CommandTiers` | Command tiers this plugin adds to the input settings at startup (source `GSTNLink`, removed at shutdown): `Command.Link` = 360, above the attack and strong tiers. |
 
 ## Tests
 
@@ -139,7 +152,15 @@ builds only) and added to the global registry for the test's scope.
 `Break.{Distance, Timeout, Death, PartnerState, HitByRole}`, `Exit.{NeverInsideGeometry, DeterministicForEqualInputs}`: the watchdog's pure
 function on entity views, its commands applied through the real inbox rule, the exit placer with a fake world.
 
+`GSTNLink.NP.*` (F12): `Grab.{WeightGate, GrabberCooldown, PummelKeepsLink, ThrowDirectHitNoOverlap, ThrowSkipsParryShield,
+ImmunityAfterReleaseAndThrow, MashEscapeFrameDeterministic, GrabLockedByNameWithParts, GrabLockedAbsentWithoutParts}`,
+`Latch.{WeightPicksLatchOverGrab, AttackHitsPartnerOnly, ShakeOffBreaksThroughWatchdog, LatchedEnemyKeepsActing}`.
+
 Harness: `Tools/GASNPPTest/link_scenarios.py` (`SUITE_LINK`: `link_spike_*`, `link_rollback_*` (formation through a grab hit, a watchdog break
 with forced reconciles over the break frames) and `link_break_distance_*` (a leash and the grabber moved away, then a knock-out of either side) in
-three pairings, plus `grab_immunity`; `link_probe_*` are Task A's walk probes, not in the suite), content from
-`Tools/GAS/setup_defence_link_content.py` `run_link()` (`/GSTNLink/Test/DA_LinkType_Grab_Test`).
+three pairings, plus `grab_immunity`; F12: `grab_throw`, `grab_mash` (a forced reconcile mid-mash), `grab_interact`, `grab_gate` (with and
+without the GSTNParts content), `throw_at_enemy`, `latch_big_enemy_*` in three pairings (the latched enemy's own client judged against the
+authority at the same frame) and `latch_big_enemy_bystander_client_latches_client` (a bystander in the enemy's attack: judged on convergence);
+`link_probe_*` are Task A's walk probes and `probe_*` debug aids, not in the suite; `defence_scenarios.scenario_grab_shield` is the real grab of a
+shielding target), content from `Tools/GAS/setup_defence_link_content.py` `run_link()` (`/GSTNLink/Test/DA_LinkType_Grab_Test`, and
+`DA_LinkType_Latch_Test` which the grab lists as its alternative). `link_mp.py` runs the spike with the PIE clients in separate processes.

@@ -439,3 +439,57 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
   StaleSerialIgnored, OnePathForPipelineBreaks}`, `.Break.{Distance, Timeout, Death, PartnerState, HitByRole}`, `.Exit.{NeverInsideGeometry,
   DeterministicForEqualInputs}` (the test classes are prefixed `FGSTN_LinkNP*`: the Core tests own `FGSTN_LinkBreak*Test`, and a duplicate class
   name is not registered, with only a warning).
+
+## F12: GSTNLinkNP part 3 (F12a grab commands, pummel, throws, mash, immunity, grab gate; F12b latch on big enemies)
+
+- **Commands as slots**: `UGSTN_LinkSlots::Build()` makes the standard slots (Grab and Release on a press of Interact, Pummel = Attack with a
+  neutral stick, Throw Forward / Back = Attack or Strong with a tilt, Up = Strong neutral, Down = Attack while Crouch is held, Latch.Attack =
+  a press of Attack). Each role slot is `RoleSlotPriorityOffset` (100) above the plain one, Throw.Down one more (it shares Attack with
+  Pummel), and every slot has `bFallThroughWhenUnavailable`: an unavailable link slot (Release while not linked) otherwise reserved the press
+  and the grab never came out. The Release bindings of each role ignore the other roles (`IgnoreTags`), so the loadout validator sees no
+  ambiguity. The harness's test input config has no Strong button, so the harness throws with Throw.Down (deviation).
+- **Command tier contribution** (new): `UGSTN_LinkSettings::CommandTiers` (`Command.Link` = 360) is pushed into the input settings at
+  module startup (source `GSTNLink`) and removed at shutdown. Without it the attack and strong tiers won every press the link commands
+  share.
+- **LinkEstablished and the cancel window**: there is no LinkEstablished buffer event (extensions have no seam to raise one, deviation). The
+  grab ability's `OnHit` cancel window [6, 24) into the `Command.Link` tags does the job. New neutral seam:
+  `FGSTN_CombatTickContext::RunningTimeline` (the timeline the entity runs this frame) so the link tick reads the ability's keys.
+- **Release**: the Release command sets PendingBreak with the reason from the role definition (`FGSTN_LinkRoleDef::ReleaseBreakReason`:
+  Release for the grabber and latcher, ShakeOff for the latched), and the watchdog breaks it. One path (`FGSTN_LinkShakeOff`) for both.
+- **Throw**: the key frame of the throw ability's outcome track posts a direct hit to the partner through `UGSTN_CombatWorldSubsystem::PostHit`
+  (no hitbox overlap). Its outcome extension `FGSTN_LinkThrowOutcome` ends BOTH sides in the simulation with reason Throw: the thrown side
+  is placed at the thrower's socket (Teleport, zero velocity), gets its AfterThrow grab immunity and is launched by the hit; the thrower
+  gets its cooldown (`FGSTN_LinkRequestSide::CooldownEndFrame`, new refusal `Cooldown`). Deviation: not through the watchdog (a watchdog
+  break landed after the launch and undid it); the watchdog skips an orphan whose partner shows the same serial idle with reason Throw.
+  The exit is not collision-checked, no attacker hitstop on a throw, SwapRoles is not built (warned once). A throw is not parryable and skips
+  the shield (`ThrowSkipsParryShield` names the defence steps by class path, no module edge).
+- **Pummel**: a hit on the partner with `LinkFilter = LinkedPartnerOnly`, gated by `PummelFreeFrames`, no reaction (`SuppressReaction`).
+  `LinkFilter` is applied in the LinkRequest step (deviation: not in a filter step of its own).
+- **Mash**: `FGSTN_LinkMash` counts presses and stick flicks since the last frame and brings the escape frame closer (an Escape break through
+  the watchdog). No resistance attribute (deviation): the rule's numbers only. A parked target that does not act gets its mash end at formation.
+- **Grab gate**: `Combat.Part.GrabLocked` by name (with GSTNParts; absent without it), the weight gate through the kit's link extension.
+- **Kit extension pointer** (fix): `FGSTN_LinkBodyData` holds a weak pointer to the kit and looks its extension up on each read; a raw
+  pointer to the extension dangled after a loadout change and crashed the editor.
+- **F12b latch**: the grab type lists the latch type in `Alternatives`; the LinkRequest step and the grab candidate provider try the
+  alternatives first, then the hit's own type, so the same tap latches onto a fighter above `MaxGrabWeight` and at least `MinLatchWeight`.
+  The harness sets these weights in memory (50 / 90) rather than shipping a heavy pawn (deviation). Everything is per type by data: the drill
+  latch needs only its definition, its rule and an entry in some type's `Alternatives`.
+- **Response channel** (fix): the response names the type the target FORMED, which may be the alternative of the predicted one; the
+  initiator now takes the channel from that type's definition and matches its own pending request to the target whatever type it predicted.
+  Before, the latch formed on the Hand channel.
+- **Attacker root** (new neutral seam): `FGSTN_SnapshotEntry::bPlacedByContributor`. The link contributor sets it when it places a parked
+  role; the attacker step then starts that entity's moves from the placement instead of its capsule (the latcher's attack came from where
+  the latch began).
+- **Latched enemy keeps acting**: the latcher is parked and acts; the enemy walks, turns and attacks with it on; its hits on the rider deal
+  damage with no reaction (`bNoReaction` on a non-type hit to the partner).
+- **Not tested**: a latch on a part under a socket with GSTNParts on.
+- **Harness measurement** (latch): on the latched enemy's own client the rider is compared with where the authority placed it at the same
+  frame (the recorder now stores the yaw per sim tick); the time-aligned comparison, which read the once-per-editor-frame sampling at the
+  turns, is kept as a note. The enemy's attack predicted a hit on an uninvolved pawn the authority did not make (hit targets 3 against 2):
+  a legitimate mispredict, kept as the `latch_big_enemy_bystander_*` variant and judged on convergence.
+- **Tests (13)**: `GSTNLink.NP.Grab.{WeightGate, GrabberCooldown, PummelKeepsLink, ThrowDirectHitNoOverlap, ThrowSkipsParryShield,
+  ImmunityAfterReleaseAndThrow, MashEscapeFrameDeterministic, GrabLockedByNameWithParts, GrabLockedAbsentWithoutParts}`,
+  `GSTNLink.NP.Latch.{WeightPicksLatchOverGrab, AttackHitsPartnerOnly, ShakeOffBreaksThroughWatchdog, LatchedEnemyKeepsActing}`. Constants
+  are prefixed `GrabTest*` / `LatchTest*` (a unity build clashed on shared names).
+- **Mover fix, separate commit**: `UKinematicActorSimulation::BeginDestroy` no longer calls `Uninit` (it created an object during the garbage
+  purge and crashed the editor on a PIE teardown).
