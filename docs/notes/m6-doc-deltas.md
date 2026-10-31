@@ -377,3 +377,65 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
   `.Parked.{ModeEnteredByTag, HurtboxFromPartnerSocket, NoInputNoGravity, InitiatorFollowsMovingPartner}`, `.Tick.{GrabbedHasNoCandidates,
   LatchedKeepsCandidates, TagsFromRole}`. Test-only types `Combat.Link.Type.GSTNTestOnlyNPGrab` / `NPLatch` and their roles live in the
   test fixture (automation builds only).
+
+## F11: GSTNLinkNP part 2 (watchdog, break rules, exit placement, LinkBreakOnHit), with task A (input redundancy) and task B (fragment check at connect)
+
+- **Task A, the 2 % reconciles of client_grabs_host (OPEN 2 of HANDOVER 57): not the link.** The same walk with no link reconciled as often
+  (`link_probe_*` scenarios, 8 runs each way at 2 %: 10 walk reconciles with the link, 7 without, `taskA-probe-2pct.log`). The one-process PIE runs at
+  ~19 fps, so a client engine frame packs 3 to 9 fixed input frames into one packet, while the fork's redundancy was `FixedTickInputSendCount` (6)
+  FRAMES: the next packet re-sent only 2-3 frames of a lost one, and the server filled the rest with repeated inputs (a mismatch when the walk's
+  stick changed in them). No send was ever held by saturation (`np.Spike.LogInputSend`, new, off by default). Fix in the fork
+  (`SendFixedTickInputsToServer`): the copies cover the last 6 frames AND every new frame of the previous send, and a backlog no longer drops them
+  (only a send the connection held back does). After: 4 walk reconciles (1 / 3), server input gaps per run 4-20 -> 0-1
+  (`taskA-probe-2pct-fixed.log`, editor-A1 / -A2.log). What is left is server starvation by 100-256 ms editor hitches (logged per tick): it hits
+  both clients alike, the uninvolved observer included. Threshold not changed.
+- **Task B, connect refusal**: `FGSTN_SyncFragmentRegistry::GetSignature` (CRC of the registered (type id, struct path) pairs, ascending ids, test
+  ids 240+ excluded, 0 for none; the registry drops the engine's cached checksum when it changes) is folded by GSTNCombatNP into the engine's local
+  network version (`FNetworkVersion::GetLocalNetworkVersionOverride`, chaining a project override), so the engine's own Hello check refuses a client
+  whose set differs. `IsNetworkCompatibleOverride` (bound only if free) logs this machine's fragments on a mismatch. No RPC, no game mode code.
+  The engine returns its cached checksum even when asked for the base version, so `FGSTN_FragmentNetworkVersion::GetBaseVersion` recomputes it.
+  Tests `GSTNCombat.NP.FragmentVersion.{Signature, NetworkVersion}`; a PIE connect with GSTNLink off on one side cannot be made in one process:
+  NOT run.
+- **Watchdog cadence**: `UGSTN_LinkWatchdog` evaluates once per engine frame from `OnWorldPostActorTick`, after Network Prediction finalized the
+  frame (its FinalizeFrame runs in the pre-actor tick), on the latest frame F of the authority's states, and stamps its commands F. With several
+  fixed ticks per engine frame it sees only the latest; every cause is held state (a pending flag, a death, a distance, a timeout), so nothing is
+  missed and the break lands at F+1 of the latest frame (2 frames after the cause at one tick per frame). The documented net-mode exception:
+  `IsAuthority()` = net mode not NM_Client; nothing else in the link code reads a net mode.
+- **What it reads**: every registered entity (new neutral accessor `UGSTN_CombatWorldSubsystem::GetRegisteredEntityIds`), its combat component's
+  sync state (link fragment, `ActionState == KO` = death), the pawn's transform and capsule, its ability system tags (PartnerState). Server-side
+  state of its own: only the posted (entity, channel, serial) set that stops a command being posted twice while it waits for its frame.
+- **Distance** is the F5b fake host's rule: the parked entity's capsule against where the link expects it. The parked capsule stays where the grab
+  started (F10's parked mode), so `MaxDistanceCm` is a leash from that spot: a type whose holder walks keeps 0 (the default, as the S1 grab does).
+- **One reason per link**: a Serial-matched pair is decided by its lower entity id, own side first. An orphan (one side only, after
+  `OrphanGraceFrames` from its LinkFrame) breaks alone, Forced, posted to that side only.
+- **Exit**: only the definition's parked role gets an exit (`GSTNLinkExitFlags::Teleport`; `Fallback` when the placer found no free place,
+  logged); the other side keeps its place. The placer gets the staying side's transform and forward; the exit is quantised to floats (yaw only)
+  before it is posted, so the authority and the clients apply the same numbers. `FGSTN_WorldExitCollisionQuery` is a capsule overlap (ECC_Pawn)
+  that ignores EVERY combat pawn, not only the pair (deviation: a third pawn at the exit is not avoided).
+- **Teleport** (`FGSTN_LinkExitRequest`): on the frame the command's exit record is written, the link tick extension applies `UGSTN_GE_LinkExit`
+  (instant, `UApplyMoveGameplayEffectComponent` + `UGSTN_LinkExitMoveCreator` -> `FGSTN_LinkExitEffect` = Mover's teleport plus the exit velocity),
+  values as set-by-caller NAMES (no new tags); the parked modifier's cancel lands in the same Mover tick. Capsule collision is still restored by the
+  presentation component (F10), not here.
+- **Command fields** added to `FGSTN_LinkCommandEntry`: `ExitFlags` (copied to the exit record) and `ImmunityEndFrame` (raises the target's
+  `GrabImmunityEndFrame`). The grab immunity comes from the TYPE's grab rule (a `UGSTN_LinkRule_Grab` in the definition's Rules,
+  `ImmunityFramesAfterRelease` / `AfterThrow`), not the kit's rules (deviation: the kit's are not in the watchdog's views). No latch immunity: the
+  fragment has no latch field (deviation).
+- **Idle stays idle**: the reason a break leaves on an idle channel and a grab immunity that has run out are dropped by the tick extension
+  (a reason makes the state "live" on the wire, about 20 B per sync state forever).
+- **LinkBreakOnHit**: Body channel only; a hit that landed (not blocked or parried) on an Active role; the rule is `EvaluateBreak` with only the hit
+  filled in (`QualifiesForBreak`), so the role's `HitBreaks`, `MinKnockbackToBreak` and `bPartnerHitsBreak` are read in one place. It writes an
+  outcome extension (`FGSTN_LinkBreakOutcome`); its applier sets PendingBreak (reason Hit) on the victim's link of that serial; the watchdog breaks
+  it. `UGSTN_LinkContentLibrary::AddLinkStepsToRules` inserts it after MeterGain (no rules asset edited).
+- **Events**: `Combat.Event.LinkBroken` (Magnitude = reason index, the reason's tag in Tags, Instigator / Target = the two pawns) and
+  `GrabEscaped` for an Escape, through `UGSTN_SimEventSubsystem::Broadcast` from the watchdog (the server).
+- **Data-driven per type**: the watchdog names no type; the break rules, MaxFrames, the parked role and the placer are the definition's, the
+  immunity follows from the rule class. A drill latch needs only its definition and its rule.
+- **Not built** (unchanged from F10, no command before F12): PendingBreak on Release and the grabber's cancel window; `MarkPendingBreak` is the hook.
+- **Harness** (`link_scenarios.py`): `link_rollback_*` now breaks through the watchdog (a leash and the grabber moved 500 cm away) with forced
+  reconciles over the break frames; `link_break_distance_*` (three pairings: distance, then a knock-out of the grabbed, then of the grabber);
+  `grab_immunity` (immunity set to 120 frames in memory: a regrab inside it whiffs, one after it forms). A parked pawn is not moved by a teleport
+  into a KO zone (its combat position follows the partner): the zone is put 50-170 cm ahead of the grabber instead. In-memory content only.
+- **Tests (13)**: `GSTNCombat.NP.FragmentVersion.{Signature, NetworkVersion}`, `GSTNLink.NP.Watchdog.{BreakAtF1BothSides, OrphanAfterGrace,
+  StaleSerialIgnored, OnePathForPipelineBreaks}`, `.Break.{Distance, Timeout, Death, PartnerState, HitByRole}`, `.Exit.{NeverInsideGeometry,
+  DeterministicForEqualInputs}` (the test classes are prefixed `FGSTN_LinkNP*`: the Core tests own `FGSTN_LinkBreak*Test`, and a duplicate class
+  name is not registered, with only a warning).
