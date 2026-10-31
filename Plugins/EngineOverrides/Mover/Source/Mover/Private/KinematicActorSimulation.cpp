@@ -14,7 +14,11 @@ UKinematicActorSimulation::UKinematicActorSimulation()
 
 void UKinematicActorSimulation::BeginDestroy()
 {
-	Uninit();
+	// No Uninit() here: clearing the modes re-registers the null mode, which creates an object, and the state machine may already be in the
+	// same garbage purge. Creating objects during the purge crashed the editor on a PIE teardown (access violation in ConstructDefaultModes).
+	// The liaisons call Uninit() at the right time; here only the references are dropped
+	MoverComp = nullptr;
+	ModeFSM = nullptr;
 	Super::BeginDestroy();
 }
 
