@@ -312,3 +312,68 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
 - Gates (named logs in `Saved/Logs`): `build-f9-1` (Step 0), `build-f9-2`, `build-f9-link-off`, `build-f9-final` Succeeded;
   `headless-f9-on-1.log` 1133 / 0 (1127 + 6, GSTNLink 37, GSTNDefence 75, no asset-manager ensure); `headless-f9-link-off.log` 1096 / 0,
   no GSTNLink line, GSTNDefence 75, no ensure. PIE sweep skipped: nothing registers the provider or reads the registry at runtime before F10.
+
+## F10: GSTNLinkNP part 1 (F10a fragment, snapshot, tick, parked mode, presentation; F10b inbox kinds, steps, harness)
+
+- **Neutral combat seams** (GSTNCombatCore / GSTNCombatNP; with nothing registered they change nothing): `FGSTN_SnapshotExtensionSet` holds
+  THREE blobs (parts, defence, link; `MaxBlobs` 3, slots packed in ascending type id), `FGSTN_HitVictimView::MaxSnapshotExtensions` 3;
+  `IGSTN_SnapshotContributor::FinalizeSnapshot(Frame, Entries)` and `FGSTN_SnapshotContributorRegistry::Finalize`, called by the snapshot
+  build after the sort and before the grid and the history record (a parked entity is placed from its partner's entry); the resolved hit
+  carries the ATTACKER's blobs (`FGSTN_ResolvedHit::AttackerExtensions`, `FindAttackerExtension`; the victim step finds the attacker's
+  entry through the new `FGSTN_VictimTickInput::Snapshot`, the attacker's prediction its own entry); `FGSTN_CombatTickContext` gains
+  `Snapshot`, `AttackerHits` (from AfterExecute on, on a frame the attacker step ran) and `EntityId`.
+- **Action state Linked is derived** (as F7's defence states): no `EGSTN_ActionState` value; a parked role that does not act
+  (`bActsWhileLinked` false) is vetoed by `BlocksActions`, which also leaves it no candidates. Its running timeline is cancelled by the link
+  tick extension at AfterClocks on the frame the veto starts (an applier cannot reach the core). The `EnterLinked` request slot is not used:
+  the tick extension queues `FGSTN_LinkedModifier` on the parked edge and cancels it by tag on the edge out (the combat tick runs before
+  Mover, so Mover simulates it that frame).
+- **The parked mode is entered by the modifier's tag through a transition**: `UGSTN_LinkedModeTransition` (entry: any mode to the linked
+  mode while `Combat.Mover.Linked` is in Mover's state; exit, the linked mode's own: to Falling once it is gone). A project authors the
+  entry as a global transition; `FGSTN_LinkAttach` adds the mode and an entry transition to every mode of a pawn's Mover at attach. The
+  mode carries no tag of its own (a mode's tags count in the state query, so the exit would never fire).
+- **Baked socket** = the partner's skeletal mesh REFERENCE POSE socket (socket offset x bone component-space reference pose x the mesh's
+  offset from the actor root), baked at attach for every `SocketOnPartner` the registry knows (`FGSTN_LinkBodyData`, append-only table, the
+  snapshot carries its index). No per-frame bake of animated sockets; presentation follows the live socket (`bUseLiveSocket`).
+- **Every combat pawn is attached** (not only kits with a link extension): any entity can be grabbed and the sockets are the partner's.
+  Attach runs from the loadout extension `GSTNLinkNP`, and for pawns whose loadout never compiled (the harness pawns at PIE start) from
+  `UGSTN_LinkContentLibrary::RebuildRegistryAndReattach`.
+- **Request tags in the snapshot** are a 32-bit mask over `FGSTN_LinkRequestTags` (the immunity and lock tags, `Combat.Part.GrabLocked` by
+  name, then every tag the registered definitions' `RequestRequirements` and their grab and latch rules' defaults name, sorted by name). A
+  tag only a kit's own rules name is not in the table and reads as absent. The request weight is 100 x the snapshot's weight scale, for the
+  provider pre-filter and the step alike (the parts plugin's effective weight is not read).
+- **A refused request posts no response**: it does not stand (`bHit` false: the victim step posts nothing for it), which is what makes it
+  whiff with no hitstop on both sides. The common refusal (target busy, immune, locked) is predicted identically by the initiator; a
+  disagreement (simultaneous grabs) leaves the loser's predicted request to `RequestTimeoutFrames` (12), identical on every machine.
+  `LinkResponse{refused}` and its handler exist for later kinds. An accepted request Stops with `bNoDamage` and no knockback: no
+  grab-confirm hitstop in F10 (F12's grab content decides it).
+- **Not built (no link command exists before F12)**: the grabber's cancel window into `Command.Link.*` (spec 7.2 item 3, the
+  `LinkEstablished` buffer event) and PendingBreak on Release; `FGSTN_LinkTickExtension::MarkPendingBreak` is the hook F12's release uses.
+- **`LinkCommand` has a test and debug kind `Form`** (type, role, partner): the S1 spike forms its link by a server-side command posted to
+  both inboxes (`UGSTN_LinkContentLibrary::FormTestLink`), the plan's "linked by a server-side test command (no pipeline)". The simulation
+  never posts it. `Break` and `Place` are handled for F11; a break's exit record is dropped the frame after its own (otherwise an idle entity
+  carries 55 bytes of exit forever: measured 78 B per sync state after a break before the fix, 23 B after).
+- **`Interact.Target.Grab` is projected only for a kit with a link extension.** The probe reads other entities' snapshot positions, which a
+  client knows as interpolated proxies, so its answer is not prediction-stable: projected on every pawn it made the ability system model
+  reconcile (found by the spike: `Interact.Target.Grab : 1` in the server's state, absent in the client's). The probe is stateless (no
+  sticky focus in the fragment) and has no line of sight. A prediction-stable grab focus is an F12 item.
+- **Collision between the two capsules** is ignored from the presentation component's tick (both roots' `IgnoreActorWhenMoving`), not from
+  the simulation, so a frame late at the start; F11's exit request is where the restore belongs.
+- **Camera and aim**: the plugin exposes `GetLinkedTransform` and `IsLinkedParked`; the camera follow is the consumer's code (GSTNCamera is
+  outside this checkpoint).
+- **Connect refusal by the fragment registry (acceptance)**: no such rule exists. The fragment list is length-prefixed and a machine without
+  the plugin SKIPS fragment 18 (`FGSTN_SyncFragmentList::NetSerialize`); it does not refuse the connection. Not tested; the registry's
+  `GetSignature` compared at login would be the place for a refusal.
+- **S1 as built** (`link_scenarios.py`): presentation error = the grabbed pawn's shown transform on each world against the server's, after
+  removing the best constant delay of that world (-500..500 ms: the grabber's own client runs ahead, its partner's behind), p50 / p95 / max
+  over the walk's first 7 s; reconciles per client from the harness counter (one forced reconcile adds 2 to it), judged outside the forced
+  windows; the uninvolved observer judged over the held link only (the PIE start-up corrections land in a batch's formation window). Bytes
+  per second are not measurable from Python: a live grab's fragment is 23 B per sync state on each side, idle 0 B. No watchdog yet (no host
+  frame time with it); the latch pairing of S1 is covered by the unit tests only.
+- **Test content**: `/GSTNLink/Test/DA_LinkType_Grab_Test` (grab, the grabbed parked 90 cm in front of the grabber's root facing it, no
+  socket, the grab rule) from `Tools/GAS/setup_defence_link_content.py` `run_link()`; `.gitignore` gains `!Plugins/GSTNLink/Content/`. The
+  harness turns the test weapon's `Command.Attack.Neutral` into a grab in memory (`SetKitMoveHitType`) for `link_rollback`.
+- **Tests (17)**: `GSTNLink.NP.Fragment.{RoundTripIdleOneBit, TwoChannelsBytes, Interpolate}`, `.Formation.{AcceptedAtF1ResponseAtF2,
+  RefusedWhiffsNoHitstop, SimultaneousFirstWins, ChainRefused, PredictedClearedOnTimeout, SerialIdempotentAfterRollback, LatchParksInitiator}`,
+  `.Parked.{ModeEnteredByTag, HurtboxFromPartnerSocket, NoInputNoGravity, InitiatorFollowsMovingPartner}`, `.Tick.{GrabbedHasNoCandidates,
+  LatchedKeepsCandidates, TagsFromRole}`. Test-only types `Combat.Link.Type.GSTNTestOnlyNPGrab` / `NPLatch` and their roles live in the
+  test fixture (automation builds only).
