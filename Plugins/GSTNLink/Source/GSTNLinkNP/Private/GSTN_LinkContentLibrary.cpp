@@ -550,6 +550,87 @@ bool UGSTN_LinkContentLibrary::RemoveLinkTestBindings(UGSTN_PrimaryKitDefinition
 	return true;
 }
 
+bool UGSTN_LinkContentLibrary::WriteKitLinkContent(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UGameplayAbility> Grab, TSubclassOf<UGameplayAbility> Pummel,
+	TSubclassOf<UGameplayAbility> Release, TSubclassOf<UGameplayAbility> ThrowForward, TSubclassOf<UGameplayAbility> ThrowBack,
+	TSubclassOf<UGameplayAbility> ThrowUp, TSubclassOf<UGameplayAbility> ThrowDown, TSubclassOf<UGameplayAbility> LatchAttack, int32 MashBaseFrames)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	using namespace GSTNLinkTags;
+	const TMap<FGameplayTag, TSubclassOf<UGameplayAbility>> ByCommand = {
+		{ Command_Link_Grab.GetTag(), Grab }, { Command_Link_Pummel.GetTag(), Pummel }, { Command_Link_Release.GetTag(), Release },
+		{ Command_Link_Throw_Forward.GetTag(), ThrowForward }, { Command_Link_Throw_Back.GetTag(), ThrowBack }, { Command_Link_Throw_Up.GetTag(), ThrowUp },
+		{ Command_Link_Throw_Down.GetTag(), ThrowDown }, { Command_Link_Latch_Attack.GetTag(), LatchAttack } };
+
+	// The same slots and bindings AddLinkTestBindings puts on a kit in memory, built on copies so an unchanged kit is left untouched
+	FGSTN_CommandSet CommandSet = Kit->CommandSet;
+	const TArray<FGSTN_InputSlotSpec> Specs = UGSTN_LinkSlots::Build();
+	CommandSet.AddedSlots.RemoveAll([&Specs](const FGSTN_InputSlotEntry& Entry)
+	{
+		return Specs.ContainsByPredicate([&Entry](const FGSTN_InputSlotSpec& Spec) { return Spec.Command == Entry.GetSpec().Command; });
+	});
+	for (const FGSTN_InputSlotSpec& Spec : Specs)
+	{
+		FGSTN_InputSlotEntry Entry;
+		Entry.Inline = Spec;
+		CommandSet.AddedSlots.Add(MoveTemp(Entry));
+	}
+
+	TArray<FGSTN_LinkSlotBinding> Slots = UGSTN_LinkSlots::DefaultBindings();
+	FGSTN_LinkSlotBinding ShakeOff;
+	ShakeOff.Command = Command_Link_Release;
+	ShakeOff.Requirements.RequireTags.AddTag(Role_Latched);
+	ShakeOff.Requirements.IgnoreTags.AddTag(Role_Grabber);
+	ShakeOff.Requirements.IgnoreTags.AddTag(Role_Latcher);
+	Slots.Add(ShakeOff);
+	TArray<FGSTN_AbilityBinding> KitBindings = Kit->KitBindings;
+	KitBindings.RemoveAll([](const FGSTN_AbilityBinding& Binding) { return Binding.Command.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Command.Link"))); });
+	for (const FGSTN_LinkSlotBinding& Slot : Slots)
+	{
+		const TSubclassOf<UGameplayAbility>* Class = ByCommand.Find(Slot.Command);
+		if (!Class || !*Class)
+		{
+			continue;
+		}
+		FGSTN_AbilityBinding& Binding = KitBindings.AddDefaulted_GetRef();
+		Binding.Command = Slot.Command;
+		Binding.Requirements = Slot.Requirements;
+		Binding.Ability = TSoftClassPtr<UGameplayAbility>(Class->Get());
+	}
+
+	FGSTN_KitExtensionList Extensions = Kit->Extensions;
+	FGSTN_LinkKitExtension LinkExtension;
+	LinkExtension.GrabRules.Mash.BaseFrames = MashBaseFrames;
+	const int32 Existing = Extensions.ExtensionData.IndexOfByPredicate([](const FInstancedStruct& Entry) { return Entry.GetPtr<FGSTN_LinkKitExtension>() != nullptr; });
+	if (Existing != INDEX_NONE)
+	{
+		Extensions.ExtensionData[Existing] = FInstancedStruct::Make(LinkExtension);
+	}
+	else
+	{
+		Extensions.ExtensionData.Add(FInstancedStruct::Make(LinkExtension));
+	}
+
+	bool bSame = FGSTN_CommandSet::StaticStruct()->CompareScriptStruct(&CommandSet, &Kit->CommandSet, PPF_None)
+		&& FGSTN_KitExtensionList::StaticStruct()->CompareScriptStruct(&Extensions, &Kit->Extensions, PPF_None)
+		&& KitBindings.Num() == Kit->KitBindings.Num();
+	for (int32 Index = 0; bSame && Index < KitBindings.Num(); ++Index)
+	{
+		bSame = FGSTN_AbilityBinding::StaticStruct()->CompareScriptStruct(&KitBindings[Index], &Kit->KitBindings[Index], PPF_None);
+	}
+	if (bSame)
+	{
+		return false;
+	}
+	Kit->CommandSet = MoveTemp(CommandSet);
+	Kit->KitBindings = MoveTemp(KitBindings);
+	Kit->Extensions = MoveTemp(Extensions);
+	Kit->MarkPackageDirty();
+	return true;
+}
+
 bool UGSTN_LinkContentLibrary::SetKitLinkWeights(UGSTN_PrimaryKitDefinition* Kit, float MaxGrabWeight, float MinLatchWeight)
 {
 	if (!Kit)

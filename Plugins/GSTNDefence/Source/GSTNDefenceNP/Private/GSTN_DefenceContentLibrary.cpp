@@ -10,6 +10,7 @@
 #include "Engine/World.h"
 
 #include "AbilitySystemComponent.h"
+#include "Abilities/GameplayAbility.h"
 #include "AbilitySystemGlobals.h"
 #include "Attributes/GSTN_DefenceAttributeSet.h"
 #include "Data/GSTN_DefenceKitExtension.h"
@@ -92,6 +93,72 @@ bool UGSTN_DefenceContentLibrary::SetKitDefenceMoves(UGSTN_PrimaryKitDefinition*
 		}
 	}
 	Data[Existing] = FInstancedStruct::Make(Extension);
+	Kit->MarkPackageDirty();
+	return true;
+}
+
+bool UGSTN_DefenceContentLibrary::WriteKitDefenceExtension(UGSTN_PrimaryKitDefinition* Kit, UGSTN_DefenceRules* Rules, TSubclassOf<UObject> ShieldAbility,
+	TSubclassOf<UObject> GroundBounce, TSubclassOf<UObject> GetupRoll, TSubclassOf<UObject> GetupNeutral,
+	TSubclassOf<UObject> TechInPlace, TSubclassOf<UObject> TechRoll, TSubclassOf<UObject> TechWall)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	auto Soft = [](TSubclassOf<UObject> Class) { return Class ? TSoftClassPtr<UObject>(Class.Get()) : TSoftClassPtr<UObject>(); };
+	FGSTN_DefenceKitExtension Extension;
+	Extension.Rules = TSoftObjectPtr<UGSTN_DefenceRules>(Rules);
+	Extension.ShieldAbility = Soft(ShieldAbility);
+	Extension.GetupSet.GroundBounce = Soft(GroundBounce);
+	Extension.GetupSet.Roll = Soft(GetupRoll);
+	Extension.GetupSet.Neutral = Soft(GetupNeutral);
+	// The map in a fixed insertion order, so the same classes always serialise the same bytes
+	const TPair<EGSTN_TechType, TSubclassOf<UObject>> Tech[] = { { EGSTN_TechType::InPlace, TechInPlace }, { EGSTN_TechType::RollLeft, TechRoll },
+		{ EGSTN_TechType::RollRight, TechRoll }, { EGSTN_TechType::WallTech, TechWall }, { EGSTN_TechType::WallJumpTech, TechWall } };
+	for (const TPair<EGSTN_TechType, TSubclassOf<UObject>>& Entry : Tech)
+	{
+		if (Entry.Value)
+		{
+			Extension.Tech.Abilities.Add(Entry.Key, Soft(Entry.Value));
+		}
+	}
+
+	TArray<FInstancedStruct>& Data = Kit->Extensions.ExtensionData;
+	const int32 Existing = Data.IndexOfByPredicate([](const FInstancedStruct& Entry) { return Entry.GetPtr<FGSTN_DefenceKitExtension>() != nullptr; });
+	if (Existing != INDEX_NONE && FGSTN_DefenceKitExtension::StaticStruct()->CompareScriptStruct(Data[Existing].GetPtr<FGSTN_DefenceKitExtension>(), &Extension, PPF_None))
+	{
+		return false;
+	}
+	if (Existing != INDEX_NONE)
+	{
+		Data[Existing] = FInstancedStruct::Make(Extension);
+	}
+	else
+	{
+		Data.Add(FInstancedStruct::Make(Extension));
+	}
+	Kit->MarkPackageDirty();
+	return true;
+}
+
+bool UGSTN_DefenceContentLibrary::WriteKitCommandAbility(UGSTN_PrimaryKitDefinition* Kit, FGameplayTag Command, TSubclassOf<UObject> AbilityClass)
+{
+	if (!Kit || !Command.IsValid() || (AbilityClass && !AbilityClass->IsChildOf(UGameplayAbility::StaticClass())))
+	{
+		return false;
+	}
+	const TSoftClassPtr<UGameplayAbility> Wanted = AbilityClass ? TSoftClassPtr<UGameplayAbility>(AbilityClass.Get()) : TSoftClassPtr<UGameplayAbility>();
+	FGSTN_AbilityBinding* Binding = Kit->KitBindings.FindByPredicate([&Command](const FGSTN_AbilityBinding& Entry) { return Entry.Command == Command; });
+	if (Binding && Binding->Ability == Wanted)
+	{
+		return false;
+	}
+	if (!Binding)
+	{
+		Binding = &Kit->KitBindings.AddDefaulted_GetRef();
+		Binding->Command = Command;
+	}
+	Binding->Ability = Wanted;
 	Kit->MarkPackageDirty();
 	return true;
 }

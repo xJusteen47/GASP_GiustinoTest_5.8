@@ -13,13 +13,15 @@
 #include "HAL/IConsoleManager.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Sim/GSTN_LinkSnapshotExt.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
+#include "Simulation/GSTN_CombatSimTypes.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 
 namespace
 {
 	int32 GLinkDebugDraw = 0;
 	FAutoConsoleVariableRef CVarLinkDebugDraw(TEXT("gstn.Combat.Debug.Links"), GLinkDebugDraw,
-		TEXT("1 draws the links of every pawn on this machine: partner line, parked capsule, shown transform and hurtbox anchor, grab target."),
+		TEXT("1 draws the links of every pawn on this machine: partner line, parked capsule, shown transform and hurtbox anchor (socket gizmo), serial, remaining frames, grab target."),
 		ECVF_Cheat);
 
 	void DrawAxes(const UWorld* World, const FTransform& Transform, float Size, float Thickness)
@@ -85,9 +87,15 @@ void FGSTN_LinkDebugDraw::DrawEntity(const AActor* Owner, const UGSTN_LinkPresen
 		}
 	}
 	const FGameplayTag RoleTag = Registry->GetRoleTag(Body.LinkTypeIndex, Body.Role);
-	DrawDebugString(World, Location + FVector(0.f, 0.f, 110.f), FString::Printf(TEXT("%s %s s%d p%d%s"),
+	// Remaining frames at the frame of the state shown here (an interpolated pawn is drawn at its own frame): the timeout of a pending request,
+	// the mash end of a grab; a link with no end (EndFrame 0) shows none
+	const UGSTN_CombatSimComponent* CombatSim = Owner->FindComponentByClass<UGSTN_CombatSimComponent>();
+	const FGSTN_CombatSyncState* Sync = CombatSim ? CombatSim->GetSyncState() : nullptr;
+	const int32 Frame = Sync ? Sync->Core.Input.History.GetLatestFrame() : INDEX_NONE;
+	const FString Left = Body.EndFrame > 0 && Frame != INDEX_NONE ? FString::Printf(TEXT(" %d left"), FMath::Max(Body.EndFrame - Frame, 0)) : FString();
+	DrawDebugString(World, Location + FVector(0.f, 0.f, 110.f), FString::Printf(TEXT("%s %s s%d p%d%s%s"),
 		RoleTag.IsValid() ? *RoleTag.GetTagName().ToString() : TEXT("(no role)"), *Registry->GetLinkType(Body.LinkTypeIndex).GetTagName().ToString(),
-		Body.Serial, static_cast<int32>(Body.Phase), Body.HasFlag(GSTNLinkFlags::Predicted) ? TEXT(" predicted") : TEXT("")), nullptr, Color, 0.f, true);
+		Body.Serial, static_cast<int32>(Body.Phase), *Left, Body.HasFlag(GSTNLinkFlags::Predicted) ? TEXT(" predicted") : TEXT("")), nullptr, Color, 0.f, true);
 
 	FTransform Shown;
 	if (Presentation.GetLinkedTransform(Shown))

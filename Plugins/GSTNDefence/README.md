@@ -167,17 +167,43 @@ fragment at the hit frame plus one; the `Punish` kind (`GSTNDefenceInboxKinds::P
 
 `Tools/GASNPPTest/defence_scenarios.py` (`SUITE_DEFENCE`): `shield_block`, `shield_bubble`, `shield_oos`, `shield_break`, `shield_mode_off`,
 `grab_shield` (a stub until F12), `parry`, `parry_move`, and (F8) `landing_bounce`, `landing_getup`, `tech_ground`, `tech_wall`, `sdi`, each in a
-fresh PIE through `defence_batch()`. The F8 kit content is set in memory by `UGSTN_DefenceContentLibrary::SetKitDefenceMoves` (the plugin's native
-landing and tech abilities). Content: `Tools/GAS/setup_defence_link_content.py`
-writes `/GSTNDefence/Test/DA_DefenceRules_Test` (PvP) and `DA_DefenceRules_TestPvE`; the kit, input config and combat rules are adjusted in memory
-(never saved); the abilities are `UGSTN_GA_Shield` and `UGSTN_GA_CounterSample` (a counter stance sample with a parry window and an `OnParry`
-cancel).
+fresh PIE through `defence_batch()`.
+
+Content (F13), written by `Tools/GAS/setup_defence_link_content.py` (idempotent: compares before it writes, saves only what changed, backs up to
+`Saved/Backups/GAS`; a rerun on current content gives identical hashes) and checked by `Tools/GAS/validate_defence_content.py`:
+
+| Asset | What |
+|---|---|
+| `/GSTNDefence/Test/DA_DefenceRules_Test` | PvP rules, short numbers: shield 100, drain 0.4/frame, regen 0.2 after 10, perfect shield 5 frames on the release, tech window 20, lockout 40, profiles `Shield` and `Counter` |
+| `DA_DefenceRules_TestPvE` | the same with `bShieldEnabled = false` |
+| `GA_Shield_Test`, `GA_CounterTest` | thin Blueprint children of `UGSTN_GA_Shield` and `UGSTN_GA_CounterSample` (parry window + `OnParry` cancel) |
+| `GA_TechInPlace_Test`, `GA_TechRoll_Test`, `GA_TechWall_Test` | the tech set (children of `UGSTN_GA_Tech`; roll = left and right, wall = wall and wall jump) |
+| `GA_GroundBounce_Test`, `GA_GetupRoll_Test`, `GA_GetupNeutral_Test` | the get-up set |
+
+The project test kits that carry them (`/Game/GASNPPTest/Combat/KIT_Test_Defence`, `_DefencePvE` (+ the counter on `Command.Special.Neutral`),
+`_DefenceLanding`, `_DefenceTech`, `_DefenceLink`; copies of `KIT_Test_Hits`) and the Parry and Shield steps in the standard rules are written by
+the same script (`UGSTN_DefenceContentLibrary::WriteKitDefenceExtension`, `WriteKitCommandAbility`: they mark the kit dirty only when it
+changes). The scenarios pick the kit; the shield button on the input config and shortened rule numbers stay in memory. The F7/F8 runtime path
+(`SetKitDefenceExtension`, `SetKitDefenceMoves`, native abilities on `KIT_Test_Hits`) still works with `defence_scenarios.USE_CONTENT = False`.
+
+## Debug (console only, not in Shipping)
+
+| Variable | Draws |
+|---|---|
+| `gstn.Combat.Debug.Shield 1` | the bubble sphere while it exists (cyan and thick inside the perfect shield window), the shield value as a bar (broken, stun frames), a move's parry window (magenta bar and capsule), a parry (white, 20 frames), punished frames |
+| `gstn.Combat.Debug.Tech 1` | the tech lockout bar, what is left of the last press's window, teching and downed frames |
+
+`FGSTN_DefenceDebugDraw` (`GSTNDefenceNP`, private) reads the shown combat state of every registered pawn at that state's own frame and the
+attached rules; it writes nothing. No Gameplay Debugger rows (X19).
 
 ## Tests
 
 `GSTNDefence.NP.*` (F7): `Fragment.*`, `Snapshot.*`, `Tick.*`, `Steps.*` (17 tests, list in docs/notes/m6-doc-deltas.md F7). F8 adds
 `Landing.{BounceSteered, DownedThenGetupRoll, GetupAttackFromSlot, JumpGetsUp, MaxDownedFrames, TechSuccessCancelsImpact, TechFailureResolvesImpactFirst,
 NoTechSetNoLockout}`, `DI.RulesOverloadApplied`, `SDI.{DriftSweptByMover, MaxDistancePerHit, ThrowBlocksSDI}` (12).
+
+`GSTNDefence.Content.SampleAssetsValid` (F13, editor context): the content above loads, validates, carries the spec 11 numbers and the
+ability Blueprints derive from their native classes.
 
 `GSTNDefence.GAS.*` (F6): `AttributeClamp`, `ShieldBindingOmittedWhenUnavailable`, `ShieldAbilityRefusesWhenUnavailable`, `TechSetPerKit`,
 `GetupNeutralRequiresKnockdown`, `ShieldRestoreSeenAsRequest`, and (F7) `ShieldBindingMatchesPress`: on a stock ability system in a transient world, no NP, no asset from disk.

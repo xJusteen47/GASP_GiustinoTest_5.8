@@ -3,6 +3,7 @@
 #include "GSTN_DefenceFragmentRegistration.h"
 
 #include "Data/GSTN_DefenceTracks.h"
+#include "Debug/GSTN_DefenceDebugDraw.h"
 #include "GSTN_DefenceOutcomeApplier.h"
 #include "Sim/GSTN_DefenceInboxKinds.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
@@ -29,7 +30,8 @@ void FGSTN_DefenceFragmentRegistration::Unregister()
 /**
  * Registers the defence fragment and the hooks that give it meaning before the first simulation tick: the snapshot contributor (the
  * extension and the bubble), the tick extension (clocks, stamps, tags, veto), the two track hooks (hold window, parry window), the outcome
- * applier of the Parry and Shield steps, the Punish inbox kind and the loadout extension that attaches a kit's defence to its pawn on every machine. A machine that has the plugin reads and writes the
+ * applier of the Parry and Shield steps, the Punish inbox kind and the loadout extension that attaches a kit's defence to its pawn on every machine
+ * (plus, outside Shipping, the console debug draw of gstn.Combat.Debug.Shield and .Tech). A machine that has the plugin reads and writes the
  * fragment and a machine without it skips the bytes. An entity gets any of it only when its kit carries a defence extension, so a project
  * that enables the plugin and gives no kit one pays a map lookup per entity and tick and nothing on the wire.
  */
@@ -49,10 +51,12 @@ public:
 		FGSTN_LoadoutExtension Loadout;
 		Loadout.ContributeCompileInput = &FGSTN_DefenceAttach::AttachFromLoadout;
 		FGSTN_LoadoutExtensionRegistry::Register(FGSTN_DefenceAttach::GetLoadoutExtensionId(), MoveTemp(Loadout));
+		FGSTN_DefenceDebugDraw::Register();
 	}
 
 	virtual void ShutdownModule() override
 	{
+		FGSTN_DefenceDebugDraw::Unregister();
 		FGSTN_LoadoutExtensionRegistry::Unregister(FGSTN_DefenceAttach::GetLoadoutExtensionId());
 		FGSTN_DefencePunishHandler::Unregister();
 		FGSTN_OutcomeApplierRegistry::Get().Unregister(&Applier);

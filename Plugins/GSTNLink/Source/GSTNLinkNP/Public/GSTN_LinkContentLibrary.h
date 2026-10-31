@@ -10,6 +10,7 @@
 class AActor;
 class UGSTN_CombatRules;
 class UGSTN_PrimaryKitDefinition;
+class UGameplayAbility;
 
 /**
  * Content and harness helpers of the link plugin (Tools/GASNPPTest/link_scenarios.py, the editor): the pipeline steps in a rules asset, a grab
@@ -110,6 +111,17 @@ public:
 	/** Puts back what AddLinkTestBindings changed. False when it changed nothing on this kit */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
 	static bool RemoveLinkTestBindings(UGSTN_PrimaryKitDefinition* Kit);
+
+	/**
+	 * F13 content (Tools/GAS/setup_defence_link_content.py, saved by the script): what AddLinkTestBindings does in memory, written for good from
+	 * content classes: the standard link slots, the bindings (Grab, Pummel, Release for every role with the latched one's as the shake-off, the four
+	 * throws, the latch attack) and a link extension with default rules but the grab's mash base frames. A null class leaves that command unbound.
+	 * No backup is kept (RemoveLinkTestBindings does not undo it). Returns whether the kit changed: dirty only then, so a rerun saves nothing
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool WriteKitLinkContent(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UGameplayAbility> Grab, TSubclassOf<UGameplayAbility> Pummel,
+		TSubclassOf<UGameplayAbility> Release, TSubclassOf<UGameplayAbility> ThrowForward, TSubclassOf<UGameplayAbility> ThrowBack,
+		TSubclassOf<UGameplayAbility> ThrowUp, TSubclassOf<UGameplayAbility> ThrowDown, TSubclassOf<UGameplayAbility> LatchAttack, int32 MashBaseFrames);
 
 	/** In memory: the kit link extension's MaxGrabWeight and MinLatchWeight (a negative value keeps the current one). False without an extension */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")

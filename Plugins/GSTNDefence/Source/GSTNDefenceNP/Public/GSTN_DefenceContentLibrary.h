@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GSTN_DefenceContentLibrary.generated.h"
 
@@ -40,6 +41,24 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
 	static bool SetKitDefenceMoves(UGSTN_PrimaryKitDefinition* Kit, bool bLanding, bool bTechSet);
+
+	/**
+	 * F13 content (Tools/GAS/setup_defence_link_content.py, saved by the script): writes the kit's whole defence extension from content classes:
+	 * the rules, the shield ability (null = none), the get-up set (ground bounce, roll, neutral get-up) and the tech set (TechInPlace for InPlace,
+	 * TechRoll for RollLeft and RollRight, TechWall for WallTech and WallJumpTech; all null = no tech set). Fields not named here keep their
+	 * defaults. Returns whether the kit changed: the package is marked dirty only then, so a rerun with the same content saves nothing
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static bool WriteKitDefenceExtension(UGSTN_PrimaryKitDefinition* Kit, UGSTN_DefenceRules* Rules, TSubclassOf<UObject> ShieldAbility,
+		TSubclassOf<UObject> GroundBounce, TSubclassOf<UObject> GetupRoll, TSubclassOf<UObject> GetupNeutral,
+		TSubclassOf<UObject> TechInPlace, TSubclassOf<UObject> TechRoll, TSubclassOf<UObject> TechWall);
+
+	/**
+	 * F13 content: binds Command to AbilityClass in the kit's own bindings (the first binding of that command; one is added when the kit has
+	 * none). Returns whether the kit changed (dirty only then). Used for the counter move of the PvE test kit (Command.Special.Neutral)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static bool WriteKitCommandAbility(UGSTN_PrimaryKitDefinition* Kit, FGameplayTag Command, TSubclassOf<UObject> AbilityClass);
 
 	/** The held-direction drift used in the actor's current hitstop, cm (the combat state's Hit.SDIDistanceUsed); -1 without a combat state */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Debug")

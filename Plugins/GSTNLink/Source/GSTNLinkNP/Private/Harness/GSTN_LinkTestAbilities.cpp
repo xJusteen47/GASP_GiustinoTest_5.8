@@ -30,6 +30,8 @@ namespace
 		FGSTN_TimelineTrack_Hitbox Track;
 		Track.StartFrame = Start;
 		Track.EndFrame = End;
+		// The whole body, spelled as the group that holds every part (the timeline validator refuses an empty selector), like the project's test move
+		Track.Part.GroupName = TEXT("Body");
 		Track.Hitboxes.Add(Spec);
 		Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Track));
 	}
