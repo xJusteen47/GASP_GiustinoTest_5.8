@@ -1164,8 +1164,12 @@ SUITE_LATCH = [f'latch_big_enemy_{p}' for p in LATCH_PAIRINGS]
 SUITE_LINK = SUITE_LINK + SUITE_LATCH
 
 
-def _latch(pairing):
-    name = f'latch_big_enemy_{pairing}'
+def _latch(pairing, bystander_in_path=False):
+    """bystander_in_path: the uninvolved pawn stands in front of the enemy for the enemy's attack. On the enemy's own client that attack
+    predicted a hit on it that the authority did not make (hit targets 3 against 2, diag-latch-reconciles-2.log): a legitimate mispredict,
+    judged on convergence (the enemy's corrected frames equal the authority's, the bystander's damage equal, at most one hit on it) with the
+    correction count logged, not budgeted"""
+    name = f'latch_big_enemy_{"bystander_" if bystander_in_path else ""}{pairing}'
     rig = _GrabRig(name, LATCH_PAIRINGS[pairing])
     run = rig.run
     kit = _kit()
@@ -1186,9 +1190,14 @@ def _latch(pairing):
                     e = actor(wi, rig.bkey).get_actor_transform()
                     q = e.inverse_transform_location(unreal.Vector(*p))
                     local[wi].append((t, (q.x, q.y, q.z)))
+                    if wi == rig.ib and wi > 0:
+                        # The frame this world shows the enemy at (its Mover's last step), for the frame-aligned comparison
+                        fr = json.loads(g.comps(g.worlds()[wi])[rig.bkey].get_state_snapshot()).get('serverFrame')
+                        framed.append((t, p, fr))
         except Exception:
             pass
     local = {wi: [] for wi in range(len(g.worlds()))}
+    framed = []
     handle = unreal.register_slate_post_tick_callback(tick)
 
     def weights():
@@ -1234,15 +1243,38 @@ def _latch(pairing):
             p50, p95, mx, d = e
             role = 'latcher' if wi == rig.ia else 'latched' if wi == rig.ib else 'observer'
             if wi == rig.ib:
-                # The latched enemy's own world predicts the enemy ahead of the server by a lead that drifts with the input buffer, and the
-                # server reference is sampled once per editor frame, so the comparison below is noisiest at the sharp turns (a 45 cm offset
-                # swung at the turn rate). Both are gated: that comparison, and the rider staying at one place on the enemy as this world shows
-                # it (the presentation places it from the partner's transform, so this one holds by construction: a regression guard)
+                # The latched enemy's own world predicts the enemy ahead of the server, and a reference sampled once per editor frame and
+                # aligned by one constant delay read the sampling at the turns (p95 19-30 cm, dev-latch-10..12). Gated instead: each shown
+                # rider sample against where the authority placed the rider at the SAME frame (the frame this world shows the enemy at; the
+                # authority's enemy pose at that frame from the recorder's final ticks, the rider at the authority's own offset on it). The
+                # time-aligned figure stays as a note. Also gated: the rider stays at one place on the enemy as this world shows it (the
+                # presentation places it from the partner's transform, so it holds by construction: a regression guard)
+                run.note(f'world {wi} (latched) against the server, time-aligned: p50 {p50:.1f} p95 {p95:.1f} max {mx:.1f} cm, delay {d * 1000:.0f} ms')
+                srv = run.final_by_frame('srv', rig.marks['walk_start']['t'] - 1.0, rig.marks['walk_end']['t'] + 1.0) if run.key == rig.bkey else {}
+                spts = [c for t, c in local[0] if inside(t, 0.0)]
+                off = tuple(sorted(c[k] for c in spts)[len(spts) // 2] for k in range(3)) if spts else None
+                errs = []
+                for t, p, fr in framed:
+                    s0 = srv.get(fr)
+                    if not inside(t, 0.5) or s0 is None or s0.get('yaw') is None or off is None:
+                        continue
+                    c, sn = math.cos(math.radians(s0['yaw'])), math.sin(math.radians(s0['yaw']))
+                    ref = (s0['loc'][0] + off[0] * c - off[1] * sn, s0['loc'][1] + off[0] * sn + off[1] * c, s0['loc'][2] + off[2])
+                    errs.append(math.dist(p, ref))
+                if len(errs) < 20:
+                    res.append((f'world {wi} (latched): the rider presentation, frame-aligned, sampled', False,
+                                f'{len(errs)} aligned samples of {len(framed)}, authority frames {len(srv)}'))
+                else:
+                    fp50, fp95, fmx = _percentile(errs, 0.5), _percentile(errs, 0.95), max(errs)
+                    res.append((f'world {wi} (latched): the rider follows the enemy within S1, aligned by frame (p95 <= {S1["partner_p95"]} cm, max <= {S1["max"]} cm)',
+                                fp95 <= S1['partner_p95'] and fmx <= S1['max'],
+                                f'p50 {fp50:.1f} p95 {fp95:.1f} max {fmx:.1f} cm, {len(errs)} samples, authority offset {tuple(round(v, 1) for v in off)}'))
                 pts = [c for t, c in local[wi] if inside(t, 0.5)]
                 med = tuple(sorted(c[k] for c in pts)[len(pts) // 2] for k in range(3)) if pts else (0.0, 0.0, 0.0)
                 devs = [math.dist(c, med) for c in pts]
                 res.append((f'world {wi} (latched, its own world): the rider stays at one place on the enemy as shown (max <= 5 cm)',
                             bool(devs) and max(devs) <= 5.0, f'local offset {tuple(round(v, 1) for v in med)}, max deviation {max(devs) if devs else -1:.1f} cm, {len(pts)} samples'))
+                continue
             res.append((f'world {wi} ({role}): the rider follows the enemy within S1 (p95 <= {S1["partner_p95"]} cm, max <= {S1["max"]} cm)',
                         p95 <= S1['partner_p95'] and mx <= S1['max'], f'p50 {p50:.1f} p95 {p95:.1f} max {mx:.1f} cm, delay {d * 1000:.0f} ms, {len(mine)} samples'))
         return res
@@ -1255,7 +1287,10 @@ def _latch(pairing):
             res.append((f'client {ci}: no unforced reconcile while the enemy walks and turns with the rider on', clean == 0, f'{clean}'))
             hits = rb('walk2_start', ci) - rb('pre_latch_attack', ci)
             # One reconcile is 2 steps of the harness counter (the spike's measure): at most one per hit over the two hits of the window
-            res.append((f'client {ci}: at most one correction per hit in the attack window (two hits, 2 counter steps each)', hits <= 4, f'{hits} counter steps'))
+            if bystander_in_path:
+                run.note(f'client {ci}: attack window with the bystander in the path: {hits} counter steps (logged, judged on convergence)')
+            else:
+                res.append((f'client {ci}: at most one correction per hit in the attack window (two hits, 2 counter steps each)', hits <= 4, f'{hits} counter steps'))
         return res
 
     def judge():
@@ -1290,6 +1325,34 @@ def _latch(pairing):
         return 'bystander far', out
     steps += [(t0 + 0.05, far)]
     t = t0 + 0.5
+    hits_on_c = {}
+
+    def received_on_c(label):
+        def f():
+            hits_on_c[label] = [x for x in g.event_log(ckey) if x[0] == 'T' and x[1] == 'HitReceived']
+            hits_on_c[label + '_dmg'] = g.damage_of(0, ckey)
+            return 'hits received by the bystander', label, len(hits_on_c[label])
+        return f
+
+    def converged():
+        # The enemy's corrected frames on its own world against the authority's, over the attack and one second after it
+        if rig.ib == 0 or run.key != rig.bkey:
+            return True, 'the enemy is the host: no predicting copy'
+        a0, a1 = rig.marks['pre_enemy_attack']['t'], rig.marks['post_enemy_attack']['t']
+        srv, cli = run.final_by_frame('srv', a0, a1), run.final_by_frame('cli', a0, a1)
+        common = sorted(set(srv) & set(cli))
+        worst = max((math.dist(srv[f]['loc'], cli[f]['loc']) for f in common), default=-1.0)
+        modes = sum(1 for f in common if srv[f]['mode'] != cli[f]['mode'])
+        dmg = {wi: g.damage_of(wi, ckey) for wi in range(len(g.worlds()))}
+        # No duplicate: each hit the authority published on the bystander has its own frame, and its damage is their sum (a move with two hit
+        # windows hits twice; the same hit counted twice would share a frame or add damage that no event explains)
+        new = hits_on_c['after'][len(hits_on_c['before']):]
+        frames = [x[2] for x in new]
+        gained = hits_on_c['after_dmg'] - hits_on_c['before_dmg']
+        dup_free = len(frames) == len(set(frames)) and abs(gained - sum(x[3] for x in new)) < 0.6
+        ok = len(common) >= 30 and worst <= 1.0 and modes == 0 and dup_free and len({round(v, 2) for v in dmg.values()}) == 1
+        return ok, (f'{len(common)} common frames, worst location diff {worst:.2f} cm, mode diffs {modes}; hits on the bystander (frame, damage) '
+                    f'{[(x[2], x[3]) for x in new]}, damage gained {gained}; its damage per world {dmg}')
     # The enemy walks and turns with the rider on (clean window 1), the rider's latch attack lands while it walks, the enemy stops and attacks
     # (its spin may hit the rider: one correction for the hit's victim), then a second clean walk window. Rider presentation over the clean windows
     req = {}
@@ -1306,6 +1369,9 @@ def _latch(pairing):
         a = k * 0.8
         steps.append((t + 0.5 * k, hold_walk(True, (math.sin(a), math.cos(a), 0.0))))
     w = t + 2.5
+    # Clean window 2 starts W2 after the rider's attack; the bystander variant moves the bystander away at w + 2.7 first, and that teleport
+    # costs every client one correction, so its window starts later
+    W2 = 3.2 if bystander_in_path else 2.7
     steps += [(w - 0.05, mark_t('pre_latch_attack')), (w, rig.tap(rig.ia, 'Attack')), (w + 0.7, mark_t('post_latch_attack')),
               (w + 0.7, run.at('the latch attack hit the walking enemy (5 damage on the authority) and nobody else', lambda: (
                   abs((rig.marks['post_latch_attack']['dmg'][0] - rig.marks['pre_latch_attack']['dmg'][0]) - 5.0) < 0.6
@@ -1318,9 +1384,16 @@ def _latch(pairing):
               (w + 0.8, hold_walk(False)), (w + 1.45, request('before')), (w + 1.5, rig.tap(rig.ib, 'Attack')), (w + 1.9, request('after')),
               (w + 1.9, run.at('the latched enemy attacks while ridden: its command came out on the authority', lambda: (
                   req['after'][1] != req['before'][1] and req['after'][0] > 0, f"request {req['before']} -> {req['after']}"))),
-              (w + 1.95, hold_walk(True, (0.0, -1.0, 0.0))), (w + 2.7, mark_t('walk2_start'))]
+              (w + 1.95, hold_walk(True, (0.0, -1.0, 0.0))), (w + W2, mark_t('walk2_start'))]
+    if bystander_in_path:
+        steps += [(w + 1.0, lambda: ('bystander in the path', g._place_near(rig.ib, ckey, (110.0, 0.0)))), (w + 1.4, received_on_c('before')),
+                  # Frames up to w + 2.2 (the attack is over by then), judged at w + 2.65 once their corrections have arrived
+                  (w + 1.42, mark_t('pre_enemy_attack')), (w + 2.2, mark_t('post_enemy_attack')), (w + 2.6, received_on_c('after')),
+                  (w + 2.65, run.at('the attack of the enemy with the bystander in its path converged: corrected frames equal the authority, '
+                                    'no duplicate hit on the bystander, equal damage everywhere', converged)),
+                  (w + 2.7, far)]
     # Clean window 2: 2.5 s more, retracing window 1 (the opposite directions) so the pair stays on the level (a longer walk away fell off its edge)
-    w2 = w + 2.7
+    w2 = w + W2
     for k in range(1, 5):
         a = k * 0.8
         steps.append((w2 + 0.5 * k, hold_walk(True, (-math.sin(a), -math.cos(a), 0.0))))
@@ -1348,6 +1421,14 @@ def _latch(pairing):
 
 for _p in LATCH_PAIRINGS:
     globals()[f'scenario_latch_big_enemy_{_p}'] = (lambda p: (lambda: _latch(p)))(_p)
+
+
+def scenario_latch_big_enemy_bystander_client_latches_client():
+    _latch('client_latches_client', bystander_in_path=True)
+
+
+SUITE_LATCH = SUITE_LATCH + ['latch_big_enemy_bystander_client_latches_client']
+SUITE_LINK = SUITE_LINK + ['latch_big_enemy_bystander_client_latches_client']
 
 
 _probe = {'rows': [], 'mark': None, 'h': None, 't0': 0.0}

@@ -369,6 +369,8 @@ private:
 		int32 SimTimeMs = 0;
 		int32 ServerFrame = 0;
 		FVector Location = FVector::ZeroVector;
+		/** Actor yaw at the tick: with Location, the pose a parked partner is placed from (latch scenarios, aligned by ServerFrame) */
+		float Yaw = 0.f;
 		FVector Velocity = FVector::ZeroVector;
 		FName Mode;
 		bool bResimulating = false;

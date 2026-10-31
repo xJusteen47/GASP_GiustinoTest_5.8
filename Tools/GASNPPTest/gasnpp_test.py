@@ -949,7 +949,7 @@ class _Run:
             newest = ticks[-1]['t']
             for e in ticks:
                 self._seq += 1
-                self.sim.append({'t': editor_sample['t'] - (newest - e['t']) / 1000.0, side: {'ms': e['t'], 'tags': set(e['tags']), 'loc': tuple(e['loc']),
+                self.sim.append({'t': editor_sample['t'] - (newest - e['t']) / 1000.0, side: {'ms': e['t'], 'tags': set(e['tags']), 'loc': tuple(e['loc']), 'yaw': e.get('yaw'),
                                                                                               'vel': tuple(e['vel']), 'mode': e['mode'],
                                                                                               'rs': bool(e.get('rs')), 'fr': e.get('fr'), 'seq': self._seq}})
 
