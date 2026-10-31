@@ -1,0 +1,239 @@
+// Combat simulation (GAS-NPP fork): the part of the combat component that runs the attacker side of the tick (combat-m4-hits 6).
+
+#include "Simulation/GSTN_CombatSimComponent.h"
+
+#include "Debug/GSTN_CombatDebugDraw.h"
+#include "GameFramework/Actor.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
+#include "MoverDataModelTypes.h"
+#include "MoverSimulationTypes.h"
+#include "NetworkPredictionTickState.h"
+#include "Rules/GSTN_CombatRules.h"
+#include "Simulation/GSTN_CombatTableSet.h"
+#include "Simulation/GSTN_CombatTimelineLogic.h"
+#include "World/GSTN_CombatWorldSubsystem.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatAttacker, Log, All);
+
+void UGSTN_CombatSimComponent::SetTestFriendlyFire(bool bEnabled)
+{
+	if (CombatRules)
+	{
+		CombatRules->bFriendlyFire = bEnabled;
+	}
+}
+
+void UGSTN_CombatSimComponent::SetCombatRules(UGSTN_CombatRules* Rules)
+{
+	CombatRules = Rules;
+	// The surface layer of the impacts is part of the rules asset, loaded here and never inside the simulation. A table set by hand stays
+	if (CombatRules && !CombatRules->SurfaceImpactTable.IsNull())
+	{
+		ImpactTable = CombatRules->SurfaceImpactTable.LoadSynchronous();
+	}
+}
+
+bool UGSTN_CombatSimComponent::ReadOwnPose(FTransform& OutTransform, FVector& OutUp)
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return false;
+	}
+	// The tracker holds the Mover state of the last simulated frame, which is the end of the previous one at this point of the tick
+	const UGSTN_MoverSimStateTracker* Tracker = GetJumpTracker();
+	const FMoverDefaultSyncState* Mover = Tracker ? Tracker->GetSyncState().SyncStateCollection.FindDataByType<FMoverDefaultSyncState>() : nullptr;
+	if (Mover)
+	{
+		OutTransform = FTransform(Mover->GetOrientation_WorldSpace(), Mover->GetLocation_WorldSpace());
+		OutUp = Tracker->GetUpDirection();
+	}
+	else
+	{
+		OutTransform = Owner->GetActorTransform();
+		OutTransform.SetScale3D(FVector::OneVector);
+		OutUp = OutTransform.GetUnitAxis(EAxis::Z);
+	}
+	return true;
+}
+
+void UGSTN_CombatSimComponent::StampMoveOrigin(FGSTN_CombatSyncCore& Core, int32 Frame)
+{
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame != Frame)
+	{
+		return;
+	}
+	FTransform Pose;
+	FVector Up;
+	if (ReadOwnPose(Pose, Up))
+	{
+		Core.Hit.MoveOrigin = FGSTN_MoveOrigin::Make(Pose);
+	}
+}
+
+void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncCore& Core, const FGSTN_StepSnapshot* Snapshot, const FGSTN_HitGroupMask& GroupMask)
+{
+	const int32 Frame = TimeStep.Frame;
+	const bool bLog = GSTNCombatDebug::IsHitLogOn();
+	const bool bDraw = GSTNCombatDebug::IsHitboxDrawOn();
+	AttackerDebugShapes.Reset();
+	AttackerHits.Reset();
+	LastStepMs = static_cast<float>(TimeStep.StepMS);
+	PredictedHits.RemoveAll([Frame](const FGSTN_PredictedHitView& View) { return View.Frame >= Frame || View.Frame < Frame - 240; });
+	if (bLog)
+	{
+		HitLogByFrame.Remove(Frame);
+		HitboxTraceByFrame.Remove(Frame);
+	}
+
+	FGSTN_AttackerTickInput In;
+	In.Frame = Frame;
+	In.AttackerId = RegisteredEntityId;
+	In.AttackerTeam = ResolveTeam();
+	// A remote player's pawn on the authority hits the victims as that player saw them (M4 H10); every other attacker the shared snapshot
+	In.Snapshot = Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE ? ResolveAttackerSnapshot(TimeStep, Snapshot) : Snapshot;
+	In.Rules = CombatRules;
+	In.GroupMask = GroupMask;
+	In.StepSeconds = TimeStep.StepMS * 0.001f;
+	In.DebugShapes = (bLog || bDraw) ? &AttackerDebugShapes : nullptr;
+	// A timeline that ended into its recoil has no hitboxes any more
+	if (Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE)
+	{
+		In.Timeline = GetRegistryTimeline(Tables(), Core.ActiveTimeline);
+		In.TimelineFrame = FMath::Max(Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames, 0);
+	}
+	if (!In.Timeline || !ReadOwnPose(In.Root, In.Up))
+	{
+		return;
+	}
+	// A contributor placed this entity in the step snapshot (a parked link role riding its partner, M6 F12): its moves start from there, not from its
+	// capsule, which stays where the link began. The placement of the end of the previous frame, the same bytes on every machine
+	if (const FGSTN_SnapshotEntry* Own = In.Snapshot ? In.Snapshot->Find(In.AttackerId) : nullptr; Own && Own->bPlacedByContributor)
+	{
+		In.Root.SetLocation(Own->Transform.GetLocation());
+		In.Root.SetRotation(Own->Transform.GetRotation());
+	}
+
+	FGSTN_CombatAttacker::Tick(In, Core, AttackerScratch, AttackerHits);
+
+	UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
+	int16 BindingOfTimeline = INDEX_NONE;
+	if (!AttackerHits.IsEmpty())
+	{
+		// The binding that started the running timeline, for the tags of the victim's events (the first one that names it)
+		const UGSTN_CombatTableSet& Set = Tables();
+		for (int32 Index = 0; Index < Set.BindingTimeline.Num(); ++Index)
+		{
+			if (Set.BindingTimeline[Index] == Core.ActiveTimeline)
+			{
+				BindingOfTimeline = static_cast<int16>(Index);
+				break;
+			}
+		}
+	}
+	// A ricochet ends the timeline into its recoil (M4 H12). No hitstop, confirm or meter were given to the attacker (the tick wrote none)
+	for (const FGSTN_AttackerHit& Hit : AttackerHits)
+	{
+		if (Hit.bRicochet)
+		{
+			const UGSTN_CombatTableSet& Set = Tables();
+			FGSTN_CombatTimelineLogic::StartRecoil(Core, Frame, GetRegistryTimeline(Set, Core.ActiveTimeline), Set.GetRicochetFallback(Core.ActiveWeaponIndex));
+			break;
+		}
+	}
+	for (const FGSTN_AttackerHit& Hit : AttackerHits)
+	{
+		if (Hit.bReplacedTarget && !bLoggedTargetOverflow)
+		{
+			bLoggedTargetOverflow = true;
+			UE_LOG(LogGSTNCombatAttacker, Warning, TEXT("%s: the hit target ring (%d) is full, the oldest target of the move was replaced; a hitbox group that hits more victims than that can hit the first ones again"),
+				*GetPathName(), FGSTN_HitSyncState::MaxHitTargets);
+		}
+		if (!Hit.bRicochet)
+		{
+			FGSTN_PredictedHitView& View = PredictedHits.AddDefaulted_GetRef();
+			View.Frame = Frame;
+			View.VictimId = Hit.VictimId;
+			View.HitGroup = Hit.HitGroup;
+			View.Timeline = Core.ActiveTimeline;
+			View.HitboxIndex = Hit.Entry.AttackerHitboxIndex;
+			View.AttackerHitstopFrames = Hit.AttackerHitstopFrames;
+			View.bHasKnockback = Hit.bHasKnockback;
+			View.Knockback = Hit.Knockback;
+			View.CueTag = Hit.CueTag;
+			View.HitLocation = Hit.HitLocation;
+		}
+		// Also on a ricochet: the victim still gets the entry for its cue and event. A victim that does not tick here refuses it
+		if (World)
+		{
+			FGSTN_HitInboxEntry Entry = Hit.Entry;
+			Entry.AttackerTimeline = Core.ActiveTimeline;
+			Entry.AttackerBinding = BindingOfTimeline;
+			World->PostHit(Hit.VictimId, Entry);
+		}
+	}
+
+	if (bLog)
+	{
+		FString Trace;
+		for (const FGSTN_AttackerDebugShape& Shape : AttackerDebugShapes)
+		{
+			const FVector Center = (Shape.Shape.Local * Shape.World).GetLocation();
+			Trace += FString::Printf(TEXT("%d:%d:%d:%.2f,%.2f,%.2f;"), Frame, Shape.HitboxIndex, Shape.Space, Center.X, Center.Y, Center.Z);
+		}
+		if (!Trace.IsEmpty())
+		{
+			HitboxTraceByFrame.Add(Frame, Trace);
+			HitboxTraceByFrame.Remove(Frame - 512);
+		}
+		FString Log;
+		for (const FGSTN_AttackerHit& Hit : AttackerHits)
+		{
+			Log += FString::Printf(TEXT("%d:%d:%d:%d:%d:%d:%d;"), Frame, Hit.VictimId, Hit.HitGroup, Hit.Entry.AttackerHitboxIndex, Hit.Entry.HurtboxIndex, Hit.bRicochet ? 1 : 0, Hit.AttackerHitstopFrames);
+		}
+		if (!Log.IsEmpty())
+		{
+			HitLogByFrame.Add(Frame, Log);
+			HitLogByFrame.Remove(Frame - 512);
+		}
+	}
+}
+
+FString UGSTN_CombatSimComponent::GetInboxLog() const
+{
+	TArray<int32> Frames;
+	InboxLogByFrame.GetKeys(Frames);
+	Frames.Sort();
+	FString Out;
+	for (const int32 Frame : Frames)
+	{
+		Out += InboxLogByFrame[Frame];
+	}
+	return Out;
+}
+
+FString UGSTN_CombatSimComponent::GetHitLog() const
+{
+	TArray<int32> Frames;
+	HitLogByFrame.GetKeys(Frames);
+	Frames.Sort();
+	FString Out;
+	for (const int32 Frame : Frames)
+	{
+		Out += HitLogByFrame[Frame];
+	}
+	return Out;
+}
+
+FString UGSTN_CombatSimComponent::GetHitboxTrace() const
+{
+	TArray<int32> Frames;
+	HitboxTraceByFrame.GetKeys(Frames);
+	Frames.Sort();
+	FString Out;
+	for (const int32 Frame : Frames)
+	{
+		Out += HitboxTraceByFrame[Frame];
+	}
+	return Out;
+}

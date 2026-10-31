@@ -1,0 +1,338 @@
+# GSTNCombatNP
+
+The Network Prediction adapter of [GSTNCombat](../GSTNCombat/README.md). It was the `GSTNCombatNP` module of the
+`GSTNCombat` plugin and is now its own plugin so that `GSTNCombat` (`GSTNCombatCore`) works in a project without the GAS-NPP
+fork. The module keeps its name, so class paths (`/Script/GSTNCombatNP.*`) and include paths are unchanged and no class
+redirect is needed. Design: [docs/architecture/combat.md](../../docs/architecture/combat.md).
+
+Status: **experimental (0.1)**.
+
+## What it contains
+
+The combat NP model: `UGSTN_CombatSimComponent` (`Simulation/GSTN_CombatSimComponent.h`, model `GSTN_Combat`, sort priority
+`PreKinematicMovers - 3`) and its sync/aux/input types (`Simulation/GSTN_CombatSimTypes.h`): the sync state is `FGSTN_CombatSyncCore` (the embedded input state
+and the hitstop window) plus a list of sync fragments (below). It embeds the input command and
+the input sim state of [GSTNInputNP](../GSTNInputNP/README.md) and is the host of its simulator (`IGSTN_InputSimHost`), so the
+component only adds the debug hitstop. It also implements `IGSTN_CommandSourceInterface` (the activation context and
+`IsCommandButtonHeld` for abilities), honours the command locks (`Input.Lock.Command[.<root>]`) and publishes
+`Input.Event.CommandExecuted` through `UGSTN_SimEventSubsystem` on the authority only (the listen-server host's own pawn
+included). Everything that touches the ability system goes through here. `UGSTN_CombatSimComponent` is `Blueprintable` so a
+project can subclass it for its own defaults; its `InputConfig` and `SlotBindings` are soft references resolved once in
+`BeginPlay`, and its simulation hooks stay in C++.
+
+## Sync fragments and tick extensions
+
+**Action part (combat-m3 7.1).** `FGSTN_CombatSyncCore` also carries what the combatant is doing: `ActionState` (`Actionable`, `InTimeline`),
+`ActiveTimeline` (registry index or `INDEX_NONE`), `ActiveSource` (`EGSTN_ActivationSource`, from GSTNInputNP), `TimelineStartFrame` and
+`TimelinePausedFrames` (timeline frame = `F - TimelineStartFrame - TimelinePausedFrames`), `PausedFramesTotal` (combat clock = `F - PausedFramesTotal`),
+`ActiveWeaponIndex`, `LoadoutRevision` and `Requests`, a fixed array of four `{ Type, Frame, Arg }` (`Simulation/GSTN_CombatActionTypes.h`). An idle
+combatant holds the defaults and pays **one bit** for the whole part, so a game that applies no loadout sends what it sent before plus that bit. A request is
+only valid in the frame it was made: the combat tick must call `Requests.PruneBefore(Frame)` at the top of every frame (C10 wires it; no request is made before then), so the wire never carries a dead one.
+`LoadoutRevision` is written only by the server, out of band, with `UGSTN_CombatSimComponent::ServerWriteLoadoutRevision`; the tick makes requests and adopts
+abilities only while `Core.IsLoadoutCurrent(TableRevision)` (the loadout revision gate, combat-m3 7.8). All of it takes part in `ShouldReconcile`, `ToString` and
+`Interpolate` (discrete: the newer frame). The tick reads and writes them (the clock, the requests, adoption, the weapon index); the types are
+`FGSTN_CombatRequest` and `FGSTN_CombatRequests` (`Find` and `Remove` by type, frame and argument: one frame can hold the commits of a replaced
+timeline and of its replacement), `FGSTN_CombatAuxState` (the model's aux state, empty) and `FGSTN_CombatTickContext` (what a tick extension sees).
+The `Combat.State.*` tags exist in `GSTNCombatCore` but the tick does not project them yet.
+
+**Clock, aim and command marker (for abilities).** The component answers three queries about the frame being simulated, for an
+ability's activation or tick (not presentation code): `GetCombatClock()` is the Network Prediction frame minus every hitstop frame so
+far (`Core.PausedFramesTotal`; the pure helper is `FGSTN_CombatClock`), so it stands still in hitstop (the tick adds one to it for every frame inside the window of the previous state, and to `TimelinePausedFrames`
+when a timeline runs, so a timeline also stands still and ends later by the hitstop length); `IsInTimeline()` is
+`Core.ActionState == InTimeline`; `GetAimRotation()` is the camera aim of the frame's command (`HasAim()` says whether the command carried
+one, see `bSendCameraAim` in [GSTNInputNP](../GSTNInputNP/README.md)). The aim is copied at the top of each combat tick into three scalars,
+so a re-simulation reads the command it replays. `FGSTN_InputHostUtils::IsCommandActivation(Handle)` is true for the spec's own handle inside `CanExecuteBinding` and
+`ExecuteRequest` (an `FGSTN_CommandActivationScope(Handle)` on the stack): an ability uses it to tell a command from a trigger or an effect,
+and an ability that a command's ability triggers synchronously (another handle) is not a command.
+
+**`UGSTN_GA_Base` (combat-m3 6.1; policy enum `EGSTN_InterruptPolicy`: `SkipIfBusy`, `InterruptCurrent`).** The base of the abilities that run under the combat model (`Abilities/GSTN_GA_Base.h`, `Abstract, Blueprintable`,
+derives from the fork's `UNpGameplayAbility`). It gives an ability: `GetCombatComponent()` (cached when the avatar is set);
+`GetActivationContext()` (the command, press frame, trigger button and source of the activation, captured in `ActivateAbility` into sync
+variables and rebuilt on demand; the command is stored as its table index, never as a tag); `bEndOnTriggerRelease` (ends the ability on the
+frame the button that started it is no longer held in the input history; no effect on a start without a button); `GetCombatClock()` and
+`WaitCombatFrames(N)` (counts N combat frames, hitstop excluded, from a start clock in a sync variable, then calls `OnCombatFramesElapsed` /
+the Blueprint event; one wait at a time, never called while a frame is restored); `GetAimRotation()`; and `InterruptPolicy`
+(`SkipIfBusy` refuses a non-command activation while a timeline runs; `InterruptCurrent` cancels the running abilities that carry any tag of
+`InterruptTags`; a command is never subject to it). Call the parent's `ActivateAbility` before reading the context. The decisions are
+the pure `FGSTN_GARules` (`Abilities/GSTN_GATypes.h`). Costs, cooldowns, block/cancel tags and triggers are the ability system's own.
+
+**Timeline abilities (combat-m3 6.2, 7.2).** `UGSTN_GA_BaseCombat` derives from `UGSTN_GA_Base` and carries frame data (`Timeline`, or a
+`TimelineAsset` that wins): total and first actionable frames, a startup override window, cancel windows, a cancellable tail, a montage.
+The component builds a **timeline registry** from the bindings of its command table (the timeline ability classes, each once, in binding order;
+the index is what `ActiveTimeline` stores). Each combat tick: requests older than the frame are pruned; the running timeline is evaluated
+(`FGSTN_CombatTimelineLogic::AdvanceClock`: it ends at its length, or when its ability is gone; crossing the commit frame requests
+`CommitTimeline`); the input simulation asks the component `IsCommandAllowed` for every candidate (`FGSTN_CombatTimelineLogic::IsCommandAllowed`:
+free when idle, in the tail or from the first actionable frame; inside the override window a command named by `OverrideInto`, or of a higher tier
+when it is empty; inside an open cancel window a command its query names); a timeline command that wins starts the timeline
+(`Start`: a `CancelTimeline` request for the replaced entry and the new state). The ability is activated by the input request of the same frame,
+finds itself in the combat state, plays its montage and ends when the state stops naming it. The ability system's pre-tick runs
+`CancelTimeline`, the input request, then `CommitTimeline` (`CommitAbility`), so a timeline replaced inside its override window never pays.
+**Adoption (combat-m3 7.4).** A timeline ability that something other than a command activates (a gameplay event or tag trigger, an effect, another
+ability, AI) finds no start in the combat state, so it marks itself as waiting (sync var `bAwaitingAdoption` plus the loose tag
+`Combat.Ability.AwaitingAdoption`) and the combat tick of the next frame adopts it (`FGSTN_CombatTimelineLogic::Adopt`: the first waiting entry in registry
+order wins, the others get a `CancelAbility` request, the timeline state is written with source `Adopted`); the ability starts in its own tick of that frame.
+The class has to be in the registry: list it in `UGSTN_CombatSimComponent::AdoptableTimelines` (same list on every machine) or bind it to a command.
+The tick publishes `Combat.Event.TimelineStarted` (source tag `Combat.Source.{Command,Forced,Adopted}`) when a timeline reaches its commit.
+Not done yet: tag projection, facing, movement track, the other events (C12), hits (M4).
+All of the logic is pure and covered by `GSTNCombat.NP.Timeline.*`.
+
+**Sync state.** `FGSTN_CombatSyncState` is `Core` (`FGSTN_CombatSyncCore`: the input state, the hitstop window and the action part) followed by
+`Fragments`, a list of `FGSTN_SyncFragment` from `GSTNCombatCore` that features add per entity. The core's bytes are the same with
+or without fragments, and an entity with none pays one bit for the list (the format and the reason it is length-prefixed are in the
+[GSTNCombat README](../GSTNCombat/README.md)). A fragment mismatch against the authority asks for a reconcile like the hitstop window
+does, and so does a mismatch of the input state (it is authoritative; the trace names the field). Interpolated proxies take the newer core, and each fragment
+decides how it blends (default: the newer one). No production fragment type exists yet (the tests define their own).
+
+**Tick extensions.** `IGSTN_CombatTickExtension` (`Simulation/GSTN_CombatTickExtension.h`) is the C++ per-frame hook an optional plugin registers in
+`FGSTN_CombatTickExtensionRegistry::Get()`. The combat tick calls the registry at four fixed points (`EGSTN_CombatHookPoint`:
+`AfterClocks`, `BeforeCandidates`, `AfterExecute`, `BeforeTagProjection`, the steps of combat-m3 7.2); with nothing registered each call is an empty loop.
+Extensions run ordered by `GetPriority()` (lower first), ties by `GetTypeId()` (a `GSTNFeatureIds` value), so the order is the same on every
+machine whatever the plugin load order; two extensions with one type id are refused. An extension is simulation code: deterministic, its state only in
+its own sync fragment, no component, world or ability system reads, no net-mode branches. Until the timeline clock and tag projection exist
+in the model the four points sit around the input simulator call (which does candidates, resolution and the request in one function); their meaning
+is fixed and the call sites move with the model.
+
+*Register an extension:* derive from `IGSTN_CombatTickExtension`, give it a `GetTypeId()` (a `GSTNFeatureIds` value) and a `GetPriority()`, implement
+the hooks it needs and keep its state in its own `FGSTN_SyncFragment`; then call `FGSTN_CombatTickExtensionRegistry::Get().Register(&Extension)` once
+from the module's startup (and `Unregister` at shutdown). The hook receives an `FGSTN_CombatTickContext` (`In` read-only, `Out` for its fragment).
+
+*Can-act veto (M6 F2):* `IGSTN_CombatTickExtension::BlocksActions(Context)` (default false) is asked of every extension once a frame, after the
+`BeforeCandidates` point and before the candidates are collected (`FGSTN_CombatTickExtensionRegistry::BlocksActions`, OR of the answers); a true answer
+makes `UGSTN_CombatSimComponent::IsCommandAllowed` refuse every command that frame, as a hit reaction does (the input is still recorded and aged, the
+attacker step and the clocks are not affected). It reads `Context.In/Out` and nothing else. `FGSTN_CombatTickContext::Timeline` points at the clock's
+evaluation of the frame so an extension at `AfterClocks` can read the windows the track hooks stamped.
+
+*Model order:* the combat model (`GSTN_Combat`) sorts at `PreKinematicMovers - 3`, the embedded input model `GSTN_Input` (sort priority 46)
+is part of its state and has no tick of its own; the ability system is `- 2`, Mover after it.
+
+## Dependencies
+
+- Plugins (all non-optional, see `GSTNCombatNP.uplugin`): `GSTNCombat`, `GSTNCombatGAS`, `GSTNInputNP`, `GSTNInput`, GameplayAbilities,
+  AbilitySystemSimulation, NetworkPrediction (the GAS-NPP fork in `Plugins/GASNPP`), EnhancedInput, Mover.
+- Module `GSTNCombatNP` depends on `GSTNCombatCore`, `GSTNCombatGAS` (the timeline ability tags, the combat attribute set the stats modifier reads),
+  `GSTNInputCore`, `GSTNInputNP` and the fork modules. Nothing in `GSTNCombat`
+  depends on this plugin.
+- Dependency rule: an `*NP` module may depend on another plugin's `*NP` module of the same layer, and on nothing above it.
+  `GSTNCombatNP` depends on `GSTNInputNP` by design (one NP model per character embeds the input simulation) and may use only its
+  Public headers and interfaces (for example `IGSTN_InputSimHost`), never its internals. Core modules keep no NP, GAS or Mover
+  dependencies.
+
+## Tags and settings
+
+This plugin declares no gameplay tags and owns no settings class and no config file: the combat tags, lock tags and
+`UGSTN_CombatSettings` live in `GSTNCombatCore` (`Plugins/GSTNCombat/Config/DefaultGSTNCombat.ini`), the input tags and
+settings in `GSTNInputCore`.
+
+## How to wire it
+
+1. Enable the plugin `GSTNCombatNP` (the project's `.uproject` lists it; it pulls in `GSTNInputNP` and the fork).
+2. Put `UGSTN_CombatSimComponent` on the pawn next to a `UNpAbilitySystemComponent` and a Mover component, set its
+   `InputConfig` and `SlotBindings` (a `UGSTN_CommandBindingSet`), and use `UGSTN_StandardSlots` from `GSTNCombatCore` for the
+   default command set. A pawn uses either this component or `UGSTN_InputSimComponent` of `GSTNInputNP`, never both.
+3. A project module that uses the component lists `GSTNCombatNP` (and the Core modules it includes from) in its `Build.cs`.
+
+## How a frame flows
+
+On a pawn that has the combat component, an ability system component and a Mover component, every fixed Network
+Prediction tick (62.5 Hz) runs the three models in this order, on the server, on the predicting client and again on
+every re-simulation after a rollback:
+
+```
+combat model (priority 47)  ->  ability system (48)  ->  Mover (50)
+```
+
+1. **Combat model.** Reads the frame's input command (buttons, raw stick, camera yaw), classifies the stick against the
+   facing the Mover tracker knows for the end of the previous frame, and appends the result to the input history kept in
+   its sync state. It then decides what it wants from the ability system (activate a move, pause the montage for
+   hitstop) and writes that as a *frame-stamped request* in its own sync state. It never calls the ability system.
+2. **Ability system.** At the start of its tick it broadcasts `OnSimulationPreTick` (a hook added to the fork, see
+   [PATCHES.md](../GASNPP/PATCHES.md)). The combat component executes the pending requests there, so activations run
+   with the correct frame, time and rollback bookkeeping.
+3. **Mover.** Moves the character. Abilities reach Mover only through queued moves, never by writing character state.
+
+Consequences worth remembering: tags and effects granted in a frame are visible to Mover in the same frame, but
+Mover's result is visible to the abilities one frame later; all code in this chain must be deterministic and keep its
+state in the sync/aux state (rules in [gas-npp.md](../../docs/architecture/gas-npp.md)).
+
+## Tests
+
+Automation tests `GSTNCombat.NP.*` in `Source/GSTNCombatNP/Private/Tests/` run without a world, headless, with the rest:
+`Automation RunTests GSTNInput+GSTNCombat`.
+
+- `Fragments.{RoundTrip0, RoundTrip1, RoundTrip2, UnknownTypeId}`: the wire format of the combat sync state with zero, one and two fragments
+  (the log prints the bits of each; zero fragments are exactly one bit over the core), the array order not affecting the bytes,
+  `ShouldReconcile`, `Interpolate` and `ToString` of the state, a fragment of an unknown type id being skipped without moving the reader, and a
+  malformed count being an archive error. The fragments used are test-only types with ids from the test range.
+- `State.{RoundTrip, RequestsStaleDropped, Interpolate, ShouldReconcile, RevisionGate}`: the wire format of the action part, requests of older frames
+  dropped by `PruneBefore`, interpolation, the reconcile rule and the loadout revision gate. `Fragments.UnsendableDoesNotReconcile`: a fragment that
+  cannot be sent never asks for a reconcile.
+- `Timeline.{Adopt, AdoptSameClass, SameFrameCommit, Hitstop}`: adoption (first waiting wins, losers cancelled, the running class adopted again is not
+  cancelled), the requests of one frame when a timeline is replaced at the end of its window, and the clock standing still in hitstop.
+- `Timeline.{CommitDeferred, Clock, OverrideInto, CancelWindow, Replace, TailCancel}`: the timeline part of the tick on plain sync state: the deferred
+  commit (once, on the frame the override window ends, or on the start frame without a window), the clock and the end of a timeline, the override rule
+  (higher tier, explicit query), cancel windows (half open), replacement (the old entry is cancelled, nothing was committed) and the cancellable tail.
+- `GABase.{WaitFramesRollback, InterruptPolicy, ReleaseEnds}`: the combat clock and a wait counted on it (through hitstop and through a
+  rollback and replay), the interrupt truth table and the command marker scope, the end on trigger release. Pure rules; the ability
+  itself is checked by the PIE scenarios.
+- `TickExtension.{OrderByPriority, EmptyHooksNoEffect}`: run order by priority then type id independent of registration order, duplicate
+  ids refused, and the hook points changing nothing when no extension or only an observer is registered.
+
+The pure logic is covered by `GSTNCombat.Core.*` (in `GSTNCombatCore`) and `GSTNInput.NP.*` (in `GSTNInputNP`). The network behaviour of the
+combat model is checked with the PIE harness `Tools/GASNPPTest/gasnpp_test.py` (dedicated server + 2 clients), scenario
+`combat_spike`; any change to the combat sync state needs it (see [testing.md](../../docs/architecture/testing.md)).
+
+## Conventions
+
+Types are prefixed `GSTN_`; export macro `GSTNCOMBATNP_API`. Public headers in `Public/<Area>/`, implementations in
+`Private/<Area>/`. Simulation code must be deterministic and rollback-safe (rules in
+[gas-npp.md](../../docs/architecture/gas-npp.md)).
+
+## Further reading
+
+[combat.md](../../docs/architecture/combat.md) · [combat-m2-sim-input.md](../../docs/architecture/combat-m2-sim-input.md) ·
+[input.md](../../docs/architecture/input.md) · [GSTNInputNP README](../GSTNInputNP/README.md) ·
+[gas-npp.md](../../docs/architecture/gas-npp.md) · [PATCHES.md](../GASNPP/PATCHES.md)
+
+## Stats movement modifier (combat-m3 5)
+
+`FGSTN_StatsMovementModifier` (`Movement/GSTN_StatsMovementModifier.h`) is a permanent Mover modifier that makes a character's speeds follow
+its `WalkSpeed` stat. `UGSTN_CombatSimComponent` queues it once (`bQueueStatsModifier`, default on) on the authority and the owning client, on the first
+tick where Mover's simulation exists. On every simulated substep (`OnPreMovement`) it assigns **archetype value x factor**, never the current value
+times a factor, to the speeds the modes read, so the result is a pure function of the restored stats and a rollback cannot leave a stale value. Factor =
+`WalkSpeed / UGSTN_CombatSettings::StatsReferenceWalkSpeed` (0 while the owner has `Combat.Lock.Movement`: the character brakes with its own
+deceleration). What it writes, in all modes of the component: `UCommonLegacyMovementSettings::MaxSpeed`; `MaxSpeedOverride` of a mode whose archetype sets
+it (>= 0); and the float properties named in `UGSTN_CombatSettings::StatsSpeedProperties` (the gait variables of a Blueprint walking mode, which feed
+`MaxSpeedOverride` and so win over the shared settings: the project lists `WalkSpeed`, `RunSpeed`, `SprintSpeed`, `CrouchSpeed` in its
+`Config/DefaultGSTNCombat.ini`). A character whose ability system has no `UGSTN_CombatAttributeSet` is left alone. The arithmetic is `FGSTN_StatsScaling`
+(GSTNCombatCore). Not built yet: acceleration/braking/air control, gravity phases (C13).
+Tests: `GSTNCombat.Core.Stats.{Factor,ScalingIsBaseRelative}`, `GSTNCombat.NP.Stats.{MaxSpeedFollowsAttribute,LockMovementBrakes}`.
+
+## Weapon switch (combat-m3 7.7)
+A timeline ability with a `FGSTN_TimelineTrack_WeaponSwitch` track swaps the active weapon: when the track's frame is crossed the combat tick sets `ActiveWeaponIndex` (`FGSTN_WeaponSwitchRules::Resolve`, GSTNCombatCore), makes a `SwapWeaponStats` request carrying the old index and publishes `Combat.Event.WeaponSwitched` (authority only). The ability system's pre-tick runs `FGSTN_WeaponStatsSwap::Execute`: the old weapon's stats effect (`UGSTN_GE_WeaponStats`) is removed and the new one's applied, both found by class, so replaying the frame gives the same stats. The effects come from `UGSTN_CombatSimComponent::WeaponStats` (index 0 = primary). The primary weapon does not change during a match, so a switch is primary <-> support; a support weapon inherits the kit's stats and by default has no effect (an entry with an empty `Effect`). Tests: `GSTNCombat.Core.Stats.WeaponSwitchResolve`, `GSTNCombat.NP.Stats.SwapDeterministic`; PIE: `scenario_weapon_switch` (Tools/GASNPPTest). Not built yet: the loadout filling `WeaponStats`, the per-weapon anim layer, `UGSTN_GA_WeaponSwitch` as a plugin ability.
+
+## Jump (combat-m3 7.9, C13)
+
+The combat tick steps `FGSTN_CombatSyncCore::Jump` from the Mover sim-state tracker (grounded tag, speed along the local up, `WasExternallyLaunchedThisFrame`) and the stats of the ability system, before the input tick; it gates `Command.Movement.Jump` / `.FastFall` requests (`CanExecuteBinding`) and turns an accepted one into the take-off / fast fall state. `UGSTN_GA_PlatformJump` (Role Jump) only applies the impulse effect of that frame (`UGSTN_GE_PlatformJump` / `UGSTN_GE_PlatformAirJump`, upward speed `JumpVelocity` / `AirJumpVelocity`); `UGSTN_GA_PlatformFastFall` is the same class with Role FastFall. A kit binds them to its jump commands as data. The stats modifier applies the gravity phase (`UGSTN_CombatSimComponent::ApplyJumpGravity`). Squat: with `SquatFrames` > 0 (ability data `bOverrideSquatFrames` / `SquatFrames`, default `UGSTN_CombatSettings::JumpSquatFrames` = 0) a ground jump request only starts a squat in the jump state; the ability stays active and applies the impulse on the take-off frame the tick decides; air and coyote jumps never squat; the `JumpSquatFrames` attribute is not read. `MaxFallSpeed` / `FastFallSpeed` cap the gravity step. Tests: `GSTNCombat.NP.State.RoundTrip` (jump state on the wire); the squat by `GSTNCombat.Core.Jump.SquatDelaysImpulse` and the scenario `jump_squat`; the behaviour is covered by the harness scenarios `variable_jump`, `air_jump_fastfall`, `tilted_gravity_jump`, `external_launch_jump`.
+
+## Dash and dodge abilities (combat-m3 section 3, C14)
+
+`UGSTN_GA_MoveTimeline` (abstract) is a timeline ability whose movement is one instant velocity effect applied when the timeline begins (`UGSTN_GA_BaseCombat::OnTimelineBegan`). Concrete defaults: `UGSTN_GA_Dash`, `UGSTN_GA_GroundDodge` (low long-jump arc, lands standing), `UGSTN_GA_AirDodge` (dive roll, ends on landing after the landing lag of its movement track). The speeds are the data of the `MoveEffect` (`UGSTN_GE_Move*`, creator `UGSTN_MoveImpulseCreator`), the timeline is the ability's timeline data, and the dodges carry `Combat.State.Hitstun` / `Hitstop` in `ActivationBlockedTags` (no hard-coded check: a kit's child class clears them). The creator reads the up direction, facing and velocity from the Mover sim-state tracker, so the impulse is the same on every machine under any gravity. The ability never sets character state; it ends itself on landing from the tracker's ground tag. No Mover mode and no `Combat.Mover.*` tag is added.
+Bind them as data: dash to `Command.Movement.Dash`; the ground dodge (require `Input.Context.Grounded`) and the air dodge (require `Input.Context.Airborne`) to `Command.Defence.Dodge`. Tests: `GSTNCombat.NP.Dodge.*`; PIE scenarios dash, ground_dodge, air_dodge, dodge_blocked_in_hitstun, dash_tilted_gravity, kit_without_dodge, interact_tap_hold.
+
+## Loadout tables and the table swap (C17, `docs/notes/loadout-table-swap-design.md`)
+
+Everything the loadout decides lives in a **table set** (`UGSTN_CombatTableSet`, `Simulation/GSTN_CombatTableSet.h`): the `FGSTN_CommandTable` the input simulation
+resolves against, the timeline registry with its tiers and default windows, the per-binding timeline and jump role, the kit's jump data, the weapon stats, a
+deterministic `Checksum`. The component keeps one set per loadout revision (`FindTableSet`, `RegisterTableSet`): revision 0 is the Blueprint binding set (a pawn
+without a loadout runs on it for the whole match), the others are the newest `UGSTN_CombatSettings::MaxRetainedTableRevisions`. The active table is a pure function
+of the rolled-back state (`FGSTN_CombatSyncCore::TableRevision`), never "the current table" of the component.
+
+- **Converter** `FGSTN_CombatTableConverter::Convert` (pure, class loader injected): Core `FGSTN_CompiledBindingTable` to a set. Commands sorted by tag name, bindings by
+  (command name, Core entry order); each binding gets `SourceMask` (`GSTNEntrySourceMask::Bit`, Core) and, when its offset or buffer differs, its own slot. Entries that do not
+  load or do not fit are dropped with an error in the report. `RegisterExtension(Id, Fn)` is the seam for mods: extensions run in id order after the base conversion.
+- **Swap** `FGSTN_LoadoutSwapLogic::Step` at the top of `SimulationTick`, right after the request prune: `LoadoutRevision` is the demand (the server's out-of-band write),
+  `TableRevision` what the simulation has swapped to. The first frame that has the demanded set is the boundary on every machine: the running timeline ends (a `CancelTimeline`
+  request carrying the OLD registry index, resolved against the previous set in the pre-tick), the weapon returns to the primary, buffered presses and stick anchors are used
+  up, `TableRevision` follows, `Combat.Event.LoadoutSwapped` is published by the authority. A demand with no set yet (a client before the loadout OnRep) closes the gate: the
+  input history keeps running, no command resolves, no adoption (`GetGateClosedFrames()` counts those frames). A forced command on the swap frame is dropped.
+- **Feeding it** `BindLoadoutComponent` (done by the component itself, a few times a second until a `UGSTN_LoadoutComponent` is found on the owner or the pawn's PlayerState):
+  when the loadout applies on any machine its compiled table is converted and registered under the loadout revision. `ServerApplyLoadoutChange` refuses a change within
+  `MinFramesBetweenLoadoutChanges` of the previous one. `GSTN.NP.TableLimits` (a loadout validator registered at module startup) refuses a loadout over 255 bindings or 32767 timelines.
+- Tests: `GSTNCombat.NP.Table.*` (conversion, checksum, extensions, limits, weapon stats), `GSTNCombat.NP.Swap.*` (the step), `GSTNCombat.NP.State.TableRevision*`; the network behaviour
+  is `scenario_loadout_change` (checks 16 to 20: table revision follows, equal checksum, the dash command exists only in Beta, the gate stays open on the authority).
+- Table swap scenarios (session 2, `docs/notes/m3-doc-deltas.md` C18), all on the kit tables of `/Game/GASNPPTest/Combat`: `scenario_command_set` (a removed command and an added one on its button),
+  `scenario_ex_meter` (the EX slot falls through to the plain special without meter), `scenario_super_code` (supers entered as a code, meter gate, a reconcile mid-code),
+  `scenario_wait_frames` (a kit-bound timeline that waits combat frames, delayed exactly by a hitstop). A command's tier is the tier of its tag root (`Command.Special.*` = 300): an EX or
+  alternative command of a tiered family has to live under the same root, or the plain command outranks it whatever the pattern.
+
+## Hits: sync state, world subsystem, snapshot, inbox (combat-m4-hits 5, 7, 11; M4 H6)
+
+- `FGSTN_HitSyncState` (`Simulation/GSTN_CombatHitState.h`), the `Hit` member of `FGSTN_CombatSyncCore`: quantised move origin, a ring of eight hit targets, confirm flags, hitstun and impact end frames, pending launch (int16 × 3 at cm/s / 4), pending reaction (2 bits), reserved SDI count. Every field expires by its end frame; the wire and `ShouldReconcile` use `Canonical(context)`, so an idle combatant costs +0 bits (the part is inside the action part) and an expired window is not a difference. `EGSTN_ActionState` has `Hitstun`, `Tumble`, `Splat`; `EGSTN_RequestType` has the hit requests (`ApplyDamage` ... `ImpactSurface`).
+- `UGSTN_CombatWorldSubsystem` (`World/`): the registry of hittable entities (sorted by NP id; the combat component registers itself once its id exists and has a `HurtboxSet`), providers (`IGSTN_HittableProvider`, sorted by provider id) and the per-step snapshot `FGSTN_StepSnapshot` (end of the previous frame: pose and velocity from the Mover sim state tracker, `Up = -gravity direction`, hurt states, hitstop, action state, `FGSTN_VictimReactionState`, `FGSTN_SnapshotExtension`s, uniform grid broadphase). `EnsureSnapshot(Frame)` builds it for the first caller of a step; every component's `RestoreFrame` invalidates it. Nothing calls `EnsureSnapshot` from the tick before the attacker side (H8).
+- `FGSTN_CombatInbox` (`Simulation/GSTN_CombatInbox.h`, M6 F1; it replaced `FGSTN_HitInbox`): the queue of one combat entity, of **open kinds**. An entry is `FGSTN_InboxEntry { Kind, Frame, SenderId, Payload }`; the hit is kind `GSTNInboxKinds::Hit` (0) and its payload is `FGSTN_HitInboxEntry`, unchanged (`ToInboxEntry` / `FromInboxEntry`). Written by `UGSTN_CombatSimComponent::PostToInbox` only where the instance ticks (`TicksOnThisMachine`; `PostHit` is a wrapper for the hit kind; `PostToInbox(TargetId, Entry)` posts to another entity through the world subsystem), drained at `Frame + 1` in (SenderId, kind, the kind's order key, arrival) order, trimmed by `RestoreFrame` for every kind. The stamp is the delivery gate only, so a victim that missed a frame still gets the older entries ordered by sender. 64 entries at most, all kinds together.
+- `FGSTN_InboxKindRegistry`: kind id to handler (and optional order key), registered by an NP module at startup like `FGSTN_OutcomeApplierRegistry`. The victim step hands every drained entry that is not a hit to its handler (deterministic, writes only through `FGSTN_InboxDispatchContext`) before it resolves the frame's hits; the hit kind has no handler because the victim step resolves the hits as one batch. An entry of a kind nobody registered is ignored with one warning per kind. Kind ids are fixed in `GSTNInboxKinds` (`Sync/GSTN_SyncFragment.h` of `GSTNCombatCore`): 0 hit, 16-31 reserved for `GSTNDefence`, 32-47 for `GSTNLink`, 128 and up for games, 240 and up for tests.
+- Tests: `GSTNCombat.NP.Hits.State.*`, `Snapshot.*`, `Inbox.*` (17: the 13 above plus `GSTNCombat.NP.Inbox.{KindOrderStable, UnknownKindIgnoredWithWarning, TrimOnRollbackAllKinds, PostToInboxRefusedWhereNotTicking}`). The byte counts of the states are logged by `State.RoundTrip`.
+
+## Hitstop and freeze (combat-m4-hits 8; M4 H7)
+
+- `FGSTN_LayeredMove_Freeze` (`Movement/GSTN_LayeredMove_Freeze.h`): OverrideAll, zero velocity, carries the Mover tag `Combat.Mover.Frozen` (`GSTNCombatNPTags::Mover_Frozen`, read by Mover from the sync state). `Setup(IncomingVelocity, DurationMs, bZeroVelocityOnFinish)` fills the finish velocity settings: the pawn leaves the freeze with the velocity it had (an attacker, a victim that is not staggered) or with zero (`bZeroVelocityOnFinish`, a stagger-in-place victim). A staggered victim's knockback or push is a later move and replaces it. The restore rides on the finish velocity settings Mover already serializes, so it survives a rollback with no extra state.
+- `UGSTN_FreezeMoveCreator` + `UGSTN_GE_Freeze` / `UGSTN_GE_FreezeZeroVelocity`: instant effects that queue the freeze once (rule 2: abilities move the character only through queued moves). The incoming velocity is the Mover's committed velocity at the time (the ability system ticks before Mover, so it is the end of the previous frame on every machine); the duration is the SetByCaller `Combat.SetByCaller.FreezeSeconds`.
+- The combat tick writes a `Freeze` request (frame, length in frames) next to the hitstop window; `HandleAbilitySimulationPreTick` applies `FreezeEffect` of the component (`UGSTN_GE_Freeze` by default) with `frames x StepMs`. The debug hitstop button does exactly this today; hits (H8/H9) will write the same request. `FGSTN_CombatSyncCore::AdvanceHitstopClock` is the move clock: `PausedFramesTotal` grows by one on every frame inside the previous state's window, the buffer ages through `PausedStart/PausedEnd` of the match parameters (`FGSTN_MatchParams`), and a playing synced montage is paused on window frames and resumed at `HitstopEndFrame`.
+- Debug aids for the harness: `HitstopTestMontage` (started with the window), `SetHitstopTestFrames`, `SetHitstopTestMontage`, `GetHitstopMontageInfo`, `GetHitstopMontageTrace` (montage time per simulated frame).
+- The project wall modes lock on the tag, see `UGSTN_WallMovementModeBase::IsMovementLocked` in wall-movement.md.
+- Tests: `GSTNCombat.NP.Hits.Hitstop.{PausedFramesCount, BufferAgeExcludesHitstop, FreezeRestoresVelocity, FreezeZeroOnFinishFlag}` (4). Harness scenarios `hitstop_montage`, `hit_on_wall` (first half), and the `combat_spike` hitstop step.
+
+## Attacker side (combat-m4-hits 6; M4 H8)
+
+- `FGSTN_CombatAttacker::Tick` (`Simulation/GSTN_CombatAttacker.h`, `GSTN_CombatTick_Attacker.cpp`): a pure function of the sync core, the running timeline's data, the step snapshot and the rules. The component calls it right after the "before candidates" extension point (so a hit of frame F confirms the run for the cancel gate of F), not on a hitstop frame and not with the loadout gate closed. Steps: open hitboxes of the timeline frame (`FGSTN_TimelinePlayer::EvaluateHits`, paused frames already out), groups in the extension's `HitGroupMask` skipped; world shape by space (`Root` = end-of-F-1 pose x key, `BakedSocket` = pose x baked frame x key, `WorldAtMoveStart` = `MoveOrigin` x key, `Projectile` skipped); broadphase through `FGSTN_StepSnapshot::QueryCandidates`; relationship (the rules' resolver), `IsRelationshipHittable` / friendly fire, the hitbox's variant (`bIgnore`, `ShapeScale`, data override); overlap (swept when flagged) against the victim's hurtboxes minus the intangible ones, `PickHurtboxIndex`; one hit per victim and group per move execution (`HitTargets` ring, `MaxTargetsPerGroup` on the hitbox; several hitboxes of one group on one victim keep the highest `Data.Priority`).
+- The attacker's own consequences of each new hit come from running the rules' hit pipeline over a context made of the snapshot's victim view (`FGSTN_VictimReactionState`): the attacker outcome (`FGSTN_AttackerOutcomeRegistry`; `Ricochet` = no confirm, no hitstop, no meter, the victim still told), the confirm bit (`HitConfirmFlags`, bit `group & 7`; `OnBlock` stays false until M6), the hitstop window `[F, F + AttackerHitstopFrames)` with its `Freeze` request (the shape the debug button writes), a `MeterGain` request when the rules give meter. The entry for the victim (`FGSTN_HitInboxEntry`: variant-applied hit data, contact point, hitbox velocity, attacker yaw, relationship index 0 Self / 1 Ally / 2 Enemy / 3 Neutral, hurtbox, hitbox, `HurtState`, `bRicochet`) goes to the victim's inbox through `UGSTN_CombatWorldSubsystem::PostHit`.
+- The component builds the snapshot at the top of every combat tick (`EnsureSnapshot`), stamps `MoveOrigin` when a timeline starts (command or adoption), and resolves the rules once at `BeginPlay` from the combat settings (`SetCombatRules` replaces them). `FGSTN_CombatTimelineLogic` clears the run's hit part when a timeline starts; cancel windows with `OnHit` read `HitConfirmFlags`.
+- Until the victim side exists (H9) the component drains and drops its inbox at the top of the tick. Under `gstn.Combat.Debug.HitLog 1` it keeps three debug logs the harness reads (`GetHitLog`, `GetHitboxTrace`, `GetInboxLog`; last 512 frames, a re-simulated frame replaces its entry). Debug draw: `gstn.Combat.Debug.Hitboxes` (world shapes of the open hitboxes, one colour per space) and `gstn.Combat.Debug.Hurtboxes` (the entity's hurtboxes, coloured by hurt state), in `Private/Debug/`, presentation only.
+- Harness knobs on the component (UFUNCTIONs, a live component must not be edited from Python): `SetTestTeam`, `SetTestFriendlyFire`.
+- Tests: `GSTNCombat.NP.Hits.Attacker.{OncePerGroupPerExecution, RingOverflowReplacesOldest, MaskSkipsGroup, IntangibleNotHit, InvincibleRegistersNoDelivery, RelationshipVariant, SelfExcludedUnlessVariant, WorldAtMoveStartUsesOrigin, AttackerHitstopFromSnapshotView}` (9). Harness scenarios `hit_basic`, `hit_trade`, `friendly_fire`, `hit_host` (attacker half here, victim half in H9c below). Test content: `KIT_Test_Hits` / `WPN_Test_Hits` (`GSTN_GA_TestHitMove`, a hitbox of each space) and the hurtbox set `HBS_Test_Pawn`, written by `Tools/GAS/setup_gas_assets.py --hits-content`.
+
+## Victim side (combat-m4-hits 7; M4 H9a)
+
+`FGSTN_CombatVictim` (pure, `Simulation/GSTN_CombatVictim.h`) resolves the drained inbox at F+1, before the clocks: pipeline on the snapshot view plus the damage of earlier entries, then state (hitstun/tumble, hitstop window, `HitstunEndFrame`, pending reaction and launch, cancel of the move), `PushBack` promoted to `Launch` when airborne or in a wall mode, `MinStaggerLockFrames` as the floor of stagger and push back, a sub-threshold hit on a victim in hitstun changes nothing. At hitstop end `StepReaction` turns the pending reaction into a `FGSTN_LayeredMove_Knockback` (DI, knockback resistance) or `FGSTN_LayeredMove_PushBack`, queued through `UGSTN_GE_Knockback` / `UGSTN_GE_PushBack`. The pre-tick executes the requests (`ApplyDamage` also sends `Combat.Event.Hit.Received`, `ApplyEffect`, `Cue`, `VictimFreeze`, `MeterGain`, `Knockback`, `PushBack`). `Requests` has 8 slots. A hit received raises `Input.BufferEvent.Interrupted`. Commands are refused while the state is hitstun, tumble or splat. KO zones, the outbox events and the state tags follow in H9b.
+
+## KO, events, state tags, movement lock (combat-m4-hits 7; M4 H9b)
+
+- **KO** is the terminal action state `EGSTN_ActionState::KO`: a hit that leaves the victim at the cap (`Health` mode: no health left; `PercentCapped`: damage percent at `MaxHealth`; `Percent` has no cap) or a position inside a KO zone at the end of the previous frame. The running move is cancelled, the pending reaction of the killing hit still plays, nothing resolves on a KO'd combatant, commands are refused, the snapshot shows it as intangible. `UGSTN_CombatSimComponent::ServerRespawn()` (server, out of band) is the way out until a game has its own respawn.
+- **`AGSTN_KOZone`** (`World/GSTN_KOZone.h`): a box, registered with `UGSTN_CombatWorldSubsystem` at BeginPlay (transform and extent copied: static data). Place it in the level or spawn the same one on every machine (`SpawnZone`, `DestroyAllZones`).
+- **Outbox events** from the victim step (`FGSTN_CombatVictim::AppendHitEvents` / `AppendKOEvent`), appended unconditionally and published once by the authority in `FinalizeFrame`: `HitLanded` and `HitReceived` (instigator = attacker, target = victim; tags: the attacker's command and move, `Combat.HitType.*`, `Combat.Relationship.*`, `Combat.Event.Hit.Staggered`, `.Tumble`, `.Reaction.{StaggerInPlace,PushBack,Launch}`; magnitude = damage; a ricochet raises HitLanded only) and `Combat.Event.KO` with the `KOReason` tag. `PublishOutbox` keeps an instigator the producer set.
+- **State tags**: `Combat.State.Hitstun` (hitstun or splat), `Tumble` and `Hitstop` are set by the pre-tick from the sync state of the frame (`FGSTN_CombatVictim::ProjectStateTags`, `SetLooseGameplayTagCount`, idempotent), so the dodge abilities' blocked tags take effect.
+- **Movement lock**: while the state locks the combatant (hitstun, tumble, splat, KO) `Combat.Lock.Reaction` is projected, a tag of its own set every frame from the sync state like the three state tags (`SetLooseGameplayTagCount`), and the stats modifier zeroes the speeds when it or `Combat.Lock.Movement` is present; the stick feeds DI only. `Lock.Movement` stays for the abilities and effects that root a combatant and the projection never touches it. The first version kept "I hold the lock" in a component member: a member is outside the rolled back state, so a resimulation from before the hit could skip the Add (rule 1 of gas-npp.md), and it was one of the two rollbacks per hit.
+- **Reaction moves start one frame after the hitstop window** (Mover applies the finish velocity of the freeze over the proposed move of the frame the freeze finishes on, and honours a move's preferred mode on its first tick only).
+- **Rollbacks**: the victim's client rolls back once per hit (`hit_basic` 15/15, three runs at 60/15/2 %, one per hit in each phase); the hit itself is the one correction, the movement lock is no longer a second.
+
+## Victim scenarios (combat-m4-hits 7; M4 H9c)
+
+Harness scenarios in `Tools/GASNPPTest/gasnpp_test.py`, all judged on the sim ticks of the victim's authority copy and its own client (one `_HitRig` shot per hit: rules, thresholds, hurtbox set and damage percent are set between shots):
+- `hit_basic` (victim half: window on the frame of the hit, hitstun 31 frames after it, damage, events once, one rollback per hit), `hit_trade` (round 1 flinch trade, round 2 staggering: whichever the taps' frames made of it, every hit that landed staggers its victim), `friendly_fire` (off: no reaction; Ally 3 and Enemy 6 damage with the window and the relationship tag), `hit_host` (client victim, then the host as the victim: window equal on both clients' copies, damage on all three, host zero rollbacks), `hit_on_wall` + `hit_on_wall_hit` (a real spin while the climber wall slides: it stays WallSliding and still through the window).
+- `stagger_threshold` (force 8 against thresholds 9 / 8 / infinite), `reaction_tiers` (the thresholds move so each tier is hit with the same blow; `MaxReaction` caps a launch to a push back and a push back to a stagger), `di` (the victim locked in place by `UGSTN_GE_TestMovementLock`, stick left / right / in / out; the tilted gravity variant is covered by the Core DI tests, the harness cannot tilt one victim only), `ko_zone` (control under the cap, a zone spawned on every machine with `SpawnZone`, the cap in `PercentCapped` mode; one KO event on the host, none on the clients), `dodge_blocked_in_hitstun` (real hit, a long hitstun through `min_hitstun_frames`; the escape-kit variant stays the effect hook because a real hitstun refuses commands at the combat gate).
+- Harness knob added: `ServerSetMovementLock` (an infinite effect granting `Combat.Lock.Movement`).
+
+## Lag compensation and presentation (combat-m4-hits 9, 9b; M4 H10)
+
+- **Lag compensation** (`Simulation/GSTN_LagCompensation.h`): a remote player's pawn on the authority hits the victims as that player saw them. `RunAttackerStep` builds a per-attacker overlay of the step snapshot (victims' transform, velocity and `FGSTN_VictimReactionState` at the interpolation time of the input being simulated, at most `Rules.MaxRewindMs` back) and the attacker tick reads it instead of the shared snapshot, which is never written. The host pawn, AI and predicting clients never rewind. The world subsystem keeps the per-entity ring (authority only, sized by `RequestHistory`).
+- **Fork component usage.** Poses come from the fork: put `UNetworkPredictionLagCompensation` on every pawn that can be hit (the actor must be moved by Mover through its root; the component captures the actor transform each fixed step and restores it on `UnwindActors`). A hittable actor without it is rewound from the ring instead. `MaxRewindTimeMS` of the fork's settings is 400 in the plugin ini (250 until H11: the attacker view of the H10 runs was 345-364 ms behind at 60/15, so 250 clamped every hit); the fork additionally allows the interpolation buffer and the input buffer on top, so the rules' `MaxRewindMs` is the effective cap. `GetLagCompInfo()` on the combat component reports the last rewind (counter, requested, applied, current time).
+- **Presentation** (`Presentation/GSTN_HitPresentationComponent.h`): add it to the locally controlled pawn. On a new predicted hit it plays the cue locally, flashes the victim (`HitFlash` scalar), pauses the attacker's and victim's meshes for their hitstop and extrapolates the victim's reaction (mesh offset, fades out); a hit removed by a correction while the move runs cancels all of it. Cue handlers on the attacker's machine call `ShouldPlayAuthoritativeCue` so the real cue of an already shown hit plays once. Presentation only: nothing here is read by the simulation.
+
+## Surface impacts (combat-m4-hits 7b; M4 H11)
+
+A launched (Tumble) victim that runs into a surface splats, bounces or breaks it. Needs [GSTNSurface](../GSTNSurface/README.md) (`GSTNSurfaceCore`) for the surface type of the contact.
+
+- **Contact probe** (`Movement/GSTN_LayeredMove_Knockback.h`, `Movement/GSTN_TumbleContact.h`): the knockback move sweeps the victim's collision along the velocity of the frame (start pose from Mover's sync state) and, on a blocking hit, writes `FGSTN_TumbleContactSyncState` into itself: face kind (wall, floor, ceiling by the normal against the victim's up), quantised normal, speed into the face (whole cm/s), the Mover frame and the `uint8` GSTNSurface type index (`UGSTN_SurfaceUtils::Resolve`: an `IGSTN_SurfaceProvider` on the collider or its actor, else the physical material mapping, else the settings' default). The move is part of Mover's sync state, so a rollback restores the record and a resimulation writes it again. The move never reacts to the contact: an unresolved hit is what Mover does (slide).
+- **Decision** (`FGSTN_CombatVictim::StepImpact`, pure): in the victim step of frame F the tracker's state is the end of F-1; a record made on frame F-1 (exactly: a contact resolves once) of a victim in `Tumble`, outside a hitstop and not staggered by a hit this frame goes through `UGSTN_ImpactMath::Resolve` with the profile of the hit that launched the victim (`Core.Hit.ImpactProfileQ`, packed, copied from the inbox entry's `FGSTN_HitData::Impact` when the victim staggers), the victim response (the kit's `FGSTN_ImpactResponseExtension`, else `UGSTN_CombatRules::ImpactResponse`) and the table (`UGSTN_CombatRules::SurfaceImpactTable`, loaded in `SetCombatRules`; `SetImpactTable` replaces it). Floors and ceilings resolve only on a row with `bForceDefault` (a trampoline). Nothing reads a live component in the decision.
+  - **Splat**: `ActionState = Splat` until `ImpactEndFrame`, held at rest by a freeze of that many frames, then `Actionable`; `Rules.BaseImpactDamage` times the row's and the victim's `ImpactDamageScale` as an `ImpactDamage` request (the rules' damage effect, set by caller).
+  - **Bounce**: the pre-impact velocity reflected about the normal times the restitution goes out as a knockback move (like a hit's launch); the state stays `Tumble` and the hitstun end covers the flight; damage as for a splat.
+  - **Break**: a stop of the row's `BreakStopFrames` (6: hitstop window + freeze), the request `ImpactSurface`, and a pending launch with `ResidualSpeedScale` of the speed the victim came with, so it goes through the broken surface when the stop ends (the launch goes out one frame after the window like any reaction). The surface is broken **outside the simulation**: the component remembers the collider the probe touched by contact frame (local data) and `FinalizeFrame` calls `IGSTN_SurfaceProvider::BreakSurface` on the authority only, once (measured: 2 simulation frames after the decision); the surface replicates its own state, so a predicting client's copy of the victim meets the surface until that arrives and is corrected. The stop is the margin for the break to take effect before the victim moves on; with it too short the relaunched victim stands against a surface that is still there.
+  - **One contact, one impact**: the knockback move that was flying into the surface probes once more on the frame its replacement relaunches the victim (and through the frames of a break's stop). A bounce or a break stamps `ImpactEndFrame` with the first frame a new contact can be made on, and `StepImpact` ignores records made before it (`ImpactEndFrame` means nothing else while the victim tumbles; for a splat it is the end of the pin).
+  - **Probe life.** A tumbling victim's knockback move lives `TumbleProbeFrames` (240) instead of the rest of the hitstun: the tumble goes on until the victim lands, which can be long after the hitstun, and the move is the probe. It adds nothing but the probe after its first frame (no decay, normal gravity).
+  - A launch that stays within the step height of the floor lands at once (Mover's Falling mode grounds it): a splat or bounce is judged by what the contact does, the harness victim carries damage percent to fly higher.
+- Events `Combat.Event.Impact.{Splat,Bounce,Break}` (GSTNCombatGAS, native leaves) go through the outbox like the hit events, with the surface type as a tag. `GetImpactInfo` / `GetImpactCounts` report the latest impact and the counts on this machine for the harness. `bNoTech` on the profile is reserved for M6.
+- Tests `GSTNCombat.NP.Hits.Impact.{ContactRecordWritten, ResolvedOneFrameAfterContact, SplatEndsActionable, BounceKeepsTumble, BreakRequestOutsideSim, ForcedAndForbiddenByHitData, MaterialMappingBaked}`. Scenario `impact_wall` (harness: `AGSTN_TestSurface`, a replicated provider box spawned at run time, and `UGSTN_ImpactTestLibrary`).
+
+## Ricochet recoil and dodge window (M4 H12)
+
+- **Recoil:** when the attacker side decides `Ricochet` and a response exists (the attack's `RicochetResponse`, else the active weapon's, else the kit's: `UGSTN_CombatTableSet::GetRicochetFallback`), `FGSTN_CombatSyncCore::RecoilStartFrame` is set to the next frame (`FGSTN_CombatTimelineLogic::StartRecoil`). `AdvanceClock` evaluates the recoil in place of the timeline (a hitstop frame moves the start later), the attacker step and the hurt-state snapshot treat the combatant as out of its timeline, and the state returns to Actionable after `RecoilFrames` (the locked part). `UGSTN_GA_BaseCombat` keeps running and plays the recoil montage on the synced slot, the response cue and the optional push back (`UGSTN_CombatSimComponent::ExecuteRecoilMove`, the `UGSTN_GE_PushBack` effect). The rest of the montage is the cancellable tail. No hitstop, confirm or meter reach the attacker; the victim still gets the flagged inbox entry (cue and event).
+- **Dodges:** `UGSTN_GA_GroundDodge` / `UGSTN_GA_AirDodge` carry the feet window as data (see GSTNCombat). The snapshot reads it for the hit pipeline of every attacker, so the feet are missed during the window and the torso is not.
+- Harness hooks (not API): `GetRecoilInfo`, `UGSTN_GASNPPTestComponent::SetForceRicochet / GetDodgeWindow / ServerSetPlanted`. Tests: `GSTNCombat.NP.Hits.Dodge.FeetWindowFromData`, `GSTNCombat.NP.Hits.Ricochet.*`. Details and deviations: `docs/notes/m4-doc-deltas.md` "H12".
+
+## Reaction gate and burst (M4 H13b)
+
+`UGSTN_CombatSimComponent::IsCommandAllowed` / `CanExecuteBinding` let an ability through a hit reaction when its class carries
+`Combat.Ability.IgnoreHitstunOnActivation`, from `UGSTN_CombatTableSet::BindingReaction` (flags built from the class defaults with the table set).
+`bEndReactionOnActivation` on `UGSTN_GA_Base` makes the combat tick call `FGSTN_CombatVictim::EndReaction` in the frame of the request and queue the
+`EGSTN_RequestType::EndReaction` request (the executor removes the freeze effects). Fork requirements are unchanged: `UNpGameplayAbility` parents only.
+
+## Extra hurtboxes, clock track hooks, reverse deliveries, request kinds (M6 F2)
+
+Neutral seams for the optional defence and link plugins; with nothing registered every path is the M4/M5 one bit for bit, and no sync state, aux state or
+fragment changed on the wire.
+
+- **Extra hurtboxes.** `IGSTN_SnapshotContributor::AppendExtraHurtboxes(Context, Out)` (default none; called by the snapshot build after `Contribute` whether or not the blob is set; not at a rebuild) appends up to `GSTNHurtboxIndex::MaxExtraHurtboxes` (2, the rest is cut) `FGSTN_ExtraHurtbox`es, computed from the context only. They live on `FGSTN_SnapshotEntry::ExtraHurtboxes` (an inline array; `FindHurtboxShape(HitIndex)` resolves a set or extra index), in `FGSTN_EntityHistoryRecord` (so `GSTNLagComp::BuildOverlay` hands a rewound step the bubble of the rewound frame) and in `FGSTN_HitVictimView::ExtraHurtboxes`. The broadphase radius grows to hold them (`GSTNExtraHurtboxes::ComputeBoundRadius`, never shrinking in an overlay). The attacker's candidate loop tests extras like the body (no hurt state: nothing makes them intangible), picks with `UGSTN_HitShapeUtils::PickHurtboxIndex(..., Extras, HitType)` after the hit's variant is applied, and the victim step resolves `Entry.HurtboxIndex` through the same lookup. An entity with no hurtbox set cannot be hit whatever extras it carries. `FGSTN_HitInboxEntry::HurtboxIndex` is a byte already, so the inbox entry is unchanged.
+- **Clock track hooks.** `IGSTN_TimelineTrackHook` (`Simulation/GSTN_TimelineTrackHook.h`), registered in `FGSTN_TimelineTrackHookRegistry::Get()` for a track **struct** (the track kind enum is closed, so a plugin's track derives `FGSTN_TimelineTrack` and reports no known kind). `FGSTN_CombatTimelineLogic::AdvanceClock` calls the hook of every such track of the running timeline each tick with the frame the timeline is on (a stall holds it) and the entity's input state, before it counts the pause. `FGSTN_TrackHookResult::bStallThisFrame` adds one to `TimelinePausedFrames` exactly as a hitstop frame does (one frame stalled by both counts once) but never touches `PausedFramesTotal`, so the combat clock and the buffers keep running; `bStampWindow` appends an `FGSTN_StampedWindow { StartFrame, EndFrame, Profile }` to `FGSTN_TimelineOutput::StampedWindows` (two at most) for the plugin's own extension to write into its fragment. `EvaluateStart` also runs the hooks, for stamps only (a stall of frame 0 starts with the next tick). Not run on a recoil. Without a hook the step costs one empty check.
+- **Reverse deliveries.** `FGSTN_HitResolutionContext::OutgoingEntries` / `FGSTN_StepResult::OutgoingEntries` (`TArray<FGSTN_InboxEntry>`): a step queues messages to the attacker of the hit it resolves. `FGSTN_CombatVictim::Resolve` stamps `Frame` and `SenderId` for the hits that stand (not a ricochet, not a hit a step refused) into `FGSTN_VictimResult::Outgoing`, and `RunVictimStep` posts each through `PostToInbox(TargetId, Entry)` after the step, so the attacker drains it on the next frame; a target that does not tick on this machine refuses it (on a client the reply reaches only an attacker it predicts).
+- **Request kinds.** `FGSTN_CombatRequests` already has `Capacity = 8` slots (the plan asked for six); the wire is 4 bits count + per **present** request 5 bits type, packed frame, 16 bits argument, so an absent slot costs nothing. `EGSTN_RequestType` gains the data-only kinds `EnterLinked`, `ExitLink`, `ApplyLinkEffect`, `RemoveLinkEffect`, `LaunchLinked` (18 to 22, inside the 5-bit field, no handler in this module).
+- Tests: `GSTNCombat.NP.Snapshot.ExtraHurtboxInHistory`, `GSTNCombat.NP.Clock.{TrackHookStallsTimelineNotClock, HookStampsWindow}`, `GSTNCombat.NP.Tick.BlocksActionsVeto`, `GSTNCombat.NP.Victim.OutgoingEntriesPosted`, `GSTNCombat.NP.Requests.EightSlotsRoundTrip`. Core side: `GSTNCombat.Core.Hurtbox.*` (see `GSTNCombat`). Details: `docs/notes/m6-doc-deltas.md` "M6 follow-up 2 (F2)".

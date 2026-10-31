@@ -1,0 +1,214 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/HitResult.h"
+#include "GameplayTagContainer.h"
+#include "MovementModeTransition.h"
+#include "WallMovement/GSTN_WallMovementTypes.h"
+#include "GSTN_WallEntryTransition.generated.h"
+
+struct FHitResult;
+struct FMoverSyncState;
+
+/** Whether the wall can be grabbed while still going up */
+UENUM(BlueprintType)
+enum class EGSTN_WallEntryVertical : uint8
+{
+	/** Any vertical speed */
+	Any,
+	/** Only while falling (vertical speed <= 0), like the Mario games that don't let you wall slide on the way up */
+	DescendingOnly,
+	/** While going up no faster than MaxAscendingSpeed */
+	BelowSpeed,
+};
+
+/** What to do when the wall to grab is the same as the last one (horizontal normals within SameWallAngle) */
+UENUM(BlueprintType)
+enum class EGSTN_SameWallPolicy : uint8
+{
+	/** No restriction */
+	Allow,
+	/**
+	 * Only at or below the height the last wall was left at (+ tolerance): no gaining height by wall jumping up the same
+	 * wall (Super Mario 3D World). Walls facing a different way are not limited, so alternating walls still climbs
+	 */
+	HeightCap,
+	/** Never: wall jumps must go between walls facing different ways */
+	Deny,
+};
+
+/**
+ * Falling -> wall mode (e.g. WallSliding) when the character moves/pushes into a wall in the air.
+ * Add it to the Transitions of the Falling movement mode (or of any air mode).
+ *
+ * It only decides WHETHER to grab; how the incoming momentum is kept is set on the target mode (EntryMomentum).
+ * The wall found here is handed to the mode, which starts already aligned to it.
+ *
+ * Re-entry rules read the wall memory in FGSTN_WallMovementSyncState (last wall normal, height and time), which every
+ * wall mode keeps up to date. Their purpose: with strong air control the character could leave a wall and re-grab it
+ * higher up again and again, climbing it; the height cap stops that on walls facing the same (or a similar) way.
+ * The memory is forgotten when:
+ *  - the character went through one of MemoryResetModes (e.g. it landed and walked) after leaving the wall
+ *  - one of MemoryResetTags is present (e.g. granted by an ability; only while present), or
+ *    UGSTN_WallMovementLibrary::ResetWallMemory is called (FGSTN_ResetWallMemoryEffect, stored in the sync state)
+ *  - a different wall is grabbed (it overwrites the memory)
+ */
+UCLASS(Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
+class GASP_GIUSTINO2_API UGSTN_WallEntryTransition : public UBaseMovementModeTransition
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_WallEntryTransition(const FObjectInitializer& ObjectInitializer);
+
+	virtual FTransitionEvalResult Evaluate_Implementation(const FSimulationTickParams& Params) const override;
+	virtual void Trigger_Implementation(const FSimulationTickParams& Params) override;
+
+	/** Mode to enter (as registered on the Mover component) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry")
+	FName TargetModeName = TEXT("WallSliding");
+
+	// ---------------------------------------------------------------- Detection
+
+	/** How far ahead (along the stick and the horizontal velocity) the capsule looks for a wall (cm) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float ProbeDistance = 30.f;
+
+	/**
+	 * Grabbable surfaces: angle between their normal and gravity-up, from MinSurfaceAngle... The default range, 45 to 120, is the one the wall
+	 * modes accept: surfaces from 45 degrees off the horizontal (below that is a floor, the limit Mover walks on) through every inclined wall
+	 * (60, 70, 80 degrees: the normal tilts up), the vertical wall (90) and overhangs up to 30 degrees past it (the normal tilts down)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection", meta = (ClampMin = "0", ClampMax = "180", ForceUnits = "deg"))
+	float MinSurfaceAngle = 45.f;
+
+	/** ...to MaxSurfaceAngle (90 = vertical, above = overhangs) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection", meta = (ClampMin = "0", ClampMax = "180", ForceUnits = "deg"))
+	float MaxSurfaceAngle = 120.f;
+
+	/**
+	 * Which surfaces can be grabbed besides the angle: set it to the same behaviours as the target mode (WallSlide for a slide
+	 * entry, WallClimb for a climb entry), so a surface the mode would reject at once is never entered. Empty by default =
+	 * every surface, as before. Applied to the face hit by the sweep and to the confirmation at capsule height
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Detection")
+	FGSTN_WallSurfaceFilter SurfaceFilter;
+
+	// ---------------------------------------------------------------- Conditions
+
+	/** The stick must push toward the wall */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Conditions")
+	bool bRequireInputTowardWall = true;
+
+	/** dot(stick direction, into the wall) needed. 1 = straight at it, 0.5 = within ~60 degrees */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Conditions", meta = (ClampMin = "0", ClampMax = "1", EditCondition = "bRequireInputTowardWall"))
+	float MinInputTowardWallDot = 0.5f;
+
+	/** Grabbing while going up */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Conditions")
+	EGSTN_WallEntryVertical VerticalPolicy = EGSTN_WallEntryVertical::Any;
+
+	/** Max upward speed for VerticalPolicy = BelowSpeed (cm/s) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Conditions", meta = (ClampMin = "0", ForceUnits = "cm/s",
+		EditCondition = "VerticalPolicy == EGSTN_WallEntryVertical::BelowSpeed"))
+	float MaxAscendingSpeed = 200.f;
+
+	/** Time in the current (air) mode before a wall can be grabbed: avoids grabbing the wall you just jumped off from the ground (s) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Conditions", meta = (ClampMin = "0", ForceUnits = "s"))
+	float MinAirTime = 0.1f;
+
+	// ---------------------------------------------------------------- Re-entry (wall memory)
+
+	/** Rule for grabbing again the same wall as last time */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Re-entry")
+	EGSTN_SameWallPolicy SameWallPolicy = EGSTN_SameWallPolicy::HeightCap;
+
+	/** Walls whose horizontal normals are within this angle count as "the same wall" (deg) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Re-entry", meta = (ClampMin = "0", ClampMax = "180", ForceUnits = "deg"))
+	float SameWallAngle = 30.f;
+
+	/** HeightCap: how far above the last exit height the same wall can still be grabbed (cm) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Re-entry", meta = (ForceUnits = "cm",
+		EditCondition = "SameWallPolicy == EGSTN_SameWallPolicy::HeightCap"))
+	float HeightCapTolerance = 10.f;
+
+	/** The same wall can't be grabbed again for this long after leaving it, e.g. right after a wall jump (s) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Re-entry", meta = (ClampMin = "0", ForceUnits = "s"))
+	float ReentryCooldown = 0.25f;
+
+	/**
+	 * Going through one of these modes after leaving a wall resets the wall memory (no height cap, no same-wall rule).
+	 * Typically the ground modes: landing and walking resets it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Re-entry")
+	TArray<FName> MemoryResetModes;
+
+	/**
+	 * While any of these tags is present the wall memory is ignored, e.g. an ability that grants the tag to allow climbing
+	 * the same wall again. It is not latched: the entry check is read-only (it runs more than once per tick and again on
+	 * re-simulation), so the reset ends with the tag. To forget the wall for good, queue FGSTN_ResetWallMemoryEffect
+	 * (UGSTN_WallMovementLibrary::ResetWallMemory) from the ability. Looked up on the Mover component
+	 * (modes, layered moves, modifiers) and on the owner's IGameplayTagAssetInterface (the actor or a component of it,
+	 * such as an AbilitySystemComponent). Owner tags are game-thread state, not part of the predicted input
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall Entry|Re-entry")
+	FGameplayTagContainer MemoryResetTags;
+
+	/**
+	 * Read MemoryResetModes from a mode change record that a rollback left stale (its mode is not the start state's mode: the change into the current
+	 * mode was erased with the frames after the rollback and not written again), instead of ignoring the reset. Without it, a correction near a
+	 * take-off makes the client keep a wall memory the server has forgotten, and the next grab of the same wall is refused on the client only: a
+	 * reconcile at every re-grab (traversal T2, found re-grabbing a moving enemy shape; nothing about moving walls). See UGSTN_WallReentryUtils.
+	 * Off by default here (legacy transitions unchanged), on in the surface-driven transitions of the v2 modes
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall Entry|Re-entry")
+	bool bInferModeChangeLostToRollback = false;
+
+	/**
+	 * HeightCap on a moving wall (a Movable component) is judged in the wall's own frame: the height above the wall's origin now against the one the
+	 * wall was left at (recorded by modes with bRecordWallBaseInMemory, the v2 modes). A memory with no such frame (a static wall, a legacy mode) and a
+	 * moving wall: cooldown only. Static walls keep world heights. Off by default here (legacy transitions unchanged), on in the surface-driven
+	 * transitions (traversal-surfaces.md 4.3, T2)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wall Entry|Re-entry", meta = (EditCondition = "SameWallPolicy == EGSTN_SameWallPolicy::HeightCap"))
+	bool bBaseRelativeHeightCap = false;
+
+protected:
+	/**
+	 * Whether any MemoryResetTags is present in the simulated state (Mover's own tags) or on the owner. Owner tags are
+	 * game-thread state: predicted only if their source (e.g. the GAS-NPP ability system) ticks before Mover
+	 */
+	bool HasMemoryResetTag(const FMoverSyncState& SyncState) const;
+
+	/** A grabbable wall found by FindEntryWall */
+	struct FEntryCandidate
+	{
+		FVector Normal = FVector::ZeroVector;
+		FVector Point = FVector::ZeroVector;
+		/** The sweep hit that found the wall (its component is what a surface-driven subclass resolves) */
+		FHitResult Hit;
+	};
+
+	friend struct FGSTN_WallEntryTestAccess;
+
+	/**
+	 * The mode to enter for a wall FindEntryWall accepted. Base: TargetModeName, so a transition behaves exactly as before. Subclasses that choose the
+	 * mode by what they found (UGSTN_WallSurfaceModeTransition, the wall's surface) override it; None = refuse the wall
+	 */
+	virtual FName ResolveEntryMode(const FEntryCandidate& Candidate, const FSimulationTickParams& Params) const;
+
+	/**
+	 * The filter SweepForWall applies to the surface it finds. Base: SurfaceFilter. The surface-driven twins return an empty one: their mode list decides what
+	 * is a wall, and the filter such a transition inherited when it replaced a plain one (setup_wall_slide_modes.py copied the old transition's, WallSlide
+	 * only) refused every climb-only surface before the list was asked
+	 */
+	virtual const FGSTN_WallSurfaceFilter& GetEntrySurfaceFilter() const;
+
+	/** All the checks. Returns false (with the reason when logging) if the wall can't be grabbed now */
+	bool FindEntryWall(const FSimulationTickParams& Params, FEntryCandidate& OutCandidate) const;
+
+	/** Capsule sweep along a horizontal direction for a grabbable surface */
+	bool SweepForWall(const FSimulationTickParams& Params, const FVector& Direction, const FVector& GravityUp, FHitResult& OutHit) const;
+};
