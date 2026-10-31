@@ -116,5 +116,5 @@ err = {}
 for n in ("foot_MainPoint_l", "hand_MainPoint_l", "hand_MainPoint_r", "pelvis_MainPoint", "head_MainPoint"):
     p = plan[owner[n]]
     err[n] = round(max(float(np.linalg.norm(pos(n, f) - np.array(T["targets"][n][p["src"][f]]))) for f in p["keys"]), 2)
-print(json.dumps({"ok": [ok1, ok2, ok3], "layers": {nm: len(lv.layer(l).key_frame_indices()) for nm, l in LAYERS.items()},
+print(json.dumps({"ok": [ok1, ok2, ok3], "layers": {nm: len(list(lv.layer(l).key_frame_indices())) for nm, l in LAYERS.items()},
                   "key_error_cm": err, "anim_size": dv.get_animation_size(), "sec": round(time.time() - t0, 1)}))

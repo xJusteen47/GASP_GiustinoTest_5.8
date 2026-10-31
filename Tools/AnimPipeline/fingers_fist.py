@@ -10,7 +10,8 @@ tab = [s for s in sm.scenes() if s.name() == (globals().get("TAB") or "jab_v8.ca
 ds = tab.domain_scene(); mv = ds.model_viewer(); dv = ds.data_viewer(); lv = ds.layers_viewer()
 ids = {mv.get_object_name(o): o for o in mv.get_objects()}
 N = dv.get_animation_size()
-FRAMES = [int(x) for x in str(globals().get("FRAMES")).split(",")] if globals().get("FRAMES") else list(range(N))   # sparse scenes: only the key frames
+_F = globals().get("FRAMES")   # csc_run turns "0,1,2" into a tuple and "5" into an int; a string also works
+FRAMES = ([int(_F)] if isinstance(_F, int) else [int(x) for x in (_F if isinstance(_F, (tuple, list)) else str(_F).split(","))]) if _F not in (None, "") else list(range(N))   # sparse scenes: only the key frames
 boxes = [f"{f}_{i}_Box" for f in ("index", "middle", "ring", "pinky", "thumb") for i in ("01", "02", "03")]
 def did(n, key):
     for d in dv.get_all_data_id(ids[n]):
