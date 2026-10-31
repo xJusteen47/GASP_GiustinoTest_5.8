@@ -5989,6 +5989,12 @@ def scenario_impact_wall(client=1, shot_time=5.5):
     run.run(steps)
 
 
+# impact_wall_mode's tap (HANDOVER 59 OPEN 2): the climber's height wanted when the spin opens, and how far ahead of the tap that is (the spin's 20
+# frames plus about one editor tick and the attacker client's input delay)
+IMPACT_SPIN_HEIGHT = 230.0
+IMPACT_TAP_LEAD_S = 0.45
+
+
 def scenario_impact_wall_mode(client=1, tap_delay=2.0):
     """Second half of the wall scenario of the hits milestone, for the surface impacts (M4 H11, combat-m4-hits 7b): a victim wall sliding on a wall is
     launched INTO it. `client` is the climber, the other client the attacker. A wall (an AGSTN_TestSurface box of the Wall type, which the wall mode slides on
@@ -6080,14 +6086,19 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
             elif ph == 'hit':
                 comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
                 # The climber rises along the wall to about 330 cm, then slides down faster and faster (400 cm/s at the floor). The spin of the test move opens 20
-                # frames (0.35 s) after the tap and reaches 140 cm around the attacker (height 88), the feet of the climber are 62 cm under its centre: tap just
-                # after the top of the rise, so the spin finds the climber about 230 cm up, still on the wall
-                if now - st['tw'] > 0.2 and mode == wm and snap(worlds()[0])[key]['velocity'][2] < -20.0 and loc.z < 265.0 and 'F' not in st:
+                # frames (0.35 s) after the tap and reaches 140 cm around the attacker (height 88), the feet of the climber are 62 cm under its centre: the spin
+                # must find the climber about 230 cm up, still on the wall. HANDOVER 59: a fixed tap height (the first editor tick under 265 cm) passed when
+                # the tap fell at 255-261 cm and failed at 242-255 cm (a late editor tick on a faster slide: the climber reached the floor before the spin).
+                # So the tap is velocity-aware: issued once the height predicted at the spin (now + IMPACT_TAP_LEAD_S, linear in the vertical speed) is at
+                # IMPACT_SPIN_HEIGHT or below, wherever the editor tick falls
+                vz = snap(worlds()[0])[key]['velocity'][2]
+                predicted = loc.z + vz * IMPACT_TAP_LEAD_S
+                if now - st['tw'] > 0.2 and mode == wm and vz < -20.0 and predicted <= IMPACT_SPIN_HEIGHT and 'F' not in st:
                     st['F'] = _latest_frame(0, akey)
                     st['t_tap'] = now
                     st['d0'] = (damage_of(0, key), damage_of(client, key))
                     st['c0'] = (_impact_counts(0, key), _impact_counts(client, key))
-                    st['p_tap'] = (round(frame_x((loc.x, loc.y)), 1), round(loc.z, 1), mode)
+                    st['p_tap'] = (round(frame_x((loc.x, loc.y)), 1), round(loc.z, 1), mode, round(vz, 1), round(predicted, 1))
                     combat_tap(att, attack)
                 if hits() and 'backed' not in st:
                     # the first hit landed: the attacker steps back so the rest of its move (the spin, 20 frames in) does not hit the splatted climber again
@@ -6112,7 +6123,7 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
         hs = hits()
         # the mode the climber is in when the hit freezes it: the first simulation tick with the hitstop tag
         stop = next((s for s in run._win('srv', st['t_tap'], st['t_tap'] + 1.5, sim=True) if 'Combat.State.Hitstop' in s['tags']), None) if st.get('t_tap') is not None else None
-        return st['reached'] and len(hs) == 1 and stop is not None and stop['mode'] == wm, f"reached the wall {st['reached']}, hits {hs} (group 0 is the Root box, 3 the spin), climber at the tap (x ahead of the attacker, z, mode) {st.get('p_tap')}, mode when the hitstop opened {stop['mode'] if stop else None}"
+        return st['reached'] and len(hs) == 1 and stop is not None and stop['mode'] == wm, f"reached the wall {st['reached']}, hits {hs} (group 0 is the Root box, 3 the spin), climber at the tap (x ahead of the attacker, z, mode, vertical speed, z predicted at the spin) {st.get('p_tap')}, mode when the hitstop opened {stop['mode'] if stop else None}"
 
     def impact_check():
         c1 = (_impact_counts(0, key), _impact_counts(client, key))
