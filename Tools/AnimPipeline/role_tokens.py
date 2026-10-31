@@ -8,7 +8,8 @@ Usage: python role_tokens.py <session-id> <take> <label> [from-ISO] [to-ISO]
   <session-id>/subagents/*.jsonl"""
 import sys, os, json, glob, collections
 
-PROJ = os.environ.get("CLAUDE_PROJECT_TRANSCRIPTS") or os.path.expanduser("~/.claude/projects/C--Users-<user>-Documents-Unreal-Projects-GASP-Giustino2")
+# default: the Claude project folder whose slug ends with the project name (the slug embeds the user's home path)
+PROJ = os.environ.get("CLAUDE_PROJECT_TRANSCRIPTS") or next(iter(sorted(glob.glob(os.path.expanduser("~/.claude/projects/*-GASP-Giustino2")))), "")
 # $/MTok: input, cache write (1 h), cache read, output
 PRICE = {"opus": (4, 8, 0.20, 20), "sonnet": (3, 6, 0.30, 15), "haiku": (1, 2, 0.10, 5), "fable": (4, 8, 0.20, 20)}
 

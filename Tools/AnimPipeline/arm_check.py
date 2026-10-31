@@ -64,7 +64,9 @@ def arm_rows(frames, ref_frames):
             fore_twist = twist_about(qrel(q_ref_fore, qr), ax_fore)
             hand_twist = twist_about(qrel(q_ref_hand, qrel(qf, qh)), ax_hand)
             # hinge direction: swing part of the elbow rotation, as an axis in the upper arm's frame
-            v = qr[:3]; sw = v - np.dot(v, ax_fore) * ax_fore
+            # q and -q are the same rotation: pick w >= 0 first, or a bend that crosses 180 deg of stored angle reads as a
+            # flipped hinge (Ganondorf v2, 01/11: elbow stored as 316 deg about -Z at f0-8, 73 deg about +Z at f9)
+            v = np.asarray(qr[:3]) * (1.0 if qr[3] >= 0 else -1.0); sw = v - np.dot(v, ax_fore) * ax_fore
             sw = unit(sw) if np.linalg.norm(sw) > 1e-4 else None
             if f == 0 and sw is not None and sw_ref is None:
                 sw_ref = sw

@@ -56,7 +56,7 @@ ARM_LAG_R = 2.0
 ARM_LAG_L = lambda k: 0.0 if k <= 12 else 2.0     # arms trail the leg-led recovery
 
 ANK_ADJ = {}                          # {frame: (dx, dy, dz)} cm on the kicking ankle keys (auto_fix.py)
-HEEL = {0: 10, 2: 16, 4: 24, 5: 30}   # deg, kicking heel up about the ball before the lift-off (6)
+HEEL = {0: 10, 2: 11, 4: 10, 5: 15}   # v2 01/11: ankle 141-148 > 140 at f2-5 with 16/24/30 (Unreal bones ~1 deg under the model)   # deg, kicking heel up about the ball before the lift-off (6)
 KICK_YAW = 20.0              # deg, kick line outward (toward +X, the lead side) from the facing
 CONTACT_ANKLE_Y = 92.0       # cm, ankle height at contact (belly height of an opponent)
 REACH = 0.985                # share of the leg's full length at contact (knee ~13 deg short of straight)
@@ -77,13 +77,13 @@ BAL_W = {0: 0.55, 1: 0.7, 2: 0.82, 3: 0.92, 4: 0.97, 5: 1, 6: 1, 26: 1, 27: 0.85
 W_AIR = {0: 0, 4: 0, 6: 1, 23: 1, 27: 0, 43: 0}                                   # the kicking foot rides the hips while up
 # arms: from the idle's hanging arms; rise a little and open for balance in the load, counter at the snap, home by the FAF
 ARM_L = {0: ("D", (2, 5, 3)), 4: ("D", (2, 6, 3)), 7: ("D", (2, 8, 4)), 8: ("D", (-2, 2, 6)), 9: ("A", (-10, -36, 24)), 11: ("A", (-11, -39, 25)),
-         19: ("A", (-17, -41, 17)), 23: ("A", (-15, -39, 22)), 26: ("A", (-7, -32, 34)), 30: ("A", (0, -40, 20)), 35: ("D", (0, 0, 0)), 43: ("D", (0, 0, 0))}
+         19: ("A", (-17, -41, 17)), 23: ("A", (-15, -39, 22)), 26: ("A", (-10, -36, 28)), 30: ("A", (-2, -40, 20)), 35: ("D", (0, 0, 0)), 43: ("D", (0, 0, 0))}
 ARM_R = {0: ("D", (2, 3, -3)), 3: ("D", (3, 6, -4)), 6: ("D", (4, 10, -6)), 9: ("A", (12, -15, -43.5)), 11: ("A", (14, -15, -43)), 19: ("A", (13, -16, -43)),
-         23: ("A", (12, -17, -43)), 25: ("A", (9.5, -26.5, -37)), 27: ("A", (7, -32, -33)), 29: ("A", (5.1, -37.8, -26.1)), 31: ("A", (3, -42, -18)), 36: ("D", (0, 0, 0)), 43: ("D", (0, 0, 0))}   # 23-31 ~46 cm from the shoulder: an arc
+         23: ("A", (12, -17, -43)), 25: ("A", (9.5, -26.5, -37)), 27: ("A", (7, -32, -33)), 30: ("A", (5.1, -37.8, -26.1)), 32: ("A", (3, -42, -18)), 36: ("D", (0, 0, 0)), 43: ("D", (0, 0, 0))}   # 23-31 ~46 cm from the shoulder: an arc
 # rear arm almost straight out to the right in the hold (reach ~47.5 of 49 cm; it was 30-35, bent ~100 deg), then it drops
 # before it bends back in (pre-flight 31/10: elbow up/out and chicken wing on 7-10 and 27-34)
-POLE_L = {0: None, 8: None, 9: (-0.6, -0.75, 0.15), 11: (-0.7, -0.7, 0.15), 19: (-0.7, -0.7, 0.15), 26: (-0.3, -0.9, 0.2), 30: None, 43: None}   # None = the idle's
-POLE_R = {0: None, 2: None, 5: (-0.6, -0.8, -0.15), 8: (0.1, -1.0, -0.3), 19: (0.1, -1.0, -0.3), 25: (-0.4, -0.9, -0.1), 31: (-0.7, -0.7, 0.0), 36: None, 43: None}   # sampled ARM_LAG_R late; back-down while it hangs   # sampled ARM_LAG_R late   # elbow down whenever the arm is raised past 40 deg (pre-flight 31/10)
+POLE_L = {0: None, 8: None, 9: (-0.6, -0.75, 0.15), 11: (-0.7, -0.7, 0.15), 19: (-0.7, -0.7, 0.15), 26: (-0.85, -0.15, -0.45), 30: None, 43: None}   # None = the idle's
+POLE_R = {0: None, 2: None, 5: (-0.3, -0.95, -0.05), 8: (-0.6, -0.8, 0.0), 19: (-0.7, -0.7, 0.0), 23: (0.0, -1.0, -0.25), 25: (-0.5, -0.85, -0.15), 31: (-0.8, -0.6, 0.0), 33: (-0.85, -0.5, 0.0), 36: None, 43: None}   # v2 01/11: hold back-down 45 deg (relaxed arm out to the side), down at 23 keeps the upper arm <= 50 deg on the drop   # sampled ARM_LAG_R late; back-down while it hangs   # sampled ARM_LAG_R late   # elbow down whenever the arm is raised past 40 deg (pre-flight 31/10)
 
 
 # parameter overrides (auto_fix.py writes them; ganon_iter.sh passes MODEL_OVERRIDES): {name: value} replaces the
@@ -252,6 +252,7 @@ def main():
            29: ga, 32: ga, 43: ga}
     ANK[20] = ANK[19] + np.array([0.0, -9.0, -3.0])                      # mostly down first (the shin swings about the knee)
     ANK[21] = 0.5 * (ANK[19] + ANK[23]) + np.array([0.0, -7.0, 2.0])     # the knee folds: the foot sweeps down, not a straight line
+    ANK[25] = 0.5 * (ANK[23] + ANK[27]) + np.array([0.0, -1.5, -1.5])   # v2 01/11: rounds the 23-27 drop (radial wobble 4.1 cm on 22-28)
     ank = pchip(ANK)
     # knee bend direction (from the hip-ankle line): along the foot on the ground, up-forward in the air (knee over the toes)
     kb0 = unit(G["calf_LimbDir_l"] - G["calf_MainPoint_l"])
@@ -284,6 +285,7 @@ def main():
     ank0 = pchip(ANK)
     for k_, d_ in ANK_ADJ.items():
         ANK[int(k_)] = (ANK[int(k_)] if int(k_) in ANK else ank0[int(k_)]) + np.array(d_, dtype=float)
+    ANK[25] = 0.5 * (ANK[23] + ANK[27]) + np.array([0.0, -1.5, -1.5])   # v2 01/11: rounds the 23-27 drop (radial wobble 4.1 cm on 22-28)
     ank = pchip(ANK)
     fax, flat = pchip(FAX), pchip(FLAT)
 
