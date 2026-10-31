@@ -12,6 +12,7 @@ void UGSTN_WallAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
 	WallAnim = FGSTN_WallAnimState();
+	WallLimbContact = FGSTN_WallLimbContactState();
 	FindMoverComponent();
 }
 
@@ -27,6 +28,9 @@ void UGSTN_WallAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// A missing Mover component (editor preview) reads as "not on a wall": the layer then fades out like a normal exit
 	const FGSTN_WallAnimInputs Inputs = UGSTN_WallAnimUtils::GatherInputs(MoverComponent.Get(), Settings);
 	WallAnim = UGSTN_WallAnimUtils::StepWallAnimState(WallAnim, Inputs, Settings, DeltaSeconds);
+
+	// Probes from last frame's pose: the chain roots (shoulders, hips) are not moved by the limb IK, so the origins are the animated ones
+	WallLimbContact = UGSTN_WallAnimUtils::GatherLimbContact(GetSkelMeshComponent(), MoverComponent.Get(), WallAnim, LimbContactSettings);
 }
 
 void UGSTN_WallAnimInstance::FindMoverComponent()
