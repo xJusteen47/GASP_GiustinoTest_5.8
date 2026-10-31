@@ -17,6 +17,7 @@
 #include "Sim/GSTN_LinkSnapshotContributor.h"
 #include "Sim/GSTN_LinkSnapshotExt.h"
 #include "Simulation/GSTN_CombatAttacker.h"
+#include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "World/GSTN_StepSnapshot.h"
 
 namespace
@@ -188,8 +189,14 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveGrabTarget(const FGSTN_SnapshotEntr
 	{
 		return FGameplayTag();
 	}
+	// Only a kit that can grab (it carries a link extension) looks for a grab target: the probe reads other entities' snapshot positions, which
+	// a client knows as interpolated proxies, so its result is not prediction-stable and must not reach a pawn that never grabs (F10 deviation)
 	const FGSTN_LinkBodyData* Body = FGSTN_LinkAttach::At(SelfExt->BodyIndex);
-	FGSTN_LinkInteractOffer Offer = FGSTN_LinkInteractProvider::MakeGrabOffer(*Registry, Body ? Body->KitExtension : nullptr);
+	if (!Body || !Body->KitExtension)
+	{
+		return FGameplayTag();
+	}
+	FGSTN_LinkInteractOffer Offer = FGSTN_LinkInteractProvider::MakeGrabOffer(*Registry, Body->KitExtension);
 	if (!Offer.Definition)
 	{
 		return FGameplayTag();
@@ -249,6 +256,20 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 		if (FGSTN_LinkFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments))
 		{
 			StepLinkTick(*Fragment, Context.Frame, UGSTN_LinkSettings::Get().RequestTimeoutFrames);
+			// The exit a break recorded is read on its frame (F11's exit request); after it the record is dropped, so an idle entity is idle on the wire
+			if (Fragment->Actions.Exit.Frame != 0 && Context.Frame > Fragment->Actions.Exit.Frame)
+			{
+				Fragment->Actions.Exit = FGSTN_LinkActions::FExit();
+			}
+			// The frame a non-acting parked role starts (the victim step or the inbox wrote it this frame): its running move ends, so no hitbox
+			// of it hits the partner later this frame
+			const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+			const FGSTN_LinkFragment* Before = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.In.Fragments);
+			if (IsActionBlocked(*Fragment, Registry) && !(Before && IsActionBlocked(*Before, Registry))
+				&& Context.Out.Core.ActionState == EGSTN_ActionState::InTimeline)
+			{
+				FGSTN_CombatTimelineLogic::CancelForOtherCommand(Context.Out.Core, Context.Frame);
+			}
 		}
 		break;
 	case EGSTN_CombatHookPoint::AfterExecute:

@@ -21,7 +21,8 @@ struct FGSTN_SnapshotEntry;
  *
  *  - AfterClocks (the link tick of 7.4): a PREDICTED link (Phase Pending, flag Predicted) that got no response within the settings'
  *    RequestTimeoutFrames (12) is cleared, its serial kept; a PendingBreak a role input asked for (MarkPendingBreak, the Release command of
- *    F12) is held for the watchdog. Nothing here moves another entity or writes its state.
+ *    F12) is held for the watchdog; on the frame a non-acting parked role starts (the grabbed), its running timeline is cancelled, so no
+ *    hitbox of it lands on the partner. Nothing here moves another entity or writes its state.
  *  - BlocksActions (asked after BeforeCandidates): the entity's Body role is a parked role that does not act while linked (the grabbed): no
  *    command starts, so it has no candidates. A role with bActsWhileLinked (the latcher, the latched enemy, the grabber) gets no veto and keeps
  *    its candidates: the latched enemy fights on.
@@ -33,7 +34,9 @@ struct FGSTN_SnapshotEntry;
  *    the role tag of every channel through the registry (every registered role tag is set, so a role that ended is cleared), and
  *    Interact.Target.Grab through the GSTNLinkGAS candidate provider: an FGSTN_LinkInteractSource built from the step snapshot (end of the
  *    previous frame), the kit's grab offer, one stateless probe (no sticky focus, no line of sight: F10 deviation), then
- *    FGSTN_LinkInteractProvider::ProjectTargetTag. A linked entity, or one whose kit cannot grab, projects no target.
+ *    FGSTN_LinkInteractProvider::ProjectTargetTag. A linked entity, or one whose kit carries no link extension (it cannot grab), projects no
+ *    target: the probe reads other entities' snapshot positions, interpolated on a client, so the tag is not prediction-stable (an F12 item).
+ *    The exit record a break left in the link actions is dropped the frame after its own.
  *
  * Simulation code: deterministic, no net mode, no resimulation branch, state only in the fragment. The registry, the attach table and the
  * meanings are content; the tags go to the entity's ability system, which rolls back with the rest; the Mover modifier goes through Mover's
