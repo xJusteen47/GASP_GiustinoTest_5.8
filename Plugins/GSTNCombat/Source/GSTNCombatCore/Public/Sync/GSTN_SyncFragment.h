@@ -146,6 +146,20 @@ public:
 
 	/** GSTNFeatureIds::Invalid when the struct is not registered */
 	static uint8 FindId(const UScriptStruct* Struct);
+
+	/**
+	 * What this machine can put on the wire: a CRC of every registered (type id, struct path) pair in ascending id order, test ids
+	 * (GSTNFeatureIds::FirstTest and above) excluded. 0 with nothing registered. Two machines with the same set of fragment plugins
+	 * get the same value whatever their load order; GSTNCombatNP folds it into the network version, so a client whose set differs
+	 * (a fragment plugin enabled on one side only) is refused at connect instead of silently skipping the fragment.
+	 */
+	static uint32 GetSignature();
+
+	/** The signature of an explicit list of (type id, struct path) pairs: the same rule as GetSignature, for tests and logs */
+	static uint32 ComputeSignature(TConstArrayView<TPair<uint8, FString>> Entries);
+
+	/** "16 /Script/GSTNPartsNP.GSTN_PartsFragment, 18 ..." for logs (test ids excluded, as in the signature) */
+	static FString Describe();
 };
 
 /**

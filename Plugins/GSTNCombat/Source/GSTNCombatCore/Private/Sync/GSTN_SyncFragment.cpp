@@ -3,6 +3,8 @@
 #include "Sync/GSTN_SyncFragment.h"
 
 #include "Algo/Sort.h"
+#include "Misc/Crc.h"
+#include "Misc/NetworkVersion.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 
@@ -119,6 +121,8 @@ bool FGSTN_SyncFragmentRegistry::Register(uint8 TypeId, const UScriptStruct* Str
 
 	Data.ById[TypeId] = Struct;
 	Data.IdByStruct.Add(Struct, TypeId);
+	// The network version folds the signature in (GSTNCombatNP) and the engine caches it: recompute on the next request
+	FNetworkVersion::InvalidateNetworkChecksum();
 	return true;
 }
 
@@ -129,7 +133,65 @@ void FGSTN_SyncFragmentRegistry::Unregister(uint8 TypeId)
 	{
 		Data.IdByStruct.Remove(Struct);
 		Data.ById[TypeId] = nullptr;
+		FNetworkVersion::InvalidateNetworkChecksum();
 	}
+}
+
+namespace
+{
+	void CollectSignatureEntries(TArray<TPair<uint8, FString>>& Out)
+	{
+		for (int32 Id = 1; Id < GSTNFeatureIds::FirstTest; ++Id)
+		{
+			if (const UScriptStruct* Struct = FGSTN_SyncFragmentRegistry::FindStruct(static_cast<uint8>(Id)))
+			{
+				Out.Emplace(static_cast<uint8>(Id), Struct->GetPathName());
+			}
+		}
+	}
+}
+
+uint32 FGSTN_SyncFragmentRegistry::ComputeSignature(TConstArrayView<TPair<uint8, FString>> Entries)
+{
+	TArray<TPair<uint8, FString>> Sorted;
+	for (const TPair<uint8, FString>& Entry : Entries)
+	{
+		if (Entry.Key != GSTNFeatureIds::Invalid && Entry.Key < GSTNFeatureIds::FirstTest)
+		{
+			Sorted.Add(Entry);
+		}
+	}
+	if (Sorted.IsEmpty())
+	{
+		return 0;
+	}
+	Sorted.Sort([](const TPair<uint8, FString>& A, const TPair<uint8, FString>& B) { return A.Key < B.Key; });
+	TStringBuilder<512> Text;
+	for (const TPair<uint8, FString>& Entry : Sorted)
+	{
+		Text.Appendf(TEXT("%d=%s;"), Entry.Key, *Entry.Value);
+	}
+	// Never 0 for a non-empty set, so 0 keeps meaning "nothing registered"
+	return FMath::Max(FCrc::StrCrc32(Text.ToString()), 1u);
+}
+
+uint32 FGSTN_SyncFragmentRegistry::GetSignature()
+{
+	TArray<TPair<uint8, FString>> Entries;
+	CollectSignatureEntries(Entries);
+	return ComputeSignature(Entries);
+}
+
+FString FGSTN_SyncFragmentRegistry::Describe()
+{
+	TArray<TPair<uint8, FString>> Entries;
+	CollectSignatureEntries(Entries);
+	TStringBuilder<512> Text;
+	for (const TPair<uint8, FString>& Entry : Entries)
+	{
+		Text.Appendf(TEXT("%s%d %s"), Text.Len() ? TEXT(", ") : TEXT(""), Entry.Key, *Entry.Value);
+	}
+	return Entries.IsEmpty() ? FString(TEXT("none")) : FString(Text.ToString());
 }
 
 const UScriptStruct* FGSTN_SyncFragmentRegistry::FindStruct(uint8 TypeId)
