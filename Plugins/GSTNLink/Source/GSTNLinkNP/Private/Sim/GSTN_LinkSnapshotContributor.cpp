@@ -113,6 +113,8 @@ void FGSTN_LinkSnapshotContributor::FinalizeSnapshot(int32 Frame, TArrayView<FGS
 			Entry.Transform.SetRotation(Parked.GetRotation());
 			Entry.Facing = Parked.GetRotation().GetForwardVector();
 			Entry.Velocity = Entries[PartnerIndex].Velocity;
+			// A parked role that acts (the latcher) attacks from where it rides, not from its capsule
+			Entry.bPlacedByContributor = true;
 		}
 	}
 }

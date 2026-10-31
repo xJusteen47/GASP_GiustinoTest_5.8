@@ -32,6 +32,7 @@ import gasnpp_test as g
 
 LINK_DIR = '/GSTNLink/Test/'
 LINK_TYPE_ASSET = LINK_DIR + 'DA_LinkType_Grab_Test'
+LATCH_TYPE_ASSET = LINK_DIR + 'DA_LinkType_Latch_Test'
 GRAB = 'Combat.Link.Type.Grab'
 ATTACK_COMMAND = 'Command.Attack.Neutral'   # the test weapon's attack (WPN_Test_Hits), the move link_rollback turns into a grab
 LINKED_MODE = 'GSTN_Linked'
@@ -48,8 +49,10 @@ _last = {'rig': None}
 
 # ---- content ---------------------------------------------------------------------------------------------------------------------------------
 def prepare_editor():
-    """The plugin's test link type (created by the content helper when missing) and a registry that knows it. Run before PIE"""
-    if not unreal.load_asset(LINK_TYPE_ASSET):
+    """The plugin's test link types (the grab and, F12b, the latch it lists as its alternative; created by the content helper when missing) and a
+    registry that knows them. Run before PIE"""
+    grab = unreal.load_asset(LINK_TYPE_ASSET)
+    if not grab or not unreal.load_asset(LATCH_TYPE_ASSET) or not list(grab.get_editor_property('alternatives')):
         import sys
         import os
         sys.path.insert(0, os.path.join(unreal.Paths.project_dir(), 'Tools', 'GAS'))
@@ -1149,6 +1152,204 @@ def scenario_throw_at_enemy(pairing='client_grabs_client'):
     run.run(steps)
 
 
+
+# ---- F12b: the latch ----------------------------------------------------------------------------------------------------------------------------
+# The grab test type lists the latch as its alternative (setup_defence_link_content.run_link). The kit's link extension is tuned IN MEMORY so that a
+# standard fighter counts as a big enemy: MaxGrabWeight 50 (it is not grabbed), MinLatchWeight 90 (it is latched onto). The same tap of Interact
+# latches; the latcher is parked on the enemy's back and acts (its Attack is Command.Link.Latch.Attack, LinkedPartnerOnly, no reaction), the enemy
+# walks, turns and attacks with the latcher on, the latcher's Interact releases (reason Release) and the enemy's Interact shakes it off (its role's
+# release reason ShakeOff), both through the watchdog. Deviation: no separate heavy pawn asset; the weight comes from the kit's limits.
+LATCH_PAIRINGS = {'host_latches_client': 'host_grabs_client', 'client_latches_host': 'client_grabs_host', 'client_latches_client': 'client_grabs_client'}
+SUITE_LATCH = [f'latch_big_enemy_{p}' for p in LATCH_PAIRINGS]
+SUITE_LINK = SUITE_LINK + SUITE_LATCH
+
+
+def _latch(pairing):
+    name = f'latch_big_enemy_{pairing}'
+    rig = _GrabRig(name, LATCH_PAIRINGS[pairing])
+    run = rig.run
+    kit = _kit()
+    series = {wi: [] for wi in range(len(g.worlds()))}
+    sample = {'on': False}
+    ckey = g.key_of_player(rig.others[0])
+
+    def tick(_dt):
+        if not sample['on']:
+            return
+        try:
+            t = run.now()
+            for wi in series:
+                p = linked_location(wi, rig.akey)
+                if p is not None:
+                    series[wi].append((t, p))
+                    # The rider in the frame of the enemy as this same world shows it: what the latched enemy's own player sees
+                    e = actor(wi, rig.bkey).get_actor_transform()
+                    q = e.inverse_transform_location(unreal.Vector(*p))
+                    local[wi].append((t, (q.x, q.y, q.z)))
+        except Exception:
+            pass
+    local = {wi: [] for wi in range(len(g.worlds()))}
+    handle = unreal.register_slate_post_tick_callback(tick)
+
+    def weights():
+        return 'latch weights', Lib.set_kit_link_weights(kit, 50.0, 90.0)
+
+    def latched_check(label):
+        def f():
+            rows = {wi: (body(wi, rig.akey), body(wi, rig.bkey)) for wi in range(len(g.worlds()))}
+            ok = all(a and b and a[0] == 1 and b[0] == 2 and a[1] == 2 and b[1] == 2 for a, b in rows.values())
+            serials = {(a[2], a[3], b[2], b[3]) for a, b in rows.values() if a and b}
+            parked = {wi: mover_mode(wi, rig.akey) for wi in range(len(g.worlds()))}
+            sim = [0] + ([rig.ia] if rig.ia > 0 else [])
+            return ok and len(serials) == 1 and all(parked[wi] == LINKED_MODE for wi in sim), f'{rows} latcher modes {parked}'
+        return run.at(label, f)
+
+    def latch_type_check():
+        def f():
+            idx = Lib.get_link_type_index(g._tag('Combat.Link.Type.Latch'))
+            texts = {wi: link_text(wi, rig.akey) for wi in range(len(g.worlds()))}
+            return idx > 0 and all(f'type {idx} role 1' in t for t in texts.values()), f'latch index {idx}: {texts}'
+        return run.at('the tap formed the LATCH (the grab refused the weight, its alternative took it): every world', f)
+
+    def hold_walk(on, v=(0.0, 1.0, 0.0)):
+        return lambda: ('walk', g.hold(rig.ib, 'move', v) if on else g.release(rig.ib, 'move'))
+
+    def sampling(on):
+        def f():
+            sample['on'] = on
+            return 'sampling', on
+        return f
+
+    def presentation():
+        res = []
+        windows = [(rig.marks['walk_start']['t'], rig.marks['pre_latch_attack']['t']), (rig.marks['walk2_start']['t'], rig.marks['walk_end']['t'])]
+        inside = lambda t, lead: any(a + lead <= t <= b for a, b in windows)
+        server = [(t, p) for t, p in series[0] if inside(t, 0.0)]
+        for wi in range(1, len(g.worlds())):
+            mine = [(t, p) for t, p in series[wi] if inside(t, 0.5)]
+            e = presentation_error(mine, server)
+            if e is None:
+                res.append((f'world {wi}: the rider presentation sampled', False, f'{len(mine)} samples, server {len(server)}'))
+                continue
+            p50, p95, mx, d = e
+            role = 'latcher' if wi == rig.ia else 'latched' if wi == rig.ib else 'observer'
+            if wi == rig.ib:
+                # The latched enemy's own world predicts the enemy ahead of the server by a lead that drifts with the input buffer, and the
+                # server reference is sampled once per editor frame, so the comparison below is noisiest at the sharp turns (a 45 cm offset
+                # swung at the turn rate). Both are gated: that comparison, and the rider staying at one place on the enemy as this world shows
+                # it (the presentation places it from the partner's transform, so this one holds by construction: a regression guard)
+                pts = [c for t, c in local[wi] if inside(t, 0.5)]
+                med = tuple(sorted(c[k] for c in pts)[len(pts) // 2] for k in range(3)) if pts else (0.0, 0.0, 0.0)
+                devs = [math.dist(c, med) for c in pts]
+                res.append((f'world {wi} (latched, its own world): the rider stays at one place on the enemy as shown (max <= 5 cm)',
+                            bool(devs) and max(devs) <= 5.0, f'local offset {tuple(round(v, 1) for v in med)}, max deviation {max(devs) if devs else -1:.1f} cm, {len(pts)} samples'))
+            res.append((f'world {wi} ({role}): the rider follows the enemy within S1 (p95 <= {S1["partner_p95"]} cm, max <= {S1["max"]} cm)',
+                        p95 <= S1['partner_p95'] and mx <= S1['max'], f'p50 {p50:.1f} p95 {p95:.1f} max {mx:.1f} cm, delay {d * 1000:.0f} ms, {len(mine)} samples'))
+        return res
+
+    def walk_reconciles():
+        res = []
+        rb = lambda name, ci: rig.marks[name]['rb'][ci]
+        for ci in sorted({i for i in (rig.ia, rig.ib) if i > 0}):
+            clean = (rb('pre_latch_attack', ci) - rb('walk_start', ci)) + (rb('walk_end', ci) - rb('walk2_start', ci))
+            res.append((f'client {ci}: no unforced reconcile while the enemy walks and turns with the rider on', clean == 0, f'{clean}'))
+            hits = rb('walk2_start', ci) - rb('pre_latch_attack', ci)
+            # One reconcile is 2 steps of the harness counter (the spike's measure): at most one per hit over the two hits of the window
+            res.append((f'client {ci}: at most one correction per hit in the attack window (two hits, 2 counter steps each)', hits <= 4, f'{hits} counter steps'))
+        return res
+
+    def judge():
+        for label, ok, detail in presentation() + walk_reconciles():
+            run.check(label, ok, detail)
+        return 'judged'
+
+    def mark_t(label):
+        def f():
+            rig.mark(label)()
+            rig.marks[label]['t'] = run.now()
+            rig.marks[label]['dmg_c'] = g.damage_of(0, ckey)
+            return 'mark', label
+        return f
+
+    steps = [(0.2, rig.setup()), (0.4, weights)]
+    grab, t = rig.grab_steps()
+    # grab_steps checks the grab formation and B's parked mode: for the latch the parked side is A, so those two checks are replaced
+    steps += grab[:5]
+    t0 = t - 0.1
+    steps += [(t0, latched_check('latched on every world: A role 1 parked (where it is simulated), B role 2, one serial and link frame')), (t0, latch_type_check())]
+    # The walk below curves into world +X (radius ~4 m) and retraces: the uninvolved pawn goes 6 m to world -X of the enemy, out of every reach
+    def far():
+        b = g.snap(g.worlds()[0])[rig.bkey]['location']
+        out = []
+        for n, i in enumerate(rig.others):
+            k = g.key_of_player(i)
+            spawn = g.comps(g.worlds()[0])[k].get_spawn_location()
+            x, y = b[0] - 600.0, b[1] + 300.0 * n
+            g.comps(g.worlds()[0])[k].server_reset_to_spawn(unreal.Vector(x - spawn.x, y - spawn.y, 0.0))
+            out.append((round(x), round(y)))
+        return 'bystander far', out
+    steps += [(t0 + 0.05, far)]
+    t = t0 + 0.5
+    # The enemy walks and turns with the rider on (clean window 1), the rider's latch attack lands while it walks, the enemy stops and attacks
+    # (its spin may hit the rider: one correction for the hit's victim), then a second clean walk window. Rider presentation over the clean windows
+    req = {}
+
+    def request(label):
+        def f():
+            req[label] = tuple((g.snap(g.worlds()[0])[rig.bkey].get('combat') or {}).get('request', (0, -1)))
+            return 'enemy request', label, req[label]
+        return f
+
+    steps += [(t, mark_t('walk_start')), (t, sampling(True)), (t, hold_walk(True))]
+    # Clean window 1: 2.5 s of walking and turning
+    for k in range(1, 5):
+        a = k * 0.8
+        steps.append((t + 0.5 * k, hold_walk(True, (math.sin(a), math.cos(a), 0.0))))
+    w = t + 2.5
+    steps += [(w - 0.05, mark_t('pre_latch_attack')), (w, rig.tap(rig.ia, 'Attack')), (w + 0.7, mark_t('post_latch_attack')),
+              (w + 0.7, run.at('the latch attack hit the walking enemy (5 damage on the authority) and nobody else', lambda: (
+                  abs((rig.marks['post_latch_attack']['dmg'][0] - rig.marks['pre_latch_attack']['dmg'][0]) - 5.0) < 0.6
+                  and abs(rig.marks['post_latch_attack']['dmg_c'] - rig.marks['pre_latch_attack']['dmg_c']) < 0.01,
+                  f"enemy {rig.marks['pre_latch_attack']['dmg']} -> {rig.marks['post_latch_attack']['dmg']}, bystander {rig.marks['pre_latch_attack']['dmg_c']} -> {rig.marks['post_latch_attack']['dmg_c']}"))),
+              # The test kit binds only the neutral attack: the enemy lets go of the stick for its attack and walks on after it. Its attack comes
+              # ~1.5 s after the rider's: on the enemy's own client the rider is a remote pawn whose state lags ~25 frames, and with the rider's
+              # attack still running there the enemy's hit on the rider was predicted 6-8 frames late (2-3 extra corrections,
+              # diag-latch-reconciles-2.log): remote state latency of any hit on a pawn that has just acted, not the latch
+              (w + 0.8, hold_walk(False)), (w + 1.45, request('before')), (w + 1.5, rig.tap(rig.ib, 'Attack')), (w + 1.9, request('after')),
+              (w + 1.9, run.at('the latched enemy attacks while ridden: its command came out on the authority', lambda: (
+                  req['after'][1] != req['before'][1] and req['after'][0] > 0, f"request {req['before']} -> {req['after']}"))),
+              (w + 1.95, hold_walk(True, (0.0, -1.0, 0.0))), (w + 2.7, mark_t('walk2_start'))]
+    # Clean window 2: 2.5 s more, retracing window 1 (the opposite directions) so the pair stays on the level (a longer walk away fell off its edge)
+    w2 = w + 2.7
+    for k in range(1, 5):
+        a = k * 0.8
+        steps.append((w2 + 0.5 * k, hold_walk(True, (-math.sin(a), -math.cos(a), 0.0))))
+    e = w2 + 2.5
+    steps += [(e, latched_check('still latched after both attacks and the walk, on every world')),
+              (e, hold_walk(False)), (e, mark_t('walk_end')), (e, sampling(False)), (e + 0.05, judge)]
+    t = e + 0.2
+    # Release by the latcher, then a second latch and the enemy's shake-off
+    steps += [(t, rig.tap(rig.ia, 'Interact')), (t + 0.9, rig.gone('the latcher let go: the link is gone on every world')),
+              (t + 0.9, rig.reason('Release')),
+              (t + 0.9, run.at('the latcher left the parked mode everywhere', lambda: (all(mover_mode(wi, rig.akey) != LINKED_MODE for wi in range(len(g.worlds()))),
+                                                                                    f'{ {wi: mover_mode(wi, rig.akey) for wi in range(len(g.worlds()))} }')))]
+    t += 1.2
+    regrab, t = rig.grab_steps(t)
+    steps += regrab[:5]
+    steps += [(t - 0.1, latched_check('latched again on every world')), (t + 0.3, rig.tap(rig.ib, 'Interact')),
+              (t + 1.2, rig.gone('the enemy shook the latcher off: the link is gone on every world')), (t + 1.2, rig.reason('ShakeOff')),
+              (t + 1.2, run.at('the latcher left the parked mode everywhere after the shake-off', lambda: (
+                  all(mover_mode(wi, rig.akey) != LINKED_MODE for wi in range(len(g.worlds()))), f'{ {wi: mover_mode(wi, rig.akey) for wi in range(len(g.worlds()))} }'))),
+              (t + 1.25, lambda: (unreal.unregister_slate_post_tick_callback(handle), 'sampler stopped')[1]),
+              (t + 1.3, lambda: ('weights back', Lib.set_kit_link_weights(kit, 120.0, 250.0)))]
+    steps += rig.end(t + 1.4)
+    run.run(steps)
+
+
+for _p in LATCH_PAIRINGS:
+    globals()[f'scenario_latch_big_enemy_{_p}'] = (lambda p: (lambda: _latch(p)))(_p)
+
+
 _probe = {'rows': [], 'mark': None, 'h': None, 't0': 0.0}
 
 
@@ -1260,4 +1461,27 @@ def probe_shield_target(client=1, victim=2):
     g.run_timeline([(0.2, setup), (1.2, lambda: g._place_near(client, b, (90.0, 0.0))), (1.9, describe('idle')),
                     (2.0, lambda: (g.combat_hold(victim, g.button_mask('Shield')), g.combat_tap(victim, g.button_mask('Shield')))),
                     (2.6, describe('shielding')), (2.8, lambda: g.combat_clear(victim)), (3.4, describe('after')), (3.5, ds.defence_reset)])
+    return 'probe started'
+
+
+def probe_latch_attack(pairing='client_grabs_client'):
+    """Debug aid (not a scenario): latch (the kit's weights tuned as in latch_big_enemy), then the latcher taps Attack; _probe['latch'] holds the
+    latcher's request and the partner's damage before and after, on the server and the latcher's own world"""
+    ia, ib = PAIRINGS[pairing]
+    a, b = g.key_of_player(ia), g.key_of_player(ib)
+    grab_content_setup([g.key_of_player(i) for i in (0, 1, 2)])
+    Lib.set_kit_link_weights(_kit(), 50.0, 90.0)
+    _probe['latch'] = {}
+
+    def read(label):
+        def f():
+            _probe['latch'][label] = {wi: ((g.snap(g.worlds()[wi])[a].get('combat') or {}).get('request'), g.damage_of(wi, b), body(wi, a), mover_mode(wi, a),
+                                           [t for t in ('Combat.Link.Role.Latcher', 'Combat.Link.Linked') if has_tag(wi, a, t)]) for wi in (0, ia)}
+            return 'read', label
+        return f
+
+    others = [g.key_of_player(i) for i in (0, 1, 2) if i not in (ia, ib)]
+    g.run_timeline([(0.3, lambda: [g._place_near(ia, k, (-300.0, 400.0)) for k in others]), (0.4, lambda: g._place_near(ia, b, (90.0, 0.0))),
+                    (1.0, lambda: g.combat_tap(ia, g.button_mask('Interact'))), (2.0, read('latched')), (2.1, lambda: g.combat_tap(ia, g.button_mask('Attack'))),
+                    (3.0, read('attacked')), (3.1, lambda: Lib.set_kit_link_weights(_kit(), 120.0, 250.0))])
     return 'probe started'

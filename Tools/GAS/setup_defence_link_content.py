@@ -13,7 +13,10 @@
 #   DA_DefenceRules_TestPvE  the same with bShieldEnabled false: nothing of the shield exists, the counter move still parries
 #   DA_LinkType_Grab_Test    (GSTNLink) the grab link type of the harness: Combat.Link.Type.Grab, grabber / grabbed, the grabbed parked 90 cm in front
 #                            of the grabber's ROOT facing it (no socket: the S1 spike measures the link, not a hand animation; the hand socket path is
-#                            the unit tests'), the grab rule with its defaults. The registry finds it by its primary asset type under /GSTNLink
+#                            the unit tests'), the grab rule with its defaults, the latch as its alternative (F12b). The registry finds it by its primary
+#                            asset type under /GSTNLink
+#   DA_LinkType_Latch_Test   (GSTNLink, F12b) the latch: Combat.Link.Type.Latch, latcher (parked on the latched one's back, acting) / latched (acting,
+#                            its release is the shake-off), the latch rule with its defaults
 # The abilities are native classes of GSTNDefenceNP (UGSTN_GA_Shield, whose frames match these rules, and UGSTN_GA_CounterSample), so no Blueprint
 # is created. The kits, the input config and the combat rules are adjusted IN MEMORY by the scenarios, never here.
 import os
@@ -23,6 +26,7 @@ import unreal
 TEST_DIR = '/GSTNDefence/Test'
 LINK_DIR = '/GSTNLink/Test'
 LINK_TYPE = 'DA_LinkType_Grab_Test'
+LATCH_TYPE = 'DA_LinkType_Latch_Test'
 BACKUP_DIR = os.path.join(unreal.Paths.project_saved_dir(), 'Backups', 'GAS')
 
 
@@ -118,14 +122,51 @@ def _write_link_type():
     asset.set_editor_property('target_role', grabbed)
     asset.set_editor_property('rules', [unreal.new_object(unreal.GSTN_LinkRule_Grab, asset)])
     asset.set_editor_property('initiator_predicts', False)
+    # F12b: the latch is tried first, so one tap latches onto a target heavy enough for the latch rule and grabs a lighter one
+    asset.set_editor_property('alternatives', [_tag('Combat.Link.Type.Latch')])
     unreal.EditorAssetLibrary.save_loaded_asset(asset)
     log(f'wrote {LINK_DIR}/{LINK_TYPE}')
     return asset
 
 
+def _write_latch_type():
+    """F12b: the latch link type of the harness. The latcher (initiator) is parked on the latched enemy's back (45 cm behind its root, 60 cm up, facing
+    the same way) and acts while linked; the latched enemy acts too, and its own release is a shake-off. The latch rule with its defaults (the kits
+    of the scenarios lower MinLatchWeight in memory so a standard fighter counts as big)"""
+    asset, created = _get_or_create(LATCH_TYPE, unreal.GSTN_LinkTypeDefinition, LINK_DIR)
+    if not created:
+        _backup(f'{LINK_DIR}/{LATCH_TYPE}')
+    asset.set_editor_property('link_type', _tag('Combat.Link.Type.Latch'))
+    asset.set_editor_property('channel', unreal.GSTN_LinkChannel.BODY)
+    latcher = asset.get_editor_property('initiator_role')
+    latcher.set_editor_property('role_tag', _tag('Combat.Link.Role.Latcher'))
+    latcher.set_editor_property('parked', True)
+    latcher.set_editor_property('acts_while_linked', True)
+    latcher.set_editor_property('collision_with_partner', False)
+    latcher.set_editor_property('socket_on_partner', 'None')
+    latcher.set_editor_property('socket_offset', unreal.Transform(location=[-45.0, 0.0, 60.0], rotation=[0.0, 0.0, 0.0], scale=[1.0, 1.0, 1.0]))
+    asset.set_editor_property('initiator_role', latcher)
+    latched = asset.get_editor_property('target_role')
+    latched.set_editor_property('role_tag', _tag('Combat.Link.Role.Latched'))
+    latched.set_editor_property('parked', False)
+    latched.set_editor_property('acts_while_linked', True)
+    latched.set_editor_property('release_break_reason', _tag('Combat.Link.BreakReason.ShakeOff'))
+    asset.set_editor_property('target_role', latched)
+    asset.set_editor_property('rules', [unreal.new_object(unreal.GSTN_LinkRule_Latch, asset)])
+    asset.set_editor_property('initiator_predicts', False)
+    unreal.EditorAssetLibrary.save_loaded_asset(asset)
+    log(f'wrote {LINK_DIR}/{LATCH_TYPE}')
+    return asset
+
+
 def run_link():
     """The GSTNLink part only (the defence assets are left untouched)"""
-    return [LINK_TYPE] if _write_link_type() else []
+    out = []
+    if _write_latch_type():
+        out.append(LATCH_TYPE)
+    if _write_link_type():
+        out.append(LINK_TYPE)
+    return out
 
 
 def run():
@@ -134,6 +175,7 @@ def run():
         for name, spec in specs().items():
             out[name] = _write_rules(name, spec)
     if hasattr(unreal, 'GSTN_LinkTypeDefinition'):
+        out[LATCH_TYPE] = _write_latch_type()
         out[LINK_TYPE] = _write_link_type()
     return sorted(out)
 

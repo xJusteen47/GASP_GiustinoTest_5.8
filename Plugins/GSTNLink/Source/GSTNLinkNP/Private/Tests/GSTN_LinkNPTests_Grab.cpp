@@ -30,11 +30,11 @@ using namespace GSTNLinkNPTest;
 
 namespace
 {
-	constexpr int32 GrabberId = 5;
-	constexpr int32 GrabbedId = 6;
-	constexpr int32 OtherId = 9;
-	constexpr uint8 Serial = 4;
-	constexpr int32 LinkFrame = 100;
+	constexpr int32 GrabTestGrabberId = 5;
+	constexpr int32 GrabTestGrabbedId = 6;
+	constexpr int32 GrabTestOtherId = 9;
+	constexpr uint8 GrabTestSerial = 4;
+	constexpr int32 GrabTestLinkFrame = 100;
 
 	/** A hit as the victim's pipeline (and the attacker's prediction) sees it: both sides' link extensions of the end of the previous frame */
 	struct FHitRig
@@ -144,8 +144,8 @@ namespace
 	/** The thrower's and the thrown entity's step snapshot entries */
 	void MakeThrowEntries(const FGSTN_LinkFragment& Grabber, const FGSTN_LinkFragment& Grabbed, FGSTN_SnapshotEntry& OutSelf, FGSTN_SnapshotEntry& OutPartner)
 	{
-		OutSelf = MakeEntry(GrabberId, FTransform(FVector::ZeroVector), 0, &Grabber);
-		OutPartner = MakeEntry(GrabbedId, FTransform(FVector(30.0, 0.0, 0.0)), 0, &Grabbed);
+		OutSelf = MakeEntry(GrabTestGrabberId, FTransform(FVector::ZeroVector), 0, &Grabber);
+		OutPartner = MakeEntry(GrabTestGrabbedId, FTransform(FVector(30.0, 0.0, 0.0)), 0, &Grabbed);
 	}
 
 	/** The victim's view of a direct throw entry */
@@ -164,11 +164,11 @@ bool FGSTN_LinkNPGrabPummelTest::RunTest(const FString& Parameters)
 	FScopedLinkTypes Types;
 	FScopedGrabRule Grab(Types.Grab);
 	Grab.Rule->Rules.PummelFreeFrames = 15;
-	const FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabbedId, Serial, LinkFrame + 1);
-	const FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabberId, Serial, LinkFrame);
+	const FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabTestGrabbedId, GrabTestSerial, GrabTestLinkFrame + 1);
+	const FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabTestGrabberId, GrabTestSerial, GrabTestLinkFrame);
 
 	// A pummel after the free frames: lands, with the reaction scaled away, and the link does not break on it
-	FHitRig Rig(GrabberId, Grabber, GrabbedId, Grabbed, LinkFrame + 20);
+	FHitRig Rig(GrabTestGrabberId, Grabber, GrabTestGrabbedId, Grabbed, GrabTestLinkFrame + 20);
 	Rig.View.Incoming.Hit.HitType = GSTNLinkTags::HitType_Pummel;
 	Rig.View.Incoming.Hit.LinkFilter = EGSTN_LinkFilter::LinkedPartnerOnly;
 	Rig.View.Incoming.Hit.Damage = 3.f;
@@ -186,26 +186,26 @@ bool FGSTN_LinkNPGrabPummelTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the grabbed link is still active, with no pending break"), After && After->Links.Body.IsActive() && !After->Links.Body.HasFlag(GSTNLinkFlags::PendingBreak));
 
 	// Inside the free frames the pummel whiffs (no instant mash)
-	FHitRig Early(GrabberId, Grabber, GrabbedId, Grabbed, LinkFrame + 5);
+	FHitRig Early(GrabTestGrabberId, Grabber, GrabTestGrabbedId, Grabbed, GrabTestLinkFrame + 5);
 	Early.View.Incoming.Hit = Rig.View.Incoming.Hit;
 	FGSTN_StepResult EarlyOut;
 	TestEqual(TEXT("an early pummel stops"), Early.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), EarlyOut), EGSTN_StepResult::Stop);
 	TestFalse(TEXT("and does not land"), EarlyOut.bHit);
 
 	// The same hitbox on a third entity: the link filter lets it land on the partner only
-	FHitRig Other(GrabberId, Grabber, OtherId, FGSTN_LinkFragment(), LinkFrame + 20);
+	FHitRig Other(GrabTestGrabberId, Grabber, GrabTestOtherId, FGSTN_LinkFragment(), GrabTestLinkFrame + 20);
 	Other.View.Incoming.Hit = Rig.View.Incoming.Hit;
 	FGSTN_StepResult OtherOut;
 	TestEqual(TEXT("a third entity is filtered"), Other.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), OtherOut), EGSTN_StepResult::Stop);
 	TestFalse(TEXT("and never hit"), OtherOut.bHit);
 
 	// An ordinary attack that excludes the partner never lands on it, and lands on the third entity
-	FHitRig Excluded(GrabberId, Grabber, GrabbedId, Grabbed, LinkFrame + 20);
+	FHitRig Excluded(GrabTestGrabberId, Grabber, GrabTestGrabbedId, Grabbed, GrabTestLinkFrame + 20);
 	Excluded.View.Incoming.Hit.LinkFilter = EGSTN_LinkFilter::ExcludeLinkedPartner;
 	FGSTN_StepResult ExcludedOut;
 	Excluded.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), ExcludedOut);
 	TestFalse(TEXT("ExcludeLinkedPartner spares the partner"), ExcludedOut.bHit);
-	FHitRig ExcludedOther(GrabberId, Grabber, OtherId, FGSTN_LinkFragment(), LinkFrame + 20);
+	FHitRig ExcludedOther(GrabTestGrabberId, Grabber, GrabTestOtherId, FGSTN_LinkFragment(), GrabTestLinkFrame + 20);
 	ExcludedOther.View.Incoming.Hit.LinkFilter = EGSTN_LinkFilter::ExcludeLinkedPartner;
 	FGSTN_StepResult ExcludedOtherOut;
 	TestEqual(TEXT("and hits anyone else"), ExcludedOther.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), ExcludedOtherOut), EGSTN_StepResult::Continue);
@@ -218,30 +218,30 @@ bool FGSTN_LinkNPGrabThrowTest::RunTest(const FString& Parameters)
 {
 	FScopedLinkTypes Types;
 	FScopedGrabRule Grab(Types.Grab);
-	FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabbedId, Serial, LinkFrame + 1);
-	const FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabberId, Serial, LinkFrame);
+	FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabTestGrabbedId, GrabTestSerial, GrabTestLinkFrame + 1);
+	const FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabTestGrabberId, GrabTestSerial, GrabTestLinkFrame);
 	constexpr int32 KeyFrame = 140;
 
 	// The key: the entry goes straight to the partner (no hitbox), and the grabber's own link ends on the key's frame
 	FGSTN_SnapshotEntry Self;
 	FGSTN_SnapshotEntry Partner;
 	MakeThrowEntries(Grabber, Grabbed, Self, Partner);
-	const FGSTN_HitInboxEntry Entry = FGSTN_LinkThrow::MakeThrowEntry(MakeThrowKey(), KeyFrame, Self, Partner, Serial, Types.GrabIndex, nullptr);
+	const FGSTN_HitInboxEntry Entry = FGSTN_LinkThrow::MakeThrowEntry(MakeThrowKey(), KeyFrame, Self, Partner, GrabTestSerial, Types.GrabIndex, nullptr);
 	TestEqual(TEXT("stamped with the key's frame"), Entry.Frame, KeyFrame);
-	TestEqual(TEXT("from the grabber"), Entry.AttackerId, GrabberId);
+	TestEqual(TEXT("from the grabber"), Entry.AttackerId, GrabTestGrabberId);
 	TestTrue(TEXT("a throw hit"), Entry.Hit.HitType.MatchesTagExact(GSTNLinkTags::HitType_Throw));
 	const FGSTN_LinkPartnerHit* Partnered = nullptr;
 	for (const FInstancedStruct& Extension : Entry.Hit.ExtensionData)
 	{
 		Partnered = Partnered ? Partnered : Extension.GetPtr<FGSTN_LinkPartnerHit>();
 	}
-	TestTrue(TEXT("carrying the link's serial and type"), Partnered && Partnered->Serial == Serial && Partnered->LinkTypeIndex == Types.GrabIndex);
+	TestTrue(TEXT("carrying the link's serial and type"), Partnered && Partnered->Serial == GrabTestSerial && Partnered->LinkTypeIndex == Types.GrabIndex);
 	TestTrue(TEXT("the grabber's link ends at the key"), FGSTN_LinkThrow::EndOwnLink(Grabber, KeyFrame, &Grab.Rule->Rules));
 	TestTrue(TEXT("idle, reason Throw, the serial kept"), Grabber.Links.Body.Phase == EGSTN_LinkPhase::None
-		&& Grabber.Links.Body.GetBreakReason() == EGSTN_LinkBreakReason::Throw && Grabber.Links.Body.Serial == Serial);
+		&& Grabber.Links.Body.GetBreakReason() == EGSTN_LinkBreakReason::Throw && Grabber.Links.Body.Serial == GrabTestSerial);
 
 	// F+1 on the thrown side: valid on the victim's side alone (the grabber's side is already idle in the snapshot)
-	FHitRig Rig = RigForEntry(Entry, Grabber, GrabbedId, Grabbed);
+	FHitRig Rig = RigForEntry(Entry, Grabber, GrabTestGrabbedId, Grabbed);
 	Rig.Point();
 	FGSTN_StepResult Out;
 	TestEqual(TEXT("the throw goes on to the knockback steps"), Rig.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), Out), EGSTN_StepResult::Continue);
@@ -262,15 +262,15 @@ bool FGSTN_LinkNPGrabThrowTest::RunTest(const FString& Parameters)
 	{
 		if (FGSTN_LinkPartnerHit* Hit = Extension.GetMutablePtr<FGSTN_LinkPartnerHit>())
 		{
-			Hit->Serial = Serial + 1;
+			Hit->Serial = GrabTestSerial + 1;
 		}
 	}
-	FHitRig StaleRig = RigForEntry(Stale, Grabber, GrabbedId, Grabbed);
+	FHitRig StaleRig = RigForEntry(Stale, Grabber, GrabTestGrabbedId, Grabbed);
 	StaleRig.Point();
 	FGSTN_StepResult StaleOut;
 	StaleRig.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), StaleOut);
 	TestFalse(TEXT("a throw of another serial is refused"), StaleOut.bHit);
-	FHitRig ThirdRig = RigForEntry(Entry, Grabber, OtherId, FGSTN_LinkFragment());
+	FHitRig ThirdRig = RigForEntry(Entry, Grabber, GrabTestOtherId, FGSTN_LinkFragment());
 	ThirdRig.Point();
 	FGSTN_StepResult ThirdOut;
 	ThirdRig.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), ThirdOut);
@@ -279,10 +279,10 @@ bool FGSTN_LinkNPGrabThrowTest::RunTest(const FString& Parameters)
 	// The watchdog leaves the thrown side to the simulation while the thrower shows the throw
 	TArray<FGSTN_LinkWatchdogEntity> Entities;
 	FGSTN_LinkWatchdogEntity A;
-	A.EntityId = GrabberId;
+	A.EntityId = GrabTestGrabberId;
 	A.Links = Grabber.Links;
 	FGSTN_LinkWatchdogEntity B;
-	B.EntityId = GrabbedId;
+	B.EntityId = GrabTestGrabbedId;
 	B.Links = Grabbed.Links;
 	Entities = { A, B };
 	FGSTN_LinkWatchdogLogic::FParams Params;
@@ -299,12 +299,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkNPGrabThrowDefenceTest, "GSTNLink.NP.
 bool FGSTN_LinkNPGrabThrowDefenceTest::RunTest(const FString& Parameters)
 {
 	FScopedLinkTypes Types;
-	const FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabbedId, Serial, LinkFrame + 1);
-	const FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabberId, Serial, LinkFrame);
+	const FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabTestGrabbedId, GrabTestSerial, GrabTestLinkFrame + 1);
+	const FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabTestGrabberId, GrabTestSerial, GrabTestLinkFrame);
 	FGSTN_SnapshotEntry Self;
 	FGSTN_SnapshotEntry Partner;
 	MakeThrowEntries(Grabber, Grabbed, Self, Partner);
-	const FGSTN_HitInboxEntry Entry = FGSTN_LinkThrow::MakeThrowEntry(MakeThrowKey(), 140, Self, Partner, Serial, Types.GrabIndex, nullptr);
+	const FGSTN_HitInboxEntry Entry = FGSTN_LinkThrow::MakeThrowEntry(MakeThrowKey(), 140, Self, Partner, GrabTestSerial, Types.GrabIndex, nullptr);
 
 	// What the defence steps read to stay out (by name, the defence plugin may not depend on links): a grab-like hit type, not parryable, and the
 	// body hurtbox, never an extra one such as the shield bubble: a direct entry chose no hurtbox by overlap
@@ -314,7 +314,7 @@ bool FGSTN_LinkNPGrabThrowDefenceTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("on the body hurtbox, not the bubble"), static_cast<int32>(Entry.HurtboxIndex), 0);
 
 	// With the defence plugin loaded, its steps run on the throw and stop nothing (found by name: no module dependency)
-	FHitRig Rig = RigForEntry(Entry, Grabber, GrabbedId, Grabbed);
+	FHitRig Rig = RigForEntry(Entry, Grabber, GrabTestGrabbedId, Grabbed);
 	Rig.Point();
 	int32 Ran = 0;
 	for (const TCHAR* Path : { TEXT("/Script/GSTNDefenceNP.GSTN_HitStep_Parry"), TEXT("/Script/GSTNDefenceNP.GSTN_HitStep_Shield") })
@@ -345,7 +345,7 @@ bool FGSTN_LinkNPGrabMashTest::RunTest(const FString& Parameters)
 	const FGSTN_MashRule& Rule = Grab.Rule->Rules.Mash;
 
 	// Formation: the step decides the escape frame from the rule and the grabbed side's damage
-	FHitRig Request(GrabberId, FGSTN_LinkFragment(), GrabbedId, FGSTN_LinkFragment(), LinkFrame - 1);
+	FHitRig Request(GrabTestGrabberId, FGSTN_LinkFragment(), GrabTestGrabbedId, FGSTN_LinkFragment(), GrabTestLinkFrame - 1);
 	Request.View.Incoming.Hit.HitType = GSTNCombatHitTags::HitType_Grab;
 	Request.View.Incoming.Hit.LinkType = TestGrab;
 	FGSTN_StepResult Formed;
@@ -357,31 +357,31 @@ bool FGSTN_LinkNPGrabMashTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	const int32 Initial = FGSTN_LinkMash::InitialEndFrame(Rule, LinkFrame, 0.f);
+	const int32 Initial = FGSTN_LinkMash::InitialEndFrame(Rule, GrabTestLinkFrame, 0.f);
 	TestEqual(TEXT("the escape frame from the formation on"), Grabbed->Links.Body.EndFrame, Initial);
 
 	// Three presses while linked (and one before the link, which is the past)
 	FGSTN_InputHistory History;
-	for (int32 Frame = LinkFrame - 4; Frame <= LinkFrame + 30; ++Frame)
+	for (int32 Frame = GrabTestLinkFrame - 4; Frame <= GrabTestLinkFrame + 30; ++Frame)
 	{
-		AppendFrame(History, Frame, Frame == LinkFrame - 2 || Frame == LinkFrame + 10 || Frame == LinkFrame + 15 || Frame == LinkFrame + 20);
+		AppendFrame(History, Frame, Frame == GrabTestLinkFrame - 2 || Frame == GrabTestLinkFrame + 10 || Frame == GrabTestLinkFrame + 15 || Frame == GrabTestLinkFrame + 20);
 	}
 	FGSTN_LinkFragment First = *Grabbed;
-	TestTrue(TEXT("the mash counts"), FGSTN_LinkMash::Step(First, History, Rule, MAX_uint32, LinkFrame + 31));
+	TestTrue(TEXT("the mash counts"), FGSTN_LinkMash::Step(First, History, Rule, MAX_uint32, GrabTestLinkFrame + 31));
 	TestEqual(TEXT("three presses, ReducePerPress each"), First.Links.Body.EndFrame, Initial - 3 * Rule.ReducePerPress);
-	TestEqual(TEXT("up to the history's latest frame"), First.MashProcessedFrame, LinkFrame + 30);
+	TestEqual(TEXT("up to the history's latest frame"), First.MashProcessedFrame, GrabTestLinkFrame + 30);
 
 	// The same frame simulated again (a re-simulation) and an independent run give the same frame: nothing counts twice
 	FGSTN_LinkFragment Again = First;
-	FGSTN_LinkMash::Step(Again, History, Rule, MAX_uint32, LinkFrame + 31);
+	FGSTN_LinkMash::Step(Again, History, Rule, MAX_uint32, GrabTestLinkFrame + 31);
 	TestEqual(TEXT("a repeated tick counts nothing"), Again.Links.Body.EndFrame, First.Links.Body.EndFrame);
 	FGSTN_LinkFragment Other = *Grabbed;
-	FGSTN_LinkMash::Step(Other, History, Rule, MAX_uint32, LinkFrame + 31);
+	FGSTN_LinkMash::Step(Other, History, Rule, MAX_uint32, GrabTestLinkFrame + 31);
 	TestTrue(TEXT("a second machine lands on the same state"), Other == First);
 
 	// The watchdog's break rule escapes exactly on that frame, not one before
 	FGSTN_LinkBreakInput Input;
-	Input.LinkFrame = LinkFrame;
+	Input.LinkFrame = GrabTestLinkFrame;
 	Input.EndFrame = First.Links.Body.EndFrame;
 	Input.Frame = First.Links.Body.EndFrame - 1;
 	TestFalse(TEXT("no escape one frame before"), UGSTN_LinkMath::EvaluateBreak(Types.Grab->Break, Types.Grab->MaxFrames, Input).bBreak);
@@ -399,14 +399,14 @@ bool FGSTN_LinkNPGrabImmunityTest::RunTest(const FString& Parameters)
 	const FGSTN_GrabRules& Rules = Grab.Rule->Rules;
 
 	// A release: the grabber's release key marks PendingBreak(Release); the watchdog gives the grabbed its breather through the break command
-	FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabbedId, Serial, LinkFrame + 1);
-	FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabberId, Serial, LinkFrame);
+	FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabTestGrabbedId, GrabTestSerial, GrabTestLinkFrame + 1);
+	FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabTestGrabberId, GrabTestSerial, GrabTestLinkFrame);
 	TestTrue(TEXT("release marks the pending break"), FGSTN_LinkTickExtension::MarkPendingBreak(Grabber, static_cast<uint8>(EGSTN_LinkBreakReason::Release)));
 	FGSTN_LinkWatchdogEntity A;
-	A.EntityId = GrabberId;
+	A.EntityId = GrabTestGrabberId;
 	A.Links = Grabber.Links;
 	FGSTN_LinkWatchdogEntity B;
-	B.EntityId = GrabbedId;
+	B.EntityId = GrabTestGrabbedId;
 	B.Links = Grabbed.Links;
 	B.Transform = FTransform(FVector(30.0, 0.0, 0.0));
 	FGSTN_LinkWatchdogLogic::FParams Params;
@@ -415,7 +415,7 @@ bool FGSTN_LinkNPGrabImmunityTest::RunTest(const FString& Parameters)
 	TArray<FGSTN_LinkWatchdogBreak> Breaks;
 	constexpr int32 ReleaseFrame = 200;
 	FGSTN_LinkWatchdogLogic::Evaluate({ A, B }, ReleaseFrame, Params, Posts, Breaks);
-	const FGSTN_LinkWatchdogPost* ToGrabbed = Posts.FindByPredicate([](const FGSTN_LinkWatchdogPost& Post) { return Post.TargetId == GrabbedId; });
+	const FGSTN_LinkWatchdogPost* ToGrabbed = Posts.FindByPredicate([](const FGSTN_LinkWatchdogPost& Post) { return Post.TargetId == GrabTestGrabbedId; });
 	TestTrue(TEXT("a release break, both sides"), Posts.Num() == 2 && Breaks.Num() == 1 && Breaks[0].Reason == EGSTN_LinkBreakReason::Release);
 	TestTrue(TEXT("with the release breather for the grabbed"), ToGrabbed && ToGrabbed->Command.ImmunityEndFrame == ReleaseFrame + 1 + Rules.ImmunityFramesAfterRelease);
 	if (ToGrabbed)
@@ -427,7 +427,7 @@ bool FGSTN_LinkNPGrabImmunityTest::RunTest(const FString& Parameters)
 	// A regrab inside the breather whiffs (no registration), one at its end connects
 	auto Regrab = [](const FGSTN_LinkFragment& Victim, int32 Frame)
 	{
-		FHitRig Rig(GrabberId, FGSTN_LinkFragment(), GrabbedId, Victim, Frame);
+		FHitRig Rig(GrabTestGrabberId, FGSTN_LinkFragment(), GrabTestGrabbedId, Victim, Frame);
 		Rig.View.Incoming.Hit.HitType = GSTNCombatHitTags::HitType_Grab;
 		Rig.View.Incoming.Hit.LinkType = TestGrab;
 		FGSTN_StepResult Out;
@@ -437,15 +437,15 @@ bool FGSTN_LinkNPGrabImmunityTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("grabbable at its end"), Regrab(Grabbed, Grabbed.GrabImmunityEndFrame));
 
 	// A throw: the thrown side's breather is the AfterThrow one, from the throw's outcome
-	FGSTN_LinkFragment Thrower = MakeLinked(Types.GrabIndex, 1, GrabbedId, Serial, LinkFrame + 1);
-	const FGSTN_LinkFragment Held = MakeLinked(Types.GrabIndex, 2, GrabberId, Serial, LinkFrame);
+	FGSTN_LinkFragment Thrower = MakeLinked(Types.GrabIndex, 1, GrabTestGrabbedId, GrabTestSerial, GrabTestLinkFrame + 1);
+	const FGSTN_LinkFragment Held = MakeLinked(Types.GrabIndex, 2, GrabTestGrabberId, GrabTestSerial, GrabTestLinkFrame);
 	FGSTN_SnapshotEntry Self;
 	FGSTN_SnapshotEntry Partner;
 	MakeThrowEntries(Thrower, Held, Self, Partner);
 	constexpr int32 ThrowFrame = 300;
-	const FGSTN_HitInboxEntry Entry = FGSTN_LinkThrow::MakeThrowEntry(MakeThrowKey(), ThrowFrame, Self, Partner, Serial, Types.GrabIndex, nullptr);
+	const FGSTN_HitInboxEntry Entry = FGSTN_LinkThrow::MakeThrowEntry(MakeThrowKey(), ThrowFrame, Self, Partner, GrabTestSerial, Types.GrabIndex, nullptr);
 	FGSTN_LinkThrow::EndOwnLink(Thrower, ThrowFrame, &Rules);
-	FHitRig Rig = RigForEntry(Entry, Thrower, GrabbedId, Held);
+	FHitRig Rig = RigForEntry(Entry, Thrower, GrabTestGrabbedId, Held);
 	Rig.Point();
 	FGSTN_StepResult Out;
 	Rig.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), Out);
@@ -464,7 +464,7 @@ bool FGSTN_LinkNPGrabCooldownTest::RunTest(const FString& Parameters)
 	FScopedGrabRule Grab(Types.Grab);
 	const FGSTN_GrabRules& Rules = Grab.Rule->Rules;
 	constexpr int32 ThrowFrame = 200;
-	FGSTN_LinkFragment Thrower = MakeLinked(Types.GrabIndex, 1, GrabbedId, Serial, LinkFrame + 1);
+	FGSTN_LinkFragment Thrower = MakeLinked(Types.GrabIndex, 1, GrabTestGrabbedId, GrabTestSerial, GrabTestLinkFrame + 1);
 	FGSTN_LinkThrow::EndOwnLink(Thrower, ThrowFrame, &Rules);
 	TestEqual(TEXT("the cooldown runs from the throw"), Thrower.Actions.CooldownEndFrame, ThrowFrame + Rules.GrabberCooldownFrames);
 	FGSTN_LinkSnapshotExt Ext;
@@ -473,7 +473,7 @@ bool FGSTN_LinkNPGrabCooldownTest::RunTest(const FString& Parameters)
 
 	auto Grabs = [&Thrower](int32 Frame)
 	{
-		FHitRig Rig(GrabberId, Thrower, OtherId, FGSTN_LinkFragment(), Frame);
+		FHitRig Rig(GrabTestGrabberId, Thrower, GrabTestOtherId, FGSTN_LinkFragment(), Frame);
 		Rig.View.Incoming.Hit.HitType = GSTNCombatHitTags::HitType_Grab;
 		Rig.View.Incoming.Hit.LinkType = TestGrab;
 		FGSTN_StepResult Out;
@@ -487,9 +487,9 @@ bool FGSTN_LinkNPGrabCooldownTest::RunTest(const FString& Parameters)
 	FGSTN_LinkRequestContext Context;
 	Context.Frame = ThrowFrame + 1;
 	Context.Definition = Types.Grab;
-	Context.Initiator.EntityId = GrabberId;
+	Context.Initiator.EntityId = GrabTestGrabberId;
 	Context.Initiator.CooldownEndFrame = Thrower.Actions.CooldownEndFrame;
-	Context.Target.EntityId = OtherId;
+	Context.Target.EntityId = GrabTestOtherId;
 	TestTrue(TEXT("refused for the cooldown"), UGSTN_LinkRule::CheckCommon(Context).Refusal == EGSTN_LinkRefusal::Cooldown);
 	return true;
 }
@@ -502,7 +502,7 @@ bool FGSTN_LinkNPGrabWeightTest::RunTest(const FString& Parameters)
 	Grab.Rule->Rules.MaxGrabWeight = 120.f;
 	auto Grabs = [](uint8 WeightScaleQ)
 	{
-		FHitRig Rig(GrabberId, FGSTN_LinkFragment(), GrabbedId, FGSTN_LinkFragment(), LinkFrame);
+		FHitRig Rig(GrabTestGrabberId, FGSTN_LinkFragment(), GrabTestGrabbedId, FGSTN_LinkFragment(), GrabTestLinkFrame);
 		Rig.View.Incoming.Hit.HitType = GSTNCombatHitTags::HitType_Grab;
 		Rig.View.Incoming.Hit.LinkType = TestGrab;
 		Rig.View.Victim.ReactionState.WeightScaleQ = WeightScaleQ;
@@ -523,7 +523,7 @@ namespace
 	/** A grab request on a target that carries Tags (as the snapshot's request tag mask carries them) */
 	bool GrabsTargetWith(const FGameplayTagContainer& Tags)
 	{
-		FHitRig Rig(GrabberId, FGSTN_LinkFragment(), GrabbedId, FGSTN_LinkFragment(), LinkFrame);
+		FHitRig Rig(GrabTestGrabberId, FGSTN_LinkFragment(), GrabTestGrabbedId, FGSTN_LinkFragment(), GrabTestLinkFrame);
 		Rig.VictimExt.RequestTagMask = FGSTN_LinkRequestTags::MakeMask(Tags);
 		Rig.Point();
 		Rig.View.Incoming.Hit.HitType = GSTNCombatHitTags::HitType_Grab;

@@ -106,6 +106,13 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	{
 		return;
 	}
+	// A contributor placed this entity in the step snapshot (a parked link role riding its partner, M6 F12): its moves start from there, not from its
+	// capsule, which stays where the link began. The placement of the end of the previous frame, the same bytes on every machine
+	if (const FGSTN_SnapshotEntry* Own = In.Snapshot ? In.Snapshot->Find(In.AttackerId) : nullptr; Own && Own->bPlacedByContributor)
+	{
+		In.Root.SetLocation(Own->Transform.GetLocation());
+		In.Root.SetRotation(Own->Transform.GetRotation());
+	}
 
 	FGSTN_CombatAttacker::Tick(In, Core, AttackerScratch, AttackerHits);
 

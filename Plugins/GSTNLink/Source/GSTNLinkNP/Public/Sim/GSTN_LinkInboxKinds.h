@@ -124,7 +124,8 @@ struct GSTNLINKNP_API FGSTN_LinkCommandEntry
  * and the frame; the same on every machine and in a re-simulation.
  *
  *  - Response, on the initiator (F+2): accepted and newer than the channel's serial -> role 1, Active, the target as partner, the response's
- *    serial and link frame (the predicted state, if any, is replaced). Refused -> a Pending request to that target is cleared. Idempotent: a
+ *    serial and link frame (the predicted state, if any, is replaced). The channel is the definition's of the type the response names, which may
+ *    be an alternative of the predicted one (a grab that formed the latch, F12b). Refused -> a Pending request to that target is cleared. Idempotent: a
  *    response whose serial the channel already carries as role 1 changes nothing, so the entry a re-simulated sender posts again after a
  *    rollback lands on the same state.
  *  - Command, on both sides (F+1): Break of the live link of that serial -> the channel resets (serial kept), the exit goes to the link

@@ -221,6 +221,12 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 	/** World space velocity at the end of the previous frame */
 	FVector Velocity = FVector::ZeroVector;
 
+	/**
+	 * A contributor's FinalizeSnapshot placed the entity (M6 F12: a parked link role rides its partner, so its capsule is not where it is): the
+	 * attacker step then starts the entity's own moves from this Transform instead of its capsule's pose. Set only by a contributor; false otherwise
+	 */
+	bool bPlacedByContributor = false;
+
 	/** The unit forward axis of the entity */
 	FVector Facing = FVector::ForwardVector;
 

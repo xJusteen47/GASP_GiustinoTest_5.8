@@ -5,6 +5,8 @@
 #include "Simulation/GSTN_CombatInbox.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Sim/GSTN_LinkFragment.h"
+#include "Data/GSTN_LinkTypeDefinition.h"
+#include "GSTN_LinkRegistry.h"
 #include "Sync/GSTN_InboxEntry.h"
 
 bool FGSTN_LinkInboxHandlers::ApplyResponse(FGSTN_LinkFragment& Fragment, const FGSTN_LinkResponseEntry& Response, int32 SenderId)
@@ -13,11 +15,25 @@ bool FGSTN_LinkInboxHandlers::ApplyResponse(FGSTN_LinkFragment& Fragment, const 
 	{
 		return false;
 	}
-	// The response names a type; its channel is the definition's, and the state of either channel carries the type index it asked for
+	// The response names the type the target FORMED, which may be an alternative of the one the initiator asked for (the grab's latch, F12b): the
+	// channel is that type's definition's, and the initiator's own pending request to this target on it is this request whatever type it predicted.
+	// Without the definition (a registry that does not know the index) either channel that carries the very type is searched, as before
 	const FGSTN_EntityRef Target(GSTNEntityKinds::Fighter, static_cast<uint16>(SenderId));
-	for (FGSTN_LinkState* State : { &Fragment.Links.Body, &Fragment.Links.Hand })
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	const UGSTN_LinkTypeDefinition* Definition = Registry ? Registry->GetDefinition(Response.LinkTypeIndex) : nullptr;
+	TArray<FGSTN_LinkState*, TInlineAllocator<2>> Channels;
+	if (Definition)
 	{
-		const bool bOwnRequest = State->Phase == EGSTN_LinkPhase::Pending && State->PartnerId == Target && State->LinkTypeIndex == Response.LinkTypeIndex;
+		Channels.Add(&Fragment.Get(Definition->Channel));
+	}
+	else
+	{
+		Channels = { &Fragment.Links.Body, &Fragment.Links.Hand };
+	}
+	for (FGSTN_LinkState* State : Channels)
+	{
+		const bool bOwnRequest = State->Phase == EGSTN_LinkPhase::Pending && State->PartnerId == Target
+			&& (Definition || State->LinkTypeIndex == Response.LinkTypeIndex);
 		if (Response.bAccepted)
 		{
 			// Already applied: the same serial on role 1 (the re-arrival after a rollback of the sender)
