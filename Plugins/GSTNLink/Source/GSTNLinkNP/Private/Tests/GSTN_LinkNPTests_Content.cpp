@@ -20,8 +20,9 @@ namespace GSTNLinkContentTest
 	/** The plugin's content root: plugin-owned, so the test needs no project content */
 	const TCHAR* const Root = TEXT("/GSTNLink/Test/");
 
-	/** The grab's mash in the test content: shorter than the rule's default so the harness waits less (m6 spec 11, "grab base 90 frames") */
-	constexpr int32 MashBaseFrames = 90;
+	/** The type's own grab rule keeps the default mash: it is the fallback of a kit without a link extension (the spec 11 test mash of 90 frames is
+	 *  kit data, on the project's KIT_Test_Link, which a plugin test cannot load) */
+	const int32 MashBaseFrames = FGSTN_MashRule().BaseFrames;
 
 	const UGSTN_LinkTypeDefinition* LoadType(FAutomationTestBase& Test, const TCHAR* Name)
 	{
@@ -43,7 +44,7 @@ bool FGSTN_LinkContentSampleAssetsValidTest::RunTest(const FString& Parameters)
 {
 	using namespace GSTNLinkContentTest;
 
-	// The grab: its tag, the grabbed parked, the latch tried first, the grab rule with the test mash
+	// The grab: its tag, the grabbed parked, the latch tried first, the grab rule at its default mash
 	if (const UGSTN_LinkTypeDefinition* Grab = LoadType(*this, TEXT("DA_LinkType_Grab_Test")))
 	{
 		TestTrue(TEXT("The grab type's tag"), Grab->LinkType == GSTNLinkTags::Type_Grab.GetTag());
@@ -56,7 +57,7 @@ bool FGSTN_LinkContentSampleAssetsValidTest::RunTest(const FString& Parameters)
 		}
 		if (TestNotNull(TEXT("The grab type carries a grab rule"), Rule))
 		{
-			TestEqual(TEXT("The grab rule's mash base frames"), Rule->Rules.Mash.BaseFrames, MashBaseFrames);
+			TestEqual(TEXT("The grab rule keeps the default mash base frames"), Rule->Rules.Mash.BaseFrames, MashBaseFrames);
 		}
 	}
 

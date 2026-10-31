@@ -1,7 +1,8 @@
 # Writes the M6 test content of GSTNDefence and GSTNLink (plan F13) and the project test kits that carry it. Idempotent with identical hashes: every
 # property is compared before it is written and an asset is saved only when something changed, so a rerun on up-to-date content saves nothing (run()
 # returns and logs the SHA-256 of every asset it owns: compare two runs). An existing asset that changes is backed up to Saved/Backups/GAS first.
-# Each plugin's part runs only when that plugin is enabled.
+# Each plugin's part runs only when that plugin is enabled. An asset with unsaved in-memory changes when the run starts (the harness edits the rules and
+# kits in memory) is never saved: run it headless or in a fresh editor.
 #
 # Run in the editor Python console (both plugins enabled):
 #   import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_defence_link_content as s; s.run()
@@ -18,7 +19,7 @@
 # /GSTNLink/Test:
 #   DA_LinkType_Grab_Test    the grab link type: Combat.Link.Type.Grab, grabber / grabbed, the grabbed parked 90 cm in front of the grabber's ROOT facing it
 #                            (no socket: the S1 spike measures the link, not a hand animation; the hand socket path is the unit tests'), the grab rule with
-#                            the test mash (base 90 frames), the latch as its alternative (F12b). The registry finds it by its primary asset type
+#                            its defaults (the kit-less fallback), the latch as its alternative (F12b). The registry finds it by its primary asset type
 #   DA_LinkType_Latch_Test   the latch: Combat.Link.Type.Latch, latcher (parked on the latched one's back, acting) / latched (acting, its release is the
 #                            shake-off), the latch rule with its defaults
 #   GA_Grab_Test, GA_Pummel_Test, GA_Release_Test, GA_ThrowForward_Test, GA_ThrowBack_Test, GA_ThrowUp_Test, GA_ThrowDown_Test, GA_LatchAttack_Test
@@ -29,7 +30,7 @@
 #   KIT_Test_DefencePvE      + defence extension: DA_DefenceRules_TestPvE, GA_Shield_Test; Command.Special.Neutral plays GA_CounterTest
 #   KIT_Test_DefenceLanding  + defence extension: PvP rules, the shield, the get-up set (ground bounce, roll, neutral get-up)
 #   KIT_Test_DefenceTech     + the landing kit's extension and the tech set (in place, roll, wall)
-#   KIT_Test_Link            + the standard link slots, the link moves above, a link extension (default rules, grab mash base 90 frames)
+#   KIT_Test_Link            + the standard link slots, the link moves above, a link extension (default rules but the spec 11 test mash: base 90 frames)
 #   KIT_Test_DefenceLink     + the defence extension of KIT_Test_Defence and the link content of KIT_Test_Link (scenario grab_shield)
 # and the rules the test pawns play, /GSTNCombat/Rules/GSTN_CombatRules_Standard, get the steps GrabImmunity, LinkRequest (GSTNLink), Parry, Shield
 # (GSTNDefence) and LinkBreakOnHit (GSTNLink) in m6 spec 9 order. Rerun this script after Tools/GAS/setup_gas_assets.py --h13-content, which rewrites
@@ -67,6 +68,7 @@ KITS = {
     'KIT_Test_DefenceLink': ('DA_DefenceRules_Test', True, False, False, False, True),
 }
 _owned = []   # every asset path this run wrote or checked, for hashes()
+_dirty_at_start = set()   # asset paths whose package was already dirty when run() started (never saved by this run)
 
 
 def log(msg):
@@ -159,6 +161,11 @@ class _Asset:
         self.changed = self.changed or bool(changed)
 
     def save(self):
+        if self.path in _dirty_at_start:
+            # The asset had unsaved changes before this run (in an editor session the harness changes the rules and kits in memory): saving it now
+            # would write those changes too. Refused; rerun headless or in a fresh editor
+            unreal.log_error(f'[setup_defence_link_content] NOT saved {self.path}: it had unsaved in-memory changes before this run')
+            return False
         if self.created or self.changed:
             if not self.created:
                 _backup(self.path)
@@ -274,11 +281,14 @@ def _rule(a, rule_class, configure=None):
 
 
 def _grab_mash(rule):
+    """The type's own grab rule keeps the rule's default mash (150 frames): it is what a kit WITHOUT a link extension plays (link_rollback and
+    grab_immunity grab with KIT_Test_Hits' weapon and need the longer hold). The test mash of spec 11 is kit data, on KIT_Test_Link's extension"""
     rules = rule.get_editor_property('rules')
     mash = rules.get_editor_property('mash')
-    if mash.get_editor_property('base_frames') == MASH_BASE_FRAMES:
+    default = unreal.GSTN_MashRule().get_editor_property('base_frames')
+    if mash.get_editor_property('base_frames') == default:
         return False
-    mash.set_editor_property('base_frames', MASH_BASE_FRAMES)
+    mash.set_editor_property('base_frames', default)
     rules.set_editor_property('mash', mash)
     rule.set_editor_property('rules', rules)
     return True
@@ -386,6 +396,9 @@ def run_project():
 def run(project=True):
     """Everything (project=False: the plugin content only). Returns {asset path: hash} after the run"""
     del _owned[:]
+    _dirty_at_start.clear()
+    for pkg in unreal.EditorLoadingAndSavingUtils.get_dirty_content_packages():
+        _dirty_at_start.add(pkg.get_name())   # the package name is the asset path without the object name
     if has_defence():
         run_defence()
     if has_link():

@@ -163,15 +163,15 @@ without the GSTNParts content), `throw_at_enemy`, `latch_big_enemy_*` in three p
 authority at the same frame) and `latch_big_enemy_bystander_client_latches_client` (a bystander in the enemy's attack: judged on convergence);
 `link_probe_*` are Task A's walk probes and `probe_*` debug aids, not in the suite; `defence_scenarios.scenario_grab_shield` is the real grab of a
 shielding target), content from `Tools/GAS/setup_defence_link_content.py` (F13; idempotent, identical hashes on a rerun, validated by
-`Tools/GAS/validate_defence_content.py`): `/GSTNLink/Test/DA_LinkType_Grab_Test` (grab rule with the test mash, base 90 frames),
+`Tools/GAS/validate_defence_content.py`): `/GSTNLink/Test/DA_LinkType_Grab_Test` (grab rule at its defaults: the fallback of a kit without a link extension),
 `DA_LinkType_Latch_Test` (the grab's alternative), the move Blueprints `GA_Grab_Test`, `GA_Pummel_Test`, `GA_Release_Test`,
 `GA_Throw{Forward,Back,Up,Down}_Test`, `GA_LatchAttack_Test` (thin children of the native `UGSTN_GA_LinkTest*`), and the project kit
-`/Game/GASNPPTest/Combat/KIT_Test_Link` (slots, moves and a link extension, written by `UGSTN_LinkContentLibrary::WriteKitLinkContent`,
+`/Game/GASNPPTest/Combat/KIT_Test_Link` (slots, moves and a link extension with the spec 11 test mash, base 90 frames, written by `UGSTN_LinkContentLibrary::WriteKitLinkContent`,
 dirty only on a change) plus the link steps in the standard rules. The scenarios play `KIT_Test_Link`; `link_rollback` / `grab_immunity` still
 turn the test weapon's attack into a grab in memory, and leash, immunity and weights are scenario numbers. The F10-F12 runtime path
 (`AddLinkTestBindings` on `KIT_Test_Hits`) works with `link_scenarios.USE_CONTENT = False`. Debug: `gstn.Combat.Debug.Links 1` (console only)
 draws the partner line, the parked capsule, the shown transform and the hurtbox anchor (socket gizmo), role, type, serial, phase and the
 frames left to the link's end; no Gameplay Debugger rows (X19).
 
-`GSTNLink.Content.SampleAssetsValid` (F13, editor context): both link types load, validate and are found by the registry; the grab's mash is
-90 frames and it lists the latch; the move Blueprints derive from their native classes. `link_mp.py` runs the spike with the PIE clients in separate processes.
+`GSTNLink.Content.SampleAssetsValid` (F13, editor context): both link types load, validate and are found by the registry; the grab rule keeps
+the default mash and the type lists the latch; the move Blueprints derive from their native classes. `link_mp.py` runs the spike with the PIE clients in separate processes.
