@@ -144,18 +144,39 @@ def run_timeline(steps):
     _running['handle'] = handle[0]
 
 
-def _combat_history(c):
-    """The history string with every frame older than FGSTN_InputHistory::MaxEventAge (254) written as '?'.
-    The wire format sends 8-bit frame deltas, so a client receives such an event (the current stick, kept forever) as
-    AncientFrame ('?') while the server still holds the real frame: same logical history, different strings."""
-    latest = c.get('historyFrame')
-    items = []
-    for item in c['history'].split():
-        frame, sep, rest = item.partition(':')
-        if sep and latest is not None and frame.lstrip('-').isdigit() and latest - int(frame) > 254:
-            frame = '?'
-        items.append(frame + sep + rest)
-    return ' '.join(items)
+MAX_EVENT_AGE = 254   # FGSTN_InputHistory::MaxEventAge
+
+
+def _combat_histories(ca, cb):
+    """Both history strings over ONE frame window, so two views read at the same wall time but at different sim frames compare.
+    Each side drops an event once its own latest frame is more than 254 frames past it (FGSTN_InputHistory::DropOldEvents), and
+    the owner runs a few frames ahead of the server: an event at the edge of the window is already gone on the owner and still
+    kept on the server (weapon_switch, HANDOVER 60 OPEN 2). Window: (newest latest frame - 254, oldest latest frame]: both
+    sides have simulated it and neither has aged anything in it out. Older events are dropped, except the newest stick event
+    at or before the window end, which the history keeps forever as the current stick: written '?' (the wire also sends it as
+    AncientFrame, '?' on a client while the server holds the real frame). Newer events are frames one side has not simulated yet."""
+    la, lb = ca.get('historyFrame'), cb.get('historyFrame')
+    if la is None or lb is None:
+        return ca['history'], cb['history']
+    lo, hi = max(la, lb) - MAX_EVENT_AGE, min(la, lb)
+
+    def norm(c):
+        items = []
+        for item in c['history'].split():
+            frame, sep, rest = item.partition(':')
+            f = int(frame) if frame.lstrip('-').isdigit() and abs(int(frame)) < 1 << 29 else None   # None: AncientFrame
+            if f is None or f <= hi:
+                items.append((f, sep, rest))
+        sticks = [i for i, (f, sep, rest) in enumerate(items) if sep and not rest.startswith(('+', '-'))]
+        out = []
+        for i, (f, sep, rest) in enumerate(items):
+            if f is None or f < lo:
+                if sticks and i == sticks[-1]:
+                    out.append('?' + sep + rest)
+                continue
+            out.append(f'{f}{sep}{rest}')
+        return ' '.join(out)
+    return norm(ca), norm(cb)
 
 
 def _diff(a, b, pos_tol=2.0):
@@ -175,9 +196,9 @@ def _diff(a, b, pos_tol=2.0):
     # Combat input history (newest 8 events): only where both sides run the combat model, not on simulated proxies
     ca, cb = a.get('combat'), b.get('combat')
     if ca and cb and b.get('simTicks', 0) > 0 and a.get('simTicks', 0) > 0:
-        ha, hb = _combat_history(ca), _combat_history(cb)
+        ha, hb = _combat_histories(ca, cb)
         if ha != hb:
-            d.append(f"combat history '{ha}'!='{hb}'")
+            d.append(f"combat history '{ha}'!='{hb}' (frames {ca.get('historyFrame')}/{cb.get('historyFrame')}, raw '{ca['history']}'/'{cb['history']}')")
     return d
 
 
@@ -1476,7 +1497,8 @@ def scenario_weapon_switch(client=1, resim_frames=15):
     def agree():
         sv, ov = _view(0, key), _view(client, key)
         d = [x for x in _diff(sv, ov) if not str(x).startswith(('Health', 'Stamina'))] if sv and ov else 'missing view'   # the periodic regen of the test set lags by a period on the owner
-        return not d, f'server vs owner diff: {d or "none"}'
+        h = [f"{n} frame {(v.get('combat') or {}).get('historyFrame')} '{(v.get('combat') or {}).get('history')}'" for n, v in (('srv', sv), ('cli', ov)) if v]
+        return not d, f'server vs owner diff: {d or "none"} ({"; ".join(h)})'
 
     def no_unexplained():
         r = report_reconciles(marks['start']) if marks.get('start') is not None else None
@@ -1497,7 +1519,7 @@ def scenario_weapon_switch(client=1, resim_frames=15):
         (5.7, lambda: ('force reconcile across the swap', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
         (7.0, run.at('press 1: the support weapon, WalkSpeed 300, run 200', weapon(1, 300.0, 200.0))),
         (7.0, run.at('press 1: exactly one WeaponSwitched', switched(1))),
-        (7.2, lambda: ('walk', hold(client, 'move', (0, 1, 0)))),
+        (7.2, lambda: ('walk back', hold(client, 'move', (0, -1, 0)))),   # back the way it came: a second walk forward ran into the lane end (peak 0)
         (9.6, run.at('walking with the support weapon', peak(8.2, 9.6, 200))),
         (9.7, lambda: ('stop', release(client, 'move'))),
         (10.2, lambda: ('press 2: switch back', press(client, 'buff'))),
