@@ -5,6 +5,7 @@
 #include "Pipeline/GSTN_HitStep_LinkRequest.h"
 #include "Pipeline/GSTN_LinkHitOutcome.h"
 
+#include "Data/GSTN_LinkHitData.h"
 #include "Events/GSTN_SimEvent.h"
 #include "GSTN_LinkRegistry.h"
 #include "GSTN_LinkRequirementLibrary.h"
@@ -13,7 +14,9 @@
 #include "Sim/GSTN_LinkAttach.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Sim/GSTN_LinkInboxKinds.h"
+#include "Sim/GSTN_LinkMash.h"
 #include "Sim/GSTN_LinkSnapshotExt.h"
+#include "Sim/GSTN_LinkThrow.h"
 #include "Sim/GSTN_LinkTickExtension.h"
 #include "State/GSTN_LinkMath.h"
 
@@ -40,12 +43,17 @@ bool FGSTN_LinkStepUtils::IsPartnerHit(const FGameplayTag& HitType)
 
 void FGSTN_LinkStepUtils::MakeRequestContext(const FGSTN_HitContextView& View, FGSTN_LinkRequestContext& OutContext)
 {
+	MakeRequestContext(View, View.Incoming.Hit.LinkType, OutContext);
+}
+
+void FGSTN_LinkStepUtils::MakeRequestContext(const FGSTN_HitContextView& View, const FGameplayTag& LinkType, FGSTN_LinkRequestContext& OutContext)
+{
 	const FGSTN_ResolvedHit& Incoming = View.Incoming;
 	const FGSTN_LinkSnapshotExt* TargetExt = FGSTN_LinkSnapshotExt::FromVictim(View.Victim);
 	const FGSTN_LinkSnapshotExt* InitiatorExt = FGSTN_LinkSnapshotExt::FromAttacker(Incoming);
 
 	OutContext.Frame = Incoming.Frame;
-	OutContext.LinkType = Incoming.Hit.LinkType;
+	OutContext.LinkType = LinkType;
 
 	FGSTN_LinkRequestSide& Initiator = OutContext.Initiator;
 	Initiator.EntityId = Incoming.AttackerEntityId;
@@ -53,6 +61,7 @@ void FGSTN_LinkStepUtils::MakeRequestContext(const FGSTN_HitContextView& View, F
 	{
 		FGSTN_LinkRequestTags::AppendTags(InitiatorExt->RequestTagMask, Initiator.Tags);
 		Initiator.GrabImmunityEndFrame = InitiatorExt->GrabImmunityEndFrame;
+		Initiator.CooldownEndFrame = InitiatorExt->CooldownEndFrame;
 		Initiator.Links = InitiatorExt->ToLinkStates();
 		// The initiator's own predicted request for this target is this very request, not a busy channel
 		for (FGSTN_LinkState* State : { &Initiator.Links.Body, &Initiator.Links.Hand })
@@ -79,7 +88,62 @@ void FGSTN_LinkStepUtils::MakeRequestContext(const FGSTN_HitContextView& View, F
 		UGSTN_LinkRequirementLibrary::ResolveDefinitions(*Registry, OutContext);
 	}
 	const FGSTN_LinkBodyData* InitiatorBody = InitiatorExt ? FGSTN_LinkAttach::At(InitiatorExt->BodyIndex) : nullptr;
-	UGSTN_LinkRequirementLibrary::ApplyKitRules(InitiatorBody ? InitiatorBody->KitExtension : nullptr, OutContext);
+	UGSTN_LinkRequirementLibrary::ApplyKitRules(InitiatorBody ? InitiatorBody->GetKitExtension() : nullptr, OutContext);
+}
+
+bool FGSTN_LinkStepUtils::ArePartners(const FGSTN_HitContextView& View)
+{
+	const FGSTN_LinkSnapshotExt* TargetExt = FGSTN_LinkSnapshotExt::FromVictim(View.Victim);
+	if (!TargetExt || TargetExt->BodyPhase != static_cast<uint8>(EGSTN_LinkPhase::Active) || TargetExt->PartnerId != View.Incoming.AttackerEntityId)
+	{
+		return false;
+	}
+	for (const FInstancedStruct& Extension : View.Incoming.Hit.ExtensionData)
+	{
+		if (const FGSTN_LinkPartnerHit* Direct = Extension.GetPtr<FGSTN_LinkPartnerHit>())
+		{
+			return TargetExt->BodySerial == Direct->Serial && TargetExt->BodyTypeIndex == Direct->LinkTypeIndex;
+		}
+	}
+	const FGSTN_LinkSnapshotExt* InitiatorExt = FGSTN_LinkSnapshotExt::FromAttacker(View.Incoming);
+	return InitiatorExt && InitiatorExt->BodyPhase == static_cast<uint8>(EGSTN_LinkPhase::Active) && InitiatorExt->PartnerId == View.Victim.EntityId
+		&& TargetExt->BodySerial == InitiatorExt->BodySerial && TargetExt->BodyTypeIndex == InitiatorExt->BodyTypeIndex;
+}
+
+void FGSTN_LinkStepUtils::SuppressReaction(FGSTN_StepResult& Out)
+{
+	Out.KnockbackScale = 0.f;
+	Out.HitstunScale = 0.f;
+	Out.StaggerScale = 0.f;
+	Out.bNoFlinch = true;
+	Out.MaxReaction = EGSTN_HitReaction::StaggerInPlace;
+}
+
+namespace
+{
+	bool HasNoReaction(const FGSTN_HitData& Hit)
+	{
+		if (Hit.HitType.IsValid() && Hit.HitType.MatchesTag(GSTNLinkTags::HitType_Pummel))
+		{
+			return true;
+		}
+		for (const FInstancedStruct& Extension : Hit.ExtensionData)
+		{
+			if (const FGSTN_LinkHitData* Data = Extension.GetPtr<FGSTN_LinkHitData>())
+			{
+				return Data->bNoReaction;
+			}
+		}
+		return false;
+	}
+
+	/** The grab rules of the hit's attacker side: its kit's link extension, else the link type's own grab rule */
+	const FGSTN_GrabRules* AttackerGrabRules(const FGSTN_HitContextView& View, const UGSTN_LinkTypeDefinition* Definition)
+	{
+		const FGSTN_LinkSnapshotExt* InitiatorExt = FGSTN_LinkSnapshotExt::FromAttacker(View.Incoming);
+		const FGSTN_LinkBodyData* Body = InitiatorExt ? FGSTN_LinkAttach::At(InitiatorExt->BodyIndex) : nullptr;
+		return FGSTN_LinkThrow::FindGrabRules(Definition, Body ? Body->GetKitExtension() : nullptr);
+	}
 }
 
 // ---- GrabImmunity
@@ -116,34 +180,92 @@ EGSTN_StepResult UGSTN_HitStep_LinkRequest::Resolve_Implementation(const FGSTN_H
 		return EGSTN_StepResult::Continue;
 	}
 	const FGSTN_HitData& Hit = View.Incoming.Hit;
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+
+	// The hit's link filter: the combat core carries it, the link plugin gives it its meaning (a pummel lands only on the held partner, a move
+	// may exclude it). The attacker's prediction runs this step on the same snapshot, so a filtered hit never happened on either side
+	const bool bPartners = FGSTN_LinkStepUtils::ArePartners(View);
+	if ((Hit.LinkFilter == EGSTN_LinkFilter::LinkedPartnerOnly && !bPartners) || (Hit.LinkFilter == EGSTN_LinkFilter::ExcludeLinkedPartner && bPartners))
+	{
+		Out.bHit = false;
+		return EGSTN_StepResult::Stop;
+	}
 
 	// A throw or a pummel lands only on the Body partner of the same live link
 	if (FGSTN_LinkStepUtils::IsPartnerHit(Hit.HitType))
 	{
-		const FGSTN_LinkSnapshotExt* TargetExt = FGSTN_LinkSnapshotExt::FromVictim(View.Victim);
-		const FGSTN_LinkSnapshotExt* InitiatorExt = FGSTN_LinkSnapshotExt::FromAttacker(View.Incoming);
-		const bool bLive = TargetExt && InitiatorExt && TargetExt->BodyPhase == static_cast<uint8>(EGSTN_LinkPhase::Active)
-			&& InitiatorExt->BodyPhase == static_cast<uint8>(EGSTN_LinkPhase::Active);
-		const bool bPartners = bLive && TargetExt->PartnerId == View.Incoming.AttackerEntityId && InitiatorExt->PartnerId == View.Victim.EntityId
-			&& TargetExt->BodySerial == InitiatorExt->BodySerial && TargetExt->BodyTypeIndex == InitiatorExt->BodyTypeIndex;
 		if (!bPartners)
 		{
 			Out.bHit = false;
 			return EGSTN_StepResult::Stop;
 		}
+		const FGSTN_LinkSnapshotExt* TargetExt = FGSTN_LinkSnapshotExt::FromVictim(View.Victim);
+		const UGSTN_LinkTypeDefinition* Definition = Registry ? Registry->GetDefinition(TargetExt->BodyTypeIndex) : nullptr;
+		const FGSTN_GrabRules* Rules = AttackerGrabRules(View, Definition);
+		if (Hit.HitType.MatchesTag(GSTNLinkTags::HitType_Pummel))
+		{
+			// No pummel right after the grab (no instant mash): it whiffs until PummelFreeFrames after the formation
+			const int32 FreeFrames = Rules ? FMath::Max(Rules->PummelFreeFrames, 0) : 0;
+			if (View.Incoming.Frame != INDEX_NONE && View.Incoming.Frame < TargetExt->LinkFrame + FreeFrames)
+			{
+				Out.bHit = false;
+				return EGSTN_StepResult::Stop;
+			}
+		}
+		if (HasNoReaction(Hit))
+		{
+			FGSTN_LinkStepUtils::SuppressReaction(Out);
+		}
+		if (Hit.HitType.MatchesTag(GSTNLinkTags::HitType_Throw))
+		{
+			// The thrown side leaves its link on its next frame, at the thrower's socket where its parked placement is (the snapshot position),
+			// facing the thrower; its breather comes from the thrower's grab rules. The knockback steps that follow launch it
+			FGSTN_LinkThrowOutcome Outcome;
+			Outcome.Serial = TargetExt->BodySerial;
+			Outcome.ExitFrame = View.Incoming.Frame != INDEX_NONE ? View.Incoming.Frame + 1 : 0;
+			Outcome.ImmunityEndFrame = Rules && Outcome.ExitFrame != 0 ? Outcome.ExitFrame + FMath::Max(Rules->ImmunityFramesAfterThrow, 0) : 0;
+			Outcome.ExitPosition = FVector3f(View.Victim.Location);
+			Outcome.ExitYawDeg = static_cast<float>(FRotator::NormalizeAxis((-View.Incoming.AttackerFacing).Rotation().Yaw));
+			Out.OutcomeExtensions.Add(FInstancedStruct::Make(Outcome));
+		}
 		return EGSTN_StepResult::Continue;
 	}
+	if (bPartners && HasNoReaction(Hit))
+	{
+		// A hit on the partner that opts out of the reaction (a latch attack must not knock the ridden enemy off the latcher)
+		FGSTN_LinkStepUtils::SuppressReaction(Out);
+	}
 
-	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
 	const uint8 TypeIndex = Registry && Hit.LinkType.IsValid() ? Registry->GetTypeIndex(Hit.LinkType) : 0;
 	if (TypeIndex == 0)
 	{
 		return EGSTN_StepResult::Continue;
 	}
 
+	// The type the hit names, after the alternatives its definition lists (the grab lists the latch): the first whose checks accept forms
 	FGSTN_LinkRequestContext Request;
-	FGSTN_LinkStepUtils::MakeRequestContext(View, Request);
-	const FGSTN_LinkRuleResult Decision = UGSTN_LinkRequirementLibrary::EvaluateRequest(Request);
+	FGSTN_LinkRuleResult Decision = FGSTN_LinkRuleResult::Refuse(EGSTN_LinkRefusal::NoDefinition);
+	const UGSTN_LinkTypeDefinition* Asked = Registry->GetDefinition(TypeIndex);
+	TArray<FGameplayTag, TInlineAllocator<4>> Candidates;
+	if (Asked)
+	{
+		Candidates.Append(Asked->Alternatives);
+	}
+	Candidates.Add(Hit.LinkType);
+	for (const FGameplayTag& Candidate : Candidates)
+	{
+		if (Registry->GetTypeIndex(Candidate) == 0)
+		{
+			continue;
+		}
+		Request = FGSTN_LinkRequestContext();
+		FGSTN_LinkStepUtils::MakeRequestContext(View, Candidate, Request);
+		Decision = UGSTN_LinkRequirementLibrary::EvaluateRequest(Request);
+		if (Decision.bAccepted && Request.Definition)
+		{
+			break;
+		}
+	}
 	if (!Decision.bAccepted || !Request.Definition)
 	{
 		// The request whiffs on both sides (the initiator's prediction reads the same snapshot): no registration, no hitstop. A predicted request
@@ -153,18 +275,28 @@ EGSTN_StepResult UGSTN_HitStep_LinkRequest::Resolve_Implementation(const FGSTN_H
 	}
 
 	const EGSTN_LinkChannel Channel = Request.Definition->Channel;
+	const uint8 FormedIndex = Registry->GetTypeIndex(Request.LinkType);
 	FGSTN_LinkHitOutcome Outcome;
 	Outcome.bAccepted = true;
-	Outcome.LinkTypeIndex = TypeIndex;
+	Outcome.LinkTypeIndex = FormedIndex;
 	Outcome.Channel = Channel;
 	Outcome.Serial = FGSTN_LinkState::NextSerial(Request.Target.Links.Get(Channel).Serial, Request.Initiator.Links.Get(Channel).Serial);
 	Outcome.LinkFrame = View.Incoming.Frame != INDEX_NONE ? View.Incoming.Frame + 1 : INDEX_NONE;
 	Outcome.InitiatorId = View.Incoming.AttackerEntityId;
+	// A target parked without acting (the grabbed) mashes out by the grab rules: its end frame from the formation on, the same on every machine
+	const FGSTN_LinkRoleDef& TargetRole = Request.Definition->GetRoleDef(2);
+	if (TargetRole.bParked && !TargetRole.bActsWhileLinked && Outcome.LinkFrame != INDEX_NONE)
+	{
+		if (const FGSTN_GrabRules* Rules = AttackerGrabRules(View, Request.Definition))
+		{
+			Outcome.EndFrame = FGSTN_LinkMash::InitialEndFrame(Rules->Mash, Outcome.LinkFrame, View.Victim.ReactionState.GetDamagePercent());
+		}
+	}
 	Out.OutcomeExtensions.Add(FInstancedStruct::Make(Outcome));
 
 	FGSTN_LinkResponseEntry Response;
 	Response.bAccepted = true;
-	Response.LinkTypeIndex = TypeIndex;
+	Response.LinkTypeIndex = FormedIndex;
 	Response.Serial = Outcome.Serial;
 	Response.LinkFrame = Outcome.LinkFrame;
 	Out.OutgoingEntries.Add(FGSTN_LinkInboxHandlers::MakeResponse(Response));
@@ -274,6 +406,7 @@ void FGSTN_LinkOutcomeApplier::Apply(const FInstancedStruct& Extension, const FG
 	Formed.PartnerId = FGSTN_EntityRef(GSTNEntityKinds::Fighter, static_cast<uint16>(Outcome->InitiatorId));
 	Formed.Serial = Outcome->Serial;
 	Formed.LinkFrame = Outcome->LinkFrame;
+	Formed.EndFrame = Outcome->EndFrame;
 	State = Formed;
 }
 

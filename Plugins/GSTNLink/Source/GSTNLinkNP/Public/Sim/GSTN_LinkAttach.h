@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
 class AActor;
 class UGSTN_PrimaryKitDefinition;
@@ -30,8 +31,17 @@ struct GSTNLINKNP_API FGSTN_LinkBodyData
 	/** Socket name -> root-relative transform, from the reference pose */
 	TMap<FName, FTransform> BakedSockets;
 
-	/** The kit's link extension (inside the kit asset, which the loadout keeps loaded), or null */
-	const FGSTN_LinkKitExtension* KitExtension = nullptr;
+	/**
+	 * The kit the loadout attached, held weakly, and its link extension looked up on every read (GetKitExtension): a raw pointer into the kit's
+	 * extension list would dangle as soon as the list is edited in memory (the harness adds and removes kit content between runs; found in PIE)
+	 */
+	TWeakObjectPtr<const UGSTN_PrimaryKitDefinition> Kit;
+
+	/** A test's own extension, used when no kit is attached (AddForTest) */
+	const FGSTN_LinkKitExtension* TestKitExtension = nullptr;
+
+	/** The kit's link extension, or the test's, or null */
+	const FGSTN_LinkKitExtension* GetKitExtension() const;
 
 	/** The socket's root-relative transform; identity for NAME_None and for a name that was not baked */
 	FTransform GetSocket(FName Socket) const;

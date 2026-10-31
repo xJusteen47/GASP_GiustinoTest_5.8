@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "GameplayTagContainer.h"
 #include "GSTN_LinkSettings.generated.h"
 
 /**
@@ -41,5 +42,21 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Link|Assets", meta = (ContentDir, LongPackageName))
 	TArray<FDirectoryPath> LinkTypeDirectories;
 
+	/**
+	 * Priority tier of the link command roots, contributed to the GSTN Input settings at startup (as the combat plugin contributes its own): a
+	 * higher tier always beats a lower one, so a link command (Command.Link: the pummel on the attack press, the throws on attack and strong)
+	 * outranks the attack it shares a press with. Every link slot falls through when it cannot execute, so outside its role it costs nothing
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Input", meta = (Categories = "Command"))
+	TMap<FGameplayTag, int32> CommandTiers;
+
+	/** Hands CommandTiers to the input settings under this plugin's contribution source */
+	void PushToInputSettings() const;
+	static void RemoveFromInputSettings();
+
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 };

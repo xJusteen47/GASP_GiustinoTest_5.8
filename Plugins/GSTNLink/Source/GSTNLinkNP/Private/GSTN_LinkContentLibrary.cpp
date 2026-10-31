@@ -8,6 +8,13 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GSTN_LinkRegistry.h"
+#include "GSTN_LinkInteractProvider.h"
+#include "Sim/GSTN_LinkSnapshotExt.h"
+#include "Sim/GSTN_LinkTickExtension.h"
+#include "GSTN_LinkTags.h"
+#include "Harness/GSTN_LinkTestAbilities.h"
+#include "Input/GSTN_LinkSlots.h"
+#include "Data/GSTN_LinkKitExtension.h"
 #include "Hits/GSTN_HitSteps.h"
 #include "Kits/GSTN_AbilityBinding.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
@@ -355,12 +362,8 @@ int32 UGSTN_LinkContentLibrary::RebuildRegistryAndReattach()
 			{
 				// The kit's link extension stays the one the loadout attached
 				const FGSTN_LinkBodyData* Previous = FGSTN_LinkAttach::Find(*It);
-				const FGSTN_LinkKitExtension* Kit = Previous ? Previous->KitExtension : nullptr;
-				const uint16 Index = FGSTN_LinkAttach::Apply(*It, nullptr);
-				if (Kit)
-				{
-					const_cast<FGSTN_LinkBodyData*>(FGSTN_LinkAttach::At(Index))->KitExtension = Kit;
-				}
+				const UGSTN_PrimaryKitDefinition* Kit = Previous ? Previous->Kit.Get() : nullptr;
+				FGSTN_LinkAttach::Apply(*It, Kit);
 				++Attached;
 			}
 		}
@@ -435,4 +438,219 @@ namespace
 			}
 			UE_LOG(LogTemp, Log, TEXT("gstn.Link.Test.Prepare: %d pawns attached, link steps %s"), Attached, bSteps ? TEXT("added") : TEXT("not added"));
 		}));
+}
+
+namespace
+{
+	/** What AddLinkTestBindings replaced, per kit, for RemoveLinkTestBindings (harness only; the kits are root content that outlives a PIE) */
+	struct FKitBackup
+	{
+		FGSTN_CommandSet CommandSet;
+		TArray<FGSTN_AbilityBinding> KitBindings;
+		FGSTN_KitExtensionList Extensions;
+	};
+	TMap<TWeakObjectPtr<UGSTN_PrimaryKitDefinition>, FKitBackup>& KitBackups()
+	{
+		static TMap<TWeakObjectPtr<UGSTN_PrimaryKitDefinition>, FKitBackup> Backups;
+		return Backups;
+	}
+
+	TSoftClassPtr<UGameplayAbility> AbilityFor(const FGSTN_LinkSlotBinding& Binding)
+	{
+		using namespace GSTNLinkTags;
+		const FGameplayTag& Command = Binding.Command;
+		UClass* Class = nullptr;
+		if (Command == Command_Link_Grab.GetTag())
+		{
+			Class = UGSTN_GA_LinkTestGrab::StaticClass();
+		}
+		else if (Command == Command_Link_Pummel.GetTag())
+		{
+			Class = UGSTN_GA_LinkTestPummel::StaticClass();
+		}
+		else if (Command == Command_Link_Release.GetTag())
+		{
+			Class = UGSTN_GA_LinkTestRelease::StaticClass();
+		}
+		else if (Command == Command_Link_Latch_Attack.GetTag())
+		{
+			Class = UGSTN_GA_LinkTestLatchAttack::StaticClass();
+		}
+		else if (Command.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Command.Link.Throw"))))
+		{
+			Class = UGSTN_GA_LinkTestThrow::StaticClass();
+		}
+		return TSoftClassPtr<UGameplayAbility>(Class);
+	}
+}
+
+int32 UGSTN_LinkContentLibrary::AddLinkTestBindings(UGSTN_PrimaryKitDefinition* Kit)
+{
+	if (!Kit)
+	{
+		return 0;
+	}
+	if (!KitBackups().Contains(Kit))
+	{
+		FKitBackup& Backup = KitBackups().Add(Kit);
+		Backup.CommandSet = Kit->CommandSet;
+		Backup.KitBindings = Kit->KitBindings;
+		Backup.Extensions = Kit->Extensions;
+	}
+
+	// The slots: the standard link set replaces the kit's own slots of the same commands
+	const TArray<FGSTN_InputSlotSpec> Specs = UGSTN_LinkSlots::Build();
+	Kit->CommandSet.AddedSlots.RemoveAll([&Specs](const FGSTN_InputSlotEntry& Entry)
+	{
+		return Specs.ContainsByPredicate([&Entry](const FGSTN_InputSlotSpec& Spec) { return Spec.Command == Entry.GetSpec().Command; });
+	});
+	for (const FGSTN_InputSlotSpec& Spec : Specs)
+	{
+		FGSTN_InputSlotEntry Entry;
+		Entry.Inline = Spec;
+		Kit->CommandSet.AddedSlots.Add(MoveTemp(Entry));
+	}
+
+	// The bindings, with the slots' requirements; the latched role's release is the shake-off (the role's own release reason)
+	TArray<FGSTN_LinkSlotBinding> Bindings = UGSTN_LinkSlots::DefaultBindings();
+	FGSTN_LinkSlotBinding ShakeOff;
+	ShakeOff.Command = GSTNLinkTags::Command_Link_Release;
+	ShakeOff.Requirements.RequireTags.AddTag(GSTNLinkTags::Role_Latched);
+	ShakeOff.Requirements.IgnoreTags.AddTag(GSTNLinkTags::Role_Grabber);
+	ShakeOff.Requirements.IgnoreTags.AddTag(GSTNLinkTags::Role_Latcher);
+	Bindings.Add(ShakeOff);
+	Kit->KitBindings.RemoveAll([](const FGSTN_AbilityBinding& Binding) { return Binding.Command.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Command.Link"))); });
+	int32 Added = 0;
+	for (const FGSTN_LinkSlotBinding& Slot : Bindings)
+	{
+		FGSTN_AbilityBinding& Binding = Kit->KitBindings.AddDefaulted_GetRef();
+		Binding.Command = Slot.Command;
+		Binding.Requirements = Slot.Requirements;
+		Binding.Ability = AbilityFor(Slot);
+		++Added;
+	}
+
+	if (!Kit->Extensions.Find<FGSTN_LinkKitExtension>())
+	{
+		Kit->Extensions.ExtensionData.Add(FInstancedStruct::Make(FGSTN_LinkKitExtension()));
+	}
+	return Added;
+}
+
+bool UGSTN_LinkContentLibrary::RemoveLinkTestBindings(UGSTN_PrimaryKitDefinition* Kit)
+{
+	FKitBackup Backup;
+	if (!Kit || !KitBackups().RemoveAndCopyValue(Kit, Backup))
+	{
+		return false;
+	}
+	Kit->CommandSet = Backup.CommandSet;
+	Kit->KitBindings = Backup.KitBindings;
+	Kit->Extensions = Backup.Extensions;
+	return true;
+}
+
+bool UGSTN_LinkContentLibrary::SetKitLinkWeights(UGSTN_PrimaryKitDefinition* Kit, float MaxGrabWeight, float MinLatchWeight)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	for (FInstancedStruct& Entry : Kit->Extensions.ExtensionData)
+	{
+		if (FGSTN_LinkKitExtension* Extension = Entry.GetMutablePtr<FGSTN_LinkKitExtension>())
+		{
+			if (MaxGrabWeight >= 0.f)
+			{
+				Extension->GrabRules.MaxGrabWeight = MaxGrabWeight;
+			}
+			if (MinLatchWeight >= 0.f)
+			{
+				Extension->LatchRules.MinLatchWeight = MinLatchWeight;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UGSTN_LinkContentLibrary::SetTypeAlternatives(FGameplayTag LinkType, const TArray<FGameplayTag>& Alternatives)
+{
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	UGSTN_LinkTypeDefinition* Definition = Registry ? const_cast<UGSTN_LinkTypeDefinition*>(Registry->FindDefinition(LinkType)) : nullptr;
+	if (!Definition)
+	{
+		return false;
+	}
+	Definition->Alternatives = Alternatives;
+	return true;
+}
+
+bool UGSTN_LinkContentLibrary::GetShownLinkNumbers(const AActor* Actor, int32& OutEndFrame, int32& OutMashProcessedFrame, int32& OutCooldownEndFrame,
+	int32& OutGrabImmunityEndFrame, int32& OutBreakReason)
+{
+	const FGSTN_LinkFragment* Shown = UGSTN_LinkPresentationComponent::FindShownFragment(Actor);
+	OutEndFrame = Shown ? Shown->Links.Body.EndFrame : 0;
+	OutMashProcessedFrame = Shown ? Shown->MashProcessedFrame : 0;
+	OutCooldownEndFrame = Shown ? Shown->Actions.CooldownEndFrame : 0;
+	OutGrabImmunityEndFrame = Shown ? Shown->GrabImmunityEndFrame : 0;
+	OutBreakReason = Shown ? Shown->Links.Body.BreakReason : 0;
+	return Shown != nullptr;
+}
+
+FString UGSTN_LinkContentLibrary::DescribeGrabProbe(const AActor* Actor)
+{
+	const UGSTN_CombatSimComponent* Combat = Actor ? Actor->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	const UGSTN_CombatWorldSubsystem* World = Actor ? UGSTN_CombatWorldSubsystem::Get(Actor->GetWorld()) : nullptr;
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	const int32 SelfId = GetEntityId(Actor);
+	if (!Combat || !World || !Registry || SelfId == INDEX_NONE)
+	{
+		return FString();
+	}
+	const FGSTN_StepSnapshot& Snapshot = World->GetSnapshot();
+	const FGSTN_SnapshotEntry* Self = Snapshot.Find(SelfId);
+	const FGSTN_LinkSnapshotExt* SelfExt = Self ? Self->Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link) : nullptr;
+	const FGSTN_LinkBodyData* Body = SelfExt && SelfExt->IsValid() ? FGSTN_LinkAttach::At(SelfExt->BodyIndex) : nullptr;
+	if (!Self || !Body || !Body->GetKitExtension())
+	{
+		return FString::Printf(TEXT("self %d: no snapshot entry or no kit link extension"), SelfId);
+	}
+	auto MakeSide = [](const FGSTN_SnapshotEntry& Entry)
+	{
+		FGSTN_LinkRequestSide Side;
+		Side.EntityId = Entry.EntityId;
+		Side.EffectiveWeight = 100.f * static_cast<float>(Entry.Reaction.WeightScaleQ) / 64.f;
+		if (const FGSTN_LinkSnapshotExt* Ext = Entry.Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link); Ext && Ext->IsValid())
+		{
+			FGSTN_LinkRequestTags::AppendTags(Ext->RequestTagMask, Side.Tags);
+			Side.GrabImmunityEndFrame = Ext->GrabImmunityEndFrame;
+			Side.CooldownEndFrame = Ext->CooldownEndFrame;
+			Side.Links = Ext->ToLinkStates();
+		}
+		return Side;
+	};
+	TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>> Offers;
+	FGSTN_LinkTickExtension::MakeGrabOffers(*Registry, Body->GetKitExtension(), Offers);
+	FGSTN_LinkInteractSource Source;
+	Source.Interactor = MakeSide(*Self);
+	Source.Offers = Offers;
+	Source.Registry = Registry;
+	FString Out = FString::Printf(TEXT("self %d tags [%s] frame %d;"), SelfId, *Source.Interactor.Tags.ToStringSimple(), Snapshot.Frame);
+	for (const FGSTN_SnapshotEntry& Entry : Snapshot.Entries)
+	{
+		if (Entry.EntityId == SelfId)
+		{
+			continue;
+		}
+		FGSTN_LinkInteractEntity Candidate;
+		Candidate.Side = MakeSide(Entry);
+		Candidate.Location = Entry.Transform.GetLocation();
+		FGSTN_LinkRuleResult Refusal;
+		const int32 Offer = FGSTN_LinkInteractProvider::FindAcceptedOffer(Source, Candidate, Snapshot.Frame, &Refusal);
+		Out += FString::Printf(TEXT(" %d dist=%.0f hurtboxes=%d tags=[%s] weight=%.0f %s;"), Entry.EntityId, FVector::Dist(Entry.Transform.GetLocation(), Self->Transform.GetLocation()),
+			Entry.Hurtboxes ? 1 : 0, *Candidate.Side.Tags.ToStringSimple(), Candidate.Side.EffectiveWeight,
+			Offer != INDEX_NONE ? *FString::Printf(TEXT("offer=%d"), Offer) : *FString::Printf(TEXT("refused %d"), static_cast<int32>(Refusal.Refusal)));
+	}
+	return Out;
 }

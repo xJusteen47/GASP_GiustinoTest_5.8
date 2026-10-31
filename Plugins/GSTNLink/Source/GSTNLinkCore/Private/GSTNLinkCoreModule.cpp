@@ -70,10 +70,17 @@ public:
 		}
 
 		UAssetManager::CallOrRegister_OnAssetManagerCreated(FSimpleMulticastDelegate::FDelegate::CreateStatic(&GSTNLinkCoreModule::RegisterLinkTypeAssets));
+
+		// The link command tier, beside the combat plugin's tiers (the settings object has read its config by now: its first access is here)
+		UGSTN_LinkSettings::Get().PushToInputSettings();
 	}
 
 	virtual void ShutdownModule() override
 	{
+		if (UObjectInitialized())
+		{
+			UGSTN_LinkSettings::RemoveFromInputSettings();
+		}
 		if (!TagIniPath.IsEmpty() && UObjectInitialized())
 		{
 			UGameplayTagsManager::Get().RemoveTagIniSearchPath(TagIniPath);

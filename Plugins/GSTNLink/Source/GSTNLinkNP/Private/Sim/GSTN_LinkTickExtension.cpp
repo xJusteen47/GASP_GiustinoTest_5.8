@@ -15,10 +15,15 @@
 #include "Movement/GSTN_LinkedModifier.h"
 #include "Sim/GSTN_LinkAttach.h"
 #include "Sim/GSTN_LinkFragment.h"
+#include "Sim/GSTN_LinkMash.h"
+#include "Sim/GSTN_LinkShakeOff.h"
+#include "Sim/GSTN_LinkThrow.h"
 #include "Sim/GSTN_LinkSnapshotContributor.h"
 #include "Sim/GSTN_LinkSnapshotExt.h"
 #include "Simulation/GSTN_CombatAttacker.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
+#include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
 
 namespace
@@ -38,6 +43,7 @@ namespace
 		{
 			FGSTN_LinkRequestTags::AppendTags(Ext->RequestTagMask, Side.Tags);
 			Side.GrabImmunityEndFrame = Ext->GrabImmunityEndFrame;
+			Side.CooldownEndFrame = Ext->CooldownEndFrame;
 			Side.Links = Ext->ToLinkStates();
 		}
 		return Side;
@@ -167,6 +173,123 @@ void FGSTN_LinkTickExtension::GatherProjectableTags(const UGSTN_LinkRegistry* Re
 	}
 }
 
+namespace
+{
+	/** The kit link extension of an entity, from its snapshot entry's body index (content the attach table holds); null without one */
+	const FGSTN_LinkKitExtension* KitOf(const FGSTN_StepSnapshot* Snapshot, int32 EntityId)
+	{
+		const FGSTN_SnapshotEntry* Entry = Snapshot && EntityId != INDEX_NONE ? Snapshot->Find(EntityId) : nullptr;
+		const FGSTN_LinkSnapshotExt* Ext = Entry ? Entry->Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link) : nullptr;
+		const FGSTN_LinkBodyData* Body = Ext && Ext->IsValid() ? FGSTN_LinkAttach::At(Ext->BodyIndex) : nullptr;
+		return Body ? Body->GetKitExtension() : nullptr;
+	}
+}
+
+bool FGSTN_LinkTickExtension::StepOutcomeKeys(const FGSTN_CombatTickContext& Context, FGSTN_LinkFragment& Fragment, TArray<FThrowPost, TInlineAllocator<1>>& OutThrows)
+{
+	const FGSTN_LinkState& Body = Fragment.Links.Body;
+	if (!Context.RunningTimeline || !Body.IsActive() || Body.Role == 0)
+	{
+		return false;
+	}
+	int32 Previous = 0;
+	int32 Current = 0;
+	if (!FGSTN_LinkOutcomeKeys::GetCrossedFrames(Context.In.Core, Context.Out.Core, Context.Frame, Previous, Current))
+	{
+		return false;
+	}
+	TArray<const FGSTN_LinkOutcomeKey*, TInlineAllocator<2>> Keys;
+	FGSTN_LinkOutcomeKeys::Collect(*Context.RunningTimeline, Previous, Current, Keys);
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	const UGSTN_LinkTypeDefinition* Definition = Registry ? Registry->GetDefinition(Body.LinkTypeIndex) : nullptr;
+	if (Keys.IsEmpty() || !Definition)
+	{
+		return false;
+	}
+
+	bool bChanged = false;
+	for (const FGSTN_LinkOutcomeKey* Key : Keys)
+	{
+		if (!Fragment.Links.Body.IsActive())
+		{
+			// An earlier key of the frame ended the link (a throw): the rest of them have nothing to act on
+			break;
+		}
+		switch (Key->Outcome)
+		{
+		case EGSTN_LinkOutcome::Release:
+			bChanged |= FGSTN_LinkShakeOff::ApplyReleaseKey(Fragment, *Definition, Registry);
+			break;
+		case EGSTN_LinkOutcome::Throw:
+		{
+			const int32 PartnerId = Fragment.Links.Body.PartnerId.IsNull() ? INDEX_NONE : static_cast<int32>(Fragment.Links.Body.PartnerId.Id);
+			const FGSTN_SnapshotEntry* Self = Context.Snapshot && Context.EntityId != INDEX_NONE ? Context.Snapshot->Find(Context.EntityId) : nullptr;
+			const FGSTN_SnapshotEntry* Partner = Context.Snapshot && PartnerId != INDEX_NONE ? Context.Snapshot->Find(PartnerId) : nullptr;
+			if (!Self || !Partner)
+			{
+				// Without both entities in the step snapshot there is nobody to hit: the key does nothing (the link stays)
+				break;
+			}
+			FGSTN_LinkThrow::WarnUnresolvedExtensions(Key->ThrowHit);
+			const UGSTN_CombatSimComponent* Combat = Context.Owner ? Context.Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+			FThrowPost& Post = OutThrows.AddDefaulted_GetRef();
+			Post.PartnerId = PartnerId;
+			Post.Entry = FGSTN_LinkThrow::MakeThrowEntry(*Key, Context.Frame, *Self, *Partner, Fragment.Links.Body.Serial, Fragment.Links.Body.LinkTypeIndex,
+				Combat ? Combat->GetCombatRules() : nullptr);
+			bChanged |= FGSTN_LinkThrow::EndOwnLink(Fragment, Context.Frame, FGSTN_LinkThrow::FindGrabRules(Definition, KitOf(Context.Snapshot, Context.EntityId)));
+			break;
+		}
+		case EGSTN_LinkOutcome::SwapRoles:
+		{
+			static bool bWarned = false;
+			UE_CLOG(!bWarned, LogTemp, Warning, TEXT("A link outcome key asks for SwapRoles, which is not built (M6 F12): ignored"));
+			bWarned = true;
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	return bChanged;
+}
+
+bool FGSTN_LinkTickExtension::StepMash(const FGSTN_CombatTickContext& Context, FGSTN_LinkFragment& Fragment)
+{
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	const FGSTN_LinkState& Body = Fragment.Links.Body;
+	if (!Body.IsActive() || Body.EndFrame <= 0 || !IsActionBlocked(Fragment, Registry))
+	{
+		return false;
+	}
+	// The grabber's rules: its kit's link extension (from its snapshot entry), else the type's own grab rule
+	const int32 PartnerId = Body.PartnerId.IsNull() ? INDEX_NONE : static_cast<int32>(Body.PartnerId.Id);
+	const FGSTN_GrabRules* Rules = FGSTN_LinkThrow::FindGrabRules(Registry ? Registry->GetDefinition(Body.LinkTypeIndex) : nullptr, KitOf(Context.Snapshot, PartnerId));
+	if (!Rules)
+	{
+		return false;
+	}
+	return FGSTN_LinkMash::Step(Fragment, Context.In.Core.Input.History, Rules->Mash, FGSTN_LinkMash::ButtonMaskOf(Rules->Mash, Context.Buttons), Context.Frame);
+}
+
+void FGSTN_LinkTickExtension::MakeGrabOffers(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkKitExtension* Kit, TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers)
+{
+	const FGSTN_LinkInteractOffer Grab = FGSTN_LinkInteractProvider::MakeGrabOffer(Registry, Kit);
+	if (!Grab.Definition)
+	{
+		return;
+	}
+	for (const FGameplayTag& Alternative : Grab.Definition->Alternatives)
+	{
+		if (const UGSTN_LinkTypeDefinition* Definition = Registry.FindDefinition(Alternative))
+		{
+			FGSTN_LinkInteractOffer Offer = Grab;
+			Offer.Definition = Definition;
+			OutOffers.Add(Offer);
+		}
+	}
+	OutOffers.Add(Grab);
+}
+
 const FGSTN_InteractMeaningTable& FGSTN_LinkTickExtension::GetLinkMeanings()
 {
 	static FGSTN_InteractMeaningTable Meanings;
@@ -193,12 +316,13 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveGrabTarget(const FGSTN_SnapshotEntr
 	// Only a kit that can grab (it carries a link extension) looks for a grab target: the probe reads other entities' snapshot positions, which
 	// a client knows as interpolated proxies, so its result is not prediction-stable and must not reach a pawn that never grabs (F10 deviation)
 	const FGSTN_LinkBodyData* Body = FGSTN_LinkAttach::At(SelfExt->BodyIndex);
-	if (!Body || !Body->KitExtension)
+	if (!Body || !Body->GetKitExtension())
 	{
 		return FGameplayTag();
 	}
-	FGSTN_LinkInteractOffer Offer = FGSTN_LinkInteractProvider::MakeGrabOffer(*Registry, Body->KitExtension);
-	if (!Offer.Definition)
+	TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>> Offers;
+	MakeGrabOffers(*Registry, Body->GetKitExtension(), Offers);
+	if (Offers.IsEmpty())
 	{
 		return FGameplayTag();
 	}
@@ -223,7 +347,7 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveGrabTarget(const FGSTN_SnapshotEntr
 	FGSTN_LinkInteractSource Source;
 	Source.Interactor = MakeSide(Self, SelfExt);
 	Source.Entities = Candidates;
-	Source.Offers = MakeArrayView(&Offer, 1);
+	Source.Offers = Offers;
 	Source.Registry = Registry;
 
 	static const FGSTN_InteractRules Rules;
@@ -283,6 +407,22 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 				&& Context.Out.Core.ActionState == EGSTN_ActionState::InTimeline)
 			{
 				FGSTN_CombatTimelineLogic::CancelForOtherCommand(Context.Out.Core, Context.Frame);
+			}
+			// F12: the keys of the running move (release, throw, a shake-off), then the grabbed side's mash
+			TArray<FThrowPost, TInlineAllocator<1>> Throws;
+			StepOutcomeKeys(Context, *Fragment, Throws);
+			StepMash(Context, *Fragment);
+			if (!Throws.IsEmpty() && Context.Owner)
+			{
+				// The direct throw hit, posted like the attacker step posts its hits: stamped this frame, delivered at the partner's next. A partner that
+				// does not tick on this machine refuses it (the authority always takes it)
+				if (UGSTN_CombatWorldSubsystem* World = UGSTN_CombatWorldSubsystem::Get(Context.Owner->GetWorld()))
+				{
+					for (const FThrowPost& Post : Throws)
+					{
+						World->PostHit(Post.PartnerId, Post.Entry);
+					}
+				}
 			}
 		}
 		break;

@@ -37,6 +37,7 @@ namespace GSTNLinkTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Back, "Command.Link.Throw.Back", "Back throw command of the grabber role. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Up, "Command.Link.Throw.Up", "Up throw command of the grabber role. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Down, "Command.Link.Throw.Down", "Down throw command of the grabber role. Part of the standard command set");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Latch_Attack, "Command.Link.Latch.Attack", "Attack command of the latcher role, an attack press, its hitbox landing only on the ridden partner. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Lock_Command_Link, "Input.Lock.Command.Link", "Locks the link command family. An ordinary count granted by abilities and gameplay effects");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_LinkFormed, "Combat.Event.LinkFormed", "A link formed. Authoritative event published once per key by the watchdog or the pipeline when the response is sent");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_LinkBroken, "Combat.Event.LinkBroken", "A link broke; the payload carries the reason. Authoritative event published once per key by the watchdog");
@@ -56,7 +57,7 @@ namespace GSTNLinkTags
 			Mover_Linked, Interact_Target_Grab,
 			Command_Link_Grab, Command_Link_Pummel, Command_Link_Release,
 			Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down,
-			Input_Lock_Command_Link,
+			Command_Link_Latch_Attack, Input_Lock_Command_Link,
 			Event_LinkFormed, Event_LinkBroken, Event_Throw, Event_GrabEscaped });
 	}
 }

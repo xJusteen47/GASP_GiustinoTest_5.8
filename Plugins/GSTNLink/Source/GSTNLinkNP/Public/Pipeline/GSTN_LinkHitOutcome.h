@@ -10,6 +10,7 @@
 struct FGSTN_HitContextView;
 struct FGSTN_LinkRequestContext;
 struct FGSTN_LinkSnapshotExt;
+struct FGSTN_StepResult;
 
 /**
  * What the LinkRequest step decided about a link request hit, handed to the link outcome applier (FGSTN_LinkOutcomeApplier) when the target's
@@ -45,6 +46,10 @@ struct GSTNLINKNP_API FGSTN_LinkHitOutcome : public FGSTN_HitExtension
 	/** EGSTN_LinkRefusal of a refusal (logs, tests) */
 	UPROPERTY()
 	uint8 Refusal = 0;
+
+	/** The frame the target's role ends by itself (the mash end, F12): LinkFrame + the grab rules' initial mash frames; 0 = no mash */
+	UPROPERTY()
+	int32 EndFrame = 0;
 };
 
 /**
@@ -106,4 +111,17 @@ struct GSTNLINKNP_API FGSTN_LinkStepUtils
 	 * Pending state, in the snapshot of the end of the previous frame) is not counted as busy: it is this very request
 	 */
 	static void MakeRequestContext(const FGSTN_HitContextView& View, FGSTN_LinkRequestContext& OutContext);
+
+	/** The same for another link type than the hit names (one of its definition's Alternatives) */
+	static void MakeRequestContext(const FGSTN_HitContextView& View, const FGameplayTag& LinkType, FGSTN_LinkRequestContext& OutContext);
+
+	/**
+	 * The hit's attacker and victim are the two ends of one live Body link at the end of the previous frame (what LinkFilter and the partner hits
+	 * ask). A direct entry (FGSTN_LinkPartnerHit, a throw) is judged on the victim's side alone (its link of that serial and type, the attacker as
+	 * partner): the attacker cleared its own on the key's frame. An overlap hit needs both sides Active with each other, one serial and type
+	 */
+	static bool ArePartners(const FGSTN_HitContextView& View);
+
+	/** Scales the hit's reaction away (no hitstun, knockback, stagger or flinch); damage, meter and events stay (a pummel, a hit that opts in) */
+	static void SuppressReaction(FGSTN_StepResult& Out);
 };

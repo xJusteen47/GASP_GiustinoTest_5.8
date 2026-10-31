@@ -85,6 +85,13 @@ void UGSTN_LinkTypeDefinition::Validate(TArray<FString>& OutErrors) const
 	{
 		OutErrors.Add(FString::Printf(TEXT("%s: the link type tag '%s' is not under Combat.Link.Type."), *Name, *LinkType.ToString()));
 	}
+	for (const FGameplayTag& Alternative : Alternatives)
+	{
+		if (!Alternative.IsValid() || Alternative == LinkType)
+		{
+			OutErrors.Add(FString::Printf(TEXT("%s: an alternative link type is unset or names the type itself."), *Name));
+		}
+	}
 
 	ValidateRole(Name, TEXT("initiator"), InitiatorRole, OutErrors);
 	ValidateRole(Name, TEXT("target"), TargetRole, OutErrors);

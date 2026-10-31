@@ -148,6 +148,16 @@ void FGSTN_LinkWatchdogLogic::Evaluate(TConstArrayView<FGSTN_LinkWatchdogEntity>
 				{
 					continue;
 				}
+				// A throw in flight (F12): the thrower ended this very link at its key with reason Throw, and the thrown side ends it on its next frame
+				// in the simulation (the throw hit's outcome, with its exit and immunity). Breaking it here would race that frame
+				if (Partner)
+				{
+					const FGSTN_LinkState& Other = Partner->Links.Get(Channel);
+					if (Other.Phase == EGSTN_LinkPhase::None && Other.Serial == State.Serial && Other.GetBreakReason() == EGSTN_LinkBreakReason::Throw)
+					{
+						continue;
+					}
+				}
 				Break.bOrphan = true;
 				Break.Reason = EGSTN_LinkBreakReason::Forced;
 			}

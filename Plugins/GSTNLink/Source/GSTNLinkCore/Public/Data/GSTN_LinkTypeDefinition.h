@@ -76,6 +76,14 @@ struct GSTNLINKCORE_API FGSTN_LinkRoleDef
 	/** Offset applied to the partner's socket to get the parked placement */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role|Placement")
 	FTransform SocketOffset = FTransform::Identity;
+
+	/**
+	 * The break reason when this role's own move ends the link (a Release key of a link outcome track on the role's timeline: the grabber's
+	 * release, the latcher letting go, the latched enemy shaking the latcher off). A Combat.Link.BreakReason tag, resolved through the registry's
+	 * reason table; empty = Release. So a shake-off is the latched role's data, not code that names the latch
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role|Break", meta = (Categories = "Combat.Link.BreakReason"))
+	FGameplayTag ReleaseBreakReason;
 };
 
 /** How hits on one role of a link affect the link (m6 spec 3 and 7.5) */
@@ -185,6 +193,14 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Request", meta = (Categories = "Combat.Link.Type"))
 	TArray<FGameplayTag> ForbiddenWithBody;
+
+	/**
+	 * Link types tried BEFORE this one when a hit or the interact button asks for this type, in order: the first whose request checks accept
+	 * the target forms instead, and this type only when none does. The grab lists the latch, so one tap grabs a light enemy and latches onto
+	 * one heavy enough for the latch rule (the rules decide by weight; nothing names either type). An alternative never lists further ones
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Request", meta = (Categories = "Combat.Link.Type"))
+	TArray<FGameplayTag> Alternatives;
 
 	/**
 	 * The initiator's own machine predicts the link before the response arrives. Grabs do not (hitstop and a predicted flag only);

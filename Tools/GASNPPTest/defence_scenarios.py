@@ -446,23 +446,44 @@ def scenario_shield_mode_off(client=1):
 
 
 def scenario_grab_shield(client=1):
-    """STUB until F12 (grabs are not built yet): the grab-like hit types the bubble ignores and the steps skip are checked through the pure library on a
-    shielding victim's machine. The full scenario (a grab passing through the bubble to the body, forming the link) replaces it in F12."""
+    """F12: a real grab through the shield. c2 raises its shield, c1 (the defence kit plus the plugin's harness link moves) taps Interact with c2 in
+    reach: the grab hit passes the bubble (grab-like hit types are never blocked) and forms the link on every world (c1 role 1, c2 role 2, one serial);
+    no block is recorded for it. The in-memory link content is put back before the defence content"""
+    import link_scenarios as ls
     rig = _DefenceRig('grab_shield', client, 2 if client == 1 else 1)
     run = rig.run
-    steps = [rig.setup_step()]
+    # The link moves go on the kit BEFORE the rig applies it, so one compile holds the defence and the link content (applying the kit a pawn already
+    # runs compiles nothing); they come off last, after the defence content (the link backup is the kit as it was before both)
+    steps = [(0.1, lambda: ls.grab_content_setup([]))]
+    steps.append(rig.setup_step())
     t = rig.cursor
-    steps += [(t, rig.place()), (t + 1.0, _hold(rig.vi, True)), (t + 1.6, _hold(rig.vi, False))]
-    rig.cursor = t + 2.0
-    t = rig.cursor
-    steps += [
-        (t, run.at('STUB: Combat.HitType.Grab is grab-like (the bubble ignores it, Parry and Shield skip it)',
-                   lambda: (bool(unreal.GSTN_DefenceMath.is_grab_like_hit_type(g._tag('Combat.HitType.Grab'))), 'pure check; full scenario in F12'))),
-        (t, run.at('STUB: an ordinary hit type is not', lambda: (not unreal.GSTN_DefenceMath.is_grab_like_hit_type(g._tag('Combat.HitType.Normal')), 'pure check'))),
-        (t, _equal_states(rig, 'the shield was raised and released, equal on every world', want=lambda p: p['release'] >= p['press'] > 0)),
-        (t, rig.kits_ok()),
-    ]
-    steps += rig.end_steps()
+    others = [g.key_of_player(i) for i in range(len(g.worlds())) if i not in (client, rig.vi)]
+
+    def clear_others():
+        # A second candidate in reach takes the grab probe's focus: the uninvolved pawns go 3 m behind the attacker
+        for n, key in enumerate(others):
+            g._place_near(client, key, (-300.0, 400.0 * (n + 1)))
+        return 'others cleared'
+
+    steps += [(t + 0.95, clear_others), (t + 1.0, rig.place((90.0, 0.0))), (t + 1.6, _hold(rig.vi, True)),
+              (t + 2.0, rig.mark('shielding')),
+              (t + 2.0, _equal_states(rig, 'the shield is raised before the grab, equal on every world', want=lambda p: p['press'] > 0 and p.get('release', 0) < p['press'])),
+              (t + 2.05, run.at('c1 has c2 as its grab target while c2 shields', lambda: (
+                  ls.has_tag(0, rig.akey, 'Interact.Target.Grab') and ls.has_tag(client, rig.akey, 'Interact.Target.Grab'),
+                  f"{[ls.has_tag(w, rig.akey, 'Interact.Target.Grab') for w in range(len(g.worlds()))]}, victim tags shield {has_tag(0, rig.vkey, 'Combat.State.Shield')}"))),
+              (t + 2.1, lambda: ('grab', g.combat_tap(client, g.button_mask('Interact'))))]
+    t += 3.0
+
+    def formed():
+        rows = {wi: (ls.body(wi, rig.akey), ls.body(wi, rig.vkey)) for wi in range(len(g.worlds()))}
+        ok = all(a and b and a[0] == 1 and b[0] == 2 and a[1] == 2 and b[1] == 2 for a, b in rows.values())
+        return ok and len({(a[2], b[2], a[3], b[3]) for a, b in rows.values() if a and b}) == 1, f'{rows}'
+
+    steps += [(t, run.at('the grab went through the shield: the link formed on every world', formed)),
+              (t, run.at('no block was recorded for the grab', lambda: (not _kinds(rig.vkey, 'Blocked'), f'{events(rig.vkey)}'))),
+              (t + 0.1, _hold(rig.vi, False)), (t + 0.3, rig.kits_ok())]
+    rig.cursor = t + 0.4
+    steps += rig.end_steps(extra=[ls.grab_content_reset])
     run.run(steps)
 
 

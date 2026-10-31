@@ -97,4 +97,38 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Harness")
 	static FString GetMirrorText(const AActor* Actor);
+
+	/**
+	 * In memory, never saved (F12 harness): the kit's command set gets the standard link slots (UGSTN_LinkSlots), its bindings the harness link moves
+	 * (UGSTN_GA_LinkTest*: grab, pummel, the four throws, release as grabber, latcher and latched, the latched one being the shake-off, the latch
+	 * attack) with the slots' default requirements, and a link extension with default rules when it has none. The kit's previous command set,
+	 * bindings and extensions are kept for RemoveLinkTestBindings. Re-apply the pawns' loadout afterwards. Returns the bindings added
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static int32 AddLinkTestBindings(UGSTN_PrimaryKitDefinition* Kit);
+
+	/** Puts back what AddLinkTestBindings changed. False when it changed nothing on this kit */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool RemoveLinkTestBindings(UGSTN_PrimaryKitDefinition* Kit);
+
+	/** In memory: the kit link extension's MaxGrabWeight and MinLatchWeight (a negative value keeps the current one). False without an extension */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool SetKitLinkWeights(UGSTN_PrimaryKitDefinition* Kit, float MaxGrabWeight, float MinLatchWeight);
+
+	/** In memory: the definition's Alternatives (the grab's latch, F12b). False for an unknown type */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool SetTypeAlternatives(FGameplayTag LinkType, const TArray<FGameplayTag>& Alternatives);
+
+	/** What this world shows for the actor's Body link besides the summary: the mash end, the mash's last counted frame, the cooldown, the grab immunity, the reason */
+	/**
+	 * The grab probe as this actor's world runs it (harness and debug): per entity of the world's step snapshot, "id dist=<cm> offer=<index>|refused
+	 * <EGSTN_LinkRefusal>" with the interactor's own side first. The same request checks the link tick's probe makes, without the probe's arc and tie
+	 * rules; "" without a snapshot or a link extension
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Harness")
+	static FString DescribeGrabProbe(const AActor* Actor);
+
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Harness")
+	static bool GetShownLinkNumbers(const AActor* Actor, int32& OutEndFrame, int32& OutMashProcessedFrame, int32& OutCooldownEndFrame, int32& OutGrabImmunityEndFrame,
+		int32& OutBreakReason);
 };

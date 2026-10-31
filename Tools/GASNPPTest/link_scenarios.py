@@ -751,3 +751,513 @@ def control_walk(client=1, seconds=WALK_SECONDS):
         return 'control', delta
     g.run_timeline([(0.5, mark('start'))] + _walk_steps(_Walker, 0.5, seconds) + [(seconds + 0.7, mark('end')), (seconds + 0.8, report)])
     return 'control started'
+
+
+# ---- F12a: the grab moves -------------------------------------------------------------------------------------------------------------------------
+# The kit of the harness pawns (KIT_Test_Hits) gets, IN MEMORY, the standard link slots and the plugin's harness link moves (UGSTN_GA_LinkTest*: grab on a
+# tap of Interact, pummel on Attack, throw on Crouch + Attack (Throw.Down: the test input config has no Strong button), release on Interact as the grabber) and a link extension with default
+# rules (UGSTN_LinkContentLibrary.add_link_test_bindings), put back by grab_content_reset. Every scenario runs in a fresh PIE (defence_batch).
+REASON.update({'ShakeOff': 1, 'Escape': 8, 'Release': 9, 'Throw': 10})
+SUITE_GRAB = ['grab_throw', 'grab_mash', 'grab_interact', 'grab_gate', 'throw_at_enemy']
+SUITE_LINK = SUITE_LINK + SUITE_GRAB
+_grab = {'kit': None}
+
+
+def _kit():
+    return unreal.load_asset('/Game/GASNPPTest/Combat/' + g.HIT_KIT)
+
+
+def grab_content_setup(keys, bounce=False):
+    """The link steps in the pipeline, the harness link moves on the test kit, the kit applied to the pawns `keys`. Returns the loadout answers.
+    Applying the kit a pawn already runs changes nothing (no new revision, the old table stays): run it in a fresh PIE, or before the first apply
+    (grab_content_setup([]) then the rig's own apply). bounce applies another kit first, which the server refuses within 30 frames of a change"""
+    link_setup()
+    added = Lib.add_link_test_bindings(_kit())
+    answers = []
+    for k in keys:
+        if bounce:
+            g._apply_loadout(k, 'KIT_Test_Alpha')
+        answers.append(g._apply_loadout(k, g.HIT_KIT))
+    _grab['kit'] = answers
+    return 'link moves', added, _grab['kit']
+
+
+def grab_content_reset():
+    msgs = [str(Lib.remove_link_test_bindings(_kit()))]
+    msgs.append(link_reset())
+    return 'grab content reset', msgs
+
+
+def numbers(wi, key):
+    """(mash end, mash processed, cooldown end, grab immunity end, break reason) world wi shows for `key`"""
+    r = Lib.get_shown_link_numbers(actor(wi, key))
+    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool)]
+    return tuple(vals[:5]) if len(vals) >= 5 else (0, 0, 0, 0, 0)
+
+
+def link_text(wi, key):
+    return Lib.get_shown_link_text(actor(wi, key))
+
+
+def has_tag(wi, key, name):
+    asc = actor(wi, key).get_component_by_class(unreal.AbilitySystemComponent)
+    return bool(asc.has_matching_gameplay_tag(g._tag(name)))
+
+
+def _tag_exists(name):
+    """The tag is registered (a tag the import cannot resolve reads back as None)"""
+    return g._tag_text(g._tag(name)) == name
+
+
+class _GrabRig:
+    """One grab pairing: A (world ia's player) grabs B (world ib's player). The verdict goes through gasnpp_test._Run. Samples B's mash end on every
+    world each editor tick (its last value before the escape is the predicted escape frame)"""
+
+    def __init__(self, name, pairing):
+        self.ia, self.ib = PAIRINGS[pairing]
+        self.akey, self.bkey = g.key_of_player(self.ia), g.key_of_player(self.ib)
+        self.others = [i for i in (0, 1, 2) if i not in (self.ia, self.ib)]
+        main = self.ib if self.ib > 0 else self.ia
+        self.run = g._Run(name, main, judge_reconciles=False)
+        # Details as text: the batch report slices them
+        at = self.run.at
+        self.run.at = lambda label, fn: at(label, lambda: (lambda r: (r[0], str(r[1])))(fn()))
+        self.marks, self.ends = {}, {wi: [] for wi in range(len(g.worlds()))}
+        # What each world showed, every editor tick: B's break (reason, serial, immunity end) and A's cooldown end, the values a break leaves for a
+        # few frames only (the idle hygiene drops them once the exit is past), so the checks read what was seen, not what is left
+        self.seen = {wi: {'breaks': set(), 'immunity': set(), 'cooldown': set()} for wi in range(len(g.worlds()))}
+        self.trace = []
+        # The pending reactions B's authority copy showed (EGSTN_HitReaction: 0 stagger in place, 1 push back, 2 launch)
+        self.reactions = set()
+        self.handle = unreal.register_slate_post_tick_callback(self._tick)
+        _last['rig'] = self
+
+    def _tick(self, _dt):
+        try:
+            for wi in self.ends:
+                n = numbers(wi, self.bkey)
+                if n[0]:
+                    self.ends[wi].append(n[0])
+                b = shown_break(wi, self.bkey)
+                if b[0]:
+                    self.seen[wi]['breaks'].add((b[0], b[1]))
+                if n[3]:
+                    self.seen[wi]['immunity'].add(n[3])
+                c = numbers(wi, self.akey)[2]
+                if c:
+                    self.seen[wi]['cooldown'].add(c)
+            info = g.victim_info(0, self.bkey)
+            if info[5]:
+                self.reactions.add(info[5] - 1)
+            row = (body(0, self.akey), body(0, self.bkey), numbers(0, self.bkey)[3], numbers(0, self.akey)[2], watchdog())
+            if not self.trace or self.trace[-1][1:] != row:
+                self.trace.append((round(self.run.now(), 2),) + row)
+        except Exception:
+            pass
+
+    def stop(self):
+        if self.handle is not None:
+            unreal.unregister_slate_post_tick_callback(self.handle)
+            self.handle = None
+
+    def setup(self):
+        return lambda: grab_content_setup([self.akey, self.bkey] + [g.key_of_player(i) for i in self.others])
+
+    def place(self, spot=(90.0, 0.0), key=None):
+        def f():
+            g._place_near(self.ia, key or self.bkey, spot)
+            return 'placed', key or self.bkey, spot
+        return f
+
+    def tap(self, wi, button):
+        return lambda: ('tap', wi, button, g.combat_tap(wi, g.button_mask(button)))
+
+    def throw(self):
+        """Command.Link.Throw.Down: Crouch held and an Attack press (the test input config has no Strong button). Release with self.unhold()"""
+        return lambda: ('throw', g.combat_hold(self.ia, g.button_mask('Crouch')), g.combat_tap(self.ia, g.button_mask('Attack')))
+
+    def unhold(self):
+        return lambda: ('buttons cleared', g.combat_clear(self.ia))
+
+    def mark(self, name):
+        def f():
+            self.marks[name] = {'rb': {i: g.rollbacks(i) for i in (1, 2)}, 'dmg': [g.damage_of(w, self.bkey) for w in range(len(g.worlds()))],
+                                'frame': g._latest_frame(0, self.akey), 'watchdog': watchdog()}
+            return 'mark', name, self.marks[name]
+        return f
+
+    def formed(self, label='formed on every world: A role 1, B role 2, one serial and link frame'):
+        def f():
+            rows = {wi: (body(wi, self.akey), body(wi, self.bkey)) for wi in range(len(g.worlds()))}
+            ok = all(a and b and a[0] == 1 and b[0] == 2 and a[1] == 2 and b[1] == 2 for a, b in rows.values())
+            serials = {(a[2], a[3], b[2], b[3]) for a, b in rows.values() if a and b}
+            return ok and len(serials) == 1, f'{rows}'
+        return self.run.at(label, f)
+
+    def parked(self):
+        return self.run.at('B is in the parked mode where it is simulated', lambda: (
+            all(mover_mode(wi, self.bkey) == LINKED_MODE for wi in [0] + ([self.ib] if self.ib > 0 else [])),
+            {wi: mover_mode(wi, self.bkey) for wi in range(len(g.worlds()))}))
+
+    def gone(self, label='the link is gone on every world'):
+        def f():
+            rows = {wi: (body(wi, self.akey), body(wi, self.bkey)) for wi in range(len(g.worlds()))}
+            return all((a is None or a[1] == 0) and (b is None or b[1] == 0) for a, b in rows.values()), f'{rows}'
+        return self.run.at(label, f)
+
+    def reason(self, name):
+        """The break's reason. A watchdog break (Release, Escape...) is the watchdog's last; a throw breaks in the simulation (the thrower at its key,
+        the thrown at its next frame) and the watchdog posts nothing for it. The reason itself stays on the fragment for a frame or two (the idle
+        hygiene), too short for the editor tick to sample on every world"""
+        def f():
+            w = watchdog()
+            if name == 'Throw':
+                before = self.marks.get('pre_grab', {}).get('watchdog', (0,))[0]
+                return w[0] == before, f'watchdog {w}, breaks before the grab {before}'
+            return w[2] == REASON[name], f'{name}={REASON[name]}: watchdog {w}'
+        return self.run.at(f'the link broke with reason {name}', f)
+
+    def seen_equal(self, label, what, positive=True):
+        """Every world showed the same value(s) of `what` ('immunity' of B, 'cooldown' of A), at least one when positive"""
+        def f():
+            rows = {wi: sorted(v[what]) for wi, v in self.seen.items()}
+            last = {wi: (v[-1] if v else None) for wi, v in rows.items()}
+            return (all(last.values()) or not positive) and len(set(last.values())) == 1, f'{rows}'
+        return self.run.at(label, f)
+
+    def equal_texts(self, label):
+        """Both pawns' Body link summary (role, phase, serial, link frame, partner) and B's mash end, equal on every world. The full text also holds
+        the mash's last counted frame, which each world shows with its own presentation delay"""
+        def f():
+            rows = {wi: (body(wi, self.akey), body(wi, self.bkey), numbers(wi, self.bkey)[0]) for wi in range(len(g.worlds()))}
+            return len(set(rows.values())) == 1, f'{rows}'
+        return self.run.at(label, f)
+
+    def target_tag(self):
+        return self.run.at('A projects Interact.Target.Grab before the tap (its own world and the server)', lambda: (
+            has_tag(self.ia, self.akey, 'Interact.Target.Grab') and has_tag(0, self.akey, 'Interact.Target.Grab'),
+            {wi: has_tag(wi, self.akey, 'Interact.Target.Grab') for wi in range(len(g.worlds()))}))
+
+    def kits_ok(self):
+        return self.run.at('the kits took the link moves', lambda: (_grab['kit'] is not None and all(k == 'OK' for k in _grab['kit']), f"{_grab['kit']}"))
+
+    def end(self, t):
+        def restore():
+            self.stop()
+            return grab_content_reset()
+        trace = lambda: self.run.note(f'server trace (t, A body, B body, B immunity, A cooldown, watchdog): {self.trace[:40]}')
+        return [(t, self.kits_ok()), (t, trace), (t + 0.05, restore), (t + 0.2, self.run.finish())]
+
+    def clear_others(self):
+        """The uninvolved pawns out of every reach (3 m behind A, 4 m apart): with a second candidate in reach the grab probe's focus is not the target"""
+        def f():
+            for n, i in enumerate(self.others):
+                g._place_near(self.ia, g.key_of_player(i), (-300.0, 400.0 * (n + 1)))
+            return 'others cleared'
+        return f
+
+    def grab_steps(self, t0=1.2):
+        """Place B in reach, check the target tag, tap the grab, check the formation and the parked mode. Returns (steps, time after)"""
+        return [(t0 - 0.05, self.clear_others()), (t0, self.place()), (t0 + 0.6, self.target_tag()), (t0 + 0.65, self.mark('pre_grab')), (t0 + 0.7, self.tap(self.ia, 'Interact')),
+                (t0 + 1.5, self.formed()), (t0 + 1.5, self.parked())], t0 + 1.6
+
+
+def scenario_grab_throw(pairing='client_grabs_client'):
+    """A grabs B with a tap of Interact, pummels twice (Attack), throws (Crouch + Attack: the down throw). Every world shows the same link before, after the pummels
+    and after the throw: the pummels land on the partner only (damage 3 each, the link stays), the throw ends both sides with reason Throw (the thrown
+    side at the thrower's socket, then launched), the thrown side carries the AfterThrow grab immunity and the thrower its cooldown, equal everywhere"""
+    rig = _GrabRig('grab_throw', pairing)
+    run = rig.run
+    steps = [(0.2, rig.setup())]
+    grab, t = rig.grab_steps()
+    steps += grab
+    # The grab lasts 150 frames (2.4 s) without a mash: the pummels and the throw come well inside it
+    steps += [(t + 0.15, rig.mark('pre_pummel')), (t + 0.2, rig.tap(rig.ia, 'Attack')), (t + 0.5, rig.tap(rig.ia, 'Attack')), (t + 0.85, rig.mark('pummeled')),
+              (t + 0.85, rig.formed('after two pummels the link still holds, the same on every world')),
+              (t + 0.85, run.at('the pummels did 3 + 3 damage to B on the authority', lambda: (
+                  abs((rig.marks['pummeled']['dmg'][0] - rig.marks['pre_pummel']['dmg'][0]) - 6.0) < 0.6,
+                  f"{rig.marks['pre_pummel']['dmg']} -> {rig.marks['pummeled']['dmg']}"))),
+              (t + 0.9, rig.equal_texts('the link states are equal on every world after the pummels')),
+              (t + 1.0, rig.throw()), (t + 1.3, rig.unhold()), (t + 3.1, rig.mark('thrown')),
+              (t + 3.1, rig.gone('the throw ended the link on every world')), (t + 3.1, rig.reason('Throw')),
+              (t + 3.1, rig.seen_equal('B carried the after-throw grab immunity, the same end frame on every world', 'immunity')),
+              (t + 3.1, rig.seen_equal('A carried its grab cooldown, the same end frame on every world', 'cooldown')),
+              (t + 3.1, run.at('B left the parked mode everywhere', lambda: (all(mover_mode(wi, rig.bkey) != LINKED_MODE for wi in range(len(g.worlds()))),
+                                                                           {wi: mover_mode(wi, rig.bkey) for wi in range(len(g.worlds()))}))),
+              (t + 3.1, run.at('the throw did its damage (8), and every world shows the same damage after it', lambda: (
+                  rig.marks['thrown']['dmg'][0] - rig.marks['pummeled']['dmg'][0] > 7.0 and len({round(d, 1) for d in rig.marks['thrown']['dmg']}) == 1,
+                  f"{rig.marks['pre_pummel']['dmg']} -> {rig.marks['pummeled']['dmg']} -> {rig.marks['thrown']['dmg']}"))),
+              (t + 3.15, rig.equal_texts('the link states are equal on every world after the throw')),
+              (t + 3.2, lambda: run.note(f"rollbacks per mark: {[(n, m['rb']) for n, m in rig.marks.items()]}"))]
+    steps += rig.end(t + 3.3)
+    run.run(steps)
+
+
+def scenario_grab_mash(pairing='client_grabs_client'):
+    """A grabs B; B mashes Attack every 0.12 s and its client is forced to reconcile in the middle of it. The mash end is equal on every world while it
+    runs (the presses count once, a re-simulation counts nothing twice), and the link breaks with reason Escape on every world; the watchdog's break frame
+    is at or after the mash end that every world last showed (the escape on the predicted frame), within one engine frame of ticks"""
+    rig = _GrabRig('grab_mash', pairing)
+    run = rig.run
+    steps = [(0.2, rig.setup())]
+    grab, t = rig.grab_steps()
+    steps += grab
+    steps.append((t, run.at('B has a mash end from the formation on, equal on every world', lambda: (
+        len({numbers(wi, rig.bkey)[0] for wi in range(len(g.worlds()))}) == 1 and numbers(0, rig.bkey)[0] > 0, {wi: numbers(wi, rig.bkey) for wi in range(len(g.worlds()))}))))
+    mash_from = t + 0.1
+    k = 0
+    while mash_from + 0.12 * k < t + 2.2:
+        steps.append((mash_from + 0.12 * k, rig.tap(rig.ib, 'Attack')))
+        k += 1
+    if rig.ib > 0:
+        steps.append((mash_from + 0.5, lambda: ('forced', g.force_reconcile(rig.ib, extra_frames=10))))
+    steps += [(t + 3.4, rig.gone('the grabbed escaped on every world')), (t + 3.4, rig.reason('Escape')),
+              (t + 3.4, run.at('the mash end shrank with the presses', lambda: (min(rig.ends[0]) < max(rig.ends[0]) if rig.ends[0] else False, f'{rig.ends[0][:1]} -> {rig.ends[0][-1:]}'))),
+              (t + 3.4, run.at('every world last showed the same mash end (the predicted escape frame)', lambda: (
+                  len({v[-1] for v in rig.ends.values() if v}) == 1 and all(rig.ends.values()), {wi: v[-1:] for wi, v in rig.ends.items()}))),
+              (t + 3.4, run.at('the watchdog broke it at that frame or within an engine frame after (reason Escape)', lambda: (
+                  watchdog()[2] == REASON['Escape'] and rig.ends[0] and 0 <= watchdog()[3] - rig.ends[0][-1] <= 12, f'watchdog {watchdog()}, end {rig.ends[0][-1:]}')))]
+    steps += rig.end(t + 3.5)
+    run.run(steps)
+
+
+def scenario_grab_interact(pairing='client_grabs_client'):
+    """The interact button: a tap on a grab target grabs; a tap as the grabber releases (reason Release, the release breather on B, equal everywhere); a
+    hold with nothing in reach forms nothing. The pick up rows of the button belong to the held-objects plugin: with it off, Command.Link.Pickup does not
+    exist and the kit has no binding for it"""
+    rig = _GrabRig('grab_interact', pairing)
+    run = rig.run
+    steps = [(0.2, rig.setup())]
+    grab, t = rig.grab_steps()
+    steps += grab
+    steps += [(t + 0.3, rig.tap(rig.ia, 'Interact')), (t + 1.3, rig.gone('the second tap released B on every world')), (t + 1.3, rig.reason('Release')),
+              (t + 1.3, rig.seen_equal('B carried the release breather, the same end frame on every world', 'immunity')),
+              (t + 1.4, rig.place((450.0, 0.0))),
+              (t + 2.0, lambda: ('hold', g.combat_hold(rig.ia, g.button_mask('Interact')), g.combat_tap(rig.ia, g.button_mask('Interact')))),
+              (t + 2.6, lambda: ('release', g.combat_clear(rig.ia))),
+              (t + 3.2, rig.gone('a hold with nothing in reach forms nothing')),
+              (t + 3.2, run.at('without the held-objects plugin there is no pick up command and no binding for it', lambda: (
+                  not _tag_exists('Command.Link.Pickup') and not any('Pickup' in g._tag_text(b.get_editor_property('command')) for b in _kit().get_editor_property('kit_bindings')),
+                  f"tag {_tag_exists('Command.Link.Pickup')}")))]
+    steps += rig.end(t + 3.3)
+    run.run(steps)
+
+
+def scenario_grab_gate(pairing='client_grabs_client'):
+    """The grab gate of a heavy enemy (M4b P9, the deferred scenario_part_grabbable). Weight: with the kit's MaxGrabWeight at 50 the standard fighter (100)
+    is not a grab target (no Interact.Target.Grab, the tap forms nothing); at 120 it is grabbed. Parts: with GSTNParts loaded B carries a part set whose grab
+    gate needs ArmL broken: Combat.Part.GrabLocked is projected, the tap forms nothing; three hits break the arm, the tag goes and the tap grabs. Without
+    GSTNParts the tag does not exist and the weight decides alone"""
+    import parts_scenarios as ps
+    parts = _tag_exists('Combat.Part.GrabLocked')
+    rig = _GrabRig('grab_gate', pairing)
+    run = rig.run
+    kit = _kit()
+
+    def weights(value):
+        return lambda: ('max grab weight', value, Lib.set_kit_link_weights(kit, value, -1.0))
+
+    steps = [(0.2, rig.setup()), (0.4, weights(50.0)), (1.2, rig.place()), (1.8, rig.tap(rig.ia, 'Interact')),
+             (2.6, run.at('above MaxGrabWeight (50): no grab target, nothing forms', lambda: (
+                 not has_tag(0, rig.akey, 'Interact.Target.Grab') and all(body(wi, rig.bkey) is None or body(wi, rig.bkey)[1] == 0 for wi in range(len(g.worlds()))),
+                 {wi: body(wi, rig.bkey) for wi in range(len(g.worlds()))}))),
+             (2.7, weights(120.0))]
+    grab, t = rig.grab_steps(2.8)
+    steps += grab
+    steps += [(t, lambda: run.note(f'watchdog after the weight grab: {watchdog()}, seen {rig.seen[0]}')),
+              (t + 0.2, rig.tap(rig.ia, 'Interact')), (t + 1.0, rig.gone('released before the parts half'))]
+    t += 3.0
+    if parts:
+        part_set = {}
+
+        def gate_on():
+            p = ps.parts_setup('ArmL', 12.0, 0)
+            gate = p.get_editor_property('grab_gate')
+            gate.set_editor_property('required_parts', [ps.PART_INDEX['ArmL']])
+            p.set_editor_property('grab_gate', gate)
+            ps.attach_everywhere(p)
+            part_set['p'] = p
+            g.hit_rules_setup()
+            return 'grab gate: ArmL'
+
+        def gate_off():
+            p = part_set.get('p')
+            if p:
+                gate = p.get_editor_property('grab_gate')
+                gate.set_editor_property('required_parts', [])
+                p.set_editor_property('grab_gate', gate)
+            return ps.parts_reset()
+
+        steps += [(t, gate_on), (t + 1.0, rig.place()),
+                  (t + 1.6, run.at('GrabLocked is projected while the arm is whole, on the authority', lambda: (has_tag(0, rig.bkey, 'Combat.Part.GrabLocked'), 'tag'))),
+                  (t + 1.7, rig.tap(rig.ia, 'Interact')),
+                  (t + 2.5, run.at('GrabLocked: the tap forms nothing', lambda: (all(body(wi, rig.bkey) is None or body(wi, rig.bkey)[1] == 0 for wi in range(len(g.worlds()))),
+                                                                              {wi: body(wi, rig.bkey) for wi in range(len(g.worlds()))})))]
+        t += 2.7
+        for i in range(3):
+            steps += [(t, rig.place((205.0, 0.0))), (t + 1.6, rig.tap(rig.ia, 'Attack'))]
+            t += 3.6
+        steps.append((t, run.at('three hits broke the arm: GrabLocked is gone', lambda: (not has_tag(0, rig.bkey, 'Combat.Part.GrabLocked'),
+                                                                                        ps.parts_state(0, rig.bkey)))))
+
+        def body_boxes():
+            # The parts content put every hurtbox on the arm; the arm is broken and hidden now, so the standard boxes come back for the grab (the
+            # broken mask, which the gate reads, stays). parts_reset puts the same list back
+            unreal.load_asset(ps.PARTS_DIR + 'HBS_Test_Pawn').set_editor_property('hurtboxes', ps._ps_saved['hbs'])
+            return 'standard hurtboxes back'
+        steps.append((t + 0.05, body_boxes))
+        grab, t = rig.grab_steps(t + 0.1)
+        steps += grab
+        steps += [(t + 0.2, rig.tap(rig.ia, 'Interact')), (t + 1.0, gate_off)]
+        t += 1.2
+    else:
+        steps.append((t, run.at('without GSTNParts Combat.Part.GrabLocked does not exist: the weight decides alone', lambda: (
+            not _tag_exists('Combat.Part.GrabLocked'), 'tag absent'))))
+        t += 0.2
+    steps += [(t, weights(120.0))]
+    steps += rig.end(t + 0.1)
+    run.run(steps)
+
+
+def scenario_throw_at_enemy(pairing='client_grabs_client'):
+    """A throws B toward C (the third player, 260 cm ahead of A). With the held-objects plugin off the throw is the plain M6 launch: B gets a launch
+    reaction (the harness pawns have no knockback move effect, so the reaction is read, not a displacement); C takes no damage from the thrown body
+    (there is no thrown-body hitbox)"""
+    rig = _GrabRig('throw_at_enemy', pairing)
+    run = rig.run
+    ckey = g.key_of_player(rig.others[0])
+    held = _tag_exists('Combat.State.Thrown')
+    steps = [(0.2, rig.setup())]
+    grab, t = rig.grab_steps()
+    steps += grab
+    pos = {}
+
+    def where(label):
+        def f():
+            pos[label] = (actor(0, rig.akey).get_actor_location(), actor(0, rig.bkey).get_actor_location(), g.damage_of(0, ckey))
+            return 'where', label
+        return f
+
+    steps += [(t, rig.place((260.0, 0.0), key=ckey)), (t + 0.6, where('before')), (t + 0.7, rig.throw()), (t + 1.0, rig.unhold()), (t + 2.4, where('after')),
+              (t + 2.4, rig.gone('the throw ended the link')),
+              # The harness pawns carry no knockback move effect, so a launch shows as the victim's pending reaction, not as a displacement
+              (t + 2.45, run.at('the throw launched B (pending reaction Launch on the authority, the plain M6 throw)', lambda: (
+                  2 in rig.reactions, f"reactions {sorted(rig.reactions)}, distance {(pos['before'][1] - pos['before'][0]).length():.0f} -> {(pos['after'][1] - pos['after'][0]).length():.0f} cm"))),
+              (t + 2.45, run.at('the held-objects plugin is off: no thrown body, C takes no damage from B', lambda: (
+                  not held and abs(pos['after'][2] - pos['before'][2]) < 0.01, f"held plugin {held}, C damage {pos['before'][2]} -> {pos['after'][2]}")))]
+    steps += rig.end(t + 2.5)
+    run.run(steps)
+
+
+_probe = {'rows': [], 'mark': None, 'h': None, 't0': 0.0}
+
+
+def probe_throw(pairing='client_grabs_client'):
+    """Debug aid (not a scenario): grab, throw (Crouch + Attack) and sample the thrown pawn on the server every editor tick: (t, location, velocity,
+    Mover mode, Body link, action state, damage). Read probe_rows() after about 5 s"""
+    ia, ib = PAIRINGS[pairing]
+    b = g.key_of_player(ib)
+    grab_content_setup([g.key_of_player(i) for i in (0, 1, 2)])
+    _probe.update(rows=[], mark=None)
+
+    def tick(_dt):
+        try:
+            act = actor(0, b)
+            mv = act.get_component_by_class(unreal.MoverComponent)
+            v, l = mv.get_velocity(), act.get_actor_location()
+            e = json.loads(g.comps(g.worlds()[0])[b].read_snapshot_entry(-1))
+            _probe['rows'].append((round(time.time() - _probe['t0'], 2), round(l.x), round(l.y), round(l.z), round(v.x), round(v.y), round(v.z),
+                                   str(mv.get_movement_mode_name()), body(0, b), g.victim_info(0, b), e.get('damagePercent')))
+        except Exception as ex:
+            _probe['rows'].append(str(ex)[:80])
+
+    def start():
+        _probe['t0'] = time.time()
+        _probe['h'] = unreal.register_slate_post_tick_callback(tick)
+        return 'sampling'
+
+    def throw():
+        _probe['mark'] = len(_probe['rows'])
+        g.combat_hold(ia, g.button_mask('Crouch'))
+        g.combat_tap(ia, g.button_mask('Attack'))
+        return 'throw'
+
+    def stop():
+        g.combat_clear(ia)
+        unreal.unregister_slate_post_tick_callback(_probe['h'])
+        return 'stopped'
+
+    g.run_timeline([(0.8, lambda: g._place_near(ia, b, (90.0, 0.0))), (1.4, start), (1.5, lambda: g.combat_tap(ia, g.button_mask('Interact'))),
+                    (2.4, throw), (2.6, lambda: g.combat_clear(ia)), (4.6, stop)])
+    return 'probe started'
+
+
+def probe_rows(before=2, after=40):
+    m = _probe['mark'] or 0
+    return _probe['rows'][max(m - before, 0): m + after]
+
+
+def probe_hit_after_release(pairing='client_grabs_client', release=True):
+    """Debug aid (not a scenario): A hits B with the test move (B not linked), then grabs and (release=True) lets go, then hits B again. B sampled on the
+    server as in probe_throw: does a hit after a link still launch? probe_rows() afterwards; _probe['marks'] holds the row index of each hit"""
+    ia, ib = PAIRINGS[pairing]
+    b = g.key_of_player(ib)
+    grab_content_setup([g.key_of_player(i) for i in (0, 1, 2)])
+    _probe.update(rows=[], mark=None, marks={})
+
+    def tick(_dt):
+        try:
+            act = actor(0, b)
+            mv = act.get_component_by_class(unreal.MoverComponent)
+            v, l = mv.get_velocity(), act.get_actor_location()
+            _probe['rows'].append((round(time.time() - _probe['t0'], 2), round(l.x), round(l.y), round(l.z), round(v.x), round(v.y), round(v.z),
+                                   str(mv.get_movement_mode_name()), body(0, b), g.victim_info(0, b)))
+        except Exception as ex:
+            _probe['rows'].append(str(ex)[:80])
+
+    def start():
+        _probe['t0'] = time.time()
+        _probe['h'] = unreal.register_slate_post_tick_callback(tick)
+        return 'sampling'
+
+    def hit(name):
+        def f():
+            _probe['marks'][name] = len(_probe['rows'])
+            return g.combat_tap(ia, g.button_mask('Attack'))
+        return f
+
+    def stop():
+        unreal.unregister_slate_post_tick_callback(_probe['h'])
+        return 'stopped'
+
+    steps = [(0.5, start), (0.6, lambda: g._place_near(ia, b, (205.0, 0.0))), (1.4, hit('first')),
+             (4.0, lambda: g._place_near(ia, b, (90.0, 0.0))), (4.8, lambda: g.combat_tap(ia, g.button_mask('Interact')))]
+    if release:
+        steps.append((5.6, lambda: g.combat_tap(ia, g.button_mask('Interact'))))
+    steps += [(7.0, lambda: g._place_near(ia, b, (205.0, 0.0))), (7.8, hit('second')), (10.0, stop)]
+    g.run_timeline(steps)
+    return 'probe started'
+
+
+def probe_shield_target(client=1, victim=2):
+    """Debug aid (not a scenario): the defence content, the link moves, the victim shielding in reach; then the grab probe's description on every world
+    (UGSTN_LinkContentLibrary.describe_grab_probe) into _probe['describe']"""
+    import defence_scenarios as ds
+    a, b = g.key_of_player(client), g.key_of_player(victim)
+    _probe['describe'] = {}
+
+    def setup():
+        g.hit_rules_setup()
+        ds.defence_setup()
+        return grab_content_setup([a, b])
+
+    def describe(label):
+        def f():
+            _probe['describe'][label] = {wi: Lib.describe_grab_probe(actor(wi, a)) for wi in range(len(g.worlds()))}
+            return 'described', label
+        return f
+
+    g.run_timeline([(0.2, setup), (1.2, lambda: g._place_near(client, b, (90.0, 0.0))), (1.9, describe('idle')),
+                    (2.0, lambda: (g.combat_hold(victim, g.button_mask('Shield')), g.combat_tap(victim, g.button_mask('Shield')))),
+                    (2.6, describe('shielding')), (2.8, lambda: g.combat_clear(victim)), (3.4, describe('after')), (3.5, ds.defence_reset)])
+    return 'probe started'

@@ -12,6 +12,7 @@
 class AActor;
 class UAbilitySystemComponent;
 struct FGSTN_AttackerHit;
+struct FGSTN_CombatTimelineData;
 struct FGSTN_ButtonMap;
 struct FGSTN_StepSnapshot;
 struct FGSTN_SimEventOutbox;
@@ -83,6 +84,11 @@ struct FGSTN_CombatTickContext
 	 * fragment at AfterClocks. Valid for this tick only; null in a test
 	 */
 	const FGSTN_TimelineOutput* Timeline = nullptr;
+	/**
+	 * The frame data of the timeline Out runs at the hook (its registry entry in the frame's table set), null when none runs (M6 F12: the link
+	 * plugin reads its own track kind, a throw key, from it). Content, the same on every machine; valid for this tick only; null in a test
+	 */
+	const FGSTN_CombatTimelineData* RunningTimeline = nullptr;
 
 	/**
 	 * The entity's actor and ability system, for an extension that must reach content or the tags of the entity (it projects tags from its

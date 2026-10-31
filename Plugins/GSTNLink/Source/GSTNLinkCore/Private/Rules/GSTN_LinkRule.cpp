@@ -17,6 +17,12 @@ FGSTN_LinkRuleResult UGSTN_LinkRule::CheckCommon(const FGSTN_LinkRequestContext&
 		return FGSTN_LinkRuleResult::Refuse(EGSTN_LinkRefusal::SelfLink);
 	}
 
+	// The initiator's own cooldown (after a throw): it cannot start another link before its end frame
+	if (Context.Frame < Context.Initiator.CooldownEndFrame)
+	{
+		return FGSTN_LinkRuleResult::Refuse(EGSTN_LinkRefusal::Cooldown);
+	}
+
 	// One slot per channel. A pending request also occupies the slot, so simultaneous requests on one entity cannot both win
 	const FGSTN_LinkState& InitiatorSlot = Context.Initiator.Links.Get(Definition->Channel);
 	if (InitiatorSlot.Phase != EGSTN_LinkPhase::None)

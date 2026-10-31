@@ -50,6 +50,9 @@ struct GSTNLINKNP_API FGSTN_LinkSnapshotExt
 	/** Bit i = the entity carried FGSTN_LinkRequestTags::Get()[i] at the end of the previous frame */
 	uint32 RequestTagMask = 0;
 
+	/** The entity cannot initiate a link before this frame (its link actions' cooldown: the grabber's after a throw, F12) */
+	int32 CooldownEndFrame = 0;
+
 	uint8 BodyTypeIndex = 0;
 	uint8 BodyRole = 0;
 	uint8 BodyPhase = 0;

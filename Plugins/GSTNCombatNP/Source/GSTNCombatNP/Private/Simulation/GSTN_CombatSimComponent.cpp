@@ -884,6 +884,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		FillHookContext(HookContext, FrameCmd, Up);
 	}
 	HookContext.Timeline = &TimelineOutput;
+	HookContext.RunningTimeline = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline ? GetRegistryTimeline(FrameSet, OutSync.Core.ActiveTimeline) : nullptr;
 	HookContext.Snapshot = StepSnapshot;
 	// What an extension may ask the model to do in this tick (StartForcedTimeline): this frame's state, tables and hook environment
 	ServiceSync = &OutSync;

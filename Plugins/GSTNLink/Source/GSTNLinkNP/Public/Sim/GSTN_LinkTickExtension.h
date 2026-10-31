@@ -6,11 +6,13 @@
 #include "GameplayTagContainer.h"
 #include "GSTN_LinkInteractProvider.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
+#include "Simulation/GSTN_HitInbox.h"
 
 class UGSTN_LinkRegistry;
 class UGSTN_LinkTypeDefinition;
 struct FGSTN_InteractMeaningTable;
 struct FGSTN_LinkFragment;
+struct FGSTN_LinkKitExtension;
 struct FGSTN_LinkState;
 struct FGSTN_SnapshotEntry;
 
@@ -74,6 +76,30 @@ public:
 
 	/** Sets PendingBreak with a reason on a live Body link (a role input such as Release): false when the Body channel holds no live link */
 	static bool MarkPendingBreak(FGSTN_LinkFragment& Fragment, uint8 Reason);
+
+	/** A throw the outcome keys decided: the entry and the partner it goes to (the hook posts it through the combat world, as the attacker step does) */
+	struct FThrowPost
+	{
+		int32 PartnerId = INDEX_NONE;
+		FGSTN_HitInboxEntry Entry;
+	};
+
+	/**
+	 * The link outcome keys the running move crossed this frame (F12, FGSTN_LinkOutcomeKeys) for the entity's live Body link: Release sets
+	 * PendingBreak with the role's release reason (FGSTN_LinkShakeOff), Throw ends the own link and hands the throw entry back in OutThrows,
+	 * KeepLink does nothing, SwapRoles is not built (logged once). Needs Context.RunningTimeline; the throw needs both entities in Context.Snapshot.
+	 * True when the fragment changed
+	 */
+	static bool StepOutcomeKeys(const FGSTN_CombatTickContext& Context, FGSTN_LinkFragment& Fragment, TArray<FThrowPost, TInlineAllocator<1>>& OutThrows);
+
+	/** The grabbed side's mash at AfterClocks (FGSTN_LinkMash), on the input history of the end of the previous frame. True when the fragment changed */
+	static bool StepMash(const FGSTN_CombatTickContext& Context, FGSTN_LinkFragment& Fragment);
+
+	/**
+	 * The offers of the grab button for a kit (F12): the grab's Alternatives first (the latch: same Interact.Target.Grab meaning, the grab's reach),
+	 * then the grab, so the probe projects the target tag for a target heavy enough to latch as for one light enough to grab
+	 */
+	static void MakeGrabOffers(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkKitExtension* Kit, TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers);
 
 	/** The Combat.Link.* tags the fragment projects (Linked, Pending, the role tag of each channel) */
 	static void GatherStateTags(const FGSTN_LinkFragment* Fragment, const UGSTN_LinkRegistry* Registry, FGameplayTagContainer& Out);

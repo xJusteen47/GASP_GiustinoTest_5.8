@@ -126,7 +126,7 @@ uint16 FGSTN_LinkAttach::Apply(AActor* Owner, const UGSTN_PrimaryKitDefinition* 
 		return 0;
 	}
 	TUniquePtr<FGSTN_LinkBodyData> Data = MakeUnique<FGSTN_LinkBodyData>();
-	Data->KitExtension = UGSTN_LinkRequirementLibrary::FindKitExtension(Kit);
+	Data->Kit = Kit;
 
 	TArray<FName> Sockets;
 	GatherRoleSockets(Sockets);
@@ -185,6 +185,15 @@ uint16 FGSTN_LinkAttach::AddForTest(const TMap<FName, FTransform>& Sockets, cons
 {
 	TUniquePtr<FGSTN_LinkBodyData> Data = MakeUnique<FGSTN_LinkBodyData>();
 	Data->BakedSockets = Sockets;
-	Data->KitExtension = KitExtension;
+	Data->TestKitExtension = KitExtension;
 	return AddEntry(MoveTemp(Data));
+}
+
+const FGSTN_LinkKitExtension* FGSTN_LinkBodyData::GetKitExtension() const
+{
+	if (const UGSTN_PrimaryKitDefinition* Attached = Kit.Get())
+	{
+		return UGSTN_LinkRequirementLibrary::FindKitExtension(Attached);
+	}
+	return TestKitExtension;
 }

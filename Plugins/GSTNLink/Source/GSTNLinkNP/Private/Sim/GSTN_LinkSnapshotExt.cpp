@@ -140,6 +140,7 @@ void FGSTN_LinkSnapshotExt::SetFromFragment(const FGSTN_LinkFragment& Fragment)
 	HandTypeIndex = Fragment.Links.Hand.LinkTypeIndex;
 	HandRole = Fragment.Links.Hand.Role;
 	GrabImmunityEndFrame = Fragment.GrabImmunityEndFrame;
+	CooldownEndFrame = Fragment.Actions.CooldownEndFrame;
 }
 
 const FGSTN_LinkSnapshotExt* FGSTN_LinkSnapshotExt::FromVictim(const FGSTN_HitVictimView& Victim)
