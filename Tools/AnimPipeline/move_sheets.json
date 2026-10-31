@@ -1,0 +1,196 @@
+{
+ "_doc": "Per-move parameters for motion_check.py and legibility.py. Frames are anim frames (60 fps). contact = active frames; hold_window = frames where the strike holds its pose (recoil allowed, jitter detector off there); hold_frames_min = frames after first contact the effector must stay within hold_tolerance of full extension; strength light|strong (strong moves must recoil, not freeze). Class defaults: jab hold 1-2, smash 6+.",
+ "_classes": {
+  "jab": {
+   "strength": "light",
+   "hold_frames_min": 1,
+   "recoil_required": false
+  },
+  "tilt": {
+   "strength": "strong",
+   "hold_frames_min": 3,
+   "recoil_required": false
+  },
+  "smash": {
+   "strength": "strong",
+   "hold_frames_min": 6,
+   "recoil_required": true
+  }
+ },
+ "v5": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV5",
+  "contact": [
+   1,
+   3
+  ],
+  "faf": 17,
+  "effector": "middle_01_l",
+  "hold_window": [
+   1,
+   3
+  ]
+ },
+ "v6": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV6",
+  "contact": [
+   1,
+   3
+  ],
+  "faf": 17,
+  "effector": "middle_01_l",
+  "hold_window": [
+   1,
+   3
+  ]
+ },
+ "v7": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV7",
+  "contact": [
+   1,
+   2
+  ],
+  "faf": 17,
+  "effector": "middle_01_l",
+  "hold_window": [
+   1,
+   2
+  ]
+ },
+ "v8": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV8",
+  "contact": [
+   1,
+   2
+  ],
+  "faf": 18,
+  "effector": "middle_01_l",
+  "hold_window": [
+   1,
+   2
+  ],
+  "_faf_note": "FAF = 0-based game frame 19 (owner: 'fai 19 se parti da 0'; UFD total 19) = anim round(19*0.96) = 18"
+ },
+ "v9": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV9",
+  "contact": [
+   1,
+   2
+  ],
+  "faf": 18,
+  "effector": "middle_01_l",
+  "hold_window": [
+   1,
+   2
+  ],
+  "_faf_note": "FAF = 0-based game frame 19 (owner: 'fai 19 se parti da 0'; UFD total 19) = anim round(19*0.96) = 18"
+ },
+ "v10": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV10",
+  "contact": [
+   1,
+   2
+  ],
+  "faf": 18,
+  "effector": "middle_01_l",
+  "hold_window": [
+   1,
+   2
+  ],
+  "_faf_note": "FAF = 0-based game frame 19 (owner: 'fai 19 se parti da 0'; UFD total 19) = anim round(19*0.96) = 18"
+ },
+ "ganondorf_ftilt": {
+  "move": "tilt",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_GanondorfFTilt",
+  "contact": [
+   9,
+   11
+  ],
+  "faf": 37,
+  "effector": "ball_r",
+  "hold_window": [
+   9,
+   14
+  ],
+  "_source": "UFD ganondorf 'Forward Tilt': startup 10, active 10-12, total 39 (1-based game frames). 0-based game frames: active G9-G11, FAF G39. Anim frame = G x 0.96 (62.5 Hz game, 60 fps clip).",
+  "_todo": "effector (which foot kicks) and clip length to set from the owner's blockout",
+  "_refs": "refs/ufd/calibration_metrics.csv: Ganondorf ftilt build 6 frames, 90% of the path in the last 2, holds frozen ~9 frames at ~69%; Captain Falcon ftilt build 6, last-2 75%, hold 3; Ken heavy ftilt build 9, last-2 93%, hold 6 with ~9% recoil; Terry ftilt 1-frame snap, hold 5 at 100%."
+ },
+ "v11": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV11",
+  "contact": [
+   1,
+   2
+  ],
+  "faf": 18,
+  "effector": "middle_01_l",
+  "hold_window": [
+   1,
+   2
+  ],
+  "_faf_note": "FAF = 0-based game frame 19 (owner: 'fai 19 se parti da 0'; UFD total 19) = anim round(19*0.96) = 18",
+  "balance_exempt_frames": [
+   1,
+   2,
+   3
+  ],
+  "_balance_note": "contact frames 1-3: the forward lunge into the punch (centre of mass up to 3.9 cm past the front foot); declared lunge, owner can override"
+ },
+ "ganon_v1": {
+  "move": "tilt",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V1",
+  "contact": [
+   9,
+   11
+  ],
+  "faf": 37,
+  "effector": "ball_l",
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l",
+  "hold_window": [
+   9,
+   19
+  ],
+  "_source": "UFD ganondorf 'Forward Tilt': startup 10, active 10-12, total 39 (1-based game frames) -> contact anim 9-11, FAF anim 37 (G39 x 0.96). Kick with the lead (left) leg, built from scratch (ganon_ftilt_motion.py), sparse keys."
+ },
+ "ganon_v1ap": {
+  "move": "tilt",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V1_AutoPhys",
+  "contact": [
+   9,
+   11
+  ],
+  "faf": 37,
+  "effector": "ball_l",
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l",
+  "hold_window": [
+   9,
+   19
+  ],
+  "_source": "AutoPhysics side test: ganon_v1 snapped to AutoPhysics in ganon_ftilt_v1_autophys.casc"
+ },
+ "ganon_v2": {
+  "move": "tilt",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V2",
+  "contact": [
+   9,
+   11
+  ],
+  "faf": 37,
+  "effector": "ball_l",
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l",
+  "hold_window": [
+   9,
+   19
+  ],
+  "_source": "Ganondorf ftilt v2: idle start, balance solved per frame (ganon_ftilt_v2_motion.py)"
+ }
+}
