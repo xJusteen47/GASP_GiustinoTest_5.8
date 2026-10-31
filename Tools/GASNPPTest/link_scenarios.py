@@ -12,10 +12,12 @@
 #   ls.last()                                # (verdict, checks)
 #   import defence_scenarios as ds; ds.defence_batch(ls.SUITE_LINK, module=ls, report='f10-sweep/link-listen-0pct.log')
 #
-# Content: the plugin's /GSTNLink/Test/DA_LinkType_Grab_Test (Tools/GAS/setup_defence_link_content.py run_link()); everything else is changed IN
-# MEMORY and put back: the combat rules get the GrabImmunity and LinkRequest steps (UGSTN_LinkContentLibrary.add_link_steps_to_rules), and for
-# link_rollback the test kit's attack (KIT_Test_Hits' weapon, Command.Attack.Neutral) becomes a grab (hit type Combat.HitType.Grab, link type Combat.Link.Type.Grab)
-# until the scenario ends. No shared Blueprint is edited.
+# Content (F13: saved by Tools/GAS/setup_defence_link_content.py): the plugin's /GSTNLink/Test (DA_LinkType_Grab_Test, DA_LinkType_Latch_Test, the link
+# move Blueprints GA_*_Test), the project kit /Game/GASNPPTest/Combat/KIT_Test_Link (link slots, the moves, a link extension) and the GrabImmunity,
+# LinkRequest and LinkBreakOnHit steps saved in the standard rules. What stays IN MEMORY and is put back: for link_rollback and grab_immunity the test
+# kit's attack (KIT_Test_Hits' weapon, Command.Attack.Neutral) becomes a grab (hit type Combat.HitType.Grab, link type Combat.Link.Type.Grab) until the
+# scenario ends (the formation through a weapon hit is what those scenarios test), and the numbers a scenario changes (leash, immunity, weights).
+# Without the content (USE_CONTENT False or the kit missing) the F10-F12 runtime path still works: steps and link moves added in memory.
 #
 # S1 thresholds (plan F0 S1, variant P): zero unforced reconciles on the grabber's and the grabbed's clients during the walk; exactly one correction
 # at link start and one at link end per client that simulates one of the two; presentation error of the grabbed pawn's shown transform against the
@@ -43,6 +45,8 @@ REASON = {'Forced': 11, 'Distance': 3, 'OwnDeath': 4, 'PartnerDeath': 5, 'Hit': 
 S1 = {'own_p95': 10.0, 'partner_p95': 25.0, 'max': 60.0, 'converge_frames': 2}
 WALK_SECONDS = 20.0
 Lib = unreal.GSTN_LinkContentLibrary
+CONTENT_KIT = 'KIT_Test_Link'
+USE_CONTENT = True   # the saved content (F13); False = the F10-F12 runtime path on KIT_Test_Hits
 _saved = {}
 _last = {'rig': None}
 
@@ -69,7 +73,9 @@ def restore_editor():
 def link_setup(grab_attack=False, akey=None):
     """The in-memory content of a scenario: the link steps in the combat pipeline; with grab_attack the test kit's attack becomes a grab"""
     prepare_editor()
-    Lib.add_link_steps_to_rules(g.hit_rules())
+    if not _has_steps_saved():
+        Lib.add_link_steps_to_rules(g.hit_rules())
+        _saved['steps'] = True
     if grab_attack:
         kit = unreal.load_asset('/Game/GASNPPTest/Combat/' + g.HIT_KIT)
         if 'attack' not in _saved:
@@ -83,11 +89,13 @@ def link_setup(grab_attack=False, akey=None):
 
 def link_reset():
     msgs = []
-    try:
-        Lib.remove_link_steps_from_rules(g.hit_rules())
-        msgs.append('steps')
-    except Exception:
-        pass
+    # The steps are content of the standard rules since F13: taken out only when this module added them in memory
+    if _saved.pop('steps', False):
+        try:
+            Lib.remove_link_steps_from_rules(g.hit_rules())
+            msgs.append('steps')
+        except Exception:
+            pass
     if 'attack' in _saved:
         old = _saved.pop('attack')
         kit = unreal.load_asset('/Game/GASNPPTest/Combat/' + g.HIT_KIT)
@@ -95,6 +103,17 @@ def link_reset():
         Lib.set_kit_move_hit_type(kit, g._tag(ATTACK_COMMAND), hit_type, link_type)
         msgs.append('attack')
     return 'restored ' + ','.join(msgs)
+
+
+def _has_steps_saved():
+    """The rules the pawns play already carry the link steps (the F13 content of the standard rules)"""
+    names = ' '.join(str(p) for p in g.hit_rules().get_editor_property('hit_pipeline'))
+    return all(n in names for n in ('HitStep_GrabImmunity', 'HitStep_LinkRequest', 'HitStep_LinkBreakOnHit'))
+
+
+def content_kit():
+    """The saved link test kit (F13), None when USE_CONTENT is off or it is missing (the runtime path then edits KIT_Test_Hits)"""
+    return CONTENT_KIT if USE_CONTENT and unreal.EditorAssetLibrary.does_asset_exist('/Game/GASNPPTest/Combat/' + CONTENT_KIT) else None
 
 
 def _out_tags(result):
@@ -766,27 +785,36 @@ SUITE_LINK = SUITE_LINK + SUITE_GRAB
 _grab = {'kit': None}
 
 
+def _kit_name():
+    return content_kit() or g.HIT_KIT
+
+
 def _kit():
-    return unreal.load_asset('/Game/GASNPPTest/Combat/' + g.HIT_KIT)
+    """The kit the grab scenarios play (KIT_Test_Link from the content; KIT_Test_Hits on the runtime path): the in-memory weights go on it"""
+    return unreal.load_asset('/Game/GASNPPTest/Combat/' + _kit_name())
 
 
-def grab_content_setup(keys, bounce=False):
-    """The link steps in the pipeline, the harness link moves on the test kit, the kit applied to the pawns `keys`. Returns the loadout answers.
-    Applying the kit a pawn already runs changes nothing (no new revision, the old table stays): run it in a fresh PIE, or before the first apply
-    (grab_content_setup([]) then the rig's own apply). bounce applies another kit first, which the server refuses within 30 frames of a change"""
+def grab_content_setup(keys, bounce=False, edit_kit=None):
+    """The link steps, the link moves on the kit, the kit applied to the pawns `keys`. Returns the loadout answers. F13: the saved KIT_Test_Link has
+    the moves already (edit_kit None follows USE_CONTENT; False never edits a kit, True takes the runtime path). Applying the kit a pawn already runs
+    changes nothing (no new revision, the old table stays): run it in a fresh PIE, or before the first apply (grab_content_setup([]) then the rig's own
+    apply). bounce applies another kit first, which the server refuses within 30 frames of a change"""
     link_setup()
-    added = Lib.add_link_test_bindings(_kit())
+    runtime = (content_kit() is None) if edit_kit is None else edit_kit
+    added = Lib.add_link_test_bindings(unreal.load_asset('/Game/GASNPPTest/Combat/' + g.HIT_KIT)) if runtime else 'content kit'
+    _grab['runtime'] = runtime
+    kit = g.HIT_KIT if runtime else _kit_name()
     answers = []
     for k in keys:
         if bounce:
             g._apply_loadout(k, 'KIT_Test_Alpha')
-        answers.append(g._apply_loadout(k, g.HIT_KIT))
+        answers.append(g._apply_loadout(k, kit))
     _grab['kit'] = answers
-    return 'link moves', added, _grab['kit']
+    return 'link moves', added, kit, _grab['kit']
 
 
 def grab_content_reset():
-    msgs = [str(Lib.remove_link_test_bindings(_kit()))]
+    msgs = [str(Lib.remove_link_test_bindings(unreal.load_asset('/Game/GASNPPTest/Combat/' + g.HIT_KIT)))] if _grab.pop('runtime', False) else []
     msgs.append(link_reset())
     return 'grab content reset', msgs
 

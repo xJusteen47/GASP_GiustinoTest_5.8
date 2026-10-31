@@ -8,15 +8,17 @@
 #   ds.last()                                # (verdict, checks) of the last one
 #   ds.defence_batch(ds.SUITE_DEFENCE, loss=2, report='f7-sweep/defence-listen-2pct.log')   # restarts PIE before each, poll ds.defence_batch_report()
 #
-# The test content is the plugin's (Tools/GAS/setup_defence_link_content.py: /GSTNDefence/Test/DA_DefenceRules_Test and _TestPvE); everything else is
-# adjusted IN MEMORY by defence_setup() (never saved) and put back by defence_reset():
+# F13: the scenarios run from the saved content of Tools/GAS/setup_defence_link_content.py: the plugin's /GSTNDefence/Test (DA_DefenceRules_Test,
+# _TestPvE, GA_Shield_Test, GA_CounterTest, the tech and get-up Blueprints), the project kits /Game/GASNPPTest/Combat/KIT_Test_Defence (PvP, shield),
+# KIT_Test_DefencePvE (PvE, shield, GA_CounterTest on Command.Special.Neutral), KIT_Test_DefenceLanding (+ get-up set), KIT_Test_DefenceTech (+ tech set)
+# and the Parry and Shield steps saved in the standard rules. defence_setup() picks the kit; the loadout contribution then grants the shield binding and
+# the attribute set, and the attach runs on every machine. What stays IN MEMORY (never saved, put back by defence_reset()):
 #   - IC_GASNPP_Test gets the button Input.Button.Shield appended (prepare_editor, before PIE: the button map is built when a pawn initialises; the
-#     other buttons keep their bits);
-#   - KIT_Test_Hits gets the FGSTN_DefenceKitExtension (the rules, UGSTN_GA_Shield as its shield) and, for the counter, Command.Special.Neutral bound to
-#     UGSTN_GA_CounterSample; the loadout contribution then grants the shield binding and the attribute set, and the attach runs on every machine;
-#   - the combat rules get the Parry and Shield steps (UGSTN_DefenceContentLibrary.add_defence_steps_to_rules);
+#     other buttons keep their bits). The shared input config is not one of the assets the owner approved for this content;
 #   - a scenario may shorten numbers of the rules asset (the shield's maximum for the break; the perfect shield window and the bubble's release frames
-#     for the parry, so a scripted release lands the hit inside them through 60 ms of lag).
+#     for the parry, so a scripted release lands the hit inside them through 60 ms of lag; the tech window): parameters of the scenario, not content.
+# Without the content kits (USE_CONTENT False, or a kit missing) the F7/F8 runtime path still works: KIT_Test_Hits gets the extension, the native
+# abilities and the steps in memory.
 # No shared Blueprint is edited. Every scenario asserts zero rollbacks on the host's own pawn (listen: it has no prediction and no wire to itself).
 import json
 import os
@@ -28,7 +30,9 @@ import gasnpp_test as g
 DEF_DIR = '/GSTNDefence/Test/'
 RULES_PVP = DEF_DIR + 'DA_DefenceRules_Test'
 RULES_PVE = DEF_DIR + 'DA_DefenceRules_TestPvE'
-KIT_PATH = '/Game/GASNPPTest/Combat/' + g.HIT_KIT
+KIT_DIR = '/Game/GASNPPTest/Combat/'
+KIT_PATH = KIT_DIR + g.HIT_KIT
+USE_CONTENT = True   # the saved content kits (F13); False = the F7/F8 runtime path on KIT_Test_Hits
 SHIELD_BUTTON = 'Input.Button.Shield'
 BUBBLE = 0x80
 SUITE_DEFENCE = ['shield_block', 'shield_bubble', 'shield_oos', 'shield_break', 'shield_mode_off', 'grab_shield', 'parry', 'parry_move',
@@ -78,14 +82,12 @@ def _set_struct(asset, prop, **values):
 
 
 def defence_setup(rules_path=RULES_PVP, shield=True, counter=False, shield_values=None, parry_values=None, landing=False, tech_set=False,
-                  tech_values=None, sdi_values=None, ground_values=None):
+                  tech_values=None, sdi_values=None, ground_values=None, link=False):
     """The in-memory content of a scenario (see the header). F8: landing / tech_set give the kit the plugin's native landing and tech abilities
     (UGSTN_DefenceContentLibrary.set_kit_defence_moves); tech_values / sdi_values / ground_values shorten numbers of the rules' tech, SDI and ground
     bounce structs. Returns what it set"""
-    kit = unreal.load_asset(KIT_PATH)
     rules = _rules(rules_path)
-    if 'kit_bindings' not in _saved:
-        _saved['kit_bindings'] = list(kit.get_editor_property('kit_bindings'))
+    content = content_kit(rules_path, shield, counter, landing, tech_set, link)
     if shield_values:
         _saved.setdefault('shield', (rules_path, _set_struct(rules, 'shield', **shield_values)))
     if parry_values:
@@ -93,6 +95,17 @@ def defence_setup(rules_path=RULES_PVP, shield=True, counter=False, shield_value
     for prop, values in (('tech', tech_values), ('sdi', sdi_values), ('ground_bounce', ground_values)):
         if values:
             _saved.setdefault(prop, (rules_path, _set_struct(rules, prop, **values)))
+    if content:
+        _saved['kit'] = content
+        # The steps are saved in the standard rules; a suite that reset the rules in memory (parts_reset's fill_standard) took them out until the
+        # editor reloads the asset, so they are put back for this scenario and taken out again by defence_reset
+        if not _has_steps_saved():
+            Lib.add_defence_steps_to_rules(g.hit_rules())
+            _saved['steps'] = True
+        return 'defence', rules_path.split('/')[-1], 'content kit', content
+    kit = unreal.load_asset(KIT_PATH)
+    if 'kit_bindings' not in _saved:
+        _saved['kit_bindings'] = list(kit.get_editor_property('kit_bindings'))
     Lib.set_kit_defence_extension(kit, rules, unreal.GSTN_GA_Shield.static_class() if shield else None)
     if landing or tech_set:
         Lib.set_kit_defence_moves(kit, landing, tech_set)
@@ -102,29 +115,58 @@ def defence_setup(rules_path=RULES_PVP, shield=True, counter=False, shield_value
             if g._tag_text(b.get_editor_property('command')) == 'Command.Special.Neutral':
                 b.set_editor_property('ability', unreal.GSTN_GA_CounterSample)
         kit.set_editor_property('kit_bindings', bindings)
+    had_steps = _has_steps_saved()
     Lib.add_defence_steps_to_rules(g.hit_rules())
-    return 'defence', rules_path.split('/')[-1], 'shield' if shield else 'no shield', 'counter' if counter else ''
+    _saved['steps'] = not had_steps
+    _saved['kit'] = g.HIT_KIT
+    return 'runtime path', 'defence', rules_path.split('/')[-1], 'shield' if shield else 'no shield', 'counter' if counter else ''
 
 
 def defence_reset():
     """Puts the in-memory content back (the kit, the rules values, the combat pipeline)"""
     msgs = []
-    kit = unreal.load_asset(KIT_PATH)
-    Lib.clear_kit_defence_extension(kit)
-    if 'kit_bindings' in _saved:
-        kit.set_editor_property('kit_bindings', _saved.pop('kit_bindings'))
-        msgs.append('kit')
+    if _saved.pop('kit', g.HIT_KIT) == g.HIT_KIT:
+        # The runtime path: KIT_Test_Hits back to its saved state
+        kit = unreal.load_asset(KIT_PATH)
+        Lib.clear_kit_defence_extension(kit)
+        if 'kit_bindings' in _saved:
+            kit.set_editor_property('kit_bindings', _saved.pop('kit_bindings'))
+            msgs.append('kit')
     for prop in ('shield', 'parry', 'tech', 'sdi', 'ground_bounce'):
         if prop in _saved:
             path, old = _saved.pop(prop)
             _set_struct(_rules(path), prop, **old)
             msgs.append(prop)
-    try:
-        Lib.remove_defence_steps_from_rules(g.hit_rules())
-        msgs.append('steps')
-    except Exception:
-        pass
+    # The steps are content of the standard rules since F13: taken out only when this module added them in memory
+    if _saved.pop('steps', False):
+        try:
+            Lib.remove_defence_steps_from_rules(g.hit_rules())
+            msgs.append('steps')
+        except Exception:
+            pass
     return 'restored ' + ','.join(msgs)
+
+
+def _has_steps_saved():
+    """The rules the pawns play already carry Parry and Shield (the F13 content of the standard rules)"""
+    names = ' '.join(str(p) for p in g.hit_rules().get_editor_property('hit_pipeline'))
+    return 'HitStep_Parry' in names and 'HitStep_Shield' in names
+
+
+def content_kit(rules_path=RULES_PVP, shield=True, counter=False, landing=False, tech_set=False, link=False):
+    """The saved test kit of a configuration (F13), None when there is none or USE_CONTENT is off: the runtime path then edits KIT_Test_Hits.
+    link: the defence kit that also carries the link content (grab_shield)"""
+    if not USE_CONTENT or not shield:
+        return None
+    if link:
+        name = 'KIT_Test_DefenceLink' if rules_path == RULES_PVP and not (counter or landing or tech_set) else None
+    elif rules_path == RULES_PVE:
+        name = 'KIT_Test_DefencePvE' if not landing and not tech_set else None
+    elif counter:
+        name = None
+    else:
+        name = 'KIT_Test_DefenceTech' if tech_set else 'KIT_Test_DefenceLanding' if landing else 'KIT_Test_Defence'
+    return name if name and unreal.EditorAssetLibrary.does_asset_exist(KIT_DIR + name) else None
 
 
 # ---- readers -----------------------------------------------------------------------------------------------------------------------------------
@@ -212,8 +254,9 @@ class _DefenceRig(g._HitRig):
             g.hit_rules_setup()
             g._hit_logging(True)
             what = defence_setup(**self.setup)
-            self.kit = g._apply_loadout(self.akey, g.HIT_KIT)
-            self.kit2 = g._apply_loadout(self.vkey, g.HIT_KIT)
+            kit = _saved.get('kit', g.HIT_KIT)
+            self.kit = g._apply_loadout(self.akey, kit)
+            self.kit2 = g._apply_loadout(self.vkey, kit)
             for w in range(len(g.worlds())):
                 Lib.start_defence_event_log(_actor(w, self.vkey))
             self.host_rb0 = g.rollbacks(0) if g.detected_mode() == 'listen' else None
@@ -450,11 +493,12 @@ def scenario_grab_shield(client=1):
     reach: the grab hit passes the bubble (grab-like hit types are never blocked) and forms the link on every world (c1 role 1, c2 role 2, one serial);
     no block is recorded for it. The in-memory link content is put back before the defence content"""
     import link_scenarios as ls
-    rig = _DefenceRig('grab_shield', client, 2 if client == 1 else 1)
+    rig = _DefenceRig('grab_shield', client, 2 if client == 1 else 1, link=True)
     run = rig.run
-    # The link moves go on the kit BEFORE the rig applies it, so one compile holds the defence and the link content (applying the kit a pawn already
-    # runs compiles nothing); they come off last, after the defence content (the link backup is the kit as it was before both)
-    steps = [(0.1, lambda: ls.grab_content_setup([]))]
+    # F13: the rig applies KIT_Test_DefenceLink (defence and link content saved together); grab_content_setup([]) only readies the link registry then.
+    # Runtime path: the link moves go on the kit BEFORE the rig applies it, so one compile holds the defence and the link content (applying the kit a
+    # pawn already runs compiles nothing); they come off last, after the defence content (the link backup is the kit as it was before both)
+    steps = [(0.1, lambda: ls.grab_content_setup([], edit_kit=content_kit(link=True) is None))]
     steps.append(rig.setup_step())
     t = rig.cursor
     others = [g.key_of_player(i) for i in range(len(g.worlds())) if i not in (client, rig.vi)]
