@@ -493,3 +493,52 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
   are prefixed `GrabTest*` / `LatchTest*` (a unity build clashed on shared names).
 - **Mover fix, separate commit**: `UKinematicActorSimulation::BeginDestroy` no longer calls `Uninit` (it created an object during the garbage
   purge and crashed the editor on a PIE teardown).
+
+## F13: content, tools, debug
+
+- **Shared assets: new kits, not edits** (deviation from plan section 6 / the brief's list): `KIT_Test_Hits`, `BP_GASNPP_TestCharacter` and
+  `HBS_Test_Pawn` are unchanged. The kit extensions and link slots live in six NEW kits under `/Game/GASNPPTest/Combat`, copies of
+  `KIT_Test_Hits`: `KIT_Test_Defence` (PvP, shield), `KIT_Test_DefencePvE` (PvE, shield, `GA_CounterTest` on `Command.Special.Neutral`),
+  `KIT_Test_DefenceLanding` (+ get-up set), `KIT_Test_DefenceTech` (+ tech set), `KIT_Test_Link` (slots, moves, link extension),
+  `KIT_Test_DefenceLink` (grab_shield). Why: with GSTNLink or GSTNDefence off, `KIT_Test_Hits` would load instanced structs and
+  `Command.Link.*` tags of a missing plugin, and a defence extension changes landing (downed forever with `MaxDownedFrames 0`) in the
+  M1-M4b scenarios. Same pattern as `KIT_Test_Parts` (M4b P7). Nothing on the character or the hurtbox set was needed: every pawn already
+  gets the link and defence attach from its kit.
+- **Rules steps**: `/GSTNCombat/Rules/GSTN_CombatRules_Standard` (the rules the test pawns play) carries GrabImmunity, LinkRequest, Parry,
+  Shield, LinkBreakOnHit in spec 9 order. With a plugin off they are soft references the rules skip at Log level. `setup_gas_assets.py
+  --h13-content` rewrites that asset from FillStandard: rerun the defence/link script after it.
+- **Plugin content**: `/GSTNDefence/Test` `GA_Shield_Test`, `GA_CounterTest`, tech set `GA_Tech{InPlace,Roll,Wall}_Test`, get-up set
+  `GA_GroundBounce_Test`, `GA_GetupRoll_Test`, `GA_GetupNeutral_Test`; `/GSTNLink/Test` `GA_Grab_Test`, `GA_Pummel_Test`, `GA_Release_Test`,
+  `GA_Throw{Forward,Back,Up,Down}_Test`, `GA_LatchAttack_Test`. All thin Blueprint children of the native classes (the frame data is the
+  native class's): the four throws are identical assets, the direction is the command's. The plan's `DA_LinkType_Grab` is the existing
+  `DA_LinkType_Grab_Test` (a second definition with the same tag would collide in the registry). `DA_DefenceRules_Test*` unchanged (the
+  tech window 20 / lockout 40 of spec 11 are the defaults, now written explicitly).
+- **Mash 90 frames is kit data**: on `KIT_Test_Link`'s link extension (`GrabRules.Mash.BaseFrames`). The type's own grab rule keeps the
+  default (150): it is the fallback of a kit without a link extension, and `link_rollback` / `grab_immunity` grab with `KIT_Test_Hits`'
+  weapon (the first sweep with 90 on the type failed those three: the grabbed escaped before the checks).
+- **Content script** (`Tools/GAS/setup_defence_link_content.py`): compares every property before writing and saves only what changed, so
+  a rerun on current content saves nothing (27 identical hashes, content-f13-2/-3/-4/-5.log). Kits through new writers
+  `UGSTN_DefenceContentLibrary::WriteKitDefenceExtension`, `WriteKitCommandAbility`, `UGSTN_LinkContentLibrary::WriteKitLinkContent`
+  (dirty only on a change). Blueprint parent read from the asset registry's ParentClass tag (not a Python property). Guard: an asset whose
+  package was already dirty when the run started is never saved (found when a run inside a harness editor saved the in-memory test values
+  of the standard rules; restored from git, never committed). Run it headless or in a fresh editor.
+- **Validator** `Tools/GAS/validate_defence_content.py`: 27 assets, 0 errors, 9 warnings (validate-f13-2.log). Warnings: no track editor
+  for the Hold Window / Parry Window / Link Outcome tracks (7), and M4's "Grab/Pummel is data only" hit-data wording (2), both editor-tooling
+  text. The kits are compared with `KIT_Test_Hits` as baseline: its one error (no identity tag under `Kit`, M5's designer rule) is inherited
+  by every copy and reported, not counted.
+- **Validator fix in content**: the harness link moves (`UGSTN_GA_LinkTest*`) had hitbox tracks with an empty part selector, which the
+  timeline validator refuses; they now name the group `Body`, like the project's test move.
+- **Harness**: the scenarios apply the content kits and play the saved steps (re-added for one scenario when a suite reset the rules in
+  memory, e.g. `parts_reset`'s `fill_standard`). Still in memory: the shield button on `IC_GASNPP_Test` (not an approved asset), the
+  numbers a scenario changes (rule values, leash, immunity, weights), and `link_rollback` / `grab_immunity`'s attack-as-grab on
+  `KIT_Test_Hits`. The runtime-attach path is kept behind `USE_CONTENT = False` in both modules.
+- **Debug (console only, not in Shipping; no Gameplay Debugger rows, X19)**: `gstn.Combat.Debug.Shield` (bubble, cyan inside the perfect
+  shield window; value bar with broken/stun frames; a move's parry window in magenta; a parry in white for 20 frames; punished frames),
+  `gstn.Combat.Debug.Tech` (lockout bar, the last press's window, teching, downed), `FGSTN_DefenceDebugDraw` on every world's post actor
+  tick. `gstn.Combat.Debug.Links` gains the frames left to the link's end. All read the shown state at its own frame.
+- **Tests (2)**: `GSTNDefence.Content.SampleAssetsValid`, `GSTNLink.Content.SampleAssetsValid` (editor context: load, IsDataValid, spec 11
+  numbers, registry lookup, Blueprint parents). No project content: the kits are checked by the validator script.
+- **Harness fix, separate commit**: `impact_wall_mode` taps on the height predicted at the spin (z + vz x 0.45 s <= 230 cm) instead of the
+  first tick under 265 cm. `weapon_switch` NOT fixed: walking the second leg back avoids the lane end, but then the server's combat input
+  history holds three back-tilt events the owner's lacks (harness-fix-rerun-1..3.log; 180 frames old, inside MaxEventAge), so "server and
+  owner agree" fails. Reported for the lead.
