@@ -4,6 +4,7 @@
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Engine/Engine.h"
+#include "HAL/IConsoleManager.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GSTN_LinkRegistry.h"
@@ -390,4 +391,48 @@ bool UGSTN_LinkContentLibrary::GetShownBodyBreak(const AActor* Actor, int32& Out
 	OutSerial = Shown ? Shown->Links.Body.Serial : 0;
 	OutGrabImmunityEndFrame = Shown ? Shown->GrabImmunityEndFrame : 0;
 	return Shown != nullptr;
+}
+
+FString UGSTN_LinkContentLibrary::GetMirrorText(const AActor* Actor)
+{
+	int32 Role = 0, Phase = 0, Serial = 0, LinkFrame = 0, Partner = INDEX_NONE;
+	if (!GetShownBodyLink(Actor, Role, Phase, Serial, LinkFrame, Partner))
+	{
+		return FString();
+	}
+	FString Parked = TEXT("-");
+	const UGSTN_LinkPresentationComponent* Presentation = Actor->FindComponentByClass<UGSTN_LinkPresentationComponent>();
+	FTransform Shown;
+	if (Presentation && Presentation->IsLinkedParked() && Presentation->GetLinkedTransform(Shown))
+	{
+		const FVector L = Shown.GetLocation();
+		Parked = FString::Printf(TEXT("%.2f,%.2f,%.2f"), L.X, L.Y, L.Z);
+	}
+	return FString::Printf(TEXT("%d,%d,%d,%d,%d;%s"), Role, Phase, Serial, LinkFrame, Partner, *Parked);
+}
+
+namespace
+{
+	/** The harness's separate-process mode: a client process cannot run the editor's Python, so the server sends it this through the test component's
+	    remote command. It does what link_scenarios.link_setup does in the editor: rebuild the registry, reattach the pawns, add the link steps to the
+	    world's combat rules (in memory, as the editor's copy) */
+	FAutoConsoleCommandWithWorldAndArgs GLinkTestPrepareCommand(
+		TEXT("gstn.Link.Test.Prepare"),
+		TEXT("Harness: rebuild the link registry, reattach the combat pawns and (with 'steps') add the link steps to the combat rules of this world."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const int32 Attached = UGSTN_LinkContentLibrary::RebuildRegistryAndReattach();
+			bool bSteps = false;
+			if (World && Args.Contains(TEXT("steps")))
+			{
+				for (TActorIterator<AActor> It(World); It && !bSteps; ++It)
+				{
+					if (const UGSTN_CombatSimComponent* Combat = It->FindComponentByClass<UGSTN_CombatSimComponent>())
+					{
+						bSteps = UGSTN_LinkContentLibrary::AddLinkStepsToRules(Combat->GetCombatRulesForTest());
+					}
+				}
+			}
+			UE_LOG(LogTemp, Log, TEXT("gstn.Link.Test.Prepare: %d pawns attached, link steps %s"), Attached, bSteps ? TEXT("added") : TEXT("not added"));
+		}));
 }

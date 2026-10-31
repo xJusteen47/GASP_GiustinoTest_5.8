@@ -117,6 +117,36 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	bool PressInput(UInputAction* Action);
 
+	// ---- Separate-process PIE bridge (RunUnderOneProcess=false). The editor's Python then sees only the host's world: it drives a client through
+	// RemoteExec on the server's copy of that client's pawn, and reads the client from the records the client writes every engine frame.
+	// Test transport only (a reliable client RPC down, a file on this machine up): nothing in it is simulation state.
+
+	/**
+	 * Server copy of a client-owned pawn: runs Command on the owning client (reliable). Commands: "hold <input action path> x y z",
+	 * "release <input action path>", "press <input action path>", "tap <combat button mask>", "exec <console command>" (in the client's world),
+	 * "mirror 1 [<class path>:<static function>]" / "mirror 0". The function, when given, takes the pawn (AActor*) and returns an FString: its text
+	 * goes in the record next to each pawn. False when this is not a server copy of a remote client's pawn.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Remote")
+	bool RemoteExec(const FString& Command);
+
+	/**
+	 * Where a client process writes the records of its pawn "P<player id>": Saved/Logs/mirror/<key>.txt, one per line, appended twice a second. A file
+	 * on this machine, not the game connection: an RPC per frame competed with the client's input upstream. A record is "<platform seconds>
+	 * <rollbacks> <engine frame ms>" then, per test pawn of the client's world, "|<pawn key> <Mover mode> <function text>". The harness deletes it between runs.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GASNPP Test|Remote")
+	static FString GetMirrorFilePath(const FString& PawnKey);
+
+	/** FPlatformTime::Seconds() of this process: one clock for every process on the machine, the time base of the mirror records */
+	UFUNCTION(BlueprintPure, Category = "GASNPP Test|Remote")
+	static double GetPlatformSeconds();
+
+	/** Clears the dirty flag of Object's package without saving it. The harness's in-memory editor setup (the level's game mode) dirties the map, and a
+	    separate-process PIE refuses to start until dirty packages are saved: the harness must never save the shared level */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Remote")
+	static bool ClearPackageDirtyFlag(UObject* Object);
+
 	UPROPERTY(EditDefaultsOnly, Category = "GASNPP Test")
 	TObjectPtr<UInputMappingContext> TestMappingContext;
 
@@ -300,6 +330,19 @@ private:
 	void HandleAbilityPreTick(const FAbilitySystemTimeStep& TimeStep);
 
 	void ApplyStatsProbe();
+
+	UFUNCTION(Client, Reliable)
+	void ClientRemoteExec(const FString& Command);
+
+	void RunRemoteCommand(const FString& Command);
+	void SendMirrorRecord(float DeltaTime);
+	void FlushMirror();
+
+	/** Client side of the bridge: mirroring on (the tick interval drops to every frame), the per pawn text function, the records not written yet */
+	bool bMirror = false;
+	FString MirrorFunction;
+	TArray<FString> MirrorRecords;
+	double MirrorFlushTime = 0.0;
 
 	void TrySetupInput();
 

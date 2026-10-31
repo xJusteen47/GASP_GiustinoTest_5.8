@@ -89,4 +89,12 @@ public:
 	/** What the last break left on the Body channel this world shows for the actor: the reason index (0 = none), the serial and the grab immunity end */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Harness")
 	static bool GetShownBodyBreak(const AActor* Actor, int32& OutReason, int32& OutSerial, int32& OutGrabImmunityEndFrame);
+
+	/**
+	 * One line of what this world shows for the actor, for the harness's separate-process mirror (a client process has no Python: its test component
+	 * sends this to the server each frame): "role,phase,serial,linkFrame,partner;x,y,z" with the parked shown location, or "-" after the ';' while it
+	 * shows no parked role; "" without a fragment.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Harness")
+	static FString GetMirrorText(const AActor* Actor);
 };

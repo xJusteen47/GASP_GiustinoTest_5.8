@@ -11,7 +11,13 @@
 #include "DefaultMovementSet/Modes/SimpleWalkingMode.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Dom/JsonObject.h"
+#include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "EngineUtils.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformTime.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Engine/World.h"
 #include "EnhancedInputSubsystems.h"
 #include "Events/GSTN_SimEventSubsystem.h"
@@ -45,6 +51,8 @@ UGSTN_GASNPPTestComponent::UGSTN_GASNPPTestComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.TickInterval = 0.25f;
 	bWantsInitializeComponent = true;
+	// For the separate-process bridge's RPCs only (no replicated property)
+	SetIsReplicatedByDefault(true);
 }
 
 void UGSTN_GASNPPTestComponent::InitializeComponent()
@@ -86,6 +94,10 @@ void UGSTN_GASNPPTestComponent::InitializeComponent()
 void UGSTN_GASNPPTestComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// The pawn Blueprints' component templates were saved with replication off, which wins over the constructor default: the bridge's RPCs need it
+	// on, on every copy (a non-replicated component runs a client RPC locally and drops a server one)
+	SetIsReplicated(true);
 
 	if (!TestMappingContext && !DefaultTestMappingContext.IsNull())
 	{
@@ -212,6 +224,176 @@ void UGSTN_GASNPPTestComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	{
 		TrySetupInput();
 	}
+	if (bMirror)
+	{
+		SendMirrorRecord(DeltaTime);
+	}
+}
+
+bool UGSTN_GASNPPTestComponent::RemoteExec(const FString& Command)
+{
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	if (!Pawn || !Pawn->HasAuthority() || Pawn->IsLocallyControlled() || !Pawn->GetController())
+	{
+		return false;
+	}
+	// Python runs under the editor's script execution guard, which makes every RPC local (AActor::GetFunctionCallspace): lift it for this send only
+	TGuardValue<bool> RemoteCall(GAllowActorScriptExecutionInEditor, false);
+	ClientRemoteExec(Command);
+	return true;
+}
+
+void UGSTN_GASNPPTestComponent::ClientRemoteExec_Implementation(const FString& Command)
+{
+	RunRemoteCommand(Command);
+}
+
+void UGSTN_GASNPPTestComponent::RunRemoteCommand(const FString& Command)
+{
+	FString Verb, Rest;
+	if (!Command.Split(TEXT(" "), &Verb, &Rest))
+	{
+		Verb = Command;
+	}
+	TArray<FString> Args;
+	Rest.ParseIntoArrayWS(Args);
+	const auto LoadAction = [&Args]() { return Args.Num() > 0 ? LoadObject<UInputAction>(nullptr, *Args[0]) : nullptr; };
+	bool bOk = false;
+	if (Verb == TEXT("hold") && Args.Num() >= 4)
+	{
+		bOk = StartHoldingInput(LoadAction(), FVector(FCString::Atod(*Args[1]), FCString::Atod(*Args[2]), FCString::Atod(*Args[3])));
+	}
+	else if (Verb == TEXT("release"))
+	{
+		bOk = StopHoldingInput(LoadAction());
+	}
+	else if (Verb == TEXT("press"))
+	{
+		bOk = PressInput(LoadAction());
+	}
+	else if (Verb == TEXT("tap") && Args.Num() >= 1)
+	{
+		if (UGSTN_CombatSimComponent* Combat = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
+		{
+			Combat->TapScriptedButtons(FCString::Atoi(*Args[0]));
+			bOk = true;
+		}
+	}
+	else if (Verb == TEXT("exec") && GEngine)
+	{
+		bOk = GEngine->Exec(GetWorld(), *Rest);
+	}
+	else if (Verb == TEXT("mirror"))
+	{
+		FlushMirror();
+		bMirror = Args.Num() > 0 && Args[0] == TEXT("1");
+		MirrorFunction = Args.Num() > 1 ? Args[1] : FString();
+		SetComponentTickInterval(bMirror ? 0.f : 0.25f);
+		bOk = true;
+	}
+	UE_LOG(LogTemp, Log, TEXT("GASNPP_REMOTE %s -> %s"), *Command, bOk ? TEXT("ok") : TEXT("FAILED"));
+}
+
+namespace
+{
+	/** Calls a static UFunction "<class path>:<name>" that takes an actor first and returns an FString; "?" when it cannot */
+	FString CallMirrorFunction(const FString& Path, AActor* Actor)
+	{
+		FString ClassPath, Name;
+		if (!Path.Split(TEXT(":"), &ClassPath, &Name))
+		{
+			return TEXT("?");
+		}
+		UClass* Class = FindObject<UClass>(nullptr, *ClassPath);
+		UFunction* Function = Class ? Class->FindFunctionByName(*Name) : nullptr;
+		FStrProperty* Return = Function ? CastField<FStrProperty>(Function->GetReturnProperty()) : nullptr;
+		FObjectPropertyBase* First = Function ? CastField<FObjectPropertyBase>(Function->PropertyLink) : nullptr;
+		if (!Return || !First)
+		{
+			return TEXT("?");
+		}
+		uint8* Params = static_cast<uint8*>(FMemory_Alloca_Aligned(Function->ParmsSize, Function->GetMinAlignment()));
+		FMemory::Memzero(Params, Function->ParmsSize);
+		for (TFieldIterator<FProperty> It(Function); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+		{
+			It->InitializeValue_InContainer(Params);
+		}
+		First->SetObjectPropertyValue_InContainer(Params, Actor);
+		Class->GetDefaultObject()->ProcessEvent(Function, Params);
+		FString Out = Return->GetPropertyValue_InContainer(Params);
+		for (TFieldIterator<FProperty> It(Function); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+		{
+			It->DestroyValue_InContainer(Params);
+		}
+		return Out;
+	}
+}
+
+void UGSTN_GASNPPTestComponent::SendMirrorRecord(float DeltaTime)
+{
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	if (!Pawn || !Pawn->IsLocallyControlled() || Pawn->HasAuthority())
+	{
+		return;
+	}
+	TStringBuilder<1024> Record;
+	Record.Appendf(TEXT("%.4f %d %.1f"), FPlatformTime::Seconds(), RollbackCount, DeltaTime * 1000.f);
+	for (TActorIterator<APawn> It(GetWorld()); It; ++It)
+	{
+		if (!It->FindComponentByClass<UGSTN_GASNPPTestComponent>())
+		{
+			continue;
+		}
+		const APlayerState* PlayerState = It->GetPlayerState();
+		const FString Key = PlayerState ? FString::Printf(TEXT("P%d"), PlayerState->GetPlayerId()) : It->GetName();
+		const UMoverComponent* PawnMover = It->FindComponentByClass<UMoverComponent>();
+		const FString Text = MirrorFunction.IsEmpty() ? FString() : CallMirrorFunction(MirrorFunction, *It);
+		Record.Appendf(TEXT("|%s %s %s"), *Key, PawnMover ? *PawnMover->GetMovementModeName().ToString() : TEXT("-"), Text.IsEmpty() ? TEXT("-") : *Text);
+	}
+	MirrorRecords.Add(FString(Record.ToView()));
+	// Written to a file on this machine, not sent over the game connection: an RPC per frame competed with the client's input upstream (records
+	// were dropped while the client walked, and the extra traffic is not what the test measures). Whole lines, appended twice a second
+	const double Now = FPlatformTime::Seconds();
+	if (Now - MirrorFlushTime >= 0.5)
+	{
+		FlushMirror();
+		MirrorFlushTime = Now;
+	}
+}
+
+FString UGSTN_GASNPPTestComponent::GetMirrorFilePath(const FString& PawnKey)
+{
+	return FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Logs") / TEXT("mirror") / (PawnKey + TEXT(".txt")));
+}
+
+void UGSTN_GASNPPTestComponent::FlushMirror()
+{
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	const APlayerState* PlayerState = Pawn ? Pawn->GetPlayerState() : nullptr;
+	if (MirrorRecords.IsEmpty() || !PlayerState)
+	{
+		return;
+	}
+	const FString Text = FString::Join(MirrorRecords, TEXT("\n")) + TEXT("\n");
+	FFileHelper::SaveStringToFile(Text, *GetMirrorFilePath(FString::Printf(TEXT("P%d"), PlayerState->GetPlayerId())),
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+	MirrorRecords.Reset();
+}
+
+double UGSTN_GASNPPTestComponent::GetPlatformSeconds()
+{
+	return FPlatformTime::Seconds();
+}
+
+bool UGSTN_GASNPPTestComponent::ClearPackageDirtyFlag(UObject* Object)
+{
+	UPackage* Package = Object ? Object->GetPackage() : nullptr;
+	if (!Package)
+	{
+		return false;
+	}
+	Package->SetDirtyFlag(false);
+	return true;
 }
 
 void UGSTN_GASNPPTestComponent::TrySetupInput()
