@@ -21,11 +21,11 @@ resolve an *Open* question of the outline and are for the user to confirm; the m
 > **Revision 2026-10-22, second note (owner direction on the shield, [game-design-direction.md](game-design-direction.md) §2f, §2e, §6;
 > it wins over this file):** (1) **The shield exists only where the game mode enables it: PvP yes, PvE no.** A rules flag
 > (`UGSTN_DefenceRules::bShieldEnabled`, per game mode) and the kit's own shield entry must both be present; in PvE the shield slot is
-> free for kits (§1d). (2) **The shield works like Super Smash Bros. Ultimate**, adapted to 3D: a **spherical bubble** (`ArcDegrees` default
-> 360) that **shrinks** as shield health drains (held drain plus damage), regenerates when released, **breaks** into a long stun with an
-> upward launch, gives **shield stun** and **pushback** that scale with damage, can be **poked** where the shrunk bubble leaves a hurtbox
-> exposed, allows **out-of-shield options**, **grabs beat it**, cannot be held in the air, and its tilt (stick) shifts the bubble centre
-> slightly (§5.3). The earlier "limited, directional 140° arc" shield becomes an optional kit variant (arc < 360). (3) **Perfect shield =
+> free for kits (§1d). (2) **The shield works like Super Smash Bros. Ultimate**, adapted to 3D the way Rivals of Aether 2 does it: a **spherical bubble of fixed size** (owner direction 2026-10-26: always
+> the same size, no stick tilt, no directional arc) whose health drains while held and under damage and regenerates when released, that
+> **breaks** into a long stun with an upward launch, gives **shield stun** and **pushback** that scale with damage, allows
+> **out-of-shield options**, **grabs beat it** and cannot be held in the air (§5.3). The earlier "limited, directional 140° arc" shield
+> and the Smash-style shrink, tilt and poke are dropped. (3) **Perfect shield =
 > parry**, with Ultimate-style timing, resolved by the **same parry step as the parry windows of moves** (§5.4). (4) **Any timeline ability
 > can parry** through a `ParryWindow` track, in PvE and PvP, independently of the shield (§3, §5.4). (5) Armor is a **stagger-threshold
 > window** and poise is **remaining weight** (no separate poise system, game-design-direction §2f); M6 adds nothing for them (§1d). Frame
@@ -36,8 +36,8 @@ resolve an *Open* question of the outline and are for the user to confirm; the m
 ## 1. Scope
 
 **Goal:** the defensive half of the platform-fighter ruleset in 3D, plus the generic link system that grabs use now and
-piggyback (M7) and held objects (later) reuse. In: the **PvP shield, Smash-Ultimate style** (spherical bubble that shrinks with
-`ShieldHealth`, shieldstun, pushback, poke, break, out-of-shield options), **parry** (the shield's perfect shield and the `ParryWindow`
+piggyback (M7) and held objects (later) reuse. In: the **PvP shield, Rivals-of-Aether-2 style** (fixed-size spherical bubble with a
+`ShieldHealth` pool, shieldstun, pushback, break, out-of-shield options), **parry** (the shield's perfect shield and the `ParryWindow`
 of any move, one resolution step), tech
 (ground, wall, roll: a tech ability, never a movement mode) with anti-mash lockout, knockdown, SDI/DI rules asset, the link system (spike, state, request/
 accept, parked movement mode, watchdog, exit placement, break rules, debug draw), grabs (grab, pummel, throws,
@@ -112,7 +112,7 @@ everything is selected by the game mode and the kit, never assumed by `GSTNComba
 - `FGSTN_DefenceKitExtension : FGSTN_KitExtension { TSoftObjectPtr<UGSTN_DefenceRules> Rules; TSubclassOf<UGSTN_GA_Shield> ShieldAbility;
   FGSTN_TechSet Tech; }` on the kit (modularity-and-tags.md §5b). `UGSTN_CombatRules::Defence` is only the **default** for kits
   without the extension; a kit with an empty extension has **no shield** (the `Shield` step sees no bubble), a kit with another
-  `ShieldAbility`/rules asset has its own bubble size, drain, perfect-shield window, a directional arc (< 360) or no perfect shield at all
+  `ShieldAbility`/rules asset has its own bubble size, drain, perfect-shield window or no perfect shield at all
   (`WindowFrames = 0`).
 - The `Shield` and `Parry` steps read the **victim's rules index from the snapshot extension** (`FGSTN_DefenceSnapshotExt::RulesIndex`,
   baked at load), so two fighters with different shields resolve differently in the same pipeline, deterministically.
@@ -166,7 +166,7 @@ combat tick** under `Combat.State.*` (combat.md §5.4) and nothing else grants t
 | `Command.Defence.Shield` | native (standard set) | GSTNDefenceCore | Shield command (`Hold(Shield)`); built only where the mode enables the shield (§1d) | slot set |
 | `Command.Link.Grab` / `.Pummel` / `.Release` / `.Throw.Forward` `.Back` `.Up` `.Down` | native (standard set) | GSTNLinkCore | Grab (tap) and grabber-role commands (`Command.Link.Mount/Dismount/Drop` are declared, as ini, by `GSTNPiggyback`; `Pickup` (hold) and `Drop` of held objects by `GSTNHeld`) | slot set |
 | `Input.Lock.Command.Defence`, `Input.Lock.Command.Link` | native | GSTNDefenceCore / GSTNLinkCore | Lock a command family | abilities/GEs (ordinary counts) |
-| `Combat.Event.Blocked/Parried/ShieldPoked/ShieldBroken/Teched/KnockedDown` | native | GSTNDefenceGAS | Authoritative events (§5.6 combat.md, server outbox); `Parried` carries the **source** (shield or move) in its payload, `ShieldPoked` is a hit that landed on a body hurtbox of a shielding victim | published by the combat model |
+| `Combat.Event.Blocked/Parried/ShieldBroken/Teched/KnockedDown` | native | GSTNDefenceGAS | Authoritative events (§5.6 combat.md, server outbox); `Parried` carries the **source** (shield or move) in its payload | published by the combat model |
 | `Combat.Event.LinkFormed/LinkBroken/Throw/GrabEscaped` | native | GSTNLinkGAS | Same | published by the watchdog/pipeline |
 | `Combat.SetByCaller.ShieldDamage` | native | GSTNDefenceGAS | GE magnitude key | set by the damage code |
 | `Combat.Relationship.*`, `Combat.Hurtbox.*` | native (exist) | GSTNCombatGAS | unchanged | — |
@@ -214,9 +214,9 @@ declaration, so each plugin builds and runs alone.
 4. **Mash through rollback.** `Mash` presses of the grabbed counted from history, forced reconcile in the middle of the
    mash: escape frame must equal on server and client.
 5. **Shield bubble as an extra hurtbox (decides §5.3's contact rule).** The bubble is a sphere contributed by the snapshot extension at
-   the attacker's hit frame from the victim's replicated shield state (analytic value, tilt). Measure, on a shielding victim that is
-   (a) standing, (b) tilting the stick, (c) draining while held, (d) shrunk to its minimum: the rate of attacker predictions that
-   disagree with the server's block / poke / miss (expect 0 for the server's own and the owning client's view; on an interpolated
+   the attacker's hit frame from the victim's replicated shield state (analytic value). Measure, on a shielding victim that is
+   (a) standing, (b) moving, (c) draining while held: the rate of attacker predictions that
+   disagree with the server's block / miss (expect 0 for the server's own and the owning client's view; on an interpolated
    victim report the rate and the size of the radius or centre error that causes it), the extra hit-detection cost per frame with
    8 shielding entities, and whether the extra-hurtbox seam keeps M4's hurtbox selection unchanged when no bubble exists. **Pass:** zero
    disagreements for (a), (c) and (d) on the owner, ≤ 1 per 100 hits on an interpolated victim, cost < 0.1 ms. If it fails, the fallback
@@ -230,7 +230,7 @@ mode like the rest of the rules). It holds **`bShieldEnabled`** (the PvP/PvE swi
 
 | Struct | Fields |
 |---|---|
-| `FGSTN_ShieldRules` | **Bubble (Smash-style, 3D):** `ArcDegrees` (**default 360** = the spherical bubble; < 360 is a directional shield for a kit that wants one, §5.3), `ElevationLimitDeg` and `TurnRateDegPerFrame` (arc kits only; 90 = any elevation, 0 = facing locked at press), `MaxRadiusCm` (default: covers the capsule with a margin), `CentreHeightCm`, `RadiusByFraction` (`FGSTN_Curve1D`: shield fraction → radius fraction, default linear down to a minimum, so the bubble **shrinks** as health drains), `TiltMaxShiftCm`, `TiltRateCmPerFrame`, `TiltMinZone` (stick tilt shifts the centre, §5.3). **Timing:** `StartupFrames` (default 1), `ReleaseFrames`. **Health:** `DrainPerFrame`, `RegenPerFrame`, `RegenDelayFrames`, `ShieldDamagePerDamage`, `RecoverFractionAfterBreak`, `BreakStunFrames`, `BreakLaunch` (cm/s up). **Reaction:** `ShieldStunBase`, `ShieldStunPerDamage`, `MaxShieldStun`, `ShieldHitstopMultiplier`, `PushbackSpeed` (cm/s), `PushbackSpeedPerDamage` and `PushbackFrames`. `IncomingShieldDamageScaleByRelationship` (map; for PvP modes that also field minions or environment hits, §13) |
+| `FGSTN_ShieldRules` | **Bubble (fixed sphere, 3D):** `RadiusCm` (default: covers the capsule with a margin; the same at any shield value), `CentreHeightCm`. No arc, no shrink, no tilt (owner direction 2026-10-26, §5.3). **Timing:** `StartupFrames` (default 1), `ReleaseFrames`. **Health:** `DrainPerFrame`, `RegenPerFrame`, `RegenDelayFrames`, `ShieldDamagePerDamage`, `RecoverFractionAfterBreak`, `BreakStunFrames`, `BreakLaunch` (cm/s up). **Reaction:** `ShieldStunBase`, `ShieldStunPerDamage`, `MaxShieldStun`, `ShieldHitstopMultiplier`, `PushbackSpeed` (cm/s), `PushbackSpeedPerDamage` and `PushbackFrames`. `IncomingShieldDamageScaleByRelationship` (map; for PvP modes that also field minions or environment hits, §13) |
 | `FGSTN_ParryProfile` | **What a parry gives**, shared by both parry sources (§5.4): `HitstopFrames`, `DefenderRecoveryFrames` (shield source only), `AttackerStunFrames` (by hit class: `TMap<tag, int32>`, default entry; 0 = Ultimate-like "defender advantage only"), `bParryableProjectiles`, `bReflectProjectiles` (reserved, not implemented), `MeterGain` |
 | `FGSTN_ParryRules` | **The shield's perfect shield** (§5.4): `EGSTN_ParryAnchor Anchor` (default `Release`, as in Ultimate; `Press` for a Brawl/Smash 4-style powershield), `WindowFrames` (default 5), `MinHeldFramesBeforeRelease` (0; anti-tap knob), `ProfileIndex` (0) |
 | `FGSTN_TechRules` | `WindowFrames` (default 20 before contact), `LockoutFrames` (default 40 after a press), `LateFrames` (0), `bTechInHitstunNotTumble` (false), `InPlaceFrames`, `RollFrames`, `RollDistance`, `WallTechFrames`, `bAllowWallTech`, `KnockdownFrames`, `NoTechKnockdownBonusFrames`, `IntangibleFrames` (the moves' own `HurtboxModifier` windows win; this is only the fallback) |
@@ -241,9 +241,8 @@ mode like the rest of the rules). It holds **`bShieldEnabled`** (the PvP/PvE swi
 
 **Math** — `UGSTN_DefenceMath` (stateless, doubles, identical on every machine):
 `IsShieldAvailable(Rules, bKitHasShield)`; `ShieldValueAt(const FGSTN_ShieldValue&, int32 Frame, const FGSTN_ShieldRates&)` (analytic, §5);
-`ShieldRadiusAt(Value, Rules)`, `ShieldCentreAt(TiltQ, Rules, PlaneBasis)` (the entity's local up/right/forward, so any gravity works) and `MakeShieldBubble(...) → FGSTN_ShieldBubble { Centre, Radius }`
+`ShieldCentreAt(Rules, PlaneBasis)` (the entity's local up, so any gravity works) and `MakeShieldBubble(Rules, entity transform) → FGSTN_ShieldBubble { Centre, Radius }` (the radius is `RadiusCm`, independent of the value)
 (the sphere the snapshot extension contributes, §5.3); `ShieldStunFrames(Damage, Rules)`;
-`IsInShieldArc(ShieldYawDeg, Rules, HitSourceDirOnPlane, HitSourceElevationDeg)` (arc kits, `ArcDegrees < 360`, only);
 `EvaluateTech(const FGSTN_TechState&, history view, contact frame, Rules) → {bSuccess, PressFrame}`;
 `EvaluateParryWindow(PressFrame, HitFrame, ReleaseFrame, Rules)` (the shield's two anchors) and
 **`ResolveParry(const FGSTN_ParryContext&) → FGSTN_ParryDecision { EGSTN_ParrySource Source (None/Shield/Move); uint8 ProfileIndex }`**
@@ -332,7 +331,7 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
   - Immunity (granted by kits/bosses/GEs, read by rules): `Combat.Immunity.Grab`, `.Parry` (cannot be parried), `.Shield`.
   - Commands (`Command.` root, standard slot set; patterns in §8): `Command.Defence.Shield`, `Command.Link.Grab`,
     `.Pummel`, `.Throw.Forward/.Back/.Up/.Down`, `.Release` (`Link.Mount/.Dismount` are `GSTNPiggyback`'s).
-  - Events: `Combat.Event.Blocked`, `.Parried`, `.ShieldPoked`, `.ShieldBroken`, `.Teched`, `.KnockedDown`, `.LinkFormed`, `.LinkBroken`,
+  - Events: `Combat.Event.Blocked`, `.Parried`, `.ShieldBroken`, `.Teched`, `.KnockedDown`, `.LinkFormed`, `.LinkBroken`,
     `.Throw`, `.GrabEscaped` (outbox, tagged with hit type, relationship, link type, roles; §5.6 combat.md).
   - SetByCaller: `Combat.SetByCaller.ShieldDamage`.
 
@@ -343,7 +342,7 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
 | Field | Purpose |
 |---|---|
 | `int16 ShieldValue`, `int32 ShieldStampFrame`, `uint8 ShieldFlags` | Analytic shield: value at `ShieldStampFrame` in 1/4 points; flags = `Raised`, `Breaking`. Re-stamped at every change event. |
-| `int32 ShieldPressFrame`, `int32 ShieldReleaseFrame`, `uint16 ShieldYawQ`, `int8 ShieldTiltQ[2]` | Press frame defines the perfect-shield window; release frame the regen delay, `ReopenLockout` and the release-anchored window; yaw (arc kits only, otherwise 0) quantized 360/65536; **tilt** = the stick-driven shift of the bubble centre on the movement plane, each axis in 1/127 of `TiltMaxShiftCm`, updated while the shield is up. |
+| `int32 ShieldPressFrame`, `int32 ShieldReleaseFrame` | Press frame defines the perfect-shield window; release frame the regen delay, `ReopenLockout` and the release-anchored window. No yaw and no tilt: the bubble is a fixed sphere on the body (owner direction 2026-10-26). |
 | `int32 MoveParryStartFrame`, `int32 MoveParryEndFrame`, `uint8 MoveParryProfile`, `int32 LastParryFrame` | The window of the move's `ParryWindow` track, stamped in combat frames when the track starts (one window at a time, the later track wins) and cut to the frame after a parried hit when `bCloseOnParry`; profile index into `ParryProfiles`; `LastParryFrame` drives the `OnParry` cancel condition (both sources). |
 | `int32 ShieldStunEndFrame`, `int32 ParryRecoveryEndFrame`, `int32 BreakEndFrame` | Stuns by end-frame stamps. |
 | `int32 TechLockoutEndFrame`, `int32 LastTechPressFrame`, `int32 TechEndFrame`, `uint8 TechType` | Tech state machine (§6). |
@@ -366,8 +365,7 @@ nothing where the target's instance does not drain inboxes (same rule as hit del
    `PunishEndFrame`, cancel timeline, hitstop; `LinkResponse`, `LinkCommand` → §7.
 3. **Defence clocks**: `ShieldStunEndFrame` reached → clear; break end → shield value = `RecoverFractionAfterBreak`,
    state `Actionable`; `KnockdownEndFrame`/`TechEndFrame` reached → `Actionable` (a get-up ability may be requested);
-   `PunishEndFrame` reached → `Actionable`; shield drain/regen and the bubble radius are analytic (no per-frame work); while the
-   shield is up (and the mode enables it) the **tilt** is updated from the stick; a `ParryWindow` track that starts this frame stamps
+   `PunishEndFrame` reached → `Actionable`; shield drain/regen is analytic (no per-frame work) and the bubble is a fixed sphere; a `ParryWindow` track that starts this frame stamps
    `MoveParryStartFrame/EndFrame/Profile` (§5.4).
 4. **Tech** (§6) when `Tumble`: process new tech presses, evaluate contact.
 5. **Link tick** (§7.4): mash, role-input flags, request timeouts.
@@ -384,14 +382,14 @@ the owner asked for.
 
 | Mechanic | Super Smash Bros. Ultimate | Here (*Proposal*) |
 |---|---|---|
-| Form | A bubble around the character | A **sphere** centred on the body (`CentreHeightCm`), `ArcDegrees = 360` |
-| Size | Shrinks as shield health falls; at full it covers the whole body | `Radius = MaxRadiusCm × RadiusByFraction(Value / Max)`, analytic in the frame (§5.3 *Bubble*) |
+| Form | A bubble around the character | A **sphere** centred on the body (`CentreHeightCm`), 360°, no arc |
+| Size | **Fixed** (owner direction 2026-10-26, as in Rivals of Aether 2): the bubble covers the whole body at any shield health; health only decides when it breaks | `Radius = RadiusCm`, no dependence on the value |
 | Held drain / regen | Shield health (max 50 as I recall) drains slowly while held and regenerates, about half as fast, after release | `DrainPerFrame`, `RegenPerFrame`, `RegenDelayFrames`; a full hold lasts several seconds (starting point ≈ 5 s), regeneration about twice slower |
-| Tilt | The stick moves the bubble slightly, exposing the other side | Centre shifted on the movement plane by `ShieldTiltQ`, never rotates the character |
+| Tilt | **None**: the stick does not move the bubble | No `ShieldTiltQ`, no centre shift |
 | Damage to shield | Grows with the hit's damage | `ShieldDamage`, or `Damage × ShieldDamagePerDamage` |
 | Shield stun | Defender stalled for a time that grows with the hit's damage | `min(MaxShieldStun, ShieldStunBase + ShieldStunPerDamage × Damage)` |
 | Pushback | Defender is pushed back by the hit, more for stronger hits | `PushbackSpeed + PushbackSpeedPerDamage × Damage` for `PushbackFrames`; the attacker is not pushed in this version |
-| Shield poke | A hit that reaches the exposed part of a shrunk shield hits the character | Hit lands on a **body hurtbox outside the bubble**: a normal hit, event `ShieldPoked` |
+| Shield poke | **None** with a bubble that always covers the body | A hit on a body hurtbox of a shielding victim can only come from a kit radius that does not cover it: an ordinary hit, no event |
 | Shield break | Shield health 0 from damage: launched upward, long stun, shield returns at about 30 of 50 | `ActionState = ShieldBroken`, `BreakLaunch` up, `BreakStunFrames`, `RecoverFractionAfterBreak` (starting point 0.6) |
 | Out-of-shield options | Jump, up special, up smash, grab, shield drop through a thin platform; dodge (roll / spot dodge) | Cancel windows inside the hold window (§4), refused during `ShieldStun` |
 | Perfect shield (parry) | In Ultimate the parry is done by **releasing** the shield just before the hit (the first ~5 frames of the shield drop); earlier games (Brawl, Smash 4) used a press-timed powershield | **The parry**, same step as a move's parry (§5.4); `Anchor = Release`, `WindowFrames` 5 |
@@ -402,8 +400,7 @@ the owner asked for.
 - **Raise**: command `Command.Defence.Shield` = `Hold(Shield, 0)` anchored by the button press; binding requires `Input.Context.Grounded`
   (grounded only, no wall shield, as in Smash). Execute as any timeline: `ShieldPressFrame = F`; **the bubble exists from the press
   frame**, `ShieldFlags.Raised` (the frame from which it blocks) from the end of startup (`StartupFrames`, default 1: Ultimate raises it
-  on the first frame); the perfect-shield window opens at the press frame (§5.4). `ShieldYawQ` is written only for arc kits (aim policy
-  `SnapToStick` if tilted, else facing). The command cannot execute if `ShieldValue ≤ 0` or `Breaking` (the model refuses through
+  on the first frame); the perfect-shield window opens at the press frame (§5.4). The command cannot execute if `ShieldValue ≤ 0` or `Breaking` (the model refuses through
   `CanExecute`; the lock tag `Combat.State.Tech.Lockout` is *not* reused). **Re-pressing stays allowed after a release**; the perfect shield
   is anchored on the release (§5.4), and `MinHeldFramesBeforeRelease` is the only anti-tap knob.
 - **Value**: `ShieldValueAt(F)` = while `Raised`: `max(0, V0 − Drain × (F − Stamp))`; after release: `V0` until
@@ -411,39 +408,30 @@ the owner asked for.
   `UGSTN_DefenceAttributeSet` at end of F-1; a change of rates re-stamps on the next event (documented approximation).
   Zero value **while held from decay alone** → `bEndOnZeroShield` ends the hold window (timeline proceeds to release; no break, only a
   forced drop with `ReleaseFrames`): a break comes only from damage (below).
-- **Bubble**: `FGSTN_ShieldBubble { Centre, Radius }` = `MakeShieldBubble(Rules, ShieldValueAt(HitFrame), TiltQ, entity transform at the hit
-  frame)`; `Centre = root + up × CentreHeightCm + tilt shift on the plane`, with *up* the entity's local up (arbitrary gravity, game-design
-  §2d). The radius is a function of the analytic value, so the bubble at any past frame is known without extra state and a rollback needs
-  nothing more. The bubble exists from the press frame to `ShieldReleaseFrame + ReleaseFrames`, **and not while the victim is in hitstun,
+- **Bubble**: `FGSTN_ShieldBubble { Centre, Radius }` = `MakeShieldBubble(Rules, entity transform at the hit frame)`;
+  `Centre = root + up × CentreHeightCm`, `Radius = RadiusCm`, with *up* the entity's local up (arbitrary gravity, game-design §2d). The
+  bubble depends only on the rules and on the entity transform at the hit frame (owner direction 2026-10-26: fixed size, no tilt), so the
+  bubble at any past frame comes from the lag-compensation transform alone and a rollback needs nothing more. The bubble exists from the press frame to `ShieldReleaseFrame + ReleaseFrames`, **and not while the victim is in hitstun,
   tumble or `ShieldBroken`** (a broken shield has no bubble).
-- **Tilt**: while the shield is up, the stick on the movement plane (zone ≥ `TiltMinZone`) moves the centre toward the stick by up to
-  `TiltMaxShiftCm`, at most `TiltRateCmPerFrame` per frame, and back to the centre on a neutral stick. The shift exposes the opposite
-  side of the body (poke) and covers the tilted side more; it is a bubble offset, not a facing change. Written as `ShieldTiltQ` each
-  tick from the stick (a sync value, 2 bytes while the shield is up; the attacker reads it from the snapshot at the hit frame).
 - **Contact: the bubble is an extra hurtbox** (the snapshot extension of `GSTNDefenceNP`, seam of §1b): an `FGSTN_ExtraHurtbox` with the
   bubble sphere, a priority above every body hurtbox, and the hit-type ignore tags `Grab`, `Throw`, `Unblockable` (derived from
   `bBlockable = false`). The M4 hit detection therefore picks, for each overlapping hit, **the bubble if the hitbox touches it** (shield
   first, as in Smash, **including attacks that would miss the body but touch the bubble**), otherwise the body hurtbox it overlaps
-  (the poke), and a grab sees only the body. The `HurtboxIndex` of the entry says which: bubble indices live in a reserved range
-  (`≥ 0x80`) so no `GSTN_Hurtbox` array is touched. Kits with an **arc shield (`ArcDegrees < 360`)** keep the old rule on top of this:
-  `IsInShieldArc` with `Dir` = victim position (end of F-1) → hit source, projected on the movement plane; source =
-  `FGSTN_InboxEntry::HitLocation`, for `Projectile` hits with `|HitboxVelocity| > 50` the direction `−HitboxVelocity`; `|Dir2D| < 1 cm`
-  counts as inside when the elevation limit allows; inside iff `acos(dot(Facing2D, Dir2D)) ≤ ArcDegrees / 2` and elevation ≤
-  `ElevationLimitDeg`, boundary inclusive; a bubble hit **outside the arc** is re-targeted by the step to the nearest body hurtbox to
-  `HitLocation` and continues as a poke.
+  (only possible with a kit radius that leaves it uncovered), and a grab sees only the body. The `HurtboxIndex` of the entry says which: bubble indices live in a reserved range
+  (`≥ 0x80`) so no `GSTN_Hurtbox` array is touched. There is no arc rule: a hit on the bubble is blocked from any direction.
 - **Pipeline step `Shield`** (§9): conditions: shield available, victim `Raised` at the hit's `Frame` (not at resolution frame, so the
-  F+1 delay does not change the outcome), `bBlockable`, the hit's hurtbox is the bubble (arc kits: also in arc), relationship `Enemy` or
+  F+1 delay does not change the outcome), `bBlockable`, the hit's hurtbox is the bubble, relationship `Enemy` or
   `Neutral` (ally hits resolve by their variant; a variant may set blockable), and the `Parry` step has not parried it. Outcome:
   `bBlocked`; shield damage = `HitData.ShieldDamage` (or derived) × victim `IncomingShieldDamageMultiplier` ×
-  `IncomingShieldDamageScaleByRelationship`; value re-stamped lower (**the bubble shrinks with it**); shieldstun frames =
+  `IncomingShieldDamageScaleByRelationship`; value re-stamped lower (the bubble keeps its size); shieldstun frames =
   `ShieldStunFrames(Damage)`, `ShieldStunEndFrame = HitstopEnd + that`; no damage, no knockback, no hitstun; optional pushback
   (`PushbackSpeed + PushbackSpeedPerDamage × Damage`) as `FGSTN_LayeredMove_Knockback` over `PushbackFrames` **on the victim along the
   hit direction, no tumble**; hitstop both sides = knockback model hitstop × `ShieldHitstopMultiplier`; meter gain per rules (defender
   small). During `ShieldStun` the bubble stays up (further hits still land on it) and the victim cannot act.
-- **Shield poke**: a hit on a **body hurtbox** of a victim whose shield is up (`Raised` at the hit frame) skips the `Shield` step's
-  block, does **not** touch the shield value, and resolves as an ordinary hit (damage, knockback, hitstun, which also ends the shield);
-  the step only adds the event `Combat.Event.ShieldPoked` for feedback. Pokes need no special rule: they appear when the shrunk bubble, or the
-  tilt, leaves a hurtbox uncovered.
+- **Hit on the body while shielding**: a hit on a **body hurtbox** of a victim whose shield is up (`Raised` at the hit frame) skips the
+  `Shield` step's block, does **not** touch the shield value, and resolves as an ordinary hit (damage, knockback, hitstun, which also ends
+  the shield). With the default radius the bubble covers every body hurtbox, so this only happens for a kit whose radius leaves one
+  uncovered: there is no poke mechanic and no event (owner direction 2026-10-26).
 - **Shield break**: new value ≤ 0 from damage → `ActionState = ShieldBroken`, `BreakEndFrame = F + BreakStunFrames`,
   `ShieldFlags.Breaking`, `BreakLaunch` **up** (the local up), no bubble, `Punish` entry not sent, event `ShieldBroken`. The broken
   defender is not intangible: hits resolve normally. At `BreakEndFrame` the value becomes `RecoverFractionAfterBreak × Max` (§5.2 step 3).
@@ -454,10 +442,9 @@ the owner asked for.
 - **Shield and grabs/supers**: `Grab`/`Throw` ignore shield (`bGrabBeatsShield`: they are not blockable, so the bubble never catches
   them). Supers: hit type `Unblockable` only on hits the designer marks (*Proposal*: super finishers unblockable, setup hits blockable
   and parry-able, shield damage × tuned so a full-health shield breaks in 2 hits).
-- **Prediction**: the shielding player predicts raise, hold, tilt, release. The attacker predicts block / poke / parry from the snapshot with the same
+- **Prediction**: the shielding player predicts raise, hold, release. The attacker predicts block / parry from the snapshot with the same
   pure functions (bubble from the replicated shield state at the hit frame, spike 2.5); on an interpolated victim a disagreement is a normal
-  correction. The block outcome arrives as a victim correction (one rollback, as any hit, M4 §12.7); presentation (spark, shield flash,
-  bubble shrinking) is predicted on the attacker's machine from the predicted `OnBlock`.
+  correction. The block outcome arrives as a victim correction (one rollback, as any hit, M4 §12.7); presentation (spark, shield flash) is predicted on the attacker's machine from the predicted `OnBlock`.
 
 ### 5.4 Parry: one resolution, two sources
 
@@ -469,8 +456,7 @@ attacker punish, meter, event) is applied by one piece of code and tested once.
   `Anchor = Release`: window `[ShieldReleaseFrame, ShieldReleaseFrame + WindowFrames)` (default **5 frames**, *Proposal* value close to
   Ultimate's; the bubble still exists during `ReleaseFrames`, so the hit lands on it), only if the shield was held at least
   `MinHeldFramesBeforeRelease` (default 0). `Anchor = Press` gives the older press-timed powershield `[ShieldPressFrame,
-  ShieldPressFrame + WindowFrames)` for kits or modes that want it. The hit must have landed **on the bubble** (a poke on an exposed body
-  part is a normal hit: a shrunk shield has a smaller perfect shield too). Evaluated at the hit's stamped `Frame`.
+  ShieldPressFrame + WindowFrames)` for kits or modes that want it. The hit must have landed **on the bubble**. Evaluated at the hit's stamped `Frame`.
 - **Source Move (`FGSTN_ParryWindowTrack`).** Any timeline ability, in PvE and PvP, with or without a shield (§1d): while its window is
   open (`MoveParryStartFrame ≤ HitFrame < MoveParryEndFrame`, stamped when the track starts), a hit that lands on a hurtbox selected by the
   track (`AffectedHurtboxes`/`AffectedTags`, empty = any) is parried. Counter stances, parry specials and "perfect block" moves are
@@ -790,17 +776,17 @@ travels in `LinkCommand`; the teleport is a Mover instant move through a GE (the
 5. **`Parry`** (§5.4) — the single parry resolution for both sources (perfect shield and a move's `ParryWindow`) → on success `Stop`.
    Runs in every mode; it finds nothing to do when no window is open.
 6. **`Shield`** (§5.3) — skipped where the mode disables the shield; a hit that landed on the bubble → on block `Stop` after its own
-   hitstop/meter work (it does not call `ComputeKnockback`); a hit on a body hurtbox of a shielding victim (poke) only adds the
-   `ShieldPoked` event and `Continue`s.
+   hitstop/meter work (it does not call `ComputeKnockback`); a hit on a body hurtbox of a shielding victim (a kit radius that leaves it uncovered)
+   `Continue`s as an ordinary hit.
 7. `ComputeKnockback`, `ApplyDamage`, `Hitstop`, `MeterGain` (M4, unchanged)
 8. **`LinkBreakOnHit`** — if the victim is `Linked` and the hit qualifies (§7.5) → `PendingBreak`.
 9. **`Tumble/Tech`** bookkeeping: a launch with tumble sets `Combat.Mover.Tumble` and queues the contact modifier.
 
 The context gains: `bGrab`, `bThrow`, `Link` info, `OutgoingEntries` (reverse deliveries applied after the pipeline),
-`bBlocked`, `bParried` plus `ParrySource` (M4 had the first two as placeholders, now written), `ShieldDamageApplied`, `bShieldPoke`. Steps stay `const`, pure over
+`bBlocked`, `bParried` plus `ParrySource` (M4 had the first two as placeholders, now written), `ShieldDamageApplied`. Steps stay `const`, pure over
 their inputs, and **never read live components** (combat.md §5.3). The `Shield`/`Parry` steps and the attacker's
 prediction call the same `UGSTN_DefenceMath` functions on the snapshot (which now carries, per entity, the rules index (`RulesIndex`, with `bShieldEnabled` and `bKitHasShield`), the shield state
-(`Raised`, value stamp, press and release frames, tilt, yaw for arc kits, from which the bubble is derived and contributed as an extra
+(`Raised`, value stamp, press and release frames, from which the bubble is derived and contributed as an extra
 hurtbox), the move parry stamps (`MoveParryStartFrame/EndFrame/Profile`), `Link.Role`, `GrabImmunityEnd` and the immunity tags), so a
 disagreement means only that the victim's state really differs.
 
@@ -811,7 +797,7 @@ from the state's frame, so an idle fighter costs ≈ 0 in delta mode (combat.md 
 
 | Group | Raw (worst case) | Typical idle | Typical active |
 |---|---|---|---|
-| Shield (`ShieldValue` 2, stamp 4, flags 1, press 4, release 4, yaw 2, tilt 2) | 19 B | ~1 B | ~9 B |
+| Shield (`ShieldValue` 2, stamp 4, flags 1, press 4, release 4) | 15 B | ~1 B | ~7 B |
 | Stuns (shieldstun, parry recovery, break, punish) | 4 × 4 + 1 = 17 B | 0 | ~4 B |
 | Tech + knockdown (lockout, last press, end, type, knockdown end) | 17 B | 0 | ~6 B |
 | Move parry window (`MoveParryStartFrame` 4, `MoveParryEndFrame` 4, profile 1, `LastParryFrame` 4) | 13 B | 0 | ~4 B |
@@ -829,17 +815,16 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
   out-of-shield cancel windows), **a counter move (`GA_CounterTest`: a timeline with a `ParryWindow` track and an `OnParry` cancel into
   a counter-attack)**, grab move, pummel, four throws (forward and down enough for tests), tech set (InPlace, Roll, WallTech), knockdown
   get-up; defence rules assets `DA_DefenceRules_Test` (**PvP: `bShieldEnabled = true`**, short numbers: shield 100, drain 0.4/frame,
-  perfect-shield window 5, tech window 20, lockout 40, grab base 90 frames, an arc variant `ArcDegrees = 140` for the arc-kit tests) and
+  perfect-shield window 5, tech window 20, lockout 40, grab base 90 frames) and
   **`DA_DefenceRules_TestPvE` (`bShieldEnabled = false`)**. A Python helper builds them like M3/M4 content.
-- Debug: `gstn.Combat.Debug.Shield 1` (the bubble sphere with its tilt shift and current radius, the arc wedge for arc kits, value bar, parry window colour for both sources), `...Links 1` (line between partners,
+- Debug: `gstn.Combat.Debug.Shield 1` (the bubble sphere, value bar, parry window colour for both sources), `...Links 1` (line between partners,
   socket gizmo, serial, remaining frames), `...Tech 1` (window/lockout bar), Gameplay Debugger additions.
 - **Harness scenarios** (`gasnpp_test.py`; 60/15 ms with and without 2 % loss; clean = snapshots equal, no unexplained
   reconciles, plus the expected one per hit/grab on the victim's client):
-  `scenario_link_spike` (§2.1, **every pairing with the host as grabber, as grabbed and as neither**), `scenario_shield_block` (c1 jabs c2 shielding: blocked, shield value down, bubble smaller, shieldstun
+  `scenario_link_spike` (§2.1, **every pairing with the host as grabber, as grabbed and as neither**), `scenario_shield_block` (c1 jabs c2 shielding: blocked, shield value down, bubble unchanged, shieldstun
   frames scale with damage, pushback, no knockback, c1 `OnBlock` cancel), `scenario_shield_bubble` (replaces the arc scenario: a hit from
-  behind and from above is blocked (360°), a hit that only touches the bubble beyond the body capsule is blocked, tilt toward and away from
-  the hit; the arc-kit variant blocks inside and passes outside its arc), `scenario_shield_poke` (shield held until the bubble no longer covers the feet,
-  then a low hit deals normal damage and `ShieldPoked`, the shield value untouched), `scenario_shield_oos` (jump, up special, grab out
+  behind and from above is blocked (360°), a hit that only touches the bubble beyond the body capsule is blocked, the bubble has the same radius at full and at low
+  shield health), `scenario_shield_oos` (jump, up special, grab out
   of shield work outside shield stun and are refused during it), `scenario_shield_break` (repeated hits: break, launched up, long
   stun, shield returns at `RecoverFractionAfterBreak`), `scenario_shield_mode_off` (PvE rules asset: the shield command is absent and
   refused, no bubble, no `Combat.State.Shield*`, the slot's button runs the kit's own ability, tech still works in `Tumble`, a counter
@@ -861,9 +846,8 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
   configuration (host + 2 clients) and in dedicated + 2 clients** (owner direction §6b); `place_pair` takes the host as either
   partner. "Server" in these scenarios means the authority, which in the reference configuration is the host machine.
 - **Automation tests** (`GSTNCombat.Core.Defence.*`, `.Link.*`): `IsShieldAvailable` (rules flag × kit), bubble radius
-  against shield fraction (curve, clamps, minimum) and centre against tilt (bound, rate limit, arbitrary up), shield stun and pushback
-  scaling with damage, contact classification on a fake hit set (touches the bubble beyond the body, only a body hurtbox outside it =
-  poke, grab ignores it), the arc rule for arc kits at boundary/behind/above and projectile source direction, analytic shield value
+  and centre (fixed radius at any value, centre on the entity's local up, arbitrary up), shield stun and pushback
+  scaling with damage, contact classification on a fake hit set (touches the bubble beyond the body, a body hurtbox outside it only with a small kit radius, grab ignores it), analytic shield value
   (drain, regen delay, clamp, rate change re-stamp), perfect-shield window edges (press-anchored and release-anchored) and reopen
   lockout, **`ResolveParry` for both sources** (equal profile gives equal outcome, window edges, `bCloseOnParry`, hurtbox selection,
   `bParryable`, `Combat.Immunity.Parry`, projectile flag), tech state machine on fake histories (press in window, early press with lockout, mash during lockout does not
@@ -879,9 +863,9 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
 1. Spikes recorded in combat.md §17 with the §2.1 pass/fail result; if P failed, work stops and the user decides.
 2. Scenarios of §11 clean; M1–M4 tests and scenarios (`scenario_hit_*`, `scenario_combat_spike`) still clean.
 3. Blocked hit: no damage or knockback, shield value, bubble radius and stun equal on server and both clients; a hit that touches
-   the bubble is blocked even beyond the body capsule and from any direction (360°); a hit that reaches a body hurtbox outside a
-   shrunk or tilted bubble (shield poke) deals normal damage and leaves the shield value untouched; a grab connects through the bubble;
-   break launches upward and returns the shield at `RecoverFractionAfterBreak`; for an arc kit, a hit outside its arc deals normal damage.
+   the bubble is blocked even beyond the body capsule and from any direction (360°); the bubble has the same radius at full and at low
+   shield health; a grab connects through the bubble;
+   break launches upward and returns the shield at `RecoverFractionAfterBreak`.
 4. A parry costs the attacker's client one rollback; a parry vs block is decided by the hit's frame, not by resolution
    latency (release at hit−4 vs hit−6 verified); **a move's `ParryWindow` and the shield's perfect shield give the same outcome and the
    same rollback count through the same `Parry` step**.
@@ -898,7 +882,7 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
     mode exists.
 7d. **The shield exists only where the game mode enables it**: with the PvE rules asset (`bShieldEnabled = false`) there is no shield
     command, bubble, state tag or attribute set, the shield slot is free for the kit's own ability, tech still works, and parry windows of
-    moves still parry; with the PvP rules asset the Smash-style shield of §5.3 works (grounded only, shrinking bubble, tilt, poke, break,
+    moves still parry; with the PvP rules asset the Smash-style shield of §5.3 works (grounded only, fixed bubble, break,
     out-of-shield options, perfect shield).
 7e. Any timeline ability with a `ParryWindow` track parries in PvE and PvP, with the shield enabled or not, and a new parry behaviour
     (another punish, hitstop or meter) is a new `FGSTN_ParryProfile` entry, data only (§14).
@@ -912,19 +896,19 @@ link spike measures the real figure; budget ≤ 2 B/s/entity extra at idle, ≤ 
   rules asset, ability and, if needed, pipeline step.
 - **Shield: PvP only, like Smash (owner direction 2026-10-22)** — decided by the owner, details *Proposal*: the shield exists where the
   mode enables it (PvP yes, PvE no, `bShieldEnabled`); it is a **limited** shield (a `ShieldHealth` pool that drains while held and
-  regenerates after a delay) shaped as a **spherical bubble that shrinks with the pool**, breaks into a long stun with an upward launch,
-  gives shield stun and pushback by damage, can be poked and left through out-of-shield options, loses to grabs, is grounded only and is
-  tilted by the stick (§5.3). This **supersedes the earlier proposals** of a directional 140° arc, of PvE shield rules via
-  `IncomingShieldDamageScaleByRelationship` (the map stays only for PvP modes that field minions or hazards) and of the rejection of an
-  always-available block (moot: there is no PvE shield). The arc shield survives as a kit variant (`ArcDegrees < 360`).
+  regenerates after a delay) shaped as a **spherical bubble of fixed size** (owner direction 2026-10-26: like Rivals of Aether 2, always the same size, no
+  stick tilt), breaks into a long stun with an upward launch, gives shield stun and pushback by damage, is left through out-of-shield
+  options, loses to grabs and is grounded only (§5.3). This **supersedes the earlier proposals** of a directional 140° arc, of PvE shield
+  rules via `IncomingShieldDamageScaleByRelationship` (the map stays only for PvP modes that field minions or hazards), of the rejection
+  of an always-available block (moot: there is no PvE shield) and, since 2026-10-26, of the Smash-style shrink, tilt and poke and of the
+  arc kit variant.
 - **Parry** — decided by the owner in substance (the shield's parry, and special moves that parry), details *Proposal*: **one resolution
   step for two sources**: the perfect shield (release-anchored 5-frame window as in Ultimate; a press-anchored powershield is data) and the `ParryWindow` track of any timeline ability, in every mode (§5.4). `Combat.Immunity.Parry`
   and `bParryable` on bosses' signature attacks keep PvE fights safe from parry-everything.
 - **Supers vs shields** — *Proposal*: `Unblockable` is a per-hit flag (`HitType`), not per super; super finishers are
   unblockable, setup hits blockable with a large `ShieldDamage`; supers stay parryable unless the hit also carries
   `bParryable = false`.
-- **Added by this spec** (smaller decisions, same status): no air or wall shield (Smash: air dodge instead); the bubble has no facing,
-  the tilt shifts its centre (arc kits keep a facing locked at press, turn rate 0, with a data hook); the bubble is an extra hurtbox
+- **Added by this spec** (smaller decisions, same status): no air or wall shield (Smash: air dodge instead); the bubble has no facing and a fixed centre on the body; the bubble is an extra hurtbox
   (spike 2.5); grabs are not predicted beyond hitstop; knockdown with one neutral get-up; tech uses the Shield button
   and needs `Tumble`, not plain hitstun; a grab beats shield and cannot be parried.
 
