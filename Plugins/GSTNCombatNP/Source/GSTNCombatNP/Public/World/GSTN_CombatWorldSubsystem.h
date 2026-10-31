@@ -115,6 +115,16 @@ public:
 
 	int32 GetNumRegisteredEntities() const { return Registry.Num(); }
 
+	/** The registered entity ids, ascending (the registry's order). For server-side observers of the finalized state (the link watchdog), never for simulation */
+	void GetRegisteredEntityIds(TArray<int32>& OutIds) const
+	{
+		OutIds.Reset(Registry.Num());
+		for (const FRegistryEntry& Entry : Registry)
+		{
+			OutIds.Add(Entry.EntityId);
+		}
+	}
+
 	/**
 	 * KO zones (AGSTN_KOZone): static boxes, read once at registration. A combatant whose simulated position is inside one is knocked out by
 	 * its combat tick. The transform and extent are copied, so the answer depends on nothing that can move between machines

@@ -48,6 +48,35 @@ struct GSTNLINKNP_API FGSTN_LinkHitOutcome : public FGSTN_HitExtension
 };
 
 /**
+ * What the LinkBreakOnHit step decided: the victim's live link of this serial is to break (reason Hit). Handed to FGSTN_LinkBreakOutcomeApplier,
+ * which sets PendingBreak on that very link only (a link of another serial is left alone), for the watchdog to break.
+ */
+USTRUCT()
+struct GSTNLINKNP_API FGSTN_LinkBreakOutcome : public FGSTN_HitExtension
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	EGSTN_LinkChannel Channel = EGSTN_LinkChannel::Body;
+
+	UPROPERTY()
+	uint8 Serial = 0;
+
+	/** EGSTN_LinkBreakReason index (Hit) */
+	UPROPERTY()
+	uint8 Reason = 0;
+};
+
+/** Applies FGSTN_LinkBreakOutcome: PendingBreak with its reason on the victim's live link of the outcome's serial */
+class GSTNLINKNP_API FGSTN_LinkBreakOutcomeApplier : public IGSTN_OutcomeExtensionApplier
+{
+public:
+	virtual const UScriptStruct* GetExtensionStruct() const override;
+	virtual void Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const override;
+	virtual void AppendEvents(const FInstancedStruct& Extension, const FGSTN_SimEvent& Envelope, FGSTN_SimEventOutbox& Outbox) const override {}
+};
+
+/**
  * Applies the link outcomes to the target's link fragment (m6 spec 7.2 item 2): accepted -> the channel holds role 2 of the type, Active, the
  * initiator as partner, the outcome's serial and link frame; refused -> the refusal is recorded in the link actions (LastRefusedSerial,
  * RefusedFrame). Nothing else: the target's timeline is cancelled by the link tick extension on the frame its role starts blocking actions,

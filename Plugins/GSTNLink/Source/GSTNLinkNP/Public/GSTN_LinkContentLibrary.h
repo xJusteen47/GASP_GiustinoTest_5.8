@@ -81,4 +81,12 @@ public:
 	/** The link registry's wire index of a type (0 = unknown) */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
 	static int32 GetLinkTypeIndex(FGameplayTag LinkType);
+
+	/** The link watchdog of the actor's world (F11): breaks and orphans posted so far, and the last break's reason index and frame. False without one */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Harness")
+	static bool GetWatchdogStats(const AActor* WorldActor, int32& OutBreaks, int32& OutOrphans, int32& OutLastReason, int32& OutLastFrame);
+
+	/** What the last break left on the Body channel this world shows for the actor: the reason index (0 = none), the serial and the grab immunity end */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Harness")
+	static bool GetShownBodyBreak(const AActor* Actor, int32& OutReason, int32& OutSerial, int32& OutGrabImmunityEndFrame);
 };

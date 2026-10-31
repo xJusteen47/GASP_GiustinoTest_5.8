@@ -1,6 +1,7 @@
 // Links, Network Prediction half.
 
 #include "Pipeline/GSTN_HitStep_GrabImmunity.h"
+#include "Pipeline/GSTN_HitStep_LinkBreakOnHit.h"
 #include "Pipeline/GSTN_HitStep_LinkRequest.h"
 #include "Pipeline/GSTN_LinkHitOutcome.h"
 
@@ -13,6 +14,8 @@
 #include "Sim/GSTN_LinkFragment.h"
 #include "Sim/GSTN_LinkInboxKinds.h"
 #include "Sim/GSTN_LinkSnapshotExt.h"
+#include "Sim/GSTN_LinkTickExtension.h"
+#include "State/GSTN_LinkMath.h"
 
 namespace
 {
@@ -169,6 +172,72 @@ EGSTN_StepResult UGSTN_HitStep_LinkRequest::Resolve_Implementation(const FGSTN_H
 	// A link request does no damage and no knockback: the later steps do not run
 	Out.bNoDamage = true;
 	return EGSTN_StepResult::Stop;
+}
+
+// ---- LinkBreakOnHit
+
+bool UGSTN_HitStep_LinkBreakOnHit::QualifiesForBreak(const UGSTN_LinkTypeDefinition& Definition, uint8 VictimRole, bool bFromPartner, float Knockback)
+{
+	// The break evaluator with only the hit filled in: the one place the hit rule is written (UGSTN_LinkMath::EvaluateBreak)
+	FGSTN_LinkBreakInput Input;
+	Input.OwnRoleTag = Definition.GetRoleDef(VictimRole).RoleTag;
+	Input.Hit.bHit = true;
+	Input.Hit.bFromPartner = bFromPartner;
+	Input.Hit.Knockback = Knockback;
+	const FGSTN_LinkBreakDecision Decision = UGSTN_LinkMath::EvaluateBreak(Definition.Break, 0, Input);
+	return Decision.bBreak && Decision.Reason == EGSTN_LinkBreakReason::Hit;
+}
+
+EGSTN_StepResult UGSTN_HitStep_LinkBreakOnHit::Resolve_Implementation(const FGSTN_HitContextView& View, FGSTN_StepResult& Out) const
+{
+	if (!View.Outcome.bHit || View.Outcome.bBlocked || View.Outcome.bParried)
+	{
+		return EGSTN_StepResult::Continue;
+	}
+	const FGSTN_LinkSnapshotExt* Ext = FGSTN_LinkSnapshotExt::FromVictim(View.Victim);
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	if (!Ext || !Registry || Ext->BodyPhase != static_cast<uint8>(EGSTN_LinkPhase::Active) || Ext->BodyRole == 0)
+	{
+		return EGSTN_StepResult::Continue;
+	}
+	const UGSTN_LinkTypeDefinition* Definition = Registry->GetDefinition(Ext->BodyTypeIndex);
+	if (!Definition)
+	{
+		return EGSTN_StepResult::Continue;
+	}
+	const bool bFromPartner = Ext->PartnerId != INDEX_NONE && Ext->PartnerId == View.Incoming.AttackerEntityId;
+	const float Knockback = View.Outcome.bHasKnockback ? View.Outcome.Knockback.Knockback : 0.f;
+	if (QualifiesForBreak(*Definition, Ext->BodyRole, bFromPartner, Knockback))
+	{
+		FGSTN_LinkBreakOutcome Outcome;
+		Outcome.Channel = EGSTN_LinkChannel::Body;
+		Outcome.Serial = Ext->BodySerial;
+		Outcome.Reason = static_cast<uint8>(EGSTN_LinkBreakReason::Hit);
+		Out.OutcomeExtensions.Add(FInstancedStruct::Make(Outcome));
+	}
+	return EGSTN_StepResult::Continue;
+}
+
+// ---- Break applier
+
+const UScriptStruct* FGSTN_LinkBreakOutcomeApplier::GetExtensionStruct() const
+{
+	return FGSTN_LinkBreakOutcome::StaticStruct();
+}
+
+void FGSTN_LinkBreakOutcomeApplier::Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const
+{
+	const FGSTN_LinkBreakOutcome* Outcome = Extension.GetPtr<FGSTN_LinkBreakOutcome>();
+	FGSTN_LinkFragment* Fragment = Outcome && Context.VictimFragments ? FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(*Context.VictimFragments) : nullptr;
+	if (!Fragment)
+	{
+		return;
+	}
+	const FGSTN_LinkState& State = Fragment->Get(Outcome->Channel);
+	if (State.IsActive() && State.Serial == Outcome->Serial && Outcome->Channel == EGSTN_LinkChannel::Body)
+	{
+		FGSTN_LinkTickExtension::MarkPendingBreak(*Fragment, Outcome->Reason);
+	}
 }
 
 // ---- Applier

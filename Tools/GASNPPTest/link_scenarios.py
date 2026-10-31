@@ -2,6 +2,9 @@
 # grabber walking, dashing and circling for 20 s, forced reconciles inside the link) and the formation rollback scenario (a real grab hit through
 # the LinkRequest step, forced reconciles on each client over the formation frames), each in three pairings: host grabs client, client grabs host,
 # client grabs client. Every scenario starts in a FRESH PIE: run them with defence_scenarios.defence_batch(module=link_scenarios).
+# F11 adds the watchdog's scenarios: link_break_distance (a leash and the server moving the grabber away, then a knock-out of either side, in the three
+# pairings), grab_immunity (a regrab refused inside the immunity after a break), and link_rollback breaks through the watchdog with forced reconciles
+# over the break frames. The test type's MaxDistanceCm and grab immunity are changed IN MEMORY and put back.
 #
 #   import link_scenarios as ls
 #   ls.prepare_editor()                      # once, in the editor world BEFORE the first PIE: the plugin's test link type exists and is registered
@@ -33,7 +36,9 @@ GRAB = 'Combat.Link.Type.Grab'
 ATTACK_COMMAND = 'Command.Attack.Neutral'   # the test weapon's attack (WPN_Test_Hits), the move link_rollback turns into a grab
 LINKED_MODE = 'GSTN_Linked'
 PAIRINGS = {'host_grabs_client': (0, 1), 'client_grabs_host': (1, 0), 'client_grabs_client': (1, 2)}
-SUITE_LINK = [f'link_spike_{p}' for p in PAIRINGS] + [f'link_rollback_{p}' for p in PAIRINGS]
+SUITE_LINK = ([f'link_spike_{p}' for p in PAIRINGS] + [f'link_rollback_{p}' for p in PAIRINGS] + [f'link_break_distance_{p}' for p in PAIRINGS]
+              + ['grab_immunity'])
+REASON = {'Forced': 11, 'Distance': 3, 'OwnDeath': 4, 'PartnerDeath': 5, 'Hit': 6}   # EGSTN_LinkBreakReason indices
 S1 = {'own_p95': 10.0, 'partner_p95': 25.0, 'max': 60.0, 'converge_frames': 2}
 WALK_SECONDS = 20.0
 Lib = unreal.GSTN_LinkContentLibrary
@@ -136,6 +141,50 @@ def linked_location(wi, key):
 def mover_mode(wi, key):
     m = actor(wi, key).get_component_by_class(unreal.MoverComponent)
     return str(m.get_movement_mode_name()) if m else None
+
+
+def watchdog():
+    """(breaks, orphans, last reason index, last frame) of the server's link watchdog"""
+    r = Lib.get_watchdog_stats(actor(0, g.key_of_player(0)))
+    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool)]
+    return tuple(vals[:4]) if len(vals) >= 4 else (0, 0, 0, -1)
+
+
+def shown_break(wi, key):
+    """(reason, serial, grab immunity end) the Body channel of world wi shows for `key` after a break"""
+    r = Lib.get_shown_body_break(actor(wi, key))
+    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool)]
+    return tuple(vals[:3]) if len(vals) >= 3 else (0, 0, 0)
+
+
+def set_leash(cm):
+    """The test link type's MaxDistanceCm, in memory (the scenarios put 0 back)"""
+    d = unreal.load_asset(LINK_TYPE_ASSET)
+    br = d.get_editor_property('break')
+    br.set_editor_property('max_distance_cm', float(cm))
+    d.set_editor_property('break', br)
+    return 'leash', cm
+
+
+def set_grab_immunity(frames):
+    """ImmunityFramesAfterRelease of the test type's grab rule, in memory; returns the previous value"""
+    d = unreal.load_asset(LINK_TYPE_ASSET)
+    rule = d.get_editor_property('rules')[0]
+    rules = rule.get_editor_property('rules')
+    old = rules.get_editor_property('immunity_frames_after_release')
+    rules.set_editor_property('immunity_frames_after_release', int(frames))
+    rule.set_editor_property('rules', rules)
+    return old
+
+
+def move_away(key, back_cm=500.0):
+    """Server teleport of a pawn back_cm behind itself (the authority moves it; clients get it as a correction)"""
+    a = g.snap(g.worlds()[0])[key]
+    yaw = math.radians(a['yaw'])
+    loc = a['location']
+    target = unreal.Vector(loc[0] - back_cm * math.cos(yaw), loc[1] - back_cm * math.sin(yaw), loc[2])
+    g.comps(g.worlds()[0])[key].server_teleport_exact(target)
+    return 'moved', (round(target.x), round(target.y))
 
 
 def _check(run, label, fn):
@@ -419,11 +468,21 @@ def _rollback(pairing):
         return st.get('kit') == 'OK', f"loadout {st.get('kit')}"
 
     def brk():
-        return 'break', Lib.break_test_link(actor(0, rig.bkey))
+        # F11: the break goes through the watchdog (a leash and the grabber moved away), with forced reconciles over the break frames
+        st['wd'] = watchdog()
+        set_leash(150.0)
+        return move_away(rig.akey)
+
+    def broke_once():
+        wd = watchdog()
+        rows = {wi: (shown_break(wi, rig.akey), shown_break(wi, rig.bkey)) for wi in range(len(g.worlds()))}
+        ok = wd[0] == st['wd'][0] + 1 and wd[2] == REASON['Distance']
+        return ok, f'watchdog {st["wd"]} -> {wd} (one break, reason Distance); shown (reason, serial, immunity) {rows}'
 
     def restore():
         rig.stop()
         g._hit_logging(False)
+        set_leash(0.0)
         r = link_reset()
         g._apply_loadout(rig.akey, g.HIT_KIT)
         return r
@@ -436,14 +495,242 @@ def _rollback(pairing):
               (T + 2.0, _check(run, 'formed at F+1 on the target and the same link on the initiator, on every world (after the forced reconciles)', formed_frames)),
               (T + 2.0, _check(run, 'the grabbed is parked where it simulates', lambda: (all(mover_mode(wi, rig.bkey) == LINKED_MODE for wi in [0] + ([rig.ib] if rig.ib > 0 else [])),
                                                                                   {wi: mover_mode(wi, rig.bkey) for wi in range(len(g.worlds()))}))),
-              (T + 2.1, brk), (T + 3.2, _check(run, 'the link is gone on every world', rig.none_show)),
+              (T + 2.1, brk)]
+    for n, ci in enumerate(rig.clients):
+        steps.append((T + 2.16 + 0.04 * n, force(ci)))
+    steps += [(T + 3.2, _check(run, 'the link is gone on every world (after forced reconciles over the break frames)', rig.none_show)),
+              (T + 3.2, _check(run, 'one watchdog break, reason Distance', broke_once)),
+              (T + 3.2, _check(run, 'the grabbed left the parked mode on every world', lambda: (all(mover_mode(wi, rig.bkey) != LINKED_MODE for wi in range(len(g.worlds()))),
+                                                                                         {wi: mover_mode(wi, rig.bkey) for wi in range(len(g.worlds()))}))),
               (T + 3.3, restore), (T + 3.6, run.finish())]
+    run.run(steps)
+
+
+def _break_distance(pairing):
+    """F11: breaks only through the watchdog. (1) A leash (MaxDistanceCm 150 in memory) and the server moving the grabber 500 cm away: one break with
+    reason Distance, the link gone on every world, the grabbed out of the parked mode and placed by the exit placer near the grabber, its grab immunity
+    set, at most one correction (2 counter steps) on each involved client. (2) A new link, the grabbed knocked out in a KO zone: a death break.
+    (3) The same with the grabber knocked out."""
+    name = f'link_break_distance_{pairing}'
+    rig = _LinkRig(name, pairing)
+    run = rig.run
+    grab = g._tag(GRAB)
+    st = {}
+
+    def form():
+        return 'formed' if Lib.form_test_link(actor(0, rig.akey), actor(0, rig.bkey), grab) else 'FORM REFUSED'
+
+    def snapshot(tag):
+        def f():
+            st[tag] = watchdog()
+            rig.mark(tag)()
+            return tag, st[tag]
+        return f
+
+    def broke(tag, reasons):
+        def f():
+            wd = watchdog()
+            ok = wd[0] == st[tag][0] + 1 and wd[2] in reasons
+            return ok, f'watchdog {st[tag]} -> {wd} (one break, reason in {reasons})'
+        return f
+
+    def exit_near():
+        a = g.snap(g.worlds()[0])[rig.akey]['location']
+        b = g.snap(g.worlds()[0])[rig.bkey]['location']
+        d = math.dist(a[:2], b[:2])
+        return 60.0 <= d <= 250.0, f'grabbed {d:.0f} cm from the grabber on the authority (ring placer radius 120)'
+
+    def immune():
+        r = shown_break(0, rig.bkey)
+        return r[2] > 0, f'grabbed (reason, serial, immunity end) {r}'
+
+    def one_correction(tag_a, tag_b):
+        def f():
+            n = {ci: rig.rb_between(tag_a, tag_b, ci) for ci in rig.clients}
+            return all(v <= 2 for v in n.values()), f'counter steps per involved client {n} (one correction = 2)'
+        return f
+
+    def spawn_zone_on(key):
+        """A KO zone 900 cm away with `key` (the grabber) teleported into it"""
+        def f():
+            loc = g.snap(g.worlds()[0])[key]['location']
+            centre = unreal.Vector(loc[0] + 900.0, loc[1], loc[2])
+            for w in g.worlds():
+                unreal.GSTN_KOZone.spawn_zone(w, centre, unreal.Vector(150.0, 150.0, 400.0))
+            g.comps(g.worlds()[0])[key].server_teleport_exact(centre)
+            return 'KO zone for', key
+        return f
+
+    def spawn_zone_ahead():
+        """A parked pawn is not moved by a teleport (its combat position follows the partner's socket): a small KO zone 50..170 cm ahead of the
+        grabber holds the grabbed (parked 90 cm ahead, its capsule left 150 cm ahead) and not the grabber"""
+        a = g.snap(g.worlds()[0])[rig.akey]
+        yaw = math.radians(a['yaw'])
+        loc = a['location']
+        centre = unreal.Vector(loc[0] + 110.0 * math.cos(yaw), loc[1] + 110.0 * math.sin(yaw), loc[2])
+        for w in g.worlds():
+            unreal.GSTN_KOZone.spawn_zone(w, centre, unreal.Vector(60.0, 60.0, 400.0))
+        return 'KO zone ahead of the grabber', (round(centre.x), round(centre.y))
+
+    def clear_zones():
+        for w in g.worlds():
+            unreal.GSTN_KOZone.destroy_all_zones(w)
+        return 'zones removed'
+
+    def respawn():
+        for key in (rig.akey, rig.bkey):
+            g.comps(g.worlds()[0])[key].server_reset_test_state(unreal.Vector(0.0, 0.0, 0.0))
+        return 'respawned'
+
+    gone = lambda: rig.none_show()
+    unparked = lambda: (all(mover_mode(wi, rig.bkey) != LINKED_MODE for wi in range(len(g.worlds()))), {wi: mover_mode(wi, rig.bkey) for wi in range(len(g.worlds()))})
+    death = (REASON['OwnDeath'], REASON['PartnerDeath'])
+    def setup():
+        st['imm'] = set_grab_immunity(600)   # long enough to still be seen at the check
+        return link_setup()
+
+    steps = [(0.2, setup), (0.3, rig.place_partner()), (1.6, form),
+             (2.5, _check(run, 'formed on every world', lambda: rig.all_show(1, 2))),
+             (2.6, lambda: set_leash(150.0)), (2.7, snapshot('pre_distance')), (2.8, lambda: move_away(rig.akey)),
+             (4.2, rig.mark('post_distance')),
+             (4.2, _check(run, 'distance: one watchdog break, reason Distance', broke('pre_distance', (REASON['Distance'],)))),
+             (4.2, _check(run, 'distance: the link is gone on every world', gone)),
+             (4.2, _check(run, 'distance: the grabbed left the parked mode on every world', unparked)),
+             (4.2, _check(run, 'distance: the exit placer put the grabbed near the grabber', exit_near)),
+             (4.2, _check(run, 'distance: the grabbed is grab immune after the break', immune)),
+             (4.2, _check(run, 'distance: at most one correction on each involved client', one_correction('pre_distance', 'post_distance'))),
+             (4.3, lambda: set_leash(0.0)),
+             (4.5, rig.place_partner()), (5.2, form), (6.1, _check(run, 'formed again', lambda: rig.all_show(1, 2))),
+             (6.2, snapshot('pre_ko_b')), (6.3, spawn_zone_ahead),
+             (8.0, _check(run, 'grabbed knocked out: one death break', broke('pre_ko_b', death))),
+             (8.0, _check(run, 'grabbed knocked out: the link is gone on every world', gone)),
+             (8.1, clear_zones), (8.2, respawn),
+             (10.0, rig.place_partner()), (10.7, form), (11.6, _check(run, 'formed a third time', lambda: rig.all_show(1, 2))),
+             (11.7, snapshot('pre_ko_a')), (11.8, spawn_zone_on(rig.akey)),
+             (13.5, _check(run, 'grabber knocked out: one death break', broke('pre_ko_a', death))),
+             (13.5, _check(run, 'grabber knocked out: the link is gone on every world', gone)),
+             (13.6, clear_zones), (13.7, respawn)]
+
+    def restore():
+        rig.stop()
+        set_leash(0.0)
+        if 'imm' in st:
+            set_grab_immunity(st['imm'])
+        clear_zones()
+        return link_reset()
+
+    steps += [(15.5, restore), (15.8, run.finish())]
+    run.run(steps)
+
+
+def scenario_grab_immunity(pairing='client_grabs_host', immunity_frames=120):
+    """F11: a regrab is refused for the grab rule's ImmunityFramesAfterRelease after a break (set to `immunity_frames` in memory): a grab hit forms the
+    link, the watchdog breaks it (leash and the grabber moved away), a second grab inside the immunity whiffs (no link on any world), a third after it forms"""
+    rig = _LinkRig('grab_immunity', pairing)
+    run = rig.run
+    st = {}
+
+    def setup():
+        st['kit'] = link_setup(grab_attack=True, akey=rig.akey)
+        st['imm'] = set_grab_immunity(immunity_frames)
+        return 'kit', st['kit'], 'immunity was', st['imm']
+
+    def attack():
+        g.combat_tap(rig.ia, g.button_mask('Attack'))
+        return 'attack'
+
+    def brk():
+        set_leash(150.0)
+        return move_away(rig.akey)
+
+    def linked(want):
+        def f():
+            rows = {wi: (body(wi, rig.akey), body(wi, rig.bkey)) for wi in range(len(g.worlds()))}
+            got = all(a and b and a[0] == 1 and b[0] == 2 for a, b in rows.values())
+            idle = all((a is None or a[1] == 0) and (b is None or b[1] == 0) for a, b in rows.values())
+            return (got if want else idle), f'{rows}; target (reason, serial, immunity end) {shown_break(0, rig.bkey)}'
+        return f
+
+    def restore():
+        rig.stop()
+        set_leash(0.0)
+        if 'imm' in st:
+            set_grab_immunity(st['imm'])
+        r = link_reset()
+        g._apply_loadout(rig.akey, g.HIT_KIT)
+        return r
+
+    steps = [(0.2, setup), (0.4, rig.place_partner((205.0, 0.0))), (2.0, attack),
+             (3.5, _check(run, 'the first grab formed', linked(True))),
+             (3.6, brk), (4.4, lambda: set_leash(0.0)), (4.5, rig.place_partner((205.0, 0.0))), (5.0, attack),
+             (6.0, _check(run, f'a regrab inside the {immunity_frames}-frame immunity is refused (no link on any world)', linked(False))),
+             (6.1, rig.place_partner((205.0, 0.0))), (7.8, attack),
+             (9.0, _check(run, 'after the immunity the grab forms again', linked(True))),
+             (9.1, lambda: Lib.break_test_link(actor(0, rig.bkey))), (10.0, restore), (10.3, run.finish())]
     run.run(steps)
 
 
 for _p in PAIRINGS:
     globals()[f'scenario_link_spike_{_p}'] = (lambda p: (lambda: _spike(p)))(_p)
     globals()[f'scenario_link_rollback_{_p}'] = (lambda p: (lambda: _rollback(p)))(_p)
+    globals()[f'scenario_link_break_distance_{_p}'] = (lambda p: (lambda: _break_distance(p)))(_p)
+
+
+def _walk_probe(pairing, link, sample):
+    """Task A probe (F11): the spike's walk with or without the held link and with or without the rig's per-tick sampling of every world, no forced
+    reconciles. Reports the walking client's unforced reconciles and the editor frame times (one process: every world shares the engine frame)"""
+    name = f'link_probe_{pairing}_{"link" if link else "nolink"}_{"sample" if sample else "nosample"}'
+    rig = _LinkRig(name, pairing)
+    run = rig.run
+    if not sample:
+        rig.stop()
+    dts = []
+    probe = {'h': None}
+
+    def dt_tick(dt):
+        dts.append(dt)
+
+    def form():
+        if not link:
+            return 'no link'
+        return 'formed' if Lib.form_test_link(actor(0, rig.akey), actor(0, rig.bkey), g._tag(GRAB)) else 'FORM REFUSED'
+
+    def start():
+        probe['h'] = unreal.register_slate_post_tick_callback(dt_tick)
+        return 'dt probe on'
+
+    T_FORM, T_WALK = 1.6, 2.6
+    T_END = T_WALK + WALK_SECONDS
+    steps = [(0.2, lambda: link_setup()), (0.3, rig.place_partner()), (T_FORM, form), (T_WALK - 0.1, start), (T_WALK, rig.mark('walk_start'))]
+    steps += _walk_steps(rig, T_WALK, WALK_SECONDS)
+
+    def verdicts():
+        unreal.unregister_slate_post_tick_callback(probe['h'])
+        for ci in rig.clients:
+            n = rig.rb_between('walk_start', 'walk_end', ci)
+            run.check(f'client {ci}: zero reconciles during the walk', n == 0, f'{n}')
+        s = sorted(dts)
+        run.note(f'PROBE {name}: frames {len(s)}, mean {1000 * sum(s) / max(1, len(s)):.1f} ms, p95 {1000 * _percentile(s, 0.95):.1f} ms, '
+                 f'max {1000 * (s[-1] if s else 0):.1f} ms, > 64 ms {sum(1 for x in s if x > 0.064)}, > 100 ms {sum(1 for x in s if x > 0.1)}')
+        unreal.log(f'LINK PROBE {name}: walk rollbacks {[rig.rb_between("walk_start", "walk_end", ci) for ci in rig.clients]}, frames {len(s)}, '
+                   f'p95 {1000 * _percentile(s, 0.95):.1f} ms, > 64 ms {sum(1 for x in s if x > 0.064)}')
+        return 'judged'
+
+    def restore():
+        rig.stop()
+        g.release(rig.ia, 'move')
+        if link:
+            Lib.break_test_link(actor(0, rig.bkey))
+        return link_reset()
+
+    steps += [(T_END + 0.2, rig.mark('walk_end')), (T_END + 0.3, verdicts), (T_END + 0.4, restore), (T_END + 1.6, run.finish())]
+    run.run(steps)
+
+
+for _p in ('client_grabs_host', 'client_grabs_client'):
+    for _l in (True, False):
+        for _s in (True, False):
+            globals()[f'scenario_link_probe_{_p}_{"link" if _l else "nolink"}_{"sample" if _s else "nosample"}'] = (lambda p, l, s: (lambda: _walk_probe(p, l, s)))(_p, _l, _s)
 
 
 def control_walk(client=1, seconds=WALK_SECONDS):

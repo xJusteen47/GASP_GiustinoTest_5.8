@@ -77,11 +77,16 @@ bool FGSTN_LinkInboxHandlers::ApplyCommand(FGSTN_LinkFragment& Fragment, const F
 	Exit.Position = FVector(Command.ExitPosition);
 	Exit.YawDeg = Command.ExitYawDeg;
 	Exit.Velocity = FVector(Command.ExitVelocity);
+	Exit.Flags = Command.ExitFlags;
 	if (Command.Kind == EGSTN_LinkCommandKind::Break)
 	{
 		const uint8 Reason = Command.Reason;
 		State.Reset();
 		State.BreakReason = Reason;
+		if (Command.ImmunityEndFrame > 0)
+		{
+			Fragment.GrabImmunityEndFrame = FMath::Max(Fragment.GrabImmunityEndFrame, Command.ImmunityEndFrame);
+		}
 	}
 	return true;
 }

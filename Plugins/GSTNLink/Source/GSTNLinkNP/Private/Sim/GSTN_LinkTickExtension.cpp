@@ -11,6 +11,7 @@
 #include "GSTN_LinkSettings.h"
 #include "GSTN_LinkTags.h"
 #include "Hits/GSTN_CombatHitTags.h"
+#include "Movement/GSTN_LinkExitRequest.h"
 #include "Movement/GSTN_LinkedModifier.h"
 #include "Sim/GSTN_LinkAttach.h"
 #include "Sim/GSTN_LinkFragment.h"
@@ -260,6 +261,19 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 			if (Fragment->Actions.Exit.Frame != 0 && Context.Frame > Fragment->Actions.Exit.Frame)
 			{
 				Fragment->Actions.Exit = FGSTN_LinkActions::FExit();
+				// ...and with it the reason the break left on an idle channel (a reason makes the state "live" on the wire: ~20 B forever)
+				for (FGSTN_LinkState* State : { &Fragment->Links.Body, &Fragment->Links.Hand })
+				{
+					if (State->Phase == EGSTN_LinkPhase::None && State->Role == 0)
+					{
+						State->BreakReason = 0;
+					}
+				}
+			}
+			// A grab immunity that has run out is dropped too, for the same reason
+			if (Fragment->GrabImmunityEndFrame != 0 && Context.Frame >= Fragment->GrabImmunityEndFrame)
+			{
+				Fragment->GrabImmunityEndFrame = 0;
 			}
 			// The frame a non-acting parked role starts (the victim step or the inbox wrote it this frame): its running move ends, so no hitbox
 			// of it hits the partner later this frame
@@ -301,6 +315,13 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 		else if (bWasParked && !bParked)
 		{
 			FGSTN_LinkedModifier::Cancel(Context.Owner);
+		}
+		// The exit of a break (F11): the teleport to the watchdog's exit on the frame its command was applied, in the same Mover tick as the
+		// parked mode's end
+		if (const FGSTN_LinkFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
+			Fragment && FGSTN_LinkExitRequest::IsDue(Fragment->Actions.Exit, Context.Frame))
+		{
+			FGSTN_LinkExitRequest::Apply(Context.AbilitySystem, Fragment->Actions.Exit);
 		}
 		ProjectTags(Context);
 		break;

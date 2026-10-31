@@ -36,7 +36,9 @@ struct FGSTN_SnapshotEntry;
  *    previous frame), the kit's grab offer, one stateless probe (no sticky focus, no line of sight: F10 deviation), then
  *    FGSTN_LinkInteractProvider::ProjectTargetTag. A linked entity, or one whose kit carries no link extension (it cannot grab), projects no
  *    target: the probe reads other entities' snapshot positions, interpolated on a client, so the tag is not prediction-stable (an F12 item).
- *    The exit record a break left in the link actions is dropped the frame after its own.
+ *    On the frame a LinkCommand's exit record is written with the Teleport flag (the watchdog's break, F11) the exit request applies the
+ *    teleport (FGSTN_LinkExitRequest), in the same Mover tick as the parked mode's end. The exit record is dropped the frame after its own,
+ *    and a grab immunity that has run out (AfterClocks), so an idle entity is idle on the wire.
  *
  * Simulation code: deterministic, no net mode, no resimulation branch, state only in the fragment. The registry, the attach table and the
  * meanings are content; the tags go to the entity's ability system, which rolls back with the rest; the Mover modifier goes through Mover's

@@ -109,6 +109,14 @@ struct GSTNLINKNP_API FGSTN_LinkCommandEntry
 
 	UPROPERTY()
 	FVector3f ExitVelocity = FVector3f::ZeroVector;
+
+	/** GSTNLinkExitFlags of the exit (Teleport for the parked side: the exit request moves it on the command's frame) */
+	UPROPERTY()
+	uint8 ExitFlags = 0;
+
+	/** Break: the frame before which this side cannot be grabbed again (the grab target's breather); 0 = unchanged */
+	UPROPERTY()
+	int32 ImmunityEndFrame = 0;
 };
 
 /**
@@ -119,8 +127,8 @@ struct GSTNLINKNP_API FGSTN_LinkCommandEntry
  *    serial and link frame (the predicted state, if any, is replaced). Refused -> a Pending request to that target is cleared. Idempotent: a
  *    response whose serial the channel already carries as role 1 changes nothing, so the entry a re-simulated sender posts again after a
  *    rollback lands on the same state.
- *  - Command, on both sides (F+1): Break of the live link of that serial -> the channel resets (serial kept) and the exit goes to the link
- *    actions; Place -> the exit only; Form (test and debug command) -> the role of the payload on a free channel. Any other serial is ignored.
+ *  - Command, on both sides (F+1): Break of the live link of that serial -> the channel resets (serial kept), the exit goes to the link
+ *    actions and a grab target's immunity end is raised; Place -> the exit only; Form (test and debug command) -> the role of the payload on a free channel. Any other serial is ignored.
  */
 struct GSTNLINKNP_API FGSTN_LinkInboxHandlers
 {

@@ -21,6 +21,7 @@ public class GSTNLinkNP : ModuleRules
 			"Engine",
 			"GameplayTags",
 			"GameplayAbilities",
+			"AbilitySystemSimulation",
 			"NetworkPrediction",
 			"Mover",
 			"GSTNInputCore",

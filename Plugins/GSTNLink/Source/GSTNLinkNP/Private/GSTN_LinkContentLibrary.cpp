@@ -12,6 +12,7 @@
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Pipeline/GSTN_HitStep_GrabImmunity.h"
+#include "Pipeline/GSTN_HitStep_LinkBreakOnHit.h"
 #include "Pipeline/GSTN_HitStep_LinkRequest.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Serialization/MemoryWriter.h"
@@ -22,6 +23,7 @@
 #include "Timeline/GSTN_CombatTimeline.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "GSTN_LinkPresentationComponent.h"
+#include "GSTN_LinkWatchdog.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 
 namespace
@@ -98,7 +100,8 @@ bool UGSTN_LinkContentLibrary::AddLinkStepsToRules(UGSTN_CombatRules* Rules)
 	TArray<TSoftClassPtr<UGSTN_HitResolutionStep>>& Pipeline = Rules->HitPipeline;
 	const bool bHasImmunity = Pipeline.ContainsByPredicate([](const TSoftClassPtr<UGSTN_HitResolutionStep>& Step) { return IsStepOf(Step, UGSTN_HitStep_GrabImmunity::StaticClass()); });
 	const bool bHasRequest = Pipeline.ContainsByPredicate([](const TSoftClassPtr<UGSTN_HitResolutionStep>& Step) { return IsStepOf(Step, UGSTN_HitStep_LinkRequest::StaticClass()); });
-	if (bHasImmunity && bHasRequest)
+	const bool bHasBreak = Pipeline.ContainsByPredicate([](const TSoftClassPtr<UGSTN_HitResolutionStep>& Step) { return IsStepOf(Step, UGSTN_HitStep_LinkBreakOnHit::StaticClass()); });
+	if (bHasImmunity && bHasRequest && bHasBreak)
 	{
 		return true;
 	}
@@ -114,6 +117,16 @@ bool UGSTN_LinkContentLibrary::AddLinkStepsToRules(UGSTN_CombatRules* Rules)
 	}
 	Pipeline.Insert(TSoftClassPtr<UGSTN_HitResolutionStep>(UGSTN_HitStep_LinkRequest::StaticClass()), At);
 	Pipeline.Insert(TSoftClassPtr<UGSTN_HitResolutionStep>(UGSTN_HitStep_GrabImmunity::StaticClass()), At);
+	// LinkBreakOnHit after MeterGain (m6 spec 9 step 8: the knockback is known), else last
+	int32 BreakAt = Pipeline.Num();
+	for (int32 Index = 0; Index < Pipeline.Num(); ++Index)
+	{
+		if (IsStepOf(Pipeline[Index], UGSTN_HitStep_MeterGain::StaticClass()))
+		{
+			BreakAt = Index + 1;
+		}
+	}
+	Pipeline.Insert(TSoftClassPtr<UGSTN_HitResolutionStep>(UGSTN_HitStep_LinkBreakOnHit::StaticClass()), BreakAt);
 	Rules->ResolveHitPipeline();
 	return true;
 }
@@ -126,7 +139,8 @@ bool UGSTN_LinkContentLibrary::RemoveLinkStepsFromRules(UGSTN_CombatRules* Rules
 	}
 	const int32 Removed = Rules->HitPipeline.RemoveAll([](const TSoftClassPtr<UGSTN_HitResolutionStep>& Step)
 	{
-		return IsStepOf(Step, UGSTN_HitStep_GrabImmunity::StaticClass()) || IsStepOf(Step, UGSTN_HitStep_LinkRequest::StaticClass());
+		return IsStepOf(Step, UGSTN_HitStep_GrabImmunity::StaticClass()) || IsStepOf(Step, UGSTN_HitStep_LinkRequest::StaticClass())
+			|| IsStepOf(Step, UGSTN_HitStep_LinkBreakOnHit::StaticClass());
 	});
 	if (Removed > 0)
 	{
@@ -357,4 +371,23 @@ int32 UGSTN_LinkContentLibrary::GetLinkTypeIndex(FGameplayTag LinkType)
 {
 	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
 	return Registry ? Registry->GetTypeIndex(LinkType) : 0;
+}
+
+bool UGSTN_LinkContentLibrary::GetWatchdogStats(const AActor* WorldActor, int32& OutBreaks, int32& OutOrphans, int32& OutLastReason, int32& OutLastFrame)
+{
+	const UGSTN_LinkWatchdog* Watchdog = WorldActor ? UGSTN_LinkWatchdog::Get(WorldActor->GetWorld()) : nullptr;
+	OutBreaks = Watchdog ? Watchdog->GetNumBreaks() : 0;
+	OutOrphans = Watchdog ? Watchdog->GetNumOrphans() : 0;
+	OutLastReason = Watchdog && Watchdog->GetLastBreakFrame() != INDEX_NONE ? static_cast<int32>(Watchdog->GetLastBreak().Reason) : 0;
+	OutLastFrame = Watchdog ? Watchdog->GetLastBreakFrame() : INDEX_NONE;
+	return Watchdog != nullptr;
+}
+
+bool UGSTN_LinkContentLibrary::GetShownBodyBreak(const AActor* Actor, int32& OutReason, int32& OutSerial, int32& OutGrabImmunityEndFrame)
+{
+	const FGSTN_LinkFragment* Shown = UGSTN_LinkPresentationComponent::FindShownFragment(Actor);
+	OutReason = Shown ? Shown->Links.Body.BreakReason : 0;
+	OutSerial = Shown ? Shown->Links.Body.Serial : 0;
+	OutGrabImmunityEndFrame = Shown ? Shown->GrabImmunityEndFrame : 0;
+	return Shown != nullptr;
 }
