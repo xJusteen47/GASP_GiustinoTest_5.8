@@ -77,7 +77,9 @@ def arm_rows(frames, ref_frames):
                     par = f"lowerarm_{s}" if tb.startswith("lowerarm") else f"upperarm_{s}"
                     tw_bones[tb] = round(twist_about(qrel(L.bone_tf(fr, par)[1], L.bone_tf(fr, tb)[1]),
                                                      ax_fore if tb.startswith("lowerarm") else local_axis(R, f"upperarm_{s}", f"lowerarm_{s}")), 1)
-            row = {"frame": f, "pole_fwd": round(float(np.dot(pole, fwd)), 2), "pole_out": round(float(np.dot(pole, outward)), 2),
+            ua = unit(el - sh)
+            row = {"frame": f, "ua_back": round(float(-np.dot(ua, fwd)), 2), "ua_side": round(float(abs(np.dot(ua, outward))), 2),
+                   "pole_fwd": round(float(np.dot(pole, fwd)), 2), "pole_out": round(float(np.dot(pole, outward)), 2),
                    "pole_up": round(float(pole[2]), 2), "elevation": round(elev, 1), "flex": round(flex, 1), "reverse": reverse,
                    "fore_twist": round(fore_twist, 1), "hand_twist": round(hand_twist, 1), "twist_bones": tw_bones}
             if prev:
@@ -101,12 +103,18 @@ def flags(rows_by_side, sheet, TH, frames):
             if r["flex"] > TH["elbow_min_flex_for_pole_deg"]:
                 # an upper arm hanging close to vertical has no "down" left for its elbow: a bent hanging arm points the
                 # elbow back or in, which is natural (only a flare out, below, is a defect there)
-                if r["pole_up"] > TH["elbow_pole_up_max"] and r["elevation"] >= TH.get("elbow_pole_min_elevation_deg", 40):
+                # an upper arm swept BACK (shoulder extension, more back than sideways) points its bent elbow back/up, which
+                # is natural: it has its own limit, the shoulder's extension range (Ganondorf ftilt v3, 01/11: the reference's
+                # rear arm is swept 55-57 deg back in the recovery)
+                swept = r.get("ua_back", 0) > 0 and r.get("ua_back", 0) > r.get("ua_side", 0)
+                if not swept and r["pole_up"] > TH["elbow_pole_up_max"] and r["elevation"] >= TH.get("elbow_pole_min_elevation_deg", 40):
                     issues.append(("elbow pointing up/sideways", f"pole up {r['pole_up']:+.2f}"))
                 if r["pole_out"] > TH["elbow_pole_out_max"]:
                     issues.append(("elbow flared out", f"pole out {r['pole_out']:+.2f}"))
-                if r["elevation"] > TH["elbow_upperarm_elev_max_deg"]:
+                if not swept and r["elevation"] > TH["elbow_upperarm_elev_max_deg"]:
                     issues.append(("upper arm raised (chicken wing)", f"elevation {r['elevation']:.0f} deg"))
+                if swept and r["elevation"] > TH.get("elbow_ext_elev_max_deg", 65):
+                    issues.append(("upper arm swept back past the shoulder's range", f"elevation {r['elevation']:.0f} deg"))
             if r["reverse"]:
                 issues.append(("elbow bending the wrong way", "hinge axis flipped vs the guard"))
             if abs(r["fore_twist"]) > TH["twist_max_deg"]:

@@ -196,5 +196,36 @@
   ],
   "_source": "Ganondorf ftilt v2: idle start, balance solved per frame (ganon_ftilt_v2_motion.py)",
   "reference": "refs/owner_ganon_ftilt"
+ },
+ "ganon_v3": {
+  "move": "tilt",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V3",
+  "contact": [
+   9,
+   11
+  ],
+  "faf": 37,
+  "effector": "ball_l",
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l",
+  "hold_window": [
+   9,
+   20
+  ],
+  "_source": "Ganondorf ftilt v3: key poses from the owner's 5 frames (refs/owner_ganon_ftilt/keyposes.json), ganon_ftilt_v3_motion.py",
+  "reference": "refs/owner_ganon_ftilt",
+  "balance_exempt_frames": [
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   20,
+   21,
+   22
+  ],
+  "_balance_exempt": "the reference is off balance in the strike (its COM ~0.23 body lengths = 29 cm ahead of the support ankle at the active pose, the toe edge is ~15 cm): 9-14 the strike lunge; 20-22 the step down onto the landing foot (a controlled fall forward, the foot lands at 23-24)",
+  "_exit": "ends in the reference's low wide guard (support knee ~76 deg, weight on the front foot), not the upright idle: the reference's last frame is crouched (owner's frames); the game's blend returns to the idle"
  }
 }
