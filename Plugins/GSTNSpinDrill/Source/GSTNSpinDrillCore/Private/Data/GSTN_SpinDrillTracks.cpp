@@ -3,6 +3,7 @@
 #include "Data/GSTN_SpinDrillTracks.h"
 
 #include "Data/GSTN_SpinTimelines.h"
+#include "GSTN_SpinDrillTags.h"
 #include "Hits/GSTN_HitboxTypes.h"
 #include "Hits/GSTN_HitShape.h"
 #include "Input/GSTN_CombatCommandTags.h"
@@ -16,6 +17,20 @@ const FGSTN_SpinTrack* FGSTN_SpinTrack::Find(const FGSTN_CombatTimelineData& Dat
 		if (Struct && Struct->IsChildOf(SpinStruct))
 		{
 			return &Track.Get<FGSTN_SpinTrack>();
+		}
+	}
+	return nullptr;
+}
+
+const FGSTN_SpinCancelTrack* FGSTN_SpinCancelTrack::Find(const FGSTN_CombatTimelineData& Data)
+{
+	const UScriptStruct* CancelStruct = FGSTN_SpinCancelTrack::StaticStruct();
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
+	{
+		const UScriptStruct* Struct = Track.GetScriptStruct();
+		if (Struct && Struct->IsChildOf(CancelStruct))
+		{
+			return &Track.Get<FGSTN_SpinCancelTrack>();
 		}
 	}
 	return nullptr;
@@ -61,7 +76,45 @@ FGSTN_CombatTimelineData FGSTN_SpinTimelines::Make(const FGSTN_SpinTimelineParam
 	Jump.Condition = EGSTN_CancelCondition::Always;
 	Jump.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCommandTags::Movement_Jump.GetTag()));
 	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Jump));
+
+	// D5: the opposite rotation, from CancelFromFrame on, starts the cancel (its binding requires the spin's sense tag)
+	if (Params.CancelFromFrame >= 0 && Params.CancelFromFrame < Data.TotalFrames)
+	{
+		FGSTN_TimelineTrack_CancelWindow IntoOpposite;
+		IntoOpposite.StartFrame = Params.CancelFromFrame;
+		IntoOpposite.EndFrame = Data.TotalFrames;
+		IntoOpposite.Condition = EGSTN_CancelCondition::Always;
+		IntoOpposite.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(SpinCommand(Opposite(Sense))));
+		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(IntoOpposite));
+	}
 	return Data;
+}
+
+FGSTN_CombatTimelineData FGSTN_SpinTimelines::MakeCancel(const FGSTN_SpinCancelTimelineParams& Params, EGSTN_SpinSense Sense)
+{
+	FGSTN_CombatTimelineData Data;
+	Data.TotalFrames = FMath::Max(1, Params.RecoveryFrames);
+	Data.FirstActionableFrame = Data.TotalFrames;
+	Data.OverrideFrames = 0;
+
+	FGSTN_SpinCancelTrack Cancel;
+	Cancel.StartFrame = 0;
+	Cancel.EndFrame = Data.TotalFrames;
+	Cancel.Sense = Sense;
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_SpinCancelTrack>(Cancel));
+
+	FGSTN_TimelineTrack_CancelWindow Jump;
+	Jump.StartFrame = 0;
+	Jump.EndFrame = Data.TotalFrames;
+	Jump.Condition = EGSTN_CancelCondition::Always;
+	Jump.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCommandTags::Movement_Jump.GetTag()));
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Jump));
+	return Data;
+}
+
+FGameplayTag FGSTN_SpinTimelines::SpinCommand(EGSTN_SpinSense Sense)
+{
+	return (Sense == EGSTN_SpinSense::Clockwise ? GSTNSpinDrillTags::Command_Movement_Spin_Clockwise : GSTNSpinDrillTags::Command_Movement_Spin_CounterClockwise).GetTag();
 }
 
 FGSTN_SpinTimelineParams FGSTN_SpinTimelines::GroundParams()

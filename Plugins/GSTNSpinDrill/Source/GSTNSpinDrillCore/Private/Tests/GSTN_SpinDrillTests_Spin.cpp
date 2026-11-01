@@ -55,15 +55,29 @@ bool FGSTN_SpinDrillSpinTimelinesTest::RunTest(const FString& Parameters)
 
 			bool bRing = false;
 			bool bJumpWindow = false;
+			bool bOppositeWindow = false;
+			bool bSameSenseWindow = false;
+			const FGameplayTagContainer OppositeKeys(FGameplayTag::RequestGameplayTag(Sense == EGSTN_SpinSense::Clockwise
+				? TEXT("Command.Movement.Spin.CounterClockwise.Keys") : TEXT("Command.Movement.Spin.Clockwise.Keys")));
+			const FGameplayTagContainer Same(FGSTN_SpinTimelines::SpinCommand(Sense));
 			for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
 			{
 				const FGSTN_TimelineTrack* Base = Track.GetPtr<FGSTN_TimelineTrack>();
+				if (Base && Base->GetKind() == EGSTN_TimelineTrackKind::CancelWindow)
+				{
+					const FGSTN_TimelineTrack_CancelWindow& Window = static_cast<const FGSTN_TimelineTrack_CancelWindow&>(*Base);
+					// D5: the opposite command (its keyboard child included) from CancelFromFrame, never the same sense
+					bOppositeWindow |= Window.StartFrame == Params.CancelFromFrame && Window.IntoCommands.Matches(OppositeKeys);
+					bSameSenseWindow |= Window.IntoCommands.Matches(Same);
+				}
 				bRing |= Base && Base->GetKind() == EGSTN_TimelineTrackKind::Hitbox && Base->StartFrame == Params.RingStartFrame && Base->EndFrame == Params.RingEndFrame;
 				bJumpWindow |= Base && Base->GetKind() == EGSTN_TimelineTrackKind::CancelWindow && Base->StartFrame == 0;
 				TestFalse(*FString::Printf(TEXT("%s: no tags track (no movement lock)"), *Label), Base && Base->GetKind() == EGSTN_TimelineTrackKind::Tags);
 			}
 			TestTrue(*FString::Printf(TEXT("%s: the hitbox ring"), *Label), bRing);
 			TestTrue(*FString::Printf(TEXT("%s: the jump cancel window"), *Label), bJumpWindow);
+			TestTrue(*FString::Printf(TEXT("%s: the cancel window into the opposite spin from frame %d"), *Label, Params.CancelFromFrame), bOppositeWindow);
+			TestFalse(*FString::Printf(TEXT("%s: no window into the same sense"), *Label), bSameSenseWindow);
 
 			FString First;
 			const int32 Errors = CountErrors(Data, First);
@@ -74,6 +88,24 @@ bool FGSTN_SpinDrillSpinTimelinesTest::RunTest(const FString& Parameters)
 	FGSTN_CombatTimelineData Plain;
 	Plain.TotalFrames = 10;
 	TestNull(TEXT("a timeline without a spin track has none"), FGSTN_SpinTrack::Find(Plain));
+	TestNull(TEXT("nor a cancel track"), FGSTN_SpinCancelTrack::Find(Plain));
+
+	// D5: the cancel timeline is the recovery: the cancel track, a jump window, no hitbox, actionable at its end
+	const FGSTN_CombatTimelineData Cancel = FGSTN_SpinTimelines::MakeCancel(FGSTN_SpinCancelTimelineParams(), EGSTN_SpinSense::CounterClockwise);
+	const FGSTN_SpinCancelTrack* CancelTrack = FGSTN_SpinCancelTrack::Find(Cancel);
+	TestTrue(TEXT("cancel: the track with the cancelling sense"), CancelTrack && !CancelTrack->IsClockwise());
+	TestNull(TEXT("cancel: no spin track"), FGSTN_SpinTrack::Find(Cancel));
+	TestEqual(TEXT("cancel: 8 recovery frames, actionable at the end"), Cancel.TotalFrames * 100 + Cancel.FirstActionableFrame, 808);
+	bool bHitbox = false;
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Cancel.Tracks)
+	{
+		const FGSTN_TimelineTrack* Base = Track.GetPtr<FGSTN_TimelineTrack>();
+		bHitbox |= Base && Base->GetKind() == EGSTN_TimelineTrackKind::Hitbox;
+	}
+	TestFalse(TEXT("cancel: no hitbox"), bHitbox);
+	FString First;
+	const int32 Errors = CountErrors(Cancel, First);
+	TestEqual(*FString::Printf(TEXT("cancel: the timeline validates (%s)"), *First), Errors, 0);
 	return true;
 }
 

@@ -9,7 +9,7 @@ The design is [spin-drill.md](../../docs/architecture/spin-drill.md); the checkp
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints D1 (the plugin, its five modules, the native tags of spec
 §10), D2 (tuning structs, target response, the pure drill math and the tuning asset) and D3 (the drill sync fragment and the tick
 extension's phase machine) and D4 (the ground and air spin: abilities, input slots, hop, low gravity, one air spin per airtime) are
-built. Next: D5 (opposite-spin cancel). The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
+built, and D5 (the opposite-spin cancel). Next: D6/D7 (combat core seams). The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
 
 ## Modules
 
@@ -107,8 +107,12 @@ BeforeCandidates yet; the request of the frame and the bore end rules (`UGSTN_Dr
 - **Kit**: `UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings` (air binding requires `Mover.IsInAir`, ground binding ignores it, slots inline),
   `AddSpinBindingsToKit` for setup scripts and the harness. Tuning per kit: a `FGSTN_SpinDrillKitExtension` entry naming a
   `UGSTN_SpinDrillTuning`; its loadout extension copies the values into `FGSTN_SpinDrillAttach` on every machine. No entry = defaults.
+- **Opposite-spin cancel (D5)**: the spin timelines open a window into the opposite spin command from frame 6; the bindings route
+  that command to `UGSTN_GA_SpinCancelClockwise` / `...CounterClockwise` while `Combat.State.Spinning.<other sense>` holds (cancel
+  bindings first). The cancel's timeline carries a `FGSTN_SpinCancelTrack` and is the 8-frame recovery (no hitbox, momentum kept); the
+  extension stops the spin and ends the air spin's low gravity. Outside a spin the same rotation is an ordinary spin.
 - **Harness**: `Tools/GASNPPTest/spin_drill_scenarios.py` (`spin_ground_hits_ring`, `spin_air_hop_low_gravity`,
-  `air_spin_once_per_airtime`), bindings added in memory.
+  `air_spin_once_per_airtime`, `spin_opposite_cancel`), bindings added in memory.
 - Limits: wall contact does not refresh the air spin yet (no wall fact in the combat state); a pawn without the combat stats never
   spends its air spin; deviations in [spin-drill-doc-deltas.md](../../docs/notes/spin-drill-doc-deltas.md) "D4".
 

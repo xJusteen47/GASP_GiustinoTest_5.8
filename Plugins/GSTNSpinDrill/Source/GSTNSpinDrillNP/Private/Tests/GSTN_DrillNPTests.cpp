@@ -647,4 +647,66 @@ bool FGSTN_DrillNPSpinFlowTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPSpinCancelTest, "GSTNSpinDrill.NP.Spin.OppositeCancel", GSTNDrillNPTest::Flags)
+bool FGSTN_DrillNPSpinCancelTest::RunTest(const FString& Parameters)
+{
+	FScopedFragment Registered;
+	FTimelineDrillExtension Extension;
+	const FGSTN_CombatTimelineData AirCw = FGSTN_SpinTimelines::Make(FGSTN_SpinTimelines::AirParams(), EGSTN_SpinSense::Clockwise, true);
+	const FGSTN_CombatTimelineData CancelCcw = FGSTN_SpinTimelines::MakeCancel(FGSTN_SpinCancelTimelineParams(), EGSTN_SpinSense::CounterClockwise);
+	const FGSTN_CombatTimelineData CancelCw = FGSTN_SpinTimelines::MakeCancel(FGSTN_SpinCancelTimelineParams(), EGSTN_SpinSense::Clockwise);
+	const auto Phase = [](const FGSTN_CombatSyncState& State) { return static_cast<int32>(ReadFragment(State).Phase); };
+	const int32 Spinning = static_cast<int32>(EGSTN_DrillPhase::Spinning);
+	const int32 None = static_cast<int32>(EGSTN_DrillPhase::None);
+
+	FGSTN_CombatSyncState State;
+	State.Core.Jump.Phase = EGSTN_JumpPhase::Falling;
+	Extension.Started = AirCw;
+	RunTimeline(State, 10);
+	RunTick(Extension, State, 10);
+	TestEqual(TEXT("air spin from frame 10"), Phase(State), Spinning);
+
+	// The phase machine's own refusals, on the fragment (in game the windows already keep these timelines from starting): the same sense
+	// never cancels, and the opposite rotation does not before CancelFromFrame (6)
+	const FGSTN_DrillSimTuning Tuning = FGSTN_DrillSimTuning::MakeDefault();
+	FGSTN_DrillFrameInputs SameSense;
+	FGSTN_DrillTickExtension::ReadCancelStart(*FGSTN_SpinCancelTrack::Find(CancelCw), SameSense);
+	FGSTN_DrillFragment Same = ReadFragment(State);
+	FGSTN_DrillTickExtension::StepAfterExecute(Same, 17, SameSense, Tuning);
+	TestEqual(TEXT("a cancel of the same sense is refused"), static_cast<int32>(Same.Phase), Spinning);
+	FGSTN_DrillFrameInputs OppositeSense;
+	FGSTN_DrillTickExtension::ReadCancelStart(*FGSTN_SpinCancelTrack::Find(CancelCcw), OppositeSense);
+	FGSTN_DrillFragment Early = ReadFragment(State);
+	FGSTN_DrillTickExtension::StepAfterExecute(Early, 14, OppositeSense, Tuning);
+	TestEqual(TEXT("frame 4 of the spin: refused"), static_cast<int32>(Early.Phase), Spinning);
+
+	// Through the extension: the cancel's timeline starts on frame 16, frame 6 of the spin
+	Extension.Started = CancelCcw;
+
+	// From frame 6 it stops the spin; the low gravity of the air spin ends with it, the air spin stays spent
+	RunTimeline(State, 16);
+	RunTick(Extension, State, 16);
+	const FGSTN_DrillFragment Cancelled = ReadFragment(State);
+	TestEqual(TEXT("frame 6 of the spin: cancelled"), static_cast<int32>(Cancelled.Phase), None);
+	TestEqual(TEXT("the low gravity ended with the cancel"), Cancelled.LowGravityUntilFrame, static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("the air spin stays spent for this airtime"), static_cast<int32>(Cancelled.AirSpinsUsed), 1);
+
+	// While the cancel's recovery runs nothing restarts the spin
+	RunTick(Extension, State, 17);
+	TestEqual(TEXT("still no phase during the recovery"), Phase(State), None);
+
+	// A tuning that keeps low gravity a little longer keeps it past the cancel by those frames only
+	FGSTN_DrillFragment Air;
+	FGSTN_DrillSimTuning Longer = FGSTN_DrillSimTuning::MakeDefault();
+	Longer.LowGravityExtraFrames = 5;
+	FGSTN_DrillFrameInputs Start;
+	FGSTN_DrillTickExtension::ReadSpinStart(*FGSTN_SpinTrack::Find(AirCw), Start);
+	FGSTN_DrillTickExtension::StepAfterExecute(Air, 100, Start, Longer);
+	FGSTN_DrillFrameInputs Stop;
+	FGSTN_DrillTickExtension::ReadCancelStart(*FGSTN_SpinCancelTrack::Find(CancelCcw), Stop);
+	FGSTN_DrillTickExtension::StepAfterExecute(Air, 110, Stop, Longer);
+	TestEqual(TEXT("extra frames: low gravity until the cancel frame + 5"), Air.LowGravityUntilFrame, 115);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

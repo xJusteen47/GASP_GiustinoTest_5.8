@@ -99,3 +99,21 @@ Differences between the code and [spin-drill.md](../architecture/spin-drill.md) 
   3 damage; air 36 frames, actionable 20, ring 2-20. Jump cancel window over the whole spin; no movement lock. Placeholders.
 - **Module edges.** GSTNSpinDrillNP adds GSTNInputNP (tracker) and GSTNCombatGAS (combat stats); GSTNSpinDrillGAS adds the NP fork modules,
   GSTNInputCore/NP and GSTNCombatNP (the abilities are `UGSTN_GA_BaseCombat` children).
+
+## D5 (opposite-spin cancel)
+
+- As spec §7.3 and SD.2 (the opposite rotation stops the spin, it does not start one), with the D4 shape: a plugin track
+  `FGSTN_SpinCancelTrack` (sense of the cancelling rotation) on the cancel's timeline, and two classes `UGSTN_GA_SpinCancelClockwise`,
+  `...CounterClockwise` (abstract `UGSTN_GA_SpinCancel`). The extension turns the track into the Cancel request on the frame the timeline
+  starts; the phase machine keeps its D3 rule (opposite sense, from `CancelFromFrame`).
+- The spin timelines carry a cancel window into the opposite spin command (the parent tag, so the keyboard child is in it) from
+  `FGSTN_SpinTimelineParams::CancelFromFrame` (6, the tuning's default). The window is the gate and the tuning value is what the phase
+  machine checks: keep them equal (noted on the field).
+- Routing is binding data: the cancel binding requires the sense tag of the spin it stops (`Combat.State.Spinning.CounterClockwise` for the
+  clockwise cancel). Bindings resolve to the most required tags, then the first: in the air the cancel and the air spin both require one
+  tag, so `MakeDefaultSpinBindings` puts the cancels first (12 bindings with the keyboard shortcut).
+- The cancel timeline is the recovery (`CancelRecoveryFrames`, 8): no hitbox, no movement (momentum kept), a jump window, actionable at its
+  end. Spec §2's "recovery 4 frames" and the tuning's 8 disagreed: the tuning's 8 is used.
+- New rule: a spin that ends early (cancel, replacement, jump cancel) also ends the air spin's low gravity, keeping only
+  `LowGravityExtraFrames` (SD.3 "only during the air spin"). The air spin stays spent for the airtime.
+- No new tags. Harness: `spin_opposite_cancel` in `spin_drill_scenarios.py` (not run yet, as the D4 ones).

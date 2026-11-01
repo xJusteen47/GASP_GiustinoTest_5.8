@@ -79,6 +79,51 @@ public:
 	UGSTN_GA_AirSpinClockwise(const FObjectInitializer& ObjectInitializer);
 };
 
+/**
+ * The opposite-spin cancel (plan D5, spin-drill.md 7.3, 14 SD.2: the opposite rotation stops the spin early, it does not start a new spin).
+ * A timeline ability with a FGSTN_SpinCancelTrack: its timeline is the recovery (no hitbox, no movement, the momentum kept); the tick
+ * extension sees the track when the timeline starts and ends the spin's phase. Reached only through the spin's cancel window into the
+ * opposite command, and only by a binding that requires the spin's sense tag (Combat.State.Spinning.CounterClockwise for the clockwise
+ * cancel): outside a spin the same command is a normal spin. Sense = the cancelling rotation, so one class per sense like the spin.
+ */
+UCLASS(Abstract, Blueprintable)
+class GSTNSPINDRILLGAS_API UGSTN_GA_SpinCancel : public UGSTN_GA_BaseCombat
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_SpinCancel(const FObjectInitializer& ObjectInitializer);
+
+	/** The cancel track of the timeline this class runs, null when it has none */
+	const FGSTN_SpinCancelTrack* FindCancelTrack() const;
+
+	/** The state tag a binding of this class must require: the sense of the spin it cancels (the opposite of the track's) */
+	static FGameplayTag RequiredSpinTag(EGSTN_SpinSense CancellingSense);
+
+protected:
+	void SetDefaultCancel(EGSTN_SpinSense Sense);
+};
+
+/** A clockwise rotation cancels a counter-clockwise spin. Bind to Command.Movement.Spin.Clockwise requiring Combat.State.Spinning.CounterClockwise */
+UCLASS(Blueprintable)
+class GSTNSPINDRILLGAS_API UGSTN_GA_SpinCancelClockwise : public UGSTN_GA_SpinCancel
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_SpinCancelClockwise(const FObjectInitializer& ObjectInitializer);
+};
+
+/** A counter-clockwise rotation cancels a clockwise spin. Bind to Command.Movement.Spin.CounterClockwise requiring Combat.State.Spinning.Clockwise */
+UCLASS(Blueprintable)
+class GSTNSPINDRILLGAS_API UGSTN_GA_SpinCancelCounterClockwise : public UGSTN_GA_SpinCancel
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_SpinCancelCounterClockwise(const FObjectInitializer& ObjectInitializer);
+};
+
 /** The default air spin, counter-clockwise. Bind to Command.Movement.Spin.CounterClockwise with an airborne requirement */
 UCLASS(Blueprintable)
 class GSTNSPINDRILLGAS_API UGSTN_GA_AirSpinCounterClockwise : public UGSTN_GA_Spin

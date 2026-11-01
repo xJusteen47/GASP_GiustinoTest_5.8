@@ -40,6 +40,19 @@ namespace GSTNDrillTick
 		Fragment.PhaseStartFrame = Frame;
 	}
 
+	/**
+	 * The low gravity belonged to the air spin's timeline (14 SD.3): a spin that ends early (cancelled, replaced, jump cancelled) ends it
+	 * too, keeping only the extra frames of the tuning. A spin that runs to its end finds its window ending there anyway
+	 */
+	void EndLowGravity(FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_DrillSimTuning& Tuning)
+	{
+		if (Fragment.LowGravityUntilFrame != INDEX_NONE)
+		{
+			const int32 Until = FMath::Min(Fragment.LowGravityUntilFrame, Frame + FMath::Max(0, Tuning.LowGravityExtraFrames));
+			Fragment.LowGravityUntilFrame = Until > Frame ? Until : INDEX_NONE;
+		}
+	}
+
 	uint16 ToFrames16(int32 Frames)
 	{
 		return static_cast<uint16>(FMath::Clamp(Frames, 0, static_cast<int32>(MAX_uint16)));
@@ -124,6 +137,12 @@ void FGSTN_DrillTickExtension::StepAfterClocks(FGSTN_DrillFragment& Fragment, in
 		}
 		break;
 	case EGSTN_DrillPhase::Spinning:
+		if (Inputs.bPhaseTimelineEnded)
+		{
+			GSTNDrillTick::EnterNone(Fragment);
+			GSTNDrillTick::EndLowGravity(Fragment, Frame, Tuning);
+		}
+		break;
 	case EGSTN_DrillPhase::Launching:
 	case EGSTN_DrillPhase::Lag:
 		if (Inputs.bPhaseTimelineEnded)
@@ -168,6 +187,7 @@ void FGSTN_DrillTickExtension::StepAfterExecute(FGSTN_DrillFragment& Fragment, i
 		if (Fragment.IsSpinning() && Inputs.bClockwise != Fragment.IsClockwise() && Fragment.FramesInPhase(Frame) >= Tuning.CancelFromFrame)
 		{
 			EnterNone(Fragment);
+			EndLowGravity(Fragment, Frame, Tuning);
 		}
 		break;
 	case EGSTN_DrillRequest::Dive:
@@ -306,6 +326,12 @@ void FGSTN_DrillTickExtension::ReadSpinStart(const FGSTN_SpinTrack& Track, FGSTN
 	OutInputs.SpinFrames = FMath::Max(0, Track.EndFrame);
 }
 
+void FGSTN_DrillTickExtension::ReadCancelStart(const FGSTN_SpinCancelTrack& Track, FGSTN_DrillFrameInputs& OutInputs)
+{
+	OutInputs.Request = EGSTN_DrillRequest::Cancel;
+	OutInputs.bClockwise = Track.IsClockwise();
+}
+
 bool FGSTN_DrillTickExtension::WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame)
 {
 	return Fragment && Fragment->IsLowGravity(Frame);
@@ -330,6 +356,10 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 			if (const FGSTN_SpinTrack* Spin = FGSTN_SpinTrack::Find(*Started))
 			{
 				ReadSpinStart(*Spin, Inputs);
+			}
+			else if (const FGSTN_SpinCancelTrack* Cancel = FGSTN_SpinCancelTrack::Find(*Started))
+			{
+				ReadCancelStart(*Cancel, Inputs);
 			}
 		}
 		break;
