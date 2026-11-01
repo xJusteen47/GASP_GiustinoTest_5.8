@@ -121,6 +121,7 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
   struct of the kits that may use it). The registry compiles it into the offer list and the probe's meaning table; the link tick extension
   projects whichever meaning the focus has. The type's rules pre-filter its candidates with the same request sides the hit path builds, team
   and kit data included, so an ally-only type (list `UGSTN_LinkRule_Team`) never offers an enemy (G1).
+- **A team rule on every grab-like type** (M7 G5): the interact probe tries the offers on a candidate by priority and the first whose rules accept it names the candidate, so an offer whose rules ignore the team shadows every lower offer for that candidate (an unfiltered grab, 100, claimed allies the mount, 50, is meant for). List `UGSTN_LinkRule_Team` (EnemiesOnly for a grab or a latch, AlliesOnly for a mount; Any only in a friendly-fire mode). The test grab and latch carry it as their second rule (`Tools/GAS/setup_defence_link_content.py`; the harness edits `rules[0]`).
 - **A rule that reads your kit's data**: put a `FGSTN_KitExtension` child in the kit's extension array and read it with
   `Context.Initiator.FindKitExtension<T>()` (or `Target`); `Context.*.TeamId` and `UGSTN_LinkRule::AreAllies` give the teams (G1).
 - **A type-specific byte on the link** (a carry load): override `UGSTN_LinkRule::ComputePayload`; the first non-zero value of the rules is the
