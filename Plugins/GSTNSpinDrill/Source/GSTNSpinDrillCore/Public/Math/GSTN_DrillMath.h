@@ -176,6 +176,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GSTN|SpinDrill")
 	static int32 RefreshEventsForEnd(EGSTN_DrillEndResult Result, bool bLaunchRefreshesAirSpin);
 
+	/**
+	 * Refresh events the combat jump state shows between the end of the previous frame and this one (plan D4): Land while the jump phase is
+	 * None (grounded), Trampoline on the frame the phase becomes Launched (an external launch). C++ only: the phase enum is not a Blueprint
+	 * type. Wall contact is not visible in the jump state and raises nothing here
+	 */
+	static int32 RefreshEventsFromJumpPhase(uint8 PreviousPhase, uint8 CurrentPhase);
+
+	/**
+	 * Velocity after the air spin's hop, in the frame of Up (unit, against gravity). The part across Up is kept. Along Up: with
+	 * bCancelFall the speed becomes max(current, HopSpeed), so a falling character always rises; without it HopSpeed is added
+	 */
+	UFUNCTION(BlueprintPure, Category = "GSTN|SpinDrill")
+	static FVector ComputeHopVelocity(const FVector& Prior, const FVector& Up, float HopSpeed, bool bCancelFall);
+
 	// ---- Vectors ----
 
 	/**

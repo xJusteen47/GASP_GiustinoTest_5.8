@@ -3,6 +3,7 @@
 #include "Math/GSTN_DrillMath.h"
 
 #include "Curves/CurveFloat.h"
+#include "Jump/GSTN_JumpTypes.h"
 
 namespace GSTNDrillMath
 {
@@ -143,6 +144,37 @@ bool UGSTN_DrillMath::CanAirSpin(int32 AirSpinsUsed, int32 UsesPerAirtime)
 int32 UGSTN_DrillMath::RefreshEventsForEnd(EGSTN_DrillEndResult Result, bool bLaunchRefreshesAirSpin)
 {
 	return Result == EGSTN_DrillEndResult::Launch && bLaunchRefreshesAirSpin ? static_cast<int32>(EGSTN_AirSpinRefresh::Launch) : 0;
+}
+
+int32 UGSTN_DrillMath::RefreshEventsFromJumpPhase(uint8 PreviousPhase, uint8 CurrentPhase)
+{
+	const uint8 Grounded = static_cast<uint8>(EGSTN_JumpPhase::None);
+	const uint8 Launched = static_cast<uint8>(EGSTN_JumpPhase::Launched);
+	int32 Events = 0;
+	if (CurrentPhase == Grounded)
+	{
+		Events |= static_cast<int32>(EGSTN_AirSpinRefresh::Land);
+	}
+	// The edge only: a launch refreshes once, so an air spin used while still rising from it stays spent
+	if (CurrentPhase == Launched && PreviousPhase != Launched)
+	{
+		Events |= static_cast<int32>(EGSTN_AirSpinRefresh::Trampoline);
+	}
+	return Events;
+}
+
+FVector UGSTN_DrillMath::ComputeHopVelocity(const FVector& Prior, const FVector& Up, float HopSpeed, bool bCancelFall)
+{
+	const FVector UpDir = Up.GetSafeNormal();
+	if (UpDir.IsZero())
+	{
+		return Prior;
+	}
+	const double Along = Prior.Dot(UpDir);
+	const FVector Across = Prior - UpDir * Along;
+	const double Hop = FMath::Max(0.f, HopSpeed);
+	const double NewAlong = bCancelFall ? FMath::Max(Along, Hop) : Along + Hop;
+	return Across + UpDir * NewAlong;
 }
 
 FVector UGSTN_DrillMath::ComputeLaunchVelocity(EGSTN_DrillLaunchDirection Direction, const FVector& SurfaceNormal, const FVector& Gravity, float Speed)

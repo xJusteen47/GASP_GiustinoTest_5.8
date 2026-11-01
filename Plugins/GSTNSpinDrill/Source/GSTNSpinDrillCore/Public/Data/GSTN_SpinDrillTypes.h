@@ -73,6 +73,13 @@ struct GSTNSPINDRILLCORE_API FGSTN_AirSpinTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|AirSpin", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float HopSpeed = 450.f;
 
+	/**
+	 * True (Sunshine): a falling character first stops falling, then rises at HopSpeed, so the spin always lifts. False: the hop is added
+	 * to the speed along gravity-up, so a fast fall only slows down. The speed across gravity is kept either way
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|AirSpin")
+	bool bHopCancelsFall = true;
+
 	/** Gravity multiplier during the air spin */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|AirSpin", meta = (ClampMin = "0", ClampMax = "2"))
 	float SpinGravityScale = 0.35f;

@@ -3,6 +3,8 @@
 // rollback (a restored older state re-simulated gives the same frames) and the projection of the Combat.State.* tags.
 
 #include "AbilitySystemComponent.h"
+#include "Data/GSTN_SpinDrillTracks.h"
+#include "Data/GSTN_SpinTimelines.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -496,6 +498,11 @@ bool FGSTN_DrillNPTagsTest::RunTest(const FString& Parameters)
 	FGSTN_DrillTickExtension Extension;
 	FGSTN_CombatSyncState State;
 	FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DrillFragment>(State.Fragments) = AirSpinCcw();
+	// The spin's timeline runs and the entity is airborne, or the real extension would end the spin and give the air spin back
+	State.Core.ActionState = EGSTN_ActionState::InTimeline;
+	State.Core.ActiveTimeline = 0;
+	State.Core.TimelineStartFrame = AirSpinCcw().PhaseStartFrame;
+	State.Core.Jump.Phase = EGSTN_JumpPhase::Falling;
 	RunTick(Extension, State, 105, Rig.ASC);
 	TestTrue(TEXT("projected: Spinning.CounterClockwise"), Rig.ASC->HasMatchingGameplayTag(GSTNSpinDrillTags::State_Spinning_CounterClockwise));
 	TestFalse(TEXT("not Clockwise"), Rig.ASC->HasMatchingGameplayTag(GSTNSpinDrillTags::State_Spinning_Clockwise));
@@ -509,6 +516,134 @@ bool FGSTN_DrillNPTagsTest::RunTest(const FString& Parameters)
 	RunTick(Extension, BeforeAnySpin, 104, Rig.ASC);
 	TestFalse(TEXT("a rollback to before the fragment clears Spinning"), Rig.ASC->HasMatchingGameplayTag(GSTNSpinDrillTags::State_Spinning));
 	TestFalse(TEXT("and AirSpinSpent"), Rig.ASC->HasMatchingGameplayTag(GSTNSpinDrillTags::State_AirSpinSpent));
+	return true;
+}
+
+namespace GSTNDrillNPTest
+{
+	/** The real extension (its own GatherInputs) with the started timeline taken from the test instead of a combat component */
+	class FTimelineDrillExtension : public FGSTN_DrillTickExtension
+	{
+	public:
+		FGSTN_CombatTimelineData Started;
+
+	protected:
+		virtual const FGSTN_CombatTimelineData* ResolveStartedTimeline(const FGSTN_CombatTickContext& Context) const override
+		{
+			const FGSTN_CombatSyncCore& Core = Context.Out.Core;
+			return Core.ActionState == EGSTN_ActionState::InTimeline && Core.TimelineStartFrame == Context.Frame ? &Started : nullptr;
+		}
+	};
+
+	/** The combat state of a timeline running since StartFrame */
+	void RunTimeline(FGSTN_CombatSyncState& State, int32 StartFrame)
+	{
+		State.Core.ActionState = EGSTN_ActionState::InTimeline;
+		State.Core.ActiveTimeline = 0;
+		State.Core.TimelineStartFrame = StartFrame;
+	}
+
+	void StopTimeline(FGSTN_CombatSyncState& State)
+	{
+		State.Core.ActionState = EGSTN_ActionState::Actionable;
+		State.Core.ActiveTimeline = INDEX_NONE;
+		State.Core.TimelineStartFrame = INDEX_NONE;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPSpinReadTest, "GSTNSpinDrill.NP.Spin.ReadsTheCombatState", GSTNDrillNPTest::Flags)
+bool FGSTN_DrillNPSpinReadTest::RunTest(const FString& Parameters)
+{
+	// The pure reads: the end of a spin's timeline, the request of a spin track, the low gravity window
+	FGSTN_CombatSyncCore Core;
+	FGSTN_DrillFragment Spinning = GroundSpin();
+	TestTrue(TEXT("no timeline: the spin ended"), FGSTN_DrillTickExtension::HasSpinTimelineEnded(Spinning, Core));
+	Core.ActionState = EGSTN_ActionState::InTimeline;
+	Core.TimelineStartFrame = Spinning.PhaseStartFrame;
+	TestFalse(TEXT("its own timeline runs: not ended"), FGSTN_DrillTickExtension::HasSpinTimelineEnded(Spinning, Core));
+	Core.TimelineStartFrame = Spinning.PhaseStartFrame + 3;
+	TestTrue(TEXT("another timeline replaced it: ended"), FGSTN_DrillTickExtension::HasSpinTimelineEnded(Spinning, Core));
+	FGSTN_DrillFragment Diving = Spinning;
+	Diving.Phase = EGSTN_DrillPhase::Diving;
+	TestFalse(TEXT("only a spin ends this way"), FGSTN_DrillTickExtension::HasSpinTimelineEnded(Diving, Core));
+
+	FGSTN_SpinTrack Track;
+	Track.EndFrame = 36;
+	Track.Sense = EGSTN_SpinSense::CounterClockwise;
+	Track.bAirSpin = true;
+	FGSTN_DrillFrameInputs Inputs;
+	FGSTN_DrillTickExtension::ReadSpinStart(Track, Inputs);
+	TestTrue(TEXT("an air track asks for an air spin, counter-clockwise, 36 frames"), Inputs.Request == EGSTN_DrillRequest::AirSpin && !Inputs.bClockwise && Inputs.SpinFrames == 36);
+	Track.bAirSpin = false;
+	FGSTN_DrillTickExtension::ReadSpinStart(Track, Inputs);
+	TestTrue(TEXT("a ground track asks for a spin"), Inputs.Request == EGSTN_DrillRequest::Spin);
+
+	const FGSTN_DrillFragment Air = AirSpinCcw();
+	TestFalse(TEXT("no fragment: no low gravity"), FGSTN_DrillTickExtension::WantsLowGravity(nullptr, 0));
+	TestEqual(TEXT("the window is the fragment's"), FGSTN_DrillTickExtension::WantsLowGravity(&Air, Air.PhaseStartFrame), Air.IsLowGravity(Air.PhaseStartFrame));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPSpinFlowTest, "GSTNSpinDrill.NP.Spin.AirSpinOncePerAirtime", GSTNDrillNPTest::Flags)
+bool FGSTN_DrillNPSpinFlowTest::RunTest(const FString& Parameters)
+{
+	FScopedFragment Registered;
+	FTimelineDrillExtension Extension;
+	Extension.Started = FGSTN_SpinTimelines::Make(FGSTN_SpinTimelines::AirParams(), EGSTN_SpinSense::Clockwise, true);
+	const int32 SpinFrames = Extension.Started.TotalFrames;
+
+	// Airborne: the jump state says falling, so nothing refreshes
+	FGSTN_CombatSyncState State;
+	State.Core.Jump.Phase = EGSTN_JumpPhase::Falling;
+	RunTick(Extension, State, 9);
+	TestNull(TEXT("no spin, no fragment"), FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(State.Fragments));
+
+	// Frame 10: the air spin's timeline starts
+	RunTimeline(State, 10);
+	RunTick(Extension, State, 10);
+	FGSTN_DrillFragment F = ReadFragment(State);
+	TestEqual(TEXT("spinning from frame 10"), static_cast<int32>(F.Phase), static_cast<int32>(EGSTN_DrillPhase::Spinning));
+	TestEqual(TEXT("the phase starts with the timeline"), F.PhaseStartFrame, 10);
+	TestTrue(TEXT("clockwise air spin"), F.IsClockwise() && (F.Flags & GSTNDrillFlags::AirSpin) != 0);
+	TestEqual(TEXT("one air spin used"), static_cast<int32>(F.AirSpinsUsed), 1);
+	TestEqual(TEXT("low gravity to the end of the spin track"), F.LowGravityUntilFrame, 10 + SpinFrames);
+
+	// It keeps spinning while its timeline runs, and ends with it
+	RunTick(Extension, State, 11);
+	TestEqual(TEXT("still spinning at frame 11"), static_cast<int32>(ReadFragment(State).Phase), static_cast<int32>(EGSTN_DrillPhase::Spinning));
+	StopTimeline(State);
+	RunTick(Extension, State, 12);
+	F = ReadFragment(State);
+	TestEqual(TEXT("the timeline ended: no phase"), static_cast<int32>(F.Phase), static_cast<int32>(EGSTN_DrillPhase::None));
+	TestEqual(TEXT("still one air spin used in this airtime"), static_cast<int32>(F.AirSpinsUsed), 1);
+
+	// A second air spin in the same airtime is refused, even if its timeline started (the ability's block is the first gate)
+	RunTimeline(State, 20);
+	RunTick(Extension, State, 20);
+	TestEqual(TEXT("refused: no phase"), static_cast<int32>(ReadFragment(State).Phase), static_cast<int32>(EGSTN_DrillPhase::None));
+	StopTimeline(State);
+
+	// A trampoline launch gives it back once
+	State.Core.Jump.Phase = EGSTN_JumpPhase::Launched;
+	RunTick(Extension, State, 30);
+	// RunTick hands the same jump state as In and Out: the launch edge needs the previous frame to differ
+	TestEqual(TEXT("still launched is not a new launch"), static_cast<int32>(ReadFragment(State).AirSpinsUsed), 1);
+
+	// Landing after the low gravity window (it ends at 10 + 36) gives it back and the fragment is the default again
+	State.Core.Jump.Phase = EGSTN_JumpPhase::None;
+	RunTick(Extension, State, 60);
+	F = ReadFragment(State);
+	TestEqual(TEXT("landing gives the air spin back"), static_cast<int32>(F.AirSpinsUsed), 0);
+	TestTrue(TEXT("and the fragment is the default"), F.IsDefault());
+
+	// A ground spin uses nothing and has no low gravity
+	FTimelineDrillExtension Ground;
+	Ground.Started = FGSTN_SpinTimelines::Make(FGSTN_SpinTimelines::GroundParams(), EGSTN_SpinSense::CounterClockwise, false);
+	RunTimeline(State, 70);
+	RunTick(Ground, State, 70);
+	F = ReadFragment(State);
+	TestTrue(TEXT("ground spin, counter-clockwise, no air spin used, no low gravity"), F.IsSpinning() && !F.IsClockwise() && F.AirSpinsUsed == 0
+		&& F.LowGravityUntilFrame == INDEX_NONE);
 	return true;
 }
 

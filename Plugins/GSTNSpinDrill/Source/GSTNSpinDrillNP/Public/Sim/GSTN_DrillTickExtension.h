@@ -78,7 +78,7 @@ struct FGSTN_DrillFrameInputs
 };
 
 /** The tuning values the phase machine needs, copied from the kit's tuning (content, the same on every machine) */
-struct FGSTN_DrillSimTuning
+struct GSTNSPINDRILLNP_API FGSTN_DrillSimTuning
 {
 	int32 CancelFromFrame = 6;
 	int32 MinDiveFramesBeforeLatch = 2;
@@ -88,6 +88,12 @@ struct FGSTN_DrillSimTuning
 	bool bContinueThroughDestroyed = false;
 	bool bRefreshAirSpinOnLaunch = true;
 
+	// The air spin's movement (D4): read by the hop creator and the low gravity effect, never by the phase machine
+	float HopSpeed = 450.f;
+	bool bHopCancelsFall = true;
+	float SpinGravityScale = 0.35f;
+	float SpinMaxFallSpeedScale = 0.5f;
+
 	/** The defaults of the Core tuning structs */
 	static FGSTN_DrillSimTuning MakeDefault();
 
@@ -96,16 +102,20 @@ struct FGSTN_DrillSimTuning
 };
 
 /**
- * The spin and drill phase machine inside the combat tick (spin-drill.md 7.2), skeleton of plan D3. It reads and writes only the drill
- * fragment; the other inputs arrive as FGSTN_DrillFrameInputs. Priority 130: after the parts (100), the defence (110) and the links (120).
+ * The spin and drill phase machine inside the combat tick (spin-drill.md 7.2), skeleton of plan D3 with the spin of D4. It reads and writes
+ * only the drill fragment; the other inputs arrive as FGSTN_DrillFrameInputs. Priority 130: after the parts (100), the defence (110) and the
+ * links (120).
  *
- *  - AfterClocks: the refresh events give the air spins back; the low gravity stamp is cleared once passed; a seat that reached its
- *    length becomes the bore; the end of the timeline of a spin, launch or lag returns to None.
+ *  - AfterClocks: the low gravity stamp is cleared once passed; a seat that reached its length becomes the bore; the end of the timeline of
+ *    a spin, launch or lag returns to None (a spin ends when the combat state no longer runs the timeline that started it).
  *  - BeforeCandidates: nothing yet (the bore's hit-group mask is the fallback of seam S1, D6).
- *  - AfterExecute: the request of the frame (spin, air spin, cancel, dive, latch, bounce, ground), the hit count, then the end conditions
- *    of a latched driller (UGSTN_DrillMath::ResolveEnd).
+ *  - AfterExecute: the refresh events of the frame give the air spins back (the jump state after this frame's jump step: grounded, or
+ *    just launched), then the request of the frame (spin, air spin, cancel, dive, latch, bounce, ground), the hit count, then the end
+ *    conditions of a latched driller (UGSTN_DrillMath::ResolveEnd). A spin request comes from a timeline that started this frame and
+ *    carries a FGSTN_SpinTrack (its sense and air flag).
  *  - BeforeTagProjection: Combat.State.Spinning (+ .Clockwise / .CounterClockwise), .AirSpinSpent, .Drilling, .DrillLatched SET from the
- *    fragment, never added, so a re-simulated frame ends with the same tags.
+ *    fragment, never added, so a re-simulated frame ends with the same tags; and the low gravity effect follows the fragment's window
+ *    (UGSTN_GE_AirSpinLowGravity::Sync).
  *
  * Every transition returns the fragment to its defaults once nothing is live, so an entity that stopped spinning costs no payload.
  * Simulation code: deterministic, no net mode, no resimulation branch, state only in the fragment.
@@ -134,12 +144,33 @@ public:
 	/** Every tag this extension sets or clears */
 	static const FGameplayTagContainer& GetProjectableTags();
 
+	// ---- Reading the combat state (pure, tests drive them directly)
+
+	/** A Spinning fragment whose timeline is no longer the one the combat state runs (it ended, was cancelled or was replaced) */
+	static bool HasSpinTimelineEnded(const FGSTN_DrillFragment& Fragment, const FGSTN_CombatSyncCore& Core);
+
+	/** The request a spin track asks for on the frame its timeline starts: Spin or AirSpin, the sense, the frames of the low gravity */
+	static void ReadSpinStart(const struct FGSTN_SpinTrack& Track, FGSTN_DrillFrameInputs& OutInputs);
+
+	/** The low gravity window of the air spin holds at Frame: what UGSTN_GE_AirSpinLowGravity::Sync is asked to match */
+	static bool WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame);
+
 protected:
-	/** The frame's inputs at a hook point. Nothing fills them in D3 (no abilities yet): the defaults, which change nothing */
+	/**
+	 * The frame's inputs at a hook point: at AfterClocks the end of a spin's timeline; at AfterExecute the refresh events of the jump state
+	 * and the spin request of a timeline that started this frame. The dive, latch and bore inputs come with D8 to D10
+	 */
 	virtual FGSTN_DrillFrameInputs GatherInputs(EGSTN_CombatHookPoint Point, const FGSTN_CombatTickContext& Context) const;
 
-	/** The entity's tuning. The defaults in D3; the kit's tuning once the kit extension exists */
+	/** The entity's tuning: the attached kit tuning (FGSTN_SpinDrillAttach), else the defaults */
 	virtual FGSTN_DrillSimTuning GetTuning(const FGSTN_CombatTickContext& Context) const;
+
+	/**
+	 * The frame data of a timeline that started on this frame (the combat state's TimelineStartFrame is the frame), null otherwise. Content:
+	 * the class default of the registry entry in the table set of the state's revision, the same on every machine. The context's
+	 * RunningTimeline cannot serve, it is taken before a command starts its timeline
+	 */
+	virtual const FGSTN_CombatTimelineData* ResolveStartedTimeline(const FGSTN_CombatTickContext& Context) const;
 
 private:
 	void ProjectTags(FGSTN_CombatTickContext& Context, const FGSTN_DrillSimTuning& Tuning) const;
