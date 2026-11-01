@@ -100,11 +100,6 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 		DetachMesh();
 		Partner = PartnerActor;
 	}
-	if (!Role.bCollisionWithPartner && IgnoredPartner.Get() != PartnerActor)
-	{
-		SetPartnerCollisionIgnored(IgnoredPartner.Get(), false);
-		SetPartnerCollisionIgnored(PartnerActor, true);
-	}
 	return true;
 }
 
@@ -144,18 +139,28 @@ void UGSTN_LinkPresentationComponent::DetachMesh()
 	bMeshAttached = false;
 }
 
-void UGSTN_LinkPresentationComponent::SetPartnerCollisionIgnored(AActor* Other, bool bIgnore)
+void UGSTN_LinkPresentationComponent::SetCollisionIgnoredPartner(AActor* NewPartner)
 {
 	AActor* Owner = GetOwner();
 	UPrimitiveComponent* OwnRoot = Owner ? Cast<UPrimitiveComponent>(Owner->GetRootComponent()) : nullptr;
-	UPrimitiveComponent* OtherRoot = Other ? Cast<UPrimitiveComponent>(Other->GetRootComponent()) : nullptr;
-	if (!OwnRoot || !OtherRoot)
+	AActor* Previous = IgnoredPartner.Get();
+	if (!OwnRoot || Previous == NewPartner)
 	{
 		return;
 	}
-	OwnRoot->IgnoreActorWhenMoving(Other, bIgnore);
-	OtherRoot->IgnoreActorWhenMoving(Owner, bIgnore);
-	IgnoredPartner = bIgnore ? Other : nullptr;
+	if (Previous)
+	{
+		OwnRoot->IgnoreActorWhenMoving(Previous, false);
+	}
+	if (NewPartner && NewPartner != Owner)
+	{
+		OwnRoot->IgnoreActorWhenMoving(NewPartner, true);
+		IgnoredPartner = NewPartner;
+	}
+	else
+	{
+		IgnoredPartner = nullptr;
+	}
 }
 
 void UGSTN_LinkPresentationComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -173,7 +178,6 @@ void UGSTN_LinkPresentationComponent::TickComponent(float DeltaTime, ELevelTick 
 	else
 	{
 		DetachMesh();
-		SetPartnerCollisionIgnored(IgnoredPartner.Get(), false);
 		Partner = nullptr;
 	}
 	FGSTN_LinkDebugDraw::DrawEntity(GetOwner(), *this);
@@ -182,6 +186,6 @@ void UGSTN_LinkPresentationComponent::TickComponent(float DeltaTime, ELevelTick 
 void UGSTN_LinkPresentationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	DetachMesh();
-	SetPartnerCollisionIgnored(IgnoredPartner.Get(), false);
+	SetCollisionIgnoredPartner(nullptr);
 	Super::EndPlay(EndPlayReason);
 }

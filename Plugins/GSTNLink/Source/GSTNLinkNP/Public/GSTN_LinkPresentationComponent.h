@@ -20,9 +20,9 @@ struct FGSTN_LinkFragment;
  *    does not simulate the partner, the partner is interpolated and so is this, which is the intended trade (spike 2.1).
  *  - The owner's skeletal mesh is attached to the partner's mesh at that socket (relative = the mesh's own offset from its root x the role's
  *    offset), so it follows the animated hand. The capsule is NOT attached: it stays at the parked transform of the simulation.
- *  - Collision between the two capsules is ignored while linked when the role says bCollisionWithPartner false, and restored at the end.
- *    It is set from this tick, so the first simulated frame of a link may still sweep against the partner (F10 deviation: F11's exit
- *    placement moves the restore into the exit request).
+ *  - It also holds the collision side of a link for its owner (F15): SetCollisionIgnoredPartner, called by the link tick extension every
+ *    simulated frame from the simulated link fragment (FGSTN_LinkExitCollision), never from what this machine shows. Until F15 this tick
+ *    set and restored the pair's collision from the shown state, so a client restored it later than the authority (HANDOVER 61 OPEN 2).
  * Camera and aim consumers read GetLinkedTransform() (the project camera change approved in plan section 6 is the consumer's code; this
  * plugin exposes the transform and the bIsLinkedParked flag only).
  */
@@ -57,6 +57,15 @@ public:
 	/** The link fragment this machine shows for an actor (its combat component's latest state), or null */
 	static const FGSTN_LinkFragment* FindShownFragment(const AActor* Actor);
 
+	/**
+	 * Makes the owner's root primitive ignore exactly Partner when it moves (null = nobody), undoing the previous one. Only the owner's own
+	 * capsule: the partner's tick writes its own. Simulation-driven (FGSTN_LinkExitCollision::Apply), rewritten every simulated frame
+	 */
+	void SetCollisionIgnoredPartner(AActor* Partner);
+
+	/** The actor the owner's capsule ignores because of a link, or null */
+	AActor* GetCollisionIgnoredPartner() const { return IgnoredPartner.Get(); }
+
 	/** The component of an actor, created and registered when missing (FGSTN_LinkAttach does it on every machine) */
 	static UGSTN_LinkPresentationComponent* FindOrAdd(AActor* Owner);
 
@@ -70,7 +79,6 @@ private:
 	bool UpdateLinkedTransform();
 	void AttachMesh(AActor* NewPartner);
 	void DetachMesh();
-	void SetPartnerCollisionIgnored(AActor* Other, bool bIgnore);
 
 	TWeakObjectPtr<AActor> Partner;
 	TWeakObjectPtr<AActor> IgnoredPartner;

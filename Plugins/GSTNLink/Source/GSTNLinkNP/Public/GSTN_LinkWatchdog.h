@@ -96,8 +96,14 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogLogic
 		/** Frames after a LinkFrame before a one-sided link counts as an orphan (the settings' OrphanGraceFrames) */
 		int32 OrphanGraceFrames = 3;
 
-		/** The world for the exit placer, or null (the placer then takes its first candidate) */
+		/** The world for the exit placer, or null (the placer then takes its first candidate). Used when WithPairCollision is unset */
 		const IGSTN_ExitCollisionQuery* Collision = nullptr;
+
+		/**
+		 * The world for the exit of ONE pair (F15, HANDOVER 58 OPEN 2): calls Use with a query that ignores only the exiting and the staying
+		 * entity, so a third pawn (a bystander) blocks a place like any wall. Unset = Collision for every pair
+		 */
+		TFunction<void(int32 ExitingId, int32 StayingId, TFunctionRef<void(const IGSTN_ExitCollisionQuery*)> Use)> WithPairCollision;
 
 		/** The definition of a link type index; null = unknown (the link is left alone) */
 		TFunction<const UGSTN_LinkTypeDefinition*(uint8)> Definitions;
@@ -115,7 +121,7 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogLogic
 	static float ParkedDistance(const UGSTN_LinkTypeDefinition& Definition, const FGSTN_LinkWatchdogEntity& Initiator, const FGSTN_LinkWatchdogEntity& Target);
 };
 
-/** The real world asked by the exit placer: a capsule overlap against blocking geometry, the two linked pawns ignored. Server only */
+/** The real world asked by the exit placer: a capsule overlap against blocking geometry, the actors it is given ignored (the pair). Server only */
 class GSTNLINKNP_API FGSTN_WorldExitCollisionQuery : public IGSTN_ExitCollisionQuery
 {
 public:

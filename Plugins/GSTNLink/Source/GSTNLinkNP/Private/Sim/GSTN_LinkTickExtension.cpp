@@ -14,6 +14,7 @@
 #include "Movement/GSTN_LinkExitRequest.h"
 #include "Movement/GSTN_LinkedModifier.h"
 #include "Sim/GSTN_LinkAttach.h"
+#include "Sim/GSTN_LinkExitCollision.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Sim/GSTN_LinkMash.h"
 #include "Sim/GSTN_LinkShakeOff.h"
@@ -399,6 +400,8 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 			{
 				Fragment->GrabImmunityEndFrame = 0;
 			}
+			// ...and the exit collision window (F15)
+			FGSTN_LinkExitCollision::DropExpired(*Fragment, Context.Frame);
 			// The frame a non-acting parked role starts (the victim step or the inbox wrote it this frame): its running move ends, so no hitbox
 			// of it hits the partner later this frame
 			const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
@@ -462,6 +465,18 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 			Fragment && FGSTN_LinkExitRequest::IsDue(Fragment->Actions.Exit, Context.Frame))
 		{
 			FGSTN_LinkExitRequest::Apply(Context.AbilitySystem, Fragment->Actions.Exit);
+		}
+		// The pair's collision for this frame's Mover tick (F15): from the fragment this frame wrote, rewritten every simulated frame. An entity
+		// that never linked has no fragment and nothing to undo
+		if (Context.Owner)
+		{
+			const FGSTN_LinkFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
+			const FGSTN_EntityRef Ignored = FGSTN_LinkExitCollision::GetIgnoredPartner(Fragment, Registry, Context.Frame);
+			const UGSTN_CombatWorldSubsystem* World = Fragment ? UGSTN_CombatWorldSubsystem::Get(Context.Owner->GetWorld()) : nullptr;
+			if (Fragment)
+			{
+				FGSTN_LinkExitCollision::Apply(Context.Owner, Ignored.IsNull() || Ignored.Kind != GSTNEntityKinds::Fighter || !World ? nullptr : World->FindOwnerActor(Ignored.Id));
+			}
 		}
 		ProjectTags(Context);
 		break;

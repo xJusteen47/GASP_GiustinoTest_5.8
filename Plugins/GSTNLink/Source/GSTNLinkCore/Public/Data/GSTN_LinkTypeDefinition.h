@@ -188,6 +188,16 @@ public:
 	TObjectPtr<UGSTN_LinkExitPlacer> ExitPlacer;
 
 	/**
+	 * Frames after the exit during which the two former partners still ignore each other's collision, for a type whose parked role ignores
+	 * it while linked (IgnoresPartnerCollision). The window is sync state of both sides (the link fragment), so every machine and every
+	 * resimulation sweeps the same way: a client that still shows the released partner parked (interpolated) does not walk into a capsule
+	 * the authority has already restored, or the other way round. Default 12: the second correction it removes came 1-7 frames after the
+	 * break (HANDOVER 61), plus margin. 0 = collision returns on the exit frame
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Exit", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 ExitCollisionIgnoreFrames = 12;
+
+	/**
 	 * Body-channel link types this type cannot be formed or kept alongside. Meaningful on Hand-channel types only (a mount allows a
 	 * Hand link, so a rider can hold and throw; a grab does not): a Body type lists none
 	 */
@@ -225,6 +235,9 @@ public:
 
 	/** Index (1 or 2) of the parked role, or 0 when the type parks nobody */
 	int32 GetParkedRoleIndex() const;
+
+	/** The two capsules ignore each other while linked: the parked role says bCollisionWithPartner false. A type that parks nobody never does */
+	bool IgnoresPartnerCollision() const;
 
 	/** Index (1 or 2) of the role whose tag is RoleTag, or 0 when neither is */
 	int32 FindRoleIndex(const FGameplayTag& RoleTag) const;

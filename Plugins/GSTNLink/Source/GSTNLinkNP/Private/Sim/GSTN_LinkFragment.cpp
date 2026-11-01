@@ -12,7 +12,8 @@ namespace
 		constexpr uint8 Actions = 1 << 2;
 		constexpr uint8 GrabImmunity = 1 << 3;
 		constexpr uint8 Mash = 1 << 4;
-		constexpr uint8 All = Body | Hand | Actions | GrabImmunity | Mash;
+		constexpr uint8 ExitIgnore = 1 << 5;
+		constexpr uint8 All = Body | Hand | Actions | GrabImmunity | Mash | ExitIgnore;
 	}
 
 	void SerializeLinkState(FArchive& Ar, FGSTN_LinkState& State)
@@ -59,7 +60,7 @@ bool FGSTN_LinkFragment::IsDefault() const
 bool FGSTN_LinkFragment::operator==(const FGSTN_LinkFragment& Other) const
 {
 	return Links == Other.Links && Actions == Other.Actions && GrabImmunityEndFrame == Other.GrabImmunityEndFrame
-		&& MashProcessedFrame == Other.MashProcessedFrame;
+		&& MashProcessedFrame == Other.MashProcessedFrame && ExitIgnorePartner == Other.ExitIgnorePartner && ExitIgnoreEndFrame == Other.ExitIgnoreEndFrame;
 }
 
 void FGSTN_LinkFragment::NetSerialize(FArchive& Ar)
@@ -76,6 +77,7 @@ void FGSTN_LinkFragment::NetSerialize(FArchive& Ar)
 		Mask |= !Actions.IsIdle() ? Presence::Actions : 0;
 		Mask |= GrabImmunityEndFrame != 0 ? Presence::GrabImmunity : 0;
 		Mask |= MashProcessedFrame != 0 ? Presence::Mash : 0;
+		Mask |= ExitIgnoreEndFrame != 0 || !ExitIgnorePartner.IsNull() ? Presence::ExitIgnore : 0;
 		Ar << Mask;
 	}
 	else
@@ -114,6 +116,16 @@ void FGSTN_LinkFragment::NetSerialize(FArchive& Ar)
 	{
 		Ar << MashProcessedFrame;
 	}
+	if (Mask & Presence::ExitIgnore)
+	{
+		bool bSuccess = true;
+		ExitIgnorePartner.NetSerialize(Ar, nullptr, bSuccess);
+		Ar << ExitIgnoreEndFrame;
+		if (!bSuccess)
+		{
+			Ar.SetError();
+		}
+	}
 }
 
 bool FGSTN_LinkFragment::ShouldReconcile(const FGSTN_SyncFragment& Authority) const
@@ -144,6 +156,11 @@ void FGSTN_LinkFragment::ToString(FAnsiStringBuilderBase& Out) const
 	if (MashProcessedFrame != 0)
 	{
 		Out.Appendf(" mash %d", MashProcessedFrame);
+	}
+	if (ExitIgnoreEndFrame != 0)
+	{
+		Out << " exitignore " << TCHAR_TO_ANSI(*ExitIgnorePartner.ToString());
+		Out.Appendf(" until %d", ExitIgnoreEndFrame);
 	}
 }
 

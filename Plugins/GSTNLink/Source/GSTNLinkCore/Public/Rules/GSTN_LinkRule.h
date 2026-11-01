@@ -30,13 +30,18 @@ public:
 	/**
 	 * The checks every link type shares, which the rules of this plugin run first and a plugin's own rule should too: a definition
 	 * exists, the two entities differ, both channels are free, the other channel's link coexists, the target is not locked and meets
-	 * the definition's RequestRequirements
+	 * the definition's RequestRequirements. Blueprint-callable (F15, HANDOVER 61 OPEN 4): a Blueprint rule's Evaluate calls it first on
+	 * the context it was given; the context's definition and other-channel pointers are not reflected but travel with the struct's
+	 * native copy, so the Blueprint call decides exactly as the native one. A context made in Blueprint has no definition and is refused
+	 * with NoDefinition
 	 */
+	UFUNCTION(BlueprintPure, Category = "Link")
 	static FGSTN_LinkRuleResult CheckCommon(const FGSTN_LinkRequestContext& Context);
 
 	/**
 	 * Whether Tags holds the tag with this name. The tag is looked up by name each time and an unknown name is false: the optional
 	 * plugin that declares it may not be loaded, and this plugin never names it by an extern
 	 */
+	UFUNCTION(BlueprintPure, Category = "Link")
 	static bool ContainsTagNamed(const FGameplayTagContainer& Tags, FName TagName);
 };

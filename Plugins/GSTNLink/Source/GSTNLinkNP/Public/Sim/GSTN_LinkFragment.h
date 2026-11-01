@@ -21,7 +21,8 @@
  * Wire format: nothing at all for a fragment at its defaults (IsDefault; the list framing says 0 bytes), else a presence byte and the groups
  * that are present: Body and Hand (each the link state's own form: a header byte, the serial, the live fields; at most 22 bytes), actions
  * (refused serial 2, refused frame 4, cooldown 4, active move 6, pending move 6, exit 4 + 3 x 4 + 4 + 3 x 4 + 1), grab immunity 4, mash
- * processed 4. An idle entity is the one flag bit of the fragment list; a live grab on one channel is 1 + 22 bytes.
+ * processed 4, exit collision window 4 + 4 (F15). An idle entity is the one flag bit of the fragment list; a live grab on one channel is
+ * 1 + 22 bytes.
  */
 USTRUCT()
 struct GSTNLINKNP_API FGSTN_LinkFragment : public FGSTN_SyncFragment
@@ -39,6 +40,15 @@ struct GSTNLINKNP_API FGSTN_LinkFragment : public FGSTN_SyncFragment
 
 	/** The last input history frame the mash rule counted (grabbed side, F12), so a re-simulated frame counts a press once. 0 = none */
 	int32 MashProcessedFrame = 0;
+
+	/**
+	 * The former partner whose collision the entity still ignores after a Body link ended (F15, FGSTN_LinkExitCollision), until
+	 * ExitIgnoreEndFrame (exclusive). Written at the break on both sides from the same stamped frame, dropped once it has run out
+	 */
+	FGSTN_EntityRef ExitIgnorePartner;
+
+	/** The first frame the former partners collide again. 0 = no window */
+	int32 ExitIgnoreEndFrame = 0;
 
 	FGSTN_LinkState& Get(EGSTN_LinkChannel Channel) { return Links.Get(Channel); }
 	const FGSTN_LinkState& Get(EGSTN_LinkChannel Channel) const { return Links.Get(Channel); }

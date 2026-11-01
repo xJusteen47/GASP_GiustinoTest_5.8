@@ -4,6 +4,7 @@
 
 #include "Simulation/GSTN_CombatInbox.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Sim/GSTN_LinkExitCollision.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GSTN_LinkRegistry.h"
@@ -97,6 +98,9 @@ bool FGSTN_LinkInboxHandlers::ApplyCommand(FGSTN_LinkFragment& Fragment, const F
 	if (Command.Kind == EGSTN_LinkCommandKind::Break)
 	{
 		const uint8 Reason = Command.Reason;
+		// Both sides apply this command on the same frame: the window of the pair's collision starts there on both (F15)
+		const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+		FGSTN_LinkExitCollision::Begin(Fragment, State, Registry ? Registry->GetDefinition(State.LinkTypeIndex) : nullptr, Exit.Frame);
 		State.Reset();
 		State.BreakReason = Reason;
 		if (Command.ImmunityEndFrame > 0)

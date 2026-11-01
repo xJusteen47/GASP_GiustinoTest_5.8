@@ -213,7 +213,12 @@ void FGSTN_LinkWatchdogLogic::Evaluate(TConstArrayView<FGSTN_LinkWatchdogEntity>
 				{
 					// The parked side leaves through the type's placer, around the side that stays (an orphan's partner is gone: it stays where its capsule is)
 					FGSTN_ExitResult Exit;
-					if (Other)
+					if (Other && Params.WithPairCollision)
+					{
+						Params.WithPairCollision(Side->EntityId, Other->EntityId,
+							[&](const IGSTN_ExitCollisionQuery* PairCollision) { Exit = PlaceExit(*Definition, *Side, *Other, PairCollision); });
+					}
+					else if (Other)
 					{
 						Exit = PlaceExit(*Definition, *Side, *Other, Params.Collision);
 					}
@@ -308,7 +313,7 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 	TArray<int32> Ids;
 	Combat->GetRegisteredEntityIds(Ids);
 	TArray<FGSTN_LinkWatchdogEntity> Entities;
-	TArray<const AActor*, TInlineAllocator<16>> Actors;
+	TMap<int32, const AActor*> Actors;
 	bool bAnyLink = false;
 	int32 Frame = INDEX_NONE;
 	for (const int32 Id : Ids)
@@ -321,7 +326,7 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 			continue;
 		}
 		FGSTN_LinkWatchdogEntity& Entity = Entities.AddDefaulted_GetRef();
-		Actors.Add(Owner);
+		Actors.Add(Id, Owner);
 		Entity.EntityId = Id;
 		Entity.Frame = Sync->Core.Input.History.GetLatestFrame();
 		Frame = FMath::Max(Frame, Entity.Frame);
@@ -350,10 +355,22 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 	}
 	Entities.Sort([](const FGSTN_LinkWatchdogEntity& A, const FGSTN_LinkWatchdogEntity& B) { return A.EntityId < B.EntityId; });
 
-	const FGSTN_WorldExitCollisionQuery Collision(World, TArray<const AActor*, TInlineAllocator<2>>(Actors.GetData(), Actors.Num()));
 	FGSTN_LinkWatchdogLogic::FParams Params;
 	Params.OrphanGraceFrames = UGSTN_LinkSettings::Get().OrphanGraceFrames;
-	Params.Collision = &Collision;
+	// Only the pair is ignored: a third pawn standing where the ring would put the exit blocks that place (F15; until then every pawn was ignored)
+	Params.WithPairCollision = [World, &Actors](int32 ExitingId, int32 StayingId, TFunctionRef<void(const IGSTN_ExitCollisionQuery*)> Use)
+	{
+		TArray<const AActor*, TInlineAllocator<2>> Pair;
+		for (const int32 Id : { ExitingId, StayingId })
+		{
+			if (const AActor* const* Actor = Actors.Find(Id))
+			{
+				Pair.Add(*Actor);
+			}
+		}
+		const FGSTN_WorldExitCollisionQuery Collision(World, MoveTemp(Pair));
+		Use(&Collision);
+	};
 	Params.Definitions = [Registry](uint8 Index) { return Registry->GetDefinition(Index); };
 
 	TArray<FGSTN_LinkWatchdogPost> Posts;

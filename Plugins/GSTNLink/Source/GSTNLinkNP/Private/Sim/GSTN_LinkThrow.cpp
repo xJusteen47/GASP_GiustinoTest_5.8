@@ -6,12 +6,14 @@
 #include "Data/GSTN_LinkKitExtension.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "Events/GSTN_SimEvent.h"
+#include "GSTN_LinkRegistry.h"
 #include "GSTN_LinkTags.h"
 #include "GSTN_LinkWatchdog.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitResolution.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Rules/GSTN_LinkRule_Grab.h"
+#include "Sim/GSTN_LinkExitCollision.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
@@ -37,6 +39,9 @@ void FGSTN_LinkThrowOutcomeApplier::Apply(const FInstancedStruct& Extension, con
 		return;
 	}
 	FGSTN_LinkState& Body = Fragment->Links.Body;
+	// The thrown side's window starts on its exit frame, the thrower's key frame + 1, as the thrower's own (EndOwnLink)
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	FGSTN_LinkExitCollision::Begin(*Fragment, Body, Registry ? Registry->GetDefinition(Body.LinkTypeIndex) : nullptr, Outcome->ExitFrame);
 	Body.Reset();
 	Body.BreakReason = static_cast<uint8>(EGSTN_LinkBreakReason::Throw);
 	Fragment->GrabImmunityEndFrame = FMath::Max(Fragment->GrabImmunityEndFrame, Outcome->ImmunityEndFrame);
@@ -150,6 +155,9 @@ bool FGSTN_LinkThrow::EndOwnLink(FGSTN_LinkFragment& Fragment, int32 Frame, cons
 	{
 		return false;
 	}
+	// The window from Frame + 1: the thrown side's exit frame (the throw hit stamped Frame, applied at Frame + 1)
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	FGSTN_LinkExitCollision::Begin(Fragment, Body, Registry ? Registry->GetDefinition(Body.LinkTypeIndex) : nullptr, Frame + 1);
 	Body.Reset();
 	Body.BreakReason = static_cast<uint8>(EGSTN_LinkBreakReason::Throw);
 	const int32 Cooldown = Rules ? FMath::Max(Rules->GrabberCooldownFrames, 0) : 0;

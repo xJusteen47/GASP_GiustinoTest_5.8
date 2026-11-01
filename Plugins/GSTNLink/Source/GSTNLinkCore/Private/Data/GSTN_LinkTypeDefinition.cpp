@@ -48,6 +48,12 @@ int32 UGSTN_LinkTypeDefinition::GetParkedRoleIndex() const
 	return TargetRole.bParked ? 2 : 0;
 }
 
+bool UGSTN_LinkTypeDefinition::IgnoresPartnerCollision() const
+{
+	const int32 Parked = GetParkedRoleIndex();
+	return Parked != 0 && !GetRoleDef(Parked).bCollisionWithPartner;
+}
+
 int32 UGSTN_LinkTypeDefinition::FindRoleIndex(const FGameplayTag& RoleTag) const
 {
 	if (!RoleTag.IsValid())
