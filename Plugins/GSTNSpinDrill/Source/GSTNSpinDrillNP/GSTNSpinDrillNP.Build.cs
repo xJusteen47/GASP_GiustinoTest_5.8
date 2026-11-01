@@ -1,8 +1,8 @@
 using UnrealBuildTool;
 
-// Spin and drill, Network Prediction half (spin-drill.md 4, 7). Will hold the drill sync fragment, the combat tick extension,
-// the snapshot extension and the latched movement mode; empty in the skeleton (plan D1). Allowed edges: engine, the NP fork (NetworkPrediction,
-// Mover), GSTNCombatNP (the combat model hosting the fragment), GSTNCombatCore, GSTNInputCore and GSTNSpinDrillCore. It must never
+// Spin and drill, Network Prediction half (spin-drill.md 4, 7). Holds the drill sync fragment and the combat tick extension (D3); will add
+// the snapshot extension and the latched movement mode. Allowed edges: engine, the NP fork (NetworkPrediction, Mover; GameplayAbilities and
+// AbilitySystemSimulation for the tag projection), GSTNCombatNP (the combat model hosting the fragment), GSTNCombatCore, GSTNInputCore and GSTNSpinDrillCore. It must never
 // depend on GSTNParts, GSTNLevelObjects, an Editor module or the project module.
 public class GSTNSpinDrillNP : ModuleRules
 {
@@ -16,6 +16,8 @@ public class GSTNSpinDrillNP : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
+			"GameplayAbilities",
+			"AbilitySystemSimulation",
 			"NetworkPrediction",
 			"Mover",
 			"GSTNInputCore",

@@ -30,3 +30,20 @@ Differences between the code and [spin-drill.md](../architecture/spin-drill.md) 
   Blueprint type and the fragment (D3) serialises them by hand. Their functions are C++ only.
 - `UGSTN_SpinDrillTuning` lives in the GAS module as the spec says; the kit extension that references it is not built yet.
 - All default numbers are placeholders.
+
+## D3
+
+- Feature id: `GSTNFeatureIds::SpinDrill = 19` added to `GSTN_SyncFragment.h` (owner OK SD.11, seam S5): the constant, its one-line
+  comment and a blank line, as its neighbours. No other GSTNCombat edit.
+- `FGSTN_DrillFragment` drops `Target`, `AnchorQ` and `AxisQ` of spec §7.1 (plan §2b: the latch is a GSTNLink link). It adds
+  `PhaseStartFrame` (phase timers as frame stamps), an `AirSpin` flag beside the sense bit, `LowGravityUntilFrame` (for seam S6,
+  nothing reads it yet), and `SeatFrames` / `MaxBoreFrames` resolved at the latch (the target's data may change while latched).
+  Sizes: 7 B ground spin, 12 B air spin, 16 / 21 B latched (spec: about 20 B active).
+- The fragment is never removed once added (as the defence and link fragments); every transition returns it to its defaults
+  when nothing is live, so an idle entity pays the 25 bits of framing and 0 B of payload; only an entity that never spun pays 1 bit.
+- `LatchFrame = F + 1` (spec §7.4) and the seat phase starts there; the end conditions run from the latch frame on.
+- A cancel returns to `None`; the cancel's recovery frames are its own timeline's job (D5).
+- Tag projection: with no fragment, the tags are cleared only when the ability system holds one of them (a rollback to before the
+  first spin), instead of the defence's early return; same "set, never added" rule otherwise.
+- The NP module also depends on GameplayAbilities and AbilitySystemSimulation (tag projection), as GSTNLinkNP does.
+- The extension's inputs (`FGSTN_DrillFrameInputs`) and tuning are defaults in D3: nothing in game drives the phase machine until D4.

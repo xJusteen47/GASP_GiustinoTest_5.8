@@ -28,6 +28,9 @@ namespace GSTNFeatureIds
 	/** Reserved for the GSTNLink plugin (grabs and other links). Not assigned to any code yet, same reason */
 	constexpr uint8 Link = 18;
 
+	/** FGSTN_DrillFragment (GSTNSpinDrillNP): the spin and drill state of an entity */
+	constexpr uint8 SpinDrill = 19;
+
 	constexpr uint8 FirstGame = 128;
 	constexpr uint8 FirstTest = 240;
 	constexpr uint8 TestA = 240;

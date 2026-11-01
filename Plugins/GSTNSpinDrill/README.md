@@ -7,8 +7,8 @@ The design is [spin-drill.md](../../docs/architecture/spin-drill.md); the checkp
 [spin-drill-plan.md](../../docs/architecture/plans/spin-drill-plan.md).
 
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints D1 (the plugin, its five modules, the native tags of spec
-§10) and D2 (tuning structs, target response, the pure drill math and the tuning asset) are built. No fragment, ability or
-presentation code yet (D3 onward). The D0 input findings (Spin condition,
+§10), D2 (tuning structs, target response, the pure drill math and the tuning asset) and D3 (the drill sync fragment and the tick
+extension's phase machine) are built. No ability yet, so nothing drives the phase machine in game (D4 onward). The D0 input findings (Spin condition,
 keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
 
 ## Modules
@@ -16,7 +16,7 @@ keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-dri
 | Module | Type | State | What it will hold |
 |---|---|---|---|
 | `GSTNSpinDrillCore` | Runtime | native tags, tuning structs, target response, `UGSTN_DrillMath` | Data structs, pure math, drill target response, native tags. No GAS, NP or Mover. Tests `GSTNSpinDrill.Core.*`. |
-| `GSTNSpinDrillNP` | Runtime | empty | Drill sync fragment, combat tick extension, snapshot extension, latched movement mode. Needs the GAS-NPP fork. |
+| `GSTNSpinDrillNP` | Runtime | `FGSTN_DrillFragment` (feature id 19), `FGSTN_DrillTickExtension` (priority 130) | Drill sync fragment, combat tick extension, later the snapshot extension and the latched movement mode. Needs the GAS-NPP fork. Tests `GSTNSpinDrill.NP.*`. |
 | `GSTNSpinDrillGAS` | Runtime | `UGSTN_SpinDrillTuning` (data asset, no logic) | The five abilities (spin, spin cancel, dive, bore, launch), tuning data asset, kit extension. |
 | `GSTNSpinDrillPresentation` | Runtime | empty | Procedural spin and wobble component; clients and listen hosts only. |
 | `GSTNSpinDrillTests` | Runtime, not in Shipping | empty | Harness abilities and test content names. Unit tests stay in each module's `Private/Tests`. |
@@ -29,8 +29,8 @@ project and for Game Feature plugins, so the `GameplayCue.SpinDrill.*` leaves (i
 - Plugins: `GSTNInput`, `GSTNCombat`, `GSTNCombatGAS`, `GSTNCombatNP`, `GameplayAbilities`, `NetworkPrediction`, `Mover`.
 - `GSTNSpinDrillCore`: Core, CoreUObject, Engine, GameplayTags, GSTNInputCore, GSTNCombatCore; private Projects (to find the plugin's
   own folder). No GAS, NP or Mover module.
-- `GSTNSpinDrillNP`: Core, CoreUObject, Engine, GameplayTags, NetworkPrediction, Mover, GSTNInputCore, GSTNCombatCore, GSTNCombatNP,
-  GSTNSpinDrillCore.
+- `GSTNSpinDrillNP`: Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, AbilitySystemSimulation (tag projection, as
+  GSTNLinkNP), NetworkPrediction, Mover, GSTNInputCore, GSTNCombatCore, GSTNCombatNP, GSTNSpinDrillCore.
 - `GSTNSpinDrillGAS`: Core, CoreUObject, Engine, GameplayTags, GSTNCombatCore, GSTNCombatGAS, GSTNSpinDrillCore, GSTNSpinDrillNP.
 - `GSTNSpinDrillPresentation`: Core, CoreUObject, Engine, GameplayTags, GSTNSpinDrillCore, GSTNSpinDrillNP.
 - `GSTNSpinDrillTests`: the four modules above.
@@ -67,6 +67,22 @@ A `static_assert` keeps it within the 20-byte snapshot extension slot.
   `SampleWobbleCurve` (reads the curve once, outside the simulation).
 
 Default numbers are placeholders to tune in play, not design values.
+
+## Sync fragment and tick extension (D3)
+
+`FGSTN_DrillFragment` (`Sim/GSTN_DrillFragment.h`), registered under `GSTNFeatureIds::SpinDrill` = 19 at module startup: phase
+(None, Spinning, Diving, Seating, Boring, Launching, Lag), flags (spin sense, air spin), phase start frame, air spins used, low
+gravity until frame, latch frame, seat and maximum bore frames resolved at the latch, hits landed. The latch target, anchor and axis
+are not here: plan §2b moves them to the GSTNLink latch. Wire (measured by `GSTNSpinDrill.NP.Fragment.RoundTripAndBits`): no
+fragment 1 bit; idle fragment 0 B payload, 25 bits with the list framing; ground spin 7 B; air spin 12 B; latched 16 B (21 B with
+the air group live), plus 25 bits of framing.
+
+`FGSTN_DrillTickExtension` (`Sim/GSTN_DrillTickExtension.h`), priority 130 (after parts 100, defence 110, links 120): the refresh
+events, the low-gravity stamp, seat to bore and the end of a spin, launch or lag timeline at AfterClocks; nothing at
+BeforeCandidates yet; the request of the frame and the bore end rules (`UGSTN_DrillMath::ResolveEnd`) at AfterExecute; the
+`Combat.State.*` tags set (never added) at BeforeTagProjection. The pure step functions (`StepAfterClocks`, `StepAfterExecute`,
+`GatherStateTags`) are public for tests. `GatherInputs` and `GetTuning` return defaults until the abilities (D4) and the kit
+extension exist, so in game an entity never gets a fragment yet.
 
 ## Tags
 
