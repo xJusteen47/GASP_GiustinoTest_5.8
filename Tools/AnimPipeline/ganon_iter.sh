@@ -27,6 +27,13 @@ head -1 sheets/${TAKE}_preflight.txt
 if [ -n "$PREFLIGHT_GATE" ] && ! python -c "import json,sys; sys.exit(1 if json.load(open('sheets/${TAKE}_preflight.json'))['flags'] else 0)"; then
   cat sheets/${TAKE}_preflight.txt; echo "pre-flight flagged: pass stopped (PREFLIGHT_GATE=1)"; exit 1
 fi
+# bone lengths on the model's points (bone_lengths.py, < 0.1 s): rigid pairs keep the idle's distances. A model that moves
+# trunk segments on their own stretches the chain (Ganondorf v3: head point 17 cm off the neck). BONELEN_GATE=0 reports only.
+STEP=bone_lengths t bash -o pipefail -c "python bone_lengths.py ${TAKE}_targets_raw.json --ref=idle_points.json > sheets/${TAKE}_bonelen_model.txt || true"
+head -1 sheets/${TAKE}_bonelen_model.txt
+if [ "${BONELEN_GATE:-1}" != 0 ] && grep -q '^FAIL' sheets/${TAKE}_bonelen_model.txt; then
+  cat sheets/${TAKE}_bonelen_model.txt; echo "bone lengths changed in the model: pass stopped (BONELEN_GATE=0 to override)"; exit 1
+fi
 KEYS=$(python -c "import json; print(','.join(str(k) for k in json.load(open('${TAKE}_targets_raw.json'))['keyplan']['keys']))")
 for PASS in raw final; do
   TG=${TAKE}_targets_raw.json; [ $PASS = final ] && TG=${TAKE}_targets.json
@@ -36,6 +43,8 @@ for PASS in raw final; do
   STEP=ue_import_$PASS t bash -o pipefail -c "MSYS_NO_PATHCONV=1 python -I import_take.py ${CASC%.casc}.fbx $ASSET"
   rm -f sheets/raw/${TAKE}_legbones.json
   STEP=ue_sample_bones_$PASS t bash -o pipefail -c "MSYS_NO_PATHCONV=1 python -c \"import legibility as L; L.sample('/Game/AnimPipeline/Pilot/$ASSET', '$TAKE')\""
+  # Cascadeur's own solve stretches clavicles/spine a little (v2: 0.4 cm): report only on its bones
+  python bone_lengths.py sheets/raw/${TAKE}_legbones.json > sheets/${TAKE}_bonelen_$PASS.txt || true; head -1 sheets/${TAKE}_bonelen_$PASS.txt
   if [ $PASS = raw ]; then
     STEP=wrist_fix t bash -o pipefail -c "python wrist_fix.py $TAKE ${TAKE}_targets_raw.json ${TAKE}_targets.json 10 all --smooth=${SMOOTH:-6-36} > /dev/null"
   fi
