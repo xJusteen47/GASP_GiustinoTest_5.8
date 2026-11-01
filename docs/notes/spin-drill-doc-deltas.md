@@ -47,3 +47,12 @@ Differences between the code and [spin-drill.md](../architecture/spin-drill.md) 
   first spin), instead of the defence's early return; same "set, never added" rule otherwise.
 - The NP module also depends on GameplayAbilities and AbilitySystemSimulation (tag projection), as GSTNLinkNP does.
 - The extension's inputs (`FGSTN_DrillFrameInputs`) and tuning are defaults in D3: nothing in game drives the phase machine until D4.
+
+## D3b (input history, GSTNInput)
+
+- Not a spin-drill plan checkpoint: the D0 finding (16-event stick ring too short for a spin under camera/facing churn) fixed in
+  GSTNInput before D4, owner OK 2026-11-01. Fix 2 of the spike report, compacted: `MaxDirectionEvents` 32, `MaxButtonEvents` 16,
+  packed events (348 to 232 bytes for the history). D4 can rely on a full default 360 Spin slot in any camera/facing setup.
+- Spec impact: none for spin-drill.md; input.md gets the "History rings and storage" bullet, combat.md §6.4 and §15 the new counts.
+- Trace scopes added (`GSTN_InputHistory_*`, `GSTN_InputMatcher_Match`, `GSTN_SlotResolver_Resolve`, `GSTN_InputSimulator_Tick`,
+  the two `SimulationTick`s); measurements and the copy audit in docs/notes/input-memory-audit.md.

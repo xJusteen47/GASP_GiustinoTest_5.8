@@ -260,7 +260,7 @@ The review showed the history cannot be rebuilt from inputs alone (the server fi
 corrected state), so a **compact event log is part of the combat sync state**:
 
 - `ButtonEvents`: ring of the last 16 events `{Frame, Button, bRelease, bConsumed}`.
-- `DirectionEvents`: ring of the last 16 direction changes `{Frame, StickDir, FacingDir, WorldDir, Zone, bFlick,
+- `DirectionEvents`: ring of the last 32 direction changes (16 until D3b, see input.md "History rings and storage") `{Frame, StickDir, FacingDir, WorldDir, Zone, bFlick,
   WorldYaw}` — a new event when any of the three directions or the zone changes (turning the character or camera with
   the stick held adds one event per 45° sector).
 - Current held mask (the `PrevHeldButtons` of M0).
@@ -948,7 +948,7 @@ unless a design needs prediction.
 
 - `NetSerialize` delta-aware against `FNetSerializeParams::BaseDeltaStatePtr` (sim proxies already get delta frames).
 - End-frame stamps instead of countdowns (5.5) make an idle entity's state constant: about one bit per frame.
-- History serialized with saturated uint8 deltas, rings capped at 16 events.
+- History serialized with saturated uint8 deltas, rings capped at 16 button and 32 stick events (D3b; 2 and 4 bytes an event on the wire).
 - Minions are outside NPP (section 13).
 - Defence and links (M6), asserted by the fragment tests (`GSTNDefence.NP.Fragment.*`, `GSTNLink.NP.Fragment.*`): an entity with no
   fragment writes the list's one bit; an idle fragment has a zero-byte payload (framing 25 bits); an ended link keeps its serial (3 B); a

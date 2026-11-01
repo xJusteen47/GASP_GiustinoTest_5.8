@@ -224,6 +224,21 @@ Each plugin must work in a project that knows nothing about this one:
   the matcher ignores terminal stick anchors at or before it. Wire: one optional byte in the history (flag 0x20 of the first
   header byte, the frame's age), compared in `operator==`, aged out like an event. Tests `GSTNInput.Core.Input.Resolver.StickOnly*`,
   `...History.ConsumedStickAnchor`.
+- **History rings and storage (D3b, 2026-11-01, owner OK).** `FGSTN_InputHistory` keeps `MaxButtonEvents` = 16 button events and
+  `MaxDirectionEvents` = 32 stick events. The stick ring is the bigger one because a stick event is pushed whenever the Stick, World
+  (camera) or Facing direction changes: with camera and facing off the 45 degree grid a 360 spin makes up to ~25 events, and 16 lost
+  the start of it (spin-drill-spike-report.md, D0). One stick event per frame at most and a Spin spans at most `MaxFrames` (30 by
+  default), so 32 holds a whole default spin. Slot masks (`ReservedEvents`, `ExcludedEvents`) are button slots only and stay
+  `uint32`; `FGSTN_InputMatcher::MaxCandidatesPerStep` is the larger ring. The events are packed because the history is copied
+  into every frame of the prediction buffers: frames are stored as their low 16 bits and rebuilt from the newest frame (no live
+  event is more than `MaxEventAge` = 254 frames from it; the newest stick event that turned ancient keeps a flag bit), a stick
+  sample is 15 bits (three directions in 4 bits, zone 2, flick 1) plus the aim byte, kept in separate arrays: 3 bytes a button event,
+  5 a stick event. `sizeof(FGSTN_InputHistory)` went from 348 bytes (16 + 16 events) to 232 (16 + 32). The accessors
+  (`GetButtonEvent`, `GetDirectionEvent`) unpack and return by value; callers did not change. Wire format: the same bytes per event
+  (2 a button event, 4 a stick event); the stick count takes 6 bits of its header byte, so the "latest frame follows" flag moved to
+  bit 6 of the button header (bit 7 of both stays zero and is validated). Tests `...History.FrameWrap`,
+  `...History.SerializationFullStickRing`, `...History.StorageSize`, `...Conditions.SpinDirectionRingLimit`,
+  `...Conditions.SpinThreeSpaceChurn`.
 - **`UGSTN_CommandBindingSet`** (DataAsset, was `UGSTN_CombatSlotBindingSet`): slots, bindings
   `{ Command; Requirements; Ability }`, reset rules. The combat model replaces it with its compiled loadout table (M3)
   through the same simulator calls.
@@ -381,7 +396,7 @@ What the condition does today:
 - Charging is input only, so it continues while the character walks, crouches, blocks or attacks, as in Street Fighter.
 
 Gaps, *Proposal*:
-1. **The history keeps the last 16 direction events** (`FGSTN_InputHistory::MaxEvents`). A new event is recorded whenever the stick
+1. **The history keeps the last 32 direction events** (`FGSTN_InputHistory::MaxDirectionEvents`; 16 before D3b). A new event is recorded whenever the stick
    sector, the zone, the facing or the camera yaw changes the stick's direction, so a charge held while the camera turns, or while
    the stick wobbles between back and down-back, can push the start of the run out of the ring: the charge then looks shorter than it
    was and the move fails. Fix: a small **charge tracker** in the input state of `GSTNInputNP`. For each charge slot declared by the
@@ -424,7 +439,7 @@ same button, and a tap slot and a hold slot never match the same release). The r
 press can fire a normal attack and the hold keeps charging through other moves, walking or blocking, as in Street Fighter. A release
 during another move is buffered like any command. The EX meter fall-through already exists in the resolver (M3 C17–C18): without
 meter, a command marked EX falls through to its plain version. Gaps, *Proposal*:
-1. **The 16-event button ring**: if the press of the held button drops out of the ring, `Release` counts the hold as longer than the
+1. **The 16-event button ring** (`MaxButtonEvents`): if the press of the held button drops out of the ring, `Release` counts the hold as longer than the
    history (`MAX_int32`), which is right for a long hold but wrong when the press was pushed out early by **other button presses**:
    eight presses and releases of other buttons while charging push it out, and a 120-frame charge could fire after 30 frames. Fix:
    the charge tracker of gap 1 gets **button slots**: `uint8 HeldFrames` (saturating at 255, about 4 s) of the current press, one byte

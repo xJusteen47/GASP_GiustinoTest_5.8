@@ -7,7 +7,11 @@
 #include "GSTN_InputCoreTypes.h"
 #include "Input/GSTN_InputSample.h"
 
-/** A button going down or up. Presses are consumed by activations and reset rules, releases never are. */
+/**
+ * A button going down or up. Presses are consumed by activations and reset rules, releases never are.
+ *
+ * The unpacked view the accessors return by value; the history stores an event in 3 bytes (FGSTN_InputHistory, "Storage").
+ */
 struct FGSTN_ButtonEvent
 {
 	int32 Frame = INDEX_NONE;
@@ -26,7 +30,11 @@ struct FGSTN_ButtonEvent
 	}
 };
 
-/** The stick changing direction in any space, or zone, or flicking: the stick state from this frame on. */
+/**
+ * The stick changing direction in any space, or zone, or flicking: the stick state from this frame on.
+ *
+ * The unpacked view the accessors return by value; the history stores an event in 5 bytes (FGSTN_InputHistory, "Storage").
+ */
 struct FGSTN_DirectionEvent
 {
 	int32 Frame = INDEX_NONE;
@@ -46,8 +54,13 @@ struct FGSTN_DirectionEvent
  * facing comes from corrected state, so the history cannot be rebuilt from commands alone.
  *
  * Determinism and size rules:
- *  - Plain data, copied every frame: two rings of 16 events (fixed storage, no allocation), the held mask and the stick
- *    of the newest frame. Ring overflow drops the oldest event.
+ *  - Plain data, copied every frame: a ring of MaxButtonEvents button events and one of MaxDirectionEvents stick events
+ *    (fixed storage, no allocation), the held mask and the stick of the newest frame. Ring overflow drops the oldest event.
+ *  - Why the stick ring is twice the button ring: each stick event stores the Stick, World (camera) and Facing directions
+ *    and one is pushed whenever any of them changes. With the camera and the facing off the 45 degree grid of the stick,
+ *    a 360 spin makes up to ~25 events, and with 16 the oldest fell out before the spin was whole (spin-drill-spike-report.md,
+ *    D0 finding). At most one stick event is pushed per frame and a Spin spans at most its MaxFrames (default 30), so 32
+ *    always holds a whole default spin.
  *  - Events older than MaxEventAge frames are dropped, so a state that did not change for a while does not change at all
  *    (cheap delta serialization) and serializing with 8-bit frame deltas loses nothing. The one exception is the newest
  *    stick event: it is the current stick state, so it stays and its frame becomes AncientFrame.
@@ -58,13 +71,24 @@ struct FGSTN_DirectionEvent
  *  - Equality is logical (same events in the same order), not bitwise: the same history can sit at different positions
  *    of the rings.
  *
- * "Event slot" below is the physical position (0..15) of an event in its ring. A slot is stable while the event lives
- * and is what the matcher reports as used events and what ReservedEvents masks refer to.
+ * Storage: the history is copied into every frame of the prediction buffers, so the events are packed (the game targets
+ * very weak hardware). Frames are kept as their low 16 bits and rebuilt from the newest frame: no live event is more than
+ * MaxEventAge frames from it, so the 16-bit difference is exact. The newest stick event that turned ancient keeps a flag
+ * bit instead. A stick sample packs into 15 bits (three directions in 4 bits, zone 2, flick 1) plus its aim byte.
+ * Button event 3 bytes, stick event 5 bytes, kept in separate arrays so nothing is padded. The accessors unpack, so they
+ * return the events by value.
+ *
+ * "Event slot" below is the physical position of an event in its ring. A slot is stable while the event lives and is
+ * what the matcher reports as used events and what ReservedEvents masks refer to (button slots only: the button ring
+ * has 16 slots, so a mask fits in a uint32).
  */
 struct GSTNINPUTCORE_API FGSTN_InputHistory
 {
-	/** Capacity of each ring */
-	static constexpr int32 MaxEvents = 16;
+	/** Capacity of the button ring (power of two; slot masks are uint32) */
+	static constexpr int32 MaxButtonEvents = 16;
+
+	/** Capacity of the stick ring (power of two), see the class comment for why it is bigger */
+	static constexpr int32 MaxDirectionEvents = 32;
 
 	/** Events older than this many frames are dropped */
 	static constexpr int32 MaxEventAge = 254;
@@ -89,10 +113,19 @@ struct GSTNINPUTCORE_API FGSTN_InputHistory
 	int32 GetButtonSlot(int32 Age) const
 	{
 		check(Age >= 0 && Age < ButtonCount);
-		return (ButtonHead - 1 - Age) & (MaxEvents - 1);
+		return (ButtonHead - 1 - Age) & (MaxButtonEvents - 1);
 	}
 
-	const FGSTN_ButtonEvent& GetButtonEvent(int32 Slot) const { return ButtonEvents[Slot]; }
+	/** The event in a button slot, unpacked */
+	FGSTN_ButtonEvent GetButtonEvent(int32 Slot) const
+	{
+		FGSTN_ButtonEvent Event;
+		Event.Frame = UnwrapFrame(ButtonFrames[Slot]);
+		Event.Button = static_cast<uint8>(ButtonBits[Slot] & ButtonBitsButton);
+		Event.bRelease = (ButtonBits[Slot] & ButtonBitRelease) != 0;
+		Event.bConsumed = (ButtonBits[Slot] & ButtonBitConsumed) != 0;
+		return Event;
+	}
 
 	/** Marks a press as used. Ends its time and hold buffering */
 	void Consume(int32 Slot);
@@ -127,11 +160,15 @@ struct GSTNINPUTCORE_API FGSTN_InputHistory
 
 	int32 GetNumDirectionEvents() const { return DirectionCount; }
 
-	/** Stick event of the given age (0 = newest) */
-	const FGSTN_DirectionEvent& GetDirectionEvent(int32 Age) const
+	/** Stick event of the given age (0 = newest), unpacked */
+	FGSTN_DirectionEvent GetDirectionEvent(int32 Age) const
 	{
 		check(Age >= 0 && Age < DirectionCount);
-		return DirectionEvents[(DirectionHead - 1 - Age) & (MaxEvents - 1)];
+		const int32 Slot = GetDirectionSlot(Age);
+		FGSTN_DirectionEvent Event;
+		Event.Frame = GetDirectionFrameAtSlot(Slot);
+		Event.Stick = UnpackStick(DirectionSticks[Slot], DirectionYaws[Slot]);
+		return Event;
 	}
 
 	/**
@@ -161,17 +198,63 @@ struct GSTNINPUTCORE_API FGSTN_InputHistory
 	bool operator==(const FGSTN_InputHistory& Other) const;
 
 private:
+	static constexpr uint8 ButtonBitsButton = 0x1F;
+	static constexpr uint8 ButtonBitRelease = 1u << 5;
+	static constexpr uint8 ButtonBitConsumed = 1u << 6;
+
+	/** Packed stick: Stick bits 0-3, Facing 4-7, World 8-11, Zone 12-13, flick bit 14, ancient bit 15 */
+	static constexpr uint16 PackedStickFlick = 1u << 14;
+
+	/** The event is the newest one and older than MaxEventAge: its frame reads AncientFrame */
+	static constexpr uint16 PackedStickAncient = 1u << 15;
+
+	static uint16 PackStick(const FGSTN_StickSample& Stick)
+	{
+		return static_cast<uint16>(static_cast<uint16>(Stick.StickDir) | (static_cast<uint16>(Stick.FacingDir) << 4)
+			| (static_cast<uint16>(Stick.WorldDir) << 8) | (static_cast<uint16>(Stick.Zone) << 12) | (Stick.bFlick ? PackedStickFlick : 0));
+	}
+
+	static FGSTN_StickSample UnpackStick(uint16 Packed, uint8 WorldYaw)
+	{
+		FGSTN_StickSample Stick;
+		Stick.StickDir = static_cast<EGSTN_StickDirection>(Packed & 0x0F);
+		Stick.FacingDir = static_cast<EGSTN_StickDirection>((Packed >> 4) & 0x0F);
+		Stick.WorldDir = static_cast<EGSTN_StickDirection>((Packed >> 8) & 0x0F);
+		Stick.Zone = static_cast<EGSTN_StickZone>((Packed >> 12) & 0x03);
+		Stick.bFlick = (Packed & PackedStickFlick) != 0;
+		Stick.WorldYaw = WorldYaw;
+		return Stick;
+	}
+
+	int32 GetDirectionSlot(int32 Age) const { return (DirectionHead - 1 - Age) & (MaxDirectionEvents - 1); }
+
+	/** Full frame from its low 16 bits, relative to the newest frame (exact within 32767 frames of it either way) */
+	int32 UnwrapFrame(uint16 Stored) const
+	{
+		return Current.Frame - static_cast<int16>(static_cast<uint16>(static_cast<uint16>(Current.Frame) - Stored));
+	}
+
+	int32 GetDirectionFrameAtSlot(int32 Slot) const
+	{
+		return (DirectionSticks[Slot] & PackedStickAncient) != 0 ? AncientFrame : UnwrapFrame(DirectionFrames[Slot]);
+	}
+
 	void PushButtonEvent(int32 Frame, int32 Button, bool bRelease);
-	void PushDirectionEvent(const FGSTN_DirectionEvent& Event);
+	void PushDirectionEvent(int32 Frame, const FGSTN_StickSample& Stick);
 	void DropOldEvents(int32 Now);
 
-	TStaticArray<FGSTN_ButtonEvent, MaxEvents> ButtonEvents;
+	// Button ring, 3 bytes an event: the low 16 bits of the frame, then the button and its flags (ButtonBit*).
+	TStaticArray<uint16, MaxButtonEvents> ButtonFrames;
+	TStaticArray<uint8, MaxButtonEvents> ButtonBits;
 
 	/** Next slot to write; with a full ring it is also the oldest event */
 	uint8 ButtonHead = 0;
 	uint8 ButtonCount = 0;
 
-	TStaticArray<FGSTN_DirectionEvent, MaxEvents> DirectionEvents;
+	// Stick ring, 5 bytes an event: the low 16 bits of the frame, the packed stick, the aim byte.
+	TStaticArray<uint16, MaxDirectionEvents> DirectionFrames;
+	TStaticArray<uint16, MaxDirectionEvents> DirectionSticks;
+	TStaticArray<uint8, MaxDirectionEvents> DirectionYaws;
 	uint8 DirectionHead = 0;
 	uint8 DirectionCount = 0;
 
@@ -182,4 +265,10 @@ private:
 
 	/** Stick of the newest frame. Its directions always equal the newest stick event's (or Neutral when there is none) */
 	FGSTN_DirectionEvent Current;
+
+	static_assert((MaxButtonEvents & (MaxButtonEvents - 1)) == 0 && MaxButtonEvents <= 16, "Button slots are masked, fit a uint32 mask and the 5-bit wire count");
+	static_assert((MaxDirectionEvents & (MaxDirectionEvents - 1)) == 0 && MaxDirectionEvents <= 32, "Stick slots are masked and the count fits the 6-bit wire count");
+	static_assert(MaxEventAge < 32767, "Frames are stored as 16-bit offsets from the newest one");
+	static_assert(sizeof(ButtonFrames) + sizeof(ButtonBits) == 3 * MaxButtonEvents, "A button event is 3 bytes");
+	static_assert(sizeof(DirectionFrames) + sizeof(DirectionSticks) + sizeof(DirectionYaws) == 5 * MaxDirectionEvents, "A stick event is 5 bytes");
 };

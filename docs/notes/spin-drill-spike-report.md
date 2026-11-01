@@ -62,6 +62,13 @@ Possible fixes (not made; GSTNInput, its own small checkpoint):
 
 Recommended: 1, before D4 relies on the stick spin.
 
+**Fix chosen (D3b, 2026-11-01, owner OK): fix 2, compacted.** The owner preferred one bigger ring to a second log, on condition
+that it cost no more memory or copying than before (the game targets very weak hardware). The stick ring is 32 events, the button
+ring stays 16, and both rings store packed events (16-bit frames rebuilt from the newest frame, the stick in 15 bits plus the aim
+byte): `sizeof(FGSTN_InputHistory)` went from 348 to 232 bytes, the wire is unchanged per event. `SpinDirectionRingLimit` now
+matches the camera 15 / facing 30 sweep in both senses, and `SpinThreeSpaceChurn` checks a 30-frame spin with all three spaces
+changing on different frames. Details in input.md ("History rings and storage") and docs/notes/input-memory-audit.md.
+
 ### (b) A 180° keyboard sweep with 8-way digital input
 
 **Yes for a normal roll, today, with `MinDegrees = 180`** and the default 30 frames / one skipped sector: A-S-D rolled through

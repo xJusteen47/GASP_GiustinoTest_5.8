@@ -320,18 +320,55 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ConditionSpinDirectionRingTest, "GSTNInpu
 bool FGSTN_ConditionSpinDirectionRingTest::RunTest(const FString& Parameters)
 {
 	// The history pushes a direction event when the 8-way direction changes in ANY space (Stick, World, Facing) and keeps
-	// 16 of them. With the camera and the character both at 0 the three spaces change on the same frames: 9 events a turn.
+	// 32 of them (16 before D3b). With the camera and the character both at 0 the three spaces change on the same frames: 9 events a turn.
 	for (const int32 DegreesPerFrame : { 15, -15 })
 	{
 		const EGSTN_SpinRotation Sense = DegreesPerFrame > 0 ? EGSTN_SpinRotation::Clockwise : EGSTN_SpinRotation::CounterClockwise;
 		const FString Name = DegreesPerFrame > 0 ? TEXT("clockwise") : TEXT("counter-clockwise");
 		ExpectMatch(*this, *(Name + TEXT(" sweep, camera and facing aligned")), SpinOnly(Sense), *StickSweep(DegreesPerFrame, 360), true);
 
-		// Known limit (D0 finding, spin-drill-spike-report.md): camera at 15 and character at 30 put the World and Facing
-		// boundaries 15 degrees away from the Stick ones, so the same turn makes 25 events. The ring drops the oldest and
-		// the spin sees less than 360 degrees. Flip to true when the spin gets its own stick-space log or a bigger ring.
-		ExpectMatch(*this, *(Name + TEXT(" sweep, camera 15 facing 30 (known limit)")), SpinOnly(Sense),
-			*StickSweep(DegreesPerFrame, 360, TEXT("0:cam=15 0:face=30")), false);
+		// D0 finding (spin-drill-spike-report.md): camera at 15 and character at 30 put the World and Facing boundaries 15
+		// degrees away from the Stick ones, so the same turn makes 25 events. A 16-event ring dropped the start of the turn;
+		// the 32-event ring of D3b keeps all of it.
+		ExpectMatch(*this, *(Name + TEXT(" sweep, camera 15 facing 30")), SpinOnly(Sense),
+			*StickSweep(DegreesPerFrame, 360, TEXT("0:cam=15 0:face=30")), true);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ConditionSpinThreeSpaceChurnTest, "GSTNInput.Core.Input.Conditions.SpinThreeSpaceChurn", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ConditionSpinThreeSpaceChurnTest::RunTest(const FString& Parameters)
+{
+	// The slowest default spin (360 degrees over 30 frames, 12 a frame) with the three spaces changing on different frames:
+	// camera off the grid, and the character either still or turning 2 degrees a frame (Facing then changes at its own rate).
+	// Every frame can push a stick event, so this is the most a default spin can put in the ring; all of it must fit.
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeSettings();
+	for (const bool bTurning : { false, true })
+	{
+		FString Prefix = TEXT("0:cam=15 0:face=30");
+		if (bTurning)
+		{
+			for (int32 Frame = 1; Frame <= 30; ++Frame)
+			{
+				Prefix += FString::Printf(TEXT(" %d:face=%d"), Frame, 30 + 2 * Frame);
+			}
+		}
+		for (const int32 DegreesPerFrame : { 12, -12 })
+		{
+			const EGSTN_SpinRotation Sense = DegreesPerFrame > 0 ? EGSTN_SpinRotation::Clockwise : EGSTN_SpinRotation::CounterClockwise;
+			const EGSTN_SpinRotation Wrong = DegreesPerFrame > 0 ? EGSTN_SpinRotation::CounterClockwise : EGSTN_SpinRotation::Clockwise;
+			const FString Script = StickSweep(DegreesPerFrame, 360, *Prefix);
+			const FString Name = FString::Printf(TEXT("%s 30-frame spin, %s"), DegreesPerFrame > 0 ? TEXT("clockwise") : TEXT("counter-clockwise"),
+				bTurning ? TEXT("character turning") : TEXT("character still"));
+
+			const FGSTN_InputHistory History = PlayTo(*this, *Script, *Settings);
+			const int32 Events = History.GetNumDirectionEvents();
+			AddInfo(FString::Printf(TEXT("%s: %d stick events"), *Name, Events));
+			TestTrue(*(Name + TEXT(": the spaces churn (more than one event per sector)")), Events > 16);
+			TestTrue(*(Name + TEXT(": the whole spin is in the ring")), Events < FGSTN_InputHistory::MaxDirectionEvents);
+			TestEqual(*(Name + TEXT(": right sense")), MatchNow(SpinOnly(Sense), History, *Settings), true);
+			TestEqual(*(Name + TEXT(": wrong sense")), MatchNow(SpinOnly(Wrong), History, *Settings), false);
+		}
 	}
 	return true;
 }

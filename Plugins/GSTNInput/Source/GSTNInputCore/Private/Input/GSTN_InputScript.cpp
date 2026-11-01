@@ -427,7 +427,7 @@ FString FGSTN_InputScript::Describe(const FGSTN_InputHistory& History, int32 Max
 	}
 
 	FString Result;
-	for (int32 Index = FMath::Max(0, Items.Num() - MaxEvents); Index < Items.Num(); ++Index)
+	for (int32 Index = MaxEvents < 0 ? 0 : FMath::Max(0, Items.Num() - MaxEvents); Index < Items.Num(); ++Index)
 	{
 		Result += Result.IsEmpty() ? TEXT("") : TEXT(" ");
 		Result += Items[Index].Text;

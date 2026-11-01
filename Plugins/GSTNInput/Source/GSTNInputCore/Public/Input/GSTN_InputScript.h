@@ -83,8 +83,9 @@ public:
 	/**
 	 * The most recent events of a history in this notation, oldest first, e.g. "12:+A 14:6t! 15:-A". Stick directions
 	 * are the physical stick; a frame that is too old to know is printed as "?". For logs and the input display.
+	 * MaxEvents INDEX_NONE prints every event of both rings.
 	 */
-	static FString Describe(const FGSTN_InputHistory& History, int32 MaxEvents = 16);
+	static FString Describe(const FGSTN_InputHistory& History, int32 MaxEvents = INDEX_NONE);
 
 private:
 	enum class EEventType : uint8

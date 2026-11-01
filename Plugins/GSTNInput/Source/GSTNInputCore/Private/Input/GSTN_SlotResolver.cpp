@@ -1,6 +1,7 @@
 // Pure input logic (no GAS, no Network Prediction).
 
 #include "Input/GSTN_SlotResolver.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Algo/Sort.h"
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_InputSettings.h"
@@ -100,6 +101,7 @@ namespace
 FGSTN_SlotResolution FGSTN_SlotResolver::Resolve(TConstArrayView<const FGSTN_InputSlotSpec*> Slots, const FGSTN_InputHistory& History,
 	const FGSTN_ResolveParams& Params, const UGSTN_InputSettings& Settings, TFunctionRef<bool(int32 SlotIndex)> CanExecute)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_SlotResolver_Resolve);
 	FGSTN_SlotResolution Resolution;
 	if (!ensureMsgf(Params.Buttons, TEXT("FGSTN_ResolveParams needs a button map")))
 	{

@@ -1,6 +1,7 @@
 // Standalone input simulation component (GAS-NPP fork).
 
 #include "Simulation/GSTN_InputSimComponent.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 
 #include "AbilitySystemGlobals.h"
 #include "Abilities/NpAbilitySystemComponent.h"
@@ -243,6 +244,7 @@ bool UGSTN_InputSimComponent::IsCommandButtonHeld(int32 Button) const
 void UGSTN_InputSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_InputModelStateTypes>& Input,
 	const TNetSimOutput<FGSTN_InputModelStateTypes>& Output)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_InputSimComponent_SimulationTick);
 	const FGSTN_InputModelSyncState& InSync = *Input.Sync;
 	FGSTN_InputModelSyncState& OutSync = *Output.Sync;
 	OutSync = InSync;

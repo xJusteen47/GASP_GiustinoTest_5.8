@@ -1,6 +1,7 @@
 // Combat simulation (GAS-NPP fork).
 
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 
 #include "Loadout/GSTN_LoadoutComponent.h"
 
@@ -754,6 +755,7 @@ bool UGSTN_CombatSimComponent::IsCommandButtonHeld(int32 Button) const
 void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_CombatStateTypes>& Input,
 	const TNetSimOutput<FGSTN_CombatStateTypes>& Output)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_CombatSimComponent_SimulationTick);
 	const FGSTN_CombatSyncState& InSync = *Input.Sync;
 	FGSTN_CombatSyncState& OutSync = *Output.Sync;
 	OutSync = InSync;
