@@ -3,6 +3,8 @@
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 
 #include "Simulation/GSTN_TimelineTrackHook.h"
+#include "Events/GSTN_SimEvent.h"
+#include "GameFramework/Actor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatTimeline, Log, All);
 
@@ -286,4 +288,25 @@ void FGSTN_CombatTimelineLogic::EvaluateStart(FGSTN_CombatSyncCore& Core, int32 
 	{
 		AddRequest(Core, EGSTN_RequestType::CommitTimeline, Frame, Core.ActiveTimeline);
 	}
+}
+
+int32 FGSTN_CombatTimelineLogic::AppendOutboxEvents(const FGSTN_TimelineOutput& Output, int32 Frame, AActor* Instigator, FGSTN_SimEventOutbox& Outbox)
+{
+	int32 Appended = 0;
+	for (const FGSTN_TimelineTrack_Event* Key : Output.Events)
+	{
+		if (!Key || !Key->OutboxEventTag.IsValid())
+		{
+			continue;
+		}
+		FGSTN_SimEvent Event;
+		Event.EventType = Key->OutboxEventTag;
+		Event.Tags = Key->OutboxTags;
+		Event.Magnitude = Key->OutboxMagnitude;
+		Event.Frame = Frame;
+		Event.Instigator = Instigator;
+		Outbox.Add(MoveTemp(Event));
+		++Appended;
+	}
+	return Appended;
 }

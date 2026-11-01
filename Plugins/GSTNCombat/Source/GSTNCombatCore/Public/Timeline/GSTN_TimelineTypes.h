@@ -227,6 +227,20 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Event : public FGSTN_TimelineTrack
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event")
 	FGameplayTag GameplayEventTag;
 
+	/**
+	 * Authoritative event key (seam D-1, game-modes.md 2): when set, the combat tick posts a sim event of this type to the entity's outbox on the
+	 * frame the key is crossed, with OutboxTags and OutboxMagnitude (a spin's sense, a count). The outbox is published on the authority only,
+	 * once per frame, so level objects and modes react to the move without a server request of their own. Empty = cue and gameplay event only
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event|Outbox")
+	FGameplayTag OutboxEventTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event|Outbox", meta = (EditCondition = "OutboxEventTag.IsValid()"))
+	FGameplayTagContainer OutboxTags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event|Outbox", meta = (EditCondition = "OutboxEventTag.IsValid()"))
+	float OutboxMagnitude = 0.f;
+
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Event; }
 };
 

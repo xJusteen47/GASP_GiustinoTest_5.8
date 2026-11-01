@@ -75,6 +75,9 @@ struct FGSTN_AttackerHit
 	int32 VictimId = INDEX_NONE;
 	uint8 HitGroup = 0;
 
+	/** What the target ring stored for the hit: HitGroup, plus the re-hit interval's index for a hitbox with one (FGSTN_HitboxSpec::MakeTargetKey) */
+	uint8 TargetKey = 0;
+
 	/** What goes to the victim's inbox (also on a ricochet) */
 	FGSTN_HitInboxEntry Entry;
 

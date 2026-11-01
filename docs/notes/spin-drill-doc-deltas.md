@@ -117,3 +117,25 @@ Differences between the code and [spin-drill.md](../architecture/spin-drill.md) 
 - New rule: a spin that ends early (cancel, replacement, jump cancel) also ends the air spin's low gravity, keeping only
   `LowGravityExtraFrames` (SD.3 "only during the air spin"). The air spin stays spent for the airtime.
 - No new tags. Harness: `spin_opposite_cancel` in `spin_drill_scenarios.py` (not run yet, as the D4 ones).
+
+## D6/D7 (combat core seams)
+
+- Coordinated with the M7 thread (its G3 had not started; it rebases on these). Additive only: every existing timeline behaves as before.
+- **S1 re-hit interval**: `FGSTN_HitboxSpec::RehitIntervalFrames` (0 = once per group and attack, today's rule). The interval counts
+  simulation frames since the timeline started, hitstop and held frames included, so a held move keeps grinding. Instead of a frame field
+  per target, the target ring stores a key: `FGSTN_HitboxSpec::MakeTargetKey` = the group (bits 0-2) plus the interval's index mod 32
+  (bits 3-7), so `FGSTN_HitTarget`, its byte on the wire and the sync state size are unchanged. Needs a group below 8 (groups are already
+  a byte mask); a larger group ignores the interval. `MaxTargetsPerGroup` counts per key (per interval). `FGSTN_AttackerHit::TargetKey`
+  carries the key; the attacker's hit presentation matches on it, so each re-hit flashes once.
+- **S2 loop section: dropped.** The bore holds its loop with a track hook stall owned by GSTNSpinDrill (the defence's hold window
+  mechanism, `FGSTN_TrackHookResult::bStallThisFrame`), and S1 counts run frames, so the hitbox stays open and re-hits while held. No
+  timeline player change, no new track kind. The synced montage loop becomes a presentation matter (D11).
+- **S3: dropped** earlier (plan §2b, the latch's parked transform).
+- **S4 attacker hit notify: already there.** M6 F10 added `FGSTN_CombatTickContext::AttackerHits` (victim id, group, inbox entry, hit
+  location) from the AfterExecute point on; the drill reads it in D9. A contact normal is not in it; D9 derives it from the snapshot or
+  asks for it then.
+- **S6 gravity contributor: not needed** (D4: the low gravity is an effect on the combat gravity stats).
+- **D-1 authoritative event key**: `FGSTN_TimelineTrack_Event::OutboxEventTag` (+ `OutboxTags`, `OutboxMagnitude`). The combat tick posts
+  one sim event per crossed key with a tag to the entity's outbox (`FGSTN_CombatTimelineLogic::AppendOutboxEvents`), after the weapon
+  switch step, while a timeline runs; published by the authority only. It adds events; the HitLanded and KO event structs are untouched.
+- Tests: `GSTNCombat.NP.Seams.S1.TargetKey`, `.S1.RehitEveryInterval`, `.D1.EventKeyPostsToOutbox` (GSTN_CombatNPTests_Seams.cpp).
