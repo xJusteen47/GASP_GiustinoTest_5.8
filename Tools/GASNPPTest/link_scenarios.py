@@ -167,7 +167,7 @@ def mover_mode(wi, key):
 
 def watchdog():
     """(breaks, orphans, last reason index, last frame) of the server's link watchdog"""
-    r = Lib.get_watchdog_stats(actor(0, g.key_of_player(0)))
+    r = Lib.get_watchdog_stats(next(iter(g.comps(g.worlds()[0]).values())).get_owner())   # any pawn of the server's world (dedicated: no host pawn)
     vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool)]
     return tuple(vals[:4]) if len(vals) >= 4 else (0, 0, 0, -1)
 
@@ -280,8 +280,15 @@ class _LinkRig:
         main = self.ib if self.ib > 0 else self.clients[0]
         self.own_side = 'cli' if self.ib > 0 else None
         extra = [('b_srv', 0, self.bkey)]
+        # The authority's grabber pose per sim frame, for the frame-aligned grabber presentation. When the grabbed is the host, the run's main pawn is
+        # the grabber itself and its 'srv' side already drains that history (a second drain of one component would get nothing)
+        self.a_side = 'srv' if self.ib == 0 else 'a_srv'
+        if self.ia > 0 and self.ib > 0:
+            extra.append(('a_srv', 0, self.akey))
         self.run = g._Run(name, main, judge_reconciles=False, extra=extra)
         self.series = {wi: [] for wi in range(len(g.worlds()))}
+        self.framed = []     # (t, shown location of B on the grabber's world, the frame that world shows the grabber at)
+        self.host_off = []   # (t, B's shown location in A's local frame on the authority)
         self.modes = {wi: [] for wi in range(len(g.worlds()))}
         self.marks = {}
         _last['rig'] = self
@@ -294,6 +301,12 @@ class _LinkRig:
                 p = linked_location(wi, self.bkey)
                 if p is not None:
                     self.series[wi].append((t, p))
+                    if wi == 0:
+                        q = actor(0, self.akey).get_actor_transform().inverse_transform_location(unreal.Vector(*p))
+                        self.host_off.append((t, (q.x, q.y, q.z)))
+                    elif wi == self.ia:
+                        fr = json.loads(g.comps(g.worlds()[wi])[self.akey].get_state_snapshot()).get('serverFrame')
+                        self.framed.append((t, p, fr))
                 self.modes[wi].append((t, mover_mode(wi, self.bkey)))
         except Exception:
             pass
@@ -302,6 +315,37 @@ class _LinkRig:
         if self.handle is not None:
             unreal.unregister_slate_post_tick_callback(self.handle)
             self.handle = None
+
+    def framed_errors(self, t0, t1):
+        """Each sample of B shown on the grabber's world against where the authority placed B at the SAME frame: the authority's grabber pose at
+        the frame that world shows the grabber at, plus the authority's median grab offset (as the latch check, 8c14670). (errors cm, samples)"""
+        srv = self.run.final_by_frame(self.a_side, t0 - 1.0, t1 + 1.0)
+        offs = [c for t, c in self.host_off if t0 <= t <= t1]
+        rows = [(p, fr) for t, p, fr in self.framed if t0 <= t <= t1]
+        if not offs or not srv:
+            return [], len(rows)
+        off = tuple(sorted(c[k] for c in offs)[len(offs) // 2] for k in range(3))
+        def placed(s0):
+            c, sn = math.cos(math.radians(s0['yaw'])), math.sin(math.radians(s0['yaw']))
+            return (s0['loc'][0] + off[0] * c - off[1] * sn, s0['loc'][1] + off[0] * sn + off[1] * c, s0['loc'][2] + off[2])
+
+        errs, seg = [], []
+        for p, fr in rows:
+            s0 = srv.get(fr)
+            if s0 is None or s0.get('yaw') is None:
+                continue
+            ref = placed(s0)
+            errs.append(math.dist(p, ref))
+            # Note only: the mesh is shown smoothed between the last two simulated frames, so also the distance to the authority's path from F-1 to F
+            s1 = srv.get(fr - 1)
+            if s1 is not None and s1.get('yaw') is not None:
+                a, b = placed(s1), ref
+                ab = [b[k] - a[k] for k in range(3)]
+                den = sum(x * x for x in ab)
+                u = 0.0 if den <= 1e-9 else max(0.0, min(1.0, sum((p[k] - a[k]) * ab[k] for k in range(3)) / den))
+                seg.append(math.dist(p, [a[k] + u * ab[k] for k in range(3)]))
+        self.seg_errors = seg
+        return errs, len(rows)
 
     def mark(self, name):
         def f():
@@ -429,6 +473,24 @@ def _spike(pairing):
             p50, p95, mx, d = e
             limit = S1['own_p95'] if wi == rig.ia else S1['partner_p95']
             role = 'grabber' if wi == rig.ia else 'grabbed' if wi == rig.ib else 'observer'
+            if wi == rig.ia:
+                # The grabber's own world predicts it ahead of the server, and the server reference is sampled once per editor frame and aligned by one
+                # constant delay: with dashes in the walk that reads the sampling (p95 12.8 cm at 0 % in one F14 run). Gated by frame instead, as the
+                # latch check and link_mp; the time-aligned figure stays as a note
+                run.note(f'world {wi} (grabber) time-aligned: p50 {p50:.1f} p95 {p95:.1f} max {mx:.1f} cm, delay {d * 1000:.0f} ms, {len(mine)} samples')
+                errs, n = rig.framed_errors(T_WALK + 0.5, T_WALK + 7.0)
+                if len(errs) < 20:
+                    res.append((f'world {wi} (grabber): presentation aligned by frame sampled', False, f'{len(errs)} aligned of {n}'))
+                    continue
+                errs.sort()
+                fp50, fp95, fmx = errs[len(errs) // 2], errs[min(len(errs) - 1, int(0.95 * len(errs)))], errs[-1]
+                res.append((f'world {wi} (grabber): presentation aligned by frame p95 <= {limit} cm, max <= {S1["max"]} cm', fp95 <= limit and fmx <= S1['max'],
+                            f'p50 {fp50:.1f} p95 {fp95:.1f} max {fmx:.1f} cm, {len(errs)} of {n} samples'))
+                seg = sorted(getattr(rig, 'seg_errors', []))
+                if seg:
+                    run.note(f'world {wi} (grabber) against the authority between frames F-1 and F (smoothing interval, note only): p50 {seg[len(seg) // 2]:.1f} '
+                             f'p95 {seg[min(len(seg) - 1, int(0.95 * len(seg)))]:.1f} max {seg[-1]:.1f} cm')
+                continue
             res.append((f'world {wi} ({role}): presentation p95 <= {limit} cm, max <= {S1["max"]} cm', p95 <= limit and mx <= S1['max'],
                         f'p50 {p50:.1f} p95 {p95:.1f} max {mx:.1f} cm, delay {d * 1000:.0f} ms, {len(mine)} samples'))
         if rig.series[0]:
@@ -847,7 +909,7 @@ class _GrabRig:
     def __init__(self, name, pairing):
         self.ia, self.ib = PAIRINGS[pairing]
         self.akey, self.bkey = g.key_of_player(self.ia), g.key_of_player(self.ib)
-        self.others = [i for i in (0, 1, 2) if i not in (self.ia, self.ib)]
+        self.others = [i for i in g.all_players() if i not in (self.ia, self.ib)]   # a dedicated server has no player of its own
         main = self.ib if self.ib > 0 else self.ia
         self.run = g._Run(name, main, judge_reconciles=False)
         # Details as text: the batch report slices them

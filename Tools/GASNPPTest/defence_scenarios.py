@@ -501,7 +501,7 @@ def scenario_grab_shield(client=1):
     steps = [(0.1, lambda: ls.grab_content_setup([], edit_kit=content_kit(link=True) is None))]
     steps.append(rig.setup_step())
     t = rig.cursor
-    others = [g.key_of_player(i) for i in range(len(g.worlds())) if i not in (client, rig.vi)]
+    others = [g.key_of_player(i) for i in g.all_players() if i not in (client, rig.vi)]   # a dedicated server has no player of its own
 
     def clear_others():
         # A second candidate in reach takes the grab probe's focus: the uninvolved pawns go 3 m behind the attacker
