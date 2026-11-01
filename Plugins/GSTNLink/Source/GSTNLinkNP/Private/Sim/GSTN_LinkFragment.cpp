@@ -42,7 +42,7 @@ namespace
 	void SerializeActions(FArchive& Ar, FGSTN_LinkActions& Actions)
 	{
 		Ar << Actions.LastRefusedSerial << Actions.RefusedFrame << Actions.CooldownEndFrame;
-		Ar << Actions.Active.Id << Actions.Active.StartFrame;
+		Ar << Actions.Active.Id << Actions.Active.StartFrame << Actions.Active.Side;
 		Ar << Actions.PendingStart.Frame << Actions.PendingStart.Id;
 		Ar << Actions.Exit.Frame;
 		SerializeVector(Ar, Actions.Exit.Position);
@@ -164,8 +164,8 @@ void FGSTN_LinkFragment::ToString(FAnsiStringBuilderBase& Out) const
 	}
 	if (!Actions.IsIdle())
 	{
-		Out.Appendf(" actions{refused %d@%d cooldown %d active %d@%d pending %d@%d exit %d}", Actions.LastRefusedSerial, Actions.RefusedFrame,
-			Actions.CooldownEndFrame, Actions.Active.Id, Actions.Active.StartFrame, Actions.PendingStart.Id, Actions.PendingStart.Frame, Actions.Exit.Frame);
+		Out.Appendf(" actions{refused %d@%d cooldown %d active %d@%d side %d pending %d@%d exit %d}", Actions.LastRefusedSerial, Actions.RefusedFrame,
+			Actions.CooldownEndFrame, Actions.Active.Id, Actions.Active.StartFrame, Actions.Active.Side, Actions.PendingStart.Id, Actions.PendingStart.Frame, Actions.Exit.Frame);
 	}
 	if (GrabImmunityEndFrame != 0)
 	{

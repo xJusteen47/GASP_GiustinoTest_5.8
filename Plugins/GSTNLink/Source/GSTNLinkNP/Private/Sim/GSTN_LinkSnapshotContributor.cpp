@@ -109,6 +109,8 @@ void FGSTN_LinkSnapshotContributor::FinalizeSnapshot(int32 Frame, TArrayView<FGS
 		FTransform Parked;
 		if (ComputeParkedTransform(*Ext, Entries[PartnerIndex], Parked))
 		{
+			// M7 G2: the turn of a parked role that acts (0 for every other role: the placement unchanged)
+			Parked = UGSTN_LinkMath::ComposeLocalYaw(Parked, static_cast<int16>(Ext->LocalYawQ8 * UGSTN_LinkMath::LocalYawQuantum));
 			Entry.Transform.SetLocation(Parked.GetLocation());
 			Entry.Transform.SetRotation(Parked.GetRotation());
 			Entry.Facing = Parked.GetRotation().GetForwardVector();

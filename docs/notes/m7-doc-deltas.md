@@ -67,3 +67,44 @@ smoothing put the mesh back on its parked capsule (B). Fix: the attachment and t
 component ticks in `TG_PostPhysics`, after both), and the mesh's original offset is Mover's base transform. Not re-measured: the S2 mirror tooling was throwaway, and
 the one-session probe of G1 (`Saved/Logs/m7-g1/probe-b.log`) formed the test latch without the scenarios' link setup, so the pawns had no
 presentation component and it says nothing about the fix. OPEN for G10 (measure the parked mesh on its own client, rendering on).
+
+## G2: partner moves and parked facing (HANDOVER 71)
+
+### Shipped names that differ from the plan and spec
+
+| Plan / spec | Shipped |
+|---|---|
+| `UGSTN_LinkActionProvider` "resolves an int16 Id to the partner's ability and its rules" | `IGSTN_LinkActionProvider` (UInterface in `GSTNLinkCore`, C++ only: it hands out class and placer pointers) with `ResolveLinkAction(int16 Id, FGSTN_LinkActionInfo&)`. `FGSTN_LinkActionInfo` (plain struct): `PartnerAbility`, `PartnerRequirements` (`FGSTN_TagRequirements`), `PartnerStartOffsetFrames`, `OutcomeFrame` (initiator timeline frame), `Outcome` (`EGSTN_LinkActionOutcome`: `KeepLink`, `Break`, `SwapRoles` reserved), `BreakReason` (tag, empty = Release), `ExitPlacer` (null = the type's), `bPartnerLocksCommands` (M7's `PartnerMode = Cooperative`), `MaxDurationFrames`. `UGSTN_LinkActionTable`: a provider filled by code |
+| "registered per link type in the registry" | `UGSTN_LinkRegistry::RegisterActionProvider(LinkType tag, UObject*)` / `UnregisterActionProvider` / `GetActionProvider(TypeIndex)` / `ResolveLinkAction(TypeIndex, Id, Info)`; keyed by tag so a table rebuild keeps it; not in the registry signature (content the provider's plugin owns) |
+| spec 6.5 item 2 "it writes `ActivePair = { PairIdx, S }` and a link-inbox entry `{ PartnerMove, Frame = S, PairIdx, LinkSerial, T }`" | How the initiator posts: a **link outcome key** `EGSTN_LinkOutcome::PartnerMove` with `PartnerMoveId` on the initiator's move (the F12 track kind, evaluated in the combat tick, so deterministic and re-posted by a resimulation). The link tick writes `FGSTN_LinkActions::Active = { Id, S, Side = Initiator }` (`Side` is new, `GSTNLinkActionSide`) and posts `FGSTN_LinkPartnerMoveEntry { Serial, Id, TargetFrame = S + max(PartnerStartOffsetFrames, 1) }` as inbox kind `GSTNLinkInboxKinds::PartnerMove` (FirstLink + 2), stamped S, through `UGSTN_CombatWorldSubsystem::PostToInbox` (refused where the partner does not tick, as every inbox post). No API an ability calls: an ability cannot write the link fragment |
+| spec 6.5 item 3 "request the partner ability (activation like a forced command)" | The inbox handler only schedules `Actions.PendingStart = { max(T, S + 1), Id }`; the link tick at AfterClocks of that frame starts it through `IGSTN_CombatTickServices::StartForcedTimeline` (source Forced, M6 F8's seam) and writes `Active = { Id, F, Partner }`. The command lock is `BlocksActions` while the partner's part plays and the action says `bPartnerLocksCommands`; it lifts when the forced timeline is replaced or over |
+| partner requirements "checked against the partner's projected tags in the snapshot" | The partner's own snapshot entry's request tags (`FGSTN_LinkTickExtension::MakeRequestSide`). That mask holds only the tags of `FGSTN_LinkRequestTags` (the definitions' request requirements and the grab/latch rules): a tag only a provider names reads as absent (the F10 deviation of kit rules). OPEN for G8 |
+| spec 6.5 item 4 "the initiator writes `Link.Phase = Exiting` and posts Break (or Swap) to the partner" | Through the watchdog, the only break authority: at the outcome frame (initiator's timeline, same run, hitstop-aware via `FGSTN_LinkOutcomeKeys::GetCrossedFrames`) the initiator sets `PendingBreak` with the action's reason; the record stays until the break, and the watchdog places the parked side with the action's `ExitPlacer` (`FGSTN_LinkWatchdogEntity::ActiveMove`, `FParams::ActionExitPlacer`, `PlaceExit(..., Placer)`). `LinkCommand{Break}` now also clears both sides' `Active` and `PendingStart`. `SwapRoles`: logged once, treated as KeepLink |
+| failure paths "serial mismatch, partner KO, MaxDurationFrames -> Break with the default exit; both sides emit PairMoveAborted" | Partner KO (at its start or while it plays) and `MaxDurationFrames` (either side): the record is cleared first (so the watchdog uses the type's default placer), `PendingBreak` with `Forced`, event `Combat.Event.Link.PartnerMoveAborted` (native, GSTNLink; Magnitude = the id) from the side that aborts, through the combat outbox (authority only). **Serial mismatch** follows spec item 3, not the brief: the entry is dropped (no link of that serial exists on the partner to break; the initiator's own link breaks as an orphan if it really is one), no event (the inbox handler has no outbox). Requirements failing, an unknown id, a partner in a hit reaction or a kit without the ability: the part is dropped with the event, the link kept |
+| `Actions.PendingStart` "or activates at once" when T <= F | Always through PendingStart: the handler runs before AfterClocks of the same frame, so a due part starts in the frame it is drained, which is the same thing |
+| Partner moves on any channel | Body channel only (the outcome keys act on the Body link) |
+
+### Parked facing
+
+- `FGSTN_LinkRoleDef::YawLimitDeg` (360) is the **whole arc** centred on the placement's forward (360 = free, 90 = +-45 degrees, 0 = fixed).
+  `StepFacing` runs at AfterExecute (after step 8, so a move that started this frame is known): on the start frame of a move (an "aimed move":
+  `ActiveTimeline` or `TimelineStartFrame` changed, or a timeline began) and on every idle frame (`Actionable`), `LocalYawQ` faces the frame's
+  stick on the plane relative to the parked placement from the step snapshot; a stick below a quarter tilt keeps the turn. Only for the Body
+  link's parked role with `bActsWhileLinked`.
+- `LocalYawQ` is written in quanta of 128 (1/256 turn, about 1.4 degrees), so the snapshot carries it exactly in one signed byte:
+  `FGSTN_LinkSnapshotExt` (full at 32 B) narrowed its type word to one byte (`Magic` 0x4C) and took the other for `LocalYawQ8`.
+  `FinalizeSnapshot` composes the turn (`UGSTN_LinkMath::ComposeLocalYaw`); `UGSTN_LinkPresentationComponent` composes it into its role offset.
+  Not in the watchdog's distance (a turn about the parked root does not move it).
+- **The latch at its defaults**: 360 means a latcher that pushes the stick while idle, or at the start of its attack, now turns; with no
+  stick it is byte-identical (`GSTNLink.NP.Facing.LatchUnchanged`). A latch that must keep facing the enemy sets its latcher role's
+  `YawLimitDeg` to 0 (data). SUITE_LINK's latch scenarios are the check on the shipped test content.
+
+### Counts (laptop, `Saved/m7-g2`, `Select-String 'Test Completed. Result=\{Success\}'` / `\{Fail`)
+
+- `headless-g2-on.log` 1212/0 = HANDOVER 69's 1199 + 4 GSTNInput tests of D3b (HANDOVER 70, on the feature branch since 2d871d2) + 9 new
+  `GSTNLink.NP` (PartnerMove 5, Facing 3, Fragment 1). `headless-g2-linkoff.log` 1107/0 = 1103 + 4. `headless-g2-ext-2.log` 1222/0 = 1212 + 10
+  `GSTNExtTest` (9 + `Link.PartnerMoveFromOutside`).
+- `GSTNLink.Core.Tags.AllRegisteredAndDocumented` now counts 40 native tags (`Combat.Event.Link.PartnerMoveAborted`), and the owned-subtree check
+  admits `Combat.Event.Link.*`.
+- SUITE_LINK, listen host + 2 clients in one editor process, 60/15 ms: `Saved/Logs/m7-g2/link-listen-0pct.log` 19/19 PASS (latch scenarios included).
+- SUITE_LINK at 2 % loss: `link-listen-2pct.log` 17/19; the two FAILs were `link_spike_client_grabs_host` (one observer correction while the link is held) and `link_spike_client_grabs_client` (3 counter steps in a forced window, limit 2), scenarios that run none of the G2 paths (a debug-formed grab; no partner move, a non-acting parked role). Rerun of both twice: `link-listen-2pct-rerun.log` 4/4 PASS.

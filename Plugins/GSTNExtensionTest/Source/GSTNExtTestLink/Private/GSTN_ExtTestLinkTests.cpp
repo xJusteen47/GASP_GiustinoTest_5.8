@@ -348,4 +348,59 @@ bool FGSTN_ExtTestLinkPayloadTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ExtTestPartnerMoveTest, "GSTNExtTest.Link.PartnerMoveFromOutside", Flags)
+bool FGSTN_ExtTestPartnerMoveTest::RunTest(const FString& Parameters)
+{
+	// M7 G2: a provider of this module registers for the carry and drives a partner move through GSTNLink's key step, inbox rule and link tick
+	FScopedCarry Carry;
+	UGSTN_ExtTestCarryMoves* Moves = NewObject<UGSTN_ExtTestCarryMoves>(GetTransientPackage());
+	Moves->AddToRoot();
+	Moves->CarriedAbility = UGSTN_ExtTestCarryRule::StaticClass();
+	UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	TestTrue(TEXT("registered from outside"), Registry->RegisterActionProvider(GSTNExtTestLinkTags::Type_Carry, Moves));
+	TestFalse(TEXT("an object without the interface is refused"), Registry->RegisterActionProvider(GSTNExtTestLinkTags::Type_Carry, Carry.Definition));
+	TestTrue(TEXT("the registry resolves through it"), Registry->GetActionProvider(Carry.Index) == static_cast<const IGSTN_LinkActionProvider*>(Moves));
+
+	constexpr uint8 Serial = 3;
+	constexpr int32 KeyFrame = HitFrame + 40;
+	FGSTN_LinkFragment Carrier;
+	Carrier.Links.Body.LinkTypeIndex = Carry.Index;
+	Carrier.Links.Body.Role = 1;
+	Carrier.Links.Body.Phase = EGSTN_LinkPhase::Active;
+	Carrier.Links.Body.PartnerId = FGSTN_EntityRef(GSTNEntityKinds::Fighter, static_cast<uint16>(CarriedId));
+	Carrier.Links.Body.Serial = Serial;
+	FGSTN_LinkFragment Carried = Carrier;
+	Carried.Links.Body.Role = 2;
+	Carried.Links.Body.PartnerId = FGSTN_EntityRef(GSTNEntityKinds::Fighter, static_cast<uint16>(CarrierId));
+
+	FGSTN_LinkActionInfo Info;
+	TestTrue(TEXT("the toss resolves"), Registry->ResolveLinkAction(Carry.Index, UGSTN_ExtTestCarryMoves::TossId, Info));
+	FGSTN_LinkPartnerMoveEntry Entry;
+	TestTrue(TEXT("the carrier's key starts it"), FGSTN_LinkTickExtension::StartPartnerMove(Carrier, UGSTN_ExtTestCarryMoves::TossId, KeyFrame, Info, Entry));
+	TestTrue(TEXT("the carried side schedules it"), FGSTN_LinkInboxHandlers::ApplyPartnerMove(Carried, Entry, KeyFrame));
+
+	FGSTN_LinkTickExtension::FPartnerMoveFrame Frame;
+	Frame.Frame = KeyFrame + 3;
+	FGSTN_LinkTickExtension::FPartnerMoveResult Result;
+	FGSTN_LinkTickExtension::StepPartnerMoves(Carried, Frame, Registry, Result);
+	TestTrue(TEXT("the carried part starts 3 frames on, with the provider's ability"), Result.StartAbility == UGSTN_ExtTestCarryRule::StaticClass());
+
+	// The carrier's timeline (started 2 frames before the key) crosses its frame 6: the link breaks with the provider's reason
+	FGSTN_LinkTickExtension::FPartnerMoveFrame Outcome;
+	Outcome.Frame = KeyFrame + 4;
+	Outcome.bInTimeline = true;
+	Outcome.TimelineStartFrame = KeyFrame - 2;
+	Outcome.bTimelineCrossed = true;
+	Outcome.TimelinePrevious = 5;
+	Outcome.TimelineCurrent = 6;
+	FGSTN_LinkTickExtension::FPartnerMoveResult OutcomeResult;
+	FGSTN_LinkTickExtension::StepPartnerMoves(Carrier, Outcome, Registry, OutcomeResult);
+	TestTrue(TEXT("pending break, reason Throw"), Carrier.Links.Body.HasFlag(GSTNLinkFlags::PendingBreak)
+		&& Carrier.Links.Body.GetBreakReason() == EGSTN_LinkBreakReason::Throw);
+
+	Registry->UnregisterActionProvider(GSTNExtTestLinkTags::Type_Carry);
+	TestTrue(TEXT("unregistered"), Registry->GetActionProvider(Carry.Index) == nullptr);
+	Moves->RemoveFromRoot();
+	return true;
+}
 #endif

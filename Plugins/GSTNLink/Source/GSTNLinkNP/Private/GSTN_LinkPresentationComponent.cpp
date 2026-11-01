@@ -85,7 +85,8 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 	}
 	const FGSTN_LinkRoleDef& Role = Definition->GetRoleDef(ShownRole);
 	PartnerSocket = Role.SocketOnPartner;
-	RoleOffset = Role.SocketOffset;
+	// M7 G2: the parked role's own turn (LocalYawQ), as the snapshot substitution composes it, so the mesh faces where its hurtboxes do
+	RoleOffset = UGSTN_LinkMath::ComposeLocalYaw(Role.SocketOffset, ShownRole == Body.Role ? Body.LocalYawQ : static_cast<int16>(0));
 
 	const USkeletalMeshComponent* PartnerMesh = PartnerActor->FindComponentByClass<USkeletalMeshComponent>();
 	if (bUseLiveSocket && PartnerMesh && !PartnerSocket.IsNone() && PartnerMesh->DoesSocketExist(PartnerSocket))
@@ -99,7 +100,7 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 		const FTransform Socket = PartnerBody ? PartnerBody->GetSocket(PartnerSocket) : FTransform::Identity;
 		FTransform PartnerTransform = PartnerActor->GetActorTransform();
 		PartnerTransform.SetScale3D(FVector::OneVector);
-		LinkedTransform = UGSTN_LinkMath::ParkedTransformOnSocket(PartnerTransform, Socket, Role);
+		LinkedTransform = RoleOffset * Socket * PartnerTransform;
 	}
 
 	if (Partner.Get() != PartnerActor)

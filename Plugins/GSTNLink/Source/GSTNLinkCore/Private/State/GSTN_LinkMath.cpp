@@ -142,3 +142,49 @@ bool UGSTN_LinkMath::TryGetParkedTransform(const UGSTN_LinkTypeDefinition& Defin
 	OutTransform = ParkedTransformOnSocket(PartnerTransform, SocketRootRelative, Definition.GetRoleDef(RoleIndex));
 	return true;
 }
+
+int16 UGSTN_LinkMath::LocalYawQFromDeg(double YawDeg)
+{
+	// Units of 1/32768 turn, wrapped to [-16384, 16384) (half a turn each way), rounded to the quantum the snapshot byte holds exactly
+	const double Wrapped = FMath::UnwindDegrees(YawDeg);
+	int32 Steps = FMath::RoundToInt32(Wrapped / 360.0 * (32768.0 / LocalYawQuantum));
+	const int32 HalfTurnSteps = 16384 / LocalYawQuantum;
+	if (Steps >= HalfTurnSteps)
+	{
+		Steps -= 2 * HalfTurnSteps;
+	}
+	return static_cast<int16>(Steps * LocalYawQuantum);
+}
+
+double UGSTN_LinkMath::LocalYawDeg(int16 LocalYawQ)
+{
+	return static_cast<double>(LocalYawQ) * 360.0 / 32768.0;
+}
+
+FTransform UGSTN_LinkMath::ComposeLocalYaw(const FTransform& Parked, int16 LocalYawQ)
+{
+	if (LocalYawQ == 0)
+	{
+		return Parked;
+	}
+	// The turn about the parked root's own up axis: applied first, in the parked space
+	const FTransform Turn(FQuat(FVector::UpVector, FMath::DegreesToRadians(LocalYawDeg(LocalYawQ))));
+	return Turn * Parked;
+}
+
+int16 UGSTN_LinkMath::FacingYawQ(const FTransform& Anchor, const FVector& WorldDirection, float YawLimitDeg, int16 Current)
+{
+	const FVector Local = Anchor.InverseTransformVectorNoScale(WorldDirection);
+	const FVector2D OnPlane(Local.X, Local.Y);
+	if (OnPlane.SizeSquared() < UE_KINDA_SMALL_NUMBER)
+	{
+		return Current;
+	}
+	double YawDeg = FMath::RadiansToDegrees(FMath::Atan2(OnPlane.Y, OnPlane.X));
+	if (YawLimitDeg < 360.f)
+	{
+		const double Half = FMath::Max(static_cast<double>(YawLimitDeg), 0.0) * 0.5;
+		YawDeg = FMath::Clamp(YawDeg, -Half, Half);
+	}
+	return LocalYawQFromDeg(YawDeg);
+}

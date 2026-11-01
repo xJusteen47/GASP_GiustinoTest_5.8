@@ -411,3 +411,31 @@ void UGSTN_LinkRegistry::UpdateSignature()
 	}
 	Signature = FCrc::StrCrc32(*Text);
 }
+
+bool UGSTN_LinkRegistry::RegisterActionProvider(const FGameplayTag& LinkType, UObject* Provider)
+{
+	if (!LinkType.IsValid() || !Provider || !Provider->GetClass()->ImplementsInterface(UGSTN_LinkActionProvider::StaticClass()))
+	{
+		return false;
+	}
+	ActionProviders.Add(LinkType, Provider);
+	return true;
+}
+
+void UGSTN_LinkRegistry::UnregisterActionProvider(const FGameplayTag& LinkType)
+{
+	ActionProviders.Remove(LinkType);
+}
+
+const IGSTN_LinkActionProvider* UGSTN_LinkRegistry::GetActionProvider(uint8 TypeIndex) const
+{
+	const FGSTN_LinkTypeEntry* Entry = GetEntry(TypeIndex);
+	const TObjectPtr<UObject>* Found = Entry ? ActionProviders.Find(Entry->LinkType) : nullptr;
+	return Found && *Found ? Cast<IGSTN_LinkActionProvider>(Found->Get()) : nullptr;
+}
+
+bool UGSTN_LinkRegistry::ResolveLinkAction(uint8 TypeIndex, int16 Id, FGSTN_LinkActionInfo& OutInfo) const
+{
+	const IGSTN_LinkActionProvider* Provider = Id > 0 ? GetActionProvider(TypeIndex) : nullptr;
+	return Provider && Provider->ResolveLinkAction(Id, OutInfo);
+}

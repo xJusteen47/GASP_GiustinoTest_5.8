@@ -46,5 +46,9 @@ void FGSTN_LinkOutcomeTrack::Validate(const FString& Label, TArray<FString>& Out
 		{
 			OutErrors.Add(FString::Printf(TEXT("%s: key %d throws with a hit whose type is not Combat.HitType.Throw, so the throw would not skip parry and shield."), *Label, KeyIndex));
 		}
+		if (Key.Outcome == EGSTN_LinkOutcome::PartnerMove && (Key.PartnerMoveId < 1 || Key.PartnerMoveId > MAX_int16))
+		{
+			OutErrors.Add(FString::Printf(TEXT("%s: key %d starts partner move %d, outside 1..32767 (the id travels as an int16)."), *Label, KeyIndex, Key.PartnerMoveId));
+		}
 	}
 }

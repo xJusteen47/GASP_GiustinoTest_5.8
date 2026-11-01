@@ -18,7 +18,9 @@ namespace GSTNLinkInboxKinds
 	constexpr uint8 Response = GSTNInboxKinds::FirstLink;
 	/** A break or a placement of a live link (FGSTN_LinkCommandEntry), the watchdog's to both sides (F11) */
 	constexpr uint8 Command = GSTNInboxKinds::FirstLink + 1;
-	static_assert(Command <= GSTNInboxKinds::LastLink, "the link kinds stay in the link range");
+	/** The partner's part of a partner move (FGSTN_LinkPartnerMoveEntry), from the initiator's link outcome key to the partner (M7 G2) */
+	constexpr uint8 PartnerMove = GSTNInboxKinds::FirstLink + 2;
+	static_assert(PartnerMove <= GSTNInboxKinds::LastLink, "the link kinds stay in the link range");
 }
 
 /**
@@ -52,6 +54,30 @@ struct GSTNLINKNP_API FGSTN_LinkResponseEntry
 	/** The link's Payload byte the target's rules wrote on accept (M7 G1), so both sides hold the same state */
 	UPROPERTY()
 	uint8 Payload = 0;
+};
+
+/**
+ * The payload of a PartnerMove entry (M7 G2, M7 spec 6.5 item 2): posted by the initiator's link tick on the frame S its move crossed a PartnerMove
+ * outcome key (stamped S, from the initiator to its Body partner, only where the partner ticks: the authority, and the partner's own machine when
+ * it simulates both), drained by the partner at F >= S + 1. Plain integers: the id is the link type's action provider's, the serial the link's.
+ * Partner moves are Body-channel only, as the outcome keys are.
+ */
+USTRUCT()
+struct GSTNLINKNP_API FGSTN_LinkPartnerMoveEntry
+{
+	GENERATED_BODY()
+
+	/** The serial of the Body link the move belongs to: the partner drops an entry of another link */
+	UPROPERTY()
+	uint8 Serial = 0;
+
+	/** The action provider's id (1..32767) */
+	UPROPERTY()
+	int16 Id = 0;
+
+	/** The frame the partner's part starts on: S + max(PartnerStartOffsetFrames, 1) */
+	UPROPERTY()
+	int32 TargetFrame = INDEX_NONE;
 };
 
 /** What a LinkCommand does */
@@ -133,18 +159,29 @@ struct GSTNLINKNP_API FGSTN_LinkCommandEntry
  *    response whose serial the channel already carries as role 1 changes nothing, so the entry a re-simulated sender posts again after a
  *    rollback lands on the same state.
  *  - Command, on both sides (F+1): Break of the live link of that serial -> the channel resets (serial kept), the exit goes to the link
- *    actions and a grab target's immunity end is raised; Place -> the exit only; Form (test and debug command) -> the role of the payload on a free channel. Any other serial is ignored.
+ *    actions and a grab target's immunity end is raised; Place -> the exit only; Form (test and debug command) -> the role of the payload on a free channel. Any other serial is ignored. A Break
+ *    also ends any partner move of the link (the actions' Active and PendingStart).
+ *  - PartnerMove, on the partner (S+1 on, M7 G2): ApplyPartnerMove.
  */
 struct GSTNLINKNP_API FGSTN_LinkInboxHandlers
 {
 	static void HandleResponse(const FGSTN_InboxEntry& Entry, const FGSTN_InboxDispatchContext& Context);
 	static void HandleCommand(const FGSTN_InboxEntry& Entry, const FGSTN_InboxDispatchContext& Context);
+	static void HandlePartnerMove(const FGSTN_InboxEntry& Entry, const FGSTN_InboxDispatchContext& Context);
 
 	/** The response rule on a fragment (what HandleResponse does), for the tests. SenderId is the target's entity id. True when it changed */
 	static bool ApplyResponse(FGSTN_LinkFragment& Fragment, const FGSTN_LinkResponseEntry& Response, int32 SenderId);
 
 	/** The command rule on a fragment. EntryFrame is the command's stamp. True when it changed */
 	static bool ApplyCommand(FGSTN_LinkFragment& Fragment, const FGSTN_LinkCommandEntry& Command, int32 EntryFrame);
+
+	/**
+	 * The partner-move rule on the partner's fragment (M7 G2): the Body link must be live with the entry's serial, else the entry is dropped (the
+	 * initiator's move continues alone, M7 spec 6.5 item 3). Accepted: the start is scheduled in the link actions (PendingStart at the target frame,
+	 * never before EntryFrame + 1); the link tick starts the part at AfterClocks of that frame. Idempotent: an entry already scheduled or already
+	 * playing changes nothing, so the re-post of a re-simulated initiator lands on the same state. True when it changed
+	 */
+	static bool ApplyPartnerMove(FGSTN_LinkFragment& Fragment, const FGSTN_LinkPartnerMoveEntry& Move, int32 EntryFrame);
 
 	/** Registers both kinds with FGSTN_InboxKindRegistry (module startup); false when an id was taken */
 	static bool Register();
@@ -153,4 +190,5 @@ struct GSTNLINKNP_API FGSTN_LinkInboxHandlers
 	/** The entries a step appends to OutgoingEntries (the victim step stamps Frame and SenderId) */
 	static FGSTN_InboxEntry MakeResponse(const FGSTN_LinkResponseEntry& Payload);
 	static FGSTN_InboxEntry MakeCommand(const FGSTN_LinkCommandEntry& Payload);
+	static FGSTN_InboxEntry MakePartnerMove(const FGSTN_LinkPartnerMoveEntry& Payload);
 };

@@ -170,11 +170,15 @@ struct GSTNLINKCORE_API FGSTN_LinkActions
 	/** The frame before which this entity cannot form a link again (a remount cooldown, the grabber's cooldown after a throw) */
 	int32 CooldownEndFrame = 0;
 
-	/** The partner move that is playing: the action provider's id and the frame it started */
+	/**
+	 * The partner move that is playing: the action provider's id, the frame it started and which side this entity plays (GSTNLinkActionSide:
+	 * the initiator, whose key posted it, or the partner, whose part the link tick started). Cleared when the move is over or the link ends
+	 */
 	struct FActive
 	{
 		int16 Id = 0;
 		int32 StartFrame = 0;
+		uint8 Side = 0;
 	} Active;
 
 	/** A partner move that starts at Frame */

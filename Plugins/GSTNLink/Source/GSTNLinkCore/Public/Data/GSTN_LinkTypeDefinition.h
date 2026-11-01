@@ -111,6 +111,16 @@ struct GSTNLINKCORE_API FGSTN_LinkRoleDef
 	/** The effect the entity holding this role carries while the link is Active (a carry load). None by default */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role|Effect")
 	FGSTN_LinkEffectDef LinkEffect;
+
+	/**
+	 * The arc a parked role that acts may turn through, centred on the forward of its parked placement (M7 G2: a parked role facing where it attacks).
+	 * The role's link state carries the turn (FGSTN_LinkState::LocalYawQ), written by the link tick from the stick at the start of each of its
+	 * moves and, while it is idle, from the stick; the snapshot composes it into the parked transform, so hurtboxes and hitboxes turn with it.
+	 * 360 = free; 0 = the role always faces the placement's forward. Ignored for a role that is not parked or does not act. With no stick
+	 * the turn stays where it is, so a role that never pushes the stick keeps the placement's facing
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role|Placement", meta = (ClampMin = "0.0", ClampMax = "360.0", ForceUnits = "deg"))
+	float YawLimitDeg = 360.f;
 };
 
 /**

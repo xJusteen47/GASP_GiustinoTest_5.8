@@ -1,5 +1,6 @@
 #include "GSTN_ExtTestCarryRule.h"
 
+#include "GSTN_LinkTags.h"
 #include "Modules/ModuleManager.h"
 
 IMPLEMENT_MODULE(FDefaultModuleImpl, GSTNExtTestLink)
@@ -32,4 +33,20 @@ uint8 UGSTN_ExtTestCarryRule::ComputePayload_Implementation(const FGSTN_LinkRequ
 {
 	const float Capacity = FMath::Max(GetCapacity(Context), 1.f);
 	return static_cast<uint8>(FMath::Clamp(FMath::RoundToInt(255.f * Context.Target.EffectiveWeight / Capacity), 0, 255));
+}
+
+bool UGSTN_ExtTestCarryMoves::ResolveLinkAction(int16 Id, FGSTN_LinkActionInfo& OutInfo) const
+{
+	if (Id != TossId)
+	{
+		return false;
+	}
+	OutInfo = FGSTN_LinkActionInfo();
+	OutInfo.PartnerAbility = CarriedAbility;
+	OutInfo.PartnerStartOffsetFrames = 3;
+	OutInfo.OutcomeFrame = 6;
+	OutInfo.Outcome = EGSTN_LinkActionOutcome::Break;
+	OutInfo.BreakReason = GSTNLinkTags::BreakReason_Throw;
+	OutInfo.MaxDurationFrames = 60;
+	return true;
 }

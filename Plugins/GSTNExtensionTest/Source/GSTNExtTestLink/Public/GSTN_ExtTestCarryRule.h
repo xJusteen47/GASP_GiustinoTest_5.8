@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Actions/GSTN_LinkActionProvider.h"
 #include "NativeGameplayTags.h"
 #include "Rules/GSTN_KitExtension.h"
 #include "Rules/GSTN_LinkRule.h"
@@ -53,4 +54,24 @@ public:
 
 	/** The load ratio, weight / capacity, quantised to 0..255 */
 	virtual uint8 ComputePayload_Implementation(const FGSTN_LinkRequestContext& Context) const override;
+};
+
+/**
+ * The carry's partner moves (M7 G2), provided from outside GSTNLink as M7's pair-move registry will be: the link plugin knows only the interface
+ * and the id its outcome keys post. Move 7 is a "toss": the carried side plays its part 3 frames after the carrier's key and the link breaks at
+ * the carrier's timeline frame 6 with reason Throw.
+ */
+UCLASS()
+class GSTNEXTTESTLINK_API UGSTN_ExtTestCarryMoves : public UObject, public IGSTN_LinkActionProvider
+{
+	GENERATED_BODY()
+
+public:
+	static constexpr int16 TossId = 7;
+
+	/** The carried side's ability of the toss (any class: the tests check it is the one the link tick asks the model to start) */
+	UPROPERTY()
+	TObjectPtr<UClass> CarriedAbility;
+
+	virtual bool ResolveLinkAction(int16 Id, FGSTN_LinkActionInfo& OutInfo) const override;
 };

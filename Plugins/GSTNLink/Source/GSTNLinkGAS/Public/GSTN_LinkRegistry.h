@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Actions/GSTN_LinkActionProvider.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GameplayTagContainer.h"
 #include "GSTN_InteractTypes.h"
@@ -212,6 +213,23 @@ public:
 	static void RegisterInteractOffer(FName LinkTypeTagName, const FGSTN_LinkInteractOfferDef& Offer);
 	static void UnregisterInteractOffer(FName LinkTypeTagName);
 
+	// ---- Partner moves (M7 G2) ----
+
+	/**
+	 * Registers the action provider of a link type (an object implementing IGSTN_LinkActionProvider: M7's pair-move registry, a
+	 * UGSTN_LinkActionTable), which resolves the partner-move ids its link outcome keys post. One provider per type; a second registration
+	 * replaces the first. Keyed by the type tag, so a rebuild of the table (new indices) keeps it. Content: register before a match, not during one.
+	 * False for an object that does not implement the interface
+	 */
+	bool RegisterActionProvider(const FGameplayTag& LinkType, UObject* Provider);
+	void UnregisterActionProvider(const FGameplayTag& LinkType);
+
+	/** The action provider of a type index, or null */
+	const IGSTN_LinkActionProvider* GetActionProvider(uint8 TypeIndex) const;
+
+	/** The provider's action Id of a type index into OutInfo; false without a provider or for an id it does not know */
+	bool ResolveLinkAction(uint8 TypeIndex, int16 Id, FGSTN_LinkActionInfo& OutInfo) const;
+
 private:
 	/** Compiles InteractOffers and InteractMeanings from the table's rows and the code registrations */
 	void BuildInteractOffers();
@@ -237,6 +255,11 @@ private:
 	TArray<FGSTN_LinkOfferEntry> InteractOffers;
 	FGSTN_InteractMeaningTable InteractMeanings;
 	FGSTN_LinkReasonTable Reasons;
+
+	/** Type tag -> action provider (M7 G2) */
+	UPROPERTY(Transient)
+	TMap<FGameplayTag, TObjectPtr<UObject>> ActionProviders;
+
 	TArray<FString> BuildErrors;
 	uint32 Signature = 0;
 	bool bBuilt = false;

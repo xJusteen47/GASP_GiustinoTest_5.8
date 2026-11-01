@@ -95,7 +95,7 @@ float FGSTN_LinkWatchdogLogic::ParkedDistance(const UGSTN_LinkTypeDefinition& De
 }
 
 FGSTN_ExitResult FGSTN_LinkWatchdogLogic::PlaceExit(const UGSTN_LinkTypeDefinition& Definition, const FGSTN_LinkWatchdogEntity& Exiting,
-	const FGSTN_LinkWatchdogEntity& Staying, const IGSTN_ExitCollisionQuery* Collision)
+	const FGSTN_LinkWatchdogEntity& Staying, const IGSTN_ExitCollisionQuery* Collision, const UGSTN_LinkExitPlacer* Placer)
 {
 	FGSTN_ExitQuery Query;
 	Query.PartnerTransform = Staying.Transform;
@@ -104,7 +104,7 @@ FGSTN_ExitResult FGSTN_LinkWatchdogLogic::PlaceExit(const UGSTN_LinkTypeDefiniti
 	Query.CapsuleRadius = Exiting.CapsuleRadius;
 	Query.CapsuleHalfHeight = Exiting.CapsuleHalfHeight;
 	Query.Collision = Collision;
-	FGSTN_ExitResult Exit = Definition.GetExitPlacer()->Place(Query);
+	FGSTN_ExitResult Exit = (Placer ? Placer : Definition.GetExitPlacer())->Place(Query);
 	// The command carries floats: quantise here, so the authority's own copy and every client apply the same numbers
 	const FVector3f Location(Exit.Transform.GetLocation());
 	const float Yaw = static_cast<float>(Exit.Transform.Rotator().Yaw);
@@ -191,6 +191,18 @@ void FGSTN_LinkWatchdogLogic::Evaluate(TConstArrayView<FGSTN_LinkWatchdogEntity>
 			Command.Reason = static_cast<uint8>(Break.Reason);
 
 			const int32 ParkedIndex = Definition->GetParkedRoleIndex();
+			// M7 G2: a partner move still playing on either side (its outcome Break) leaves through the move's exit, when its provider names one
+			const UGSTN_LinkExitPlacer* MovePlacer = nullptr;
+			if (Channel == EGSTN_LinkChannel::Body && Params.ActionExitPlacer)
+			{
+				for (const FGSTN_LinkWatchdogEntity* Player : { &Entity, bMatched ? Partner : nullptr })
+				{
+					if (Player && Player->ActiveMove.Id != 0 && !MovePlacer)
+					{
+						MovePlacer = Params.ActionExitPlacer(State.LinkTypeIndex, Player->ActiveMove.Id);
+					}
+				}
+			}
 			const FGSTN_GrabRules* GrabRules = FindGrabRules(*Definition);
 			const int32 ImmunityFrames = !GrabRules ? 0 : Break.Reason == EGSTN_LinkBreakReason::Throw ? GrabRules->ImmunityFramesAfterThrow : GrabRules->ImmunityFramesAfterRelease;
 
@@ -216,11 +228,11 @@ void FGSTN_LinkWatchdogLogic::Evaluate(TConstArrayView<FGSTN_LinkWatchdogEntity>
 					if (Other && Params.WithPairCollision)
 					{
 						Params.WithPairCollision(Side->EntityId, Other->EntityId,
-							[&](const IGSTN_ExitCollisionQuery* PairCollision) { Exit = PlaceExit(*Definition, *Side, *Other, PairCollision); });
+							[&](const IGSTN_ExitCollisionQuery* PairCollision) { Exit = PlaceExit(*Definition, *Side, *Other, PairCollision, MovePlacer); });
 					}
 					else if (Other)
 					{
-						Exit = PlaceExit(*Definition, *Side, *Other, Params.Collision);
+						Exit = PlaceExit(*Definition, *Side, *Other, Params.Collision, MovePlacer);
 					}
 					else
 					{
@@ -333,6 +345,7 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 		if (const FGSTN_LinkFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Sync->Fragments))
 		{
 			Entity.Links = Fragment->Links;
+			Entity.ActiveMove = Fragment->Actions.Active;
 			bAnyLink |= Fragment->Links.Body.IsLinked() || Fragment->Links.Hand.IsLinked();
 		}
 		Entity.Transform = Owner->GetActorTransform();
@@ -372,6 +385,11 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 		Use(&Collision);
 	};
 	Params.Definitions = [Registry](uint8 Index) { return Registry->GetDefinition(Index); };
+	Params.ActionExitPlacer = [Registry](uint8 TypeIndex, int16 ActionId) -> const UGSTN_LinkExitPlacer*
+	{
+		FGSTN_LinkActionInfo Info;
+		return Registry->ResolveLinkAction(TypeIndex, ActionId, Info) ? Info.ExitPlacer : nullptr;
+	};
 
 	TArray<FGSTN_LinkWatchdogPost> Posts;
 	TArray<FGSTN_LinkWatchdogBreak> Breaks;

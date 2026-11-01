@@ -22,7 +22,7 @@ namespace GSTNLinkSnapshotBits
 /**
  * The link snapshot extension of one entity (spec seam D9, m6 spec 9 "the snapshot now carries Link.Role, GrabImmunityEnd and the immunity
  * tags"): the Body and Hand link summaries, the Body partner, the grab immunity stamp, the request tags as a mask over FGSTN_LinkRequestTags,
- * and the entity's body content index (baked sockets, kit link extension). Trivially copyable and at most 32 bytes, so the lag compensation
+ * the entity's body content index (baked sockets, kit link extension) and the parked turn (M7 G2). Trivially copyable and at most 32 bytes, so the lag compensation
  * history keeps it with the record; integers only, no tag and no pointer.
  *
  * The LinkRequest step reads the target's from the victim view and the initiator's from FGSTN_ResolvedHit::AttackerExtensions, both of the
@@ -30,10 +30,16 @@ namespace GSTNLinkSnapshotBits
  */
 struct GSTNLINKNP_API FGSTN_LinkSnapshotExt
 {
-	/** The type word a reader validates ("LK") */
-	static constexpr uint16 Magic = 0x4C4B;
+	/** The type byte a reader validates ('L'). One byte since M7 G2, which took the other for LocalYawQ8 */
+	static constexpr uint8 Magic = 0x4C;
 
-	uint16 TypeWord = Magic;
+	uint8 TypeWord = Magic;
+
+	/**
+	 * The Body link's LocalYawQ in quanta of UGSTN_LinkMath::LocalYawQuantum (M7 G2: the turn of a parked role that acts), exact because the
+	 * simulation writes only whole quanta. FinalizeSnapshot composes it into the substituted transform
+	 */
+	int8 LocalYawQ8 = 0;
 
 	/** FGSTN_LinkAttach table index of the entity's body content; 0 = none (its sockets read as its root) */
 	uint16 BodyIndex = 0;

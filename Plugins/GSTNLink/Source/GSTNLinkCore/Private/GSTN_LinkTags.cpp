@@ -43,6 +43,7 @@ namespace GSTNLinkTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_LinkBroken, "Combat.Event.LinkBroken", "A link broke; the payload carries the reason. Authoritative event published once per key by the watchdog");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Throw, "Combat.Event.Throw", "A throw released the partner. Authoritative event published once per key by the combat outbox on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_GrabEscaped, "Combat.Event.GrabEscaped", "The grabbed entity mashed free. Authoritative event published once per key by the watchdog on the authority");
+UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Link_PartnerMoveAborted, "Combat.Event.Link.PartnerMoveAborted", "A partner move was aborted (partner knocked out, part could not start, MaxDurationFrames). Magnitude = the action id. Published by the combat outbox on the authority");
 
 	void GetDeclaredTags(TArray<FGameplayTag>& OutTags)
 	{
@@ -58,6 +59,6 @@ namespace GSTNLinkTags
 			Command_Link_Grab, Command_Link_Pummel, Command_Link_Release,
 			Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down,
 			Command_Link_Latch_Attack, Input_Lock_Command_Link,
-			Event_LinkFormed, Event_LinkBroken, Event_Throw, Event_GrabEscaped });
+			Event_LinkFormed, Event_LinkBroken, Event_Throw, Event_GrabEscaped, Event_Link_PartnerMoveAborted });
 	}
 }

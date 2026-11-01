@@ -12,7 +12,7 @@ bool FGSTN_LinkTagsDocumentedTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
 	GSTNLinkTags::GetDeclaredTags(Tags);
-	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 39);
+	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 40);
 
 	const UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
 	TSet<FGameplayTag> Seen;
@@ -76,7 +76,7 @@ bool FGSTN_LinkTagsNoForeignRootTest::RunTest(const FString& Parameters)
 			|| Name == TEXT("Combat.Mover.Linked") || Name == TEXT("Interact.Target.Grab")
 			|| Name.StartsWith(TEXT("Command.Link.")) || Name == TEXT("Input.Lock.Command.Link")
 			|| Name == TEXT("Combat.Event.LinkFormed") || Name == TEXT("Combat.Event.LinkBroken")
-			|| Name == TEXT("Combat.Event.Throw") || Name == TEXT("Combat.Event.GrabEscaped");
+			|| Name == TEXT("Combat.Event.Throw") || Name == TEXT("Combat.Event.GrabEscaped") || Name.StartsWith(TEXT("Combat.Event.Link."));
 		TestTrue(FString::Printf(TEXT("%s is in a subtree owned by GSTNLink"), *Name), bOwned);
 	}
 	return true;

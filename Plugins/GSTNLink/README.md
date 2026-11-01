@@ -20,6 +20,8 @@ request side; the optimistic initiator accept (`bInitiatorPredicts`, `PendingFra
 (`ComputePayload`); the generic team rule; the presentation shows a predicting initiator parked from its request and re-asserts the mesh
 attachment every tick. Corrections to the M7 spec are in [m7-doc-deltas.md](../../docs/notes/m7-doc-deltas.md).
 
+M7 G2 (generic, no type of another plugin named): **partner moves** (a link type's action provider, `IGSTN_LinkActionProvider`, registered per type in the registry, resolves an `int16` id to the partner's ability, requirements, start offset, outcome frame and kind, exit and `MaxDurationFrames`; a `PartnerMove` link outcome key on the initiator's move records it and posts the `PartnerMove` inbox kind to the partner, whose link tick starts its part as a Forced timeline on the target frame; the outcome breaks through the watchdog with the action's exit; failure paths abort with `Combat.Event.Link.PartnerMoveAborted`) and **parked facing** (`FGSTN_LinkRoleDef::YawLimitDeg`; a parked role that acts turns, `LocalYawQ`, from the stick at the start of its moves and while idle; the snapshot substitution and the presentation compose the turn).
+
 ## Modules
 
 | Module | State | What it is |
@@ -60,7 +62,9 @@ the plugin's content and `LinkTypeDirectories` (always cooked), so the project's
 | Type | What it is |
 |---|---|
 | `UGSTN_LinkTypeDefinition` | A link type, a `PrimaryDataAsset` of primary asset type `GSTN_LinkType`: the type tag, the channel (`Body` parks the entity, `Hand` never does), two `FGSTN_LinkRoleDef`, `FGSTN_LinkBreakRules`, `RequestRequirements`, `ForbiddenWithBody`, `bInitiatorPredicts`, `MaxFrames`, `DebugColor`, `Alternatives` (F12: other type tags a request of this type tries first, in order; the grab lists the latch). A role's `ReleaseBreakReason` (F12) is the reason its Release command ends the link with (the latched side's is `ShakeOff`). `Validate` is pure; `IsDataValid` forwards it. The asset manager finds every definition; code never lists them. |
-| `FGSTN_LinkRoleDef` | One role: its tag, `bParked`, `bActsWhileLinked`, `bCollisionWithPartner`, the socket of the partner it is placed on (by name) and the offset. A grab parks role 2; a latch parks role 1. G1: `LinkEffect` (`FGSTN_LinkEffectDef`: a gameplay effect class path and a SetByCaller tag) the role carries while Active, magnitude `Payload / 255`. |
+| `FGSTN_LinkRoleDef` | One role: its tag, `bParked`, `bActsWhileLinked`, `bCollisionWithPartner`, the socket of the partner it is placed on (by name) and the offset. A grab parks role 2; a latch parks role 1. G1: `LinkEffect` (`FGSTN_LinkEffectDef`: a gameplay effect class path and a SetByCaller tag) the role carries while Active, magnitude `Payload / 255`. G2: `YawLimitDeg` (360): the arc a parked role that acts may turn through (`LocalYawQ`, 1/256-turn steps; 0 = fixed). |
+| `IGSTN_LinkActionProvider`, `FGSTN_LinkActionInfo`, `UGSTN_LinkActionTable` | G2: the partner moves of a link type. The provider (registered with `UGSTN_LinkRegistry::RegisterActionProvider(LinkType, Object)`, keyed by the type tag) resolves an id (1..32767) to `FGSTN_LinkActionInfo`: `PartnerAbility` (a timeline ability of the partner's kit), `PartnerRequirements` (on the partner's snapshot request tags), `PartnerStartOffsetFrames` (at least 1), `OutcomeFrame` (the initiator's timeline frame) and `Outcome` (`KeepLink`, `Break`, `SwapRoles` reserved), `BreakReason`, `ExitPlacer` (null = the type's), `bPartnerLocksCommands`, `MaxDurationFrames`. Content: the same answer on every machine. `UGSTN_LinkActionTable` is a table filled by code. |
+| `EGSTN_LinkOutcome::PartnerMove` | G2: a link outcome key that starts the partner move `PartnerMoveId` (the initiator's record `FGSTN_LinkActions::Active` with `Side`, the partner's part through the `PartnerMove` inbox kind). |
 | `FGSTN_LinkInteractOfferDef` | G1: how the interact button offers a type (the definition's `InteractOffer`): the `Interact.Target` meaning (empty = not offered), `Priority` (0..255, higher first; the grab is 100), `ReachCm`, `RequiredKitExtension` (the kits that look for it). `UGSTN_LinkRegistry::RegisterInteractOffer` gives a type whose asset names none an offer by code (GSTNLink does it for its grab). |
 | `bInitiatorPredicts`, `PendingFrames` | G1, on the definition: the initiator's predicted request becomes Active (flag `Predicted` kept) `PendingFrames` (2) after the hit unless the target's snapshot entry shows it linked to someone else; the response confirms it. |
 | `UGSTN_LinkRule_Team` | G1: a generic rule on the sides' teams (`Any`, `AlliesOnly`, `EnemiesOnly`); refuses with `Team`. |
@@ -97,6 +101,7 @@ Designer vocabulary (the `GameplayCue.Combat.Link.*`, `.Pummel` and `.Throw` cue
 | `Interact.Target.Grab` | The link tick extension, from the interact probe |
 | `Command.Link.Grab`, `.Pummel`, `.Release`, `.Throw.Forward`, `.Back`, `.Up`, `.Down`, `.Latch.Attack` (F12), `Input.Lock.Command.Link` | The standard command set, abilities and effects |
 | `Combat.Event.LinkFormed`, `.LinkBroken`, `.Throw`, `.GrabEscaped` | The watchdog and the combat outbox on the authority |
+| `Combat.Event.Link.PartnerMoveAborted` | G2: the link tick's combat outbox on the authority (Magnitude = the action id) |
 
 `Combat.HitType.Grab` is declared by `GSTNCombatCore`, so this plugin reads it and does not declare it. The link subtree tags reserved
 for M7, M8, M10 and the drill (`Type.Mount/Ride/Held/Minion/Drill`, `Role.Carrier/Rider/Holder/HeldObject/Driller/Drilled`) are
@@ -122,6 +127,8 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
   link's `Payload` on both sides. A role's `LinkEffect` is applied with `Payload / 255` while the link is Active and removed on every end (G1).
 - **An initiator that shows its link before the answer** (a mount): `bInitiatorPredicts` and `PendingFrames` on the definition; the
   presentation shows a parked initiator parked from the request on (G1).
+- **A partner move** (a pair move: one partner throws the other, or jumps off it): implement `IGSTN_LinkActionProvider` (or fill a `UGSTN_LinkActionTable`) and register it for your type with `UGSTN_LinkRegistry::RegisterActionProvider`; put a `PartnerMove` key with the id on the initiator's move timeline (a link outcome track). The partner's ability must be a timeline ability of its kit. The partner's part starts on its own server state and reaches its client by correction (G2; M7 S4 measures the delay). Body channel only; one move at a time.
+- **A parked role that faces where it acts**: leave `YawLimitDeg` at 360 or narrow the arc; 0 keeps the role on the placement's forward. The turn comes from the stick at the start of each move and while idle; no stick keeps it.
 - **A role's animation**: an `AnimsByRole` entry in the kit's (or weapon's) `FGSTN_LinkKitExtension`.
 - **A heavier or lighter grabber**: give the kit a `FGSTN_LinkKitExtension` with its own `FGSTN_GrabRules`.
 - **A new request rule**: subclass `UGSTN_LinkRule` (C++ or Blueprint), override `Evaluate`, list it in the definition's `Rules`. Call
@@ -207,6 +214,8 @@ GrabUnchanged}`, `LinkEffect.{AppliedOnActive, RemovedOnEveryBreakReason, Idempo
 `Interact.{SecondOfferProjectsItsMeaning, OfferPriorityOrder, AllyOnlyRulePreFilter}`, `Request.SideCarriesTeamAndKit`; and from outside
 the plugin `GSTNExtTest.Link.{InteractOfferFromOutside, PayloadFromOwnRule}`. Every test file of `GSTNLinkNP` wraps its content in its own
 namespace, so the module links in a unity build.
+
+`GSTNLink.NP.*` (M7 G2, `GSTN_LinkNPTests_G2.cpp`): `PartnerMove.{StartsAtTargetFrame_0_1_12, SerialMismatchDropped, OutcomeBreaksBothSides, RollbackTrimsEntries, AbortOnPartnerKO}`, `Facing.{StickWithinLimit, AimedMoveSetsYaw, LatchUnchanged}`, `Fragment.PartnerMoveAndFacingRoundTrip`; from outside the plugin `GSTNExtTest.Link.PartnerMoveFromOutside`.
 
 `GSTNLink.NP.*` (F12): `Grab.{WeightGate, GrabberCooldown, PummelKeepsLink, ThrowDirectHitNoOverlap, ThrowSkipsParryShield,
 ImmunityAfterReleaseAndThrow, MashEscapeFrameDeterministic, GrabLockedByNameWithParts, GrabLockedAbsentWithoutParts}`,
