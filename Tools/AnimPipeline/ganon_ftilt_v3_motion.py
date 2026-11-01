@@ -25,6 +25,16 @@ Support leg: its pelvis height is SOLVED each frame from a support-knee curve (S
 so the knee stays in range on one foot whatever the balance shift does. Balance: the body shifts so the centre of mass sits
 on a target: over the support foot in the wind-up, ahead of it in the strike (the reference is off balance there: declared
 lunge frames), between the feet after the landing (BAL_F = front-foot share).
+v3.1 (owner 01/11 15:37Z "Vai", after "the neck detaches from the head" and "how do we stand on the torso rotation"):
+- trunk as a chain (each segment turns about its parent's joint; the lagged balance shift becomes a capped aim per segment,
+  LAG_AIM_*, faded into the settle by AIM_FADE): every length stays the idle's (bone_lengths.py);
+- twist chain: pelvis yaw 5 -> 33 deg peaking at 6.7, chest 1.2 frames behind (CHEST_LAG) with a counter-twist to -17 deg
+  (chest vs pelvis down to -23), the kicking leg's snap 1 frame after the chest; the shoulders close 31% first -> active
+  (reference 31%) and reopen in the recovery (twist_chain.py);
+- pronation on both forearms (PRON_L/R, up to 40 deg on the lead arm in the strike);
+- deeper, wider crouch: support hip 0.41 body lengths at the recovery pose and 0.49 at the FAF (reference 0.40 / 0.51),
+  feet 62 cm apart (LAND_SPOT 12 cm out), support knee to 120 deg;
+- rear arm swing a little wider (curves gate: 0.57x -> 0.6x+ the reference).
 Cascadeur space: X = character's left, Y up, Z forward. Kicking leg = LEFT."""
 import os, json, math
 import numpy as np
@@ -38,9 +48,15 @@ KEYS = list(range(N)); LINEAR = [[a, b] for a, b in zip(KEYS[:-1], KEYS[1:])]; C
 KICK_YAW = 20.0              # deg, kick plane outward (toward +X, the lead side) from the facing
 
 import sys as _sys
-LEGACY_TRUNK = "--legacy-trunk" in _sys.argv     # reproduce the first v3 delivery (stretched trunk), for comparison only
+LEGACY_TRUNK = "--legacy-trunk" in _sys.argv     # the first v3 delivery's trunk mechanics (stretched), for comparison only;
+                                                 # its exact points are kept as ganon_v3leg_targets_raw.json in the working folder
 OUT = next((a.split("=", 1)[1] for a in _sys.argv if a.startswith("--out=")), "ganon_v3_targets_raw.json")
-CHEST_LAG = 1.6
+CHEST_LAG = 1.2
+LAG_AIM_GAIN = 0.7   # share of the lagged balance shift turned into each trunk segment's aim (hierarchical trunk)
+LAG_AIM_GAIN_REC = 1.5   # the same after the landing (the crouch's drop), tuned on its own
+LAG_AIM_MAX_REC = 14
+AIM_FADE = (30, 33)   # the aims fade out into the settle: fed back through the balance solve they pop the last frames
+LAG_AIM_MAX_DEG = 10   # cap per segment and frame: the strike's shift is ~20 cm a frame, a full aim tips the trunk 60 deg
 HEAD_LAG = 3.0
 ARM_LAG = 1.0
 FA_LAG = 0.0                 # the forearm trails the upper arm (overlap down the arm chain)
@@ -53,32 +69,35 @@ LEG = {0: (-8, -88), 3: (45, -56), 6: (80, -37), 7: (81, -36), 8: (72, -16),
        9: (7, -4), 10: (6, -6), 11: (5, -8), 13: (2, -18), 16: (1, -22), 18: (5, -30), 19: (9, -40), 20: (-5, -45), 21: (-15, -62), 22: (-28, -72), 23: (-42, -78)}
 LEG_OUT = {0: 4, 9: 2, 20: 2, 23: 4}                       # knee out of the kick plane (deg, outward)
 FOOT_REL = {0: 52, 8: 60, 9: 72, 20: 70, 22: 58, 23: 62}   # foot axis (ankle -> ball) minus shin angle; idle 66 (neutral)
-LAND_BLEND = {22: 0.3, 23: 0.75}   # share of the landing spot reached before the touchdown (fast out of the hold, slow in to the floor)
-LAND_SPOT = (6.0, 0.0, 20.0)                               # cm from the idle left ankle: ~0.55 body lengths ahead of the support
+LAND_BLEND = {21: 0.1, 22: 0.4, 23: 0.8}   # share of the landing spot reached before the touchdown (fast out of the hold, slow in to the floor)
+LAND_SPOT = (12.0, 0.0, 22.0)   # cm from the idle left ankle: ~0.55 body lengths ahead of the support
 
 # ---- arms: (upper arm, forearm) side-view angles, and out-of-plane angles (outward +) ----
-ARM_L = {0: (-48, -8), 2: (-30, -18), 4: (-2, 4), 6: (16, 16), 8: (8, 12), 9: (-68, -52), 11: (-70, -54), 20: (-72, -56), 23: (-82, -40),
-         25: (-87, -13), 35: (-78, -48)}
+ARM_L = {0: (-48, -8), 2: (-30, -18), 4: (-2, 4), 6: (16, 16), 8: (8, 12), 9: (-68, -52), 11: (-70, -54), 20: (-72, -56), 23: (-82, -40), 25: (-87, -13), 33: (-81, -42), 35: (-78, -48)}
 ARM_L_OUT = {0: (15, 10), 6: (18, 4), 9: (20, 15), 25: (25, 15), 35: (20, 10)}
 # rear arm: the reference's is ~1.5x longer in 2D than ours (the near-side arm, the gauntlet), so its swing is a little
 # exaggerated (forward in the wind-up, back in the strike) to keep the amplitude near the reference, and kept close to the
 # side plane (out-of-plane shortens it further)
-ARM_R = {0: (-117, -72), 3: (-85, -45), 6: (-48, -12), 8: (-58, -24), 9: (-124, -98), 11: (-124, -98), 20: (-124, -94), 23: (-140, -92),
-         25: (-150, -88), 35: (-148, -103)}
+ARM_R = {0: (-117, -72), 3: (-82, -42), 6: (-42, -6), 8: (-54, -20), 9: (-130, -104), 11: (-130, -104), 20: (-128, -98), 23: (-142, -94), 25: (-152, -90), 33: (-150, -98), 35: (-148, -103)}
 ARM_R_OUT = {0: (6, 10), 6: (5, 8), 9: (14, 16), 20: (12, 16), 25: (8, 12), 35: (6, 10)}
+# forearm roll (deg about the forearm axis, + = pronation: the thumb side turns in and down), sampled with the forearm. The
+# solver puts it in the hand bone and the twist bones spread it along the forearm. v3 had none (the hand only followed the
+# forearm's swing by the smallest rotation)
+PRON_L = {0: 0, 6: -10, 9: 35, 11: 40, 20: 35, 25: 15, 34: 10}
+PRON_R = {0: 0, 9: 20, 20: 20, 34: 5}
 
 # ---- body ----
-LEAN = {0: -16, 3: -24, 6: -31, 7: -32, 8: -36, 9: -44, 11: -45, 20: -40, 22: -25, 24: -2, 26: 7, 30: 11, 33: 16}   # deg, - = back
-PEL_YAW = {0: 10, 6: 14, 8: 18, 9: 24, 11: 24, 20: 22, 24: 20, 33: 18}   # hips stay open toward profile into the wide crouch (knees out, as the reference)
-CHEST_YAW = {0: -2, 6: -4, 9: -6, 20: -5, 26: -2, 34: -2}
+LEAN = {0: -16, 3: -24, 6: -31, 7: -32, 8: -36, 9: -44, 11: -45, 20: -40, 22: -25, 24: -8, 26: 4, 28: 11, 31: 14, 33: 16}   # deg, - = back
+PEL_YAW = {0: 10, 4: 6, 5: 5, 6: 9, 7: 20, 8: 28, 9: 32, 11: 33, 20: 30, 24: 26, 33: 23}   # hips stay open toward profile into the wide crouch (knees out, as the reference)
+CHEST_YAW = {0: -2, 6: 0, 8: -8, 9: -16, 11: -17, 20: -15, 23: -14, 27: -8, 31: -4, 34: -3}
 SIDE = {0: 5, 4: 6.5, 6: 6, 9: 8, 20: 7, 24: 3, 30: 1}
 # support foot about its ball: a little with the hips in the kick, then turned out as the weight goes into the wide crouch
 # (the reference's support thigh points at the camera in the recovery and the last frame: the knee goes out to the side)
 PIVOT = {0: 6, 6: 8, 9: 16, 20: 16, 23: 22, 26: 42, 29: 45}
-SUP_KNEE = {0: 16, 3: 22, 5: 13, 6: 11, 8: 11, 9: 12, 11: 13, 20: 18, 22: 24, 23: 34, 24: 58, 25: 82, 27: 102, 29: 100, 31: 90, 34: 76}
+SUP_KNEE = {0: 16, 3: 22, 5: 13, 6: 11, 8: 11, 9: 12, 11: 13, 20: 18, 22: 23, 23: 26, 24: 58, 25: 90, 26: 108, 27: 116, 29: 118, 31: 108, 33: 82}
 # centre-of-mass target: cm along the attack from the support foot centre while on one foot; the strike (9-12) and the
 # step down onto the landing foot (21-23) are ahead of the toes, as the reference (declared exempt in the move sheet)
-BAL_S = {0: 0, 3: -1.5, 5: -2, 6: -2, 7: 0, 8: 3, 9: 10, 11: 10, 13: 8, 15: 6.5, 20: 6.5, 22: 10, 23: 14}
+BAL_S = {0: 0, 3: -1.5, 5: -2, 6: -2, 7: 0, 8: 3, 9: 10, 11: 10, 13: 8, 15: 6.5, 20: 6.5, 22: 5, 23: 3}
 BAL_F = {23: 0.0, 24: 0.1, 25: 0.3, 27: 0.5, 33: 0.68}   # the reference ends with the weight on the front foot (COM 0.45 of 0.55)            # front-foot share once both feet are down
 
 _ovr = os.environ.get("MODEL_OVERRIDES")
@@ -102,6 +121,11 @@ def Ry(d):
 def Rz(d):
     a = math.radians(d); c, s = math.cos(a), math.sin(a)
     return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+
+def rot_axis(ax, d):
+    """Rotation of d degrees about the unit axis ax (Rodrigues)."""
+    ax = unit(ax); a = math.radians(d); K = np.array([[0, -ax[2], ax[1]], [ax[2], 0, -ax[0]], [-ax[1], ax[0], 0]])
+    return np.eye(3) + math.sin(a) * K + (1 - math.cos(a)) * K @ K
 
 def rot_between(a, b):
     a, b = unit(a), unit(b)
@@ -174,7 +198,8 @@ def main():
     C = {"yaw": pchip(PEL_YAW)[:, 0], "cyaw": pchip(CHEST_YAW)[:, 0], "lean": pchip(LEAN)[:, 0], "side": pchip(SIDE)[:, 0],
          "pivot": pchip(PIVOT)[:, 0], "knee": pchip(SUP_KNEE)[:, 0], "leg": pchip(LEG), "leg_out": pchip(LEG_OUT)[:, 0],
          "foot_rel": pchip(FOOT_REL)[:, 0], "arm_l": pchip(ARM_L), "arm_r": pchip(ARM_R), "out_l": pchip(ARM_L_OUT), "out_r": pchip(ARM_R_OUT),
-         "bal_s": pchip(BAL_S)[:, 0], "bal_f": pchip(BAL_F)[:, 0]}
+         "bal_s": pchip(BAL_S)[:, 0], "bal_f": pchip(BAL_F)[:, 0],
+         "pron_l": pchip(PRON_L)[:, 0], "pron_r": pchip(PRON_R)[:, 0]}
 
     def at(curve, t):
         t = min(max(float(t), 0.0), N - 1.0); i = int(math.floor(t)); a = t - i
@@ -274,6 +299,27 @@ def main():
             lagged = {n: corr for n in PELV + SP2 + CHEST + HEAD}
         for n in PELV + SP2 + CHEST + HEAD:
             D[n] = D[n] + lagged[n]
+        if not LEGACY_TRUNK and k > 0:
+            # positional overlap without stretching: each segment, in order up the chain, turns about its joint so its end
+            # points where the lagged shift would have put it (a rigid aim, not a translation); the segments above ride along
+            chain = [(SP2, "pelvis_MainPoint", "spine_02_MainPoint", 0.35 * CHEST_LAG),
+                     (CHEST, "spine_02_MainPoint", "neck_01_MainPoint", 0.7 * CHEST_LAG),
+                     (HEAD, "neck_01_MainPoint", "head_MainPoint", 0.9 * HEAD_LAG)]
+            for i, (seg, piv_n, end_n, lag) in enumerate(chain):
+                rec = k >= LAND - 1
+                if seg is HEAD and not rec:
+                    continue          # in the strike the head stays on the target (pre-flight: head toward the target)
+                J = D[piv_n].copy(); E = D[end_n]
+                fade = min(1.0, max(0.0, (AIM_FADE[1] + i - k) / float(AIM_FADE[1] - AIM_FADE[0])))   # one frame later per segment up the chain
+                R = rot_between(E - J, E + fade * (LAG_AIM_GAIN_REC if rec else LAG_AIM_GAIN) * (corr_at(k - lag) - corr) - J)
+                ax = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
+                deg = math.degrees(math.acos(max(-1.0, min(1.0, (np.trace(R) - 1) / 2))))
+                cap = LAG_AIM_MAX_REC if rec else LAG_AIM_MAX_DEG
+                if deg > cap and np.linalg.norm(ax) > 1e-9:
+                    R = rot_axis(ax, cap)
+                for s_, *_ in chain[i:]:
+                    for n in s_:
+                        D[n] = J + R @ (D[n] - J)
         # ---- arms: side-view angles, sampled ARM_LAG late ----
         sh_l = D["upperarm_MainPoint_l"] - D["upperarm_MainPoint_r"]; sh_l[1] = 0.0
         fwd_c = np.cross(unit(sh_l), up)
@@ -296,8 +342,10 @@ def main():
             D[f"lowerarm_AdditionalPoint_{s}"] = el + Rua @ (G[f"lowerarm_AdditionalPoint_{s}"] - G[f"lowerarm_MainPoint_{s}"])
             D[f"lowerarm_LimbDir_{s}"] = el + bend * np.linalg.norm(G[f"lowerarm_LimbDir_{s}"] - G[f"lowerarm_MainPoint_{s}"])
             D[f"hand_MainPoint_{s}"] = hand
+            # pronation: the left (lead) hand rolls one way and the right the other for the same anatomical turn
+            Rp = rot_axis(hand - el, (1.0 if s == "l" else -1.0) * at(C[f"pron_{s}"], ta - FA_LAG))
             for n in (f"hand_DirectionPoint_{s}", f"hand_AdditionalPoint_{s}"):
-                D[n] = hand + Rfa @ (G[n] - G[f"hand_MainPoint_{s}"])
+                D[n] = hand + Rp @ Rfa @ (G[n] - G[f"hand_MainPoint_{s}"])
         # ---- kicking leg (left): angles in the air, planted from LAND, blended in between ----
         Hh = D["thigh_MainPoint_l"]
         th_t, th_s = C["leg"][k]; lo = C["leg_out"][k]
