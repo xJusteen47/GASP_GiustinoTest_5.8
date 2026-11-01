@@ -153,29 +153,19 @@ ref_sidebyside.py refs/<name> <out.png> <take>:<frames>    the reference's still
 - No interpolation pass: write every frame (the model is dense). Cascadeur's physics tools are the only thing lost.
 - A Blender exporter would reuse `pose_solver.py` and set the same local transforms on an armature.
 
-## Status: Ganondorf ftilt v3.1 (01/11, 17:30Z)
+## Status: Ganondorf ftilt v3.1 (02/11, 00:55 local)
 
-Model done, asset NOT written yet (Unreal was not available: the owner is using the desktop).
-- Done, files only: rigid trunk (bone_lengths.py PASS on points and on the dry-run tracks), twist chain (twist_chain.py PASS),
-  curves gate PASS, pre-flight 0 flags, pronation, deeper/wider crouch (support hip 0.41 / 0.49 body lengths vs ref 0.40 /
-  0.51), writer two-bone IK (planted feet exact; the landing touchdown 22-24 is up to 1.4 cm short, the straight leg).
-- Working-folder data (Saved/AnimPipeline): ganon_v3_targets_raw.json and ganon_v31_targets_raw.json = v3.1 points;
-  ganon_v31_bones.json = solve; ganon_v3leg_targets_raw.json = the first v3's exact points;
-  sheets/raw/AS_Pilot_GanonFTilt_V3_tracks_old.json = tracks of the v3 asset currently in Unreal (stretched);
-  sheets/raw/AS_Pilot_GanonFTilt_V2_frame0.json = template cache built offline from ganon_v2_legbones (re-sample it from
-  Unreal if in doubt: delete the file and the writer samples the template).
-- The current AS_Pilot_GanonFTilt_V3 in Unreal is still the broken v3 (detached head): do not review it.
-
-Next, with Unreal open (only when the owner frees the desktop; close the editor right after):
-1. `python ue_write_take.py ganon_v31_bones.json AS_Pilot_GanonFTilt_V3` (gates on bone_lengths before and after the write);
-2. `rm sheets/raw/ganon_v3_legbones.json`, then `legibility.sample('/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V3', 'ganon_v3')`
-   and `python bone_lengths.py sheets/raw/ganon_v3_legbones.json --ref=sheets/raw/AS_Pilot_GanonFTilt_V2_frame0.json`;
-3. legibility.py measure, tangency.py, clearance.py, motion_check.py on ganon_v3;
-4. `legibility_shots.py ganon_v3 "0:first,7:anticipation,10:active,27:recovery,37:last" az180,az225,az135,h180,f180`;
-5. `joint_closeups.py ganon_v3 "0:first,7:anticipation,10:active,27:recovery,37:last"` -> reviewed (coordinator or a blind
-   reviewer) before delivery;
-6. off-editor: rebuild sheets/ganon_v3_page (v3.1) with the rear/3-4 shots, the close-ups and each verdict copied verbatim
-   from its report.
+Written and reviewed. `AS_Pilot_GanonFTilt_V3` now holds v3.1 (`ue_write_take.py ganon_v31_bones.json AS_Pilot_GanonFTilt_V3`;
+the first call right after the editor starts can return `write: None`: wait until the bridge answers `read_anim_sequence`).
+Take name for the checks stays `ganon_v3`. Page: https://claude.ai/artifact/74Z5ofar8jg72Gu2zWqeKY (v3 page kept as history).
+- PASS: bone lengths (write 66, read-back 65, sampled 64 bones; read-back vs FK 0.00 cm), curves gate on the Unreal bones,
+  twist chain, joint close-ups (head attached; reviewed by Opus, `sheets/ganon_v3_closeups_review.txt`).
+- FAIL: legibility (rear arm hides the fist f20-21 at f180/h180; rear elbow behind the back on 30 frames, worst f26);
+  clearance (lowerarm_l in spine_03 -3.85 cm at f10); motion_check (arm chains peak together at 9.5, head/chest lag 0-0.26,
+  knee_l 1 deg f9, ankle_l 144 deg f22-24, 8 arc jitters: hand_l 2-8/22-28 up to 11 cm radial, foot_l 2-8, pelvis 26-34).
+- Next (v3.2): left forearm 4-5 cm out at f9-11; rear elbow closer to the torso f20-28; stagger the arm peaks and half a
+  frame of head lag; knee_l not straight at f9, ankle_l less extended at the landing; smooth the jitter windows.
+- Page frames (side-by-side): v2 0,5,9,30,37; v3.1 0,7,10,27,37. Rear/3-4: legibility_shots.py az180,az225,az135,h180,f180.
 
 ## Checks, where each rule lives, and its thresholds
 
