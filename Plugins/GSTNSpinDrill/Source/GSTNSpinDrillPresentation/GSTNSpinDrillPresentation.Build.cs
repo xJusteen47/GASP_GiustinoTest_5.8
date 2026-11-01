@@ -1,8 +1,9 @@
 using UnrealBuildTool;
 
-// Spin and drill, presentation (spin-drill.md 9). Will hold the procedural spin and wobble component; empty in the skeleton
-// (plan D1). Runs on clients and listen hosts; nothing in the simulation may depend on it. Allowed edges: engine, GSTNSpinDrillCore and
-// GSTNSpinDrillNP (it reads the shown drill state).
+// Spin and drill, presentation (spin-drill.md 9). Holds the procedural spin and wobble component (D11) and the loadout extension that adds it.
+// Runs on clients and listen hosts; nothing in the simulation may depend on it. Allowed edges: engine, Mover (its visual component),
+// GSTNCombatCore, GSTNCombatNP (the shown combat state), GSTNCombatGAS (the loadout extension registry), GSTNSpinDrillCore and
+// GSTNSpinDrillNP (the drill fragment).
 public class GSTNSpinDrillPresentation : ModuleRules
 {
 	public GSTNSpinDrillPresentation(ReadOnlyTargetRules Target) : base(Target)
@@ -15,6 +16,10 @@ public class GSTNSpinDrillPresentation : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
+			"Mover",
+			"GSTNCombatCore",
+			"GSTNCombatGAS",
+			"GSTNCombatNP",
 			"GSTNSpinDrillCore",
 			"GSTNSpinDrillNP"
 		});

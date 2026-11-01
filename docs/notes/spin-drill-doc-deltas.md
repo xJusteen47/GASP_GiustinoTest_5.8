@@ -166,3 +166,12 @@ Differences between the code and [spin-drill.md](../architecture/spin-drill.md) 
   root, `Combat.HitType.Drill`, 4 damage). Placeholders.
 - Harness: `drill_ground_lag`, `drill_nondrillable_bounce` (not run; they need `Input.Button.Crouch` in IC_GASNPP_Test). `drill_tilted_gravity`
   not written: no harness level with a gravity volume; the vectors under any gravity are unit tested.
+
+## D11, minimal part (presentation)
+
+- Owner rule of 2026-10-24 (no aesthetics before the mechanics): only the procedural layer that makes the spin readable in playtests.
+  `UGSTN_DrillPresentationComponent` turns the mesh around the capsule's up while Spinning (SpinRps, 2.5) or Diving/Boring
+  (`VisualSpinRps`) and wobbles it while Seating (`UGSTN_DrillMath::ComputeWobble`), from the shown drill fragment and the frame, asserted
+  every tick in TG_PostPhysics on top of Mover's base visual transform. Added by the Presentation module's own loadout extension on every
+  machine but a dedicated server. Idle cost: one fragment lookup per tick.
+- Not done (later D11, after the mechanics): placeholder montages per phase, cues, skin override hook, the `Anim.Set.*` leaves.
