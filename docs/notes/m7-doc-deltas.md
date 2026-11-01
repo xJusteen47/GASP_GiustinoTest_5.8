@@ -108,3 +108,31 @@ presentation component and it says nothing about the fix. OPEN for G10 (measure 
   admits `Combat.Event.Link.*`.
 - SUITE_LINK, listen host + 2 clients in one editor process, 60/15 ms: `Saved/Logs/m7-g2/link-listen-0pct.log` 19/19 PASS (latch scenarios included).
 - SUITE_LINK at 2 % loss: `link-listen-2pct.log` 17/19; the two FAILs were `link_spike_client_grabs_host` (one observer correction while the link is held) and `link_spike_client_grabs_client` (3 counter steps in a forced window, limit 2), scenarios that run none of the G2 paths (a debug-formed grab; no partner move, a non-acting parked role). Rerun of both twice: `link-listen-2pct-rerun.log` 4/4 PASS.
+
+## G4: GSTNPiggyback plugin skeleton and pure core (HANDOVER 77)
+
+### Shipped names that differ from the plan and spec
+
+| Plan / spec | Shipped |
+|---|---|
+| `GSTNPiggybackTests` module type "Developer" | `DeveloperTool` (the engine's current name for a module that never ships; "Developer" is its deprecated alias) |
+| `.uplugin` "requires `GSTNLink` and `GSTNCombat`" | Also lists `GSTNInput`, `GSTNCombatGAS` and `GSTNCombatNP`: the Runtime module's plan dependencies (`GSTNInputCore`, `GSTNCombatGAS`, `GSTNCombatNP`) live in those plugins, and UBT warns when a module uses a plugin its descriptor does not list |
+| `CarrierProfile`, `RiderProfile` "live on the primary kit (`UGSTN_PrimaryKitDefinition`)" | `FGSTN_MountKitExtension : FGSTN_KitExtension { Carrier, Rider }`, an entry of the kit's extension array (the M6 way; the kit asset never names piggyback). A kit without it can neither carry nor ride; inside it `bCanBeMounted` and `bCanRide` default true. G5's rule reads it with `FGSTN_LinkRequestSide::FindKitExtension<FGSTN_MountKitExtension>()` |
+| `FGSTN_CarrierProfile` fields | Spec fields plus `ExitDistance` (90 cm, the ring of `ExitCandidates`). `MountMaxDistance` and `ExitDistance` are cm floats; `AnchorYawLimitDeg` on the rider profile is GSTNLink's whole-arc `YawLimitDeg` meaning (G2) |
+| `FGSTN_MountRules` "as an `FGSTN_RulesExtension`" | Derives from `FGSTN_RulesExtension` directly (data inline, not a soft pointer to a rules asset as defence does). Defaults: carrier break 1800 cm/s (the reaction tuning's `TumbleThreshold`), rider 3600, `MaxCarrierTeleportCm` 500, `DefaultCredit` OwnerOnly |
+| `EvaluateEligibility` "input: both entities' snapshot entries" | `FGSTN_MountEligibilityInput`: plain values (bools, weights, frame, distance, range, cooldown end frame), filled by G5 from the snapshot, so the Core module needs no NP type. Check order (documented, tested): carrier kit, rider kit, already linked, cooldown, hitstun, busy/lock, range, weight. The enum keeps the spec's order (the verdict is a byte on the wire). `bAllyOnly` is not an eligibility check: G5 lists GSTNLink's generic `UGSTN_LinkRule_Team` (AlliesOnly) on the mount type, as G1 provided |
+| `ComputeCarryRatio -> uint8` | Clamped, round half up (`floor(x * 255 + 0.5)`); zero or negative capacity: any weight is 255; NaN is 0. Helpers `CarryRatioToUnit`, `ScaleCarryTuning` (air jumps in integer math) |
+| `ExitCandidates(Anchor, CarrierFacing, Mode)` | `ExitCandidates(Anchor, CarrierTransform, Mode, DistanceCm)`: the whole transform (its up axis keeps the candidates on the carrier's plane under any gravity). Orders: BehindCarrier back, left, right, front; SideOfCarrier right, left, back, front; AtAnchor anchor, then BehindCarrier's |
+| `SplitCredit(Share, Amount)` | `SplitCredit(uint8 PartnerShare, double Amount) -> FGSTN_CreditSplit { OwnerAmount, PartnerAmount }`, the partner's part is Amount * Share / 255; `MakePartnerShare(0.5)` = 128. G3's shipped `PartnerShare` must use the same 0..255 scale, or G7 converts |
+| pair-move enum `EGSTN_LinkOutcome { Keep, Break, SwapRoles }` | Not declared: GSTNLink's `EGSTN_LinkActionOutcome { KeepLink, Break, SwapRoles }` (G2) is the one field; `EGSTN_LinkOutcome` is also already a GSTNLink enum (outcome keys), so the name would clash. `EGSTN_PairRole`, `EGSTN_PairCredit`, `EGSTN_PairPartnerMode` shipped as in the spec |
+| tags: spec 11's own break reasons include `KO Removed Teleport` | Plan G4's list (`Dismount Drop Outcome CarrierHit RiderHit`): KO is GSTNLink's `OwnDeath`/`PartnerDeath`, and a teleport break uses `Distance` (no `Teleport` tag; add one in G5 only if the watchdog needs to tell them apart). 21 native tags; the three command slots in `Config/Tags/GSTNPiggybackCommands.ini`, registered by `GSTNPiggybackCore` at startup (`AddTagIniSearchPath`, as GSTNLink does) |
+| `Combat.Event.Link.Mounted`/`.MountRefused` | Under `Combat.Event.Link.*`, the subtree GSTNLink's tag test admits for itself (G2). Not a conflict (that test checks only GSTNLink's own list), but G12 should say in combat.md that the subtree is shared |
+| grep gate "extend the M6 script in `Tools/`" | There was none (M6's gate was run by hand, HANDOVER 61). New `Tools/Modules/check_modules.py` (plain Python): nothing outside the plugin names `GSTNPiggyback` (code, Build.cs, .uplugin, config, `.uproject`; `--allow-uproject` for a local enabled build), no `/Game/` or `ConstructorHelpers` in the plugin source, and the M6 module edges (Link vs Defence, the two ExtTest modules, Core without GAS/NP) |
+| Tests in the module that owns the code (M6 habit) | In `GSTNPiggybackTests` (plan section 2), names `GSTNPiggyback.Core.*` as the plan lists |
+
+### Counts (laptop worktree, `Saved/m7-g4`, `Select-String 'Test Completed. Result=\{Success\}'` / `\{Fail`)
+
+- Configurations: "off" = `Saved/m7-g2/uproject.on` (GSTNLink and GSTNDefence on, HANDOVER 76's config, SHA256 DB15DE2B...), "on" = off plus `GSTNPiggyback`.
+- `headless-g4-on.log` 1219/0 = 1212 + 7 `GSTNPiggyback.Core.*`; no ensure. `headless-g4-off.log` 1212/0 = HANDOVER 76's `headless-g2-on.log`; the log never names the plugin.
+- Builds `build-g4-on.out` (the four plugin DLLs built, no warning from plugin files) and `build-g4-off.out` (makefile regenerated for the changed `.uproject`, nothing to recompile) both "Result: Succeeded".
+- `python Tools/Modules/check_modules.py` on the committed tree: 0 problems. The committed `.uproject` was restored byte-identical (SHA256 9C4F29DE...) and does not list the plugin.
