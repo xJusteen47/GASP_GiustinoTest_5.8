@@ -24,7 +24,7 @@ carried tilt, shrink or arc (`ArcDegrees`, `ElevationLimit`, `TurnRate`, `Radius
 |---|---|---|
 | `GSTNDefenceCore` | exists (Runtime, Default) | Native tags, settings, the rules asset and its structs (shield, parry, tech, DI, SDI, landing), the integer curve, the kit and rules extensions, the timeline tracks, and the pure math (shield value and bubble, parry, tech, DI, SDI, ground bounce). No GAS, Network Prediction or Mover, so it needs no fork. Covered by `GSTNDefence.Core.*`. |
 | `GSTNDefenceGAS` | exists (Runtime, Default) | `UGSTN_DefenceAttributeSet` (the shield mirror and the numbers the model reads), the effects `UGSTN_GE_ShieldDamage` (mirror), `UGSTN_GE_ShieldRestore` (request) and `UGSTN_GE_ShieldBreak` (cosmetic), the shield ability's timeline as data (`FGSTN_ShieldAbilitySpec`), and `UGSTN_DefenceLibrary`: availability, the shield `CanExecute` decision, the get-up requirement, the kit extension resolution and the loadout contribution (registered as a `FGSTN_LoadoutExtension` of `GSTNCombatGAS`). Stock GAS, no fork. Covered by `GSTNDefence.GAS.*`. |
-| `GSTNDefenceNP` | not built (F7, F8) | Sync fragment, shield bubble contribution, `Parry` and `Shield` steps, tech and landing, DI and SDI wiring, and the ability classes (`UGSTN_GA_Shield`, `UGSTN_GA_Tech`, `UGSTN_GA_GroundBounce`, `UGSTN_GA_GetupRoll`, `UGSTN_GA_GetupNeutral`), which derive from `UGSTN_GA_BaseCombat` of `GSTNCombatNP` and plug the GAS module's data and decisions in. Needs the GAS-NPP fork. |
+| `GSTNDefenceNP` | exists (Runtime, Default; F7a; F7b adds the steps, F8 the landing) | Sync fragment (feature id 17), shield bubble contribution, defence clocks and tag projection, the hold and parry track hooks, `Parry` and `Shield` steps, tech and landing, DI and SDI wiring, and the ability classes (`UGSTN_GA_Shield`, `UGSTN_GA_Tech`, `UGSTN_GA_GroundBounce`, `UGSTN_GA_GetupRoll`, `UGSTN_GA_GetupNeutral`), which derive from `UGSTN_GA_BaseCombat` of `GSTNCombatNP` and plug the GAS module's data and decisions in. Needs the GAS-NPP fork. | Covered by `GSTNDefence.NP.*`.
 
 The module class (`Private/GSTNDefenceCoreModule.cpp`) registers the plugin's `Config/Tags` folder with the tag manager: the engine
 reads `Config/Tags` only for the project and for Game Feature plugins, not for ordinary plugins, so the ini vocabulary would
@@ -40,6 +40,9 @@ otherwise be missing.
 - `GSTNDefenceGAS` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, GSTNInputCore, GSTNCombatCore,
   GSTNCombatGAS, GSTNDefenceCore. No NetworkPrediction, AbilitySystemSimulation, Mover, GSTNCombatNP, GSTNLink, Editor or project
   module. The ability classes therefore live in the NP module: `UGSTN_GA_BaseCombat` is a `GSTNCombatNP` class.
+- `GSTNDefenceNP` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, NetworkPrediction,
+  AbilitySystemSimulation, Mover, GSTNInputCore, GSTNInputNP, GSTNCombatCore, GSTNCombatGAS, GSTNCombatNP, GSTNDefenceCore, GSTNDefenceGAS.
+  Needs the GAS-NPP fork. No GSTNLink, Editor or project module.
 - `GSTNCombat` builds and passes its tests with this plugin absent: the plugin adds behaviour by registering into the combat
   extension surface (modularity-and-tags.md 5b), never by editing the combat core.
 
@@ -68,7 +71,21 @@ otherwise be missing.
 | `UGSTN_GE_ShieldRestore` | Instant, additive on `ShieldHealth` by the set-by-caller NAME key `GetAmountKey()` (no new tag). A pickup applies it; the model reads `RequestedDelta(ASC, LastMirrored)` at its next tick (the mirror's base value minus the last value it mirrored) and applies that as a request, then mirrors the result. |
 | `UGSTN_GE_ShieldBreak` | Instant, empty: a Blueprint child adds the break cue and presentation tags. The break state itself is sync state (`Combat.State.ShieldBroken` is projected). |
 | `FGSTN_ShieldAbilitySpec`, `FGSTN_OutOfShieldOption`, `EGSTN_ShieldRefusal` | The shield ability's timeline as data: `BuildTimeline(ShieldRules)` gives startup frames, ONE `FGSTN_HoldWindowTrack` on `Input.Button.Shield` with `bEndOnZeroShield`, release frames, and one M3 cancel window per out-of-shield option over the hold window. The refusal reasons of `CanExecuteShield`. |
-| `UGSTN_DefenceLibrary` | `ResolveRules` (kit extension, else the match's combat rules extension, else the settings' default), `IsShieldAvailableForKit`, `CanExecuteShield` (available, value > 0, not breaking, grounded), `GetupNeutralRequirements` (`Combat.State.Knockdown`), `ResolveAbilityClass` / `ResolveTechSet` / `ResolveGetupSet` (class-checked, a non-ability is dropped with a warning), `MakeShieldBindingInput` (`Command.Defence.Shield`, grounded, slot override `Press(Shield)` + `Hold(Shield, 0)`), `MakeGetupNeutralBindingInput`, and the loadout extension: `ContributeToLoadout`, `GrantDefence`, `RevokeDefence`. |
+| `UGSTN_DefenceLibrary` | `ResolveRules` (kit extension, else the match's combat rules extension, else the settings' default), `IsShieldAvailableForKit`, `CanExecuteShield` (available, value > 0, not breaking, grounded), `GetupNeutralRequirements` (`Combat.State.Knockdown`), `ResolveAbilityClass` / `ResolveTechSet` / `ResolveGetupSet` (class-checked, a non-ability is dropped with a warning), `MakeShieldBindingInput` (`Command.Defence.Shield`, grounded, slot override `Press(Shield)`; F7 dropped the `Hold(Shield, 0)` of F6, which the loadout validator refused), `MakeGetupNeutralBindingInput`, and the loadout extension: `ContributeToLoadout`, `GrantDefence`, `RevokeDefence`. |
+
+### Network Prediction half (`GSTNDefenceNP`)
+
+| Type | What it is |
+|---|---|
+| `FGSTN_DefenceFragment` | Combat sync fragment `GSTNFeatureIds::Defence` (17): the analytic shield (value in quarter points at a stamp frame, `Raised`/`Breaking`/`Empty` flags, press and release frames; no yaw, no tilt), the move parry window and its profile and hurtbox mask, `LastParryFrame`, the stuns as end-frame stamps (shield stun, parry recovery, break, punish), tech, knockdown and grab immunity stamps (F8, F12), a queued pushback and the mirror bookkeeping. Zero bytes at its defaults, a presence mask and the live groups otherwise. |
+| `FGSTN_DefenceSnapshotExt`, `FGSTN_DefenceSnapshotContributor` | The 32 byte snapshot POD (rules index, availability, raised/blocks/bubble/breaking flags, the value at the snapshot frame, press and release frames, the move window, immunity bits) and its contributor; while the bubble exists (press to release + `ReleaseFrames`, not in a hit reaction, not broken) the bubble is added as an extra hurtbox (index range `>= 0x80`) that ignores the non-blockable and grab-like hit types. |
+| `FGSTN_DefenceTickExtension` | Priority 110: the defence clocks (break recovery, `Empty` from decay, restore requests, the mirror every 16 frames while the value moves, the pushback start), the hold and parry stamps turned into raise, release and the move window, `BlocksActions` (shield stun, broken, punished), `AdmitsOnlyBindingsRequiring` (`Combat.State.Knockdown` while downed), the `OnParry` held cancel condition, the projection of the `Combat.State.*` defence tags, and the F8 hooks below. |
+| `FGSTN_TumbleLanding` (F8) | The landing from a tumble and the optional tech, on the core's tumble contact hooks: a floor contact with no surface impact ends the reaction, gives the stick-steered mini bounce and the kit's ground bounce (Forced), then the downed state (`KnockdownEndFrame`: `MaxDownedFrames`, 0 = never; after a missed tech the spec's `KnockdownFrames` + bonus) with a movement lock (`UGSTN_GE_DownedLock`); holding the stick starts the get-up roll, a get-up command (neutral on the jump slot, get-up attacks) ends it. With a non-empty tech set: presses of `Input.Button.Shield` from the history (lockout, window), the kind from the stick and the contact (`PickTechType`), success consumes the contact (no impact) and starts the kit's tech ability Forced, failure lets the impact resolve first. |
+| `FGSTN_DIWiring` (F8) | The DI rules overload at the end of a launch's hitstop (`OverrideDI`, `UGSTN_DIRulesMath::ApplyDI`), and the per-hit `HitFlags` (DI disabled, SDI blocked: throw, armor, stagger-in-place tier per the rules) the outcome applier records. |
+| `FGSTN_SDIDrift`, `UGSTN_GE_SDIDrift` (F8) | Held-direction SDI: each hitstop frame of a staggered victim but the last, `UGSTN_SDIMath::NextDisplacement` against the core's `Hit.SDIDistanceUsed`, given to Mover as a one-frame drift freeze (`FGSTN_LayeredMove_Freeze::DriftVelocity`, priority above the hitstop freeze) so collision stops it. |
+| `FGSTN_HoldWindowHook`, `FGSTN_ParryWindowHook` | Track hooks of `FGSTN_HoldWindowTrack` (stalls the timeline ON the hold frame while the button is held or the shield is stunned; never the combat clock) and `FGSTN_ParryWindowTrack` (stamps the window in simulation frames when the track starts). |
+| `FGSTN_DefenceAttach`, `UGSTN_DefenceContentLibrary` | The content an entity plays with (rules, kit has a shield, bubble ignore types), attached from the loadout on every machine or by the harness (`AttachDefenceToActor`); an append-only rules table gives the snapshot's rules index. |
+| `UGSTN_GA_Shield`, `UGSTN_GA_Tech`, `UGSTN_GA_GroundBounce`, `UGSTN_GA_GetupRoll`, `UGSTN_GA_GetupNeutral` | Thin `UGSTN_GA_BaseCombat` children. The shield builds its timeline from `FGSTN_ShieldAbilitySpec` and refuses through `CanExecuteShield`; the tech, ground bounce and roll are started Forced by the model, the neutral get-up by its command (F8). The four landing/tech classes have a plain `TotalFrames` timeline (20/24/30/20) a child replaces with its own tracks. None writes sync state. |
 
 ## Math
 
@@ -82,7 +99,7 @@ on every machine and in a resimulation. Views (`GSTN_DefenceViews.h`) are plain 
 | `UGSTN_SDIMath` | `NextDisplacement`: one frame of held-direction drift, limited to `MaxDistanceCmPerHit`. |
 
 The bubble functions take no shield value and no stick: the radius is `RadiusCm` at any value (the fixed-bubble decision).
-Deferred to F8, which has the contact record: picking the tech kind (in place, roll, wall) from the stick and the contact normal.
+The tech kind (in place, roll, wall, wall jump) is picked in `GSTNDefenceNP` (`FGSTN_TumbleLanding::PickTechType`), where the contact record is.
 
 ## Tags
 
@@ -93,7 +110,7 @@ Designer vocabulary (the `GameplayCue.Combat.*` cues) is ini only: `Config/Tags/
 | Tag | Written by |
 |---|---|
 | `Combat.State.Shielding`, `.ShieldStun`, `.ShieldBroken`, `.ParryWindow`, `.ParryRecovery`, `.Parried`, `.Teching`, `.Knockdown`, `.Tech.Lockout` | Projected by the defence tick extension (F7), never granted |
-| `Combat.Mover.Tumble` | The tumble contact modifier (F8) |
+| `Combat.Mover.Tumble` | Reserved: F8 reads M4's knockback probe record and adds no contact modifier (deltas F8) |
 | `Combat.Immunity.Parry`, `Combat.Immunity.Shield` | Kits, abilities, effects (ordinary counts) |
 | `Command.Defence.Shield`, `Input.Lock.Command.Defence` | The standard command set (F6), abilities and effects |
 | `Combat.Event.Blocked`, `.Parried`, `.ShieldBroken`, `.Teched`, `.KnockedDown` | The combat outbox on the authority |
@@ -127,6 +144,36 @@ Every contribution depends only on the resolved assets, so every machine compile
 - **A shield pickup**: apply `UGSTN_GE_ShieldRestore` (`Apply(ASC, Amount, Instigator)`); the model consumes the request.
 - **Shield presentation**: Blueprint children of `UGSTN_GE_ShieldDamage` and `UGSTN_GE_ShieldBreak` with the ini cues
   (`GameplayCue.Combat.Shield.Hit`, `.Break`); the rules asset names them.
+- **A new defensive pipeline step** (m6 spec 14): subclass `UGSTN_HitResolutionStep`, write only to the step result, and insert it into the
+  combat rules' `HitPipeline` at its place (spec 9): before `UGSTN_HitStep_Parry` for something a parry or block still decides after,
+  after `UGSTN_HitStep_Shield` for something that acts only on hits that land; then `ResolveHitPipeline`. If the attacker must predict it,
+  its decision is a pure function of the view (put it in a `BlueprintPure` math library like `UGSTN_DefenceMath`). State it needs is a
+  field of `FGSTN_DefenceFragment` written in all four places (`NetSerialize`, `ShouldReconcile`, `Interpolate`, `ToString`) and a snapshot
+  extension field; effects back on the attacker go through `OutgoingEntries` (C++ only), like the punish. Tests with fake contexts, as
+  `GSTNDefence.NP.Steps.*`.
+- **A parry that is not a timeline window** (a passive item, a barrier): a value in `EGSTN_ParrySource` and its window stamps passed to
+  `ResolveParry`; the `Parry` step's applier is unchanged.
+- **Worked example from another plugin**: `Plugins/GSTNExtensionTest` (test only, M6 F14) adds a brace step from outside this plugin
+  (`UGSTN_ExtTestStep_Brace`, before the Parry step). Its tests (`GSTNExtTest.Defence.*`) show it resolves in place, writes the outcome once
+  and leaves the shield's parry and block unchanged: no change here, in `GSTNCombat` or in the combat model's tick (m6 spec 12 item 7).
+
+## Extending in Blueprint
+
+What a designer can add without C++ (m6 plan section 0, MT 3.8). Blueprint logic that runs in the simulation (a step, a timeline ability's
+tracks) must be pure: read its input and nothing else (no actor, component, world or latent node).
+
+| Extension | Blueprint parent | Notes |
+|---|---|---|
+| Shield ability | `UGSTN_GA_Shield` | the hold window and the out-of-shield cancel windows are timeline data; the kit's `FGSTN_DefenceKitExtension` names it |
+| Counter move | `UGSTN_GA_CounterSample` or any `UGSTN_GA_BaseCombat` timeline | a `FGSTN_ParryWindowTrack` with a profile index and an `OnParry` cancel window |
+| Tech, get-up, ground bounce | `UGSTN_GA_Tech`, `UGSTN_GA_GetupNeutral`, `UGSTN_GA_GetupRoll`, `UGSTN_GA_GroundBounce` | listed in the kit's `FGSTN_TechSet` / `FGSTN_GetupSet` |
+| Shield effects and cues | `UGSTN_GE_ShieldDamage`, `UGSTN_GE_ShieldBreak`, `UGSTN_GE_ShieldRestore` | the rules asset names the classes |
+| Defensive step | `UGSTN_HitResolutionStep` (GSTNCombatCore), `Resolve(FGSTN_HitContextView, FGSTN_StepResult)` | an inbox entry back to the attacker is C++ only |
+| Rules, parry profiles, DI and SDI | `UGSTN_DefenceRules` (data asset) | per mode (PvP / PvE) and per kit |
+
+`UGSTN_DefenceMath`, `UGSTN_SDIMath` and `UGSTN_DIRulesMath` expose the shield value, bubble, parry window, tech, DI and SDI math as
+`BlueprintPure`. Per-frame code (the tick extension, the fragment, the snapshot contributor, the inbox kinds) stays C++.
+`Tools/GAS/setup_defence_link_content.py` builds the plugin's Blueprint children of the native shield, counter, tech, get-up and link moves.
 
 ## Settings
 
@@ -136,10 +183,60 @@ Every contribution depends only on the resolved assets, so every machine compile
 |---|---|
 | `DefaultRules` | Rules asset for a mode whose combat rules carry no defence extension. Empty = no defence rules. |
 
+## Pipeline steps (`GSTNDefenceNP`, spec 9 steps 5 and 6)
+
+| Step | What it does |
+|---|---|
+| `UGSTN_HitStep_Parry` | One `ResolveParry` for both sources (perfect shield on the bubble, a move's `ParryWindow` track) at the hit's stamped frame: nullify, the profile's hitstop on both sides, a `Punish` inbox entry back to the attacker (none when the profile has no attacker stun), `Combat.Event.Parried` (magnitude = source). Runs in every mode. |
+| `UGSTN_HitStep_Shield` | Only where the shield is available and blocks at the hit frame: a hit on the bubble is blocked (shield damage, stun, push back, hitstop x `ShieldHitstopMultiplier`, `Combat.Event.Blocked`) or breaks it (`Combat.Event.ShieldBroken`, an upward launch that never tumbles); a body hit while raised continues as an ordinary hit. |
+
+`UGSTN_DefenceContentLibrary::AddDefenceStepsToRules` puts both after `HurtboxReaction` (Parry first). `FGSTN_DefenceOutcomeApplier` writes the
+fragment at the hit frame plus one; the `Punish` kind (`GSTNDefenceInboxKinds::Punish` = 16) punishes the attacker and cancels its move.
+
+## Harness
+
+`Tools/GASNPPTest/defence_scenarios.py` (`SUITE_DEFENCE`): `shield_block`, `shield_bubble`, `shield_oos`, `shield_break`, `shield_mode_off`,
+`grab_shield` (a stub until F12), `parry`, `parry_move`, and (F8) `landing_bounce`, `landing_getup`, `tech_ground`, `tech_wall`, `sdi`, each in a
+fresh PIE through `defence_batch()`.
+
+Content (F13), written by `Tools/GAS/setup_defence_link_content.py` (idempotent: compares before it writes, saves only what changed, backs up to
+`Saved/Backups/GAS`; a rerun on current content gives identical hashes) and checked by `Tools/GAS/validate_defence_content.py`:
+
+| Asset | What |
+|---|---|
+| `/GSTNDefence/Test/DA_DefenceRules_Test` | PvP rules, short numbers: shield 100, drain 0.4/frame, regen 0.2 after 10, perfect shield 5 frames on the release, tech window 20, lockout 40, profiles `Shield` and `Counter` |
+| `DA_DefenceRules_TestPvE` | the same with `bShieldEnabled = false` |
+| `GA_Shield_Test`, `GA_CounterTest` | thin Blueprint children of `UGSTN_GA_Shield` and `UGSTN_GA_CounterSample` (parry window + `OnParry` cancel) |
+| `GA_TechInPlace_Test`, `GA_TechRoll_Test`, `GA_TechWall_Test` | the tech set (children of `UGSTN_GA_Tech`; roll = left and right, wall = wall and wall jump) |
+| `GA_GroundBounce_Test`, `GA_GetupRoll_Test`, `GA_GetupNeutral_Test` | the get-up set |
+
+The project test kits that carry them (`/Game/GASNPPTest/Combat/KIT_Test_Defence`, `_DefencePvE` (+ the counter on `Command.Special.Neutral`),
+`_DefenceLanding`, `_DefenceTech`, `_DefenceLink`; copies of `KIT_Test_Hits`) and the Parry and Shield steps in the standard rules are written by
+the same script (`UGSTN_DefenceContentLibrary::WriteKitDefenceExtension`, `WriteKitCommandAbility`: they mark the kit dirty only when it
+changes). The scenarios pick the kit; the shield button on the input config and shortened rule numbers stay in memory. The F7/F8 runtime path
+(`SetKitDefenceExtension`, `SetKitDefenceMoves`, native abilities on `KIT_Test_Hits`) still works with `defence_scenarios.USE_CONTENT = False`.
+
+## Debug (console only, not in Shipping)
+
+| Variable | Draws |
+|---|---|
+| `gstn.Combat.Debug.Shield 1` | the bubble sphere while it exists (cyan and thick inside the perfect shield window), the shield value as a bar (broken, stun frames), a move's parry window (magenta bar and capsule), a parry (white, 20 frames), punished frames |
+| `gstn.Combat.Debug.Tech 1` | the tech lockout bar, what is left of the last press's window, teching and downed frames |
+
+`FGSTN_DefenceDebugDraw` (`GSTNDefenceNP`, private) reads the shown combat state of every registered pawn at that state's own frame and the
+attached rules; it writes nothing. No Gameplay Debugger rows (X19).
+
 ## Tests
 
+`GSTNDefence.NP.*` (F7): `Fragment.*`, `Snapshot.*`, `Tick.*`, `Steps.*` (17 tests, list in docs/notes/m6-doc-deltas.md F7). F8 adds
+`Landing.{BounceSteered, DownedThenGetupRoll, GetupAttackFromSlot, JumpGetsUp, MaxDownedFrames, TechSuccessCancelsImpact, TechFailureResolvesImpactFirst,
+NoTechSetNoLockout}`, `DI.RulesOverloadApplied`, `SDI.{DriftSweptByMover, MaxDistancePerHit, ThrowBlocksSDI}` (12).
+
+`GSTNDefence.Content.SampleAssetsValid` (F13, editor context): the content above loads, validates, carries the spec 11 numbers and the
+ability Blueprints derive from their native classes.
+
 `GSTNDefence.GAS.*` (F6): `AttributeClamp`, `ShieldBindingOmittedWhenUnavailable`, `ShieldAbilityRefusesWhenUnavailable`, `TechSetPerKit`,
-`GetupNeutralRequiresKnockdown`, `ShieldRestoreSeenAsRequest`: on a stock ability system in a transient world, no NP, no asset from disk.
+`GetupNeutralRequiresKnockdown`, `ShieldRestoreSeenAsRequest`, and (F7) `ShieldBindingMatchesPress`: on a stock ability system in a transient world, no NP, no asset from disk.
 
 `GSTNDefence.Core.*`: `Tags.*`, `Data.*` (F3); F4 adds `Shield.*`, `Parry.*`, `Tech.*`, `DI.*`, `SDI.*`, `Bounce.*`. They run with only
 this plugin and `GSTNCombatCore` loaded: no GAS, no NP, no world.

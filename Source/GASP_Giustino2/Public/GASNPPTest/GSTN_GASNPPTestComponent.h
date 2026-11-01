@@ -62,7 +62,8 @@ public:
 	void ResetCounters();
 
 	/** Every simulation tick since the last call (resimulated ticks included), as a JSON array of
-	    {t: BaseSimTimeMs, loc, vel, mode, tags: Test.* tags}, then forgets them. The harness judges heights, speeds and tag spans on
+	    {t: BaseSimTimeMs, fr: ServerFrame, loc, vel, mode, rs: resimulated, tags: Test.* tags}, then forgets them. fr is the frame index every
+	    copy of a pawn shares (the authority's frame), so an owner's tick lines up with the authority's frame for frame. The harness judges heights, speeds and tag spans on
 	    these, not on the editor tick, so a check does not depend on how many sim steps one editor frame holds. */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	FString DrainSimHistory();
@@ -115,6 +116,44 @@ public:
 	/** Injects a single-frame press of an action (e.g. IA_GASNPP_Dash). Local player only. */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	bool PressInput(UInputAction* Action);
+
+	// ---- Separate-process PIE bridge (RunUnderOneProcess=false). The editor's Python then sees only the host's world: it drives a client through
+	// RemoteExec on the server's copy of that client's pawn, and reads the client from the records the client writes every engine frame.
+	// Test transport only (a reliable client RPC down, a file on this machine up): nothing in it is simulation state.
+
+	/**
+	 * Server copy of a client-owned pawn: runs Command on the owning client (reliable). Commands: "hold <input action path> x y z",
+	 * "release <input action path>", "press <input action path>", "tap <combat button mask>", "exec <console command>" (in the client's world),
+	 * "mirror 1 [<class path>:<static function>]" / "mirror 0". The function, when given, takes the pawn (AActor*) and returns an FString: its text
+	 * goes in the record next to each pawn. False when this is not a server copy of a remote client's pawn.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Remote")
+	bool RemoteExec(const FString& Command);
+
+	/**
+	 * Where a client process writes the records of its pawn "P<player id>": Saved/Logs/mirror/<key>.txt, one per line, appended twice a second. A file
+	 * on this machine, not the game connection: an RPC per frame competed with the client's input upstream. A record is "<platform seconds>
+	 * <rollbacks> <engine frame ms>" then, per test pawn of the client's world, "|<pawn key> <Mover mode> <function text>". The harness deletes it between runs.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GASNPP Test|Remote")
+	static FString GetMirrorFilePath(const FString& PawnKey);
+
+	/** FPlatformTime::Seconds() of this process: one clock for every process on the machine, the time base of the mirror records */
+	UFUNCTION(BlueprintPure, Category = "GASNPP Test|Remote")
+	static double GetPlatformSeconds();
+
+	/**
+	 * Bytes in every packet the world's game net driver sent and received since it was created (UNetDriver::OutTotalBytes / InTotalBytes), as
+	 * "<out> <in>", or an empty string without a net driver. Two readings give the host's upload rate: `stat net` is not readable from Python and
+	 * the engine's server stat replicator exists only on a dedicated server (link_standalone's bytes/s, M6 spec 10)
+	 */
+	UFUNCTION(BlueprintPure, Category = "GASNPP Test|Remote", meta = (WorldContext = "WorldContextObject"))
+	static FString GetNetDriverTotals(const UObject* WorldContextObject);
+
+	/** Clears the dirty flag of Object's package without saving it. The harness's in-memory editor setup (the level's game mode) dirties the map, and a
+	    separate-process PIE refuses to start until dirty packages are saved: the harness must never save the shared level */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Remote")
+	static bool ClearPackageDirtyFlag(UObject* Object);
 
 	UPROPERTY(EditDefaultsOnly, Category = "GASNPP Test")
 	TObjectPtr<UInputMappingContext> TestMappingContext;
@@ -300,12 +339,33 @@ private:
 
 	void ApplyStatsProbe();
 
+	UFUNCTION(Client, Reliable)
+	void ClientRemoteExec(const FString& Command);
+
+	void RunRemoteCommand(const FString& Command);
+	void SendMirrorRecord(float DeltaTime);
+	void FlushMirror();
+
+	/** Client side of the bridge: mirroring on (the tick interval drops to every frame), the per pawn text function, the records not written yet */
+	bool bMirror = false;
+	FString MirrorFunction;
+	TArray<FString> MirrorRecords;
+	double MirrorFlushTime = 0.0;
+
 	void TrySetupInput();
 
 	class UEnhancedInputLocalPlayerSubsystem* GetLocalInputSubsystem() const;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMoverComponent> Mover;
+
+	/**
+	 * Mover's state as of the frame being simulated. The sim history and the mode log read velocity and mode here, not from Mover's own
+	 * queries: those return the presentation copy, which re-simulated ticks do not update (a re-simulated tick then reported the
+	 * pre-rollback mode and velocity next to its re-simulated position, and the harness saw mode flips and speeds that never happened).
+	 */
+	UPROPERTY(Transient)
+	TObjectPtr<class UGSTN_MoverSimStateTracker> SimState;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNpAbilitySystemComponent> AbilitySystem;
@@ -315,9 +375,13 @@ private:
 	struct FSimHistoryEntry
 	{
 		int32 SimTimeMs = 0;
+		int32 ServerFrame = 0;
 		FVector Location = FVector::ZeroVector;
+		/** Actor yaw at the tick: with Location, the pose a parked partner is placed from (latch scenarios, aligned by ServerFrame) */
+		float Yaw = 0.f;
 		FVector Velocity = FVector::ZeroVector;
 		FName Mode;
+		bool bResimulating = false;
 		TArray<FString> Tags;
 	};
 	TArray<FSimHistoryEntry> SimHistory;

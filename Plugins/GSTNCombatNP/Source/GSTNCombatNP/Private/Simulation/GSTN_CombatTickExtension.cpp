@@ -53,6 +53,16 @@ void FGSTN_CombatTickExtensionRegistry::Run(EGSTN_CombatHookPoint Point, FGSTN_C
 	}
 }
 
+uint32 FGSTN_CombatTickExtensionRegistry::HeldCancelConditions(const FGSTN_CombatTickContext& Context) const
+{
+	uint32 Mask = 0;
+	for (const FEntry& Entry : Entries)
+	{
+		Mask |= Entry.Extension->HeldCancelConditions(Context);
+	}
+	return Mask;
+}
+
 bool FGSTN_CombatTickExtensionRegistry::BlocksActions(const FGSTN_CombatTickContext& Context) const
 {
 	bool bBlocked = false;
@@ -61,4 +71,47 @@ bool FGSTN_CombatTickExtensionRegistry::BlocksActions(const FGSTN_CombatTickCont
 		bBlocked |= Entry.Extension->BlocksActions(Context);
 	}
 	return bBlocked;
+}
+
+FGameplayTag FGSTN_CombatTickExtensionRegistry::AdmitsOnlyBindingsRequiring(const FGSTN_CombatTickContext& Context) const
+{
+	for (const FEntry& Entry : Entries)
+	{
+		const FGameplayTag Tag = Entry.Extension->AdmitsOnlyBindingsRequiring(Context);
+		if (Tag.IsValid())
+		{
+			return Tag;
+		}
+	}
+	return FGameplayTag();
+}
+
+bool FGSTN_CombatTickExtensionRegistry::ConsumeTumbleContact(FGSTN_CombatTickContext& Context, const FGSTN_TumbleContactSyncState& Contact) const
+{
+	bool bConsumed = false;
+	for (const FEntry& Entry : Entries)
+	{
+		bConsumed |= Entry.Extension->ConsumeTumbleContact(Context, Contact);
+	}
+	return bConsumed;
+}
+
+void FGSTN_CombatTickExtensionRegistry::OnTumbleContactResolved(FGSTN_CombatTickContext& Context, const FGSTN_TumbleContactSyncState& Contact, EGSTN_ImpactOutcome Outcome) const
+{
+	for (const FEntry& Entry : Entries)
+	{
+		Entry.Extension->OnTumbleContactResolved(Context, Contact, Outcome);
+	}
+}
+
+bool FGSTN_CombatTickExtensionRegistry::OverrideDI(const FGSTN_CombatTickContext& Context, const FVector& Launch, const FVector& StickOnPlane, const FVector& Up, const FVector& YawFallback, FVector& OutVelocity) const
+{
+	for (const FEntry& Entry : Entries)
+	{
+		if (Entry.Extension->OverrideDI(Context, Launch, StickOnPlane, Up, YawFallback, OutVelocity))
+		{
+			return true;
+		}
+	}
+	return false;
 }

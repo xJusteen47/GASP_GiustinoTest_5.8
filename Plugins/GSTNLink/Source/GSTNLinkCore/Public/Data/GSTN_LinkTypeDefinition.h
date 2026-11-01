@@ -11,8 +11,8 @@
 
 /**
  * Primary asset types of the link plugin. A link type definition returns one from GetPrimaryAssetId so the asset manager finds
- * every link type, whichever plugin ships it (m6 spec 7.0 item 3); code never lists them. A project registers the type under
- * PrimaryAssetTypesToScan (a project decision: the plugin does not edit the project's DefaultGame.ini).
+ * every link type, whichever plugin ships it (m6 spec 7.0 item 3); code never lists them. The module registers the type itself over
+ * the plugin's content and UGSTN_LinkSettings::LinkTypeDirectories, so the project's DefaultGame.ini does not list it.
  */
 namespace GSTNLinkAssetTypes
 {
@@ -65,7 +65,7 @@ struct GSTNLINKCORE_API FGSTN_LinkRoleDef
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	bool bActsWhileLinked = false;
 
-	/** The two capsules collide while linked. False = collision between them is ignored and restored at the exit */
+	/** The two capsules collide while linked. False (on the parked role) = they ignore each other while linked and for the type's ExitCollisionIgnoreFrames after the exit */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	bool bCollisionWithPartner = false;
 
@@ -76,6 +76,14 @@ struct GSTNLINKCORE_API FGSTN_LinkRoleDef
 	/** Offset applied to the partner's socket to get the parked placement */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role|Placement")
 	FTransform SocketOffset = FTransform::Identity;
+
+	/**
+	 * The break reason when this role's own move ends the link (a Release key of a link outcome track on the role's timeline: the grabber's
+	 * release, the latcher letting go, the latched enemy shaking the latcher off). A Combat.Link.BreakReason tag, resolved through the registry's
+	 * reason table; empty = Release. So a shake-off is the latched role's data, not code that names the latch
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role|Break", meta = (Categories = "Combat.Link.BreakReason"))
+	FGameplayTag ReleaseBreakReason;
 };
 
 /** How hits on one role of a link affect the link (m6 spec 3 and 7.5) */
@@ -180,11 +188,29 @@ public:
 	TObjectPtr<UGSTN_LinkExitPlacer> ExitPlacer;
 
 	/**
+	 * Frames after the exit during which the two former partners still ignore each other's collision, for a type whose parked role ignores
+	 * it while linked (IgnoresPartnerCollision). The window is sync state of both sides (the link fragment), so every machine and every
+	 * resimulation sweeps the same way: a client that still shows the released partner parked (interpolated) does not walk into a capsule
+	 * the authority has already restored, or the other way round. Default 12: the second correction it removes came 1-7 frames after the
+	 * break (HANDOVER 61), plus margin. 0 = collision returns on the exit frame
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Exit", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 ExitCollisionIgnoreFrames = 12;
+
+	/**
 	 * Body-channel link types this type cannot be formed or kept alongside. Meaningful on Hand-channel types only (a mount allows a
 	 * Hand link, so a rider can hold and throw; a grab does not): a Body type lists none
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Request", meta = (Categories = "Combat.Link.Type"))
 	TArray<FGameplayTag> ForbiddenWithBody;
+
+	/**
+	 * Link types tried BEFORE this one when a hit or the interact button asks for this type, in order: the first whose request checks accept
+	 * the target forms instead, and this type only when none does. The grab lists the latch, so one tap grabs a light enemy and latches onto
+	 * one heavy enough for the latch rule (the rules decide by weight; nothing names either type). An alternative never lists further ones
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Request", meta = (Categories = "Combat.Link.Type"))
+	TArray<FGameplayTag> Alternatives;
 
 	/**
 	 * The initiator's own machine predicts the link before the response arrives. Grabs do not (hitstop and a predicted flag only);
@@ -209,6 +235,9 @@ public:
 
 	/** Index (1 or 2) of the parked role, or 0 when the type parks nobody */
 	int32 GetParkedRoleIndex() const;
+
+	/** The two capsules ignore each other while linked: the parked role says bCollisionWithPartner false. A type that parks nobody never does */
+	bool IgnoresPartnerCollision() const;
 
 	/** Index (1 or 2) of the role whose tag is RoleTag, or 0 when neither is */
 	int32 FindRoleIndex(const FGameplayTag& RoleTag) const;

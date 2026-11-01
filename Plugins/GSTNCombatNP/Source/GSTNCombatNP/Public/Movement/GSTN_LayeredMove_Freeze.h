@@ -36,6 +36,14 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Freeze : public FLayeredMoveBase
 	UPROPERTY()
 	bool bZeroVelocityOnFinish = false;
 
+	/**
+	 * Velocity the frozen pawn moves with instead of standing still (cm/s, world space; zero = a plain freeze). Set on the one-frame drift freezes of
+	 * held-direction SDI (M6 F8): the move is still OverrideAll, so Mover sweeps the drift through collision and a wall or a ledge stops it. Serialized
+	 * (one bit when zero), so a rollback restores the drift of a frame like the rest of the move
+	 */
+	UPROPERTY()
+	FVector DriftVelocity = FVector::ZeroVector;
+
 	/** Fills the duration and the finish velocity from the arguments. The only way a freeze gets its finish velocity: call it after setting the fields */
 	void Setup(const FVector& InIncomingVelocity, float InDurationMs, bool bInZeroVelocityOnFinish);
 
@@ -69,6 +77,14 @@ public:
 	/** The freeze ends with zero velocity instead of restoring the incoming one (a stagger-in-place victim) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Freeze")
 	bool bZeroVelocityOnFinish = false;
+
+	/**
+	 * A drift freeze (M6 F8, held-direction SDI): the move drifts with the spec's SetByCaller velocity (Combat.SetByCaller.Move.Velocity.X/Y/Z),
+	 * runs above the hitstop freeze (Priority 1, the higher override wins) and finishes keeping the velocity Mover has (the hitstop freeze under it
+	 * decides the velocity the window ends with)
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Freeze")
+	bool bDriftFromSetByCaller = false;
 
 	virtual FEffectMoveContainer MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
 		const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const override;

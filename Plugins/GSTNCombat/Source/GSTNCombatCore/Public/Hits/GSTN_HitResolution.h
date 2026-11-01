@@ -92,6 +92,10 @@ struct GSTNCOMBATCORE_API FGSTN_ResolvedHit
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
 	FGSTN_HitData Hit;
 
+	/** The simulation frame the overlap was made on (the inbox entry's stamp; the attacker's own frame in its prediction): what a window of the victim is tested against, never the resolution frame. INDEX_NONE when unknown */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
+	int32 Frame = INDEX_NONE;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
 	int32 AttackerEntityId = INDEX_NONE;
 
@@ -118,6 +122,27 @@ struct GSTNCOMBATCORE_API FGSTN_ResolvedHit
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
 	bool bVictimGrounded = false;
+
+	/**
+	 * The ATTACKER's snapshot extension PODs (M6 F10: the link request reads the initiator's link state and kit through them), from the same
+	 * snapshot of the end of the previous frame as the victim's: the victim step finds the attacker's entry by AttackerEntityId, the attacker's
+	 * prediction reads its own. Empty when the attacker has no entry on this machine (then a step that needs them decides without). Not
+	 * reflected, not owned: valid for the run only, like FGSTN_HitVictimView::SnapshotExtensions
+	 */
+	FGSTN_HitVictimView::FSnapshotExtensionRef AttackerExtensions[FGSTN_HitVictimView::MaxSnapshotExtensions];
+
+	/** The attacker's POD of a plugin by its feature id, or null */
+	const void* FindAttackerExtension(uint8 TypeId) const
+	{
+		for (const FGSTN_HitVictimView::FSnapshotExtensionRef& Ref : AttackerExtensions)
+		{
+			if (Ref.TypeId == TypeId && Ref.Data)
+			{
+				return Ref.Data;
+			}
+		}
+		return nullptr;
+	}
 };
 
 /**

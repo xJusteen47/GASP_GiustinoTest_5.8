@@ -40,6 +40,7 @@
 #include "NetworkPredictionWorldManager.h"
 #include "Curves/CurveVector.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
+#include "Simulation/GSTN_TimelineTrackHook.h"
 #include "Presentation/GSTN_HitPresentationComponent.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "Hits/GSTN_ImpactTypes.h"
@@ -574,6 +575,22 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 		// An extension's state forbids acting (BlocksActions): no command starts, whatever the reaction or the timeline would allow
 		return false;
 	}
+	if (FrameAdmitTag.IsValid())
+	{
+		// An extension's state admits only the bindings made for it (a downed entity's get-ups): a command without one does not start
+		const FGSTN_CommandTable::FCommand* Admitting = Current.Table.Commands.IsValidIndex(CommandIndex) ? &Current.Table.Commands[CommandIndex] : nullptr;
+		bool bAdmitted = false;
+		for (int32 Offset = 0; Admitting && Offset < Admitting->NumBindings && !bAdmitted; ++Offset)
+		{
+			bAdmitted = IsBindingAdmitted(Current.Table, Admitting->FirstBinding + Offset);
+		}
+		UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s: command %d (%s) %s while only bindings requiring %s are admitted"), *GetNameSafe(GetOwner()), CommandIndex,
+			Admitting ? *Admitting->Tag.ToString() : TEXT("?"), bAdmitted ? TEXT("admitted") : TEXT("refused"), *FrameAdmitTag.ToString());
+		if (!bAdmitted)
+		{
+			return false;
+		}
+	}
 	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
 	{
 		// The one exception: an ability tagged Combat.Ability.IgnoreHitstunOnActivation, in a reaction (a KO is never bypassed). The gate only asks
@@ -600,7 +617,7 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 	const FGameplayTag& Command = Current.Table.Commands[CommandIndex].Tag;
 	const int32 Running = GateCore->ActiveTimeline;
 	return FGSTN_CombatTimelineLogic::IsCommandAllowed(*GateCore, GetRegistryTimeline(Current, Running), TimelineOutput, Command,
-		UGSTN_InputSettings::Get().GetCommandTier(Command), Current.TimelineTier.IsValidIndex(Running) ? Current.TimelineTier[Running] : 0);
+		UGSTN_InputSettings::Get().GetCommandTier(Command), Current.TimelineTier.IsValidIndex(Running) ? Current.TimelineTier[Running] : 0, FrameCancelConditions);
 }
 
 int32 UGSTN_CombatSimComponent::GetCombatClock() const
@@ -699,8 +716,10 @@ void UGSTN_CombatSimComponent::AppendFrameEvents(uint8 PreviousFingerprint, uint
 
 bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 {
-	if (!IsJumpBindingAllowed(BindingIndex))
+	if (!IsJumpBindingAllowed(BindingIndex) || !IsBindingAdmitted(Tables().Table, BindingIndex))
 	{
+		UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s: binding %d refused (jump gate %d, admitted %d)"), *GetNameSafe(GetOwner()), BindingIndex, IsJumpBindingAllowed(BindingIndex) ? 1 : 0,
+			IsBindingAdmitted(Tables().Table, BindingIndex) ? 1 : 0);
 		return false;
 	}
 	// In a hit reaction only an ability that says so may start (the gate of IsCommandAllowed passed the command, not necessarily this binding)
@@ -714,7 +733,9 @@ bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 		}
 	}
 	// On the end-of-previous-frame state, like the ability system's own check at execution
-	return FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, GetCommandTable(), BindingIndex);
+	const bool bCanExecute = FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, GetCommandTable(), BindingIndex);
+	UE_CLOG(!bCanExecute && FrameAdmitTag.IsValid(), LogGSTNCombatSim, Verbose, TEXT("%s: binding %d cannot execute (its ability refuses)"), *GetNameSafe(GetOwner()), BindingIndex);
+	return bCanExecute;
 }
 
 FGSTN_ActivationContext UGSTN_CombatSimComponent::GetActivationContext() const
@@ -759,7 +780,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// The victim side (combat-m4-hits 7): the hits the attackers wrote on the previous frame are resolved before anything else of this frame, so
 	// the hitstop window they open already stands this frame (its first frame is the frame after the hit, like the attacker's), and a cancelled
 	// move or a hitstun state is what the rest of the tick sees
-	RunVictimStep(TimeStep, OutSync, StepSnapshot, *Input.Cmd);
+	RunVictimStep(TimeStep, InSync, OutSync, StepSnapshot, *Input.Cmd);
 
 	// The loadout table swap (loadout-table-swap-design 2c). The active table is the set of the demanded revision; the frame that first has
 	// it is the boundary on every machine, and every later step of the frame (clock, adoption, jump, input, step 8) reads that one table.
@@ -801,6 +822,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// Hitstop (combat-m3 7.1): a frame inside the window of the previous state stands still on the combat clock. The window the
 	// debug button opens on frame F pauses from F+1 (F itself was simulated with the clock running when it opened)
 	const bool bHitstopFrame = OutSync.Core.AdvanceHitstopClock(Frame);
+
+	// What the track hooks of the plugins may read besides the input: the button map and the fragments as this frame writes them (M6 F7)
+	FGSTN_TrackHookEnvironment HookEnvironment;
+	HookEnvironment.Buttons = &ButtonMap;
+	HookEnvironment.Fragments = &OutSync.Fragments;
 	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
@@ -816,7 +842,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		const int32 StartBefore = OutSync.Core.TimelineStartFrame;
 		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(FrameSet, Running),
 			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame,
-			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex));
+			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex), &HookEnvironment);
 		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,
@@ -841,7 +867,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		const int32 Adopted = FGSTN_CombatTimelineLogic::Adopt(OutSync.Core, Frame, Awaiting);
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Adopted))
 		{
-			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Adopted], TimelineOutput);
+			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Adopted], TimelineOutput, &HookEnvironment);
 			StampMoveOrigin(OutSync.Core, Frame);
 		}
 	}
@@ -851,20 +877,34 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	// Extension hooks at the fixed points of the tick. With nothing registered every call is an empty loop
 	FGSTN_CombatTickContext HookContext(Frame, InSync, OutSync);
-	HookContext.Owner = GetOwner();
-	HookContext.AbilitySystem = AbilitySystem;
-	HookContext.Outbox = &EventOutbox;
+	{
+		FTransform Pose;
+		FVector Up = FVector::UpVector;
+		ReadOwnPose(Pose, Up);
+		FillHookContext(HookContext, FrameCmd, Up);
+	}
 	HookContext.Timeline = &TimelineOutput;
+	HookContext.RunningTimeline = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline ? GetRegistryTimeline(FrameSet, OutSync.Core.ActiveTimeline) : nullptr;
+	HookContext.Snapshot = StepSnapshot;
+	// What an extension may ask the model to do in this tick (StartForcedTimeline): this frame's state, tables and hook environment
+	ServiceSync = &OutSync;
+	ServiceFrame = Frame;
+	ServiceHookEnvironment = &HookEnvironment;
+	HookContext.Services = this;
 	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
 	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeCandidates, HookContext);
 	// The can-act veto of the extensions, from the fragments as the hooks above left them; it closes the gate the candidates ask
 	bFrameActionsBlocked = Extensions.BlocksActions(HookContext);
+	FrameCancelConditions = Extensions.HeldCancelConditions(HookContext);
+	FrameAdmitTag = Extensions.AdmitsOnlyBindingsRequiring(HookContext);
 
 	// The attacker side (combat-m4-hits 6), before the candidates: a hit of this frame confirms the run for the cancel gate of the same frame
 	if (!bHitstopFrame && !bFrameGateClosed)
 	{
 		RunAttackerStep(TimeStep, OutSync.Core, StepSnapshot, HookContext.HitGroupMask);
+		// The hits of this frame, for the extensions' AfterExecute point (the scratch array lives on the component until the next attacker step)
+		HookContext.AttackerHits = AttackerHits;
 	}
 
 	// Step 5a, the jump bookkeeping: before the input tick, because the gate asks whether a jump or an air jump is available this frame
@@ -887,6 +927,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
 	bFrameActionsBlocked = false;
+	FrameCancelConditions = 0;
+	FrameAdmitTag = FGameplayTag();
 
 	// A burst: the ability that starts in a reaction and says it ends it. The state is rewritten here, in the frame of the request, so it rolls
 	// back with the rest; the ability system's pre-tick removes the freeze of the window (EndReaction request)
@@ -917,7 +959,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		StampMoveOrigin(OutSync.Core, Frame);
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Entry))
 		{
-			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Entry], TimelineOutput);
+			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Entry], TimelineOutput, &HookEnvironment);
 		}
 	}
 	// A timeline that reached its commit is a timeline that started: the event of the one that was replaced inside its startup
@@ -977,6 +1019,55 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	}
 
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
+	ServiceSync = nullptr;
+	ServiceFrame = INDEX_NONE;
+	ServiceHookEnvironment = nullptr;
+}
+
+void UGSTN_CombatSimComponent::FillHookContext(FGSTN_CombatTickContext& Context, const FGSTN_InputCmd& Cmd, const FVector& Up)
+{
+	Context.Owner = GetOwner();
+	Context.AbilitySystem = AbilitySystem;
+	Context.EntityId = RegisteredEntityId;
+	Context.Outbox = &EventOutbox;
+	Context.Up = Up;
+	Context.Stick = FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
+	Context.StickOnPlane = FGSTN_CombatVictim::StickToPlane(Context.Stick, FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), Up);
+	Context.Buttons = &ButtonMap;
+}
+
+bool UGSTN_CombatSimComponent::StartForcedTimeline(const UClass* AbilityClass)
+{
+	if (!ServiceSync || !FrameTables || !AbilityClass)
+	{
+		return false;
+	}
+	const UGSTN_CombatTableSet& Set = *FrameTables;
+	const int32 Entry = Set.TimelineRegistry.IndexOfByPredicate([AbilityClass](const TSubclassOf<UGSTN_GA_BaseCombat>& Class) { return Class.Get() == AbilityClass; });
+	if (Entry == INDEX_NONE)
+	{
+		return false;
+	}
+	// What step 8 does for a command, source Forced; the ability system's pre-tick of the frame activates the ability (ActivateEntry), which finds its
+	// timeline running from this frame and begins it
+	FGSTN_CombatSyncCore& Core = ServiceSync->Core;
+	FGSTN_CombatTimelineLogic::Start(Core, ServiceFrame, Entry, EGSTN_ActivationSource::Forced);
+	StampMoveOrigin(Core, ServiceFrame);
+	if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Set, Entry))
+	{
+		FGSTN_CombatTimelineLogic::EvaluateStart(Core, ServiceFrame, *Data, Set.TimelineDefaultOverride.IsValidIndex(Entry) ? Set.TimelineDefaultOverride[Entry] : 0, TimelineOutput, ServiceHookEnvironment);
+	}
+	Core.Requests.Add(EGSTN_RequestType::ActivateEntry, ServiceFrame, static_cast<int16>(Entry));
+	return true;
+}
+
+bool UGSTN_CombatSimComponent::IsBindingAdmitted(const FGSTN_CommandTable& Table, int32 BindingIndex) const
+{
+	if (!FrameAdmitTag.IsValid())
+	{
+		return true;
+	}
+	return Table.Bindings.IsValidIndex(BindingIndex) && Table.Bindings[BindingIndex].Requirements.RequireTags.HasTagExact(FrameAdmitTag);
 }
 
 FString UGSTN_CombatSimComponent::GetDebugString(int32 MaxEvents) const
@@ -1288,6 +1379,28 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 
 	// A surface that launches, met by a combatant that is not tumbling: queued on Mover before it ticks, before a jump of this frame starts
 	StepSurfaceLaunch(TimeStep, Sync->Core);
+
+	// A timeline the model started by itself this frame (StartForcedTimeline: an extension's landing, tech, get-up): its ability is activated here and
+	// finds its timeline running from this frame, like a command's
+	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
+	{
+		if (Slot.Type == EGSTN_RequestType::ActivateEntry && Slot.Frame == Frame && FrameSet.TimelineRegistry.IsValidIndex(Slot.Arg) && AbilitySystem)
+		{
+			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(FrameSet.TimelineRegistry[Slot.Arg]);
+			if (Spec && !Spec->IsActive())
+			{
+				// Activated as the model's own request, like a command's: the timeline it belongs to is already the running one, which an
+				// activation from outside the model (a trigger, an effect) would be refused for (UGSTN_GA_Base's interrupt policy)
+				const FGameplayAbilitySpecHandle Handle = Spec->Handle;
+				const FGSTN_CommandActivationScope CommandScope(Handle);
+				if (!AbilitySystem->TryActivateAbility(Handle))
+				{
+					UE_LOG(LogGSTNCombatSim, Log, TEXT("%s frame %d: forced timeline %d (%s) did not activate"), *GetNameSafe(GetOwner()), Frame, static_cast<int32>(Slot.Arg),
+						*GetNameSafe(FrameSet.TimelineRegistry[Slot.Arg].Get()));
+				}
+			}
+		}
+	}
 
 	// A request made on this frame starts its ability here, inside the ability system's tick
 	FGSTN_InputHostUtils::ExecuteRequest(AbilitySystem, bFrameGateClosed ? EmptyTableSet->Table : FrameSet.Table, Sync->Core.Input, Frame);

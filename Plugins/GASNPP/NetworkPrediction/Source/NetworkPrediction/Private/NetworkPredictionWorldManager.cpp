@@ -22,6 +22,7 @@ NETSIM_DEVCVAR_SHIPCONST_INT(ToggleLagCompensationDebug, 0, "np.DrawLagCompensat
 namespace NetworkPredictionCVars
 {
 	NETSIM_DEVCVAR_SHIPCONST_INT(SpikeLogResimCost, 0, "np.Spike.LogResimCost", "Spike S-FP. 1: on clients, accumulate wall time and frame count of rollback re-simulations and log one SpikeResim line every 5 seconds. 0: off.");
+	NETSIM_DEVCVAR_SHIPCONST_INT(SpikeLogInputSend, 0, "np.Spike.LogInputSend", "Diagnostics of the fixed tick input stream. 1: a client logs every engine frame whose input send is not the steady one (3+ fixed ticks in the frame, a backlog sent without redundant copies, frames held back by a connection that is not net ready); the server logs every fixed tick it is starved of a client's input. 0: off.");
 }
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(NetworkPredictionWorldManager)
@@ -457,7 +458,13 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 				{
 					if (IsValid(InputHandler))
 					{
+						const int32 ConsumedBefore = InputHandler->LastConsumedFrame;
 						InputHandler->AdvanceLastConsumedFrame(DesiredBufferedInputs, MaxBufferedInputs);
+						if (NetworkPredictionCVars::SpikeLogInputSend() != 0 && ConsumedBefore != INDEX_NONE && InputHandler->LastConsumedFrame == ConsumedBefore)
+						{
+							UE_LOG(LogNetworkPrediction, Log, TEXT("NpInputSend server %s: starved at client frame %d (last received %d), engine frame %.1f ms"),
+								*GetNameSafe(InputHandler->GetOwner()), ConsumedBefore, InputHandler->LastReceivedFrame, fEngineFrameDeltaTimeMS);
+						}
 					}
 				}
 
@@ -504,7 +511,7 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 		// Once per engine frame, after all the fixed ticks it ran
 		if (Services.FixedServerRPC.Array.Num() > 0)
 		{
-			SendFixedTickInputsToServer(FixedTickState.PendingFrame > FirstFrameThisUpdate);
+			SendFixedTickInputsToServer(FixedTickState.PendingFrame > FirstFrameThisUpdate, FixedTickState.PendingFrame - FirstFrameThisUpdate, fEngineFrameDeltaTimeMS);
 		}
 	}
 
@@ -772,7 +779,7 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 	}
 }
 
-void UNetworkPredictionWorldManager::SendFixedTickInputsToServer(const bool bTickedThisFrame)
+void UNetworkPredictionWorldManager::SendFixedTickInputsToServer(const bool bTickedThisFrame, const int32 NumTicksThisFrame, const float EngineFrameMS)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(NetworkPrediction::CallServerRPC);
 
@@ -783,19 +790,45 @@ void UNetworkPredictionWorldManager::SendFixedTickInputsToServer(const bool bTic
 	// already overwritten some of them
 	const int32 MaxBacklog = NpFixedTickServerInputBufferSize - 1;
 
+	// Per handler: the oldest frame its redundant copies start at (EndFrame when it sends none). The copies cover the last
+	// NumInputToSend frames AND every new frame of the previous send: a client whose engine frame runs several fixed ticks packs
+	// several new frames in each packet, and a window of NumInputToSend frames would then re-send only part of a lost packet, which
+	// the server can only fill with repeated inputs (a mismatch whenever the stick or a button changed in the missing frames).
+	TArray<int32, TInlineAllocator<2>> CopyStartFrames;
 	int32 StartFrame = EndFrame;
 	for (UNetworkPredictionPlayerControllerComponent* InputHandler : RPCHandlers)
 	{
-		if (!IsValid(InputHandler))
+		int32 CopyStart = EndFrame;
+		if (IsValid(InputHandler))
 		{
-			continue;
+			int32& NextFrame = InputHandler->NextInputFrameToSend;
+			NextFrame = NextFrame == INDEX_NONE ? FMath::Max(EndFrame - 1, 0) : FMath::Clamp(NextFrame, EndFrame - MaxBacklog, EndFrame);
+			if (bTickedThisFrame && !InputHandler->bPreviousSendHeld)
+			{
+				CopyStart = EndFrame - NumInputToSend;
+				if (InputHandler->PreviousSendFirstFrame != INDEX_NONE)
+				{
+					CopyStart = FMath::Min(CopyStart, InputHandler->PreviousSendFirstFrame);
+				}
+				CopyStart = FMath::Max3(CopyStart, EndFrame - MaxBacklog, 0);
+			}
+			StartFrame = FMath::Min3(StartFrame, NextFrame, CopyStart);
 		}
-		int32& NextFrame = InputHandler->NextInputFrameToSend;
-		NextFrame = NextFrame == INDEX_NONE ? FMath::Max(EndFrame - 1, 0) : FMath::Clamp(NextFrame, EndFrame - MaxBacklog, EndFrame);
-		const bool bSendRedundantCopies = bTickedThisFrame && EndFrame - NextFrame <= NumInputToSend;
-		StartFrame = FMath::Min(StartFrame, bSendRedundantCopies ? FMath::Min(NextFrame, EndFrame - NumInputToSend) : NextFrame);
+		CopyStartFrames.Add(CopyStart);
 	}
 	StartFrame = FMath::Max(StartFrame, 0);
+
+	// np.Spike.LogInputSend: per handler, what this engine frame's send looked like
+	const bool bLogInputSend = NetworkPredictionCVars::SpikeLogInputSend() != 0;
+	TArray<TPair<int32, int32>, TInlineAllocator<2>> LogBacklogAndHeld; // (backlog before the send, frames held back by a connection that is not net ready)
+	TArray<int32, TInlineAllocator<2>> FirstNewFrames;
+	TArray<bool, TInlineAllocator<2>> HeldThisSend;
+	for (UNetworkPredictionPlayerControllerComponent* InputHandler : RPCHandlers)
+	{
+		LogBacklogAndHeld.Add(TPair<int32, int32>(IsValid(InputHandler) ? EndFrame - InputHandler->NextInputFrameToSend : 0, 0));
+		FirstNewFrames.Add(INDEX_NONE);
+		HeldThisSend.Add(false);
+	}
 
 	for (int32 Frame = StartFrame; Frame < EndFrame; ++Frame)
 	{
@@ -803,28 +836,65 @@ void UNetworkPredictionWorldManager::SendFixedTickInputsToServer(const bool bTic
 		{
 			Ptr->AddInputToHandler(Frame);
 		}
-		for (UNetworkPredictionPlayerControllerComponent* InputHandler : RPCHandlers)
+		for (int32 Index = 0; Index < RPCHandlers.Num(); ++Index)
 		{
+			UNetworkPredictionPlayerControllerComponent* InputHandler = RPCHandlers[Index];
 			if (!IsValid(InputHandler))
 			{
 				continue;
 			}
 			int32& NextFrame = InputHandler->NextInputFrameToSend;
-			const bool bSendRedundantCopies = bTickedThisFrame && EndFrame - NextFrame <= NumInputToSend;
 			const bool bNewFrame = Frame == NextFrame;
-			const bool bRedundantCopy = bSendRedundantCopies && Frame < NextFrame && Frame >= EndFrame - NumInputToSend;
+			const bool bRedundantCopy = Frame < NextFrame && Frame >= CopyStartFrames[Index];
 			const UNetConnection* NetConnection = InputHandler->GetNetConnection();
 			if ((bNewFrame || bRedundantCopy) && NetConnection && NetConnection->IsNetReady())
 			{
 				InputHandler->SendServerRpc(Frame);
 				if (bNewFrame)
 				{
+					if (FirstNewFrames[Index] == INDEX_NONE)
+					{
+						FirstNewFrames[Index] = Frame;
+					}
 					++NextFrame;
 				}
 			}
 			else
 			{
+				if (bNewFrame || bRedundantCopy)
+				{
+					HeldThisSend[Index] = true;
+					++LogBacklogAndHeld[Index].Value;
+				}
 				InputHandler->DiscardInputsToSend();
+			}
+		}
+	}
+
+	for (int32 Index = 0; Index < RPCHandlers.Num(); ++Index)
+	{
+		if (UNetworkPredictionPlayerControllerComponent* InputHandler = RPCHandlers[Index]; IsValid(InputHandler) && bTickedThisFrame)
+		{
+			InputHandler->bPreviousSendHeld = HeldThisSend[Index];
+			if (FirstNewFrames[Index] != INDEX_NONE)
+			{
+				InputHandler->PreviousSendFirstFrame = FirstNewFrames[Index];
+			}
+		}
+	}
+
+	if (bLogInputSend)
+	{
+		for (int32 Index = 0; Index < RPCHandlers.Num() && Index < LogBacklogAndHeld.Num(); ++Index)
+		{
+			const int32 Backlog = LogBacklogAndHeld[Index].Key;
+			const int32 Held = LogBacklogAndHeld[Index].Value;
+			if (NumTicksThisFrame >= 3 || Backlog > NumInputToSend || Held > 0)
+			{
+				UE_LOG(LogNetworkPrediction, Log, TEXT("NpInputSend client %s: engine frame %.1f ms, %d fixed ticks, backlog %d, %d copies, %d held (not net ready), next frame to send %d"),
+					*GetNameSafe(IsValid(RPCHandlers[Index]) ? RPCHandlers[Index]->GetOwner() : nullptr), EngineFrameMS, NumTicksThisFrame, Backlog,
+					FMath::Max(0, (EndFrame - Backlog) - CopyStartFrames[Index]), Held,
+					IsValid(RPCHandlers[Index]) ? RPCHandlers[Index]->NextInputFrameToSend : INDEX_NONE);
 			}
 		}
 	}

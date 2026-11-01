@@ -144,18 +144,39 @@ def run_timeline(steps):
     _running['handle'] = handle[0]
 
 
-def _combat_history(c):
-    """The history string with every frame older than FGSTN_InputHistory::MaxEventAge (254) written as '?'.
-    The wire format sends 8-bit frame deltas, so a client receives such an event (the current stick, kept forever) as
-    AncientFrame ('?') while the server still holds the real frame: same logical history, different strings."""
-    latest = c.get('historyFrame')
-    items = []
-    for item in c['history'].split():
-        frame, sep, rest = item.partition(':')
-        if sep and latest is not None and frame.lstrip('-').isdigit() and latest - int(frame) > 254:
-            frame = '?'
-        items.append(frame + sep + rest)
-    return ' '.join(items)
+MAX_EVENT_AGE = 254   # FGSTN_InputHistory::MaxEventAge
+
+
+def _combat_histories(ca, cb):
+    """Both history strings over ONE frame window, so two views read at the same wall time but at different sim frames compare.
+    Each side drops an event once its own latest frame is more than 254 frames past it (FGSTN_InputHistory::DropOldEvents), and
+    the owner runs a few frames ahead of the server: an event at the edge of the window is already gone on the owner and still
+    kept on the server (weapon_switch, HANDOVER 60 OPEN 2). Window: (newest latest frame - 254, oldest latest frame]: both
+    sides have simulated it and neither has aged anything in it out. Older events are dropped, except the newest stick event
+    at or before the window end, which the history keeps forever as the current stick: written '?' (the wire also sends it as
+    AncientFrame, '?' on a client while the server holds the real frame). Newer events are frames one side has not simulated yet."""
+    la, lb = ca.get('historyFrame'), cb.get('historyFrame')
+    if la is None or lb is None:
+        return ca['history'], cb['history']
+    lo, hi = max(la, lb) - MAX_EVENT_AGE, min(la, lb)
+
+    def norm(c):
+        items = []
+        for item in c['history'].split():
+            frame, sep, rest = item.partition(':')
+            f = int(frame) if frame.lstrip('-').isdigit() and abs(int(frame)) < 1 << 29 else None   # None: AncientFrame
+            if f is None or f <= hi:
+                items.append((f, sep, rest))
+        sticks = [i for i, (f, sep, rest) in enumerate(items) if sep and not rest.startswith(('+', '-'))]
+        out = []
+        for i, (f, sep, rest) in enumerate(items):
+            if f is None or f < lo:
+                if sticks and i == sticks[-1]:
+                    out.append('?' + sep + rest)
+                continue
+            out.append(f'{f}{sep}{rest}')
+        return ' '.join(out)
+    return norm(ca), norm(cb)
 
 
 def _diff(a, b, pos_tol=2.0):
@@ -175,9 +196,9 @@ def _diff(a, b, pos_tol=2.0):
     # Combat input history (newest 8 events): only where both sides run the combat model, not on simulated proxies
     ca, cb = a.get('combat'), b.get('combat')
     if ca and cb and b.get('simTicks', 0) > 0 and a.get('simTicks', 0) > 0:
-        ha, hb = _combat_history(ca), _combat_history(cb)
+        ha, hb = _combat_histories(ca, cb)
         if ha != hb:
-            d.append(f"combat history '{ha}'!='{hb}'")
+            d.append(f"combat history '{ha}'!='{hb}' (frames {ca.get('historyFrame')}/{cb.get('historyFrame')}, raw '{ca['history']}'/'{cb['history']}')")
     return d
 
 
@@ -896,7 +917,7 @@ class _Run:
         self.name, self.client, self.sample = name, client, sample
         self.key = key_of_player(client) if sample else None
         self.extra, self.judge_reconciles = list(extra or []), judge_reconciles
-        self.results, self.samples, self.sim, self.handle = [], [], [], None
+        self.results, self.samples, self.sim, self.handle, self._seq = [], [], [], None, 0
         self.rb0 = _total_rollbacks()
         self.log_mark = None
         try:
@@ -948,8 +969,10 @@ class _Run:
                 continue
             newest = ticks[-1]['t']
             for e in ticks:
-                self.sim.append({'t': editor_sample['t'] - (newest - e['t']) / 1000.0, side: {'ms': e['t'], 'tags': set(e['tags']), 'loc': tuple(e['loc']),
-                                                                                              'vel': tuple(e['vel']), 'mode': e['mode']}})
+                self._seq += 1
+                self.sim.append({'t': editor_sample['t'] - (newest - e['t']) / 1000.0, side: {'ms': e['t'], 'tags': set(e['tags']), 'loc': tuple(e['loc']), 'yaw': e.get('yaw'),
+                                                                                              'vel': tuple(e['vel']), 'mode': e['mode'],
+                                                                                              'rs': bool(e.get('rs')), 'fr': e.get('fr'), 'seq': self._seq}})
 
     def run(self, steps):
         """Restarts the clock and runs the timeline; the last step must be finish()."""
@@ -962,6 +985,25 @@ class _Run:
     def _win(self, side, t0, t1, sim=False):
         """Samples of `side` in [t0, t1]: the editor ticks, or with sim=True the simulation ticks (loc / vel / mode / tags / ms only)."""
         return [s[side] for s in (self.sim if sim else self.samples) if t0 <= s['t'] <= t1 and s.get(side)]
+
+    def final_sim(self, side, t0, t1):
+        """The simulation ticks of `side` in [t0, t1] as the copy finally simulated them: one tick per sim time, the one drained last (a re-simulation
+        after a correction replaces the prediction of the same frame). _win(sim=True) holds both, sorted by an estimated time, so a predicted tick and
+        its re-simulation sit side by side: a mode sequence read from it alternates wherever the correction changed the mode."""
+        last = {}
+        for s in self._win(side, t0, t1, sim=True):
+            if s['ms'] not in last or s.get('seq', 0) >= last[s['ms']].get('seq', 0):
+                last[s['ms']] = s
+        return [last[ms] for ms in sorted(last)]
+
+    def final_by_frame(self, side, t0, t1):
+        """final_sim keyed by the authority's frame index ('fr', the same on every copy of a pawn): {frame: last drained tick}. Sim times differ
+        between copies, frames do not, so this is how an owner's corrected ticks line up with the authority's."""
+        last = {}
+        for s in self._win(side, t0, t1, sim=True):
+            if s.get('fr') is not None and (s['fr'] not in last or s['seq'] >= last[s['fr']]['seq']):
+                last[s['fr']] = s
+        return last
 
     def saw_tag(self, tag, t0, t1, side='srv'):
         return any(tag in s['tags'] for s in self._win(side, t0, t1, sim=True))
@@ -1455,7 +1497,8 @@ def scenario_weapon_switch(client=1, resim_frames=15):
     def agree():
         sv, ov = _view(0, key), _view(client, key)
         d = [x for x in _diff(sv, ov) if not str(x).startswith(('Health', 'Stamina'))] if sv and ov else 'missing view'   # the periodic regen of the test set lags by a period on the owner
-        return not d, f'server vs owner diff: {d or "none"}'
+        h = [f"{n} frame {(v.get('combat') or {}).get('historyFrame')} '{(v.get('combat') or {}).get('history')}'" for n, v in (('srv', sv), ('cli', ov)) if v]
+        return not d, f'server vs owner diff: {d or "none"} ({"; ".join(h)})'
 
     def no_unexplained():
         r = report_reconciles(marks['start']) if marks.get('start') is not None else None
@@ -1476,7 +1519,7 @@ def scenario_weapon_switch(client=1, resim_frames=15):
         (5.7, lambda: ('force reconcile across the swap', force_reconcile(client, resim_frames) if client != 0 else 'host: nothing to reconcile')),
         (7.0, run.at('press 1: the support weapon, WalkSpeed 300, run 200', weapon(1, 300.0, 200.0))),
         (7.0, run.at('press 1: exactly one WeaponSwitched', switched(1))),
-        (7.2, lambda: ('walk', hold(client, 'move', (0, 1, 0)))),
+        (7.2, lambda: ('walk back', hold(client, 'move', (0, -1, 0)))),   # back the way it came: a second walk forward ran into the lane end (peak 0)
         (9.6, run.at('walking with the support weapon', peak(8.2, 9.6, 200))),
         (9.7, lambda: ('stop', release(client, 'move'))),
         (10.2, lambda: ('press 2: switch back', press(client, 'buff'))),
@@ -3649,7 +3692,8 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
 
     def vsampler(_dt):
         try:
-            st['rec'].append((run.now(), victim_info(0, key), victim_info(client, key)))
+            # authority, owner, observer (the attacker's client: an interpolated proxy, it runs no sim ticks, only its sync state is read)
+            st['rec'].append((run.now(), victim_info(0, key), victim_info(client, key), victim_info(att, key)))
         except Exception:
             pass
 
@@ -3758,19 +3802,49 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
         if not w:
             return False, f'hits {hits()}'
         fr, auth, own = w
-        ok = len(auth) == 1 and auth[0][0] == fr and auth[0][1] - auth[0][0] >= HIT_ATTACKER_HITSTOP and own[-1:] == [auth[0][:2]]
-        return ok, f'hit frame {fr}, window authority {auth}, owner {own}'
+        obs = [x[:2] for x in windows_seen([(r[0], r[3]) for r in st['rec'] if len(r) > 3], 1) if x[0] >= fr]
+        ok = (len(auth) == 1 and auth[0][0] == fr and auth[0][1] - auth[0][0] >= HIT_ATTACKER_HITSTOP and own[-1:] == [auth[0][:2]]
+              and obs[-1:] == [auth[0][:2]])
+        return ok, f'hit frame {fr}, window authority {auth}, owner {own}, observer {obs}'
 
-    def held_in_window():
+    def owner_view():
+        """How the owner met the hit. It cannot predict a hit from another client: it learns of it from a correction whose base is the newest authority
+        frame it received, restores that state and re-simulates forward; frames before the base are never re-run. So when the base is past the hitstop
+        window (the authority runs several fixed ticks in one engine frame and replicates only the last one: a slow editor frame on the listen host,
+        8 frames are 128 ms at 62.5 Hz), the owner never simulates a hitstop tick; that is the netcode, not a missed state. Returns the window, the
+        final timelines by frame and the owner's base (the first frame of its final timeline that carries the hit's tags)."""
         w = win()
         if not w or not w[1]:
-            return False, f'hits {hits()}'
+            return None
         lo, hi = w[1][0][0], w[1][0][1]
-        out, ok = [], True
+        t0, t1 = st['tw'] - 1.0, st['tw'] + 3.0
+        own, auth = run.final_by_frame('cli', t0, t1), run.final_by_frame('srv', t0, t1)
+        knows = sorted(f for f, s in own.items() if f >= lo and s['tags'] & {'Combat.State.Hitstop', 'Combat.State.Hitstun'})
+        return {'lo': lo, 'hi': hi, 'own': own, 'auth': auth, 'base': knows[0] if knows else None,
+                'own_stop': sorted(f for f, s in own.items() if 'Combat.State.Hitstop' in s['tags']),
+                'auth_stop': sorted(f for f, s in auth.items() if 'Combat.State.Hitstop' in s['tags'])}
+
+    def held_in_window():
+        v = owner_view()
+        if not v:
+            return False, f'hits {hits()}'
+        out, ok = [f"window [{v['lo']}, {v['hi']}), authority hitstop frames {v['auth_stop'][:1]}..{v['auth_stop'][-1:]}"], True
         for sd in ('srv', 'cli'):
-            ticks = [s for s in run.sim if s.get(sd) and s[sd]['tags'] and 'Combat.State.Hitstop' in s[sd]['tags']]
-            modes = sorted({s[sd]['mode'] for s in ticks})
-            pts = [s[sd]['loc'] for s in ticks]
+            fl = v['auth'] if sd == 'srv' else v['own']
+            ticks = [fl[f] for f in (v['auth_stop'] if sd == 'srv' else v['own_stop'])]
+            if sd == 'cli' and not ticks:
+                # Late correction (owner_view): judged on the corrected timeline, frame for frame against the authority from the base on
+                b = v['base']
+                same = [f for f in range(b, b + 16) if f in fl and f in v['auth']] if b is not None else []
+                bad = [(f, fl[f]['mode'], v['auth'][f]['mode'], round(math.dist(fl[f]['loc'], v['auth'][f]['loc']), 2)) for f in same
+                       if fl[f]['mode'] != v['auth'][f]['mode'] or math.dist(fl[f]['loc'], v['auth'][f]['loc']) > 1.0]
+                good = b is not None and b >= v['hi'] and len(same) >= 12 and not bad
+                ok &= good
+                out.append(f"cli: no hitstop tick, the correction came after the window: first frame with the hit {b} (window end {v['hi']}), "
+                           f"{len(same)} frames compared with the authority from there, mismatches {bad[:3]}")
+                continue
+            modes = sorted({s['mode'] for s in ticks})
+            pts = [s['loc'] for s in ticks]
             spread = max((math.dist(p, q) for p in pts for q in pts), default=1e9)
             good = bool(ticks) and modes == [wm] and spread < (5.0 if sd == 'srv' else 8.0)
             ok &= good
@@ -3780,17 +3854,29 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
     def tags_and_damage():
         seen = {sd: {t for s in run._win(sd, st['tw'], st['tw'] + 3.0, sim=True) for t in s['tags'] if t.startswith('Combat.State.')} for sd in ('srv', 'cli')}
         d = (damage_of(0, key) - st['d0'][0], damage_of(client, key) - st['d0'][1])
-        ok = all({'Combat.State.Hitstop', 'Combat.State.Hitstun'} <= t for t in seen.values()) and d[0] == d[1] > 0
-        return ok, f'tags srv {sorted(seen["srv"])}, owner {sorted(seen["cli"])}, damage change {d}'
+        v = owner_view()
+        # The owner sees Hitstop only when its correction base fell inside the window (owner_view); Hitstun always
+        late = bool(v) and not v['own_stop'] and v['base'] is not None and v['base'] >= v['hi']
+        want_cli = {'Combat.State.Hitstun'} if late else {'Combat.State.Hitstop', 'Combat.State.Hitstun'}
+        ok = {'Combat.State.Hitstop', 'Combat.State.Hitstun'} <= seen['srv'] and want_cli <= seen['cli'] and d[0] == d[1] > 0
+        return ok, f'tags srv {sorted(seen["srv"])}, owner {sorted(seen["cli"])}{" (late correction)" if late else ""}, damage change {d}'
 
     def after():
-        seq = {sd: [] for sd in ('srv', 'cli')}
+        # From the final timelines (final_sim): the owner's raw sim ticks hold each corrected frame twice, prediction and re-simulation, and read
+        # as WallSliding <-> Walking flips that its simulation never made. A grab is Falling -> wall mode. The owner cannot predict the hit, so its
+        # prediction slides off the wall before the authority (held by the hit) does; the correction puts it back on the wall (Walking -> wall,
+        # a restored state, no grab: the wall log shows one ACTIVATE per world) and it leaves on the authority's frame. When the correction's
+        # base frame is after the predicted exit, those predicted Walking frames stay in the final timeline: a second wall segment, not a grab.
+        seq, grabs = {sd: [] for sd in ('srv', 'cli')}, {}
         for sd in seq:
-            for s in run._win(sd, st['tw'], st['tw'] + 3.0, sim=True):
+            ticks = run.final_sim(sd, st['tw'] - 1.0, st['tw'] + 3.0)
+            grabs[sd] = sum(1 for a, b in zip(ticks, ticks[1:]) if a['mode'] == 'Falling' and b['mode'] == wm)
+            for s in ticks:
                 if not seq[sd] or seq[sd][-1] != s['mode']:
                     seq[sd].append(s['mode'])
-        zs = [round(s['loc'][2]) for s in run._win('srv', st['tw'], st['tw'] + 3.0, sim=True)]
-        return True, f'mode sequence after the attack: authority {seq["srv"]}, owner {seq["cli"]}; height of the climber every 10th tick {zs[::10]}'
+        zs = [round(s['loc'][2]) for s in run.final_sim('srv', st['tw'], st['tw'] + 3.0)]
+        return grabs['srv'] == grabs['cli'] == 1, (f'wall grabs (authority, owner) ({grabs["srv"]}, {grabs["cli"]}); mode sequence: '
+                                                  f'authority {seq["srv"]}, owner {seq["cli"]}; height of the climber every 10th tick {zs[::10]}')
 
     def end():
         for hd in ('v',):
@@ -3812,7 +3898,7 @@ def scenario_hit_on_wall_hit(client=1, wall_x=1010.0, wall_y=-880.0, tap_delay=1
         (t_end, run.at('the hitstop window opens on the frame of the hit, equal on the owner', window_on_wall)),
         (t_end, run.at('WallSliding through the whole window on both, and the pawn did not move', held_in_window)),
         (t_end, run.at('Hitstop and Hitstun projected, the damage taken on both copies', tags_and_damage)),
-        (t_end, run.at('what the pawn does after its hitstun (reported)', after)),
+        (t_end, run.at('one wall grab on the authority and the owner (final timelines; mode sequence reported)', after)),
         (t_end + 0.2, end),
         (t_end + 0.4, run.finish()),
     ]
@@ -5925,6 +6011,12 @@ def scenario_impact_wall(client=1, shot_time=5.5):
     run.run(steps)
 
 
+# impact_wall_mode's tap (HANDOVER 59 OPEN 2): the climber's height wanted when the spin opens, and how far ahead of the tap that is (the spin's 20
+# frames plus about one editor tick and the attacker client's input delay)
+IMPACT_SPIN_HEIGHT = 230.0
+IMPACT_TAP_LEAD_S = 0.45
+
+
 def scenario_impact_wall_mode(client=1, tap_delay=2.0):
     """Second half of the wall scenario of the hits milestone, for the surface impacts (M4 H11, combat-m4-hits 7b): a victim wall sliding on a wall is
     launched INTO it. `client` is the climber, the other client the attacker. A wall (an AGSTN_TestSurface box of the Wall type, which the wall mode slides on
@@ -6016,14 +6108,19 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
             elif ph == 'hit':
                 comp.start_holding_input(ia_move, unreal.Vector(*_steer_value(client, into)))
                 # The climber rises along the wall to about 330 cm, then slides down faster and faster (400 cm/s at the floor). The spin of the test move opens 20
-                # frames (0.35 s) after the tap and reaches 140 cm around the attacker (height 88), the feet of the climber are 62 cm under its centre: tap just
-                # after the top of the rise, so the spin finds the climber about 230 cm up, still on the wall
-                if now - st['tw'] > 0.2 and mode == wm and snap(worlds()[0])[key]['velocity'][2] < -20.0 and loc.z < 265.0 and 'F' not in st:
+                # frames (0.35 s) after the tap and reaches 140 cm around the attacker (height 88), the feet of the climber are 62 cm under its centre: the spin
+                # must find the climber about 230 cm up, still on the wall. HANDOVER 59: a fixed tap height (the first editor tick under 265 cm) passed when
+                # the tap fell at 255-261 cm and failed at 242-255 cm (a late editor tick on a faster slide: the climber reached the floor before the spin).
+                # So the tap is velocity-aware: issued once the height predicted at the spin (now + IMPACT_TAP_LEAD_S, linear in the vertical speed) is at
+                # IMPACT_SPIN_HEIGHT or below, wherever the editor tick falls
+                vz = snap(worlds()[0])[key]['velocity'][2]
+                predicted = loc.z + vz * IMPACT_TAP_LEAD_S
+                if now - st['tw'] > 0.2 and mode == wm and vz < -20.0 and predicted <= IMPACT_SPIN_HEIGHT and 'F' not in st:
                     st['F'] = _latest_frame(0, akey)
                     st['t_tap'] = now
                     st['d0'] = (damage_of(0, key), damage_of(client, key))
                     st['c0'] = (_impact_counts(0, key), _impact_counts(client, key))
-                    st['p_tap'] = (round(frame_x((loc.x, loc.y)), 1), round(loc.z, 1), mode)
+                    st['p_tap'] = (round(frame_x((loc.x, loc.y)), 1), round(loc.z, 1), mode, round(vz, 1), round(predicted, 1))
                     combat_tap(att, attack)
                 if hits() and 'backed' not in st:
                     # the first hit landed: the attacker steps back so the rest of its move (the spin, 20 frames in) does not hit the splatted climber again
@@ -6048,7 +6145,7 @@ def scenario_impact_wall_mode(client=1, tap_delay=2.0):
         hs = hits()
         # the mode the climber is in when the hit freezes it: the first simulation tick with the hitstop tag
         stop = next((s for s in run._win('srv', st['t_tap'], st['t_tap'] + 1.5, sim=True) if 'Combat.State.Hitstop' in s['tags']), None) if st.get('t_tap') is not None else None
-        return st['reached'] and len(hs) == 1 and stop is not None and stop['mode'] == wm, f"reached the wall {st['reached']}, hits {hs} (group 0 is the Root box, 3 the spin), climber at the tap (x ahead of the attacker, z, mode) {st.get('p_tap')}, mode when the hitstop opened {stop['mode'] if stop else None}"
+        return st['reached'] and len(hs) == 1 and stop is not None and stop['mode'] == wm, f"reached the wall {st['reached']}, hits {hs} (group 0 is the Root box, 3 the spin), climber at the tap (x ahead of the attacker, z, mode, vertical speed, z predicted at the spin) {st.get('p_tap')}, mode when the hitstop opened {stop['mode'] if stop else None}"
 
     def impact_check():
         c1 = (_impact_counts(0, key), _impact_counts(client, key))

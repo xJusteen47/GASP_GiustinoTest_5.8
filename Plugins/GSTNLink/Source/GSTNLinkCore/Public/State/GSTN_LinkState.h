@@ -225,7 +225,9 @@ enum class EGSTN_LinkRefusal : uint8
 	/** The target is lighter than the latch limit */
 	TooLight,
 	/** The target is still immune after its last link */
-	Immunity
+	Immunity,
+	/** The initiator is still in its link cooldown (the grabber's cooldown after a throw) */
+	Cooldown
 };
 
 /** The answer of a request rule: Accept or Refuse(reason). A default value accepts, so a rule that does nothing is the identity */
@@ -276,6 +278,10 @@ struct GSTNLINKCORE_API FGSTN_LinkRequestSide
 	/** The entity cannot be latched onto before this frame (set when its last latcher left) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Link")
 	int32 LatchImmunityEndFrame = 0;
+
+	/** The entity cannot form a link as the initiator before this frame (FGSTN_LinkActions::CooldownEndFrame: the grabber's cooldown after a throw) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Link")
+	int32 CooldownEndFrame = 0;
 
 	/** Link states of the two channels (plain data, not reflected) */
 	FGSTN_LinkStates Links;

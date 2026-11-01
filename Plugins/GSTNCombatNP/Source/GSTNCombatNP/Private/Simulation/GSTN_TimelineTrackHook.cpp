@@ -44,7 +44,7 @@ void FGSTN_TimelineTrackHookRegistry::Unregister(IGSTN_TimelineTrackHook* Hook)
 }
 
 bool FGSTN_TimelineTrackHookRegistry::Run(const FGSTN_CombatTimelineData& Data, int32 Frame, int32 TimelineStartFrame, int32 TimelineFrame, bool bHitstopFrame,
-	const FGSTN_InputSimState& Input, FGSTN_StampedWindowList& OutWindows) const
+	const FGSTN_InputSimState& Input, FGSTN_StampedWindowList& OutWindows, const FGSTN_TrackHookEnvironment* Environment) const
 {
 	bool bStall = false;
 	if (Hooks.IsEmpty())
@@ -52,8 +52,9 @@ bool FGSTN_TimelineTrackHookRegistry::Run(const FGSTN_CombatTimelineData& Data, 
 		return bStall;
 	}
 	// The order of the tracks in the data, the same on every machine; the registry only says which struct has a hook
-	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
+	for (int32 TrackIndex = 0; TrackIndex < Data.Tracks.Num(); ++TrackIndex)
 	{
+		const TInstancedStruct<FGSTN_TimelineTrack>& Instance = Data.Tracks[TrackIndex];
 		const UScriptStruct* TrackStruct = Instance.GetScriptStruct();
 		const FGSTN_TimelineTrack* Track = Instance.GetPtr();
 		if (!TrackStruct || !Track)
@@ -67,10 +68,16 @@ bool FGSTN_TimelineTrackHookRegistry::Run(const FGSTN_CombatTimelineData& Data, 
 				continue;
 			}
 			FGSTN_TrackHookContext Context(*Track, Input);
+			Context.TrackIndex = TrackIndex;
 			Context.Frame = Frame;
 			Context.TimelineStartFrame = TimelineStartFrame;
 			Context.TimelineFrame = TimelineFrame;
 			Context.bHitstopFrame = bHitstopFrame;
+			if (Environment)
+			{
+				Context.Buttons = Environment->Buttons;
+				Context.Fragments = Environment->Fragments;
+			}
 			const FGSTN_TrackHookResult Result = Entry.Hook->Evaluate(Context);
 			bStall |= Result.bStallThisFrame;
 			if (Result.bStampWindow && OutWindows.Num() < MaxStampedWindows)

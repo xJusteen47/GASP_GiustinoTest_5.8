@@ -353,6 +353,8 @@ const FGSTN_StepSnapshot& UGSTN_CombatWorldSubsystem::EnsureSnapshot(int32 Frame
 
 	// Registry entries are sorted already and providers append after them: one stable sort gives every machine the same order
 	Algo::StableSortBy(Snapshot.Entries, &FGSTN_SnapshotEntry::EntityId);
+	// The contributors' pass over the whole snapshot (a parked entity placed from its partner's entry), before the grid reads the transforms
+	FGSTN_SnapshotContributorRegistry::Get().Finalize(Frame, Snapshot.Entries);
 	Snapshot.BuildGrid(DefaultCellSize);
 
 	bSnapshotInvalid = false;

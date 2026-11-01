@@ -329,11 +329,13 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		Incoming.Hit = Candidate.Hit;
 		Incoming.AttackerEntityId = In.AttackerId;
 		Incoming.AttackerTeamId = In.AttackerTeam.GetId();
+		FGSTN_CombatVictim::SetAttackerExtensions(Incoming, Snapshot.Find(In.AttackerId));
 		// The TeamFilter step refuses Self, and the hitbox's Self variant already decided this hit may happen: the prediction runs it as an
 		// ordinary enemy hit. The inbox entry keeps the real relationship
 		Incoming.Relationship = Candidate.Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Candidate.Relationship;
 		Incoming.Up = In.Up;
 		Incoming.AttackerFacing = AttackerFacing;
+		Incoming.Frame = In.Frame;
 		const FGSTN_HitShape* VictimShape = Victim.FindHurtboxShape(Candidate.HurtboxIndex);
 		const FVector VictimCenter = VictimShape ? ShapeCenter(*VictimShape, Victim.Transform) : Victim.Transform.GetLocation();
 		Incoming.HitboxToVictim = (VictimCenter - Candidate.HitboxCenter).GetSafeNormal(UE_SMALL_NUMBER, AttackerFacing);
@@ -375,9 +377,12 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 
 		if (!Hit.bRicochet)
 		{
-			// The consequences the attacker predicts: the hit is confirmed (the gate of OnHit cancels) and its own hitstop opens. OnBlock stays
-			// false until shields exist (M6)
-			Core.Hit.HitConfirmFlags |= GetConfirmBit(Group);
+			// The consequences the attacker predicts: the hit is confirmed (the gate of OnHit cancels) and its own hitstop opens. A parried hit
+			// confirms nothing (M6 F7: the punish follows; OnBlock stays false, a blocked hit confirms like a hit)
+			if (!Context.Outcome.bParried)
+			{
+				Core.Hit.HitConfirmFlags |= GetConfirmBit(Group);
+			}
 			if (Context.Outcome.bHasKnockback)
 			{
 				Hit.AttackerHitstopFrames = FMath::Max(Context.Outcome.Knockback.AttackerHitstopFrames, 0);

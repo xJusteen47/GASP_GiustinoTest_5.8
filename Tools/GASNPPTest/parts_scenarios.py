@@ -727,6 +727,22 @@ def _rise(samples):
     return (max(x['loc'][2] for x in samples) - samples[0]['loc'][2]) if samples else 0.0
 
 
+def _owner_follows_rise(srv, cli, ticks=16, tol=1.0):
+    """(ok, matched, asked, worst cm): the owner has, for each of the first `ticks` rising sim ticks of the authority (velocity up), a tick at the same
+    sim time within `tol` cm of the authority's position. A sim time can hold the owner's first prediction and its re-simulation; any of them may
+    match (the prediction of a rising tick sits on the floor, so it cannot match by accident). Positions, not velocities: see launched()"""
+    rising = [x for x in srv if x['vel'][2] > 1.0][:ticks]
+    by_ms = {}
+    for x in cli:
+        by_ms.setdefault(x.get('ms'), []).append(x['loc'])
+    worst, matched = 0.0, 0
+    for x in rising:
+        d = min((math.dist(x['loc'], p) for p in by_ms.get(x.get('ms'), [])), default=float('inf'))
+        worst = max(worst, d)
+        matched += d <= tol
+    return len(rising) >= 8 and matched == len(rising), matched, len(rising), worst
+
+
 def scenario_part_ricochet(client=1):
     """P8. c1 hits c2's armoured plate (ArmR, hardness 3) with the light test move (penetration 0): the band below ricochets. Judged on the authority, the
     attacker's client and the victim: one hit flagged as a ricochet, predicted identically on the attacker's client (same row); the attacker recoils (recoil
@@ -904,13 +920,24 @@ def scenario_part_break_launch(client=1, cap=12.0):
         return f
 
     def launched():
+        # The owner's launch is judged on its positions, not its peak speed. The owner learns of the hit after the launch frame and re-simulates
+        # the rise; the test recorder samples velocity and mode in PreSimulationTick, where Mover still reports the pre-rollback state during a
+        # re-simulation (the owner's re-simulated ticks sat at the authority's height to 0.1 cm while reading Walking, 0 cm/s). So the owner's
+        # peak speed was the speed of its first forward tick after the correction, 540 - 15.68 per tick of lead: 9 to 16 ticks across the P14
+        # and F7 sweeps, a latency reading that failed the old > 300 threshold past 15 ticks (F7 bisect, pbl-diag.jsonl). The authority keeps
+        # the speed check; the owner must re-simulate the authority's rise tick for tick. Owner windows are compared on the hitstop only (as
+        # _HitRig does): a correction after the hitstun end arrives canonical, without the hitstun end.
         stag = _staggered_on(rig, 'h3')
         wins = _windows_after_hit(rig, 'h3')
+        own = list(dict.fromkeys(w[:2] for w in wins[1]))
         rises = (_rise(S['h3']['srv']), _rise(S['h3']['cli']))
-        speed = (max((x['vel'][2] for x in S['h3']['srv']), default=0.0), max((x['vel'][2] for x in S['h3']['cli']), default=0.0))
-        ok = all(stag) and len(S['h3']['hits']) == 1 and len(wins[0]) == 1 and len(wins[1]) == 1 and wins[0][0][:2] == wins[1][0][:2]
-        ok = ok and min(rises) > 30.0 and min(speed) > 300.0
-        return ok, f"staggered {stag}, windows {wins}, rise (authority, owner) {rises}, peak vertical speed {speed}, hits {S['h3']['hits']}"
+        speed = max((x['vel'][2] for x in S['h3']['srv']), default=0.0)
+        track = _owner_follows_rise(S['h3']['srv'], S['h3']['cli'])
+        ok = all(stag) and len(S['h3']['hits']) == 1 and len(wins[0]) == 1 and len(own) == 1 and wins[0][0][:2] == own[0]
+        ok = ok and min(rises) > 30.0 and speed > 300.0 and track[0]
+        return ok, (f"staggered {stag}, windows {wins}, rise (authority, owner) {rises}, authority peak vertical speed {speed}, owner rise ticks "
+                    f"matched {track[1]}/{track[2]} (worst {track[3]:.2f} cm), owner peak speed {max((x['vel'][2] for x in S['h3']['cli']), default=0.0)}"
+                    f" (latency, not judged), hits {S['h3']['hits']}")
 
     def same_place():
         spots = [tuple(g.snap(g.worlds()[w])[rig.vkey]['location']) for w in range(len(g.worlds()))]

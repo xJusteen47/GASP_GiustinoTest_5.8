@@ -3,6 +3,7 @@
 #include "Loadout/GSTN_LoadoutRules.h"
 #include "Modules/ModuleManager.h"
 #include "Simulation/GSTN_CombatTableSet.h"
+#include "Simulation/GSTN_FragmentNetworkVersion.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatNP"
 
@@ -21,11 +22,14 @@ public:
 	virtual void StartupModule() override
 	{
 		UGSTN_LoadoutRules::RegisterValidator(TableLimitsValidatorId, &FGSTNCombatNPModule::ValidateTableLimits);
+		// A client whose combat sync fragments differ from the server's is refused at connect (FGSTN_FragmentNetworkVersion)
+		FGSTN_FragmentNetworkVersion::Install();
 	}
 
 	virtual void ShutdownModule() override
 	{
 		UGSTN_LoadoutRules::UnregisterValidator(TableLimitsValidatorId);
+		FGSTN_FragmentNetworkVersion::Uninstall();
 	}
 
 	static FGSTN_LoadoutRuleResult ValidateTableLimits(const FGSTN_LoadoutRulesView& View)

@@ -76,16 +76,20 @@ struct FGSTN_ReactionRequest
 	/** The frame of the hit the request belongs to; stamped by the victim step before the appliers run, INDEX_NONE outside it */
 	int32 Frame = INDEX_NONE;
 
+	/** The launch never becomes a tumble, however fast (a shield break goes straight up and lands on its feet, M6 F7). Follows the launch that wins the merge */
+	bool bNoTumble = false;
+
 	bool HasLaunch() const { return !LaunchVelocity.IsNearlyZero(); }
 	bool IsSet() const { return MinHitstunFrames > 0 || HasLaunch(); }
 
-	/** Adds a request of another source: the longer floor, the faster launch */
-	void Merge(int32 InMinHitstunFrames, const FVector& InLaunchVelocity)
+	/** Adds a request of another source: the longer floor, the faster launch (and that launch's tumble rule) */
+	void Merge(int32 InMinHitstunFrames, const FVector& InLaunchVelocity, bool bInNoTumble = false)
 	{
 		MinHitstunFrames = FMath::Max(MinHitstunFrames, InMinHitstunFrames);
 		if (InLaunchVelocity.SizeSquared() > LaunchVelocity.SizeSquared())
 		{
 			LaunchVelocity = InLaunchVelocity;
+			bNoTumble = bInNoTumble;
 		}
 	}
 };

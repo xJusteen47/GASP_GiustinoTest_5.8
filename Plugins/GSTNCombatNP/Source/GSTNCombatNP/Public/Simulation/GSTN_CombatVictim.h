@@ -67,6 +67,8 @@ struct FGSTN_VictimTickInput
 
 	/** The victim's sync fragments, handed to the outcome appliers; may be null */
 	FGSTN_SyncFragmentArray* Fragments = nullptr;
+	/** The whole step snapshot Self belongs to, for the attacker's extension blobs of a hit (FGSTN_ResolvedHit::AttackerExtensions, M6 F10); may be null */
+	const FGSTN_StepSnapshot* Snapshot = nullptr;
 };
 
 /** Why a combatant was knocked out; None for a frame that knocked nobody out */
@@ -184,6 +186,12 @@ struct FGSTN_ReactionStepInput
 
 	/** Fraction of the knockback the victim resists (the KnockbackResistance attribute) */
 	float KnockbackResistance = 0.f;
+
+	/**
+	 * Optional DI in place of the rules' (M6 F8: a tick extension's OverrideDI, the defence's DI rules): (Launch, StickOnPlane, Up, YawFallback,
+	 * OutVelocity) -> whether it decided. Unset or false: UGSTN_HitMathUtils::ApplyDI with Rules->DI. Pure, like the step
+	 */
+	TFunction<bool(const FVector&, const FVector&, const FVector&, const FVector&, FVector&)> DIOverride;
 };
 
 /**
@@ -199,6 +207,12 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 * same view.
 	 */
 	static FGSTN_HitVictimView MakeVictimView(const FGSTN_SnapshotEntry& Victim, const UGSTN_CombatRules* Rules);
+
+	/** Points the view's extension slots (and its single pointer, the lowest id) at the blobs of Set, which must outlive the view's use */
+	static void SetViewExtensions(FGSTN_HitVictimView& View, const FGSTN_SnapshotExtensionSet& Set);
+
+	/** Points the hit's attacker extension slots at the blobs of the attacker's entry (M6 F10); null clears them. The entry must outlive the hit's run */
+	static void SetAttackerExtensions(FGSTN_ResolvedHit& Incoming, const FGSTN_SnapshotEntry* Attacker);
 
 	/** The weight scale the health weight curve gives a victim with this damage, 1 when no curve applies. Written into the snapshot for the attacker's machine */
 	static float ComputeWeightScale(const UGSTN_CombatRules* Rules, const UGSTN_HurtboxSetDefinition* Hurtboxes, double DamagePercent, float HealthFraction);

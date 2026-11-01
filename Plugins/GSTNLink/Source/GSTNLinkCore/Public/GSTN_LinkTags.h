@@ -139,6 +139,9 @@ namespace GSTNLinkTags
 	/** Down throw command of the grabber role. Part of the standard command set */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Throw_Down);
 
+	/** Attack command of the latcher role (a move whose hitbox lands only on the partner it rides). Part of the standard command set (F12b) */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Latch_Attack);
+
 	/** Locks the link command family. An ordinary count granted by abilities and effects */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Input_Lock_Command_Link);
 

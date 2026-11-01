@@ -16,6 +16,10 @@
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_InputSettings.h"
+#include "Input/GSTN_ButtonMap.h"
+#include "Input/GSTN_InputScript.h"
+#include "Input/GSTN_SlotResolver.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Input/GSTN_InputTags.h"
 #include "Input/GSTN_StandardSlots.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
@@ -462,6 +466,33 @@ bool FGSTN_DefenceGASShieldRestoreRequestTest::RunTest(const FString& Parameters
 	LastMirrored = 50.f;
 	TestTrue(TEXT("a hand-applied loss"), UGSTN_GE_ShieldDamage::Apply(ASC, nullptr, 7.f));
 	TestEqual(TEXT("seen as a negative request"), UGSTN_GE_ShieldRestore::RequestedDelta(ASC, LastMirrored), -7.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceGASShieldBindingMatchesTest, "GSTNDefence.GAS.ShieldBindingMatchesPress", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FGSTN_DefenceGASShieldBindingMatchesTest::RunTest(const FString& Parameters)
+{
+	// The slot the loadout compiles for the shield, resolved against a press of the shield button (M6 F7: found by the harness)
+	const FGSTN_BindingInput Binding = UGSTN_DefenceLibrary::MakeShieldBindingInput(FSoftObjectPath());
+	TestTrue(TEXT("a slot override"), Binding.bHasSlotOverride);
+	const TArray<FGameplayTag> Tags = { GSTNCombatButtonTags::Button_Attack.GetTag(), GSTNCombatButtonTags::Button_Shield.GetTag() };
+	TStrongObjectPtr<UGSTN_InputSettings> Settings(NewObject<UGSTN_InputSettings>(GetTransientPackage()));
+	Settings->DefaultBufferFrames = 8;
+	for (const TCHAR* Notation : { TEXT("5:+Shield"), TEXT("5:+Shield 9:-Shield") })
+	{
+		FGSTN_InputScript Script(Tags);
+		FString Error;
+		FGSTN_InputHistory History;
+		const bool bPlayed = Script.Parse(Notation, Error) && Script.Advance(History, *Settings, Script.GetLastFrame());
+		TestTrue(*FString::Printf(TEXT("script %s plays (%s)"), Notation, *Error), bPlayed);
+		const FGSTN_ButtonMap Map(Tags);
+		TArray<const FGSTN_InputSlotSpec*> Slots = { &Binding.SlotOverride };
+		FGSTN_ResolveParams Params;
+		Params.Buttons = &Map;
+		Params.Now = History.GetLatestFrame();
+		const FGSTN_SlotResolution Resolution = FGSTN_SlotResolver::Resolve(Slots, History, Params, *Settings, [](int32) { return true; });
+		TestEqual(*FString::Printf(TEXT("%s starts the shield"), Notation), Resolution.SlotIndex, 0);
+	}
 	return true;
 }
 

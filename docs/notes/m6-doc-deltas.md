@@ -117,3 +117,515 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
 - Tests: `GSTNDefence.GAS.{AttributeClamp, ShieldBindingOmittedWhenUnavailable, ShieldAbilityRefusesWhenUnavailable, TechSetPerKit,
   GetupNeutralRequiresKnockdown, ShieldRestoreSeenAsRequest}` (the plan's six names; the ability tests exercise the decisions and data the
   F7 ability classes call) plus `GSTNCombat.GAS.Loadout.ExtensionHooks`.
+
+## F7: GSTNDefenceNP part 1 (F7a fragment, snapshot, clocks, abilities; F7b steps, applier, punish)
+
+- **Module deps**: `GSTNDefenceNP` also lists `AbilitySystemSimulation` (the `UNpGameplayAbility` base of `UGSTN_GA_BaseCombat`, needed to link
+  the five ability classes) and `Mover` (the push back move); the uplugin lists both plugins. No GSTNLink module.
+- **Action states are derived, not stored** (spec 5.1 adds `ShieldStun`, `ShieldBroken`, `Punished`, `Knockdown` to `EGSTN_ActionState`):
+  the core enum is untouched; the states are the frame against the fragment's end stamps and the `Breaking` flag, `BlocksActions` (F2) vetoes
+  every command while any holds, and the tags are projected from them. A window that runs out needs no clearing.
+- **Combat seams** (GSTNCombatNP/Core): the snapshot entry and the victim view carry one blob per contributor (`FGSTN_SnapshotExtensionSet`,
+  two at most, ascending type id; parts and defence both contribute; `MaxContributors` 2); `FGSTN_TrackHookEnvironment` (the button map and
+  the entity's fragments) and the track index reach the track hooks; `IGSTN_CombatTickExtension::HeldCancelConditions` (OnParry) feeds the
+  cancel gate; `FGSTN_ReactionRequest::bNoTumble`; `FGSTN_ResolvedHit::Frame` (the hit's stamped frame, what every defence window is
+  tested against); `FGSTN_SnapshotContributorContext::ActionState` (no bubble in a hit reaction).
+- **Hold stall**: the hold hook stalls the timeline ON the hold frame (the frame the previous tick evaluated) while the button is held or
+  the shield is stunned, so the out-of-shield cancel windows of that frame stay open; the button is read from the history at the end of F-1
+  (the combat tick samples input after the clock step): a release is seen one frame late, the same on every machine.
+- **Push back is not a reaction request**: the request seam always staggers (a launch or a hitstun floor), which would end the shield. The
+  block's push back is queued in the fragment and given at the hitstop end as `UGSTN_GE_PushBack` (the victim side push back move: a slide,
+  no tumble). The break's upward launch does use the request (`bNoTumble`).
+- **Shield value at the hit**: the snapshot's value at the snapshot frame minus the shield damage, re-stamped at the hit frame (at most one
+  frame of drain apart from the exact value; identical on every machine, which read the same snapshot).
+- **Restore request**: `RequestedDelta` is applied by the tick extension at the frame it is seen (after clocks), not by the applier at F+1.
+- **Meter**: a blocked hit gives the attacker the combat rules' per-damage meter; the defender's small gain (block and parry) is not applied,
+  the victim side has no meter request path yet (F14 or a combat seam).
+- **Parry immunity**: only the victim's `Combat.Immunity.Parry` (snapshot bit); `FGSTN_HitData` has no tag container for the hit side.
+- **`bCloseOnParry`** of the parry track rides in bit 7 of `MoveParryProfile` (fragment and snapshot); profiles stay below 16.
+- **Perfect shield advantage**: the tick extension ends the shield timeline at `ParryRecoveryEndFrame` (the spec's "actionable early"), so no
+  cancel window content is needed. A move parry keeps playing; its `OnParry` cancel windows open from `LastParryFrame`.
+- **Punish**: inbox kind `GSTNDefenceInboxKinds::Punish` = 16 (the first defence id); `PunishEndFrame = max(hitstop end, frame) + stun`,
+  the running timeline cancelled, the hitstop extended (with a freeze request) only where the attacker's own prediction did not open it.
+  A profile with no attacker stun sends no entry ("advantage only"). A parried hit no longer sets the attacker's hit confirm (OnHit
+  cancels); a blocked one does (OnBlock stays unimplemented).
+- **Events**: `Combat.Event.Parried` (magnitude = `EGSTN_ParrySource`), `Combat.Event.Blocked`, `Combat.Event.ShieldBroken`, from the
+  applier's `AppendEvents`; the core's `HitLanded`/`HitReceived` still fire for a blocked or parried hit.
+- **Step placement**: `UGSTN_DefenceContentLibrary::AddDefenceStepsToRules` puts Parry then Shield after `HurtboxReaction` (the core's
+  placeholder note), so before `HealthWeight`/`PartResolve` and `ComputeKnockback`. Both steps live in `GSTNDefenceNP` (they read the NP
+  snapshot extension), not in Core like `PartResolve`.
+- **The bubble is any extra hurtbox** of the entity (only the defence contributes extras today); a second contributor of extras would need
+  the bubble's position in the extension.
+- **Snapshot build reads the ASC** (immunity tags, the attribute set's rates and multiplier) at the end of F-1, as the spec states; the
+  steps and the applier read only the snapshot and the fragment. `ResolveParryTrack` reads the combat component's table set (content) to
+  find the running track.
+- **The shield ability's frames** are class defaults (`StartupFrames`, `ReleaseFrames` on `UGSTN_GA_Shield`, timeline built on the CDO),
+  not built from the rules at grant: a kit whose rules differ names a child class with the matching frames.
+- **Found by the harness and fixed in F7**: (1) the F6 shield binding `Press(Shield)` + `Hold(Shield, 0)` in one step was refused by the loadout
+  validator (its canonical input pressed a held button), so no kit with a shield loaded: now `Press(Shield)` only (the hold is the timeline's
+  hold window), test `GSTNDefence.GAS.ShieldBindingMatchesPress`; (2) `UGSTN_GA_Shield::CanActivateAbility` read `Input.Context.Grounded` from
+  the ability system, where it never is (it is a context tag of the input provider): the binding's requirement owns it now; (3) the mirror was
+  written unquantised and any difference >= 0.01 read as a restore request, so the regenerating shield was re-stamped at machine-dependent
+  frames: the mirror gets the quantised value and a request is at least one quantum (0.25 point).
+- **Test content**: two data assets, `/GSTNDefence/Test/DA_DefenceRules_Test` (PvP) and `DA_DefenceRules_TestPvE`, from
+  `Tools/GAS/setup_defence_link_content.py` (`.gitignore` gains `!Plugins/GSTNDefence/Content/`). No `GA_Shield_Test` / `GA_CounterTest`
+  Blueprints: the native `UGSTN_GA_Shield` matches the test rules' frames and `UGSTN_GA_CounterSample` (new, `GSTNDefenceNP`: parry window over
+  frames 2..14, profile "Counter", `OnParry` cancel into `Command.Attack`) is the counter move. The bubble radius of the test rules is 95 cm
+  at the capsule middle (the test pawn's origin), so it covers `HBS_Test_Pawn`.
+- **Harness** (`defence_scenarios.py`): the kit, the input config (`Input.Button.Shield` appended, before PIE) and the combat pipeline are
+  changed in memory only; the parry scenario widens the perfect-shield window and the bubble's release frames to 30 frames in memory so a
+  scripted release survives 60/15 ms (and 2 % loss); the break scenario uses a 7 point shield draining 0.02 a frame. `scenario_grab_shield`
+  is a stub (pure grab-type checks) until F12. A hit the attacker lands on a just-broken bubble through lag compensation resolves on the victim
+  as a body hit (the victim's own snapshot has no bubble): accepted behaviour.
+- `UGSTN_DefenceContentLibrary` gains `AddDefenceStepsToRules`/`RemoveDefenceStepsFromRules` and a per-world defence event log
+  (`StartDefenceEventLog`, `GetDefenceEventLog`, `StopDefenceEventLog`; debug only).
+- **`part_break_launch` with GSTNDefence enabled (HANDOVER 52 open item, closed in HANDOVER 53)**: not a defence regression. Every defence
+  piece (tick extension, contributor, hooks, applier, punish handler) early-outs for an entity with no defence data, which is the parts test
+  pawn. The failing quantity was the owner's peak vertical speed, a latency reading: the owner learns of the hit after the launch frame and
+  re-simulates the rise, and the test recorder samples Mover velocity and mode in `PreSimulationTick`, where a re-simulated tick still reports
+  the pre-rollback state (Walking, 0 cm/s) while its position already matches the authority's to 0.1 cm. The owner's peak was therefore the
+  speed of its first forward tick, 540 - 15.68 per tick of lead (9 to 16 ticks across the P14 and F7 sweeps; > 300 fails past 15). The check
+  now keeps the speed threshold on the authority and asks the owner to follow the authority's first 16 rising ticks within 1 cm
+  (`_owner_follows_rise`); owner windows are compared on the hitstop only, as `_HitRig` does (a correction after the hitstun end arrives
+  canonical, hitstun end -1). Any harness check that reads owner velocity or mode from re-simulated sim ticks has the same blind spot.
+- Tests (17 NP + 1 GAS): `GSTNDefence.NP.Fragment.{RoundTripIdleOneBit, ActiveBytesWithinTable, Interpolate, ForcedRollbackTakesAuthority}`,
+  `.Snapshot.{BubbleContributed, NoBubbleWhenUnavailableOrHitstunOrBroken, RulesIndexPerEntity}`, `.Tick.{HoldStallsTimelineNotClock,
+  VetoWhileStunned, TagsProjected}`, `.Steps.{ParryBeforeShieldOrder, ShieldBlockNoDamage, BodyHitWhileRaisedContinues, BreakLaunchUp,
+  GrabPassesThroughBubble, ModeOffSkipsShieldNotParry, OutgoingPunishPosted}`.
+
+## F8: GSTNDefenceNP part 2 (landing, downed, get-ups, optional tech, DI rules, SDI drift)
+
+- **Core seams added to GSTNCombatNP (neutral, no defence knowledge)**:
+  - `FGSTN_LayeredMove_Freeze::DriftVelocity` (OverrideAll velocity of a freeze, one bit on the wire when zero) and
+    `UGSTN_FreezeMoveCreator::bDriftFromSetByCaller` (the drift from `Combat.SetByCaller.Move.Velocity.X/Y/Z`, priority 1 above the hitstop
+    freeze, finish keeps the velocity).
+  - `FGSTN_HitSyncState::SDICount` (uint8, reserved) renamed `SDIDistanceUsed` and widened to uint16 in 1/8 cm (`SDIUnitsPerCm`); the
+    victim step resets it on every staggering hit. Test `GSTNCombat.NP...HitState` updated for the rename only.
+  - `FGSTN_CombatTickContext` gains `StickOnPlane`, `Stick` (the frame's command), `Up`, `Buttons` and `Services`
+    (`IGSTN_CombatTickServices::StartForcedTimeline`, implemented by the combat component: step 8's start with source Forced plus an
+    `ActivateEntry` request). The pre-tick now executes `ActivateEntry` (it existed as a type with no executor), under the command
+    activation scope: a non-command activation is refused by `UGSTN_GA_Base`'s interrupt policy while a timeline runs, and the forced
+    timeline is already the running one when its ability activates (found in PIE: the bounce timeline ended after one frame).
+  - `IGSTN_CombatTickExtension` gains `AdmitsOnlyBindingsRequiring` (the gate passes only bindings whose requirements hold the tag),
+    `ConsumeTumbleContact` / `OnTumbleContactResolved` (called by the victim step around `StepImpact` for a new contact, same conditions as
+    the impact; the hooks run before the frame's tables are chosen, so their context has no services) and `OverrideDI` (wired through
+    `FGSTN_ReactionStepInput::DIOverride` into `StepReaction`, the existing hit-state path at the hitstop end). `RunVictimStep` takes the
+    frame's input state and reads the contact whenever an extension is registered, not only with an impact table.
+- **Downed state is not a veto** (F7 had Knockdown in `BlocksActions`): it admits only the bindings that require
+  `Combat.State.Knockdown`, so the neutral get-up (jump slot) and the get-up attacks can start; F7's test `Tick.VetoWhileStunned` now
+  checks this. The downed movement lock is an infinite effect `UGSTN_GE_DownedLock` (`Combat.Lock.Movement`, read by the stats movement
+  modifier), applied and removed on the tag projection from `IsKnockedDown`.
+- **No contact modifier**: the spec's `FGSTN_TumbleContactModifier` is not added; M4's knockback probe already records floor and wall
+  contacts (`FGSTN_TumbleContactSyncState`), and F8 reads that record through the hooks. `Combat.Mover.Tumble` stays unused.
+- **Landing rules**: no tech set: `KnockdownEndFrame` = contact + `MaxDownedFrames`, or never (MAX_int32) for 0; a kit with a tech set
+  that missed: contact + `KnockdownFrames` + `NoTechKnockdownBonusFrames` (spec 6 algorithm). The bounce stick is the command of the
+  frame the model sees the contact (contact + 1). The bounce is a knockback move (flight time from the rise), the ground bounce ability
+  starts Forced at AfterClocks of the same frame (the decision is carried in the fragment's pending start, empty at the end of the tick).
+  Holding the stick (|stick| >= 0.5) once the bounce timeline is over starts the get-up roll Forced; the roll's direction is content
+  (the thin class has no movement track).
+- **Tech**: presses come from the history up to the end of the previous frame, so `LateFrames` presses after the contact cannot count
+  (evaluated at contact + 1; the default is 0). The kind: wall -> WallTech, or WallJumpTech with the stick away from the wall (dot > 0.5);
+  floor -> InPlace with a neutral stick, else RollRight/RollLeft by the physical stick's x; a kind without an ability falls back to
+  InPlace/WallTech. Tech moves: in place and wall techs hold still (the core's at-rest freeze) for their frames, a roll slides
+  `RollDistance` over `RollFrames`, the wall jump tech launches off the wall at the same speed (no rule fields for its motion yet). A wall
+  tech failure with no impact outcome keeps M4's behaviour (no extra reflect).
+- **SDI**: drift frames are the victim's hitstop frames but the last (the hitstop freeze hands back its velocity on the frame after; a drift
+  finishing with it would fight it); the used distance is stored rounded up to 1/8 cm, so the quantised total never passes the cap.
+  `SDIBlocked` (throw, armored unless allowed, stagger-in-place tier per the rules) and `DIDisabled` are recorded at every hit in the
+  fragment's `HitFlags` by the outcome applier: the Parry step now appends a pass-through outcome (Result None) for every hit it lets go
+  on, so the applier sees it (the step tests read the deciding outcome, the last one).
+- **Fragment**: + `HitFlags`, `PendingStartFrame/Kind` (presence bits 10 and 11; everything live 2 + 91 bytes).
+- **Attach data**: + the kit's ground bounce, roll and tech classes (`FGSTN_DefenceAttach::SetKitMoves`, loaded where the loadout compiles).
+- **Content and harness**: `UGSTN_DefenceContentLibrary::SetKitDefenceMoves` (the native landing and tech classes on a kit, in memory) and
+  `GetSDIDistanceUsed`; the state string gains `techlock techpress techend techtype down hitflags`; the defence event log records Teched and
+  KnockedDown. The four thin classes get a plain `TotalFrames` timeline. Scenarios `landing_bounce` and `landing_getup` (the plan's one
+  landing scenario split in two: its second shot found the attacker turned by the first), `tech_ground`, `tech_wall` (the impact_wall
+  layout: a Wall test surface the wall mode slides on), `sdi` (the asset's SDI values); the tech scenarios widen the window to 60 frames in
+  memory and force a reconcile of the victim's client after the press. The get-up press is the combat button (`combat_tap` of Jump): the
+  `press('jump')` helper drives the movement input action only.
+- Tests (12 NP): `GSTNDefence.NP.Landing.{BounceSteered, DownedThenGetupRoll, GetupAttackFromSlot, JumpGetsUp, MaxDownedFrames,
+  TechSuccessCancelsImpact, TechFailureResolvesImpactFirst, NoTechSetNoLockout}`, `.DI.RulesOverloadApplied`,
+  `.SDI.{DriftSweptByMover, MaxDistancePerHit, ThrowBlocksSDI}`. The move effects check the avatar has a Mover first (a test rig has none).
+
+## F9: GSTNLinkGAS registry, requirements, interact provider, anims by role
+
+- **Asset scanning (Step 0, 0942df4) is plugin-owned, not a root ini line.** `GSTNLinkCore`'s module registers the primary asset type
+  `GSTN_LinkType` when the asset manager is created (`UAssetManager::CallOrRegister_OnAssetManagerCreated`,
+  `ScanPathsForPrimaryAssets` over `/GSTNLink` when that mount exists plus the new setting `UGSTN_LinkSettings::LinkTypeDirectories`,
+  base class `UGSTN_LinkTypeDefinition`, no Blueprint classes, not editor only, `CookRule = AlwaysCook`). Reason: a
+  `PrimaryAssetTypesToScan` line in `Config/DefaultGame.ini` naming `/Script/GSTNLinkCore.GSTN_LinkTypeDefinition` makes the engine
+  `ensure` ("Failed to load class ... for Primary Asset Type", `FPrimaryAssetTypeInfo::FillRuntimeData`) in every build where GSTNLink
+  is disabled, which is the default. No root ini changed; `/Game/GASNPPTest` is not scanned yet because no link type asset lives there:
+  the project adds it with one `+LinkTypeDirectories=(Path="/Game/GASNPPTest")` line in its own `Config/DefaultGSTNLink.ini` when the
+  first one does (F11/F12). Closes HANDOVER 50 open item (3) and the F5a delta "owner edit: F9". If a project also lists the type in its
+  ini it must use the same base class and flags, or the asset manager reports a mismatch.
+- **`GSTNInteractCore` exists on the branch**, so the provider implements `IGSTN_InteractCandidateProvider` and the plan's fallback
+  projection is not built. `GSTNLink.uplugin` now depends on the `GSTNCombatGAS` and `GSTNInteract` plugins (GSTNInteract is enabled in
+  the committed `.uproject` already). Provider id `GSTNInteractProviders::LinkEntities = FirstConsumer` (16) is allocated in the central
+  id list of `GSTN_InteractTypes.h` (one line in GSTNInteract, the file its comment names as the only place for ids).
+- **`UGSTN_LinkRegistry` is an engine subsystem**, not a world one: the table is content, shared by a listen host and its PIE clients in
+  one process. It builds when the asset manager completes its first scan (`CallOrRegister_OnCompletedInitialScan`) and on demand
+  (`Get()` builds if needed, `RebuildFromAssetManager`), never by itself afterwards, so it cannot change under a match. Code-made
+  definitions join through `AddDefinition` / `RemoveDefinition` (the acceptance path: a test module registers a type without touching
+  GSTNLink); `Build(Definitions)` is the pure entry point. Wire index = 1-based rank of the type tag's name (case-sensitive), so it depends
+  on the set, never on load order; duplicates keep the definition whose path sorts first; more than `MaxLinkTypes` (255) are reported.
+  `GetSignature()` (CRC of the table and the plugin reasons) tells two machines with different sets apart; nothing compares it yet (F10's
+  content signature can).
+- **Skipped definitions**: the registry runs `UGSTN_LinkTypeDefinition::Validate`, the same function the asset's `IsDataValid` reports
+  (F5a), logs `Link registry: Skipped <path>: <problem>` as a warning and keeps the lines in `GetBuildErrors()`. No editor-only validator
+  was added: the definition's own `IsDataValid` already reports unregistered tags.
+- **Reason table** `FGSTN_LinkReasonTable`: generic reasons keep the `EGSTN_LinkBreakReason` indices (through `UGSTN_LinkMath::BreakReasonTag`
+  / `BreakReasonFromTag`, so the core's break math needs no lookup); plugin reasons take `FirstPlugin` (16) on, sorted by tag name, so
+  the registration order does not matter. Plugins register by tag NAME from their module startup (`UGSTN_LinkRegistry::RegisterPluginReason`,
+  a static list, because no registry exists that early); each build appends the names that resolve. An append re-sorts, so indices are
+  fixed only once the registry is built (before a match).
+- **Requirement library** (`UGSTN_LinkRequirementLibrary`): `EvaluateRequest` = `UGSTN_LinkRule::CheckCommon` then the definition's rules in
+  order (first refusal wins; a definition with no rule is decided by the common checks), `ResolveDefinitions` (definition from the
+  registry, each side's `OtherChannelDefinition` from its other channel's type index), `ApplyKitRules`, `FindKitExtension`, `IsLinkLocked`
+  (`Combat.Lock.Link`, which `CheckCommon` already refuses as `TargetLocked`), `MeetsRequirements`, and `GetActionBlockingRoleTags`: the roles
+  that are parked AND do not act while linked (the grabbed; not the latcher, not the grabber whose pummels and throws are abilities), for the
+  base ability's activation block in F10/F11, so a plugin's parked role is blocked without being named. Everything per link type is data:
+  the drill's latch variant (spin-drill-plan 2b) is a definition plus its own `UGSTN_LinkRule` subclass, with no change here.
+- **Interact provider** (`FGSTN_LinkInteractProvider`, plain C++ implementing the interface): reads a `FGSTN_LinkInteractSource` through
+  `FGSTN_InteractQuery::HostContext` (type name `GSTNLinkInteractSource`): the interactor as a `FGSTN_LinkRequestSide`, the entities
+  (request side, location, radius) and the OFFERS (definition, `Interact.Target` meaning, reach, kit rules) in priority order. An entity is
+  offered under the first offer whose `EvaluateRequest` accepts it, so the pre-filter is exactly the target's LinkRequest decision
+  (`GrabLocked` by name, `Combat.Immunity.Grab`, immunity frames, weight, busy channels, `Combat.Lock.Link`). Candidate id
+  `{LinkEntities, entity id}`, reach override = the offer's reach (the kit's `InteractReachCm` for a grab), radius = the capsule, live for
+  every frame (the snapshot is the stamp). Arc, scoring, ties and the focus stay the probe's (`UGSTN_InteractMath`). `MakeGrabOffer` builds
+  the standard offer; a latch offer is the same struct with another definition and meaning. `ProjectTargetTag` (static) removes every
+  `Interact.Target` tag and adds the focus meaning only when actionable: the "one tag per frame" rule as a pure function the F10 link tick
+  extension calls (the plan put the projection in the tick extension; the function lives here so it is tested without NP).
+- **Anim selection** (`UGSTN_LinkAnimSelection`): `FGSTN_KitLinkAnims` per role tag already lived in `GSTNLinkCore` (F5a's
+  `FGSTN_LinkKitExtension::AnimsByRole`), so `GSTN_LinkAnimSelection.h` holds the selection only: weapon extension first, then kit (the M3
+  weapon anim layer being the more specific), soft classes never loaded; `SelectForLinkState` maps a state's type index and role through the
+  registry; `GatherRoleAnimLayers` lists them for a client preload. No runtime consumer of M3's kit/weapon anim layers exists yet
+  (`LocomotionAnimLayer` / `AnimLayer` are read by the editor preview only), so "consumed by the M3 anim pattern" means the same soft-class
+  data shape; the presentation link is F10/F11.
+- `LogGSTNLink` is now exported from `GSTNLinkCore` (`GSTNLINKCORE_API`) for the GAS module, as F6 did for `LogGSTNDefence`.
+- **Tests: six, one more than the plan's five**: `GSTNLink.GAS.Registry.{IndicesStableAcrossLoadOrder, UnknownTagSkipped, ReasonTableAppend}`,
+  `GSTNLink.GAS.Interact.{ProviderFiltersUngrabbable, OneTargetTagPerFrame}` and `GSTNLink.GAS.Anim.LayerByRole` (the anim selection had no
+  test name in the plan). The acceptance (a test-only type gets an index and roles without touching GSTNLink) is inside
+  `IndicesStableAcrossLoadOrder`: the test file declares `Combat.Link.Type.GSTNTestOnly`, `Combat.Link.Role.GSTNTestOnlyA/B` and
+  `Combat.Link.BreakReason.GSTNTestOnlyA/B` with `UE_DEFINE_GAMEPLAY_TAG_STATIC` under `WITH_DEV_AUTOMATION_TESTS` (test builds only; "no new
+  tags" holds for production). `ProviderFiltersUngrabbable` checks the `Combat.Part.GrabLocked` case only when GSTNParts registered the tag.
+- Gates (named logs in `Saved/Logs`): `build-f9-1` (Step 0), `build-f9-2`, `build-f9-link-off`, `build-f9-final` Succeeded;
+  `headless-f9-on-1.log` 1133 / 0 (1127 + 6, GSTNLink 37, GSTNDefence 75, no asset-manager ensure); `headless-f9-link-off.log` 1096 / 0,
+  no GSTNLink line, GSTNDefence 75, no ensure. PIE sweep skipped: nothing registers the provider or reads the registry at runtime before F10.
+
+## F10: GSTNLinkNP part 1 (F10a fragment, snapshot, tick, parked mode, presentation; F10b inbox kinds, steps, harness)
+
+- **Neutral combat seams** (GSTNCombatCore / GSTNCombatNP; with nothing registered they change nothing): `FGSTN_SnapshotExtensionSet` holds
+  THREE blobs (parts, defence, link; `MaxBlobs` 3, slots packed in ascending type id), `FGSTN_HitVictimView::MaxSnapshotExtensions` 3;
+  `IGSTN_SnapshotContributor::FinalizeSnapshot(Frame, Entries)` and `FGSTN_SnapshotContributorRegistry::Finalize`, called by the snapshot
+  build after the sort and before the grid and the history record (a parked entity is placed from its partner's entry); the resolved hit
+  carries the ATTACKER's blobs (`FGSTN_ResolvedHit::AttackerExtensions`, `FindAttackerExtension`; the victim step finds the attacker's
+  entry through the new `FGSTN_VictimTickInput::Snapshot`, the attacker's prediction its own entry); `FGSTN_CombatTickContext` gains
+  `Snapshot`, `AttackerHits` (from AfterExecute on, on a frame the attacker step ran) and `EntityId`.
+- **Action state Linked is derived** (as F7's defence states): no `EGSTN_ActionState` value; a parked role that does not act
+  (`bActsWhileLinked` false) is vetoed by `BlocksActions`, which also leaves it no candidates. Its running timeline is cancelled by the link
+  tick extension at AfterClocks on the frame the veto starts (an applier cannot reach the core). The `EnterLinked` request slot is not used:
+  the tick extension queues `FGSTN_LinkedModifier` on the parked edge and cancels it by tag on the edge out (the combat tick runs before
+  Mover, so Mover simulates it that frame).
+- **The parked mode is entered by the modifier's tag through a transition**: `UGSTN_LinkedModeTransition` (entry: any mode to the linked
+  mode while `Combat.Mover.Linked` is in Mover's state; exit, the linked mode's own: to Falling once it is gone). A project authors the
+  entry as a global transition; `FGSTN_LinkAttach` adds the mode and an entry transition to every mode of a pawn's Mover at attach. The
+  mode carries no tag of its own (a mode's tags count in the state query, so the exit would never fire).
+- **Baked socket** = the partner's skeletal mesh REFERENCE POSE socket (socket offset x bone component-space reference pose x the mesh's
+  offset from the actor root), baked at attach for every `SocketOnPartner` the registry knows (`FGSTN_LinkBodyData`, append-only table, the
+  snapshot carries its index). No per-frame bake of animated sockets; presentation follows the live socket (`bUseLiveSocket`).
+- **Every combat pawn is attached** (not only kits with a link extension): any entity can be grabbed and the sockets are the partner's.
+  Attach runs from the loadout extension `GSTNLinkNP`, and for pawns whose loadout never compiled (the harness pawns at PIE start) from
+  `UGSTN_LinkContentLibrary::RebuildRegistryAndReattach`.
+- **Request tags in the snapshot** are a 32-bit mask over `FGSTN_LinkRequestTags` (the immunity and lock tags, `Combat.Part.GrabLocked` by
+  name, then every tag the registered definitions' `RequestRequirements` and their grab and latch rules' defaults name, sorted by name). A
+  tag only a kit's own rules name is not in the table and reads as absent. The request weight is 100 x the snapshot's weight scale, for the
+  provider pre-filter and the step alike (the parts plugin's effective weight is not read).
+- **A refused request posts no response**: it does not stand (`bHit` false: the victim step posts nothing for it), which is what makes it
+  whiff with no hitstop on both sides. The common refusal (target busy, immune, locked) is predicted identically by the initiator; a
+  disagreement (simultaneous grabs) leaves the loser's predicted request to `RequestTimeoutFrames` (12), identical on every machine.
+  `LinkResponse{refused}` and its handler exist for later kinds. An accepted request Stops with `bNoDamage` and no knockback: no
+  grab-confirm hitstop in F10 (F12's grab content decides it).
+- **Not built (no link command exists before F12)**: the grabber's cancel window into `Command.Link.*` (spec 7.2 item 3, the
+  `LinkEstablished` buffer event) and PendingBreak on Release; `FGSTN_LinkTickExtension::MarkPendingBreak` is the hook F12's release uses.
+- **`LinkCommand` has a test and debug kind `Form`** (type, role, partner): the S1 spike forms its link by a server-side command posted to
+  both inboxes (`UGSTN_LinkContentLibrary::FormTestLink`), the plan's "linked by a server-side test command (no pipeline)". The simulation
+  never posts it. `Break` and `Place` are handled for F11; a break's exit record is dropped the frame after its own (otherwise an idle entity
+  carries 55 bytes of exit forever: measured 78 B per sync state after a break before the fix, 23 B after).
+- **`Interact.Target.Grab` is projected only for a kit with a link extension.** The probe reads other entities' snapshot positions, which a
+  client knows as interpolated proxies, so its answer is not prediction-stable: projected on every pawn it made the ability system model
+  reconcile (found by the spike: `Interact.Target.Grab : 1` in the server's state, absent in the client's). The probe is stateless (no
+  sticky focus in the fragment) and has no line of sight. A prediction-stable grab focus is an F12 item.
+- **Collision between the two capsules** is ignored from the presentation component's tick (both roots' `IgnoreActorWhenMoving`), not from
+  the simulation, so a frame late at the start; F11's exit request is where the restore belongs.
+- **Camera and aim**: the plugin exposes `GetLinkedTransform` and `IsLinkedParked`; the camera follow is the consumer's code (GSTNCamera is
+  outside this checkpoint).
+- **Connect refusal by the fragment registry (acceptance)**: no such rule exists. The fragment list is length-prefixed and a machine without
+  the plugin SKIPS fragment 18 (`FGSTN_SyncFragmentList::NetSerialize`); it does not refuse the connection. Not tested; the registry's
+  `GetSignature` compared at login would be the place for a refusal.
+- **S1 as built** (`link_scenarios.py`): presentation error = the grabbed pawn's shown transform on each world against the server's, after
+  removing the best constant delay of that world (-500..500 ms: the grabber's own client runs ahead, its partner's behind), p50 / p95 / max
+  over the walk's first 7 s; reconciles per client from the harness counter (one forced reconcile adds 2 to it), judged outside the forced
+  windows; the uninvolved observer judged over the held link only (the PIE start-up corrections land in a batch's formation window). Bytes
+  per second are not measurable from Python: a live grab's fragment is 23 B per sync state on each side, idle 0 B. No watchdog yet (no host
+  frame time with it); the latch pairing of S1 is covered by the unit tests only.
+- **Test content**: `/GSTNLink/Test/DA_LinkType_Grab_Test` (grab, the grabbed parked 90 cm in front of the grabber's root facing it, no
+  socket, the grab rule) from `Tools/GAS/setup_defence_link_content.py` `run_link()`; `.gitignore` gains `!Plugins/GSTNLink/Content/`. The
+  harness turns the test weapon's `Command.Attack.Neutral` into a grab in memory (`SetKitMoveHitType`) for `link_rollback`.
+- **Tests (17)**: `GSTNLink.NP.Fragment.{RoundTripIdleOneBit, TwoChannelsBytes, Interpolate}`, `.Formation.{AcceptedAtF1ResponseAtF2,
+  RefusedWhiffsNoHitstop, SimultaneousFirstWins, ChainRefused, PredictedClearedOnTimeout, SerialIdempotentAfterRollback, LatchParksInitiator}`,
+  `.Parked.{ModeEnteredByTag, HurtboxFromPartnerSocket, NoInputNoGravity, InitiatorFollowsMovingPartner}`, `.Tick.{GrabbedHasNoCandidates,
+  LatchedKeepsCandidates, TagsFromRole}`. Test-only types `Combat.Link.Type.GSTNTestOnlyNPGrab` / `NPLatch` and their roles live in the
+  test fixture (automation builds only).
+
+## F11: GSTNLinkNP part 2 (watchdog, break rules, exit placement, LinkBreakOnHit), with task A (input redundancy) and task B (fragment check at connect)
+
+- **Task A, the 2 % reconciles of client_grabs_host (OPEN 2 of HANDOVER 57): not the link.** The same walk with no link reconciled as often
+  (`link_probe_*` scenarios, 8 runs each way at 2 %: 10 walk reconciles with the link, 7 without, `taskA-probe-2pct.log`). The one-process PIE runs at
+  ~19 fps, so a client engine frame packs 3 to 9 fixed input frames into one packet, while the fork's redundancy was `FixedTickInputSendCount` (6)
+  FRAMES: the next packet re-sent only 2-3 frames of a lost one, and the server filled the rest with repeated inputs (a mismatch when the walk's
+  stick changed in them). No send was ever held by saturation (`np.Spike.LogInputSend`, new, off by default). Fix in the fork
+  (`SendFixedTickInputsToServer`): the copies cover the last 6 frames AND every new frame of the previous send, and a backlog no longer drops them
+  (only a send the connection held back does). After: 4 walk reconciles (1 / 3), server input gaps per run 4-20 -> 0-1
+  (`taskA-probe-2pct-fixed.log`, editor-A1 / -A2.log). What is left is server starvation by 100-256 ms editor hitches (logged per tick): it hits
+  both clients alike, the uninvolved observer included. Threshold not changed.
+- **Task B, connect refusal**: `FGSTN_SyncFragmentRegistry::GetSignature` (CRC of the registered (type id, struct path) pairs, ascending ids, test
+  ids 240+ excluded, 0 for none; the registry drops the engine's cached checksum when it changes) is folded by GSTNCombatNP into the engine's local
+  network version (`FNetworkVersion::GetLocalNetworkVersionOverride`, chaining a project override), so the engine's own Hello check refuses a client
+  whose set differs. `IsNetworkCompatibleOverride` (bound only if free) logs this machine's fragments on a mismatch. No RPC, no game mode code.
+  The engine returns its cached checksum even when asked for the base version, so `FGSTN_FragmentNetworkVersion::GetBaseVersion` recomputes it.
+  Tests `GSTNCombat.NP.FragmentVersion.{Signature, NetworkVersion}`; a PIE connect with GSTNLink off on one side cannot be made in one process:
+  NOT run.
+- **Watchdog cadence**: `UGSTN_LinkWatchdog` evaluates once per engine frame from `OnWorldPostActorTick`, after Network Prediction finalized the
+  frame (its FinalizeFrame runs in the pre-actor tick), on the latest frame F of the authority's states, and stamps its commands F. With several
+  fixed ticks per engine frame it sees only the latest; every cause is held state (a pending flag, a death, a distance, a timeout), so nothing is
+  missed and the break lands at F+1 of the latest frame (2 frames after the cause at one tick per frame). The documented net-mode exception:
+  `IsAuthority()` = net mode not NM_Client; nothing else in the link code reads a net mode.
+- **What it reads**: every registered entity (new neutral accessor `UGSTN_CombatWorldSubsystem::GetRegisteredEntityIds`), its combat component's
+  sync state (link fragment, `ActionState == KO` = death), the pawn's transform and capsule, its ability system tags (PartnerState). Server-side
+  state of its own: only the posted (entity, channel, serial) set that stops a command being posted twice while it waits for its frame.
+- **Distance** is the F5b fake host's rule: the parked entity's capsule against where the link expects it. The parked capsule stays where the grab
+  started (F10's parked mode), so `MaxDistanceCm` is a leash from that spot: a type whose holder walks keeps 0 (the default, as the S1 grab does).
+- **One reason per link**: a Serial-matched pair is decided by its lower entity id, own side first. An orphan (one side only, after
+  `OrphanGraceFrames` from its LinkFrame) breaks alone, Forced, posted to that side only.
+- **Exit**: only the definition's parked role gets an exit (`GSTNLinkExitFlags::Teleport`; `Fallback` when the placer found no free place,
+  logged); the other side keeps its place. The placer gets the staying side's transform and forward; the exit is quantised to floats (yaw only)
+  before it is posted, so the authority and the clients apply the same numbers. `FGSTN_WorldExitCollisionQuery` is a capsule overlap (ECC_Pawn)
+  that ignores EVERY combat pawn, not only the pair (deviation: a third pawn at the exit is not avoided).
+- **Teleport** (`FGSTN_LinkExitRequest`): on the frame the command's exit record is written, the link tick extension applies `UGSTN_GE_LinkExit`
+  (instant, `UApplyMoveGameplayEffectComponent` + `UGSTN_LinkExitMoveCreator` -> `FGSTN_LinkExitEffect` = Mover's teleport plus the exit velocity),
+  values as set-by-caller NAMES (no new tags); the parked modifier's cancel lands in the same Mover tick. Capsule collision is still restored by the
+  presentation component (F10), not here.
+- **Command fields** added to `FGSTN_LinkCommandEntry`: `ExitFlags` (copied to the exit record) and `ImmunityEndFrame` (raises the target's
+  `GrabImmunityEndFrame`). The grab immunity comes from the TYPE's grab rule (a `UGSTN_LinkRule_Grab` in the definition's Rules,
+  `ImmunityFramesAfterRelease` / `AfterThrow`), not the kit's rules (deviation: the kit's are not in the watchdog's views). No latch immunity: the
+  fragment has no latch field (deviation).
+- **Idle stays idle**: the reason a break leaves on an idle channel and a grab immunity that has run out are dropped by the tick extension
+  (a reason makes the state "live" on the wire, about 20 B per sync state forever).
+- **LinkBreakOnHit**: Body channel only; a hit that landed (not blocked or parried) on an Active role; the rule is `EvaluateBreak` with only the hit
+  filled in (`QualifiesForBreak`), so the role's `HitBreaks`, `MinKnockbackToBreak` and `bPartnerHitsBreak` are read in one place. It writes an
+  outcome extension (`FGSTN_LinkBreakOutcome`); its applier sets PendingBreak (reason Hit) on the victim's link of that serial; the watchdog breaks
+  it. `UGSTN_LinkContentLibrary::AddLinkStepsToRules` inserts it after MeterGain (no rules asset edited).
+- **Events**: `Combat.Event.LinkBroken` (Magnitude = reason index, the reason's tag in Tags, Instigator / Target = the two pawns) and
+  `GrabEscaped` for an Escape, through `UGSTN_SimEventSubsystem::Broadcast` from the watchdog (the server).
+- **Data-driven per type**: the watchdog names no type; the break rules, MaxFrames, the parked role and the placer are the definition's, the
+  immunity follows from the rule class. A drill latch needs only its definition and its rule.
+- **Not built** (unchanged from F10, no command before F12): PendingBreak on Release and the grabber's cancel window; `MarkPendingBreak` is the hook.
+- **Harness** (`link_scenarios.py`): `link_rollback_*` now breaks through the watchdog (a leash and the grabber moved 500 cm away) with forced
+  reconciles over the break frames; `link_break_distance_*` (three pairings: distance, then a knock-out of the grabbed, then of the grabber);
+  `grab_immunity` (immunity set to 120 frames in memory: a regrab inside it whiffs, one after it forms). A parked pawn is not moved by a teleport
+  into a KO zone (its combat position follows the partner): the zone is put 50-170 cm ahead of the grabber instead. In-memory content only.
+- **Tests (13)**: `GSTNCombat.NP.FragmentVersion.{Signature, NetworkVersion}`, `GSTNLink.NP.Watchdog.{BreakAtF1BothSides, OrphanAfterGrace,
+  StaleSerialIgnored, OnePathForPipelineBreaks}`, `.Break.{Distance, Timeout, Death, PartnerState, HitByRole}`, `.Exit.{NeverInsideGeometry,
+  DeterministicForEqualInputs}` (the test classes are prefixed `FGSTN_LinkNP*`: the Core tests own `FGSTN_LinkBreak*Test`, and a duplicate class
+  name is not registered, with only a warning).
+
+## F12: GSTNLinkNP part 3 (F12a grab commands, pummel, throws, mash, immunity, grab gate; F12b latch on big enemies)
+
+- **Commands as slots**: `UGSTN_LinkSlots::Build()` makes the standard slots (Grab and Release on a press of Interact, Pummel = Attack with a
+  neutral stick, Throw Forward / Back = Attack or Strong with a tilt, Up = Strong neutral, Down = Attack while Crouch is held, Latch.Attack =
+  a press of Attack). Each role slot is `RoleSlotPriorityOffset` (100) above the plain one, Throw.Down one more (it shares Attack with
+  Pummel), and every slot has `bFallThroughWhenUnavailable`: an unavailable link slot (Release while not linked) otherwise reserved the press
+  and the grab never came out. The Release bindings of each role ignore the other roles (`IgnoreTags`), so the loadout validator sees no
+  ambiguity. The harness's test input config has no Strong button, so the harness throws with Throw.Down (deviation).
+- **Command tier contribution** (new): `UGSTN_LinkSettings::CommandTiers` (`Command.Link` = 360) is pushed into the input settings at
+  module startup (source `GSTNLink`) and removed at shutdown. Without it the attack and strong tiers won every press the link commands
+  share.
+- **LinkEstablished and the cancel window**: there is no LinkEstablished buffer event (extensions have no seam to raise one, deviation). The
+  grab ability's `OnHit` cancel window [6, 24) into the `Command.Link` tags does the job. New neutral seam:
+  `FGSTN_CombatTickContext::RunningTimeline` (the timeline the entity runs this frame) so the link tick reads the ability's keys.
+- **Release**: the Release command sets PendingBreak with the reason from the role definition (`FGSTN_LinkRoleDef::ReleaseBreakReason`:
+  Release for the grabber and latcher, ShakeOff for the latched), and the watchdog breaks it. One path (`FGSTN_LinkShakeOff`) for both.
+- **Throw**: the key frame of the throw ability's outcome track posts a direct hit to the partner through `UGSTN_CombatWorldSubsystem::PostHit`
+  (no hitbox overlap). Its outcome extension `FGSTN_LinkThrowOutcome` ends BOTH sides in the simulation with reason Throw: the thrown side
+  is placed at the thrower's socket (Teleport, zero velocity), gets its AfterThrow grab immunity and is launched by the hit; the thrower
+  gets its cooldown (`FGSTN_LinkRequestSide::CooldownEndFrame`, new refusal `Cooldown`). Deviation: not through the watchdog (a watchdog
+  break landed after the launch and undid it); the watchdog skips an orphan whose partner shows the same serial idle with reason Throw.
+  The exit is not collision-checked, no attacker hitstop on a throw, SwapRoles is not built (warned once). A throw is not parryable and skips
+  the shield (`ThrowSkipsParryShield` names the defence steps by class path, no module edge).
+- **Pummel**: a hit on the partner with `LinkFilter = LinkedPartnerOnly`, gated by `PummelFreeFrames`, no reaction (`SuppressReaction`).
+  `LinkFilter` is applied in the LinkRequest step (deviation: not in a filter step of its own).
+- **Mash**: `FGSTN_LinkMash` counts presses and stick flicks since the last frame and brings the escape frame closer (an Escape break through
+  the watchdog). No resistance attribute (deviation): the rule's numbers only. A parked target that does not act gets its mash end at formation.
+- **Grab gate**: `Combat.Part.GrabLocked` by name (with GSTNParts; absent without it), the weight gate through the kit's link extension.
+- **Kit extension pointer** (fix): `FGSTN_LinkBodyData` holds a weak pointer to the kit and looks its extension up on each read; a raw
+  pointer to the extension dangled after a loadout change and crashed the editor.
+- **F12b latch**: the grab type lists the latch type in `Alternatives`; the LinkRequest step and the grab candidate provider try the
+  alternatives first, then the hit's own type, so the same tap latches onto a fighter above `MaxGrabWeight` and at least `MinLatchWeight`.
+  The harness sets these weights in memory (50 / 90) rather than shipping a heavy pawn (deviation). Everything is per type by data: the drill
+  latch needs only its definition, its rule and an entry in some type's `Alternatives`.
+- **Response channel** (fix): the response names the type the target FORMED, which may be the alternative of the predicted one; the
+  initiator now takes the channel from that type's definition and matches its own pending request to the target whatever type it predicted.
+  Before, the latch formed on the Hand channel.
+- **Attacker root** (new neutral seam): `FGSTN_SnapshotEntry::bPlacedByContributor`. The link contributor sets it when it places a parked
+  role; the attacker step then starts that entity's moves from the placement instead of its capsule (the latcher's attack came from where
+  the latch began).
+- **Latched enemy keeps acting**: the latcher is parked and acts; the enemy walks, turns and attacks with it on; its hits on the rider deal
+  damage with no reaction (`bNoReaction` on a non-type hit to the partner).
+- **Not tested**: a latch on a part under a socket with GSTNParts on.
+- **Harness measurement** (latch): on the latched enemy's own client the rider is compared with where the authority placed it at the same
+  frame (the recorder now stores the yaw per sim tick); the time-aligned comparison, which read the once-per-editor-frame sampling at the
+  turns, is kept as a note. The enemy's attack predicted a hit on an uninvolved pawn the authority did not make (hit targets 3 against 2):
+  a legitimate mispredict, kept as the `latch_big_enemy_bystander_*` variant and judged on convergence.
+- **Tests (13)**: `GSTNLink.NP.Grab.{WeightGate, GrabberCooldown, PummelKeepsLink, ThrowDirectHitNoOverlap, ThrowSkipsParryShield,
+  ImmunityAfterReleaseAndThrow, MashEscapeFrameDeterministic, GrabLockedByNameWithParts, GrabLockedAbsentWithoutParts}`,
+  `GSTNLink.NP.Latch.{WeightPicksLatchOverGrab, AttackHitsPartnerOnly, ShakeOffBreaksThroughWatchdog, LatchedEnemyKeepsActing}`. Constants
+  are prefixed `GrabTest*` / `LatchTest*` (a unity build clashed on shared names).
+- **Mover fix, separate commit**: `UKinematicActorSimulation::BeginDestroy` no longer calls `Uninit` (it created an object during the garbage
+  purge and crashed the editor on a PIE teardown).
+
+## F13: content, tools, debug
+
+- **Shared assets: new kits, not edits** (deviation from plan section 6 / the brief's list): `KIT_Test_Hits`, `BP_GASNPP_TestCharacter` and
+  `HBS_Test_Pawn` are unchanged. The kit extensions and link slots live in six NEW kits under `/Game/GASNPPTest/Combat`, copies of
+  `KIT_Test_Hits`: `KIT_Test_Defence` (PvP, shield), `KIT_Test_DefencePvE` (PvE, shield, `GA_CounterTest` on `Command.Special.Neutral`),
+  `KIT_Test_DefenceLanding` (+ get-up set), `KIT_Test_DefenceTech` (+ tech set), `KIT_Test_Link` (slots, moves, link extension),
+  `KIT_Test_DefenceLink` (grab_shield). Why: with GSTNLink or GSTNDefence off, `KIT_Test_Hits` would load instanced structs and
+  `Command.Link.*` tags of a missing plugin, and a defence extension changes landing (downed forever with `MaxDownedFrames 0`) in the
+  M1-M4b scenarios. Same pattern as `KIT_Test_Parts` (M4b P7). Nothing on the character or the hurtbox set was needed: every pawn already
+  gets the link and defence attach from its kit.
+- **Rules steps**: `/GSTNCombat/Rules/GSTN_CombatRules_Standard` (the rules the test pawns play) carries GrabImmunity, LinkRequest, Parry,
+  Shield, LinkBreakOnHit in spec 9 order. With a plugin off they are soft references the rules skip at Log level. `setup_gas_assets.py
+  --h13-content` rewrites that asset from FillStandard: rerun the defence/link script after it.
+- **Plugin content**: `/GSTNDefence/Test` `GA_Shield_Test`, `GA_CounterTest`, tech set `GA_Tech{InPlace,Roll,Wall}_Test`, get-up set
+  `GA_GroundBounce_Test`, `GA_GetupRoll_Test`, `GA_GetupNeutral_Test`; `/GSTNLink/Test` `GA_Grab_Test`, `GA_Pummel_Test`, `GA_Release_Test`,
+  `GA_Throw{Forward,Back,Up,Down}_Test`, `GA_LatchAttack_Test`. All thin Blueprint children of the native classes (the frame data is the
+  native class's): the four throws are identical assets, the direction is the command's. The plan's `DA_LinkType_Grab` is the existing
+  `DA_LinkType_Grab_Test` (a second definition with the same tag would collide in the registry). `DA_DefenceRules_Test*` unchanged (the
+  tech window 20 / lockout 40 of spec 11 are the defaults, now written explicitly).
+- **Mash 90 frames is kit data**: on `KIT_Test_Link`'s link extension (`GrabRules.Mash.BaseFrames`). The type's own grab rule keeps the
+  default (150): it is the fallback of a kit without a link extension, and `link_rollback` / `grab_immunity` grab with `KIT_Test_Hits`'
+  weapon (the first sweep with 90 on the type failed those three: the grabbed escaped before the checks).
+- **Content script** (`Tools/GAS/setup_defence_link_content.py`): compares every property before writing and saves only what changed, so
+  a rerun on current content saves nothing (27 identical hashes, content-f13-2/-3/-4/-5.log). Kits through new writers
+  `UGSTN_DefenceContentLibrary::WriteKitDefenceExtension`, `WriteKitCommandAbility`, `UGSTN_LinkContentLibrary::WriteKitLinkContent`
+  (dirty only on a change). Blueprint parent read from the asset registry's ParentClass tag (not a Python property). Guard: an asset whose
+  package was already dirty when the run started is never saved (found when a run inside a harness editor saved the in-memory test values
+  of the standard rules; restored from git, never committed). Run it headless or in a fresh editor.
+- **Validator** `Tools/GAS/validate_defence_content.py`: 27 assets, 0 errors, 9 warnings (validate-f13-2.log). Warnings: no track editor
+  for the Hold Window / Parry Window / Link Outcome tracks (7), and M4's "Grab/Pummel is data only" hit-data wording (2), both editor-tooling
+  text. The kits are compared with `KIT_Test_Hits` as baseline: its one error (no identity tag under `Kit`, M5's designer rule) is inherited
+  by every copy and reported, not counted.
+- **Validator fix in content**: the harness link moves (`UGSTN_GA_LinkTest*`) had hitbox tracks with an empty part selector, which the
+  timeline validator refuses; they now name the group `Body`, like the project's test move.
+- **Harness**: the scenarios apply the content kits and play the saved steps (re-added for one scenario when a suite reset the rules in
+  memory, e.g. `parts_reset`'s `fill_standard`). Still in memory: the shield button on `IC_GASNPP_Test` (not an approved asset), the
+  numbers a scenario changes (rule values, leash, immunity, weights), and `link_rollback` / `grab_immunity`'s attack-as-grab on
+  `KIT_Test_Hits`. The runtime-attach path is kept behind `USE_CONTENT = False` in both modules.
+- **Debug (console only, not in Shipping; no Gameplay Debugger rows, X19)**: `gstn.Combat.Debug.Shield` (bubble, cyan inside the perfect
+  shield window; value bar with broken/stun frames; a move's parry window in magenta; a parry in white for 20 frames; punished frames),
+  `gstn.Combat.Debug.Tech` (lockout bar, the last press's window, teching, downed), `FGSTN_DefenceDebugDraw` on every world's post actor
+  tick. `gstn.Combat.Debug.Links` gains the frames left to the link's end. All read the shown state at its own frame.
+- **Tests (2)**: `GSTNDefence.Content.SampleAssetsValid`, `GSTNLink.Content.SampleAssetsValid` (editor context: load, IsDataValid, spec 11
+  numbers, registry lookup, Blueprint parents). No project content: the kits are checked by the validator script.
+- **Harness fix, separate commit**: `impact_wall_mode` taps on the height predicted at the spin (z + vz x 0.45 s <= 230 cm) instead of the
+  first tick under 265 cm. `weapon_switch` NOT fixed: walking the second leg back avoids the lane end, but then the server's combat input
+  history holds three back-tilt events the owner's lacks (harness-fix-rerun-1..3.log; 180 frames old, inside MaxEventAge), so "server and
+  owner agree" fails. Reported for the lead.
+
+## F14: full sweep, byte table, docs commit
+
+- **weapon_switch history (HANDOVER 60 OPEN 2): a harness artefact.** The server and owner views are read at the same wall time but about 13
+  sim frames apart, so an event at the edge of `MaxEventAge` (254) is still kept on the server and already dropped on the owner; trimming
+  runs on sim frames and is deterministic. `_diff` compares both histories over the window both have simulated (4fffbf3). The second walk
+  goes back (the lane end). No GSTNInput change.
+- **The 2 % gate needs a host at tick rate, and the editor is not one.** One-process PIE is game-thread bound (48.8 ms a frame, 3 worlds);
+  an editor host alone ran about 14 fps (F12). Gate run with a standalone listen host (`Tools/GASNPPTest/link_standalone.ps1`, e02ba18;
+  -nullrhi, -notimeouts, a warm-up spike per process set). Host 97-101 fps. Every judged 2 % run: 0 server-starved ticks, 0 unforced walk
+  reconciles. The starvation part of OPEN 1 is closed as an editor-host artefact; the fork is unchanged.
+- **Grabber presentation is judged by frame** (lead's rule, as the latch, 8c14670): standalone p95 7.3 cm (one frame of walking) in every
+  run; in the one-process editor the same check reads p95 10.1-13.1 cm (listen and dedicated) with an identical p50 6.5 / max 22.4 in every run (a deterministic
+  offset of about one frame, not explained; the F-1..F interval reading is the same). Reported, limit unchanged (HANDOVER 61 OPEN).
+- **Link end in client_grabs_client: a second correction** on the grabber's client 1-7 frames after the break, on its own Mover state
+  (the authority's grabber velocity along its facing drops to ~0, the client keeps walking): the grabber meets something on the authority
+  that its client does not show, most likely the released partner placed in front of it with collision restored, while the client shows
+  that partner interpolated. 4 of 8 standalone runs at 2 %, 1 of 3 at 0 %. Exit placement / collision design (HANDOVER 58 OPEN 2), not
+  the fork.
+- **Connect refusal** checked with two standalone processes (one-process PIE cannot load different plugin sets): a client started with
+  `-DisablePlugins=GSTNLink` is refused at Hello ("connecting with invalid version" / `OutdatedClient`). The plan's "the fragment
+  registry refuses" is the network version check of task B (F11).
+- **Fake plugin test as a third plugin** (fc01f63): `Plugins/GSTNExtensionTest` (test only, off by default) with one module per M6
+  plugin, `Runtime` because native tags in an `UncookedOnly` module trip the engine's tag ensure. 7 tests `GSTNExtTest.*`.
+- **Byte table (spec 10) as built**, from the fragment tests: no fragment 1 bit; idle fragment 0 B payload (25 bits framed); ended link
+  3 B; raised shield 2 + 15 B; one live link channel 1 + 22 B; two channels 45 B; every defence group live 2 + 85 B. Spec: idle 1-2 B,
+  active 22-27 B, 21 B per channel raw: within it. Spec 10's "<= 40 B/s/entity extra while held" cannot be resolved by the host's total
+  upload (108-111 KB/s with a held link against 115-116 KB/s for the no-link control, three pawns, two clients, 0 %): no measurable
+  increase, the parked pawn costs slightly less.
+- **Core modules** list Engine, DeveloperSettings and Projects besides the plan's Core, CoreUObject, GameplayTags, GSTNInputCore,
+  GSTNCombatCore (data assets, the settings class, plugin paths); no NP module. The grep gate is otherwise clean (net mode read only in
+  `UGSTN_LinkWatchdog::IsAuthority`).
+- **Dedicated + 2 clients**: two pawns per world and no host pawn; the pairings that name the host do not apply. `defence_batch` accepts it.
+- **Blueprint**: `UGSTN_LinkRule::CheckCommon` is a C++ static, so a Blueprint rule cannot run the shared checks (OPEN).
+
+## F15: follow-ups (exit collision window, PIE frame sampling, CheckCommon in Blueprint, grab_throw timing)
+
+Run on the desktop (owner's call, 2026-11-01) in the `GASP_Giustino2_feature` worktree. Commits c11c133 (C++), a9708e0 (harness).
+
+- **Link-end second correction (HANDOVER 61 OPEN 2): the cause was collision as presentation state.** Until F15
+  `UGSTN_LinkPresentationComponent` ignored and restored the pair's capsule collision from the state each machine SHOWS; on the grabber's
+  client the released partner is interpolated a few frames behind, so the client restored collision later than the authority and a rollback
+  never restored it (the authority's grabber stopped against the partner, its client walked on). Now `FGSTN_LinkExitCollision` derives the
+  ignored partner from the entity's own link fragment (the live Body link when the parked role says `bCollisionWithPartner` false, then the
+  former partner for `UGSTN_LinkTypeDefinition::ExitCollisionIgnoreFrames`, default 12), both sides open the window from the same stamped
+  frame (the watchdog's Break command, a throw on either side), the fragment carries it (`ExitIgnorePartner`, `ExitIgnoreEndFrame`, a new
+  presence bit, 4 + 4 bytes while open, dropped when it runs out), and the link tick extension writes the owner's OWN capsule ignore list in
+  `BeforeTagProjection`, before that frame's Mover tick, every simulated frame (the stats modifier's pattern for Mover's gravity override).
+  The presentation component only remembers which actor the rule added. Window 12 frames: the corrections came 1-7 frames after the break.
+  Proof, standalone host, `link_spike_client_grabs_client`, 8 judged runs each (`Saved/Logs/f15-sweep/`): before `base-0pct-1/2`
+  5/8 and `base-2pct-1/2` 4/8 with the double correction; after `after-0pct-1/2` 0/8 and `after-2pct-1/2` 0/8 (warm-ups 0/4 too).
+- **Exit query ignores only the pair** (HANDOVER 58 OPEN 2): `FGSTN_LinkWatchdogLogic::FParams::WithPairCollision` hands the placer one query
+  per pair; a third pawn blocks a place. Test `GSTNLink.NP.Exit.QueryIgnoresOnlyThePair`.
+- **Not fixed, found while measuring**: one unforced walk reconcile on the grabber's client in some `client_grabs_client` runs, before and
+  after F15 alike (3/16 before, 4/16 after; `diagwalk-0pct-1.log` with `np.PrintReconciles`): at the walk's direction change the authority's
+  grabber velocity is ~3 cm/s against a local ~30 cm/s, Walking with `SmoothWalkingState`, inputs equal. Not the link's collision (the rate
+  did not change) and not the link end.
+- **PIE grabber presentation (HANDOVER 61 OPEN 1): a harness numbering error, not the game.** The authority's sim history records frame N in
+  the test component's pre-simulation tick (the pose the step starts from); the frame a world shows a pawn at is its Mover's last step, whose
+  pose is that step's result. So the pose shown at N is the record of N + 1 (`link_scenarios.SHOWN_TO_RECORDED`). Same samples,
+  `editor-diag-1.log`: against record N p50 6.7 / p95 12.4 / max 22.4 cm (the constant one frame of walking every F14 run showed), against
+  N + 1 p50 0.0 / p95 0.0. Applied to the grabber check, the latch check and `link_mp`; the limit stays 10 cm. The standalone mirror records
+  paired this frame's step with the previous frame's presentation (test component in PrePhysics, link presentation in PostPhysics): right
+  only on engine frames with exactly one step, the 7.3 cm p95 there; while mirroring the test component now ticks in PostUpdateWork.
+- **`UGSTN_LinkRule::CheckCommon` and `ContainsTagNamed` are `BlueprintPure`** (HANDOVER 61 OPEN 4); the context's unreflected pointers
+  travel with the struct's native copy. Test `GSTNLink.Core.Rule.CheckCommonFromBlueprint` calls it through reflection and compares.
+- **grab_throw** (HANDOVER 61 OPEN 3): the second pummel was tapped 0.3 s after the first (15-21 frames at 20 editor fps, around the pummel's
+  end, 18 frames + 4 of hitstop). Now `_GrabRig.tap_when_free` taps once the first pummel's damage is on the authority and the grabber is out
+  of its timeline on its own world: 3/3 PASS (`pie-diag-1.log`), and PASS in the SUITE_LINK run.
+- **Tests (5)**: `GSTNLink.NP.ExitCollision.{IgnoredWhileLinked, WindowExpiry, RollbackAcrossWindow}`, `GSTNLink.NP.Exit.QueryIgnoresOnlyThePair`,
+  `GSTNLink.Core.Rule.CheckCommonFromBlueprint`.
+
+## Plan corrections (M6, closed in F14)
+
+What the plan (`m6-defence-links-plan.md`, branch `claude/project-thread-mvizq6`) says that the build does differently, for a reader of the
+plan; details in the checkpoint sections above.
+
+1. Shield: a fixed-size bubble, no tilt, shrink or arc (owner, 2026-10-26, after S5).
+2. Seams: X18 / X19 were already on `feature`; the F9 interact fallback was not needed (F0 S0).
+3. Links are accepted by the target's own pipeline on every machine; only breaks are server-decided (the watchdog), no server branch.
+4. No grab-confirm hitstop, no `LinkEstablished` buffer event, no latch immunity field, no SwapRoles, no attacker hitstop on throws, an
+   uncollision-checked throw exit (F10-F12).
+5. Test content: six new kits instead of edits to `KIT_Test_Hits`, `BP_GASNPP_TestCharacter`, `HBS_Test_Pawn` (F13, approved).
+6. The network gate's 2 % runs need a host at tick rate: a standalone host (F14), not the editor.
+7. The connect refusal is the network version (task B), not a fragment registry rule.
+8. The "fake plugin" test is a third, test-only plugin.
+9. Spec 10's bytes/s budget is not measurable from the host's total upload; the fragment tests carry the byte table.

@@ -48,6 +48,12 @@ int32 UGSTN_LinkTypeDefinition::GetParkedRoleIndex() const
 	return TargetRole.bParked ? 2 : 0;
 }
 
+bool UGSTN_LinkTypeDefinition::IgnoresPartnerCollision() const
+{
+	const int32 Parked = GetParkedRoleIndex();
+	return Parked != 0 && !GetRoleDef(Parked).bCollisionWithPartner;
+}
+
 int32 UGSTN_LinkTypeDefinition::FindRoleIndex(const FGameplayTag& RoleTag) const
 {
 	if (!RoleTag.IsValid())
@@ -84,6 +90,13 @@ void UGSTN_LinkTypeDefinition::Validate(TArray<FString>& OutErrors) const
 	else if (!IsUnderRoot(LinkType, TEXT("Combat.Link.Type")))
 	{
 		OutErrors.Add(FString::Printf(TEXT("%s: the link type tag '%s' is not under Combat.Link.Type."), *Name, *LinkType.ToString()));
+	}
+	for (const FGameplayTag& Alternative : Alternatives)
+	{
+		if (!Alternative.IsValid() || Alternative == LinkType)
+		{
+			OutErrors.Add(FString::Printf(TEXT("%s: an alternative link type is unset or names the type itself."), *Name));
+		}
 	}
 
 	ValidateRole(Name, TEXT("initiator"), InitiatorRole, OutErrors);

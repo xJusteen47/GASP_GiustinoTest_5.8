@@ -28,7 +28,7 @@ struct FGSTN_EntityHistoryRecord
 	FGSTN_VictimReactionState Reaction;
 
 	/** The plugin extension of the entry (broken parts): a rewind hands the step the one of the rewound frame */
-	FGSTN_SnapshotExtensionBlob Extension;
+	FGSTN_SnapshotExtensionSet Extension;
 
 	/** The extra hurtboxes of the entry (a shield bubble): a rewind hands the step the ones of the rewound frame, so a hit lands on the bubble the victim had then */
 	FGSTN_ExtraHurtboxList ExtraHurtboxes;
@@ -114,6 +114,16 @@ public:
 	int32 GetSnapshotBuildCount() const { return SnapshotBuildCount; }
 
 	int32 GetNumRegisteredEntities() const { return Registry.Num(); }
+
+	/** The registered entity ids, ascending (the registry's order). For server-side observers of the finalized state (the link watchdog), never for simulation */
+	void GetRegisteredEntityIds(TArray<int32>& OutIds) const
+	{
+		OutIds.Reset(Registry.Num());
+		for (const FRegistryEntry& Entry : Registry)
+		{
+			OutIds.Add(Entry.EntityId);
+		}
+	}
 
 	/**
 	 * KO zones (AGSTN_KOZone): static boxes, read once at registration. A combatant whose simulated position is inside one is knocked out by
