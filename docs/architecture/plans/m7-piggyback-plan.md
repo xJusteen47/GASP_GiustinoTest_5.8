@@ -62,7 +62,7 @@ M6 was built generic enough that a mount is mostly **one more link type plus dat
 | Y5 | Parked movement mode (`UGSTN_LinkedMovementMode`, `Combat.Mover.Linked`), snapshot substitution of the parked entity (`GSTN_LinkSnapshotExt`), action veto for roles that do not act | 5, 6.4 | **Present** | G5 |
 | Y6 | Watchdog: break rules (distance, hits per role with `MinKnockbackToBreak`, deaths, partner state), commands to both sides on the same frame, exit placement (`UGSTN_LinkExitPlacer`, `IGSTN_ExitCollisionQuery`), exit request (`GSTN_LinkExitRequest`), exit collision window (F15) | 6.4, 8 | **Present** | G5, G7 |
 | Y7 | Presentation: `UGSTN_LinkPresentationComponent` attaches the parked mesh to the partner's socket, `GetLinkedTransform()` for camera/aim, collision side from the simulated fragment | 5, 6.8 | **Present** (while Active; attach while `Pending` comes with G1) | G1, G10 |
-| Y8 | Interact probe: `UGSTN_LinkInteractProvider` offers link types as `FGSTN_LinkInteractOffer { Definition, MeaningTag, ReachCm }`, pre-filtered by the type's own request checks | 7 | **Present**. Mount = one more offer under `Interact.Target.Mount`; the probe's default priority already lists Mount last (INT.5) | G5 |
+| Y8 | Interact probe (**worse**, G0 S0: grab-only probe, fixed in G1): `UGSTN_LinkInteractProvider` offers link types as `FGSTN_LinkInteractOffer { Definition, MeaningTag, ReachCm }`, pre-filtered by the type's own request checks | 7 | **Present**. Mount = one more offer under `Interact.Target.Mount`; the probe's default priority already lists Mount last (INT.5) | G5 |
 | Y9 | Link slots as data (`GSTN_LinkSlots`), grabber/latcher bindings by role | 7 | **Present**; M7 adds its slots in its own ini | G5 |
 | Y10 | Hit `LinkFilter` (`Any`, `LinkedPartnerOnly`, `ExcludeLinkedPartner`) | 5 (`bAffectsLinkPartner`) | **Present**: replaces the spec's `bAffectsLinkPartner` flag; M7 sets `ExcludeLinkedPartner` on its moves and the hit step treats partners as excluded by default (G7) | G7 |
 | Y11 | Weight and carry capacity (`UGSTN_CombatAttributeSet::Weight`, `MaxCarryWeight`) | 3, 4 | **Present** | G5, G6 |
@@ -117,6 +117,15 @@ unless G10 shows the camera or perception needs one (M6's `GetLinkedTransform()`
   effect (no stored handle: idempotent under resimulation), requested by the link tick when a role becomes Active and when it ends.
   `LaunchLinked` executes the exit's velocity as the existing knockback layered move. A rule may write the link's `Payload` on accept
   (`UGSTN_LinkRule::ComputePayload`, `BlueprintNativeEvent`, default 0).
+- **Interact offers and request sides** (added after G0 S0, 2026-11-01, `docs/notes/m7-spike-report.md`): the link tick's in-simulation
+  probe only offers the grab and its `Alternatives` under `Interact.Target.Grab`, and `FGSTN_LinkRequestSide` carries no team, no
+  attributes and only typed grab/latch kit rules, so no other plugin can add a meaning or an ally-only rule. Fix, generic: interact offers
+  registered per link type (meaning tag + priority, data on the type definition or the registry), the probe built from that list and its
+  meaning table from the registered tags; `FGSTN_LinkRequestSide` gains the team id and the kit's extension list (rules read their own
+  extension by type, as `FGSTN_LoadoutExtensionRegistry` does). Grab and latch keep their behaviour (SUITE_LINK gate). The drill's
+  interact-formed latch uses the same seam (tell the spin-drill thread before and after).
+- Link effects are applied by the link tick extension (as the exit GE is), since `GSTNCombatNP` has no executor seam for the five link
+  request kinds; Y16's `FGSTN_KitExtension::Compile` is `FGSTN_LoadoutExtensionRegistry` in shipped code.
 - Tests: `GSTNLink.NP.Predict.{OptimisticAcceptAtPendingFrames, RefusalRollsBackToIdle, ConfirmClearsFlag, GrabUnchanged}`,
   `GSTNLink.GAS.LinkEffect.{AppliedOnActive, RemovedOnEveryBreakReason, IdempotentOnResim, PayloadToMagnitude}`.
 - Harness: SUITE_LINK unchanged (all 19), plus the EXT carry with `bInitiatorPredicts` on as a scratch scenario.
