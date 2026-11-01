@@ -12,7 +12,7 @@
 
 FGameplayTag GSTNHitRelationship::FromIndex(uint8 Index)
 {
-	switch (Index)
+	switch (Index == 255 ? Index : static_cast<uint8>(Index & ~ForcedBit))
 	{
 	case 0:
 		return GSTNCombatHitTags::Relationship_Self.GetTag();
@@ -58,6 +58,7 @@ namespace
 		const FGSTN_HitboxSpec* Spec = nullptr;
 		FGSTN_HitData Hit;
 		FGameplayTag Relationship;
+		bool bRelationshipForced = false;
 		int32 HurtboxIndex = 0;
 		EGSTN_HurtState HurtState = EGSTN_HurtState::Normal;
 		FVector HitLocation = FVector::ZeroVector;
@@ -219,8 +220,8 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 					continue;
 				}
 			}
-			else if (In.Rules ? !In.Rules->IsRelationshipHittable(Relationship)
-				: (Relationship != GSTNCombatHitTags::Relationship_Enemy.GetTag() && Relationship != GSTNCombatHitTags::Relationship_Neutral.GetTag()))
+			else if (!(Variant && Variant->bForceHittable) && (In.Rules ? !In.Rules->IsRelationshipHittable(Relationship)
+				: (Relationship != GSTNCombatHitTags::Relationship_Enemy.GetTag() && Relationship != GSTNCombatHitTags::Relationship_Neutral.GetTag())))
 			{
 				continue;
 			}
@@ -280,6 +281,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			Candidate.Spec = &Spec;
 			Candidate.Hit = VariantHit;
 			Candidate.Relationship = Relationship;
+			Candidate.bRelationshipForced = Variant && Variant->bForceHittable;
 			Candidate.HurtboxIndex = Picked;
 			Candidate.HurtState = Victim.HurtStates.IsValidIndex(Picked) ? Victim.HurtStates[Picked].State : EGSTN_HurtState::Normal;
 			Candidate.HitboxCenter = HitboxCenter;
@@ -340,6 +342,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		// The TeamFilter step refuses Self, and the hitbox's Self variant already decided this hit may happen: the prediction runs it as an
 		// ordinary enemy hit. The inbox entry keeps the real relationship
 		Incoming.Relationship = Candidate.Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Candidate.Relationship;
+		Incoming.bRelationshipForced = Candidate.bRelationshipForced;
 		Incoming.Up = In.Up;
 		Incoming.AttackerFacing = AttackerFacing;
 		Incoming.Frame = In.Frame;
@@ -415,6 +418,10 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		Entry.HitboxVelocity = Candidate.HitboxVelocity;
 		Entry.AttackerYaw = static_cast<float>(AttackerFacing.Rotation().Yaw);
 		Entry.Relationship = GSTNHitRelationship::ToIndex(Candidate.Relationship);
+		if (Candidate.bRelationshipForced && Entry.Relationship != 255)
+		{
+			Entry.Relationship |= GSTNHitRelationship::ForcedBit;
+		}
 		Entry.HurtboxIndex = static_cast<uint8>(Candidate.HurtboxIndex);
 		Entry.AttackerHitboxIndex = static_cast<uint8>(FMath::Min(Candidate.HitboxIndex, 255));
 		Entry.HurtState = static_cast<uint8>(Candidate.HurtState);

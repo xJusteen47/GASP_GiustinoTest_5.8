@@ -107,6 +107,10 @@ struct GSTNCOMBATCORE_API FGSTN_ResolvedHit
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
 	FGameplayTag Relationship;
 
+	/** The hitbox's variant for Relationship says bForceHittable: the TeamFilter step lets it through whatever the rules list */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
+	bool bRelationshipForced = false;
+
 	/** The victim's local up at the frame of the hit (minus its gravity direction), never world Z */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit")
 	FVector Up = FVector::UpVector;

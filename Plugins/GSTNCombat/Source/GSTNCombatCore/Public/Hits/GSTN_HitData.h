@@ -277,6 +277,14 @@ struct GSTNCOMBATCORE_API FGSTN_HitVariant
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Variant")
 	bool bIgnore = false;
 
+	/**
+	 * The hitbox hits victims of this relationship even when the match rules do not list it as hittable (an ally-only interaction such as a
+	 * mount request). Both checks read it: the attacker's overlap and the victim's TeamFilter step (the inbox entry carries it). Off by
+	 * default; bIgnore wins over it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Variant")
+	bool bForceHittable = false;
+
 	/** Scales the hitbox's shape for victims of this relationship (a bigger net for allies of a healing move) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Variant", meta = (ClampMin = "0.0"))
 	float ShapeScale = 1.f;

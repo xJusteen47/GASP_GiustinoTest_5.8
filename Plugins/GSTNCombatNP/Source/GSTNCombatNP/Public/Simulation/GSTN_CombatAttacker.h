@@ -21,8 +21,13 @@ namespace GSTNHitRelationship
 	/** Index of a Combat.Relationship.* tag in the inbox entry: 0 Self, 1 Ally, 2 Enemy, 3 Neutral, 255 for a tag a custom resolver made up */
 	GSTNCOMBATNP_API uint8 ToIndex(const FGameplayTag& Relationship);
 
-	/** The tag of an index ToIndex wrote; the empty tag for 255 (a tag a custom resolver made up: the pipeline resolves it again) */
+	/** The tag of an index ToIndex wrote (ForcedBit ignored); the empty tag for 255 (a tag a custom resolver made up: the pipeline resolves it again) */
 	GSTNCOMBATNP_API FGameplayTag FromIndex(uint8 Index);
+
+	/** Set on an index 0..3 when the hitbox's variant forced the relationship hittable (FGSTN_HitVariant::bForceHittable); never on 255 */
+	constexpr uint8 ForcedBit = 0x80;
+
+	inline bool IsForced(uint8 Index) { return Index != 255 && (Index & ForcedBit) != 0; }
 }
 
 /** World shape of an active hitbox at a frame, for the debug draw and the harness trace */

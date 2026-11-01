@@ -172,6 +172,7 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		// The attacker predicted a Self hit as an ordinary enemy hit (TeamFilter refuses Self): the victim runs the same pipeline on the same input
 		const FGameplayTag Relationship = GSTNHitRelationship::FromIndex(Entry.Relationship);
 		Incoming.Relationship = Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Relationship;
+		Incoming.bRelationshipForced = GSTNHitRelationship::IsForced(Entry.Relationship);
 		Incoming.Up = Self.Up;
 		Incoming.AttackerFacing = FRotator(0.0, Entry.AttackerYaw, 0.0).Vector();
 		Incoming.HitboxVelocity = Entry.HitboxVelocity;
