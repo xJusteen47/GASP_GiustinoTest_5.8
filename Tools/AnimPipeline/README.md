@@ -42,10 +42,53 @@ Coordinates:
 - **References first.** Fetch UFD references first (`ufd_fetch.py`); GIF downloads are pre-approved.
 - **FAF.** FAF = the UFD total read as a 0-based game frame (jab: anim 18; Ganondorf ftilt: anim 37).
 
+## Replicating a reference: key poses first (owner, 01/11, after Ganondorf v2 was rejected)
+
+Ganondorf v2 passed every check and was rejected: "the arm movement makes no sense, the legs don't have the right anticipation". We had taken only the extension and timing curve from the reference, never its key poses. Timing alone is never enough.
+1. **Extract the key poses first.** For each phase (first frame, anticipation, active, recovery, last frame), read the reference frames as joint directions per body part: torso pitch/yaw, upper arm and forearm, thigh and shin per side, head. Store them as `refs/<move>/keyposes.json`.
+2. **Build our key poses from those**, arms included. Our rules (balance, counterweight) adjust a pose, they never invent it.
+3. **Pose-match score:** compare each of our key poses with the reference, per body part (angle between directions). Report it beside the checks, and review it first: a pose that does not match fails, even if every check passes.
+4. **Stance comes from the reference too** (Ganondorf's ftilt lands in a deep, wide crouch, not upright).
+
+## Motion curves and reference keypoints (01/11)
+
+Ganondorf v2 passed every check and was rejected: the arms made no sense and the legs had no anticipation. Nothing measured
+how much each part moves, when, and in which direction. These tools do, and gate the pass on them.
+- **Venv** (isolated, owner's machine): `C:/Users/jacop/Tools/animcurves-venv` (Python 3.12) with `pybvh` 0.9.0 (MIT:
+  finite differences, SPARC smoothness), `rtmlib` 0.0.16 (Apache-2.0: RTMPose + the HumanArt-trained YOLOX detector on
+  onnxruntime, CPU, no mmcv) and `dtaidistance` 2.5.1 (DTW). Sources were read before installing: the only network use is
+  rtmlib's first-run model download from download.openmmlab.com (Hugging Face mirror on failure) into `~/.cache/rtmlib`.
+  Recreate: `py -3.12 -m venv animcurves-venv && animcurves-venv/Scripts/python -m pip install pybvh==0.9.0 rtmlib==0.0.16 dtaidistance==2.5.1`.
+  `motion_curves.py` also runs on plain Python (numpy fallbacks, same numbers to rounding); `ref_keypoints.py` needs the venv.
+- **Reference keypoints:** `<venv python> ref_keypoints.py refs/<name>/keypoints_auto.json <stills or GIF>` writes COCO-17
+  keypoints and an overlay PNG per image. Check the overlays once (left/right on side views); corrections and fully manual
+  frames go in `keypoints_auto_fix.json`. `refs/<name>/reference.json` names the key poses (stills: first, anticipation,
+  active, recovery, last) or the GIF timing (dense), and the move sheet's `reference` points to the folder.
+  Done: `refs/owner_ganon_ftilt` (owner's 5 frames; the estimator handled the cape and the hitbox overlay) and
+  `refs/mario_jab1` (UFD GIF, 19 frames; frame 0 is too faint and is skipped; a 3-frame median damps the far arm's flicker).
+- **Curves:** `python motion_curves.py <take> [--source=bones|model] [--blind]` -> `sheets/<take>[_model]_curves.png` (speed
+  heatmap: body part x frame, phases, peaks, wind-up), `.txt` (table), `.json`, and `_vsref.png` (our side-view stick
+  figures over the reference's, per key pose). Exit 1 when the reference comparison fails.
+- **Gate:** `ganon_iter.sh` runs it on the model right after the model step and stops the pass on a failure
+  (`CURVES_GATE=0` reports only; `CURVES_PY` picks the Python). The worker's pre mode runs it first and escalates its
+  failures: they are pose design.
+- **Blind review:** after the gate passes, a subagent that is not told the intent describes the motion from the blind
+  heatmap (`--blind`) and an unnamed frame strip; it must name the phases (wind-up, kick, landing) at the right frames.
+  Brief and verdict rules: `iter_worker.md`, "Blind review".
+- **Validation (01/11):** Ganondorf v2 FAILS against the owner's frames (both arms 0.59x/0.44x the reference amplitude,
+  support leg 0.35x, body wind-up 0.06 of the strike vs 0.28); Ganondorf v1 FAILS (rear arm 0.56x, support leg 0.40x, rear
+  wrist still where the reference swings it back); jab v11 FAILS against Mario on the rear arm only (0.51x: Mario flings
+  it back and swings it, ours stays in the guard at the chin). The v11 failure is a real difference from Mario, not noise;
+  whether the guard arm should be exempt on jabs is the owner's call. Blind review of Ganondorf v2 (Sonnet, not told the
+  move): it found chamber, kick, hold, retraction and settle at the right frames, but described the wind-up as "the body
+  nearly still", the arms moving only at the strike and the support leg still throughout -> FAIL, as the gate.
+
 ## One pass of a move (Ganondorf ftilt is the template)
 
 ```
 ganon_ftilt_v2_motion.py   model: rig points per frame + key plan       -> <take>_targets_raw.json
+motion_curves.py           GATE: limb amplitude, anticipation, arm direction vs the reference (model points, ~1 s)
+                                                                        -> sheets/<take>_model_curves.png/.txt/.json
 preflight.py               the checks on the model's points, < 0.1 s     -> sheets/<take>_preflight.txt/.json
 sparse_apply.py            Cascadeur: keys, interpolation, weights       (TAB, SAVE_AS, TARGETS)
 fingers_fist.py            Cascadeur: closed fists on the key frames      (TAB, FRAMES)
@@ -78,6 +121,7 @@ Keys:
 
 | Module | What it judges | Thresholds |
 |---|---|---|
+| `motion_curves.py` + `motion_ref.py` (FIRST, before the pre-flight; again on the baked bones) | Per part (hands, elbows, feet, knees, head, chest relative to the pelvis; pelvis and centre of mass in the world), per phase: amplitude, share of the limb path and energy (near-still limbs while the action runs), speed-peak order and lag behind the pelvis, with/counter the strike (velocity correlation), anticipation (wind-up opposite the strike / strike). Against the reference's 2D keypoints from the same side camera: pose distance per limb, amplitude ratio, anticipation, wrist direction, DTW. Fails on a limb under 0.6x the reference amplitude, a missing anticipation, or a wrist going the other way. See "Motion curves" below | `motion_thresholds.json` (`curves_*`) |
 | `preflight.py` (before any pass) | On the model's rig points, approximate: limb bend from lengths (reach, elbow direction), balance/lift-off/support knee/kick weight, key plan (same keys and lag on every layer of an IK chain, Bezier overshoot and drift, clamped mid-motion keys), strike spacing table, recovery fast-out/slow-in, linear motion (constant speed over 4 frames), landing absorption (kicks: pelvis dips >= 1 cm after the foot lands), overlap peak order and simultaneous arrivals, arcs (straight paths, reversal clusters, one-frame pops, twinning, head, foot slide). Floor = the idle's foot heights. Calibrated on Ganondorf v1 (catches all known errors; knee 93–99° vs Unreal 89–99°) and jab v11 (1 marginal flag) | `motion_thresholds.json` + constants in the script |
 | `tangency.py` (report) | Tangencies (Solid Drawing): two parts' outlines within 1.5 cm (screen-scaled), within 15 deg, over > 25% of a limb's length; joint pairs excluded (shoulder, elbow, wrist, hip, knee, ankle, neck). Six ortho views, 3/4s and game rings, at the key poses. Offline on the cached bones, 30-45 s | constants in the script |
 | `spacing_rules.py` (from preflight and motion_check) | Recovery: speed peak in the first 60% of hold end -> arrival (fast out), last approach step <= 0.6 x the largest of the last 4 (slow in to the guard) | constants in the script |

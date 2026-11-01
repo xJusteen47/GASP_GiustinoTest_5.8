@@ -16,7 +16,9 @@ Working folder: the data folder (`Saved/AnimPipeline` in the project, `$ANIMPIPE
 ## Modes
 
 - **pre** (files only; allowed even while the owner's pause holds):
-  `DENSE=1 python $MODEL > sheets/${TAKE}_model_report.txt && python preflight.py ${TAKE}_targets_raw.json $TAKE --quiet`
+  `DENSE=1 python $MODEL > sheets/${TAKE}_model_report.txt && python motion_curves.py $TAKE --source=model --quiet && python preflight.py ${TAKE}_targets_raw.json $TAKE --quiet`
+  The motion-curves gate comes first. Its failures (a limb under the reference amplitude, a missing anticipation, an arm
+  going the wrong way: `sheets/${TAKE}_model_curves.txt`, after "reference") are pose design: never fix them, ESCALATE.
 - **full** (Cascadeur + Unreal; ONLY when Opus says the owner gave the go):
   `PREFLIGHT_GATE=1 DENSE=1 SMOOTH=12-36 CHECKS=1 TAKE=$TAKE CASC=$CASC ASSET=$ASSET MODEL=$MODEL ./ganon_iter.sh`
   Then read `sheets/${TAKE}_motion.json` (`flags`), `sheets/${TAKE}_clearance.json`, `sheets/${TAKE}_legibility.txt` and `sheets/${TAKE}_tangency.txt`.
@@ -73,6 +75,27 @@ remaining flags: <check> <key numbers> -> <why: no rule / repeat / broke X / pos
 reverted: <rule + reason>, or none
 backup: <MODEL>.bak_<HHMM>
 ```
+
+## Blind review (a separate subagent, after the motion-curves gate passes and before Opus's by-eye review)
+
+Checks pass on moves that read as nothing (Ganondorf v2). A second subagent that does NOT know the intent must be able to
+tell the story from the motion alone.
+- **Inputs, and nothing else:** `sheets/<take>_curves.png` (the speed heatmap; strip the title: it names the move and the
+  failures, so pass `sheets/<take>_curves_blind.png` from `python motion_curves.py <take> --blind`) and 5-8 frames of
+  one side view (the existing renders or `view_sheets.py` output, file names without the move's name). Never the move sheet,
+  the log, the take name, the reference or this brief.
+- **Prompt:** "This is a character animation (60 fps). From the speed heatmap (rows = body parts, columns = frames) and the
+  frames, describe what the body does, phase by phase, with frame ranges: what moves first, what leads, what holds, what
+  comes to rest. Name each phase in one or two words. Which body parts barely move? Be concrete; do not guess the game."
+- **Launch:** `Agent(subagent_type="general-purpose", model="sonnet", prompt=<the prompt + the image paths>)`.
+- **Verdict (Opus, against the move sheet):** the description must name the move's phases in order, at roughly the right
+  frames (± 2): for a kick, wind-up/anticipation → kick/strike → landing/recovery; for a punch, guard → strike → return.
+  It FAILS if a phase is missing or merged (for example no wind-up, "the leg simply rises and lowers"), or if it reports a
+  limb as still that the reference moves. A label is not enough: the wind-up must be DESCRIBED as the body or the arms
+  drawing back or loading against the strike before it; "the body is nearly still, then the knee lifts" is no wind-up.
+  Test (01/11, Ganondorf v2): the reviewer labelled f0-4 "anticipation" but saw "the body nearly still", arms reacting only
+  at f8 and the support leg "almost still throughout" -> FAIL, the same verdict as the curves gate. A failure goes back to pose design, like a curves-gate failure. Log the
+  description and verdict in the move log.
 
 ## For Opus (how to launch and measure)
 
