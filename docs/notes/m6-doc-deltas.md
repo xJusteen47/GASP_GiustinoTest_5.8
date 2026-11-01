@@ -577,6 +577,43 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
 - **Dedicated + 2 clients**: two pawns per world and no host pawn; the pairings that name the host do not apply. `defence_batch` accepts it.
 - **Blueprint**: `UGSTN_LinkRule::CheckCommon` is a C++ static, so a Blueprint rule cannot run the shared checks (OPEN).
 
+## F15: follow-ups (exit collision window, PIE frame sampling, CheckCommon in Blueprint, grab_throw timing)
+
+Run on the desktop (owner's call, 2026-11-01) in the `GASP_Giustino2_feature` worktree. Commits c11c133 (C++), a9708e0 (harness).
+
+- **Link-end second correction (HANDOVER 61 OPEN 2): the cause was collision as presentation state.** Until F15
+  `UGSTN_LinkPresentationComponent` ignored and restored the pair's capsule collision from the state each machine SHOWS; on the grabber's
+  client the released partner is interpolated a few frames behind, so the client restored collision later than the authority and a rollback
+  never restored it (the authority's grabber stopped against the partner, its client walked on). Now `FGSTN_LinkExitCollision` derives the
+  ignored partner from the entity's own link fragment (the live Body link when the parked role says `bCollisionWithPartner` false, then the
+  former partner for `UGSTN_LinkTypeDefinition::ExitCollisionIgnoreFrames`, default 12), both sides open the window from the same stamped
+  frame (the watchdog's Break command, a throw on either side), the fragment carries it (`ExitIgnorePartner`, `ExitIgnoreEndFrame`, a new
+  presence bit, 4 + 4 bytes while open, dropped when it runs out), and the link tick extension writes the owner's OWN capsule ignore list in
+  `BeforeTagProjection`, before that frame's Mover tick, every simulated frame (the stats modifier's pattern for Mover's gravity override).
+  The presentation component only remembers which actor the rule added. Window 12 frames: the corrections came 1-7 frames after the break.
+  Proof, standalone host, `link_spike_client_grabs_client`, 8 judged runs each (`Saved/Logs/f15-sweep/`): before `base-0pct-1/2`
+  5/8 and `base-2pct-1/2` 4/8 with the double correction; after `after-0pct-1/2` 0/8 and `after-2pct-1/2` 0/8 (warm-ups 0/4 too).
+- **Exit query ignores only the pair** (HANDOVER 58 OPEN 2): `FGSTN_LinkWatchdogLogic::FParams::WithPairCollision` hands the placer one query
+  per pair; a third pawn blocks a place. Test `GSTNLink.NP.Exit.QueryIgnoresOnlyThePair`.
+- **Not fixed, found while measuring**: one unforced walk reconcile on the grabber's client in some `client_grabs_client` runs, before and
+  after F15 alike (3/16 before, 4/16 after; `diagwalk-0pct-1.log` with `np.PrintReconciles`): at the walk's direction change the authority's
+  grabber velocity is ~3 cm/s against a local ~30 cm/s, Walking with `SmoothWalkingState`, inputs equal. Not the link's collision (the rate
+  did not change) and not the link end.
+- **PIE grabber presentation (HANDOVER 61 OPEN 1): a harness numbering error, not the game.** The authority's sim history records frame N in
+  the test component's pre-simulation tick (the pose the step starts from); the frame a world shows a pawn at is its Mover's last step, whose
+  pose is that step's result. So the pose shown at N is the record of N + 1 (`link_scenarios.SHOWN_TO_RECORDED`). Same samples,
+  `editor-diag-1.log`: against record N p50 6.7 / p95 12.4 / max 22.4 cm (the constant one frame of walking every F14 run showed), against
+  N + 1 p50 0.0 / p95 0.0. Applied to the grabber check, the latch check and `link_mp`; the limit stays 10 cm. The standalone mirror records
+  paired this frame's step with the previous frame's presentation (test component in PrePhysics, link presentation in PostPhysics): right
+  only on engine frames with exactly one step, the 7.3 cm p95 there; while mirroring the test component now ticks in PostUpdateWork.
+- **`UGSTN_LinkRule::CheckCommon` and `ContainsTagNamed` are `BlueprintPure`** (HANDOVER 61 OPEN 4); the context's unreflected pointers
+  travel with the struct's native copy. Test `GSTNLink.Core.Rule.CheckCommonFromBlueprint` calls it through reflection and compares.
+- **grab_throw** (HANDOVER 61 OPEN 3): the second pummel was tapped 0.3 s after the first (15-21 frames at 20 editor fps, around the pummel's
+  end, 18 frames + 4 of hitstop). Now `_GrabRig.tap_when_free` taps once the first pummel's damage is on the authority and the grabber is out
+  of its timeline on its own world: 3/3 PASS (`pie-diag-1.log`), and PASS in the SUITE_LINK run.
+- **Tests (5)**: `GSTNLink.NP.ExitCollision.{IgnoredWhileLinked, WindowExpiry, RollbackAcrossWindow}`, `GSTNLink.NP.Exit.QueryIgnoresOnlyThePair`,
+  `GSTNLink.Core.Rule.CheckCommonFromBlueprint`.
+
 ## Plan corrections (M6, closed in F14)
 
 What the plan (`m6-defence-links-plan.md`, branch `claude/project-thread-mvizq6`) says that the build does differently, for a reader of the

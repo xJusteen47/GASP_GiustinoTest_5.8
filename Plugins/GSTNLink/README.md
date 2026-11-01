@@ -113,6 +113,12 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
   the response, the parked mode, the anchor of the hurtboxes and the presentation are the same code for every type; nothing in
   `GSTNLinkNP` names a type. To have the interact tap form it, list its tag in another type's `Alternatives` (as the grab lists the
   latch) and give the latched role a `ReleaseBreakReason`; its attack is an ability whose hit carries `LinkFilter = LinkedPartnerOnly`.
+- **Collision between the partners**: a type whose parked role says `bCollisionWithPartner` false ignores the pair's capsule collision
+  while linked and for `ExitCollisionIgnoreFrames` (default 12) after the exit (F15). It is simulation state, not presentation:
+  `FGSTN_LinkExitCollision` reads the link fragment (the live link, then the exit window both sides open from the same stamped frame) and
+  the link tick extension writes the owner's own capsule ignore list before every simulated frame's Mover tick, so a client that still shows
+  the released partner parked sweeps as the authority does, and a resimulation sweeps as the first pass. Tune the window on the definition;
+  0 = collision returns on the exit frame. The exit placer's world query ignores only the pair, so a third pawn blocks a place.
 - **A link command on another button**: a slot from `UGSTN_LinkSlots::Build()` with your own binding; keep it at the `Command.Link`
   tier (`CommandTiers` in the settings) so it is not shadowed by attack and strong commands of the same button.
 - **Formation in the pipeline**: put `UGSTN_HitStep_GrabImmunity` then `UGSTN_HitStep_LinkRequest` after `HurtState` in the rules'
@@ -140,10 +146,12 @@ simulation on every machine and in every resimulation.
 | Link type | `UGSTN_LinkTypeDefinition` (data asset) | none: roles, sockets, break rules, requirements, rules, placer | the plugin's content or a folder in `LinkTypeDirectories` |
 | Role animation | `FGSTN_LinkKitExtension::AnimsByRole` (data) | none | the kit or weapon |
 
-`UGSTN_LinkMath` exposes the stateless math (`EvaluateBreak`, the mash, the parked placement, the reason tags) as `BlueprintPure`. Not
-available to Blueprint: `UGSTN_LinkRule::CheckCommon` (a C++ static; a Blueprint rule cannot run the shared checks first, so list it after a
-C++ rule that does, HANDOVER 61 OPEN), and everything per frame (the tick extension, the fragment, the inbox kinds, the watchdog), which
-stays C++.
+`UGSTN_LinkMath` exposes the stateless math (`EvaluateBreak`, the mash, the parked placement, the reason tags) as `BlueprintPure`, and
+`UGSTN_LinkRule::CheckCommon` and `ContainsTagNamed` are `BlueprintPure` statics (F15): a Blueprint rule's `Evaluate` calls `CheckCommon` on
+the context it was given and returns its refusal first. The context's definition and link states are not reflected but travel with the
+struct's native copy, so the Blueprint call decides as the native one (`GSTNLink.Core.Rule.CheckCommonFromBlueprint`); a context made in
+Blueprint has no definition and is refused with `NoDefinition`. Not available to Blueprint: everything per frame (the tick extension, the
+fragment, the inbox kinds, the watchdog), which stays C++.
 
 ## Settings
 

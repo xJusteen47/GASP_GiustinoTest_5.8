@@ -65,7 +65,7 @@ struct GSTNLINKCORE_API FGSTN_LinkRoleDef
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	bool bActsWhileLinked = false;
 
-	/** The two capsules collide while linked. False = collision between them is ignored and restored at the exit */
+	/** The two capsules collide while linked. False (on the parked role) = they ignore each other while linked and for the type's ExitCollisionIgnoreFrames after the exit */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role")
 	bool bCollisionWithPartner = false;
 
