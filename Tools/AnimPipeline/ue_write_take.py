@@ -1,6 +1,6 @@
 """Write a solved take (pose_solver.py output: component-space bones per frame) into Unreal, no Cascadeur.
 
-    python ue_write_take.py <take>_bones.json <AssetName> [--template=AS_Pilot_GanonFTilt_V2] [--no-write]
+    python ue_write_take.py <take>_bones.json <AssetName> [--template=AS_Pilot_GanonFTilt_V2] [--no-write] [--no-ik]
 
 1. samples the template take's frame 0 in local and component space (cached in sheets/raw/<Template>_frame0.json) and finds
    each bone's parent from the data (comp_b = comp_parent * local_b), so no hierarchy is hard-coded;
@@ -8,6 +8,8 @@
    template's local translation (the skeleton's bone lengths). The solver places each bone at its own rig point, and the
    model's points do not keep the skeleton's distances (Ganondorf v3: head 1.4-22.7 cm from neck_02, reference 5.4), so
    writing the solved positions detached the head from the neck. The solved positions now only aim the rotations;
+   Then a two-bone IK per limb puts each foot and hand back at its solved position (limb_ik; --no-ik skips it): with the
+   skeleton's lengths a planted foot drifted up to 3.9 cm;
 3. gates on bone_lengths.py (any bone off its reference length by > 0.1 cm stops the write) and reports how far the hands,
    feet and head moved from the solve once the lengths are fixed (the model's own stretch);
 4. writes them into /Game/AnimPipeline/Pilot/<AssetName> (a copy of the template; ue_take_writer.py, saved);
@@ -71,6 +73,55 @@ def find_parents(loc, comp, solved, bones):
     return parent
 
 
+LIMBS = [(f"thigh_{s}", f"calf_{s}", f"foot_{s}") for s in "lr"] + [(f"upperarm_{s}", f"lowerarm_{s}", f"hand_{s}") for s in "lr"]
+
+
+def limb_ik(S, parent, ref_t, root_p, root_q):
+    """With the skeleton's lengths, the feet and hands no longer land where the solve put them (Ganondorf v3.1: a planted
+    foot drifted 3.9 cm, i.e. it slid). Per frame, FK the solved rotations with the reference translations, then turn the
+    upper and lower bone of each limb (two-bone IK in its current bend plane, minimal rotations) so the end bone sits at its
+    solved position; the end bone keeps its solved orientation. Returns a copy of S with those rotations changed."""
+    from pose_solver import q2m, m2q
+    out = {}
+    for f, fr in S.items():
+        R = {b: q2m(np.array(fr[b][1])) for b in fr}
+        P = {"root": root_p}; Rr = q2m(root_q)
+
+        def pos(b):
+            if b not in P:
+                p = parent[b]
+                Rp = R[p] if p in R else Rr
+                P[b] = np.array(fr[b][0]) if b in BL.FREE else pos(p) + Rp @ ref_t[b]
+            return P[b]
+        nf = {b: list(v) for b, v in fr.items()}
+        for a, m, e in LIMBS:
+            if not all(x in fr for x in (a, m, e)):
+                continue
+            H, K, E = pos(a), pos(m), pos(e)
+            T = np.array(fr[e][0])
+            l1, l2 = float(np.linalg.norm(ref_t[m])), float(np.linalg.norm(ref_t[e]))
+            d = min(float(np.linalg.norm(T - H)), l1 + l2 - 1e-3); u = (T - H) / max(np.linalg.norm(T - H), 1e-9)
+            w = K - H; w = w - u * np.dot(w, u); w = w / max(np.linalg.norm(w), 1e-9)
+            x = (l1 * l1 - l2 * l2 + d * d) / (2 * d); h = np.sqrt(max(l1 * l1 - x * x, 0.0))
+            K2 = H + u * x + w * h
+            Ra = q2m(m2q(_rot_between(K - H, K2 - H))) @ R[a]
+            E1 = K2 + Ra @ (R[a].T @ (E - K))                          # the end after the upper bone's turn
+            Rm = _rot_between(E1 - K2, H + u * d - K2) @ (Ra @ R[a].T @ R[m])
+            nf[a] = [fr[a][0], m2q(Ra).tolist()]; nf[m] = [fr[m][0], m2q(Rm).tolist()]
+        out[f] = nf
+    return out
+
+
+def _rot_between(a, b):
+    a = a / max(np.linalg.norm(a), 1e-12); b = b / max(np.linalg.norm(b), 1e-12)
+    v = np.cross(a, b); c = float(np.dot(a, b))
+    if c < -0.9999:
+        ax = np.cross(a, [1.0, 0, 0] if abs(a[0]) < 0.9 else [0, 1.0, 0]); ax /= np.linalg.norm(ax)
+        return 2 * np.outer(ax, ax) - np.eye(3)
+    vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.eye(3) + vx + vx @ vx / (1.0 + c)
+
+
 def to_tracks(S, parent, ref_t, root_p, root_q):
     """Local tracks: rotation from the solve, translation = reference except root/pelvis (step 2)."""
     n = len(S); tracks = {}
@@ -121,7 +172,8 @@ def main():
     if bad:
         print("WARNING bones parented to root (check):", bad)
     ref_t = {b: np.array(loc[b][:3]) for b in solved}
-    tracks = to_tracks(S, parent, ref_t, np.array(comp["root"][:3]), np.array(comp["root"][3:7]))
+    root_p, root_q = np.array(comp["root"][:3]), np.array(comp["root"][3:7])
+    tracks = to_tracks(limb_ik(S, parent, ref_t, root_p, root_q) if "no-ik" not in opt else S, parent, ref_t, root_p, root_q)
     tmp = os.path.join(HERE, "sheets", "raw", f"{name}_tracks.json")
     os.makedirs(os.path.dirname(tmp), exist_ok=True)
     json.dump({"keys": n, "template": tmpl, "bones": tracks}, open(tmp, "w"))
