@@ -6,17 +6,18 @@ onto what the tip hits when it is drillable, bore with repeated hits, then hop o
 The design is [spin-drill.md](../../docs/architecture/spin-drill.md); the checkpoints are
 [spin-drill-plan.md](../../docs/architecture/plans/spin-drill-plan.md).
 
-Status: **skeleton (0.1)**, `EnabledByDefault: false`. Checkpoint D1 is built: the plugin, its five modules, the native tags of spec
-§10 and their test. No data, math, fragment, ability or presentation code yet (D2 onward). The D0 input findings (Spin condition,
+Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints D1 (the plugin, its five modules, the native tags of spec
+§10) and D2 (tuning structs, target response, the pure drill math and the tuning asset) are built. No fragment, ability or
+presentation code yet (D3 onward). The D0 input findings (Spin condition,
 keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
 
 ## Modules
 
 | Module | Type | State | What it will hold |
 |---|---|---|---|
-| `GSTNSpinDrillCore` | Runtime | native tags, tag ini registration, log category | Data structs, pure math (`UGSTN_DrillMath`), drill target response, native tags. No GAS, NP or Mover. Tests `GSTNSpinDrill.Core.*`. |
+| `GSTNSpinDrillCore` | Runtime | native tags, tuning structs, target response, `UGSTN_DrillMath` | Data structs, pure math, drill target response, native tags. No GAS, NP or Mover. Tests `GSTNSpinDrill.Core.*`. |
 | `GSTNSpinDrillNP` | Runtime | empty | Drill sync fragment, combat tick extension, snapshot extension, latched movement mode. Needs the GAS-NPP fork. |
-| `GSTNSpinDrillGAS` | Runtime | empty | The five abilities (spin, spin cancel, dive, bore, launch), tuning data asset, kit extension. |
+| `GSTNSpinDrillGAS` | Runtime | `UGSTN_SpinDrillTuning` (data asset, no logic) | The five abilities (spin, spin cancel, dive, bore, launch), tuning data asset, kit extension. |
 | `GSTNSpinDrillPresentation` | Runtime | empty | Procedural spin and wobble component; clients and listen hosts only. |
 | `GSTNSpinDrillTests` | Runtime, not in Shipping | empty | Harness abilities and test content names. Unit tests stay in each module's `Private/Tests`. |
 
@@ -35,6 +36,37 @@ project and for Game Feature plugins, so the `GameplayCue.SpinDrill.*` leaves (i
 - `GSTNSpinDrillTests`: the four modules above.
 - Never: `GSTNParts`, `GSTNLevelObjects` (their bridges are separate small plugins, spec §4), an Editor module or the project module.
   `GSTNLink` comes in with the latch (D9), through a new link type.
+
+## Data and math (D2)
+
+Tuning (`Data/GSTN_SpinDrillTypes.h`, Core), grouped by the `UGSTN_SpinDrillTuning` data asset (GAS module, one per kit, no logic):
+
+| Struct | Fields |
+|---|---|
+| `FGSTN_AirSpinTuning` | `HopSpeed`, `SpinGravityScale`, `SpinMaxFallSpeedScale`, `LowGravityExtraFrames`, `UsesPerAirtime`, `RefreshOn` (`EGSTN_AirSpinRefresh` flags: Land, Wall, Trampoline, Launch, Hit; default all but Hit) |
+| `FGSTN_SpinCancelTuning` | `CancelFromFrame`, `CancelRecoveryFrames` |
+| `FGSTN_DiveTuning` | `DiveDirection` (Gravity; Facing and Stick later), `PlungeSpeed`, `SteerFraction` (lateral only, 15 %), `MinDiveFramesBeforeLatch`, `GroundLagFrames`, `BounceSpeed` |
+| `FGSTN_BoreTuning` | `SeatFrames`, `RehitIntervalFrames`, `MaxBoreFrames`, `DetachPopSpeed`, `JumpBoostWindowFrames`, `LatchDepthCm`, `bContinueThroughDestroyed` (no `MinBoreFramesForLaunch`: spec §13b) |
+| `FGSTN_DrillLaunchTuning` | `LaunchSpeed`, `LaunchDirection` (SurfaceNormal or GravityUp), `bRefreshAirSpin` |
+| `FGSTN_DrillWobbleTuning` | `WobbleCurve` (soft, amplitude over the seat, both axes 0..1), `MaxWobbleDegrees`, `PrecessionHz`, `VisualSpinRps` |
+
+Target side: `FGSTN_DrillTargetResponse` (`Data/GSTN_DrillTargetResponse.h`): overrides only (`SeatFramesScale`, `MaxBoreFramesOverride`,
+`DamagePerHitScale`), `bLatchMoves` and `bNeverDrillable`. Whether a part is drillable is penetration against hardness, not a flag.
+A `static_assert` keeps it within the 20-byte snapshot extension slot.
+
+`UGSTN_DrillMath` (`Math/GSTN_DrillMath.h`), pure, no world, no UObject read on the simulation path:
+
+- `QuantizeAnchor` / `DequantizeAnchor`: 3 x int16, 1 cm, at most 0.5 cm error, false when clamped (beyond 327.67 m). C++ only.
+- `EncodeAxis` / `DecodeAxis`: octahedral 2 x int16, below 0.01 degree, poles exact, zero encodes +Z. C++ only.
+- `ResolveEnd` (`FGSTN_DrillEndInputs` -> `EGSTN_DrillEndResult`), first match: hitstun or KO -> `DetachHitstun`; target gone or
+  not drillable -> `Launch` (`KeepPlunging` with `bContinueThroughDestroyed`); crouch released or maximum reached -> `Launch` with a
+  jump boost, `DetachPop` without; else `Continue`. Helpers `ResolveMaxBoreFrames`, `ResolveSeatFrames`, `IsJumpBoostInWindow`.
+- `ShouldRefreshAirSpin`, `AirSpinsUsedAfterEvents`, `CanAirSpin`, `RefreshEventsForEnd` (only a launch that the tuning lets refresh).
+- `ComputeLaunchVelocity` (any gravity, fallbacks for a zero normal or zero gravity), `ComputeDiveVelocity` (lateral steering).
+- `ComputeWobble` (amplitude and phase from frames since latch and sampled curve values; exactly 0 from `SeatFrames`) and
+  `SampleWobbleCurve` (reads the curve once, outside the simulation).
+
+Default numbers are placeholders to tune in play, not design values.
 
 ## Tags
 
@@ -59,5 +91,5 @@ Off by default. To try it: enable `GSTNSpinDrill` in the `.uproject` (or Edit > 
 
 ## Extending
 
-Nothing to extend yet. The extension points (tuning asset, target response overrides, Blueprint hooks on the abilities) arrive with
-D2 to D5; see spec §13.
+Make a `UGSTN_SpinDrillTuning` asset per kit (the kit extension that references it comes later). The target response is filled by a
+kit or a drill-target interface in a later checkpoint. Blueprint hooks on the abilities arrive with D4 and D5; see spec §13.
