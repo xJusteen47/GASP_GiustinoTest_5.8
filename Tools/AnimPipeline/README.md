@@ -45,8 +45,8 @@ Coordinates:
 ## Replicating a reference: key poses first (owner, 01/11, after Ganondorf v2 was rejected)
 
 Ganondorf v2 passed every check and was rejected: "the arm movement makes no sense, the legs don't have the right anticipation". We had taken only the extension and timing curve from the reference, never its key poses. Timing alone is never enough.
-1. **Extract the key poses first.** For each phase (first frame, anticipation, active, recovery, last frame), read the reference frames as joint directions per body part: torso pitch/yaw, upper arm and forearm, thigh and shin per side, head. Store them as `refs/<move>/keyposes.json`.
-2. **Build our key poses from those**, arms included. Our rules (balance, counterweight) adjust a pose, they never invent it.
+1. **Extract the key poses first.** For each phase (first frame, anticipation, active, recovery, last frame), read the reference frames as joint directions per body part: torso pitch/yaw, upper arm and forearm, thigh and shin per side, head. Store them as `refs/<move>/keyposes.json`: `python ref_keyposes.py refs/<move> [support side]` writes every 2D segment's side-view angle and length per still (same normalisation as the gate). A segment much shorter than its longest still points out of the side plane: its direction is unreliable.
+2. **Build our key poses from those**, arms included. Our rules (balance, counterweight) adjust a pose, they never invent it. Template: `ganon_ftilt_v3_motion.py` keys the kicking leg and the arms as side-view angles from keyposes.json (so the projection matches by construction), solves the support hip height from a support-knee curve and the balance shift per frame; where the reference itself is off balance, the frames are declared in the move sheet (`balance_exempt_frames`, with the reason).
 3. **Pose-match score:** compare each of our key poses with the reference, per body part (angle between directions). Report it beside the checks, and review it first: a pose that does not match fails, even if every check passes.
 4. **Stance comes from the reference too** (Ganondorf's ftilt lands in a deep, wide crouch, not upright).
 
@@ -86,7 +86,7 @@ how much each part moves, when, and in which direction. These tools do, and gate
 ## One pass of a move (Ganondorf ftilt is the template)
 
 ```
-ganon_ftilt_v2_motion.py   model: rig points per frame + key plan       -> <take>_targets_raw.json
+ganon_ftilt_v3_motion.py   model: rig points per frame + key plan       -> <take>_targets_raw.json
 motion_curves.py           GATE: limb amplitude, anticipation, arm direction vs the reference (model points, ~1 s)
                                                                         -> sheets/<take>_model_curves.png/.txt/.json
 preflight.py               the checks on the model's points, < 0.1 s     -> sheets/<take>_preflight.txt/.json
@@ -129,7 +129,7 @@ Keys:
 | `legibility.py` | Attacking part distinct at contact; rear arm / arms hiding it; rear elbow; fists closed; attacking limb readable from the Follow, rail and PvP cameras; exaggeration out of the body. `configure(take)` switches to the kick mode (foot as the attacking part) from the move sheet | `legibility_thresholds.json` |
 | `motion_check.py` | Weight (punch: centre of mass into the strike; kick: hip drive from the wind-up), impact spacing, hold/recoil, overlap cascades, arcs and zig-zags (snaps, holds and the wind-up reversal are beats), attack line | `motion_thresholds.json` |
 | `joints.py` (from motion_check) | Wrists, knees over the toes, ankles, foot roll/floor, support knee on one foot, airborne kicking foot | `motion_thresholds.json` (`joint_*`) |
-| `arm_check.py` (from motion_check) | Elbow direction (from 40° of upper-arm elevation), flare, chicken wing, reverse bend, forearm/hand roll and roll jumps | `motion_thresholds.json` (`elbow_*`, `twist_*`) |
+| `arm_check.py` (from motion_check) | Elbow direction (from 40° of upper-arm elevation), flare, chicken wing (arms raised forward or sideways; an arm swept back has its own limit, `elbow_ext_elev_max_deg` 65°), reverse bend, forearm/hand roll and roll jumps | `motion_thresholds.json` (`elbow_*`, `twist_*`) |
 | `balance_check.py` (from motion_check) | Centre of mass inside the support base (flat foot or toes), 2 cm tolerance; kicks: upper body leans back relative to the hips | `motion_thresholds.json` (`balance_*`, `counterbalance_*`) |
 | `pose_rules.py` (from motion_check) | Weight shifted before lift-off, support knee 10–45° on one foot, kick kinetic chain, no twinning, head toward the target, planted-foot slide | `motion_thresholds.json` |
 | `wrist_check.py` | Wrist flexion/deviation and frozen fists | `motion_thresholds.json` (`wrist_*`, `frozen_*`) |

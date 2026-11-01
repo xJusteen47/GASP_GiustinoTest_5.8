@@ -194,12 +194,16 @@ class Move:
                 if flex <= TH["elbow_min_flex_for_pole_deg"]:
                     continue
                 iss = []
-                if pole[1] > TH["elbow_pole_up_max"] and elev >= TH.get("elbow_pole_min_elevation_deg", 40):
+                ua = unit(el - sh); fwd = np.cross(left, up_t)
+                swept = float(-np.dot(ua, fwd)) > max(0.0, abs(float(np.dot(ua, left))))   # swept back: own limit (arm_check)
+                if not swept and pole[1] > TH["elbow_pole_up_max"] and elev >= TH.get("elbow_pole_min_elevation_deg", 40):
                     iss.append("elbow pointing up/sideways")
                 if out_ > TH["elbow_pole_out_max"]:
                     iss.append("elbow flared out")
-                if elev > TH["elbow_upperarm_elev_max_deg"]:
+                if not swept and elev > TH["elbow_upperarm_elev_max_deg"]:
                     iss.append("upper arm raised (chicken wing)")
+                if swept and elev > TH.get("elbow_ext_elev_max_deg", 65):
+                    iss.append("upper arm swept back past the shoulder's range")
                 striking_arm = not self.kick and s == self.side
                 if iss and not (striking_arm and f in win and elev > 60 and flex < 60):
                     bad.append((s, f, iss, round(out_, 2), round(float(pole[1]), 2), round(elev)))
