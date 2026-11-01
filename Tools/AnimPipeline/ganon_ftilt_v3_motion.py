@@ -37,25 +37,26 @@ LAND = 24                    # the kicking foot is planted from here
 KEYS = list(range(N)); LINEAR = [[a, b] for a, b in zip(KEYS[:-1], KEYS[1:])]; CLAMPED = []; BEZIER = []; LAYERS = {}; WEIGHTS = {}
 KICK_YAW = 20.0              # deg, kick plane outward (toward +X, the lead side) from the facing
 
-CHEST_LAG = 1.3
+CHEST_LAG = 1.6
 HEAD_LAG = 3.0
 ARM_LAG = 1.0
+FA_LAG = 0.0                 # the forearm trails the upper arm (overlap down the arm chain)
 ARM_AXIS_BLEND = {"l": 0.5, "r": 0.85}        # arms swing in a plane between the kick plane (0) and the chest's own forward (1): the chest is
                              # turned ~40 deg toward profile, so a swing in the kick plane goes out SIDEWAYS from the chest
                              # (flared, raised elbow); halfway keeps cos(19 deg) of it in the side view
 
 # ---- kicking leg: (thigh, shin) side-view angles, deg; until the landing ----
-LEG = {0: (-8, -88), 2: (22, -66), 4: (62, -44), 6: (80, -37), 7: (81, -36), 8: (72, -16),
+LEG = {0: (-8, -88), 3: (45, -56), 6: (80, -37), 7: (81, -36), 8: (72, -16),
        9: (7, -4), 10: (6, -6), 11: (5, -8), 13: (2, -18), 16: (1, -22), 18: (5, -30), 19: (9, -40), 20: (-5, -45), 21: (-15, -62), 22: (-28, -72), 23: (-42, -78)}
 LEG_OUT = {0: 4, 9: 2, 20: 2, 23: 4}                       # knee out of the kick plane (deg, outward)
-FOOT_REL = {0: 52, 6: 50, 8: 60, 9: 72, 20: 70, 22: 58, 23: 62}   # foot axis (ankle -> ball) minus shin angle; idle 66 (neutral)
+FOOT_REL = {0: 52, 8: 60, 9: 72, 20: 70, 22: 58, 23: 62}   # foot axis (ankle -> ball) minus shin angle; idle 66 (neutral)
 LAND_BLEND = {22: 0.3, 23: 0.75}   # share of the landing spot reached before the touchdown (fast out of the hold, slow in to the floor)
 LAND_SPOT = (6.0, 0.0, 20.0)                               # cm from the idle left ankle: ~0.55 body lengths ahead of the support
 
 # ---- arms: (upper arm, forearm) side-view angles, and out-of-plane angles (outward +) ----
-ARM_L = {0: (-48, -8), 2: (-30, -18), 4: (-2, 4), 6: (16, 9), 8: (8, 2), 9: (-68, -82), 11: (-70, -84), 20: (-72, -78), 23: (-82, -40),
+ARM_L = {0: (-48, -8), 2: (-30, -18), 4: (-2, 4), 6: (16, 16), 8: (8, 12), 9: (-68, -52), 11: (-70, -54), 20: (-72, -56), 23: (-82, -40),
          25: (-87, -13), 35: (-78, -48)}
-ARM_L_OUT = {0: (15, 10), 6: (12, 8), 9: (20, 15), 25: (25, 15), 35: (20, 10)}
+ARM_L_OUT = {0: (15, 10), 6: (18, 4), 9: (20, 15), 25: (25, 15), 35: (20, 10)}
 # rear arm: the reference's is ~1.5x longer in 2D than ours (the near-side arm, the gauntlet), so its swing is a little
 # exaggerated (forward in the wind-up, back in the strike) to keep the amplitude near the reference, and kept close to the
 # side plane (out-of-plane shortens it further)
@@ -64,17 +65,17 @@ ARM_R = {0: (-117, -72), 3: (-85, -45), 6: (-48, -12), 8: (-58, -24), 9: (-124, 
 ARM_R_OUT = {0: (6, 10), 6: (5, 8), 9: (14, 16), 20: (12, 16), 25: (8, 12), 35: (6, 10)}
 
 # ---- body ----
-LEAN = {0: -16, 3: -24, 6: -31, 7: -32, 8: -36, 9: -44, 11: -45, 20: -40, 22: -25, 24: -2, 26: 7, 30: 11, 34: 16}   # deg, - = back
-PEL_YAW = {0: 10, 6: 14, 8: 18, 9: 24, 11: 24, 20: 20, 24: 10, 33: 6}
+LEAN = {0: -16, 3: -24, 6: -31, 7: -32, 8: -36, 9: -44, 11: -45, 20: -40, 22: -25, 24: -2, 26: 7, 30: 11, 33: 16}   # deg, - = back
+PEL_YAW = {0: 10, 6: 14, 8: 18, 9: 24, 11: 24, 20: 22, 24: 20, 33: 18}   # hips stay open toward profile into the wide crouch (knees out, as the reference)
 CHEST_YAW = {0: -2, 6: -4, 9: -6, 20: -5, 26: -2, 34: -2}
-SIDE = {0: 5, 6: 6, 9: 8, 20: 7, 24: 3, 30: 1}
+SIDE = {0: 5, 4: 6.5, 6: 6, 9: 8, 20: 7, 24: 3, 30: 1}
 # support foot about its ball: a little with the hips in the kick, then turned out as the weight goes into the wide crouch
 # (the reference's support thigh points at the camera in the recovery and the last frame: the knee goes out to the side)
 PIVOT = {0: 6, 6: 8, 9: 16, 20: 16, 23: 22, 26: 42, 29: 45}
-SUP_KNEE = {0: 16, 3: 22, 6: 11, 8: 11, 9: 12, 11: 13, 20: 18, 22: 24, 23: 34, 24: 58, 25: 82, 27: 102, 29: 100, 31: 90, 34: 76}
+SUP_KNEE = {0: 16, 3: 22, 5: 13, 6: 11, 8: 11, 9: 12, 11: 13, 20: 18, 22: 24, 23: 34, 24: 58, 25: 82, 27: 102, 29: 100, 31: 90, 34: 76}
 # centre-of-mass target: cm along the attack from the support foot centre while on one foot; the strike (9-12) and the
 # step down onto the landing foot (21-23) are ahead of the toes, as the reference (declared exempt in the move sheet)
-BAL_S = {0: 0, 3: -1.5, 6: 0, 8: 3, 9: 10, 11: 10, 13: 8, 15: 6.5, 20: 6.5, 22: 10, 23: 14}
+BAL_S = {0: 0, 3: -1.5, 5: -2, 6: -2, 7: 0, 8: 3, 9: 10, 11: 10, 13: 8, 15: 6.5, 20: 6.5, 22: 10, 23: 14}
 BAL_F = {23: 0.0, 24: 0.1, 25: 0.3, 27: 0.5, 33: 0.68}   # the reference ends with the weight on the front foot (COM 0.45 of 0.55)            # front-foot share once both feet are down
 
 _ovr = os.environ.get("MODEL_OVERRIDES")
@@ -202,6 +203,10 @@ def main():
     gax = unit(G["ball_MainPoint_l"] - G["foot_MainPoint_l"])
     glat = G["ball_AdditionalPoint_l"] - G["ball_MainPoint_l"]; glat = unit(glat - gax * np.dot(glat, gax))
     spot = G["foot_MainPoint_l"] + np.array(LAND_SPOT)
+    # the planted landing foot points where its knee bends (knee over the toes): yaw the idle foot to the knee pole
+    kp_h = unit(kf + 0.5 * lat); ga_h = unit(np.array([gax[0], 0.0, gax[2]]))
+    yaw_l = math.degrees(math.atan2(ga_h[0], ga_h[2]) - math.atan2(kp_h[0], kp_h[2]))
+    gax_land, glat_land = Ry(yaw_l) @ gax, Ry(yaw_l) @ glat
     MASS = [("head", 0.081), ("trunk", 0.497), ("ua_l", 0.028), ("ua_r", 0.028), ("fa_l", 0.016), ("fa_r", 0.016), ("hd_l", 0.006),
             ("hd_r", 0.006), ("th_l", 0.10), ("th_r", 0.10), ("sh_l", 0.0465), ("sh_r", 0.0465), ("ft_l", 0.0145), ("ft_r", 0.0145)]
 
@@ -259,7 +264,8 @@ def main():
             return math.cos(o) * (math.cos(t) * ax + math.sin(t) * up) + math.sin(o) * side * lat_a
         for s, sd in (("l", 1.0), ("r", -1.0)):
             ta = k - ARM_LAG
-            th_ua, th_fa = at(C[f"arm_{s}"], ta); o_ua, o_fa = at(C[f"out_{s}"], ta)
+            th_ua, o_ua = at(C[f"arm_{s}"], ta)[0], at(C[f"out_{s}"], ta)[0]
+            th_fa, o_fa = at(C[f"arm_{s}"], ta - FA_LAG)[1], at(C[f"out_{s}"], ta - FA_LAG)[1]
             S = D[f"upperarm_MainPoint_{s}"]
             el = S + L_UA[s] * adir(th_ua, o_ua, sd)
             hand = el + L_FA[s] * adir(th_fa, o_fa, sd)
@@ -293,9 +299,9 @@ def main():
         if w < 1.0:
             a_air = sdir(th_s + C["foot_rel"][k], 0.0)
             l_air = lat
-            a1 = unit((1 - w) * a_air + w * gax); l1 = unit((1 - w) * l_air + w * glat)
+            a1 = unit((1 - w) * a_air + w * gax_land); l1 = unit((1 - w) * l_air + w * glat_land)
         else:
-            a1, l1 = gax, glat
+            a1, l1 = gax_land, glat_land
         l1 = unit(l1 - a1 * np.dot(l1, a1))
         F0 = np.stack([gax, glat, np.cross(gax, glat)], axis=1); F1 = np.stack([a1, l1, np.cross(a1, l1)], axis=1)
         Rf = F1 @ F0.T
