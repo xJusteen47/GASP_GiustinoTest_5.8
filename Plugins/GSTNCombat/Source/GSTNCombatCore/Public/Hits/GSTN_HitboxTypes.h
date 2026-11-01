@@ -100,6 +100,29 @@ struct GSTNCOMBATCORE_API FGSTN_HitboxSpec
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox", meta = (ClampMin = "1", ClampMax = "8"))
 	uint8 MaxTargetsPerGroup = 8;
 
+	/**
+	 * Re-hit interval (seam S1, combat.md 11.1): 0 = a victim is hit once per group and attack (the rule above). N > 0 = the same victim can be
+	 * hit again by this group every N simulation frames of the attack's run, counted from the frame the timeline started (hitstop and held
+	 * frames included, so a held move keeps grinding: the drill's bore). Needs a HitGroup below 8 (the group's bit); ignored otherwise
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox", meta = (ClampMin = "0", ClampMax = "255", ForceUnits = "Frames"))
+	int32 RehitIntervalFrames = 0;
+
+	/**
+	 * The key the attacker's target ring stores for a hit of this hitbox FramesSinceStart frames into the attack: HitGroup, plus for a re-hit
+	 * interval the interval's index (mod 32) in the bits above the group's three, so a new interval is a new key and the ring's byte and
+	 * wire stay as they are. Pure
+	 */
+	uint8 MakeTargetKey(int32 FramesSinceStart) const
+	{
+		if (RehitIntervalFrames <= 0 || HitGroup >= 8)
+		{
+			return HitGroup;
+		}
+		const int32 Interval = FMath::Max(FramesSinceStart, 0) / RehitIntervalFrames;
+		return static_cast<uint8>(HitGroup | ((Interval & 31) << 3));
+	}
+
 	/** Tests the sub-steps between the previous and the current frame, so a fast hitbox does not tunnel */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox")
 	bool bSweepBetweenFrames = false;

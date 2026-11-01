@@ -1004,6 +1004,9 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 			Event.Instigator = GetOwner();
 			EventOutbox.Add(MoveTemp(Event));
 		}
+		// Seam D-1: the event keys of the running timeline that carry an outbox event, crossed by this frame's evaluation. Written on every machine
+		// and every re-simulation, published by the authority only (the cue and the gameplay event of the key stay the ability's)
+		FGSTN_CombatTimelineLogic::AppendOutboxEvents(TimelineOutput, Frame, GetOwner(), EventOutbox);
 	}
 	Extensions.Run(EGSTN_CombatHookPoint::AfterExecute, HookContext);
 

@@ -154,7 +154,8 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 			FGSTN_PredictedHitView& View = PredictedHits.AddDefaulted_GetRef();
 			View.Frame = Frame;
 			View.VictimId = Hit.VictimId;
-			View.HitGroup = Hit.HitGroup;
+			// The ring's key, which the presentation tracker reads back from the targets (a re-hit interval makes each interval its own effect)
+			View.HitGroup = Hit.TargetKey;
 			View.Timeline = Core.ActiveTimeline;
 			View.HitboxIndex = Hit.Entry.AttackerHitboxIndex;
 			View.AttackerHitstopFrames = Hit.AttackerHitstopFrames;
