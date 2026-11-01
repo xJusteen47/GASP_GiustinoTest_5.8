@@ -148,7 +148,8 @@ ref_sidebyside.py refs/<name> <out.png> <take>:<frames>    the reference's still
 - The solved positions only aim the rotations. The first v3 wrote them as translations, and the model's head point was up to
   17 cm off its neck (each trunk segment rotated about the pelvis at its own lagged time): the head detached from the neck
   in Unreal. Cascadeur's rig had hidden the same stretch in v2 (4 cm). The v3 model now builds the trunk as a chain (each
-  segment about its parent's joint, one balance shift), and both ends are gated on `bone_lengths.py`.
+  segment about its parent's joint, one balance shift), and both ends are gated on `bone_lengths.py`. Ganondorf v3.1 is the tuned result (all model gates pass; twist chain, crouch
+  and pronation in the model's docstring).
 - No interpolation pass: write every frame (the model is dense). Cascadeur's physics tools are the only thing lost.
 - A Blender exporter would reuse `pose_solver.py` and set the same local transforms on an armature.
 
