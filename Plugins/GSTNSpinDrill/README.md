@@ -9,7 +9,7 @@ The design is [spin-drill.md](../../docs/architecture/spin-drill.md); the checkp
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints D1 (the plugin, its five modules, the native tags of spec
 §10), D2 (tuning structs, target response, the pure drill math and the tuning asset) and D3 (the drill sync fragment and the tick
 extension's phase machine) and D4 (the ground and air spin: abilities, input slots, hop, low gravity, one air spin per airtime) are
-built, D5 (the opposite-spin cancel), D6/D7 (combat core seams: re-hit interval, outbox event keys) and D8 (the dive). Next: D9+D10 (latch and bore). The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
+built, D5 (the opposite-spin cancel), D6/D7 (combat core seams: re-hit interval, outbox event keys) D8 (the dive) and the minimal part of D11 (the procedural spin and wobble). Next: D9+D10 (latch and bore). The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
 
 ## Modules
 
@@ -18,7 +18,7 @@ built, D5 (the opposite-spin cancel), D6/D7 (combat core seams: re-hit interval,
 | `GSTNSpinDrillCore` | Runtime | native tags, tuning structs, target response, `UGSTN_DrillMath`, `FGSTN_SpinTrack`, `FGSTN_SpinTimelines`, `FGSTN_SpinSlots` | Data structs, pure math, drill target response, native tags. No GAS, NP or Mover. Tests `GSTNSpinDrill.Core.*`. |
 | `GSTNSpinDrillNP` | Runtime | `FGSTN_DrillFragment` (feature id 19), `FGSTN_DrillTickExtension` (priority 130), `FGSTN_SpinDrillAttach`, hop and low gravity effects | Drill sync fragment, combat tick extension, later the snapshot extension and the latched movement mode. Needs the GAS-NPP fork. Tests `GSTNSpinDrill.NP.*`. |
 | `GSTNSpinDrillGAS` | Runtime | `UGSTN_SpinDrillTuning`, `FGSTN_SpinDrillKitExtension` + loadout extension, the spin abilities, `UGSTN_SpinDrillLibrary` | The five abilities (spin, spin cancel, dive, bore, launch), tuning data asset, kit extension. |
-| `GSTNSpinDrillPresentation` | Runtime | empty | Procedural spin and wobble component; clients and listen hosts only. |
+| `GSTNSpinDrillPresentation` | Runtime | `UGSTN_DrillPresentationComponent` (D11, minimal) | Procedural spin and wobble component; clients and listen hosts only. |
 | `GSTNSpinDrillTests` | Runtime, not in Shipping | empty | Harness abilities and test content names. Unit tests stay in each module's `Private/Tests`. |
 
 The Core module class registers the plugin's `Config/Tags` folder with the tag manager: the engine reads `Config/Tags` only for the

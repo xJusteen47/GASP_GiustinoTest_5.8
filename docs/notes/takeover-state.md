@@ -899,3 +899,8 @@ BUILD: Saved/D4/build_d8_2.out "Result: Succeeded". TESTS: Saved/D4/headless-d8-
 HARNESS: drill_ground_lag and drill_nondrillable_bounce added to spin_drill_scenarios.py (need Input.Button.Crouch in IC_GASNPP_Test); drill_tilted_gravity not written (no gravity volume level). No scenario of SUITE_SPIN has been run.
 OPEN: (1) Owner: fast-forward feature/gas-npp-5.8 to the thread branch now that the plugin-enabled run passed. (2) SUITE_SPIN in PIE. (3) HANDOVER 71 OPEN 2-5.
 NEXT: D9+D10 (latch and bore through Combat.Link.Type.Drill, M7 G1 offers; no GSTNLink edit expected; M7 G2 is editing GSTNLink now, so check with it before reading assumptions off those files).
+
+## HANDOVER 75 (laptop, 2026-11-01): spin and drill D11, minimal presentation only
+Branch feature/gas-npp-5.8, laptop checkout at 79d57d9 (D8) + this, pushed to claude/project-thread-vfuzsj. Done while M7 G2 edits GSTNLink (D9+D10 waits for its push). Coordinator reminded the owner rule of 2026-10-24 (no aesthetics yet): kept to the procedural readability layer. CODE: GSTNSpinDrillPresentation: UGSTN_DrillPresentationComponent (ComputePose / PoseRotation pure; spin yaw during Spinning, drill spin during Diving/Boring/Seating, wobble during Seating; TG_PostPhysics on top of Mover's base visual transform), module loadout extension GSTNSpinDrillPresentation (FindOrAdd, not on a dedicated server); Build.cs + Mover, GSTNCombatCore/GAS/NP. Test GSTNSpinDrill.Presentation.PoseFromFragment.
+BUILD: Saved/D4/build_d11_1.out "Result: Succeeded" (plugin enabled with the LF needle). TESTS: Saved/D4/headless-d11.log (RunTests GSTNInput+GSTNCombat+GSTNSpinDrill): found 626, 626 Success / 0 Fail. .uproject restored (E48D6E45DC87). Not checked in a rendered PIE.
+NEXT: D9+D10 after M7 G2 is pushed.
