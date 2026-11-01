@@ -29,6 +29,12 @@ namespace GSTNSpinDrillTags
 	/** Spin command, a counter-clockwise stick rotation in Stick space */
 	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Movement_Spin_CounterClockwise);
 
+	/** Clockwise spin from the keyboard shortcut D-S-A (a Motion in Stick space); a child, so cancel windows on the parent take it */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Movement_Spin_Clockwise_Keys);
+
+	/** Counter-clockwise spin from the keyboard shortcut A-S-D (a Motion in Stick space) */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Movement_Spin_CounterClockwise_Keys);
+
 	/** Spin command from the optional spin button; the sense is the last stick rotation's, clockwise by default */
 	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Movement_Spin_Button);
 
@@ -59,6 +65,20 @@ namespace GSTNSpinDrillTags
 
 	/** The drill is latched onto a target and boring */
 	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_DrillLatched);
+
+	/**
+	 * The low gravity of the air spin is on. The one exception to "projected, never granted": the low gravity effect grants it, and the
+	 * tick extension compares it with the fragment every frame to apply or remove the effect (a cheap tag test instead of an effect query)
+	 */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_SpinLowGravity);
+
+	// ---- SetByCaller magnitudes of the low gravity effect ----
+
+	/** Multiplier of the jump and fall gravity scales while the air spin's low gravity is on */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_SpinDrill_GravityScale);
+
+	/** Multiplier of the maximum fall speed while the air spin's low gravity is on */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_SpinDrill_FallSpeedScale);
 
 	// ---- Hit type ----
 

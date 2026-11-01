@@ -12,7 +12,7 @@ bool FGSTN_SpinDrillTagsTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
 	GSTNSpinDrillTags::GetDeclaredTags(Tags);
-	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 21);
+	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 26);
 
 	const UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
 	TSet<FGameplayTag> Seen;

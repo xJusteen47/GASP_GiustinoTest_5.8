@@ -2,11 +2,18 @@
 
 #include "Sim/GSTN_DrillTickExtension.h"
 
+#include "Abilities/GSTN_GA_BaseCombat.h"
 #include "AbilitySystemComponent.h"
+#include "Data/GSTN_SpinDrillTracks.h"
+#include "Effects/GSTN_SpinDrillEffects.h"
+#include "GameFramework/Actor.h"
 #include "GSTN_SpinDrillTags.h"
 #include "Math/GSTN_DrillMath.h"
 #include "Sim/GSTN_DrillFragment.h"
+#include "Sim/GSTN_SpinDrillAttach.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 #include "Sync/GSTN_SyncFragment.h"
 
 namespace GSTNDrillTick
@@ -55,6 +62,10 @@ FGSTN_DrillSimTuning FGSTN_DrillSimTuning::FromTuning(const FGSTN_AirSpinTuning&
 	Tuning.LowGravityExtraFrames = AirSpin.LowGravityExtraFrames;
 	Tuning.bContinueThroughDestroyed = Bore.bContinueThroughDestroyed;
 	Tuning.bRefreshAirSpinOnLaunch = Launch.bRefreshAirSpin;
+	Tuning.HopSpeed = AirSpin.HopSpeed;
+	Tuning.bHopCancelsFall = AirSpin.bHopCancelsFall;
+	Tuning.SpinGravityScale = AirSpin.SpinGravityScale;
+	Tuning.SpinMaxFallSpeedScale = AirSpin.SpinMaxFallSpeedScale;
 	return Tuning;
 }
 
@@ -99,7 +110,6 @@ void FGSTN_DrillTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 
 void FGSTN_DrillTickExtension::StepAfterClocks(FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_DrillFrameInputs& Inputs, const FGSTN_DrillSimTuning& Tuning)
 {
-	Fragment.AirSpinsUsed = static_cast<uint8>(UGSTN_DrillMath::AirSpinsUsedAfterEvents(Fragment.AirSpinsUsed, Tuning.RefreshOn, Inputs.RefreshEvents));
 	if (Fragment.LowGravityUntilFrame != INDEX_NONE && Frame >= Fragment.LowGravityUntilFrame)
 	{
 		Fragment.LowGravityUntilFrame = INDEX_NONE;
@@ -129,6 +139,10 @@ void FGSTN_DrillTickExtension::StepAfterClocks(FGSTN_DrillFragment& Fragment, in
 void FGSTN_DrillTickExtension::StepAfterExecute(FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_DrillFrameInputs& Inputs, const FGSTN_DrillSimTuning& Tuning)
 {
 	using namespace GSTNDrillTick;
+
+	// The refresh comes first: a landing and an air spin request on one frame cannot happen (the air spin is bound to the air), but a
+	// trampoline launch and an air spin can, and the spin then counts against the airtime the launch started
+	Fragment.AirSpinsUsed = static_cast<uint8>(UGSTN_DrillMath::AirSpinsUsedAfterEvents(Fragment.AirSpinsUsed, Tuning.RefreshOn, Inputs.RefreshEvents));
 
 	switch (Inputs.Request)
 	{
@@ -279,14 +293,73 @@ void FGSTN_DrillTickExtension::GatherStateTags(const FGSTN_DrillFragment* Fragme
 	}
 }
 
+bool FGSTN_DrillTickExtension::HasSpinTimelineEnded(const FGSTN_DrillFragment& Fragment, const FGSTN_CombatSyncCore& Core)
+{
+	return Fragment.IsSpinning() && (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame != Fragment.PhaseStartFrame);
+}
+
+void FGSTN_DrillTickExtension::ReadSpinStart(const FGSTN_SpinTrack& Track, FGSTN_DrillFrameInputs& OutInputs)
+{
+	OutInputs.Request = Track.bAirSpin ? EGSTN_DrillRequest::AirSpin : EGSTN_DrillRequest::Spin;
+	OutInputs.bClockwise = Track.IsClockwise();
+	// The low gravity lasts to the end of the track, counted from the timeline's start (the frame of the request)
+	OutInputs.SpinFrames = FMath::Max(0, Track.EndFrame);
+}
+
+bool FGSTN_DrillTickExtension::WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame)
+{
+	return Fragment && Fragment->IsLowGravity(Frame);
+}
+
 FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPoint Point, const FGSTN_CombatTickContext& Context) const
 {
-	return FGSTN_DrillFrameInputs();
+	FGSTN_DrillFrameInputs Inputs;
+	switch (Point)
+	{
+	case EGSTN_CombatHookPoint::AfterClocks:
+		if (const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments))
+		{
+			Inputs.bPhaseTimelineEnded = HasSpinTimelineEnded(*Fragment, Context.Out.Core);
+		}
+		break;
+	case EGSTN_CombatHookPoint::AfterExecute:
+		// The jump step of this frame already ran: In holds the end of the previous frame, Out this one
+		Inputs.RefreshEvents = UGSTN_DrillMath::RefreshEventsFromJumpPhase(static_cast<uint8>(Context.In.Core.Jump.Phase), static_cast<uint8>(Context.Out.Core.Jump.Phase));
+		if (const FGSTN_CombatTimelineData* Started = ResolveStartedTimeline(Context))
+		{
+			if (const FGSTN_SpinTrack* Spin = FGSTN_SpinTrack::Find(*Started))
+			{
+				ReadSpinStart(*Spin, Inputs);
+			}
+		}
+		break;
+	default:
+		break;
+	}
+	return Inputs;
 }
 
 FGSTN_DrillSimTuning FGSTN_DrillTickExtension::GetTuning(const FGSTN_CombatTickContext& Context) const
 {
-	return FGSTN_DrillSimTuning::MakeDefault();
+	return FGSTN_SpinDrillAttach::FindOrDefault(Context.Owner);
+}
+
+const FGSTN_CombatTimelineData* FGSTN_DrillTickExtension::ResolveStartedTimeline(const FGSTN_CombatTickContext& Context) const
+{
+	const FGSTN_CombatSyncCore& Core = Context.Out.Core;
+	// Almost every frame stops here: only the frame a timeline starts on looks further
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame != Context.Frame || !Context.Owner)
+	{
+		return nullptr;
+	}
+	const UGSTN_CombatSimComponent* Combat = Context.Owner->FindComponentByClass<UGSTN_CombatSimComponent>();
+	const UGSTN_CombatTableSet* Set = Combat ? Combat->FindTableSet(Core.TableRevision) : nullptr;
+	if (!Set || !Set->TimelineRegistry.IsValidIndex(Core.ActiveTimeline) || !Set->TimelineRegistry[Core.ActiveTimeline])
+	{
+		return nullptr;
+	}
+	const UGSTN_GA_BaseCombat* Default = Set->TimelineRegistry[Core.ActiveTimeline]->GetDefaultObject<UGSTN_GA_BaseCombat>();
+	return Default ? &Default->GetTimelineData() : nullptr;
 }
 
 void FGSTN_DrillTickExtension::ProjectTags(FGSTN_CombatTickContext& Context, const FGSTN_DrillSimTuning& Tuning) const
@@ -298,6 +371,8 @@ void FGSTN_DrillTickExtension::ProjectTags(FGSTN_CombatTickContext& Context, con
 	}
 	const FGameplayTagContainer& Projectable = GetProjectableTags();
 	const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments);
+	// The low gravity follows the window on every frame, before the early out: a rollback to before the fragment must remove it too
+	UGSTN_GE_AirSpinLowGravity::Sync(*ASC, WantsLowGravity(Fragment, Context.Frame), Tuning);
 	// No fragment (never spun, or a rollback to before the first spin): clear only what a predicted future may have left
 	if (!Fragment && !ASC->HasAnyMatchingGameplayTags(Projectable))
 	{
