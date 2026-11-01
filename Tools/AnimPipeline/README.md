@@ -36,7 +36,7 @@ Coordinates:
   - Frame 0 already shows a strong change into the move's stance: guard, load or chamber.
   - The recovery rises back toward the upright idle by the FAF.
   - Exceptions: crouched and aerial moves.
-  - **A reference's last frame is the FAF pose** (owner, 01/11, Ganondorf ftilt: "the last frame is functionally the last"). The clip is IN that pose at the FAF, with every part arrived (lags included); if that pose is not the idle (a crouched guard), the move overrides "rise toward the idle by the FAF". A return to the idle, if wanted, lives only in the tail after the FAF.
+  - **A reference's last frame is the FAF pose** (owner, 01/11, Ganondorf ftilt: "the last frame is functionally the last"). The clip is IN that pose at the FAF, with every part arrived (lags included); if that pose is not the idle (a crouched guard), the move overrides "rise toward the idle by the FAF". No authored tail: the clip ends ON the FAF and the game's generic blend takes it to whichever idle is playing (owner, 01/11).
 - **Six views.** Every key pose is reviewed from six views (front, right, back, left, top, bottom), plus 3/4, the game cameras, videos and elbow close-ups.
 - **Exaggeration.** Joints must look natural; an out-of-range joint is accepted only as an exaggeration inside the action frames and along the motion.
 - **Big pose changes.** Before a relatively big pose change beyond what was asked, describe it and wait for approval (waived for jab v11 and Ganondorf ftilt).
