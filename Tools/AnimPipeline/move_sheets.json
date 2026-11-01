@@ -226,6 +226,6 @@
    22
   ],
   "_balance_exempt": "the reference is off balance in the strike (its COM ~0.23 body lengths = 29 cm ahead of the support ankle at the active pose, the toe edge is ~15 cm): 9-14 the strike lunge; 20-22 the step down onto the landing foot (a controlled fall forward, the foot lands at 23-24)",
-  "_exit": "ends in the reference's low wide guard (support knee ~76 deg, weight on the front foot), not the upright idle: the reference's last frame is crouched (owner's frames); the game's blend returns to the idle"
+  "_exit": "the FAF pose (anim 37) IS the reference's last frame, the low wide guard (owner 01/11 14:24Z: the last frame is the functional last frame); this move overrides 'rise toward the idle by the FAF'. The tail 37-43 holds the guard; any return to the idle belongs in the tail, which starts at the FAF"
  }
 }

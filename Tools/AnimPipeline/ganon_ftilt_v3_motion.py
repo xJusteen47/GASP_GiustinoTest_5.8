@@ -16,7 +16,9 @@ Timing (UFD: startup 10, active 10-12, total 39; anim = G x 0.96; refs/ufd/Ganon
 reference's first pose (knee already lifting, arms out); the knee chambers to the chest and the support leg extends 0-6
 (the wind-up), hold 6-7, 8 starts the throw-back, 8->9 the 1-frame snap to full extension with the torso thrown back,
 contact 9-11, hold to 20 with the knee giving a little, retract 21-22, the foot lands at 24 into the deep wide crouch (25),
-rises to the low guard by the FAF (37) and holds it (the reference ends crouched: no rise to the idle, declared in the sheet).
+rises to the low guard and is IN it at the FAF (37): the owner's 5th frame is the functional last frame (owner, 01/11 14:24Z),
+so every part arrives by 37 (pelvis 34, chest ~35, arms 36, head 37 through their lags) and nothing rises toward the idle
+before the FAF. The tail 37-43 holds the guard; a return to the upright idle, if ever wanted, belongs in that tail only.
 
 Support leg: its pelvis height is SOLVED each frame from a support-knee curve (SUP_KNEE, flexion deg) and the hips' place,
 so the knee stays in range on one foot whatever the balance shift does. Balance: the body shifts so the centre of mass sits
@@ -51,19 +53,19 @@ LAND_SPOT = (6.0, 0.0, 20.0)                               # cm from the idle le
 
 # ---- arms: (upper arm, forearm) side-view angles, and out-of-plane angles (outward +) ----
 ARM_L = {0: (-48, -8), 2: (-30, -18), 4: (-2, 4), 6: (16, 9), 8: (8, 2), 9: (-68, -82), 11: (-70, -84), 20: (-72, -78), 23: (-82, -40),
-         25: (-87, -13), 41: (-78, -48), 43: (-78, -48)}
-ARM_L_OUT = {0: (15, 10), 6: (12, 8), 9: (20, 15), 25: (25, 15), 41: (20, 10), 43: (20, 10)}
+         25: (-87, -13), 35: (-78, -48), 43: (-78, -48)}
+ARM_L_OUT = {0: (15, 10), 6: (12, 8), 9: (20, 15), 25: (25, 15), 35: (20, 10), 43: (20, 10)}
 # rear arm: the reference's is ~1.5x longer in 2D than ours (the near-side arm, the gauntlet), so its swing is a little
 # exaggerated (forward in the wind-up, back in the strike) to keep the amplitude near the reference, and kept close to the
 # side plane (out-of-plane shortens it further)
 ARM_R = {0: (-117, -72), 3: (-85, -45), 6: (-48, -12), 8: (-58, -24), 9: (-124, -98), 11: (-124, -98), 20: (-124, -94), 23: (-140, -92),
-         25: (-150, -88), 41: (-148, -103), 43: (-148, -103)}
-ARM_R_OUT = {0: (6, 10), 6: (5, 8), 9: (14, 16), 20: (12, 16), 25: (8, 12), 41: (6, 10), 43: (6, 10)}
+         25: (-150, -88), 35: (-148, -103), 43: (-148, -103)}
+ARM_R_OUT = {0: (6, 10), 6: (5, 8), 9: (14, 16), 20: (12, 16), 25: (8, 12), 35: (6, 10), 43: (6, 10)}
 
 # ---- body ----
-LEAN = {0: -16, 3: -24, 6: -31, 7: -32, 8: -36, 9: -44, 11: -45, 20: -40, 22: -25, 24: -2, 26: 7, 30: 11, 37: 16, 43: 16}   # deg, - = back
+LEAN = {0: -16, 3: -24, 6: -31, 7: -32, 8: -36, 9: -44, 11: -45, 20: -40, 22: -25, 24: -2, 26: 7, 30: 11, 34: 16, 43: 16}   # deg, - = back
 PEL_YAW = {0: 10, 6: 14, 8: 18, 9: 24, 11: 24, 20: 20, 24: 10, 33: 6, 43: 6}
-CHEST_YAW = {0: -2, 6: -4, 9: -6, 20: -5, 26: -2, 36: -2, 43: -2}
+CHEST_YAW = {0: -2, 6: -4, 9: -6, 20: -5, 26: -2, 34: -2, 43: -2}
 SIDE = {0: 5, 6: 6, 9: 8, 20: 7, 24: 3, 30: 1, 43: 1}
 # support foot about its ball: a little with the hips in the kick, then turned out as the weight goes into the wide crouch
 # (the reference's support thigh points at the camera in the recovery and the last frame: the knee goes out to the side)
@@ -72,7 +74,7 @@ SUP_KNEE = {0: 16, 3: 22, 6: 11, 8: 11, 9: 12, 11: 13, 20: 18, 22: 24, 23: 34, 2
 # centre-of-mass target: cm along the attack from the support foot centre while on one foot; the strike (9-12) and the
 # step down onto the landing foot (21-23) are ahead of the toes, as the reference (declared exempt in the move sheet)
 BAL_S = {0: 0, 3: -1.5, 6: 0, 8: 3, 9: 10, 11: 10, 13: 8, 15: 6.5, 20: 6.5, 22: 10, 23: 14, 43: 14}
-BAL_F = {23: 0.0, 24: 0.1, 25: 0.3, 27: 0.5, 37: 0.68, 43: 0.68}   # the reference ends with the weight on the front foot (COM 0.45 of 0.55)            # front-foot share once both feet are down
+BAL_F = {23: 0.0, 24: 0.1, 25: 0.3, 27: 0.5, 33: 0.68, 43: 0.68}   # the reference ends with the weight on the front foot (COM 0.45 of 0.55)            # front-foot share once both feet are down
 
 _ovr = os.environ.get("MODEL_OVERRIDES")
 if _ovr and os.path.exists(_ovr):
