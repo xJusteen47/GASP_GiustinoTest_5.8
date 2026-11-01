@@ -10,6 +10,16 @@ TIM=sheets/${TAKE}_timings.tsv; RUN=$(date +%H:%M:%S)
 t() { local s=$(date +%s%N) rc=0; "$@" || rc=$?; local e=$(date +%s%N); printf "%s	%s	%s
 " "$RUN" "$STEP" "$(( (e - s) / 100000000 ))e-1" >> $TIM; [ $rc = 0 ] || { echo "step $STEP failed (exit $rc)"; exit $rc; }; }
 STEP=model t bash -o pipefail -c "python ${MODEL:-ganon_ftilt_motion.py} > sheets/${TAKE}_model_report.txt"
+# motion-curves gate (motion_curves.py on the model's points, about 1 s): every limb's amplitude, the anticipation and the
+# arms' direction against the move's reference (move sheet "reference"). It runs FIRST and stops the pass on a failure: a move
+# whose motion does not match the reference fails whatever the other checks say (Ganondorf v2). CURVES_GATE=0 reports only.
+# CURVES_PY: a Python with pybvh/dtaidistance (the animcurves venv); plain python works too (numpy fallbacks).
+CURVES_PY=${CURVES_PY:-python}
+STEP=curves t bash -o pipefail -c "$CURVES_PY motion_curves.py $TAKE --source=model --quiet > sheets/${TAKE}_curves_gate.txt || true"
+tail -1 sheets/${TAKE}_curves_gate.txt
+if [ "${CURVES_GATE:-1}" != 0 ] && ! python -c "import json,sys; sys.exit(1 if json.load(open('sheets/${TAKE}_model_curves.json')).get('reference',{}).get('fail') else 0)"; then
+  sed -n '/^reference/,$p' sheets/${TAKE}_model_curves.txt; echo "motion curves failed against the reference: pass stopped (CURVES_GATE=0 to override)"; exit 1
+fi
 # pre-flight (preflight.py, < 0.1 s): the checks on the model's rig points before any Cascadeur/Unreal work.
 # Report in sheets/${TAKE}_preflight.txt/.json; PREFLIGHT_GATE=1 stops the pass when it flags anything.
 STEP=preflight t bash -o pipefail -c "python preflight.py ${TAKE}_targets_raw.json $TAKE > sheets/${TAKE}_preflight.txt || true"

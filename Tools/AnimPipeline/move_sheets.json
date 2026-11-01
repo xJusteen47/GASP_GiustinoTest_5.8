@@ -140,7 +140,8 @@
    2,
    3
   ],
-  "_balance_note": "contact frames 1-3: the forward lunge into the punch (centre of mass up to 3.9 cm past the front foot); declared lunge, owner can override"
+  "_balance_note": "contact frames 1-3: the forward lunge into the punch (centre of mass up to 3.9 cm past the front foot); declared lunge, owner can override",
+  "reference": "refs/mario_jab1"
  },
  "ganon_v1": {
   "move": "tilt",
@@ -157,7 +158,8 @@
    9,
    19
   ],
-  "_source": "UFD ganondorf 'Forward Tilt': startup 10, active 10-12, total 39 (1-based game frames) -> contact anim 9-11, FAF anim 37 (G39 x 0.96). Kick with the lead (left) leg, built from scratch (ganon_ftilt_motion.py), sparse keys."
+  "_source": "UFD ganondorf 'Forward Tilt': startup 10, active 10-12, total 39 (1-based game frames) -> contact anim 9-11, FAF anim 37 (G39 x 0.96). Kick with the lead (left) leg, built from scratch (ganon_ftilt_motion.py), sparse keys.",
+  "reference": "refs/owner_ganon_ftilt"
  },
  "ganon_v1ap": {
   "move": "tilt",
@@ -174,7 +176,8 @@
    9,
    19
   ],
-  "_source": "AutoPhysics side test: ganon_v1 snapped to AutoPhysics in ganon_ftilt_v1_autophys.casc"
+  "_source": "AutoPhysics side test: ganon_v1 snapped to AutoPhysics in ganon_ftilt_v1_autophys.casc",
+  "reference": "refs/owner_ganon_ftilt"
  },
  "ganon_v2": {
   "move": "tilt",
@@ -191,6 +194,7 @@
    9,
    19
   ],
-  "_source": "Ganondorf ftilt v2: idle start, balance solved per frame (ganon_ftilt_v2_motion.py)"
+  "_source": "Ganondorf ftilt v2: idle start, balance solved per frame (ganon_ftilt_v2_motion.py)",
+  "reference": "refs/owner_ganon_ftilt"
  }
 }
