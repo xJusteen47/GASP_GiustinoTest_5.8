@@ -65,14 +65,28 @@ bool FGSTN_SpinDrillGASBindingsTest::RunTest(const FString& Parameters)
 	}
 
 	const TArray<FGSTN_AbilityBinding> Bindings = UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(true);
-	TestEqual(TEXT("an air and a ground binding per slot"), Bindings.Num(), 8);
-	for (const FGSTN_AbilityBinding& Binding : Bindings)
+	TestEqual(TEXT("a cancel, an air and a ground binding per slot"), Bindings.Num(), 12);
+	for (int32 Index = 0; Index < Bindings.Num(); ++Index)
 	{
+		const FGSTN_AbilityBinding& Binding = Bindings[Index];
 		const FString Command = Binding.Command.ToString();
+		const UClass* Class = Binding.Ability.Get();
+		if (const UGSTN_GA_SpinCancel* Cancel = Class ? Cast<UGSTN_GA_SpinCancel>(Class->GetDefaultObject()) : nullptr)
+		{
+			// D5: the cancels come first and require the sense tag of the spin they stop, which is the opposite of the command's
+			const FGSTN_SpinCancelTrack* Track = Cancel->FindCancelTrack();
+			const bool bClockwiseCommand = Binding.Command.MatchesTag(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise);
+			TestTrue(*FString::Printf(TEXT("%s: cancel bindings come first"), *Command), Index < Slots.Num());
+			TestTrue(*FString::Printf(TEXT("%s: the cancel's sense is the command's"), *Command), Track && Track->IsClockwise() == bClockwiseCommand);
+			TestTrue(*FString::Printf(TEXT("%s: it requires the opposite spin's tag"), *Command), Binding.Requirements.RequireTags.HasTagExact(
+				bClockwiseCommand ? GSTNSpinDrillTags::State_Spinning_CounterClockwise : GSTNSpinDrillTags::State_Spinning_Clockwise));
+			TestTrue(*FString::Printf(TEXT("%s: identity tag"), *Command), Cancel->GetAssetTags().HasTagExact(GSTNSpinDrillTags::Ability_Movement_SpinCancel));
+			TestEqual(*FString::Printf(TEXT("%s: the recovery is the whole cancel timeline"), *Command), Cancel->GetTimelineData().FirstActionableFrame, Cancel->GetTimelineData().TotalFrames);
+			continue;
+		}
 		const bool bAir = Binding.Requirements.RequireTags.HasTagExact(Mover_IsInAir);
 		TestTrue(*FString::Printf(TEXT("%s: the slot is inline and names the command"), *Command), Binding.HasSlotOverride() && Binding.GetSlotOverrideCommand() == Binding.Command);
 		TestTrue(*FString::Printf(TEXT("%s: air requires Mover.IsInAir, ground ignores it"), *Command), bAir != Binding.Requirements.IgnoreTags.HasTagExact(Mover_IsInAir));
-		const UClass* Class = Binding.Ability.Get();
 		const UGSTN_GA_Spin* Default = Class ? Cast<UGSTN_GA_Spin>(Class->GetDefaultObject()) : nullptr;
 		if (!TestNotNull(*FString::Printf(TEXT("%s: binds a spin class"), *Command), Default))
 		{

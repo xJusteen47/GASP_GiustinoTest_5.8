@@ -152,6 +152,9 @@ public:
 	/** The request a spin track asks for on the frame its timeline starts: Spin or AirSpin, the sense, the frames of the low gravity */
 	static void ReadSpinStart(const struct FGSTN_SpinTrack& Track, FGSTN_DrillFrameInputs& OutInputs);
 
+	/** The request a spin cancel track asks for on the frame its timeline starts: Cancel with the cancelling rotation's sense (D5) */
+	static void ReadCancelStart(const struct FGSTN_SpinCancelTrack& Track, FGSTN_DrillFrameInputs& OutInputs);
+
 	/** The low gravity window of the air spin holds at Frame: what UGSTN_GE_AirSpinLowGravity::Sync is asked to match */
 	static bool WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame);
 

@@ -51,7 +51,20 @@ TArray<FGSTN_AbilityBinding> UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(boo
 {
 	using namespace GSTNSpinDrillLibrary;
 	TArray<FGSTN_AbilityBinding> Bindings;
-	for (const FGSTN_InputSlotSpec& Slot : FGSTN_SpinSlots::Build(bKeyboardShortcut))
+	const TArray<FGSTN_InputSlotSpec> Slots = FGSTN_SpinSlots::Build(bKeyboardShortcut);
+	// The cancels first: in the air a cancel (requires the spin's sense tag) and the air spin (requires Mover.IsInAir) both require one
+	// tag, and the first of equally specific bindings wins. On the ground the cancel requires more than the ground spin and wins anyway
+	for (const FGSTN_InputSlotSpec& Slot : Slots)
+	{
+		const EGSTN_SpinSense Sense = Slot.Command.MatchesTag(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise) ? EGSTN_SpinSense::Clockwise : EGSTN_SpinSense::CounterClockwise;
+		FGSTN_AbilityBinding Cancel;
+		Cancel.Command = Slot.Command;
+		Cancel.SlotOverride.Inline = Slot;
+		Cancel.Ability = TSoftClassPtr<UGameplayAbility>(Sense == EGSTN_SpinSense::Clockwise ? UGSTN_GA_SpinCancelClockwise::StaticClass() : UGSTN_GA_SpinCancelCounterClockwise::StaticClass());
+		Cancel.Requirements.RequireTags.AddTag(UGSTN_GA_SpinCancel::RequiredSpinTag(Sense));
+		Bindings.Add(MoveTemp(Cancel));
+	}
+	for (const FGSTN_InputSlotSpec& Slot : Slots)
 	{
 		const bool bClockwise = Slot.Command.MatchesTag(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise);
 		Bindings.Add(MakeBinding(Slot, bClockwise ? UGSTN_GA_AirSpinClockwise::StaticClass() : UGSTN_GA_AirSpinCounterClockwise::StaticClass(), true));

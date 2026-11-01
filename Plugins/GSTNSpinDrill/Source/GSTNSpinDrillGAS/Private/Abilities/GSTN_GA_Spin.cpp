@@ -42,6 +42,39 @@ void UGSTN_GA_Spin::SetDefaultSpin(EGSTN_SpinSense Sense, bool bAirSpin)
 	}
 }
 
+UGSTN_GA_SpinCancel::UGSTN_GA_SpinCancel(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	SetAssetTags(FGameplayTagContainer(GSTNSpinDrillTags::Ability_Movement_SpinCancel.GetTag()));
+}
+
+const FGSTN_SpinCancelTrack* UGSTN_GA_SpinCancel::FindCancelTrack() const
+{
+	return FGSTN_SpinCancelTrack::Find(GetTimelineData());
+}
+
+FGameplayTag UGSTN_GA_SpinCancel::RequiredSpinTag(EGSTN_SpinSense CancellingSense)
+{
+	return (CancellingSense == EGSTN_SpinSense::Clockwise ? GSTNSpinDrillTags::State_Spinning_CounterClockwise : GSTNSpinDrillTags::State_Spinning_Clockwise).GetTag();
+}
+
+void UGSTN_GA_SpinCancel::SetDefaultCancel(EGSTN_SpinSense Sense)
+{
+	Timeline = FGSTN_SpinTimelines::MakeCancel(FGSTN_SpinCancelTimelineParams(), Sense);
+}
+
+UGSTN_GA_SpinCancelClockwise::UGSTN_GA_SpinCancelClockwise(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	SetDefaultCancel(EGSTN_SpinSense::Clockwise);
+}
+
+UGSTN_GA_SpinCancelCounterClockwise::UGSTN_GA_SpinCancelCounterClockwise(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	SetDefaultCancel(EGSTN_SpinSense::CounterClockwise);
+}
+
 UGSTN_GA_SpinClockwise::UGSTN_GA_SpinClockwise(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {

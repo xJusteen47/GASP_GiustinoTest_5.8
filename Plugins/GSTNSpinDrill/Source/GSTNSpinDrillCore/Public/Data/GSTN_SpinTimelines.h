@@ -30,17 +30,41 @@ struct FGSTN_SpinTimelineParams
 
 	/** The part group the ring hangs on: the whole body, spelled as the group that holds every part (an empty selector is refused) */
 	FName RingGroup = TEXT("Body");
+
+	/**
+	 * First frame of the cancel window into the opposite spin command (D5). Keep it equal to the kit tuning's
+	 * FGSTN_SpinCancelTuning::CancelFromFrame: the window is the gate, the tuning value is what the phase machine checks. Negative = no window
+	 */
+	int32 CancelFromFrame = 6;
+};
+
+/** What the default opposite-spin cancel timeline is made of (D5) */
+struct FGSTN_SpinCancelTimelineParams
+{
+	/** The recovery: no hitbox, actionable at the end (FGSTN_SpinCancelTuning::CancelRecoveryFrames) */
+	int32 RecoveryFrames = 8;
 };
 
 /** Builders of the default spin timelines, as plain data */
 struct GSTNSPINDRILLCORE_API FGSTN_SpinTimelines
 {
 	/**
-	 * A spin: the spin track over the whole length, the hitbox ring, and a cancel window into the jump over the whole length (3D World:
-	 * the spin chains into a jump). No movement lock: locomotion continues. The opposite-spin cancel (D5) and the drill (D8) add their
-	 * own windows.
+	 * A spin: the spin track over the whole length, the hitbox ring, a cancel window into the jump over the whole length (3D World: the
+	 * spin chains into a jump) and one into the opposite spin command from CancelFromFrame (D5; the parent tag, so the keyboard child is
+	 * in it too). No movement lock: locomotion continues. The drill (D8) adds its own window.
 	 */
 	static FGSTN_CombatTimelineData Make(const FGSTN_SpinTimelineParams& Params, EGSTN_SpinSense Sense, bool bAirSpin);
+
+	/** The opposite-spin cancel: the cancel track over the recovery, a jump cancel window, nothing else. Sense = the cancelling rotation */
+	static FGSTN_CombatTimelineData MakeCancel(const FGSTN_SpinCancelTimelineParams& Params, EGSTN_SpinSense Sense);
+
+	/** The spin command of a sense (the parent of the keyboard child) */
+	static FGameplayTag SpinCommand(EGSTN_SpinSense Sense);
+
+	static EGSTN_SpinSense Opposite(EGSTN_SpinSense Sense)
+	{
+		return Sense == EGSTN_SpinSense::Clockwise ? EGSTN_SpinSense::CounterClockwise : EGSTN_SpinSense::Clockwise;
+	}
 
 	static FGSTN_SpinTimelineParams GroundParams();
 

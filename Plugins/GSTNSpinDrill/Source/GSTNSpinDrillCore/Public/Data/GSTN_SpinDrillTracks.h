@@ -40,3 +40,23 @@ struct GSTNSPINDRILLCORE_API FGSTN_SpinTrack : public FGSTN_TimelineTrack
 	/** The first spin track of a timeline, null when it has none (a scan of the track array, done only on the frame a timeline starts) */
 	static const FGSTN_SpinTrack* Find(const FGSTN_CombatTimelineData& Data);
 };
+
+/**
+ * Marks a timeline as the opposite-spin cancel (plan D5, spin-drill.md 7.3, 14 SD.2): when it starts, the drill tick extension asks the
+ * phase machine to stop the running spin, which it does only for the opposite sense and from CancelFromFrame on. Sense is the sense of the
+ * rotation that cancels (a clockwise rotation cancels a counter-clockwise spin). A plugin track like FGSTN_SpinTrack: no kind, no hook.
+ * The cancel timeline itself is the recovery: no hitbox, no movement, the momentum is kept.
+ */
+USTRUCT(BlueprintType, meta = (DisplayName = "Spin Cancel"))
+struct GSTNSPINDRILLCORE_API FGSTN_SpinCancelTrack : public FGSTN_TimelineTrack
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spin")
+	EGSTN_SpinSense Sense = EGSTN_SpinSense::Clockwise;
+
+	bool IsClockwise() const { return Sense == EGSTN_SpinSense::Clockwise; }
+
+	/** The first spin cancel track of a timeline, null when it has none */
+	static const FGSTN_SpinCancelTrack* Find(const FGSTN_CombatTimelineData& Data);
+};
