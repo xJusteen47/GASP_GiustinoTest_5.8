@@ -55,6 +55,20 @@ initiator is the driller) → D11 → D12 → D13.
 
 
 
+### State of feature/gas-npp-5.8 at 65cd8b5 (M6 closed, checked 2026-11-01)
+
+- **Ready**: `GSTNLink` with the latch (`Combat.Link.Type.Latch`, `Role.Latcher`, `FGSTN_LatchRules` with `MinLatchWeight` and
+  `ImmunityFramesAfterLatch`, `FGSTN_LinkRoleDef::bParked`, `FGSTN_EntityRef`, `FGSTN_FakeLinkHost` for tests). The drill type is a
+  second `UGSTN_LinkTypeDefinition` shipped by `GSTNSpinDrill` with its own rule; D9 first checks that the latch rule is per type
+  and not hard-wired to `Type.Latch` (stop condition if it is).
+- **Not built yet** (still needed): S1 re-hit interval, S2 loop section, S4 attacker hit notify, S6 gravity contributor, D-1. Also
+  not in code yet: `TurnSense`/`TurnSteps` and `DemolitionForce` on `FGSTN_HitData` (plans H14/H15) and `FGSTN_PartScrewRule` (P19):
+  the drill authors them once they exist; no checkpoint here waits on them.
+
+## 3. Coordination
+
+- M4b and M6 are complete, so the M4b/M6 notes below are history; D6–D7 still check with whichever thread is editing
+  `GSTNCombat*` at that moment.
 - **M4b thread (laptop, `GSTNCombat*`/`GSTNParts`)**: D6–D7 edit the combat core; run them only after P14, or in a window that thread
   agrees to. D12's parts bridge waits for M4b complete.
 - **Desktop thread ("Implementazioni parallele sul fisso")**: D1–D5 and D11 can run on the desktop branch if the owner prefers
