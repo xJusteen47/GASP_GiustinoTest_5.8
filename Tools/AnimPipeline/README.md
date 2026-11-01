@@ -118,6 +118,25 @@ Keys:
 - `DENSE=1` keys every frame (what Unreal receives anyway);
 - `sparse_apply.py` also supports sparse plans (per-layer keys, lags, interpolation, weights), with the caveats in `handoff.md`.
 
+## Direct to Unreal, without Cascadeur (01/11, Ganondorf v3)
+
+Cascadeur is optional (owner: "if you act directly in Unreal, one can use Blender too"). The model's rig points go straight
+to the skeleton:
+```
+pose_solver.py <take>_targets_raw.json <take>_bones.json    rig points -> UE component-space bones (calibrated on a take known
+                                                           both ways: ganon_v2 targets + its Unreal bones; --validate)
+ue_write_take.py <take>_bones.json <AssetName>             local tracks (parents read from the template take's own data,
+                                                           root held) written into /Game/AnimPipeline/Pilot/<AssetName>, a
+                                                           copy of the template; read back against the solve
+legibility.sample(...)                                     bones -> sheets/raw/<take>_legbones.json, then every check as usual
+ref_sidebyside.py refs/<name> <out.png> <take>:<frames>    the reference's stills beside our takes, same side camera
+```
+- Each bone's frame comes from three rig points (joint, next joint, bend or own extra point). Limbs match Cascadeur within
+  ~1 cm and 1-5 deg; the spine's 2-5 deg is Cascadeur's own spine distribution. In-between bones (spine_01/03/05, neck_02,
+  twist bones) slerp; fingers stay rigid with the hand (the calibration's fists).
+- No interpolation pass: write every frame (the model is dense). Cascadeur's physics tools are the only thing lost.
+- A Blender exporter would reuse `pose_solver.py` and set the same local transforms on an armature.
+
 ## Checks, where each rule lives, and its thresholds
 
 | Module | What it judges | Thresholds |
