@@ -139,3 +139,30 @@ Differences between the code and [spin-drill.md](../architecture/spin-drill.md) 
   one sim event per crossed key with a tag to the entity's outbox (`FGSTN_CombatTimelineLogic::AppendOutboxEvents`), after the weapon
   switch step, while a timeline runs; published by the authority only. It adds events; the HitLanded and KO event structs are untouched.
 - Tests: `GSTNCombat.NP.Seams.S1.TargetKey`, `.S1.RehitEveryInterval`, `.D1.EventKeyPostsToOutbox` (GSTN_CombatNPTests_Seams.cpp).
+
+## D8 (dive)
+
+- **Entry**: `Command.Movement.Drill` = Press(Crouch) (`FGSTN_SpinSlots::MakeDrillSlot`), bound to `UGSTN_GA_DrillDive` requiring
+  `Combat.State.Spinning`; the spin timelines open a window into it from `DiveFromFrame` (3). Spec §5 says Hold(Crouch): a hold is not an
+  anchor condition, so the press starts the dive and the ability ends on the release (`bEndOnTriggerRelease`). Crouch held before the spin
+  does not dive (press it again).
+- **Movement without a movement track**: the core does not play timeline movement tracks for ordinary timelines, so the plunge is an instant
+  velocity effect at the start (`UGSTN_GE_DrillPlunge`: PlungeSpeed along the tracker's down, any gravity) plus a dive gravity effect
+  (`UGSTN_GE_DrillDiveGravity`: the four jump and fall gravity scales times 0, granting `Combat.State.DiveGravity`), synced from the fragment
+  like the low gravity. The speed stays constant. **Steering is the character's air control**, not a separate 15 %: tune AirControl for
+  the feel (spec §13b). The air spin's low gravity ends when the dive starts.
+- **Outcomes** (`ReadDiveOutcome`, AfterExecute): a hit of the dive's timeline this frame (`Context.AttackerHits`) is a bounce (D9 turns
+  drillable targets into a latch first); the ground after the dive's first frame is the lag (`GroundLagFrames`, from the attach). The
+  bounce sets `GSTNDrillFlags::Bounced` for that frame; the ability applies `UGSTN_GE_DrillBounce` (BounceSpeed against gravity, a hop
+  that cancels the fall) and ends. The lag lasts until the ability ends it GroundLagFrames after landing; the fragment's Lag phase ends with
+  the dive's timeline.
+- **Timeline end rules** (`HasPhaseTimelineEnded`): Spinning and Diving end when the combat state no longer runs the timeline that started
+  them; Lag when the dive's timeline ends or another starts. A timeline that started on the frame itself (an adoption) is left to
+  AfterExecute, so a dive or cancel adopted on that frame is read as such.
+- **Keyboard shortcut**: D4 put it under two child commands because "a step has no any of"; wrong, `FGSTN_InputCondition_AnyOf` exists.
+  The two spin slots are now AnyOf(Spin 360, Motion), and the `.Keys` tags are gone. Bindings: 7 (2 cancels, 2 air, 2 ground, the dive).
+- **Tags (25)**: `.Keys` x2 removed, `Combat.State.DiveGravity` added.
+- **Default dive timeline** (`FGSTN_SpinTimelines::MakeDive`): 120 frames at most, the dive track, a swept sphere tip (45 cm, 20 cm below the
+  root, `Combat.HitType.Drill`, 4 damage). Placeholders.
+- Harness: `drill_ground_lag`, `drill_nondrillable_bounce` (not run; they need `Input.Button.Crouch` in IC_GASNPP_Test). `drill_tilted_gravity`
+  not written: no harness level with a gravity volume; the vectors under any gravity are unit tested.

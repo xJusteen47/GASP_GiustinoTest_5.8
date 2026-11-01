@@ -2,6 +2,7 @@
 
 #include "GSTN_SpinDrillLibrary.h"
 
+#include "Abilities/GSTN_GA_DrillDive.h"
 #include "Abilities/GSTN_GA_Spin.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
@@ -36,7 +37,7 @@ namespace GSTNSpinDrillLibrary
 	bool IsSpinCommand(const FGameplayTag& Command)
 	{
 		return Command.MatchesTag(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise) || Command.MatchesTag(GSTNSpinDrillTags::Command_Movement_Spin_CounterClockwise)
-			|| Command.MatchesTagExact(GSTNSpinDrillTags::Command_Movement_Spin_Button);
+			|| Command.MatchesTagExact(GSTNSpinDrillTags::Command_Movement_Spin_Button) || Command.MatchesTagExact(GSTNSpinDrillTags::Command_Movement_Drill);
 	}
 
 	const FGSTN_DrillFragment* ShownFragment(const AActor* Actor)
@@ -70,6 +71,13 @@ TArray<FGSTN_AbilityBinding> UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(boo
 		Bindings.Add(MakeBinding(Slot, bClockwise ? UGSTN_GA_AirSpinClockwise::StaticClass() : UGSTN_GA_AirSpinCounterClockwise::StaticClass(), true));
 		Bindings.Add(MakeBinding(Slot, bClockwise ? UGSTN_GA_SpinClockwise::StaticClass() : UGSTN_GA_SpinCounterClockwise::StaticClass(), false));
 	}
+	// D8: crouch pressed during a spin, on the ground or in the air
+	FGSTN_AbilityBinding Drill;
+	Drill.Command = GSTNSpinDrillTags::Command_Movement_Drill.GetTag();
+	Drill.SlotOverride.Inline = FGSTN_SpinSlots::MakeDrillSlot();
+	Drill.Ability = TSoftClassPtr<UGameplayAbility>(UGSTN_GA_DrillDive::StaticClass());
+	Drill.Requirements.RequireTags.AddTag(GSTNSpinDrillTags::State_Spinning);
+	Bindings.Add(MoveTemp(Drill));
 	return Bindings;
 }
 

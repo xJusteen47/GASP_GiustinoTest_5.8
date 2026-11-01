@@ -94,6 +94,11 @@ struct GSTNSPINDRILLNP_API FGSTN_DrillSimTuning
 	float SpinGravityScale = 0.35f;
 	float SpinMaxFallSpeedScale = 0.5f;
 
+	// The dive's movement (D8): read by the dive and bounce effects and the dive ability
+	float PlungeSpeed = 1800.f;
+	int32 GroundLagFrames = 18;
+	float BounceSpeed = 700.f;
+
 	/** The defaults of the Core tuning structs */
 	static FGSTN_DrillSimTuning MakeDefault();
 
@@ -146,6 +151,12 @@ public:
 
 	// ---- Reading the combat state (pure, tests drive them directly)
 
+	/**
+	 * The timeline that drives the fragment's phase is over: Spinning and Diving when the combat state no longer runs the timeline that started
+	 * them, Lag when the dive's timeline (inside which it started) ended or another one began. False for the other phases
+	 */
+	static bool HasPhaseTimelineEnded(const FGSTN_DrillFragment& Fragment, const FGSTN_CombatSyncCore& Core);
+
 	/** A Spinning fragment whose timeline is no longer the one the combat state runs (it ended, was cancelled or was replaced) */
 	static bool HasSpinTimelineEnded(const FGSTN_DrillFragment& Fragment, const FGSTN_CombatSyncCore& Core);
 
@@ -154,6 +165,12 @@ public:
 
 	/** The request a spin cancel track asks for on the frame its timeline starts: Cancel with the cancelling rotation's sense (D5) */
 	static void ReadCancelStart(const struct FGSTN_SpinCancelTrack& Track, FGSTN_DrillFrameInputs& OutInputs);
+
+	/** What a diving fragment's frame asks for (D8): Bounce when the dive's tip hit something, GroundLand on the ground after the first frame, else None */
+	static EGSTN_DrillRequest ReadDiveOutcome(const FGSTN_DrillFragment& Fragment, int32 Frame, bool bTipHit, bool bGrounded);
+
+	/** The dive's gravity (none) holds: what UGSTN_GE_DrillDiveGravity::Sync is asked to match */
+	static bool WantsDiveGravity(const FGSTN_DrillFragment* Fragment);
 
 	/** The low gravity window of the air spin holds at Frame: what UGSTN_GE_AirSpinLowGravity::Sync is asked to match */
 	static bool WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame);

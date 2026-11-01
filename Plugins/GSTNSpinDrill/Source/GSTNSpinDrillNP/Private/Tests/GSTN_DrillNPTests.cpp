@@ -647,6 +647,69 @@ bool FGSTN_DrillNPSpinFlowTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPDiveTest, "GSTNSpinDrill.NP.Dive.LagAndBounce", GSTNDrillNPTest::Flags)
+bool FGSTN_DrillNPDiveTest::RunTest(const FString& Parameters)
+{
+	FScopedFragment Registered;
+	FTimelineDrillExtension Extension;
+	const FGSTN_CombatTimelineData AirCw = FGSTN_SpinTimelines::Make(FGSTN_SpinTimelines::AirParams(), EGSTN_SpinSense::Clockwise, true);
+	const FGSTN_CombatTimelineData Dive = FGSTN_SpinTimelines::MakeDive(FGSTN_DiveTimelineParams());
+	const auto Phase = [](const FGSTN_CombatSyncState& State) { return ReadFragment(State).Phase; };
+
+	// An air spin, then crouch on frame 14: the dive's timeline replaces the spin's and the fragment dives
+	FGSTN_CombatSyncState State;
+	State.Core.Jump.Phase = EGSTN_JumpPhase::Falling;
+	Extension.Started = AirCw;
+	RunTimeline(State, 10);
+	RunTick(Extension, State, 10);
+	Extension.Started = Dive;
+	RunTimeline(State, 14);
+	RunTick(Extension, State, 14);
+	FGSTN_DrillFragment F = ReadFragment(State);
+	TestTrue(TEXT("diving from frame 14, the spin's sense kept"), F.Phase == EGSTN_DrillPhase::Diving && F.PhaseStartFrame == 14 && F.IsClockwise());
+	TestEqual(TEXT("the air spin's low gravity ended with the dive"), F.LowGravityUntilFrame, static_cast<int32>(INDEX_NONE));
+	TestTrue(TEXT("the dive gravity is wanted while diving"), FGSTN_DrillTickExtension::WantsDiveGravity(&F));
+	TestEqual(TEXT("the air spin stays spent"), static_cast<int32>(F.AirSpinsUsed), 1);
+
+	// Still in the air: the dive goes on; the ground: the lag, which lasts as long as the dive's timeline
+	RunTick(Extension, State, 15);
+	TestTrue(TEXT("airborne: still diving"), Phase(State) == EGSTN_DrillPhase::Diving);
+	State.Core.Jump.Phase = EGSTN_JumpPhase::None;
+	RunTick(Extension, State, 20);
+	F = ReadFragment(State);
+	TestTrue(TEXT("on the ground: the lag from frame 20"), F.Phase == EGSTN_DrillPhase::Lag && F.PhaseStartFrame == 20);
+	TestFalse(TEXT("no dive gravity in the lag"), FGSTN_DrillTickExtension::WantsDiveGravity(&F));
+	TestEqual(TEXT("landing gave the air spin back"), static_cast<int32>(F.AirSpinsUsed), 0);
+	RunTick(Extension, State, 30);
+	TestTrue(TEXT("the lag holds while the dive's timeline runs"), Phase(State) == EGSTN_DrillPhase::Lag);
+	StopTimeline(State);
+	RunTick(Extension, State, 39);
+	TestTrue(TEXT("the dive's timeline ended: the lag is over"), Phase(State) == EGSTN_DrillPhase::None);
+
+	// The pure outcome of a diving frame: a tip hit bounces (before the ground), the ground on the first frame is not a landing yet
+	FGSTN_DrillFragment Diving;
+	Diving.Phase = EGSTN_DrillPhase::Diving;
+	Diving.PhaseStartFrame = 100;
+	TestTrue(TEXT("a tip hit bounces, even on the ground"), FGSTN_DrillTickExtension::ReadDiveOutcome(Diving, 103, true, true) == EGSTN_DrillRequest::Bounce);
+	TestTrue(TEXT("the ground after the first frame is the lag"), FGSTN_DrillTickExtension::ReadDiveOutcome(Diving, 101, false, true) == EGSTN_DrillRequest::GroundLand);
+	TestTrue(TEXT("the ground on the dive's first frame is not (a ground dive lands the frame after)"), FGSTN_DrillTickExtension::ReadDiveOutcome(Diving, 100, false, true) == EGSTN_DrillRequest::None);
+	TestTrue(TEXT("not diving: nothing"), FGSTN_DrillTickExtension::ReadDiveOutcome(GroundSpin(), 103, true, true) == EGSTN_DrillRequest::None);
+
+	// The bounce: phase None with the Bounced flag for that frame only, the air spin not given back (7.6)
+	const FGSTN_DrillSimTuning Tuning = FGSTN_DrillSimTuning::MakeDefault();
+	FGSTN_DrillFragment Bounced = Diving;
+	Bounced.AirSpinsUsed = 1;
+	FGSTN_DrillFrameInputs Bounce;
+	Bounce.Request = EGSTN_DrillRequest::Bounce;
+	FGSTN_DrillTickExtension::StepAfterExecute(Bounced, 103, Bounce, Tuning);
+	TestTrue(TEXT("bounced: no phase, the flag set"), Bounced.Phase == EGSTN_DrillPhase::None && (Bounced.Flags & GSTNDrillFlags::Bounced) != 0);
+	TestEqual(TEXT("the bounce does not refresh the air spin"), static_cast<int32>(Bounced.AirSpinsUsed), 1);
+	FGSTN_DrillTickExtension::StepAfterClocks(Bounced, 104, FGSTN_DrillFrameInputs(), Tuning);
+	TestEqual(TEXT("the flag is gone the frame after"), static_cast<int32>(Bounced.Flags & GSTNDrillFlags::Bounced), 0);
+	TestEqual(TEXT("and the wire takes the flag"), PayloadBytes(Diving) > 0, true);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPSpinCancelTest, "GSTNSpinDrill.NP.Spin.OppositeCancel", GSTNDrillNPTest::Flags)
 bool FGSTN_DrillNPSpinCancelTest::RunTest(const FString& Parameters)
 {

@@ -22,10 +22,11 @@ class GSTNSPINDRILLGAS_API UGSTN_SpinDrillLibrary : public UBlueprintFunctionLib
 
 public:
 	/**
-	 * The default spin bindings (plans D4, D5), each with its slot inline (FGSTN_SpinSlots): per spin command first the opposite-spin cancel
-	 * (requires the sense tag of the spin it cancels), then an air spin binding that requires Mover.IsInAir and a ground spin binding that
-	 * ignores it, so the context picks exactly one. bKeyboardShortcut adds the .Keys commands, bound to the same classes. Keep the order when
-	 * copying them into a kit: equally specific bindings resolve to the first
+	 * The default spin and drill bindings (plans D4, D5, D8), each with its slot inline (FGSTN_SpinSlots): per spin command first the
+	 * opposite-spin cancel (requires the sense tag of the spin it cancels), then an air spin binding that requires Mover.IsInAir and a ground
+	 * spin binding that ignores it, so the context picks exactly one; last the drill dive on Command.Movement.Drill, requiring
+	 * Combat.State.Spinning. bKeyboardShortcut puts the A-S-D / D-S-A Motion in the spin slots. Keep the order when copying them into a kit:
+	 * equally specific bindings resolve to the first
 	 */
 	static TArray<FGSTN_AbilityBinding> MakeDefaultSpinBindings(bool bKeyboardShortcut = true);
 

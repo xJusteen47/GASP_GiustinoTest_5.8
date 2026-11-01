@@ -4,6 +4,7 @@
 
 #include "GSTN_InputCoreTypes.h"
 #include "GSTN_SpinDrillTags.h"
+#include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputConditions.h"
 
 namespace GSTNSpinSlots
@@ -45,16 +46,31 @@ namespace GSTNSpinSlots
 TArray<FGSTN_InputSlotSpec> FGSTN_SpinSlots::Build(bool bKeyboardShortcut)
 {
 	using namespace GSTNSpinSlots;
-	TArray<FGSTN_InputSlotSpec> Slots;
-	Slots.Add(MakeSlot(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise.GetTag(), MakeRotation(EGSTN_SpinRotation::Clockwise)));
-	Slots.Add(MakeSlot(GSTNSpinDrillTags::Command_Movement_Spin_CounterClockwise.GetTag(), MakeRotation(EGSTN_SpinRotation::CounterClockwise)));
-	if (bKeyboardShortcut)
+	const auto Spin = [bKeyboardShortcut](EGSTN_SpinRotation Rotation, EGSTN_StickDirection First, EGSTN_StickDirection Last)
 	{
-		// input.md 9: A-S-D is counter-clockwise, D-S-A clockwise
-		Slots.Add(MakeSlot(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise_Keys.GetTag(), MakeKeys(EGSTN_StickDirection::Right, EGSTN_StickDirection::Left)));
-		Slots.Add(MakeSlot(GSTNSpinDrillTags::Command_Movement_Spin_CounterClockwise_Keys.GetTag(), MakeKeys(EGSTN_StickDirection::Left, EGSTN_StickDirection::Right)));
-	}
+		if (!bKeyboardShortcut)
+		{
+			return MakeRotation(Rotation);
+		}
+		// One command, two ways in: the stick's 360 or the keys rolled (input.md 9: A-S-D is counter-clockwise, D-S-A clockwise)
+		FGSTN_InputCondition_AnyOf Either;
+		Either.Conditions = { MakeRotation(Rotation), MakeKeys(First, Last) };
+		return FCondition::Make<FGSTN_InputCondition_AnyOf>(Either);
+	};
+	TArray<FGSTN_InputSlotSpec> Slots;
+	Slots.Add(MakeSlot(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise.GetTag(), Spin(EGSTN_SpinRotation::Clockwise, EGSTN_StickDirection::Right, EGSTN_StickDirection::Left)));
+	Slots.Add(MakeSlot(GSTNSpinDrillTags::Command_Movement_Spin_CounterClockwise.GetTag(), Spin(EGSTN_SpinRotation::CounterClockwise, EGSTN_StickDirection::Left, EGSTN_StickDirection::Right)));
 	return Slots;
+}
+
+FGSTN_InputSlotSpec FGSTN_SpinSlots::MakeDrillSlot()
+{
+	using namespace GSTNSpinSlots;
+	// A press, so the drill comes when crouch goes down during the spin; its binding requires Combat.State.Spinning, and the spin's cancel
+	// window lets it through from DiveFromFrame. Holding crouch is then read by the dive ability (it ends on the release)
+	FGSTN_InputCondition_Press Press;
+	Press.Buttons.AddTag(GSTNCombatButtonTags::Button_Crouch.GetTag());
+	return MakeSlot(GSTNSpinDrillTags::Command_Movement_Drill.GetTag(), FCondition::Make<FGSTN_InputCondition_Press>(Press));
 }
 
 bool FGSTN_SpinSlots::Find(const FGameplayTag& Command, FGSTN_InputSlotSpec& OutSpec, bool bKeyboardShortcut)
