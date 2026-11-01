@@ -290,6 +290,9 @@ void UGSTN_GASNPPTestComponent::RunRemoteCommand(const FString& Command)
 		bMirror = Args.Num() > 0 && Args[0] == TEXT("1");
 		MirrorFunction = Args.Num() > 1 ? Args[1] : FString();
 		SetComponentTickInterval(bMirror ? 0.f : 0.25f);
+		// A record reads the presentation of this engine frame (the link presentation ticks in TG_PostPhysics) and the frame the pawn is shown at
+		// together: from the default TG_PrePhysics it paired the previous frame's presentation with this frame's last step (F15)
+		SetTickGroup(bMirror ? TG_PostUpdateWork : TG_PrePhysics);
 		bOk = true;
 	}
 	UE_LOG(LogTemp, Log, TEXT("GASNPP_REMOTE %s -> %s"), *Command, bOk ? TEXT("ok") : TEXT("FAILED"));

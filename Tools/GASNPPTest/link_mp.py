@@ -218,7 +218,8 @@ class _Rig:
             if not a or not b or len(a) < 4 or a[3] is None or not b[2]:
                 continue
             n += 1
-            s = self.host_sim.get(a[3])
+            # The shown frame's pose is the host's record of the frame after it (link_scenarios.SHOWN_TO_RECORDED, F15)
+            s = self.host_sim.get(a[3] + ls.SHOWN_TO_RECORDED)
             if s is None:
                 continue
             (x, y, z), yaw = s

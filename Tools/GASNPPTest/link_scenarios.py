@@ -39,6 +39,13 @@ GRAB = 'Combat.Link.Type.Grab'
 ATTACK_COMMAND = 'Command.Attack.Neutral'   # the test weapon's attack (WPN_Test_Hits), the move link_rollback turns into a grab
 LINKED_MODE = 'GSTN_Linked'
 PAIRINGS = {'host_grabs_client': (0, 1), 'client_grabs_host': (1, 0), 'client_grabs_client': (1, 2)}
+# The frame a world SHOWS a pawn at is its Mover's last time step (the 'serverFrame' of the test component's snapshot, the shown frame of link_mp's
+# mirror records): the pose shown is that step's RESULT. The authority's sim history (final_by_frame, drain_sim_history) records each frame in the
+# pre-simulation tick, i.e. the pose the step STARTS from, the result of the frame before. So the pose shown at frame N is the record of N + 1
+# (F15, HANDOVER 61 OPEN 1: in one-process PIE the reading against record N was p50 6.7 / p95 12.4 / max 22.4 cm in every run, one frame of
+# walking; against record N + 1 p50 0.0 / p95 0.0, editor-diag-1.log). Every frame-aligned presentation check uses this
+SHOWN_TO_RECORDED = 1
+
 SUITE_LINK = ([f'link_spike_{p}' for p in PAIRINGS] + [f'link_rollback_{p}' for p in PAIRINGS] + [f'link_break_distance_{p}' for p in PAIRINGS]
               + ['grab_immunity'])
 REASON = {'Forced': 11, 'Distance': 3, 'OwnDeath': 4, 'PartnerDeath': 5, 'Hit': 6}   # EGSTN_LinkBreakReason indices
@@ -316,6 +323,29 @@ class _LinkRig:
             unreal.unregister_slate_post_tick_callback(self.handle)
             self.handle = None
 
+    def framed_offsets(self, t0, t1, shifts=(-3, -2, -1, 0, 1, 2, 3)):
+        """The reading's (p50, p95, n) when each shown sample is compared with the authority's record of frame + k, for each k: a regression guard
+        for SHOWN_TO_RECORDED (the minimum must stay at k = SHOWN_TO_RECORDED; F15 measured p50 0.0 / p95 0.0 there and 6.7 / 12.4 cm at k = 0)"""
+        srv = self.run.final_by_frame(self.a_side, t0 - 1.0, t1 + 1.0)
+        offs = [c for t, c in self.host_off if t0 <= t <= t1]
+        if not offs or not srv:
+            return {}
+        off = tuple(sorted(c[k] for c in offs)[len(offs) // 2] for k in range(3))
+        out = {}
+        for k in shifts:
+            errs = []
+            for t, p, fr in self.framed:
+                s0 = srv.get(fr + k) if t0 <= t <= t1 and fr is not None else None
+                if s0 is None or s0.get('yaw') is None:
+                    continue
+                c, sn = math.cos(math.radians(s0['yaw'])), math.sin(math.radians(s0['yaw']))
+                ref = (s0['loc'][0] + off[0] * c - off[1] * sn, s0['loc'][1] + off[0] * sn + off[1] * c, s0['loc'][2] + off[2])
+                errs.append(math.dist(p, ref))
+            if errs:
+                errs.sort()
+                out[k] = (round(errs[len(errs) // 2], 1), round(errs[min(len(errs) - 1, int(0.95 * len(errs)))], 1), len(errs))
+        return out
+
     def framed_errors(self, t0, t1):
         """Each sample of B shown on the grabber's world against where the authority placed B at the SAME frame: the authority's grabber pose at
         the frame that world shows the grabber at, plus the authority's median grab offset (as the latch check, 8c14670). (errors cm, samples)"""
@@ -331,13 +361,13 @@ class _LinkRig:
 
         errs, seg = [], []
         for p, fr in rows:
-            s0 = srv.get(fr)
+            s0 = srv.get(fr + SHOWN_TO_RECORDED)
             if s0 is None or s0.get('yaw') is None:
                 continue
             ref = placed(s0)
             errs.append(math.dist(p, ref))
             # Note only: the mesh is shown smoothed between the last two simulated frames, so also the distance to the authority's path from F-1 to F
-            s1 = srv.get(fr - 1)
+            s1 = srv.get(fr + SHOWN_TO_RECORDED - 1)
             if s1 is not None and s1.get('yaw') is not None:
                 a, b = placed(s1), ref
                 ab = [b[k] - a[k] for k in range(3)]
@@ -486,6 +516,7 @@ def _spike(pairing):
                 fp50, fp95, fmx = errs[len(errs) // 2], errs[min(len(errs) - 1, int(0.95 * len(errs)))], errs[-1]
                 res.append((f'world {wi} (grabber): presentation aligned by frame p95 <= {limit} cm, max <= {S1["max"]} cm', fp95 <= limit and fmx <= S1['max'],
                             f'p50 {fp50:.1f} p95 {fp95:.1f} max {fmx:.1f} cm, {len(errs)} of {n} samples'))
+                run.note(f'world {wi} (grabber) shown sample against the record of frame + k (k: p50, p95, n): {rig.framed_offsets(T_WALK + 0.5, T_WALK + 7.0)}')
                 seg = sorted(getattr(rig, 'seg_errors', []))
                 if seg:
                     run.note(f'world {wi} (grabber) against the authority between frames F-1 and F (smoothing interval, note only): p50 {seg[len(seg) // 2]:.1f} '
@@ -965,6 +996,34 @@ class _GrabRig:
     def tap(self, wi, button):
         return lambda: ('tap', wi, button, g.combat_tap(wi, g.button_mask(button)))
 
+    def tap_when_free(self, wi, button, after_mark, timeout=1.0):
+        """Taps `button` on world wi once the press can start a move (F15, HANDOVER 61 OPEN 3): B's damage on the authority has risen since the
+        mark `after_mark` (the previous move landed) and wi's own copy of A is out of its timeline. A tap a fixed time after the previous one fell
+        anywhere from 15 to 21 frames after it at 20 editor fps, around the pummel's own end (18 frames + 4 of hitstop), so its press sometimes
+        timed out before A was free and one pummel's damage was missing on every world. Logs when it tapped (or that it gave up) as a note"""
+        def f():
+            t0 = time.time()
+            ref = self.marks[after_mark]['dmg'][0]
+            state = {'h': None}
+
+            def poll(_dt):
+                try:
+                    landed = g.damage_of(0, self.bkey) > ref + 0.5
+                    view = g._view(wi, self.akey) or {}
+                    free = not (view.get('combat') or {}).get('inTimeline', True)
+                    late = time.time() - t0 > timeout
+                    if (landed and free) or late:
+                        unreal.unregister_slate_post_tick_callback(state['h'])
+                        mask = g.combat_tap(wi, g.button_mask(button))
+                        self.run.note(f'tap {button} on world {wi} {time.time() - t0:.3f} s after the previous move landed check started'
+                                      f'{" (TIMEOUT: tapped anyway)" if not (landed and free) else ""}, mask {mask}')
+                except Exception as e:
+                    unreal.unregister_slate_post_tick_callback(state['h'])
+                    self.run.note(f'tap_when_free failed: {e!r}')
+            state['h'] = unreal.register_slate_post_tick_callback(poll)
+            return 'tap when free armed', wi, button
+        return f
+
     def throw(self):
         """Command.Link.Throw.Down: Crouch held and an Attack press (the test input config has no Strong button). Release with self.unhold()"""
         return lambda: ('throw', g.combat_hold(self.ia, g.button_mask('Crouch')), g.combat_tap(self.ia, g.button_mask('Attack')))
@@ -1065,12 +1124,14 @@ def scenario_grab_throw(pairing='client_grabs_client'):
     grab, t = rig.grab_steps()
     steps += grab
     # The grab lasts 150 frames (2.4 s) without a mash: the pummels and the throw come well inside it
-    steps += [(t + 0.15, rig.mark('pre_pummel')), (t + 0.2, rig.tap(rig.ia, 'Attack')), (t + 0.5, rig.tap(rig.ia, 'Attack')), (t + 0.85, rig.mark('pummeled')),
-              (t + 0.85, rig.formed('after two pummels the link still holds, the same on every world')),
-              (t + 0.85, run.at('the pummels did 3 + 3 damage to B on the authority', lambda: (
+    # The second pummel is pressed once the first has landed and A is free again on its own world (F15), not a fixed 0.3 s later
+    steps += [(t + 0.15, rig.mark('pre_pummel')), (t + 0.2, rig.tap(rig.ia, 'Attack')), (t + 0.25, rig.tap_when_free(rig.ia, 'Attack', 'pre_pummel')),
+              (t + 0.95, rig.mark('pummeled')),
+              (t + 0.95, rig.formed('after two pummels the link still holds, the same on every world')),
+              (t + 0.95, run.at('the pummels did 3 + 3 damage to B on the authority', lambda: (
                   abs((rig.marks['pummeled']['dmg'][0] - rig.marks['pre_pummel']['dmg'][0]) - 6.0) < 0.6,
                   f"{rig.marks['pre_pummel']['dmg']} -> {rig.marks['pummeled']['dmg']}"))),
-              (t + 0.9, rig.equal_texts('the link states are equal on every world after the pummels')),
+              (t + 0.97, rig.equal_texts('the link states are equal on every world after the pummels')),
               (t + 1.0, rig.throw()), (t + 1.3, rig.unhold()), (t + 3.1, rig.mark('thrown')),
               (t + 3.1, rig.gone('the throw ended the link on every world')), (t + 3.1, rig.reason('Throw')),
               (t + 3.1, rig.seen_equal('B carried the after-throw grab immunity, the same end frame on every world', 'immunity')),
@@ -1345,7 +1406,7 @@ def _latch(pairing, bystander_in_path=False):
                 off = tuple(sorted(c[k] for c in spts)[len(spts) // 2] for k in range(3)) if spts else None
                 errs = []
                 for t, p, fr in framed:
-                    s0 = srv.get(fr)
+                    s0 = srv.get(fr + SHOWN_TO_RECORDED)
                     if not inside(t, 0.5) or s0 is None or s0.get('yaw') is None or off is None:
                         continue
                     c, sn = math.cos(math.radians(s0['yaw'])), math.sin(math.radians(s0['yaw']))
