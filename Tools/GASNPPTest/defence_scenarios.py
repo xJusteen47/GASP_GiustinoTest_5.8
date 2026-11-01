@@ -965,12 +965,17 @@ def defence_batch(names=None, lag=60, jitter=15, loss=0, settle=3.0, ready_timeo
     _batch.update(results=[], status=f'{len(queue)} queued', report=report, net=(lag, jitter, loss))
 
     def ready():
+        # Listen: host + 2 clients, three pawns everywhere. Dedicated (setup_editor(True, 'dedicated')): a server with no pawn of its own and no
+        # local input, so two pawns per world and no input readiness asked of the server world
+        dedicated = g._cfg.get('mode') == 'dedicated'
         ws = g.worlds()
         if len(ws) < 3:
             return False
-        for w in ws:
+        for i, w in enumerate(ws):
             c = g.comps(w)
-            if len(c) < 3 or not any(json.loads(x.get_state_snapshot()).get('inputReady') for x in c.values()):
+            if len(c) < (2 if dedicated else 3):
+                return False
+            if (i > 0 or not dedicated) and not any(json.loads(x.get_state_snapshot()).get('inputReady') for x in c.values()):
                 return False
         return True
 

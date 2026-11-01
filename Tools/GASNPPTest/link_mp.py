@@ -130,22 +130,28 @@ def net(lag, jitter, loss):
 
 
 def parse_record(line):
-    """(t, rollbacks, frame ms, {key: (mode, body tuple or None, parked xyz or None)})"""
+    """(t, rollbacks, frame ms, {key: (mode, body tuple or None, parked xyz or None, shown frame or None)}). The shown frame (the pawn's Mover's
+    last step on that client, in the authority's numbering) is absent in records written before F14"""
     parts = line.split('|')
     head = parts[0].split()
     pawns = {}
     for p in parts[1:]:
-        f = p.split(' ', 2)
-        if len(f) < 3:
-            continue
-        key, mode, text = f
+        f = p.split(' ', 3)
+        frame = None
+        if len(f) == 4 and f[2].lstrip('-').isdigit():
+            key, mode, frame, text = f[0], f[1], int(f[2]), f[3]
+        else:
+            f = p.split(' ', 2)
+            if len(f) < 3:
+                continue
+            key, mode, text = f
         body, parked = None, None
         if text not in ('-', '?') and ';' in text:
             b, loc = text.split(';', 1)
             body = tuple(int(x) for x in b.split(','))
             if loc != '-':
                 parked = tuple(float(x) for x in loc.split(','))
-        pawns[key] = (mode, body, parked)
+        pawns[key] = (mode, body, parked, frame)
     return float(head[0]), int(head[1]), float(head[2]), pawns
 
 
@@ -170,6 +176,14 @@ class _Rig:
         unreal.SystemLibrary.execute_console_command(g.worlds()[0], 'np.Spike.LogInputSend 1')
         self.log_mark = g.mark_log()
         self.t_start = now()
+        # The authority's grabber pose per sim frame (the host simulates every frame once: no resimulation) and the host's own grab offset
+        # (the parked partner's presentation in the grabber's local frame), for the frame-aligned presentation check
+        self.host_sim = {}
+        self.host_off = []
+        try:
+            server_comps()[self.akey].drain_sim_history()
+        except Exception:
+            pass
         self.handle = unreal.register_slate_post_tick_callback(self._tick)
 
     def _tick(self, dt):
@@ -179,8 +193,39 @@ class _Rig:
             for key in (self.akey, self.bkey):
                 view[key] = (ls.mover_mode(0, key), ls.body(0, key), ls.linked_location(0, key))
             self.host.append((t, dt * 1000.0, view))
+            for e in json.loads(server_comps()[self.akey].drain_sim_history()):
+                if e.get('fr') is not None and e.get('yaw') is not None:
+                    self.host_sim[e['fr']] = (tuple(e['loc']), e['yaw'])
+            parked = view[self.bkey][2]
+            if parked:
+                q = ls.actor(0, self.akey).get_actor_transform().inverse_transform_location(unreal.Vector(*parked))
+                self.host_off.append((t, (q.x, q.y, q.z)))
         except Exception:
             pass
+
+    def framed_errors(self, wi, t0, t1):
+        """Each shown sample of the parked partner on world wi against where the authority placed it at the SAME frame: the authority's grabber
+        pose at the frame wi shows the grabber at, plus the host's median grab offset (as the latch check, 8c14670). (errors cm, samples)"""
+        offs = [c for t, c in self.host_off if t0 <= t <= t1]
+        if not offs:
+            return [], 0
+        off = tuple(sorted(c[k] for c in offs)[len(offs) // 2] for k in range(3))
+        errs, n = [], 0
+        for r in self.records[wi]:
+            if not (t0 <= r[0] <= t1):
+                continue
+            a, b = r[3].get(self.akey), r[3].get(self.bkey)
+            if not a or not b or len(a) < 4 or a[3] is None or not b[2]:
+                continue
+            n += 1
+            s = self.host_sim.get(a[3])
+            if s is None:
+                continue
+            (x, y, z), yaw = s
+            c, sn = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+            ref = (x + off[0] * c - off[1] * sn, y + off[0] * sn + off[1] * c, z + off[2])
+            errs.append(math.dist(b[2], ref))
+        return errs, n
 
     def drain(self):
         for ci in (1, 2):
@@ -345,6 +390,20 @@ def _spike(pairing):
             p50, p95, mx, d = e
             limit = ls.S1['own_p95'] if wi == rig.ia else ls.S1['partner_p95']
             role = 'grabber' if wi == rig.ia else 'grabbed' if wi == rig.ib else 'observer'
+            if wi == rig.ia:
+                # The grabber's own world predicts it ahead of the authority by a lead that drifts with the input buffer, and with dashes in the walk
+                # one constant delay reads the jitter (time-aligned p95 13.2 cm once at 2 %, sa-spike-2pct-3.log). Gated by frame instead, as the
+                # latch: each shown sample against the authority's placement at the frame this world shows the grabber at. Time-aligned: a note
+                run.note(f'process {wi} (grabber) time-aligned: p50 {p50:.1f} p95 {p95:.1f} max {mx:.1f} cm, delay {d * 1000:.0f} ms, {len(mine)} samples')
+                errs, n = rig.framed_errors(wi, ws + 0.5, ws + 7.0)
+                if len(errs) < 20:
+                    res.append((f'process {wi} (grabber): presentation aligned by frame sampled', False, f'{len(errs)} aligned of {n}, authority frames {len(rig.host_sim)}'))
+                    continue
+                errs.sort()
+                fp50, fp95, fmx = errs[len(errs) // 2], errs[min(len(errs) - 1, int(0.95 * len(errs)))], errs[-1]
+                res.append((f'process {wi} (grabber): presentation aligned by frame p95 <= {limit} cm, max <= {ls.S1["max"]} cm', fp95 <= limit and fmx <= ls.S1['max'],
+                            f'p50 {fp50:.1f} p95 {fp95:.1f} max {fmx:.1f} cm, {len(errs)} of {n} samples'))
+                continue
             res.append((f'process {wi} ({role}): presentation p95 <= {limit} cm, max <= {ls.S1["max"]} cm', p95 <= limit and mx <= ls.S1['max'],
                         f'p50 {p50:.1f} p95 {p95:.1f} max {mx:.1f} cm, delay {d * 1000:.0f} ms, {len(mine)} samples'))
         unreal.SystemLibrary.execute_console_command(g.worlds()[0], 'np.Spike.LogInputSend 0')
