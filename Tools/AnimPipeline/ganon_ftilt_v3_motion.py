@@ -37,6 +37,9 @@ LAND = 24                    # the kicking foot is planted from here
 KEYS = list(range(N)); LINEAR = [[a, b] for a, b in zip(KEYS[:-1], KEYS[1:])]; CLAMPED = []; BEZIER = []; LAYERS = {}; WEIGHTS = {}
 KICK_YAW = 20.0              # deg, kick plane outward (toward +X, the lead side) from the facing
 
+import sys as _sys
+LEGACY_TRUNK = "--legacy-trunk" in _sys.argv     # reproduce the first v3 delivery (stretched trunk), for comparison only
+OUT = next((a.split("=", 1)[1] for a in _sys.argv if a.startswith("--out=")), "ganon_v3_targets_raw.json")
 CHEST_LAG = 1.6
 HEAD_LAG = 3.0
 ARM_LAG = 1.0
@@ -187,13 +190,25 @@ def main():
         Rc = Rx(lean) @ Rz(side) @ Ry(yaw_c + cy)
         for n in PELV:
             D[n] = piv + Rp @ (G[n] - piv)
-        for n in SP2:
-            D[n] = piv + Rs @ (G[n] - piv)
-        for n in CHEST:
-            D[n] = piv + Rc @ (G[n] - piv)
         th2 = k - 0.5 * (CHEST_LAG + HEAD_LAG)
         Rc2 = Rx(at(C["lean"], th2)) @ Rz(at(C["side"], th2)) @ Ry(at(C["yaw"], th2) + at(C["cyaw"], th2))
-        hm = piv + Rc2 @ (G["head_MainPoint"] - piv)
+        if LEGACY_TRUNK:
+            # v3 as first delivered: every segment rotated about the PELVIS at its own lagged time, so a lag between two
+            # big rotations on a 60 cm lever pulled the head point up to 17 cm off the neck ("the neck detaches")
+            for n in SP2:
+                D[n] = piv + Rs @ (G[n] - piv)
+            for n in CHEST:
+                D[n] = piv + Rc @ (G[n] - piv)
+            hm = piv + Rc2 @ (G["head_MainPoint"] - piv)
+        else:
+            # hierarchical trunk: each segment turns about its PARENT's joint (spine_02 about the pelvis, the chest about
+            # spine_02, the head about neck_01), so the overlap lags change angles only and every length stays the idle's
+            for n in SP2:
+                D[n] = piv + Rs @ (G[n] - piv)
+            s2 = D["spine_02_MainPoint"]
+            for n in CHEST:
+                D[n] = s2 + Rc @ (G[n] - G["spine_02_MainPoint"])
+            hm = D["neck_01_MainPoint"] + Rc2 @ (G["head_MainPoint"] - G["neck_01_MainPoint"])
         Rh = Rx(0.45 * at(C["lean"], th)) @ Rz(0.4 * at(C["side"], th)) @ Ry(0.3 * (at(C["yaw"], th) + at(C["cyaw"], th)))
         for n in HEAD:
             D[n] = hm + Rh @ (G[n] - G["head_MainPoint"])
@@ -250,8 +265,13 @@ def main():
 
     def compose(k, corr):
         D = body(k)
-        lagged = {**{n: corr for n in PELV}, **{n: corr_at(k - 0.35 * CHEST_LAG) if k > 0 else corr for n in SP2},
-                  **{n: corr_at(k - 0.7 * CHEST_LAG) if k > 0 else corr for n in CHEST}, **{n: corr_at(k - 0.9 * HEAD_LAG) if k > 0 else corr for n in HEAD}}
+        if LEGACY_TRUNK:
+            lagged = {**{n: corr for n in PELV}, **{n: corr_at(k - 0.35 * CHEST_LAG) if k > 0 else corr for n in SP2},
+                      **{n: corr_at(k - 0.7 * CHEST_LAG) if k > 0 else corr for n in CHEST}, **{n: corr_at(k - 0.9 * HEAD_LAG) if k > 0 else corr for n in HEAD}}
+        else:
+            # one shift for the whole trunk: a per-segment lagged translation stretches the spine (v3: up to 6 cm); the
+            # overlap is in the lagged rotations above
+            lagged = {n: corr for n in PELV + SP2 + CHEST + HEAD}
         for n in PELV + SP2 + CHEST + HEAD:
             D[n] = D[n] + lagged[n]
         # ---- arms: side-view angles, sampled ARM_LAG late ----
@@ -370,8 +390,8 @@ def main():
     res = {"frames": list(range(N)), "targets": {n: [out[n][k].tolist() for k in range(N)] for n in names}, "feet": {},
            "keyplan": {"keys": KEYS, "linear": LINEAR, "bezier": BEZIER, "layers": LAYERS, "weights": {}, "kind": "clamped"},
            "move": {"contact": list(CONTACT), "faf": FAF_K, "kick_dir_cascadeur": kf.tolist()}}
-    json.dump(res, open(os.path.join(HERE, "ganon_v3_targets_raw.json"), "w"))
-    print("written ganon_v3_targets_raw.json")
+    json.dump(res, open(os.path.join(HERE, OUT), "w"))
+    print("written " + OUT)
 
 
 if __name__ == "__main__":
