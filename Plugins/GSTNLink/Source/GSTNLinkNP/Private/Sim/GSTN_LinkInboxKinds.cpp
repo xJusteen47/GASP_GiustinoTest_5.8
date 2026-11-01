@@ -33,12 +33,15 @@ bool FGSTN_LinkInboxHandlers::ApplyResponse(FGSTN_LinkFragment& Fragment, const 
 	}
 	for (FGSTN_LinkState* State : Channels)
 	{
-		const bool bOwnRequest = State->Phase == EGSTN_LinkPhase::Pending && State->PartnerId == Target
+		// The initiator's own request to this target: still Pending, or already accepted optimistically (M7 G1: Active, role 1, flag Predicted)
+		const bool bOptimistic = State->IsActive() && State->Role == 1 && State->HasFlag(GSTNLinkFlags::Predicted);
+		const bool bOwnRequest = (State->Phase == EGSTN_LinkPhase::Pending || bOptimistic) && State->PartnerId == Target
 			&& (Definition || State->LinkTypeIndex == Response.LinkTypeIndex);
 		if (Response.bAccepted)
 		{
-			// Already applied: the same serial on role 1 (the re-arrival after a rollback of the sender)
-			if (State->Role == 1 && State->Serial == Response.Serial && State->PartnerId == Target)
+			// Already applied: the same serial on role 1 (the re-arrival after a rollback of the sender). An optimistic accept is not applied
+			// yet: the response below replaces it, which confirms it (the flag goes) or corrects a mispredicted serial or payload
+			if (State->Role == 1 && State->Serial == Response.Serial && State->PartnerId == Target && !bOptimistic)
 			{
 				return false;
 			}
@@ -51,6 +54,7 @@ bool FGSTN_LinkInboxHandlers::ApplyResponse(FGSTN_LinkFragment& Fragment, const 
 				Formed.PartnerId = Target;
 				Formed.Serial = Response.Serial;
 				Formed.LinkFrame = Response.LinkFrame;
+				Formed.Payload = Response.Payload;
 				*State = Formed;
 				return true;
 			}

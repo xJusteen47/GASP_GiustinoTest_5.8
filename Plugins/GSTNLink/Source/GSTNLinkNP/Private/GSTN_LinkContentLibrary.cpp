@@ -693,26 +693,13 @@ FString UGSTN_LinkContentLibrary::DescribeGrabProbe(const AActor* Actor)
 	const FGSTN_SnapshotEntry* Self = Snapshot.Find(SelfId);
 	const FGSTN_LinkSnapshotExt* SelfExt = Self ? Self->Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link) : nullptr;
 	const FGSTN_LinkBodyData* Body = SelfExt && SelfExt->IsValid() ? FGSTN_LinkAttach::At(SelfExt->BodyIndex) : nullptr;
-	if (!Self || !Body || !Body->GetKitExtension())
-	{
-		return FString::Printf(TEXT("self %d: no snapshot entry or no kit link extension"), SelfId);
-	}
-	auto MakeSide = [](const FGSTN_SnapshotEntry& Entry)
-	{
-		FGSTN_LinkRequestSide Side;
-		Side.EntityId = Entry.EntityId;
-		Side.EffectiveWeight = 100.f * static_cast<float>(Entry.Reaction.WeightScaleQ) / 64.f;
-		if (const FGSTN_LinkSnapshotExt* Ext = Entry.Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link); Ext && Ext->IsValid())
-		{
-			FGSTN_LinkRequestTags::AppendTags(Ext->RequestTagMask, Side.Tags);
-			Side.GrabImmunityEndFrame = Ext->GrabImmunityEndFrame;
-			Side.CooldownEndFrame = Ext->CooldownEndFrame;
-			Side.Links = Ext->ToLinkStates();
-		}
-		return Side;
-	};
 	TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>> Offers;
-	FGSTN_LinkTickExtension::MakeGrabOffers(*Registry, Body->GetKitExtension(), Offers);
+	FGSTN_LinkTickExtension::MakeOffersFor(*Registry, Body, Offers);
+	if (!Self || Offers.IsEmpty())
+	{
+		return FString::Printf(TEXT("self %d: no snapshot entry or no interact offer for its kit"), SelfId);
+	}
+	auto MakeSide = [](const FGSTN_SnapshotEntry& Entry) { return FGSTN_LinkTickExtension::MakeRequestSide(Entry); };
 	FGSTN_LinkInteractSource Source;
 	Source.Interactor = MakeSide(*Self);
 	Source.Offers = Offers;

@@ -8,12 +8,14 @@
 #include "GSTN_InteractMath.h"
 #include "GSTN_InteractTags.h"
 #include "GSTN_LinkRegistry.h"
+#include "GSTN_LinkRequirementLibrary.h"
 #include "GSTN_LinkSettings.h"
 #include "GSTN_LinkTags.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Movement/GSTN_LinkExitRequest.h"
 #include "Movement/GSTN_LinkedModifier.h"
 #include "Sim/GSTN_LinkAttach.h"
+#include "Sim/GSTN_LinkEffects.h"
 #include "Sim/GSTN_LinkExitCollision.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Sim/GSTN_LinkMash.h"
@@ -34,21 +36,27 @@ namespace
 		return Registry ? Registry->GetDefinition(Fragment.Links.Body.LinkTypeIndex) : nullptr;
 	}
 
-	/** The request side of a snapshot entry, as the LinkRequest step builds it from the same bytes */
-	FGSTN_LinkRequestSide MakeSide(const FGSTN_SnapshotEntry& Entry, const FGSTN_LinkSnapshotExt* Ext)
+}
+
+FGSTN_LinkRequestSide FGSTN_LinkTickExtension::MakeRequestSide(const FGSTN_SnapshotEntry& Entry)
+{
+	FGSTN_LinkRequestSide Side;
+	Side.EntityId = Entry.EntityId;
+	Side.TeamId = Entry.Team.GetId();
+	Side.EffectiveWeight = 100.f * static_cast<float>(Entry.Reaction.WeightScaleQ) / 64.f;
+	const FGSTN_LinkSnapshotExt* Ext = Entry.Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link);
+	if (Ext && Ext->IsValid())
 	{
-		FGSTN_LinkRequestSide Side;
-		Side.EntityId = Entry.EntityId;
-		Side.EffectiveWeight = 100.f * static_cast<float>(Entry.Reaction.WeightScaleQ) / 64.f;
-		if (Ext)
+		FGSTN_LinkRequestTags::AppendTags(Ext->RequestTagMask, Side.Tags);
+		Side.GrabImmunityEndFrame = Ext->GrabImmunityEndFrame;
+		Side.CooldownEndFrame = Ext->CooldownEndFrame;
+		Side.Links = Ext->ToLinkStates();
+		if (const FGSTN_LinkBodyData* Body = FGSTN_LinkAttach::At(Ext->BodyIndex))
 		{
-			FGSTN_LinkRequestTags::AppendTags(Ext->RequestTagMask, Side.Tags);
-			Side.GrabImmunityEndFrame = Ext->GrabImmunityEndFrame;
-			Side.CooldownEndFrame = Ext->CooldownEndFrame;
-			Side.Links = Ext->ToLinkStates();
+			Side.KitExtensions = Body->GetKitExtensions();
 		}
-		return Side;
 	}
+	return Side;
 }
 
 uint8 FGSTN_LinkTickExtension::GetTypeId() const
@@ -272,41 +280,121 @@ bool FGSTN_LinkTickExtension::StepMash(const FGSTN_CombatTickContext& Context, F
 	return FGSTN_LinkMash::Step(Fragment, Context.In.Core.Input.History, Rules->Mash, FGSTN_LinkMash::ButtonMaskOf(Rules->Mash, Context.Buttons), Context.Frame);
 }
 
-void FGSTN_LinkTickExtension::MakeGrabOffers(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkKitExtension* Kit, TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers)
+void FGSTN_LinkTickExtension::MakeOffersFor(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkBodyData* Body, TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers)
 {
-	const FGSTN_LinkInteractOffer Grab = FGSTN_LinkInteractProvider::MakeGrabOffer(Registry, Kit);
-	if (!Grab.Definition)
+	if (Body)
 	{
-		return;
+		FGSTN_LinkInteractProvider::MakeOffers(Registry, Body->GetKitExtensions(), Body->GetKitExtension(), OutOffers);
 	}
-	for (const FGameplayTag& Alternative : Grab.Definition->Alternatives)
+}
+
+bool FGSTN_LinkTickExtension::PredictRequest(FGSTN_LinkState& State, const UGSTN_LinkRegistry& Registry, const FGSTN_SnapshotEntry& Self,
+	const FGSTN_SnapshotEntry& Victim, const FGameplayTag& AskedType, int32 Frame)
+{
+	const UGSTN_LinkTypeDefinition* Asked = Registry.FindDefinition(AskedType);
+	if (!Asked)
 	{
-		if (const UGSTN_LinkTypeDefinition* Definition = Registry.FindDefinition(Alternative))
+		return false;
+	}
+	// The context the target's LinkRequest step builds from the same snapshot (FGSTN_LinkStepUtils::MakeRequestContext), so the initiator holds
+	// the type and the payload the target will form
+	const FGSTN_LinkSnapshotExt* SelfExt = Self.Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link);
+	const FGSTN_LinkBodyData* SelfBody = SelfExt && SelfExt->IsValid() ? FGSTN_LinkAttach::At(SelfExt->BodyIndex) : nullptr;
+	TArray<FGameplayTag, TInlineAllocator<4>> Candidates(Asked->Alternatives);
+	Candidates.Add(AskedType);
+	for (const FGameplayTag& Candidate : Candidates)
+	{
+		FGSTN_LinkRequestContext Request;
+		Request.Frame = Frame;
+		Request.LinkType = Candidate;
+		Request.Initiator = MakeRequestSide(Self);
+		Request.Target = MakeRequestSide(Victim);
+		UGSTN_LinkRequirementLibrary::ResolveDefinitions(Registry, Request);
+		UGSTN_LinkRequirementLibrary::ApplyKitRules(SelfBody ? SelfBody->GetKitExtension() : nullptr, Request);
+		if (!Request.Definition || Request.Definition->Channel != Asked->Channel || !UGSTN_LinkRequirementLibrary::EvaluateRequest(Request).bAccepted)
 		{
-			FGSTN_LinkInteractOffer Offer = Grab;
-			Offer.Definition = Definition;
-			OutOffers.Add(Offer);
+			continue;
 		}
+		State.LinkTypeIndex = Registry.GetTypeIndex(Candidate);
+		State.Payload = UGSTN_LinkRequirementLibrary::ComputePayload(Request);
+		return true;
 	}
-	OutOffers.Add(Grab);
+	return false;
 }
 
-const FGSTN_InteractMeaningTable& FGSTN_LinkTickExtension::GetLinkMeanings()
+bool FGSTN_LinkTickExtension::StepOptimisticAccept(FGSTN_LinkFragment& Fragment, int32 SelfId, int32 Frame, const UGSTN_LinkRegistry* Registry,
+	TFunctionRef<const FGSTN_LinkSnapshotExt*(int32 EntityId)> TargetExtOf)
 {
-	static FGSTN_InteractMeaningTable Meanings;
-	static bool bBuilt = false;
-	if (!bBuilt)
+	if (!Registry)
 	{
-		FGSTN_InteractMeaning Grab;
-		Grab.Tag = GSTNLinkTags::Interact_Target_Grab;
-		Meanings.Build({ Grab });
-		bBuilt = true;
+		return false;
 	}
-	return Meanings;
+	bool bChanged = false;
+	for (const EGSTN_LinkChannel Channel : { EGSTN_LinkChannel::Body, EGSTN_LinkChannel::Hand })
+	{
+		FGSTN_LinkState& State = Fragment.Get(Channel);
+		if (State.Phase != EGSTN_LinkPhase::Pending || !State.HasFlag(GSTNLinkFlags::Predicted) || State.PartnerId.IsNull())
+		{
+			continue;
+		}
+		const UGSTN_LinkTypeDefinition* Definition = Registry->GetDefinition(State.LinkTypeIndex);
+		if (!Definition || !Definition->bInitiatorPredicts || Frame < State.LinkFrame + FMath::Max(Definition->PendingFrames, 1))
+		{
+			continue;
+		}
+		const FGSTN_LinkSnapshotExt* Target = TargetExtOf(static_cast<int32>(State.PartnerId.Id));
+		if (!Target || !Target->IsValid())
+		{
+			// Nothing known about the target on this machine: the request waits for its response or its timeout
+			continue;
+		}
+
+		uint8 Serial = 0;
+		int32 LinkFrame = State.LinkFrame + 1;
+		if (Channel == EGSTN_LinkChannel::Body)
+		{
+			if (Target->BodyPhase != static_cast<uint8>(EGSTN_LinkPhase::None))
+			{
+				if (Target->BodyRole != 2 || Target->PartnerId != SelfId)
+				{
+					// The target holds another link (a second initiator came first, or it initiated its own): what a refusal would say
+					State.Reset();
+					bChanged = true;
+					continue;
+				}
+				// The target formed with this entity already (a machine that simulates it): its serial and frame are the authority's
+				Serial = Target->BodySerial;
+				LinkFrame = Target->LinkFrame;
+			}
+			else
+			{
+				Serial = FGSTN_LinkState::NextSerial(Target->BodySerial, State.Serial);
+			}
+		}
+		else
+		{
+			// The snapshot carries no Hand serial or partner: a held Hand link is a refusal, a free one predicts from the entity's own serial
+			if (Target->HandRole != 0)
+			{
+				State.Reset();
+				bChanged = true;
+				continue;
+			}
+			Serial = FGSTN_LinkState::NextSerial(0, State.Serial);
+		}
+
+		State.Role = 1;
+		State.Phase = EGSTN_LinkPhase::Active;
+		State.Serial = Serial;
+		State.LinkFrame = LinkFrame;
+		// The Predicted flag stays: the response clears it where it arrives; elsewhere the authority's state equals this one but for the flag
+		bChanged = true;
+	}
+	return bChanged;
 }
 
-FGameplayTag FGSTN_LinkTickExtension::ResolveGrabTarget(const FGSTN_SnapshotEntry& Self, TConstArrayView<FGSTN_SnapshotEntry> Entries, int32 Frame,
-	const FVector& StickOnPlane, const FGSTN_InteractMeaningTable& Meanings) const
+FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_SnapshotEntry& Self, TConstArrayView<FGSTN_SnapshotEntry> Entries, int32 Frame,
+	const FVector& StickOnPlane) const
 {
 	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
 	const FGSTN_LinkSnapshotExt* SelfExt = Self.Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link);
@@ -314,15 +402,10 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveGrabTarget(const FGSTN_SnapshotEntr
 	{
 		return FGameplayTag();
 	}
-	// Only a kit that can grab (it carries a link extension) looks for a grab target: the probe reads other entities' snapshot positions, which
-	// a client knows as interpolated proxies, so its result is not prediction-stable and must not reach a pawn that never grabs (F10 deviation)
-	const FGSTN_LinkBodyData* Body = FGSTN_LinkAttach::At(SelfExt->BodyIndex);
-	if (!Body || !Body->GetKitExtension())
-	{
-		return FGameplayTag();
-	}
+	// Only a kit that some offer applies to (the grab: a link extension) looks for a target: the probe reads other entities' snapshot positions,
+	// which a client knows as interpolated proxies, so its result is not prediction-stable and must not reach a pawn that never uses it (F10)
 	TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>> Offers;
-	MakeGrabOffers(*Registry, Body->GetKitExtension(), Offers);
+	MakeOffersFor(*Registry, FGSTN_LinkAttach::At(SelfExt->BodyIndex), Offers);
 	if (Offers.IsEmpty())
 	{
 		return FGameplayTag();
@@ -336,7 +419,7 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveGrabTarget(const FGSTN_SnapshotEntr
 			continue;
 		}
 		FGSTN_LinkInteractEntity& Candidate = Candidates.AddDefaulted_GetRef();
-		Candidate.Side = MakeSide(Entry, Entry.Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link));
+		Candidate.Side = MakeRequestSide(Entry);
 		Candidate.Location = Entry.Transform.GetLocation();
 		Candidate.RadiusCm = FMath::RoundToInt32(FMath::Min(Entry.BoundRadius, 60.f));
 	}
@@ -346,11 +429,12 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveGrabTarget(const FGSTN_SnapshotEntr
 	}
 
 	FGSTN_LinkInteractSource Source;
-	Source.Interactor = MakeSide(Self, SelfExt);
+	Source.Interactor = MakeRequestSide(Self);
 	Source.Entities = Candidates;
 	Source.Offers = Offers;
 	Source.Registry = Registry;
 
+	const FGSTN_InteractMeaningTable& Meanings = Registry->GetInteractMeanings();
 	static const FGSTN_InteractRules Rules;
 	const IGSTN_InteractCandidateProvider* Providers[] = { &Provider };
 	FGSTN_InteractQuery Query;
@@ -371,7 +455,8 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveGrabTarget(const FGSTN_SnapshotEntr
 	const FGSTN_InteractFocusResult Focus = UGSTN_InteractMath::UpdateFocus(Query, State);
 	FGameplayTagContainer Projected;
 	FGSTN_LinkInteractProvider::ProjectTargetTag(Focus, Meanings, Projected);
-	return Projected.HasTagExact(GSTNLinkTags::Interact_Target_Grab) ? GSTNLinkTags::Interact_Target_Grab.GetTag() : FGameplayTag();
+	// ProjectTargetTag leaves at most one Interact.Target tag: the focus meaning
+	return Projected.IsEmpty() ? FGameplayTag() : Projected.First();
 }
 
 void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_CombatTickContext& Context)
@@ -381,6 +466,17 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 	case EGSTN_CombatHookPoint::AfterClocks:
 		if (FGSTN_LinkFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments))
 		{
+			// M7 G1: a predicting type's request accepts itself PendingFrames after the hit, on the target's entry of the step snapshot (end of the
+			// previous frame). The response of a machine that simulates the target was drained before this point, so there it already formed
+			if (Context.Snapshot && Context.EntityId != INDEX_NONE)
+			{
+				const FGSTN_StepSnapshot& Snapshot = *Context.Snapshot;
+				StepOptimisticAccept(*Fragment, Context.EntityId, Context.Frame, UGSTN_LinkRegistry::Get(), [&Snapshot](int32 EntityId) -> const FGSTN_LinkSnapshotExt*
+				{
+					const FGSTN_SnapshotEntry* Entry = Snapshot.Find(EntityId);
+					return Entry ? Entry->Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link) : nullptr;
+				});
+			}
 			StepLinkTick(*Fragment, Context.Frame, UGSTN_LinkSettings::Get().RequestTimeoutFrames);
 			// The exit a break recorded is read on its frame (F11's exit request); after it the record is dropped, so an idle entity is idle on the wire
 			if (Fragment->Actions.Exit.Frame != 0 && Context.Frame > Fragment->Actions.Exit.Frame)
@@ -442,7 +538,18 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 				}
 				// The fragment exists from the first link on: a grab-like hit is when it first appears
 				FGSTN_LinkFragment& Fragment = FGSTN_SyncFragmentList::FindOrAdd<FGSTN_LinkFragment>(Context.Out.Fragments);
-				MarkPredicted(Fragment, *Registry, LinkType, Hit.VictimId, Context.Frame);
+				if (!MarkPredicted(Fragment, *Registry, LinkType, Hit.VictimId, Context.Frame))
+				{
+					continue;
+				}
+				// M7 G1: a type the initiator accepts by itself holds the type and the payload the target will form (same snapshot as the hit)
+				const UGSTN_LinkTypeDefinition* Asked = Registry->FindDefinition(LinkType);
+				const FGSTN_SnapshotEntry* Self = Context.Snapshot ? Context.Snapshot->Find(Context.EntityId) : nullptr;
+				const FGSTN_SnapshotEntry* Victim = Context.Snapshot ? Context.Snapshot->Find(Hit.VictimId) : nullptr;
+				if (Asked && Asked->bInitiatorPredicts && Self && Victim)
+				{
+					PredictRequest(Fragment.Get(Asked->Channel), *Registry, *Self, *Victim, LinkType, Context.Frame);
+				}
 			}
 		}
 		break;
@@ -466,6 +573,9 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 		{
 			FGSTN_LinkExitRequest::Apply(Context.AbilitySystem, Fragment->Actions.Exit);
 		}
+		// M7 G1: the link effects of roles that became Active or ended this frame, like the exit effect: from the fragment this frame wrote
+		FGSTN_LinkEffects::Step(Context.AbilitySystem, FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.In.Fragments),
+			FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments), Registry);
 		// The pair's collision for this frame's Mover tick (F15): from the fragment this frame wrote, rewritten every simulated frame. An entity
 		// that never linked has no fragment and nothing to undo
 		if (Context.Owner)
@@ -505,12 +615,12 @@ void FGSTN_LinkTickExtension::ProjectTags(FGSTN_CombatTickContext& Context) cons
 	FGameplayTagContainer Held;
 	GatherStateTags(Fragment, Registry, Held);
 
-	// The grab target of this frame, for an entity that is free to grab (no link, nothing pending) and is in the snapshot
+	// The interact target of this frame, for an entity that is free to link (no link, nothing pending) and is in the snapshot
 	if (Context.Snapshot && Context.EntityId != INDEX_NONE && (!Fragment || (Fragment->Links.Body.Phase == EGSTN_LinkPhase::None && Fragment->Links.Hand.Phase == EGSTN_LinkPhase::None)))
 	{
 		if (const FGSTN_SnapshotEntry* Self = Context.Snapshot->Find(Context.EntityId))
 		{
-			const FGameplayTag Target = ResolveGrabTarget(*Self, Context.Snapshot->Entries, Context.Frame, Context.StickOnPlane, GetLinkMeanings());
+			const FGameplayTag Target = ResolveInteractTarget(*Self, Context.Snapshot->Entries, Context.Frame, Context.StickOnPlane);
 			if (Target.IsValid())
 			{
 				Held.AddTag(Target);
@@ -518,10 +628,18 @@ void FGSTN_LinkTickExtension::ProjectTags(FGSTN_CombatTickContext& Context) cons
 		}
 	}
 
-	// Set, never added: nothing else writes these, and a re-simulated frame must not inherit what a predicted future left
+	// Set, never added: nothing else writes these, and a re-simulated frame must not inherit what a predicted future left. Every meaning an
+	// offer can project is in the set (the grab's always, so a kit without offers still clears it)
 	FGameplayTagContainer Projectable;
 	GatherProjectableTags(Registry, Projectable);
 	Projectable.AddTag(GSTNLinkTags::Interact_Target_Grab);
+	if (Registry)
+	{
+		for (const FGSTN_LinkOfferEntry& Offer : Registry->GetInteractOffers())
+		{
+			Projectable.AddTag(Offer.Offer.Meaning);
+		}
+	}
 	for (const FGameplayTag& Tag : Projectable)
 	{
 		ASC->SetLooseGameplayTagCount(Tag, Held.HasTagExact(Tag) ? 1 : 0);

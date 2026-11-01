@@ -9,6 +9,7 @@ class AActor;
 class UGSTN_PrimaryKitDefinition;
 class USkeletalMesh;
 struct FGSTN_CompileInput;
+struct FGSTN_KitExtensionList;
 struct FGSTN_LinkKitExtension;
 struct FGSTN_LoadoutExtensionContext;
 
@@ -40,8 +41,14 @@ struct GSTNLINKNP_API FGSTN_LinkBodyData
 	/** A test's own extension, used when no kit is attached (AddForTest) */
 	const FGSTN_LinkKitExtension* TestKitExtension = nullptr;
 
-	/** The kit's link extension, or the test's, or null */
+	/** A test's own extension array, used when no kit is attached (AddForTest) */
+	const FGSTN_KitExtensionList* TestKitExtensions = nullptr;
+
+	/** The kit's link extension, or the test's (its own, then the one of its array), or null */
 	const FGSTN_LinkKitExtension* GetKitExtension() const;
+
+	/** The kit's whole extension array (M7 G1: the request side's KitExtensions, so a plugin's rule reads its own kit data), or the test's, or null */
+	const FGSTN_KitExtensionList* GetKitExtensions() const;
 
 	/** The socket's root-relative transform; identity for NAME_None and for a name that was not baked */
 	FTransform GetSocket(FName Socket) const;
@@ -87,6 +94,7 @@ public:
 	/** Drops every attachment and the table (tests only: a running simulation holds indices into it) */
 	static void Reset();
 
-	/** Adds a body entry that no actor owns (tests): the sockets and kit given. Returns its index */
-	static uint16 AddForTest(const TMap<FName, FTransform>& Sockets, const FGSTN_LinkKitExtension* KitExtension = nullptr);
+	/** Adds a body entry that no actor owns (tests): the sockets and kit given (a link extension, an extension array, or both). Returns its index */
+	static uint16 AddForTest(const TMap<FName, FTransform>& Sockets, const FGSTN_LinkKitExtension* KitExtension = nullptr,
+		const FGSTN_KitExtensionList* KitExtensions = nullptr);
 };

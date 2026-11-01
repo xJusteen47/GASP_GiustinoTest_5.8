@@ -7,7 +7,11 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Data/GSTN_LinkTypeDefinition.h"
+#include "GSTN_InteractTypes.h"
+#include "GSTN_LinkInteractProvider.h"
 #include "GSTN_LinkRegistry.h"
+#include "Sim/GSTN_LinkAttach.h"
+#include "StructUtils/InstancedStruct.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitResolution.h"
 #include "Misc/AutomationTest.h"
@@ -51,6 +55,10 @@ namespace
 			Definition->TargetRole.SocketOffset = FTransform(FVector(0.0, 0.0, 40.0));
 			Definition->Break.MaxDistanceCm = 50.f;
 			Definition->Rules.Add(NewObject<UGSTN_ExtTestCarryRule>(Definition));
+			// M7 G1: the interact button offers it under its own meaning, below the grab, to kits that carry its kit entry
+			Definition->InteractOffer.Meaning = GSTNExtTestLinkTags::Interact_Target_Carry;
+			Definition->InteractOffer.Priority = 30;
+			Definition->InteractOffer.RequiredKitExtension = FGSTN_ExtTestCarryKit::StaticStruct();
 
 			UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
 			NumBefore = Registry->Num();
@@ -245,6 +253,98 @@ bool FGSTN_ExtTestLinkBreakRulesTest::RunTest(const FString& Parameters)
 	Input.bPartnerDead = true;
 	const FGSTN_LinkBreakDecision Dead = UGSTN_LinkMath::EvaluateBreak(Carry.Definition->Break, 0, Input);
 	TestTrue(TEXT("the carrier dies: PartnerDeath, the generic rule every type shares"), Dead.bBreak && Dead.Reason == EGSTN_LinkBreakReason::PartnerDeath);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ExtTestLinkOfferTest, "GSTNExtTest.Link.InteractOfferFromOutside", Flags)
+bool FGSTN_ExtTestLinkOfferTest::RunTest(const FString& Parameters)
+{
+	FScopedCarry Carry;
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+
+	// M7 G1: the definition's own offer is compiled by GSTNLink's registry, meaning and all; nothing in GSTNLink names it
+	const FGSTN_LinkOfferEntry* Entry = Registry->GetInteractOffers().FindByPredicate([&Carry](const FGSTN_LinkOfferEntry& Offer) { return Offer.Definition == Carry.Definition; });
+	TestTrue(TEXT("the carry is an interact offer"), Entry && Entry->Offer.Meaning == GSTNExtTestLinkTags::Interact_Target_Carry && Entry->Offer.Priority == 30);
+	const int32 MeaningIndex = Registry->GetInteractMeanings().IndexOf(GSTNExtTestLinkTags::Interact_Target_Carry);
+	TestTrue(TEXT("its meaning joined the probe's table"), MeaningIndex != 0);
+
+	// Offered to a kit that carries the carry's own kit entry only
+	FGSTN_KitExtensionList CarrierKit;
+	FGSTN_ExtTestCarryKit CarryData;
+	CarryData.MaxCarryWeight = 200.f;
+	CarrierKit.ExtensionData.Add(FInstancedStruct::Make(CarryData));
+	FGSTN_KitExtensionList PlainKit;
+	auto IsOffered = [&Carry](TConstArrayView<FGSTN_LinkInteractOffer> Offers)
+	{
+		return Offers.ContainsByPredicate([&Carry](const FGSTN_LinkInteractOffer& Offer) { return Offer.Definition == Carry.Definition; });
+	};
+	TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>> Offers;
+	FGSTN_LinkInteractProvider::MakeOffers(*Registry, &PlainKit, nullptr, Offers);
+	TestFalse(TEXT("a kit without the carry entry is not offered the carry"), IsOffered(Offers));
+	Offers.Reset();
+	FGSTN_LinkInteractProvider::MakeOffers(*Registry, &CarrierKit, nullptr, Offers);
+	TestTrue(TEXT("a carrier kit is"), IsOffered(Offers));
+
+	// The pre-filter runs the carry's rule with the interactor's kit: 180 fits this kit's 200, not the rule's own 150
+	FGSTN_LinkInteractOffer Only;
+	for (const FGSTN_LinkInteractOffer& Offer : Offers)
+	{
+		Only = Offer.Definition == Carry.Definition ? Offer : Only;
+	}
+	const FGSTN_LinkInteractOffer OnlyOffers[] = { Only };
+	FGSTN_LinkInteractSource Source;
+	Source.Interactor.EntityId = CarrierId;
+	Source.Interactor.KitExtensions = &CarrierKit;
+	Source.Offers = OnlyOffers;
+	Source.Registry = Registry;
+	FGSTN_LinkInteractEntity Heavy;
+	Heavy.Side.EntityId = CarriedId;
+	Heavy.Side.EffectiveWeight = 180.f;
+	TestEqual(TEXT("180 is offered to a 200 kit"), FGSTN_LinkInteractProvider::FindAcceptedOffer(Source, Heavy, HitFrame), 0);
+	Source.Interactor.KitExtensions = &PlainKit;
+	TestEqual(TEXT("and refused with the rule's own 150"), FGSTN_LinkInteractProvider::FindAcceptedOffer(Source, Heavy, HitFrame), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ExtTestLinkPayloadTest, "GSTNExtTest.Link.PayloadFromOwnRule", Flags)
+bool FGSTN_ExtTestLinkPayloadTest::RunTest(const FString& Parameters)
+{
+	FGSTN_LinkFragmentRegistration::Register();
+	FGSTN_LinkInboxHandlers::Register();
+	FScopedCarry Carry;
+
+	// The carrier's body holds a kit with the carry entry (capacity 200); the target weighs 100: the rule writes 255 x 100 / 200 = 128
+	FGSTN_KitExtensionList CarrierKit;
+	FGSTN_ExtTestCarryKit CarryData;
+	CarryData.MaxCarryWeight = 200.f;
+	CarrierKit.ExtensionData.Add(FInstancedStruct::Make(CarryData));
+	FGSTN_LinkFragment Carrier = PredictedCarry();
+	FCarryRequest Request(Carrier, 64);
+	Request.InitiatorExt.BodyIndex = FGSTN_LinkAttach::AddForTest({}, nullptr, &CarrierKit);
+	FGSTN_StepResult Out;
+	Request.Run(Out);
+	const FGSTN_LinkHitOutcome* Outcome = Out.OutcomeExtensions.Num() == 1 ? Out.OutcomeExtensions[0].GetPtr<FGSTN_LinkHitOutcome>() : nullptr;
+	if (!TestNotNull(TEXT("accepted with an outcome"), Outcome))
+	{
+		return false;
+	}
+	TestEqual(TEXT("payload from the carry rule"), static_cast<int32>(Outcome->Payload), 128);
+	const FGSTN_LinkResponseEntry* Response = Out.OutgoingEntries.Num() == 1 ? Out.OutgoingEntries[0].Payload.GetPtr<FGSTN_LinkResponseEntry>() : nullptr;
+	TestTrue(TEXT("the response carries it to the carrier"), Response && Response->Payload == 128);
+
+	// Both sides hold it: the carried through GSTNLink's applier, the carrier through its response
+	FGSTN_SyncFragmentArray TargetFragments;
+	FGSTN_OutcomeApplyContext Apply;
+	Apply.VictimFragments = &TargetFragments;
+	FGSTN_LinkOutcomeApplier().Apply(Out.OutcomeExtensions[0], Request.View, Apply);
+	const FGSTN_LinkFragment* Carried = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(TargetFragments);
+	TestTrue(TEXT("carried: payload 128"), Carried && Carried->Links.Body.Payload == 128);
+	if (Response)
+	{
+		FGSTN_LinkInboxHandlers::ApplyResponse(Carrier, *Response, CarriedId);
+	}
+	TestTrue(TEXT("carrier: payload 128, same serial"), Carrier.Links.Body.Payload == 128 && Carried && Carrier.Links.Body.Serial == Carried->Links.Body.Serial);
+	TestEqual(TEXT("a live carry with a payload still costs 1 + 22 bytes"), PayloadBytes(Carrier), 1 + 22);
 	return true;
 }
 

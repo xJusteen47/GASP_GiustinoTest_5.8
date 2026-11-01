@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GameplayTagContainer.h"
+#include "Rules/GSTN_KitExtension.h"
 #include "Sync/GSTN_EntityRef.h"
 #include "GSTN_LinkState.generated.h"
 
@@ -227,7 +228,9 @@ enum class EGSTN_LinkRefusal : uint8
 	/** The target is still immune after its last link */
 	Immunity,
 	/** The initiator is still in its link cooldown (the grabber's cooldown after a throw) */
-	Cooldown
+	Cooldown,
+	/** The two entities' teams do not allow this type (an ally-only rule and an enemy, M7 G1) */
+	Team
 };
 
 /** The answer of a request rule: Accept or Refuse(reason). A default value accepts, so a rule that does nothing is the identity */
@@ -283,11 +286,32 @@ struct GSTNLINKCORE_API FGSTN_LinkRequestSide
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Link")
 	int32 CooldownEndFrame = 0;
 
+	/**
+	 * The entity's team as the snapshot carries it (M7 G1): the hit's team on the request path, the snapshot entry's on the interact path, so a
+	 * rule that links allies only (a mount) decides the same on both. 255 = no team (neutral to everyone)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Link")
+	uint8 TeamId = 255;
+
 	/** Link states of the two channels (plain data, not reflected) */
 	FGSTN_LinkStates Links;
 
 	/** The definition of the link on the channel other than the request's, or null when that channel is free (not reflected) */
 	const UGSTN_LinkTypeDefinition* OtherChannelDefinition = nullptr;
+
+	/**
+	 * The entity's kit extension array (content, the same on every machine), or null for an entity without a kit: a plugin's rule reads its own
+	 * kit data from here with FindKitExtension<T>(), as the loadout extension registry does, so a third link type needs no typed slot in this
+	 * struct (M7 G1). Not reflected: valid for the call, a rule never keeps it
+	 */
+	const FGSTN_KitExtensionList* KitExtensions = nullptr;
+
+	/** The entity's kit extension of type ExtensionT, or null */
+	template <typename ExtensionT>
+	const ExtensionT* FindKitExtension() const { return KitExtensions ? KitExtensions->Find<ExtensionT>() : nullptr; }
+
+	/** Both entities have the same real team (255, no team, is nobody's ally) */
+	bool IsAllyOf(const FGSTN_LinkRequestSide& Other) const { return TeamId != 255 && TeamId == Other.TeamId; }
 };
 
 /**

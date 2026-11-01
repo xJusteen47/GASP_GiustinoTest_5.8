@@ -3,6 +3,7 @@
 #include "Data/GSTN_LinkTypeDefinition.h"
 
 #include "Placement/GSTN_Placer_Ring.h"
+#include "Rules/GSTN_KitExtension.h"
 #include "Rules/GSTN_LinkRule.h"
 
 #if WITH_EDITOR
@@ -143,6 +144,23 @@ void UGSTN_LinkTypeDefinition::Validate(TArray<FString>& OutErrors) const
 		}
 	}
 
+	if (bInitiatorPredicts && PendingFrames < 1)
+	{
+		OutErrors.Add(FString::Printf(TEXT("%s: PendingFrames %d must be at least 1 for an initiator that predicts."), *Name, PendingFrames));
+	}
+	if (InteractOffer.IsOffered() && !IsUnderRoot(InteractOffer.Meaning, TEXT("Interact.Target")))
+	{
+		OutErrors.Add(FString::Printf(TEXT("%s: the interact meaning '%s' is not under Interact.Target."), *Name, *InteractOffer.Meaning.ToString()));
+	}
+	if (InteractOffer.Priority < 0 || InteractOffer.Priority > 255 || InteractOffer.ReachCm < 0.f)
+	{
+		OutErrors.Add(FString::Printf(TEXT("%s: the interact offer's priority must be 0..255 and its reach not negative."), *Name));
+	}
+	if (InteractOffer.RequiredKitExtension != nullptr && !InteractOffer.RequiredKitExtension->IsChildOf(FGSTN_KitExtension::StaticStruct()))
+	{
+		OutErrors.Add(FString::Printf(TEXT("%s: the interact offer's RequiredKitExtension '%s' is not a kit extension struct."), *Name,
+			*InteractOffer.RequiredKitExtension->GetName()));
+	}
 	if (!ForbiddenWithBody.IsEmpty() && Channel != EGSTN_LinkChannel::Hand)
 	{
 		OutErrors.Add(FString::Printf(TEXT("%s: ForbiddenWithBody is only meaningful on a Hand-channel type; a Body type excludes every other Body type by itself."), *Name));

@@ -181,11 +181,12 @@ void FGSTN_LinkAttach::Reset()
 	State() = FLinkAttachState();
 }
 
-uint16 FGSTN_LinkAttach::AddForTest(const TMap<FName, FTransform>& Sockets, const FGSTN_LinkKitExtension* KitExtension)
+uint16 FGSTN_LinkAttach::AddForTest(const TMap<FName, FTransform>& Sockets, const FGSTN_LinkKitExtension* KitExtension, const FGSTN_KitExtensionList* KitExtensions)
 {
 	TUniquePtr<FGSTN_LinkBodyData> Data = MakeUnique<FGSTN_LinkBodyData>();
 	Data->BakedSockets = Sockets;
 	Data->TestKitExtension = KitExtension;
+	Data->TestKitExtensions = KitExtensions;
 	return AddEntry(MoveTemp(Data));
 }
 
@@ -195,5 +196,18 @@ const FGSTN_LinkKitExtension* FGSTN_LinkBodyData::GetKitExtension() const
 	{
 		return UGSTN_LinkRequirementLibrary::FindKitExtension(Attached);
 	}
+	if (TestKitExtension == nullptr && TestKitExtensions != nullptr)
+	{
+		return TestKitExtensions->Find<FGSTN_LinkKitExtension>();
+	}
 	return TestKitExtension;
+}
+
+const FGSTN_KitExtensionList* FGSTN_LinkBodyData::GetKitExtensions() const
+{
+	if (const UGSTN_PrimaryKitDefinition* Attached = Kit.Get())
+	{
+		return &Attached->Extensions;
+	}
+	return TestKitExtensions;
 }

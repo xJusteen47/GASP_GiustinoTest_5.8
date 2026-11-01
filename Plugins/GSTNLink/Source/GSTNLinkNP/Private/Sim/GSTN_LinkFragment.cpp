@@ -130,7 +130,25 @@ void FGSTN_LinkFragment::NetSerialize(FArchive& Ar)
 
 bool FGSTN_LinkFragment::ShouldReconcile(const FGSTN_SyncFragment& Authority) const
 {
-	return !(*this == static_cast<const FGSTN_LinkFragment&>(Authority));
+	const FGSTN_LinkFragment& Other = static_cast<const FGSTN_LinkFragment&>(Authority);
+	if (*this == Other)
+	{
+		return false;
+	}
+	// M7 G1: an optimistic accept (Active, role 1, flag Predicted) is the authority's confirmed link but for the flag, which only the response
+	// clears and which never reaches a machine that does not simulate the target: equal links otherwise are not a misprediction
+	FGSTN_LinkFragment Local = *this;
+	FGSTN_LinkFragment Server = Other;
+	for (const EGSTN_LinkChannel Channel : { EGSTN_LinkChannel::Body, EGSTN_LinkChannel::Hand })
+	{
+		FGSTN_LinkState& Mine = Local.Get(Channel);
+		const FGSTN_LinkState& Theirs = Server.Get(Channel);
+		if (Mine.IsActive() && Mine.Role == 1 && Mine.HasFlag(GSTNLinkFlags::Predicted) && !Theirs.HasFlag(GSTNLinkFlags::Predicted))
+		{
+			Mine.Flags &= ~GSTNLinkFlags::Predicted;
+		}
+	}
+	return !(Local == Server);
 }
 
 void FGSTN_LinkFragment::ToString(FAnsiStringBuilderBase& Out) const

@@ -44,6 +44,13 @@ public:
 	static FGSTN_LinkRuleResult EvaluateRequest(const FGSTN_LinkRequestContext& Context);
 
 	/**
+	 * The Payload byte of an accepted request (M7 G1): the first non-zero UGSTN_LinkRule::ComputePayload of the definition's rules, in order;
+	 * 0 without a definition or when every rule returns 0 (the grab and the latch). Pure, so the target's step and the initiator's prediction
+	 * compute the same byte from the same context
+	 */
+	static uint8 ComputePayload(const FGSTN_LinkRequestContext& Context);
+
+	/**
 	 * Fills Context.Definition from the registry by Context.LinkType, and each side's OtherChannelDefinition from the link type index
 	 * that side's other channel holds, so the coexistence check sees the real link of the other channel. A context whose type is not
 	 * registered keeps a null definition (EvaluateRequest then refuses NoDefinition)

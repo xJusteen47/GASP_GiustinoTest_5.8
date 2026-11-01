@@ -48,6 +48,10 @@ struct GSTNLINKNP_API FGSTN_LinkResponseEntry
 	/** EGSTN_LinkRefusal of a refusal, for logs and tests only */
 	UPROPERTY()
 	uint8 Refusal = 0;
+
+	/** The link's Payload byte the target's rules wrote on accept (M7 G1), so both sides hold the same state */
+	UPROPERTY()
+	uint8 Payload = 0;
 };
 
 /** What a LinkCommand does */

@@ -8,6 +8,7 @@
 #include "GameFramework/Actor.h"
 #include "GSTN_LinkDebugDraw.h"
 #include "GSTN_LinkRegistry.h"
+#include "MoverComponent.h"
 #include "Sim/GSTN_LinkAttach.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Sim/GSTN_LinkSnapshotContributor.h"
@@ -66,7 +67,13 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 	}
 	const FGSTN_LinkState& Body = Fragment->Links.Body;
 	const UGSTN_LinkTypeDefinition* Definition = Registry->GetDefinition(Body.LinkTypeIndex);
-	if (!(FGSTN_LinkSnapshotContributor::ComputeBits(Definition, Body.Role, Body.Phase) & GSTNLinkSnapshotBits::Parked) || Body.PartnerId.IsNull())
+	// M7 G1: an initiator that predicts its link (bInitiatorPredicts) and is the parked role is SHOWN parked from its request on (Pending), so the
+	// optimistic accept PendingFrames later does not pop; a refusal detaches it again. The simulation parks it from the accept only
+	const bool bShownPending = Definition && Definition->bInitiatorPredicts && Body.Phase == EGSTN_LinkPhase::Pending
+		&& Body.HasFlag(GSTNLinkFlags::Predicted) && Definition->InitiatorRole.bParked;
+	const uint8 ShownRole = bShownPending ? 1 : Body.Role;
+	const EGSTN_LinkPhase ShownPhase = bShownPending ? EGSTN_LinkPhase::Active : Body.Phase;
+	if (!(FGSTN_LinkSnapshotContributor::ComputeBits(Definition, ShownRole, ShownPhase) & GSTNLinkSnapshotBits::Parked) || Body.PartnerId.IsNull())
 	{
 		return false;
 	}
@@ -76,7 +83,7 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 	{
 		return false;
 	}
-	const FGSTN_LinkRoleDef& Role = Definition->GetRoleDef(Body.Role);
+	const FGSTN_LinkRoleDef& Role = Definition->GetRoleDef(ShownRole);
 	PartnerSocket = Role.SocketOnPartner;
 	RoleOffset = Role.SocketOffset;
 
@@ -108,18 +115,36 @@ void UGSTN_LinkPresentationComponent::AttachMesh(AActor* NewPartner)
 	AActor* Owner = GetOwner();
 	USkeletalMeshComponent* Mesh = Owner ? Owner->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
 	USkeletalMeshComponent* PartnerMesh = NewPartner ? NewPartner->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
-	if (!Mesh || !PartnerMesh || bMeshAttached)
+	if (!Mesh || !PartnerMesh)
 	{
 		return;
 	}
-	MeshOriginalParent = Mesh->GetAttachParent();
-	MeshOriginalSocket = Mesh->GetAttachSocketName();
-	MeshOriginalRelative = Mesh->GetRelativeTransform();
-	// The parked transform places the owner's ROOT on the socket; the mesh keeps its own offset from the root
+	if (!bMeshAttached)
+	{
+		MeshOriginalParent = Mesh->GetAttachParent();
+		MeshOriginalSocket = Mesh->GetAttachSocketName();
+		MeshOriginalRelative = Mesh->GetRelativeTransform();
+		// Mover's own offset of its visual component, not the relative transform of this frame (its smoothing may have moved the mesh)
+		if (const UMoverComponent* Mover = Owner->FindComponentByClass<UMoverComponent>(); Mover && Mover->GetPrimaryVisualComponent() == Mesh)
+		{
+			MeshOriginalRelative = Mover->GetBaseVisualComponentTransform();
+		}
+		bMeshAttached = true;
+	}
+	// The parked transform places the owner's ROOT on the socket; the mesh keeps its own offset from the root. Asserted on every tick, not
+	// once: Mover writes its primary visual component every frame before the actors tick (FinalizeFrame resets the relative transform to its
+	// base, dropping the role offset: the fixed second step of S2 finding A; FinalizeSmoothingFrame puts it back on its own capsule in world
+	// space: the parked entity's mesh that never rode on its own client, S2 finding B). This tick runs after both (TG_PostPhysics)
 	const FName Socket = PartnerMesh->DoesSocketExist(PartnerSocket) ? PartnerSocket : NAME_None;
-	Mesh->AttachToComponent(PartnerMesh, FAttachmentTransformRules::KeepRelativeTransform, Socket);
-	Mesh->SetRelativeTransform(MeshOriginalRelative * RoleOffset);
-	bMeshAttached = true;
+	if (Mesh->GetAttachParent() != PartnerMesh || Mesh->GetAttachSocketName() != Socket)
+	{
+		Mesh->AttachToComponent(PartnerMesh, FAttachmentTransformRules::KeepRelativeTransform, Socket);
+	}
+	const FTransform Relative = MeshOriginalRelative * RoleOffset;
+	if (!Mesh->GetRelativeTransform().Equals(Relative))
+	{
+		Mesh->SetRelativeTransform(Relative);
+	}
 }
 
 void UGSTN_LinkPresentationComponent::DetachMesh()

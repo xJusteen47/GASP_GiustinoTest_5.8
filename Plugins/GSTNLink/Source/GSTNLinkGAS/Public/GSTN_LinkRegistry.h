@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GameplayTagContainer.h"
+#include "GSTN_InteractTypes.h"
 #include "Subsystems/EngineSubsystem.h"
 #include "GSTN_LinkRegistry.generated.h"
 
@@ -47,6 +48,19 @@ struct GSTNLINKGAS_API FGSTN_LinkTypeEntry
 	{
 		return RoleIndex == 1 ? InitiatorRoleTag : (RoleIndex == 2 ? TargetRoleTag : FGameplayTag());
 	}
+};
+
+/**
+ * One link type the interact button offers (M7 G1): the definition and its offer, from the definition's own InteractOffer or from a code
+ * registration (UGSTN_LinkRegistry::RegisterInteractOffer). The registry keeps them in the order the probe tries them: priority, higher first,
+ * then the type tag's name, so every machine with the same content tries them in the same order.
+ */
+struct GSTNLINKGAS_API FGSTN_LinkOfferEntry
+{
+	/** The offered type (kept alive by its row of the type table) */
+	const UGSTN_LinkTypeDefinition* Definition = nullptr;
+
+	FGSTN_LinkInteractOfferDef Offer;
 };
 
 /**
@@ -179,7 +193,29 @@ public:
 	static void RegisterPluginReason(FName ReasonTagName);
 	static void UnregisterPluginReason(FName ReasonTagName);
 
+	// ---- Interact offers (M7 G1) ----
+
+	/**
+	 * The link types the interact button offers, in the order the probe tries them on a candidate (priority, higher first, then type tag name):
+	 * every registered definition with an InteractOffer meaning, and the code registrations for types whose definition names none
+	 */
+	TConstArrayView<FGSTN_LinkOfferEntry> GetInteractOffers() const { return InteractOffers; }
+
+	/** The probe's meaning table of the link offers: one meaning per distinct offer meaning, its default priority the highest of its offers */
+	const FGSTN_InteractMeaningTable& GetInteractMeanings() const { return InteractMeanings; }
+
+	/**
+	 * Registers an interact offer for a link type by tag name, from a module's startup, before any registry is built (like
+	 * RegisterPluginReason). It applies to a definition of that type that names no offer itself: the definition's own data wins. GSTNLink
+	 * registers its grab this way (Interact.Target.Grab, priority 100, kits with a link extension), so its shipped assets keep working unchanged
+	 */
+	static void RegisterInteractOffer(FName LinkTypeTagName, const FGSTN_LinkInteractOfferDef& Offer);
+	static void UnregisterInteractOffer(FName LinkTypeTagName);
+
 private:
+	/** Compiles InteractOffers and InteractMeanings from the table's rows and the code registrations */
+	void BuildInteractOffers();
+
 	/** Asset definitions plus code-added ones, then Build */
 	void RebuildFromSources();
 
@@ -198,6 +234,8 @@ private:
 	TArray<TObjectPtr<UGSTN_LinkTypeDefinition>> CodeDefinitions;
 
 	TMap<FGameplayTag, uint8> IndexByType;
+	TArray<FGSTN_LinkOfferEntry> InteractOffers;
+	FGSTN_InteractMeaningTable InteractMeanings;
 	FGSTN_LinkReasonTable Reasons;
 	TArray<FString> BuildErrors;
 	uint32 Signature = 0;

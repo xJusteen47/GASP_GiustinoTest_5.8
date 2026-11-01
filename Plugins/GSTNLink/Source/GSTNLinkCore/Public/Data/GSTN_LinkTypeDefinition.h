@@ -7,6 +7,7 @@
 #include "GameplayTagContainer.h"
 #include "Input/GSTN_CommandBindings.h"
 #include "UObject/PrimaryAssetId.h"
+#include "UObject/SoftObjectPath.h"
 #include "GSTN_LinkTypeDefinition.generated.h"
 
 /**
@@ -38,6 +39,28 @@ enum class EGSTN_LinkChannel : uint8
 {
 	Body,
 	Hand
+};
+
+/**
+ * A gameplay effect a role carries while its link is Active (M7 G1, a carry load on the carrier): applied by the link tick extension on the
+ * frame the role becomes Active, with the link's Payload / 255 as the SetByCaller magnitude, and removed by its source effect class on every
+ * end of the link, whatever the reason. Data only: a path to the effect class, so this module needs no ability system (the class must derive
+ * from UGameplayEffect; the NP module loads and checks it). An empty path = no effect.
+ */
+USTRUCT(BlueprintType)
+struct GSTNLINKCORE_API FGSTN_LinkEffectDef
+{
+	GENERATED_BODY()
+
+	/** The effect class (a UGameplayEffect subclass); a duration or infinite effect, removed when the link ends */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect", meta = (MetaClass = "/Script/GameplayAbilities.GameplayEffect"))
+	FSoftClassPath Effect;
+
+	/** The SetByCaller tag the payload magnitude (0..1) is written under. Empty = the effect reads no magnitude */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effect")
+	FGameplayTag SetByCallerTag;
+
+	bool IsSet() const { return Effect.IsValid(); }
 };
 
 /**
@@ -84,6 +107,47 @@ struct GSTNLINKCORE_API FGSTN_LinkRoleDef
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role|Break", meta = (Categories = "Combat.Link.BreakReason"))
 	FGameplayTag ReleaseBreakReason;
+
+	/** The effect the entity holding this role carries while the link is Active (a carry load). None by default */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Role|Effect")
+	FGSTN_LinkEffectDef LinkEffect;
+};
+
+/**
+ * How the interact button offers a link type (M7 G1, after the G0 seam audit): the Interact.Target meaning the probe projects while a candidate
+ * of this type is the focus, its priority against the other meanings and offers, the reach and which kits look for it at all. A definition
+ * with no meaning is never offered by the interact button (it forms through a hit only, or as another type's Alternative). The registry
+ * compiles every offered type into one list, so a plugin adds a meaning by data, never by editing the link tick.
+ */
+USTRUCT(BlueprintType)
+struct GSTNLINKCORE_API FGSTN_LinkInteractOfferDef
+{
+	GENERATED_BODY()
+
+	/** The Interact.Target leaf projected for this type (Interact.Target.Grab, or a leaf the type's plugin declares). Empty = not offered */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact", meta = (Categories = "Interact.Target"))
+	FGameplayTag Meaning;
+
+	/**
+	 * Higher first (0..255, the probe's priority scale): the order in which offers are tried on a candidate (the first whose rules accept it
+	 * names the candidate's meaning), and the meaning's default priority in the probe. The grab is 100; INT.5 puts a mount below it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact", meta = (ClampMin = "0", ClampMax = "255"))
+	int32 Priority = 100;
+
+	/** Reach to the candidate's surface. 0 = the probe rules' reach */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float ReachCm = 0.f;
+
+	/**
+	 * Only an interactor whose kit carries an extension of this struct (or a child) is offered the type: the grab needs FGSTN_LinkKitExtension,
+	 * a mount its own kit extension. None = every interactor. A kit that no offer applies to never runs the probe (its result reads interpolated
+	 * positions on a client, so it must not reach a pawn that never uses it)
+	 */
+	UPROPERTY(EditAnywhere, Category = "Interact")
+	TObjectPtr<UScriptStruct> RequiredKitExtension;
+
+	bool IsOffered() const { return Meaning.IsValid(); }
 };
 
 /** How hits on one role of a link affect the link (m6 spec 3 and 7.5) */
@@ -213,11 +277,24 @@ public:
 	TArray<FGameplayTag> Alternatives;
 
 	/**
-	 * The initiator's own machine predicts the link before the response arrives. Grabs do not (hitstop and a predicted flag only);
-	 * a mount may
+	 * The initiator's own machine accepts its request optimistically (M7 G1): its predicted Pending link becomes Active, flag Predicted kept,
+	 * PendingFrames after the request, unless the target's snapshot entry shows it formed with someone else. The real response confirms it
+	 * (flag cleared); a refusal comes back as the authority's state (one rollback). Grabs do not (hitstop and a predicted flag only, then the
+	 * response); a mount does
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Request")
 	bool bInitiatorPredicts = false;
+
+	/**
+	 * Frames after the request at which an initiator that predicts accepts by itself (bInitiatorPredicts). 2 = the frame the real response would
+	 * arrive on a machine that simulates the target, so the authority and the initiator's machine show the link from the same frame
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Request", meta = (ClampMin = "1", ForceUnits = "Frames", EditCondition = "bInitiatorPredicts"))
+	int32 PendingFrames = 2;
+
+	/** How the interact button offers this type. No meaning = only hits (or another type's Alternatives) form it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Interact")
+	FGSTN_LinkInteractOfferDef InteractOffer;
 
 	/** The link breaks (Timeout) this many frames after it formed. 0 = it never times out; a grab's end comes from the mash instead */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Break", meta = (ClampMin = "0", ForceUnits = "Frames"))

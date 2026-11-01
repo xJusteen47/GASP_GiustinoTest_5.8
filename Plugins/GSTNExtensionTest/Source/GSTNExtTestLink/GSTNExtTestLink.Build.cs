@@ -18,6 +18,7 @@ public class GSTNExtTestLink : ModuleRules
 			"GSTNInputCore",
 			"GSTNCombatCore",
 			"GSTNCombatNP",
+			"GSTNInteractCore",
 			"GSTNLinkCore",
 			"GSTNLinkGAS",
 			"GSTNLinkNP"

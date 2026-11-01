@@ -50,6 +50,10 @@ struct GSTNLINKNP_API FGSTN_LinkHitOutcome : public FGSTN_HitExtension
 	/** The frame the target's role ends by itself (the mash end, F12): LinkFrame + the grab rules' initial mash frames; 0 = no mash */
 	UPROPERTY()
 	int32 EndFrame = 0;
+
+	/** The link's Payload byte, from the rules' ComputePayload (M7 G1); 0 for the grab and the latch */
+	UPROPERTY()
+	uint8 Payload = 0;
 };
 
 /**

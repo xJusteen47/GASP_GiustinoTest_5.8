@@ -11,6 +11,7 @@ class UGSTN_LinkRegistry;
 class UGSTN_LinkTypeDefinition;
 struct FGSTN_GrabRules;
 struct FGSTN_InteractMeaningTable;
+struct FGSTN_KitExtensionList;
 struct FGSTN_LatchRules;
 struct FGSTN_LinkKitExtension;
 
@@ -29,8 +30,8 @@ struct GSTNLINKGAS_API FGSTN_LinkInteractEntity
 
 /**
  * One link type the interact button may form, and the meaning the probe projects for it (m6 spec 8, interaction.md 6 item 2). A grab
- * offers Combat.Link.Type.Grab under Interact.Target.Grab; a later type (the drill's latch variant) is one more offer with its own
- * meaning, never code here.
+ * offers Combat.Link.Type.Grab under Interact.Target.Grab; a later type (a mount, the drill's latch variant) is one more offer with its
+ * own meaning, compiled by the registry from the type's InteractOffer (M7 G1), never code here.
  */
 struct GSTNLINKGAS_API FGSTN_LinkInteractOffer
 {
@@ -42,6 +43,9 @@ struct GSTNLINKGAS_API FGSTN_LinkInteractOffer
 
 	/** Reach to the candidate's surface for this offer: the kit's InteractReachCm for a grab. 0 = the probe rules' ReachCm */
 	float ReachCm = 0.f;
+
+	/** The offer's priority (higher first), as the registry ordered it; informational, the meaning table carries the probe's priority */
+	int32 Priority = 100;
 
 	/** The initiator kit's rules, or null for the rules' own copies (FGSTN_LinkRequestContext) */
 	const FGSTN_GrabRules* GrabRules = nullptr;
@@ -100,6 +104,19 @@ public:
 
 	/** The standard grab offer: the registry's Combat.Link.Type.Grab under Interact.Target.Grab, reach and rules from the kit when given */
 	static FGSTN_LinkInteractOffer MakeGrabOffer(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkKitExtension* InitiatorKit);
+
+	/**
+	 * The offers of the interact button for one interactor (M7 G1), in the order the pre-filter tries them: the registry's offers (priority,
+	 * higher first, then type name), each preceded by its definition's Alternatives under the same meaning, reach and rules (the grab lists the
+	 * latch: one tap grabs a light enemy and latches onto a heavy one). An offer whose RequiredKitExtension the interactor's kit does not carry
+	 * is left out, so a kit that no offer applies to gets none and does not probe. The grab keeps its kit-driven reach (MakeGrabOffer).
+	 * KitExtensions is the interactor kit's extension array, LinkKit its link extension (either may be null: a test body has only the latter)
+	 */
+	static void MakeOffers(const UGSTN_LinkRegistry& Registry, const FGSTN_KitExtensionList* KitExtensions, const FGSTN_LinkKitExtension* LinkKit,
+		TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers);
+
+	/** Whether a kit carries an extension of Required (or a child); a null Required is carried by every kit */
+	static bool CarriesKitExtension(const FGSTN_KitExtensionList* KitExtensions, const FGSTN_LinkKitExtension* LinkKit, const UScriptStruct* Required);
 
 	/**
 	 * Projects the focus as tags: removes every Interact.Target tag from InOutTags, then adds the focus meaning's tag, only when the focus

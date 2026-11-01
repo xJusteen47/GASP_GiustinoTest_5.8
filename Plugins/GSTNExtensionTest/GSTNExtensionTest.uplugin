@@ -37,6 +37,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNInteract",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNLink",
 			"Enabled": true
 		},

@@ -62,7 +62,10 @@ struct GSTNLINKNP_API FGSTN_LinkFragment : public FGSTN_SyncFragment
 
 	virtual void NetSerialize(FArchive& Ar) override;
 
-	/** Exact equality of every field: the exit position and velocity are the watchdog's quantised result, written identically on every machine */
+	/**
+	 * Exact equality of every field (the exit position and velocity are the watchdog's quantised result, written identically on every machine),
+	 * except one: a local optimistic accept (Active, role 1, flag Predicted, M7 G1) equals the authority's same link without the flag
+	 */
 	virtual bool ShouldReconcile(const FGSTN_SyncFragment& Authority) const override;
 
 	/** Discrete state: the copy of the later sample the registry hands over is already the result */

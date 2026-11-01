@@ -19,7 +19,12 @@ struct FGSTN_LinkFragment;
  *    the partner's mesh (presentation only), or the baked one when bUseLiveSocket is off or the mesh has no such socket. On a client that
  *    does not simulate the partner, the partner is interpolated and so is this, which is the intended trade (spike 2.1).
  *  - The owner's skeletal mesh is attached to the partner's mesh at that socket (relative = the mesh's own offset from its root x the role's
- *    offset), so it follows the animated hand. The capsule is NOT attached: it stays at the parked transform of the simulation.
+ *    offset), so it follows the animated hand. The capsule is NOT attached: it stays at the parked transform of the simulation. The attachment
+ *    is asserted on every tick (M7 G1): Mover rewrites its visual component before the actors tick (its base relative transform, and its
+ *    smoothing's world transform on the owner's own capsule), which dropped the role offset one frame after the attach and kept a predicting
+ *    owner's mesh on its own capsule (S2 findings A and B).
+ *  - A type whose initiator predicts (bInitiatorPredicts) and is the parked role is shown parked from its request (Pending) on, so the
+ *    optimistic accept does not pop; a refusal detaches it on the frame the state says so (no blend yet: G10).
  *  - It also holds the collision side of a link for its owner (F15): SetCollisionIgnoredPartner, called by the link tick extension every
  *    simulated frame from the simulated link fragment (FGSTN_LinkExitCollision), never from what this machine shows. Until F15 this tick
  *    set and restored the pair's collision from the shown state, so a client restored it later than the authority (HANDOVER 61 OPEN 2).

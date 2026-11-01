@@ -14,6 +14,12 @@ presentation transform, the debug draw); F11 adds part 2 (the watchdog, the brea
 (F12b). The design is
 [combat-m6-defence-links.md](../../docs/architecture/combat-m6-defence-links.md).
 
+M7 G1 (generic follow-ups for link types of other plugins; no type of theirs is named here): interact offers per link type compiled by the
+registry (meaning, priority, reach, required kit extension) and the probe built from them; the team and the kit's extension array on each
+request side; the optimistic initiator accept (`bInitiatorPredicts`, `PendingFrames`); a link effect per role and the rules' `Payload`
+(`ComputePayload`); the generic team rule; the presentation shows a predicting initiator parked from its request and re-asserts the mesh
+attachment every tick. Corrections to the M7 spec are in [m7-doc-deltas.md](../../docs/notes/m7-doc-deltas.md).
+
 ## Modules
 
 | Module | State | What it is |
@@ -54,7 +60,10 @@ the plugin's content and `LinkTypeDirectories` (always cooked), so the project's
 | Type | What it is |
 |---|---|
 | `UGSTN_LinkTypeDefinition` | A link type, a `PrimaryDataAsset` of primary asset type `GSTN_LinkType`: the type tag, the channel (`Body` parks the entity, `Hand` never does), two `FGSTN_LinkRoleDef`, `FGSTN_LinkBreakRules`, `RequestRequirements`, `ForbiddenWithBody`, `bInitiatorPredicts`, `MaxFrames`, `DebugColor`, `Alternatives` (F12: other type tags a request of this type tries first, in order; the grab lists the latch). A role's `ReleaseBreakReason` (F12) is the reason its Release command ends the link with (the latched side's is `ShakeOff`). `Validate` is pure; `IsDataValid` forwards it. The asset manager finds every definition; code never lists them. |
-| `FGSTN_LinkRoleDef` | One role: its tag, `bParked`, `bActsWhileLinked`, `bCollisionWithPartner`, the socket of the partner it is placed on (by name) and the offset. A grab parks role 2; a latch parks role 1. |
+| `FGSTN_LinkRoleDef` | One role: its tag, `bParked`, `bActsWhileLinked`, `bCollisionWithPartner`, the socket of the partner it is placed on (by name) and the offset. A grab parks role 2; a latch parks role 1. G1: `LinkEffect` (`FGSTN_LinkEffectDef`: a gameplay effect class path and a SetByCaller tag) the role carries while Active, magnitude `Payload / 255`. |
+| `FGSTN_LinkInteractOfferDef` | G1: how the interact button offers a type (the definition's `InteractOffer`): the `Interact.Target` meaning (empty = not offered), `Priority` (0..255, higher first; the grab is 100), `ReachCm`, `RequiredKitExtension` (the kits that look for it). `UGSTN_LinkRegistry::RegisterInteractOffer` gives a type whose asset names none an offer by code (GSTNLink does it for its grab). |
+| `bInitiatorPredicts`, `PendingFrames` | G1, on the definition: the initiator's predicted request becomes Active (flag `Predicted` kept) `PendingFrames` (2) after the hit unless the target's snapshot entry shows it linked to someone else; the response confirms it. |
+| `UGSTN_LinkRule_Team` | G1: a generic rule on the sides' teams (`Any`, `AlliesOnly`, `EnemiesOnly`); refuses with `Team`. |
 | `FGSTN_LinkBreakRules` | `MaxDistanceCm`, `HitBreaks` per role (`MinKnockbackToBreak`, `bPartnerHitsBreak`), death flags, `PartnerMustNot` state tags. |
 | `FGSTN_GrabRules`, `FGSTN_MashRule` | The grab data of a kit: requirements, weight limit, input timings, immunity frames, pummel delay, the mash. |
 | `FGSTN_LatchRules` | The latch data of a kit: requirements, `MinLatchWeight` (the mirror of the grab's weight limit). |
@@ -65,7 +74,7 @@ the plugin's content and `LinkTypeDirectories` (always cooked), so the project's
 | `UGSTN_LinkExitPlacer`, `IGSTN_ExitCollisionQuery` | Where an entity lands when a link ends: abstract placer, one `BlueprintNativeEvent` `Place(FGSTN_ExitQuery)`, deterministic, asks the world only through the query interface. A definition holds its placer instanced; none = the ring. |
 | `UGSTN_Placer_Ring`, `UGSTN_Placer_AtSocket` | The ring (preferred direction, seven turns of 45 degrees, above, then a reported-invalid fallback next to the partner) and the throw's exit (the partner's socket, raised retries, the throw hit's knockback as velocity). |
 | `FGSTN_LinkState`, `FGSTN_LinkStates`, `FGSTN_LinkActions` | Plain sync value types: indices and ticks only, no tag; one state per channel; idle serialises to one byte; serial rules make every inbox entry idempotent. |
-| `FGSTN_LinkRequestContext` | The const view a rule reads: both entities as values (tags, weight, link slots, immunity frames), the definition, the kit rules. |
+| `FGSTN_LinkRequestContext` | The const view a rule reads: both entities as values (tags, weight, link slots, immunity frames, G1: team and the kit's extension array, `FindKitExtension<T>()`), the definition, the kit rules. |
 | `UGSTN_LinkMath` | `MashInitialFrames`, `MashProgress`, `MashEscaped`, `EvaluateBreak` (one reason wins, in a fixed order), `ParkedTransform` / `TryGetParkedTransform` (same derivation for whichever role is parked), reason tags. |
 | `UGSTN_LinkSlots` | The standard link input slots (Grab and Release on Interact, Pummel, the four throws, `Latch.Attack`) at the `Command.Link` tier, each `bFallThroughWhenUnavailable`, role slots `RoleSlotPriorityOffset` (100) above, and `DefaultBindings()` (the Release bindings of each role ignore the other roles). |
 | `FGSTN_LinkHitData` | Hit extension: `bNoReaction` (a hit on the linked partner deals its damage with no reaction, the latch attack and pummel). |
@@ -102,8 +111,17 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
   outside the plugin's content need their folder in `LinkTypeDirectories`.
 - **A new break reason**: declare its tag in your plugin and call `UGSTN_LinkRegistry::RegisterPluginReason(TagName)` from your
   module startup; it takes an index from `EGSTN_LinkBreakReason::FirstPlugin` on, in tag name order.
-- **A type the interact button forms** (the drill's latch variant): one more `FGSTN_LinkInteractOffer` (definition, `Interact.Target`
-  meaning, reach) in the source the link tick extension hands the probe; the offer's rules pre-filter its candidates.
+- **A type the interact button forms** (a mount, the drill's latch variant): set the definition's `InteractOffer` (its own
+  `Interact.Target` leaf, declared by your plugin, a priority below the grab's 100 if the grab should win, the reach, and the kit extension
+  struct of the kits that may use it). The registry compiles it into the offer list and the probe's meaning table; the link tick extension
+  projects whichever meaning the focus has. The type's rules pre-filter its candidates with the same request sides the hit path builds, team
+  and kit data included, so an ally-only type (list `UGSTN_LinkRule_Team`) never offers an enemy (G1).
+- **A rule that reads your kit's data**: put a `FGSTN_KitExtension` child in the kit's extension array and read it with
+  `Context.Initiator.FindKitExtension<T>()` (or `Target`); `Context.*.TeamId` and `UGSTN_LinkRule::AreAllies` give the teams (G1).
+- **A type-specific byte on the link** (a carry load): override `UGSTN_LinkRule::ComputePayload`; the first non-zero value of the rules is the
+  link's `Payload` on both sides. A role's `LinkEffect` is applied with `Payload / 255` while the link is Active and removed on every end (G1).
+- **An initiator that shows its link before the answer** (a mount): `bInitiatorPredicts` and `PendingFrames` on the definition; the
+  presentation shows a parked initiator parked from the request on (G1).
 - **A role's animation**: an `AnimsByRole` entry in the kit's (or weapon's) `FGSTN_LinkKitExtension`.
 - **A heavier or lighter grabber**: give the kit a `FGSTN_LinkKitExtension` with its own `FGSTN_GrabRules`.
 - **A new request rule**: subclass `UGSTN_LinkRule` (C++ or Blueprint), override `Evaluate`, list it in the definition's `Rules`. Call
@@ -183,6 +201,12 @@ builds only) and added to the global registry for the test's scope.
 `GSTNLink.NP.*` (F11): `Watchdog.{BreakAtF1BothSides, OrphanAfterGrace, StaleSerialIgnored, OnePathForPipelineBreaks}`,
 `Break.{Distance, Timeout, Death, PartnerState, HitByRole}`, `Exit.{NeverInsideGeometry, DeterministicForEqualInputs}`: the watchdog's pure
 function on entity views, its commands applied through the real inbox rule, the exit placer with a fake world.
+
+`GSTNLink.NP.*` (M7 G1, `GSTN_LinkNPTests_G1.cpp`): `Predict.{OptimisticAcceptAtPendingFrames, RefusalRollsBackToIdle, ConfirmClearsFlag,
+GrabUnchanged}`, `LinkEffect.{AppliedOnActive, RemovedOnEveryBreakReason, IdempotentOnResim, PayloadToMagnitude}`,
+`Interact.{SecondOfferProjectsItsMeaning, OfferPriorityOrder, AllyOnlyRulePreFilter}`, `Request.SideCarriesTeamAndKit`; and from outside
+the plugin `GSTNExtTest.Link.{InteractOfferFromOutside, PayloadFromOwnRule}`. Every test file of `GSTNLinkNP` wraps its content in its own
+namespace, so the module links in a unity build.
 
 `GSTNLink.NP.*` (F12): `Grab.{WeightGate, GrabberCooldown, PummelKeepsLink, ThrowDirectHitNoOverlap, ThrowSkipsParryShield,
 ImmunityAfterReleaseAndThrow, MashEscapeFrameDeterministic, GrabLockedByNameWithParts, GrabLockedAbsentWithoutParts}`,
