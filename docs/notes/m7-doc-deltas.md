@@ -68,7 +68,7 @@ component ticks in `TG_PostPhysics`, after both), and the mesh's original offset
 the one-session probe of G1 (`Saved/Logs/m7-g1/probe-b.log`) formed the test latch without the scenarios' link setup, so the pawns had no
 presentation component and it says nothing about the fix. OPEN for G10 (measure the parked mesh on its own client, rendering on).
 
-## G2: partner moves and parked facing (HANDOVER 71)
+## G2: partner moves and parked facing (HANDOVER 76)
 
 ### Shipped names that differ from the plan and spec
 
