@@ -14,6 +14,10 @@
 #include "Sim/GSTN_LinkInboxKinds.h"
 #include "Sim/GSTN_LinkTickExtension.h"
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_Watchdog
+{
+
 namespace
 {
 	using namespace GSTNLinkNPTest;
@@ -366,5 +370,7 @@ bool FGSTN_LinkNPExitDeterministicTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the exit record holds the command's floats"), Applied.Actions.Exit.Position, FVector(PA->Command.ExitPosition));
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_Watchdog
 
 #endif

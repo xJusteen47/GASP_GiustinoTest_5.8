@@ -26,6 +26,10 @@
 #include "Sim/GSTN_LinkTickExtension.h"
 #include "State/GSTN_LinkMath.h"
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_Grab
+{
+
 using namespace GSTNLinkNPTest;
 
 namespace
@@ -570,5 +574,7 @@ bool FGSTN_LinkNPGrabLockedWithoutPartsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the rule skips the name it cannot resolve: the weight decides alone"), GrabsTargetWith(FGameplayTagContainer()));
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_Grab
 
 #endif

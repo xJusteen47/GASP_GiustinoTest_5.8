@@ -10,6 +10,10 @@
 #include "Sim/GSTN_LinkTickExtension.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_Tick
+{
+
 using namespace GSTNLinkNPTest;
 
 namespace
@@ -108,5 +112,7 @@ bool FGSTN_LinkTickTagsFromRoleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("and Linked and Pending"), Projectable.HasTagExact(GSTNLinkTags::Linked) && Projectable.HasTagExact(GSTNLinkTags::Pending));
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_Tick
 
 #endif

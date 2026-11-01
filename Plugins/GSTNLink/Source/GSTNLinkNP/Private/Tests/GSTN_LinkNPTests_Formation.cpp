@@ -19,6 +19,10 @@
 #include "Sim/GSTN_LinkTickExtension.h"
 #include "Simulation/GSTN_CombatInbox.h"
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_Formation
+{
+
 using namespace GSTNLinkNPTest;
 
 namespace
@@ -336,5 +340,7 @@ bool FGSTN_LinkFormationLatchTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("and keeps acting"), FGSTN_LinkTickExtension::IsActionBlocked(Latcher, UGSTN_LinkRegistry::Get()));
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_Formation
 
 #endif

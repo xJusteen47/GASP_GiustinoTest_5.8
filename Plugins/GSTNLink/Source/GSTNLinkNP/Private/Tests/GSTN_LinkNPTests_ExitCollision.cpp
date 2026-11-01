@@ -15,6 +15,10 @@
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_ExitCollision
+{
+
 namespace
 {
 	using namespace GSTNLinkNPTest;
@@ -270,5 +274,7 @@ bool FGSTN_LinkNPExitQueryIgnoresOnlyPairTest::RunTest(const FString& Parameters
 	TestTrue(TEXT("still a valid place"), (ToGrabbed->Command.ExitFlags & GSTNLinkExitFlags::Fallback) == 0);
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_ExitCollision
 
 #endif
