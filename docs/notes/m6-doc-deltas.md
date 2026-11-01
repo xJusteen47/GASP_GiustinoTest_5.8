@@ -542,3 +542,53 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
   first tick under 265 cm. `weapon_switch` NOT fixed: walking the second leg back avoids the lane end, but then the server's combat input
   history holds three back-tilt events the owner's lacks (harness-fix-rerun-1..3.log; 180 frames old, inside MaxEventAge), so "server and
   owner agree" fails. Reported for the lead.
+
+## F14: full sweep, byte table, docs commit
+
+- **weapon_switch history (HANDOVER 60 OPEN 2): a harness artefact.** The server and owner views are read at the same wall time but about 13
+  sim frames apart, so an event at the edge of `MaxEventAge` (254) is still kept on the server and already dropped on the owner; trimming
+  runs on sim frames and is deterministic. `_diff` compares both histories over the window both have simulated (4fffbf3). The second walk
+  goes back (the lane end). No GSTNInput change.
+- **The 2 % gate needs a host at tick rate, and the editor is not one.** One-process PIE is game-thread bound (48.8 ms a frame, 3 worlds);
+  an editor host alone ran about 14 fps (F12). Gate run with a standalone listen host (`Tools/GASNPPTest/link_standalone.ps1`, e02ba18;
+  -nullrhi, -notimeouts, a warm-up spike per process set). Host 97-101 fps. Every judged 2 % run: 0 server-starved ticks, 0 unforced walk
+  reconciles. The starvation part of OPEN 1 is closed as an editor-host artefact; the fork is unchanged.
+- **Grabber presentation is judged by frame** (lead's rule, as the latch, 8c14670): standalone p95 7.3 cm (one frame of walking) in every
+  run; in the one-process editor the same check reads p95 10.1-13.1 cm (listen and dedicated) with an identical p50 6.5 / max 22.4 in every run (a deterministic
+  offset of about one frame, not explained; the F-1..F interval reading is the same). Reported, limit unchanged (HANDOVER 61 OPEN).
+- **Link end in client_grabs_client: a second correction** on the grabber's client 1-7 frames after the break, on its own Mover state
+  (the authority's grabber velocity along its facing drops to ~0, the client keeps walking): the grabber meets something on the authority
+  that its client does not show, most likely the released partner placed in front of it with collision restored, while the client shows
+  that partner interpolated. 4 of 8 standalone runs at 2 %, 1 of 3 at 0 %. Exit placement / collision design (HANDOVER 58 OPEN 2), not
+  the fork.
+- **Connect refusal** checked with two standalone processes (one-process PIE cannot load different plugin sets): a client started with
+  `-DisablePlugins=GSTNLink` is refused at Hello ("connecting with invalid version" / `OutdatedClient`). The plan's "the fragment
+  registry refuses" is the network version check of task B (F11).
+- **Fake plugin test as a third plugin** (fc01f63): `Plugins/GSTNExtensionTest` (test only, off by default) with one module per M6
+  plugin, `Runtime` because native tags in an `UncookedOnly` module trip the engine's tag ensure. 7 tests `GSTNExtTest.*`.
+- **Byte table (spec 10) as built**, from the fragment tests: no fragment 1 bit; idle fragment 0 B payload (25 bits framed); ended link
+  3 B; raised shield 2 + 15 B; one live link channel 1 + 22 B; two channels 45 B; every defence group live 2 + 85 B. Spec: idle 1-2 B,
+  active 22-27 B, 21 B per channel raw: within it. Spec 10's "<= 40 B/s/entity extra while held" cannot be resolved by the host's total
+  upload (108-111 KB/s with a held link against 115-116 KB/s for the no-link control, three pawns, two clients, 0 %): no measurable
+  increase, the parked pawn costs slightly less.
+- **Core modules** list Engine, DeveloperSettings and Projects besides the plan's Core, CoreUObject, GameplayTags, GSTNInputCore,
+  GSTNCombatCore (data assets, the settings class, plugin paths); no NP module. The grep gate is otherwise clean (net mode read only in
+  `UGSTN_LinkWatchdog::IsAuthority`).
+- **Dedicated + 2 clients**: two pawns per world and no host pawn; the pairings that name the host do not apply. `defence_batch` accepts it.
+- **Blueprint**: `UGSTN_LinkRule::CheckCommon` is a C++ static, so a Blueprint rule cannot run the shared checks (OPEN).
+
+## Plan corrections (M6, closed in F14)
+
+What the plan (`m6-defence-links-plan.md`, branch `claude/project-thread-mvizq6`) says that the build does differently, for a reader of the
+plan; details in the checkpoint sections above.
+
+1. Shield: a fixed-size bubble, no tilt, shrink or arc (owner, 2026-10-26, after S5).
+2. Seams: X18 / X19 were already on `feature`; the F9 interact fallback was not needed (F0 S0).
+3. Links are accepted by the target's own pipeline on every machine; only breaks are server-decided (the watchdog), no server branch.
+4. No grab-confirm hitstop, no `LinkEstablished` buffer event, no latch immunity field, no SwapRoles, no attacker hitstop on throws, an
+   uncollision-checked throw exit (F10-F12).
+5. Test content: six new kits instead of edits to `KIT_Test_Hits`, `BP_GASNPP_TestCharacter`, `HBS_Test_Pawn` (F13, approved).
+6. The network gate's 2 % runs need a host at tick rate: a standalone host (F14), not the editor.
+7. The connect refusal is the network version (task B), not a fragment registry rule.
+8. The "fake plugin" test is a third, test-only plugin.
+9. Spec 10's bytes/s budget is not measurable from the host's total upload; the fragment tests carry the byte table.

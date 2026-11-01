@@ -144,6 +144,36 @@ Every contribution depends only on the resolved assets, so every machine compile
 - **A shield pickup**: apply `UGSTN_GE_ShieldRestore` (`Apply(ASC, Amount, Instigator)`); the model consumes the request.
 - **Shield presentation**: Blueprint children of `UGSTN_GE_ShieldDamage` and `UGSTN_GE_ShieldBreak` with the ini cues
   (`GameplayCue.Combat.Shield.Hit`, `.Break`); the rules asset names them.
+- **A new defensive pipeline step** (m6 spec 14): subclass `UGSTN_HitResolutionStep`, write only to the step result, and insert it into the
+  combat rules' `HitPipeline` at its place (spec 9): before `UGSTN_HitStep_Parry` for something a parry or block still decides after,
+  after `UGSTN_HitStep_Shield` for something that acts only on hits that land; then `ResolveHitPipeline`. If the attacker must predict it,
+  its decision is a pure function of the view (put it in a `BlueprintPure` math library like `UGSTN_DefenceMath`). State it needs is a
+  field of `FGSTN_DefenceFragment` written in all four places (`NetSerialize`, `ShouldReconcile`, `Interpolate`, `ToString`) and a snapshot
+  extension field; effects back on the attacker go through `OutgoingEntries` (C++ only), like the punish. Tests with fake contexts, as
+  `GSTNDefence.NP.Steps.*`.
+- **A parry that is not a timeline window** (a passive item, a barrier): a value in `EGSTN_ParrySource` and its window stamps passed to
+  `ResolveParry`; the `Parry` step's applier is unchanged.
+- **Worked example from another plugin**: `Plugins/GSTNExtensionTest` (test only, M6 F14) adds a brace step from outside this plugin
+  (`UGSTN_ExtTestStep_Brace`, before the Parry step). Its tests (`GSTNExtTest.Defence.*`) show it resolves in place, writes the outcome once
+  and leaves the shield's parry and block unchanged: no change here, in `GSTNCombat` or in the combat model's tick (m6 spec 12 item 7).
+
+## Extending in Blueprint
+
+What a designer can add without C++ (m6 plan section 0, MT 3.8). Blueprint logic that runs in the simulation (a step, a timeline ability's
+tracks) must be pure: read its input and nothing else (no actor, component, world or latent node).
+
+| Extension | Blueprint parent | Notes |
+|---|---|---|
+| Shield ability | `UGSTN_GA_Shield` | the hold window and the out-of-shield cancel windows are timeline data; the kit's `FGSTN_DefenceKitExtension` names it |
+| Counter move | `UGSTN_GA_CounterSample` or any `UGSTN_GA_BaseCombat` timeline | a `FGSTN_ParryWindowTrack` with a profile index and an `OnParry` cancel window |
+| Tech, get-up, ground bounce | `UGSTN_GA_Tech`, `UGSTN_GA_GetupNeutral`, `UGSTN_GA_GetupRoll`, `UGSTN_GA_GroundBounce` | listed in the kit's `FGSTN_TechSet` / `FGSTN_GetupSet` |
+| Shield effects and cues | `UGSTN_GE_ShieldDamage`, `UGSTN_GE_ShieldBreak`, `UGSTN_GE_ShieldRestore` | the rules asset names the classes |
+| Defensive step | `UGSTN_HitResolutionStep` (GSTNCombatCore), `Resolve(FGSTN_HitContextView, FGSTN_StepResult)` | an inbox entry back to the attacker is C++ only |
+| Rules, parry profiles, DI and SDI | `UGSTN_DefenceRules` (data asset) | per mode (PvP / PvE) and per kit |
+
+`UGSTN_DefenceMath`, `UGSTN_SDIMath` and `UGSTN_DIRulesMath` expose the shield value, bubble, parry window, tech, DI and SDI math as
+`BlueprintPure`. Per-frame code (the tick extension, the fragment, the snapshot contributor, the inbox kinds) stays C++.
+`Tools/GAS/setup_defence_link_content.py` builds the plugin's Blueprint children of the native shield, counter, tech, get-up and link moves.
 
 ## Settings
 

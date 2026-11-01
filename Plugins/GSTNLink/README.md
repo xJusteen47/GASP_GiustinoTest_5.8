@@ -120,6 +120,30 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
 - **The parked mode on a pawn**: author `UGSTN_LinkedModeTransition` as a global transition of the pawn's Mover (or let
   `FGSTN_LinkAttach` add the mode and an entry transition to every mode at attach, as the harness pawns get them).
 - **A new exit**: subclass `UGSTN_LinkExitPlacer` (or tune `UGSTN_Placer_Ring` on the definition) and set it as the definition's `ExitPlacer`.
+- **Worked example from another plugin**: `Plugins/GSTNExtensionTest` (test only, M6 F14) adds a carry type from outside this plugin through the
+  public API: a definition made by code and `AddDefinition`, its own type and role tags, a `UGSTN_LinkRule` subclass, and its break rules.
+  Its tests (`GSTNExtTest.Link.*`) form it through this plugin's `LinkRequest` step, outcome applier and response kind, park the target
+  through the existing tick extension and measure the same 1 + 22 bytes as any live link: nothing here or in the combat model's tick
+  changed (m6 spec 12 item 7).
+
+## Extending in Blueprint
+
+What a designer can add without C++ (m6 plan section 0, MT 3.8). Each extension class has ONE `BlueprintNativeEvent`, a const input and a
+result out, and must be pure: read the input and nothing else (no actor, component, world or latent node), because it runs inside the
+simulation on every machine and in every resimulation.
+
+| Extension | Blueprint parent | Entry point | Where it goes |
+|---|---|---|---|
+| Request rule | `UGSTN_LinkRule` | `Evaluate(FGSTN_LinkRequestContext) -> FGSTN_LinkRuleResult` | the definition's `Rules` (instanced) |
+| Exit placement | `UGSTN_LinkExitPlacer` | `Place(FGSTN_ExitQuery) -> FGSTN_ExitResult` | the definition's `ExitPlacer` (instanced) |
+| Pipeline step | `UGSTN_HitResolutionStep` (GSTNCombatCore) | `Resolve(FGSTN_HitContextView, FGSTN_StepResult)` | the combat rules' `HitPipeline`; an inbox entry back to the attacker (`OutgoingEntries`) is C++ only |
+| Link type | `UGSTN_LinkTypeDefinition` (data asset) | none: roles, sockets, break rules, requirements, rules, placer | the plugin's content or a folder in `LinkTypeDirectories` |
+| Role animation | `FGSTN_LinkKitExtension::AnimsByRole` (data) | none | the kit or weapon |
+
+`UGSTN_LinkMath` exposes the stateless math (`EvaluateBreak`, the mash, the parked placement, the reason tags) as `BlueprintPure`. Not
+available to Blueprint: `UGSTN_LinkRule::CheckCommon` (a C++ static; a Blueprint rule cannot run the shared checks first, so list it after a
+C++ rule that does, HANDOVER 61 OPEN), and everything per frame (the tick extension, the fragment, the inbox kinds, the watchdog), which
+stays C++.
 
 ## Settings
 
