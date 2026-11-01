@@ -71,5 +71,8 @@
  "curves_ref_anticip_frac": 0.5,
  "curves_ref_dir_min": 0.15,
  "elbow_ext_elev_max_deg": 65,
- "_note_elbow_ext": "Ganondorf ftilt v3 (01/11): an upper arm swept BACK (more back than sideways from the chest frame) is shoulder extension, its bent elbow points back/up naturally; the chicken-wing (50 deg) and elbow-up rules apply to arms raised forward or sideways, a swept-back arm is limited at 65 deg (extension range ~50-60 + exaggeration). The reference's rear arm: 55-57 deg back."
+ "_note_elbow_ext": "Ganondorf ftilt v3 (01/11): an upper arm swept BACK (more back than sideways from the chest frame) is shoulder extension, its bent elbow points back/up naturally; the chicken-wing (50 deg) and elbow-up rules apply to arms raised forward or sideways, a swept-back arm is limited at 65 deg (extension range ~50-60 + exaggeration). The reference's rear arm: 55-57 deg back.",
+ "twist_lag_min_frames": 0.5,
+ "twist_amp_ratio_min": 0.6,
+ "_twist": "twist_chain.py (owner 01/11, torso rotation): yaw-speed peaks pelvis -> chest -> limb in the strike, pelvis -> chest in the recovery, each >= 0.5 frame later (as overlap_min_lag_frames); hip and shoulder turn (side-view separation, body lengths) >= 0.6x the reference's range and closing (as curves_ref_amp_ratio_min)"
 }
