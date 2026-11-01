@@ -79,6 +79,9 @@ FGSTN_DrillSimTuning FGSTN_DrillSimTuning::FromTuning(const FGSTN_AirSpinTuning&
 	Tuning.bHopCancelsFall = AirSpin.bHopCancelsFall;
 	Tuning.SpinGravityScale = AirSpin.SpinGravityScale;
 	Tuning.SpinMaxFallSpeedScale = AirSpin.SpinMaxFallSpeedScale;
+	Tuning.PlungeSpeed = Dive.PlungeSpeed;
+	Tuning.GroundLagFrames = Dive.GroundLagFrames;
+	Tuning.BounceSpeed = Dive.BounceSpeed;
 	return Tuning;
 }
 
@@ -123,6 +126,8 @@ void FGSTN_DrillTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 
 void FGSTN_DrillTickExtension::StepAfterClocks(FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_DrillFrameInputs& Inputs, const FGSTN_DrillSimTuning& Tuning)
 {
+	// The bounce flag lives for the frame of the bounce only (the dive ability read it in that frame)
+	Fragment.Flags &= ~GSTNDrillFlags::Bounced;
 	if (Fragment.LowGravityUntilFrame != INDEX_NONE && Frame >= Fragment.LowGravityUntilFrame)
 	{
 		Fragment.LowGravityUntilFrame = INDEX_NONE;
@@ -143,6 +148,7 @@ void FGSTN_DrillTickExtension::StepAfterClocks(FGSTN_DrillFragment& Fragment, in
 			GSTNDrillTick::EndLowGravity(Fragment, Frame, Tuning);
 		}
 		break;
+	case EGSTN_DrillPhase::Diving:
 	case EGSTN_DrillPhase::Launching:
 	case EGSTN_DrillPhase::Lag:
 		if (Inputs.bPhaseTimelineEnded)
@@ -196,6 +202,8 @@ void FGSTN_DrillTickExtension::StepAfterExecute(FGSTN_DrillFragment& Fragment, i
 			const uint8 Sense = Fragment.Flags & GSTNDrillFlags::CounterClockwise;
 			Enter(Fragment, EGSTN_DrillPhase::Diving, Frame);
 			Fragment.Flags = Sense;
+			// The dive has its own gravity (none): the air spin's low gravity ends here
+			EndLowGravity(Fragment, Frame, Tuning);
 		}
 		break;
 	case EGSTN_DrillRequest::Latch:
@@ -212,8 +220,9 @@ void FGSTN_DrillTickExtension::StepAfterExecute(FGSTN_DrillFragment& Fragment, i
 	case EGSTN_DrillRequest::Bounce:
 		if (Fragment.Phase == EGSTN_DrillPhase::Diving)
 		{
-			// 7.6: a bounce never refreshes the air spin
+			// 7.6: a bounce never refreshes the air spin. The flag tells the dive ability to bounce and end, this frame only
 			EnterNone(Fragment);
+			Fragment.Flags = GSTNDrillFlags::Bounced;
 		}
 		break;
 	case EGSTN_DrillRequest::GroundLand:
@@ -313,6 +322,23 @@ void FGSTN_DrillTickExtension::GatherStateTags(const FGSTN_DrillFragment* Fragme
 	}
 }
 
+bool FGSTN_DrillTickExtension::HasPhaseTimelineEnded(const FGSTN_DrillFragment& Fragment, const FGSTN_CombatSyncCore& Core)
+{
+	const bool bRunning = Core.ActionState == EGSTN_ActionState::InTimeline;
+	switch (Fragment.Phase)
+	{
+	case EGSTN_DrillPhase::Spinning:
+	case EGSTN_DrillPhase::Diving:
+		// These phases start with their timeline: the phase start frame is the timeline's
+		return !bRunning || Core.TimelineStartFrame != Fragment.PhaseStartFrame;
+	case EGSTN_DrillPhase::Lag:
+		// The lag starts inside the dive's timeline (on landing) and lasts as long as it does: it ends with it or when another one starts
+		return !bRunning || Core.TimelineStartFrame >= Fragment.PhaseStartFrame;
+	default:
+		return false;
+	}
+}
+
 bool FGSTN_DrillTickExtension::HasSpinTimelineEnded(const FGSTN_DrillFragment& Fragment, const FGSTN_CombatSyncCore& Core)
 {
 	return Fragment.IsSpinning() && (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame != Fragment.PhaseStartFrame);
@@ -332,6 +358,25 @@ void FGSTN_DrillTickExtension::ReadCancelStart(const FGSTN_SpinCancelTrack& Trac
 	OutInputs.bClockwise = Track.IsClockwise();
 }
 
+EGSTN_DrillRequest FGSTN_DrillTickExtension::ReadDiveOutcome(const FGSTN_DrillFragment& Fragment, int32 Frame, bool bTipHit, bool bGrounded)
+{
+	if (Fragment.Phase != EGSTN_DrillPhase::Diving)
+	{
+		return EGSTN_DrillRequest::None;
+	}
+	// D8: every hit of the dive bounces (D9 turns the drillable ones into a latch first); the ground after the dive's first frame is the lag
+	if (bTipHit)
+	{
+		return EGSTN_DrillRequest::Bounce;
+	}
+	return bGrounded && Fragment.FramesInPhase(Frame) >= 1 ? EGSTN_DrillRequest::GroundLand : EGSTN_DrillRequest::None;
+}
+
+bool FGSTN_DrillTickExtension::WantsDiveGravity(const FGSTN_DrillFragment* Fragment)
+{
+	return Fragment && Fragment->Phase == EGSTN_DrillPhase::Diving;
+}
+
 bool FGSTN_DrillTickExtension::WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame)
 {
 	return Fragment && Fragment->IsLowGravity(Frame);
@@ -345,7 +390,10 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 	case EGSTN_CombatHookPoint::AfterClocks:
 		if (const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments))
 		{
-			Inputs.bPhaseTimelineEnded = HasSpinTimelineEnded(*Fragment, Context.Out.Core);
+			// A timeline that started on this very frame (an adoption, step 3) is left to AfterExecute, which reads what it is (a dive, a
+			// cancel...); a plain one ends the phase on the next frame
+			const bool bStartedNow = Context.Out.Core.ActionState == EGSTN_ActionState::InTimeline && Context.Out.Core.TimelineStartFrame == Context.Frame;
+			Inputs.bPhaseTimelineEnded = !bStartedNow && HasPhaseTimelineEnded(*Fragment, Context.Out.Core);
 		}
 		break;
 	case EGSTN_CombatHookPoint::AfterExecute:
@@ -360,6 +408,17 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 			else if (const FGSTN_SpinCancelTrack* Cancel = FGSTN_SpinCancelTrack::Find(*Started))
 			{
 				ReadCancelStart(*Cancel, Inputs);
+			}
+			else if (FGSTN_DiveTrack::Find(*Started))
+			{
+				Inputs.Request = EGSTN_DrillRequest::Dive;
+			}
+		}
+		if (Inputs.Request == EGSTN_DrillRequest::None)
+		{
+			if (const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments))
+			{
+				Inputs.Request = ReadDiveOutcome(*Fragment, Context.Frame, Context.AttackerHits.Num() > 0, Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::None);
 			}
 		}
 		break;
@@ -403,6 +462,7 @@ void FGSTN_DrillTickExtension::ProjectTags(FGSTN_CombatTickContext& Context, con
 	const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments);
 	// The low gravity follows the window on every frame, before the early out: a rollback to before the fragment must remove it too
 	UGSTN_GE_AirSpinLowGravity::Sync(*ASC, WantsLowGravity(Fragment, Context.Frame), Tuning);
+	UGSTN_GE_DrillDiveGravity::Sync(*ASC, WantsDiveGravity(Fragment));
 	// No fragment (never spun, or a rollback to before the first spin): clear only what a predicted future may have left
 	if (!Fragment && !ASC->HasAnyMatchingGameplayTags(Projectable))
 	{

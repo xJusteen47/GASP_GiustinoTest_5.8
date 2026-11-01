@@ -60,3 +60,17 @@ struct GSTNSPINDRILLCORE_API FGSTN_SpinCancelTrack : public FGSTN_TimelineTrack
 	/** The first spin cancel track of a timeline, null when it has none */
 	static const FGSTN_SpinCancelTrack* Find(const FGSTN_CombatTimelineData& Data);
 };
+
+/**
+ * Marks a timeline as the drill's dive (plan D8, spin-drill.md 7.4): when it starts during a spin, the drill tick extension enters the Diving
+ * phase; while it runs, the fragment's phase turns a hit of the timeline into the bounce (D9 adds the latch first) and the ground into the
+ * landing lag; the dive gravity (none) holds for the phase. A plugin track like the others: no kind, no hook.
+ */
+USTRUCT(BlueprintType, meta = (DisplayName = "Drill Dive"))
+struct GSTNSPINDRILLCORE_API FGSTN_DiveTrack : public FGSTN_TimelineTrack
+{
+	GENERATED_BODY()
+
+	/** The first dive track of a timeline, null when it has none */
+	static const FGSTN_DiveTrack* Find(const FGSTN_CombatTimelineData& Data);
+};

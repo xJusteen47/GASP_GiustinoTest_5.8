@@ -2,6 +2,8 @@
 
 #include "Data/GSTN_SpinDrillTracks.h"
 #include "Data/GSTN_SpinTimelines.h"
+#include "GSTN_SpinDrillTags.h"
+#include "Hits/GSTN_HitboxTypes.h"
 #include "Jump/GSTN_JumpTypes.h"
 #include "Math/GSTN_DrillMath.h"
 #include "Misc/AutomationTest.h"
@@ -57,8 +59,9 @@ bool FGSTN_SpinDrillSpinTimelinesTest::RunTest(const FString& Parameters)
 			bool bJumpWindow = false;
 			bool bOppositeWindow = false;
 			bool bSameSenseWindow = false;
-			const FGameplayTagContainer OppositeKeys(FGameplayTag::RequestGameplayTag(Sense == EGSTN_SpinSense::Clockwise
-				? TEXT("Command.Movement.Spin.CounterClockwise.Keys") : TEXT("Command.Movement.Spin.Clockwise.Keys")));
+			bool bDiveWindow = false;
+			const FGameplayTagContainer Drill(GSTNSpinDrillTags::Command_Movement_Drill.GetTag());
+			const FGameplayTagContainer OppositeKeys(FGSTN_SpinTimelines::SpinCommand(FGSTN_SpinTimelines::Opposite(Sense)));
 			const FGameplayTagContainer Same(FGSTN_SpinTimelines::SpinCommand(Sense));
 			for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
 			{
@@ -66,9 +69,11 @@ bool FGSTN_SpinDrillSpinTimelinesTest::RunTest(const FString& Parameters)
 				if (Base && Base->GetKind() == EGSTN_TimelineTrackKind::CancelWindow)
 				{
 					const FGSTN_TimelineTrack_CancelWindow& Window = static_cast<const FGSTN_TimelineTrack_CancelWindow&>(*Base);
-					// D5: the opposite command (its keyboard child included) from CancelFromFrame, never the same sense
+					// D5: the opposite command from CancelFromFrame, never the same sense
 					bOppositeWindow |= Window.StartFrame == Params.CancelFromFrame && Window.IntoCommands.Matches(OppositeKeys);
 					bSameSenseWindow |= Window.IntoCommands.Matches(Same);
+					// D8: the drill from DiveFromFrame
+					bDiveWindow |= Window.StartFrame == Params.DiveFromFrame && Window.IntoCommands.Matches(Drill);
 				}
 				bRing |= Base && Base->GetKind() == EGSTN_TimelineTrackKind::Hitbox && Base->StartFrame == Params.RingStartFrame && Base->EndFrame == Params.RingEndFrame;
 				bJumpWindow |= Base && Base->GetKind() == EGSTN_TimelineTrackKind::CancelWindow && Base->StartFrame == 0;
@@ -78,6 +83,7 @@ bool FGSTN_SpinDrillSpinTimelinesTest::RunTest(const FString& Parameters)
 			TestTrue(*FString::Printf(TEXT("%s: the jump cancel window"), *Label), bJumpWindow);
 			TestTrue(*FString::Printf(TEXT("%s: the cancel window into the opposite spin from frame %d"), *Label, Params.CancelFromFrame), bOppositeWindow);
 			TestFalse(*FString::Printf(TEXT("%s: no window into the same sense"), *Label), bSameSenseWindow);
+			TestTrue(*FString::Printf(TEXT("%s: the cancel window into the drill from frame %d"), *Label, Params.DiveFromFrame), bDiveWindow);
 
 			FString First;
 			const int32 Errors = CountErrors(Data, First);
@@ -106,6 +112,28 @@ bool FGSTN_SpinDrillSpinTimelinesTest::RunTest(const FString& Parameters)
 	FString First;
 	const int32 Errors = CountErrors(Cancel, First);
 	TestEqual(*FString::Printf(TEXT("cancel: the timeline validates (%s)"), *First), Errors, 0);
+
+	// D8: the dive: the dive track over the whole length, the drill tip swept below the feet
+	const FGSTN_DiveTimelineParams DiveParams;
+	const FGSTN_CombatTimelineData Dive = FGSTN_SpinTimelines::MakeDive(DiveParams);
+	const FGSTN_DiveTrack* DiveTrack = FGSTN_DiveTrack::Find(Dive);
+	TestTrue(TEXT("dive: the dive track over the whole timeline"), DiveTrack && DiveTrack->StartFrame == 0 && DiveTrack->EndFrame == Dive.TotalFrames);
+	TestEqual(TEXT("dive: the longest dive"), Dive.TotalFrames, DiveParams.MaxFrames);
+	const FGSTN_HitboxSpec* TipSpec = nullptr;
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Dive.Tracks)
+	{
+		const FGSTN_TimelineTrack* Base = Track.GetPtr<FGSTN_TimelineTrack>();
+		if (Base && Base->GetKind() == EGSTN_TimelineTrackKind::Hitbox)
+		{
+			const FGSTN_TimelineTrack_Hitbox& Hitbox = static_cast<const FGSTN_TimelineTrack_Hitbox&>(*Base);
+			TipSpec = Hitbox.Hitboxes.Num() == 1 ? &Hitbox.Hitboxes[0] : nullptr;
+		}
+	}
+	TestTrue(TEXT("dive: the tip is a drill hit, swept, below the feet"), TipSpec && TipSpec->Data.HitType == GSTNSpinDrillTags::HitType_Drill.GetTag()
+		&& TipSpec->bSweepBetweenFrames && TipSpec->Keys.Num() == 1 && TipSpec->Keys[0].Offset.Z < 0.0);
+	FString DiveFirst;
+	const int32 DiveErrors = CountErrors(Dive, DiveFirst);
+	TestEqual(*FString::Printf(TEXT("dive: the timeline validates (%s)"), *DiveFirst), DiveErrors, 0);
 	return true;
 }
 

@@ -1,13 +1,16 @@
 // Automation tests of the spin and drill ability-system half (plan D4): the spin abilities' defaults, the default bindings and slots, and the
 // tuning that reaches the simulation.
 
+#include "Abilities/GSTN_GA_DrillDive.h"
 #include "Abilities/GSTN_GA_Spin.h"
+#include "Input/GSTN_InputConditions.h"
 #include "GSTN_SpinDrillLibrary.h"
 #include "GSTN_SpinDrillTags.h"
 #include "GSTN_SpinDrillTuning.h"
 #include "Input/GSTN_SpinSlots.h"
 #include "Misc/AutomationTest.h"
 #include "MoverTypes.h"
+#include "Sim/GSTN_DrillFragment.h"
 #include "Sim/GSTN_DrillTickExtension.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -53,8 +56,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SpinDrillGASBindingsTest, "GSTNSpinDrill.
 bool FGSTN_SpinDrillGASBindingsTest::RunTest(const FString& Parameters)
 {
 	const TArray<FGSTN_InputSlotSpec> Slots = FGSTN_SpinSlots::Build(true);
-	TestEqual(TEXT("four spin slots with the keyboard shortcut"), Slots.Num(), 4);
+	TestEqual(TEXT("two spin slots with the keyboard shortcut"), Slots.Num(), 2);
 	TestEqual(TEXT("two without it"), FGSTN_SpinSlots::Build(false).Num(), 2);
+	for (const FGSTN_InputSlotSpec& Slot : Slots)
+	{
+		const FGSTN_InputCondition_AnyOf* Either = Slot.Pattern.Steps.Num() == 1 && Slot.Pattern.Steps[0].AllOf.Num() == 1
+			? Slot.Pattern.Steps[0].AllOf[0].GetPtr<FGSTN_InputCondition_AnyOf>() : nullptr;
+		TestTrue(*FString::Printf(TEXT("%s: the stick rotation or the keys, in one AnyOf"), *Slot.Command.ToString()), Either && Either->Conditions.Num() == 2);
+	}
 	TSet<FGameplayTag> Commands;
 	for (const FGSTN_InputSlotSpec& Slot : Slots)
 	{
@@ -65,12 +74,18 @@ bool FGSTN_SpinDrillGASBindingsTest::RunTest(const FString& Parameters)
 	}
 
 	const TArray<FGSTN_AbilityBinding> Bindings = UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(true);
-	TestEqual(TEXT("a cancel, an air and a ground binding per slot"), Bindings.Num(), 12);
+	TestEqual(TEXT("a cancel, an air and a ground binding per slot, and the drill"), Bindings.Num(), 7);
 	for (int32 Index = 0; Index < Bindings.Num(); ++Index)
 	{
 		const FGSTN_AbilityBinding& Binding = Bindings[Index];
 		const FString Command = Binding.Command.ToString();
 		const UClass* Class = Binding.Ability.Get();
+		if (Class == UGSTN_GA_DrillDive::StaticClass())
+		{
+			TestTrue(TEXT("the drill: Command.Movement.Drill while spinning, last"), Binding.Command.MatchesTagExact(GSTNSpinDrillTags::Command_Movement_Drill)
+				&& Binding.Requirements.RequireTags.HasTagExact(GSTNSpinDrillTags::State_Spinning) && Index == Bindings.Num() - 1);
+			continue;
+		}
 		if (const UGSTN_GA_SpinCancel* Cancel = Class ? Cast<UGSTN_GA_SpinCancel>(Class->GetDefaultObject()) : nullptr)
 		{
 			// D5: the cancels come first and require the sense tag of the spin they stop, which is the opposite of the command's
@@ -117,6 +132,31 @@ bool FGSTN_SpinDrillGASTuningTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("uses per airtime"), Sim.UsesPerAirtime, 2);
 	const FGSTN_DrillSimTuning Defaults = FGSTN_DrillSimTuning::MakeDefault();
 	TestEqual(TEXT("the defaults are the struct defaults"), Defaults.HopSpeed, FGSTN_AirSpinTuning().HopSpeed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SpinDrillGASDiveTest, "GSTNSpinDrill.GAS.Dive.AbilityDefaultsAndDecisions", GSTNSpinDrillGASTest::Flags)
+bool FGSTN_SpinDrillGASDiveTest::RunTest(const FString& Parameters)
+{
+	const UGSTN_GA_DrillDive* Default = GetDefault<UGSTN_GA_DrillDive>();
+	TestNotNull(TEXT("the dive timeline has the dive track"), FGSTN_DiveTrack::Find(Default->GetTimelineData()));
+	TestTrue(TEXT("plunge and bounce effects"), Default->PlungeEffect.Get() != nullptr && Default->BounceEffect.Get() != nullptr);
+	TestTrue(TEXT("releasing crouch ends it"), Default->bEndOnTriggerRelease);
+	TestTrue(TEXT("identity tag"), Default->GetAssetTags().HasTagExact(GSTNSpinDrillTags::Ability_Combat_Drill_Dive));
+
+	FGSTN_DrillFragment Fragment;
+	TestEqual(TEXT("no fragment: nothing"), UGSTN_GA_DrillDive::DecideFromFragment(nullptr, 10, 18), 0);
+	Fragment.Phase = EGSTN_DrillPhase::Diving;
+	Fragment.PhaseStartFrame = 10;
+	TestEqual(TEXT("diving: nothing"), UGSTN_GA_DrillDive::DecideFromFragment(&Fragment, 12, 18), 0);
+	Fragment.Phase = EGSTN_DrillPhase::None;
+	Fragment.Flags = GSTNDrillFlags::Bounced;
+	TestEqual(TEXT("bounced: bounce and end"), UGSTN_GA_DrillDive::DecideFromFragment(&Fragment, 12, 18), 1);
+	Fragment.Flags = 0;
+	Fragment.Phase = EGSTN_DrillPhase::Lag;
+	Fragment.PhaseStartFrame = 20;
+	TestEqual(TEXT("lag frame 17 of 18: nothing"), UGSTN_GA_DrillDive::DecideFromFragment(&Fragment, 37, 18), 0);
+	TestEqual(TEXT("lag over: end"), UGSTN_GA_DrillDive::DecideFromFragment(&Fragment, 38, 18), 2);
 	return true;
 }
 

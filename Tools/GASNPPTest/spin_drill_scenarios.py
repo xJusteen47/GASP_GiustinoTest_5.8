@@ -22,7 +22,7 @@ import unreal
 import gasnpp_test as g
 
 KIT_PATH = '/Game/GASNPPTest/Combat/' + g.HIT_KIT
-SUITE_SPIN = ['spin_ground_hits_ring', 'spin_air_hop_low_gravity', 'air_spin_once_per_airtime', 'spin_opposite_cancel']
+SUITE_SPIN = ['spin_ground_hits_ring', 'spin_air_hop_low_gravity', 'air_spin_once_per_airtime', 'spin_opposite_cancel', 'drill_ground_lag', 'drill_nondrillable_bounce']
 TAG_SPINNING = 'Combat.State.Spinning'
 TAG_AIR_SPENT = 'Combat.State.AirSpinSpent'
 TAG_LOW_GRAVITY = 'Combat.State.SpinLowGravity'
@@ -236,3 +236,91 @@ def scenario_spin_opposite_cancel(client=1):
         (t3 + 1.0, run.finish()), (t3 + 1.05, _finish(run, 'spin_opposite_cancel'))]
     run.run(steps)
     return 'running'
+
+
+# ---- D8: the dive -------------------------------------------------------------------------------------------------------------------------------------
+PHASE_DIVING, PHASE_LAG = 2, 6
+TAG_DIVE_GRAVITY = 'Combat.State.DiveGravity'
+
+
+def crouch_tap(client):
+    return lambda: ('crouch', g.combat_tap(client, g.button_mask('Crouch')))
+
+
+def crouch_hold(client):
+    return lambda: ('hold crouch', g.combat_hold(client, g.button_mask('Crouch')))
+
+
+def crouch_release(client):
+    return lambda: ('release crouch', g.combat_clear(client))
+
+
+def scenario_drill_ground_lag(client=1):
+    """Jump, air spin, crouch held: the dive starts on every world (phase Diving, the dive gravity effect on, the speed along gravity near the plunge
+    speed of 1800), reaches the ground, the lag phase follows (18 frames) and ends; no rollback on the diver from the dive"""
+    run = g._Run('drill_ground_lag', client)
+    key = g.key_of_player(client)
+    seen = {}
+
+    def at(name):
+        def f():
+            seen[name] = {wi: drill(wi, key) for wi in range(len(g.worlds()))}
+            seen[name + '_rb'] = g.rollbacks(client)
+            return name, seen[name]
+        return f
+
+    def down_speed(t0, t1, side='srv'):
+        return [-s['vel'][2] for s in run._win(side, t0, t1, sim=True)]
+
+    spin, t1 = spin_steps(client, 0.4, clockwise=True)
+    steps = [(0.3, at('before'))] + jump_steps(client, 0.3) + spin + [
+        (t1 + 0.05, crouch_hold(client)), (t1 + 0.07, crouch_tap(client)), (t1 + 0.15, at('diving')),
+        (t1 + 2.0, at('after')), (t1 + 2.0, crouch_release(client)),
+        (t1 + 2.05, run.at('every world showed the dive', lambda: (all((d or (0,))[0] == PHASE_DIVING for d in seen['diving'].values()), seen['diving']))),
+        (t1 + 2.05, run.at('the dive gravity effect was on during the dive (authority and client)', lambda: (
+            run.saw_tag(TAG_DIVE_GRAVITY, t1, t1 + 1.0, 'srv') and run.saw_tag(TAG_DIVE_GRAVITY, t1, t1 + 1.0, 'cli'), ''))),
+        (t1 + 2.05, run.at('the plunge reached about the plunge speed', lambda: (
+            max(down_speed(t1, t1 + 1.0) or [0.0]) > 1500.0, f"max down speed {max(down_speed(t1, t1 + 1.0) or [0.0]):.0f}"))),
+        (t1 + 2.05, run.at('the dive ended: no phase on any world 2 s later (the lag is over)', lambda: (
+            all((d or (0,))[0] not in (PHASE_DIVING, PHASE_LAG) for d in seen['after'].values()), seen['after']))),
+        (t1 + 2.05, run.at('no rollback on the diver', lambda: (seen['after_rb'] - seen['before_rb'] == 0, f"{seen['before_rb']} -> {seen['after_rb']}"))),
+        (t1 + 2.6, run.finish()), (t1 + 2.65, _finish(run, 'drill_ground_lag'))]
+    run.run(steps)
+    return 'running'
+
+
+def scenario_drill_nondrillable_bounce(client=1, victim=2):
+    """The diver lands its tip on another player (nothing is drillable before D9): the victim takes the tip's damage on the authority, the dive ends in a
+    bounce (speed along up > 500 right after) on the authority and the diver's client, and the air spin is not given back by it"""
+    vkey = g.key_of_player(victim)
+    run = g._Run('drill_nondrillable_bounce', client, extra=[('vic', 0, vkey)])
+    key = g.key_of_player(client)
+    seen = {}
+
+    def place_under():
+        a = actor(0, key).get_actor_location()
+        actor(0, vkey).set_actor_location(unreal.Vector(a.x, a.y, a.z - 20.0), False, True)
+        return 'victim under the diver'
+
+    def at(name):
+        def f():
+            vic = run.latest('vic')
+            seen[name] = vic['attr'].get('Health') if vic else None
+            return name, seen[name]
+        return f
+
+    spin, t1 = spin_steps(client, 0.55, clockwise=False)
+    steps = jump_steps(client, 0.3) + [(0.5, place_under), (0.52, at('before'))] + spin + [
+        (t1 + 0.03, crouch_hold(client)), (t1 + 0.05, crouch_tap(client)), (t1 + 1.2, at('after')), (t1 + 1.2, crouch_release(client)),
+        (t1 + 1.25, run.at("the victim took the tip's damage on the authority", lambda: (
+            seen['before'] is not None and seen['after'] is not None and seen['after'] < seen['before'] - 1.0, f"{seen['before']} -> {seen['after']}"))),
+        (t1 + 1.25, run.at('the diver bounced (rising after the dive) on the authority and its client', lambda: (
+            max([s['vel'][2] for s in run._win('srv', t1, t1 + 1.0, sim=True)] or [0.0]) > 500.0
+            and max([s['vel'][2] for s in run._win('cli', t1, t1 + 1.0, sim=True)] or [0.0]) > 500.0, ''))),
+        (t1 + 1.25, run.at('the air spin stayed spent after the bounce', lambda: (run.saw_tag(TAG_AIR_SPENT, t1 + 0.2, t1 + 0.6, 'srv'), ''))),
+        (t1 + 1.6, run.finish()), (t1 + 1.65, _finish(run, 'drill_nondrillable_bounce'))]
+    run.run(steps)
+    return 'running'
+
+# drill_tilted_gravity (plan D8): needs a level with a gravity volume the harness can place a pawn in; the dive and bounce vectors under any gravity
+# are pinned by the unit tests (GSTNSpinDrill.Core.Math.LaunchAndDive, GSTNSpinDrill.Core.Spin.HopAndRefresh). Not written until such a level exists.

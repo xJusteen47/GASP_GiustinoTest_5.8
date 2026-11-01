@@ -36,6 +36,20 @@ const FGSTN_SpinCancelTrack* FGSTN_SpinCancelTrack::Find(const FGSTN_CombatTimel
 	return nullptr;
 }
 
+const FGSTN_DiveTrack* FGSTN_DiveTrack::Find(const FGSTN_CombatTimelineData& Data)
+{
+	const UScriptStruct* DiveStruct = FGSTN_DiveTrack::StaticStruct();
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
+	{
+		const UScriptStruct* Struct = Track.GetScriptStruct();
+		if (Struct && Struct->IsChildOf(DiveStruct))
+		{
+			return &Track.Get<FGSTN_DiveTrack>();
+		}
+	}
+	return nullptr;
+}
+
 FGSTN_CombatTimelineData FGSTN_SpinTimelines::Make(const FGSTN_SpinTimelineParams& Params, EGSTN_SpinSense Sense, bool bAirSpin)
 {
 	FGSTN_CombatTimelineData Data;
@@ -87,6 +101,51 @@ FGSTN_CombatTimelineData FGSTN_SpinTimelines::Make(const FGSTN_SpinTimelineParam
 		IntoOpposite.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(SpinCommand(Opposite(Sense))));
 		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(IntoOpposite));
 	}
+	// D8: crouch pressed during the spin, from DiveFromFrame on, starts the dive (its binding requires Combat.State.Spinning)
+	if (Params.DiveFromFrame >= 0 && Params.DiveFromFrame < Data.TotalFrames)
+	{
+		FGSTN_TimelineTrack_CancelWindow IntoDive;
+		IntoDive.StartFrame = Params.DiveFromFrame;
+		IntoDive.EndFrame = Data.TotalFrames;
+		IntoDive.Condition = EGSTN_CancelCondition::Always;
+		IntoDive.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNSpinDrillTags::Command_Movement_Drill.GetTag()));
+		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(IntoDive));
+	}
+	return Data;
+}
+
+FGSTN_CombatTimelineData FGSTN_SpinTimelines::MakeDive(const FGSTN_DiveTimelineParams& Params)
+{
+	FGSTN_CombatTimelineData Data;
+	Data.TotalFrames = FMath::Max(2, Params.MaxFrames);
+	Data.FirstActionableFrame = Data.TotalFrames;
+	Data.OverrideFrames = 0;
+
+	FGSTN_DiveTrack Dive;
+	Dive.StartFrame = 0;
+	Dive.EndFrame = Data.TotalFrames;
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_DiveTrack>(Dive));
+
+	FGSTN_HitboxSpec Tip;
+	Tip.Shape.Type = EGSTN_ShapeType::Sphere;
+	Tip.Shape.Extent = FVector(Params.TipRadius);
+	Tip.Space = EGSTN_HitboxSpace::Root;
+	Tip.bSweepBetweenFrames = true;
+	FGSTN_HitboxKey Key;
+	Key.Frame = 0;
+	Key.Offset = FVector(0.0, 0.0, -Params.TipDepth);
+	Tip.Keys = { Key };
+	Tip.Data.HitType = GSTNSpinDrillTags::HitType_Drill.GetTag();
+	Tip.Data.Damage = Params.Damage;
+	Tip.Data.BaseKnockback = Params.BaseKnockback;
+	Tip.Data.AngleDeg = Params.KnockbackAngleDeg;
+
+	FGSTN_TimelineTrack_Hitbox Hitbox;
+	Hitbox.StartFrame = 0;
+	Hitbox.EndFrame = Data.TotalFrames;
+	Hitbox.Part.GroupName = Params.TipGroup;
+	Hitbox.Hitboxes.Add(Tip);
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Hitbox));
 	return Data;
 }
 

@@ -9,7 +9,7 @@ The design is [spin-drill.md](../../docs/architecture/spin-drill.md); the checkp
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints D1 (the plugin, its five modules, the native tags of spec
 §10), D2 (tuning structs, target response, the pure drill math and the tuning asset) and D3 (the drill sync fragment and the tick
 extension's phase machine) and D4 (the ground and air spin: abilities, input slots, hop, low gravity, one air spin per airtime) are
-built, and D5 (the opposite-spin cancel). Next: D6/D7 (combat core seams). The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
+built, D5 (the opposite-spin cancel), D6/D7 (combat core seams: re-hit interval, outbox event keys) and D8 (the dive). Next: D9+D10 (latch and bore). The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
 
 ## Modules
 
@@ -102,8 +102,8 @@ BeforeCandidates yet; the request of the frame and the bore end rules (`UGSTN_Dr
   fragment's window (one tag test). `LowGravityExtraFrames` extends the window.
 - **Hop**: `UGSTN_DrillMath::ComputeHopVelocity` on the tracker's velocity and up; `bHopCancelsFall` (default) makes the speed along up
   max(current, `HopSpeed`), so the spin always lifts; any gravity.
-- **Input** (`FGSTN_SpinSlots`, Core): `Command.Movement.Spin.Clockwise` / `.CounterClockwise` = Spin 360 in Stick space;
-  `.Clockwise.Keys` (D-S-A) / `.CounterClockwise.Keys` (A-S-D) = Motion slots in Stick space. Not gated to digital input yet.
+- **Input** (`FGSTN_SpinSlots`, Core): `Command.Movement.Spin.Clockwise` / `.CounterClockwise` = AnyOf(Spin 360 in Stick space, the
+  Motion D-S-A / A-S-D); `Command.Movement.Drill` = Press(Crouch). The keyboard Motion is not gated to digital input yet.
 - **Kit**: `UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings` (air binding requires `Mover.IsInAir`, ground binding ignores it, slots inline),
   `AddSpinBindingsToKit` for setup scripts and the harness. Tuning per kit: a `FGSTN_SpinDrillKitExtension` entry naming a
   `UGSTN_SpinDrillTuning`; its loadout extension copies the values into `FGSTN_SpinDrillAttach` on every machine. No entry = defaults.
@@ -111,21 +111,24 @@ BeforeCandidates yet; the request of the frame and the bore end rules (`UGSTN_Dr
   that command to `UGSTN_GA_SpinCancelClockwise` / `...CounterClockwise` while `Combat.State.Spinning.<other sense>` holds (cancel
   bindings first). The cancel's timeline carries a `FGSTN_SpinCancelTrack` and is the 8-frame recovery (no hitbox, momentum kept); the
   extension stops the spin and ends the air spin's low gravity. Outside a spin the same rotation is an ordinary spin.
+- **Dive (D8)**: crouch pressed during a spin (`Command.Movement.Drill`, window from frame 3) starts `UGSTN_GA_DrillDive`: a plunge at
+  PlungeSpeed along gravity with no gravity while diving (`UGSTN_GE_DrillDiveGravity`), steering by air control, the drill tip
+  (`Combat.HitType.Drill`). A tip hit bounces (until D9 latches drillable targets), the ground gives the landing lag, releasing crouch ends it.
 - **Harness**: `Tools/GASNPPTest/spin_drill_scenarios.py` (`spin_ground_hits_ring`, `spin_air_hop_low_gravity`,
-  `air_spin_once_per_airtime`, `spin_opposite_cancel`), bindings added in memory.
+  `air_spin_once_per_airtime`, `spin_opposite_cancel`, `drill_ground_lag`, `drill_nondrillable_bounce`), bindings added in memory.
 - Limits: wall contact does not refresh the air spin yet (no wall fact in the combat state); a pawn without the combat stats never
   spends its air spin; deviations in [spin-drill-doc-deltas.md](../../docs/notes/spin-drill-doc-deltas.md) "D4".
 
 ## Tags
 
-Native, declared in `GSTN_SpinDrillTags.h` (`GSTNSpinDrillTags`), listed by `GetDeclaredTags` (26 tags):
+Native, declared in `GSTN_SpinDrillTags.h` (`GSTNSpinDrillTags`), listed by `GetDeclaredTags` (25 tags):
 
 | Tags | Kind |
 |---|---|
-| `Command.Movement.Spin.Clockwise`, `.CounterClockwise`, `.Clockwise.Keys`, `.CounterClockwise.Keys`, `.Button`, `Command.Movement.Drill` | command leaves (the `Command.Movement` family is the combat plugin's) |
+| `Command.Movement.Spin.Clockwise`, `.CounterClockwise`, `.Button`, `Command.Movement.Drill` | command leaves (the `Command.Movement` family is the combat plugin's) |
 | `Input.Button.Spin` | optional button leaf, not in the default kit |
 | `Combat.State.Spinning`, `.Spinning.Clockwise`, `.Spinning.CounterClockwise`, `.AirSpinSpent`, `.Drilling`, `.DrillLatched` | projected from the drill fragment, never granted |
-| `Combat.State.SpinLowGravity` | granted only by the low gravity effect (the one exception to "projected") |
+| `Combat.State.SpinLowGravity`, `Combat.State.DiveGravity` | granted only by the low gravity and dive gravity effects (the exceptions to "projected") |
 | `Combat.SetByCaller.SpinDrill.GravityScale`, `.FallSpeedScale` | magnitudes of the low gravity effect |
 | `Combat.HitType.Drill` | hit type leaf |
 | `Combat.Event.Drill.Latched`, `.Detached`, `.Launched`, `.GroundLag` | events, published once on the authority |

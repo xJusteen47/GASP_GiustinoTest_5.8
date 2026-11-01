@@ -29,7 +29,13 @@ namespace GSTNDrillFlags
 	/** The current spin is the air spin (it counted against AirSpinsUsed) */
 	constexpr uint8 AirSpin = 1 << 1;
 
-	constexpr uint8 All = CounterClockwise | AirSpin;
+	/**
+	 * The dive just ended on a hittable target that is not drillable (spin-drill.md 7.6): set with the phase back to None on the bounce frame,
+	 * cleared at the next AfterClocks. The dive ability reads it to apply the bounce and end; nothing else does
+	 */
+	constexpr uint8 Bounced = 1 << 2;
+
+	constexpr uint8 All = CounterClockwise | AirSpin | Bounced;
 }
 
 /**
