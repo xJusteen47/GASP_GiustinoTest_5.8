@@ -931,5 +931,5 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 
 ## Per-thread handovers (from 2026-11-02)
 - Spin and drill: docs/notes/handovers/spin-drill.md (SD-01 onward).
-- M7 piggyback: docs/notes/handovers/m7-piggyback.md (M7 creates it with its next handover).
+- M7 piggyback: docs/notes/handovers/m7-piggyback.md (M7-01 onward: G5 and later).
 - Animation pipeline: docs/notes/handovers/anim-pipeline.md.
