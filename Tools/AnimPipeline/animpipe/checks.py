@@ -62,6 +62,8 @@ def _planted(F, exempt, sides="lr"):
             d = [float(np.linalg.norm(f[b] - F[0][b])) for i, f in enumerate(F) if i not in exempt]
             worst[b] = round(max(d), 2)
     bad = {b: v for b, v in worst.items() if v > PLANT_TOL}
+    if not worst:
+        return True, "n/a: no planted foot in the card (aerial)"
     return not bad, f"max drift {max(worst.values())} cm (tol {PLANT_TOL})" + (f", over: {bad}" if bad else "")
 
 

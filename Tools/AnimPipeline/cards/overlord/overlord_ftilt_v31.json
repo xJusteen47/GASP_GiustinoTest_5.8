@@ -1,5 +1,5 @@
 {
- "move": "ganon_ftilt_v31",
+ "move": "overlord_ftilt_v31",
  "class": "tilt",
  "anim": "/Game/AnimPipeline/Rig/AS_GanonFTiltV31_Build",
  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",

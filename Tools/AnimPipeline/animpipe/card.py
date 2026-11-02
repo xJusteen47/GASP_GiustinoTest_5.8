@@ -1,6 +1,6 @@
 """Move card: the one data file per move (brief §4.1). Versions are cards, not scripts.
 
-Schema (cards/<move>.json):
+Schema (cards/<kit>/<kit>_<move>_vN.json, see cards/README.md):
   move, class (jab|tilt|smash -> move_sheets _classes), anim (UE asset the build writes), rig, fps (60 or 62.5)
   timing_csv   frame data CSV (refs/ufd/*_timing.csv: frame,extension_pct,reach_px,active; 1-based game frames).
                The ONLY source of the windows: startup/active/hold/FAF are derived here, never typed.

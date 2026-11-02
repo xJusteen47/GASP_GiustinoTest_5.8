@@ -131,3 +131,27 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   rosso/ciano `hitstop_sheet.py` -> `<mossa>_hitstop_snap.png` (prima jab: cattura del worktree aaqr80, ossa identiche).
 - Da guardare: Ganon 9,8 cm è al limite (amount 0,9 darebbe margine); hitstop vero in PIE quando le abilità usano i montage.
 - Costo stimato: Opus ~35 chiamate, contesto ~70k, circa $3-4; niente subagenti.
+
+## Checkpoint 9 (2026-11-02): kit overlord e down air v1 (Ganondorf dair + stomp di M. Bison)
+- Owner: mosse raggruppate per **kit** (proxy di un personaggio). Schede in `cards/<kit>/<kit>_<mossa>_vN.json` (`cards/README.md`).
+  Kit **overlord** (nome provvisorio): stile "violenza elegante" alla M. Bison / Rugal (KOF): composto, potenza controllata,
+  braccia conserte. Ganondorf ftilt spostato in `overlord/overlord_ftilt_v31.json` (`move` rinominato: i nuovi output avranno il
+  prefisso overlord_; l'asset UE resta `AS_GanonFTiltV31_Build`). Jab nel kit `pilot`.
+- Nuovo `python -m animpipe author <card>`: senza clip né pose Step, le pose chiave sono dati nella scheda (blocco `author`:
+  bacino, colonna, testa, clavicole, mani/piedi IK con pole, in assi componente) -> ossa -> `ue_write_take.py` ->
+  `AS_Pilot_OverlordDAir_V1` (sorgente del build). Pugni dal template Ganon V2.
+- Dair v1 (`cards/overlord/overlord_dair_v1.json`): tempi UFD Ganondorf dair (startup 16, attivi 16-18, totale 44 -> anim
+  attivi 14-16, FAF 42). Pose 0/6/12/14/16/26/34/42: raccolta in aria, braccia che salgono e si incrociano sopra la testa (12),
+  al 14 gambe giù dritte e braccia conserte sul petto (lo scatto grande è SUL primo frame di hitbox), tenuta, ginocchia su al FAF.
+  Build `AS_OverlordDAirV1_Build`; montage e video con hitstop 8 a f14 e whiff.
+- Check: hitstop_snap PASS (0,6 cm/frame dopo gli attivi), ossa, contatto/FAF, pugni PASS; legibility FAIL (controlli da pugno
+  su un calcio, come il ftilt). Clearance stampa PASS ma ha violazioni: avambracci incrociati che si toccano e avambraccio dx
+  nella testa ai frame 9-13 (fino a -8 cm), braccio conserto nel petto a 34-36. 2 tentativi sulle pose, poi fermo (regola 5).
+- A occhio (griglia laterale): fasi leggibili; le braccia conserte sporgono troppo in avanti (sembrano tese), lo stomp è
+  pulito ma poco "pesante"; nessun giro elegante dopo l'hit (fase successiva, non fatta).
+- Bug strumenti: `animpipe check` andava in errore senza piedi piantati (aereo): ora "n/a". L'editor va lanciato con
+  `MSYS_NO_PATHCONV=1`, altrimenti Git Bash storpia `/Game/...` e si apre DefaultLevel (sporco). `ue_write_take` fallisce la
+  rilettura subito dopo il salvataggio (dialog): il build campiona bene lo stesso.
+- Output nei project files: `dair_v1_griglia_laterale.png`, `dair_v1_ingame_hitstop_vs_whiff.mp4`, `dair_v1_pose_lato_fronte.png`.
+- Prossimo: giudizio owner (o sue pose chiave); poi braccia conserte più vicine al petto e clearance delle braccia sopra la testa.
+- Costo stimato: Opus ~75 chiamate, contesto ~110k, circa $7-9; niente subagenti (render e build erano 3 comandi).

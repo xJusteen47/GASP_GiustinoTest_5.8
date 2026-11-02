@@ -3,6 +3,7 @@
     python -m animpipe roundtrip <AnimAsset> <name> [--fps=60|62.5] [--keys=card.json|0,3,9]   rig bake round trip
     python -m animpipe tangent <name>                                                             tangent probe on LS_<name>
     python -m animpipe card <card.json>                                                           validate a move card
+    python -m animpipe author <card.json> [--no-write]  card "author" pose data -> source take (no clip yet)
     python -m animpipe build <card.json>        card -> sparse keys + tangents on the rig -> AnimSequence at the card fps
     python -m animpipe trails <card.json>       motion trails, one composite image (3 views, build over source)
     python -m animpipe poses <card.json> [--frames=] [--take=] [--over=]   pose checkpoint grid (one image)
@@ -133,6 +134,9 @@ def main():
         os.makedirs(OUT, exist_ok=True)
         r = _ue_py("tangent_probe", name=args[0], out=os.path.join(OUT, f"{args[0]}_tangent.json").replace("\\", "/"))
         print(json.dumps(r)[:400])
+    elif cmd == "author":
+        from animpipe.author import run
+        run(args[0], opt)
     elif cmd == "build":
         build(args[0])
     elif cmd == "check":
