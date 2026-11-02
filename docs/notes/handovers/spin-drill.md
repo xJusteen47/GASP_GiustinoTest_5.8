@@ -209,3 +209,26 @@ after one checkpoint.
   3. One rollback in spin_opposite_cancel and drill_ground_lag (budget 0): decide if 1 is acceptable at 60/15 ms or find its cause.
   4. drill_nondrillable_bounce: victim damage 0 -> 0 (same placement as 1).
 - Cost: one Opus thread, ~110k context, 2 editor runs (~6 min each), 3 builds + 2 headless runs. Medium.
+
+## SD-08 (laptop, 2026-11-02): jump input and target placement fixed in the harness; SUITE_SPIN 3/12; latch blocked by the tip's depth (STOPPED)
+
+- Probe (Saved/SD08/probe_latch.py, outputs probe*.txt; report Saved/Logs/sd-08/spin-full3.log): world-0/1 positions of diver and target every tick.
+- Harness fixes (Python only, spin_drill_scenarios.py): (a) jump_steps holds IA_Jump 0.1 s instead of a one-frame press_input, which was lost or
+  answered up to 0.5 s late at -nullrhi rates (no jump at all before 0.8 s in 3 latch scenarios); (b) _teleport_under puts the target ON THE FLOOR
+  (own z) under the diver's own client copy, at the end of the stick turn (t1). The old call ran while the authority still had the diver on the
+  ground, asked the target into the floor and pushed it 60 cm aside; (c) hop check: window to t_end + 0.3, bar 400 (sim samples read the 450 hop
+  as 402), spin at jump + 0.4 so the turn ends at the top, landing window t_end + 2.0..2.2; (d) drill_ground_lag spin at 0.55 like the rig.
+- SUITE_SPIN 3/12 (was 2/12): PASS ring, air hop, air once. ground_lag and opposite_cancel fail only on 1 rollback (budget 0).
+- (1) Latch, two attempts used, STOPPED: with the target now exactly under the dive, the diver lands on the target's capsule top, slides off
+  sideways and glides at constant height in Diving (no dive gravity, plunge velocity redirected by the contact); no tip hit ever lands
+  (nondrillable_bounce: damage 0 -> 0). Cause (code read, not yet tested): the dive tip is a Root-space sphere at TipDepth 20, radius 45
+  (FGSTN_DiveTimelineParams, GSTN_SpinTimelines.h; same for the bore). Root = the sim transform = capsule CENTER (actor z 88 standing), so the
+  sphere's bottom is 23 cm ABOVE the feet and can never touch a body the capsule stands on. SD-07's one latch came from a target teleported 20 cm
+  under the diver's centre (overlapping). Proposed fix (GSTNSpinDrill Core defaults, game code, needs the go): TipDepth ~ capsule half height +
+  10 (about 100), or measure from the feet; then rerun SUITE_SPIN. Also worth a ticket: a Diving drill that is stopped by a non-ground contact
+  glides forever (should end or fall).
+- (2) Hop: fixed (harness only).
+- (3) One rollback in spin_opposite_cancel and drill_ground_lag: cause not obvious from the samples; not investigated further. Decide whether 1
+  rollback at 60/15 ms is acceptable for an out-of-sync cancel/dive start, or probe the frame of the correction.
+- Gates: no C++ changed, so the build and the headless suites are unchanged from SD-07 (on 980/0, off 933/0), not rerun.
+- Cost: one Opus thread, ~95k context, 6 editor runs (~5-8 min each), no builds. Medium.

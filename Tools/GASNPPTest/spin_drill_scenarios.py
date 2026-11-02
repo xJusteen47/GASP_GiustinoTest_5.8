@@ -161,11 +161,15 @@ def _seen_all(run, pred, t0, t1, same_start=False, same_latch=False):
     return ok, s
 
 
-def _teleport_under(key, vkey):
-    """Server teleport of `vkey` 20 cm under `key`'s root (the authority moves it; clients get it as a correction). A set_actor_location is
-    undone by Mover on the next tick (SD-07)"""
-    a = actor(0, key).get_actor_location()
-    return g.comps(g.worlds()[0])[vkey].server_teleport_exact(unreal.Vector(a.x, a.y, a.z - 20.0))
+def _teleport_under(key, vkey, wi=0):
+    """Server teleport of `vkey` onto the floor right under `key` as world `wi` shows it (the authority moves it; clients get it as a
+    correction). A set_actor_location is undone by Mover on the next tick (SD-07). The target keeps its own height (standing on the floor)
+    and takes the diver's x, y. SD-08 probe: placed 20 cm under a diver the authority still showed on the ground, the target was asked into
+    the floor and pushed 60 cm aside; placed under the authority's diver 50 ms before the stick turn ended, it sat 15 cm off the spot the
+    dive left from (the turn drifts the diver) and the tip slid off its head. So the latch scenarios place it at the end of the turn under the
+    diver's own client copy (wi = the diver's world), which is where the dive starts; the authority dives there 100-250 ms later"""
+    a, v = actor(wi, key).get_actor_location(), actor(0, vkey).get_actor_location()
+    return g.comps(g.worlds()[0])[vkey].server_teleport_exact(unreal.Vector(a.x, a.y, v.z + 2.0))
 
 
 # ---- input -----------------------------------------------------------------------------------------------------------------------------------------
@@ -183,7 +187,9 @@ def spin_steps(client, t, clockwise=True):
 
 
 def jump_steps(client, t):
-    return [(t, lambda: ('jump', g.press(client, 'jump')))]
+    # Held for 0.1 s, not a one-frame press_input: at -nullrhi editor rates a one-frame injection was lost or answered up to 0.5 s late
+    # (SD-08 probe: no jump at all before 0.8 s in three latch scenarios), which moved every later step of the scenario off its jump
+    return [(t, lambda: ('jump', g.hold(client, 'jump', (1.0, 0.0, 0.0)))), (t + 0.1, lambda: ('jump let go', g.release(client, 'jump')))]
 
 
 def _apply_kit():
@@ -277,20 +283,23 @@ def scenario_spin_air_hop_low_gravity(client=1):
     def up_speed(t0, t1, side='srv'):
         return [s['vel'][2] for s in run._win(side, t0, t1, sim=True)]
 
+    # The spin is recognised at the end of the stick turn (t_end), about the jump's top (apex ~0.7 s after the press), and the authority hops
+    # 100-250 ms later: the window runs to t_end + 0.3, where a plain jump already falls. The sim samples are taken before the tick integrates,
+    # so the hop (450) reads as 402, a few ticks of gravity later (same value in SD-06 and SD-08): 400 is the bar, a plain jump never reads it there
     t_jump2 = 2.5
-    spin, t_end = spin_steps(client, t_jump2 + 0.25, clockwise=False)
+    spin, t_end = spin_steps(client, t_jump2 + 0.4, clockwise=False)
     steps = jump_steps(client, 0.3) + jump_steps(client, t_jump2) + spin + [
-        (t_jump2 + 0.24, run.at('before the spin the jump is near its top', lambda: (True, f"vz {up_speed(t_jump2 + 0.2, t_jump2 + 0.24)[-1:]}"))),
-        (t_end + 0.1, run.at('the hop lifts: vz reaches the hop speed after the spin starts', lambda: (
-            max(up_speed(t_end - 0.05, t_end + 0.1) or [0.0]) >= 440.0, f"max vz {max(up_speed(t_end - 0.05, t_end + 0.1) or [0.0]):.0f}"))),
+        (t_jump2 + 0.39, run.at('before the spin the jump is near its top', lambda: (True, f"vz {up_speed(t_jump2 + 0.3, t_jump2 + 0.39)[-1:]}"))),
+        (t_end + 0.3, run.at('the hop lifts: vz reaches the hop speed after the spin starts', lambda: (
+            max(up_speed(t_end - 0.05, t_end + 0.3) or [0.0]) >= 400.0, f"max vz {max(up_speed(t_end - 0.05, t_end + 0.3) or [0.0]):.0f}"))),
         (t_end + 0.3, run.at('the low gravity effect is on during the spin, on both copies', lambda: (
             run.saw_tag(TAG_LOW_GRAVITY, t_end, t_end + 0.3, 'srv') and run.saw_tag(TAG_LOW_GRAVITY, t_end, t_end + 0.3, 'cli'), ''))),
         (t_end + 1.5, run.at('the low gravity effect is gone after the spin', lambda: (
             not run.saw_tag(TAG_LOW_GRAVITY, t_end + 1.2, t_end + 1.5, 'srv'), ''))),
-        (t_end + 1.5, run.at('the air spin was spent, then given back on landing', lambda: (
-            run.saw_tag(TAG_AIR_SPENT, t_end, t_end + 0.5, 'srv') and not run.saw_tag(TAG_AIR_SPENT, t_end + 1.3, t_end + 1.5, 'srv'), ''))),
-        (t_end + 1.55, lambda: run.note(f"descent with the spin vs the plain jump: {up_speed(t_end + 0.3, t_end + 0.6)[:3]} / {up_speed(0.9, 1.2)[:3]}")),
-        (t_end + 1.6, run.finish()), (t_end + 1.65, _finish(run, 'spin_air_hop_low_gravity'))]
+        (t_end + 2.2, run.at('the air spin was spent, then given back on landing', lambda: (
+            run.saw_tag(TAG_AIR_SPENT, t_end, t_end + 0.6, 'srv') and not run.saw_tag(TAG_AIR_SPENT, t_end + 2.0, t_end + 2.2, 'srv'), ''))),
+        (t_end + 2.25, lambda: run.note(f"descent with the spin vs the plain jump: {up_speed(t_end + 0.3, t_end + 0.6)[:3]} / {up_speed(0.9, 1.2)[:3]}")),
+        (t_end + 2.3, run.finish()), (t_end + 2.35, _finish(run, 'spin_air_hop_low_gravity'))]
     _run(run, steps)
     return 'running'
 
@@ -403,7 +412,7 @@ def scenario_drill_ground_lag(client=1):
     def down_speed(t0, t1, side='srv'):
         return [-s['vel'][2] for s in run._win(side, t0, t1, sim=True)]
 
-    spin, t1 = spin_steps(client, 0.4, clockwise=True)
+    spin, t1 = spin_steps(client, 0.55, clockwise=True)   # as the latch rig: the turn ends near the top of the jump (the jump is on time since SD-08)
     steps = [(0.3, at('before'))] + jump_steps(client, 0.3) + spin + [
         (t1 + 0.05, crouch_hold(client)), (t1 + 0.07, crouch_tap(client)),
         (t1 + 2.0, at('after')), (t1 + 2.0, crouch_release(client)),
@@ -431,7 +440,7 @@ def scenario_drill_nondrillable_bounce(client=1, victim=2):
     seen = {}
 
     def place_under():
-        return 'victim under the diver', _teleport_under(key, vkey)
+        return 'victim under the diver', _teleport_under(key, vkey, client)
 
     def at(name):
         def f():
@@ -444,7 +453,7 @@ def scenario_drill_nondrillable_bounce(client=1, victim=2):
         return lambda: ('drill immunity', on, TestLib.server_set_drill_immunity(actor(0, vkey), on))
 
     spin, t1 = spin_steps(client, 0.55, clockwise=False)
-    steps = [(0.1, immune(True))] + jump_steps(client, 0.3) + [(0.5, place_under), (0.52, at('before'))] + spin + [
+    steps = [(0.1, immune(True)), (0.2, at('before'))] + jump_steps(client, 0.3) + [(t1, place_under)] + spin + [
         (t1 + 0.03, crouch_hold(client)), (t1 + 0.05, crouch_tap(client)), (t1 + 1.2, at('after')), (t1 + 1.2, crouch_release(client)),
         (t1 + 1.25, run.at("the victim took the tip's damage on the authority", lambda: (
             seen['before'] is not None and seen['after'] is not None and seen['after'] > seen['before'] + 1.0, f"{seen['before']} -> {seen['after']}"))),
@@ -504,14 +513,15 @@ class _DrillRig:
         self.seen = {}
         _spy(self.run, self.key)
         spin, self.t1 = spin_steps(client, 0.55, clockwise=True)
-        self.steps = [(0.1, self.immune(False))] + jump_steps(client, 0.3) + [(0.5, self.place_under), (0.52, self.mark('before'))] + spin + [
+        # The target goes under the diver at the end of the stick turn (t1, ~0.55 s after the press, near the top of the jump: see _teleport_under)
+        self.steps = [(0.1, self.immune(False)), (0.2, self.mark('before'))] + jump_steps(client, 0.3) + [(self.t1, self.place_under)] + spin + [
             (self.t1 + 0.03, crouch_hold(client)), (self.t1 + 0.05, crouch_tap(client)), (self.t1 + 0.45, self.mark('latched'))]
 
     def immune(self, on):
         return lambda: ('drill immunity', on, TestLib.server_set_drill_immunity(actor(0, self.vkey), on))
 
     def place_under(self):
-        return 'target under the diver', _teleport_under(self.key, self.vkey)
+        return 'target under the diver', _teleport_under(self.key, self.vkey, self.client)
 
     def mark(self, name):
         def f():
