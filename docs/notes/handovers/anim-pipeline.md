@@ -59,3 +59,9 @@ Pushato su `feature/gas-npp-5.8` come fast-forward puro: `deeab05` (rebase pulit
 Prossimo: (1) Ganondorf, gamba che scende in un blocco solo ai frame 16-24 (spaziatura), non corretta qui; (2) hitstop e
 camera veri in PIE quando le abilità combat usano questi montage.
 Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
+
+## Checkpoint 4 (2026-11-02): anteprime senza hitstop (whiff)
+- `ingame_judge.py` ora produce sempre: `<mossa>_ingame.mp4` (hitstop), `_ingame_whiff.mp4`, `_ingame_compare.mp4` (hitstop a sinistra, whiff a destra); `--cached` rifà i video dai frame già catturati senza editor.
+- Rigenerati jab v12 (hitstop 4) e Ganon ftilt v3.1 (hitstop 8) con l'editor aperto; compositi `<mossa>_hitstop_vs_whiff.png` in `sheets/ingame/` (non in git), copiati nei project files.
+- Whiff: pose identiche all'hitstop (il congelamento ripete solo il frame attivo). Unica nota whiff: ftilt, recupero 19->25 cade in un blocco solo (già segnalato, spaziatura 0,17); nessun problema nuovo. Animazioni non toccate.
+- Pushato su feature: `061bdbb`. Costo stimato: ~25 chiamate, contesto ~60k, circa $1,5-2 (Sonnet 5.5), niente subagenti.
