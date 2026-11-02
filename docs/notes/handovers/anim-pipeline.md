@@ -55,5 +55,7 @@ Decisioni owner applicate: 60 fps, round-trip 1 cm, stretch OFF + ossa 0,1 cm; 4
 - Editor: riaperto direttamente in `L_PilotCapture` (DefaultLevel risultava dirty all'avvio e non è stato toccato); l'indice
   di ripristino autosave è stato spostato in `Saved/Autosaves_restore_bak/` (nessun autosave cancellato).
 
-Prossimo: hitstop e camera veri in PIE quando le abilità combat usano questi montage; spaziatura Ganon 16-24.
+Pushato su `feature/gas-npp-5.8` come fast-forward puro: `deeab05` (rebase pulito sopra `13cc565`).
+Prossimo: (1) Ganondorf, gamba che scende in un blocco solo ai frame 16-24 (spaziatura), non corretta qui; (2) hitstop e
+camera veri in PIE quando le abilità combat usano questi montage.
 Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
