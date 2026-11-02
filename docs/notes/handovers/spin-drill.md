@@ -153,3 +153,15 @@ after one checkpoint.
 - Environment: unreal-mcp / Rider ue_health were not connected (no running editor); headless runs via Saved/SD05/run_editor.ps1 with
   `QUIT_EDITOR` (not `quit`: my first driver hung 10 min). Scripts in Saved/HC/.
 - Cost: one Sonnet thread, ~45k context, 4 short headless editor runs plus one 10 min hang. Low.
+
+### HC-02 (laptop, 2026-11-02): hold-to-crouch DONE (live editor, Rider python graph API)
+
+- IA_Crouch trigger: Pressed -> Down (Started/Triggered/Completed: a clean hold for the combat "crouch held" read as well). Mappings untouched
+  (L1, C, gamepad B keep working).
+- `SandboxCharacter_Mover` and `_CMC`, event IA_Crouch: the toggle moved from Triggered to **Started**; **Completed** is wired to the "crouch off"
+  node (Mover: `SetFieldsInStruct_9` WantsToCrouch=false; CMC: `UnCrouch` node 59). Both compile, 0 node errors. Press toggles as before, release forces stand.
+- Known quirk: Started still toggles, so pressing while somehow already crouched (e.g. crouched by another source) stands up; release also stands. Fine for hold.
+- NOT verified: no PIE hold test and no headless suite run (SUITE_SPIN is red from SD-05, no green crouch suite known). Check by hand: hold L1 = crouched, release = stands, keyboard C too.
+- Changed shared binaries: Content/Input/IA_Crouch, Content/Blueprints/SandboxCharacter_{Mover,CMC}.uasset. Backups: Saved/Backups/GAS/IA_Crouch.pre-hold.uasset; BPs via git.
+- Tip: the live editor with Rider connected has `unreal.BlueprintGraphEditor` / `BlueprintGraphPinLibrary` (list nodes, rewire pins, compile).
+- Cost: ~35k more context.
