@@ -11,7 +11,7 @@
 The existing scripts run unchanged as subprocesses, each one's output goes to <OUT>/<move>_check/<check>.txt; this
 module reads only their verdict line. Bone data: legibility's cache sheets/raw/<take>_legbones.json (component space,
 X left, Y forward, Z up). Full result: <OUT>/<move>_check.json. Prints at most 5 lines."""
-import json, os, re, subprocess, sys
+import json, math, os, re, subprocess, sys
 import numpy as np
 
 from animpipe.card import load, windows, to_move_sheet
@@ -84,7 +84,16 @@ def _fists(F, hands, skip=()):
     return not bad, "openness (ratio, frame) " + ", ".join(f"{s} {v[0]}@{v[1]}" for s, v in worst.items()) + f" (max {FIST_MAX})"
 
 
-def _hitstop_snap(F, w, lim, exempt):
+HEAD_LEVER = 20.0
+
+
+def _head_quats(take):
+    import legibility as L
+    d = json.load(open(os.path.join(TOOLS, "sheets", "raw", f"{take}_legbones.json")))["frames"]
+    return [{"head": np.array(L.rot_to_quat(*d[str(i)]["head"][3:6]))} for i in range(len(d))]
+
+
+def _hitstop_snap(F, w, lim, exempt, Q=None):
     """Block (owner rule, 02/11): the hit can land on any active frame and freezes the clip there for the hitstop, so
     the step from every active frame f to f+1 is what the player sees right after the freeze. The largest per-bone
     displacement (component space, every sampled bone) of each such step must stay under `lim`. A big travel belongs
@@ -95,6 +104,13 @@ def _hitstop_snap(F, w, lim, exempt):
         if f in exempt:
             continue
         b, d = max(((b, float(np.linalg.norm(F[f + 1][b] - F[f][b]))) for b in F[f]), key=lambda kv: kv[1])
+        if Q is not None:
+            # the head turns about its pivot: its bone barely moves while the face swings (owner 02/11, dair v2), so its
+            # rotation counts as the arc travelled by a point HEAD_LEVER cm out (the top of the head)
+            dq = abs(float(np.dot(Q[f]["head"], Q[f + 1]["head"])))
+            arc = 2 * math.acos(min(1.0, dq)) * HEAD_LEVER
+            if arc > d:
+                b, d = "head (turn)", arc
         worst.append((f, b, round(d, 1)))
     bad = [x for x in worst if x[2] > lim]
     return not bad, "active->next max " + ", ".join(f"{f}->{f + 1} {d} cm ({b})" for f, b, d in worst) + f" (max {lim})"
@@ -147,7 +163,7 @@ def run(path, src=False):
     sides = "".join(s for s in "lr" if f"foot_{s}_ik_ctrl" in c.get("planted", ["foot_l_ik_ctrl", "foot_r_ik_ctrl"]))
     res["block"]["planted_feet"] = _planted(F, exempt.get("planted", set()), sides)
     res["block"]["fists"] = _fists(F, c.get("fists", ["l", "r"]), exempt.get("fists", set()))
-    res["block"]["hitstop_snap"] = _hitstop_snap(F, w, float(c.get("hitstop_max_cm", HITSTOP_MAX)), exempt.get("hitstop_snap", set()))
+    res["block"]["hitstop_snap"] = _hitstop_snap(F, w, float(c.get("hitstop_max_cm", HITSTOP_MAX)), exempt.get("hitstop_snap", set()), _head_quats(take))
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),
                        ("twist_chain", ["twist_chain.py", take, "--quiet"]),

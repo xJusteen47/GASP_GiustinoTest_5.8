@@ -181,3 +181,11 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   (ncols 0 con --take/--over), da sistemare.
 - Lezioni: il server script Cascadeur va avviato dall'owner; la finestra minimizzata blocca i render (`ui.restore_window()`).
 - Costo stimato: Opus ~75 chiamate, contesto ~100k, circa $7-9; niente subagenti (ogni build/render era un comando).
+- **v3 (owner review di v2)**: v2 non aveva sinergia (braccia ferme sul busto mentre busto e gambe ruotavano) e la testa
+  scattava dopo l'hit. Cause: braccia fisse nel frame del petto da 6 a 12; `part_delays.head = 1` (la testa arrivava alla
+  posa dello stomp un frame dopo l'hit, quindi dopo l'hitstop). `hitstop_snap` ora conta la rotazione della testa (arco a
+  20 cm): v2 = 27 cm al 14->15, v3 = 1,4 cm. Scheda `overlord_dair_v3.json`: braccia che viaggiano rispetto al busto in ogni
+  tratto (basse 0, larghe e in salita 6, incrocio a petto 10, tua 15 al 12, spinta su al 13, giù sul petto al 14 con le
+  gambe), busto che si chiude per gradi, mano villain che si apre da 4 a 12. Clearance: resta l'avambraccio dx nella testa
+  -5,6 cm al 12-13 (posa dell'owner su un manichino con proporzioni diverse). Output `overlord_dair_v3_lato.png`,
+  `overlord_dair_v3_hitstop_vs_whiff.mp4`. Costo totale del thread circa $9-11.
