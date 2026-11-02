@@ -1,0 +1,147 @@
+"""Editor side of animpipe (runs inside Unreal through the bridge's run_python_file). One Level Sequence per take:
+skeletal mesh spawnable + body Control Rig track; keys live on the rig's controls, the AnimSequence is a bake.
+
+Entry points return a short JSON string; anything long is written to the path given in `out`.
+  roundtrip(anim, rig, name, fps_num, fps_den, keep_frames, out)  anim -> rig keys -> (optional sparse) -> AnimSequence
+  tangent_probe(name, out)                                          per-key tangents/weights on a rig control channel
+"""
+import json
+import unreal
+
+MESH = "/Game/Characters/UEFN_Mannequin/Meshes/SKM_UEFN_Mannequin"
+DIR = "/Game/AnimPipeline/Rig"
+EAL = unreal.EditorAssetLibrary
+
+
+def _world():
+    return unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+
+
+def _rig_class(rig):
+    a = unreal.load_asset(rig)
+    return a.generated_class() if hasattr(a, "generated_class") else a
+
+
+def _new(name, cls, factory):
+    full = f"{DIR}/{name}"
+    if EAL.does_asset_exist(full):
+        EAL.delete_asset(full)
+    return unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, DIR, cls, factory)
+
+
+def _rig_section(binding):
+    for t in binding.get_tracks():
+        if isinstance(t, unreal.MovieSceneControlRigParameterTrack):
+            return t, t.get_sections()[0]
+    return None, None
+
+
+def _sequence(anim, name, rate):
+    """Level Sequence with the mannequin as a spawnable and the source anim on it, open in Sequencer."""
+    src = unreal.load_asset(anim)
+    n = src.get_editor_property("number_of_sampled_frames") if hasattr(src, "number_of_sampled_frames") else None
+    length = unreal.AnimationLibrary.get_sequence_length(src) if hasattr(unreal.AnimationLibrary, "get_sequence_length") else src.get_play_length()
+    seq = _new(f"LS_{name}", unreal.LevelSequence, unreal.LevelSequenceFactoryNew())
+    seq.set_display_rate(rate)
+    end = int(round(length * rate.numerator / rate.denominator))
+    seq.set_playback_start(0); seq.set_playback_end(end)   # the export includes the end frame
+    actor = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).spawn_actor_from_class(unreal.SkeletalMeshActor, unreal.Vector(0, 0, 0))
+    actor.skeletal_mesh_component.set_skinned_asset_and_update(unreal.load_asset(MESH)) if hasattr(actor.skeletal_mesh_component, "set_skinned_asset_and_update") else actor.skeletal_mesh_component.set_skeletal_mesh(unreal.load_asset(MESH))
+    binding = seq.add_spawnable_from_instance(actor)
+    actor.destroy_actor()
+    tr = binding.add_track(unreal.MovieSceneSkeletalAnimationTrack)
+    sec = tr.add_section(); sec.set_range(0, end + 1)
+    p = sec.get_editor_property("params"); p.set_editor_property("animation", src); sec.set_editor_property("params", p)
+    LSE = unreal.LevelSequenceEditorBlueprintLibrary
+    LSE.open_level_sequence(seq)
+    LSE.refresh_current_level_sequence()
+    LSE.set_current_time(0)              # the spawnable must exist in the editor world before the bake can find its mesh
+    return seq, binding, end, length
+
+
+def roundtrip(anim, rig, name, fps_num=60, fps_den=1, keep_frames=None, out=None):
+    rate = unreal.FrameRate(int(fps_num), int(fps_den))
+    seq, binding, end, length = _sequence(anim, name, rate)
+    opts = unreal.AnimSeqExportOption()
+    ok = unreal.ControlRigSequencerLibrary.bake_to_control_rig(_world(), seq, _rig_class(rig), opts, False, 0.001, binding)
+    track, sec = _rig_section(binding)
+    res = {"bake_ok": bool(ok), "end": end, "length": length, "rig_track": track is not None}
+    if sec is None:
+        return json.dumps(res)
+    chans = sec.get_all_channels()
+    tick = seq.get_tick_resolution()
+    keys_before = sum(len(c.get_keys()) for c in chans)
+    removed = 0
+    if keep_frames:
+        keep = set(int(f) for f in keep_frames)
+        for c in chans:
+            for k in list(c.get_keys()):
+                f = k.get_time(unreal.MovieSceneTimeUnit.DISPLAY_RATE).frame_number.value
+                if f not in keep:
+                    c.remove_key(k); removed += 1
+    res.update({"channels": len(chans), "keys_before": keys_before, "removed": removed,
+                "keys_after": sum(len(c.get_keys()) for c in chans), "tick": [tick.numerator, tick.denominator],
+                "controls": len([c for c in chans if "." not in c.channel_name.__str__()])})
+    # bake back to an AnimSequence
+    skel = unreal.load_asset(anim).get_editor_property("skeleton")
+    fac = unreal.AnimSequenceFactory(); fac.set_editor_property("target_skeleton", skel)
+    dst = _new(f"AS_{name}", unreal.AnimSequence, fac)
+    eo = unreal.AnimSeqExportOption()
+    for prop, val in (("use_custom_frame_rate", True), ("custom_frame_rate", rate)):
+        try:
+            eo.set_editor_property(prop, val)
+        except Exception as e:
+            res.setdefault("export_opt_missing", []).append(prop)
+    # the spawnable only exists while the sequence is open: SequencerTools.export_anim_sequence finds no skel mesh
+    res["export_ok"] = bool(unreal.ControlRigSequencerLibrary.export_anim_sequence_from_sequencer(dst, eo, binding, False))
+    res["out_asset"] = dst.get_path_name().split(".")[0]
+    try:
+        res["out_frames"] = dst.get_editor_property("number_of_sampled_keys")
+    except Exception:
+        pass
+    res["out_length"] = dst.get_play_length()
+    EAL.save_asset(seq.get_path_name().split(".")[0]); EAL.save_asset(res["out_asset"])
+    unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
+    if out:
+        json.dump(res, open(out, "w"), indent=1)
+    return json.dumps(res)
+
+
+def tangent_probe(name, out=None):
+    """On the rig track of LS_<name>: pick hand_l_ctrl Location X (or the first float channel with 2+ keys), set user cubic
+    tangents and weights on two keys, read them back and sample the curve at 240 fps between them."""
+    seq = unreal.load_asset(f"{DIR}/LS_{name}")
+    unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(seq)
+    res = {}
+    for b in seq.get_spawnables() + seq.get_possessables():
+        t, sec = _rig_section(b)
+        if sec is None:
+            continue
+        chans = [c for c in sec.get_all_channels() if isinstance(c, unreal.MovieSceneScriptingFloatChannel) and len(c.get_keys()) >= 2]
+        # the channel that moves most between its first two keys (a flat pair cannot show a tangent change)
+        pick = max(chans, key=lambda c: abs(c.get_keys()[1].get_value() - c.get_keys()[0].get_value())) if chans else None
+        if pick is None:
+            break
+        k0, k1 = pick.get_keys()[0], pick.get_keys()[1]
+        f0 = k0.get_time(unreal.MovieSceneTimeUnit.DISPLAY_RATE).frame_number.value
+        f1 = k1.get_time(unreal.MovieSceneTimeUnit.DISPLAY_RATE).frame_number.value
+        tick = seq.get_tick_resolution()
+        rng = unreal.SequencerScriptingRange(has_start_value=True, has_end_value=True,
+                                             inclusive_start=int(f0 * tick.numerator / tick.denominator / 60),
+                                             exclusive_end=int((f1 + 1) * tick.numerator / tick.denominator / 60))
+        before = [round(v, 3) for v in pick.evaluate_keys(rng, unreal.FrameRate(240, 1))]
+        for k in (k0, k1):
+            k.set_interpolation_mode(unreal.RichCurveInterpMode.RCIM_CUBIC)
+            k.set_tangent_mode(unreal.RichCurveTangentMode.RCTM_USER)
+            k.set_tangent_weight_mode(unreal.RichCurveTangentWeightMode.RCTWM_WEIGHTED_BOTH)
+        k0.set_leave_tangent(0.0); k0.set_leave_tangent_weight(0.5)
+        k1.set_arrive_tangent(0.0); k1.set_arrive_tangent_weight(0.05)
+        after = [round(v, 3) for v in pick.evaluate_keys(rng, unreal.FrameRate(240, 1))]
+        res = {"channel": str(pick.channel_name), "frames": [f0, f1],
+               "readback": [k0.get_leave_tangent_weight(), k1.get_arrive_tangent_weight(), str(k1.get_tangent_mode())],
+               "curve_changed": before != after, "before": before, "after": after}
+        break
+    unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
+    if out:
+        json.dump(res, open(out, "w"), indent=1)
+    return json.dumps({k: v for k, v in res.items() if k not in ("before", "after")})
