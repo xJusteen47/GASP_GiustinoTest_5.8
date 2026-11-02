@@ -302,3 +302,6 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
 - Conflitti PR #24: tocca `__main__.py` (6 righe mie: comando `casc-*`), legge `approved` nello stesso formato di locks.py;
   quando #24 entra, `casc-diff` può lasciare il posto al suo `diff`. Nessun file in comune oltre `__main__.py`.
 - Costo stimato: Opus ~110 chiamate, contesto ~150k, circa $10-12; niente subagenti.
+- **Stomp = f23 intero (owner 23:16, "f23 andava bene")**: tolta l'eccezione dei piedi affiancati, gambe e caviglie
+  incrociate come f23 a 15/17/31 (31 con l'assestamento di 2 cm), lock esteso a [15, 17, 31]. Check invariati: tutto PASS
+  tranne legibility.
