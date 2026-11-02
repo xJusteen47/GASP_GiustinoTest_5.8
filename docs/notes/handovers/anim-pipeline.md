@@ -222,7 +222,8 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   dai numeri UFD. Scheda `overlord_dair_v4.json`: 0 posa iniziale quasi in piedi, ginocchio sx su, braccia aperte, mani
   aperte -> carica estrema al 5 (sua 15) -> carica tenuta e viva fino all'11 (piedi +8 cm, mani +8 cm, busto -6°, insieme)
   -> rilascio che inizia al 13 -> stomp al 14 -> tenuta fino al 30 -> recupero al 42. Gate: hitstop_snap 1,9 cm, contact_faf
-  PASS; FAIL legibility (ereditato), clearance (avambraccio dx nella testa -5,7 cm nella carica, avambracci incrociati -5)
-  e co_motion (braccia "incollate" 7-12 nella tenuta). Fermo dopo 2 tentativi. Domanda all'owner: il rilascio va
-  distribuito su 3-4 frame (11->14) o resta lo scatto sul frame di hitbox (regola attuale)?
+  PASS; FAIL legibility (ereditato) e clearance
+  (avambraccio dx nella testa -5,7 cm nella carica, avambracci incrociati -5: aperto per l'owner). Rilascio distribuito
+  11->14 come chiesto (15% al 12, 42% al 13, il 58% sul 14); co_motion ora PASS. Timing: d'ora in poi li dà l'owner con
+  la reference (il modello legge male i tempi dalle GIF).
   Output `overlord_dair_v4_lato.png`, `overlord_dair_v4_hitstop_vs_whiff.mp4`. Costo totale del thread circa $12-14.
