@@ -180,6 +180,7 @@ def _apply_manual(track, end, keys, backup=None):
     sec = track.add_section()
     sec.set_blend_type(_ADD)
     sec.set_range(0, end + 1)
+    sec.set_row_index(1)              # its own row under the card's section, so the owner sees and picks it
     by = {str(c.channel_name): c for c in sec.get_all_channels() if isinstance(c, unreal.MovieSceneScriptingFloatChannel)}
     n, missing = 0, []
     for ch, ks in keys.items():
