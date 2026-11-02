@@ -1,0 +1,26 @@
+{
+  "move": "jab_v11",
+  "class": "jab",
+  "anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV11",
+  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+  "fps": 60,
+  "timing_csv": "refs/ufd/MarioJab1_timing.csv",
+  "reference": "refs/mario_jab1",
+  "effector": "middle_01_l",
+  "_poses_note": "Retro-fitted card for the round-trip test: jab v11 was authored dense (v11_motion.py), so these are the window boundaries of its Mario curves (anim = round(G x 0.96)), not owner Step poses. New moves list the owner's poses.",
+  "poses": [
+    {"name": "guard", "frame": 0, "source": {"file": "jab_v11.casc", "frame": 0}},
+    {"name": "contact_in", "frame": 1, "source": null},
+    {"name": "contact", "frame": 2, "source": {"file": "jab_v11.casc", "frame": 2}},
+    {"name": "snap_back", "frame": 3, "source": null},
+    {"name": "chamber", "frame": 5, "source": null},
+    {"name": "recoil_peak", "frame": 9, "source": null},
+    {"name": "return", "frame": 12, "source": null},
+    {"name": "exit", "frame": 17, "source": null},
+    {"name": "faf", "frame": 18, "source": null},
+    {"name": "guard_tail", "frame": 37, "source": {"file": "jab_v11.casc", "frame": 0}}
+  ],
+  "spacing": {"startup": "arrive_1_2", "active": "hold_recoil", "recovery": "limb_led_recovery"},
+  "part_delays": {"chest": 0, "head": 1, "forearm": 0, "hand": 0},
+  "exemptions": [{"check": "balance", "frames": [1, 3], "why": "declared forward lunge into the punch (centre of mass up to 3.9 cm past the front foot)"}]
+}
