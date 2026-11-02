@@ -114,3 +114,21 @@ libero. Un checkpoint per thread, handover ≤30 righe, nessuna decisione nuova 
 Manuale del thread dair resta com'è: i punti 3 e 4 gli aggiungono memoria in git, lock e diff.
 
 Costo di questo thread: Fable, ~10 chiamate, contesto ~45k, circa $1.
+
+## 10. Follow-up (owner 22:43Z): perché la carica del dair si è allontanata dalla posa 15 di Cascadeur
+
+Causa (git delle schede overlord_dair, handover): la posa dell'owner è entrata UNA volta (v2, 8df94ff) come numeri nel
+blocco `author` e da lì è stata riscritta a mano senza riferimento: v2 mani +9-16 cm avanti per la clearance; v3 (936fe5b)
+poli dei gomiti 8-12 cm più stretti, mani 4-10 cm più indietro e 4 cm più basse ("sinergia"); v4 ha ereditato v3; 194c7d8
+le ha alzate di 8-10 cm, e3628b6 è tornata a v3. In ogni scheda `poses[].source` è `null` e il JSON della posa Cascadeur
+vive in `Saved/` (non in git): nessun check poteva confrontare, e `casc_to_author` riduce la posa a target IK (mano, polo,
+piede) che poi si editano come numeri qualsiasi. Lock e diff della PR #24 avrebbero fermato v3 solo se v2 fosse stata
+approvata; mancano tre cose, da fare nel thread desktop (Opus medium, ~$3):
+1. **Pose dell'owner in git**: `cards/<kit>/refs/<move>_owner_poses.json` (export di `pose.get` per frame) e `source:
+   {file, frame}` compilato nelle pose della scheda che vengono da lui.
+2. **Check `source_fidelity`** (bloccante): per ogni posa con `source`, `casc_to_author` rigenera i target e li confronta
+   con i campi `author` della scheda (mano/piede/polo ≤ 3 cm, busto/testa ≤ 5°, dita escluse); ogni scostamento voluto va
+   dichiarato come `edits` con `why`, mai riscrivendo i numeri. Così il diff mostra "scheda vs owner", non solo "vN vs vN-1".
+3. **Posa dell'owner come chiave diretta** (modo migliore, opzionale): importare lo Step FBX/posa come ossa sul rig e usarla
+   come chiave (`build` già campiona le pose da `source_anim`), lasciando ad `author` solo i frame non posati dall'owner.
+Ordine owner per il dair: carica = Cascadeur 15, rilascio = Cascadeur 23, entrambe approvate e bloccate (dita escluse).
