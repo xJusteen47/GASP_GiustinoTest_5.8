@@ -135,3 +135,21 @@ after one checkpoint.
 - Gates: build on Succeeded, headless on 980/0; off (SpinDrill+Piggyback disabled) build Succeeded, headless 933/0; no ensure; .uproject
   restored. Not touched: hold-to-crouch.
 - Cost: one Opus thread, ~150k context, 3 UBT builds, 7 editor runs (~45 min machine): medium-high; stopped at the context rule.
+
+## HC-01 (laptop, 2026-11-02): hold-to-crouch on IA_Crouch: NOT done, needs a BP graph edit in a live editor
+
+- Result: no asset changed (IA_Crouch reverted to its committed state). Nothing to build or test: no C++ touched, suites unchanged by construction.
+- Findings: IA_Crouch (`/Game/Input/IA_Crouch`) has one trigger, `InputTriggerPressed`; IMC_Sandbox mappings (L1, C, gamepad B) have no triggers of their
+  own. Referenced by `/Game/Blueprints/SandboxCharacter_Mover` (event "Crouch Input (toggle)") and `SandboxCharacter_CMC` (event on IA_Crouch), and by
+  `/Game/GASNPPTest/Input/IC_GASNPP_Test` (the combat `Input.Button.Crouch`, so the dive "crouch held" reads the same action).
+- Tried and rejected: IA triggers [Pressed, Released] so the existing toggle fires on press and on release (zero BP edits). It breaks the combat path:
+  `NpAbilitySystemComponent` (lines ~280-325) maps the action state to Started/Triggered/Completed, and Pressed+Released never gives a clean
+  Started..Completed hold, so the dive's "crouch held" would break. Also a ledge auto-uncrouch while held would re-crouch on release.
+- Right fix (needs the live editor, Rider/unreal-mcp connected; the headless Python has no graph node API): IA_Crouch trigger -> `InputTriggerDown`
+  (or none: the default gives Started/Triggered/Completed); in both BPs replace the Triggered toggle by Started -> Set WantsToCrouch true and
+  Completed -> Set WantsToCrouch false (in Mover also keep the existing "uncrouch when falling" path). Keyboard C and gamepad B keep working
+  (mappings untouched). Then run the headless suites and check in PIE: hold L1 = crouched, release = stands.
+- Decision made: did not ship the zero-BP variant. Tell the owner before editing the two shared BPs (binary, no merge).
+- Environment: unreal-mcp / Rider ue_health were not connected (no running editor); headless runs via Saved/SD05/run_editor.ps1 with
+  `QUIT_EDITOR` (not `quit`: my first driver hung 10 min). Scripts in Saved/HC/.
+- Cost: one Sonnet thread, ~45k context, 4 short headless editor runs plus one 10 min hang. Low.
