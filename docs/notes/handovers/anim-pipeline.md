@@ -252,3 +252,25 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   -> dopo il rebuild mano dx +10 cm al 25, clearance 73 -> 68 coppie sotto i 2 cm; tolto il ritocco torna identico. Livello
   vuoto = clip identica. Attenzione: braccia in FK su questo rig (i controlli IK della mano non fanno nulla). Il bridge a
   volte fallisce la prima chiamata dopo un salvataggio: si rilancia. Livello del dair lasciato vuoto. Costo extra ~$3.
+
+## Rifinitura pipeline (2026-11-02 sera, PR #24, thread Fable + subagenti Sonnet/Opus, nessun editor)
+- Piano approvato dall'owner: `docs/notes/reviews/anim-pipeline-refinement-plan-2026-11-02.md`. Fatti i punti senza editor;
+  brief `handovers/anim-pipeline-refinement-brief.md`. Tutto provato SOLO con dati sintetici (`Tools/AnimPipeline/tests/`,
+  21 test, `python3 tests/test_*.py`, niente pytest).
+- **Lock pose approvate** (`animpipe/locks.py`): blocco `approved` nella scheda (frames x parti, ref, why); `load()` ferma
+  build/check/review se le pose `author` bloccate differiscono dal ref/snapshot (0,5 cm / 1°); `--unlock part@frame`;
+  `animpipe approve` (scrive `cards/<kit>/approved/<move>.json`); `animpipe diff` (cambiato / chiavi nuove-tolte / intatto
+  (lock) / manuale, 5 righe, json completo). Dair v4: lock gambe 13-14 già applicato. Guardia 2 (chiavi del rig dopo il
+  build vs snapshot) NON fatta: serve l'editor.
+- **Regole README come check** (`checks.py`, opt-in via `rules` nella scheda): frame_0, knees_front, feet_side_by_side,
+  villain_hand. Soglie da tarare sul desktop (dair v4 e jab v12 devono passare). `animpipe card` stampa "timing: owner/CSV".
+- **Legibility `strike`** (`legibility.py`): limb/hiders/pose_checks dal move sheet (`sheet_extra.strike`); bug: la sheet
+  era cercata per nome take, ora anche per asset, quindi dair e ftilt erano giudicati come pugni. Da verificare sul desktop:
+  dair v4 e ftilt v3.1 come calci (la regola B può segnalare le braccia conserte), jab v12 invariato; il take `_src` resta pugno.
+- **Proporzioni** (`casc_to_author.py`): target mani/piedi riscalati sulle catene UE (`--no-rescale` = vecchio). Da provare
+  sulla posa 15 dell'owner con clearance. **Pollice** (`author.py` chiave `thumb`: "along" default, "open"): owner deve scegliere.
+- **Capture dello strato Manuale** (`animpipe capture`): copia `Saved/.../<move>_manual_layer.json` in
+  `cards/<kit>/manual/<move>.json` + blocco `manual`; build fallback sequenza -> Saved -> copia nella scheda; diff avvisa se
+  una posa cambia sotto un ritocco manuale. Da verificare: nomi reali dei canali (`hand_r_fk_ctrl.Rotation.X` assunto).
+- Prossimo thread (desktop, Opus medium): `animpipe check` su dair v4 e jab v12 con `rules` e `strike`, taratura soglie,
+  prova capture + build senza sequenza, guardia 2. Costo di questo thread: Fable ~25 chiamate (~$2) + subagenti ~360k token (~$15).
