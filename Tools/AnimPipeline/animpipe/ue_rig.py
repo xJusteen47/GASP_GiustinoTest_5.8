@@ -107,6 +107,113 @@ def roundtrip(anim, rig, name, fps_num=60, fps_den=1, keep_frames=None, out=None
     return json.dumps(res)
 
 
+def _ctrl(chan):
+    return str(chan.channel_name).split(".")[0]
+
+
+def _frame(k):
+    return k.get_time(unreal.MovieSceneTimeUnit.DISPLAY_RATE).frame_number.value
+
+
+# spacing profile -> (leave weight of the segment's first key, arrive weight of its last key) as a fraction of the
+# segment; None = smart auto tangents (no stop at the key). Weighted segments get flat tangents: their keys are pose hits.
+PROFILE_W = {"charge_long": (0.6, 0.12), "arrive_1_2": (0.12, 0.6), "hold_recoil": (1 / 3, 1 / 3), "limb_led_recovery": None}
+# card part -> control name fragments (CR_Mannequin_Body); a part lags by shifting its interior keys later
+PIN_TOL = {"Location": 1.0, "Rotation": 2.0}                    # cm, degrees
+PART_CTRLS = {"chest": ("spine_05", "chest", "spine_04"), "head": ("head", "neck"), "forearm": ("lowerarm",), "hand": ("hand_",)}
+
+
+def _seg_profile(segments, f):
+    """Profile of the card segment that contains frame f (a <= f < b); shifted keys take the profile where they land."""
+    for a, b, p in segments:
+        if a <= f < b:
+            return p
+    return None
+
+
+def build(spec):
+    """Card -> keys on the body rig -> AnimSequence. spec: {name, source_anim, rig, fps_num, fps_den, poses (anim frames),
+    segments [[f0, f1, profile]], part_delays {part: frames}, planted [control names], out}.
+    The poses are sampled from source_anim (an existing move now; the owner's Step FBX once imported): bake the anim onto
+    the rig, keep only the pose frames, shape the in-betweens with tangents per spacing profile, lag the parts, pin the
+    planted IK feet to their first key. No per-frame keys are ever written."""
+    rate = unreal.FrameRate(int(spec["fps_num"]), int(spec["fps_den"]))
+    name = spec["name"]
+    seq, binding, end, length = _sequence(spec["source_anim"], name, rate)
+    ok = unreal.ControlRigSequencerLibrary.bake_to_control_rig(_world(), seq, _rig_class(spec["rig"]), unreal.AnimSeqExportOption(),
+                                                                False, 0.001, binding)
+    track, sec = _rig_section(binding)
+    res = {"bake_ok": bool(ok), "end": end, "length": length}
+    if sec is None:
+        return json.dumps(res)
+    keep = set(int(f) for f in spec["poses"])
+    segs = spec["segments"]
+    chans = [c for c in sec.get_all_channels() if isinstance(c, unreal.MovieSceneScriptingFloatChannel)]
+    res["controls"] = sorted(set(_ctrl(c) for c in chans))
+    res["keys_before"] = sum(len(c.get_keys()) for c in chans)
+    planted = tuple(spec.get("planted", []))
+    delays = {p: int(d) for p, d in spec.get("part_delays", {}).items() if int(d)}
+    shifted, pinned = {}, set()
+    last = max(keep)
+    for c in chans:
+        # edit the baked keys in place (remove / set_value / set_time): re-adding keys with add_key lost the values
+        for k in list(c.get_keys()):
+            if _frame(k) not in keep:
+                c.remove_key(k)
+        keys = c.get_keys()
+        if not keys:
+            continue
+        ctrl = _ctrl(c)
+        if ctrl in planted:           # planted foot: snap small drift back to the first key (a real step is left alone)
+            v0 = keys[0].get_value()
+            tol = PIN_TOL["Location" if ".Location." in str(c.channel_name) else "Rotation"]
+            for k in keys[1:]:
+                if 0 < abs(k.get_value() - v0) <= tol:
+                    k.set_value(v0); pinned.add(ctrl)
+        for part, d in delays.items():
+            if any(s in ctrl for s in PART_CTRLS.get(part, ())):
+                for k in reversed(keys[1:-1]):                        # back to front: a key never lands on an unmoved one
+                    f = _frame(k)
+                    if f + d < last:
+                        k.set_time(unreal.FrameNumber(f + d), 0.0, unreal.MovieSceneTimeUnit.DISPLAY_RATE)
+                    else:
+                        c.remove_key(k)
+                shifted.setdefault(part, set()).add(ctrl)
+                break
+        keys = c.get_keys()
+        frames = [_frame(k) for k in keys]
+        for i, k in enumerate(keys):
+            out_w = PROFILE_W.get(_seg_profile(segs, frames[i])) if i + 1 < len(keys) else None
+            in_w = PROFILE_W.get(_seg_profile(segs, frames[i - 1])) if i else None
+            k.set_interpolation_mode(unreal.RichCurveInterpMode.RCIM_CUBIC)
+            if out_w is None and in_w is None:
+                k.set_tangent_mode(unreal.RichCurveTangentMode.RCTM_SMART_AUTO)
+                continue
+            k.set_tangent_mode(unreal.RichCurveTangentMode.RCTM_USER)
+            k.set_tangent_weight_mode(unreal.RichCurveTangentWeightMode.RCTWM_WEIGHTED_BOTH)
+            k.set_arrive_tangent(0.0); k.set_leave_tangent(0.0)
+            spf = rate.denominator / rate.numerator                    # seconds per display frame
+            if out_w is not None:
+                k.set_leave_tangent_weight(out_w[0] * (frames[i + 1] - frames[i]) * spf)
+            if in_w is not None:
+                k.set_arrive_tangent_weight(in_w[1] * (frames[i] - frames[i - 1]) * spf)
+    res.update({"keys_after": sum(len(c.get_keys()) for c in chans), "pinned": sorted(pinned),
+                "shifted": {p: sorted(v) for p, v in shifted.items()}})
+    skel = unreal.load_asset(spec["source_anim"]).get_editor_property("skeleton")
+    fac = unreal.AnimSequenceFactory(); fac.set_editor_property("target_skeleton", skel)
+    dst = _new(f"AS_{name}", unreal.AnimSequence, fac)
+    eo = unreal.AnimSeqExportOption()
+    eo.set_editor_property("use_custom_frame_rate", True); eo.set_editor_property("custom_frame_rate", rate)
+    res["export_ok"] = bool(unreal.ControlRigSequencerLibrary.export_anim_sequence_from_sequencer(dst, eo, binding, False))
+    res["out_asset"] = dst.get_path_name().split(".")[0]
+    res["out_length"] = dst.get_play_length()
+    EAL.save_asset(seq.get_path_name().split(".")[0]); EAL.save_asset(res["out_asset"])
+    unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
+    if spec.get("out"):
+        json.dump(res, open(spec["out"], "w"), indent=1)
+    return json.dumps({k: v for k, v in res.items() if k not in ("controls", "shifted")})
+
+
 def tangent_probe(name, out=None):
     """On the rig track of LS_<name>: pick hand_l_ctrl Location X (or the first float channel with 2+ keys), set user cubic
     tangents and weights on two keys, read them back and sample the curve at 240 fps between them."""

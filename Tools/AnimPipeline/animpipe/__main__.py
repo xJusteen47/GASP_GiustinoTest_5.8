@@ -3,6 +3,9 @@
     python -m animpipe roundtrip <AnimAsset> <name> [--fps=60|62.5] [--keys=card.json|0,3,9]   rig bake round trip
     python -m animpipe tangent <name>                                                             tangent probe on LS_<name>
     python -m animpipe card <card.json>                                                           validate a move card
+    python -m animpipe build <card.json>        card -> sparse keys + tangents on the rig -> AnimSequence at the card fps
+    python -m animpipe trails <card.json>       motion trails, one composite image (3 views, build over source)
+    python -m animpipe check <card.json>        the three check classes on the card's built anim (animpipe/checks.py)
 
 Every command writes its full result to Saved/AnimPipeline/animpipe/<name>_<cmd>.json and prints at most 5 lines."""
 import json, os, sys, time
@@ -81,6 +84,39 @@ def roundtrip(anim, name, opt):
     print(path)
 
 
+def build(path):
+    from animpipe.card import load, key_frames, segments
+    c = load(path)
+    name = c["anim"].rsplit("/", 1)[1][3:]
+    num, den = (125, 2) if str(c["fps"]) == "62.5" else (int(c["fps"]), 1)
+    os.makedirs(OUT, exist_ok=True)
+    spec = {"name": name, "source_anim": c["source_anim"], "rig": c.get("rig", RIG), "fps_num": num, "fps_den": den,
+            "poses": key_frames(c), "segments": segments(c), "part_delays": c.get("part_delays", {}),
+            "planted": c.get("planted", []), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
+    t0 = time.time()
+    r = _ue_py("build", spec=spec)
+    if r.get("export_ok"):
+        n = int(round(r["length"] * num / den))
+        frames = list(range(n + 1))
+        A, B = _sample(c["source_anim"], frames), _sample(r["out_asset"], frames)
+        per, at_pose = {}, {}
+        for f in frames:
+            for bn in BONES:
+                d = sum((x - y) ** 2 for x, y in zip(A[f][bn], B[f][bn])) ** 0.5
+                per[bn] = max(per.get(bn, 0.0), d)
+                if f in spec["poses"]:
+                    at_pose[bn] = max(at_pose.get(bn, 0.0), d)
+        r.update({"vs_source_cm": {k: round(v, 2) for k, v in per.items()}, "at_poses_cm": {k: round(v, 2) for k, v in at_pose.items()}})
+    r["sec"] = round(time.time() - t0, 1)
+    path = os.path.join(OUT, f"{c['move']}_build.json")
+    json.dump(r, open(path, "w"), indent=1)
+    worst = max(r.get("vs_source_cm", {"-": -1}).items(), key=lambda kv: kv[1])
+    wpose = max(r.get("at_poses_cm", {"-": -1}).items(), key=lambda kv: kv[1])
+    print(f"build {c['move']}: bake {r.get('bake_ok')} export {r.get('export_ok')} keys {r.get('keys_before')}->{r.get('keys_after')} in {r['sec']} s")
+    print(f"vs source: worst {worst[1]} cm ({worst[0]}); at the poses {wpose[1]} cm ({wpose[0]}) [MEASURE]")
+    print(path)
+
+
 def main():
     cmd, args = sys.argv[1], [a for a in sys.argv[2:] if not a.startswith("--")]
     opt = dict((a[2:].split("=", 1) + [""])[:2] for a in sys.argv[2:] if a.startswith("--"))
@@ -90,6 +126,14 @@ def main():
         os.makedirs(OUT, exist_ok=True)
         r = _ue_py("tangent_probe", name=args[0], out=os.path.join(OUT, f"{args[0]}_tangent.json").replace("\\", "/"))
         print(json.dumps(r)[:400])
+    elif cmd == "build":
+        build(args[0])
+    elif cmd == "check":
+        from animpipe.checks import run
+        run(args[0])
+    elif cmd == "trails":
+        from animpipe.trails import run
+        run(args[0])
     elif cmd == "card":
         from animpipe.card import load, key_frames, windows
         c = load(args[0])
