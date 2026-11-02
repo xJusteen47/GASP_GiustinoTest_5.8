@@ -45,9 +45,12 @@ def _bones(take):
     return [{b: np.array(v[:3]) for b, v in d[str(i)].items()} for i in range(len(d))]
 
 
-def _contact_faf(F, w, eff):
-    """Block: the effector's forward reach (Y relative to the pelvis) peaks inside the contact window; clip >= FAF."""
-    reach = [f[eff][1] - f["pelvis"][1] for f in F]
+def _contact_faf(F, w, eff, axis="y"):
+    """Block: the effector's reach relative to the pelvis peaks inside the contact window; clip >= FAF. The reach is
+    forward (Y) by default; a card's "reach_axis" picks another direction, e.g. "-z" for a downward stomp."""
+    sign, k = (-1, axis[1:]) if axis.startswith("-") else (1, axis)
+    i = "xyz".index(k)
+    reach = [sign * (f[eff][i] - f["pelvis"][i]) for f in F]
     peak = int(np.argmax(reach))
     c0, c1 = w["active"]
     ok = c0 <= peak <= c1 and len(F) - 1 >= w["faf"]
@@ -67,14 +70,15 @@ def _planted(F, exempt, sides="lr"):
     return not bad, f"max drift {max(worst.values())} cm (tol {PLANT_TOL})" + (f", over: {bad}" if bad else "")
 
 
-def _fists(F, hands):
+def _fists(F, hands, skip=()):
+    """Block: hands closed. Frames in the card's "fists" exemption (an open hand the owner asked for) are skipped."""
     worst = {}
     for s in hands:
         chain = [f"hand_{s}", f"middle_metacarpal_{s}", f"middle_01_{s}", f"middle_02_{s}", f"middle_03_{s}"]
         r = []
-        for f in F:
+        for i, f in enumerate(F):
             ln = sum(np.linalg.norm(f[a] - f[b]) for a, b in zip(chain, chain[1:]))
-            r.append(np.linalg.norm(f[chain[-1]] - f[chain[0]]) / ln)
+            r.append(0.0 if i in skip else np.linalg.norm(f[chain[-1]] - f[chain[0]]) / ln)
         worst[s] = (round(float(max(r)), 2), int(np.argmax(r)))
     bad = {s: v for s, v in worst.items() if v[0] > FIST_MAX}
     return not bad, "openness (ratio, frame) " + ", ".join(f"{s} {v[0]}@{v[1]}" for s, v in worst.items()) + f" (max {FIST_MAX})"
@@ -139,10 +143,10 @@ def run(path, src=False):
     res["block"]["clearance"] = (rc == 0 and "FAIL" not in _verdict_line(ln), _verdict_line(ln))
     F = _bones(take)
     eff = c.get("effector", "middle_01_l")
-    res["block"]["contact_faf"] = _contact_faf(F, w, eff)
+    res["block"]["contact_faf"] = _contact_faf(F, w, eff, c.get("reach_axis", "y"))
     sides = "".join(s for s in "lr" if f"foot_{s}_ik_ctrl" in c.get("planted", ["foot_l_ik_ctrl", "foot_r_ik_ctrl"]))
     res["block"]["planted_feet"] = _planted(F, exempt.get("planted", set()), sides)
-    res["block"]["fists"] = _fists(F, c.get("fists", ["l", "r"]))
+    res["block"]["fists"] = _fists(F, c.get("fists", ["l", "r"]), exempt.get("fists", set()))
     res["block"]["hitstop_snap"] = _hitstop_snap(F, w, float(c.get("hitstop_max_cm", HITSTOP_MAX)), exempt.get("hitstop_snap", set()))
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),

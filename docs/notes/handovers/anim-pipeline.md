@@ -159,3 +159,25 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   import in `/Game/AnimPipeline/Pilot/` (`import_take.py`); nuova scheda `overlord_dair_v2.json` con `source_anim` = quella take,
   `source: {file, frame}` per posa e niente blocco `author`; poi `build`, `check`, `ingame_judge.py ... 8 --at=14`.
 - Costo stimato: Opus ~75 chiamate, contesto ~110k, circa $7-9; niente subagenti (render e build erano 3 comandi).
+
+## Checkpoint 10 (2026-11-02): down air v2 dalle pose Cascadeur dell'owner
+- Pose owner lette dal file aperto (`autosave2-Down air.casc`, copia in `Saved/AnimPipeline/overlord_dair_owner.casc`; numeri in
+  `Saved/AnimPipeline/dair_v2/owner_poses_cascadeur.json`). **15 = carica** (palla compatta, ginocchia al petto, avambracci
+  incrociati davanti alla faccia), **23 = stomp** (corpo dritto verticale un po' indietro, gambe unite, braccia conserte alte).
+  Nessun giro dopo l'hit nelle sue pose. Mani nel suo file = default: ignorate.
+- Nuovo `casc_to_author.py <pose.json> <frame>...`: punti di controllo Cascadeur -> pose del blocco `author` (rotazioni bacino e
+  busto da terne di riferimento, mani/piedi nei frame di author.py, poli = gomito/ginocchio spinti fuori). Riusabile per ogni
+  posa dell'owner. `author.py`: chiave `fingers: [0..1,0,0]` = **mano villain** (aperta, dita dritte e unite), blend per frame.
+  `checks.py`: `reach_axis` nella scheda (dair: `-z`), esenzione `fists` per frame.
+- Scheda `cards/overlord/overlord_dair_v2.json`: tempi Ganondorf (owner conferma). Sua 15 -> anim 12 (+ tenuta 13 compressa,
+  mano villain 8-13), sua 23 -> anim 14 (tutta l'estensione SUL primo frame di hitbox), punte dei piedi -45 ("troppo è giusto").
+  Build `AS_OverlordDAirV2_Build`, sorgente `AS_Pilot_OverlordDAir_V2`.
+- Check: 6/7 blocchi PASS (contact_faf, fists, hitstop_snap 3,3 cm, ossa, clearance stampa PASS); legibility FAIL ereditato
+  (controlli da pugno su un calcio). Clearance dopo 2 tentativi: avambraccio dx nella testa -5 cm al 13; contatti delle braccia
+  conserte (mano sul braccio opposto -4/-5, avambracci -5) restano. Per staccarli ho spinto le mani in avanti di 9-16 cm al 12:
+  **nella vista laterale le braccia al 12 sembrano tese in avanti**, meno fedeli alla sua 15. Decisione chiesta all'owner.
+- Output: `overlord_dair_v2_pose_owner_15_23.png`, `overlord_dair_v2_lato.png` (composito lato in gioco),
+  `overlord_dair_v2_hitstop_vs_whiff.mp4`. Non fatto: compositi fronte/3-4 in gioco (budget); `animpipe poses` va in errore
+  (ncols 0 con --take/--over), da sistemare.
+- Lezioni: il server script Cascadeur va avviato dall'owner; la finestra minimizzata blocca i render (`ui.restore_window()`).
+- Costo stimato: Opus ~75 chiamate, contesto ~100k, circa $7-9; niente subagenti (ogni build/render era un comando).

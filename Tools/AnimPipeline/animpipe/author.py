@@ -18,7 +18,9 @@ pose (all optional; missing keys = idle):
            PELVIS frame (offset from the pelvis bone, axes turned with the pelvis)
 Axes are Unreal component space: X = character's left, Y = forward, Z = up. A rotation [rx, ry, rz] is a rotation vector
 in degrees about those axes (+rx tips up -> back, i.e. a forward lean is negative; it swings a hanging limb forward).
-Fingers keep the template's fists. Limbs are two-bone IK in the plane of the pole; each bone's roll comes from mapping its
+  fingers  [open, 0, 0]   0 = the template's fists (default), 1 = the overlord "villain hand": open and flat, fingers
+           straight and pressed together (joints 01-03 straightened, metacarpals as the template); blended per frame.
+Fingers keep the template's fists unless `fingers` opens them. Limbs are two-bone IK in the plane of the pole; each bone's roll comes from mapping its
 idle (aim, hinge) frame onto the new one, so elbows and knees keep their hinge.
 """
 import json, math, os, subprocess, sys
@@ -101,6 +103,14 @@ def base():
     return P, R, loc_t, loc_r
 
 
+def _slerp_m(a, b, t):
+    qa, qb = m2q(a), m2q(b)
+    if np.dot(qa, qb) < 0:
+        qb = -qb
+    q = qa * (1 - t) + qb * t
+    return q2m(q / np.linalg.norm(q))
+
+
 def _frame(aim, hinge):
     a = aim / np.linalg.norm(aim); h = hinge - a * np.dot(hinge, a); h /= np.linalg.norm(h)
     return np.column_stack([a, h, np.cross(a, h)])
@@ -151,9 +161,15 @@ class Poser:
                 fk(f"{t}_{s}")
             for t in ("lowerarm_twist_01", "lowerarm_twist_02"):
                 fk(f"{t}_{s}")
+            fo = float(np.clip((pose.get("fingers") or [0])[0], 0, 1))
             for fg in ("index", "middle", "ring", "pinky"):
                 for j in ("metacarpal", "01", "02", "03"):
-                    fk(f"{fg}_{j}_{s}")
+                    b = f"{fg}_{j}_{s}"
+                    if fo > 0 and j != "metacarpal":
+                        keep = self.lr[b]; self.lr[b] = _slerp_m(keep, np.eye(3), fo)
+                        fk(b); self.lr[b] = keep
+                    else:
+                        fk(b)
             fk(f"thigh_{s}")
             self._limb(P, R, f"thigh_{s}", f"calf_{s}", f"foot_{s}", pose.get(f"leg_{s}"), P["pelvis"], Dpel, "foot_rot")
             fk(f"ball_{s}")
