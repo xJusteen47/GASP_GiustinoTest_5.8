@@ -50,3 +50,21 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
   match's `FGSTN_MountRules`). (5) The committed .uproject does not list GSTNPiggyback (owner's call). (6) The G0-G4 "exactly one rollback"
   wording of `scenario_mount_refused` is now a recorded count bounded 1-4. (7) The intermittent latch check above.
 - Next: M7-02 (generic GSTNLink commit: a relationship filter in the interact probe), then G6 after the predicted rider exit decision.
+
+## M7-02 (laptop, 2026-11-02): generic GSTNLink commit, relationship filter on interact offers (option B)
+
+- Commits on feature/gas-npp-5.8: 4031ea5 "GSTNLink: relationship filter on interact offers", 6301009 "M7: the mount offer applies to allies
+  only", then this docs commit. Deltas: docs/notes/m7-doc-deltas.md (G5, GSTNLink changes, option B built).
+- `FGSTN_LinkInteractOfferDef::Relationships` (empty = every relationship: existing offers unchanged; `AppliesTo`); `FGSTN_LinkInteractOffer`
+  carries it; `FGSTN_LinkInteractProvider::FindAcceptedOffer` computes the candidate's relationship with `UGSTN_RelationshipResolver::DefaultRule`
+  on the two teams and skips offers for other relationships before their rules (refusal `Team`); the code-registered grab offer lists Enemy and
+  Neutral; alternatives keep the offer's relationships; the mount lists Ally. Not from the match rules: the probe has no rules asset (a custom
+  resolver of the match is not consulted). The grab/latch team rule of d1ecd6a stays (belt and braces, and it covers the hit path).
+- Test: `GSTNLink.GAS.Interact.RelationshipFilter`. Counts (`Saved/m7-g5`): `headless-m702-on.log` 1233/0, `headless-m702-off.log` 1218/0, no
+  ensure; builds `build-m702-on.out`, `build-m702-off.out` "Result: Succeeded". Harness 0 %: `mount-listen-0pct-m702.log` 5/5;
+  `link-listen-0pct-m702.log` 18/19 (`latch_big_enemy_client_latches_client`: one unforced reconcile during the walk), rerun
+  `link-listen-0pct-m702-rerun.log`: client_latches_client PASS, host_latches_client FAIL ("at most one correction per hit in the attack window":
+  5 counter steps).
+- OPEN for the lead and the spin thread: `latch_big_enemy_host_latches_client` fails that attack-window check in 3 of 5 runs since the rebase
+  onto the spin work (2c3ff00), with or without this commit, and passed in every run before it (G2, G5 pre-rebase). The latched enemy is linked,
+  so the probe never runs for it; suspect the merged D6/D7 combat seams (re-hit interval). GSTNLink is now frozen for D9/D10.

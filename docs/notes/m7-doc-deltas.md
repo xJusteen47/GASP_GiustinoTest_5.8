@@ -181,7 +181,7 @@ forced bit (413-416).
   `DA_LinkType_Latch_Test` GSTNLink's `UGSTN_LinkRule_Team` (EnemiesOnly) as their SECOND rule (the harness edits the type's own rule as
   `rules[0]`); GSTNLink's README says a grab-like type should list a team rule. SUITE_LINK at 0 % is the check that grabs and latches of enemies
   are unchanged. OPEN (option B, not built): the probe could also skip relationships the match rules make unhittable, so a type without a team rule
-  cannot shadow a lower offer.
+  cannot shadow a lower offer. **Built in M7-02** as data, not from the match rules (the probe has no rules asset): `FGSTN_LinkInteractOfferDef::Relationships` (empty = every relationship, so existing offers are unchanged), the relationship from `UGSTN_RelationshipResolver::DefaultRule` on the two teams (a custom resolver of the match is not consulted); GSTNLink registers its grab offer for Enemy and Neutral, the mount type lists Ally. Test `GSTNLink.GAS.Interact.RelationshipFilter`.
 
 ### S3 (spike report section S3)
 
