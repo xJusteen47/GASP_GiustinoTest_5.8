@@ -928,3 +928,8 @@ NEXT: D9+D10 after M7 G2 is pushed.
 The five spin-drill commits rebased locally from 2d871d2 onto origin/feature/gas-npp-5.8 61a9ce9 (M7 G2 + HANDOVER 76), then onto 94e5d43 (M7 G4, its HANDOVER 77; this entry renumbered to 78, M7 G5 takes 79); only conflicts: append-only in this file (both kept, so 76 and 77 sit before 71-75). G4 adds only the GSTNPiggyback plugin and docs, no file this branch touches. Not pushed yet: replacing the old commits on claude/project-thread-vfuzsj needs a force push, which the session may not do; the plan is a plain fast-forward push of this local branch to origin/feature/gas-npp-5.8 once the owner says yes (the thread branch then stays at the pre-rebase 8f8ab0e, superseded). The rebase's autostash put the local .uproject back with CRLF (hash A1FB6E2A91B5, same content); restored from Saved/D4/uproject.local.bak to E48D6E45DC87. .mcp.json went through the same autostash (content unchanged, line endings may differ).
 BUILD: Saved/D4/build_rebase_1.out "Result: Succeeded" (GSTNSpinDrill enabled with the LF needle). TESTS: Saved/D4/headless-rebase.log, RunTests GSTNInput+GSTNCombat+GSTNSpinDrill+GSTNDefence+GSTNLink+GSTNParts: found 943, 943 Success / 0 Fail, 46 GSTNSpinDrill entries.
 OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
+
+## Per-thread handovers (from 2026-11-02)
+- Spin and drill: docs/notes/handovers/spin-drill.md (SD-01 onward).
+- M7 piggyback: docs/notes/handovers/m7-piggyback.md (M7 creates it with its next handover).
+- Animation pipeline: docs/notes/handovers/anim-pipeline.md.
