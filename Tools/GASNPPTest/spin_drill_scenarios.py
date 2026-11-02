@@ -17,6 +17,7 @@
 # changes). No shared Blueprint is edited. The stick rotation is driven through IA_Move like a pad: 9 positions 35 ms apart (a 360 in ~0.32 s,
 # inside the 30-frame window of the Spin condition).
 import math
+import re
 import time
 
 import unreal
@@ -100,6 +101,65 @@ def drill(wi, key):
 def drill_text(wi, key):
     return Lib.get_shown_drill_text(actor(wi, key))
 
+NO_FRAGMENT = (0, -1, 0, 0, -1, 0)
+
+
+def read(wi, key):
+    """(phase, phase start frame, air spins used, low gravity until, latch frame, latch hits) of the pawn `key` as world `wi` shows it; NO_FRAGMENT without one"""
+    d = drill(wi, key)
+    if d is None:
+        return NO_FRAGMENT
+    m = re.search(r'latch (-?\d+) seat -?\d+ max -?\d+ hits (\d+)', drill_text(wi, key) or '')
+    return tuple(d) + ((int(m.group(1)), int(m.group(2))) if m else (-1, 0))
+
+
+class _Spy:
+    """Per-world sampler of the pawn `key` (SD-06). The authority and the other clients show a spin, a dive or a latch 100-250 ms after the predicting
+    client (60/15 ms lag + input buffer), so a check that reads every world at one instant misses it. Every editor tick it records read() on every
+    world; a check asks 'first seen on world wi in [t0, t1]' (sighted) and the scenarios compare the frames the worlds report, not the instant."""
+
+    def __init__(self, run, key):
+        self.run, self.key, self.rows = run, key, []
+        self.handle = unreal.register_slate_post_tick_callback(self._tick)
+
+    def _tick(self, _dt):
+        try:
+            self.rows.append((self.run.now(), {wi: read(wi, self.key) for wi in range(len(g.worlds()))}))
+        except Exception:
+            pass
+
+    def stop(self):
+        if self.handle is not None:
+            unreal.unregister_slate_post_tick_callback(self.handle)
+            self.handle = None
+
+    def first(self, wi, pred, t0, t1):
+        return next((r[1][wi] for r in self.rows if t0 <= r[0] <= t1 and wi in r[1] and pred(r[1][wi])), None)
+
+    def sighted(self, pred, t0, t1):
+        """{world: first reading in [t0, t1] that satisfies pred, or None}"""
+        return {wi: self.first(wi, pred, t0, t1) for wi in range(len(g.worlds()))}
+
+    def never(self, pred, t0, t1, worlds=None):
+        """True when no reading of any (listed) world in [t0, t1] satisfies pred"""
+        return not any(pred(v) for r in self.rows if t0 <= r[0] <= t1 for wi, v in r[1].items() if worlds is None or wi in worlds)
+
+
+def _spy(run, key):
+    run.spy = _Spy(run, key)
+    return run.spy
+
+
+def _seen_all(run, pred, t0, t1, same_start=False, same_latch=False):
+    """(ok, details): every world has a reading satisfying pred in [t0, t1]; same_start / same_latch also want one phase start / latch frame across them"""
+    s = run.spy.sighted(pred, t0, t1)
+    ok = all(v is not None for v in s.values())
+    if ok and same_start:
+        ok = len({v[1] for v in s.values()}) == 1
+    if ok and same_latch:
+        ok = len({v[4] for v in s.values()}) == 1
+    return ok, s
+
 
 # ---- input -----------------------------------------------------------------------------------------------------------------------------------------
 def spin_steps(client, t, clockwise=True):
@@ -141,11 +201,15 @@ def on_ready():
 def _run(run, steps):
     # By hand (no batch): call on_ready() once in the running PIE and wait a second before the first scenario
     run.run(list(steps) if _kit_state['applied'] else [(0.05, _apply_kit)] + list(steps))
+    if getattr(run, 'spy', None):
+        run.spy.rows.clear()   # run.run restarted the clock: readings from before it carry the old time base
 
 
 # ---- scenarios ---------------------------------------------------------------------------------------------------------------------------------------
 def _finish(run, name):
     def step():
+        if getattr(run, 'spy', None):
+            run.spy.stop()
         _last['verdict'] = all(ok for ok, _, _ in run.results if ok is not None)
         _last['checks'] = list(run.results)
         unreal.log(f"SPIN {name}: {'PASS' if _last['verdict'] else 'FAIL'}")
@@ -160,6 +224,7 @@ def scenario_spin_ground_hits_ring(client=1, victim=2):
     key, vkey = g.key_of_player(client), g.key_of_player(victim)
     # The victim's authoritative copy is sampled too ('vic'): its Health is what the ring's hit changes
     run = g._Run('spin_ground_hits_ring', client, extra=[('vic', 0, vkey)])
+    _spy(run, key)
     marks = {}
 
     def mark(name):
@@ -178,11 +243,10 @@ def scenario_spin_ground_hits_ring(client=1, victim=2):
 
     spin, t_end = spin_steps(client, 0.6, clockwise=True)
     steps = [(0.2, place_victim), (0.5, mark('before'))] + spin + [
-        (t_end + 0.05, mark('spinning')),
-        (t_end + 0.05, run.at('the spinner shows the Spinning phase on every world', lambda: (
-            all((marks['spinning']['drill'][wi] or (0,))[0] == PHASE_SPINNING for wi in marks['spinning']['drill']), marks['spinning']['drill']))),
-        (t_end + 0.06, run.at('the phase start frame is the same on every world', lambda: (
-            len({(d or (0, -1))[1] for d in marks['spinning']['drill'].values()}) == 1, marks['spinning']['drill']))),
+        (t_end + 0.8, run.at('the spinner shows the Spinning phase on every world (first sighting in the spin window)', lambda: _seen_all(
+            run, _is_spin, t_end - 0.1, t_end + 0.75))),
+        (t_end + 0.8, run.at('the phase start frame is the same on every world', lambda: _seen_all(
+            run, _is_spin, t_end - 0.1, t_end + 0.75, same_start=True))),
         (t_end + 1.0, run.at('Combat.State.Spinning was held on the authority and on the predicting client', lambda: (
             run.saw_tag(TAG_SPINNING, 0.5, t_end + 1.0, 'srv') and run.saw_tag(TAG_SPINNING, 0.5, t_end + 1.0, 'cli'), ''))),
         (t_end + 1.0, mark('after')),
@@ -232,11 +296,13 @@ def scenario_air_spin_once_per_airtime(client=1):
     exercised here, the unit test GSTNSpinDrill.Core.Spin.HopAndRefresh pins it"""
     run = g._Run('air_spin_once_per_airtime', client)
     key = g.key_of_player(client)
+    _spy(run, key)
     seen = {}
 
-    def phase_at(name):
+    def first_spin(name, t0, t1, used):
+        # The authority shows the spin up to 250 ms after the client: first sighting in a window, with the air spins used the spin should leave
         def f():
-            seen[name] = drill(0, key)
+            seen[name] = run.spy.first(0, lambda r: r[0] == PHASE_SPINNING and r[2] == used, t0, t1)
             return name, seen[name]
         return f
 
@@ -244,13 +310,18 @@ def scenario_air_spin_once_per_airtime(client=1):
     second, t2 = spin_steps(client, t1 + 0.1, clockwise=False)
     ground, t3 = spin_steps(client, 2.6, clockwise=True)
     again, t4 = spin_steps(client, 3.85, clockwise=True)
-    steps = jump_steps(client, 0.3) + first + [(t1 + 0.05, phase_at('first'))] + second + [(t2 + 0.05, phase_at('second'))] + ground + [
-        (t3 + 0.05, phase_at('ground'))] + jump_steps(client, 3.7) + again + [(t4 + 0.05, phase_at('again')),
-        (t4 + 0.1, run.at('the first spin in the air is the air spin', lambda: (seen['first'] and seen['first'][0] == PHASE_SPINNING and seen['first'][2] == 1, seen))),
-        (t4 + 0.1, run.at('the second spin in the same airtime started nothing new', lambda: (
-            not seen['second'] or seen['second'][1] == seen['first'][1] or seen['second'][0] != PHASE_SPINNING, seen))),
-        (t4 + 0.1, run.at('on the ground the spin works and nothing is spent', lambda: (seen['ground'] and seen['ground'][0] == PHASE_SPINNING and seen['ground'][2] == 0, seen))),
-        (t4 + 0.1, run.at('a new jump allows one air spin again', lambda: (seen['again'] and seen['again'][0] == PHASE_SPINNING and seen['again'][2] == 1, seen))),
+    def spin_starts(t0, t1):
+        # distinct phase start frames of spins the authority showed in the window: the second rotation must not add one
+        return {r[1] for _, row in run.spy.rows if t0 <= _ <= t1 for r in [row[0]] if r[0] == PHASE_SPINNING}
+
+    steps = jump_steps(client, 0.3) + first + [(t1 + 0.7, first_spin('first', t1 - 0.2, t1 + 0.6, 1))] + second + ground + [
+        (t3 + 0.7, first_spin('ground', t3 - 0.2, t3 + 0.6, 0))] + jump_steps(client, 3.7) + again + [
+        (t4 + 0.7, first_spin('again', t4 - 0.2, t4 + 0.6, 1)),
+        (t4 + 0.75, run.at('the first spin in the air is the air spin', lambda: (seen['first'] is not None, seen))),
+        (t4 + 0.75, run.at('the second spin in the same airtime started nothing new', lambda: (
+            seen['first'] is not None and spin_starts(t1 - 0.2, t3 - 0.3) == {seen['first'][1]}, sorted(spin_starts(t1 - 0.2, t3 - 0.3))))),
+        (t4 + 0.75, run.at('on the ground the spin works and nothing is spent', lambda: (seen['ground'] is not None, seen))),
+        (t4 + 0.75, run.at('a new jump allows one air spin again', lambda: (seen['again'] is not None, seen))),
         (t4 + 1.2, run.finish()), (t4 + 1.25, _finish(run, 'air_spin_once_per_airtime'))]
     _run(run, steps)
     return 'running'
@@ -262,13 +333,13 @@ def scenario_spin_opposite_cancel(client=1):
     client has no rollback from it, and a counter-clockwise rotation with no spin running is an ordinary spin again"""
     run = g._Run('spin_opposite_cancel', client)
     key = g.key_of_player(client)
+    _spy(run, key)
     seen = {}
 
     def phase_at(name):
         def f():
-            seen[name] = {wi: drill(wi, key) for wi in range(len(g.worlds()))}
             seen[name + '_rb'] = g.rollbacks(client)
-            return name, seen[name]
+            return name, seen[name + '_rb']
         return f
 
     def held_seconds(t0, t1, side):
@@ -279,15 +350,14 @@ def scenario_spin_opposite_cancel(client=1):
     # The second rotation starts right away: 9 steps of 35 ms end ~0.32 s later, past CancelFromFrame (6 frames, 0.1 s) of the first spin
     cancel, t2 = spin_steps(client, t1 + 0.02, clockwise=False)
     plain, t3 = spin_steps(client, t2 + 1.2, clockwise=False)
-    steps = [(0.4, phase_at('before'))] + spin + cancel + [(t2 + 0.15, phase_at('cancelled'))] + plain + [(t3 + 0.05, phase_at('plain')),
+    steps = [(0.4, phase_at('before'))] + spin + cancel + [(t2 + 0.8, phase_at('cancelled'))] + plain + [
         (t3 + 0.1, run.at('the spin was held for less than its natural length on the authority and the client', lambda: (
             0.0 < held_seconds(t1 - 0.4, t2 + 0.5, 'srv') < 0.45 and 0.0 < held_seconds(t1 - 0.4, t2 + 0.5, 'cli') < 0.45,
             f"srv {held_seconds(t1 - 0.4, t2 + 0.5, 'srv'):.2f} s, cli {held_seconds(t1 - 0.4, t2 + 0.5, 'cli'):.2f} s"))),
         (t3 + 0.1, run.at('after the cancel no world shows a spin (the opposite rotation did not start one)', lambda: (
-            all((d or (0,))[0] != PHASE_SPINNING for d in seen['cancelled'].values()), seen['cancelled']))),
+            run.spy.never(_is_spin, t2 + 0.7, t2 + 1.1), 'no Spinning reading on any world in the window'))),
         (t3 + 0.1, run.at('no rollback on the spinner from the cancel', lambda: (seen['cancelled_rb'] - seen['before_rb'] == 0, f"{seen['before_rb']} -> {seen['cancelled_rb']}"))),
-        (t3 + 0.1, run.at('with no spin running the same rotation is a counter-clockwise spin', lambda: (
-            all((d or (0,))[0] == PHASE_SPINNING for d in seen['plain'].values()), seen['plain']))),
+        (t3 + 0.8, run.at('with no spin running the same rotation is a counter-clockwise spin', lambda: _seen_all(run, _is_spin, t3 - 0.1, t3 + 0.75))),
         (t3 + 1.0, run.finish()), (t3 + 1.05, _finish(run, 'spin_opposite_cancel'))]
     _run(run, steps)
     return 'running'
@@ -315,6 +385,7 @@ def scenario_drill_ground_lag(client=1):
     speed of 1800), reaches the ground, the lag phase follows (18 frames) and ends; no rollback on the diver from the dive"""
     run = g._Run('drill_ground_lag', client)
     key = g.key_of_player(client)
+    _spy(run, key)
     seen = {}
 
     def at(name):
@@ -329,9 +400,10 @@ def scenario_drill_ground_lag(client=1):
 
     spin, t1 = spin_steps(client, 0.4, clockwise=True)
     steps = [(0.3, at('before'))] + jump_steps(client, 0.3) + spin + [
-        (t1 + 0.05, crouch_hold(client)), (t1 + 0.07, crouch_tap(client)), (t1 + 0.15, at('diving')),
+        (t1 + 0.05, crouch_hold(client)), (t1 + 0.07, crouch_tap(client)),
         (t1 + 2.0, at('after')), (t1 + 2.0, crouch_release(client)),
-        (t1 + 2.05, run.at('every world showed the dive', lambda: (all((d or (0,))[0] == PHASE_DIVING for d in seen['diving'].values()), seen['diving']))),
+        (t1 + 2.05, run.at('every world showed the dive (first sighting in the dive window)', lambda: _seen_all(
+            run, lambda r: r[0] == PHASE_DIVING, t1, t1 + 1.5))),
         (t1 + 2.05, run.at('the dive gravity effect was on during the dive (authority and client)', lambda: (
             run.saw_tag(TAG_DIVE_GRAVITY, t1, t1 + 1.0, 'srv') and run.saw_tag(TAG_DIVE_GRAVITY, t1, t1 + 1.0, 'cli'), ''))),
         (t1 + 2.05, run.at('the plunge reached about the plunge speed', lambda: (
@@ -389,8 +461,6 @@ def scenario_drill_nondrillable_bounce(client=1, victim=2):
 # The diver jumps, air spins and dives with crouch held onto another player placed under it (players are drillable: no weight limit, spin-drill.md
 # 13b). The tip's hit forms the drill latch (Seating, then Boring while crouch is held); the exit is a pop on the release, the launch with a jump press
 # in the boost window, the launch when the target is gone, a detach when the driller is hit. Tuning defaults: seat 12 frames, a hit every 6, at most 90.
-import re
-
 PHASE_SEATING, PHASE_BORING, PHASE_LAUNCHING = 3, 4, 5
 LATCHED = (PHASE_SEATING, PHASE_BORING)
 DRILL_STEPS_PER_LATCH = 3   # driller client rollbacks allowed per latch (D10 stop condition: more than 3 corrections per latch)
@@ -399,9 +469,16 @@ LAUNCH_VZ = 1000.0          # the launch is 1400 cm/s along the surface normal, 
 
 def latch_info(wi, key):
     """(phase, latch frame, hits) of the pawn `key` as world `wi` shows it; (0, -1, 0) without a fragment"""
-    d = drill(wi, key)
-    m = re.search(r'latch (-?\d+) seat -?\d+ max -?\d+ hits (\d+)', drill_text(wi, key) or '')
-    return ((d or (0,))[0], int(m.group(1)) if m else -1, int(m.group(2)) if m else 0)
+    r = read(wi, key)
+    return r[0], r[4], r[5]
+
+
+def _is_spin(r):
+    return r[0] == PHASE_SPINNING
+
+
+def _is_latched(r):
+    return r[0] in LATCHED
 
 
 def _all_latched(seen):
@@ -422,6 +499,7 @@ class _DrillRig:
         self.key, self.vkey = g.key_of_player(client), g.key_of_player(victim)
         self.run = g._Run(name, client, extra=[('vic', 0, self.vkey)], judge_reconciles=judge_reconciles)
         self.seen = {}
+        _spy(self.run, self.key)
         spin, self.t1 = spin_steps(client, 0.55, clockwise=True)
         self.steps = [(0.1, self.immune(False))] + jump_steps(client, 0.3) + [(0.5, self.place_under), (0.52, self.mark('before'))] + spin + [
             (self.t1 + 0.03, crouch_hold(client)), (self.t1 + 0.05, crouch_tap(client)), (self.t1 + 0.45, self.mark('latched'))]
@@ -444,9 +522,10 @@ class _DrillRig:
             return name, self.seen[name]
         return f
 
-    def check_latched(self):
-        return self.run.at('the tip formed the drill latch: every world shows Seating or Boring with one latch frame', lambda: (
-            _all_latched(self.seen['latched']), self.seen['latched']))
+    def check_latched(self, t_exit):
+        """Every world showed Seating or Boring with one latch frame at some point in [t1, t_exit] (the worlds see it 100-250 ms apart)"""
+        return self.run.at('the tip formed the drill latch: every world shows Seating or Boring with one latch frame', lambda: _seen_all(
+            self.run, _is_latched, self.t1, t_exit, same_latch=True))
 
     def rollbacks(self, a, b, limit=DRILL_STEPS_PER_LATCH):
         return self.run.at(f'at most {limit} rollbacks on the driller client during the latch', lambda: (
@@ -467,7 +546,7 @@ def scenario_drill_latch_static_multi_hit(client=1, victim=2):
     run, t1 = rig.run, rig.t1
     steps = rig.steps + [
         (t1 + 1.1, rig.mark('bored')), (t1 + 1.12, crouch_release(client)), (t1 + 1.6, rig.mark('after')),
-        (t1 + 1.65, rig.check_latched()),
+        (t1 + 1.65, rig.check_latched(t1 + 1.1)),
         (t1 + 1.65, run.at('still latched after 1 s of crouch on every world', lambda: (_all_latched(rig.seen['bored']), rig.seen['bored']))),
         (t1 + 1.65, run.at('the bore landed at least three hits (authority)', lambda: (rig.seen['bored'][0][2] >= 3, rig.seen['bored']))),
         (t1 + 1.65, run.at("the target's Health dropped on the authority", lambda: (
@@ -487,7 +566,7 @@ def scenario_drill_release_early_pop(client=1, victim=2):
     t_rel = t1 + 0.5
     steps = rig.steps + [
         (t_rel, crouch_release(client)), (t_rel + 0.5, rig.mark('after')),
-        (t_rel + 0.55, rig.check_latched()),
+        (t_rel + 0.55, rig.check_latched(t_rel + 0.1)),
         (t_rel + 0.55, run.at('the release ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),
         (t_rel + 0.55, run.at('the pop: the driller rises after the release, under the launch speed (authority and client)', lambda: (
             all(150.0 < rig.max_vz(t_rel, t_rel + 0.4, side) < LAUNCH_VZ for side in ('srv', 'cli')),
@@ -505,7 +584,7 @@ def scenario_drill_launch_after_bore(client=1, victim=2):
     t_rel = t1 + 0.8
     steps = rig.steps + [
         (t_rel - 0.035, lambda: ('jump button', g.combat_tap(client, g.button_mask('Jump')))), (t_rel, crouch_release(client)), (t_rel + 0.6, rig.mark('after')),
-        (t_rel + 0.65, rig.check_latched()),
+        (t_rel + 0.65, rig.check_latched(t_rel + 0.1)),
         (t_rel + 0.65, run.at('the launch: the driller leaves at about the launch speed (authority and client)', lambda: (
             all(rig.max_vz(t_rel - 0.05, t_rel + 0.4, side) > LAUNCH_VZ for side in ('srv', 'cli')),
             f"max vz srv {rig.max_vz(t_rel - 0.05, t_rel + 0.4, 'srv'):.0f}, cli {rig.max_vz(t_rel - 0.05, t_rel + 0.4, 'cli'):.0f}"))),
@@ -538,7 +617,7 @@ def scenario_drill_target_destroyed(client=1, victim=2):
 
     steps = rig.steps + [
         (t_ko, zone), (t_ko + 0.6, rig.mark('after')), (t_ko + 0.62, clear),
-        (t_ko + 0.65, rig.check_latched()),
+        (t_ko + 0.65, rig.check_latched(t_ko + 0.1)),
         (t_ko + 0.65, run.at('the latch ended on every world after the KO', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),
         (t_ko + 0.65, run.at('target gone: the exit is the launch (authority and client)', lambda: (
             all(rig.max_vz(t_ko, t_ko + 0.5, side) > LAUNCH_VZ for side in ('srv', 'cli')),
@@ -569,7 +648,7 @@ def scenario_drill_latch_moving_enemy(client=1, victim=2):
     steps = rig.steps + [
         (t1 + 0.5, where('walk_start')), (t1 + 0.5, lambda: ('walk', g.hold(victim, 'move', (0.0, 1.0, 0.0)))),
         (t1 + 1.3, rig.mark('walked')), (t1 + 1.3, where('walk_end')), (t1 + 1.3, lambda: ('stop', g.release(victim, 'move'))),
-        (t1 + 1.35, rig.check_latched()),
+        (t1 + 1.35, rig.check_latched(t1 + 1.3)),
         (t1 + 1.35, run.at('still latched after the walk on every world', lambda: (_all_latched(rig.seen['walked']), rig.seen['walked']))),
         (t1 + 1.35, run.at('the target walked and the driller rode it (authority)', walked)),
         (t1 + 1.35, rig.rollbacks('latched', 'walked'))]
@@ -601,7 +680,7 @@ def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
     steps = rig.steps + [
         (t_hit, place_hitter), (t_hit + 0.03, lambda: ('attack', g.combat_tap(hitter, g.button_mask('Attack')))),
         (t_hit + 0.7, rig.mark('after')), (t_hit + 0.7, driller_hp),
-        (t_hit + 0.75, rig.check_latched()),
+        (t_hit + 0.75, rig.check_latched(t_hit + 0.1)),
         (t_hit + 0.75, run.at('the hit ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),
         (t_hit + 0.75, run.at("the driller's Health dropped on the authority", lambda: (
             hp.get('before') is not None and hp.get('after') is not None and hp['after'] < hp['before'] - 1.0, hp))),

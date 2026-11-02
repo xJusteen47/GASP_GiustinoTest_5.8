@@ -165,3 +165,23 @@ after one checkpoint.
 - Changed shared binaries: Content/Input/IA_Crouch, Content/Blueprints/SandboxCharacter_{Mover,CMC}.uasset. Backups: Saved/Backups/GAS/IA_Crouch.pre-hold.uasset; BPs via git.
 - Tip: the live editor with Rider connected has `unreal.BlueprintGraphEditor` / `BlueprintGraphPinLibrary` (list nodes, rewire pins, compile).
 - Cost: ~35k more context.
+
+## SD-06 (laptop, 2026-11-02): per-world sampler in the spin harness; sighting checks pass, real findings behind them (STOPPED)
+
+- Fix (Python only, `Tools/GASNPPTest/spin_drill_scenarios.py`): `_Spy` samples `read()` (phase, start frame, air spins used, low-gravity until, latch frame,
+  hits) on every world each editor tick; checks are "first seen on world wi within [t0, t1]" (`_seen_all`, `first`, `never`). Used by the spin, air-once,
+  opposite-cancel, dive and all six latch scenarios (`_DrillRig.check_latched(t_exit)`). `_finish` stops the spy. No C++ touched, so no rebuild:
+  build gates are those of SD-05 (on Succeeded / off Succeeded); other headless suites unchanged by construction (not rerun).
+- Run 7 (Saved/Logs/sd-05/spin-listen-0pct.log, editor log Saved/SD05/editor-sd06a.log): still 0/12, but the timing problem is gone: spin_ground_hits_ring
+  now PASSES the spinning-on-every-world, same-start-frame (330), tag-held, spin-ended and no-rollback checks. One attempt used of two.
+- What fails now is real game behaviour or content, not the read timing (stopped, not widening scope):
+  1. Ring damage never lands: victim Health 50 -> 50 in spin_ground_hits_ring (victim placed 80 cm away on the authority).
+  2. Air hop: max vz 402 < 440; Combat.State.SpinLowGravity never seen (spin_air_hop_low_gravity). Air spin is spent (used=1) and given back.
+  3. Dive never starts: no Diving phase on any world, max down speed 0 (drill_ground_lag). Hence no latch in 5 of 6 latch scenarios;
+     moving_enemy saw Seating on world 1 only (3, 354) and never on the authority.
+  4. spin_opposite_cancel: Spinning held 0.67 s srv / 0.86 s cli (natural 0.5 s: the cancel does not shorten it), 1 rollback; air_spin_once: ground
+     spin after landing not seen (window may be too early, check first).
+- Next: check whether 1-3 share a cause (the spin timeline ends "no longer named by the combat state", log line at the spin end; ring hit and tip hit
+  both depend on the timeline's hit steps). Start with the ring damage: probe the victim position/team/immunity and the spin's hit step on the authority
+  (Saved/SD05/probe.py). Then the dive start (crouch_hold/tap input vs the dive's start condition).
+- Cost: one Sonnet thread, ~60k context, 1 editor run (~6 min). Low.
