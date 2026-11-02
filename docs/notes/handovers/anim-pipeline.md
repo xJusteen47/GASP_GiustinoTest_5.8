@@ -279,3 +279,26 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
 - **Carica viva (owner 22:56)**: solo il 5 è la sua f15 così com'è (bloccato, `approved` ora solo [5]); il 12 = f15 più le
   differenze di tenuta di v4c (busto -6°, testa +4°, mani +4/+10 avanti e +7 su) e piedi +6 avanti/+6 su (il primo
   tentativo con i soli +4 di v4c dava co_motion FAIL, gambe ferme 7-12). Check: tutto PASS tranne legibility (ereditato).
+
+## Giro scheda ↔ Cascadeur a chiavi sparse (2026-11-03)
+- Owner: non riesce a lavorare con il livello additivo Manuale; vuole modificare in Cascadeur con le chiavi sparse.
+  Nuovo `animpipe/cascadeur.py` (`casc-export`, `casc-import`, `casc-revert`, `casc-diff`), `casc_ue.py` (export FBX via
+  bridge), `casc_prepare.py` (lato Cascadeur). Uso in `cards/README.md`. 8 test offline in `tests/test_casc_roundtrip.py`.
+- Import per parte (arm_x con clavicola, leg_x, trunk, head) confrontata con la rilettura di Cascadeur subito dopo
+  l'export (`--ref`): la differenza nuova-rilettura si applica alle ossa della scheda e poi si ricavano i campi `author`.
+  Così la distorsione propria del rig Cascadeur (rollio cosce/collo 5-11°) non entra nella scheda. Parti non toccate:
+  identiche byte per byte. Lock `approved` rispettati, snapshot in `cards/<kit>/history/` a ogni import.
+- Trappole Cascadeur (2026.2.3): `import_animation` di un FBX di Unreal dà una scena di 1 frame; serve
+  `import_animation_to_selected_objects` con tutti i Joint selezionati, e `FbxSettings.up_axis = Z` (sennò il personaggio
+  è sdraiato). `export_all_objects` esporta anche la mesh (UE crea una SkeletalMesh): usare `export_joints`. Le sezioni di
+  1 frame restano STEP (nessun intermedio, innocuo). Rileggendo in UE la radice ha la conversione di asse: il campionamento
+  la toglie. `MSYS_NO_PATHCONV=1` per i `--take=/Game/...` da Git Bash.
+- Prova sulla dair v4 (scheda di d3c5efa, non modificata): take UE = scheda (0 parti cambiate); rilettura Cascadeur vs
+  scheda max 0,84 cm (clavicola dx); giro senza modifiche: scheda identica, riesportazione dopo salvataggio = 0,00004 cm.
+  Giro con modifica (copia della scheda nello scratch): mano dx +10 cm su al 31 -> solo arm_r@31 cambiato, mano +10,01 cm,
+  residuo 0,06 cm, la clip cambia solo 18-36. Build in UE della scheda modificata non fatta (avrebbe sovrascritto la dair).
+- Pronto per l'owner: `Saved/AnimPipeline/casc/overlord_dair_v4.casc` (aperto in Cascadeur, chiavi 0/2/3/5/12/13/14/15/
+  17/31/37/42) e la rilettura `overlord_dair_v4_ref.json`. File di prova `*_test1/_edit1/_lying_test/_edittest/_base`: da buttare.
+- Conflitti PR #24: tocca `__main__.py` (6 righe mie: comando `casc-*`), legge `approved` nello stesso formato di locks.py;
+  quando #24 entra, `casc-diff` può lasciare il posto al suo `diff`. Nessun file in comune oltre `__main__.py`.
+- Costo stimato: Opus ~110 chiamate, contesto ~150k, circa $10-12; niente subagenti.

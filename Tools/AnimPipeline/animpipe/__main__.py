@@ -184,7 +184,7 @@ def main():
         print(r, os.path.join(OUT, f"{args[0]}_probe.json"))
     elif cmd.startswith("casc-"):
         from animpipe import cascadeur as K
-        {"casc-export": lambda: K.export_cmd(args[0]), "casc-import": lambda: K.import_cmd(args[0], opt),
+        {"casc-export": lambda: K.export_cmd(args[0], opt), "casc-import": lambda: K.import_cmd(args[0], opt),
          "casc-revert": lambda: K.revert(args[0], args[1] if len(args) > 1 else None),
          "casc-diff": lambda: K.diff(args[0], args[1])}[cmd]()
     elif cmd == "card":

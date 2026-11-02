@@ -29,3 +29,13 @@ def export_fbx(asset, path):
     ok = unreal.Exporter.run_asset_export_task(task)
     return json.dumps({"ok": bool(ok), "path": path, "frames": anim.get_editor_property("number_of_sampled_frames")
                        if hasattr(anim, "number_of_sampled_frames") else None, "length": anim.get_play_length()})
+
+
+def delete_assets(paths):
+    """Drop round-trip leftovers (only names this module made: /Game/AnimPipeline/Pilot/AS_Casc*)."""
+    done = {}
+    for p in paths:
+        if not p.startswith("/Game/AnimPipeline/Pilot/AS_Casc"):
+            done[p] = "refused"; continue
+        done[p] = bool(unreal.EditorAssetLibrary.delete_asset(p)) if unreal.EditorAssetLibrary.does_asset_exist(p) else "missing"
+    return json.dumps(done)

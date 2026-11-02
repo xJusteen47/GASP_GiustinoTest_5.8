@@ -188,9 +188,31 @@ def _card_path(p):
     return p if os.path.isabs(p) else os.path.join(C.TOOLS, p)
 
 
-def merge(c, bones, unlock=(), poser=None):
-    """New card (copy) with the Cascadeur bones merged in. bones = {frame(int): (P, R)} for Cascadeur's key frames.
-    Returns (card, report). Raises ValueError on a lock."""
+def target_bones(card, new, ref, parts):
+    """Card bones moved by what the owner changed in Cascadeur: for each changed part, the change new vs ref (both read
+    back from Cascadeur, relative to the part's parent) is applied to the card's bones. Cascadeur's own rig distortion
+    (the same in ref and new: thigh/neck roll, a straight leg kept a little short) cancels out. Unchanged parts keep the
+    card's relative bones and follow their parent."""
+    (Pc, Rc), (Pn, Rn), (Pr, Rr) = card, new, ref
+    P, R = {}, {}
+    for part in ("trunk", "head", "arm_l", "arm_r", "leg_l", "leg_r"):
+        par, bones = PARTS[part]
+        for bn in bones:
+            pc, rc = rel(Pc, Rc, bn, par)
+            if part in parts:
+                pn, rn = rel(Pn, Rn, bn, par); pr, rr = rel(Pr, Rr, bn, par)
+                pc, rc = pc + (pn - pr), rn @ rr.T @ rc
+            if par is None:
+                P[bn], R[bn] = pc, rc
+            else:
+                P[bn], R[bn] = P[par] + R[par] @ pc, R[par] @ rc
+    return P, R
+
+
+def merge(c, bones, unlock=(), poser=None, ref=None):
+    """New card (copy) with the Cascadeur bones merged in. bones = {frame(int): (P, R)} for Cascadeur's key frames;
+    ref = the same read back right after casc-export (no edit), every frame. Without ref the bones are compared with the
+    card itself (offline tests). Returns (card, report). Raises ValueError on a lock."""
     poser = poser or Poser()
     c = copy.deepcopy(c)
     au = c["author"]; poses = au["poses"]
@@ -202,24 +224,26 @@ def merge(c, bones, unlock=(), poser=None):
         is_new = str(f) not in poses
         old = poses.get(str(f)) or interp[f]
         Po, Ro = poser.solve(old)
+        Pr, Rr = ref[f] if ref and f in ref else (Po, Ro)
         changed = {}
         for part in PARTS:
-            cm, dg = part_delta(P, R, Po, Ro, part)
-            if is_new or cm > PART_CM or dg > PART_DEG:
+            cm, dg = part_delta(P, R, Pr, Rr, part)
+            if cm > PART_CM or dg > PART_DEG:
                 changed[part] = [round(cm, 2), round(dg, 2)]
         if not changed:
             continue
         for part in changed:
             if not is_new and locked(c, f, part) and f"{part}@{f}" not in unlock:
                 blocked.append(f"{part}@{f} ({changed[part][0]} cm, {changed[part][1]} deg)")
-        fitted = fit(poser, P, R, old)
+        Pt, Rt = target_bones((Po, Ro), (P, R), (Pr, Rr), changed) if ref else (P, R)
+        fitted = fit(poser, Pt, Rt, old)
         pose = copy.deepcopy(old)
         for part in changed:
             for k in FIELDS[part]:
                 if k in fitted:
                     pose[k] = fitted[k]
         Pn, _ = poser.solve(pose)
-        cm, b = residual(P, Pn)
+        cm, b = residual(Pt, Pn)
         rep["frames"][f] = {"parts": changed, "residual_cm": round(cm, 2), "worst_bone": b}
         if cm > FIT_CM:
             rep["flag"].append(f)
@@ -252,11 +276,22 @@ def write_card(path, c):
         fh.write("\n")
 
 
-def import_bones(card_path, bones, opt):
+def save_ref(path, bones):
+    json.dump({str(f): {b: [P[b].tolist(), R[b].reshape(-1).tolist()] for b in P} for f, (P, R) in bones.items()}, open(path, "w"))
+
+
+def load_ref(path):
+    if not os.path.exists(path):
+        return None
+    d = json.load(open(path))
+    return {int(f): ({b: np.array(v[0]) for b, v in fr.items()}, {b: np.array(v[1]).reshape(3, 3) for b, v in fr.items()}) for f, fr in d.items()}
+
+
+def import_bones(card_path, bones, opt, ref=None):
     path = _card_path(card_path)
     c = C.load(path)
     unlock = set(u for u in (opt.get("unlock") or "").split(",") if u)
-    new, rep = merge(c, bones, unlock)
+    new, rep = merge(c, bones, unlock, ref=ref)
     out = os.path.join(_out(), f"{c['move']}_casc_import.json")
     json.dump(rep, open(out, "w"), indent=1)
     ch = rep["frames"]
@@ -336,21 +371,30 @@ def _ue_py(entry, **kw):
     return json.loads(v)
 
 
-def export_cmd(card_path):
+RIG_SCENE = os.path.join(os.path.dirname(CASC_DIR), "jab_blockout.casc")   # a scene on Cascadeur's UEFN mannequin rig
+
+
+def export_cmd(card_path, opt=None):
+    """Card take -> FBX, and a fresh copy of the UEFN rig scene as <move>.casc for casc_prepare.py. An existing
+    <move>.casc may hold the owner's edits: refused unless --force (then it is kept as <move>_<stamp>.casc)."""
+    opt = opt or {}
     c = C.load(_card_path(card_path))
     os.makedirs(CASC_DIR, exist_ok=True)
     fbx = os.path.join(CASC_DIR, f"{c['move']}_take.fbx").replace("\\", "/")
+    casc = os.path.join(CASC_DIR, f"{c['move']}.casc").replace("\\", "/")
+    if os.path.exists(casc):
+        if "force" not in opt:
+            raise SystemExit(f"{casc} exists (owner edits?): import it first, or --force to keep it aside and start over")
+        shutil.move(casc, casc[:-5] + time.strftime("_%Y%m%d_%H%M%S") + ".casc")
+    shutil.copyfile(RIG_SCENE, casc)
     r = _ue_py("export_fbx", asset=c["source_anim"], path=fbx)
     keys = sorted(int(k) for k in c["author"]["poses"])
     n = int(c["author"]["frames"])
-    plan = {"card": card_path, "fbx": fbx, "casc": fbx.replace("_take.fbx", ".casc"), "frames": n, "keys": keys,
-            "delete": [f for f in range(n) if f not in keys], "ue": r}
+    plan = {"card": card_path, "fbx": fbx, "casc": casc, "casc_fbx": casc[:-5] + "_casc.fbx", "frames": n, "keys": keys, "ue": r}
     out = os.path.join(CASC_DIR, f"{c['move']}_export.json")
     json.dump(plan, open(out, "w"), indent=1)
-    print(f"casc-export {c['move']}: {c['source_anim']} -> {fbx} (ok {r.get('ok')}), keep keys {keys}")
-    print(f"Cascadeur: UEFN rig scene, import_animation {os.path.basename(fbx)}, delete keys {len(plan['delete'])} frames, "
-          f"bezier_clamped, save {os.path.basename(plan['casc'])}")
-    print(out)
+    print(f"casc-export {c['move']}: {c['source_anim']} -> {os.path.basename(fbx)} (ok {r.get('ok')}), keys {keys}")
+    print(f"next: open {casc} in Cascadeur, run casc_prepare.py with PLAN={out}, then casc-import --ref")
     return plan
 
 
@@ -359,15 +403,19 @@ def sample_take(asset, frames):
     out = {}
     for s0 in range(0, len(frames), 8):
         for _ in range(20):        # a source-control dialog after a save blocks the bridge for a few seconds
-            r = ue.call("sample_pose", {"assetPath": asset, "boneNames": SAMPLE_BONES, "frames": frames[s0:s0 + 8], "space": "component"})
+            r = ue.call("sample_pose", {"assetPath": asset, "boneNames": SAMPLE_BONES + ["root"], "frames": frames[s0:s0 + 8], "space": "component"})
             if not r.get("dialogBlocking"):
                 break
             time.sleep(3)
         if "samples" not in r:
             raise RuntimeError(f"sample_pose {asset}: {str(r)[:300]}")
         for s in r["samples"]:
-            out[int(s["frame"])] = bones_from_json({b["name"]: [b["location"][k] for k in "xyz"] + [b["rotation"][k] for k in ("pitch", "yaw", "roll")]
-                                                    for b in s["bones"]})
+            P, R = bones_from_json({b["name"]: [b["location"][k] for k in "xyz"] + [b["rotation"][k] for k in ("pitch", "yaw", "roll")]
+                                    for b in s["bones"]})
+            # Cascadeur's FBX comes in with the Y-up conversion on the root bone (roll -90): undo the root's rotation so
+            # the bones are in the same Z-up component space as the card (the root's position is not used by the card)
+            M = R.pop("root").T; P.pop("root")
+            out[int(s["frame"])] = ({b: M @ p for b, p in P.items()}, {b: M @ m for b, m in R.items()})
     return out
 
 
@@ -379,15 +427,28 @@ def import_cmd(card_path, opt):
         if opt.get("keys"):
             ks = {int(k) for k in opt["keys"].split(",")}
             bones = {f: v for f, v in bones.items() if f in ks}
+    elif opt.get("take"):          # an AnimSequence already in Unreal (baseline: the card's own source take)
+        keys = [int(k) for k in opt["keys"].split(",")] if opt.get("keys") else sorted(int(k) for k in c["author"]["poses"])
+        bones = sample_take(opt["take"], keys)
     else:
         import ue
-        fbx = opt.get("fbx") or os.path.join(CASC_DIR, f"{c['move']}_casc.fbx")
+        fbx = opt.get("fbx") or os.path.join(CASC_DIR, f"{c['move']}_casc.fbx")   # casc_prepare / the owner's export
         asset = f"AS_Casc_{c['move']}"
+        _ue_py("delete_assets", paths=[f"/Game/AnimPipeline/Pilot/{asset}"])     # the previous round's import
         r = ue.call("import_animation", {"filePath": fbx.replace("\\", "/"), "skeletonPath": "/Game/Characters/UEFN_Mannequin/Meshes/SK_UEFN_Mannequin",
                                          "packagePath": "/Game/AnimPipeline/Pilot", "name": asset, "removeRedundantKeys": False,
                                          "importSettings": {"animationLength": "FBXALIT_ExportedTime"}})
         if not r.get("success"):
             raise RuntimeError(f"import {fbx}: {str(r)[:300]}")
+        refp = os.path.join(CASC_DIR, f"{c['move']}_ref.json")
+        if "ref" in opt:            # right after casc-export, no edit: Cascadeur's own readback of the card, every frame
+            save_ref(refp, sample_take(f"/Game/AnimPipeline/Pilot/{asset}", list(range(int(c["author"]["frames"])))))
+            print(f"casc-import --ref {c['move']}: Cascadeur readback saved, card untouched: {refp}")
+            return None
         keys = [int(k) for k in opt["keys"].split(",")]
         bones = sample_take(f"/Game/AnimPipeline/Pilot/{asset}", keys)
+        ref = load_ref(refp)
+        if ref is None:
+            print("no --ref readback for this export: comparing with the card itself (Cascadeur's rig distortion shows up)")
+        return import_bones(card_path, bones, opt, ref)
     return import_bones(card_path, bones, opt)

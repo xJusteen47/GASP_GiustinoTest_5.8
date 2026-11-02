@@ -127,6 +127,30 @@ def test_lock_blocks_and_unlock_passes():
     assert 5 in rep["frames"]
 
 
+def test_ref_cancels_cascadeur_distortion():
+    """Cascadeur's readback (ref) twists the thighs and shortens a leg a little; the owner then raises the right hand.
+    Only the hand edit reaches the card, the distortion does not."""
+    c = _load()
+    card = _keys(c)
+    ref, new = {}, {}
+    for f, (P, R) in card.items():
+        P, R = copy.deepcopy(P), copy.deepcopy(R)
+        for s in "lr":
+            _rotate_subtree(P, R, f"thigh_{s}", rv([0, 0, 10]))      # rig distortion, same in ref and new
+        ref[f] = (P, R)
+        new[f] = (copy.deepcopy(P), copy.deepcopy(R))
+    P, R = new[31]
+    _rotate_subtree(P, R, "upperarm_r", rv([-20, 0, 0]))
+    out, rep = K.merge(c, new, poser=POSER, ref=ref)
+    assert list(rep["frames"]) == [31] and list(rep["frames"][31]["parts"]) == ["arm_r"], rep
+    Pa, _ = POSER.solve(c["author"]["poses"]["31"]); Pb, _ = POSER.solve(out["author"]["poses"]["31"])
+    Pr, _ = ref[31]; Pn, _ = new[31]
+    want = (Pn["hand_r"] - Pn["spine_05"]) - (Pr["hand_r"] - Pr["spine_05"])
+    got = (Pb["hand_r"] - Pb["spine_05"]) - (Pa["hand_r"] - Pa["spine_05"])
+    assert np.linalg.norm(want - got) < 1.0, (want, got)
+    assert np.linalg.norm(Pb["foot_l"] - Pa["foot_l"]) < 1e-6
+
+
 if __name__ == "__main__":
     for n, f in list(globals().items()):
         if n.startswith("test_"):

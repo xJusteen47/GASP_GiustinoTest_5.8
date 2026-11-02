@@ -40,3 +40,19 @@ section to key. Before rebuilding it reads that section's keys and puts them bac
 Card changes and layer tweaks stack: if a card change moves the same control, re-check the tweak.
 Do not undo past your own edits: the editor's Ctrl+Z history also holds the build ("Bake to Control Rig", "Add actor"),
 and undoing it removes the rig track from the open sequence. Delete a key to drop a tweak; if it happens, close without saving.
+
+## Editing in Cascadeur: sparse keys, back into the card
+The card stays the source of truth; Cascadeur is the editor (keys only on the card's key frames, never baked curves).
+1. `python -m animpipe casc-export <card>`: the card's take -> FBX, and a fresh `Saved/AnimPipeline/casc/<move>.casc` on the
+   UEFN rig (refused if one exists: it may hold your edits; `--force` keeps it aside).
+2. In Cascadeur (script server on): open that `.casc`, run `Tools/AnimPipeline/casc_prepare.py` with `PLAN=` the
+   `<move>_export.json` it printed. It imports onto the selected joints with up axis Z, deletes every non-key frame,
+   sets clamped bezier, saves and exports `<move>_casc.fbx`. Then `casc-import <card> --ref` (Cascadeur's readback, no edit).
+3. Edit in Cascadeur (move keys' poses, add keys), save, File > Export the joints (or export_joints) to `<move>_casc.fbx`.
+4. `casc-import <card> --keys=<Cascadeur key frames>`: only the parts you changed (arm_x, leg_x, trunk, head, vs the
+   readback, 0.5 cm / 1°) are rewritten; the rest stays byte for byte. A new key becomes a pose. Locked (`approved`)
+   parts stop it (`--unlock=part@frame`). Fingers and `wrist_out` stay the card's. Then `author`, `build`, `check`.
+5. `casc-revert <card>` puts back the card as before the last import (snapshots in `cards/<kit>/history/`);
+   `casc-diff <a> <b>` lists the key frames and parts that differ between two cards.
+The in-betweens you see in Cascadeur are its curves (a preview): the build keeps the card's spacing. A trunk bend that
+the card cannot hold (all in one vertebra; the card spreads it on five) is reported as residual > 1 cm, never hidden.
