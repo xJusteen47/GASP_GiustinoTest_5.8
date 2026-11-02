@@ -252,3 +252,11 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   -> dopo il rebuild mano dx +10 cm al 25, clearance 73 -> 68 coppie sotto i 2 cm; tolto il ritocco torna identico. Livello
   vuoto = clip identica. Attenzione: braccia in FK su questo rig (i controlli IK della mano non fanno nulla). Il bridge a
   volte fallisce la prima chiamata dopo un salvataggio: si rilancia. Livello del dair lasciato vuoto. Costo extra ~$3.
+- **Sequenza senza rig (stessa sera)**: una serie di Ctrl+Z dell'owner ha annullato "Esegui il baking nel Control Rig" della
+  build (la cronologia degli annullamenti comprende le operazioni degli script); chiuso senza salvare, il file su disco era
+  integro (traccia rig + Manuale). Avviso aggiunto in `cards/README.md`.
+- **Avambraccio dx nella testa (-6,0 cm, 3-13)**: non si risolve muovendo solo la testa. Prova in UE: testa +15° indietro
+  -> -5,8 (ritirata). Ricerca offline (Poser + forme di `clearance.py`, ~0,3-0,8 cm più pessimista di UE): testa che ruota
+  via dal gomito dx entra nell'avambraccio sx (meglio: -3,1 cm); gomiti più larghi (polo) o mani più avanti non aiutano.
+  La testa è chiusa tra i due gomiti: serve cambiare la posa delle braccia approvata (spalle/gomiti) oppure un'esenzione.
+  Lasciata all'owner: scheda e clip come le pose approvate. Costo extra ~$3.

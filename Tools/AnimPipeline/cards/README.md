@@ -38,3 +38,5 @@ section to key. Before rebuilding it reads that section's keys and puts them bac
    {keys: N}`. A copy of the layer is kept in `Saved/AnimPipeline/animpipe/<move>_manual_layer.json` (used only if the
    sequence is gone). To drop a tweak, delete its keys on the layer and rebuild.
 Card changes and layer tweaks stack: if a card change moves the same control, re-check the tweak.
+Do not undo past your own edits: the editor's Ctrl+Z history also holds the build ("Bake to Control Rig", "Add actor"),
+and undoing it removes the rig track from the open sequence. Delete a key to drop a tweak; if it happens, close without saving.
