@@ -32,3 +32,28 @@ Domande per l'owner:
 2. Ganondorf: braccio dietro ora vicino al corpo nel recupero e braccio sinistro aperto allo scatto (griglia `_ab`): ok?
 
 Costo stimato: Opus ~85 chiamate, contesto finale ~130k, circa $9-11; subagente Sonnet (A/B cieco) ~75k token, < $0,5.
+
+## Checkpoint 3 (2026-11-02): jab con guardia al mento e giudizio in gioco
+
+Decisioni owner applicate: 60 fps, round-trip 1 cm, stretch OFF + ossa 0,1 cm; 4a pugno dietro fermo al mento; 4b braccia Ganon OK.
+- **Jab rebuild** (`build cards/jab_v12.json`, 15 `edits` nella scheda, nessun frame a mano): chiavi 1/2/3/5/9 su
+  `upperarm_r_fk_ctrl` (gomito al posto del frame 0 nel riferimento del petto), `lowerarm_r_fk_ctrl` (pugno sotto la testa)
+  e `hand_r_fk_ctrl` (orientamento del frame 0 portato dal petto). Soluzioni dallo Jacobiano del rig (`fk_solve.py` per le
+  posizioni, sonde +10° su X/Y/Z per la mano). Bloccanti **6/6 PASS** (clearance minima 0,27 cm al frame 6, stretta ma ok).
+- Misure nel riferimento del petto (prima -> dopo): pugno dal mento 18-21 cm -> 0,6-3,6 cm; errore di orientamento ai frame
+  1-3 54° -> 9-11°. Il salto 0->1 in spazio componente (50°) ora è solo il petto che gira di 52° al contatto: la guardia
+  segue il busto, il pugno non gira più contro di esso. Griglia `sheets/jab_v12_poses.png` (build sopra sorgente).
+- **Giudizio in gioco** (`ingame_judge.py <card> <hitstop>`, nuovo): crea `AM_<nome>` accanto alla build, cattura ogni frame
+  dalla camera laterale Duel (el 12, 450 cm, FOV 55) e ripete il primo frame attivo per l'hitstop; mp4 60 fps + striscia in
+  `sheets/ingame/`. Non è PIE con l'abilità vera: hitstop ipotizzati 4 (jab) e 8 (ftilt), da tarare in combat.
+  - Jab: **verde**. Leggibile (braccio teso chiaro di lato, guardia chiusa visibile), forza dal busto + affondo + hitstop;
+    smoothness ok sulla striscia, motion_check FAIL ereditato (stesso della sorgente, non bloccante).
+  - Ganondorf ftilt: **verde con note**. Silhouette del calcio molto leggibile, peso sulla gamba d'appoggio, braccio sinistro
+    aperto non si legge come "triangolo" a 450 cm. Nota: dal frame 16 al 24 la gamba scende in un blocco solo (spaziatura
+    0,17 già segnalata) e il FAF a 37 chiude in una posa raccolta diversa dalla guardia del jab.
+- Montage `AM_JabV12_Build`, `AM_GanonFTiltV31_Build` in `/Game/AnimPipeline/Rig` (Content non versionato).
+- Editor: riaperto direttamente in `L_PilotCapture` (DefaultLevel risultava dirty all'avvio e non è stato toccato); l'indice
+  di ripristino autosave è stato spostato in `Saved/Autosaves_restore_bak/` (nessun autosave cancellato).
+
+Prossimo: hitstop e camera veri in PIE quando le abilità combat usano questi montage; spaziatura Ganon 16-24.
+Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.

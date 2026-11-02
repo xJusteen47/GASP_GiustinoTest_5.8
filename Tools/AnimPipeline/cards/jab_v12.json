@@ -78,12 +78,208 @@
    "why": "declared forward lunge into the punch"
   }
  ],
- "edits": [],
+ "edits": [
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    1
+   ],
+   "delta": [
+    0,
+    0.0,
+    28.5
+   ],
+   "why": "owner 4a: rear guard held at the chin; rear elbow keeps its frame-0 place in the chest frame (inside the torso), upper arm solved per key from the rig Jacobian"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    2
+   ],
+   "delta": [
+    0,
+    0.1,
+    28.4
+   ],
+   "why": "owner 4a: rear guard held at the chin; rear elbow keeps its frame-0 place in the chest frame (inside the torso), upper arm solved per key from the rig Jacobian"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    3
+   ],
+   "delta": [
+    0,
+    -0.2,
+    24.7
+   ],
+   "why": "owner 4a: rear guard held at the chin; rear elbow keeps its frame-0 place in the chest frame (inside the torso), upper arm solved per key from the rig Jacobian"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    5
+   ],
+   "delta": [
+    0,
+    0.5,
+    13.3
+   ],
+   "why": "owner 4a: rear guard held at the chin; rear elbow keeps its frame-0 place in the chest frame (inside the torso), upper arm solved per key from the rig Jacobian"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9
+   ],
+   "delta": [
+    0,
+    0.5,
+    10.1
+   ],
+   "why": "owner 4a: rear guard held at the chin; rear elbow keeps its frame-0 place in the chest frame (inside the torso), upper arm solved per key from the rig Jacobian"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    1
+   ],
+   "delta": [
+    0,
+    -24.0,
+    5.7
+   ],
+   "why": "owner 4a: rear fist held at the chin; forearm swings the fist back to its frame-0 place under the head (chest frame), solved per key from the rig Jacobian"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    2
+   ],
+   "delta": [
+    0,
+    -26.7,
+    6.8
+   ],
+   "why": "owner 4a: rear fist held at the chin; forearm swings the fist back to its frame-0 place under the head (chest frame), solved per key from the rig Jacobian"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    3
+   ],
+   "delta": [
+    0,
+    -28.3,
+    11.4
+   ],
+   "why": "owner 4a: rear fist held at the chin; forearm swings the fist back to its frame-0 place under the head (chest frame), solved per key from the rig Jacobian"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    5
+   ],
+   "delta": [
+    0,
+    -40.3,
+    13.4
+   ],
+   "why": "owner 4a: rear fist held at the chin; forearm swings the fist back to its frame-0 place under the head (chest frame), solved per key from the rig Jacobian"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9
+   ],
+   "delta": [
+    0,
+    -20.0,
+    12.4
+   ],
+   "why": "owner 4a: rear fist held at the chin; forearm swings the fist back to its frame-0 place under the head (chest frame), solved per key from the rig Jacobian"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    1
+   ],
+   "delta": [
+    75.9,
+    -3.4,
+    -13.9
+   ],
+   "why": "owner 4a: rear fist keeps its frame-0 orientation carried by the chest (no turn of the fist at contact); hand rotation solved per key from probe builds"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    2
+   ],
+   "delta": [
+    75.4,
+    -1.2,
+    -15.9
+   ],
+   "why": "owner 4a: rear fist keeps its frame-0 orientation carried by the chest (no turn of the fist at contact); hand rotation solved per key from probe builds"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    3
+   ],
+   "delta": [
+    66.6,
+    -2.6,
+    -18.8
+   ],
+   "why": "owner 4a: rear fist keeps its frame-0 orientation carried by the chest (no turn of the fist at contact); hand rotation solved per key from probe builds"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    5
+   ],
+   "delta": [
+    36.7,
+    0.5,
+    -11.6
+   ],
+   "why": "owner 4a: rear fist keeps its frame-0 orientation carried by the chest (no turn of the fist at contact); hand rotation solved per key from probe builds"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9
+   ],
+   "delta": [
+    37.0,
+    7.1,
+    -9.0
+   ],
+   "why": "owner 4a: rear fist keeps its frame-0 orientation carried by the chest (no turn of the fist at contact); hand rotation solved per key from probe builds"
+  }
+ ],
  "drop": [],
  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV12",
  "planted": [
   "foot_l_ik_ctrl",
   "foot_r_ik_ctrl"
  ],
- "_open": "rear fist snap at contact: two targeted tries (drop hand twist keys 1-3: 70 deg/frame, worse; drop hand + upper-arm twist: 36.5, unchanged). The 36 deg come from the rear arm swing in the 1-frame contact, not the twist: needs a pose decision (owner)."
+ "_open": "closed 2026-11-02 (owner 4a): rear guard held at the chin by the elbow/forearm/hand edits; the guard turns with the chest (52 deg chest turn at contact), the fist no longer turns against it."
 }
