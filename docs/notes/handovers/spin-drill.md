@@ -65,7 +65,7 @@ after one checkpoint.
 
 ## SD-03 (laptop, 2026-11-02): D9 part 2 and D10 (bore, launch, pop, per-latch anchor), latch flake per hit
 
-- Commits on feature/gas-npp-5.8: 2ebf25d "Spin and drill D9 part 2 and D10" + this one (handover, per-hit latch check). Deltas:
+- Commits on feature/gas-npp-5.8: c58d8cc "Spin and drill D9 part 2 and D10" + this one (handover, per-hit latch check). Deltas:
   spin-drill-doc-deltas.md "D9, part 2 and D10" (design vs built). Decisions 5 (drill type in code, Immunity.Drill until D12) and 6 applied.
 - Built: `FGSTN_BoreTrack` + `FGSTN_SpinTimelines::MakeBore`; `FGSTN_BoreTrackHook` (holds seat/bore frame, stamps crouch 0xD1);
   `UGSTN_GA_DrillBore` (forced at the seat's first frame, found by its track; `FGSTN_SpinDrillKitExtension::BoreAbility` adds it to the kit's
