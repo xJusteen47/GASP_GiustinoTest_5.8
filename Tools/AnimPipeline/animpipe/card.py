@@ -7,6 +7,7 @@ Schema (cards/<move>.json):
   faf_game     0-based game frame of FAF when the CSV ends before it (owner rule: "fai 19 se parti da 0")
   poses        [{name, frame (anim), source: {file, frame} (owner's .casc/FBX step pose) | null, spacing?}]: the only
                keyed frames; `spacing` overrides the phase profile for the segment that starts at this pose
+               ease_out (0-1, opt-in): a flat pose key followed by an unweighted segment eases out with this leave weight
   spacing      {phase: profile}: charge_long | arrive_1_2 | hold_recoil | limb_led_recovery
   part_delays  {chest, head, forearm, hand}: frames each part lags the pelvis
   exemptions   [{check, frames, why}]: declared, owner can override

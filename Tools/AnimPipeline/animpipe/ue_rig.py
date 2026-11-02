@@ -152,6 +152,9 @@ def build(spec):
         return json.dumps(res)
     keep = set(int(f) for f in spec["poses"])
     segs = spec["segments"]
+    # opt-in per pose (card `ease_out`): a flat key whose next segment has no weights leaves with this fraction of the
+    # segment as leave weight, so it eases out of the pose instead of leaving at full speed. Absent = old behaviour.
+    ease = {int(f): w for f, w in spec.get("ease_out", {}).items()}
     chans = [c for c in sec.get_all_channels() if isinstance(c, unreal.MovieSceneScriptingFloatChannel)]
     res["controls"] = sorted(set(_ctrl(c) for c in chans))
     res["keys_before"] = sum(len(c.get_keys()) for c in chans)
@@ -213,6 +216,8 @@ def build(spec):
             spf = rate.denominator / rate.numerator                    # seconds per display frame
             if out_w is not None:
                 k.set_leave_tangent_weight(out_w[0] * (frames[i + 1] - frames[i]) * spf)
+            elif frames[i] in ease and i + 1 < len(keys):
+                k.set_leave_tangent_weight(ease[frames[i]] * (frames[i + 1] - frames[i]) * spf)
             if in_w is not None:
                 k.set_arrive_tangent_weight(in_w[1] * (frames[i] - frames[i - 1]) * spf)
     res.update({"keys_after": sum(len(c.get_keys()) for c in chans), "pinned": sorted(pinned), "dropped": dropped, "edited": edited,

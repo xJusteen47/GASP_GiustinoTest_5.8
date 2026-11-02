@@ -43,7 +43,8 @@
     "file": "refs/owner_ganon_ftilt/3_active.png",
     "frame": 10
    },
-   "spacing": "limb_led_recovery"
+   "spacing": "limb_led_recovery",
+   "ease_out": 0.333
   },
   {
    "name": "hold_end",

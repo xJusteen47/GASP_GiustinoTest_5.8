@@ -85,3 +85,18 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
 - Anteprime in gioco (`ingame_judge.py`, hitstop 8 + whiff): `sheets/ingame/ganon_ftilt_v31_*.mp4` e composito
   `ganon_ftilt_v31_recovery_before_after.png` (prima whiff / dopo whiff / dopo hitstop, frame 10-27, vista laterale), nei project files.
 - Costo stimato: Opus ~40 chiamate, contesto ~75k, circa $4-5; niente subagenti. Editor lasciato aperto su L_PilotCapture.
+
+## Checkpoint 6 (2026-11-02): ease-out opt-in, Ganondorf tiene il calcio e poi cade
+- Decisione coordinatore (regola 6): ease-out come opzione per posa nella scheda, `ease_out` (0-1), default spento.
+  Motore (`ue_rig.py`): una chiave piatta seguita da un segmento senza pesi esce con peso `ease_out` x durata segmento.
+- Jab v12 ricostruito col nuovo motore: ossa identiche al riferimento (differenza massima 0,0), check 6/6 PASS.
+  Ricontrollo jab sulle ossa fresche (fix cache): 6/6 PASS, clearance minima 0,27 cm a f6, nessun risultato cambiato.
+  `motion_curves` del jab fallisce nel worktree feature solo perché manca il ref Mario (non versionato): misura, non bloccante.
+- Ganondorf: `ease_out: 0.333` sulla posa 10 (con `drop` a 20 e `limb_led_recovery` del checkpoint 5), 1 tentativo.
+  Piede sinistro cm/frame: tenuta 10-14 (0,3 / 0,9 / 1,7 / 2,7), caduta che accelera 15-20 (picco 14,3, prima 22 dopo
+  uno stop), rallenta all'appoggio 21-25 (14 / 10,8 / 7 / 7,3 / 5,4). Bloccanti 5/6 come prima (legibility ereditato;
+  contatore "gomito dietro la schiena" 15 frame, prima 12-13), planted 1,03 cm, vs sorgente 33,28 cm come prima.
+- Attenzione: il primo build del jab dopo i build Ganon è uscito rotto (mano a 103 cm); rifatto identico, era il bake e non
+  il codice (riprodotto senza la modifica: ok). Se `vs source` supera ~40 cm, rifai il build una volta.
+- Anteprime: `sheets/ingame/ganon_ftilt_v31_*.mp4` e composito `ganon_ftilt_v31_recovery_before_after.png`, nei project files.
+- Costo stimato checkpoint 5+6: Opus ~65 chiamate, contesto ~95k, circa $6-8; niente subagenti. Editor lasciato aperto.
