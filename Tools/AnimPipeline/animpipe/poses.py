@@ -39,6 +39,10 @@ def run(path, opt):
         sel = [int(x) for x in opt["frames"].split(",")]
     else:
         sel = [f for f, p in poses.items() if p.get("source") and str(p["source"].get("file", "")).endswith(".png")][:5]
+        if not sel:                              # --take/--over without reference stills: the card's own key poses, <= 6 spread out
+            ks = sorted(poses)
+            sel = [ks[round(i * (len(ks) - 1) / 5)] for i in range(6)] if len(ks) > 6 else ks
+            sel = sorted(set(sel))
     imgs = [poses.get(f, {}).get("source") for f in sel]
     has_img = any(s and str(s.get("file", "")).endswith(".png") for s in imgs)
     rows = 3 if has_img else 2

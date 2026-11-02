@@ -152,6 +152,22 @@
     37
    ],
    "why": "support foot pivots on the ball (v3.1 model PIVOT 16-45 deg): the ankle travels, the ball stays (ball drift reported)"
+  },
+  {
+   "check": "clearance",
+   "frames": [
+    25,
+    30,
+    31,
+    32,
+    33
+   ],
+   "pairs": [
+    "lowerarm_r|spine_03",
+    "lowerarm_r|spine_04",
+    "lowerarm_l|spine_03"
+   ],
+   "why": "accepted v3.1: the forearms sink into the torso as the arms come back across the body in the recovery (4.4 cm worst at 32, after the hit); known, not worth a pose change"
   }
  ],
  "edits": [

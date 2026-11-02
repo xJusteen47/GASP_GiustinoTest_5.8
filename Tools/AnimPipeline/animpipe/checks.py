@@ -125,9 +125,10 @@ def _hitstop_snap(F, w, lim, exempt, Q=None):
 # co_motion (owner 02/11, dair v2): through the startup the limbs move with the trunk as one motion; a limb glued to its
 # parent (arm to chest, leg to pelvis) while the body turns reads as a doll. Thresholds are a first guess: calibrate on
 # dair v2 (must FAIL: arms fixed on the chest 6-12) and dair v3 / jab v12 / ftilt v3.1 (must PASS) before trusting them.
+# Calibrated 02/11 on those four (thread A): v2 arm_r glued 6-8 while the body travels 5.5 cm; the accepted moves glue nothing for 3 steps.
 CO_LIMBS = {"arm_l": ("hand_l", "spine_05"), "arm_r": ("hand_r", "spine_05"), "leg_l": ("foot_l", "pelvis"), "leg_r": ("foot_r", "pelvis")}
 CO_FROZEN = 1.0      # cm/frame of the limb end in its parent's frame: below this the limb is "glued"
-CO_BODY = 3.0        # cm/frame of body motion (trunk turn at 30 cm, or another limb) that makes a glued limb a fault
+CO_BODY = 4.0        # cm the rest of the body travels (summed per step: trunk turn at 30 cm, or the fastest other limb) over a glued run
 CO_RUN = 3           # consecutive glued steps to flag
 
 
@@ -140,25 +141,24 @@ def _local(F, Q, f, end, parent):
 
 def _co_motion(F, Q, w, skip_limbs=(), exempt=()):
     """Block: in the startup (frame 0 to the first active frame) no limb stays glued to its parent (< CO_FROZEN cm/frame)
-    for CO_RUN or more steps while the rest of the body moves (> CO_BODY cm/frame). Card `co_motion_skip`: limbs held on
+    for CO_RUN or more steps while the rest of the body travels CO_BODY cm or more over that run. Card `co_motion_skip`: limbs held on
     purpose (jab guard fist at the chin = arm_r); planted legs are skipped by the caller; exemption frames `co_motion`."""
     end = min(w["active"][0], len(F) - 1)
     limbs = {k: v for k, v in CO_LIMBS.items() if k not in skip_limbs and v[0] in F[0] and v[1] in F[0]}
     sp = {k: [float(np.linalg.norm(_local(F, Q, f + 1, *v) - _local(F, Q, f, *v))) for f in range(end)] for k, v in limbs.items()}
     trunk = [max(_arc(Q[f]["pelvis"], Q[f + 1]["pelvis"], 30.0), _arc(Q[f]["spine_05"], Q[f + 1]["spine_05"], 30.0)) for f in range(end)]
+    body = {k: [max([trunk[f]] + [sp[o][f] for o in limbs if o != k]) for f in range(end)] for k in limbs}
     runs = []
     for k in limbs:
         run = []
-        for f in range(end):
-            body = max([trunk[f]] + [sp[o][f] for o in limbs if o != k])
-            if f not in exempt and sp[k][f] < CO_FROZEN and body > CO_BODY:
+        for f in range(end + 1):
+            if f < end and f not in exempt and sp[k][f] < CO_FROZEN:
                 run.append(f)
                 continue
-            if len(run) >= CO_RUN:
+            # a body that eases in moves little per step: the run is judged by what the body travels over all of it
+            if len(run) >= CO_RUN and sum(body[k][g] for g in run) >= CO_BODY:
                 runs.append((k, run[0], run[-1] + 1))
             run = []
-        if len(run) >= CO_RUN:
-            runs.append((k, run[0], run[-1] + 1))
     if not runs:
         return True, f"no limb glued >= {CO_RUN} frames in the startup 0-{end} (limbs {', '.join(limbs)})"
     return False, "glued while the body moves: " + ", ".join(f"{k} {a}-{b}" for k, a, b in runs)

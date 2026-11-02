@@ -201,3 +201,20 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   clearance finché non si esentano i contatti delle braccia conserte e si risolve l'avambraccio nella testa.
 - Prossimo: thread A (Sonnet, taratura + `animpipe review` + fix `animpipe poses`), poi C (proporzioni), poi B (legibility).
 - Costo stimato: Opus ~20 chiamate, contesto ~70k, circa $2-3; niente subagenti.
+
+## Thread A (2026-11-02): taratura dei check nuovi + `animpipe review`
+- Dati: solo cache `sheets/raw/*_legbones.json` e `clearance.json` già in `Saved/` (nessun editor, nessuna posa toccata).
+- `hitstop_snap`: invariato, già corretto. jab v12 7,4 cm, ftilt v3.1 9,8 cm (margine sottile sotto i 10), dair v3 1,4, **dair v2 27,3 (testa) FAIL**.
+- `co_motion`: la regola per passo non prendeva v2 (il corpo accelera piano: 0,5-3 cm/frame proprio dove le braccia sono ferme).
+  Ora una corsa di 3+ passi con arto < 1 cm/frame FAIL se il resto del corpo percorre >= 4 cm sulla corsa (`CO_FROZEN 1.0`, `CO_BODY 4.0`,
+  somma). Con 1,5 cm/frame l'ftilt dava falso positivo (braccio sx 0-3 mentre il piede sx fa il passo). Esito: v2 FAIL (arm_r 6-9),
+  jab v12, ftilt v3.1, dair v3 PASS. Taratura su 4 mosse sole: soglie provvisorie, rivedere con la prossima mossa accettata.
+- `clearance` (dati salvati): jab PASS; v2 FAIL (testa -5,1 + braccia conserte); ftilt aveva -4,4 cm avambraccio dx/busto in recupero
+  (32-33, dopo l'hit): esentato nella scheda con motivo (accettata dall'owner); dair v3: esentati i contatti delle braccia conserte
+  (frame 9-42, coppie elencate), restano FAIL solo avambraccio dx/mano sx/avambraccio sx **nella testa** (10-13, -5,6 cm al 13).
+  Nota: i dati di clearance dell'ftilt sono sotto il vecchio nome `ganon_ftilt_v31_check`, vanno rigenerati con `animpipe check`.
+- Nuovo `animpipe review <card> [--hitstop=8] [--at=] [--force]`: build + check + `ingame_judge` (hitstop, whiff, compare, strip);
+  niente render se un blocco fallisce. **Non provato end to end** (serve l'editor, non aperto: l'owner potrebbe usarlo).
+- Fix `animpipe poses` senza `--frames` e senza immagini: usa fino a 6 pose chiave della scheda (provato su dair v3 over v2).
+- Resta: legibility sul dair (thread B, FAIL atteso), eseguire un `animpipe check` completo dall'editor per confermare (clearance
+  e legibility vere), thread C (proporzioni). Costo: Sonnet ~30 chiamate, ~$1.5.

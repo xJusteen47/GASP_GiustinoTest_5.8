@@ -8,6 +8,8 @@
     python -m animpipe trails <card.json>       motion trails, one composite image (3 views, build over source)
     python -m animpipe poses <card.json> [--frames=] [--take=] [--over=]   pose checkpoint grid (one image)
     python -m animpipe check <card.json>        the three check classes on the card's built anim (animpipe/checks.py)
+    python -m animpipe review <card.json> [--hitstop=8] [--at=<active frame>] [--force]   build + check + in-game render, gated:
+                                                no render while a blocking check fails (--force renders anyway)
 
 Every command writes its full result to Saved/AnimPipeline/animpipe/<name>_<cmd>.json and prints at most 5 lines."""
 import json, os, sys, time
@@ -125,6 +127,31 @@ def build(path):
     print(path)
 
 
+def review(path, opt):
+    """build -> check -> ingame_judge (hitstop + whiff + compare + strip), one command. The render is only worth the owner's
+    time when the blocking checks are green or every FAIL is exempted in the card, so a FAIL stops it unless --force."""
+    import subprocess
+    from animpipe.card import load, windows
+    c = load(path)
+    build(path)
+    from animpipe.checks import run
+    run(path)
+    v = json.load(open(os.path.join(OUT, f"{c['move']}_check.json")))
+    if v["verdict"] != "PASS" and "force" not in opt:
+        bad = [k for k, x in v["block"].items() if not x["ok"]]
+        print(f"review {c['move']}: no render, blocking {', '.join(bad)} (fix or exempt with a reason in the card; --force renders anyway)")
+        return
+    at = opt.get("at") or str(windows(c)["anim"]["active"][0])
+    env = dict(os.environ, MSYS_NO_PATHCONV="1", PYTHONIOENCODING="utf-8")
+    p = subprocess.run([sys.executable, "ingame_judge.py", path, opt.get("hitstop", "8"), f"--at={at}"], cwd=TOOLS, env=env,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    log = os.path.join(OUT, f"{c['move']}_review.txt")
+    open(log, "w", encoding="utf-8").write((p.stdout or "") + (p.stderr or ""))
+    tail = [l for l in (p.stdout or "").splitlines() if l.strip()][-2:]
+    print(f"review {c['move']}: ingame rc {p.returncode}, " + " | ".join(t.strip()[:100] for t in tail))
+    print(log)
+
+
 def main():
     cmd, args = sys.argv[1], [a for a in sys.argv[2:] if not a.startswith("--")]
     opt = dict((a[2:].split("=", 1) + [""])[:2] for a in sys.argv[2:] if a.startswith("--"))
@@ -142,6 +169,8 @@ def main():
     elif cmd == "check":
         from animpipe.checks import run
         run(args[0], src="src" in opt)
+    elif cmd == "review":
+        review(args[0], opt)
     elif cmd == "trails":
         from animpipe.trails import run
         run(args[0])
