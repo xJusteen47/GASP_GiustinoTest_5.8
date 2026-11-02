@@ -26,10 +26,20 @@ def flex(fr, a, b, c):
     pa, pb, pc = (L.bone_tf(fr, x)[0] for x in (a, b, c))
     return 180.0 - ang(pa - pb, pc - pb)
 
+def floor_ref(frames, s):
+    """Ankle and ball heights of foot s on the floor: frame 0's, unless that foot is already in the air at frame 0 (a move
+    whose first frame has the knee up, Ganondorf ftilt v3): then the other foot's frame-0 heights (the same floor)."""
+    f0 = frames["0"]; o = "l" if s == "r" else "r"
+    an, ba = L.bone_tf(f0, f"foot_{s}")[0][2], L.bone_tf(f0, f"ball_{s}")[0][2]
+    oba = L.bone_tf(f0, f"ball_{o}")[0][2]
+    if ba > oba + 2.5:
+        return L.bone_tf(f0, f"foot_{o}")[0][2], oba
+    return an, ba
+
 def planted(frames, f, s, tol=2.5):
-    f0 = frames["0"]; fr = frames[str(f)]
-    return (L.bone_tf(fr, f"foot_{s}")[0][2] <= L.bone_tf(f0, f"foot_{s}")[0][2] + tol and
-            L.bone_tf(fr, f"ball_{s}")[0][2] <= L.bone_tf(f0, f"ball_{s}")[0][2] + tol)
+    fr = frames[str(f)]; an0, ba0 = floor_ref(frames, s)
+    return (L.bone_tf(fr, f"foot_{s}")[0][2] <= an0 + tol and
+            L.bone_tf(fr, f"ball_{s}")[0][2] <= ba0 + tol)
 
 def speed_peak(frames, bone, a, b):
     P = np.array([L.bone_tf(frames[str(f)], bone)[0] for f in range(a, b + 1)])
@@ -106,7 +116,7 @@ def check(frames, sheet, TH, attack_dir, balance_rows, anticipation_key):
     sl = []
     for s in "lr":
         run = []
-        z0 = L.bone_tf(frames["0"], f"ball_{s}")[0][2]
+        z0 = floor_ref(frames, s)[1]
         for f in range(n):
             if planted(frames, f, s) and L.bone_tf(frames[str(f)], f"ball_{s}")[0][2] <= z0 + 1.0:
                 run.append(L.bone_tf(frames[str(f)], f"ball_{s}")[0][:2])

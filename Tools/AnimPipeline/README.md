@@ -36,6 +36,7 @@ Coordinates:
   - Frame 0 already shows a strong change into the move's stance: guard, load or chamber.
   - The recovery rises back toward the upright idle by the FAF.
   - Exceptions: crouched and aerial moves.
+  - **A reference's last frame is the FAF pose** (owner, 01/11, Ganondorf ftilt: "the last frame is functionally the last"). The clip is IN that pose at the FAF, with every part arrived (lags included); if that pose is not the idle (a crouched guard), the move overrides "rise toward the idle by the FAF". No authored tail: the clip ends ON the FAF and the game's generic blend takes it to whichever idle is playing (owner, 01/11).
 - **Six views.** Every key pose is reviewed from six views (front, right, back, left, top, bottom), plus 3/4, the game cameras, videos and elbow close-ups.
 - **Exaggeration.** Joints must look natural; an out-of-range joint is accepted only as an exaggeration inside the action frames and along the motion.
 - **Big pose changes.** Before a relatively big pose change beyond what was asked, describe it and wait for approval (waived for jab v11 and Ganondorf ftilt).
@@ -45,8 +46,8 @@ Coordinates:
 ## Replicating a reference: key poses first (owner, 01/11, after Ganondorf v2 was rejected)
 
 Ganondorf v2 passed every check and was rejected: "the arm movement makes no sense, the legs don't have the right anticipation". We had taken only the extension and timing curve from the reference, never its key poses. Timing alone is never enough.
-1. **Extract the key poses first.** For each phase (first frame, anticipation, active, recovery, last frame), read the reference frames as joint directions per body part: torso pitch/yaw, upper arm and forearm, thigh and shin per side, head. Store them as `refs/<move>/keyposes.json`.
-2. **Build our key poses from those**, arms included. Our rules (balance, counterweight) adjust a pose, they never invent it.
+1. **Extract the key poses first.** For each phase (first frame, anticipation, active, recovery, last frame), read the reference frames as joint directions per body part: torso pitch/yaw, upper arm and forearm, thigh and shin per side, head. Store them as `refs/<move>/keyposes.json`: `python ref_keyposes.py refs/<move> [support side]` writes every 2D segment's side-view angle and length per still (same normalisation as the gate). A segment much shorter than its longest still points out of the side plane: its direction is unreliable.
+2. **Build our key poses from those**, arms included. Our rules (balance, counterweight) adjust a pose, they never invent it. Template: `ganon_ftilt_v3_motion.py` keys the kicking leg and the arms as side-view angles from keyposes.json (so the projection matches by construction), solves the support hip height from a support-knee curve and the balance shift per frame; where the reference itself is off balance, the frames are declared in the move sheet (`balance_exempt_frames`, with the reason).
 3. **Pose-match score:** compare each of our key poses with the reference, per body part (angle between directions). Report it beside the checks, and review it first: a pose that does not match fails, even if every check passes.
 4. **Stance comes from the reference too** (Ganondorf's ftilt lands in a deep, wide crouch, not upright).
 
@@ -86,10 +87,14 @@ how much each part moves, when, and in which direction. These tools do, and gate
 ## One pass of a move (Ganondorf ftilt is the template)
 
 ```
-ganon_ftilt_v2_motion.py   model: rig points per frame + key plan       -> <take>_targets_raw.json
+ganon_ftilt_v3_motion.py   model: rig points per frame + key plan       -> <take>_targets_raw.json
 motion_curves.py           GATE: limb amplitude, anticipation, arm direction vs the reference (model points, ~1 s)
                                                                         -> sheets/<take>_model_curves.png/.txt/.json
+twist_chain.py             GATE: complementary rotations: yaw-speed order pelvis -> chest -> limb (strike), pelvis ->
+                           chest (recovery), hip/shoulder turn >= 0.6x the reference's key poses -> sheets/<take>_twist.*
 preflight.py               the checks on the model's points, < 0.1 s     -> sheets/<take>_preflight.txt/.json
+bone_lengths.py            GATE: rigid rig-point pairs keep the idle's distances (--ref=idle_points.json), then every
+                           bone keeps its reference length (> 0.1 cm fails; root/pelvis free)
 sparse_apply.py            Cascadeur: keys, interpolation, weights       (TAB, SAVE_AS, TARGETS)
 fingers_fist.py            Cascadeur: closed fists on the key frames      (TAB, FRAMES)
 export_current.py          Cascadeur: baked FBX next to the .casc
@@ -100,6 +105,7 @@ clearance.py               self-penetration (physics-asset capsules)
 tangency.py                tangencies per key pose and view (report)      -> sheets/<take>_tangency.json/.txt
 motion_check.py            weight, spacing, hold, overlap, arcs, joints, arms, balance, posing rules
 legibility.py measure      body-part legibility over the camera rings
+joint_closeups.py          MANDATORY: head/neck, shoulders, wrists at 90 cm, 3 angles, every key frame
 ```
 
 - **Driver:** `ganon_iter.sh`, with env vars `TAKE CASC ASSET MODEL DENSE=1 SMOOTH=12-36 CHECKS=1`.
@@ -109,7 +115,11 @@ legibility.py measure      body-part legibility over the camera rings
   - `legibility_shots.py`: game cameras, mesh and parts side by side;
   - `traj_overlay.py`: motion paths;
   - `visual_check.py`: silhouettes and videos.
-- **Review page:** `ganon_page.py` / `legibility_page.py` build `sheets/*.html`, published as Artifacts.
+- **Review page:** `ganon_page.py` / `legibility_page.py` build `sheets/*.html`, published as Artifacts. Every page carries,
+  besides the side views: the rear and 3/4 legibility shots (`legibility_shots.py` with az180, az225, az135, h180, f180), the
+  joint close-ups (`joint_closeups.py`) and each check's verdict copied from its own report, never summarised by hand (the
+  v3 page said "legibility pass" while `ganon_v3_legibility.txt` said FAIL). The close-ups go to the coordinator before
+  delivery.
 
 Keys:
 - every layer is keyed on the same frames (the rig's IK chains span layers);
@@ -117,11 +127,53 @@ Keys:
 - `DENSE=1` keys every frame (what Unreal receives anyway);
 - `sparse_apply.py` also supports sparse plans (per-layer keys, lags, interpolation, weights), with the caveats in `handoff.md`.
 
+## Direct to Unreal, without Cascadeur (01/11, Ganondorf v3)
+
+Cascadeur is optional (owner: "if you act directly in Unreal, one can use Blender too"). The model's rig points go straight
+to the skeleton:
+```
+pose_solver.py <take>_targets_raw.json <take>_bones.json    rig points -> UE component-space bones (calibrated on a take known
+                                                           both ways: ganon_v2 targets + its Unreal bones; --validate)
+bone_lengths.py <take>_targets_raw.json --ref=idle_points.json   the model's rigid point pairs (gate)
+ue_write_take.py <take>_bones.json <AssetName>             local tracks, ROTATIONS ONLY (every bone but root/pelvis keeps the
+                                                           template's translation), parents read from the template take's
+                                                           own data, root held; gated on bone_lengths.py before writing
+                                                           (--no-write stops there) and again on the read-back
+legibility.sample(...)                                     bones -> sheets/raw/<take>_legbones.json, then every check as usual
+ref_sidebyside.py refs/<name> <out.png> <take>:<frames>    the reference's stills beside our takes, same side camera
+```
+- Each bone's frame comes from three rig points (joint, next joint, bend or own extra point). Limbs match Cascadeur within
+  ~1 cm and 1-5 deg; the spine's 2-5 deg is Cascadeur's own spine distribution. In-between bones (spine_01/03/05, neck_02,
+  twist bones) slerp; fingers stay rigid with the hand (the calibration's fists).
+- The solved positions only aim the rotations. The first v3 wrote them as translations, and the model's head point was up to
+  17 cm off its neck (each trunk segment rotated about the pelvis at its own lagged time): the head detached from the neck
+  in Unreal. Cascadeur's rig had hidden the same stretch in v2 (4 cm). The v3 model now builds the trunk as a chain (each
+  segment about its parent's joint, one balance shift), and both ends are gated on `bone_lengths.py`. Ganondorf v3.1 is the tuned result (all model gates pass; twist chain, crouch
+  and pronation in the model's docstring).
+- No interpolation pass: write every frame (the model is dense). Cascadeur's physics tools are the only thing lost.
+- A Blender exporter would reuse `pose_solver.py` and set the same local transforms on an armature.
+
+## Status: Ganondorf ftilt v3.1 (02/11, 00:55 local)
+
+Written and reviewed. `AS_Pilot_GanonFTilt_V3` now holds v3.1 (`ue_write_take.py ganon_v31_bones.json AS_Pilot_GanonFTilt_V3`;
+the first call right after the editor starts can return `write: None`: wait until the bridge answers `read_anim_sequence`).
+Take name for the checks stays `ganon_v3`. Page: https://claude.ai/artifact/74Z5ofar8jg72Gu2zWqeKY (v3 page kept as history).
+- PASS: bone lengths (write 66, read-back 65, sampled 64 bones; read-back vs FK 0.00 cm), curves gate on the Unreal bones,
+  twist chain, joint close-ups (head attached; reviewed by Opus, `sheets/ganon_v3_closeups_review.txt`).
+- FAIL: legibility (rear arm hides the fist f20-21 at f180/h180; rear elbow behind the back on 30 frames, worst f26);
+  clearance (lowerarm_l in spine_03 -3.85 cm at f10); motion_check (arm chains peak together at 9.5, head/chest lag 0-0.26,
+  knee_l 1 deg f9, ankle_l 144 deg f22-24, 8 arc jitters: hand_l 2-8/22-28 up to 11 cm radial, foot_l 2-8, pelvis 26-34).
+- Next (v3.2): left forearm 4-5 cm out at f9-11; rear elbow closer to the torso f20-28; stagger the arm peaks and half a
+  frame of head lag; knee_l not straight at f9, ankle_l less extended at the landing; smooth the jitter windows.
+- Page frames (side-by-side): v2 0,5,9,30,37; v3.1 0,7,10,27,37. Rear/3-4: legibility_shots.py az180,az225,az135,h180,f180.
+
 ## Checks, where each rule lives, and its thresholds
 
 | Module | What it judges | Thresholds |
 |---|---|---|
 | `motion_curves.py` + `motion_ref.py` (FIRST, before the pre-flight; again on the baked bones) | Per part (hands, elbows, feet, knees, head, chest relative to the pelvis; pelvis and centre of mass in the world), per phase: amplitude, share of the limb path and energy (near-still limbs while the action runs), speed-peak order and lag behind the pelvis, with/counter the strike (velocity correlation), anticipation (wind-up opposite the strike / strike). Against the reference's 2D keypoints from the same side camera: pose distance per limb, amplitude ratio, anticipation, wrist direction, DTW. Fails on a limb under 0.6x the reference amplitude, a missing anticipation, or a wrist going the other way. See "Motion curves" below | `motion_thresholds.json` (`curves_*`) |
+| `twist_chain.py` (model points, after the curves gate) | Complementary rotations (owner 01/11): yaw of the hip line, shoulder line and head per frame. Order: in the strike (2 frames before the anticipation pose to the contact) the yaw-speed peaks go pelvis -> chest -> strike effector, each >= 0.5 frame later; in the recovery pelvis -> chest. Amplitude against the reference's key poses (side-view hip and shoulder separation, body lengths): hips' and shoulders' range and the shoulders' closing first -> active >= 0.6x, same direction. Ganondorf v3 fails (leg peaks with the pelvis, 2 frames before the chest; shoulders close 15% vs 31%), v2 too | `motion_thresholds.json` (`twist_*`) |
+| `bone_lengths.py` (model points, written tracks, sampled bones) | Rigid lengths: the model's rig-point pairs (trunk chain, head, limbs) against `idle_points.json`; the written local tracks and the sampled Unreal bones against the template's reference translations (or the take's frame 0). Gates the model step of `ganon_iter.sh` (`BONELEN_GATE=0` reports only) and `ue_write_take.py` (before the write and on the read-back); on a Cascadeur take's sampled bones it reports only (its solve stretches clavicles/spine by up to 0.4 cm, v2) | 0.1 cm |
 | `preflight.py` (before any pass) | On the model's rig points, approximate: limb bend from lengths (reach, elbow direction), balance/lift-off/support knee/kick weight, key plan (same keys and lag on every layer of an IK chain, Bezier overshoot and drift, clamped mid-motion keys), strike spacing table, recovery fast-out/slow-in, linear motion (constant speed over 4 frames), landing absorption (kicks: pelvis dips >= 1 cm after the foot lands), overlap peak order and simultaneous arrivals, arcs (straight paths, reversal clusters, one-frame pops, twinning, head, foot slide). Floor = the idle's foot heights. Calibrated on Ganondorf v1 (catches all known errors; knee 93–99° vs Unreal 89–99°) and jab v11 (1 marginal flag) | `motion_thresholds.json` + constants in the script |
 | `tangency.py` (report) | Tangencies (Solid Drawing): two parts' outlines within 1.5 cm (screen-scaled), within 15 deg, over > 25% of a limb's length; joint pairs excluded (shoulder, elbow, wrist, hip, knee, ankle, neck). Six ortho views, 3/4s and game rings, at the key poses. Offline on the cached bones, 30-45 s | constants in the script |
 | `spacing_rules.py` (from preflight and motion_check) | Recovery: speed peak in the first 60% of hold end -> arrival (fast out), last approach step <= 0.6 x the largest of the last 4 (slow in to the guard) | constants in the script |
@@ -129,7 +181,7 @@ Keys:
 | `legibility.py` | Attacking part distinct at contact; rear arm / arms hiding it; rear elbow; fists closed; attacking limb readable from the Follow, rail and PvP cameras; exaggeration out of the body. `configure(take)` switches to the kick mode (foot as the attacking part) from the move sheet | `legibility_thresholds.json` |
 | `motion_check.py` | Weight (punch: centre of mass into the strike; kick: hip drive from the wind-up), impact spacing, hold/recoil, overlap cascades, arcs and zig-zags (snaps, holds and the wind-up reversal are beats), attack line | `motion_thresholds.json` |
 | `joints.py` (from motion_check) | Wrists, knees over the toes, ankles, foot roll/floor, support knee on one foot, airborne kicking foot | `motion_thresholds.json` (`joint_*`) |
-| `arm_check.py` (from motion_check) | Elbow direction (from 40° of upper-arm elevation), flare, chicken wing, reverse bend, forearm/hand roll and roll jumps | `motion_thresholds.json` (`elbow_*`, `twist_*`) |
+| `arm_check.py` (from motion_check) | Elbow direction (from 40° of upper-arm elevation), flare, chicken wing (arms raised forward or sideways; an arm swept back has its own limit, `elbow_ext_elev_max_deg` 65°), reverse bend, forearm/hand roll and roll jumps | `motion_thresholds.json` (`elbow_*`, `twist_*`) |
 | `balance_check.py` (from motion_check) | Centre of mass inside the support base (flat foot or toes), 2 cm tolerance; kicks: upper body leans back relative to the hips | `motion_thresholds.json` (`balance_*`, `counterbalance_*`) |
 | `pose_rules.py` (from motion_check) | Weight shifted before lift-off, support knee 10–45° on one foot, kick kinetic chain, no twinning, head toward the target, planted-foot slide | `motion_thresholds.json` |
 | `wrist_check.py` | Wrist flexion/deviation and frozen fists | `motion_thresholds.json` (`wrist_*`, `frozen_*`) |

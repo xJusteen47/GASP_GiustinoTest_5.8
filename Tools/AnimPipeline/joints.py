@@ -63,6 +63,17 @@ def check(frames, sheet, attack_dir, TH):
     for s in "lr":
         q0 = L.bone_tf(frames["0"], f"foot_{s}")[1]
         ball0 = L.bone_tf(frames["0"], f"ball_{s}")[0][2]
+        an0 = L.bone_tf(frames["0"], f"foot_{s}")[0][2]
+        # a foot already in the air at frame 0 (a move whose first frame has the knee up, Ganondorf ftilt v3): the floor is
+        # the other foot's ball height, and its guard orientation is its first frame back on that floor
+        o = "l" if s == "r" else "r"
+        floor = L.bone_tf(frames["0"], f"ball_{o}")[0][2]
+        if ball0 > floor + 2.5:
+            ball0 = floor
+            first = next((g for g in range(n) if L.bone_tf(frames[str(g)], f"ball_{s}")[0][2] <= floor + 1.0), None)
+            if first is not None:
+                q0 = L.bone_tf(frames[str(first)], f"foot_{s}")[1]
+                an0 = L.bone_tf(frames[str(first)], f"foot_{s}")[0][2]
         for f in range(n):
             fr = frames[str(f)]
             hip, kn, an, ball = (L.bone_tf(fr, b)[0] for b in (f"thigh_{s}", f"calf_{s}", f"foot_{s}", f"ball_{s}"))
@@ -72,7 +83,7 @@ def check(frames, sheet, attack_dir, TH):
             knee_flex = 180.0 - math.degrees(math.acos(np.clip(np.dot(unit(hip - kn), unit(an - kn)), -1, 1)))
             foot_dir = hz(ball - an)
             kicking = sheet.get("strike_limb") == f"leg_{s}"
-            airborne = kicking and (ball[2] > ball0 + 3.0 or an[2] > L.bone_tf(frames["0"], f"foot_{s}")[0][2] + 3.0)
+            airborne = kicking and (ball[2] > ball0 + 3.0 or an[2] > an0 + 3.0)
             # in the air a near-vertical foot or a near-straight leg has no meaningful horizontal direction
             flat_ok = np.linalg.norm((ball - an)[:2]) > 0.5 * np.linalg.norm(ball - an) and np.linalg.norm(bend[:2]) > 0.5 * np.linalg.norm(bend)
             knee_toe = signed_angle_z(foot_dir, hz(bend)) if np.linalg.norm(bend[:2]) > 1.0 and (not airborne or flat_ok) else 0.0
