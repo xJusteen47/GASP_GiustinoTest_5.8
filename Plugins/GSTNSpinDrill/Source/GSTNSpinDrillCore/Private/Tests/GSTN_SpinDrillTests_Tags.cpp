@@ -12,7 +12,7 @@ bool FGSTN_SpinDrillTagsTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
 	GSTNSpinDrillTags::GetDeclaredTags(Tags);
-	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 25);
+	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 29);
 
 	const UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
 	TSet<FGameplayTag> Seen;
@@ -44,8 +44,8 @@ bool FGSTN_SpinDrillTagsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Command.Movement.Dash exists (declared by GSTNCombatCore)"), Dash.IsValid());
 	TestFalse(TEXT("Command.Movement.Dash is not in this plugin's list"), Tags.Contains(Dash));
 
-	// Reserved for later checkpoints, never declared by the skeleton
-	TestFalse(TEXT("Combat.Link.Type.Drill is not declared yet (latch checkpoint)"),
+	// The drill latch (D9) is a leaf of GSTNLink's link type family
+	TestTrue(TEXT("Combat.Link.Type.Drill is declared (latch checkpoint)"),
 		FGameplayTag::RequestGameplayTag(TEXT("Combat.Link.Type.Drill"), false).IsValid());
 	return true;
 }

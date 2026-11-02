@@ -15,9 +15,9 @@
  * Combat.State.* leaves are projected by the drill tick extension from the drill fragment's phase, never granted by an ability or
  * an effect, so they stay deterministic across a rollback. No tag is stored in a sync state or a snapshot: those carry indices.
  *
- * Not declared here: the Anim.Set.* leaves (they follow GSTNAnimation's rules and come with the presentation checkpoint), the link
- * type Combat.Link.Type.Drill and its roles (they come with the latch checkpoint, as a GSTNLink type) and the GameplayCue.SpinDrill.*
- * leaves (ini only, Config/Tags/GSTNSpinDrill.ini).
+ * The drill latch's link type and roles (Combat.Link.Type.Drill, Combat.Link.Role.Driller / .Drilled, D9) are leaves of GSTNLink's
+ * families declared here, as any plugin's own link type does. Not declared here: the Anim.Set.* leaves (they follow GSTNAnimation's
+ * rules and come with the presentation checkpoint) and the GameplayCue.SpinDrill.* leaves (ini only, Config/Tags/GSTNSpinDrill.ini).
  */
 namespace GSTNSpinDrillTags
 {
@@ -81,6 +81,20 @@ namespace GSTNSpinDrillTags
 
 	/** A hit from the drill tip */
 	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_Drill);
+
+	// ---- Drill latch (leaves of GSTNLink's Combat.Link families, D9) ----
+
+	/** The drill latch link type, on the dive tip's hit data */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Link_Type_Drill);
+
+	/** Role 1 of the drill latch: the driller (parked, acts) */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Link_Role_Driller);
+
+	/** Role 2 of the drill latch: the drilled target */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Link_Role_Drilled);
+
+	/** A target with this state tag refuses the drill latch: the tip bounces (7.6). Until the parts bridge (D12) decides by penetration */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Immunity_Drill);
 
 	// ---- Events ----
 

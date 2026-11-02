@@ -139,6 +139,9 @@ FGSTN_CombatTimelineData FGSTN_SpinTimelines::MakeDive(const FGSTN_DiveTimelineP
 	Tip.Data.Damage = Params.Damage;
 	Tip.Data.BaseKnockback = Params.BaseKnockback;
 	Tip.Data.AngleDeg = Params.KnockbackAngleDeg;
+	// D9: the tip asks for the drill latch. GSTNLink's request step decides on the target side (UGSTN_LinkRule_Drill); a request does no damage,
+	// and a refusal does not land, which the drill reads as the bounce of 7.6
+	Tip.Data.LinkType = GSTNSpinDrillTags::Link_Type_Drill.GetTag();
 
 	FGSTN_TimelineTrack_Hitbox Hitbox;
 	Hitbox.StartFrame = 0;

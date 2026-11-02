@@ -9,7 +9,7 @@ The design is [spin-drill.md](../../docs/architecture/spin-drill.md); the checkp
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints D1 (the plugin, its five modules, the native tags of spec
 §10), D2 (tuning structs, target response, the pure drill math and the tuning asset) and D3 (the drill sync fragment and the tick
 extension's phase machine) and D4 (the ground and air spin: abilities, input slots, hop, low gravity, one air spin per airtime) are
-built, D5 (the opposite-spin cancel), D6/D7 (combat core seams: re-hit interval, outbox event keys) D8 (the dive) and the minimal part of D11 (the procedural spin and wobble). Next: D9+D10 (latch and bore). The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
+built, D5 (the opposite-spin cancel), D6/D7 (combat core seams: re-hit interval, outbox event keys) D8 (the dive) and the minimal part of D11 (the procedural spin and wobble), and D9 part 1 (the drill latch as a GSTNLink type made by code: the tip asks for it, the phase machine seats, bounces and ends from the link). Next: D9 part 2 (bore ability, launch), D10. The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
 
 ## Modules
 
@@ -26,19 +26,20 @@ project and for Game Feature plugins, so the `GameplayCue.SpinDrill.*` leaves (i
 
 ## Dependencies
 
-- Plugins: `GSTNInput`, `GSTNCombat`, `GSTNCombatGAS`, `GSTNCombatNP`, `GameplayAbilities`, `NetworkPrediction`, `Mover`.
-- `GSTNSpinDrillCore`: Core, CoreUObject, Engine, GameplayTags, GSTNInputCore, GSTNCombatCore; private Projects (to find the plugin's
+- Plugins: `GSTNInput`, `GSTNCombat`, `GSTNCombatGAS`, `GSTNCombatNP`, `GSTNLink` (D9), `GameplayAbilities`, `NetworkPrediction`, `Mover`.
+- `GSTNSpinDrillCore`: Core, CoreUObject, Engine, GameplayTags, GSTNInputCore, GSTNCombatCore, GSTNLinkCore (the drill rule); private Projects (to find the plugin's
   own folder). No GAS, NP or Mover module.
 - `GSTNSpinDrillNP`: Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, AbilitySystemSimulation (tag projection and the
   effects, as GSTNLinkNP), NetworkPrediction, Mover, GSTNInputCore, GSTNInputNP (the Mover sim state tracker), GSTNCombatCore,
-  GSTNCombatGAS (the combat stats the low gravity scales), GSTNCombatNP, GSTNSpinDrillCore.
+  GSTNCombatGAS (the combat stats the low gravity scales), GSTNCombatNP, GSTNSpinDrillCore, GSTNLinkCore, GSTNLinkGAS (the registry),
+  GSTNLinkNP (the link fragment the drill reads).
 - `GSTNSpinDrillGAS`: Core, CoreUObject, Engine, GameplayTags, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, Mover,
   GSTNInputCore, GSTNInputNP, GSTNCombatCore, GSTNCombatGAS, GSTNCombatNP (the abilities are `UGSTN_GA_BaseCombat` children),
-  GSTNSpinDrillCore, GSTNSpinDrillNP.
+  GSTNSpinDrillCore, GSTNSpinDrillNP, GSTNLinkCore, GSTNLinkGAS (the drill link type, `FGSTN_DrillLinkType`).
 - `GSTNSpinDrillPresentation`: Core, CoreUObject, Engine, GameplayTags, GSTNSpinDrillCore, GSTNSpinDrillNP.
 - `GSTNSpinDrillTests`: the four modules above.
 - Never: `GSTNParts`, `GSTNLevelObjects` (their bridges are separate small plugins, spec §4), an Editor module or the project module.
-  `GSTNLink` comes in with the latch (D9), through a new link type.
+  `GSTNLink` is used through its public API only (D9), never edited from here.
 
 ## Data and math (D2)
 
@@ -113,7 +114,7 @@ BeforeCandidates yet; the request of the frame and the bore end rules (`UGSTN_Dr
   extension stops the spin and ends the air spin's low gravity. Outside a spin the same rotation is an ordinary spin.
 - **Dive (D8)**: crouch pressed during a spin (`Command.Movement.Drill`, window from frame 3) starts `UGSTN_GA_DrillDive`: a plunge at
   PlungeSpeed along gravity with no gravity while diving (`UGSTN_GE_DrillDiveGravity`), steering by air control, the drill tip
-  (`Combat.HitType.Drill`). A tip hit bounces (until D9 latches drillable targets), the ground gives the landing lag, releasing crouch ends it.
+  (`Combat.HitType.Drill`). A tip hit asks for the drill latch (D9); a refused one bounces, the ground gives the landing lag, releasing crouch ends it.
 - **Harness**: `Tools/GASNPPTest/spin_drill_scenarios.py` (`spin_ground_hits_ring`, `spin_air_hop_low_gravity`,
   `air_spin_once_per_airtime`, `spin_opposite_cancel`, `drill_ground_lag`, `drill_nondrillable_bounce`), bindings added in memory.
 - Limits: wall contact does not refresh the air spin yet (no wall fact in the combat state); a pawn without the combat stats never

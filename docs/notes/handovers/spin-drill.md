@@ -36,3 +36,29 @@ Earlier entries: HANDOVER 63-66, 70-75 and 78 in `docs/notes/takeover-state.md`.
 
 One long Opus session (D4 through D11 plus two rebases): very high, far past the new 150k-context rule; the next thread should stop
 after one checkpoint.
+
+## SD-02 (laptop, 2026-11-02): triage of the flaky latch check, D9 part 1 (drill latch as a GSTNLink type)
+
+- Commit on feature/gas-npp-5.8 (on d05d767): "Spin and drill D9 part 1: the drill latch as a GSTNLink type". Deltas:
+  docs/notes/spin-drill-doc-deltas.md sections "D9, part 1" and "Triage".
+- Triage (M7 OPEN 7, `latch_big_enemy_host_latches_client`): NOT the D6/D7 seams (with RehitIntervalFrames 0 the ring key is the group,
+  byte for byte; no other spin commit touches a file outside GSTNSpinDrill, which those runs do not enable). The check was at its limit
+  before the rebase (3, 4, 4 counter steps; limit 4) and is 3-5 after: a margin flake. No code change. Lead to decide: per-hit count or a
+  10-run distribution before touching the bound.
+- D9 part 1 (C++, owner's asset question unanswered: code first, as the mount): tags `Combat.Link.Type.Drill`, `Combat.Link.Role.Driller/
+  .Drilled`, `Combat.Immunity.Drill` (29 tags); `UGSTN_LinkRule_Drill` (Core); `FGSTN_DrillLinkType` (GAS, registered at PostEngineInit:
+  driller parked, acts, yaw 0, predicts, hit break on the driller, leash 300); the dive tip's hit carries the drill link type; the phase
+  machine reads `FGSTN_DrillLinkView` (Pending -> AwaitLatch, Active -> Latch, refused -> Bounce; latched: link broken by a hit -> detach,
+  otherwise target gone -> launch; hitstun/KO detach; crouch held = dive timeline running) and releases its own link through GSTNLink's
+  `MarkPendingBreak` when its bore ends. New plugin edge GSTNSpinDrill -> GSTNLink (public API only; GSTNLink and GSTNCombat untouched).
+- Gates (laptop, Saved/SD02): build with GSTNSpinDrill on `build-on2.out` "Result: Succeeded" (attempt 1 failed on a C4459 shadowed name in a
+  test, fixed); RunTests GSTNInput+GSTNCombat+GSTNSpinDrill+GSTNDefence+GSTNLink+GSTNParts `headless-on2.log` 950/0 (943 at SD-01 + 4 new +
+  M7's link tests), no ensure; the 4 new tests pass; .uproject restored (SHA256 E48D6E45DC87...); check_modules.py 0 problems. Plugin-off build not run (no file outside GSTNSpinDrill changed). Harness not run (needs the bore and
+  `Input.Button.Crouch` in IC_GASNPP_Test).
+- OPEN for the owner (one message): (1) driller placement is a fixed offset (0, 0, 100) over the target's root: a per-latch anchor (tip
+  where it hit) needs a GSTNLink seam (a per-link offset in the link state); OK to ask M7/lead for it? (2) a link type asset (DA_LinkType_Drill
+  via a setup script) instead of code: keep code? (3) "not drillable" is the tag `Combat.Immunity.Drill` until D12 (penetration vs hardness).
+- Next thread (D9 part 2, then D10): `UGSTN_GA_DrillBore` adopted at the latch (track hook stall while crouch is held, tip re-hit interval
+  = `FGSTN_BoreTuning::RehitIntervalFrames`, `HitsLanded`, damage scale), launch and pop velocities (`ComputeLaunchVelocity`, instant effect),
+  outbox events, Launch refresh; harness scenarios of the plan; D10 moving target (corrections per latch, stop condition > 3).
+- Cost of this thread (estimate): one Opus session, about 140k context, two builds of ~20 min; within the 150k rule.

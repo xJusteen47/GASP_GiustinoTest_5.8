@@ -35,7 +35,13 @@ namespace GSTNDrillFlags
 	 */
 	constexpr uint8 Bounced = 1 << 2;
 
-	constexpr uint8 All = CounterClockwise | AirSpin | Bounced;
+	/**
+	 * The dive's tip asked for the drill latch and its response is awaited (D9): set while the driller's drill link is Pending, so a link that
+	 * goes back to idle without becoming Active (refused, or the request timed out) reads as the bounce. Cleared by the latch or the bounce
+	 */
+	constexpr uint8 AwaitingLatch = 1 << 3;
+
+	constexpr uint8 All = CounterClockwise | AirSpin | Bounced | AwaitingLatch;
 }
 
 /**

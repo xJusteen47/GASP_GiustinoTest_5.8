@@ -17,7 +17,8 @@ public class GSTNSpinDrillCore : ModuleRules
 			"Engine",
 			"GameplayTags",
 			"GSTNInputCore",
-			"GSTNCombatCore"
+			"GSTNCombatCore",
+			"GSTNLinkCore"
 		});
 
 		// Finds the plugin's own Config/Tags folder to register it with the tag manager

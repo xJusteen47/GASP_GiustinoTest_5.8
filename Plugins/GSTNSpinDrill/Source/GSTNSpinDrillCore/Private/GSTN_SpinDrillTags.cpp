@@ -20,6 +20,10 @@ namespace GSTNSpinDrillTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_SpinDrill_GravityScale, "Combat.SetByCaller.SpinDrill.GravityScale", "Multiplier of the jump and fall gravity scales while the air spin's low gravity is on");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_SpinDrill_FallSpeedScale, "Combat.SetByCaller.SpinDrill.FallSpeedScale", "Multiplier of the maximum fall speed while the air spin's low gravity is on");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Drill, "Combat.HitType.Drill", "A hit from the drill tip; carries a penetration compared with the hardness of the part it hits. Set on the hit data");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Link_Type_Drill, "Combat.Link.Type.Drill", "The drill's latch, a GSTNLink type made by code (FGSTN_DrillLinkType): the driller parked on the target. On the dive tip's hit data");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Link_Role_Driller, "Combat.Link.Role.Driller", "Role 1 of the drill latch: the driller, parked on the target and acting. Projected by the link tick");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Link_Role_Drilled, "Combat.Link.Role.Drilled", "Role 2 of the drill latch: the target being drilled, free to move and act. Projected by the link tick");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Immunity_Drill, "Combat.Immunity.Drill", "The entity refuses the drill latch (the drill rule): the tip bounces off it as off a hittable, not drillable target");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Drill_Latched, "Combat.Event.Drill.Latched", "The drill latched onto a target. Published once on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Drill_Detached, "Combat.Event.Drill.Detached", "The drill detached from its target: release, maximum time, stagger or target gone. Published once on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Drill_Launched, "Combat.Event.Drill.Launched", "The drill ended in the high jump out of the target. Published once on the authority");
@@ -37,7 +41,7 @@ namespace GSTNSpinDrillTags
 			Input_Button_Spin,
 			State_Spinning, State_Spinning_Clockwise, State_Spinning_CounterClockwise, State_AirSpinSpent, State_Drilling, State_DrillLatched,
 			State_SpinLowGravity, State_DiveGravity, SetByCaller_SpinDrill_GravityScale, SetByCaller_SpinDrill_FallSpeedScale,
-			HitType_Drill,
+			HitType_Drill, Link_Type_Drill, Link_Role_Driller, Link_Role_Drilled, Immunity_Drill,
 			Event_Drill_Latched, Event_Drill_Detached, Event_Drill_Launched, Event_Drill_GroundLag,
 			Ability_Movement_Spin, Ability_Movement_SpinCancel, Ability_Combat_Drill_Dive, Ability_Combat_Drill_Bore, Ability_Combat_Drill_Launch });
 	}

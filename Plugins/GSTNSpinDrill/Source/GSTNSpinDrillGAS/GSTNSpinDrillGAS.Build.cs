@@ -27,6 +27,8 @@ public class GSTNSpinDrillGAS : ModuleRules
 			"GSTNCombatGAS",
 			"GSTNCombatNP",
 			"GSTNSpinDrillCore",
+			"GSTNLinkCore",
+			"GSTNLinkGAS",
 			"GSTNSpinDrillNP"
 		});
 	}

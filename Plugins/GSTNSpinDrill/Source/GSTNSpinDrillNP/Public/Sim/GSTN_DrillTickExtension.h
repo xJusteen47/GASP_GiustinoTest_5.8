@@ -7,6 +7,7 @@
 #include "Simulation/GSTN_CombatTickExtension.h"
 
 struct FGSTN_DrillFragment;
+struct FGSTN_LinkFragment;
 
 /** What asks the phase machine to change at AfterExecute (the abilities of D4-D10 will raise them; tests raise them by hand) */
 enum class EGSTN_DrillRequest : uint8
@@ -33,6 +34,25 @@ enum class EGSTN_DrillRequest : uint8
 
 	/** The dive reached plain ground: the ground lag */
 	GroundLand,
+
+	/** The tip's drill link request is awaiting its response (D9): the dive goes on, the fragment remembers the request */
+	AwaitLatch,
+};
+
+/**
+ * What the drill reads of the entity's Body link (GSTNLink's fragment, written by the link tick at priority 120, before this extension): only a
+ * drill latch (Combat.Link.Type.Drill) in which this entity is the driller (role 1) counts. Values of the frame
+ */
+struct FGSTN_DrillLinkView
+{
+	/** The tip asked for the latch and the response is awaited */
+	bool bPending = false;
+
+	/** The latch holds and no break is decided */
+	bool bActive = false;
+
+	/** The latch is breaking because the driller was hit (the hitstun wins, 7.4) */
+	bool bBrokenByHit = false;
 };
 
 /**
@@ -166,8 +186,32 @@ public:
 	/** The request a spin cancel track asks for on the frame its timeline starts: Cancel with the cancelling rotation's sense (D5) */
 	static void ReadCancelStart(const struct FGSTN_SpinCancelTrack& Track, FGSTN_DrillFrameInputs& OutInputs);
 
-	/** What a diving fragment's frame asks for (D8): Bounce when the dive's tip hit something, GroundLand on the ground after the first frame, else None */
-	static EGSTN_DrillRequest ReadDiveOutcome(const FGSTN_DrillFragment& Fragment, int32 Frame, bool bTipHit, bool bGrounded);
+	/**
+	 * What a diving fragment's frame asks for (D8, D9): Latch while the drill link is Active (the phase machine seats from MinDiveFramesBeforeLatch
+	 * on), AwaitLatch while it is Pending, Bounce when an awaited request came back refused or a tip hit asked for no link, GroundLand on the
+	 * ground after the first frame, else None
+	 */
+	static EGSTN_DrillRequest ReadDiveOutcome(const FGSTN_DrillFragment& Fragment, int32 Frame, bool bTipHit, bool bGrounded,
+		const FGSTN_DrillLinkView& Link = FGSTN_DrillLinkView());
+
+	/** The drill latch as the link fragment holds it; DrillTypeIndex is the registry's index of Combat.Link.Type.Drill (0 = not registered) */
+	static FGSTN_DrillLinkView ReadLinkView(const FGSTN_LinkFragment* LinkFragment, int32 DrillTypeIndex);
+
+	/**
+	 * The end inputs of a latched fragment (D9, before the bore ability): crouch counts as held while the dive's timeline, which ends on the
+	 * release (bEndOnTriggerRelease), is still the one running; a latch link no longer Active is the driller hit (broken by a hit) or the target
+	 * gone (any other break: death, distance, a forced exit)
+	 */
+	static void ReadLatchEnd(const FGSTN_DrillFragment& Fragment, const FGSTN_CombatSyncCore& Core, const FGSTN_DrillLinkView& Link, FGSTN_DrillFrameInputs& InOutInputs);
+
+	/**
+	 * The drill's own end of a latch (pop, launch, keep plunging) while its link is still Active: asks GSTNLink for the Release break through its
+	 * public MarkPendingBreak (the watchdog places the exit). True when it marked. Not needed when the link ended first (it is no longer Active)
+	 */
+	static bool ReleaseLinkOnUnlatch(bool bWasLatched, const FGSTN_DrillFragment& Fragment, const FGSTN_DrillLinkView& Link, FGSTN_LinkFragment* LinkFragment);
+
+	/** The registry's index of Combat.Link.Type.Drill, 0 when the type is not registered (content: the same on every machine) */
+	static int32 GetDrillTypeIndex();
 
 	/** The dive's gravity (none) holds: what UGSTN_GE_DrillDiveGravity::Sync is asked to match */
 	static bool WantsDiveGravity(const FGSTN_DrillFragment* Fragment);

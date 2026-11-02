@@ -7,9 +7,12 @@
 #include "Data/GSTN_SpinDrillTracks.h"
 #include "Effects/GSTN_SpinDrillEffects.h"
 #include "GameFramework/Actor.h"
+#include "GSTN_LinkRegistry.h"
 #include "GSTN_SpinDrillTags.h"
 #include "Math/GSTN_DrillMath.h"
 #include "Sim/GSTN_DrillFragment.h"
+#include "Sim/GSTN_LinkFragment.h"
+#include "Sim/GSTN_LinkTickExtension.h"
 #include "Sim/GSTN_SpinDrillAttach.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
@@ -111,7 +114,14 @@ void FGSTN_DrillTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 		}
 		if (Fragment)
 		{
+			const bool bWasLatched = Fragment->IsLatched();
 			StepAfterExecute(*Fragment, Context.Frame, Inputs, GetTuning(Context));
+			if (bWasLatched && !Fragment->IsLatched())
+			{
+				// The drill ended its own latch (pop, launch): the link it still holds is released through GSTNLink, which places the exit
+				FGSTN_LinkFragment* LinkFragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
+				ReleaseLinkOnUnlatch(bWasLatched, *Fragment, ReadLinkView(LinkFragment, GetDrillTypeIndex()), LinkFragment);
+			}
 		}
 		break;
 	}
@@ -215,6 +225,13 @@ void FGSTN_DrillTickExtension::StepAfterExecute(FGSTN_DrillFragment& Fragment, i
 			Fragment.SeatFrames = ToFrames16(Inputs.LatchSeatFrames);
 			Fragment.MaxBoreFrames = ToFrames16(FMath::Max(1, Inputs.LatchMaxBoreFrames));
 			Fragment.HitsLanded = 0;
+			Fragment.Flags &= ~GSTNDrillFlags::AwaitingLatch;
+		}
+		break;
+	case EGSTN_DrillRequest::AwaitLatch:
+		if (Fragment.Phase == EGSTN_DrillPhase::Diving)
+		{
+			Fragment.Flags |= GSTNDrillFlags::AwaitingLatch;
 		}
 		break;
 	case EGSTN_DrillRequest::Bounce:
@@ -358,18 +375,87 @@ void FGSTN_DrillTickExtension::ReadCancelStart(const FGSTN_SpinCancelTrack& Trac
 	OutInputs.bClockwise = Track.IsClockwise();
 }
 
-EGSTN_DrillRequest FGSTN_DrillTickExtension::ReadDiveOutcome(const FGSTN_DrillFragment& Fragment, int32 Frame, bool bTipHit, bool bGrounded)
+EGSTN_DrillRequest FGSTN_DrillTickExtension::ReadDiveOutcome(const FGSTN_DrillFragment& Fragment, int32 Frame, bool bTipHit, bool bGrounded,
+	const FGSTN_DrillLinkView& Link)
 {
 	if (Fragment.Phase != EGSTN_DrillPhase::Diving)
 	{
 		return EGSTN_DrillRequest::None;
 	}
-	// D8: every hit of the dive bounces (D9 turns the drillable ones into a latch first); the ground after the dive's first frame is the lag
+	// D9: the tip's hit asks for the drill latch. Active -> latch (asked again every frame until MinDiveFramesBeforeLatch lets it seat); Pending ->
+	// keep diving; a request that went back to idle was refused (the hit did not land) -> bounce
+	if (Link.bActive)
+	{
+		return EGSTN_DrillRequest::Latch;
+	}
+	if (Link.bPending)
+	{
+		return EGSTN_DrillRequest::AwaitLatch;
+	}
+	if ((Fragment.Flags & GSTNDrillFlags::AwaitingLatch) != 0)
+	{
+		return EGSTN_DrillRequest::Bounce;
+	}
+	// D8: a tip hit that asked for no link (a timeline without the drill type) bounces; the ground after the dive's first frame is the lag
 	if (bTipHit)
 	{
 		return EGSTN_DrillRequest::Bounce;
 	}
 	return bGrounded && Fragment.FramesInPhase(Frame) >= 1 ? EGSTN_DrillRequest::GroundLand : EGSTN_DrillRequest::None;
+}
+
+FGSTN_DrillLinkView FGSTN_DrillTickExtension::ReadLinkView(const FGSTN_LinkFragment* LinkFragment, int32 DrillTypeIndex)
+{
+	FGSTN_DrillLinkView View;
+	if (!LinkFragment || DrillTypeIndex <= 0)
+	{
+		return View;
+	}
+	const FGSTN_LinkState& Body = LinkFragment->Links.Body;
+	if (Body.LinkTypeIndex != DrillTypeIndex || Body.Role != 1)
+	{
+		return View;
+	}
+	const bool bBreaking = Body.Phase == EGSTN_LinkPhase::Exiting || (Body.IsActive() && Body.HasFlag(GSTNLinkFlags::PendingBreak));
+	View.bPending = Body.Phase == EGSTN_LinkPhase::Pending;
+	View.bActive = Body.IsActive() && !Body.HasFlag(GSTNLinkFlags::PendingBreak);
+	View.bBrokenByHit = bBreaking && Body.GetBreakReason() == EGSTN_LinkBreakReason::Hit;
+	return View;
+}
+
+void FGSTN_DrillTickExtension::ReadLatchEnd(const FGSTN_DrillFragment& Fragment, const FGSTN_CombatSyncCore& Core, const FGSTN_DrillLinkView& Link,
+	FGSTN_DrillFrameInputs& InOutInputs)
+{
+	if (!Fragment.IsLatched())
+	{
+		return;
+	}
+	// Until the bore ability holds its own loop, the dive's timeline stands for the held crouch: the dive ability ends on the release
+	InOutInputs.bCrouchHeld = Core.ActionState == EGSTN_ActionState::InTimeline && Core.TimelineStartFrame < Fragment.LatchFrame;
+	// The driller staggered or knocked out by any source, before the link notices the hit: detach, the hitstun wins (7.4)
+	InOutInputs.bDrillerInHitstun |= Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Tumble;
+	InOutInputs.bDrillerKnockedOut |= Core.ActionState == EGSTN_ActionState::KO;
+	if (!Link.bActive)
+	{
+		InOutInputs.bDrillerInHitstun |= Link.bBrokenByHit;
+		InOutInputs.bTargetGone |= !Link.bBrokenByHit;
+	}
+}
+
+bool FGSTN_DrillTickExtension::ReleaseLinkOnUnlatch(bool bWasLatched, const FGSTN_DrillFragment& Fragment, const FGSTN_DrillLinkView& Link,
+	FGSTN_LinkFragment* LinkFragment)
+{
+	if (!bWasLatched || Fragment.IsLatched() || !Link.bActive || !LinkFragment)
+	{
+		return false;
+	}
+	return FGSTN_LinkTickExtension::MarkPendingBreak(*LinkFragment, static_cast<uint8>(EGSTN_LinkBreakReason::Release));
+}
+
+int32 FGSTN_DrillTickExtension::GetDrillTypeIndex()
+{
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	return Registry ? Registry->GetTypeIndex(GSTNSpinDrillTags::Link_Type_Drill) : 0;
 }
 
 bool FGSTN_DrillTickExtension::WantsDiveGravity(const FGSTN_DrillFragment* Fragment)
@@ -414,12 +500,16 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 				Inputs.Request = EGSTN_DrillRequest::Dive;
 			}
 		}
-		if (Inputs.Request == EGSTN_DrillRequest::None)
+		if (const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments))
 		{
-			if (const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments))
+			// The drill latch as the link tick (priority 120) left it this frame; nothing to read for an entity that never linked
+			const FGSTN_LinkFragment* LinkFragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
+			const FGSTN_DrillLinkView Link = LinkFragment ? ReadLinkView(LinkFragment, GetDrillTypeIndex()) : FGSTN_DrillLinkView();
+			if (Inputs.Request == EGSTN_DrillRequest::None)
 			{
-				Inputs.Request = ReadDiveOutcome(*Fragment, Context.Frame, Context.AttackerHits.Num() > 0, Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::None);
+				Inputs.Request = ReadDiveOutcome(*Fragment, Context.Frame, Context.AttackerHits.Num() > 0, Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::None, Link);
 			}
+			ReadLatchEnd(*Fragment, Context.Out.Core, Link, Inputs);
 		}
 		break;
 	default:

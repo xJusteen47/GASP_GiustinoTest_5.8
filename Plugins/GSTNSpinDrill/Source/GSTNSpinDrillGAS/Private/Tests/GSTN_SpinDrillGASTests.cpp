@@ -3,6 +3,11 @@
 
 #include "Abilities/GSTN_GA_DrillDive.h"
 #include "Abilities/GSTN_GA_Spin.h"
+#include "Data/GSTN_LinkTypeDefinition.h"
+#include "GSTN_DrillLinkType.h"
+#include "GSTN_LinkRegistry.h"
+#include "Rules/GSTN_LinkRule_Drill.h"
+#include "State/GSTN_LinkState.h"
 #include "Input/GSTN_InputConditions.h"
 #include "GSTN_SpinDrillLibrary.h"
 #include "GSTN_SpinDrillTags.h"
@@ -157,6 +162,65 @@ bool FGSTN_SpinDrillGASDiveTest::RunTest(const FString& Parameters)
 	Fragment.PhaseStartFrame = 20;
 	TestEqual(TEXT("lag frame 17 of 18: nothing"), UGSTN_GA_DrillDive::DecideFromFragment(&Fragment, 37, 18), 0);
 	TestEqual(TEXT("lag over: end"), UGSTN_GA_DrillDive::DecideFromFragment(&Fragment, 38, 18), 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SpinDrillGASLinkTypeTest, "GSTNSpinDrill.GAS.Latch.LinkTypeAndRule", GSTNSpinDrillGASTest::Flags)
+bool FGSTN_SpinDrillGASLinkTypeTest::RunTest(const FString& Parameters)
+{
+	const UGSTN_LinkTypeDefinition* Definition = FGSTN_DrillLinkType::Build(nullptr);
+	if (!TestNotNull(TEXT("built"), Definition))
+	{
+		return false;
+	}
+	TArray<FString> Errors;
+	Definition->Validate(Errors);
+	TestEqual(TEXT("the definition validates"), Errors.Num(), 0);
+	TestTrue(TEXT("the drill type on the Body channel"), Definition->LinkType == GSTNSpinDrillTags::Link_Type_Drill && Definition->Channel == EGSTN_LinkChannel::Body);
+	TestEqual(TEXT("the driller (role 1) is the parked role"), Definition->GetParkedRoleIndex(), 1);
+	TestTrue(TEXT("the driller acts and does not turn with the stick"), Definition->InitiatorRole.bActsWhileLinked && Definition->InitiatorRole.YawLimitDeg == 0.f);
+	TestTrue(TEXT("the drilled target keeps acting"), Definition->TargetRole.bActsWhileLinked && !Definition->TargetRole.bParked);
+	TestTrue(TEXT("the driller's machine predicts the seat"), Definition->bInitiatorPredicts);
+	TestFalse(TEXT("hits only: not offered by the interact button"), Definition->InteractOffer.IsOffered());
+	TestTrue(TEXT("the drill immunity is in the request requirements (the snapshot's request tag mask)"),
+		Definition->RequestRequirements.IgnoreTags.HasTagExact(GSTNSpinDrillTags::Immunity_Drill));
+
+	if (const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get())
+	{
+		TestTrue(TEXT("registered with GSTNLink at startup"), Registry->GetTypeIndex(GSTNSpinDrillTags::Link_Type_Drill) > 0);
+	}
+
+	// The rule on a request context (the shared checks need only the definition and two distinct entities)
+	const UGSTN_LinkRule_Drill* Rule = Cast<UGSTN_LinkRule_Drill>(Definition->Rules.Num() > 0 ? Definition->Rules[0].Get() : nullptr);
+	if (!TestNotNull(TEXT("the drill rule"), Rule))
+	{
+		return false;
+	}
+	FGSTN_LinkRequestContext Context;
+	Context.Frame = 200;
+	Context.LinkType = GSTNSpinDrillTags::Link_Type_Drill;
+	Context.Definition = Definition;
+	Context.Initiator.EntityId = 1;
+	Context.Target.EntityId = 2;
+	TestTrue(TEXT("a neutral target (a prop, no team) is drilled"), Rule->Evaluate_Implementation(Context).bAccepted);
+	FGSTN_LinkRequestContext Allies = Context;
+	Allies.Initiator.TeamId = 1;
+	Allies.Target.TeamId = 1;
+	TestTrue(TEXT("an ally refuses (Team)"), Rule->Evaluate_Implementation(Allies).Refusal == EGSTN_LinkRefusal::Team);
+	FGSTN_LinkRequestContext Enemies = Allies;
+	Enemies.Target.TeamId = 2;
+	TestTrue(TEXT("an enemy is drilled"), Rule->Evaluate_Implementation(Enemies).bAccepted);
+	FGSTN_LinkRequestContext Immune = Context;
+	Immune.Target.Tags.AddTag(GSTNSpinDrillTags::Immunity_Drill);
+	TestFalse(TEXT("Combat.Immunity.Drill refuses"), Rule->Evaluate_Implementation(Immune).bAccepted);
+	FGSTN_LinkRequestContext Recent = Context;
+	Recent.Target.LatchImmunityEndFrame = 210;
+	TestTrue(TEXT("the latch immunity after the last latcher refuses"), Rule->Evaluate_Implementation(Recent).Refusal == EGSTN_LinkRefusal::Immunity);
+	FGSTN_LinkRequestContext Busy = Context;
+	Busy.Target.Links.Body.Role = 2;
+	Busy.Target.Links.Body.Phase = EGSTN_LinkPhase::Active;
+	Busy.Target.Links.Body.LinkTypeIndex = 1;
+	TestFalse(TEXT("one driller per target: a busy Body channel refuses"), Rule->Evaluate_Implementation(Busy).bAccepted);
 	return true;
 }
 

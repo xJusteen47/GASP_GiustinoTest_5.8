@@ -175,3 +175,44 @@ Differences between the code and [spin-drill.md](../architecture/spin-drill.md) 
   every tick in TG_PostPhysics on top of Mover's base visual transform. Added by the Presentation module's own loadout extension on every
   machine but a dedicated server. Idle cost: one fragment lookup per tick.
 - Not done (later D11, after the mechanics): placeholder montages per phase, cues, skin override hook, the `Anim.Set.*` leaves.
+
+## D9, part 1 (the drill latch as a GSTNLink type)
+
+- **New plugin edge: GSTNSpinDrill depends on GSTNLink** (uplugin; Core lists GSTNLinkCore, GAS adds GSTNLinkCore/GAS, NP adds
+  GSTNLinkCore/GAS/NP). Plan 2b ships the drill type from this plugin, so the D1 rule "no module lists GSTNLink" ends here. GSTNLink is
+  unchanged: everything goes through its public API (registry `AddDefinition`, `UGSTN_LinkRule`, the link fragment, `MarkPendingBreak`).
+- **Tags (29)**: `Combat.Link.Type.Drill`, `Combat.Link.Role.Driller`, `.Drilled`, `Combat.Immunity.Drill`, declared in GSTNSpinDrillCore.
+- **Type made by code**, the mount's pattern (owner did not answer asset vs code): `FGSTN_DrillLinkType::Build` (GAS), registered at
+  PostEngineInit by the GAS module. Driller = role 1, parked, acts, no collision with the target, `YawLimitDeg` 0; Drilled = role 2, acts;
+  `bInitiatorPredicts`, PendingFrames 2; hit break on the driller (any knockback, the target's own hits do not), own and partner death,
+  leash 300 cm; no timeout, no interact offer. **The driller sits at a fixed offset (0, 0, 100) over the target's root**: GSTNLink places a
+  parked role per type, not per latch, so the tip does not sit where it hit (needs a per-link anchor seam in GSTNLink: OPEN).
+- **Rule** `UGSTN_LinkRule_Drill` (Core): GSTNLink's shared checks, then allies refuse (Team), `Combat.Immunity.Drill` refuses, the
+  latch immunity after the last latcher refuses. No weight limit. The immunity tag is also in the definition's `RequestRequirements`,
+  which is what puts it in the snapshot's request tag mask (the rule alone would never see it). It stands for "hittable but not
+  drillable" until D12 decides by penetration; `FGSTN_DrillTargetResponse::bNeverDrillable` is not read by the rule (the target side
+  sees no drill snapshot extension).
+- **The tip asks, the link decides**: the dive tip's hit data carries `LinkType = Combat.Link.Type.Drill`. GSTNLink makes it a request:
+  no damage on the tip hit (the bore does the damage), the attacker's link goes Pending on the hit frame, Active on the response (or
+  PendingFrames later on the driller's own machine), idle on a refusal (the hit does not land, no hitstop).
+- **Phase machine** (`FGSTN_DrillLinkView` from the link fragment, read at AfterExecute after the link tick): Diving + Active -> Latch
+  (asked every frame, seats from `MinDiveFramesBeforeLatch`); Pending -> new request `AwaitLatch` (flag `GSTNDrillFlags::AwaitingLatch`);
+  idle with the flag -> Bounce (refused or timed out); a tip hit with no link asked -> Bounce as D8. Latched: the link no longer Active ->
+  broken by a hit = DetachHitstun, any other break (death, distance, forced) = target gone = Launch; the core state's hitstun, tumble and
+  KO also detach. **Crouch held = the dive's timeline still runs** (the dive ability ends on the release) until the bore ability holds its
+  own loop; so the dive's 120 frames also cap the bore for now. When the drill ends its own latch (pop, launch) while the link is Active
+  it marks GSTNLink's Release break (`ReleaseLinkOnUnlatch`); the watchdog places the exit as for any link.
+- Not in part 1 (next): `UGSTN_GA_DrillBore` with the track hook stall and the tip's re-hit interval (hits, `HitsLanded`, the target
+  response's scales), the launch and pop velocities (`ComputeLaunchVelocity` via an instant effect), the Latched/Detached/Launched
+  outbox events, the Launch air spin refresh, harness scenarios.
+- Tests: `GSTNSpinDrill.NP.Latch.{LinkView, DiveOutcomeFromLink, EndAndRelease}`, `GSTNSpinDrill.GAS.Latch.LinkTypeAndRule`; the tag
+  test counts 29 and checks the link type is declared.
+
+## Triage: SUITE_LINK latch_big_enemy_host_latches_client (M7-01/02 OPEN 7)
+
+- Not the D6/D7 seams: for a hitbox with `RehitIntervalFrames` 0 `MakeTargetKey` returns the group, so the ring key, the max-targets
+  count and the hit presentation key are the values of before; the outbox event key posts only for keys with a tag. No other spin commit
+  touches a file outside GSTNSpinDrill (GSTNSpinDrill is not enabled in those runs).
+- The check (`hits <= 4` counter steps over the two hits of the attack window) was already at its limit before the rebase: 3, 4, 4 in the
+  m7-g2/g5 editor logs; after it 5, 5, 3, 5. One odd step over the limit (half a reconcile on the counter). No code fix; options for the
+  lead: count per hit instead of per window, or measure the distribution over ~10 runs at 0 % before changing the bound.

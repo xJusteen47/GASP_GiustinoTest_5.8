@@ -16,6 +16,7 @@
 #include "Serialization/MemoryWriter.h"
 #include "Sim/GSTN_DrillFragment.h"
 #include "Sim/GSTN_DrillTickExtension.h"
+#include "Sim/GSTN_LinkFragment.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -769,6 +770,150 @@ bool FGSTN_DrillNPSpinCancelTest::RunTest(const FString& Parameters)
 	FGSTN_DrillTickExtension::ReadCancelStart(*FGSTN_SpinCancelTrack::Find(CancelCcw), Stop);
 	FGSTN_DrillTickExtension::StepAfterExecute(Air, 110, Stop, Longer);
 	TestEqual(TEXT("extra frames: low gravity until the cancel frame + 5"), Air.LowGravityUntilFrame, 115);
+	return true;
+}
+
+namespace GSTNDrillNPTest
+{
+	/** A link fragment whose Body channel holds a link of TypeIndex in Role and Phase */
+	FGSTN_LinkFragment BodyLink(uint8 TypeIndex, uint8 Role, EGSTN_LinkPhase Phase, uint8 LinkFlags = 0, EGSTN_LinkBreakReason Reason = EGSTN_LinkBreakReason::None)
+	{
+		FGSTN_LinkFragment Link;
+		Link.Links.Body.LinkTypeIndex = TypeIndex;
+		Link.Links.Body.Role = Role;
+		Link.Links.Body.Phase = Phase;
+		Link.Links.Body.Serial = 1;
+		Link.Links.Body.Flags = LinkFlags;
+		Link.Links.Body.BreakReason = static_cast<uint8>(Reason);
+		return Link;
+	}
+
+	FGSTN_DrillFragment DivingFrom(int32 Start)
+	{
+		FGSTN_DrillFragment Fragment;
+		Fragment.Phase = EGSTN_DrillPhase::Diving;
+		Fragment.PhaseStartFrame = Start;
+		return Fragment;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPLatchLinkViewTest, "GSTNSpinDrill.NP.Latch.LinkView", GSTNDrillNPTest::Flags)
+bool FGSTN_DrillNPLatchLinkViewTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNDrillNPTest;
+	constexpr uint8 Drill = 3;
+	auto View = [](const FGSTN_LinkFragment& Link) { return FGSTN_DrillTickExtension::ReadLinkView(&Link, Drill); };
+
+	const FGSTN_LinkFragment ActiveDrill = BodyLink(Drill, 1, EGSTN_LinkPhase::Active);
+	TestFalse(TEXT("no link fragment: nothing"), FGSTN_DrillTickExtension::ReadLinkView(nullptr, Drill).bActive);
+	TestFalse(TEXT("drill type not registered (index 0): nothing"), FGSTN_DrillTickExtension::ReadLinkView(&ActiveDrill, 0).bActive);
+	TestTrue(TEXT("pending driller"), View(BodyLink(Drill, 1, EGSTN_LinkPhase::Pending, GSTNLinkFlags::Predicted)).bPending);
+	TestTrue(TEXT("active driller"), View(ActiveDrill).bActive);
+	TestFalse(TEXT("another link type is not the drill's"), View(BodyLink(Drill + 1, 1, EGSTN_LinkPhase::Active)).bActive);
+	TestFalse(TEXT("the drilled side (role 2) is not the driller"), View(BodyLink(Drill, 2, EGSTN_LinkPhase::Active)).bActive);
+	const FGSTN_DrillLinkView Hit = View(BodyLink(Drill, 1, EGSTN_LinkPhase::Active, GSTNLinkFlags::PendingBreak, EGSTN_LinkBreakReason::Hit));
+	TestTrue(TEXT("a decided hit break: no longer active, broken by a hit"), !Hit.bActive && Hit.bBrokenByHit);
+	const FGSTN_DrillLinkView Exiting = View(BodyLink(Drill, 1, EGSTN_LinkPhase::Exiting, 0, EGSTN_LinkBreakReason::PartnerDeath));
+	TestTrue(TEXT("exiting for the target's death: not active, not a hit"), !Exiting.bActive && !Exiting.bBrokenByHit);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPLatchDiveOutcomeTest, "GSTNSpinDrill.NP.Latch.DiveOutcomeFromLink", GSTNDrillNPTest::Flags)
+bool FGSTN_DrillNPLatchDiveOutcomeTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNDrillNPTest;
+	const FGSTN_DrillSimTuning Tuning = FGSTN_DrillSimTuning::MakeDefault();
+	FGSTN_DrillLinkView Pending;
+	Pending.bPending = true;
+	FGSTN_DrillLinkView Active;
+	Active.bActive = true;
+
+	// The tip's hit frame: the link tick (120) already marked the request Pending, so the dive waits instead of bouncing
+	FGSTN_DrillFragment F = DivingFrom(100);
+	TestTrue(TEXT("a tip hit with the request pending: await, no bounce"), FGSTN_DrillTickExtension::ReadDiveOutcome(F, 101, true, false, Pending) == EGSTN_DrillRequest::AwaitLatch);
+	FGSTN_DrillFrameInputs In;
+	In.Request = EGSTN_DrillRequest::AwaitLatch;
+	FGSTN_DrillTickExtension::StepAfterExecute(F, 101, In, Tuning);
+	TestTrue(TEXT("awaiting: still diving, the flag set"), F.Phase == EGSTN_DrillPhase::Diving && (F.Flags & GSTNDrillFlags::AwaitingLatch) != 0);
+
+	// Refused (or timed out): the link went back to idle -> the bounce of 7.6, the flag gone with it
+	FGSTN_DrillFragment Refused = F;
+	TestTrue(TEXT("idle after awaiting: bounce"), FGSTN_DrillTickExtension::ReadDiveOutcome(Refused, 103, false, false) == EGSTN_DrillRequest::Bounce);
+	In.Request = EGSTN_DrillRequest::Bounce;
+	FGSTN_DrillTickExtension::StepAfterExecute(Refused, 103, In, Tuning);
+	TestTrue(TEXT("bounced, no awaiting flag left"), Refused.Phase == EGSTN_DrillPhase::None && Refused.Flags == GSTNDrillFlags::Bounced);
+
+	// Accepted on the dive's first frame: the latch is asked every frame and seats from MinDiveFramesBeforeLatch on
+	FGSTN_DrillFragment Early = DivingFrom(100);
+	Early.Flags = GSTNDrillFlags::AwaitingLatch;
+	TestTrue(TEXT("active: latch"), FGSTN_DrillTickExtension::ReadDiveOutcome(Early, 101, false, true, Active) == EGSTN_DrillRequest::Latch);
+	In = FGSTN_DrillFrameInputs();
+	In.Request = EGSTN_DrillRequest::Latch;
+	In.LatchSeatFrames = 12;
+	In.LatchMaxBoreFrames = 90;
+	FGSTN_DrillTickExtension::StepAfterExecute(Early, 101, In, Tuning);
+	TestTrue(TEXT("too early to seat: still diving"), Early.Phase == EGSTN_DrillPhase::Diving);
+	FGSTN_DrillTickExtension::StepAfterExecute(Early, 100 + Tuning.MinDiveFramesBeforeLatch, In, Tuning);
+	TestTrue(TEXT("seats the next frame"), Early.Phase == EGSTN_DrillPhase::Seating && Early.LatchFrame == 101 + Tuning.MinDiveFramesBeforeLatch);
+	TestEqual(TEXT("the awaiting flag cleared by the latch"), static_cast<int32>(Early.Flags & GSTNDrillFlags::AwaitingLatch), 0);
+	TestTrue(TEXT("a plain tip hit (no link asked) still bounces"), FGSTN_DrillTickExtension::ReadDiveOutcome(DivingFrom(100), 103, true, false) == EGSTN_DrillRequest::Bounce);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPLatchEndTest, "GSTNSpinDrill.NP.Latch.EndAndRelease", GSTNDrillNPTest::Flags)
+bool FGSTN_DrillNPLatchEndTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNDrillNPTest;
+	const FGSTN_DrillSimTuning Tuning = FGSTN_DrillSimTuning::MakeDefault();
+	FGSTN_DrillLinkView Active;
+	Active.bActive = true;
+
+	FGSTN_DrillFragment Latched;
+	Latched.Phase = EGSTN_DrillPhase::Boring;
+	Latched.PhaseStartFrame = 115;
+	Latched.LatchFrame = 103;
+	Latched.SeatFrames = 12;
+	Latched.MaxBoreFrames = 90;
+
+	FGSTN_CombatSyncCore Core;
+	Core.ActionState = EGSTN_ActionState::InTimeline;
+	Core.TimelineStartFrame = 98;
+	FGSTN_DrillFrameInputs In;
+	FGSTN_DrillTickExtension::ReadLatchEnd(Latched, Core, Active, In);
+	TestTrue(TEXT("the dive's timeline runs: crouch held, nothing gone"), In.bCrouchHeld && !In.bTargetGone && !In.bDrillerInHitstun);
+	FGSTN_DrillFragment Kept = Latched;
+	FGSTN_DrillTickExtension::StepAfterExecute(Kept, 120, In, Tuning);
+	TestTrue(TEXT("held: keeps boring"), Kept.Phase == EGSTN_DrillPhase::Boring);
+
+	// Crouch released: the dive ability ended its timeline -> the pop, and the drill releases the link it holds
+	Core.ActionState = EGSTN_ActionState::Actionable;
+	In = FGSTN_DrillFrameInputs();
+	FGSTN_DrillTickExtension::ReadLatchEnd(Latched, Core, Active, In);
+	TestFalse(TEXT("timeline over: crouch released"), In.bCrouchHeld);
+	FGSTN_DrillFragment Popped = Latched;
+	FGSTN_DrillTickExtension::StepAfterExecute(Popped, 120, In, Tuning);
+	TestTrue(TEXT("released without a jump: the pop (no phase, no latch)"), Popped.Phase == EGSTN_DrillPhase::None && Popped.LatchFrame == INDEX_NONE);
+	FGSTN_LinkFragment Link = BodyLink(3, 1, EGSTN_LinkPhase::Active);
+	TestTrue(TEXT("the drill releases its link"), FGSTN_DrillTickExtension::ReleaseLinkOnUnlatch(true, Popped, Active, &Link));
+	TestTrue(TEXT("as GSTNLink's pending Release break"), Link.Links.Body.HasFlag(GSTNLinkFlags::PendingBreak)
+		&& Link.Links.Body.GetBreakReason() == EGSTN_LinkBreakReason::Release);
+	TestFalse(TEXT("still latched: no release"), FGSTN_DrillTickExtension::ReleaseLinkOnUnlatch(true, Latched, Active, &Link));
+
+	// The link ended first: a hit on the driller detaches it (no launch); any other break is the target gone (the launch)
+	Core.ActionState = EGSTN_ActionState::InTimeline;
+	FGSTN_DrillLinkView ByHit;
+	ByHit.bBrokenByHit = true;
+	In = FGSTN_DrillFrameInputs();
+	FGSTN_DrillTickExtension::ReadLatchEnd(Latched, Core, ByHit, In);
+	FGSTN_DrillFragment Detached = Latched;
+	FGSTN_DrillTickExtension::StepAfterExecute(Detached, 120, In, Tuning);
+	TestTrue(TEXT("broken by a hit: detached, no launch"), In.bDrillerInHitstun && Detached.Phase == EGSTN_DrillPhase::None);
+	TestFalse(TEXT("nothing to release: the link is no longer active"), FGSTN_DrillTickExtension::ReleaseLinkOnUnlatch(true, Detached, ByHit, &Link));
+	In = FGSTN_DrillFrameInputs();
+	FGSTN_DrillTickExtension::ReadLatchEnd(Latched, Core, FGSTN_DrillLinkView(), In);
+	FGSTN_DrillFragment Launched = Latched;
+	FGSTN_DrillTickExtension::StepAfterExecute(Launched, 120, In, Tuning);
+	TestTrue(TEXT("link gone otherwise: the target is gone, the launch"), In.bTargetGone && Launched.Phase == EGSTN_DrillPhase::Launching);
 	return true;
 }
 
