@@ -185,6 +185,22 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNDefence",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNLink",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNSpinDrill",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPiggyback",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNDepthMarker",
 			"Enabled": true
 		},
