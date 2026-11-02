@@ -234,3 +234,8 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   Giro successivo (owner): ginocchia davanti e raccolte al petto nella carica (polo del ginocchio in avanti, piedi sotto le
   anche, la tenuta avanza invece di salire: ginocchio da y -20 a +12 cm dal bacino); chiave al 2 con le due braccia che
   salgono larghe insieme (il braccio sx solitario in alto è sparito). Costo totale del thread circa $17-19.
+- Ultimo giro (owner): piedi affiancati allo stomp, ginocchia avanti nel rilascio, braccia sopra la testa al 3-4, mani
+  villain piegate 35° in fuori al polso (`author.py` `wrist_out`), avambracci più alti nella carica: testa da -6 a -3,9 cm
+  (2 tentativi, resta da chiudere con gli avambracci incrociati -5,7). Regole dell'owner raccolte in `cards/README.md`.
+  Aperti: clearance braccia; salto 4->5 delle braccia da sopra la testa a davanti (da guardare). Prossimi thread (owner):
+  rifinitura della pipeline, agente Fable che suggerisce correzioni alla timeline. Thread chiuso per contesto.

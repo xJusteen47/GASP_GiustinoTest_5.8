@@ -18,6 +18,8 @@ pose (all optional; missing keys = idle):
            PELVIS frame (offset from the pelvis bone, axes turned with the pelvis)
 Axes are Unreal component space: X = character's left, Y = forward, Z = up. A rotation [rx, ry, rz] is a rotation vector
 in degrees about those axes (+rx tips up -> back, i.e. a forward lean is negative; it swings a hanging limb forward).
+  wrist_out [deg, 0, 0]   bends both hands at the wrist away from the forearm line, toward the outside of the body
+           (owner: the villain hand reads only when it breaks the arm line); blended per frame
   fingers  [open, 0, 0]   0 = the template's fists (default), 1 = the overlord "villain hand": open and flat, fingers
            straight and pressed together (joints 01-03 straightened, metacarpals as the template); blended per frame.
 Fingers keep the template's fists unless `fingers` opens them. Limbs are two-bone IK in the plane of the pole; each bone's roll comes from mapping its
@@ -157,6 +159,12 @@ class Poser:
             fk(f"clavicle_{s}", pose.get(f"clavicle_{s}"))
             fk(f"upperarm_{s}")
             self._limb(P, R, f"upperarm_{s}", f"lowerarm_{s}", f"hand_{s}", pose.get(f"arm_{s}"), P["spine_05"], Dch, "hand_rot")
+            wo = float((pose.get("wrist_out") or [0])[0])
+            if wo:
+                fa = P[f"hand_{s}"] - P[f"lowerarm_{s}"]; out = Dch @ np.array([1.0 if s == "l" else -1.0, 0, 0])
+                ax = np.cross(fa, out); n = np.linalg.norm(ax)
+                if n > 1e-6:
+                    R[f"hand_{s}"] = rv(ax / n * wo) @ R[f"hand_{s}"]
             for t in ("upperarm_twist_01", "upperarm_twist_02"):
                 fk(f"{t}_{s}")
             for t in ("lowerarm_twist_01", "lowerarm_twist_02"):
