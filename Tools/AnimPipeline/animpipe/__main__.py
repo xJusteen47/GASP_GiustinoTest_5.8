@@ -11,6 +11,7 @@
     python -m animpipe review <card.json> [--hitstop=8] [--at=<active frame>] [--force]   build + check + in-game render, gated:
                                                 no render while a blocking check fails (--force renders anyway)
     python -m animpipe casc-export|casc-import|casc-revert|casc-diff ...   card <-> Cascadeur, sparse keys (animpipe/cascadeur.py)
+    python -m animpipe casc-spacing <card> --fit|--apply|--score            Cascadeur in-betweens = the build's (animpipe/spacing.py)
 
 Every command writes its full result to Saved/AnimPipeline/animpipe/<name>_<cmd>.json and prints at most 5 lines."""
 import json, os, sys, time
@@ -186,7 +187,8 @@ def main():
         from animpipe import cascadeur as K
         {"casc-export": lambda: K.export_cmd(args[0], opt), "casc-import": lambda: K.import_cmd(args[0], opt),
          "casc-revert": lambda: K.revert(args[0], args[1] if len(args) > 1 else None),
-         "casc-diff": lambda: K.diff(args[0], args[1])}[cmd]()
+         "casc-diff": lambda: K.diff(args[0], args[1]),
+         "casc-spacing": lambda: __import__("animpipe.spacing", fromlist=["x"]).plan_cmd(args[0], opt)}[cmd]()
     elif cmd == "card":
         from animpipe.card import load, key_frames, windows
         c = load(args[0])
