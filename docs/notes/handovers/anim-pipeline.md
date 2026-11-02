@@ -260,3 +260,19 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   via dal gomito dx entra nell'avambraccio sx (meglio: -3,1 cm); gomiti più larghi (polo) o mani più avanti non aiutano.
   La testa è chiusa tra i due gomiti: serve cambiare la posa delle braccia approvata (spalle/gomiti) oppure un'esenzione.
   Lasciata all'owner: scheda e clip come le pose approvate. Costo extra ~$3.
+- **Pose dell'owner bloccate (02/11 22:43)**: carica (5, tenuta identica al 12) = suo Cascadeur f15, stomp (15, 17; 31 con
+  l'assestamento di 2 cm) = suo f23. Lette da `cards/overlord/refs/overlord_dair_owner_poses.json` (copia in git del file
+  letto alle 21:07 da `autosave2-Down air.casc`; script server di Cascadeur spento, non riletto dal vivo) con il
+  `casc_to_author.py` della PR #24 (rescale; rapporti segmenti 1,0 su questi rig: la lettura non era sbagliata). Della
+  pipeline restano: altezza del bacino, dita, `wrist_out`, piedi affiancati x ±9 allo stomp (regola owner; f23 ha le
+  caviglie incrociate). Clavicole tolte a 5/12. `source` sulle pose 5/12/15/17/31, blocchi `approved` 5+12 e 15+17
+  (formato PR #24, scritti a mano: PR #24 non mergiata, conflitti solo in README e handover) più quello di PR #24 (gambe 13-14).
+- Perché era derivata: i giri successivi a v2 avevano alzato/avanzato le mani di 8 cm, aggiunto clavicole, cambiato busto
+  e testa a mano. Diff per parte vs f15 al frame 5 prima -> dopo: gomito dx 17,2 -> 5,4 cm, mano dx 16,9 -> 5,4, mano sx
+  13,3 -> 5,0, polpacci 25-36 -> 6, testa 3,8 -> 3,8 (posizioni dal bacino; il resto ~5 cm è la forma del busto UE).
+  Stomp vs f23: mani 3,0 -> 3,7, gomiti 4,2-4,9 -> 3,6-3,9, testa 3,1; piedi 7-17 cm per i piedi affiancati (voluto).
+- Check: co_motion, hitstop_snap (1,0 cm), contact_faf, bone_lengths, fists, clearance PASS; legibility FAIL (ereditato).
+  Clearance con esenzioni accettate dall'owner: avambracci/mani contro la testa 3-14 (sua f15: -3,0 dx, -4,7 sx; 13 resta
+  -5,0 nel rilascio fra le due pose), braccia conserte sul petto 15-34 (sua f23, fino a -3,7). Frame 3-4, 13-14, timing invariati.
+- Aperti: carica ferma 5-12 (prima "viva"): se l'owner la vuole viva va sbloccata; `source_fidelity` (piano §10) non fatto.
+  Il bridge fallisce a volte la prima chiamata: si rilancia. Costo del thread circa $12.

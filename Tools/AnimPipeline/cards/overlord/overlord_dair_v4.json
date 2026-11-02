@@ -6,7 +6,7 @@
  "fps": 60,
  "timing_csv": "refs/ufd/GanondorfDAir_timing.csv",
  "effector": "foot_l",
- "_design": "Kit overlord ('elegant violence', M. Bison / Rugal). Ganondorf dair timing (UFD: startup 16, active 16-18, total 44 -> anim active 14-16, FAF 42) and its shape (knees tucked to the chest, both feet driven straight down); M. Bison head-stomp upper body: the arms rise and cross above the head through the startup, then fold on the chest (Bison's crossed arms) as the feet strike, and stay folded. Aerial: no idle entry, frame 0 already in the air tuck. No owner Step poses: the poses are authored data (author block), v1 for the owner's judgement. v1b (owner refs IMG_9040/9041 seen): arms folded tight and high on the chest, hands on the opposite upper arm; toes pointed at the stomp. v2 (2026-11-02): owner's Cascadeur key poses (Saved/AnimPipeline/overlord_dair_owner.casc, frames 15 and 23, read with casc_to_author.py; data in Saved/AnimPipeline/dair_v2/owner_poses_cascadeur.json) replace the anticipation and the stomp: owner 15 (tight ball, knees to the chest, forearms crossed in front of the face) -> anim 12, held and compressed to 13; owner 23 (straight vertical body leaning back, legs together, crossed arms high on the chest) -> anim 14, so the whole extension lands ON the first hitbox frame. Ganondorf timing kept (owner). Villain hand (open, fingers straight and together) at the anticipation, as asked. Owner rule: 'too much is just right' (Sakurai): toes pointed harder than his pose (-45). Clearance fix: crossed forearms 9-16 cm further forward at 12-13 (right in front of the left), head tuck 35% less; folded hands 3-6 cm off the chest in the recovery. Clearance pass 2: right forearm 5 cm above the left at 12-13, elbows wider; folded hands 5 cm further off the chest from 14. v3 (owner review of v2): arms, trunk and legs move as one: the arms travel relative to the trunk on every segment (low at the sides -> wide and rising at 6 -> crossing at chest height at 10 -> owner's crossed forearms in front of the face at 12 -> pushed up at 13 -> slammed down onto the chest at 14 with the legs), the trunk curls progressively (0 -> 6 -> 10 -> 12) instead of all at once. Head lag removed (part_delays head 0): the head reached its stomp pose one frame after the hit, so it snapped after the hitstop; hitstop_snap now counts the head's turn (20 cm lever). v4 (owner timing, replaces the GIF timing): initial pose almost upright, one knee up, arms open, hands open (0) -> extreme charge reached at 5 (owner 15) -> charge held and still tightening to 11 -> release starts at 12-13 (still reads as the charge) -> stomp lands on 14 (active 14-16) -> stomp held to 30 with a small settle -> recovery to 42. Slow, heavy move. Charge hold is alive: 5->11 the feet tuck 8 cm higher, the hands rise 8 cm, the trunk curls 6 deg, all together. Release spread 11->14 (owner: a slow move takes a few frames to let the force go): 15% at 12, 42% at 13, the last and largest 58% lands on 14. Owner: the first frame is already drawn in and loaded (55% of the way to the charge, arms pulled back with elbows behind), so 5 extremises a loaded pose. Owner: hitbox from anim frame 15 (16th frame); the charge hold runs to 12, release 12->15; charge poses more drawn in (feet +5 cm, trunk -6 deg). Frame 0 (owner: a sharp start, not already the charge): legs half drawn, trunk 30% curled, arms flung open wide and low behind the shoulders with open hands; 3: the arms sweep above the head and start crossing on the way; 5: the charge. Owner: knees stay in front, tucked to the chest through the charge (knee pole forward, feet under the hips, the hold creeps forward not up); key 2 keeps both arms rising wide together. Owner round: feet side by side at the stomp (no crossed ankles), villain hands bent 35 deg outward at the wrist 0-12. Owner review of that round: the arms got worse and the frog-open knees at 14 were right, so the arms at 3/5/12/13 (trunk at 3 included) and the knee poles at 13-14 are back to the previous round.",
+ "_design": "Kit overlord ('elegant violence', M. Bison / Rugal). Ganondorf dair timing (UFD: startup 16, active 16-18, total 44 -> anim active 14-16, FAF 42) and its shape (knees tucked to the chest, both feet driven straight down); M. Bison head-stomp upper body: the arms rise and cross above the head through the startup, then fold on the chest (Bison's crossed arms) as the feet strike, and stay folded. Aerial: no idle entry, frame 0 already in the air tuck. No owner Step poses: the poses are authored data (author block), v1 for the owner's judgement. v1b (owner refs IMG_9040/9041 seen): arms folded tight and high on the chest, hands on the opposite upper arm; toes pointed at the stomp. v2 (2026-11-02): owner's Cascadeur key poses (Saved/AnimPipeline/overlord_dair_owner.casc, frames 15 and 23, read with casc_to_author.py; data in Saved/AnimPipeline/dair_v2/owner_poses_cascadeur.json) replace the anticipation and the stomp: owner 15 (tight ball, knees to the chest, forearms crossed in front of the face) -> anim 12, held and compressed to 13; owner 23 (straight vertical body leaning back, legs together, crossed arms high on the chest) -> anim 14, so the whole extension lands ON the first hitbox frame. Ganondorf timing kept (owner). Villain hand (open, fingers straight and together) at the anticipation, as asked. Owner rule: 'too much is just right' (Sakurai): toes pointed harder than his pose (-45). Clearance fix: crossed forearms 9-16 cm further forward at 12-13 (right in front of the left), head tuck 35% less; folded hands 3-6 cm off the chest in the recovery. Clearance pass 2: right forearm 5 cm above the left at 12-13, elbows wider; folded hands 5 cm further off the chest from 14. v3 (owner review of v2): arms, trunk and legs move as one: the arms travel relative to the trunk on every segment (low at the sides -> wide and rising at 6 -> crossing at chest height at 10 -> owner's crossed forearms in front of the face at 12 -> pushed up at 13 -> slammed down onto the chest at 14 with the legs), the trunk curls progressively (0 -> 6 -> 10 -> 12) instead of all at once. Head lag removed (part_delays head 0): the head reached its stomp pose one frame after the hit, so it snapped after the hitstop; hitstop_snap now counts the head's turn (20 cm lever). v4 (owner timing, replaces the GIF timing): initial pose almost upright, one knee up, arms open, hands open (0) -> extreme charge reached at 5 (owner 15) -> charge held and still tightening to 11 -> release starts at 12-13 (still reads as the charge) -> stomp lands on 14 (active 14-16) -> stomp held to 30 with a small settle -> recovery to 42. Slow, heavy move. Charge hold is alive: 5->11 the feet tuck 8 cm higher, the hands rise 8 cm, the trunk curls 6 deg, all together. Release spread 11->14 (owner: a slow move takes a few frames to let the force go): 15% at 12, 42% at 13, the last and largest 58% lands on 14. Owner: the first frame is already drawn in and loaded (55% of the way to the charge, arms pulled back with elbows behind), so 5 extremises a loaded pose. Owner: hitbox from anim frame 15 (16th frame); the charge hold runs to 12, release 12->15; charge poses more drawn in (feet +5 cm, trunk -6 deg). Frame 0 (owner: a sharp start, not already the charge): legs half drawn, trunk 30% curled, arms flung open wide and low behind the shoulders with open hands; 3: the arms sweep above the head and start crossing on the way; 5: the charge. Owner: knees stay in front, tucked to the chest through the charge (knee pole forward, feet under the hips, the hold creeps forward not up); key 2 keeps both arms rising wide together. Owner round: feet side by side at the stomp (no crossed ankles), villain hands bent 35 deg outward at the wrist 0-12. Owner review of that round: the arms got worse and the frog-open knees at 14 were right, so the arms at 3/5/12/13 (trunk at 3 included) and the knee poles at 13-14 are back to the previous round. Owner 02/11 22:43: charge (5, held to 12) = his Cascadeur f15, stomp (15-17, 31 with the 2 cm settle) = his f23, both read with casc_to_author (rescale, ratios 1.0 on these rigs) and locked in `approved`; pelvis height, fingers, wrist_out and the side-by-side feet stay the pipeline's. Why the charge had drifted: later rounds moved the hands +8 cm up and forward, added clavicle offsets and changed the trunk curl and head tuck by hand.",
  "_manual": "Owner hand tweaks live on the additive 'Manuale' section of the rig track in /Game/AnimPipeline/Rig/LS_OverlordDAirV4_Build; animpipe build keeps them (cards/README.md). Arms are FK on this rig (arm_*_fk_ik_switch 0): key the *_fk_ctrl controls, the hand IK controls do nothing. Legs are IK.",
  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAir_V4",
  "poses": [
@@ -28,13 +28,21 @@
   {
    "name": "charge",
    "frame": 5,
-   "source": null,
+   "source": {
+    "file": "cards/overlord/refs/overlord_dair_owner_poses.json",
+    "frame": 15,
+    "tool": "casc_to_author (PR 24, rescale; ratios 1.0)"
+   },
    "spacing": "arrive_1_2"
   },
   {
    "name": "charge_hold",
    "frame": 12,
-   "source": null
+   "source": {
+    "file": "cards/overlord/refs/overlord_dair_owner_poses.json",
+    "frame": 15,
+    "tool": "casc_to_author (PR 24, rescale; ratios 1.0)"
+   }
   },
   {
    "name": "release_start",
@@ -50,17 +58,29 @@
   {
    "name": "active",
    "frame": 15,
-   "source": null
+   "source": {
+    "file": "cards/overlord/refs/overlord_dair_owner_poses.json",
+    "frame": 23,
+    "tool": "casc_to_author (PR 24, rescale; ratios 1.0)"
+   }
   },
   {
    "name": "active_end",
    "frame": 17,
-   "source": null
+   "source": {
+    "file": "cards/overlord/refs/overlord_dair_owner_poses.json",
+    "frame": 23,
+    "tool": "casc_to_author (PR 24, rescale; ratios 1.0)"
+   }
   },
   {
    "name": "hold_end",
    "frame": 31,
-   "source": null,
+   "source": {
+    "file": "cards/overlord/refs/overlord_dair_owner_poses.json",
+    "frame": 23,
+    "tool": "casc_to_author (PR 24, rescale; ratios 1.0)"
+   },
    "spacing": "limb_led_recovery",
    "ease_out": 0.333
   },
@@ -218,6 +238,12 @@
   {
    "check": "clearance",
    "frames": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
     9,
     10,
     11,
@@ -264,9 +290,38 @@
     "lowerarm_l|upperarm_r",
     "lowerarm_r|spine_04",
     "hand_l|spine_04",
-    "lowerarm_l|spine_04"
+    "lowerarm_l|spine_04",
+    "hand_r|spine_04",
+    "hand_r|spine_03",
+    "lowerarm_r|spine_03",
+    "hand_l|spine_05",
+    "lowerarm_l|spine_05"
    ],
-   "why": "owner's crossed arms: hands and forearms rest on the opposite arm and the chest (accepted contact). NOT exempt: forearm/hand into the head (lowerarm_r|head 10-13), the known open point of his pose 15 on this mannequin"
+   "why": "owner's crossed arms: hands and forearms rest on the opposite arm and the chest (accepted contact), from the crossing at 3 on. Owner f23 (stomp, locked) folds them straight onto the chest: chest pairs spine_03-05 included (up to -3.7 cm at 15-34)."
+  },
+  {
+   "check": "clearance",
+   "frames": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "pairs": [
+    "lowerarm_r|head",
+    "lowerarm_l|head",
+    "hand_l|head",
+    "hand_r|head"
+   ],
+   "why": "owner 02/11 22:39-22:44: the charge is his Cascadeur f15 pose, locked ('dovrebbe essere a posto'); on this mannequin its crossed forearms rest against the head (offline -2.5/-4.7 cm at 5-12, more in the 12->15 release between his two locked poses). Accepted contact, not a pose to fix."
   }
  ],
  "author": {
@@ -593,37 +648,37 @@
      ]
     },
     "spine": [
-     -75.8,
+     -69.8,
      -11.8,
      -0.3
     ],
     "head": [
-     -10.7,
+     -21.3,
      -1.6,
      -2.3
     ],
     "arm_l": {
      "hand": [
-      -1.5,
-      14.9,
+      -0.9,
+      10.2,
       31.4
      ],
      "pole": [
-      40.3,
-      12.6,
-      46.4
+      40.9,
+      7.9,
+      46.5
      ]
     },
     "leg_l": {
      "foot": [
-      10,
-      12,
-      -10
+      8.0,
+      11.2,
+      -13.7
      ],
      "pole": [
-      18,
-      85,
-      15
+      49.2,
+      57.8,
+      67.7
      ],
      "foot_rot": [
       39.3,
@@ -633,26 +688,26 @@
     },
     "arm_r": {
      "hand": [
-      0.7,
-      14.9,
-      42.1
+      0.1,
+      6.7,
+      34.1
      ],
      "pole": [
-      -30.3,
-      -10.2,
-      49.9
+      -30.9,
+      -15.5,
+      44.9
      ]
     },
     "leg_r": {
      "foot": [
-      -10,
-      12,
-      -10
+      -10.0,
+      6.4,
+      -13.9
      ],
      "pole": [
-      -18,
-      85,
-      15
+      -76.0,
+      31.4,
+      60.5
      ],
      "foot_rot": [
       38.0,
@@ -663,16 +718,6 @@
     "fingers": [
      1,
      0,
-     0
-    ],
-    "clavicle_l": [
-     0,
-     -12,
-     0
-    ],
-    "clavicle_r": [
-     0,
-     12,
      0
     ],
     "wrist_out": [
@@ -695,37 +740,37 @@
      ]
     },
     "spine": [
-     -81.8,
+     -69.8,
      -11.8,
      -0.3
     ],
     "head": [
-     -6.4,
+     -21.3,
      -1.6,
      -2.3
     ],
     "arm_l": {
      "hand": [
-      -1.5,
-      18.9,
-      38.4
+      -0.9,
+      10.2,
+      31.4
      ],
      "pole": [
-      40.3,
-      16.6,
-      53.4
+      40.9,
+      7.9,
+      46.5
      ]
     },
     "leg_l": {
      "foot": [
-      10,
-      16,
-      -10
+      8.0,
+      11.2,
+      -13.7
      ],
      "pole": [
-      18,
-      85,
-      15
+      49.2,
+      57.8,
+      67.7
      ],
      "foot_rot": [
       39.3,
@@ -735,26 +780,26 @@
     },
     "arm_r": {
      "hand": [
-      0.7,
-      24.9,
-      49.1
+      0.1,
+      6.7,
+      34.1
      ],
      "pole": [
-      -30.3,
-      -6.2,
-      56.9
+      -30.9,
+      -15.5,
+      44.9
      ]
     },
     "leg_r": {
      "foot": [
-      -10,
-      16,
-      -10
+      -10.0,
+      6.4,
+      -13.9
      ],
      "pole": [
-      -18,
-      85,
-      15
+      -76.0,
+      31.4,
+      60.5
      ],
      "foot_rot": [
       38.0,
@@ -765,16 +810,6 @@
     "fingers": [
      1,
      0,
-     0
-    ],
-    "clavicle_l": [
-     0,
-     -12,
-     0
-    ],
-    "clavicle_r": [
-     0,
-     12,
      0
     ],
     "wrist_out": [
@@ -992,13 +1027,13 @@
     ],
     "arm_l": {
      "hand": [
-      -11.2,
-      12.5,
+      -10.9,
+      7.6,
       -12.4
      ],
      "pole": [
-      7.4,
-      48.7,
+      7.6,
+      48.9,
       -24.6
      ]
     },
@@ -1014,20 +1049,20 @@
       -37.9
      ],
      "foot_rot": [
-      -45,
+      -20.0,
       0,
       0
      ]
     },
     "arm_r": {
      "hand": [
-      4.5,
-      18.8,
+      4.3,
+      13.7,
       -15.7
      ],
      "pole": [
-      -33.0,
-      12.8,
+      -33.3,
+      12.7,
       -38.2
      ]
     },
@@ -1035,15 +1070,15 @@
      "foot": [
       -9,
       -21.0,
-      -80.8
+      -80.9
      ],
      "pole": [
       -9,
       -2.0,
-      -38.5
+      -38.6
      ],
      "foot_rot": [
-      -45,
+      -16.0,
       0,
       0
      ]
@@ -1073,7 +1108,7 @@
      ]
     },
     "spine": [
-     29.3,
+     28.3,
      34.3,
      -0.1
     ],
@@ -1084,13 +1119,13 @@
     ],
     "arm_l": {
      "hand": [
-      -11.2,
-      11.5,
-      -13.4
+      -10.9,
+      7.6,
+      -12.4
      ],
      "pole": [
-      7.4,
-      48.7,
+      7.6,
+      48.9,
       -24.6
      ]
     },
@@ -1106,20 +1141,20 @@
       -37.9
      ],
      "foot_rot": [
-      -45,
+      -20.0,
       0,
       0
      ]
     },
     "arm_r": {
      "hand": [
-      4.5,
-      17.8,
-      -16.7
+      4.3,
+      13.7,
+      -15.7
      ],
      "pole": [
-      -33.0,
-      12.8,
+      -33.3,
+      12.7,
       -38.2
      ]
     },
@@ -1127,15 +1162,15 @@
      "foot": [
       -9,
       -21.0,
-      -80.8
+      -80.9
      ],
      "pole": [
       -9,
       -2.0,
-      -38.5
+      -38.6
      ],
      "foot_rot": [
-      -45,
+      -16.0,
       0,
       0
      ]
@@ -1165,8 +1200,8 @@
      ]
     },
     "spine": [
-     26.9,
-     32.6,
+     28.3,
+     34.3,
      -0.1
     ],
     "head": [
@@ -1176,13 +1211,13 @@
     ],
     "arm_l": {
      "hand": [
-      -11.2,
-      12.5,
+      -10.9,
+      7.6,
       -12.4
      ],
      "pole": [
-      7.4,
-      48.7,
+      7.6,
+      48.9,
       -24.6
      ]
     },
@@ -1198,20 +1233,20 @@
       -37.9
      ],
      "foot_rot": [
-      -45,
+      -20.0,
       0,
       0
      ]
     },
     "arm_r": {
      "hand": [
-      4.5,
-      18.8,
+      4.3,
+      13.7,
       -15.7
      ],
      "pole": [
-      -33.0,
-      12.8,
+      -33.3,
+      12.7,
       -38.2
      ]
     },
@@ -1219,15 +1254,15 @@
      "foot": [
       -9,
       -21.0,
-      -78.8
+      -78.9
      ],
      "pole": [
       -9,
       -2.0,
-      -38.5
+      -38.6
      ],
      "foot_rot": [
-      -45,
+      -16.0,
       0,
       0
      ]
@@ -1433,5 +1468,57 @@
  "anim_active": [
   15,
   17
+ ],
+ "approved": [
+  {
+   "frames": [
+    13,
+    14
+   ],
+   "parts": [
+    "leg_l",
+    "leg_r"
+   ],
+   "ref": "overlord/overlord_dair_v4.json",
+   "by": "owner",
+   "date": "2026-11-02",
+   "why": "owner 02/11: ginocchia a rana giuste"
+  },
+  {
+   "frames": [
+    5,
+    12
+   ],
+   "parts": [
+    "arm_l",
+    "arm_r",
+    "trunk",
+    "head",
+    "leg_l",
+    "leg_r"
+   ],
+   "ref": "overlord/overlord_dair_v4.json",
+   "by": "owner",
+   "date": "2026-11-02",
+   "why": "owner 02/11 22:43: charge = his Cascadeur f15 pose (refs/overlord_dair_owner_poses.json), locked; fingers and wrist_out stay the pipeline's"
+  },
+  {
+   "frames": [
+    15,
+    17
+   ],
+   "parts": [
+    "arm_l",
+    "arm_r",
+    "trunk",
+    "head",
+    "leg_l",
+    "leg_r"
+   ],
+   "ref": "overlord/overlord_dair_v4.json",
+   "by": "owner",
+   "date": "2026-11-02",
+   "why": "owner 02/11 22:43: stomp = his Cascadeur f23 pose, locked; feet side by side (x +-9, his earlier rule) instead of f23's crossed ankles; fingers stay the pipeline's"
+  }
  ]
 }
