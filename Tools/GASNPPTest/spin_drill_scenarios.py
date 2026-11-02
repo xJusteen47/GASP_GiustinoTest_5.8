@@ -23,6 +23,7 @@ import gasnpp_test as g
 
 KIT_PATH = '/Game/GASNPPTest/Combat/' + g.HIT_KIT
 SUITE_SPIN = ['spin_ground_hits_ring', 'spin_air_hop_low_gravity', 'air_spin_once_per_airtime', 'spin_opposite_cancel', 'drill_ground_lag', 'drill_nondrillable_bounce']
+NEEDED_BUTTONS = ['Input.Button.Spin', 'Input.Button.Crouch']
 TAG_SPINNING = 'Combat.State.Spinning'
 TAG_AIR_SPENT = 'Combat.State.AirSpinSpent'
 TAG_LOW_GRAVITY = 'Combat.State.SpinLowGravity'
@@ -34,20 +35,40 @@ Lib = unreal.GSTN_SpinDrillLibrary
 
 
 # ---- content, in memory ------------------------------------------------------------------------------------------------------------------------
+def _button_names(cfg):
+    return [g._tag_text(b.get_editor_property('tag')) for b in cfg.get_editor_property('buttons')]
+
+
 def prepare_editor():
-    """Adds the default spin bindings to the test kit (in memory). Run in the editor world before PIE: the loadout is compiled when a pawn starts"""
+    """Adds the default spin bindings to the test kit and the Spin and Crouch buttons to IC_GASNPP_Test that lack them (all in memory). Run in the editor
+    world before PIE: the loadout and the button map are built when a pawn starts. Idempotent; restore_editor undoes it (defence_batch calls it at the end)"""
     kit = unreal.load_asset(KIT_PATH)
     _saved.setdefault('kit_bindings', list(kit.get_editor_property('kit_bindings')))
-    return 'spin bindings added', Lib.add_spin_bindings_to_kit(kit, True)
+    cfg = unreal.load_asset(g.INPUT_CONFIG)
+    buttons = list(cfg.get_editor_property('buttons'))
+    names = _button_names(cfg)
+    missing = [b for b in NEEDED_BUTTONS if b not in names]
+    if missing:
+        _saved.setdefault('buttons', list(buttons))
+        for name in missing:
+            button = type(buttons[0])()
+            button.set_editor_property('tag', g._tag(name))
+            buttons.append(button)
+        cfg.set_editor_property('buttons', buttons)
+    return 'spin bindings added', Lib.add_spin_bindings_to_kit(kit, True), 'buttons added', missing
 
 
 def restore_editor():
-    """Puts the kit's bindings back as they were before prepare_editor (with PIE stopped)"""
-    if 'kit_bindings' not in _saved:
-        return 'nothing to restore'
-    kit = unreal.load_asset(KIT_PATH)
-    kit.set_editor_property('kit_bindings', _saved.pop('kit_bindings'))
-    return 'kit bindings restored'
+    """Puts the kit's bindings and the input config's buttons back as they were before prepare_editor (with PIE stopped)"""
+    out = []
+    if 'kit_bindings' in _saved:
+        kit = unreal.load_asset(KIT_PATH)
+        kit.set_editor_property('kit_bindings', _saved.pop('kit_bindings'))
+        out.append('kit bindings restored')
+    if 'buttons' in _saved:
+        unreal.load_asset(g.INPUT_CONFIG).set_editor_property('buttons', _saved.pop('buttons'))
+        out.append('buttons restored')
+    return out or 'nothing to restore'
 
 
 def last():
@@ -62,7 +83,11 @@ def actor(wi, key):
 
 def drill(wi, key):
     """(phase, phase start frame, air spins used, low gravity until) of the pawn `key` as world `wi` shows it, None without a fragment"""
-    ok, phase, start, used, low = Lib.get_shown_drill_numbers(actor(wi, key))
+    # UE Python gives None (not a tuple) when the function returns false: no drill fragment on that pawn
+    r = Lib.get_shown_drill_numbers(actor(wi, key))
+    if not isinstance(r, tuple) or len(r) != 5:
+        return None
+    ok, phase, start, used, low = r
     return (phase, start, used, low) if ok else None
 
 
@@ -86,6 +111,15 @@ def spin_steps(client, t, clockwise=True):
 
 def jump_steps(client, t):
     return [(t, lambda: ('jump', g.press(client, 'jump')))]
+
+
+def _apply_kit():
+    """The test kit (with the spin bindings added in memory by prepare_editor) on every pawn: the pawns start on their default loadout, which has none"""
+    return 'kit applied', [g._apply_loadout(g.key_of_player(i), g.HIT_KIT) for i in g.all_players()]
+
+
+def _run(run, steps):
+    run.run([(0.05, _apply_kit)] + list(steps))
 
 
 # ---- scenarios ---------------------------------------------------------------------------------------------------------------------------------------
@@ -139,7 +173,7 @@ def scenario_spin_ground_hits_ring(client=1, victim=2):
         (t_end + 1.05, run.at('no rollback on the spinner during the spin', lambda: (
             marks['after']['rb'] - marks['before']['rb'] == 0, f"{marks['before']['rb']} -> {marks['after']['rb']}"))),
         (t_end + 1.1, run.finish()), (t_end + 1.15, _finish(run, 'spin_ground_hits_ring'))]
-    run.run(steps)
+    _run(run, steps)
     return 'running'
 
 
@@ -167,7 +201,7 @@ def scenario_spin_air_hop_low_gravity(client=1):
             run.saw_tag(TAG_AIR_SPENT, t_end, t_end + 0.5, 'srv') and not run.saw_tag(TAG_AIR_SPENT, t_end + 1.3, t_end + 1.5, 'srv'), ''))),
         (t_end + 1.55, lambda: run.note(f"descent with the spin vs the plain jump: {up_speed(t_end + 0.3, t_end + 0.6)[:3]} / {up_speed(0.9, 1.2)[:3]}")),
         (t_end + 1.6, run.finish()), (t_end + 1.65, _finish(run, 'spin_air_hop_low_gravity'))]
-    run.run(steps)
+    _run(run, steps)
     return 'running'
 
 
@@ -197,7 +231,7 @@ def scenario_air_spin_once_per_airtime(client=1):
         (t4 + 0.1, run.at('on the ground the spin works and nothing is spent', lambda: (seen['ground'] and seen['ground'][0] == PHASE_SPINNING and seen['ground'][2] == 0, seen))),
         (t4 + 0.1, run.at('a new jump allows one air spin again', lambda: (seen['again'] and seen['again'][0] == PHASE_SPINNING and seen['again'][2] == 1, seen))),
         (t4 + 1.2, run.finish()), (t4 + 1.25, _finish(run, 'air_spin_once_per_airtime'))]
-    run.run(steps)
+    _run(run, steps)
     return 'running'
 
 
@@ -234,7 +268,7 @@ def scenario_spin_opposite_cancel(client=1):
         (t3 + 0.1, run.at('with no spin running the same rotation is a counter-clockwise spin', lambda: (
             all((d or (0,))[0] == PHASE_SPINNING for d in seen['plain'].values()), seen['plain']))),
         (t3 + 1.0, run.finish()), (t3 + 1.05, _finish(run, 'spin_opposite_cancel'))]
-    run.run(steps)
+    _run(run, steps)
     return 'running'
 
 
@@ -285,7 +319,7 @@ def scenario_drill_ground_lag(client=1):
             all((d or (0,))[0] not in (PHASE_DIVING, PHASE_LAG) for d in seen['after'].values()), seen['after']))),
         (t1 + 2.05, run.at('no rollback on the diver', lambda: (seen['after_rb'] - seen['before_rb'] == 0, f"{seen['before_rb']} -> {seen['after_rb']}"))),
         (t1 + 2.6, run.finish()), (t1 + 2.65, _finish(run, 'drill_ground_lag'))]
-    run.run(steps)
+    _run(run, steps)
     return 'running'
 
 
@@ -319,7 +353,7 @@ def scenario_drill_nondrillable_bounce(client=1, victim=2):
             and max([s['vel'][2] for s in run._win('cli', t1, t1 + 1.0, sim=True)] or [0.0]) > 500.0, ''))),
         (t1 + 1.25, run.at('the air spin stayed spent after the bounce', lambda: (run.saw_tag(TAG_AIR_SPENT, t1 + 0.2, t1 + 0.6, 'srv'), ''))),
         (t1 + 1.6, run.finish()), (t1 + 1.65, _finish(run, 'drill_nondrillable_bounce'))]
-    run.run(steps)
+    _run(run, steps)
     return 'running'
 
 # drill_tilted_gravity (plan D8): needs a level with a gravity volume the harness can place a pawn in; the dive and bounce vectors under any gravity

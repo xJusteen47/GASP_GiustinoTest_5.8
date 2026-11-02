@@ -82,3 +82,23 @@ after one checkpoint.
   (3) Launch/pop velocity vs the link's exit placement at F+1 unverified in PIE. (4) KeepPlunging still ends next frame. (5) Bore damage scale: D12.
 - Cost: one Opus thread, ~140k context, 3 UBT builds + 2 headless + 2 harness editor runs (~60 min machine): medium-high.
 - Next: fix the spin harness input (IC buttons) and write the six drill scenarios, then D12.
+
+## SD-04 (laptop, 2026-11-02): spin harness input; drill scenarios NOT written
+
+- Done: `spin_drill_scenarios.prepare_editor` adds Input.Button.Spin/Crouch to IC_GASNPP_Test and the spin bindings to KIT_Test_Hits, in memory;
+  `restore_editor` undoes both and `defence_batch` now calls the module's `restore_editor` at the end of a batch (no more kit pollution for
+  later suites). Every spin scenario applies the test kit to all pawns at 0.05 s (`_apply_kit`; the pawns started on their default loadout).
+  `drill()` treats the None UE Python returns for "false + out params" as no fragment (it used to raise).
+- NOT done: SUITE_SPIN still 0/6 (runs in Saved/Logs/sd-04/spin-run*.log, 3 attempts). Spin never starts on any world: no drill fragment on any
+  pawn (get_shown_drill_numbers -> None), vz after the air spin only the jump's 386. The kit applies (only "arbitrary choice" warnings for
+  bindings 4/5, 7/8 of the spin commands: air spin vs ground spin require one tag each, a design warning). Next check: after
+  `server_apply_test_loadout` does the pawn show `Command.Movement.Spin.*` in its slot table / is the SpinDrill kit extension and fragment
+  in the pawn's sync state (needs the extension in the kit's loadout compile, not only bindings)? Maybe the stick rotation never reaches the
+  combat input buffer (IA_Move on IC_GASNPP_Test as move_action). Probe with `Lib.get_shown_drill_text` + `unreal.log` of the slot table.
+- Six drill scenarios: not written (they depend on spin working). Max-2-attempts rule hit; stopped.
+- Input (owner request): IMC_Sandbox: Crouch is now on Gamepad L1 (it was Sprint's); Sprint moved to L3 (Gamepad_LeftThumbstick). Crouch was
+  also on C and gamepad B (face right). SHARED BINARY changed: Content/Input/IMC_Sandbox.uasset. NOT hold-to-crouch yet: IA_Crouch has an
+  InputTriggerPressed trigger (GASP's BP toggles on it). Hold needs a Down trigger or Pressed+Released in the BP/IA: not changed, needs the owner's OK.
+- Environment: UnrealEditor stuck for hours came from my own script's empty driver path (PowerShell regex on a backslash); fixed. Stop-Process
+  of the editor works with the new .claude/settings.json rules only as the bare command.
+- Cost: one Sonnet thread, ~100k context, 6 editor runs (~25 min machine), medium. Low value per cost: the root cause of "no spin" is open.

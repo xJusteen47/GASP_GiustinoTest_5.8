@@ -982,6 +982,12 @@ def defence_batch(names=None, lag=60, jitter=15, loss=0, settle=3.0, ready_timeo
     def done():
         unreal.unregister_slate_post_tick_callback(_batch['handle'])
         _batch['handle'] = None
+        # In-memory content of the module (kit bindings, extra buttons) must not leak into the next suite of the same editor
+        if module and hasattr(module, 'restore_editor'):
+            try:
+                module.restore_editor()
+            except Exception as e:
+                unreal.log_warning(f'restore_editor: {e}')
         _batch['status'] = 'done'
         if _batch['report']:
             path = os.path.join(unreal.Paths.project_saved_dir(), 'Logs', _batch['report'])
