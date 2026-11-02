@@ -231,5 +231,6 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   dall'owner, vincono sul CSV). Chiavi 0/3/5/12/13/14/15/17/31/37/42. Frame 0 distinto dall'air idle ma non già in carica:
   gambe raccolte a metà, busto chiuso al 30%, braccia spalancate dietro le spalle e mani aperte. Al 3 le braccia salgono
   sopra la testa e cominciano a incrociarsi, al 5 c'è la carica, più chiusa di prima. Gate come prima (clearance aperta).
-  **Difetto aperto**: al frame 2 il braccio sx passa dritto in alto da solo (interpolazione 0->3 attraverso la testa); da
-  correggere con una chiave al 2 o un polo diverso. Costo totale del thread circa $15-17.
+  Giro successivo (owner): ginocchia davanti e raccolte al petto nella carica (polo del ginocchio in avanti, piedi sotto le
+  anche, la tenuta avanza invece di salire: ginocchio da y -20 a +12 cm dal bacino); chiave al 2 con le due braccia che
+  salgono larghe insieme (il braccio sx solitario in alto è sparito). Costo totale del thread circa $17-19.
