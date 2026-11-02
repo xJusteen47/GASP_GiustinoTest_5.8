@@ -154,5 +154,8 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   rilettura subito dopo il salvataggio (dialog): il build campiona bene lo stesso.
 - Output nei project files: `dair_v1_griglia_laterale.png`, `dair_v1_ingame_hitstop_vs_whiff.mp4`, `dair_v1_pose_lato_fronte.png`.
 - v1b dopo le immagini dell'owner (Bison SF4 e SF2): braccia conserte strette e alte sul petto, mani sul braccio opposto, punte
-  dei piedi tese allo stomp. Output `dair_v1b_*`. Prossimo: giudizio owner; clearance delle braccia sopra la testa (frame 9-13).
+  dei piedi tese allo stomp. Output `dair_v1b_*`. Fermato qui (owner darà pose Cascadeur): la compenetrazione 9-13 resta.
+- Pose owner in ingresso: `.casc` in `Saved/AnimPipeline/overlord_dair_owner.casc` (mai sovrascritto), FBX a step accanto,
+  import in `/Game/AnimPipeline/Pilot/` (`import_take.py`); nuova scheda `overlord_dair_v2.json` con `source_anim` = quella take,
+  `source: {file, frame}` per posa e niente blocco `author`; poi `build`, `check`, `ingame_judge.py ... 8 --at=14`.
 - Costo stimato: Opus ~75 chiamate, contesto ~110k, circa $7-9; niente subagenti (render e build erano 3 comandi).
