@@ -41,4 +41,10 @@ namespace GSTNCombatNPTags
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_Reaction_StaggerInPlace);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_Reaction_PushBack);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_Reaction_Launch);
+
+	/**
+	 * Tag of the extra HitLanded and KO events a credited hit adds (M7 G3): the copy whose instigator is the credit partner, not the attacker.
+	 * A listener that counts its own hits filters it out (or in, to count assists)
+	 */
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_CreditPartner);
 }

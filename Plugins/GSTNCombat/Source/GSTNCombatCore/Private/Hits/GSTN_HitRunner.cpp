@@ -52,6 +52,10 @@ void FGSTN_HitPipelineRunner::Merge(const FGSTN_StepResult& Result, FGSTN_HitRes
 		Outcome.Knockback = Result.Knockback;
 	}
 	Outcome.MeterGains.Append(Result.MeterGains);
+	if (Result.Credit.IsSet())
+	{
+		Outcome.Credit = Result.Credit;
+	}
 	Outcome.Events.Append(Result.Events);
 	Outcome.Effects.Append(Result.Effects);
 	Outcome.Requests.Append(Result.Requests);

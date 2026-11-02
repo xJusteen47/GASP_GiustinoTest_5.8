@@ -502,7 +502,7 @@ bool FGSTN_CombatVictim::ReachedCap(const UGSTN_CombatRules* Rules, const FGSTN_
 	}
 }
 
-void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame, AActor* Attacker, AActor* Victim, const FGameplayTagContainer& MoveTags, FGSTN_SimEventOutbox& Outbox)
+void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame, AActor* Attacker, AActor* Victim, const FGameplayTagContainer& MoveTags, FGSTN_SimEventOutbox& Outbox, AActor* CreditPartner)
 {
 	FGSTN_SimEvent Event;
 	Event.Frame = Frame;
@@ -533,7 +533,18 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 
 	FGSTN_SimEvent Landed = Event;
 	Landed.EventType = GSTNCombatTags::Event_HitLanded;
-	Outbox.Add(MoveTemp(Landed));
+	if (Hit.Outcome.Credit.IsSet())
+	{
+		FGSTN_SimEvent Credited = Landed;
+		Credited.Instigator = CreditPartner;
+		Credited.Tags.AddTag(GSTNCombatNPTags::EventHit_CreditPartner);
+		Outbox.Add(MoveTemp(Landed));
+		Outbox.Add(MoveTemp(Credited));
+	}
+	else
+	{
+		Outbox.Add(MoveTemp(Landed));
+	}
 	Event.EventType = GSTNCombatTags::Event_HitReceived;
 	const FGSTN_SimEvent Envelope = Event;
 	if (!Hit.bRicochet)
@@ -557,7 +568,7 @@ void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FG
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::Lock_Reaction, IsActionLocked(Core) ? 1 : 0);
 }
 
-void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox)
+void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox, const FGSTN_HitCredit* Credit, AActor* CreditPartner)
 {
 	FGSTN_SimEvent Event;
 	Event.EventType = GSTNCombatTags::Event_KO;
@@ -565,6 +576,15 @@ void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor*
 	Event.Instigator = Cause == EGSTN_KOCause::Health && Attacker ? Attacker : Victim;
 	Event.Target = Victim;
 	Event.Tags.AddTag(Cause == EGSTN_KOCause::Zone ? GSTNCombatTags::KOReason_Zone : GSTNCombatTags::KOReason_Health);
+	if (Cause == EGSTN_KOCause::Health && Credit && Credit->IsSet())
+	{
+		FGSTN_SimEvent Credited = Event;
+		Credited.Instigator = CreditPartner;
+		Credited.Tags.AddTag(GSTNCombatNPTags::EventHit_CreditPartner);
+		Outbox.Add(MoveTemp(Event));
+		Outbox.Add(MoveTemp(Credited));
+		return;
+	}
 	Outbox.Add(MoveTemp(Event));
 }
 

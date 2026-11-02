@@ -221,15 +221,31 @@ EGSTN_StepResult UGSTN_HitStep_MeterGain::Resolve_Implementation(const FGSTN_Hit
 	const float Amount = View.Outcome.Damage * View.Rules->MeterGainPerDamage;
 	if (Amount > 0.f)
 	{
-		FGSTN_MeterGain& Gain = Out.MeterGains.AddDefaulted_GetRef();
-		Gain.Meter = View.Rules->MeterGainMeter;
-		Gain.Amount = Amount;
+		// A credited partner (M7 G3) takes its share as a request of its own; MeterGains stays the attacker's meter, the attacker's prediction
+		// sums only the Attacker requests, so its own gain is the rest
+		const FGSTN_HitCredit& Credit = View.Outcome.Credit;
+		const float PartnerAmount = Credit.IsSet() ? FGSTN_HitCredit::PartnerPart(Amount, Credit.PartnerShare) : 0.f;
+		const float OwnerAmount = Amount - PartnerAmount;
+		if (OwnerAmount > 0.f)
+		{
+			FGSTN_MeterGain& Gain = Out.MeterGains.AddDefaulted_GetRef();
+			Gain.Meter = View.Rules->MeterGainMeter;
+			Gain.Amount = OwnerAmount;
 
-		FGSTN_HitRequest& Request = Out.Requests.AddDefaulted_GetRef();
-		Request.Kind = EGSTN_HitRequestKind::MeterGain;
-		Request.Target = EGSTN_HitRequestTarget::Attacker;
-		Request.Effect = View.Rules->MeterGainEffect;
-		Request.Magnitude = Amount;
+			FGSTN_HitRequest& Request = Out.Requests.AddDefaulted_GetRef();
+			Request.Kind = EGSTN_HitRequestKind::MeterGain;
+			Request.Target = EGSTN_HitRequestTarget::Attacker;
+			Request.Effect = View.Rules->MeterGainEffect;
+			Request.Magnitude = OwnerAmount;
+		}
+		if (PartnerAmount > 0.f)
+		{
+			FGSTN_HitRequest& Request = Out.Requests.AddDefaulted_GetRef();
+			Request.Kind = EGSTN_HitRequestKind::MeterGain;
+			Request.Target = EGSTN_HitRequestTarget::Partner;
+			Request.Effect = View.Rules->MeterGainEffect;
+			Request.Magnitude = PartnerAmount;
+		}
 	}
 	return EGSTN_StepResult::Continue;
 }

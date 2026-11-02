@@ -199,3 +199,40 @@ notes assumed) and a 117 cm visible snap for 3-4 ticks, at 0 % and 2 %. `scenari
 4. Per-carrier data the request context and the exit query do not carry: socket and offset, exit mode and distance, the combat attributes
    `Weight` / `MaxCarryWeight`, the match's `FGSTN_MountRules`.
 5. The committed `.uproject` still does not list GSTNPiggyback (the brief: restore it byte-identical); enabling it in the project is the owner's call.
+
+## G3: partner credit in GSTNCombat (M7-03)
+
+### Shipped names that differ from the plan
+
+| Plan | Shipped |
+|---|---|
+| "hit entries and the `HitLanded`/`KO` events gain an optional `FGSTN_EntityRef CreditPartner` and a quantised `PartnerShare`" | `FGSTN_HitCredit { int32 PartnerEntityId = INDEX_NONE; uint8 PartnerShare; }` in `FGSTN_HitOutcome::Credit` and `FGSTN_StepResult::Credit` (core). An entity id, not an `FGSTN_EntityRef`: the pipeline already names the attacker by its combat entity id (`AttackerEntityId`), and a partner is always a fighter. The **inbox entry is not changed** (no wire change): the step that credits reads the attacker's link state from the attacker's snapshot extensions (`FGSTN_ResolvedHit::AttackerExtensions`), on the victim's run and the attacker's prediction alike. Merge: a set credit replaces the outcome's (later step wins), an unset one changes nothing |
+| `PartnerShare` scale | 0..255, the scale of the piggyback plugin's `SplitCredit` (`FGSTN_HitCredit::PartnerPart(Amount, Share) = Amount * Share / 255`); the attacker keeps the rest, so the two always add up |
+| "the `MeterGain` request splits meter" | `UGSTN_HitStep_MeterGain` writes the attacker's part as before (`MeterGains` + an `Attacker` request) and the partner's part as a request with the new `EGSTN_HitRequestTarget::Partner`. The attacker's prediction sums only `Attacker` requests, so its own meter is the rest with no NP change. **Nobody applies `Partner` requests yet**: the partner's meter lives in the partner's simulation, so the owner of the partner (G7, the piggyback hit step, or a link inbox message) applies it. A credit step must run before MeterGain |
+| "the event carries the partner" (`FGSTN_SimEvent` has no field for it; it is GSTNInput's) | A credited hit adds a **copy** of `HitLanded` right after the attacker's, instigated by the partner's actor and tagged `Combat.Event.Hit.CreditPartner` (new native tag of GSTNCombatNP); a credited Health KO adds the same copy of `KO` (a zone KO credits nobody). `UGSTN_CombatSimComponent::FindCreditPartnerActor` resolves the id through the world subsystem. Without a credit the events are exactly the pre-G3 ones (test), so "event size unchanged" holds as "event list unchanged" |
+| Tests `GSTNCombat.Hits.Credit.{EmptyByDefault, MeterSplit, EventCarriesPartner}` | As planned, in `GSTNCombatNP/.../Tests/GSTN_CombatNPTests_Credit.cpp` (the events live in the NP module) |
+
+## G6 item 1: predicted rider exits, design of the seam (M7-03, not built)
+
+Owner decision S1 (2026-11-01): the rider predicts its own exit, the server rewinds the carrier so it places the same exit. Design for the next
+thread (two edits, in this order, each its own commit):
+
+1. **GSTNCombatNP (generic): the entity's lag-compensated view for tick extensions.** `IGSTN_CombatTickServices::GetViewSnapshot()` returns
+   `ResolveAttackerSnapshot(TimeStep, StepSnapshot)`, built lazily once per frame (the overlay the attacker step already uses: on the
+   authority, for a remote player's pawn, the other entities at the input's interpolation time, capped by `MaxRewindMs`; everywhere else the
+   shared snapshot, which on a client already holds the interpolated proxies the player sees). Cost only when an extension asks.
+2. **GSTNLink (generic): initiator-placed exits.** `UGSTN_LinkTypeDefinition::bInitiatorPlacesExit` (default false: grabs and latches
+   unchanged). When the parked initiator releases (its own `Release`/`Escape` PendingBreak in the link tick), the tick runs the type's (or the
+   move's) exit placer on the partner's entry of the **view** snapshot and writes `FGSTN_LinkActions::Exit` (Teleport, due at Frame + 1)
+   in its own fragment, predicted. `FGSTN_LinkWatchdogEntity` gains that `Exit`; for a break whose exiting side already carries an exit
+   for this serial, the watchdog copies it into the Break command instead of placing (so the rider's client receives what it predicted:
+   no correction). Collision on the rider's client: `IGSTN_ExitCollisionQuery` from the world in the sim is not rollback-safe; the first
+   version places without collision (placer's first candidate) and the watchdog checks the copied place with the world, falling back to
+   its own placement (one correction) only when it overlaps.
+3. **Shared with D9 part 2 (drill per-latch anchor):** the same view gives the driller its anchor: at the latch, the tip's hit location
+   relative to the target's pose in the driller's view (`GetViewSnapshot`), quantised (int16 cm x3) into a new per-link
+   `FGSTN_LinkState` anchor override (flag bit `GSTNLinkFlags::AnchorOverride`), which the snapshot contributor and the linked movement
+   mode use instead of the definition's fixed offset. Server and client agree because the server's hit is lag-compensated by the same overlay.
+   The anchor field changes the link state's wire (live states only; idle stays one byte): bump the fragment version.
+- Harness for item 1: `dismount_predicted` (client rider dismounts while the carrier walks and runs: 0 corrections on the rider's
+  client, exit within 5 cm of the authority's), plus SUITE_MOUNT and SUITE_LINK unchanged.

@@ -43,7 +43,9 @@ UENUM(BlueprintType)
 enum class EGSTN_HitRequestTarget : uint8
 {
 	Victim,
-	Attacker
+	Attacker,
+	/** The outcome's credit partner (FGSTN_HitCredit::PartnerEntityId): who applies it is the layer that owns the partner (a link plugin) */
+	Partner
 };
 
 /** A gameplay effect the outcome asks for. The core records the class and the number; the GAS layer applies it */
@@ -77,6 +79,30 @@ struct GSTNCOMBATCORE_API FGSTN_MeterGain
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Meter")
 	float Amount = 0.f;
+};
+
+/**
+ * Who shares the credit of a hit with its attacker (M7 G3): a partner entity and its share of the meter, on a 0..255 scale (255 = all of it),
+ * the scale of the piggyback plugin's SplitCredit. Neutral: no core step writes it, a step of a plugin that knows partners (a pair move, a
+ * linked rider) does. Empty by default, and an empty credit changes nothing anywhere: the meter goes to the attacker, no extra event.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_HitCredit
+{
+	GENERATED_BODY()
+
+	/** The partner's combat entity id; INDEX_NONE = no partner */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Credit")
+	int32 PartnerEntityId = INDEX_NONE;
+
+	/** The partner's part of the meter the hit gives, Amount * PartnerShare / 255. 0 = the partner is named in the events but gains nothing */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Credit")
+	uint8 PartnerShare = 0;
+
+	bool IsSet() const { return PartnerEntityId != INDEX_NONE; }
+
+	/** The partner's part of Amount; the attacker keeps Amount minus it, so the two always add up to Amount */
+	static float PartnerPart(float Amount, uint8 Share) { return Amount * static_cast<float>(Share) / 255.f; }
 };
 
 /**
@@ -184,6 +210,10 @@ struct GSTNCOMBATCORE_API FGSTN_HitOutcome
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Outcome")
 	TArray<FGSTN_MeterGain> MeterGains;
+
+	/** Who shares the credit (M7 G3). Written by a plugin step; the MeterGain step splits the meter by it, the victim's events name the partner */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Outcome")
+	FGSTN_HitCredit Credit;
 
 	/** Events the layer above raises (tags, never stored in sync state) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Outcome")
@@ -354,6 +384,10 @@ struct GSTNCOMBATCORE_API FGSTN_StepResult
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Step|Outcome")
 	TArray<FGSTN_MeterGain> MeterGains;
+
+	/** Replaces the outcome's credit when set (a later step wins); an unset credit changes nothing. A step that credits must run before MeterGain */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Step|Outcome")
+	FGSTN_HitCredit Credit;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Step|Outcome")
 	TArray<FGameplayTag> Events;

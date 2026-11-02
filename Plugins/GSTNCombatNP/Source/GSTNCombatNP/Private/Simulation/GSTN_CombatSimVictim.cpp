@@ -389,12 +389,13 @@ void UGSTN_CombatSimComponent::AppendVictimEvents(int32 Frame)
 		{
 			AttackerCombat->AppendMoveTags(Hit.Entry.AttackerTimeline, Hit.Entry.AttackerBinding, MoveTags);
 		}
-		FGSTN_CombatVictim::AppendHitEvents(Hit, Frame, Attacker, GetOwner(), MoveTags, EventOutbox);
+		FGSTN_CombatVictim::AppendHitEvents(Hit, Frame, Attacker, GetOwner(), MoveTags, EventOutbox, FindCreditPartnerActor(Hit));
 	}
 	if (VictimResult.KO != EGSTN_KOCause::None)
 	{
-		AActor* Attacker = VictimResult.KOHitIndex != INDEX_NONE ? FindAttackerActor(VictimResult.Hits[VictimResult.KOHitIndex]) : nullptr;
-		FGSTN_CombatVictim::AppendKOEvent(VictimResult.KO, Frame, Attacker, GetOwner(), EventOutbox);
+		const FGSTN_VictimHit* KOHit = VictimResult.Hits.IsValidIndex(VictimResult.KOHitIndex) ? &VictimResult.Hits[VictimResult.KOHitIndex] : nullptr;
+		AActor* Attacker = KOHit ? FindAttackerActor(*KOHit) : nullptr;
+		FGSTN_CombatVictim::AppendKOEvent(VictimResult.KO, Frame, Attacker, GetOwner(), EventOutbox, KOHit ? &KOHit->Outcome.Credit : nullptr, KOHit ? FindCreditPartnerActor(*KOHit) : nullptr);
 	}
 }
 
@@ -464,6 +465,12 @@ AActor* UGSTN_CombatSimComponent::FindAttackerActor(const FGSTN_VictimHit& Hit) 
 {
 	const UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
 	return World ? World->FindOwnerActor(Hit.Entry.AttackerId) : nullptr;
+}
+
+AActor* UGSTN_CombatSimComponent::FindCreditPartnerActor(const FGSTN_VictimHit& Hit) const
+{
+	const UGSTN_CombatWorldSubsystem* World = WorldSubsystem.Get();
+	return World && Hit.Outcome.Credit.IsSet() ? World->FindOwnerActor(Hit.Outcome.Credit.PartnerEntityId) : nullptr;
 }
 
 FGameplayEffectContextHandle UGSTN_CombatSimComponent::MakeHitContext(const FGSTN_VictimHit& Hit) const

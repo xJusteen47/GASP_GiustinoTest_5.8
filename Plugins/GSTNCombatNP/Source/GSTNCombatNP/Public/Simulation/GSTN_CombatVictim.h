@@ -281,9 +281,11 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 * The outbox events of one resolved hit (combat.md 5.6): HitLanded (for the attacker's listeners) and HitReceived (the victim's), the
 	 * second only when the hit was not a ricochet. Both carry the hit type, the relationship, bStaggered, the tumble and the reaction as tags,
 	 * the damage as the magnitude, and MoveTags (the attacker's command and move) when the caller has them. Appended unconditionally: the
-	 * host's FinalizeFrame publishes them on the authority, once
+	 * host's FinalizeFrame publishes them on the authority, once. A hit whose outcome names a credit partner (M7 G3) adds a copy of HitLanded
+	 * right after it, instigated by CreditPartner (the caller resolves it; null when it cannot) and tagged Combat.Event.Hit.CreditPartner.
+	 * Without a credit the events are exactly the ones before G3
 	 */
-	static void AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame, AActor* Attacker, AActor* Victim, const FGameplayTagContainer& MoveTags, FGSTN_SimEventOutbox& Outbox);
+	static void AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame, AActor* Attacker, AActor* Victim, const FGameplayTagContainer& MoveTags, FGSTN_SimEventOutbox& Outbox, AActor* CreditPartner = nullptr);
 
 	/**
 	 * Projects the combat state onto the ability system for the frame (the pre-tick): Combat.State.Hitstun (hitstun or splat), Tumble and
@@ -293,8 +295,9 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 */
 	static void ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame);
 
-	/** The KO event: the instigator is the attacker for a Health KO (the victim itself for a zone), the target the combatant; KOReason as a tag */
-	static void AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox);
+	/** The KO event: the instigator is the attacker for a Health KO (the victim itself for a zone), the target the combatant; KOReason as a tag. A Health KO whose
+	 * hit names a credit partner (Credit set) adds a copy instigated by CreditPartner and tagged Combat.Event.Hit.CreditPartner */
+	static void AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox, const FGSTN_HitCredit* Credit = nullptr, AActor* CreditPartner = nullptr);
 
 	/** The stick on the plane normal to Up: forward is the camera's, turned about Up (never world Z) */
 	static FVector StickToPlane(const FVector2D& Stick, double CameraYawDegrees, const FVector& Up);

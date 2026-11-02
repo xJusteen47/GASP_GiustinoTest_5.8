@@ -733,6 +733,9 @@ private:
 	FGameplayEffectContextHandle MakeHitContext(const FGSTN_VictimHit& Hit) const;
 	AActor* FindAttackerActor(const FGSTN_VictimHit& Hit) const;
 
+	/** The actor of the hit's credit partner (M7 G3), or null when the hit names none or it is not on this machine */
+	AActor* FindCreditPartnerActor(const FGSTN_VictimHit& Hit) const;
+
 	/**
 	 * The surface launch of a combatant that is not tumbling (GSTN_CombatSimSurfaceLaunch.cpp), decided in the ability system's pre-tick from the
 	 * tracked Mover state, so it needs no sync state of its own: the queued layered move is what Mover keeps and rolls back

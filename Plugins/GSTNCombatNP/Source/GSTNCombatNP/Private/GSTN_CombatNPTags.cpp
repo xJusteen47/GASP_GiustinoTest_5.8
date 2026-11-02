@@ -19,4 +19,5 @@ namespace GSTNCombatNPTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_Reaction_StaggerInPlace, "Combat.Event.Hit.Reaction.StaggerInPlace", "Tag of a HitLanded or HitReceived event: the reaction tier was a stagger in place");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_Reaction_PushBack, "Combat.Event.Hit.Reaction.PushBack", "Tag of a HitLanded or HitReceived event: the reaction tier was a push back");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_Reaction_Launch, "Combat.Event.Hit.Reaction.Launch", "Tag of a HitLanded or HitReceived event: the reaction tier was a launch");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_CreditPartner, "Combat.Event.Hit.CreditPartner", "Tag of the copy of a HitLanded or KO event sent to the hit's credit partner (FGSTN_HitCredit)");
 }
