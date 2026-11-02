@@ -7,6 +7,7 @@
 #include "GSTN_CombatCoreTags.h"
 #include "GSTN_LinkRegistry.h"
 #include "GSTN_LinkRule_Mount.h"
+#include "Hits/GSTN_CombatHitTags.h"
 #include "GSTN_PiggybackTags.h"
 #include "GSTN_Placer_Mount.h"
 #include "Rules/GSTN_LinkRule_Team.h"
@@ -80,6 +81,8 @@ UGSTN_LinkTypeDefinition* FGSTN_MountLinkType::Build(UObject* Outer, const FGSTN
 	Definition->InteractOffer.Priority = OfferPriority;
 	Definition->InteractOffer.ReachCm = OfferReachCm;
 	Definition->InteractOffer.RequiredKitExtension = FGSTN_MountKitExtension::StaticStruct();
+	// Allies only, before the rules run too (GSTNLink's offer filter: the grab lists Enemy and Neutral, the mount Ally)
+	Definition->InteractOffer.Relationships.AddTag(GSTNCombatHitTags::Relationship_Ally);
 
 	if (Rules.bPredictRiderExits)
 	{
