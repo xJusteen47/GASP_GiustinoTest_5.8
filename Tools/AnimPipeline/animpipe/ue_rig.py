@@ -51,7 +51,9 @@ def _sequence(anim, name, rate):
     actor.destroy_actor()
     tr = binding.add_track(unreal.MovieSceneSkeletalAnimationTrack)
     sec = tr.add_section(); sec.set_range(0, end + 1)
-    p = sec.get_editor_property("params"); p.set_editor_property("animation", src); sec.set_editor_property("params", p)
+    p = sec.get_editor_property("params"); p.set_editor_property("animation", src)
+    tw = p.get_editor_property("play_rate"); tw.set_fixed_play_rate(0.99999); p.set_editor_property("play_rate", tw)   # at t == length the section loops back to frame 0: keep the last frame inside the clip
+    sec.set_editor_property("params", p)
     LSE = unreal.LevelSequenceEditorBlueprintLibrary
     LSE.open_level_sequence(seq)
     LSE.refresh_current_level_sequence()
@@ -140,8 +142,10 @@ def build(spec):
     rate = unreal.FrameRate(int(spec["fps_num"]), int(spec["fps_den"]))
     name = spec["name"]
     seq, binding, end, length = _sequence(spec["source_anim"], name, rate)
+    seq.set_playback_end(end + 1)        # the rig bake stops before the playback end: without this the last frame has no key
     ok = unreal.ControlRigSequencerLibrary.bake_to_control_rig(_world(), seq, _rig_class(spec["rig"]), unreal.AnimSeqExportOption(),
                                                                 False, 0.001, binding)
+    seq.set_playback_end(end)
     track, sec = _rig_section(binding)
     res = {"bake_ok": bool(ok), "end": end, "length": length}
     if sec is None:
@@ -154,16 +158,30 @@ def build(spec):
     planted = tuple(spec.get("planted", []))
     delays = {p: int(d) for p, d in spec.get("part_delays", {}).items() if int(d)}
     shifted, pinned = {}, set()
+    dropped = edited = 0
     last = max(keep)
     for c in chans:
         # edit the baked keys in place (remove / set_value / set_time): re-adding keys with add_key lost the values
         for k in list(c.get_keys()):
             if _frame(k) not in keep:
                 c.remove_key(k)
+        ctrl = _ctrl(c)
+        cname = str(c.channel_name)
+        for d in spec.get("drop", []):
+            if d["control"] == ctrl and f".{d.get('attr', '')}" in cname:
+                for k in list(c.get_keys()):
+                    if _frame(k) in d["frames"]:
+                        c.remove_key(k); dropped += 1
+        for e in spec.get("edits", []):
+            if e["control"] == ctrl and f".{e['attr']}." in cname:
+                axis = "XYZ".index(cname.rsplit(".", 1)[1][-1]) if cname.rsplit(".", 1)[1][-1] in "XYZ" else None
+                if axis is not None and e["delta"][axis]:
+                    for k in c.get_keys():
+                        if _frame(k) in e["frames"]:
+                            k.set_value(k.get_value() + e["delta"][axis]); edited += 1
         keys = c.get_keys()
         if not keys:
             continue
-        ctrl = _ctrl(c)
         if ctrl in planted:           # planted foot: snap small drift back to the first key (a real step is left alone)
             v0 = keys[0].get_value()
             tol = PIN_TOL["Location" if ".Location." in str(c.channel_name) else "Rotation"]
@@ -197,7 +215,7 @@ def build(spec):
                 k.set_leave_tangent_weight(out_w[0] * (frames[i + 1] - frames[i]) * spf)
             if in_w is not None:
                 k.set_arrive_tangent_weight(in_w[1] * (frames[i] - frames[i - 1]) * spf)
-    res.update({"keys_after": sum(len(c.get_keys()) for c in chans), "pinned": sorted(pinned),
+    res.update({"keys_after": sum(len(c.get_keys()) for c in chans), "pinned": sorted(pinned), "dropped": dropped, "edited": edited,
                 "shifted": {p: sorted(v) for p, v in shifted.items()}})
     skel = unreal.load_asset(spec["source_anim"]).get_editor_property("skeleton")
     fac = unreal.AnimSequenceFactory(); fac.set_editor_property("target_skeleton", skel)
@@ -207,11 +225,68 @@ def build(spec):
     res["export_ok"] = bool(unreal.ControlRigSequencerLibrary.export_anim_sequence_from_sequencer(dst, eo, binding, False))
     res["out_asset"] = dst.get_path_name().split(".")[0]
     res["out_length"] = dst.get_play_length()
+    if spec.get("lock_lengths", True):
+        res["lock_lengths"] = _lock_lengths(dst, unreal.load_asset(spec["source_anim"]))
     EAL.save_asset(seq.get_path_name().split(".")[0]); EAL.save_asset(res["out_asset"])
     unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
     if spec.get("out"):
         json.dump(res, open(spec["out"], "w"), indent=1)
     return json.dumps({k: v for k, v in res.items() if k not in ("controls", "shifted")})
+
+
+FREE_TRANSLATION = ("root", "pelvis", "ik_", "vb ")   # bones whose translation is motion, not length
+
+
+def _lock_lengths(dst, src):
+    """Rig stretch off, on the bake: every bone except root/pelvis/ik_* keeps the source's frame-0 local translation on
+    every frame (rotation untouched), so bone lengths are exact (gate 0.1 cm). Returns the largest change it removed (cm)."""
+    ctrl = dst.get_editor_property("controller")
+    model = dst.get_editor_property("data_model")
+    n = dst.get_editor_property("number_of_sampled_keys")
+    names = [str(b) for b in unreal.AnimationLibrary.get_animation_track_names(dst)]
+    worst, done, wb, per = 0.0, 0, "", {}
+    ctrl.open_bracket(unreal.Text("animpipe lock lengths"), False)
+    for b in names:
+        if b.startswith(FREE_TRANSLATION):
+            continue
+        ref = unreal.AnimationLibrary.get_bone_pose_for_frame(src, b, 0, False).translation
+        pos, rot, scl = [], [], []
+        for f in range(n):
+            t = unreal.AnimationLibrary.get_bone_pose_for_frame(dst, b, f, False)
+            dd = (t.translation - ref).length()
+            per[b] = max(per.get(b, 0.0), dd)
+            if dd > worst:
+                worst, wb = dd, f"{b}@{f}"
+            pos.append(ref); rot.append(t.rotation); scl.append(t.scale3d)
+        ctrl.set_bone_track_keys(b, pos, rot, scl, False)
+        done += 1
+    ctrl.close_bracket(False)
+    big = sorted(((round(v, 2), k) for k, v in per.items() if v > 0.1), reverse=True)[:8]
+    return {"bones": done, "removed_max_cm": round(worst, 3), "at": wb, "over_0.1": big, "frames": n}
+
+
+def probe(name, out=None):
+    """Channel names, key counts and value spans on the rig track of LS_<name>, for writing card edits."""
+    seq = unreal.load_asset(f"{DIR}/LS_{name}")
+    unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(seq)
+    res = {}
+    for b in seq.get_spawnables() + seq.get_possessables():
+        t, sec = _rig_section(b)
+        if sec is None:
+            continue
+        for c in sec.get_all_channels():
+            ks = c.get_keys() if hasattr(c, "get_keys") else []
+            if not ks:
+                continue
+            try:
+                vals = [k.get_value() for k in ks]
+                res[str(c.channel_name)] = [len(ks), round(min(vals), 2), round(max(vals), 2), [_frame(k) for k in ks], [round(v, 2) for v in vals]] if not isinstance(vals[0], bool) else [len(ks), vals]
+            except Exception as e:
+                res[str(c.channel_name)] = str(e)[:80]
+    unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
+    if out:
+        json.dump(res, open(out, "w"), indent=1)
+    return json.dumps({"channels": len(res)})
 
 
 def tangent_probe(name, out=None):

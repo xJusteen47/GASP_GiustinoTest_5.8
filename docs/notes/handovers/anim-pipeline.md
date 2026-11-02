@@ -1,33 +1,34 @@
-# Handover anim pipeline: checkpoint 2, motore unico (2026-11-02, branch claude/project-thread-0pzf0o)
+# Handover anim pipeline: fase B, jab v12 e Ganondorf v3.1 sul rig (2026-11-02, branch claude/project-thread-s125cq)
 
-Esito: **il motore gira end-to-end su jab v11** (scheda -> Control Rig -> bake 60 fps -> controlli 3 classi -> trails), un
-giro completo < 1 min (build 10 s, check 35 s, trails 2 s). Checkpoint 1 (spike, GO a 60 fps) è nella storia git di questo file.
-Comandi (`Tools/AnimPipeline`, `python -m animpipe ...`): `build <card>`, `check <card>`, `trails <card>`; risultati in
-`Saved/AnimPipeline/animpipe/<move>_{build,check}.json` + `<move>_check.txt` (una riga per controllo), immagine in `sheets/`.
+Esito: **le due mosse sono bakate dal motore unico** (`python -m animpipe build cards/<mossa>.json`, ~10 s ciascuna):
+`/Game/AnimPipeline/Rig/AS_GanonFTiltV31_Build` (11 pose, 10659 chiavi) e `AS_JabV12_Build` (9 pose, 8685 chiavi).
+Checkpoint 2 è nella storia git di questo file. Non esistono file Step dell'owner per queste mosse: le pose sono i frame
+chiave delle clip v3.1/v12 (Ganondorf: i 5 frame dell'owner a 0/7/10/27/37 più 6 intermedi).
 
-- `build` (`ue_rig.build`): bake della `source_anim` sul `CR_Mannequin_Body`, tiene solo i frame delle pose, tangenti per
-  profilo di spaziatura (`charge_long`/`arrive_1_2`/`hold_recoil` = piatte pesate; `limb_led_recovery` = smart auto),
-  ritardi per parte (sposta le chiavi interne dei controlli), piedi IK `planted`: deriva <= 1 cm / 2° riportata alla chiave 0.
-  Jab v11: 36822 -> 9690 chiavi; alle pose 0,0 cm sulle mani, testa 2,75 (ritardo 1 frame dichiarato), piedi 0,96;
-  fuori dalle pose max 4,7 cm (mano), contro i 7,35 della sola riduzione del checkpoint 1.
-- `check`: blocca bone_lengths, clearance, legibility, contatto/FAF, piedi piantati, pugni chiusi; misura motion_curves(+ref),
-  motion_check, spaziatura (progresso a metà segmento), distanza dalla sorgente; occhio: 3 voci per la griglia. Gli script
-  vecchi girano invariati come sottoprocessi. `move_sheets.json[move]` è generato dalla scheda a ogni check.
-- Jab v11 build: FAIL su legibility (braccio dietro copre il pugno, 1 frame) e bone_lengths (4 ossa, max clavicola_r 1,29 cm).
-  Sorgente densa con gli stessi controlli: legibility PASS, bone_lengths FAIL già lì (8 ossa, max 0,98). Nessun auto-fix:
-  v11 è una scheda retrofittata (pose = confini delle finestre), il test vero è v12 / v3.1 con le pose Step.
-- Trails: fatti offline dalle ossa campionate (matplotlib, 3 viste, build su sorgente in grigio): niente editor, 1 immagine.
+- Checkpoint pose (una griglia per mossa, `Tools/AnimPipeline/sheets/`, non in git): `ganon_ftilt_v31_poses.png` (riga in
+  alto = i 5 frame dell'owner), `jab_v12_poses.png`; build sopra sorgente: `ganon_ftilt_v31_poses_ab.png`.
+- Ganondorf, difetti risolti con `edits` nella scheda (rotazioni FK risolte dallo Jacobiano del rig, `fk_solve.py`):
+  gomito dietro fuori profilo da 31 a 13 frame (gomito ~20 cm dietro il petto invece di 33-35, chiavi 20-32);
+  avambraccio sinistro nel fianco allo scatto: clearance al frame 10 da -4,0 a +4,1 cm (mano 28 cm di lato, era 13).
+  Bloccanti 5/6 come la sorgente: legibility FAIL ereditato (controlli da pugno su un calcio), ma migliore della sorgente.
+- Jab v12: bloccanti 6/6 PASS (come la sorgente). **Pugno dietro non risolto** dopo 2 tentativi mirati (togliere la
+  torsione della mano 1-3: 70°/frame, peggio; mano + braccio: 36,5°, uguale). I 36° del frame 0->1 vengono dallo swing
+  del braccio di guardia nel contatto di 1 frame, non dalla torsione: serve una decisione di posa (domanda 1).
+- Motore: ultimo frame ora bakato giusto (la sezione tornava al frame 0 a t = durata; play rate 0,99999); `lock_lengths`
+  (stretch spento sul bake, traslazioni locali fisse; tolto fino a 1,56 cm sul collo) -> bone_lengths PASS su entrambe;
+  scheda: `edits`, `drop`, `spacing` per posa, `sheet_extra`; `check --src` (stessi controlli sulla sorgente); planted
+  solo sui piedi della scheda; `probe <take>` (canali del rig); `poses` (griglia, `--over`, `--blind`).
+- Da guardare: ginocchio dietro del jab 9 cm più avanti della sorgente in guardia (IK gamba del rig, frame 0 e 18-37);
+  spaziatura Ganon 3-7 a 0,17 (sorgente 0,78); motion_check FAIL identico alla sorgente su entrambe.
+- A/B cieco (Sonnet, A = sorgente, B = build): jab B di poco (pugno più pulito dal busto al contatto); Ganondorf B
+  (recupero più basso e piantato, più vicino al riferimento), ma segnala al frame 10 vista frontale il braccio sinistro
+  che si chiude a triangolo verso il busto: effetto dell'abduzione, da guardare in gioco.
+- Non fatto: giudizio in gioco (montage + hitstop + camera), per budget. Editor chiuso col kill (asset salvati dal build).
+  Scratch in `/Game/AnimPipeline/Rig`: `AS_/LS_Jac1_Build`, `Jac2_Build`, `GanonAxisProbe_Build` (cancellabili).
 
-Decisioni prese senza owner (consigliate): resto a 60 fps; accetto 1 cm su colonna/ginocchio nei round trip delle mosse vecchie;
-calibrazione delle tangenti in editor tolta (evaluate_keys inaffidabile), la spaziatura si misura sul bake.
-Gotcha: da Git Bash serve `MSYS_NO_PATHCONV=1` (altrimenti `/Game/...` diventa un percorso Windows; `check` lo imposta);
-`add_key` sui canali del rig perde i valori: si modificano le chiavi esistenti (remove/set_value/set_time); `twist_chain`
-è n/a sui build (legge i punti Cascadeur `<take>_targets_raw.json`); `refs/` nel worktree è una junction verso `Saved/AnimPipeline/refs`.
+Domande per l'owner:
+1. Jab: il braccio di guardia scatta indietro col busto nel frame di contatto e il pugno gira. Lo tengo fermo al mento
+   (la guardia segue il petto, cambio di posa al frame 1) o accetti lo scatto stile Mario?
+2. Ganondorf: braccio dietro ora vicino al corpo nel recupero e braccio sinistro aperto allo scatto (griglia `_ab`): ok?
 
-Prossimo thread (fase B): import delle pose Step del proprietario (`poses[].source.file`) sui controlli al posto di
-`source_anim`; equilibrio come regolazione del bacino alle chiavi; twist_chain sulle ossa; regressione v12 e v3.1.
-
-Domanda per il proprietario: bone_lengths a 0,1 cm boccia anche v11 denso (stretch del rig/bake). Consiglio: sui build da rig
-spegnere gli stretch switch del rig e tenere 0,1 cm; in alternativa "non peggio della sorgente". Applico il primo nella fase B.
-Editor: aperto da riga di comando, chiuso col kill (asset salvati esplicitamente, nessun salvataggio di mappa o Blueprint).
-Costo stimato: Opus ~60 chiamate, ~115k contesto finale, circa $6-8; nessun subagente.
+Costo stimato: Opus ~85 chiamate, contesto finale ~130k, circa $9-11; subagente Sonnet (A/B cieco) ~75k token, < $0,5.

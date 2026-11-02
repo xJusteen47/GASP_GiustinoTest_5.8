@@ -5,10 +5,14 @@ Schema (cards/<move>.json):
   timing_csv   frame data CSV (refs/ufd/*_timing.csv: frame,extension_pct,reach_px,active; 1-based game frames).
                The ONLY source of the windows: startup/active/hold/FAF are derived here, never typed.
   faf_game     0-based game frame of FAF when the CSV ends before it (owner rule: "fai 19 se parti da 0")
-  poses        [{name, frame (anim), source: {file, frame} (owner's .casc/FBX step pose) | null}]: the only keyed frames
+  poses        [{name, frame (anim), source: {file, frame} (owner's .casc/FBX step pose) | null, spacing?}]: the only
+               keyed frames; `spacing` overrides the phase profile for the segment that starts at this pose
   spacing      {phase: profile}: charge_long | arrive_1_2 | hold_recoil | limb_led_recovery
   part_delays  {chest, head, forearm, hand}: frames each part lags the pelvis
   exemptions   [{check, frames, why}]: declared, owner can override
+  sheet_extra  extra move_sheets fields the checks read (hold_window, strike_limb, strike_side): overrides the derived ones
+  edits        [{control, attr: Location|Rotation, frames, delta [x,y,z], why}]: targeted pose changes, added to the keys
+  drop         [{control, attr, frames, why}]: keys removed on one control so it travels through (no stop) on those frames
 """
 import csv, json, os
 
@@ -58,6 +62,7 @@ def to_move_sheet(c):
     w = windows(c)["anim"]
     e = {"move": c["class"], "anim": c["anim"], "contact": w["active"], "faf": w["faf"], "hold_window": w["active"],
          "effector": c.get("effector", "middle_01_l"), "reference": c.get("reference", "")}
+    e.update(c.get("sheet_extra", {}))
     for ex in c.get("exemptions", []):
         e[f"{ex['check']}_exempt_frames"] = ex["frames"]
     return e
@@ -73,4 +78,5 @@ def segments(c):
     """[[f0, f1, profile]] for each pair of consecutive poses: the spacing profile of the phase the segment starts in."""
     fr = key_frames(c)
     sp = c.get("spacing", {})
-    return [[a, b, sp.get(phase_of(c, a), "limb_led_recovery")] for a, b in zip(fr, fr[1:])]
+    own = {p["frame"]: p["spacing"] for p in c["poses"] if p.get("spacing")}   # a pose may set the profile of the segment it starts
+    return [[a, b, own.get(a) or sp.get(phase_of(c, a), "limb_led_recovery")] for a, b in zip(fr, fr[1:])]
