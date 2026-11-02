@@ -68,3 +68,8 @@ risultati dei check su file (regola 4).
 3. **Blocco:** ogni chiave dell'owner si blocca da sola all'import (consigliato) oppure solo quelle che l'owner approva
    a parte.
 4. **Modello:** Opus effort medium (consigliato) oppure Sonnet, più economico.
+
+## Decisione (owner, 2026-11-02 23:28Z): "Ok. Come consigliato."
+Avvio con un messaggio al coordinatore; Claude scrive pose intermedie modificabili; ogni chiave dell'owner si blocca da
+sola all'import; Opus effort medium. Si implementa dopo il merge di PR #24 (brief in fondo a
+`docs/notes/handovers/anim-pipeline.md`).

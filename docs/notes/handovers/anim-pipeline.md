@@ -305,3 +305,28 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
 - **Stomp = f23 intero (owner 23:16, "f23 andava bene")**: tolta l'eccezione dei piedi affiancati, gambe e caviglie
   incrociate come f23 a 15/17/31 (31 con l'assestamento di 2 cm), lock esteso a [15, 17, 31]. Check invariati: tutto PASS
   tranne legibility.
+
+## Brief: interpolazione fatta da Claude (thread Opus sul desktop, DOPO il merge di PR #24)
+Decisione dell'owner 02/11 23:28Z, proposta `docs/notes/reviews/proposta-interpolazione-claude-2026-11-02.md`.
+Obiettivo: l'owner mette in Cascadeur solo le sue chiavi; Claude scrive le pose intermedie; le chiavi dell'owner non si
+toccano mai. Prerequisito: PR #24 su feature (`locks.py`, `approve/diff`, `rules`; `source_fidelity` se fatto).
+Codice esistente da estendere, non duplicare: `animpipe/cascadeur.py` (`casc-export/import/revert/diff`, `merge()`,
+`locked()`, snapshot in `cards/<kit>/history/`), `casc_prepare.py` (lato Cascadeur), `author.py` (`frames()` = smoothstep
+tra le pose). Quando entra #24, `casc-diff` può lasciare il posto al `diff` di #24; `locked()` deve usare `locks.py`.
+Passi (Opus medium, subagenti Sonnet per i test):
+1. `casc_prepare.py`: comando Scripts "GSTN → Segna chiavi mie": salva, `export_joints`, scrive
+   `Saved/AnimPipeline/casc/<move>_owner_keys.json` {frames, timing opzionale, stamp}.
+2. `casc-import --owner-keys`: per ogni frame dell'owner aggiunge/aggiorna un blocco `approved` (`by: owner`, tutte le
+   parti, dita e `wrist_out` esclusi) nel formato di `locks.py`.
+3. `animpipe interp <card>`: prepara su file il pacchetto per l'agente (pose dell'owner, tempi, `cards/README.md`,
+   ultimi check) e valida la risposta. Pose nuove in `author` con `origin: "claude"` e `why`. Rifiuta tutta la
+   scheda se una posa cade su un frame bloccato. Eventuali `spacing`/`part_delays` per segmento.
+4. Gate: `build` + `check` (co_motion, hitstop_snap, clearance con esenzioni, bone_lengths, frame 0/`rules`). Massimo 2
+   tentativi, poi si ferma e scrive quale check fallisce e su quali frame.
+5. `casc-export`: scena con le chiavi dell'owner e quelle di Claude; nel file `_owner_keys.json` va segnato chi ha messo
+   ogni chiave (l'API non colora le chiavi). Una chiave di Claude spostata dall'owner diventa sua e si blocca al
+   prossimo import.
+6. `casc-revert` e `diff` invariati. Test offline in `tests/` (niente chiavi dell'owner cambiate, rifiuto sul frame
+   bloccato, giro senza modifiche identico). Prova vera sulla dair v4 su una copia della scheda.
+Avvio a regime: l'owner scrive al coordinatore "interpola la <mossa>", e il coordinatore apre un thread desktop con
+questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: pulsante che lancia `claude -p`, Sonnet.
