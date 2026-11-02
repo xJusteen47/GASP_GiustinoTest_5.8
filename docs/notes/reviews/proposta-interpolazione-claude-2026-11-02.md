@@ -73,3 +73,25 @@ risultati dei check su file (regola 4).
 Avvio con un messaggio al coordinatore; Claude scrive pose intermedie modificabili; ogni chiave dell'owner si blocca da
 sola all'import; Opus effort medium. Si implementa dopo il merge di PR #24 (brief in fondo a
 `docs/notes/handovers/anim-pipeline.md`).
+
+## Esiste già qualcosa di simile? (ricerca web, 2026-11-02 23:4xZ)
+| Strumento | Cosa fa | Chiavi bloccate e regole nostre? | Ci serve? |
+|---|---|---|---|
+| Cascadeur AI Inbetweening (2025.1, nuovo in 2025.3, dataset più grande in 2026.2) | Una rete genera gli intermedi tra le pose, con stili per traccia | Mantiene le chiavi, ma nessuna regola nostra e nessun controllo: è quello che "rompe le cose" | No, resta da evitare |
+| Cascadeur 2026.2 Easing | Cambia la spaziatura su un intervallo senza toccare la traiettoria | Non tocca le chiavi | Utile all'owner a mano; il nostro import oggi legge solo le chiavi, non la spaziatura |
+| AutoPhysics / Animation Unbaking | Fisica sopra le chiavi / curve dense tornate a chiavi | Le chiavi restano, la fisica cambia i frame di mezzo | No come interpolatore; l'unbaking non serve, le nostre chiavi sono già sparse |
+| Cascadeur MCP / "cascadeur-mcp-plus" (open source, Glama) | Script, chiavi, interpolazione; `ai_motion.inbetween` richiama l'IA di Cascadeur | Nessuna logica di pose propria | Solo come trasporto: noi usiamo già lo script server |
+| MotionLLM Assistant, MotionSmith (plugin UE su Fab) | Movimento generato dentro Sequencer da testo, tempi e percorso, poi bake in chiavi Control Rig | Le pagine non parlano di chiavi bloccate né di regole | No: generano movimento nuovo, non intermedi fedeli alle pose dell'owner |
+| Maya 2026.1 MotionMaker | Locomozione IA tra posizioni o lungo un percorso | No regole; pensato per camminate, non per mosse di combattimento | No |
+| Blender MCP e simili | Impostano chiavi e tipo di interpolazione | Nessuna logica di pose | No |
+| Ricerca (es. arXiv 2605.02742, in-betweening adattivo) | Modelli addestrati, nessuno strumento pronto | — | No |
+
+Non abbiamo trovato nessuno strumento in cui un agente scriva gli intermedi da chiavi bloccate e sia vincolato da
+regole e controlli del progetto. I generatori IA producono movimento plausibile ma non obbediscono a regole come
+co_motion, snap o "troppo è proprio giusto". **Raccomandazione: costruire il nostro come previsto.** Due adattamenti:
+- usare l'Easing di Cascadeur 2026.2 come strumento a mano dell'owner, da leggere all'import in un secondo momento;
+- l'IA di Cascadeur può servire al massimo come prima bozza da far passare ai check, come avevamo già deciso il 30/10, mai
+  come risultato finale.
+
+Fonti: cascadeur.com/blog (2025.1, 2025.3, 2026.1, 2026.2), glama.ai/mcp/servers/Karylcode/cascadeur-mcp-plus,
+forums.unrealengine.com (MotionLLM Assistant, MotionSmith), 80.lv (Maya 2026.1 MotionMaker), arxiv.org/abs/2605.02742.
