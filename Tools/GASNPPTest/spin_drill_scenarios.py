@@ -161,6 +161,13 @@ def _seen_all(run, pred, t0, t1, same_start=False, same_latch=False):
     return ok, s
 
 
+def _teleport_under(key, vkey):
+    """Server teleport of `vkey` 20 cm under `key`'s root (the authority moves it; clients get it as a correction). A set_actor_location is
+    undone by Mover on the next tick (SD-07)"""
+    a = actor(0, key).get_actor_location()
+    return g.comps(g.worlds()[0])[vkey].server_teleport_exact(unreal.Vector(a.x, a.y, a.z - 20.0))
+
+
 # ---- input -----------------------------------------------------------------------------------------------------------------------------------------
 def spin_steps(client, t, clockwise=True):
     """Timeline steps that turn the stick of `client` once around (IA_Move: x right, y forward), starting up, then let go. Returns (steps, end time)"""
@@ -222,7 +229,7 @@ def scenario_spin_ground_hits_ring(client=1, victim=2):
     fragment's phase start frame is equal on every world, the pawn standing next to the spinner takes the ring's damage on the authority, and the
     spinner's client has no rollback caused by the spin (a predicted spin the server agrees with)"""
     key, vkey = g.key_of_player(client), g.key_of_player(victim)
-    # The victim's authoritative copy is sampled too ('vic'): its Health is what the ring's hit changes
+    # The victim's authoritative copy is sampled too ('vic'). A combat hit raises the victim's damage percent (the combat snapshot), not Health (SD-07)
     run = g._Run('spin_ground_hits_ring', client, extra=[('vic', 0, vkey)])
     _spy(run, key)
     marks = {}
@@ -230,16 +237,14 @@ def scenario_spin_ground_hits_ring(client=1, victim=2):
     def mark(name):
         def f():
             vic = run.latest('vic')
-            marks[name] = {'rb': g.rollbacks(client), 'hp': vic['attr'].get('Health') if vic else None,
+            marks[name] = {'rb': g.rollbacks(client), 'hp': g.damage_of(0, vkey),
                            'drill': {wi: drill(wi, key) for wi in range(len(g.worlds()))}}
             return name, marks[name]['drill']
         return f
 
     def place_victim():
-        # Next to the spinner on the authority: inside the ring (110 cm) at the spinner's height
-        a = actor(0, key).get_actor_location()
-        actor(0, vkey).set_actor_location(unreal.Vector(a.x + 80.0, a.y, a.z), False, True)
-        return 'victim placed'
+        # 80 cm in front of the spinner, inside the ring (110 cm), through the simulation: a set_actor_location is undone by Mover (SD-07)
+        return 'victim placed', g._place_near(client, vkey, (80.0, 0.0))
 
     spin, t_end = spin_steps(client, 0.6, clockwise=True)
     steps = [(0.2, place_victim), (0.5, mark('before'))] + spin + [
@@ -253,7 +258,7 @@ def scenario_spin_ground_hits_ring(client=1, victim=2):
         (t_end + 1.0, run.at('the spin ended: no phase on any world after its timeline', lambda: (
             all((marks['after']['drill'][wi] or (0,))[0] != PHASE_SPINNING for wi in marks['after']['drill']), marks['after']['drill']))),
         (t_end + 1.02, run.at("the pawn next to the spinner took the ring's damage on the authority", lambda: (
-            marks['before']['hp'] is not None and marks['after']['hp'] is not None and marks['after']['hp'] < marks['before']['hp'] - 1.0,
+            marks['before']['hp'] is not None and marks['after']['hp'] is not None and marks['after']['hp'] > marks['before']['hp'] + 1.0,
             f"{marks['before']['hp']} -> {marks['after']['hp']}"))),
         (t_end + 1.05, run.at('no rollback on the spinner during the spin', lambda: (
             marks['after']['rb'] - marks['before']['rb'] == 0, f"{marks['before']['rb']} -> {marks['after']['rb']}"))),
@@ -426,14 +431,12 @@ def scenario_drill_nondrillable_bounce(client=1, victim=2):
     seen = {}
 
     def place_under():
-        a = actor(0, key).get_actor_location()
-        actor(0, vkey).set_actor_location(unreal.Vector(a.x, a.y, a.z - 20.0), False, True)
-        return 'victim under the diver'
+        return 'victim under the diver', _teleport_under(key, vkey)
 
     def at(name):
         def f():
             vic = run.latest('vic')
-            seen[name] = vic['attr'].get('Health') if vic else None
+            seen[name] = g.damage_of(0, vkey)
             return name, seen[name]
         return f
 
@@ -444,7 +447,7 @@ def scenario_drill_nondrillable_bounce(client=1, victim=2):
     steps = [(0.1, immune(True))] + jump_steps(client, 0.3) + [(0.5, place_under), (0.52, at('before'))] + spin + [
         (t1 + 0.03, crouch_hold(client)), (t1 + 0.05, crouch_tap(client)), (t1 + 1.2, at('after')), (t1 + 1.2, crouch_release(client)),
         (t1 + 1.25, run.at("the victim took the tip's damage on the authority", lambda: (
-            seen['before'] is not None and seen['after'] is not None and seen['after'] < seen['before'] - 1.0, f"{seen['before']} -> {seen['after']}"))),
+            seen['before'] is not None and seen['after'] is not None and seen['after'] > seen['before'] + 1.0, f"{seen['before']} -> {seen['after']}"))),
         (t1 + 1.25, run.at('the diver bounced (rising after the dive) on the authority and its client', lambda: (
             max([s['vel'][2] for s in run._win('srv', t1, t1 + 1.0, sim=True)] or [0.0]) > 500.0
             and max([s['vel'][2] for s in run._win('cli', t1, t1 + 1.0, sim=True)] or [0.0]) > 500.0, ''))),
@@ -508,16 +511,14 @@ class _DrillRig:
         return lambda: ('drill immunity', on, TestLib.server_set_drill_immunity(actor(0, self.vkey), on))
 
     def place_under(self):
-        a = actor(0, self.key).get_actor_location()
-        actor(0, self.vkey).set_actor_location(unreal.Vector(a.x, a.y, a.z - 20.0), False, True)
-        return 'target under the diver'
+        return 'target under the diver', _teleport_under(self.key, self.vkey)
 
     def mark(self, name):
         def f():
             vic = self.run.latest('vic')
             self.seen[name] = {wi: latch_info(wi, self.key) for wi in range(len(g.worlds()))}
             self.seen[name + '_rb'] = g.rollbacks(self.client)
-            self.seen[name + '_hp'] = vic['attr'].get('Health') if vic else None
+            self.seen[name + '_hp'] = g.damage_of(0, self.vkey)
             self.seen[name + '_used'] = {wi: (drill(wi, self.key) or (0, 0, 0, 0))[2] for wi in range(len(g.worlds()))}
             return name, self.seen[name]
         return f
@@ -540,7 +541,7 @@ class _DrillRig:
 
 def scenario_drill_latch_static_multi_hit(client=1, victim=2):
     """The latch on a target that stands still, crouch held for 1 s: every world shows the latch with the same latch frame, the bore lands at least
-    three hits (the authority's count, a hit every 6 frames after the 12-frame seat), the target's Health drops on the authority, the driller's client
+    three hits (the authority's count, a hit every 6 frames after the 12-frame seat), the target's damage rises on the authority, the driller's client
     stays within the correction budget, and the release ends the latch on every world"""
     rig = _DrillRig('drill_latch_static_multi_hit', client, victim)
     run, t1 = rig.run, rig.t1
@@ -549,8 +550,8 @@ def scenario_drill_latch_static_multi_hit(client=1, victim=2):
         (t1 + 1.65, rig.check_latched(t1 + 1.1)),
         (t1 + 1.65, run.at('still latched after 1 s of crouch on every world', lambda: (_all_latched(rig.seen['bored']), rig.seen['bored']))),
         (t1 + 1.65, run.at('the bore landed at least three hits (authority)', lambda: (rig.seen['bored'][0][2] >= 3, rig.seen['bored']))),
-        (t1 + 1.65, run.at("the target's Health dropped on the authority", lambda: (
-            rig.seen['before_hp'] is not None and rig.seen['bored_hp'] is not None and rig.seen['bored_hp'] < rig.seen['before_hp'] - 1.0,
+        (t1 + 1.65, run.at("the target's damage rose on the authority", lambda: (
+            rig.seen['before_hp'] is not None and rig.seen['bored_hp'] is not None and rig.seen['bored_hp'] > rig.seen['before_hp'] + 1.0,
             f"{rig.seen['before_hp']} -> {rig.seen['bored_hp']}"))),
         (t1 + 1.65, rig.rollbacks('latched', 'bored')),
         (t1 + 1.65, run.at('the release ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after'])))]
@@ -658,7 +659,7 @@ def scenario_drill_latch_moving_enemy(client=1, victim=2):
 
 def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
     """The third pawn (the host) is placed next to the latched driller, facing it, and attacks: the hit detaches the driller (hitstun wins, 7.4),
-    the latch ends on every world and the driller's Health drops on the authority. Hits by another player are out-of-band for the driller's
+    the latch ends on every world and the driller's damage rises on the authority. Hits by another player are out-of-band for the driller's
     client: reconciles are budgeted, not judged"""
     rig = _DrillRig('drill_hit_while_latched_detaches', client, victim, judge_reconciles=False)
     run, t1 = rig.run, rig.t1
@@ -670,11 +671,11 @@ def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
         d = actor(0, rig.key).get_actor_location()
         yaw = math.radians(g.snap(g.worlds()[0])[hkey]['yaw'])
         spot = unreal.Vector(d.x - 70.0 * math.cos(yaw), d.y - 70.0 * math.sin(yaw), d.z)
-        hp['before'] = (run.latest('srv') or {}).get('attr', {}).get('Health')
+        hp['before'] = g.damage_of(0, rig.key)
         return 'hitter placed', g.comps(g.worlds()[0])[hkey].server_teleport_exact(spot)
 
     def driller_hp():
-        hp['after'] = (run.latest('srv') or {}).get('attr', {}).get('Health')
+        hp['after'] = g.damage_of(0, rig.key)
         return 'driller hp', hp
 
     steps = rig.steps + [
@@ -682,8 +683,8 @@ def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
         (t_hit + 0.7, rig.mark('after')), (t_hit + 0.7, driller_hp),
         (t_hit + 0.75, rig.check_latched(t_hit + 0.1)),
         (t_hit + 0.75, run.at('the hit ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),
-        (t_hit + 0.75, run.at("the driller's Health dropped on the authority", lambda: (
-            hp.get('before') is not None and hp.get('after') is not None and hp['after'] < hp['before'] - 1.0, hp))),
+        (t_hit + 0.75, run.at("the driller's damage rose on the authority", lambda: (
+            hp.get('before') is not None and hp.get('after') is not None and hp['after'] > hp['before'] + 1.0, hp))),
         (t_hit + 0.75, rig.rollbacks('latched', 'after'))]
     _run(run, steps + rig.end(t_hit + 0.8))
     return 'running'

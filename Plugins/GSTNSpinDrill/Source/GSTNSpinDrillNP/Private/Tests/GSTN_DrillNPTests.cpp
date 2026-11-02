@@ -620,7 +620,7 @@ bool FGSTN_DrillNPSpinFlowTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the timeline ended: no phase"), static_cast<int32>(F.Phase), static_cast<int32>(EGSTN_DrillPhase::None));
 	TestEqual(TEXT("still one air spin used in this airtime"), static_cast<int32>(F.AirSpinsUsed), 1);
 
-	// A second air spin in the same airtime is refused, even if its timeline started (the ability's block is the first gate)
+	// A second air spin in the same airtime is refused, even if its timeline started (the kit binding is the first gate)
 	RunTimeline(State, 20);
 	RunTick(Extension, State, 20);
 	TestEqual(TEXT("refused: no phase"), static_cast<int32>(ReadFragment(State).Phase), static_cast<int32>(EGSTN_DrillPhase::None));

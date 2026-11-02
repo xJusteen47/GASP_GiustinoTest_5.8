@@ -69,7 +69,10 @@ TArray<FGSTN_AbilityBinding> UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(boo
 	for (const FGSTN_InputSlotSpec& Slot : Slots)
 	{
 		const bool bClockwise = Slot.Command.MatchesTag(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise);
-		Bindings.Add(MakeBinding(Slot, bClockwise ? UGSTN_GA_AirSpinClockwise::StaticClass() : UGSTN_GA_AirSpinCounterClockwise::StaticClass(), true));
+		FGSTN_AbilityBinding AirSpin = MakeBinding(Slot, bClockwise ? UGSTN_GA_AirSpinClockwise::StaticClass() : UGSTN_GA_AirSpinCounterClockwise::StaticClass(), true);
+		// Once per airtime, at the command match: an ability block on the same tag would see the spend of the very frame that adopts the spin (SD-07)
+		AirSpin.Requirements.IgnoreTags.AddTag(GSTNSpinDrillTags::State_AirSpinSpent);
+		Bindings.Add(MoveTemp(AirSpin));
 		Bindings.Add(MakeBinding(Slot, bClockwise ? UGSTN_GA_SpinClockwise::StaticClass() : UGSTN_GA_SpinCounterClockwise::StaticClass(), false));
 	}
 	// D8: crouch pressed during a spin, on the ground or in the air

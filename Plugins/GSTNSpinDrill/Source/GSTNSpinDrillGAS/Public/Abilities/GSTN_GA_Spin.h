@@ -17,8 +17,10 @@ class UGameplayEffect;
  *
  * In the air the timeline's spin track says bAirSpin: the ability then applies HopEffect when the timeline starts (the small hop; the ability
  * never sets the character's state, Mover applies the queued move), and the tick extension lowers gravity for the track's frames through the
- * low gravity effect. Once per airtime: the air spin classes are blocked by Combat.State.AirSpinSpent, which the extension projects from the
- * fragment; landing and trampolines give it back, a hit does not (owner 2026-11-01).
+ * low gravity effect. Once per airtime: the air spin binding ignores the command while Combat.State.AirSpinSpent is on (the extension projects
+ * it from the fragment), and the extension refuses a second air spin itself; landing and trampolines give it back, a hit does not (owner
+ * 2026-11-01). Not an ActivationBlockedTags entry: the combat tick spends the air spin when it adopts the timeline, before the ability system
+ * activates the ability in that frame, so the ability would block itself (SD-07).
  *
  * Kit bindings (data): Command.Movement.Spin.Clockwise to UGSTN_GA_AirSpinClockwise with an airborne requirement and UGSTN_GA_SpinClockwise
  * without one, the same for CounterClockwise. One class per sense because the fragment is written inside the combat tick, before the ability
@@ -39,13 +41,13 @@ public:
 	/** The spin track of the timeline this class runs, null when the timeline has none (a misauthored asset: the spin is then a plain attack) */
 	const FGSTN_SpinTrack* FindSpinTrack() const;
 
-	/** The tags that block the activation (the ability's data: the air spin's Combat.State.AirSpinSpent) */
+	/** The tags that block the activation (none by default: the air spin's gate is its binding, see the class comment) */
 	const FGameplayTagContainer& GetBlockedTags() const { return ActivationBlockedTags; }
 
 protected:
 	virtual void OnTimelineBegan(int32 StateStartFrame) override;
 
-	/** Sets the default timeline of a ground or air spin of one sense, and for the air spin the block on Combat.State.AirSpinSpent */
+	/** Sets the default timeline of a ground or air spin of one sense */
 	void SetDefaultSpin(EGSTN_SpinSense Sense, bool bAirSpin);
 };
 

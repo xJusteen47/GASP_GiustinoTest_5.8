@@ -185,3 +185,27 @@ after one checkpoint.
   both depend on the timeline's hit steps). Start with the ring damage: probe the victim position/team/immunity and the spin's hit step on the authority
   (Saved/SD05/probe.py). Then the dive start (crouch_hold/tap input vs the dive's start condition).
 - Cost: one Sonnet thread, ~60k context, 1 editor run (~6 min). Low.
+
+## SD-07 (laptop, 2026-11-02): air spin blocked itself (fixed); ring was a harness bug (fixed); SUITE_SPIN 2/12, latch still red (STOPPED)
+
+- Probe (Saved/SD07/probe.py, output probe.txt): the air spin was requested and counted (used 1) but its timeline never ran: phase None,
+  no low gravity, no hop, so no Combat.State.Spinning for the drill binding. Cause: the combat tick adopts the spin and spends the air spin
+  (projects Combat.State.AirSpinSpent) BEFORE the ability system activates the ability in that frame, and the air spin classes had that tag
+  in ActivationBlockedTags, so they blocked themselves. Fix (GSTNSpinDrillGAS only): no ActivationBlockedTags on the spin classes; the
+  once-per-airtime gate is the air spin binding's IgnoreTags (State_AirSpinSpent, checked at command match on the previous frame's tags)
+  plus the extension's CanAirSpin. Tests updated (GAS.Spin defaults and DefaultBindingsAndSlots).
+- Ring: the game was fine (probe: victim damage 0 -> 3 = the ring's Damage). The harness read the Health attribute, but combat hits raise
+  the damage percent (g.damage_of); and set_actor_location placements are undone by Mover. spin_drill_scenarios.py now reads damage_of
+  everywhere, places the ring victim with g._place_near and the drill targets with _teleport_under (server_teleport_exact).
+- Gates: build on Succeeded, headless 980/0; off Succeeded, 933/0 (unchanged). SUITE_SPIN 2/12 (was 0/12), Saved/Logs/sd-05/spin-listen-0pct.log,
+  editor log Saved/SD05/editor-sd07spin.log. PASS: spin_ground_hits_ring, air_spin_once_per_airtime. Fell out of the same fix: the dive starts
+  (drill_ground_lag only fails on 1 rollback), the opposite cancel now shortens the spin (only 1 rollback fails).
+- Still red (one fix attempt used, not widened):
+  1. Latch never forms in static_multi_hit, release_early_pop, launch_after_bore, moving_enemy, hit_while_latched (no Seating on any world);
+     drill_target_destroyed DOES see the latch. Suspect _teleport_under (victim 20 cm under an airborne diver's root: capsules overlap,
+     the teleport may be refused or nudged). Next: log the target's position vs the diver's at the dive start; try placing the target on the
+     floor under the diver (g._place_near(client, vkey, (0, 0)) or a small forward offset) before the jump.
+  2. spin_air_hop_low_gravity: max vz 0 and "spent then given back" not seen: check the scenario's sample window first (the hop runs now).
+  3. One rollback in spin_opposite_cancel and drill_ground_lag (budget 0): decide if 1 is acceptable at 60/15 ms or find its cause.
+  4. drill_nondrillable_bounce: victim damage 0 -> 0 (same placement as 1).
+- Cost: one Opus thread, ~110k context, 2 editor runs (~6 min each), 3 builds + 2 headless runs. Medium.

@@ -39,11 +39,10 @@ void UGSTN_GA_Spin::OnTimelineBegan(int32 StateStartFrame)
 
 void UGSTN_GA_Spin::SetDefaultSpin(EGSTN_SpinSense Sense, bool bAirSpin)
 {
+	// No ActivationBlockedTags on Combat.State.AirSpinSpent: the combat tick adopts the timeline and spends the air spin before the ability
+	// system activates the ability in the same frame, so that block refused every air spin (SD-07). The once-per-airtime gate is the kit
+	// binding's IgnoreTags (checked at the command match, on the previous frame's tags) and the tick extension's CanAirSpin
 	Timeline = FGSTN_SpinTimelines::Make(bAirSpin ? FGSTN_SpinTimelines::AirParams() : FGSTN_SpinTimelines::GroundParams(), Sense, bAirSpin);
-	if (bAirSpin)
-	{
-		ActivationBlockedTags.AddTag(GSTNSpinDrillTags::State_AirSpinSpent.GetTag());
-	}
 }
 
 UGSTN_GA_SpinCancel::UGSTN_GA_SpinCancel(const FObjectInitializer& ObjectInitializer)

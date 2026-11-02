@@ -51,8 +51,9 @@ bool FGSTN_SpinDrillGASAbilitiesTest::RunTest(const FString& Parameters)
 		}
 		TestEqual(*FString::Printf(TEXT("%s: sense"), *Name), static_cast<int32>(Spin->Sense), static_cast<int32>(Case.Sense));
 		TestEqual(*FString::Printf(TEXT("%s: air flag"), *Name), Spin->bAirSpin, Case.bAir);
-		TestEqual(*FString::Printf(TEXT("%s: blocked once the air spin is spent only in the air"), *Name),
-			Case.Default->GetBlockedTags().HasTagExact(GSTNSpinDrillTags::State_AirSpinSpent), Case.bAir);
+		// The binding gates the spent air spin; a block on the ability would refuse the spin in the frame the combat tick spends it (SD-07)
+		TestFalse(*FString::Printf(TEXT("%s: not blocked by AirSpinSpent"), *Name),
+			Case.Default->GetBlockedTags().HasTagExact(GSTNSpinDrillTags::State_AirSpinSpent));
 		TestTrue(*FString::Printf(TEXT("%s: identity tag"), *Name), Case.Default->GetAssetTags().HasTagExact(GSTNSpinDrillTags::Ability_Movement_Spin));
 		TestNotNull(*FString::Printf(TEXT("%s: has a hop effect"), *Name), Case.Default->HopEffect.Get());
 	}
@@ -127,6 +128,8 @@ bool FGSTN_SpinDrillGASBindingsTest::RunTest(const FString& Parameters)
 		const bool bAir = Binding.Requirements.RequireTags.HasTagExact(Mover_IsInAir);
 		TestTrue(*FString::Printf(TEXT("%s: the slot is inline and names the command"), *Command), Binding.HasSlotOverride() && Binding.GetSlotOverrideCommand() == Binding.Command);
 		TestTrue(*FString::Printf(TEXT("%s: air requires Mover.IsInAir, ground ignores it"), *Command), bAir != Binding.Requirements.IgnoreTags.HasTagExact(Mover_IsInAir));
+		TestEqual(*FString::Printf(TEXT("%s: only the air spin ignores the command once the air spin is spent"), *Command),
+			Binding.Requirements.IgnoreTags.HasTagExact(GSTNSpinDrillTags::State_AirSpinSpent), bAir);
 		const UGSTN_GA_Spin* Default = Class ? Cast<UGSTN_GA_Spin>(Class->GetDefaultObject()) : nullptr;
 		if (!TestNotNull(*FString::Printf(TEXT("%s: binds a spin class"), *Command), Default))
 		{
