@@ -281,5 +281,14 @@
   "foot_l_ik_ctrl",
   "foot_r_ik_ctrl"
  ],
- "_open": "closed 2026-11-02 (owner 4a): rear guard held at the chin by the elbow/forearm/hand edits; the guard turns with the chest (52 deg chest turn at contact), the fist no longer turns against it."
+ "_open": "closed 2026-11-02 (owner 4a): rear guard held at the chin by the elbow/forearm/hand edits; the guard turns with the chest (52 deg chest turn at contact), the fist no longer turns against it.",
+ "hitstop_blend": [
+  {
+   "frame": 3,
+   "toward": 2,
+   "amount": 0.85,
+   "match": [],
+   "why": "hitstop_snap (owner 02/11): the hand snapped back 24 cm (fingers 29) from the last active frame 2 to 3; frame 3 stays 85% at the contact pose, the retraction runs 3-5"
+  }
+ ]
 }

@@ -14,6 +14,10 @@ Schema (cards/<move>.json):
   sheet_extra  extra move_sheets fields the checks read (hold_window, strike_limb, strike_side): overrides the derived ones
   edits        [{control, attr: Location|Rotation, frames, delta [x,y,z], why}]: targeted pose changes, added to the keys
   drop         [{control, attr, frames, why}]: keys removed on one control so it travels through (no stop) on those frames
+  hitstop_blend [{frame, toward, amount 0-1, match: [control name fragments] | [] = all, why}]: the key at `frame` moves
+               `amount` of the way to the key at `toward` on the matched controls (after `edits`). Fixes a pop out of a
+               hitbox-active frame (check hitstop_snap): the travel moves before the hitbox opens or later in the recovery.
+  hitstop_max_cm  per-bone limit of the hitstop_snap check (default 10 cm per anim frame); the check is on for every move
 """
 import csv, json, os
 

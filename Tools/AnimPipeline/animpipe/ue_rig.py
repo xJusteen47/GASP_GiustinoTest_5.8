@@ -161,7 +161,7 @@ def build(spec):
     planted = tuple(spec.get("planted", []))
     delays = {p: int(d) for p, d in spec.get("part_delays", {}).items() if int(d)}
     shifted, pinned = {}, set()
-    dropped = edited = 0
+    dropped = edited = blended = 0
     last = max(keep)
     for c in chans:
         # edit the baked keys in place (remove / set_value / set_time): re-adding keys with add_key lost the values
@@ -182,6 +182,18 @@ def build(spec):
                     for k in c.get_keys():
                         if _frame(k) in e["frames"]:
                             k.set_value(k.get_value() + e["delta"][axis]); edited += 1
+        for hb in spec.get("hitstop_blend", []):
+            # pull the key at `frame` toward the key at `toward` (both pose keys): no pop out of a hitbox-active frame
+            if hb.get("match") and not any(m in ctrl for m in hb["match"]):
+                continue
+            by = {_frame(k): k for k in c.get_keys()}
+            k, t = by.get(int(hb["frame"])), by.get(int(hb["toward"]))
+            if k is None or t is None:
+                continue
+            v, tv = k.get_value(), t.get_value()
+            if ".Rotation." in cname:                              # Euler channel: blend the short way round
+                tv = v + ((tv - v + 180.0) % 360.0 - 180.0)
+            k.set_value(v + float(hb["amount"]) * (tv - v)); blended += 1
         keys = c.get_keys()
         if not keys:
             continue
@@ -220,7 +232,7 @@ def build(spec):
                 k.set_leave_tangent_weight(ease[frames[i]] * (frames[i + 1] - frames[i]) * spf)
             if in_w is not None:
                 k.set_arrive_tangent_weight(in_w[1] * (frames[i] - frames[i - 1]) * spf)
-    res.update({"keys_after": sum(len(c.get_keys()) for c in chans), "pinned": sorted(pinned), "dropped": dropped, "edited": edited,
+    res.update({"keys_after": sum(len(c.get_keys()) for c in chans), "pinned": sorted(pinned), "dropped": dropped, "edited": edited, "blended": blended,
                 "shifted": {p: sorted(v) for p, v in shifted.items()}})
     skel = unreal.load_asset(spec["source_anim"]).get_editor_property("skeleton")
     fac = unreal.AnimSequenceFactory(); fac.set_editor_property("target_skeleton", skel)

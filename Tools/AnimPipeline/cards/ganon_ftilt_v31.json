@@ -302,5 +302,14 @@
  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V3",
  "planted": [
   "foot_r_ik_ctrl"
+ ],
+ "hitstop_blend": [
+  {
+   "frame": 9,
+   "toward": 10,
+   "amount": 0.85,
+   "match": [],
+   "why": "hitstop_snap (owner 02/11): arms jumped 49 cm (hands) from the first active frame 9 to 10; the strike pose arrives by 9 (85%), so the travel happens 7-9 before the hitbox opens; owner pose 10 unchanged"
+  }
  ]
 }

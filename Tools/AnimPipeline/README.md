@@ -42,6 +42,7 @@ Coordinates:
 - **Big pose changes.** Before a relatively big pose change beyond what was asked, describe it and wait for approval (waived for jab v11 and Ganondorf ftilt).
 - **References first.** Fetch UFD references first (`ufd_fetch.py`); GIF downloads are pre-approved.
 - **FAF.** FAF = the UFD total read as a 0-based game frame (jab: anim 18; Ganondorf ftilt: anim 37).
+- **No pop after a hitbox frame** (owner, 02/11, every move). A hit can land on any active frame and the hitstop freezes the clip there, so the step from each active frame to the next must be small (check `hitstop_snap`, blocking, default on, 10 cm per anim frame per bone). The big travel goes ON the frame the hitbox comes out (into the first active frame), or later in the recovery. Fix in the card with `hitstop_blend` (pull the pose after the active frame toward it, or the first active pose toward the strike pose); preview with `ingame_judge.py <card> <hitstop> --at=<active frame>` and `hitstop_sheet.py`.
 
 ## Replicating a reference: key poses first (owner, 01/11, after Ganondorf v2 was rejected)
 
@@ -178,6 +179,7 @@ Take name for the checks stays `ganon_v3`. Page: https://claude.ai/artifact/74Z5
 | `tangency.py` (report) | Tangencies (Solid Drawing): two parts' outlines within 1.5 cm (screen-scaled), within 15 deg, over > 25% of a limb's length; joint pairs excluded (shoulder, elbow, wrist, hip, knee, ankle, neck). Six ortho views, 3/4s and game rings, at the key poses. Offline on the cached bones, 30-45 s | constants in the script |
 | `spacing_rules.py` (from preflight and motion_check) | Recovery: speed peak in the first 60% of hold end -> arrival (fast out), last approach step <= 0.6 x the largest of the last 4 (slow in to the guard) | constants in the script |
 | `clearance.py` | Gap between capsules (≥ 2 cm) | in the script |
+| `animpipe check` hitstop_snap (blocking, every move) | Largest per-bone displacement from each hitbox-active frame to the next (the first frame the player sees after a hitstop freeze). Fixed with the card's `hitstop_blend` | 10 cm per anim frame; card `hitstop_max_cm` |
 | `legibility.py` | Attacking part distinct at contact; rear arm / arms hiding it; rear elbow; fists closed; attacking limb readable from the Follow, rail and PvP cameras; exaggeration out of the body. `configure(take)` switches to the kick mode (foot as the attacking part) from the move sheet | `legibility_thresholds.json` |
 | `motion_check.py` | Weight (punch: centre of mass into the strike; kick: hip drive from the wind-up), impact spacing, hold/recoil, overlap cascades, arcs and zig-zags (snaps, holds and the wind-up reversal are beats), attack line | `motion_thresholds.json` |
 | `joints.py` (from motion_check) | Wrists, knees over the toes, ankles, foot roll/floor, support knee on one foot, airborne kicking foot | `motion_thresholds.json` (`joint_*`) |

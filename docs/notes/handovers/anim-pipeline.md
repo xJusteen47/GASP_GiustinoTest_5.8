@@ -112,3 +112,22 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   vuole ancora più estremo. Nota: il ginocchio si sposta di 8 cm verso il centro (x), da guardare in vista frontale.
 - Anteprime: `sheets/ingame/ganon_ftilt_v31_*.mp4` e composito `ganon_ftilt_v31_anticipation_before_after.png`, nei project files.
 - Costo stimato checkpoint 7: Opus ~20 chiamate, contesto ~110k (cumulato), circa $3-4.
+
+## Checkpoint 8 (2026-11-02): niente scatto dopo un frame con hitbox (regola owner, tutte le mosse)
+- Owner: durante l'hitstop il frame congelato è seguito da un salto grande delle braccia; lo scatto va NEL frame in cui
+  esce la hitbox, non subito dopo. Regola generale, documentata nel README (regole owner + tabella check).
+- Check `hitstop_snap` in `animpipe check`: **bloccante, default su ogni mossa** (scelta: non opt-in, come chiesto).
+  Per ogni frame attivo f misura lo spostamento massimo per osso f -> f+1 (spazio componente, 65 ossa), limite 10 cm
+  per frame anim (card `hitstop_max_cm` per cambiarlo, esenzione `hitstop_snap` possibile).
+- Opzione scheda `hitstop_blend` [{frame, toward, amount, match}]: la chiave a `frame` va di `amount` verso quella a
+  `toward` sui controlli indicati (vuoto = tutti), dopo gli `edits`; rotazioni per la via corta. Esplicita per mossa
+  (scelta: il motore non la applica da solo, perché quale posa spostare è una decisione di posa).
+- Ganondorf: 9 -> 10 da 63 cm (mani 49) a **9,8 cm**: posa 9 all'85% verso la 10, il salto ora è 8 -> 9 (entrata
+  nella hitbox). Pose owner 0/7/10/27/37 intatte. Bloccanti 6/7: legibility FAIL ereditato come prima.
+- Jab v12: 2 -> 3 da 29 cm a **7,4 cm** (1° tentativo 0,7 -> 13,7 cm, tenuto 0,85): il pugno resta teso al 3 e
+  rientra 3-5 (3 -> 4 ora più veloce, fuori dalla finestra attiva). Bloccanti **7/7 PASS**.
+- Anteprime: `ingame_judge.py ... --at=<frame attivo>` (nuovo: hitstop su un frame attivo qualsiasi); jab hitstop 4
+  a f2, Ganon hitstop 8 a f9; mp4 hitstop/whiff/compare in `sheets/ingame/`. Compositi prima/dopo con sovrapposizione
+  rosso/ciano `hitstop_sheet.py` -> `<mossa>_hitstop_snap.png` (prima jab: cattura del worktree aaqr80, ossa identiche).
+- Da guardare: Ganon 9,8 cm è al limite (amount 0,9 darebbe margine); hitstop vero in PIE quando le abilità usano i montage.
+- Costo stimato: Opus ~35 chiamate, contesto ~70k, circa $3-4; niente subagenti.

@@ -93,7 +93,7 @@ def build(path):
     os.makedirs(OUT, exist_ok=True)
     spec = {"name": name, "source_anim": c["source_anim"], "rig": c.get("rig", RIG), "fps_num": num, "fps_den": den,
             "poses": key_frames(c), "segments": segments(c), "part_delays": c.get("part_delays", {}),
-            "planted": c.get("planted", []), "edits": c.get("edits", []), "drop": c.get("drop", []),
+            "planted": c.get("planted", []), "edits": c.get("edits", []), "drop": c.get("drop", []), "hitstop_blend": c.get("hitstop_blend", []),
             "ease_out": {str(q["frame"]): q["ease_out"] for q in c["poses"] if q.get("ease_out")},
             "lock_lengths": c.get("lock_lengths", True), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
     t0 = time.time()

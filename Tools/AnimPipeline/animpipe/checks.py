@@ -2,7 +2,8 @@
 
   block    invariants: a FAIL stops the move. bone_lengths, clearance, legibility (the striking part seen from the game
            cameras), contact/FAF (the effector peaks inside the contact window, the clip reaches the FAF), planted feet,
-           closed fists.
+           closed fists, hitstop_snap (default on every move: no bone travels more than HITSTOP_MAX cm from a
+           hitbox-active frame to the next one, since a hit freezes the clip on that frame and the next frame would pop).
   measure  reported, never block: motion_curves (+ motion_ref against the card's reference), twist_chain, motion_check
            (weight, overlap, balance, pose rules), spacing of the built curves, distance from the source poses.
   eye      quality the owner judges on the review grid; listed, not computed.
@@ -17,6 +18,7 @@ from animpipe.card import load, windows, to_move_sheet
 from animpipe.__main__ import OUT, TOOLS
 
 PLANT_TOL = 2.0          # cm a planted foot (ankle and ball) may drift from frame 0
+HITSTOP_MAX = 10.0       # cm per anim frame (60 fps) out of a hitbox-active frame; card `hitstop_max_cm` overrides
 FIST_MAX = 0.7           # fingertip-to-wrist distance / finger chain length; open hand ~0.95, closed fist ~0.5
 EYE = ["arcs and silhouette on the review grid", "weight and snap at 1x and 0.25x", "face/head follow-through"]
 
@@ -76,6 +78,22 @@ def _fists(F, hands):
     return not bad, "openness (ratio, frame) " + ", ".join(f"{s} {v[0]}@{v[1]}" for s, v in worst.items()) + f" (max {FIST_MAX})"
 
 
+def _hitstop_snap(F, w, lim, exempt):
+    """Block (owner rule, 02/11): the hit can land on any active frame and freezes the clip there for the hitstop, so
+    the step from every active frame f to f+1 is what the player sees right after the freeze. The largest per-bone
+    displacement (component space, every sampled bone) of each such step must stay under `lim`. A big travel belongs
+    before the hitbox opens (into the first active frame) or later in the recovery, never right after an active frame."""
+    a0, a1 = w["active"]
+    worst = []
+    for f in range(a0, min(a1, len(F) - 2) + 1):
+        if f in exempt:
+            continue
+        b, d = max(((b, float(np.linalg.norm(F[f + 1][b] - F[f][b]))) for b in F[f]), key=lambda kv: kv[1])
+        worst.append((f, b, round(d, 1)))
+    bad = [x for x in worst if x[2] > lim]
+    return not bad, "active->next max " + ", ".join(f"{f}->{f + 1} {d} cm ({b})" for f, b, d in worst) + f" (max {lim})"
+
+
 def _spacing(F, segs, eff):
     """Measure: effector progress at the middle frame of every pose segment longer than 2 frames (shorter ones have no
     frame inside to see the spacing at 60 fps)."""
@@ -123,6 +141,7 @@ def run(path, src=False):
     sides = "".join(s for s in "lr" if f"foot_{s}_ik_ctrl" in c.get("planted", ["foot_l_ik_ctrl", "foot_r_ik_ctrl"]))
     res["block"]["planted_feet"] = _planted(F, exempt.get("planted", set()), sides)
     res["block"]["fists"] = _fists(F, c.get("fists", ["l", "r"]))
+    res["block"]["hitstop_snap"] = _hitstop_snap(F, w, float(c.get("hitstop_max_cm", HITSTOP_MAX)), exempt.get("hitstop_snap", set()))
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),
                        ("twist_chain", ["twist_chain.py", take, "--quiet"]),

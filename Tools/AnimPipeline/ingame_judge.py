@@ -1,11 +1,12 @@
 """In-game read of a built move: montage + hitstop + side (Duel) camera, without PIE.
-    python ingame_judge.py <card.json> <hitstop_frames> [az=90] [--cached]
+    python ingame_judge.py <card.json> <hitstop_frames> [az=90] [--cached] [--at=<active anim frame>]
 Creates AM_<name> next to the built anim, captures every frame lit from the side camera (el 12, 450 cm, FOV 55 =
 FGSTN_CameraDuelTuning), repeats the first active frame <hitstop> times (the attacker's hitstop freeze), and writes
 sheets/ingame/<move>_ingame.mp4 (60 fps, 1x) and <move>_ingame_strip.png (startup end -> active -> recovery start, one image).
 Standard second output: the same move whiffing (no hitstop, the sequence plays straight through) as <move>_ingame_whiff.mp4, and
 <move>_ingame_compare.mp4 with hitstop (left) and whiff (right) side by side. --cached reuses the frames of the last capture
-(sheets/ingame/_<move>/raw) instead of driving the editor, e.g. to re-time the hitstop.
+(sheets/ingame/_<move>/raw) instead of driving the editor, e.g. to re-time the hitstop. --at freezes on another active frame
+(a hit can land on any of them; the frame after the freeze is what check hitstop_snap limits).
 Judged by eye on the strip and the video: weight/force, smoothness, readability. Needs the editor in L_PilotCapture."""
 import json, os, sys, time
 import numpy as np
@@ -58,6 +59,9 @@ def grab(f):
 
 imgs = {f: grab(f) for f in range(n + 1)}
 a0 = w["active"][0]
+for a in sys.argv[1:]:
+    if a.startswith("--at="):
+        a0 = int(a[5:])
 seq = list(range(n + 1))
 hs_seq = seq[:a0 + 1] + [a0] * hit + seq[a0 + 1:]
 
