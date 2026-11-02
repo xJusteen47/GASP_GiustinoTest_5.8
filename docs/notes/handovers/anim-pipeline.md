@@ -276,3 +276,6 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   -5,0 nel rilascio fra le due pose), braccia conserte sul petto 15-34 (sua f23, fino a -3,7). Frame 3-4, 13-14, timing invariati.
 - Aperti: carica ferma 5-12 (prima "viva"): se l'owner la vuole viva va sbloccata; `source_fidelity` (piano §10) non fatto.
   Il bridge fallisce a volte la prima chiamata: si rilancia. Costo del thread circa $12.
+- **Carica viva (owner 22:56)**: solo il 5 è la sua f15 così com'è (bloccato, `approved` ora solo [5]); il 12 = f15 più le
+  differenze di tenuta di v4c (busto -6°, testa +4°, mani +4/+10 avanti e +7 su) e piedi +6 avanti/+6 su (il primo
+  tentativo con i soli +4 di v4c dava co_motion FAIL, gambe ferme 7-12). Check: tutto PASS tranne legibility (ereditato).
