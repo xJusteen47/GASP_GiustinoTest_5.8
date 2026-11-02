@@ -105,6 +105,14 @@ struct GSTNPIGGYBACKCORE_API FGSTN_CarrierProfile
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Carrier", meta = (ClampMin = "0.0", ForceUnits = "cm"))
 	float MountMaxDistance = 150.f;
 
+	/**
+	 * The heaviest rider this kit carries (equal is allowed), in the units of FGSTN_RiderProfile::Weight (100 = a standard fighter). Kit data in G5:
+	 * a link rule reads only its request context, which carries neither the combat attribute MaxCarryWeight nor the initiator's weight, so the
+	 * mount decides on the two kits' declared values, the same on every machine (m7-doc-deltas G5)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Carrier", meta = (ClampMin = "0.0"))
+	float CarryCapacity = 150.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Carrier")
 	FGSTN_CarryTuning Carry;
 
@@ -130,6 +138,10 @@ struct GSTNPIGGYBACKCORE_API FGSTN_RiderProfile
 	/** Whether this kit may ride an ally */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Rider")
 	bool bCanRide = true;
+
+	/** The rider's weight for the mount rule and the carry ratio (100 = a standard fighter), compared with the carrier's CarryCapacity */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Rider", meta = (ClampMin = "0.0"))
+	float Weight = 100.f;
 
 	/** Hand IK target socket on the carrier (optional, presentation only) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Rider")
@@ -159,6 +171,26 @@ struct GSTNPIGGYBACKCORE_API FGSTN_MountKitExtension : public FGSTN_KitExtension
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback")
 	FGSTN_RiderProfile Rider;
+
+	/**
+	 * The Runtime module's loadout extension binds the interact button's mount meanings for this kit (combat-m7-piggyback.md 7): Mount (requires
+	 * Interact.Target.Mount) and Dismount (requires the rider role) when the kit can ride, Drop (Interact + crouch held, requires the carrier role)
+	 * when it can be mounted. False = the kit binds the commands itself
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Bindings")
+	bool bAddDefaultBindings = true;
+
+	/** The mount move; empty = the Runtime module's UGSTN_GA_Mount. A timeline ability whose hitbox names the mount link type */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Bindings", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath MountAbility;
+
+	/** The rider's dismount; empty = UGSTN_GA_Dismount (a Release key: the rider role's reason is Dismount) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Bindings", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath DismountAbility;
+
+	/** The carrier's drop; empty = UGSTN_GA_Drop (a Release key: the carrier role's reason is Drop) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Bindings", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath DropAbility;
 };
 
 /**
@@ -209,6 +241,16 @@ struct GSTNPIGGYBACKCORE_API FGSTN_MountRules : public FGSTN_RulesExtension
 	/** The mount breaks when the carrier's transform jumps more than this in one frame (a respawn, a teleport) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Break", meta = (ClampMin = "0.0", ForceUnits = "cm"))
 	float MaxCarrierTeleportCm = 500.f;
+
+	/**
+	 * Who places a rider that leaves on its own (a dismount): false = SERVER-GIVEN, the only mode built in G5. The watchdog on the authority places
+	 * the rider with the mount type's exit placer, and the rider's own client takes the exit as a correction (the presentation's blend hides it),
+	 * as every carrier-initiated exit. True is reserved for the predicted mode of combat-m7-piggyback.md 6.4 (the rider's client places itself
+	 * from its local anchor and the server rewinds the carrier to the rider's view); S1 found it unsafe for a client rider, and the owner has
+	 * not chosen it. Until it is built, true is reported once and treated as false
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Exit")
+	bool bPredictRiderExits = false;
 
 	/** Credit of a pair move whose definition does not choose one */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Credit")

@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Piggyback",
-	"Description": "Piggyback and pair moves for the GSTN combat (M7): an ally rides on a carrier as one more GSTNLink link type, with carry load, mount rules and pair moves as data. Skeleton only (checkpoint G4): native tags and the pure mount data and math in GSTNPiggybackCore, empty Runtime and Editor modules, and the Core tests in GSTNPiggybackTests. Built on GSTNLink and GSTNCombat from outside, through their public API only; nothing depends on this plugin. Enabling it changes nothing until a kit carries its mount data and a rules asset its mount rules.",
+	"Description": "Piggyback and pair moves for the GSTN combat (M7): an ally rides on a carrier as one more GSTNLink link type, with carry load, mount rules and pair moves as data. G5: the mount link type (rider parked on an ally carrier), its rule and exit placer, the mount, dismount and drop abilities and their bindings, on top of the G4 core (native tags, mount data and math). Built on GSTNLink and GSTNCombat from outside, through their public API only; nothing depends on this plugin. Enabling it changes nothing until a kit carries its mount data and a rules asset its mount rules.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -11,7 +11,7 @@
 	"MarketplaceURL": "",
 	"SupportURL": "",
 	"EnabledByDefault": false,
-	"CanContainContent": false,
+	"CanContainContent": true,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": true,
 	"Installed": false,
@@ -56,6 +56,18 @@
 		},
 		{
 			"Name": "GSTNLink",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "AbilitySystemSimulation",
+			"Enabled": true
+		},
+		{
+			"Name": "NetworkPrediction",
 			"Enabled": true
 		}
 	]

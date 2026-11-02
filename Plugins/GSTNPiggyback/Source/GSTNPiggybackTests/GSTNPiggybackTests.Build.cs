@@ -15,8 +15,16 @@ public class GSTNPiggybackTests : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
+			"GameplayAbilities",
+			"AbilitySystemSimulation",
+			"NetworkPrediction",
+			"GSTNInputCore",
 			"GSTNCombatCore",
+			"GSTNCombatGAS",
+			"GSTNCombatNP",
 			"GSTNLinkCore",
+			"GSTNLinkGAS",
+			"GSTNLinkNP",
 			"GSTNPiggybackCore",
 			"GSTNPiggybackRuntime"
 		});

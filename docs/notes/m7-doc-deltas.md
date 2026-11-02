@@ -136,3 +136,66 @@ presentation component and it says nothing about the fix. OPEN for G10 (measure 
 - `headless-g4-on.log` 1219/0 = 1212 + 7 `GSTNPiggyback.Core.*`; no ensure. `headless-g4-off.log` 1212/0 = HANDOVER 76's `headless-g2-on.log`; the log never names the plugin.
 - Builds `build-g4-on.out` (the four plugin DLLs built, no warning from plugin files) and `build-g4-off.out` (makefile regenerated for the changed `.uproject`, nothing to recompile) both "Result: Succeeded".
 - `python Tools/Modules/check_modules.py` on the committed tree: 0 problems. The committed `.uproject` was restored byte-identical (SHA256 9C4F29DE...) and does not list the plugin.
+
+## G5: mount, dismount and drop (HANDOVER 78)
+
+### Seam added to GSTNCombat (approved by the lead through the coordinator, 2026-11-01, option A)
+
+The plan's mount is a hit on an ALLY, and GSTNCombat dropped every ally hit before the link step unless the match rules list Ally or turn on
+friendly fire (attacker step and victim TeamFilter step; a hitbox variant could only ignore a relationship). Commit 307ca14
+"GSTNCombat: per-relationship hittable override on hitbox variants": `FGSTN_HitVariant::bForceHittable` (off by default; `bIgnore` wins), read by
+the attacker step (skips the rules' gate for that variant) and carried to the victim in bit 0x80 of the inbox entry's relationship byte
+(`GSTNHitRelationship::ForcedBit`, `IsForced`; never on 255; `FromIndex` masks it), where `FGSTN_ResolvedHit::bRelationshipForced` lets the
+TeamFilter step pass it. Tests `GSTNCombat.NP.Hits.Attacker.ForceHittableVariant`, `GSTNCombat.NP.Hits.TeamFilter.ForcedRelationship`.
+Hunks in `GSTN_CombatTick_Attacker.cpp` (for the spin thread's D6/D7 merge): FromIndex switch (line 15), `FAttackerCandidate::bRelationshipForced`
+(61), the relationship gate (219-221), the candidate's flag (279), the predicted pipeline's `Incoming.bRelationshipForced` (338), the entry's
+forced bit (413-416).
+
+### Shipped names that differ from the plan and spec
+
+| Plan / spec | Shipped |
+|---|---|
+| `DA_LinkType_Mount` "in the plugin's Content" | Made by code: `FGSTN_MountLinkType::Build(Outer, FGSTN_MountRules)` and `Register()` (GSTNLink's `AddDefinition`, at PostEngineInit), as GSTNExtensionTest does. An asset would need the editor to author its instanced rule and placer, and the definition is fully decided by the rules struct and four constants (`RiderOffset` (-20, 0, 95) cm on the carrier's root, offer priority 50, reach 150 cm, leash 300 cm) |
+| rider socket "from the carrier profile, else root + offset" | Root + `RiderOffset()` always: the definition is one per type and the request side carries no carrier profile to the placement. `MountSocket` / `MountOffset` of the profile are unread (OPEN, needs a per-entity placement seam in GSTNLink) |
+| `PartnerMustNot` = KO | Empty: no KO state tag exists; deaths break through `bBreakOnOwnDeath` / `bBreakOnPartnerDeath` (GSTNLink's `OwnDeath` / `PartnerDeath`) |
+| hit breaks "carrier above CarrierBreakKnockback, rider above RiderBreakKnockback" | `FGSTN_RoleHitBreak` per role from the rules' thresholds, `bPartnerHitsBreak` false; the reason is GSTNLink's `Hit` until G7's mount hit step names `CarrierHit` / `RiderHit` |
+| `UGSTN_LinkRule_Mount` "weight, cooldown, Combat.Lock.Link, carrier not in hitstun, range" from the snapshot | From the request context only (a rule reads nothing else). The context carries neither the combat attributes `Weight` / `MaxCarryWeight` (the initiator side has no weight at all on the hit path) nor a position: the weights are kit data, `FGSTN_CarrierProfile::CarryCapacity` (150) and `FGSTN_RiderProfile::Weight` (100), new fields; range is the mount hitbox and the offer's reach (the rule's range check runs with distance 0); the cooldown is the rider's generic link `CooldownEndFrame`, which nothing writes after a mount (no remount cooldown yet, OPEN); hitstun is `Combat.State.Hitstun`, named in the type's `RequestRequirements` so the snapshot's request tag mask carries it (with the plugin on, the request tag table gains that tag) |
+| `FGSTN_MountRules` "absent = every mount refused" | Not reachable from a rule (no world, no rules asset in the request context): the type is built from the default `FGSTN_MountRules`. OPEN: a request-context seam for the match's rules extensions |
+| exit placer for `BehindCarrier / SideOfCarrier / AtAnchor` "per the carrier profile's DefaultExit" | `UGSTN_Placer_Mount { Mode, DistanceCm }` on the definition (BehindCarrier, 90 cm): the exit query carries no kit, so the profile's `DefaultExit` / `ExitDistance` are unread (OPEN). The anchor is the query's `SocketTransform` |
+| `bInteractionPickNearest` on the hitbox spec | Not added (a GSTNCombat field): the mount hitbox has `MaxTargetsPerGroup` 1 and the interact probe already chose one focus |
+| "interact candidates are allies only for this offer" | The type lists GSTNLink's `UGSTN_LinkRule_Team` (AlliesOnly) when `FGSTN_MountRules::bAllyOnly`; the probe's pre-filter runs it (G1) |
+| bindings "by role (M7 7)", `DisallowedCommands` "compiled by the kit extension" | `FGSTN_MountLoadout`, a GSTNCombatGAS loadout extension (`GSTNPiggyback.Mount`): Mount, Dismount (role slot offset 100) and Drop (101, Crouch held), each with its own slot override that falls through when unavailable; `FGSTN_MountKitExtension::bAddDefaultBindings` and ability overrides (`MountAbility`, `DismountAbility`, `DropAbility`, empty = the native classes). `DisallowedCommands` add `Combat.Link.Role.Carrier` to the ignored tags of every kit and weapon binding of those commands that does not require the role |
+| dismount / drop "issue the unlink" | A Release key of a link outcome track; the role's `ReleaseBreakReason` names `Dismount` (rider) or `Drop` (carrier). The plugin's five reasons are registered by name at module startup |
+| rider exits "predicted by the rider's client" (spec 6.4) | SERVER-GIVEN in G5 (the watchdog on the authority places every exit). `FGSTN_MountRules::bPredictRiderExits` (default false) is the switch; true is logged and treated as false. The owner decided on 2026-11-01 (after S1) that a client rider's own exits are PREDICTED with the server rewinding the carrier to the rider's view time: first G6 item if not done here |
+| test kits "in the plugin's test content" | `/GSTNPiggyback/Test/KIT_Test_Mount` and `KIT_Test_MountHeavy`, copies of the project's `/Game/GASNPPTest/Combat/KIT_Test_Link` (they reference its moves and slot set: test content only, nothing in the plugin's code loads them) with a mount entry written by `UGSTN_PiggybackContentLibrary::WriteMountKitData`; the plugin adds `/GSTNPiggyback` to the asset manager's `GSTN_PrimaryKit` scan |
+| `scenario_mount_refused` with `KIT_Test_MountHeavy` | Kit data is the same on every machine, so a heavy rider is refused on its own screen (the probe offers no mount, no request): that is `scenario_mount_heavy_refused` (0 rollbacks). The rollback case needs a refusal the rider cannot see: `scenario_mount_refused` links the carrier on the server (a debug-formed grab by the third pawn) on the tick the rider taps |
+| mount hitbox "active window" | One active frame (3): with a longer window the rider's client, restored by its rollback after a refusal, re-requested the carrier on the next active frame |
+| bindings "Interact = Mount / Dismount / Drop" | Slot offsets -1 (Mount, below the grab's 0), 101 (Dismount, above the Release's 100) and 102 (Drop): the loadout validator refuses two slots with one input at one priority whatever their requirements. Mount also ignores `Interact.Target.Grab`, Dismount ignores the grabber, latcher and latched roles |
+
+### GSTNLink changes G5 needed (approved by the lead through the coordinator)
+
+- Commit "GSTNLink test: ReasonTableAppend relative to reasons other plugins registered" (bb2c516): the test assumed no plugin had registered a
+  break reason; it now compares with a baseline build. Test only. The spin thread's drill (D9/D10) registers reasons too and needs it.
+- The interact probe tries offers by priority and the first whose rules accept a candidate names it: the grab (100, no team rule) claimed allies,
+  so the mount's offer (50) was never reached. `Tools/GAS/setup_defence_link_content.py` now gives `DA_LinkType_Grab_Test` and
+  `DA_LinkType_Latch_Test` GSTNLink's `UGSTN_LinkRule_Team` (EnemiesOnly) as their SECOND rule (the harness edits the type's own rule as
+  `rules[0]`); GSTNLink's README says a grab-like type should list a team rule. SUITE_LINK at 0 % is the check that grabs and latches of enemies
+  are unchanged. OPEN (option B, not built): the probe could also skip relationships the match rules make unhittable, so a type without a team rule
+  cannot shadow a lower offer.
+
+### S3 (spike report section S3)
+
+Accepted mount: 0 rollbacks on the rider's client, 1 correction on the carrier's. Unseen refusal: 3 rollbacks on the rider's client (not 1 as G1's
+notes assumed) and a 117 cm visible snap for 3-4 ticks, at 0 % and 2 %. `scenario_mount_refused` records the count and accepts 1 to 4.
+
+### OPEN after G5
+
+1. **Predicted rider exits** (owner decision 2026-11-01: a client rider's own exits and hitboxes are predicted from its interpolated anchor, the
+   server rewinds the carrier to the rider's view time): not built; `bPredictRiderExits` is false and logs if set. Needs a GSTNLink seam (a
+   Release of a parked acting role that places itself on its own machine instead of waiting for the watchdog's command) and the rewind on the
+   authority. First item of G6. Today's server-given dismount costs the rider's client 3 rollbacks and ends 0 cm from the authority.
+2. Unseen refusal = 3 rollbacks (S3): a refusal memory on the rider, or no optimistic attach until the carrier's copy is newer than the request.
+3. Remount cooldown: nothing writes the rider's link cooldown after a mount ends (no generic seam to set `CooldownEndFrame` on a break).
+4. Per-carrier data the request context and the exit query do not carry: socket and offset, exit mode and distance, the combat attributes
+   `Weight` / `MaxCarryWeight`, the match's `FGSTN_MountRules`.
+5. The committed `.uproject` still does not list GSTNPiggyback (the brief: restore it byte-identical); enabling it in the project is the owner's call.

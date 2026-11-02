@@ -6,8 +6,10 @@ initiator, parked on the carrier and still acting through its own bindings; the 
 piggyback-specific (mount rules, carry load, pair moves, the mount hit step) is data and code of this plugin; `GSTNLink` and `GSTNCombat`
 know nothing of it.
 
-Status: **skeleton** (checkpoint G4 of the M7 plan). The pure part is done: native tags, mount data, carry and anchor math, exit candidates,
-credit split, with tests. The Runtime and Editor modules are empty until G5 and G11.
+Status: **G5** of the M7 plan. G4 built the pure part (native tags, mount data, carry and anchor math, exit candidates, credit split). G5 adds
+the mount itself: the mount link type (made by code), its rule and exit placer, the mount, dismount and drop abilities, their bindings and the
+carrier's disallowed commands, the plugin's test kits and the harness scenarios. Carry load (G6), hits while mounted (G7) and pair moves (G8+)
+are not built yet; the Editor module is empty until G11.
 
 Spec: `docs/architecture/combat-m7-piggyback.md`. Plan: `docs/architecture/plans/m7-piggyback-plan.md` (branch `claude/project-thread-wzb12r`).
 Where the spec and the shipped code differ, the shipped names win; the differences are listed in `docs/notes/m7-doc-deltas.md`.
@@ -17,7 +19,7 @@ Where the spec and the shipped code differ, the shipped names win; the differenc
 | Module | Type | Contents | Depends on |
 |---|---|---|---|
 | `GSTNPiggybackCore` | Runtime | Native tags (`GSTN_PiggybackTags.h`), mount data (`GSTN_MountTypes.h`), pair-move enums (`GSTN_PairMoveTypes.h`), `UGSTN_MountUtils` | `GSTNCombatCore`, `GSTNLinkCore` |
-| `GSTNPiggybackRuntime` | Runtime | Empty. G5+: mount link rule and type, mount/dismount/drop and pair-move abilities, carry load effect, pair-move registry, mount hit step | `GSTNPiggybackCore`, `GSTNInputCore`, `GSTNCombatGAS`, `GSTNCombatNP`, `GSTNLinkGAS`, `GSTNLinkNP` |
+| `GSTNPiggybackRuntime` | Runtime | G5: `FGSTN_MountLinkType` (the mount type, registered at startup), `UGSTN_LinkRule_Mount`, `UGSTN_Placer_Mount`, `UGSTN_GA_Mount` / `_Dismount` / `_Drop`, `FGSTN_MountLoadout` (bindings and disallowed commands), `UGSTN_PiggybackContentLibrary` (test kits, kit scan). Later: carry load, pair moves, mount hit step | `GSTNPiggybackCore`, `GSTNInputCore`, `GSTNCombatGAS`, `GSTNCombatNP`, `GSTNLinkGAS`, `GSTNLinkNP`, `GameplayAbilities`, `AbilitySystemSimulation`, `NetworkPrediction` |
 | `GSTNPiggybackEditor` | Editor | Empty. G11: pair-move factory and validators, anchor debug panel | `GSTNPiggybackRuntime` |
 | `GSTNPiggybackTests` | DeveloperTool | Automation tests (`GSTNPiggyback.*`); never ships | all of the above |
 
@@ -84,6 +86,34 @@ Reused from `GSTNLink`, never redeclared: `Combat.Link.Linked`, `Combat.Link.Pen
   - `ExitCandidates`: ordered places to put a rider down, for GSTNLink's exit placer.
   - `MakePartnerShare`, `SplitCredit`: a pair move's credit between the hitbox owner and the partner.
 
+## The mount (G5, `GSTNPiggybackRuntime`)
+
+- **Type**: `FGSTN_MountLinkType::Build(Rules)` makes the definition, `Register()` adds it to GSTNLink's registry once the engine exists (code, not
+  an asset: its instanced rule and placer would need the editor to author, and it is fully decided by `FGSTN_MountRules` and a few constants).
+  Body channel; role 1 **Rider** (initiator: parked on the carrier's root + `RiderOffset()` (-20, 0, 95) cm, acts, no collision with the carrier,
+  turns freely, Release reason `Dismount`); role 2 **Carrier** (target: acts, Release reason `Drop`). `bInitiatorPredicts`, `PendingFrames` 2.
+  Rules: GSTNLink's `UGSTN_LinkRule_Team` (AlliesOnly) then `UGSTN_LinkRule_Mount`. Hit breaks: carrier above `CarrierBreakKnockback`, rider above
+  `RiderBreakKnockback`, partner hits never (reason `Hit` until G7). Deaths break it; leash 300 cm. Exit `UGSTN_Placer_Mount` (BehindCarrier, 90 cm).
+  Interact offer `Interact.Target.Mount`, priority 50 (the grab is 100: with an enemy and an ally in reach the grab wins), reach 150 cm, kits
+  with `FGSTN_MountKitExtension`. The carrier's `Combat.State.Hitstun` is named in the request requirements (a carrier in hitstun refuses).
+- **Rule**: `UGSTN_LinkRule_Mount` runs `UGSTN_MountUtils::EvaluateEligibility` on values of the request context: both kits' mount data
+  (`Carrier.CarryCapacity`, `Rider.Weight`, `bCanBeMounted`, `bCanRide`), link states, request tags, the rider's link cooldown. Range is the
+  hitbox's and the offer's reach. Its payload is the carry ratio (`ComputeCarryRatio`), held by both sides for G6's carry load.
+- **Moves** (timeline abilities built in their constructors, Blueprintable): `UGSTN_GA_Mount` (24 frames, one ally-only interaction hitbox
+  on frame 3 only, one target (a longer window re-requested a refused carrier on the rider's client after its rollback): the Ally variant is `bForceHittable` (GSTNCombat), Enemy and Neutral ignored), `UGSTN_GA_Dismount` and `UGSTN_GA_Drop`
+  (a Release key: the role names the reason). A kit can name its own classes in its mount data.
+- **Bindings** (`FGSTN_MountLoadout`, a loadout extension): Mount = Press(Interact) requiring `Interact.Target.Mount` (slot offset -1, below the
+  grab's 0); Dismount = Press(Interact) requiring `Combat.Link.Role.Rider` (101, above the Release's 100); Drop = Press(Interact) + Hold(Crouch)
+  requiring `Combat.Link.Role.Carrier` (102). The loadout validator refuses two slots with one input at one priority, whatever their requirements.
+  All fall through when unavailable. The carrier profile's `DisallowedCommands` add `Combat.Link.Role.Carrier` to the ignored tags of every kit
+  and weapon binding of those commands.
+- **Exits are server-given**: the watchdog on the authority places the rider (dismount, drop, every break) and the rider's client takes it as a
+  correction. `FGSTN_MountRules::bPredictRiderExits` (false) is the switch for the predicted rider exit with the server rewinding the carrier
+  (owner decision 2026-11-01, spec 6.4): not built yet, true is logged and treated as false.
+- **Test content**: `Content/Test/KIT_Test_Mount` (rider weight 100, capacity 150) and `KIT_Test_MountHeavy` (rider weight 200), copies of the
+  project's `KIT_Test_Link` with a mount entry, written by `Tools/GASNPPTest/mount_scenarios.py` (`prepare_editor`). The plugin adds its content
+  to the asset manager's kit scan (`UGSTN_PiggybackContentLibrary::ScanPluginKits`). Harness: `mount_scenarios.SUITE_MOUNT`.
+
 ## How to extend
 
 - **New pair move** (from G8): author the initiator's and the partner's timeline abilities, create a pair-move definition (roles, offset,
@@ -105,5 +135,10 @@ Reused from `GSTNLink`, never redeclared: `Combat.Link.Linked`, `Combat.Link.Pen
 - `Core.Anchor.Compose`: socket and offset in the carrier's frame; the turn does not move the anchor; equal to GSTNLink's composition.
 - `Core.Exit.CandidateOrder`: the order of every mode, a turned carrier, an upside-down carrier, a negative distance.
 - `Core.Credit.Split`: the ends, half, a third, a negative amount.
+- `Runtime.Rule.AcceptsAllyWithMountData`, `Runtime.Rule.EveryRefusal`, `Runtime.Rule.TypeRegisteredAsSpecified`,
+  `Runtime.Rule.MountHitboxTargetsAlliesOnly`: the rule on hand-built request contexts, the registered type, the mount move's hitbox.
+- `Runtime.Bindings.RiderHasNoGroundContext`, `Runtime.Bindings.DisallowedCommands`: the loadout extension's bindings and disallowed commands.
+- `Runtime.Break.EveryReasonClearsStates`: every generic and plugin reason, from either side, clears both states and places the rider (fake host).
+- `Runtime.Disabled.UnboundCommandIsLegal`: a kit without mount data is unchanged; the mount bindings bring their own slots.
 - `Core.Tags.Registered`: every native tag registered, explicit, documented and not one of GSTNLink's; the generic reasons exist; the
   three command slots come from the plugin's ini.

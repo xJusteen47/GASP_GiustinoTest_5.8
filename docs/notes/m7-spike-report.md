@@ -154,6 +154,32 @@ engine frame from the mirror.
   `-nullrhi`), and not checked for a host rider. This likely affects M6's latcher on its own client too (M6 measured `GetLinkedTransform`,
   not the mesh). For G1 (attach during Pending) / G10.
 
+## S3 optimistic mount cost (checkpoint G5, laptop, 2026-11-01)
+
+Measured by `Tools/GASNPPTest/mount_scenarios.py` (G5) on the real mount (a hit of `UGSTN_GA_Mount` through GSTNLink's LinkRequest step, the
+optimistic accept of G1 at `PendingFrames` 2), listen host + 2 clients in one editor process, 60/15 ms, rider = client 1, carrier = client 2.
+Rollbacks are the rider pawn's Mover post-simulation rollbacks (the harness counter); the visible snap is the largest jump of the rider's shown
+position between two editor ticks on its own screen (the parked presentation while it shows one, else the actor).
+
+| Case | 0 % (`mount-listen-0pct.log`) | 2 % (`mount-listen-2pct.log`) |
+|---|---|---|
+| Accepted mount: rollbacks on the rider's client | 0 | 0 |
+| Accepted mount: corrections on the carrier's client (it learns the link from the authority) | 1 | 1 |
+| Refused mount the rider cannot see (the server links the carrier on the tick of the tap): rollbacks on the rider's client | 3 | 3 |
+| Same: visible snap on the rider's screen | 117 cm (3-4 ticks shown on the carrier's back, then back to its feet) | 117 cm |
+| Refused mount the rider can see (`KIT_Test_MountHeavy`: the probe offers no mount) | no request, 0 rollbacks | 0 |
+| Dismount (server-given exit): rollbacks on the rider's client | 3 | 3 |
+| Dismount: rider's place, own client vs authority after it settles | 0.0 cm (90 cm behind the carrier) | 0.0 cm |
+
+**Verdict.** An accepted mount is free on the rider's machine, as G1 designed (the flag-only difference is not a reconcile). An unseen refusal
+is NOT one rollback as the plan assumed but about three at 60/15 ms: the rider's client re-predicts the accept against its interpolated copy of
+the carrier, which still shows the carrier free, until that copy catches up; each authoritative packet in between corrects it again (the log
+shows the linked modifier started and ended "after a rollback" on consecutive engine frames). The snap is the full attach offset (117 cm), shown
+for 3-4 ticks: without the presentation blend of G10 it is visible. Unseen refusals need the carrier's state to change on the server within the
+interpolation delay of the tap (another link, a hit, a lock), so they are rare; a refusal by data (kits, teams, weights) is predicted and costs
+nothing. Options for later (OPEN): a refusal memory on the rider (do not re-predict a serial the authority refused), or no optimistic attach
+until the carrier's copy is newer than the request frame.
+
 ## Other findings
 
 1. **Unity build clash in `GSTNLinkNP` tests (blocks a clean build)**: `GSTN_LinkNPTests_ExitCollision.cpp` (F15) and
