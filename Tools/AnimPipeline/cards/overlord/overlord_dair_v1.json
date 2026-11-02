@@ -6,7 +6,7 @@
  "fps": 60,
  "timing_csv": "refs/ufd/GanondorfDAir_timing.csv",
  "effector": "foot_l",
- "_design": "Kit overlord ('elegant violence', M. Bison / Rugal). Ganondorf dair timing (UFD: startup 16, active 16-18, total 44 -> anim active 14-16, FAF 42) and its shape (knees tucked to the chest, both feet driven straight down); M. Bison head-stomp upper body: the arms rise and cross above the head through the startup, then fold on the chest (Bison's crossed arms) as the feet strike, and stay folded. Aerial: no idle entry, frame 0 already in the air tuck. No owner Step poses: the poses are authored data (author block), v1 for the owner's judgement.",
+ "_design": "Kit overlord ('elegant violence', M. Bison / Rugal). Ganondorf dair timing (UFD: startup 16, active 16-18, total 44 -> anim active 14-16, FAF 42) and its shape (knees tucked to the chest, both feet driven straight down); M. Bison head-stomp upper body: the arms rise and cross above the head through the startup, then fold on the chest (Bison's crossed arms) as the feet strike, and stay folded. Aerial: no idle entry, frame 0 already in the air tuck. No owner Step poses: the poses are authored data (author block), v1 for the owner's judgement. v1b (owner refs IMG_9040/9041 seen): arms folded tight and high on the chest, hands on the opposite upper arm; toes pointed at the stomp.",
  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAir_V1",
  "poses": [
   {
@@ -478,7 +478,7 @@
       -30
      ],
      "foot_rot": [
-      -10,
+      -40,
       0,
       0
      ]
@@ -495,35 +495,45 @@
       -30
      ],
      "foot_rot": [
-      -10,
+      -40,
       0,
       0
      ]
     },
     "arm_l": {
      "hand": [
-      -14,
-      22,
-      -8
+      -12,
+      17,
+      -3
      ],
      "pole": [
       40,
-      24,
-      -12
+      30,
+      -10
      ]
     },
     "arm_r": {
      "hand": [
-      14,
-      26,
-      0
+      12,
+      19,
+      3
      ],
      "pole": [
       -40,
-      26,
+      30,
       -6
      ]
-    }
+    },
+    "clavicle_l": [
+     0,
+     0,
+     -8
+    ],
+    "clavicle_r": [
+     0,
+     0,
+     8
+    ]
    },
    "16": {
     "pelvis": {
@@ -560,7 +570,7 @@
       -30
      ],
      "foot_rot": [
-      -10,
+      -40,
       0,
       0
      ]
@@ -577,35 +587,45 @@
       -30
      ],
      "foot_rot": [
-      -10,
+      -40,
       0,
       0
      ]
     },
     "arm_l": {
      "hand": [
-      -14,
-      22,
-      -8
+      -12,
+      17,
+      -3
      ],
      "pole": [
       40,
-      24,
-      -12
+      30,
+      -10
      ]
     },
     "arm_r": {
      "hand": [
-      14,
-      26,
-      0
+      12,
+      19,
+      3
      ],
      "pole": [
       -40,
-      26,
+      30,
       -6
      ]
-    }
+    },
+    "clavicle_l": [
+     0,
+     0,
+     -8
+    ],
+    "clavicle_r": [
+     0,
+     0,
+     8
+    ]
    },
    "26": {
     "pelvis": {
@@ -642,7 +662,7 @@
       -25
      ],
      "foot_rot": [
-      -12,
+      -35,
       0,
       0
      ]
@@ -659,35 +679,45 @@
       -25
      ],
      "foot_rot": [
-      -12,
+      -35,
       0,
       0
      ]
     },
     "arm_l": {
      "hand": [
-      -14,
-      22,
-      -8
+      -12,
+      17,
+      -3
      ],
      "pole": [
       40,
-      24,
-      -12
+      30,
+      -10
      ]
     },
     "arm_r": {
      "hand": [
-      14,
-      26,
-      0
+      12,
+      19,
+      3
      ],
      "pole": [
       -40,
-      26,
+      30,
       -6
      ]
-    }
+    },
+    "clavicle_l": [
+     0,
+     0,
+     -8
+    ],
+    "clavicle_r": [
+     0,
+     0,
+     8
+    ]
    },
    "34": {
     "pelvis": {
@@ -697,13 +727,13 @@
       -2
      ],
      "rot": [
-      -6,
+      -3,
       0,
       0
      ]
     },
     "spine": [
-     -4,
+     0,
      0,
      0
     ],
@@ -748,28 +778,38 @@
     },
     "arm_l": {
      "hand": [
-      -14,
-      27,
-      -9
+      -12,
+      17,
+      -3
      ],
      "pole": [
       40,
-      29,
-      -12
+      30,
+      -10
      ]
     },
     "arm_r": {
      "hand": [
-      14,
-      31,
-      -1
+      12,
+      19,
+      3
      ],
      "pole": [
       -40,
-      31,
+      30,
       -6
      ]
-    }
+    },
+    "clavicle_l": [
+     0,
+     0,
+     -8
+    ],
+    "clavicle_r": [
+     0,
+     0,
+     8
+    ]
    },
    "42": {
     "pelvis": {
@@ -779,13 +819,13 @@
       0
      ],
      "rot": [
-      -5,
+      -3,
       0,
       0
      ]
     },
     "spine": [
-     -3,
+     0,
      0,
      0
     ],
@@ -830,28 +870,38 @@
     },
     "arm_l": {
      "hand": [
-      -14,
-      27,
-      -9
+      -12,
+      17,
+      -3
      ],
      "pole": [
       40,
-      29,
-      -12
+      30,
+      -10
      ]
     },
     "arm_r": {
      "hand": [
-      14,
-      31,
-      -1
+      12,
+      19,
+      3
      ],
      "pole": [
       -40,
-      31,
+      30,
       -6
      ]
-    }
+    },
+    "clavicle_l": [
+     0,
+     0,
+     -8
+    ],
+    "clavicle_r": [
+     0,
+     0,
+     8
+    ]
    }
   }
  }

@@ -153,5 +153,6 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   `MSYS_NO_PATHCONV=1`, altrimenti Git Bash storpia `/Game/...` e si apre DefaultLevel (sporco). `ue_write_take` fallisce la
   rilettura subito dopo il salvataggio (dialog): il build campiona bene lo stesso.
 - Output nei project files: `dair_v1_griglia_laterale.png`, `dair_v1_ingame_hitstop_vs_whiff.mp4`, `dair_v1_pose_lato_fronte.png`.
-- Prossimo: giudizio owner (o sue pose chiave); poi braccia conserte più vicine al petto e clearance delle braccia sopra la testa.
+- v1b dopo le immagini dell'owner (Bison SF4 e SF2): braccia conserte strette e alte sul petto, mani sul braccio opposto, punte
+  dei piedi tese allo stomp. Output `dair_v1b_*`. Prossimo: giudizio owner; clearance delle braccia sopra la testa (frame 9-13).
 - Costo stimato: Opus ~75 chiamate, contesto ~110k, circa $7-9; niente subagenti (render e build erano 3 comandi).
