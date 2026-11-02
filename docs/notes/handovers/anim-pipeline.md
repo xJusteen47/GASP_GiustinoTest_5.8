@@ -245,3 +245,10 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   invariato (hitbox al 15). Check: co_motion PASS, hitstop_snap PASS 1,9 cm, contact_faf PASS; clearance FAIL come in v4c
   (avambraccio dx nella testa -6,0 cm al 5, avambracci incrociati -5,2 all'8), legibility FAIL ereditato. La clearance delle
   braccia resta aperta: va risolta senza cambiare la lettura delle braccia di v4c. Costo: Opus ~15 chiamate, ~$1.
+- **Livello "Manuale" (owner, stessa sera)**: ritocchi a mano in Unreal che sopravvivono ad `animpipe build`. La build
+  crea sulla traccia del Control Rig di `LS_<name>` una sezione additiva su tutta la clip (section to key); prima di
+  ricostruire ne legge le chiavi e le rimette (copia in `Saved/AnimPipeline/animpipe/<move>_manual_layer.json`, usata solo
+  se la sequenza manca). Uso in `cards/README.md`. Prova sul dair: +20° `upperarm_r_fk_ctrl` Rot Z al 25 (0 al 20 e al 30)
+  -> dopo il rebuild mano dx +10 cm al 25, clearance 73 -> 68 coppie sotto i 2 cm; tolto il ritocco torna identico. Livello
+  vuoto = clip identica. Attenzione: braccia in FK su questo rig (i controlli IK della mano non fanno nulla). Il bridge a
+  volte fallisce la prima chiamata dopo un salvataggio: si rilancia. Livello del dair lasciato vuoto. Costo extra ~$3.

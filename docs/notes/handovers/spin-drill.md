@@ -232,3 +232,18 @@ after one checkpoint.
   rollback at 60/15 ms is acceptable for an out-of-sync cancel/dive start, or probe the frame of the correction.
 - Gates: no C++ changed, so the build and the headless suites are unchanged from SD-07 (on 980/0, off 933/0), not rerun.
 - Cost: one Opus thread, ~95k context, 6 editor runs (~5-8 min each), no builds. Medium.
+
+### SD-08b (same thread, owner's go 21:44Z): drill tip below the feet; SUITE_SPIN still 3/12, blocked by the jump
+
+- Change (GSTNSpinDrill Core, GSTN_SpinTimelines.h): TipDepth 20 -> 100 for the dive and the bore tip (Root space = capsule centre; the bore
+  sphere now sits on the target's centre, DrillerOffset 100). Gates: on Succeeded, headless 980/0; off Succeeded, 933/0 (unchanged).
+- Effect (Saved/Logs/sd-08/spin-tip2.log): the tip lands now: nondrillable_bounce passes damage and bounce (fails only "air spin stayed spent"),
+  drill_target_destroyed forms the latch on every world (fails only the launch speed). No gliding dive seen any more: no end/fall rule proposed.
+- Harness: jump held 0.25 s (was 0.1). Still red: in 4-5 of 7 diving scenarios the diver NEVER jumps (positions in Saved/SD08/probe7.txt).
+  Pattern: it fails whenever the diver key is the pawn resting at (-800, 0, 90.000) and works when it is the one at (-800, -60, 88.27): the
+  pawn at z 90.000 has likely never landed (Mover not Walking, so the jump is refused). Next (two harness attempts on the jump used, stopped):
+  log the diver's Mover mode before the jump (`gstn.test.LogMoverModeChanges 1`); if it is not Walking, settle both pawns with
+  server_reset_to_spawn / _place_near in on_ready or the rig's first step, then rerun SUITE_SPIN.
+- Unchanged: 1 rollback in spin_opposite_cancel / drill_ground_lag (budget 0); opposite_cancel also failed its shortened-spin checks once in
+  this run (flaky, same pawn issue suspected).
+- Cost: ~+35k context, 2 builds + 2 headless runs, 2 editor runs.

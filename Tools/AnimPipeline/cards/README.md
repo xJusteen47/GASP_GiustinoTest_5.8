@@ -45,3 +45,16 @@ Every card and every review pass applies these; the checks that enforce one are 
 - `rules` `{frame_0, knees_front, feet_side_by_side, villain_hand}`: le regole di sopra come check bloccanti, con le soglie
   nel blocco (`frame_0`: `charge, min_cm, max_frac`; `knees_front`: `frames, tol`; `feet_side_by_side`: `frames, min_cm`;
   `villain_hand`: `frames, min_deg`). Blocco assente = check non eseguito. Soglie da tarare sul desktop (dair v4, jab v12).
+
+## Hand tweaks in Unreal: the "Manuale" layer
+`animpipe build` deletes and recreates `LS_<name>` and the clip from the card, so keys edited on the base section are
+lost. Every build adds an **additive** section ("Manuale") on the Control Rig track, over the whole clip, and makes it the
+section to key. Before rebuilding it reads that section's keys and puts them back, so the clip and all checks include them.
+1. Open `/Game/AnimPipeline/Rig/LS_<name>` (e.g. `LS_OverlordDAirV4_Build`). The rig track has two sections: the
+   base one (from the card) and the additive one, already the section to key (right click > "Set as section to key" if not).
+2. Pose a control on a frame and key it: the key goes on the layer and adds to the card's pose. Key the frames around the
+   tweak at 0 so it fades in and out. On this rig the arms are FK (`*_fk_ctrl`), the legs IK (`foot_*_ik_ctrl`).
+3. Save the sequence, then `python -m animpipe build <card>` and `check` (or `review`): the build prints `manual layer
+   {keys: N}`. A copy of the layer is kept in `Saved/AnimPipeline/animpipe/<move>_manual_layer.json` (used only if the
+   sequence is gone). To drop a tweak, delete its keys on the layer and rebuild.
+Card changes and layer tweaks stack: if a card change moves the same control, re-check the tweak.

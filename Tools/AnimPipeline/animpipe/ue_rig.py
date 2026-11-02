@@ -137,6 +137,73 @@ def _seg_profile(segments, f):
     return None
 
 
+
+# --- owner's "Manuale" layer -------------------------------------------------------------------------------------------
+# The build deletes and recreates LS_<name> from the card, so hand edits on the base section would be lost. The owner keys
+# his tweaks on an ADDITIVE section of the rig track instead (the build creates it empty and makes it the section to key):
+# its keys are read before the rebuild, written back on the new additive section, and the export bakes base + layer, so
+# the clip and every check see the edit. A JSON copy of the layer is written each build (restored only if LS_ is gone).
+_ADD = unreal.MovieSceneBlendType.ADDITIVE
+
+
+def _additive_sections(seq):
+    for b in seq.get_spawnables() + seq.get_possessables():
+        for t in b.get_tracks():
+            if isinstance(t, unreal.MovieSceneControlRigParameterTrack):
+                for s in t.get_sections():
+                    if s.get_blend_type().blend_type == _ADD:
+                        yield s
+
+
+def _read_manual(name, backup=None):
+    """{channel: [[frame, value, interp name, tangent mode name, arrive, leave], ...]} from the additive sections of the old
+    LS_<name>; the backup JSON only when the sequence does not exist."""
+    full = f"{DIR}/LS_{name}"
+    if not EAL.does_asset_exist(full):
+        try:
+            return json.load(open(backup)) if backup else {}
+        except (OSError, ValueError):
+            return {}
+    seq = unreal.load_asset(full)
+    LSE = unreal.LevelSequenceEditorBlueprintLibrary
+    LSE.open_level_sequence(seq)
+    keys = {}
+    for s in _additive_sections(seq):
+        for c in s.get_all_channels():
+            if isinstance(c, unreal.MovieSceneScriptingFloatChannel):
+                for k in c.get_keys():
+                    keys.setdefault(str(c.channel_name), []).append(
+                        [_frame(k), k.get_value(), k.get_interpolation_mode().name, k.get_tangent_mode().name,
+                         k.get_arrive_tangent(), k.get_leave_tangent()])
+    LSE.close_level_sequence()
+    return keys
+
+
+def _apply_manual(track, end, keys, backup=None):
+    """New additive section over the whole clip with the saved keys; it becomes the section to key for the owner."""
+    sec = track.add_section()
+    sec.set_blend_type(_ADD)
+    sec.set_range(0, end + 1)
+    by = {str(c.channel_name): c for c in sec.get_all_channels() if isinstance(c, unreal.MovieSceneScriptingFloatChannel)}
+    n, missing = 0, []
+    for ch, ks in keys.items():
+        c = by.get(ch)
+        if c is None:
+            missing.append(ch); continue
+        for f, v, im, tm, at, lt in ks:
+            k = c.add_key(unreal.FrameNumber(int(f)), float(v), 0.0, unreal.MovieSceneTimeUnit.DISPLAY_RATE)
+            k.set_value(float(v))
+            k.set_interpolation_mode(getattr(unreal.RichCurveInterpMode, im))
+            k.set_tangent_mode(getattr(unreal.RichCurveTangentMode, tm))
+            if tm in ("RCTM_USER", "RCTM_BREAK"):
+                k.set_arrive_tangent(at); k.set_leave_tangent(lt)
+            n += 1
+    track.set_section_to_key(sec)
+    if backup:
+        json.dump(keys, open(backup, "w"), indent=1)
+    return {"keys": n, "channels": len(keys) - len(missing), "missing": missing[:10]}
+
+
 def build(spec):
     """Card -> keys on the body rig -> AnimSequence. spec: {name, source_anim, rig, fps_num, fps_den, poses (anim frames),
     segments [[f0, f1, profile]], part_delays {part: frames}, planted [control names], out}.
@@ -145,6 +212,7 @@ def build(spec):
     planted IK feet to their first key. No per-frame keys are ever written."""
     rate = unreal.FrameRate(int(spec["fps_num"]), int(spec["fps_den"]))
     name = spec["name"]
+    manual = _read_manual(name, spec.get("manual_out"))
     seq, binding, end, length = _sequence(spec["source_anim"], name, rate)
     seq.set_playback_end(end + 1)        # the rig bake stops before the playback end: without this the last frame has no key
     ok = unreal.ControlRigSequencerLibrary.bake_to_control_rig(_world(), seq, _rig_class(spec["rig"]), unreal.AnimSeqExportOption(),
@@ -238,6 +306,7 @@ def build(spec):
                 k.set_arrive_tangent_weight(in_w[1] * (frames[i] - frames[i - 1]) * spf)
     res.update({"keys_after": sum(len(c.get_keys()) for c in chans), "pinned": sorted(pinned), "dropped": dropped, "edited": edited, "blended": blended,
                 "shifted": {p: sorted(v) for p, v in shifted.items()}})
+    res["manual"] = _apply_manual(track, end, manual, spec.get("manual_out"))
     skel = unreal.load_asset(spec["source_anim"]).get_editor_property("skeleton")
     fac = unreal.AnimSequenceFactory(); fac.set_editor_property("target_skeleton", skel)
     dst = _new(f"AS_{name}", unreal.AnimSequence, fac)
