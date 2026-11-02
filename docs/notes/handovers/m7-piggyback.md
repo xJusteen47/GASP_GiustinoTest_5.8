@@ -68,3 +68,28 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
 - OPEN for the lead and the spin thread: `latch_big_enemy_host_latches_client` fails that attack-window check in 3 of 5 runs since the rebase
   onto the spin work (2c3ff00), with or without this commit, and passed in every run before it (G2, G5 pre-rebase). The latched enemy is linked,
   so the probe never runs for it; suspect the merged D6/D7 combat seams (re-hit interval). GSTNLink is now frozen for D9/D10.
+
+## M7-03 (laptop, 2026-11-02): G3 partner credit; G6 item 1 seam designed, not built
+
+- Commit on feature/gas-npp-5.8: ddbdb9a "M7 G3: partner credit on hits" (GSTNCombatCore + GSTNCombatNP), then this docs commit. Deltas:
+  docs/notes/m7-doc-deltas.md sections "G3" and "G6 item 1". GSTNCombat has no open change now.
+- G3: `FGSTN_HitCredit { PartnerEntityId, PartnerShare 0..255 }` in `FGSTN_HitOutcome::Credit` / `FGSTN_StepResult::Credit` (later set
+  wins); MeterGain step splits (attacker part as before, partner part as `EGSTN_HitRequestTarget::Partner`); credited HitLanded / Health KO
+  add a partner copy tagged `Combat.Event.Hit.CreditPartner` (`FindCreditPartnerActor`). Inbox entry and wire unchanged; no core step
+  writes the credit (G7's mount hit step will, from the attacker's link extension). Nobody applies Partner meter requests yet (G7 OPEN).
+- Tests `GSTNCombat.Hits.Credit.{EmptyByDefault, MeterSplit, EventCarriesPartner}`.
+- Gates (laptop, `Saved/M703`, script `build.ps1`): on = local .uproject + GSTNSpinDrill + GSTNPiggyback, `build-on2.out` Succeeded,
+  `headless-on2.log` 968/0 (950 + 15 piggyback + 3); off = local .uproject (Defence, Link on), `build-off1.out` Succeeded,
+  `headless-off1.log` 926/0; no ensure; .uproject restored (hash of Saved/D4/uproject.local.bak); check_modules.py 0 problems. Attempt 1 failed
+  one new test (it set the outcome's damage, the event reads the entry's), fixed. Harness NOT run: no step sets a credit, so no simulated
+  behaviour changes (SUITE_MOUNT/SUITE_LINK to run with G6/G7).
+- G6 item 1 (predicted rider exits, owner decision S1): design in the deltas, confirmed by the owner (2026-11-02) to also carry the drill's
+  per-latch anchor. Two commits for the next thread: (1) GSTNCombatNP `IGSTN_CombatTickServices::GetViewSnapshot()` = lazy
+  `ResolveAttackerSnapshot` for tick extensions; (2) GSTNLink `bInitiatorPlacesExit` (rider places its exit in its link tick from the view,
+  watchdog copies it into the Break) + `FGSTN_LinkState` anchor override (flag `AnchorOverride`, int16 cm x3, fragment version bump) for
+  D9 part 2. Then harness `dismount_predicted`. I own the GSTNLink seams until that lands: tell the spin thread before editing.
+- Owner decisions (2026-11-02): GSTNPiggyback stays OFF in the committed .uproject; LAST STEP OF G6: enable GSTNPiggyback together with
+  GSTNLink, GSTNDefence and GSTNSpinDrill in the .uproject.
+- OPEN: (1) who applies Partner meter requests (G7); (2) the M7-01 OPEN items 2-6 unchanged; (3) latch margin flake as per SD-02.
+- Cost: one Opus thread, about 130k context, two builds pairs (~25 min UBT + tests): medium.
+- Next: M7-04 = G6 item 1 (the two commits above), new thread.
