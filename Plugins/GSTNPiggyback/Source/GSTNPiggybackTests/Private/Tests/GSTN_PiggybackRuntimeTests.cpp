@@ -241,8 +241,14 @@ bool FGSTN_PiggybackRuleTypeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the mount is offered under Interact.Target.Mount"), MountPriority != INDEX_NONE);
 	TestTrue(TEXT("below the grab (INT.5: grab wins with both in reach)"), GrabPriority == INDEX_NONE || MountPriority < GrabPriority);
 
-	// The rules switch for rider exits: false (server-given) by default
-	TestFalse(TEXT("rider exits are server-given by default"), FGSTN_MountRules().bPredictRiderExits);
+	// The rules switch for rider exits (G6): predicted by default, carried by the type as GSTNLink's initiator-placed exit
+	TestTrue(TEXT("rider exits are predicted by default"), FGSTN_MountRules().bPredictRiderExits);
+	FGSTN_MountRules ServerGiven;
+	ServerGiven.bPredictRiderExits = false;
+	const UGSTN_LinkTypeDefinition* Predicted = FGSTN_MountLinkType::Build(nullptr, FGSTN_MountRules());
+	const UGSTN_LinkTypeDefinition* Given = FGSTN_MountLinkType::Build(nullptr, ServerGiven);
+	TestTrue(TEXT("the mount type places the rider's exit on the rider"), Predicted && Predicted->bInitiatorPlacesExit);
+	TestTrue(TEXT("and the switch turns it off"), Given && !Given->bInitiatorPlacesExit);
 	return true;
 }
 

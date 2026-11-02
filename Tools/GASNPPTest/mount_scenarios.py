@@ -14,8 +14,11 @@
 #   mount_refused        the server links the carrier to the third pawn (a debug-formed grab) on the very tick the rider taps: the rider's client
 #                        does not see it yet, accepts optimistically, and the authority refuses: the rider's client rolls back (1 to 4; 3 measured, S3), the
 #                        carrier never shows the mount; the rider's visible snap is measured (S3). Then the heavy kit: no mount meaning, no request
-#   dismount_drop        mount, dismount (rider tap: reason Dismount, the rider placed off the carrier by the authority, server-given), mount again,
-#                        drop (carrier: Crouch held + Interact: reason Drop)
+#   dismount_drop        mount, dismount (rider tap: reason Dismount, the rider places its own exit off the carrier, G6), mount again,
+#                        drop (carrier: Crouch held + Interact: reason Drop, the exit server-given)
+#   dismount_predicted   M7 G6: mount, the carrier walks then runs, the rider dismounts while it moves: the rider's client predicts the break
+#                        and its own exit (no rollback on it from the tap to a second later), the watchdog copied that exit, and once the rider
+#                        stands its own client and the server agree within 5 cm
 #   mount_interact_priority  an enemy and an ally both in reach: the probe projects Interact.Target.Grab, the tap grabs the enemy (INT.5)
 import math
 import time
@@ -33,7 +36,7 @@ MOUNT_TARGET = 'Interact.Target.Mount'
 GRAB_TARGET = 'Interact.Target.Grab'
 FIRST_PLUGIN_REASON = 16
 PAIRINGS = {'client_rides_client': (1, 2), 'client_rides_host': (1, 0), 'host_rides_client': (0, 1)}
-SUITE_MOUNT = ['mount_basic', 'mount_refused', 'mount_heavy_refused', 'dismount_drop', 'mount_interact_priority']
+SUITE_MOUNT = ['mount_basic', 'mount_refused', 'mount_heavy_refused', 'dismount_drop', 'mount_interact_priority', 'dismount_predicted']
 _last = {'rig': None}
 
 
@@ -251,7 +254,7 @@ def scenario_dismount_drop(pairing='client_rides_client'):
         d = math.dist(r['location'][:2], c['location'][:2])
         mine = g.snap(g.worlds()[rig.ir])[rig.rkey]['location']
         err = math.dist(mine, r['location'])
-        run.note(f"dismount exit (server-given): rider {d:.1f} cm from the carrier on the server; rider's own client vs server {err:.1f} cm")
+        run.note(f"dismount exit (rider-placed, G6): rider {d:.1f} cm from the carrier on the server; rider's own client vs server {err:.1f} cm")
         return 60.0 <= d <= 200.0 and ls.mover_mode(0, rig.rkey) != ls.LINKED_MODE, f'distance {d:.1f}, client-server {err:.1f}'
 
     steps = [(0.2, rig.setup()), (1.1, rig.clear_other())]
@@ -259,7 +262,7 @@ def scenario_dismount_drop(pairing='client_rides_client'):
     steps += mount
     steps += [(t + 0.3, rig.mark('pre_dismount')), (t + 0.35, rig.tap(rig.ir)), (t + 1.4, rig.mark('dismounted')),
               (t + 1.4, rig.gone('the dismount ended the link on every world')), (t + 1.4, reason('Dismount')),
-              (t + 1.45, run.at('the rider stands off the carrier (the authority placed it)', exit_check)),
+              (t + 1.45, run.at('the rider stands off the carrier', exit_check)),
               (t + 1.45, lambda: run.note(f"dismount: rider client rollbacks {rig.rb_delta('pre_dismount', 'dismounted', rig.ir)}, "
                                           f"visible snap {rig.snap_cm(rig.marks['pre_dismount']['t'], rig.marks['dismounted']['t']):.1f} cm"))]
     mount2, t2 = rig.mount_steps(t + 1.8, 'mount2')
@@ -270,6 +273,54 @@ def scenario_dismount_drop(pairing='client_rides_client'):
               (t2 + 1.4, run.at('the rider left the parked mode everywhere', lambda: (
                   all(ls.mover_mode(wi, rig.rkey) != ls.LINKED_MODE for wi in range(len(g.worlds()))), {wi: ls.mover_mode(wi, rig.rkey) for wi in range(len(g.worlds()))})))]
     steps += rig.end(t2 + 1.5)
+    run.run(steps)
+
+
+def scenario_dismount_predicted(pairing='client_rides_client'):
+    """M7 G6: the rider dismounts while the carrier walks then runs. The rider's client predicts the break and the exit from its view of the
+    carrier; the server places the same exit from the carrier rewound to that view and the watchdog copies it: no rollback on the rider's client"""
+    rig = _MountRig('dismount_predicted', pairing)
+    run = rig.run
+    st = {}
+
+    def walk(v):
+        return lambda: ('carrier move', v, g.hold(rig.ic, 'move', v))
+
+    def sprint(on):
+        return lambda: ('carrier sprint', on, g.hold(rig.ic, 'sprint', (1.0, 0.0, 0.0)) if on else g.release(rig.ic, 'sprint'))
+
+    def stop():
+        return lambda: ('carrier stops', g.release(rig.ic, 'move'), g.release(rig.ic, 'sprint'))
+
+    def carrier_moved():
+        a, b = rig.marks['walking']['pos'][rig.ckey], rig.marks['pre_dismount']['pos'][rig.ckey]
+        st['carrier_cm'] = math.dist(a[:2], b[:2])
+        return st['carrier_cm'] > 50.0, f"carrier moved {st['carrier_cm']:.1f} cm between the marks on the server"
+
+    def agree():
+        server = g.snap(g.worlds()[0])[rig.rkey]['location']
+        mine = g.snap(g.worlds()[rig.ir])[rig.rkey]['location']
+        st['err'] = math.dist(mine, server)
+        return st['err'] <= 5.0 and ls.mover_mode(rig.ir, rig.rkey) != ls.LINKED_MODE, f"rider's own client vs server {st['err']:.2f} cm"
+
+    steps = [(0.2, rig.setup()), (1.1, rig.clear_other())]
+    mount, t = rig.mount_steps(1.2)
+    steps += mount
+    steps += [(t + 0.1, walk((0.0, 1.0, 0.0))), (t + 0.6, rig.mark('walking')), (t + 0.9, sprint(True)),
+              (t + 1.5, rig.mark('pre_dismount')), (t + 1.55, rig.tap(rig.ir)), (t + 2.55, rig.mark('dismounted')),
+              (t + 2.55, run.at('the carrier was moving when the rider left', carrier_moved)),
+              (t + 2.55, rig.gone('the dismount ended the link on every world')),
+              (t + 2.55, run.at('the watchdog broke it with the rider\'s reason', lambda: (
+                  ls.watchdog()[2] >= FIRST_PLUGIN_REASON, f'watchdog {ls.watchdog()}'))),
+              (t + 2.55, run.at('no rollback on the rider\'s client for its own dismount (predicted break and exit)', lambda: (
+                  rig.rb_delta('pre_dismount', 'dismounted', rig.ir) == 0, f"rider client rollbacks {rig.rb_delta('pre_dismount', 'dismounted', rig.ir)}"))),
+              (t + 2.6, stop()),
+              (t + 3.4, run.at('the rider stands where the authority has it, within 5 cm, on its own client', agree)),
+              (t + 3.45, lambda: run.note(f"G6 dismount while the carrier moved {st.get('carrier_cm', 0):.0f} cm in 0.9 s: rider client rollbacks "
+                                          f"{rig.rb_delta('pre_dismount', 'dismounted', rig.ir)}, carrier client {rig.rb_delta('pre_dismount', 'dismounted', rig.ic)}, "
+                                          f"visible snap {rig.snap_cm(rig.marks['pre_dismount']['t'], rig.marks['dismounted']['t']):.1f} cm, "
+                                          f"client-server {st.get('err', -1):.2f} cm"))]
+    steps += rig.end(t + 3.5)
     run.run(steps)
 
 

@@ -84,10 +84,8 @@ UGSTN_LinkTypeDefinition* FGSTN_MountLinkType::Build(UObject* Outer, const FGSTN
 	// Allies only, before the rules run too (GSTNLink's offer filter: the grab lists Enemy and Neutral, the mount Ally)
 	Definition->InteractOffer.Relationships.AddTag(GSTNCombatHitTags::Relationship_Ally);
 
-	if (Rules.bPredictRiderExits)
-	{
-		UE_LOG(LogGSTNPiggyback, Warning, TEXT("FGSTN_MountRules::bPredictRiderExits is not built yet (G5 ships server-given rider exits only): treated as false"));
-	}
+	// G6: the rider places its own exit from its view (predicted on its machine; the watchdog copies it)
+	Definition->bInitiatorPlacesExit = Rules.bPredictRiderExits;
 	return Definition;
 }
 

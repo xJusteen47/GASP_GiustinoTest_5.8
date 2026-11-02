@@ -243,14 +243,15 @@ struct GSTNPIGGYBACKCORE_API FGSTN_MountRules : public FGSTN_RulesExtension
 	float MaxCarrierTeleportCm = 500.f;
 
 	/**
-	 * Who places a rider that leaves on its own (a dismount): false = SERVER-GIVEN, the only mode built in G5. The watchdog on the authority places
-	 * the rider with the mount type's exit placer, and the rider's own client takes the exit as a correction (the presentation's blend hides it),
-	 * as every carrier-initiated exit. True is reserved for the predicted mode of combat-m7-piggyback.md 6.4 (the rider's client places itself
-	 * from its local anchor and the server rewinds the carrier to the rider's view); S1 found it unsafe for a client rider, and the owner has
-	 * not chosen it. Until it is built, true is reported once and treated as false
+	 * Who places a rider that leaves on its own (a dismount, or any break the rider's link marks pending): true = PREDICTED (owner decision S1,
+	 * 2026-11-01; built in G6). The mount type sets GSTNLink's bInitiatorPlacesExit: the rider's link tick places the exit with the mount's
+	 * placer around the carrier as the rider's view shows it (on the authority the carrier rewound to the rider's input time), the rider ends
+	 * the link on the next frame by itself, and the watchdog copies that exit into its command, so the rider's client takes no correction
+	 * unless the place overlaps the world. False = SERVER-GIVEN (G5): the watchdog places the rider and its client takes the exit as a
+	 * correction. Exits the carrier causes (a drop) are server-given either way
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Exit")
-	bool bPredictRiderExits = false;
+	bool bPredictRiderExits = true;
 
 	/** Credit of a pair move whose definition does not choose one */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Credit")

@@ -212,7 +212,7 @@ notes assumed) and a 117 cm visible snap for 3-4 ticks, at 0 % and 2 %. `scenari
 | "the event carries the partner" (`FGSTN_SimEvent` has no field for it; it is GSTNInput's) | A credited hit adds a **copy** of `HitLanded` right after the attacker's, instigated by the partner's actor and tagged `Combat.Event.Hit.CreditPartner` (new native tag of GSTNCombatNP); a credited Health KO adds the same copy of `KO` (a zone KO credits nobody). `UGSTN_CombatSimComponent::FindCreditPartnerActor` resolves the id through the world subsystem. Without a credit the events are exactly the pre-G3 ones (test), so "event size unchanged" holds as "event list unchanged" |
 | Tests `GSTNCombat.Hits.Credit.{EmptyByDefault, MeterSplit, EventCarriesPartner}` | As planned, in `GSTNCombatNP/.../Tests/GSTN_CombatNPTests_Credit.cpp` (the events live in the NP module) |
 
-## G6 item 1: predicted rider exits, design of the seam (M7-03, not built)
+## G6 item 1: predicted rider exits, design of the seam (M7-03; built in M7-04, deltas at the end of this section)
 
 Owner decision S1 (2026-11-01): the rider predicts its own exit, the server rewinds the carrier so it places the same exit. Design for the next
 thread (two edits, in this order, each its own commit):
@@ -236,3 +236,17 @@ thread (two edits, in this order, each its own commit):
    The anchor field changes the link state's wire (live states only; idle stays one byte): bump the fragment version.
 - Harness for item 1: `dismount_predicted` (client rider dismounts while the carrier walks and runs: 0 corrections on the rider's
   client, exit within 5 cm of the authority's), plus SUITE_MOUNT and SUITE_LINK unchanged.
+
+### Built in M7-04: what differs from the design above
+
+| Design | Built |
+|---|---|
+| `GetViewSnapshot()` pure accessor | A virtual with a default returning null (so test doubles of `IGSTN_CombatTickServices`, e.g. the defence tests' fake, need no change); the caller falls back to `Context.Snapshot`. The component builds the view once per tick (`ResolveViewOnce`) and the attacker step shares it. |
+| the rider writes `Exit` and the watchdog copies it | Plus: the rider ENDS its own link on the exit's frame (`StepOwnExitBreak`, first thing at AfterClocks, the same `ApplyCommand` with the same exit). Without it the rider's client would keep the link until the server's state arrived (a correction). On the authority the command is drained first, so the step finds the link idle. |
+| watchdog copies "for this serial" | The copy condition is: type flag, side role 1 = parked, `Exit.Frame == F + 1`, flag `GSTNLinkExitFlags::InitiatorPlaced` (new, bit 2), `PendingBreak` set. The world check is `IsCapsuleFree` with the pair query; a blocked place falls back to the placer (flag Fallback when invalid, no InitiatorPlaced). |
+| (not in the design) | Missed frame rule: a side whose partner's channel is idle with the same serial and a reason, for a type with the flag, breaks at once with that reason (not as an orphan after the grace). Covers a slow host (several fixed ticks per engine frame). |
+| (not in the design) | `ShouldReconcile` accepts an initiator-placed exit (same frame and flags; position and velocity within `UGSTN_LinkSettings::PredictedPlacementToleranceCm` = 5 cm, yaw within 5 degrees) and an anchor override within the same tolerance: both machines place from interpolated poses and never agree bit for bit. |
+| anchor in the link state, "bump the fragment version" | `int16 AnchorCm[3]` + `GSTNLinkFlags::AnchorOverride` (bit 2); serialised after `LocalYawQ` only with the flag, so the fragment has no version to bump: a state without it keeps its bytes. The snapshot extension carries it (`BodyAnchorCm`), which made it 38 B: GSTNCombatNP's `FGSTN_SnapshotExtensionBlob::MaxBytes` went 32 -> 40 (blob 48 B with its header; the parts test's 48 B bound holds). |
+| "the linked movement mode uses it" | The linked mode never reads the offset (the capsule stays where it was, the snapshot substitution places the hurtboxes): the consumers are the snapshot contributor (`TryGetParkedTransform` overload with the parked state), the watchdog's leash (`ParkedDistance`) and the presentation component. Nothing writes an anchor yet: D9 part 2 calls `SetAnchorOverride` on the latcher's Body link. |
+| exit capsule | The rider's capsule size comes from its root capsule component (content, fixed), as the watchdog reads it; `FExitSelf` defaults (34/88) in tests. |
+| `bPredictRiderExits` default false | true (owner decision S1); the mount type copies it into `bInitiatorPlacesExit`. |

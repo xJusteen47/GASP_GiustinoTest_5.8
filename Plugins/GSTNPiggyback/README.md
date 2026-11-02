@@ -93,7 +93,7 @@ Reused from `GSTNLink`, never redeclared: `Combat.Link.Linked`, `Combat.Link.Pen
   Body channel; role 1 **Rider** (initiator: parked on the carrier's root + `RiderOffset()` (-20, 0, 95) cm, acts, no collision with the carrier,
   turns freely, Release reason `Dismount`); role 2 **Carrier** (target: acts, Release reason `Drop`). `bInitiatorPredicts`, `PendingFrames` 2.
   Rules: GSTNLink's `UGSTN_LinkRule_Team` (AlliesOnly) then `UGSTN_LinkRule_Mount`. Hit breaks: carrier above `CarrierBreakKnockback`, rider above
-  `RiderBreakKnockback`, partner hits never (reason `Hit` until G7). Deaths break it; leash 300 cm. Exit `UGSTN_Placer_Mount` (BehindCarrier, 90 cm).
+  `RiderBreakKnockback`, partner hits never (reason `Hit` until G7). Deaths break it; no leash (G6: GSTNLink measures it from the parked capsule, which never moves, so 300 cm broke a walking carrier). Exit `UGSTN_Placer_Mount` (BehindCarrier, 90 cm).
   Interact offer `Interact.Target.Mount`, priority 50 (the grab is 100: with an enemy and an ally in reach the grab wins), reach 150 cm, kits
   with `FGSTN_MountKitExtension`. The carrier's `Combat.State.Hitstun` is named in the request requirements (a carrier in hitstun refuses).
 - **Rule**: `UGSTN_LinkRule_Mount` runs `UGSTN_MountUtils::EvaluateEligibility` on values of the request context: both kits' mount data
@@ -107,9 +107,11 @@ Reused from `GSTNLink`, never redeclared: `Combat.Link.Linked`, `Combat.Link.Pen
   requiring `Combat.Link.Role.Carrier` (102). The loadout validator refuses two slots with one input at one priority, whatever their requirements.
   All fall through when unavailable. The carrier profile's `DisallowedCommands` add `Combat.Link.Role.Carrier` to the ignored tags of every kit
   and weapon binding of those commands.
-- **Exits are server-given**: the watchdog on the authority places the rider (dismount, drop, every break) and the rider's client takes it as a
-  correction. `FGSTN_MountRules::bPredictRiderExits` (false) is the switch for the predicted rider exit with the server rewinding the carrier
-  (owner decision 2026-11-01, spec 6.4): not built yet, true is logged and treated as false.
+- **Rider exits are predicted** (G6, owner decision 2026-11-01): `FGSTN_MountRules::bPredictRiderExits` (true) sets GSTNLink's
+  `bInitiatorPlacesExit` on the mount type. A break the rider's link marks pending (a dismount) is placed by the rider's own link tick around
+  the carrier as the rider saw it (on the server the carrier rewound to the rider's input time), ended by the rider the next frame, and copied
+  by the watchdog: no correction on the rider's client unless the place overlaps the world. Exits the carrier causes (a drop) and the
+  watchdog's own breaks (distance, death, timeout) stay server-given. False = every exit server-given (G5).
 - **Test content**: `Content/Test/KIT_Test_Mount` (rider weight 100, capacity 150) and `KIT_Test_MountHeavy` (rider weight 200), copies of the
   project's `KIT_Test_Link` with a mount entry, written by `Tools/GASNPPTest/mount_scenarios.py` (`prepare_editor`). The plugin adds its content
   to the asset manager's kit scan (`UGSTN_PiggybackContentLibrary::ScanPluginKits`). Harness: `mount_scenarios.SUITE_MOUNT`.
