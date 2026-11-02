@@ -100,3 +100,15 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   il codice (riprodotto senza la modifica: ok). Se `vs source` supera ~40 cm, rifai il build una volta.
 - Anteprime: `sheets/ingame/ganon_ftilt_v31_*.mp4` e composito `ganon_ftilt_v31_recovery_before_after.png`, nei project files.
 - Costo stimato checkpoint 5+6: Opus ~65 chiamate, contesto ~95k, circa $6-8; niente subagenti. Editor lasciato aperto.
+
+## Checkpoint 7 (2026-11-02): anticipazione Ganondorf più estrema (feedback owner)
+- Owner: "gamba più verso il corpo nell'anticipazione, posa più estrema". Solo `edits` nella scheda, frame 7, 2 tentativi.
+- Sonda: gli edit `Location` su `foot_l_ik_ctrl` / `body_ctrl` vanno 1:1 sugli assi componente (X sinistra, Y avanti, Z su).
+- Tentativo 1 (piede [0,-15,+6], corpo [0,-3,-4]): il ginocchio finiva 14 cm dietro l'anca (IK senza guida). Scartato.
+- Tentativo 2 (tenuto): piede [0,-19,-8], `leg_l_pv_ik_ctrl` [0,+40,+10] (ginocchio avanti e alto), corpo [0,-3,-4].
+  Al frame 7: piede 19 cm più vicino all'anca (distanza anca-piede 20 cm, prima 43), ginocchio sopra l'anca, bacino 4 cm
+  più basso; lo scatto 7 -> 9 ha più corsa. Bloccanti 5/6 come prima, clearance PASS, planted 1,02 cm.
+- Non fatto: busto più inclinato indietro e braccia più caricate (servono sonde FK, `fk_solve.py`); da proporre se l'owner
+  vuole ancora più estremo. Nota: il ginocchio si sposta di 8 cm verso il centro (x), da guardare in vista frontale.
+- Anteprime: `sheets/ingame/ganon_ftilt_v31_*.mp4` e composito `ganon_ftilt_v31_anticipation_before_after.png`, nei project files.
+- Costo stimato checkpoint 7: Opus ~20 chiamate, contesto ~110k (cumulato), circa $3-4.

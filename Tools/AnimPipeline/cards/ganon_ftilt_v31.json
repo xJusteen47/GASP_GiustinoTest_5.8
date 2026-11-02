@@ -232,6 +232,45 @@
     -20.1
    ],
    "why": "owner defect: left forearm into the hip at the snap; abduct the upper arm (elbow +8 cm out)"
+  },
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    7
+   ],
+   "delta": [
+    0,
+    -19,
+    -8
+   ],
+   "why": "owner 2026-11-02: anticipation more extreme, kicking leg pulled toward the body (tighter fold: foot back toward the hip)"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [
+    7
+   ],
+   "delta": [
+    0,
+    -3,
+    -4
+   ],
+   "why": "owner 2026-11-02: anticipation more extreme, kicking leg pulled toward the body (sink and settle back on the support leg)"
+  },
+  {
+   "control": "leg_l_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    7
+   ],
+   "delta": [
+    0,
+    40,
+    10
+   ],
+   "why": "owner 2026-11-02: anticipation more extreme, kicking leg pulled toward the body (knee stays forward and high in the tighter fold)"
   }
  ],
  "drop": [
