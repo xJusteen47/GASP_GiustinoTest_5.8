@@ -25,3 +25,16 @@ Every card and every review pass applies these; the checks that enforce one are 
   line (`wrist_out`); hands in the owner's Cascadeur files are default, never copy them.
 - **No interpenetration** accepted (`clearance`): fix forearms/head/crossed arms rather than accept them.
 - **Feet**: side by side unless the pose says otherwise; check the back view for crossed ankles and frog knees.
+
+## Hand tweaks in Unreal: the "Manuale" layer
+`animpipe build` deletes and recreates `LS_<name>` and the clip from the card, so keys edited on the base section are
+lost. Every build adds an **additive** section ("Manuale") on the Control Rig track, over the whole clip, and makes it the
+section to key. Before rebuilding it reads that section's keys and puts them back, so the clip and all checks include them.
+1. Open `/Game/AnimPipeline/Rig/LS_<name>` (e.g. `LS_OverlordDAirV4_Build`). The rig track has two sections: the
+   base one (from the card) and the additive one, already the section to key (right click > "Set as section to key" if not).
+2. Pose a control on a frame and key it: the key goes on the layer and adds to the card's pose. Key the frames around the
+   tweak at 0 so it fades in and out. On this rig the arms are FK (`*_fk_ctrl`), the legs IK (`foot_*_ik_ctrl`).
+3. Save the sequence, then `python -m animpipe build <card>` and `check` (or `review`): the build prints `manual layer
+   {keys: N}`. A copy of the layer is kept in `Saved/AnimPipeline/animpipe/<move>_manual_layer.json` (used only if the
+   sequence is gone). To drop a tweak, delete its keys on the layer and rebuild.
+Card changes and layer tweaks stack: if a card change moves the same control, re-check the tweak.

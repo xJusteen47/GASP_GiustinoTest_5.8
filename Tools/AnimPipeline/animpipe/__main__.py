@@ -98,7 +98,8 @@ def build(path):
             "poses": key_frames(c), "segments": segments(c), "part_delays": c.get("part_delays", {}),
             "planted": c.get("planted", []), "edits": c.get("edits", []), "drop": c.get("drop", []), "hitstop_blend": c.get("hitstop_blend", []),
             "ease_out": {str(q["frame"]): q["ease_out"] for q in c["poses"] if q.get("ease_out")},
-            "lock_lengths": c.get("lock_lengths", True), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
+            "lock_lengths": c.get("lock_lengths", True),
+            "manual_out": os.path.join(OUT, f"{c['move']}_manual_layer.json").replace("\\", "/"), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
     t0 = time.time()
     r = _ue_py("build", spec=spec)
     if r.get("export_ok"):
@@ -123,7 +124,7 @@ def build(path):
     worst = max(r.get("vs_source_cm", {"-": -1}).items(), key=lambda kv: kv[1])
     wpose = max(r.get("at_poses_cm", {"-": -1}).items(), key=lambda kv: kv[1])
     print(f"build {c['move']}: bake {r.get('bake_ok')} export {r.get('export_ok')} keys {r.get('keys_before')}->{r.get('keys_after')} in {r['sec']} s")
-    print(f"vs source: worst {worst[1]} cm ({worst[0]}); at the poses {wpose[1]} cm ({wpose[0]}) [MEASURE]")
+    print(f"vs source: worst {worst[1]} cm ({worst[0]}); at the poses {wpose[1]} cm ({wpose[0]}) [MEASURE]; manual layer {r.get('manual')}")
     print(path)
 
 
