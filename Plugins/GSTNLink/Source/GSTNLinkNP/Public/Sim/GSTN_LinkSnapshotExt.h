@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "State/GSTN_LinkState.h"
+#include "World/GSTN_StepSnapshot.h"
 
 struct FGSTN_HitVictimView;
 struct FGSTN_ResolvedHit;
@@ -22,8 +23,9 @@ namespace GSTNLinkSnapshotBits
 /**
  * The link snapshot extension of one entity (spec seam D9, m6 spec 9 "the snapshot now carries Link.Role, GrabImmunityEnd and the immunity
  * tags"): the Body and Hand link summaries, the Body partner, the grab immunity stamp, the request tags as a mask over FGSTN_LinkRequestTags,
- * the entity's body content index (baked sockets, kit link extension) and the parked turn (M7 G2). Trivially copyable and at most 32 bytes, so the lag compensation
- * history keeps it with the record; integers only, no tag and no pointer.
+ * the entity's body content index (baked sockets, kit link extension), the parked turn (M7 G2) and the Body link's per-link anchor (M7 G6).
+ * Trivially copyable and within the blob (FGSTN_SnapshotExtensionBlob::MaxBytes, 40 B since M7 G6), so the lag compensation history keeps it
+ * with the record; integers only, no tag and no pointer.
  *
  * The LinkRequest step reads the target's from the victim view and the initiator's from FGSTN_ResolvedHit::AttackerExtensions, both of the
  * end of the previous frame, so the attacker's prediction and the victim's resolution decide on the same bytes.
@@ -70,10 +72,13 @@ struct GSTNLINKNP_API FGSTN_LinkSnapshotExt
 	/** GSTNLinkSnapshotBits */
 	uint8 Bits = 0;
 
+	/** The Body link's FGSTN_LinkState::AnchorCm, valid when BodyFlags holds GSTNLinkFlags::AnchorOverride (M7 G6) */
+	int16 BodyAnchorCm[3] = { 0, 0, 0 };
+
 	bool IsValid() const { return TypeWord == Magic; }
 	bool IsParked() const { return (Bits & GSTNLinkSnapshotBits::Parked) != 0; }
 
-	/** The two channels as link states (the summary: type, role, phase, partner, serial, frame, flags) */
+	/** The two channels as link states (the summary: type, role, phase, partner, serial, frame, flags, the Body anchor) */
 	FGSTN_LinkStates ToLinkStates() const;
 
 	/** Fills the summary from a fragment (Body, Hand, immunity); keeps BodyIndex, RequestTagMask and Bits */
@@ -86,7 +91,7 @@ struct GSTNLINKNP_API FGSTN_LinkSnapshotExt
 	static const FGSTN_LinkSnapshotExt* FromAttacker(const FGSTN_ResolvedHit& Incoming);
 };
 
-static_assert(sizeof(FGSTN_LinkSnapshotExt) <= 32, "the link snapshot extension must fit the snapshot blob");
+static_assert(sizeof(FGSTN_LinkSnapshotExt) <= FGSTN_SnapshotExtensionBlob::MaxBytes, "the link snapshot extension must fit the snapshot blob");
 
 /**
  * The tags a link request may read on the target (and the initiator) side, in one fixed table, so the snapshot carries them as a 32-bit mask

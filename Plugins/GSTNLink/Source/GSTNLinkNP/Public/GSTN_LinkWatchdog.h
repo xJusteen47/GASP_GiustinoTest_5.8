@@ -21,6 +21,12 @@ namespace GSTNLinkExitFlags
 
 	/** The placer found no free place: the exit is the fallback next to the partner (logged by the watchdog) */
 	constexpr uint8 Fallback = 1 << 1;
+
+	/**
+	 * The parked initiator placed this exit itself from its view (M7 G6, UGSTN_LinkTypeDefinition::bInitiatorPlacesExit) and ends its link on
+	 * the exit's frame by itself; a watchdog command that copies it keeps the flag, so both paths leave the same record
+	 */
+	constexpr uint8 InitiatorPlaced = 1 << 2;
 }
 
 /**
@@ -50,6 +56,9 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogEntity
 
 	/** The partner move the entity plays (M7 G2: its link actions' Active), for the exit of a move's outcome break */
 	FGSTN_LinkActions::FActive ActiveMove;
+
+	/** The exit record of its link actions (M7 G6: an initiator-placed exit the break copies) */
+	FGSTN_LinkActions::FExit Exit;
 };
 
 /** One inbox entry the watchdog posts: a LinkCommand stamped StampFrame for TargetId, sent by SenderId (the partner) */
@@ -88,6 +97,10 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogBreak
  *    both sides clear the link the same frame. The definition's parked role gets its exit from the definition's exit placer (Teleport flag,
  *    the placer's transform quantised to floats as the command carries it, the placer's velocity); a type whose request rules hold a grab rule gives
  *    its target the grab immunity end (that rule's ImmunityFramesAfterRelease, or AfterThrow for a throw: the type's data, not the kit's).
+ *  - M7 G6, a type with bInitiatorPlacesExit: a parked side that carries its own exit for the next frame (InitiatorPlaced, its PendingBreak
+ *    set) gets that exit copied into its command when the place is free in the world (the pair ignored), else the placer's own (one
+ *    correction on its machine). A side whose partner already ended this very serial by itself (an idle channel, same serial, a reason: the
+ *    frame the watchdog did not see) is broken at once with the partner's reason, not as an orphan.
  *
  * Deterministic for equal inputs: entities are walked in entity id order, the placer's candidates come in its fixed order. Everything per link
  * type comes from its definition (break rules, placer, parked role), so a new type (a drill latch) needs only its own definition.

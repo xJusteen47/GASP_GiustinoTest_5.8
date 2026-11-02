@@ -67,6 +67,7 @@ the plugin's content and `LinkTypeDirectories` (always cooked), so the project's
 | `EGSTN_LinkOutcome::PartnerMove` | G2: a link outcome key that starts the partner move `PartnerMoveId` (the initiator's record `FGSTN_LinkActions::Active` with `Side`, the partner's part through the `PartnerMove` inbox kind). |
 | `FGSTN_LinkInteractOfferDef` | G1: how the interact button offers a type (the definition's `InteractOffer`): the `Interact.Target` meaning (empty = not offered), `Priority` (0..255, higher first; the grab is 100), `ReachCm`, `RequiredKitExtension` (the kits that look for it), `Relationships` (M7-02: the `Combat.Relationship.*` of a candidate the offer applies to, by GSTNCombat's default rule on the teams; empty = every one; GSTNLink's own grab offer lists Enemy and Neutral). `UGSTN_LinkRegistry::RegisterInteractOffer` gives a type whose asset names none an offer by code (GSTNLink does it for its grab). |
 | `bInitiatorPredicts`, `PendingFrames` | G1, on the definition: the initiator's predicted request becomes Active (flag `Predicted` kept) `PendingFrames` (2) after the hit unless the target's snapshot entry shows it linked to someone else; the response confirms it. |
+| `bInitiatorPlacesExit` | G6, on the definition: the parked initiator places its own exit from its view and ends the link by itself the next frame; the watchdog copies the exit (see How to extend). Off for grabs and latches. |
 | `UGSTN_LinkRule_Team` | G1: a generic rule on the sides' teams (`Any`, `AlliesOnly`, `EnemiesOnly`); refuses with `Team`. |
 | `FGSTN_LinkBreakRules` | `MaxDistanceCm`, `HitBreaks` per role (`MinKnockbackToBreak`, `bPartnerHitsBreak`), death flags, `PartnerMustNot` state tags. |
 | `FGSTN_GrabRules`, `FGSTN_MashRule` | The grab data of a kit: requirements, weight limit, input timings, immunity frames, pummel delay, the mash. |
@@ -128,6 +129,18 @@ ever stored in a sync state or a snapshot: only the link type index, the role in
   link's `Payload` on both sides. A role's `LinkEffect` is applied with `Payload / 255` while the link is Active and removed on every end (G1).
 - **An initiator that shows its link before the answer** (a mount): `bInitiatorPredicts` and `PendingFrames` on the definition; the
   presentation shows a parked initiator parked from the request on (G1).
+- **A parked initiator that leaves on its own, predicted** (a rider's dismount): `bInitiatorPlacesExit` on the definition (M7 G6). On the
+  frame its Body link gets a `PendingBreak`, the initiator's link tick places its exit (the playing partner move's placer, else the type's;
+  no collision) around the partner in `IGSTN_CombatTickServices::GetViewSnapshot` (on the authority the partner rewound to the player's
+  input time) and records it in `Actions.Exit` (flag `GSTNLinkExitFlags::InitiatorPlaced`, due the next frame); on that frame it ends the
+  link by itself exactly as the watchdog's command would (`StepOwnExitBreak`). The watchdog copies the exit into its command when the
+  world has room for it (the pair ignored), else places its own (one correction). A side whose initiator already ended the link on a frame
+  the watchdog did not see breaks at once with the initiator's reason. The two machines' exits are compared within
+  `PredictedPlacementToleranceCm`, so the rider's client takes no correction.
+- **A per-link parked anchor** (a drill's latch point): `FGSTN_LinkState::SetAnchorOverride(LocalCm)` on the parked side's Body link (flag
+  `GSTNLinkFlags::AnchorOverride`, three `int16` cm in the partner's socket space, on the wire only with the flag). It replaces the
+  translation of the role's `SocketOffset` in the snapshot substitution, the watchdog's leash and the presentation. Decide it from
+  `GetViewSnapshot` so the authority's lag-compensated hit and the player's machine agree; they are compared within the same tolerance.
 - **A partner move** (a pair move: one partner throws the other, or jumps off it): implement `IGSTN_LinkActionProvider` (or fill a `UGSTN_LinkActionTable`) and register it for your type with `UGSTN_LinkRegistry::RegisterActionProvider`; put a `PartnerMove` key with the id on the initiator's move timeline (a link outcome track). The partner's ability must be a timeline ability of its kit. The partner's part starts on its own server state and reaches its client by correction (G2; M7 S4 measures the delay). Body channel only; one move at a time.
 - **A parked role that faces where it acts**: leave `YawLimitDeg` at 360 or narrow the arc; 0 keeps the role on the placement's forward. The turn comes from the stick at the start of each move and while idle; no stick keeps it.
 - **A role's animation**: an `AnimsByRole` entry in the kit's (or weapon's) `FGSTN_LinkKitExtension`.
@@ -187,6 +200,7 @@ fragment, the inbox kinds, the watchdog), which stays C++.
 |---|---|
 | `RequestTimeoutFrames` | Frames a predicted link waits for its response before the link tick clears it (12). |
 | `OrphanGraceFrames` | Frames after a formation during which a one-sided link is not an orphan (3). |
+| `PredictedPlacementToleranceCm` | M7 G6: how far an initiator-placed exit or a per-link anchor on the player's machine may be from the authority's before it is a misprediction (5 cm; the exit's yaw within 5 degrees). |
 | `LinkTypeDirectories` | Content folders, besides the plugin's own, scanned for link type definitions (empty). Read when the asset manager is created. |
 | `CommandTiers` | Command tiers this plugin adds to the input settings at startup (source `GSTNLink`, removed at shutdown): `Command.Link` = 360, above the attack and strong tiers. |
 
@@ -205,6 +219,9 @@ RefusedWhiffsNoHitstop, SimultaneousFirstWins, ChainRefused, PredictedClearedOnT
 LatchedKeepsCandidates, TagsFromRole}`. No world: steps, applier and handlers on views and fragments, the Mover transition on a transient
 component. Test-only link types `Combat.Link.Type.GSTNTestOnlyNPGrab/Latch` and their roles are declared in the test fixture (automation
 builds only) and added to the global registry for the test's scope.
+
+`GSTNLink.NP.*` (M7 G6, `GSTN_LinkNPTests_InitiatorExit.cpp`): `InitiatorExit.{PlacedFromView, OwnBreakEqualsCommand, BlockedPlaceFallsBack,
+OnlyWhenAsked, MissedFrameBreaksPartner, ReconcileTolerance}`, `Anchor.Override`.
 
 `GSTNLink.NP.*` (F11): `Watchdog.{BreakAtF1BothSides, OrphanAfterGrace, StaleSerialIgnored, OnePathForPipelineBreaks}`,
 `Break.{Distance, Timeout, Death, PartnerState, HitByRole}`, `Exit.{NeverInsideGeometry, DeterministicForEqualInputs}`: the watchdog's pure

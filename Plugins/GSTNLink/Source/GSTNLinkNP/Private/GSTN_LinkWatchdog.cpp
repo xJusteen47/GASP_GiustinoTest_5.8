@@ -90,7 +90,9 @@ float FGSTN_LinkWatchdogLogic::ParkedDistance(const UGSTN_LinkTypeDefinition& De
 	}
 	const FGSTN_LinkWatchdogEntity& Parked = ParkedIndex == 1 ? Initiator : Target;
 	const FGSTN_LinkWatchdogEntity& Anchor = ParkedIndex == 1 ? Target : Initiator;
-	const FTransform Expected = UGSTN_LinkMath::ParkedTransform(Anchor.Transform, Definition.GetRoleDef(ParkedIndex));
+	// M7 G6: the parked side's per-link anchor, when its link carries one, is where the link expects it
+	const FTransform Offset = Parked.Links.Get(Definition.Channel).ResolveParkedOffset(Definition.GetRoleDef(ParkedIndex).SocketOffset);
+	const FTransform Expected = Offset * Anchor.Transform;
 	return static_cast<float>(FVector::Dist(Parked.Transform.GetLocation(), Expected.GetLocation()));
 }
 
@@ -141,7 +143,22 @@ void FGSTN_LinkWatchdogLogic::Evaluate(TConstArrayView<FGSTN_LinkWatchdogEntity>
 			Break.LinkTypeIndex = State.LinkTypeIndex;
 
 			const bool bMatched = IsMatched(Entity, State, Partner, Channel);
-			if (!bMatched)
+			// M7 G6: the parked initiator of a type that places its own exit ended this very link by itself on a frame this evaluation did not see
+			// (several fixed ticks in one engine frame): the side that stays breaks now, with the initiator's reason
+			const FGSTN_LinkState* EndedByPartner = nullptr;
+			if (!bMatched && Partner && Definition->bInitiatorPlacesExit)
+			{
+				const FGSTN_LinkState& Other = Partner->Links.Get(Channel);
+				if (Other.Phase == EGSTN_LinkPhase::None && Other.Serial == State.Serial && Other.BreakReason != 0)
+				{
+					EndedByPartner = &Other;
+				}
+			}
+			if (EndedByPartner)
+			{
+				Break.Reason = EndedByPartner->GetBreakReason();
+			}
+			else if (!bMatched)
 			{
 				// One-sided: the target holds role 2 one frame before the initiator gets the response (formation), so only after the grace
 				if (Frame - State.LinkFrame < Params.OrphanGraceFrames)
@@ -223,6 +240,32 @@ void FGSTN_LinkWatchdogLogic::Evaluate(TConstArrayView<FGSTN_LinkWatchdogEntity>
 				Post.Command = Command;
 				if (SideRole != 0 && SideRole == ParkedIndex)
 				{
+					// M7 G6: the parked initiator placed its own exit for the frame this command applies on: copied when the world has room for it
+					const FGSTN_LinkActions::FExit& Own = Side->Exit;
+					const bool bOwnExit = Definition->bInitiatorPlacesExit && SideRole == 1 && Other && Own.Frame == Frame + 1
+						&& (Own.Flags & GSTNLinkExitFlags::InitiatorPlaced) != 0 && Side->Links.Get(Channel).HasFlag(GSTNLinkFlags::PendingBreak);
+					if (bOwnExit)
+					{
+						bool bFree = true;
+						const FQuat Rotation = FRotator(0.0, Own.YawDeg, 0.0).Quaternion();
+						auto Check = [&](const IGSTN_ExitCollisionQuery* Query) { bFree = !Query || Query->IsCapsuleFree(Own.Position, Rotation, Side->CapsuleRadius, Side->CapsuleHalfHeight); };
+						if (Params.WithPairCollision)
+						{
+							Params.WithPairCollision(Side->EntityId, Other->EntityId, Check);
+						}
+						else
+						{
+							Check(Params.Collision);
+						}
+						if (bFree)
+						{
+							Post.Command.ExitPosition = FVector3f(Own.Position);
+							Post.Command.ExitYawDeg = Own.YawDeg;
+							Post.Command.ExitVelocity = FVector3f(Own.Velocity);
+							Post.Command.ExitFlags = Own.Flags;
+							continue;
+						}
+					}
 					// The parked side leaves through the type's placer, around the side that stays (an orphan's partner is gone: it stays where its capsule is)
 					FGSTN_ExitResult Exit;
 					if (Other && Params.WithPairCollision)
@@ -346,6 +389,7 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 		{
 			Entity.Links = Fragment->Links;
 			Entity.ActiveMove = Fragment->Actions.Active;
+			Entity.Exit = Fragment->Actions.Exit;
 			bAnyLink |= Fragment->Links.Body.IsLinked() || Fragment->Links.Hand.IsLinked();
 		}
 		Entity.Transform = Owner->GetActorTransform();

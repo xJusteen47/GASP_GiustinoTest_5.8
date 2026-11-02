@@ -4,6 +4,8 @@
 
 #include "AbilitySystemComponent.h"
 #include "Actions/GSTN_LinkActionProvider.h"
+#include "Components/CapsuleComponent.h"
+#include "GSTN_LinkWatchdog.h"
 #include "Events/GSTN_SimEvent.h"
 #include "Data/GSTN_LinkKitExtension.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
@@ -688,6 +690,66 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_Snapshot
 	return Projected.IsEmpty() ? FGameplayTag() : Projected.First();
 }
 
+bool FGSTN_LinkTickExtension::StepInitiatorExit(FGSTN_LinkFragment& Fragment, int32 Frame, const UGSTN_LinkRegistry* Registry, const FGSTN_SnapshotEntry* PartnerInView,
+	const FExitSelf& Self)
+{
+	const FGSTN_LinkState& Body = Fragment.Links.Body;
+	const UGSTN_LinkTypeDefinition* Definition = BodyDefinition(Fragment, Registry);
+	if (!Definition || !Definition->bInitiatorPlacesExit || !Body.IsActive() || Body.Role != 1 || Definition->GetParkedRoleIndex() != 1
+		|| !Body.HasFlag(GSTNLinkFlags::PendingBreak) || Fragment.Actions.Exit.Frame != 0 || !PartnerInView
+		|| Body.PartnerId.IsNull() || static_cast<int32>(Body.PartnerId.Id) != PartnerInView->EntityId)
+	{
+		return false;
+	}
+	// The placer the watchdog would pick: the playing partner move's exit, else the type's own
+	const UGSTN_LinkExitPlacer* MovePlacer = nullptr;
+	if (Fragment.Actions.Active.Id != 0 && Registry)
+	{
+		FGSTN_LinkActionInfo Info;
+		MovePlacer = Registry->ResolveLinkAction(Body.LinkTypeIndex, Fragment.Actions.Active.Id, Info) ? Info.ExitPlacer : nullptr;
+	}
+	FGSTN_LinkWatchdogEntity Exiting;
+	Exiting.Up = Self.Up;
+	Exiting.CapsuleRadius = Self.CapsuleRadius;
+	Exiting.CapsuleHalfHeight = Self.CapsuleHalfHeight;
+	FGSTN_LinkWatchdogEntity Staying;
+	Staying.Transform = PartnerInView->Transform;
+	Staying.Transform.SetScale3D(FVector::OneVector);
+	Staying.Up = PartnerInView->Up;
+	// No collision: the world is not rollback-safe state. The watchdog checks the place with the world before it copies it
+	const FGSTN_ExitResult Exit = FGSTN_LinkWatchdogLogic::PlaceExit(*Definition, Exiting, Staying, nullptr, MovePlacer);
+	FGSTN_LinkActions::FExit& Record = Fragment.Actions.Exit;
+	Record.Frame = Frame + 1;
+	Record.Position = Exit.Transform.GetLocation();
+	Record.YawDeg = static_cast<float>(Exit.Transform.Rotator().Yaw);
+	Record.Velocity = Exit.Velocity;
+	Record.Flags = GSTNLinkExitFlags::Teleport | GSTNLinkExitFlags::InitiatorPlaced;
+	return true;
+}
+
+bool FGSTN_LinkTickExtension::StepOwnExitBreak(FGSTN_LinkFragment& Fragment, int32 Frame, const UGSTN_LinkRegistry* Registry)
+{
+	const FGSTN_LinkState& Body = Fragment.Links.Body;
+	const FGSTN_LinkActions::FExit& Exit = Fragment.Actions.Exit;
+	const UGSTN_LinkTypeDefinition* Definition = BodyDefinition(Fragment, Registry);
+	if (!Definition || !Definition->bInitiatorPlacesExit || !Body.IsLinked() || Body.Role != 1 || !Body.HasFlag(GSTNLinkFlags::PendingBreak)
+		|| Exit.Frame != Frame || (Exit.Flags & GSTNLinkExitFlags::InitiatorPlaced) == 0)
+	{
+		return false;
+	}
+	// The watchdog's command for this side, as it would carry the copied exit (the parked initiator gets no grab immunity: that is role 2's)
+	FGSTN_LinkCommandEntry Command;
+	Command.Kind = EGSTN_LinkCommandKind::Break;
+	Command.Channel = EGSTN_LinkChannel::Body;
+	Command.Serial = Body.Serial;
+	Command.Reason = Body.BreakReason != 0 ? Body.BreakReason : static_cast<uint8>(EGSTN_LinkBreakReason::Forced);
+	Command.ExitPosition = FVector3f(Exit.Position);
+	Command.ExitYawDeg = Exit.YawDeg;
+	Command.ExitVelocity = FVector3f(Exit.Velocity);
+	Command.ExitFlags = Exit.Flags;
+	return FGSTN_LinkInboxHandlers::ApplyCommand(Fragment, Command, Frame - 1);
+}
+
 void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_CombatTickContext& Context)
 {
 	switch (Point)
@@ -695,6 +757,8 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 	case EGSTN_CombatHookPoint::AfterClocks:
 		if (FGSTN_LinkFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments))
 		{
+			// M7 G6: an initiator-placed exit due this frame ends the link here, as the command drained before this point did on the authority
+			StepOwnExitBreak(*Fragment, Context.Frame, UGSTN_LinkRegistry::Get());
 			// M7 G1: a predicting type's request accepts itself PendingFrames after the hit, on the target's entry of the step snapshot (end of the
 			// previous frame). The response of a machine that simulates the target was drained before this point, so there it already formed
 			if (Context.Snapshot && Context.EntityId != INDEX_NONE)
@@ -802,6 +866,24 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 					Event.Magnitude = static_cast<float>(MoveResult.AbortedId);
 					Context.Outbox->Add(MoveTemp(Event));
 				}
+			}
+			// M7 G6: a parked initiator that releases (any PendingBreak of this frame or before) places its own exit from its view: on the authority,
+			// for a remote player, the partner as that player saw it. Asked only then, so the view costs nothing on any other frame
+			if (Fragment->Links.Body.HasFlag(GSTNLinkFlags::PendingBreak) && Fragment->Actions.Exit.Frame == 0 && Fragment->Links.Body.Role == 1)
+			{
+				const FGSTN_StepSnapshot* View = Context.Services ? Context.Services->GetViewSnapshot() : nullptr;
+				View = View ? View : Context.Snapshot;
+				const FGSTN_LinkState& Body = Fragment->Links.Body;
+				const FGSTN_SnapshotEntry* Partner = View && !Body.PartnerId.IsNull() ? View->Find(Body.PartnerId.Id) : nullptr;
+				FExitSelf Self;
+				Self.Up = Context.Up;
+				if (const UCapsuleComponent* Capsule = Context.Owner ? Cast<UCapsuleComponent>(Context.Owner->GetRootComponent()) : nullptr)
+				{
+					// The capsule's size is content (fixed for the pawn), not state: the watchdog reads the same numbers
+					Self.CapsuleRadius = Capsule->GetScaledCapsuleRadius();
+					Self.CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+				}
+				StepInitiatorExit(*Fragment, Context.Frame, Registry, Partner, Self);
 			}
 		}
 		break;

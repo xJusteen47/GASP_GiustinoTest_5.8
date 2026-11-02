@@ -2,6 +2,9 @@
 
 #include "Sim/GSTN_LinkFragment.h"
 
+#include "GSTN_LinkSettings.h"
+#include "GSTN_LinkWatchdog.h"
+
 namespace
 {
 	/** Presence bits of the serialised fragment */
@@ -147,8 +150,30 @@ bool FGSTN_LinkFragment::ShouldReconcile(const FGSTN_SyncFragment& Authority) co
 		{
 			Mine.Flags &= ~GSTNLinkFlags::Predicted;
 		}
+		// M7 G6: a per-link anchor both machines decided from their own view of the same hit is the same anchor within the tolerance
+		FVector MineAnchor;
+		FVector TheirAnchor;
+		if (Mine.GetAnchorOverride(MineAnchor) && Theirs.GetAnchorOverride(TheirAnchor) && IsSamePlacement(MineAnchor, TheirAnchor))
+		{
+			FMemory::Memcpy(Mine.AnchorCm, Theirs.AnchorCm, sizeof(Mine.AnchorCm));
+		}
+	}
+	// M7 G6: so is an exit the parked initiator placed from its view (the authority placed it from the rewound one): same frame, same flags
+	FGSTN_LinkActions::FExit& MineExit = Local.Actions.Exit;
+	const FGSTN_LinkActions::FExit& TheirExit = Server.Actions.Exit;
+	if ((MineExit.Flags & GSTNLinkExitFlags::InitiatorPlaced) != 0 && MineExit.Frame == TheirExit.Frame && MineExit.Flags == TheirExit.Flags
+		&& IsSamePlacement(MineExit.Position, TheirExit.Position) && IsSamePlacement(MineExit.Velocity, TheirExit.Velocity)
+		&& FMath::Abs(FMath::FindDeltaAngleDegrees(MineExit.YawDeg, TheirExit.YawDeg)) <= PlacementToleranceYawDeg)
+	{
+		MineExit = TheirExit;
 	}
 	return !(Local == Server);
+}
+
+bool FGSTN_LinkFragment::IsSamePlacement(const FVector& Mine, const FVector& Theirs)
+{
+	const double Tolerance = UGSTN_LinkSettings::Get().PredictedPlacementToleranceCm;
+	return FVector::DistSquared(Mine, Theirs) <= Tolerance * Tolerance;
 }
 
 void FGSTN_LinkFragment::ToString(FAnsiStringBuilderBase& Out) const

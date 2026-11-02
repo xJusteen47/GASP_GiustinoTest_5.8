@@ -143,6 +143,17 @@ bool UGSTN_LinkMath::TryGetParkedTransform(const UGSTN_LinkTypeDefinition& Defin
 	return true;
 }
 
+bool UGSTN_LinkMath::TryGetParkedTransform(const UGSTN_LinkTypeDefinition& Definition, int32 RoleIndex, const FTransform& PartnerTransform,
+	const FTransform& SocketRootRelative, const FGSTN_LinkState& ParkedState, FTransform& OutTransform)
+{
+	if (RoleIndex < 1 || RoleIndex > 2 || Definition.GetParkedRoleIndex() != RoleIndex)
+	{
+		return false;
+	}
+	OutTransform = ParkedState.ResolveParkedOffset(Definition.GetRoleDef(RoleIndex).SocketOffset) * SocketRootRelative * PartnerTransform;
+	return true;
+}
+
 int16 UGSTN_LinkMath::LocalYawQFromDeg(double YawDeg)
 {
 	// Units of 1/32768 turn, wrapped to [-16384, 16384) (half a turn each way), rounded to the quantum the snapshot byte holds exactly

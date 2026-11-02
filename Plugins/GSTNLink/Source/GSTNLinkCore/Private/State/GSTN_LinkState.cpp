@@ -13,7 +13,45 @@ bool FGSTN_LinkState::operator==(const FGSTN_LinkState& Other) const
 {
 	return LinkTypeIndex == Other.LinkTypeIndex && Role == Other.Role && Phase == Other.Phase && PartnerId == Other.PartnerId
 		&& Serial == Other.Serial && LinkFrame == Other.LinkFrame && EndFrame == Other.EndFrame && Flags == Other.Flags
-		&& BreakReason == Other.BreakReason && Payload == Other.Payload && LocalYawQ == Other.LocalYawQ;
+		&& BreakReason == Other.BreakReason && Payload == Other.Payload && LocalYawQ == Other.LocalYawQ
+		&& AnchorCm[0] == Other.AnchorCm[0] && AnchorCm[1] == Other.AnchorCm[1] && AnchorCm[2] == Other.AnchorCm[2];
+}
+
+void FGSTN_LinkState::SetAnchorOverride(const FVector& LocalCm)
+{
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		AnchorCm[Axis] = static_cast<int16>(FMath::Clamp(FMath::RoundToInt32(LocalCm[Axis]), static_cast<int32>(MIN_int16), static_cast<int32>(MAX_int16)));
+	}
+	Flags |= GSTNLinkFlags::AnchorOverride;
+}
+
+void FGSTN_LinkState::ClearAnchorOverride()
+{
+	AnchorCm[0] = AnchorCm[1] = AnchorCm[2] = 0;
+	Flags &= ~GSTNLinkFlags::AnchorOverride;
+}
+
+bool FGSTN_LinkState::GetAnchorOverride(FVector& OutLocalCm) const
+{
+	if (!HasFlag(GSTNLinkFlags::AnchorOverride))
+	{
+		return false;
+	}
+	OutLocalCm = FVector(AnchorCm[0], AnchorCm[1], AnchorCm[2]);
+	return true;
+}
+
+FTransform FGSTN_LinkState::ResolveParkedOffset(const FTransform& DefinitionOffset) const
+{
+	FVector Anchor;
+	if (!GetAnchorOverride(Anchor))
+	{
+		return DefinitionOffset;
+	}
+	FTransform Offset = DefinitionOffset;
+	Offset.SetTranslation(Anchor);
+	return Offset;
 }
 
 uint8 FGSTN_LinkState::NextSerial(uint8 A, uint8 B)
@@ -58,6 +96,11 @@ bool FGSTN_LinkState::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuc
 		Ar << BreakReason;
 		Ar << Payload;
 		Ar << LocalYawQ;
+		// M7 G6: the per-link anchor follows the flag byte read above, so a state without it keeps its old bytes
+		if ((Flags & GSTNLinkFlags::AnchorOverride) != 0)
+		{
+			Ar << AnchorCm[0] << AnchorCm[1] << AnchorCm[2];
+		}
 		bool bPartnerSuccess = true;
 		PartnerId.NetSerialize(Ar, Map, bPartnerSuccess);
 		bOutSuccess = bPartnerSuccess;

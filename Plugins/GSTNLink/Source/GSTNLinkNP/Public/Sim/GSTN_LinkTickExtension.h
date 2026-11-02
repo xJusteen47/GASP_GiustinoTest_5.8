@@ -34,6 +34,10 @@ struct FGSTN_SnapshotEntry;
  *  - AfterClocks, M7 G2: the PartnerMove keys of the running move start partner moves (the initiator's record, the partner's entry posted to its
  *    inbox); StepPartnerMoves starts a scheduled partner part (StartForcedTimeline, source Forced), applies the initiator's outcome at its
  *    frame and aborts on the failure paths (Combat.Event.Link.PartnerMoveAborted).
+ *  - AfterClocks, M7 G6 (a type with bInitiatorPlacesExit): first, a parked initiator whose own exit is due this frame ends its link by itself
+ *    (StepOwnExitBreak: what the watchdog's command does, which on the authority already did it), so its machine shows the break and the
+ *    teleport on the frame the authority does; last, a parked initiator whose Body link holds a PendingBreak and no exit yet places its exit
+ *    (StepInitiatorExit) around its partner in IGSTN_CombatTickServices::GetViewSnapshot (Context.Snapshot without services), due the next frame.
  *  - AfterExecute, M7 G2: StepFacing turns a parked role that acts (LocalYawQ) from its aimed moves and idle stick.
  *  - BlocksActions (asked after BeforeCandidates): the entity's Body role is a parked role that does not act while linked (the grabbed), or it
  *    plays the partner's part of a partner move that locks commands (M7 G2): no command starts, so it has no candidates. A role with bActsWhileLinked (the latcher, the latched enemy, the grabber) gets no veto and keeps
@@ -90,6 +94,33 @@ public:
 
 	/** Sets PendingBreak with a reason on a live Body link (a role input such as Release): false when the Body channel holds no live link */
 	static bool MarkPendingBreak(FGSTN_LinkFragment& Fragment, uint8 Reason);
+
+	// ---- Initiator-placed exits (M7 G6)
+
+	/** What the exiting entity needs of itself to place its exit: its up and its capsule (content, the same on every machine) */
+	struct FExitSelf
+	{
+		FVector Up = FVector::UpVector;
+		float CapsuleRadius = 34.f;
+		float CapsuleHalfHeight = 88.f;
+	};
+
+	/**
+	 * The parked initiator of a type with bInitiatorPlacesExit places its own exit: when its Body link is Active, holds a PendingBreak and its
+	 * link actions hold no exit, the exit placer (the playing partner move's, else the type's: what the watchdog would use) runs without
+	 * collision around PartnerInView (the partner's entry of the initiator's view snapshot), quantised as the watchdog's command carries it,
+	 * and Actions.Exit = {Frame + 1, the place, Teleport | InitiatorPlaced}. False (nothing changed) for any other link or without the partner
+	 */
+	static bool StepInitiatorExit(FGSTN_LinkFragment& Fragment, int32 Frame, const UGSTN_LinkRegistry* Registry, const FGSTN_SnapshotEntry* PartnerInView,
+		const FExitSelf& Self);
+
+	/**
+	 * The frame an initiator-placed exit is due (Actions.Exit.Frame == Frame, InitiatorPlaced) on a Body link that still holds its PendingBreak:
+	 * the link ends exactly as the watchdog's Break command stamped Frame - 1 would end it (FGSTN_LinkInboxHandlers::ApplyCommand with that
+	 * exit and the pending reason). Where the command was applied first (the authority drains it before this point) the link is already idle and
+	 * nothing happens. True when the fragment changed
+	 */
+	static bool StepOwnExitBreak(FGSTN_LinkFragment& Fragment, int32 Frame, const UGSTN_LinkRegistry* Registry);
 
 	/** A throw the outcome keys decided: the entry and the partner it goes to (the hook posts it through the combat world, as the attacker step does) */
 	struct FThrowPost

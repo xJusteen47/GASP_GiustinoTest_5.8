@@ -161,6 +161,10 @@ public:
 	static bool TryGetParkedTransform(const UGSTN_LinkTypeDefinition& Definition, int32 RoleIndex, const FTransform& PartnerTransform,
 		const FTransform& SocketRootRelative, FTransform& OutTransform);
 
+	/** As above, with the parked side's link state, whose per-link anchor (AnchorOverride, M7 G6) replaces the offset's translation */
+	static bool TryGetParkedTransform(const UGSTN_LinkTypeDefinition& Definition, int32 RoleIndex, const FTransform& PartnerTransform,
+		const FTransform& SocketRootRelative, const FGSTN_LinkState& ParkedState, FTransform& OutTransform);
+
 	// ---- Parked facing (M7 G2) ----
 
 	/**

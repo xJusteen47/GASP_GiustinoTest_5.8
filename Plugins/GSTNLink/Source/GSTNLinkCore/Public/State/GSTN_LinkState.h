@@ -56,6 +56,12 @@ namespace GSTNLinkFlags
 
 	/** A break was decided and waits for the watchdog's command (Release, Escape...) */
 	constexpr uint8 PendingBreak = 1 << 1;
+
+	/**
+	 * The link carries its own parked anchor (FGSTN_LinkState::AnchorCm, M7 G6): the parked role stands there instead of at the translation of
+	 * its definition's SocketOffset (a drill's per-latch tip point). The anchor's three fields are on the wire only with this flag
+	 */
+	constexpr uint8 AnchorOverride = 1 << 2;
 }
 
 /**
@@ -101,6 +107,13 @@ struct GSTNLINKCORE_API FGSTN_LinkState
 	/** Facing relative to the anchor, quantised to 1/32768 turn */
 	int16 LocalYawQ = 0;
 
+	/**
+	 * The per-link parked anchor, whole centimetres in the space of the partner's socket (its root when the role names none), valid with the
+	 * flag AnchorOverride (M7 G6): it replaces the translation of the parked role's SocketOffset, whose rotation stays. Written by the plugin
+	 * that decides it (the drill, from the latch hit in the view snapshot) through SetAnchorOverride; zero otherwise
+	 */
+	int16 AnchorCm[3] = { 0, 0, 0 };
+
 	/** Nothing is linked and nothing is pending. The serial is kept apart: it survives the end of a link */
 	bool IsIdle() const { return Phase == EGSTN_LinkPhase::None && LinkTypeIndex == 0 && Role == 0; }
 
@@ -109,6 +122,18 @@ struct GSTNLINKCORE_API FGSTN_LinkState
 
 	bool IsActive() const { return Phase == EGSTN_LinkPhase::Active; }
 	bool HasFlag(uint8 Flag) const { return (Flags & Flag) != 0; }
+
+	/** Sets the per-link anchor (LocalCm in the partner's socket space, rounded to whole cm, clamped to the int16 range) and its flag */
+	void SetAnchorOverride(const FVector& LocalCm);
+
+	/** Clears the anchor and its flag: the definition's offset again */
+	void ClearAnchorOverride();
+
+	/** The anchor in cm when the flag is set; false (OutLocalCm unchanged) otherwise */
+	bool GetAnchorOverride(FVector& OutLocalCm) const;
+
+	/** The parked role's offset of this link: DefinitionOffset, with its translation replaced by the anchor when the link carries one */
+	FTransform ResolveParkedOffset(const FTransform& DefinitionOffset) const;
 	EGSTN_LinkBreakReason GetBreakReason() const { return static_cast<EGSTN_LinkBreakReason>(BreakReason); }
 
 	/** An entry that forms a link with this serial changes the state only if it is newer than the serial the state already carries */
@@ -188,7 +213,10 @@ struct GSTNLINKCORE_API FGSTN_LinkActions
 		int16 Id = 0;
 	} PendingStart;
 
-	/** The exit the watchdog decided: where and how fast the entity leaves, valid when Frame is non-zero */
+	/**
+	 * The exit of a break, valid when Frame is non-zero: the watchdog's (written by its command), or for a type with bInitiatorPlacesExit the
+	 * parked initiator's own (M7 G6: placed in its link tick, flag GSTNLinkExitFlags::InitiatorPlaced, due the frame after its release)
+	 */
 	struct FExit
 	{
 		int32 Frame = 0;

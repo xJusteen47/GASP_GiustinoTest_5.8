@@ -64,9 +64,17 @@ struct GSTNLINKNP_API FGSTN_LinkFragment : public FGSTN_SyncFragment
 
 	/**
 	 * Exact equality of every field (the exit position and velocity are the watchdog's quantised result, written identically on every machine),
-	 * except one: a local optimistic accept (Active, role 1, flag Predicted, M7 G1) equals the authority's same link without the flag
+	 * except: a local optimistic accept (Active, role 1, flag Predicted, M7 G1) equals the authority's same link without the flag; and the
+	 * placements a player's machine decides from its own view (M7 G6: an initiator-placed exit, a per-link anchor) equal the authority's within
+	 * UGSTN_LinkSettings::PredictedPlacementToleranceCm (and PlacementToleranceYawDeg for the exit's yaw)
 	 */
 	virtual bool ShouldReconcile(const FGSTN_SyncFragment& Authority) const override;
+
+	/** The yaw an initiator-placed exit may differ by from the authority's before it is a misprediction */
+	static constexpr float PlacementToleranceYawDeg = 5.f;
+
+	/** Two predicted placements are the same within the settings' tolerance */
+	static bool IsSamePlacement(const FVector& Mine, const FVector& Theirs);
 
 	/** Discrete state: the copy of the later sample the registry hands over is already the result */
 	virtual void Interpolate(const FGSTN_SyncFragment* From, const FGSTN_SyncFragment* To, float PCT) override {}

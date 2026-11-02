@@ -87,7 +87,8 @@ bool FGSTN_LinkSnapshotContributor::ComputeParkedTransform(const FGSTN_LinkSnaps
 	const FTransform Socket = PartnerBody ? PartnerBody->GetSocket(Definition->GetRoleDef(Ext.BodyRole).SocketOnPartner) : FTransform::Identity;
 	FTransform PartnerTransform = Partner.Transform;
 	PartnerTransform.SetScale3D(FVector::OneVector);
-	return UGSTN_LinkMath::TryGetParkedTransform(*Definition, Ext.BodyRole, PartnerTransform, Socket, OutTransform);
+	// M7 G6: a per-link anchor (the drill's latch point) replaces the role's offset translation
+	return UGSTN_LinkMath::TryGetParkedTransform(*Definition, Ext.BodyRole, PartnerTransform, Socket, Ext.ToLinkStates().Body, OutTransform);
 }
 
 void FGSTN_LinkSnapshotContributor::FinalizeSnapshot(int32 Frame, TArrayView<FGSTN_SnapshotEntry> Entries) const

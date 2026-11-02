@@ -498,7 +498,7 @@ bool FGSTN_LinkG2RoundTripTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a side difference reconciles"), OtherSide.ShouldReconcile(Fragment));
 
 	// The snapshot byte holds every turn the simulation writes exactly, and the extension still fits its blob
-	static_assert(sizeof(FGSTN_LinkSnapshotExt) <= 32, "the link snapshot extension must fit the snapshot blob");
+	static_assert(sizeof(FGSTN_LinkSnapshotExt) <= FGSTN_SnapshotExtensionBlob::MaxBytes, "the link snapshot extension must fit the snapshot blob");
 	int32 Mismatches = 0;
 	for (int32 Q = -16384; Q < 16384; Q += UGSTN_LinkMath::LocalYawQuantum)
 	{

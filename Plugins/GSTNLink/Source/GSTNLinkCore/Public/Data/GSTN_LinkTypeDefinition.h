@@ -315,6 +315,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Request", meta = (ClampMin = "1", ForceUnits = "Frames", EditCondition = "bInitiatorPredicts"))
 	int32 PendingFrames = 2;
 
+	/**
+	 * The parked initiator places its own exit (M7 G6: a rider's dismount, predicted on the rider's machine). When its Body link gets a
+	 * PendingBreak, its link tick runs the exit placer (the playing partner move's, else the type's) around the partner as the initiator's view
+	 * shows it (IGSTN_CombatTickServices::GetViewSnapshot: on the authority the partner rewound to the rider's input time) and records the
+	 * exit, due the next frame, when the initiator ends the link by itself exactly as the watchdog's command would. The watchdog copies that
+	 * exit into its command instead of placing one, unless the place overlaps the world (then its own placement: one correction). The
+	 * initiator places without collision. Only for a type whose parked role is the initiator; off = every exit server-given (grabs, latches)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Break")
+	bool bInitiatorPlacesExit = false;
+
 	/** How the interact button offers this type. No meaning = only hits (or another type's Alternatives) form it */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Interact")
 	FGSTN_LinkInteractOfferDef InteractOffer;

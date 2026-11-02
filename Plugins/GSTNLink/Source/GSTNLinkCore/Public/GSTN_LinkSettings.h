@@ -33,6 +33,14 @@ public:
 	int32 OrphanGraceFrames = 3;
 
 	/**
+	 * How far a placement the player's machine predicts from its view (an initiator-placed exit, a per-link anchor: M7 G6) may be from the
+	 * authority's, placed from the lag-compensated view, before it counts as a misprediction. Both come from interpolated poses, so they never
+	 * agree bit for bit; inside this they are the same placement and nothing is corrected
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Prediction", meta = (ClampMin = "0.0", ClampMax = "50.0", ForceUnits = "cm"))
+	float PredictedPlacementToleranceCm = 5.f;
+
+	/**
 	 * Content folders, besides the plugin's own content, where link type definitions live (a project's test or game content, another
 	 * plugin's content). The module registers the GSTN_LinkType primary asset type with the asset manager over the plugin's content
 	 * and these folders at startup, so the project's DefaultGame.ini does not list the type: a PrimaryAssetTypesToScan line naming a
