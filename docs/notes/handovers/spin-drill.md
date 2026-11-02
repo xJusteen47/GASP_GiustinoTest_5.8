@@ -247,3 +247,21 @@ after one checkpoint.
 - Unchanged: 1 rollback in spin_opposite_cancel / drill_ground_lag (budget 0); opposite_cancel also failed its shortened-spin checks once in
   this run (flaky, same pawn issue suspected).
 - Cost: ~+35k context, 2 builds + 2 headless runs, 2 editor runs.
+
+## SD-09 (laptop, 2026-11-02): the diver jumps in every scenario now; SUITE_SPIN 4/12; latch still red, new lead (STOPPED, 2 attempts used)
+
+- Probe (Saved/SD09/probe_mode.py; outputs probe_mode*.txt, probe_tick.txt): Mover mode and position of both pawns on every world before the jump
+  and every tick. Cause confirmed: one of the two spawns leaves its pawn in Falling at z 90.00 for the whole PIE (never lands at rest), so its jump
+  is refused. Which player gets that spawn changes between PIEs (spawns also move: (-800, 0) or (-800, 60) in different runs).
+- Fix (harness only, spin_drill_scenarios.py): on_ready calls _settle_pawns, which drops only the pawns that are not Walking with
+  server_teleport_exact (+2 cm, forced Falling). Attempt 1 settled both pawns: every diver jumped but the target stood 2 cm higher and no latch
+  or tip damage landed anywhere (Logs/sd-09/spin-settle.log). Attempt 2 (kept) settles only the stuck pawn: every diver jumps (12/12 PREJUMP Walking).
+- SUITE_SPIN 4/12 (was 3/12; Saved/Logs/sd-09/spin-settle2.log): PASS ring, air hop, air once, drill_ground_lag.
+- Still red: nondrillable_bounce (tip damage 0 -> 0) and all six latch scenarios (no world shows Seating or Boring). New lead from probe_mode3.txt
+  (static_multi_hit): the diver now dives from ~320 cm, the tip (centre -145) touches the target's head at the dive's first frame, both the
+  authority and the client go to Mover mode GSTN_Linked at z 322 and stay there, but the drill text shows a NEW Spinning (start frame 353),
+  not Seating. So a link forms, but the drill does not read it as its latch (ReadDiveOutcome / link type?), or the crouch tap at t1 + 0.05 starts
+  a spin. Next: read the drill state and link type on that frame (game code, C++), not the harness.
+- Unchanged: 1 rollback in spin_opposite_cancel (budget 0). drill_ground_lag passed this run.
+- Gates: Python only, no C++ changed: build and headless suites as in SD-08b (on 980/0, off 933/0), not rerun.
+- Cost: one Opus thread, ~75k context, 4 editor runs (~6 min each), no builds. Low-medium.

@@ -209,7 +209,25 @@ def on_ready():
     """defence_batch calls it once per PIE when the pawns are ready, before its settle time: the kit change (a loadout revision) is out of the way
     before the scenario's inputs. A loadout change at the scenario's start left the first jump and spin unanswered (SD-05)"""
     _kit_state['applied'] = True
-    return _apply_kit()
+    return _apply_kit(), _settle_pawns()
+
+
+def _settle_pawns():
+    """Drops every pawn onto the floor where it stands. SD-09 probe: one of the two spawns leaves its pawn in Falling at z 90.00 for the whole PIE
+    (it never lands while it stands still), so its jump is refused; whichever player gets that spawn changes between PIEs, which is why the dive
+    scenarios failed only some of the time. A server_teleport_exact (forced Falling, zero velocity) 2 cm above the spot makes it land in Walking
+    within the batch's settle time. Only a pawn that is not Walking is moved: the drop leaves it standing 2 cm above the floor (Walking does not look
+    for a floor at rest), and settling the standing pawn too lifted the drill target 2 cm and the latch stopped forming (SD-09 run 2)"""
+    out = []
+    for i in g.all_players():
+        key = g.key_of_player(i)
+        a = actor(0, key)
+        mover = a.get_component_by_class(unreal.CharacterMoverComponent)
+        if mover and str(mover.get_movement_mode_name()) == 'Walking':
+            continue
+        v = a.get_actor_location()
+        out.append((i, g.comps(g.worlds()[0])[key].server_teleport_exact(unreal.Vector(v.x, v.y, v.z + 2.0))))
+    return 'pawns settled', out
 
 
 def _run(run, steps):
