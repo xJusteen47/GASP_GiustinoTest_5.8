@@ -10,6 +10,7 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | [m4b-parts-plan.md](m4b-parts-plan.md) | M4b destructible parts (`GSTNParts*`) | P0..P16 | `../combat-parts.md` |
 | [m5-editor-plan.md](m5-editor-plan.md) | M5 editor and debug (`GSTNCombatEditor`, `GSTNCombatDebug`) | E0..E19 | `../combat-m5-editor.md` |
 | [traversal-surfaces-plan.md](traversal-surfaces-plan.md) (added 2026-10-22 evening) | Traversal surfaces: wall-slide / trampoline surfaces on level objects and enemy body parts (`GSTNSurface`, `GSTNPlatform`, `GSTNPlatformParts`) | T0..T9 | `../traversal-surfaces.md` |
+| [spin-drill-plan.md](spin-drill-plan.md) (added 2026-10-25) | Spin (3D World / air hop) and drill (latch, multi-hit, final jump) (`GSTNSpinDrill`) | D0..D13 | `../spin-drill.md` |
 
 `../game-design-direction.md` wins over every spec and plan. `../modularity-and-tags.md` §3.7-3.9, §4, §5b are binding.
 

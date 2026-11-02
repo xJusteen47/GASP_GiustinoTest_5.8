@@ -8,6 +8,7 @@
 #include "GameFramework/Actor.h"
 #include "GSTN_LinkDebugDraw.h"
 #include "GSTN_LinkRegistry.h"
+#include "MoverComponent.h"
 #include "Sim/GSTN_LinkAttach.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Sim/GSTN_LinkSnapshotContributor.h"
@@ -66,7 +67,13 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 	}
 	const FGSTN_LinkState& Body = Fragment->Links.Body;
 	const UGSTN_LinkTypeDefinition* Definition = Registry->GetDefinition(Body.LinkTypeIndex);
-	if (!(FGSTN_LinkSnapshotContributor::ComputeBits(Definition, Body.Role, Body.Phase) & GSTNLinkSnapshotBits::Parked) || Body.PartnerId.IsNull())
+	// M7 G1: an initiator that predicts its link (bInitiatorPredicts) and is the parked role is SHOWN parked from its request on (Pending), so the
+	// optimistic accept PendingFrames later does not pop; a refusal detaches it again. The simulation parks it from the accept only
+	const bool bShownPending = Definition && Definition->bInitiatorPredicts && Body.Phase == EGSTN_LinkPhase::Pending
+		&& Body.HasFlag(GSTNLinkFlags::Predicted) && Definition->InitiatorRole.bParked;
+	const uint8 ShownRole = bShownPending ? 1 : Body.Role;
+	const EGSTN_LinkPhase ShownPhase = bShownPending ? EGSTN_LinkPhase::Active : Body.Phase;
+	if (!(FGSTN_LinkSnapshotContributor::ComputeBits(Definition, ShownRole, ShownPhase) & GSTNLinkSnapshotBits::Parked) || Body.PartnerId.IsNull())
 	{
 		return false;
 	}
@@ -76,9 +83,10 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 	{
 		return false;
 	}
-	const FGSTN_LinkRoleDef& Role = Definition->GetRoleDef(Body.Role);
+	const FGSTN_LinkRoleDef& Role = Definition->GetRoleDef(ShownRole);
 	PartnerSocket = Role.SocketOnPartner;
-	RoleOffset = Role.SocketOffset;
+	// M7 G2: the parked role's own turn (LocalYawQ), as the snapshot substitution composes it, so the mesh faces where its hurtboxes do
+	RoleOffset = UGSTN_LinkMath::ComposeLocalYaw(Role.SocketOffset, ShownRole == Body.Role ? Body.LocalYawQ : static_cast<int16>(0));
 
 	const USkeletalMeshComponent* PartnerMesh = PartnerActor->FindComponentByClass<USkeletalMeshComponent>();
 	if (bUseLiveSocket && PartnerMesh && !PartnerSocket.IsNone() && PartnerMesh->DoesSocketExist(PartnerSocket))
@@ -92,18 +100,13 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 		const FTransform Socket = PartnerBody ? PartnerBody->GetSocket(PartnerSocket) : FTransform::Identity;
 		FTransform PartnerTransform = PartnerActor->GetActorTransform();
 		PartnerTransform.SetScale3D(FVector::OneVector);
-		LinkedTransform = UGSTN_LinkMath::ParkedTransformOnSocket(PartnerTransform, Socket, Role);
+		LinkedTransform = RoleOffset * Socket * PartnerTransform;
 	}
 
 	if (Partner.Get() != PartnerActor)
 	{
 		DetachMesh();
 		Partner = PartnerActor;
-	}
-	if (!Role.bCollisionWithPartner && IgnoredPartner.Get() != PartnerActor)
-	{
-		SetPartnerCollisionIgnored(IgnoredPartner.Get(), false);
-		SetPartnerCollisionIgnored(PartnerActor, true);
 	}
 	return true;
 }
@@ -113,18 +116,36 @@ void UGSTN_LinkPresentationComponent::AttachMesh(AActor* NewPartner)
 	AActor* Owner = GetOwner();
 	USkeletalMeshComponent* Mesh = Owner ? Owner->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
 	USkeletalMeshComponent* PartnerMesh = NewPartner ? NewPartner->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
-	if (!Mesh || !PartnerMesh || bMeshAttached)
+	if (!Mesh || !PartnerMesh)
 	{
 		return;
 	}
-	MeshOriginalParent = Mesh->GetAttachParent();
-	MeshOriginalSocket = Mesh->GetAttachSocketName();
-	MeshOriginalRelative = Mesh->GetRelativeTransform();
-	// The parked transform places the owner's ROOT on the socket; the mesh keeps its own offset from the root
+	if (!bMeshAttached)
+	{
+		MeshOriginalParent = Mesh->GetAttachParent();
+		MeshOriginalSocket = Mesh->GetAttachSocketName();
+		MeshOriginalRelative = Mesh->GetRelativeTransform();
+		// Mover's own offset of its visual component, not the relative transform of this frame (its smoothing may have moved the mesh)
+		if (const UMoverComponent* Mover = Owner->FindComponentByClass<UMoverComponent>(); Mover && Mover->GetPrimaryVisualComponent() == Mesh)
+		{
+			MeshOriginalRelative = Mover->GetBaseVisualComponentTransform();
+		}
+		bMeshAttached = true;
+	}
+	// The parked transform places the owner's ROOT on the socket; the mesh keeps its own offset from the root. Asserted on every tick, not
+	// once: Mover writes its primary visual component every frame before the actors tick (FinalizeFrame resets the relative transform to its
+	// base, dropping the role offset: the fixed second step of S2 finding A; FinalizeSmoothingFrame puts it back on its own capsule in world
+	// space: the parked entity's mesh that never rode on its own client, S2 finding B). This tick runs after both (TG_PostPhysics)
 	const FName Socket = PartnerMesh->DoesSocketExist(PartnerSocket) ? PartnerSocket : NAME_None;
-	Mesh->AttachToComponent(PartnerMesh, FAttachmentTransformRules::KeepRelativeTransform, Socket);
-	Mesh->SetRelativeTransform(MeshOriginalRelative * RoleOffset);
-	bMeshAttached = true;
+	if (Mesh->GetAttachParent() != PartnerMesh || Mesh->GetAttachSocketName() != Socket)
+	{
+		Mesh->AttachToComponent(PartnerMesh, FAttachmentTransformRules::KeepRelativeTransform, Socket);
+	}
+	const FTransform Relative = MeshOriginalRelative * RoleOffset;
+	if (!Mesh->GetRelativeTransform().Equals(Relative))
+	{
+		Mesh->SetRelativeTransform(Relative);
+	}
 }
 
 void UGSTN_LinkPresentationComponent::DetachMesh()
@@ -144,18 +165,28 @@ void UGSTN_LinkPresentationComponent::DetachMesh()
 	bMeshAttached = false;
 }
 
-void UGSTN_LinkPresentationComponent::SetPartnerCollisionIgnored(AActor* Other, bool bIgnore)
+void UGSTN_LinkPresentationComponent::SetCollisionIgnoredPartner(AActor* NewPartner)
 {
 	AActor* Owner = GetOwner();
 	UPrimitiveComponent* OwnRoot = Owner ? Cast<UPrimitiveComponent>(Owner->GetRootComponent()) : nullptr;
-	UPrimitiveComponent* OtherRoot = Other ? Cast<UPrimitiveComponent>(Other->GetRootComponent()) : nullptr;
-	if (!OwnRoot || !OtherRoot)
+	AActor* Previous = IgnoredPartner.Get();
+	if (!OwnRoot || Previous == NewPartner)
 	{
 		return;
 	}
-	OwnRoot->IgnoreActorWhenMoving(Other, bIgnore);
-	OtherRoot->IgnoreActorWhenMoving(Owner, bIgnore);
-	IgnoredPartner = bIgnore ? Other : nullptr;
+	if (Previous)
+	{
+		OwnRoot->IgnoreActorWhenMoving(Previous, false);
+	}
+	if (NewPartner && NewPartner != Owner)
+	{
+		OwnRoot->IgnoreActorWhenMoving(NewPartner, true);
+		IgnoredPartner = NewPartner;
+	}
+	else
+	{
+		IgnoredPartner = nullptr;
+	}
 }
 
 void UGSTN_LinkPresentationComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -173,7 +204,6 @@ void UGSTN_LinkPresentationComponent::TickComponent(float DeltaTime, ELevelTick 
 	else
 	{
 		DetachMesh();
-		SetPartnerCollisionIgnored(IgnoredPartner.Get(), false);
 		Partner = nullptr;
 	}
 	FGSTN_LinkDebugDraw::DrawEntity(GetOwner(), *this);
@@ -182,6 +212,6 @@ void UGSTN_LinkPresentationComponent::TickComponent(float DeltaTime, ELevelTick 
 void UGSTN_LinkPresentationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	DetachMesh();
-	SetPartnerCollisionIgnored(IgnoredPartner.Get(), false);
+	SetCollisionIgnoredPartner(nullptr);
 	Super::EndPlay(EndPlayReason);
 }

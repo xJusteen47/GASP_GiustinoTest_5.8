@@ -4,6 +4,7 @@
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Input/GSTN_InputHistory.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 
 namespace
 {
@@ -250,6 +251,7 @@ int32 FGSTN_InputMatcher::GetAge(int32 Frame, const FGSTN_MatchParams& Params)
 
 bool FGSTN_InputMatcher::Match(const FGSTN_InputPattern& Pattern, const FGSTN_InputHistory& History, const FGSTN_MatchParams& Params, FGSTN_PatternMatch& Out)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_InputMatcher_Match);
 	Out = FGSTN_PatternMatch();
 	if (!ensureMsgf(Params.Buttons, TEXT("FGSTN_MatchParams needs a button map")) || Pattern.Steps.IsEmpty())
 	{

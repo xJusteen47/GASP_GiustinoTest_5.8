@@ -1,6 +1,8 @@
 // Automation tests of the link plugin: the grab and latch request rules (plan F5b).
 
 #include "GSTN_CombatCoreTags.h"
+#include "GSTN_LinkTags.h"
+#include "UObject/StructOnScope.h"
 #include "GSTN_LinkTestUtils.h"
 #include "Misc/AutomationTest.h"
 #include "Rules/GSTN_LinkRule_Grab.h"
@@ -400,6 +402,81 @@ bool FGSTN_LinkRuleLatchOnePerPartnerTest::RunTest(const FString& Parameters)
 	// The Hand slot of the enemy is not the latch's: a held object on it does not count
 	Fixture.Context.Target.Links.Hand.Phase = EGSTN_LinkPhase::Active;
 	TestTrue(TEXT("Another channel's link does not block a latch"), Fixture.Evaluate().bAccepted);
+	return true;
+}
+
+// ---- CheckCommon from Blueprint (F15, HANDOVER 61 OPEN 4)
+
+namespace
+{
+	/** Calls UGSTN_LinkRule::CheckCommon through its reflected function, as a Blueprint node does: the context is copied into the call frame */
+	bool CallCheckCommonReflected(const FGSTN_LinkRequestContext& Context, FGSTN_LinkRuleResult& OutResult)
+	{
+		UFunction* Function = UGSTN_LinkRule::StaticClass()->FindFunctionByName(TEXT("CheckCommon"));
+		if (!Function)
+		{
+			return false;
+		}
+		FStructOnScope Parms(Function);
+		const FStructProperty* ContextParam = CastField<FStructProperty>(Function->FindPropertyByName(TEXT("Context")));
+		const FStructProperty* ReturnParam = CastField<FStructProperty>(Function->GetReturnProperty());
+		if (!ContextParam || !ReturnParam)
+		{
+			return false;
+		}
+		ContextParam->CopyCompleteValue(ContextParam->ContainerPtrToValuePtr<void>(Parms.GetStructMemory()), &Context);
+		UGSTN_LinkRule::StaticClass()->GetDefaultObject()->ProcessEvent(Function, Parms.GetStructMemory());
+		ReturnParam->CopyCompleteValue(&OutResult, ReturnParam->ContainerPtrToValuePtr<void>(Parms.GetStructMemory()));
+		return true;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkRuleCheckCommonBlueprintTest, "GSTNLink.Core.Rule.CheckCommonFromBlueprint", GSTNLinkTest::Flags)
+
+bool FGSTN_LinkRuleCheckCommonBlueprintTest::RunTest(const FString& Parameters)
+{
+	const UFunction* Function = UGSTN_LinkRule::StaticClass()->FindFunctionByName(TEXT("CheckCommon"));
+	if (!TestNotNull(TEXT("CheckCommon is a reflected function"), Function))
+	{
+		return false;
+	}
+	TestTrue(TEXT("static, Blueprint-callable and pure"), Function->HasAllFunctionFlags(FUNC_Static | FUNC_BlueprintCallable | FUNC_BlueprintPure));
+	TestNotNull(TEXT("ContainsTagNamed too"), UGSTN_LinkRule::StaticClass()->FindFunctionByName(TEXT("ContainsTagNamed")));
+
+	UGSTN_LinkTypeDefinition* Definition = GSTNLinkTest::MakeGrabDefinition();
+	TArray<FGSTN_LinkRequestContext> Cases;
+	// Accepted
+	Cases.Add(GSTNLinkTest::MakeContext(Definition));
+	// Self link
+	FGSTN_LinkRequestContext Self = GSTNLinkTest::MakeContext(Definition);
+	Self.Target.EntityId = Self.Initiator.EntityId;
+	Cases.Add(Self);
+	// The target's channel is busy: the link states are not reflected either, they travel with the native copy too
+	FGSTN_LinkRequestContext Busy = GSTNLinkTest::MakeContext(Definition);
+	Busy.Target.Links.Body.Phase = EGSTN_LinkPhase::Active;
+	Busy.Target.Links.Body.Role = 2;
+	Cases.Add(Busy);
+	// Locked target (a reflected tag container)
+	FGSTN_LinkRequestContext Locked = GSTNLinkTest::MakeContext(Definition);
+	Locked.Target.Tags.AddTag(GSTNLinkTags::Lock_Link);
+	Cases.Add(Locked);
+	// No definition: what a context made in Blueprint gets
+	Cases.Add(GSTNLinkTest::MakeContext(nullptr));
+
+	for (int32 Index = 0; Index < Cases.Num(); ++Index)
+	{
+		const FGSTN_LinkRuleResult Native = UGSTN_LinkRule::CheckCommon(Cases[Index]);
+		FGSTN_LinkRuleResult Reflected = FGSTN_LinkRuleResult::Refuse(EGSTN_LinkRefusal::Cooldown);
+		if (!TestTrue(FString::Printf(TEXT("case %d: the reflected call runs"), Index), CallCheckCommonReflected(Cases[Index], Reflected)))
+		{
+			continue;
+		}
+		TestEqual(FString::Printf(TEXT("case %d: same verdict"), Index), Reflected.bAccepted, Native.bAccepted);
+		TestEqual(FString::Printf(TEXT("case %d: same refusal"), Index), Refusal(Reflected), Refusal(Native));
+	}
+	TestTrue(TEXT("the accepted case is accepted"), UGSTN_LinkRule::CheckCommon(Cases[0]).bAccepted);
+	TestEqual(TEXT("the busy case is refused as busy"), Refusal(UGSTN_LinkRule::CheckCommon(Cases[2])), static_cast<int32>(EGSTN_LinkRefusal::TargetBusy));
+	TestEqual(TEXT("no definition"), Refusal(UGSTN_LinkRule::CheckCommon(Cases[4])), static_cast<int32>(EGSTN_LinkRefusal::NoDefinition));
 	return true;
 }
 

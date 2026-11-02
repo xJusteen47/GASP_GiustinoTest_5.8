@@ -159,6 +159,9 @@ namespace GSTNLinkTags
 	/** The grabbed entity mashed free. Authoritative event published once per key by the watchdog */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_GrabEscaped);
 
+	/** A partner move was aborted (M7 G2): its partner was knocked out, its part could not start, or it outlived its MaxDurationFrames. Magnitude = the action id. Published by the combat outbox on the authority */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Link_PartnerMoveAborted);
+
 	/** Appends every tag this module declares, so tests and validators cannot miss one */
 	GSTNLINKCORE_API void GetDeclaredTags(TArray<FGameplayTag>& OutTags);
 }

@@ -266,15 +266,21 @@ def _role(a, prop, **fields):
     a.struct(prop, **fields)
 
 
-def _rule(a, rule_class, configure=None):
-    """The definition's one rule of rule_class (kept when it is the only rule, so a rerun does not make a new subobject), then configure(rule) -> changed"""
+def _rule(a, rule_class, configure=None, enemies_only=True):
+    """The definition's rule of rule_class first, then (M7 G5) GSTNLink's team rule with EnemiesOnly: the interact probe tries offers by priority and
+    the first whose rules accept a candidate names it, so an unfiltered grab (priority 100) would claim an ally a lower offer (the mount, 50) is
+    meant for. Second, not first: the harness edits the type's own rule in memory as rules[0]. Existing subobjects are kept when the classes match
+    in order, so a rerun makes no new one; then configure(rule) -> changed"""
+    classes = [rule_class.static_class()] + ([unreal.GSTN_LinkRule_Team.static_class()] if enemies_only else [])
     rules = list(a.asset.get_editor_property('rules'))
-    if len(rules) == 1 and rules[0] and rules[0].get_class() == rule_class.static_class():
-        rule = rules[0]
-    else:
-        rule = unreal.new_object(rule_class, a.asset)
-        a.asset.set_editor_property('rules', [rule])
+    if [r.get_class() if r else None for r in rules] != classes:
+        rules = [unreal.new_object(rule_class, a.asset)] + ([unreal.new_object(unreal.GSTN_LinkRule_Team, a.asset)] if enemies_only else [])
+        a.asset.set_editor_property('rules', rules)
         a.mark(True)
+    if enemies_only and rules[1].get_editor_property('requirement') != unreal.GSTN_LinkTeamRequirement.ENEMIES_ONLY:
+        rules[1].set_editor_property('requirement', unreal.GSTN_LinkTeamRequirement.ENEMIES_ONLY)
+        a.mark(True)
+    rule = rules[0]
     if configure:
         a.mark(configure(rule))
     return rule

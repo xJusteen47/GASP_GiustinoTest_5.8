@@ -13,6 +13,7 @@
 #include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/NetDriver.h"
 #include "EngineUtils.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformTime.h"
@@ -289,6 +290,9 @@ void UGSTN_GASNPPTestComponent::RunRemoteCommand(const FString& Command)
 		bMirror = Args.Num() > 0 && Args[0] == TEXT("1");
 		MirrorFunction = Args.Num() > 1 ? Args[1] : FString();
 		SetComponentTickInterval(bMirror ? 0.f : 0.25f);
+		// A record reads the presentation of this engine frame (the link presentation ticks in TG_PostPhysics) and the frame the pawn is shown at
+		// together: from the default TG_PrePhysics it paired the previous frame's presentation with this frame's last step (F15)
+		SetTickGroup(bMirror ? TG_PostUpdateWork : TG_PrePhysics);
 		bOk = true;
 	}
 	UE_LOG(LogTemp, Log, TEXT("GASNPP_REMOTE %s -> %s"), *Command, bOk ? TEXT("ok") : TEXT("FAILED"));
@@ -348,7 +352,10 @@ void UGSTN_GASNPPTestComponent::SendMirrorRecord(float DeltaTime)
 		const FString Key = PlayerState ? FString::Printf(TEXT("P%d"), PlayerState->GetPlayerId()) : It->GetName();
 		const UMoverComponent* PawnMover = It->FindComponentByClass<UMoverComponent>();
 		const FString Text = MirrorFunction.IsEmpty() ? FString() : CallMirrorFunction(MirrorFunction, *It);
-		Record.Appendf(TEXT("|%s %s %s"), *Key, PawnMover ? *PawnMover->GetMovementModeName().ToString() : TEXT("-"), Text.IsEmpty() ? TEXT("-") : *Text);
+		// The frame this world shows the pawn at (its Mover's last step, the authority's frame numbering): the host lines the record up with its own
+		// pose of that frame (link_mp's frame-aligned presentation check)
+		const int32 ShownFrame = PawnMover ? PawnMover->GetLastTimeStep().ServerFrame : INDEX_NONE;
+		Record.Appendf(TEXT("|%s %s %d %s"), *Key, PawnMover ? *PawnMover->GetMovementModeName().ToString() : TEXT("-"), ShownFrame, Text.IsEmpty() ? TEXT("-") : *Text);
 	}
 	MirrorRecords.Add(FString(Record.ToView()));
 	// Written to a file on this machine, not sent over the game connection: an RPC per frame competed with the client's input upstream (records
@@ -383,6 +390,13 @@ void UGSTN_GASNPPTestComponent::FlushMirror()
 double UGSTN_GASNPPTestComponent::GetPlatformSeconds()
 {
 	return FPlatformTime::Seconds();
+}
+
+FString UGSTN_GASNPPTestComponent::GetNetDriverTotals(const UObject* WorldContextObject)
+{
+	const UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr;
+	const UNetDriver* Driver = World ? World->GetNetDriver() : nullptr;
+	return Driver ? FString::Printf(TEXT("%u %u"), Driver->OutTotalBytes, Driver->InTotalBytes) : FString();
 }
 
 bool UGSTN_GASNPPTestComponent::ClearPackageDirtyFlag(UObject* Object)

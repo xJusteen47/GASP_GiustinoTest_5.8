@@ -19,7 +19,7 @@
  * Every class here is stateless and reads only its view, like any step.
  */
 
-/** Lets the hit through only on a hittable relationship: the rules' HittableRelationships, plus Ally when friendly fire is on */
+/** Lets the hit through only on a hittable relationship: the rules' HittableRelationships, plus Ally when friendly fire is on, plus a relationship the hitbox's variant forces */
 UCLASS(meta = (DisplayName = "Team Filter"))
 class GSTNCOMBATCORE_API UGSTN_HitStep_TeamFilter : public UGSTN_HitResolutionStep
 {

@@ -1,6 +1,7 @@
 // The per-frame input simulation a host model embeds (GAS-NPP fork).
 
 #include "Simulation/GSTN_InputSimulator.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 
 #include "Abilities/GameplayAbility.h"
 #include "Input/GSTN_ButtonMap.h"
@@ -41,6 +42,7 @@ namespace
 
 FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args, const IGSTN_InputSimHost& Host)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_InputSimulator_Tick);
 	check(Args.Cmd && Args.In && Args.Out && Args.Table && Args.Buttons && Args.Settings);
 
 	const FGSTN_InputCmd& Cmd = *Args.Cmd;

@@ -10,6 +10,7 @@
 #include "Hits/GSTN_HitVictimView.h"
 #include "Rules/GSTN_LinkRule_Grab.h"
 #include "Rules/GSTN_LinkRule_Latch.h"
+#include "State/GSTN_LinkMath.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Sync/GSTN_SyncFragment.h"
 
@@ -117,6 +118,7 @@ FGSTN_LinkStates FGSTN_LinkSnapshotExt::ToLinkStates() const
 	States.Body.Serial = BodySerial;
 	States.Body.Flags = BodyFlags;
 	States.Body.LinkFrame = LinkFrame;
+	States.Body.LocalYawQ = static_cast<int16>(LocalYawQ8 * UGSTN_LinkMath::LocalYawQuantum);
 	if (PartnerId != INDEX_NONE)
 	{
 		States.Body.PartnerId = FGSTN_EntityRef(GSTNEntityKinds::Fighter, static_cast<uint16>(PartnerId));
@@ -136,6 +138,8 @@ void FGSTN_LinkSnapshotExt::SetFromFragment(const FGSTN_LinkFragment& Fragment)
 	BodySerial = Body.Serial;
 	BodyFlags = Body.Flags;
 	LinkFrame = Body.LinkFrame;
+	// The simulation writes the turn in quanta of LocalYawQuantum, so one signed byte holds it exactly (M7 G2)
+	LocalYawQ8 = static_cast<int8>(FMath::Clamp(Body.LocalYawQ / UGSTN_LinkMath::LocalYawQuantum, -128, 127));
 	PartnerId = Body.PartnerId.IsNull() ? INDEX_NONE : static_cast<int32>(Body.PartnerId.Id);
 	HandTypeIndex = Fragment.Links.Hand.LinkTypeIndex;
 	HandRole = Fragment.Links.Hand.Role;

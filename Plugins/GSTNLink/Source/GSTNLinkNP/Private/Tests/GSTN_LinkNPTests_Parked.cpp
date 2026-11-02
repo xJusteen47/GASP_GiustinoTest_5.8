@@ -16,6 +16,10 @@
 #include "Sim/GSTN_LinkAttach.h"
 #include "Sim/GSTN_LinkSnapshotContributor.h"
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_Parked
+{
+
 using namespace GSTNLinkNPTest;
 
 namespace
@@ -205,5 +209,7 @@ bool FGSTN_LinkParkedInitiatorFollowsTest::RunTest(const FString& Parameters)
 	}
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_Parked
 
 #endif

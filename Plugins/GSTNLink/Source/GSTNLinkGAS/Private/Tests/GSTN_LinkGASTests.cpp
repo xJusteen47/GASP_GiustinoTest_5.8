@@ -297,16 +297,21 @@ bool FGSTN_LinkRegistryReasonAppendTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("appending twice changes nothing"), static_cast<int32>(Backward.Append(TestReasonA)), First);
 	TestEqual(TEXT("two plugin reasons"), Backward.NumPluginReasons(), 2);
 
-	// The registry appends the names plugins registered from their startup, at every build, and its signature covers them
+	// The registry appends the names plugins registered from their startup, at every build, and its signature covers them. Other enabled plugins
+	// may have registered their own reasons already (M7's mount, the drill), so the expectations are relative to what a build has without B
+	UGSTN_LinkRegistry* Baseline = NewRegistry();
+	Baseline->Build({ MakeGrab() });
+	const int32 OthersRegistered = Baseline->GetReasons().NumPluginReasons();
 	UGSTN_LinkRegistry::RegisterPluginReason(TestReasonB.GetTag().GetTagName());
 	UGSTN_LinkRegistry::RegisterPluginReason(TEXT("Combat.Link.BreakReason.GSTNNotRegistered"));
 	UGSTN_LinkRegistry* Registry = NewRegistry();
 	Registry->Build({ MakeGrab() });
 	const uint32 SignatureWithB = Registry->GetSignature();
-	TestEqual(TEXT("the registered reason is in the registry's table"), static_cast<int32>(Registry->GetReasons().IndexOf(TestReasonB)), First);
-	TestEqual(TEXT("a name no plugin declares is skipped"), Registry->GetReasons().NumPluginReasons(), 1);
-	TestEqual(TEXT("an appended reason sorts before B"), static_cast<int32>(Registry->AppendReason(TestReasonA)), First);
-	TestEqual(TEXT("B moved after A"), static_cast<int32>(Registry->GetReasons().IndexOf(TestReasonB)), First + 1);
+	const int32 IndexOfB = static_cast<int32>(Registry->GetReasons().IndexOf(TestReasonB));
+	TestTrue(TEXT("the registered reason is in the registry's table, from FirstPlugin on"), IndexOfB >= First && Registry->GetReasons().TagOf(static_cast<uint8>(IndexOfB)) == TestReasonB.GetTag());
+	TestEqual(TEXT("a name no plugin declares is skipped"), Registry->GetReasons().NumPluginReasons(), OthersRegistered + 1);
+	TestEqual(TEXT("an appended reason sorts before B (no other reason sorts between the two test names)"), static_cast<int32>(Registry->AppendReason(TestReasonA)), IndexOfB);
+	TestEqual(TEXT("B moved after A"), static_cast<int32>(Registry->GetReasons().IndexOf(TestReasonB)), IndexOfB + 1);
 	TestTrue(TEXT("the signature covers the reasons"), Registry->GetSignature() != SignatureWithB);
 	UGSTN_LinkRegistry::UnregisterPluginReason(TestReasonB.GetTag().GetTagName());
 	UGSTN_LinkRegistry::UnregisterPluginReason(TEXT("Combat.Link.BreakReason.GSTNNotRegistered"));

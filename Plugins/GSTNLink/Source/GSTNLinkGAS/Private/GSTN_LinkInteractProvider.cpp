@@ -131,6 +131,79 @@ FGSTN_LinkInteractOffer FGSTN_LinkInteractProvider::MakeGrabOffer(const UGSTN_Li
 	return Offer;
 }
 
+bool FGSTN_LinkInteractProvider::CarriesKitExtension(const FGSTN_KitExtensionList* KitExtensions, const FGSTN_LinkKitExtension* LinkKit, const UScriptStruct* Required)
+{
+	if (Required == nullptr)
+	{
+		return true;
+	}
+	// A test body holds its link extension without a list
+	if (LinkKit != nullptr && FGSTN_LinkKitExtension::StaticStruct()->IsChildOf(Required))
+	{
+		return true;
+	}
+	if (KitExtensions != nullptr)
+	{
+		for (const FInstancedStruct& Entry : KitExtensions->ExtensionData)
+		{
+			const UScriptStruct* Struct = Entry.GetScriptStruct();
+			if (Struct != nullptr && Struct->IsChildOf(Required))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+void FGSTN_LinkInteractProvider::MakeOffers(const UGSTN_LinkRegistry& Registry, const FGSTN_KitExtensionList* KitExtensions, const FGSTN_LinkKitExtension* LinkKit,
+	TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers)
+{
+	const UGSTN_LinkTypeDefinition* GrabDefinition = Registry.FindDefinition(GSTNLinkTags::Type_Grab);
+	for (const FGSTN_LinkOfferEntry& Entry : Registry.GetInteractOffers())
+	{
+		if (!CarriesKitExtension(KitExtensions, LinkKit, Entry.Offer.RequiredKitExtension))
+		{
+			continue;
+		}
+		FGSTN_LinkInteractOffer Offer;
+		if (Entry.Definition == GrabDefinition)
+		{
+			// The grab's reach and rules are the kit's grab rules (F12), not the offer's data
+			Offer = MakeGrabOffer(Registry, LinkKit);
+		}
+		else
+		{
+			Offer.Definition = Entry.Definition;
+			Offer.ReachCm = Entry.Offer.ReachCm;
+			Offer.GrabRules = LinkKit != nullptr ? &LinkKit->GrabRules : nullptr;
+			Offer.LatchRules = LinkKit != nullptr ? &LinkKit->LatchRules : nullptr;
+		}
+		Offer.Meaning = Entry.Offer.Meaning;
+		Offer.Priority = Entry.Offer.Priority;
+		if (Offer.Definition == nullptr)
+		{
+			continue;
+		}
+
+		// The type's alternatives are tried first under its meaning (the grab lists the latch), as the LinkRequest step tries them on a hit
+		for (const FGameplayTag& Alternative : Offer.Definition->Alternatives)
+		{
+			const UGSTN_LinkTypeDefinition* Definition = Registry.FindDefinition(Alternative);
+			const bool bListed = OutOffers.ContainsByPredicate([Definition, &Offer](const FGSTN_LinkInteractOffer& Listed)
+			{
+				return Listed.Definition == Definition && Listed.Meaning == Offer.Meaning;
+			});
+			if (Definition != nullptr && !bListed)
+			{
+				FGSTN_LinkInteractOffer& Added = OutOffers.Add_GetRef(Offer);
+				Added.Definition = Definition;
+			}
+		}
+		OutOffers.Add(Offer);
+	}
+}
+
 void FGSTN_LinkInteractProvider::ProjectTargetTag(const FGSTN_InteractFocusResult& Focus, const FGSTN_InteractMeaningTable& Meanings,
 	FGameplayTagContainer& InOutTags)
 {

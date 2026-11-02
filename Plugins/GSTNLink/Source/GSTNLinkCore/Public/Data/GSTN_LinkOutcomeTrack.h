@@ -18,7 +18,12 @@ enum class EGSTN_LinkOutcome : uint8
 	/** The move continues and the link stays (a pummel, a pose change) */
 	KeepLink,
 	/** The two entities swap roles (a reversal) */
-	SwapRoles
+	SwapRoles,
+	/**
+	 * The move starts a partner move (M7 G2): the link type's action provider resolves PartnerMoveId, the initiator's link actions record it and
+	 * the partner's part is posted to its inbox. One partner move at a time; a key while one plays does nothing
+	 */
+	PartnerMove
 };
 
 /** One outcome of a link move, at a frame of the move's timeline */
@@ -41,6 +46,10 @@ struct GSTNLINKCORE_API FGSTN_LinkOutcomeKey
 	/** The exit placer to use, by name, instead of the link type's own. None = the link type's placer */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Outcome")
 	FName ExitPlacement = NAME_None;
+
+	/** The partner move the outcome PartnerMove starts: an id of the link type's action provider (1..32767). Ignored by the other outcomes */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Outcome", meta = (ClampMin = "1", ClampMax = "32767", EditCondition = "Outcome == EGSTN_LinkOutcome::PartnerMove"))
+	int32 PartnerMoveId = 1;
 };
 
 /**

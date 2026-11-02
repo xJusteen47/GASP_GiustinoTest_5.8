@@ -8,6 +8,8 @@
 #include "Timeline/GSTN_TimelinePlayer.h"
 
 struct FGSTN_TrackHookEnvironment;
+struct FGSTN_SimEventOutbox;
+class AActor;
 
 /**
  * The timeline part of the combat tick (combat-m3 7.2 steps 2, 6, 8 and 9), as functions of the sync state and the timeline
@@ -86,4 +88,11 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 
 	/** Back to Actionable with no timeline */
 	static void ClearTimeline(FGSTN_CombatSyncCore& Core);
+
+	/**
+	 * Seam D-1: one sim event per event key crossed by Output that names an outbox event (FGSTN_TimelineTrack_Event::OutboxEventTag), in the
+	 * order of the keys: the key's type, tags and magnitude, the frame and the instigator. Appends unconditionally (the outbox is published on
+	 * the authority only, once per frame). Returns the number appended
+	 */
+	static int32 AppendOutboxEvents(const FGSTN_TimelineOutput& Output, int32 Frame, AActor* Instigator, FGSTN_SimEventOutbox& Outbox);
 };

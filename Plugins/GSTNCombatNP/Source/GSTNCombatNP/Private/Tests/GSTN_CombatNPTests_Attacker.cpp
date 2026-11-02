@@ -4,6 +4,8 @@
 #include "Misc/AutomationTest.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitExtensions.h"
+#include "Hits/GSTN_HitResolution.h"
+#include "Hits/GSTN_HitSteps.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Simulation/GSTN_CombatAttacker.h"
@@ -369,6 +371,72 @@ bool FGSTN_AttackerRelationshipVariantTest::RunTest(const FString& Parameters)
 		Plain.Run(0);
 		TestEqual(TEXT("and the plain shape hits the same victim"), Plain.Hits.Num(), 1);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AttackerForceHittableTest, "GSTNCombat.NP.Hits.Attacker.ForceHittableVariant", GSTN_NP_TEST_FLAGS)
+bool FGSTN_AttackerForceHittableTest::RunTest(const FString& Parameters)
+{
+	const FGameplayTag Ally = GSTNCombatHitTags::Relationship_Ally.GetTag();
+
+	// An ally-only interaction: the Ally variant forces the relationship hittable while the rules keep friendly fire off
+	FGSTN_HitboxSpec Spec = FAttackerFixture::MakeSphere(60.0, 0, FVector(50.0, 0.0, 0.0));
+	Spec.RelationshipVariants.Add(Ally).bForceHittable = true;
+	{
+		FAttackerFixture Fixture;
+		Fixture.AddTrack(0, 10, { Spec });
+		Fixture.AddEntity(2, 1, FVector(100.0, 0.0, 0.0));
+		Fixture.Finish();
+		TestFalse(TEXT("the rules still refuse allies"), Fixture.Rules->IsRelationshipHittable(Ally));
+		Fixture.Run(0);
+		TestEqual(TEXT("the forced ally is hit"), Fixture.Hits.Num(), 1);
+		if (Fixture.Hits.Num() == 1)
+		{
+			const uint8 Index = Fixture.Hits[0].Entry.Relationship;
+			TestEqual(TEXT("index Ally with the forced bit"), static_cast<int32>(Index), 1 | GSTNHitRelationship::ForcedBit);
+			TestTrue(TEXT("the victim reads it as forced"), GSTNHitRelationship::IsForced(Index));
+			TestTrue(TEXT("and the tag is still Ally"), GSTNHitRelationship::FromIndex(Index) == Ally);
+		}
+	}
+	// The other relationships stay as authored: an enemy is hit with a plain index, and bIgnore wins over the force
+	{
+		FAttackerFixture Fixture;
+		Fixture.AddTrack(0, 10, { Spec });
+		Fixture.AddEntity(2, 2, FVector(100.0, 0.0, 0.0));
+		Fixture.Finish();
+		Fixture.Run(0);
+		TestTrue(TEXT("an enemy is hit, not forced"), Fixture.Hits.Num() == 1 && Fixture.Hits[0].Entry.Relationship == 2);
+
+		FGSTN_HitboxSpec Ignored = Spec;
+		Ignored.RelationshipVariants.FindChecked(Ally).bIgnore = true;
+		FAttackerFixture IgnoreFixture;
+		IgnoreFixture.AddTrack(0, 10, { Ignored });
+		IgnoreFixture.AddEntity(2, 1, FVector(100.0, 0.0, 0.0));
+		IgnoreFixture.Finish();
+		IgnoreFixture.Run(0);
+		TestEqual(TEXT("bIgnore wins"), IgnoreFixture.Hits.Num(), 0);
+	}
+	TestFalse(TEXT("255 is never forced"), GSTNHitRelationship::IsForced(255));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TeamFilterForcedTest, "GSTNCombat.NP.Hits.TeamFilter.ForcedRelationship", GSTN_NP_TEST_FLAGS)
+bool FGSTN_TeamFilterForcedTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGSTN_CombatRules> Rules(UGSTN_CombatRules::CreateStandard(GetTransientPackage()));
+	FGSTN_HitContextView View;
+	View.Rules = Rules.Get();
+	View.Incoming.Relationship = GSTNCombatHitTags::Relationship_Ally.GetTag();
+	FGSTN_StepResult Out;
+	Out.bHit = true;
+	TestEqual(TEXT("an ally stops at the team filter"), GetDefault<UGSTN_HitStep_TeamFilter>()->Resolve_Implementation(View, Out), EGSTN_StepResult::Stop);
+	TestFalse(TEXT("and does not land"), Out.bHit);
+
+	View.Incoming.bRelationshipForced = true;
+	FGSTN_StepResult Forced;
+	Forced.bHit = true;
+	TestEqual(TEXT("a forced ally passes"), GetDefault<UGSTN_HitStep_TeamFilter>()->Resolve_Implementation(View, Forced), EGSTN_StepResult::Continue);
+	TestTrue(TEXT("and still lands"), Forced.bHit);
 	return true;
 }
 

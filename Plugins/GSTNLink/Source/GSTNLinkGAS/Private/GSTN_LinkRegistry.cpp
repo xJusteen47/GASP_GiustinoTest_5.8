@@ -18,6 +18,13 @@ namespace GSTNLinkRegistryPrivate
 		return Names;
 	}
 
+	/** Interact offers registered by type tag name before any registry exists (module startups) */
+	TMap<FName, FGSTN_LinkInteractOfferDef>& OfferRegistrations()
+	{
+		static TMap<FName, FGSTN_LinkInteractOfferDef> Offers;
+		return Offers;
+	}
+
 	/** Tag name order, case-sensitive so it never depends on the locale: the order the wire indices come from */
 	bool TagNameLess(const FGameplayTag& A, const FGameplayTag& B)
 	{
@@ -116,6 +123,7 @@ void UGSTN_LinkRegistry::Deinitialize()
 	AssetDefinitions.Reset();
 	CodeDefinitions.Reset();
 	IndexByType.Reset();
+	InteractOffers.Reset();
 	bBuilt = false;
 
 	Super::Deinitialize();
@@ -253,6 +261,8 @@ void UGSTN_LinkRegistry::Build(TConstArrayView<UGSTN_LinkTypeDefinition*> Defini
 		}
 	}
 
+	BuildInteractOffers();
+
 	for (const FString& Error : BuildErrors)
 	{
 		UE_LOG(LogGSTNLink, Warning, TEXT("Link registry: %s"), *Error);
@@ -325,6 +335,67 @@ void UGSTN_LinkRegistry::UnregisterPluginReason(FName ReasonTagName)
 	GSTNLinkRegistryPrivate::PluginReasonNames().Remove(ReasonTagName);
 }
 
+void UGSTN_LinkRegistry::RegisterInteractOffer(FName LinkTypeTagName, const FGSTN_LinkInteractOfferDef& Offer)
+{
+	if (!LinkTypeTagName.IsNone())
+	{
+		GSTNLinkRegistryPrivate::OfferRegistrations().Add(LinkTypeTagName, Offer);
+	}
+}
+
+void UGSTN_LinkRegistry::UnregisterInteractOffer(FName LinkTypeTagName)
+{
+	GSTNLinkRegistryPrivate::OfferRegistrations().Remove(LinkTypeTagName);
+}
+
+void UGSTN_LinkRegistry::BuildInteractOffers()
+{
+	InteractOffers.Reset();
+	for (const FGSTN_LinkTypeEntry& Entry : Entries)
+	{
+		if (Entry.Definition == nullptr)
+		{
+			continue;
+		}
+		// The definition's own offer wins; a code registration fills in for a type whose asset names none
+		const FGSTN_LinkInteractOfferDef* Offer = Entry.Definition->InteractOffer.IsOffered() ? &Entry.Definition->InteractOffer
+			: GSTNLinkRegistryPrivate::OfferRegistrations().Find(Entry.LinkType.GetTagName());
+		if (Offer != nullptr && Offer->IsOffered())
+		{
+			FGSTN_LinkOfferEntry& Added = InteractOffers.AddDefaulted_GetRef();
+			Added.Definition = Entry.Definition;
+			Added.Offer = *Offer;
+			Added.Offer.Priority = FMath::Clamp(Added.Offer.Priority, 0, 255);
+		}
+	}
+	InteractOffers.StableSort([](const FGSTN_LinkOfferEntry& A, const FGSTN_LinkOfferEntry& B)
+	{
+		if (A.Offer.Priority != B.Offer.Priority)
+		{
+			return A.Offer.Priority > B.Offer.Priority;
+		}
+		return GSTNLinkRegistryPrivate::TagNameLess(A.Definition->LinkType, B.Definition->LinkType);
+	});
+
+	// One meaning per tag, at the highest priority of its offers (the table sorts by tag name itself, so the indices are stable)
+	TArray<FGSTN_InteractMeaning> Meanings;
+	for (const FGSTN_LinkOfferEntry& Entry : InteractOffers)
+	{
+		FGSTN_InteractMeaning* Existing = Meanings.FindByPredicate([&Entry](const FGSTN_InteractMeaning& Meaning) { return Meaning.Tag == Entry.Offer.Meaning; });
+		if (Existing == nullptr)
+		{
+			FGSTN_InteractMeaning& Meaning = Meanings.AddDefaulted_GetRef();
+			Meaning.Tag = Entry.Offer.Meaning;
+			Meaning.DefaultPriority = Entry.Offer.Priority;
+		}
+		else
+		{
+			Existing->DefaultPriority = FMath::Max(Existing->DefaultPriority, Entry.Offer.Priority);
+		}
+	}
+	InteractMeanings.Build(Meanings);
+}
+
 void UGSTN_LinkRegistry::UpdateSignature()
 {
 	FString Text;
@@ -339,4 +410,32 @@ void UGSTN_LinkRegistry::UpdateSignature()
 		Text += FString::Printf(TEXT("R%d=%s;"), ReasonIndex, *Reasons.TagOf(ReasonIndex).ToString());
 	}
 	Signature = FCrc::StrCrc32(*Text);
+}
+
+bool UGSTN_LinkRegistry::RegisterActionProvider(const FGameplayTag& LinkType, UObject* Provider)
+{
+	if (!LinkType.IsValid() || !Provider || !Provider->GetClass()->ImplementsInterface(UGSTN_LinkActionProvider::StaticClass()))
+	{
+		return false;
+	}
+	ActionProviders.Add(LinkType, Provider);
+	return true;
+}
+
+void UGSTN_LinkRegistry::UnregisterActionProvider(const FGameplayTag& LinkType)
+{
+	ActionProviders.Remove(LinkType);
+}
+
+const IGSTN_LinkActionProvider* UGSTN_LinkRegistry::GetActionProvider(uint8 TypeIndex) const
+{
+	const FGSTN_LinkTypeEntry* Entry = GetEntry(TypeIndex);
+	const TObjectPtr<UObject>* Found = Entry ? ActionProviders.Find(Entry->LinkType) : nullptr;
+	return Found && *Found ? Cast<IGSTN_LinkActionProvider>(Found->Get()) : nullptr;
+}
+
+bool UGSTN_LinkRegistry::ResolveLinkAction(uint8 TypeIndex, int16 Id, FGSTN_LinkActionInfo& OutInfo) const
+{
+	const IGSTN_LinkActionProvider* Provider = Id > 0 ? GetActionProvider(TypeIndex) : nullptr;
+	return Provider && Provider->ResolveLinkAction(Id, OutInfo);
 }

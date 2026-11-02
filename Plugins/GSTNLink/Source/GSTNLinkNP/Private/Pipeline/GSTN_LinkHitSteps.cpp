@@ -57,6 +57,7 @@ void FGSTN_LinkStepUtils::MakeRequestContext(const FGSTN_HitContextView& View, c
 
 	FGSTN_LinkRequestSide& Initiator = OutContext.Initiator;
 	Initiator.EntityId = Incoming.AttackerEntityId;
+	Initiator.TeamId = Incoming.AttackerTeamId;
 	if (InitiatorExt)
 	{
 		FGSTN_LinkRequestTags::AppendTags(InitiatorExt->RequestTagMask, Initiator.Tags);
@@ -75,6 +76,7 @@ void FGSTN_LinkStepUtils::MakeRequestContext(const FGSTN_HitContextView& View, c
 
 	FGSTN_LinkRequestSide& Target = OutContext.Target;
 	Target.EntityId = View.Victim.EntityId;
+	Target.TeamId = View.Victim.TeamId;
 	Target.EffectiveWeight = RequestWeight(View.Victim);
 	if (TargetExt)
 	{
@@ -88,7 +90,11 @@ void FGSTN_LinkStepUtils::MakeRequestContext(const FGSTN_HitContextView& View, c
 		UGSTN_LinkRequirementLibrary::ResolveDefinitions(*Registry, OutContext);
 	}
 	const FGSTN_LinkBodyData* InitiatorBody = InitiatorExt ? FGSTN_LinkAttach::At(InitiatorExt->BodyIndex) : nullptr;
+	const FGSTN_LinkBodyData* TargetBody = TargetExt ? FGSTN_LinkAttach::At(TargetExt->BodyIndex) : nullptr;
 	UGSTN_LinkRequirementLibrary::ApplyKitRules(InitiatorBody ? InitiatorBody->GetKitExtension() : nullptr, OutContext);
+	// Each side's whole kit extension array (M7 G1): a plugin's rule reads its own kit data by type
+	Initiator.KitExtensions = InitiatorBody ? InitiatorBody->GetKitExtensions() : nullptr;
+	Target.KitExtensions = TargetBody ? TargetBody->GetKitExtensions() : nullptr;
 }
 
 bool FGSTN_LinkStepUtils::ArePartners(const FGSTN_HitContextView& View)
@@ -283,6 +289,8 @@ EGSTN_StepResult UGSTN_HitStep_LinkRequest::Resolve_Implementation(const FGSTN_H
 	Outcome.Serial = FGSTN_LinkState::NextSerial(Request.Target.Links.Get(Channel).Serial, Request.Initiator.Links.Get(Channel).Serial);
 	Outcome.LinkFrame = View.Incoming.Frame != INDEX_NONE ? View.Incoming.Frame + 1 : INDEX_NONE;
 	Outcome.InitiatorId = View.Incoming.AttackerEntityId;
+	// The type-specific byte a rule writes on accept (M7 G1: a carry load); both sides hold it, the link effect reads it
+	Outcome.Payload = UGSTN_LinkRequirementLibrary::ComputePayload(Request);
 	// A target parked without acting (the grabbed) mashes out by the grab rules: its end frame from the formation on, the same on every machine
 	const FGSTN_LinkRoleDef& TargetRole = Request.Definition->GetRoleDef(2);
 	if (TargetRole.bParked && !TargetRole.bActsWhileLinked && Outcome.LinkFrame != INDEX_NONE)
@@ -299,6 +307,7 @@ EGSTN_StepResult UGSTN_HitStep_LinkRequest::Resolve_Implementation(const FGSTN_H
 	Response.LinkTypeIndex = FormedIndex;
 	Response.Serial = Outcome.Serial;
 	Response.LinkFrame = Outcome.LinkFrame;
+	Response.Payload = Outcome.Payload;
 	Out.OutgoingEntries.Add(FGSTN_LinkInboxHandlers::MakeResponse(Response));
 
 	// A link request does no damage and no knockback: the later steps do not run
@@ -407,6 +416,7 @@ void FGSTN_LinkOutcomeApplier::Apply(const FInstancedStruct& Extension, const FG
 	Formed.Serial = Outcome->Serial;
 	Formed.LinkFrame = Outcome->LinkFrame;
 	Formed.EndFrame = Outcome->EndFrame;
+	Formed.Payload = Outcome->Payload;
 	State = Formed;
 }
 

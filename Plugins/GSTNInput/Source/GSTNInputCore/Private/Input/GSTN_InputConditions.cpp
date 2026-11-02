@@ -13,7 +13,7 @@ namespace
 		int32 Frame = 0;
 		FGSTN_StickSample Stick;
 	};
-	using FStickEvents = TArray<FStickEvent, TInlineAllocator<FGSTN_InputHistory::MaxEvents>>;
+	using FStickEvents = TArray<FStickEvent, TInlineAllocator<FGSTN_InputHistory::MaxDirectionEvents>>;
 
 	void CollectStickEvents(const FGSTN_InputHistory& History, FStickEvents& Out)
 	{
@@ -520,7 +520,7 @@ bool FGSTN_InputCondition_Spin::Matches(const FGSTN_ConditionContext& Ctx, int32
 	FStickEvents Events;
 	CollectStickEvents(Ctx.History, Events);
 
-	TArray<FSpinNode, TInlineAllocator<FGSTN_InputHistory::MaxEvents>> Nodes;
+	TArray<FSpinNode, TInlineAllocator<FGSTN_InputHistory::MaxDirectionEvents>> Nodes;
 	for (const FStickEvent& Event : Events)
 	{
 		const EGSTN_StickDirection Direction = Event.Stick.GetDirection(Space);

@@ -542,3 +542,90 @@ After spike S5 (tilt failed on an interpolated victim) the owner fixed the shiel
   first tick under 265 cm. `weapon_switch` NOT fixed: walking the second leg back avoids the lane end, but then the server's combat input
   history holds three back-tilt events the owner's lacks (harness-fix-rerun-1..3.log; 180 frames old, inside MaxEventAge), so "server and
   owner agree" fails. Reported for the lead.
+
+## F14: full sweep, byte table, docs commit
+
+- **weapon_switch history (HANDOVER 60 OPEN 2): a harness artefact.** The server and owner views are read at the same wall time but about 13
+  sim frames apart, so an event at the edge of `MaxEventAge` (254) is still kept on the server and already dropped on the owner; trimming
+  runs on sim frames and is deterministic. `_diff` compares both histories over the window both have simulated (4fffbf3). The second walk
+  goes back (the lane end). No GSTNInput change.
+- **The 2 % gate needs a host at tick rate, and the editor is not one.** One-process PIE is game-thread bound (48.8 ms a frame, 3 worlds);
+  an editor host alone ran about 14 fps (F12). Gate run with a standalone listen host (`Tools/GASNPPTest/link_standalone.ps1`, e02ba18;
+  -nullrhi, -notimeouts, a warm-up spike per process set). Host 97-101 fps. Every judged 2 % run: 0 server-starved ticks, 0 unforced walk
+  reconciles. The starvation part of OPEN 1 is closed as an editor-host artefact; the fork is unchanged.
+- **Grabber presentation is judged by frame** (lead's rule, as the latch, 8c14670): standalone p95 7.3 cm (one frame of walking) in every
+  run; in the one-process editor the same check reads p95 10.1-13.1 cm (listen and dedicated) with an identical p50 6.5 / max 22.4 in every run (a deterministic
+  offset of about one frame, not explained; the F-1..F interval reading is the same). Reported, limit unchanged (HANDOVER 61 OPEN).
+- **Link end in client_grabs_client: a second correction** on the grabber's client 1-7 frames after the break, on its own Mover state
+  (the authority's grabber velocity along its facing drops to ~0, the client keeps walking): the grabber meets something on the authority
+  that its client does not show, most likely the released partner placed in front of it with collision restored, while the client shows
+  that partner interpolated. 4 of 8 standalone runs at 2 %, 1 of 3 at 0 %. Exit placement / collision design (HANDOVER 58 OPEN 2), not
+  the fork.
+- **Connect refusal** checked with two standalone processes (one-process PIE cannot load different plugin sets): a client started with
+  `-DisablePlugins=GSTNLink` is refused at Hello ("connecting with invalid version" / `OutdatedClient`). The plan's "the fragment
+  registry refuses" is the network version check of task B (F11).
+- **Fake plugin test as a third plugin** (fc01f63): `Plugins/GSTNExtensionTest` (test only, off by default) with one module per M6
+  plugin, `Runtime` because native tags in an `UncookedOnly` module trip the engine's tag ensure. 7 tests `GSTNExtTest.*`.
+- **Byte table (spec 10) as built**, from the fragment tests: no fragment 1 bit; idle fragment 0 B payload (25 bits framed); ended link
+  3 B; raised shield 2 + 15 B; one live link channel 1 + 22 B; two channels 45 B; every defence group live 2 + 85 B. Spec: idle 1-2 B,
+  active 22-27 B, 21 B per channel raw: within it. Spec 10's "<= 40 B/s/entity extra while held" cannot be resolved by the host's total
+  upload (108-111 KB/s with a held link against 115-116 KB/s for the no-link control, three pawns, two clients, 0 %): no measurable
+  increase, the parked pawn costs slightly less.
+- **Core modules** list Engine, DeveloperSettings and Projects besides the plan's Core, CoreUObject, GameplayTags, GSTNInputCore,
+  GSTNCombatCore (data assets, the settings class, plugin paths); no NP module. The grep gate is otherwise clean (net mode read only in
+  `UGSTN_LinkWatchdog::IsAuthority`).
+- **Dedicated + 2 clients**: two pawns per world and no host pawn; the pairings that name the host do not apply. `defence_batch` accepts it.
+- **Blueprint**: `UGSTN_LinkRule::CheckCommon` is a C++ static, so a Blueprint rule cannot run the shared checks (OPEN).
+
+## F15: follow-ups (exit collision window, PIE frame sampling, CheckCommon in Blueprint, grab_throw timing)
+
+Run on the desktop (owner's call, 2026-11-01) in the `GASP_Giustino2_feature` worktree. Commits c11c133 (C++), a9708e0 (harness).
+
+- **Link-end second correction (HANDOVER 61 OPEN 2): the cause was collision as presentation state.** Until F15
+  `UGSTN_LinkPresentationComponent` ignored and restored the pair's capsule collision from the state each machine SHOWS; on the grabber's
+  client the released partner is interpolated a few frames behind, so the client restored collision later than the authority and a rollback
+  never restored it (the authority's grabber stopped against the partner, its client walked on). Now `FGSTN_LinkExitCollision` derives the
+  ignored partner from the entity's own link fragment (the live Body link when the parked role says `bCollisionWithPartner` false, then the
+  former partner for `UGSTN_LinkTypeDefinition::ExitCollisionIgnoreFrames`, default 12), both sides open the window from the same stamped
+  frame (the watchdog's Break command, a throw on either side), the fragment carries it (`ExitIgnorePartner`, `ExitIgnoreEndFrame`, a new
+  presence bit, 4 + 4 bytes while open, dropped when it runs out), and the link tick extension writes the owner's OWN capsule ignore list in
+  `BeforeTagProjection`, before that frame's Mover tick, every simulated frame (the stats modifier's pattern for Mover's gravity override).
+  The presentation component only remembers which actor the rule added. Window 12 frames: the corrections came 1-7 frames after the break.
+  Proof, standalone host, `link_spike_client_grabs_client`, 8 judged runs each (`Saved/Logs/f15-sweep/`): before `base-0pct-1/2`
+  5/8 and `base-2pct-1/2` 4/8 with the double correction; after `after-0pct-1/2` 0/8 and `after-2pct-1/2` 0/8 (warm-ups 0/4 too).
+- **Exit query ignores only the pair** (HANDOVER 58 OPEN 2): `FGSTN_LinkWatchdogLogic::FParams::WithPairCollision` hands the placer one query
+  per pair; a third pawn blocks a place. Test `GSTNLink.NP.Exit.QueryIgnoresOnlyThePair`.
+- **Not fixed, found while measuring**: one unforced walk reconcile on the grabber's client in some `client_grabs_client` runs, before and
+  after F15 alike (3/16 before, 4/16 after; `diagwalk-0pct-1.log` with `np.PrintReconciles`): at the walk's direction change the authority's
+  grabber velocity is ~3 cm/s against a local ~30 cm/s, Walking with `SmoothWalkingState`, inputs equal. Not the link's collision (the rate
+  did not change) and not the link end.
+- **PIE grabber presentation (HANDOVER 61 OPEN 1): a harness numbering error, not the game.** The authority's sim history records frame N in
+  the test component's pre-simulation tick (the pose the step starts from); the frame a world shows a pawn at is its Mover's last step, whose
+  pose is that step's result. So the pose shown at N is the record of N + 1 (`link_scenarios.SHOWN_TO_RECORDED`). Same samples,
+  `editor-diag-1.log`: against record N p50 6.7 / p95 12.4 / max 22.4 cm (the constant one frame of walking every F14 run showed), against
+  N + 1 p50 0.0 / p95 0.0. Applied to the grabber check, the latch check and `link_mp`; the limit stays 10 cm. The standalone mirror records
+  paired this frame's step with the previous frame's presentation (test component in PrePhysics, link presentation in PostPhysics): right
+  only on engine frames with exactly one step, the 7.3 cm p95 there; while mirroring the test component now ticks in PostUpdateWork.
+- **`UGSTN_LinkRule::CheckCommon` and `ContainsTagNamed` are `BlueprintPure`** (HANDOVER 61 OPEN 4); the context's unreflected pointers
+  travel with the struct's native copy. Test `GSTNLink.Core.Rule.CheckCommonFromBlueprint` calls it through reflection and compares.
+- **grab_throw** (HANDOVER 61 OPEN 3): the second pummel was tapped 0.3 s after the first (15-21 frames at 20 editor fps, around the pummel's
+  end, 18 frames + 4 of hitstop). Now `_GrabRig.tap_when_free` taps once the first pummel's damage is on the authority and the grabber is out
+  of its timeline on its own world: 3/3 PASS (`pie-diag-1.log`), and PASS in the SUITE_LINK run.
+- **Tests (5)**: `GSTNLink.NP.ExitCollision.{IgnoredWhileLinked, WindowExpiry, RollbackAcrossWindow}`, `GSTNLink.NP.Exit.QueryIgnoresOnlyThePair`,
+  `GSTNLink.Core.Rule.CheckCommonFromBlueprint`.
+
+## Plan corrections (M6, closed in F14)
+
+What the plan (`m6-defence-links-plan.md`, branch `claude/project-thread-mvizq6`) says that the build does differently, for a reader of the
+plan; details in the checkpoint sections above.
+
+1. Shield: a fixed-size bubble, no tilt, shrink or arc (owner, 2026-10-26, after S5).
+2. Seams: X18 / X19 were already on `feature`; the F9 interact fallback was not needed (F0 S0).
+3. Links are accepted by the target's own pipeline on every machine; only breaks are server-decided (the watchdog), no server branch.
+4. No grab-confirm hitstop, no `LinkEstablished` buffer event, no latch immunity field, no SwapRoles, no attacker hitstop on throws, an
+   uncollision-checked throw exit (F10-F12).
+5. Test content: six new kits instead of edits to `KIT_Test_Hits`, `BP_GASNPP_TestCharacter`, `HBS_Test_Pawn` (F13, approved).
+6. The network gate's 2 % runs need a host at tick rate: a standalone host (F14), not the editor.
+7. The connect refusal is the network version (task B), not a fragment registry rule.
+8. The "fake plugin" test is a third, test-only plugin.
+9. Spec 10's bytes/s budget is not measurable from the host's total upload; the fragment tests carry the byte table.

@@ -27,7 +27,7 @@ EGSTN_StepResult UGSTN_HitStep_TeamFilter::Resolve_Implementation(const FGSTN_Hi
 	}
 
 	// Without rules nothing says who may be hit: the step is the identity
-	if (View.Rules && !View.Rules->IsRelationshipHittable(Relationship))
+	if (View.Rules && !View.Incoming.bRelationshipForced && !View.Rules->IsRelationshipHittable(Relationship))
 	{
 		Out.bHit = false;
 		return EGSTN_StepResult::Stop;

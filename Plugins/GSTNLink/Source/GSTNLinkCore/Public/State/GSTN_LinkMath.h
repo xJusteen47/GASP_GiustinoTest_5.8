@@ -160,4 +160,27 @@ public:
 	 */
 	static bool TryGetParkedTransform(const UGSTN_LinkTypeDefinition& Definition, int32 RoleIndex, const FTransform& PartnerTransform,
 		const FTransform& SocketRootRelative, FTransform& OutTransform);
+
+	// ---- Parked facing (M7 G2) ----
+
+	/**
+	 * The quantum of FGSTN_LinkState::LocalYawQ that the simulation writes: 128 units of 1/32768 turn (1/256 turn, about 1.4 degrees), so the
+	 * snapshot carries the turn as one signed byte (LocalYawQ / 128) without losing anything the fragment holds
+	 */
+	static constexpr int32 LocalYawQuantum = 128;
+
+	/** A turn in degrees as the link state carries it: wrapped to [-180, 180), rounded to LocalYawQuantum */
+	static int16 LocalYawQFromDeg(double YawDeg);
+
+	/** The turn of a LocalYawQ in degrees */
+	static double LocalYawDeg(int16 LocalYawQ);
+
+	/** The parked transform turned about its own up axis by LocalYawQ: what the snapshot substitution places (0 = the transform unchanged) */
+	static FTransform ComposeLocalYaw(const FTransform& Parked, int16 LocalYawQ);
+
+	/**
+	 * The turn of a parked role that faces WorldDirection, relative to its placement Anchor (the parked transform without a turn), clamped to the
+	 * arc YawLimitDeg centred on the anchor's forward (360 = free, 0 = always 0). A direction with no length on the anchor's plane keeps Current
+	 */
+	static int16 FacingYawQ(const FTransform& Anchor, const FVector& WorldDirection, float YawLimitDeg, int16 Current);
 };

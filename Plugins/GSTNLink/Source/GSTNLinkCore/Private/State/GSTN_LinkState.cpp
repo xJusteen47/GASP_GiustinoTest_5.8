@@ -78,7 +78,7 @@ FString FGSTN_LinkState::ToString() const
 bool FGSTN_LinkActions::operator==(const FGSTN_LinkActions& Other) const
 {
 	return LastRefusedSerial == Other.LastRefusedSerial && RefusedFrame == Other.RefusedFrame && CooldownEndFrame == Other.CooldownEndFrame
-		&& Active.Id == Other.Active.Id && Active.StartFrame == Other.Active.StartFrame
+		&& Active.Id == Other.Active.Id && Active.StartFrame == Other.Active.StartFrame && Active.Side == Other.Active.Side
 		&& PendingStart.Frame == Other.PendingStart.Frame && PendingStart.Id == Other.PendingStart.Id
 		&& Exit.Frame == Other.Exit.Frame && Exit.Position == Other.Exit.Position && Exit.YawDeg == Other.Exit.YawDeg
 		&& Exit.Velocity == Other.Exit.Velocity && Exit.Flags == Other.Exit.Flags;

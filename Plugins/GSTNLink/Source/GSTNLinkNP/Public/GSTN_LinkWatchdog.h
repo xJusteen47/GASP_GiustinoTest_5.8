@@ -47,6 +47,9 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogEntity
 
 	/** The state tags the entity projects (hitstun, tumble, knockdown...), for the partner's PartnerMustNot */
 	FGameplayTagContainer StateTags;
+
+	/** The partner move the entity plays (M7 G2: its link actions' Active), for the exit of a move's outcome break */
+	FGSTN_LinkActions::FActive ActiveMove;
 };
 
 /** One inbox entry the watchdog posts: a LinkCommand stamped StampFrame for TargetId, sent by SenderId (the partner) */
@@ -96,11 +99,24 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogLogic
 		/** Frames after a LinkFrame before a one-sided link counts as an orphan (the settings' OrphanGraceFrames) */
 		int32 OrphanGraceFrames = 3;
 
-		/** The world for the exit placer, or null (the placer then takes its first candidate) */
+		/** The world for the exit placer, or null (the placer then takes its first candidate). Used when WithPairCollision is unset */
 		const IGSTN_ExitCollisionQuery* Collision = nullptr;
+
+		/**
+		 * The world for the exit of ONE pair (F15, HANDOVER 58 OPEN 2): calls Use with a query that ignores only the exiting and the staying
+		 * entity, so a third pawn (a bystander) blocks a place like any wall. Unset = Collision for every pair
+		 */
+		TFunction<void(int32 ExitingId, int32 StayingId, TFunctionRef<void(const IGSTN_ExitCollisionQuery*)> Use)> WithPairCollision;
 
 		/** The definition of a link type index; null = unknown (the link is left alone) */
 		TFunction<const UGSTN_LinkTypeDefinition*(uint8)> Definitions;
+
+		/**
+		 * The exit placer of a partner move (M7 G2: the type's action provider's ExitPlacer of the move id), or null for the type's own. Asked for
+		 * a Body break while either side still plays a move: an outcome Break keeps the move until the break, an abort clears it first, so an
+		 * aborted move leaves through the default exit. Unset = the type's placer always
+		 */
+		TFunction<const UGSTN_LinkExitPlacer*(uint8 TypeIndex, int16 ActionId)> ActionExitPlacer;
 	};
 
 	/** Entities must be sorted by EntityId. Frame is the frame all of them are the end of (the stamp of the posts) */
@@ -109,13 +125,13 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogLogic
 
 	/** The exit of the parked side of a link: the definition's placer around the staying entity, quantised as the command carries it */
 	static FGSTN_ExitResult PlaceExit(const UGSTN_LinkTypeDefinition& Definition, const FGSTN_LinkWatchdogEntity& Exiting, const FGSTN_LinkWatchdogEntity& Staying,
-		const IGSTN_ExitCollisionQuery* Collision);
+		const IGSTN_ExitCollisionQuery* Collision, const UGSTN_LinkExitPlacer* Placer = nullptr);
 
 	/** How far the parked entity's capsule stands from the placement the link expects for it (0 for a type that parks nobody) */
 	static float ParkedDistance(const UGSTN_LinkTypeDefinition& Definition, const FGSTN_LinkWatchdogEntity& Initiator, const FGSTN_LinkWatchdogEntity& Target);
 };
 
-/** The real world asked by the exit placer: a capsule overlap against blocking geometry, the two linked pawns ignored. Server only */
+/** The real world asked by the exit placer: a capsule overlap against blocking geometry, the actors it is given ignored (the pair). Server only */
 class GSTNLINKNP_API FGSTN_WorldExitCollisionQuery : public IGSTN_ExitCollisionQuery
 {
 public:

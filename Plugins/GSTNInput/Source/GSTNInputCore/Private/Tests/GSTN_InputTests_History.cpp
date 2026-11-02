@@ -60,24 +60,24 @@ bool FGSTN_HistoryRingTest::RunTest(const FString& Parameters)
 	{
 		History.Append(TapSample(Frame, 1u));
 	}
-	TestEqual(TEXT("ring is full"), History.GetNumButtonEvents(), FGSTN_InputHistory::MaxEvents);
+	TestEqual(TEXT("ring is full"), History.GetNumButtonEvents(), FGSTN_InputHistory::MaxButtonEvents);
 	TestEqual(TEXT("newest event is the last release"), History.GetButtonEvent(History.GetButtonSlot(0)).Frame, 19);
 	TestTrue(TEXT("newest event is a release"), History.GetButtonEvent(History.GetButtonSlot(0)).bRelease != 0);
 	TestEqual(TEXT("oldest kept event is from frame 12"), History.GetButtonEvent(History.GetButtonSlot(15)).Frame, 12);
 	TestTrue(TEXT("oldest kept event is a press"), History.GetButtonEvent(History.GetButtonSlot(15)).bRelease == 0);
 
-	// The stick ring overflows the same way: a new direction every frame.
+	// The stick ring (32) overflows the same way: a new direction every frame, 40 frames keep frames 8..39.
 	FGSTN_InputHistory Stick;
-	for (int32 Frame = 0; Frame < 20; ++Frame)
+	for (int32 Frame = 0; Frame < 40; ++Frame)
 	{
 		FGSTN_InputSample Sample = IdleSample(Frame);
 		Sample.Stick.Zone = EGSTN_StickZone::Tilt;
 		Sample.Stick.StickDir = static_cast<EDir>(1 + Frame % 8);
 		Stick.Append(Sample);
 	}
-	TestEqual(TEXT("stick ring is full"), Stick.GetNumDirectionEvents(), FGSTN_InputHistory::MaxEvents);
-	TestEqual(TEXT("newest stick event"), Stick.GetDirectionEvent(0).Frame, 19);
-	TestEqual(TEXT("oldest kept stick event"), Stick.GetDirectionEvent(15).Frame, 4);
+	TestEqual(TEXT("stick ring is full"), Stick.GetNumDirectionEvents(), FGSTN_InputHistory::MaxDirectionEvents);
+	TestEqual(TEXT("newest stick event"), Stick.GetDirectionEvent(0).Frame, 39);
+	TestEqual(TEXT("oldest kept stick event"), Stick.GetDirectionEvent(31).Frame, 8);
 	return true;
 }
 
@@ -375,6 +375,147 @@ bool FGSTN_HistorySizeTest::RunTest(const FString& Parameters)
 	const int32 BusyBytes = Save(Busy, 15).Num();
 	AddInfo(FString::Printf(TEXT("busy history: %d bytes"), BusyBytes));
 	TestTrue(TEXT("a full history is at most 100 bytes"), BusyBytes <= 100);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HistoryFullDirectionRingSerializationTest, "GSTNInput.Core.Input.History.SerializationFullStickRing", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_HistoryFullDirectionRingSerializationTest::RunTest(const FString& Parameters)
+{
+	// 40 frames with a new stick state each (three spaces apart, aim changing): the stick ring is full with 32 events, the
+	// button ring with 16, and the count headers use their widest values.
+	FGSTN_InputHistory History;
+	for (int32 Frame = 0; Frame < 40; ++Frame)
+	{
+		FGSTN_InputSample Sample = TapSample(Frame, 1u << (Frame % 5));
+		Sample.Stick.Zone = Frame % 3 == 0 ? EGSTN_StickZone::Aim : EGSTN_StickZone::Tilt;
+		Sample.Stick.StickDir = static_cast<EDir>(1 + Frame % 8);
+		Sample.Stick.WorldDir = static_cast<EDir>(1 + (Frame + 3) % 8);
+		Sample.Stick.FacingDir = static_cast<EDir>(1 + (Frame + 5) % 8);
+		Sample.Stick.bFlick = Frame % 7 == 0;
+		Sample.Stick.WorldYaw = static_cast<uint8>(Frame * 7 + 1);
+		History.Append(Sample);
+	}
+	TestEqual(TEXT("stick ring full"), History.GetNumDirectionEvents(), FGSTN_InputHistory::MaxDirectionEvents);
+	TestEqual(TEXT("button ring full"), History.GetNumButtonEvents(), FGSTN_InputHistory::MaxButtonEvents);
+
+	const TArray<uint8> Bytes = Save(History, 39);
+	FGSTN_InputHistory Loaded;
+	TestTrue(TEXT("loads"), Load(Loaded, Bytes, 39));
+	TestTrue(TEXT("round trip is equal"), History == Loaded);
+	TestTrue(TEXT("saving the loaded copy gives the same bytes"), Save(Loaded, 39) == Bytes);
+	for (int32 Age = 0; Age < History.GetNumDirectionEvents(); ++Age)
+	{
+		if (!(History.GetDirectionEvent(Age) == Loaded.GetDirectionEvent(Age)))
+		{
+			AddError(FString::Printf(TEXT("stick event of age %d differs after the round trip"), Age));
+			break;
+		}
+	}
+	// Per event the wire is what it was with 16: 2 bytes a button event, 4 a stick event, plus the headers
+	AddInfo(FString::Printf(TEXT("full history (16 button + 32 stick events): %d bytes"), Bytes.Num()));
+	TestTrue(TEXT("no more than 2 bytes a button event and 4 a stick event, plus at most 8 of header"),
+		Bytes.Num() <= 2 * FGSTN_InputHistory::MaxButtonEvents + 4 * FGSTN_InputHistory::MaxDirectionEvents + 8);
+
+	// A stick count beyond the ring is garbage: 33 in the 6-bit field, or the top bit
+	TestFalse(TEXT("33 stick events are an error"), Load(Loaded, { 0x00, 33, 0x00 }, 0));
+	TestFalse(TEXT("the stick header's top bit is an error"), Load(Loaded, { 0x00, 0x80, 0x00 }, 0));
+	TestFalse(TEXT("17 button events are an error"), Load(Loaded, { 17, 0x00, 0x00 }, 0));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HistoryFrameWrapTest, "GSTNInput.Core.Input.History.FrameWrap", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_HistoryFrameWrapTest::RunTest(const FString& Parameters)
+{
+	// Events are stored with the low 16 bits of their frame and rebuilt from the newest frame. Run a busy history across
+	// the 65536 boundary (and across a large int32 one) and check every event against the frame it was appended at.
+	for (const int32 Start : { 7, 65536 - 40, 3 * 65536 - 1, 0x7FFF0000 })
+	{
+		FGSTN_InputHistory History;
+		TArray<int32> StickFrames;
+		TArray<int32> ButtonFrames;
+		for (int32 Index = 0; Index < 80; ++Index)
+		{
+			const int32 Frame = Start + Index;
+			FGSTN_InputSample Sample = Index % 2 == 0 ? TapSample(Frame, 1u) : IdleSample(Frame);
+			if (Index % 2 == 0)
+			{
+				ButtonFrames.Add(Frame);
+				ButtonFrames.Add(Frame);
+			}
+			Sample.Stick.Zone = EGSTN_StickZone::Tilt;
+			Sample.Stick.StickDir = static_cast<EDir>(1 + (Index / 3) % 8);
+			if (Index % 3 == 0)
+			{
+				StickFrames.Add(Frame);
+			}
+			History.Append(Sample);
+
+			const FString Where = FString::Printf(TEXT("start %d, frame %d"), Start, Frame);
+			bool bAllRight = true;
+			for (int32 Age = 0; Age < History.GetNumButtonEvents(); ++Age)
+			{
+				bAllRight &= History.GetButtonEvent(History.GetButtonSlot(Age)).Frame == ButtonFrames[ButtonFrames.Num() - 1 - Age];
+			}
+			for (int32 Age = 0; Age < History.GetNumDirectionEvents(); ++Age)
+			{
+				bAllRight &= History.GetDirectionEvent(Age).Frame == StickFrames[StickFrames.Num() - 1 - Age];
+			}
+			if (!bAllRight)
+			{
+				AddError(FString::Printf(TEXT("frames rebuilt wrong at %s"), *Where));
+				break;
+			}
+		}
+
+		// The rebuilt frames drive the queries too
+		const int32 Last = Start + 79;
+		TestEqual(*FString::Printf(TEXT("start %d: direction at the latest stick event"), Start), History.GetDirectionAt(StickFrames.Last(), EGSTN_DirectionSpace::Stick),
+			static_cast<EDir>(1 + (79 / 3) % 8));
+		int32 HeldFrames = 0;
+		TestFalse(*FString::Printf(TEXT("start %d: a tap is never held"), Start), History.IsButtonHeldAt(0, Last - 1, HeldFrames));
+
+		// Round trip right at the wrap
+		FGSTN_InputHistory Loaded;
+		TestTrue(*FString::Printf(TEXT("start %d: loads"), Start), Load(Loaded, Save(History, Last), Last));
+		TestTrue(*FString::Printf(TEXT("start %d: round trip is equal"), Start), History == Loaded);
+
+		// Ageing out across the wrap: a held stick turns ancient, a press past MaxEventAge leaves
+		for (int32 Frame = Last + 1; Frame <= Last + FGSTN_InputHistory::MaxEventAge + 1; ++Frame)
+		{
+			FGSTN_InputSample Idle = IdleSample(Frame);
+			Idle.Stick = History.GetCurrentStick();
+			Idle.Stick.bFlick = false;
+			History.Append(Idle);
+		}
+		TestEqual(*FString::Printf(TEXT("start %d: the buttons aged out"), Start), History.GetNumButtonEvents(), 0);
+		TestEqual(*FString::Printf(TEXT("start %d: one ancient stick event"), Start), History.GetNumDirectionEvents(), 1);
+		TestEqual(*FString::Printf(TEXT("start %d: it reads AncientFrame"), Start), History.GetDirectionEvent(0).Frame, static_cast<int32>(FGSTN_InputHistory::AncientFrame));
+		TestTrue(*FString::Printf(TEXT("start %d: ancient round trip"), Start), Load(Loaded, Save(History, History.GetLatestFrame()), History.GetLatestFrame()) && History == Loaded);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HistoryStorageSizeTest, "GSTNInput.Core.Input.History.StorageSize", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_HistoryStorageSizeTest::RunTest(const FString& Parameters)
+{
+	// The layout before D3b (16 + 16 unpacked events), mirrored here only to print the saving next to the real size
+	struct FLegacyHistoryLayout
+	{
+		struct FButton { int32 Frame; uint8 Bits; };
+		struct FStick { int32 Frame; uint8 Bytes[6]; };
+		FButton Buttons[16];
+		uint8 ButtonHead;
+		uint8 ButtonCount;
+		FStick Sticks[16];
+		uint8 DirectionHead;
+		uint8 DirectionCount;
+		uint32 HeldButtons;
+		int32 LastConsumedStickFrame;
+		FStick Current;
+	};
+	AddInfo(FString::Printf(TEXT("sizeof(FGSTN_InputHistory): %d bytes (16 + 32 packed events); the pre-D3b layout (16 + 16 events): %d bytes"),
+		static_cast<int32>(sizeof(FGSTN_InputHistory)), static_cast<int32>(sizeof(FLegacyHistoryLayout))));
+	TestTrue(TEXT("twice the stick events and still smaller than before"), sizeof(FGSTN_InputHistory) < sizeof(FLegacyHistoryLayout));
 	return true;
 }
 

@@ -142,6 +142,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GASNPP Test|Remote")
 	static double GetPlatformSeconds();
 
+	/**
+	 * Bytes in every packet the world's game net driver sent and received since it was created (UNetDriver::OutTotalBytes / InTotalBytes), as
+	 * "<out> <in>", or an empty string without a net driver. Two readings give the host's upload rate: `stat net` is not readable from Python and
+	 * the engine's server stat replicator exists only on a dedicated server (link_standalone's bytes/s, M6 spec 10)
+	 */
+	UFUNCTION(BlueprintPure, Category = "GASNPP Test|Remote", meta = (WorldContext = "WorldContextObject"))
+	static FString GetNetDriverTotals(const UObject* WorldContextObject);
+
 	/** Clears the dirty flag of Object's package without saving it. The harness's in-memory editor setup (the level's game mode) dirties the map, and a
 	    separate-process PIE refuses to start until dirty packages are saved: the harness must never save the shared level */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Remote")

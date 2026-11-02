@@ -8,6 +8,10 @@
 
 #include "Serialization/MemoryReader.h"
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_Fragment
+{
+
 using namespace GSTNLinkNPTest;
 
 namespace
@@ -147,5 +151,7 @@ bool FGSTN_LinkFragmentInterpolateTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a fragment absent from the later sample is absent"), FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Gone) == nullptr);
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_Fragment
 
 #endif

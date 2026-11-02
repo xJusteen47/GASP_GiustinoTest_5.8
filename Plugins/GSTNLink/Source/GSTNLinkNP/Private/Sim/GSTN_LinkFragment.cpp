@@ -12,7 +12,8 @@ namespace
 		constexpr uint8 Actions = 1 << 2;
 		constexpr uint8 GrabImmunity = 1 << 3;
 		constexpr uint8 Mash = 1 << 4;
-		constexpr uint8 All = Body | Hand | Actions | GrabImmunity | Mash;
+		constexpr uint8 ExitIgnore = 1 << 5;
+		constexpr uint8 All = Body | Hand | Actions | GrabImmunity | Mash | ExitIgnore;
 	}
 
 	void SerializeLinkState(FArchive& Ar, FGSTN_LinkState& State)
@@ -41,7 +42,7 @@ namespace
 	void SerializeActions(FArchive& Ar, FGSTN_LinkActions& Actions)
 	{
 		Ar << Actions.LastRefusedSerial << Actions.RefusedFrame << Actions.CooldownEndFrame;
-		Ar << Actions.Active.Id << Actions.Active.StartFrame;
+		Ar << Actions.Active.Id << Actions.Active.StartFrame << Actions.Active.Side;
 		Ar << Actions.PendingStart.Frame << Actions.PendingStart.Id;
 		Ar << Actions.Exit.Frame;
 		SerializeVector(Ar, Actions.Exit.Position);
@@ -59,7 +60,7 @@ bool FGSTN_LinkFragment::IsDefault() const
 bool FGSTN_LinkFragment::operator==(const FGSTN_LinkFragment& Other) const
 {
 	return Links == Other.Links && Actions == Other.Actions && GrabImmunityEndFrame == Other.GrabImmunityEndFrame
-		&& MashProcessedFrame == Other.MashProcessedFrame;
+		&& MashProcessedFrame == Other.MashProcessedFrame && ExitIgnorePartner == Other.ExitIgnorePartner && ExitIgnoreEndFrame == Other.ExitIgnoreEndFrame;
 }
 
 void FGSTN_LinkFragment::NetSerialize(FArchive& Ar)
@@ -76,6 +77,7 @@ void FGSTN_LinkFragment::NetSerialize(FArchive& Ar)
 		Mask |= !Actions.IsIdle() ? Presence::Actions : 0;
 		Mask |= GrabImmunityEndFrame != 0 ? Presence::GrabImmunity : 0;
 		Mask |= MashProcessedFrame != 0 ? Presence::Mash : 0;
+		Mask |= ExitIgnoreEndFrame != 0 || !ExitIgnorePartner.IsNull() ? Presence::ExitIgnore : 0;
 		Ar << Mask;
 	}
 	else
@@ -114,11 +116,39 @@ void FGSTN_LinkFragment::NetSerialize(FArchive& Ar)
 	{
 		Ar << MashProcessedFrame;
 	}
+	if (Mask & Presence::ExitIgnore)
+	{
+		bool bSuccess = true;
+		ExitIgnorePartner.NetSerialize(Ar, nullptr, bSuccess);
+		Ar << ExitIgnoreEndFrame;
+		if (!bSuccess)
+		{
+			Ar.SetError();
+		}
+	}
 }
 
 bool FGSTN_LinkFragment::ShouldReconcile(const FGSTN_SyncFragment& Authority) const
 {
-	return !(*this == static_cast<const FGSTN_LinkFragment&>(Authority));
+	const FGSTN_LinkFragment& Other = static_cast<const FGSTN_LinkFragment&>(Authority);
+	if (*this == Other)
+	{
+		return false;
+	}
+	// M7 G1: an optimistic accept (Active, role 1, flag Predicted) is the authority's confirmed link but for the flag, which only the response
+	// clears and which never reaches a machine that does not simulate the target: equal links otherwise are not a misprediction
+	FGSTN_LinkFragment Local = *this;
+	FGSTN_LinkFragment Server = Other;
+	for (const EGSTN_LinkChannel Channel : { EGSTN_LinkChannel::Body, EGSTN_LinkChannel::Hand })
+	{
+		FGSTN_LinkState& Mine = Local.Get(Channel);
+		const FGSTN_LinkState& Theirs = Server.Get(Channel);
+		if (Mine.IsActive() && Mine.Role == 1 && Mine.HasFlag(GSTNLinkFlags::Predicted) && !Theirs.HasFlag(GSTNLinkFlags::Predicted))
+		{
+			Mine.Flags &= ~GSTNLinkFlags::Predicted;
+		}
+	}
+	return !(Local == Server);
 }
 
 void FGSTN_LinkFragment::ToString(FAnsiStringBuilderBase& Out) const
@@ -134,8 +164,8 @@ void FGSTN_LinkFragment::ToString(FAnsiStringBuilderBase& Out) const
 	}
 	if (!Actions.IsIdle())
 	{
-		Out.Appendf(" actions{refused %d@%d cooldown %d active %d@%d pending %d@%d exit %d}", Actions.LastRefusedSerial, Actions.RefusedFrame,
-			Actions.CooldownEndFrame, Actions.Active.Id, Actions.Active.StartFrame, Actions.PendingStart.Id, Actions.PendingStart.Frame, Actions.Exit.Frame);
+		Out.Appendf(" actions{refused %d@%d cooldown %d active %d@%d side %d pending %d@%d exit %d}", Actions.LastRefusedSerial, Actions.RefusedFrame,
+			Actions.CooldownEndFrame, Actions.Active.Id, Actions.Active.StartFrame, Actions.Active.Side, Actions.PendingStart.Id, Actions.PendingStart.Frame, Actions.Exit.Frame);
 	}
 	if (GrabImmunityEndFrame != 0)
 	{
@@ -144,6 +174,11 @@ void FGSTN_LinkFragment::ToString(FAnsiStringBuilderBase& Out) const
 	if (MashProcessedFrame != 0)
 	{
 		Out.Appendf(" mash %d", MashProcessedFrame);
+	}
+	if (ExitIgnoreEndFrame != 0)
+	{
+		Out << " exitignore " << TCHAR_TO_ANSI(*ExitIgnorePartner.ToString());
+		Out.Appendf(" until %d", ExitIgnoreEndFrame);
 	}
 }
 

@@ -43,6 +43,25 @@ FGSTN_LinkRuleResult UGSTN_LinkRequirementLibrary::EvaluateRequest(const FGSTN_L
 	return FGSTN_LinkRuleResult::Accept();
 }
 
+uint8 UGSTN_LinkRequirementLibrary::ComputePayload(const FGSTN_LinkRequestContext& Context)
+{
+	if (Context.Definition == nullptr)
+	{
+		return 0;
+	}
+	for (const TObjectPtr<UGSTN_LinkRule>& Rule : Context.Definition->Rules)
+	{
+		if (Rule != nullptr)
+		{
+			if (const uint8 Payload = Rule->ComputePayload(Context))
+			{
+				return Payload;
+			}
+		}
+	}
+	return 0;
+}
+
 void UGSTN_LinkRequirementLibrary::ResolveDefinitions(const UGSTN_LinkRegistry& Registry, FGSTN_LinkRequestContext& Context)
 {
 	Context.Definition = Registry.FindDefinition(Context.LinkType);

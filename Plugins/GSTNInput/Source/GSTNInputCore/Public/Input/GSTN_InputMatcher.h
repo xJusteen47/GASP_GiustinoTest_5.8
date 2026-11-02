@@ -54,7 +54,7 @@ struct GSTNINPUTCORE_API FGSTN_MatchParams
  * every earlier step looks for its anchor in the MaxGapFrames before the next step's anchor, newest first, backtracking
  * when a later step cannot be completed. A button event used by a later step is not available to an earlier one.
  *
- * Bounded: at most 16 candidates per step, and the search gives up (no match, ensure in development) after 4096 condition
+ * Bounded: at most MaxCandidatesPerStep (32) candidates per step, and the search gives up (no match, ensure in development) after 4096 condition
  * evaluations, so a malformed pattern cannot stall the simulation.
  */
 struct GSTNINPUTCORE_API FGSTN_InputMatcher
@@ -62,8 +62,8 @@ struct GSTNINPUTCORE_API FGSTN_InputMatcher
 	/** Maximum condition evaluations of one match */
 	static constexpr int32 MaxEvaluations = 4096;
 
-	/** Maximum candidates tried per step */
-	static constexpr int32 MaxCandidatesPerStep = FGSTN_InputHistory::MaxEvents;
+	/** Maximum candidates tried per step: an anchor is a button or a stick event, so the larger ring */
+	static constexpr int32 MaxCandidatesPerStep = FMath::Max(FGSTN_InputHistory::MaxButtonEvents, FGSTN_InputHistory::MaxDirectionEvents);
 
 	/** @return true and the match if the pattern is satisfied */
 	static bool Match(const FGSTN_InputPattern& Pattern, const FGSTN_InputHistory& History, const FGSTN_MatchParams& Params, FGSTN_PatternMatch& Out);

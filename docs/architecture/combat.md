@@ -260,7 +260,7 @@ The review showed the history cannot be rebuilt from inputs alone (the server fi
 corrected state), so a **compact event log is part of the combat sync state**:
 
 - `ButtonEvents`: ring of the last 16 events `{Frame, Button, bRelease, bConsumed}`.
-- `DirectionEvents`: ring of the last 16 direction changes `{Frame, StickDir, FacingDir, WorldDir, Zone, bFlick,
+- `DirectionEvents`: ring of the last 32 direction changes (16 until D3b, see input.md "History rings and storage") `{Frame, StickDir, FacingDir, WorldDir, Zone, bFlick,
   WorldYaw}` — a new event when any of the three directions or the zone changes (turning the character or camera with
   the stick held adds one event per 45° sector).
 - Current held mask (the `PrevHeldButtons` of M0).
@@ -878,6 +878,44 @@ A **link** is a relation between two entities, each with a role: `Combat.Link.Mo
 Grabs (M6) are links with the hostile relationship and the grabbed playing the parked role (follows the grabber's
 socket); throws are grabber-role slots. Held objects (13b) are links whose partner is a server-simulated object.
 
+### As built (M6, plugin `GSTNLink`)
+
+Built for grabs, throws and the latch on big enemies; mounts (M7) and held objects (M10) reuse it and are not built. Details, data and
+extension points: [Plugins/GSTNLink/README.md](../../Plugins/GSTNLink/README.md); the spec is `combat-m6-defence-links.md` (plan branch).
+
+- **Plugin, not core.** `GSTNLinkCore` (definitions, rules, state, placers, mash and break math, a fake host), `GSTNLinkGAS` (the type
+  registry, request checks, the grab candidate of the interact probe, anims by role), `GSTNLinkNP` (everything per frame). Optional and off
+  by default; no `GSTNDefence` module is ever listed (a grep gate). The combat core got only neutral seams (snapshot blob slots, a
+  finalize pass, attacker extensions on the resolved hit, the inbox kinds, the tick context's snapshot and running timeline).
+- **State.** One sync fragment (`FGSTN_LinkFragment`, feature id 18), not fields of the core state: two channels (Body, Hand) of
+  `FGSTN_LinkState` (type index, role, phase, partner as `FGSTN_EntityRef`, serial, link frame, end frame, flags, reason, payload, local yaw;
+  21 B of fields per channel), the link actions (refusal, cooldown, active action, pending break, exit), grab immunity and the mash frame. An
+  entity that never linked writes one bit; a live grab is 23 B per side. Type, role and reason are indices from tables built the same way
+  on every machine; the fragment signature is folded into the network version, so a client without the plugin is refused at Hello.
+- **Formation through the pipeline.** A hit whose data names a registered `LinkType` (a `Grab` hit type) is a request. The target's
+  `GrabImmunity` and `LinkRequest` steps run the type's `UGSTN_LinkRule`s on the snapshot of F-1 and accept or refuse; an accepted request
+  writes the target's role at F+1 (outcome applier) and posts a `LinkResponse` that gives the initiator its role at F+2 (serial
+  idempotent). The initiator predicts only a pending request; a refused one whiffs (no hitstop, no response) and clears by timeout. The
+  interact button forms a grab through `Interact.Target.Grab` (the grab type lists the latch as an alternative; kit weights decide).
+- **Parked role.** `UGSTN_LinkedMovementMode` (+ modifier and transition, added to every pawn's Mover at attach): the capsule follows the
+  partner's socket in the simulation; `UGSTN_LinkPresentationComponent` puts the mesh on the partner's live socket; hurtboxes anchor on the
+  partner's baked socket. A non-acting parked role is vetoed by the link tick extension. The latch is the same code with the initiator's
+  role parked and acting.
+- **Breaks only through the watchdog.** `UGSTN_LinkWatchdog` (server, once per engine frame on the latest finalized frame F) evaluates
+  every pair with the type's break rules (leash, own and partner death, hit breaks posted by `LinkBreakOnHit`, mash escape, release,
+  orphans) and posts `LinkCommand{Break}` stamped F to both inboxes; the exit placer (ring by default, at the socket for throws) places the
+  parked side with a collision query and a Mover teleport. Throws end both sides in the simulation.
+- **Grab commands.** `Command.Link.*` slots (grab and release on Interact, pummel, four throws, latch attack) at their own tier (360); a
+  grab cancel window into them; pummel, throws with the command's exit velocity and cooldown, the mash with `Escape`, grab immunity, and the
+  grab gate (weight, `Combat.Part.GrabLocked` from GSTNParts, read by name).
+- **Network cost (measured, F14).** One correction at link start and one at link end on each client that simulates a partner; no unforced
+  correction while the grabber walks, with a host at tick rate (the standalone host of `Tools/GASNPPTest/link_standalone.ps1`); an editor
+  host at 14-20 fps starves the server's input buffer and is not a valid 2 % gate. Host upload with a held link is not measurably higher
+  than without (108-111 against 115-116 KB/s for three pawns and two clients). Bytes per state: section 15.
+- **Differences from the decision above.** No `Combat.Link.Mount`/`Held` yet; links are not "created by the server only" in the sense of a
+  server branch: the target's own pipeline accepts (the same code on every machine) and only breaks are server-decided. Role-only actions
+  are plain bindings on `Combat.Link.Role.*`, as planned.
+
 ## 13. Many enemies (40+)
 
 Two paths with the same Core logic:
@@ -910,8 +948,14 @@ unless a design needs prediction.
 
 - `NetSerialize` delta-aware against `FNetSerializeParams::BaseDeltaStatePtr` (sim proxies already get delta frames).
 - End-frame stamps instead of countdowns (5.5) make an idle entity's state constant: about one bit per frame.
-- History serialized with saturated uint8 deltas, rings capped at 16 events.
+- History serialized with saturated uint8 deltas, rings capped at 16 button and 32 stick events (D3b; 2 and 4 bytes an event on the wire).
 - Minions are outside NPP (section 13).
+- Defence and links (M6), asserted by the fragment tests (`GSTNDefence.NP.Fragment.*`, `GSTNLink.NP.Fragment.*`): an entity with no
+  fragment writes the list's one bit; an idle fragment has a zero-byte payload (framing 25 bits); an ended link keeps its serial (3 B); a
+  raised shield is 17 B (mask 2 + shield group 15); one live link channel is 1 + 22 B (21 B of fields + header), both channels 45 B; every
+  defence group live 87 B, inside the list's payload limit. So idle about 1 bit, a typical active defender or grabber 17-23 B (spec 10:
+  1-2 B idle, 22-27 B active, 21 B per channel raw). Host upload measured in F14 (standalone host, the link spike): no measurable increase
+  with a held link.
 - Parts (M4b): `FGSTN_PartsFragment` writes 3 + N payload bytes (N = part count, 16 at most); inside the sync fragment list that is 13 B at N = 6, 15 B at N = 8 and 23 B at N = 16 (177 bits: 1 flag + count + id + length + payload), within the 24 B ceiling of the plan. An entity without a part set writes the flag bit only (1 bit); a pristine fragment has a zero-byte payload (framing 25 bits). Measured by `GSTNParts.NP.Fragment.*` (log `Saved/Logs/headless-p14-on.log`, lines "Fragment bytes"). The harness does not report host bytes per second, so no with/without-parts rate is recorded.
 
 ## 16. Project integration
@@ -974,6 +1018,13 @@ every frame. Safe rules: UFUNCTION setters and self-unregistering callbacks.
 
 The parts spikes (P0a overlap-part agreement under lag compensation, P0c fragment encoding and bytes, ricochet re-measure) are in `docs/notes/m4b-spike-report.md`.
 
+### 17d. M6 spike results
+
+The defence and link spikes are in `docs/notes/m6-spike-report.md`: S0 seam audit (no seam worse than audited), S5 shield bubble as an extra
+hurtbox (failed for a tilting shield; passes after the owner's fixed-bubble decision of 2026-10-26). S1 (the link spike, variant P) was
+read in F10-F14 from the harness: formation, parked follow and break on every world in the three pairings, one correction at link start
+and end; at 2 % loss with a host at tick rate no unforced correction (HANDOVER 61).
+
 Parts (P9): a part's damage is `Damage x (1 - Thickness) + DeepDamage x Thickness` once the penetration band lets the hit through (`DeepDamage` defaults to the hit's `Damage`, `Thickness` to 0), so hardness decides whether a hit gets in and thickness how deep it goes.
 
 ## 18. Roadmap
@@ -990,7 +1041,7 @@ where the implementation differs. Milestones are sequential: each spec assumes t
 | M4 | Hits | Hurtboxes, hitboxes, snapshot, inbox, resolution pipeline, damage and meter gain, hitstop (Mover freeze, wall lock), hitstun/knockback/DI, teams and variants, lag compensation, hit presentation, dodges (intangibility). | [combat-m4-hits.md](combat-m4-hits.md) |
 | M4b | Destructible parts | `Plugins/GSTNParts` (Core, GAS, NP, Editor): part sets, penetration table, break effects, `PartResolve` step, sync fragment, restore, grab gate, thickness, validator and balance report, sample content. **Status: logic complete, presentation P10-P12 pending.** | plugin README, `docs/notes/m4b-doc-deltas.md` |
 | M5 | Editor | Timeline editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m9.md](combat-m5-m9.md) |
-| M6 | Defence and links | Shield, parry, tech, SDI; link system spike, links, grabs/throws. | [combat-m5-m9.md](combat-m5-m9.md) |
+| M6 | Defence and links | Shield, parry, tech, SDI; link system spike, links, grabs/throws. `Plugins/GSTNDefence`, `Plugins/GSTNLink` (Core, GAS, NP; optional), test content, harness suites, and a test-only extension plugin. **Status: done (F0-F14, HANDOVER 61); open items listed there.** | [combat-m5-m9.md](combat-m5-m9.md), the plugin READMEs, `docs/notes/m6-doc-deltas.md` |
 | M7 | Piggyback and pair moves | Mount link, riding mode, role-only bindings, carry load, pair moves. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M8 | Minions | Server subsystem, LOD, compact replication. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M9 | Stock GAS adapter | Optional. | [combat-m5-m9.md](combat-m5-m9.md) |

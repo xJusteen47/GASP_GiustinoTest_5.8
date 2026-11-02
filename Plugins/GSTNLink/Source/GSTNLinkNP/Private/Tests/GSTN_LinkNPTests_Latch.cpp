@@ -22,6 +22,10 @@
 #include "Sim/GSTN_LinkTickExtension.h"
 #include "Timeline/GSTN_CombatTimeline.h"
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_Latch
+{
+
 using namespace GSTNLinkNPTest;
 
 namespace
@@ -286,5 +290,7 @@ bool FGSTN_LinkNPLatchActingTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("a hitstop frame crosses none"), FGSTN_LinkOutcomeKeys::GetCrossedFrames(In, Out, 310, Previous, Current));
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_Latch
 
 #endif

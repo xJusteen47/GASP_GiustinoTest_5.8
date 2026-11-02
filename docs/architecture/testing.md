@@ -111,3 +111,38 @@ From `docs/notes/test-content-names.md` (`setup_gas_assets.run(combat_input=True
 ### P14 sweep and the parts sample content
 
 `Tools/GAS/setup_parts_sample_content.py` writes the plugin-owned sample content under `/GSTNParts/Samples` (editor Python or headless `UnrealEditor-Cmd ... -run=pythonscript -script=...`; idempotent, rerunning gives a byte-identical part set asset) and `validate_combat_content.py --parts` runs the validators over it (one log line "validation: N assets, E errors, W warnings"). The M4b closing sweep, all at the harness level with the editor's own PIE settings: `SUITE_PARTS` in listen (3 players, one process) and dedicated (2 clients) at `net(60, 15, 0)` and `net(60, 15, 2)`; `SUITE_DEFAULT` in listen with the plugin enabled, then with it disabled in the `.uproject` (rebuild, run, re-enable, rebuild). A scenario that is red once is re-run once in a fresh PIE before it is called red. The first launch of the editor after a build must be left alone for about a minute after the log line "Editor ready": a Rider script call that is cancelled or that arrives while the editor still loads crashed the editor twice (RiderLink script executor). The harness reports no bytes per second; the fragment sizes come from the `GSTNParts.NP.Fragment.*` tests (log lines "Fragment bytes").
+
+### Defence and link suites (M6: `SUITE_DEFENCE`, `SUITE_LINK`)
+
+`Tools/GASNPPTest/defence_scenarios.py` (`SUITE_DEFENCE`, 13: shield block, bubble, out of shield, break, mode off, grab on a shield,
+parry from the shield and from a move window, landing bounce and get-up, ground and wall tech, SDI) and `link_scenarios.py` (`SUITE_LINK`,
+19: `link_spike`, `link_rollback` and `link_break_distance` in the three pairings host grabs client / client grabs host / client grabs
+client, `grab_immunity`, `grab_throw`, `grab_mash`, `grab_interact`, `grab_gate`, `throw_at_enemy`, `latch_big_enemy` in three pairings and
+its bystander variant). Both need the plugins enabled and the saved test content (below). Each scenario needs a FRESH PIE:
+`defence_batch(names, lag, jitter, loss, report=..., module=None or link_scenarios)` ends and restarts PIE before each (play settings as
+the editor has them) and writes the report under `Saved/Logs`; poll `defence_batch_report()`.
+
+- **Pairings.** The host takes either role: the host has no prediction and no wire to itself, so the judged corrections are on the clients
+  (exactly one at link start and one at link end on each client that simulates a partner, none while the grabber walks). Presentation is
+  judged on the grabber's own world AT THE SAME SIM FRAME against the authority (the frame that world shows the grabber at; the latch
+  check does the same for the rider); the time-aligned reading (one constant delay removed) is a note only.
+- **Dedicated server.** `setup_editor(True, 'dedicated', 2)` and PIE with `netMode=client, dedicatedServer=true, players=2`: two pawns per
+  world, no host pawn, so the pairings that name the host do not apply. `defence_batch`'s ready check accepts it.
+- **2 % loss needs a host at tick rate.** In one process the editor runs the three worlds at 20-40 fps (game-thread bound) and an editor
+  host alone at about 14 fps, so long host frames starve the server's input buffer (HANDOVER 59). For the link spike at 2 % use the
+  standalone host: `powershell -File Tools/GASNPPTest/link_standalone.ps1 -Loss 2 -Report <dir>/<name>.log -Tag <tag> -NullRhi`
+  (`-PrintReconciles` for every client reconcile in the client logs, `-NoLink` for the bytes/s control). It launches a standalone listen
+  host (a game process running `link_standalone.py` through `-ExecCmds`) and two client processes, runs a warm-up spike (not judged: a
+  fresh uncooked client pays one 270-310 ms frame at its first dash) and the three pairings, and reports the host's frame statistics
+  (97-101 fps there) and its upload over the held-link window (`UGSTN_GASNPPTestComponent::GetNetDriverTotals`). Only `link_mp`'s
+  scenarios run that way: the rest of the suites read the authority's world from the editor's Python.
+- **Content.** `Tools/GAS/setup_defence_link_content.py` writes the plugins' test content (Blueprint children of the native shield,
+  counter, tech, get-up and link moves; the link types; the six `KIT_Test_Defence*` / `KIT_Test_Link*` kits) and the defence and link
+  steps of `/GSTNCombat/Rules/GSTN_CombatRules_Standard`. Idempotent (a rerun saves nothing), refuses to save a package that was already
+  dirty, run headless or in a fresh editor, never in a harness editor. `validate_defence_content.py` checks it.
+- **Connect refusal.** A client with a different set of combat sync fragments is refused at Hello (the fragment signature is part of the
+  network version). Check with two standalone processes, one started with `-DisablePlugins=GSTNLink`: the host logs "connecting with
+  invalid version", the client `OutdatedClient` (F14: `Saved/Logs/f14-sweep/refusal-linkoff-*.log`). One-process PIE cannot run it.
+- **Extension test.** `Plugins/GSTNExtensionTest` (test only) adds a link type and a defence step from outside both plugins; enable it in
+  the local `.uproject` to build and run `GSTNExtTest.*`.
+- **Bytes.** `GSTNDefence.NP.Fragment.*` and `GSTNLink.NP.Fragment.*` assert the sizes of combat.md section 15.

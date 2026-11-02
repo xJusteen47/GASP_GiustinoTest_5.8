@@ -15,6 +15,10 @@
 
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 
+// One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
+namespace GSTNLinkNPTests_Content
+{
+
 namespace GSTNLinkContentTest
 {
 	/** The plugin's content root: plugin-owned, so the test needs no project content */
@@ -113,5 +117,7 @@ bool FGSTN_LinkContentSampleAssetsValidTest::RunTest(const FString& Parameters)
 	}
 	return true;
 }
+
+} // namespace GSTNLinkNPTests_Content
 
 #endif
