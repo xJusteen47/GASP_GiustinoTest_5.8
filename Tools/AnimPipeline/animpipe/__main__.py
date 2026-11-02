@@ -10,6 +10,7 @@
     python -m animpipe check <card.json>        the three check classes on the card's built anim (animpipe/checks.py)
     python -m animpipe review <card.json> [--hitstop=8] [--at=<active frame>] [--force]   build + check + in-game render, gated:
                                                 no render while a blocking check fails (--force renders anyway)
+    python -m animpipe casc-export|casc-import|casc-revert|casc-diff ...   card <-> Cascadeur, sparse keys (animpipe/cascadeur.py)
 
 Every command writes its full result to Saved/AnimPipeline/animpipe/<name>_<cmd>.json and prints at most 5 lines."""
 import json, os, sys, time
@@ -181,6 +182,11 @@ def main():
     elif cmd == "probe":
         r = _ue_py("probe", name=args[0], out=os.path.join(OUT, f"{args[0]}_probe.json").replace("\\", "/"))
         print(r, os.path.join(OUT, f"{args[0]}_probe.json"))
+    elif cmd.startswith("casc-"):
+        from animpipe import cascadeur as K
+        {"casc-export": lambda: K.export_cmd(args[0]), "casc-import": lambda: K.import_cmd(args[0], opt),
+         "casc-revert": lambda: K.revert(args[0], args[1] if len(args) > 1 else None),
+         "casc-diff": lambda: K.diff(args[0], args[1])}[cmd]()
     elif cmd == "card":
         from animpipe.card import load, key_frames, windows
         c = load(args[0])
