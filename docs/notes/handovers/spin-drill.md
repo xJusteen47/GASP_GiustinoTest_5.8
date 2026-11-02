@@ -62,3 +62,23 @@ after one checkpoint.
   = `FGSTN_BoreTuning::RehitIntervalFrames`, `HitsLanded`, damage scale), launch and pop velocities (`ComputeLaunchVelocity`, instant effect),
   outbox events, Launch refresh; harness scenarios of the plan; D10 moving target (corrections per latch, stop condition > 3).
 - Cost of this thread (estimate): one Opus session, about 140k context, two builds of ~20 min; within the 150k rule.
+
+## SD-03 (laptop, 2026-11-02): D9 part 2 and D10 (bore, launch, pop, per-latch anchor), latch flake per hit
+
+- Commits on feature/gas-npp-5.8: 2ebf25d "Spin and drill D9 part 2 and D10" + this one (handover, per-hit latch check). Deltas:
+  spin-drill-doc-deltas.md "D9, part 2 and D10" (design vs built). Decisions 5 (drill type in code, Immunity.Drill until D12) and 6 applied.
+- Built: `FGSTN_BoreTrack` + `FGSTN_SpinTimelines::MakeBore`; `FGSTN_BoreTrackHook` (holds seat/bore frame, stamps crouch 0xD1);
+  `UGSTN_GA_DrillBore` (forced at the seat's first frame, found by its track; `FGSTN_SpinDrillKitExtension::BoreAbility` adds it to the kit's
+  triggered abilities); `UGSTN_GE_DrillLaunch` / `UGSTN_GE_DrillPop` (falling mode, driller's up as normal); flag `Popped`; Launching ends with
+  the bore's timeline; per-latch anchor written once through GSTNLink `SetAnchorOverride` (driller root in target root space, view snapshot);
+  outbox Event.Drill.Latched/Detached/Launched/GroundLag. D10 = the link's parked transform + this anchor (no extra code).
+- Gates (Saved/SD03, scripts build.ps1, run_harness.ps1, harness_driver.py): on build Succeeded, headless 980/0 (975 + 5 `GSTNSpinDrill.NP.Bore.*`);
+  off (SpinDrill+Piggyback disabled) build Succeeded, headless 933/0; no ensure; .uproject restored (committed copy, CRLF).
+- Latch flake, 10 runs (Saved/Logs/sd-03/latchb*): attack window steps 3,3,3,4,6,4,3,3,3,4 -> check now per hit, limit 3 steps/hit
+  (`LATCH_STEPS_PER_HIT`, link_scenarios.py). Separate flake seen once: "no unforced reconcile while the enemy walks" = 1 (run 01). Not fixed.
+- OPEN: (1) SUITE_SPIN fails whole (no spin on any world) in this harness: never run before; IC_GASNPP_Test has no Spin/Crouch buttons and the
+  spin prepare_editor leaves duplicate Spin bindings in KIT_Test_Hits for later suites (run it last or in its own editor). (2) Drill harness
+  scenarios of the plan (latch static multi-hit, early pop, launch, target destroyed, moving enemy, hit while latched) not written: they need (1).
+  (3) Launch/pop velocity vs the link's exit placement at F+1 unverified in PIE. (4) KeepPlunging still ends next frame. (5) Bore damage scale: D12.
+- Cost: one Opus thread, ~140k context, 3 UBT builds + 2 headless + 2 harness editor runs (~60 min machine): medium-high.
+- Next: fix the spin harness input (IC buttons) and write the six drill scenarios, then D12.
