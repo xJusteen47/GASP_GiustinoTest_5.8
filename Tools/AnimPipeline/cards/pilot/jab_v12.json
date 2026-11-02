@@ -8,6 +8,8 @@
  "faf_game": 19,
  "reference": "refs/mario_jab1",
  "effector": "middle_01_l",
+ "co_motion_skip": ["arm_r"],
+ "_co_motion_note": "Owner decision 4 (02/11): the rear guard fist stays fixed at the chin, so arm_r is glued to the chest on purpose.",
  "_poses_note": "No owner Step file for the jab: the poses are the key frames of the v12 model (v12_motion.py, Mario windows), sampled from AS_Pilot_JabV12.",
  "poses": [
   {

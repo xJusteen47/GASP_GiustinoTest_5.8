@@ -189,3 +189,15 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   gambe), busto che si chiude per gradi, mano villain che si apre da 4 a 12. Clearance: resta l'avambraccio dx nella testa
   -5,6 cm al 12-13 (posa dell'owner su un manichino con proporzioni diverse). Output `overlord_dair_v3_lato.png`,
   `overlord_dair_v3_hitstop_vs_whiff.mp4`. Costo totale del thread circa $9-11.
+
+## Revisione pipeline (2026-11-02, dopo il feedback owner sul dair v2)
+- Doc: `docs/notes/reviews/anim-pipeline-review-2026-11-02.md` (cosa è scappato, tagli di costo, piano A/B/C).
+- **Bug**: il blocco `clearance` di `animpipe check` era sempre PASS (`clearance.py` non stampa verdetto né exit code).
+  Ora il verdetto viene da `clearance.json`: FAIL se gap < 0, 0-2 cm solo riportato, esenzioni per coppia nella scheda.
+- `hitstop_snap`: rotazione di tutte le ossa foglia (testa 20 cm, punte piedi 8, punte dita 2,5), non solo la testa.
+- Nuovo blocco **`co_motion`** (default su ogni mossa): nello startup nessun arto fermo sul genitore (< 1 cm/frame per 3+
+  passi) mentre il corpo si muove (> 3 cm/frame). Gambe piantate saltate; `co_motion_skip` nella scheda (jab: `arm_r`).
+- Provati solo su dati sintetici (niente editor qui). **Soglie da tarare** (thread A): atteso dair v2 FAIL, v3 FAIL solo
+  clearance finché non si esentano i contatti delle braccia conserte e si risolve l'avambraccio nella testa.
+- Prossimo: thread A (Sonnet, taratura + `animpipe review` + fix `animpipe poses`), poi C (proporzioni), poi B (legibility).
+- Costo stimato: Opus ~20 chiamate, contesto ~70k, circa $2-3; niente subagenti.
