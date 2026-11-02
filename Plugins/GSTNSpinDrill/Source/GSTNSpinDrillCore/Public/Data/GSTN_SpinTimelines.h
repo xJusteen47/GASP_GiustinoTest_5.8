@@ -47,9 +47,12 @@ struct FGSTN_DiveTimelineParams
 	/** The longest dive; the dive ends earlier on the ground (lag), on a bounce, or when crouch is released */
 	int32 MaxFrames = 120;
 
-	/** The tip: a sphere below the feet, along the character's down (the dive goes along gravity and the character stands along it) */
+	/** The tip: a sphere below the feet, along the character's down (the dive goes along gravity and the character stands along it).
+	    TipDepth is measured from the Root hitbox space, which is the capsule CENTRE (88 cm above the feet on the sample character), not the feet:
+	    at 20 the sphere ended 23 cm above the feet and never reached a body the capsule lands on (SD-08). At 100 it reaches 57 cm below the
+	    feet, so it overlaps the target's upper body once the capsules touch */
 	float TipRadius = 45.f;
-	float TipDepth = 20.f;
+	float TipDepth = 100.f;
 
 	float Damage = 4.f;
 	float BaseKnockback = 200.f;
@@ -68,9 +71,10 @@ struct FGSTN_BoreTimelineParams
 	/** Keep equal to the kit tuning's FGSTN_BoreTuning::RehitIntervalFrames: the hitbox carries it, the tuning documents it */
 	int32 RehitIntervalFrames = 6;
 
-	/** The tip, as the dive's */
+	/** The tip, as the dive's. Latched, the driller's centre sits 100 cm above the target's root (UGSTN_DrillLinkType::DrillerOffset), so the
+	    re-hit sphere is centred on the target */
 	float TipRadius = 45.f;
-	float TipDepth = 20.f;
+	float TipDepth = 100.f;
 	float Damage = 2.f;
 	float BaseKnockback = 0.f;
 	float KnockbackAngleDeg = 90.f;

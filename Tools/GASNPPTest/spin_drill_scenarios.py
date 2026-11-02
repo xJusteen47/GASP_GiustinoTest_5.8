@@ -187,9 +187,10 @@ def spin_steps(client, t, clockwise=True):
 
 
 def jump_steps(client, t):
-    # Held for 0.1 s, not a one-frame press_input: at -nullrhi editor rates a one-frame injection was lost or answered up to 0.5 s late
-    # (SD-08 probe: no jump at all before 0.8 s in three latch scenarios), which moved every later step of the scenario off its jump
-    return [(t, lambda: ('jump', g.hold(client, 'jump', (1.0, 0.0, 0.0)))), (t + 0.1, lambda: ('jump let go', g.release(client, 'jump')))]
+    # Held for 0.25 s, not a one-frame press_input: at -nullrhi editor rates a one-frame injection was lost or answered up to 0.5 s late
+    # (SD-08 probe: no jump at all before 0.8 s in three latch scenarios), which moved every later step of the scenario off its jump. A 0.1 s
+    # hold still failed in a run where the editor ticked every ~0.1 s (one frame again): 0.25 s spans at least two editor frames
+    return [(t, lambda: ('jump', g.hold(client, 'jump', (1.0, 0.0, 0.0)))), (t + 0.25, lambda: ('jump let go', g.release(client, 'jump')))]
 
 
 def _apply_kit():
