@@ -25,3 +25,23 @@ Every card and every review pass applies these; the checks that enforce one are 
   line (`wrist_out`); hands in the owner's Cascadeur files are default, never copy them.
 - **No interpenetration** accepted (`clearance`): fix forearms/head/crossed arms rather than accept them.
 - **Feet**: side by side unless the pose says otherwise; check the back view for crossed ankles and frog knees.
+
+## Disciplina di giro (plan 02/11 §8)
+- Un giro = una modifica dichiarata (parti x frame) + `animpipe diff` + `review`; il resto resta sotto lock.
+- Massimo 2 tentativi su una stessa correzione, poi handover con ciò che serve (regola 5 del progetto).
+- Prima di toccare una parte si legge il blocco `approved`; se la correzione chiesta tocca una parte bloccata si chiede
+  all'owner (una domanda sola) invece di sbloccare.
+
+## Blocchi di scheda per pose approvate e regole
+- `approved` `[{frames, parts, ref, by, date, why}]`: pose accettate dall'owner. Parti: `arm_l arm_r leg_l leg_r trunk head
+  hand_l hand_r`. `ref` e' la scheda di riferimento (path sotto `cards/`); `load()` ferma `build/check/review` se le pose
+  `author` ai frame bloccati differiscono dal `ref` oltre 0,5 cm / 1 grado (errore con frame, parte, campo). Il lock non
+  scade con la versione: la scheda v5 nasce con gli `approved` di v4. Si supera solo con `--unlock part@frame` E togliendo la
+  voce dalla scheda con un `why`.
+- `animpipe approve <scheda> --frames=13,14 --parts=leg_l,leg_r --why="..."`: aggiunge la voce (`ref` = la scheda stessa) e
+  scrive lo snapshot `cards/<kit>/approved/<move>.json`.
+- `animpipe diff <scheda> [--vs=<scheda>]`: spostamento massimo per frame x parte rispetto alla versione precedente; da
+  incollare nell'handover di ogni giro ("cambiato: ...; intatto (lock): ...").
+- `rules` `{frame_0, knees_front, feet_side_by_side, villain_hand}`: le regole di sopra come check bloccanti, con le soglie
+  nel blocco (`frame_0`: `charge, min_cm, max_frac`; `knees_front`: `frames, tol`; `feet_side_by_side`: `frames, min_cm`;
+  `villain_hand`: `frames, min_deg`). Blocco assente = check non eseguito. Soglie da tarare sul desktop (dair v4, jab v12).

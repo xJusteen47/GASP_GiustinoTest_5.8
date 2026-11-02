@@ -122,7 +122,11 @@ def _frame(k):
 PROFILE_W = {"charge_long": (0.6, 0.12), "arrive_1_2": (0.12, 0.6), "hold_recoil": (1 / 3, 1 / 3), "limb_led_recovery": None}
 # card part -> control name fragments (CR_Mannequin_Body); a part lags by shifting its interior keys later
 PIN_TOL = {"Location": 1.0, "Rotation": 2.0}                    # cm, degrees
-PART_CTRLS = {"chest": ("spine_05", "chest", "spine_04"), "head": ("head", "neck"), "forearm": ("lowerarm",), "hand": ("hand_",)}
+PART_CTRLS = {"chest": ("spine_05", "chest", "spine_04"), "head": ("head", "neck"), "forearm": ("lowerarm",), "hand": ("hand_",),
+              "arm_l": ("upperarm_l", "lowerarm_l", "hand_l"), "arm_r": ("upperarm_r", "lowerarm_r", "hand_r"),
+              "leg_l": ("thigh_l", "calf_l", "foot_l"), "leg_r": ("thigh_r", "calf_r", "foot_r"),
+              "hand_l": ("hand_l", "hand_l_ik"), "hand_r": ("hand_r", "hand_r_ik"),
+              "leg_l_ik": ("foot_l_ik",), "leg_r_ik": ("foot_r_ik",)}   # locks (animpipe/locks.py) read these; part_delays use the first four
 
 
 def _seg_profile(segments, f):

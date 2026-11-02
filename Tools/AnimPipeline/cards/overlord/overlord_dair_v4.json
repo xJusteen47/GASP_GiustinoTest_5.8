@@ -1432,5 +1432,21 @@
  "anim_active": [
   15,
   17
+ ],
+ "approved": [
+  {
+   "frames": [
+    13,
+    14
+   ],
+   "parts": [
+    "leg_l",
+    "leg_r"
+   ],
+   "ref": "overlord/overlord_dair_v4.json",
+   "by": "owner",
+   "date": "2026-11-02",
+   "why": "owner 02/11: ginocchia a rana giuste"
+  }
  ]
 }

@@ -17,6 +17,9 @@ Schema (cards/<kit>/<kit>_<move>_vN.json, see cards/README.md):
   hitstop_blend [{frame, toward, amount 0-1, match: [control name fragments] | [] = all, why}]: the key at `frame` moves
                `amount` of the way to the key at `toward` on the matched controls (after `edits`). Fixes a pop out of a
                hitbox-active frame (check hitstop_snap): the travel moves before the hitbox opens or later in the recovery.
+  approved     [{frames, parts, ref (card under cards/), by, date, why}]: poses the owner accepted; load() stops when the
+               card's author poses at those frames/parts differ from `ref` (animpipe/locks.py, --unlock part@frame skips)
+  rules        {frame_0|knees_front|feet_side_by_side|villain_hand: thresholds}: README rules as checks (checks.py)
   hitstop_max_cm  per-bone limit of the hitstop_snap check (default 10 cm per anim frame); the check is on for every move
 """
 import csv, json, os
@@ -29,7 +32,10 @@ PROFILES = {"charge_long", "arrive_1_2", "hold_recoil", "limb_led_recovery"}
 REQUIRED = ("move", "class", "anim", "fps", "timing_csv", "poses")
 
 
-def load(path):
+UNLOCK = set()    # {(part, frame)} set by `--unlock part@frame` in __main__: the approved guard skips those pairs
+
+
+def load(path, unlock=None):
     c = json.load(open(path if os.path.isabs(path) else os.path.join(TOOLS, path)))
     miss = [k for k in REQUIRED if k not in c]
     if miss:
@@ -40,6 +46,9 @@ def load(path):
     frames = [p["frame"] for p in c["poses"]]
     if frames != sorted(set(frames)):
         raise ValueError(f"card {path}: pose frames must be unique and ascending: {frames}")
+    if c.get("approved"):
+        from animpipe import locks
+        locks.guard(c, path, UNLOCK if unlock is None else unlock)
     return c
 
 

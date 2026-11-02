@@ -7,6 +7,8 @@
            co_motion (no limb glued to the trunk through the startup while the body moves).
   measure  reported, never block: motion_curves (+ motion_ref against the card's reference), twist_chain, motion_check
            (weight, overlap, balance, pose rules), spacing of the built curves, distance from the source poses.
+  rules    (opt-in) the README's owner rules as blocking checks, declared in the card under `rules` with their thresholds;
+           an absent block is not run: frame_0, knees_front, feet_side_by_side, villain_hand (see RULES below).
   eye      quality the owner judges on the review grid; listed, not computed.
 
 The existing scripts run unchanged as subprocesses, each one's output goes to <OUT>/<move>_check/<check>.txt; this
@@ -199,6 +201,82 @@ def _spacing(F, segs, eff):
     return out
 
 
+# README owner rules as checks (plan 02/11 §5). Each takes the bone dump F (list of {bone: xyz}, component space, X left,
+# Y forward, Z up) and the card's thresholds for it; absent from card["rules"] = not run. THRESHOLDS ARE A FIRST GUESS:
+# calibrate on the desktop with dair v4 and jab v12 (both must pass without new exemptions) before trusting a FAIL.
+PART_END = {"arm_l": "hand_l", "arm_r": "hand_r", "leg_l": "foot_l", "leg_r": "foot_r", "trunk": "spine_05", "head": "head"}
+
+
+def _dist(a, b):
+    return float(np.linalg.norm(a - b))
+
+
+def rule_frame_0(F, idle, p):
+    """frame_0: "frame 0 breaks clearly from the idle but is not yet the charge". Per part end bone, the distance from
+    the idle pose must be >= min_cm and <= max_frac of the way idle -> frame `charge`. p: {charge, min_cm, max_frac,
+    parts?}. `idle` is a bone dict of the idle pose (idle_neutral dump frame 0 by default, see run)."""
+    parts = p.get("parts", list(PART_END))
+    bad, rows = [], []
+    for part in parts:
+        b = PART_END[part]
+        d0 = _dist(F[0][b], idle[b])
+        path = _dist(F[p["charge"]][b], idle[b])
+        frac = d0 / path if path > 1e-6 else 0.0
+        rows.append(f"{part} {d0:.1f} cm {frac:.0%}")
+        if d0 < p["min_cm"] or (path >= p["min_cm"] and frac > p["max_frac"]):
+            bad.append(part)
+    return not bad, "frame 0 vs idle: " + ", ".join(rows) + f" (min {p['min_cm']} cm, max {p['max_frac']:.0%} of the way to {p['charge']})" + (f"; out: {', '.join(bad)}" if bad else "")
+
+
+def rule_knees_front(F, p):
+    """knees_front: at p["frames"] both knees (calf bones) stay in front of the pelvis (y >= pelvis y - tol, default 0)."""
+    tol = p.get("tol", 0.0)
+    bad = [(f, s, round(float(F[f]["calf_" + s][1] - F[f]["pelvis"][1]), 1)) for f in p["frames"] for s in "lr"
+           if F[f]["calf_" + s][1] < F[f]["pelvis"][1] - tol]
+    return not bad, ("knee behind the pelvis (frame, side, dy cm): " + ", ".join(map(str, bad))) if bad else f"knees in front on {p['frames']} (tol {tol})"
+
+
+def rule_feet_side_by_side(F, p):
+    """feet_side_by_side: at p["frames"] the ankles are >= min_cm apart sideways (x of foot_l minus foot_r, the left foot
+    is on +X) and never crossed (negative separation)."""
+    seps = {f: round(float(F[f]["foot_l"][0] - F[f]["foot_r"][0]), 1) for f in p["frames"]}
+    crossed = [f for f, v in seps.items() if v < 0]
+    narrow = [f for f, v in seps.items() if 0 <= v < p["min_cm"]]
+    msg = "ankle separation " + ", ".join(f"{f}: {v}" for f, v in seps.items()) + f" cm (min {p['min_cm']})"
+    return not (crossed or narrow), msg + (f"; crossed {crossed}" if crossed else "") + (f"; too close {narrow}" if narrow else "")
+
+
+def rule_villain_hand(F, p):
+    """villain_hand: at p["frames"] the hand breaks the forearm line at the wrist by >= min_deg, measured on the bones
+    (angle between lowerarm->hand and hand->middle_01), so a build that loses the bend fails even if the card asks for it."""
+    sides = p.get("sides", "lr")
+    out, bad = [], []
+    for f in p["frames"]:
+        for s in sides:
+            a = F[f]["hand_" + s] - F[f]["lowerarm_" + s]
+            b = F[f]["middle_01_" + s] - F[f]["hand_" + s]
+            ang = math.degrees(math.acos(max(-1.0, min(1.0, float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))))))
+            out.append(f"{f}{s} {ang:.0f}")
+            if ang < p["min_deg"]:
+                bad.append(f"{f}{s}")
+    return not bad, "wrist angle (deg) " + ", ".join(out) + f" (min {p['min_deg']})" + (f"; straight at {', '.join(bad)}" if bad else "")
+
+
+def _idle_bones(name="idle_neutral"):
+    return _bones(name)[0]
+
+
+def run_rules(c, F):
+    """{rule: (ok, line)} for the rules declared in the card; undeclared ones are not run."""
+    r, out = c.get("rules", {}), {}
+    if "frame_0" in r:
+        out["rule_frame_0"] = rule_frame_0(F, _idle_bones(r["frame_0"].get("idle", "idle_neutral")), r["frame_0"])
+    for name, fn in (("knees_front", rule_knees_front), ("feet_side_by_side", rule_feet_side_by_side), ("villain_hand", rule_villain_hand)):
+        if name in r:
+            out["rule_" + name] = fn(F, r[name])
+    return out
+
+
 def run(path, src=False):
     from animpipe.card import segments
     c = load(path)
@@ -231,6 +309,7 @@ def run(path, src=False):
     sides = "".join(s for s in "lr" if f"foot_{s}_ik_ctrl" in c.get("planted", ["foot_l_ik_ctrl", "foot_r_ik_ctrl"]))
     res["block"]["planted_feet"] = _planted(F, exempt.get("planted", set()), sides)
     res["block"]["fists"] = _fists(F, c.get("fists", ["l", "r"]), exempt.get("fists", set()))
+    res["block"].update(run_rules(c, F))
     Q = _quats(take)
     res["block"]["hitstop_snap"] = _hitstop_snap(F, w, float(c.get("hitstop_max_cm", HITSTOP_MAX)), exempt.get("hitstop_snap", set()), Q)
     # a planted foot is still on purpose: its leg is not judged

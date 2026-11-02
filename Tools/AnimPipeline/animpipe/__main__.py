@@ -7,6 +7,9 @@
     python -m animpipe build <card.json>        card -> sparse keys + tangents on the rig -> AnimSequence at the card fps
     python -m animpipe trails <card.json>       motion trails, one composite image (3 views, build over source)
     python -m animpipe poses <card.json> [--frames=] [--take=] [--over=]   pose checkpoint grid (one image)
+    python -m animpipe approve <card.json> --frames=13,14 --parts=leg_l,leg_r --why="..."   lock accepted poses (cards/<kit>/approved/)
+    python -m animpipe diff <card.json> [--vs=<card.json>]      author-pose displacement per frame x part vs the previous version
+    (any card command) --unlock=leg_l@14,arm_l@3   skip the approved guard for those part@frame pairs, one line printed each
     python -m animpipe check <card.json>        the three check classes on the card's built anim (animpipe/checks.py)
     python -m animpipe review <card.json> [--hitstop=8] [--at=<active frame>] [--force]   build + check + in-game render, gated:
                                                 no render while a blocking check fails (--force renders anyway)
@@ -155,6 +158,9 @@ def review(path, opt):
 def main():
     cmd, args = sys.argv[1], [a for a in sys.argv[2:] if not a.startswith("--")]
     opt = dict((a[2:].split("=", 1) + [""])[:2] for a in sys.argv[2:] if a.startswith("--"))
+    if opt.get("unlock"):
+        from animpipe import card, locks
+        card.UNLOCK.update(locks.parse_unlock(opt["unlock"]))
     if cmd == "roundtrip":
         roundtrip(args[0], args[1], opt)
     elif cmd == "tangent":
@@ -183,7 +189,18 @@ def main():
     elif cmd == "card":
         from animpipe.card import load, key_frames, windows
         c = load(args[0])
-        print(f"card {c['move']} OK: keys {key_frames(c)} windows {windows(c)}")
+        try:
+            w = windows(c)
+        except OSError:
+            w = "n/a (timing CSV not found here)"
+        from animpipe.locks import timing_line
+        print(f"card {c['move']} OK: keys {key_frames(c)} windows {w}; approved {len(c.get('approved', []))}; {timing_line(c)}")
+    elif cmd == "approve":
+        from animpipe.locks import approve
+        approve(args[0], opt["frames"].split(","), opt["parts"].split(","), opt["why"], opt.get("by", "owner"))
+    elif cmd == "diff":
+        from animpipe.locks import diff
+        diff(args[0], opt.get("vs"))
     else:
         print(__doc__)
 
