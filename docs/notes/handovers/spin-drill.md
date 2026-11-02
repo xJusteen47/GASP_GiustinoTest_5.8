@@ -110,3 +110,28 @@ after one checkpoint.
   after `prepare_editor`; try applying in `defence_batch`'s ready phase. (3) Only if 1 and 2 fail: the stick rotation (IA_Move through
   IC_GASNPP_Test) does not reach the combat input buffer; probe by `get_shown_drill_text` plus a log of the slot table.
 - Estimated cost: Sonnet 5.5, ~100-110k context tokens, 6 editor runs (~25 min machine). Next work: hold-to-crouch (new thread, approved by owner).
+
+## SD-05 (laptop, 2026-11-02): why no spin started (two real bugs, fixed); drill scenarios written, SUITE_SPIN still red
+
+- Root cause of "no spin anywhere" (not the harness): (1) `MakeDefaultSpinBindings` tied the cancel and the air spin (1 required tag each):
+  the loadout compile reports it as a binding conflict ERROR and refuses the whole kit (the "arbitrary choice" lines of SD-04 were the refusal,
+  revision 0, kit None). Now a ground and an air cancel per command (9 bindings), each one tag above the spin it competes with. (2) The spin,
+  cancel, dive and bore abilities called `SetAssetTags(...)` and dropped `Ability.Timeline` from `UGSTN_GA_BaseCombat`: the compile took them
+  for plain abilities, the command activated them, the combat tick never started the timeline ("not adopted within 2 frames"). Broke the
+  spin in the game too, not only in tests. Both pinned in `GSTNSpinDrill.GAS.Spin.DefaultBindingsAndSlots` (no conflict, keeps Ability.Timeline).
+- Harness fixes: `defence_batch` str() of dict details; module hook `on_ready()` 1 s into the settle time (spin applies the kit there: a kit
+  change at the scenario start ate the first jump); `drill()` read UE Python's folded return wrong (true gives the 4 out params, no bool):
+  it always said "no fragment"; `_apply_kit` logs a refused kit. Probe driver: Saved/SD05/probe.py (stick history, request, drill per tick).
+- New: `GSTNSpinDrillTests` has `UGSTN_SpinDrillTestLibrary::ServerSetDrillImmunity` (test effect granting Combat.Immunity.Drill), used by
+  `drill_nondrillable_bounce` (players are drillable since D9). Six latch scenarios in spin_drill_scenarios.py (`SUITE_DRILL`, part of
+  SUITE_SPIN): static multi-hit, early pop, launch after bore (jump button tap in the boost window), target destroyed (KO zone), moving
+  enemy (D10), hit while latched (host teleported next to the driller, attacks). NOT yet green: never reached the latch (see next).
+- SUITE_SPIN run 6 (Saved/Logs/sd-05/spin-listen-0pct.log): 0/12. The spin now runs (client shows Spinning at the right frame, spin
+  timelines end after 32 frames in the log), but every check reads ONE mark per world at t_end+0.05: the authority and the other client show
+  the spin 100-250 ms later (60/15 ms lag + input buffer), so they read None/idle. Same for the dive and the latch marks.
+- Next (one thread, Sonnet is enough): give the module a per-world sampler (slate tick: drill tuple + latch_info per world with time), and
+  turn every mark check into "seen on world wi within [t0, t1]" (first sighting per world, same start frame). Then rerun; expect real
+  findings on the ring damage, hop speed and the latch only after that. Run with Saved/SD05/run_editor.ps1 + driver_spin.py (~8 min).
+- Gates: build on Succeeded, headless on 980/0; off (SpinDrill+Piggyback disabled) build Succeeded, headless 933/0; no ensure; .uproject
+  restored. Not touched: hold-to-crouch.
+- Cost: one Opus thread, ~150k context, 3 UBT builds, 7 editor runs (~45 min machine): medium-high; stopped at the context rule.

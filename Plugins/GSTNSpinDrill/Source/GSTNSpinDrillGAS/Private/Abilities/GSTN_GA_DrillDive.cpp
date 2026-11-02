@@ -19,7 +19,11 @@ UGSTN_GA_DrillDive::UGSTN_GA_DrillDive(const FObjectInitializer& ObjectInitializ
 	BounceEffect = UGSTN_GE_DrillBounce::StaticClass();
 	// Releasing crouch, the drill's trigger, stops the dive (spec 1.4)
 	bEndOnTriggerRelease = true;
-	SetAssetTags(FGameplayTagContainer(GSTNSpinDrillTags::Ability_Combat_Drill_Dive.GetTag()));
+	// Added to the base's tags, never replacing them: Ability.Timeline (UGSTN_GA_BaseCombat) is how the loadout compile knows a timeline
+	// ability; without it the command activates the ability as a plain one and the combat tick never adopts it (SD-05)
+	FGameplayTagContainer Tags = GetAssetTags();
+	Tags.AddTag(GSTNSpinDrillTags::Ability_Combat_Drill_Dive.GetTag());
+	SetAssetTags(Tags);
 }
 
 void UGSTN_GA_DrillDive::OnTimelineBegan(int32 StateStartFrame)

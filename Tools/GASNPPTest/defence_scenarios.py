@@ -1015,10 +1015,15 @@ def defence_batch(names=None, lag=60, jitter=15, loss=0, settle=3.0, ready_timeo
                     les.editor_request_begin_play()
             elif st['phase'] == 'wait_ready':
                 if les.is_in_play_in_editor() and ready():
-                    st.update(phase='settle', t=time.time())
+                    st.update(phase='settle', t=time.time(), readied=False)
                 elif elapsed > ready_timeout:
                     _batch['results'].append((st['cur'], 'ERROR pawns not ready', []))
                     st.update(phase='end', t=time.time(), ending=False)
+            elif st['phase'] == 'settle' and not st.get('readied') and elapsed >= 1.0 and module and hasattr(module, 'on_ready'):
+                # A module's per-PIE setup (spin_drill_scenarios applies its test kit) inside the settle time, once the player states have
+                # replicated (the pawn keys are player ids), so a loadout change is compiled everywhere before the scenario's first input
+                st['readied'] = True
+                module.on_ready()
             elif st['phase'] == 'settle' and elapsed >= settle:
                 g.net(lag, jitter, loss)
                 g.reset_all()
@@ -1029,7 +1034,7 @@ def defence_batch(names=None, lag=60, jitter=15, loss=0, settle=3.0, ready_timeo
             elif st['phase'] == 'run':
                 if g._last_run.get('results') is not st['prev'] and g._last_run.get('results') is not None:
                     res = g._last_run
-                    bad = [f'{l} -> {d[:300]}' for ok, l, d in res['results'] if ok is False]
+                    bad = [f'{l} -> {str(d)[:300]}' for ok, l, d in res['results'] if ok is False]
                     _batch['results'].append((st['cur'], res['verdict'], bad))
                     st.update(phase='end', t=time.time(), ending=False)
                 elif elapsed > timeout:

@@ -19,7 +19,11 @@ UGSTN_GA_DrillBore::UGSTN_GA_DrillBore(const FObjectInitializer& ObjectInitializ
 	PopEffect = UGSTN_GE_DrillPop::StaticClass();
 	// The release is read by the phase machine (the bore track's crouch stamp), not by the ability: ending here would race the decision
 	bEndOnTriggerRelease = false;
-	SetAssetTags(FGameplayTagContainer(GSTNSpinDrillTags::Ability_Combat_Drill_Bore.GetTag()));
+	// Added to the base's tags, never replacing them: Ability.Timeline (UGSTN_GA_BaseCombat) is how the loadout compile knows a timeline
+	// ability; without it the command activates the ability as a plain one and the combat tick never adopts it (SD-05)
+	FGameplayTagContainer Tags = GetAssetTags();
+	Tags.AddTag(GSTNSpinDrillTags::Ability_Combat_Drill_Bore.GetTag());
+	SetAssetTags(Tags);
 }
 
 int32 UGSTN_GA_DrillBore::DecideFromFragment(const FGSTN_DrillFragment* Fragment, int32 Frame)

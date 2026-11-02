@@ -53,17 +53,18 @@ TArray<FGSTN_AbilityBinding> UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(boo
 	using namespace GSTNSpinDrillLibrary;
 	TArray<FGSTN_AbilityBinding> Bindings;
 	const TArray<FGSTN_InputSlotSpec> Slots = FGSTN_SpinSlots::Build(bKeyboardShortcut);
-	// The cancels first: in the air a cancel (requires the spin's sense tag) and the air spin (requires Mover.IsInAir) both require one
-	// tag, and the first of equally specific bindings wins. On the ground the cancel requires more than the ground spin and wins anyway
+	// The cancels first, one for the ground and one for the air, so each requires one tag more than the spin it competes with (the ground
+	// spin requires none, the air spin Mover.IsInAir). Equal counts would be an "arbitrary choice" binding conflict, which the loadout
+	// compile reports as an error and refuses the whole kit (SD-05: no spin in the harness came from that)
 	for (const FGSTN_InputSlotSpec& Slot : Slots)
 	{
 		const EGSTN_SpinSense Sense = Slot.Command.MatchesTag(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise) ? EGSTN_SpinSense::Clockwise : EGSTN_SpinSense::CounterClockwise;
-		FGSTN_AbilityBinding Cancel;
-		Cancel.Command = Slot.Command;
-		Cancel.SlotOverride.Inline = Slot;
-		Cancel.Ability = TSoftClassPtr<UGameplayAbility>(Sense == EGSTN_SpinSense::Clockwise ? UGSTN_GA_SpinCancelClockwise::StaticClass() : UGSTN_GA_SpinCancelCounterClockwise::StaticClass());
-		Cancel.Requirements.RequireTags.AddTag(UGSTN_GA_SpinCancel::RequiredSpinTag(Sense));
-		Bindings.Add(MoveTemp(Cancel));
+		for (const bool bAir : { false, true })
+		{
+			FGSTN_AbilityBinding Cancel = MakeBinding(Slot, Sense == EGSTN_SpinSense::Clockwise ? UGSTN_GA_SpinCancelClockwise::StaticClass() : UGSTN_GA_SpinCancelCounterClockwise::StaticClass(), bAir);
+			Cancel.Requirements.RequireTags.AddTag(UGSTN_GA_SpinCancel::RequiredSpinTag(Sense));
+			Bindings.Add(MoveTemp(Cancel));
+		}
 	}
 	for (const FGSTN_InputSlotSpec& Slot : Slots)
 	{

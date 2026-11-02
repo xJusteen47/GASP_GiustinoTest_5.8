@@ -4,6 +4,7 @@
 #
 #   import sys; sys.path.insert(0, r"<project>/Tools/GASNPPTest"); import spin_drill_scenarios as sd
 #   sd.prepare_editor()                 # once, in the editor world BEFORE PIE: the spin bindings go on the test kit IN MEMORY (never saved)
+#   sd.on_ready()                       # once per PIE, a second before the first scenario: the test kit on every pawn
 #   sd.scenario_spin_ground_hits_ring() # in a running PIE
 #   sd.scenario_spin_air_hop_low_gravity()
 #   sd.scenario_air_spin_once_per_airtime()
@@ -12,7 +13,7 @@
 #   sd.restore_editor()                 # with PIE stopped: the kit's bindings as saved
 #
 # Needs the GSTNSpinDrill plugin enabled (EnabledByDefault false: enable it locally, never commit the .uproject change). What stays in memory:
-# the twelve default spin bindings (cancels first) (UGSTN_SpinDrillLibrary.add_spin_bindings_to_kit, slots inline, so neither the command set nor the input config
+# the nine default spin bindings (ground and air cancels first) (UGSTN_SpinDrillLibrary.add_spin_bindings_to_kit, slots inline, so neither the command set nor the input config
 # changes). No shared Blueprint is edited. The stick rotation is driven through IA_Move like a pad: 9 positions 35 ms apart (a 360 in ~0.32 s,
 # inside the 30-frame window of the Spin condition).
 import math
@@ -23,6 +24,10 @@ import gasnpp_test as g
 
 KIT_PATH = '/Game/GASNPPTest/Combat/' + g.HIT_KIT
 SUITE_SPIN = ['spin_ground_hits_ring', 'spin_air_hop_low_gravity', 'air_spin_once_per_airtime', 'spin_opposite_cancel', 'drill_ground_lag', 'drill_nondrillable_bounce']
+# Plan D9/D10 (SD-05): the latch on another player, from the dive's tip to the exit
+SUITE_DRILL = ['drill_latch_static_multi_hit', 'drill_release_early_pop', 'drill_launch_after_bore', 'drill_target_destroyed', 'drill_latch_moving_enemy',
+               'drill_hit_while_latched_detaches']
+SUITE_SPIN = SUITE_SPIN + SUITE_DRILL
 NEEDED_BUTTONS = ['Input.Button.Spin', 'Input.Button.Crouch']
 TAG_SPINNING = 'Combat.State.Spinning'
 TAG_AIR_SPENT = 'Combat.State.AirSpinSpent'
@@ -32,6 +37,7 @@ STEP_S = 0.035
 _saved = {}
 _last = {'verdict': None, 'checks': []}
 Lib = unreal.GSTN_SpinDrillLibrary
+TestLib = unreal.GSTN_SpinDrillTestLibrary   # GSTNSpinDrillTests: harness helpers (drill immunity)
 
 
 # ---- content, in memory ------------------------------------------------------------------------------------------------------------------------
@@ -83,12 +89,12 @@ def actor(wi, key):
 
 def drill(wi, key):
     """(phase, phase start frame, air spins used, low gravity until) of the pawn `key` as world `wi` shows it, None without a fragment"""
-    # UE Python gives None (not a tuple) when the function returns false: no drill fragment on that pawn
+    # UE Python folds a bool return with out params: None when it returns false (no drill fragment on that pawn), the out params alone when
+    # true (a 4-tuple; the bool is not in it). A 5-tuple is accepted too in case a build keeps the return value
     r = Lib.get_shown_drill_numbers(actor(wi, key))
-    if not isinstance(r, tuple) or len(r) != 5:
-        return None
-    ok, phase, start, used, low = r
-    return (phase, start, used, low) if ok else None
+    if isinstance(r, tuple) and len(r) == 5:
+        return tuple(r[1:]) if r[0] else None
+    return tuple(r) if isinstance(r, tuple) and len(r) == 4 else None
 
 
 def drill_text(wi, key):
@@ -115,11 +121,26 @@ def jump_steps(client, t):
 
 def _apply_kit():
     """The test kit (with the spin bindings added in memory by prepare_editor) on every pawn: the pawns start on their default loadout, which has none"""
-    return 'kit applied', [g._apply_loadout(g.key_of_player(i), g.HIT_KIT) for i in g.all_players()]
+    out = [g._apply_loadout(g.key_of_player(i), g.HIT_KIT) for i in g.all_players()]
+    if any(r != 'OK' for r in out):
+        # A refused loadout leaves the pawns on their default kit (no spin bindings): every check after it would fail for that one reason
+        unreal.log_error(f'spin harness: the test kit was refused: {out}')
+    return 'kit applied', out
+
+
+_kit_state = {'applied': False}
+
+
+def on_ready():
+    """defence_batch calls it once per PIE when the pawns are ready, before its settle time: the kit change (a loadout revision) is out of the way
+    before the scenario's inputs. A loadout change at the scenario's start left the first jump and spin unanswered (SD-05)"""
+    _kit_state['applied'] = True
+    return _apply_kit()
 
 
 def _run(run, steps):
-    run.run([(0.05, _apply_kit)] + list(steps))
+    # By hand (no batch): call on_ready() once in the running PIE and wait a second before the first scenario
+    run.run(list(steps) if _kit_state['applied'] else [(0.05, _apply_kit)] + list(steps))
 
 
 # ---- scenarios ---------------------------------------------------------------------------------------------------------------------------------------
@@ -324,7 +345,8 @@ def scenario_drill_ground_lag(client=1):
 
 
 def scenario_drill_nondrillable_bounce(client=1, victim=2):
-    """The diver lands its tip on another player (nothing is drillable before D9): the victim takes the tip's damage on the authority, the dive ends in a
+    """The diver lands its tip on another player marked not drillable (Combat.Immunity.Drill through the test effect; players are drillable
+    since D9): the victim takes the tip's damage on the authority, the dive ends in a
     bounce (speed along up > 500 right after) on the authority and the diver's client, and the air spin is not given back by it"""
     vkey = g.key_of_player(victim)
     run = g._Run('drill_nondrillable_bounce', client, extra=[('vic', 0, vkey)])
@@ -343,8 +365,11 @@ def scenario_drill_nondrillable_bounce(client=1, victim=2):
             return name, seen[name]
         return f
 
+    def immune(on):
+        return lambda: ('drill immunity', on, TestLib.server_set_drill_immunity(actor(0, vkey), on))
+
     spin, t1 = spin_steps(client, 0.55, clockwise=False)
-    steps = jump_steps(client, 0.3) + [(0.5, place_under), (0.52, at('before'))] + spin + [
+    steps = [(0.1, immune(True))] + jump_steps(client, 0.3) + [(0.5, place_under), (0.52, at('before'))] + spin + [
         (t1 + 0.03, crouch_hold(client)), (t1 + 0.05, crouch_tap(client)), (t1 + 1.2, at('after')), (t1 + 1.2, crouch_release(client)),
         (t1 + 1.25, run.at("the victim took the tip's damage on the authority", lambda: (
             seen['before'] is not None and seen['after'] is not None and seen['after'] < seen['before'] - 1.0, f"{seen['before']} -> {seen['after']}"))),
@@ -352,9 +377,234 @@ def scenario_drill_nondrillable_bounce(client=1, victim=2):
             max([s['vel'][2] for s in run._win('srv', t1, t1 + 1.0, sim=True)] or [0.0]) > 500.0
             and max([s['vel'][2] for s in run._win('cli', t1, t1 + 1.0, sim=True)] or [0.0]) > 500.0, ''))),
         (t1 + 1.25, run.at('the air spin stayed spent after the bounce', lambda: (run.saw_tag(TAG_AIR_SPENT, t1 + 0.2, t1 + 0.6, 'srv'), ''))),
-        (t1 + 1.6, run.finish()), (t1 + 1.65, _finish(run, 'drill_nondrillable_bounce'))]
+        (t1 + 1.55, immune(False)), (t1 + 1.6, run.finish()), (t1 + 1.65, _finish(run, 'drill_nondrillable_bounce'))]
     _run(run, steps)
     return 'running'
 
 # drill_tilted_gravity (plan D8): needs a level with a gravity volume the harness can place a pawn in; the dive and bounce vectors under any gravity
 # are pinned by the unit tests (GSTNSpinDrill.Core.Math.LaunchAndDive, GSTNSpinDrill.Core.Spin.HopAndRefresh). Not written until such a level exists.
+
+
+# ---- drill latch (plans D9, D10) ---------------------------------------------------------------------------------------------------------------------
+# The diver jumps, air spins and dives with crouch held onto another player placed under it (players are drillable: no weight limit, spin-drill.md
+# 13b). The tip's hit forms the drill latch (Seating, then Boring while crouch is held); the exit is a pop on the release, the launch with a jump press
+# in the boost window, the launch when the target is gone, a detach when the driller is hit. Tuning defaults: seat 12 frames, a hit every 6, at most 90.
+import re
+
+PHASE_SEATING, PHASE_BORING, PHASE_LAUNCHING = 3, 4, 5
+LATCHED = (PHASE_SEATING, PHASE_BORING)
+DRILL_STEPS_PER_LATCH = 3   # driller client rollbacks allowed per latch (D10 stop condition: more than 3 corrections per latch)
+LAUNCH_VZ = 1000.0          # the launch is 1400 cm/s along the surface normal, the pop 400
+
+
+def latch_info(wi, key):
+    """(phase, latch frame, hits) of the pawn `key` as world `wi` shows it; (0, -1, 0) without a fragment"""
+    d = drill(wi, key)
+    m = re.search(r'latch (-?\d+) seat -?\d+ max -?\d+ hits (\d+)', drill_text(wi, key) or '')
+    return ((d or (0,))[0], int(m.group(1)) if m else -1, int(m.group(2)) if m else 0)
+
+
+def _all_latched(seen):
+    rows = seen.values()
+    return all(r[0] in LATCHED for r in rows) and len({r[1] for r in rows}) == 1
+
+
+def _none_latched(seen):
+    return all(r[0] not in LATCHED for r in seen.values())
+
+
+class _DrillRig:
+    """The common start of the latch scenarios: diver = world `client`'s pawn, target = world `victim`'s pawn, placed under the diver in the jump.
+    t1 = the end of the stick turn; crouch is held from t1 + 0.03 (and tapped at t1 + 0.05) until a scenario releases it"""
+
+    def __init__(self, name, client, victim, judge_reconciles=True):
+        self.name, self.client, self.victim = name, client, victim
+        self.key, self.vkey = g.key_of_player(client), g.key_of_player(victim)
+        self.run = g._Run(name, client, extra=[('vic', 0, self.vkey)], judge_reconciles=judge_reconciles)
+        self.seen = {}
+        spin, self.t1 = spin_steps(client, 0.55, clockwise=True)
+        self.steps = [(0.1, self.immune(False))] + jump_steps(client, 0.3) + [(0.5, self.place_under), (0.52, self.mark('before'))] + spin + [
+            (self.t1 + 0.03, crouch_hold(client)), (self.t1 + 0.05, crouch_tap(client)), (self.t1 + 0.45, self.mark('latched'))]
+
+    def immune(self, on):
+        return lambda: ('drill immunity', on, TestLib.server_set_drill_immunity(actor(0, self.vkey), on))
+
+    def place_under(self):
+        a = actor(0, self.key).get_actor_location()
+        actor(0, self.vkey).set_actor_location(unreal.Vector(a.x, a.y, a.z - 20.0), False, True)
+        return 'target under the diver'
+
+    def mark(self, name):
+        def f():
+            vic = self.run.latest('vic')
+            self.seen[name] = {wi: latch_info(wi, self.key) for wi in range(len(g.worlds()))}
+            self.seen[name + '_rb'] = g.rollbacks(self.client)
+            self.seen[name + '_hp'] = vic['attr'].get('Health') if vic else None
+            self.seen[name + '_used'] = {wi: (drill(wi, self.key) or (0, 0, 0, 0))[2] for wi in range(len(g.worlds()))}
+            return name, self.seen[name]
+        return f
+
+    def check_latched(self):
+        return self.run.at('the tip formed the drill latch: every world shows Seating or Boring with one latch frame', lambda: (
+            _all_latched(self.seen['latched']), self.seen['latched']))
+
+    def rollbacks(self, a, b, limit=DRILL_STEPS_PER_LATCH):
+        return self.run.at(f'at most {limit} rollbacks on the driller client during the latch', lambda: (
+            self.seen[b + '_rb'] - self.seen[a + '_rb'] <= limit, f"{self.seen[a + '_rb']} -> {self.seen[b + '_rb']}"))
+
+    def max_vz(self, t0, t1, side):
+        return max([s['vel'][2] for s in self.run._win(side, t0, t1, sim=True)] or [0.0])
+
+    def end(self, t):
+        return [(t, crouch_release(self.client)), (t + 0.5, self.run.finish()), (t + 0.55, _finish(self.run, self.name))]
+
+
+def scenario_drill_latch_static_multi_hit(client=1, victim=2):
+    """The latch on a target that stands still, crouch held for 1 s: every world shows the latch with the same latch frame, the bore lands at least
+    three hits (the authority's count, a hit every 6 frames after the 12-frame seat), the target's Health drops on the authority, the driller's client
+    stays within the correction budget, and the release ends the latch on every world"""
+    rig = _DrillRig('drill_latch_static_multi_hit', client, victim)
+    run, t1 = rig.run, rig.t1
+    steps = rig.steps + [
+        (t1 + 1.1, rig.mark('bored')), (t1 + 1.12, crouch_release(client)), (t1 + 1.6, rig.mark('after')),
+        (t1 + 1.65, rig.check_latched()),
+        (t1 + 1.65, run.at('still latched after 1 s of crouch on every world', lambda: (_all_latched(rig.seen['bored']), rig.seen['bored']))),
+        (t1 + 1.65, run.at('the bore landed at least three hits (authority)', lambda: (rig.seen['bored'][0][2] >= 3, rig.seen['bored']))),
+        (t1 + 1.65, run.at("the target's Health dropped on the authority", lambda: (
+            rig.seen['before_hp'] is not None and rig.seen['bored_hp'] is not None and rig.seen['bored_hp'] < rig.seen['before_hp'] - 1.0,
+            f"{rig.seen['before_hp']} -> {rig.seen['bored_hp']}"))),
+        (t1 + 1.65, rig.rollbacks('latched', 'bored')),
+        (t1 + 1.65, run.at('the release ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after'])))]
+    _run(run, steps + rig.end(t1 + 1.7))
+    return 'running'
+
+
+def scenario_drill_release_early_pop(client=1, victim=2):
+    """Crouch let go right after the seat: the latch ends on every world with the small pop out (rising, but well under the launch speed) on the
+    authority and the driller's client"""
+    rig = _DrillRig('drill_release_early_pop', client, victim)
+    run, t1 = rig.run, rig.t1
+    t_rel = t1 + 0.5
+    steps = rig.steps + [
+        (t_rel, crouch_release(client)), (t_rel + 0.5, rig.mark('after')),
+        (t_rel + 0.55, rig.check_latched()),
+        (t_rel + 0.55, run.at('the release ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),
+        (t_rel + 0.55, run.at('the pop: the driller rises after the release, under the launch speed (authority and client)', lambda: (
+            all(150.0 < rig.max_vz(t_rel, t_rel + 0.4, side) < LAUNCH_VZ for side in ('srv', 'cli')),
+            f"max vz srv {rig.max_vz(t_rel, t_rel + 0.4, 'srv'):.0f}, cli {rig.max_vz(t_rel, t_rel + 0.4, 'cli'):.0f}"))),
+        (t_rel + 0.55, rig.rollbacks('latched', 'after'))]
+    _run(run, steps + rig.end(t_rel + 0.6))
+    return 'running'
+
+
+def scenario_drill_launch_after_bore(client=1, victim=2):
+    """After 0.6 s of bore, jump is pressed and crouch let go two frames later (inside the 8-frame boost window): the exit is the launch, at about
+    the launch speed on the authority and the driller's client, and it gives the air spin back"""
+    rig = _DrillRig('drill_launch_after_bore', client, victim)
+    run, t1 = rig.run, rig.t1
+    t_rel = t1 + 0.8
+    steps = rig.steps + [
+        (t_rel - 0.035, lambda: ('jump button', g.combat_tap(client, g.button_mask('Jump')))), (t_rel, crouch_release(client)), (t_rel + 0.6, rig.mark('after')),
+        (t_rel + 0.65, rig.check_latched()),
+        (t_rel + 0.65, run.at('the launch: the driller leaves at about the launch speed (authority and client)', lambda: (
+            all(rig.max_vz(t_rel - 0.05, t_rel + 0.4, side) > LAUNCH_VZ for side in ('srv', 'cli')),
+            f"max vz srv {rig.max_vz(t_rel - 0.05, t_rel + 0.4, 'srv'):.0f}, cli {rig.max_vz(t_rel - 0.05, t_rel + 0.4, 'cli'):.0f}"))),
+        (t_rel + 0.65, run.at('the launch gave the air spin back (every world)', lambda: (
+            all(u == 0 for u in rig.seen['after_used'].values()) and _none_latched(rig.seen['after']), (rig.seen['after_used'], rig.seen['after'])))),
+        (t_rel + 0.65, rig.rollbacks('latched', 'after'))]
+    _run(run, steps + rig.end(t_rel + 0.7))
+    return 'running'
+
+
+def scenario_drill_target_destroyed(client=1, victim=2):
+    """The latched target is knocked out by a small KO zone around it (not reaching the driller sitting on top) while crouch is still held: the latch
+    ends on every world with the launch (target gone), on the authority and the driller's client. The KO is an out-of-band event: reconciles are
+    budgeted, not judged"""
+    rig = _DrillRig('drill_target_destroyed', client, victim, judge_reconciles=False)
+    run, t1 = rig.run, rig.t1
+    t_ko = t1 + 0.6
+
+    def zone():
+        v = actor(0, rig.vkey).get_actor_location()
+        for w in g.worlds():
+            unreal.GSTN_KOZone.spawn_zone(w, v, unreal.Vector(60.0, 60.0, 50.0))
+        return 'KO zone on the target', (round(v.x), round(v.y), round(v.z))
+
+    def clear():
+        for w in g.worlds():
+            unreal.GSTN_KOZone.destroy_all_zones(w)
+        g.comps(g.worlds()[0])[rig.vkey].server_reset_test_state(unreal.Vector(0.0, 0.0, 0.0))
+        return 'zones removed, target respawned'
+
+    steps = rig.steps + [
+        (t_ko, zone), (t_ko + 0.6, rig.mark('after')), (t_ko + 0.62, clear),
+        (t_ko + 0.65, rig.check_latched()),
+        (t_ko + 0.65, run.at('the latch ended on every world after the KO', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),
+        (t_ko + 0.65, run.at('target gone: the exit is the launch (authority and client)', lambda: (
+            all(rig.max_vz(t_ko, t_ko + 0.5, side) > LAUNCH_VZ for side in ('srv', 'cli')),
+            f"max vz srv {rig.max_vz(t_ko, t_ko + 0.5, 'srv'):.0f}, cli {rig.max_vz(t_ko, t_ko + 0.5, 'cli'):.0f}"))),
+        (t_ko + 0.65, rig.rollbacks('latched', 'after'))]
+    _run(run, steps + rig.end(t_ko + 0.7))
+    return 'running'
+
+
+def scenario_drill_latch_moving_enemy(client=1, victim=2):
+    """D10: the latched target walks forward for 0.8 s while the driller holds crouch: the latch holds on every world, the target moved on the authority
+    (the driller rides it: the parked transform plus the per-latch anchor), and the driller's client stays within the correction budget of the latch"""
+    rig = _DrillRig('drill_latch_moving_enemy', client, victim, judge_reconciles=False)
+    run, t1 = rig.run, rig.t1
+    pos = {}
+
+    def where(name):
+        def f():
+            pos[name] = (actor(0, rig.vkey).get_actor_location(), actor(0, rig.key).get_actor_location())
+            return name, 'positions'
+        return f
+
+    def walked():
+        (v0, d0), (v1, d1) = pos['walk_start'], pos['walk_end']
+        dv, dd = (v1 - v0).length(), (d1 - d0).length()
+        return dv > 100.0 and abs(dv - dd) < 60.0, f'target moved {dv:.0f} cm, driller {dd:.0f} cm'
+
+    steps = rig.steps + [
+        (t1 + 0.5, where('walk_start')), (t1 + 0.5, lambda: ('walk', g.hold(victim, 'move', (0.0, 1.0, 0.0)))),
+        (t1 + 1.3, rig.mark('walked')), (t1 + 1.3, where('walk_end')), (t1 + 1.3, lambda: ('stop', g.release(victim, 'move'))),
+        (t1 + 1.35, rig.check_latched()),
+        (t1 + 1.35, run.at('still latched after the walk on every world', lambda: (_all_latched(rig.seen['walked']), rig.seen['walked']))),
+        (t1 + 1.35, run.at('the target walked and the driller rode it (authority)', walked)),
+        (t1 + 1.35, rig.rollbacks('latched', 'walked'))]
+    _run(run, steps + rig.end(t1 + 1.4))
+    return 'running'
+
+
+def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
+    """The third pawn (the host) is placed next to the latched driller, facing it, and attacks: the hit detaches the driller (hitstun wins, 7.4),
+    the latch ends on every world and the driller's Health drops on the authority. Hits by another player are out-of-band for the driller's
+    client: reconciles are budgeted, not judged"""
+    rig = _DrillRig('drill_hit_while_latched_detaches', client, victim, judge_reconciles=False)
+    run, t1 = rig.run, rig.t1
+    hkey = g.key_of_player(hitter)
+    hp = {}
+    t_hit = t1 + 0.6
+
+    def place_hitter():
+        d = actor(0, rig.key).get_actor_location()
+        yaw = math.radians(g.snap(g.worlds()[0])[hkey]['yaw'])
+        spot = unreal.Vector(d.x - 70.0 * math.cos(yaw), d.y - 70.0 * math.sin(yaw), d.z)
+        hp['before'] = (run.latest('srv') or {}).get('attr', {}).get('Health')
+        return 'hitter placed', g.comps(g.worlds()[0])[hkey].server_teleport_exact(spot)
+
+    def driller_hp():
+        hp['after'] = (run.latest('srv') or {}).get('attr', {}).get('Health')
+        return 'driller hp', hp
+
+    steps = rig.steps + [
+        (t_hit, place_hitter), (t_hit + 0.03, lambda: ('attack', g.combat_tap(hitter, g.button_mask('Attack')))),
+        (t_hit + 0.7, rig.mark('after')), (t_hit + 0.7, driller_hp),
+        (t_hit + 0.75, rig.check_latched()),
+        (t_hit + 0.75, run.at('the hit ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),
+        (t_hit + 0.75, run.at("the driller's Health dropped on the authority", lambda: (
+            hp.get('before') is not None and hp.get('after') is not None and hp['after'] < hp['before'] - 1.0, hp))),
+        (t_hit + 0.75, rig.rollbacks('latched', 'after'))]
+    _run(run, steps + rig.end(t_hit + 0.8))
+    return 'running'

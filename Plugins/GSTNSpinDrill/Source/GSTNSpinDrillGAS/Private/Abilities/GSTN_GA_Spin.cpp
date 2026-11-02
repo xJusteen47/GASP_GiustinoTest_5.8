@@ -13,7 +13,11 @@ UGSTN_GA_Spin::UGSTN_GA_Spin(const FObjectInitializer& ObjectInitializer)
 	HopEffect = UGSTN_GE_AirSpinHop::StaticClass();
 
 	// The native tag, not a request by name: a class default is built when the module loads, possibly before the tag manager has its tree
-	SetAssetTags(FGameplayTagContainer(GSTNSpinDrillTags::Ability_Movement_Spin.GetTag()));
+	// Added to the base's tags, never replacing them: Ability.Timeline (UGSTN_GA_BaseCombat) is how the loadout compile knows a timeline
+	// ability; without it the command activates the ability as a plain one and the combat tick never adopts it (SD-05)
+	FGameplayTagContainer Tags = GetAssetTags();
+	Tags.AddTag(GSTNSpinDrillTags::Ability_Movement_Spin.GetTag());
+	SetAssetTags(Tags);
 }
 
 const FGSTN_SpinTrack* UGSTN_GA_Spin::FindSpinTrack() const
@@ -45,7 +49,11 @@ void UGSTN_GA_Spin::SetDefaultSpin(EGSTN_SpinSense Sense, bool bAirSpin)
 UGSTN_GA_SpinCancel::UGSTN_GA_SpinCancel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetAssetTags(FGameplayTagContainer(GSTNSpinDrillTags::Ability_Movement_SpinCancel.GetTag()));
+	// Added to the base's tags, never replacing them: Ability.Timeline (UGSTN_GA_BaseCombat) is how the loadout compile knows a timeline
+	// ability; without it the command activates the ability as a plain one and the combat tick never adopts it (SD-05)
+	FGameplayTagContainer Tags = GetAssetTags();
+	Tags.AddTag(GSTNSpinDrillTags::Ability_Movement_SpinCancel.GetTag());
+	SetAssetTags(Tags);
 }
 
 const FGSTN_SpinCancelTrack* UGSTN_GA_SpinCancel::FindCancelTrack() const

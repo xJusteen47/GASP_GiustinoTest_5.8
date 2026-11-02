@@ -1,4 +1,4 @@
-// Spin and drill plugin, module GSTNSpinDrillTests: skeleton (plan D1), no code yet.
+// Spin and drill plugin, module GSTNSpinDrillTests: harness helpers only (GSTN_SpinDrillTestLibrary).
 
 #include "Modules/ModuleManager.h"
 

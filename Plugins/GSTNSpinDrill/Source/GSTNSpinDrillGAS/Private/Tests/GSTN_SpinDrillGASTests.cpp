@@ -4,10 +4,12 @@
 #include "Abilities/GSTN_GA_DrillDive.h"
 #include "Abilities/GSTN_GA_Spin.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
+#include "GSTN_CombatTags.h"
 #include "GSTN_DrillLinkType.h"
 #include "GSTN_LinkRegistry.h"
 #include "Rules/GSTN_LinkRule_Drill.h"
 #include "State/GSTN_LinkState.h"
+#include "Input/GSTN_CommandBindings.h"
 #include "Input/GSTN_InputConditions.h"
 #include "GSTN_SpinDrillLibrary.h"
 #include "GSTN_SpinDrillTags.h"
@@ -79,12 +81,28 @@ bool FGSTN_SpinDrillGASBindingsTest::RunTest(const FString& Parameters)
 	}
 
 	const TArray<FGSTN_AbilityBinding> Bindings = UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(true);
-	TestEqual(TEXT("a cancel, an air and a ground binding per slot, and the drill"), Bindings.Num(), 7);
+	TestEqual(TEXT("a ground and an air cancel, an air and a ground spin per slot, and the drill"), Bindings.Num(), 9);
+	// The loadout compile refuses a kit with a binding conflict (equal required counts that can hold together): the defaults must have none
+	TArray<FGSTN_BindingKey> Keys;
+	for (const FGSTN_AbilityBinding& Binding : Bindings)
+	{
+		Keys.Add({ Binding.Command, &Binding.Requirements });
+	}
+	const TArray<FGSTN_BindingConflict> Conflicts = UGSTN_CommandBindingUtils::FindBindingConflicts(Keys, {});
+	TestEqual(TEXT("no binding conflict among the defaults"), Conflicts.Num(), 0);
+	for (const FGSTN_BindingConflict& Conflict : Conflicts)
+	{
+		AddError(Conflict.Message);
+	}
 	for (int32 Index = 0; Index < Bindings.Num(); ++Index)
 	{
 		const FGSTN_AbilityBinding& Binding = Bindings[Index];
 		const FString Command = Binding.Command.ToString();
 		const UClass* Class = Binding.Ability.Get();
+		// The loadout compile treats only abilities tagged Ability.Timeline as timelines: a subclass that replaced its asset tags lost it
+		const UGameplayAbility* AbilityDefault = Class ? Class->GetDefaultObject<UGameplayAbility>() : nullptr;
+		TestTrue(*FString::Printf(TEXT("%s (%s): keeps Ability.Timeline"), *Command, *GetNameSafe(Class)),
+			AbilityDefault && AbilityDefault->GetAssetTags().HasTagExact(GSTNCombatTags::Ability_Timeline));
 		if (Class == UGSTN_GA_DrillDive::StaticClass())
 		{
 			TestTrue(TEXT("the drill: Command.Movement.Drill while spinning, last"), Binding.Command.MatchesTagExact(GSTNSpinDrillTags::Command_Movement_Drill)
@@ -96,7 +114,9 @@ bool FGSTN_SpinDrillGASBindingsTest::RunTest(const FString& Parameters)
 			// D5: the cancels come first and require the sense tag of the spin they stop, which is the opposite of the command's
 			const FGSTN_SpinCancelTrack* Track = Cancel->FindCancelTrack();
 			const bool bClockwiseCommand = Binding.Command.MatchesTag(GSTNSpinDrillTags::Command_Movement_Spin_Clockwise);
-			TestTrue(*FString::Printf(TEXT("%s: cancel bindings come first"), *Command), Index < Slots.Num());
+			TestTrue(*FString::Printf(TEXT("%s: cancel bindings come first"), *Command), Index < 2 * Slots.Num());
+			TestTrue(*FString::Printf(TEXT("%s: one more required tag than the spin it competes with"), *Command), Binding.Requirements.RequireTags.HasTagExact(Mover_IsInAir)
+				!= Binding.Requirements.IgnoreTags.HasTagExact(Mover_IsInAir));
 			TestTrue(*FString::Printf(TEXT("%s: the cancel's sense is the command's"), *Command), Track && Track->IsClockwise() == bClockwiseCommand);
 			TestTrue(*FString::Printf(TEXT("%s: it requires the opposite spin's tag"), *Command), Binding.Requirements.RequireTags.HasTagExact(
 				bClockwiseCommand ? GSTNSpinDrillTags::State_Spinning_CounterClockwise : GSTNSpinDrillTags::State_Spinning_Clockwise));
