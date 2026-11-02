@@ -5,6 +5,7 @@
     python -m animpipe card <card.json>                                                           validate a move card
     python -m animpipe build <card.json>        card -> sparse keys + tangents on the rig -> AnimSequence at the card fps
     python -m animpipe trails <card.json>       motion trails, one composite image (3 views, build over source)
+    python -m animpipe poses <card.json> [--frames=] [--take=] [--over=]   pose checkpoint grid (one image)
     python -m animpipe check <card.json>        the three check classes on the card's built anim (animpipe/checks.py)
 
 Every command writes its full result to Saved/AnimPipeline/animpipe/<name>_<cmd>.json and prints at most 5 lines."""
@@ -23,7 +24,7 @@ def _ue_py(entry, **kw):
     r = ue.call("run_python_file", {"filePath": os.path.join(HERE, "ue_rig.py").replace("\\", "/"), "entryPoint": entry, "kwargs": kw}, timeout=600)
     v = r.get("result")
     if not isinstance(v, str) or not v.startswith("{"):
-        raise RuntimeError(f"{entry}: {str(v)[:300]} | log: {str(r.get('log_output'))[-600:]}")
+        raise RuntimeError(f"{entry}: {str(v)[-700:]} | log: {str(r.get('log_output'))[-600:]}")
     return json.loads(v)
 
 
@@ -92,7 +93,8 @@ def build(path):
     os.makedirs(OUT, exist_ok=True)
     spec = {"name": name, "source_anim": c["source_anim"], "rig": c.get("rig", RIG), "fps_num": num, "fps_den": den,
             "poses": key_frames(c), "segments": segments(c), "part_delays": c.get("part_delays", {}),
-            "planted": c.get("planted", []), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
+            "planted": c.get("planted", []), "edits": c.get("edits", []), "drop": c.get("drop", []),
+            "lock_lengths": c.get("lock_lengths", True), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
     t0 = time.time()
     r = _ue_py("build", spec=spec)
     if r.get("export_ok"):
@@ -130,10 +132,16 @@ def main():
         build(args[0])
     elif cmd == "check":
         from animpipe.checks import run
-        run(args[0])
+        run(args[0], src="src" in opt)
     elif cmd == "trails":
         from animpipe.trails import run
         run(args[0])
+    elif cmd == "poses":
+        from animpipe.poses import run
+        run(args[0], opt)
+    elif cmd == "probe":
+        r = _ue_py("probe", name=args[0], out=os.path.join(OUT, f"{args[0]}_probe.json").replace("\\", "/"))
+        print(r, os.path.join(OUT, f"{args[0]}_probe.json"))
     elif cmd == "card":
         from animpipe.card import load, key_frames, windows
         c = load(args[0])

@@ -1,0 +1,89 @@
+{
+ "move": "jab_v12",
+ "class": "jab",
+ "anim": "/Game/AnimPipeline/Rig/AS_JabV12_Build",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/MarioJab1_timing.csv",
+ "faf_game": 19,
+ "reference": "refs/mario_jab1",
+ "effector": "middle_01_l",
+ "_poses_note": "No owner Step file for the jab: the poses are the key frames of the v12 model (v12_motion.py, Mario windows), sampled from AS_Pilot_JabV12.",
+ "poses": [
+  {
+   "name": "guard",
+   "frame": 0,
+   "source": null
+  },
+  {
+   "name": "contact_in",
+   "frame": 1,
+   "source": null
+  },
+  {
+   "name": "contact",
+   "frame": 2,
+   "source": null
+  },
+  {
+   "name": "snap_back",
+   "frame": 3,
+   "source": null
+  },
+  {
+   "name": "chamber",
+   "frame": 5,
+   "source": null
+  },
+  {
+   "name": "recoil_peak",
+   "frame": 9,
+   "source": null
+  },
+  {
+   "name": "return",
+   "frame": 12,
+   "source": null
+  },
+  {
+   "name": "exit",
+   "frame": 17,
+   "source": null
+  },
+  {
+   "name": "faf",
+   "frame": 18,
+   "source": null
+  }
+ ],
+ "spacing": {
+  "startup": "arrive_1_2",
+  "active": "hold_recoil",
+  "recovery": "limb_led_recovery"
+ },
+ "part_delays": {
+  "chest": 0,
+  "head": 1,
+  "forearm": 0,
+  "hand": 0
+ },
+ "exemptions": [
+  {
+   "check": "balance",
+   "frames": [
+    1,
+    2,
+    3
+   ],
+   "why": "declared forward lunge into the punch"
+  }
+ ],
+ "edits": [],
+ "drop": [],
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_JabV12",
+ "planted": [
+  "foot_l_ik_ctrl",
+  "foot_r_ik_ctrl"
+ ],
+ "_open": "rear fist snap at contact: two targeted tries (drop hand twist keys 1-3: 70 deg/frame, worse; drop hand + upper-arm twist: 36.5, unchanged). The 36 deg come from the rear arm swing in the 1-frame contact, not the twist: needs a pose decision (owner)."
+}

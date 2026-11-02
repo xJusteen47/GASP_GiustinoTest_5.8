@@ -52,9 +52,10 @@ def _contact_faf(F, w, eff):
     return ok, f"reach peak at frame {peak} (window {c0}-{c1}), clip {len(F)} frames, FAF {w['faf']}"
 
 
-def _planted(F, exempt):
+def _planted(F, exempt, sides="lr"):
+    """Only the card's planted feet (foot_<s>_ik_ctrl): a kicking or stepping foot is not planted."""
     worst = {}
-    for s in "lr":
+    for s in sides:
         for b in (f"foot_{s}", f"ball_{s}"):
             d = [float(np.linalg.norm(f[b] - F[0][b])) for i, f in enumerate(F) if i not in exempt]
             worst[b] = round(max(d), 2)
@@ -90,10 +91,12 @@ def _spacing(F, segs, eff):
     return out
 
 
-def run(path):
+def run(path, src=False):
     from animpipe.card import segments
     c = load(path)
     move, anim = c["move"], c["anim"]
+    if src:                                   # the same checks on the source clip: the "not worse than the source" baseline
+        move, anim = move + "_src", c["source_anim"]
     take = anim.rsplit("/", 1)[1][3:]
     w = windows(c)["anim"]
     outdir = os.path.join(OUT, f"{move}_check"); os.makedirs(outdir, exist_ok=True)
@@ -117,7 +120,8 @@ def run(path):
     F = _bones(take)
     eff = c.get("effector", "middle_01_l")
     res["block"]["contact_faf"] = _contact_faf(F, w, eff)
-    res["block"]["planted_feet"] = _planted(F, exempt.get("planted", set()))
+    sides = "".join(s for s in "lr" if f"foot_{s}_ik_ctrl" in c.get("planted", ["foot_l_ik_ctrl", "foot_r_ik_ctrl"]))
+    res["block"]["planted_feet"] = _planted(F, exempt.get("planted", set()), sides)
     res["block"]["fists"] = _fists(F, c.get("fists", ["l", "r"]))
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),
