@@ -216,3 +216,18 @@ Differences between the code and [spin-drill.md](../architecture/spin-drill.md) 
 - The check (`hits <= 4` counter steps over the two hits of the attack window) was already at its limit before the rebase: 3, 4, 4 in the
   m7-g2/g5 editor logs; after it 5, 5, 3, 5. One odd step over the limit (half a reconcile on the counter). No code fix; options for the
   lead: count per hit instead of per window, or measure the distribution over ~10 runs at 0 % before changing the bound.
+
+## D9, part 2 and D10 (bore, launch, pop, per-latch anchor, moving targets)
+
+| Spec / plan | Built (SD-03) | Why |
+|---|---|---|
+| 7.4: bore loop section [LoopStart, LoopEnd) (seam S2) | `FGSTN_BoreTrack` (seat frame 0, bore frame 1) held by `FGSTN_BoreTrackHook`, the defence hold-window pattern | The track hook seam already exists; a one-frame hold with the S1 re-hit interval (it counts held frames) is the loop without a core edit |
+| 7.4: `DrillBore` adopted at the latch (frame F) | Forced start (`StartForcedTimeline`) on the seat's first frame (F+1) at AfterClocks | The link turns Active at AfterExecute of F; the forced start belongs to AfterClocks as for GSTNLink's partner moves |
+| Bore ability listed by the kit | `FGSTN_SpinDrillKitExtension::BoreAbility` (default `UGSTN_GA_DrillBore`) added to the kit's triggered abilities at compile; the NP side finds the bore by its track | NP cannot name a GAS class; kits need no edit |
+| Crouch held read from the input history in the extension | The hook stamps it (`GSTNDrillStamps::CrouchMarker`, 0xD1); `ReadCrouchStamp`; fallback: the timeline running since the latch | The extension has no input history; the hook does |
+| Launch along the latch surface normal | The driller's up stands for the normal | The dive goes along gravity; the target's pose is not readable from a move creator. A side latch launches up |
+| `DetachPopSpeed` | Pop = hop of DetachPopSpeed along up from zero speed, flag `Popped` for one frame (like `Bounced`) | The parked driller has no speed of its own |
+| Launch and pop modes | Both force the falling mode | The parked mode of the latch link must not keep the velocity; checked only by tests, harness pending |
+| Damage scale per bore hit | Not built: each bore hit is the tip's data (2 damage, no knockback) | No spec value; D12 (penetration vs hardness) owns it |
+| D10: derived transform (S3), exit placement | GSTNLink's parked transform with the per-latch anchor (`SetAnchorOverride`, the driller's root in the target's root space, from the driller's view, written once on the first Active frame); GSTNLink's exit placer | Plan 2b |
+| `KeepPlunging` (`bContinueThroughDestroyed`) | Unchanged from D9 part 1: the Diving phase ends next frame (no dive timeline) | Off by default; to revisit with D12 |

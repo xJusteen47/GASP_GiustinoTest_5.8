@@ -8,6 +8,16 @@
 
 struct FGSTN_DrillFragment;
 struct FGSTN_LinkFragment;
+struct FGSTN_LinkState;
+struct FGSTN_TimelineOutput;
+class UGSTN_CombatTableSet;
+class UGSTN_GA_BaseCombat;
+
+/** The profile byte the bore's track hook stamps (FGSTN_StampedWindow::Profile): the crouch hold of the bore timeline */
+namespace GSTNDrillStamps
+{
+	constexpr uint8 CrouchMarker = 0xD1;
+}
 
 /** What asks the phase machine to change at AfterExecute (the abilities of D4-D10 will raise them; tests raise them by hand) */
 enum class EGSTN_DrillRequest : uint8
@@ -119,6 +129,11 @@ struct GSTNSPINDRILLNP_API FGSTN_DrillSimTuning
 	int32 GroundLagFrames = 18;
 	float BounceSpeed = 700.f;
 
+	// The end of a bore (D9 part 2): read by the launch and pop effects
+	float LaunchSpeed = 1400.f;
+	EGSTN_DrillLaunchDirection LaunchDirection = EGSTN_DrillLaunchDirection::SurfaceNormal;
+	float DetachPopSpeed = 400.f;
+
 	/** The defaults of the Core tuning structs */
 	static FGSTN_DrillSimTuning MakeDefault();
 
@@ -132,12 +147,14 @@ struct GSTNSPINDRILLNP_API FGSTN_DrillSimTuning
  * links (120).
  *
  *  - AfterClocks: the low gravity stamp is cleared once passed; a seat that reached its length becomes the bore; the end of the timeline of
- *    a spin, launch or lag returns to None (a spin ends when the combat state no longer runs the timeline that started it).
+ *    a spin, launch or lag returns to None (a spin ends when the combat state no longer runs the timeline that started it). On the first
+ *    latched frame the kit's bore timeline is adopted (D9 part 2, StartForcedTimeline), which the bore's track hook then holds.
  *  - BeforeCandidates: nothing yet (the bore's hit-group mask is the fallback of seam S1, D6).
  *  - AfterExecute: the refresh events of the frame give the air spins back (the jump state after this frame's jump step: grounded, or
  *    just launched), then the request of the frame (spin, air spin, cancel, dive, latch, bounce, ground), the hit count, then the end
  *    conditions of a latched driller (UGSTN_DrillMath::ResolveEnd). A spin request comes from a timeline that started this frame and
- *    carries a FGSTN_SpinTrack (its sense and air flag).
+ *    carries a FGSTN_SpinTrack (its sense and air flag). Then the link side: the per-latch anchor on the first Active frame, the release of
+ *    a link the drill ended itself, and the outbox events (Event.Drill.Latched, .Detached, .Launched, .GroundLag).
  *  - BeforeTagProjection: Combat.State.Spinning (+ .Clockwise / .CounterClockwise), .AirSpinSpent, .Drilling, .DrillLatched SET from the
  *    fragment, never added, so a re-simulated frame ends with the same tags; and the low gravity effect follows the fragment's window
  *    (UGSTN_GE_AirSpinLowGravity::Sync).
@@ -209,6 +226,28 @@ public:
 	 * public MarkPendingBreak (the watchdog places the exit). True when it marked. Not needed when the link ended first (it is no longer Active)
 	 */
 	static bool ReleaseLinkOnUnlatch(bool bWasLatched, const FGSTN_DrillFragment& Fragment, const FGSTN_DrillLinkView& Link, FGSTN_LinkFragment* LinkFragment);
+
+	/**
+	 * The crouch of a running bore as its track hook stamped it this tick: true held, false released; unset (no stamp: the bore timeline is not
+	 * the running one, or a test) leaves bOutHeld unchanged and returns false
+	 */
+	static bool ReadCrouchStamp(const FGSTN_TimelineOutput* Timeline, bool& bOutHeld);
+
+	/**
+	 * The latched fragment still has to adopt its bore: it is latched from this frame on (the seat starts at LatchFrame) and the running timeline
+	 * started before the latch (the dive). The extension then starts the kit's bore at AfterClocks
+	 */
+	static bool WantsBoreAdoption(const FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_CombatSyncCore& Core);
+
+	/** The first ability of the table set's timeline registry whose timeline carries a FGSTN_BoreTrack (content), null when the kit has none */
+	static const UClass* FindBoreAbility(const UGSTN_CombatTableSet* Set);
+
+	/**
+	 * The per-latch anchor (M7 G6 seam of GSTNLink): the driller's root where the latch took it, in the partner's root space (the drill type
+	 * names no socket), written once on the driller's Active drill link that carries no anchor yet. SelfRoot is the driller's snapshot entry (end
+	 * of the previous frame), PartnerRoot the partner in the driller's view snapshot. True when it wrote
+	 */
+	static bool WriteLatchAnchor(FGSTN_LinkState& Body, int32 DrillTypeIndex, const FTransform& SelfRoot, const FTransform& PartnerRoot);
 
 	/** The registry's index of Combat.Link.Type.Drill, 0 when the type is not registered (content: the same on every machine) */
 	static int32 GetDrillTypeIndex();

@@ -84,6 +84,52 @@ public:
 };
 
 /**
+ * Creates the launch out of a bore (D9 part 2, spin-drill.md 7.4): LaunchSpeed along the tuning's LaunchDirection, in the falling mode, so the
+ * parked mode of the latch link does not keep it. The surface normal is the driller's up: the dive goes along gravity, so the tip meets the
+ * target's face that looks against it (a side-on latch reads as the top; the anchor's direction would need the target's pose here)
+ */
+UCLASS(DisplayName = "GSTN Drill Launch Creator")
+class GSTNSPINDRILLNP_API UGSTN_DrillLaunchCreator : public UBaseMoveEffectCreator
+{
+	GENERATED_BODY()
+
+public:
+	virtual FEffectMoveContainer MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+		const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const override;
+};
+
+/** Instant: the launch of a bore (UGSTN_DrillLaunchCreator). Applied by the bore ability on the frame the fragment enters Launching */
+UCLASS()
+class GSTNSPINDRILLNP_API UGSTN_GE_DrillLaunch : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_DrillLaunch();
+};
+
+/** Creates the detach pop (crouch released before the launch is earned): a hop of DetachPopSpeed against gravity, in the falling mode */
+UCLASS(DisplayName = "GSTN Drill Pop Creator")
+class GSTNSPINDRILLNP_API UGSTN_DrillPopCreator : public UBaseMoveEffectCreator
+{
+	GENERATED_BODY()
+
+public:
+	virtual FEffectMoveContainer MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+		const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const override;
+};
+
+/** Instant: the detach pop (UGSTN_DrillPopCreator). Applied by the bore ability on the frame the fragment carries the Popped flag */
+UCLASS()
+class GSTNSPINDRILLNP_API UGSTN_GE_DrillPop : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_DrillPop();
+};
+
+/**
  * The dive gravity (D8): an infinite effect that sets the jump and fall gravity scales to zero while the fragment is Diving, so the plunge keeps
  * its speed whatever the jump phase would apply. Grants Combat.State.DiveGravity and is synced from the fragment every frame like the low
  * gravity (level-triggered, one tag test). A pawn without the combat attribute set is left untouched.

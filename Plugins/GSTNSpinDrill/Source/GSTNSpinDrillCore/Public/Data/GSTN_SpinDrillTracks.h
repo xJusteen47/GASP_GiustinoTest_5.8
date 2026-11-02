@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "GSTN_SpinDrillTracks.generated.h"
 
@@ -73,4 +74,33 @@ struct GSTNSPINDRILLCORE_API FGSTN_DiveTrack : public FGSTN_TimelineTrack
 
 	/** The first dive track of a timeline, null when it has none */
 	static const FGSTN_DiveTrack* Find(const FGSTN_CombatTimelineData& Data);
+};
+
+/**
+ * Marks a timeline as the drill's bore (plan D9 part 2, spin-drill.md 7.4) and holds it while the drill is latched. The drill tick extension
+ * adopts the timeline that carries this track when the seat starts (its ability must be in the kit's triggered abilities: the kit extension
+ * adds UGSTN_GA_DrillBore), and the drill's track hook (GSTNSpinDrillNP) stalls it:
+ *
+ *  - on StartFrame (the seat frame, no hitbox) while the fragment is Seating;
+ *  - on BoreFrame (the tip hitbox with its re-hit interval, seam S1 counting the held frames) while the fragment is latched;
+ *  - never once the latch ended (launch, pop, detach): the timeline then plays its recovery after BoreFrame and ends.
+ *
+ * Every tick the hook also stamps whether HoldButton (crouch, the drill's trigger) is still held, which is how the phase machine reads the
+ * release (FGSTN_DrillTickExtension::ReadCrouchStamp). The track's range is [StartFrame, BoreFrame].
+ */
+USTRUCT(BlueprintType, meta = (DisplayName = "Drill Bore"))
+struct GSTNSPINDRILLCORE_API FGSTN_BoreTrack : public FGSTN_TimelineTrack
+{
+	GENERATED_BODY()
+
+	/** The frame held while the bore lasts; the tip hitbox is open on it. After StartFrame */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bore", meta = (ClampMin = "1"))
+	int32 BoreFrame = 1;
+
+	/** The button whose release ends the bore (read from the input history) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bore", meta = (Categories = "Input.Button"))
+	FGameplayTag HoldButton;
+
+	/** The first bore track of a timeline, null when it has none */
+	static const FGSTN_BoreTrack* Find(const FGSTN_CombatTimelineData& Data);
 };

@@ -349,7 +349,9 @@ bool FGSTN_DrillNPPhasesTest::RunTest(const FString& Parameters)
 	FGSTN_DrillFragment Popped = F;
 	StepFrame(Popped, 318, Release, Tuning);
 	PhaseIs(TEXT("release without a jump: hop out"), Popped, EGSTN_DrillPhase::None);
-	TestTrue(TEXT("and the latch is cleared"), Popped.IsDefault());
+	TestTrue(TEXT("and the latch is cleared, the pop flagged for its frame"), Popped.LatchFrame == INDEX_NONE && Popped.Flags == GSTNDrillFlags::Popped);
+	FGSTN_DrillTickExtension::StepAfterClocks(Popped, 319, FGSTN_DrillFrameInputs(), Tuning);
+	TestTrue(TEXT("the next frame: the default fragment again"), Popped.IsDefault());
 
 	// The other ends from the same bore
 	FGSTN_DrillFrameInputs Boost = Release;

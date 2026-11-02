@@ -41,7 +41,13 @@ namespace GSTNDrillFlags
 	 */
 	constexpr uint8 AwaitingLatch = 1 << 3;
 
-	constexpr uint8 All = CounterClockwise | AirSpin | Bounced | AwaitingLatch;
+	/**
+	 * The latch just ended in a detach pop (crouch released early, D9 part 2): set with the phase back to None on the pop frame, cleared at the
+	 * next AfterClocks, like Bounced. The bore ability reads it to apply the pop; nothing else does
+	 */
+	constexpr uint8 Popped = 1 << 4;
+
+	constexpr uint8 All = CounterClockwise | AirSpin | Bounced | AwaitingLatch | Popped;
 }
 
 /**

@@ -9,7 +9,7 @@ The design is [spin-drill.md](../../docs/architecture/spin-drill.md); the checkp
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints D1 (the plugin, its five modules, the native tags of spec
 §10), D2 (tuning structs, target response, the pure drill math and the tuning asset) and D3 (the drill sync fragment and the tick
 extension's phase machine) and D4 (the ground and air spin: abilities, input slots, hop, low gravity, one air spin per airtime) are
-built, D5 (the opposite-spin cancel), D6/D7 (combat core seams: re-hit interval, outbox event keys) D8 (the dive) and the minimal part of D11 (the procedural spin and wobble), and D9 part 1 (the drill latch as a GSTNLink type made by code: the tip asks for it, the phase machine seats, bounces and ends from the link). Next: D9 part 2 (bore ability, launch), D10. The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
+built, D5 (the opposite-spin cancel), D6/D7 (combat core seams: re-hit interval, outbox event keys) D8 (the dive) and the minimal part of D11 (the procedural spin and wobble), D9 part 1 (the drill latch as a GSTNLink type made by code: the tip asks for it, the phase machine seats, bounces and ends from the link), D9 part 2 (bore, launch, pop, per-latch anchor) and D10 (moving targets through the link's parked transform and the anchor). Next: D12 (penetration vs hardness), D13. The D0 input findings (Spin condition, keyboard shortcut) are in [spin-drill-spike-report.md](../../docs/notes/spin-drill-spike-report.md).
 
 ## Modules
 
@@ -115,6 +115,14 @@ BeforeCandidates yet; the request of the frame and the bore end rules (`UGSTN_Dr
 - **Dive (D8)**: crouch pressed during a spin (`Command.Movement.Drill`, window from frame 3) starts `UGSTN_GA_DrillDive`: a plunge at
   PlungeSpeed along gravity with no gravity while diving (`UGSTN_GE_DrillDiveGravity`), steering by air control, the drill tip
   (`Combat.HitType.Drill`). A tip hit asks for the drill latch (D9); a refused one bounces, the ground gives the landing lag, releasing crouch ends it.
+- **Bore (D9 part 2)**: on the seat's first frame the tick extension starts (forced) the kit's bore, the first timeline of the registry with a
+  `FGSTN_BoreTrack`; `FGSTN_SpinDrillKitExtension::BoreAbility` (default `UGSTN_GA_DrillBore`) adds it to the kit's triggered abilities.
+  `FGSTN_BoreTrackHook` holds the seat frame while Seating and the bore frame while latched; the tip there re-hits every
+  `RehitIntervalFrames` (seam S1, ordinary hits, `HitsLanded`). The hook stamps the crouch (`GSTNDrillStamps::CrouchMarker`) for the end rules.
+  Launch: `UGSTN_GE_DrillLaunch` (LaunchSpeed, LaunchDirection, the driller's up as the surface normal); pop: `UGSTN_GE_DrillPop`
+  (DetachPopSpeed, flag `Popped`). The per-latch anchor (where the driller met the target, in the target's root space) goes into
+  GSTNLink's `FGSTN_LinkState::SetAnchorOverride` on the first Active frame, so a moving target (D10) carries the driller where it hit.
+  Outbox: `Event.Drill.Latched`, `.Detached`, `.Launched`, `.GroundLag` (magnitude = hits landed).
 - **Harness**: `Tools/GASNPPTest/spin_drill_scenarios.py` (`spin_ground_hits_ring`, `spin_air_hop_low_gravity`,
   `air_spin_once_per_airtime`, `spin_opposite_cancel`, `drill_ground_lag`, `drill_nondrillable_bounce`), bindings added in memory.
 - Limits: wall contact does not refresh the air spin yet (no wall fact in the combat state); a pawn without the combat stats never

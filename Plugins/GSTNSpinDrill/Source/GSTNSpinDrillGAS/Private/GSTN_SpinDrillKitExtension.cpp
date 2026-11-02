@@ -2,6 +2,8 @@
 
 #include "GSTN_SpinDrillKitExtension.h"
 
+#include "Abilities/GSTN_GA_DrillBore.h"
+
 #include "Components/ActorComponent.h"
 #include "GameFramework/Actor.h"
 #include "GSTN_SpinDrillTuning.h"
@@ -9,6 +11,11 @@
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Sim/GSTN_SpinDrillAttach.h"
+
+FGSTN_SpinDrillKitExtension::FGSTN_SpinDrillKitExtension()
+	: BoreAbility(UGSTN_GA_DrillBore::StaticClass())
+{
+}
 
 const FGSTN_SpinDrillKitExtension* FGSTN_SpinDrillLoadout::FindKitExtension(const UGSTN_PrimaryKitDefinition* Kit)
 {
@@ -29,6 +36,10 @@ void FGSTN_SpinDrillLoadout::AttachFromLoadout(const FGSTN_LoadoutExtensionConte
 	{
 		FGSTN_SpinDrillAttach::Clear(Owner);
 		return;
+	}
+	if (!Extension->BoreAbility.IsNull())
+	{
+		Input.Kit.TriggeredAbilities.AddUnique(Extension->BoreAbility.ToSoftObjectPath());
 	}
 	// Loaded here, where the loadout is compiled, never in a tick; the values are copied, so nothing has to keep the asset alive
 	const UGSTN_SpinDrillTuning* Tuning = Extension->Tuning.IsNull() ? nullptr : Extension->Tuning.LoadSynchronous();

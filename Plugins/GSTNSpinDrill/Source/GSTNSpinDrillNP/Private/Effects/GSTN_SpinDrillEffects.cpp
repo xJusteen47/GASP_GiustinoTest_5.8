@@ -10,6 +10,7 @@
 #include "Math/GSTN_DrillMath.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
+#include "MoverSimulationTypes.h"
 #include "Sim/GSTN_SpinDrillAttach.h"
 
 FEffectMoveContainer UGSTN_AirSpinHopCreator::MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
@@ -83,6 +84,56 @@ UGSTN_GE_DrillBounce::UGSTN_GE_DrillBounce()
 	DurationPolicy = EGameplayEffectDurationType::Instant;
 	UApplyMoveGameplayEffectComponent* ApplyMove = CreateDefaultSubobject<UApplyMoveGameplayEffectComponent>(TEXT("ApplyMove"));
 	ApplyMove->MoveProcessor = CreateDefaultSubobject<UGSTN_DrillBounceCreator>(TEXT("BounceCreator"));
+	GEComponents.Add(ApplyMove);
+}
+
+FEffectMoveContainer UGSTN_DrillLaunchCreator::MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+	const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const
+{
+	FApplyVelocityEffect Effect;
+	Effect.bAdditiveVelocity = false;
+	if (!TargetMoverComponent)
+	{
+		return FEffectMoveContainer(&Effect);
+	}
+	const UGSTN_MoverSimStateTracker* Tracker = UGSTN_MoverSimStateTracker::FindOrAdd(TargetMoverComponent);
+	const FGSTN_DrillSimTuning Tuning = FGSTN_SpinDrillAttach::FindOrDefault(TargetMoverComponent->GetOwner());
+	const FVector Up = Tracker->GetUpDirection();
+	Effect.VelocityToApply = UGSTN_DrillMath::ComputeLaunchVelocity(Tuning.LaunchDirection, Up, -Up, Tuning.LaunchSpeed);
+	Effect.ForceMovementMode = DefaultModeNames::Falling;
+	return FEffectMoveContainer(&Effect);
+}
+
+UGSTN_GE_DrillLaunch::UGSTN_GE_DrillLaunch()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	UApplyMoveGameplayEffectComponent* ApplyMove = CreateDefaultSubobject<UApplyMoveGameplayEffectComponent>(TEXT("ApplyMove"));
+	ApplyMove->MoveProcessor = CreateDefaultSubobject<UGSTN_DrillLaunchCreator>(TEXT("LaunchCreator"));
+	GEComponents.Add(ApplyMove);
+}
+
+FEffectMoveContainer UGSTN_DrillPopCreator::MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+	const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const
+{
+	FApplyVelocityEffect Effect;
+	Effect.bAdditiveVelocity = false;
+	if (!TargetMoverComponent)
+	{
+		return FEffectMoveContainer(&Effect);
+	}
+	const UGSTN_MoverSimStateTracker* Tracker = UGSTN_MoverSimStateTracker::FindOrAdd(TargetMoverComponent);
+	const FGSTN_DrillSimTuning Tuning = FGSTN_SpinDrillAttach::FindOrDefault(TargetMoverComponent->GetOwner());
+	// The parked driller has no speed of its own: the pop is the hop alone
+	Effect.VelocityToApply = UGSTN_DrillMath::ComputeHopVelocity(FVector::ZeroVector, Tracker->GetUpDirection(), Tuning.DetachPopSpeed, true);
+	Effect.ForceMovementMode = DefaultModeNames::Falling;
+	return FEffectMoveContainer(&Effect);
+}
+
+UGSTN_GE_DrillPop::UGSTN_GE_DrillPop()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	UApplyMoveGameplayEffectComponent* ApplyMove = CreateDefaultSubobject<UApplyMoveGameplayEffectComponent>(TEXT("ApplyMove"));
+	ApplyMove->MoveProcessor = CreateDefaultSubobject<UGSTN_DrillPopCreator>(TEXT("PopCreator"));
 	GEComponents.Add(ApplyMove);
 }
 

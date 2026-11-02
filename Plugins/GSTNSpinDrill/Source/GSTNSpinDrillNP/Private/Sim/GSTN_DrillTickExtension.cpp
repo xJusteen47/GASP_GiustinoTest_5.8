@@ -6,6 +6,7 @@
 #include "AbilitySystemComponent.h"
 #include "Data/GSTN_SpinDrillTracks.h"
 #include "Effects/GSTN_SpinDrillEffects.h"
+#include "Events/GSTN_SimEvent.h"
 #include "GameFramework/Actor.h"
 #include "GSTN_LinkRegistry.h"
 #include "GSTN_SpinDrillTags.h"
@@ -18,6 +19,8 @@
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Sync/GSTN_SyncFragment.h"
+#include "Timeline/GSTN_TimelinePlayer.h"
+#include "World/GSTN_StepSnapshot.h"
 
 namespace GSTNDrillTick
 {
@@ -60,6 +63,24 @@ namespace GSTNDrillTick
 	{
 		return static_cast<uint16>(FMath::Clamp(Frames, 0, static_cast<int32>(MAX_uint16)));
 	}
+
+	/** The event the phase change of an AfterExecute raises, empty for none (outbox: published on the authority only, once per frame) */
+	FGameplayTag EventForChange(EGSTN_DrillPhase Before, bool bWasLatched, const FGSTN_DrillFragment& After)
+	{
+		if (!bWasLatched && After.IsLatched())
+		{
+			return GSTNSpinDrillTags::Event_Drill_Latched;
+		}
+		if (bWasLatched && !After.IsLatched())
+		{
+			return After.Phase == EGSTN_DrillPhase::Launching ? GSTNSpinDrillTags::Event_Drill_Launched.GetTag() : GSTNSpinDrillTags::Event_Drill_Detached.GetTag();
+		}
+		if (Before == EGSTN_DrillPhase::Diving && After.Phase == EGSTN_DrillPhase::Lag)
+		{
+			return GSTNSpinDrillTags::Event_Drill_GroundLag;
+		}
+		return FGameplayTag();
+	}
 }
 
 FGSTN_DrillSimTuning FGSTN_DrillSimTuning::MakeDefault()
@@ -85,6 +106,9 @@ FGSTN_DrillSimTuning FGSTN_DrillSimTuning::FromTuning(const FGSTN_AirSpinTuning&
 	Tuning.PlungeSpeed = Dive.PlungeSpeed;
 	Tuning.GroundLagFrames = Dive.GroundLagFrames;
 	Tuning.BounceSpeed = Dive.BounceSpeed;
+	Tuning.LaunchSpeed = Launch.LaunchSpeed;
+	Tuning.LaunchDirection = Launch.LaunchDirection;
+	Tuning.DetachPopSpeed = Bore.DetachPopSpeed;
 	return Tuning;
 }
 
@@ -101,6 +125,16 @@ void FGSTN_DrillTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 		if (FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments))
 		{
 			StepAfterClocks(*Fragment, Context.Frame, GatherInputs(Point, Context), GetTuning(Context));
+			// D9 part 2: the seat starts with the kit's bore timeline, which holds the latch while crouch is held. A kit without one keeps the
+			// dive's timeline (the D9 part 1 behaviour: its release ends the latch)
+			if (Context.Services && WantsBoreAdoption(*Fragment, Context.Frame, Context.Out.Core))
+			{
+				const UGSTN_CombatSimComponent* Combat = Context.Owner ? Context.Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+				if (const UClass* Bore = FindBoreAbility(Combat ? Combat->FindTableSet(Context.Out.Core.TableRevision) : nullptr))
+				{
+					Context.Services->StartForcedTimeline(Bore);
+				}
+			}
 		}
 		break;
 	case EGSTN_CombatHookPoint::AfterExecute:
@@ -115,12 +149,37 @@ void FGSTN_DrillTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 		if (Fragment)
 		{
 			const bool bWasLatched = Fragment->IsLatched();
+			const EGSTN_DrillPhase Before = Fragment->Phase;
 			StepAfterExecute(*Fragment, Context.Frame, Inputs, GetTuning(Context));
+			FGSTN_LinkFragment* LinkFragment = (bWasLatched || Fragment->IsLatched()) ? FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments) : nullptr;
 			if (bWasLatched && !Fragment->IsLatched())
 			{
 				// The drill ended its own latch (pop, launch): the link it still holds is released through GSTNLink, which places the exit
-				FGSTN_LinkFragment* LinkFragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
 				ReleaseLinkOnUnlatch(bWasLatched, *Fragment, ReadLinkView(LinkFragment, GetDrillTypeIndex()), LinkFragment);
+			}
+			else if (Fragment->IsLatched() && LinkFragment && !LinkFragment->Links.Body.HasFlag(GSTNLinkFlags::AnchorOverride))
+			{
+				// The per-latch anchor: where the driller met the target, from the driller's view of it (on the authority, for a remote player,
+				// the target as that player saw it), so the parked driller stays where the tip hit instead of the type's fixed offset
+				const FGSTN_StepSnapshot* View = Context.Services ? Context.Services->GetViewSnapshot() : nullptr;
+				View = View ? View : Context.Snapshot;
+				const FGSTN_LinkState& Body = LinkFragment->Links.Body;
+				const FGSTN_SnapshotEntry* Self = Context.Snapshot && Context.EntityId != INDEX_NONE ? Context.Snapshot->Find(Context.EntityId) : nullptr;
+				const FGSTN_SnapshotEntry* Partner = View && !Body.PartnerId.IsNull() ? View->Find(Body.PartnerId.Id) : nullptr;
+				if (Self && Partner)
+				{
+					WriteLatchAnchor(LinkFragment->Links.Body, GetDrillTypeIndex(), Self->Transform, Partner->Transform);
+				}
+			}
+			const FGameplayTag Event = GSTNDrillTick::EventForChange(Before, bWasLatched, *Fragment);
+			if (Event.IsValid() && Context.Outbox)
+			{
+				FGSTN_SimEvent SimEvent;
+				SimEvent.EventType = Event;
+				SimEvent.Frame = Context.Frame;
+				SimEvent.Instigator = Context.Owner;
+				SimEvent.Magnitude = static_cast<float>(Fragment->HitsLanded);
+				Context.Outbox->Add(MoveTemp(SimEvent));
 			}
 		}
 		break;
@@ -136,8 +195,8 @@ void FGSTN_DrillTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 
 void FGSTN_DrillTickExtension::StepAfterClocks(FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_DrillFrameInputs& Inputs, const FGSTN_DrillSimTuning& Tuning)
 {
-	// The bounce flag lives for the frame of the bounce only (the dive ability read it in that frame)
-	Fragment.Flags &= ~GSTNDrillFlags::Bounced;
+	// The bounce and pop flags live for their frame only (the dive and bore abilities read them in that frame)
+	Fragment.Flags &= ~(GSTNDrillFlags::Bounced | GSTNDrillFlags::Popped);
 	if (Fragment.LowGravityUntilFrame != INDEX_NONE && Frame >= Fragment.LowGravityUntilFrame)
 	{
 		Fragment.LowGravityUntilFrame = INDEX_NONE;
@@ -277,9 +336,14 @@ void FGSTN_DrillTickExtension::StepAfterExecute(FGSTN_DrillFragment& Fragment, i
 	switch (Result)
 	{
 	case EGSTN_DrillEndResult::DetachHitstun:
-	case EGSTN_DrillEndResult::DetachPop:
 		ClearLatch(Fragment);
 		EnterNone(Fragment);
+		break;
+	case EGSTN_DrillEndResult::DetachPop:
+		// The bore ability applies the pop on this frame (the flag), then its timeline plays the recovery
+		ClearLatch(Fragment);
+		EnterNone(Fragment);
+		Fragment.Flags = GSTNDrillFlags::Popped;
 		break;
 	case EGSTN_DrillEndResult::Launch:
 		ClearLatch(Fragment);
@@ -349,7 +413,9 @@ bool FGSTN_DrillTickExtension::HasPhaseTimelineEnded(const FGSTN_DrillFragment& 
 		// These phases start with their timeline: the phase start frame is the timeline's
 		return !bRunning || Core.TimelineStartFrame != Fragment.PhaseStartFrame;
 	case EGSTN_DrillPhase::Lag:
-		// The lag starts inside the dive's timeline (on landing) and lasts as long as it does: it ends with it or when another one starts
+	case EGSTN_DrillPhase::Launching:
+		// The lag starts inside the dive's timeline (on landing) and the launch inside the bore's (its recovery): each lasts as long as its
+		// timeline does, ending with it or when another one starts
 		return !bRunning || Core.TimelineStartFrame >= Fragment.PhaseStartFrame;
 	default:
 		return false;
@@ -430,8 +496,9 @@ void FGSTN_DrillTickExtension::ReadLatchEnd(const FGSTN_DrillFragment& Fragment,
 	{
 		return;
 	}
-	// Until the bore ability holds its own loop, the dive's timeline stands for the held crouch: the dive ability ends on the release
-	InOutInputs.bCrouchHeld = Core.ActionState == EGSTN_ActionState::InTimeline && Core.TimelineStartFrame < Fragment.LatchFrame;
+	// The dive's timeline (it ends on the release) or the bore adopted at the latch stands for the held crouch; the bore's stamp refines it
+	// (ReadCrouchStamp, which the extension applies after this). Any later timeline is not the drill's: released
+	InOutInputs.bCrouchHeld = Core.ActionState == EGSTN_ActionState::InTimeline && Core.TimelineStartFrame <= Fragment.LatchFrame;
 	// The driller staggered or knocked out by any source, before the link notices the hit: detach, the hitstun wins (7.4)
 	InOutInputs.bDrillerInHitstun |= Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Tumble;
 	InOutInputs.bDrillerKnockedOut |= Core.ActionState == EGSTN_ActionState::KO;
@@ -450,6 +517,57 @@ bool FGSTN_DrillTickExtension::ReleaseLinkOnUnlatch(bool bWasLatched, const FGST
 		return false;
 	}
 	return FGSTN_LinkTickExtension::MarkPendingBreak(*LinkFragment, static_cast<uint8>(EGSTN_LinkBreakReason::Release));
+}
+
+bool FGSTN_DrillTickExtension::ReadCrouchStamp(const FGSTN_TimelineOutput* Timeline, bool& bOutHeld)
+{
+	if (!Timeline)
+	{
+		return false;
+	}
+	for (const FGSTN_StampedWindow& Stamp : Timeline->StampedWindows)
+	{
+		if (Stamp.Profile == GSTNDrillStamps::CrouchMarker)
+		{
+			bOutHeld = Stamp.EndFrame == INDEX_NONE;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FGSTN_DrillTickExtension::WantsBoreAdoption(const FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_CombatSyncCore& Core)
+{
+	// Asked on the seat's first frame only: a kit without a bore is not scanned again on every latched frame
+	return Fragment.IsLatched() && Frame == Fragment.LatchFrame
+		&& (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame < Fragment.LatchFrame);
+}
+
+const UClass* FGSTN_DrillTickExtension::FindBoreAbility(const UGSTN_CombatTableSet* Set)
+{
+	if (!Set)
+	{
+		return nullptr;
+	}
+	for (const TSubclassOf<UGSTN_GA_BaseCombat>& Class : Set->TimelineRegistry)
+	{
+		const UGSTN_GA_BaseCombat* Default = Class ? Class->GetDefaultObject<UGSTN_GA_BaseCombat>() : nullptr;
+		if (Default && FGSTN_BoreTrack::Find(Default->GetTimelineData()))
+		{
+			return Class.Get();
+		}
+	}
+	return nullptr;
+}
+
+bool FGSTN_DrillTickExtension::WriteLatchAnchor(FGSTN_LinkState& Body, int32 DrillTypeIndex, const FTransform& SelfRoot, const FTransform& PartnerRoot)
+{
+	if (DrillTypeIndex <= 0 || Body.LinkTypeIndex != DrillTypeIndex || Body.Role != 1 || !Body.IsActive() || Body.HasFlag(GSTNLinkFlags::AnchorOverride))
+	{
+		return false;
+	}
+	Body.SetAnchorOverride(PartnerRoot.InverseTransformPosition(SelfRoot.GetLocation()));
+	return true;
 }
 
 int32 FGSTN_DrillTickExtension::GetDrillTypeIndex()
@@ -510,6 +628,15 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 				Inputs.Request = ReadDiveOutcome(*Fragment, Context.Frame, Context.AttackerHits.Num() > 0, Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::None, Link);
 			}
 			ReadLatchEnd(*Fragment, Context.Out.Core, Link, Inputs);
+			if (Fragment->IsLatched())
+			{
+				ReadCrouchStamp(Context.Timeline, Inputs.bCrouchHeld);
+				// Every hit of the bore's tip lands on the latched target (the tip sits in it); a ricochet is not a hit
+				for (const FGSTN_AttackerHit& Hit : Context.AttackerHits)
+				{
+					Inputs.bHitLanded |= !Hit.bRicochet;
+				}
+			}
 		}
 		break;
 	default:

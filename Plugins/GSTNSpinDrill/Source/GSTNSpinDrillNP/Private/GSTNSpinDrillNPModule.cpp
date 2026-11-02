@@ -2,7 +2,9 @@
 
 #include "Modules/ModuleManager.h"
 #include "Sim/GSTN_DrillFragment.h"
+#include "Data/GSTN_SpinDrillTracks.h"
 #include "Sim/GSTN_DrillTickExtension.h"
+#include "Sim/GSTN_DrillTrackHook.h"
 
 /**
  * Registers the drill fragment under GSTNFeatureIds::SpinDrill and the drill tick extension before the first simulation tick, and
@@ -17,16 +19,19 @@ public:
 	{
 		FGSTN_DrillFragmentRegistration::Register();
 		FGSTN_CombatTickExtensionRegistry::Get().Register(&TickExtension);
+		FGSTN_TimelineTrackHookRegistry::Get().Register(FGSTN_BoreTrack::StaticStruct(), &BoreHook);
 	}
 
 	virtual void ShutdownModule() override
 	{
+		FGSTN_TimelineTrackHookRegistry::Get().Unregister(&BoreHook);
 		FGSTN_CombatTickExtensionRegistry::Get().Unregister(&TickExtension);
 		FGSTN_DrillFragmentRegistration::Unregister();
 	}
 
 private:
 	FGSTN_DrillTickExtension TickExtension;
+	FGSTN_BoreTrackHook BoreHook;
 };
 
 IMPLEMENT_MODULE(FGSTNSpinDrillNPModule, GSTNSpinDrillNP)

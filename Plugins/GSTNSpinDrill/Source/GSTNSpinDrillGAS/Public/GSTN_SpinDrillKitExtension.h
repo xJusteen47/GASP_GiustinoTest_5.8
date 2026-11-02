@@ -7,6 +7,7 @@
 #include "GSTN_SpinDrillKitExtension.generated.h"
 
 class UGSTN_PrimaryKitDefinition;
+class UGSTN_GA_DrillBore;
 class UGSTN_SpinDrillTuning;
 struct FGSTN_CompileInput;
 struct FGSTN_LoadoutExtensionContext;
@@ -28,6 +29,15 @@ struct GSTNSPINDRILLGAS_API FGSTN_SpinDrillKitExtension : public FGSTN_KitExtens
 	/** The kit's tuning. Empty = the defaults of the tuning structs */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SpinDrill")
 	TSoftObjectPtr<UGSTN_SpinDrillTuning> Tuning;
+
+	/**
+	 * The bore the drill tick extension starts at the latch (a timeline with a FGSTN_BoreTrack). Added to the kit's triggered abilities when the
+	 * loadout is compiled, so the kit asset does not list it. Empty = no bore: the dive's timeline holds the latch (D9 part 1 behaviour)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SpinDrill")
+	TSoftClassPtr<UGSTN_GA_DrillBore> BoreAbility;
+
+	FGSTN_SpinDrillKitExtension();
 };
 
 /** The loadout side of the spin and drill: the kit extension resolved into the pawn's attached tuning */
@@ -38,8 +48,8 @@ struct GSTNSPINDRILLGAS_API FGSTN_SpinDrillLoadout
 
 	/**
 	 * The loadout extension this module registers: attaches the kit's tuning (or the defaults when the entry names none) to the loadout's
-	 * owner wherever the loadout is compiled; a kit without the entry detaches, and the pawn plays with the defaults. Adds nothing to the
-	 * compile input
+	 * owner wherever the loadout is compiled; a kit without the entry detaches, and the pawn plays with the defaults. Adds the entry's
+	 * BoreAbility to the kit's triggered abilities (D9 part 2), so the timeline registry holds the bore the latch starts
 	 */
 	static void AttachFromLoadout(const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input);
 

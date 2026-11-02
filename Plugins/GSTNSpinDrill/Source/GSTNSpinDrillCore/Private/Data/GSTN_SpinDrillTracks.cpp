@@ -6,6 +6,7 @@
 #include "GSTN_SpinDrillTags.h"
 #include "Hits/GSTN_HitboxTypes.h"
 #include "Hits/GSTN_HitShape.h"
+#include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
 
 const FGSTN_SpinTrack* FGSTN_SpinTrack::Find(const FGSTN_CombatTimelineData& Data)
@@ -45,6 +46,20 @@ const FGSTN_DiveTrack* FGSTN_DiveTrack::Find(const FGSTN_CombatTimelineData& Dat
 		if (Struct && Struct->IsChildOf(DiveStruct))
 		{
 			return &Track.Get<FGSTN_DiveTrack>();
+		}
+	}
+	return nullptr;
+}
+
+const FGSTN_BoreTrack* FGSTN_BoreTrack::Find(const FGSTN_CombatTimelineData& Data)
+{
+	const UScriptStruct* BoreStruct = FGSTN_BoreTrack::StaticStruct();
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
+	{
+		const UScriptStruct* Struct = Track.GetScriptStruct();
+		if (Struct && Struct->IsChildOf(BoreStruct))
+		{
+			return &Track.Get<FGSTN_BoreTrack>();
 		}
 	}
 	return nullptr;
@@ -146,6 +161,45 @@ FGSTN_CombatTimelineData FGSTN_SpinTimelines::MakeDive(const FGSTN_DiveTimelineP
 	FGSTN_TimelineTrack_Hitbox Hitbox;
 	Hitbox.StartFrame = 0;
 	Hitbox.EndFrame = Data.TotalFrames;
+	Hitbox.Part.GroupName = Params.TipGroup;
+	Hitbox.Hitboxes.Add(Tip);
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Hitbox));
+	return Data;
+}
+
+FGSTN_CombatTimelineData FGSTN_SpinTimelines::MakeBore(const FGSTN_BoreTimelineParams& Params)
+{
+	FGSTN_CombatTimelineData Data;
+	const int32 BoreFrame = 1;
+	Data.TotalFrames = BoreFrame + 1 + FMath::Max(1, Params.RecoveryFrames);
+	Data.FirstActionableFrame = Data.TotalFrames;
+	Data.OverrideFrames = 0;
+
+	FGSTN_BoreTrack Bore;
+	Bore.StartFrame = 0;
+	Bore.EndFrame = BoreFrame + 1;
+	Bore.BoreFrame = BoreFrame;
+	Bore.HoldButton = GSTNCombatButtonTags::Button_Crouch.GetTag();
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_BoreTrack>(Bore));
+
+	FGSTN_HitboxSpec Tip;
+	Tip.Shape.Type = EGSTN_ShapeType::Sphere;
+	Tip.Shape.Extent = FVector(Params.TipRadius);
+	Tip.Space = EGSTN_HitboxSpace::Root;
+	FGSTN_HitboxKey Key;
+	Key.Frame = 0;
+	Key.Offset = FVector(0.0, 0.0, -Params.TipDepth);
+	Tip.Keys = { Key };
+	Tip.Data.HitType = GSTNSpinDrillTags::HitType_Drill.GetTag();
+	Tip.Data.Damage = Params.Damage;
+	Tip.Data.BaseKnockback = Params.BaseKnockback;
+	Tip.Data.AngleDeg = Params.KnockbackAngleDeg;
+	// Seam S1: the held frame re-hits the latched target every RehitIntervalFrames (it counts stalled frames). No link type: the latch holds
+	Tip.RehitIntervalFrames = FMath::Max(1, Params.RehitIntervalFrames);
+
+	FGSTN_TimelineTrack_Hitbox Hitbox;
+	Hitbox.StartFrame = BoreFrame;
+	Hitbox.EndFrame = BoreFrame + 1;
 	Hitbox.Part.GroupName = Params.TipGroup;
 	Hitbox.Hitboxes.Add(Tip);
 	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Hitbox));

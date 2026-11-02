@@ -59,6 +59,24 @@ struct FGSTN_DiveTimelineParams
 	FName TipGroup = TEXT("Body");
 };
 
+/** What the default drill bore timeline is made of (D9 part 2): seat frame 0, bore frame 1 (held), then the recovery */
+struct FGSTN_BoreTimelineParams
+{
+	/** Frames played after the latch ends (launch, pop) before the timeline is over */
+	int32 RecoveryFrames = 8;
+
+	/** Keep equal to the kit tuning's FGSTN_BoreTuning::RehitIntervalFrames: the hitbox carries it, the tuning documents it */
+	int32 RehitIntervalFrames = 6;
+
+	/** The tip, as the dive's */
+	float TipRadius = 45.f;
+	float TipDepth = 20.f;
+	float Damage = 2.f;
+	float BaseKnockback = 0.f;
+	float KnockbackAngleDeg = 90.f;
+	FName TipGroup = TEXT("Body");
+};
+
 /** What the default opposite-spin cancel timeline is made of (D5) */
 struct FGSTN_SpinCancelTimelineParams
 {
@@ -78,6 +96,9 @@ struct GSTNSPINDRILLCORE_API FGSTN_SpinTimelines
 
 	/** The drill dive: the dive track over the whole length and the tip hitbox (Combat.HitType.Drill, swept between frames: the dive is fast) */
 	static FGSTN_CombatTimelineData MakeDive(const FGSTN_DiveTimelineParams& Params);
+
+	/** The drill bore: the bore track (seat frame 0, held bore frame 1, crouch) and the tip hitbox on the bore frame with its re-hit interval */
+	static FGSTN_CombatTimelineData MakeBore(const FGSTN_BoreTimelineParams& Params);
 
 	/** The opposite-spin cancel: the cancel track over the recovery, a jump cancel window, nothing else. Sense = the cancelling rotation */
 	static FGSTN_CombatTimelineData MakeCancel(const FGSTN_SpinCancelTimelineParams& Params, EGSTN_SpinSense Sense);
