@@ -102,3 +102,11 @@ after one checkpoint.
 - Environment: UnrealEditor stuck for hours came from my own script's empty driver path (PowerShell regex on a backslash); fixed. Stop-Process
   of the editor works with the new .claude/settings.json rules only as the bare command.
 - Cost: one Sonnet thread, ~100k context, 6 editor runs (~25 min machine), medium. Low value per cost: the root cause of "no spin" is open.
+- Hypotheses for "no drill fragment on any pawn" (for the next thread, in order): (1) the fragment is registered by GSTNSpinDrillNP at
+  PostEngineInit (`FGSTN_DrillFragmentRegistration::Register`, GSTNSpinDrillNPModule.cpp) but a pawn's sync state only carries the fragments of
+  features its kit/combat component enabled: check whether the test pawn (BP_GASNPP_TestCharacter, combat component) enables the SpinDrill
+  feature id (GSTNFeatureIds::SpinDrill) or needs `FGSTN_SpinDrillKitExtension` in the loadout; the unit tests build it by hand, the harness
+  never did. (2) The PIE worlds started before the kit was applied (apply at 0.05 s of the scenario): the compiled slot table may need a fresh PIE
+  after `prepare_editor`; try applying in `defence_batch`'s ready phase. (3) Only if 1 and 2 fail: the stick rotation (IA_Move through
+  IC_GASNPP_Test) does not reach the combat input buffer; probe by `get_shown_drill_text` plus a log of the slot table.
+- Estimated cost: Sonnet 5.5, ~100-110k context tokens, 6 editor runs (~25 min machine). Next work: hold-to-crouch (new thread, approved by owner).
