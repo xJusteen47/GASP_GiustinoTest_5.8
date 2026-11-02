@@ -218,3 +218,11 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
 - Fix `animpipe poses` senza `--frames` e senza immagini: usa fino a 6 pose chiave della scheda (provato su dair v3 over v2).
 - Resta: legibility sul dair (thread B, FAIL atteso), eseguire un `animpipe check` completo dall'editor per confermare (clearance
   e legibility vere), thread C (proporzioni). Costo: Sonnet ~30 chiamate, ~$1.5.
+- **v4 (timing dell'owner)**: il Ganondorf originale resta il riferimento; sbagliati erano i tempi che v1-v3 ricavavano solo
+  dai numeri UFD. Scheda `overlord_dair_v4.json`: 0 posa iniziale quasi in piedi, ginocchio sx su, braccia aperte, mani
+  aperte -> carica estrema al 5 (sua 15) -> carica tenuta e viva fino all'11 (piedi +8 cm, mani +8 cm, busto -6°, insieme)
+  -> rilascio che inizia al 13 -> stomp al 14 -> tenuta fino al 30 -> recupero al 42. Gate: hitstop_snap 1,9 cm, contact_faf
+  PASS; FAIL legibility (ereditato), clearance (avambraccio dx nella testa -5,7 cm nella carica, avambracci incrociati -5)
+  e co_motion (braccia "incollate" 7-12 nella tenuta). Fermo dopo 2 tentativi. Domanda all'owner: il rilascio va
+  distribuito su 3-4 frame (11->14) o resta lo scatto sul frame di hitbox (regola attuale)?
+  Output `overlord_dair_v4_lato.png`, `overlord_dair_v4_hitstop_vs_whiff.mp4`. Costo totale del thread circa $12-14.
