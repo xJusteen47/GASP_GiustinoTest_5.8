@@ -6,12 +6,17 @@
  "fps": 60,
  "timing_csv": "refs/ufd/GanondorfDAir_timing.csv",
  "effector": "foot_l",
- "_design": "Kit overlord ('elegant violence', M. Bison / Rugal). Ganondorf dair timing (UFD: startup 16, active 16-18, total 44 -> anim active 14-16, FAF 42) and its shape (knees tucked to the chest, both feet driven straight down); M. Bison head-stomp upper body: the arms rise and cross above the head through the startup, then fold on the chest (Bison's crossed arms) as the feet strike, and stay folded. Aerial: no idle entry, frame 0 already in the air tuck. No owner Step poses: the poses are authored data (author block), v1 for the owner's judgement. v1b (owner refs IMG_9040/9041 seen): arms folded tight and high on the chest, hands on the opposite upper arm; toes pointed at the stomp. v2 (2026-11-02): owner's Cascadeur key poses (Saved/AnimPipeline/overlord_dair_owner.casc, frames 15 and 23, read with casc_to_author.py; data in Saved/AnimPipeline/dair_v2/owner_poses_cascadeur.json) replace the anticipation and the stomp: owner 15 (tight ball, knees to the chest, forearms crossed in front of the face) -> anim 12, held and compressed to 13; owner 23 (straight vertical body leaning back, legs together, crossed arms high on the chest) -> anim 14, so the whole extension lands ON the first hitbox frame. Ganondorf timing kept (owner). Villain hand (open, fingers straight and together) at the anticipation, as asked. Owner rule: 'too much is just right' (Sakurai): toes pointed harder than his pose (-45). Clearance fix: crossed forearms 9-16 cm further forward at 12-13 (right in front of the left), head tuck 35% less; folded hands 3-6 cm off the chest in the recovery. Clearance pass 2: right forearm 5 cm above the left at 12-13, elbows wider; folded hands 5 cm further off the chest from 14. v3 (owner review of v2): arms, trunk and legs move as one: the arms travel relative to the trunk on every segment (low at the sides -> wide and rising at 6 -> crossing at chest height at 10 -> owner's crossed forearms in front of the face at 12 -> pushed up at 13 -> slammed down onto the chest at 14 with the legs), the trunk curls progressively (0 -> 6 -> 10 -> 12) instead of all at once. Head lag removed (part_delays head 0): the head reached its stomp pose one frame after the hit, so it snapped after the hitstop; hitstop_snap now counts the head's turn (20 cm lever). v4 (owner timing, replaces the GIF timing): initial pose almost upright, one knee up, arms open, hands open (0) -> extreme charge reached at 5 (owner 15) -> charge held and still tightening to 11 -> release starts at 12-13 (still reads as the charge) -> stomp lands on 14 (active 14-16) -> stomp held to 30 with a small settle -> recovery to 42. Slow, heavy move. Charge hold is alive: 5->11 the feet tuck 8 cm higher, the hands rise 8 cm, the trunk curls 6 deg, all together. Release spread 11->14 (owner: a slow move takes a few frames to let the force go): 15% at 12, 42% at 13, the last and largest 58% lands on 14.",
+ "_design": "Kit overlord ('elegant violence', M. Bison / Rugal). Ganondorf dair timing (UFD: startup 16, active 16-18, total 44 -> anim active 14-16, FAF 42) and its shape (knees tucked to the chest, both feet driven straight down); M. Bison head-stomp upper body: the arms rise and cross above the head through the startup, then fold on the chest (Bison's crossed arms) as the feet strike, and stay folded. Aerial: no idle entry, frame 0 already in the air tuck. No owner Step poses: the poses are authored data (author block), v1 for the owner's judgement. v1b (owner refs IMG_9040/9041 seen): arms folded tight and high on the chest, hands on the opposite upper arm; toes pointed at the stomp. v2 (2026-11-02): owner's Cascadeur key poses (Saved/AnimPipeline/overlord_dair_owner.casc, frames 15 and 23, read with casc_to_author.py; data in Saved/AnimPipeline/dair_v2/owner_poses_cascadeur.json) replace the anticipation and the stomp: owner 15 (tight ball, knees to the chest, forearms crossed in front of the face) -> anim 12, held and compressed to 13; owner 23 (straight vertical body leaning back, legs together, crossed arms high on the chest) -> anim 14, so the whole extension lands ON the first hitbox frame. Ganondorf timing kept (owner). Villain hand (open, fingers straight and together) at the anticipation, as asked. Owner rule: 'too much is just right' (Sakurai): toes pointed harder than his pose (-45). Clearance fix: crossed forearms 9-16 cm further forward at 12-13 (right in front of the left), head tuck 35% less; folded hands 3-6 cm off the chest in the recovery. Clearance pass 2: right forearm 5 cm above the left at 12-13, elbows wider; folded hands 5 cm further off the chest from 14. v3 (owner review of v2): arms, trunk and legs move as one: the arms travel relative to the trunk on every segment (low at the sides -> wide and rising at 6 -> crossing at chest height at 10 -> owner's crossed forearms in front of the face at 12 -> pushed up at 13 -> slammed down onto the chest at 14 with the legs), the trunk curls progressively (0 -> 6 -> 10 -> 12) instead of all at once. Head lag removed (part_delays head 0): the head reached its stomp pose one frame after the hit, so it snapped after the hitstop; hitstop_snap now counts the head's turn (20 cm lever). v4 (owner timing, replaces the GIF timing): initial pose almost upright, one knee up, arms open, hands open (0) -> extreme charge reached at 5 (owner 15) -> charge held and still tightening to 11 -> release starts at 12-13 (still reads as the charge) -> stomp lands on 14 (active 14-16) -> stomp held to 30 with a small settle -> recovery to 42. Slow, heavy move. Charge hold is alive: 5->11 the feet tuck 8 cm higher, the hands rise 8 cm, the trunk curls 6 deg, all together. Release spread 11->14 (owner: a slow move takes a few frames to let the force go): 15% at 12, 42% at 13, the last and largest 58% lands on 14. Owner: the first frame is already drawn in and loaded (55% of the way to the charge, arms pulled back with elbows behind), so 5 extremises a loaded pose. Owner: hitbox from anim frame 15 (16th frame); the charge hold runs to 12, release 12->15; charge poses more drawn in (feet +5 cm, trunk -6 deg). Frame 0 (owner: a sharp start, not already the charge): legs half drawn, trunk 30% curled, arms flung open wide and low behind the shoulders with open hands; 3: the arms sweep above the head and start crossing on the way; 5: the charge.",
  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAir_V4",
  "poses": [
   {
    "name": "first",
    "frame": 0,
+   "source": null
+  },
+  {
+   "name": "arms_rise_cross",
+   "frame": 3,
    "source": null
   },
   {
@@ -22,40 +27,40 @@
   },
   {
    "name": "charge_hold",
-   "frame": 11,
-   "source": null
-  },
-  {
-   "name": "release_start",
    "frame": 12,
    "source": null
   },
   {
-   "name": "release",
+   "name": "release_start",
    "frame": 13,
+   "source": null
+  },
+  {
+   "name": "release",
+   "frame": 14,
    "source": null,
    "spacing": "charge_long"
   },
   {
    "name": "active",
-   "frame": 14,
+   "frame": 15,
    "source": null
   },
   {
    "name": "active_end",
-   "frame": 16,
+   "frame": 17,
    "source": null
   },
   {
    "name": "hold_end",
-   "frame": 30,
+   "frame": 31,
    "source": null,
    "spacing": "limb_led_recovery",
    "ease_out": 0.333
   },
   {
    "name": "recovery",
-   "frame": 36,
+   "frame": 37,
    "source": null
   },
   {
@@ -77,8 +82,8 @@
  },
  "sheet_extra": {
   "hold_window": [
-   14,
-   30
+   15,
+   31
   ],
   "strike_limb": "leg_l",
   "strike_side": "leg_l"
@@ -199,7 +204,8 @@
     10,
     11,
     12,
-    13
+    13,
+    14
    ],
    "why": "owner 02/11: open hands at the start (his initial pose) and the villain hand through the charge"
   },
@@ -264,88 +270,195 @@
    "0": {
     "pelvis": {
      "loc": [
-      0,
-      0,
-      0
+      0.0,
+      -1.0,
+      5.0
      ],
      "rot": [
-      -8,
-      0,
-      0
+      -1.5,
+      2.1,
+      -6.0
      ]
     },
     "spine": [
-     -4,
+     -22.7,
      0,
      0
     ],
     "head": [
-     2,
+     -3.2,
      0,
      0
     ],
     "leg_l": {
      "foot": [
-      10,
-      22,
-      -50
+      10.0,
+      11.6,
+      -35.4
      ],
      "pole": [
-      14,
-      80,
-      0
+      31.6,
+      58.9,
+      23.9
      ],
      "foot_rot": [
-      -30,
-      0,
-      0
+      9.6,
+      0.0,
+      0.0
      ]
     },
     "leg_r": {
      "foot": [
-      -10,
-      0,
-      -66
+      -10.0,
+      4.2,
+      -37.5
      ],
      "pole": [
-      -12,
-      60,
-      -20
+      -44.0,
+      45.7,
+      20.2
      ],
      "foot_rot": [
-      -20,
-      0,
-      0
+      9.0,
+      0.0,
+      0.0
      ]
     },
     "arm_l": {
      "hand": [
-      40,
-      14,
-      6
+      46,
+      -8,
+      -4
      ],
      "pole": [
-      70,
-      -10,
-      0
+      60,
+      -40,
+      -20
      ]
     },
     "arm_r": {
      "hand": [
-      -40,
-      14,
-      6
+      -46,
+      -8,
+      -4
      ],
      "pole": [
-      -70,
-      -10,
-      0
+      -60,
+      -40,
+      -20
      ]
     },
     "fingers": [
      1,
      0,
      0
+    ],
+    "clavicle_l": [
+     0,
+     -12,
+     0
+    ],
+    "clavicle_r": [
+     0,
+     12,
+     0
+    ]
+   },
+   "3": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -1.7,
+      8.5
+     ],
+     "rot": [
+      3.0,
+      3.6,
+      -10.2
+     ]
+    },
+    "spine": [
+     -59.9,
+     -8.3,
+     -0.2
+    ],
+    "head": [
+     -8.4,
+     -1.1,
+     -1.6
+    ],
+    "leg_l": {
+     "foot": [
+      8.6,
+      12.7,
+      -16.7
+     ],
+     "pole": [
+      43.9,
+      58.1,
+      54.6
+     ],
+     "foot_rot": [
+      30.4,
+      0.0,
+      0.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -10.0,
+      7.1,
+      -17.5
+     ],
+     "pole": [
+      -66.3,
+      35.7,
+      48.4
+     ],
+     "foot_rot": [
+      29.3,
+      0.0,
+      0.0
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      4,
+      10,
+      52
+     ],
+     "pole": [
+      55,
+      -5,
+      40
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -4,
+      15,
+      50
+     ],
+     "pole": [
+      -55,
+      0,
+      40
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ],
+    "clavicle_l": [
+     0.0,
+     -12.0,
+     0.0
+    ],
+    "clavicle_r": [
+     0.0,
+     12.0,
+     0.0
     ]
    },
    "5": {
@@ -362,7 +475,7 @@
      ]
     },
     "spine": [
-     -69.8,
+     -75.8,
      -11.8,
      -0.3
     ],
@@ -386,8 +499,8 @@
     "leg_l": {
      "foot": [
       8.0,
-      11.2,
-      -13.7
+      13.2,
+      -8.7
      ],
      "pole": [
       49.2,
@@ -415,105 +528,8 @@
     "leg_r": {
      "foot": [
       -10.0,
-      6.4,
-      -13.9
-     ],
-     "pole": [
-      -75.9,
-      31.4,
-      60.5
-     ],
-     "foot_rot": [
-      38.0,
-      0,
-      0
-     ]
-    },
-    "fingers": [
-     1,
-     0,
-     0
-    ],
-    "clavicle_l": [
-     0,
-     -12,
-     0
-    ],
-    "clavicle_r": [
-     0,
-     12,
-     0
-    ]
-   },
-   "11": {
-    "pelvis": {
-     "loc": [
-      0,
-      -2,
-      11
-     ],
-     "rot": [
-      5.0,
-      4.2,
-      -12.0
-     ]
-    },
-    "spine": [
-     -75.8,
-     -11.8,
-     -0.3
-    ],
-    "head": [
-     -6.4,
-     -1.6,
-     -2.3
-    ],
-    "arm_l": {
-     "hand": [
-      -1.5,
-      18.9,
-      38.4
-     ],
-     "pole": [
-      40.3,
-      16.6,
-      53.4
-     ]
-    },
-    "leg_l": {
-     "foot": [
-      8.0,
-      13.2,
-      -5.7
-     ],
-     "pole": [
-      49.2,
-      57.8,
-      67.7
-     ],
-     "foot_rot": [
-      39.3,
-      0,
-      0
-     ]
-    },
-    "arm_r": {
-     "hand": [
-      0.7,
-      24.9,
-      49.1
-     ],
-     "pole": [
-      -30.3,
-      -6.2,
-      56.9
-     ]
-    },
-    "leg_r": {
-     "foot": [
-      -10.0,
       8.4,
-      -5.9
+      -8.9
      ],
      "pole": [
       -75.9,
@@ -543,6 +559,103 @@
     ]
    },
    "12": {
+    "pelvis": {
+     "loc": [
+      0,
+      -2,
+      11
+     ],
+     "rot": [
+      5.0,
+      4.2,
+      -12.0
+     ]
+    },
+    "spine": [
+     -81.8,
+     -11.8,
+     -0.3
+    ],
+    "head": [
+     -6.4,
+     -1.6,
+     -2.3
+    ],
+    "arm_l": {
+     "hand": [
+      -1.5,
+      18.9,
+      38.4
+     ],
+     "pole": [
+      40.3,
+      16.6,
+      53.4
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      8.0,
+      15.2,
+      -0.7
+     ],
+     "pole": [
+      49.2,
+      57.8,
+      67.7
+     ],
+     "foot_rot": [
+      39.3,
+      0,
+      0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      0.7,
+      24.9,
+      49.1
+     ],
+     "pole": [
+      -30.3,
+      -6.2,
+      56.9
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -10.0,
+      10.4,
+      -0.9
+     ],
+     "pole": [
+      -75.9,
+      31.4,
+      60.5
+     ],
+     "foot_rot": [
+      38.0,
+      0,
+      0
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ],
+    "clavicle_l": [
+     0,
+     -12,
+     0
+    ],
+    "clavicle_r": [
+     0,
+     12,
+     0
+    ]
+   },
+   "13": {
     "pelvis": {
      "loc": [
       0.0,
@@ -629,7 +742,7 @@
      0
     ]
    },
-   "13": {
+   "14": {
     "pelvis": {
      "loc": [
       0.0,
@@ -716,7 +829,7 @@
      0
     ]
    },
-   "14": {
+   "15": {
     "pelvis": {
      "loc": [
       0,
@@ -803,7 +916,7 @@
      0
     ]
    },
-   "16": {
+   "17": {
     "pelvis": {
      "loc": [
       0,
@@ -890,7 +1003,7 @@
      0
     ]
    },
-   "30": {
+   "31": {
     "pelvis": {
      "loc": [
       0,
@@ -977,7 +1090,7 @@
      0
     ]
    },
-   "36": {
+   "37": {
     "pelvis": {
      "loc": [
       0,
@@ -1153,5 +1266,9 @@
    }
   }
  },
- "reach_axis": "-z"
+ "reach_axis": "-z",
+ "anim_active": [
+  15,
+  17
+ ]
 }

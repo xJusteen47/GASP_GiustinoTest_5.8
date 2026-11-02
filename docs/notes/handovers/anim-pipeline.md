@@ -227,3 +227,9 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   11->14 come chiesto (15% al 12, 42% al 13, il 58% sul 14); co_motion ora PASS. Timing: d'ora in poi li dà l'owner con
   la reference (il modello legge male i tempi dalle GIF).
   Output `overlord_dair_v4_lato.png`, `overlord_dair_v4_hitstop_vs_whiff.mp4`. Costo totale del thread circa $12-14.
+- **v4 ultimo giro (owner)**: hitbox dal frame 15 (0-based): `card.py` accetta `anim_active` nella scheda (tempi dati
+  dall'owner, vincono sul CSV). Chiavi 0/3/5/12/13/14/15/17/31/37/42. Frame 0 distinto dall'air idle ma non già in carica:
+  gambe raccolte a metà, busto chiuso al 30%, braccia spalancate dietro le spalle e mani aperte. Al 3 le braccia salgono
+  sopra la testa e cominciano a incrociarsi, al 5 c'è la carica, più chiusa di prima. Gate come prima (clearance aperta).
+  **Difetto aperto**: al frame 2 il braccio sx passa dritto in alto da solo (interpolazione 0->3 attraverso la testa); da
+  correggere con una chiave al 2 o un polo diverso. Costo totale del thread circa $15-17.

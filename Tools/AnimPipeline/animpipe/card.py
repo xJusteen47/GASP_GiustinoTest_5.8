@@ -58,8 +58,11 @@ def windows(c):
     act = [int(r["frame"]) - 1 for r in rows if r["active"] == "True"]
     faf = int(c.get("faf_game", len(rows)))
     g = {"startup": [0, act[0] - 1], "active": [act[0], act[-1]], "faf": faf}
-    return {"game": g, "anim": {"startup": [g2k(c, x) for x in g["startup"]], "active": [g2k(c, x) for x in g["active"]],
-                                "faf": g2k(c, faf)}}
+    a = {"startup": [g2k(c, x) for x in g["startup"]], "active": [g2k(c, x) for x in g["active"]], "faf": g2k(c, faf)}
+    if c.get("anim_active"):
+        # owner-given hitbox frames (0-based anim frames) override the CSV: the owner times moves himself (02/11)
+        a["active"] = [int(x) for x in c["anim_active"]]; a["startup"] = [0, a["active"][0] - 1]
+    return {"game": g, "anim": a}
 
 
 def to_move_sheet(c):
