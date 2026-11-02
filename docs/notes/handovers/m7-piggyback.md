@@ -93,3 +93,33 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
 - OPEN: (1) who applies Partner meter requests (G7); (2) the M7-01 OPEN items 2-6 unchanged; (3) latch margin flake as per SD-02.
 - Cost: one Opus thread, about 130k context, two builds pairs (~25 min UBT + tests): medium.
 - Next: M7-04 = G6 item 1 (the two commits above), new thread.
+
+## M7-04 (laptop, 2026-11-02): G6 item 1 built (S1 seam + predicted rider exits), plugins enabled
+
+- Commits on feature/gas-npp-5.8 (rebased onto 988a6cd, anim pipeline only): 93e9e15 "GSTNCombatNP: the entity's lag-compensated view for
+  tick extensions", ad6665c "GSTNLink: initiator-placed exits and a per-link parked anchor", 53319fb "M7 G6: predicted rider exits",
+  c2aab63 "Enable GSTNDefence, GSTNLink, GSTNSpinDrill and GSTNPiggyback" (owner decision 1), then this docs commit. Deltas: m7-doc-deltas.md
+  "G6 item 1 / Built in M7-04" (design vs built table).
+- GSTNCombatNP: `IGSTN_CombatTickServices::GetViewSnapshot()` (virtual, default null = use Context.Snapshot), built once per tick and shared
+  with the attacker step (`ResolveViewOnce`). `FGSTN_SnapshotExtensionBlob::MaxBytes` 32 -> 40 (link extension now 38 B with the anchor).
+- GSTNLink: `bInitiatorPlacesExit`; link tick `StepInitiatorExit` (PendingBreak edge -> exit from the view, flag `GSTNLinkExitFlags::InitiatorPlaced`,
+  due F+1) and `StepOwnExitBreak` (at F+1 the initiator ends the link via the same `ApplyCommand`); watchdog copies the exit if the world is free
+  (else own placement), and breaks the staying side at once if the initiator ended a link the watchdog missed. `ShouldReconcile` tolerance
+  `UGSTN_LinkSettings::PredictedPlacementToleranceCm` (5 cm, yaw 5 deg). Anchor seam for D9 part 2: `FGSTN_LinkState::SetAnchorOverride`
+  (flag `AnchorOverride`, int16 cm x3 in partner socket space, on the wire only with the flag; snapshot, leash, presentation use it). Nothing
+  writes it yet. GSTNLink seams are free again for the spin thread.
+- Piggyback: `bPredictRiderExits` default true -> `bInitiatorPlacesExit`. Mount leash removed (LeashCm 0): GSTNLink's leash is measured from the
+  parked capsule, which never moves, so a walking carrier broke the mount after 3 m (found by the new scenario).
+- Tests: `GSTNLink.NP.InitiatorExit.{PlacedFromView, OwnBreakEqualsCommand, BlockedPlaceFallsBack, OnlyWhenAsked, MissedFrameBreaksPartner,
+  ReconcileTolerance}`, `GSTNLink.NP.Anchor.Override`; piggyback Bindings test now checks the predicted default.
+- Gates (`Saved/M704`, scripts `build.ps1`, `run_harness.ps1`, driver `harness_driver.py`): on (local + SpinDrill + Piggyback = the committed set)
+  `headless-on1.log` 975/0, off (Defence+Link only) `headless-off1.log` 933/0, no ensure, both builds Succeeded; check_modules 0 problems.
+  Harness 0 % (60/15 ms, listen + 2 clients), `Saved/Logs/m7-04/`: SUITE_LINK 19/19 (`link-listen-0pct-a.log`, latch flake did not show);
+  SUITE_MOUNT 5/6 then, after the leash fix, 6/6 (`mount-listen-0pct-b.log`). dismount_predicted: carrier moved 396 cm in 0.9 s, rider client
+  rollbacks 0, client-server 0.27 cm, carrier client 1 correction. Headless not rerun after the leash constant (piggyback only, no test reads it).
+- OPEN: (1) the parked capsule stays where it mounted (an invisible blocker for third pawns? not checked); a carrier teleport check
+  (`MaxCarrierTeleportCm`) is not built. (2) A client re-simulation re-places the exit from the current proxies (within tolerance so far).
+  (3) M7-01 OPEN 2-4, 6 and M7-03 OPEN 1 (Partner meter requests, G7) unchanged. (4) The Saved/D4 uproject backup is stale now that the
+  committed .uproject lists the plugins; build scripts that compare against it will abort.
+- Cost: one Opus thread, ~160k context, 3 UBT builds + 2 headless runs + 2 harness runs (~70 min machine): medium-high.
+- Next: G6 remaining items (or G7 mount hit step) in a new thread; spin D9 part 2 can use the anchor seam.
