@@ -608,8 +608,21 @@ private:
 	int32 ServiceFrame = INDEX_NONE;
 	const FGSTN_TrackHookEnvironment* ServiceHookEnvironment = nullptr;
 
+	/**
+	 * What GetViewSnapshot resolves from: the time step and the step snapshot of the tick under way, and the view once built (M7 G6). Set with
+	 * ServiceSync, cleared at the end of the tick; never state
+	 */
+	const FNetSimTimeStep* ServiceTimeStep = nullptr;
+	const FGSTN_StepSnapshot* ServiceStepSnapshot = nullptr;
+	const FGSTN_StepSnapshot* ServiceView = nullptr;
+	bool bServiceViewResolved = false;
+
 	// IGSTN_CombatTickServices
 	virtual bool StartForcedTimeline(const UClass* AbilityClass) override;
+	virtual const FGSTN_StepSnapshot* GetViewSnapshot() override;
+
+	/** ResolveAttackerSnapshot at most once per tick for the frame's step snapshot (the attacker step and the extensions share it) */
+	const FGSTN_StepSnapshot* ResolveViewOnce(const FNetSimTimeStep& TimeStep, const FGSTN_StepSnapshot* Shared);
 
 	/** Fills what an extension hook of this tick reads besides the states: owner, ability system, outbox, the stick on the plane, up, the button map */
 	void FillHookContext(FGSTN_CombatTickContext& Context, const FGSTN_InputCmd& Cmd, const FVector& Up);

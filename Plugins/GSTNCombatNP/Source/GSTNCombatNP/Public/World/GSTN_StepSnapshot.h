@@ -35,12 +35,12 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotExtension
  * the record and a rewind hands the step the extension of the rewound frame. An entry holds one blob per registered contributor
  * (FGSTN_SnapshotExtensionSet, three at most since M6 F10); the victim view exposes each by type id.
  *
- * MaxBytes is the smallest size that holds the parts extension (type word, mask, 16 damage bytes, serial, set pointer): 32 B, 40 B
- * with the header. A pointer in it is allowed only for content that outlives every entity (a data asset kept alive by its owner).
+ * MaxBytes was the smallest size that holds the parts extension (type word, mask, 16 damage bytes, serial, set pointer): 32 B. M7 G6 raised
+ * it to 40 B for the link extension's per-link anchor (three int16), 48 B with the header; a blob that uses less leaves the rest zero. A pointer in it is allowed only for content that outlives every entity (a data asset kept alive by its owner).
  */
 struct GSTNCOMBATNP_API FGSTN_SnapshotExtensionBlob
 {
-	static constexpr int32 MaxBytes = 32;
+	static constexpr int32 MaxBytes = 40;
 
 	/** GSTNFeatureIds of the contributor that wrote it; Invalid (0) = empty */
 	uint8 TypeId = 0;

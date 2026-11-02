@@ -90,8 +90,9 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	In.Frame = Frame;
 	In.AttackerId = RegisteredEntityId;
 	In.AttackerTeam = ResolveTeam();
-	// A remote player's pawn on the authority hits the victims as that player saw them (M4 H10); every other attacker the shared snapshot
-	In.Snapshot = Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE ? ResolveAttackerSnapshot(TimeStep, Snapshot) : Snapshot;
+	// A remote player's pawn on the authority hits the victims as that player saw them (M4 H10); every other attacker the shared snapshot. The
+	// view is built once per frame and shared with the tick extensions that ask for it (GetViewSnapshot)
+	In.Snapshot = Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE ? ResolveViewOnce(TimeStep, Snapshot) : Snapshot;
 	In.Rules = CombatRules;
 	In.GroupMask = GroupMask;
 	In.StepSeconds = TimeStep.StepMS * 0.001f;

@@ -892,6 +892,10 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	ServiceSync = &OutSync;
 	ServiceFrame = Frame;
 	ServiceHookEnvironment = &HookEnvironment;
+	ServiceTimeStep = &TimeStep;
+	ServiceStepSnapshot = StepSnapshot;
+	ServiceView = nullptr;
+	bServiceViewResolved = false;
 	HookContext.Services = this;
 	const FGSTN_CombatTickExtensionRegistry& Extensions = FGSTN_CombatTickExtensionRegistry::Get();
 	Extensions.Run(EGSTN_CombatHookPoint::AfterClocks, HookContext);
@@ -1027,6 +1031,30 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	ServiceSync = nullptr;
 	ServiceFrame = INDEX_NONE;
 	ServiceHookEnvironment = nullptr;
+	ServiceTimeStep = nullptr;
+	ServiceStepSnapshot = nullptr;
+	ServiceView = nullptr;
+	bServiceViewResolved = false;
+}
+
+const FGSTN_StepSnapshot* UGSTN_CombatSimComponent::GetViewSnapshot()
+{
+	return ServiceTimeStep ? ResolveViewOnce(*ServiceTimeStep, ServiceStepSnapshot) : nullptr;
+}
+
+const FGSTN_StepSnapshot* UGSTN_CombatSimComponent::ResolveViewOnce(const FNetSimTimeStep& TimeStep, const FGSTN_StepSnapshot* Shared)
+{
+	// Outside the hook window (no frame under way) nothing is cached: resolve as before
+	if (!ServiceTimeStep || Shared != ServiceStepSnapshot)
+	{
+		return ResolveAttackerSnapshot(TimeStep, Shared);
+	}
+	if (!bServiceViewResolved)
+	{
+		ServiceView = ResolveAttackerSnapshot(TimeStep, Shared);
+		bServiceViewResolved = true;
+	}
+	return ServiceView;
 }
 
 void UGSTN_CombatSimComponent::FillHookContext(FGSTN_CombatTickContext& Context, const FGSTN_InputCmd& Cmd, const FVector& Up)

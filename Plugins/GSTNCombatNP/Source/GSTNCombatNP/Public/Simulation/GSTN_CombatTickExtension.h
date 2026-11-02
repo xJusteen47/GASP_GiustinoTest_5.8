@@ -33,6 +33,18 @@ public:
 	 * class must be in the frame's timeline registry (a kit triggered ability). Returns false when it is not: nothing changes
 	 */
 	virtual bool StartForcedTimeline(const UClass* AbilityClass) = 0;
+
+	/**
+	 * The other entities as this entity's player saw them when it gave the frame's input (M7 G6): the step snapshot overlaid with the lag
+	 * compensated poses the attacker step hits against. On the authority, for a remote player's pawn under rules with lag compensation, the
+	 * others are rewound to the input's interpolation time (capped by MaxRewindMs); everywhere else it is the step snapshot itself, which on a
+	 * client already holds the interpolated proxies the player sees. So a placement decided from it (an exit, an anchor) is the same, within
+	 * the interpolation's precision, on the player's machine and on the authority.
+	 *
+	 * Built at most once per simulated frame, on the first call (the attacker step shares it): a cost only when asked. Valid until the end of
+	 * the tick; null outside a combat tick and in a test, where the caller uses Context.Snapshot. Read-only
+	 */
+	virtual const FGSTN_StepSnapshot* GetViewSnapshot() { return nullptr; }
 };
 
 /**
