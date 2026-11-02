@@ -249,5 +249,24 @@
   ],
   "_balance_note": "contact frames 1-3: the forward lunge into the punch (centre of mass up to 3.9 cm past the front foot); declared lunge, owner can override",
   "reference": "refs/mario_jab1"
+ },
+ "jab_v11": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Rig/AS_JabV11_Build",
+  "contact": [
+   1,
+   2
+  ],
+  "faf": 18,
+  "hold_window": [
+   1,
+   2
+  ],
+  "effector": "middle_01_l",
+  "reference": "refs/mario_jab1",
+  "balance_exempt_frames": [
+   1,
+   3
+  ]
  }
 }

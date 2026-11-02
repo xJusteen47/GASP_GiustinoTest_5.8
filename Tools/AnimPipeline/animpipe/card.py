@@ -61,3 +61,16 @@ def to_move_sheet(c):
     for ex in c.get("exemptions", []):
         e[f"{ex['check']}_exempt_frames"] = ex["frames"]
     return e
+
+
+def phase_of(c, f):
+    """startup | active | recovery of an anim frame, from the CSV windows."""
+    a = windows(c)["anim"]["active"]
+    return "startup" if f < a[0] else ("active" if f <= a[1] else "recovery")
+
+
+def segments(c):
+    """[[f0, f1, profile]] for each pair of consecutive poses: the spacing profile of the phase the segment starts in."""
+    fr = key_frames(c)
+    sp = c.get("spacing", {})
+    return [[a, b, sp.get(phase_of(c, a), "limb_led_recovery")] for a, b in zip(fr, fr[1:])]

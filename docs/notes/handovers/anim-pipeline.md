@@ -1,33 +1,33 @@
-# Handover anim pipeline: spike fase A, checkpoint 1 (2026-11-02, branch claude/project-thread-mkwsb0)
+# Handover anim pipeline: checkpoint 2, motore unico (2026-11-02, branch claude/project-thread-0pzf0o)
 
-Esito: **GO sul Control Rig a 60 fps; NO-GO su 62,5 fps.** Codice: `Tools/AnimPipeline/animpipe/` (`python -m animpipe ...`),
-scheda `Tools/AnimPipeline/cards/jab_v11.json`. Risultati completi: `Saved/AnimPipeline/animpipe/*.json` (non versionati).
-Asset: `/Game/AnimPipeline/Rig/{LS_,AS_}JabV11_{RT60,Sparse}` (Content non versionato).
+Esito: **il motore gira end-to-end su jab v11** (scheda -> Control Rig -> bake 60 fps -> controlli 3 classi -> trails), un
+giro completo < 1 min (build 10 s, check 35 s, trails 2 s). Checkpoint 1 (spike, GO a 60 fps) è nella storia git di questo file.
+Comandi (`Tools/AnimPipeline`, `python -m animpipe ...`): `build <card>`, `check <card>`, `trails <card>`; risultati in
+`Saved/AnimPipeline/animpipe/<move>_{build,check}.json` + `<move>_check.txt` (una riga per controllo), immagine in `sheets/`.
 
-Punti del brief §3:
-1. Rig: `CR_Mannequin_Body` del GASP funziona così com'è sul UEFN mannequin: 22 controlli, 985 canali. FK/IK ok.
-2. Round trip jab v11 denso (anim -> bake sui controlli -> AnimSequence): effettori entro 0,06 cm (mani, testa, bacino,
-   piedi, pugno), ma spine_05 0,96 cm e polpacci 0,58 cm (IK spline della colonna e pole del ginocchio del rig): sopra lo
-   0,5 del brief, dentro l'1 cm della regressione §4.6. Accettato (le mosse nuove nascono sul rig). Chiavi solo ai 10 frame
-   della scheda: 37430 -> 9850 chiavi, pugno a 7,35 cm al frame 4 (atteso: v11 è una curva densa di Mario; è una misura).
-3. Tangenti e pesi per chiave su un controllo del rig da Python: OK (`animpipe tangent`, readback e curva cambiata).
-   Animation Assistant via MCP non provato (unreal-mcp non connesso in questa sessione): API diretta basta.
-4. Motion trails: NON fatto, rimandato al prossimo thread.
-5. 62,5 fps: l'export rifiuta ("62,5 fps non multiplo o fattore di 30"). Si resta a 60 con `round(G x 0,96)`.
-6. Un passaggio completo (bake + export + confronto) = 8 s.
+- `build` (`ue_rig.build`): bake della `source_anim` sul `CR_Mannequin_Body`, tiene solo i frame delle pose, tangenti per
+  profilo di spaziatura (`charge_long`/`arrive_1_2`/`hold_recoil` = piatte pesate; `limb_led_recovery` = smart auto),
+  ritardi per parte (sposta le chiavi interne dei controlli), piedi IK `planted`: deriva <= 1 cm / 2° riportata alla chiave 0.
+  Jab v11: 36822 -> 9690 chiavi; alle pose 0,0 cm sulle mani, testa 2,75 (ritardo 1 frame dichiarato), piedi 0,96;
+  fuori dalle pose max 4,7 cm (mano), contro i 7,35 della sola riduzione del checkpoint 1.
+- `check`: blocca bone_lengths, clearance, legibility, contatto/FAF, piedi piantati, pugni chiusi; misura motion_curves(+ref),
+  motion_check, spaziatura (progresso a metà segmento), distanza dalla sorgente; occhio: 3 voci per la griglia. Gli script
+  vecchi girano invariati come sottoprocessi. `move_sheets.json[move]` è generato dalla scheda a ogni check.
+- Jab v11 build: FAIL su legibility (braccio dietro copre il pugno, 1 frame) e bone_lengths (4 ossa, max clavicola_r 1,29 cm).
+  Sorgente densa con gli stessi controlli: legibility PASS, bone_lengths FAIL già lì (8 ossa, max 0,98). Nessun auto-fix:
+  v11 è una scheda retrofittata (pose = confini delle finestre), il test vero è v12 / v3.1 con le pose Step.
+- Trails: fatti offline dalle ossa campionate (matplotlib, 3 viste, build su sorgente in grigio): niente editor, 1 immagine.
 
-Gotcha (già nel codice): `SequencerTools.export_anim_sequence` non trova lo spawnable -> usare
-`ControlRigSequencerLibrary.export_anim_sequence_from_sequencer` con la sequenza aperta e `set_current_time(0)` prima del
-bake; dopo un save un dialogo di source control blocca il bridge qualche secondo (retry in `_sample`); l'export include
-il frame di fine playback.
+Decisioni prese senza owner (consigliate): resto a 60 fps; accetto 1 cm su colonna/ginocchio nei round trip delle mosse vecchie;
+calibrazione delle tangenti in editor tolta (evaluate_keys inaffidabile), la spaziatura si misura sul bake.
+Gotcha: da Git Bash serve `MSYS_NO_PATHCONV=1` (altrimenti `/Game/...` diventa un percorso Windows; `check` lo imposta);
+`add_key` sui canali del rig perde i valori: si modificano le chiavi esistenti (remove/set_value/set_time); `twist_chain`
+è n/a sui build (legge i punti Cascadeur `<take>_targets_raw.json`); `refs/` nel worktree è una junction verso `Saved/AnimPipeline/refs`.
 
-Scheda: le finestre vengono dal CSV (`refs/ufd/*_timing.csv`), `card.to_move_sheet` rigenera la voce v11 identica a
-quella scritta a mano in `move_sheets.json`. Per jab v11 le "pose" sono i confini delle finestre (mossa nata densa).
+Prossimo thread (fase B): import delle pose Step del proprietario (`poses[].source.file`) sui controlli al posto di
+`source_anim`; equilibrio come regolazione del bacino alle chiavi; twist_chain sulle ossa; regressione v12 e v3.1.
 
-Prossimo thread: motion trails (punto 4), poi fase B: `animpipe build <scheda>` che importa le pose Step del
-proprietario sui controlli ai frame della scheda e applica tangenti per profilo di spaziatura; regressione v12/v3.1.
-
-Domande per il proprietario: (1) 62,5 fps forse richiede di cambiare il frame rate di animazione nelle Project Settings:
-vale la pena provarlo o restiamo a 60 (consigliato)? (2) ok 1 cm su colonna/ginocchio nel round trip delle mosse vecchie?
-Editor: aperto da riga di comando e chiuso (processo terminato, nessun salvataggio di DefaultLevel/NewBlueprint).
-Costo stimato: Opus ~45 chiamate, ~75k contesto finale, circa $4-5; nessun subagente.
+Domanda per il proprietario: bone_lengths a 0,1 cm boccia anche v11 denso (stretch del rig/bake). Consiglio: sui build da rig
+spegnere gli stretch switch del rig e tenere 0,1 cm; in alternativa "non peggio della sorgente". Applico il primo nella fase B.
+Editor: aperto da riga di comando, chiuso col kill (asset salvati esplicitamente, nessun salvataggio di mappa o Blueprint).
+Costo stimato: Opus ~60 chiamate, ~115k contesto finale, circa $6-8; nessun subagente.
