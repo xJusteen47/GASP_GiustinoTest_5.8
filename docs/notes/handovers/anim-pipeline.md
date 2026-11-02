@@ -65,3 +65,23 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
 - Rigenerati jab v12 (hitstop 4) e Ganon ftilt v3.1 (hitstop 8) con l'editor aperto; compositi `<mossa>_hitstop_vs_whiff.png` in `sheets/ingame/` (non in git), copiati nei project files.
 - Whiff: pose identiche all'hitstop (il congelamento ripete solo il frame attivo). Unica nota whiff: ftilt, recupero 19->25 cade in un blocco solo (già segnalato, spaziatura 0,17); nessun problema nuovo. Animazioni non toccate.
 - Pushato su feature: `061bdbb`. Costo stimato: ~25 chiamate, contesto ~60k, circa $1,5-2 (Sonnet 5.5), niente subagenti.
+
+## Checkpoint 5 (2026-11-02): Ganondorf ftilt, gamba che scende in un blocco (spaziatura recupero)
+- Diagnosi (piede sinistro, cm/frame): il segmento 10-20 era `hold_recoil` con chiave piatta a 20 -> il piede si fermava
+  a 20 (0,6) e poi cadeva 22 / 19 / 12,5 ai frame 21-23 (40 cm in 3 frame).
+- Tentativo 1 (scheda: posa `active` 10 con `spacing: limb_led_recovery`, niente stop a 20): 5,1 -> 14,9 -> 23,3 -> 15,1. Picco ancora.
+- Tentativo 2 (tenuto; scheda: `drop` a 20 su `foot_l_ik_ctrl` Location/Rotation e `leg_l_pv_ik_ctrl` Location):
+  la gamba viaggia 10 -> 23 senza fermarsi: 7,9 -> 5,6 cm/frame quasi costante, poi 7,3 / 5,4 all'appoggio 24-25.
+  Nessuna posa dell'owner cambiata (0/7/10/27/37), nessun frame a mano, il resto del corpo tiene la chiave a 20.
+- Rovescio: niente più "blocco", ma la discesa è quasi lineare e il calcio teso non si tiene (a f14 piede 70 cm, prima 81).
+  Bloccanti 5/6 come prima (legibility FAIL ereditato); motion_check uguale; planted 1,03 cm; clearance PASS.
+- Prossimo passo proposto (motore, non scheda): oggi una chiave piatta il cui segmento seguente è `limb_led_recovery` ha
+  peso di uscita 0 (`ue_rig.py`, out_w None) -> nessun ease-out da 10. Dare a quella chiave il peso di uscita del profilo
+  del segmento entrante (1/3) darebbe: tenuta a 10-14, accelerazione, appoggio a 23-25. Serve l'ok dell'owner (cambia il
+  motore per tutte le mosse). Alternativa solo-scheda: spostare la posa `hold_end` 20 -> 17 (stop più alto, caduta su 6 frame).
+- Bug strumenti corretto: `legibility.py` riusa `sheets/raw/<take>_legbones.json` per percorso asset, quindi dopo un
+  rebuild i check leggevano le ossa vecchie. `animpipe build` ora cancella quel file. (I check dei checkpoint precedenti
+  dopo un rebuild potrebbero essere stati letti sul dump vecchio.)
+- Anteprime in gioco (`ingame_judge.py`, hitstop 8 + whiff): `sheets/ingame/ganon_ftilt_v31_*.mp4` e composito
+  `ganon_ftilt_v31_recovery_before_after.png` (prima whiff / dopo whiff / dopo hitstop, frame 10-27, vista laterale), nei project files.
+- Costo stimato: Opus ~40 chiamate, contesto ~75k, circa $4-5; niente subagenti. Editor lasciato aperto su L_PilotCapture.

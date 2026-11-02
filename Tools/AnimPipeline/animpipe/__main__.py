@@ -98,6 +98,10 @@ def build(path):
     t0 = time.time()
     r = _ue_py("build", spec=spec)
     if r.get("export_ok"):
+        # legibility.py caches the bone dump by asset path only: a rebuild keeps the path, so drop the stale dump
+        stale = os.path.join(TOOLS, "sheets", "raw", f"{name}_legbones.json")
+        if os.path.exists(stale):
+            os.remove(stale)
         n = int(round(r["length"] * num / den))
         frames = list(range(n + 1))
         A, B = _sample(c["source_anim"], frames), _sample(r["out_asset"], frames)

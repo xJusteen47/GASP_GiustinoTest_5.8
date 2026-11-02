@@ -42,7 +42,8 @@
    "source": {
     "file": "refs/owner_ganon_ftilt/3_active.png",
     "frame": 10
-   }
+   },
+   "spacing": "limb_led_recovery"
   },
   {
    "name": "hold_end",
@@ -232,7 +233,32 @@
    "why": "owner defect: left forearm into the hip at the snap; abduct the upper arm (elbow +8 cm out)"
   }
  ],
- "drop": [],
+ "drop": [
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    20
+   ],
+   "why": "leg drops in one block at 20-23 (foot stops at 20, then 22 cm/frame): the kicking leg travels 10 -> 23 through the hold end, so it eases out of the hold and falls over 13 frames"
+  },
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20
+   ],
+   "why": "leg drops in one block at 20-23 (foot stops at 20, then 22 cm/frame): the kicking leg travels 10 -> 23 through the hold end, so it eases out of the hold and falls over 13 frames"
+  },
+  {
+   "control": "leg_l_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    20
+   ],
+   "why": "leg drops in one block at 20-23 (foot stops at 20, then 22 cm/frame): the kicking leg travels 10 -> 23 through the hold end, so it eases out of the hold and falls over 13 frames"
+  }
+ ],
  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V3",
  "planted": [
   "foot_r_ik_ctrl"
