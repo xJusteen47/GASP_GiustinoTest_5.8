@@ -12,6 +12,7 @@
 #include "GSTN_LinkRegistry.h"
 #include "GSTN_LinkRequirementLibrary.h"
 #include "GSTN_LinkTags.h"
+#include "Hits/GSTN_CombatHitTags.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Misc/AutomationTest.h"
@@ -315,6 +316,57 @@ bool FGSTN_LinkRegistryReasonAppendTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the signature covers the reasons"), Registry->GetSignature() != SignatureWithB);
 	UGSTN_LinkRegistry::UnregisterPluginReason(TestReasonB.GetTag().GetTagName());
 	UGSTN_LinkRegistry::UnregisterPluginReason(TEXT("Combat.Link.BreakReason.GSTNNotRegistered"));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkInteractRelationshipTest, "GSTNLink.GAS.Interact.RelationshipFilter", GSTNLinkGASTest::Flags)
+bool FGSTN_LinkInteractRelationshipTest::RunTest(const FString& Parameters)
+{
+	// Offer 0: a grab for enemies and neutrals (tried first); offer 1: the same type under another meaning, for allies only (a mount's shape)
+	FProbeRig Rig;
+	Rig.Source.Interactor.TeamId = 1;
+	Rig.Offers[0].Relationships.AddTag(GSTNCombatHitTags::Relationship_Enemy);
+	Rig.Offers[0].Relationships.AddTag(GSTNCombatHitTags::Relationship_Neutral);
+	FGSTN_LinkInteractOffer AllyOffer = Rig.Offers[0];
+	AllyOffer.Meaning = GSTNInteractTags::Root_Target;
+	AllyOffer.Relationships.Reset();
+	AllyOffer.Relationships.AddTag(GSTNCombatHitTags::Relationship_Ally);
+	Rig.Offers.Add(AllyOffer);
+	Rig.Source.Offers = Rig.Offers;
+
+	auto OfferFor = [&Rig](uint8 Team, EGSTN_LinkRefusal* OutRefusal = nullptr)
+	{
+		FGSTN_LinkInteractEntity Entity;
+		Entity.Side.EntityId = 2;
+		Entity.Side.TeamId = Team;
+		FGSTN_LinkRuleResult Refusal;
+		const int32 Index = FGSTN_LinkInteractProvider::FindAcceptedOffer(Rig.Source, Entity, Rig.Frame, &Refusal);
+		if (OutRefusal)
+		{
+			*OutRefusal = Refusal.Refusal;
+		}
+		return Index;
+	};
+	TestEqual(TEXT("an enemy takes the grab"), OfferFor(2), 0);
+	TestEqual(TEXT("a candidate without a team (Neutral) takes the grab"), OfferFor(255), 0);
+	TestEqual(TEXT("an ally skips the grab and takes the ally offer below it"), OfferFor(1), 1);
+
+	// Without the ally offer an ally is offered nothing, refused for its team
+	Rig.Source.Offers = MakeArrayView(Rig.Offers.GetData(), 1);
+	EGSTN_LinkRefusal Refusal = EGSTN_LinkRefusal::None;
+	TestEqual(TEXT("no offer applies to the ally"), OfferFor(1, &Refusal), static_cast<int32>(INDEX_NONE));
+	TestTrue(TEXT("refused for Team"), Refusal == EGSTN_LinkRefusal::Team);
+
+	// An offer with no relationships applies to every one (what every offer did before): the grab shadows the ally offer again
+	Rig.Offers[0].Relationships.Reset();
+	Rig.Source.Offers = Rig.Offers;
+	TestEqual(TEXT("an unfiltered grab claims the ally first"), OfferFor(1), 0);
+
+	FGSTN_LinkInteractOfferDef Def;
+	Def.Relationships.AddTag(GSTNCombatHitTags::Relationship_Ally);
+	TestTrue(TEXT("AppliesTo: listed"), Def.AppliesTo(GSTNCombatHitTags::Relationship_Ally));
+	TestFalse(TEXT("AppliesTo: not listed"), Def.AppliesTo(GSTNCombatHitTags::Relationship_Enemy));
+	TestTrue(TEXT("AppliesTo: empty = every one"), FGSTN_LinkInteractOfferDef().AppliesTo(GSTNCombatHitTags::Relationship_Enemy));
 	return true;
 }
 

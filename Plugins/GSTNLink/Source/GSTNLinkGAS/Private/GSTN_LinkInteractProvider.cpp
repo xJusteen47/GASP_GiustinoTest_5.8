@@ -9,6 +9,7 @@
 #include "GSTN_LinkRegistry.h"
 #include "GSTN_LinkRequirementLibrary.h"
 #include "GSTN_LinkTags.h"
+#include "Hits/GSTN_RelationshipResolver.h"
 
 FName FGSTN_LinkInteractSource::TypeName()
 {
@@ -32,9 +33,26 @@ uint8 FGSTN_LinkInteractProvider::GetProviderId() const
 int32 FGSTN_LinkInteractProvider::FindAcceptedOffer(const FGSTN_LinkInteractSource& Source, const FGSTN_LinkInteractEntity& Entity, int32 Frame,
 	FGSTN_LinkRuleResult* OutRefusal)
 {
+	// The candidate's relationship, as a hit would see it under the default rule (no team = Neutral): an offer only for other relationships is
+	// skipped before its rules, so it cannot claim a candidate a lower offer is meant for
+	FGSTN_RelationshipQuery Query;
+	Query.AttackerEntityId = Source.Interactor.EntityId;
+	Query.AttackerTeamId = Source.Interactor.TeamId;
+	Query.VictimEntityId = Entity.Side.EntityId;
+	Query.VictimTeamId = Entity.Side.TeamId;
+	const FGameplayTag Relationship = UGSTN_RelationshipResolver::DefaultRule(Query);
+
 	for (int32 OfferIndex = 0; OfferIndex < Source.Offers.Num(); ++OfferIndex)
 	{
 		const FGSTN_LinkInteractOffer& Offer = Source.Offers[OfferIndex];
+		if (!Offer.Relationships.IsEmpty() && !Offer.Relationships.HasTagExact(Relationship))
+		{
+			if (OutRefusal != nullptr)
+			{
+				*OutRefusal = FGSTN_LinkRuleResult::Refuse(EGSTN_LinkRefusal::Team);
+			}
+			continue;
+		}
 
 		// The same context the target's LinkRequest step will build, so the probe and the request cannot disagree on a refusal
 		FGSTN_LinkRequestContext Context;
@@ -181,6 +199,8 @@ void FGSTN_LinkInteractProvider::MakeOffers(const UGSTN_LinkRegistry& Registry, 
 		}
 		Offer.Meaning = Entry.Offer.Meaning;
 		Offer.Priority = Entry.Offer.Priority;
+		// The alternatives below are copies of this offer, so they keep its relationships (the latch tried under the grab's meaning)
+		Offer.Relationships = Entry.Offer.Relationships;
 		if (Offer.Definition == nullptr)
 		{
 			continue;

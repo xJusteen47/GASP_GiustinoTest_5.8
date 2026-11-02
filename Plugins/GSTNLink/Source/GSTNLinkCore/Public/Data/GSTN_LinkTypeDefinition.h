@@ -157,7 +157,20 @@ struct GSTNLINKCORE_API FGSTN_LinkInteractOfferDef
 	UPROPERTY(EditAnywhere, Category = "Interact")
 	TObjectPtr<UScriptStruct> RequiredKitExtension;
 
+	/**
+	 * The relationships (Combat.Relationship.*, interactor to candidate) this offer applies to; empty = every one. The probe tries a candidate's
+	 * offers by priority and the first whose rules accept it names the candidate, so an offer that ignores the relationship shadows every lower offer
+	 * for that candidate (an unfiltered grab claimed the allies a mount is for). The relationship is GSTNCombat's default rule on the two teams
+	 * (UGSTN_RelationshipResolver::DefaultRule: no team is Neutral), the rule a hit uses when the match rules name no resolver; the probe has no
+	 * rules asset, so a custom resolver of the match is not consulted (M7 G5 option B). GSTNLink's grab offer lists Enemy and Neutral
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact", meta = (Categories = "Combat.Relationship"))
+	FGameplayTagContainer Relationships;
+
 	bool IsOffered() const { return Meaning.IsValid(); }
+
+	/** Whether the offer applies to a candidate of this relationship (true for every one when Relationships is empty) */
+	bool AppliesTo(const FGameplayTag& Relationship) const { return Relationships.IsEmpty() || Relationships.HasTagExact(Relationship); }
 };
 
 /** How hits on one role of a link affect the link (m6 spec 3 and 7.5) */

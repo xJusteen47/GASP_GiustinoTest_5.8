@@ -50,6 +50,9 @@ struct GSTNLINKGAS_API FGSTN_LinkInteractOffer
 	/** The initiator kit's rules, or null for the rules' own copies (FGSTN_LinkRequestContext) */
 	const FGSTN_GrabRules* GrabRules = nullptr;
 	const FGSTN_LatchRules* LatchRules = nullptr;
+
+	/** The relationships the offer applies to, from its offer data (FGSTN_LinkInteractOfferDef::Relationships); empty = every one */
+	FGameplayTagContainer Relationships;
 };
 
 /**
