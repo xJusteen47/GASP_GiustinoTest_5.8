@@ -63,6 +63,18 @@ def test_diff_and_parts():
     assert L._ranges([13, 14, 3, 5, 6]) == "3,5-6,13-14"
 
 
+def test_diff_new_keys_and_lock_intact():
+    import io, contextlib
+    v3 = os.path.join(os.path.dirname(V4), "overlord_dair_v3.json")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        L.diff(V4, v3)
+    out = buf.getvalue()
+    assert "chiavi nuove:" in out and "intatto (lock): leg_l 13-14; leg_r 13-14" in out, out
+    assert len(out.splitlines()) <= 5
+    os.remove(os.path.join(L.out_dir(), "overlord_dair_v4_diff.json"))
+
+
 if __name__ == "__main__":
     for n, f in sorted(globals().items()):
         if n.startswith("test_"):

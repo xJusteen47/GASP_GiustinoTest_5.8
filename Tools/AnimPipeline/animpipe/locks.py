@@ -102,6 +102,13 @@ def _check_entry(e, i, where):
 
 def guard(c, path, unlock=()):
     """Guard 1. Raises ValueError listing every locked (frame, part, field) that moved; prints one line per unlock."""
+    errs = [m for _, _, m in violations(c, path, unlock)]
+    if errs:
+        raise ValueError(f"card {path}: approved poses changed ({len(errs)}); fix the card or --unlock part@frame:\n  " + "\n  ".join(errs[:8]))
+
+
+def violations(c, path, unlock=()):
+    """[(frame, part, message)] of locked poses that differ from the lock's ref (or snapshot when ref is the card itself)."""
     errs = []
     for i, e in enumerate(c.get("approved", [])):
         _check_entry(e, i, path)
@@ -131,9 +138,8 @@ def guard(c, path, unlock=()):
                     continue                      # self-reference without a snapshot: nothing to compare against
                 for field, d, unit, tol in compare(part_leaves(_pose(c, f), p), want):
                     if d > tol:
-                        errs.append(f"frame {f} part {p} field {field}: moved {'(one side missing)' if d == math.inf else f'{d:.2f} {unit}'} (tol {tol} {unit}, ref {e['ref']})")
-    if errs:
-        raise ValueError(f"card {path}: approved poses changed ({len(errs)}); fix the card or --unlock part@frame:\n  " + "\n  ".join(errs[:8]))
+                        errs.append((f, p, f"frame {f} part {p} field {field}: moved {'(one side missing)' if d == math.inf else f'{d:.2f} {unit}'} (tol {tol} {unit}, ref {e['ref']})"))
+    return errs
 
 
 def parse_unlock(s):
@@ -254,18 +260,21 @@ def diff(path, vs=None):
         print(f"diff {c['move']}: no previous version or foreign ref to compare with (pass --vs=<card>)")
         return
     o = json.load(open(card_file(vs), encoding="utf-8"))
-    frames = sorted({int(f) for x in (c, o) for f in x.get("author", {}).get("poses", {})})
-    table = {str(f): {p: dict(zip(("cm", "deg"), pose_delta(_pose(o, f), _pose(c, f), p))) for p in PARTS} for f in frames}
+    fa, fb = ({int(f) for f in x.get("author", {}).get("poses", {})} for x in (o, c))
+    frames = sorted(fa | fb)
+    table = {str(f): {p: dict(zip(("cm", "deg"), pose_delta(_pose(o, f), _pose(c, f), p))) for p in PARTS} for f in frames if f in fa & fb}
+    new, gone = sorted(fb - fa), sorted(fa - fb)
     changed, intact = {}, {}
-    for f in frames:
+    for f in sorted(fa & fb):
         for p in PARTS:
             t = table[str(f)][p]
             if t["cm"] > EPS_CM or t["deg"] > EPS_DEG:
                 changed.setdefault(p, []).append(f)
+    broken = {(f, p) for f, p, _ in violations(c, path)}      # locks are judged against their own ref, not against --vs
     for e in c.get("approved", []):
         for p in e["parts"]:
-            intact.setdefault(p, set()).update(f for f in e["frames"] if f not in changed.get(p, []))
-    res = {"card": c["move"], "vs": o["move"], "timing": timing_line(c), "poses": table}
+            intact.setdefault(p, set()).update(f for f in e["frames"] if (f, p) not in broken)
+    res = {"card": c["move"], "vs": o["move"], "new_keys": new, "removed_keys": gone, "timing": timing_line(c), "poses": table}
     bt = bone_table(o, c)
     if bt:
         res["bones"] = bt
@@ -273,7 +282,8 @@ def diff(path, vs=None):
     jp = os.path.join(d, f"{c['move']}_diff.json")
     json.dump(res, open(jp, "w"), indent=1)
     print(f"diff {c['move']} vs {o['move']}; {timing_line(c)}")
-    print("cambiato: " + ("; ".join(f"{p} {_ranges(fr)}" for p, fr in changed.items()) or "niente"))
+    print("cambiato: " + ("; ".join(f"{p} {_ranges(fr)}" for p, fr in changed.items()) or "niente")
+          + (f" | chiavi nuove: {_ranges(new)}" if new else "") + (f" | chiavi tolte: {_ranges(gone)}" if gone else ""))
     print("intatto (lock): " + ("; ".join(f"{p} {_ranges(fr)}" for p, fr in intact.items() if fr) or "nessun lock"))
     if bt:
         bc = {}
