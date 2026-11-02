@@ -19,6 +19,8 @@ Schema (cards/<kit>/<kit>_<move>_vN.json, see cards/README.md):
                hitbox-active frame (check hitstop_snap): the travel moves before the hitbox opens or later in the recovery.
   approved     [{frames, parts, ref (card under cards/), by, date, why}]: poses the owner accepted; load() stops when the
                card's author poses at those frames/parts differ from `ref` (animpipe/locks.py, --unlock part@frame skips)
+  manual       {file, by, date, channels, keys, parts: {part: [frames]}}: the owner's hand-keyed layer (`animpipe capture`); the build
+               falls back to cards/<kit>/<file> when the sequence and the Saved backup are gone
   rules        {frame_0|knees_front|feet_side_by_side|villain_hand: thresholds}: README rules as checks (checks.py)
   hitstop_max_cm  per-bone limit of the hitstop_snap check (default 10 cm per anim frame); the check is on for every move
 """

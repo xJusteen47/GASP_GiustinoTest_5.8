@@ -13,6 +13,7 @@ Parts map onto the `author.poses` fields (author.py) and, for the build, onto ri
   arm_x -> arm_x{hand,pole}, leg_x -> leg_x, trunk -> pelvis + spine, head -> head, hand_x -> arm_x.hand_rot + fingers +
   wrist_out (fingers and wrist_out are shared by both hands).
 Tolerances are the plan's 0.5 cm / 1 deg; fingers are a 0-1 blend, 0.01.
+`capture` keeps the owner's hand-keyed "Manuale" layer in git (card block `manual`), and `diff` warns when a changed pose sits under it.
 """
 import glob, json, math, os, re
 
@@ -26,6 +27,10 @@ PART_BONES = {"arm_l": ("upperarm_l", "lowerarm_l", "hand_l"), "arm_r": ("uppera
               "trunk": ("pelvis", "spine_01", "spine_02", "spine_03", "spine_04", "spine_05"), "head": ("neck_01", "neck_02", "head"),
               "hand_l": ("index_01_l", "middle_01_l", "ring_01_l", "pinky_01_l"), "hand_r": ("index_01_r", "middle_01_r", "ring_01_r", "pinky_01_r")}
 CARDS = os.path.join(C.TOOLS, "cards")
+# control name fragments -> part; copy of ue_rig.PART_CTRLS (that module imports unreal). The fk hand/forearm controls belong to arm_x.
+CTRL_PARTS = (("arm_l", ("upperarm_l", "lowerarm_l", "hand_l")), ("arm_r", ("upperarm_r", "lowerarm_r", "hand_r")),
+              ("leg_l", ("thigh_l", "calf_l", "foot_l")), ("leg_r", ("thigh_r", "calf_r", "foot_r")),
+              ("trunk", ("pelvis", "spine", "chest")), ("head", ("head", "neck")))
 
 
 def _flat(v, path):
@@ -180,6 +185,44 @@ def approve(path, frames, parts, why, by="owner", date=None):
     print(sp)
 
 
+# --- capture: the Manuale layer into git ---
+def ctrl_part(channel):
+    """Part of a rig channel name (e.g. hand_r_fk_ctrl.Rotation.X) by control fragment, or None."""
+    for part, frags in CTRL_PARTS:
+        if any(f in channel for f in frags):
+            return part
+
+
+def capture(path, src=None, by="owner", date=None):
+    """Copy the layer backup JSON to cards/<kit>/manual/<move>.json and write the card's `manual` block (parts -> frames)."""
+    import datetime
+    c = json.load(open(card_file(path), encoding="utf-8"))
+    src = src or os.path.join(out_dir(), f"{c['move']}_manual_layer.json")
+    if not os.path.exists(src):
+        print(f"capture {c['move']}: no layer backup at {src} (build once with the layer keyed, or pass --from=<file>)")
+        return
+    layer = json.load(open(src, encoding="utf-8"))
+    parts, nk = {}, 0
+    for ch, ks in layer.items():
+        nk += len(ks)
+        p = ctrl_part(ch)
+        parts.setdefault(p or "?", set()).update(int(k[0]) for k in ks)
+    rel = f"manual/{c['move']}.json"
+    dst = os.path.join(os.path.dirname(card_file(path)), rel)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    json.dump(layer, open(dst, "w", encoding="utf-8"), indent=1); open(dst, "a").write("\n")
+    c["manual"] = {"file": rel, "by": by, "date": date or datetime.date.today().isoformat(), "channels": len(layer), "keys": nk,
+                   "parts": {p: sorted(fr) for p, fr in sorted(parts.items())}}
+    json.dump(c, open(card_file(path), "w", encoding="utf-8"), indent=1, ensure_ascii=False); open(card_file(path), "a").write("\n")
+    print(f"capture {c['move']}: {len(layer)} channels, {nk} keys; parts " + "; ".join(f"{p} {_ranges(fr)}" for p, fr in c["manual"]["parts"].items()))
+    print(dst)
+
+
+def manual_path(c, path):
+    """Absolute path of the card's captured layer, or None."""
+    return os.path.join(os.path.dirname(card_file(path)), c["manual"]["file"]) if c.get("manual") else None
+
+
 # --- diff ---
 def _vkey(name):
     m = re.search(r"_v(\d+)(\w*)$", name)
@@ -284,7 +327,12 @@ def diff(path, vs=None):
     print(f"diff {c['move']} vs {o['move']}; {timing_line(c)}")
     print("cambiato: " + ("; ".join(f"{p} {_ranges(fr)}" for p, fr in changed.items()) or "niente")
           + (f" | chiavi nuove: {_ranges(new)}" if new else "") + (f" | chiavi tolte: {_ranges(gone)}" if gone else ""))
-    print("intatto (lock): " + ("; ".join(f"{p} {_ranges(fr)}" for p, fr in intact.items() if fr) or "nessun lock"))
+    mline = ""
+    if c.get("manual"):
+        hit = {p: [f for f in fr if any(abs(f - g) <= 1 for g in changed.get(p, ()))] for p, fr in c["manual"]["parts"].items()}
+        hit = {p: fr for p, fr in hit.items() if fr}
+        mline = " | manuale sotto una posa cambiata: " + "; ".join(f"{p} {_ranges(fr)}" for p, fr in hit.items()) + " (ricontrollare)" if hit else " | manuale: intatto"
+    print("intatto (lock): " + ("; ".join(f"{p} {_ranges(fr)}" for p, fr in intact.items() if fr) or "nessun lock") + mline)
     if bt:
         bc = {}
         for f, row in bt.items():

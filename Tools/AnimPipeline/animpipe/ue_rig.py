@@ -5,7 +5,7 @@ Entry points return a short JSON string; anything long is written to the path gi
   roundtrip(anim, rig, name, fps_num, fps_den, keep_frames, out)  anim -> rig keys -> (optional sparse) -> AnimSequence
   tangent_probe(name, out)                                          per-key tangents/weights on a rig control channel
 """
-import json
+import json, os
 import unreal
 
 MESH = "/Game/Characters/UEFN_Mannequin/Meshes/SKM_UEFN_Mannequin"
@@ -155,15 +155,18 @@ def _additive_sections(seq):
                         yield s
 
 
-def _read_manual(name, backup=None):
+def _read_manual(name, backup=None, card_copy=None):
     """{channel: [[frame, value, interp name, tangent mode name, arrive, leave], ...]} from the additive sections of the old
-    LS_<name>; the backup JSON only when the sequence does not exist."""
+    LS_<name>; without the sequence the Saved backup JSON, then the copy in the card's git folder (animpipe capture)."""
     full = f"{DIR}/LS_{name}"
     if not EAL.does_asset_exist(full):
-        try:
-            return json.load(open(backup)) if backup else {}
-        except (OSError, ValueError):
-            return {}
+        for f in (backup, card_copy):
+            try:
+                if f and os.path.exists(f):
+                    return json.load(open(f))
+            except (OSError, ValueError):
+                pass
+        return {}
     seq = unreal.load_asset(full)
     LSE = unreal.LevelSequenceEditorBlueprintLibrary
     LSE.open_level_sequence(seq)
@@ -212,7 +215,7 @@ def build(spec):
     planted IK feet to their first key. No per-frame keys are ever written."""
     rate = unreal.FrameRate(int(spec["fps_num"]), int(spec["fps_den"]))
     name = spec["name"]
-    manual = _read_manual(name, spec.get("manual_out"))
+    manual = _read_manual(name, spec.get("manual_out"), spec.get("manual_in"))
     seq, binding, end, length = _sequence(spec["source_anim"], name, rate)
     seq.set_playback_end(end + 1)        # the rig bake stops before the playback end: without this the last frame has no key
     ok = unreal.ControlRigSequencerLibrary.bake_to_control_rig(_world(), seq, _rig_class(spec["rig"]), unreal.AnimSeqExportOption(),

@@ -58,3 +58,8 @@ section to key. Before rebuilding it reads that section's keys and puts them bac
    {keys: N}`. A copy of the layer is kept in `Saved/AnimPipeline/animpipe/<move>_manual_layer.json` (used only if the
    sequence is gone). To drop a tweak, delete its keys on the layer and rebuild.
 Card changes and layer tweaks stack: if a card change moves the same control, re-check the tweak.
+4. `python -m animpipe capture <card>` (or `--from=<file>`) copies the layer backup into git as `cards/<kit>/manual/<move>.json`
+   and adds the card block `manual` (file, by, date, channels, keys, parts -> frames). Commit both.
+5. Build fallback for the layer keys: the sequence `LS_<name>`, then `Saved/.../<move>_manual_layer.json`, then the card copy.
+6. `diff` adds "manuale sotto una posa cambiata: arm_r 5 (ricontrollare)" when a changed pose is at (or +-1 frame from)
+   a manual key, else "manuale: intatto"; `animpipe card` prints the keys per part.
