@@ -239,3 +239,9 @@ Costo stimato checkpoint 3: Opus ~95 chiamate, contesto ~110k, circa $8-10.
   (2 tentativi, resta da chiudere con gli avambracci incrociati -5,7). Regole dell'owner raccolte in `cards/README.md`.
   Aperti: clearance braccia; salto 4->5 delle braccia da sopra la testa a davanti (da guardare). Prossimi thread (owner):
   rifinitura della pipeline, agente Fable che suggerisce correzioni alla timeline. Thread chiuso per contesto.
+- **Ripristino (owner, 2026-11-02 sera)**: l'ultimo giro aveva peggiorato le braccia e le ginocchia "a rana" al 14 andavano
+  bene. Dalla scheda di 2c000a7 (v4c) tornano: braccia alle chiavi 3/5/12/13 (busto al 3 compreso, avambraccio dx della
+  carica) e poli delle ginocchia al 13-14. Tenuti: piedi affiancati allo stomp (15-31) e `wrist_out` 35° (0-12). Timing
+  invariato (hitbox al 15). Check: co_motion PASS, hitstop_snap PASS 1,9 cm, contact_faf PASS; clearance FAIL come in v4c
+  (avambraccio dx nella testa -6,0 cm al 5, avambracci incrociati -5,2 all'8), legibility FAIL ereditato. La clearance delle
+  braccia resta aperta: va risolta senza cambiare la lettura delle braccia di v4c. Costo: Opus ~15 chiamate, ~$1.
