@@ -71,7 +71,7 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
 
 ## M7-03 (laptop, 2026-11-02): G3 partner credit; G6 item 1 seam designed, not built
 
-- Commit on feature/gas-npp-5.8: ddbdb9a "M7 G3: partner credit on hits" (GSTNCombatCore + GSTNCombatNP), then this docs commit. Deltas:
+- Commit on feature/gas-npp-5.8: 1ce94f2 "M7 G3: partner credit on hits" (GSTNCombatCore + GSTNCombatNP), then this docs commit. Deltas:
   docs/notes/m7-doc-deltas.md sections "G3" and "G6 item 1". GSTNCombat has no open change now.
 - G3: `FGSTN_HitCredit { PartnerEntityId, PartnerShare 0..255 }` in `FGSTN_HitOutcome::Credit` / `FGSTN_StepResult::Credit` (later set
   wins); MeterGain step splits (attacker part as before, partner part as `EGSTN_HitRequestTarget::Partner`); credited HitLanded / Health KO
