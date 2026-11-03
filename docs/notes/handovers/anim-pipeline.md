@@ -661,3 +661,21 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - Render standalone (PR #28) riuscito al primo colpo, editor owner intatto; serve `ANIMPIPE_PROJECT=<progetto principale>`
   dal worktree (aggiunto in `standalone.py`). Griglie in `cards/overlord/dair/review/varG_*.png`; mp4 in `sheets/ingame/*varG*`.
 - Da fare: revisione visiva (thread cloud). Costo stimato: ~75 chiamate, contesto ~95k, circa $12.
+
+## Dair variante H: follow-through ×2,6 e FAF un pelo avanti, FERMA dopo 2 tentativi (2026-11-03, thread desktop Opus)
+- Ramo `claude/project-thread-0pafeo` da 0614992 (dgqsku), cartella `GASP_Giustino2_feature`. G scartata (`variant discard`,
+  card in `Saved/AnimPipeline/variants/done`), H aperta e riempita da G con `Tools/AnimPipeline/dair_varH_make.py` (take proprio
+  `AS_Pilot_OverlordDAir_V4_VarH`: va cambiato anche `author.take`, il 1° author ha riscritto il take VarG, ormai scartato).
+- **Numerazione:** prima di f6c5659 `ingame_judge` scriveva `f{f}` = frame anim (l'hitstop ripete f). Il "FAF 37" dell'owner è
+  anim 37: la lettura "video = anim+8" della review di G era sbagliata. FAF su anim 37-42 (rampa smoothstep da 31, a 34 -7,9°).
+- FAF: key 37 = owner 37 mescolata 0,2 verso 31 (G 0,5). Lean misurato 37 **6,3°**, 40 7,9°, 42 8,3°; 0 e 31 invariati.
+- Follow-through (edits 18-30): bacino -5/-10/-7/-1/+4/+4,5/+2/-1,5/-2,5/-1,5 cm (p2p 14,8 cm, era 3,8), ginocchia +2 (10,98 cm),
+  spina +1, testa +2 (-2,2°/cm), mani +3. Piedi IK = body + piega (contact_faf ok).
+- Tentativo 1 (driver G ×2,6, compensazione mani piena): clearance -6,5 cm, snap 17→18 22,9 cm, reach peak f24. Tentativo 2:
+  check FAIL solo clearance (hand_l|spine_03 -1,58 cm @f25); verify 8/12 (3 ritardi a 0 frame, testa 5,77 cm < 6). Nessun render.
+- **Scoperto:** su questo rig `upperarm_*_fk_ctrl` Rotation X **negativa alza** le mani rispetto al bacino (G lo dava al contrario):
+  la "compensazione" 18-20 le abbassava e il "ritardo" a 21-22 le alzava. Serve: segno invertito, lobo positivo ≤ ~+4° (petto).
+- **Serve anche:** i ritardi vanno misurati su z(mano/testa) − z(bacino) (assoluto = dominato dal dip, picchi coincidenti):
+  aggiungere un `rel` a `verify.py`. Testa ~-3°/cm. Il dump di foot_l ha uno step di 279 cm a anim 14→15 (prima dello stomp,
+  non toccato da H): verificare dump/IK al frame attivo (punto 4 della review di G).
+- Req + misure frame per frame: `cards/overlord/dair/review/overlord_dair_v4_varH_req.json`. Costo: ~45 chiamate, contesto ~70k, ~$6.

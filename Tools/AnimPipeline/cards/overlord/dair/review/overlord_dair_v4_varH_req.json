@@ -1,0 +1,238 @@
+{
+ "variant": "overlord_dair_v4_varH",
+ "status": "STOPPED after 2 attempts (owner rule 5): check FAIL clearance (hand_l|spine_03 -1.58 cm @f25); verify 8/12 (3 delays + head nod 5.77<6 FAIL). No render.",
+ "video": false,
+ "hitstop": 8,
+ "_frames": "anim frames. Checked 03/11: before PR #28 ingame_judge printed f<N> = the anim frame sampled (grab(f), hitstop repeats f), so the owner's 'FAF 37' is anim 37, not video 37. FAF correction on anim 37-42 (ramp from 34); follow-through on anim 18-30. New grids show both v<N> and anim f<n>.",
+ "reqs": [
+  {
+   "id": "lean_f0_unchanged",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 0,
+   "min": 22,
+   "max": 30
+  },
+  {
+   "id": "lean_f31_stomp_hold_unchanged",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 31,
+   "min": -26,
+   "max": -18
+  },
+  {
+   "id": "lean_f37_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 37,
+   "min": 5,
+   "max": 8
+  },
+  {
+   "id": "lean_f40_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 40,
+   "min": 5,
+   "max": 9
+  },
+  {
+   "id": "lean_f42_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 42,
+   "min": 5,
+   "max": 10
+  },
+  {
+   "id": "pelvis_dip_peak_to_peak_x2",
+   "type": "amplitude",
+   "bone": "pelvis",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 12,
+   "max": 22
+  },
+  {
+   "id": "head_nod_visible",
+   "type": "amplitude",
+   "bone": "head",
+   "coord": "y",
+   "window": [
+    17,
+    31
+   ],
+   "min": 6
+  },
+  {
+   "id": "hand_l_follow_visible",
+   "type": "amplitude",
+   "bone": "hand_l",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 8
+  },
+  {
+   "id": "knee_l_fold",
+   "type": "amplitude",
+   "bone": "calf_l",
+   "coord": "y",
+   "window": [
+    17,
+    31
+   ],
+   "min": 6
+  },
+  {
+   "id": "hand_l_peak_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_l",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 2,
+   "max": 4
+  },
+  {
+   "id": "hand_r_peak_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_r",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 2,
+   "max": 4
+  },
+  {
+   "id": "head_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "head",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 1,
+   "max": 3
+  }
+ ],
+ "frame_numbering_check": "Old ingame_judge (pre f6c5659) labelled frames f{f} with f = anim frame sampled (hitstop repeats it): owner's f-labels = anim frames, so FAF 37 = anim 37 and the 'video = anim+8' reading of the G review was wrong.",
+ "measured_attempt2_anim16_31": {
+  "pelvis_z": [
+   77.6,
+   76.6,
+   71.6,
+   66.6,
+   69.7,
+   75.8,
+   80.9,
+   81.5,
+   79.1,
+   75.7,
+   74.8,
+   75.9,
+   77.5,
+   78.0,
+   77.8,
+   77.6
+  ],
+  "hand_l_z": [
+   112.9,
+   111.9,
+   105.4,
+   99.6,
+   104.0,
+   114.5,
+   121.6,
+   120.0,
+   114.4,
+   108.7,
+   108.0,
+   110.5,
+   113.8,
+   114.7,
+   113.8,
+   112.9
+  ],
+  "hand_l_minus_pelvis": [
+   35.3,
+   35.3,
+   33.8,
+   32.9,
+   34.3,
+   38.7,
+   40.7,
+   38.5,
+   35.3,
+   33.0,
+   33.2,
+   34.6,
+   36.3,
+   36.6,
+   36.1,
+   35.3
+  ],
+  "head_minus_pelvis": [
+   53.5,
+   53.5,
+   53.5,
+   54.5,
+   55.4,
+   54.9,
+   53.7,
+   52.5,
+   52.4,
+   53.0,
+   53.8,
+   54.0,
+   53.8,
+   53.5,
+   53.4,
+   53.5
+  ],
+  "lean_deg": {
+   "0": 26.33,
+   "31": -22.56,
+   "37": 6.33,
+   "40": 7.88,
+   "42": 8.27
+  },
+  "pelvis_p2p_cm": 14.84,
+  "knee_l_fold_cm": 10.98,
+  "hand_l_amp_cm": 22.0,
+  "head_amp_cm": 5.77
+ },
+ "next_attempt_needs": [
+  "upperarm_*_fk_ctrl Rotation X: NEGATIVE lifts the hands relative to the pelvis on this rig (G's notes assumed the opposite): flip the sign of the hand edits (hold up at 18-20 = negative, late dip at 21-23 = positive), positive lobe capped ~+4 deg (chest clearance, it failed at +5.6 deg @f25)",
+  "delay reqs must use hand/head z MINUS pelvis z (absolute z is dominated by the 15 cm body dip, peaks always coincide): add a 'rel' bone to verify.py delay/amplitude",
+  "head nod: factor -2.2 -> about -3 deg/cm for >= 6 cm",
+  "foot_l dump shows a 279 cm step at anim 14->15 (before the stomp, not touched by H): check the dump/IK at the active frame"
+ ]
+}

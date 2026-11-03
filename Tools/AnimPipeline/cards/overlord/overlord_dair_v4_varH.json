@@ -1,14 +1,14 @@
 {
- "move": "overlord_dair_v4_varG",
+ "move": "overlord_dair_v4_varH",
  "class": "tilt",
- "anim": "/Game/AnimPipeline/Rig/AS_OverlordDAirV4_Build_VarG",
+ "anim": "/Game/AnimPipeline/Rig/AS_OverlordDAirV4_Build_VarH",
  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
  "fps": 60,
  "timing_csv": "refs/ufd/GanondorfDAir_timing.csv",
  "effector": "foot_l",
  "_design": "Kit overlord ('elegant violence', M. Bison / Rugal). Ganondorf dair timing (UFD: startup 16, active 16-18, total 44 -> anim active 14-16, FAF 42) and its shape (knees tucked to the chest, both feet driven straight down); M. Bison head-stomp upper body: the arms rise and cross above the head through the startup, then fold on the chest (Bison's crossed arms) as the feet strike, and stay folded. Aerial: no idle entry, frame 0 already in the air tuck. No owner Step poses: the poses are authored data (author block), v1 for the owner's judgement. v1b (owner refs IMG_9040/9041 seen): arms folded tight and high on the chest, hands on the opposite upper arm; toes pointed at the stomp. v2 (2026-11-02): owner's Cascadeur key poses (Saved/AnimPipeline/overlord_dair_owner.casc, frames 15 and 23, read with casc_to_author.py; data in Saved/AnimPipeline/dair_v2/owner_poses_cascadeur.json) replace the anticipation and the stomp: owner 15 (tight ball, knees to the chest, forearms crossed in front of the face) -> anim 12, held and compressed to 13; owner 23 (straight vertical body leaning back, legs together, crossed arms high on the chest) -> anim 14, so the whole extension lands ON the first hitbox frame. Ganondorf timing kept (owner). Villain hand (open, fingers straight and together) at the anticipation, as asked. Owner rule: 'too much is just right' (Sakurai): toes pointed harder than his pose (-45). Clearance fix: crossed forearms 9-16 cm further forward at 12-13 (right in front of the left), head tuck 35% less; folded hands 3-6 cm off the chest in the recovery. Clearance pass 2: right forearm 5 cm above the left at 12-13, elbows wider; folded hands 5 cm further off the chest from 14. v3 (owner review of v2): arms, trunk and legs move as one: the arms travel relative to the trunk on every segment (low at the sides -> wide and rising at 6 -> crossing at chest height at 10 -> owner's crossed forearms in front of the face at 12 -> pushed up at 13 -> slammed down onto the chest at 14 with the legs), the trunk curls progressively (0 -> 6 -> 10 -> 12) instead of all at once. Head lag removed (part_delays head 0): the head reached its stomp pose one frame after the hit, so it snapped after the hitstop; hitstop_snap now counts the head's turn (20 cm lever). v4 (owner timing, replaces the GIF timing): initial pose almost upright, one knee up, arms open, hands open (0) -> extreme charge reached at 5 (owner 15) -> charge held and still tightening to 11 -> release starts at 12-13 (still reads as the charge) -> stomp lands on 14 (active 14-16) -> stomp held to 30 with a small settle -> recovery to 42. Slow, heavy move. Charge hold is alive: 5->11 the feet tuck 8 cm higher, the hands rise 8 cm, the trunk curls 6 deg, all together. Release spread 11->14 (owner: a slow move takes a few frames to let the force go): 15% at 12, 42% at 13, the last and largest 58% lands on 14. Owner: the first frame is already drawn in and loaded (55% of the way to the charge, arms pulled back with elbows behind), so 5 extremises a loaded pose. Owner: hitbox from anim frame 15 (16th frame); the charge hold runs to 12, release 12->15; charge poses more drawn in (feet +5 cm, trunk -6 deg). Frame 0 (owner: a sharp start, not already the charge): legs half drawn, trunk 30% curled, arms flung open wide and low behind the shoulders with open hands; 3: the arms sweep above the head and start crossing on the way; 5: the charge. Owner: knees stay in front, tucked to the chest through the charge (knee pole forward, feet under the hips, the hold creeps forward not up); key 2 keeps both arms rising wide together. Owner round: feet side by side at the stomp (no crossed ankles), villain hands bent 35 deg outward at the wrist 0-12. Owner review of that round: the arms got worse and the frog-open knees at 14 were right, so the arms at 3/5/12/13 (trunk at 3 included) and the knee poles at 13-14 are back to the previous round. Owner 02/11 22:43: charge (5, held to 12) = his Cascadeur f15, stomp (15-17, 31 with the 2 cm settle) = his f23, both read with casc_to_author (rescale, ratios 1.0 on these rigs) and locked in `approved`; pelvis height, fingers, wrist_out and the side-by-side feet stay the pipeline's. Why the charge had drifted: later rounds moved the hands +8 cm up and forward, added clavicle offsets and changed the trunk curl and head tuck by hand. Owner 02/11 22:56: the charge stays alive: only 5 is his f15 as is (locked); 12 = f15 plus the v4c hold deltas. Hold legs: feet tuck 6 cm forward and 6 up from 5 to 12 (co_motion: the legs must travel with the curling trunk). Owner 02/11 23:16: the stomp keeps his f23 feet (crossed ankles); the side-by-side exception is dropped for the dair.",
  "_manual": "Owner hand tweaks live on the additive 'Manuale' section of the rig track in /Game/AnimPipeline/Rig/LS_OverlordDAirV4_Build; animpipe build keeps them (cards/README.md). Arms are FK on this rig (arm_*_fk_ik_switch 0): key the *_fk_ctrl controls, the hand IK controls do nothing. Legs are IK.",
- "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAir_V4_VarG",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAir_V4_VarH",
  "poses": [
   {
    "name": "start",
@@ -96,7 +96,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft19",
@@ -104,7 +104,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft20",
@@ -112,7 +112,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft21",
@@ -120,7 +120,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft22",
@@ -128,7 +128,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft23",
@@ -136,7 +136,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft24",
@@ -144,7 +144,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft25",
@@ -152,7 +152,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft26",
@@ -160,7 +160,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft27",
@@ -168,7 +168,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft28",
@@ -176,7 +176,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft29",
@@ -184,7 +184,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "ft30",
@@ -192,7 +192,7 @@
    "source": null,
    "origin": "claude",
    "spacing": "limb_led_recovery",
-   "why": "owner 03/11 G: key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
+   "why": "owner 03/11 H (da G): key di follow-through dopo lo stomp, campionata dal take (posa invariata); il movimento lo danno gli edits"
   },
   {
    "name": "hold_end",
@@ -477,7 +477,7 @@
   }
  ],
  "author": {
-  "take": "AS_Pilot_OverlordDAir_V4_VarG",
+  "take": "AS_Pilot_OverlordDAir_V4_VarH",
   "frames": 43,
   "poses": {
    "0": {
@@ -3008,19 +3008,19 @@
     "pelvis": {
      "loc": [
       0.0,
-      0.6,
-      -7.55
+      0.96,
+      -4.28
      ],
      "rot": [
-      -5.9,
-      -5.4,
-      7.25
+      -14.84,
+      -4.2,
+      6.5
      ]
     },
     "spine": [
-     22.1,
-     26.7,
-     -4.6
+     19.1,
+     21.78,
+     -7.359999999999999
     ],
     "head": [
      -9.4,
@@ -3107,29 +3107,29 @@
     ],
     "spine_chain": {
      "spine_01": [
-      0.29,
-      -0.34500000000000003,
-      0.505
+      0.092,
+      -0.07800000000000001,
+      0.568
      ],
      "spine_02": [
-      0.525,
-      -0.5599999999999999,
-      0.515
+      0.21600000000000003,
+      -0.17,
+      0.602
      ],
      "spine_03": [
-      0.295,
-      -0.235,
-      -0.19
+      0.118,
+      -0.124,
+      -0.154
      ],
      "spine_04": [
-      -0.605,
-      0.64,
-      -0.44999999999999996
+      -0.332,
+      0.22600000000000003,
+      -0.702
      ],
      "spine_05": [
-      -0.5900000000000001,
-      0.6000000000000001,
-      0.275
+      -0.28400000000000003,
+      0.29400000000000004,
+      -0.064
      ]
     },
     "neck_chain": {
@@ -3161,40 +3161,40 @@
     ],
     "bones": {
      "pelvis": [
-      0.10187276865639631,
-      -0.7250157749348731,
-      0.1758173192187091,
-      0.6580747186791273
+      0.04244949239313045,
+      -0.7055413094712215,
+      0.22433020138881457,
+      0.6708840898173495
      ],
      "spine_01": [
-      -0.005543233237855424,
-      0.029970964445433203,
-      -0.05469123434891945,
-      0.9980380166811648
+      -0.0020611742814168376,
+      0.02765213811078082,
+      -0.045875678991895624,
+      0.9985622328605847
      ],
      "spine_02": [
-      0.0116540987230594,
-      0.02626210266633386,
-      -0.02786932314674205,
-      0.9991985712428929
+      0.015006316794910445,
+      0.024741171022278543,
+      -0.01863703538819554,
+      0.9994074973826423
      ],
      "spine_03": [
-      0.001755732202478627,
-      0.026855051686046624,
-      -0.06271679454237025,
-      0.997668445569821
+      0.005146235809381137,
+      0.024445470166548806,
+      -0.053919766199608574,
+      0.9982327354171021
      ],
      "spine_04": [
-      -0.000686595631985586,
-      0.02909155199618462,
-      -0.036915141699327005,
-      0.9988946303300513
+      0.003101276195062243,
+      0.023286673876667628,
+      -0.0296784431181645,
+      0.9992833946983236
      ],
      "spine_05": [
-      0.009754821645437207,
-      0.023334661528735142,
-      -0.052230076463799395,
-      0.9983147580490789
+      0.013031532864862657,
+      0.017284702603910417,
+      -0.04516852661686334,
+      0.9987448234711147
      ],
      "neck_01": [
       -0.105145,
@@ -3684,10 +3684,10 @@
  "approved": [],
  "variant": {
   "of": "overlord_dair_v4",
-  "letter": "G",
-  "why": "G: co_motion braccia f7-11 della A + follow-through dopo lo stomp con edits sui control",
+  "letter": "H",
+  "why": "H: follow-through x2.6 (bacino ~-10 cm, testa ~20 gradi, ginocchia ~10 cm, ritardi spina+1 testa+2 mani+3, mani dopo il bacino) + FAF un pelo avanti anim 37-42",
   "base_sha": "3fb9fbdd852a",
-  "at": "20261103_205728"
+  "at": "20261103_213906"
  },
  "edits": [
   {
@@ -3725,9 +3725,9 @@
    "delta": [
     0,
     0,
-    -3.64
+    -5.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -3738,9 +3738,9 @@
    "delta": [
     0,
     0,
-    -3.64
+    -5.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -3751,9 +3751,35 @@
    "delta": [
     0,
     0,
-    -3.64
+    -5.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    18
+   ],
+   "delta": [
+    4.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    18
+   ],
+   "delta": [
+    4.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -3764,22 +3790,9 @@
    "delta": [
     0,
     0,
-    -3.84
+    -10.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "spine_03_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    19
-   ],
-   "delta": [
-    3.31,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -3790,9 +3803,9 @@
    "delta": [
     0,
     0,
-    -3.84
+    -10.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -3803,9 +3816,48 @@
    "delta": [
     0,
     0,
-    -3.84
+    -10.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    19
+   ],
+   "delta": [
+    4.55,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    19
+   ],
+   "delta": [
+    8.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    19
+   ],
+   "delta": [
+    8.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -3816,35 +3868,9 @@
    "delta": [
     0,
     0,
-    -1.45
+    -7.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "spine_03_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    20
-   ],
-   "delta": [
-    3.49,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "head_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    20
-   ],
-   "delta": [
-    8.6,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -3855,9 +3881,9 @@
    "delta": [
     0,
     0,
-    -0.49
+    -2.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -3868,9 +3894,61 @@
    "delta": [
     0,
     0,
-    -0.49
+    -2.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20
+   ],
+   "delta": [
+    9.1,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20
+   ],
+   "delta": [
+    11.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20
+   ],
+   "delta": [
+    5.6,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20
+   ],
+   "delta": [
+    5.6,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -3881,48 +3959,9 @@
    "delta": [
     0,
     0,
-    1.23
+    -1.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "spine_03_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    21
-   ],
-   "delta": [
-    1.32,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "head_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    21
-   ],
-   "delta": [
-    9.08,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_l_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    21
-   ],
-   "delta": [
-    -9.27,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -3933,22 +3972,9 @@
    "delta": [
     0,
     0,
-    3.85
+    9.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_r_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    21
-   ],
-   "delta": [
-    -9.27,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -3959,9 +3985,61 @@
    "delta": [
     0,
     0,
-    3.85
+    9.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    21
+   ],
+   "delta": [
+    6.37,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    21
+   ],
+   "delta": [
+    22.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    21
+   ],
+   "delta": [
+    -7.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    21
+   ],
+   "delta": [
+    -7.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -3972,48 +4050,9 @@
    "delta": [
     0,
     0,
-    2.33
+    4.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "spine_03_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    22
-   ],
-   "delta": [
-    -1.11,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "head_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    22
-   ],
-   "delta": [
-    3.42,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_l_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    22
-   ],
-   "delta": [
-    -9.78,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -4024,22 +4063,9 @@
    "delta": [
     0,
     0,
-    5.79
+    11.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_r_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    22
-   ],
-   "delta": [
-    -9.78,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -4050,9 +4076,61 @@
    "delta": [
     0,
     0,
-    5.79
+    11.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    22
+   ],
+   "delta": [
+    0.91,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    22
+   ],
+   "delta": [
+    15.4,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    22
+   ],
+   "delta": [
+    -14.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    22
+   ],
+   "delta": [
+    -14.0,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -4063,48 +4141,9 @@
    "delta": [
     0,
     0,
-    1.58
+    4.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "spine_03_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    23
-   ],
-   "delta": [
-    -2.12,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "head_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    23
-   ],
-   "delta": [
-    -2.9,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_l_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    23
-   ],
-   "delta": [
-    -3.68,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -4115,22 +4154,9 @@
    "delta": [
     0,
     0,
-    4.51
+    5.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_r_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    23
-   ],
-   "delta": [
-    -3.68,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -4141,48 +4167,74 @@
    "delta": [
     0,
     0,
-    4.51
+    5.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "spine_03_ctrl",
    "attr": "Rotation",
    "frames": [
-    24
+    23
    ],
    "delta": [
-    -1.44,
+    -3.64,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "head_ctrl",
    "attr": "Rotation",
    "frames": [
-    24
+    23
    ],
    "delta": [
-    -5.51,
+    2.2,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
    "attr": "Rotation",
    "frames": [
-    24
+    23
    ],
    "delta": [
-    0.78,
+    -9.8,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    23
+   ],
+   "delta": [
+    -9.8,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [
+    24
+   ],
+   "delta": [
+    0,
+    0,
+    2.0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -4193,22 +4245,9 @@
    "delta": [
     0,
     0,
-    1.59
+    2.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_r_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    24
-   ],
-   "delta": [
-    0.78,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -4219,9 +4258,61 @@
    "delta": [
     0,
     0,
-    1.59
+    2.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    24
+   ],
+   "delta": [
+    -4.09,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    24
+   ],
+   "delta": [
+    -8.8,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    24
+   ],
+   "delta": [
+    -1.4,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    24
+   ],
+   "delta": [
+    -1.4,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -4232,35 +4323,9 @@
    "delta": [
     0,
     0,
-    -1.13
+    -1.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "head_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    25
-   ],
-   "delta": [
-    -3.74,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_l_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    25
-   ],
-   "delta": [
-    1.48,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -4271,22 +4336,9 @@
    "delta": [
     0,
     0,
-    -0.72
+    -1.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_r_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    25
-   ],
-   "delta": [
-    1.48,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -4297,9 +4349,61 @@
    "delta": [
     0,
     0,
-    -0.72
+    -1.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    25
+   ],
+   "delta": [
+    -1.82,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    25
+   ],
+   "delta": [
+    -9.9,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    25
+   ],
+   "delta": [
+    5.6,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    25
+   ],
+   "delta": [
+    5.6,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -4310,35 +4414,9 @@
    "delta": [
     0,
     0,
-    -1.2
+    -2.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "spine_03_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    26
-   ],
-   "delta": [
-    1.03,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_l_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    26
-   ],
-   "delta": [
-    1.01,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -4349,22 +4427,9 @@
    "delta": [
     0,
     0,
-    -1.2
+    -2.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_r_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    26
-   ],
-   "delta": [
-    1.01,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -4375,9 +4440,61 @@
    "delta": [
     0,
     0,
-    -1.2
+    -2.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    26
+   ],
+   "delta": [
+    1.36,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    26
+   ],
+   "delta": [
+    -4.4,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    26
+   ],
+   "delta": [
+    6.3,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    26
+   ],
+   "delta": [
+    6.3,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -4388,9 +4505,9 @@
    "delta": [
     0,
     0,
-    -0.4
+    -1.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "spine_03_ctrl",
@@ -4399,11 +4516,11 @@
     27
    ],
    "delta": [
-    0.97,
+    2.27,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "head_ctrl",
@@ -4412,40 +4529,53 @@
     27
    ],
    "delta": [
-    2.4,
+    3.3,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    27
+   ],
+   "delta": [
+    2.8,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    27
+   ],
+   "delta": [
+    2.8,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
    "attr": "Location",
    "frames": [
-    27
+    28
    ],
    "delta": [
     0,
     0,
-    -0.14
+    2.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
-   "attr": "Location",
-   "frames": [
-    27
-   ],
-   "delta": [
-    0,
-    0,
-    -0.14
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "body_ctrl",
    "attr": "Location",
    "frames": [
     28
@@ -4453,9 +4583,9 @@
    "delta": [
     0,
     0,
-    0.25
+    2.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "spine_03_ctrl",
@@ -4464,11 +4594,11 @@
     28
    ],
    "delta": [
-    0.27,
+    1.36,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "head_ctrl",
@@ -4477,11 +4607,11 @@
     28
    ],
    "delta": [
-    1.83,
+    5.5,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -4490,24 +4620,11 @@
     28
    ],
    "delta": [
-    -1.87,
+    -2.1,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "foot_l_ik_ctrl",
-   "attr": "Location",
-   "frames": [
-    28
-   ],
-   "delta": [
-    0,
-    0,
-    0.78
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "upperarm_r_fk_ctrl",
@@ -4516,24 +4633,11 @@
     28
    ],
    "delta": [
-    -1.87,
+    -2.1,
     0,
     0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "foot_r_ik_ctrl",
-   "attr": "Location",
-   "frames": [
-    28
-   ],
-   "delta": [
-    0,
-    0,
-    0.78
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -4544,48 +4648,9 @@
    "delta": [
     0,
     0,
-    0.26
+    0.5
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "spine_03_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    29
-   ],
-   "delta": [
-    -0.12,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "head_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    29
-   ],
-   "delta": [
-    0.38,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_l_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    29
-   ],
-   "delta": [
-    -1.07,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -4596,22 +4661,9 @@
    "delta": [
     0,
     0,
-    0.63
+    2.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_r_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    29
-   ],
-   "delta": [
-    -1.07,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -4622,9 +4674,48 @@
    "delta": [
     0,
     0,
-    0.63
+    2.0
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    29
+   ],
+   "delta": [
+    3.3,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    29
+   ],
+   "delta": [
+    -3.5,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    29
+   ],
+   "delta": [
+    -3.5,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "body_ctrl",
@@ -4635,48 +4726,9 @@
    "delta": [
     0,
     0,
-    0.05
+    0.2
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "spine_03_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    30
-   ],
-   "delta": [
-    -0.07,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "head_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    30
-   ],
-   "delta": [
-    -0.09,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_l_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    30
-   ],
-   "delta": [
-    -0.12,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_l_ik_ctrl",
@@ -4687,22 +4739,9 @@
    "delta": [
     0,
     0,
-    0.15
+    0.2
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
-  },
-  {
-   "control": "upperarm_r_fk_ctrl",
-   "attr": "Rotation",
-   "frames": [
-    30
-   ],
-   "delta": [
-    -0.12,
-    0,
-    0
-   ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   },
   {
    "control": "foot_r_ik_ctrl",
@@ -4713,9 +4752,51 @@
    "delta": [
     0,
     0,
-    0.15
+    0.2
    ],
-   "why": "owner 03/11 G: follow-through dopo lo stomp (driver bacino, mezzo seno smorzato P=7f tau=6f), ritardi spina+1 testa+2 mani+3 ginocchia+2"
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    30
+   ],
+   "delta": [
+    -0.46,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    30
+   ],
+   "delta": [
+    -2.1,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    30
+   ],
+   "delta": [
+    -2.1,
+    0,
+    0
+   ],
+   "why": "owner 03/11 H: follow-through ~x2.6 su G (bacino -10 cm al f19, overshoot e assestamento smorzato), spina+1, testa+2 (nod ~20), mani+3 (picco dopo il bacino, compensate a 18-20), ginocchia +2 (~10 cm)"
   }
- ]
+ ],
+ "_varH": {
+  "k37": 0.2
+ }
 }
