@@ -1,0 +1,32 @@
+{
+ "variant": "overlord_dair_v4_varF",
+ "status": "NOT READY: numeric gates FAIL, not shown to owner",
+ "trunk_lean_deg_forward_positive_y": {
+  "note": "pelvis->spine_05 lean in the card's solved pose, measured with Tools/AnimPipeline/lean.py",
+  "f0_before_A": 12.4,
+  "f0_now": 26.3,
+  "f3": 34.5,
+  "hold_f15_31": -22.3,
+  "f37_orig": 13.7,
+  "f37_now": -4.3,
+  "f42_orig": 27.4,
+  "f42_now": 8.5,
+  "target_f42": "a hair forward (+5..+10)"
+ },
+ "follow_through": {
+  "driver": "pelvis dip after f17 (damped half-cosine, period 8f, tau 6f)",
+  "lags_frames": {
+   "spine": 1,
+   "head": 2,
+   "hands": 3,
+   "knees": 2
+  },
+  "measured_peak_frames_in_clip_VarD_first_attempt_cm": "pelvis/spine_05 peak f23-ish, head f22, hand_r f19 and f24, calf_l f23: delays visible; amplitude only +-2 cm"
+ },
+ "gates_varF": {
+  "contact_faf": "FAIL reach peak f18 (window 15-17)",
+  "clearance": "FAIL hand_l|spine_03 -0.27cm f24",
+  "co_motion": "FAIL arm_l 7-11, arm_r 7-10 (also FAIL on the applied A card once its take is regenerated)"
+ },
+ "root_cause_of_C_and_B_no_motion": "build reads the take written by `animpipe author <card>`: it must run before `build` on every card change (B and C skipped it)"
+}

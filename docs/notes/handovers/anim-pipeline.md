@@ -611,3 +611,19 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   Build+check PASS, grid r1, video a CAPSULE (`preview_multi.py`): il render in-game è fallito 2 volte, DefaultLevel sporco
   nell'editor dell'owner (setup rifiuta di cambiare mappa). Se vuole il lit, salvi la mappa e rilancio `ingame_multi.py`.
 - Non applicata. Costo: ~12 chiamate, ~$1.
+
+## Dair: varianti D/F bloccate da gate numerici (2026-11-03, thread desktop Sonnet)
+- **Causa di B e C senza secondary motion:** `build` legge il take scritto da `python -m animpipe author <card.json>`; va lanciato
+  prima di ogni `build` quando cambiano le pose. B e C non lo avevano fatto (nessun movimento nel clip). Da ora: author→build→check.
+- **Scoperta sulla A applicata:** rigenerato il take (author+build+check sul card principale): `co_motion` FAIL (braccia incollate
+  f7-11 / f7-10, effetto del ritimo 10→12, 13→14 della A). Prima risultava PASS perché il check girava su un take vecchio.
+  Il clip principale `AS_OverlordDAirV4_Build` ora è ricostruito dalla A.
+- **Busto (lean avanti in gradi, `Tools/AnimPipeline/lean.py`):** f0 12,4→26,3 (A); hold -22,3; f37 13,7→-4,3; f42 27,4→8,5 (D/F,
+  fattori 0,5/0,62). Il 15% di C dava quasi -17 (indietro): era l'errore.
+- **Follow-through (D/F):** bacino scende (mezzo coseno smorzato, periodo 8f) e ritardi spina+1, testa+2, mani+3, ginocchia+2 con
+  keys author per frame 18-30 (`dair_followthrough_draft.py`). Picchi sfalsati visibili, ampiezza ±2 cm (poca). Gate FAIL: contact_faf
+  (picco reach f18: le key senza `bones` risolvono i piedi diversamente da f17), clearance (mano-spina 0,27 cm), co_motion (eredità A).
+- **Proposta:** il follow-through va fatto con `edits` (delta sui control, non nuove key author) e il co_motion della A va risolto
+  prima (arm_l/arm_r f7-11 si muovono con il corpo). Variante F aperta, non mostrata all'owner; req in
+  `cards/overlord/dair/review/overlord_dair_v4_varF_req.json`. Nessuna immagine nuova: il render è bloccato dai gate.
+- Costo stimato: ~35 chiamate, ~$3.

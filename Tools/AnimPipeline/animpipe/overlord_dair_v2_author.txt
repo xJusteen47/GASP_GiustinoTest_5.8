@@ -1,0 +1,16 @@
+parents: {'pelvis': 'root', 'spine_01': 'pelvis', 'neck_02': 'neck_01', 'head': 'neck_02', 'hand_l': 'lowerarm_l', 'upperarm_twist_01_l': 'upperarm_l', 'lowerarm_twist_02_r': 'lowerarm_r', 'foot_l': 'calf_l', 'ball_l': 'foot_l'}
+PASS bone lengths: 66 bones within 0.1 cm of the reference on every frame
+moved from the solve by the fixed lengths (model stretch), worst cm @frame: {'head': '0.0@15', 'hand_l': '0.0@12', 'hand_r': '0.0@7', 'foot_l': '0.0@38', 'foot_r': '0.0@0', 'ball_l': '0.0@19', 'ball_r': '0.0@0', 'spine_05': '0.0@15'}
+write: {'written': 66, 'missing': [], 'length': 0.699999988079071} 
+asset: None None 0
+
+Traceback (most recent call last):
+  File "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_feature\Tools\AnimPipeline\ue_write_take.py", line 220, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_feature\Tools\AnimPipeline\ue_write_take.py", line 202, in main
+    back = sample(dest, solved, list(range(n)), "component")
+  File "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_feature\Tools\AnimPipeline\ue_write_take.py", line 39, in sample
+    for s in r["samples"]:
+             ~^^^^^^^^^^^
+KeyError: 'samples'
