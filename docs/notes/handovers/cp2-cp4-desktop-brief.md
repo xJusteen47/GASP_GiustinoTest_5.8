@@ -26,3 +26,15 @@ max 2 tentativi, script ≤5 righe, handover ≤30 righe con costo.
   fallisce: dichiararlo in `source.keep` con il why, oppure `derived`.
 - Gate finale: `check` + `fidelity` → `review --visual` → skill (cloud) → `visual-gate` → `approve`. Prima mossa vera:
   la dair dalle nuove chiavi dell'owner (f0, f4, f8, f14, f15 hitbox, ultime 2 = FAF da confermare).
+
+## Aggiornamento 2026-11-03 (dopo la skill pubblica, commit 0308102): il passo sulla dair vera parte dai verbi nuovi
+- Ingresso: `python -m animpipe status overlord_dair_v4` e poi il `next` (skill `.claude/skills/animpipe-move/`,
+  ex `gstn-visual-review` = `review.md`). Niente più comandi con il percorso della scheda né `visual-gate`/`capture`/`casc-*`.
+- Cascadeur: l'owner preme **Invia** (non più "Esporta per Unreal"); la richiesta va in `casc/requests/` e la consuma
+  `animpipe import <mossa>`. C'è già una richiesta dair in attesa (vecchia): chiedere all'owner se vale ancora.
+- CP2 si innesta in `render` (`animpipe/verbs.py` `v_render`): oggi copia la griglia `poses`; sostituirla con il composito
+  (fantasma owner, traiettorie, hitstop) mantenendo `visual/<mossa>/r<N>/grid.png` + `manifest.json`.
+- CP4 si innesta in `import` (dita/mani dalle chiavi owner) e `interp` (pose `origin: claude` da file `--from`).
+- Ok e approvazione dall'owner con **GSTN Studio** (`python -m animpipe.app`, tkinter): Ok, Approva, varianti, snapshot.
+- Barra Cascadeur e riga di stato non ancora provate dentro Cascadeur: prima cosa da verificare (serve il server script,
+  lo avvia l'owner).
