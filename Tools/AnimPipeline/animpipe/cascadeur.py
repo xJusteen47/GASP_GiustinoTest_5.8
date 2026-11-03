@@ -35,7 +35,7 @@ PARTS = {   # part -> (parent bone or None = component space, bones compared)
     "leg_l": ("pelvis", ("thigh_l", "calf_l", "foot_l", "ball_l")),
     "leg_r": ("pelvis", ("thigh_r", "calf_r", "foot_r", "ball_r")),
 }
-FIELDS = {"trunk": ("pelvis", "spine"), "head": ("head",), "arm_l": ("arm_l", "clavicle_l"), "arm_r": ("arm_r", "clavicle_r"),
+FIELDS = {"trunk": ("pelvis", "spine", "spine_chain"), "head": ("head", "neck_chain"), "arm_l": ("arm_l", "clavicle_l"), "arm_r": ("arm_r", "clavicle_r"),
           "leg_l": ("leg_l",), "leg_r": ("leg_r",)}
 RESID_BONES = [b for p in PARTS.values() for b in p[1]]
 
@@ -121,6 +121,19 @@ def fit(poser, P, R, old):
     for b in NECK:
         nk = nk @ lr[b]
     new["head"] = _r1(rotvec(R["head"] @ nk.T))
+    # what the even spread misses (a bend held in one vertebra, the neck curling under the head): per-bone extras so the
+    # owner's trunk and neck come back within the 1 cm round trip instead of being smoothed out
+    for key, chain, par, tot in (("spine_chain", SPINE, "pelvis", new["spine"]), ("neck_chain", NECK, "spine_05", new["head"])):
+        Rp, ex = R[par], {}
+        for b in chain:
+            e = rotvec(R[b] @ (rv(np.array(tot) / len(chain)) @ Rp @ lr[b]).T)
+            if np.linalg.norm(e) > 0.05:
+                ex[b] = [round(float(x), 2) + 0.0 for x in e]
+            Rp = R[b]
+        if ex:
+            new[key] = ex
+        else:
+            new.pop(key, None)
     for s in "lr":
         new[f"clavicle_{s}"] = _r1(rotvec(R[f"clavicle_{s}"] @ (R["spine_05"] @ lr[f"clavicle_{s}"]).T))
     # limbs: targets relative to the SOLVED origin (the author chain), so the world hand/foot stays where Cascadeur put it
@@ -188,13 +201,14 @@ def _card_path(p):
     return p if os.path.isabs(p) else os.path.join(C.TOOLS, p)
 
 
-def target_bones(card, new, ref, parts):
+def target_bones(card, new, ref, parts, rigid=False):
     """Card bones moved by what the owner changed in Cascadeur: for each changed part, the change new vs ref (both read
     back from Cascadeur, relative to the part's parent) is applied to the card's bones. Cascadeur's own rig distortion
     (the same in ref and new: thigh/neck roll, a straight leg kept a little short) cancels out. Unchanged parts keep the
     card's relative bones and follow their parent."""
     (Pc, Rc), (Pn, Rn), (Pr, Rr) = card, new, ref
     P, R = {}, {}
+    stretch = [0.0]
     for part in ("trunk", "head", "arm_l", "arm_r", "leg_l", "leg_r"):
         par, bones = PARTS[part]
         for bn in bones:
@@ -206,7 +220,16 @@ def target_bones(card, new, ref, parts):
                 P[bn], R[bn] = pc, rc
             else:
                 P[bn], R[bn] = P[par] + R[par] @ pc, R[par] @ rc
-    return P, R
+            sk = PARENT.get(bn)
+            if part in parts and rigid and sk in P and sk in bones:
+                # rigid: the owner's rotations on the card's bone lengths. Adding position deltas bone by bone breaks
+                # lengths on a big change (Cascadeur's foot/forearm are not the card's), which no pose can then match;
+                # the dropped stretch is kept in stretch_cm so it is reported, not hidden
+                lc = Rc[sk].T @ (Pc[bn] - Pc[sk])
+                q = P[sk] + R[sk] @ lc
+                stretch[0] = max(stretch[0], float(np.linalg.norm(q - P[bn])))
+                P[bn] = q
+    return (P, R, stretch[0]) if rigid else (P, R)
 
 
 def merge(c, bones, unlock=(), poser=None, ref=None):
@@ -235,18 +258,28 @@ def merge(c, bones, unlock=(), poser=None, ref=None):
         for part in changed:
             if not is_new and locked(c, f, part) and f"{part}@{f}" not in unlock:
                 blocked.append(f"{part}@{f} ({changed[part][0]} cm, {changed[part][1]} deg)")
-        Pt, Rt = target_bones((Po, Ro), (P, R), (Pr, Rr), changed) if ref else (P, R)
+        st = 0.0
+        # a new key sits where the card only had an in-between, and Cascadeur's in-between there is not the card's
+        # (other spacing): a delta from that readback would carry the spacing gap into the pose. Take the bones whole.
+        if ref and not is_new:
+            Pt, Rt, st = target_bones((Po, Ro), (P, R), (Pr, Rr), changed, rigid=True)
+        else:
+            Pt, Rt = P, R
         fitted = fit(poser, Pt, Rt, old)
         pose = copy.deepcopy(old)
         for part in changed:
             for k in FIELDS[part]:
                 if k in fitted:
                     pose[k] = fitted[k]
+                else:
+                    pose.pop(k, None)
         Pn, _ = poser.solve(pose)
         cm, b = residual(Pt, Pn)
-        rep["frames"][f] = {"parts": changed, "residual_cm": round(cm, 2), "worst_bone": b}
+        rep["frames"][f] = {"parts": changed, "residual_cm": round(cm, 2), "worst_bone": b, "stretch_cm": round(st, 2)}
         if cm > FIT_CM:
             rep["flag"].append(f)
+            d = {bn: round(float(np.linalg.norm(Pt[bn] - Pn[bn])), 2) for bn in RESID_BONES if bn in Pt and bn in Pn}
+            rep["frames"][f]["worst"] = dict(sorted(d.items(), key=lambda x: -x[1])[:6])
         poses[str(f)] = pose
         if is_new:
             rep["new"].append(f)

@@ -11,7 +11,7 @@ sys.path.insert(0, TOOLS)
 from animpipe import card as C, cascadeur as K
 from animpipe.author import Poser, PARENT, rv
 
-CARD = os.path.join(TOOLS, "cards", "overlord", "overlord_dair_v4.json")
+CARD = os.path.join(TOOLS, "tests", "data", "overlord_dair_v4_pre_owner_keys.json")   # frozen: the live card changes with every import
 POSER = Poser()
 
 
@@ -95,7 +95,7 @@ def test_uneven_spine_is_reported():
     _rotate_subtree(P, R, "spine_04", rv([-35, 0, 0]))          # all the bend in one vertebra: author spreads it evenly
     bones[12] = (P, R)
     _, rep = K.merge(c, bones, poser=POSER)
-    assert rep["frames"][12]["residual_cm"] > 0.0
+    assert 0.0 < rep["frames"][12]["residual_cm"] < 0.1     # spine_chain holds the one-vertebra bend
 
 
 def test_new_key_becomes_pose():

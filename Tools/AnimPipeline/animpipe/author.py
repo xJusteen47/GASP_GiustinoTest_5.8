@@ -11,6 +11,8 @@ pose (all optional; missing keys = idle):
   pelvis   {"loc": [x, y, z] cm, "rot": [rx, ry, rz] deg}   world offset and rotation of the pelvis
   spine    [rx, ry, rz]   total rotation of the trunk above the pelvis, spread over spine_01..05
   head     [rx, ry, rz]   extra rotation of neck_01, neck_02, head (spread)
+  spine_chain / neck_chain  {"<bone>": [rx, ry, rz]}  optional per-bone extra on top of the even spread (world axes, at
+           the bone's pivot): what an owner pose from Cascadeur bends unevenly along the spine/neck (casc-import writes it)
   clavicle_l / clavicle_r  [rx, ry, rz]   shrug / protraction
   arm_l / arm_r  {"hand": [x, y, z], "pole": [x, y, z], "hand_rot": [rx, ry, rz]}  hand target and elbow pole, in the
            CHEST frame (offset from spine_05, axes turned with the trunk); the hand keeps its idle angle to the forearm
@@ -172,10 +174,15 @@ class Poser:
             if delta is not None:
                 # world-axis rotation about the bone's own pivot; children inherit it
                 R[b] = rv(delta) @ R[b]
+        sc, nc = pose.get("spine_chain") or {}, pose.get("neck_chain") or {}
         for b in SPINE:
             fk(b, sp / len(SPINE))
+            if b in sc:
+                R[b] = rv(sc[b]) @ R[b]
         for b in NECK:
             fk(b, hd / len(NECK))
+            if b in nc:
+                R[b] = rv(nc[b]) @ R[b]
         Dch = rv(sp) @ Dpel
         for s in "lr":
             fk(f"clavicle_{s}", pose.get(f"clavicle_{s}"))
