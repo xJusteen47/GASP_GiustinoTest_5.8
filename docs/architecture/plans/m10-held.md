@@ -280,6 +280,8 @@ Not planned as a gate yet; recorded so G10 and the loadout work (M3 loadout, [co
   held, **only if that slot is empty**. Likely shape: `bStowable` on the object definition; a stow ability ends the `Held` link and writes
   the object's ref into the support slot (presentation on a back socket); taking it out recreates the `Held` link; refused when a support
   weapon is already there.
+- **With a support weapon already equipped** (owner, 15:54): the held object cannot be stowed and cannot be swapped with the support or
+  the main weapon; **any weapon switch drops it on the ground** (the `Held` link ends with a drop, as on a hit).
 - Needs G10 first and a short loadout note (slot ownership while a summoned weapon is held); ask the owner before it becomes a gate.
 
 ### G12 Presentation, debug, editor
