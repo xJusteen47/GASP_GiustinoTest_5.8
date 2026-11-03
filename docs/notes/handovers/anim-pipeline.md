@@ -627,3 +627,20 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   prima (arm_l/arm_r f7-11 si muovono con il corpo). Variante F aperta, non mostrata all'owner; req in
   `cards/overlord/dair/review/overlord_dair_v4_varF_req.json`. Nessuna immagine nuova: il render è bloccato dai gate.
 - Costo stimato: ~35 chiamate, ~$3.
+
+## Render standalone + frame video + verify (2026-11-03, thread cloud Sonnet, nessun editor)
+- Ramo `claude/anim-render-standalone` da `feature/gas-npp-5.8` 60da6fa; solo `Tools/AnimPipeline` + skill + questo file.
+- `animpipe/vframes.py`: frame video ⇄ anim (freeze di hitstop). `--video` su render/approve `--frames`, interp `--drop`/`--from`;
+  `result.frame_map` prima di scrivere. Griglie `poses`: titolo `v<N> (anim n)`, chiavi owner ★ rosse. `ingame_judge.py`: testo
+  `v<i> (f<n>)` su ogni frame del video, `--raw=` `--tag=` nuovi. Skill animpipe-move §4b: mappa richiesta→key nel messaggio.
+- `render --standalone` (`animpipe/standalone.py` + `standalone_capture.py`): 2° UnrealEditor off-screen sulla mappa salvata
+  L_PilotCapture, `capture_ue` invariato, multi-angolo `--azs`, stesso formato mp4. Exit 4 se manca engine/mappa salvata.
+- `verify <mossa> --req=file.json`: angoli / ritardo picchi / ampiezza, PASS/FAIL per riga (bonus fatto).
+- Test: `tests/test_vframes.py` 6 verdi; test_verbs e test_visual verdi. Smoke griglia con dump finto ok.
+- **Da verificare sul desktop (5 righe):** 1) `L_PilotCapture.umap` esiste salvata (altrimenti aprirla una volta e salvare);
+  2) `animpipe build` poi `animpipe render <mossa> --standalone --azs=90` mentre l'editor dell'owner è aperto con DefaultLevel
+  sporco: deve finire senza toccarlo; 3) il video non è nero/vuoto (shader del primo avvio, se nero: rilancia) e `v<N>` sul frame
+  coincide col numero che l'owner vede; 4) hitstop: `v(a0+1)..v(a0+8)` mostrano lo stesso anim; 5) se `-RenderOffScreen` o `-ExecCmds`
+  fallisce leggi `Saved/AnimPipeline/standalone/<mossa>/editor.log`.
+- Rischi: due editor sullo stesso progetto (lock di Saved/Intermediate); `get_play_length`/attesa 3 tick non provati.
+- Costo: ~35 chiamate, contesto ~85k, circa $3-4 (Sonnet).
