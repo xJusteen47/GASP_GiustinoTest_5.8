@@ -144,3 +144,21 @@ FGSTN_CreditSplit UGSTN_MountUtils::SplitCredit(uint8 PartnerShare, double Amoun
 	Split.OwnerAmount = Amount - Split.PartnerAmount;
 	return Split;
 }
+
+FVector UGSTN_MountUtils::ComputeExitLaunch(const FGSTN_PairExitLaunch& Launch, const FVector& Aim, const FVector& Up, const FVector& PartnerVelocity)
+{
+	const FVector LocalUp = Up.IsNearlyZero() ? FVector::UpVector : Up.GetSafeNormal();
+	FVector Velocity = LocalUp * Launch.UpSpeed;
+	const FVector Flat = FVector::VectorPlaneProject(Aim, LocalUp).GetSafeNormal();
+	if (!Flat.IsZero() && Launch.Speed != 0.f)
+	{
+		const double Pitch = FMath::DegreesToRadians(static_cast<double>(FMath::Clamp(Launch.PitchDeg, -89.f, 89.f)));
+		Velocity += (Flat * FMath::Cos(Pitch) + LocalUp * FMath::Sin(Pitch)) * Launch.Speed;
+	}
+	if (Launch.InheritPartnerVelocity != 0.f)
+	{
+		const FVector Inherited = Launch.bInheritHorizontalOnly ? FVector::VectorPlaneProject(PartnerVelocity, LocalUp) : PartnerVelocity;
+		Velocity += Inherited * Launch.InheritPartnerVelocity;
+	}
+	return Velocity;
+}

@@ -277,3 +277,16 @@ thread (two edits, in this order, each its own commit):
 | `ExitMode` | One `UGSTN_Placer_Mount` per definition (mode + `ExitDistanceCm`), owned by the registry; break reason `Combat.Link.BreakReason.Outcome` |
 | `Interruptible` partner | `bPartnerLocksCommands` is forced false for it; "a hit replaces its part" is GSTNLink's forced-timeline behaviour (not re-tested here) |
 | partner requirements read provider tags (OPEN since G2) | Still OPEN: tags only `PartnerRequirements` names are not in `FGSTN_LinkRequestTags` and read absent. Needed by G9 content only if a reference move requires such a tag |
+
+## G9 part A: the exit launch of a pair move (M7-08, desktop)
+
+G9 split in two: part A (this) is the runtime the reference moves miss; part B is the content (`PM_ThrowRider`, `PM_BoostJump`: four
+abilities with timelines, the definitions, the test kit's set), `scenario_throw_rider` / `scenario_boost_jump` and spike 4.
+
+| Spec / plan | Built |
+|---|---|
+| `LaunchLinked` executes the exit's velocity; "at release the server fills `PendingExit.Velocity`" | No new request: GSTNLink's exit already carries a velocity to the parked mode (G6, SD-12). The mount placer computes it: `UGSTN_Placer_Mount::Launch` (`FGSTN_PairExitLaunch`), filled by the registry from the definition's new `ExitLaunch`; zero = a put-down (every existing exit unchanged). Math in `UGSTN_MountUtils::ComputeExitLaunch` |
+| throw aim "carrier's stick snapped to the movement plane, fixed pitch `ThrowAngleDeg`" | The query's `PreferredDirection` (the carrier's forward, which follows its stick while it moves) flattened onto the plane of the rider's up, pitched by `PitchDeg`. The stick itself is not read: the exit query has no input |
+| `ThrowInheritCarrierVelocity` / `InheritCarrierVelocity` × the carrier's (horizontal) velocity | `InheritPartnerVelocity` (+ `bInheritHorizontalOnly` for the boost) × the new `FGSTN_ExitQuery::PartnerVelocity`: the watchdog fills it from the pawn on the authority (`FGSTN_LinkWatchdogEntity::Velocity`), an initiator placing its own exit from its view snapshot's `Velocity` (the boost jump, predicted) |
+| boost "rider's `JumpVelocity × BoostMultiplier`" | One `UpSpeed` on the definition: the placer reads no Mover settings. Content authors the product |
+| `RefundAirJumps`, thrown rider's sweeping hitbox, `ThrownActionableFrame` | Part B (abilities and timelines) |

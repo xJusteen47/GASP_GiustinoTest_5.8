@@ -87,6 +87,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pair Move|Outcome", meta = (ClampMin = "0.0", ForceUnits = "cm"))
 	float ExitDistanceCm = 90.f;
 
+	/** The velocity the rider leaves with on a Break (throw, boost jump), computed by the exit placer from the carrier's forward and velocity */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pair Move|Outcome")
+	FGSTN_PairExitLaunch ExitLaunch;
+
 	/** Who is credited for the pair move's hits (combat-m7-piggyback.md 6.7) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pair Move|Credit")
 	EGSTN_PairCredit Credit = EGSTN_PairCredit::OwnerOnly;

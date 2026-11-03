@@ -45,6 +45,10 @@ struct GSTNLINKCORE_API FGSTN_ExitQuery
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Exit")
 	FVector KnockbackVelocity = FVector::ZeroVector;
 
+	/** The velocity of the entity that stays, for an exit that inherits it (M7 G9: a rider thrown or boosted off a running carrier) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Exit")
+	FVector PartnerVelocity = FVector::ZeroVector;
+
 	/** The world, or null for no collision check. Not reflected and not owned: valid for the call only, and a Blueprint placer cannot reach it */
 	const IGSTN_ExitCollisionQuery* Collision = nullptr;
 };

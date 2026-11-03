@@ -93,6 +93,7 @@ bool UGSTN_PairMoveRegistry::AddDefinition(const UGSTN_PairMoveDefinition* Defin
 	UGSTN_Placer_Mount* Placer = NewObject<UGSTN_Placer_Mount>(this);
 	Placer->Mode = Definition->ExitMode;
 	Placer->DistanceCm = Definition->ExitDistanceCm;
+	Placer->Launch = Definition->ExitLaunch;
 
 	// Sorted insert by id: the listing order is the id order whatever order kits were compiled in
 	int32 Insert = 0;

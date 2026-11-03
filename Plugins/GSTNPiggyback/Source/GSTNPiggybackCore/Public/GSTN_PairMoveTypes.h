@@ -40,3 +40,36 @@ enum class EGSTN_PairPartnerMode : uint8
 	/** The partner's part is an ordinary forced timeline: a hit reaction replaces it */
 	Interruptible
 };
+
+/**
+ * The velocity a rider leaves a pair move's Break with (combat-m7-piggyback.md 6.6, M7 G9): a launch along the exit's aim pitched up, a
+ * straight up part, and a share of the staying partner's velocity. All zero (the default) = a plain put-down. Content, read by the mount
+ * placer from the query only, so the watchdog and an initiator placing its own exit compute the same numbers from the same inputs.
+ */
+USTRUCT(BlueprintType)
+struct GSTNPIGGYBACKCORE_API FGSTN_PairExitLaunch
+{
+	GENERATED_BODY()
+
+	/** Speed along the aim (the carrier's forward on the movement plane) pitched up by PitchDeg. The throw's ThrowSpeed */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pair Move|Launch", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float Speed = 0.f;
+
+	/** Pitch of the aimed part above the movement plane. The throw's ThrowAngleDeg */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pair Move|Launch", meta = (ClampMin = "-89.0", ClampMax = "89.0", ForceUnits = "deg"))
+	float PitchDeg = 0.f;
+
+	/** Speed straight along the local up, added to the aimed part. The boost jump's launch (rider jump velocity x boost multiplier) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pair Move|Launch", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float UpSpeed = 0.f;
+
+	/** Share of the staying partner's velocity added on top (ThrowInheritCarrierVelocity, InheritCarrierVelocity) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pair Move|Launch", meta = (ClampMin = "0.0", ClampMax = "2.0"))
+	float InheritPartnerVelocity = 0.f;
+
+	/** Inherit only the partner's velocity on the movement plane (the boost jump: the carrier's fall or jump does not lift the rider) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pair Move|Launch")
+	bool bInheritHorizontalOnly = false;
+
+	bool IsZero() const { return Speed == 0.f && UpSpeed == 0.f && InheritPartnerVelocity == 0.f; }
+};

@@ -44,6 +44,8 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogEntity
 
 	/** The root (capsule centre) and the capsule, for the distance rule and the exit placer */
 	FTransform Transform = FTransform::Identity;
+	/** World velocity (the pawn's on the authority, the snapshot's in an initiator-placed exit): the exit query's PartnerVelocity (M7 G9) */
+	FVector Velocity = FVector::ZeroVector;
 	FVector Up = FVector::UpVector;
 	float CapsuleRadius = 34.f;
 	float CapsuleHalfHeight = 88.f;

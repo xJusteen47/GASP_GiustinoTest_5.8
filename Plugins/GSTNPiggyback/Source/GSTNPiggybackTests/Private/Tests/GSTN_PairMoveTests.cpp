@@ -3,6 +3,9 @@
 // No world: the definitions are transient objects and the abilities are the plugin's mount moves (any combat timeline ability will do).
 
 #include "Data/GSTN_LinkOutcomeTrack.h"
+#include "Data/GSTN_LinkTypeDefinition.h"
+#include "GSTN_LinkWatchdog.h"
+#include "GSTN_MountUtils.h"
 #include "GSTN_MountAbilities.h"
 #include "GSTN_PairMoveDefinition.h"
 #include "GSTN_PairMoveRegistry.h"
@@ -200,6 +203,63 @@ bool FGSTN_PairMoveRegistryTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("resolve 3"), Registry->ResolveLinkAction(3, Info));
 	TestEqual(TEXT("offset 0 becomes 1"), Info.PartnerStartOffsetFrames, 1);
 	TestFalse(TEXT("interruptible partner keeps its commands"), Info.bPartnerLocksCommands);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PairMoveExitLaunchTest, "GSTNPiggyback.Runtime.PairMove.ExitLaunch", GSTNPairMoveTests::Flags)
+bool FGSTN_PairMoveExitLaunchTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPairMoveTests;
+	const FVector Up = FVector::UpVector;
+	const FVector Partner(300.0, 0.0, -200.0);
+
+	// Zero launch: a put-down, whatever the partner does
+	TestTrue(TEXT("zero launch"), UGSTN_MountUtils::ComputeExitLaunch(FGSTN_PairExitLaunch(), FVector::ForwardVector, Up, Partner).IsNearlyZero());
+
+	// Throw: aim flattened and pitched, half the carrier's full velocity
+	FGSTN_PairExitLaunch Throw;
+	Throw.Speed = 1000.f;
+	Throw.PitchDeg = 30.f;
+	Throw.InheritPartnerVelocity = 0.5f;
+	const FVector Thrown = UGSTN_MountUtils::ComputeExitLaunch(Throw, FVector(2.0, 0.0, 5.0), Up, Partner);
+	TestTrue(TEXT("throw velocity"), Thrown.Equals(FVector(1000.0 * FMath::Cos(PI / 6.0) + 150.0, 0.0, 1000.0 * FMath::Sin(PI / 6.0) - 100.0), 0.01));
+	TestTrue(TEXT("aim along up drops the aimed part"), UGSTN_MountUtils::ComputeExitLaunch(Throw, Up, Up, FVector::ZeroVector).IsNearlyZero());
+
+	// Boost: straight up, the carrier's in-plane velocity only; a tilted up works the same
+	FGSTN_PairExitLaunch Boost;
+	Boost.UpSpeed = 900.f;
+	Boost.InheritPartnerVelocity = 1.f;
+	Boost.bInheritHorizontalOnly = true;
+	TestTrue(TEXT("boost velocity"), UGSTN_MountUtils::ComputeExitLaunch(Boost, FVector::ForwardVector, Up, Partner).Equals(FVector(300.0, 0.0, 900.0), 0.01));
+	TestTrue(TEXT("boost on a wall up"), UGSTN_MountUtils::ComputeExitLaunch(Boost, FVector::ForwardVector, FVector(2.0, 0.0, 0.0), Partner).Equals(FVector(900.0, 0.0, -200.0), 0.01));
+
+	// The placer carries it, valid candidate and fallback alike; the watchdog fills the partner's velocity and quantises it
+	UGSTN_Placer_Mount* Placer = NewObject<UGSTN_Placer_Mount>(GetTransientPackage());
+	Placer->Mode = EGSTN_ExitMode::AtAnchor;
+	Placer->Launch = Throw;
+	FGSTN_ExitQuery Query;
+	Query.PreferredDirection = FVector::ForwardVector;
+	Query.PartnerVelocity = Partner;
+	const FGSTN_ExitResult Placed = Placer->Place(Query);
+	TestTrue(TEXT("placer velocity"), Placed.bValid && Placed.Velocity.Equals(UGSTN_MountUtils::ComputeExitLaunch(Throw, FVector::ForwardVector, Up, Partner), 0.01));
+	UGSTN_LinkTypeDefinition* Type = NewObject<UGSTN_LinkTypeDefinition>(GetTransientPackage());
+	FGSTN_LinkWatchdogEntity Exiting;
+	FGSTN_LinkWatchdogEntity Staying;
+	Staying.Transform = FTransform(FRotator(0.0, 90.0, 0.0), FVector(100.0, 0.0, 0.0));
+	Staying.Velocity = FVector(0.0, 400.0, 0.0);
+	const FGSTN_ExitResult Exit = FGSTN_LinkWatchdogLogic::PlaceExit(*Type, Exiting, Staying, nullptr, Placer);
+	const FVector Expected = UGSTN_MountUtils::ComputeExitLaunch(Throw, FVector(0.0, 1.0, 0.0), Up, Staying.Velocity);
+	TestTrue(TEXT("watchdog aims along the carrier and inherits its velocity"), Exit.Velocity.Equals(Expected, 0.01) && Exit.Velocity.Y > 1000.0);
+
+	// The registry's placer takes the definition's launch
+	TStrongObjectPtr<UGSTN_PairMoveRegistry> Registry(NewObject<UGSTN_PairMoveRegistry>(GetTransientPackage()));
+	UGSTN_PairMoveDefinition* Definition = MakeDefinition(7);
+	Definition->ExitLaunch = Boost;
+	TestTrue(TEXT("add"), Registry->AddDefinition(Definition));
+	FGSTN_LinkActionInfo Info;
+	TestTrue(TEXT("resolve"), Registry->ResolveLinkAction(7, Info));
+	const UGSTN_Placer_Mount* Resolved = Cast<UGSTN_Placer_Mount>(Info.ExitPlacer);
+	TestTrue(TEXT("definition launch on the placer"), Resolved && Resolved->Launch.UpSpeed == 900.f && Resolved->Launch.bInheritHorizontalOnly);
 	return true;
 }
 

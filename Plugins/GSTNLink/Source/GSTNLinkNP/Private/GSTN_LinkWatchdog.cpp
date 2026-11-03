@@ -103,6 +103,7 @@ FGSTN_ExitResult FGSTN_LinkWatchdogLogic::PlaceExit(const UGSTN_LinkTypeDefiniti
 	Query.PartnerTransform = Staying.Transform;
 	Query.Up = Exiting.Up;
 	Query.PreferredDirection = Staying.Transform.GetUnitAxis(EAxis::X);
+	Query.PartnerVelocity = Staying.Velocity;
 	Query.CapsuleRadius = Exiting.CapsuleRadius;
 	Query.CapsuleHalfHeight = Exiting.CapsuleHalfHeight;
 	Query.Collision = Collision;
@@ -393,6 +394,7 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 			bAnyLink |= Fragment->Links.Body.IsLinked() || Fragment->Links.Hand.IsLinked();
 		}
 		Entity.Transform = Owner->GetActorTransform();
+		Entity.Velocity = Owner->GetVelocity();
 		Entity.Up = Owner->GetActorUpVector();
 		if (const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Owner->GetRootComponent()))
 		{

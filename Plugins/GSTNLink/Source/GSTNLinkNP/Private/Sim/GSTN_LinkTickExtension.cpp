@@ -716,6 +716,7 @@ bool FGSTN_LinkTickExtension::StepInitiatorExit(FGSTN_LinkFragment& Fragment, in
 	Staying.Transform = PartnerInView->Transform;
 	Staying.Transform.SetScale3D(FVector::OneVector);
 	Staying.Up = PartnerInView->Up;
+	Staying.Velocity = PartnerInView->Velocity;
 	// No collision: the world is not rollback-safe state. The watchdog checks the place with the world before it copies it
 	const FGSTN_ExitResult Exit = FGSTN_LinkWatchdogLogic::PlaceExit(*Definition, Exiting, Staying, nullptr, MovePlacer);
 	FGSTN_LinkActions::FExit& Record = Fragment.Actions.Exit;

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GSTN_MountTypes.h"
+#include "GSTN_PairMoveTypes.h"
 #include "Placement/GSTN_LinkExitPlacer.h"
 #include "GSTN_Placer_Mount.generated.h"
 
@@ -28,6 +29,10 @@ public:
 	/** Distance of the ring candidates from the carrier's root */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Exit", meta = (ClampMin = "0.0", ForceUnits = "cm"))
 	float DistanceCm = 90.f;
+
+	/** The exit's velocity (a pair move's throw or boost, M7 G9): aimed along the query's PreferredDirection, inheriting its PartnerVelocity. Zero = a put-down */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Exit")
+	FGSTN_PairExitLaunch Launch;
 
 	virtual FGSTN_ExitResult Place_Implementation(const FGSTN_ExitQuery& Query) const override;
 };

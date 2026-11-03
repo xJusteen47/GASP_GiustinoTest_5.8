@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GSTN_MountTypes.h"
+#include "GSTN_PairMoveTypes.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GSTN_MountUtils.generated.h"
 
@@ -60,6 +61,14 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Piggyback|Exit")
 	static TArray<FTransform> ExitCandidates(const FTransform& Anchor, const FTransform& CarrierTransform, EGSTN_ExitMode Mode, double DistanceCm);
+
+	/**
+	 * The exit velocity of Launch (M7 G9): Speed along Aim flattened onto the plane normal to Up and pitched up by PitchDeg, plus UpSpeed along
+	 * Up, plus InheritPartnerVelocity x PartnerVelocity (its in-plane part only with bInheritHorizontalOnly). An Aim along Up or zero drops
+	 * the aimed part. Up is normalised; a zero Up counts as world up.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Piggyback|Exit")
+	static FVector ComputeExitLaunch(const FGSTN_PairExitLaunch& Launch, const FVector& Aim, const FVector& Up, const FVector& PartnerVelocity);
 
 	/** A fraction (0..1, clamped) as a partner share byte, round half up: 0.5 is 128 */
 	UFUNCTION(BlueprintPure, Category = "Piggyback|Credit")
