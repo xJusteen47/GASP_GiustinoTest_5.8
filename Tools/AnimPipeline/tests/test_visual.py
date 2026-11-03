@@ -3,7 +3,7 @@ import json, os, shutil, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from animpipe import visual as V
 
-SCHEMA = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".claude", "skills", "gstn-visual-review", "verdict.schema.json")
+SCHEMA = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".claude", "skills", "animpipe-move", "verdict.schema.json")
 
 
 def _with(verdicts):

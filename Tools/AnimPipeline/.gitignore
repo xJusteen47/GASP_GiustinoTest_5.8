@@ -29,3 +29,7 @@ _*.txt
 *_metrics_csc.txt
 .venv/
 venv/
+
+# Machine settings and open variants (cards/<kit>/<move>_var<A>.json, see animpipe/variants.py)
+animpipe.local.toml
+*_var[A-Z].json

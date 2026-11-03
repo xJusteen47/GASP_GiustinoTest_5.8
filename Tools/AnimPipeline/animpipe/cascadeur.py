@@ -390,7 +390,8 @@ def load_bones_json(path):
 
 # ---------------------------------------------------------------- commands (Unreal through the bridge; Cascadeur steps
 # go through the Cascadeur MCP tools: import_export.import_animation, keys.delete, keys.interpolation, scene.save)
-CASC_DIR = os.path.join(os.path.expanduser("~"), "Documents", "Unreal Projects", "GASP_Giustino2", "Saved", "AnimPipeline", "casc")
+from animpipe import config as _cfg
+CASC_DIR = _cfg.CASC
 SAMPLE_BONES = sorted({b for p in PARTS.values() for b in p[1]})
 
 
@@ -468,7 +469,7 @@ def import_cmd(card_path, opt):
         fbx = opt.get("fbx") or os.path.join(CASC_DIR, f"{c['move']}_casc.fbx")   # casc_prepare / the owner's export
         asset = f"AS_Casc_{c['move']}"
         _ue_py("delete_assets", paths=[f"/Game/AnimPipeline/Pilot/{asset}"])     # the previous round's import
-        r = ue.call("import_animation", {"filePath": fbx.replace("\\", "/"), "skeletonPath": "/Game/Characters/UEFN_Mannequin/Meshes/SK_UEFN_Mannequin",
+        r = ue.call("import_animation", {"filePath": fbx.replace("\\", "/"), "skeletonPath": _cfg.CFG["skeleton"],
                                          "packagePath": "/Game/AnimPipeline/Pilot", "name": asset, "removeRedundantKeys": False,
                                          "importSettings": {"animationLength": "FBXALIT_ExportedTime"}})
         if not r.get("success"):

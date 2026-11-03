@@ -463,3 +463,31 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - Cascadeur: solo Segna chiave + Invia + riga di stato. App PySide6 "GSTN Studio": griglia+verdetto, Ok/Approva,
   varianti, snapshot. Costo in più ~$15-20; ordine: punti 2-6 (Sonnet, senza editor) PRIMA di CP2/CP4.
 - Costo di questo thread: ~12 chiamate, contesto ~60k, circa $1-1,5.
+
+## Skill pubblica + GSTN Studio, punti 2-7 e 9-11 della proposta (2026-11-03, thread desktop Opus, nessun editor)
+- Ramo `claude/project-thread-n3qk2z` (da `origin/feature/gas-npp-5.8` 2ee3ef3), nel worktree `_feature`; i file dair
+  non salvati dell'owner (`move_sheets.json`, `overlord_dair_v*_bones/author`, `cards/overlord/history/`) non toccati.
+- `animpipe.toml` + `animpipe/config.py`: niente più percorsi fissi (`__main__`, card, cascadeur, locks, `_bridge`).
+  Su questo desktop `animpipe.local.toml` (non in git) punta `data_dir` a `GASP_Giustino2/Saved/AnimPipeline`.
+- `animpipe/verbs.py`: `animpipe <verbo> <mossa>` (status, import, interp, build, check, render, verdict, owner-ok,
+  approve, export, variant, snapshot, restore, revert); una riga JSON, exit 0/1/2/3/4, run in `<data>/runs/<mossa>/`.
+  I vecchi comandi con percorso della scheda funzionano ancora (strato interno).
+- Divieti dentro i comandi: `interp` rifiuta (exit 3) frame che sono chiavi owner (segnate, con `source`, o lock owner)
+  o bloccati, e pose senza why; `import` rifiuta se una chiave owner manca dall'export e ripristina se la perde;
+  `approve` rifiuta senza `owner_ok.json` sul giro corrente con la stessa scheda; `variant apply` vuole `--quote`.
+- `animpipe/snapshots.py`: zip automatici prima di ogni verbo che scrive; `restore <mossa> <data>|last` fa prima uno
+  snapshot dello stato attuale; la `.casc` dell'owner va solo in `casc/restored/`, mai sovrascritta.
+- `status`: macchina a stati import → interp → build → check → render → verdict → owner-ok → approve → export → done;
+  max 2 check falliti o 2 giri bloccati → `ask_owner` (exit 3). Varianti: `<mossa>_var<A>` accanto alla scheda
+  (gitignored), clip `AS_..._Var<A>` separata, lock confrontati con l'originale.
+- Skill `.claude/skills/animpipe-move/` (SKILL.md, review.md = ex gstn-visual-review, rubric, schema, calibrazione,
+  rules.md, kits/overlord.md, kits/pilot.md): nessun nome di modello.
+- Cascadeur: menu GSTN = Segna chiave + Invia (ex "Esporta per Unreal", l'id azione cambia: rifare l'eventuale hotkey) +
+  riga di stato nella barra ogni 2 s; via Stato e Annulla import. **Non provato dentro Cascadeur** (server script spento).
+- GSTN Studio `python -m animpipe.app`: **tkinter invece di PySide6** (PySide6 non installato; così niente da
+  installare). Mosse + status, griglia del giro + verdetto, Ok (chiede le parole dell'owner), Approva, variante
+  originale/variante con frame e why, Applica/Scarta, snapshot + Ripristina, Annulla ultimo import. Provata con dati finti.
+- Test: `tests/test_verbs.py` 4 nuovi verdi; suite 44/45 (`test_capture` fallisce come prima, separatore Windows).
+- Non fatto: `render` usa la griglia `poses` esistente (non ancora il composito CP2 con fantasma owner); dita owner
+  nell'import (CP4); script storici in `legacy/` (punto 12). La richiesta di import dair in attesa non è stata toccata.
+- Costo stimato: ~45 chiamate, contesto ~110k, circa $8-10; niente subagenti.

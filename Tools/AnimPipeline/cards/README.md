@@ -47,7 +47,7 @@ Every card and every review pass applies these; the checks that enforce one are 
 - Blocca: `check` (block `source_fidelity`), `approve`, e `load()` per le schede con pose `origin: owner`.
   `animpipe fidelity <scheda>` lo esegue da solo. Senza `sheets/raw` (solo desktop) dice n/a.
 
-## Revisione visiva (skill `.claude/skills/gstn-visual-review/`)
+## Revisione visiva (skill `.claude/skills/animpipe-move/`)
 - Dopo il gate numerico: `review --visual` (CP2, desktop) scrive una sola immagine + `manifest.json` in
   `Saved/AnimPipeline/visual/<move>/r<N>/`; un thread cloud con la skill la guarda una volta e scrive `verdict.json`.
 - `animpipe visual-gate <scheda> [--round=N]`: 0 passa, 1 bloccato, 2 nessun verdetto. `approve` rifiuta finché l'ultimo

@@ -1,5 +1,8 @@
 """animpipe: one entry point, versions are data (move card JSON + Level Sequence), not scripts.
 
+Public surface: `python -m animpipe <verb> <move>` (animpipe/verbs.py: one json line out, fixed exit codes, automatic
+snapshots). The commands below take a card path and are the internal layer the verbs call; kept for old scripts.
+
     python -m animpipe roundtrip <AnimAsset> <name> [--fps=60|62.5] [--keys=card.json|0,3,9]   rig bake round trip
     python -m animpipe tangent <name>                                                             tangent probe on LS_<name>
     python -m animpipe card <card.json>                                                           validate a move card
@@ -25,9 +28,10 @@ import json, os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.dirname(HERE)
 sys.path.insert(0, TOOLS)
-OUT = os.path.join(os.path.expanduser("~"), "Documents", "Unreal Projects", "GASP_Giustino2", "Saved", "AnimPipeline", "animpipe")
+from animpipe import config as _cfg
+OUT = _cfg.OUT
 BONES = ["pelvis", "spine_05", "head", "hand_l", "hand_r", "lowerarm_l", "lowerarm_r", "foot_l", "foot_r", "calf_l", "calf_r", "middle_01_l"]
-RIG = "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body"
+RIG = _cfg.CFG["rig"]
 
 
 def _ue_py(entry, **kw):
@@ -163,7 +167,10 @@ def review(path, opt):
 
 
 def main():
-    cmd, args = sys.argv[1], [a for a in sys.argv[2:] if not a.startswith("--")]
+    from animpipe import verbs
+    cmd, args = (sys.argv[1] if len(sys.argv) > 1 else ""), [a for a in sys.argv[2:] if not a.startswith("--")]
+    if cmd in verbs.VERBS and not (args and args[0].endswith(".json")) or cmd in ("", "help"):
+        sys.exit(verbs.run(sys.argv[1:]))       # the public surface: animpipe <verb> <move>
     opt = dict((a[2:].split("=", 1) + [""])[:2] for a in sys.argv[2:] if a.startswith("--"))
     if opt.get("unlock"):
         from animpipe import card, locks

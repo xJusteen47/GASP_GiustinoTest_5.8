@@ -26,7 +26,7 @@ PART_BONES = {"arm_l": ("upperarm_l", "lowerarm_l", "hand_l"), "arm_r": ("uppera
               "leg_l": ("thigh_l", "calf_l", "foot_l", "ball_l"), "leg_r": ("thigh_r", "calf_r", "foot_r", "ball_r"),
               "trunk": ("pelvis", "spine_01", "spine_02", "spine_03", "spine_04", "spine_05"), "head": ("neck_01", "neck_02", "head"),
               "hand_l": ("index_01_l", "middle_01_l", "ring_01_l", "pinky_01_l"), "hand_r": ("index_01_r", "middle_01_r", "ring_01_r", "pinky_01_r")}
-CARDS = os.path.join(C.TOOLS, "cards")
+CARDS = C._cfg.CARDS
 # control name fragments -> part; copy of ue_rig.PART_CTRLS (that module imports unreal). The fk hand/forearm controls belong to arm_x.
 CTRL_PARTS = (("arm_l", ("upperarm_l", "lowerarm_l", "hand_l")), ("arm_r", ("upperarm_r", "lowerarm_r", "hand_r")),
               ("leg_l", ("thigh_l", "calf_l", "foot_l")), ("leg_r", ("thigh_r", "calf_r", "foot_r")),

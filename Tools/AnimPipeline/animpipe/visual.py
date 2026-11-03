@@ -1,7 +1,7 @@
-"""Visual review verdict (plan 03/11, skill .claude/skills/gstn-visual-review): the pipeline side.
+"""Visual review verdict (plan 03/11, skill .claude/skills/animpipe-move): the pipeline side.
 
 Round folder: <Saved/AnimPipeline>/visual/<move>/r<N>/ with grid.png + manifest.json (written by `review --visual`, CP2)
-and verdict.json (written by the reviewing Claude, schema .claude/skills/gstn-visual-review/verdict.schema.json):
+and verdict.json (written by the reviewing Claude, schema .claude/skills/animpipe-move/verdict.schema.json):
   {move, round, esito: ok|correggi|chiedi_owner, problemi: [{regola, frame, parti, gravita: blocca|nota, pannello, prova,
    correzione: {frame, parte, direzione, quanto}}], segmenti: [{da, a, stato: ok|manca|brutto}]}
 

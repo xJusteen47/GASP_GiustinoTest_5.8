@@ -7,7 +7,7 @@ def name():
 
 
 def description():
-    return "Riapre la barra con i pulsanti GSTN (Esporta per Unreal, Segna chiave, Annulla import, Stato)"
+    return "Riapre la barra con i pulsanti GSTN (Segna chiave, Invia, riga di stato)"
 
 
 def run(scene):

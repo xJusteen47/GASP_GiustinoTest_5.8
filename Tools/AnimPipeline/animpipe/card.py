@@ -29,7 +29,8 @@ import csv, json, os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.dirname(HERE)
-REFS = os.path.join(os.path.expanduser("~"), "Documents", "Unreal Projects", "GASP_Giustino2", "Saved", "AnimPipeline")
+from animpipe import config as _cfg
+REFS = _cfg.DATA
 GAME_HZ = 62.5
 PROFILES = {"charge_long", "arrive_1_2", "hold_recoil", "limb_led_recovery"}
 REQUIRED = ("move", "class", "anim", "fps", "timing_csv", "poses")

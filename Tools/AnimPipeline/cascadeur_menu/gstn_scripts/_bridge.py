@@ -7,14 +7,22 @@ so a button press can never feed a throwaway scene into a card.
 
 Files written (all in CASC_DIR):
   <move>_casc.fbx              joints, baked: what `casc-import` reads by default
+  The commands of the GSTN menu: Segna chiave, Invia (+ the status line of the bar). Undo, approve, variants and
+  snapshots are in the GSTN Studio app (python -m animpipe.app), which needs no open scene.
   <move>_owner_keys.json       frames the owner marked as his keys {move, frames, marked{frame: stamp}, stamp}
   requests/<stamp>_<move>_<action>.json   one per button press; Claude handles it and moves it to requests/done/
 """
-import json, os, time
+import importlib.util, json, os, time
 
 import csc
 
-CASC_DIR = os.path.join(os.path.expanduser("~"), "Documents", "Unreal Projects", "GASP_Giustino2", "Saved", "AnimPipeline", "casc")
+# Paths come from Tools/AnimPipeline/animpipe.toml (+ animpipe.local.toml), the same file the commands read.
+_TOOLS = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# animpipe/config.py is stdlib only; loaded by path under its own name (no numpy in Cascadeur's Python, no clash with
+# another module called "config")
+_spec = importlib.util.spec_from_file_location("gstn_animpipe_config", os.path.join(_TOOLS, "animpipe", "config.py"))
+_cfg = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_cfg)
+CASC_DIR = _cfg.CASC
 REQ_DIR = os.path.join(CASC_DIR, "requests")
 
 
@@ -85,3 +93,21 @@ def save_and_export(app, tab, move):
     fbx = os.path.join(CASC_DIR, f"{move}_casc.fbx").replace("\\", "/")
     loader.export_joints(fbx)
     return fbx, key_frames(tab)
+
+
+def status_text():
+    """One line for the bar, never an error popup: move, owner keys, waiting requests (refreshed every 2 s)."""
+    try:
+        tab = csc.app.get_application().get_scene_manager().current_scene()
+        path = str(tab.get_path_name() or "").replace("\\", "/")
+        base = os.path.basename(path)
+        if not base.lower().endswith(".casc") or os.path.normcase(os.path.dirname(os.path.abspath(path))) != os.path.normcase(os.path.abspath(CASC_DIR)):
+            return "scena non collegata"
+        move = base[:-5]
+        if not os.path.exists(os.path.join(CASC_DIR, f"{move}_export.json")):
+            return f"{move}: non collegata a una scheda"
+        pend = [n for n in os.listdir(REQ_DIR) if n.endswith(".json") and f"_{move}_" in n] if os.path.isdir(REQ_DIR) else []
+        keys = load_owner_keys(move)["frames"]
+        return f"{move} | chiavi tue {','.join(map(str, keys)) or '-'} | " + (f"{len(pend)} invio in attesa" if pend else "nessun invio in attesa")
+    except Exception as e:          # the bar must never break Cascadeur
+        return f"stato n/d ({type(e).__name__})"

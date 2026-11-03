@@ -1,5 +1,16 @@
 # AnimPipeline — move animation pilot (Cascadeur → Unreal)
 
+## Superficie pubblica (2026-11-03): `animpipe <verbo> <mossa>`
+Da `Tools/AnimPipeline`: `python -m animpipe status <mossa>` dice il prossimo verbo (`next`). Verbi: status, import,
+interp, build, check, render, verdict, owner-ok, approve, export, variant new|show|apply|discard, snapshot, restore,
+revert (elenco e opzioni in `animpipe/verbs.py`). Ogni verbo stampa **una riga JSON** `{ok, verb, move, exit, result,
+next}`, il dettaglio va in `<data>/runs/<mossa>/`. Exit: 0 ok, 1 gate bloccato, 2 uso sbagliato, 3 serve l'owner,
+4 serve un'app. Snapshot zip automatici prima di import/interp/build/variant apply/restore/approve/export in
+`<data>/snapshots/<mossa>/`; `restore <mossa> <data>` li rimette (la scena .casc dell'owner non viene mai sovrascritta:
+la copia va in `casc/restored/`). Percorsi in `animpipe.toml` (+ `animpipe.local.toml` per la macchina, non in git).
+Skill: `.claude/skills/animpipe-move/` (segue `status`). App owner: `python -m animpipe.app` (GSTN Studio).
+I comandi più sotto (con il percorso della scheda) restano come strato interno.
+
 Working folder for the combat-move animation pilot: Cascadeur scenes, motion models, the Unreal round trip, the checks and
 the review pages. The code and settings are versioned here (`Tools/AnimPipeline/`); the data is not. Start here; the current state is in `handoff.md` and the move logs in the working folder (not in git):
 - `jab_log.md` and `ganon_ftilt_log.md` are in Italian, for the owner;

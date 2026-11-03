@@ -10,12 +10,13 @@ from PySide6 import QtCore, QtGui, QtQml
 
 # Plain QtQuick items, no QtQuick.Controls: after a restart Cascadeur's Controls style drew the buttons as white boxes and
 # showed every ToolTip at once (owner screenshot 2026-11-03). Tooltips dropped: the labels say what each button does.
+# Only what needs the open scene (proposal 2026-11-03 §c): the rest (undo import, ok/approve, variants, snapshots) is in
+# the GSTN Studio app. The status line replaces the old "Stato" button.
 BUTTONS = [   # (label, Scripts action id, description for the docs)
-    ("Esporta", "Scripts.GSTN.Esporta per Unreal", "Salva, esporta le ossa e chiede a Claude l'import nella scheda"),
     ("Segna chiave", "Scripts.GSTN.Segna chiave (frame corrente)", "Il frame corrente diventa (o smette di essere) una chiave tua"),
-    ("Annulla import", "Scripts.GSTN.Annulla ultimo import (chiedi a Claude)", "Chiede a Claude di rimettere la scheda com'era"),
-    ("Stato", "Scripts.GSTN.Stato", "Mossa, chiavi, richieste in attesa"),
+    ("Invia", "Scripts.GSTN.Invia", "Salva, esporta le ossa e lascia la richiesta di import nella scheda"),
 ]
+STATUS_MS = 2000
 
 QML = """
 import QtQuick
@@ -53,12 +54,36 @@ Window {
                 }
             }
         }
+        Text {
+            text: gstnBridge.status
+            color: "#a8a8a8"
+            font.pixelSize: 11
+            Layout.leftMargin: 6
+            Layout.rightMargin: 4
+        }
     }
 }
 """
 
 
 class _Bridge(QtCore.QObject):
+    statusChanged = QtCore.Signal()
+
+    def __init__(self):
+        super().__init__()
+        self._status = ""
+
+    def _get_status(self):
+        return self._status
+
+    def refresh(self):
+        from gstn_scripts import _bridge as B
+        s = B.status_text()
+        if s != self._status:
+            self._status = s; self.statusChanged.emit()
+
+    status = QtCore.Property(str, _get_status, notify=statusChanged)
+
     @QtCore.Slot(str)
     def call(self, action):
         # Deferred: the action may save the scene, which should not run inside the QML click handler.
@@ -104,7 +129,9 @@ def show():
             raise RuntimeError("GSTN bar: QML did not load")
         win = roots[0]
         win.widthChanged.connect(lambda *_: QtCore.QTimer.singleShot(0, _place))
-        _state.update(engine=eng, bridge=bridge, win=win)
+        timer = QtCore.QTimer(); timer.setInterval(STATUS_MS); timer.timeout.connect(bridge.refresh); timer.start()
+        bridge.refresh()
+        _state.update(engine=eng, bridge=bridge, win=win, timer=timer)
     main = _main_window()
     if main is not None and _state.get("main") is not main:
         win.setTransientParent(main)

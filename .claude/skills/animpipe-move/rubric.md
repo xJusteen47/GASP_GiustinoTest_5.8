@@ -27,6 +27,6 @@ source_fidelity, strike, rules) are not judged again: the eye looks for what the
 | fantasma_owner | grey ghost on owner keys | the coloured pose does not cover the owner ghost | never correggi: `chiedi_owner` if over ~1 cm visible |
 
 Rules for corrections
-- Correct only Claude in-betweens (`origin: claude` in the manifest) and parts not in `approved`. On an owner key or a
+- Correct only the pipeline in-betweens (`origin: claude` in the manifest) and parts not in `approved`. On an owner key or a
   locked part write the problem and set `esito: chiedi_owner`.
 - One `correzione` per problem, the smallest that fixes it; never propose new keys on the owner's frames.
