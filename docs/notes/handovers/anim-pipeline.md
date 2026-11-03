@@ -355,3 +355,26 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - Scelte fatte senza owner: LINEAR ammesso nel fit; nessuna scelta di valori fisici (servono i suoi). Prossimo: se vuole
   < 1 cm, chiavi intermedie solo-tempo fuori dalla scheda (import le deve ignorare) oppure accettare la differenza di rig.
 - Costo stimato: ~90 chiamate, contesto ~140k, circa $8-10; niente subagenti; editor in hold ~5 min.
+
+## Pulsanti GSTN in Cascadeur (2026-11-03)
+- Codice: `Tools/AnimPipeline/cascadeur_menu/` (`gstn_scripts/` = voci menu, `gstn_events/` = apertura barra all'avvio,
+  `install.py`). Menu **Scripts > GSTN**: Esporta per Unreal, Segna chiave (frame corrente), Annulla ultimo import (chiedi a
+  Claude), Stato, Mostra barra pulsanti. Gli stessi 4 comandi sono pulsanti in una barra GSTN che si apre da sola nella
+  barra del titolo di Cascadeur (a destra, segue la finestra).
+- Toolbar nativa: NON personalizzabile in 2026.2.3 (QML fisso, nessuna config). La barra GSTN è una finestra Qt a parte,
+  stesso codice delle voci menu (`call_action("Scripts.GSTN.<nome>")`). Tasti: sì, Settings > Hotkeys Window > Scripts
+  (le voci script sono azioni legabili, verificato con Quick export); nessuna scorciatoia preimpostata.
+- I comandi non lanciano animpipe e non toccano la scheda. Solo scene `<CASC_DIR>/<mossa>.casc` con `<mossa>_export.json`
+  (copie di prova rifiutate). Esporta = salva il tab + `export_joints` cotto in `<mossa>_casc.fbx` + richiesta. Segna
+  chiave = alterna il frame in `<mossa>_owner_keys.json` {frames, marked{frame: stamp}} (avvisa se il frame non è una
+  chiave della scena). Richieste: `casc/requests/<stamp>_<mossa>_<import|revert>.json` con `command` pronto
+  (casc-import con --fbx/--keys, casc-revert) e `owner_keys`. Chi la esegue la sposta in `requests/done/`.
+- Prova (copia `gstntest.casc`, poi cancellata): rifiutata la `_spacelab`; segna/togli 12, 20 con avviso; export 12 chiavi,
+  fbx 1 MB; revert e stato ok; barra visibile nel titolo e clic → azione (via Quick export). Scheda e dair non toccate.
+- **Da fare dall'owner, una volta** (a me negato: modifica impostazioni persistenti di Cascadeur, file sola lettura):
+  `python -I Tools/AnimPipeline/cascadeur_menu/install.py` dal worktree `_feature` e riavviare Cascadeur. Backup
+  `settings.json.bak_gstn`; `--uninstall` toglie tutto. Le voci GSTN in menu/hotkey compaiono solo dopo il riavvio.
+- Il percorso in settings punta al worktree `GASP_Giustino2_feature`: se il worktree cambia, rilanciare install.py.
+- Non fatto: richiesta "interpola" (il comando `interp` non esiste ancora), lettura automatica delle richieste lato
+  coordinatore (oggi: leggere `requests/` a mano o su "importa").
+- Costo stimato: ~75 chiamate, contesto ~110k, circa $7-9; niente subagenti.
