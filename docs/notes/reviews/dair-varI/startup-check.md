@@ -12,3 +12,16 @@ Verdict: startup NOT shifted. Variant I has the same timing as the base overlord
   anim 15 = 0-based. His Cascadeur f15 (charge) = anim 5/12, a different numbering. Base in-game raw/log not re-rendered:
   base card has the same a0=15, so its label is the same "(f15) HITSTOP".
 - Hit on anim 16 would need active [16,17]: owner decision, not a variant I effect.
+
+## Follow-up: pose vs hit frame (owner: the stomp pose shows 1 frame after the freeze)
+Verdict: card/window problem (shared by base v4 and I), NOT a capture off-by-one in ingame_judge.py.
+- Captured raw frames (sheets/ingame/_overlord_dair_v4_varI_az90/raw, side camera): lowest-pixel row of the body 221 @f14,
+  228 @f15, 285 @f16, 285 @f17 and a frame-to-frame diff of 0.27/0.75/1.42/0.15 (f14..f17). The feet drop ~57 px between f15
+  and f16: the stomp lands on anim 16; f15 is the last frame before it (the screenshot at "(f15) HITSTOP" shows it).
+- Capture is honest: grab() waits until set_frame(f) puts hand_r within 0.5 cm of sample_pose(f) (hand_r moves 15 cm/frame
+  at 15->16, so a stale frame cannot pass); all raw frames 10-18 are distinct; the freeze repeats raw f15 as the label says.
+- The card puts anim_active at [15,17] (a0 = 15), so the hitbox opens one frame before the impact pose. Not verified: why the
+  key at 15 lands visually on 16 (build/sequencer offset vs poses). Dump speed uses central differences, so its indices
+  cannot say it; the old "step 14->15" in the handover is that metric, not the image.
+- One-line fixes: card = anim_active [16,17] + FAF +1 (cards/overlord/overlord_dair_v4*.json, timing CSV active window);
+  judge = none needed (a --at=16 run already freezes on the impact frame). Card NOT changed here.
