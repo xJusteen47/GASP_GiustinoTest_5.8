@@ -299,3 +299,26 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
   (sweep, byte table, combat.md §3/§12b/§17 and the shared `Combat.Event.Link.*` subtree). Next thread: G10, then G12.
 - Open points unchanged (RefundAirJumps, carrier shield on rider, leash, teleport break): no gate needed them.
 - Cost: one Opus thread, ~90k context, ~65 calls, 3 UBT builds, 2 headless editors, 3 harness editors (~50 min machine): medium.
+
+## M7-13 (desktop, 2026-11-03): G10 closed, presentation; G12 not started
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9. Deltas: m7-doc-deltas.md "G10 (M7-13)". Presentation only: no sync state,
+  no sim code. The gate list of the M7 plan is not in docs/architecture/plans: G10 taken as defined in the M7-12 entry.
+- GSTNLink (shared, generic): `UGSTN_LinkTypeDefinition::PresentationBlendSeconds` (0 = M6 snap, grab/latch unchanged; mount 0.1 s);
+  `UGSTN_LinkPresentationComponent` slides the parked mesh on attach/detach (incl. a refused optimistic mount) from its last shown world
+  transform, links/unlinks the kit's `AnimsByRole` layer of the shown role (async, never on a dedicated server), `OnShownRoleChanged`,
+  `GetShownRoleTag`, `GetPresentationBlendAlpha`. Contract: a role layer uses its own layer interface (unlink resets to the ABP defaults).
+- Piggyback: `UGSTN_MountPresentationLibrary::GetRiderIKTargets` (RiderProfile socket bases + L/R, default GSTN_MountHand/Foot, Alpha =
+  slide). Editor: `gstn.Combat.Debug.MeshLog 1` (mesh vs linked transform every 30 frames). No anim BP/IK content made (no assets edited).
+- Gates (`Saved/M713`, diagnosis.txt; reports `Saved/Logs/m7-13`): build ON Succeeded (0 warnings), `headless-on1.log` 1289/0; OFF
+  (Piggyback off) Succeeded, `headless-off1.log` 1260/0; ON2 (+MeshLog, editor only) Succeeded; 0 ensures. Harness listen/3, 60/15 ms:
+  SUITE_MOUNT 6/9 + SUITE_LINK 17/19 in one run, every failure at setup (rider offer not projected / pawn KeyError, "kits applied -> None"),
+  all 5 rerun alone PASS = 9/9 and 19/19. The setup flake is worse in long batches (3/9 vs 1/9 in M7-12): worth a harness fix (not done).
+- Finding B: fixed (mesh on the partner's mesh in 1077/1078 samples, both clients and server). Finding A: no client-only step (the same
+  127 cm median d2D on server and clients: a systematic term of the measure, mesh base offset vs linked transform, not a step). Measured
+  with -nullrhi; the "rendering on" run was NOT done (budget): `run.ps1 -Render` exists for it.
+- Harness gotcha: an editor still running when you edit the PIE ini rewrites it on quit (my 1st run: all "pawns not ready"). Edit the ini
+  only with no editor of this worktree open. State: .uproject = HEAD, PIE ini restored, binaries = ON2.
+- Not run: 2 % (no sim change). Open points unchanged (RefundAirJumps, carrier shield, leash, teleport break): no gate needed them.
+- NOT started: G12 (sweep, byte table, combat.md §3/§12b/§17, shared `Combat.Event.Link.*` subtree; fold deltas G5-G11 + G10). Next thread: G12.
+- Cost: one Opus thread, ~95k context, ~65 calls, 3 UBT builds, 2 headless editors, 3 harness editors (~75 min machine): medium.

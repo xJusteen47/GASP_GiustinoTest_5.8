@@ -4,8 +4,14 @@
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimInstance.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
+#include "GSTN_LinkAnimSelection.h"
 #include "GSTN_LinkDebugDraw.h"
 #include "GSTN_LinkRegistry.h"
 #include "MoverComponent.h"
@@ -15,7 +21,30 @@
 #include "Sim/GSTN_LinkSnapshotExt.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "State/GSTN_LinkMath.h"
+#include "Loadout/GSTN_LoadoutAssembly.h"
+#include "Loadout/GSTN_LoadoutComponent.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
+
+namespace GSTNLinkPresentationPrivate
+{
+	USkeletalMeshComponent* FindMesh(const AActor* Actor)
+	{
+		return Actor ? Actor->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
+	}
+
+	/** The loadout of a fighter: on the actor, else on its PlayerState (where combat-m3 puts it), as the combat component finds it */
+	const UGSTN_LoadoutComponent* FindLoadout(const AActor* Actor)
+	{
+		const UGSTN_LoadoutComponent* Found = Actor ? Actor->FindComponentByClass<UGSTN_LoadoutComponent>() : nullptr;
+		if (!Found)
+		{
+			const APawn* Pawn = Cast<APawn>(Actor);
+			const APlayerState* PlayerState = Pawn ? Pawn->GetPlayerState() : nullptr;
+			Found = PlayerState ? PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>() : nullptr;
+		}
+		return Found;
+	}
+}
 
 UGSTN_LinkPresentationComponent::UGSTN_LinkPresentationComponent()
 {
@@ -56,7 +85,7 @@ bool UGSTN_LinkPresentationComponent::GetLinkedTransform(FTransform& OutTransfor
 	return true;
 }
 
-bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
+bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform(FGameplayTag& OutRoleTag)
 {
 	AActor* Owner = GetOwner();
 	const FGSTN_LinkFragment* Fragment = FindShownFragment(Owner);
@@ -73,6 +102,12 @@ bool UGSTN_LinkPresentationComponent::UpdateLinkedTransform()
 		&& Body.HasFlag(GSTNLinkFlags::Predicted) && Definition->InitiatorRole.bParked;
 	const uint8 ShownRole = bShownPending ? 1 : Body.Role;
 	const EGSTN_LinkPhase ShownPhase = bShownPending ? EGSTN_LinkPhase::Active : Body.Phase;
+	if (Definition && (ShownPhase == EGSTN_LinkPhase::Active || ShownPhase == EGSTN_LinkPhase::Exiting))
+	{
+		// G10: the shown role of any role (the carrier's too), for its anim layer; and the type's slide time, kept after the link ends for the detach
+		OutRoleTag = Definition->GetRoleDef(ShownRole).RoleTag;
+		ShownTypeBlendSeconds = Definition->PresentationBlendSeconds;
+	}
 	if (!(FGSTN_LinkSnapshotContributor::ComputeBits(Definition, ShownRole, ShownPhase) & GSTNLinkSnapshotBits::Parked) || Body.PartnerId.IsNull())
 	{
 		return false;
@@ -193,7 +228,9 @@ void UGSTN_LinkPresentationComponent::TickComponent(float DeltaTime, ELevelTick 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	bParkedShown = UpdateLinkedTransform();
+	FGameplayTag RoleTag;
+	const bool bWasAttached = bMeshAttached;
+	bParkedShown = UpdateLinkedTransform(RoleTag);
 	if (bParkedShown)
 	{
 		if (bAttachMesh)
@@ -206,12 +243,152 @@ void UGSTN_LinkPresentationComponent::TickComponent(float DeltaTime, ELevelTick 
 		DetachMesh();
 		Partner = nullptr;
 	}
+	// G10: an attach or a detach this frame slides the mesh from where it was shown at the end of the last frame
+	if (bWasAttached != bMeshAttached && bHasLastShown)
+	{
+		StartMeshBlend(LastShownWorld);
+	}
+	ApplyMeshBlend(DeltaTime);
+	if (const USkeletalMeshComponent* Mesh = GSTNLinkPresentationPrivate::FindMesh(GetOwner()))
+	{
+		LastShownWorld = Mesh->GetComponentTransform();
+		bHasLastShown = true;
+	}
+	UpdateShownRole(RoleTag);
 	FGSTN_LinkDebugDraw::DrawEntity(GetOwner(), *this);
+}
+
+float UGSTN_LinkPresentationComponent::GetPresentationBlendAlpha() const
+{
+	return bBlending && BlendSeconds > 0.f ? FMath::Clamp(BlendElapsed / BlendSeconds, 0.f, 1.f) : 1.f;
+}
+
+void UGSTN_LinkPresentationComponent::StartMeshBlend(const FTransform& FromWorld)
+{
+	BlendSeconds = ShownTypeBlendSeconds;
+	BlendElapsed = 0.f;
+	BlendFromWorld = FromWorld;
+	bBlending = BlendSeconds > 0.f;
+}
+
+void UGSTN_LinkPresentationComponent::ApplyMeshBlend(float DeltaTime)
+{
+	if (!bBlending)
+	{
+		return;
+	}
+	USkeletalMeshComponent* Mesh = GSTNLinkPresentationPrivate::FindMesh(GetOwner());
+	const USceneComponent* Parent = Mesh ? Mesh->GetAttachParent() : nullptr;
+	if (!Parent)
+	{
+		bBlending = false;
+		return;
+	}
+	// The settled transform is recomputed from the attachment, never read back from the mesh: Mover may or may not have rewritten the mesh
+	// this frame, and the last frame's blended write must not feed the next one
+	const FTransform TargetRelative = bMeshAttached ? MeshOriginalRelative * RoleOffset : MeshOriginalRelative;
+	BlendElapsed += DeltaTime;
+	const float Alpha = FMath::Clamp(BlendElapsed / BlendSeconds, 0.f, 1.f);
+	if (Alpha >= 1.f)
+	{
+		Mesh->SetRelativeTransform(TargetRelative);
+		bBlending = false;
+		return;
+	}
+	const FTransform Settled = TargetRelative * Parent->GetSocketTransform(Mesh->GetAttachSocketName());
+	FTransform Shown;
+	Shown.Blend(BlendFromWorld, Settled, FMath::SmoothStep(0.f, 1.f, Alpha));
+	Mesh->SetWorldTransform(Shown);
+}
+
+void UGSTN_LinkPresentationComponent::UpdateShownRole(const FGameplayTag& NewRoleTag)
+{
+	if (NewRoleTag == ShownRoleTag)
+	{
+		return;
+	}
+	const FGameplayTag OldRoleTag = ShownRoleTag;
+	ShownRoleTag = NewRoleTag;
+	UnlinkRoleLayer();
+	if (bLinkRoleAnimLayers && NewRoleTag.IsValid())
+	{
+		LinkRoleLayer(NewRoleTag);
+	}
+	OnShownRoleChanged.Broadcast(OldRoleTag, NewRoleTag);
+}
+
+void UGSTN_LinkPresentationComponent::LinkRoleLayer(const FGameplayTag& RoleTag)
+{
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	const UGSTN_LoadoutComponent* Loadout = GSTNLinkPresentationPrivate::FindLoadout(GetOwner());
+	if (!Loadout)
+	{
+		return;
+	}
+	const FGSTN_ResolvedLoadout& Resolved = Loadout->GetResolvedLoadout();
+	const UGSTN_WeaponDefinition* Weapon = nullptr;
+	for (const UGSTN_WeaponDefinition* Candidate : Resolved.Weapons)
+	{
+		if (Candidate)
+		{
+			// The first resolved weapon: the loadout's main one
+			Weapon = Candidate;
+			break;
+		}
+	}
+	WantedRoleLayer = UGSTN_LinkAnimSelection::SelectRoleAnimLayer(Resolved.Kit, Weapon, RoleTag);
+	if (WantedRoleLayer.IsNull())
+	{
+		return;
+	}
+	if (WantedRoleLayer.Get())
+	{
+		HandleRoleLayerLoaded(RoleTag);
+		return;
+	}
+	// Loaded off the critical path (GatherRoleAnimLayers is what a client preloads, so this is rare); linked only if the role is still shown
+	RoleLayerHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(WantedRoleLayer.ToSoftObjectPath(),
+		FStreamableDelegate::CreateUObject(this, &UGSTN_LinkPresentationComponent::HandleRoleLayerLoaded, RoleTag));
+}
+
+void UGSTN_LinkPresentationComponent::HandleRoleLayerLoaded(FGameplayTag ForRoleTag)
+{
+	RoleLayerHandle.Reset();
+	UClass* LayerClass = WantedRoleLayer.Get();
+	USkeletalMeshComponent* Mesh = GSTNLinkPresentationPrivate::FindMesh(GetOwner());
+	if (ForRoleTag != ShownRoleTag || !LayerClass || !Mesh)
+	{
+		return;
+	}
+	Mesh->LinkAnimClassLayers(TSubclassOf<UAnimInstance>(LayerClass));
+	LinkedRoleLayer = LayerClass;
+}
+
+void UGSTN_LinkPresentationComponent::UnlinkRoleLayer()
+{
+	if (RoleLayerHandle.IsValid())
+	{
+		RoleLayerHandle->CancelHandle();
+		RoleLayerHandle.Reset();
+	}
+	if (LinkedRoleLayer)
+	{
+		if (USkeletalMeshComponent* Mesh = GSTNLinkPresentationPrivate::FindMesh(GetOwner()))
+		{
+			Mesh->UnlinkAnimClassLayers(TSubclassOf<UAnimInstance>(LinkedRoleLayer.Get()));
+		}
+		LinkedRoleLayer = nullptr;
+	}
+	WantedRoleLayer.Reset();
 }
 
 void UGSTN_LinkPresentationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	DetachMesh();
+	UnlinkRoleLayer();
 	SetCollisionIgnoredPartner(nullptr);
 	Super::EndPlay(EndPlayReason);
 }

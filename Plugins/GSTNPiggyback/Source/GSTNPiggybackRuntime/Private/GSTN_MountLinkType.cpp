@@ -54,6 +54,8 @@ UGSTN_LinkTypeDefinition* FGSTN_MountLinkType::Build(UObject* Outer, const FGSTN
 
 	Definition->bInitiatorPredicts = true;
 	Definition->PendingFrames = FMath::Max(Rules.PendingFrames, 1);
+	// G10: the rider's mesh slides onto the seat (and back off on a refusal or an exit) instead of popping; presentation only
+	Definition->PresentationBlendSeconds = 0.1f;
 
 	// Hit breaks by role and thresholds; the reason is GSTNLink's generic Hit until G7's mount hit step names CarrierHit / RiderHit
 	Definition->Break.MaxDistanceCm = LeashCm;

@@ -2,6 +2,7 @@
 
 #include "GSTN_PiggybackLinkDebug.h"
 
+#include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -27,6 +28,13 @@ namespace
 	FAutoConsoleVariableRef CVarDebugLinkLog(TEXT("gstn.Combat.Debug.LinkLog"), GDebugLinkLog,
 		TEXT("1 (PIE) logs one line per change of a pawn's shown Body link (type, role, phase, serial) in every world."),
 		ECVF_Cheat);
+
+	int32 GDebugMeshLog = 0;
+	FAutoConsoleVariableRef CVarDebugMeshLog(TEXT("gstn.Combat.Debug.MeshLog"), GDebugMeshLog,
+		TEXT("1 (PIE) logs every 30 frames, per shown parked role in every world, where its mesh is against its linked transform (M7 G10: S2 findings A and B)."),
+		ECVF_Cheat);
+
+	int32 GMeshLogFrame = 0;
 
 	/** What the log compares: a change of any of these is one line */
 	struct FShownLink
@@ -150,6 +158,19 @@ bool FGSTN_PiggybackLinkDebug::Tick(float DeltaTime)
 			}
 		}
 
+		FTransform ShownLinked;
+		if (GDebugMeshLog != 0 && (GMeshLogFrame % 30) == 0 && Presentation->GetLinkedTransform(ShownLinked))
+		{
+			// Finding B = the mesh not on the partner's mesh; finding A = a step between the mesh and the linked transform (the mesh's own
+			// base offset, usually only a vertical one, is part of dz)
+			const USceneComponent* Mesh = Owner->FindComponentByClass<USkeletalMeshComponent>();
+			const USceneComponent* Parent = Mesh ? Mesh->GetAttachParent() : nullptr;
+			const AActor* Partner = Presentation->GetBodyPartner();
+			const FVector Delta = Mesh ? Mesh->GetComponentLocation() - ShownLinked.GetLocation() : FVector::ZeroVector;
+			UE_LOG(LogGSTNPiggybackEditor, Log, TEXT("[mesh] %s %s: on partner %d, d2D %.1f cm, dz %.1f cm, blend %.2f"), **Label, *Owner->GetName(),
+				Parent && Partner && Parent->GetOwner() == Partner ? 1 : 0, Delta.Size2D(), Delta.Z, Presentation->GetPresentationBlendAlpha());
+		}
+
 #if ENABLE_DRAW_DEBUG
 		FTransform LinkedTransform;
 		if (GDebugAnchor != 0 && World != ServerWorld && ServerCombat && Presentation->GetLinkedTransform(LinkedTransform))
@@ -173,6 +194,8 @@ bool FGSTN_PiggybackLinkDebug::Tick(float DeltaTime)
 		}
 #endif
 	}
+
+	++GMeshLogFrame;
 
 	// Pawns that went away
 	for (auto It = GLastShown.CreateIterator(); It; ++It)

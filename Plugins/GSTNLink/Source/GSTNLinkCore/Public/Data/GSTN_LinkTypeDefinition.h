@@ -334,6 +334,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Break", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 MaxFrames = 0;
 
+	/**
+	 * Presentation only (M7 G10): how long the parked role's mesh takes to slide from where it was shown onto the partner's socket when it
+	 * is attached, and back onto its own capsule when it is detached (a refused optimistic mount, an exit). 0 = snap, the M6 behaviour.
+	 * Never read by the simulation: the capsule and the hurtboxes are on the parked transform from the attach frame on
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Presentation", meta = (ClampMin = "0.0", ClampMax = "1.0", ForceUnits = "s"))
+	float PresentationBlendSeconds = 0.f;
+
 	/** Colour of the link in debug drawing */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Debug")
 	FColor DebugColor = FColor::Orange;
