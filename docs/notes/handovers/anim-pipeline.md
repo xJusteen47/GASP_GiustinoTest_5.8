@@ -400,3 +400,23 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   una posa cambia sotto un ritocco manuale. Da verificare: nomi reali dei canali (`hand_r_fk_ctrl.Rotation.X` assunto).
 - Prossimo thread (desktop, Opus medium): `animpipe check` su dair v4 e jab v12 con `rules` e `strike`, taratura soglie,
   prova capture + build senza sequenza, guardia 2. Costo di questo thread: Fable ~25 chiamate (~$2) + subagenti ~360k token (~$15).
+
+## Chiusura pipeline: merge PR #24, source_fidelity, revisione visiva (2026-11-03, thread cloud Opus, nessun editor)
+- PR #24 unita in feature (5652ab8). Conflitti solo nei doc (README carte + questo file, tenuti entrambi). La scheda
+  dair v4 è rimasta quella di feature (lock nello stesso formato di PR #24, nessuna conversione necessaria); il lock
+  13-14 della PR e il suo snapshot sono stati lasciati fuori perché si riferivano al timing vecchio. `test_locks` ora usa
+  una copia congelata della scheda di PR #24 (`tests/fixtures/`), così le modifiche alla scheda vera non lo rompono.
+- `source_fidelity` (121bbee, `animpipe/fidelity.py`, `animpipe fidelity <scheda>`): le pose con `source` devono essere
+  quelle dell'owner entro 0,5 cm / 1° (dita, `wrist_out`, `hand_rot` e altezza del bacino esclusi; altri scarti solo in
+  `source.keep` con why; `derived` = non confrontata). Il file deve stare in `cards/<kit>/refs/`. Blocca `check`,
+  `approve`, e `load()` per le schede con pose `origin: owner`. Senza `sheets/raw` (cloud) dice n/a.
+- Revisione visiva (e2e4b6f): skill `.claude/skills/gstn-visual-review/` (SKILL.md, rubric.md, verdict.schema.json,
+  calibrazione.md); `animpipe visual-gate` legge `Saved/AnimPipeline/visual/<move>/r<N>/verdict.json` (0 passa,
+  1 bloccato, 2 nessun verdetto; max 2 giri); `approve` rifiuta se l'ultimo verdetto blocca. README: diagnosi di 3 righe
+  prima di ogni build, niente render prima del gate numerico.
+- Test: 9 file in `tests/` passano qui (aggiunti `test_fidelity.py`, `test_visual.py`); `test_casc_roundtrip.py` richiede
+  `sheets/raw` (solo desktop), non eseguito. Pollice villain: resta "along" (default approvato).
+- Non fatto (serve il desktop): `review --visual` (CP2), calibrazione della skill, `--owner-keys` + `interp` (CP4),
+  `fidelity` con il rig vero sulla dair. Brief: `handovers/cp2-cp4-desktop-brief.md`.
+- Costo stimato: ~45 chiamate, contesto ~85k, circa $4-6; niente subagenti.
+
