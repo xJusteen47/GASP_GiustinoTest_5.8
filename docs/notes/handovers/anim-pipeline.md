@@ -572,3 +572,15 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   annunciato ("ci sono altri cambiamenti di timing proposti", 03/11) non sono ancora state scritte: le darà con il video.
   Decisione presa: la dair tiene i pugni chiusi, niente mano da cattivo (owner 03/11).
 - Costo stimato: ~75 chiamate, contesto ~100k (~$9).
+
+## Dair: video multi-angolo in-game reso, export verso Cascadeur fermo su .casc esistente (2026-11-03, thread desktop Sonnet)
+- Ramo `claude/project-thread-dgqsku`. Nessun approve, nessun merge.
+- **Video fatto:** `ingame_multi.py cards/overlord/overlord_dair_v4.json 8 ...` → `overlord_dair_v5_hitstop_vs_whiff.mp4`
+  (43 frame, 4 camere lato/3-4 fronte/dietro/alto, hitstop 8 a f15 | whiff). Copia in `Saved/AnimPipeline/` del worktree
+  `_feature` e caricata in project files. L'editor è stato rimesso su `/Game/Levels/DefaultLevel` (load_level, nessun save).
+- **Cascadeur:** il verbo `import` va Cascadeur→scheda (serve una richiesta "Invia" in `casc/requests/`, ora non ce ne sono);
+  per mandare la dair in Cascadeur il verbo è `export overlord_dair_v4` (il nome mossa è quello della scheda, non `dair`).
+  Rifiutato: `Saved/AnimPipeline/casc/overlord_dair_v4.casc` esiste già (modificato oggi 16:16, probabili modifiche
+  dell'owner). Non ho usato `--force`. Decisione all'owner: aprire quel .casc così com'è, oppure `export --force` (il vecchio
+  resta da parte) per rifarlo dalla scheda attuale.
+- Costo stimato: ~20 chiamate, contesto ~45k (~$1,5).
