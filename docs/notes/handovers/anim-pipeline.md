@@ -330,3 +330,28 @@ Passi (Opus medium, subagenti Sonnet per i test):
    bloccato, giro senza modifiche identico). Prova vera sulla dair v4 su una copia della scheda.
 Avvio a regime: l'owner scrive al coordinatore "interpola la <mossa>", e il coordinatore apre un thread desktop con
 questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: pulsante che lancia `claude -p`, Sonnet.
+
+## Spacing Cascadeur = build, interruttori fisica (2026-11-03, brief casc-spacing-brief.md)
+- `animpipe casc-spacing <card> --fit|--apply|--score` (`animpipe/spacing.py`) + lato Cascadeur `casc_spacing.py`. Verità:
+  ossa della build per frame (`sheets/raw/<take>_legbones.json`); metrica: scarto peggiore per intermedio con il divario
+  delle pose chiave tolto (la build stessa sposta le ginocchia fino a 7 cm alle chiavi). Fit per segmento e per layer
+  (Fingers esclusi): LINEAR o CLAMPED/BEZIER/LOW_AMPLITUDE con pesi 0.1/0.33/0.6, discesa a coordinate 2 passate su una
+  copia `<move>_spacelab.casc`, obiettivo = somma per frame del peggiore (col max sulla finestra peggiorava i vicini).
+- Solo API chiavi: nessuna chiave aggiunta o spostata. `--apply` rifiuta se una posa chiave si muove (dair: 0,0 cm).
+- Dair v4 applicata a `casc/overlord_dair_v4.casc` (backup `_prespacing.casc/.fbx`, `_ref_prespacing.json`), --ref rifatta
+  in UE: peggiore per segmento 0-2 5,4->4,7; 3-5 9,2->5,9; 5-12 37,6->8,8; 15-17 0,75; 17-31 2,5->1,5; 31-37 12,5->6,1;
+  37-42 0,45->0,39 cm. Obiettivo < 1 cm NON raggiunto su 4 segmenti: resta forma del percorso (ginocchia, avambracci,
+  bacino 3-4 cm), non timing. Su questo rig un intervallo bezier fa uscire il ginocchio fuori da entrambe le chiavi anche
+  con pesi 0: per questo molti layer sono LINEAR. Nessuna API per la direzione delle tangenti.
+- Garanzie: pose chiave nuova vs vecchia readback 0,0001 cm; import senza modifiche = 0 parti, scheda identica (hash);
+  13 test verdi (`tests/test_casc_spacing.py` nuovi 5). revert/diff non toccati. part_delays != 0: rifiutato (servirebbero
+  chiavi fuori dai frame della scheda), la dair ha tutti 0.
+- Fisica: `casc_physics.py` (PHYSICS=piano). Interruttori del pannello (Physics corrector, Smooth trajectory/rotation,
+  Compensation, Separation, Secondary) ora da script: click sintetico su Off/On della riga nel pannello Physics settings
+  (verificato sulla copia: Secondary e Separation Off, Smooth trajectory On, letti con get_bool_value). Valori per punto
+  (`points`, es. muscle_stiffness mani 5->15, verificato). Snap to AutoPhysics: solo su copia `_physics/_spacelab` con
+  `allow_key_changes` (sposta le pose chiave = violerebbe i lock); non eseguito. Nessun valore cambiato nella scena
+  dell'owner: tutti gli interruttori lì sono On. Dettagli in `cascadeur_api_verified.md` §6c.
+- Scelte fatte senza owner: LINEAR ammesso nel fit; nessuna scelta di valori fisici (servono i suoi). Prossimo: se vuole
+  < 1 cm, chiavi intermedie solo-tempo fuori dalla scheda (import le deve ignorare) oppure accettare la differenza di rig.
+- Costo stimato: ~90 chiamate, contesto ~140k, circa $8-10; niente subagenti; editor in hold ~5 min.

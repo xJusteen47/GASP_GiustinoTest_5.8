@@ -54,5 +54,9 @@ The card stays the source of truth; Cascadeur is the editor (keys only on the ca
    parts stop it (`--unlock=part@frame`). Fingers and `wrist_out` stay the card's. Then `author`, `build`, `check`.
 5. `casc-revert <card>` puts back the card as before the last import (snapshots in `cards/<kit>/history/`);
    `casc-diff <a> <b>` lists the key frames and parts that differ between two cards.
-The in-betweens you see in Cascadeur are its curves (a preview): the build keeps the card's spacing. A trunk bend that
+6. Spacing like the build: `casc-spacing <card> --fit` (plan; run `casc_spacing.py` in Cascadeur on a `<move>_spacelab.casc`
+   copy: per segment and layer it picks interpolation + easing weights against the build's bones), then `--apply` (writes
+   them into `<move>.casc`, refuses if a key pose moved), `casc-import --ref` again, `--score` (worst cm per segment).
+   Keys are never added or moved, so import, locks, revert and diff are unchanged.
+Without step 6 the in-betweens you see in Cascadeur are its own curves (a preview): the build keeps the card's spacing. A trunk bend that
 the card cannot hold (all in one vertebra; the card spreads it on five) is reported as residual > 1 cm, never hidden.

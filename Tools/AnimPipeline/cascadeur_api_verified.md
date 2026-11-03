@@ -154,7 +154,17 @@ answer it (or close it) before calling again.
 - They ARE per scene: `tab.get_setting_handler().get_bool_value("AutoPhysics", ...)` reads True in jab_v5/v7 while the app
   ini says false, and the value survives a restart. The ini (`Cascadeur_tools.ini`) holds app defaults, rewritten on exit;
   editing it (with Cascadeur closed) can only change the defaults, not an existing .casc (not tested, by design).
-- UI route (partial): the toggles are custom QML rows (Text + QQuickImage + QQuickMouseArea) in the "Physics settings" side
+- **SOLVED 2026-11-03 (`casc_physics.py`, on the dair `_spacelab` copy)**: synthetic press/release on the TabButton
+  "Physics settings" opens the side tab; the panel's row is the label whose parent subtree holds two `CheckButton`s
+  "Off"/"On" (the per-point "Secondary motion" header has none); scroll its Flickable (`contentY`) until the button is
+  inside, then a synthetic press/release on "Off"/"On" flips the scene setting at once (read back with
+  `get_bool_value`). Emitting `clicked` on the CheckButton does NOT change the setting. Also Physics corrector.
+- Key weights (`left/right_weight_velocity`, default 1/3) only shape bezier intervals; on this rig a bezier interval swings
+  the knee far outside both keys even with weights 0 (not tangent overshoot); LINEAR stays on the chord. No API for the
+  tangent direction (`Tangents.UserDefined` vs `Continuous` made no difference on readback).
+- Per-point data writes: write with the datum's own type (`type(current)(value)`); an int into a float datum fails the
+  modify with "RuntimeError: bad variant access" in the log.
+- UI route (old, partial): the toggles are custom QML rows (Text + QQuickImage + QQuickMouseArea) in the "Physics settings" side
   tab. A synthetic click on a row with the label "Secondary motion" hit the per-point "Secondary motion" section header in
   Object properties instead (same text), and switching the side tab programmatically failed (the tab bar is a
   QQuickListView; restored afterwards). Not solved: set these toggles by hand once per scene (they persist in the .casc),
