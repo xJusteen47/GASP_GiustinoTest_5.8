@@ -1028,6 +1028,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	}
 
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
+	ProjectTimelineTags(InSync.Core, OutSync.Core, Frame);
 	ServiceSync = nullptr;
 	ServiceFrame = INDEX_NONE;
 	ServiceHookEnvironment = nullptr;
@@ -1035,6 +1036,61 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	ServiceStepSnapshot = nullptr;
 	ServiceView = nullptr;
 	bServiceViewResolved = false;
+}
+
+void UGSTN_CombatSimComponent::CollectTimelineTags(const FGSTN_CombatSyncCore& Core, int32 Frame, FGameplayTagContainer& OutTags) const
+{
+	// The same timeline frame the hurt states read (GSTN_CombatSimSnapshot): a hitstop frame has not advanced the timeline, a recoil runs none
+	const UGSTN_CombatTableSet* Set = Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE ? FindTableSet(Core.TableRevision) : nullptr;
+	const FGSTN_CombatTimelineData* Timeline = Set ? GetRegistryTimeline(*Set, Core.ActiveTimeline) : nullptr;
+	if (!Timeline)
+	{
+		return;
+	}
+	const int32 EvaluatedFrame = Core.IsInHitstop(Frame) ? Frame - 1 : Frame;
+	const int32 TimelineFrame = FMath::Max(EvaluatedFrame - Core.TimelineStartFrame - Core.TimelinePausedFrames, 0);
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Timeline->Tracks)
+	{
+		const FGSTN_TimelineTrack* Track = Instance.GetPtr<FGSTN_TimelineTrack>();
+		if (Track && Track->GetKind() == EGSTN_TimelineTrackKind::Tags && Track->Contains(TimelineFrame))
+		{
+			OutTags.AppendTags(static_cast<const FGSTN_TimelineTrack_Tags*>(Track)->Tags);
+		}
+	}
+}
+
+void UGSTN_CombatSimComponent::ProjectTimelineTags(const FGSTN_CombatSyncCore& InCore, const FGSTN_CombatSyncCore& OutCore, int32 Frame)
+{
+	// Applied as a difference, not set: Combat.Lock.Movement and the command locks are also granted by effects, and a set count would erase
+	// them. The difference is a function of the two states only, and the ability system's tag counts are part of its own rolled back sync
+	// state (it ticks after this model in the same frame): a restored frame holds the tags of the restored input state, so a re-simulation
+	// or a correction applies the right difference with no member remembering what was granted
+	if (!AbilitySystem)
+	{
+		return;
+	}
+	FGameplayTagContainer Before;
+	FGameplayTagContainer After;
+	CollectTimelineTags(InCore, Frame - 1, Before);
+	CollectTimelineTags(OutCore, Frame, After);
+	if (Before.IsEmpty() && After.IsEmpty())
+	{
+		return;
+	}
+	for (const FGameplayTag& Tag : Before)
+	{
+		if (!After.HasTagExact(Tag))
+		{
+			AbilitySystem->RemoveLooseGameplayTag(Tag);
+		}
+	}
+	for (const FGameplayTag& Tag : After)
+	{
+		if (!Before.HasTagExact(Tag))
+		{
+			AbilitySystem->AddLooseGameplayTag(Tag);
+		}
+	}
 }
 
 const FGSTN_StepSnapshot* UGSTN_CombatSimComponent::GetViewSnapshot()

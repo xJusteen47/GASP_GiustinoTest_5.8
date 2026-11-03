@@ -732,6 +732,13 @@ private:
 	/** Projects Combat.State.{Hitstun,Tumble,Hitstop} and the movement lock from the sync state of the frame (the ability system's pre-tick). Idempotent: a function of the state only */
 	void ProjectStateTags(const FGSTN_CombatSyncCore& Core, int32 Frame);
 
+	/** The tags of the Tags tracks (FGSTN_TimelineTrack_Tags) open on the timeline the state runs at Frame. A function of the state only */
+	void CollectTimelineTags(const FGSTN_CombatSyncCore& Core, int32 Frame, FGameplayTagContainer& OutTags) const;
+
+	/** The Tags tracks' consumer: grants the open windows' tags to the ability system as loose tags, as the difference between the input state
+	 *  (Frame - 1) and the output state (Frame). Runs at the end of the combat tick, before the ability system's tick of the same frame */
+	void ProjectTimelineTags(const FGSTN_CombatSyncCore& InCore, const FGSTN_CombatSyncCore& OutCore, int32 Frame);
+
 	/** The KO events and the hit events of the victim step, appended to the outbox (every machine writes them, the authority publishes them) */
 	void AppendVictimEvents(int32 Frame);
 

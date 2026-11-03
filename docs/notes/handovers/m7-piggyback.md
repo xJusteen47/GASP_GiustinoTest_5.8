@@ -255,3 +255,24 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
 - Still open: the Tags-track consumer (carrier root / command locks from a timeline: decide with the combat owner), forward prediction for pair partners
   (spike 4 ~280-300 ms, pending owner), rider client rollbacks 2 on boost (carrier client 9), RefundAirJumps, thrown land-cancel, rider attack binding, G6 carry load.
 - Cost: one Sonnet thread, ~65k context, ~45 calls, 3 UBT builds, 3 harness editors, 2 headless editors: medium-low.
+
+## M7-11 (desktop, 2026-11-03): the Tags track's consumer; G10-G12 not started
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9. Not on feature (owner pushes). Deltas: m7-doc-deltas.md "M7-11".
+- Built: `UGSTN_CombatSimComponent::ProjectTimelineTags` / `CollectTimelineTags` (GSTNCombatNP, generic): at the end of the combat tick the
+  tags of the open `FGSTN_TimelineTrack_Tags` windows go to the ASC as loose tags, added/removed as the difference between the input state
+  (F-1) and the output state (F). No member cache: the fork's ASC tag counts are in its rolled-back sync state and it ticks after combat.
+  Difference, not Set, so effect-granted `Combat.Lock.Movement` survives.
+- boost_jump probe: 'braced' reads `Combat.Lock.Movement` on the carrier's ASC again, new check "the brace lock is gone on every world".
+  Result: server (and the rider's client) see the lock, gone ~170 ms later, no leak; carrier's own client still never sees it (correction).
+- Gates (`Saved/M711`, diagnosis.txt; reports `Saved/Logs/m7-11`): build ON Succeeded, `headless-on1.log` 1287/0; OFF (`GSTNPiggyback` off)
+  Succeeded, `headless-off1.log` 1260/0; 0 ensures. Harness listen/3, 60/15 ms: boost_jump alone 10/10; SUITE_MOUNT 0 % 9/9; throw_rider +
+  boost_jump 2 % 2/2; SUITE_LINK 0 % 15/19, the 4 failures were the known missing-pawn exception flake, rerun 4/4 (= 19/19).
+  Not run: SUITE_DEFENCE (driver has no defence module), GSTNLink-off config, dedicated server.
+- Boost rollbacks now: rider client 2, carrier client 4 (was 9).
+- .uproject = HEAD, PIE ini restored; worktree binaries are the OFF build: rebuild ON first.
+- Owner (2026-11-03): option (a) confirmed; forward prediction for pair partners = a separate milestone after M8 ("fix prediction once and for all").
+- NOT started: G10 (presentation/anim/camera, M), G11 (GSTNPiggybackEditor is an empty module: factory, validators,
+  `gstn.Combat.Debug.Anchor`, link log line), G12 (sweep, byte table, docs). Next thread: G11 first (S), then G10, G12.
+- Still open: RefundAirJumps (no gate needed it), thrown land-cancel, rider attack binding, G6 carry load, the expired-table-set edge (deltas).
+- Cost: one Opus thread, ~75k context, ~70 calls, 2 UBT builds, 2 headless editors, 3 harness editors (~40 min machine): medium.

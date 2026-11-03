@@ -142,16 +142,13 @@ class _MountRig:
                     now = self.run.now()
                     if ('unparked', wi) not in self.first and ls.mover_mode(wi, self.rkey) != ls.LINKED_MODE:
                         self.first[('unparked', wi)] = now
-                    if ('braced', wi) not in self.first and self._carrier_in_timeline(wi):
+                    locked = ls.has_tag(wi, self.ckey, LOCK_MOVEMENT)
+                    if ('braced', wi) not in self.first and locked:
                         self.first[('braced', wi)] = now
+                    if ('braced', wi) in self.first and ('unbraced', wi) not in self.first and not locked:
+                        self.first[('unbraced', wi)] = now
         except Exception:
             pass
-
-    def _carrier_in_timeline(self, wi):
-        # The Tags track of a combat timeline grants nothing to the ASC yet (no consumer of TagWindows in GSTNCombatNP), so Combat.Lock.Movement is never
-        # an ASC tag; the carrier's forced partner timeline running is what 'braced' can observe (the snapshot's combat.inTimeline)
-        v = json.loads(g.comps(g.worlds()[wi])[self.ckey].get_state_snapshot())
-        return bool((v.get('combat') or {}).get('inTimeline'))
 
     def stop(self):
         if self.handle is not None:
@@ -612,15 +609,21 @@ def scenario_boost_jump(pairing='client_rides_client'):
         run.note(f"boost: the carrier's own client saw the brace: {('braced', rig.ic) in rig.first}")
         return ('braced', 0) in rig.first, f'{rig.first}'
 
+    def unbraced():
+        # The Tags track's consumer removes the lock when the window closes (no leak after the brace, on any world that saw it)
+        held = [wi for wi in range(len(g.worlds())) if ls.has_tag(wi, rig.ckey, LOCK_MOVEMENT)]
+        return not held, f'still locked on {held}'
+
     steps = [(0.2, rig.setup()), (1.1, rig.clear_other())]
     mount, t = rig.mount_steps(1.2)
     steps += mount
     steps += [(t + 0.3, rig.mark('pre_boost')), (t + 0.35, boost), (t + 1.2, rig.gone('the boost ended the link on every world')),
               (t + 1.2, run.at('the rider rose above the carrier', rose)),
-              (t + 1.2, run.at('the carrier braced on the server', braced)),
+              (t + 1.2, run.at('the carrier braced on the server (Combat.Lock.Movement on its ASC)', braced)),
               (t + 1.2, _spike4(rig, 'braced', 0, rig.ic, 'boost (carrier braced, server vs carrier screen)', gate=False)),
               (t + 1.2, _spike4(rig, 'unparked', rig.ir, rig.ic, 'boost (rider leaves, rider vs carrier screen)')),
               (t + 2.2, rig.mark('boosted')),
+              (t + 2.2, run.at('the brace lock is gone on every world', unbraced)),
               (t + 2.25, lambda: run.note(f"boost: rollbacks rider client {rig.rb_delta('pre_boost', 'boosted', rig.ir)} (predicted: expect 0), "
                                           f"carrier client {rig.rb_delta('pre_boost', 'boosted', rig.ic)}"))]
     steps += rig.end(t + 2.3)

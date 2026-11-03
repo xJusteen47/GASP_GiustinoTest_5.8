@@ -304,3 +304,11 @@ abilities with timelines, the definitions, the test kit's set), `scenario_throw_
 | thrown hitbox "active until landing or 40 f" | 40 f only: a land cancel needs a movement track, and the flight is the exit launch |
 | `UGSTN_GA_PairMove::PairMove` names the definition | Left empty on the test classes (a class default cannot name an asset of a setup script); validation runs on the definitions |
 | `WriteMountKitData` replaced the whole mount entry | Now changes only the two weights, so a rerun of `prepare_editor` keeps the pair moves |
+
+## M7-11: the Tags track's consumer (GSTNCombatNP, desktop)
+
+| Spec / plan | Shipped |
+|---|---|
+| `FGSTN_TimelineTrack_Tags` "granted by the combat tick, never by the ability" (no consumer existed: only `UGSTN_TimelinePlayer` filled `TagWindows`) | `UGSTN_CombatSimComponent::ProjectTimelineTags` at the end of the combat tick: loose tags added/removed as the difference between the windows open in the input state (frame F-1) and the output state (F), same timeline frame as the hurt states (hitstop holds, recoil runs none). No member cache: the fork's ASC tag counts are in its own rolled-back sync state and it ticks after the combat model, so a restored frame already holds the input state's tags. Difference, not `SetLooseGameplayTagCount`, so effect-granted `Combat.Lock.Movement` is not erased. Generic for every timeline, not piggyback-specific |
+| boost_jump "braced" probe read `combat.inTimeline` (M7-10) | Reads `Combat.Lock.Movement` on the carrier's ASC again, plus "the brace lock is gone on every world" (no leak) |
+| Known edge | A timeline whose table set expired on this machine between two frames contributes nothing to the input side, so its tags would stay granted (no case in the tests; how long a machine keeps old table sets was not checked) |
