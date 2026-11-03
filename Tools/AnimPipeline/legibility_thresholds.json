@@ -50,5 +50,14 @@
  "steal_review_strike_extra_frames": 2,
  "_steal_note": "v9/v10 2026-10-31: with the tucked rear guard the owner asked for, the chambered lead fist in the recovery spring (frames 8-11) is behind the rear forearm only from the LOW back-right diagonal (az225, el 10): 22-57% in every pose tried (glove at the chin centre, glove out to the cheek, fist wider, bigger spring, Mario's full dip). The gameplay cameras at that azimuth (Follow 25 deg, rail 40 deg) see it (0-8%). So the rear-arm rule stays strict on every gameplay camera while the fist is out, and on the low az* views during the strike (contact + 2 frames); in the spring the az* values are info. Owner can override.",
  "kick_steal_window": "contact .. hold_window end + 1",
- "_kick_steal_note": "Ganondorf ftilt 31/10: for a kick the arms-hide-the-foot rule covers the strike and its hold; while the leg re-chambers under the body (after the hold) the foot passes the hip and any arm by it, which is not the attack's read. Owner can override."
+ "_kick_steal_note": "Ganondorf ftilt 31/10: for a kick the arms-hide-the-foot rule covers the strike and its hold; while the leg re-chambers under the body (after the hold) the foot passes the hip and any arm by it, which is not the attack's read. Owner can override.",
+ "kick": {
+  "fist_contact_distinct_min": 50,
+  "game_arm_read_min": 50,
+  "game_arm_read_floor": 30,
+  "pvp_arm_read_min": 60,
+  "limb_out_min_cm": 40,
+  "elbow_out_min_cm": 10
+ },
+ "_kick_note": "2026-11-03: a kick (strike limb leg_l/leg_r/legs) is judged with this block, keys as for the arm: 'fist' = the striking foot, 'arm' = shin + foot, 'elbow' = the knee. Calibrated on the two owner-accepted kicks: overlord dair v4 (legs, both feet together) and ganon ftilt v3.1 (leg_l). Their worst values over the active frames: game camera mean 69/83, worst yaw 48 (ftilt, Follow behind) / 77 (dair), PvP 93/96, reach out of the body 75/82 cm, knee out 27/29 cm. Read shares stay as for the arm (both pass with margin); a leg is longer than an arm, so a kick must reach >= 40 cm out of the body and show its knee >= 10 cm outside the outline (an arm: 25 / 5)."
 }

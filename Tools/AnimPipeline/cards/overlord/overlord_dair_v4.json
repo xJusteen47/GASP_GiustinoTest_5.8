@@ -139,7 +139,11 @@
    31
   ],
   "strike_limb": "leg_l",
-  "strike_side": "leg_l"
+  "strike_side": "leg_l",
+  "strike": {
+   "limb": "legs",
+   "why": "both feet drive straight down together (design): the two legs are one striking limb, the arms are the hiders"
+  }
  },
  "planted": [],
  "exemptions": [
@@ -3339,5 +3343,81 @@
   17
  ],
  "faf_game": 39,
- "_faf_why": "owner 03/11 10:03: FAF 37 (anim frame; game 39 at 60 fps), charge stays at 3 as keyed. The approved block of the 03:02 import was written without his ok on the composite grid: removed until he approves it (owner rule 2); owner keys stay protected by origin/source."
+ "_faf_why": "owner 03/11 10:03: FAF 37 (anim frame; game 39 at 60 fps), charge stays at 3 as keyed. The approved block of the 03:02 import was written without his ok on the composite grid: removed until he approves it (owner rule 2); owner keys stay protected by origin/source.",
+ "rules": {
+  "frame_0": {
+   "charge": 3,
+   "min_cm": 5,
+   "max_frac": 1.0
+  },
+  "knees_front": {
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "tol": 0
+  },
+  "feet_side_by_side": {
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42
+   ],
+   "min_cm": 4
+  }
+ },
+ "_rules_note": "2026-11-03, calibrated on this build (owner keys, charge 3): frame 0 is the owner's air tuck, already 38-97% of the way to the charge per part, so frame_0 checks only the break from the idle (min 7.5 cm measured, max_frac 1.0); knees 23-36 cm in front through the charge 0-14 (behind by 2 cm only in the stomp, legs straight down); ankles 5.6 cm apart at the closest (feet together in the stomp), never crossed. villain_hand not declared: v4 keeps the template fists (no fingers/wrist_out in the card), owner to say if the dair wants the villain hand."
 }

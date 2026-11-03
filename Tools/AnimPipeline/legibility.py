@@ -180,6 +180,9 @@ def configure(take, anim=None, sheet=None):
         ATTS = [f"foot_{s}" for s in sides]; FORES = [f"shin_{s}" for s in sides]
         ATT_BONES = [f"ball_{s}" for s in sides]; ATT_JOINTS = [f"calf_{s}" for s in sides]
         ATT_CHAIN = [f"{q}_{s}" for s in sides for q in ("thigh", "shin", "foot")]
+        if limb == "legs":   # both feet strike together (dair stomp): the two legs read as one limb, touching is not hiding
+            for p in ATT_CHAIN:
+                NEIGH[p] = list(dict.fromkeys(NEIGH.get(p, []) + [q for q in ATT_CHAIN if q != p]))
         REAR = "r"
     else:
         s = limb[-1]
@@ -554,6 +557,9 @@ TH = {}   # filled from legibility_thresholds.json (calibrated on v5, v6 and v7;
 def load_th():
     p = os.path.join(HERE, "legibility_thresholds.json")
     TH.update(json.load(open(p)) if os.path.exists(p) else {})
+    # a kick is judged with the foot's own thresholds (block "kick"), not the ones calibrated on the jab's arm
+    if KICK:
+        TH.update(TH.get("kick", {}))
 
 def fist_cover_rear(vr):
     """% of the attacking fist overlapped by the rear arm in this view (any depth order) and % occluded by it."""

@@ -82,6 +82,19 @@ def test_kick_and_legs_skip_punch_checks():
     assert "foot_l" not in L.PNAMES and L.ATTS == ["hand_l"]        # rebuilt, not stacked
 
 
+def test_legs_are_one_limb_and_kick_thresholds():
+    """Dair stomp: the two legs touching is not one foot hiding the other; a kick reads the "kick" threshold block."""
+    L.configure("synthetic", sheet={"strike": {"limb": "legs"}})
+    assert "shin_r" in L.NEIGH["foot_l"] and "foot_l" in L.NEIGH["shin_r"]
+    L.load_th()
+    assert L.TH["limb_out_min_cm"] == L.TH["kick"]["limb_out_min_cm"]
+    L.configure("synthetic", sheet={"strike_limb": "leg_l"})
+    assert "shin_r" not in L.NEIGH["foot_l"]                          # a single kicking leg: the other leg may hide it
+    L.configure("synthetic", sheet={})
+    L.load_th()
+    assert L.TH["limb_out_min_cm"] == 25
+
+
 def test_no_hiders_turns_rule_b_off():
     res, fl = run({"strike": {"limb": "legs", "hiders": []}})
     assert "rear arm hides the fist" not in checks(fl)
