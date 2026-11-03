@@ -33,7 +33,8 @@
 #   KIT_Test_Link            + the standard link slots, the link moves above, a link extension (default rules but the spec 11 test mash: base 90 frames)
 #   KIT_Test_DefenceLink     + the defence extension of KIT_Test_Defence and the link content of KIT_Test_Link (scenario grab_shield)
 # and the rules the test pawns play, /GSTNCombat/Rules/GSTN_CombatRules_Standard, get the steps GrabImmunity, LinkRequest (GSTNLink), Parry, Shield
-# (GSTNDefence) and LinkBreakOnHit (GSTNLink) in m6 spec 9 order. Rerun this script after Tools/GAS/setup_gas_assets.py --h13-content, which rewrites
+# (GSTNDefence), LinkBreakOnHit (GSTNLink) in m6 spec 9 order, and MountHit (GSTNPiggyback, M7 G7) after ComputeKnockback.
+# Rerun this script after Tools/GAS/setup_gas_assets.py --h13-content, which rewrites
 # that asset from FillStandard. With a plugin off its steps are soft references the rules skip (logged, not an error).
 import hashlib
 import os
@@ -81,6 +82,10 @@ def has_defence():
 
 def has_link():
     return hasattr(unreal, 'GSTN_LinkTypeDefinition')
+
+
+def has_piggyback():
+    return hasattr(unreal, 'GSTN_HitStep_MountHit')
 
 
 # ---- files, backups, hashes -----------------------------------------------------------------------------------------------------------------------------
@@ -393,6 +398,9 @@ def run_project():
         a.mark(unreal.GSTN_LinkContentLibrary.add_link_steps_to_rules(rules))
     if has_defence() and not all(s in names for s in ('HitStep_Parry', 'HitStep_Shield')):
         a.mark(unreal.GSTN_DefenceContentLibrary.add_defence_steps_to_rules(rules))
+    if has_piggyback() and 'HitStep_MountHit' not in names:
+        # M7 G7: right after ComputeKnockback (GSTNPiggyback, optional)
+        a.mark(unreal.GSTN_PiggybackContentLibrary.add_mount_step_to_rules(rules))
     a.save()
     log('standard rules pipeline: ' + ', '.join(p.get_name() if hasattr(p, 'get_name') else str(p) for p in rules.get_editor_property('hit_pipeline')))
     out.append(STANDARD_RULES)

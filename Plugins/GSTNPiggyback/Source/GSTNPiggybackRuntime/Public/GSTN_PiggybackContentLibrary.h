@@ -6,6 +6,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GSTN_PiggybackContentLibrary.generated.h"
 
+class UGSTN_CombatRules;
 class UGSTN_PrimaryKitDefinition;
 
 /**
@@ -37,4 +38,15 @@ public:
 	/** The registered mount link type's wire index (0 = not registered) */
 	UFUNCTION(BlueprintCallable, Category = "Piggyback|Content")
 	static int32 GetMountTypeIndex();
+
+	/**
+	 * Inserts UGSTN_HitStep_MountHit right after ComputeKnockback (before ApplyDamage, MeterGain and LinkBreakOnHit: the rider's scaled knockback is
+	 * what the later steps read, and the mount's break reason is marked first). Idempotent; never saves. False without ComputeKnockback
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Piggyback|Content")
+	static bool AddMountStepToRules(UGSTN_CombatRules* Rules);
+
+	/** Removes UGSTN_HitStep_MountHit from the pipeline. Never saves */
+	UFUNCTION(BlueprintCallable, Category = "Piggyback|Content")
+	static bool RemoveMountStepFromRules(UGSTN_CombatRules* Rules);
 };
