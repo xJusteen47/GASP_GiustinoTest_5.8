@@ -474,6 +474,32 @@ cannot leave one behind (test: every break reason in section 8 ends with none of
    other than its own bindings.
 7. combat.md updated (§3 modules, §12b, §17, roadmap link); plugin builds and M1-M6 pass with it disabled; the host has no reference to it.
 
+### Acceptance status (G12)
+
+Evidence: `docs/notes/m7-doc-deltas.md`, `docs/notes/handovers/m7-piggyback.md` (M7-05..M7-13), `docs/notes/m7-spike-report.md`.
+
+1. **Met.** S1 to S4 recorded (combat.md §17e). S1: client riders fail the anchor rule, so exits are predicted with a server rewind (owner, 2026-11-01);
+   S4 measured about 280-300 ms, over 150 ms: forward prediction for pair partners deferred by the owner to a milestone after M8.
+2. **Partly.** G12 run (M7-14, listen/3, 60/15 ms, one long batch): SUITE_MOUNT 0 % 9/10 (`mount_interact_priority` failed once, PASS alone),
+   SUITE_LINK 0 % 19/19 with no reruns (the setup flake is fixed in `defence_batch`'s ready check), SUITE_MOUNT 2 % 9/10: `mounted_hit` failed twice
+   (once a break with generic reason 6 instead of RiderHit; once the mount formed only on the rider's client, nothing on the server: open);
+   `mount_forced_reconcile` PASS at 0 and 2 %. Headless plugin-off 1260/0, on 1289/0 (M7-13, no C++ change since). Not run: dedicated server,
+   host pairings in batch, SUITE_DEFAULT/PARTS/DEFENCE in the three plugin configurations.
+   Byte table: link fragment payload 0 B per sync state for an unlinked pawn (also during another pair's mount), 23 B for rider and carrier while mounted.
+3. **Partly.** Attached at request + `PendingFrames` and 0 rollbacks on the rider's client when accepted, 1 correction on the carrier's (S3). An unseen
+   refusal costs 3 rollbacks (up to 5 at 0 %) and a 117 cm snap, not one rollback; `scenario_mount_refused` accepts 1 to 4. The carry-load effect is not built.
+4. **Partly.** No unforced corrections in the held windows (S1: 0 rollbacks); but a client rider's anchor equals the authority's of about 0.3 s earlier, so it is
+   not under 10 cm while the carrier moves. Rider exits are predicted and match the authority within 5 cm. `Debug.Anchor`, `LinkLog` and `MeshLog` exist.
+   Finding A (127 cm median on every world, a term of the measure, no client-only step) is not resolved; B (mesh on its own capsule) is fixed. Not measured with rendering on.
+5. **Partly.** Both reference pair moves play on both screens (`throw_rider`, `boost_jump`); rider client ends 0.0 cm from the server after the throw. Corrections
+   beyond start and exit: boost costs the rider's client 2 and the carrier's 4 rollbacks (carrier's own client never sees its brace; it gets the forced move by
+   correction). A rider is not hit by its carrier (`MountHit`, partner exclusion). Credit follows the definition, but nobody applies the partner's meter request.
+6. **Partly.** Role and disallowed-command bindings are validated (`Runtime.Bindings.*`, loadout validator) and a riding pawn has no ground context. The rider's own
+   attack binding (`Role.Rider`) is in no kit yet (`scenario_rider_attack` waits for it).
+7. **Met.** combat.md §3, §12b, §17e and the roadmap updated at G12; plugin off passes (1260/0, the log never names it); `Tools/Modules/check_modules.py` finds no reference outside.
+
+Still open: carry load, rider attack binding, `RefundAirJumps`, thrown land-cancel, carrier shield over the rider, remount cooldown, dedicated-server runs.
+
 ## 14. How to extend
 
 **New pair move**: (1) author the initiator and partner timeline abilities (`UGSTN_GA_PairMove` child for the initiator,

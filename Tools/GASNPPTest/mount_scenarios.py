@@ -30,6 +30,11 @@
 #                        release on every world, the rider flies off along the carrier's forward with the exit launch; spike 4 is measured
 #   boost_jump           M7 G9: the mounted rider's jump boosts it off the carrier (PM_BoostJump): the carrier braces (Combat.Lock.Movement) on
 #                        the server and its own world, the rider rises well above its parked height; spike 4 is measured
+#   mount_forced_reconcile  M7 G12: forced reconciles on both clients around the mount (request tick, then spans that reach back over the
+#                        Pending and first Active frames) and around a throw (pair-move start, then a span over its outcome/release frame).
+#                        The forced resimulations must change nothing: one mount with one serial everywhere, the throw ends it everywhere,
+#                        each client's own pawn equals the server's after settle. np.ForceReconcile is one global cvar under one process, so
+#                        the client that takes each force is noted, not gated; the frames are hit through ForceReconcileExtraFrames spans
 #   Spike 4 (spec 2.4): the partner's visible reaction on the partner's own screen, against the same event on the initiator's screen (ms; one
 #   PIE editor tick of jitter). Above 150 ms = open a forward-prediction milestone for pair partners
 import json
@@ -50,7 +55,7 @@ GRAB_TARGET = 'Interact.Target.Grab'
 FIRST_PLUGIN_REASON = 16
 PAIRINGS = {'client_rides_client': (1, 2), 'client_rides_host': (1, 0), 'host_rides_client': (0, 1)}
 SUITE_MOUNT = ['mount_basic', 'mount_refused', 'mount_heavy_refused', 'dismount_drop', 'mount_interact_priority', 'dismount_predicted',
-               'mounted_hit', 'throw_rider', 'boost_jump']   # rider_attack waits for a Role.Rider attack binding: no kit has one yet (M7-06)
+               'mounted_hit', 'throw_rider', 'boost_jump', 'mount_forced_reconcile']   # rider_attack waits for a Role.Rider attack binding: no kit has one yet (M7-06)
 PAIR_SET = 'PMS_Test_Mount'
 PAIR_MOVES = (('PM_ThrowRider', 'Combat.PairMove.ThrowRider'), ('PM_BoostJump', 'Combat.PairMove.BoostJump'))
 LOCK_MOVEMENT = 'Combat.Lock.Movement'
@@ -234,10 +239,23 @@ class _MountRig:
 def scenario_mount_basic(pairing='client_rides_client'):
     rig = _MountRig('mount_basic', pairing)
     run = rig.run
-    steps = [(0.2, rig.setup()), (1.1, rig.clear_other())]
+    st = {}
+
+    def payload(name):
+        def f():
+            st[name] = {k: ls.Lib.get_shown_link_payload_bytes(ls.actor(0, k)) for k in (rig.rkey, rig.ckey, rig.okey)}
+            return 'link payload bytes', name, st[name]
+        return f
+
+    steps = [(0.2, rig.setup()), (1.1, rig.clear_other()), (1.15, payload('idle'))]
     mount, t = rig.mount_steps(1.2)
     steps += mount
-    steps += [(t, run.at('no rollback on the rider\'s client for an accepted mount (optimistic accept)', lambda: (
+    steps += [(t, payload('mounted')),
+              (t, lambda: run.note(f"G12 byte table: link fragment payload per sync state (server), idle {st.get('idle')}, mounted "
+                                   f"{st.get('mounted')} (rider, carrier, third pawn; B; bytes/s not measurable from Python)")),
+              (t, run.at('the unlinked third pawn sends the same link bytes as before the mount', lambda: (
+                  st['mounted'][rig.okey] == st['idle'][rig.okey], f"{st['idle'][rig.okey]} -> {st['mounted'][rig.okey]}"))),
+              (t, run.at('no rollback on the rider\'s client for an accepted mount (optimistic accept)', lambda: (
                   rig.rb_delta('pre_mount', 'mount', rig.ir) == 0, f"rider client rollbacks {rig.rb_delta('pre_mount', 'mount', rig.ir)}"))),
               (t, lambda: run.note(f"S3 carrier's client corrections on acceptance: {rig.rb_delta('pre_mount', 'mount', rig.ic)} (world {rig.ic}); "
                                    f"rider's {rig.rb_delta('pre_mount', 'mount', rig.ir)}; snap on the rider's screen at the attach "
@@ -627,4 +645,58 @@ def scenario_boost_jump(pairing='client_rides_client'):
               (t + 2.25, lambda: run.note(f"boost: rollbacks rider client {rig.rb_delta('pre_boost', 'boosted', rig.ir)} (predicted: expect 0), "
                                           f"carrier client {rig.rb_delta('pre_boost', 'boosted', rig.ic)}"))]
     steps += rig.end(t + 2.3)
+    run.run(steps)
+
+
+def scenario_mount_forced_reconcile(pairing='client_rides_client'):
+    """Spec 9: forced reconciles at the request, Pending, first Active, pair-move start and outcome frames. A forced reconcile rolls the client
+    back ForceReconcileExtraFrames before its last server frame and resimulates: forcing right after an event with a span longer than the
+    event's age puts the event's frame inside the resimulated range. Clean = the link rows and each client's own pawn equal the server's"""
+    rig = _MountRig('mount_forced_reconcile', pairing)
+    run = rig.run
+    st = {'forces': []}
+
+    def force(label, wi, frames):
+        def f():
+            st['forces'].append((label, wi, frames, g.rollbacks(rig.ir), g.rollbacks(rig.ic)))
+            return 'force', label, wi, frames, g.force_reconcile(wi, frames)
+        return f
+
+    def own_equal(label):
+        def f():
+            srv = g.snap(g.worlds()[0])
+            bad = {}
+            for wi, key in ((rig.ir, rig.rkey), (rig.ic, rig.ckey)):
+                if wi <= 0:
+                    continue
+                d = g._diff(srv[key], g.snap(g.worlds()[wi])[key], pos_tol=10.0)
+                if d:
+                    bad[wi] = d
+            return not bad, f'{bad}'
+        return run.at(label, f)
+
+    def throw():
+        return 'carrier throws', g.combat_tap(rig.ic, g.button_mask('Special'))
+
+    def forced_happened():
+        rb = {wi: g.rollbacks(wi) for wi in g.all_players() if wi > 0}
+        start = rig.marks['pre_mount']['rb']
+        gained = {wi: rb[wi] - start[wi] for wi in rb}
+        run.note(f'forced reconciles: {len(st["forces"])} requested, rollbacks gained per client {gained} (one global cvar: any client may take one)')
+        return sum(gained.values()) >= 3, f'{gained}'
+
+    steps = [(0.2, rig.setup()), (1.1, rig.clear_other()), (1.2, rig.place(rig.ckey, (90.0, 0.0))), (1.8, rig.target(MOUNT_TARGET)),
+             (1.85, rig.mark('pre_mount')),
+             (1.9, rig.tap(rig.ir)), (1.9, force('request frame', rig.ir, 2)),
+             (2.15, force('Pending frame (span over the request + 1)', rig.ic, 20)),
+             (2.45, force('first Active frame (span over the accept)', rig.ir, 30)),
+             (3.0, rig.mark('mount')), (3.0, rig.mounted()), (3.0, rig.parked()),
+             (3.3, own_equal("after the mount's forced reconciles, each client's own pawn equals the server's")),
+             (3.6, throw), (3.6, force('pair-move start', rig.ic, 4)),
+             (3.95, force('outcome/release frame (span over the throw)', rig.ir, 30)),
+             (4.4, rig.gone('the throw ended the link on every world after the forced reconciles')),
+             (5.8, rig.mark('settled')),
+             (5.8, own_equal("after the throw's forced reconciles and the landing, each client's own pawn equals the server's")),
+             (5.85, run.at('the forced reconciles happened', forced_happened))]
+    steps += rig.end(5.9)
     run.run(steps)

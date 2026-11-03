@@ -6,10 +6,10 @@ initiator, parked on the carrier and still acting through its own bindings; the 
 piggyback-specific (mount rules, carry load, pair moves, the mount hit step) is data and code of this plugin; `GSTNLink` and `GSTNCombat`
 know nothing of it.
 
-Status: **G5** of the M7 plan. G4 built the pure part (native tags, mount data, carry and anchor math, exit candidates, credit split). G5 adds
+Status: M7 closed at G12 except the carry load and the rider's attack binding (see the acceptance status in the spec §13). G4 built the pure part (native tags, mount data, carry and anchor math, exit candidates, credit split). G5 adds
 the mount itself: the mount link type (made by code), its rule and exit placer, the mount, dismount and drop abilities, their bindings and the
-carrier's disallowed commands, the plugin's test kits and the harness scenarios. Carry load (G6), hits while mounted (G7) and pair moves (G8+)
-are not built yet; G11 filled the Editor module (see the table).
+carrier's disallowed commands, the plugin's test kits and the harness scenarios. Later checkpoints added predicted rider exits (G6), hits while mounted (G7), pair-move data and the reference moves (G8-G9), presentation
+and rider IK targets (G10) and the Editor module (G11). The carry load (weight effect) is not built.
 
 Spec: `docs/architecture/combat-m7-piggyback.md`. Plan: `docs/architecture/plans/m7-piggyback-plan.md` (branch `claude/project-thread-wzb12r`).
 Where the spec and the shipped code differ, the shipped names win; the differences are listed in `docs/notes/m7-doc-deltas.md`.
@@ -118,15 +118,23 @@ Reused from `GSTNLink`, never redeclared: `Combat.Link.Linked`, `Combat.Link.Pen
 
 ## How to extend
 
-- **New pair move** (from G8): author the initiator's and the partner's timeline abilities, create a pair-move definition (roles, offset,
-  outcome frame, exit, credit), add it to the kit's pair-move set, bind the initiator's ability under an existing command with the role
-  requirement (`Combat.Link.Role.Rider` or `.Carrier`), validate the loadout. No code.
+- **New pair move** (no code): (1) author the initiator's ability (a `UGSTN_GA_PairMove` child, with a `PartnerMove` link outcome key in its
+  timeline) and the partner's timeline ability; (2) create a `UGSTN_PairMoveDefinition` (Content Browser > Gameplay > Combat; the factory picks
+  the lowest free `PairMoveId`): abilities, partner offset, outcome frame, `ExitMode` / `ExitDistanceCm` / `ExitLaunch`, credit, optional
+  `TriggerCommand`; (3) add it to the kit's `UGSTN_PairMoveSet` (named by `FGSTN_MountKitExtension::PairMoves`); (4) bind the initiator's ability
+  under an existing command tag with the role requirement (`Combat.Link.Role.Rider` or `.Carrier`), or set `TriggerCommand` and let the loadout
+  extension bind it; (5) validate (`IsDataValid` on the definition, the set and the loadout; saving the ability Blueprint re-runs the
+  definition's checks) and adapt `scenario_throw_rider` / `scenario_boost_jump` in `Tools/GASNPPTest/mount_scenarios.py` by naming the move.
 - **New carrier restriction**: add the command to the carrier profile's `DisallowedCommands`.
 - **New exit mode**: an `EGSTN_ExitMode` entry and its case in `UGSTN_MountUtils::ExitCandidates` (pure, with a test in
   `GSTNPiggyback.Core.Exit.*`).
 - **New mount condition**: a `UGSTN_LinkRule` subclass on the mount type's definition, or a new verdict and check in `EvaluateEligibility`
   (one place for prediction and resolution).
-- **Different weight rules**: the kit's `FGSTN_CarryTuning`, or `ComputeCarryRatio`/`ScaleCarryTuning`.
+- **Different weight rules**: the kit's `FGSTN_CarryTuning`, or `ComputeCarryRatio` / `ScaleCarryTuning` (the carry load itself is not built).
+- **Hits while mounted**: `FGSTN_MountRules` (thresholds, reaction scales, cover arc, credit); `AddMountStepToRules` puts `UGSTN_HitStep_MountHit`
+  after `ComputeKnockback`.
+- **Role animation and IK**: the kit's `AnimsByRole` entries for `Combat.Link.Role.Carrier` / `.Rider` (GSTNLink's presentation component links
+  them); sockets `GSTN_MountHand*` / `GSTN_MountFoot*` (or the rider profile's bases) feed `UGSTN_MountPresentationLibrary::GetRiderIKTargets`.
 
 ## Tests (`GSTNPiggyback.*`)
 

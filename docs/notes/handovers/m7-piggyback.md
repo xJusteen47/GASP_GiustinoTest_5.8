@@ -322,3 +322,24 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
 - Not run: 2 % (no sim change). Open points unchanged (RefundAirJumps, carrier shield, leash, teleport break): no gate needed them.
 - NOT started: G12 (sweep, byte table, combat.md §3/§12b/§17, shared `Combat.Event.Link.*` subtree; fold deltas G5-G11 + G10). Next thread: G12.
 - Cost: one Opus thread, ~95k context, ~65 calls, 3 UBT builds, 2 headless editors, 3 harness editors (~75 min machine): medium.
+
+## M7-14 (desktop, 2026-11-03): G12, sweep subset, byte table, docs folded; setup flake fixed
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9. Harness and docs only: no C++, no content, no UBT build (binaries = M7-13 ON2).
+- Harness: `scenario_mount_forced_reconcile` (SUITE_MOUNT, now 10): forces on both clients at the request tick and with spans over Pending, first
+  Active, pair-move start and the throw's release; checks one mount/serial everywhere, link gone everywhere, each client's own pawn = server's
+  (`g._diff`, 10 cm). np.ForceReconcile is one global cvar: which client takes each force is noted, not gated. `mount_basic` notes the byte table.
+- Flake fix (M7-13 "setup flake"): cause = a pawn keyed by actor name before its player state replicates (`g.comps`), so rigs missed keys and
+  teams were not applied (mount offer read as a grab). `defence_batch` ready() now waits for `P<id>` keys, same set on every world.
+- Run (`Saved/M714`, diagnosis.txt; reports `Saved/Logs/m7-14`), listen/3, 60/15 ms, ONE batch: SUITE_MOUNT 0 % 9/10, SUITE_LINK 0 % 19/19 (no
+  rerun needed: flake gone), SUITE_MOUNT 2 % 9/10. Rerun alone: `mount_interact_priority` 0 % PASS; `mounted_hit` 2 % FAIL again (stopped, 2 tries).
+- OPEN (new, 2 % only): `mounted_hit` run 1 broke the mount with generic reason 6 instead of RiderHit; run 2 the mount formed only on the rider's
+  client ((1, 2, 1, 512, 9) on world 1, nothing on server/carrier 1 s after the tap): an optimistic accept that the server never resolved or
+  refused. Worth a look before M8 (request loss/redundancy vs `ResolvePending` timeout). `mount_forced_reconcile` PASS at 0 and 2 %.
+- Byte table: link payload 0 B idle (third pawn unchanged during a mount), 23 B per sync state for rider and carrier while mounted.
+- Docs (subagent, checked): combat.md §3 GSTNPiggyback, §12b "As built (M7)" + `Combat.Event.Link.*`, §17e spikes, roadmap row; README "How to
+  extend"; testing.md mount scenarios; deltas marked folded; spec §13 "Acceptance status (G12)": 1 and 7 met, 2-6 partly.
+- Not run: dedicated server, host pairings, SUITE_DEFAULT/PARTS/DEFENCE x three plugin configs, headless (no code change), render-on Finding A.
+- Still open: carry load G6 (`UGSTN_GE_CarryLoad`, `scenario_mount_carry`) never built; rider attack binding; RefundAirJumps; the 2 % finding above.
+- State: .uproject = HEAD, PIE ini restored, binaries = ON2. M7 G0-G12 done with the open items above.
+- Cost: one Opus thread, ~70k context, ~40 calls, 0 builds, 2 harness editors (~35 min machine) + one Sonnet doc subagent (~145k tokens): medium.

@@ -146,3 +146,20 @@ the editor has them) and writes the report under `Saved/Logs`; poll `defence_bat
 - **Extension test.** `Plugins/GSTNExtensionTest` (test only) adds a link type and a defence step from outside both plugins; enable it in
   the local `.uproject` to build and run `GSTNExtTest.*`.
 - **Bytes.** `GSTNDefence.NP.Fragment.*` and `GSTNLink.NP.Fragment.*` assert the sizes of combat.md section 15.
+
+### Mount scenarios (M7: `SUITE_MOUNT`, `Tools/GASNPPTest/mount_scenarios.py`)
+
+`SUITE_MOUNT` (10): `mount_basic`, `mount_refused`, `mount_heavy_refused`, `dismount_drop`, `mount_interact_priority`, `dismount_predicted`,
+`mounted_hit`, `throw_rider`, `boost_jump` (both measure spike 4) and `mount_forced_reconcile` (forced reconciles on both clients around the
+mount and a throw; they must change nothing). `rider_attack` is written but not in the suite (no kit has the `Role.Rider` attack binding).
+Run `ds.defence_batch(ms.SUITE_MOUNT, module=ms, report=...)` after `ms.prepare_editor()` (writes the plugin's test kits and pair moves).
+
+- **Headless driver.** An editor process with `-nullrhi -unattended -ExecCmds="py <driver>"` (driver copied to TEMP, forward slashes, no quoted
+  path with spaces, quits by itself), as the thread's `Saved/M7xx/run.ps1 -Job harness`. The PIE ini
+  (`Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini`) must be `PlayNetMode=PIE_ListenServer`, `PlayNumberOfClients=3` for the run;
+  edit it only with NO editor of the worktree open (a running editor rewrites it on quit) and restore it afterwards. Without it every scenario
+  times out with "pawns not ready".
+- **Ready check.** `defence_batch` now waits until every pawn is keyed by its player id (`P<id>`) with the same keys on every world; before, a
+  pawn whose player state had not replicated was keyed by its actor name and a scenario's rig missed it (a setup flake of long batches).
+  A scenario that still fails at setup passes when rerun alone.
+- **Not covered.** Dedicated server, a run of the mount suite at 2 % loss after G9, `rider_attack`.

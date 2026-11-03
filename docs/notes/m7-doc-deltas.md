@@ -1,10 +1,12 @@
 # M7 doc deltas (piggyback and pair moves)
 
+Folded into combat.md / README / testing.md at G12 (M7-14). Every section below is marked "(folded at G12)"; content kept as the detailed record.
+
 Corrections to the M7 plan (`docs/architecture/plans/m7-piggyback-plan.md`, branch `claude/project-thread-wzb12r`) and spec
 (`docs/architecture/combat-m7-piggyback.md`) that the checkpoints found, collected per checkpoint, to be folded into `docs/` by G12. Where the
 spec or plan and the shipped code differ, the shipped names win. Test counts come from named logs under `Saved/Logs/`.
 
-## G0: seam audit corrections (HANDOVER 67, `docs/notes/m7-spike-report.md`)
+## G0: seam audit corrections (HANDOVER 67, `docs/notes/m7-spike-report.md`) (folded at G12)
 
 - **Y4** (initiator prediction): the `Predicted` mark is put on the initiator of **every** registered link type's hit, not only grab-like ones;
   `bInitiatorPredicts` was read by nothing. G1 makes it gate the optimistic accept only (below).
@@ -17,7 +19,7 @@ spec or plan and the shipped code differ, the shipped names win. Test counts com
   (`FGSTN_LinkRequestSide::FindKitExtension<T>()`).
 - **Y8 and R1** (the two WORSE rows): fixed by G1 items A (interact offers) and the request side's team and kit array.
 
-## G1: generic GSTNLink follow-ups (HANDOVER 69)
+## G1: generic GSTNLink follow-ups (HANDOVER 69) (folded at G12)
 
 ### Shipped names that differ from the plan and spec
 
@@ -68,7 +70,7 @@ component ticks in `TG_PostPhysics`, after both), and the mesh's original offset
 the one-session probe of G1 (`Saved/Logs/m7-g1/probe-b.log`) formed the test latch without the scenarios' link setup, so the pawns had no
 presentation component and it says nothing about the fix. OPEN for G10 (measure the parked mesh on its own client, rendering on).
 
-## G2: partner moves and parked facing (HANDOVER 76)
+## G2: partner moves and parked facing (HANDOVER 76) (folded at G12)
 
 ### Shipped names that differ from the plan and spec
 
@@ -109,7 +111,7 @@ presentation component and it says nothing about the fix. OPEN for G10 (measure 
 - SUITE_LINK, listen host + 2 clients in one editor process, 60/15 ms: `Saved/Logs/m7-g2/link-listen-0pct.log` 19/19 PASS (latch scenarios included).
 - SUITE_LINK at 2 % loss: `link-listen-2pct.log` 17/19; the two FAILs were `link_spike_client_grabs_host` (one observer correction while the link is held) and `link_spike_client_grabs_client` (3 counter steps in a forced window, limit 2), scenarios that run none of the G2 paths (a debug-formed grab; no partner move, a non-acting parked role). Rerun of both twice: `link-listen-2pct-rerun.log` 4/4 PASS.
 
-## G4: GSTNPiggyback plugin skeleton and pure core (HANDOVER 77)
+## G4: GSTNPiggyback plugin skeleton and pure core (HANDOVER 77) (folded at G12)
 
 ### Shipped names that differ from the plan and spec
 
@@ -137,7 +139,7 @@ presentation component and it says nothing about the fix. OPEN for G10 (measure 
 - Builds `build-g4-on.out` (the four plugin DLLs built, no warning from plugin files) and `build-g4-off.out` (makefile regenerated for the changed `.uproject`, nothing to recompile) both "Result: Succeeded".
 - `python Tools/Modules/check_modules.py` on the committed tree: 0 problems. The committed `.uproject` was restored byte-identical (SHA256 9C4F29DE...) and does not list the plugin.
 
-## G5: mount, dismount and drop (HANDOVER 78)
+## G5: mount, dismount and drop (HANDOVER 78) (folded at G12)
 
 ### Seam added to GSTNCombat (approved by the lead through the coordinator, 2026-11-01, option A)
 
@@ -200,7 +202,7 @@ notes assumed) and a 117 cm visible snap for 3-4 ticks, at 0 % and 2 %. `scenari
    `Weight` / `MaxCarryWeight`, the match's `FGSTN_MountRules`.
 5. The committed `.uproject` still does not list GSTNPiggyback (the brief: restore it byte-identical); enabling it in the project is the owner's call.
 
-## G3: partner credit in GSTNCombat (M7-03)
+## G3: partner credit in GSTNCombat (M7-03) (folded at G12)
 
 ### Shipped names that differ from the plan
 
@@ -212,7 +214,7 @@ notes assumed) and a 117 cm visible snap for 3-4 ticks, at 0 % and 2 %. `scenari
 | "the event carries the partner" (`FGSTN_SimEvent` has no field for it; it is GSTNInput's) | A credited hit adds a **copy** of `HitLanded` right after the attacker's, instigated by the partner's actor and tagged `Combat.Event.Hit.CreditPartner` (new native tag of GSTNCombatNP); a credited Health KO adds the same copy of `KO` (a zone KO credits nobody). `UGSTN_CombatSimComponent::FindCreditPartnerActor` resolves the id through the world subsystem. Without a credit the events are exactly the pre-G3 ones (test), so "event size unchanged" holds as "event list unchanged" |
 | Tests `GSTNCombat.Hits.Credit.{EmptyByDefault, MeterSplit, EventCarriesPartner}` | As planned, in `GSTNCombatNP/.../Tests/GSTN_CombatNPTests_Credit.cpp` (the events live in the NP module) |
 
-## G6 item 1: predicted rider exits, design of the seam (M7-03; built in M7-04, deltas at the end of this section)
+## G6 item 1: predicted rider exits, design of the seam (M7-03; built in M7-04, deltas at the end of this section) (folded at G12)
 
 Owner decision S1 (2026-11-01): the rider predicts its own exit, the server rewinds the carrier so it places the same exit. Design for the next
 thread (two edits, in this order, each its own commit):
@@ -251,7 +253,7 @@ thread (two edits, in this order, each its own commit):
 | exit capsule | The rider's capsule size comes from its root capsule component (content, fixed), as the watchdog reads it; `FExitSelf` defaults (34/88) in tests. |
 | `bPredictRiderExits` default false | true (owner decision S1); the mount type copies it into `bInitiatorPlacesExit`. |
 
-## G7: hits while mounted (M7-05, desktop)
+## G7: hits while mounted (M7-05, desktop) (folded at G12)
 
 | Plan / spec | Shipped |
 |---|---|
@@ -264,7 +266,7 @@ thread (two edits, in this order, each its own commit):
 | credit "from the attacker's link and ActivePair" | From the attacker's mount link per `FGSTN_MountRules::DefaultCredit` (OwnerOnly default = none; Split = share 128). ActivePair is G8. Partner meter requests still applied by nobody (M7-03 OPEN 1) |
 | rules "absent = defaults" | `FindRules` reads the rules asset's `FGSTN_MountRules` extension for scales, arc and credit, else the defaults |
 
-## G8: pair-move data (M7-07, desktop)
+## G8: pair-move data (M7-07, desktop) (folded at G12)
 
 | Spec / plan | Built |
 |---|---|
@@ -278,7 +280,7 @@ thread (two edits, in this order, each its own commit):
 | `Interruptible` partner | `bPartnerLocksCommands` is forced false for it; "a hit replaces its part" is GSTNLink's forced-timeline behaviour (not re-tested here) |
 | partner requirements read provider tags (OPEN since G2) | Still OPEN: tags only `PartnerRequirements` names are not in `FGSTN_LinkRequestTags` and read absent. Needed by G9 content only if a reference move requires such a tag |
 
-## G9 part A: the exit launch of a pair move (M7-08, desktop)
+## G9 part A: the exit launch of a pair move (M7-08, desktop) (folded at G12)
 
 G9 split in two: part A (this) is the runtime the reference moves miss; part B is the content (`PM_ThrowRider`, `PM_BoostJump`: four
 abilities with timelines, the definitions, the test kit's set), `scenario_throw_rider` / `scenario_boost_jump` and spike 4.
@@ -291,7 +293,7 @@ abilities with timelines, the definitions, the test kit's set), `scenario_throw_
 | boost "rider's `JumpVelocity × BoostMultiplier`" | One `UpSpeed` on the definition: the placer reads no Mover settings. Content authors the product |
 | `RefundAirJumps`, thrown rider's sweeping hitbox, `ThrownActionableFrame` | Part B (abilities and timelines) |
 
-## G9 part B: the reference pair moves as test content (M7-09, desktop)
+## G9 part B: the reference pair moves as test content (M7-09, desktop) (folded at G12)
 
 | Spec / plan | Built |
 |---|---|
@@ -305,7 +307,7 @@ abilities with timelines, the definitions, the test kit's set), `scenario_throw_
 | `UGSTN_GA_PairMove::PairMove` names the definition | Left empty on the test classes (a class default cannot name an asset of a setup script); validation runs on the definitions |
 | `WriteMountKitData` replaced the whole mount entry | Now changes only the two weights, so a rerun of `prepare_editor` keeps the pair moves |
 
-## M7-11: the Tags track's consumer (GSTNCombatNP, desktop)
+## M7-11: the Tags track's consumer (GSTNCombatNP, desktop) (folded at G12)
 
 | Spec / plan | Shipped |
 |---|---|
@@ -313,7 +315,7 @@ abilities with timelines, the definitions, the test kit's set), `scenario_throw_
 | boost_jump "braced" probe read `combat.inTimeline` (M7-10) | Reads `Combat.Lock.Movement` on the carrier's ASC again, plus "the brace lock is gone on every world" (no leak) |
 | Known edge | A timeline whose table set expired on this machine between two frames contributes nothing to the input side, so its tags would stay granted (no case in the tests; how long a machine keeps old table sets was not checked) |
 
-## G11 (M7-12): the editor module (desktop)
+## G11 (M7-12): the editor module (desktop) (folded at G12)
 
 | Spec / plan | Shipped |
 |---|---|
@@ -322,7 +324,7 @@ abilities with timelines, the definitions, the test kit's set), `scenario_throw_
 | "`Debug.Anchor` panel", "`gstn.Combat.Debug.Anchor 1` draws server vs client anchor" (9) | No panel: a core ticker of the editor module draws, in every PIE client world, the parked role's snapshot anchor of that client (green) and of the server (red) with the distance. Each world shows its own latest step: the gap includes the frame offset while the carrier moves. PIE only (needs all worlds in one process) |
 | "a log line per link transition" (9) | `gstn.Combat.Debug.LinkLog 1`, same ticker: one `LogGSTNPiggybackEditor` line per change of a pawn's shown Body link (type, role, phase, serial) per world. Editor only: a `-game` client has no such line. Generic over link types (GSTNLink untouched) |
 
-## G10 (M7-13): presentation, anim layers, rider IK (desktop)
+## G10 (M7-13): presentation, anim layers, rider IK (desktop) (folded at G12)
 
 | Spec / plan | Shipped |
 |---|---|

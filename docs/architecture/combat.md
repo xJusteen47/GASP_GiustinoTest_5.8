@@ -99,6 +99,15 @@ The destructible-parts plugin `Plugins/GSTNParts/` (M4b; usage in its README, de
 
 The presentation module (damage material, hidden bones, chunks) is not built (P10-P12 pending an owner decision). Sample content lives in `Plugins/GSTNParts/Content/Samples` (`Tools/GAS/setup_parts_sample_content.py`).
 
+The piggyback plugin `Plugins/GSTNPiggyback/` (M7; usage in its README, spec [combat-m7-piggyback.md](combat-m7-piggyback.md), deviations in `docs/notes/m7-doc-deltas.md`) is a mount link type and the pair moves on top of `GSTNLink`. Optional, off by default, and nothing outside it names it (`Tools/Modules/check_modules.py` is the grep gate); its `.uplugin` lists `GSTNLink`, `GSTNCombat`, `GSTNInput`, `GSTNCombatGAS` and `GSTNCombatNP`:
+
+| Module | Depends on | Contents |
+|---|---|---|
+| `GSTNPiggybackCore` (Runtime) | GSTNCombatCore, GSTNLinkCore | **Pure, no fork**: native tags (the three command slots come from the plugin's ini), mount data (`FGSTN_MountKitExtension`, `FGSTN_MountRules`), pair-move enums, `UGSTN_MountUtils` (eligibility, carry ratio, anchor, exit candidates and launch, credit split). |
+| `GSTNPiggybackRuntime` (Runtime) | Core, GSTNInputCore, GSTNCombatGAS/NP, GSTNLinkGAS/NP, the fork | The mount type (made by code), `UGSTN_LinkRule_Mount`, `UGSTN_Placer_Mount`, mount/dismount/drop abilities and their loadout extension, `UGSTN_HitStep_MountHit`, the pair-move definition/set/registry, test pair-move abilities, rider IK targets. |
+| `GSTNPiggybackEditor` (Editor) | Runtime, GSTNLink*, GSTNCombatNP, DataValidation | Pair-move factories and validators, PIE debug (`gstn.Combat.Debug.Anchor`, `LinkLog`, `MeshLog`). |
+| `GSTNPiggybackTests` (DeveloperTool) | all | Automation tests `GSTNPiggyback.*`; never ships. |
+
 A future `GSTNCombatStockGAS` would replace only `GSTNCombatNP` (same data, simulation through prediction keys).
 
 *Content versioning:* `.gitignore` ignores `Plugins/**/Content/`. When the plugin ships default assets (standard slot
@@ -916,6 +925,44 @@ extension points: [Plugins/GSTNLink/README.md](../../Plugins/GSTNLink/README.md)
   server branch: the target's own pipeline accepts (the same code on every machine) and only breaks are server-decided. Role-only actions
   are plain bindings on `Combat.Link.Role.*`, as planned.
 
+### As built (M7, plugin `GSTNPiggyback`)
+
+Built on `GSTNLink` for the mount and the two reference pair moves; details and extension points: [Plugins/GSTNPiggyback/README.md](../../Plugins/GSTNPiggyback/README.md),
+spec `combat-m7-piggyback.md`, deviations `docs/notes/m7-doc-deltas.md`. Where the spec and the code differ, the code wins.
+
+- **Mount, dismount, drop.** The mount is a Body link type made by code (`FGSTN_MountLinkType`): rider = initiator, parked on the carrier's root
+  + offset, still acting; carrier = target, acting. Rules: `UGSTN_LinkRule_Team` (allies) then `UGSTN_LinkRule_Mount` (pure eligibility on the
+  request context; weights are kit data, `FGSTN_MountKitExtension`). Interact offer `Interact.Target.Mount` at priority 50 for the Ally
+  relationship (grab: 100, Enemy/Neutral). The mount hitbox needs a generic seam in the combat core: `FGSTN_HitVariant::bForceHittable` (an ally
+  hit past the match rules; carried in bit 0x80 of the inbox relationship byte). Dismount and Drop are Release keys; the role names the reason.
+- **Optimistic accept.** `bInitiatorPredicts` gates it: the rider attaches at request + `PendingFrames`, before the response
+  (`StepOptimisticAccept`); the response confirms it, an accepted mount costs the rider's client no rollback. An unseen refusal costs it 3
+  rollbacks and a visible snap of about 1 m for 3-4 ticks (measured, S3). Rider exits are predicted (`bInitiatorPlacesExit`): the rider places
+  its own exit from the combat model's lag-compensated view (`GetViewSnapshot()`), the watchdog copies it; a carrier-caused or watchdog break
+  stays server-given.
+- **Carry load** (weight effect on the carrier's tuning): NOT built; `ComputeCarryRatio` and the ratio payload exist, nothing applies them.
+- **Hits while mounted.** `UGSTN_HitStep_MountHit` after `ComputeKnockback`: reaction scales for the rider, break reasons `RiderHit` /
+  `CarrierHit` above the thresholds, mount partners never hit each other, credit per `DefaultCredit`. Partner credit is generic in the combat
+  core (`FGSTN_HitCredit`, `PartnerShare` 0..255, event copy tagged `Combat.Event.Hit.CreditPartner`); nobody applies the partner's meter yet.
+  The rider's own attack binding (`Role.Rider`) is in no kit yet.
+- **Pair moves.** Definition `UGSTN_PairMoveDefinition` (authored `PairMoveId`, abilities, partner offset, outcome, exit mode and launch,
+  optional `TriggerCommand`), a set per kit, a registry that is `GSTNLink`'s action provider (`PartnerMove` key, inbox, forced partner
+  timeline). The exit launch is the mount placer's velocity. Reference moves are test content (not designed abilities): `PM_ThrowRider` and
+  `PM_BoostJump`. The partner's reaction is visible about 280-300 ms later on its own screen (S4, over the 150 ms gate): forward prediction
+  for pair partners is deferred by the owner to a milestone after M8.
+- **Tags track consumer.** `UGSTN_CombatSimComponent::ProjectTimelineTags` (generic, `GSTNCombatNP`) grants the loose tags of open
+  `FGSTN_TimelineTrack_Tags` windows as the difference between input and output state, so a rolled-back frame needs no cache.
+- **Presentation.** Generic in `GSTNLink`: `PresentationBlendSeconds` (mount 0.1 s), a role anim layer per shown role tag
+  (`AnimsByRole`, `OnShownRoleChanged`), mesh asserted every tick (fixes the S2 finding B); rider IK targets from carrier sockets
+  (`GetRiderIKTargets`), no anim blueprint content shipped.
+- **Tooling.** Editor module: pair-move factories, `UGSTN_PairMoveAbilityValidator`; PIE cvars `gstn.Combat.Debug.Anchor`, `.LinkLog`, `.MeshLog`.
+  Harness `mount_scenarios.SUITE_MOUNT` (testing.md).
+- **Shared tag subtree.** `Combat.Event.Link.*` is shared: `GSTNLink` owns `PartnerMoveAborted`, the piggyback plugin adds `Mounted` and
+  `MountRefused`; each plugin's tag test checks only its own list. Break reasons `Dismount`, `Drop`, `Outcome`, `CarrierHit`, `RiderHit`
+  are the plugin's.
+- **Open.** Carry load, rider attack binding, `RefundAirJumps`, thrown land-cancel, carrier shield over the rider, remount cooldown,
+  per-carrier socket/exit data (the exit query and request context carry no kit), dedicated-server runs.
+
 ## 13. Many enemies (40+)
 
 Two paths with the same Core logic:
@@ -1025,6 +1072,17 @@ hurtbox (failed for a tilting shield; passes after the owner's fixed-bubble deci
 read in F10-F14 from the harness: formation, parked follow and break on every world in the three pairings, one correction at link start
 and end; at 2 % loss with a host at tick rate no unforced correction (HANDOVER 61).
 
+### 17e. M7 spike results
+
+Full report `docs/notes/m7-spike-report.md`. S0 seam audit: two seams worse than planned (interact offers, request side), fixed in G1.
+S1 anchor agreement: a client rider's anchor equals the authority's of about 0.3 s earlier (the carrier is an interpolated proxy there), so
+the plan's fallback applied; the owner decided (2026-11-01) that rider exits are predicted with the server rewinding the carrier (G6 item 1).
+S2 presentation: no pop at forced reconciles; finding A (fixed second step) and B (mesh on its own parked capsule on the rider's client) were
+fixed in `UGSTN_LinkPresentationComponent`; B re-measured fixed (G10), A is a constant term of the measure (127 cm median on every world,
+no client-only step). S3 optimistic mount: accepted costs the rider 0 rollbacks and the carrier's client 1 correction; an unseen refusal 3
+rollbacks and a 117 cm snap (0 % and 2 %). S4 partner-move delay: about 280 ms (throw) and 300 ms (boost), over the 150 ms gate:
+forward prediction for pair partners is a separate milestone after M8.
+
 Parts (P9): a part's damage is `Damage x (1 - Thickness) + DeepDamage x Thickness` once the penetration band lets the hit through (`DeepDamage` defaults to the hit's `Damage`, `Thickness` to 0), so hardness decides whether a hit gets in and thickness how deep it goes.
 
 ## 18. Roadmap
@@ -1042,7 +1100,7 @@ where the implementation differs. Milestones are sequential: each spec assumes t
 | M4b | Destructible parts | `Plugins/GSTNParts` (Core, GAS, NP, Editor): part sets, penetration table, break effects, `PartResolve` step, sync fragment, restore, grab gate, thickness, validator and balance report, sample content. **Status: logic complete, presentation P10-P12 pending.** | plugin README, `docs/notes/m4b-doc-deltas.md` |
 | M5 | Editor | Timeline editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M6 | Defence and links | Shield, parry, tech, SDI; link system spike, links, grabs/throws. `Plugins/GSTNDefence`, `Plugins/GSTNLink` (Core, GAS, NP; optional), test content, harness suites, and a test-only extension plugin. **Status: done (F0-F14, HANDOVER 61); open items listed there.** | [combat-m5-m9.md](combat-m5-m9.md), the plugin READMEs, `docs/notes/m6-doc-deltas.md` |
-| M7 | Piggyback and pair moves | Mount link, riding mode, role-only bindings, carry load, pair moves. | [combat-m5-m9.md](combat-m5-m9.md) |
+| M7 | Piggyback and pair moves | Mount link, riding mode, role-only bindings, carry load, pair moves. `Plugins/GSTNPiggyback` (Core, Runtime, Editor, Tests; optional). **Status: done except carry load and the rider attack binding (G12, acceptance status in the spec §13).** | [combat-m7-piggyback.md](combat-m7-piggyback.md), the plugin README, `docs/notes/m7-doc-deltas.md` |
 | M8 | Minions | Server subsystem, LOD, compact replication. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M9 | Stock GAS adapter | Optional. | [combat-m5-m9.md](combat-m5-m9.md) |
 

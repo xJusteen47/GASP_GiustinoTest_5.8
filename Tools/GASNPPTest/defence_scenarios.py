@@ -968,13 +968,20 @@ def defence_batch(names=None, lag=60, jitter=15, loss=0, settle=3.0, ready_timeo
         # Listen: host + 2 clients, three pawns everywhere. Dedicated (setup_editor(True, 'dedicated')): a server with no pawn of its own and no
         # local input, so two pawns per world and no input readiness asked of the server world
         dedicated = g._cfg.get('mode') == 'dedicated'
+        # Every pawn keyed by its player id ('P<id>') on every world, the same keys everywhere: a pawn whose player state has not replicated
+        # yet is keyed by its actor name (g.comps), and a scenario that builds its rig then misses that pawn on another world (M7-13 setup
+        # flake of long batches: KeyError on 'BP_GASNPP_TestCharacter_C_0' / 'P<id>', teams not applied, the mount offer read as a grab)
         ws = g.worlds()
         if len(ws) < 3:
             return False
+        keys = None
         for i, w in enumerate(ws):
             c = g.comps(w)
-            if len(c) < (2 if dedicated else 3):
+            if len(c) < (2 if dedicated else 3) or not all(k.startswith('P') and k[1:].isdigit() for k in c):
                 return False
+            if keys is not None and set(c) != keys:
+                return False
+            keys = set(c)
             if (i > 0 or not dedicated) and not any(json.loads(x.get_state_snapshot()).get('inputReady') for x in c.values()):
                 return False
         return True
