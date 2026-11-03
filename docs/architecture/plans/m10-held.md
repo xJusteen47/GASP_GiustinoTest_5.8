@@ -5,7 +5,7 @@ Plan only, no code. Checkpoints are named **G0..G13**. One checkpoint = one comm
 M6 defence and links, and the M7 follow-ups **as shipped** on `feature/gas-npp-5.8` (audited at 60da6fa), not as specified: where the two
 differ, the shipped names win and the spec is corrected in `docs/notes/m10-doc-deltas.md` (created in G0).
 
-Status: **draft for the owner** (2026-11-03). Section 6 has the open questions (Italian); section 5 the defaults applied when no answer
+Status: **draft for the owner** (2026-11-03); owner answered Q4, Q5, Q7, Q9 at 15:51 and added the deferred single-use/throwable weapon idea. Section 6 has the open questions (Italian); section 5 the defaults applied when no answer
 comes. Every default is data (definition, kit or rules fields), except the three marked *structural* in section 6.
 
 Sources (short ids used below):
@@ -189,12 +189,15 @@ Opus medium for design/hard code, Sonnet for data, tests and harness. Total M10 
 - `UGSTN_ObjectDefinition` (M10 §6, without `HeldWeapon` until G10), `UGSTN_ObjectComponent` (replicated state: `Idle/Held/Flying/Landed/
   Broken`, holder ref, link serial, charges; dormant at rest), `UGSTN_ObjectSubsystem` (object table = the `Object` kind's resolver of G1,
   record registration of G2, pool).
-- `Held` link type asset (channel Hand, no parked role, break rules: hitstun on holder → drop, KO, grabbed, distance safety, object
-  destroyed; `DropVelocity`), `UGSTN_LinkRule_Held` (state, kind allow list, `MaxCarryWeight`, free hand, re-pickup lock).
+- `Held` link type asset (channel Hand, no parked role, break rules: hit on holder → drop **per object** (owner, Q4: "depends on damage,
+  knockback and the specific object"): `FGSTN_DropOnHitRule` on the object definition with `MinDamage`, `MinKnockback` and an optional
+  hit-type/tag filter, evaluated by a small link hit step after `ComputeKnockback`; KO, grabbed, distance safety, object destroyed;
+  `DropVelocity`), `UGSTN_LinkRule_Held` (state, kind allow list, `MaxCarryWeight`, free hand, re-pickup lock).
 - `UGSTN_GA_Pickup` (`Command.Link.Pickup` = Hold(Interact, `HoldFrames` 15), requirements `Interact.Target.Pickup` and not carrying; target
   = focus id), predicted attach, refusal pops back. **Race**: earliest request frame, then lower entity id; loser fumble cue.
   `UGSTN_GA_Drop` (`Command.Link.Drop`), placement socket.
-- Tests (`GSTNHeld.Runtime.*` with `FGSTN_FakeLinkHost`): lifecycle pickup → hold → drop → pickup, break rules table, race determinism,
+- Tests (`GSTNHeld.Runtime.*` with `FGSTN_FakeLinkHost`): lifecycle pickup → hold → drop → pickup, break rules table (drop-on-hit below and
+  above each threshold, per object), race determinism,
   events once.
 - Harness: `scenario_pickup_drop`, `scenario_pickup_race`, `scenario_drop_on_hit`, `scenario_held_grabbed` (matrix rows of M10 §12 that
   exist today: holder grabbed, holder grabs with Light/Medium, rider picks up, carrier refused), `scenario_object_dormancy`.
@@ -213,12 +216,19 @@ Opus medium for design/hard code, Sonnet for data, tests and harness. Total M10 
 
 - `FGSTN_ProjectileTrack` (registered track type; editor draws it generically), `ReleaseLink` event, `UGSTN_GA_Throw`
   (`Combat.State.Throwing`, any attack command with `Combat.Link.Role.Holder` + size tag; fumble if interrupted before release).
+- **Aim** (owner, Q5: "if we are aiming it follows the aim"): `AimPolicy = StickOrAimWhenAiming` (default) uses the simulated
+  `AimYaw/AimPitch` of the current command (combat.md §11.6, converged shoulder aim of camera.md §6) while the holder is aiming
+  (`Camera.Request.Aim` granted by the aim ability), else the stick direction. Origin = the character's baked hand socket, never the
+  camera. The test kit sets `bSendCameraAim` (camera.md §6 validator).
+- **Friendly fire** (owner, Q7): thrown objects hit player allies **by default**; the game mode's rules can turn it off (relationship
+  variant of combat.md §12.3, data on `UGSTN_CombatRules`).
 - Server: projectile spawned from the replicated release; `UGSTN_ObjectSubsystem` steps it after the fighters' frame, sweeps world and
   hurtboxes (step snapshot), posts hits with `PostHit` (Z8) stamped F, drained at F+1; per-throw hit ring, `MaxHits`; credit = detached
   instigator (G3); impact behaviours `Break/Bounce/Stick/Land` (`Explode` = a GE, data); `MaxActiveProjectiles` 32, pooled; events only on
   the wire (~36 B throw, ~16 B impact).
 - Tests: throw lifecycle on the fake host, impact behaviours, credit after thrower leaves, pool cap.
-- Harness: `scenario_pickup_throw_hit` (c1 throws at c2: state, damage, knockback, credit equal; one rollback on c2),
+- Harness: `scenario_pickup_throw_hit` (c1 throws at c2: state, damage, knockback, credit equal; one rollback on c2), `scenario_throw_aimed`
+  (shoulder aim at a target off the stick direction: projectile follows the aim, equal on server and client), friendly fire on/off by mode,
   `scenario_throw_forced_reconcile` (forced rollback over the release frame: exactly one projectile, one event), `scenario_throw_bounce`.
 - Gate: as G5, plus no extra reconcile on the thrower.
 
@@ -234,12 +244,13 @@ Opus medium for design/hard code, Sonnet for data, tests and harness. Total M10 
 - `FGSTN_ThrownBodyExtension` in the M6 throw key's `ThrowHit.ExtensionData` (Z9; no edit of `GSTNLink`), `FGSTN_ThrownOutcome` written by
   the `Throw` resolution, applied by this plugin's `IGSTN_OutcomeExtensionApplier` (Z10): `Combat.State.Thrown` for the flight, a
   `ThrownBody` hitbox generated by the thrown entity's own tick extension (`Space = Root`), credit to the thrower, `Combat.Source.ThrownEnemy`;
-  the thrown fighter ignores its own team while `ThrownBody` is active; not hittable while held or flying (default); surface impact =
-  M4's `EGSTN_ImpactOutcome` (Z11), not `ImpactBehaviour`; damage weight from `UGSTN_PartMath::EffectiveWeight` when `GSTNParts` is on.
+  the thrown fighter ignores its own team while `ThrownBody` is active; not hittable by attacks while held or flying (owner, Q9); surface
+  impact = M4's `EGSTN_ImpactOutcome` (Z11), not `ImpactBehaviour`, and **the thrown body takes damage from that impact** (owner, Q9: splat on
+  the ground or bounce off a wall), the same surface-impact damage a launched enemy takes, data on the hit/entity/surface rules; damage weight from `UGSTN_PartMath::EffectiveWeight` when `GSTNParts` is on.
 - The grab gate is untouched (`Combat.Part.GrabLocked`, `Combat.Immunity.Grab`).
 - Tests: applier goldens, team ignore, effective weight, extension ignored with a warning when `GSTNHeld` is off (already in `GSTNLink`).
 - Harness: `scenario_throw_enemy` (c1 grabs a part-broken test enemy and throws it at two others: hits with credit to c1, wall impact per
-  data; same with host as thrower). The **minion** half waits for M8.
+  data with self-damage on splat and on bounce, no damage from attacks in flight; same with host as thrower). The **minion** half waits for M8.
 - Gate: as G5 + `SUITE_PARTS` with `GSTNHeld` on and off.
 
 ### G10 *Optional* held weapons (M10b; only if the owner answers Q2 "yes")
@@ -253,6 +264,19 @@ Opus medium for design/hard code, Sonnet for data, tests and harness. Total M10 
 - `Combat.State.CatchWindow` from the timeline `Tags` track, pipeline step `Catch` before damage, judged with `PositionAt` at the catcher's
   rewound view time; deflect step `ProjectileInteraction`; re-ownership, `ChainDepth`, assists.
 - Harness: `scenario_catch`, `scenario_deflect`.
+
+### Deferred (owner hypothesis, 2026-11-03 15:51): throwable support weapons and single-use weapons
+
+Not planned as a gate yet; recorded so G10 and the loadout work (M3 loadout, [combat-loadout-mods.md](../combat-loadout-mods.md)) leave room.
+
+- **Throwable support weapons**, possibly through an ability: the support weapon becomes a projectile (`FGSTN_ProjectileTrack` with
+  `bUseHeldObject` reading the weapon's object definition), so it reuses G7 entirely; what is new is the loadout side (the slot empties,
+  and how the weapon is recovered).
+- **Single-use weapons** (example: a special sword summoned as an object that vanishes after one move): it appears in the hand and
+  occupies the **support-weapon slot** as usual. If a support weapon is already equipped, the single-use one is held anyway. **Switching**
+  to the kit's main weapon or to the support weapon **drops** the single-use one. Likely shape: a held weapon (G10) with `HeldCharges` = 1
+  and `bVanishOnEmpty`, summoned by an ability instead of picked up, and a loadout rule "weapon switch ends the Held link".
+- Needs G10 first and a short loadout note (slot ownership while a summoned weapon is held); ask the owner before it becomes a gate.
 
 ### G12 Presentation, debug, editor
 
@@ -282,11 +306,11 @@ Opus medium for design/hard code, Sonnet for data, tests and harness. Total M10 
 | M10.2 | Four size classes as tags; test content uses Light and Medium only |
 | M10.3 | Held weapons not built in this plan (G10 optional) |
 | M10.5 | Pickup race: earliest request, then lower id; loser fumble |
-| M10.6 | Any hitstun on the holder drops the object |
-| M10.7 | Stick direction; no charge, no camera aim in the test kit (both are ability fields) |
+| M10.6 | **Answered (Q4)**: drop depends on damage, knockback and the object (`FGSTN_DropOnHitRule` per definition); test objects: Light drops on any hitstun, Medium above a knockback threshold |
+| M10.7 | **Answered (Q5)**: follows the aim while aiming (camera.md §6), else the stick; no charge in the test kit |
 | M10.8 | Damage = curve on impact speed × size multiplier, curve flat by default (reads as "fixed per type") |
 | M10.10 | One hit per target per throw; `MaxHits` 1 (no pierce) |
-| M10.11 (rest) | Thrown objects ignore player allies; friendly fire is a mode rule |
+| M10.11 (rest) | **Answered (Q7)**: thrown objects hit player allies by default; the mode can turn it off |
 | M10.12 | Credit to the thrower, snapshot at release (survives death and disconnect) |
 | M10.13-14 | Catch and deflect not built (G11 optional) |
 | M10.15-16 | Rider may pick up and throw (Hand channel); carrier refused; grabbed holder drops; no grab while holding Medium+ |
@@ -294,7 +318,7 @@ Opus medium for design/hard code, Sonnet for data, tests and harness. Total M10 
 | M10.19 | Separate optional plugin (this plan) |
 | M10.20 | Fighters in G9; minions after M8 |
 | M10.21 | Thrown enemy uses M4 surface rules; props use `ImpactBehaviour` |
-| M10.22 | Thrown enemy not hittable while held/flying; hits any enemy of the thrower, its own team ignored |
+| M10.22 | **Answered (Q9)**: not hittable by attacks while held/flying, but damaged by its own surface impact (splat, wall bounce); hits any enemy of the thrower, its own team ignored |
 
 ## 6. Domande per il proprietario (max 10, in italiano)
 
@@ -309,12 +333,16 @@ Le prime tre sono strutturali (cambiano l'ordine o il perimetro); le altre sono 
    simulazione (I2) non c'è. Va bene un passo intermedio piccolo (G2: gli oggetti a terra entrano nel probe della presa che già esiste),
    oppure vuoi costruire I2 completo prima di M10 (circa $15-25 in più)? *Consiglio:* passo intermedio; I2 lo sostituisce poi con gli stessi dati.
 4. Se chi porta un oggetto viene colpito, l'oggetto cade **sempre** (qualsiasi hitstun) o solo sopra una soglia di colpo? *Default:* sempre.
+   **Risposta (03/11, 15:51):** dipende dal danno, dal knockback e dall'oggetto specifico. → soglie per oggetto (G5).
 5. Il lancio va nella direzione dello stick, oppure vuoi anche lancio caricato (tenendo premuto) o mirato con la camera? *Default:* stick.
+   **Risposta (03/11, 15:51):** se stiamo mirando segue la mira (già pianificata, camera.md §6, combat.md §11.6). → G7.
 6. Il danno di un oggetto lanciato: fisso per tipo di oggetto, o cresce con la velocità e la taglia? *Default:* curva piatta = fisso per tipo,
    modificabile per oggetto.
 7. Gli oggetti lanciati possono colpire **altri giocatori alleati** (fuoco amico)? *Default:* no, attivabile per modalità.
+   **Risposta (03/11, 15:51):** sì di default, ma dipende dalla modalità. → G7.
 8. Chi cavalca (M7) può raccogliere e lanciare oggetti? E chi porta un rider? *Default:* il rider sì, il carrier no.
 9. Un nemico lanciato può essere colpito mentre è in mano o in volo? *Default:* no; colpisce tutti i nemici del lanciatore, anche i suoi alleati.
+   **Risposta (03/11, 15:51):** no, ma può farsi danno quando impatta il suolo (splat) o rimbalza su una parete. → G9.
 10. Quanti oggetti in volo insieme al massimo, e gli oggetti a terra spariscono o ricompaiono dopo un po'? *Default:* 32 in volo; a terra
     restano finché il pool non li ricicla; ricomparsa decisa per oggetto.
 
