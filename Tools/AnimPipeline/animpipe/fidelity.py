@@ -5,7 +5,8 @@ A pose in the card points at the owner's pose it comes from:
     tool "casc_to_author..." (default): file = Cascadeur control points ({frame: {joint: xyz}}); the expected author pose
          is casc_to_author.convert of that frame (rescale on, owner lengths averaged over the file's frames).
     tool "casc-import": file = bones read from Cascadeur ({frames: {frame: bones}}, cascadeur.load_bones_json); the
-         card pose solved by the Poser must match those bones part by part (cascadeur.part_delta).
+         card pose solved by the Poser must match the owner's ROTATIONS on the rig's bone lengths, part by part
+         (cascadeur.part_delta: 1 deg, and 0.5 cm after the length normalization). Bone length is never compared.
     derived: "<why>"  the pose is built from an owner pose on purpose (a held charge): listed, not compared.
   poses[i].origin = "owner" (CP4 `casc-import --owner-keys`): source is then mandatory.
 Never compared (the pipeline's on every move, README): fingers, wrist_out, hand_rot, pelvis.loc (height). Any other
@@ -62,19 +63,27 @@ def compare_pose(card_pose, want, keep=()):
 
 
 def _bones_errors(c, frame, path, sframe, keep):
+    """The card pose vs the owner's rotations put on the rig's fixed bone lengths (coordinator 2026-11-03: Cascadeur
+    stretches bones 1-2 cm, a known limit; length is normalized away, never compared). Target = the owner's local
+    rotations (author.local_bones) solved with the card's pelvis height and hands; then rotations <= 1 deg and
+    positions <= 0.5 cm per part, relative to the part's parent. wrist_out is left out of both sides."""
     from animpipe.cascadeur import load_bones_json, part_delta, PARTS, PART_CM, PART_DEG
-    from animpipe.author import Poser
+    from animpipe.author import Poser, local_bones
     want = load_bones_json(path).get(int(sframe))
     if want is None:
         return [(f"frame {sframe}", float("inf"), "missing in file", 0)]
-    P, R = Poser().solve(c["author"]["poses"][str(frame)])
+    pose = {k: v for k, v in c["author"]["poses"][str(frame)].items() if k != "wrist_out"}
+    poser = Poser()
+    P, R = poser.solve(pose)
+    Pw, Rw = poser.solve({**pose, "bones": local_bones(want[1])})
     out = []
     for part in PARTS:
         if part in keep:
             continue
-        cm, dg = part_delta(P, R, *want, part)
+        cm, dg = part_delta(P, R, Pw, Rw, part)
         if cm > PART_CM or dg > PART_DEG:
-            out.append((part, round(max(cm, dg), 2), "cm" if cm > PART_CM else "deg", PART_CM if cm > PART_CM else PART_DEG))
+            rc, rd = cm / PART_CM, dg / PART_DEG          # report the worse of the two in its own unit
+            out.append((part, round(cm, 2), "cm", PART_CM) if rc >= rd else (part, round(dg, 2), "deg", PART_DEG))
     return out
 
 

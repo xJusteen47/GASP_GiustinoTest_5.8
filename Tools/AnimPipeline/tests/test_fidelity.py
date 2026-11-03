@@ -1,6 +1,6 @@
 """source_fidelity (animpipe/fidelity.py) on synthetic cards: the owner-pose conversion is stubbed (the real one needs
 sheets/raw, desktop only). Run: python tests/test_fidelity.py (or python -m pytest tests)."""
-import copy, os, sys
+import copy, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from animpipe import fidelity as F
 
@@ -62,6 +62,32 @@ def test_no_rig_is_na():
     F._rig_ok = lambda: False
     ok, line, _ = F.check(_card())
     assert ok is None and "n/a" in line
+
+
+def test_owner_bones_whole_and_stretch_ignored():
+    """casc-import poses (coordinator 2026-11-03): the owner's rotations are stored whole (`bones`) and compared on
+    the rig's bone lengths. A Cascadeur stretch (bones 2 cm longer) never fails; a rotation the card lacks (a thigh
+    twist) fails until the pose carries the owner's bones; a 2 deg change to them fails again."""
+    import tempfile, numpy as np
+    from animpipe.author import Poser, local_bones, rv
+    from animpipe import cascadeur as K
+    if not os.path.exists(os.path.join(os.path.dirname(F.__file__), "..", "sheets", "raw", "idle_neutral_legbones.json")):
+        print("skip (no rig data)"); return
+    po = Poser(); pose = {"spine": [-10, 0, 0], "leg_l": {"foot": [10, 5, -85], "pole": [10, 60, -40]}}
+    P, R = po.solve(pose)
+    R["thigh_l"] = R["thigh_l"] @ rv([0, 10, 0])               # twist about the thigh: no author field holds it
+    Pw, Rw = po.solve({**pose, "bones": local_bones(R)})
+    Pw = {b: Pw[b] + (Pw[b] - Pw["pelvis"]) * 0.03 for b in Pw}
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    json.dump({"frames": {"0": {b: [list(map(float, Pw[b])), K.m2q(Rw[b])] for b in Pw}}}, tmp); tmp.close()
+    c = {"author": {"poses": {"0": dict(pose)}}}
+    assert F._bones_errors(c, 0, tmp.name, 0, ()), "a missing thigh twist must fail"
+    c["author"]["poses"]["0"]["bones"] = local_bones(Rw)
+    assert F._bones_errors(c, 0, tmp.name, 0, ()) == [], "owner rotations whole + stretch: must pass"
+    b = c["author"]["poses"]["0"]["bones"]; b["calf_l"] = list(K.m2q(K.q2m(b["calf_l"]) @ rv([2, 0, 0])))
+    bad = F._bones_errors(c, 0, tmp.name, 0, ())
+    assert bad and bad[0][0] == "leg_l" and bad[0][2] == "deg", bad
+    os.unlink(tmp.name)
 
 
 if __name__ == "__main__":

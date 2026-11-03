@@ -23,7 +23,7 @@ import copy, glob, json, math, os, shutil, time
 import numpy as np
 
 from animpipe import card as C
-from animpipe.author import Poser, PARENT, SPINE, NECK, rv, frames as author_frames
+from animpipe.author import Poser, PARENT, SPINE, NECK, rv, local_bones, frames as author_frames
 
 PART_CM, PART_DEG = 0.5, 1.0     # same tolerance as the approved-pose locks (locks.py)
 FIT_CM = 1.0                     # owner's 1 cm round-trip rule
@@ -280,6 +280,14 @@ def merge(c, bones, unlock=(), poser=None, ref=None):
             rep["flag"].append(f)
             d = {bn: round(float(np.linalg.norm(Pt[bn] - Pn[bn])), 2) for bn in RESID_BONES if bn in Pt and bn in Pn}
             rep["frames"][f]["worst"] = dict(sorted(d.items(), key=lambda x: -x[1])[:6])
+        if pose.get("bones"):
+            # an owner pose carries his rotations whole: a part changed in Cascadeur drops its bones so the fitted
+            # fields drive it (casc-import --owner-keys puts the new whole rotations back)
+            for part in changed:
+                for bn in PARTS[part][1]:
+                    pose["bones"].pop(bn, None)
+            if not pose["bones"]:
+                pose.pop("bones")
         poses[str(f)] = pose
         for p in c["poses"]:
             # a Cascadeur-points source (casc_to_author) described the pose before this rewrite: left in place check
@@ -337,7 +345,7 @@ def import_bones(card_path, bones, opt, ref=None, fbx=""):
         ok = sorted(int(k) for k in str(opt["owner-keys"]).split(",") if k.strip()) or sorted(bones)
         if "dry" not in opt:
             rep["owner_refs"] = save_owner_refs(new, bones, ok, fbx)
-        mark_owner_sources(new, set(ok), owner_refs_rel(new))
+        mark_owner_sources(new, set(ok), owner_refs_rel(new), bones)
         rep["frames"].update({f: rep["frames"].get(f, {"parts": {}, "sources": "owner"}) for f in ok})
     out = os.path.join(_out(), f"{c['move']}_casc_import.json")
     json.dump(rep, open(out, "w"), indent=1)
@@ -427,12 +435,16 @@ def save_owner_refs(c, bones, keys, fbx=""):
     return rel_p
 
 
-def mark_owner_sources(c, keys, rel_p):
+def mark_owner_sources(c, keys, rel_p, bones=None):
     """origin: owner + source {file, frame, tool: casc-import} on the card's poses at the owner's keys. A source of
     another kind (Cascadeur points from casc_to_author) is replaced: the pose was just rewritten from these bones, so the
-    old source would make check fail on a pose that is no longer the one it describes. A declared keep is kept."""
+    old source would make check fail on a pose that is no longer the one it describes. A declared keep is kept.
+    With bones, the author pose takes the owner's rotations whole (`bones`, author.py): no re-derivation through the
+    fitted fields, which cannot hold a thigh twist, the ball or an uneven neck (coordinator 2026-11-03)."""
     for p in c["poses"]:
         if p["frame"] in keys:
+            if bones and p["frame"] in bones and str(p["frame"]) in c["author"]["poses"]:
+                c["author"]["poses"][str(p["frame"])]["bones"] = local_bones(bones[p["frame"]][1])
             keep = (p.get("source") or {}).get("keep")
             p["origin"] = "owner"
             p["source"] = {"file": rel_p, "frame": p["frame"], "tool": "casc-import", **({"keep": keep} if keep else {})}

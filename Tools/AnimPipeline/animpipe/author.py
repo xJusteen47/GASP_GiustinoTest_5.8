@@ -20,6 +20,12 @@ pose (all optional; missing keys = idle):
            PELVIS frame (offset from the pelvis bone, axes turned with the pelvis)
 Axes are Unreal component space: X = character's left, Y = forward, Z = up. A rotation [rx, ry, rz] is a rotation vector
 in degrees about those axes (+rx tips up -> back, i.e. a forward lean is negative; it swings a hanging limb forward).
+  bones    {"<bone>": [qx, qy, qz, qw]}  an owner pose taken WHOLE (casc-import --owner-keys, coordinator 2026-11-03):
+           Cascadeur's rotations exactly as he made them, local to the parent bone (pelvis: component space), on the
+           rig's fixed bone lengths (Cascadeur stretches bones 1-2 cm: a known limit, normalized away here). A bone listed
+           here ignores the fields above for itself (spine spread, chains, limb IK, foot_rot); never listed: hands and
+           fingers (the card's hand_rot, wrist_out, fingers own them), twist bones (they follow their parent). The
+           pelvis position stays pelvis.loc. In-betweens next to a pose without `bones` blend bone rotations.
   wrist_out [deg, 0, 0]   bends both hands at the wrist away from the forearm line, toward the outside of the body
            (owner: the villain hand reads only when it breaks the arm line); blended per frame
   fingers  [open, 0, 0]   0 = the template's fists (default), 1 = the overlord "villain hand": open and flat, fingers
@@ -60,6 +66,17 @@ THUMBS = [f"thumb_0{i}_{s}" for s in "lr" for i in (1, 2, 3)]
 THUMB = {"along": 8.0, "open": 55.0}
 SPINE = ["spine_01", "spine_02", "spine_03", "spine_04", "spine_05"]
 NECK = ["neck_01", "neck_02", "head"]
+# the bones an owner pose carries whole (pose["bones"]); hands stay the card's (owner rule: Cascadeur hands are default)
+OWNER_BONES = ["pelvis"] + SPINE + NECK + [f"{b}_{s}" for s in "lr" for b in ("clavicle", "upperarm", "lowerarm", "thigh", "calf", "foot", "ball")]
+
+
+def local_bones(R, nd=6):
+    """{bone: quaternion} of OWNER_BONES local to the parent (pelvis: component space), from component rotations R."""
+    out = {}
+    for b in OWNER_BONES:
+        p = PARENT[b]
+        out[b] = [round(float(x), nd) for x in m2q(R[b] if p is None else R[p].T @ R[b])]
+    return out
 
 
 # --- quaternions (x, y, z, w) and rotation matrices ---
@@ -161,15 +178,18 @@ class Poser:
 
     def solve(self, pose):
         P, R = {}, {}
+        ov = {b: q2m(np.asarray(q, float) / np.linalg.norm(q)) for b, q in (pose.get("bones") or {}).items()}
         pv = pose.get("pelvis", {})
-        R["pelvis"] = rv(pv.get("rot", [0, 0, 0])) @ self.R0["pelvis"]
+        R["pelvis"] = ov["pelvis"] if "pelvis" in ov else rv(pv.get("rot", [0, 0, 0])) @ self.R0["pelvis"]
         P["pelvis"] = self.P0["pelvis"] + np.array(pv.get("loc", [0, 0, 0]), float)
-        Dpel = rv(pv.get("rot", [0, 0, 0]))
+        Dpel = R["pelvis"] @ self.R0["pelvis"].T
         sp = np.array(pose.get("spine", [0, 0, 0]), float); hd = np.array(pose.get("head", [0, 0, 0]), float)
 
         def fk(b, delta=None):
             p = PARENT[b]
             P[b] = P[p] + R[p] @ self.lt[b]
+            if b in ov:                          # owner rotation, taken whole
+                R[b] = R[p] @ ov[b]; return
             R[b] = R[p] @ self.lr[b]
             if delta is not None:
                 # world-axis rotation about the bone's own pivot; children inherit it
@@ -177,17 +197,21 @@ class Poser:
         sc, nc = pose.get("spine_chain") or {}, pose.get("neck_chain") or {}
         for b in SPINE:
             fk(b, sp / len(SPINE))
-            if b in sc:
+            if b in sc and b not in ov:
                 R[b] = rv(sc[b]) @ R[b]
         for b in NECK:
             fk(b, hd / len(NECK))
-            if b in nc:
+            if b in nc and b not in ov:
                 R[b] = rv(nc[b]) @ R[b]
-        Dch = rv(sp) @ Dpel
+        Dch = R["spine_05"] @ self.R0["spine_05"].T if "spine_05" in ov else rv(sp) @ Dpel
         for s in "lr":
             fk(f"clavicle_{s}", pose.get(f"clavicle_{s}"))
             fk(f"upperarm_{s}")
-            self._limb(P, R, f"upperarm_{s}", f"lowerarm_{s}", f"hand_{s}", pose.get(f"arm_{s}"), P["spine_05"], Dch, "hand_rot")
+            if f"lowerarm_{s}" in ov:
+                fk(f"lowerarm_{s}"); fk(f"hand_{s}")
+                R[f"hand_{s}"] = rv((pose.get(f"arm_{s}") or {}).get("hand_rot", [0, 0, 0])) @ R[f"hand_{s}"]
+            else:
+                self._limb(P, R, f"upperarm_{s}", f"lowerarm_{s}", f"hand_{s}", pose.get(f"arm_{s}"), P["spine_05"], Dch, "hand_rot")
             wo = float((pose.get("wrist_out") or [0])[0])
             if wo:
                 fa = P[f"hand_{s}"] - P[f"lowerarm_{s}"]; out = Dch @ np.array([1.0 if s == "l" else -1.0, 0, 0])
@@ -209,7 +233,12 @@ class Poser:
                         fk(b)
             self._thumb(P, R, s, fo, fk)
             fk(f"thigh_{s}")
-            self._limb(P, R, f"thigh_{s}", f"calf_{s}", f"foot_{s}", pose.get(f"leg_{s}"), P["pelvis"], Dpel, "foot_rot")
+            if f"calf_{s}" in ov:
+                fk(f"calf_{s}"); fk(f"foot_{s}")
+                if f"foot_{s}" not in ov:
+                    R[f"foot_{s}"] = rv((pose.get(f"leg_{s}") or {}).get("foot_rot", [0, 0, 0])) @ R[f"foot_{s}"]
+            else:
+                self._limb(P, R, f"thigh_{s}", f"calf_{s}", f"foot_{s}", pose.get(f"leg_{s}"), P["pelvis"], Dpel, "foot_rot")
             fk(f"ball_{s}")
         return P, R
 
@@ -264,7 +293,7 @@ def _lerp(a, b, t):
 
 def frames(author):
     keys = sorted((int(k), v) for k, v in author["poses"].items())
-    out = {}
+    out, seg, poser = {}, {}, []
     for f in range(int(author["frames"])):
         if f <= keys[0][0]:
             out[f] = keys[0][1]; continue
@@ -272,8 +301,28 @@ def frames(author):
             out[f] = keys[-1][1]; continue
         (fa, pa), (fb, pb) = next((keys[i], keys[i + 1]) for i in range(len(keys) - 1) if keys[i][0] <= f < keys[i + 1][0])
         t = (f - fa) / (fb - fa); t = t * t * (3 - 2 * t)
+        if "bones" in pa or "bones" in pb:
+            if (fa, fb) not in seg:
+                seg[(fa, fb)] = _bone_pair(pa, pb, poser)
+            pa, pb = seg[(fa, fb)]
         out[f] = _lerp(pa, pb, t)
     return out
+
+
+def _bone_pair(pa, pb, poser):
+    """A segment with an owner pose (bones) on one end: the other end gets its solved rotations as bones too, so the
+    in-between blends rotations (a missing `bones` would read as zero); quaternion signs aligned for the blend."""
+    if not poser:
+        poser.append(Poser())
+    pa, pb = dict(pa), dict(pb)
+    for p in (pa, pb):              # full set from the solve (a partial `bones` keeps its own bones, the rest is solved)
+        p["bones"] = local_bones(poser[0].solve(p)[1])
+    ba, bb = pa["bones"], dict(pb["bones"])
+    for b in bb:
+        if np.dot(ba[b], bb[b]) < 0:
+            bb[b] = [-x for x in bb[b]]
+    pa["bones"], pb["bones"] = ba, bb
+    return pa, pb
 
 
 def _opens(au):
