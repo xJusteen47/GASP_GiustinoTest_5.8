@@ -250,3 +250,16 @@ thread (two edits, in this order, each its own commit):
 | "the linked movement mode uses it" | The linked mode never reads the offset (the capsule stays where it was, the snapshot substitution places the hurtboxes): the consumers are the snapshot contributor (`TryGetParkedTransform` overload with the parked state), the watchdog's leash (`ParkedDistance`) and the presentation component. Nothing writes an anchor yet: D9 part 2 calls `SetAnchorOverride` on the latcher's Body link. |
 | exit capsule | The rider's capsule size comes from its root capsule component (content, fixed), as the watchdog reads it; `FExitSelf` defaults (34/88) in tests. |
 | `bPredictRiderExits` default false | true (owner decision S1); the mount type copies it into `bInitiatorPlacesExit`. |
+
+## G7: hits while mounted (M7-05, desktop)
+
+| Plan / spec | Shipped |
+|---|---|
+| `UGSTN_HitStep_MountHit` "after ComputeKnockback" | Right after it (before ApplyDamage, MeterGain, LinkBreakOnHit), by `UGSTN_PiggybackContentLibrary::AddMountStepToRules` (idempotent) and `setup_defence_link_content.py`. Steps after ComputeKnockback cannot use the reaction scales (already applied), so the step replaces the outcome's knockback with the scaled one |
+| break reasons `RiderHit` / `CarrierHit` | The step adds GSTNLink's `FGSTN_LinkBreakOutcome` with the plugin reason before LinkBreakOnHit; `MarkPendingBreak` keeps the first reason, so other link types are untouched. Thresholds are the registered definition's hit breaks (`QualifiesForBreak`), i.e. the default `FGSTN_MountRules` |
+| `CarrierCoverFrontDeg` "hit redirected to the carrier's hurtboxes" | No redirect: a hit from inside the arc around the rider's facing does not land on the rider; the carrier takes it only if its own hurtboxes overlap. Off by default |
+| `bCarrierShieldCoversRider` | NOT built: the rider's hit view has no carrier defence state. Off by default, unread (OPEN) |
+| partners excluded "unless LinkedPartnerOnly" | Built: any mount partner hit with another filter is dropped (Stop), friendly fire or not |
+| carrier above threshold "rider dropped, velocity 0.5 x launch" | The break only; exit velocity waits for G9's `LaunchLinked` (OPEN) |
+| credit "from the attacker's link and ActivePair" | From the attacker's mount link per `FGSTN_MountRules::DefaultCredit` (OwnerOnly default = none; Split = share 128). ActivePair is G8. Partner meter requests still applied by nobody (M7-03 OPEN 1) |
+| rules "absent = defaults" | `FindRules` reads the rules asset's `FGSTN_MountRules` extension for scales, arc and credit, else the defaults |

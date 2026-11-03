@@ -123,3 +123,24 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
   committed .uproject lists the plugins; build scripts that compare against it will abort.
 - Cost: one Opus thread, ~160k context, 3 UBT builds + 2 headless runs + 2 harness runs (~70 min machine): medium-high.
 - Next: G6 remaining items (or G7 mount hit step) in a new thread; spin D9 part 2 can use the anchor seam.
+
+## M7-05 (desktop, 2026-11-03): G7 hits while mounted (step + tests); harness and rules asset not run
+
+- Worktree `GASP_Giustino2_m7` (desktop), branch claude/project-thread-7autp9 from feature 60da6fa. Commit c254dca "M7 G7: hits while
+  mounted", then this docs commit. NOT pushed to feature (needs harness + owner's "ok merge"). Deltas: m7-doc-deltas.md "G7".
+- Note: G6 is NOT complete. Carry load (`UGSTN_GE_CarryLoad` + MMC, `scenario_mount_carry`) is not built; only G6 item 1 was.
+- `UGSTN_HitStep_MountHit` (Runtime): pure `Evaluate(FGSTN_MountHitInput, FGSTN_MountRules)` + `Resolve`. Rider below threshold: knockback x
+  RiderKnockbackScale (0 = StaggerInPlace), hitstun x RiderHitstunScale; above: break RiderHit. Carrier above: break CarrierHit. Partner hits
+  dropped unless LinkedPartnerOnly. Front cover arc (no redirect). Credit per DefaultCredit. `AddMountStepToRules` / `RemoveMountStepFromRules`.
+- Tests `GSTNPiggyback.Hits.MountHit.{RiderBelowThreshold, RiderAboveThreshold, CarrierThreshold, Cover, PartnerExclusion, Credit, AddToRules}`.
+- Gates (`Saved/M705`, scripts `build.ps1`, `headless.ps1`, `diagnosis.txt`): on (committed .uproject) `build-on1.out` Succeeded,
+  `headless-on1.log` 1282/0, 0 ensure; off (GSTNPiggyback false) `build-off1.out` Succeeded, `headless-off1.log` 1260/0 (= on minus 22
+  piggyback tests); .uproject restored from `Saved/M705/uproject.bak`. Binaries in the worktree are the OFF build: rebuild on first.
+- NOT done (next thread, needs the editor on the m7 worktree): (1) run `setup_defence_link_content.py` so `GSTN_CombatRules_Standard` gets
+  MountHit after ComputeKnockback, commit the asset; until then the step is not in any pipeline. (2) Harness `scenario_mounted_hit`,
+  `scenario_rider_attack` (mount_scenarios.py; needs a third-pawn attack above 1800 cm/s for the break case, check the test kit's moves),
+  SUITE_MOUNT and SUITE_LINK at 0 % and 2 %. (3) Then the push to feature with the owner's "ok merge".
+- OPEN: bCarrierShieldCoversRider unread; carrier-break drop velocity (G9); Partner meter requests (M7-03 OPEN 1); G6 carry load; teleport
+  break check (M7-04 OPEN 1) unchanged.
+- Cost: one Opus thread, ~110k context, 3 UBT builds (base, on, off) + 2 headless runs (~45 min machine): medium.
+- Next: M7-06 = rules asset + G7 harness, then G6 carry load (or G8 pair-move data, pure data, S), new thread.
