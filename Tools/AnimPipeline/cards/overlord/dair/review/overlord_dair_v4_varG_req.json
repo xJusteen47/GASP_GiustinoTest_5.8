@@ -1,0 +1,307 @@
+{
+ "variant": "overlord_dair_v4_varG",
+ "status": "numeric gates PASS (author->build->check), awaiting visual review",
+ "video": false,
+ "hitstop": 8,
+ "_frames": "anim frames (video frame = anim + 8 from anim 16 on, hitstop 8 at 15)",
+ "reqs": [
+  {
+   "id": "lean_f0",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 0,
+   "min": 22,
+   "max": 30
+  },
+  {
+   "id": "lean_f37",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 37,
+   "min": -8,
+   "max": 2
+  },
+  {
+   "id": "lean_f42_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 42,
+   "min": 5,
+   "max": 10
+  },
+  {
+   "id": "pelvis_dip_peak_to_peak",
+   "type": "amplitude",
+   "bone": "pelvis",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 5,
+   "max": 10
+  },
+  {
+   "id": "hand_l_follow",
+   "type": "amplitude",
+   "bone": "hand_l",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 4
+  },
+  {
+   "id": "head_follow",
+   "type": "amplitude",
+   "bone": "head",
+   "coord": "y",
+   "window": [
+    17,
+    31
+   ]
+  },
+  {
+   "id": "knee_l_follow",
+   "type": "amplitude",
+   "bone": "calf_l",
+   "coord": "y",
+   "window": [
+    17,
+    31
+   ],
+   "min": 3
+  },
+  {
+   "id": "delay_pelvis_to_hand_l",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_l",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ]
+  }
+ ],
+ "measured_vs_unedited_build": {
+  "_how": "offsets of the G clip from the same keys without edits (PrbG0), Tools/AnimPipeline cards G; scratch scripts measG.py",
+  "pelvis_dz_cm_f17_31": [
+   -0.0,
+   -3.6,
+   -3.8,
+   -1.5,
+   1.2,
+   2.3,
+   1.6,
+   0.0,
+   -1.1,
+   -1.2,
+   -0.4,
+   0.3,
+   0.3,
+   0.1,
+   0.0
+  ],
+  "spine05_lean_deg_f17_31": [
+   -0.0,
+   -0.0,
+   3.3,
+   3.5,
+   1.3,
+   -1.1,
+   -2.1,
+   -1.4,
+   -0.0,
+   1.0,
+   1.0,
+   0.3,
+   -0.1,
+   -0.1,
+   -0.0
+  ],
+  "head_nod_deg_f17_31": [
+   0.0,
+   0.0,
+   0.0,
+   8.6,
+   9.1,
+   3.4,
+   -2.9,
+   -5.5,
+   -3.8,
+   -0.0,
+   2.4,
+   1.8,
+   0.4,
+   -0.1,
+   -0.0
+  ],
+  "hand_l_offset_cm_f17_31": [
+   0.0,
+   3.6,
+   3.5,
+   1.2,
+   4.9,
+   5.9,
+   2.8,
+   0.5,
+   1.7,
+   1.5,
+   0.3,
+   1.0,
+   0.7,
+   0.1,
+   0.0
+  ],
+  "knee_l_vs_pelvis_cm_f17_31": [
+   0.0,
+   0.0,
+   0.0,
+   2.8,
+   6.0,
+   7.1,
+   6.1,
+   3.6,
+   1.0,
+   0.0,
+   0.6,
+   1.2,
+   0.8,
+   0.2,
+   0.0
+  ],
+  "peak_frames": {
+   "pelvis": 19,
+   "spine_lean": 20,
+   "head_nod": 21,
+   "hands_rel": 22,
+   "knees_rel_pelvis": 22
+  },
+  "lags_frames_vs_pelvis": {
+   "spine": "+1",
+   "head": "+2",
+   "hands": "+3",
+   "knees": "+3 (target +2: the fold is a bump 2f late, its peak lands 1f later)"
+  },
+  "amplitudes": {
+   "pelvis_cm": 3.8,
+   "head_deg": 9.1,
+   "hands_cm": 5.9,
+   "knees_cm": 7.1,
+   "spine_deg": 3.5
+  },
+  "oscillations": "pelvis -3.8 (f19) / +2.3 (f22) / -1.2 (f25) / +0.3, head +9.1 / -5.5 / +2.4: 2-3 settles, zero at 31",
+  "lean_clip_deg": {
+   "0": 26.3,
+   "3": 34.5,
+   "15": -22.7,
+   "31": -22.6,
+   "37": -4.5,
+   "42": 8.3
+  },
+  "lean_clip_main_A_deg": {
+   "0": 26.3,
+   "3": 34.5,
+   "15": -22.7,
+   "31": -22.6,
+   "37": 13.5,
+   "42": 27.2
+  },
+  "co_motion_hand_speed_cm_per_frame_0_15": {
+   "arm_l_A": [
+    2.22,
+    10.05,
+    24.43,
+    1.05,
+    1.0,
+    0.95,
+    1.07,
+    0.76,
+    0.22,
+    0.61,
+    0.91,
+    1.18,
+    1.47,
+    7.33,
+    32.71,
+    0.0
+   ],
+   "arm_l_G": [
+    2.22,
+    10.05,
+    24.43,
+    1.05,
+    1.0,
+    0.95,
+    1.07,
+    0.76,
+    0.88,
+    1.47,
+    1.88,
+    2.25,
+    2.17,
+    10.43,
+    32.71,
+    0.0
+   ],
+   "arm_r_A": [
+    4.33,
+    19.4,
+    33.37,
+    1.31,
+    1.25,
+    1.19,
+    1.36,
+    0.99,
+    0.63,
+    0.87,
+    1.14,
+    1.5,
+    0.7,
+    2.88,
+    33.79,
+    0.0
+   ],
+   "arm_r_G": [
+    4.33,
+    19.4,
+    33.37,
+    1.31,
+    1.25,
+    1.19,
+    1.36,
+    0.99,
+    1.11,
+    1.97,
+    2.69,
+    3.47,
+    1.07,
+    6.51,
+    33.79,
+    0.0
+   ]
+  }
+ },
+ "gates_G": {
+  "verdict": "PASS",
+  "co_motion": "PASS",
+  "contact_faf": "PASS (foot reach never past 81.4 cm of 15-17)",
+  "clearance": "PASS",
+  "hitstop_snap": "PASS"
+ },
+ "edits": {
+  "key12": "upperarm_l/r_fk_ctrl Rotation [0,9,9] (hands +~6 cm in the chest frame)",
+  "18_30": "body_ctrl Loc Z -5.5 n(t); spine_03_ctrl Rot X 5 n(t-1); head_ctrl Rot X 13 n(t-2); upperarm X -14 n(t-3) (down lobes x0.25, clearance); foot_ik Z = body - fold, fold = 6 dip(t-2); n = e^(-t/6) sin(2 pi t/7), t = f-17, fade 26->31",
+  "faf": "author keys 37/42 pelvis+spine mixed from 31 by 0.5/0.62 (as F); owner keys 37/42 trunk changed on his request: variant apply will refuse, copy by hand as for A"
+ },
+ "not_reached": "hands 5.9 cm (asked 6-10): -17 deg gave 6.7 cm but hand_l|spine_03 -0.06 cm at f25 (clearance), back to -14 per the 2-attempt rule"
+}

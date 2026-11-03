@@ -644,3 +644,20 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   fallisce leggi `Saved/AnimPipeline/standalone/<mossa>/editor.log`.
 - Rischi: due editor sullo stesso progetto (lock di Saved/Intermediate); `get_play_length`/attesa 3 tick non provati.
 - Costo: ~35 chiamate, contesto ~85k, circa $3-4 (Sonnet).
+
+## Dair variante G: co_motion della A + follow-through con edits (2026-11-03, thread desktop Opus)
+- Ramo `claude/project-thread-dgqsku`; PR #28 (`claude/anim-render-standalone`) mergiata qui (solo tools/skill/doc). F scartata
+  (`variant discard`, su indicazione dell'owner via coordinatore), G aperta con **take proprio** `AS_Pilot_OverlordDAir_V4_VarG`:
+  le varianti prima condividevano il take del card principale e lo sovrascrivevano.
+- a) co_motion: alla key 12 (claude) `upperarm_l/r_fk_ctrl` Rotation [0,9,9] → mani +~6 cm nel frame del petto; velocità mani
+  f8-11 da 0,2-0,9 a 0,9-2,3 cm/f. Pose owner intatte.
+- b) follow-through: key 18-30 campionate dal take (posa invariata, `spacing` limb_led → smart auto) + `edits`: bacino (body_ctrl Z)
+  -3,8/+2,3/-1,2 cm, spina +1 (3,5°), testa +2 (nod 9,1/-5,5/+2,4°), mani +3 (5,9 cm, lobi in giù al 25% per la clearance),
+  ginocchia (picco +3, 7 cm; i piedi IK non seguono body_ctrl: piede = body - piega, la gamba solo si piega → contact_faf ok).
+- FAF: author 37/42 bacino+spina mescolati da 31 come F (0,5/0,62): lean f37 -4,5°, f42 8,3°. Tocca il tronco delle key owner
+  37/42 (richiesta sua): `variant apply` rifiuterà, si copia a mano come per la A.
+- author→build→check PASS; `verify` 8/8 PASS con `cards/overlord/dair/review/overlord_dair_v4_varG_req.json` (dentro anche i valori
+  frame per frame). Mani a -17° → 6,7 cm ma clearance -0,06 cm: tornato a -14 (regola 2 tentativi).
+- Render standalone (PR #28) riuscito al primo colpo, editor owner intatto; serve `ANIMPIPE_PROJECT=<progetto principale>`
+  dal worktree (aggiunto in `standalone.py`). Griglie in `cards/overlord/dair/review/varG_*.png`; mp4 in `sheets/ingame/*varG*`.
+- Da fare: revisione visiva (thread cloud). Costo stimato: ~75 chiamate, contesto ~95k, circa $12.

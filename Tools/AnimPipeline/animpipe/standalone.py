@@ -25,6 +25,9 @@ class Unavailable(RuntimeError):
 
 
 def project_dir():
+    # a git worktree of the tools has no content: ANIMPIPE_PROJECT names the project that holds the clips and the map
+    if os.environ.get("ANIMPIPE_PROJECT"):
+        return os.environ["ANIMPIPE_PROJECT"]
     d = TOOLS
     for _ in range(5):
         d = os.path.dirname(d)
