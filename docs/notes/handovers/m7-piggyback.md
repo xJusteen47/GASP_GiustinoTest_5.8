@@ -193,3 +193,25 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
 - G9 not started (size M + harness + S4; budget): next thread. It needs the PM_ThrowRider / PM_BoostJump content (definitions + abilities with a
   PartnerMove key + the kit set), `scenario_throw_rider`/`scenario_boost_jump`, LaunchLinked for the exit velocity.
 - Cost: one Opus thread, ~100k context, 3 UBT builds + 3 headless editors (~45 min machine): low-medium.
+
+## M7-08 (desktop, 2026-11-03): G9 part A, the exit launch of a pair move
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9, commit aed53de on 2062e15 (G8). Not on feature (desktop permission, owner).
+- Found: GSTNLink G2 already plays pair moves generically (PartnerMove key, partner inbox, Outcome Break with the action's placer), and the exit
+  already carries a velocity to the parked mode. Missing for the reference moves was only the exit velocity: the mount placer returned zero.
+- Decision (rule 6): G9 split. Part A here, part B next thread (content + scenarios + spike 4). Deltas: m7-doc-deltas.md "G9 part A".
+- Built: Core `FGSTN_PairExitLaunch` (Speed, PitchDeg, UpSpeed, InheritPartnerVelocity, bInheritHorizontalOnly) + `UGSTN_MountUtils::ComputeExitLaunch`;
+  `UGSTN_Placer_Mount::Launch` (candidate and fallback), `UGSTN_PairMoveDefinition::ExitLaunch` copied by the registry. GSTNLink (additive
+  fields only, tell the spin-drill thread): `FGSTN_ExitQuery::PartnerVelocity`, `FGSTN_LinkWatchdogEntity::Velocity` (pawn velocity on the
+  authority; snapshot `Velocity` in `StepInitiatorExit`). Zero launch = every existing exit byte-identical.
+- Test `GSTNPiggyback.Runtime.PairMove.ExitLaunch`: zero, throw (flatten + pitch + full inherit), aim along up, boost (horizontal inherit,
+  tilted up), placer, watchdog `PlaceExit` aims along the carrier and inherits, registry copies the definition's launch.
+- Gates (`Saved/M708`, diagnosis.txt): build on Succeeded, `headless-on1.log` 1286/0 (+1 vs M7-07); off `build-off1.out` Succeeded,
+  `headless-off1.log` 1260/0 (= M7-07); 0 ensure. Harness NOT run: no existing content has a non-zero launch, so no scenario can change;
+  the throw/boost scenarios belong to part B. .uproject restored (= HEAD); worktree binaries are the OFF build: rebuild on first.
+- Part B to do: PM_ThrowRider / PM_BoostJump (4 test abilities with timelines: carrier throw 12+2+18 f with PartnerMove key, rider thrown
+  with sweeping hitbox + ThrownActionableFrame, rider boost 6 f, carrier braced with Lock.Movement 10 f), the 2 definitions with ExitLaunch,
+  the test kit's PairMoveSet, Command bindings for the initiators (test-only, not designed abilities), RefundAirJumps, scenario_throw_rider /
+  scenario_boost_jump in mount_scenarios.py, spike 4 (partner delay, 150 ms threshold) into m7-spike-report.md.
+- OPEN unchanged: rider attack binding (owner deferred), G6 carry load, carrier shield over rider, provider-only partner tags, M7-04/M7-03.
+- Cost: one Opus thread, ~70k context, ~45 calls, 2 UBT builds + 2 headless editors (~30 min machine): low.
