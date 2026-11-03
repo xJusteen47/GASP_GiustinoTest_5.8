@@ -373,3 +373,20 @@ after one checkpoint.
   script returns); kill only your own editor pid (never Stop-Process -Name).
 - Gates: build (editor, on) Succeeded twice. Headless RunTests (Input+Combat+SpinDrill+Defence+Link+Parts): 965 found, exit code 0 (Saved/SD14/headless.log). Plugin-off build NOT run (~30 min).
 - Cost: one Sonnet thread, ~55 tool calls, 2 builds (~30 min each), 7 editor runs; medium. Local commit only, nothing pushed.
+
+## SD-15 (laptop, 2026-11-03): latch_static_multi_hit was a flake; moving enemy diagnosed (design call); hit_while_latched still red (STOPPED)
+
+- No C++ change in this thread, so no build and no new headless run (SD-14 gates at ca8188b still apply). Two full SUITE_SPIN runs (Saved/Logs/sd-15/full1.log, full2.log).
+- latch_static_multi_hit: FAIL in SD-14, PASS in both runs here -> flake, not a regression of the HitstunMultiplier<=0 rule. Other flakes seen in the same
+  runs: spin_ground_hits_ring (FAIL once, PASS once), release_early_pop (FAIL once, PASS once). Run 2: 7/12 PASS (+ drill_ground_lag still rollback 0 -> 2).
+- moving_enemy, cause found, NOT a hitstop issue: UGSTN_LinkedMovementMode::SimulationTick keeps the driller capsule where it was (GSTN_LinkedMovement.cpp,
+  "nothing moves"); the parked placement (FGSTN_LinkSnapshotContributor::FinalizeSnapshot, anchor in the partner's space) only rewrites the SNAPSHOT entry
+  (hurtboxes, hit space). The unit test Parked.InitiatorFollowsMovingPartner says so ("its capsule never moves"). So the harness check "driller moved
+  with the target" (actor location, 0 cm) can never pass as written. Decision for the owner (architecture, nothing changed):
+  (A, recommended) keep the design, change the check to read the placement from the snapshot/hurtbox (needs a Python-visible reader), the actor stays;
+  (B) make the parked mode move the capsule to the parked transform each Mover tick (visible riding, touches GSTNLink NP, replication and the exit).
+- hit_while_latched: harness variant tried this thread (hitter 70 cm away, 50 cm above the driller, to clear the tip sphere): still red (latch not ended,
+  driller damage 0). Reverted. 2 attempts spent in total on it (SD-14 + SD-15); next needs a probe of the hitter's jab hitbox (reach/height) vs the
+  driller's parked hurtbox, i.e. print the snapshot entry of the driller, not the actor position.
+- Not touched: nondrillable_bounce, opposite_cancel, drill_ground_lag.
+- Cost: one Sonnet thread, ~30 tool calls, 0 builds, 2 editor runs (~8 min each); small.
