@@ -1,67 +1,72 @@
-# Revisione visiva delle mosse: design definitivo (2026-11-03)
+# Pipeline mosse, flusso finale con revisione visiva (2026-11-03)
 
-Richiesta owner 03/11 01:59Z: sistemare in modo definitivo le quattro cause per cui l'agente sbagliava la dair, e far
-**guardare** il risultato a Claude (silhouette, leggibilità per parte, intermedi mancanti o venuti male, jitter), come
-skill riusabile. Un solo percorso, già scelto. Nessun codice in questo documento.
+Richiesta owner 03/11 02:00Z: chiudere in modo definitivo le quattro cause degli errori sulla dair, far **guardare** il
+risultato a Claude (silhouette, leggibilità per parte, intermedi mancanti o venuti male, jitter) come skill riusabile,
+e tenere insieme le funzioni Cascadeur nuove e le regole di risparmio (`consumi-2026-11-03.md`). Un solo percorso, già
+scelto. Nessun codice qui.
 
-## Le quattro cause e la correzione di ciascuna
-| Causa | Correzione | Dove |
-|---|---|---|
-| 1. Pose dell'owner riscritte dagli agenti | lock `approved` + check **bloccante** `source_fidelity` (scheda vs posa owner in `cards/<kit>/refs/`, scarto max 0,5 cm / 1°, dita e `wrist_out` esclusi) + fantasma della posa owner nella griglia | PR #24 + CP1 |
-| 2. Calcio giudicato come pugno | blocco `strike` di PR #24, tarato su dair v4 e jab v12 | PR #24 + CP1 |
-| 3. I check numerici non vedono forma e leggibilità | revisione visiva con rubrica dalle regole del README | CP2-CP3 |
-| 4. L'agente desktop non vede mai il risultato | cattura su file, revisore cloud Opus che legge le immagini e scrive un verdetto che la pipeline legge | CP2-CP3 |
+## Stato di ogni pezzo
+| Pezzo | Stato |
+|---|---|
+| Giro Cascadeur a chiavi sparse (`casc-export/import/revert/diff`, snapshot) | **fatto** su feature |
+| Spacing Cascadeur = build (`casc-spacing --fit/--apply/--score`), interruttori fisica per punto (`casc_physics.py`) | **fatto** |
+| Menu GSTN (Esporta, Segna chiave → `<move>_owner_keys.json`, Annulla import, Stato) | **fatto**, installato |
+| Strato "Manuale", `co_motion`, `hitstop_snap`, `clearance` con esenzioni, `animpipe review` | **fatto** (review mai provato end to end) |
+| Causa 1: lock `approved`, `approve/diff`, `capture` | **PR #24** |
+| Causa 2: blocco `strike` (calcio non più giudicato come pugno), `rules` del README, proporzioni, pollice villain | **PR #24** |
+| Causa 1: `source_fidelity` bloccante (posa owner in `cards/<kit>/refs/`, scarto max 0,5 cm / 1°), guard 2 | approvato, **da fare** (CP1) |
+| Chiavi owner bloccate da sole all'import (`casc-import --owner-keys`) | approvato, **da fare** (CP4) |
+| Interpolazione di Claude (`animpipe interp`, pose `origin: claude`) | approvato 02/11 23:28Z, **da fare** (CP4) |
+| Cause 3 e 4: cattura su file + revisione visiva + verdetto letto dalla pipeline | **nuovo** (CP2-CP3) |
 
-## Il giro (massimo 2 per mossa)
-1. **Desktop** `animpipe review <card> --visual`: build, check numerici (se un blocco fallisce si ferma, niente render), poi
-   cattura in `Saved/AnimPipeline/visual/<move>/r<N>/`: 4 immagini composite (lato lungo 1568 px) e `manifest.json`
-   (esiti numerici, frame chiave, chi possiede ogni chiave: owner o claude, segmenti di intermedi).
-   - A `griglia_lato.png`: ogni frame, silhouette colorate per parte (braccio sx/dx, gambe, busto, testa), chiavi bordate,
-     frame hitbox evidenziati, fantasma grigio della posa owner sulle sue chiavi.
-   - B `camere.png`: le pose chiave da camera di gioco, fronte e dietro (caviglie incrociate, gomito dentro il busto).
-   - C `traiettorie.png`: mano, piede, testa con un punto per frame (spacing, pop, buchi, tremolio).
-   - D `hitstop_whiff.png`: striscia con e senza hitstop attorno al primo frame attivo.
-2. **Cloud** (thread Opus medium, skill `gstn-visual-review`): copia la cartella dal PC con l'accesso cartella già
-   approvato, guarda le 4 immagini **una volta**, applica la rubrica, scrive `verdict.json` sul PC e in project files.
-3. **Desktop** legge il verdetto: `animpipe visual-gate` blocca `approve` e la consegna se c'è un problema `blocca`.
-   Corregge solo pose di Claude e parti non bloccate; un problema su una chiave dell'owner diventa `chiedi_owner`, mai una
-   modifica. Secondo giro uguale; dopo il secondo si ferma e consegna all'owner immagini + verdetto.
+## Il flusso, dall'owner alla mossa finita
+1. **Owner in Cascadeur**: mette le sue chiavi, preme "Segna chiave" su ognuna, poi "Esporta"; scrive al coordinatore
+   "interpola la <mossa>".
+2. **Desktop, import**: `casc-import --owner-keys`: le chiavi owner entrano intere (piedi compresi) e si bloccano;
+   `source_fidelity` verifica che scheda = posa owner. Dita e `wrist_out` restano quelli della scheda.
+3. **Desktop, interpolazione**: `animpipe interp` scrive le pose intermedie di Claude (con `why`) solo su frame liberi.
+4. **Desktop, gate numerico** (costa quasi zero, prima del render): lunghezze ossa, clearance, `hitstop_snap`,
+   `co_motion`, contatto/FAF, lock, `source_fidelity`, `strike`, `rules`, jitter misurato (accelerazione sui frame non
+   chiave). Se fallisce: diagnosi scritta in 3 righe, poi **una** build. Niente render finché non passa.
+5. **Desktop, cattura**: `animpipe review --visual` produce **una sola immagine** composita (lato lungo 1568 px, niente
+   mp4) in `Saved/AnimPipeline/visual/<move>/r<N>/` + `manifest.json` (esiti numerici, chiavi owner/claude, segmenti).
+   Pannelli: griglia laterale di ogni frame con silhouette colorate per parte e fantasma grigio della posa owner sulle
+   sue chiavi; pose chiave da camera di gioco e da dietro; traiettorie di mano/piede/testa con un punto per frame;
+   striscia con e senza hitstop attorno al primo frame attivo.
+6. **Cloud, revisione** (Opus medium, skill `gstn-visual-review`): copia la cartella dal PC con l'accesso già approvato,
+   guarda l'immagine **una volta**, scrive `verdict.json` sul PC e in project files. Non tocca la scheda.
+7. **Desktop, correzione**: `animpipe visual-gate` blocca `approve` e la consegna se c'è un problema `blocca`. Si correggono
+   solo pose di Claude e parti non bloccate; un problema su una chiave owner diventa `chiedi_owner`, mai una modifica.
+   Dopo una diagnosi scritta, una build, poi di nuovo 4-6. **Massimo 2 giri**, poi consegna all'owner immagine + verdetto.
+8. **Ritorno in Cascadeur**: `casc-export` con chiavi owner e di Claude, spacing applicato (`casc-spacing --apply`),
+   interruttori fisica come scelti; "Annulla import" / `casc-revert` per tornare indietro.
 
 ## La skill `gstn-visual-review` (`.claude/skills/gstn-visual-review/`)
-- `SKILL.md`: quando usarla, input (cartella del giro, scheda, `cards/README.md`), passi, limiti (una lettura per
-  immagine, niente modifiche alla scheda, niente loop).
-- `rubric.md`: una voce per regola del README, ognuna con "cosa guardare, in quale immagine, quando è blocca":
-  frame 0 vs idle e carica, "troppo è giusto" (posa spinta), sinergia, ginocchia avanti in carica, rilascio lento con il
-  passo grande sul primo frame attivo, niente scatto dopo l'hitbox, mano villain, compenetrazioni, piedi affiancati;
-  in più: silhouette leggibile dalla camera di gioco, parte che colpisce riconoscibile, linea d'azione, **intermedio
-  mancante** (salto tra due frame), **intermedio brutto** (passa dentro il corpo, ginocchio indietro, pastone), jitter.
+- `SKILL.md`: input (cartella del giro, scheda, `cards/README.md`), passi, limiti (una lettura dell'immagine, niente
+  modifiche, niente loop). Usabile da qualunque thread che sappia leggere immagini.
+- `rubric.md`: una voce per regola del README (frame 0, "troppo è giusto", sinergia, ginocchia avanti, rilascio lento con
+  il passo grande sul primo frame attivo, niente scatto dopo l'hitbox, mano villain, compenetrazioni, piedi), più
+  silhouette leggibile dalla camera di gioco, parte che colpisce riconoscibile, **intermedio mancante** (salto),
+  **intermedio brutto** (dentro il corpo, ginocchio indietro, pastone), jitter. Per ogni voce: dove guardare, quando blocca.
 - `verdict.schema.json`: `{move, round, esito: ok|correggi|chiedi_owner, problemi: [{regola, frame, parti, gravita:
-  blocca|nota, immagine, cella, prova, correzione: {frame, parte, direzione, quanto}}], segmenti: [{da, a, stato:
-  ok|manca|brutto, perche}]}`.
-- `calibrazione.md`: esempi noti. Deve dare **ok** su jab v12 e ftilt v3.1 (accettate) e **correggi** su dair v2 con i
-  difetti che l'owner aveva visto (braccia ferme, testa che scatta, avambraccio nella testa).
+  blocca|nota, pannello, prova, correzione: {frame, parte, direzione, quanto}}], segmenti: [{da, a, stato: ok|manca|brutto}]}`.
+- `calibrazione.md`: deve dare **ok** su jab v12 e ftilt v3.1 (accettate) e **correggi** su dair v2 con i difetti visti
+  dall'owner (braccia ferme, testa che scatta, avambraccio nella testa).
 
-## Numerico o visivo
-- **Numerico, bloccante, prima del render** (costa quasi zero): lunghezze ossa, clearance, `hitstop_snap`, `co_motion`,
-  frame contatto/FAF, lock e `source_fidelity`, `strike`, `rules`, jitter misurato (accelerazione sui frame non chiave).
-- **Visivo, dopo**: forma e leggibilità della silhouette, parte che colpisce, spinta delle pose, intermedi mancanti o
-  brutti, conferma del jitter, mano villain e piedi a colpo d'occhio, confronto con il fantasma della posa owner.
-
-## Checkpoint (in ordine, uno per thread)
-- **CP1** desktop Opus (brief "Rifinitura pipeline" già scritto): merge PR #24 su feature, taratura `rules`/`strike` su dair
-  v4 e jab v12, guard 2, `source_fidelity` bloccante con le pose owner in `cards/overlord/refs/`.
-- **CP2** desktop Sonnet: `review --visual` con le 4 immagini e il manifest (riusa `capture_ue.py` e `ingame_judge`),
-  jitter numerico, `visual-gate`. Prova su jab v12, dair v2, dair v4.
-- **CP3** cloud Opus: skill + rubrica + schema; calibrazione sui tre esempi; passa se coglie i difetti noti di dair v2 senza
-  `blocca` falsi su jab v12 (max 2 tentativi di taratura della rubrica).
-- **CP4** desktop Opus: l'interpolazione di Claude usa come gate numerico + visivo; prima mossa vera: la dair dalle nuove
-  chiavi Cascadeur dell'owner (il thread di import in corso finisce come previsto, poi passa da qui).
+## Checkpoint (uno per thread, tetto 80 chiamate o 100k di contesto, handover ≤ 30 righe)
+- **CP1** desktop Opus (brief "Rifinitura pipeline"): merge PR #24, taratura `rules`/`strike` su dair v4 e jab v12, guard 2,
+  `source_fidelity` bloccante con le pose owner in `cards/overlord/refs/`.
+- **CP2** desktop Sonnet: `review --visual` (una immagine + manifest, riusa `capture_ue.py`/`ingame_judge`), jitter
+  numerico, `visual-gate`. Prova su jab v12, dair v2, dair v4.
+- **CP3** cloud Opus: skill + rubrica + schema, calibrazione sui tre esempi (max 2 ritocchi della rubrica).
+- **CP4** desktop Opus: `--owner-keys` + `interp` (brief "interpolazione fatta da Claude") con gate numerico + visivo;
+  prima mossa vera: la dair dalle nuove chiavi dell'owner (il thread di import in corso finisce, poi passa da qui).
 
 ## Costi stimati
-Un giro di revisione: ~6k token di immagini + ~8k di rubrica/scheda/manifest + ~5k di risposta, Opus medium: **circa
-$0,5-1**; massimo 2 giri, quindi **≤ $2 per mossa**. Cattura sul desktop: ~$0,2. Costruzione: CP1 ~$5, CP2 ~$3, CP3 ~$4,
-CP4 nel costo già previsto per l'interpolazione ($1-3 a giro).
+Revisione: ~2k token di immagine + ~8k di rubrica/scheda/manifest + ~5k di risposta, Opus medium: **circa $0,3-0,6 a
+giro**, max 2 giri. Una mossa intera dalle chiavi owner: **$2-4** (oggi $10-19 per versione della dair). Costruzione:
+CP1 ~$5, CP2 ~$3, CP3 ~$3, CP4 ~$4.
 
 ## Unica domanda per l'owner
-Il thread di CP1 può fare da solo il merge di PR #24 su feature (il conflitto è solo nei documenti)? Se sì, si parte
-subito con CP1 e gli altri a seguire senza altre domande.
+Il thread di CP1 può fare da solo il merge di PR #24 su feature (conflitto solo nei documenti)? Se sì, CP1-CP4 partono
+in fila senza altre domande.
