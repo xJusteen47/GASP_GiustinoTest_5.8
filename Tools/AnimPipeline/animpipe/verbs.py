@@ -387,7 +387,10 @@ def v_check(move, a, o):
 
 
 def v_render(move, a, o):
-    from animpipe import poses
+    """The composite review image (animpipe/composite.py), offline from the bone cache of the built take."""
+    from animpipe import composite
+    from animpipe.__main__ import OUT, TOOLS
+    from animpipe.card import windows, key_frames
     card = card_path(move)
     b = last(move, "build", ok=True)
     if not b or b["result"].get("card_sha") != S.sha(card):
@@ -395,21 +398,30 @@ def v_render(move, a, o):
     ch = last(move, "check", build=b["seq"])
     if (not ch or ch["exit"] != 0) and "force" not in o:
         raise Stop(GATE, "no render while the numeric gates fail on this build (check first)")
-    _, log = _need_app(poses.run, card, {k: o[k] for k in ("frames", "take", "over") if k in o})
-    img = [l for l in log.splitlines() if l.strip().lower().endswith(".png")]
-    if not img or not os.path.exists(img[-1].strip()):
-        raise Stop(GATE, "render wrote no image", log=log)
+    c = read(card)
     vis = os.path.join(K.VISUAL, move)
     have = [int(m.group(1)) for d in glob.glob(os.path.join(vis, "r*")) if (m := re.fullmatch(r"r(\d+)", os.path.basename(d)))]
     rnd = max(have, default=0) + 1
     d = os.path.join(vis, f"r{rnd}"); os.makedirs(d)
-    shutil.copyfile(img[-1].strip(), os.path.join(d, "grid.png"))
-    c = read(card)
-    from animpipe.card import key_frames
+    hs = int(o.get("hitstop", 8))
+    try:
+        w, h, info = composite.build(c, S.sha(card), TOOLS, TOOLS, os.path.join(d, "grid.png"), hs)
+    except Exception as e:
+        shutil.rmtree(d, ignore_errors=True)
+        raise Stop(GATE, f"render failed: {e}")
+    win = windows(c)["anim"]
+    cp = os.path.join(OUT, f"{move}_check.json")
+    chk = read(cp) if os.path.exists(cp) else {}
+    numeric = {k: ({kk: vv for kk, vv in x.items() if isinstance(vv, (bool, int, float, str))} if isinstance(x, dict) else x)
+               for k, x in chk.get("block", {}).items()}
+    keys = sorted(key_frames(c))
     write(os.path.join(d, "manifest.json"), {"move": move, "round": rnd, "card_sha": S.sha(card), "build": b["seq"],
-          "image": "grid.png", "keys": key_frames(c), "owner_keys": sorted(owner_frames(c, move)),
+          "image": "grid.png", "image_px": [w, h], "keys": keys, "owner_keys": sorted(owner_frames(c, move)),
+          "segments": [[x, y] for x, y in zip(keys, keys[1:])], "active": info["active"], "startup": win["startup"],
+          "faf": win["faf"], "hitstop_frames": hs, "hitstop_at": info["active"][0],
+          "check": {"verdict": chk.get("verdict"), "build_of_check": ch["seq"] if ch else None, "block": numeric},
           "inbetweens": [{"frame": q["frame"], "why": q.get("why")} for q in c["poses"] if q.get("origin") == "claude"]})
-    return OK, {"round": rnd, "build": b["seq"], "image": os.path.join(d, "grid.png")}, log
+    return OK, {"round": rnd, "build": b["seq"], "image": os.path.join(d, "grid.png")}, ""
 
 
 def v_verdict(move, a, o):

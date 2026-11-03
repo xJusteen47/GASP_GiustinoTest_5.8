@@ -520,3 +520,29 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - Per l'owner al ritorno: rilanciare `install.py` di Cascadeur e avviare il server script per provare barra GSTN e riga di stato.
 - Test: 44/45 (`test_part_delays_refused` adattato: copiava la scheda dair vera, ora bloccata dal guard).
 - Costo stimato: ~55 chiamate, contesto ~100k, circa $8-9; niente subagenti, niente build, editor usato solo per import/sample.
+
+## Dair: pose owner intere, fidelity senza lunghezze, griglia composita CP2 (2026-11-03, thread desktop Opus medium)
+- Ramo `claude/project-thread-dgqsku` (da 66dv82 8a83d48) nel worktree `_feature`. File non salvati dell'owner e `move_sheets.json` non toccati.
+- **Decisione del coordinatore applicata:** le pose owner entrano INTERE. Campo nuovo `bones` nella posa author
+  (`author.py`: rotazioni locali di Cascadeur, pelvis in spazio componente; mani/dita/twist esclusi, restano della scheda);
+  il Poser fa FK con quelle rotazioni sulle lunghezze fisse del rig (stretch Cascadeur 1-2 cm = limite noto, normalizzato).
+  In-between vicino a una posa `bones`: fusione delle rotazioni (`_bone_pair`). `casc-import --owner-keys` scrive `bones`;
+  `merge()` toglie le `bones` delle parti cambiate. `fidelity`: bersaglio = rotazioni owner sul rig con altezza bacino e mani
+  della scheda; confronta rotazioni ≤1° e posizioni ≤0,5 cm dopo normalizzazione, mai la lunghezza; unità del peggiore corretta.
+- Dair v4 migrata da `refs/` (snapshot `history/overlord_dair_v4_20261103_111440.json`); chiavi owner non spostate, carica 3, FAF 37.
+  `fidelity` PASS 9/9, `load()` di nuovo ok. Diagnosi prima della build in `Saved/.../visual/overlord_dair_v4/diagnosi_b_rotations.md`.
+- Build ok. Check: tutto PASS tranne **legibility** (il piede viene giudicato con le soglie della mano: va tarata, non correggibile
+  sulle chiavi owner). Moto identico a prima (salto di 70 cm a 14→15 = stomp dell'owner).
+- **CP2 fatto (subagente Sonnet):** `animpipe/composite.py` + `v_render`: una `grid.png` 1568 px (griglia laterale di tutti i
+  frame per parte con fantasma grigio owner, pose chiave camera di gioco + da dietro, traiettorie mani/piedi/testa, passo per
+  frame con finestra hitbox) e `manifest.json` (segmenti, active, faf, hitstop, risultati del check). Prima griglia vera:
+  `visual/overlord_dair_v4/r2/grid.png` (render con `--force` per la legibility). Limiti: viste 2D dalla cache ossa (niente
+  cattura UE, niente livello dedicato: non si cambia livello con il DefaultLevel dell'owner non salvato), "camera di gioco" =
+  vista laterale, hitstop 8 di default (`--hitstop=N`), manca la striscia con/senza hitstop.
+- Owner-ok gate su approve, snapshot/restore e varianti erano già in `verbs.py`: non toccati. Nessun approve (manca l'ok owner).
+- **Jab v12:** build+check: FAIL `contact_faf` (picco di portata a f0, finestra 1-2), `fists` (apertura 0,95: mani aperte su un
+  pugno?) e legibility. Nessun blocco `rules`/`strike` in jab v12 né in dair v4. Da indagare (take sorgente?) e poi tarare le regole.
+- Prossimo: soglie legibility per il piede (dair) e `rules` su dair+jab; verdetto visivo della skill su r2 (cloud); jab v12.
+- Owner al ritorno: barra GSTN in Cascadeur + `install.py`; ok sulla griglia r2 per l'approve.
+- Test: tutti ok tranne `test_capture` (Windows, già rosso); nuovi `test_owner_bones_whole_and_stretch_ignored`, `test_composite`.
+- Costo stimato: ~45 chiamate, contesto ~95k (~$8) + subagente Sonnet ~116k token (~$1,5).
