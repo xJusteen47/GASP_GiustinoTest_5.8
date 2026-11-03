@@ -728,3 +728,26 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - File: `docs/notes/reviews/dair-offset/` (diagnosis.md, lag_test*.txt, griglia f12-18 base vs I, mp4 variante I az 90).
 - Non fatto: check ftilt_v31/jab (chiedono un build nell'editor dell'owner; il fix non tocca author/build/check).
 - Costo: ~35 chiamate, contesto ~60k, circa $5.
+
+## Dair variante K: bacino fermo + testa/pugni in ritardo, FERMA dopo 2 tentativi (2026-11-03, thread desktop Opus)
+- Ramo `claude/project-thread-0pafeo` (da cb05b0a). J scartata (`variant discard`), K aperta e riempita da I (057bd21) con
+  `Tools/AnimPipeline/dair_varK_make.py final` + `dair_varK_open.json` (apertura avambracci). Solo key 18-30 delle parti
+  coinvolte: body_ctrl z (bacino fermo 19-23, min a 20), piedi = bacino + piega ginocchia (picco 22), spine_03 (+6,5 nella
+  discesa, -11 a 24), neck_01 (-8 a 23), head_ctrl (nod retimato, picco 23), upperarm X (pugni su nella discesa, sotto il
+  riposo 22-24), apertura Z 20-27 (upperarm_l -13, lowerarm_l -8, lowerarm_r -12 al picco 23-24).
+- **Probe** (`dair_varK_make.py probe`, un build): lowerarm X e spine_05 X **nessun effetto**; lowerarm Y+10 = mano su 3,8 cm;
+  lowerarm Z-10 = mano avanti 2,4 (l) / 3,7 (r); upperarm_l Z-10 = mano avanti 4,6, gomito 3; upperarm Z destro quasi nullo
+  in avanti; neck_01 X-10 = testa z -0,6. Tabella in fondo a `dair_varK_open.json` (_why).
+- verify **14/14** (`cards/overlord/dair/review/overlord_dair_v4_varK_req.json`): minimi assoluti z testa, hand_l, hand_r a
+  **23**, bacino a **20** (ritardo 3); sulla tenuta 20-23 la testa scende 3,67 cm, hand_l 6,15, hand_r 5,9 (~4-6 px a 384);
+  dip bacino 11,8; bacino 19-23 fermo entro 0,78 cm; lean 0/31/37/40/42 invariati. Frame 0-17 e 31/37/42 identici a I
+  (diff max 0,006 cm sul dump), FAF 37, finestra [15,17], key owner non toccate.
+- Tentativo 1 (upperarm_l -8, lowerarm_l -6, pugni +6 a 23-24): check FAIL hand_l|spine_03 -2,06 cm @24.
+- Tentativo 2 (upperarm_l -13, pugni +5): FAIL **hand_l|spine_03 -1,0 cm @24** (lowerarm_l +0,01). Tutti gli altri blocchi PASS.
+  Fermo (regola 2 tentativi): niente render, niente video/griglie in `docs/notes/reviews/dair-varK/`.
+- Nota: hand_r|spine_03 e lowerarm_r|spine_03 sono già contatti accettati dall'owner nella card (exemption 3-42), hand_l no.
+- **Cosa serve per chiudere K** (una sola tra): (a) un terzo tentativo: pugni a 24 da +5 a +3 (mano_l +0,75 cm) e upperarm_l Z
+  -13→-16 a 23-25; dal t1→t2 +3 cm avanti hanno dato +1,06 cm: basta circa un altro passo uguale. Il minimo resta a 23.
+  (b) l'owner accetta il contatto hand_l|spine_03 a 22-25 come quello destro (exemption nella card). Poi render
+  `--standalone --azs=90,0,45`, griglie f12-24 e f35-42 K e base, commit in `docs/notes/reviews/dair-varK/`.
+- Costo: ~65 chiamate, contesto ~110k, circa $10.
