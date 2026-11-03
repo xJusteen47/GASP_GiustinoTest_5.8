@@ -20,6 +20,12 @@
 #                        and its own exit (no rollback on it from the tap to a second later), the watchdog copied that exit, and once the rider
 #                        stands its own client and the server agree within 5 cm
 #   mount_interact_priority  an enemy and an ally both in reach: the probe projects Interact.Target.Grab, the tap grabs the enemy (INT.5)
+#   mounted_hit          M7 G7: the third pawn hits the mounted rider from behind. Below the rider's break threshold the hit lands (the server's
+#                        inbox of the rider has it) and the mount holds on every world; then the threshold is lowered IN MEMORY on the code-made
+#                        mount type (the test move's knockback is far below the default 3600 cm/s) and the same hit breaks it with a plugin reason
+#   rider_attack         M7 G7: the mounted rider attacks the enemy ahead of its carrier: the enemy's server inbox has the hit, the carrier (its
+#                        partner) never receives one, the mount holds. NOT in SUITE_MOUNT: while riding the Grounded attack binding does not hold
+#                        and no kit has the Role.Rider attack binding of spec 9.2 yet, so the rider makes no hit (M7-06 run: empty hit log)
 import math
 import time
 
@@ -36,7 +42,8 @@ MOUNT_TARGET = 'Interact.Target.Mount'
 GRAB_TARGET = 'Interact.Target.Grab'
 FIRST_PLUGIN_REASON = 16
 PAIRINGS = {'client_rides_client': (1, 2), 'client_rides_host': (1, 0), 'host_rides_client': (0, 1)}
-SUITE_MOUNT = ['mount_basic', 'mount_refused', 'mount_heavy_refused', 'dismount_drop', 'mount_interact_priority', 'dismount_predicted']
+SUITE_MOUNT = ['mount_basic', 'mount_refused', 'mount_heavy_refused', 'dismount_drop', 'mount_interact_priority', 'dismount_predicted',
+               'mounted_hit']   # rider_attack waits for a Role.Rider attack binding: no kit has one yet (M7-06)
 _last = {'rig': None}
 
 
@@ -338,4 +345,139 @@ def scenario_mount_interact_priority(pairing='client_rides_client'):
                  {k: ls.mover_mode(0, k) for k in (rig.rkey, rig.ckey, rig.okey)}))),
              (2.9, run.at('the ally carries no link', lambda: ((ls.body(0, rig.ckey) or (0, 0))[1] == 0, ls.body(0, rig.ckey))))]
     steps += rig.end(3.0)
+    run.run(steps)
+
+
+# ---- G7: hits while mounted ----------------------------------------------------------------------------------------------------------------
+def set_mount_break(rider=None, carrier=None):
+    """MinKnockbackToBreak of the code-made mount type's hit breaks, in memory (the step reads them on every hit). Returns the old values by role"""
+    old = {}
+    for d in unreal.ObjectIterator(unreal.GSTN_LinkTypeDefinition):
+        if not d.get_name().startswith('DA_LinkType_Mount'):
+            continue
+        br = d.get_editor_property('break')
+        rows = []
+        for hb in br.get_editor_property('hit_breaks'):
+            role = str(hb.get_editor_property('role_tag').get_editor_property('tag_name'))
+            want = rider if role.endswith('Rider') else carrier if role.endswith('Carrier') else None
+            old[role] = hb.get_editor_property('min_knockback_to_break')
+            if want is not None:
+                hb.set_editor_property('min_knockback_to_break', float(want))
+            rows.append(hb)
+        br.set_editor_property('hit_breaks', rows)
+        d.set_editor_property('break', br)
+    return old
+
+
+def _place_at(key, xy):
+    """Server teleport of pawn `key` to a world XY (the floor under it is found by the teleport)"""
+    spawn = g.comps(g.worlds()[0])[key].get_spawn_location()
+    g.comps(g.worlds()[0])[key].server_reset_to_spawn(unreal.Vector(xy[0] - spawn.x, xy[1] - spawn.y, 0.0))
+    return xy
+
+
+def _along(key, from_key, cm):
+    """World XY `cm` along pawn key's own facing from from_key's server location (negative: behind it)"""
+    s = g.snap(g.worlds()[0])
+    yaw = math.radians(s[key]['yaw'])
+    loc = s[from_key]['location']
+    return loc[0] + cm * math.cos(yaw), loc[1] + cm * math.sin(yaw)
+
+
+def _inbox_since(key, frame):
+    return [r for r in g._inbox_log(0, key) if r[0] >= frame]
+
+
+def scenario_mounted_hit(pairing='client_rides_client'):
+    rig = _MountRig('mounted_hit', pairing)
+    run = rig.run
+    st = {}
+
+    def behind():
+        # The third pawn 80 cm short of the rider along its OWN facing: it faces the rider whatever the spawn yaws
+        st['spot'] = _place_at(rig.okey, _along(rig.okey, rig.rkey, -80.0))
+        return 'attacker behind the rider', st['spot']
+
+    def attack(tag):
+        def f():
+            st['F' + tag] = g._latest_frame(0, rig.rkey)
+            return 'attack', tag, st['F' + tag], g.combat_tap(rig.io, g.button_mask('Attack'))
+        return f
+
+    def landed(tag):
+        def f():
+            r, c = _inbox_since(rig.rkey, st['F' + tag]), _inbox_since(rig.ckey, st['F' + tag])
+            st['in' + tag] = (r, c)
+            return bool(r), f"rider inbox {r}, carrier inbox {c} (server, from frame {st['F' + tag]})"
+        return run.at(f'the hit landed on the rider ({tag})', f)
+
+    def lower():
+        st['old'] = set_mount_break(rider=1.0)
+        st['wd'] = ls.watchdog()
+        return 'rider break threshold 1 cm/s', st['old']
+
+    def broke():
+        wd = ls.watchdog()
+        st['reason'] = wd[2]
+        return wd[0] == st['wd'][0] + 1 and wd[2] >= FIRST_PLUGIN_REASON, f"watchdog {st['wd']} -> {wd} (one break, plugin reason from {FIRST_PLUGIN_REASON})"
+
+    def restore():
+        g._hit_logging(False)
+        old = {k.rsplit('.', 1)[-1]: v for k, v in st.get('old', {}).items()}
+        return 'restored', set_mount_break(rider=old.get('Rider', 3600.0), carrier=old.get('Carrier', 1800.0))
+
+    steps = [(0.2, rig.setup()), (0.25, lambda: ('hit log', g._hit_logging(True))), (1.1, rig.place(rig.okey, (-150.0, 250.0)))]
+    mount, t = rig.mount_steps(1.2)
+    steps += mount
+    steps += [(t, behind), (t + 0.8, rig.mark('pre_hit')), (t + 0.85, attack('A')), (t + 1.85, rig.mark('hit')),
+              (t + 1.85, landed('A')),
+              (t + 1.85, rig.mounted('below the break threshold the mount holds on every world')),
+              (t + 1.85, rig.parked()),
+              (t + 1.9, lambda: run.note(f"G7 rider hit below threshold: rider client rollbacks {rig.rb_delta('pre_hit', 'hit', rig.ir)}, carrier client "
+                                         f"{rig.rb_delta('pre_hit', 'hit', rig.ic)}, rider shown snap {rig.snap_cm(rig.marks['pre_hit']['t'], rig.marks['hit']['t']):.1f} cm, "
+                                         f"inboxes {st.get('inA')}")),
+              (t + 2.4, behind), (t + 2.9, lower), (t + 3.0, rig.mark('pre_break')), (t + 3.05, attack('B')), (t + 4.05, rig.mark('broken')),
+              (t + 4.05, landed('B')),
+              (t + 4.05, rig.gone('above the threshold the hit broke the mount on every world')),
+              (t + 4.05, run.at("the watchdog broke it once with the plugin's reason (RiderHit)", broke)),
+              (t + 4.1, lambda: run.note(f"G7 rider hit above threshold: reason index {st.get('reason')}, rider client rollbacks "
+                                         f"{rig.rb_delta('pre_break', 'broken', rig.ir)}, inboxes {st.get('inB')}")),
+              (t + 4.15, restore)]
+    steps += rig.end(t + 4.2)
+    run.run(steps)
+
+
+def scenario_rider_attack(pairing='client_rides_client'):
+    rig = _MountRig('rider_attack', pairing)
+    run = rig.run
+    st = {}
+
+    def ahead():
+        st['spot'] = _place_at(rig.okey, _along(rig.rkey, rig.rkey, 110.0))
+        return 'enemy ahead of the carrier', st['spot']
+
+    def attack():
+        st['F'] = g._latest_frame(0, rig.rkey)
+        return 'rider attacks', st['F'], g.combat_tap(rig.ir, g.button_mask('Attack'))
+
+    def landed():
+        e, c = _inbox_since(rig.okey, st['F']), _inbox_since(rig.ckey, st['F'])
+        hits = [r for r in g._hit_log(0, rig.rkey) if r[0] >= st['F']]
+        st['rows'] = (hits, e, c)
+        return bool(e), f'rider hit log {hits}; enemy inbox {e}; carrier inbox {c}'
+
+    def partner_clean():
+        return not st['rows'][2], f"carrier inbox {st['rows'][2]}"
+
+    steps = [(0.2, rig.setup()), (0.25, lambda: ('hit log', g._hit_logging(True))), (1.1, rig.place(rig.okey, (-150.0, 250.0)))]
+    mount, t = rig.mount_steps(1.2)
+    steps += mount
+    steps += [(t, ahead), (t + 0.8, rig.mark('pre_attack')), (t + 0.85, attack), (t + 1.85, rig.mark('attacked')),
+              (t + 1.85, run.at("the rider's attack landed on the enemy (server inbox)", landed)),
+              (t + 1.85, run.at('the carrier, its partner, received no hit from it', partner_clean)),
+              (t + 1.85, rig.mounted("the rider's attack keeps the mount on every world")),
+              (t + 1.9, lambda: run.note(f"G7 rider attack: rider client rollbacks {rig.rb_delta('pre_attack', 'attacked', rig.ir)}, "
+                                         f"carrier client {rig.rb_delta('pre_attack', 'attacked', rig.ic)}, rows {st.get('rows')}")),
+              (t + 1.95, lambda: ('hit log', g._hit_logging(False)))]
+    steps += rig.end(t + 2.0)
     run.run(steps)

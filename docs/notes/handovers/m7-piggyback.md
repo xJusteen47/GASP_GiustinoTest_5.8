@@ -144,3 +144,28 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
   break check (M7-04 OPEN 1) unchanged.
 - Cost: one Opus thread, ~110k context, 3 UBT builds (base, on, off) + 2 headless runs (~45 min machine): medium.
 - Next: M7-06 = rules asset + G7 harness, then G6 carry load (or G8 pair-move data, pure data, S), new thread.
+
+## M7-06 (desktop, 2026-11-03): G7 closed in the pipeline and on the network (mounted_hit); rider attack waits for a Rider binding
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9. NOT pushed to feature (needs the owner's "ok merge").
+- Rules asset: `setup_defence_link_content.py` run headless; `GSTN_CombatRules_Standard` now ... ComputeKnockback, **MountHit**, ApplyDamage,
+  Hitstop, MeterGain, LinkBreakOnHit (once). Committed with this entry.
+- `mount_scenarios.py`: `scenario_mounted_hit` (third pawn hits the rider from behind: below threshold the hit lands on the rider's server inbox,
+  mount held on every world, rider parked; then the rider threshold lowered IN MEMORY on the code-made `DA_LinkType_Mount` (`set_mount_break`,
+  the test move is far below 3600 cm/s) and the same hit breaks it once, plugin reason index 20). Helpers `_place_at`, `_along`, `_inbox_since`.
+- `scenario_rider_attack` written, NOT in SUITE_MOUNT: the rider makes no hit (empty hit log) because riding drops Grounded and no kit has the
+  spec 9.2 `Command.Attack.*` + `Role.Rider` binding (GSTN_MountLoadout adds only Mount/Dismount/Drop). Needs that binding (content or loadout
+  extension): owner decision, not built.
+- Harness (driver `Saved/M706/driver.py` + `run.ps1`: editor -nullrhi, map DefaultLevel_Harness, ini patched to listen/3 and restored),
+  60/15 ms, `Saved/Logs/m7-06/`: SUITE_MOUNT 7/7 at 2 %, 5/7 at 0 %; SUITE_LINK 18/19 at 0 % and at 2 %. The 4 failures (mount_refused 5
+  rollbacks vs <=4, dismount_predicted / latch_big_enemy_client_latches_host / link_break_distance_client_grabs_host with a missing-pawn
+  exception) all passed on one rerun (`*-rerun.log`): flakes, different each run. mounted_hit at 0 %: rider client 2 rollbacks for the hit,
+  13 for the break.
+- Headless (`Saved/M706`): on `headless-on1.log` 1282/0; off (GSTNPiggyback false) `build-off1.out` Succeeded, `headless-off1.log` 1260/0; 0 ensure.
+  .uproject restored; binaries in the worktree are the OFF build again: rebuild on first.
+- Launcher lesson: `-ExecCmds` takes no quoted path with spaces and `;` does not separate a `py` command: copy the script to TEMP with forward
+  slashes and let it quit by itself (two failed launches before that).
+- OPEN: rider attack binding (above); G6 carry load not built; bCarrierShieldCoversRider unread; mount_refused can cost 5 rollbacks at 0 %;
+  M7-04 OPEN 1 (teleport break) and M7-03 OPEN 1 unchanged.
+- Cost: one Opus thread, ~95k context, 2 UBT builds + 3 headless editors + 3 harness editors (~1.5 h machine): medium.
+- Next: owner "ok merge" for G7; then G8 pair-move data or the rider attack binding (owner's pick), new thread.
