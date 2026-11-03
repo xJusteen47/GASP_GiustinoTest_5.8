@@ -9,7 +9,7 @@ know nothing of it.
 Status: **G5** of the M7 plan. G4 built the pure part (native tags, mount data, carry and anchor math, exit candidates, credit split). G5 adds
 the mount itself: the mount link type (made by code), its rule and exit placer, the mount, dismount and drop abilities, their bindings and the
 carrier's disallowed commands, the plugin's test kits and the harness scenarios. Carry load (G6), hits while mounted (G7) and pair moves (G8+)
-are not built yet; the Editor module is empty until G11.
+are not built yet; G11 filled the Editor module (see the table).
 
 Spec: `docs/architecture/combat-m7-piggyback.md`. Plan: `docs/architecture/plans/m7-piggyback-plan.md` (branch `claude/project-thread-wzb12r`).
 Where the spec and the shipped code differ, the shipped names win; the differences are listed in `docs/notes/m7-doc-deltas.md`.
@@ -20,7 +20,7 @@ Where the spec and the shipped code differ, the shipped names win; the differenc
 |---|---|---|---|
 | `GSTNPiggybackCore` | Runtime | Native tags (`GSTN_PiggybackTags.h`), mount data (`GSTN_MountTypes.h`), pair-move enums (`GSTN_PairMoveTypes.h`), `UGSTN_MountUtils` | `GSTNCombatCore`, `GSTNLinkCore` |
 | `GSTNPiggybackRuntime` | Runtime | G5: `FGSTN_MountLinkType` (the mount type, registered at startup), `UGSTN_LinkRule_Mount`, `UGSTN_Placer_Mount`, `UGSTN_GA_Mount` / `_Dismount` / `_Drop`, `FGSTN_MountLoadout` (bindings and disallowed commands), `UGSTN_PiggybackContentLibrary` (test kits, kit scan, G9 test pair moves). G7 mount hit step; G8 `UGSTN_PairMoveDefinition` / `_Set` / `_Registry` (an optional `TriggerCommand` makes the loadout bind the initiator and register the partner); G9 TEST content `UGSTN_GA_Test_*` (`GSTN_PairMoveTestContent.h`: throw rider, boost jump, not designed abilities). Later: carry load | `GSTNPiggybackCore`, `GSTNInputCore`, `GSTNCombatGAS`, `GSTNCombatNP`, `GSTNLinkGAS`, `GSTNLinkNP`, `GameplayAbilities`, `AbilitySystemSimulation`, `NetworkPrediction` |
-| `GSTNPiggybackEditor` | Editor | Empty. G11: pair-move factory and validators, anchor debug panel | `GSTNPiggybackRuntime` |
+| `GSTNPiggybackEditor` | Editor | G11: factories and Content Browser entries of `UGSTN_PairMoveDefinition` (next free `PairMoveId`) and `_Set`; `UGSTN_PairMoveAbilityValidator` (a `UGSTN_GA_PairMove` Blueprint re-runs its definition's checks on save); PIE link debug `gstn.Combat.Debug.Anchor 1` (client vs server hurtbox anchor of parked roles) and `gstn.Combat.Debug.LinkLog 1` (one log line per shown link transition, every world). Tests `GSTNPiggyback.Editor.*` | `GSTNPiggybackRuntime`, `GSTNLink*`, `GSTNCombatNP`, `DataValidation` |
 | `GSTNPiggybackTests` | DeveloperTool | Automation tests (`GSTNPiggyback.*`); never ships | all of the above |
 
 The tags are declared in the Core module because it is a Runtime module: a native tag defined in an `UncookedOnly` module ensures in a

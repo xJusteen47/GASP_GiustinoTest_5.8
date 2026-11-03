@@ -276,3 +276,26 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
   `gstn.Combat.Debug.Anchor`, link log line), G12 (sweep, byte table, docs). Next thread: G11 first (S), then G10, G12.
 - Still open: RefundAirJumps (no gate needed it), thrown land-cancel, rider attack binding, G6 carry load, the expired-table-set edge (deltas).
 - Cost: one Opus thread, ~75k context, ~70 calls, 2 UBT builds, 2 headless editors, 3 harness editors (~40 min machine): medium.
+
+## M7-12 (desktop, 2026-11-03): G11 closed, the editor module; G10 and G12 not started
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9. Deltas: m7-doc-deltas.md "G11 (M7-12)". No runtime or simulation code touched.
+- Built in `GSTNPiggybackEditor` (was empty): factories + Content Browser entries (Gameplay > Combat) for `UGSTN_PairMoveDefinition` (new one gets
+  the lowest free `PairMoveId`) and `_Set`; `UGSTN_PairMoveAbilityValidator` (a `UGSTN_GA_PairMove` Blueprint re-runs its definition's
+  `Validate` on save, errors if the definition plays another ability); PIE core ticker `FGSTN_PiggybackLinkDebug` with
+  `gstn.Combat.Debug.Anchor 1` (client vs server snapshot anchor of parked roles, distance in cm) and `gstn.Combat.Debug.LinkLog 1` (one
+  `LogGSTNPiggybackEditor` line per shown Body link change, every world). 2 tests `GSTNPiggyback.Editor.*`. `.uplugin` now needs DataValidation.
+  No `GSTNCombatEditor` edge (its validator base is private).
+- Gates (`Saved/M712`, diagnosis.txt; reports `Saved/Logs/m7-12`): build ON Succeeded (0 warnings), `headless-on1.log` 1289/0; OFF Succeeded,
+  `headless-off1.log` 1260/0; 0 ensures. Harness listen/3, 60/15 ms, LinkLog + Anchor on: SUITE_MOUNT 8/9, boost_jump failed at its first
+  check (rider does not project `Interact.Target.Mount` before the mount: the known setup flake of M7-10), rerun alone PASS = 9/9.
+  LinkLog wrote 103 lines (pending -> active rider/carrier seen per world). Not run: 2 %, SUITE_LINK (no shared code changed).
+- Harness note: `setup_editor` cannot set the play settings from Python; edit `Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini`
+  (`PlayNetMode=PIE_ListenServer`, `PlayNumberOfClients=3`) and restore it after. My first run without it: every scenario "pawns not ready".
+- Cosmetic: LinkLog prints "(role?)" for a Pending link (role index without tag yet). Not fixed (would need a rebuild for a log string).
+- State: .uproject = HEAD, PIE ini restored, binaries = the ON build.
+- NOT started: G10 (presentation/anim/camera, M: per-role linked anim layers via the presentation component on role-tag change, rider IK on
+  `GSTN_MountHand/Foot*` sockets, attach/refusal blend, Finding A/B re-measure with rendering on; Debug.Anchor is now there for it), G12
+  (sweep, byte table, combat.md §3/§12b/§17 and the shared `Combat.Event.Link.*` subtree). Next thread: G10, then G12.
+- Open points unchanged (RefundAirJumps, carrier shield on rider, leash, teleport break): no gate needed them.
+- Cost: one Opus thread, ~90k context, ~65 calls, 3 UBT builds, 2 headless editors, 3 harness editors (~50 min machine): medium.
