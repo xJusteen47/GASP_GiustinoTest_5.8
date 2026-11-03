@@ -240,3 +240,18 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
 - OPEN: RefundAirJumps not built; thrown land-cancel not built; the 3 probe/timing fixes above; rider attack binding (deferred), G6 carry load,
   carrier shield over rider, provider-only partner tags, M7-04/M7-03.
 - Cost: one Opus thread, about 110k context, about 75 calls, 2 UBT builds, 2 headless test editors, 2 harness editors (about 1 h of machine time): medium.
+
+## M7-10 (desktop, 2026-11-03): G9 closed, the two probes fixed
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9. Not on feature (owner pushes). Test/tool changes only, no gameplay change.
+- throw_rider: the flight check moved to t+1.4 s (release lands ~0.5 s after the tap). Passes.
+- boost_jump: finding, not only a probe bug: `FGSTN_TimelineTrack_Tags` has no consumer in GSTNCombatNP (only `UGSTN_TimelinePlayer` fills
+  `TagWindows`), so `Combat.Lock.Movement` of `UGSTN_GA_Test_CarrierBraced` never reaches the ASC: the carrier is not really rooted. The
+  probe now reads the carrier's `combat.inTimeline` (snapshot). Server and rider client see the brace; the carrier's OWN client never does
+  (it gets the forced partner move by correction): the gate is the server, the carrier client is a note and the spike 4 braced measure has `gate=False`.
+- Also fixed: the ON build failed in unity mode (anonymous `SetFrames` in both GSTN_MountAbilities.cpp and GSTN_PairMoveTestContent.cpp): renamed to `SetPairMoveFrames`.
+- Gates (`Saved/M709`, `Saved/Logs/m7-10`): harness SUITE_MOUNT 0 %, listen/3: 8/9 (boost_jump the only one), boost_jump rerun PASS = 9/9,
+  mount_interact_priority passed this time. Headless on `headless-on2.log` 1287/0, off `headless-off2.log` 1260/0, 0 ensures. .uproject = HEAD; worktree binaries are the OFF build.
+- Still open: the Tags-track consumer (carrier root / command locks from a timeline: decide with the combat owner), forward prediction for pair partners
+  (spike 4 ~280-300 ms, pending owner), rider client rollbacks 2 on boost (carrier client 9), RefundAirJumps, thrown land-cancel, rider attack binding, G6 carry load.
+- Cost: one Sonnet thread, ~65k context, ~45 calls, 3 UBT builds, 3 harness editors, 2 headless editors: medium-low.

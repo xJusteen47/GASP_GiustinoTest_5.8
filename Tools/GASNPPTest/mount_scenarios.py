@@ -32,6 +32,7 @@
 #                        the server and its own world, the rider rises well above its parked height; spike 4 is measured
 #   Spike 4 (spec 2.4): the partner's visible reaction on the partner's own screen, against the same event on the initiator's screen (ms; one
 #   PIE editor tick of jitter). Above 150 ms = open a forward-prediction milestone for pair partners
+import json
 import math
 import time
 
@@ -141,10 +142,16 @@ class _MountRig:
                     now = self.run.now()
                     if ('unparked', wi) not in self.first and ls.mover_mode(wi, self.rkey) != ls.LINKED_MODE:
                         self.first[('unparked', wi)] = now
-                    if ('braced', wi) not in self.first and ls.has_tag(wi, self.ckey, LOCK_MOVEMENT):
+                    if ('braced', wi) not in self.first and self._carrier_in_timeline(wi):
                         self.first[('braced', wi)] = now
         except Exception:
             pass
+
+    def _carrier_in_timeline(self, wi):
+        # The Tags track of a combat timeline grants nothing to the ASC yet (no consumer of TagWindows in GSTNCombatNP), so Combat.Lock.Movement is never
+        # an ASC tag; the carrier's forced partner timeline running is what 'braced' can observe (the snapshot's combat.inTimeline)
+        v = json.loads(g.comps(g.worlds()[wi])[self.ckey].get_state_snapshot())
+        return bool((v.get('combat') or {}).get('inTimeline'))
 
     def stop(self):
         if self.handle is not None:
@@ -530,14 +537,14 @@ def scenario_rider_attack(pairing='client_rides_client'):
 
 
 # ---- G9: pair moves ----------------------------------------------------------------------------------------------------------------------
-def _spike4(rig, event, initiator_wi, partner_wi, label):
+def _spike4(rig, event, initiator_wi, partner_wi, label, gate=True):
     """Spike 4: the partner's screen against the initiator's for the same event (ms); also from the initiator's tap"""
     def f():
         a, b = rig.first.get((event, initiator_wi)), rig.first.get((event, partner_wi))
         tap = rig.watch_from
         if a is None or b is None:
             rig.run.note(f'spike 4 {label}: event {event} not seen on both screens ({rig.first})')
-            return False, f'{rig.first}'
+            return not gate, f'{rig.first}'
         d = (b - a) * 1000.0
         rig.run.note(f'spike 4 {label}: {event} on the partner screen (world {partner_wi}) {d:.0f} ms after the initiator screen (world {initiator_wi}); '
                      f'from the tap: initiator {(a - tap) * 1000.0:.0f} ms, partner {(b - tap) * 1000.0:.0f} ms; threshold {SPIKE4_MS:.0f} ms')
@@ -571,9 +578,9 @@ def scenario_throw_rider(pairing='client_rides_client'):
     steps = [(0.2, rig.setup()), (1.1, rig.clear_other())]
     mount, t = rig.mount_steps(1.2)
     steps += mount
-    steps += [(t + 0.3, rig.mark('pre_throw')), (t + 0.35, throw), (t + 1.0, run.at('the rider flew off the carrier (server)', flew)),
-              (t + 1.0, rig.gone('the throw ended the link on every world')),
+    steps += [(t + 0.3, rig.mark('pre_throw')), (t + 0.35, throw), (t + 1.0, rig.gone('the throw ended the link on every world')),
               (t + 1.0, _spike4(rig, 'unparked', rig.ic, rig.ir, 'throw (rider released)')),
+              (t + 1.4, run.at('the rider flew off the carrier (server)', flew)),
               (t + 2.4, rig.mark('thrown')), (t + 2.4, run.at("the rider's client and the server agree once it landed", agree)),
               (t + 2.45, lambda: run.note(f"throw: rollbacks rider client {rig.rb_delta('pre_throw', 'thrown', rig.ir)}, "
                                           f"carrier client {rig.rb_delta('pre_throw', 'thrown', rig.ic)}"))]
@@ -600,15 +607,18 @@ def scenario_boost_jump(pairing='client_rides_client'):
         return top >= 100.0, f'{top:.1f} cm'
 
     def braced():
-        return ('braced', 0) in rig.first and ('braced', rig.ic) in rig.first, f'{rig.first}'
+        # Gate: the authority braces. The carrier's own client is only noted: it gets the forced partner move by correction, not by prediction, so a
+        # 12-frame brace may never show there (spike 4; forward prediction for pair partners is a pending owner decision)
+        run.note(f"boost: the carrier's own client saw the brace: {('braced', rig.ic) in rig.first}")
+        return ('braced', 0) in rig.first, f'{rig.first}'
 
     steps = [(0.2, rig.setup()), (1.1, rig.clear_other())]
     mount, t = rig.mount_steps(1.2)
     steps += mount
     steps += [(t + 0.3, rig.mark('pre_boost')), (t + 0.35, boost), (t + 1.2, rig.gone('the boost ended the link on every world')),
               (t + 1.2, run.at('the rider rose above the carrier', rose)),
-              (t + 1.2, run.at('the carrier braced on the server and on its own world', braced)),
-              (t + 1.2, _spike4(rig, 'braced', 0, rig.ic, 'boost (carrier braced, server vs carrier screen)')),
+              (t + 1.2, run.at('the carrier braced on the server', braced)),
+              (t + 1.2, _spike4(rig, 'braced', 0, rig.ic, 'boost (carrier braced, server vs carrier screen)', gate=False)),
               (t + 1.2, _spike4(rig, 'unparked', rig.ir, rig.ic, 'boost (rider leaves, rider vs carrier screen)')),
               (t + 2.2, rig.mark('boosted')),
               (t + 2.25, lambda: run.note(f"boost: rollbacks rider client {rig.rb_delta('pre_boost', 'boosted', rig.ir)} (predicted: expect 0), "

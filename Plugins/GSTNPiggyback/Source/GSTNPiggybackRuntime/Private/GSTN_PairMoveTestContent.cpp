@@ -11,7 +11,7 @@
 
 namespace
 {
-	void SetFrames(FGSTN_CombatTimelineData& Timeline, int32 Total, int32 FirstActionable)
+	void SetPairMoveFrames(FGSTN_CombatTimelineData& Timeline, int32 Total, int32 FirstActionable)
 	{
 		Timeline.TotalFrames = Total;
 		Timeline.FirstActionableFrame = FirstActionable;
@@ -39,14 +39,14 @@ static constexpr int32 GBoostJumpId = 2;
 UGSTN_GA_Test_CarrierThrowRider::UGSTN_GA_Test_CarrierThrowRider(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetFrames(Timeline, 32, 32);
+	SetPairMoveFrames(Timeline, 32, 32);
 	AddPartnerMoveKey(Timeline, KeyFrame, GThrowRiderId);
 }
 
 UGSTN_GA_Test_RiderThrown::UGSTN_GA_Test_RiderThrown(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetFrames(Timeline, 40, ThrownActionableFrame);
+	SetPairMoveFrames(Timeline, 40, ThrownActionableFrame);
 
 	FGSTN_HitboxSpec Spec;
 	Spec.Shape.Type = EGSTN_ShapeType::Capsule;
@@ -78,14 +78,14 @@ UGSTN_GA_Test_RiderThrown::UGSTN_GA_Test_RiderThrown(const FObjectInitializer& O
 UGSTN_GA_Test_RiderBoostJump::UGSTN_GA_Test_RiderBoostJump(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetFrames(Timeline, 14, 10);
+	SetPairMoveFrames(Timeline, 14, 10);
 	AddPartnerMoveKey(Timeline, KeyFrame, GBoostJumpId);
 }
 
 UGSTN_GA_Test_CarrierBraced::UGSTN_GA_Test_CarrierBraced(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetFrames(Timeline, 12, 10);
+	SetPairMoveFrames(Timeline, 12, 10);
 	FGSTN_TimelineTrack_Tags Track;
 	Track.StartFrame = 0;
 	Track.EndFrame = LockFrames;
