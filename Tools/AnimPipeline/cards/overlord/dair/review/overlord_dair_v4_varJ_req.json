@@ -1,0 +1,306 @@
+{
+ "variant": "overlord_dair_v4_varJ",
+ "status": "STOPPED after 2 attempts: verify 17/17 PASS both times, check FAIL clearance (crossed arms into the chest), no render",
+ "video": false,
+ "hitstop": 8,
+ "_frames": "anim frames (owner's FAF 37 = anim 37). Delays on hands/head are measured on z(bone) - z(pelvis) ('rel'): absolute z is dominated by the 15 cm pelvis dip. J adds absolute-z timing: the trunk follow-through must move the absolute minimum of head and hands after the pelvis (anim 19).",
+ "reqs": [
+  {
+   "id": "lean_f0_unchanged",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 0,
+   "min": 22,
+   "max": 30
+  },
+  {
+   "id": "lean_f31_stomp_hold_unchanged",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 31,
+   "min": -26,
+   "max": -18
+  },
+  {
+   "id": "lean_f37_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 37,
+   "min": 5,
+   "max": 8
+  },
+  {
+   "id": "lean_f40_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 40,
+   "min": 5,
+   "max": 9
+  },
+  {
+   "id": "lean_f42_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 42,
+   "min": 5,
+   "max": 10
+  },
+  {
+   "id": "pelvis_dip_peak_to_peak_x2",
+   "type": "amplitude",
+   "bone": "pelvis",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 12,
+   "max": 22
+  },
+  {
+   "id": "head_nod_visible",
+   "type": "amplitude",
+   "bone": "head",
+   "coord": "y",
+   "window": [
+    17,
+    31
+   ],
+   "min": 6
+  },
+  {
+   "id": "hand_l_follow_visible",
+   "type": "amplitude",
+   "bone": "hand_l",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 8
+  },
+  {
+   "id": "knee_l_fold",
+   "type": "amplitude",
+   "bone": "calf_l",
+   "coord": "y",
+   "window": [
+    17,
+    31
+   ],
+   "min": 6
+  },
+  {
+   "id": "hand_l_peak_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_l",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 2,
+   "max": 4,
+   "rel": "pelvis"
+  },
+  {
+   "id": "hand_r_peak_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_r",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 2,
+   "max": 4,
+   "rel": "pelvis"
+  },
+  {
+   "id": "head_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "head",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 1,
+   "max": 3,
+   "rel": "pelvis"
+  },
+  {
+   "id": "hand_l_rel_follow",
+   "type": "amplitude",
+   "bone": "hand_l",
+   "rel": "pelvis",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 3
+  },
+  {
+   "id": "head_abs_min_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "head",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 1,
+   "max": 3
+  },
+  {
+   "id": "hand_l_abs_min_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_l",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 1,
+   "max": 4
+  },
+  {
+   "id": "hand_r_abs_min_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_r",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 1,
+   "max": 4
+  },
+  {
+   "id": "head_abs_travel",
+   "type": "amplitude",
+   "bone": "head",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 10
+  }
+ ],
+ "attempt1": {
+  "spine_03_peak": -8,
+  "spine_05_peak": -4,
+  "clearance": "lowerarm_l|spine_03 -0.75 cm @f21, hand_l|spine_03 -0.70 @f22",
+  "abs_min_frame": {
+   "pelvis": 19,
+   "head": 20,
+   "hand_l": 20,
+   "hand_r": 20
+  },
+  "head_z_travel_cm": 14.05,
+  "head_y_amp_cm": 9.69,
+  "rel_delays": {
+   "hand_l": 3,
+   "hand_r": 2,
+   "head": 2
+  }
+ },
+ "attempt2": {
+  "spine_03_peak": -12,
+  "spine_05_peak": 0,
+  "clearance": "lowerarm_l|spine_03 -1.52 cm @f21, hand_l|spine_03 -1.33 @f21",
+  "abs_min_frame": {
+   "pelvis": 19,
+   "head": 20,
+   "hand_l": 20,
+   "hand_r": 20
+  },
+  "head_z_travel_cm": 14.85,
+  "rel_delays": {
+   "hand_l": 2,
+   "hand_r": 2,
+   "head": 2
+  },
+  "z_anim16_31": {
+   "pelvis": [
+    77.6,
+    76.6,
+    71.6,
+    66.6,
+    69.7,
+    75.8,
+    80.9,
+    81.5,
+    79.1,
+    75.7,
+    74.8,
+    75.9,
+    77.5,
+    78.0,
+    77.8,
+    77.6
+   ],
+   "head": [
+    131.1,
+    130.1,
+    126.5,
+    121.6,
+    119.3,
+    122.9,
+    130.0,
+    134.2,
+    134.1,
+    131.1,
+    129.3,
+    129.4,
+    130.5,
+    131.4,
+    131.4,
+    131.1
+   ],
+   "hand_l": [
+    112.9,
+    111.9,
+    108.8,
+    105.3,
+    104.2,
+    109.5,
+    114.8,
+    116.8,
+    115.6,
+    113.5,
+    112.5,
+    112.2,
+    113.1,
+    113.7,
+    113.2,
+    112.9
+   ]
+  }
+ },
+ "head_min_f21_infeasible": "pelvis rises 9.2 cm from 19 to 21; head z rel pelvis moves +0.22 cm per spine_03 degree, so a head minimum at 21 needs ~40 deg of trunk pitch (or a different pelvis timing). With the -22 deg backward hold, a forward pitch RAISES the head; only the head-down sign (X negative) was used."
+}

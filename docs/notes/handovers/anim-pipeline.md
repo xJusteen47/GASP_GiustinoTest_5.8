@@ -697,3 +697,21 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - foot_l "279 cm" a 14→15: artefatto della metrica (norma di loc cm + Euler gradi con wrap). Passo reale 63 cm e ~45°, uguale su
   foot_r: è lo stomp, identico nel V4 base e in tutte le varianti. Non è una regressione.
 - Da fare: revisione visiva (cloud) e decisione owner applica/scarta. Costo: ~45 chiamate, contesto ~90k, circa $9.
+
+## Dair variante J: follow-through nel tronco, FERMA dopo 2 tentativi (2026-11-03, thread desktop Opus)
+- Ramo `claude/project-thread-0pafeo` da 057bd21. I scartata (`variant discard`), J aperta e riempita da I (git 057bd21) con
+  `Tools/AnimPipeline/dair_varJ_make.py [S3] [S5]`: unica correzione = pitch extra su spine_03 (+spine_05) in ritardo sul bacino,
+  profilo 20/21/22/23 = 0,75/1/0,65/0,2 del picco, overshoot 24-26 (-0,3/-0,375/-0,25), rientro a 28; mani: upperarm X
+  19 -0,8° (su), 20 +1,8° (giù). Nulla prima di 19 né dopo 27: lean 0/31/37/40/42 = 26,3/-22,6/6,3/7,9/8,3° invariati.
+- **Segno**: col tronco nell'hold a -22° (indietro), un pitch "avanti" ALZA la testa. Usato il segno che la abbassa (X negativo).
+- Tentativo 1 (spine_03 -8, spine_05 -4): verify 17/17, check FAIL clearance lowerarm_l|spine_03 -0,75 cm @21.
+- Tentativo 2 (spine_03 -12, spine_05 0): verify 17/17, clearance peggiore -1,52 cm @21. Fermo (regola 2 tentativi), niente
+  render (rifiutato con check FAIL). La card resta al tentativo 2.
+- Misurato (t2): minimi assoluti z bacino 19, testa **20**, mani **20** (prima 19); corsa testa z 14,85 cm; dip bacino 14,84;
+  ginocchio 10,98; ritardi rel mani 2/2, testa 2. Tutto in `cards/overlord/dair/review/overlord_dair_v4_varJ_req.json`.
+- **Minimo testa a f21 non fattibile così**: il bacino sale 9,2 cm da 19 a 21, la testa si muove 0,22 cm/° di spine_03 → servono
+  ~40° di tronco. Serve cambiare il timing del bacino (decisione review/owner) oppure accettare il minimo a 20 (ritardo 1).
+- Cosa serve per chiudere J: compensare la clearance delle braccia incrociate durante il pitch (upperarm/lowerarm FK che
+  allontanano l'avambraccio sinistro dal petto a 20-23, misurare la sensibilità prima) oppure picco ≤ ~5° (I aveva -7,8 a 21
+  senza penetrazione: il margine è ~0,4 cm). Poi render standalone e griglie f17-42.
+- Costo: ~35 chiamate, contesto ~70k, circa $6.

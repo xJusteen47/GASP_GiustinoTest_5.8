@@ -1,14 +1,14 @@
 {
- "move": "overlord_dair_v4_varI",
+ "move": "overlord_dair_v4_varJ",
  "class": "tilt",
- "anim": "/Game/AnimPipeline/Rig/AS_OverlordDAirV4_Build_VarI",
+ "anim": "/Game/AnimPipeline/Rig/AS_OverlordDAirV4_Build_VarJ",
  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
  "fps": 60,
  "timing_csv": "refs/ufd/GanondorfDAir_timing.csv",
  "effector": "foot_l",
  "_design": "Kit overlord ('elegant violence', M. Bison / Rugal). Ganondorf dair timing (UFD: startup 16, active 16-18, total 44 -> anim active 14-16, FAF 42) and its shape (knees tucked to the chest, both feet driven straight down); M. Bison head-stomp upper body: the arms rise and cross above the head through the startup, then fold on the chest (Bison's crossed arms) as the feet strike, and stay folded. Aerial: no idle entry, frame 0 already in the air tuck. No owner Step poses: the poses are authored data (author block), v1 for the owner's judgement. v1b (owner refs IMG_9040/9041 seen): arms folded tight and high on the chest, hands on the opposite upper arm; toes pointed at the stomp. v2 (2026-11-02): owner's Cascadeur key poses (Saved/AnimPipeline/overlord_dair_owner.casc, frames 15 and 23, read with casc_to_author.py; data in Saved/AnimPipeline/dair_v2/owner_poses_cascadeur.json) replace the anticipation and the stomp: owner 15 (tight ball, knees to the chest, forearms crossed in front of the face) -> anim 12, held and compressed to 13; owner 23 (straight vertical body leaning back, legs together, crossed arms high on the chest) -> anim 14, so the whole extension lands ON the first hitbox frame. Ganondorf timing kept (owner). Villain hand (open, fingers straight and together) at the anticipation, as asked. Owner rule: 'too much is just right' (Sakurai): toes pointed harder than his pose (-45). Clearance fix: crossed forearms 9-16 cm further forward at 12-13 (right in front of the left), head tuck 35% less; folded hands 3-6 cm off the chest in the recovery. Clearance pass 2: right forearm 5 cm above the left at 12-13, elbows wider; folded hands 5 cm further off the chest from 14. v3 (owner review of v2): arms, trunk and legs move as one: the arms travel relative to the trunk on every segment (low at the sides -> wide and rising at 6 -> crossing at chest height at 10 -> owner's crossed forearms in front of the face at 12 -> pushed up at 13 -> slammed down onto the chest at 14 with the legs), the trunk curls progressively (0 -> 6 -> 10 -> 12) instead of all at once. Head lag removed (part_delays head 0): the head reached its stomp pose one frame after the hit, so it snapped after the hitstop; hitstop_snap now counts the head's turn (20 cm lever). v4 (owner timing, replaces the GIF timing): initial pose almost upright, one knee up, arms open, hands open (0) -> extreme charge reached at 5 (owner 15) -> charge held and still tightening to 11 -> release starts at 12-13 (still reads as the charge) -> stomp lands on 14 (active 14-16) -> stomp held to 30 with a small settle -> recovery to 42. Slow, heavy move. Charge hold is alive: 5->11 the feet tuck 8 cm higher, the hands rise 8 cm, the trunk curls 6 deg, all together. Release spread 11->14 (owner: a slow move takes a few frames to let the force go): 15% at 12, 42% at 13, the last and largest 58% lands on 14. Owner: the first frame is already drawn in and loaded (55% of the way to the charge, arms pulled back with elbows behind), so 5 extremises a loaded pose. Owner: hitbox from anim frame 15 (16th frame); the charge hold runs to 12, release 12->15; charge poses more drawn in (feet +5 cm, trunk -6 deg). Frame 0 (owner: a sharp start, not already the charge): legs half drawn, trunk 30% curled, arms flung open wide and low behind the shoulders with open hands; 3: the arms sweep above the head and start crossing on the way; 5: the charge. Owner: knees stay in front, tucked to the chest through the charge (knee pole forward, feet under the hips, the hold creeps forward not up); key 2 keeps both arms rising wide together. Owner round: feet side by side at the stomp (no crossed ankles), villain hands bent 35 deg outward at the wrist 0-12. Owner review of that round: the arms got worse and the frog-open knees at 14 were right, so the arms at 3/5/12/13 (trunk at 3 included) and the knee poles at 13-14 are back to the previous round. Owner 02/11 22:43: charge (5, held to 12) = his Cascadeur f15, stomp (15-17, 31 with the 2 cm settle) = his f23, both read with casc_to_author (rescale, ratios 1.0 on these rigs) and locked in `approved`; pelvis height, fingers, wrist_out and the side-by-side feet stay the pipeline's. Why the charge had drifted: later rounds moved the hands +8 cm up and forward, added clavicle offsets and changed the trunk curl and head tuck by hand. Owner 02/11 22:56: the charge stays alive: only 5 is his f15 as is (locked); 12 = f15 plus the v4c hold deltas. Hold legs: feet tuck 6 cm forward and 6 up from 5 to 12 (co_motion: the legs must travel with the curling trunk). Owner 02/11 23:16: the stomp keeps his f23 feet (crossed ankles); the side-by-side exception is dropped for the dair.",
  "_manual": "Owner hand tweaks live on the additive 'Manuale' section of the rig track in /Game/AnimPipeline/Rig/LS_OverlordDAirV4_Build; animpipe build keeps them (cards/README.md). Arms are FK on this rig (arm_*_fk_ik_switch 0): key the *_fk_ctrl controls, the hand IK controls do nothing. Legs are IK.",
- "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAir_V4_VarI",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAir_V4_VarJ",
  "poses": [
   {
    "name": "start",
@@ -477,7 +477,7 @@
   }
  ],
  "author": {
-  "take": "AS_Pilot_OverlordDAir_V4_VarI",
+  "take": "AS_Pilot_OverlordDAir_V4_VarJ",
   "frames": 43,
   "poses": {
    "0": {
@@ -3684,10 +3684,10 @@
  "approved": [],
  "variant": {
   "of": "overlord_dair_v4",
-  "letter": "I",
-  "why": "I: H con segno mani invertito (su questo rig upperarm X negativo alza), lobo positivo <=+4 gradi, spina guidata dalla velocita del bacino (testa in ritardo 2 frame), ritardi misurati relativi al bacino",
+  "letter": "J",
+  "why": "J (da I): follow-through nel tronco, pitch spine_03+spine_05 in ritardo sul bacino (review cloud di I)",
   "base_sha": "3fb9fbdd852a",
-  "at": "20261103_215033"
+  "at": "20261103_221209"
  },
  "edits": [
   {
@@ -3853,11 +3853,11 @@
     19
    ],
    "delta": [
-    -6.0,
+    -6.8,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_r_fk_ctrl",
@@ -3866,11 +3866,11 @@
     19
    ],
    "delta": [
-    -6.0,
+    -6.8,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "body_ctrl",
@@ -3931,11 +3931,11 @@
     20
    ],
    "delta": [
-    -3.9,
+    -12.9,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -3944,11 +3944,11 @@
     20
    ],
    "delta": [
-    -4.6,
+    -2.8,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_r_fk_ctrl",
@@ -3957,11 +3957,11 @@
     20
    ],
    "delta": [
-    -4.6,
+    -2.8,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "body_ctrl",
@@ -4022,11 +4022,11 @@
     21
    ],
    "delta": [
-    -7.8,
+    -19.8,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -4113,11 +4113,11 @@
     22
    ],
    "delta": [
-    -6.5,
+    -14.3,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -4204,11 +4204,11 @@
     23
    ],
    "delta": [
-    -0.65,
+    -3.05,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -4295,11 +4295,11 @@
     24
    ],
    "delta": [
-    3.25,
+    6.85,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -4386,11 +4386,11 @@
     25
    ],
    "delta": [
-    4.55,
+    9.05,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -4477,11 +4477,11 @@
     26
    ],
    "delta": [
-    1.3,
+    4.3,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -4542,11 +4542,11 @@
     27
    ],
    "delta": [
-    -1.3,
+    -0.1,
     0,
     0
    ],
-   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino"
+   "why": "owner 03/11 I (da H): mani tenute su mentre il bacino scende (18-20), poi in ritardo giu a 21-23 (<=+4 gradi) e su a 25-27; spina dalla velocita del bacino: testa su nella discesa, giu nel rimbalzo, 2 frame dopo il bacino | review 03/11 J (da I): follow-through nel tronco, pitch avanti/giu su spine_03+spine_05 in ritardo sul bacino (picco a 21, overshoot 24-25, rientro a 28)"
   },
   {
    "control": "upperarm_l_fk_ctrl",
@@ -4802,5 +4802,24 @@
  "_varI": {
   "sp": 1.3,
   "hand_scale": 1.0
+ },
+ "_varJ": {
+  "s3": 12.0,
+  "s5": 0.0,
+  "profile": {
+   "19": 0.0,
+   "20": 0.75,
+   "21": 1.0,
+   "22": 0.65,
+   "23": 0.2,
+   "24": -0.3,
+   "25": -0.375,
+   "26": -0.25,
+   "27": -0.1
+  },
+  "hand": {
+   "19": -0.8,
+   "20": 1.8
+  }
  }
 }
