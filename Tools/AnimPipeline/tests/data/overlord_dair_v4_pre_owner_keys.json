@@ -1479,7 +1479,7 @@
     "leg_l",
     "leg_r"
    ],
-   "ref": "overlord/overlord_dair_v4.json",
+   "ref": "../tests/data/overlord_dair_v4_pre_owner_keys_ref.json",
    "by": "owner",
    "date": "2026-11-02",
    "why": "owner 02/11: ginocchia a rana giuste"
@@ -1496,7 +1496,7 @@
     "leg_l",
     "leg_r"
    ],
-   "ref": "overlord/overlord_dair_v4.json",
+   "ref": "../tests/data/overlord_dair_v4_pre_owner_keys_ref.json",
    "by": "owner",
    "date": "2026-11-02",
    "why": "owner 02/11: frame 5 = his Cascadeur f15 exactly, locked (no corrections); 6-12 keep the charge alive around it (v4c hold deltas), not locked"
@@ -1515,7 +1515,7 @@
     "leg_l",
     "leg_r"
    ],
-   "ref": "overlord/overlord_dair_v4.json",
+   "ref": "../tests/data/overlord_dair_v4_pre_owner_keys_ref.json",
    "by": "owner",
    "date": "2026-11-02",
    "why": "owner 02/11 22:43 + 23:16 ('f23 andava bene'): stomp = his Cascadeur f23 exactly, legs and crossed ankles included, locked (31 = f23 with the 2 cm settle); fingers stay the pipeline's"

@@ -34,7 +34,7 @@ def _rotate_subtree(P, R, root, M, pivot=None):
         for b, p in PARENT.items():
             if p in kids and b not in kids:
                 kids.add(b); changed = True
-    for b in kids:
+    for b in kids & set(P):          # PARENT also lists bones a pose may not solve (thumbs)
         P[b] = pivot + M @ (P[b] - pivot); R[b] = M @ R[b]
 
 
