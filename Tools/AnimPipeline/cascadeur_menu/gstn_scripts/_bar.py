@@ -8,8 +8,10 @@ Opened by the application_started event (gstn_events) and by Scripts > GSTN > Mo
 import csc
 from PySide6 import QtCore, QtGui, QtQml
 
-BUTTONS = [   # (label, Scripts action id, tooltip)
-    ("Esporta per Unreal", "Scripts.GSTN.Esporta per Unreal", "Salva, esporta le ossa e chiede a Claude l'import nella scheda"),
+# Plain QtQuick items, no QtQuick.Controls: after a restart Cascadeur's Controls style drew the buttons as white boxes and
+# showed every ToolTip at once (owner screenshot 2026-11-03). Tooltips dropped: the labels say what each button does.
+BUTTONS = [   # (label, Scripts action id, description for the docs)
+    ("Esporta", "Scripts.GSTN.Esporta per Unreal", "Salva, esporta le ossa e chiede a Claude l'import nella scheda"),
     ("Segna chiave", "Scripts.GSTN.Segna chiave (frame corrente)", "Il frame corrente diventa (o smette di essere) una chiave tua"),
     ("Annulla import", "Scripts.GSTN.Annulla ultimo import (chiedi a Claude)", "Chiede a Claude di rimettere la scheda com'era"),
     ("Stato", "Scripts.GSTN.Stato", "Mossa, chiavi, richieste in attesa"),
@@ -17,29 +19,38 @@ BUTTONS = [   # (label, Scripts action id, tooltip)
 
 QML = """
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 Window {
     id: win
     title: "GSTN"
     flags: Qt.Tool | Qt.FramelessWindowHint
-    color: "#202020"
-    width: row.implicitWidth + 6; height: 26
+    color: "#262626"
+    width: row.implicitWidth + 8; height: 26
     RowLayout {
         id: row
         anchors.centerIn: parent
-        spacing: 4
+        spacing: 3
         Repeater {
             model: gstnButtons
-            delegate: Button {
+            delegate: Rectangle {
                 required property var modelData
-                text: modelData.label
-                font.pixelSize: 12
-                implicitHeight: 22
-                topPadding: 2; bottomPadding: 2; leftPadding: 8; rightPadding: 8
-                ToolTip.visible: hovered
-                ToolTip.text: modelData.tip
-                onClicked: gstnBridge.call(modelData.action)
+                implicitWidth: label.implicitWidth + 16; implicitHeight: 20
+                radius: 3
+                color: area.pressed ? "#1e6fb8" : (area.containsMouse ? "#4a4a4a" : "#383838")
+                border.color: "#505050"
+                Text {
+                    id: label
+                    anchors.centerIn: parent
+                    text: modelData.label
+                    color: "#e6e6e6"
+                    font.pixelSize: 12
+                }
+                MouseArea {
+                    id: area
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: gstnBridge.call(modelData.action)
+                }
             }
         }
     }
@@ -65,7 +76,7 @@ def _main_window():
     return best
 
 
-CAPTION_BUTTONS = 150   # width of Windows' minimize/maximize/close on the main window's title bar
+CAPTION_BUTTONS = 190   # Windows' minimize/maximize/close on the title bar, plus a margin
 
 
 def _place():
@@ -74,7 +85,10 @@ def _place():
     if win is None or main is None:
         return
     fg = main.frameGeometry(); top = main.geometry().y() - fg.y()
-    win.setPosition(fg.x() + fg.width() - CAPTION_BUTTONS - win.width(), fg.y() + max(0, (top - win.height()) // 2))
+    avail = main.screen().availableGeometry()
+    right = min(fg.x() + fg.width(), avail.x() + avail.width())        # a maximized window's frame runs off screen
+    y = max(fg.y(), avail.y()) if top >= win.height() else main.geometry().y()
+    win.setPosition(right - CAPTION_BUTTONS - win.width(), y + max(0, (top - win.height()) // 2))
 
 
 def show():
@@ -89,6 +103,7 @@ def show():
         if not roots:
             raise RuntimeError("GSTN bar: QML did not load")
         win = roots[0]
+        win.widthChanged.connect(lambda *_: QtCore.QTimer.singleShot(0, _place))
         _state.update(engine=eng, bridge=bridge, win=win)
     main = _main_window()
     if main is not None and _state.get("main") is not main:
