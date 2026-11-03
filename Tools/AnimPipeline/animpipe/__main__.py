@@ -7,6 +7,10 @@
     python -m animpipe build <card.json>        card -> sparse keys + tangents on the rig -> AnimSequence at the card fps
     python -m animpipe trails <card.json>       motion trails, one composite image (3 views, build over source)
     python -m animpipe poses <card.json> [--frames=] [--take=] [--over=]   pose checkpoint grid (one image)
+    python -m animpipe approve <card.json> --frames=13,14 --parts=leg_l,leg_r --why="..."   lock accepted poses (cards/<kit>/approved/)
+    python -m animpipe diff <card.json> [--vs=<card.json>]      author-pose displacement per frame x part vs the previous version
+    python -m animpipe capture <card.json> [--from=<layer.json>]   keep the Manuale layer backup in git (cards/<kit>/manual/)
+    (any card command) --unlock=leg_l@14,arm_l@3   skip the approved guard for those part@frame pairs, one line printed each
     python -m animpipe check <card.json>        the three check classes on the card's built anim (animpipe/checks.py)
     python -m animpipe review <card.json> [--hitstop=8] [--at=<active frame>] [--force]   build + check + in-game render, gated:
                                                 no render while a blocking check fails (--force renders anyway)
@@ -92,6 +96,7 @@ def roundtrip(anim, name, opt):
 
 def build(path):
     from animpipe.card import load, key_frames, segments
+    from animpipe import locks
     c = load(path)
     name = c["anim"].rsplit("/", 1)[1][3:]
     num, den = (125, 2) if str(c["fps"]) == "62.5" else (int(c["fps"]), 1)
@@ -101,7 +106,7 @@ def build(path):
             "planted": c.get("planted", []), "edits": c.get("edits", []), "drop": c.get("drop", []), "hitstop_blend": c.get("hitstop_blend", []),
             "ease_out": {str(q["frame"]): q["ease_out"] for q in c["poses"] if q.get("ease_out")},
             "lock_lengths": c.get("lock_lengths", True),
-            "manual_out": os.path.join(OUT, f"{c['move']}_manual_layer.json").replace("\\", "/"), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
+            "manual_in": (locks.manual_path(c, path) or "").replace("\\", "/"), "manual_out": os.path.join(OUT, f"{c['move']}_manual_layer.json").replace("\\", "/"), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
     t0 = time.time()
     r = _ue_py("build", spec=spec)
     if r.get("export_ok"):
@@ -158,6 +163,9 @@ def review(path, opt):
 def main():
     cmd, args = sys.argv[1], [a for a in sys.argv[2:] if not a.startswith("--")]
     opt = dict((a[2:].split("=", 1) + [""])[:2] for a in sys.argv[2:] if a.startswith("--"))
+    if opt.get("unlock"):
+        from animpipe import card, locks
+        card.UNLOCK.update(locks.parse_unlock(opt["unlock"]))
     if cmd == "roundtrip":
         roundtrip(args[0], args[1], opt)
     elif cmd == "tangent":
@@ -192,7 +200,24 @@ def main():
     elif cmd == "card":
         from animpipe.card import load, key_frames, windows
         c = load(args[0])
-        print(f"card {c['move']} OK: keys {key_frames(c)} windows {windows(c)}")
+        try:
+            w = windows(c)
+        except OSError:
+            w = "n/a (timing CSV not found here)"
+        from animpipe.locks import timing_line
+        print(f"card {c['move']} OK: keys {key_frames(c)} windows {w}; approved {len(c.get('approved', []))}; {timing_line(c)}")
+        if c.get("manual"):
+            m = c["manual"]
+            print(f"manual: {m['keys']} keys on parts " + ", ".join(f"{p} {fr}" for p, fr in m["parts"].items()))
+    elif cmd == "capture":
+        from animpipe.locks import capture
+        capture(args[0], opt.get("from") or None, opt.get("by", "owner"))
+    elif cmd == "approve":
+        from animpipe.locks import approve
+        approve(args[0], opt["frames"].split(","), opt["parts"].split(","), opt["why"], opt.get("by", "owner"))
+    elif cmd == "diff":
+        from animpipe.locks import diff
+        diff(args[0], opt.get("vs"))
     else:
         print(__doc__)
 

@@ -22,6 +22,10 @@ in degrees about those axes (+rx tips up -> back, i.e. a forward lean is negativ
            (owner: the villain hand reads only when it breaks the arm line); blended per frame
   fingers  [open, 0, 0]   0 = the template's fists (default), 1 = the overlord "villain hand": open and flat, fingers
            straight and pressed together (joints 01-03 straightened, metacarpals as the template); blended per frame.
+thumb (author block, not per pose): "along" (default) or "open". With `fingers` > 0 the thumb leaves the template fist by
+           the same blend: "along" lays it straight beside the index (the villain hand), "open" spreads it away from the
+           index in the palm plane. The angles are THUMB below (the one place to change). Needs thumb_01..03 in the
+           template cache; run() resamples the cache once through the bridge when they are missing.
 Fingers keep the template's fists unless `fingers` opens them. Limbs are two-bone IK in the plane of the pole; each bone's roll comes from mapping its
 idle (aim, hinge) frame onto the new one, so elbows and knees keep their hinge.
 """
@@ -47,6 +51,11 @@ for s in "lr":
         PARENT[f"{fg}_01_{s}"] = f"{fg}_metacarpal_{s}"
         PARENT[f"{fg}_02_{s}"] = f"{fg}_01_{s}"
         PARENT[f"{fg}_03_{s}"] = f"{fg}_02_{s}"
+    PARENT.update({f"thumb_01_{s}": f"hand_{s}", f"thumb_02_{s}": f"thumb_01_{s}", f"thumb_03_{s}": f"thumb_02_{s}"})
+THUMBS = [f"thumb_0{i}_{s}" for s in "lr" for i in (1, 2, 3)]
+# thumb poses for the open hand: degrees between the thumb line (thumb_01 -> thumb_03, joints straight) and the index line
+# (hand -> index_01), toward the thumb side in the palm plane. Owner to choose: "along" (beside the index) or "open".
+THUMB = {"along": 8.0, "open": 55.0}
 SPINE = ["spine_01", "spine_02", "spine_03", "spine_04", "spine_05"]
 NECK = ["neck_01", "neck_02", "head"]
 
@@ -95,10 +104,10 @@ def base():
     R = {b: q2m(_rot_to_quat(*v[3:6])) for b, v in idle.items()}
     loc_t, loc_r = {}, {}
     for b, p in PARENT.items():
-        if p is None:
+        if p is None or (b in THUMBS and b not in tm["local"]):     # an old template cache without thumbs: left as the template
             continue
         loc_t[b] = np.array(tm["local"][b][:3])
-        if b.split("_")[0] in ("index", "middle", "ring", "pinky"):
+        if b.split("_")[0] in ("index", "middle", "ring", "pinky", "thumb"):
             loc_r[b] = q2m(np.array(tm["local"][b][3:7]))
         else:
             loc_r[b] = R[p].T @ R[b]
@@ -126,9 +135,22 @@ def two_bone(S, T, pole, l1, l2):
     return S + u * x + w * h, T
 
 
+def _align(a, b):
+    """Shortest rotation taking direction a onto direction b."""
+    a = a / np.linalg.norm(a); b = b / np.linalg.norm(b)
+    v = np.cross(a, b); s = np.linalg.norm(v); c = float(np.dot(a, b))
+    if s < 1e-9:
+        return np.eye(3)
+    K = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.eye(3) + K + K @ K * ((1 - c) / s ** 2)
+
+
 class Poser:
-    def __init__(self):
-        self.P0, self.R0, self.lt, self.lr = base()
+    def __init__(self, thumb="along", rig=None):
+        if thumb not in THUMB:
+            raise ValueError(f"author thumb {thumb!r}: one of {sorted(THUMB)}")
+        self.thumb = thumb
+        self.P0, self.R0, self.lt, self.lr = rig or base()
         self.hinge0 = {}
         for s in "lr":
             for a, m, e in ((f"upperarm_{s}", f"lowerarm_{s}", f"hand_{s}"), (f"thigh_{s}", f"calf_{s}", f"foot_{s}")):
@@ -178,10 +200,30 @@ class Poser:
                         fk(b); self.lr[b] = keep
                     else:
                         fk(b)
+            self._thumb(P, R, s, fo, fk)
             fk(f"thigh_{s}")
             self._limb(P, R, f"thigh_{s}", f"calf_{s}", f"foot_{s}", pose.get(f"leg_{s}"), P["pelvis"], Dpel, "foot_rot")
             fk(f"ball_{s}")
         return P, R
+
+    def _thumb(self, P, R, s, fo, fk):
+        """Template fist thumb, blended by the fingers' opening toward a straight thumb at THUMB[self.thumb] degrees from
+        the index line, turned toward the thumb side about the palm normal (the knuckle line gives the side)."""
+        t1, t2, t3 = (f"thumb_0{i}_{s}" for i in (1, 2, 3))
+        if t3 not in self.lt:
+            return
+        fk(t1)
+        if fo <= 0:
+            fk(t2); fk(t3); return
+        h = P[f"hand_{s}"]; idx = P[f"index_01_{s}"] - h
+        across = P[f"index_01_{s}"] - P[f"pinky_01_{s}"]
+        n = np.cross(idx, across); n /= max(np.linalg.norm(n), 1e-9)      # palm normal; rotating idx about n moves it to the thumb side
+        tgt = rv(n * THUMB[self.thumb]) @ idx
+        cur = R[t1] @ self.lt[t2]
+        R[t1] = _slerp_m(R[t1], _align(cur, tgt) @ R[t1], fo)
+        for b in (t2, t3):
+            keep = self.lr[b]; self.lr[b] = _slerp_m(keep, np.eye(3), fo)
+            fk(b); self.lr[b] = keep
 
     def _limb(self, P, R, a, m, e, spec, origin, D, rot_key):
         l1, l2 = np.linalg.norm(self.lt[m]), np.linalg.norm(self.lt[e])
@@ -227,15 +269,36 @@ def frames(author):
     return out
 
 
+def _opens(au):
+    return any(float((p.get("fingers") or [0])[0]) > 0 for p in au["poses"].values())
+
+
+def _thumb_cache(au):
+    """Open hands need the template's thumb bones; an older cache lacks them: resample it once through the bridge."""
+    if not _opens(au):
+        return
+    tm = json.load(open(TMPL))
+    if set(THUMBS) <= set(tm["local"]):
+        return
+    try:
+        import ue_write_take as W
+        W.template_frame0(tm["template"], sorted(set(tm["local"]) | set(THUMBS)))
+        print("author: template cache resampled with the thumbs")
+    except Exception as e:
+        print(f"author: thumbs left as the template fist (cache has no thumb bones, resample failed: {e})")
+
+
 def run(card_path, opt):
     from animpipe.card import load
     c = load(card_path)
     au = c["author"]
-    poser = Poser()
+    _thumb_cache(au)
+    poser = Poser(au.get("thumb", "along"))
     S = {}
     for f, pose in frames(au).items():
         P, R = poser.solve(pose)
-        S[str(f)] = {b: [P[b].tolist(), m2q(R[b]).tolist()] for b in P}
+        # fists: thumbs not written, so they keep the template's tracks exactly as before the thumb option
+        S[str(f)] = {b: [P[b].tolist(), m2q(R[b]).tolist()] for b in P if b not in THUMBS or _opens(au)}
     name = au["take"]
     rel = f"{c['move']}_bones.json"
     json.dump({"source": card_path, "space": "ue_component", "frames": S}, open(os.path.join(WORK, rel), "w"))

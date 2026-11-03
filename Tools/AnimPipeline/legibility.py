@@ -20,6 +20,13 @@ Pose checks:
              outline in the side and rear views (cm, + = outside).
   finger curl: summed joint angles of index..pinky (metacarpal -> 01 -> 02 -> 03), mean per finger, degrees.
 
+Strike block (move sheet "strike", a card supplies it through sheet_extra; see strike_of):
+  limb         arm_l (default) | arm_r | leg_l | leg_r | legs   the attacking part
+  hiders       parts that may hide it (rule B); default: the other arm for a punch, both arms for a kick; [] = rule B off
+  pose_checks  elbow_behind (C), rear_arm_cover (C2: rear elbow tucked against the body, side view), closed_fist (D);
+               default all three for a punch, none for a kick (the villain hand is open on purpose, the arms balance away)
+  The old strike_limb / strike_side fields still select a kick when there is no strike block.
+
 Usage:
   python legibility.py measure <AnimPath> <take> [contact=first-last] [faf=17]   sample (cached), measure, judge, heatmap
   python legibility.py spot <take> <frame> <view>                        mesh vs capsules (UE SceneCapture depth)
@@ -88,28 +95,101 @@ GAME_VIEWS = [v["name"] for v in VIEWS if v.get("game") in ("follow", "rail")]
 PVP_VIEWS = [v["name"] for v in VIEWS if v.get("game") == "pvp"]
 REAR_ARM = ["upperarm_r", "lowerarm_r", "hand_r"]
 # The attacking limb. Punch (default): the lead fist, its forearm, the lead arm; the rear arm is what may hide it.
-# Kick (move sheet "strike_limb": "leg_l", Ganondorf ftilt): the kicking foot, its shin, the lead leg; either arm may hide it
-# (the counterbalancing arms must stay off the kick). configure(take) switches before measuring.
+# Kick (strike limb leg_l, Ganondorf ftilt; legs, the overlord dair): the kicking foot(s), the shin(s), the leg(s); either
+# arm may hide it (the counterbalancing arms must stay off the kick). configure(take) switches before measuring.
+# ATTS / FORES / ATT_BONES / ATT_JOINTS are lists (two for "legs"); ATT and ATT_FORE are the first, for labels.
+# REAR is the side of the non-attacking arm whose elbow rules C/C2 watch (the result keys keep the name elbow_r_*).
+LIMBS = ("arm_l", "arm_r", "leg_l", "leg_r", "legs")
+POSE_CHECKS_ALL = ("elbow_behind", "rear_arm_cover", "closed_fist")
+_PARTS0 = {k: list(v) for k, v in PARTS.items()}
+_NEIGH0 = {k: list(v) for k, v in NEIGH.items()}
 ATT, ATT_FORE, ATT_BONE, ATT_JOINT = "hand_l", "lowerarm_l", "hand_l", "lowerarm_l"
+ATTS, FORES, ATT_BONES, ATT_JOINTS = [ATT], [ATT_FORE], [ATT_BONE], [ATT_JOINT]
 ATT_CHAIN = list(ARMS["l"])
 HIDERS = list(REAR_ARM)
+REAR = "r"
+POSE_CHECKS = set(POSE_CHECKS_ALL)
+STRIKE = {"limb": "arm_l", "hiders": list(REAR_ARM), "pose_checks": list(POSE_CHECKS_ALL)}
+SHEET = {}
 KICK = False
 
-def configure(take):
-    global ATT, ATT_FORE, ATT_BONE, ATT_JOINT, ATT_CHAIN, HIDERS, KICK, TAKE
-    TAKE = take
+def sheet_entry(take, anim=None):
+    """The move-sheet entry of a take. checks.py keys the entries by move name ("overlord_dair_v4") and passes the take
+    (asset name minus AS_), so a key lookup alone missed every card-driven move and the dair / ftilt v3.1 were judged as
+    punches. Key first (old hand-written entries), then the entry whose anim is this asset (the last one wins)."""
     try:
-        sh = json.load(open(os.path.join(HERE, "move_sheets.json"))).get(take, {})
+        ms = json.load(open(os.path.join(HERE, "move_sheets.json")))
     except Exception:
-        sh = {}
-    if sh.get("strike_limb") == "leg_l" and not KICK:
-        KICK = True
-        PARTS["shin_l"] = ["calf_l"]; PARTS["foot_l"] = ["foot_l"]
-        PNAMES[:] = list(PARTS)
-        NEIGH["shin_l"] = ["thigh_l", "foot_l"]; NEIGH["foot_l"] = ["shin_l"]
-        ATT, ATT_FORE, ATT_BONE, ATT_JOINT = "foot_l", "shin_l", "ball_l", "calf_l"
-        ATT_CHAIN = ["thigh_l", "shin_l", "foot_l"]
-        HIDERS = ARMS["l"] + ARMS["r"]
+        return {}
+    if isinstance(ms.get(take), dict):
+        return ms[take]
+    hits = [v for k, v in ms.items() if isinstance(v, dict) and not k.startswith("_") and v.get("anim")
+            and (v["anim"] == anim or v["anim"].rsplit("/", 1)[-1] == f"AS_{take}")]
+    return hits[-1] if hits else {}
+
+def _hider_parts(name, kick_sides):
+    """A hider entry: a part name (hand_r, torso, ...) or a group (arm_l, arm_r, arms, leg_l, leg_r, legs)."""
+    if name in ("arm_l", "arm_r"):
+        return list(ARMS[name[-1]])
+    if name == "arms":
+        return ARMS["l"] + ARMS["r"]
+    if name in ("leg_l", "leg_r", "legs"):
+        sides = "lr" if name == "legs" else name[-1]
+        return [p for s in sides for p in ([f"thigh_{s}", f"shin_{s}"] + ([f"foot_{s}"] if s in kick_sides else []))]
+    return [name]
+
+def strike_of(sh):
+    """The strike block of a move sheet with its defaults: {limb, hiders (part names), pose_checks}. The card supplies
+    sheet["strike"] through sheet_extra; without it the old strike_limb / strike_side fields pick the limb, so the move
+    sheets written before the block still behave as they did (a leg = kick defaults)."""
+    st = dict(sh.get("strike") or {})
+    limb = st.get("limb") or sh.get("strike_limb") or "arm_l"
+    if limb not in LIMBS:
+        raise ValueError(f"strike limb {limb!r}: one of {LIMBS}")
+    kick = limb.startswith("leg")
+    sides = ("lr" if limb == "legs" else limb[-1]) if kick else ""
+    if "hiders" in st:
+        hiders = [p for h in st["hiders"] for p in _hider_parts(h, sides)]
+    else:
+        hiders = ARMS["l"] + ARMS["r"] if kick else list(ARMS["r" if limb == "arm_l" else "l"])
+    own = ([f"{q}_{s}" for s in sides for q in ("thigh", "shin", "foot")] if kick else list(ARMS[limb[-1]]))
+    hiders = [p for p in dict.fromkeys(hiders) if p not in own]
+    pc = list(st.get("pose_checks", [] if kick else POSE_CHECKS_ALL))
+    bad = [p for p in pc if p not in POSE_CHECKS_ALL]
+    if bad:
+        raise ValueError(f"strike pose_checks {bad}: one of {POSE_CHECKS_ALL}")
+    return {"limb": limb, "hiders": hiders, "pose_checks": pc}
+
+def configure(take, anim=None, sheet=None):
+    """Set the attacking limb, the hiders and the pose checks from the move sheet (sheet= for tests). Rebuilt from the
+    import-time parts every call, so a worker process or a second take never stacks the kick split twice."""
+    global ATT, ATT_FORE, ATT_BONE, ATT_JOINT, ATTS, FORES, ATT_BONES, ATT_JOINTS, ATT_CHAIN, HIDERS, REAR, POSE_CHECKS
+    global STRIKE, SHEET, KICK, TAKE
+    TAKE = take
+    SHEET = sheet if sheet is not None else sheet_entry(take, anim)
+    STRIKE = strike_of(SHEET)
+    limb = STRIKE["limb"]
+    PARTS.clear(); PARTS.update({k: list(v) for k, v in _PARTS0.items()})
+    NEIGH.clear(); NEIGH.update({k: list(v) for k, v in _NEIGH0.items()})
+    KICK = limb.startswith("leg")
+    if KICK:
+        sides = "lr" if limb == "legs" else limb[-1]
+        for s in sides:
+            PARTS[f"shin_{s}"] = [f"calf_{s}"]; PARTS[f"foot_{s}"] = [f"foot_{s}"]
+            NEIGH[f"shin_{s}"] = [f"thigh_{s}", f"foot_{s}"]; NEIGH[f"foot_{s}"] = [f"shin_{s}"]
+        ATTS = [f"foot_{s}" for s in sides]; FORES = [f"shin_{s}" for s in sides]
+        ATT_BONES = [f"ball_{s}" for s in sides]; ATT_JOINTS = [f"calf_{s}" for s in sides]
+        ATT_CHAIN = [f"{q}_{s}" for s in sides for q in ("thigh", "shin", "foot")]
+        REAR = "r"
+    else:
+        s = limb[-1]
+        ATTS, FORES, ATT_BONES, ATT_JOINTS = [f"hand_{s}"], [f"lowerarm_{s}"], [f"hand_{s}"], [f"lowerarm_{s}"]
+        ATT_CHAIN = list(ARMS[s])
+        REAR = "r" if s == "l" else "l"
+    PNAMES[:] = list(PARTS)
+    ATT, ATT_FORE, ATT_BONE, ATT_JOINT = ATTS[0], FORES[0], ATT_BONES[0], ATT_JOINTS[0]
+    HIDERS = [p for p in STRIKE["hiders"] if p in PARTS]
+    POSE_CHECKS = set(STRIKE["pose_checks"])
     return KICK
 
 
@@ -337,9 +417,9 @@ def workers():
     n = int(os.environ.get("LEG_WORKERS", "0") or 0)
     return n if n > 0 else max(1, (os.cpu_count() or 2) - 6)
 
-def _init_worker(take):
+def _init_worker(take, sheet):
     if take:
-        configure(take)
+        configure(take, sheet=sheet)
 
 def measure(frames):
     out = {"views": VNAMES, "parts": PNAMES, "frames": {}}
@@ -351,7 +431,7 @@ def measure(frames):
             print(f"  frame {fs} done", flush=True)
         return out
     import multiprocessing as mp
-    with mp.get_context("spawn").Pool(n, initializer=_init_worker, initargs=(TAKE,)) as pool:
+    with mp.get_context("spawn").Pool(n, initializer=_init_worker, initargs=(TAKE, SHEET)) as pool:
         for fs, rowf in zip(keys, pool.starmap(measure_frame, [(fs, frames[fs]) for fs in keys], chunksize=1)):
             out["frames"][fs] = rowf
     print(f"  {len(keys)} frames done on {n} processes", flush=True)
@@ -362,7 +442,7 @@ def measure_frame(fs, fr):
     if True:
         prims = part_prims(fr)
         c5, fwd = chest_frame(fr)
-        elbow = bone_tf(fr, "lowerarm_r")[0]
+        elbow = bone_tf(fr, f"lowerarm_{REAR}")[0]
         # back surface of the chest: spine_05 / spine_04 capsule radius around the chest centre, along -fwd
         behind = float(np.dot(elbow - c5, -fwd) - SHAPES["spine_05"][0]["extent"][0])
         sideax = np.array([fwd[1], -fwd[0], 0.0])                                  # toward the character's left
@@ -399,13 +479,13 @@ def measure_frame(fs, fr):
                         vr["pairs"][f"{p}|{q}"] = [round(100 * n / a, 1), round(100 * occl / a, 1)]
             # share of the attacking fist that only the rear arm hides: covered (either depth order) by the rear arm and by
             # nothing else except its own forearm. Where torso or head already cover the fist, the rear arm is not to blame.
-            hl = masks[PNAMES.index(ATT)]
-            if hl.any():
+            hl = masks[[PNAMES.index(q) for q in ATTS]].any(axis=0)
+            if hl.any() and HIDERS:
                 rear = masks[[PNAMES.index(q) for q in HIDERS]].any(axis=0)
-                rest = masks[[i for i, q in enumerate(PNAMES) if q not in HIDERS + [ATT, ATT_FORE]]].any(axis=0)
+                rest = masks[[i for i, q in enumerate(PNAMES) if q not in HIDERS + ATTS + FORES]].any(axis=0)
                 vr["fist_rear_steal"] = round(100 * float((hl & rear & ~rest).sum()) / float(hl.sum()), 1)
             # the attacking limb as a whole (forearm + fist, or shin + foot) against everything that is not that limb
-            arm = masks[[PNAMES.index(ATT_FORE), PNAMES.index(ATT)]].any(axis=0)
+            arm = masks[[PNAMES.index(q) for q in FORES + ATTS]].any(axis=0)
             if arm.any():
                 notarm = masks[[i for i, q in enumerate(PNAMES) if q not in ATT_CHAIN]].any(axis=0)
                 vr["arm_l_distinct"] = round(100 * float((arm & ~notarm).sum()) / float(arm.sum()), 1)
@@ -429,7 +509,7 @@ def measure_frame(fs, fr):
                     vr["limb_out_cm"][s] = 0.0
                 ecol, erow = project(view, bone_tf(fr, f"lowerarm_{s}")[0])
                 vr["elbow_out_cm"][s] = round(signed_dist(body, ecol, erow) / px_per_cm(view), 1)
-            if KICK:     # rule F judges the kicking leg: reach out of the body, knee against the outline; arms kept as a*/info
+            if ATT_CHAIN != ARMS["l"]:   # rule F reads key "l" = the attacking limb (kicking leg(s), or arm_r); arm_l kept as "al"
                 vr["limb_out_cm"]["al"], vr["elbow_out_cm"]["al"] = vr["limb_out_cm"]["l"], vr["elbow_out_cm"]["l"]
                 am = masks[[PNAMES.index(q) for q in ATT_CHAIN]].any(axis=0) & ~body
                 ay, ax_ = np.nonzero(am)
@@ -439,8 +519,9 @@ def measure_frame(fs, fr):
                     vr["limb_out_cm"]["l"] = round(float(dd.max()) / px_per_cm(view), 1)
                 else:
                     vr["limb_out_cm"]["l"] = 0.0
-                kcol, krow = project(view, bone_tf(fr, ATT_JOINT)[0])
-                vr["elbow_out_cm"]["l"] = round(signed_dist(body, kcol, krow) / px_per_cm(view), 1)
+                # the knee (elbow) that reads best: for "legs" either knee out of the outline is the shape
+                vr["elbow_out_cm"]["l"] = round(max(signed_dist(body, *project(view, bone_tf(fr, j)[0])) for j in ATT_JOINTS)
+                                                / px_per_cm(view), 1)
             for s, arm in ARMS.items():
                 am = masks[[PNAMES.index(q) for q in arm]].any(axis=0)
                 holes = hull_mask(am | body) & ~U
@@ -486,7 +567,7 @@ def fist_extension(res, c0):
     if not p or not os.path.exists(p):
         return {}
     fr = json.load(open(p))["frames"]
-    h = {int(k): bone_tf(v, ATT_BONE)[0] for k, v in fr.items()}
+    h = {int(k): np.mean([bone_tf(v, b)[0] for b in ATT_BONES], axis=0) for k, v in fr.items()}
     d = h[c0] - h[0]; dd = float(np.dot(d, d)) or 1e-6
     return {k: float(np.dot(v - h[0], d)) / dd for k, v in h.items()}
 
@@ -499,25 +580,24 @@ def judge(res, contact, faf):
     #    (the game camera range), where the whole attacking arm is judged.
     for f in range(c0, c1 + 1):
         for v in TH["contact_views"]:
-            d = res["frames"][str(f)]["views"][v]["parts"][ATT]["distinct_x"]
-            if d < TH["fist_contact_distinct_min"]:
+            for att in ATTS:
                 vr = res["frames"][str(f)]["views"][v]
-                worst = max(((k.split("|")[1], val[0]) for k, val in vr["pairs"].items() if k.startswith(ATT + "|")
-                             and k.split("|")[1] not in NEIGH[ATT]), key=lambda x: x[1], default=("?", 0))
-                fl.append({"check": "fist not distinct at contact", "frame": f, "view": v, "fist_distinct_x": d, "with": worst})
+                d = vr["parts"][att]["distinct_x"] if len(ATTS) == 1 else vr["parts"].get(att, {}).get("distinct_x", 0.0)
+                if d < TH["fist_contact_distinct_min"]:
+                    worst = max(((k.split("|")[1], val[0]) for k, val in vr["pairs"].items() if k.startswith(att + "|")
+                                 and k.split("|")[1] not in NEIGH[att]), key=lambda x: x[1], default=("?", 0))
+                    fl.append({"check": "fist not distinct at contact", "frame": f, "view": v, "fist_distinct_x": d, "with": worst,
+                               **({"part": att} if len(ATTS) > 1 else {})})
     # B. while the attacking fist is out (>= steal_min_extension of its guard->contact reach, from contact on), the rear arm
     #    must not be what hides it (where torso/head hide it anyway it is not blamed). Back in the guard, a tucked rear arm
-    #    covering the lead fist from the rear-arm side is the guard itself, not the attack.
-    ext = fist_extension(res, c0)
+    #    covering the lead fist from the rear-arm side is the guard itself, not the attack. hiders = [] turns the rule off.
+    ext = fist_extension(res, c0) if HIDERS else {}
     strike_end = c1 + TH.get("steal_review_strike_extra_frames", 2)
     last = faf
     if KICK:      # the strike and its hold, not the re-chamber (legibility_thresholds.json _kick_steal_note)
-        try:
-            hw = json.load(open(os.path.join(HERE, "move_sheets.json"))).get(res.get("take"), {}).get("hold_window", [c0, c1])
-        except Exception:
-            hw = [c0, c1]
+        hw = SHEET.get("hold_window") or [c0, c1]
         last = min(faf, hw[1] + 1)
-    for f in [f for f in range(c0, last + 1) if ext.get(f, 1.0) >= TH.get("steal_min_extension", 0.15)]:
+    for f in [f for f in range(c0, last + 1) if HIDERS and ext.get(f, 1.0) >= TH.get("steal_min_extension", 0.15)]:
         for v in TH["steal_views"]:
             # gameplay cameras (f*, h*, p*): the whole time the fist is out. Low diagnostic views (az*): the strike itself
             # (contact + snap back); in the recovery spring they are reported only (see legibility_thresholds.json note)
@@ -526,16 +606,18 @@ def judge(res, contact, faf):
             s = res["frames"][str(f)]["views"][v].get("fist_rear_steal", 0)
             if s >= TH["fist_rear_steal_max"]:
                 fl.append({"check": "rear arm hides the fist", "frame": f, "view": v, "steal_pct": s})
-    # C. rear elbow: not behind the back plane of the chest (3D), confirmed in the views where it shows.
-    for f in sorted(res["frames"], key=int):
+    # C. rear elbow: not behind the back plane of the chest (3D), confirmed in the views where it shows (pose check
+    #    elbow_behind: a punch's guard rule).
+    for f in (sorted(res["frames"], key=int) if "elbow_behind" in POSE_CHECKS else []):
         r = res["frames"][f]
         if r["elbow_r_behind_back_cm"] > TH["elbow_behind_max_cm"]:
             out = {v: r["views"][v]["elbow_r_out_cm"] for v in TH["elbow_views"]}
             fl.append({"check": "rear elbow behind the back", "frame": int(f), "cm": r["elbow_r_behind_back_cm"],
                        "outside_outline_cm": out})
     # C2. rear elbow flaring away from the body during the move, seen from the side where the guard keeps it inside.
-    #     (Not for kicks: there both arms counterbalance away from the torso on purpose; arm_check keeps the elbows down.)
-    for f in ([] if KICK else range(c0, faf + 1)):
+    #     (pose check rear_arm_cover; off for kicks: both arms counterbalance away from the torso on purpose, arm_check
+    #     keeps the elbows down.)
+    for f in (range(c0, faf + 1) if "rear_arm_cover" in POSE_CHECKS else []):
         e = res["frames"][str(f)]["views"][TH["elbow_flare_view"]]["elbow_r_out_cm"]
         if e > TH["elbow_flare_max_cm"]:
             fl.append({"check": "rear elbow away from the body (side view)", "frame": f, "cm": e})
@@ -566,8 +648,8 @@ def judge(res, contact, faf):
         elbow = min(fr["views"][v]["elbow_out_cm"]["l"] for v in PVP_VIEWS)
         if reach < TH["limb_out_min_cm"] or elbow < TH["elbow_out_min_cm"]:
             fl.append({"check": "attacking arm not exaggerated out of the body", "frame": f, "reach_cm": reach, "elbow_out_cm": elbow})
-    # D. fists closed in the guard and at the FAF.
-    for f in sorted({0, faf}):
+    # D. fists closed in the guard and at the FAF (pose check closed_fist; off for the villain hand, open on purpose).
+    for f in (sorted({0, faf}) if "closed_fist" in POSE_CHECKS else []):
         for s in "lr":
             c = res["frames"][str(f)][f"curl_{s}"]
             if c < TH["curl_closed_min_deg"]:
@@ -581,8 +663,8 @@ def heatmap(res, take, contact, faf, flags):
     from matplotlib.colors import LinearSegmentedColormap
     load_th()
     nf = len(res["frames"]); fr = [str(i) for i in range(nf)]
-    keys = [(ATT, f"attacking {'foot' if KICK else 'fist'} ({ATT})"), (ATT_FORE, "attacking shin" if KICK else "lead forearm"), ("upperarm_r", "rear upper arm"),
-            ("lowerarm_r", "rear forearm"), ("hand_r", "rear hand"), ("head", "head"), ("arm_l", "ATTACKING ARM: forearm + fist area that reads, % of its side view (game rule on rows g*)")]
+    keys = [(ATT, f"attacking {'foot' if KICK else 'fist'} ({ATT})"), (ATT_FORE, "attacking shin" if KICK else "lead forearm"), (f"upperarm_{REAR}", "rear upper arm"),
+            (f"lowerarm_{REAR}", "rear forearm"), (f"hand_{REAR}", "rear hand"), ("head", "head"), ("arm_l", "ATTACKING ARM: forearm + fist area that reads, % of its side view (game rule on rows g*)")]
     cm = LinearSegmentedColormap.from_list("leg", ["#c0151b", "#f2a33a", "#f4e86a", "#5fb85a", "#1d7a37"])
     fig, axs = plt.subplots(len(keys) + 2, 1, figsize=(15, 3.0 * (len(keys) + 2)), constrained_layout=True)
     for ax, (p, label) in zip(axs, keys):
@@ -656,7 +738,8 @@ def report(res, take, flags, contact, faf):
     lines.append(f"guard (frame 0): rear elbow {g['elbow_r_body_cm'][1]} cm out to the side of the chest centre, "
                  f"{g['views']['az315']['elbow_r_out_cm']} cm outside the torso outline at az315 (info: the guard pose itself)")
     # worst distinct per key part over the move window
-    for p in [ATT, ATT_FORE] + [q for q in HIDERS if q not in (ATT, ATT_FORE)]:
+    lines.append(f"strike: limb {STRIKE['limb']}, hiders {HIDERS or 'none (rule B off)'}, pose checks {sorted(POSE_CHECKS) or 'none'}")
+    for p in ATTS + FORES + [q for q in HIDERS if q not in ATTS + FORES]:
         cells = [(res["frames"][f]["views"][v]["parts"].get(p, {}).get("distinct_x", 100), int(f), v)
                  for f in res["frames"] for v in VNAMES if contact[0] <= int(f) <= faf]
         d, f, v = min(cells)
@@ -715,7 +798,7 @@ if __name__ == "__main__":
         contact = contact if len(contact) == 2 else (contact[0], contact[0])
         faf = int(sys.argv[5]) if len(sys.argv) > 5 else 17
         t0 = time.time()
-        configure(take)
+        configure(take, anim)
         frames = sample(anim, take)
         jp = os.path.join(SHEETS, f"{take}_legibility.json")
         if os.path.exists(jp) and os.environ.get("LEG_REUSE"):

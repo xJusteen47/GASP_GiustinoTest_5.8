@@ -26,6 +26,26 @@ Every card and every review pass applies these; the checks that enforce one are 
 - **No interpenetration** accepted (`clearance`): fix forearms/head/crossed arms rather than accept them.
 - **Feet**: side by side unless the pose says otherwise; check the back view for crossed ankles and frog knees.
 
+## Disciplina di giro (plan 02/11 §8)
+- Un giro = una modifica dichiarata (parti x frame) + `animpipe diff` + `review`; il resto resta sotto lock.
+- Massimo 2 tentativi su una stessa correzione, poi handover con ciò che serve (regola 5 del progetto).
+- Prima di toccare una parte si legge il blocco `approved`; se la correzione chiesta tocca una parte bloccata si chiede
+  all'owner (una domanda sola) invece di sbloccare.
+
+## Blocchi di scheda per pose approvate e regole
+- `approved` `[{frames, parts, ref, by, date, why}]`: pose accettate dall'owner. Parti: `arm_l arm_r leg_l leg_r trunk head
+  hand_l hand_r`. `ref` e' la scheda di riferimento (path sotto `cards/`); `load()` ferma `build/check/review` se le pose
+  `author` ai frame bloccati differiscono dal `ref` oltre 0,5 cm / 1 grado (errore con frame, parte, campo). Il lock non
+  scade con la versione: la scheda v5 nasce con gli `approved` di v4. Si supera solo con `--unlock part@frame` E togliendo la
+  voce dalla scheda con un `why`.
+- `animpipe approve <scheda> --frames=13,14 --parts=leg_l,leg_r --why="..."`: aggiunge la voce (`ref` = la scheda stessa) e
+  scrive lo snapshot `cards/<kit>/approved/<move>.json`.
+- `animpipe diff <scheda> [--vs=<scheda>]`: spostamento massimo per frame x parte rispetto alla versione precedente; da
+  incollare nell'handover di ogni giro ("cambiato: ...; intatto (lock): ...").
+- `rules` `{frame_0, knees_front, feet_side_by_side, villain_hand}`: le regole di sopra come check bloccanti, con le soglie
+  nel blocco (`frame_0`: `charge, min_cm, max_frac`; `knees_front`: `frames, tol`; `feet_side_by_side`: `frames, min_cm`;
+  `villain_hand`: `frames, min_deg`). Blocco assente = check non eseguito. Soglie da tarare sul desktop (dair v4, jab v12).
+
 ## Hand tweaks in Unreal: the "Manuale" layer
 `animpipe build` deletes and recreates `LS_<name>` and the clip from the card, so keys edited on the base section are
 lost. Every build adds an **additive** section ("Manuale") on the Control Rig track, over the whole clip, and makes it the
@@ -38,6 +58,11 @@ section to key. Before rebuilding it reads that section's keys and puts them bac
    {keys: N}`. A copy of the layer is kept in `Saved/AnimPipeline/animpipe/<move>_manual_layer.json` (used only if the
    sequence is gone). To drop a tweak, delete its keys on the layer and rebuild.
 Card changes and layer tweaks stack: if a card change moves the same control, re-check the tweak.
+4. `python -m animpipe capture <card>` (or `--from=<file>`) copies the layer backup into git as `cards/<kit>/manual/<move>.json`
+   and adds the card block `manual` (file, by, date, channels, keys, parts -> frames). Commit both.
+5. Build fallback for the layer keys: the sequence `LS_<name>`, then `Saved/.../<move>_manual_layer.json`, then the card copy.
+6. `diff` adds "manuale sotto una posa cambiata: arm_r 5 (ricontrollare)" when a changed pose is at (or +-1 frame from)
+   a manual key, else "manuale: intatto"; `animpipe card` prints the keys per part.
 Do not undo past your own edits: the editor's Ctrl+Z history also holds the build ("Bake to Control Rig", "Add actor"),
 and undoing it removes the rig track from the open sequence. Delete a key to drop a tweak; if it happens, close without saving.
 

@@ -5,7 +5,7 @@ Entry points return a short JSON string; anything long is written to the path gi
   roundtrip(anim, rig, name, fps_num, fps_den, keep_frames, out)  anim -> rig keys -> (optional sparse) -> AnimSequence
   tangent_probe(name, out)                                          per-key tangents/weights on a rig control channel
 """
-import json
+import json, os
 import unreal
 
 MESH = "/Game/Characters/UEFN_Mannequin/Meshes/SKM_UEFN_Mannequin"
@@ -122,7 +122,11 @@ def _frame(k):
 PROFILE_W = {"charge_long": (0.6, 0.12), "arrive_1_2": (0.12, 0.6), "hold_recoil": (1 / 3, 1 / 3), "limb_led_recovery": None}
 # card part -> control name fragments (CR_Mannequin_Body); a part lags by shifting its interior keys later
 PIN_TOL = {"Location": 1.0, "Rotation": 2.0}                    # cm, degrees
-PART_CTRLS = {"chest": ("spine_05", "chest", "spine_04"), "head": ("head", "neck"), "forearm": ("lowerarm",), "hand": ("hand_",)}
+PART_CTRLS = {"chest": ("spine_05", "chest", "spine_04"), "head": ("head", "neck"), "forearm": ("lowerarm",), "hand": ("hand_",),
+              "arm_l": ("upperarm_l", "lowerarm_l", "hand_l"), "arm_r": ("upperarm_r", "lowerarm_r", "hand_r"),
+              "leg_l": ("thigh_l", "calf_l", "foot_l"), "leg_r": ("thigh_r", "calf_r", "foot_r"),
+              "hand_l": ("hand_l", "hand_l_ik"), "hand_r": ("hand_r", "hand_r_ik"),
+              "leg_l_ik": ("foot_l_ik",), "leg_r_ik": ("foot_r_ik",)}   # locks (animpipe/locks.py) read these; part_delays use the first four
 
 
 def _seg_profile(segments, f):
@@ -151,15 +155,18 @@ def _additive_sections(seq):
                         yield s
 
 
-def _read_manual(name, backup=None):
+def _read_manual(name, backup=None, card_copy=None):
     """{channel: [[frame, value, interp name, tangent mode name, arrive, leave], ...]} from the additive sections of the old
-    LS_<name>; the backup JSON only when the sequence does not exist."""
+    LS_<name>; without the sequence the Saved backup JSON, then the copy in the card's git folder (animpipe capture)."""
     full = f"{DIR}/LS_{name}"
     if not EAL.does_asset_exist(full):
-        try:
-            return json.load(open(backup)) if backup else {}
-        except (OSError, ValueError):
-            return {}
+        for f in (backup, card_copy):
+            try:
+                if f and os.path.exists(f):
+                    return json.load(open(f))
+            except (OSError, ValueError):
+                pass
+        return {}
     seq = unreal.load_asset(full)
     LSE = unreal.LevelSequenceEditorBlueprintLibrary
     LSE.open_level_sequence(seq)
@@ -209,7 +216,7 @@ def build(spec):
     planted IK feet to their first key. No per-frame keys are ever written."""
     rate = unreal.FrameRate(int(spec["fps_num"]), int(spec["fps_den"]))
     name = spec["name"]
-    manual = _read_manual(name, spec.get("manual_out"))
+    manual = _read_manual(name, spec.get("manual_out"), spec.get("manual_in"))
     seq, binding, end, length = _sequence(spec["source_anim"], name, rate)
     seq.set_playback_end(end + 1)        # the rig bake stops before the playback end: without this the last frame has no key
     ok = unreal.ControlRigSequencerLibrary.bake_to_control_rig(_world(), seq, _rig_class(spec["rig"]), unreal.AnimSeqExportOption(),
