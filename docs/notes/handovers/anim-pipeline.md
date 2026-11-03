@@ -454,3 +454,12 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
      la scheda impone ancora le mani del kit (fingers/wrist_out) su 3/8/14: da allineare a questa regola nel codice di import.
 - Catture: serve un livello dedicato alle catture (non DefaultLevel), così modifiche non salvate altrove non le bloccano.
   Stato editor: nessun livello cambiato né salvato da questo thread; Cascadeur con la sola scena `overlord_dair_v4.casc`.
+
+## Proposta: pipeline come skill pubblica + app (2026-11-03, thread cloud, solo design)
+- Doc: `docs/notes/reviews/skill-pubblica-proposta-2026-11-03.md`. Nessun codice; aspetta il via dell'owner.
+- Verbi rigidi `animpipe <verbo> <mossa>` (status, import, revert, interp, build, check, render, verdict, variant,
+  snapshot/restore, export, owner-ok, approve), una riga JSON + exit code fissi, snapshot automatici, `animpipe.toml`.
+- Skill unica `animpipe-move` = segue il `next` di `status`; assorbe `gstn-visual-review`; niente nomi di modelli.
+- Cascadeur: solo Segna chiave + Invia + riga di stato. App PySide6 "GSTN Studio": griglia+verdetto, Ok/Approva,
+  varianti, snapshot. Costo in più ~$15-20; ordine: punti 2-6 (Sonnet, senza editor) PRIMA di CP2/CP4.
+- Costo di questo thread: ~12 chiamate, contesto ~60k, circa $1-1,5.
