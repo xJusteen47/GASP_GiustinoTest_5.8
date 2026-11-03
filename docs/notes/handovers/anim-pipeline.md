@@ -595,3 +595,12 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   al ritimo. Se vuole di più: key aggiuntive o spacing per posa, da concordare.
 - .casc: il file delle 16:16 non è stato toccato né riesportato; Cascadeur script server spento.
 - Costo stimato: ~35 chiamate, ~$2,5.
+
+## Dair: variante A applicata, variante B aperta (2026-11-03, thread desktop Sonnet)
+- Ramo `claude/project-thread-dgqsku`. A applicata su ok owner ("Ok applica la variante A"): `variant apply` rifiuta perché la
+  A cambia le sue key 0 e 14 (chieste da lui); copiata a mano la scheda della variante sull'originale, snapshot 20261103_183835,
+  build+check PASS.
+- Variante B aperta (`overlord_dair_v4_varB`, build+check PASS, grid r1, video v7), NON applicata: secondary motion dai f19/23/27
+  (bacino, testa, mani; in-between claude) e piegamento del busto FAF ridotto al 45% (pelvis+spina ai key 37/42 verso f31,
+  `source.keep` con why). Da guardare nel video: se il FAF è ancora troppo piegato/veloce, abbassare il fattore.
+- Costo stimato: ~25 chiamate, ~$2.
