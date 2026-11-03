@@ -232,6 +232,16 @@ public:
 	static bool ReleaseLinkOnUnlatch(bool bWasLatched, const FGSTN_DrillFragment& Fragment, const FGSTN_DrillLinkView& Link, FGSTN_LinkFragment* LinkFragment);
 
 	/**
+	 * SD-12: the link exit that follows a pop or a launch (GSTNDrillFlags::ExitImpulse) teleported the driller beside the target at rest, a few
+	 * frames after the bore's effect had set the pop's or the launch's velocity. On the exit's frame (AfterExecute, before GSTNLink applies it
+	 * at BeforeTagProjection) this rewrites the record: the driller's own spot (SelfRoot, may be null: then the placer's spot is kept) and the
+	 * pop's or the launch's velocity. Clears the flag on that frame, or when the link ends without an exit. True when it rewrote the exit.
+	 * Pure: the record is sync state and every machine rewrites it the same way
+	 */
+	static bool StampExitImpulse(FGSTN_DrillFragment& Fragment, int32 Frame, const FTransform* SelfRoot, const FVector& Up, const FGSTN_DrillSimTuning& Tuning,
+		FGSTN_LinkFragment* LinkFragment);
+
+	/**
 	 * The crouch of a running bore as its track hook stamped it this tick: true held, false released; unset (no stamp: the bore timeline is not
 	 * the running one, or a test) leaves bOutHeld unchanged and returns false
 	 */

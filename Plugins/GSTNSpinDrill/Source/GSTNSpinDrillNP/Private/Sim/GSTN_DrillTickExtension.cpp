@@ -10,6 +10,7 @@
 #include "Events/GSTN_SimEvent.h"
 #include "GameFramework/Actor.h"
 #include "GSTN_LinkRegistry.h"
+#include "GSTN_LinkWatchdog.h"
 #include "GSTN_SpinDrillTags.h"
 #include "Math/GSTN_DrillMath.h"
 #include "Sim/GSTN_DrillFragment.h"
@@ -158,7 +159,18 @@ void FGSTN_DrillTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 			if (bWasLatched && !Fragment->IsLatched())
 			{
 				// The drill ended its own latch (pop, launch): the link it still holds is released through GSTNLink, which places the exit
-				ReleaseLinkOnUnlatch(bWasLatched, *Fragment, ReadLinkView(LinkFragment, GetDrillTypeIndex()), LinkFragment);
+				if (ReleaseLinkOnUnlatch(bWasLatched, *Fragment, ReadLinkView(LinkFragment, GetDrillTypeIndex()), LinkFragment))
+				{
+					// ...and its exit, frames later, must leave with the pop's or the launch's velocity (SD-12)
+					Fragment->Flags |= (Fragment->Flags & GSTNDrillFlags::Popped) != 0 ? GSTNDrillFlags::PopExit
+						: Fragment->Phase == EGSTN_DrillPhase::Launching ? GSTNDrillFlags::LaunchExit : 0;
+				}
+			}
+			if ((Fragment->Flags & GSTNDrillFlags::ExitImpulse) != 0)
+			{
+				const FGSTN_SnapshotEntry* Self = Context.Snapshot && Context.EntityId != INDEX_NONE ? Context.Snapshot->Find(Context.EntityId) : nullptr;
+				StampExitImpulse(*Fragment, Context.Frame, Self ? &Self->Transform : nullptr, Context.Up, GetTuning(Context),
+					FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments));
 			}
 			else if (Fragment->IsLatched() && LinkFragment && !LinkFragment->Links.Body.HasFlag(GSTNLinkFlags::AnchorOverride))
 			{
@@ -532,6 +544,42 @@ bool FGSTN_DrillTickExtension::ReleaseLinkOnUnlatch(bool bWasLatched, const FGST
 		return false;
 	}
 	return FGSTN_LinkTickExtension::MarkPendingBreak(*LinkFragment, static_cast<uint8>(EGSTN_LinkBreakReason::Release));
+}
+
+bool FGSTN_DrillTickExtension::StampExitImpulse(FGSTN_DrillFragment& Fragment, int32 Frame, const FTransform* SelfRoot, const FVector& Up,
+	const FGSTN_DrillSimTuning& Tuning, FGSTN_LinkFragment* LinkFragment)
+{
+	const uint8 Impulse = Fragment.Flags & GSTNDrillFlags::ExitImpulse;
+	if (Impulse == 0)
+	{
+		return false;
+	}
+	FGSTN_LinkActions::FExit* Exit = LinkFragment ? &LinkFragment->Actions.Exit : nullptr;
+	const bool bDue = Exit && Exit->Frame == Frame && (Exit->Flags & GSTNLinkExitFlags::Teleport) != 0;
+	if (!bDue)
+	{
+		// Still waiting while the link holds (pending break) or its exit is ahead; anything else (no link, an exit already past, a link that
+		// ended without one) drops the impulse, so the flag never outlives the release it belongs to
+		const bool bWaiting = Exit && (Exit->Frame > Frame || (Exit->Frame == 0 && LinkFragment->Links.Body.Phase != EGSTN_LinkPhase::None));
+		if (!bWaiting)
+		{
+			Fragment.Flags &= ~GSTNDrillFlags::ExitImpulse;
+		}
+		return false;
+	}
+	// The exit leaves from where the parked driller is (end of the previous frame) with the same velocity as the pop and launch effects
+	// (UGSTN_GE_DrillPop / UGSTN_GE_DrillLaunch). That spot touches the target, so the teleport is refused there and the link exit keeps the
+	// driller in place with this velocity (FGSTN_LinkExitEffect)
+	if (SelfRoot)
+	{
+		Exit->Position = SelfRoot->GetLocation();
+		Exit->YawDeg = static_cast<float>(SelfRoot->Rotator().Yaw);
+	}
+	Exit->Velocity = (Impulse & GSTNDrillFlags::LaunchExit) != 0
+		? UGSTN_DrillMath::ComputeLaunchVelocity(Tuning.LaunchDirection, Up, -Up, Tuning.LaunchSpeed)
+		: UGSTN_DrillMath::ComputeHopVelocity(FVector::ZeroVector, Up, Tuning.DetachPopSpeed, true);
+	Fragment.Flags &= ~GSTNDrillFlags::ExitImpulse;
+	return true;
 }
 
 bool FGSTN_DrillTickExtension::ReadCrouchStamp(const FGSTN_TimelineOutput* Timeline, bool& bOutHeld)

@@ -307,3 +307,27 @@ after one checkpoint.
   run probes inside the full suite order.
 - Gates: on Succeeded, headless 980/0; off Succeeded, 933/0; restore build Succeeded (code as committed = suite run 1, 6/12).
 - Cost: one Opus thread, ~95k context, 2 suite + 3 probe editor runs, 2+3 builds, 2 headless runs. Medium-high.
+
+## SD-12 (laptop, 2026-11-03): pop exit fixed; launch, moving enemy still red (STOPPED, 2 attempts used on the exit)
+
+- Why SD-11's own-exit attempt was not confirmed: (1) it placed the exit at the riding spot, which overlaps the target, so the watchdog
+  refused to copy it and fell back to the placer at rest; (2) where it applied, Mover's FTeleportEffect refuses an encroaching spot and
+  returns before FGSTN_LinkExitEffect set the velocity; (3) it was never probed, only judged by the suite.
+- Probe (temporary UE_LOG, Saved/SD12/probe_lines.txt): with the fix the exit carried vz 400 and teleported, the server still read vz 0:
+  the GSTN_Linked mode simulates that last parked tick and writes zero velocity before its exit transition is seen next tick.
+- Fix: the drill flags its release (GSTNDrillFlags::PopExit / LaunchExit, bits 5-6) and on the exit's due frame (AfterExecute, before
+  GSTNLink applies it at BeforeTagProjection) rewrites the exit record: own spot + pop/launch velocity (FGSTN_DrillTickExtension::
+  StampExitImpulse; the flag is dropped if the link ends without an exit). GSTNLink: FGSTN_LinkExitEffect keeps the velocity in place when
+  the teleport spot is taken, and a moving exit switches GSTN_Linked to Falling on its own tick (LeaveParkedMode). Keeping the start
+  velocity in the parked mode instead broke GSTNLink.NP.Parked.NoInputNoGravity: not used.
+- drill_release_early_pop PASS (srv and cli). Short driver: Saved/SD12/driver_short.py (ring, pop, launch, moving enemy; ~10 min).
+  run_editor.ps1 needs an ABSOLUTE driver path (a relative one resolves under Engine/Binaries and the editor idles until the timeout).
+- launch_after_bore still red: every release in the probe was a pop (flags Popped|PopExit, phase None), so the scenario never reaches the
+  launch (bore ends before MaxBoreFrames: check the scenario's crouch hold vs the latch's MaxBoreFrames, and the air spin refresh check).
+- moving_enemy (target 0 cm): bore hit with HitstunMultiplier 0 and 0 hitstop did NOT help, reverted. bLatchMoves is never read in code.
+  Next: probe the victim's move input / Mover mode while latched (is the target parked or input-blocked by a link role tag?).
+- Not touched: hit_while_latched (latch not ended by the host's hit, rollbacks), nondrillable_bounce, opposite_cancel, air_hop (vz 0 in the
+  full run), ring rollback count flaky (2 -> 3 in two short runs, PASS in the full run).
+- Full SUITE_SPIN at the start of SD-12 (exit code only): 5/12 (pop and launch red). Not rerun at the end (budget).
+- Gates: on Succeeded, headless 980/0; off Succeeded, headless 933/0; restore build Succeeded.
+- Cost: one Opus thread, ~110k context, 1 full + 4 short suite runs, 6 builds, 3 headless runs. Medium-high.

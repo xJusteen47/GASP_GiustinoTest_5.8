@@ -47,7 +47,17 @@ namespace GSTNDrillFlags
 	 */
 	constexpr uint8 Popped = 1 << 4;
 
-	constexpr uint8 All = CounterClockwise | AirSpin | Bounced | AwaitingLatch | Popped;
+	/**
+	 * The latch ended in a pop (PopExit) or a launch (LaunchExit) and the link exit that ends the parked mode is still to come (SD-12). The
+	 * link's exit teleports the driller and sets its velocity a few frames later, which overwrote the pop's or the launch's velocity; on the
+	 * exit's frame the drill rewrites that exit (its own spot, the pop's or the launch's velocity) and clears the flag
+	 * (FGSTN_DrillTickExtension::StampExitImpulse). Cleared too when the link ends without an exit
+	 */
+	constexpr uint8 PopExit = 1 << 5;
+	constexpr uint8 LaunchExit = 1 << 6;
+	constexpr uint8 ExitImpulse = PopExit | LaunchExit;
+
+	constexpr uint8 All = CounterClockwise | AirSpin | Bounced | AwaitingLatch | Popped | PopExit | LaunchExit;
 }
 
 /**

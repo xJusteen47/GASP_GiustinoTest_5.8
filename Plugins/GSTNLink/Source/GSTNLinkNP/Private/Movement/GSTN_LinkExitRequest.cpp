@@ -4,6 +4,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "GSTN_LinkWatchdog.h"
+#include "Movement/GSTN_LinkedModeTransition.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
@@ -12,11 +13,32 @@ bool FGSTN_LinkExitEffect::ApplyMovementEffect(FApplyMovementEffectParams& Apply
 {
 	if (!FTeleportEffect::ApplyMovementEffect(ApplyEffectParams, OutputState))
 	{
-		return false;
+		// The spot is taken: an exit placed where the exiting side already is (a drill's pop or launch leaves from its riding spot, which
+		// touches the target, SD-12) still leaves with its velocity, from where the capsule is. An exit at rest keeps the old refusal
+		const USceneComponent* Updated = ApplyEffectParams.UpdatedComponent;
+		if (ExitVelocity.IsZero() || !Updated)
+		{
+			return false;
+		}
+		FMoverDefaultSyncState& Kept = OutputState.SyncStateCollection.FindOrAddMutableDataByType<FMoverDefaultSyncState>();
+		Kept.SetTransforms_WorldSpace(Updated->GetComponentLocation(), Updated->GetComponentRotation(), ExitVelocity, Kept.GetAngularVelocityDegrees_WorldSpace(), nullptr);
+		LeaveParkedMode(OutputState);
+		return true;
 	}
 	FMoverDefaultSyncState& Sync = OutputState.SyncStateCollection.FindOrAddMutableDataByType<FMoverDefaultSyncState>();
 	Sync.SetTransforms_WorldSpace(Sync.GetLocation_WorldSpace(), Sync.GetOrientation_WorldSpace(), ExitVelocity, Sync.GetAngularVelocityDegrees_WorldSpace(), nullptr);
+	LeaveParkedMode(OutputState);
 	return true;
+}
+
+void FGSTN_LinkExitEffect::LeaveParkedMode(FMoverSyncState& OutputState) const
+{
+	// The exit lands on the last parked tick: the parked mode would still simulate it and zero the velocity, before its exit transition is
+	// seen next tick (SD-12: a pop left at rest). An exit that moves the side leaves the parked mode now, into the exit transition's mode
+	if (!ExitVelocity.IsZero() && OutputState.MovementMode == UGSTN_LinkedModeTransition::GetDefaultLinkedModeName())
+	{
+		OutputState.MovementMode = DefaultModeNames::Falling;
+	}
 }
 
 FInstantMovementEffect* FGSTN_LinkExitEffect::Clone() const

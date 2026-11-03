@@ -28,6 +28,10 @@ struct GSTNLINKNP_API FGSTN_LinkExitEffect : public FTeleportEffect
 	virtual void NetSerialize(FArchive& Ar) override;
 	virtual UScriptStruct* GetScriptStruct() const override;
 	virtual FString ToSimpleString() const override;
+
+private:
+	/** A moving exit (non-zero ExitVelocity) leaves the parked mode on its own tick, so the parked mode does not zero the velocity (SD-12) */
+	void LeaveParkedMode(FMoverSyncState& OutputState) const;
 };
 
 /** Makes the exit effect from the spec's set-by-caller values (the exit record of the link fragment, see FGSTN_LinkExitRequest) */
