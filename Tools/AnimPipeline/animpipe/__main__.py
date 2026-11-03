@@ -9,6 +9,8 @@
     python -m animpipe poses <card.json> [--frames=] [--take=] [--over=]   pose checkpoint grid (one image)
     python -m animpipe approve <card.json> --frames=13,14 --parts=leg_l,leg_r --why="..."   lock accepted poses (cards/<kit>/approved/)
     python -m animpipe diff <card.json> [--vs=<card.json>]      author-pose displacement per frame x part vs the previous version
+    python -m animpipe fidelity <card.json>                    owner poses in the card = the owner's (cards/<kit>/refs/), blocking
+    python -m animpipe visual-gate <card.json> [--round=N]     read the visual review verdict (Saved/AnimPipeline/visual/<move>/r<N>/verdict.json)
     python -m animpipe capture <card.json> [--from=<layer.json>]   keep the Manuale layer backup in git (cards/<kit>/manual/)
     (any card command) --unlock=leg_l@14,arm_l@3   skip the approved guard for those part@frame pairs, one line printed each
     python -m animpipe check <card.json>        the three check classes on the card's built anim (animpipe/checks.py)
@@ -215,6 +217,9 @@ def main():
     elif cmd == "approve":
         from animpipe.locks import approve
         approve(args[0], opt["frames"].split(","), opt["parts"].split(","), opt["why"], opt.get("by", "owner"))
+    elif cmd == "fidelity":
+        from animpipe.fidelity import cmd as fid
+        sys.exit(0 if fid(args[0]) is not False else 1)
     elif cmd == "diff":
         from animpipe.locks import diff
         diff(args[0], opt.get("vs"))

@@ -310,6 +310,9 @@ def run(path, src=False):
     res["block"]["planted_feet"] = _planted(F, exempt.get("planted", set()), sides)
     res["block"]["fists"] = _fists(F, c.get("fists", ["l", "r"]), exempt.get("fists", set()))
     res["block"].update(run_rules(c, F))
+    from animpipe import fidelity
+    fok, fline, _ = fidelity.check(c, path)
+    res["block"]["source_fidelity"] = (fok is not False, fline)
     Q = _quats(take)
     res["block"]["hitstop_snap"] = _hitstop_snap(F, w, float(c.get("hitstop_max_cm", HITSTOP_MAX)), exempt.get("hitstop_snap", set()), Q)
     # a planted foot is still on purpose: its leg is not judged

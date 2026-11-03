@@ -165,6 +165,10 @@ def approve(path, frames, parts, why, by="owner", date=None):
     """Add the entry (ref = the card itself), write the snapshot, and the rig keys when a build dump has them."""
     import datetime
     c = json.load(open(card_file(path), encoding="utf-8"))
+    from animpipe import fidelity
+    fok, fline, _ = fidelity.check(c, path)
+    if fok is False:
+        raise ValueError(f"approve refused: source_fidelity FAIL: {fline}")
     frames = [int(x) for x in frames]
     _check_entry({"frames": frames, "parts": parts, "ref": "-", "why": why}, 0, path)
     entry = {"frames": frames, "parts": list(parts), "ref": rel_to_cards(path), "by": by,

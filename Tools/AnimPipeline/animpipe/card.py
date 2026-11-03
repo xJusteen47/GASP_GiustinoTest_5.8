@@ -22,6 +22,7 @@ Schema (cards/<kit>/<kit>_<move>_vN.json, see cards/README.md):
   manual       {file, by, date, channels, keys, parts: {part: [frames]}}: the owner's hand-keyed layer (`animpipe capture`); the build
                falls back to cards/<kit>/<file> when the sequence and the Saved backup are gone
   rules        {frame_0|knees_front|feet_side_by_side|villain_hand: thresholds}: README rules as checks (checks.py)
+  poses[].source / origin  owner pose provenance, checked by animpipe/fidelity.py (source_fidelity, blocking)
   hitstop_max_cm  per-bone limit of the hitstop_snap check (default 10 cm per anim frame); the check is on for every move
 """
 import csv, json, os
@@ -51,6 +52,8 @@ def load(path, unlock=None):
     if c.get("approved"):
         from animpipe import locks
         locks.guard(c, path, UNLOCK if unlock is None else unlock)
+    from animpipe import fidelity
+    fidelity.guard(c, path)
     return c
 
 
