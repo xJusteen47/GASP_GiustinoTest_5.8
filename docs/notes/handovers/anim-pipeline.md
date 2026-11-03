@@ -584,3 +584,14 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   dell'owner). Non ho usato `--force`. Decisione all'owner: aprire quel .casc così com'è, oppure `export --force` (il vecchio
   resta da parte) per rifarlo dalla scheda attuale.
 - Costo stimato: ~20 chiamate, contesto ~45k (~$1,5).
+
+## Dair variante A: ritimata windup/release (2026-11-03, thread desktop Sonnet)
+- Ramo `claude/project-thread-dgqsku`. Variante `overlord_dair_v4_varA` aperta (snapshot 20261103_182459), build+check PASS,
+  grid r1 + video `overlord_dair_v6_varA_hitstop_vs_whiff.mp4`. NON applicata: l'owner decide `variant apply|discard`.
+- Richiesta owner (frame = quelli del video, cioè della build): posa del f10 → f12, posa del f13 → f14, f0 più piegato in
+  avanti, nulla da f15. Fatto: key 11 (claude) e 14 (owner, spostata su sua richiesta) tolte; nuove key 12 e 14 con le pose
+  campionate dalla build ai f10/f13; f0 tronco+spina 60% verso f3 (`source.keep` trunk/head/arm_l/arm_r con why sul f0).
+- Curve: restano smoothstep per segmento (già sinusoidali a tratti); le traiettorie dei control non sono state rifatte oltre
+  al ritimo. Se vuole di più: key aggiuntive o spacing per posa, da concordare.
+- .casc: il file delle 16:16 non è stato toccato né riesportato; Cascadeur script server spento.
+- Costo stimato: ~35 chiamate, ~$2,5.
