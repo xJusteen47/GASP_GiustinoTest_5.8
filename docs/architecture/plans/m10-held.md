@@ -276,6 +276,10 @@ Not planned as a gate yet; recorded so G10 and the loadout work (M3 loadout, [co
   occupies the **support-weapon slot** as usual. If a support weapon is already equipped, the single-use one is held anyway. **Switching**
   to the kit's main weapon or to the support weapon **drops** the single-use one. Likely shape: a held weapon (G10) with `HeldCharges` = 1
   and `bVanishOnEmpty`, summoned by an ability instead of picked up, and a loadout rule "weapon switch ends the Held link".
+- **Stowing in the support slot** (owner, 15:53): some objects can be put away in the support-weapon slot (e.g. on the back) instead of
+  held, **only if that slot is empty**. Likely shape: `bStowable` on the object definition; a stow ability ends the `Held` link and writes
+  the object's ref into the support slot (presentation on a back socket); taking it out recreates the `Held` link; refused when a support
+  weapon is already there.
 - Needs G10 first and a short loadout note (slot ownership while a summoned weapon is held); ask the owner before it becomes a gate.
 
 ### G12 Presentation, debug, editor
