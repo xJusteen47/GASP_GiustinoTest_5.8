@@ -679,3 +679,21 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   aggiungere un `rel` a `verify.py`. Testa ~-3°/cm. Il dump di foot_l ha uno step di 279 cm a anim 14→15 (prima dello stomp,
   non toccato da H): verificare dump/IK al frame attivo (punto 4 della review di G).
 - Req + misure frame per frame: `cards/overlord/dair/review/overlord_dair_v4_varH_req.json`. Costo: ~45 chiamate, contesto ~70k, ~$6.
+
+## Dair variante I: mani e testa in ritardo sul bacino, misurate relative (2026-11-03, thread desktop Opus)
+- Ramo `claude/project-thread-0pafeo`, cartella `GASP_Giustino2_feature`. H scartata, I aperta e riempita da H (commit eb532e4)
+  con `Tools/AnimPipeline/dair_varI_make.py`: bacino, ginocchia/piedi, testa (head_ctrl) e FAF key 37 identici a H.
+- **Sensibilità misurate** (nel V4 base mani/testa meno bacino sono costanti 16-31, quindi ogni moto relativo è un edit):
+  upperarm FK X -0,375 cm/° (negativo alza); spine_03 X: testa z +0,22, testa y +0,44, mani z +0,13 cm/°.
+  `head_ctrl` **non sposta l'osso head** (pivot): l'ampiezza "nod" in cm viene dalla spina, -3°/cm sulla testa non serve (tenuto -2,2).
+- Spina = -1,3 × velocità del bacino (testa su nella discesa, giù nel rimbalzo). Mani tenute su 18-20, a riposo a 22, su a 25-26.
+- Tentativo 1 (lobo +4° a 22): verify 13/13 ma clearance hand_l|spine_03 -1,86 cm @f22. La posa V4 lascia solo ~0,4 cm:
+  le mani non possono scendere sotto il riposo rispetto al bacino. Tentativo 2: profilo risolto frame per frame → check PASS.
+- verify 13/13 (`cards/overlord/dair/review/overlord_dair_v4_varI_req.json`, dentro misure e sensibilità): ritardi relativi
+  mani +3/+3, testa +2; dip bacino 14,84 cm; testa y 6,13 cm; mani rel 3,22 cm; lean 0/31/37/40/42 = 26,3/-22,6/6,3/7,9/8,3°.
+- `verify.py`: nuova chiave `rel` (osso sottratto frame per frame su delay/amplitude).
+- Render standalone: `ANIMPIPE_PROJECT` = **cartella** del progetto principale (non il .uproject). Griglie anim f17-42 e 0-42
+  laterali in `review/varI_*.png`; mp4 in `sheets/ingame/*varI*`.
+- foot_l "279 cm" a 14→15: artefatto della metrica (norma di loc cm + Euler gradi con wrap). Passo reale 63 cm e ~45°, uguale su
+  foot_r: è lo stomp, identico nel V4 base e in tutte le varianti. Non è una regressione.
+- Da fare: revisione visiva (cloud) e decisione owner applica/scarta. Costo: ~45 chiamate, contesto ~90k, circa $9.
