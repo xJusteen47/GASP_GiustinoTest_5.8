@@ -546,3 +546,24 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - Owner al ritorno: barra GSTN in Cascadeur + `install.py`; ok sulla griglia r2 per l'approve.
 - Test: tutti ok tranne `test_capture` (Windows, già rosso); nuovi `test_owner_bones_whole_and_stretch_ignored`, `test_composite`.
 - Costo stimato: ~45 chiamate, contesto ~95k (~$8) + subagente Sonnet ~116k token (~$1,5).
+
+## Dair: legibility del piede, regole owner su dair e jab v12, video multi-angolo pronto (2026-11-03, thread desktop Opus medium)
+- Ramo `claude/project-thread-dgqsku` (worktree `_feature`), commit 2e0a519. Nessun approve, nessun merge su feature.
+- **Legibility calci:** la dair spinge giù entrambi i piedi ma la scheda diceva `strike_limb leg_l`: l'altra gamba contava come
+  "corpo che nasconde il piede" e giudicavano le soglie del braccio del jab. Ora `sheet_extra.strike = {limb: legs}`; in
+  `legibility.configure` le parti delle due gambe di `legs` sono vicine fra loro (toccarsi non è nascondere); un calcio legge
+  il blocco `kick` di `legibility_thresholds.json` (letture come il braccio, portata ≥40 cm, ginocchio fuori ≥10 cm), tarato
+  su dair v4 e ganon ftilt v3.1 (passano con margine; valori nel `_kick_note`). Test `test_legs_are_one_limb_and_kick_thresholds`.
+- **Jab v12:** i FAIL (`contact_faf` picco f0, `fists` 0,95, legibility) erano una build salvata rotta (quasi T-pose, mani
+  ferme). Rifatta la build senza toccare la scheda: tutti i check PASS.
+- **Regole owner:** `rules` + `_rules_note` su dair (frame_0 charge 3 max_frac 1,0 perché f0 è già la raccolta aerea
+  dell'owner; knees_front 0-14; feet_side_by_side min 4 cm) e jab (frame_0 su braccio avanti/tronco/testa, max 0,8;
+  piedi ≥15 cm; niente knees_front: la guardia sfalsata ha il ginocchio dietro). Entrambe: check PASS 12/12 e 11/11.
+- Diagnosi scritte in `Saved/AnimPipeline/visual/overlord_dair_v4/r2/diagnosi_legibility.md` e `visual/jab_v12/diagnosi.md`.
+- Ganon ftilt v3.1: `source_fidelity` FAIL (sorgenti in `refs/owner_ganon_ftilt/*.png`, non in `cards/<kit>/refs/`): non toccato.
+- **Video owner (non fatto):** l'editor aperto ha la DefaultLevel sporca dell'owner, `capture_ue.setup` rifiuta di cambiare
+  livello. Chiesto all'owner (salvo io con backup / salva lui / chiude l'editor). Script pronto: `python ingame_multi.py
+  cards/overlord/overlord_dair_v4.json 8 <out>.mp4` (4 camere lato, 3/4 fronte, dietro, alto; hitstop | whiff). Da caricare come
+  `overlord_dair_v5_hitstop_vs_whiff.mp4`. Griglia r2 già caricata (`overlord_dair_v4_r2_grid.png`).
+- Domanda owner aperta: la dair tiene i pugni del template, non la mano da cattivo (regola overlord): la vuole?
+- Costo stimato: ~55 chiamate, contesto ~85k (~$7).
