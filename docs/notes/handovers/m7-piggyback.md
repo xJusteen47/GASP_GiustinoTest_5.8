@@ -169,3 +169,27 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
   M7-04 OPEN 1 (teleport break) and M7-03 OPEN 1 unchanged.
 - Cost: one Opus thread, ~95k context, 2 UBT builds + 3 headless editors + 3 harness editors (~1.5 h machine): medium.
 - Next: owner "ok merge" for G7; then G8 pair-move data or the rider attack binding (owner's pick), new thread.
+
+## M7-07 (desktop, 2026-11-03): G8 pair-move data; G7 feature push blocked by the permission classifier
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9. NOT on feature: the owner delegated the G7 merge to the coordinator ("gestisci tu",
+  15:24Z), the FF push `8b3922d -> feature/gas-npp-5.8` (FF from 60da6fa, checked) was DENIED by the desktop's auto-mode classifier: owner runs it or allows it.
+- Built (GSTNPiggybackRuntime): `UGSTN_PairMoveDefinition` (PrimaryDataAsset `GSTN_PairMove`, spec 4 fields + authored `PairMoveId`, `ExitMode`/
+  `ExitDistanceCm`, `Validate`/`ValidateWithTimelines`/`IsDataValid`, `MakeLinkActionInfo`), `UGSTN_PairMoveSet` (IsDataValid: id clashes),
+  `UGSTN_GA_PairMove` (abstract, `PairMove` back-reference checked), `UGSTN_PairMoveRegistry` (IGSTN_LinkActionProvider of `Combat.Link.Type.Mount`,
+  module-owned, registered at post-engine-init after the mount type; ordered by id, same-id clash refused, one `UGSTN_Placer_Mount` per definition).
+  Core: `FGSTN_MountKitExtension::PairMoves` (soft path to the set); the mount loadout extension adds the kit's set to the registry at compile.
+- Deviations (m7-doc-deltas.md "G8"): authored wire id instead of compiler `PairIdx` (G2 provider is per type, the key names the id); no timeline
+  overrides; INDEX_NONE outcome = none (Break needs a frame); offset counted from the PartnerMove key; Interruptible forces no command lock.
+- Tests `GSTNPiggyback.Runtime.PairMove.*` (3): validation cases of spec 9 (missing abilities, empty partner, no/other key, offset past the
+  initiator incl. offset 0 = 1, OutcomeFrame outside/before the key, Break without frame, SwapRoles, roles, id range), registry order from two add
+  orders and from a set, idempotence, clash, resolve (offset clamp, placer, reason, lock).
+- Gates (`Saved/M707`, diagnosis.txt): build on Succeeded; `headless-on1.log` 1283/2 (test-only bug: `TInstancedStruct::Make(Track)` slices to the
+  base: use `Make<FGSTN_LinkOutcomeTrack>`), fixed, `headless-on2.log` 1285/0; off (GSTNPiggyback false) `build-off1.out` Succeeded,
+  `headless-off1.log` 1260/0 (= M7-06); 0 ensure. Harness not run: G8 touches no NP/simulation code and the plan names no scenario for G8.
+  .uproject restored (= HEAD); binaries in the worktree are the OFF build: rebuild on first.
+- Deferred by the owner (no abilities designed yet, 15:24Z): rider mounted-attack binding (spec 9.2). Still OPEN: G6 carry load, carrier shield
+  over rider, partner requirements on provider-only tags (FGSTN_LinkRequestTags, matters for G9 content), M7-04/M7-03 OPEN items.
+- G9 not started (size M + harness + S4; budget): next thread. It needs the PM_ThrowRider / PM_BoostJump content (definitions + abilities with a
+  PartnerMove key + the kit set), `scenario_throw_rider`/`scenario_boost_jump`, LaunchLinked for the exit velocity.
+- Cost: one Opus thread, ~100k context, 3 UBT builds + 3 headless editors (~45 min machine): low-medium.

@@ -191,6 +191,13 @@ struct GSTNPIGGYBACKCORE_API FGSTN_MountKitExtension : public FGSTN_KitExtension
 	/** The carrier's drop; empty = UGSTN_GA_Drop (a Release key: the carrier role's reason is Drop) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Bindings", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
 	FSoftClassPath DropAbility;
+
+	/**
+	 * The pair moves this kit can play (a UGSTN_PairMoveSet of the Runtime module, by path so Core names no Runtime class). The loadout
+	 * extension adds them to the mount type's pair-move registry when the kit is compiled; the kit still binds each initiator move itself
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piggyback|Pair Moves", meta = (AllowedClasses = "/Script/GSTNPiggybackRuntime.GSTN_PairMoveSet"))
+	FSoftObjectPath PairMoves;
 };
 
 /**

@@ -4,6 +4,7 @@
 #include "GSTN_MountLinkType.h"
 #include "Engine/AssetManager.h"
 #include "GSTN_MountLoadout.h"
+#include "GSTN_PairMoveRegistry.h"
 #include "GSTN_PiggybackContentLibrary.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Misc/CoreDelegates.h"
@@ -35,17 +36,18 @@ public:
 
 		if (GEngine)
 		{
-			FGSTN_MountLinkType::Register();
+			RegisterWithEngine();
 		}
 		else
 		{
-			PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddStatic(&FGSTN_MountLinkType::Register);
+			PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddStatic(&FGSTNPiggybackRuntimeModule::RegisterWithEngine);
 		}
 	}
 
 	virtual void ShutdownModule() override
 	{
 		FCoreDelegates::OnPostEngineInit.Remove(PostEngineInitHandle);
+		UGSTN_PairMoveRegistry::UnregisterGlobal();
 		FGSTN_MountLinkType::Unregister();
 		FGSTN_LoadoutExtensionRegistry::Unregister(FGSTN_MountLoadout::GetLoadoutExtensionId());
 		for (const FName Reason : FGSTN_MountLinkType::GetBreakReasonNames())
@@ -55,6 +57,13 @@ public:
 	}
 
 private:
+	/** The mount type, then its pair-move registry as the type's action provider (the registry is an engine subsystem) */
+	static void RegisterWithEngine()
+	{
+		FGSTN_MountLinkType::Register();
+		UGSTN_PairMoveRegistry::RegisterGlobal();
+	}
+
 	FDelegateHandle PostEngineInitHandle;
 };
 

@@ -263,3 +263,17 @@ thread (two edits, in this order, each its own commit):
 | carrier above threshold "rider dropped, velocity 0.5 x launch" | The break only; exit velocity waits for G9's `LaunchLinked` (OPEN) |
 | credit "from the attacker's link and ActivePair" | From the attacker's mount link per `FGSTN_MountRules::DefaultCredit` (OwnerOnly default = none; Split = share 128). ActivePair is G8. Partner meter requests still applied by nobody (M7-03 OPEN 1) |
 | rules "absent = defaults" | `FindRules` reads the rules asset's `FGSTN_MountRules` extension for scales, arc and credit, else the defaults |
+
+## G8: pair-move data (M7-07, desktop)
+
+| Spec / plan | Built |
+|---|---|
+| `PairIdx` int16 "the compiler assigns each an index" | Authored `PairMoveId` (1..32767) on the definition: GSTNLink G2's provider is one per link type and the initiator's `PartnerMove` key names the id as data, so the id must exist at authoring time and must not depend on which kits a machine compiled. Validation checks the key exists |
+| registry "compiled with the loadout" | `UGSTN_PairMoveRegistry` (module-owned, registered for `Combat.Link.Type.Mount` at post-engine-init); the mount loadout extension adds the kit's set (`FGSTN_MountKitExtension::PairMoves`, soft path: Core names no Runtime class). Ordered by id; same id from another definition refused (first wins, logged) |
+| binding's compiled entry stores `PairIdx` and `PartnerRequirements` | Not needed: GSTNLink checks `PartnerRequirements` at the partner's start (G2). `InitiatorRequirements` is data only: the kit's own binding of the initiator move enforces it |
+| `InitiatorTimelineOverride` / `PartnerTimelineOverride` | Not built: GSTNLink's action info has no timeline field; a Blueprint subclass of the ability is the per-kit timing |
+| `OutcomeFrame` `INDEX_NONE` = "when the initiator's move ends" | `INDEX_NONE` = no outcome (G2 semantics); validation requires a frame for `Break`, refuses `SwapRoles` (reserved) and an outcome frame before the key |
+| partner offset "from the initiator's start frame" | From the initiator's `PartnerMove` key frame (G2), effective minimum 1 |
+| `ExitMode` | One `UGSTN_Placer_Mount` per definition (mode + `ExitDistanceCm`), owned by the registry; break reason `Combat.Link.BreakReason.Outcome` |
+| `Interruptible` partner | `bPartnerLocksCommands` is forced false for it; "a hit replaces its part" is GSTNLink's forced-timeline behaviour (not re-tested here) |
+| partner requirements read provider tags (OPEN since G2) | Still OPEN: tags only `PartnerRequirements` names are not in `FGSTN_LinkRequestTags` and read absent. Needed by G9 content only if a reference move requires such a tag |

@@ -1,6 +1,8 @@
 // Piggyback, runtime part (GAS and Network Prediction through GSTNLink and GSTNCombat).
 
 #include "GSTN_MountLoadout.h"
+#include "GSTN_PairMoveDefinition.h"
+#include "GSTN_PairMoveRegistry.h"
 
 #include "GSTN_LinkTags.h"
 #include "GSTN_MountAbilities.h"
@@ -157,5 +159,10 @@ void FGSTN_MountLoadout::Contribute(const FGSTN_LoadoutExtensionContext& Context
 	if (const FGSTN_MountKitExtension* MountData = Kit ? Kit->Extensions.Find<FGSTN_MountKitExtension>() : nullptr)
 	{
 		ContributeFromKitData(*MountData, Input);
+		// Content for the mount type's action provider: the same set on every machine that compiles this kit (ids are authored, G8)
+		if (UGSTN_PairMoveRegistry* PairMoves = MountData->PairMoves.IsNull() ? nullptr : UGSTN_PairMoveRegistry::Get())
+		{
+			PairMoves->AddSet(Cast<UGSTN_PairMoveSet>(MountData->PairMoves.TryLoad()));
+		}
 	}
 }
