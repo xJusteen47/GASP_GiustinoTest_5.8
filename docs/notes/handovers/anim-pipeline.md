@@ -715,3 +715,16 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   allontanano l'avambraccio sinistro dal petto a 20-23, misurare la sensibilità prima) oppure picco ≤ ~5° (I aveva -7,8 a 21
   senza penetrazione: il margine è ~0,4 cm). Poi render standalone e griglie f17-42.
 - Costo: ~35 chiamate, contesto ~70k, circa $6.
+
+## Dair: stomp un frame dopo = offset della cattura standalone, corretto (2026-11-03, thread desktop Opus)
+- Ramo `claude/project-thread-0pafeo`, commit 3f3d01e. Caso: **offset di pipeline**, non la posa.
+- Author e build allineati: foot_l z costruito 59,2 @14 → -2,8 @15 (author 58,9/-3,0), base e variante I. Key 15 = anim 15.
+- Cattura in editor (`ingame_judge`, raw base v4) già allineata. La cattura **standalone** mostrava la posa f-1 (correlazione
+  moto immagine/posa 0,85 a lag 1, 0,31 a lag 0): un solo `set_frame` lasciava la mesh sulla posa precedente.
+- Fix (una modifica): `standalone_capture.py` riapplica `set_frame` a ogni tick finché hand_r è stabile (max 10), poi 3 tick.
+- Dopo: base e I az 90 a lag 0 (0,87 / 0,85), piedi giù a 14→15. Card, take e build non toccati: key 37/42, FAF 37,
+  anim_active [15,17] invariati. La card dell'owner era giusta: niente +1.
+- I video standalone vecchi (varG/varI az0/45/90) sono un frame in ritardo: rifarli se servono per una review.
+- File: `docs/notes/reviews/dair-offset/` (diagnosis.md, lag_test*.txt, griglia f12-18 base vs I, mp4 variante I az 90).
+- Non fatto: check ftilt_v31/jab (chiedono un build nell'editor dell'owner; il fix non tocca author/build/check).
+- Costo: ~35 chiamate, contesto ~60k, circa $5.
