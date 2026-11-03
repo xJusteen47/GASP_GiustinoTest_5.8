@@ -752,4 +752,8 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   `--standalone --azs=90,0,45`, griglie f12-24 e f35-42 K e base, commit in `docs/notes/reviews/dair-varK/`.
 - Tentativo 3 (OK coordinatore, opzione a): upperarm_l Z -16 a 23-25, pugni a 24 +3: verify 14/14, check FAIL
   **hand_l|spine_03 -0,57 cm @23** (il punto peggiore si sposta da 24 a 23). FERMA davvero: resta l'opzione (b), owner.
-- Costo: ~70 chiamate, contesto ~115k, circa $11.
+- Coordinatore: niente altre modifiche, render di K com'è (b14412a) con `--force` (gate clearance aperto: hand_l|spine_03
+  -0,57 cm @23, da guardare a video; l'owner decide l'exemption). Serve `ANIMPIPE_PROJECT` = cartella del progetto principale.
+- `docs/notes/reviews/dair-varK/`: mp4 K e base az 90/0/45 (standalone, dopo il fix 3f3d01e) e griglie base/K stessi frame
+  `grid_f12-24_az*` e `grid_f35-42_az*` (etichette v<N> (f<n>) controllate: f12..f24 allineate).
+- Costo: ~80 chiamate, contesto ~120k, circa $12.
