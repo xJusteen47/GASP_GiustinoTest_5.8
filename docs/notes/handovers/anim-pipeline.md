@@ -757,3 +757,15 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - `docs/notes/reviews/dair-varK/`: mp4 K e base az 90/0/45 (standalone, dopo il fix 3f3d01e) e griglie base/K stessi frame
   `grid_f12-24_az*` e `grid_f35-42_az*` (etichette v<N> (f<n>) controllate: f12..f24 allineate).
 - Costo: ~80 chiamate, contesto ~120k, circa $12.
+
+## Dair variante L = K + ginocchia (2026-11-03, thread desktop Sonnet)
+- Ramo `claude/project-thread-0pafeo` da b14412a. Unica modifica: poli ginocchio `leg_{l,r}_pv_ik_ctrl` Location a f19-26
+  (peso 0,4 a 19 e 26, 1 a 20-25), delta x 30 verso l'interno, y +40 avanti: le cosce ruotano dentro, ginocchia avanti. Fold, bacino,
+  testa, pugni, braccia, frame 0-17 e 31/37/42 di K invariati. Script `Tools/AnimPipeline/dair_varL_make.py`, card
+  `overlord_dair_v4_varL.json`, req `cards/overlord/dair/review/overlord_dair_v4_varL_req.json` (= K).
+- Tentativo 1: asse x del controllo invertito su L (ginocchio sx 20,5 -> 19,7). Tentativo 2 (segno x uguale su entrambe le gambe):
+  ginocchia x f20-25 da dump: sx 8,6-9,1 (anca 9,4), dx -3,3..-4,4 (anca -4,5): dentro la larghezza dei fianchi (K: 20,5 / -16).
+- verify 14/14. check: solo clearance hand_l|spine_03 -0,57 cm @23 (noto da K), render con --force.
+- `docs/notes/reviews/dair-varL/`: mp4 base e L az 90/0/45 (standalone), griglie f12-24 e f35-42 base vs L per az (ritagliate
+  sulla figura, etichette v<N> (f<n>)). Visto a occhio az 0 f12-24: ginocchia non a rana in f20-24. Dair f35-42 non toccati.
+- Costo: ~35 chiamate, circa $4.

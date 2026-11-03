@@ -1,0 +1,170 @@
+{
+ "variant": "overlord_dair_v4_varL",
+ "status": "filled by the K thread",
+ "video": false,
+ "hitstop": 8,
+ "_frames": "anim frames. K = I + pelvis held low 19-23 (min at 20), head/fists keep sinking to 23 (absolute z), forearms opened forward 20-25. Clearance is the check block, not a line here.",
+ "reqs": [
+  {
+   "id": "lean_f0_unchanged",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 0,
+   "min": 22,
+   "max": 30
+  },
+  {
+   "id": "lean_f31_stomp_hold_unchanged",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 31,
+   "min": -26,
+   "max": -18
+  },
+  {
+   "id": "lean_f37_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 37,
+   "min": 5,
+   "max": 8
+  },
+  {
+   "id": "lean_f40_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 40,
+   "min": 5,
+   "max": 9
+  },
+  {
+   "id": "lean_f42_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 42,
+   "min": 5,
+   "max": 10
+  },
+  {
+   "id": "pelvis_dip_held",
+   "type": "amplitude",
+   "bone": "pelvis",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 10,
+   "max": 16
+  },
+  {
+   "id": "pelvis_hold_19_23_flat",
+   "type": "amplitude",
+   "bone": "pelvis",
+   "coord": "z",
+   "window": [
+    19,
+    23
+   ],
+   "max": 1.5
+  },
+  {
+   "id": "head_abs_min_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "head",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 3,
+   "max": 4
+  },
+  {
+   "id": "hand_l_abs_min_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_l",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 3,
+   "max": 4
+  },
+  {
+   "id": "hand_r_abs_min_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_r",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 3,
+   "max": 4
+  },
+  {
+   "id": "head_sinks_on_held_pelvis_20_23",
+   "type": "amplitude",
+   "bone": "head",
+   "coord": "z",
+   "window": [
+    20,
+    23
+   ],
+   "min": 3
+  },
+  {
+   "id": "hand_l_sinks_on_held_pelvis_20_23",
+   "type": "amplitude",
+   "bone": "hand_l",
+   "coord": "z",
+   "window": [
+    20,
+    23
+   ],
+   "min": 3
+  },
+  {
+   "id": "hand_r_sinks_on_held_pelvis_20_23",
+   "type": "amplitude",
+   "bone": "hand_r",
+   "coord": "z",
+   "window": [
+    20,
+    23
+   ],
+   "min": 3
+  },
+  {
+   "id": "forearm_l_opened_y",
+   "type": "amplitude",
+   "bone": "hand_l",
+   "coord": "y",
+   "rel": "spine_03",
+   "window": [
+    19,
+    24
+   ],
+   "min": 2,
+   "max": 8
+  }
+ ]
+}
