@@ -6,6 +6,8 @@
 #include "GSTN_HitStep_MountHit.h"
 #include "GSTN_LinkRegistry.h"
 #include "GSTN_MountTypes.h"
+#include "GSTN_PairMoveDefinition.h"
+#include "GSTN_PairMoveTestContent.h"
 #include "GSTN_PiggybackTags.h"
 #include "Kits/GSTN_CombatAssetTypes.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
@@ -33,7 +35,11 @@ bool UGSTN_PiggybackContentLibrary::WriteMountKitData(UGSTN_PrimaryKitDefinition
 				return true;
 			}
 			Kit->Modify();
-			Entry = FInstancedStruct::Make(Data);
+			// The rest of the entry (pair moves, profiles a script wrote) stays: only the weights change
+			FGSTN_MountKitExtension Changed = *Existing;
+			Changed.Rider.Weight = RiderWeight;
+			Changed.Carrier.CarryCapacity = CarryCapacity;
+			Entry = FInstancedStruct::Make(Changed);
 			return true;
 		}
 	}
@@ -107,4 +113,103 @@ bool UGSTN_PiggybackContentLibrary::RemoveMountStepFromRules(UGSTN_CombatRules* 
 		Rules->ResolveHitPipeline();
 	}
 	return Removed > 0;
+}
+
+bool UGSTN_PiggybackContentLibrary::FillReferencePairMove(UGSTN_PairMoveDefinition* Definition, FGameplayTag PairTag)
+{
+	if (!Definition)
+	{
+		return false;
+	}
+	const bool bThrow = PairTag == GSTNPiggybackTags::PairMove_ThrowRider.GetTag();
+	if (!bThrow && PairTag != GSTNPiggybackTags::PairMove_BoostJump.GetTag())
+	{
+		return false;
+	}
+	Definition->Modify();
+	Definition->PairTag = PairTag;
+	Definition->Outcome = EGSTN_LinkActionOutcome::Break;
+	Definition->ExitMode = EGSTN_ExitMode::AtAnchor;
+	Definition->PartnerMode = EGSTN_PairPartnerMode::Cooperative;
+	Definition->bPartnerLocksCommands = true;
+	Definition->MaxDurationFrames = 120;
+	Definition->InitiatorRequirements = FGSTN_TagRequirements();
+	Definition->PartnerRequirements = FGSTN_TagRequirements();
+	Definition->ExitLaunch = FGSTN_PairExitLaunch();
+	if (bThrow)
+	{
+		// Spec 6.6: the carrier throws along its forward, pitched up; the rider keeps the carrier's velocity. The test kit has no
+		// Command.Special.Directional slot (spec 7): its neutral special is the trigger
+		Definition->PairMoveId = 1;
+		Definition->InitiatorRole = EGSTN_PairRole::Carrier;
+		Definition->InitiatorAbility = UGSTN_GA_Test_CarrierThrowRider::StaticClass();
+		Definition->TriggerCommand = FGameplayTag::RequestGameplayTag(TEXT("Command.Special.Neutral"), false);
+		Definition->PartnerAbility = UGSTN_GA_Test_RiderThrown::StaticClass();
+		Definition->PartnerStartOffsetFrames = UGSTN_GA_Test_CarrierThrowRider::ReleaseFrame - 1 - UGSTN_GA_Test_CarrierThrowRider::KeyFrame;
+		Definition->OutcomeFrame = UGSTN_GA_Test_CarrierThrowRider::ReleaseFrame;
+		Definition->ExitLaunch.Speed = 1400.f;
+		Definition->ExitLaunch.PitchDeg = 25.f;
+		Definition->ExitLaunch.InheritPartnerVelocity = 1.f;
+		Definition->Credit = EGSTN_PairCredit::InitiatorAndOwner;
+	}
+	else
+	{
+		// Spec 6.6: straight up at twice a 650 cm/s jump, plus the carrier's velocity on the movement plane
+		Definition->PairMoveId = 2;
+		Definition->InitiatorRole = EGSTN_PairRole::Rider;
+		Definition->InitiatorAbility = UGSTN_GA_Test_RiderBoostJump::StaticClass();
+		Definition->TriggerCommand = FGameplayTag::RequestGameplayTag(TEXT("Command.Movement.Jump"), false);
+		Definition->PartnerAbility = UGSTN_GA_Test_CarrierBraced::StaticClass();
+		Definition->PartnerStartOffsetFrames = 0;
+		Definition->OutcomeFrame = UGSTN_GA_Test_RiderBoostJump::LaunchFrame;
+		Definition->ExitLaunch.UpSpeed = 1300.f;
+		Definition->ExitLaunch.InheritPartnerVelocity = 1.f;
+		Definition->ExitLaunch.bInheritHorizontalOnly = true;
+		Definition->Credit = EGSTN_PairCredit::OwnerOnly;
+	}
+	return true;
+}
+
+bool UGSTN_PiggybackContentLibrary::WritePairMoveSet(UGSTN_PairMoveSet* Set, const TArray<UGSTN_PairMoveDefinition*>& Definitions)
+{
+	if (!Set)
+	{
+		return false;
+	}
+	TArray<TObjectPtr<UGSTN_PairMoveDefinition>> Moves;
+	for (UGSTN_PairMoveDefinition* Definition : Definitions)
+	{
+		if (Definition)
+		{
+			Moves.Add(Definition);
+		}
+	}
+	if (Moves != Set->PairMoves)
+	{
+		Set->Modify();
+		Set->PairMoves = MoveTemp(Moves);
+	}
+	return true;
+}
+
+bool UGSTN_PiggybackContentLibrary::WriteMountKitPairMoves(UGSTN_PrimaryKitDefinition* Kit, const UGSTN_PairMoveSet* Set)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	const FSoftObjectPath Path(Set);
+	for (FInstancedStruct& Entry : Kit->Extensions.ExtensionData)
+	{
+		if (FGSTN_MountKitExtension* Existing = Entry.GetMutablePtr<FGSTN_MountKitExtension>())
+		{
+			if (Existing->PairMoves != Path)
+			{
+				Kit->Modify();
+				Existing->PairMoves = Path;
+			}
+			return true;
+		}
+	}
+	return false;
 }

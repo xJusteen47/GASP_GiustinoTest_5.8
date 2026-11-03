@@ -9,6 +9,7 @@ struct FGSTN_BindingInput;
 struct FGSTN_CompileInput;
 struct FGSTN_LoadoutExtensionContext;
 struct FGSTN_MountKitExtension;
+class UGSTN_PairMoveSet;
 
 /**
  * The mount's part of a loadout compile (combat-m7-piggyback.md 7), registered with GSTNCombatGAS's loadout extension registry by the module, so
@@ -43,6 +44,12 @@ struct GSTNPIGGYBACKRUNTIME_API FGSTN_MountLoadout
 
 	/** The default bindings a kit with this mount data gets, in the order above (with their slot overrides) */
 	static TArray<FGSTN_BindingInput> MakeDefaultBindings(const FGSTN_MountKitExtension& Mount);
+
+	/**
+	 * The pair moves of a kit's set: a binding of each definition's TriggerCommand to its initiator (initiator requirements + role tag), and each
+	 * partner ability as a triggered ability (the partner's registry must know it). Null set = nothing. Returns how many bindings it added
+	 */
+	static int32 ContributePairMoves(const UGSTN_PairMoveSet* Set, FGSTN_CompileInput& Input);
 
 	/** Adds Combat.Link.Role.Carrier to the ignored tags of every binding of Disallowed that does not require it. Returns how many changed */
 	static int32 ApplyDisallowedCommands(const FGameplayTagContainer& Disallowed, FGSTN_CompileInput& Input);

@@ -52,6 +52,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pair Move|Initiator")
 	FGSTN_TagRequirements InitiatorRequirements;
 
+	/**
+	 * The command that plays the initiator. Set: the mount's loadout extension binds InitiatorAbility to it on every kit that names this
+	 * definition's set, requiring InitiatorRequirements plus the initiator's role tag, on the kit's own slot of the command (none = the binding
+	 * has no input). Empty: the kit binds the initiator itself (spec 4). Either way the extension makes PartnerAbility a triggered ability of
+	 * the kit, so the partner's timeline registry has it when the link tick starts it (StartForcedTimeline refuses an unknown class)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pair Move|Initiator", meta = (Categories = "Command"))
+	FGameplayTag TriggerCommand;
+
 	/** The partner's move, started by the link tick (source Forced). Must be in the partner kit's timeline registry */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pair Move|Partner")
 	TSubclassOf<UGSTN_GA_BaseCombat> PartnerAbility;

@@ -290,3 +290,17 @@ abilities with timelines, the definitions, the test kit's set), `scenario_throw_
 | `ThrowInheritCarrierVelocity` / `InheritCarrierVelocity` × the carrier's (horizontal) velocity | `InheritPartnerVelocity` (+ `bInheritHorizontalOnly` for the boost) × the new `FGSTN_ExitQuery::PartnerVelocity`: the watchdog fills it from the pawn on the authority (`FGSTN_LinkWatchdogEntity::Velocity`), an initiator placing its own exit from its view snapshot's `Velocity` (the boost jump, predicted) |
 | boost "rider's `JumpVelocity × BoostMultiplier`" | One `UpSpeed` on the definition: the placer reads no Mover settings. Content authors the product |
 | `RefundAirJumps`, thrown rider's sweeping hitbox, `ThrownActionableFrame` | Part B (abilities and timelines) |
+
+## G9 part B: the reference pair moves as test content (M7-09, desktop)
+
+| Spec / plan | Built |
+|---|---|
+| `GA_Carrier_ThrowRider`, `GA_Rider_Thrown`, `GA_Rider_BoostJump`, `GA_Carrier_Braced` as content in `Content/GSTNCombat/Kits/Test/PairMoves` | TEST content, not designed abilities: `UGSTN_GA_Test_CarrierThrowRider` / `_RiderThrown` / `_RiderBoostJump` / `_CarrierBraced` in `GSTNPiggybackRuntime` (`GSTN_PairMoveTestContent.h`), timelines built in the constructors like the mount moves. Throw 32 f (key 1, partner at 13, release 14, actionable 32); thrown 40 f, swept capsule r45/hh90 from frame 2, `YawSource = HitboxVelocity`, one hit per target, allies ignored, actionable 24; boost 14 f (key 0, launch 6, actionable 10); braced 12 f, `Combat.Lock.Movement` 0..10 |
+| definitions and set in the kit's content | `PM_ThrowRider`, `PM_BoostJump`, `PMS_Test_Mount` in the plugin's `Content/Test`, made and filled by `mount_scenarios.prepare_editor()` (`UGSTN_PiggybackContentLibrary::FillReferencePairMove`, `WritePairMoveSet`, `WriteMountKitPairMoves`); both test kits name the set |
+| "the kit still binds each initiator move itself" (G8) | New optional `UGSTN_PairMoveDefinition::TriggerCommand`: set, the mount's loadout extension binds the initiator to it (initiator requirements + the initiator's role tag, the kit's own slot). Empty = the kit binds it, as before. The extension also makes every `PartnerAbility` a triggered ability of the kit, so the partner's timeline registry has it (`StartForcedTimeline` refuses an unknown class) |
+| throw on `Command.Special.Directional` | `Command.Special.Neutral` (the test kits have no Directional slot); boost on `Command.Movement.Jump` as specified |
+| throw: `ThrowSpeed`, `ThrowAngleDeg`, `ThrowInheritCarrierVelocity` | Speed 1400 cm/s, pitch 25°, inherit 1.0, credit `InitiatorAndOwner` |
+| boost: `JumpVelocity × BoostMultiplier`, `InheritCarrierVelocity`, `RefundAirJumps` | UpSpeed 1300 (650 × 2), horizontal inherit 1.0, credit `OwnerOnly`. `RefundAirJumps` NOT built (OPEN): the exit from the parked mode does not touch the jump state, and no part-A field carries it |
+| thrown hitbox "active until landing or 40 f" | 40 f only: a land cancel needs a movement track, and the flight is the exit launch |
+| `UGSTN_GA_PairMove::PairMove` names the definition | Left empty on the test classes (a class default cannot name an asset of a setup script); validation runs on the definitions |
+| `WriteMountKitData` replaced the whole mount entry | Now changes only the two weights, so a rerun of `prepare_editor` keeps the pair moves |

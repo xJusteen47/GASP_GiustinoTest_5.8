@@ -215,3 +215,28 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
   scenario_boost_jump in mount_scenarios.py, spike 4 (partner delay, 150 ms threshold) into m7-spike-report.md.
 - OPEN unchanged: rider attack binding (owner deferred), G6 carry load, carrier shield over rider, provider-only partner tags, M7-04/M7-03.
 - Cost: one Opus thread, ~70k context, ~45 calls, 2 UBT builds + 2 headless editors (~30 min machine): low.
+
+## M7-09 (desktop, 2026-11-03): G9 part B, the reference pair moves as test content; spike 4
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9, on abab24b. Not on feature (owner pushes).
+- Built (deltas: m7-doc-deltas.md "G9 part B"): TEST abilities `UGSTN_GA_Test_CarrierThrowRider` / `_RiderThrown` / `_RiderBoostJump` /
+  `_CarrierBraced` (`GSTN_PairMoveTestContent.h`, constructor timelines, not designed abilities); `UGSTN_PairMoveDefinition::TriggerCommand`
+  (optional): `FGSTN_MountLoadout::ContributePairMoves` binds the initiator with its role and makes each partner a triggered ability (the
+  partner's registry needs it); content helpers `FillReferencePairMove`, `WritePairMoveSet`, `WriteMountKitPairMoves`; `WriteMountKitData`
+  keeps the rest of the entry. Assets `PM_ThrowRider`, `PM_BoostJump`, `PMS_Test_Mount` in the plugin's Content/Test, both test kits name the set
+  (made by `mount_scenarios.prepare_editor()`). Throw on `Command.Special.Neutral` (no Directional slot in the test kits), boost on Jump.
+- Test `GSTNPiggyback.Runtime.PairMove.ReferenceContent`. Scenarios `throw_rider`, `boost_jump` (in SUITE_MOUNT) with the spike 4 probe.
+- Gates (`Saved/M709`, diagnosis.txt): on build Succeeded, `headless-on1.log` 1287/0; off `build-off1.out` Succeeded, `headless-off1.log`
+  1260/0; 0 ensures. .uproject restored (= HEAD); worktree binaries are the OFF build: rebuild on first.
+- Harness (driver `Saved/M709/driver.py`, `run.ps1`; the PIE ini must be listen/3, patched and restored: attempt 1 failed on it), 60/15 ms,
+  `Saved/Logs/m7-09/*-2.log`: SUITE_MOUNT at 0 %: 6/9 pass. mount_interact_priority = the known missing-pawn exception flake (M7-06).
+  throw_rider: everything passes except "flew >= 250 cm", which is checked 0.65 s after the tap while the release lands about 0.5 s after it
+  (235 / 194 cm): the check is too early, so move it to t+1.4 (not rerun: 2 attempts used). Rider client = server after the flight (0.0 cm).
+  boost_jump: the link breaks everywhere and the rider rises 604-617 cm, but the "braced" probe never saw `Combat.Lock.Movement` through
+  `has_tag` (ASC): it probably isn't an ASC tag (unverified), so the probe needs fixing. Rider client rollbacks 2-4 (predicted, expected 0):
+  OPEN, check which correction.
+- Spike 4 (m7-spike-report.md S4): about 280 ms (throw, server-given release, both screens together) and about 300 ms (boost, rider to
+  carrier screen), at 0 and 2 %. Over the 150 ms gate: by spec 2.4, a forward-prediction milestone for pair partners. Owner/coordinator decision.
+- OPEN: RefundAirJumps not built; thrown land-cancel not built; the 3 probe/timing fixes above; rider attack binding (deferred), G6 carry load,
+  carrier shield over rider, provider-only partner tags, M7-04/M7-03.
+- Cost: one Opus thread, about 110k context, about 75 calls, 2 UBT builds, 2 headless test editors, 2 harness editors (about 1 h of machine time): medium.

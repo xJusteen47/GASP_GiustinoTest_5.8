@@ -7,6 +7,10 @@
 #include "GSTN_LinkWatchdog.h"
 #include "GSTN_MountUtils.h"
 #include "GSTN_MountAbilities.h"
+#include "GSTN_MountLoadout.h"
+#include "GSTN_PairMoveTestContent.h"
+#include "GSTN_PiggybackContentLibrary.h"
+#include "Loadout/GSTN_CompiledBindingTable.h"
 #include "GSTN_PairMoveDefinition.h"
 #include "GSTN_PairMoveRegistry.h"
 #include "GSTN_PiggybackTags.h"
@@ -260,6 +264,59 @@ bool FGSTN_PairMoveExitLaunchTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("resolve"), Registry->ResolveLinkAction(7, Info));
 	const UGSTN_Placer_Mount* Resolved = Cast<UGSTN_Placer_Mount>(Info.ExitPlacer);
 	TestTrue(TEXT("definition launch on the placer"), Resolved && Resolved->Launch.UpSpeed == 900.f && Resolved->Launch.bInheritHorizontalOnly);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PairMoveReferenceContentTest, "GSTNPiggyback.Runtime.PairMove.ReferenceContent", GSTNPairMoveTests::Flags)
+bool FGSTN_PairMoveReferenceContentTest::RunTest(const FString& Parameters)
+{
+	// M7 G9 part B: the two reference pair moves on the plugin's test abilities validate against their class-default timelines, and the mount's
+	// loadout binds each initiator on its trigger command with its role while making each partner a triggered ability
+	TStrongObjectPtr<UGSTN_PairMoveDefinition> Throw(NewObject<UGSTN_PairMoveDefinition>(GetTransientPackage()));
+	TStrongObjectPtr<UGSTN_PairMoveDefinition> Boost(NewObject<UGSTN_PairMoveDefinition>(GetTransientPackage()));
+	TestTrue(TEXT("throw filled"), UGSTN_PiggybackContentLibrary::FillReferencePairMove(Throw.Get(), GSTNPiggybackTags::PairMove_ThrowRider.GetTag()));
+	TestTrue(TEXT("boost filled"), UGSTN_PiggybackContentLibrary::FillReferencePairMove(Boost.Get(), GSTNPiggybackTags::PairMove_BoostJump.GetTag()));
+	TestFalse(TEXT("another tag is refused"), UGSTN_PiggybackContentLibrary::FillReferencePairMove(Boost.Get(), GSTNPiggybackTags::Role_Rider.GetTag()));
+	for (const UGSTN_PairMoveDefinition* Definition : { Throw.Get(), Boost.Get() })
+	{
+		TArray<FString> Errors;
+		Definition->Validate(Errors);
+		TestEqual(*FString::Printf(TEXT("%s validates"), *Definition->PairTag.ToString()), Errors.Num(), 0);
+		for (const FString& Error : Errors)
+		{
+			AddInfo(Error);
+		}
+	}
+	TestEqual(TEXT("throw key frame"), UGSTN_PairMoveDefinition::FindPartnerMoveKeyFrame(GetDefault<UGSTN_GA_Test_CarrierThrowRider>()->Timeline, 1), 1);
+	TestEqual(TEXT("the thrown part starts one frame before the release"), 1 + Throw->PartnerStartOffsetFrames, Throw->OutcomeFrame - 1);
+	TestEqual(TEXT("boost key frame"), UGSTN_PairMoveDefinition::FindPartnerMoveKeyFrame(GetDefault<UGSTN_GA_Test_RiderBoostJump>()->Timeline, 2), 0);
+	TestTrue(TEXT("throw launches"), Throw->ExitLaunch.Speed > 0.f && !Throw->ExitLaunch.bInheritHorizontalOnly);
+	TestTrue(TEXT("boost launches up, horizontal inherit"), Boost->ExitLaunch.UpSpeed > 0.f && Boost->ExitLaunch.bInheritHorizontalOnly);
+
+	TStrongObjectPtr<UGSTN_PairMoveSet> Set(NewObject<UGSTN_PairMoveSet>(GetTransientPackage()));
+	TestTrue(TEXT("set written"), UGSTN_PiggybackContentLibrary::WritePairMoveSet(Set.Get(), { Throw.Get(), nullptr, Boost.Get() }));
+	TestEqual(TEXT("nulls skipped"), Set->PairMoves.Num(), 2);
+	FGSTN_CompileInput Input;
+	TestEqual(TEXT("no set, no binding"), FGSTN_MountLoadout::ContributePairMoves(nullptr, Input), 0);
+	const int32 Bound = FGSTN_MountLoadout::ContributePairMoves(Set.Get(), Input);
+	if (Throw->TriggerCommand.IsValid() && Boost->TriggerCommand.IsValid())
+	{
+		TestEqual(TEXT("two initiator bindings"), Bound, 2);
+		const FGSTN_BindingInput* ThrowBinding = Input.Kit.Bindings.FindByPredicate([&](const FGSTN_BindingInput& B) { return B.Command == Throw->TriggerCommand; });
+		const FGSTN_BindingInput* BoostBinding = Input.Kit.Bindings.FindByPredicate([&](const FGSTN_BindingInput& B) { return B.Command == Boost->TriggerCommand; });
+		TestTrue(TEXT("throw needs the carrier role"), ThrowBinding && ThrowBinding->Requirements.RequireTags.HasTagExact(GSTNPiggybackTags::Role_Carrier.GetTag())
+			&& ThrowBinding->Ability == FSoftObjectPath(UGSTN_GA_Test_CarrierThrowRider::StaticClass()) && !ThrowBinding->bHasSlotOverride);
+		TestTrue(TEXT("boost needs the rider role"), BoostBinding && BoostBinding->Requirements.RequireTags.HasTagExact(GSTNPiggybackTags::Role_Rider.GetTag())
+			&& BoostBinding->Ability == FSoftObjectPath(UGSTN_GA_Test_RiderBoostJump::StaticClass()));
+	}
+	else
+	{
+		AddWarning(TEXT("the command ini tags are not loaded: binding checks skipped"));
+	}
+	TestTrue(TEXT("partners are triggered abilities"), Input.Kit.TriggeredAbilities.Contains(FSoftObjectPath(UGSTN_GA_Test_RiderThrown::StaticClass()))
+		&& Input.Kit.TriggeredAbilities.Contains(FSoftObjectPath(UGSTN_GA_Test_CarrierBraced::StaticClass())));
+	FGSTN_MountLoadout::ContributePairMoves(Set.Get(), Input);
+	TestEqual(TEXT("a partner is added once"), Input.Kit.TriggeredAbilities.Num(), 2);
 	return true;
 }
 

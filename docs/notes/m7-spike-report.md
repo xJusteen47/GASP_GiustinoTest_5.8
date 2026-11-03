@@ -180,6 +180,26 @@ interpolation delay of the tap (another link, a hit, a lock), so they are rare; 
 nothing. Options for later (OPEN): a refusal memory on the rider (do not re-predict a serial the authority refused), or no optimistic attach
 until the carrier's copy is newer than the request frame.
 
+## S4 partner-move delay (checkpoint G9 part B, desktop, 2026-11-03)
+
+Listen host + 2 clients, 60/15 ms, rider = client 1, carrier = client 2, presentation hiding OFF (none built), one PIE editor tick of jitter.
+Measured by `mount_scenarios.py` (`_spike4`): the first editor tick each world shows the event, from the initiator's tap. Logs
+`Saved/Logs/m7-09/*-2.log`, notes in `Saved/M709/h-suite2.log`.
+
+| Pair move | Event | Initiator screen from tap | Partner screen from tap | Partner minus initiator |
+|---|---|---|---|---|
+| ThrowRider (carrier initiates), 0 % | rider leaves the parked mode (release, nominal frame 14 = 233 ms) | 538 ms (carrier) | 511 ms (rider) | -27 ms |
+| ThrowRider, 2 % | same | 569 ms | 517 ms | -52 ms |
+| BoostJump (rider initiates), 0 % | rider leaves the parked mode (launch, nominal frame 6 = 100 ms) | 123 ms (rider, predicted) | 423 ms (carrier) | +301 ms |
+| BoostJump, 2 % | same | 134 ms | 443 ms | +310 ms |
+
+Reading: the throw's release is server-given, so both screens see it at once, about 280 ms after its nominal frame (the request
+travels to the server, the server plays the carrier's timeline, the result comes back). The boost is predicted on the rider and
+reaches the carrier's screen about 300 ms later. Both exceed the 150 ms gate of spec 2.4: by the spec, open a forward-prediction
+milestone for pair partners (ForwardPredict LOD for the pair only, the fork's per-entity LOD, combat.md §12.7). Not decided here:
+an owner/coordinator decision. Not measured: the carrier's braced reaction (the harness reads ASC tags and `Combat.Lock.Movement`
+is granted by the combat tick, likely not as an ASC tag (unverified): probe to fix).
+
 ## Other findings
 
 1. **Unity build clash in `GSTNLinkNP` tests (blocks a clean build)**: `GSTN_LinkNPTests_ExitCollision.cpp` (F15) and

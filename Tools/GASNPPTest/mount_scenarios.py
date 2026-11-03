@@ -26,6 +26,12 @@
 #   rider_attack         M7 G7: the mounted rider attacks the enemy ahead of its carrier: the enemy's server inbox has the hit, the carrier (its
 #                        partner) never receives one, the mount holds. NOT in SUITE_MOUNT: while riding the Grounded attack binding does not hold
 #                        and no kit has the Role.Rider attack binding of spec 9.2 yet, so the rider makes no hit (M7-06 run: empty hit log)
+#   throw_rider          M7 G9: the carrier's neutral special throws the rider (PM_ThrowRider, plugin test content): the mount breaks at the
+#                        release on every world, the rider flies off along the carrier's forward with the exit launch; spike 4 is measured
+#   boost_jump           M7 G9: the mounted rider's jump boosts it off the carrier (PM_BoostJump): the carrier braces (Combat.Lock.Movement) on
+#                        the server and its own world, the rider rises well above its parked height; spike 4 is measured
+#   Spike 4 (spec 2.4): the partner's visible reaction on the partner's own screen, against the same event on the initiator's screen (ms; one
+#   PIE editor tick of jitter). Above 150 ms = open a forward-prediction milestone for pair partners
 import math
 import time
 
@@ -43,7 +49,11 @@ GRAB_TARGET = 'Interact.Target.Grab'
 FIRST_PLUGIN_REASON = 16
 PAIRINGS = {'client_rides_client': (1, 2), 'client_rides_host': (1, 0), 'host_rides_client': (0, 1)}
 SUITE_MOUNT = ['mount_basic', 'mount_refused', 'mount_heavy_refused', 'dismount_drop', 'mount_interact_priority', 'dismount_predicted',
-               'mounted_hit']   # rider_attack waits for a Role.Rider attack binding: no kit has one yet (M7-06)
+               'mounted_hit', 'throw_rider', 'boost_jump']   # rider_attack waits for a Role.Rider attack binding: no kit has one yet (M7-06)
+PAIR_SET = 'PMS_Test_Mount'
+PAIR_MOVES = (('PM_ThrowRider', 'Combat.PairMove.ThrowRider'), ('PM_BoostJump', 'Combat.PairMove.BoostJump'))
+LOCK_MOVEMENT = 'Combat.Lock.Movement'
+SPIKE4_MS = 150.0
 _last = {'rig': None}
 
 
@@ -58,10 +68,39 @@ def _ensure_kit(name, rider_weight, capacity):
     return name, PLib.get_mount_kit_data(kit)
 
 
+def _ensure_data_asset(name, cls):
+    path = TEST_DIR + name
+    if not unreal.EditorAssetLibrary.does_asset_exist(path):
+        factory = unreal.DataAssetFactory()
+        factory.set_editor_property('data_asset_class', cls)
+        unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, TEST_DIR.rstrip('/'), cls, factory)
+    return unreal.load_asset(path)
+
+
+def _ensure_pair_moves():
+    """G9 test content: the two reference definitions and their set in the plugin's Content/Test, the set named by both test kits' mount data
+    (the loadout then binds the initiators and makes the partners triggered abilities). Saved only when changed"""
+    defs = []
+    for name, tag in PAIR_MOVES:
+        d = _ensure_data_asset(name, unreal.GSTN_PairMoveDefinition)
+        PLib.fill_reference_pair_move(d, g._tag(tag))
+        unreal.EditorAssetLibrary.save_asset(TEST_DIR + name, only_if_is_dirty=True)
+        defs.append(d)
+    pair_set = _ensure_data_asset(PAIR_SET, unreal.GSTN_PairMoveSet)
+    PLib.write_pair_move_set(pair_set, defs)
+    unreal.EditorAssetLibrary.save_asset(TEST_DIR + PAIR_SET, only_if_is_dirty=True)
+    out = []
+    for kit_name in (KIT_MOUNT, KIT_HEAVY):
+        kit = unreal.load_asset(TEST_DIR + kit_name)
+        out.append((kit_name, PLib.write_mount_kit_pair_moves(kit, pair_set)))
+        unreal.EditorAssetLibrary.save_asset(TEST_DIR + kit_name, only_if_is_dirty=True)
+    return 'pair moves', [n for n, _ in PAIR_MOVES], out
+
+
 def prepare_editor():
-    """The two test kits (created from KIT_Test_Link when missing, saved in the plugin's Content/Test), the kit scan, the link content and the
-    saved team rule on GSTNLink's test grab (setup_defence_link_content.py, G5). Before PIE"""
-    out = [_ensure_kit(KIT_MOUNT, 100.0, 150.0), _ensure_kit(KIT_HEAVY, 200.0, 150.0)]
+    """The two test kits (created from KIT_Test_Link when missing, saved in the plugin's Content/Test), the G9 pair moves on them, the kit scan,
+    the link content and the saved team rule on GSTNLink's test grab (setup_defence_link_content.py, G5). Before PIE"""
+    out = [_ensure_kit(KIT_MOUNT, 100.0, 150.0), _ensure_kit(KIT_HEAVY, 200.0, 150.0), _ensure_pair_moves()]
     out.append(('scan', PLib.scan_plugin_kits()))
     out.append(('link', ls.prepare_editor()))
     out.append(('mount type index', PLib.get_mount_type_index()))
@@ -85,6 +124,7 @@ class _MountRig:
         at = self.run.at
         self.run.at = lambda label, fn: at(label, lambda: (lambda r: (r[0], str(r[1])))(fn()))
         self.marks, self.shown, self.seen = {}, [], {wi: set() for wi in range(len(g.worlds()))}
+        self.watch_from, self.first = None, {}   # spike 4: (event, world) -> first time seen after watch_from
         self.kits = None
         self.handle = unreal.register_slate_post_tick_callback(self._tick)
         _last['rig'] = self
@@ -97,6 +137,12 @@ class _MountRig:
             for wi in self.seen:
                 r, c = ls.body(wi, self.rkey), ls.body(wi, self.ckey)
                 self.seen[wi].add(((r or (0,))[0], (c or (0,))[0]))
+                if self.watch_from is not None:
+                    now = self.run.now()
+                    if ('unparked', wi) not in self.first and ls.mover_mode(wi, self.rkey) != ls.LINKED_MODE:
+                        self.first[('unparked', wi)] = now
+                    if ('braced', wi) not in self.first and ls.has_tag(wi, self.ckey, LOCK_MOVEMENT):
+                        self.first[('braced', wi)] = now
         except Exception:
             pass
 
@@ -480,4 +526,92 @@ def scenario_rider_attack(pairing='client_rides_client'):
                                          f"carrier client {rig.rb_delta('pre_attack', 'attacked', rig.ic)}, rows {st.get('rows')}")),
               (t + 1.95, lambda: ('hit log', g._hit_logging(False)))]
     steps += rig.end(t + 2.0)
+    run.run(steps)
+
+
+# ---- G9: pair moves ----------------------------------------------------------------------------------------------------------------------
+def _spike4(rig, event, initiator_wi, partner_wi, label):
+    """Spike 4: the partner's screen against the initiator's for the same event (ms); also from the initiator's tap"""
+    def f():
+        a, b = rig.first.get((event, initiator_wi)), rig.first.get((event, partner_wi))
+        tap = rig.watch_from
+        if a is None or b is None:
+            rig.run.note(f'spike 4 {label}: event {event} not seen on both screens ({rig.first})')
+            return False, f'{rig.first}'
+        d = (b - a) * 1000.0
+        rig.run.note(f'spike 4 {label}: {event} on the partner screen (world {partner_wi}) {d:.0f} ms after the initiator screen (world {initiator_wi}); '
+                     f'from the tap: initiator {(a - tap) * 1000.0:.0f} ms, partner {(b - tap) * 1000.0:.0f} ms; threshold {SPIKE4_MS:.0f} ms')
+        return True, f'{d:.0f} ms'
+    return rig.run.at(f'spike 4 measured ({label})', f)
+
+
+def scenario_throw_rider(pairing='client_rides_client'):
+    """The carrier throws its rider (PM_ThrowRider): carrier-initiated, the exit server-given with the definition's launch (G9 part A)"""
+    rig = _MountRig('throw_rider', pairing)
+    run = rig.run
+    st = {}
+
+    def throw():
+        st['start'] = {k: tuple(g.snap(g.worlds()[0])[k]['location']) for k in (rig.rkey, rig.ckey)}
+        rig.first.clear()
+        rig.watch_from = run.now()
+        return 'carrier throws', g.combat_tap(rig.ic, g.button_mask('Special'))
+
+    def flew():
+        r, c = g.snap(g.worlds()[0])[rig.rkey]['location'], st['start'][rig.ckey]
+        d = math.dist(r[:2], c[:2])
+        return d >= 250.0 and ls.mover_mode(0, rig.rkey) != ls.LINKED_MODE, f'rider {d:.1f} cm from where the carrier threw (server)'
+
+    def agree():
+        mine, srv = g.snap(g.worlds()[rig.ir])[rig.rkey]['location'], g.snap(g.worlds()[0])[rig.rkey]['location']
+        err = math.dist(mine, srv)
+        run.note(f'throw: rider own client vs server after the flight {err:.1f} cm')
+        return err <= 10.0, f'{err:.1f} cm'
+
+    steps = [(0.2, rig.setup()), (1.1, rig.clear_other())]
+    mount, t = rig.mount_steps(1.2)
+    steps += mount
+    steps += [(t + 0.3, rig.mark('pre_throw')), (t + 0.35, throw), (t + 1.0, run.at('the rider flew off the carrier (server)', flew)),
+              (t + 1.0, rig.gone('the throw ended the link on every world')),
+              (t + 1.0, _spike4(rig, 'unparked', rig.ic, rig.ir, 'throw (rider released)')),
+              (t + 2.4, rig.mark('thrown')), (t + 2.4, run.at("the rider's client and the server agree once it landed", agree)),
+              (t + 2.45, lambda: run.note(f"throw: rollbacks rider client {rig.rb_delta('pre_throw', 'thrown', rig.ir)}, "
+                                          f"carrier client {rig.rb_delta('pre_throw', 'thrown', rig.ic)}"))]
+    steps += rig.end(t + 2.5)
+    run.run(steps)
+
+
+def scenario_boost_jump(pairing='client_rides_client'):
+    """The rider boost-jumps off its carrier (PM_BoostJump): rider-initiated, predicted on the rider; the carrier braces on the server"""
+    rig = _MountRig('boost_jump', pairing)
+    run = rig.run
+    st = {}
+
+    def boost():
+        st['z0'] = g.snap(g.worlds()[rig.ir])[rig.rkey]['location'][2]
+        rig.first.clear()
+        rig.watch_from = run.now()
+        return 'rider boosts', g.combat_tap(rig.ir, g.button_mask('Jump'))
+
+    def rose():
+        zs = [p[2] for t, p, _ in rig.shown if t >= rig.watch_from]
+        top = max(zs, default=st['z0']) - st['z0']
+        run.note(f'boost: the rider rose {top:.1f} cm above its parked height on its own screen')
+        return top >= 100.0, f'{top:.1f} cm'
+
+    def braced():
+        return ('braced', 0) in rig.first and ('braced', rig.ic) in rig.first, f'{rig.first}'
+
+    steps = [(0.2, rig.setup()), (1.1, rig.clear_other())]
+    mount, t = rig.mount_steps(1.2)
+    steps += mount
+    steps += [(t + 0.3, rig.mark('pre_boost')), (t + 0.35, boost), (t + 1.2, rig.gone('the boost ended the link on every world')),
+              (t + 1.2, run.at('the rider rose above the carrier', rose)),
+              (t + 1.2, run.at('the carrier braced on the server and on its own world', braced)),
+              (t + 1.2, _spike4(rig, 'braced', 0, rig.ic, 'boost (carrier braced, server vs carrier screen)')),
+              (t + 1.2, _spike4(rig, 'unparked', rig.ir, rig.ic, 'boost (rider leaves, rider vs carrier screen)')),
+              (t + 2.2, rig.mark('boosted')),
+              (t + 2.25, lambda: run.note(f"boost: rollbacks rider client {rig.rb_delta('pre_boost', 'boosted', rig.ir)} (predicted: expect 0), "
+                                          f"carrier client {rig.rb_delta('pre_boost', 'boosted', rig.ic)}"))]
+    steps += rig.end(t + 2.3)
     run.run(steps)

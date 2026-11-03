@@ -160,9 +160,44 @@ void FGSTN_MountLoadout::Contribute(const FGSTN_LoadoutExtensionContext& Context
 	{
 		ContributeFromKitData(*MountData, Input);
 		// Content for the mount type's action provider: the same set on every machine that compiles this kit (ids are authored, G8)
-		if (UGSTN_PairMoveRegistry* PairMoves = MountData->PairMoves.IsNull() ? nullptr : UGSTN_PairMoveRegistry::Get())
+		// Loaded at compile time only (a loadout change), never in a tick
+		const UGSTN_PairMoveSet* Set = MountData->PairMoves.IsNull() ? nullptr : Cast<UGSTN_PairMoveSet>(MountData->PairMoves.TryLoad());
+		ContributePairMoves(Set, Input);
+		if (UGSTN_PairMoveRegistry* PairMoves = Set ? UGSTN_PairMoveRegistry::Get() : nullptr)
 		{
-			PairMoves->AddSet(Cast<UGSTN_PairMoveSet>(MountData->PairMoves.TryLoad()));
+			PairMoves->AddSet(Set);
 		}
 	}
+}
+
+int32 FGSTN_MountLoadout::ContributePairMoves(const UGSTN_PairMoveSet* Set, FGSTN_CompileInput& Input)
+{
+	if (!Set)
+	{
+		return 0;
+	}
+	int32 Added = 0;
+	for (const UGSTN_PairMoveDefinition* Definition : Set->PairMoves)
+	{
+		if (!Definition)
+		{
+			continue;
+		}
+		if (Definition->TriggerCommand.IsValid() && Definition->InitiatorAbility)
+		{
+			// The kit's own slot of the command: the binding outranks the command's ordinary bindings by its extra role tag (spec 7, 9.2)
+			FGSTN_BindingInput Binding;
+			Binding.Command = Definition->TriggerCommand;
+			Binding.Requirements = Definition->InitiatorRequirements;
+			Binding.Requirements.RequireTags.AddTag(Definition->GetInitiatorRoleTag());
+			Binding.Ability = FSoftObjectPath(Definition->InitiatorAbility.Get());
+			Input.Kit.Bindings.Add(MoveTemp(Binding));
+			++Added;
+		}
+		if (Definition->PartnerAbility)
+		{
+			Input.Kit.TriggeredAbilities.AddUnique(FSoftObjectPath(Definition->PartnerAbility.Get()));
+		}
+	}
+	return Added;
 }
