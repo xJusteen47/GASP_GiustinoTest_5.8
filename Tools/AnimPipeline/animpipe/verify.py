@@ -14,6 +14,9 @@ angle      degrees of the segment from->to against straight up, in the `side` (Y
 delay      frames the `b` bone's `peak` (max|min of `coord` x|y|z, default max) comes AFTER the `a` bone's, inside `window`
            (negative = b first). Counted in anim frames (the hitstop freeze adds none).
 amplitude  max - min of `coord` of `bone` inside `window`, cm.
+rel        optional on delay/amplitude: a bone whose `coord` is subtracted from `b` (delay) or `bone` (amplitude) frame by frame,
+           e.g. "rel": "pelvis" measures the hands' lag in the body frame (absolute z is dominated by a big body dip, so the
+           hand and pelvis minima coincide even when the hands trail). `a` stays absolute.
 Frames (frame, window) are VIDEO frames when "video" is true (default: the owner's count, see animpipe/vframes.py), else anim frames.
 `min` / `max` are both optional; a line with neither only reports the value. A missing bone or frame is a FAIL with the reason.
 """
@@ -39,8 +42,12 @@ def _coord(F, f, bone, coord):
     return _pt(F, f, bone)["xyz".index(coord)]
 
 
-def _peak(F, bone, coord, kind, lo, hi):
-    vals = [(_coord(F, f, bone, coord), f) for f in range(lo, hi + 1)]
+def _val(F, f, bone, coord, rel=None):
+    return _coord(F, f, bone, coord) - (_coord(F, f, rel, coord) if rel else 0.0)
+
+
+def _peak(F, bone, coord, kind, lo, hi, rel=None):
+    vals = [(_val(F, f, bone, coord, rel), f) for f in range(lo, hi + 1)]
     return (max(vals, key=lambda t: (t[0], -t[1])) if kind == "max" else min(vals, key=lambda t: (t[0], t[1])))[1]
 
 
@@ -54,11 +61,11 @@ def measure(F, r, conv):
         return round(math.degrees(math.atan2(b[i] - a[i], b[2] - a[2])), 2), "deg"
     lo, hi = (conv(x) for x in r["window"])
     if t == "amplitude":
-        v = [_coord(F, f, r["bone"], r["coord"]) for f in range(lo, hi + 1)]
+        v = [_val(F, f, r["bone"], r["coord"], r.get("rel")) for f in range(lo, hi + 1)]
         return round(max(v) - min(v), 2), "cm"
     if t == "delay":
         k = r.get("peak", "max"); c = r.get("coord", "z")
-        return _peak(F, r["b"], c, k, lo, hi) - _peak(F, r["a"], c, k, lo, hi), "frames"
+        return _peak(F, r["b"], c, k, lo, hi, r.get("rel")) - _peak(F, r["a"], c, k, lo, hi), "frames"
     raise ValueError(f"type {t!r} not in {TYPES}")
 
 

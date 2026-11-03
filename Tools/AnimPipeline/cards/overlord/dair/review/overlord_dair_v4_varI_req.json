@@ -1,0 +1,161 @@
+{
+ "variant": "overlord_dair_v4_varI",
+ "status": "pending",
+ "video": false,
+ "hitstop": 8,
+ "_frames": "anim frames (owner's FAF 37 = anim 37). Delays on hands/head are measured on z(bone) - z(pelvis) ('rel'): absolute z is dominated by the 15 cm pelvis dip.",
+ "reqs": [
+  {
+   "id": "lean_f0_unchanged",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 0,
+   "min": 22,
+   "max": 30
+  },
+  {
+   "id": "lean_f31_stomp_hold_unchanged",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 31,
+   "min": -26,
+   "max": -18
+  },
+  {
+   "id": "lean_f37_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 37,
+   "min": 5,
+   "max": 8
+  },
+  {
+   "id": "lean_f40_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 40,
+   "min": 5,
+   "max": 9
+  },
+  {
+   "id": "lean_f42_hair_forward",
+   "type": "angle",
+   "from": "pelvis",
+   "to": "spine_05",
+   "plane": "side",
+   "frame": 42,
+   "min": 5,
+   "max": 10
+  },
+  {
+   "id": "pelvis_dip_peak_to_peak_x2",
+   "type": "amplitude",
+   "bone": "pelvis",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 12,
+   "max": 22
+  },
+  {
+   "id": "head_nod_visible",
+   "type": "amplitude",
+   "bone": "head",
+   "coord": "y",
+   "window": [
+    17,
+    31
+   ],
+   "min": 6
+  },
+  {
+   "id": "hand_l_follow_visible",
+   "type": "amplitude",
+   "bone": "hand_l",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 8
+  },
+  {
+   "id": "knee_l_fold",
+   "type": "amplitude",
+   "bone": "calf_l",
+   "coord": "y",
+   "window": [
+    17,
+    31
+   ],
+   "min": 6
+  },
+  {
+   "id": "hand_l_peak_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_l",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 2,
+   "max": 4,
+   "rel": "pelvis"
+  },
+  {
+   "id": "hand_r_peak_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "hand_r",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 2,
+   "max": 4,
+   "rel": "pelvis"
+  },
+  {
+   "id": "head_after_pelvis",
+   "type": "delay",
+   "a": "pelvis",
+   "b": "head",
+   "coord": "z",
+   "peak": "min",
+   "window": [
+    17,
+    31
+   ],
+   "min": 1,
+   "max": 3,
+   "rel": "pelvis"
+  },
+  {
+   "id": "hand_l_rel_follow",
+   "type": "amplitude",
+   "bone": "hand_l",
+   "rel": "pelvis",
+   "coord": "z",
+   "window": [
+    17,
+    31
+   ],
+   "min": 3
+  }
+ ]
+}
