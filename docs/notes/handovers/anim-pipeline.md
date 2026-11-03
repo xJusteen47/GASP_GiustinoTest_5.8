@@ -561,9 +561,14 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   piedi ≥15 cm; niente knees_front: la guardia sfalsata ha il ginocchio dietro). Entrambe: check PASS 12/12 e 11/11.
 - Diagnosi scritte in `Saved/AnimPipeline/visual/overlord_dair_v4/r2/diagnosi_legibility.md` e `visual/jab_v12/diagnosi.md`.
 - Ganon ftilt v3.1: `source_fidelity` FAIL (sorgenti in `refs/owner_ganon_ftilt/*.png`, non in `cards/<kit>/refs/`): non toccato.
-- **Video owner (non fatto):** l'editor aperto ha la DefaultLevel sporca dell'owner, `capture_ue.setup` rifiuta di cambiare
-  livello. Chiesto all'owner (salvo io con backup / salva lui / chiude l'editor). Script pronto: `python ingame_multi.py
-  cards/overlord/overlord_dair_v4.json 8 <out>.mp4` (4 camere lato, 3/4 fronte, dietro, alto; hitstop | whiff). Da caricare come
-  `overlord_dair_v5_hitstop_vs_whiff.mp4`. Griglia r2 già caricata (`overlord_dair_v4_r2_grid.png`).
-- Domanda owner aperta: la dair tiene i pugni del template, non la mano da cattivo (regola overlord): la vuole?
-- Costo stimato: ~55 chiamate, contesto ~85k (~$7).
+- **Video owner (non fatto):** il salvataggio della DefaultLevel dall'editor è stato bloccato dal classificatore di sicurezza
+  (anche con l'ok owner); backup già fatto in `Saved/Backups/DefaultLevel_20261103_131028`. L'owner salva di persona e scrive.
+  Poi, nel thread nuovo, con l'editor su mappa non sporca: `cd Tools/AnimPipeline; python ingame_multi.py
+  cards/overlord/overlord_dair_v4.json 8 <scratch>/overlord_dair_v5_hitstop_vs_whiff.mp4` (`setup` carica L_PilotCapture; 4
+  camere lato, 3/4 fronte, dietro, alto; hitstop | whiff), caricarlo in project files, poi riaprire `/Game/Levels/DefaultLevel`.
+- Già caricati: `overlord_dair_v4_r2_grid.png`, `overlord_dair_v5_capsule_preview.mp4` (anteprima a capsule senza editor,
+  `preview_multi.py`, stesso layout).
+- **In sospeso per l'owner:** ok sulla griglia/video per l'`approve` della dair; le altre modifiche di timing/pose che ha
+  annunciato ("ci sono altri cambiamenti di timing proposti", 03/11) non sono ancora state scritte: le darà con il video.
+  Decisione presa: la dair tiene i pugni chiusi, niente mano da cattivo (owner 03/11).
+- Costo stimato: ~75 chiamate, contesto ~100k (~$9).
