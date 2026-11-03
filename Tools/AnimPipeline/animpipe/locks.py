@@ -169,6 +169,10 @@ def approve(path, frames, parts, why, by="owner", date=None):
     fok, fline, _ = fidelity.check(c, path)
     if fok is False:
         raise ValueError(f"approve refused: source_fidelity FAIL: {fline}")
+    from animpipe import visual
+    vb = visual.blocked(c["move"])
+    if vb and vb[0]:
+        raise ValueError(f"approve refused: visual review {vb[1]} (animpipe visual-gate)")
     frames = [int(x) for x in frames]
     _check_entry({"frames": frames, "parts": parts, "ref": "-", "why": why}, 0, path)
     entry = {"frames": frames, "parts": list(parts), "ref": rel_to_cards(path), "by": by,

@@ -31,6 +31,28 @@ Every card and every review pass applies these; the checks that enforce one are 
 - Massimo 2 tentativi su una stessa correzione, poi handover con ciò che serve (regola 5 del progetto).
 - Prima di toccare una parte si legge il blocco `approved`; se la correzione chiesta tocca una parte bloccata si chiede
   all'owner (una domanda sola) invece di sbloccare.
+- **Diagnosi scritta prima di ogni build** (piano 03/11 passo 4, regola 5 del progetto): quando un check o la revisione
+  visiva fallisce, prima di lanciare `build` si scrivono 3 righe nell'handover del giro (o in
+  `Saved/AnimPipeline/visual/<move>/r<N>/diagnosi.md`): 1) cosa fallisce (check o voce della rubrica, frame, parte),
+  2) la causa ipotizzata, 3) la modifica unica che la corregge (parti x frame). Poi **una** build. Niente build "per vedere".
+- Niente render (`review --visual`, catture) finché il gate numerico (`check`, `fidelity`) non passa.
+
+## Pose dell'owner: `source_fidelity` (bloccante, `animpipe/fidelity.py`)
+- Le pose dell'owner stanno in git in `cards/<kit>/refs/` (mai solo in `Saved/`). Ogni posa della scheda che viene da lui
+  ha `source: {file: "cards/<kit>/refs/<nome>.json", frame, tool}`; `tool` `casc_to_author...` (punti Cascadeur) o
+  `casc-import` (ossa lette da Cascadeur). Le pose nuove marcate dall'owner hanno anche `origin: "owner"`.
+- La posa `author` deve essere quella dell'owner entro 0,5 cm / 1 grado. Esclusi sempre: dita, `wrist_out`, `hand_rot`,
+  altezza del bacino (`pelvis.loc`). Ogni altro scarto va dichiarato in `source.keep: {"<campo>": "<why>"}`; una posa
+  costruita apposta da una dell'owner (carica tenuta) ha `source.derived: "<why>"` e non è confrontata.
+- Blocca: `check` (block `source_fidelity`), `approve`, e `load()` per le schede con pose `origin: owner`.
+  `animpipe fidelity <scheda>` lo esegue da solo. Senza `sheets/raw` (solo desktop) dice n/a.
+
+## Revisione visiva (skill `.claude/skills/gstn-visual-review/`)
+- Dopo il gate numerico: `review --visual` (CP2, desktop) scrive una sola immagine + `manifest.json` in
+  `Saved/AnimPipeline/visual/<move>/r<N>/`; un thread cloud con la skill la guarda una volta e scrive `verdict.json`.
+- `animpipe visual-gate <scheda> [--round=N]`: 0 passa, 1 bloccato, 2 nessun verdetto. `approve` rifiuta finché l'ultimo
+  verdetto blocca. Massimo 2 giri, poi immagine + verdetto all'owner. Problemi su chiavi owner o parti bloccate =
+  `chiedi_owner`, mai una modifica.
 
 ## Blocchi di scheda per pose approvate e regole
 - `approved` `[{frames, parts, ref, by, date, why}]`: pose accettate dall'owner. Parti: `arm_l arm_r leg_l leg_r trunk head

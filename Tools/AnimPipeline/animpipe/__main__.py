@@ -220,6 +220,9 @@ def main():
     elif cmd == "fidelity":
         from animpipe.fidelity import cmd as fid
         sys.exit(0 if fid(args[0]) is not False else 1)
+    elif cmd == "visual-gate":
+        from animpipe.visual import gate
+        sys.exit(gate(args[0], opt.get("round")))
     elif cmd == "diff":
         from animpipe.locks import diff
         diff(args[0], opt.get("vs"))
