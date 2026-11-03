@@ -42,6 +42,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|SpinDrill|Content")
 	static int32 RemoveSpinBindingsFromKit(UGSTN_PrimaryKitDefinition* Kit);
 
+	/**
+	 * Gives a kit the spin and drill kit extension (default values) when it has none. Without it the loadout lists no bore ability and gives
+	 * no tuning, so a dive latches but never bores (SD-11). For setup scripts and the harness, in memory. Returns true when it added one
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|SpinDrill|Content")
+	static bool AddSpinDrillExtensionToKit(UGSTN_PrimaryKitDefinition* Kit);
+
+	/** Removes every spin and drill kit extension from a kit (in memory). Returns the number removed */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|SpinDrill|Content")
+	static int32 RemoveSpinDrillExtensionFromKit(UGSTN_PrimaryKitDefinition* Kit);
+
 	/** The drill fragment of the actor's latest combat state as text ("Drill Spinning@120 cw air 1 ..."), empty when it has none */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|SpinDrill|Debug")
 	static FString GetShownDrillText(const AActor* Actor);

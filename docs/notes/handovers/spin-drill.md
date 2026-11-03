@@ -287,3 +287,23 @@ after one checkpoint.
   5. 1 rollback in spin_ground_hits_ring and drill_ground_lag this run (flaky; opposite_cancel passed this run).
 - Gates: on Succeeded, headless 980/0; off Succeeded, 933/0; restore build Succeeded.
 - Cost: one Opus thread, ~85k context, 2 probe + 2 suite editor runs, 3 builds, 2 headless runs. Medium.
+
+## SD-11 (laptop, 2026-11-03): bore hits and latch agreement fixed; SUITE_SPIN 6/12; exit speed diagnosed, fix not landed (STOPPED, 2 attempts used on the exits)
+
+- Fix 1 (bore no hits): KIT_Test_Hits has no FGSTN_SpinDrillKitExtension, so the loadout listed no bore ability: the latch held but no bore
+  timeline ran. New `UGSTN_SpinDrillLibrary::AddSpinDrillExtensionToKit` / `RemoveSpinDrillExtensionFromKit`; prepare_editor adds it,
+  restore_editor removes it. static_multi_hit and target_destroyed PASS.
+- Fix 2 (client latch 2-3 frames early): the check read the client's FIRST (predicted) latched reading. same_latch now compares the settled
+  (last latched) reading of each world; all worlds agree after correction. The early client prediction still costs rollbacks: worth a look.
+- Exits (pop, launch_after_bore vz 0), cause from the probe (Saved/SD11/probe_pop.py, probe_pop.txt): the pop is decided, the driller stays in
+  GSTN_Linked ~6 frames, then the link's exit (FGSTN_LinkExitEffect, the type's placer beside the target, ExitVelocity 0) teleports it to the
+  ground and zeroes the velocity the bore's pop/launch effect set. Attempt: drill type `bInitiatorPlacesExit = true` + a drill-written exit
+  record (riding position, pop/launch velocity) after ReleaseLinkOnUnlatch. Suite still vz 0 (launch also lost the air spin refresh), not
+  proven, REVERTED; the diff is Saved/SD11/own_exit_attempt.patch. Next: probe with it applied (link text: is Exit.Frame written? does the
+  watchdog copy it or fall back because the capsule overlaps the target? does StepOwnExitBreak run on the authority?).
+- Still red: moving_enemy (target moved 0 cm: likely the bore's 6-frame re-hit keeps the target in hitstun; spec says low hitstun, check
+  bLatchMoves / hit data), hit_while_latched (driller took no damage, 7 rollbacks), nondrillable_bounce (unchanged), opposite_cancel
+  (cancel did not stop the spin this run), flaky air_hop / rollback counts. Single-scenario probe runs often start no air spin (twice):
+  run probes inside the full suite order.
+- Gates: on Succeeded, headless 980/0; off Succeeded, 933/0; restore build Succeeded (code as committed = suite run 1, 6/12).
+- Cost: one Opus thread, ~95k context, 2 suite + 3 probe editor runs, 2+3 builds, 2 headless runs. Medium-high.

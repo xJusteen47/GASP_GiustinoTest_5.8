@@ -7,6 +7,7 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "GameFramework/Actor.h"
+#include "GSTN_SpinDrillKitExtension.h"
 #include "GSTN_SpinDrillTags.h"
 #include "Input/GSTN_SpinSlots.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
@@ -106,6 +107,21 @@ int32 UGSTN_SpinDrillLibrary::AddSpinBindingsToKit(UGSTN_PrimaryKitDefinition* K
 int32 UGSTN_SpinDrillLibrary::RemoveSpinBindingsFromKit(UGSTN_PrimaryKitDefinition* Kit)
 {
 	return Kit ? Kit->KitBindings.RemoveAll([](const FGSTN_AbilityBinding& Binding) { return GSTNSpinDrillLibrary::IsSpinCommand(Binding.Command); }) : 0;
+}
+
+bool UGSTN_SpinDrillLibrary::AddSpinDrillExtensionToKit(UGSTN_PrimaryKitDefinition* Kit)
+{
+	if (!Kit || Kit->Extensions.Find<FGSTN_SpinDrillKitExtension>())
+	{
+		return false;
+	}
+	Kit->Extensions.ExtensionData.Add(FInstancedStruct::Make<FGSTN_SpinDrillKitExtension>());
+	return true;
+}
+
+int32 UGSTN_SpinDrillLibrary::RemoveSpinDrillExtensionFromKit(UGSTN_PrimaryKitDefinition* Kit)
+{
+	return Kit ? Kit->Extensions.ExtensionData.RemoveAll([](const FInstancedStruct& Entry) { return Entry.GetPtr<FGSTN_SpinDrillKitExtension>() != nullptr; }) : 0;
 }
 
 FString UGSTN_SpinDrillLibrary::GetShownDrillText(const AActor* Actor)

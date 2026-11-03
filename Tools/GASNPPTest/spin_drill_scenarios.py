@@ -62,6 +62,9 @@ def prepare_editor():
             button.set_editor_property('tag', g._tag(name))
             buttons.append(button)
         cfg.set_editor_property('buttons', buttons)
+    # The kit extension lists the bore ability and the drill tuning: without it a dive latches but never bores (SD-11)
+    if Lib.add_spin_drill_extension_to_kit(kit):
+        _saved['extension_added'] = True
     return 'spin bindings added', Lib.add_spin_bindings_to_kit(kit, True), 'buttons added', missing
 
 
@@ -72,6 +75,9 @@ def restore_editor():
         kit = unreal.load_asset(KIT_PATH)
         kit.set_editor_property('kit_bindings', _saved.pop('kit_bindings'))
         out.append('kit bindings restored')
+    if _saved.pop('extension_added', False):
+        Lib.remove_spin_drill_extension_from_kit(unreal.load_asset(KIT_PATH))
+        out.append('kit extension removed')
     if 'buttons' in _saved:
         unreal.load_asset(g.INPUT_CONFIG).set_editor_property('buttons', _saved.pop('buttons'))
         out.append('buttons restored')
@@ -136,6 +142,9 @@ class _Spy:
     def first(self, wi, pred, t0, t1):
         return next((r[1][wi] for r in self.rows if t0 <= r[0] <= t1 and wi in r[1] and pred(r[1][wi])), None)
 
+    def last(self, wi, pred, t0, t1):
+        return next((r[1][wi] for r in reversed(self.rows) if t0 <= r[0] <= t1 and wi in r[1] and pred(r[1][wi])), None)
+
     def sighted(self, pred, t0, t1):
         """{world: first reading in [t0, t1] that satisfies pred, or None}"""
         return {wi: self.first(wi, pred, t0, t1) for wi in range(len(g.worlds()))}
@@ -157,7 +166,11 @@ def _seen_all(run, pred, t0, t1, same_start=False, same_latch=False):
     if ok and same_start:
         ok = len({v[1] for v in s.values()}) == 1
     if ok and same_latch:
-        ok = len({v[4] for v in s.values()}) == 1
+        # The predicting client may see the latch a few frames early and be corrected when the authority's state arrives (a rollback, which the
+        # rollback checks count): what must agree is the settled latch frame, the last latched reading of each world in the window (SD-11)
+        settled = {wi: run.spy.last(wi, pred, t0, t1) for wi in s}
+        ok = len({v[4] for v in settled.values()}) == 1
+        return ok, {'first': s, 'settled': settled}
     return ok, s
 
 
