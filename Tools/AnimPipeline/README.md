@@ -1,0 +1,241 @@
+# AnimPipeline — move animation pilot (Cascadeur → Unreal)
+
+## Superficie pubblica (2026-11-03): `animpipe <verbo> <mossa>`
+Da `Tools/AnimPipeline`: `python -m animpipe status <mossa>` dice il prossimo verbo (`next`). Verbi: status, import,
+interp, build, check, render, verdict, owner-ok, approve, export, variant new|show|apply|discard, snapshot, restore,
+revert (elenco e opzioni in `animpipe/verbs.py`). Ogni verbo stampa **una riga JSON** `{ok, verb, move, exit, result,
+next}`, il dettaglio va in `<data>/runs/<mossa>/`. Exit: 0 ok, 1 gate bloccato, 2 uso sbagliato, 3 serve l'owner,
+4 serve un'app. Snapshot zip automatici prima di import/interp/build/variant apply/restore/approve/export in
+`<data>/snapshots/<mossa>/`; `restore <mossa> <data>` li rimette (la scena .casc dell'owner non viene mai sovrascritta:
+la copia va in `casc/restored/`). Percorsi in `animpipe.toml` (+ `animpipe.local.toml` per la macchina, non in git).
+Skill: `.claude/skills/animpipe-move/` (segue `status`). App owner: `python -m animpipe.app` (GSTN Studio).
+I comandi più sotto (con il percorso della scheda) restano come strato interno.
+
+Working folder for the combat-move animation pilot: Cascadeur scenes, motion models, the Unreal round trip, the checks and
+the review pages. The code and settings are versioned here (`Tools/AnimPipeline/`); the data is not. Start here; the current state is in `handoff.md` and the move logs in the working folder (not in git):
+- `jab_log.md` and `ganon_ftilt_log.md` are in Italian, for the owner;
+- this README and the code docstrings are in English.
+
+Coordinates:
+- **Cascadeur**: X = character's left, Y up, Z forward.
+- **Unreal component space**: X left, Y forward, Z up.
+- Positions convert by swapping Y and Z.
+- Clips are 60 fps; the game ticks at 62.5 Hz, so anim frame = round(game frame × 0.96).
+
+## Working folder and repo copy
+
+- **This folder (`Tools/AnimPipeline/` in the repo) is the source of truth** for scripts, rules, thresholds, move sheets and these docs.
+- The scripts run in a **working folder** that also holds the data (Cascadeur `.casc`, FBX, `sheets/`, `refs/`, the handover and logs). By default that is `Saved/AnimPipeline/` in the project, which git ignores.
+- Scripts find the data next to themselves, or in `$ANIMPIPELINE_DIR` when it is set (the scripts that run inside Cascadeur or Unreal use it too). Set it if you run the scripts straight from the repo folder.
+- `sync.sh push` copies the tracked files repo -> working folder; `sync.sh pull` does the reverse for a quick edit made there (then review `git diff`). Data files are never copied.
+- Not in git, on purpose: `.casc`/`.fbx`, renders and videos, `refs/ufd` (third-party GIFs and frame data: fetch them with `ufd_fetch.py`), logs and per-take data, the handover and token data.
+- Requirements: Python 3 with numpy and matplotlib for the checks; Cascadeur (script server) and Unreal 5.8 (editor Python) for the steps that drive them; the idle clip `M_Neutral_Stand_Idle_Loop` of the UEFN mannequin.
+- `role_tokens.py` reads Claude transcripts from `$CLAUDE_PROJECT_TRANSCRIPTS` (default `~/.claude/projects/<project slug>`).
+
+## How to extend
+
+- **New move:** add an entry to `move_sheets.json` (class, contact, FAF, effector, hold window, strike limb); copy `ganon_ftilt_v2_motion.py` as the model and `ganon_iter.sh` as the driver (`TAKE`, `CASC`, `ASSET`, `MODEL`).
+- **New check:** a module with a `check(frames, sheet, TH, ...)` returning flags, called from `motion_check.run`; put its thresholds in `motion_thresholds.json` and add the rule to the table above and to `fix_rules.md`/`.json` (parameter to change, step, limits, escalation).
+- **New fix rule:** `fix_rules.json` plus the matching knob in `auto_fix.py`; the model must read it through `MODEL_OVERRIDES`.
+- **Thresholds** are calibrated on jab v11 and Ganondorf ftilt v1: re-run both after any change; results must not move unless the change is meant to.
+
+## Owner's standing rules (details: memory `anim-review-rules.md`, skill `gstn-move-animation`)
+
+- **New version, new file.** Never overwrite the owner's `.casc` or an earlier version: every version is a new `<move>_vN.casc`.
+- **Unreal assets** go only under `/Game/AnimPipeline/Pilot/`.
+- **Entry and exit.** A move is entered FROM the upright standing idle (`M_Neutral_Stand_Idle_Loop`, rig points in `idle_points.json`).
+  - Frame 0 already shows a strong change into the move's stance: guard, load or chamber.
+  - The recovery rises back toward the upright idle by the FAF.
+  - Exceptions: crouched and aerial moves.
+  - **A reference's last frame is the FAF pose** (owner, 01/11, Ganondorf ftilt: "the last frame is functionally the last"). The clip is IN that pose at the FAF, with every part arrived (lags included); if that pose is not the idle (a crouched guard), the move overrides "rise toward the idle by the FAF". No authored tail: the clip ends ON the FAF and the game's generic blend takes it to whichever idle is playing (owner, 01/11).
+- **Six views.** Every key pose is reviewed from six views (front, right, back, left, top, bottom), plus 3/4, the game cameras, videos and elbow close-ups.
+- **Exaggeration.** Joints must look natural; an out-of-range joint is accepted only as an exaggeration inside the action frames and along the motion.
+- **Big pose changes.** Before a relatively big pose change beyond what was asked, describe it and wait for approval (waived for jab v11 and Ganondorf ftilt).
+- **References first.** Fetch UFD references first (`ufd_fetch.py`); GIF downloads are pre-approved.
+- **FAF.** FAF = the UFD total read as a 0-based game frame (jab: anim 18; Ganondorf ftilt: anim 37).
+- **No pop after a hitbox frame** (owner, 02/11, every move). A hit can land on any active frame and the hitstop freezes the clip there, so the step from each active frame to the next must be small (check `hitstop_snap`, blocking, default on, 10 cm per anim frame per bone). The big travel goes ON the frame the hitbox comes out (into the first active frame), or later in the recovery. Fix in the card with `hitstop_blend` (pull the pose after the active frame toward it, or the first active pose toward the strike pose); preview with `ingame_judge.py <card> <hitstop> --at=<active frame>` and `hitstop_sheet.py`.
+- **Body synergy** (owner, 02/11, every move). Arms, trunk and legs move together through the startup; never a limb frozen on the trunk while the body turns. Check `co_motion` (blocking, default on): a limb end that moves < 1 cm/frame in its parent's frame for 3+ steps while the body moves > 3 cm/frame fails. Held limbs on purpose go in the card's `co_motion_skip` (jab: `arm_r`, guard at the chin); planted legs are skipped. Thresholds not yet calibrated on real clips.
+
+## Replicating a reference: key poses first (owner, 01/11, after Ganondorf v2 was rejected)
+
+Ganondorf v2 passed every check and was rejected: "the arm movement makes no sense, the legs don't have the right anticipation". We had taken only the extension and timing curve from the reference, never its key poses. Timing alone is never enough.
+1. **Extract the key poses first.** For each phase (first frame, anticipation, active, recovery, last frame), read the reference frames as joint directions per body part: torso pitch/yaw, upper arm and forearm, thigh and shin per side, head. Store them as `refs/<move>/keyposes.json`: `python ref_keyposes.py refs/<move> [support side]` writes every 2D segment's side-view angle and length per still (same normalisation as the gate). A segment much shorter than its longest still points out of the side plane: its direction is unreliable.
+2. **Build our key poses from those**, arms included. Our rules (balance, counterweight) adjust a pose, they never invent it. Template: `ganon_ftilt_v3_motion.py` keys the kicking leg and the arms as side-view angles from keyposes.json (so the projection matches by construction), solves the support hip height from a support-knee curve and the balance shift per frame; where the reference itself is off balance, the frames are declared in the move sheet (`balance_exempt_frames`, with the reason).
+3. **Pose-match score:** compare each of our key poses with the reference, per body part (angle between directions). Report it beside the checks, and review it first: a pose that does not match fails, even if every check passes.
+4. **Stance comes from the reference too** (Ganondorf's ftilt lands in a deep, wide crouch, not upright).
+
+## Motion curves and reference keypoints (01/11)
+
+Ganondorf v2 passed every check and was rejected: the arms made no sense and the legs had no anticipation. Nothing measured
+how much each part moves, when, and in which direction. These tools do, and gate the pass on them.
+- **Venv** (isolated, owner's machine): `C:/Users/jacop/Tools/animcurves-venv` (Python 3.12) with `pybvh` 0.9.0 (MIT:
+  finite differences, SPARC smoothness), `rtmlib` 0.0.16 (Apache-2.0: RTMPose + the HumanArt-trained YOLOX detector on
+  onnxruntime, CPU, no mmcv) and `dtaidistance` 2.5.1 (DTW). Sources were read before installing: the only network use is
+  rtmlib's first-run model download from download.openmmlab.com (Hugging Face mirror on failure) into `~/.cache/rtmlib`.
+  Recreate: `py -3.12 -m venv animcurves-venv && animcurves-venv/Scripts/python -m pip install pybvh==0.9.0 rtmlib==0.0.16 dtaidistance==2.5.1`.
+  `motion_curves.py` also runs on plain Python (numpy fallbacks, same numbers to rounding); `ref_keypoints.py` needs the venv.
+- **Reference keypoints:** `<venv python> ref_keypoints.py refs/<name>/keypoints_auto.json <stills or GIF>` writes COCO-17
+  keypoints and an overlay PNG per image. Check the overlays once (left/right on side views); corrections and fully manual
+  frames go in `keypoints_auto_fix.json`. `refs/<name>/reference.json` names the key poses (stills: first, anticipation,
+  active, recovery, last) or the GIF timing (dense), and the move sheet's `reference` points to the folder.
+  Done: `refs/owner_ganon_ftilt` (owner's 5 frames; the estimator handled the cape and the hitbox overlay) and
+  `refs/mario_jab1` (UFD GIF, 19 frames; frame 0 is too faint and is skipped; a 3-frame median damps the far arm's flicker).
+- **Curves:** `python motion_curves.py <take> [--source=bones|model] [--blind]` -> `sheets/<take>[_model]_curves.png` (speed
+  heatmap: body part x frame, phases, peaks, wind-up), `.txt` (table), `.json`, and `_vsref.png` (our side-view stick
+  figures over the reference's, per key pose). Exit 1 when the reference comparison fails.
+- **Gate:** `ganon_iter.sh` runs it on the model right after the model step and stops the pass on a failure
+  (`CURVES_GATE=0` reports only; `CURVES_PY` picks the Python). The worker's pre mode runs it first and escalates its
+  failures: they are pose design.
+- **Blind review:** after the gate passes, a subagent that is not told the intent describes the motion from the blind
+  heatmap (`--blind`) and an unnamed frame strip; it must name the phases (wind-up, kick, landing) at the right frames.
+  Brief and verdict rules: `iter_worker.md`, "Blind review".
+- **Validation (01/11):** Ganondorf v2 FAILS against the owner's frames (both arms 0.59x/0.44x the reference amplitude,
+  support leg 0.35x, body wind-up 0.06 of the strike vs 0.28); Ganondorf v1 FAILS (rear arm 0.56x, support leg 0.40x, rear
+  wrist still where the reference swings it back); jab v11 FAILS against Mario on the rear arm only (0.51x: Mario flings
+  it back and swings it, ours stays in the guard at the chin). The v11 failure is a real difference from Mario, not noise;
+  whether the guard arm should be exempt on jabs is the owner's call. Blind review of Ganondorf v2 (Sonnet, not told the
+  move): it found chamber, kick, hold, retraction and settle at the right frames, but described the wind-up as "the body
+  nearly still", the arms moving only at the strike and the support leg still throughout -> FAIL, as the gate.
+
+## One pass of a move (Ganondorf ftilt is the template)
+
+```
+ganon_ftilt_v3_motion.py   model: rig points per frame + key plan       -> <take>_targets_raw.json
+motion_curves.py           GATE: limb amplitude, anticipation, arm direction vs the reference (model points, ~1 s)
+                                                                        -> sheets/<take>_model_curves.png/.txt/.json
+twist_chain.py             GATE: complementary rotations: yaw-speed order pelvis -> chest -> limb (strike), pelvis ->
+                           chest (recovery), hip/shoulder turn >= 0.6x the reference's key poses -> sheets/<take>_twist.*
+preflight.py               the checks on the model's points, < 0.1 s     -> sheets/<take>_preflight.txt/.json
+bone_lengths.py            GATE: rigid rig-point pairs keep the idle's distances (--ref=idle_points.json), then every
+                           bone keeps its reference length (> 0.1 cm fails; root/pelvis free)
+sparse_apply.py            Cascadeur: keys, interpolation, weights       (TAB, SAVE_AS, TARGETS)
+fingers_fist.py            Cascadeur: closed fists on the key frames      (TAB, FRAMES)
+export_current.py          Cascadeur: baked FBX next to the .casc
+import_take.py             Unreal: import as /Game/AnimPipeline/Pilot/<asset>
+legibility.sample()        Unreal: bone samples -> sheets/raw/<take>_legbones.json
+wrist_fix.py               fists in line with the forearms -> <take>_targets.json, then a second pass
+clearance.py               self-penetration (physics-asset capsules)
+tangency.py                tangencies per key pose and view (report)      -> sheets/<take>_tangency.json/.txt
+motion_check.py            weight, spacing, hold, overlap, arcs, joints, arms, balance, posing rules
+legibility.py measure      body-part legibility over the camera rings
+joint_closeups.py          MANDATORY: head/neck, shoulders, wrists at 90 cm, 3 angles, every key frame
+```
+
+- **Driver:** `ganon_iter.sh`, with env vars `TAKE CASC ASSET MODEL DENSE=1 SMOOTH=12-36 CHECKS=1`.
+- **Timings:** each step's wall-clock time goes to `sheets/<take>_timings.tsv`. A pass is about 16 s, legibility about 130 s.
+- **Final renders:**
+  - `view_sheets.py <take> "f:label,..." [a-b] [elbows=f,..]`: six views, hands, elbows;
+  - `legibility_shots.py`: game cameras, mesh and parts side by side;
+  - `traj_overlay.py`: motion paths;
+  - `visual_check.py`: silhouettes and videos.
+- **Review page:** `ganon_page.py` / `legibility_page.py` build `sheets/*.html`, published as Artifacts. Every page carries,
+  besides the side views: the rear and 3/4 legibility shots (`legibility_shots.py` with az180, az225, az135, h180, f180), the
+  joint close-ups (`joint_closeups.py`) and each check's verdict copied from its own report, never summarised by hand (the
+  v3 page said "legibility pass" while `ganon_v3_legibility.txt` said FAIL). The close-ups go to the coordinator before
+  delivery.
+
+Keys:
+- every layer is keyed on the same frames (the rig's IK chains span layers);
+- overlap lives in the model's curves;
+- `DENSE=1` keys every frame (what Unreal receives anyway);
+- `sparse_apply.py` also supports sparse plans (per-layer keys, lags, interpolation, weights), with the caveats in `handoff.md`.
+
+## Direct to Unreal, without Cascadeur (01/11, Ganondorf v3)
+
+Cascadeur is optional (owner: "if you act directly in Unreal, one can use Blender too"). The model's rig points go straight
+to the skeleton:
+```
+pose_solver.py <take>_targets_raw.json <take>_bones.json    rig points -> UE component-space bones (calibrated on a take known
+                                                           both ways: ganon_v2 targets + its Unreal bones; --validate)
+bone_lengths.py <take>_targets_raw.json --ref=idle_points.json   the model's rigid point pairs (gate)
+ue_write_take.py <take>_bones.json <AssetName>             local tracks, ROTATIONS ONLY (every bone but root/pelvis keeps the
+                                                           template's translation), parents read from the template take's
+                                                           own data, root held; gated on bone_lengths.py before writing
+                                                           (--no-write stops there) and again on the read-back
+legibility.sample(...)                                     bones -> sheets/raw/<take>_legbones.json, then every check as usual
+ref_sidebyside.py refs/<name> <out.png> <take>:<frames>    the reference's stills beside our takes, same side camera
+```
+- Each bone's frame comes from three rig points (joint, next joint, bend or own extra point). Limbs match Cascadeur within
+  ~1 cm and 1-5 deg; the spine's 2-5 deg is Cascadeur's own spine distribution. In-between bones (spine_01/03/05, neck_02,
+  twist bones) slerp; fingers stay rigid with the hand (the calibration's fists).
+- The solved positions only aim the rotations. The first v3 wrote them as translations, and the model's head point was up to
+  17 cm off its neck (each trunk segment rotated about the pelvis at its own lagged time): the head detached from the neck
+  in Unreal. Cascadeur's rig had hidden the same stretch in v2 (4 cm). The v3 model now builds the trunk as a chain (each
+  segment about its parent's joint, one balance shift), and both ends are gated on `bone_lengths.py`. Ganondorf v3.1 is the tuned result (all model gates pass; twist chain, crouch
+  and pronation in the model's docstring).
+- No interpolation pass: write every frame (the model is dense). Cascadeur's physics tools are the only thing lost.
+- A Blender exporter would reuse `pose_solver.py` and set the same local transforms on an armature.
+
+## Status: Ganondorf ftilt v3.1 (02/11, 00:55 local)
+
+Written and reviewed. `AS_Pilot_GanonFTilt_V3` now holds v3.1 (`ue_write_take.py ganon_v31_bones.json AS_Pilot_GanonFTilt_V3`;
+the first call right after the editor starts can return `write: None`: wait until the bridge answers `read_anim_sequence`).
+Take name for the checks stays `ganon_v3`. Page: https://claude.ai/artifact/74Z5ofar8jg72Gu2zWqeKY (v3 page kept as history).
+- PASS: bone lengths (write 66, read-back 65, sampled 64 bones; read-back vs FK 0.00 cm), curves gate on the Unreal bones,
+  twist chain, joint close-ups (head attached; reviewed by Opus, `sheets/ganon_v3_closeups_review.txt`).
+- FAIL: legibility (rear arm hides the fist f20-21 at f180/h180; rear elbow behind the back on 30 frames, worst f26);
+  clearance (lowerarm_l in spine_03 -3.85 cm at f10); motion_check (arm chains peak together at 9.5, head/chest lag 0-0.26,
+  knee_l 1 deg f9, ankle_l 144 deg f22-24, 8 arc jitters: hand_l 2-8/22-28 up to 11 cm radial, foot_l 2-8, pelvis 26-34).
+- Next (v3.2): left forearm 4-5 cm out at f9-11; rear elbow closer to the torso f20-28; stagger the arm peaks and half a
+  frame of head lag; knee_l not straight at f9, ankle_l less extended at the landing; smooth the jitter windows.
+- Page frames (side-by-side): v2 0,5,9,30,37; v3.1 0,7,10,27,37. Rear/3-4: legibility_shots.py az180,az225,az135,h180,f180.
+
+## Checks, where each rule lives, and its thresholds
+
+| Module | What it judges | Thresholds |
+|---|---|---|
+| `motion_curves.py` + `motion_ref.py` (FIRST, before the pre-flight; again on the baked bones) | Per part (hands, elbows, feet, knees, head, chest relative to the pelvis; pelvis and centre of mass in the world), per phase: amplitude, share of the limb path and energy (near-still limbs while the action runs), speed-peak order and lag behind the pelvis, with/counter the strike (velocity correlation), anticipation (wind-up opposite the strike / strike). Against the reference's 2D keypoints from the same side camera: pose distance per limb, amplitude ratio, anticipation, wrist direction, DTW. Fails on a limb under 0.6x the reference amplitude, a missing anticipation, or a wrist going the other way. See "Motion curves" below | `motion_thresholds.json` (`curves_*`) |
+| `twist_chain.py` (model points, after the curves gate) | Complementary rotations (owner 01/11): yaw of the hip line, shoulder line and head per frame. Order: in the strike (2 frames before the anticipation pose to the contact) the yaw-speed peaks go pelvis -> chest -> strike effector, each >= 0.5 frame later; in the recovery pelvis -> chest. Amplitude against the reference's key poses (side-view hip and shoulder separation, body lengths): hips' and shoulders' range and the shoulders' closing first -> active >= 0.6x, same direction. Ganondorf v3 fails (leg peaks with the pelvis, 2 frames before the chest; shoulders close 15% vs 31%), v2 too | `motion_thresholds.json` (`twist_*`) |
+| `bone_lengths.py` (model points, written tracks, sampled bones) | Rigid lengths: the model's rig-point pairs (trunk chain, head, limbs) against `idle_points.json`; the written local tracks and the sampled Unreal bones against the template's reference translations (or the take's frame 0). Gates the model step of `ganon_iter.sh` (`BONELEN_GATE=0` reports only) and `ue_write_take.py` (before the write and on the read-back); on a Cascadeur take's sampled bones it reports only (its solve stretches clavicles/spine by up to 0.4 cm, v2) | 0.1 cm |
+| `preflight.py` (before any pass) | On the model's rig points, approximate: limb bend from lengths (reach, elbow direction), balance/lift-off/support knee/kick weight, key plan (same keys and lag on every layer of an IK chain, Bezier overshoot and drift, clamped mid-motion keys), strike spacing table, recovery fast-out/slow-in, linear motion (constant speed over 4 frames), landing absorption (kicks: pelvis dips >= 1 cm after the foot lands), overlap peak order and simultaneous arrivals, arcs (straight paths, reversal clusters, one-frame pops, twinning, head, foot slide). Floor = the idle's foot heights. Calibrated on Ganondorf v1 (catches all known errors; knee 93–99° vs Unreal 89–99°) and jab v11 (1 marginal flag) | `motion_thresholds.json` + constants in the script |
+| `tangency.py` (report) | Tangencies (Solid Drawing): two parts' outlines within 1.5 cm (screen-scaled), within 15 deg, over > 25% of a limb's length; joint pairs excluded (shoulder, elbow, wrist, hip, knee, ankle, neck). Six ortho views, 3/4s and game rings, at the key poses. Offline on the cached bones, 30-45 s | constants in the script |
+| `spacing_rules.py` (from preflight and motion_check) | Recovery: speed peak in the first 60% of hold end -> arrival (fast out), last approach step <= 0.6 x the largest of the last 4 (slow in to the guard) | constants in the script |
+| `clearance.py` | Gap between capsules (≥ 2 cm) | in the script |
+| `animpipe check` hitstop_snap (blocking, every move) | Largest per-bone displacement from each hitbox-active frame to the next (the first frame the player sees after a hitstop freeze). Fixed with the card's `hitstop_blend` | 10 cm per anim frame; card `hitstop_max_cm` |
+| `animpipe check` co_motion (blocking, every move) | Startup only: a hand (in the chest frame) or a non-planted foot (in the pelvis frame) glued for 3+ frames while the trunk or another limb moves. Leaf-bone turns (head, toes, fingertips) also count in hitstop_snap | < 1 cm/frame glued for 3+ frames while the rest of the body travels >= 4 cm over that run (calibrated 02/11: dair v2 FAIL, jab v12 / ftilt v3.1 / dair v3 PASS); card `co_motion_skip` |
+| `legibility.py` | Attacking part distinct at contact; rear arm / arms hiding it; rear elbow; fists closed; attacking limb readable from the Follow, rail and PvP cameras; exaggeration out of the body. `configure(take)` switches to the kick mode (foot as the attacking part) from the move sheet | `legibility_thresholds.json` |
+| `motion_check.py` | Weight (punch: centre of mass into the strike; kick: hip drive from the wind-up), impact spacing, hold/recoil, overlap cascades, arcs and zig-zags (snaps, holds and the wind-up reversal are beats), attack line | `motion_thresholds.json` |
+| `joints.py` (from motion_check) | Wrists, knees over the toes, ankles, foot roll/floor, support knee on one foot, airborne kicking foot | `motion_thresholds.json` (`joint_*`) |
+| `arm_check.py` (from motion_check) | Elbow direction (from 40° of upper-arm elevation), flare, chicken wing (arms raised forward or sideways; an arm swept back has its own limit, `elbow_ext_elev_max_deg` 65°), reverse bend, forearm/hand roll and roll jumps | `motion_thresholds.json` (`elbow_*`, `twist_*`) |
+| `balance_check.py` (from motion_check) | Centre of mass inside the support base (flat foot or toes), 2 cm tolerance; kicks: upper body leans back relative to the hips | `motion_thresholds.json` (`balance_*`, `counterbalance_*`) |
+| `pose_rules.py` (from motion_check) | Weight shifted before lift-off, support knee 10–45° on one foot, kick kinetic chain, no twinning, head toward the target, planted-foot slide | `motion_thresholds.json` |
+| `wrist_check.py` | Wrist flexion/deviation and frozen fists | `motion_thresholds.json` (`wrist_*`, `frozen_*`) |
+
+Per move (`move_sheets.json`):
+- `move` class (jab/tilt/smash: hold frames, recoil);
+- `contact`, `faf`, `effector`, `hold_window`;
+- `strike_limb` (`leg_l` for kicks), `strike_side`, `crouch`;
+- `balance_exempt_frames` (declared lunges, falls, airborne frames).
+
+## Light-model iteration (owner, 31/10)
+
+- `fix_rules.md` / `fix_rules.json`: for every flag, the model parameter to change, the direction and step, the limits, the re-check, and when to escalate.
+- `iter_worker.md`: the brief for a Sonnet/Haiku subagent that runs the fix loop. In `pre` mode it is files only (model + pre-flight). In `full` mode it runs `ganon_iter.sh` with `PREFLIGHT_GATE=1`, only after the owner's go. It escalates to Opus on no rule, a repeat, a broken check or a pose-design change, and returns a summary of at most 25 lines.
+- `auto_fix.py <model> <take> [--sheet=KEY] [--max-evals=N]`: fix_rules as code. It runs the model in memory, makes bounded knob changes (PEL_Y, BAL_S/W, LEAN, HEEL, ANK_ADJ, lags, CHEST_YAW, arm reach, elbow poles R4), and keeps a change only if the weighted flag cost drops. The contact, snap, hold and FAF are protected. Output: `<take>_overrides.json` (the model reads it through `MODEL_OVERRIDES`) and the residual `sheets/<take>_autofix.txt`. Test: a broken v2 (10 flags) recovers to 2 (hand arcs) in 2.5 s. Ganondorf v1 stays at 6, because its model lacks the pelvis and balance knobs and its knee needs a redesign.
+- **Parallel checks:** `legibility.py measure` and `tangency.py` spread the frames over processes, leaving 6 cores free (`LEG_WORKERS=1` forces single-core). Results are identical. Legibility: v11 96→31 s, v1 123→37 s. Tangency: v11 14→4.6 s, v1 21→6.4 s.
+- `role_tokens.py <session> <take> <label> [from] [to]`: tokens per model (subagents marked `sub:`) -> `sheets/<take>_roles.tsv`, to compare with the Opus-only baseline in `token_costs.md`.
+
+## Other tools
+
+- **References:** `ufd_fetch.py` (frame data and hitbox GIFs from ultimateframedata, cached), `ufd_measure.py` (extension, spacing, hold, recoil from a GIF), `refs/ufd/`.
+- **animationsight** (external, owner-installed, second opinion only): `bvh_from_bones.py` in the animationsight output folder writes a sampled clip as BVH. Then run `animationsight inspect <bvh> --unit cm --up y --kind oneshot` with `HOME`/`USERPROFILE` set to the venv's `home` folder (never `--show`). Its side-view frames show the centre of mass over the feet clearly.
+- **Idle pose:** `idle_points.py` turns an Unreal pose (bones) into Cascadeur rig points through each point's bone, calibrated on jab v11.
+- **Unreal helpers (editor-side, via `ue.py`):**
+  - `capture_ue.py`: captures;
+  - `ue_subframe.py`: sub-frame sampling of a clip, for slow-motion behaviour;
+  - `ue_tangent_test.py`: Sequencer per-key tangents from Python;
+  - `ue_save_*.py`: save one asset;
+  - `ue_find_idle.py`, `ue_export_idle.py`.
+- **Cascadeur probes and tests:**
+  - `tangent_test.py`: sparse keys, easing weights, sub-frames;
+  - `phys_*.py`, `snap_dialog_*.py`, `toggle_*.py`: physics tools;
+  - `inspect_scenes.py`, `metrics.py`.
+  - MCP Plus (`cascadeur-plus` tools) covers scenes, layers, keys, physics (`enable`, `priority_frame`, `snap`), actions and UI input.
+- **Cascadeur script server:** Scripts → MCP → Start script server. It does not autostart; MCP Plus autostart is not installed (it needs admin rights).
+
+## Legacy (jab passes, kept for the record)
+
+- `jab_v1_build.py` … `jab_v6_build.py`, `v6_*.py`, `v7_motion.py` / `v7_iter.sh`, `v8_*.py` / `v8_iter.sh`, `v9_*.py` / `v9_iter.sh`, `v10_*.py`, `v11_*.py`.
+- `v10_iter.sh` is the generic jab pipeline (`TAKE=v11`).
+- `ganon_ftilt_motion.py` is Ganondorf v1.
+- Throwaway scenes: `tangent_test.casc`, `ganon_ftilt_v1_unbake.casc`, `ganon_ftilt_v1_autophys.casc`, `jab_*test*.casc`.

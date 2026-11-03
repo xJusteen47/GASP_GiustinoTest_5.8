@@ -1,0 +1,9 @@
+# animpipe settings (in git). Relative paths resolve against this folder. Machine overrides go in animpipe.local.toml
+# (not in git), the same keys; ANIMPIPE_DATA / ANIMPIPE_CARDS env vars win over both.
+data_dir = "../../Saved/AnimPipeline"   # working data, never in git: runs, snapshots, renders, Cascadeur scenes
+cards_dir = "cards"                     # move cards, <cards_dir>/<kit>/<move>.json
+rig = "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body"
+skeleton = "/Game/Characters/UEFN_Mannequin/Meshes/SK_UEFN_Mannequin"
+dcc = "cascadeur"                       # key-pose app adapter
+engine = "unreal"                       # build/render adapter
+owner_lang = "it"                       # labels of GSTN Studio and the Cascadeur bar: it | en
