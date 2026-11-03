@@ -45,7 +45,9 @@ FGSTN_KnockbackResult UGSTN_KnockbackModel::ResolveRules(const FGSTN_KnockbackIn
 	// Stagger test: the attack's force against the victim's threshold. Infinite never staggers; unset staggers on every hit
 	const double Force = ComputeStaggerForce(Hit);
 	Result.StaggerForce = static_cast<float>(Force);
-	Result.bStaggered = !Modifiers.bNoFlinch && !Modifiers.StaggerThreshold.bInfinite
+	// HitstunMultiplier 0 = no hitstun, so no stagger at all (no lock floor, no launch): a multi-hit whose re-hit interval is within the hitstun floors
+	// (the drill bore) would otherwise keep renewing them and pin the victim
+	Result.bStaggered = !Modifiers.bNoFlinch && Hit.HitstunMultiplier > 0.f && !Modifiers.StaggerThreshold.bInfinite
 		&& Force * Modifiers.StaggerScale >= static_cast<double>(Modifiers.StaggerThreshold.GetFiniteOrZero());
 
 	if (Result.bStaggered)

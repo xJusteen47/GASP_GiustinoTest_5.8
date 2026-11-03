@@ -194,6 +194,8 @@ FGSTN_CombatTimelineData FGSTN_SpinTimelines::MakeBore(const FGSTN_BoreTimelineP
 	Tip.Data.Damage = Params.Damage;
 	Tip.Data.BaseKnockback = Params.BaseKnockback;
 	Tip.Data.AngleDeg = Params.KnockbackAngleDeg;
+	// No hitstun: the 6-frame re-hit would renew the MinHitstunFrames floor for the whole bore and pin the target in place
+	Tip.Data.HitstunMultiplier = 0.f;
 	// Seam S1: the held frame re-hits the latched target every RehitIntervalFrames (it counts stalled frames). No link type: the latch holds
 	Tip.RehitIntervalFrames = FMath::Max(1, Params.RehitIntervalFrames);
 

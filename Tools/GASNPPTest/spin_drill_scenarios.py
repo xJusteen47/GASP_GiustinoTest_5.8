@@ -700,7 +700,7 @@ def scenario_drill_latch_moving_enemy(client=1, victim=2):
 
 
 def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
-    """The third pawn (the host) is placed next to the latched driller, facing it, and attacks: the hit detaches the driller (hitstun wins, 7.4),
+    """The third pawn (the host) is placed beside the latched driller, outside the bore tip (the tip hits everything in reach, the hitter included), facing it, and attacks: the hit detaches the driller (hitstun wins, 7.4),
     the latch ends on every world and the driller's damage rises on the authority. Hits by another player are out-of-band for the driller's
     client: reconciles are budgeted, not judged"""
     rig = _DrillRig('drill_hit_while_latched_detaches', client, victim, judge_reconciles=False)
@@ -712,7 +712,7 @@ def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
     def place_hitter():
         d = actor(0, rig.key).get_actor_location()
         yaw = math.radians(g.snap(g.worlds()[0])[hkey]['yaw'])
-        spot = unreal.Vector(d.x - 70.0 * math.cos(yaw), d.y - 70.0 * math.sin(yaw), d.z)
+        spot = unreal.Vector(d.x - 105.0 * math.cos(yaw), d.y - 105.0 * math.sin(yaw), d.z)
         hp['before'] = g.damage_of(0, rig.key)
         return 'hitter placed', g.comps(g.worlds()[0])[hkey].server_teleport_exact(spot)
 

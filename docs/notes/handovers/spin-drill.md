@@ -350,3 +350,26 @@ after one checkpoint.
 - Gates: build Succeeded (on); headless suites and the plugin-off build NOT rerun this thread (C++ change is small, tests unit-callable: ReadCrouchStamp
   default arg keeps old calls valid). Do both before any push. No push done.
 - Cost: one Sonnet thread, ~75 context-heavy tool calls ~ low-medium; 1 build, 3 editor runs (~25 min).
+
+## SD-14 (laptop, 2026-11-03): bore no longer pins the target; hit/bounce/cancel still red (STOPPED, budget)
+
+- Decision (coordinator, owner may veto): `FGSTN_HitData::HitstunMultiplier <= 0` = no hitstun AND no stagger (UGSTN_KnockbackModel::ResolveRules sets
+  bStaggered false: no lock floors MinHitstunFrames / MinStaggerLockFrames, no launch; damage and hitstop still apply). The bore tip sets 0
+  (GSTN_SpinDrillTracks.cpp). Documented in combat-m4-hits.md and the SpinDrill README. First attempt (skip only the MinHitstunFrames floor) was not
+  enough: the victim still staggered and the rules floor re-locked it (Saved/SD14/probe.txt: actionState 2 after the first bore hit).
+- moving_enemy: target now moves (0 -> 17-20 cm in 0.8 s, expected > 100) but the driller does NOT ride it (0 cm). Two open causes:
+  (a) the bore hitstop (Auto) freezes the victim ~every 6 frames: try tip HitstopMode Override 0/0 (3rd attempt, not made: rule is 2);
+  (b) the driller's parked placement is not following the target (check UGSTN_DrillLinkType placement / anchor while the target moves).
+- hit_while_latched, cause found (Saved/SD14/probe_hit.txt): the hitter placed 70 cm from the driller sits INSIDE the bore tip (r 45, 100 cm below the
+  driller's centre), so the tip hits the hitter (damage 4 -> 20, knocked back 63 cm, hitstun) and it never hits the driller. Harness fix applied:
+  place at 105 cm (spin_drill_scenarios.py). Result of that run: still red (latch not ended, driller damage 0). Next probe: does the hitter's jab reach
+  the driller at 105 cm / at z 258 (driller is 164 cm above the floor, hitter falls from the teleport)? Consider an air hitter or a nearer
+  spot with the tip's group excluded.
+- Not touched: nondrillable_bounce, opposite_cancel (bounce check lists an empty reading; cancel: spin 0.67 s vs natural, rollbacks 0 -> 2).
+- Full SUITE_SPIN (Saved/Logs/sd-14/spin-c.log, d2.py filter did not narrow): PASS spin_ground_hits_ring, air_hop, air_spin_once, release_early_pop,
+  launch_after_bore, target_destroyed. FAIL: opposite_cancel, drill_ground_lag (rollback 0 -> 2), nondrillable_bounce, latch_static_multi_hit (no latch
+  at all: possibly flaky or a regression of the stagger change in the dive's latch, not checked), moving_enemy, hit_while_latched.
+- Harness lessons: `-ExecCmds="py C:\path\no spaces.py"` (copy the script to C:\sd14; spaces break the quoting, -ExecutePythonScript quits when the
+  script returns); kill only your own editor pid (never Stop-Process -Name).
+- Gates: build (editor, on) Succeeded twice. Headless RunTests (Input+Combat+SpinDrill+Defence+Link+Parts): 965 found, exit code 0 (Saved/SD14/headless.log). Plugin-off build NOT run (~30 min).
+- Cost: one Sonnet thread, ~55 tool calls, 2 builds (~30 min each), 7 editor runs; medium. Local commit only, nothing pushed.
