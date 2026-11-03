@@ -811,6 +811,8 @@ bool FGSTN_DrillNPLatchLinkViewTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("drill type not registered (index 0): nothing"), FGSTN_DrillTickExtension::ReadLinkView(&ActiveDrill, 0).bActive);
 	TestTrue(TEXT("pending driller"), View(BodyLink(Drill, 1, EGSTN_LinkPhase::Pending, GSTNLinkFlags::Predicted)).bPending);
 	TestTrue(TEXT("active driller"), View(ActiveDrill).bActive);
+	TestTrue(TEXT("the request of the hit frame (no role yet) is the driller's pending"), View(BodyLink(Drill, 0, EGSTN_LinkPhase::Pending, GSTNLinkFlags::Predicted)).bPending);
+	TestFalse(TEXT("a role-less request of another type is not"), View(BodyLink(Drill + 1, 0, EGSTN_LinkPhase::Pending, GSTNLinkFlags::Predicted)).bPending);
 	TestFalse(TEXT("another link type is not the drill's"), View(BodyLink(Drill + 1, 1, EGSTN_LinkPhase::Active)).bActive);
 	TestFalse(TEXT("the drilled side (role 2) is not the driller"), View(BodyLink(Drill, 2, EGSTN_LinkPhase::Active)).bActive);
 	const FGSTN_DrillLinkView Hit = View(BodyLink(Drill, 1, EGSTN_LinkPhase::Active, GSTNLinkFlags::PendingBreak, EGSTN_LinkBreakReason::Hit));

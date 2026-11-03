@@ -118,6 +118,10 @@ struct GSTNSPINDRILLNP_API FGSTN_DrillSimTuning
 	bool bContinueThroughDestroyed = false;
 	bool bRefreshAirSpinOnLaunch = true;
 
+	// The latch's lengths (FGSTN_BoreTuning), resolved against the target's response at the latch
+	int32 SeatFrames = 12;
+	int32 MaxBoreFrames = 90;
+
 	// The air spin's movement (D4): read by the hop creator and the low gravity effect, never by the phase machine
 	float HopSpeed = 450.f;
 	bool bHopCancelsFall = true;

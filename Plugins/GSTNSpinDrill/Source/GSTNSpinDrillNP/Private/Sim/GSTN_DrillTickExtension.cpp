@@ -4,6 +4,7 @@
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "AbilitySystemComponent.h"
+#include "Data/GSTN_DrillTargetResponse.h"
 #include "Data/GSTN_SpinDrillTracks.h"
 #include "Effects/GSTN_SpinDrillEffects.h"
 #include "Events/GSTN_SimEvent.h"
@@ -98,6 +99,8 @@ FGSTN_DrillSimTuning FGSTN_DrillSimTuning::FromTuning(const FGSTN_AirSpinTuning&
 	Tuning.RefreshOn = AirSpin.RefreshOn;
 	Tuning.LowGravityExtraFrames = AirSpin.LowGravityExtraFrames;
 	Tuning.bContinueThroughDestroyed = Bore.bContinueThroughDestroyed;
+	Tuning.SeatFrames = Bore.SeatFrames;
+	Tuning.MaxBoreFrames = Bore.MaxBoreFrames;
 	Tuning.bRefreshAirSpinOnLaunch = Launch.bRefreshAirSpin;
 	Tuning.HopSpeed = AirSpin.HopSpeed;
 	Tuning.bHopCancelsFall = AirSpin.bHopCancelsFall;
@@ -478,7 +481,19 @@ FGSTN_DrillLinkView FGSTN_DrillTickExtension::ReadLinkView(const FGSTN_LinkFragm
 		return View;
 	}
 	const FGSTN_LinkState& Body = LinkFragment->Links.Body;
-	if (Body.LinkTypeIndex != DrillTypeIndex || Body.Role != 1)
+	if (Body.LinkTypeIndex != DrillTypeIndex)
+	{
+		return View;
+	}
+	// The request the tip's hit marked this frame (FGSTN_LinkTickExtension::MarkPredicted) is Pending with no role yet: the roles are written
+	// when the link forms. Only the driller asks for a drill link from its own fragment, so a role-less request is the driller's own. Reading
+	// it as "no link" made the tip hit bounce on that very frame and the dive ended while the link still formed (SD-10)
+	if (Body.Phase == EGSTN_LinkPhase::Pending && Body.Role == 0)
+	{
+		View.bPending = true;
+		return View;
+	}
+	if (Body.Role != 1)
 	{
 		return View;
 	}
@@ -626,6 +641,16 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 			if (Inputs.Request == EGSTN_DrillRequest::None)
 			{
 				Inputs.Request = ReadDiveOutcome(*Fragment, Context.Frame, Context.AttackerHits.Num() > 0, Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::None, Link);
+			}
+			if (Inputs.Request == EGSTN_DrillRequest::Latch)
+			{
+				// The seat and the longest bore of this latch. Nothing filled them before SD-10: the seat was 0 frames and the bore 1, so every
+				// latch ended on its first frame. The target's response (FGSTN_DrillTargetResponse) is not carried to the driller yet: its
+				// defaults (scale 1, no override) apply
+				const FGSTN_DrillSimTuning Tuning = GetTuning(Context);
+				const FGSTN_DrillTargetResponse Response;
+				Inputs.LatchSeatFrames = UGSTN_DrillMath::ResolveSeatFrames(Tuning.SeatFrames, Response.SeatFramesScale);
+				Inputs.LatchMaxBoreFrames = UGSTN_DrillMath::ResolveMaxBoreFrames(Tuning.MaxBoreFrames, Response.MaxBoreFramesOverride);
 			}
 			ReadLatchEnd(*Fragment, Context.Out.Core, Link, Inputs);
 			if (Fragment->IsLatched())

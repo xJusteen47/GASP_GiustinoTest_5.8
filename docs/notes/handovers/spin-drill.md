@@ -265,3 +265,25 @@ after one checkpoint.
 - Unchanged: 1 rollback in spin_opposite_cancel (budget 0). drill_ground_lag passed this run.
 - Gates: Python only, no C++ changed: build and headless suites as in SD-08b (on 980/0, off 933/0), not rerun.
 - Cost: one Opus thread, ~75k context, 4 editor runs (~6 min each), no builds. Low-medium.
+
+## SD-10 (laptop, 2026-11-03): the latch forms and holds on every world; SUITE_SPIN 3/12 with new, later failures (STOPPED, 2 fixes used)
+
+- Probe (Saved/SD10/probe_link.py, outputs probe_link1/2.txt): link text, drill text and positions per tick. The target placement works
+  (server_teleport_exact returns True, the target is under the diver one tick later); SD-09's "new Spinning" was the buffered spin firing after the dive ended.
+- Fix 1 (GSTN_DrillTickExtension.cpp, ReadLinkView): the request the tip hit marks (MarkPredicted) is Pending with Role 0 (roles are written when
+  the link forms); the drill only accepted Role 1, read "no link" and bounced on the hit frame, while the link formed anyway. A role-less
+  Pending of the drill type now reads as the driller's pending. Unit test lines added in LinkView test.
+- Fix 2: Inputs.LatchSeatFrames / LatchMaxBoreFrames were never filled (seat 0, bore 1 frame: every latch ended on its first frame). Now from
+  FGSTN_BoreTuning (new SeatFrames/MaxBoreFrames in FGSTN_DrillSimTuning) with the default target response (the response is not carried to the
+  driller yet: a ticket for when targets differ).
+- Effect (Saved/Logs/sd-05/spin-listen-0pct.log): static_multi_hit latches on every world and is still Boring after 1 s of crouch.
+- Still red, next thread:
+  1. Bore hits 0, target damage 0 while Boring (static_multi_hit, hit_while_latched). Check the bore is adopted (FindBoreAbility on the test kit's
+     TimelineRegistry; prepare_editor adds only the spin bindings?) and that the bore tip overlaps the target with the per-latch anchor.
+  2. Client latch frame 2-3 frames EARLIER than the authority's (355 vs 357) and never corrected: same_latch check fails in 5 scenarios. Probably
+     the client's view of the target; decide if the drill fragment's latch frame should be reconciled or the check loosened.
+  3. Exits: pop and launch give vz 0 on both sides (release_early_pop, launch_after_bore, target_destroyed); moving_enemy: driller did not ride (0 cm).
+  4. nondrillable_bounce: tip damage 0 -> 0 and no bounce (unchanged).
+  5. 1 rollback in spin_ground_hits_ring and drill_ground_lag this run (flaky; opposite_cancel passed this run).
+- Gates: on Succeeded, headless 980/0; off Succeeded, 933/0; restore build Succeeded.
+- Cost: one Opus thread, ~85k context, 2 probe + 2 suite editor runs, 3 builds, 2 headless runs. Medium.
