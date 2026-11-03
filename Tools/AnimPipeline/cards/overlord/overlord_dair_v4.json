@@ -14,20 +14,22 @@
    "name": "start",
    "frame": 0,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 0,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
-   }
+    "tool": "casc-import"
+   },
+   "origin": "owner"
   },
   {
    "name": "charge",
    "frame": 3,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 3,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
+    "tool": "casc-import"
    },
-   "spacing": "limb_led_recovery"
+   "spacing": "limb_led_recovery",
+   "origin": "owner"
   },
   {
    "name": "charge_load",
@@ -41,11 +43,12 @@
    "name": "charge_peak",
    "frame": 8,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 8,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
+    "tool": "casc-import"
    },
-   "spacing": "limb_led_recovery"
+   "spacing": "limb_led_recovery",
+   "origin": "owner"
   },
   {
    "name": "windup",
@@ -59,58 +62,64 @@
    "name": "release_start",
    "frame": 14,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 14,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
+    "tool": "casc-import"
    },
-   "spacing": "charge_long"
+   "spacing": "charge_long",
+   "origin": "owner"
   },
   {
    "name": "release",
    "frame": 15,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 15,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
-   }
+    "tool": "casc-import"
+   },
+   "origin": "owner"
   },
   {
    "name": "active_end",
    "frame": 17,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 17,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
-   }
+    "tool": "casc-import"
+   },
+   "origin": "owner"
   },
   {
    "name": "hold_end",
    "frame": 31,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 31,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
+    "tool": "casc-import"
    },
    "spacing": "limb_led_recovery",
-   "ease_out": 0.333
+   "ease_out": 0.333,
+   "origin": "owner"
   },
   {
    "name": "faf_a",
    "frame": 37,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 37,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
-   }
+    "tool": "casc-import"
+   },
+   "origin": "owner"
   },
   {
    "name": "faf_b",
    "frame": 42,
    "source": {
-    "file": "Saved/AnimPipeline/casc/overlord_dair_v4.casc",
+    "file": "cards/overlord/refs/overlord_dair_v4_owner_bones.json",
     "frame": 42,
-    "tool": "casc-import 2026-11-03 (owner rekey)"
-   }
+    "tool": "casc-import"
+   },
+   "origin": "owner"
   }
  ],
  "spacing": {
@@ -356,13 +365,13 @@
      "rot": [
       -0.8,
       7.1,
-      -30.1
+      -30.2
      ]
     },
     "spine": [
      -22.0,
      0.1,
-     -1.9
+     -1.8
     ],
     "head": [
      -2.8,
@@ -371,19 +380,19 @@
     ],
     "leg_l": {
      "foot": [
-      15.5,
+      15.6,
       -2.3,
-      -19.9
+      -20.0
      ],
      "pole": [
-      18.6,
-      78.4,
+      18.3,
+      78.5,
       -19.1
      ],
      "foot_rot": [
-      34.6,
-      0.1,
-      8.5
+      34.9,
+      0.9,
+      8.2
      ]
     },
     "leg_r": {
@@ -459,28 +468,28 @@
     ],
     "spine_chain": {
      "spine_01": [
-      -1.39,
-      -0.48,
+      -1.36,
+      -0.46,
       0.76
      ],
      "spine_02": [
-      -2.84,
-      -2.4,
+      -2.79,
+      -2.36,
       1.05
      ],
      "spine_03": [
-      -1.63,
-      -1.78,
-      0.49
+      -1.6,
+      -1.76,
+      0.48
      ],
      "spine_04": [
-      2.55,
-      1.22,
-      -1.56
+      2.52,
+      1.2,
+      -1.57
      ],
      "spine_05": [
-      3.4,
-      2.76,
+      3.36,
+      2.73,
       -1.42
      ]
     },
@@ -505,19 +514,19 @@
    "3": {
     "pelvis": {
      "loc": [
-      0.0,
+      0.1,
       -1.5,
-      7.6
+      7.7
      ],
      "rot": [
-      2.3,
+      2.4,
       2.5,
-      -16.5
+      -16.6
      ]
     },
     "spine": [
-     -85.0,
-     8.6,
+     -84.9,
+     8.5,
      -9.6
     ],
     "head": [
@@ -527,70 +536,70 @@
     ],
     "leg_l": {
      "foot": [
-      4.7,
+      4.5,
       9.1,
       -18.7
      ],
      "pole": [
-      48.3,
-      66.7,
-      17.5
+      47.9,
+      67.1,
+      17.1
      ],
      "foot_rot": [
-      6.5,
-      -33.3,
-      -15.1
+      6.6,
+      -33.8,
+      -15.9
      ]
     },
     "leg_r": {
      "foot": [
-      -9.8,
-      3.8,
-      -19.4
+      -9.9,
+      3.9,
+      -19.6
      ],
      "pole": [
-      -61.2,
+      -61.4,
       50.1,
-      22.4
+      22.2
      ],
      "foot_rot": [
-      29.0,
-      21.2,
-      -23.6
+      29.9,
+      21.5,
+      -23.1
      ]
     },
     "arm_l": {
      "hand": [
-      1.7,
-      18.2,
-      31.8
+      1.5,
+      18.5,
+      31.1
      ],
      "pole": [
-      58.8,
-      29.9,
-      39.7
+      58.6,
+      30.4,
+      39.2
      ],
      "hand_rot": [
       67.6,
-      -27.9,
-      64.1
+      -28.2,
+      63.7
      ]
     },
     "arm_r": {
      "hand": [
-      4.7,
-      21.7,
-      28.9
+      3.7,
+      21.5,
+      28.5
      ],
      "pole": [
-      -28.8,
-      -0.9,
-      71.3
+      -29.8,
+      -1.3,
+      70.9
      ],
      "hand_rot": [
-      35.2,
-      -88.5,
-      -23.4
+      34.9,
+      -87.9,
+      -22.1
      ]
     },
     "fingers": [
@@ -599,14 +608,14 @@
      0
     ],
     "clavicle_l": [
-     35.5,
-     -19.4,
-     5.8
+     35.9,
+     -17.8,
+     4.3
     ],
     "clavicle_r": [
-     28.1,
-     -27.7,
-     -45.5
+     27.5,
+     -29.1,
+     -43.4
     ],
     "wrist_out": [
      35,
@@ -615,29 +624,29 @@
     ],
     "spine_chain": {
      "spine_01": [
-      2.12,
-      -0.82,
+      2.06,
+      -0.8,
       -0.79
      ],
      "spine_02": [
-      -1.31,
-      -0.62,
+      -1.39,
+      -0.57,
       -0.74
      ],
      "spine_03": [
-      -0.76,
-      -0.14,
+      -0.8,
+      -0.1,
       0.48
      ],
      "spine_04": [
-      -0.28,
-      0.71,
-      -0.58
+      -0.2,
+      0.7,
+      -0.55
      ],
      "spine_05": [
-      0.45,
-      1.41,
-      -0.27
+      0.55,
+      1.38,
+      -0.22
      ]
     },
     "neck_chain": {
@@ -819,11 +828,11 @@
      "loc": [
       0.1,
       -1.9,
-      7.5
+      7.6
      ],
      "rot": [
-      10.8,
-      4.5,
+      10.4,
+      4.6,
       -14.7
      ]
     },
@@ -834,80 +843,80 @@
     ],
     "arm_r": {
      "hand": [
-      6.3,
-      18.3,
-      24.2
+      6.1,
+      19.1,
+      24.4
      ],
      "pole": [
-      -19.1,
-      -1.2,
-      74.2
+      -19.3,
+      -0.3,
+      74.5
      ],
      "hand_rot": [
-      17.9,
-      -71.8,
-      -31.5
+      17.8,
+      -71.2,
+      -30.7
      ]
     },
     "leg_l": {
      "foot": [
-      5.9,
-      8.0,
-      -16.6
+      6.3,
+      7.9,
+      -16.8
      ],
      "pole": [
-      49.0,
-      65.2,
+      48.8,
+      65.4,
       20.9
      ],
      "foot_rot": [
-      17.9,
-      -37.6,
-      -30.6
+      20.7,
+      -36.1,
+      -28.5
      ]
     },
     "head": [
      -25.0,
-     17.0,
-     -42.6
+     17.1,
+     -42.2
     ],
     "arm_l": {
      "hand": [
-      5.9,
-      16.3,
-      31.4
+      5.6,
+      16.9,
+      31.6
      ],
      "pole": [
-      63.8,
-      30.4,
-      33.6
+      63.4,
+      31.3,
+      34.2
      ],
      "hand_rot": [
-      42.8,
-      -8.7,
-      44.8
+      42.6,
+      -9.2,
+      43.7
      ]
     },
     "spine": [
-     -95.0,
-     7.8,
+     -94.6,
+     7.6,
      -13.3
     ],
     "leg_r": {
      "foot": [
-      -6.8,
-      2.0,
-      -14.8
+      -7.4,
+      1.7,
+      -15.0
      ],
      "pole": [
-      -62.1,
+      -61.9,
       51.1,
-      17.5
+      18.1
      ],
      "foot_rot": [
-      31.8,
-      27.3,
-      -12.6
+      34.3,
+      23.1,
+      -16.2
      ]
     },
     "wrist_out": [
@@ -917,57 +926,57 @@
     ],
     "spine_chain": {
      "spine_01": [
-      2.62,
-      -0.76,
-      -0.7
+      2.6,
+      -0.78,
+      -0.69
      ],
      "spine_02": [
-      -3.04,
-      -2.16,
-      -0.37
+      -2.9,
+      -2.23,
+      -0.35
      ],
      "spine_03": [
-      -1.5,
-      -1.34,
-      1.26
+      -1.42,
+      -1.36,
+      1.28
      ],
      "spine_04": [
-      0.7,
-      0.78,
-      -1.76
+      0.62,
+      0.83,
+      -1.79
      ],
      "spine_05": [
-      1.64,
-      2.22,
-      -2.26
+      1.55,
+      2.28,
+      -2.29
      ]
     },
     "neck_chain": {
      "neck_01": [
-      5.77,
-      5.2,
-      -12.3
+      8.68,
+      3.48,
+      -11.39
      ],
      "neck_02": [
-      5.33,
-      -4.74,
-      14.67
+      5.29,
+      -4.84,
+      14.45
      ],
      "head": [
-      -10.39,
-      3.91,
-      -0.98
+      -12.58,
+      6.46,
+      -1.78
      ]
     },
     "clavicle_l": [
-     34.5,
-     -25.4,
-     12.2
+     35.4,
+     -22.2,
+     12.6
     ],
     "clavicle_r": [
-     35.2,
-     -23.0,
-     -50.7
+     33.0,
+     -26.9,
+     -50.1
     ]
    },
    "11": {
@@ -1168,52 +1177,52 @@
     },
     "leg_l": {
      "foot": [
-      -0.9,
-      4.3,
+      -0.8,
+      4.4,
       -37.3
      ],
      "pole": [
-      28.4,
+      28.5,
       75.5,
-      -16.9
+      -16.8
      ],
      "foot_rot": [
-      54.1,
-      -52.6,
+      54.2,
+      -53.1,
       0.3
      ]
     },
     "arm_r": {
      "hand": [
-      6.2,
+      6.3,
       19.0,
-      21.3
+      21.1
      ],
      "pole": [
-      -46.9,
-      21.4,
-      41.6
+      -46.8,
+      21.6,
+      41.3
      ],
      "hand_rot": [
       1.4,
-      -0.2,
-      -4.8
+      0.0,
+      -4.6
      ]
     },
     "leg_r": {
      "foot": [
-      -7.1,
-      -2.3,
-      -37.7
+      -7.0,
+      -2.2,
+      -37.6
      ],
      "pole": [
-      -51.5,
-      60.6,
+      -51.4,
+      60.7,
       -17.0
      ],
      "foot_rot": [
-      31.7,
-      46.6,
+      32.6,
+      46.7,
       5.0
      ]
     },
@@ -1277,9 +1286,9 @@
      -6.0
     ],
     "clavicle_r": [
-     21.9,
-     5.0,
-     -4.4
+     22.1,
+     4.0,
+     -4.3
     ]
    },
    "15": {
@@ -1324,19 +1333,19 @@
     },
     "leg_l": {
      "foot": [
-      -7.2,
-      -16.0,
-      -80.1
+      -7.4,
+      -16.3,
+      -80.0
      ],
      "pole": [
-      36.8,
-      15.3,
-      -51.4
+      38.5,
+      12.0,
+      -51.2
      ],
      "foot_rot": [
-      -19.9,
-      -0.2,
-      0.0
+      -19.6,
+      1.0,
+      4.6
      ]
     },
     "arm_r": {
@@ -1480,19 +1489,19 @@
     },
     "leg_l": {
      "foot": [
-      -7.2,
-      -16.0,
-      -80.1
+      -7.4,
+      -16.3,
+      -80.0
      ],
      "pole": [
-      36.8,
-      15.3,
-      -51.4
+      38.5,
+      12.0,
+      -51.2
      ],
      "foot_rot": [
-      -19.9,
-      -0.2,
-      0.0
+      -19.6,
+      1.0,
+      4.6
      ]
     },
     "arm_r": {
@@ -1948,19 +1957,19 @@
     },
     "leg_l": {
      "foot": [
-      13.7,
-      7.5,
+      13.5,
+      7.4,
       -42.5
      ],
      "pole": [
       15.4,
       78.5,
-      -8.1
+      -8.4
      ],
      "foot_rot": [
-      -7.3,
-      4.8,
-      -0.7
+      -6.8,
+      5.6,
+      -1.1
      ]
     },
     "arm_r": {
@@ -2069,31 +2078,6 @@
   15,
   17
  ],
- "approved": [
-  {
-   "frames": [
-    0,
-    3,
-    8,
-    14,
-    15,
-    17,
-    31,
-    37,
-    42
-   ],
-   "parts": [
-    "arm_l",
-    "arm_r",
-    "trunk",
-    "head",
-    "leg_l",
-    "leg_r"
-   ],
-   "ref": "overlord/overlord_dair_v4.json",
-   "by": "owner",
-   "date": "2026-11-03",
-   "why": "owner 03/11: rekeyed in Cascadeur (0 start, 3 charge, 8 charge peak, 14 release start, 15 release/hitbox, 17/31 stomp hold, 37/42 probable FAF); every owner key taken whole, feet included; old keys 2/5/12/13 dropped; fingers and wrist_out stay the kit's (fists on 0)"
-  }
- ]
+ "faf_game": 39,
+ "_faf_why": "owner 03/11 10:03: FAF 37 (anim frame; game 39 at 60 fps), charge stays at 3 as keyed. The approved block of the 03:02 import was written without his ok on the composite grid: removed until he approves it (owner rule 2); owner keys stay protected by origin/source."
 }

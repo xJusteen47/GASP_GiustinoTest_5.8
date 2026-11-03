@@ -56,6 +56,8 @@ def test_part_delays_refused(tmp_path):
     src = os.path.join(TOOLS, "cards", "overlord", "overlord_dair_v4.json")
     card = json.load(open(src, encoding="utf-8"))
     card["part_delays"] = {"head": 1}
+    for q in card["poses"]:     # the source_fidelity guard on owner poses is not what this test is about
+        q.pop("origin", None)
     p = tmp_path / "card.json"
     p.write_text(json.dumps(card), encoding="utf-8")
     try:

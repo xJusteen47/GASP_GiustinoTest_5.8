@@ -491,3 +491,32 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - Non fatto: `render` usa la griglia `poses` esistente (non ancora il composito CP2 con fantasma owner); dita owner
   nell'import (CP4); script storici in `legacy/` (punto 12). La richiesta di import dair in attesa non è stata toccata.
 - Costo stimato: ~45 chiamate, contesto ~110k, circa $8-10; niente subagenti.
+
+## Dair v4: check rossi tecnici, chiavi owner in refs/, FAF 37 (2026-11-03 mattina, thread desktop Opus, editor solo bridge)
+- Ramo `claude/project-thread-66dv82` (da feature 60da6fa) nel worktree `_feature`; file dair non salvati dell'owner non toccati.
+- Owner 10:03: carica resta al 3 com'è, FAF 37 (`faf_game` 39 nella scheda, finestre anim: active 15-17, faf 37).
+  Tolto il blocco `approved` del giro 03:02 (scritto senza il suo ok sulla griglia: regola owner 2).
+- Richiesta Invia delle 02:49 **archiviata, non consumata** (`casc/requests/archived/`): stesse chiavi già importate alle 03:02
+  dalla copia intatta, e il suo .fbx era stato sovrascritto dalla mia riesportazione. L'owner non ha capito la domanda: scelta mia.
+- `legibility` (KeyError foot_l): le viste ortho erano fisse a z 95 ± 100 cm, il piede della dair a z -3..-17 usciva dal
+  quadro (maschera vuota). Ora `fit_center` sposta il centro solo se la take esce dal quadro (dair: z 66; jab ecc. invariati),
+  e una parte senza maschera vale 0 % (non leggibile). Il check ora gira: verdetto FAIL di contenuto (piede non distinto al
+  contatto in 6 viste, gamba coperta da camera di gioco 3 e PvP 6). Soglie della mano applicate al piede: da tarare.
+- `casc-import --owner-keys[=0,3,..]` (anche dal verbo `import`, dai `owner_keys` della richiesta + chiavi owner già nella scheda):
+  ossa dell'owner intere in `cards/overlord/refs/overlord_dair_v4_owner_bones.json` (in git), pose con `origin: owner` e
+  `source {file, frame, tool: casc-import}`. `merge()` toglie un `source` di tipo punti quando riscrive quella posa.
+  Eseguito sul vero `casc/overlord_dair_v4_owner_rekey.fbx` (snapshot `history/overlord_dair_v4_20261103_110709.json`).
+- **`source_fidelity` sui dati veri: FAIL, e quindi `load()` ora ferma la scheda dair** (guard per `origin: owner`). Scarti
+  (cm posizione / gradi): twist della coscia 8-12° (la scheda non ha il twist della coscia: swing solo 1-4°), ball_l 13° al
+  frame 0 (punta del piede, non in scheda), gambe 2,1-2,4 cm a 15/17/31 e tronco/braccia 0,9-1,2 cm a 3/8 (Cascadeur allunga
+  le ossa, la scheda ha lunghezze fisse), testa 3-5° (neck chain). L'import riporta residuo 0,1-0,2 cm perché misura solo
+  le posizioni sul bersaglio rigido. Etichetta: il messaggio stampa "cm" anche quando il peggiore è in gradi.
+- **Prossimo passo (scelta di design, non fatta per regola dei 2 tentativi):** o fidelity confronta col bersaglio rigido
+  dell'import (rotazioni owner sulle lunghezze della scheda) e solo lo swing per le ossa di cui la scheda non ha il twist,
+  o si aggiungono twist coscia / ball / neck al Poser. Poi `source.keep` con why solo per ciò che resta. Fino ad allora
+  build/check della dair si fermano (per sbloccare: `animpipe restore overlord_dair_v4 last` o la snapshot sopra).
+- Non fatti (budget): griglia composita in `render`, livello di cattura dedicato, dita owner nell'import, interp,
+  owner-ok/approve, varianti, jab v12, GSTN Studio con dati veri, `test_capture` (Windows) ancora rosso. Nessuna build.
+- Per l'owner al ritorno: rilanciare `install.py` di Cascadeur e avviare il server script per provare barra GSTN e riga di stato.
+- Test: 44/45 (`test_part_delays_refused` adattato: copiava la scheda dair vera, ora bloccata dal guard).
+- Costo stimato: ~55 chiamate, contesto ~100k, circa $8-9; niente subagenti, niente build, editor usato solo per import/sample.

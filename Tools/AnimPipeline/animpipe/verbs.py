@@ -284,6 +284,9 @@ def v_import(move, a, o):
     keys = {int(k) for k in opt["keys"].split(",")} if opt.get("keys") else None
     marked = set(int(f) for f in (req or {}).get("owner_keys", []))
     prev_owner = owner_frames(c, move)
+    if marked | prev_owner:
+        # owner keys enter whole and go in git (cards/<kit>/refs/), each card pose there gets origin/source (CP4)
+        opt["owner-keys"] = ",".join(str(f) for f in sorted(marked | prev_owner))
     if keys is not None and not (marked | prev_owner) <= keys:
         miss = sorted((marked | prev_owner) - keys)
         raise Stop(OWNER, f"owner keys {miss} have no key in the Cascadeur scene: moved or deleted? ask the owner, nothing imported",

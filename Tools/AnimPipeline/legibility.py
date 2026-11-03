@@ -417,9 +417,22 @@ def workers():
     n = int(os.environ.get("LEG_WORKERS", "0") or 0)
     return n if n > 0 else max(1, (os.cpu_count() or 2) - 6)
 
-def _init_worker(take, sheet):
+def _init_worker(take, sheet, center=None):
     if take:
         configure(take, sheet=sheet)
+    if center is not None:
+        CENTER[:] = center
+
+def fit_center(frames, margin=10.0):
+    """The ortho views are ORTHO_W wide around CENTER (z 95 = a standing body). An aerial stomp puts the kicking foot
+    below z -5, outside the frame: its mask is empty and rule A read it as missing (KeyError on the dair). Only when the
+    take leaves the frame is the centre moved to the middle of its vertical range, so takes that fit keep the old framing
+    (and the calibration made on it)."""
+    zs = [float(bone_tf(fr, b)[0][2]) for fr in frames.values() for b in ("head", "pelvis", "ball_l", "ball_r", "hand_l", "hand_r")]
+    lo, hi, half = min(zs), max(zs), ORTHO_W / 2 - margin
+    if lo < CENTER[2] - half or hi > CENTER[2] + half:
+        CENTER[2] = round((lo + hi) / 2, 1)
+        print(f"  ortho centre moved to z {CENTER[2]} (take spans z {lo:.0f}..{hi:.0f})", flush=True)
 
 def measure(frames):
     out = {"views": VNAMES, "parts": PNAMES, "frames": {}}
@@ -431,7 +444,7 @@ def measure(frames):
             print(f"  frame {fs} done", flush=True)
         return out
     import multiprocessing as mp
-    with mp.get_context("spawn").Pool(n, initializer=_init_worker, initargs=(TAKE, SHEET)) as pool:
+    with mp.get_context("spawn").Pool(n, initializer=_init_worker, initargs=(TAKE, SHEET, CENTER.tolist())) as pool:
         for fs, rowf in zip(keys, pool.starmap(measure_frame, [(fs, frames[fs]) for fs in keys], chunksize=1)):
             out["frames"][fs] = rowf
     print(f"  {len(keys)} frames done on {n} processes", flush=True)
@@ -582,7 +595,7 @@ def judge(res, contact, faf):
         for v in TH["contact_views"]:
             for att in ATTS:
                 vr = res["frames"][str(f)]["views"][v]
-                d = vr["parts"][att]["distinct_x"] if len(ATTS) == 1 else vr["parts"].get(att, {}).get("distinct_x", 0.0)
+                d = vr["parts"].get(att, {}).get("distinct_x", 0.0)    # no mask in this view = not readable
                 if d < TH["fist_contact_distinct_min"]:
                     worst = max(((k.split("|")[1], val[0]) for k, val in vr["pairs"].items() if k.startswith(att + "|")
                                  and k.split("|")[1] not in NEIGH[att]), key=lambda x: x[1], default=("?", 0))
@@ -800,6 +813,7 @@ if __name__ == "__main__":
         t0 = time.time()
         configure(take, anim)
         frames = sample(anim, take)
+        fit_center(frames)
         jp = os.path.join(SHEETS, f"{take}_legibility.json")
         if os.path.exists(jp) and os.environ.get("LEG_REUSE"):
             res = json.load(open(jp))

@@ -281,6 +281,12 @@ def merge(c, bones, unlock=(), poser=None, ref=None):
             d = {bn: round(float(np.linalg.norm(Pt[bn] - Pn[bn])), 2) for bn in RESID_BONES if bn in Pt and bn in Pn}
             rep["frames"][f]["worst"] = dict(sorted(d.items(), key=lambda x: -x[1])[:6])
         poses[str(f)] = pose
+        for p in c["poses"]:
+            # a Cascadeur-points source (casc_to_author) described the pose before this rewrite: left in place check
+            # would compare the new pose with the old points and fail. Bones sources are re-set by mark_owner_sources.
+            src = p.get("source") if p["frame"] == f else None
+            if src and not src.get("derived") and not str(src.get("tool", "")).startswith("casc-import"):
+                p["source"] = None; rep.setdefault("source_dropped", []).append(f)
         if is_new:
             rep["new"].append(f)
             c["poses"].append({"name": f"casc_{f}", "frame": f, "source": None})
@@ -320,17 +326,25 @@ def load_ref(path):
     return {int(f): ({b: np.array(v[0]) for b, v in fr.items()}, {b: np.array(v[1]).reshape(3, 3) for b, v in fr.items()}) for f, fr in d.items()}
 
 
-def import_bones(card_path, bones, opt, ref=None):
+def import_bones(card_path, bones, opt, ref=None, fbx=""):
     path = _card_path(card_path)
     c = C.load(path)
     unlock = set(u for u in (opt.get("unlock") or "").split(",") if u)
     new, rep = merge(c, bones, unlock, ref=ref)
+    if "owner-keys" in opt:
+        # the owner's keys go in git as he made them, and each card pose there points at them (origin: owner);
+        # --owner-keys alone = every key read, --owner-keys=0,3,8 = those
+        ok = sorted(int(k) for k in str(opt["owner-keys"]).split(",") if k.strip()) or sorted(bones)
+        if "dry" not in opt:
+            rep["owner_refs"] = save_owner_refs(new, bones, ok, fbx)
+        mark_owner_sources(new, set(ok), owner_refs_rel(new))
+        rep["frames"].update({f: rep["frames"].get(f, {"parts": {}, "sources": "owner"}) for f in ok})
     out = os.path.join(_out(), f"{c['move']}_casc_import.json")
     json.dump(rep, open(out, "w"), indent=1)
     ch = rep["frames"]
     print(f"casc-import {c['move']}: {len(bones)} Cascadeur keys, {len(ch)} frames changed {sorted(ch)}, new {rep['new']}")
     for f in sorted(ch)[:3]:
-        print(f"  {f}: {', '.join(ch[f]['parts'])} (residual {ch[f]['residual_cm']} cm {ch[f]['worst_bone']})")
+        print(f"  {f}: {', '.join(ch[f]['parts']) or 'source only'} (residual {ch[f].get('residual_cm', 0)} cm {ch[f].get('worst_bone', '-')})")
     if rep["flag"] or rep["missing"]:
         print(f"  over {FIT_CM} cm: {rep['flag']}; card keys not keyed in Cascadeur (kept): {rep['missing']}")
     if not ch or "dry" in opt:
@@ -379,6 +393,50 @@ def _out():
     from animpipe.__main__ import OUT
     os.makedirs(OUT, exist_ok=True)
     return OUT
+
+
+def m2q(m):
+    """Rotation matrix -> quaternion [x, y, z, w] (inverse of q2m)."""
+    w = math.sqrt(max(0.0, 1 + m[0, 0] + m[1, 1] + m[2, 2])) / 2
+    x = math.copysign(math.sqrt(max(0.0, 1 + m[0, 0] - m[1, 1] - m[2, 2])) / 2, m[2, 1] - m[1, 2])
+    y = math.copysign(math.sqrt(max(0.0, 1 - m[0, 0] + m[1, 1] - m[2, 2])) / 2, m[0, 2] - m[2, 0])
+    z = math.copysign(math.sqrt(max(0.0, 1 - m[0, 0] - m[1, 1] + m[2, 2])) / 2, m[1, 0] - m[0, 1])
+    return [x, y, z, w]
+
+
+def owner_refs_rel(c):
+    """cards/<kit>/refs/<move>_owner_bones.json, relative to Tools/AnimPipeline (the form source.file takes)."""
+    kit = c.get("kit") or c["move"].split("_")[0]          # cards are cards/<kit>/<kit>_<move>.json
+    return f"cards/{kit}/refs/{c['move']}_owner_bones.json"
+
+
+def save_owner_refs(c, bones, keys, fbx=""):
+    """The owner's key poses as Cascadeur gave them (bones whole, component space), in git next to the card: the
+    ground truth source_fidelity compares the card with. Frames already in the file and not re-read are kept."""
+    rel_p = owner_refs_rel(c); path = os.path.join(C.TOOLS, rel_p)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    old = json.load(open(path)) if os.path.exists(path) else {"frames": {}}
+    fr = old.get("frames", {})
+    for f in keys:
+        P, R = bones[f]
+        fr[str(f)] = {b: [[round(float(x), 3) for x in P[b]], [round(v, 6) for v in m2q(R[b])]] for b in P}
+    out = {"move": c["move"], "fbx": os.path.basename(fbx), "space": "component, Z up, cm",
+           "frames": {k: fr[k] for k in sorted(fr, key=int)}}
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(out, fh)
+    return rel_p
+
+
+def mark_owner_sources(c, keys, rel_p):
+    """origin: owner + source {file, frame, tool: casc-import} on the card's poses at the owner's keys. A source of
+    another kind (Cascadeur points from casc_to_author) is replaced: the pose was just rewritten from these bones, so the
+    old source would make check fail on a pose that is no longer the one it describes. A declared keep is kept."""
+    for p in c["poses"]:
+        if p["frame"] in keys:
+            keep = (p.get("source") or {}).get("keep")
+            p["origin"] = "owner"
+            p["source"] = {"file": rel_p, "frame": p["frame"], "tool": "casc-import", **({"keep": keep} if keep else {})}
+    return c
 
 
 def load_bones_json(path):
@@ -484,5 +542,5 @@ def import_cmd(card_path, opt):
         ref = load_ref(refp)
         if ref is None:
             print("no --ref readback for this export: comparing with the card itself (Cascadeur's rig distortion shows up)")
-        return import_bones(card_path, bones, opt, ref)
+        return import_bones(card_path, bones, opt, ref, fbx)
     return import_bones(card_path, bones, opt)

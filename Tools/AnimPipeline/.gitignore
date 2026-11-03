@@ -13,6 +13,8 @@
 __pycache__/
 sheets/
 refs/
+# the owner's key poses live in git next to their card (cards/README.md, source_fidelity)
+!cards/*/refs/
 # Take data and one-off dumps
 *_targets.json
 *_targets_raw.json
