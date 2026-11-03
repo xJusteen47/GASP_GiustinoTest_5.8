@@ -445,3 +445,12 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
 - ue_write_take: la rilettura finale (`read_anim_sequence`) torna vuota ed esce 1, ma il take è scritto (build lo legge).
 - Test: 33/34; `test_capture` (PR #24) fallisce su Windows per il separatore di percorso, non toccato.
 - Costo stimato: ~110 chiamate, contesto ~150k, circa $10-12; niente subagenti.
+- **Regole owner per il prossimo passo desktop (03/11 03:01, dair in pausa finché il processo non è solido):**
+  1. Mai spostare il frame di una chiave dell'owner: proporre e aspettare. Qui nessuna chiave è stata spostata: la scena
+     salvata aveva la carica al 3 (lui ha scritto 4). Proposta aperta: verificare con lui se nella sua versione era al 4.
+  2. `approve` solo dopo l'ok esplicito dell'owner sulla griglia composita (il blocco `approved` di questo giro è stato
+     scritto senza: da confermare o togliere).
+  3. Le dita delle chiavi dell'owner in Cascadeur hanno la precedenza sulla scheda; cambiarle solo su sua richiesta. Oggi
+     la scheda impone ancora le mani del kit (fingers/wrist_out) su 3/8/14: da allineare a questa regola nel codice di import.
+- Catture: serve un livello dedicato alle catture (non DefaultLevel), così modifiche non salvate altrove non le bloccano.
+  Stato editor: nessun livello cambiato né salvato da questo thread; Cascadeur con la sola scena `overlord_dair_v4.casc`.
