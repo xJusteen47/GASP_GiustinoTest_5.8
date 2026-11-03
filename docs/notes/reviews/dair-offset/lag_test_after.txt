@@ -1,0 +1,16 @@
+sheets/ingame/_overlord_dair_v4/raw: corr(img_f, pose_f)=0.785 corr(img_f, pose_f-1)=0.261
+  f12-18 pose step cm 12:233 13:136 14:650 15:2664 16:65 17:65 18:1
+  f12-18 img diff     12:0.03 13:0.74 14:0.96 15:1.43 16:0.15 17:0.15 18:0.00
+  f12-18 lowest row   12:204 13:210 14:238 15:291 16:292 17:293 18:293
+sheets/ingame/_overlord_dair_v4_az90/raw: corr(img_f, pose_f)=0.873 corr(img_f, pose_f-1)=0.300
+  f12-18 pose step cm 12:233 13:136 14:650 15:2664 16:65 17:65 18:1
+  f12-18 img diff     12:0.28 13:0.26 14:0.69 15:1.27 16:0.13 17:0.13 18:0.00
+  f12-18 lowest row   12:220 13:221 14:228 15:285 16:286 17:286 18:286
+C:/Users/jacop/AppData/Local/Temp/claude/C--Users-jacop-Documents-Unreal-Projects-GASP-Giustino2/7edf16c9-417d-49b7-837e-6a0dd47912f6/scratchpad/varI_az90_old_raw: corr(img_f, pose_f)=0.305 corr(img_f, pose_f-1)=0.849
+  f12-18 pose step cm 12:334 13:113 14:546 15:2664 16:65 17:65 18:240
+  f12-18 img diff     12:0.28 13:0.32 14:0.24 15:0.67 16:1.27 17:0.13 18:0.13
+  f12-18 lowest row   12:218 13:220 14:221 15:228 16:285 17:286 18:286
+sheets/ingame/_overlord_dair_v4_varI_az90/raw: corr(img_f, pose_f)=0.849 corr(img_f, pose_f-1)=0.071
+  f12-18 pose step cm 12:334 13:113 14:546 15:2664 16:65 17:65 18:240
+  f12-18 img diff     12:0.32 13:0.24 14:0.67 15:1.27 16:0.13 17:0.13 18:0.44
+  f12-18 lowest row   12:220 13:221 14:228 15:285 16:286 17:286 18:290

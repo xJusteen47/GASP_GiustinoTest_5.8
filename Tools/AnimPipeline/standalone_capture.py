@@ -4,8 +4,8 @@ starts; never inside the owner's editor). Reuses capture_ue.py (setup / set_fram
 The separate process loads /Game/AnimPipeline/Pilot/L_PilotCapture FROM DISK, so whatever is unsaved in the owner's editor
 (DefaultLevel or anything else) is not in it and nothing it spawns is ever saved. Job file (env ANIMPIPE_JOB, json):
 {anim, move, azs: [..], size, el, dist, fov, out_dir, tools_dir}. Writes <out_dir>/<az>/<frame:03d>.rgb, then manifest.json
-({n, azs, size}) and <out_dir>/standalone.done ("ok" or the error), then QUIT_EDITOR. One slate tick between set_frame and
-capture (the scrub lands a tick later), a short warm-up first (shader compile makes the first captures black)."""
+({n, azs, size}) and <out_dir>/standalone.done ("ok" or the error), then QUIT_EDITOR. set_frame is re-applied until the pose
+is stable, then a few slate ticks before the capture (the scrub lands late), a short warm-up first (shader compile makes the first captures black)."""
 import json, os, sys, time, traceback
 import unreal
 
@@ -14,6 +14,7 @@ sys.path.insert(0, JOB["tools_dir"])
 import capture_ue as cap
 
 SETTLE_TICKS = 3
+MAX_SCRUB = 10
 
 
 def _log(msg):
@@ -39,7 +40,15 @@ def _script():
     for az in JOB["azs"]:
         sub = os.path.join(JOB["out_dir"], str(az)); os.makedirs(sub, exist_ok=True)
         for f in range(n + 1):
-            cap.set_frame(JOB["anim"], f)
+            # One set_frame drew the PREVIOUS frame's pose (measured 2026-11-03: image f matched pose f-1, the dair stomp
+            # showed on anim 16). Re-apply each tick until hand_r stops moving, as ingame_judge.grab does in the editor path.
+            last = None
+            for _ in range(MAX_SCRUB):
+                got = cap.set_frame(JOB["anim"], f)["hand_r"]
+                yield
+                if last is not None and max(abs(a - b) for a, b in zip(got, last)) < 0.05:
+                    break
+                last = got
             for _ in range(SETTLE_TICKS):
                 yield
             cap.OUT = sub.replace("\\", "/").rstrip("/") + "/"
