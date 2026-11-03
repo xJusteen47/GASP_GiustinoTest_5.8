@@ -721,7 +721,7 @@ def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
         return 'driller hp', hp
 
     steps = rig.steps + [
-        (t_hit, place_hitter), (t_hit + 0.03, lambda: ('attack', g.combat_tap(hitter, g.button_mask('Attack')))),
+        (t_hit, place_hitter), (t_hit + 0.03, lambda: ('attack', g.combat_hold(hitter, g.button_mask('Attack')))), (t_hit + 0.15, lambda: ('attack off', g.combat_clear(hitter))),
         (t_hit + 0.7, rig.mark('after')), (t_hit + 0.7, driller_hp),
         (t_hit + 0.75, rig.check_latched(t_hit + 0.1)),
         (t_hit + 0.75, run.at('the hit ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),

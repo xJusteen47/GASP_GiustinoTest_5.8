@@ -331,3 +331,22 @@ after one checkpoint.
 - Full SUITE_SPIN at the start of SD-12 (exit code only): 5/12 (pop and launch red). Not rerun at the end (budget).
 - Gates: on Succeeded, headless 980/0; off Succeeded, headless 933/0; restore build Succeeded.
 - Cost: one Opus thread, ~110k context, 1 full + 4 short suite runs, 6 builds, 3 headless runs. Medium-high.
+
+## SD-13 (laptop, 2026-11-03): launch fixed; moving enemy diagnosed (needs a design call); hit/bounce/cancel still red (STOPPED)
+
+- launch_after_bore PASS (94d4a93). Cause: Inputs.bJumpBoost was never filled, so ResolveEnd always chose the pop. The bore track hook now stamps the
+  jump (held, or a press inside FGSTN_BoreTuning::JumpBoostWindowFrames, read from the input history) as profile CrouchMarkerJump (0xD2);
+  ReadCrouchStamp has an optional bJumpBoost out param. Window uses the tuning default (8), not the kit's value: the hook has no tuning access.
+- Run Saved/SD13/driver_a.py (6 red scenarios): release_early_pop and launch PASS; moving_enemy, hit_while_latched, nondrillable_bounce,
+  opposite_cancel FAIL. Not rerun: ring and full suite (count not measured this thread).
+- moving_enemy, cause proven (Saved/SD13/probe_move2.txt): the target's actionState stays Hitstun (2) for the whole bore, vel 0, no link state of its
+  own. GSTN_KnockbackModel floors HitstunFrames at Tuning.MinHitstunFrames (6) = the bore's re-hit interval (6), so hitstun never ends; this is why
+  HitstunMultiplier 0 (SD-12) did nothing. NEEDS A DECISION (combat semantics): e.g. HitstunMultiplier <= 0 means no hitstun/no floor, or a HitData
+  "no hitstun" flag for the bore tip. Not done (combat core change).
+- hit_while_latched: attempt 1 (kept, harmless): held the attack button 0.12 s instead of a tap. Still driller damage 0 -> 0, so the hit never lands.
+  Suspect: the hitter is teleported to the driller's height (z ~258, driller sits on the target) and falls; probe the hitter's mode/hitboxes next.
+- nondrillable_bounce: not touched (only the bounce check is listed as failing; read the full check list in the run first).
+- opposite_cancel: not touched (spin 0.72 s vs natural length, no cancel effect, 2 -> 4 rollbacks).
+- Gates: build Succeeded (on); headless suites and the plugin-off build NOT rerun this thread (C++ change is small, tests unit-callable: ReadCrouchStamp
+  default arg keeps old calls valid). Do both before any push. No push done.
+- Cost: one Sonnet thread, ~75 context-heavy tool calls ~ low-medium; 1 build, 3 editor runs (~25 min).
