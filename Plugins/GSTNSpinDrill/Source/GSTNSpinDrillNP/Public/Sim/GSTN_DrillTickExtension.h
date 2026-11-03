@@ -17,6 +17,8 @@ class UGSTN_GA_BaseCombat;
 namespace GSTNDrillStamps
 {
 	constexpr uint8 CrouchMarker = 0xD1;
+	/** The crouch marker of a tick where the jump is held or was pressed inside the boost window (13b); a window holds one profile, so the jump rides on it */
+	constexpr uint8 CrouchMarkerJump = 0xD2;
 }
 
 /** What asks the phase machine to change at AfterExecute (the abilities of D4-D10 will raise them; tests raise them by hand) */
@@ -245,7 +247,7 @@ public:
 	 * The crouch of a running bore as its track hook stamped it this tick: true held, false released; unset (no stamp: the bore timeline is not
 	 * the running one, or a test) leaves bOutHeld unchanged and returns false
 	 */
-	static bool ReadCrouchStamp(const FGSTN_TimelineOutput* Timeline, bool& bOutHeld);
+	static bool ReadCrouchStamp(const FGSTN_TimelineOutput* Timeline, bool& bOutHeld, bool* bOutJumpBoost = nullptr);
 
 	/**
 	 * The latched fragment still has to adopt its bore: it is latched from this frame on (the seat starts at LatchFrame) and the running timeline

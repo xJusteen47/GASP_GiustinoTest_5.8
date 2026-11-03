@@ -582,7 +582,7 @@ bool FGSTN_DrillTickExtension::StampExitImpulse(FGSTN_DrillFragment& Fragment, i
 	return true;
 }
 
-bool FGSTN_DrillTickExtension::ReadCrouchStamp(const FGSTN_TimelineOutput* Timeline, bool& bOutHeld)
+bool FGSTN_DrillTickExtension::ReadCrouchStamp(const FGSTN_TimelineOutput* Timeline, bool& bOutHeld, bool* bOutJumpBoost)
 {
 	if (!Timeline)
 	{
@@ -590,9 +590,13 @@ bool FGSTN_DrillTickExtension::ReadCrouchStamp(const FGSTN_TimelineOutput* Timel
 	}
 	for (const FGSTN_StampedWindow& Stamp : Timeline->StampedWindows)
 	{
-		if (Stamp.Profile == GSTNDrillStamps::CrouchMarker)
+		if (Stamp.Profile == GSTNDrillStamps::CrouchMarker || Stamp.Profile == GSTNDrillStamps::CrouchMarkerJump)
 		{
 			bOutHeld = Stamp.EndFrame == INDEX_NONE;
+			if (bOutJumpBoost)
+			{
+				*bOutJumpBoost = Stamp.Profile == GSTNDrillStamps::CrouchMarkerJump;
+			}
 			return true;
 		}
 	}
@@ -703,7 +707,7 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 			ReadLatchEnd(*Fragment, Context.Out.Core, Link, Inputs);
 			if (Fragment->IsLatched())
 			{
-				ReadCrouchStamp(Context.Timeline, Inputs.bCrouchHeld);
+				ReadCrouchStamp(Context.Timeline, Inputs.bCrouchHeld, &Inputs.bJumpBoost);
 				// Every hit of the bore's tip lands on the latched target (the tip sits in it); a ricochet is not a hit
 				for (const FGSTN_AttackerHit& Hit : Context.AttackerHits)
 				{
