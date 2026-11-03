@@ -604,3 +604,10 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   (bacino, testa, mani; in-between claude) e piegamento del busto FAF ridotto al 45% (pelvis+spina ai key 37/42 verso f31,
   `source.keep` con why). Da guardare nel video: se il FAF è ancora troppo piegato/veloce, abbassare il fattore.
 - Costo stimato: ~25 chiamate, ~$2.
+
+## Dair: B scartata, variante C aperta (2026-11-03, thread desktop Sonnet)
+- B scartata su feedback owner. Variante C (`overlord_dair_v4_varC`, dalla scheda con A applicata): secondary motion ×~2,5 ai
+  f19/23/27 (bacino -5/+3,5/-1,5 cm, testa +10/-6/+2,5°, spina, mani) e busto FAF solo "un pelo" (15% da f31 ai key 37/42).
+  Build+check PASS, grid r1, video a CAPSULE (`preview_multi.py`): il render in-game è fallito 2 volte, DefaultLevel sporco
+  nell'editor dell'owner (setup rifiuta di cambiare mappa). Se vuole il lit, salvi la mappa e rilancio `ingame_multi.py`.
+- Non applicata. Costo: ~12 chiamate, ~$1.
