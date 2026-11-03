@@ -750,4 +750,6 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   -13→-16 a 23-25; dal t1→t2 +3 cm avanti hanno dato +1,06 cm: basta circa un altro passo uguale. Il minimo resta a 23.
   (b) l'owner accetta il contatto hand_l|spine_03 a 22-25 come quello destro (exemption nella card). Poi render
   `--standalone --azs=90,0,45`, griglie f12-24 e f35-42 K e base, commit in `docs/notes/reviews/dair-varK/`.
-- Costo: ~65 chiamate, contesto ~110k, circa $10.
+- Tentativo 3 (OK coordinatore, opzione a): upperarm_l Z -16 a 23-25, pugni a 24 +3: verify 14/14, check FAIL
+  **hand_l|spine_03 -0,57 cm @23** (il punto peggiore si sposta da 24 a 23). FERMA davvero: resta l'opzione (b), owner.
+- Costo: ~70 chiamate, contesto ~115k, circa $11.

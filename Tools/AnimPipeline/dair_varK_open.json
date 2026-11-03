@@ -1,5 +1,5 @@
 {
- "_why": "forearm opening (Rotation Z) from the K probe: upperarm_l Z-10 -> hand_l y +4.6 / elbow +3 cm forward; lowerarm Z-10 -> hand y +2.4 (l) / +3.7 (r); lowerarm X and spine_05 had no effect. Attempt 1 (upperarm_l -8, lowerarm_l -6): hand_l|spine_03 -2.06 cm @24, so attempt 2 opens the left arm more.",
+ "_why": "forearm opening (Rotation Z) from the K probe: upperarm_l Z-10 -> hand_l y +4.6 / elbow +3 cm forward; lowerarm Z-10 -> hand y +2.4 (l) / +3.7 (r); lowerarm X and spine_05 had no effect. Attempt 1 (upperarm_l -8, lowerarm_l -6): hand_l|spine_03 -2.06 cm @24, so attempt 2 opens the left arm more. Attempt 3 (coordinator OK): upperarm_l -16 at 23-25, fists at 24 +3: hand_l|spine_03 was -1.0 cm @24.",
  "frames": {
   "20": [
    [
@@ -66,7 +66,7 @@
     "upperarm_l_fk_ctrl",
     "Rotation",
     2,
-    -13
+    -16
    ],
    [
     "lowerarm_l_fk_ctrl",
@@ -86,7 +86,7 @@
     "upperarm_l_fk_ctrl",
     "Rotation",
     2,
-    -13
+    -16
    ],
    [
     "lowerarm_l_fk_ctrl",
@@ -106,7 +106,7 @@
     "upperarm_l_fk_ctrl",
     "Rotation",
     2,
-    -9.1
+    -11.2
    ],
    [
     "lowerarm_l_fk_ctrl",
