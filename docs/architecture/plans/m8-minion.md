@@ -6,8 +6,11 @@ research [`../many-enemies-replication.md`](../many-enemies-replication.md) ("ME
 code on `feature/gas-npp-5.8` differs from the spec (it was written before M4-M7 were built), the shipped names win and the spec is
 corrected in `docs/notes/m8-doc-deltas.md`.
 
-Status: **draft for the owner** (2026-11-03). Two items are architecture and wait for an answer (section 5, questions 7 and 8); every
-other default in section 5 is data or a tunable number, so the plan is self-approved for them under the project rule.
+Status: **approved** (2026-11-03). The two architecture questions are decided (owner 16:19Z: "take the most flexible and decouplable
+options, you choose"; coordinator decision): **Q7** `FGSTN_PoseHistory` and the shared net primitives move into a new small pure plugin
+`GSTNCore` (`Net/`), which `GSTNMinion` and `GSTNPlatform` both depend on (no duplication); **Q8** the small generic `OnPostFixedTick`
+hook is added to the NP fork, inert if unbound. Every other default in section 5 is data or a tunable number and stays as written
+until the owner changes it.
 
 Sources (short ids used below):
 
@@ -75,7 +78,7 @@ M4 was built with the minion seams in mind, so several M8 §3/§9 items exist. R
 | X6 | `HitTargets` ring of 16 for crowd cleave | 9.2 item 5 | **Missing**: `MaxHitTargets = 8` (`GSTN_CombatHitState.h:83`) | G1 |
 | X7 | Post-fixed-tick hook `OnPostFixedTick(Frame)` in the NP world manager | 2 spike 2, 5 | **Missing** (no hook in `PATCHES.md`); `GSTNPlatform` poses at the start of each simulation frame and would move to the hook | G0, G1 |
 | X8 | `FGSTN_LagCompTime` (one server frame ↔ rewind time conversion) | 9.2 item 3 | **Partial**: `GSTNLagComp::ClampRewindTime` exists, no frame conversion type | G1 |
-| X9 | `FGSTN_PoseHistory` with swept bounds and payload column | 3, 4b | **Present in the wrong place**: `GSTNPlatformCore/Public/GSTN_PoseHistory.h` (T3); `GSTNMinion` must never depend on `GSTNPlatform` (question 7) | G2 |
+| X9 | `FGSTN_PoseHistory` with swept bounds and payload column | 3, 4b | **Present in the wrong place**: `GSTNPlatformCore/Public/GSTN_PoseHistory.h` (T3); `GSTNMinion` must never depend on `GSTNPlatform` (question 7: decided, `GSTNCore`) | G2 |
 | X10 | `UGSTN_KnockbackModel_WeightDriven`, `HurtboxReaction` step, reaction tiers | 3, 4d.2 | **Present** (M4) | G5 |
 | X11 | Combat events with entity tags (`Combat.Entity.Fighter`) | 4c | **Missing**: the tag is not declared | G1 |
 | X12 | `UGSTN_AIInputSource` on fighters | 2 spike 1 | **Present**: spike 1 (AI fighters baseline) needs no new code | G0 |
@@ -90,14 +93,14 @@ lives in `Plugins/GSTNMinion`.
 
 | Module | Type | Contents | Depends on |
 |---|---|---|---|
-| `GSTNMinionCore` | Runtime | Tags header, `FGSTN_MinionStore` + handles, `FGSTN_MinionIntent`, LOD logic and tier scheduler, attack-token allocator, net item codec, interpolator, `UGSTN_MinionDefinition` + validation, `UGSTN_MinionLODSettings` | `GSTNCombatCore`, shared net primitives (question 7), `GameplayTags` |
+| `GSTNMinionCore` | Runtime | Tags header, `FGSTN_MinionStore` + handles, `FGSTN_MinionIntent`, LOD logic and tier scheduler, attack-token allocator, net item codec, interpolator, `UGSTN_MinionDefinition` + validation, `UGSTN_MinionLODSettings` | `GSTNCombatCore`, `GSTNCore` (shared net primitives, Q7), `GameplayTags` |
 | `GSTNMinionRuntime` | Runtime | `UGSTN_MinionCombatSubsystem` (batch), `AGSTN_MinionActor`, `UGSTN_MinionCombatComponent`, `AGSTN_MinionPack`, presentation subsystem and puppets, spawner, waves, brain + StateTree schema, lightweight movement, bench and debug | `GSTNMinionCore`, `GSTNCombatGAS`, `GSTNCombatNP`, `NetCore`, `NavigationSystem`, `StateTreeModule`, `GameplayStateTreeModule` |
 | `GSTNMinionMover` | Runtime, optional | Movement backend A (only if spike 3 picks it for a type) | `GSTNMinionRuntime`, `Mover` |
 | `GSTNMinionEditor` | Editor | Definition and registry validators, wave details | `GSTNMinionRuntime`, `UnrealEd` |
 | `GSTNMinionTests` | Developer | Automation tests needing a world, harness helpers | all of the above |
 
 Native tags are defined in a Runtime module (EXT lesson of M6/M7: an `UncookedOnly` module ensures). `GSTNMinion.uplugin` requires
-`GSTNCombat`, `GSTNCombatNP` (and the shared net plugin of question 7); nothing requires `GSTNMinion`. Tests: `GSTNMinion.Core.*` (no
+`GSTNCombat`, `GSTNCombatNP` and `GSTNCore` (Q7); nothing requires `GSTNMinion`. Tests: `GSTNMinion.Core.*` (no
 world), `GSTNMinion.Runtime.*` (editor world, stub provider); harness `Tools/GASNPPTest/minion_scenarios.py`, suite **SUITE_MINION**.
 
 ## 3. Checkpoints (in order)
@@ -137,7 +140,7 @@ G12 and for every build/test subtask; Haiku for log reading and docs.
   `Command.Minion.*` in `Config/Tags/GSTNMinion.ini`), grep gate extended.
 - Core: store (struct of arrays, free list, generation, capacity `gstn.Minion.Max` = 128), handles, intent, LOD tiers with hysteresis
   and dwell, phase scheduler, attack tokens, net item codec (M8 §8.2 layout) on the shared quantizer, definition + `IsDataValid`.
-- Shared net primitives: moved or created per question 7 (default: a small pure plugin, `FGSTN_PoseHistory` moved out of
+- Shared net primitives: new plugin `GSTNCore` (Q7 decided): `FGSTN_PoseHistory` and the quantizer moved out of
   `GSTNPlatformCore` with a redirect; `GSTNPlatform` tests must stay green).
 - Tests (M8 §12 Core list): store alloc/free/generation, stale handles, LOD thresholds/hysteresis/dwell, schedule spread ±1, token cap,
   codec round trip (position ≤ 0.5 cm, yaw ≤ 0.8°), frame-stamp wrap at 8 and 10 bits, definition validation cases.
@@ -280,17 +283,17 @@ G12 and for every build/test subtask; Haiku for log reading and docs.
 6. **Promozione** (M8.11): un minion diventa elite/boss solo quando lo chiede uno script/Blueprint? Mai il contrario? (Sì, solo da script; niente ritorno a minion.)
 7. **Architettura, primitive di rete condivise**: `FGSTN_PoseHistory` oggi sta in `GSTNPlatformCore`, ma `GSTNMinion` non può dipendere da
    `GSTNPlatform`. La sposto con il quantizzatore in un piccolo plugin puro comune (`GSTNCore`, cartella `Net/`) da cui dipendono entrambi,
-   o la duplico (~200 righe)? (Plugin comune.)
+   o la duplico (~200 righe)? **Deciso 2026-11-03: plugin comune `GSTNCore`.**
 8. **Architettura, patch del fork**: va bene un piccolo hook `OnPostFixedTick` nel fork di Network Prediction, spento se nessuno lo usa?
-   (Sì; senza, i minion leggono il confine di frame con un frame di ritardo.)
+   **Deciso 2026-11-03: sì.**
 9. **Iris** (M8.27): restiamo sulla replicazione classica (pacchetti FastArray, push model, dormancy) e saltiamo lo spike Iris? (Sì, risparmia uno spike costoso.)
 10. **Host al limite** (M8.21, M8.26): se il frame dell'host non basta, va bene ridurre i minion in combattimento (48 → 32), poi la frequenza,
     poi le animazioni dei lontani (condivise o senza scheletro)? (Sì, in quest'ordine, con il massimo misurato scritto nel report.)
 
 ## 6. Edits needing the owner's OK
 
-- The NP fork patch of G1 (question 8), announced before it lands, listed in `PATCHES.md`.
-- The move of `FGSTN_PoseHistory` out of `GSTNPlatformCore` (question 7).
+- The NP fork patch of G1 (question 8, approved 2026-11-03), still announced before it lands, listed in `PATCHES.md`.
+- The move of `FGSTN_PoseHistory` out of `GSTNPlatformCore` into `GSTNCore` (question 7, approved 2026-11-03).
 - Enabling `GSTNMinion` in the `.uproject` (G2) and `net.IsPushModelEnabled` in `Config/DefaultEngine.ini` (G6; it is safe for
   properties not marked, M8 §8.1, but it is a project ini).
 - No shared Blueprint and no owner level is edited; test content is new and made by script.
