@@ -420,3 +420,28 @@ questo brief e la scheda. Costo atteso: $1-3 per giro. Fuori scopo per ora: puls
   `fidelity` con il rig vero sulla dair. Brief: `handovers/cp2-cp4-desktop-brief.md`.
 - Costo stimato: ~45 chiamate, contesto ~85k, circa $4-6; niente subagenti.
 
+
+## Dair v4: chiavi nuove dell'owner da Cascadeur (2026-11-03, thread desktop Opus)
+- Scena dell'owner (salvata 02:48) esportata da me (nessuna richiesta Esporta). Chiavi trovate: 0/3/8/14/15/17/31/37/42
+  (l'owner ha scritto "4 = carica": nella scena è 3, preso 3; domanda aperta). Copia intatta della sua scena:
+  `casc/overlord_dair_v4_20261103_030200.casc` (+ `_owner_rekey.fbx`); backup prima di tutto `_preowner2_bak.casc`.
+- Scheda: chiavi dell'owner prese intere e bloccate (un solo blocco `approved`, tutte le parti); tolte 2/5/12/13 e i vecchi
+  lock; hitbox 15-17 invariata; pugni chiusi al frame 0; wrist_out a 8 = 8 (con 35 la mano dx entrava nella clavicola).
+- casc-import più fedele: `spine_chain`/`neck_chain` per osso in author.py (piega del tronco/collo non uniforme), target
+  con le lunghezze della scheda (stretch riportato a parte, `stretch_cm`), chiave nuova = ossa di Cascadeur intere (prima
+  prendeva un delta dall'intermedio di Cascadeur: errore di 10 cm sulla mano dx al frame 8). Residuo fit 0,08-0,3 cm.
+- Fedeltà Cascadeur owner vs scena nuova (rilettura, relativa al bacino): 0,14-0,53 cm su 0/14/15/17/31/37/42; 3 = 1,2 cm,
+  8 = 2,3 cm (upperarm: Cascadeur allunga il tronco, la scheda ha lunghezze fisse); dita dei piedi (ball) non in scheda,
+  13° al frame 0. File `casc/overlord_dair_v4_fidelity.json`.
+- Intermedi miei (`origin: claude`): 6 (ginocchia +3 cm nella carica) e 11 (mani caricano contro il colpo, 15% di 14->15);
+  tangenti automatiche su 3/6/8/11 (con flat o hold_recoil il braccio dx restava fermo 8-12). Check: clearance, co_motion,
+  hitstop_snap, bone_lengths, fists, contact_faf PASS. Rosso: legibility (KeyError foot_l, blocco strike di PR #24 sui
+  calci) e source_fidelity (vuole le pose dell'owner in `cards/overlord/refs/`: casc-import dovrebbe scriverle lì; non
+  fatto, la ref pre-rekey è stata sovrascritta). La build sposta le ginocchia fino a 7,6 cm alle chiavi (rig, già noto).
+- Scena per l'owner: `casc/overlord_dair_v4.casc` riesportata (11 chiavi) con spacing della build applicato (pose chiave
+  ferme 0,0 cm); scarto intermedi vs build: 0-3 11,4, 31-37 5,8, 37-42 3,1 cm, resto < 1,6 (forma del percorso, noto).
+- NON fatto: cattura in gioco (vista laterale, hitstop vs whiff): il livello DefaultLevel aperto nell'editor ha modifiche
+  non salvate, capture_ue.setup rifiuta di cambiare livello. Fatte solo le traiettorie (`sheets/OverlordDAirV4_Build_trails.png`).
+- ue_write_take: la rilettura finale (`read_anim_sequence`) torna vuota ed esce 1, ma il take è scritto (build lo legge).
+- Test: 33/34; `test_capture` (PR #24) fallisce su Windows per il separatore di percorso, non toccato.
+- Costo stimato: ~110 chiamate, contesto ~150k, circa $10-12; niente subagenti.
