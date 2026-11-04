@@ -4,6 +4,7 @@ Leggi SOLO questo file, `Tools/AnimPipeline/cards/README.md` (regole owner), `do
 ## 1. Obiettivo (parole dell'owner, 04/11)
 "Nei frame f30 e f31 il corpo si irrigidisce per un po' prima di iniziare il movimento di ritorno. Dovrebbe fluire direttamente in f32. Probabilmente è il molleggio delle gambe: essendo un attacco in aria, le gambe non devono molleggiare così tanto all'impatto. Le braccia e la testa sì."
 **M = L con meno rimbalzo di gambe/bacino dopo lo stomp e transizione continua f28-32 verso il ritorno.** Testa e pugni mantengono il ritardo di K/L (bacino fermo f19-23, testa/pugni scendono fino a f23).
+Chiarimento owner (04/11): "Sembra più che stiano incontrando il terreno così, invece che un semplice molleggio dovuto all'estensione rapida". Quindi le gambe in L sembrano ATTERRARE (accovacciata tenuta in basso, bacino che affonda e resta basso). M deve leggersi come calcio in aria: un rinculo breve e piccolo delle gambe dovuto all'estensione rapida dello stomp, NON un atterraggio/piega tenuta; bacino e piedi non si fermano in basso. Testa e pugni mantengono il ritardo visibile.
 Frame = frame di ANIMAZIONE (0-based). Ipotesi (da verificare nel dump prima di toccare): la risalita del bacino/piedi/ginocchia (body_ctrl z, `leg_*` ik, piega ginocchia, picco 22) arriva a un plateau a f28-31 e poi riparte → "rigido". Modifica unica: ridurre l'ampiezza della piega/rimbalzo di piedi+bacino e raccordare f28→f32 senza plateau.
 
 ## 2. Vincoli duri
