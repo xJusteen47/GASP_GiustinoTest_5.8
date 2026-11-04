@@ -2,6 +2,9 @@
 
 #include "WallMovement/Animation/GSTN_WallAnimUtils.h"
 
+#include "CollisionQueryParams.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GSTN_LimbContactUtils.h"
 #include "MoverComponent.h"
 #include "WallMovement/GSTN_WallMovementTypes.h"
 #include "WallMovement/Modes/GSTN_WallClimbV2MovementMode.h"
@@ -150,4 +153,68 @@ FGSTN_WallAnimInputs UGSTN_WallAnimUtils::GatherInputs(const UMoverComponent* Mo
 	}
 
 	return Inputs;
+}
+
+void UGSTN_WallAnimUtils::ComputeLimbWeights(const FGSTN_WallAnimState& WallAnim, const FGSTN_WallLimbContactSettings& Settings, float& OutHandWeight, float& OutFootWeight)
+{
+	OutHandWeight = 0.f;
+	OutFootWeight = 0.f;
+
+	const bool bOnWallPhase = WallAnim.Phase == EGSTN_WallAnimPhase::Enter || WallAnim.Phase == EGSTN_WallAnimPhase::Active;
+	const bool bExitPhase = WallAnim.Phase == EGSTN_WallAnimPhase::Exit && Settings.bKeepDuringExit;
+	if (!Settings.bEnabled || !(bOnWallPhase || bExitPhase))
+	{
+		return;
+	}
+
+	OutHandWeight = FMath::Clamp(WallAnim.bIsClimbing ? Settings.ClimbHandWeight : Settings.SlideHandWeight, 0.f, 1.f);
+	OutFootWeight = FMath::Clamp(WallAnim.bIsClimbing ? Settings.ClimbFootWeight : Settings.SlideFootWeight, 0.f, 1.f);
+}
+
+FGSTN_WallLimbContactState UGSTN_WallAnimUtils::GatherLimbContact(const USkeletalMeshComponent* Mesh, const UMoverComponent* MoverComponent, const FGSTN_WallAnimState& WallAnim,
+	const FGSTN_WallLimbContactSettings& Settings)
+{
+	FGSTN_WallLimbContactState State;
+	ComputeLimbWeights(WallAnim, Settings, State.HandWeight, State.FootWeight);
+	if (!Mesh || !MoverComponent || (State.HandWeight <= 0.f && State.FootWeight <= 0.f))
+	{
+		return State;
+	}
+
+	// The movement's wall plane: the fallback of every probe, and the direction they sweep in. No wall (Exit kept, wall lost) = nothing to touch
+	const FGSTN_WallMovementSyncState* WallState = MoverComponent->GetSyncState().SyncStateCollection.FindDataByType<FGSTN_WallMovementSyncState>();
+	if (!WallState || !WallState->bHasWall || WallState->WallNormal.IsNearlyZero())
+	{
+		return State;
+	}
+
+	FGSTN_LimbSurface WallPlane;
+	WallPlane.bValid = true;
+	WallPlane.Point = WallState->WallContactPoint;
+	WallPlane.Normal = WallState->WallNormal.GetSafeNormal();
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GSTN_WallLimbProbe), false, Mesh->GetOwner());
+	const UWorld* World = Mesh->GetWorld();
+	const FTransform& ComponentTransform = Mesh->GetComponentTransform();
+
+	auto Probe = [&](FName Bone, float Weight) -> FGSTN_LimbSurface
+	{
+		if (Weight <= 0.f)
+		{
+			return FGSTN_LimbSurface();
+		}
+
+		// A bone the skeleton does not have probes from nowhere: the limb uses the wall plane
+		const int32 BoneIndex = Bone.IsNone() ? INDEX_NONE : Mesh->GetBoneIndex(Bone);
+		const FGSTN_LimbSurface WorldSurface = BoneIndex == INDEX_NONE
+			? WallPlane
+			: UGSTN_LimbContactUtils::ProbeSurface(World, Mesh->GetBoneLocation(Bone, EBoneSpaces::WorldSpace), WallPlane.Normal, WallPlane, Settings.Probe, QueryParams);
+		return UGSTN_LimbContactUtils::InverseTransformSurface(WorldSurface, ComponentTransform);
+	};
+
+	State.HandLeft = Probe(Settings.HandLeftProbeBone, State.HandWeight);
+	State.HandRight = Probe(Settings.HandRightProbeBone, State.HandWeight);
+	State.FootLeft = Probe(Settings.FootLeftProbeBone, State.FootWeight);
+	State.FootRight = Probe(Settings.FootRightProbeBone, State.FootWeight);
+	return State;
 }

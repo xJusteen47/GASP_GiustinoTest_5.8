@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Animation",
-	"Description": "Feature animation decoupled from the main anim graph: linked anim layers that take over the pose when their feature asks (override layer seam), and anim sets (layer class + presentation montage overrides) chosen per feature tag (Anim.Set.*) from prioritized sources, with skin variants picked by cosmetic tags (Anim.Trait.*). Presentation only: simulation, timelines and hitboxes always read the reference montage. No GAS, Network Prediction or Mover.",
+	"Description": "Feature animation decoupled from the main anim graph: linked anim layers that take over the pose when their feature asks (override layer seam), and anim sets (layer class + presentation montage overrides) chosen per feature tag (Anim.Set.*) from prioritized sources, with skin variants picked by cosmetic tags (Anim.Trait.*). Presentation only: simulation, timelines and hitboxes always read the reference montage. Also limb contact IK: a Control Rig unit that pulls hands and feet onto a nearby surface (wall slide, climb). No GAS, Network Prediction or Mover.",
 	"Category": "Animation",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -22,9 +22,20 @@
 			"LoadingPhase": "Default"
 		},
 		{
+			"Name": "GSTNAnimationRig",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
 			"Name": "GSTNAnimationEditor",
 			"Type": "Editor",
 			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ControlRig",
+			"Enabled": true
 		}
 	]
 }

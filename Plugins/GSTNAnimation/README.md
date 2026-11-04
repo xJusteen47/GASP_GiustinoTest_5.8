@@ -8,11 +8,15 @@ hitboxes, hurtboxes, baked sockets, movement) stays identical: variants are pres
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Design: [anim-layers.md](../../docs/architecture/anim-layers.md).
 First user: the wall layer of the project ([wall-anim.md](../../docs/architecture/wall-anim.md)).
 
+It also has **limb contact IK**: a Control Rig node that pulls a hand or a foot onto a nearby surface when the clip already brings it close
+(wall slide, climb). Design: [limb-contact-ik.md](../../docs/architecture/limb-contact-ik.md).
+
 ## Modules
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNAnimationCore` | exists (Runtime, Default) | The override layer seam, the anim set data, the pure resolution and the component that applies it. No GAS, Network Prediction or Mover. Covered by `GSTNAnimation.Core.*`. |
+| `GSTNAnimationCore` | exists (Runtime, Default) | The override layer seam, the anim set data, the pure resolution and the component that applies it; the limb contact data, rules and probe. No GAS, Network Prediction or Mover. Covered by `GSTNAnimation.Core.*`. |
+| `GSTNAnimationRig` | exists (Runtime, Default) | Control Rig units: `GSTN Limb Contact IK`, `GSTN Preview Limb Surface`. Depends on ControlRig, RigVM, AnimationCore and `GSTNAnimationCore`. |
 | `GSTNAnimationEditor` | exists (Editor, Default) | `UGSTN_AnimGraphAuthoringLibrary`: anim graph authoring for Python scripts (layer interfaces, state machines, rules on an enum through Property Access, sequence players, the override-layer blend in a main graph, child asset overrides, a text dump of the graphs and a compile report). Knows no feature; nothing at runtime depends on it. Used by `Tools/GAS/setup_wall_anim_layer.py`. |
 
 ## Classes
@@ -25,6 +29,10 @@ First user: the wall layer of the project ([wall-anim.md](../../docs/architectur
 | `FGSTN_AnimSetRule`, `UGSTN_AnimSetCollection` | data (`GSTN_AnimSetCollection`) | "Use this set when the cosmetic tags match `When`", with a priority; one collection per source (character, kit, weapon, skin). |
 | `UGSTN_AnimSetUtils` | function library | `ResolveWinners`, `ResolveLayerClasses`, `ValidateMontageOverride`. Pure and deterministic. |
 | `UGSTN_AnimSetComponent` | actor component | Holds the sources and cosmetic tags of one character, loads asynchronously, links the winning layers on the mesh, answers `ResolveVisualMontage`. |
+| `FGSTN_LimbSurface`, `FGSTN_LimbContactSettings`, `FGSTN_LimbProbeSettings` | data | A surface (point, normal) a limb may touch; how one limb attaches; how the game thread probes. |
+| `UGSTN_LimbContactUtils` | function library | `ComputeContact` (gap, target, weight), `StepContactAlpha`, `AlignAxisToSurface`, `InverseTransformSurface`, `ProbeSurface` (game thread). |
+| `FGSTN_RigUnit_LimbContactIK` | Control Rig node "GSTN Limb Contact IK" | Two-bone IK of one limb onto its surface, smoothed weight, palm/sole alignment. One node per limb. |
+| `FGSTN_RigUnit_PreviewLimbSurface` | Control Rig node "GSTN Preview Limb Surface" | In editor preview worlds only, a wall placed by a control stands in for the probed surface, to check the IK without clips. |
 
 ## How it resolves
 
@@ -46,8 +54,9 @@ Default source priorities (`GSTNAnimSet`): character 0, kit 100, weapon 200, ski
 
 ## Dependencies
 
-- Plugins: none.
+- Plugins: ControlRig (engine, enabled by default).
 - `GSTNAnimationCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags; private Projects (finds the plugin's `Config/Tags`).
+- `GSTNAnimationRig` (`Build.cs`): public Core, CoreUObject, Engine, ControlRig, RigVM, GSTNAnimationCore; private AnimationCore.
 - `GSTNAnimationEditor` (`Build.cs`): public Core, CoreUObject, Engine; private UnrealEd, BlueprintGraph, AnimGraph, AnimGraphRuntime, KismetCompiler.
   The Property Access node of a rule (plugin PropertyAccessNode, class private to its module) is created by class name with its `Path` set by reflection.
 - Dependents: the project module (wall layer). Planned: the loadout apply path (kit / weapon / skin collections), spin and drill.
@@ -68,6 +77,9 @@ Default source priorities (`GSTNAnimSet`): character 0, kit 100, weapon 200, ski
 - **Variant for a skin trait**: make a child anim Blueprint of the base layer that swaps clips, a set with the same `SetTag`, and a rule in
   the skin's collection with `When` = the trait (e.g. `Anim.Trait.Build.Heavy`). No code.
 - **New trait**: a new `Anim.Trait.*` leaf in the game's `Config/Tags` ini, added to the skin's tags.
+- **Limbs touching another surface** (ledge, ladder): in that feature's layer instance, fill one `FGSTN_LimbSurface` per limb in component space
+  (`UGSTN_LimbContactUtils::ProbeSurface` + `InverseTransformSurface` on the game thread), and end its layer graph with a Control Rig of
+  `GSTN Limb Contact IK` nodes reading them. The wall layer is the example.
 
 ## Using it in another project
 

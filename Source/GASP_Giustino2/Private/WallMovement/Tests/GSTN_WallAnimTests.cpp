@@ -132,4 +132,42 @@ bool FGSTN_WallAnimPhaseTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallAnimLimbWeightsTest, "GSTN.Wall.Anim.LimbContactWeights", GSTNWallAnimTest::TestFlags)
+bool FGSTN_WallAnimLimbWeightsTest::RunTest(const FString& Parameters)
+{
+	FGSTN_WallLimbContactSettings S;
+	S.SlideHandWeight = 0.5f;
+	S.SlideFootWeight = 1.f;
+	S.ClimbHandWeight = 1.f;
+	S.ClimbFootWeight = 0.25f;
+
+	FGSTN_WallAnimState Anim;
+	float Hand = -1.f, Foot = -1.f;
+
+	UGSTN_WallAnimUtils::ComputeLimbWeights(Anim, S, Hand, Foot);
+	TestTrue(TEXT("Off the wall: no contact"), FMath::IsNearlyZero(Hand) && FMath::IsNearlyZero(Foot));
+
+	Anim.Phase = EGSTN_WallAnimPhase::Enter;
+	UGSTN_WallAnimUtils::ComputeLimbWeights(Anim, S, Hand, Foot);
+	TestTrue(TEXT("Enter uses the slide weights"), FMath::IsNearlyEqual(Hand, 0.5f) && FMath::IsNearlyEqual(Foot, 1.f));
+
+	Anim.Phase = EGSTN_WallAnimPhase::Active;
+	Anim.bIsClimbing = true;
+	UGSTN_WallAnimUtils::ComputeLimbWeights(Anim, S, Hand, Foot);
+	TestTrue(TEXT("Climbing uses the climb weights"), FMath::IsNearlyEqual(Hand, 1.f) && FMath::IsNearlyEqual(Foot, 0.25f));
+
+	Anim.Phase = EGSTN_WallAnimPhase::Exit;
+	UGSTN_WallAnimUtils::ComputeLimbWeights(Anim, S, Hand, Foot);
+	TestTrue(TEXT("Exit lets go by default"), FMath::IsNearlyZero(Hand) && FMath::IsNearlyZero(Foot));
+
+	S.bKeepDuringExit = true;
+	UGSTN_WallAnimUtils::ComputeLimbWeights(Anim, S, Hand, Foot);
+	TestTrue(TEXT("bKeepDuringExit keeps them"), FMath::IsNearlyEqual(Hand, 1.f) && FMath::IsNearlyEqual(Foot, 0.25f));
+
+	S.bEnabled = false;
+	UGSTN_WallAnimUtils::ComputeLimbWeights(Anim, S, Hand, Foot);
+	TestTrue(TEXT("Disabled: no contact"), FMath::IsNearlyZero(Hand) && FMath::IsNearlyZero(Foot));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

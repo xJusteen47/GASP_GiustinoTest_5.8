@@ -8,6 +8,7 @@
 #include "GSTN_WallAnimUtils.generated.h"
 
 class UMoverComponent;
+class USkeletalMeshComponent;
 
 /**
  * Stateless maths of the wall anim state (wall-anim.md): splits a velocity into its parts on the wall, classifies the loop state with
@@ -49,4 +50,19 @@ public:
 	 * sync state's filtered normal and gravity-up. Game thread only. A null component gives "not on a wall"
 	 */
 	static FGSTN_WallAnimInputs GatherInputs(const UMoverComponent* MoverComponent, const FGSTN_WallAnimSettings& Settings);
+
+	/**
+	 * Hand and foot weights of the limb contact rig for this frame (limb-contact-ik.md): the mode's weights (climb or slide) while the phase
+	 * is Enter or Active (and Exit if bKeepDuringExit), else 0. Pure
+	 */
+	UFUNCTION(BlueprintPure, Category = "Wall|Animation|Limb Contact")
+	static void ComputeLimbWeights(const FGSTN_WallAnimState& WallAnim, const FGSTN_WallLimbContactSettings& Settings, float& OutHandWeight, float& OutFootWeight);
+
+	/**
+	 * One frame of the limb contact state. Game thread only. When a weight is above 0, probes the wall from each limb's root bone (last
+	 * evaluated pose of Mesh) along the wall sync state's normal, falling back to the movement's wall plane (contact point and normal) when
+	 * the probe misses or hits another surface, and converts the surfaces to Mesh's component space. Off the wall every surface is invalid
+	 */
+	static FGSTN_WallLimbContactState GatherLimbContact(const USkeletalMeshComponent* Mesh, const UMoverComponent* MoverComponent, const FGSTN_WallAnimState& WallAnim,
+		const FGSTN_WallLimbContactSettings& Settings);
 };

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Templates/SubclassOf.h"
+#include "GSTN_LimbContactTypes.h"
 #include "GSTN_WallAnimTypes.generated.h"
 
 class UBaseMovementMode;
@@ -181,4 +182,85 @@ struct GASP_GIUSTINO2_API FGSTN_WallAnimInputs
 	/** Gravity-up of the Mover component (never assume world up: gravity can point anywhere) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation")
 	FVector GravityUp = FVector::UpVector;
+};
+
+/**
+ * Wall limb contact (limb-contact-ik.md): which bones the game thread probes from and how much hands and feet are pulled onto the wall
+ * in each wall mode. How a single limb attaches (distances, offsets, blend speeds) is set on the Control Rig nodes, per limb
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallLimbContactSettings
+{
+	GENERATED_BODY()
+
+	/** Off = no probes and every weight 0: the clips play untouched */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact")
+	bool bEnabled = true;
+
+	/** The sphere sweep made per limb, from its chain root towards the wall */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact")
+	FGSTN_LimbProbeSettings Probe;
+
+	/** Probe origins: the root bone of each chain (the IK never moves it, so last frame's pose is a stable origin). UE5 mannequin defaults */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact")
+	FName HandLeftProbeBone = TEXT("upperarm_l");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact")
+	FName HandRightProbeBone = TEXT("upperarm_r");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact")
+	FName FootLeftProbeBone = TEXT("thigh_l");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact")
+	FName FootRightProbeBone = TEXT("thigh_r");
+
+	/** Weight of the hands while sliding, [0, 1] */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact", meta = (ClampMin = "0", ClampMax = "1"))
+	float SlideHandWeight = 1.f;
+
+	/** Weight of the feet while sliding, [0, 1] */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact", meta = (ClampMin = "0", ClampMax = "1"))
+	float SlideFootWeight = 1.f;
+
+	/** Weight of the hands while climbing, [0, 1] */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact", meta = (ClampMin = "0", ClampMax = "1"))
+	float ClimbHandWeight = 1.f;
+
+	/** Weight of the feet while climbing, [0, 1] */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact", meta = (ClampMin = "0", ClampMax = "1"))
+	float ClimbFootWeight = 1.f;
+
+	/** Also keep the weights during the Exit phase (the exit clip pushes off the wall). Off by default: limbs let go as soon as the mode leaves the wall */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Animation|Limb Contact")
+	bool bKeepDuringExit = false;
+};
+
+/**
+ * What the wall limb contact rig reads: one surface per limb and the weights, all in component space (the rig's global space).
+ * Plain copy made on the game thread before the graph runs, like FGSTN_WallAnimState
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_WallLimbContactState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wall|Animation|Limb Contact")
+	FGSTN_LimbSurface HandLeft;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wall|Animation|Limb Contact")
+	FGSTN_LimbSurface HandRight;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wall|Animation|Limb Contact")
+	FGSTN_LimbSurface FootLeft;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wall|Animation|Limb Contact")
+	FGSTN_LimbSurface FootRight;
+
+	/** Weight for both hands this frame: 0 off the wall, else the mode's hand weight */
+	UPROPERTY(BlueprintReadOnly, Category = "Wall|Animation|Limb Contact")
+	float HandWeight = 0.f;
+
+	/** Weight for both feet this frame */
+	UPROPERTY(BlueprintReadOnly, Category = "Wall|Animation|Limb Contact")
+	float FootWeight = 0.f;
 };
