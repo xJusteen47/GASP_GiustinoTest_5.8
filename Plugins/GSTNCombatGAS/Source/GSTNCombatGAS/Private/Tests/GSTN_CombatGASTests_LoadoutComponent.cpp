@@ -22,6 +22,8 @@
 #include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Loadout/GSTN_LoadoutSaveGame.h"
 #include "Loadout/GSTN_LoadoutSubsystem.h"
+#include "Pickups/GSTN_KitPickup.h"
+#include "Pickups/GSTN_KitSwapSubsystem.h"
 #include "Tests/GSTN_GASTestTypes.h"
 #include "Tests/GSTN_LoadoutTestTypes.h"
 #include "UObject/StrongObjectPtr.h"
@@ -469,6 +471,77 @@ bool FGSTN_LoadoutExtensionHooksTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("cleared once"), Extensions.ClearedCount, 1);
 	TestEqual(TEXT("granted again"), Extensions.GrantedCount, 2);
 	TestTrue(TEXT("with the new kit"), Extensions.GrantedKit == Fixture.KitA.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_KitPickupSwapTest, "GSTNCombat.GAS.Loadout.KitPickupSwap", LoadoutComponentTestFlags)
+bool FGSTN_KitPickupSwapTest::RunTest(const FString& Parameters)
+{
+	// TH-1b: a kit on the ground swaps with the player's; the stats follow the kit and the old kit stays on the ground
+	FLoadoutFixture Fixture;
+	UGSTN_TestLoadoutComponent& Component = *Fixture.Component;
+	UAbilitySystemComponent& ASC = *Fixture.Rig.ASC;
+	UWorld& World = *Fixture.Rig.World;
+	AActor& Player = *ASC.GetOwner();
+	const FGameplayAttribute WalkSpeed = UGSTN_CombatAttributeSet::GetWalkSpeedAttribute();
+	UGSTN_KitSwapSubsystem* Swap = World.GetSubsystem<UGSTN_KitSwapSubsystem>();
+	if (!TestNotNull(TEXT("the game world has the kit swap subsystem"), Swap))
+	{
+		return false;
+	}
+
+	TArray<FString> Errors;
+	TestTrue(TEXT("the player starts with kit A"), Component.AcceptLoadout(Fixture.RequestKit(TEXT("KitA")), Errors));
+	TestEqual(TEXT("kit A's speed (700 + weapon 100)"), ASC.GetNumericAttribute(WalkSpeed), 800.f);
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	const FVector At = Player.GetActorLocation();
+	AGSTN_KitPickup* Near = World.SpawnActor<AGSTN_KitPickup>(AGSTN_KitPickup::StaticClass(), FTransform(At + FVector(100.f, 0.f, 0.f)), Params);
+	AGSTN_KitPickup* Far = World.SpawnActor<AGSTN_KitPickup>(AGSTN_KitPickup::StaticClass(), FTransform(At + FVector(1000.f, 0.f, 0.f)), Params);
+	if (!TestTrue(TEXT("two pickups spawned"), Near && Far))
+	{
+		return false;
+	}
+	TestTrue(TEXT("a pickup starts empty"), Near->IsEmpty());
+	TestNull(TEXT("an empty pickup in reach is not offered"), Swap->FindPickupFor(&Player));
+	TestFalse(TEXT("and a swap with it is refused"), UGSTN_KitSwapSubsystem::SwapWithPickup(Component, *Near, Errors));
+
+	Near->SetLoadout(Fixture.RequestKit(TEXT("KitB")));
+	Far->SetLoadout(Fixture.RequestKit(TEXT("KitB")));
+	TestTrue(TEXT("the pickup in reach is found, not the far one"), Swap->FindPickupFor(&Player) == Near);
+	Near->InteractRadius = 50.f;
+	TestNull(TEXT("out of its radius it is not"), Swap->FindPickupFor(&Player));
+	Near->InteractRadius = 150.f;
+
+	TestTrue(TEXT("the swap is accepted"), UGSTN_KitSwapSubsystem::SwapWithPickup(Component, *Near, Errors));
+	TestTrue(TEXT("the player now plays kit B"), Component.GetApplied() == Fixture.RequestKit(TEXT("KitB")));
+	TestEqual(TEXT("with kit B's stats"), ASC.GetNumericAttribute(WalkSpeed), 500.f);
+	TestFalse(TEXT("kit A's moves went with it"), Fixture.HasAbility(UGSTN_TestGrantAbilityA::StaticClass()));
+	TestTrue(TEXT("kit A lies on the ground in its place"), Near->GetLoadout() == Fixture.RequestKit(TEXT("KitA")));
+	TestEqual(TEXT("one loadout revision per swap"), Component.GetRevision(), 2);
+
+	TestTrue(TEXT("swapping back is accepted"), UGSTN_KitSwapSubsystem::SwapWithPickup(Component, *Near, Errors));
+	TestEqual(TEXT("kit A's stats are back"), ASC.GetNumericAttribute(WalkSpeed), 800.f);
+	TestTrue(TEXT("and kit B lies on the ground"), Near->GetLoadout() == Fixture.RequestKit(TEXT("KitB")));
+
+	// A kit the rules refuse changes nothing on either side
+	Near->SetLoadout(Fixture.RequestKit(TEXT("Missing")));
+	TestFalse(TEXT("an unknown kit is refused"), UGSTN_KitSwapSubsystem::SwapWithPickup(Component, *Near, Errors));
+	TestTrue(TEXT("with a finding"), Errors.Num() > 0);
+	TestTrue(TEXT("the player keeps kit A"), Component.GetApplied() == Fixture.RequestKit(TEXT("KitA")));
+	TestTrue(TEXT("and the pickup keeps its kit"), Near->GetLoadout() == Fixture.RequestKit(TEXT("Missing")));
+
+	// The death drop hook (M12): a copy of the player's kit appears on the ground
+	AGSTN_KitPickup* Dropped = Swap->DropKit(&Component, FTransform(At + FVector(0.f, 300.f, 0.f)), nullptr);
+	TestTrue(TEXT("the drop hook spawns a pickup with the player's kit"), Dropped && Dropped->GetLoadout() == Component.GetApplied());
+
+	Near->Destroy();
+	Far->Destroy();
+	if (Dropped)
+	{
+		Dropped->Destroy();
+	}
 	return true;
 }
 
