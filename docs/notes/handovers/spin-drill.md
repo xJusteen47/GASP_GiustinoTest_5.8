@@ -404,5 +404,5 @@ after one checkpoint.
   launch_after_bore, target_destroyed, moving_enemy. FAIL: spin_ground_hits_ring (rollback 2->3, flaky), opposite_cancel, drill_ground_lag, nondrillable_bounce,
   hit_while_latched (not touched), latch_static_multi_hit (flake: PASS on rerun, static.log).
 - Gates: editor build Succeeded. Headless RunTests and plugin-off build NOT run (change = 3 field assignments on the tip); run both before any push.
-- Not pushed; local commit only.
+- Not pushed; local commit 3866040 (5 commits ahead of origin).
 - Cost: one Sonnet thread, ~30 tool calls, 1 build, 6 editor runs; small-medium.
