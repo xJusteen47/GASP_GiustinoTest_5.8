@@ -71,6 +71,16 @@ struct TInstanceData
 // 64 frames are ~1 s at 62.5 Hz.
 inline constexpr int32 NpInstanceFrameBufferSize = 64;
 
+// GAS-NPP fork (M7-15): where the rollback service injects a server state older than the whole client history (its late
+// correction, TFixedRollbackService::QueryRollback), or INDEX_NONE when the state is not that old (normal reconcile) or the
+// history is not full yet (warm-up, offset still settling). The frame is the newest simulated one (PendingFrame - 1): the
+// rollback re-simulates one frame from it. Pure so the headless tests cover it (GSTNCombat.NP.LateCorrection)
+inline int32 NpLateCorrectionFrame(const int32 PendingFrame, const int32 LocalFrame, const int32 HistoryFrames)
+{
+	const bool bOlderThanHistory = LocalFrame < 0 || PendingFrame - LocalFrame > HistoryFrames;
+	return bOlderThanHistory && PendingFrame > HistoryFrames ? PendingFrame - 1 : INDEX_NONE;
+}
+
 // Frame data that instances with StateTypes will have.
 template<typename ModelDef=FNetworkPredictionModelDef>
 struct TInstanceFrameState
@@ -125,6 +135,10 @@ struct TClientRecvData
 	int32 InstanceIdx = INDEX_NONE;	// Index into TModelDataStore::Instances
 	int32 FramesIdx = INDEX_NONE;	// Index into TModelDataStore::Frames
 	ENetRole NetRole = ROLE_None;
+
+	// GAS-NPP fork (M7-15): the local frame a state older than the client's frame history is injected at instead of
+	// ServerFrame - Offset (the rollback service's late correction), INDEX_NONE otherwise
+	int32 LateCorrectionFrame = INDEX_NONE;
 };
 
 // Size of the ring in which the server keeps a remote client's fixed tick inputs (power of two). It bounds how far the client

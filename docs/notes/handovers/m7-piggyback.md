@@ -343,3 +343,23 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
 - Still open: carry load G6 (`UGSTN_GE_CarryLoad`, `scenario_mount_carry`) never built; rider attack binding; RefundAirJumps; the 2 % finding above.
 - State: .uproject = HEAD, PIE ini restored, binaries = ON2. M7 G0-G12 done with the open items above.
 - Cost: one Opus thread, ~70k context, ~40 calls, 0 builds, 2 harness editors (~35 min machine) + one Sonnet doc subagent (~145k tokens): medium.
+
+## M7-15 (desktop, 2026-11-03 + 2026-11-06): late correction for states older than the history
+
+- Worktree `GASP_Giustino2_m7`, branch claude/project-thread-7autp9. Diagnosis checked in the M7-14 2 % logs: "Ignoring server state for local
+  frame 312: older than the 63 frames of local history (PendingFrame 377)": the fork dropped it, so the rider's predicted mount was never fixed.
+- Fix (NP fork, PATCHES.md row "Late correction"): such a state, once the history is full, is compared with the newest simulated frame and, if
+  different, injected at `PendingFrame - 1` and re-simulated one frame (`NpLateCorrectionFrame`, `TClientRecvData::LateCorrectionFrame`).
+  `np.LateCorrection 0` = old drop; `np.PrintReconciles` logs each one. Test `GSTNCombat.NP.LateCorrection`.
+- Choice (not asked): newest frame, not the oldest of the history as the brief proposed: a 1-frame resim instead of ~63 per update at 5-15 fps.
+  Cost of the choice: while the round trip stays over ~1 s, a moving pawn snaps to the late server state (no prediction), instead of a permanent
+  misprediction. Revisit if a lossy run shows rubber banding.
+- Build ON (Saved/M714/build-m715on.out). Headless GSTN 1290/0, 0 ensures. Harness listen/3, 60/15 ms, 2 %: mounted_hit 3/3, SUITE_MOUNT 10/10,
+  SUITE_LINK 19/19 (Saved/Logs/m7-15/*-b, log Saved/M714/m715h2.log). The 2026-11-03 run of this thread was void: PIE ini on standalone, all
+  "pawns not ready"; `Saved/M714/pie.ps1` now patches and restores it.
+- CAVEAT: this run had 0 "Ignoring server state" lines (harness ran at normal speed, batch 5 min vs 19 min in M7-14): the low-fps condition did
+  not reproduce, so the PASS shows no regression, not that the fix fires. "Hit instead of RiderHit" (M7-14 run 1) did not reproduce either.
+- Follow-up (not done): harness at 5-15 fps under 2 % loss in one-process PIE (repro M7-14); a forced test (np.LateCorrection 0 vs 1 with an
+  artificial >1 s delay) would prove the fix fires.
+- State: .uproject = HEAD, PIE ini restored, binaries = ON build with the fix. Commit sha below; the owner pushes (push to feature denied here).
+- Cost: one Opus thread, ~45k context, ~25 calls, 0 new builds, 1 headless + 1 harness editor (~30 min machine): low.

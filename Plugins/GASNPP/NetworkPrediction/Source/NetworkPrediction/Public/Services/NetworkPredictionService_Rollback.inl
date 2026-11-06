@@ -15,6 +15,7 @@ namespace NetworkPredictionCVars
 	NETSIM_DEVCVAR_SHIPCONST_INT(ForceReconcileExtraFrames, 0, "np.ForceReconcileExtraFrames",	"Roll back this extra number of frames during the next targeted reconcile. Must be positive and reasonable given the buffer sizes.");
 	NETSIM_DEVCVAR_SHIPCONST_INT(SkipReconcile,				0, "np.SkipReconcile",				"Skip all reconciles");
 	NETSIM_DEVCVAR_SHIPCONST_INT(PrintReconciles,			0, "np.PrintReconciles",			"Print reconciles to log");
+	NETSIM_DEVCVAR_SHIPCONST_INT(LateCorrection,			1, "np.LateCorrection",				"GAS-NPP fork: a server state older than the client history that differs from the newest frame is injected there (1) or only dropped (0). np.PrintReconciles logs each one");
 }
 
 class IFixedRollbackService
@@ -106,9 +107,35 @@ public:
 				{
 					++SuppressedWarnings;
 				}
+
+				// GAS-NPP fork (M7-15): dropping it alone left a misprediction in place for good while the round trip stayed past
+				// the history (a one-process PIE at 5-15 fps under loss: a rider's optimistic mount the server formed 26 frames
+				// later was never corrected). The state cannot be compared with the frame it describes, so it is compared with
+				// the newest simulated frame instead and, when they differ, injected there and re-simulated one frame: the client
+				// snaps to the newest authoritative state it has, as late as it is, and converges once the round trip is back
+				// inside the history. Equal states (a pawn standing still) cost nothing.
+				const int32 LateFrame = NpLateCorrectionFrame(TickState->PendingFrame, LocalFrame, HistoryFrames);
+				if (LateFrame != INDEX_NONE && NetworkPredictionCVars::LateCorrection() != 0 && !NetworkPredictionCVars::SkipReconcile())
+				{
+					typename TInstanceFrameState<ModelDef>::FFrame& LateFrameData = Frames.Buffer[LateFrame];
+					TInstanceData<ModelDef>& LateInstanceData = DataStore->Instances.GetByIndexChecked(ClientRecvData.InstanceIdx);
+					if (FNetworkPredictionDriver<ModelDef>::ShouldReconcile(LateInstanceData.Info.Driver, SyncAuxType(LateFrameData.SyncState, LateFrameData.AuxState),
+						SyncAuxType(ClientRecvData.SyncState, ClientRecvData.AuxState)))
+					{
+						UE_NP_TRACE_SHOULD_RECONCILE(ClientRecvData.TraceID);
+						if (NetworkPredictionCVars::PrintReconciles())
+						{
+							UE_LOGF(LogNetworkPrediction, Warning, "Late correction: server frame %d (local %d) injected at local frame %d", ClientRecvData.ServerFrame, LocalFrame, LateFrame);
+						}
+						ClientRecvData.LateCorrectionFrame = LateFrame;
+						RollbackFrame = (RollbackFrame == INDEX_NONE) ? LateFrame : FMath::Min(RollbackFrame, LateFrame);
+						NpResizeAndSetBit(RollbackBitArray, ClientRecvIdx);
+					}
+				}
 				DataStore->ClientRecvBitMask[ClientRecvIdx] = false;
 				continue;
 			}
+			ClientRecvData.LateCorrectionFrame = INDEX_NONE;
 
 			// GAS-NPP fork: the other side of the bound above. Until the server has consumed this client's first input the
 			// offset is still 0, so the server frame maps past the local pending frame: that slot was never simulated and
@@ -262,9 +289,10 @@ private:
 			const int32 ClientRecvIdx = BitIt.GetIndex();
 			TClientRecvData<ModelDef>& ClientRecvData = DataStore->ClientRecv.GetByIndexChecked(ClientRecvIdx);
 
-			const int32 LocalFrame = ClientRecvData.ServerFrame - Offset;
+			const int32 LocalFrame = ClientRecvData.LateCorrectionFrame != INDEX_NONE ? ClientRecvData.LateCorrectionFrame : ClientRecvData.ServerFrame - Offset;
 			if (LocalFrame == LocalInputFrame)
 			{
+				ClientRecvData.LateCorrectionFrame = INDEX_NONE;
 				// Time to inject
 				TInstanceFrameState<ModelDef>& Frames = DataStore->Frames.GetByIndexChecked(ClientRecvData.FramesIdx);
 				typename TInstanceFrameState<ModelDef>::FFrame& LocalFrameData = Frames.Buffer[LocalFrame];
