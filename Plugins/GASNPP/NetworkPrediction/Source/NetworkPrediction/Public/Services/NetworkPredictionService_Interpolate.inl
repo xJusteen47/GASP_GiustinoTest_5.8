@@ -81,12 +81,21 @@ public:
 		TInstanceData<ModelDef>& InstanceData = DataStore->Instances.GetByIndexChecked(InstanceDataIdx);
 		
 		
+		// GSTN fork: the states live inline in a sparse array, so an insert that grows it moves every instance and leaves the other
+		// presentation views dangling (a snapshot read of a sim proxy then crashed, 2026-11-06). Re-point them all, as the smoothing service does
+		const SIZE_T PreviousSize = Instances.GetAllocatedSize();
 		FSparseArrayAllocationInfo AllocInfo = Instances.InsertUninitialized(ClientRecvIdx);
 		new (AllocInfo.Pointer) FInstance(ID.GetTraceID(), InstanceDataIdx, DataStore->Frames.GetIndexChecked(ID));
 
-		// Point the PresentationView to our managed state. Note this only has to be done once
-		FInstance* InternalInstance = (FInstance*)AllocInfo.Pointer;
-		InstanceData.Info.View->UpdatePresentationView(InternalInstance->SyncState, InternalInstance->AuxState);
+		if (PreviousSize != Instances.GetAllocatedSize())
+		{
+			UpdateAllInstancePresentationViews();
+		}
+		else
+		{
+			FInstance* InternalInstance = (FInstance*)AllocInfo.Pointer;
+			InstanceData.Info.View->UpdatePresentationView(InternalInstance->SyncState, InternalInstance->AuxState);
+		}
 		
 	}
 
@@ -283,6 +292,14 @@ public:
 	}
 
 private:
+	void UpdateAllInstancePresentationViews()
+	{
+		for (FInstance& Internal : Instances)
+		{
+			DataStore->Instances.GetByIndexChecked(Internal.InstanceIdx).Info.View->UpdatePresentationView(Internal.SyncState, Internal.AuxState);
+		}
+	}
+
 
 	struct FInstance
 	{
@@ -390,13 +407,21 @@ public:
 
 		const int32 InstanceDataIdx = DataStore->ClientRecv.GetByIndexChecked(ClientRecvIdx).InstanceIdx;
 
+		// GSTN fork: same dangling-view fix as the fixed service above
+		const SIZE_T PreviousSize = Instances.GetAllocatedSize();
 		FSparseArrayAllocationInfo AllocInfo = Instances.InsertUninitialized(ClientRecvIdx);
 		new (AllocInfo.Pointer) FInstance(ID.GetTraceID(), InstanceDataIdx);
 
-		TInstanceData<ModelDef>& InstanceData = DataStore->Instances.GetByIndexChecked(InstanceDataIdx);
-		FInstance* InternalInstance = (FInstance*)AllocInfo.Pointer;
-
-		InstanceData.Info.View->UpdatePresentationView(InternalInstance->SyncState, InternalInstance->AuxState);
+		if (PreviousSize != Instances.GetAllocatedSize())
+		{
+			UpdateAllInstancePresentationViews();
+		}
+		else
+		{
+			TInstanceData<ModelDef>& InstanceData = DataStore->Instances.GetByIndexChecked(InstanceDataIdx);
+			FInstance* InternalInstance = (FInstance*)AllocInfo.Pointer;
+			InstanceData.Info.View->UpdatePresentationView(InternalInstance->SyncState, InternalInstance->AuxState);
+		}
 	}
 
 	void UnregisterInstance(FNetworkPredictionID ID)
@@ -570,6 +595,14 @@ public:
 	}
 
 private:
+	void UpdateAllInstancePresentationViews()
+	{
+		for (FInstance& Internal : Instances)
+		{
+			DataStore->Instances.GetByIndexChecked(Internal.InstanceIdx).Info.View->UpdatePresentationView(Internal.SyncState, Internal.AuxState);
+		}
+	}
+
 	
 	struct FInstance
 	{

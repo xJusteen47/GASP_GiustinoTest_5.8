@@ -46,6 +46,7 @@
 #include "Hits/GSTN_HitExtensions.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "World/GSTN_StepSnapshot.h"
+#include "Pickups/GSTN_KitPickup.h"
 
 UGSTN_GASNPPTestComponent::UGSTN_GASNPPTestComponent()
 {
@@ -1143,6 +1144,30 @@ UGSTN_LoadoutComponent* UGSTN_GASNPPTestComponent::EnsureLoadoutComponent()
 FString UGSTN_GASNPPTestComponent::ServerApplyTestLoadout(const FString& KitName, const FString& SupportWeaponName)
 {
 	return ServerApplyTestLoadoutWithSupers(KitName, SupportWeaponName, FString());
+}
+
+FString UGSTN_GASNPPTestComponent::ServerSpawnKitPickup(const FString& KitName, const FString& SupportWeaponName, FVector Location, float Yaw)
+{
+	UWorld* World = GetWorld();
+	if (!World || !GetOwner()->HasAuthority())
+	{
+		return TEXT("not the authority");
+	}
+	FGSTN_LoadoutData Data;
+	Data.PrimaryKit = FPrimaryAssetId(GSTNCombatAssetTypes::PrimaryKit(), FName(*KitName));
+	if (!SupportWeaponName.IsEmpty())
+	{
+		Data.AdditionalWeapons.Add(FPrimaryAssetId(GSTNCombatAssetTypes::Weapon(), FName(*SupportWeaponName)));
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGSTN_KitPickup* Pickup = World->SpawnActor<AGSTN_KitPickup>(AGSTN_KitPickup::StaticClass(), Location, FRotator(0.f, Yaw, 0.f), Params);
+	if (!Pickup)
+	{
+		return TEXT("spawn failed");
+	}
+	Pickup->SetLoadout(Data);
+	return Pickup->GetName();
 }
 
 bool UGSTN_GASNPPTestComponent::ServerGrantMeter(int32 Which)

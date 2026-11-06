@@ -514,7 +514,8 @@ bool FGSTN_KitPickupSwapTest::RunTest(const FString& Parameters)
 	TestNull(TEXT("out of its radius it is not"), Swap->FindPickupFor(&Player));
 	Near->InteractRadius = 150.f;
 
-	TestTrue(TEXT("the swap is accepted"), UGSTN_KitSwapSubsystem::SwapWithPickup(Component, *Near, Errors));
+	const bool bSwapped = UGSTN_KitSwapSubsystem::SwapWithPickup(Component, *Near, Errors);
+	TestTrue(FString::Printf(TEXT("the swap is accepted (%s)"), *FString::Join(Errors, TEXT(" | "))), bSwapped);
 	TestTrue(TEXT("the player now plays kit B"), Component.GetApplied() == Fixture.RequestKit(TEXT("KitB")));
 	TestEqual(TEXT("with kit B's stats"), ASC.GetNumericAttribute(WalkSpeed), 500.f);
 	TestFalse(TEXT("kit A's moves went with it"), Fixture.HasAbility(UGSTN_TestGrantAbilityA::StaticClass()));

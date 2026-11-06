@@ -28,6 +28,7 @@ OUT_DIR = os.path.join(unreal.Paths.project_saved_dir(), 'TestHub')
 FIGHTER_SPOTS = {'Z5': (-5500.0, -1000.0, 150.0), 'Z1': (4200.0, 1200.0, 150.0), 'Z2': (7500.0, 600.0, 150.0)}
 DEFAULT_KIT = g.HIT_KIT        # KIT_Test_Hits: attacks + the spin bindings prepare() adds in memory
 MOUNT_KIT = 'KIT_Test_Mount'
+KIT_PICKUPS = True   # kits on the ground (AGSTN_KitPickup, hold interact) instead of the Python pads
 _state = {'prepared': None, 'walkers': {}, 'selftest': None, 'rows': []}
 
 
@@ -136,11 +137,21 @@ def spawn_dummies():
     return made
 
 
+def spawn_kits():
+    """TH-1b kits on the ground: one AGSTN_KitPickup per kit pad (build_test_hub_map.KIT_PADS), spawned on the server through the host's test
+    component and replicated. Hold interact next to one to swap your kit with it (the old kit stays on the ground). Skips when they exist"""
+    world = g.worlds()[0]
+    if unreal.GameplayStatics.get_all_actors_of_class(world, unreal.GSTN_KitPickup):
+        return 'already there'
+    srv = g._srv(_key(0))
+    return [srv.server_spawn_kit_pickup(kit, support, unreal.Vector(x, y, 20.0), 180.0) for kit, support, _label, (x, y) in hub.KIT_PADS]
+
+
 def play_setup():
     """Run once per Play (the watcher does it 4 s after Play starts): the dummies, hit rules in memory (damage on, as the hit scenarios), the
     link steps, the default kit on every player"""
     import link_scenarios as ls
-    out = [('dummies', spawn_dummies()), g.hit_rules_setup(), ls.link_setup()]
+    out = [('dummies', spawn_dummies()), ('kits', spawn_kits()), g.hit_rules_setup(), ls.link_setup()]
     # Players only: a loadout change on a dummy summoned in the same tick crashed the editor in the link snapshot contributor (2026-11-06,
     # FGSTN_SyncFragmentList::Find from UGSTN_CombatSimComponent::SimulationTick). The dummies keep their default kit: being hit needs none
     out.append({_key(i): g._apply_loadout(_key(i), DEFAULT_KIT) for i in _players()})
@@ -162,7 +173,8 @@ def _pad_check():
                 unreal.SystemLibrary.print_string(g.worlds()[i], 'Hitbox/hurtbox: ' + ('ACCESO' if _watch['debug'] else 'SPENTO'), True, True,
                                                   unreal.LinearColor(1, 0.3, 0.3, 1), 4.0)
             continue
-        pad = next((p for p in hub.KIT_PADS if math.hypot(loc[0] - p[3][0], loc[1] - p[3][1]) < hub.PAD_RADIUS), None)
+        # The kit pads hold TH-1b kit pickups now (spawn_kits): the kit changes on hold interact, not by standing on the pad
+        pad = None if KIT_PICKUPS else next((p for p in hub.KIT_PADS if math.hypot(loc[0] - p[3][0], loc[1] - p[3][1]) < hub.PAD_RADIUS), None)
         if pad is None:
             _watch['on_pad'].pop(key, None)
             continue

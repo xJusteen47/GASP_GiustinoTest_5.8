@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Pickups/GSTN_KitPlaceholderLook.h"
 
 AGSTN_KitPickup::AGSTN_KitPickup()
 {
@@ -62,6 +63,19 @@ void AGSTN_KitPickup::RefreshLook()
 	const bool bHasKit = !IsEmpty();
 	if (Mesh)
 	{
+		// No mesh of its own: the kit's stand-in box, the same colour the kit has on a player's back
+		// The tag marks the box as ours, so a later kit recolours it (a designer's own mesh is never touched)
+		static const FName PlaceholderTag(TEXT("GSTN_KitPlaceholder"));
+		if (Mesh->ComponentHasTag(PlaceholderTag) || !Mesh->GetStaticMesh())
+		{
+			if (!Mesh->ComponentHasTag(PlaceholderTag))
+			{
+				Mesh->ComponentTags.Add(PlaceholderTag);
+				Mesh->SetRelativeLocation(FVector(0.f, 0.f, 25.f));
+				Mesh->SetRelativeScale3D(FVector(0.5f));
+			}
+			UGSTN_KitPlaceholderLookSubsystem::ApplyPlaceholder(Mesh, bHasKit ? Loadout.PrimaryKit : FPrimaryAssetId());
+		}
 		Mesh->SetVisibility(bHasKit);
 	}
 	if (Label)

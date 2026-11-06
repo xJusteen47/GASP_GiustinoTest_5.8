@@ -277,6 +277,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
 	FString ServerApplyTestLoadoutWithSupers(const FString& KitName, const FString& SupportWeaponName, const FString& SuperNamesCsv);
 
+	/**
+	 * Authority only: spawns a kit pickup (AGSTN_KitPickup, hold interact next to it to swap) holding the test kit KitName (+ an optional
+	 * support weapon) at Location. The test hub calls it at Play: Python cannot spawn into a PIE world, and runtime actors keep the map
+	 * unchanged. Returns the pickup's name, or why nothing was spawned.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
+	FString ServerSpawnKitPickup(const FString& KitName, const FString& SupportWeaponName, FVector Location, float Yaw);
+
 	/** Server only: applies an instant meter grant (0 = ExMeter +60, 1 = SuperMeter +100). An out-of-band ability system change, like a grant */
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test|Loadout")
 	bool ServerGrantMeter(int32 Which);

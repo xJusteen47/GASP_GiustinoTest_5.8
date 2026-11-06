@@ -1,41 +1,29 @@
-# Handover TH-1: livello di test `L_Test_Hub` (fisso, editor dell'owner, 2026-11-06)
+# Handover TH-2: crash del Play, kit a terra, cubo per kit (portatile, 2026-11-06)
 
-- Worktree **m7**, branch `claude/project-thread-f6jper` da M7-15 (`8154056`): `feature` non ha ancora M7. Commit `32f8f7f` builder/helper/audit,
-  `02fc39f` pedane, `2867b09` automazione. La `.umap` si committa dopo il Ctrl+S dell'owner. Push: owner. `Content/AnimPipeline` in m7 = giunzione.
-- `Tools/GAS/build_test_hub_map.py`: riempie il livello aperto (mai salva la mappa), idempotente sul tag `TestHub`, 284 attori: Z0 piazza,
-  tabellone, 7 pedane kit + pedana rossa debug, Z1 colpi (stazioni di L_Test_Combat + corsia 30 m), Z2 arena 20 m con KO, Z3 piggyback,
-  Z4 spin/drill, Z5 traversal (2 corsie WallSlideAB, gradini, salti, rampe), Z6 jab v12 / ftilt v31 / dair v4 VarM in loop, segnaposto manichini.
-- **Niente Python a mano** (richiesta owner): `Config/DefaultEngine.ini` StartupScripts → `Tools/GASNPPTest/hub_startup.py` →
-  `test_hub.auto_start()`. Aperta L_Test_Hub: contenuti di test in memoria (prepare); a ogni Play in quella mappa: 10 manichini (`summon` sul
-  server + AI controller), regole colpi (`hit_rules_setup`), link step, kit di base ai giocatori; pedane: cambio kit / toggle
-  `gstn.Combat.Debug.Hitboxes`+`Hurtboxes`. Altre mappe: niente (contenuto ripristinato quando si cambia livello). Play 3 giocatori listen
-  resta salvato nelle impostazioni PIE dell'editor.
-- Scelte (regola 6): manichini spawnati a runtime perché un pawn Mover piazzato rende la mappa non salvabile (riferimento privato alle
-  transizioni dei movement mode del CDO); pedane in Python = seme di D1.
-- Verifica: Play listen 3 giocatori, `selftest()` **PASS** in tutte le zone (prima dei manichini a runtime); manichino piazzato colpito: danno 14,
-  StaggerInPlace; pedane Beta/Link applicate a mano libera.
-- **Crash** (18:16): cambio kit su un manichino nello stesso tick dello spawn → access violation in `FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>`
-  (`FGSTN_LinkSnapshotContributor::Contribute` ← `ReadSnapshotEntry` ← `EnsureSnapshot` ← `SimulationTick`). Aggirato (i manichini tengono il
-  kit di base). Bug C++ da guardare: il contributor non regge un pawn appena creato con loadout cambiato.
+- Branch `claude/project-thread-kizkcl` = `claude/project-thread-f6jper` (TH-1 + M7) + merge di `claude/project-thread-0t6tfg` (TH-1b) + questo lavoro.
+  I commit SD locali di `feature` (SD-11..16) NON sono qui. TH-1 precedente: `git show 3b00d12:docs/notes/handovers/test-hub.md`.
+- **Crash del Play risolto**: riprodotto sul portatile (Play listen 3 giocatori in L_Test_Hub, crash ~16 s dopo i manichini; stack in
+  `FGSTN_LinkSnapshotContributor::Contribute` ← `ReadSnapshotEntry`, lo stesso dei due crash del fisso). Causa: bug di NP stock.
+  `TFixed/TIndependentInterpolateService::RegisterInstance` punta la presentation view dentro una `TSparseArray` di stati inline; quando un
+  manichino nuovo la fa crescere, le view degli altri sim proxy restano su memoria liberata (Epic lo aveva già corretto solo nel servizio
+  Smooth). Fix (tentativo 1 di 2) in `NetworkPredictionService_Interpolate.inl`: se l'array si rialloca, ripunta tutte le view. Dopo: Play
+  60 s, 13 pawn e 7 kit su host e 2 client, nessun crash. Il vecchio aggiramento "niente cambio kit ai manichini" in `play_setup` si può togliere.
+- **Kit a terra**: `test_hub.spawn_kits()` al Play spawna un `AGSTN_KitPickup` per pedana (`KIT_PADS`) via `ServerSpawnKitPickup` (nuovo,
+  test component). Nessun attore nella mappa: niente Ctrl+S. Le pedane Python non cambiano più kit (`KIT_PICKUPS = True`); la rossa resta.
+  Scambio: tieni premuto interagisci vicino a un kit (raggio 150 cm). Visti replicati; lo scambio con l'input vero NON l'ho provato.
+- **Cubo per kit** (richiesta owner): `UGSTN_KitPlaceholderLookSubsystem` (GSTNCombatGAS/Pickups), solo presentazione, 4 Hz, non sul server
+  dedicato: box colorato dietro la schiena se il kit non ha skin; stesso colore sul kit a terra senza mesh. Cvar `gstn.Combat.KitPlaceholderLook`.
+  Non ancora guardato a schermo.
+- Test: build ok, headless 996/0, 0 ensure, anche dopo il fix NP. `KitPickupSwap` fallisce se si aggiunge un campo
+  a `AGSTN_KitPickup` prima di `Loadout` (layout stantio in build non-unity): ho tolto il campo, il segnaposto usa un component tag.
+- Tasti tastiera oggi (KIT_Test_Hits): tasto sx mouse attacco (14 danni, knockback 500 a 30°), accovacciato + sx attacco basso, centrale
+  speciale, Y salto del kit, U schivata, O interagisci (tieni = cambio kit), L scatto. Dash, Buff, Scudo, Spin: tasti da leggere nell'IMC.
 
-- Mappa salvata dall'owner (19:22, senza pawn piazzati) e committata (`3d35089`). Ultimo Play: setup automatico partito (10 manichini), poi
-  **secondo crash** 3 s dopo, stack solo Renderer/Core (nessun modulo nostro nei frame leggibili), preceduto da un ensure del renderer
-  "FAppTime ... no inherited time context" al salvataggio. Non diagnosticato oltre (regola dei 2 tentativi). Setup portato a 4 s (a 2 s i
-  client non erano ancora entrati: solo l'host aveva il kit).
-- **Rischio:** il Ctrl+S dell'owner ha salvato anche asset modificati in memoria dall'automazione: `GSTN_CombatRules_Standard.uasset`
-  (regole colpi, link step) e `IC_GASNPP_Test.uasset` (bottoni). Non committati: ripristinare con `git checkout` a editor chiuso; TH-2
-  deve far lavorare l'automazione su copie transitorie o ripristinare prima di ogni salvataggio.
+**Prossimo (thread nuovi):**
+1. Mappa pad Xbox dell'owner su `IMC_GASNPP_Test` (in memoria al Play come il resto): X leggero, A salto, Y speciale, B grab, RT forte,
+   LT scudo/schivata ("RL" nel messaggio, da confermare), RB abbassarsi. Manca un'azione "forte" nell'IC. (Sonnet, ~$2-3)
+2. Mosse placeholder IN BLUEPRINT (leggero/forte/aereo con knockback diversi, hitbox visibili col debug) come riferimento per l'owner;
+   le mosse complesse (riflettore, side special, proiettili) in un thread dedicato dopo. (Opus medium, ~$5-8)
+3. Guardare in Play cubo e scambio kit con l'input vero; togliere l'aggiramento sui manichini.
 
-**Prossimo, serve il fisso (dopo le 04:00):**
-1. TH-2 (Opus medium, ~$4-6): capire il crash del renderer con i manichini a runtime (provare Play senza automazione: se crasha anche
-   così è l'editor; altrimenti spawn dei manichini più tardi o via C++), verificare che un manichino a runtime prenda colpi, selftest.
-2. TH-1b kit a terra (`claude/project-thread-0t6tfg`, C++): cherry-pick su m7, build a editor chiuso, sostituire le pedane Python con
-   `AGSTN_KitPickup` (Sonnet, ~$2-4).
-3. Fix del crash sopra (Opus medium, ~$3-5) prima di cambiare kit ai manichini.
-
-**Non funziona / da guardare (brief TH-2):** manichini senza respawn dopo KO; orientamento delle scritte non controllato dall'owner; attacco da
-montato senza binding `Role.Rider` (M7-06); posa rider (IK TODO); blocco Z4 solo segnaposto (`h.drill_immune`); mosse di Z6 in nessun kit;
-`IC_GASNPP_Test.uasset` salvato su disco coi bottoni Shield/Spin (non committato: `git checkout` a editor chiuso); `Content/Levels/L_Test_Hub.umap`
-è un redirector (non committato); server dedicato e suite nelle 3 configurazioni non provati.
-
-Costo stimato: ~280k token di contesto, ~$14-17 (sopra la stima: manichini, pedane, automazione e crash su richiesta dell'owner).
+Costo stimato: ~170k token di contesto, ~$12-14 (build non-unity lente, due riproduzioni del crash).
