@@ -361,5 +361,5 @@ Earlier entries: HANDOVER 67-69, 76 and 77 in `docs/notes/takeover-state.md`. Nu
   not reproduce, so the PASS shows no regression, not that the fix fires. "Hit instead of RiderHit" (M7-14 run 1) did not reproduce either.
 - Follow-up (not done): harness at 5-15 fps under 2 % loss in one-process PIE (repro M7-14); a forced test (np.LateCorrection 0 vs 1 with an
   artificial >1 s delay) would prove the fix fires.
-- State: .uproject = HEAD, PIE ini restored, binaries = ON build with the fix. Commit sha below; the owner pushes (push to feature denied here).
+- State: .uproject = HEAD, PIE ini restored, binaries = ON build with the fix. Commit 95ad1f7 on claude/project-thread-7autp9; the owner pushes (push to feature denied here).
 - Cost: one Opus thread, ~45k context, ~25 calls, 0 new builds, 1 headless + 1 harness editor (~30 min machine): low.
