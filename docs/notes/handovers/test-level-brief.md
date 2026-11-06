@@ -30,7 +30,7 @@ non committata dell'owner: se manca un plugin, chiedi). GameMode `GM_GASNPPTest`
 che cammina in tondo (input iniettato) e il test fighter della piattaforma. **Helper** nuovo `Tools/GASNPPTest/test_hub.py` (solo Python, chiama
 l'harness esistente): `prepare()` (kit di mount/spin/link creati in memoria dai `prepare_editor()`; avvisa se due si contraddicono), `kit(i, nome)`,
 `park(i, zona)`, `walker(i, on)`, `mount(rider, carrier)`, `fighter(zona)`, `selftest()` (ogni player in ogni zona, un'azione per zona, su file).
-Una pedana di cambio kit in gioco richiede codice C++: domanda D1 della sequenza (default: solo Python).
+Cambio kit: in TH-1 solo `kit(i, nome)` in Python; l'owner ha scelto i **kit a terra** (D1): TH-1b aggiunge in Z0 una fila di kit per terra da scambiare.
 
 **Passi (thread RC sul fisso; il thread non salva mai mappe).**
 1. Thread: audit di 10 minuti: attori disponibili (`AGSTN_Trampoline`, `AGSTN_KOZone`, `AGSTN_TestSurface`, piattaforme scriptate), kit e mosse
