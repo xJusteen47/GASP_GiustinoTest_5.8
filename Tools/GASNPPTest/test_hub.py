@@ -93,22 +93,57 @@ def _place_ahead(i, key, ahead):
     v = g.snap(g.worlds()[0])[_key(i)]
     yaw = math.radians(v['yaw'])
     x, y = v['location'][0] + ahead * math.cos(yaw), v['location'][1] + ahead * math.sin(yaw)
-    comp = g.comps(g.worlds()[0])[key]
-    spawn = comp.get_spawn_location()
-    comp.server_reset_to_spawn(unreal.Vector(x - spawn.x, y - spawn.y, 0.0))
+    # server_teleport_exact, not server_reset_to_spawn: the reset left an AI dummy short of the spot (probe 2026-11-06)
+    g.comps(g.worlds()[0])[key].server_teleport_exact(unreal.Vector(x, y, v['location'][2] + 2.0))
     return round(x), round(y)
 
 
 # ---- automatic Play setup and kit pads (registered by prepare(), lives while the editor is open) ---------------------------------------------
-_watch = {'handle': None, 'pie': False, 'since': 0.0, 'ready': False, 'next': 0.0, 'on_pad': {}}
+_watch = {'handle': None, 'pie': False, 'since': 0.0, 'ready': False, 'next': 0.0, 'on_pad': {}, 'auto': False, 'content': False}
+MAP_NAME = hub.MAP_PATH.rsplit('/', 1)[1]
+
+
+def _editor_map():
+    return unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world().get_path_name().split('.')[0]
+
+
+def _pie_is_hub():
+    # PIE worlds are named UEDPIE_<n>_<map>
+    return g.worlds()[0].get_name().endswith(MAP_NAME)
+
+
+def spawn_dummies():
+    """The hub's dummies (build_test_hub_map.DUMMIES) spawned on the server with an AI controller; they replicate to the clients. Not level
+    actors: a placed Mover pawn cannot be saved in a map. Skips a spot that already has one"""
+    world = g.worlds()[0]
+    cls = unreal.load_asset(hub.DUMMY_CLASS).generated_class()
+    have = [a.get_actor_location() for a in unreal.GameplayStatics.get_all_actors_of_class(world, cls)]
+    # Python cannot spawn into a PIE world directly: the host's `summon` cheat spawns on the server (listen host), then each new pawn gets
+    # an AI controller and is teleported to its spot through the test component
+    todo = [d for d in hub.DUMMIES if not any(math.hypot(p.x - d[1][0], p.y - d[1][1]) < 50.0 for p in have)]
+    before = set(a.get_name() for a in unreal.GameplayStatics.get_all_actors_of_class(world, cls))
+    pc = unreal.GameplayStatics.get_player_controller(world, 0)
+    for _ in todo:
+        unreal.SystemLibrary.execute_console_command(world, f'summon {hub.DUMMY_CLASS}.{hub.DUMMY_CLASS.rsplit("/", 1)[1]}_C', pc)
+    new = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, cls) if a.get_name() not in before]
+    made = 0
+    for pawn, (zone, (x, y), yaw) in zip(new, todo):
+        if pawn.get_controller() is None:
+            pawn.spawn_default_controller()
+        pawn.set_actor_rotation(unreal.Rotator(0.0, 0.0, yaw), True)
+        pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent).server_teleport_exact(unreal.Vector(x, y, 100.0))
+        made += 1
+    return made
 
 
 def play_setup():
-    """Run once per Play (the watcher does it 2 s after Play starts): hit rules in memory (damage on, as the hit scenarios), the link steps,
-    the default kit on every pawn and dummy"""
+    """Run once per Play (the watcher does it 2 s after Play starts): the dummies, hit rules in memory (damage on, as the hit scenarios), the
+    link steps, the default kit on every player"""
     import link_scenarios as ls
-    out = [g.hit_rules_setup(), ls.link_setup()]
-    out.append({k: g._apply_loadout(k, DEFAULT_KIT) for k in g.comps(g.worlds()[0])})
+    out = [('dummies', spawn_dummies()), g.hit_rules_setup(), ls.link_setup()]
+    # Players only: a loadout change on a dummy summoned in the same tick crashed the editor in the link snapshot contributor (2026-11-06,
+    # FGSTN_SyncFragmentList::Find from UGSTN_CombatSimComponent::SimulationTick). The dummies keep their default kit: being hit needs none
+    out.append({_key(i): g._apply_loadout(_key(i), DEFAULT_KIT) for i in _players()})
     return out
 
 
@@ -117,6 +152,16 @@ def _pad_check():
     for i in _players():
         key = _key(i)
         loc = g.snap(world)[key]['location']
+        dx, dy = hub.DEBUG_PAD[1]
+        if math.hypot(loc[0] - dx, loc[1] - dy) < hub.PAD_RADIUS:
+            if _watch['on_pad'].get(key) != 'debug':
+                _watch['on_pad'][key] = 'debug'
+                _watch['debug'] = not _watch.get('debug', False)
+                for cvar in ('gstn.Combat.Debug.Hitboxes', 'gstn.Combat.Debug.Hurtboxes'):
+                    unreal.SystemLibrary.execute_console_command(world, f"{cvar} {int(_watch['debug'])}")
+                unreal.SystemLibrary.print_string(g.worlds()[i], 'Hitbox/hurtbox: ' + ('ACCESO' if _watch['debug'] else 'SPENTO'), True, True,
+                                                  unreal.LinearColor(1, 0.3, 0.3, 1), 4.0)
+            continue
         pad = next((p for p in hub.KIT_PADS if math.hypot(loc[0] - p[3][0], loc[1] - p[3][1]) < hub.PAD_RADIUS), None)
         if pad is None:
             _watch['on_pad'].pop(key, None)
@@ -139,6 +184,10 @@ def _watch_tick(_dt):
         running = False
     if not running:
         _watch.update(pie=False, ready=False, on_pad={})
+        if _watch['auto']:
+            _auto_content()
+        return
+    if not _pie_is_hub():
         return
     if not _watch['pie']:
         _watch.update(pie=True, since=now)
@@ -153,6 +202,27 @@ def _watch_tick(_dt):
         unreal.log_warning(f'[test_hub] watcher: {e!r}')
 
 
+def _auto_content():
+    """auto_start mode, editor idle: the test content in memory while L_Test_Hub is the open level, put back when another level is opened"""
+    try:
+        here = _editor_map() == hub.MAP_PATH
+    except Exception:
+        return
+    if here and not _watch['content']:
+        _watch['content'] = True
+        unreal.log(f'[test_hub] {prepare(setup_pie=False)}')
+    elif not here and _watch['content']:
+        _watch['content'] = False
+        unreal.log(f'[test_hub] left the hub, content restored: {restore(pie_settings=False)}')
+
+
+def auto_start():
+    """Called by the project's Python startup script (Config/DefaultEngine.ini, hub_startup.py): nothing to run by hand. Opening L_Test_Hub
+    prepares the test content, every Play in it spawns the dummies and sets the hit rules, the pads swap kits. Other levels are not touched"""
+    _watch['auto'] = True
+    return _start_watcher()
+
+
 def _start_watcher():
     if _watch['handle'] is None:
         _watch['handle'] = unreal.register_slate_post_tick_callback(_watch_tick)
@@ -160,7 +230,7 @@ def _start_watcher():
 
 
 # ---- before Play -------------------------------------------------------------------------------------------------------------------------------
-def prepare():
+def prepare(setup_pie=True):
     """The scenario modules' prepare_editor() in one go, then the PIE settings (setup_editor). Content changes stay in memory except the mount
     test kits, which mount_scenarios creates and saves in GSTNPiggyback's Content/Test when missing (its own behaviour). Reports where two disagree"""
     if _pie_running():
@@ -178,17 +248,18 @@ def prepare():
     # grab_attack would turn KIT_Test_Hits' attack into a grab and break Z1, so the hub never calls it
     notes = ['spin works on KIT_Test_Hits only; KIT_Test_Mount / KIT_Test_Link have no spin bindings',
              'link grab_attack is not used (it would make the Z1 attack a grab)']
-    try:
-        rows.append(('pie', g.setup_editor(True, 'listen', 2)))
-    except Exception as e:
-        problems.append(f'setup_editor failed: {e!r}')
+    if setup_pie:
+        try:
+            rows.append(('pie', g.setup_editor(True, 'listen', 2)))
+        except Exception as e:
+            problems.append(f'setup_editor failed: {e!r}')
     _state['prepared'] = time.time()
     rows.append(('watcher', _start_watcher()))
     path = _write('prepare.txt', [f'{n}: {r}' for n, r in rows] + ['NOTE ' + n for n in notes] + ['PROBLEM ' + p for p in problems])
     return f"prepare: {len(rows)} ok, {len(problems)} problems ({path})"
 
 
-def restore():
+def restore(pie_settings=True):
     """With Play stopped: the in-memory content and the PIE settings back"""
     import defence_scenarios as ds
     import spin_drill_scenarios as sd
@@ -198,7 +269,8 @@ def restore():
             out.append(fn())
         except Exception as e:
             out.append(f'{fn.__module__} restore failed: {e!r}')
-    out.append(g.setup_editor(False))
+    if pie_settings:
+        out.append(g.setup_editor(False))
     return out
 
 

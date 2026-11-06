@@ -74,8 +74,10 @@ KIT_PADS = [
     ('KIT_Test_Alpha', 'WPN_Test_Support', 'ARMA SUPPORTO', (1200.0, 1050.0)),
 ]
 PAD_RADIUS = 120.0
+# Stepping on it toggles the hitbox and hurtbox debug draw (gstn.Combat.Debug.Hitboxes / Hurtboxes, GSTNCombatNP)
+DEBUG_PAD = ('DEBUG HITBOX/HURTBOX', (1200.0, 1450.0))
 DUMMY_CLASS = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
-# Dummies: the test character placed in the level, possessed by an AI controller on the server (stands still, takes hits). (zone, (x, y), yaw)
+# Dummies: the test character spawned on the server at Play by test_hub, possessed by an AI controller (stands still, takes hits). (zone, (x, y), yaw)
 DUMMIES = [
     ('Z1', (3500.0, 300.0), 180.0), ('Z1', (3500.0, -400.0), 180.0), ('Z1', (2700.0, -1700.0), 180.0),
     ('Z2', (7800.0, 0.0), 180.0), ('Z2', (7500.0, 500.0), 270.0),
@@ -360,14 +362,14 @@ def kit_pads_and_dummies():
         box(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}_Item', (x, y, 60.0), (40.0, 40.0, 80.0), 'Green' if support else 'Yellow', collision=False)
         text = f'{label}\n{kit_name}' + (f'\n+ {support}' if support else '')
         sign(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}_Text', text, (x + 30.0, y), face_to=(0.0, y), size=22.0, height=170.0)
+    label, (x, y) = DEBUG_PAD
+    box('Z0_Pad_Debug', (x, y, 5.0), (PAD_RADIUS * 2.0, PAD_RADIUS * 2.0, 10.0), 'Red', mesh=CYLINDER)
+    sign('Z0_Pad_Debug_Text', label + chr(10) + 'salici: acceso / spento', (x + 30.0, y), face_to=(0.0, y), size=22.0, height=170.0)
     sign('Z0_Pads_Title', 'PEDANE KIT: salici sopra', (1200.0, -1450.0), face_to=(0.0, -1450.0), size=30.0, height=230.0)
-    cls = unreal.load_asset(DUMMY_CLASS)
-    if not cls:
-        log(f'WARNING: {DUMMY_CLASS} missing, no dummies')
-        return
-    cls = cls.generated_class()
+    # The dummies are NOT level actors: a placed Mover pawn makes the map unsaveable (its movement modes' transitions are private objects of the
+    # Blueprint's CDO). test_hub spawns them on the server at every Play; here only their markers
     for i, (zone, (x, y), yaw) in enumerate(DUMMIES):
-        _spawn(cls, (x, y, 100.0), (0.0, yaw, 0.0), f'Dummy_{zone}_{i}')
+        box(f'Dummy_{zone}_{i}_Spot', (x, y, 1.0), (100.0, 100.0, 2.0), 'Yellow', mesh=CYLINDER, collision=False)
         sign(f'Dummy_{zone}_{i}_Text', 'manichino', (x, y), face_to=(0.0, 0.0), size=20.0, height=230.0, colour=(1.0, 0.85, 0.1))
 
 
