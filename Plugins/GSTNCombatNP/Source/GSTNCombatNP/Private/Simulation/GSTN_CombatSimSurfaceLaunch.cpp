@@ -6,6 +6,8 @@
 #include "AbilitySystemComponent.h"
 #include "GameFramework/Actor.h"
 #include "GSTN_CombatNPTags.h"
+#include "Input/GSTN_CombatButtonTags.h"
+#include "Simulation/GSTN_InputHostUtils.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_SurfaceLaunch.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
@@ -29,8 +31,11 @@ void UGSTN_CombatSimComponent::StepSurfaceLaunch(const FAbilitySystemTimeStep& T
 		return;
 	}
 
+	// Hold jump on a launching surface = higher bounce: read from the sync input, so a resimulated frame decides the same
+	const bool bJumpHeld = FGSTN_InputHostUtils::IsButtonHeld(Core.Input, ButtonMap.GetIndex(GSTNCombatButtonTags::Button_Jump));
+
 	FGSTN_SurfaceLaunchDecision Decision;
-	if (!FGSTN_SurfaceLaunch::Probe(Tracker->GetSyncState(), *Mover, Tracker->GetUpDirection(), TimeStep.StepMs * 0.001, Decision))
+	if (!FGSTN_SurfaceLaunch::Probe(Tracker->GetSyncState(), *Mover, Tracker->GetUpDirection(), TimeStep.StepMs * 0.001, Decision, bJumpHeld))
 	{
 		return;
 	}

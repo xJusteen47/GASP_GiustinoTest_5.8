@@ -39,6 +39,24 @@ FString UGSTN_TrampolineTestLibrary::SpawnTestTrampoline(UObject* WorldContext, 
 	return Trampoline->GetName();
 }
 
+FString UGSTN_TrampolineTestLibrary::SpawnTestTrampolineOfClass(UObject* WorldContext, TSubclassOf<AGSTN_Trampoline> Class, FVector Location, float Yaw)
+{
+	UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;
+	if (!World || !Class)
+	{
+		return FString();
+	}
+	const FTransform Transform(FRotator(0.0, Yaw, 0.0), Location);
+	AGSTN_Trampoline* Trampoline = World->SpawnActorDeferred<AGSTN_Trampoline>(Class, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Trampoline)
+	{
+		return FString();
+	}
+	Trampoline->Tags.Add(TestTag);
+	Trampoline->FinishSpawning(Transform);
+	return Trampoline->GetName();
+}
+
 int32 UGSTN_TrampolineTestLibrary::ClearTestTrampolines(UObject* WorldContext)
 {
 	UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull) : nullptr;

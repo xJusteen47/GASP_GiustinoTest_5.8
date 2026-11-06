@@ -12,7 +12,7 @@ bool FGSTN_SurfaceLaunchParams::Validate(TArray<FText>& OutErrors) const
 
 	// ContainsNaN is true for infinite components too
 	if (LocalDirection.ContainsNaN() || !FMath::IsFinite(TiltPitch) || !FMath::IsFinite(TiltYaw)
-		|| !FMath::IsFinite(Speed) || !FMath::IsFinite(Restitution) || !FMath::IsFinite(MinSpeed) || !FMath::IsFinite(MaxSpeed))
+		|| !FMath::IsFinite(Speed) || !FMath::IsFinite(Restitution) || !FMath::IsFinite(MinSpeed) || !FMath::IsFinite(MaxSpeed) || !FMath::IsFinite(HeldJumpSpeedScale))
 	{
 		OutErrors.Add(LOCTEXT("LaunchNotFinite", "Launch: a value is not a finite number"));
 	}
