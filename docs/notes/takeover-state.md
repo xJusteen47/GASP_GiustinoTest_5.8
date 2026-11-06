@@ -933,3 +933,5 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 - Spin and drill: docs/notes/handovers/spin-drill.md (SD-01 onward).
 - M7 piggyback: docs/notes/handovers/m7-piggyback.md (M7-01 onward: G5 and later). G12 closed at M7-14 (2026-11-03): M7 done except carry load, rider attack binding and a 2 % mounted_hit finding.
 - Animation pipeline: docs/notes/handovers/anim-pipeline.md.
+- Remaining M3/M4b/M5/T gates (plan resto-m3-m4b-m5-t.md): R3 in docs/notes/handovers/m3-suite.md; traversal leftovers in
+  docs/notes/handovers/traversal-rest.md (T2 closed 2026-11-06); M5 leftovers in docs/notes/handovers/m5-rest.md (E15, E16 done 2026-11-06).
