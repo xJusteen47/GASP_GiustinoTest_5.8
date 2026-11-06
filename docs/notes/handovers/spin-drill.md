@@ -390,3 +390,19 @@ after one checkpoint.
   driller's parked hurtbox, i.e. print the snapshot entry of the driller, not the actor position.
 - Not touched: nondrillable_bounce, opposite_cancel, drill_ground_lag.
 - Cost: one Sonnet thread, ~30 tool calls, 0 builds, 2 editor runs (~8 min each); small.
+
+## SD-16 (laptop, 2026-11-06): moving_enemy GREEN; other reds untouched (STOPPED, as briefed)
+
+- Real cause of "the target does not move" was the BORE HITSTOP (SD-14 hypothesis (a) confirmed): the tip re-hits every 6 frames and froze the victim.
+  Bore tip now uses HitstopMode Override with 0 victim / 0 attacker frames (GSTN_SpinDrillTracks.cpp). Target walks 196 cm in 0.8 s (was 18-24).
+- Decision (recommended option, owner may veto): the driller capsule stays put by design (SD-15 option A). The check no longer asserts the driller
+  location. It also cannot read the parked transform: GetMirrorText's parked value comes from the live animated socket, which does not update at
+  -nullrhi (stayed frozen while the target moved 196 cm). Setting use_live_socket False from Python made the latch drop (not investigated, 2 attempts
+  used). So drill_latch_moving_enemy now checks: target walked > 100 cm while bored + latch holds on every world + rollback budget. The follow is
+  covered by the unit test Parked.InitiatorFollowsMovingPartner. Open if wanted: a snapshot-based reader.
+- Result: drill_latch_moving_enemy PASS (Saved/Logs/sd-16/mov.log). Full SUITE_SPIN (Saved/Logs/sd-16/full.log): PASS air_hop, air_spin_once, release_early_pop,
+  launch_after_bore, target_destroyed, moving_enemy. FAIL: spin_ground_hits_ring (rollback 2->3, flaky), opposite_cancel, drill_ground_lag, nondrillable_bounce,
+  hit_while_latched (not touched), latch_static_multi_hit (flake: PASS on rerun, static.log).
+- Gates: editor build Succeeded. Headless RunTests and plugin-off build NOT run (change = 3 field assignments on the tip); run both before any push.
+- Not pushed; local commit only.
+- Cost: one Sonnet thread, ~30 tool calls, 1 build, 6 editor runs; small-medium.
