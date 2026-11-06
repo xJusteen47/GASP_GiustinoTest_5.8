@@ -137,7 +137,7 @@ def spawn_dummies():
 
 
 def play_setup():
-    """Run once per Play (the watcher does it 2 s after Play starts): the dummies, hit rules in memory (damage on, as the hit scenarios), the
+    """Run once per Play (the watcher does it 4 s after Play starts): the dummies, hit rules in memory (damage on, as the hit scenarios), the
     link steps, the default kit on every player"""
     import link_scenarios as ls
     out = [('dummies', spawn_dummies()), g.hit_rules_setup(), ls.link_setup()]
@@ -193,7 +193,8 @@ def _watch_tick(_dt):
         _watch.update(pie=True, since=now)
         return
     try:
-        if not _watch['ready'] and now - _watch['since'] > 2.0:
+        # 4 s: at 2 s the clients of a 3-player Play had not joined yet and only the host got the kit (2026-11-06)
+        if not _watch['ready'] and now - _watch['since'] > 4.0:
             _watch['ready'] = True
             unreal.log(f'[test_hub] play setup: {play_setup()}')
         if _watch['ready']:
