@@ -62,6 +62,26 @@ ANIMS = [
     ('Ftilt v31', ['/Game/AnimPipeline/Rig/AS_GanonFTiltV31_Build', '/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V3']),
     ('Dair v4 VarM', ['/Game/AnimPipeline/Rig/AS_OverlordDAirV4_Build_VarM', '/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAir_V4_VarM']),
 ]
+# Kit pads (D1 "pedana", Python only until TH-1b's AGSTN_KitPickup is in this branch): standing on one gives that loadout (test_hub's watcher,
+# server side like the C15 test loadout). (kit, support weapon, label, (x, y))
+KIT_PADS = [
+    ('KIT_Test_Hits', '', 'COLPI + SPIN', (1200.0, -1050.0)),
+    ('KIT_Test_Link', '', 'PRESE', (1200.0, -700.0)),
+    ('KIT_Test_Mount', '', 'PIGGYBACK', (1200.0, -350.0)),
+    ('KIT_Test_DefenceLink', '', 'DIFESA', (1200.0, 0.0)),
+    ('KIT_Test_Alpha', '', 'KIT ALPHA', (1200.0, 350.0)),
+    ('KIT_Test_Beta', '', 'ARMA: LANCIA', (1200.0, 700.0)),
+    ('KIT_Test_Alpha', 'WPN_Test_Support', 'ARMA SUPPORTO', (1200.0, 1050.0)),
+]
+PAD_RADIUS = 120.0
+DUMMY_CLASS = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
+# Dummies: the test character placed in the level, possessed by an AI controller on the server (stands still, takes hits). (zone, (x, y), yaw)
+DUMMIES = [
+    ('Z1', (3500.0, 300.0), 180.0), ('Z1', (3500.0, -400.0), 180.0), ('Z1', (2700.0, -1700.0), 180.0),
+    ('Z2', (7800.0, 0.0), 180.0), ('Z2', (7500.0, 500.0), 270.0),
+    ('Z3', (300.0, 2800.0), 270.0),
+    ('Z4', (0.0, 6000.0), 270.0), ('Z4', (200.0, 6200.0), 270.0), ('Z4', (-200.0, 6200.0), 270.0), ('Z4', (0.0, 6400.0), 270.0),
+]
 WALL_LANES = ['a_flat', 'b_convex90']
 WALL_PLANE_X = -3000.0
 WALL_LANE_Y = [-2000.0, -800.0]
@@ -169,6 +189,7 @@ def z0_plaza():
     board = ('TEST HUB  -  zone e comandi (console Python dell\'editor)\n'
              'PRIMA di Play:  import test_hub as h; h.prepare()\n'
              'Play: listen, 3 player, Run Under One Process\n'
+             'Pedane kit davanti a te: ci sali sopra e cambi kit. Manichini nelle zone.\n'
              'h.park(1,\'Z1\')  h.kit(0,\'KIT_Test_Mount\')  h.mount(0,1)\n'
              'h.walker(2,True)  h.fighter(\'Z5\')  h.selftest()\n'
              'Z1 +X colpi | Z2 +X+ duello | Z3 +Y piggyback\n'
@@ -333,6 +354,23 @@ def z6_animations():
     sign('Z6_Sign', ZONES['Z6'][0], ZONES['Z6'][1], face_to=(0.0, 0.0))
 
 
+def kit_pads_and_dummies():
+    for kit_name, support, label, (x, y) in KIT_PADS:
+        box(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}', (x, y, 5.0), (PAD_RADIUS * 2.0, PAD_RADIUS * 2.0, 10.0), 'Grey', mesh=CYLINDER)
+        box(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}_Item', (x, y, 60.0), (40.0, 40.0, 80.0), 'Green' if support else 'Yellow', collision=False)
+        text = f'{label}\n{kit_name}' + (f'\n+ {support}' if support else '')
+        sign(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}_Text', text, (x + 30.0, y), face_to=(0.0, y), size=22.0, height=170.0)
+    sign('Z0_Pads_Title', 'PEDANE KIT: salici sopra', (1200.0, -1450.0), face_to=(0.0, -1450.0), size=30.0, height=230.0)
+    cls = unreal.load_asset(DUMMY_CLASS)
+    if not cls:
+        log(f'WARNING: {DUMMY_CLASS} missing, no dummies')
+        return
+    cls = cls.generated_class()
+    for i, (zone, (x, y), yaw) in enumerate(DUMMIES):
+        _spawn(cls, (x, y, 100.0), (0.0, yaw, 0.0), f'Dummy_{zone}_{i}')
+        sign(f'Dummy_{zone}_{i}_Text', 'manichino', (x, y), face_to=(0.0, 0.0), size=20.0, height=230.0, colour=(1.0, 0.85, 0.1))
+
+
 def lights():
     _spawn(unreal.DirectionalLight, (0.0, 0.0, 1000.0), (-50.0, 30.0, 0.0), 'Sun')
     _spawn(unreal.SkyLight, (0.0, 0.0, 1200.0), label='Sky')
@@ -344,10 +382,11 @@ def run():
     _report.clear()
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
     path = world.get_path_name().split('.')[0]
-    if not (path.startswith('/Temp/') or path == MAP_PATH):
+    # An unsaved new level is /Game/NewWorld (or /Temp/Untitled_N): anything else is someone's map
+    if not (path.startswith('/Temp/') or path in ('/Game/NewWorld', MAP_PATH)):
         raise RuntimeError(f'the open level is {path}: open an empty level (File > New Level > Empty Level) or {MAP_PATH}')
     log(f'cleared {clear()} hub actors in {path}')
-    for step in (z0_plaza, z1_hits, z2_duel, z3_piggyback, z4_spin, z5_traversal, z6_animations, lights):
+    for step in (z0_plaza, z1_hits, z2_duel, z3_piggyback, z4_spin, z5_traversal, z6_animations, kit_pads_and_dummies, lights):
         try:
             step()
         except Exception as e:   # one broken zone must not hide the others

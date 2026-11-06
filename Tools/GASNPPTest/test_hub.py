@@ -63,7 +63,100 @@ def _pie_running():
 
 
 def _key(i):
-    return g.key_of_player(i)
+    """Pawn key of the player of world i. Not g.key_of_player: the level's dummies are AI-possessed on the server and count as 'local' there"""
+    pc = unreal.GameplayStatics.get_player_controller(g.worlds()[i], 0)
+    ps = pc.get_controlled_pawn().get_editor_property('player_state') if pc and pc.get_controlled_pawn() else None
+    if ps is None:
+        raise RuntimeError(f'world {i} has no player pawn')
+    return f"P{ps.get_editor_property('player_id')}"
+
+
+def _players():
+    """World indices with a player of their own (the host is world 0 in listen)"""
+    out = []
+    for i in range(len(g.worlds())):
+        try:
+            _key(i)
+            out.append(i)
+        except Exception:
+            pass
+    return out
+
+
+def dummies():
+    """Keys of the level's dummies (test characters with no player state)"""
+    return [k for k in g.comps(g.worlds()[0]) if not k.startswith('P')]
+
+
+def _place_ahead(i, key, ahead):
+    """Server teleport of pawn `key` to `ahead` cm in front of player i"""
+    v = g.snap(g.worlds()[0])[_key(i)]
+    yaw = math.radians(v['yaw'])
+    x, y = v['location'][0] + ahead * math.cos(yaw), v['location'][1] + ahead * math.sin(yaw)
+    comp = g.comps(g.worlds()[0])[key]
+    spawn = comp.get_spawn_location()
+    comp.server_reset_to_spawn(unreal.Vector(x - spawn.x, y - spawn.y, 0.0))
+    return round(x), round(y)
+
+
+# ---- automatic Play setup and kit pads (registered by prepare(), lives while the editor is open) ---------------------------------------------
+_watch = {'handle': None, 'pie': False, 'since': 0.0, 'ready': False, 'next': 0.0, 'on_pad': {}}
+
+
+def play_setup():
+    """Run once per Play (the watcher does it 2 s after Play starts): hit rules in memory (damage on, as the hit scenarios), the link steps,
+    the default kit on every pawn and dummy"""
+    import link_scenarios as ls
+    out = [g.hit_rules_setup(), ls.link_setup()]
+    out.append({k: g._apply_loadout(k, DEFAULT_KIT) for k in g.comps(g.worlds()[0])})
+    return out
+
+
+def _pad_check():
+    world = g.worlds()[0]
+    for i in _players():
+        key = _key(i)
+        loc = g.snap(world)[key]['location']
+        pad = next((p for p in hub.KIT_PADS if math.hypot(loc[0] - p[3][0], loc[1] - p[3][1]) < hub.PAD_RADIUS), None)
+        if pad is None:
+            _watch['on_pad'].pop(key, None)
+            continue
+        if _watch['on_pad'].get(key) == pad[2]:
+            continue
+        _watch['on_pad'][key] = pad[2]
+        result = g._apply_loadout(key, pad[0], pad[1])
+        unreal.SystemLibrary.print_string(g.worlds()[i], f'Kit: {pad[2]} ({pad[0]}) -> {result}', True, True, unreal.LinearColor(1, 1, 0, 1), 4.0)
+
+
+def _watch_tick(_dt):
+    now = time.time()
+    if now < _watch['next']:
+        return
+    _watch['next'] = now + 0.2
+    try:
+        running = _pie_running()
+    except Exception:
+        running = False
+    if not running:
+        _watch.update(pie=False, ready=False, on_pad={})
+        return
+    if not _watch['pie']:
+        _watch.update(pie=True, since=now)
+        return
+    try:
+        if not _watch['ready'] and now - _watch['since'] > 2.0:
+            _watch['ready'] = True
+            unreal.log(f'[test_hub] play setup: {play_setup()}')
+        if _watch['ready']:
+            _pad_check()
+    except Exception as e:
+        unreal.log_warning(f'[test_hub] watcher: {e!r}')
+
+
+def _start_watcher():
+    if _watch['handle'] is None:
+        _watch['handle'] = unreal.register_slate_post_tick_callback(_watch_tick)
+    return 'watcher on'
 
 
 # ---- before Play -------------------------------------------------------------------------------------------------------------------------------
@@ -90,6 +183,7 @@ def prepare():
     except Exception as e:
         problems.append(f'setup_editor failed: {e!r}')
     _state['prepared'] = time.time()
+    rows.append(('watcher', _start_watcher()))
     path = _write('prepare.txt', [f'{n}: {r}' for n, r in rows] + ['NOTE ' + n for n in notes] + ['PROBLEM ' + p for p in problems])
     return f"prepare: {len(rows)} ok, {len(problems)} problems ({path})"
 
@@ -130,7 +224,7 @@ def park(i, zone, slot=None):
 
 
 def park_all(zone):
-    return [park(i, zone) for i in g.all_players()]
+    return [park(i, zone) for i in _players()]
 
 
 def walker(i, on=True, seconds_per_turn=4.0):
@@ -167,11 +261,11 @@ def mount(rider, carrier):
     ls.link_setup()
     kits = [kit(rider, MOUNT_KIT), kit(carrier, MOUNT_KIT)]
     g._team_everywhere([_key(rider), _key(carrier)], 1)
-    others = [o for o in g.all_players() if o not in (rider, carrier)]
+    others = [o for o in _players() if o not in (rider, carrier)]
     if others:
         g._team_everywhere([_key(o) for o in others], 2)
     rk, ck = _key(rider), _key(carrier)
-    _run([(0.8, lambda: ('placed', g._place_near(rider, ck, (90.0, 0.0)))),
+    _run([(0.8, lambda: ('placed', _place_ahead(rider, ck, 90.0))),
                     (1.5, lambda: ('tap', g.combat_tap(rider, g.button_mask('Interact'))))])
     return 'mount: kits', kits, 'tap in 1.5 s'
 
@@ -217,7 +311,7 @@ def _has_tag(wi, i, name):
 def selftest(zone_seconds=4.0):
     """Every player into every zone (its own slot), the position checked on the server, then one action per zone. Non-blocking: returns at once,
     the rows go to Saved/TestHub/selftest.txt and selftest_result() when it ends (~30 s)"""
-    players = list(g.all_players())
+    players = list(_players())
     rows = []
     _state['rows'], _state['selftest'] = rows, 'running'
 
@@ -272,8 +366,8 @@ def selftest(zone_seconds=4.0):
             steps.append((a, act('Z2 shield tap', lambda: g.combat_tap(players[0], g.button_mask('Shield')))))
             steps.append((a + 0.1, check('Z2 shield button exists', lambda: (g.button_index('Shield') >= 0, g.button_index('Shield')))))
         elif zone == 'Z3' and len(players) >= 2:
-            steps.append((a - 1.3, act('Z3 mount', lambda: mount(players[0], players[1]))))
-            steps.append((a + 1.6, check('Z3 mount formed on the server', lambda: mounted(players[0], players[1]))))
+            steps.append((a - 0.1, act('Z3 mount', lambda: mount(players[0], players[1]))))   # after the spot check: it moves the carrier
+            steps.append((a + 2.4, check('Z3 mount formed on the server', lambda: mounted(players[0], players[1]))))
         elif zone == 'Z4':
             steps.append((a - 1.3, act('Z4 kits back', lambda: [kit(i, DEFAULT_KIT) for i in players])))
             steps.append((a, act('Z4 spin', lambda: spin(players[0]))))
@@ -287,7 +381,7 @@ def selftest(zone_seconds=4.0):
         elif zone == 'Z6':
             steps.append((a, check('Z6 looping meshes in the PIE world', lambda: (
                 _count_actors(0, unreal.SkeletalMeshActor) >= len(hub.ANIMS), _count_actors(0, unreal.SkeletalMeshActor)))))
-        t += zone_seconds if zone in ('Z3', 'Z4') else zone_seconds - 1.5
+        t += zone_seconds + 1.0 if zone == 'Z3' else zone_seconds if zone == 'Z4' else zone_seconds - 1.5
 
     def finish():
         fails = [r for r in rows if r[0] == 'FAIL']
