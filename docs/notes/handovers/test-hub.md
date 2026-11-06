@@ -18,9 +18,17 @@
   (`FGSTN_LinkSnapshotContributor::Contribute` ← `ReadSnapshotEntry` ← `EnsureSnapshot` ← `SimulationTick`). Aggirato (i manichini tengono il
   kit di base). Bug C++ da guardare: il contributor non regge un pawn appena creato con loadout cambiato.
 
+- Mappa salvata dall'owner (19:22, senza pawn piazzati) e committata (`3d35089`). Ultimo Play: setup automatico partito (10 manichini), poi
+  **secondo crash** 3 s dopo, stack solo Renderer/Core (nessun modulo nostro nei frame leggibili), preceduto da un ensure del renderer
+  "FAppTime ... no inherited time context" al salvataggio. Non diagnosticato oltre (regola dei 2 tentativi). Setup portato a 4 s (a 2 s i
+  client non erano ancora entrati: solo l'host aveva il kit).
+- **Rischio:** il Ctrl+S dell'owner ha salvato anche asset modificati in memoria dall'automazione: `GSTN_CombatRules_Standard.uasset`
+  (regole colpi, link step) e `IC_GASNPP_Test.uasset` (bottoni). Non committati: ripristinare con `git checkout` a editor chiuso; TH-2
+  deve far lavorare l'automazione su copie transitorie o ripristinare prima di ogni salvataggio.
+
 **Prossimo, serve il fisso (dopo le 04:00):**
-1. Owner riapre l'editor su m7 e L_Test_Hub → `build_test_hub_map.run()` → Play: verificare che l'avvio automatico parta, che i manichini
-   a runtime prendano colpi, selftest → Ctrl+S → commit della `.umap` e dei MI in `Content/GASNPPTest/TestMaps/Hub`. (Se non fatto in TH-1.)
+1. TH-2 (Opus medium, ~$4-6): capire il crash del renderer con i manichini a runtime (provare Play senza automazione: se crasha anche
+   così è l'editor; altrimenti spawn dei manichini più tardi o via C++), verificare che un manichino a runtime prenda colpi, selftest.
 2. TH-1b kit a terra (`claude/project-thread-0t6tfg`, C++): cherry-pick su m7, build a editor chiuso, sostituire le pedane Python con
    `AGSTN_KitPickup` (Sonnet, ~$2-4).
 3. Fix del crash sopra (Opus medium, ~$3-5) prima di cambiare kit ai manichini.
@@ -30,4 +38,4 @@ montato senza binding `Role.Rider` (M7-06); posa rider (IK TODO); blocco Z4 solo
 `IC_GASNPP_Test.uasset` salvato su disco coi bottoni Shield/Spin (non committato: `git checkout` a editor chiuso); `Content/Levels/L_Test_Hub.umap`
 è un redirector (non committato); server dedicato e suite nelle 3 configurazioni non provati.
 
-Costo stimato: ~250k token di contesto, ~$12-15 (sopra la stima: manichini, pedane, automazione e crash su richiesta dell'owner).
+Costo stimato: ~280k token di contesto, ~$14-17 (sopra la stima: manichini, pedane, automazione e crash su richiesta dell'owner).
