@@ -8,8 +8,8 @@ combat code knows it is an enemy.
 Status: **experimental (0.1)**, `EnabledByDefault: false` (enabled in this branch's `.uproject`). Checkpoint T3 of
 [traversal-surfaces-plan.md](../../docs/architecture/plans/traversal-surfaces-plan.md): the platform minimum for **fighters**
 (many-enemies-replication.md §4.2–4.5) plus shapes with behaviours (traversal-surfaces.md §4.1, §4.2, §4.4 input). No
-platform-minion proxy and no minion seams (combat-m8-minions.md §4d.5 stays for `GSTNPlatformMinion`); no part bridge
-(`GSTNPlatformParts`, T6); no combat-state wiring (T7). Design:
+platform-minion proxy and no minion seams (combat-m8-minions.md §4d.5 stays for `GSTNPlatformMinion`); the part bridge is the separate plugin
+[GSTNPlatformParts](../GSTNPlatformParts/README.md) (T6); no combat-state wiring (T7). Design:
 [many-enemies-replication.md](../../docs/architecture/many-enemies-replication.md) §4,
 [traversal-surfaces.md](../../docs/architecture/traversal-surfaces.md) §4. Deviations from the specs:
 [traversal-doc-deltas.md](../../docs/notes/traversal-doc-deltas.md) (T3).
@@ -55,7 +55,9 @@ OnPreSimulationTick(TimeStep)            // every Mover of the world, inside the
     for shape: collider.collision = solid(state(shape, ctx.Frame)); collider.Teleport(pose * shape.Local)
 ```
 
-**Shape states** (traversal-surfaces.md §4.4). Two inputs: `SetShapeMask(uint8 EnabledShapes, DisableAs)` (the T6 parts bridge
+**Shape states** (traversal-surfaces.md §4.4). Bridges feed the inputs from `OnPrePose` (fired before a forward or presentation
+pose, never on a replayed frame: a change made there lands on the frame being posed); `FGSTN_PlatformPartGates` (Core) turns part
+bits into the shape mask for every bridge. Two inputs: `SetShapeMask(uint8 EnabledShapes, DisableAs)` (the T6 parts bridge
 feeds the confirmed broken mask) and `SetActionState(EGSTN_PlatformActionState)` (T7 maps the fighter's combat state;
 `ActiveActionStates` masks per spec and per shape). A change is stamped with the next frame the pose point simulates and kept as a
 timeline, so a frame's collision is a function of the frame and a re-simulated frame finds what it had the first time:
@@ -172,4 +174,5 @@ host + 1 client, map `L_WallSlideAB`, the fighter spawned by the driver; `--loss
 
 ## Changelog
 
+- 0.1.1 (2026-11-06): `OnPrePose` hook, `FGSTN_PlatformPartGates`, part names count as resolved when `GSTNPlatformParts` is loaded (T6).
 - 0.1 (2026-10-25): skeleton for fighters (spec, component, channel, pose point, pose history), then shapes with behaviours (plan T3).

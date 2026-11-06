@@ -230,6 +230,11 @@ UPrimitiveComponent* UGSTN_EnemyPlatformComponent::GetShapeComponent(int32 Shape
 
 void UGSTN_EnemyPlatformComponent::ApplyPosePoint(const FGSTN_PlatformPoseContext& Context)
 {
+	// Inputs only on frames simulated for the first time: a replayed frame keeps the timeline it had
+	if (Context.Frame == INDEX_NONE || Context.Frame > LatestPoseFrame)
+	{
+		OnPrePose.Broadcast(*this, Context);
+	}
 	const FTransform OwnerPose = ComputeOwnerPose(Context);
 	CurrentPoseFrame = Context.Frame;
 	if (Context.Frame != INDEX_NONE)
@@ -252,6 +257,7 @@ void UGSTN_EnemyPlatformComponent::ApplyPresentationPose()
 	FGSTN_PlatformPoseContext Context;
 	const AGameStateBase* GameState = World->GetGameState();
 	Context.TimeMs = (GameState ? GameState->GetServerWorldTimeSeconds() : World->GetTimeSeconds()) * 1000.0;
+	OnPrePose.Broadcast(*this, Context);
 	const FTransform OwnerPose = ComputeOwnerPose(Context);
 	PoseColliders(OwnerPose, INDEX_NONE);
 	OnPoseApplied(Context, OwnerPose);
@@ -288,7 +294,7 @@ uint8 UGSTN_EnemyPlatformComponent::ComputeDesiredMask() const
 	return Current.GetShapeIdMask() & ShapeMaskInput & Current.GetActionStateMask(ActionState);
 }
 
-void UGSTN_EnemyPlatformComponent::RequestShapeStates(EGSTN_PlatformShapeState DisableAs)
+void UGSTN_EnemyPlatformComponent::RequestShapeStates(EGSTN_PlatformShapeState DisableAs, int32 AtFrame)
 {
 	const FGSTN_PlatformSpec& Current = GetSpec();
 	int32 Grace[GSTNPlatform::MaxShapes];
@@ -298,7 +304,8 @@ void UGSTN_EnemyPlatformComponent::RequestShapeStates(EGSTN_PlatformShapeState D
 		Grace[Id] = Index != INDEX_NONE ? Current.GetDropGraceFrames(Current.Shapes[Index]) : 0;
 	}
 	// The next frame the pose point simulates forward: the frames already simulated keep their collision if they are replayed
-	const int32 Frame = LatestPoseFrame == INDEX_NONE ? MIN_int32 : LatestPoseFrame + 1;
+	// (or the frame the authority took the change at, which a client may already have simulated: SetShapeMaskAtFrame)
+	const int32 Frame = AtFrame != INDEX_NONE ? AtFrame : (LatestPoseFrame == INDEX_NONE ? MIN_int32 : LatestPoseFrame + 1);
 	ShapeStates.Request(ComputeDesiredMask(), DisableAs, Grace, Frame);
 }
 
@@ -306,6 +313,12 @@ void UGSTN_EnemyPlatformComponent::SetShapeMask(uint8 EnabledShapes, EGSTN_Platf
 {
 	ShapeMaskInput = EnabledShapes;
 	RequestShapeStates(DisableAs == EGSTN_PlatformShapeState::Breaking ? EGSTN_PlatformShapeState::Breaking : EGSTN_PlatformShapeState::Inactive);
+}
+
+void UGSTN_EnemyPlatformComponent::SetShapeMaskAtFrame(uint8 EnabledShapes, EGSTN_PlatformShapeState DisableAs, int32 Frame)
+{
+	ShapeMaskInput = EnabledShapes;
+	RequestShapeStates(DisableAs == EGSTN_PlatformShapeState::Breaking ? EGSTN_PlatformShapeState::Breaking : EGSTN_PlatformShapeState::Inactive, Frame);
 }
 
 void UGSTN_EnemyPlatformComponent::SetActionState(EGSTN_PlatformActionState State)

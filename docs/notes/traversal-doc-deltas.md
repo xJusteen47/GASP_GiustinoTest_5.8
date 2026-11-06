@@ -220,3 +220,13 @@ many-enemies-replication.md §4 (PL), traversal-surfaces.md §4 (TS), modularity
   After: 6/6 pass, client `launch_to_grab` 1 unexplained per rep (the harness's own dual-teleport correction, the same as rep 0 before), `on` 0, host 0; 4 of 18 grabs logged
   `memReset=1 (mode (record lost to a rollback))`, i.e. the inference fired exactly where the old rule diverged.
 - **Network checks completed 2026-10-26:** the scenario at 2 % loss, the moving lanes (`wall_ab.py --lanes "^h_"`) and the standard v2 wall scenarios at 0 % and 2 %; numbers in wall-slide-v2.md 6.15.
+
+## T6 parts bridge (2026-11-06, laptop branch `claude/project-thread-wlggpb`)
+
+- **Mask source.** Plan T6 said each machine reads the confirmed `BrokenMask` (host end of F, clients the presentation source). Measured: a
+  client then stamps the break a round trip after the host and its sliding pawn reconciles 4-7 times. Now the host reads the fragment at its
+  pose point and replicates `{BrokenMask, Frame}` on the bridge; clients call `SetShapeMaskAtFrame` with the host's frame (retroactive). The
+  Breaking telegraph keeps those past frames solid, so a mask that arrives within `DropGraceFrames` costs 0 corrections (TS §7 budget was ≤ 1).
+- **Restore.** No listener on `Combat.Event.Part.Restored`: following the mask covers it (the bit clears).
+- **Seams added to GSTNPlatform:** `OnPrePose`, `SetShapeMaskAtFrame`, `FGSTN_PlatformPartGates`; the "no bridge" warning is off when the module is loaded.
+- **Scenario** `scenario_surface_part_break` is the `part` phase of `surface_scenarios.py`, mask driven by a console command (no combat fighter yet).

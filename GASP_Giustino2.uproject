@@ -215,6 +215,10 @@
 		{
 			"Name": "GSTNPlatform",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNPlatformParts",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"
