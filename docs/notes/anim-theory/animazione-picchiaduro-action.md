@@ -12,6 +12,11 @@ Idea centrale: in un picchiaduro **l'animazione è un contratto con il giocatore
 frame deve dire in che fase è la mossa. La bellezza viene dopo la leggibilità, e la
 leggibilità viene dal contrasto tra pochi frame di movimento estremo e pose tenute chiare.
 
+**Solo teoria generale.** Qui non ci sono correzioni di mosse passate né regole ricavate da
+una singola animazione. I numeri sono **intervalli indicativi** con il loro perché: servono a
+riconoscere un problema e a ragionarci, non sono soglie da rispettare. Gli esempi sono
+marcati come tali e illustrano un principio.
+
 ---
 
 ## 1. Le fasi della mossa e i principi
@@ -83,8 +88,8 @@ mossa. Quindi:
 
 Quando il tempo riparte, l'animazione riprende dal frame congelato. Errori tipici:
 - La parte secondaria era a metà oscillazione: alla ripartenza **completa l'oscillazione
-  e ne aggiunge altre**. Sembra che il colpo abbia caricato una molla. È il caso del dair
-  con le gambe molleggianti (vedi §8.4).
+  e ne aggiunge altre**. Sembra che il colpo abbia caricato una molla
+  (esempio in §8.4).
 - Il follow-through riparte lento: dopo un congelamento lo spettatore si aspetta
   **un'esplosione** di movimento (la "liberazione" dell'energia). I primi 2-4 f dopo
   l'hitstop devono avere spacing **ampio**, poi decelerare.
@@ -103,7 +108,7 @@ uno sfocato, non pose. Strumenti per rendere quella velocità:
   Funzionano bene sullo stile giocattolo; 1 f, al massimo 2.
 - **Scie / trail VFX**: la soluzione più comune nei giochi 3D (Smash usa archi colorati sui
   colpi). Non richiede di deformare il rig; va sincronizzata con i frame attivi.
-- Con **rig stretch off** (decisione del progetto) la via pratica è: scia VFX sincronizzata
+- Con un rig **senza stretch delle ossa** la via pratica è: scia VFX sincronizzata
   + eventualmente una posa di "stretch" con arto alla massima estensione possibile nel
   frame prima del contatto.
 
@@ -123,7 +128,7 @@ lato o a 3/4) e per pochi frame. Conseguenze:
   telecamera Follow reale del gioco). Deve essere chiaro chi colpisce, con cosa e in che
   direzione.
 - **La parte che colpisce deve essere visibile** da tutte le telecamere che il gioco usa
-  (regola già nel progetto: controllare anche le viste posteriori). Se il braccio è coperto
+  (anche le viste posteriori). Se il braccio è coperto
   dal busto, la mossa sembra non avere hitbox.
 - **Direzione chiara**: la posa d'impatto deve "puntare" nella direzione del knockback.
   Un colpo che manda in alto deve avere la linea d'azione che sale.
@@ -232,32 +237,36 @@ causa nuova.
 Conclusione comune: overlap e follow-through ci sono, ma sono **brevi, una volta sola, e
 finiscono in posa**.
 
-### 8.3 Budget di moto secondario per una mossa del progetto
+### 8.3 Come ragionare sul moto secondario in una mossa
 
-| Parte | Ritardo d'inizio | Oscillazioni max | Fine entro |
-|---|---|---|---|
-| Arto che colpisce (attivo) | 0 (è la guida) | 1 overshoot ≤ 10% | 6-10 f dopo l'ultimo frame attivo |
-| Arto libero (bilanciamento) | 1-3 f | 1 | 8-12 f, comunque prima del FAF |
-| Testa | 1-2 f | 0-1 (piccola) | 6-8 f |
-| Parti passive (antenne, cristallo, accessori) | 2-4 f | 2 con decadimento ≤ 35% | prima del FAF o, se in idle, 20-30 f |
+Ordini di grandezza, con il perché (non soglie):
+- **Arto che colpisce**: è la guida, non ha ritardo; dopo l'azione è controllato dal muscolo,
+  quindi al più un piccolo overshoot e poi va in posa.
+- **Arto libero e testa**: seguono con un ritardo breve e si assestano presto, perché il
+  personaggio li controlla per restare in equilibrio e guardare il bersaglio.
+- **Parti passive** (accessori, capelli, antenne): ritardo maggiore e qualche oscillazione,
+  ma con decadimento netto; nei giochi tendono a finire entro la fine della mossa perché
+  il blend verso la mossa successiva taglierebbe un moto ancora in corso.
 
-Se una parte supera il budget, la si corregge **togliendo** oscillazioni, non smorzandole
-un po' di più.
+Quando il secondario è troppo, di solito la correzione migliore è **togliere** oscillazioni,
+non smorzarle un po' di più: il problema è che esistono senza causa, non quanto sono ampie.
 
-### 8.4 Esempio commentato: il dair con le gambe molleggianti
+### 8.4 Esempio illustrativo: secondario senza causa dopo un colpo aereo
 
-Mossa ipotetica: dair, startup f0-f11, attivo f12-f17, primo contatto f14, FAF f36.
+*Esempio, non regola*: i frame sono inventati per mostrare il principio di §8.1 e del doc 1
+§7.3. Mossa ipotetica: aereo verso il basso, startup f0-f11, attivo f12-f17, contatto f14,
+FAF f36.
 
-Sbagliato (quello che l'owner ha visto):
+Da evitare:
 - f14 contatto, hitstop congela su una posa in cui le ginocchia erano a metà flessione.
 - Alla ripartenza le gambe oscillano: estese f17, piegate f21, estese f25, piegate f29,
   ancora un rimbalzo a f33-f35. Cinque inversioni senza nessuna causa nuova.
 
-Giusto:
+Una possibile versione coerente con il principio (non l'unica):
 - f11-f13 gambe in accelerazione verso il basso, spacing crescente, estensione piena a f13.
 - f14 posa d'impatto pulita (gambe tese, punte giù, busto inarcato), tenuta dall'hitstop.
 - f15-f18 piccolo rimbalzo delle gambe verso l'alto (energia restituita dal bersaglio),
-  una volta, ampiezza ≤ 10-15% dell'estensione.
+  una volta e piccolo.
 - f18-f30 ritrazione **intenzionale** in posa aerea raccolta, slow-out e poi slow-in.
 - f30-f36 moving hold in posa aerea; nessuna oscillazione al FAF.
 
@@ -265,59 +274,51 @@ Giusto:
 
 ## 9. Note per il progetto
 
-- **60 fps** di animazione, frame dell'owner 0-based: tutti i numeri qui sono già in quella
-  scala.
+- **60 fps** di animazione, frame numerati da 0: tutti i numeri qui sono già in quella scala.
 - **Hitstop e shake li fa il codice di combattimento**: la clip non contiene frame duplicati
   per simulare l'hitstop.
-- **Le chiavi sono dell'owner** (regole del progetto): questi principi servono a scegliere
-  breakdown, spacing, overlap e settle **tra** le sue chiavi, e a dire perché una variante
-  non funziona. Se una regola qui contraddice una chiave dell'owner, vince la chiave e si
-  segnala il conflitto.
+- **Le chiavi sono dell'owner**: questi principi servono a ragionare su breakdown, spacing,
+  overlap e settle **tra** le sue chiavi, e a spiegare perché una variante non funziona.
+  Se un principio qui sembra contraddire una chiave, vince la chiave e si segnala il dubbio.
 - **Regola 10 del progetto**: nessuna variante va all'owner senza che qualcuno abbia
-  guardato il video in-game. La checklist sotto è lo strumento per quella revisione.
+  guardato il video in-game. Il §10 sotto è il metodo per quella revisione.
 
 ---
 
-## 10. Checklist di revisione frame per frame del video in-game
+## 10. Revisione frame per frame del video in-game
 
 Preparazione: video in-game con la telecamera reale, versione "colpisce" e versione "a
-vuoto"; estrarre i frame attorno a **hit** (da 6 f prima a 12 f dopo, escluso l'hitstop) e
-attorno al **FAF** (da 8 f prima a 4 f dopo). Annotare per ogni FAIL il numero di frame.
+vuoto"; estrarre i frame attorno al **contatto** e attorno al **FAF**. Si applica il metodo
+del doc 1 §13 (intenzione → previsione dai principi → misura → spiegazione), con queste
+domande in più. Le risposte vanno ricavate per la mossa in esame; nessuna voce contiene
+valori fissi.
 
-**Startup (prima dell'hit)**
-- [ ] Si capisce dalla prima posa quale mossa sta partendo (silhouette diversa dalla guardia).
-- [ ] C'è un'anticipazione in verso opposto (anche solo interna: spalla, bacino).
-- [ ] La parte che colpisce accelera fino al frame prima del contatto (intervalli crescenti).
-- [ ] Catena cinetica: il bacino/busto parte prima dell'arto.
+**Startup**
+- Dalla prima posa si capisce quale mossa sta partendo?
+- C'è un'anticipazione (anche solo interna) compatibile con lo startup disponibile?
+- La parte che colpisce accelera fino al contatto? Il centro del corpo parte prima dell'arto?
 
 **Impatto**
-- [ ] Il frame d'impatto è una posa chiave pulita: arto esteso, nessuna parte in posa casuale.
-- [ ] Silhouette leggibile alla dimensione del gioco, arto che colpisce visibile.
-- [ ] Linea d'azione tesa e orientata come il knockback.
-- [ ] La vittima reagisce nella direzione giusta con drag della testa.
+- Il frame d'impatto (quello tenuto dall'hitstop) è una posa chiave pulita, o una posa di
+  passaggio congelata?
+- Alla dimensione e con la telecamera di gioco si vede chi colpisce, con cosa e verso dove?
+- La linea d'azione è coerente con la direzione del knockback?
+- La reazione della vittima va nella direzione del colpo?
 
 **Dopo l'hitstop**
-- [ ] I primi 2-4 f dopo la ripartenza hanno spacing ampio (liberazione dell'energia).
-- [ ] Al massimo 1 overshoot per arto, ≤ 10-15%.
-- [ ] Nessuna oscillazione che riparte senza causa nuova (contare le inversioni di direzione
-      per ogni arto: max 2 dopo l'hit).
-- [ ] Il confronto "colpisce" vs "a vuoto" mostra la stessa mossa; la versione a vuoto non
-      ha il rimbalzo d'impatto ma ha un follow-through più lungo.
+- La ripartenza libera l'energia (movimento ampio subito, poi decelera)?
+- Per ogni oscillazione dopo l'impatto: qual è la causa? Se non c'è, è un errore.
+- La versione "a vuoto" è coerente con quella "colpisce" (stessa mossa, energia non ceduta)?
 
 **Recovery e FAF**
-- [ ] Il recovery dura e "costa" in proporzione alla forza della mossa.
-- [ ] Ogni moto secondario è finito prima del FAF.
-- [ ] Al FAF tutti gli arti hanno velocità quasi nulla e la posa è vicina alla guardia
-      (o alla posa aerea neutra per gli aerei).
-- [ ] Il blend verso la mossa successiva o l'idle non produce pop (> 30°/f).
-- [ ] Atterraggio (aerei): punto basso 2-4 f dopo il contatto, durata = landing lag.
+- Il recovery mostra un costo proporzionato alla forza della mossa?
+- Al FAF il corpo è fermo e pronto per qualunque azione, o qualcosa è ancora in moto?
+- Il passaggio alla mossa successiva o alla guardia è pulito?
+- Negli aerei: l'atterraggio assorbe e dura quanto il landing lag?
 
-**Generale (dal doc 1)**
-- [ ] Niente floaty, niente spacing uniforme, niente twinning, niente overlap stracotto.
-- [ ] Piedi a terra fermi, archi lisci, nessun popping.
-
-Esito: PASS solo se nessuna voce di **Impatto**, **Dopo l'hitstop** o **FAF** fallisce.
-Le altre voci in FAIL vanno elencate come miglioramenti con il frame di riferimento.
+Uso: le domande guidano lo sguardo, non danno un punteggio automatico. Per ogni problema si
+scrive il frame, il principio coinvolto e il ragionamento; le domande di **Impatto**, **Dopo
+l'hitstop** e **FAF** sono quelle che pesano di più sulla lettura della mossa.
 
 ---
 

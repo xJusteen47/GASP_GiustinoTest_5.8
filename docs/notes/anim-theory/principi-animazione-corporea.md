@@ -7,6 +7,10 @@ Il documento per picchiaduro e action (`animazione-picchiaduro-action.md`) dà p
 Non è l'elenco dei 12 principi. È la parte di mestiere che un corso di body mechanics
 (Animation Mentor, iAnimate, AnimSchool) insegna nei primi 6-9 mesi, scritta in forma
 verificabile: numeri di frame, rapporti di spacing, controlli da fare fotogramma per fotogramma.
+**Solo teoria generale.** Qui non ci sono correzioni di mosse passate né regole ricavate da
+una singola animazione. I numeri sono **intervalli indicativi** con il loro perché: servono a
+riconoscere un problema e a ragionarci, non sono soglie da rispettare. Gli esempi sono
+marcati come tali e illustrano un principio.
 
 Convenzioni:
 - Frame a **60 fps**, numerati da 0 come i frame di animazione dell'owner.
@@ -216,11 +220,11 @@ mossa che deve essere veloce.
 
 Quando una parte arriva su una posa, la supera un poco e torna. Questo dice che ha massa.
 
-Regole quantitative:
+Ordini di grandezza (il perché: un arto con muscoli frena da sé, quindi assorbe l'energia in fretta):
 - Ampiezza dell'**overshoot** di un arto muscolare: **5-15%** del tragitto appena fatto.
   Oltre il 20% sembra una molla o un arto rotto.
 - Numero di oscillazioni visibili: **una** (oltre e indietro). Al massimo una seconda,
-  ampia **≤ 30%** della prima. **Mai una terza** su un corpo vivo.
+  molto più piccola della prima. Una terza oscillazione su un arto vivo è rara: di solito indica una molla, non un muscolo.
 - Durata del settle: **4-12 f** a 60 fps per un arto; il busto si assesta più lento della
   mano ma con ampiezza minore.
 - Un corpo con muscoli è **quasi criticamente smorzato**: si assesta, non vibra. Le parti
@@ -275,16 +279,16 @@ A 24 fps lo stesso ritardo è di **0,5-1 frame** per anello: per questo nelle an
 
 ### 7.3 La regola chiave: il moto secondario è ritardato, decade, finisce
 
-Questa è la regola che il dair del progetto ha violato (le gambe continuavano a molleggiare
-dopo l'hit): **il moto secondario è una conseguenza smorzata di un moto primario, non un
-moto autonomo**.
+Principio: **il moto secondario è una conseguenza smorzata di un moto primario, non un
+moto autonomo**. Le caratteristiche che seguono ne derivano; i numeri sono indicativi.
 
 1. **Parte in ritardo**: 2-4 f dopo il cambio di direzione della parte genitore.
 2. **È proporzionale** al cambio di velocità che lo ha causato: un arresto brusco produce
    un overshoot visibile, un rallentamento dolce quasi nulla.
 3. **Decade in fretta**: ogni oscillazione successiva ha ampiezza **≤ 30-40%** della
    precedente.
-4. **Ha un termine**: si ferma entro un numero limitato di frame dal suo innesco.
+4. **Ha un termine**: si ferma dopo un tempo limitato, che dipende da quanto la parte è
+   leggera e libera (più muscolo = assestamento più rapido). Ordini di grandezza:
    - Arti con muscoli (gambe, braccia): **≤ 8-12 f** a 60 fps, **1 oscillazione**.
    - Parti morbide attaccate (pancia, guance, guanti grossi): ≤ 12-18 f, 1-2 oscillazioni.
    - Parti libere leggere (capelli, nastri, antenne, coda): ≤ 20-30 f, 2-3 oscillazioni
@@ -295,11 +299,11 @@ moto autonomo**.
 6. **Non è "rumore"**: un'oscillazione costante sovrapposta a tutta la mossa non è secondary,
    è jitter.
 
-Perché le gambe del dair erano sbagliate: dopo il contatto la gamba aveva già scaricato
-l'energia sul bersaglio (e durante l'hitstop il tempo era fermo). Un arto che ha appena
-colpito **perde** energia, non la guadagna. Quindi al massimo un piccolo rimbalzo di
-ritorno (2-6 f) e poi la gamba si ritrae con intenzione muscolare verso la posa successiva.
-Molleggi ripetuti dopo l'hit dicono "la gamba è di gomma e nessuno la controlla".
+*Esempio (illustrativo)*: un arto che ha appena colpito ha ceduto energia al bersaglio,
+quindi dopo il contatto ha **meno** energia, non di più. Se dopo l'impatto oscilla più volte
+senza una nuova causa, il moto non ha origine visibile e legge come "arto di gomma che
+nessuno controlla". Cosa fare invece dipende dalla mossa e dalle chiavi: il principio è solo
+che ogni oscillazione deve avere una causa e smorzarsi.
 
 Distinguere **intenzionale** da **passivo**:
 - Arto **attivo** (lo muove il personaggio): dopo l'azione va verso una posa con slow-in
@@ -351,15 +355,14 @@ Quasi tutto in un corpo organico si muove su archi, perché le articolazioni ruo
 - Eccezioni: colpi a stocco (jab dritto) dove la **mano** va dritta ma **gomito e spalla**
   fanno archi; arresti contro una superficie.
 
-Test pratico: segui con l'occhio un solo punto (punta del piede del dair) per tutta la
+Test pratico: segui con l'occhio un solo punto (per esempio la punta di un piede) per tutta la
 mossa. Deve disegnare una forma che potresti tracciare con un solo gesto della penna.
 
 ---
 
 ## 10. Squash e stretch su un personaggio giocattolo
 
-Il progetto ha deciso **rig stretch off** (decisioni 2026-11-02). Quindi lo squash/stretch
-si ottiene con la **posa**, non scalando le ossa:
+Su un rig senza stretch delle ossa lo squash/stretch si ottiene con la **posa**:
 - **Squash** = compressione: colonna piegata, testa incassata, ginocchia piegate, braccia
   vicine al corpo. Si usa in atterraggio, carica, impatto ricevuto.
 - **Stretch** = allungamento: colonna estesa, arti allungati al massimo, punte dei piedi
@@ -414,44 +417,57 @@ Limiti per lo stile "toy-like" (Astro Bot, DK Bananza):
 
 ---
 
-## 13. Checklist misurabile (da usare prima di consegnare una variante)
+## 13. Come derivare il giudizio su una mossa
 
-Per ogni voce: guardare i frame, non solo i numeri. Scrivere nel log il frame che prova
-il PASS o il FAIL.
+Le regole per una mossa **non si conservano**: si ricavano ogni volta dai principi, partendo
+dall'intenzione della mossa. Metodo in quattro passi:
+
+1. **Intenzione**: cosa deve comunicare la mossa (peso, velocità, chi la fa, dove va
+   l'energia)? Le chiavi dell'animatore la fissano.
+2. **Principio → previsione**: per ogni principio pertinente, cosa ci si aspetta di vedere
+   *in questa mossa*? Esempio di ragionamento: "colpo pesante → la parte che colpisce deve
+   avere spacing crescente fino al contatto, la carica deve essere proporzionata, il recovery
+   deve mostrare l'inerzia".
+3. **Misura sui frame**: cosa si osserva davvero (spacing della parte guida, ordine di
+   partenza dei segmenti, traiettorie, oscillazioni e loro causa, posizione del peso).
+4. **Confronto e spiegazione**: dove osservazione e previsione divergono, si scrive il frame,
+   il principio e il perché. Non si scrive "il braccio è troppo a destra" ma "a f12 la
+   silhouette non mostra l'arto che colpisce (principio §11)": la correzione concreta la
+   decide chi anima.
+
+Domande guida (la risposta va ricavata per la singola mossa, non da valori fissi):
 
 **Timing e spacing**
-- [ ] In stepped (solo chiavi e breakdown) la mossa si legge già.
-- [ ] Contrasto: fase più veloce : fase più lenta ≥ 1:3.
-- [ ] La parte che colpisce ha l'intervallo più lungo nel frame **prima** del contatto.
-- [ ] Nessuna parte del corpo ha 4+ intervalli uguali consecutivi (eccetto smear voluti).
-- [ ] Nessun breakdown al 50% esatto di tempo e posa tra due chiavi.
+- In stepped, solo con chiavi e breakdown, la mossa si legge già?
+- C'è contrasto tra fasi lente e veloci, o tutto dura più o meno uguale?
+- La parte che colpisce è al massimo della velocità appena prima del contatto?
+- Ci sono tratti a velocità costante su una parte organica? Sono voluti?
+- I breakdown favoriscono una chiave, o sono a metà esatta?
 
 **Peso**
-- [ ] Nelle pose tenute il COM proiettato cade dentro la base d'appoggio.
-- [ ] In aria il COM segue una parabola (scarto < 1-2 cm dalla parabola ideale).
-- [ ] Atterraggio: il punto più basso arriva 3-8 f **dopo** il contatto.
-- [ ] Catena cinetica: in un colpo forte bacino → busto → spalla → arto partono in sequenza.
+- Nelle pose tenute il peso sta sopra l'appoggio? Se no, c'è un motivo (sta cadendo, spinge)?
+- In aria il baricentro segue una traiettoria credibile?
+- Dopo un contatto con il suolo il corpo assorbe, o si ferma di colpo?
+- La forza attraversa il corpo in ordine (dal centro verso le estremità)?
 
 **Anticipazione, overshoot, settle**
-- [ ] C'è un'anticipazione, in verso opposto, di durata coerente con la tabella §5.
-- [ ] Overshoot di arti attivi 5-15%, una sola oscillazione visibile.
-- [ ] Ogni settle finisce entro 4-12 f per arti, entro 30 f per parti libere.
+- C'è una preparazione in verso opposto, proporzionata all'azione e al tempo disponibile?
+- Gli overshoot sono proporzionali alla frenata che li causa?
+- Il settle dura in modo coerente con quanto la parte è pesante, muscolare o libera?
 
 **Overlap e secondary**
-- [ ] Ritardi tra anelli della catena 1-2 f su arti attivi (mai > 3 f).
-- [ ] Ogni oscillazione secondaria ha una causa visibile nei 2-4 f precedenti.
-- [ ] Ogni oscillazione successiva ≤ 30-40% della precedente.
-- [ ] Dopo il fermo del genitore, nessun arto fa più di 1 oscillazione; nessuna oscillazione
-      dopo la fine della mossa (FAF).
-- [ ] La posa chiave è visibile "pulita" per almeno 2-3 f (o è tenuta dall'hitstop).
+- Le parti partono e si fermano in sequenza, o tutte insieme?
+- Ogni oscillazione ha una causa visibile poco prima?
+- Ogni oscillazione è più piccola della precedente?
+- Qualcosa si muove a genitore fermo, senza causa? Il secondario finisce con la mossa?
+- La posa chiave resta leggibile, o l'overlap la copre?
 
 **Forma**
-- [ ] Silhouette leggibile nelle chiavi (test del nero).
-- [ ] Linea d'azione chiara (C o S) nelle chiavi, che si inverte tra carica e azione.
-- [ ] Nessun twinning nelle chiavi.
-- [ ] Archi lisci su polso, piede, testa (motion trail senza cuspidi immotivate).
-- [ ] Piedi a terra fermi (< 1 cm/f di scivolamento).
-- [ ] Nessun popping (> 30°/f senza motivo).
+- La silhouette delle chiavi dice cosa succede?
+- C'è una linea d'azione chiara, che cambia tra carica e azione?
+- Ci sono simmetrie non volute (twinning) o tangenze?
+- Le traiettorie di mani, piedi e testa sono archi lisci? I cambi di direzione hanno un motivo?
+- I piedi a terra restano fermi? Ci sono scatti senza motivo?
 
 ---
 
@@ -476,4 +492,4 @@ il PASS o il FAIL.
   e calcio), COM e poligono d'appoggio.
 
 I numeri di questo documento sono **valori di partenza** derivati dalle fonti e dalla
-pratica comune dell'animazione 3D per giochi. Le chiavi e i tempi dell'owner vincono sempre.
+pratica comune dell'animazione 3D per giochi. Le chiavi e i tempi scelti dall'animatore (nel progetto, l'owner) vincono sempre.

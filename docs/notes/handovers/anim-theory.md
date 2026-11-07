@@ -6,15 +6,17 @@ Thread cloud, solo documenti. Branch `claude/project-thread-0ppwn5` da `feature/
 - `docs/notes/anim-theory/principi-animazione-corporea.md`: body mechanics in dettaglio
   (timing/spacing con frame a 60 fps e 24 fps, peso e COM, anticipazione, overshoot/settle,
   overlap e secondary con la regola "ritardato, decade, finisce", moving hold, archi,
-  squash/stretch con rig stretch off, silhouette, tabella errori, checklist misurabile).
+  squash/stretch con rig stretch off, silhouette, tabella errori, metodo per derivare il giudizio con domande guida).
 - `docs/notes/anim-theory/animazione-picchiaduro-action.md`: startup/active/recovery/FAF
   mappati sui principi, posa d'impatto e hitstop, smear, leggibilità, pose tenute,
   reazioni, aerei e landing lag, budget di moto secondario, esempio dair commentato,
-  checklist di revisione del video in-game attorno a hit e FAF.
+  domande per la revisione del video in-game attorno a contatto e FAF.
 
 ## Come usarli
 - Ogni thread (o Antigravity) che genera o revisiona una mossa legge i due doc prima.
-- La checklist del doc 2 §10 è la rubrica della revisione video (regola 10).
+- Il doc 2 §10 è il metodo della revisione video (regola 10).
+- Owner 11-07: niente regole ricavate da singole mosse né correzioni di posa: i giudizi si
+  derivano a ogni revisione dai principi (doc 1 §13). Numeri = ordini di grandezza.
 - Le chiavi dell'owner vincono sempre; i numeri sono valori di partenza.
 
 ## Non fatto
