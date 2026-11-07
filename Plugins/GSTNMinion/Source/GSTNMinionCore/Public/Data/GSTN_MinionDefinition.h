@@ -6,9 +6,12 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "LOD/GSTN_MinionLOD.h"
+#include "Net/GSTN_MinionNetCodec.h"
 #include "GSTN_MinionDefinition.generated.h"
 
 class AActor;
+class UAnimInstance;
+class USkeletalMesh;
 class UGSTN_CombatTimeline;
 class UGSTN_HurtboxSetDefinition;
 
@@ -30,7 +33,10 @@ enum class EGSTN_MinionMovementBackend : uint8
 {
 	/** The batch's own lightweight movement (steering, ground snap, knockback integration) */
 	Lightweight = 0,
-	/** A Mover component on the minion (optional module, only for types that need it) */
+	/**
+	 * A Mover component on the minion (optional module, only for types that need it). G4: not built, spike 3 decision B; such
+	 * types run the lightweight backend (the subsystem warns once)
+	 */
 	Mover
 };
 
@@ -75,8 +81,9 @@ struct GSTNMINIONCORE_API FGSTN_MinionStats
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Movement", meta = (ClampMin = "0.0"))
 	float GravityScale = 1.f;
 
+	/** Highest obstacle the minion steps onto while walking, and how far down the ground snap reaches */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Movement", meta = (ClampMin = "0.0", ForceUnits = "cm"))
-	float StepHeight = 35.f;
+	float StepHeight = 45.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Capsule", meta = (ClampMin = "1.0", ForceUnits = "cm"))
 	float CapsuleRadius = 34.f;
@@ -211,6 +218,51 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Presentation")
 	TSoftClassPtr<AActor> PuppetClass;
 
+	/**
+	 * Mesh of the pooled puppet (G7). Soft: a client loads it when the first puppet of the type is acquired, the server never does.
+	 * Empty is valid (a headless or -nullrhi run, a test): the puppet then has no mesh and costs only its transform
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Presentation")
+	TSoftObjectPtr<USkeletalMesh> PuppetMesh;
+
+	/** Animation Blueprint of the puppet's mesh. Empty = the mesh plays nothing (the reference pose) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Presentation")
+	TSoftClassPtr<UAnimInstance> PuppetAnimClass;
+
+	/**
+	 * The brain of the type: a StateTree asset using UGSTN_MinionStateTreeSchema (G8). Kept as a soft UObject reference so Core has no
+	 * StateTree dependency; the runtime casts it. Empty = the type has no brain (a script or the bench writes its intents).
+	 * Server only: a client never loads it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Brain", meta = (AllowedClasses = "/Script/StateTreeModule.StateTree"))
+	TSoftObjectPtr<UObject> Brain;
+
+	/**
+	 * Seconds the body stays after the Death timeline ends (the slot is Dead, not moved, not brained, not hittable, holds no token, and
+	 * the net item keeps publishing Dead so clients keep the body). Converted to whole fixed frames, rounded up, when the death ends, so
+	 * the free frame is deterministic. 0 = freed on the frame the death ends
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Death", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float CorpseSeconds = 2.f;
+
+	/**
+	 * True when the type's net item carries the extension byte (8 more bits per item update; 0 bits when false). The byte's meaning is
+	 * owned by a bridge plugin (GSTNPartsMinion sends the broken-parts mask through UGSTN_MinionCombatSubsystem::SetExtByte). It is a type
+	 * property, not a per-minion one, so the server and every client build the same wire Format from the definition (MakeNetFormat) and
+	 * need nothing on the wire to tell them. Changing it changes the item layout: it is part of the content both sides must share
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Net")
+	bool bHasNetExt = false;
+
+	/** The wire Format of this type's items: the extension byte iff bHasNetExt. Server and client both build it from here */
+	FGSTN_MinionNetFormat MakeNetFormat(bool bIdFieldActive = false) const
+	{
+		FGSTN_MinionNetFormat Format;
+		Format.bIdFieldActive = bIdFieldActive;
+		Format.bTypeHasExt = bHasNetExt;
+		return Format;
+	}
+
 	/** Fighter class the minion becomes when a script promotes it. Empty = the type cannot be promoted */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Promotion")
 	TSoftClassPtr<AActor> PromotionFighterClass;
@@ -220,6 +272,13 @@ public:
 	{
 		return bOverrideLOD ? LODOverride : Defaults;
 	}
+
+	/**
+	 * Appends every soft reference this type needs loaded to play (hurtbox set, move and reaction timelines, puppet class, mesh and anim
+	 * class, promotion fighter class), skipping empty ones and paths already in Out. Brain is added only with bIncludeServerOnly (a client
+	 * never loads the tree). A wave preloads with it so no puppet or timeline loads synchronously on the first spawn
+	 */
+	void GetSoftDependencies(TArray<FSoftObjectPath>& Out, bool bIncludeServerOnly = true) const;
 
 	/** The index in Moves of the move for a command, INDEX_NONE if none. MoveId on the wire is this + 1 */
 	int32 FindMoveIndex(const FGameplayTag& Command) const;

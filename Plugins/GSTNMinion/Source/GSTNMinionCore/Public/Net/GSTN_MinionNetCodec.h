@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/BitArray.h"
 
 /**
  * The wire layout of one minion item and the frame-stamp helpers (combat-m8-minions.md 8.2). Pure: no replication class, no
@@ -14,7 +15,7 @@
  */
 namespace GSTNMinion
 {
-	/** Bits bit 0..2 of FGSTN_MinionNetItem::Flags */
+	/** Bits bit 0..2 of FGSTN_MinionNetWireItem::Flags */
 	namespace NetFlags
 	{
 		/** No interpolation across this sample (spawn, respawn, teleport) */
@@ -137,6 +138,19 @@ struct GSTNMINIONCORE_API FGSTN_MinionNetFormat
 
 	/** True for a type with an extension byte: ExtByte is then always on the wire (8 bits) */
 	bool bTypeHasExt = false;
+
+	/**
+	 * Mixed arrays: a pack holds items of several types, and the type is only known once the item's TypeIndex has been read. When set,
+	 * bit TypeIndex says whether that type has the extension byte (the table of the project registry, same on every machine). Null =
+	 * only bTypeHasExt decides. Must outlive the Serialize / GetBitSize call
+	 */
+	const TBitArray<>* ExtTypes = nullptr;
+
+	/** Whether an item of this type carries the extension byte under this format */
+	bool HasExtFor(uint8 TypeIndex) const
+	{
+		return bTypeHasExt || (ExtTypes && ExtTypes->IsValidIndex(TypeIndex) && (*ExtTypes)[TypeIndex]);
+	}
 };
 
 /**
@@ -144,7 +158,7 @@ struct GSTNMINIONCORE_API FGSTN_MinionNetFormat
  * Id is pack-local; the global handle is PackId << 4 | Id (8.2). TypeIndex is sent on add only (bHasType), GlobalId on add only
  * while the format allows it (bHasGlobalId).
  */
-struct GSTNMINIONCORE_API FGSTN_MinionNetItem
+struct GSTNMINIONCORE_API FGSTN_MinionNetWireItem
 {
 	uint8 Id = 0;
 	bool bHasType = false;
@@ -165,8 +179,8 @@ struct GSTNMINIONCORE_API FGSTN_MinionNetItem
 	uint8 SpeedQ = 0;
 	uint8 Flags = 0;
 
-	bool operator==(const FGSTN_MinionNetItem& Other) const;
-	bool operator!=(const FGSTN_MinionNetItem& Other) const { return !(*this == Other); }
+	bool operator==(const FGSTN_MinionNetWireItem& Other) const;
+	bool operator!=(const FGSTN_MinionNetWireItem& Other) const { return !(*this == Other); }
 };
 
 /**
@@ -176,20 +190,20 @@ struct GSTNMINIONCORE_API FGSTN_MinionNetItem
 struct GSTNMINIONCORE_API FGSTN_MinionNetCodec
 {
 	/** Fills the quantized fields of Item from State (Id, type, global id and ext byte are the caller's and stay as they are) */
-	static void Quantize(const FGSTN_MinionNetState& State, const FGSTN_MinionNetQuantization& Quant, FGSTN_MinionNetItem& Item);
+	static void Quantize(const FGSTN_MinionNetState& State, const FGSTN_MinionNetQuantization& Quant, FGSTN_MinionNetWireItem& Item);
 
 	/**
 	 * Rebuilds a state. ReferenceFrame is the receiver's estimate of the server frame: it rebuilds FrameStamp (nearest, 8 bits) and
 	 * then MoveStartFrame (latest at or before the stamp, 10 bits; INDEX_NONE when MoveId is 0)
 	 */
-	static FGSTN_MinionNetState Dequantize(const FGSTN_MinionNetItem& Item, const FGSTN_MinionNetQuantization& Quant, int32 ReferenceFrame);
+	static FGSTN_MinionNetState Dequantize(const FGSTN_MinionNetWireItem& Item, const FGSTN_MinionNetQuantization& Quant, int32 ReferenceFrame);
 
 	/**
 	 * Writes the item to a saving archive or reads it from a loading one, field by field in the order of 8.2, at the widths of
 	 * GSTNMinion::NetBits. Use FBitWriter and FBitReader for a packed stream. Returns false if the archive errored
 	 */
-	static bool Serialize(FArchive& Ar, FGSTN_MinionNetItem& Item, const FGSTN_MinionNetFormat& Format);
+	static bool Serialize(FArchive& Ar, FGSTN_MinionNetWireItem& Item, const FGSTN_MinionNetFormat& Format);
 
 	/** Bits Serialize writes for this item under this format */
-	static int32 GetBitSize(const FGSTN_MinionNetItem& Item, const FGSTN_MinionNetFormat& Format);
+	static int32 GetBitSize(const FGSTN_MinionNetWireItem& Item, const FGSTN_MinionNetFormat& Format);
 };

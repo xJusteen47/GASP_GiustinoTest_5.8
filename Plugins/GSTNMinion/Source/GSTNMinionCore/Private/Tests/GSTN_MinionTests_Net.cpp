@@ -26,10 +26,10 @@ namespace
 	}
 
 	/** Writes the item to a packed stream and reads it back; returns the bit count */
-	int64 RoundTrip(const FGSTN_MinionNetItem& In, const FGSTN_MinionNetFormat& Format, FGSTN_MinionNetItem& Out, bool& bOutOk)
+	int64 RoundTrip(const FGSTN_MinionNetWireItem& In, const FGSTN_MinionNetFormat& Format, FGSTN_MinionNetWireItem& Out, bool& bOutOk)
 	{
 		FBitWriter Writer(512, true);
-		FGSTN_MinionNetItem Copy = In;
+		FGSTN_MinionNetWireItem Copy = In;
 		bOutOk = FGSTN_MinionNetCodec::Serialize(Writer, Copy, Format);
 
 		FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
@@ -53,11 +53,11 @@ bool FGSTN_MinionCodecBoundsTest::RunTest(const FString& Parameters)
 	for (int32 Index = 0; Index < 3000; ++Index)
 	{
 		const FGSTN_MinionNetState State = RandomState(Random, Quant.WorldOrigin);
-		FGSTN_MinionNetItem Item;
+		FGSTN_MinionNetWireItem Item;
 		Item.Id = static_cast<uint8>(Index & 0xFF);
 		FGSTN_MinionNetCodec::Quantize(State, Quant, Item);
 
-		FGSTN_MinionNetItem Read;
+		FGSTN_MinionNetWireItem Read;
 		bool bOk = false;
 		RoundTrip(Item, Format, Read, bOk);
 		if (!bOk || Read != Item)
@@ -96,17 +96,17 @@ bool FGSTN_MinionCodecBoundsTest::RunTest(const FString& Parameters)
 
 	// Quantized values are fixed points of the codec: dequantize then quantize again gives the same item
 	FGSTN_MinionNetState State = RandomState(Random, Quant.WorldOrigin);
-	FGSTN_MinionNetItem First;
+	FGSTN_MinionNetWireItem First;
 	FGSTN_MinionNetCodec::Quantize(State, Quant, First);
 	const FGSTN_MinionNetState Dequantized = FGSTN_MinionNetCodec::Dequantize(First, Quant, State.FrameStamp);
-	FGSTN_MinionNetItem Second;
+	FGSTN_MinionNetWireItem Second;
 	FGSTN_MinionNetCodec::Quantize(Dequantized, Quant, Second);
 	TestTrue(TEXT("Quantize(Dequantize(x)) == x"), First == Second);
 
 	// Positions outside the 19-bit range clamp instead of wrapping
 	FGSTN_MinionNetState Far;
 	Far.Position = Quant.WorldOrigin + FVector3f(1.0e7f, -1.0e7f, 0.f);
-	FGSTN_MinionNetItem FarItem;
+	FGSTN_MinionNetWireItem FarItem;
 	FGSTN_MinionNetCodec::Quantize(Far, Quant, FarItem);
 	const FGSTN_MinionNetState FarBack = FGSTN_MinionNetCodec::Dequantize(FarItem, Quant, 0);
 	TestTrue(TEXT("Clamped to the edge of the range"), FarBack.Position.X > Quant.WorldOrigin.X + 2000.f && FarBack.Position.Y < Quant.WorldOrigin.Y - 2000.f);
@@ -136,7 +136,7 @@ bool FGSTN_MinionCodecLayoutTest::RunTest(const FString& Parameters)
 		Format.bIdFieldActive = (Mask & 1) != 0;
 		Format.bTypeHasExt = (Mask & 2) != 0;
 
-		FGSTN_MinionNetItem Item;
+		FGSTN_MinionNetWireItem Item;
 		FGSTN_MinionNetCodec::Quantize(State, Quant, Item);
 		Item.Id = 0xA5;
 		Item.bHasType = (Mask & 4) != 0;
@@ -145,7 +145,7 @@ bool FGSTN_MinionCodecLayoutTest::RunTest(const FString& Parameters)
 		Item.GlobalId = Item.bHasGlobalId ? 0xC3 : 0;
 		Item.ExtByte = Format.bTypeHasExt ? 0x81 : 0;
 
-		FGSTN_MinionNetItem Read;
+		FGSTN_MinionNetWireItem Read;
 		bool bOk = false;
 		const int64 Bits = RoundTrip(Item, Format, Read, bOk);
 		TestTrue(FString::Printf(TEXT("Format %d round trips without error and consumes every bit"), Mask), bOk);
@@ -155,16 +155,16 @@ bool FGSTN_MinionCodecLayoutTest::RunTest(const FString& Parameters)
 
 	// The smallest item (no type, no id field, no extension) is within the spec's ~121 bits
 	const FGSTN_MinionNetFormat Minimal;
-	FGSTN_MinionNetItem Smallest;
+	FGSTN_MinionNetWireItem Smallest;
 	TestTrue(TEXT("The minimal item is at most 121 bits"), FGSTN_MinionNetCodec::GetBitSize(Smallest, Minimal) <= 121);
 	TestTrue(TEXT("and above 110"), FGSTN_MinionNetCodec::GetBitSize(Smallest, Minimal) > 110);
 
 	// An item with no type does not carry stale type bits across reads
-	FGSTN_MinionNetItem Dirty;
+	FGSTN_MinionNetWireItem Dirty;
 	Dirty.TypeIndex = 77;
 	Dirty.bHasType = false;
 	bool bOk = false;
-	FGSTN_MinionNetItem Read;
+	FGSTN_MinionNetWireItem Read;
 	Read.TypeIndex = 99;
 	RoundTrip(Dirty, Minimal, Read, bOk);
 	TestEqual(TEXT("Absent type reads as 0"), static_cast<int32>(Read.TypeIndex), 0);
@@ -232,7 +232,7 @@ bool FGSTN_MinionFrameWrapTest::RunTest(const FString& Parameters)
 	State.FrameStamp = 1030;
 	State.MoveId = 3;
 	State.MoveStartFrame = 1020;
-	FGSTN_MinionNetItem Item;
+	FGSTN_MinionNetWireItem Item;
 	FGSTN_MinionNetCodec::Quantize(State, Quant, Item);
 	const FGSTN_MinionNetState Back = FGSTN_MinionNetCodec::Dequantize(Item, Quant, 1000);
 	TestEqual(TEXT("Stamp rebuilt from a reference 30 frames behind"), Back.FrameStamp, 1030);

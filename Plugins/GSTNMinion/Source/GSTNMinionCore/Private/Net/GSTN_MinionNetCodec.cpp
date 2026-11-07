@@ -97,7 +97,7 @@ namespace GSTNMinionFrame
 	}
 }
 
-bool FGSTN_MinionNetItem::operator==(const FGSTN_MinionNetItem& Other) const
+bool FGSTN_MinionNetWireItem::operator==(const FGSTN_MinionNetWireItem& Other) const
 {
 	return Id == Other.Id && bHasType == Other.bHasType && TypeIndex == Other.TypeIndex
 		&& bHasGlobalId == Other.bHasGlobalId && GlobalId == Other.GlobalId
@@ -107,7 +107,7 @@ bool FGSTN_MinionNetItem::operator==(const FGSTN_MinionNetItem& Other) const
 		&& HealthQ == Other.HealthQ && ExtByte == Other.ExtByte && SpeedQ == Other.SpeedQ && Flags == Other.Flags;
 }
 
-void FGSTN_MinionNetCodec::Quantize(const FGSTN_MinionNetState& State, const FGSTN_MinionNetQuantization& Quant, FGSTN_MinionNetItem& Item)
+void FGSTN_MinionNetCodec::Quantize(const FGSTN_MinionNetState& State, const FGSTN_MinionNetQuantization& Quant, FGSTN_MinionNetWireItem& Item)
 {
 	Item.PositionQ[0] = GSTNMinionQuant::QuantizePosition(State.Position.X, Quant.WorldOrigin.X);
 	Item.PositionQ[1] = GSTNMinionQuant::QuantizePosition(State.Position.Y, Quant.WorldOrigin.Y);
@@ -123,7 +123,7 @@ void FGSTN_MinionNetCodec::Quantize(const FGSTN_MinionNetState& State, const FGS
 	Item.Flags = static_cast<uint8>(State.Flags & 0x7);
 }
 
-FGSTN_MinionNetState FGSTN_MinionNetCodec::Dequantize(const FGSTN_MinionNetItem& Item, const FGSTN_MinionNetQuantization& Quant, int32 ReferenceFrame)
+FGSTN_MinionNetState FGSTN_MinionNetCodec::Dequantize(const FGSTN_MinionNetWireItem& Item, const FGSTN_MinionNetQuantization& Quant, int32 ReferenceFrame)
 {
 	FGSTN_MinionNetState State;
 	State.Position = FVector3f(
@@ -178,7 +178,7 @@ namespace
 	}
 }
 
-bool FGSTN_MinionNetCodec::Serialize(FArchive& Ar, FGSTN_MinionNetItem& Item, const FGSTN_MinionNetFormat& Format)
+bool FGSTN_MinionNetCodec::Serialize(FArchive& Ar, FGSTN_MinionNetWireItem& Item, const FGSTN_MinionNetFormat& Format)
 {
 	namespace Bits = GSTNMinion::NetBits;
 
@@ -224,7 +224,7 @@ bool FGSTN_MinionNetCodec::Serialize(FArchive& Ar, FGSTN_MinionNetItem& Item, co
 	SerializeNarrow(Ar, Item.HitCounter, Bits::HitCounter);
 	SerializeNarrow(Ar, Item.HealthQ, Bits::Health);
 
-	if (Format.bTypeHasExt)
+	if (Format.HasExtFor(Item.TypeIndex))
 	{
 		SerializeNarrow(Ar, Item.ExtByte, Bits::ExtByte);
 	}
@@ -238,7 +238,7 @@ bool FGSTN_MinionNetCodec::Serialize(FArchive& Ar, FGSTN_MinionNetItem& Item, co
 	return !Ar.IsError();
 }
 
-int32 FGSTN_MinionNetCodec::GetBitSize(const FGSTN_MinionNetItem& Item, const FGSTN_MinionNetFormat& Format)
+int32 FGSTN_MinionNetCodec::GetBitSize(const FGSTN_MinionNetWireItem& Item, const FGSTN_MinionNetFormat& Format)
 {
 	namespace Bits = GSTNMinion::NetBits;
 
@@ -250,6 +250,6 @@ int32 FGSTN_MinionNetCodec::GetBitSize(const FGSTN_MinionNetItem& Item, const FG
 	}
 	Total += 3 * Bits::Position + Bits::Yaw + Bits::ActionState + Bits::MoveId + Bits::MoveStartFrame + Bits::FrameStamp
 		+ Bits::HitCounter + Bits::Health + Bits::Speed + Bits::Flags;
-	Total += Format.bTypeHasExt ? Bits::ExtByte : 0;
+	Total += Format.HasExtFor(Item.TypeIndex) ? Bits::ExtByte : 0;
 	return Total;
 }

@@ -8,7 +8,7 @@ namespace
 {
 	TAutoConsoleVariable<int32> CVarMinionMax(
 		TEXT("gstn.Minion.Max"),
-		128,
+		GSTNMinion::DefaultCapacity,
 		TEXT("Slots of the minion store (the most minions alive at once). Read when a store is reset, clamped to [1, 65536]."),
 		ECVF_Default);
 
@@ -48,6 +48,9 @@ void FGSTN_MinionStore::Reset(int32 InCapacity)
 	LODTier.Init(0, Slots);
 	FramesInTier.Init(0, Slots);
 	Intent.Init(FGSTN_MinionIntent(), Slots);
+	ExtFlags.Init(0, Slots);
+	MaxLODTier.Init(GSTNMinion::NoLODCeiling, Slots);
+	ExtByte.Init(0, Slots);
 	Alive.Init(false, Slots);
 	NumAlive = 0;
 }
@@ -73,6 +76,9 @@ void FGSTN_MinionStore::ResetSlot(int32 Index)
 	LODTier[Index] = 0;
 	FramesInTier[Index] = 0;
 	Intent[Index] = FGSTN_MinionIntent();
+	ExtFlags[Index] = 0;
+	MaxLODTier[Index] = GSTNMinion::NoLODCeiling;
+	ExtByte[Index] = 0;
 }
 
 FGSTN_MinionHandle FGSTN_MinionStore::Allocate()

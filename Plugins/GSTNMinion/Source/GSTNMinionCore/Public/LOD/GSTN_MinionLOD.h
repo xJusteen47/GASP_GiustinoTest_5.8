@@ -139,3 +139,32 @@ struct GSTNMINIONCORE_API FGSTN_MinionLODMath
 	 */
 	static bool Step(const FGSTN_MinionLODParams& Params, FGSTN_MinionLODState& State, float Distance, bool bForceCombat, int32 DeltaFrames = 1);
 };
+
+/** One T0 minion the host cap may demote (G11): the cap pass keeps these in a reused array, so nothing is allocated per frame */
+struct FGSTN_MinionCapCandidate
+{
+	int32 Slot = INDEX_NONE;
+	/** Ground distance to the nearest player; MAX_flt when there is none */
+	float Distance = 0.f;
+	/** The tier the slot had before this frame's LOD step, so a demotion back to it emits no tier change at all */
+	uint8 OldTier = 0;
+};
+
+/**
+ * The MaxActiveT0 cap as a pure function (M8 4d.1): the farthest candidates are demoted. The order is a strict total order (distance,
+ * then slot index: of two equal distances the HIGHER slot goes first), so every machine and a replay pick the same minions.
+ */
+namespace GSTNMinionLODCap
+{
+	/** True when A is demoted before B */
+	inline bool IsFartherThan(const FGSTN_MinionCapCandidate& A, const FGSTN_MinionCapCandidate& B)
+	{
+		return A.Distance > B.Distance || (A.Distance == B.Distance && A.Slot > B.Slot);
+	}
+
+	/**
+	 * Moves the Count farthest candidates to the front of the array (a bounded selection: Count passes, no sort, no allocation) and
+	 * returns how many were moved (Count clamped to the array). Cheap because Count is the overshoot of the cap, a handful
+	 */
+	GSTNMINIONCORE_API int32 SelectFarthest(TArrayView<FGSTN_MinionCapCandidate> Candidates, int32 Count);
+}

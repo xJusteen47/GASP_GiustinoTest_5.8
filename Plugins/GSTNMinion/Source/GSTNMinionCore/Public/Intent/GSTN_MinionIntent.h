@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "GSTN_MinionIntent.generated.h"
 
 namespace GSTNMinion
 {
@@ -25,33 +26,45 @@ namespace GSTNMinion
  * That keeps the simulation one code path whoever drives it, and makes a stale brain harmless.
  *
  * Latest value wins. The stamp is the server frame of the write; an intent older than IntentStaleFrames is ignored and the
- * minion idles, so a brain that stops (dead target, unloaded tree) cannot leave a minion walking forever. Plain data, not
- * reflected: the store holds one per slot and the batch copies it freely.
+ * minion idles, so a brain that stops (dead target, unloaded tree) cannot leave a minion walking forever. Plain data: the store
+ * holds one per slot and the batch copies it freely. Reflected (G3) only so a Blueprint brain can fill it through
+ * UGSTN_MinionCombatComponent::SetIntent; the stamp is written by the authority subsystem, never by the brain.
  */
+USTRUCT(BlueprintType)
 struct GSTNMINIONCORE_API FGSTN_MinionIntent
 {
-	/** Wanted move direction on the ground plane, unit length or zero */
-	FVector2f MoveDir = FVector2f::ZeroVector;
+	GENERATED_BODY()
+
+	/** Wanted move direction on the ground plane, unit length or zero. Double precision because Blueprint has no float vector */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Intent")
+	FVector2D MoveDir = FVector2D::ZeroVector;
 
 	/** Wanted ground speed in cm/s, clamped by the type's walk and run speed when applied */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Intent")
 	float DesiredSpeed = 0.f;
 
 	/** Wanted facing in degrees (world yaw); read only when the face request is set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Intent")
 	float DesiredYaw = 0.f;
 
 	/** True when DesiredYaw is a request; false lets the movement face the move direction */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Intent")
 	bool bFaceRequested = false;
 
 	/** The attack or move request: a Command.Minion.* tag selecting a move of the type's list. Invalid = none */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Intent")
 	FGameplayTag Command;
 
 	/** Pipeline id of the target (GSTNEntityKinds ids), INDEX_NONE for none */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Intent")
 	int32 TargetEntityId = INDEX_NONE;
 
 	/** GSTNMinion::IntentFlags */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Intent")
 	uint8 Flags = 0;
 
 	/** Server frame of the write; INDEX_NONE for an intent that was never written */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Minion|Intent")
 	int32 StampFrame = INDEX_NONE;
 
 	/** True when the intent was never written or is older than IntentStaleFrames at CurrentFrame */

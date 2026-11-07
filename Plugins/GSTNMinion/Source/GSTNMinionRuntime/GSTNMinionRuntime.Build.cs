@@ -1,19 +1,43 @@
 using UnrealBuildTool;
 
-// Minion runtime (batch subsystem, actors, presentation: M8 G3 and later). Empty shell in G2. The GAS and NP edges of the plan
-// (GSTNCombatGAS, GSTNCombatNP, NetCore, NavigationSystem, StateTree) are added by the checkpoint that first uses them.
+// Minion runtime (M8 G3): the authority batch subsystem, the pooled actor and its component, the spawner and the bench.
+// Plan section 2: never GSTNPlatform*, GSTNParts*, GSTNLink*, GSTNDefence* or the project module; no /Game/ path, no ConstructorHelpers.
+// GSTNCombatGAS and GSTNInputCore joined in G5 (the KO event tags and the authoritative event stream); NetCore in G6 (FastArray, push
+// model; public: the pack header exposes the FastArray); NavigationSystem and StateTree join with the checkpoints that first use them (G7-G8).
 public class GSTNMinionRuntime : ModuleRules
 {
 	public GSTNMinionRuntime(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		// Public: the subsystem header names the hit provider (GSTNCombatNP), the timeline player (GSTNCombatCore) and the store
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",
 			"CoreUObject",
 			"Engine",
-			"GSTNMinionCore"
+			"GameplayTags",
+			"GSTNMinionCore",
+			"GSTNCombatCore",
+			"GSTNCombatNP",
+			"NetCore",
+			// G8: the brain subsystem and the schema name StateTree types in their headers
+			"StateTreeModule",
+			"PropertyBindingUtils"
+		});
+
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			// OnPostFixedTick of the world manager (the G1 fork hook) drives the batch
+			"NetworkPrediction",
+			// FGenericTeamId of the snapshot entry
+			"AIModule",
+			// Combat.Event.KO and Combat.KOReason.Health of the minion KO event (G5)
+			"GSTNCombatGAS",
+			// UGSTN_SimEventSubsystem: the authoritative event stream the KO goes to (G5)
+			"GSTNInputCore",
+			// G8: async navigation path of the brain (a no-op without a navmesh)
+			"NavigationSystem"
 		});
 	}
 }
