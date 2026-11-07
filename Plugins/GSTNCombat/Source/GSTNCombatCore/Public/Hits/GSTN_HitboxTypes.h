@@ -94,10 +94,10 @@ struct GSTNCOMBATCORE_API FGSTN_HitboxSpec
 	uint8 HitGroup = 0;
 
 	/**
-	 * Most distinct victims this hitbox's group may hit in one execution of the move (the attacker's HitTargets ring holds 8 in all, so more
-	 * than 8 is clamped). A sweeping attack that should not skewer a crowd lowers it
+	 * Most distinct victims this hitbox's group may hit in one execution of the move (the attacker's HitTargets ring holds 16 in all, so more
+	 * than 16 is clamped). 8 by default; a crowd cleave raises it, a sweeping attack that should not skewer a crowd lowers it
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox", meta = (ClampMin = "1", ClampMax = "8"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox", meta = (ClampMin = "1", ClampMax = "16"))
 	uint8 MaxTargetsPerGroup = 8;
 
 	/**

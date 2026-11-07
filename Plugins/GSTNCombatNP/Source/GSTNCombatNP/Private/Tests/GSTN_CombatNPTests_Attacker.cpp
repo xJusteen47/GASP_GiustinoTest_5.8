@@ -162,32 +162,34 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AttackerRingOverflowTest, "GSTNCombat.NP.
 bool FGSTN_AttackerRingOverflowTest::RunTest(const FString& Parameters)
 {
 	FAttackerFixture Fixture;
-	// Group 0 reaches the five victims on the left, group 1 the four on the right: nine in all, the ring holds eight
+	// Group 0 reaches the nine victims on the left, group 1 the eight on the right: seventeen in all, the ring holds sixteen
 	FGSTN_HitboxSpec Left = FAttackerFixture::MakeSphere(120.0, 0, FVector(0.0, -300.0, 0.0));
 	FGSTN_HitboxSpec Right = FAttackerFixture::MakeSphere(120.0, 1, FVector(0.0, 300.0, 0.0));
+	Left.MaxTargetsPerGroup = 16;
+	Right.MaxTargetsPerGroup = 16;
 	Fixture.AddTrack(0, 10, { Left, Right });
-	for (int32 Index = 0; Index < 5; ++Index)
+	for (int32 Index = 0; Index < 9; ++Index)
 	{
-		Fixture.AddEntity(10 + Index, 2, FVector(Index * 30.0, -300.0, 0.0), 20.0);
+		Fixture.AddEntity(10 + Index, 2, FVector(Index * 15.0, -300.0, 0.0), 20.0);
 	}
-	for (int32 Index = 0; Index < 4; ++Index)
+	for (int32 Index = 0; Index < 8; ++Index)
 	{
-		Fixture.AddEntity(20 + Index, 2, FVector(Index * 30.0, 300.0, 0.0), 20.0);
+		Fixture.AddEntity(20 + Index, 2, FVector(Index * 15.0, 300.0, 0.0), 20.0);
 	}
 	Fixture.Finish();
 
 	Fixture.Run(0);
-	TestEqual(TEXT("nine hits"), Fixture.Hits.Num(), 9);
-	TestEqual(TEXT("the ring holds eight"), Fixture.Core.Hit.NumHitTargets(), FGSTN_HitSyncState::MaxHitTargets);
+	TestEqual(TEXT("seventeen hits"), Fixture.Hits.Num(), 17);
+	TestEqual(TEXT("the ring holds sixteen"), Fixture.Core.Hit.NumHitTargets(), FGSTN_HitSyncState::MaxHitTargets);
 	int32 Replaced = 0;
 	for (const FGSTN_AttackerHit& Hit : Fixture.Hits)
 	{
 		Replaced += Hit.bReplacedTarget ? 1 : 0;
 	}
 	TestEqual(TEXT("one hit replaced a target"), Replaced, 1);
-	// Entity order: 10..14 then 20..23, so the first written (10, group 0) is the oldest and goes
+	// Entity order: 10..18 then 20..27, so the first written (10, group 0) is the oldest and goes
 	TestFalse(TEXT("the oldest target is gone"), Fixture.Core.Hit.HasHitTarget(10, 0, 0));
-	TestTrue(TEXT("the newest is on the ring"), Fixture.Core.Hit.HasHitTarget(23, 0, 1));
+	TestTrue(TEXT("the newest is on the ring"), Fixture.Core.Hit.HasHitTarget(27, 0, 1));
 	TestTrue(TEXT("the second oldest stays"), Fixture.Core.Hit.HasHitTarget(11, 0, 0));
 
 	// MaxTargetsPerGroup: a group of a hitbox that allows two takes the two lowest ids and no more
@@ -205,6 +207,33 @@ bool FGSTN_AttackerRingOverflowTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the lowest ids win"), Limited.HitVictim(30) && Limited.HitVictim(31));
 	Limited.Run(1);
 	TestEqual(TEXT("and the others are never reached later in the same run"), Limited.Hits.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AttackerCrowdCleaveTest, "GSTNCombat.NP.Hits.Attacker.CrowdCleaveTwelve", GSTN_NP_TEST_FLAGS)
+bool FGSTN_AttackerCrowdCleaveTest::RunTest(const FString& Parameters)
+{
+	// One wide group that allows sixteen reaches twelve fighters in one frame (M8 X6): every one is hit once and none replaces another
+	FAttackerFixture Fixture;
+	FGSTN_HitboxSpec Cleave = FAttackerFixture::MakeSphere(400.0, 0);
+	Cleave.MaxTargetsPerGroup = 16;
+	Fixture.AddTrack(0, 10, { Cleave });
+	for (int32 Index = 0; Index < 12; ++Index)
+	{
+		Fixture.AddEntity(40 + Index, 2, FVector(100.0 + Index * 10.0, 0.0, 0.0));
+	}
+	Fixture.Finish();
+	Fixture.Run(0);
+	TestEqual(TEXT("twelve hits"), Fixture.Hits.Num(), 12);
+	TestEqual(TEXT("twelve targets on the ring"), Fixture.Core.Hit.NumHitTargets(), 12);
+	int32 Replaced = 0;
+	for (const FGSTN_AttackerHit& Hit : Fixture.Hits)
+	{
+		Replaced += Hit.bReplacedTarget ? 1 : 0;
+	}
+	TestEqual(TEXT("no hit replaced a target"), Replaced, 0);
+	Fixture.Run(1);
+	TestEqual(TEXT("none is hit again in the same run"), Fixture.Hits.Num(), 0);
 	return true;
 }
 

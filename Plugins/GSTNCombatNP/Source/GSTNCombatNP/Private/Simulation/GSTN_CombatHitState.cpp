@@ -257,9 +257,12 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 	if (Mask & PartTargets)
 	{
 		// The targets of a live canonical state all belong to the running timeline: only the entity and the group go on the wire
-		uint8 Count = Local.HitTargetsNum;
-		Ar.SerializeBits(&Count, 4);
-		if (Count == 0 || Count > MaxHitTargets)
+		// The block is present only with at least one target: Count - 1 fits the ring of 16 in the same 4 bits
+		static_assert(MaxHitTargets >= 1 && MaxHitTargets <= 16, "the target count goes on the wire as Count - 1 in 4 bits");
+		uint8 CountMinusOne = static_cast<uint8>(FMath::Max<int32>(Local.HitTargetsNum - 1, 0));
+		Ar.SerializeBits(&CountMinusOne, 4);
+		const uint8 Count = static_cast<uint8>(CountMinusOne + 1);
+		if (Count > MaxHitTargets)
 		{
 			Ar.SetError();
 			return;
