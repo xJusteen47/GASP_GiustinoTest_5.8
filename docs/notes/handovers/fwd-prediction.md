@@ -17,3 +17,17 @@
   (~$2-3) with the proxy offset as the "applied" check.
 - PERF-DEBT: none (measurement only).
 - Cost: ~$4 (runner ~147k tokens / 79 tool calls, 11 headless harness runs; my context ~+25k).
+
+## FP G0 close-out (laptop, 2026-11-08): sweep valid, verdict "lightweight path cannot reach 150 ms"
+
+- Coordinator OK for the inert fork knob `np.FixedTickInterpolationBufferedMSOverride` (-1 = off, dev cvar, Shipping const): read in
+  `UNetworkPredictionWorldManager::SyncNetworkPredictionSettings`, logged, PATCHES.md §4 (a test knob, does not pre-empt decision 3).
+  Built (editor target). Not gated with the GSTN headless run: the knob is off by default and the path only reads it at world init.
+- Sweep 100/66/50/33 x 0/2 % + 400 ms control, all applied (15 log lines per run), all scenarios PASS. Table and reading in the plan,
+  "G0 results" (replaces the invalid first sweep).
+- Result: the buffer moves the proxy offset by ~10-15 cm (100 -> 33 ms) and not the boost delay (~320 ms, noise 259-366). 33 ms triples the stalls.
+  Recommended 50 ms (decision 1). Verdict: G1-G2 cannot reach 150 ms; remaining gap ~150-170 ms. The throw's 540-620 ms from the tap
+  is most likely its timeline wind-up (G1 note).
+- Next: decompose the boost delay by hop before G3-G5 (~$2-3).
+- PERF-DEBT: none (test knob, one cvar read per world init).
+- Cost: ~$3 for the close-out (1 fork build, 10 harness runs, my context ~+20k); FP G0 total ~$7.

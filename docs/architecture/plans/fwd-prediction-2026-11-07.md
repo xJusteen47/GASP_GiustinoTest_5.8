@@ -102,28 +102,37 @@ presentation stay useful under B (B removes only what A could not).
   Mover's hot path (3 reads per tick per pawn) replace one global read.
 - B: harness reconcile classification adds a log parse per reconcile line (test time only).
 
-## G0 results (laptop, 2026-11-08): baseline valid, buffer sweep NOT valid (override never applied)
+## G0 results (laptop, 2026-11-08): buffer sweep done with a working override
 
-Dedicated + 2 clients, 60/15 ms, -nullrhi, `scenario_throw_rider` + `scenario_boost_jump` (client_rides_client) + a walk probe (displayed
-proxy vs server pawn). Raw table and tooling: `Saved/FPG0/results.md`, `Saved/FPG0/out/` (not versioned).
+Dedicated + 2 clients, 60/15 ms, -nullrhi, one run per cell: `scenario_throw_rider` + `scenario_boost_jump` (client_rides_client) + a walk
+probe (median distance between the displayed proxy and the server pawn while walking at ~540 cm/s; stalls = proxy still while the server
+pawn moved; jumps = step > 3x median). Buffer set with the inert fork knob `np.FixedTickInterpolationBufferedMSOverride` (PATCHES.md §4),
+applied on all 15 world inits of every run (log line). Raw files: `Saved/FPG0/sweep2.txt`, `Saved/FPG0/out/` (not versioned).
+An earlier sweep (2026-11-08 night) never applied the value (`-ini` struct override and `set` both ineffective) and is discarded.
 
-| Run | Boost: carrier screen after rider screen | Boost from tap (rider / carrier) | Throw: rider screen vs carrier screen | Throw from tap | Proxy offset (walk) |
-|---|---|---|---|---|---|
-| baseline 100 ms, 0 % | 293 ms | 139 / 431 ms | 0 ms | 596 ms | 50.5 cm |
-| baseline 100 ms, 2 % | 293 ms | 137 / 430 ms | -58 ms | 612 / 554 ms | - |
-| "66 / 50 / 33 ms", 0 and 2 % | 290-356 ms | 133-141 / 426-496 ms | -58..0 ms | 549-631 ms | - |
-| control "400 ms", two override methods | 304-351 ms | 135-137 / 441-486 ms | -56 ms | 563-619 ms | 45.1-56.5 cm |
+| Buffer ms | Loss | Boost: carrier screen after rider screen | Boost from tap (rider / carrier) | Throw: rider vs carrier screen | Throw from tap (carrier / rider) | Stalls | Jumps | Proxy offset | Scenarios |
+|---|---|---|---|---|---|---|---|---|---|
+| 100 | 0 % | 319 ms | 137 / 456 | -56 | 604 / 549 | 3 | 0 | 56.0 cm | PASS |
+| 100 | 2 % | 314 ms | 154 / 468 | -55 | 614 / 560 | 6 | 0 | 46.9 cm | PASS |
+| 66 | 0 % | 335 ms | 136 / 471 | -54 | 620 / 566 | 2 | 0 | 44.5 cm | PASS |
+| 66 | 2 % | 366 ms | 137 / 503 | -1 | 593 / 592 | 3 | 0 | 44.6 cm | PASS |
+| 50 | 0 % | 313 ms | 136 / 449 | -53 | 593 / 540 | 2 | 0 | 41.1 cm | PASS |
+| 50 | 2 % | 309 ms | 135 / 444 | -58 | 615 / 557 | 9 | 0 | 42.3 cm | PASS |
+| 33 | 0 % | 259 ms | 141 / 399 | -1 | 589 / 588 | 13 | 0 | 39.1 cm | PASS |
+| 33 | 2 % | 332 ms | 136 / 468 | -1 | 587 / 586 | 12 | 1 | 38.0 cm | PASS |
+| 400 (control) | 0 % | 364 ms | 135 / 499 | -56 | 619 / 563 | 1 | 0 | 48.5 cm | PASS |
 
-- **The sweep did not change the buffer.** A 400 ms buffer must put a walking proxy ~2 m behind the server; it stayed at 45-56 cm, like
-  100 ms. Both methods failed: `-ini:NetworkPrediction:[...]:Settings=(...)` (the commas inside the struct split the override) and the
-  `set NetworkPredictionSettingsObject Settings (...)` exec command before PIE. Python cannot write the struct (fields not exposed).
-  So every row is the 100 ms baseline measured again: the spread (290-356 ms) is run-to-run noise.
-- **Baseline (valid)**: the partner sees a boost ~290-355 ms after the initiator (S4 confirmed). A throw shows on both screens at the same
-  time (server-given) but ~550-630 ms after the tap, which is far above one trip plus 100 ms: the throw's own timeline (wind-up before the
-  release event) is probably most of it. That is design time, not network time, so FP cannot remove it. Check it in G1 before tuning anything.
-- **Verdict**: not decided. G0 cannot yet say whether a smaller buffer reaches 150 ms. The baseline says a buffer cut alone is unlikely
-  to be enough: 150 ms would need ~150 ms less than the ~300 ms measured, and the whole buffer is only 100 ms.
-- **Recommended value**: none yet. Close G0 with a working override first.
-- **To close G0 (~$2-3, laptop)**: an inert fork cvar `np.FixedTickInterpolationBufferedMSOverride` (default -1, read in
-  `UNetworkPredictionWorldManager::SyncNetworkPredictionSettings` and logged), added to PATCHES.md. That is one fork line and needs your
-  OK (no `GSTNCombatNP`). Then rerun the 8-cell sweep with the 400 ms control and the proxy offset as the check that it applied.
+- **The buffer is a small term.** From 100 to 33 ms the proxy offset falls by only ~10-15 cm (~20-30 ms at walking speed, against 67 ms
+  removed), and the 400 ms control is no farther behind than 100 ms. The interpolation either catches up past the desired buffer or the
+  Mover sim proxy shows something closer to the newest state. The boost delay does not follow the buffer: 259-366 ms in every cell, which
+  is run noise around ~320 ms.
+- **Smoothness**: 33 ms roughly triples the stalls (12-13 vs 3-6) and shows the only jump at 2 %. 50 ms stays near the baseline at 0 %
+  (2), with one noisy 2 % cell (9).
+- **Recommended buffer: 50 ms** if decision 1 is taken (a ~10 cm / ~20 ms gain on every proxy at no visible smoothness cost on this rig).
+  It does not change the pair-move delay.
+- **Verdict: the lightweight path (G1-G2) cannot reach 150 ms on the partner's screen. Expected remaining gap: ~150-170 ms** (about 310-330
+  ms measured minus at most ~20 ms from the buffer). The predicted-partner presentation of G1 still helps the initiator's screen only.
+- **Throw (for G1)**: both screens show the release together (server-given) but 540-620 ms after the tap at every buffer. That is likely the
+  throw timeline's wind-up before its release event, design time that FP cannot remove. Check the timeline frames first in G1.
+- **Next**: before building G3-G5, split the ~320 ms boost delay into its hops (rider input to server, server to link state, link state
+  replicated to the carrier, shown). The buffer is not the big term, so forward prediction's gain must be re-estimated (~$2-3, laptop).

@@ -22,6 +22,9 @@ NETSIM_DEVCVAR_SHIPCONST_INT(ToggleLagCompensationDebug, 0, "np.DrawLagCompensat
 namespace NetworkPredictionCVars
 {
 	NETSIM_DEVCVAR_SHIPCONST_INT(SpikeLogResimCost, 0, "np.Spike.LogResimCost", "Spike S-FP. 1: on clients, accumulate wall time and frame count of rollback re-simulations and log one SpikeResim line every 5 seconds. 0: off.");
+	// FP G0 test knob: the settings struct cannot be overridden per run (Python cannot write it, the -ini struct override is split by its
+	// commas), so a measurement sweep sets this before PIE starts. Read once per world at Initialize. -1 = off (project setting used)
+	NETSIM_DEVCVAR_SHIPCONST_INT(FixedTickInterpolationBufferedMSOverride, -1, "np.FixedTickInterpolationBufferedMSOverride", "Test knob (FP G0). >= 0: worlds initialized after this is set use this FixedTickInterpolationBufferedMS instead of the project setting. -1: off.");
 	NETSIM_DEVCVAR_SHIPCONST_INT(SpikeLogInputSend, 0, "np.Spike.LogInputSend", "Diagnostics of the fixed tick input stream. 1: a client logs every engine frame whose input send is not the steady one (3+ fixed ticks in the frame, a backlog sent without redundant copies, frames held back by a connection that is not net ready); the server logs every fixed tick it is starved of a client's input. 0: off.");
 }
 
@@ -75,6 +78,12 @@ void UNetworkPredictionWorldManager::Deinitialize()
 void UNetworkPredictionWorldManager::SyncNetworkPredictionSettings(const UNetworkPredictionSettingsObject* SettingsObj)
 {
 	this->Settings = SettingsObj->Settings;
+	const int32 BufferOverride = NetworkPredictionCVars::FixedTickInterpolationBufferedMSOverride();
+	if (BufferOverride >= 0)
+	{
+		this->Settings.FixedTickInterpolationBufferedMS = BufferOverride;
+		UE_LOG(LogNetworkPrediction, Log, TEXT("FixedTickInterpolationBufferedMS overridden to %d ms by np.FixedTickInterpolationBufferedMSOverride"), BufferOverride);
+	}
 }
 
 float UNetworkPredictionWorldManager::GetCurrentLagCompensationTimeMS(const AActor* Actor) const
