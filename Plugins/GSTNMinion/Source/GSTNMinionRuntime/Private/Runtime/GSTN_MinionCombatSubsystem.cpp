@@ -738,6 +738,9 @@ void UGSTN_MinionCombatSubsystem::TickBatch(int32 Frame, bool bResimulating)
 	INC_DWORD_STAT_BY(STAT_GSTN_MinionAttackHits, LastBatch.AttackHits);
 	INC_DWORD_STAT_BY(STAT_GSTN_MinionTokensDenied, LastBatch.TokensDenied);
 	BenchTotals.IgnoredEffects += LastBatch.IgnoredEffects;
+	BenchTotals.AttacksStarted += LastBatch.AttacksStarted;
+	BenchTotals.TokensDenied += LastBatch.TokensDenied;
+	BenchTotals.AttackHits += LastBatch.AttackHits;
 
 	const double Elapsed = FPlatformTime::Seconds() - StartSeconds;
 	++BenchTotals.Batches;

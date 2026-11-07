@@ -145,6 +145,10 @@ struct FGSTN_MinionBenchTotals
 	int64 LagCompCandidates = 0;
 	int64 LagCompRejected = 0;
 	int64 IgnoredEffects = 0;
+	/** G5 gate: attack starts, starts refused for a taken token and hits delivered to fighters (the harness scenarios read them) */
+	int64 AttacksStarted = 0;
+	int64 TokensDenied = 0;
+	int64 AttackHits = 0;
 };
 
 /**

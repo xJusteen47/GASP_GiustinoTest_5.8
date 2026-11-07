@@ -18,6 +18,10 @@
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
 #include "Simulation/GSTN_HitInbox.h"
 #include "Simulation/GSTN_LagCompensation.h"
+#include "GSTN_MinionTags.h"
+#include "Timeline/GSTN_CombatTimeline.h"
+#include "Timeline/GSTN_TimelineTypes.h"
+#include "World/GSTN_CombatWorldSubsystem.h"
 #include "Spawn/GSTN_MinionSpawner.h"
 
 namespace
@@ -115,6 +119,20 @@ namespace
 				Scenario = EGSTN_MinionBenchScenario::Massacre;
 			}
 			Bench->SpawnBench(Count, Scenario);
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs BenchAttackCommand(
+		TEXT("gstn.Minion.Bench.Attack"),
+		TEXT("gstn.Minion.Bench.Attack <N=1> <FighterIndex=0>: spawns N attackers around the FighterIndex-th registered fighter (ascending entity id); they walk up and swing at it in a loop. Logs the target actor."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World);
+			if (!Bench)
+			{
+				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.Attack: no bench in this world"));
+				return;
+			}
+			Bench->SpawnAttackers(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 1, Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 0);
 		}));
 
 	FAutoConsoleCommandWithWorld BenchClearCommand(
@@ -352,6 +370,88 @@ int32 UGSTN_MinionBenchSubsystem::SpawnBench(int32 Count, EGSTN_MinionBenchScena
 	return Queued;
 }
 
+int32 UGSTN_MinionBenchSubsystem::SpawnAttackers(int32 Count, int32 TargetIndex)
+{
+	UWorld* World = GetWorld();
+	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
+	UGSTN_CombatWorldSubsystem* Combat = World ? World->GetSubsystem<UGSTN_CombatWorldSubsystem>() : nullptr;
+	if (!Minions || !Combat)
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: Attack needs the minion and the combat world subsystems (client world?)"));
+		return 0;
+	}
+	TArray<int32> Fighters;
+	Combat->GetRegisteredEntityIds(Fighters);
+	Fighters.Sort();
+	if (!Fighters.IsValidIndex(TargetIndex))
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: Attack: fighter index %d, %d registered fighters"), TargetIndex, Fighters.Num());
+		return 0;
+	}
+	const AActor* TargetActor = Combat->FindOwnerActor(Fighters[TargetIndex]);
+	if (!TargetActor)
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: Attack: fighter %d has no owner actor"), Fighters[TargetIndex]);
+		return 0;
+	}
+	if (!AttackDefinition)
+	{
+		// Swing: 40 frames, one sphere over frames 4 to 9, 100 cm ahead at chest height, in the root space of the minion
+		UGSTN_CombatTimeline* Timeline = NewObject<UGSTN_CombatTimeline>(this, TEXT("GSTN_MinionBenchSwing"), RF_Transient);
+		Timeline->Data.TotalFrames = 40;
+		Timeline->Data.FirstActionableFrame = 40;
+		TInstancedStruct<FGSTN_TimelineTrack>& Track = Timeline->Data.Tracks.AddDefaulted_GetRef();
+		Track.InitializeAs<FGSTN_TimelineTrack_Hitbox>();
+		FGSTN_TimelineTrack_Hitbox& Hitbox = Track.GetMutable<FGSTN_TimelineTrack_Hitbox>();
+		Hitbox.StartFrame = 4;
+		Hitbox.EndFrame = 9;
+		FGSTN_HitboxSpec& Spec = Hitbox.Hitboxes.AddDefaulted_GetRef();
+		Spec.Shape.Type = EGSTN_ShapeType::Sphere;
+		Spec.Shape.Extent = FVector(70.0);
+		Spec.Shape.Local = FTransform(FVector(100.0, 0.0, 60.0));
+		Spec.Space = EGSTN_HitboxSpace::Root;
+		Spec.Data.Damage = 5.f;
+		Spec.Data.FixedKnockback = 100.f;
+		AttackTimeline = Timeline;
+
+		AttackDefinition = NewObject<UGSTN_MinionDefinition>(this, TEXT("GSTN_MinionBenchAttackDefinition"), RF_Transient);
+		AttackDefinition->TypeTag = FGameplayTag::RequestGameplayTag(TEXT("Minion.Type.Grunt"), false);
+		AttackDefinition->Stats.MaxHealth = 40.f;
+		FGSTN_MinionMove& Move = AttackDefinition->Moves.AddDefaulted_GetRef();
+		const FGameplayTag Swing = FGameplayTag::RequestGameplayTag(TEXT("Command.Minion.Attack.Swing"), false);
+		Move.Command = Swing.IsValid() ? Swing : FGameplayTag(GSTNMinionTags::Type);
+		Move.Timeline = Timeline;
+		Move.MaxRange = 260.f;
+		Move.CooldownFrames = 20;
+	}
+	Scenario = EGSTN_MinionBenchScenario::Attack;
+	BenchSeconds = 0.f;
+	AttackTargetId = Fighters[TargetIndex];
+	MaxHoldersSeen = 0;
+	Center = TargetActor->GetActorLocation();
+	bCenterResolved = true;
+	RingRadius = 250.0;
+	Count = FMath::Max(Count, 0);
+	int32 Queued = 0;
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		const double Angle = UE_TWO_PI * Index / FMath::Max(Count, 1);
+		const FVector Location = Center + FVector(FMath::Cos(Angle) * RingRadius, FMath::Sin(Angle) * RingRadius, 0.0);
+		const FRotator Facing = (Center - Location).Rotation();
+		const FGSTN_MinionHandle Handle = UGSTN_MinionSpawner::Spawn(World, AttackDefinition, FTransform(FRotator(0.0, Facing.Yaw, 0.0), Location), FGSTN_MinionSpawnParams());
+		if (!Handle.IsNull())
+		{
+			Handles.Add(Handle);
+			++Queued;
+		}
+	}
+	Minions->ResetBenchTotals();
+	ResetCounters(Minions->GetStore().Capacity());
+	BindMovementHook(Minions);
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: attack %d minions queued on fighter entity %d actor %s at %s"), Queued, AttackTargetId, *TargetActor->GetName(), *Center.ToCompactString());
+	return Queued;
+}
+
 void UGSTN_MinionBenchSubsystem::Clear()
 {
 	for (const FGSTN_MinionHandle& Handle : Handles)
@@ -379,6 +479,8 @@ void UGSTN_MinionBenchSubsystem::Report() const
 	// Spike 5: the drain cost per hit (a 12-minion cleave costs 12 of them) and the rewound candidate query
 	const double DrainUsPerHit = Totals.DrainedHits > 0 ? Totals.DrainSeconds * 1.0e6 / static_cast<double>(Totals.DrainedHits) : 0.0;
 	const double LagCompUsPerQuery = Totals.LagCompQueries > 0 ? Totals.LagCompSeconds * 1.0e6 / static_cast<double>(Totals.LagCompQueries) : 0.0;
+	UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench attack started=%lld tokensDenied=%lld attackHits=%lld maxHolders=%d holdersNow=%d target=%d"),
+		Totals.AttacksStarted, Totals.TokensDenied, Totals.AttackHits, MaxHoldersSeen, AttackTargetId != INDEX_NONE ? Minions->GetAttackTokens().NumHolders(AttackTargetId) : 0, AttackTargetId);
 	UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench spike5 drainedHits=%lld drainUsPerHit=%.2f cleave12Us=%.1f lagCompQueries=%lld lagCompUsPerQuery=%.2f candidates=%lld rejected=%lld ignoredEffects=%lld"),
 		Totals.DrainedHits, DrainUsPerHit, DrainUsPerHit * 12.0, Totals.LagCompQueries, LagCompUsPerQuery, Totals.LagCompCandidates, Totals.LagCompRejected, Totals.IgnoredEffects);
 }
@@ -433,6 +535,10 @@ void UGSTN_MinionBenchSubsystem::HandleMovementStepped(int32 Frame, TConstArrayV
 		return;
 	}
 	const FGSTN_MinionStore& Store = Minions->GetStore();
+	if (AttackTargetId != INDEX_NONE)
+	{
+		MaxHoldersSeen = FMath::Max(MaxHoldersSeen, Minions->GetAttackTokens().NumHolders(AttackTargetId));
+	}
 	const FGSTN_MinionMovementColumns& Columns = Minions->GetMovementColumns();
 	if (SeenGeneration.Num() != Store.Capacity())
 	{
@@ -711,6 +817,38 @@ void UGSTN_MinionBenchSubsystem::Tick(float DeltaTime)
 	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
 	if (!Minions)
 	{
+		return;
+	}
+	if (Scenario == EGSTN_MinionBenchScenario::Attack)
+	{
+		// Walk to 150 cm from the fighter, face it and ask for the swing every tick; range, cooldown and tokens decide when it starts
+		const UGSTN_CombatWorldSubsystem* Combat = World->GetSubsystem<UGSTN_CombatWorldSubsystem>();
+		const AActor* TargetActor = Combat ? Combat->FindOwnerActor(AttackTargetId) : nullptr;
+		if (!TargetActor)
+		{
+			return;
+		}
+		const FVector TargetLocation = TargetActor->GetActorLocation();
+		const FGameplayTag Swing = FGameplayTag::RequestGameplayTag(TEXT("Command.Minion.Attack.Swing"), false);
+		const FGSTN_MinionStore& AttackStore = Minions->GetStore();
+		Handles.RemoveAll([Minions](const FGSTN_MinionHandle& Handle) { return !Minions->IsValidHandle(Handle); });
+		for (const FGSTN_MinionHandle& Handle : Handles)
+		{
+			const FVector Position(AttackStore.Position[Handle.Index]);
+			const FVector2D ToTarget(TargetLocation.X - Position.X, TargetLocation.Y - Position.Y);
+			const double Distance = ToTarget.Size();
+			FGSTN_MinionIntent Intent;
+			if (Distance > 150.0)
+			{
+				Intent.MoveDir = ToTarget / Distance;
+				Intent.DesiredSpeed = 200.f;
+			}
+			Intent.DesiredYaw = FMath::RadiansToDegrees(FMath::Atan2(ToTarget.Y, ToTarget.X));
+			Intent.bFaceRequested = true;
+			Intent.Command = Swing.IsValid() ? Swing : FGameplayTag(GSTNMinionTags::Type);
+			Intent.TargetEntityId = AttackTargetId;
+			Minions->SetIntent(Handle, Intent);
+		}
 		return;
 	}
 	// Stand-in brain: walk to the nearest player (the bench centre without one) and stop at half the ring radius (150 cm at

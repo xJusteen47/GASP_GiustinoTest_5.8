@@ -229,7 +229,7 @@ namespace
 		return Timeline;
 	}
 
-	FGameplayTag TestCommand()
+	FGameplayTag HitTestCommand()
 	{
 		const FGameplayTag Swing = FGameplayTag::RequestGameplayTag(TEXT("Command.Minion.Attack.Swing"), false);
 		return Swing.IsValid() ? Swing : FGameplayTag(GSTNMinionTags::Type);
@@ -239,7 +239,7 @@ namespace
 	void IntendAttack(FHitRig& Rig, const FGSTN_MinionHandle& Handle)
 	{
 		FGSTN_MinionIntent Intent;
-		Intent.Command = TestCommand();
+		Intent.Command = HitTestCommand();
 		Intent.TargetEntityId = FighterId;
 		Rig.Minions->SetIntent(Handle, Intent);
 	}
@@ -580,7 +580,7 @@ bool FGSTN_MinionHitsAttackerHitstopTest::RunTest(const FString& Parameters)
 	TStrongObjectPtr<UGSTN_CombatTimeline> Timeline = MakeMoveTimeline(30, true, 5);
 	TStrongObjectPtr<UGSTN_MinionDefinition> Definition = MakeDefinition(Set.Get());
 	FGSTN_MinionMove& Move = Definition->Moves.AddDefaulted_GetRef();
-	Move.Command = TestCommand();
+	Move.Command = HitTestCommand();
 	Move.Timeline = Timeline.Get();
 	Move.MaxRange = 300.f;
 
@@ -639,7 +639,7 @@ bool FGSTN_MinionHitsTokensTest::RunTest(const FString& Parameters)
 	TStrongObjectPtr<UGSTN_CombatTimeline> Long = MakeMoveTimeline(40, false, 0);
 	TStrongObjectPtr<UGSTN_MinionDefinition> Definition = MakeDefinition(Set.Get());
 	FGSTN_MinionMove& Move = Definition->Moves.AddDefaulted_GetRef();
-	Move.Command = TestCommand();
+	Move.Command = HitTestCommand();
 	Move.Timeline = Long.Get();
 	Move.MaxRange = 500.f;
 	Move.CooldownFrames = 0;
@@ -685,7 +685,7 @@ bool FGSTN_MinionHitsTokensTest::RunTest(const FString& Parameters)
 	TStrongObjectPtr<UGSTN_CombatTimeline> Short = MakeMoveTimeline(3, false, 0);
 	TStrongObjectPtr<UGSTN_MinionDefinition> Quick = MakeDefinition(Set.Get());
 	FGSTN_MinionMove& QuickMove = Quick->Moves.AddDefaulted_GetRef();
-	QuickMove.Command = TestCommand();
+	QuickMove.Command = HitTestCommand();
 	QuickMove.Timeline = Short.Get();
 	QuickMove.MaxRange = 500.f;
 	QuickMove.CooldownFrames = 1000;

@@ -152,3 +152,22 @@
 - Not done: spike 5 measurement (commands exist, not run); harness `scenario_minion_hits_player`, `scenario_minion_tokens` at 0/2 %;
   timeline movement track, knockdown on landing, reaction timelines still stubs; the open G4 trapped-minion bug untouched; docs.
 - Cost: G5 ~ $9-12 (Opus writer ~490k tokens, 158 tool calls; my context ~40k; 1 build, 1 test run).
+
+## G5 closing (laptop, 2026-11-07): harness scenarios green at 0 % and 2 %, spike 5 recorded
+
+- Branch `claude/project-thread-aj375g` (from `claude/m8-g5`). Added the bench `Attack` scenario (`gstn.Minion.Bench.Attack <N> <FighterIndex>`: attackers with a
+  40 frame swing walk up to the Nth registered fighter and swing in a loop; Report prints `MinionBench attack started/tokensDenied/attackHits/maxHolders`), three
+  bench totals in the subsystem, and renamed the test helper `TestCommand` -> `HitTestCommand` (unity build clash with RuntimeTests, build failed once).
+- Harness (`Tools/GASNPPTest/minion_scenarios.py`, `SUITE_MINION`, dedicated server + 2 clients, lag 60/15, -nullrhi, driver in `Saved/M8G5`, not versioned):
+  `minion_hits_player` 0 %: PASS 7 checks, 2 %: PASS 7. `minion_tokens` 0 %: PASS 7, 2 %: PASS 7. (First 0 % run of hits_player failed on my own check
+  "no other pawn hit": the two pawns start close, one swing reaches both; replaced by "the pawn the bench named is hit". Not a code bug.)
+  Tokens run at 0 %: started 48, tokensDenied 778, maxHolders 4 (cap 4 held and reached), 8 minions, 85 attack hits.
+- Spike 5 (editor PIE dedicated, `-nullrhi`, laptop, 60 Chase minions, 40 cleaves of 12): drain 8.90 us per hit, cleave of 12 = 106.8 us; rewound candidate
+  query 0.63 us per query (1200 queries, 13840 candidates, 12200 swept-bound rejected). Editor PIE numbers carry server+2 client load, so they are upper bounds.
+  Rewind in GSTNCombatNP is still O(N) (X4 unchanged).
+- Files: Tools/GASNPPTest/minion_scenarios.py, docs/notes/perf-debt.md; edited GSTN_MinionBench.{h,cpp}, GSTN_MinionCombatSubsystem.{h,cpp}, GSTN_MinionHitTests.cpp.
+- Not run: full GSTN automation after the edits (only the build; minion code paths unchanged except bench and counters), plugin-off build, movement timelines,
+  trapped-minion bug, docs in combat.md.
+- PERF-DEBT: see docs/notes/perf-debt.md (X4 rewind O(N); pooled skeletal actors; full net state per frame; history ring copies; EnsureSnapshot with no
+  fighters; per-hit view rebuild; bench per-tick tag lookup; fixed-time harness waits).
+- Cost: ~$4-6 (Sonnet subagent, ~60 tool calls, 3 builds incl. one failed, 5 PIE harness runs).

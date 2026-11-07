@@ -27,7 +27,12 @@ enum class EGSTN_MinionBenchScenario : uint8
 	 * Chase plus random knockback (spike 3): every gstn.Minion.Bench.LaunchEveryFrames fixed frames a seeded random subset of the
 	 * minions gets a launch of up to gstn.Minion.Bench.LaunchSpeed in an upward-biased direction, or a push back
 	 */
-	Massacre
+	Massacre,
+	/**
+	 * G5 gate: minions with a sword-sized swing walk up to a fighter and attack it again and again (gstn.Minion.Bench.Attack), so the
+	 * harness sees minion hits arrive in a real fighter's inbox and the attack tokens cap the simultaneous attackers
+	 */
+	Attack
 };
 
 /**
@@ -64,6 +69,9 @@ public:
 	/** Spawns Count minions (queued: they activate over the next frames) and sets the scenario. Returns how many were queued */
 	int32 SpawnBench(int32 Count, EGSTN_MinionBenchScenario InScenario);
 
+	/** G5 gate: Count attackers in a ring (150 cm) around the TargetIndex-th registered fighter (ascending id), attacking it. Returns how many were queued */
+	int32 SpawnAttackers(int32 Count, int32 TargetIndex);
+
 	/** Despawns every bench minion */
 	void Clear();
 
@@ -90,6 +98,15 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGSTN_MinionDefinition> TransientDefinition;
+
+	/** The attackers of the Attack scenario: one move (a 40 frame swing, hitbox over frames 4 to 9) and no hurtboxes */
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_MinionDefinition> AttackDefinition;
+	UPROPERTY(Transient)
+	TObjectPtr<UObject> AttackTimeline;
+	int32 AttackTargetId = INDEX_NONE;
+	/** Highest number of tokens held against the target on any fixed frame since the spawn */
+	int32 MaxHoldersSeen = 0;
 
 	TArray<FGSTN_MinionHandle> Handles;
 	EGSTN_MinionBenchScenario Scenario = EGSTN_MinionBenchScenario::Idle;
