@@ -1,8 +1,9 @@
 using UnrealBuildTool;
 
 // The pure part of the platform plugin (many-enemies-replication.md 4.2, 4.4; traversal-surfaces.md 4.1): the platform spec and
-// its shapes, the shape state timeline, the collision rules derived from a surface behaviour, the pose history and the scripted
-// path. No world, no component, no Mover. Allowed edges: engine modules and GSTNSurfaceCore (Core -> Core, modularity 3.7 rule 2).
+// its shapes, the shape state timeline, the collision rules derived from a surface behaviour and the scripted path (the pose history
+// moved to GSTNCore, M8 Q7; GSTN_PoseHistory.h here is a redirect). No world, no component, no Mover.
+// Allowed edges: engine modules, GSTNCore and GSTNSurfaceCore (Core -> Core, modularity 3.7 rule 2).
 // Never GASP_Giustino2, GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, Mover, GSTNCombat* or GSTNParts.
 public class GSTNPlatformCore : ModuleRules
 {
@@ -16,6 +17,7 @@ public class GSTNPlatformCore : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
+			"GSTNCore",
 			"GSTNSurfaceCore"
 		});
 	}
