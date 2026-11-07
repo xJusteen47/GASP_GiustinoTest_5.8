@@ -11,6 +11,14 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | [m5-editor-plan.md](m5-editor-plan.md) | M5 editor and debug (`GSTNCombatEditor`, `GSTNCombatDebug`) | E0..E19 | `../combat-m5-editor.md` |
 | [traversal-surfaces-plan.md](traversal-surfaces-plan.md) (added 2026-10-22 evening) | Traversal surfaces: wall-slide / trampoline surfaces on level objects and enemy body parts (`GSTNSurface`, `GSTNPlatform`, `GSTNPlatformParts`) | T0..T9 | `../traversal-surfaces.md` |
 | [spin-drill-plan.md](spin-drill-plan.md) (added 2026-10-25) | Spin (3D World / air hop) and drill (latch, multi-hit, final jump) (`GSTNSpinDrill`) | D0..D13 | `../spin-drill.md` |
+| [resto-m3-m4b-m5-t.md](resto-m3-m4b-m5-t.md) (added 2026-11-06) | Open gates of M3, M4b, M5 and T, regrouped with costs | R3, P/E/T rest | the four plans above |
+| [fp-forward-prediction.md](fp-forward-prediction.md) (2026-11-06) | Forward prediction of the pair partner | G0..G4 | `../combat-m7-piggyback.md` §2 |
+| [m11-kit.md](m11-kit.md) (2026-11-06) | M11 kits in play (`GSTNPickups`, `GSTNKitMods`, `GSTNBackpack`) | G0..G8 | `../combat-loadout-mods.md` |
+| [m12-modi-livelli.md](m12-modi-livelli.md) (2026-11-06) | M12 mode framework + Levels | G0..G8 | `../game-modes.md` |
+| [m13-spedizione.md](m13-spedizione.md) (2026-11-06) | M13 Expedition | G0..G6 | `../game-modes.md` |
+| [m14-pvp.md](m14-pvp.md) (2026-11-06) | M14 Versus | G0..G5 | `../game-modes.md` |
+
+Order and cumulative cost of every plan: [sequenza-2026-11-06.md](sequenza-2026-11-06.md). M8, M10 and M7 plans are in PRs #26, #27, #21.
 
 `../game-design-direction.md` wins over every spec and plan. `../modularity-and-tags.md` §3.7-3.9, §4, §5b are binding.
 
