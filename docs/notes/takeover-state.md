@@ -936,3 +936,5 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 - Remaining M3/M4b/M5/T gates (plan resto-m3-m4b-m5-t.md): R3 in docs/notes/handovers/m3-suite.md; traversal leftovers in
   docs/notes/handovers/traversal-rest.md (T2 closed, T6 done 2026-11-06; T7 next, after M8 G1/G5); M5 leftovers in docs/notes/handovers/m5-rest.md (E15, E16 done 2026-11-06).
 - M8 minions: docs/notes/handovers/m8-minion.md (G0a 2026-11-06, G0b laptop 2026-11-07 on claude/project-thread-q54iwa; G1 next, brief there).
+- M8 minions: G0-G12a done on the laptop (status block at the end of the G12a section of handovers/m8-minion.md); desktop items G6b/G7b/G9b/G11b/G12b left.
+- Merge to feature 2026-11-07: docs/notes/handovers/merge-feature-2026-11-07.md (section "M8 merge": branch claude/m8-merge-feature, owner pushes the tip).
