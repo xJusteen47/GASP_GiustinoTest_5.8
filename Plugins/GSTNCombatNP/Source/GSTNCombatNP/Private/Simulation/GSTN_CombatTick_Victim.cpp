@@ -531,6 +531,8 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 		}
 	}
 
+	// Both ends of a hit through this tick are fighters: the kind tag rides the shared envelope (M8 X11)
+	Event.Tags.AddTag(GSTNCombatTags::Entity_Fighter);
 	FGSTN_SimEvent Landed = Event;
 	Landed.EventType = GSTNCombatTags::Event_HitLanded;
 	if (Hit.Outcome.Credit.IsSet())
@@ -576,6 +578,7 @@ void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor*
 	Event.Instigator = Cause == EGSTN_KOCause::Health && Attacker ? Attacker : Victim;
 	Event.Target = Victim;
 	Event.Tags.AddTag(Cause == EGSTN_KOCause::Zone ? GSTNCombatTags::KOReason_Zone : GSTNCombatTags::KOReason_Health);
+	Event.Tags.AddTag(GSTNCombatTags::Entity_Fighter);
 	if (Cause == EGSTN_KOCause::Health && Credit && Credit->IsSet())
 	{
 		FGSTN_SimEvent Credited = Event;
