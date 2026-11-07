@@ -12,7 +12,7 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | [traversal-surfaces-plan.md](traversal-surfaces-plan.md) (added 2026-10-22 evening) | Traversal surfaces: wall-slide / trampoline surfaces on level objects and enemy body parts (`GSTNSurface`, `GSTNPlatform`, `GSTNPlatformParts`) | T0..T9 | `../traversal-surfaces.md` |
 | [spin-drill-plan.md](spin-drill-plan.md) (added 2026-10-25) | Spin (3D World / air hop) and drill (latch, multi-hit, final jump) (`GSTNSpinDrill`) | D0..D13 | `../spin-drill.md` |
 | [resto-m3-m4b-m5-t.md](resto-m3-m4b-m5-t.md) (added 2026-11-06) | Open gates of M3, M4b, M5 and T, regrouped with costs | R3, P/E/T rest | the four plans above |
-| [fp-forward-prediction.md](fp-forward-prediction.md) (2026-11-06) | Forward prediction of the pair partner | G0..G4 | `../combat-m7-piggyback.md` Â§2 |
+| [fp-forward-prediction.md](fp-forward-prediction.md) (2026-11-06) | Forward prediction of the pair partner | G0..G4 | `../combat-m7-piggyback.md` §2 |
 | [m11-kit.md](m11-kit.md) (2026-11-06) | M11 kits in play (`GSTNPickups`, `GSTNKitMods`, `GSTNBackpack`) | G0..G8 | `../combat-loadout-mods.md` |
 | [m12-modi-livelli.md](m12-modi-livelli.md) (2026-11-06) | M12 mode framework + Levels | G0..G8 | `../game-modes.md` |
 | [m13-spedizione.md](m13-spedizione.md) (2026-11-06) | M13 Expedition | G0..G6 | `../game-modes.md` |
@@ -21,43 +21,43 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 
 Order and cumulative cost of every plan: [sequenza-2026-11-06.md](sequenza-2026-11-06.md). M10 and M7 plans are in PRs #27, #21.
 
-`../game-design-direction.md` wins over every spec and plan. `../modularity-and-tags.md` Â§3.7-3.9, Â§4, Â§5b are binding.
+`../game-design-direction.md` wins over every spec and plan. `../modularity-and-tags.md` §3.7-3.9, §4, §5b are binding.
 
 ### Traversal surfaces (T) on the other plans (added 2026-10-22 evening)
 
 | T needs | Ready at |
 |---|---|
-| H11 contact record and `Surface.Type.*` rows, H11b launch layered move and `FGSTN_SurfaceLaunchParams` (declared in `GSTNSurfaceCore` after T1, TS.1 approved 2026-10-22 22:15) | H11, H11b â†’ T4 |
-| H10 lag-comp history (composed transform of based players) | H10 â†’ T7 |
-| P7 confirmed `BrokenMask`, P7b `Combat.Event.Part.Restored` | P7b â†’ T6 |
-| `GSTNPlatform` skeleton (M8 Â§4d.5 / many-enemies Â§4; no plan yet: T3 delivers the fighter minimum if none has started), `GSTNPlatformMinion` + P16 | T3 (own), M8 + P16 â†’ T8 |
-| Wall movement core: T5 approved (TS.2, 2026-10-22 22:14); T2 is subclass-only | now â†’ T0, T1, T2 |
-| M5 E10 validation mechanism | E10 â†’ T9 |
+| H11 contact record and `Surface.Type.*` rows, H11b launch layered move and `FGSTN_SurfaceLaunchParams` (declared in `GSTNSurfaceCore` after T1, TS.1 approved 2026-10-22 22:15) | H11, H11b → T4 |
+| H10 lag-comp history (composed transform of based players) | H10 → T7 |
+| P7 confirmed `BrokenMask`, P7b `Combat.Event.Part.Restored` | P7b → T6 |
+| `GSTNPlatform` skeleton (M8 §4d.5 / many-enemies §4; no plan yet: T3 delivers the fighter minimum if none has started), `GSTNPlatformMinion` + P16 | T3 (own), M8 + P16 → T8 |
+| Wall movement core: T5 approved (TS.2, 2026-10-22 22:14); T2 is subclass-only | now → T0, T1, T2 |
+| M5 E10 validation mechanism | E10 → T9 |
 
 ### Owner direction of 2026-10-23 on these plans (added by the milestone-planning thread)
 
 New specs [`../combat-loadout-mods.md`](../combat-loadout-mods.md) (M11: kits in play, support weapons, mods, backpacks),
-[`../game-modes.md`](../game-modes.md) (M12â€“M13) and [`../depth-marker.md`](../depth-marker.md) do not change the checkpoints. Only:
+[`../game-modes.md`](../game-modes.md) (M12–M13) and [`../depth-marker.md`](../depth-marker.md) do not change the checkpoints. Only:
 H1 adds the optional hitbox field `ReachAxis` (data only, used by M11 mods); M5 keeps mod preview and mod validators out of scope
 (they go to `GSTNKitModsEditor`, a client of the M5 hooks like `GSTNPartsEditor`); M4b is unaffected (players stay one part,
-equipment is not a part). The M3 seams that M11 needs are listed in `../combat-loadout-mods.md` Â§11.
+equipment is not a part). The M3 seams that M11 needs are listed in `../combat-loadout-mods.md` §11.
 M12 (mode framework + Levels) later needs two small combat seams that no current plan builds: an authoritative event key on
-the timeline that posts to the combat outbox (game-modes D-1) and the outbox-to-`Message.*` republisher of modularity Â§5 item 4
+the timeline that posts to the combat outbox (game-modes D-1) and the outbox-to-`Message.*` republisher of modularity §5 item 4
 (D-2). Neither blocks M4, M4b or M5; adding D-1 next to the timeline `Event` track in M4 would be cheaper than later.
-The interaction plugin ([`../interaction.md`](../interaction.md) Â§3.3, owner answer to Mod.20) asks M2/M3 for one generic seam: an opaque
+The interaction plugin ([`../interaction.md`](../interaction.md) §3.3, owner answer to Mod.20) asks M2/M3 for one generic seam: an opaque
 `uint64 TargetKey` in `FGSTN_ActivationContext`, stamped when a binding requires an `Interact.Target.*` tag (combat never names interaction).
-Cheap now, a fallback accessor exists if it is refused; the probe text of M6 Â§8 that the M6 plan will use is superseded by interaction.md.
+Cheap now, a fallback accessor exists if it is refused; the probe text of M6 §8 that the M6 plan will use is superseded by interaction.md.
 
 ### Owner direction of 2026-10-25 on these plans (added by the milestone-planning thread)
 
-General mechanics from the spin and drill thread ([`../spin-drill.md`](../spin-drill.md) Â§13b, PR #15) and a collision note, all after H13 so
+General mechanics from the spin and drill thread ([`../spin-drill.md`](../spin-drill.md) §13b, PR #15) and a collision note, all after H13 so
 no running checkpoint changes: **H14** demolition force and destructible props, **H15** steer track (hitboxes, animation and facing that vary with input), **H16** world
 occlusion with a pass radius, **H17** hitbox sweep completeness (M4 plan); **P18** hurtbox openings (M4b plan); a reserved link type `Combat.Link.Type.Drill` in M6; keyboard
-shortcuts for stick gestures in [`../input.md`](../input.md) Â§9. Owner sequencing: these general specs come first, the detailed design of
+shortcuts for stick gestures in [`../input.md`](../input.md) §9. Owner sequencing: these general specs come first, the detailed design of
 individual abilities resumes at the end.
 
 Charge inputs (owner question, 2026-10-26): the `Charge` condition exists; a charge tracker in the input state of `GSTNInputNP`
-([`../input.md`](../input.md) Â§10, size S) should land before the first charge move ships.
+([`../input.md`](../input.md) §10, size S) should land before the first charge move ships.
 
 Level activation (owner brainstorm, 2026-10-26): new spec [`../level-activation.md`](../level-activation.md), plugin `GSTNActivation`
 (a generic base for zones of objects one player activates with an action; the owner builds the objects by hand). No plan yet; jump, land, enter and hit triggers need no combat seam, ability
@@ -75,7 +75,7 @@ following the briefs in [test-maps.md](test-maps.md):
 
 | Checkpoint | Map | Build after |
 |---|---|---|
-| **TM1** | `L_Test_Movement` | wall movement core (T5) and the jump; later stations after T1â€“T4, camera C3 and gravity volumes |
+| **TM1** | `L_Test_Movement` | wall movement core (T5) and the jump; later stations after T1–T4, camera C3 and gravity volumes |
 | **TM2** | `L_Test_Combat` | M4 H13 (it grows the H13 test map); later stations after M4b, M6, M10 and M11 |
 | **TM3** | `L_Test_Enemies` | M8; the parts station after P16; the platform enemy once `GSTNPlatform` exists |
 
@@ -117,15 +117,15 @@ complete) and H10; P8 after H12; P15/P16 wait for M8.
 | M4-events (hit events) | H9 |
 | M4b P-hit-extension (`FGSTN_PartHitData` in `ExtensionData`) for E12/E19 hooks test | P2 |
 
-M5 never references `GSTNParts`; `GSTNPartsEditor` (P13) is a client of the M5 hooks (spec Â§12b). P13's validators need
+M5 never references `GSTNParts`; `GSTNPartsEditor` (P13) is a client of the M5 hooks (spec §12b). P13's validators need
 only the M5 validation mechanism (E10); its hits-to-break report can land before or after E12.
 
 ## Suggested order and parallel threads after M3
 
-1. Thread "M4 core": H0 spikes, then H1 â†’ H2 â†’ H3 â†’ H4 (pure Core, no world; good for a cheaper agent per checkpoint).
+1. Thread "M4 core": H0 spikes, then H1 → H2 → H3 → H4 (pure Core, no world; good for a cheaper agent per checkpoint).
 2. Thread "M5 editor shell" in parallel from the end of M3: E0 (S1, S2, S4), E1, E2, E4, E5, E10, E14.
 3. Thread "Parts core" in parallel: P0b/P0d spikes, P1-P3 (pure), then P4 once H4 lands.
-4. Thread "M4 sim" (needs the editor and the listen-server harness on the PC): H5 â†’ H6 â†’ H7 â†’ H8 â†’ H9 â†’ H10 â†’ H11 â†’ H12 â†’ H13.
+4. Thread "M4 sim" (needs the editor and the listen-server harness on the PC): H5 → H6 → H7 → H8 → H9 → H10 → H11 → H12 → H13.
 5. After H1: E3 final, E5b, E6-E9, E11, E12; after H6/H9: E15-E17. After H9/H10: P5-P12, P14.
 
 Only one thread at a time should touch `GSTNCombatNP` and the harness on the PC (one PIE scenario at a time).
@@ -133,7 +133,7 @@ Only one thread at a time should touch `GSTNCombatNP` and the harness on the PC 
 ## Approval status (2026-10-22)
 
 The owner allowed self-approval of these plans where they hold no architectural question and no new feature. Everything
-in the three plans is approved on that basis (assumptions in Â§5 are spec proposals or tunable data defaults) **except the
+in the three plans is approved on that basis (assumptions in §5 are spec proposals or tunable data defaults) **except the
 items below, which were owner decisions**. All three are now answered:
 
 1. ~~Trampoline actor and `GSTNLevelObjects` plugin~~ **Approved 2026-10-22 18:27**: an adjustable box (height, depth,
@@ -143,5 +143,5 @@ items below, which were owner decisions**. All three are now answered:
 3. ~~Parts never heal~~ **Answered 2026-10-22 18:22**: no self-regeneration, but explicit restores (e.g. a healer enemy)
    exist. Planned as M4b checkpoint P7b; no longer blocking.
 
-Owner-OK lists in Â§6 of each plan (shared Blueprints, `.uproject`, ini, wire changes) still apply as written: they are
+Owner-OK lists in §6 of each plan (shared Blueprints, `.uproject`, ini, wire changes) still apply as written: they are
 announced before the step happens, as with M2/M3.
