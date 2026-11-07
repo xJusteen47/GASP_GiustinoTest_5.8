@@ -15,6 +15,8 @@ import gasnpp_test as g
 import defence_scenarios as ds
 
 SUITE_MINION = ['minion_hits_player', 'minion_tokens']
+# M8 G6: replication scenarios (packs, relevancy grants, registry check); run_batch(SUITE_MINION_NET)
+SUITE_MINION_NET = ['minion_late_join']
 MINION_BIT = 0x40000000
 _marks = {}
 
@@ -139,6 +141,83 @@ def scenario_minion_tokens(client=1):
         (12.5, run.at('waiting minions take over (> 4 distinct attackers over the run)', lambda: (len({r[1] for r in _minion_rows(0, st['key'])}) > 4, f"attackers {len({r[1] for r in _minion_rows(0, st['key'])})}"))),
         (12.5, run.at('damage percent equal on the server and both clients', lambda: _converged(st['key']))),
         (12.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+_NET_ITEM = re.compile(r'MinionNet (server|client player=(-?\d+) world=\S+) pack=(\d+) id=(\d+) type=(\d+) pos=(\d+),(\d+),(\d+)')
+_NET_GRANTS = re.compile(r'MinionNet grants player=(-?\d+) packs=([\d,]*)')
+_NET_CLIENT_SUMMARY = re.compile(r'MinionNet client summary player=(-?\d+) world=(\S+) items=(\d+) packs=(\d+) updates=(\d+) registryChecks=(\d+) registryOk=(\d+) mismatches=(\d+)')
+
+
+def _net_dump():
+    """gstn.Minion.Net.Dump on every world: the server logs its pack items and the grants per remote player, each client its received items"""
+    for wi in range(len(g.worlds())):
+        _cmd('gstn.Minion.Net.Dump', wi)
+    return f'dumped {len(g.worlds())} worlds'
+
+
+def _net_state():
+    """Parses the last dump after the mark: server items {(pack, id): (type, pos)}, grants {player: set(pack)}, client items and summaries by player"""
+    text = g._read_log_since(_marks['log'])
+    server, clients, grants, summaries = {}, {}, {}, {}
+    for ln in text.splitlines():
+        m = _NET_ITEM.search(ln)
+        if m:
+            key, val = (int(m.group(3)), int(m.group(4))), (int(m.group(5)), (int(m.group(6)), int(m.group(7)), int(m.group(8))))
+            if m.group(1) == 'server':
+                server[key] = val
+            else:
+                clients.setdefault(int(m.group(2)), {})[key] = val
+            continue
+        m = _NET_GRANTS.search(ln)
+        if m:
+            grants[int(m.group(1))] = {int(x) for x in m.group(2).split(',') if x}
+            continue
+        m = _NET_CLIENT_SUMMARY.search(ln)
+        if m:
+            summaries[int(m.group(1))] = {'items': int(m.group(3)), 'packs': int(m.group(4)), 'updates': int(m.group(5)),
+                                         'checks': int(m.group(6)), 'ok': int(m.group(7)), 'mismatches': int(m.group(8))}
+    return server, clients, grants, summaries
+
+
+def _net_clients_match():
+    """Every client sees every item of the packs granted to it, with the server's type and quantized position, and nothing of other packs"""
+    server, clients, grants, summaries = _net_state()
+    if not server or not summaries:
+        return False, f'server items {len(server)} client summaries {len(summaries)}'
+    bad = []
+    for player in summaries:
+        granted = grants.get(player, set())
+        want = {k: v for k, v in server.items() if k[0] in granted}
+        got = clients.get(player, {})
+        missing = [k for k in want if k not in got]
+        wrong = [k for k in want if k in got and got[k] != want[k]]
+        extra = [k for k in got if k[0] not in granted]
+        if not want or missing or wrong or extra:
+            bad.append(f'player {player}: granted {sorted(granted)} want {len(want)} missing {missing[:4]} wrong {wrong[:4]} extra {extra[:4]}')
+    return not bad, '; '.join(bad) or f'{len(summaries)} clients match {len(server)} server items'
+
+
+def scenario_minion_late_join(client=1):
+    """State only (M8 G6). 24 idle minions spawn in two packs after the clients are in (the PIE harness has no late connect and two clients, so
+    'late' = the clients join the packs' channels after the spawn, through the first relevancy grant; the third headless client of M8 2 is
+    not supported by the harness). After 4 s every client holds every item of the packs the server granted it, with the same type and quantized
+    position as the server's item, nothing of a pack it was not granted, and its registry hash check passed"""
+    run = g._Run('minion_late_join', client, judge_reconciles=False, sample=False)
+    steps = [
+        (0.0, lambda: ('setup', _marks.update(log=g.mark_log()) or 'log mark')),
+        (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Spawn 24 Idle'))),
+        (4.5, lambda: ('dump', _net_dump())),
+        (5.5, run.at('the server has 24 items', lambda: (len(_net_state()[0]) == 24, f'server items {len(_net_state()[0])}'))),
+        (5.5, run.at('every client got a grant', lambda: (
+            len(_net_state()[3]) >= 2 and all(_net_state()[2].get(p) for p in _net_state()[3]), f'grants {_net_state()[2]} clients {list(_net_state()[3])}'))),
+        (5.5, run.at('clients hold exactly the granted packs, same type and position', _net_clients_match)),
+        (5.5, run.at('registry hash checked and equal on every client', lambda: (
+            bool(_net_state()[3]) and all(s['checks'] >= 1 and s['ok'] == 1 and s['mismatches'] == 0 for s in _net_state()[3].values()),
+            f'summaries {_net_state()[3]}'))),
+        (5.6, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (6.5, run.finish()),
     ]
     run.run(steps)
 

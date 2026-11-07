@@ -171,3 +171,27 @@
 - PERF-DEBT: see docs/notes/perf-debt.md (X4 rewind O(N); pooled skeletal actors; full net state per frame; history ring copies; EnsureSnapshot with no
   fighters; per-hit view rebuild; bench per-tick tag lookup; fixed-time harness waits).
 - Cost: ~$4-6 (Sonnet subagent, ~60 tool calls, 3 builds incl. one failed, 5 PIE harness runs).
+
+## G6a (laptop, 2026-11-07): code DONE, gate green, late_join green at 0 % and 2 %; G6b (desktop) NOT started
+
+- Branch `claude/project-thread-oi94cf` from `claude/project-thread-aj375g` (103b75f). G6 split with the coordinator's OK (cost over $15):
+  G6a = code, tests, late_join, gate here; G6b = push model ini (needs owner OK, plan §6), R1 bake-off, R2, `scenario_minion_dormancy_flush` 10 min, on the desktop.
+- Step 0 on 103b75f: on 1343/0, off 1307/0, 0 ensures, no fix needed.
+- Opus writer from `Saved/M8G6/writer-brief.md`, report `Saved/M8G6/writer-report.md` (not versioned). Only `Plugins/GSTNMinion` and
+  `Tools/GASNPPTest/minion_scenarios.py` changed; Runtime Build.cs adds NetCore (public). Config ini untouched.
+- Done: `AGSTN_MinionPack` (16 items, `FGSTN_MinionNetArray`, push-based props, works with push model off), `MutatePack()` (wake/flush, then
+  mutate, MarkItemDirty, push mark; all-T3 pack -> DormantAll), per-item GCRA tier limiter on fixed frames (15/5/1/0 Hz, pack ceiling first),
+  budgeted relevancy (rank: attacking, hit in 63 frames, distance; 8000 cm; 64 items or 40 KB/s split over connections at 20 B/item; 1 s
+  hysteresis; over-inclusion counter in `GetNetStats()`), registry hash on one always-relevant `AGSTN_MinionNetManager` (error log + counter, no kick),
+  client `UGSTN_MinionClientRegistry` (decoded items for G7), `gstn.Minion.Net.Dump`. Codec struct renamed `FGSTN_MinionNetWireItem`.
+- Deviations: type sent on every update (9 bits; type-on-add needs a per-connection baseline); "token holder" approximated as "member running a
+  move"; `MaxRelevantPerClient` is a CVar (no minion settings class yet); `bTypeHasExt` fixed false.
+- Gate: on 1352/0 (1343 + 9 `GSTNMinion.*.Net.*`), off 1307/0, 0 ensures. Harness `minion_late_join` (dedicated + 2 clients, 60/15): 0 % PASS 4,
+  2 % PASS 4. Not a true late connect (harness has none, and no third client): clients join the pack channels at the first grant after the spawn.
+- Gate script bug found and fixed (`Saved/M8G6/gate.ps1`): after an `-Off` run, restoring the .uproject kept its old timestamp, so UBT reused the
+  minion-off makefile and the next "on" build compiled nothing. Now the restore touches the file. (Step 0's on run came before off, so it is valid.)
+- Not done (G6b): push model ini, R1 lean-actor variant and numbers, R2 wake latency, dormancy_flush 10 min, 3 headless clients, over-inclusion in
+  the bench report. Also still open: trapped-minion bug (G4), movement timelines, docs.
+- PERF-DEBT (also in docs/notes/perf-debt.md): NetPublish quantizes all members per pack-frame + linear FindItemIndex; relevancy pass is
+  connections x members distance checks; pack destroy/respawn churn; sync TryLoad of types on clients; type bits on every update.
+- Cost: G6a ~ $8-10 (Opus writer ~280k tokens, 70 tool calls; my context ~60k; 3 gate builds + 2 writer builds, 2 headless runs, 2 harness runs).

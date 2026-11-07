@@ -211,6 +211,8 @@ void UGSTN_MinionCombatSubsystem::Activate()
 	{
 		PostFixedTickHandle = Manager->OnPostFixedTick.AddUObject(this, &UGSTN_MinionCombatSubsystem::HandlePostFixedTick);
 	}
+	// Packs, the net manager and the per-slot replication columns (G6); after the store is sized
+	NetActivate();
 	UE_LOG(LogGSTNMinion, Log, TEXT("Minion subsystem active (capacity %d, provider %s, NP hook %s)"), Capacity,
 		bProviderRegistered ? TEXT("registered") : TEXT("none"), PostFixedTickHandle.IsValid() ? TEXT("bound") : TEXT("none"));
 }
@@ -238,6 +240,7 @@ void UGSTN_MinionCombatSubsystem::Deinitialize()
 		}
 		bActive = false;
 	}
+	NetDeinitialize();
 	SpawnQueue.Reset();
 	PendingHits.Reset();
 	AttackTokens.Reset();
@@ -294,6 +297,8 @@ int32 UGSTN_MinionCombatSubsystem::RegisterDefinition(UGSTN_MinionDefinition* De
 
 	Definitions.Add(Definition);
 	ResolvedTypes.Add(MoveTemp(Resolved));
+	// The clients check the type table against theirs (G6 registry hash); the manager carries the new table
+	NetOnRegistryChanged();
 	return Definitions.Num() - 1;
 }
 
@@ -746,6 +751,9 @@ void UGSTN_MinionCombatSubsystem::TickBatch(int32 Frame, bool bResimulating)
 	++BenchTotals.Batches;
 	BenchTotals.TotalBatchSeconds += Elapsed;
 	BenchTotals.MaxBatchSeconds = FMath::Max(BenchTotals.MaxBatchSeconds, Elapsed);
+
+	// Replication after the stages and the despawns (G6): outside the batch timing so the G3-G5 bench numbers stay comparable
+	NetPublish(Frame);
 }
 
 void UGSTN_MinionCombatSubsystem::StageSpawnDrain(int32 Frame)
@@ -780,6 +788,8 @@ void UGSTN_MinionCombatSubsystem::StageSpawnDrain(int32 Frame)
 		// An intent written while the spawn was queued is kept
 
 		PendingActivation[Slot] = false;
+		// The pack is chosen by the publish after the batch (G6), by this group
+		SlotSpawnGroup[Slot] = Queued.Params.SpawnGroup;
 		LastRunFrame[Slot] = Frame - 1;
 		TimelinePrevFrame[Slot] = INDEX_NONE;
 		for (int32 Move = 0; Move < GSTNMinion::MaxMoves; ++Move)
@@ -2171,6 +2181,7 @@ void UGSTN_MinionCombatSubsystem::FreeSlot(int32 Slot)
 		PendingActivation[Slot] = false;
 	}
 	ReleaseActor(Slot);
+	NetReleaseSlot(Slot);
 	// Pending hits of this occupant are dropped by the generation check of the drain
 	Store.Free(Handle);
 	TimelinePrevFrame[Slot] = INDEX_NONE;
@@ -2179,7 +2190,7 @@ void UGSTN_MinionCombatSubsystem::FreeSlot(int32 Slot)
 	// Tokens, rings and history name the slot: they go with the occupant (the token goes back on death, here at the latest)
 	ResetHitColumns(Slot);
 	++LastBatch.Despawned;
-	// G6: release the pack item. G9: publish Event.MinionDespawned
+	// G9: publish Event.MinionDespawned
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

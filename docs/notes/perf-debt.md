@@ -12,3 +12,9 @@ what, where, cheaper alternative.
 - G5 drain cost 8.9 us per hit (spike 5): victim entry and view rebuilt per hit; batch per victim and reuse the view.
 - Bench Attack tick (`GSTN_MinionBench.cpp`): `RequestGameplayTag` and a combat-world lookup every world tick; cache both (test tooling only).
 - Harness: scenarios wait fixed wall-clock seconds; poll a condition instead (test time only).
+- G6 `NetPublish` (`GSTN_MinionCombatSubsystem_Net.cpp`) quantizes every member each pack-frame and finds items with a linear search: keep an
+  id-to-index table on the pack and quantize only members whose rate limiter allows a send.
+- G6 relevancy pass: connections x members distance checks every 96 ms: reuse the batch's player positions or the hash grid.
+- G6 packs are destroyed when empty and respawned in waves: pool empty packs (dormant, 0 items).
+- G6 clients `TryLoad` a minion type synchronously when it first appears: preload with the wave (G9).
+- G6 type index sent on every item update (9 bits): send it on add only with a per-connection baseline (needs custom delta).

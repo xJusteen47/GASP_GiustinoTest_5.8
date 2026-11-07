@@ -2,8 +2,8 @@ using UnrealBuildTool;
 
 // Minion runtime (M8 G3): the authority batch subsystem, the pooled actor and its component, the spawner and the bench.
 // Plan section 2: never GSTNPlatform*, GSTNParts*, GSTNLink*, GSTNDefence* or the project module; no /Game/ path, no ConstructorHelpers.
-// GSTNCombatGAS and GSTNInputCore joined in G5 (the KO event tags and the authoritative event stream); NetCore, NavigationSystem and
-// StateTree join with the checkpoints that first use them (G6-G8).
+// GSTNCombatGAS and GSTNInputCore joined in G5 (the KO event tags and the authoritative event stream); NetCore in G6 (FastArray, push
+// model; public: the pack header exposes the FastArray); NavigationSystem and StateTree join with the checkpoints that first use them (G7-G8).
 public class GSTNMinionRuntime : ModuleRules
 {
 	public GSTNMinionRuntime(ReadOnlyTargetRules Target) : base(Target)
@@ -19,7 +19,8 @@ public class GSTNMinionRuntime : ModuleRules
 			"GameplayTags",
 			"GSTNMinionCore",
 			"GSTNCombatCore",
-			"GSTNCombatNP"
+			"GSTNCombatNP",
+			"NetCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

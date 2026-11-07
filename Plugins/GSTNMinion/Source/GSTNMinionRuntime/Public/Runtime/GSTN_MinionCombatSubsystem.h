@@ -10,6 +10,8 @@
 #include "LOD/GSTN_MinionLOD.h"
 #include "Movement/GSTN_MinionMovement_Lightweight.h"
 #include "Movement/GSTN_MinionMovementBackend.h"
+#include "Net/GSTN_MinionNetCodec.h"
+#include "Net/GSTN_MinionNetRelevancy.h"
 #include "Simulation/GSTN_HitInbox.h"
 #include "Spawn/GSTN_MinionSpawner.h"
 #include "Store/GSTN_MinionStore.h"
@@ -21,6 +23,9 @@
 #include "GSTN_MinionCombatSubsystem.generated.h"
 
 class AGSTN_MinionActor;
+class AGSTN_MinionNetManager;
+class AGSTN_MinionPack;
+struct FGSTN_MinionNetArray;
 class UGSTN_CombatRules;
 class UGSTN_CombatTimeline;
 class UGSTN_CombatWorldSubsystem;
@@ -149,6 +154,35 @@ struct FGSTN_MinionBenchTotals
 	int64 AttacksStarted = 0;
 	int64 TokensDenied = 0;
 	int64 AttackHits = 0;
+};
+
+/** What a MutatePack mutator changed: the array indices it wrote and whether it added or removed items */
+struct FGSTN_MinionPackMutation
+{
+	TArray<int32, TInlineAllocator<16>> ChangedItems;
+	bool bStructureChanged = false;
+};
+
+/** Replication counters of the authority (G6), for the bench, the harness dump and the tests. Nothing in the batch reads them */
+struct FGSTN_MinionNetStats
+{
+	int64 ItemUpdates = 0;
+	int64 ItemAdds = 0;
+	int64 ItemRemoves = 0;
+	/** Frames a pack had at least one item marked */
+	int64 PackSends = 0;
+	int64 Wakes = 0;
+	int64 Flushes = 0;
+	int64 Sleeps = 0;
+	int64 RelevancyPasses = 0;
+	/** Last pass, summed over the connections */
+	int32 LastGranted = 0;
+	int32 LastDeniedByBudget = 0;
+	int32 LastOutOfRange = 0;
+	int32 LastGrantedItems = 0;
+	/** Item updates sent to a connection for a member beyond the relevant distance of it, over all sent (8.1, re-pack trigger above 30 %) */
+	FGSTN_MinionOverInclusion OverInclusion;
+	uint32 RegistryHash = 0;
 };
 
 /**
@@ -340,6 +374,39 @@ public:
 	 */
 	DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnMinionTimelineEvent, const FGSTN_MinionHandle& /*Minion*/, const FGSTN_TimelineTrack_Event& /*Track*/, int32 /*TimelineFrame*/);
 	FOnMinionTimelineEvent OnTimelineEvent;
+
+	// Replication (G6, spec 8.1-8.3). Authority only and outside the batch stages: TickBatch publishes after the events are flushed,
+	// so no stage sees a pack and no stage needs an IsServer branch (the subsystem is only active with authority)
+
+	/**
+	 * The ONLY way pack items change. Order, enforced here (spec 8.1, R2): a dormant pack is woken (SetNetDormancy(DORM_Awake), when
+	 * its ceiling is above 0) or flushed (FlushNetDormancy, when it stays all-T3) FIRST, then Mutate runs, then MarkItemDirty for
+	 * every changed index (MarkArrayDirty for an add or remove), then the push-model property mark. Epic warns that modifying a
+	 * dormant FastArray and flushing afterwards may replicate nothing; one entry point makes the wrong order impossible
+	 */
+	void MutatePack(AGSTN_MinionPack& Pack, TFunctionRef<void(FGSTN_MinionNetArray& /*Array*/, FGSTN_MinionPackMutation& /*Mutation*/)> Mutate);
+
+	/** IsNetRelevantFor of a pack: the viewer's budgeted grant once evaluated, before that any member within the relevant distance */
+	bool IsPackNetRelevantFor(const AGSTN_MinionPack& Pack, const AActor* RealViewer, const FVector& SrcLocation) const;
+
+	AGSTN_MinionPack* GetPack(int32 PackId) const { return Packs.IsValidIndex(PackId) ? Packs[PackId].Get() : nullptr; }
+	AGSTN_MinionPack* GetPackOfSlot(int32 Slot) const { return SlotPackId.IsValidIndex(Slot) ? GetPack(SlotPackId[Slot]) : nullptr; }
+	int32 GetItemIdOfSlot(int32 Slot) const { return SlotItemId.IsValidIndex(Slot) ? SlotItemId[Slot] : INDEX_NONE; }
+	int32 GetNumPacks() const;
+	AGSTN_MinionNetManager* GetNetManager() const { return NetManager; }
+	const FGSTN_MinionNetStats& GetNetStats() const { return NetStats; }
+
+	/** Position origin of the wire (8.2). Set before the first spawn; the clients get it through the net manager */
+	void SetNetWorldOrigin(const FVector& Origin);
+
+	/** Runs the relevancy pass now (normally every gstn.Minion.Net.RelevancyFrames frames from TickBatch) */
+	void UpdateNetRelevancy(int32 Frame);
+
+	/** Log lines for the harness (gstn.Minion.Net.Dump): one per item, the grants per remote player and a summary */
+	void DumpNetToLog() const;
+
+	/** Test spy: when set, MutatePack and the dormancy changes append Wake, Flush, Mutate, MarkItem, MarkProperty, Sleep in order */
+	TArray<FName>* NetTraceForTests = nullptr;
 
 	// Test hooks (GSTNMinion.Runtime.*). Kept outside an #if because UHT does not accept that macro in a reflected class; both are inert
 	// unless a test calls them.
@@ -608,6 +675,47 @@ private:
 	int32 ForcedLODTier = INDEX_NONE;
 	float FixedStepSeconds = 1.f / 62.5f;
 	int32 LastBatchFrame = INDEX_NONE;
+
+	// Replication (G6), see GSTN_MinionCombatSubsystem_Net.cpp
+	struct FViewerRelevancy
+	{
+		TWeakObjectPtr<const AActor> Viewer;
+		FGSTN_MinionRelevancyState State;
+	};
+
+	void NetActivate();
+	void NetDeinitialize();
+	/** End of TickBatch: packs for new slots, the per-item sends of every pack, dormancy, and the relevancy pass on its cadence */
+	void NetPublish(int32 Frame);
+	void NetAssignSlot(int32 Slot, int32 Frame);
+	/** FreeSlot: the slot's item leaves its pack (an emptied pack is destroyed) */
+	void NetReleaseSlot(int32 Slot);
+	/** RegisterDefinition: the type table changed, the manager gets the new paths and hash */
+	void NetOnRegistryChanged();
+	FGSTN_MinionNetWireItem NetBuildWire(int32 Slot, int32 Frame) const;
+	AGSTN_MinionPack* NetSpawnPack(int32 SpawnGroup);
+	void NetTrace(const TCHAR* Step);
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<AGSTN_MinionPack>> Packs;
+
+	UPROPERTY(Transient)
+	TObjectPtr<AGSTN_MinionNetManager> NetManager;
+
+	/** Per slot: the spawn group (pack assignment), the pack and pack-local item id (INDEX_NONE before assignment) */
+	TArray<int32> SlotSpawnGroup;
+	TArray<int32> SlotPackId;
+	TArray<int32> SlotItemId;
+	/** Item updates marked since the last relevancy pass (over-inclusion metric) */
+	TArray<uint16> SlotNetUpdates;
+	/** Scratch of the relevancy pass: distance of each slot to the viewer being evaluated */
+	TArray<float> SlotViewerDistance;
+	TArray<FViewerRelevancy> ViewerRelevancy;
+	TArray<FGSTN_MinionPackCandidate> RelevancyCandidates;
+	TArray<int32> NetSentScratch;
+	FVector3f NetWorldOrigin = FVector3f::ZeroVector;
+	int32 LastRelevancyFrame = INDEX_NONE;
+	FGSTN_MinionNetStats NetStats;
 
 	FGSTN_MinionBatchStats LastBatch;
 	FGSTN_MinionBenchTotals BenchTotals;
