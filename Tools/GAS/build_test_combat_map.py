@@ -28,7 +28,9 @@ def log(msg):
 def specs():
     """The stations as plain data. Positions in cm; boxes are (centre, full size, yaw)"""
     return {
-        'floor': ((1500.0, 0.0, -50.0), (6000.0, 4000.0, 100.0)),
+        # x -3500..4500, y -2500..2500: the harness lanes sit LANE_SPACING (1500) to -X and -Y of each start (gasnpp_test.lane_offset), so a lane
+        # can stand at x -1800 / y -1800 (plus whatever a scenario pushes it back): the old floor ended at x -1500 and SUITE_DEFAULT pawns fell off it
+        'floor': ((500.0, 0.0, -50.0), (8000.0, 5000.0, 100.0)),
         'starts': [((0.0, -300.0, 100.0), 0.0), ((0.0, 300.0, 100.0), 0.0), ((-300.0, 0.0, 100.0), 0.0)],
         'wall': ((2400.0, -900.0, 300.0), (80.0, 800.0, 600.0)),
         'glass': ((2400.0, 0.0, 300.0), (10.0, 300.0, 300.0)),  # HalfExtent of the provider is half of this
