@@ -31,3 +31,18 @@
 - Next: decompose the boost delay by hop before G3-G5 (~$2-3).
 - PERF-DEBT: none (test knob, one cvar read per world init).
 - Cost: ~$3 for the close-out (1 fork build, 10 harness runs, my context ~+20k); FP G0 total ~$7.
+
+## FP decisions + G0b (laptop, 2026-11-08): owner answers in the plan, buffer 50 ms set, hop breakdown done
+
+- Owner answers (D1-D5) written in plan §6; gate table §4 revised: G1 shares a per-link "partner window" with G4 (no redo), snap on
+  misprediction accepted, new G3b (client hit inbox for link partners; the only `GSTNCombatNP` change of FP), all before M10.
+- D1 applied: `FixedTickInterpolationBufferedMS=50` in `Config/DefaultNetworkPrediction.ini` (the NP settings file; the brief said
+  DefaultEngine.ini, which does not hold this setting). Not gated with the headless GSTN run (config value only; the scenarios below ran with it).
+- G0b (3 runs at 0 % and 2 %, dedicated + 2, 60/15): boost = hop 1 rider screen -> server ~180 ms (0 %) / ~218 ms (2 %), the client lead
+  (input travel + server input buffer); hop 2 server -> carrier screen 70-128 ms. Throw: server releases at 470-484 ms (input path +
+  wind-up). Table in the plan, "G0b hop breakdown".
+- Re-estimate: G1 reaches the 150 ms initiator target by itself. G3-G5 cut the partner gap only ~30-60 ms (to ~200-260 ms, about one round
+  trip); hop 1 is the bigger lever (server input buffer settings), not measured yet and not FP.
+- Tooling (not versioned): `Saved/FPG0/hops.ps1`, driver hook `_spike4_hops`, `FP_NAMES` env.
+- PERF-DEBT: none new (the plan's §7 lists the expected debt; 50 ms buffer stalls to recheck on the desktop).
+- Cost: ~$2 (6 harness runs, my context ~+20k). FP total so far ~$9.

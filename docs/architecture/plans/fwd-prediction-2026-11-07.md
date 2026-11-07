@@ -57,21 +57,28 @@ rollback cost exists only in those windows, not for the whole ride.
 **Recommendation: C.** It follows the existing policy, costs ~$10-17 if A is enough, and never pays double: A's buffer cut and
 presentation stay useful under B (B removes only what A could not).
 
-## 4. Gates (option C)
+## 4. Gates (option C, revised 2026-11-08 after the owner's answers and G0/G0b)
+
+Rule from decision 3 ("precautions now"): G1 is built so that G3-G5 extend it and never redo it. The predicted partner reaction runs on
+the same per-link window, data and blend that G4 promotes to NP forward prediction. A visible snap to the current animation frame on a
+misprediction is accepted (fighting-game rollback style), so no extra smoothing work is planned beyond the existing presentation blend.
 
 | Gate | Scope | Acceptance (headless unless noted) | Machine | Model | Cost |
 |---|---|---|---|---|---|
-| **G0** | Baseline on b4149a8: S4 rerun (throw, boost; remote-remote, remote-host); interpolation buffer sweep 100/66/50/33 ms at 60/15, 0 and 2 %: proxy snap count, S4 delay, reconciles. No code. | numbers table in `docs/notes/fp-g0-report.md`; `scenario_link_pair_move_delay` (new harness scenario wrapping S4) | laptop (numbers), desktop (video) | Sonnet | $4-7 |
-| **G1** | Option A: chosen buffer value (project ini, owner OK); `GSTNLink` presentation: initiator plays the partner's authored reaction early, cancel + blend on refusal; cvar `gstn.Link.PredictPartnerPresentation` (default on after the gate) | `scenario_link_pair_move_delay` <= 150 ms on the initiator, report on the partner; `scenario_link_pair_move_refused` (no pop > 15 cm on refusal); SUITE_LINK, SUITE_DEFAULT 0/2 % unchanged | laptop | Sonnet (Opus for the refusal blend if needed) | $6-10 |
-| **G2** | Review gate (rule 10): desktop records the pair moves in-game, cloud review thread PASS/FAIL against the base video; PASS → owner. Owner PASS closes FP (docs: combat.md §12b, §12.7). | video PASS + owner yes | desktop + cloud | Sonnet | $2-4 |
-| **G3** | Only if G2 fails. Fork: per-entity LOD switch (proxy ↔ forward-predicted at runtime, Mover's 3 global reads made per entity), attribute base sent to proxies (unconditional, wire format), last-input repeat with `PrepareRepeatedInput`. Inert unless a caller switches. | new fork test `GSTNCombat.NP.ForwardPredictSwitch` (<= 2 extra reconciles per switch); resim cost per promoted pawn <= 0.5 ms on the low-end budget (`t.MaxFPS`, laptop) | laptop | Opus | $8-12 |
-| **G4** | Only if G2 fails. `GSTNLink` seam: link type flag `bForwardPredictPartner` + promote only inside pair-move / mount-transition windows with hysteresis; proxy correction smoothing (3-frame blend); harness: new reconcile reason `fp` so `unexplained_ours` stays the gate | `scenario_link_fp_window` (promotions = windows, 0 unexplained); SUITE_LINK + piggyback suites 0/2 %, listen and dedicated | laptop | Opus | $10-16 |
-| **G5** | Only if G2 fails. Piggyback integration (rider anchor from the predicted carrier inside windows), S1/S4 rerun, host cost with 4 pairs on the low-end budget, video review as G2, docs | `scenario_link_pair_move_delay` <= 150 ms on both partners; video PASS | desktop | Opus/Sonnet | $6-10 |
+| **G0** done | Baseline + buffer sweep (G0 results); buffer set to 50 ms (decision 1) | done, 6fdbda3 | laptop | Sonnet | ~$7 |
+| **G0b** done | Hop breakdown of the boost delay (section below) | done | laptop | Sonnet | ~$2 |
+| **G1** | `GSTNLink`: per-link "partner window" (pair move or mount transition: start frame, authored length, partner timeline id) shared by G1 and G4; on the initiator's client the partner's authored reaction plays at once from that window (presentation), snap to the authoritative frame on refusal or misprediction; cvar `gstn.Link.PredictPartnerPresentation` | `scenario_link_pair_move_delay`: initiator sees the partner react <= 150 ms after its own action; `scenario_link_pair_move_refused` (snap allowed, no stuck state); SUITE_LINK, SUITE_DEFAULT 0/2 % unchanged | laptop | Sonnet (Opus for the window design) | $6-10 |
+| **G2** | Review gate (rule 10): desktop video, cloud review PASS/FAIL; owner sees PASS only. Decides if G3-G5 still run for the partner's own screen | video PASS + owner yes | desktop + cloud | Sonnet | $2-4 |
+| **G3** | Fork (approved in advance, decision 3): per-entity LOD switch (proxy <-> forward-predicted at runtime, Mover's 3 global reads made per entity), attribute base sent to proxies (unconditional, wire format), last-input repeat with `PrepareRepeatedInput`. Inert unless a caller switches | fork test `GSTNCombat.NP.ForwardPredictSwitch` (<= 2 extra reconciles per switch); resim cost per promoted pawn <= 0.5 ms on the low-end budget | laptop | Opus | $8-12 |
+| **G3b** | Client hit inbox for link partners (decision 4: partners can hurt each other, e.g. PvP grabs, a rocket hit, hitgrabs): a hit from or on the forward-predicted partner resolves in the owning client's victim inbox (M4 inbox drained on the owning client, combat-m4-hits.md §13); server stays authoritative | `scenario_link_partner_hit` (hit during a link: one correction at most, damage equal on every world), SUITE_DEFENCE/LINK 0/2 % | laptop | Opus | $8-14 |
+| **G4** | `GSTNLink` seam: link type flag `bForwardPredictPartner`, promotes the partner only inside the G1 window (hysteresis); harness reconcile reason `fp` so `unexplained_ours` stays the gate | `scenario_link_fp_window` (promotions = windows, 0 unexplained); SUITE_LINK + piggyback 0/2 %, listen and dedicated | laptop | Opus | $10-16 |
+| **G5** | Piggyback integration (rider anchor from the predicted carrier inside windows), S1/S4 rerun, host cost with 4 pairs and 40 awake minions on the low-end budget, video review, docs | partner screen: gain over G0b recorded; video PASS | desktop | Opus/Sonnet | $6-10 |
 
-**Total**: $12-21 if G2 passes (G0-G2); $36-59 with G3-G5. Sequenza's estimate ($30-50) holds only for the B path.
+**Total left**: G1-G2 $8-14; G3-G5 with G3b $32-52; all $40-66 (G0/G0b spent ~$9). Every gate runs before M10 (decision 5).
 
-**`GSTNCombatNP` changes: none in any gate.** Fork changes only in G3 (listed above, each added to PATCHES.md §4 when it lands).
-`GSTNLink` changes in G1 and G4. The project-wide ini value in G1 needs the owner's OK (plan §6 rule). Nothing in Blueprint.
+**Code touched**: `GSTNLink` (G1, G4); fork NP/Mover (G3, listed in PATCHES.md when it lands); **`GSTNCombatNP` in G3b only**: the
+victim inbox drained on the owning client for link partners (the only reason, from decision 4); config: the 50 ms buffer already set.
+Nothing in Blueprint.
 
 ## 5. Risks
 
@@ -85,19 +92,22 @@ presentation stay useful under B (B removes only what A could not).
 - Toaster target: B multiplies resim work by 2 pawns per window; with M8 hosts already spending the frame on minions, G5 must measure the
   host with minions on (40 awake) and 4 pairs.
 
-## 6. Owner decisions
+## 6. Owner decisions (answered 2026-11-07)
 
-1. **Buffer change**: may G1 lower the project-wide `FixedTickInterpolationBufferedMS` (affects every NP proxy, not minions) to the G0 value?
-2. **Gate**: keep 150 ms on the initiator's screen as the target for A, and accept the partner's own screen at "one trip" (~180-230 ms)?
-3. **If A fails**: approve the B-path fork patches (per-entity LOD, attribute base wire format) and the ~$25-38 extra?
-4. **Hit inbox prerequisite** (combat.md §12.7 policy): waive it for link partners, who never hit each other? (Recommended: yes.)
-5. **Order**: FP G0-G2 before M10, and G3-G5 (if needed) also before M10 since both touch `GSTNLink`?
+1. **Buffer**: yes. `FixedTickInterpolationBufferedMS` = 50 ms, set in `Config/DefaultNetworkPrediction.ini` (where the NP settings live;
+   not DefaultEngine.ini).
+2. **Gate**: yes. 150 ms on the initiator's screen; the partner's own screen at about one round trip.
+3. **Fork patches G3-G5**: approved in advance, with "precautions now": G1 must not be redone by G3-G5; a snap to the current animation
+   frame on misprediction is fine.
+4. **Hit inbox prerequisite**: NOT waived. Partners can hurt each other during a link (PvP grabs, a rocket launcher, hitgrabs): G3b.
+5. **Order**: yes, all of FP before M10.
 
 ## 7. PERF-DEBT expected from this plan
 
 - A: the initiator's client evaluates the partner's reaction animation twice for one move (presentation + the later authoritative
   timeline); cheap (one montage), accept unless profiling shows it.
-- A: a smaller buffer means more proxy extrapolation work and more visible micro-corrections on every proxy under jitter.
+- A: the 50 ms buffer: stalls at 2 % 3-9 per 5 s walk vs 3-6 at 100 ms on the laptop rig (noisy); recheck on the desktop host.
+- G3b: the owning client drains the victim inbox for link partners: one more resolution pass per partner hit on that client.
 - B: ~0.03-0.04 ms per promoted pawn per resimulated frame x ~14 frames x ~5 rollbacks/s during windows; per-entity LOD lookups in
   Mover's hot path (3 reads per tick per pawn) replace one global read.
 - B: harness reconcile classification adds a log parse per reconcile line (test time only).
@@ -136,3 +146,28 @@ An earlier sweep (2026-11-08 night) never applied the value (`-ini` struct overr
   throw timeline's wind-up before its release event, design time that FP cannot remove. Check the timeline frames first in G1.
 - **Next**: before building G3-G5, split the ~320 ms boost delay into its hops (rider input to server, server to link state, link state
   replicated to the carrier, shown). The buffer is not the big term, so forward prediction's gain must be re-estimated (~$2-3, laptop).
+
+## G0b hop breakdown (laptop, 2026-11-08, buffer 50 ms, dedicated + 2, harness lag 60 ms / jitter 15 ms, 3 runs each)
+
+Times are ms after the rider's tap, from the first frame each world shows the event (`Saved/FPG0/hops.txt`). Rider = client 1, carrier = client 2.
+
+| Boost jump | 0 % (3 runs) | 2 % (3 runs) |
+|---|---|---|
+| rider's screen: rider leaves (predicted) | 132-137 | 133-134 |
+| server: carrier braces (pair move starts) | 237-240 | 237-239 |
+| server: rider leaves | 315-318 | 351-352 |
+| rider's screen: carrier braces (proxy) | 350-355 | 306-353 |
+| carrier's screen: rider leaves | 385-433 | 440-479 |
+| **hop 1**: rider's screen to server, same event (client lead: input travel + server input buffer) | ~180 | ~218 |
+| **hop 2**: server to carrier's screen (replication + 50 ms interpolation) | 70-115 | 90-128 |
+
+Throw (carrier initiates, server-given): server 470-484, rider's screen 559-570, carrier's screen 562-622 ms after the tap. The ~470 ms
+before the server releases is the carrier's input path plus the throw timeline's wind-up: design time first (G1 checks the frames).
+
+**Re-estimated gains.**
+- G1 (initiator presentation): the rider sees the carrier brace at ~350 ms today, ~215 ms after its own action. With the partner window
+  it is shown with the action (~0 ms gap). **The 150 ms initiator target is reached by G1 alone.**
+- G3-G5 (NP forward prediction of the partner): the partner's screen can only change once the initiator's input has reached it through the
+  server. FP removes hop 2's interpolation and alignment (~30-60 ms), not hop 1 (~180-220 ms, the client lead). Expected partner gap:
+  ~250-300 ms -> **~200-260 ms**, about "one round trip" (decision 2). It never reaches 150 ms on the partner's screen. The bigger lever is
+  hop 1 (the server input buffer, `FixedTickInputSendCount` / desired buffered input), which is not FP and is not measured yet.
