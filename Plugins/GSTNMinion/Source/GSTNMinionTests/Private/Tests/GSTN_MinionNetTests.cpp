@@ -61,7 +61,7 @@ namespace
 		UGSTN_MinionCombatSubsystem* Minions = nullptr;
 	};
 
-	TStrongObjectPtr<UGSTN_MinionDefinition> MakeDefinition()
+	TStrongObjectPtr<UGSTN_MinionDefinition> MakeNetTestDefinition()
 	{
 		TStrongObjectPtr<UGSTN_MinionDefinition> Definition(NewObject<UGSTN_MinionDefinition>(GetTransientPackage(), NAME_None, RF_Transient));
 		Definition->Stats.MaxHealth = 40.f;
@@ -123,7 +123,7 @@ bool FGSTN_MinionNetMutateOrderTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	TStrongObjectPtr<UGSTN_MinionDefinition> Definition = MakeDefinition();
+	TStrongObjectPtr<UGSTN_MinionDefinition> Definition = MakeNetTestDefinition();
 	TArray<FName> Trace;
 	Rig.Minions->NetTraceForTests = &Trace;
 
@@ -199,7 +199,7 @@ bool FGSTN_MinionNetPackAssignmentTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	TStrongObjectPtr<UGSTN_MinionDefinition> Definition = MakeDefinition();
+	TStrongObjectPtr<UGSTN_MinionDefinition> Definition = MakeNetTestDefinition();
 
 	TArray<FGSTN_MinionHandle> GroupA;
 	for (int32 Index = 0; Index < 17; ++Index)
@@ -262,7 +262,7 @@ bool FGSTN_MinionNetRegistryCheckTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	TStrongObjectPtr<UGSTN_MinionDefinition> Definition = MakeDefinition();
+	TStrongObjectPtr<UGSTN_MinionDefinition> Definition = MakeNetTestDefinition();
 	Rig.Spawn(Definition.Get(), 0);
 	Rig.Minions->TickBatch(1);
 	const FGSTN_MinionNetRegistryInfo& Info = Manager->GetRegistryInfo();

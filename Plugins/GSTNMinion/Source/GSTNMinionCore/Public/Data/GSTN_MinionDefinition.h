@@ -9,6 +9,8 @@
 #include "GSTN_MinionDefinition.generated.h"
 
 class AActor;
+class UAnimInstance;
+class USkeletalMesh;
 class UGSTN_CombatTimeline;
 class UGSTN_HurtboxSetDefinition;
 
@@ -214,6 +216,17 @@ public:
 	/** Actor class that presents the minion on a client (a skeletal mesh puppet). Empty = the runtime default */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Presentation")
 	TSoftClassPtr<AActor> PuppetClass;
+
+	/**
+	 * Mesh of the pooled puppet (G7). Soft: a client loads it when the first puppet of the type is acquired, the server never does.
+	 * Empty is valid (a headless or -nullrhi run, a test): the puppet then has no mesh and costs only its transform
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Presentation")
+	TSoftObjectPtr<USkeletalMesh> PuppetMesh;
+
+	/** Animation Blueprint of the puppet's mesh. Empty = the mesh plays nothing (the reference pose) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Presentation")
+	TSoftClassPtr<UAnimInstance> PuppetAnimClass;
 
 	/** Fighter class the minion becomes when a script promotes it. Empty = the type cannot be promoted */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Promotion")

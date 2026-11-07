@@ -18,3 +18,9 @@ what, where, cheaper alternative.
 - G6 packs are destroyed when empty and respawned in waves: pool empty packs (dormant, 0 items).
 - G6 clients `TryLoad` a minion type synchronously when it first appears: preload with the wave (G9).
 - G6 type index sent on every item update (9 bits): send it on add only with a per-connection baseline (needs custom delta).
+- G7 presentation (`GSTN_MinionPresentationSubsystem`): the client registry is walked every frame over all items; queue changed ids from
+  OnItemReceived instead.
+- G7 visible cut sorts every record every frame: partial select (nth_element) or re-rank at 10 Hz.
+- G7 `FindRecordBySlot` is linear per predicted hit on clients: keep a slot-to-key map.
+- G7 puppet mesh, anim class, puppet class and hurtbox set load synchronously on first use: async preload when the registry resolves a type.
+- G7 snapshot provider re-walks all records per build; puppets call SetActorLocationAndRotation every frame even when unchanged.

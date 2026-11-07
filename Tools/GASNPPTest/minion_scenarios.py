@@ -14,9 +14,10 @@ import unreal
 import gasnpp_test as g
 import defence_scenarios as ds
 
-SUITE_MINION = ['minion_hits_player', 'minion_tokens']
+SUITE_MINION = ['minion_hits_player', 'minion_tokens', 'minion_replicate', 'minion_late_join', 'minion_player_hits_minion',
+                'minion_reaction_tiers', 'minion_lagcomp']
 # M8 G6: replication scenarios (packs, relevancy grants, registry check); run_batch(SUITE_MINION_NET)
-SUITE_MINION_NET = ['minion_late_join']
+SUITE_MINION_NET = ['minion_late_join', 'minion_replicate']
 MINION_BIT = 0x40000000
 _marks = {}
 
@@ -209,6 +210,7 @@ def scenario_minion_late_join(client=1):
         (0.0, lambda: ('setup', _marks.update(log=g.mark_log()) or 'log mark')),
         (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Spawn 24 Idle'))),
         (4.5, lambda: ('dump', _net_dump())),
+        (4.6, lambda: ('present dump', _present_dump())),
         (5.5, run.at('the server has 24 items', lambda: (len(_net_state()[0]) == 24, f'server items {len(_net_state()[0])}'))),
         (5.5, run.at('every client got a grant', lambda: (
             len(_net_state()[3]) >= 2 and all(_net_state()[2].get(p) for p in _net_state()[3]), f'grants {_net_state()[2]} clients {list(_net_state()[3])}'))),
@@ -216,8 +218,278 @@ def scenario_minion_late_join(client=1):
         (5.5, run.at('registry hash checked and equal on every client', lambda: (
             bool(_net_state()[3]) and all(s['checks'] >= 1 and s['ok'] == 1 and s['mismatches'] == 0 for s in _net_state()[3].values()),
             f'summaries {_net_state()[3]}'))),
+        (5.5, run.at('every client has a puppet record for each relevant item (G7)', _puppets_cover_relevant)),
         (5.6, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
         (6.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+# ---- M8 G7: client presentation (puppets). Lines come from gstn.Minion.Present.Dump (writer-report.md of G7) ----
+_PRES_PUPPET = re.compile(r'MinionPresent puppet player=(-?\d+) world=(\S+) id=(\d+) slot=(-?\d+) type=(\d+) pos=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+) '
+                          r'yaw=\S+ frame=(\S+) tier=(-?\d+) mode=(\w+) visible=(\d) flash=(\w+)')
+_PRES_SUMMARY = re.compile(r'MinionPresent summary player=(-?\d+) world=(\S+) source=(\w+) renderSource=(\w+) renderFrame=\S+ active=(\d+) visible=(\d+) culled=(\d+) '
+                           r'.*?hittables=(\d+) predicted=(\d+) confirmed=(\d+) cancelled=(\d+) expired=(\d+) remote=(\d+)')
+_NET_CLIENT_ITEM = re.compile(r'MinionNet client player=(-?\d+) world=\S+ pack=(\d+) id=(\d+) type=\d+ pos=(\d+),(\d+),(\d+) yaw=\d+ state=-?\d+ updates=(\d+)')
+POSITION_BIAS = 1 << 18   # GSTNMinion::NetBits::Position = 19, 1 cm steps: wire value = offset in cm + bias
+# G7 gap: the registry WorldOrigin is in no dump; the harness world is assumed to use the zero origin (a mismatch shows as one constant offset in the detail)
+
+
+def _present_dump():
+    for wi in range(1, len(g.worlds())):
+        _cmd('gstn.Minion.Present.Dump', wi)
+    return 'present dumped on the clients'
+
+
+def _present_state(mark=None):
+    """Last Present.Dump after the mark: puppets {(player, id): dict}, summaries {player: dict}"""
+    text = g._read_log_since(mark if mark is not None else _marks['log'])
+    puppets, summaries = {}, {}
+    for ln in text.splitlines():
+        m = _PRES_PUPPET.search(ln)
+        if m:
+            puppets[(int(m.group(1)), int(m.group(3)))] = dict(
+                slot=int(m.group(4)), pos=(float(m.group(6)), float(m.group(7)), float(m.group(8))), frame=float(m.group(9)),
+                tier=int(m.group(10)), mode=m.group(11), visible=int(m.group(12)), flash=m.group(13))
+            continue
+        m = _PRES_SUMMARY.search(ln)
+        if m:
+            summaries[int(m.group(1))] = dict(
+                source=m.group(3), renderSource=m.group(4), active=int(m.group(5)), visible=int(m.group(6)), culled=int(m.group(7)),
+                hittables=int(m.group(8)), predicted=int(m.group(9)), confirmed=int(m.group(10)), cancelled=int(m.group(11)),
+                expired=int(m.group(12)), remote=int(m.group(13)))
+    return puppets, summaries
+
+
+def _puppet_of(puppets, player, pack, item):
+    # G7 gap: the dump's id= convention is not documented; the client registry keys by PackId<<4|ItemId (writer report), tried first, then the bare item id
+    return puppets.get((player, pack << 4 | item)) or puppets.get((player, item))
+
+
+def _puppets_cover_relevant():
+    server, clients, grants, summaries = _net_state()
+    puppets, psum = _present_state()
+    if not clients or not psum:
+        return False, f'client items {len(clients)} present summaries {len(psum)}'
+    bad = []
+    for player, items in clients.items():
+        miss = [k for k in items if _puppet_of(puppets, player, *k) is None]
+        s = psum.get(player)
+        if miss or s is None or s['active'] != len(items) or s['visible'] + s['culled'] != s['active'] or s['source'] == 'none':
+            bad.append(f'player {player}: items {len(items)} without puppet record {miss[:4]} summary {s}')
+    return not bad, '; '.join(bad) or f'{len(clients)} clients: puppet records for all {sum(len(v) for v in clients.values())} relevant items'
+
+
+def _dist(a, b):
+    return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
+
+
+def _client_pawn_pos(client):
+    _, pawn = g._local_pawn(client)
+    v = pawn.get_actor_location()
+    return (v.x, v.y, v.z)
+
+
+def scenario_minion_replicate(client=1):
+    """M8 G7. 40 idle minions spawn (the server splits them into packs: 3 expected, >= 2 required). On each client every relevant minion has a puppet
+    and its displayed position is within 20 cm of the server's. G7 gap: no command dumps the server position at the client's displayed frame, so the
+    minions are idle (they never move) and the displayed position is compared with the server's current one after the interpolators settled"""
+    run = g._Run('minion_replicate', client, judge_reconciles=False, sample=False)
+
+    def pos_ok():
+        server, clients, grants, summaries = _net_state()
+        puppets, psum = _present_state()
+        bad, n, worst = [], 0, 0.0
+        for player, items in clients.items():
+            for k in items:
+                p = _puppet_of(puppets, player, *k)
+                if p is None or k not in server:
+                    bad.append((player, k, 'no puppet' if p is None else 'not on server'))
+                    continue
+                d = _dist(p['pos'], tuple(c - POSITION_BIAS for c in server[k][1]))
+                worst, n = max(worst, d), n + 1
+                if d > 20.0:
+                    bad.append((player, k, round(d, 1)))
+        return (not bad and n > 0), f'{n} puppets compared, worst {worst:.1f} cm, bad {bad[:4]}'
+
+    def packs():
+        keys = _net_state()[0]
+        return len(keys) == 40 and len({k[0] for k in keys}) >= 2, f'items {len(keys)} packs {sorted({k[0] for k in keys})}'
+
+    steps = [
+        (0.0, lambda: ('setup', _marks.update(log=g.mark_log()) or 'log mark')),
+        (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Spawn 40 Idle'))),
+        (5.5, lambda: ('dump', _net_dump())),
+        (5.6, lambda: ('present dump', _present_dump())),
+        (6.5, run.at('the server has 40 items in >= 2 packs', packs)),
+        (6.5, run.at('every relevant minion has a puppet on each client', _puppets_cover_relevant)),
+        (6.5, run.at('displayed position within 20 cm of the server position', pos_ok)),
+        (6.5, run.at('presentation clock resolved on every client', lambda: (
+            bool(_present_state()[1]) and all(s['renderSource'] in ('np', 'fixed') for s in _present_state()[1].values()), f'{_present_state()[1]}'))),
+        (6.6, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (7.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def _swing_steps(start, stop, every, client):
+    """Attack taps from the client's pawn every `every` seconds in [start, stop)"""
+    out, t = [], start
+    while t < stop:
+        out.append((t, lambda: ('attack tap', g.combat_tap(client, g.button_mask('Attack')))))
+        t += every
+    return out
+
+
+def _flash_summary():
+    """The client whose presentation predicted the most hits (the swinging one) -> (player, summary)"""
+    _, summ = _present_state()
+    best = max(summ.items(), key=lambda kv: kv[1]['predicted'], default=(None, None))
+    return best[0], best[1], summ
+
+
+def scenario_minion_player_hits_minion(client=1):
+    """M8 G7. A client player swings at idle minions standing in the bench ring around the first player. The server drains minion hits (spike5
+    drainedHits > 0), the client predicted a flash on a puppet and the HitCounter confirmed it, none was cancelled, and the confirmed puppet is a
+    minion the server owns. G7 gap: no command logs the victim minion id per hit on the server; the closest check is that the confirmed puppet's
+    id is one of the server's Net.Dump items (a hit on another id would cancel the predicted flash)"""
+    run = g._Run('minion_player_hits_minion', client, judge_reconciles=False, sample=False)
+
+    def capture():
+        _marks['dump'] = g.mark_log()
+        _net_dump()
+        _present_dump()
+        _cmd('gstn.Minion.Bench.Report')
+        return 'dumped'
+
+    def confirmed_flash():
+        player, s, summ = _flash_summary()
+        return (s is not None and s['predicted'] >= 1 and s['confirmed'] >= 1 and s['cancelled'] == 0), f'summaries {summ}'
+
+    def confirmed_on_server_minion():
+        server = _net_state()[0]
+        ids = {k[0] << 4 | k[1] for k in server} | {k[1] for k in server}
+        puppets, _ = _present_state()
+        player = _flash_summary()[0]
+        conf = [key for key, p in puppets.items() if p['flash'] == 'confirmed' and key[0] == player]
+        return bool(conf) and all(key[1] in ids for key in conf), f'confirmed puppets {conf[:4]} server ids {sorted(ids)[:6]}'
+
+    steps = [(0.0, lambda: ('setup', _setup())),
+             (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Attack 6 0'))),
+             (0.6, lambda: ('spawn', _cmd('gstn.Minion.Bench.Attack 6 1')))]  # Spawn's 600 cm ring is out of swing reach; attackers walk up to both pawns
+    steps += _swing_steps(3.0, 8.0, 0.5, client)
+    steps += [
+        (9.0, lambda: ('capture', capture())),
+        (10.0, run.at('the server drained minion hits (drainedHits > 0)', lambda: ((_num(_report_line('MinionBench spike5'), 'drainedHits') or 0) > 0, _report_line('MinionBench spike5')[-120:]))),
+        (10.0, run.at('the client predicted a flash and it was confirmed, none cancelled', confirmed_flash)),
+        (10.0, run.at('the confirmed flash sits on a minion the server owns', confirmed_on_server_minion)),
+        (10.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (11.0, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_minion_reaction_tiers(client=1):
+    """M8 G7. 40 chasing minions: the client dump carries tiers. At least two tiers occur, a lower tier is on average no farther from the client's pawn
+    than a higher one (T0 <= T1 <= T2, 50 cm slack), and the lowest tier present gets more wire updates per item than the highest over the 2 s between
+    two Net.Dump samples. G7 gap: Bench.Spawn puts every minion on one ring radius, so distance variety comes from the chase and the relevancy range
+    only; the client infers the tier from the sample gap (writer report), so this checks the wire cadence, not a server-side tier id; and the Present id
+    to (pack, item) join relies on the id convention of _puppet_of"""
+    run = g._Run('minion_reaction_tiers', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def sample(tag):
+        st[tag] = g.mark_log()
+        _net_dump()
+        _present_dump()
+        return f'sample {tag}'
+
+    def updates_of(mark):
+        text = g._read_log_since(mark)
+        # first dump after the mark only: the log after mark 'a' also holds sample 'b'
+        out = {}
+        for m in map(_NET_CLIENT_ITEM.search, text.splitlines()):
+            if m:
+                out.setdefault((int(m.group(1)), int(m.group(2)), int(m.group(3))), int(m.group(7)))
+        return out
+
+    def distances():
+        puppets, _ = _present_state(st['b'])
+        by = {0: [], 1: [], 2: []}
+        here = _client_pawn_pos(client)
+        for (player, pid), p in puppets.items():
+            if p['tier'] in by and p['visible']:
+                by[p['tier']].append(_dist(p['pos'], here))
+        return by
+
+    def tiers_present():
+        by = distances()
+        return sum(1 for v in by.values() if v) >= 2, f'puppets per tier {({t: len(v) for t, v in by.items()})}'
+
+    def tiers_ordered():
+        means = {t: sum(v) / len(v) for t, v in distances().items() if v}
+        order = sorted(means)
+        return len(order) >= 2 and all(means[a] <= means[b] + 50.0 for a, b in zip(order, order[1:])), f'mean distance per tier {({t: round(m) for t, m in means.items()})}'
+
+    def lowest_tier_updates_more():
+        a, b = updates_of(st['a']), updates_of(st['b'])
+        puppets, _ = _present_state(st['b'])
+        rate = {0: [], 1: [], 2: []}
+        for k in b:
+            p = _puppet_of(puppets, *k) if k in a else None
+            if p and p['tier'] in rate:
+                rate[p['tier']].append(b[k] - a[k])
+        mean = {t: sum(v) / len(v) for t, v in rate.items() if v}
+        if len(mean) < 2:
+            return False, f'fewer than two tiers with a joined update count: {mean}'
+        return mean[min(mean)] > mean[max(mean)], f'mean updates per item {({t: round(m, 1) for t, m in mean.items()})} (n {({t: len(v) for t, v in rate.items()})})'
+
+    steps = [
+        (0.0, lambda: ('setup', _marks.update(log=g.mark_log()) or 'log mark')),
+        (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Spawn 40 Chase'))),
+        (4.0, lambda: ('sample a', sample('a'))),
+        (6.0, lambda: ('sample b', sample('b'))),
+        (7.0, run.at('at least two reaction tiers on the client dump', tiers_present)),
+        (7.0, run.at('lower tiers are no farther from the pawn (T0 <= T1 <= T2)', tiers_ordered)),
+        (7.0, run.at('the lowest tier updates more often than the highest', lowest_tier_updates_more)),
+        (7.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (8.0, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_minion_lagcomp(client=1):
+    """M8 G7. At the batch's 60/15 lag, a client swings at chasing (moving) minions. The server's rewound candidate query ran and found candidates
+    (spike5 lagCompQueries, candidates > 0), the server drained hits (drainedHits > 0), and the client confirmed a flash on a puppet it aimed at.
+    G7 gap: nothing dumps which minion the rewound query accepted nor the swing's aim, so 'lands on the minion the client saw' is judged by
+    predicted >= 1, confirmed >= 1, cancelled == 0 on the client (a hit that landed on another minion would cancel the predicted flash)"""
+    run = g._Run('minion_lagcomp', client, judge_reconciles=False, sample=False)
+
+    def capture():
+        _marks['dump'] = g.mark_log()
+        _present_dump()
+        _cmd('gstn.Minion.Bench.Report')
+        return 'dumped'
+
+    def confirmed_flash():
+        player, s, summ = _flash_summary()
+        return (s is not None and s['predicted'] >= 1 and s['confirmed'] >= 1 and s['cancelled'] == 0), f'summaries {summ}'
+
+    def line():
+        return _report_line('MinionBench spike5')
+
+    steps = [(0.0, lambda: ('setup', _setup())),
+             (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Attack 4 0'))),
+             (0.6, lambda: ('spawn', _cmd('gstn.Minion.Bench.Attack 4 1')))]  # moving attackers walk into swing reach; Chase stops on the 600 cm ring
+    steps += _swing_steps(2.5, 8.0, 0.5, client)
+    steps += [
+        (9.0, lambda: ('capture', capture())),
+        (10.0, run.at('the server ran rewound queries and found candidates', lambda: (
+            (_num(line(), 'lagCompQueries') or 0) > 0 and (_num(line(), 'candidates') or 0) > 0, line()[-140:]))),
+        (10.0, run.at('the server drained hits on moving minions (drainedHits > 0)', lambda: ((_num(line(), 'drainedHits') or 0) > 0, line()[-140:]))),
+        (10.0, run.at('the client predicted and confirmed a flash on the puppet it aimed at', confirmed_flash)),
+        (10.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (11.0, run.finish()),
     ]
     run.run(steps)
 

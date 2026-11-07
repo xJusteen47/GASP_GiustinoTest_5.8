@@ -106,6 +106,13 @@ public:
 	/** Array index of the item with this pack-local id, INDEX_NONE when absent */
 	int32 FindItemIndex(uint8 ItemId) const;
 
+	/**
+	 * Client: the authority store slot of a pack-local item id as the server last sent it, INDEX_NONE when unknown. The slot is the
+	 * minion's pipeline id (MinionEntityBase | slot), which the client's puppets need as client hittables: the attacker's predicted
+	 * HitTargets entry must carry the id the server's own tick of the same attack writes, or every predicted hit is a correction (G7)
+	 */
+	int32 GetNetSlotOfItem(uint8 ItemId) const;
+
 	// Authority bookkeeping (never replicated; the subsystem owns its meaning)
 
 	int32 SpawnGroup = 0;
@@ -134,4 +141,15 @@ private:
 
 	UPROPERTY(Replicated)
 	FGSTN_MinionNetArray Items;
+
+	/**
+	 * Store slot by pack-local item id (MaxItems entries, MAX_uint16 = free), refreshed from MemberSlot by every MutatePack. It changes
+	 * only when a member joins or leaves, so with push model off it is one 32 B compare per pack send and with push model on it is
+	 * marked only when it changed. Not in the item: that would add 16 bits to every item update for a value that never changes
+	 */
+	UPROPERTY(Replicated)
+	TArray<uint16> NetItemSlots;
+
+	/** Authority: copies MemberSlot into NetItemSlots and marks it when it changed */
+	void RefreshNetItemSlots();
 };

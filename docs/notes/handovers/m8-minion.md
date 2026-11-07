@@ -195,3 +195,32 @@
 - PERF-DEBT (also in docs/notes/perf-debt.md): NetPublish quantizes all members per pack-frame + linear FindItemIndex; relevancy pass is
   connections x members distance checks; pack destroy/respawn churn; sync TryLoad of types on clients; type bits on every update.
 - Cost: G6a ~ $8-10 (Opus writer ~280k tokens, 70 tool calls; my context ~60k; 3 gate builds + 2 writer builds, 2 headless runs, 2 harness runs).
+
+## G7a (laptop, 2026-11-07): presentation code DONE, gate green; scenarios 2/5 green; G7b (desktop) NOT started
+
+- Branch `claude/project-thread-n4yotz` from `claude/project-thread-oi94cf` (6271c2b). G7 split with the coordinator's OK (estimate over $15):
+  G7a = code, tests, 5 scenarios, gate here; G7b = spike 7 + owner video on the desktop (with G6b).
+- Opus writer from `Saved/M8G7/writer-brief.md` (report `writer-report.md`, not versioned); Sonnet for the scenarios (`scenarios-report.md`).
+- Done (only `Plugins/GSTNMinion` + `minion_scenarios.py`): `UGSTN_MinionPresentationSubsystem` (client registry or, on a listen host, the store),
+  pooled `AGSTN_MinionPuppet` (null mesh ok headless), `FGSTN_MinionInterpolator` (Core; T0 on NP `Interpolation` render frame, T1/T2 dead
+  reckoning + 200 ms blends, teleport snaps; tier inferred from sample gap), `MaxVisible` 60 nearest first (CVar `gstn.Minion.Present.MaxVisible`),
+  predicted flash (custom primitive data 0) + mesh pause, confirmed by HitCounter in 500 ms or cancelled, puppets as client hittables (pack
+  replicates a small `NetItemSlots` table for slot -> server id), URO + OnlyTickPoseWhenRendered, pooled placeholder shatter,
+  `gstn.Minion.Present.Dump` (puppet + summary lines, format in writer-report). Definition gains soft `PuppetMesh`, `PuppetAnimClass`.
+- Deviations: Animation Budget Allocator skipped (plugin not enabled, logged once). `UGSTN_HitPresentationComponent` cannot present minion
+  victims (`FindOwnerActor` null, material param flash): subsystem reuses its tracker on the local pawn's sync state; attacker-side pause and
+  local cue do not play for minion hits (needs a GSTNCombatNP hook, not touched). Two old unity-clash helpers renamed.
+- Gate: on 1363/0 (1352 + 11 `GSTNMinion.*.Present.*`), off 1307/0, 0 ensures.
+- Harness 0 % (dedicated + 2 clients, 60/15): `minion_replicate` PASS 4, `minion_late_join` PASS 5 (now with puppets). FAIL:
+  `minion_player_hits_minion`, `minion_lagcomp`: client Attack taps are sent but the server shows lagCompQueries=0, drainedHits=0, client
+  predicted=0, even with Bench.Attack minions walking up to both pawns (fix 1: Spawn's 600 cm ring was out of reach). Next: check that the
+  tap activates a swing on the harness pawn and that the player->minion hit query is wired (GSTNCombatNP side; G5 only tested minion->player).
+  `minion_reaction_tiers`: fix 1 (sample windows overlapped) done; now T0 items get 0.8 updates/2 s vs T1 9.0: tier inversion or wrong
+  client tier inference, undiagnosed. 2 % runs NOT done (0 % not green). Max 2 fix attempts reached for the session budget.
+- G7b needs from the desktop: spike 7 (listen host that renders + a client, Development, `stat unit`/Insights: game thread ≤ 3 ms at 60
+  puppets, ≤ 2 ms at 40, or M8 §4d.1 fallback recorded); owner video of 40 grunts hit (several angles); a puppet mesh/anim class set on
+  the grunt definition (none yet); Animation Budget Allocator plugin enable (owner OK) if wanted; the three failing scenarios and 2 % runs.
+- Not done: anim-instance driving, ground snap, Launched extrapolation, instanced mesh for culled minions; G4 trapped-minion bug; docs.
+- PERF-DEBT (also in docs/notes/perf-debt.md): registry polled per frame; full sort for the visible cut; linear FindRecordBySlot; sync loads
+  of puppet assets; puppet transform set every frame even unchanged.
+- Cost: G7a ~ $12-14 (Opus writer ~280k tokens, 82 tool calls; Sonnet ~120k; my context ~70k; 2 writer builds + 3 gate builds, 2 harness runs).

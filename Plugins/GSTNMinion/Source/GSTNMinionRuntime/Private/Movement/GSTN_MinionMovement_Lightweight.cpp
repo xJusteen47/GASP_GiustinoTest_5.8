@@ -24,7 +24,7 @@ namespace
 	/** Sideways speed given to an airborne capsule that a non-walkable contact holds in place (it slides off the edge) */
 	constexpr double EdgeSlideSpeed = 100.0;
 
-	bool IsLocomotionState(uint8 State)
+	bool IsLightweightLocomotionState(uint8 State)
 	{
 		const EGSTN_MinionActionState S = static_cast<EGSTN_MinionActionState>(State);
 		return S == EGSTN_MinionActionState::Idle || S == EGSTN_MinionActionState::Walk || S == EGSTN_MinionActionState::Move;
@@ -260,7 +260,7 @@ void FGSTN_MinionMovement_Lightweight::StepSlot(FGSTN_MinionMoveContext& Ctx, in
 
 	const FGSTN_MinionIntent& Intent = Store.Intent[Slot];
 	const bool bStale = Intent.IsStale(Ctx.Frame);
-	const bool bFollowsIntent = Mode == EGSTN_MinionKnockbackMode::None && IsLocomotionState(Store.ActionState[Slot]) && Store.MoveId[Slot] == 0 && !bStale;
+	const bool bFollowsIntent = Mode == EGSTN_MinionKnockbackMode::None && IsLightweightLocomotionState(Store.ActionState[Slot]) && Store.MoveId[Slot] == 0 && !bStale;
 	FVector IntentVelocity = FVector::ZeroVector;
 	if (bFollowsIntent)
 	{
@@ -411,7 +411,7 @@ void FGSTN_MinionMovement_Lightweight::StepSlot(FGSTN_MinionMoveContext& Ctx, in
 		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Idle);
 	}
 
-	if (Mode == EGSTN_MinionKnockbackMode::None && IsLocomotionState(Store.ActionState[Slot]) && Store.MoveId[Slot] == 0)
+	if (Mode == EGSTN_MinionKnockbackMode::None && IsLightweightLocomotionState(Store.ActionState[Slot]) && Store.MoveId[Slot] == 0)
 	{
 		// Facing: the requested yaw, else the intent's direction; turned at the type's rate
 		float Yaw = Store.YawDegrees[Slot];

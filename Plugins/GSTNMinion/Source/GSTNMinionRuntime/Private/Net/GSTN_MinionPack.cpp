@@ -82,6 +82,7 @@ void AGSTN_MinionPack::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	Params.bIsPushBased = true;
 	DOREPLIFETIME_WITH_PARAMS_FAST(AGSTN_MinionPack, PackId, Params);
 	DOREPLIFETIME_WITH_PARAMS_FAST(AGSTN_MinionPack, Items, Params);
+	DOREPLIFETIME_WITH_PARAMS_FAST(AGSTN_MinionPack, NetItemSlots, Params);
 }
 
 void AGSTN_MinionPack::PostInitializeComponents()
@@ -136,4 +137,27 @@ void AGSTN_MinionPack::InitPack(int32 InPackId, int32 InSpawnGroup)
 void AGSTN_MinionPack::MarkItemsPropertyDirty()
 {
 	MARK_PROPERTY_DIRTY_FROM_NAME(AGSTN_MinionPack, Items, this);
+	// Every membership change goes through MutatePack (and so here), after the pack was woken or flushed
+	RefreshNetItemSlots();
+}
+
+void AGSTN_MinionPack::RefreshNetItemSlots()
+{
+	bool bChanged = NetItemSlots.Num() != MaxItems;
+	NetItemSlots.SetNum(MaxItems);
+	for (int32 Id = 0; Id < MaxItems; ++Id)
+	{
+		const uint16 Value = MemberSlot[Id] == INDEX_NONE ? MAX_uint16 : static_cast<uint16>(MemberSlot[Id]);
+		bChanged |= NetItemSlots[Id] != Value;
+		NetItemSlots[Id] = Value;
+	}
+	if (bChanged)
+	{
+		MARK_PROPERTY_DIRTY_FROM_NAME(AGSTN_MinionPack, NetItemSlots, this);
+	}
+}
+
+int32 AGSTN_MinionPack::GetNetSlotOfItem(uint8 ItemId) const
+{
+	return NetItemSlots.IsValidIndex(ItemId) && NetItemSlots[ItemId] != MAX_uint16 ? static_cast<int32>(NetItemSlots[ItemId]) : INDEX_NONE;
 }
