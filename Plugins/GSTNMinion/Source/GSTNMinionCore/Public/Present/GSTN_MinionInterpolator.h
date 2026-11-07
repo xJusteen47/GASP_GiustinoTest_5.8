@@ -131,8 +131,12 @@ public:
 	/** T0 for an inferred T0, dead reckoning otherwise */
 	FGSTN_MinionDisplayPose Evaluate(double RenderFrame, double NowSeconds, const FGSTN_MinionSmoothingParams& Params);
 
-	/** Tier inferred from the gap between the two newest samples; Far with fewer than two samples */
-	EGSTN_MinionLODTier GetInferredTier(const FGSTN_MinionSmoothingParams& Params) const;
+	/**
+	 * Tier inferred from the gap between the two newest samples; Far with fewer than two samples. With NowSeconds >= 0 the time since the
+	 * newest sample arrived counts as a gap too: a T0 minion that went still sends nothing, and its last two (close) samples must not keep
+	 * it T0 forever (G7a: idle minions read T0 with no updates, moving ones read slower)
+	 */
+	EGSTN_MinionLODTier GetInferredTier(const FGSTN_MinionSmoothingParams& Params, double NowSeconds = -1.0) const;
 
 	int32 Num() const { return Count; }
 	/** Newest sample, null when empty */

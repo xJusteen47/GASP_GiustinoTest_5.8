@@ -165,16 +165,21 @@ FGSTN_MinionDisplayPose FGSTN_MinionInterpolator::DeadReckon(double NowSeconds, 
 
 FGSTN_MinionDisplayPose FGSTN_MinionInterpolator::Evaluate(double RenderFrame, double NowSeconds, const FGSTN_MinionSmoothingParams& Params)
 {
-	return GetInferredTier(Params) == EGSTN_MinionLODTier::Combat ? Interpolate(RenderFrame, NowSeconds, Params) : DeadReckon(NowSeconds, Params);
+	return GetInferredTier(Params, NowSeconds) == EGSTN_MinionLODTier::Combat ? Interpolate(RenderFrame, NowSeconds, Params) : DeadReckon(NowSeconds, Params);
 }
 
-EGSTN_MinionLODTier FGSTN_MinionInterpolator::GetInferredTier(const FGSTN_MinionSmoothingParams& Params) const
+EGSTN_MinionLODTier FGSTN_MinionInterpolator::GetInferredTier(const FGSTN_MinionSmoothingParams& Params, double NowSeconds) const
 {
 	if (Count < 2)
 	{
 		return EGSTN_MinionLODTier::Far;
 	}
-	const int32 Gap = At(Count - 1).Frame - At(Count - 2).Frame;
+	int32 Gap = At(Count - 1).Frame - At(Count - 2).Frame;
+	if (NowSeconds >= 0.0)
+	{
+		const double SilentFrames = (NowSeconds - NewestArrivalSeconds) * 1000.0 / FMath::Max(Params.FixedStepMs, 1.f);
+		Gap = FMath::Max(Gap, FMath::FloorToInt32(SilentFrames));
+	}
 	if (Gap <= Params.T0MaxFrameGap)
 	{
 		return EGSTN_MinionLODTier::Combat;

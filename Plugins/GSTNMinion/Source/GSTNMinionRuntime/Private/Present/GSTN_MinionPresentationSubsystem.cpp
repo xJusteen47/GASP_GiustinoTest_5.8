@@ -249,7 +249,7 @@ void UGSTN_MinionPresentationSubsystem::TickPresentation(double NowSeconds)
 		{
 			FGSTN_MinionPresentRecord& Record = Pair.Value;
 			Record.Pose = Record.Interpolator.Evaluate(Stats.RenderFrame, NowSeconds, Smoothing);
-			Record.Tier = Record.Interpolator.GetInferredTier(Smoothing);
+			Record.Tier = Record.Interpolator.GetInferredTier(Smoothing, NowSeconds);
 		}
 	}
 	else

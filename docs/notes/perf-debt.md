@@ -24,3 +24,4 @@ what, where, cheaper alternative.
 - G7 `FindRecordBySlot` is linear per predicted hit on clients: keep a slot-to-key map.
 - G7 puppet mesh, anim class, puppet class and hurtbox set load synchronously on first use: async preload when the registry resolves a type.
 - G7 snapshot provider re-walks all records per build; puppets call SetActorLocationAndRotation every frame even when unchanged.
+- G7a: the minion harness scenarios still wait fixed times and judge from log dumps; tier inference now reads the clock per record per frame (cheap, no new cost of note).

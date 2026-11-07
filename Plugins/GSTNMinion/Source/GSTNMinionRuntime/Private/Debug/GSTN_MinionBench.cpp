@@ -30,6 +30,21 @@ namespace
 		TEXT("gstn.Minion.Bench.Definition"), TEXT(""),
 		TEXT("Object path of the UGSTN_MinionDefinition the bench spawns (empty = a transient definition built in code)."));
 
+	// G7a: the transient grunts had no hurtbox set, so no player swing could ever hit them (player -> minion scenarios). Read when a
+	// transient definition is first built, so set it before the first Spawn/Attack of the world
+	TAutoConsoleVariable<FString> CVarBenchHurtboxSet(
+		TEXT("gstn.Minion.Bench.HurtboxSet"), TEXT(""),
+		TEXT("Object path of a UGSTN_HurtboxSetDefinition the transient bench grunts get (empty = none: they cannot be hit)."));
+
+	void ApplyBenchHurtboxSet(UGSTN_MinionDefinition* Definition)
+	{
+		const FString Path = CVarBenchHurtboxSet.GetValueOnGameThread();
+		if (Definition && !Path.IsEmpty())
+		{
+			Definition->HurtboxSet = TSoftObjectPtr<UGSTN_HurtboxSetDefinition>(FSoftObjectPath(Path));
+		}
+	}
+
 	// Timed headless runs (gate of G3/G11): ExecCmds cannot wait, so the bench reports, and optionally quits, by itself
 	TAutoConsoleVariable<float> CVarBenchAutoReportSeconds(
 		TEXT("gstn.Minion.Bench.AutoReportSeconds"), 0.f,
@@ -280,6 +295,7 @@ UGSTN_MinionDefinition* UGSTN_MinionBenchSubsystem::ResolveDefinition()
 		TransientDefinition = NewObject<UGSTN_MinionDefinition>(this, TEXT("GSTN_MinionBenchDefinition"), RF_Transient);
 		TransientDefinition->TypeTag = FGameplayTag::RequestGameplayTag(TEXT("Minion.Type.Grunt"), false);
 		TransientDefinition->Stats.MaxHealth = 40.f;
+		ApplyBenchHurtboxSet(TransientDefinition);
 	}
 	return TransientDefinition;
 }
@@ -417,6 +433,7 @@ int32 UGSTN_MinionBenchSubsystem::SpawnAttackers(int32 Count, int32 TargetIndex)
 		AttackDefinition = NewObject<UGSTN_MinionDefinition>(this, TEXT("GSTN_MinionBenchAttackDefinition"), RF_Transient);
 		AttackDefinition->TypeTag = FGameplayTag::RequestGameplayTag(TEXT("Minion.Type.Grunt"), false);
 		AttackDefinition->Stats.MaxHealth = 40.f;
+		ApplyBenchHurtboxSet(AttackDefinition);
 		FGSTN_MinionMove& Move = AttackDefinition->Moves.AddDefaulted_GetRef();
 		const FGameplayTag Swing = FGameplayTag::RequestGameplayTag(TEXT("Command.Minion.Attack.Swing"), false);
 		Move.Command = Swing.IsValid() ? Swing : FGameplayTag(GSTNMinionTags::Type);

@@ -143,6 +143,10 @@ bool FGSTN_MinionPresentTierTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("one sample: Far (dead reckoning)"), Interpolator.GetInferredTier(Params) == EGSTN_MinionLODTier::Far);
 	Interpolator.AddSample(MakeSample(104, FVector3f::ZeroVector), 0.0);
 	TestTrue(TEXT("15 Hz gap: Combat"), Interpolator.GetInferredTier(Params) == EGSTN_MinionLODTier::Combat);
+	// Params.FixedStepMs 16: 0.05 s of silence is ~3 frames (still T0), 0.3 s ~18 frames (T1), 1 s ~62 frames (T2)
+	TestTrue(TEXT("silent 0.05 s: still Combat"), Interpolator.GetInferredTier(Params, 0.05) == EGSTN_MinionLODTier::Combat);
+	TestTrue(TEXT("silent 0.3 s: Near"), Interpolator.GetInferredTier(Params, 0.3) == EGSTN_MinionLODTier::Near);
+	TestTrue(TEXT("silent 1 s: Far"), Interpolator.GetInferredTier(Params, 1.0) == EGSTN_MinionLODTier::Far);
 	Interpolator.AddSample(MakeSample(117, FVector3f::ZeroVector), 0.0);
 	TestTrue(TEXT("5 Hz gap: Near"), Interpolator.GetInferredTier(Params) == EGSTN_MinionLODTier::Near);
 	Interpolator.AddSample(MakeSample(180, FVector3f::ZeroVector), 0.0);

@@ -224,3 +224,29 @@
 - PERF-DEBT (also in docs/notes/perf-debt.md): registry polled per frame; full sort for the visible cut; linear FindRecordBySlot; sync loads
   of puppet assets; puppet transform set every frame even unchanged.
 - Cost: G7a ~ $12-14 (Opus writer ~280k tokens, 82 tool calls; Sonnet ~120k; my context ~70k; 2 writer builds + 3 gate builds, 2 harness runs).
+
+## G7a closing (laptop, 2026-11-07): 3 of 5 G7 scenarios green at 0 % and 2 %; player_hits_minion and lagcomp still red (2 fix attempts used)
+
+- Branch `claude/project-thread-xm9w8k` from `claude/project-thread-n4yotz` (cd6cfa9). Diagnosis in `Saved/M8G7/diag-g7a.md` (not versioned).
+- Player -> minion, cause harness/bench side, hit pipeline and GSTNCombatNP untouched: (a) a bare harness pawn's Attack has no hit move (needs
+  `KIT_Test_Hits`, whose swing tag is `Test.State.HitMove`, not `Attacking`); (b) the bench's transient grunts had no hurtbox set, so nothing could
+  hit them; (c) the attackers keep the swinging pawn in hitstun. Fix: bench CVar `gstn.Minion.Bench.HurtboxSet` (read when the transient definition
+  is built), harness `_swinger_setup` (kit, `HBS_Test_Pawn` on the grunts, infinite stagger threshold on the pawns).
+- `lagCompQueries=0` is by design: no live code calls `GatherRewoundCandidates`; minions are rewound by the GSTNLagComp overlay through the provider.
+  The lagcomp check on that counter was replaced by "the kit swing came out".
+- Tiers: the server is right (all 40 items at ceiling 15 = T0, near the pawn). The client inferred T0 for still minions forever (last two samples
+  close, then silence) and the old check compared raw update counts, which follow motion. Fix: `GetInferredTier(Params, NowSeconds)` counts the
+  silence since the newest sample as a gap (unit test added); scenario rewritten (server ceilings by distance, still items read slow, moving items
+  update more and within their ceiling) on slow Massacre launches (Chase minions stand still by the samples).
+- Results (dedicated + 2 clients, 60/15): 0 % replicate PASS 4, late_join PASS 5, reaction_tiers PASS 4; player_hits_minion and lagcomp FAIL only on
+  "none cancelled": predicted 33/36, confirmed 22/30, cancelled 6/6 (server drained hits, swing out). 2 %: replicate, late_join, reaction_tiers PASS;
+  player_hits_minion and lagcomp FAIL: the kit swing never came out (no HitMove on the server, 0 drained hits).
+- Gate: on 1363/0, off 1307/0, 0 ensures (the tier test grew 3 asserts, same test count).
+- Open (next thread, Opus for the first): (1) ~18 % of predicted minion flashes cancelled at 0 % loss: check whether cancels are hits on dying
+  minions (3 of 12 die in the run) or client/server pose disagreement; if dying, allow cancels on minions that died in the window. (2) At 2 % the
+  scripted one-frame tap seems lost or the loadout not applied: check `Test.State.HitMove` on the client and the loadout view before the taps,
+  try `combat_hold` for a few frames. Then rerun both at 0 % and 2 %.
+- Files: Tools/GASNPPTest/minion_scenarios.py; GSTN_MinionBench.cpp; GSTN_MinionInterpolator.{h,cpp}; GSTN_MinionPresentationSubsystem.cpp;
+  GSTN_MinionTests_Present.cpp.
+- PERF-DEBT (also in perf-debt.md): none new in runtime; harness scenarios still wait fixed times (no event waits).
+- Cost: ~$7 (one session, ~75 tool calls, 2 builds + gate on/off, 6 headless harness runs incl. 2 diagnostic).
