@@ -333,7 +333,7 @@ these four rules in order, from the hit data and `Ctx.Reaction` only (all *Propo
    - `PushBack`: a **horizontal slide on the ground, with no airborne state**: `LaunchVelocity` = the horizontal direction × `min(K ×
      PushBackSpeedScale, MaxPushBackSpeed)`; no tumble, no DI.
    - `StaggerInPlace`: hitstun with **zero displacement** (`LaunchVelocity = 0`).
-   `HitstunFrames = max(MinHitstunFrames, floor(K × HitstunFactor × HitstunMultiplier × Reaction.HitstunScale))` when staggered, else 0 (the
+   `HitstunFrames = max(MinHitstunFrames, floor(K × HitstunFactor × HitstunMultiplier × Reaction.HitstunScale))` when staggered, else 0; **`HitstunMultiplier <= 0` means no hitstun and no stagger at all (no floor, no launch; damage and hitstop still apply)** (drill bore, SD-14) (the
    floor keeps a stagger in place readable). The stagger force only **gates** hitstun: it does not scale its length.
 
 **Weight, stagger and juggle (owner §2, §2b).** Every model applies the modifiers of `Ctx.Reaction` exactly once, in this order:

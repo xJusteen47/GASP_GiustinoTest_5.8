@@ -3,6 +3,10 @@
 #include "Sim/GSTN_DrillTrackHook.h"
 
 #include "Data/GSTN_SpinDrillTracks.h"
+#include "Data/GSTN_SpinDrillTypes.h"
+#include "Input/GSTN_CombatButtonTags.h"
+#include "Input/GSTN_InputHistory.h"
+#include "Math/GSTN_DrillMath.h"
 #include "Input/GSTN_ButtonMap.h"
 #include "Sim/GSTN_DrillFragment.h"
 #include "Sim/GSTN_DrillTickExtension.h"
@@ -36,9 +40,28 @@ FGSTN_TrackHookResult FGSTN_BoreTrackHook::Evaluate(const FGSTN_TrackHookContext
 		Result.bStallThisFrame = true;
 	}
 
+	// Jump boost (13b): jump held now, or a press at most the window before this frame, read from the same history as the crouch
+	bool bJumpBoost = false;
+	const int32 JumpButton = Context.Buttons ? Context.Buttons->GetIndex(GSTNCombatButtonTags::Button_Jump.GetTag()) : INDEX_NONE;
+	if (JumpButton >= 0 && JumpButton < 32)
+	{
+		const FGSTN_InputHistory& History = Context.Input.History;
+		int32 LastPress = INDEX_NONE;
+		for (int32 Age = 0; Age < History.GetNumButtonEvents(); ++Age)
+		{
+			const FGSTN_ButtonEvent Event = History.GetButtonEvent(History.GetButtonSlot(Age));
+			if (Event.Button == JumpButton && !Event.bRelease)
+			{
+				LastPress = Event.Frame;
+				break;
+			}
+		}
+		bJumpBoost = UGSTN_DrillMath::IsJumpBoostInWindow(Context.Frame, LastPress, (History.GetHeldButtons() & (1u << JumpButton)) != 0, FGSTN_BoreTuning().JumpBoostWindowFrames);
+	}
+
 	Result.bStampWindow = true;
 	Result.Window.StartFrame = Context.TimelineStartFrame;
 	Result.Window.EndFrame = bHeld ? INDEX_NONE : Context.Frame;
-	Result.Window.Profile = GSTNDrillStamps::CrouchMarker;
+	Result.Window.Profile = bJumpBoost ? GSTNDrillStamps::CrouchMarkerJump : GSTNDrillStamps::CrouchMarker;
 	return Result;
 }

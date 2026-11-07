@@ -331,3 +331,83 @@ after one checkpoint.
 - Full SUITE_SPIN at the start of SD-12 (exit code only): 5/12 (pop and launch red). Not rerun at the end (budget).
 - Gates: on Succeeded, headless 980/0; off Succeeded, headless 933/0; restore build Succeeded.
 - Cost: one Opus thread, ~110k context, 1 full + 4 short suite runs, 6 builds, 3 headless runs. Medium-high.
+
+## SD-13 (laptop, 2026-11-03): launch fixed; moving enemy diagnosed (needs a design call); hit/bounce/cancel still red (STOPPED)
+
+- launch_after_bore PASS (94d4a93). Cause: Inputs.bJumpBoost was never filled, so ResolveEnd always chose the pop. The bore track hook now stamps the
+  jump (held, or a press inside FGSTN_BoreTuning::JumpBoostWindowFrames, read from the input history) as profile CrouchMarkerJump (0xD2);
+  ReadCrouchStamp has an optional bJumpBoost out param. Window uses the tuning default (8), not the kit's value: the hook has no tuning access.
+- Run Saved/SD13/driver_a.py (6 red scenarios): release_early_pop and launch PASS; moving_enemy, hit_while_latched, nondrillable_bounce,
+  opposite_cancel FAIL. Not rerun: ring and full suite (count not measured this thread).
+- moving_enemy, cause proven (Saved/SD13/probe_move2.txt): the target's actionState stays Hitstun (2) for the whole bore, vel 0, no link state of its
+  own. GSTN_KnockbackModel floors HitstunFrames at Tuning.MinHitstunFrames (6) = the bore's re-hit interval (6), so hitstun never ends; this is why
+  HitstunMultiplier 0 (SD-12) did nothing. NEEDS A DECISION (combat semantics): e.g. HitstunMultiplier <= 0 means no hitstun/no floor, or a HitData
+  "no hitstun" flag for the bore tip. Not done (combat core change).
+- hit_while_latched: attempt 1 (kept, harmless): held the attack button 0.12 s instead of a tap. Still driller damage 0 -> 0, so the hit never lands.
+  Suspect: the hitter is teleported to the driller's height (z ~258, driller sits on the target) and falls; probe the hitter's mode/hitboxes next.
+- nondrillable_bounce: not touched (only the bounce check is listed as failing; read the full check list in the run first).
+- opposite_cancel: not touched (spin 0.72 s vs natural length, no cancel effect, 2 -> 4 rollbacks).
+- Gates: build Succeeded (on); headless suites and the plugin-off build NOT rerun this thread (C++ change is small, tests unit-callable: ReadCrouchStamp
+  default arg keeps old calls valid). Do both before any push. No push done.
+- Cost: one Sonnet thread, ~75 context-heavy tool calls ~ low-medium; 1 build, 3 editor runs (~25 min).
+
+## SD-14 (laptop, 2026-11-03): bore no longer pins the target; hit/bounce/cancel still red (STOPPED, budget)
+
+- Decision (coordinator, owner may veto): `FGSTN_HitData::HitstunMultiplier <= 0` = no hitstun AND no stagger (UGSTN_KnockbackModel::ResolveRules sets
+  bStaggered false: no lock floors MinHitstunFrames / MinStaggerLockFrames, no launch; damage and hitstop still apply). The bore tip sets 0
+  (GSTN_SpinDrillTracks.cpp). Documented in combat-m4-hits.md and the SpinDrill README. First attempt (skip only the MinHitstunFrames floor) was not
+  enough: the victim still staggered and the rules floor re-locked it (Saved/SD14/probe.txt: actionState 2 after the first bore hit).
+- moving_enemy: target now moves (0 -> 17-20 cm in 0.8 s, expected > 100) but the driller does NOT ride it (0 cm). Two open causes:
+  (a) the bore hitstop (Auto) freezes the victim ~every 6 frames: try tip HitstopMode Override 0/0 (3rd attempt, not made: rule is 2);
+  (b) the driller's parked placement is not following the target (check UGSTN_DrillLinkType placement / anchor while the target moves).
+- hit_while_latched, cause found (Saved/SD14/probe_hit.txt): the hitter placed 70 cm from the driller sits INSIDE the bore tip (r 45, 100 cm below the
+  driller's centre), so the tip hits the hitter (damage 4 -> 20, knocked back 63 cm, hitstun) and it never hits the driller. Harness fix applied:
+  place at 105 cm (spin_drill_scenarios.py). Result of that run: still red (latch not ended, driller damage 0). Next probe: does the hitter's jab reach
+  the driller at 105 cm / at z 258 (driller is 164 cm above the floor, hitter falls from the teleport)? Consider an air hitter or a nearer
+  spot with the tip's group excluded.
+- Not touched: nondrillable_bounce, opposite_cancel (bounce check lists an empty reading; cancel: spin 0.67 s vs natural, rollbacks 0 -> 2).
+- Full SUITE_SPIN (Saved/Logs/sd-14/spin-c.log, d2.py filter did not narrow): PASS spin_ground_hits_ring, air_hop, air_spin_once, release_early_pop,
+  launch_after_bore, target_destroyed. FAIL: opposite_cancel, drill_ground_lag (rollback 0 -> 2), nondrillable_bounce, latch_static_multi_hit (no latch
+  at all: possibly flaky or a regression of the stagger change in the dive's latch, not checked), moving_enemy, hit_while_latched.
+- Harness lessons: `-ExecCmds="py C:\path\no spaces.py"` (copy the script to C:\sd14; spaces break the quoting, -ExecutePythonScript quits when the
+  script returns); kill only your own editor pid (never Stop-Process -Name).
+- Gates: build (editor, on) Succeeded twice. Headless RunTests (Input+Combat+SpinDrill+Defence+Link+Parts): 965 found, exit code 0 (Saved/SD14/headless.log). Plugin-off build NOT run (~30 min).
+- Cost: one Sonnet thread, ~55 tool calls, 2 builds (~30 min each), 7 editor runs; medium. Local commit only, nothing pushed.
+
+## SD-15 (laptop, 2026-11-03): latch_static_multi_hit was a flake; moving enemy diagnosed (design call); hit_while_latched still red (STOPPED)
+
+- No C++ change in this thread, so no build and no new headless run (SD-14 gates at ca8188b still apply). Two full SUITE_SPIN runs (Saved/Logs/sd-15/full1.log, full2.log).
+- latch_static_multi_hit: FAIL in SD-14, PASS in both runs here -> flake, not a regression of the HitstunMultiplier<=0 rule. Other flakes seen in the same
+  runs: spin_ground_hits_ring (FAIL once, PASS once), release_early_pop (FAIL once, PASS once). Run 2: 7/12 PASS (+ drill_ground_lag still rollback 0 -> 2).
+- moving_enemy, cause found, NOT a hitstop issue: UGSTN_LinkedMovementMode::SimulationTick keeps the driller capsule where it was (GSTN_LinkedMovement.cpp,
+  "nothing moves"); the parked placement (FGSTN_LinkSnapshotContributor::FinalizeSnapshot, anchor in the partner's space) only rewrites the SNAPSHOT entry
+  (hurtboxes, hit space). The unit test Parked.InitiatorFollowsMovingPartner says so ("its capsule never moves"). So the harness check "driller moved
+  with the target" (actor location, 0 cm) can never pass as written. Decision for the owner (architecture, nothing changed):
+  (A, recommended) keep the design, change the check to read the placement from the snapshot/hurtbox (needs a Python-visible reader), the actor stays;
+  (B) make the parked mode move the capsule to the parked transform each Mover tick (visible riding, touches GSTNLink NP, replication and the exit).
+- hit_while_latched: harness variant tried this thread (hitter 70 cm away, 50 cm above the driller, to clear the tip sphere): still red (latch not ended,
+  driller damage 0). Reverted. 2 attempts spent in total on it (SD-14 + SD-15); next needs a probe of the hitter's jab hitbox (reach/height) vs the
+  driller's parked hurtbox, i.e. print the snapshot entry of the driller, not the actor position.
+- Not touched: nondrillable_bounce, opposite_cancel, drill_ground_lag.
+- Cost: one Sonnet thread, ~30 tool calls, 0 builds, 2 editor runs (~8 min each); small.
+
+## SD-16 (laptop, 2026-11-06): moving_enemy GREEN; other reds untouched (STOPPED, as briefed)
+
+- Real cause of "the target does not move" was the BORE HITSTOP (SD-14 hypothesis (a) confirmed): the tip re-hits every 6 frames and froze the victim.
+  Bore tip now uses HitstopMode Override with 0 victim / 0 attacker frames (GSTN_SpinDrillTracks.cpp). Target walks 196 cm in 0.8 s (was 18-24).
+- Decision (recommended option, owner may veto): the driller capsule stays put by design (SD-15 option A). The check no longer asserts the driller
+  location. It also cannot read the parked transform: GetMirrorText's parked value comes from the live animated socket, which does not update at
+  -nullrhi (stayed frozen while the target moved 196 cm). Setting use_live_socket False from Python made the latch drop (not investigated, 2 attempts
+  used). So drill_latch_moving_enemy now checks: target walked > 100 cm while bored + latch holds on every world + rollback budget. The follow is
+  covered by the unit test Parked.InitiatorFollowsMovingPartner. Open if wanted: a snapshot-based reader.
+- Result: drill_latch_moving_enemy PASS (Saved/Logs/sd-16/mov.log). Full SUITE_SPIN (Saved/Logs/sd-16/full.log): PASS air_hop, air_spin_once, release_early_pop,
+  launch_after_bore, target_destroyed, moving_enemy. FAIL: spin_ground_hits_ring (rollback 2->3, flaky), opposite_cancel, drill_ground_lag, nondrillable_bounce,
+  hit_while_latched (not touched), latch_static_multi_hit (flake: PASS on rerun, static.log).
+- Gates: editor build Succeeded. Headless RunTests and plugin-off build NOT run (change = 3 field assignments on the tip); run both before any push.
+- Not pushed; local commit 3866040 (5 commits ahead of origin).
+- Cost: one Sonnet thread, ~30 tool calls, 1 build, 6 editor runs; small-medium.
+
+## SD-16 gate (laptop, 2026-11-06, run by the M8-G0a thread at 3312333): GREEN
+
+- Headless on (Input+Combat+SpinDrill+Piggyback+Defence+Link+Parts): 980 success, 0 fail, 0 ensure. Plugin-off build (SpinDrill+Piggyback off): Succeeded;
+  off suites 933/0/0. Rebuild with plugins on: Succeeded. Logs Saved/SD17 (gate.txt, headless-on.log, headless-off.log). SD-17 not needed for the gate.
