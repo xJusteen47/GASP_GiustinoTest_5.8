@@ -1,21 +1,34 @@
-// Minion runtime (authority batch, M8 G3).
+// Minion runtime (authority batch, M8 G3; hit flows, attack tokens and lag compensation G5).
 
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
 
 #include "Algo/StableSort.h"
 #include "Engine/World.h"
+#include "Events/GSTN_SimEventSubsystem.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GSTN_CombatTags.h"
+#include "GSTN_MinionTags.h"
 #include "GSTNMinionCoreModule.h"
 #include "HAL/IConsoleManager.h"
+#include "Hits/GSTN_CombatHitTags.h"
+#include "Hits/GSTN_HitExtensions.h"
+#include "Hits/GSTN_HitRunner.h"
+#include "Hits/GSTN_HitShapeUtils.h"
+#include "Hits/GSTN_HitSteps.h"
 #include "Hits/GSTN_HurtboxTypes.h"
+#include "Input/GSTN_CombatSettings.h"
 #include "NetworkPredictionWorldManager.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
+#include "Rules/GSTN_CombatRules.h"
 #include "Runtime/GSTN_MinionActor.h"
 #include "Runtime/GSTN_MinionCombatComponent.h"
 #include "Schedule/GSTN_MinionSchedule.h"
+#include "Simulation/GSTN_CombatAttacker.h"
+#include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_HitInbox.h"
+#include "Simulation/GSTN_LagCompensation.h"
 #include "Stats/Stats.h"
 #include "Timeline/GSTN_CombatTimeline.h"
 #include "Timeline/GSTN_TimelineTypes.h"
@@ -41,6 +54,9 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("T0 Combat"), STAT_GSTN_MinionT0, STATGROUP_GSTN
 DECLARE_DWORD_COUNTER_STAT(TEXT("T1 Near"), STAT_GSTN_MinionT1, STATGROUP_GSTNMinion);
 DECLARE_DWORD_COUNTER_STAT(TEXT("T2 Far"), STAT_GSTN_MinionT2, STATGROUP_GSTNMinion);
 DECLARE_DWORD_COUNTER_STAT(TEXT("T3 Dormant"), STAT_GSTN_MinionT3, STATGROUP_GSTNMinion);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Ignored hit effects"), STAT_GSTN_MinionIgnoredEffects, STATGROUP_GSTNMinion);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Hits on fighters"), STAT_GSTN_MinionAttackHits, STATGROUP_GSTNMinion);
+DECLARE_DWORD_COUNTER_STAT(TEXT("Attack tokens denied"), STAT_GSTN_MinionTokensDenied, STATGROUP_GSTNMinion);
 
 namespace
 {
@@ -51,6 +67,48 @@ namespace
 	TAutoConsoleVariable<int32> CVarCorpseFrames(
 		TEXT("gstn.Minion.CorpseFrames"), 60,
 		TEXT("Frames a dying minion stays before it is freed when its type has no Death timeline."));
+
+	TAutoConsoleVariable<int32> CVarMaxAttackersPerPlayer(
+		TEXT("gstn.Minion.MaxAttackersPerPlayer"), FGSTN_MinionAttackTokens::DefaultMaxPerTarget,
+		TEXT("Most minions that may start an attack against one fighter at a time (attack tokens). Read when the minion subsystem activates."));
+
+	TAutoConsoleVariable<float> CVarLagCompMaxSpeed(
+		TEXT("gstn.Minion.LagComp.MaxSpeed"), 700.f,
+		TEXT("Fastest a minion moves (cm/s): a rewound query inflates its search by this times the rewind age (spec 9.2: 700 x 0.25 s = 175 cm)."));
+
+	/** The transform that carries a hitbox at a timeline frame; false for a space a minion cannot place (a projectile, a missing baked socket) */
+	bool BuildCarrier(const FGSTN_HitboxSpec& Spec, const FGSTN_CombatTimelineData& Timeline, const FTransform& Root, int32 TimelineFrame, int32 TrackFrame, FTransform& OutCarrier)
+	{
+		const FTransform Key = UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame);
+		switch (Spec.Space)
+		{
+		case EGSTN_HitboxSpace::Root:
+			OutCarrier = Key * Root;
+			return true;
+		case EGSTN_HitboxSpace::BakedSocket:
+		{
+			FTransform Socket;
+			if (!Timeline.FindBakedSocket(Spec.Socket, TimelineFrame, Socket))
+			{
+				return false;
+			}
+			OutCarrier = Key * Socket * Root;
+			return true;
+		}
+		case EGSTN_HitboxSpace::WorldAtMoveStart:
+			// A minion keeps no move origin (one more column for a space no minion move uses yet): the root of the frame stands in
+			OutCarrier = Key * Root;
+			return true;
+		case EGSTN_HitboxSpace::Projectile:
+		default:
+			return false;
+		}
+	}
+
+	FVector ShapeCenterOf(const FGSTN_HitShape& Shape, const FTransform& Carrier)
+	{
+		return (Shape.Local * Carrier).GetLocation();
+	}
 
 	/** States in which the minion follows its intent (anything else is a reaction or a timeline that owns the minion) */
 	bool IsLocomotionState(uint8 State)
@@ -110,14 +168,39 @@ void UGSTN_MinionCombatSubsystem::Activate()
 	LastRunFrame.Init(INDEX_NONE, Capacity);
 	TimelinePrevFrame.Init(INDEX_NONE, Capacity);
 	NextMoveFrame.Init(0, Capacity * GSTNMinion::MaxMoves);
-	LastAttackerId.Init(INDEX_NONE, Capacity);
 	MoveColumns.Reset(Capacity);
 	SlotActors.Init(nullptr, Capacity);
 	Scheduled.Reserve(Capacity);
 
+	KnockbackPercent.Init(0.f, Capacity);
+	HitstopEndFrame.Init(INDEX_NONE, Capacity);
+	HitstunEndFrame.Init(INDEX_NONE, Capacity);
+	PendingReaction.Init(0, Capacity);
+	PendingReactionVelocity.Init(FVector3f::ZeroVector, Capacity);
+	AttackerHitstopEndFrame.Init(INDEX_NONE, Capacity);
+	PausedFrames.Init(0, Capacity);
+	LastAttackerRing.Init(INDEX_NONE, Capacity * GSTNMinion::LastAttackerRingSize);
+	LastAttackerHead.Init(0, Capacity);
+	LastAttackerCount.Init(0, Capacity);
+	HitByRing.Init(FHitByKey(), Capacity * GSTNMinion::HitByRingSize);
+	HitByHead.Init(0, Capacity);
+	AttackTargets.Init(FAttackTarget(), Capacity * GSTNMinion::AttackTargetRingSize);
+	AttackTargetHead.Init(0, Capacity);
+	History.Reset(Capacity);
+	AttackTokens.Reset();
+	AttackTokens.SetMaxPerTarget(CVarMaxAttackersPerPlayer.GetValueOnGameThread());
+
+	// Rules resolved here, outside the simulation, so the batch only runs resolved lists. A rules asset set before activation wins
+	if (!CombatRules)
+	{
+		// The settings hand out a const pointer to an asset or to their built-in copy; the batch only reads it, the property keeps it referenced
+		CombatRules = const_cast<UGSTN_CombatRules*>(UGSTN_CombatSettings::Get().ResolveDefaultRules());
+	}
+
 	UWorld* World = GetWorld();
 	if (UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(World))
 	{
+		CombatWorld = Combat;
 		bProviderRegistered = Combat->RegisterProvider(this);
 		if (!bProviderRegistered)
 		{
@@ -157,6 +240,8 @@ void UGSTN_MinionCombatSubsystem::Deinitialize()
 	}
 	SpawnQueue.Reset();
 	PendingHits.Reset();
+	AttackTokens.Reset();
+	CombatWorld.Reset();
 	QueuedEvents.Reset();
 	DespawnList.Reset();
 	SlotActors.Reset();
@@ -289,8 +374,20 @@ bool UGSTN_MinionCombatSubsystem::LaunchMinion(const FGSTN_MinionHandle& Handle,
 	{
 		Store.ActionState[Slot] = static_cast<uint8>(bPushBack ? EGSTN_MinionActionState::PushedBack : EGSTN_MinionActionState::Launched);
 	}
-	// G5: the drain also cancels the current move for staggered hits; a script launch leaves a running timeline alone
+	// A script launch leaves a running timeline alone; the drain cancels the move of a staggered minion itself (CancelTimeline)
 	return true;
+}
+
+int32 UGSTN_MinionCombatSubsystem::GetLastAttacker(int32 Slot, int32 Age) const
+{
+	constexpr int32 Size = GSTNMinion::LastAttackerRingSize;
+	if (!LastAttackerCount.IsValidIndex(Slot) || Age < 0 || Age >= LastAttackerCount[Slot])
+	{
+		return INDEX_NONE;
+	}
+	// Head is the next write position, so the newest entry sits one before it
+	const int32 Position = (LastAttackerHead[Slot] - 1 - Age + 2 * Size) % Size;
+	return LastAttackerRing[Slot * Size + Position];
 }
 
 float UGSTN_MinionCombatSubsystem::GetHealth(const FGSTN_MinionHandle& Handle) const
@@ -326,27 +423,11 @@ void UGSTN_MinionCombatSubsystem::AppendSnapshotEntities(int32 Frame, TArray<FGS
 		{
 			continue;
 		}
-		const int32 TypeIndex = Store.TypeIndex[Slot];
-		const UGSTN_MinionDefinition* Definition = GetDefinition(TypeIndex);
-		if (!Definition)
-		{
-			continue;
-		}
-		const FGSTN_MinionResolvedType& Resolved = ResolvedTypes[TypeIndex];
-
 		FGSTN_SnapshotEntry& Entry = OutEntries.AddDefaulted_GetRef();
-		Entry.EntityId = GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot));
-		Entry.Generation = Store.Generation[Slot];
-		Entry.Team = FGenericTeamId(Definition->TeamId);
-		const FRotator Rotation(0.f, Store.YawDegrees[Slot], 0.f);
-		Entry.Transform = FTransform(Rotation, FVector(Store.Position[Slot]));
-		Entry.Facing = Rotation.Vector();
-		Entry.Hurtboxes = Resolved.Hurtboxes;
-		// Every hurtbox takes hits normally until G5 derives armor and intangibility from the minion's timeline
-		Entry.HurtStates.SetNum(Resolved.Hurtboxes ? Resolved.Hurtboxes->Hurtboxes.Num() : 0);
-		Entry.BoundRadius = Resolved.BoundRadius;
-		Entry.HealthFraction = Store.MaxHealth[Slot] > 0.f ? Store.Health[Slot] / Store.MaxHealth[Slot] : 1.f;
-		// G5: Velocity, ActionState/Reaction (hitstop, stagger threshold, weight) for the attacker's hitstop prediction
+		if (!FillSnapshotEntry(Slot, Frame, Entry))
+		{
+			OutEntries.Pop(EAllowShrinking::No);
+		}
 	}
 }
 
@@ -367,8 +448,232 @@ bool UGSTN_MinionCombatSubsystem::PostToEntityInbox(int32 EntityId, uint16 Gener
 	Pending.Frame = Entry.Frame;
 	Pending.EntityId = EntityId;
 	Pending.Generation = Generation;
+	if (const FGSTN_HitInboxEntry* Hit = FGSTN_HitInboxEntry::FromInboxEntry(Entry))
+	{
+		Pending.AttackerHitboxIndex = Hit->AttackerHitboxIndex;
+		Pending.HurtboxIndex = Hit->HurtboxIndex;
+	}
 	Pending.Entry = Entry;
 	return true;
+}
+
+UGSTN_CombatWorldSubsystem* UGSTN_MinionCombatSubsystem::GetCombatWorld() const
+{
+	return CombatWorld.Get();
+}
+
+void UGSTN_MinionCombatSubsystem::SetCombatRules(UGSTN_CombatRules* Rules)
+{
+	CombatRules = Rules;
+}
+
+const UGSTN_CombatRules* UGSTN_MinionCombatSubsystem::GetCombatRules() const
+{
+	return CombatRules;
+}
+
+FVector UGSTN_MinionCombatSubsystem::UpAt(const FVector& Position) const
+{
+	const UWorld* World = GetWorld();
+	const FVector Gravity = GravitySource ? GravitySource(Position) : FVector(0.0, 0.0, World ? World->GetGravityZ() : -980.0);
+	const FVector Up = -Gravity.GetSafeNormal();
+	return Up.IsNearlyZero() ? FVector::UpVector : Up;
+}
+
+FTransform UGSTN_MinionCombatSubsystem::MakeRoot(const FVector& Feet, float YawDegrees) const
+{
+	// The capsule stands along the gravity up (the movement backend aligns it so); the yaw turns about that up
+	const FQuat Tilt = FQuat::FindBetweenNormals(FVector::UpVector, UpAt(Feet));
+	const FQuat Yaw(FVector::UpVector, FMath::DegreesToRadians(static_cast<double>(YawDegrees)));
+	return FTransform(Tilt * Yaw, Feet);
+}
+
+FTransform UGSTN_MinionCombatSubsystem::RootOf(int32 Slot) const
+{
+	return MakeRoot(FVector(Store.Position[Slot]), Store.YawDegrees[Slot]);
+}
+
+bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGSTN_SnapshotEntry& Out) const
+{
+	const int32 TypeIndex = Store.TypeIndex[Slot];
+	const UGSTN_MinionDefinition* Definition = GetDefinition(TypeIndex);
+	if (!Definition)
+	{
+		return false;
+	}
+	const FGSTN_MinionResolvedType& Resolved = ResolvedTypes[TypeIndex];
+	const UGSTN_HurtboxSetDefinition* Set = Resolved.Hurtboxes;
+
+	Out.EntityId = GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot));
+	Out.Generation = Store.Generation[Slot];
+	Out.Team = FGenericTeamId(Definition->TeamId);
+	Out.Transform = RootOf(Slot);
+	Out.Velocity = FVector(MoveColumns.Velocity[Slot]);
+	Out.Facing = Out.Transform.GetUnitAxis(EAxis::X);
+	Out.Up = Out.Transform.GetUnitAxis(EAxis::Z);
+	Out.Hurtboxes = Set;
+	Out.BoundRadius = Resolved.BoundRadius;
+	Out.HealthFraction = Store.MaxHealth[Slot] > 0.f ? FMath::Clamp(Store.Health[Slot] / Store.MaxHealth[Slot], 0.f, 1.f) : 1.f;
+
+	// Both hitstops freeze the minion: the victim's window (hits of the previous frames) and its own as an attacker
+	const bool bVictimHitstop = Frame < HitstopEndFrame[Slot];
+	const bool bAttackerHitstop = AttackerHitstopEndFrame[Slot] != INDEX_NONE && Frame <= AttackerHitstopEndFrame[Slot];
+	Out.bInHitstop = bVictimHitstop || bAttackerHitstop;
+
+	// The fighters' action state vocabulary, for steps that read it: any hit reaction is Hitstun, a running move InTimeline
+	switch (static_cast<EGSTN_MinionActionState>(Store.ActionState[Slot]))
+	{
+	case EGSTN_MinionActionState::Hitstop:
+	case EGSTN_MinionActionState::Hitstun:
+	case EGSTN_MinionActionState::PushedBack:
+	case EGSTN_MinionActionState::Launched:
+	case EGSTN_MinionActionState::Knockdown:
+	case EGSTN_MinionActionState::GetUp:
+		Out.ActionState = EGSTN_ActionState::Hitstun;
+		break;
+	case EGSTN_MinionActionState::Dying:
+	case EGSTN_MinionActionState::Dead:
+		Out.ActionState = EGSTN_ActionState::KO;
+		break;
+	default:
+		Out.ActionState = IsMoveId(Store.MoveId[Slot]) ? EGSTN_ActionState::InTimeline : EGSTN_ActionState::Actionable;
+		break;
+	}
+
+	// How each hurtbox takes hits: the hurtbox modifier tracks of the running timeline at the frame it last evaluated (the end of the
+	// previous frame, like the fighter's), so a dodge's intangible feet or an armored windup work on minions with the same data
+	Out.HurtStates.Reset();
+	if (Set)
+	{
+		Out.HurtStates.SetNum(Set->Hurtboxes.Num());
+		const UGSTN_CombatTimeline* Timeline = Store.MoveId[Slot] != 0 && TimelinePrevFrame[Slot] != INDEX_NONE ? TimelineOfMoveId(Slot, Store.MoveId[Slot]) : nullptr;
+		if (Timeline)
+		{
+			FGSTN_TimelinePlayer::EvaluateHits(Timeline->Data, TimelinePrevFrame[Slot], HurtScratch);
+			for (int32 Index = 0; Index < Set->Hurtboxes.Num(); ++Index)
+			{
+				Out.HurtStates[Index] = FGSTN_TimelinePlayer::ResolveHurtState(HurtScratch, Set->Hurtboxes[Index]);
+			}
+		}
+	}
+
+	// The compact reaction state, built as the fighter's is: what the attacker's hitstop prediction and the lag-comp ring read
+	uint8 Flags = 0;
+	FGSTN_StaggerThreshold Threshold = Set ? Set->StaggerThreshold : FGSTN_StaggerThreshold();
+	bool bAllIntangible = Out.HurtStates.Num() > 0;
+	bool bAllInvincible = Out.HurtStates.Num() > 0;
+	for (const FGSTN_HurtboxFrameState& Hurt : Out.HurtStates)
+	{
+		bAllIntangible &= Hurt.State == EGSTN_HurtState::Intangible;
+		bAllInvincible &= Hurt.State == EGSTN_HurtState::Intangible || Hurt.State == EGSTN_HurtState::Invincible;
+		if (Hurt.State == EGSTN_HurtState::Armor)
+		{
+			Flags |= GSTNVictimReactionFlags::Armor;
+			Threshold = FGSTN_StaggerThreshold::Max(Threshold, Hurt.ArmorThreshold);
+		}
+	}
+	Flags |= bAllIntangible ? GSTNVictimReactionFlags::Intangible : 0;
+	Flags |= bAllInvincible ? GSTNVictimReactionFlags::Invincible : 0;
+	Flags |= Out.bInHitstop ? GSTNVictimReactionFlags::InHitstop : 0;
+	const double WeightScale = FGSTN_CombatVictim::ComputeWeightScale(CombatRules, Set, KnockbackPercent[Slot], Out.HealthFraction);
+	Out.Reaction = FGSTN_VictimReactionState::Make(KnockbackPercent[Slot], WeightScale, Flags, Threshold);
+	// No snapshot contributor runs for minions (no fragments, no parts code here): the parts bridge (M4b P16) uses the step slot and the store hook
+	return true;
+}
+
+FGSTN_HitVictimView UGSTN_MinionCombatSubsystem::MakeMinionView(int32 Slot, const FGSTN_SnapshotEntry& Entry) const
+{
+	FGSTN_HitVictimView View = FGSTN_CombatVictim::MakeVictimView(Entry, CombatRules);
+	// The health model of a minion: its own hit points in every damage mode (it dies at 0 whatever the rules count), so the fraction is
+	// always the store's; the percent modes still grow the knockback through the damage percent of the reaction state
+	View.HealthFraction = Store.MaxHealth[Slot] > 0.f ? FMath::Clamp(Store.Health[Slot] / Store.MaxHealth[Slot], 0.f, 1.f) : 1.f;
+	// The store as it is now: the earlier entries of the same drain already moved health and percent (the AdvanceVictim rule)
+	const FGSTN_VictimReactionState& Old = Entry.Reaction;
+	const double WeightScale = FGSTN_CombatVictim::ComputeWeightScale(CombatRules, Entry.Hurtboxes, KnockbackPercent[Slot], View.HealthFraction);
+	View.ReactionState = FGSTN_VictimReactionState::Make(KnockbackPercent[Slot], WeightScale, Old.Flags, Old.EffectiveThresholdQ, Old.ExtMask);
+	if (const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]))
+	{
+		View.Weight = Definition->Stats.Weight;
+	}
+	// The kind, so a step can tell a minion from a fighter without an id test
+	View.StateTags.AddTag(GSTNMinionTags::Entity_Minion);
+	const FGameplayTag StateTag = GSTNMinionTags::GetActionStateTag(static_cast<EGSTN_MinionActionState>(Store.ActionState[Slot]));
+	if (StateTag.IsValid())
+	{
+		View.StateTags.AddTag(StateTag);
+	}
+	return View;
+}
+
+bool UGSTN_MinionCombatSubsystem::BuildVictimView(const FGSTN_MinionHandle& Handle, int32 Frame, FGSTN_HitVictimView& OutView) const
+{
+	if (!Store.IsValid(Handle) || PendingActivation[Handle.Index])
+	{
+		return false;
+	}
+	FGSTN_SnapshotEntry Entry;
+	if (!FillSnapshotEntry(Handle.Index, Frame, Entry))
+	{
+		return false;
+	}
+	OutView = MakeMinionView(Handle.Index, Entry);
+	return true;
+}
+
+void UGSTN_MinionCombatSubsystem::RunVictimPipeline(FGSTN_HitResolutionContext& Context) const
+{
+	const UGSTN_CombatRules* Rules = CombatRules;
+	if (!Rules)
+	{
+		return;
+	}
+	FGSTN_HitContextView View;
+	FGSTN_HitPipelineRunner::MakeView(Rules, Context, View);
+
+	// Same loop as FGSTN_HitPipelineRunner::Run, with the two minion differences: MeterGain is skipped (a minion has no meter; the
+	// fighter's own prediction gains it as attacker) and the optional extra step runs before ComputeKnockback
+	auto RunStep = [&View, &Context, Rules](const UGSTN_HitResolutionStep* Step) -> bool
+	{
+		if (!Step)
+		{
+			return false;
+		}
+		FGSTN_StepResult Result;
+		const EGSTN_StepResult Verdict = Step->Resolve(View, Result);
+		FGSTN_HitPipelineRunner::Merge(Result, Context);
+		if (Verdict == EGSTN_StepResult::Stop)
+		{
+			return true;
+		}
+		FGSTN_HitPipelineRunner::MakeView(Rules, Context, View);
+		return false;
+	};
+
+	const UGSTN_HitResolutionStep* Extra = ExtraVictimStep ? GetDefault<UGSTN_HitResolutionStep>(ExtraVictimStep) : nullptr;
+	bool bExtraDone = Extra == nullptr;
+	for (const TSubclassOf<UGSTN_HitResolutionStep>& StepClass : Rules->GetResolvedHitPipeline())
+	{
+		if (!StepClass || StepClass->IsChildOf(UGSTN_HitStep_MeterGain::StaticClass()))
+		{
+			continue;
+		}
+		if (!bExtraDone && StepClass->IsChildOf(UGSTN_HitStep_ComputeKnockback::StaticClass()))
+		{
+			bExtraDone = true;
+			if (RunStep(Extra))
+			{
+				return;
+			}
+		}
+		if (RunStep(GetDefault<UGSTN_HitResolutionStep>(StepClass)))
+		{
+			return;
+		}
+	}
+	if (!bExtraDone)
+	{
+		RunStep(Extra);
+	}
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -429,6 +734,10 @@ void UGSTN_MinionCombatSubsystem::TickBatch(int32 Frame, bool bResimulating)
 	INC_DWORD_STAT_BY(STAT_GSTN_MinionHitsDrained, LastBatch.HitsDrained);
 	INC_DWORD_STAT_BY(STAT_GSTN_MinionSpawns, LastBatch.SpawnsActivated);
 	INC_DWORD_STAT_BY(STAT_GSTN_MinionEvents, LastBatch.TimelineEvents);
+	INC_DWORD_STAT_BY(STAT_GSTN_MinionIgnoredEffects, LastBatch.IgnoredEffects);
+	INC_DWORD_STAT_BY(STAT_GSTN_MinionAttackHits, LastBatch.AttackHits);
+	INC_DWORD_STAT_BY(STAT_GSTN_MinionTokensDenied, LastBatch.TokensDenied);
+	BenchTotals.IgnoredEffects += LastBatch.IgnoredEffects;
 
 	const double Elapsed = FPlatformTime::Seconds() - StartSeconds;
 	++BenchTotals.Batches;
@@ -474,8 +783,8 @@ void UGSTN_MinionCombatSubsystem::StageSpawnDrain(int32 Frame)
 		{
 			NextMoveFrame[Slot * GSTNMinion::MaxMoves + Move] = 0;
 		}
-		LastAttackerId[Slot] = INDEX_NONE;
 		MoveColumns.ResetSlot(Slot);
+		ResetHitColumns(Slot);
 
 		AcquireActor(Slot, Queued.Transform);
 		if (Queued.Params.bPlaySpawnTimeline && ResolvedTypes[Queued.TypeIndex].SpawnTimeline)
@@ -581,6 +890,8 @@ void UGSTN_MinionCombatSubsystem::StageLODUpdate(int32 Frame)
 void UGSTN_MinionCombatSubsystem::StageInboxDrain(int32 Frame)
 {
 	SCOPE_CYCLE_COUNTER(STAT_GSTN_MinionInbox);
+	// Wall clock for the spike 5 drain cost only; nothing below reads it
+	const double StartSeconds = FPlatformTime::Seconds();
 	// Entries stamped before this frame (the M4 rule: a hit of frame F reacts at F+1). Later stamps wait
 	DrainScratch.Reset();
 	for (int32 Index = 0; Index < PendingHits.Num();)
@@ -595,41 +906,36 @@ void UGSTN_MinionCombatSubsystem::StageInboxDrain(int32 Frame)
 			++Index;
 		}
 	}
-	// Victim slot, then attacker: the order every machine and a replay agree on, whatever order the attackers ticked in.
-	// Stable, so the hitboxes of one attacker keep their delivery order. Hits are drained whatever the victim's schedule: a hit
-	// wakes a far minion (forced Combat below)
+	// Victim slot, then attacker, then the attacker's hitbox: the order every machine and a replay agree on, whatever order the attackers
+	// ticked in (the M4 drain rule, so trades are order-independent). Stable, so equal keys keep their delivery order. Hits are drained
+	// whatever the victim's schedule: a hit wakes a far minion (forced Combat below)
 	Algo::StableSort(DrainScratch, [](const FPendingHit& A, const FPendingHit& B)
 	{
 		const int32 SlotA = GSTNEntityKinds::MinionIndexOf(A.EntityId);
 		const int32 SlotB = GSTNEntityKinds::MinionIndexOf(B.EntityId);
-		return SlotA != SlotB ? SlotA < SlotB : A.Entry.SenderId < B.Entry.SenderId;
+		if (SlotA != SlotB)
+		{
+			return SlotA < SlotB;
+		}
+		return A.Entry.SenderId != B.Entry.SenderId ? A.Entry.SenderId < B.Entry.SenderId : A.AttackerHitboxIndex < B.AttackerHitboxIndex;
 	});
+
+	// The victim's entry is built once per victim, from the store as the previous frame left it (the hits of this drain move only health
+	// and percent, which MakeMinionView reads from the store for each entry)
+	int32 EntrySlot = INDEX_NONE;
+	FGSTN_SnapshotEntry SelfEntry;
 
 	for (const FPendingHit& Pending : DrainScratch)
 	{
 		const int32 Slot = GSTNEntityKinds::MinionIndexOf(Pending.EntityId);
 		const FGSTN_MinionHandle Handle = Store.HandleOfSlot(Slot);
+		// Generation check: a hit stamped for the previous occupant of a recycled slot, or for a minion that died earlier in this drain
 		if (Handle.IsNull() || Handle.Generation != Pending.Generation || PendingActivation[Slot] || IsDyingOrDead(Store.ActionState[Slot]))
 		{
 			continue;
 		}
 		TraceStage(EStage::InboxDrain, Slot);
 		++LastBatch.HitsDrained;
-
-		// G5: the rules pipeline (TeamFilter, HurtState, HurtboxReaction, ComputeKnockback, ApplyDamage, Hitstop) on a victim view built
-		// from the store, reaction tiers (Hitstop -> Hitstun / PushedBack / Launched), move cancel, HitBy ring. G3 only subtracts the
-		// hit's flat damage when the entry is a plain hit; other kinds are counted and dropped
-		float Damage = 0.f;
-		if (Pending.Entry.Kind == GSTNInboxKinds::Hit)
-		{
-			if (const FGSTN_HitInboxEntry* Hit = Pending.Entry.Payload.GetPtr<FGSTN_HitInboxEntry>())
-			{
-				Damage = Hit->Hit.Damage;
-			}
-		}
-		Store.Health[Slot] = FMath::Max(0.f, Store.Health[Slot] - Damage);
-		Store.HitCounter[Slot] = static_cast<uint8>(Store.HitCounter[Slot] + 1);
-		LastAttackerId[Slot] = Pending.Entry.SenderId;
 
 		// A hit forces Combat without dwell (spec 7)
 		const uint8 OldTier = Store.LODTier[Slot];
@@ -640,25 +946,366 @@ void UGSTN_MinionCombatSubsystem::StageInboxDrain(int32 Frame)
 			QueueLODChange(Slot, OldTier, Store.LODTier[Slot]);
 		}
 
-		FQueuedEvent& HitEvent = QueuedEvents.AddDefaulted_GetRef();
-		HitEvent.Kind = FQueuedEvent::EKind::Hit;
-		HitEvent.Handle = Handle;
-		HitEvent.Damage = Damage;
-		HitEvent.OtherId = Pending.Entry.SenderId;
-
-		if (Store.Health[Slot] <= 0.f)
+		// Other inbox kinds have no minion meaning yet (a link request, a parry punish); a ricochet only informs the victim for its cue (G7)
+		const FGSTN_HitInboxEntry* Hit = FGSTN_HitInboxEntry::FromInboxEntry(Pending.Entry);
+		if (!Hit || Hit->bRicochet)
 		{
-			// Death replaces whatever the minion was playing; the death timeline (or the corpse frames) ends in the despawn
-			Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Dying);
-			StartTimeline(Slot, GSTNMinion::ReactionMoveIds::Death, Frame);
+			continue;
+		}
 
-			FQueuedEvent& DiedEvent = QueuedEvents.AddDefaulted_GetRef();
-			DiedEvent.Kind = FQueuedEvent::EKind::Died;
-			DiedEvent.Handle = Handle;
-			DiedEvent.OtherId = LastAttackerId[Slot];
-			// G5: KO event (Combat.Event.KO with Combat.Entity.Minion) for the attacker's credit
+		// HitBy dedupe (spec 9.2 item 4): a re-delivered hit is dropped before it touches anything
+		FHitByKey Key;
+		Key.AttackerId = Hit->AttackerId;
+		Key.TimelineKey = Hit->Frame;
+		Key.HitGroup = Hit->AttackerHitboxIndex;
+		if (HasHitBy(Slot, Key))
+		{
+			++LastBatch.HitsDeduped;
+			continue;
+		}
+
+		if (EntrySlot != Slot)
+		{
+			EntrySlot = Slot;
+			SelfEntry = FGSTN_SnapshotEntry();
+			FillSnapshotEntry(Slot, Frame, SelfEntry);
+		}
+		AddHitBy(Slot, Key);
+		ApplyHit(Slot, Frame, *Hit, SelfEntry);
+	}
+
+	BenchTotals.DrainSeconds += FPlatformTime::Seconds() - StartSeconds;
+	BenchTotals.DrainedHits += LastBatch.HitsDrained;
+}
+
+void UGSTN_MinionCombatSubsystem::ApplyHit(int32 Slot, int32 Frame, const FGSTN_HitInboxEntry& Hit, const FGSTN_SnapshotEntry& Self)
+{
+	const FGSTN_MinionHandle Handle = Store.HandleOfSlot(Slot);
+	const UGSTN_CombatRules* Rules = CombatRules;
+
+	// The context the fighter's victim step builds (FGSTN_CombatVictim::Resolve), on the minion's view
+	FGSTN_HitResolutionContext Context;
+	FGSTN_ResolvedHit& Incoming = Context.Incoming;
+	Incoming.Hit = Hit.Hit;
+	Incoming.Frame = Hit.Frame;
+	Incoming.AttackerEntityId = Hit.AttackerId;
+	Incoming.AttackerTeamId = Hit.AttackerTeam;
+	const UGSTN_CombatWorldSubsystem* World = GetCombatWorld();
+	FGSTN_CombatVictim::SetAttackerExtensions(Incoming, World ? World->GetSnapshot().Find(Hit.AttackerId) : nullptr);
+	// The attacker predicted a Self hit as an ordinary enemy hit (TeamFilter refuses Self): the victim runs the same pipeline on the same input
+	const FGameplayTag Relationship = GSTNHitRelationship::FromIndex(Hit.Relationship);
+	Incoming.Relationship = Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Relationship;
+	Incoming.bRelationshipForced = GSTNHitRelationship::IsForced(Hit.Relationship);
+	Incoming.Up = Self.Up;
+	Incoming.AttackerFacing = FRotator(0.0, Hit.AttackerYaw, 0.0).Vector();
+	Incoming.HitboxVelocity = Hit.HitboxVelocity;
+	Incoming.bVictimGrounded = MoveColumns.bGrounded[Slot] != 0;
+	FVector VictimCenter = Self.Transform.GetLocation();
+	if (const FGSTN_HitShape* HurtShape = Self.FindHurtboxShape(Hit.HurtboxIndex))
+	{
+		VictimCenter = ShapeCenterOf(*HurtShape, Self.Transform);
+	}
+	Incoming.HitboxToVictim = (VictimCenter - Hit.HitLocation).GetSafeNormal(UE_SMALL_NUMBER, Incoming.AttackerFacing);
+
+	Context.Victim = MakeMinionView(Slot, Self);
+	Context.HurtboxIndex = Hit.HurtboxIndex;
+	Context.HurtState = static_cast<EGSTN_HurtState>(FMath::Min<uint8>(Hit.HurtState, static_cast<uint8>(EGSTN_HurtState::Armor)));
+	if (Self.HurtStates.IsValidIndex(Hit.HurtboxIndex))
+	{
+		Context.ArmorThreshold = Self.HurtStates[Hit.HurtboxIndex].ArmorThreshold;
+	}
+	Context.HurtboxSet = Self.Hurtboxes;
+	if (Rules)
+	{
+		RunVictimPipeline(Context);
+	}
+	else
+	{
+		// No rules at all (a world with no settings asset and no built-in copy): the hit's damage, nothing else
+		Context.Outcome.Damage = Hit.Hit.Damage;
+	}
+	if (!Context.Outcome.bHit)
+	{
+		// A step refused it (team filter, intangible): it never happened for this minion
+		return;
+	}
+	++LastBatch.HitsApplied;
+	const FGSTN_HitOutcome& Outcome = Context.Outcome;
+
+	// Extra effects (the hit's ExtraEffects through ApplyDamage) need an ability system a minion does not have: counted, ignored (v1)
+	LastBatch.IgnoredEffects += Outcome.Effects.Num();
+
+	// Damage: the minion's hit points in every mode; the percent modes also keep the damage percent the knockback grows with
+	const float Damage = FMath::Max(Outcome.Damage, 0.f);
+	Store.Health[Slot] = FMath::Max(0.f, Store.Health[Slot] - Damage);
+	if (Rules && Rules->DamageMode != EGSTN_DamageMode::Health)
+	{
+		KnockbackPercent[Slot] += Damage;
+		if (Rules->DamageMode == EGSTN_DamageMode::PercentCapped)
+		{
+			KnockbackPercent[Slot] = FMath::Min(KnockbackPercent[Slot], Rules->MaxHealth);
 		}
 	}
+	Store.HitCounter[Slot] = static_cast<uint8>(Store.HitCounter[Slot] + 1);
+	PushLastAttacker(Slot, Hit.AttackerId);
+
+	// The reaction tier of M4 3. A hit below the stagger threshold changes no state (spec 5 stage 2.2): damage and HitCounter only
+	const FGSTN_KnockbackResult& Knockback = Outcome.Knockback;
+	const bool bStaggered = Outcome.bHasKnockback && Knockback.bStaggered;
+	EGSTN_MinionPendingReaction Reaction = EGSTN_MinionPendingReaction::None;
+	FVector ReactionVelocity = FVector::ZeroVector;
+	if (bStaggered)
+	{
+		switch (Knockback.Reaction)
+		{
+		case EGSTN_HitReaction::PushBack:
+			Reaction = EGSTN_MinionPendingReaction::PushBack;
+			// Horizontal by construction: the backend slides it on the ground plane and never lets it leave the floor
+			ReactionVelocity = FVector::VectorPlaneProject(Knockback.LaunchVelocity, Self.Up);
+			break;
+		case EGSTN_HitReaction::Launch:
+			Reaction = EGSTN_MinionPendingReaction::Launch;
+			ReactionVelocity = Knockback.LaunchVelocity;
+			break;
+		default:
+			Reaction = EGSTN_MinionPendingReaction::StaggerInPlace;
+			break;
+		}
+	}
+
+	const bool bDies = Store.Health[Slot] <= 0.f;
+	if (bStaggered && !bDies)
+	{
+		// The stagger takes the minion out of its move (spec 5 stage 2.2) and gives its attack token back to the crowd
+		CancelTimeline(Slot, Frame);
+		AttackTokens.ReleaseSlot(Slot);
+
+		const int32 HitstopFrames = FMath::Max(Knockback.HitstopFrames, 0);
+		// The window opens on the frame of the hit (the fighter rule), so the drain at F+1 is already its second frame
+		const int32 End = Hit.Frame + HitstopFrames;
+		HitstopEndFrame[Slot] = Frame < HitstopEndFrame[Slot] ? FMath::Max(HitstopEndFrame[Slot], End) : End;
+		int32 HitstunFrames = Knockback.HitstunFrames;
+		if (Reaction != EGSTN_MinionPendingReaction::Launch && Rules)
+		{
+			// The locked part of a stagger is never shorter than the floor of the rules (the fighter's rule)
+			HitstunFrames = FMath::Max(HitstunFrames, Rules->MinStaggerLockFrames);
+		}
+		HitstunEndFrame[Slot] = FMath::Max(HitstopEndFrame[Slot], Frame) + FMath::Max(HitstunFrames, 0);
+
+		if (HitstopEndFrame[Slot] > Frame)
+		{
+			// Frozen until the window ends; the tier goes out then (StepVictimReaction, start of stage 3). A newer stagger replaces an older pending one
+			Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Hitstop);
+			PendingReaction[Slot] = static_cast<uint8>(Reaction);
+			PendingReactionVelocity[Slot] = FVector3f(ReactionVelocity);
+			MoveColumns.Velocity[Slot] = FVector3f::ZeroVector;
+			MoveColumns.PendingLaunch[Slot] = FVector3f::ZeroVector;
+		}
+		else
+		{
+			ApplyReaction(Slot, Reaction, ReactionVelocity);
+		}
+	}
+
+	if (OnOutcomeApplied.IsBound())
+	{
+		FGSTN_HitContextView Resolved;
+		FGSTN_HitPipelineRunner::MakeView(Rules, Context, Resolved);
+		OnOutcomeApplied.Broadcast(Handle, Hit, Resolved, Frame);
+	}
+
+	FQueuedEvent& HitEvent = QueuedEvents.AddDefaulted_GetRef();
+	HitEvent.Kind = FQueuedEvent::EKind::Hit;
+	HitEvent.Handle = Handle;
+	HitEvent.Damage = Damage;
+	HitEvent.OtherId = Hit.AttackerId;
+
+	if (bDies)
+	{
+		// Death replaces whatever the minion was playing; the death timeline (or the corpse frames) ends in the despawn. A killing blow that
+		// pushes or launches still carries the body away (a KO flies), with no hitstop wait: the state stays Dying
+		AttackTokens.ReleaseSlot(Slot);
+		CancelTimeline(Slot, Frame);
+		PendingReaction[Slot] = 0;
+		PendingReactionVelocity[Slot] = FVector3f::ZeroVector;
+		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Dying);
+		StartTimeline(Slot, GSTNMinion::ReactionMoveIds::Death, Frame);
+		if ((Reaction == EGSTN_MinionPendingReaction::Launch || Reaction == EGSTN_MinionPendingReaction::PushBack) && !ReactionVelocity.IsNearlyZero())
+		{
+			LaunchMinion(Handle, ReactionVelocity, Reaction == EGSTN_MinionPendingReaction::PushBack);
+		}
+
+		FQueuedEvent& DiedEvent = QueuedEvents.AddDefaulted_GetRef();
+		DiedEvent.Kind = FQueuedEvent::EKind::Died;
+		DiedEvent.Handle = Handle;
+		DiedEvent.OtherId = Hit.AttackerId;
+
+		// The authoritative KO for the attacker's credit (Combat.Event.KO + Combat.Entity.Minion), published after the stages
+		FQueuedEvent& KOEvent = QueuedEvents.AddDefaulted_GetRef();
+		KOEvent.Kind = FQueuedEvent::EKind::KO;
+		KOEvent.Handle = Handle;
+		KOEvent.OtherId = Hit.AttackerId;
+		KOEvent.Frame = Frame;
+	}
+}
+
+void UGSTN_MinionCombatSubsystem::ApplyReaction(int32 Slot, EGSTN_MinionPendingReaction Reaction, const FVector& Velocity)
+{
+	PendingReaction[Slot] = 0;
+	PendingReactionVelocity[Slot] = FVector3f::ZeroVector;
+	if (IsDyingOrDead(Store.ActionState[Slot]))
+	{
+		return;
+	}
+	const FGSTN_MinionHandle Handle = Store.HandleOfSlot(Slot);
+	const bool bMoves = (Reaction == EGSTN_MinionPendingReaction::PushBack || Reaction == EGSTN_MinionPendingReaction::Launch) && !Velocity.IsNearlyZero();
+	if (bMoves)
+	{
+		// The movement backend owns the knockback from here: it returns the minion to Idle when the slide stops or the flight lands
+		LaunchMinion(Handle, Velocity, Reaction == EGSTN_MinionPendingReaction::PushBack);
+	}
+	else if (Reaction != EGSTN_MinionPendingReaction::None)
+	{
+		// A stagger in place (or a push with no speed): held in place until HitstunEndFrame
+		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Hitstun);
+	}
+	else
+	{
+		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Idle);
+	}
+}
+
+void UGSTN_MinionCombatSubsystem::StepVictimReaction(int32 Slot, int32 Frame)
+{
+	const EGSTN_MinionActionState State = static_cast<EGSTN_MinionActionState>(Store.ActionState[Slot]);
+	if (State == EGSTN_MinionActionState::Hitstop && Frame >= HitstopEndFrame[Slot])
+	{
+		ApplyReaction(Slot, static_cast<EGSTN_MinionPendingReaction>(PendingReaction[Slot]), FVector(PendingReactionVelocity[Slot]));
+	}
+	if (static_cast<EGSTN_MinionActionState>(Store.ActionState[Slot]) == EGSTN_MinionActionState::Hitstun && Frame >= HitstunEndFrame[Slot])
+	{
+		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Idle);
+	}
+}
+
+void UGSTN_MinionCombatSubsystem::CancelTimeline(int32 Slot, int32 Frame)
+{
+	const uint8 MoveId = Store.MoveId[Slot];
+	if (MoveId == 0 || MoveId == GSTNMinion::ReactionMoveIds::Death)
+	{
+		return;
+	}
+	if (IsMoveId(MoveId))
+	{
+		// A cancelled move still pays its cooldown, so a staggered minion does not swing again the frame it recovers
+		const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]);
+		if (Definition && Definition->Moves.IsValidIndex(MoveId - 1))
+		{
+			NextMoveFrame[Slot * GSTNMinion::MaxMoves + (MoveId - 1)] = Frame + Definition->Moves[MoveId - 1].CooldownFrames;
+		}
+		AttackTokens.ReleaseSlot(Slot);
+	}
+	else if (Store.ActionState[Slot] == static_cast<uint8>(EGSTN_MinionActionState::Spawning))
+	{
+		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Idle);
+	}
+	Store.MoveId[Slot] = 0;
+	TimelinePrevFrame[Slot] = INDEX_NONE;
+	PausedFrames[Slot] = 0;
+	AttackerHitstopEndFrame[Slot] = INDEX_NONE;
+}
+
+bool UGSTN_MinionCombatSubsystem::HasHitBy(int32 Slot, const FHitByKey& Key) const
+{
+	const int32 Base = Slot * GSTNMinion::HitByRingSize;
+	for (int32 Index = 0; Index < GSTNMinion::HitByRingSize; ++Index)
+	{
+		if (HitByRing[Base + Index] == Key)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void UGSTN_MinionCombatSubsystem::AddHitBy(int32 Slot, const FHitByKey& Key)
+{
+	HitByRing[Slot * GSTNMinion::HitByRingSize + HitByHead[Slot]] = Key;
+	HitByHead[Slot] = static_cast<uint8>((HitByHead[Slot] + 1) % GSTNMinion::HitByRingSize);
+}
+
+void UGSTN_MinionCombatSubsystem::PushLastAttacker(int32 Slot, int32 AttackerId)
+{
+	constexpr int32 Size = GSTNMinion::LastAttackerRingSize;
+	LastAttackerRing[Slot * Size + LastAttackerHead[Slot]] = AttackerId;
+	LastAttackerHead[Slot] = static_cast<uint8>((LastAttackerHead[Slot] + 1) % Size);
+	LastAttackerCount[Slot] = static_cast<uint8>(FMath::Min<int32>(LastAttackerCount[Slot] + 1, Size));
+}
+
+bool UGSTN_MinionCombatSubsystem::HasAttackTarget(int32 Slot, int32 VictimId, int32 MoveStartFrame, uint8 TargetKey) const
+{
+	const int32 Base = Slot * GSTNMinion::AttackTargetRingSize;
+	for (int32 Index = 0; Index < GSTNMinion::AttackTargetRingSize; ++Index)
+	{
+		const FAttackTarget& Target = AttackTargets[Base + Index];
+		if (Target.VictimId == VictimId && Target.MoveStartFrame == MoveStartFrame && Target.TargetKey == TargetKey)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+int32 UGSTN_MinionCombatSubsystem::CountAttackTargets(int32 Slot, int32 MoveStartFrame, uint8 TargetKey) const
+{
+	int32 Count = 0;
+	const int32 Base = Slot * GSTNMinion::AttackTargetRingSize;
+	for (int32 Index = 0; Index < GSTNMinion::AttackTargetRingSize; ++Index)
+	{
+		const FAttackTarget& Target = AttackTargets[Base + Index];
+		Count += Target.VictimId != INDEX_NONE && Target.MoveStartFrame == MoveStartFrame && Target.TargetKey == TargetKey ? 1 : 0;
+	}
+	return Count;
+}
+
+void UGSTN_MinionCombatSubsystem::AddAttackTarget(int32 Slot, int32 VictimId, int32 MoveStartFrame, uint8 TargetKey)
+{
+	// Full ring: the oldest is evicted (the fighters' rule since G1)
+	FAttackTarget& Target = AttackTargets[Slot * GSTNMinion::AttackTargetRingSize + AttackTargetHead[Slot]];
+	Target.VictimId = VictimId;
+	Target.MoveStartFrame = MoveStartFrame;
+	Target.TargetKey = TargetKey;
+	AttackTargetHead[Slot] = static_cast<uint8>((AttackTargetHead[Slot] + 1) % GSTNMinion::AttackTargetRingSize);
+}
+
+void UGSTN_MinionCombatSubsystem::ResetHitColumns(int32 Slot)
+{
+	KnockbackPercent[Slot] = 0.f;
+	HitstopEndFrame[Slot] = INDEX_NONE;
+	HitstunEndFrame[Slot] = INDEX_NONE;
+	PendingReaction[Slot] = 0;
+	PendingReactionVelocity[Slot] = FVector3f::ZeroVector;
+	AttackerHitstopEndFrame[Slot] = INDEX_NONE;
+	PausedFrames[Slot] = 0;
+	for (int32 Index = 0; Index < GSTNMinion::LastAttackerRingSize; ++Index)
+	{
+		LastAttackerRing[Slot * GSTNMinion::LastAttackerRingSize + Index] = INDEX_NONE;
+	}
+	LastAttackerHead[Slot] = 0;
+	LastAttackerCount[Slot] = 0;
+	for (int32 Index = 0; Index < GSTNMinion::HitByRingSize; ++Index)
+	{
+		HitByRing[Slot * GSTNMinion::HitByRingSize + Index] = FHitByKey();
+	}
+	HitByHead[Slot] = 0;
+	for (int32 Index = 0; Index < GSTNMinion::AttackTargetRingSize; ++Index)
+	{
+		AttackTargets[Slot * GSTNMinion::AttackTargetRingSize + Index] = FAttackTarget();
+	}
+	AttackTargetHead[Slot] = 0;
+	// Tokens name slots: a recycled slot must not inherit the previous occupant's token or wait
+	AttackTokens.ReleaseSlot(Slot);
+	History.ClearSlot(Slot);
 }
 
 const UGSTN_CombatTimeline* UGSTN_MinionCombatSubsystem::TimelineOfMoveId(int32 Slot, uint8 MoveId) const
@@ -689,6 +1336,9 @@ void UGSTN_MinionCombatSubsystem::StartTimeline(int32 Slot, uint8 MoveId, int32 
 	Store.MoveId[Slot] = MoveId;
 	Store.MoveStartFrame[Slot] = Frame;
 	TimelinePrevFrame[Slot] = INDEX_NONE;
+	// A new clock: no paused frames, no attacker hitstop carried over from the previous move
+	PausedFrames[Slot] = 0;
+	AttackerHitstopEndFrame[Slot] = INDEX_NONE;
 	if (MoveId == GSTNMinion::ReactionMoveIds::Spawn)
 	{
 		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Spawning);
@@ -711,6 +1361,8 @@ void UGSTN_MinionCombatSubsystem::EndTimeline(int32 Slot, int32 Frame)
 			NextMoveFrame[Slot * GSTNMinion::MaxMoves + (MoveId - 1)] = Frame + Definition->Moves[MoveId - 1].CooldownFrames;
 		}
 		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Idle);
+		// The attack is over: its token goes back to the crowd
+		AttackTokens.ReleaseSlot(Slot);
 	}
 	else if (MoveId == GSTNMinion::ReactionMoveIds::Spawn)
 	{
@@ -723,11 +1375,79 @@ void UGSTN_MinionCombatSubsystem::EndTimeline(int32 Slot, int32 Frame)
 	}
 	Store.MoveId[Slot] = 0;
 	TimelinePrevFrame[Slot] = INDEX_NONE;
+	PausedFrames[Slot] = 0;
+	AttackerHitstopEndFrame[Slot] = INDEX_NONE;
 }
 
 void UGSTN_MinionCombatSubsystem::StageTimelineAdvance(int32 Frame)
 {
 	SCOPE_CYCLE_COUNTER(STAT_GSTN_MinionTimeline);
+
+	// S(F), the fighters at the end of F-1: what the range checks and the attack queries read. Built lazily (most frames no minion attacks)
+	const FGSTN_StepSnapshot* Snapshot = nullptr;
+	bool bSnapshotAcquired = false;
+	auto GetSnapshot = [this, Frame, &Snapshot, &bSnapshotAcquired]()
+	{
+		if (!bSnapshotAcquired)
+		{
+			bSnapshotAcquired = true;
+			Snapshot = AcquireFighterSnapshot(Frame);
+		}
+		return Snapshot;
+	};
+
+	// a. The end of the victims' hitstops and staggers, then the moves that may start. A move against a fighter needs an attack token
+	// (spec 9.3): the requests of the frame are collected first and granted together in ascending slot order, so who gets the token does
+	// not depend on which slot asked first
+	StartCandidates.Reset();
+	for (const int32 Slot : Scheduled)
+	{
+		if (!Store.IsSlotAlive(Slot))
+		{
+			continue;
+		}
+		StepVictimReaction(Slot, Frame);
+		if (Store.MoveId[Slot] != 0)
+		{
+			continue;
+		}
+		// A slot that plays nothing holds no token; a wait left from an earlier frame is dropped and asked again below if still wanted
+		AttackTokens.ReleaseSlot(Slot);
+		if (!Store.Intent[Slot].HasCommand())
+		{
+			continue;
+		}
+		int32 MoveIndex = INDEX_NONE;
+		int32 TargetId = INDEX_NONE;
+		if (!CanStartCommand(Slot, Frame, GetSnapshot(), MoveIndex, TargetId))
+		{
+			continue;
+		}
+		FStartCandidate& Candidate = StartCandidates.AddDefaulted_GetRef();
+		Candidate.Slot = Slot;
+		Candidate.MoveIndex = MoveIndex;
+		Candidate.TargetId = TargetId;
+		Candidate.bNeedsToken = GSTNEntityKinds::KindOfEntityId(TargetId) == GSTNEntityKinds::Fighter;
+		if (Candidate.bNeedsToken)
+		{
+			AttackTokens.Request(TargetId, Slot);
+		}
+	}
+	AttackTokens.Resolve();
+	for (const FStartCandidate& Candidate : StartCandidates)
+	{
+		if (Candidate.bNeedsToken && !AttackTokens.Holds(Candidate.TargetId, Candidate.Slot))
+		{
+			// The fighter has its attackers already: the command stays, the brain circles and the next run asks again
+			++LastBatch.TokensDenied;
+			continue;
+		}
+		StartTimeline(Candidate.Slot, static_cast<uint8>(Candidate.MoveIndex + 1), Frame);
+		Store.Intent[Candidate.Slot].Command = FGameplayTag();
+		++LastBatch.AttacksStarted;
+	}
+
+	// b. Advance every running timeline, pausing the attacker hitstop, and query the open hitboxes of the moves
 	for (const int32 Slot : Scheduled)
 	{
 		if (!Store.IsSlotAlive(Slot))
@@ -736,30 +1456,22 @@ void UGSTN_MinionCombatSubsystem::StageTimelineAdvance(int32 Frame)
 		}
 		TraceStage(EStage::TimelineAdvance, Slot);
 
-		// Start the requested move: a known command, no timeline playing, a locomotion state, off cooldown, and T0/T1 (attack
-		// timelines never start at T2/T3, spec 7)
-		FGSTN_MinionIntent& Intent = Store.Intent[Slot];
-		if (Store.MoveId[Slot] == 0 && IsLocomotionState(Store.ActionState[Slot])
-			&& Store.LODTier[Slot] <= static_cast<uint8>(EGSTN_MinionLODTier::Near)
-			&& Intent.HasCommand() && !Intent.IsStale(Frame))
-		{
-			const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]);
-			const int32 MoveIndex = Definition ? Definition->FindMoveIndex(Intent.Command) : INDEX_NONE;
-			if (MoveIndex != INDEX_NONE && MoveIndex < GSTNMinion::MaxMoves
-				&& TimelineOfMoveId(Slot, static_cast<uint8>(MoveIndex + 1)) != nullptr
-				&& Frame >= NextMoveFrame[Slot * GSTNMinion::MaxMoves + MoveIndex])
-			{
-				// G5: range check against the target and the attack token (FGSTN_MinionAttackTokens) before the start
-				StartTimeline(Slot, static_cast<uint8>(MoveIndex + 1), Frame);
-				Intent.Command = FGameplayTag();
-			}
-		}
-
 		const uint8 MoveId = Store.MoveId[Slot];
 		if (MoveId == 0)
 		{
 			continue;
 		}
+
+		// The minion's own hitstop as an attacker stands its clock still (the frames in (last run, Frame] up to the window's end), however
+		// many frames the LOD let pass; its victim hitstop needs no pause because a staggering hit cancels the move
+		const int32 PreviousRun = LastRunFrame[Slot] != INDEX_NONE ? LastRunFrame[Slot] : Frame - 1;
+		const int32 HitstopEnd = AttackerHitstopEndFrame[Slot];
+		if (HitstopEnd != INDEX_NONE)
+		{
+			PausedFrames[Slot] += FMath::Clamp(HitstopEnd - PreviousRun, 0, FMath::Max(Frame - PreviousRun, 0));
+		}
+		const bool bInAttackerHitstop = HitstopEnd != INDEX_NONE && Frame <= HitstopEnd;
+
 		const int32 TimelineFrame = Frame - Store.MoveStartFrame[Slot];
 		const UGSTN_CombatTimeline* Timeline = TimelineOfMoveId(Slot, MoveId);
 		if (!Timeline)
@@ -776,7 +1488,7 @@ void UGSTN_MinionCombatSubsystem::StageTimelineAdvance(int32 Frame)
 		// stepping 2 or 4 frames at a time fires the same events as a T0 one
 		FGSTN_TimelineEvalParams Params;
 		Params.Frame = TimelineFrame;
-		Params.PausedFrames = 0; // G5: hitstop pauses
+		Params.PausedFrames = PausedFrames[Slot];
 		Params.PreviousFrame = TimelinePrevFrame[Slot];
 		FGSTN_TimelinePlayer::Evaluate(Timeline->Data, Params, TimelineOutput);
 
@@ -791,13 +1503,398 @@ void UGSTN_MinionCombatSubsystem::StageTimelineAdvance(int32 Frame)
 		}
 		TimelinePrevFrame[Slot] = TimelineOutput.Frame;
 
-		// G5: FGSTN_TimelinePlayer::EvaluateHits and the attack queries against fighters (end-of-F-1 transforms, Fighter kind mask,
-		// attacker-side hit groups), delivered to the fighter inbox with Frame = F
+		// Hits against the fighters of S(F) (end-of-F-1 transforms: the store has not moved this frame yet). A timeline that stands still
+		// in its hitstop hits nothing new, like the fighter's attacker step
+		if (IsMoveId(MoveId) && !bInAttackerHitstop)
+		{
+			if (const FGSTN_StepSnapshot* Fighters = GetSnapshot())
+			{
+				RunAttackQueries(Slot, Frame, Timeline->Data, TimelineOutput.Frame, *Fighters);
+			}
+		}
 
-		if (TimelineOutput.bFinished)
+		// A ricochet may have cancelled the move inside the queries
+		if (Store.MoveId[Slot] == MoveId && TimelineOutput.bFinished)
 		{
 			EndTimeline(Slot, Frame);
 		}
+	}
+}
+
+bool UGSTN_MinionCombatSubsystem::CanStartCommand(int32 Slot, int32 Frame, const FGSTN_StepSnapshot* Snapshot, int32& OutMoveIndex, int32& OutTargetId) const
+{
+	// A known command, no timeline playing, a locomotion state, off cooldown, and T0/T1 (attack timelines never start at T2/T3, spec 7)
+	const FGSTN_MinionIntent& Intent = Store.Intent[Slot];
+	if (Store.MoveId[Slot] != 0 || !IsLocomotionState(Store.ActionState[Slot])
+		|| Store.LODTier[Slot] > static_cast<uint8>(EGSTN_MinionLODTier::Near)
+		|| !Intent.HasCommand() || Intent.IsStale(Frame))
+	{
+		return false;
+	}
+	const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]);
+	const int32 MoveIndex = Definition ? Definition->FindMoveIndex(Intent.Command) : INDEX_NONE;
+	if (MoveIndex == INDEX_NONE || MoveIndex >= GSTNMinion::MaxMoves
+		|| TimelineOfMoveId(Slot, static_cast<uint8>(MoveIndex + 1)) == nullptr
+		|| Frame < NextMoveFrame[Slot * GSTNMinion::MaxMoves + MoveIndex])
+	{
+		return false;
+	}
+
+	// Range to the target, when the brain named one: a fighter from S(F) (where the hit query will look), a minion from the store. A target
+	// that is not there (dead, left, a stale id) refuses the start, so a brain cannot swing at nothing
+	const int32 TargetId = Intent.TargetEntityId;
+	if (TargetId != INDEX_NONE)
+	{
+		FVector TargetLocation = FVector::ZeroVector;
+		bool bFound = false;
+		if (GSTNEntityKinds::IsMinionEntityId(TargetId))
+		{
+			const FGSTN_MinionHandle Target = Store.HandleFromEntityId(TargetId);
+			if (!Target.IsNull() && !PendingActivation[Target.Index])
+			{
+				TargetLocation = FVector(Store.Position[Target.Index]);
+				bFound = true;
+			}
+		}
+		else if (Snapshot)
+		{
+			if (const FGSTN_SnapshotEntry* Entry = Snapshot->Find(TargetId))
+			{
+				TargetLocation = Entry->Transform.GetLocation();
+				bFound = true;
+			}
+		}
+		if (!bFound)
+		{
+			return false;
+		}
+		const FGSTN_MinionMove& Move = Definition->Moves[MoveIndex];
+		const double Distance = FVector::Dist(TargetLocation, FVector(Store.Position[Slot]));
+		if (Distance < Move.MinRange || Distance > Move.MaxRange)
+		{
+			return false;
+		}
+	}
+	OutMoveIndex = MoveIndex;
+	OutTargetId = TargetId;
+	return true;
+}
+
+const FGSTN_StepSnapshot* UGSTN_MinionCombatSubsystem::AcquireFighterSnapshot(int32 Frame)
+{
+	UGSTN_CombatWorldSubsystem* World = GetCombatWorld();
+	// No registered fighter: nothing to hit or to range-check against
+	if (!World || World->GetNumRegisteredEntities() == 0)
+	{
+		return nullptr;
+	}
+	// The first combat tick of F built S(F) already (the hook runs after every model); the frame numbers are the same Step.Frame
+	const FGSTN_StepSnapshot& Held = World->GetSnapshot();
+	if (Held.Frame == Frame)
+	{
+		return &Held;
+	}
+	// No fighter ticked this frame (an empty server, a test world): build S(F) as that tick would, from end-of-F-1 fighters. The minion
+	// entries in it carry this frame's drain, which is harmless: minions only query fighters, and the next frame builds its own
+	return &World->EnsureSnapshot(Frame);
+}
+
+void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, const FGSTN_CombatTimelineData& Timeline, int32 TimelineFrame, const FGSTN_StepSnapshot& Snapshot)
+{
+	UGSTN_CombatWorldSubsystem* World = GetCombatWorld();
+	if (!World)
+	{
+		return;
+	}
+	FGSTN_TimelinePlayer::EvaluateHits(Timeline, TimelineFrame, HitScratch);
+	if (HitScratch.Hitboxes.IsEmpty())
+	{
+		return;
+	}
+
+	const UGSTN_CombatRules* Rules = CombatRules;
+	const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]);
+	const int32 AttackerId = GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot));
+	const uint8 AttackerTeam = Definition ? Definition->TeamId : 255;
+	const int32 MaxHitsPerVictim = Definition ? FMath::Max(Definition->MaxHitsPerFrame, 1) : 1;
+	const FTransform Root = RootOf(Slot);
+	const FVector Up = Root.GetUnitAxis(EAxis::Z);
+	const FVector AttackerFacing = Root.GetUnitAxis(EAxis::X);
+	const int32 StartFrame = Store.MoveStartFrame[Slot];
+
+	/** A hitbox that touches a fighter this frame (the fighter attacker's candidate, same rules) */
+	struct FCandidate
+	{
+		int32 EntryIndex = INDEX_NONE;
+		int32 HitboxIndex = 0;
+		const FGSTN_HitboxSpec* Spec = nullptr;
+		FGSTN_HitData Hit;
+		FGameplayTag Relationship;
+		bool bRelationshipForced = false;
+		int32 HurtboxIndex = 0;
+		EGSTN_HurtState HurtState = EGSTN_HurtState::Normal;
+		FVector HitLocation = FVector::ZeroVector;
+		FVector HitboxCenter = FVector::ZeroVector;
+		FVector HitboxVelocity = FVector::ZeroVector;
+		uint8 TargetKey = 0;
+	};
+	TArray<FCandidate, TInlineAllocator<8>> Candidates;
+	TArray<int32, TInlineAllocator<8>> Overlapped;
+
+	for (int32 HitboxIndex = 0; HitboxIndex < HitScratch.Hitboxes.Num(); ++HitboxIndex)
+	{
+		const FGSTN_ActiveHitbox& Active = HitScratch.Hitboxes[HitboxIndex];
+		if (!Active.Spec)
+		{
+			continue;
+		}
+		const FGSTN_HitboxSpec& Spec = *Active.Spec;
+		FTransform Carrier;
+		if (!BuildCarrier(Spec, Timeline, Root, TimelineFrame, Active.TrackFrame, Carrier))
+		{
+			continue;
+		}
+		FTransform PreviousCarrier = Carrier;
+		if (!BuildCarrier(Spec, Timeline, Root, FMath::Max(TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier))
+		{
+			PreviousCarrier = Carrier;
+		}
+		const FVector HitboxCenter = ShapeCenterOf(Spec.Shape, Carrier);
+		const FVector PreviousCenter = ShapeCenterOf(Spec.Shape, PreviousCarrier);
+		const FVector HitboxVelocity = (HitboxCenter - PreviousCenter) / FMath::Max<double>(FixedStepSeconds, UE_SMALL_NUMBER);
+
+		double VariantScale = 1.0;
+		for (const TPair<FGameplayTag, FGSTN_HitVariant>& Pair : Spec.RelationshipVariants)
+		{
+			VariantScale = FMath::Max<double>(VariantScale, Pair.Value.ShapeScale);
+		}
+		const double Reach = (Spec.Shape.Extent.GetMax() * FMath::Max(Carrier.GetScale3D().GetAbsMax(), PreviousCarrier.GetScale3D().GetAbsMax())
+			+ Spec.Shape.Local.GetLocation().Size()) * VariantScale;
+		FBox Bounds(ForceInit);
+		Bounds += HitboxCenter;
+		Bounds += PreviousCenter;
+		Bounds = Bounds.ExpandBy(Reach);
+		CandidateScratch.Reset();
+		Snapshot.QueryCandidates(Bounds, CandidateScratch);
+
+		for (const int32 EntryIndex : CandidateScratch)
+		{
+			const FGSTN_SnapshotEntry& Victim = Snapshot.Entries[EntryIndex];
+			// The Fighter kind mask: minion-minion is never tested (spec 5 stage 2.3), whatever the teams
+			if (GSTNEntityKinds::KindOfEntityId(Victim.EntityId) != GSTNEntityKinds::Fighter || !Victim.Hurtboxes || Victim.Hurtboxes->Hurtboxes.IsEmpty())
+			{
+				continue;
+			}
+
+			// Relationship, the rules' hittable list and the hitbox's variant, exactly as a fighter attacker decides
+			FGSTN_RelationshipQuery Query;
+			Query.AttackerEntityId = AttackerId;
+			Query.AttackerTeamId = AttackerTeam;
+			Query.VictimEntityId = Victim.EntityId;
+			Query.VictimTeamId = Victim.Team.GetId();
+			const FGameplayTag Relationship = Rules ? Rules->ResolveRelationship(Query) : UGSTN_RelationshipResolver::DefaultRule(Query);
+			const FGSTN_HitVariant* Variant = Spec.RelationshipVariants.Find(Relationship);
+			if (Variant && Variant->bIgnore)
+			{
+				continue;
+			}
+			if (!(Variant && Variant->bForceHittable) && (Rules ? !Rules->IsRelationshipHittable(Relationship)
+				: (Relationship != GSTNCombatHitTags::Relationship_Enemy.GetTag() && Relationship != GSTNCombatHitTags::Relationship_Neutral.GetTag())))
+			{
+				continue;
+			}
+			// Attacker-side dedupe: a fighter is hit once per group (or re-hit interval) and move execution
+			const uint8 TargetKey = Spec.MakeTargetKey(Frame - StartFrame);
+			if (HasAttackTarget(Slot, Victim.EntityId, StartFrame, TargetKey))
+			{
+				continue;
+			}
+
+			const FGSTN_HitShape HitShape = Variant && !FMath::IsNearlyEqual(Variant->ShapeScale, 1.f) ? UGSTN_HitShapeUtils::ScaleShape(Spec.Shape, Variant->ShapeScale) : Spec.Shape;
+			const TArray<FGSTN_Hurtbox>& Hurtboxes = Victim.Hurtboxes->Hurtboxes;
+			Overlapped.Reset();
+			for (int32 HurtIndex = 0; HurtIndex < Hurtboxes.Num(); ++HurtIndex)
+			{
+				if (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible)
+				{
+					continue;
+				}
+				const bool bTouches = Spec.bSweepBetweenFrames
+					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform)
+					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform);
+				if (bTouches)
+				{
+					Overlapped.Add(HurtIndex);
+				}
+			}
+			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
+			{
+				const FGSTN_HitShape& ExtraShape = Victim.ExtraHurtboxes[ExtraPosition].Shape;
+				const bool bTouches = Spec.bSweepBetweenFrames
+					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, ExtraShape, Victim.Transform)
+					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, ExtraShape, Victim.Transform);
+				if (bTouches)
+				{
+					Overlapped.Add(GSTNHurtboxIndex::FromExtraPosition(ExtraPosition));
+				}
+			}
+			if (Overlapped.IsEmpty())
+			{
+				continue;
+			}
+			const FGSTN_HitData VariantHit = Variant ? UGSTN_HitDataUtils::ApplyVariant(Spec.Data, *Variant) : Spec.Data;
+			const int32 Picked = UGSTN_HitShapeUtils::PickHurtboxIndex(Overlapped, Hurtboxes, Victim.ExtraHurtboxes, VariantHit.HitType);
+			const FGSTN_HitShape* PickedShape = Victim.FindHurtboxShape(Picked);
+			if (Picked == INDEX_NONE || !PickedShape)
+			{
+				continue;
+			}
+
+			FCandidate Candidate;
+			Candidate.EntryIndex = EntryIndex;
+			Candidate.HitboxIndex = HitboxIndex;
+			Candidate.Spec = &Spec;
+			Candidate.Hit = VariantHit;
+			Candidate.Relationship = Relationship;
+			Candidate.bRelationshipForced = Variant && Variant->bForceHittable;
+			Candidate.HurtboxIndex = Picked;
+			Candidate.HurtState = Victim.HurtStates.IsValidIndex(Picked) ? Victim.HurtStates[Picked].State : EGSTN_HurtState::Normal;
+			Candidate.HitboxCenter = HitboxCenter;
+			Candidate.HitLocation = (HitboxCenter + ShapeCenterOf(*PickedShape, Victim.Transform)) * 0.5;
+			Candidate.HitboxVelocity = HitboxVelocity;
+			Candidate.TargetKey = TargetKey;
+
+			// Sweetspots: one hit per (victim, group) per frame, the highest priority (ties: the lower hitbox index, which came first)
+			bool bReplaced = false;
+			for (FCandidate& Existing : Candidates)
+			{
+				if (Existing.EntryIndex == EntryIndex && Existing.Spec->HitGroup == Spec.HitGroup)
+				{
+					if (Candidate.Hit.Priority > Existing.Hit.Priority)
+					{
+						Existing = Candidate;
+					}
+					bReplaced = true;
+					break;
+				}
+			}
+			if (!bReplaced)
+			{
+				Candidates.Add(Candidate);
+			}
+		}
+	}
+	if (Candidates.IsEmpty())
+	{
+		return;
+	}
+
+	// Victims by id, hitboxes by index: the order the target ring and the fighters' inboxes are written in
+	Candidates.Sort([](const FCandidate& A, const FCandidate& B)
+	{
+		return A.EntryIndex != B.EntryIndex ? A.EntryIndex < B.EntryIndex : A.HitboxIndex < B.HitboxIndex;
+	});
+
+	int32 LongestHitstop = 0;
+	bool bRicochet = false;
+	int32 CurrentEntry = INDEX_NONE;
+	int32 HitsOnVictim = 0;
+	for (const FCandidate& Candidate : Candidates)
+	{
+		if (Candidate.EntryIndex != CurrentEntry)
+		{
+			CurrentEntry = Candidate.EntryIndex;
+			HitsOnVictim = 0;
+		}
+		// The type's cap of hits on one victim in one frame (several groups touching at once)
+		if (HitsOnVictim >= MaxHitsPerVictim)
+		{
+			continue;
+		}
+		if (CountAttackTargets(Slot, StartFrame, Candidate.TargetKey) >= FMath::Clamp<int32>(Candidate.Spec->MaxTargetsPerGroup, 1, GSTNMinion::AttackTargetRingSize))
+		{
+			continue;
+		}
+		const FGSTN_SnapshotEntry& Victim = Snapshot.Entries[Candidate.EntryIndex];
+
+		// The attacker's prediction of the hit on the fighter's view: the same function the fighters use, for the minion's own hitstop.
+		// The fighter runs the authoritative pipeline when it drains the entry at F+1
+		FGSTN_HitResolutionContext Context;
+		FGSTN_ResolvedHit& Incoming = Context.Incoming;
+		Incoming.Hit = Candidate.Hit;
+		Incoming.AttackerEntityId = AttackerId;
+		Incoming.AttackerTeamId = AttackerTeam;
+		Incoming.Relationship = Candidate.Relationship == GSTNCombatHitTags::Relationship_Self.GetTag() ? GSTNCombatHitTags::Relationship_Enemy.GetTag() : Candidate.Relationship;
+		Incoming.bRelationshipForced = Candidate.bRelationshipForced;
+		Incoming.Up = Up;
+		Incoming.AttackerFacing = AttackerFacing;
+		Incoming.Frame = Frame;
+		const FGSTN_HitShape* VictimShape = Victim.FindHurtboxShape(Candidate.HurtboxIndex);
+		const FVector VictimCenter = VictimShape ? ShapeCenterOf(*VictimShape, Victim.Transform) : Victim.Transform.GetLocation();
+		Incoming.HitboxToVictim = (VictimCenter - Candidate.HitboxCenter).GetSafeNormal(UE_SMALL_NUMBER, AttackerFacing);
+		Incoming.HitboxVelocity = Candidate.HitboxVelocity;
+		Incoming.bVictimGrounded = false;
+		Context.Victim = FGSTN_CombatVictim::MakeVictimView(Victim, Rules);
+		Context.HurtboxIndex = static_cast<uint8>(Candidate.HurtboxIndex);
+		Context.HurtState = Candidate.HurtState;
+		if (Victim.HurtStates.IsValidIndex(Candidate.HurtboxIndex))
+		{
+			Context.ArmorThreshold = Victim.HurtStates[Candidate.HurtboxIndex].ArmorThreshold;
+		}
+		Context.HurtboxSet = Victim.Hurtboxes;
+		if (Rules)
+		{
+			FGSTN_HitPipelineRunner::Run(*Rules, Context);
+		}
+		if (!Context.Outcome.bHit)
+		{
+			continue;
+		}
+		AddAttackTarget(Slot, Victim.EntityId, StartFrame, Candidate.TargetKey);
+		++HitsOnVictim;
+
+		FGSTN_HitContextView ContextView;
+		FGSTN_HitPipelineRunner::MakeView(Rules, Context, ContextView);
+		const bool bHitRicochet = FGSTN_AttackerOutcomeRegistry::Get().Evaluate(Rules, ContextView) == EGSTN_AttackerHitOutcome::Ricochet;
+		bRicochet |= bHitRicochet;
+		if (!bHitRicochet && Context.Outcome.bHasKnockback)
+		{
+			LongestHitstop = FMath::Max(LongestHitstop, FMath::Max(Context.Outcome.Knockback.AttackerHitstopFrames, 0));
+		}
+
+		FGSTN_HitInboxEntry Entry;
+		Entry.Frame = Frame;
+		Entry.AttackerId = AttackerId;
+		Entry.AttackerTeam = AttackerTeam;
+		Entry.Hit = Candidate.Hit;
+		Entry.HitLocation = Candidate.HitLocation;
+		Entry.HitboxVelocity = Candidate.HitboxVelocity;
+		Entry.AttackerYaw = static_cast<float>(AttackerFacing.Rotation().Yaw);
+		Entry.Relationship = GSTNHitRelationship::ToIndex(Candidate.Relationship);
+		if (Candidate.bRelationshipForced && Entry.Relationship != 255)
+		{
+			Entry.Relationship |= GSTNHitRelationship::ForcedBit;
+		}
+		Entry.HurtboxIndex = static_cast<uint8>(Candidate.HurtboxIndex);
+		Entry.AttackerHitboxIndex = static_cast<uint8>(FMath::Min(Candidate.HitboxIndex, 255));
+		Entry.HurtState = static_cast<uint8>(Candidate.HurtState);
+		Entry.bRicochet = bHitRicochet;
+		// Into the fighter's inbox (the server ticks that instance), stamped F: drained at F+1, a correction on the player's client
+		if (World->PostHit(Victim.EntityId, Entry))
+		{
+			++LastBatch.AttackHits;
+		}
+	}
+
+	if (LongestHitstop > 0)
+	{
+		// The frame of the hit runs on, the next LongestHitstop frames stand still (the fighter's window)
+		AttackerHitstopEndFrame[Slot] = FMath::Max(AttackerHitstopEndFrame[Slot], Frame + LongestHitstop);
+	}
+	if (bRicochet)
+	{
+		// No recoil timeline for minions yet: the move just stops (its cooldown applies)
+		CancelTimeline(Slot, Frame);
 	}
 }
 
@@ -903,8 +2000,27 @@ void UGSTN_MinionCombatSubsystem::StagePublish(int32 Frame)
 		{
 			Actor->SetActorLocationAndRotation(FVector(Store.Position[Slot]), FRotator(0.f, Store.YawDegrees[Slot], 0.f), false, nullptr, ETeleportType::TeleportPhysics);
 		}
-		// G5: history ring write for frame F (pose, swept bound). G6: pack item dirtying at the tier's rate
+
+		// History of frame F (end of F) for the rewound queries: pose, swept bound, and the flags a rewound hit reads. A dying minion is
+		// recorded intangible (the snapshot leaves it out), so a rewind to its last frames cannot hit it either
+		const int32 TypeIndex = Store.TypeIndex[Slot];
+		const float BoundRadius = ResolvedTypes.IsValidIndex(TypeIndex) ? ResolvedTypes[TypeIndex].BoundRadius : 0.f;
+		uint8 Flags = IsDyingOrDead(Store.ActionState[Slot]) ? GSTNVictimReactionFlags::Intangible : 0;
+		Flags |= (Frame + 1 < HitstopEndFrame[Slot] || Frame + 1 <= AttackerHitstopEndFrame[Slot]) ? GSTNVictimReactionFlags::InHitstop : 0;
+		History.Write(Slot, Frame, Store.Position[Slot], Store.YawDegrees[Slot], BoundRadius, Flags);
+		// G6: pack item dirtying at the tier's rate
 	}
+
+	// The candidate hash holds every activated minion where it is now (a skipped slot has not moved)
+	HashSlots.Reset();
+	for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE; Slot = Store.NextAliveSlot(Slot + 1))
+	{
+		if (!PendingActivation[Slot])
+		{
+			HashSlots.Add(Slot);
+		}
+	}
+	History.RebuildHash(HashSlots, Store.Position);
 
 #if STATS
 	int32 PerTier[4] = {};
@@ -927,6 +2043,7 @@ void UGSTN_MinionCombatSubsystem::FlushEventsAndDespawns()
 	// Broadcast after the stages: a listener may spawn, despawn or write intents without touching a column a stage is walking
 	TArray<FQueuedEvent> Events = MoveTemp(QueuedEvents);
 	QueuedEvents.Reset();
+	UGSTN_SimEventSubsystem* SimEvents = nullptr;
 	for (const FQueuedEvent& Event : Events)
 	{
 		if (!Store.IsValid(Event.Handle))
@@ -935,21 +2052,45 @@ void UGSTN_MinionCombatSubsystem::FlushEventsAndDespawns()
 		}
 		AGSTN_MinionActor* Actor = SlotActors[Event.Handle.Index];
 		UGSTN_MinionCombatComponent* Component = Actor ? Actor->GetMinionComponent() : nullptr;
-		if (!Component)
-		{
-			continue;
-		}
 		switch (Event.Kind)
 		{
 		case FQueuedEvent::EKind::Hit:
-			Component->OnMinionHit.Broadcast(Event.Damage, Event.OtherId);
+			if (Component)
+			{
+				Component->OnMinionHit.Broadcast(Event.Damage, Event.OtherId);
+			}
 			break;
 		case FQueuedEvent::EKind::Died:
-			Component->OnMinionDied.Broadcast(Event.OtherId);
+			if (Component)
+			{
+				Component->OnMinionDied.Broadcast(Event.OtherId);
+			}
 			break;
 		case FQueuedEvent::EKind::LODChanged:
-			Component->OnLODChanged.Broadcast(static_cast<EGSTN_MinionLODTier>(Event.OldTier), static_cast<EGSTN_MinionLODTier>(Event.NewTier));
+			if (Component)
+			{
+				Component->OnLODChanged.Broadcast(static_cast<EGSTN_MinionLODTier>(Event.OldTier), static_cast<EGSTN_MinionLODTier>(Event.NewTier));
+			}
 			break;
+		case FQueuedEvent::EKind::KO:
+		{
+			// The authoritative stream (quests, kill feeds): published once, here, outside the stages. The subsystem only exists on the
+			// authority, so no role check is needed. Instigator = the attacker's actor when it is a registered fighter
+			SimEvents = SimEvents ? SimEvents : UGSTN_SimEventSubsystem::Get(this);
+			if (SimEvents)
+			{
+				FGSTN_SimEvent KO;
+				KO.EventType = GSTNCombatTags::Event_KO;
+				KO.Frame = Event.Frame;
+				const UGSTN_CombatWorldSubsystem* World = GetCombatWorld();
+				KO.Instigator = World ? World->FindOwnerActor(Event.OtherId) : nullptr;
+				KO.Target = Actor;
+				KO.Tags.AddTag(GSTNCombatTags::KOReason_Health);
+				KO.Tags.AddTag(GSTNMinionTags::Entity_Minion);
+				SimEvents->Broadcast(KO);
+			}
+			break;
+		}
 		}
 	}
 
@@ -1032,8 +2173,67 @@ void UGSTN_MinionCombatSubsystem::FreeSlot(int32 Slot)
 	TimelinePrevFrame[Slot] = INDEX_NONE;
 	LastRunFrame[Slot] = INDEX_NONE;
 	MoveColumns.ResetSlot(Slot);
+	// Tokens, rings and history name the slot: they go with the occupant (the token goes back on death, here at the latest)
+	ResetHitColumns(Slot);
 	++LastBatch.Despawned;
 	// G6: release the pack item. G9: publish Event.MinionDespawned
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Lag compensation (spike 5)
+
+void UGSTN_MinionCombatSubsystem::GatherRewoundCandidates(const FBox& Bounds, float RewindMs, int32 FixedStepMS, TArray<FGSTN_MinionRewoundPose>& OutPoses)
+{
+	OutPoses.Reset();
+	if (!bActive || FixedStepMS <= 0 || LastBatchFrame == INDEX_NONE || !Bounds.IsValid)
+	{
+		return;
+	}
+	// Wall clock for the spike 5 report only; nothing below reads it
+	const double StartSeconds = FPlatformTime::Seconds();
+
+	// The frame whose end the attacker's client displayed (one conversion shared with the fighters' RewindActors), never in the future
+	const int32 RewindFrame = FMath::Min(FGSTN_LagCompTime::FrameOfTime(RewindMs, FixedStepMS), LastBatchFrame);
+	const double AgeSeconds = static_cast<double>(FMath::Max(LastBatchFrame - RewindFrame, 0) * FixedStepMS) / 1000.0;
+
+	// Candidates come from where minions are NOW: a minion that was inside the bounds at the rewind frame cannot have moved further than
+	// MaxSpeed x age since. The hash holds feet, so the hurt bound of the largest type is added too
+	float LargestBound = 0.f;
+	for (const FGSTN_MinionResolvedType& Resolved : ResolvedTypes)
+	{
+		LargestBound = FMath::Max(LargestBound, Resolved.BoundRadius);
+	}
+	const double Inflate = FMath::Max(CVarLagCompMaxSpeed.GetValueOnGameThread(), 0.f) * AgeSeconds + LargestBound;
+	CandidateScratch.Reset();
+	History.QueryHash(Bounds.ExpandBy(Inflate), CandidateScratch);
+
+	const FBox3f Query(FVector3f(Bounds.Min), FVector3f(Bounds.Max));
+	int32 Rejected = 0;
+	for (const int32 Slot : CandidateScratch)
+	{
+		if (!Store.IsSlotAlive(Slot) || PendingActivation[Slot])
+		{
+			continue;
+		}
+		// The record of the rewind frame (or the latest before it): no record = the minion did not exist then
+		const FGSTN_MinionHistoryRecord* Record = History.Find(Slot, RewindFrame);
+		if (!Record || !Record->SweptBound.Intersect(Query) || (Record->ReactionFlags & GSTNVictimReactionFlags::Intangible) != 0)
+		{
+			++Rejected;
+			continue;
+		}
+		FGSTN_MinionRewoundPose& Pose = OutPoses.AddDefaulted_GetRef();
+		Pose.EntityId = GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot));
+		Pose.Generation = Store.Generation[Slot];
+		Pose.Frame = Record->Frame;
+		Pose.Transform = MakeRoot(FVector(Record->Position), Record->YawDegrees);
+		Pose.ReactionFlags = Record->ReactionFlags;
+	}
+
+	++BenchTotals.LagCompQueries;
+	BenchTotals.LagCompCandidates += CandidateScratch.Num();
+	BenchTotals.LagCompRejected += Rejected;
+	BenchTotals.LagCompSeconds += FPlatformTime::Seconds() - StartSeconds;
 }
 
 void UGSTN_MinionCombatSubsystem::QueueLODChange(int32 Slot, uint8 OldTier, uint8 NewTier)

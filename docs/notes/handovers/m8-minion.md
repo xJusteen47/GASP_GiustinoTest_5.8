@@ -132,3 +132,23 @@
   step-up/snap path. Not fixed (2 attempts used).
 - Not done: L_MinionCourse as an asset (course is built in code instead), Mover backend A, docs.
 - Cost: G4 ~ $9-12 (Opus writer ~290k tokens over 3 rounds, my context ~95k; 4 builds, 2 test runs, 3 bench runs incl. the 10-min soak).
+
+## G5 (laptop, 2026-11-07): code DONE, gate green; harness scenarios and spike 5 numbers NOT done
+
+- Branch `claude/m8-g5` from `claude/project-thread-pk0j51` (04baf07). Opus writer subagent from `Saved/M8G5/writer-brief.md`; report with
+  files, choices and doubts: `Saved/M8G5/writer-report.md` (not versioned). Nothing outside `Plugins/GSTNMinion` changed
+  (uplugin and Runtime Build.cs now list GSTNCombatGAS and GSTNInput; tests Build.cs lists AIModule).
+- Done: stage 2.2 drain through the rules pipeline on a victim view (MeterGain skipped; Hitstop/Hitstun/PushedBack/Launched by tier, below
+  threshold only HitCounter), last-attacker ring, HitBy dedupe, KO event; provider snapshot minion fields; `HurtboxIndex` in PendingHits,
+  optional pipeline step slot, `OnOutcomeApplied` hook (inert, for M4b P16); stage 2.3 attack queries against fighters, hitstop pausing,
+  stamped delivery to the fighter inbox; attack tokens (`gstn.Minion.MaxAttackersPerPlayer`, default 4) released on death/hit/timeline end;
+  bench commands `gstn.Minion.Bench.Cleave` and `gstn.Minion.Bench.LagComp`.
+- X4 decision: minions use the world subsystem's history ring through the provider snapshot (no separate FGSTN_MinionHistory needed for
+  the fighters' rewind). The cheap candidate query `GatherRewoundCandidates` (grid inflated by MaxMinionSpeed*RewindMs + swept bound) exists
+  but is NOT wired into the fighters' rewind: that needs a GSTNCombatNP change, so rewind cost still grows with N. Open for G6/G7.
+- Dedupe key is (attacker, hit frame, hitbox index): the hit entry carries neither TimelineStartFrame nor HitGroup.
+- Gate: editor build OK first try; headless GSTN 1343/0, 0 ensures (1336 + 7 `GSTNMinion.Runtime.Hits.*`). Plugin-off build not run (no
+  file outside GSTNMinion changed).
+- Not done: spike 5 measurement (commands exist, not run); harness `scenario_minion_hits_player`, `scenario_minion_tokens` at 0/2 %;
+  timeline movement track, knockdown on landing, reaction timelines still stubs; the open G4 trapped-minion bug untouched; docs.
+- Cost: G5 ~ $9-12 (Opus writer ~490k tokens, 158 tool calls; my context ~40k; 1 build, 1 test run).

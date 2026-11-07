@@ -5,28 +5,37 @@
 #include "CoreMinimal.h"
 #include "Containers/BitArray.h"
 #include "Data/GSTN_MinionDefinition.h"
+#include "Hits/GSTN_HitResolution.h"
+#include "LagComp/GSTN_MinionHistory.h"
 #include "LOD/GSTN_MinionLOD.h"
 #include "Movement/GSTN_MinionMovement_Lightweight.h"
 #include "Movement/GSTN_MinionMovementBackend.h"
+#include "Simulation/GSTN_HitInbox.h"
 #include "Spawn/GSTN_MinionSpawner.h"
 #include "Store/GSTN_MinionStore.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Sync/GSTN_InboxEntry.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
+#include "Tokens/GSTN_MinionAttackTokens.h"
 #include "World/GSTN_StepSnapshot.h"
 #include "GSTN_MinionCombatSubsystem.generated.h"
 
 class AGSTN_MinionActor;
+class UGSTN_CombatRules;
 class UGSTN_CombatTimeline;
+class UGSTN_CombatWorldSubsystem;
+class UGSTN_HitResolutionStep;
 class UGSTN_HurtboxSetDefinition;
+struct FGSTN_CombatTimelineData;
 struct FGSTN_TimelineTrack_Event;
 
 namespace GSTNMinion
 {
 	/**
 	 * MoveId values of the reaction timelines the batch plays without a request. Moves use 1..MaxMoves (index + 1); the reactions sit
-	 * at the top of the 6-bit wire range so they never collide with a move. G3 uses Spawn and Death only; G5 adds the hit reactions
-	 * and G6 freezes the table when the net item ships.
+	 * at the top of the 6-bit wire range so they never collide with a move. G3 uses Spawn and Death only; the hit reactions (G5) are
+	 * action states without a timeline (the presentation of G7 picks the clip from the state), and G6 freezes the table when the net
+	 * item ships.
 	 */
 	namespace ReactionMoveIds
 	{
@@ -36,7 +45,36 @@ namespace GSTNMinion
 
 	/** Provider id of the minion subsystem in the combat world subsystem (fixed: providers append in id order on every machine) */
 	constexpr int32 SnapshotProviderId = 8;
+
+	/** Entries of the last-attacker ring of a minion (KO credit, assists; spec 5 stage 2.2) */
+	constexpr int32 LastAttackerRingSize = 4;
+
+	/** Entries of the HitBy ring of a minion: the victim-side dedupe of re-delivered hits (spec 9.2 item 4) */
+	constexpr int32 HitByRingSize = 8;
+
+	/** Entries of the attacker-side target ring of a minion's running move: the HitTargets of a fighter, 16 since G1 */
+	constexpr int32 AttackTargetRingSize = 16;
 }
+
+/** The reaction tier a staggered hit left waiting for the end of the victim's hitstop (a runtime column, never on the wire) */
+enum class EGSTN_MinionPendingReaction : uint8
+{
+	None = 0,
+	StaggerInPlace,
+	PushBack,
+	Launch
+};
+
+/** A minion as a rewound attack query sees it at the rewind frame (UGSTN_MinionCombatSubsystem::GatherRewoundCandidates) */
+struct FGSTN_MinionRewoundPose
+{
+	int32 EntityId = INDEX_NONE;
+	uint16 Generation = 0;
+	int32 Frame = INDEX_NONE;
+	/** Feet, yawed; the hurtboxes hang from it like from the snapshot entry's transform */
+	FTransform Transform;
+	uint8 ReactionFlags = 0;
+};
 
 /**
  * A definition of the registry with its soft references resolved once, at registration: the batch reads raw pointers, never a soft
@@ -73,6 +111,16 @@ struct FGSTN_MinionBatchStats
 	int32 Scheduled = 0;
 	int32 SpawnsActivated = 0;
 	int32 HitsDrained = 0;
+	/** Drained hits the pipeline let through (the rest: refused by a step, a ricochet, another inbox kind or a HitBy duplicate) */
+	int32 HitsApplied = 0;
+	int32 HitsDeduped = 0;
+	/** Hits whose outcome carried extra gameplay effects, which minions ignore in v1 (STAT_GSTN_MinionIgnoredEffects) */
+	int32 IgnoredEffects = 0;
+	/** Moves started this frame, and starts refused because the target's attack tokens were taken */
+	int32 AttacksStarted = 0;
+	int32 TokensDenied = 0;
+	/** Hits minions delivered to fighters' inboxes this frame */
+	int32 AttackHits = 0;
 	int32 TimelineEvents = 0;
 	int32 Despawned = 0;
 };
@@ -88,6 +136,15 @@ struct FGSTN_MinionBenchTotals
 	int64 MovementMinionFrames = 0;
 	/** Minions freed for falling below the world's KillZ */
 	int32 FellOut = 0;
+	/** Spike 5: stage 2.2 time and the hits it drained (the 12-minion cleave cost is their ratio times 12) */
+	double DrainSeconds = 0.0;
+	int64 DrainedHits = 0;
+	/** Spike 5: rewound candidate queries, their time, the candidates the hash gave and those the swept bound rejected */
+	int64 LagCompQueries = 0;
+	double LagCompSeconds = 0.0;
+	int64 LagCompCandidates = 0;
+	int64 LagCompRejected = 0;
+	int64 IgnoredEffects = 0;
 };
 
 /**
@@ -110,6 +167,20 @@ struct FGSTN_MinionBenchTotals
  * Hit provider: the subsystem is the IGSTN_HittableProvider of GSTNEntityKinds::Minion. AppendSnapshotEntities reads the store,
  * which the batch of this frame has not touched yet (it runs after the models), so a fighter hits the end-of-F-1 minion.
  * PostToEntityInbox stamps a hit into PendingHits; the drain of the next batch applies it (the M4 rule: reaction at F+1).
+ *
+ * Hit flows (G5, spec 9):
+ *  - player -> minion: stage 2 runs the rules' hit pipeline (MeterGain skipped: a minion has no meter) on a victim view built from the
+ *    store, applies damage, the hitstop and the reaction tier (Hitstop, then Hitstun / PushedBack / Launched; below the stagger
+ *    threshold only HitCounter moves), cancels the running move of a staggered minion, and dedupes re-deliveries with the HitBy ring;
+ *  - minion -> player: stage 3 evaluates the open hitboxes of the running move against the FIGHTERS of S(F) only (end-of-F-1
+ *    transforms on both sides), runs the pipeline as the attacker's prediction for the minion's own hitstop, and posts the hit to the
+ *    fighter's inbox stamped F; the fighter drains it at F+1 like any hit. A minion attacker never rewinds;
+ *  - attack tokens: a move against a fighter starts only with a token (at most MaxAttackersPerPlayer holders per fighter); the token
+ *    goes back when the move ends, when a hit staggers the minion and when it dies;
+ *  - lag compensation: the minions are in every snapshot through this provider, so the combat world subsystem's ring records them
+ *    and the fighters' overlay (GSTNLagComp::BuildOverlay) rewinds them like any entity without an NP component, with no code outside
+ *    this plugin. The minion history (FGSTN_MinionHistory, written in stage 5) adds the cheap candidate query of spec 9.2 for a pose
+ *    source that wants it (GatherRewoundCandidates) and the spike 5 measurement.
  */
 UCLASS()
 class GSTNMINIONRUNTIME_API UGSTN_MinionCombatSubsystem : public UWorldSubsystem, public IGSTN_HittableProvider
@@ -163,12 +234,69 @@ public:
 	 * Gives a live minion a launch velocity, consumed by its next movement step (stage 4). bPushBack slides it on the ground
 	 * (decaying, stops at walls and ledges, never airborne); otherwise it flies under gravity until it lands. Sets the action state
 	 * to PushedBack or Launched (a dying minion keeps its state); the backend returns it to Idle when the knockback ends.
-	 * G5's drain calls this for the reaction tiers; scripts and the bench may call it outside a stage. False for a stale handle
+	 * The drain calls this for the reaction tiers once the victim hitstop is over (and cancels the move itself); a script launch leaves a
+	 * running timeline alone. Scripts and the bench may call it outside a stage. False for a stale handle
 	 */
 	bool LaunchMinion(const FGSTN_MinionHandle& Handle, const FVector& Velocity, bool bPushBack);
 
 	/** Gravity acceleration at a position for every minion (a gravity field). Unset (empty function) = the world's gravity Z */
 	void SetGravitySource(TFunction<FVector(const FVector&)> InGravityAt) { GravitySource = MoveTemp(InGravityAt); }
+
+	// Hits (G5)
+
+	/**
+	 * The rules minions are hit and hit with. Set before minions take hits (a game mode at begin play); unset, Activate takes the project's
+	 * default rules (UGSTN_CombatSettings). The rules must have their hit pipeline resolved; the batch only runs the resolved list
+	 */
+	void SetCombatRules(UGSTN_CombatRules* Rules);
+	const UGSTN_CombatRules* GetCombatRules() const;
+
+	/**
+	 * The optional pipeline step slot (bridge seam for parts on minions, M4b P16): a step class run for minion victims right before the
+	 * rules' ComputeKnockback step (at the end when the rules have none). Null (the default) runs the rules' pipeline unchanged. Same
+	 * contract as every hit step: pure, deterministic, class default object only
+	 */
+	void SetExtraVictimStep(TSubclassOf<UGSTN_HitResolutionStep> StepClass) { ExtraVictimStep = StepClass; }
+
+	/**
+	 * Store hook after a drained hit was written into the store (health, state, rings), before the next entry: the slot for a bridge that
+	 * keeps per-minion data of its own (M4b P16: part damage from the outcome extensions). Called from inside stage 2: a listener reads
+	 * and writes its own data only; it must not spawn, despawn, write intents or touch the store. Inert unless bound
+	 */
+	DECLARE_MULTICAST_DELEGATE_FourParams(FOnMinionOutcomeApplied, const FGSTN_MinionHandle& /*Minion*/, const FGSTN_HitInboxEntry& /*Hit*/, const FGSTN_HitContextView& /*Resolved*/, int32 /*Frame*/);
+	FOnMinionOutcomeApplied OnOutcomeApplied;
+
+	/** The victim view the pipeline reads for a live minion at Frame (the store as it is now): kind tag, health fraction, weight, hurt state */
+	bool BuildVictimView(const FGSTN_MinionHandle& Handle, int32 Frame, FGSTN_HitVictimView& OutView) const;
+
+	/** The attack tokens of the minions against fighters. MaxPerTarget is gstn.Minion.MaxAttackersPerPlayer at activation */
+	const FGSTN_MinionAttackTokens& GetAttackTokens() const { return AttackTokens; }
+	void SetMaxAttackersPerTarget(int32 MaxAttackers) { AttackTokens.SetMaxPerTarget(MaxAttackers); }
+
+	// Per-slot hit state (authority columns, for tests, debug and the bridges)
+	int32 GetHitstopEndFrame(int32 Slot) const { return HitstopEndFrame.IsValidIndex(Slot) ? HitstopEndFrame[Slot] : INDEX_NONE; }
+	int32 GetHitstunEndFrame(int32 Slot) const { return HitstunEndFrame.IsValidIndex(Slot) ? HitstunEndFrame[Slot] : INDEX_NONE; }
+	int32 GetAttackerHitstopEndFrame(int32 Slot) const { return AttackerHitstopEndFrame.IsValidIndex(Slot) ? AttackerHitstopEndFrame[Slot] : INDEX_NONE; }
+	int32 GetPausedFrames(int32 Slot) const { return PausedFrames.IsValidIndex(Slot) ? PausedFrames[Slot] : 0; }
+	float GetKnockbackPercent(int32 Slot) const { return KnockbackPercent.IsValidIndex(Slot) ? KnockbackPercent[Slot] : 0.f; }
+	EGSTN_MinionPendingReaction GetPendingReaction(int32 Slot) const
+	{
+		return PendingReaction.IsValidIndex(Slot) ? static_cast<EGSTN_MinionPendingReaction>(PendingReaction[Slot]) : EGSTN_MinionPendingReaction::None;
+	}
+	/** The attacker of the Age-th latest hit (0 = latest), INDEX_NONE when the ring holds fewer */
+	int32 GetLastAttacker(int32 Slot, int32 Age = 0) const;
+
+	// Lag compensation (G5, spike 5)
+
+	/**
+	 * The minions a rewound hitbox could touch: candidates from the current position hash inside Bounds inflated by
+	 * gstn.Minion.LagComp.MaxSpeed x the rewind age, rejected by the swept bound of the rewind frame (FGSTN_LagCompTime::FrameOfTime of
+	 * RewindMs), and the survivors sampled at that frame. Ascending slot order. Only for a remote player's attack on the authority
+	 * (GSTNLagComp::ShouldRewind): the host and AI attackers, minions included, hit the present and never call it.
+	 */
+	void GatherRewoundCandidates(const FBox& Bounds, float RewindMs, int32 FixedStepMS, TArray<FGSTN_MinionRewoundPose>& OutPoses);
+
+	const FGSTN_MinionHistory& GetHistory() const { return History; }
 
 	FGSTN_MinionMovementSettings& GetMovementSettings() { return MovementSettings; }
 	const FGSTN_MinionMovementColumns& GetMovementColumns() const { return MoveColumns; }
@@ -204,7 +332,7 @@ public:
 
 	/**
 	 * C++ hook: an event track of a minion's timeline was crossed this frame (fires once per crossing, whatever frames the LOD
-	 * skipped). Called from inside stage 3: a listener must not spawn, despawn or write intents. G5 routes cues and outbox events here
+	 * skipped). Called from inside stage 3: a listener must not spawn, despawn or write intents. The presentation (G7) routes cues here
 	 */
 	DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnMinionTimelineEvent, const FGSTN_MinionHandle& /*Minion*/, const FGSTN_TimelineTrack_Event& /*Track*/, int32 /*TimelineFrame*/);
 	FOnMinionTimelineEvent OnTimelineEvent;
@@ -242,18 +370,54 @@ private:
 		int32 Frame = INDEX_NONE;
 		int32 EntityId = INDEX_NONE;
 		uint16 Generation = 0;
+		/** Copied from the hit payload when there is one (0 otherwise): the third key of the drain order, and the hurtbox for the parts bridge */
+		uint8 AttackerHitboxIndex = 0;
+		uint8 HurtboxIndex = 0;
 		FGSTN_InboxEntry Entry;
+	};
+
+	/**
+	 * The victim-side identity of a hit (spec 9.2 item 4). The spec's key is (AttackerId, TimelineStartFrame, HitGroup); the inbox entry
+	 * carries neither of the last two, so the batch keys on (AttackerId, the overlap frame, the attacker's hitbox index): a re-delivery of
+	 * the same hit matches it exactly, and two distinct hits never do (the attacker's own target ring forbids the same hitbox hitting the
+	 * same victim twice on one frame)
+	 */
+	struct FHitByKey
+	{
+		int32 AttackerId = INDEX_NONE;
+		int32 TimelineKey = INDEX_NONE;
+		uint8 HitGroup = 0;
+
+		bool operator==(const FHitByKey& Other) const { return AttackerId == Other.AttackerId && TimelineKey == Other.TimelineKey && HitGroup == Other.HitGroup; }
+	};
+
+	/** One victim of a minion's running move: the HitTargets entry of a fighter (victim, move start, group key) */
+	struct FAttackTarget
+	{
+		int32 VictimId = INDEX_NONE;
+		int32 MoveStartFrame = INDEX_NONE;
+		uint8 TargetKey = 0;
 	};
 
 	/** A Blueprint event a stage queued; broadcast after stage 5 */
 	struct FQueuedEvent
 	{
-		enum class EKind : uint8 { Hit, Died, LODChanged } Kind = EKind::Hit;
+		enum class EKind : uint8 { Hit, Died, LODChanged, KO } Kind = EKind::Hit;
 		FGSTN_MinionHandle Handle;
 		float Damage = 0.f;
 		int32 OtherId = INDEX_NONE;
+		int32 Frame = INDEX_NONE;
 		uint8 OldTier = 0;
 		uint8 NewTier = 0;
+	};
+
+	/** A move a scheduled slot may start this frame, waiting for the token resolve of stage 3 */
+	struct FStartCandidate
+	{
+		int32 Slot = INDEX_NONE;
+		int32 MoveIndex = INDEX_NONE;
+		int32 TargetId = INDEX_NONE;
+		bool bNeedsToken = false;
 	};
 
 	void Activate();
@@ -277,6 +441,57 @@ private:
 	const UGSTN_CombatTimeline* TimelineOfMoveId(int32 Slot, uint8 MoveId) const;
 	/** Ends whatever timeline the slot plays: cooldown stamp for a move, Idle after Spawning, Dead after the death timeline */
 	void EndTimeline(int32 Slot, int32 Frame);
+
+	// Hits (G5)
+
+	/** The world combat subsystem the minions are registered with, null when there is none */
+	UGSTN_CombatWorldSubsystem* GetCombatWorld() const;
+
+	/** The snapshot entry of a live, activated slot as the store holds it now (transform, hurt states, reaction state). False for a slot of no type */
+	bool FillSnapshotEntry(int32 Slot, int32 Frame, FGSTN_SnapshotEntry& Out) const;
+
+	/** The victim view of a slot from its snapshot entry, with the store's current health, percent and weight */
+	FGSTN_HitVictimView MakeMinionView(int32 Slot, const FGSTN_SnapshotEntry& Entry) const;
+
+	/** Root of a slot: the feet, yawed, tilted to the gravity up */
+	FTransform RootOf(int32 Slot) const;
+	FTransform MakeRoot(const FVector& Feet, float YawDegrees) const;
+	FVector UpAt(const FVector& Position) const;
+
+	/** The rules' resolved pipeline minus MeterGain, with the extra victim step before ComputeKnockback (see SetExtraVictimStep) */
+	void RunVictimPipeline(FGSTN_HitResolutionContext& Context) const;
+
+	/** One drained hit on a slot (pipeline, store writes, reaction, rings, events); Self is the slot's entry of this drain */
+	void ApplyHit(int32 Slot, int32 Frame, const FGSTN_HitInboxEntry& Hit, const FGSTN_SnapshotEntry& Self);
+
+	/** Turns a reaction tier into the action state (Hitstun) or a launch of the movement backend (PushedBack, Launched) */
+	void ApplyReaction(int32 Slot, EGSTN_MinionPendingReaction Reaction, const FVector& Velocity);
+
+	/** End of the victim's hitstop (the pending reaction goes out) and of a stagger in place (back to Idle). Start of stage 3 */
+	void StepVictimReaction(int32 Slot, int32 Frame);
+
+	/** Cancels a running move or spawn timeline (a staggered hit, a ricochet): cooldown stamp, token back, clock reset. Death is never cancelled */
+	void CancelTimeline(int32 Slot, int32 Frame);
+
+	/** Whether the slot may start its intent's command at Frame, all checks but the token; the move index and target when it may */
+	bool CanStartCommand(int32 Slot, int32 Frame, const FGSTN_StepSnapshot* Snapshot, int32& OutMoveIndex, int32& OutTargetId) const;
+
+	/** The fighters' snapshot of Frame (S(F)), built here when no fighter ticked; null without fighters or a combat world */
+	const FGSTN_StepSnapshot* AcquireFighterSnapshot(int32 Frame);
+
+	/** The open hitboxes of a slot's move at TimelineFrame against the fighters of Snapshot; posts the hits and opens the attacker hitstop */
+	void RunAttackQueries(int32 Slot, int32 Frame, const FGSTN_CombatTimelineData& Timeline, int32 TimelineFrame, const FGSTN_StepSnapshot& Snapshot);
+
+	bool HasAttackTarget(int32 Slot, int32 VictimId, int32 MoveStartFrame, uint8 TargetKey) const;
+	int32 CountAttackTargets(int32 Slot, int32 MoveStartFrame, uint8 TargetKey) const;
+	void AddAttackTarget(int32 Slot, int32 VictimId, int32 MoveStartFrame, uint8 TargetKey);
+
+	bool HasHitBy(int32 Slot, const FHitByKey& Key) const;
+	void AddHitBy(int32 Slot, const FHitByKey& Key);
+	void PushLastAttacker(int32 Slot, int32 AttackerId);
+
+	/** Resets the G5 columns of a slot (activation and free) */
+	void ResetHitColumns(int32 Slot);
 
 	void AcquireActor(int32 Slot, const FTransform& Transform);
 	void ReleaseActor(int32 Slot);
@@ -319,10 +534,44 @@ private:
 	TArray<int32> TimelinePrevFrame;
 	/** Cooldown stamps: frame from which move m of slot s may start again, at [s * GSTNMinion::MaxMoves + m] */
 	TArray<int32> NextMoveFrame;
-	/** Pipeline id of the last attacker (KO credit; the 4-entry ring of the spec comes with G5) */
-	TArray<int32> LastAttackerId;
 	/** Velocity, ground flag, pending launch and knockback mode of the movement backend */
 	FGSTN_MinionMovementColumns MoveColumns;
+
+	// Hit columns (G5). Authority only, never on the wire (the action state and HitCounter are what the clients get)
+
+	/** Damage percent the minion took, in the percent damage modes: what the weight driven knockback grows with (0 in the Health mode) */
+	TArray<float> KnockbackPercent;
+	/** Victim hitstop: frames before this one are frozen (the window opens on the hit's frame, the fighter rule) */
+	TArray<int32> HitstopEndFrame;
+	/** End of a stagger in place (Hitstun back to Idle); push back and launch end when the movement does */
+	TArray<int32> HitstunEndFrame;
+	/** EGSTN_MinionPendingReaction and its velocity, released when the victim hitstop ends */
+	TArray<uint8> PendingReaction;
+	TArray<FVector3f> PendingReactionVelocity;
+	/** The minion's own hitstop as an attacker: its move clock stands still up to and including this frame */
+	TArray<int32> AttackerHitstopEndFrame;
+	/** Frames the running timeline stood still so far (the attacker hitstop): timeline frame = Frame - MoveStartFrame - PausedFrames */
+	TArray<int32> PausedFrames;
+	/** [Slot * LastAttackerRingSize + i], newest at LastAttackerHead[Slot] */
+	TArray<int32> LastAttackerRing;
+	TArray<uint8> LastAttackerHead;
+	TArray<uint8> LastAttackerCount;
+	/** [Slot * HitByRingSize + i], oldest overwritten */
+	TArray<FHitByKey> HitByRing;
+	TArray<uint8> HitByHead;
+	/** [Slot * AttackTargetRingSize + i], the running move's victims (keyed by its start frame, so a new move needs no clear) */
+	TArray<FAttackTarget> AttackTargets;
+	TArray<uint8> AttackTargetHead;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_CombatRules> CombatRules;
+
+	UPROPERTY(Transient)
+	TSubclassOf<UGSTN_HitResolutionStep> ExtraVictimStep;
+
+	TWeakObjectPtr<UGSTN_CombatWorldSubsystem> CombatWorld;
+	FGSTN_MinionAttackTokens AttackTokens;
+	FGSTN_MinionHistory History;
 
 	// Movement (stage 4). Backend A (Mover, non-predicted) is not built: G4, spike 3 decision B
 	FGSTN_MinionMovement_Lightweight LightweightMovement;
@@ -344,6 +593,12 @@ private:
 	TArray<FVector2D> PlayerPositions;
 	TArray<FPendingHit> DrainScratch;
 	FGSTN_TimelineOutput TimelineOutput;
+	/** Hit side of a timeline evaluation (attack queries); the snapshot's hurt states use their own, the provider is const */
+	FGSTN_TimelineFrameResult HitScratch;
+	mutable FGSTN_TimelineFrameResult HurtScratch;
+	TArray<FStartCandidate> StartCandidates;
+	TArray<int32> CandidateScratch;
+	TArray<int32> HashSlots;
 
 	FGSTN_MinionLODParams DefaultLODParams;
 	int32 ForcedLODTier = INDEX_NONE;

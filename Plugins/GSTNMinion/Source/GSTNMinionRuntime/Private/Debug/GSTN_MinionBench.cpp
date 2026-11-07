@@ -14,7 +14,10 @@
 #include "GameFramework/PlayerController.h"
 #include "GSTNMinionCoreModule.h"
 #include "HAL/IConsoleManager.h"
+#include "NetworkPredictionWorldManager.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
+#include "Simulation/GSTN_HitInbox.h"
+#include "Simulation/GSTN_LagCompensation.h"
 #include "Spawn/GSTN_MinionSpawner.h"
 
 namespace
@@ -145,6 +148,74 @@ namespace
 			{
 				Bench->Report();
 			}
+		}));
+
+	// Spike 5 measurement hooks (combat-m8-minions.md 9.2: the 12-minion cleave and the rewound query should cost tens of microseconds).
+	// They only feed the counters of gstn.Minion.Bench.Report; nothing in the simulation depends on them
+
+	FAutoConsoleCommandWithWorldAndArgs BenchCleaveCommand(
+		TEXT("gstn.Minion.Bench.Cleave"),
+		TEXT("gstn.Minion.Bench.Cleave <N=12> <Damage=1>: posts one synthetic hit (neutral attacker) on each of the N lowest live minions; the next batch drains them (drainUsPerHit in the report)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
+			if (!Minions)
+			{
+				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.Cleave: no active minion subsystem"));
+				return;
+			}
+			const int32 Count = Args.Num() > 0 ? FMath::Max(FCString::Atoi(*Args[0]), 1) : 12;
+			const float Damage = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 1.f;
+			const FGSTN_MinionStore& Store = Minions->GetStore();
+			const int32 Frame = FMath::Max(Minions->GetLastBatchFrame(), 0);
+			int32 Posted = 0;
+			for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE && Posted < Count; Slot = Store.NextAliveSlot(Slot + 1))
+			{
+				FGSTN_HitInboxEntry Hit;
+				Hit.Frame = Frame;
+				// An id no fighter uses: the pipeline treats it as a neutral attacker, nothing is looked up for it
+				Hit.AttackerId = 0x3FFFFFF0;
+				Hit.AttackerTeam = 255;
+				// 255: no relationship index, the TeamFilter step resolves it from the teams (no team = Neutral, hittable by default)
+				Hit.Relationship = 255;
+				Hit.Hit.Damage = Damage;
+				Hit.HitLocation = FVector(Store.Position[Slot]);
+				const FGSTN_MinionHandle Handle = Store.HandleOfSlot(Slot);
+				Posted += Minions->PostToEntityInbox(GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot)), Handle.Generation, Hit.ToInboxEntry()) ? 1 : 0;
+			}
+			UE_LOG(LogGSTNMinion, Log, TEXT("Bench: cleave of %d hits posted at frame %d"), Posted, Frame);
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs BenchLagCompCommand(
+		TEXT("gstn.Minion.Bench.LagComp"),
+		TEXT("gstn.Minion.Bench.LagComp <Rounds=10> <RewindMs=250>: runs a rewound candidate query around every live minion, Rounds times (lagCompUsPerQuery in the report)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
+			const UNetworkPredictionWorldManager* Manager = World ? World->GetSubsystem<UNetworkPredictionWorldManager>() : nullptr;
+			if (!Minions)
+			{
+				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.LagComp: no active minion subsystem"));
+				return;
+			}
+			const int32 Rounds = Args.Num() > 0 ? FMath::Max(FCString::Atoi(*Args[0]), 1) : 10;
+			const float RewindAgeMs = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 250.f;
+			const int32 StepMs = Manager && Manager->GetFixedTickState().FixedStepMS > 0 ? Manager->GetFixedTickState().FixedStepMS : 16;
+			const float NowMs = static_cast<float>(FGSTN_LagCompTime::TimeOfFrame(FMath::Max(Minions->GetLastBatchFrame(), 0), StepMs));
+			const FGSTN_MinionStore& Store = Minions->GetStore();
+			TArray<FGSTN_MinionRewoundPose> Poses;
+			int32 Found = 0;
+			for (int32 Round = 0; Round < Rounds; ++Round)
+			{
+				for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE; Slot = Store.NextAliveSlot(Slot + 1))
+				{
+					// A sword-sized hitbox bound in front of where the minion is now
+					const FVector Centre(Store.Position[Slot]);
+					Minions->GatherRewoundCandidates(FBox(Centre - FVector(60.0), Centre + FVector(60.0)), NowMs - RewindAgeMs, StepMs, Poses);
+					Found += Poses.Num();
+				}
+			}
+			UE_LOG(LogGSTNMinion, Log, TEXT("Bench: lag comp rounds=%d rewindMs=%.0f poses=%d"), Rounds, RewindAgeMs, Found);
 		}));
 }
 
@@ -305,6 +376,11 @@ void UGSTN_MinionBenchSubsystem::Report() const
 	UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench alive=%d frames=%d avgBatchUs=%.1f maxBatchUs=%.1f moveUsPerMinionFrame=%.2f fell=%d stuck=%d blocked=%d tunnelled=%d"),
 		Minions->GetLastBatchStats().Alive, Totals.Batches, AvgUs, Totals.MaxBatchSeconds * 1.0e6, MoveUs,
 		Totals.FellOut + FellBelowCourse, Stuck, Blocked, Tunnelled);
+	// Spike 5: the drain cost per hit (a 12-minion cleave costs 12 of them) and the rewound candidate query
+	const double DrainUsPerHit = Totals.DrainedHits > 0 ? Totals.DrainSeconds * 1.0e6 / static_cast<double>(Totals.DrainedHits) : 0.0;
+	const double LagCompUsPerQuery = Totals.LagCompQueries > 0 ? Totals.LagCompSeconds * 1.0e6 / static_cast<double>(Totals.LagCompQueries) : 0.0;
+	UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench spike5 drainedHits=%lld drainUsPerHit=%.2f cleave12Us=%.1f lagCompQueries=%lld lagCompUsPerQuery=%.2f candidates=%lld rejected=%lld ignoredEffects=%lld"),
+		Totals.DrainedHits, DrainUsPerHit, DrainUsPerHit * 12.0, Totals.LagCompQueries, LagCompUsPerQuery, Totals.LagCompCandidates, Totals.LagCompRejected, Totals.IgnoredEffects);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

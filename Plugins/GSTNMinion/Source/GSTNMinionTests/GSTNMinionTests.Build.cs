@@ -17,7 +17,9 @@ public class GSTNMinionTests : ModuleRules
 			"GSTNMinionCore",
 			"GSTNMinionRuntime",
 			"GSTNCombatCore",
-			"GSTNCombatNP"
+			"GSTNCombatNP",
+			// FGenericTeamId of the stub fighter in the hit tests (G5)
+			"AIModule"
 		});
 	}
 }
