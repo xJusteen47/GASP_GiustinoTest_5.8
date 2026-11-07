@@ -72,3 +72,17 @@
   (`(392, 3, 3, 0, 1, 0, 6)`). Pre-existing on this laptop state, not caused by G1; worth its own look (open).
 - Not done: dedicated-server runs, plugin-off build (nothing in G1 is optional), docs (combat.md X5-X11 rows) beyond PATCHES.md.
 - Cost: G1 ~ $9-11 (one Opus thread; 4 builds, ~4 h machine harness incl. the baseline).
+
+## G2 (laptop, 2026-11-07): DONE, gate green
+
+- Commit after f61b253 on `claude/project-thread-qeaif9`; includes the desktop GSTNCore part (merge 3e5e503). Code written by a Sonnet
+  subagent, two compile/test fixes by me (`QuietNaN` -> `std::numeric_limits`; a test that added an array element to its own array).
+- `Plugins/GSTNMinion` (EnabledByDefault false, enabled in `.uproject`): Core module only has content; Runtime/Editor/Tests are shells.
+  Choices to review in G3: health on the wire 5 bits as fraction x 31; minimal net item 119 bits (spec ~121); generations start at 1 and wrap
+  65535 -> 1 (0 = null handle); LOD dwell bypassed only by `bForceCombat`; tokens never preempt, granted by ascending slot; the codec has its
+  own `GSTNMinionQuant` helpers (no quantizer existed in GSTNPlatform or GSTNCore); `KnockbackModel`, StateTree and the "supported tracks"
+  check left out of the definition (runtime classes, G3+); `gstn.Minion.LOD.*` cvars not added.
+- Gate: build OK; headless GSTN 1322/0, 0 ensures (= 1307 with the plugin absent + 15 `GSTNMinion.Core.*`); `check_modules.py
+  --allow-uproject` 0 problems (without the flag: the old GSTNPiggyback .uproject note). Harness not needed (no NP or fighter code).
+- Not done: G3 (next, L size). Docs (combat.md, plugin index row for GSTNMinion) not updated.
+- Cost: G2 ~ $5-7 (Sonnet writer ~230k tokens, 3 builds). Thread total G1+G2 ~ $16-19.
