@@ -101,3 +101,29 @@ presentation stay useful under B (B removes only what A could not).
 - B: ~0.03-0.04 ms per promoted pawn per resimulated frame x ~14 frames x ~5 rollbacks/s during windows; per-entity LOD lookups in
   Mover's hot path (3 reads per tick per pawn) replace one global read.
 - B: harness reconcile classification adds a log parse per reconcile line (test time only).
+
+## G0 results (laptop, 2026-11-08): baseline valid, buffer sweep NOT valid (override never applied)
+
+Dedicated + 2 clients, 60/15 ms, -nullrhi, `scenario_throw_rider` + `scenario_boost_jump` (client_rides_client) + a walk probe (displayed
+proxy vs server pawn). Raw table and tooling: `Saved/FPG0/results.md`, `Saved/FPG0/out/` (not versioned).
+
+| Run | Boost: carrier screen after rider screen | Boost from tap (rider / carrier) | Throw: rider screen vs carrier screen | Throw from tap | Proxy offset (walk) |
+|---|---|---|---|---|---|
+| baseline 100 ms, 0 % | 293 ms | 139 / 431 ms | 0 ms | 596 ms | 50.5 cm |
+| baseline 100 ms, 2 % | 293 ms | 137 / 430 ms | -58 ms | 612 / 554 ms | - |
+| "66 / 50 / 33 ms", 0 and 2 % | 290-356 ms | 133-141 / 426-496 ms | -58..0 ms | 549-631 ms | - |
+| control "400 ms", two override methods | 304-351 ms | 135-137 / 441-486 ms | -56 ms | 563-619 ms | 45.1-56.5 cm |
+
+- **The sweep did not change the buffer.** A 400 ms buffer must put a walking proxy ~2 m behind the server; it stayed at 45-56 cm, like
+  100 ms. Both methods failed: `-ini:NetworkPrediction:[...]:Settings=(...)` (the commas inside the struct split the override) and the
+  `set NetworkPredictionSettingsObject Settings (...)` exec command before PIE. Python cannot write the struct (fields not exposed).
+  So every row is the 100 ms baseline measured again: the spread (290-356 ms) is run-to-run noise.
+- **Baseline (valid)**: the partner sees a boost ~290-355 ms after the initiator (S4 confirmed). A throw shows on both screens at the same
+  time (server-given) but ~550-630 ms after the tap, which is far above one trip plus 100 ms: the throw's own timeline (wind-up before the
+  release event) is probably most of it. That is design time, not network time, so FP cannot remove it. Check it in G1 before tuning anything.
+- **Verdict**: not decided. G0 cannot yet say whether a smaller buffer reaches 150 ms. The baseline says a buffer cut alone is unlikely
+  to be enough: 150 ms would need ~150 ms less than the ~300 ms measured, and the whole buffer is only 100 ms.
+- **Recommended value**: none yet. Close G0 with a working override first.
+- **To close G0 (~$2-3, laptop)**: an inert fork cvar `np.FixedTickInterpolationBufferedMSOverride` (default -1, read in
+  `UNetworkPredictionWorldManager::SyncNetworkPredictionSettings` and logged), added to PATCHES.md. That is one fork line and needs your
+  OK (no `GSTNCombatNP`). Then rerun the 8-cell sweep with the 400 ms control and the proxy offset as the check that it applied.
