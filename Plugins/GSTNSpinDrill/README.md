@@ -118,7 +118,7 @@ BeforeCandidates yet; the request of the frame and the bore end rules (`UGSTN_Dr
 - **Bore (D9 part 2)**: on the seat's first frame the tick extension starts (forced) the kit's bore, the first timeline of the registry with a
   `FGSTN_BoreTrack`; `FGSTN_SpinDrillKitExtension::BoreAbility` (default `UGSTN_GA_DrillBore`) adds it to the kit's triggered abilities.
   `FGSTN_BoreTrackHook` holds the seat frame while Seating and the bore frame while latched; the tip there re-hits every
-  `RehitIntervalFrames` (seam S1, ordinary hits, `HitsLanded`). The hook stamps the crouch (`GSTNDrillStamps::CrouchMarker`) for the end rules.
+  `RehitIntervalFrames` (seam S1, ordinary hits, `HitsLanded`). The hook stamps the crouch (`GSTNDrillStamps::CrouchMarker`) for the end rules. The tip carries `HitstunMultiplier` 0 (= no hitstun, no stagger; combat-m4-hits.md): the re-hit interval is within the floor, so otherwise the target stays in hitstun and never moves.
   Launch: `UGSTN_GE_DrillLaunch` (LaunchSpeed, LaunchDirection, the driller's up as the surface normal); pop: `UGSTN_GE_DrillPop`
   (DetachPopSpeed, flag `Popped`). The per-latch anchor (where the driller met the target, in the target's root space) goes into
   GSTNLink's `FGSTN_LinkState::SetAnchorOverride` on the first Active frame, so a moving target (D10) carries the driller where it hit.

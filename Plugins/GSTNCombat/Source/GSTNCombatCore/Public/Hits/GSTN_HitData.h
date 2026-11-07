@@ -98,6 +98,7 @@ struct GSTNCOMBATCORE_API FGSTN_HitData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Knockback")
 	EGSTN_YawSource YawSource = EGSTN_YawSource::AttackerFacing;
 
+	/** Scales the hitstun frames. 0 = no hitstun and no stagger at all (damage and hitstop still apply), for multi-hits that must not pin the victim */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Hitstun", meta = (ClampMin = "0.0"))
 	float HitstunMultiplier = 1.f;
 

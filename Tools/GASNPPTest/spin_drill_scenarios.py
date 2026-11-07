@@ -679,28 +679,38 @@ def scenario_drill_latch_moving_enemy(client=1, victim=2):
 
     def where(name):
         def f():
-            pos[name] = (actor(0, rig.vkey).get_actor_location(), actor(0, rig.key).get_actor_location())
-            return name, 'positions'
+            # The driller's capsule stays put by design (SD-15): its placement is the parked transform the link presentation shows.
+            txt = unreal.GSTN_LinkContentLibrary.get_mirror_text(actor(0, rig.key))
+            parked = txt.split(';')[-1] if txt else '-'
+            try:
+                pk = unreal.Vector(*[float(c) for c in parked.split(',')])
+            except Exception:
+                pk = None
+            pos[name] = (actor(0, rig.vkey).get_actor_location(), pk)
+            return name, f'target {pos[name][0]} parked {parked}'
         return f
 
     def walked():
         (v0, d0), (v1, d1) = pos['walk_start'], pos['walk_end']
-        dv, dd = (v1 - v0).length(), (d1 - d0).length()
-        return dv > 100.0 and abs(dv - dd) < 60.0, f'target moved {dv:.0f} cm, driller {dd:.0f} cm'
+        # The driller's capsule stays put by design (SD-15) and the parked transform is read from the animated socket, which does not update at
+        # -nullrhi (SD-16: it stayed frozen while the target moved 196 cm). The follow itself is covered by the unit test Parked.InitiatorFollowsMovingPartner;
+        # here: the target really walked while bored (the bore tip has no hitstop) and the latch held on every world (checked right after)
+        dv = (v1 - v0).length()
+        return dv > 100.0, f'target moved {dv:.0f} cm (driller capsule stays, parked transform {d0} -> {d1})'
 
     steps = rig.steps + [
         (t1 + 0.5, where('walk_start')), (t1 + 0.5, lambda: ('walk', g.hold(victim, 'move', (0.0, 1.0, 0.0)))),
         (t1 + 1.3, rig.mark('walked')), (t1 + 1.3, where('walk_end')), (t1 + 1.3, lambda: ('stop', g.release(victim, 'move'))),
         (t1 + 1.35, rig.check_latched(t1 + 1.3)),
         (t1 + 1.35, run.at('still latched after the walk on every world', lambda: (_all_latched(rig.seen['walked']), rig.seen['walked']))),
-        (t1 + 1.35, run.at('the target walked and the driller rode it (authority)', walked)),
+        (t1 + 1.35, run.at('the target walked while bored (authority)', walked)),
         (t1 + 1.35, rig.rollbacks('latched', 'walked'))]
     _run(run, steps + rig.end(t1 + 1.4))
     return 'running'
 
 
 def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
-    """The third pawn (the host) is placed next to the latched driller, facing it, and attacks: the hit detaches the driller (hitstun wins, 7.4),
+    """The third pawn (the host) is placed beside the latched driller, outside the bore tip (the tip hits everything in reach, the hitter included), facing it, and attacks: the hit detaches the driller (hitstun wins, 7.4),
     the latch ends on every world and the driller's damage rises on the authority. Hits by another player are out-of-band for the driller's
     client: reconciles are budgeted, not judged"""
     rig = _DrillRig('drill_hit_while_latched_detaches', client, victim, judge_reconciles=False)
@@ -712,7 +722,7 @@ def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
     def place_hitter():
         d = actor(0, rig.key).get_actor_location()
         yaw = math.radians(g.snap(g.worlds()[0])[hkey]['yaw'])
-        spot = unreal.Vector(d.x - 70.0 * math.cos(yaw), d.y - 70.0 * math.sin(yaw), d.z)
+        spot = unreal.Vector(d.x - 105.0 * math.cos(yaw), d.y - 105.0 * math.sin(yaw), d.z)
         hp['before'] = g.damage_of(0, rig.key)
         return 'hitter placed', g.comps(g.worlds()[0])[hkey].server_teleport_exact(spot)
 
@@ -721,7 +731,7 @@ def scenario_drill_hit_while_latched_detaches(client=1, victim=2, hitter=0):
         return 'driller hp', hp
 
     steps = rig.steps + [
-        (t_hit, place_hitter), (t_hit + 0.03, lambda: ('attack', g.combat_tap(hitter, g.button_mask('Attack')))),
+        (t_hit, place_hitter), (t_hit + 0.03, lambda: ('attack', g.combat_hold(hitter, g.button_mask('Attack')))), (t_hit + 0.15, lambda: ('attack off', g.combat_clear(hitter))),
         (t_hit + 0.7, rig.mark('after')), (t_hit + 0.7, driller_hp),
         (t_hit + 0.75, rig.check_latched(t_hit + 0.1)),
         (t_hit + 0.75, run.at('the hit ended the latch on every world', lambda: (_none_latched(rig.seen['after']), rig.seen['after']))),
