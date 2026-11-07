@@ -1,27 +1,49 @@
-// Minion runtime (authority batch, M8 G3).
+// Minion runtime (authority batch, M8 G3; spike 3 scenario, course and robustness counters G4).
 
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Math/RandomStream.h"
 #include "Store/GSTN_MinionStore.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "GSTN_MinionBench.generated.h"
 
+class AActor;
+class UGSTN_MinionCombatSubsystem;
 class UGSTN_MinionDefinition;
+class UPrimitiveComponent;
 
 /** What the bench minions do (gstn.Minion.Bench.Spawn <N> <Scenario>) */
 enum class EGSTN_MinionBenchScenario : uint8
 {
 	/** Zero intent: measures the batch floor (schedule, LOD, publish) */
 	Idle,
-	/** Every world tick the bench writes an intent toward the nearest player, standing in for the AI (G8) */
-	Chase
+	/**
+	 * Every world tick the bench writes an intent toward the nearest player (the bench centre when there is none), standing in for
+	 * the AI (G8). Minions stop at half the ring radius, so a crowd does not jam into a "stuck" pile at the target
+	 */
+	Chase,
+	/**
+	 * Chase plus random knockback (spike 3): every gstn.Minion.Bench.LaunchEveryFrames fixed frames a seeded random subset of the
+	 * minions gets a launch of up to gstn.Minion.Bench.LaunchSpeed in an upward-biased direction, or a push back
+	 */
+	Massacre
 };
 
 /**
  * The bench of M8 (spike tooling, combat-m8-minions.md 4 "Debug"): spawns N minions of one type in a ring and drives them with a
  * trivial brain, so `stat GSTNMinion` and gstn.Minion.Bench.Report measure the batch alone. Console commands:
- *   gstn.Minion.Bench.Spawn <N> <Idle|Chase>   gstn.Minion.Bench.Clear   gstn.Minion.Bench.Report
+ *   gstn.Minion.Bench.Spawn <N> <Idle|Chase|Massacre>   gstn.Minion.Bench.Clear   gstn.Minion.Bench.Report
+ *   gstn.Minion.Bench.Course <1|0>   builds (or removes) the hostile test course of spike 3 around the bench centre, in code:
+ *   engine cube actors (no /Game asset) for a floor, stairs (30 cm steps), a 40 degree ramp onto a 300 cm ledge, a thin wall
+ *   (10 cm) and a 90 degree corner.
+ *
+ * Robustness counters (spike 3, read from the subsystem's end-of-movement hook, so per fixed frame): fell out of the world
+ * (KillZ, plus 10 m below the course floor when a course exists), stuck = trapped (the capsule overlaps blocking geometry after
+ * its step, or moves less than 1 cm over 125 frames while airborne or knocked back), blocked (the same while walking with intent:
+ * a wall in a straight-line chaser's way, expected without navigation), tunnelled (the centre's segment of one frame crosses a
+ * course box, which a correct sweep never allows). Spawns are dropped onto the geometry under the ring, never inside it.
+ * Launches are drawn in the same hook, in slot order, from a seeded stream held here: the same run launches the same minions.
  * The type is the asset at gstn.Minion.Bench.Definition, or a transient definition built in code (no content needed).
  *
  * The bench writes intents from the world tick, outside the fixed tick, exactly like the brain will: latest wins, and the batch
@@ -45,17 +67,58 @@ public:
 	/** Despawns every bench minion */
 	void Clear();
 
-	/** Logs `MinionBench alive=.. frames=.. avgBatchUs=.. maxBatchUs=..` (LogGSTNMinion) */
+	/**
+	 * Logs `MinionBench alive=.. frames=.. avgBatchUs=.. maxBatchUs=.. moveUsPerMinionFrame=.. fell=.. stuck=.. blocked=.. tunnelled=..`
+	 * (LogGSTNMinion)
+	 */
 	void Report() const;
+
+	/** Builds the test course around the bench centre (true) or removes it (false) */
+	void SetCourse(bool bEnable);
+
+	virtual void Deinitialize() override;
 
 private:
 	UGSTN_MinionDefinition* ResolveDefinition();
+	/** Nearest player or the origin, once; the course and the ring share it */
+	FVector ResolveCenter();
+	void AddCourseBox(const FVector& Offset, const FVector& Size, const FRotator& Rotation);
+	void BindMovementHook(UGSTN_MinionCombatSubsystem* Minions);
+	void HandleMovementStepped(int32 Frame, TConstArrayView<int32> Slots, TConstArrayView<FVector3f> PreviousPositionBySlot);
+	void ResetCounters(int32 Capacity);
+	void CountTrapped(int32 Slot, const FVector& Feet, const TCHAR* ModeName, const TCHAR* Reason, int32 Frame);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGSTN_MinionDefinition> TransientDefinition;
 
 	TArray<FGSTN_MinionHandle> Handles;
 	EGSTN_MinionBenchScenario Scenario = EGSTN_MinionBenchScenario::Idle;
+
+	FVector Center = FVector::ZeroVector;
+	bool bCenterResolved = false;
+	double RingRadius = 600.0;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<AActor>> CourseActors;
+	TArray<TWeakObjectPtr<UPrimitiveComponent>> CourseBoxes;
+
+	TWeakObjectPtr<UGSTN_MinionCombatSubsystem> HookedMinions;
+	FDelegateHandle MovementHookHandle;
+
+	/** Massacre launches (seeded from gstn.Minion.Bench.Seed at each spawn) */
+	FRandomStream LaunchStream;
+
+	// Robustness counters and their per-slot state (store capacity entries)
+	int32 FellBelowCourse = 0;
+	/** Trapped minions (reported as stuck=): in penetration after a step, or not moving for 2 s while airborne or knocked back */
+	int32 Stuck = 0;
+	/** Walking minions held by a wall for 2 s with intent (reported as blocked=; expected without navigation) */
+	int32 Blocked = 0;
+	int32 Tunnelled = 0;
+	TArray<uint16> SeenGeneration;
+	TArray<FVector3f> StuckAnchor;
+	TArray<int32> StuckFrames;
+	TArray<uint8> SlotFlags;
 
 	/** Seconds since the last bench spawn, for gstn.Minion.Bench.AutoReportSeconds; negative once reported (or before any spawn) */
 	float BenchSeconds = -1.f;

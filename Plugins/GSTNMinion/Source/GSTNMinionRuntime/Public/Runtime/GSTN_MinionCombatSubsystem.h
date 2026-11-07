@@ -6,6 +6,8 @@
 #include "Containers/BitArray.h"
 #include "Data/GSTN_MinionDefinition.h"
 #include "LOD/GSTN_MinionLOD.h"
+#include "Movement/GSTN_MinionMovement_Lightweight.h"
+#include "Movement/GSTN_MinionMovementBackend.h"
 #include "Spawn/GSTN_MinionSpawner.h"
 #include "Store/GSTN_MinionStore.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -81,6 +83,11 @@ struct FGSTN_MinionBenchTotals
 	int32 Batches = 0;
 	double TotalBatchSeconds = 0.0;
 	double MaxBatchSeconds = 0.0;
+	/** Stage 4 only, and the minion-frames it stepped: their ratio is the spike 3 cost per minion-frame (cB) */
+	double MovementSeconds = 0.0;
+	int64 MovementMinionFrames = 0;
+	/** Minions freed for falling below the world's KillZ */
+	int32 FellOut = 0;
 };
 
 /**
@@ -151,6 +158,28 @@ public:
 	 * never re-simulates, and the hook only reports it for the clients' managers; the guard keeps a misconfigured world harmless.
 	 */
 	void TickBatch(int32 Frame, bool bResimulating = false);
+
+	/**
+	 * Gives a live minion a launch velocity, consumed by its next movement step (stage 4). bPushBack slides it on the ground
+	 * (decaying, stops at walls and ledges, never airborne); otherwise it flies under gravity until it lands. Sets the action state
+	 * to PushedBack or Launched (a dying minion keeps its state); the backend returns it to Idle when the knockback ends.
+	 * G5's drain calls this for the reaction tiers; scripts and the bench may call it outside a stage. False for a stale handle
+	 */
+	bool LaunchMinion(const FGSTN_MinionHandle& Handle, const FVector& Velocity, bool bPushBack);
+
+	/** Gravity acceleration at a position for every minion (a gravity field). Unset (empty function) = the world's gravity Z */
+	void SetGravitySource(TFunction<FVector(const FVector&)> InGravityAt) { GravitySource = MoveTemp(InGravityAt); }
+
+	FGSTN_MinionMovementSettings& GetMovementSettings() { return MovementSettings; }
+	const FGSTN_MinionMovementColumns& GetMovementColumns() const { return MoveColumns; }
+
+	/**
+	 * C++ hook at the end of stage 4: the frame, the slots it moved (ascending) and the store positions before the stage, by slot
+	 * (only filled while someone is bound). Called from inside the batch: a listener may call LaunchMinion (applied next frame)
+	 * but must not spawn, despawn or write intents. The bench's robustness counters use it.
+	 */
+	DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnMinionMovementStepped, int32 /*Frame*/, TConstArrayView<int32> /*Slots*/, TConstArrayView<FVector3f> /*PreviousPositionBySlot*/);
+	FOnMinionMovementStepped OnMovementStepped;
 
 	/** Debug and test: every slot is put in this tier, no hysteresis (INDEX_NONE restores the distance rule) */
 	void SetForcedLODTier(int32 Tier) { ForcedLODTier = Tier; }
@@ -292,6 +321,17 @@ private:
 	TArray<int32> NextMoveFrame;
 	/** Pipeline id of the last attacker (KO credit; the 4-entry ring of the spec comes with G5) */
 	TArray<int32> LastAttackerId;
+	/** Velocity, ground flag, pending launch and knockback mode of the movement backend */
+	FGSTN_MinionMovementColumns MoveColumns;
+
+	// Movement (stage 4). Backend A (Mover, non-predicted) is not built: G4, spike 3 decision B
+	FGSTN_MinionMovement_Lightweight LightweightMovement;
+	FGSTN_MinionMovementSettings MovementSettings;
+	TFunction<FVector(const FVector&)> GravitySource;
+	FGSTN_MinionMoveContext MoveContext;
+	TArray<int32> MoveSlots;
+	TArray<FVector3f> PreviousPositions;
+	bool bWarnedMoverBackend = false;
 
 	TArray<FQueuedSpawn> SpawnQueue;
 	TArray<FPendingHit> PendingHits;

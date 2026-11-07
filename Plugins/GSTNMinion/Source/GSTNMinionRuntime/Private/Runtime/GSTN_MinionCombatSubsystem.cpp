@@ -4,6 +4,7 @@
 
 #include "Algo/StableSort.h"
 #include "Engine/World.h"
+#include "GameFramework/WorldSettings.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GSTNMinionCoreModule.h"
@@ -110,6 +111,7 @@ void UGSTN_MinionCombatSubsystem::Activate()
 	TimelinePrevFrame.Init(INDEX_NONE, Capacity);
 	NextMoveFrame.Init(0, Capacity * GSTNMinion::MaxMoves);
 	LastAttackerId.Init(INDEX_NONE, Capacity);
+	MoveColumns.Reset(Capacity);
 	SlotActors.Init(nullptr, Capacity);
 	Scheduled.Reserve(Capacity);
 
@@ -271,6 +273,23 @@ bool UGSTN_MinionCombatSubsystem::RequestCommand(const FGSTN_MinionHandle& Handl
 	FGSTN_MinionIntent& Stored = Store.Intent[Handle.Index];
 	Stored.Command = Command;
 	Stored.StampFrame = FMath::Max(LastBatchFrame, 0);
+	return true;
+}
+
+bool UGSTN_MinionCombatSubsystem::LaunchMinion(const FGSTN_MinionHandle& Handle, const FVector& Velocity, bool bPushBack)
+{
+	if (!Store.IsValid(Handle) || PendingActivation[Handle.Index])
+	{
+		return false;
+	}
+	const int32 Slot = Handle.Index;
+	MoveColumns.PendingLaunch[Slot] = FVector3f(Velocity);
+	MoveColumns.KnockbackMode[Slot] = static_cast<uint8>(bPushBack ? EGSTN_MinionKnockbackMode::PushedBack : EGSTN_MinionKnockbackMode::Launched);
+	if (!IsDyingOrDead(Store.ActionState[Slot]))
+	{
+		Store.ActionState[Slot] = static_cast<uint8>(bPushBack ? EGSTN_MinionActionState::PushedBack : EGSTN_MinionActionState::Launched);
+	}
+	// G5: the drain also cancels the current move for staggered hits; a script launch leaves a running timeline alone
 	return true;
 }
 
@@ -456,6 +475,7 @@ void UGSTN_MinionCombatSubsystem::StageSpawnDrain(int32 Frame)
 			NextMoveFrame[Slot * GSTNMinion::MaxMoves + Move] = 0;
 		}
 		LastAttackerId[Slot] = INDEX_NONE;
+		MoveColumns.ResetSlot(Slot);
 
 		AcquireActor(Slot, Queued.Transform);
 		if (Queued.Params.bPlaySpawnTimeline && ResolvedTypes[Queued.TypeIndex].SpawnTimeline)
@@ -783,9 +803,12 @@ void UGSTN_MinionCombatSubsystem::StageTimelineAdvance(int32 Frame)
 
 void UGSTN_MinionCombatSubsystem::StageMovement(int32 Frame)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_MinionMovement);
 	SCOPE_CYCLE_COUNTER(STAT_GSTN_MinionMovement);
-	// G4: the movement backend (lightweight or Mover) replaces this placeholder: gravity, collision, ground snap, knockback
-	// integration, the timeline's movement tracks and minion-minion separation. Until then: a kinematic step on flat ground
+	// Wall clock for the bench's per-minion-frame mean only; nothing below reads it
+	const double StartSeconds = FPlatformTime::Seconds();
+
+	MoveSlots.Reset();
 	for (const int32 Slot : Scheduled)
 	{
 		if (!Store.IsSlotAlive(Slot))
@@ -794,8 +817,8 @@ void UGSTN_MinionCombatSubsystem::StageMovement(int32 Frame)
 		}
 		TraceStage(EStage::Movement, Slot);
 
-		const bool bDormant = Store.LODTier[Slot] == static_cast<uint8>(EGSTN_MinionLODTier::Dormant);
-		if (bDormant || !IsLocomotionState(Store.ActionState[Slot]) || Store.MoveId[Slot] != 0)
+		// Dormant minions are frozen where they are (spec 7): no gravity, no collision
+		if (Store.LODTier[Slot] == static_cast<uint8>(EGSTN_MinionLODTier::Dormant))
 		{
 			Store.Speed[Slot] = 0.f;
 			continue;
@@ -805,50 +828,60 @@ void UGSTN_MinionCombatSubsystem::StageMovement(int32 Frame)
 		{
 			continue;
 		}
-		const FGSTN_MinionStats& Stats = Definition->Stats;
-		// A slot stepped every N frames integrates N frames at once (dt x N, spec 7)
-		const float DeltaSeconds = FixedStepSeconds * static_cast<float>(FMath::Max(1, Frame - LastRunFrame[Slot]));
+		if (Definition->MovementBackend == EGSTN_MinionMovementBackend::Mover && !bWarnedMoverBackend)
+		{
+			// G4: backend A (Mover, non-predicted) is not built (spike 3 decision B); the type runs the lightweight backend
+			bWarnedMoverBackend = true;
+			UE_LOG(LogGSTNMinion, Warning, TEXT("Minion type %s asks for the Mover backend, which is not built: using the lightweight one"), *GetNameSafe(Definition));
+		}
+		MoveSlots.Add(Slot);
+	}
 
-		const FGSTN_MinionIntent& Intent = Store.Intent[Slot];
-		const bool bStale = Intent.IsStale(Frame);
-		FVector2D Direction = bStale ? FVector2D::ZeroVector : Intent.MoveDir;
-		if (Direction.SizeSquared() > 1.0)
-		{
-			Direction.Normalize();
-		}
-		const float MaxSpeed = Stats.RunSpeed > 0.f ? Stats.RunSpeed : TNumericLimits<float>::Max();
-		const float WantedSpeed = bStale ? 0.f : FMath::Clamp(Intent.DesiredSpeed, 0.f, MaxSpeed);
-		const FVector2D Velocity = Direction * WantedSpeed;
-		const float Speed = static_cast<float>(Velocity.Size());
+	UWorld* World = GetWorld();
+	const bool bObserved = OnMovementStepped.IsBound();
+	if (bObserved)
+	{
+		PreviousPositions = Store.Position;
+	}
 
-		// Facing: the requested yaw, else the move direction; turned at the type's rate
-		float Yaw = Store.YawDegrees[Slot];
-		bool bHasTarget = false;
-		float TargetYaw = Yaw;
-		if (!bStale && Intent.bFaceRequested)
+	if (World && !MoveSlots.IsEmpty())
+	{
+		MoveContext.World = World;
+		MoveContext.Store = &Store;
+		MoveContext.Columns = &MoveColumns;
+		MoveContext.Definitions = Definitions;
+		MoveContext.LastRunFrame = LastRunFrame;
+		MoveContext.Frame = Frame;
+		MoveContext.FixedStepSeconds = FixedStepSeconds;
+		MoveContext.GravityAt = GravitySource;
+		MoveContext.Settings = MovementSettings;
+		MoveContext.ObjectQuery = FCollisionObjectQueryParams();
+		for (const TEnumAsByte<ECollisionChannel> Channel : MovementSettings.BlockingObjectTypes)
 		{
-			TargetYaw = Intent.DesiredYaw;
-			bHasTarget = true;
+			MoveContext.ObjectQuery.AddObjectTypesToQuery(Channel);
 		}
-		else if (Speed > 1.f)
-		{
-			TargetYaw = FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(Velocity.Y, Velocity.X)));
-			bHasTarget = true;
-		}
-		if (bHasTarget)
-		{
-			const float MaxTurn = Stats.TurnRateDegPerSec * DeltaSeconds;
-			const float Delta = FMath::FindDeltaAngleDegrees(Yaw, TargetYaw);
-			Yaw = static_cast<float>(FRotator::NormalizeAxis(Yaw + FMath::Clamp(Delta, -MaxTurn, MaxTurn)));
-		}
-		Store.YawDegrees[Slot] = Yaw;
+		MoveContext.QueryParams = FCollisionQueryParams(SCENE_QUERY_STAT(GSTN_MinionMove), false);
+		const AWorldSettings* WorldSettings = World->GetWorldSettings();
+		MoveContext.KillZ = WorldSettings ? WorldSettings->KillZ : -UE_BIG_NUMBER;
+		MoveContext.FellOut.Reset();
+		MoveContext.MinionFrames = 0;
 
-		FVector3f& Position = Store.Position[Slot];
-		Position.X += static_cast<float>(Velocity.X) * DeltaSeconds;
-		Position.Y += static_cast<float>(Velocity.Y) * DeltaSeconds;
-		Store.Speed[Slot] = Speed;
-		Store.ActionState[Slot] = static_cast<uint8>(Speed < 1.f ? EGSTN_MinionActionState::Idle
-			: (Speed <= Stats.WalkSpeed + 1.f ? EGSTN_MinionActionState::Walk : EGSTN_MinionActionState::Move));
+		LightweightMovement.StepBatch(MoveContext, MoveSlots);
+
+		for (const int32 Slot : MoveContext.FellOut)
+		{
+			// Fell out of the world: a robustness failure (spike 3 counts it), freed with the dead after the events
+			++BenchTotals.FellOut;
+			DespawnList.AddUnique(Slot);
+			UE_LOG(LogGSTNMinion, Verbose, TEXT("Minion slot %d fell below KillZ at frame %d"), Slot, Frame);
+		}
+		BenchTotals.MovementMinionFrames += MoveContext.MinionFrames;
+	}
+	BenchTotals.MovementSeconds += FPlatformTime::Seconds() - StartSeconds;
+
+	if (bObserved)
+	{
+		OnMovementStepped.Broadcast(Frame, MoveSlots, PreviousPositions);
 	}
 }
 
@@ -998,6 +1031,7 @@ void UGSTN_MinionCombatSubsystem::FreeSlot(int32 Slot)
 	Store.Free(Handle);
 	TimelinePrevFrame[Slot] = INDEX_NONE;
 	LastRunFrame[Slot] = INDEX_NONE;
+	MoveColumns.ResetSlot(Slot);
 	++LastBatch.Despawned;
 	// G6: release the pack item. G9: publish Event.MinionDespawned
 }

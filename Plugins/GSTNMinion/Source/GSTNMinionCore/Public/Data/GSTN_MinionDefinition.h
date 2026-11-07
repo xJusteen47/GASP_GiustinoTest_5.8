@@ -30,7 +30,10 @@ enum class EGSTN_MinionMovementBackend : uint8
 {
 	/** The batch's own lightweight movement (steering, ground snap, knockback integration) */
 	Lightweight = 0,
-	/** A Mover component on the minion (optional module, only for types that need it) */
+	/**
+	 * A Mover component on the minion (optional module, only for types that need it). G4: not built, spike 3 decision B; such
+	 * types run the lightweight backend (the subsystem warns once)
+	 */
 	Mover
 };
 
@@ -75,8 +78,9 @@ struct GSTNMINIONCORE_API FGSTN_MinionStats
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Movement", meta = (ClampMin = "0.0"))
 	float GravityScale = 1.f;
 
+	/** Highest obstacle the minion steps onto while walking, and how far down the ground snap reaches */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Movement", meta = (ClampMin = "0.0", ForceUnits = "cm"))
-	float StepHeight = 35.f;
+	float StepHeight = 45.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Capsule", meta = (ClampMin = "1.0", ForceUnits = "cm"))
 	float CapsuleRadius = 34.f;
