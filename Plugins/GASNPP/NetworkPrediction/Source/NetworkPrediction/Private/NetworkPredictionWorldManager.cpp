@@ -337,7 +337,10 @@ void UNetworkPredictionWorldManager::ReconcileSimulationsPostNetworkUpdate_Inter
 				{
 					Ptr->StepRollback(Step, ServiceStep);
 				}
-				
+
+				// GAS-NPP fork (M8 G1): the re-simulated frame is complete
+				OnPostFixedTick.Broadcast(Step.Frame, ServiceStep.EndTotalSimulationTime, true);
+
 				bFirstStep = false;
 			}
 			FixedTickState.PendingFrame = EndFrame;
@@ -506,6 +509,9 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 					RegisteredComp->CaptureStateAndAddToHistory(ServiceStep.EndTotalSimulationTime);
 				}
 			}
+
+			// GAS-NPP fork (M8 G1): every model ticked this frame and the lag-comp history holds it
+			OnPostFixedTick.Broadcast(Step.Frame, ServiceStep.EndTotalSimulationTime, false);
 		}
 
 		// Once per engine frame, after all the fixed ticks it ran

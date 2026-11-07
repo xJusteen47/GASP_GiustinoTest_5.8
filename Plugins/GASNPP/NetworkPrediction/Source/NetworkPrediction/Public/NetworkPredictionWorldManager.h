@@ -176,6 +176,16 @@ private:
 	FOnHandleDeferredServiceConfig DeferredServiceConfigDelegate;
 	bool bLockServices = false; // Services are locked and we can't
 
+public:
+	// GAS-NPP fork (M8 G1): once per fixed sim frame, after every model ticked it and the lag-comp history captured it; also for each
+	// re-simulated frame of a rollback. ServerFrame = the Step.Frame the models saw; EndTimeMS = ServerFrame * FixedStepMS = the history
+	// stamp RewindActors reads (GetCurrentLagCompensationTimeMS is one frame behind it at this point). Inert when unbound. Services are
+	// locked: do not register instances from a listener. bResimulating is information, like Mover's flag: simulation must not branch on it.
+	DECLARE_MULTICAST_DELEGATE_ThreeParams(FNpOnPostFixedTick, int32 /*ServerFrame*/, int32 /*EndTimeMS*/, bool /*bResimulating*/);
+	FNpOnPostFixedTick OnPostFixedTick;
+
+private:
+
 	// Spike S-FP: resim cost accumulated by np.Spike.LogResimCost. Per manager (= per client world) so that two PIE clients
 	// in one process are not mixed.
 	struct FSpikeResimStats
