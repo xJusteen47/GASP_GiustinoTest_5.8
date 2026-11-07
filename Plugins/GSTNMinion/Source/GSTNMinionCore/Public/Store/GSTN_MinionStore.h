@@ -36,10 +36,17 @@ enum class EGSTN_MinionActionState : uint8
  * Names a live minion. The index is the store slot; the generation tells a recycled slot from the minion that used to be there,
  * so a hit stamped for a dead minion, a stale token or an old AI target is dropped on delivery instead of landing on the new
  * occupant. A live slot's generation is never 0, so the default value (generation 0) is the null handle and never resolves.
+ * Reflected (G3) as an opaque Blueprint value: Blueprint passes it back to the spawner and the component, never reads its fields.
  */
+USTRUCT(BlueprintType)
 struct GSTNMINIONCORE_API FGSTN_MinionHandle
 {
+	GENERATED_BODY()
+
+	UPROPERTY()
 	uint16 Index = 0;
+
+	UPROPERTY()
 	uint16 Generation = 0;
 
 	FGSTN_MinionHandle() = default;

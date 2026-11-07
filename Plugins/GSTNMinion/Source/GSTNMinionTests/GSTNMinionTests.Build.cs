@@ -1,7 +1,7 @@
 using UnrealBuildTool;
 
-// Minion tests that need a world and harness helpers (GSTNMinion.Runtime.*, M8 G3 and later). Empty shell in G2: the pure
-// GSTNMinion.Core.* tests live in GSTNMinionCore/Private/Tests.
+// Minion tests that need a world (GSTNMinion.Runtime.*, M8 G3 and later). The pure GSTNMinion.Core.* tests live in
+// GSTNMinionCore/Private/Tests.
 public class GSTNMinionTests : ModuleRules
 {
 	public GSTNMinionTests(ReadOnlyTargetRules Target) : base(Target)
@@ -13,8 +13,11 @@ public class GSTNMinionTests : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"GameplayTags",
 			"GSTNMinionCore",
-			"GSTNMinionRuntime"
+			"GSTNMinionRuntime",
+			"GSTNCombatCore",
+			"GSTNCombatNP"
 		});
 	}
 }

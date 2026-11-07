@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Minion",
-	"Description": "Minions for the GSTN combat, up to 40+ awake enemies on one host (M8). G2 content: GSTNMinionCore, the pure part (the minion store with generation handles, the intent, LOD tiers, the phase scheduler, attack tokens, the net item codec, the definition asset and its validation, native tags). The Runtime, Editor and Tests modules are empty shells until later checkpoints. Enabling it changes nothing until a level spawns minions.",
+	"Description": "Minions for the GSTN combat, up to 40+ awake enemies on one host (M8). G2 content: GSTNMinionCore, the pure part (the minion store with generation handles, the intent, LOD tiers, the phase scheduler, attack tokens, the net item codec, the definition asset and its validation, native tags). G3 adds GSTNMinionRuntime: the authority batch subsystem (driven by the NP post-fixed-tick hook), pooled minion actors, the spawner and the bench (gstn.Minion.Bench.*, stat GSTNMinion), with world tests in GSTNMinionTests. Enabling it changes nothing until a level spawns minions.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -48,6 +48,10 @@
 		},
 		{
 			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
+			"Name": "NetworkPrediction",
 			"Enabled": true
 		}
 	]

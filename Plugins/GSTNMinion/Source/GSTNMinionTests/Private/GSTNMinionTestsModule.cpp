@@ -1,4 +1,4 @@
-// Minion Tests shell (M8 G2): nothing to register yet.
+// Minion world tests (GSTNMinion.Runtime.*, M8 G3): the tests register themselves.
 
 #include "Modules/ModuleManager.h"
 
