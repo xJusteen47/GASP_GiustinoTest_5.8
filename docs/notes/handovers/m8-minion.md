@@ -86,3 +86,26 @@
   --allow-uproject` 0 problems (without the flag: the old GSTNPiggyback .uproject note). Harness not needed (no NP or fighter code).
 - Not done: G3 (next, L size). Docs (combat.md, plugin index row for GSTNMinion) not updated.
 - Cost: G2 ~ $5-7 (Sonnet writer ~230k tokens, 3 builds). Thread total G1+G2 ~ $16-19.
+
+## G3 (laptop, 2026-11-07): DONE, gate green (harness suites not run)
+
+- Branch `claude/project-thread-pk0j51` from qeaif9 (bf8562c); commit c1bf627. Code by an Opus writer subagent from
+  `Saved/M8G3/writer-brief.md`; its report (files, choices, every stub) is `Saved/M8G3/writer-report.md` (not versioned).
+- Runtime: `UGSTN_MinionCombatSubsystem` (game/PIE worlds, activates in OnWorldBeginPlay when NetMode != Client; provider + OnPostFixedTick
+  bound; skips resim and repeated frames), stages 0 spawn queue (`gstn.Minion.SpawnsPerFrame` 4) / 1 LOD / 2 drain stub (flat damage only)
+  / 3 timeline with skip-once events / 4 flat kinematic placeholder / 5 publish (actor transform T0/T1, stats). `AGSTN_MinionActor` pooled,
+  `UGSTN_MinionCombatComponent` (SetIntent, RequestCommand, GetHealth, OnMinionHit/Died/LODChanged, sent after stage 5),
+  `UGSTN_MinionSpawner` (slot claimed at once, activated by the queue), bench subsystem + `gstn.Minion.Bench.{Spawn,Clear,Report}`,
+  `AutoReportSeconds`/`AutoQuit` cvars for timed headless runs, `stat GSTNMinion`, Insights scope `GSTN_MinionBatch`.
+- Choices to review: intent/handle are BlueprintType (MoveDir now FVector2D); reaction MoveIds 62 (spawn) / 63 (death) for G6; hits wake a
+  slot (tier forced to Combat); Dying minions left out of the snapshot; test hooks are not under WITH_DEV_AUTOMATION_TESTS (UHT accepted);
+  `GSTNMinion.uplugin` now lists NetworkPrediction.
+- Stubs: G5 rules pipeline, tokens, attack queries, hitstop; G4 movement backend; G5/G6 history ring and packs; G9 spawn events.
+- Gate: build on OK; headless GSTN 1326/0, 0 ensures (1322 + 4 `GSTNMinion.Runtime.*`); plugin off build OK, 1307/0 (= G1 baseline);
+  grep gate clean. Bench headless (`-game -nullrhi`, DefaultLevel, `Saved/M8G3/bench.ps1`): N=40 Idle 3750 frames avg 19.3 us max 566 us;
+  Chase avg 13.2 us max 260 us; 0 ensures. Chase movement not checked by eye (nullrhi).
+- Not done: `Tools/GAS/setup_minion_assets.py` written but NOT run (needs the editor; asset property names untested), so no
+  DA_Minion_Grunt/Heavy or L_MinionYard yet. Harness SUITE_* not run: G3 touches no fighter or NP code, the provider is empty with no minions.
+  Docs (combat.md, plugin index row) not updated.
+- Pitfall: `-ExecCmds` separates commands with commas, not semicolons (only the first ran).
+- Cost: G3 ~ $10-13 (Opus writer ~245k tokens, my context ~75k; 4 builds, 2 headless runs, 2 bench runs, ~1 h machine).
