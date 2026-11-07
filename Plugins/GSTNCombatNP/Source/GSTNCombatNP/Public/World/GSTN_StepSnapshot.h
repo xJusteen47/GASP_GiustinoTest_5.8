@@ -213,6 +213,12 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 	/** The NP proxy id (or the id a provider gives its entities, in its own range) */
 	int32 EntityId = INDEX_NONE;
 
+	/**
+	 * The generation of a provider's slot this entry was read from (0 for a registered entity). A hit posted against this snapshot carries it,
+	 * so the provider drops a hit stamped for a slot that was freed and reused since (FindEntity, M8 4c)
+	 */
+	uint16 Generation = 0;
+
 	FGenericTeamId Team;
 
 	/** Where the entity was at the end of the previous frame, from the Mover sim state tracker (the actor's own transform for a proxy) */
@@ -343,6 +349,33 @@ public:
 
 	/** Appends the provider's entities for the snapshot of Frame. The caller sorts the whole snapshot by entity id afterwards */
 	virtual void AppendSnapshotEntities(int32 Frame, TArray<FGSTN_SnapshotEntry>& OutEntries) = 0;
+
+	/**
+	 * The entity kind (GSTNEntityKinds) whose pipeline id range this provider owns: FindEntity hands it every id of that range. None (the
+	 * default) owns no range; such a provider's entities can be hit but take no inbox entries
+	 */
+	virtual uint8 GetEntityKind() const { return GSTNEntityKinds::None; }
+
+	/**
+	 * Delivers an inbox entry to the provider's entity EntityId. Generation is the one of the snapshot entry the sender acted on: a provider
+	 * whose slot holds another generation now must drop the entry and return false. False by default (takes nothing)
+	 */
+	virtual bool PostToEntityInbox(int32 EntityId, uint16 Generation, const FGSTN_InboxEntry& Entry) { return false; }
+};
+
+/** What UGSTN_CombatWorldSubsystem::FindEntity found for a pipeline id: a registered entity's source or the provider that owns the id's range */
+struct FGSTN_FoundEntity
+{
+	/** GSTNEntityKinds of the id; None when nothing was found */
+	uint8 Kind = GSTNEntityKinds::None;
+
+	/** Set for a registered entity (a combat component, a test stand-in) whose owner is alive */
+	IGSTN_SnapshotSource* Source = nullptr;
+
+	/** Set for an id in a provider's range (the provider decides whether the slot is live) */
+	IGSTN_HittableProvider* Provider = nullptr;
+
+	bool IsFound() const { return Source != nullptr || Provider != nullptr; }
 };
 
 /** What a snapshot contributor reads (spec seam D9). Every member is a value of the end of the previous frame, or constant data */

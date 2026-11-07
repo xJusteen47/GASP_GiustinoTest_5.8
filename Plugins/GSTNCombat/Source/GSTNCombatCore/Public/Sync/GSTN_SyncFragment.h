@@ -63,8 +63,7 @@ namespace GSTNInboxKinds
 
 /**
  * Entity kind ids of FGSTN_EntityRef: what sort of thing a reference points at. An id is as fixed as a feature id. 0 is the
- * fighter, the only kind that exists today; the names after it are reserved for the plugins that will add them and are not used by
- * any code yet.
+ * fighter; Minion has its pipeline id range below (the store that fills it is GSTNMinion's); Object is reserved.
  */
 namespace GSTNEntityKinds
 {
@@ -82,6 +81,27 @@ namespace GSTNEntityKinds
 
 	/** The kind of the null reference (FGSTN_EntityRef::Null): points at nothing */
 	constexpr uint8 None = 255;
+
+	/**
+	 * Inside the hit pipeline (snapshot, inbox, HitTargets ring) an entity is a plain int32 id. A fighter's is its NP proxy id, which
+	 * never reaches this bit; a minion's is MinionEntityBase | its store slot index (M8 4c). The pipeline treats both as opaque ids, and
+	 * UGSTN_CombatWorldSubsystem::FindEntity dispatches on the bit to the registry or to the provider of the minion kind.
+	 */
+	constexpr int32 MinionEntityBase = 0x40000000;
+
+	/** The id range a minion slot index may take: the index of an FGSTN_EntityRef (16 bits) */
+	constexpr int32 MaxMinionIndex = 0xFFFF;
+
+	constexpr bool IsMinionEntityId(int32 EntityId) { return EntityId >= 0 && (EntityId & MinionEntityBase) != 0; }
+
+	/** The pipeline id of the minion in store slot Index */
+	constexpr int32 MakeMinionEntityId(uint16 Index) { return MinionEntityBase | static_cast<int32>(Index); }
+
+	/** The store slot index of a minion pipeline id (call only with IsMinionEntityId true) */
+	constexpr uint16 MinionIndexOf(int32 EntityId) { return static_cast<uint16>(EntityId & MaxMinionIndex); }
+
+	/** The kind a pipeline id belongs to: Minion with the bit, Fighter otherwise, None for a negative id */
+	constexpr uint8 KindOfEntityId(int32 EntityId) { return EntityId < 0 ? None : (IsMinionEntityId(EntityId) ? Minion : Fighter); }
 }
 
 /**

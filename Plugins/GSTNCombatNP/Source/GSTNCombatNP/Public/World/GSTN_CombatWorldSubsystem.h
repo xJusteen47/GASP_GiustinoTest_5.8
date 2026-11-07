@@ -98,8 +98,22 @@ public:
 	/** The next EnsureSnapshot builds again. Called by every combat component's RestoreFrame, and by anything that changes an entity out of the tick */
 	void InvalidateSnapshot();
 
-	/** Hands a message of any inbox kind to the entity's inbox through its source. False for an unknown id, a source that is gone or one that takes none or does not tick here */
+	/**
+	 * Who answers for a pipeline id: dispatches on the id's kind bit (GSTNEntityKinds::KindOfEntityId). A fighter id is looked up in the registry
+	 * (found only while its owner lives); a minion id goes to the first provider, in provider id order, whose GetEntityKind is Minion. Inert
+	 * without such a provider: a minion id is then not found
+	 */
+	FGSTN_FoundEntity FindEntity(int32 EntityId) const;
+
+	/**
+	 * Hands a message of any inbox kind to the entity's inbox through its source, or its provider. False for an unknown id, a source that is
+	 * gone or one that takes none or does not tick here. A provider's entity gets the generation of its entry in the held snapshot (0 when it
+	 * has none), the one the sender hit against
+	 */
 	bool PostToInbox(int32 EntityId, const FGSTN_InboxEntry& Entry);
+
+	/** PostToInbox with the generation the sender read (a rewound view's entry): the provider drops it when its slot holds another one now */
+	bool PostToInbox(int32 EntityId, uint16 Generation, const FGSTN_InboxEntry& Entry);
 
 	/** A hit: PostToInbox of the entry wrapped as kind Hit */
 	bool PostHit(int32 EntityId, const FGSTN_HitInboxEntry& Entry);
