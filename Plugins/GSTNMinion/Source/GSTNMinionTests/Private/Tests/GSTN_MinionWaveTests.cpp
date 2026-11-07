@@ -27,7 +27,7 @@
 
 #define GSTN_MINION_WAVE_TEST_FLAGS (EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 
-namespace
+namespace GSTNMinionWaveTestHelpers
 {
 	/** Keeps a console variable at a value while a test runs */
 	struct FScopedIntCVar
@@ -193,6 +193,8 @@ namespace
 		uint16 SlotGenerationAfter = 0;
 	};
 }
+// Named, not anonymous: unity builds merge this file with the hit tests, which have helpers of the same names
+using namespace GSTNMinionWaveTestHelpers;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionCorpseTest, "GSTNMinion.Runtime.Corpse.StaysThenFrees", GSTN_MINION_WAVE_TEST_FLAGS)
 bool FGSTN_MinionCorpseTest::RunTest(const FString& Parameters)

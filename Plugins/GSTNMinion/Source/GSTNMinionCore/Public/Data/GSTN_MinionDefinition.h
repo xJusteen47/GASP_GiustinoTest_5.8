@@ -6,6 +6,7 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "LOD/GSTN_MinionLOD.h"
+#include "Net/GSTN_MinionNetCodec.h"
 #include "GSTN_MinionDefinition.generated.h"
 
 class AActor;
@@ -243,6 +244,24 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Death", meta = (ClampMin = "0.0", ForceUnits = "s"))
 	float CorpseSeconds = 2.f;
+
+	/**
+	 * True when the type's net item carries the extension byte (8 more bits per item update; 0 bits when false). The byte's meaning is
+	 * owned by a bridge plugin (GSTNPartsMinion sends the broken-parts mask through UGSTN_MinionCombatSubsystem::SetExtByte). It is a type
+	 * property, not a per-minion one, so the server and every client build the same wire Format from the definition (MakeNetFormat) and
+	 * need nothing on the wire to tell them. Changing it changes the item layout: it is part of the content both sides must share
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Net")
+	bool bHasNetExt = false;
+
+	/** The wire Format of this type's items: the extension byte iff bHasNetExt. Server and client both build it from here */
+	FGSTN_MinionNetFormat MakeNetFormat(bool bIdFieldActive = false) const
+	{
+		FGSTN_MinionNetFormat Format;
+		Format.bIdFieldActive = bIdFieldActive;
+		Format.bTypeHasExt = bHasNetExt;
+		return Format;
+	}
 
 	/** Fighter class the minion becomes when a script promotes it. Empty = the type cannot be promoted */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Promotion")

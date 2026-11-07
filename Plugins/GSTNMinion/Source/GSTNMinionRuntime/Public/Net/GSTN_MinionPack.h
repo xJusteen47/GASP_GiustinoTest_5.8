@@ -103,6 +103,14 @@ public:
 	int32 GetPackId() const { return PackId; }
 	const FGSTN_MinionNetArray& GetNetArray() const { return Items; }
 
+	/**
+	 * Which type indices carry the extension byte (UGSTN_MinionDefinition::bHasNetExt), the table the item codec needs to read a mixed pack:
+	 * the type is on the wire before the ext byte, but the bit count of the rest depends on it. Process-wide because the item's NetSerialize
+	 * has no world; it is the project registry, so it is the same for every world of the process. The authority sets it when the registry
+	 * changes, a client when it resolves the registry the server sent. All false (or never set) = no type has an ext byte = the v1 layout
+	 */
+	static void SetNetExtTypes(const TBitArray<>& InExtTypes);
+
 	/** Array index of the item with this pack-local id, INDEX_NONE when absent */
 	int32 FindItemIndex(uint8 ItemId) const;
 

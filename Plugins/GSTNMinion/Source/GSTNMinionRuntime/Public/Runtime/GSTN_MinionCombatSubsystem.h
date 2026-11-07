@@ -8,6 +8,7 @@
 #include "Hits/GSTN_HitResolution.h"
 #include "LagComp/GSTN_MinionHistory.h"
 #include "LOD/GSTN_MinionLOD.h"
+#include "Runtime/GSTN_MinionPublishObserver.h"
 #include "Movement/GSTN_MinionMovement_Lightweight.h"
 #include "Movement/GSTN_MinionMovementBackend.h"
 #include "Net/GSTN_MinionNetCodec.h"
@@ -363,6 +364,50 @@ public:
 
 	const FGSTN_MinionHistory& GetHistory() const { return History; }
 
+	// Bridge seams (G10). Generic and inert while nothing is bound: no flag, no ceiling, no ext byte and no observer change a publish
+	// byte, a LOD decision or a test. The bridges (GSTNPlatformMinion, GSTNPartsMinion) call these from OnMinionActivated; the setters
+	// are authority-only writes outside the simulation's rollback state (a minion is not predicted) and ignore a stale handle.
+
+	/**
+	 * Marks the minion as a platform collider carried by a bridge: its pack item is not published (an existing one leaves its pack like a
+	 * despawn's, clearing the flag adds it back with a Teleport sample), while the store keeps simulating it and the observers get its pose.
+	 * Cleared when the slot is freed. Takes effect at the next net publish
+	 */
+	void SetPlatformActor(const FGSTN_MinionHandle& Handle, bool bPlatformActor);
+	bool IsPlatformActor(const FGSTN_MinionHandle& Handle) const;
+	int32 GetNumPlatformActors() const { return NumPlatformFlagged; }
+
+	/**
+	 * Per-slot LOD ceiling: the minion is never in a tier farther than MaxTier. A slot already farther is pulled back at once (a queued
+	 * LODChanged event like any change), then the normal stepping runs under the ceiling. EGSTN_MinionLODTier::Dormant (the default)
+	 * lifts it. A bridge sets Combat or Near while a player is based on the minion or within mount range
+	 */
+	void SetMaxLODTier(const FGSTN_MinionHandle& Handle, EGSTN_MinionLODTier MaxTier);
+	EGSTN_MinionLODTier GetMaxLODTier(const FGSTN_MinionHandle& Handle) const;
+
+	/**
+	 * Exempts the minion from the MaxActiveCombat demotion (G11): it stays in Combat when the cap would send the farthest to Near. Meant for
+	 * a platform minion a player stands on. The demotion pass must test IsExemptFromCombatCap(Slot)
+	 */
+	void SetExemptFromCombatCap(const FGSTN_MinionHandle& Handle, bool bExempt);
+
+	/** Observers of the platform pose point (raw pointers, see IGSTN_MinionPublishObserver for the lifetime rule). Adding twice is a no-op */
+	void AddPublishObserver(IGSTN_MinionPublishObserver* Observer);
+	void RemovePublishObserver(IGSTN_MinionPublishObserver* Observer);
+
+	/**
+	 * The pose of a minion at a batch frame from the lag compensation history (end of that frame), for a bridge's platform lag
+	 * compensation. The history holds exact frames: the latest record at or before Frame is returned (a frame a LOD-skipped slot did not
+	 * write, or one in the future, reads the nearest earlier/latest record); a frame older than the ring reads its oldest record.
+	 * bOutClamped is true whenever the record is not exactly Frame. False (outputs untouched) for a stale or pending handle or a slot
+	 * without any record yet
+	 */
+	bool SamplePose(const FGSTN_MinionHandle& Handle, int32 Frame, FVector3f& OutPosition, float& OutYaw, bool& bOutClamped) const;
+
+	/** The extension byte the net item carries for a type with UGSTN_MinionDefinition::bHasNetExt (ignored on the wire for other types). Dirty only on change */
+	void SetExtByte(const FGSTN_MinionHandle& Handle, uint8 ExtByte);
+	uint8 GetExtByte(const FGSTN_MinionHandle& Handle) const;
+
 	FGSTN_MinionMovementSettings& GetMovementSettings() { return MovementSettings; }
 	const FGSTN_MinionMovementColumns& GetMovementColumns() const { return MoveColumns; }
 
@@ -614,6 +659,18 @@ private:
 	/** Frees the corpses whose time is up (end of the batch, after the events) */
 	void FreeDueCorpses(int32 Frame);
 
+	/**
+	 * True when the slot must be skipped by the MaxActiveCombat demotion (G11). The demotion pass of StageLODUpdate has to ask this for
+	 * every candidate (see the G11 comment there): a platform a player stands on cannot be sent to Near by the cap
+	 */
+	bool IsExemptFromCombatCap(int32 Slot) const { return (Store.ExtFlags[Slot] & GSTNMinion::ExtFlag::ExemptFromCombatCap) != 0; }
+
+	/** Sets or clears one GSTNMinion::ExtFlag bit of a slot, keeping NumPlatformFlagged in step */
+	void SetExtFlag(int32 Slot, uint8 Bit, bool bOn);
+
+	/** Calls the observers with the flagged, activated slots (end of StagePublish). Nothing when no observer or no flagged slot */
+	void NotifyPublishObservers(int32 Frame);
+
 	const FGSTN_MinionLODParams& LODParamsOf(int32 Slot) const;
 	int32 IntervalOf(int32 Slot) const;
 	void QueueLODChange(int32 Slot, uint8 OldTier, uint8 NewTier);
@@ -689,6 +746,13 @@ private:
 	TWeakObjectPtr<UGSTN_CombatWorldSubsystem> CombatWorld;
 	FGSTN_MinionAttackTokens AttackTokens;
 	FGSTN_MinionHistory History;
+
+	/** Slots with GSTNMinion::ExtFlag::PlatformActor set: the observer pass and the net publish skip all work at 0 */
+	int32 NumPlatformFlagged = 0;
+	/** Raw pointers, the observer unregisters itself (IGSTN_MinionPublishObserver). Not a UPROPERTY on purpose: it is not a UObject */
+	TArray<IGSTN_MinionPublishObserver*> PublishObservers;
+	/** Reused by NotifyPublishObservers: no allocation per frame once it has grown to the flagged count */
+	TArray<FGSTN_MinionPublishedPose> PublishedPoses;
 
 	// Movement (stage 4). Backend A (Mover, non-predicted) is not built: G4, spike 3 decision B
 	FGSTN_MinionMovement_Lightweight LightweightMovement;

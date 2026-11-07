@@ -65,6 +65,9 @@ public:
 	/** The latest record of the slot at or before Frame, inside the depth; null when there is none */
 	const FGSTN_MinionHistoryRecord* Find(int32 Slot, int32 Frame) const;
 
+	/** The oldest record the ring still holds for the slot (SamplePose clamps a frame older than the ring to it); null when none */
+	const FGSTN_MinionHistoryRecord* FindOldest(int32 Slot) const;
+
 	/** Rebuilds the position hash from the given slots (ascending) and their current feet positions (indexed by slot) */
 	void RebuildHash(TConstArrayView<int32> Slots, TConstArrayView<FVector3f> PositionBySlot, float CellSize = DefaultCellSize);
 

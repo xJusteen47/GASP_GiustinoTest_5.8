@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Containers/BitArray.h"
 #include "Intent/GSTN_MinionIntent.h"
+#include "LOD/GSTN_MinionLOD.h"
 #include "Sync/GSTN_EntityRef.h"
 #include "Sync/GSTN_SyncFragment.h"
 #include "GSTN_MinionStore.generated.h"
@@ -76,6 +77,21 @@ namespace GSTNMinion
 	{
 		return FGSTN_EntityRef(GSTNEntityKinds::Minion, Handle.Index, static_cast<uint8>(Handle.Generation & 0xFF));
 	}
+
+	/**
+	 * Bits of FGSTN_MinionStore::ExtFlags. Authority-side, never on the wire (the 3 wire Flags stay as they are): they are the switches a
+	 * bridge plugin (platforms, parts) flips on a slot, all inert at 0
+	 */
+	namespace ExtFlag
+	{
+		/** The minion's collider is carried by a bridge: its pack item is not published (the store keeps simulating it) */
+		constexpr uint8 PlatformActor = 1 << 0;
+		/** Exempt from the MaxActiveCombat demotion (a platform minion that a player stands on must stay in Combat) */
+		constexpr uint8 ExemptFromCombatCap = 1 << 1;
+	}
+
+	/** Default of the MaxLODTier column: the farthest tier, i.e. no ceiling */
+	constexpr uint8 NoLODCeiling = static_cast<uint8>(EGSTN_MinionLODTier::Dormant);
 
 	/** Slot count a store gets from the console variable gstn.Minion.Max (default 128), clamped to [1, GSTNEntityKinds::MaxMinionIndex + 1] */
 	GSTNMINIONCORE_API int32 GetConfiguredCapacity();
@@ -151,6 +167,15 @@ struct GSTNMINIONCORE_API FGSTN_MinionStore
 	TArray<uint8> LODTier;
 	TArray<int32> FramesInTier;
 	TArray<FGSTN_MinionIntent> Intent;
+	/** GSTNMinion::ExtFlag bits (bridge switches, authority only, never on the wire) */
+	TArray<uint8> ExtFlags;
+	/**
+	 * Per-slot LOD ceiling (G10 seam): the farthest EGSTN_MinionLODTier the slot may be in. GSTNMinion::NoLODCeiling (the farthest tier)
+	 * means no constraint. A bridge lowers it while a player is based on the minion or within mount range
+	 */
+	TArray<uint8> MaxLODTier;
+	/** Extension byte of the slot's net item, published only for types with UGSTN_MinionDefinition::bHasNetExt (owned by a bridge) */
+	TArray<uint8> ExtByte;
 
 private:
 	void ResetSlot(int32 Index);

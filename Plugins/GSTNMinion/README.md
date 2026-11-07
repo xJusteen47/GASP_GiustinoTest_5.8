@@ -49,6 +49,21 @@ changes nothing until a level spawns minions; nothing in the other plugins knows
 - Bench: `gstn.Minion.Bench.Wave <N> <CorpseSeconds=1>`, `gstn.Minion.Bench.Kill`. Tests: `GSTNMinion.Core.Wave.*`,
   `GSTNMinion.Runtime.{Corpse,Wave,Promote}.*`; harness `minion_wave`.
 
+## Bridge seams (G10)
+
+Generic hooks for optional bridge plugins (platforms: `GSTNPlatformMinion`, parts: `GSTNPartsMinion`; both come later and `GSTNMinion` depends on
+neither). All are inert while nothing is bound: no publish byte, LOD decision or test changes, and no per-frame work beyond two integer tests.
+- **Platform flag**: `UGSTN_MinionCombatSubsystem::SetPlatformActor(Handle, bool)` (store `ExtFlags`). A flagged minion has no pack item (an
+  existing one leaves like a despawn's; clearing the flag adds it back); the store keeps simulating it. Reset when the slot is freed.
+- **`IGSTN_MinionPublishObserver`**: `AddPublishObserver` / `RemovePublishObserver` (raw pointer, the observer unregisters itself). Called once
+  per batch step, at the end of `StagePublish`, with the end-of-step pose and velocity of the flagged slots, in slot order.
+- **LOD ceiling**: `SetMaxLODTier(Handle, tier)` (store `MaxLODTier`, default Dormant = none) holds a slot no farther than a tier, pulled back at
+  once. `SetExemptFromCombatCap` plus `IsExemptFromCombatCap(Slot)` mark slots the G11 `MaxActiveCombat` demotion must skip.
+- **Pose samples**: `SamplePose(Handle, Frame, Position, Yaw, bClamped)` reads the lag compensation history (nearest record, clamped outside the ring).
+- **ExtByte**: `UGSTN_MinionDefinition::bHasNetExt` adds the 8-bit extension byte to the net item of that type (0 bits otherwise), built into the
+  wire format on both sides from the definition; `SetExtByte(Handle, byte)` on the authority, `UGSTN_MinionClientRegistry::GetExtByte(GlobalId)` on a client.
+- Tests: `GSTNMinion.Core.Seams.*`, `GSTNMinion.Runtime.Seams.*`.
+
 ## Gameplay tags
 
 Native: see `GSTN_MinionTags.h`. Designer vocabulary (ini only) is in `Config/Tags/GSTNMinion.ini` (`Minion.Type.Grunt`,

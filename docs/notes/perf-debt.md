@@ -37,3 +37,7 @@ what, where, cheaper alternative.
 - G9a wave preload skips assets already in memory (nothing holds them): a streamable handle for the whole wave would keep them resident, at the price of memory on the low-end target.
 - G9a Promote loads the fighter class synchronously when nothing preloaded it (a lone promotion, not from a wave): preload PromotionFighterClass with the definition.
 - G9a `PromotedFighters` weak list is pruned on every Promote call (linear in at most the cap): trivial, noted for completeness.
+- G10 `NotifyPublishObservers` copies one pose per flagged slot into a reused array each step (a few floats each, up to 8 platforms): hand the observer the store columns by slot list instead if a bridge ever needs more than a handful.
+- G10 `SetNetExtTypes` is a process-wide table read by every item `NetSerialize` (one pointer test while no type has an ext byte): a per-pack type format cached on the pack would avoid the global.
+- G10 `NetPublish`'s first loop now tests the platform flag for every activated slot each frame (one byte test per slot): fold it into the slot list the dirty pass already walks once G11 restructures the pass.
+- G10 `SamplePose` falls back to `FindOldest`, a forward scan of up to the ring depth (32) only for a frame older than the ring: fine for a rare lag-comp read; keep the ring's first-frame index per slot if it becomes hot.

@@ -133,10 +133,15 @@ void UGSTN_MinionCombatSubsystem::NetOnRegistryChanged()
 {
 	FGSTN_MinionNetRegistryInfo Info;
 	Info.TypePaths.Reserve(Definitions.Num());
-	for (const TObjectPtr<UGSTN_MinionDefinition>& Definition : Definitions)
+	TBitArray<> ExtTypes(false, Definitions.Num());
+	for (int32 Index = 0; Index < Definitions.Num(); ++Index)
 	{
+		const UGSTN_MinionDefinition* Definition = Definitions[Index];
 		Info.TypePaths.Add(Definition ? Definition->GetPathName() : FString());
+		ExtTypes[Index] = Definition && Definition->bHasNetExt;
 	}
+	// The item codec needs the same table the clients build from the same definitions (G10 ExtByte seam)
+	AGSTN_MinionPack::SetNetExtTypes(ExtTypes);
 	NetStats.RegistryHash = FGSTN_MinionRegistryHash::Compute(Info.TypePaths);
 	Info.Hash = static_cast<int32>(NetStats.RegistryHash);
 	Info.WorldOrigin = FVector(NetWorldOrigin);
@@ -204,9 +209,11 @@ FGSTN_MinionNetWireItem UGSTN_MinionCombatSubsystem::NetBuildWire(int32 Slot, in
 
 	FGSTN_MinionNetQuantization Quant;
 	Quant.WorldOrigin = NetWorldOrigin;
+	bool bTypeHasExt = false;
 	if (const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]))
 	{
 		Quant.MaxSpeed = Definition->Stats.RunSpeed;
+		bTypeHasExt = Definition->bHasNetExt;
 	}
 
 	FGSTN_MinionNetWireItem Wire;
@@ -215,6 +222,9 @@ FGSTN_MinionNetWireItem UGSTN_MinionCombatSubsystem::NetBuildWire(int32 Slot, in
 	Wire.bHasType = true;
 	Wire.TypeIndex = Store.TypeIndex[Slot];
 	FGSTN_MinionNetCodec::Quantize(State, Quant, Wire);
+	// Only a type that owns the byte sends it; for any other the field stays 0 and is not on the wire (the rate limiter compares it, so a
+	// change of the byte alone makes the item dirty)
+	Wire.ExtByte = bTypeHasExt ? Store.ExtByte[Slot] : 0;
 	return Wire;
 }
 
@@ -347,7 +357,20 @@ void UGSTN_MinionCombatSubsystem::NetPublish(int32 Frame)
 	// Packs for the minions the spawn drain activated this frame (ascending slot order, so pack membership is deterministic)
 	for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE; Slot = Store.NextAliveSlot(Slot + 1))
 	{
-		if (!PendingActivation[Slot] && SlotPackId[Slot] == INDEX_NONE)
+		if (PendingActivation[Slot])
+		{
+			continue;
+		}
+		// Platform seam (G10): a flagged slot has no item. One that already has one loses it exactly like a despawn does (NetReleaseSlot:
+		// the id is freed, an emptied pack is destroyed); clearing the flag finds SlotPackId empty and re-adds it with a Teleport sample
+		if (Store.ExtFlags[Slot] & GSTNMinion::ExtFlag::PlatformActor)
+		{
+			if (SlotPackId[Slot] != INDEX_NONE)
+			{
+				NetReleaseSlot(Slot);
+			}
+		}
+		else if (SlotPackId[Slot] == INDEX_NONE)
 		{
 			NetAssignSlot(Slot, Frame);
 		}

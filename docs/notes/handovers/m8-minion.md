@@ -301,3 +301,25 @@
 - PERF-DEBT (also in perf-debt.md): corpse list walk per batch; corpses still scheduled/LOD/published/hashed (skip Dead in schedule and hash); spawn points
   by GetAllActorsWithTag per wave start; wave preload not held resident; Promote sync-loads the fighter class when not preloaded; weak fighter list prune.
 - Cost: ~$9 (writer ~316k tokens / 65 tool calls; my context ~95k; 5 builds incl. off, 3 gate test runs, 6 harness runs).
+
+## G10 (laptop, 2026-11-07): bridge seams for platforms and parts DONE (inert), gate green in three configurations
+
+- Branch `claude/m8-g10-laptop` from `claude/m8-g9-laptop` (75b3419). Sonnet writer (`Saved/M8G10/writer-brief.md`, `writer-report.md`). Only `Plugins/GSTNMinion` + docs.
+- Seams (all inert unbound, GSTNMinion gains no dependency on GSTNPlatform/GSTNParts): (1) `SetPlatformActor(Handle, bool)`: NetPublish skips (or removes,
+  then re-adds on clear) the pack item, the store keeps simulating; (2) `IGSTN_MinionPublishObserver` + `Add/RemovePublishObserver`, called once per
+  step from StagePublish with the end-of-F pose/yaw/velocity of flagged slots only (count-gated, reused array); (3) per-slot `MaxLODTier` ceiling
+  (`SetMaxLODTier`, applied in StageLODUpdate) and `bExemptFromCombatCap` with `IsExemptFromCombatCap` next to the "// G11" demotion comment;
+  (4) `SamplePose(Handle, Frame, Pos, Yaw, bClamped)` over FGSTN_MinionHistory (new `FindOldest`); (5) ExtByte: `bHasNetExt` on the definition,
+  `SetExtByte`, client registry `GetExtByte`.
+- Deviation: the item Format did not know the type, so `FGSTN_MinionNetFormat` gained an `ExtTypes` table filled by a process-wide
+  `AGSTN_MinionPack::SetNetExtTypes` (server on registry change, client on registry resolve). With no ext type the wire is the v1 layout (same bits).
+  Open risk for P16: a client pack received before the registry would parse with an empty table (only once a type sets bHasNetExt).
+- Skipped (optional in the plan): moving the GSTNPlatform pose point to the G1 hook (would edit GSTNPlatform).
+- Gate: all on 1386/0 (+7 `*.Seams.*`), GSTNMinion off 1307/0, GSTNPlatform+GSTNPlatformParts off 1364/0, 0 ensures. One build fix: unity build
+  merged the G9a wave tests with the hit tests (same anonymous helper names): wave helpers moved to a named namespace.
+- Harness (dedicated + 2 clients, 60/15): 0 % and 2 %: hits_player, tokens, replicate, late_join, reaction_tiers, tokens_brain, wave PASS (no rerun
+  needed); lod FAIL on "no pop" only (known, out of scope). player_hits_minion, lagcomp not run (desktop queue).
+- Gate script: `Saved/M8G10/gate.ps1 -Off -OffPlugins A,B` disables any plugin list (GSTNPlatformParts must go off with GSTNPlatform).
+- PERF-DEBT (also in perf-debt.md): observer pose copy per flagged slot per step; process-wide ext-type table read per item NetSerialize (cache per pack);
+  NetPublish tests the platform flag on every activated slot each frame (fold into the dirty pass in G11); SamplePose FindOldest scan (rare).
+- Cost: ~$6 (writer ~221k tokens / 43 tool calls; my context ~+40k; 5 builds incl. 2 off configs, 3 gate test runs, 2 harness runs).

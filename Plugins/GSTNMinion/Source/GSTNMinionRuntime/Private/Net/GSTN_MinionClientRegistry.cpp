@@ -71,13 +71,17 @@ void UGSTN_MinionClientRegistry::ApplyRegistryInfo(const FGSTN_MinionNetRegistry
 	TArray<FString> Resolved;
 	Resolved.Reserve(Info.TypePaths.Num());
 	Definitions.SetNum(Info.TypePaths.Num());
+	TBitArray<> ExtTypes(false, Info.TypePaths.Num());
 	for (int32 Index = 0; Index < Info.TypePaths.Num(); ++Index)
 	{
 		const FSoftObjectPath Path(Info.TypePaths[Index]);
 		UGSTN_MinionDefinition* Definition = Path.IsValid() ? Cast<UGSTN_MinionDefinition>(Path.TryLoad()) : nullptr;
 		Definitions[Index] = Definition;
+		ExtTypes[Index] = Definition && Definition->bHasNetExt;
 		Resolved.Add(Definition ? Definition->GetPathName() : FString());
 	}
+	// The item codec reads the ext byte of the types that have one (G10 seam): the same table the server built from the same assets
+	AGSTN_MinionPack::SetNetExtTypes(ExtTypes);
 
 	const uint32 LocalHash = FGSTN_MinionRegistryHash::Compute(Resolved);
 	++RegistryChecks;
@@ -100,6 +104,12 @@ void UGSTN_MinionClientRegistry::ApplyRegistryInfo(const FGSTN_MinionNetRegistry
 		UE_LOG(LogGSTNMinion, Error, TEXT("MinionNet registry MISMATCH: server hash %08x, client %08x, %d types; unresolved on this client:%s"),
 			ServerHash, LocalHash, Info.TypePaths.Num(), Missing.IsEmpty() ? TEXT(" none (different path or order)") : *Missing);
 	}
+}
+
+uint8 UGSTN_MinionClientRegistry::GetExtByte(int32 GlobalId) const
+{
+	const FGSTN_MinionClientItem* Item = Items.Find(GlobalId);
+	return Item ? Item->Wire.ExtByte : 0;
 }
 
 const UGSTN_MinionDefinition* UGSTN_MinionClientRegistry::GetDefinition(int32 TypeIndex) const

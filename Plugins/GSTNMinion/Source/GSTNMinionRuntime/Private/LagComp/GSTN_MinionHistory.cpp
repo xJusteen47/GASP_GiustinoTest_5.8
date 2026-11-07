@@ -72,6 +72,24 @@ const FGSTN_MinionHistoryRecord* FGSTN_MinionHistory::Find(int32 Slot, int32 Fra
 	return nullptr;
 }
 
+const FGSTN_MinionHistoryRecord* FGSTN_MinionHistory::FindOldest(int32 Slot) const
+{
+	if (!LastFrame.IsValidIndex(Slot) || LastFrame[Slot] == INDEX_NONE)
+	{
+		return nullptr;
+	}
+	// Ascending from the oldest frame the ring can still hold; a slot the LOD skipped has gaps, so the first stamped match is the oldest
+	for (int32 Wanted = FMath::Max(LastFrame[Slot] - Depth + 1, 0); Wanted <= LastFrame[Slot]; ++Wanted)
+	{
+		const FGSTN_MinionHistoryRecord& Record = Records[IndexOf(Slot, Wanted)];
+		if (Record.Frame == Wanted)
+		{
+			return &Record;
+		}
+	}
+	return nullptr;
+}
+
 void FGSTN_MinionHistory::RebuildHash(TConstArrayView<int32> Slots, TConstArrayView<FVector3f> PositionBySlot, float CellSize)
 {
 	HashCellSize = FMath::Max(CellSize, 1.f);

@@ -173,6 +173,8 @@ void UGSTN_MinionCombatSubsystem::Activate()
 	bActive = true;
 
 	Store.ResetToConfiguredCapacity();
+	NumPlatformFlagged = 0;
+	PublishedPoses.Reset();
 	const int32 Capacity = Store.Capacity();
 	PendingActivation.Init(false, Capacity);
 	LastRunFrame.Init(INDEX_NONE, Capacity);
@@ -990,9 +992,11 @@ void UGSTN_MinionCombatSubsystem::StageLODUpdate(int32 Frame)
 
 		if (ForcedLODTier >= 0 && ForcedLODTier < static_cast<int32>(EGSTN_MinionLODTier::Count))
 		{
-			if (OldTier != ForcedLODTier)
+			// A bridge ceiling still holds under the test override
+			const uint8 Forced = static_cast<uint8>(FMath::Min<int32>(ForcedLODTier, Store.MaxLODTier[Slot]));
+			if (OldTier != Forced)
 			{
-				Store.LODTier[Slot] = static_cast<uint8>(ForcedLODTier);
+				Store.LODTier[Slot] = Forced;
 				Store.FramesInTier[Slot] = 0;
 				QueueLODChange(Slot, OldTier, Store.LODTier[Slot]);
 			}
@@ -1018,14 +1022,24 @@ void UGSTN_MinionCombatSubsystem::StageLODUpdate(int32 Frame)
 		FGSTN_MinionLODState LODState;
 		LODState.Tier = static_cast<EGSTN_MinionLODTier>(OldTier);
 		LODState.FramesInTier = Store.FramesInTier[Slot];
+		const int32 OldFramesInTier = LODState.FramesInTier;
 		FGSTN_MinionLODMath::Step(LODParamsOf(Slot), LODState, Distance, bForceCombat, DeltaFrames);
 		Store.LODTier[Slot] = static_cast<uint8>(LODState.Tier);
 		Store.FramesInTier[Slot] = LODState.FramesInTier;
+		// Per-slot ceiling (G10 seam): never farther than a bridge allows. Held at the ceiling, the dwell keeps counting, so releasing the
+		// ceiling does not restart the dwell; pulled back from a farther tier, it restarts like any tier change
+		const uint8 Ceiling = Store.MaxLODTier[Slot];
+		if (Store.LODTier[Slot] > Ceiling)
+		{
+			Store.LODTier[Slot] = Ceiling;
+			Store.FramesInTier[Slot] = Ceiling == OldTier ? OldFramesInTier + DeltaFrames : 0;
+		}
 		if (Store.LODTier[Slot] != OldTier)
 		{
 			QueueLODChange(Slot, OldTier, Store.LODTier[Slot]);
 		}
-		// G11: MaxActiveCombat demotion of the farthest non-attacking T0 minions
+		// G11: MaxActiveCombat demotion of the farthest non-attacking T0 minions. It MUST skip a slot with IsExemptFromCombatCap(Slot)
+		// (G10 seam: a platform a player stands on)
 	}
 }
 
@@ -2184,6 +2198,8 @@ void UGSTN_MinionCombatSubsystem::StagePublish(int32 Frame)
 	}
 	History.RebuildHash(HashSlots, Store.Position);
 
+	NotifyPublishObservers(Frame);
+
 #if STATS
 	int32 PerTier[4] = {};
 	for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE; Slot = Store.NextAliveSlot(Slot + 1))
@@ -2358,6 +2374,11 @@ void UGSTN_MinionCombatSubsystem::FreeSlot(int32 Slot)
 	ReleaseActor(Slot);
 	NetReleaseSlot(Slot);
 	CorpseEndFrame[Slot] = INDEX_NONE;
+	// A freed platform slot no longer counts (the store resets the flags with the slot)
+	if (Store.ExtFlags[Slot] & GSTNMinion::ExtFlag::PlatformActor)
+	{
+		--NumPlatformFlagged;
+	}
 	// Pending hits of this occupant are dropped by the generation check of the drain
 	Store.Free(Handle);
 	TimelinePrevFrame[Slot] = INDEX_NONE;
@@ -2424,6 +2445,148 @@ void UGSTN_MinionCombatSubsystem::GatherRewoundCandidates(const FBox& Bounds, fl
 	BenchTotals.LagCompCandidates += CandidateScratch.Num();
 	BenchTotals.LagCompRejected += Rejected;
 	BenchTotals.LagCompSeconds += FPlatformTime::Seconds() - StartSeconds;
+}
+
+void UGSTN_MinionCombatSubsystem::SetExtFlag(int32 Slot, uint8 Bit, bool bOn)
+{
+	const bool bWasOn = (Store.ExtFlags[Slot] & Bit) != 0;
+	if (bWasOn == bOn)
+	{
+		return;
+	}
+	Store.ExtFlags[Slot] = bOn ? static_cast<uint8>(Store.ExtFlags[Slot] | Bit) : static_cast<uint8>(Store.ExtFlags[Slot] & ~Bit);
+	if (Bit == GSTNMinion::ExtFlag::PlatformActor)
+	{
+		NumPlatformFlagged += bOn ? 1 : -1;
+	}
+}
+
+void UGSTN_MinionCombatSubsystem::SetPlatformActor(const FGSTN_MinionHandle& Handle, bool bPlatformActor)
+{
+	if (Store.IsValid(Handle))
+	{
+		SetExtFlag(Handle.Index, GSTNMinion::ExtFlag::PlatformActor, bPlatformActor);
+	}
+}
+
+bool UGSTN_MinionCombatSubsystem::IsPlatformActor(const FGSTN_MinionHandle& Handle) const
+{
+	return Store.IsValid(Handle) && (Store.ExtFlags[Handle.Index] & GSTNMinion::ExtFlag::PlatformActor) != 0;
+}
+
+void UGSTN_MinionCombatSubsystem::SetExemptFromCombatCap(const FGSTN_MinionHandle& Handle, bool bExempt)
+{
+	if (Store.IsValid(Handle))
+	{
+		SetExtFlag(Handle.Index, GSTNMinion::ExtFlag::ExemptFromCombatCap, bExempt);
+	}
+}
+
+void UGSTN_MinionCombatSubsystem::SetMaxLODTier(const FGSTN_MinionHandle& Handle, EGSTN_MinionLODTier MaxTier)
+{
+	if (!Store.IsValid(Handle))
+	{
+		return;
+	}
+	const int32 Slot = Handle.Index;
+	const uint8 Ceiling = static_cast<uint8>(FMath::Min<int32>(static_cast<int32>(MaxTier), static_cast<int32>(GSTNMinion::NoLODCeiling)));
+	Store.MaxLODTier[Slot] = Ceiling;
+	// Pulled back at once, not at the slot next scheduled LOD step (a dormant one is up to DormantInterval frames away): a player is
+	// about to stand on it
+	if (!PendingActivation[Slot] && Store.LODTier[Slot] > Ceiling)
+	{
+		const uint8 OldTier = Store.LODTier[Slot];
+		Store.LODTier[Slot] = Ceiling;
+		Store.FramesInTier[Slot] = 0;
+		QueueLODChange(Slot, OldTier, Ceiling);
+	}
+}
+
+EGSTN_MinionLODTier UGSTN_MinionCombatSubsystem::GetMaxLODTier(const FGSTN_MinionHandle& Handle) const
+{
+	return Store.IsValid(Handle) ? static_cast<EGSTN_MinionLODTier>(Store.MaxLODTier[Handle.Index]) : EGSTN_MinionLODTier::Dormant;
+}
+
+void UGSTN_MinionCombatSubsystem::AddPublishObserver(IGSTN_MinionPublishObserver* Observer)
+{
+	if (Observer)
+	{
+		PublishObservers.AddUnique(Observer);
+	}
+}
+
+void UGSTN_MinionCombatSubsystem::RemovePublishObserver(IGSTN_MinionPublishObserver* Observer)
+{
+	PublishObservers.Remove(Observer);
+}
+
+void UGSTN_MinionCombatSubsystem::NotifyPublishObservers(int32 Frame)
+{
+	// Inert unbound: two integer tests, no pass over the slots, no allocation
+	if (NumPlatformFlagged == 0 || PublishObservers.IsEmpty())
+	{
+		return;
+	}
+	// HashSlots is every activated slot in ascending order (built just above in StagePublish), so the walk is in slot order and skips pending slots
+	PublishedPoses.Reset();
+	for (const int32 Slot : HashSlots)
+	{
+		if (Store.ExtFlags[Slot] & GSTNMinion::ExtFlag::PlatformActor)
+		{
+			FGSTN_MinionPublishedPose& Pose = PublishedPoses.AddDefaulted_GetRef();
+			Pose.Handle = Store.HandleOfSlot(Slot);
+			Pose.Position = Store.Position[Slot];
+			Pose.YawDegrees = Store.YawDegrees[Slot];
+			Pose.Velocity = MoveColumns.Velocity[Slot];
+		}
+	}
+	if (PublishedPoses.IsEmpty())
+	{
+		return;
+	}
+	// Backwards by index: an observer removing itself in the callback must not invalidate the loop
+	for (int32 Index = PublishObservers.Num() - 1; Index >= 0; --Index)
+	{
+		if (PublishObservers.IsValidIndex(Index))
+		{
+			PublishObservers[Index]->OnMinionPosesPublished(Frame, PublishedPoses);
+		}
+	}
+}
+
+bool UGSTN_MinionCombatSubsystem::SamplePose(const FGSTN_MinionHandle& Handle, int32 Frame, FVector3f& OutPosition, float& OutYaw, bool& bOutClamped) const
+{
+	if (!Store.IsValid(Handle) || PendingActivation[Handle.Index])
+	{
+		return false;
+	}
+	const FGSTN_MinionHistoryRecord* Record = History.Find(Handle.Index, Frame);
+	if (!Record)
+	{
+		// Older than the ring (or before the first record): the oldest one is the nearest the history can say
+		Record = History.FindOldest(Handle.Index);
+	}
+	if (!Record)
+	{
+		return false;
+	}
+	OutPosition = Record->Position;
+	OutYaw = Record->YawDegrees;
+	bOutClamped = Record->Frame != Frame;
+	return true;
+}
+
+void UGSTN_MinionCombatSubsystem::SetExtByte(const FGSTN_MinionHandle& Handle, uint8 ExtByte)
+{
+	if (Store.IsValid(Handle))
+	{
+		Store.ExtByte[Handle.Index] = ExtByte;
+	}
+}
+
+uint8 UGSTN_MinionCombatSubsystem::GetExtByte(const FGSTN_MinionHandle& Handle) const
+{
+	return Store.IsValid(Handle) ? Store.ExtByte[Handle.Index] : 0;
 }
 
 void UGSTN_MinionCombatSubsystem::QueueLODChange(int32 Slot, uint8 OldTier, uint8 NewTier)

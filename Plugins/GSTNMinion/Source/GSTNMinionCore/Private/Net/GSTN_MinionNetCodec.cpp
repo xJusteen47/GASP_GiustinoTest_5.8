@@ -224,7 +224,7 @@ bool FGSTN_MinionNetCodec::Serialize(FArchive& Ar, FGSTN_MinionNetWireItem& Item
 	SerializeNarrow(Ar, Item.HitCounter, Bits::HitCounter);
 	SerializeNarrow(Ar, Item.HealthQ, Bits::Health);
 
-	if (Format.bTypeHasExt)
+	if (Format.HasExtFor(Item.TypeIndex))
 	{
 		SerializeNarrow(Ar, Item.ExtByte, Bits::ExtByte);
 	}
@@ -250,6 +250,6 @@ int32 FGSTN_MinionNetCodec::GetBitSize(const FGSTN_MinionNetWireItem& Item, cons
 	}
 	Total += 3 * Bits::Position + Bits::Yaw + Bits::ActionState + Bits::MoveId + Bits::MoveStartFrame + Bits::FrameStamp
 		+ Bits::HitCounter + Bits::Health + Bits::Speed + Bits::Flags;
-	Total += Format.bTypeHasExt ? Bits::ExtByte : 0;
+	Total += Format.HasExtFor(Item.TypeIndex) ? Bits::ExtByte : 0;
 	return Total;
 }

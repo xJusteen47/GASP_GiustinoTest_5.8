@@ -53,6 +53,12 @@ public:
 	const TMap<int32, FGSTN_MinionClientItem>& GetItems() const { return Items; }
 	const FGSTN_MinionClientItem* FindItem(int32 GlobalId) const { return Items.Find(GlobalId); }
 
+	/**
+	 * The extension byte the server last sent for a minion (G10 seam, read by a bridge such as GSTNPartsMinion), 0 when the item is
+	 * unknown or its type has no ext byte (UGSTN_MinionDefinition::bHasNetExt)
+	 */
+	uint8 GetExtByte(int32 GlobalId) const;
+
 	/** Position origin of the items, from the server (zero until the manager arrived) */
 	const FVector3f& GetWorldOrigin() const { return WorldOrigin; }
 

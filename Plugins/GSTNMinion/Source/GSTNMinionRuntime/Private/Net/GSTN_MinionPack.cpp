@@ -10,10 +10,15 @@
 
 namespace
 {
-	/** v1 wire format: no global id field (re-pack fallback off), no extension byte (no bridge sends one yet) */
-	const FGSTN_MinionNetFormat& PackItemFormat()
+	/** Types with an extension byte, by type index. Empty while no type has one, which keeps the format at the v1 layout */
+	TBitArray<> GExtTypes;
+	bool GAnyExtType = false;
+
+	/** v1 wire format: no global id field (re-pack fallback off); the extension byte only for the types that own one (a bridge's) */
+	FGSTN_MinionNetFormat PackItemFormat()
 	{
-		static const FGSTN_MinionNetFormat Format;
+		FGSTN_MinionNetFormat Format;
+		Format.ExtTypes = GAnyExtType ? &GExtTypes : nullptr;
 		return Format;
 	}
 
@@ -24,9 +29,16 @@ namespace
 	}
 }
 
+void AGSTN_MinionPack::SetNetExtTypes(const TBitArray<>& InExtTypes)
+{
+	GExtTypes = InExtTypes;
+	GAnyExtType = GExtTypes.Find(true) != INDEX_NONE;
+}
+
 bool FGSTN_MinionNetItem::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
-	bOutSuccess = FGSTN_MinionNetCodec::Serialize(Ar, Wire, PackItemFormat());
+	const FGSTN_MinionNetFormat Format = PackItemFormat();
+	bOutSuccess = FGSTN_MinionNetCodec::Serialize(Ar, Wire, Format);
 	return true;
 }
 
