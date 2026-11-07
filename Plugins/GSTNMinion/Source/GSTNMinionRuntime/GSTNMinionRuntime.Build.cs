@@ -20,7 +20,10 @@ public class GSTNMinionRuntime : ModuleRules
 			"GSTNMinionCore",
 			"GSTNCombatCore",
 			"GSTNCombatNP",
-			"NetCore"
+			"NetCore",
+			// G8: the brain subsystem and the schema name StateTree types in their headers
+			"StateTreeModule",
+			"PropertyBindingUtils"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
@@ -32,7 +35,9 @@ public class GSTNMinionRuntime : ModuleRules
 			// Combat.Event.KO and Combat.KOReason.Health of the minion KO event (G5)
 			"GSTNCombatGAS",
 			// UGSTN_SimEventSubsystem: the authoritative event stream the KO goes to (G5)
-			"GSTNInputCore"
+			"GSTNInputCore",
+			// G8: async navigation path of the brain (a no-op without a navmesh)
+			"NavigationSystem"
 		});
 	}
 }

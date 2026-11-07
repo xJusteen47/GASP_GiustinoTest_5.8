@@ -25,3 +25,9 @@ what, where, cheaper alternative.
 - G7 puppet mesh, anim class, puppet class and hurtbox set load synchronously on first use: async preload when the registry resolves a type.
 - G7 snapshot provider re-walks all records per build; puppets call SetActorLocationAndRotation every frame even when unchanged.
 - G7a: the minion harness scenarios still wait fixed times and judge from log dumps; tier inference now reads the clock per record per frame (cheap, no new cost of note).
+- G8 brain (`GSTN_MinionBrainSubsystem.cpp`): an FStateTreeExecutionContext is built per ticked slot: reuse one per tree and swap the instance data.
+- G8 separation neighbours walk the whole store per T0/T1 brain tick (O(N) per minion): query the batch's position hash.
+- G8 target pick scans every fighter per slot at 2 Hz and resolves owner actors per pass: push fighter positions from the combat world once per frame.
+- G8 the type's StateTree loads synchronously at the first spawn of a type: async preload with the definition (with the G9 wave preload).
+- G8 per-slot StateTree instance data arrays sized to store capacity (128): sparse storage for brained slots only.
+- G8 spike 6: native brain is 10x cheaper than the StateTree (0.49 vs 4.96 us per tick): for the low-end target, consider native for T1/T2 or for grunts.

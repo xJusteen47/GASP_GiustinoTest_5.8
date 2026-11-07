@@ -32,13 +32,19 @@ enum class EGSTN_MinionBenchScenario : uint8
 	 * G5 gate: minions with a sword-sized swing walk up to a fighter and attack it again and again (gstn.Minion.Bench.Attack), so the
 	 * harness sees minion hits arrive in a real fighter's inbox and the attack tokens cap the simultaneous attackers
 	 */
-	Attack
+	Attack,
+	/**
+	 * G8: the minions think for themselves. Each gets the test StateTree (the native brain when the editor module is not loaded or
+	 * gstn.Minion.Brain.Native is 1) from UGSTN_MinionBrainSubsystem and chases the nearest fighter; the bench writes no intent
+	 */
+	Brain
 };
 
 /**
  * The bench of M8 (spike tooling, combat-m8-minions.md 4 "Debug"): spawns N minions of one type in a ring and drives them with a
  * trivial brain, so `stat GSTNMinion` and gstn.Minion.Bench.Report measure the batch alone. Console commands:
- *   gstn.Minion.Bench.Spawn <N> <Idle|Chase|Massacre>   gstn.Minion.Bench.Clear   gstn.Minion.Bench.Report
+ *   gstn.Minion.Bench.Spawn <N> <Idle|Chase|Massacre|Brain>   gstn.Minion.Bench.Clear   gstn.Minion.Bench.Report
+ *   gstn.Minion.Bench.Attack <N> <FighterIndex> [Brain]   gstn.Minion.Bench.Poke <BenchIndex>
  *   gstn.Minion.Bench.Course <1|0>   builds (or removes) the hostile test course of spike 3 around the bench centre, in code:
  *   engine cube actors (no /Game asset) for a floor, stairs (30 cm steps), a 40 degree ramp onto a 300 cm ledge, a thin wall
  *   (10 cm) and a 90 degree corner.
@@ -70,7 +76,13 @@ public:
 	int32 SpawnBench(int32 Count, EGSTN_MinionBenchScenario InScenario);
 
 	/** G5 gate: Count attackers in a ring (150 cm) around the TargetIndex-th registered fighter (ascending id), attacking it. Returns how many were queued */
-	int32 SpawnAttackers(int32 Count, int32 TargetIndex);
+	int32 SpawnAttackers(int32 Count, int32 TargetIndex, bool bBrain = false);
+
+	/**
+	 * G8 test tooling: posts one synthetic 1 damage hit on the BenchIndex-th minion of this bench through PostToEntityInbox, as a fighter's
+	 * hit would arrive. It is the only way to hit a Dormant minion (the hit grid holds no Far or Dormant minion). Returns false for a bad index
+	 */
+	bool Poke(int32 BenchIndex);
 
 	/** Despawns every bench minion */
 	void Clear();
@@ -88,6 +100,8 @@ public:
 
 private:
 	UGSTN_MinionDefinition* ResolveDefinition();
+	/** Gives every bench minion without one the test tree (or the native brain when there is none) */
+	void StartBenchBrains(UWorld* World);
 	/** Nearest player or the origin, once; the course and the ring share it */
 	FVector ResolveCenter();
 	void AddCourseBox(const FVector& Offset, const FVector& Size, const FRotator& Rotation);
@@ -105,6 +119,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UObject> AttackTimeline;
 	int32 AttackTargetId = INDEX_NONE;
+	/** True when the attackers think with the brain (Attack <N> <Fighter> Brain): the bench writes no intents and pins the brain's target */
+	bool bAttackBrain = false;
 	/** Highest number of tokens held against the target on any fixed frame since the spawn */
 	int32 MaxHoldersSeen = 0;
 

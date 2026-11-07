@@ -228,6 +228,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Presentation")
 	TSoftClassPtr<UAnimInstance> PuppetAnimClass;
 
+	/**
+	 * The brain of the type: a StateTree asset using UGSTN_MinionStateTreeSchema (G8). Kept as a soft UObject reference so Core has no
+	 * StateTree dependency; the runtime casts it. Empty = the type has no brain (a script or the bench writes its intents).
+	 * Server only: a client never loads it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Brain", meta = (AllowedClasses = "/Script/StateTreeModule.StateTree"))
+	TSoftObjectPtr<UObject> Brain;
+
 	/** Fighter class the minion becomes when a script promotes it. Empty = the type cannot be promoted */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Promotion")
 	TSoftClassPtr<AActor> PromotionFighterClass;

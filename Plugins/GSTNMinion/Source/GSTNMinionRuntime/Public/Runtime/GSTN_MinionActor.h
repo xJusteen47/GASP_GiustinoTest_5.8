@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "GSTN_MinionActor.generated.h"
 
+class UGSTN_MinionBrainComponent;
 class UGSTN_MinionCombatComponent;
 
 /**
@@ -25,6 +26,7 @@ public:
 	AGSTN_MinionActor();
 
 	UGSTN_MinionCombatComponent* GetMinionComponent() const { return MinionComponent; }
+	UGSTN_MinionBrainComponent* GetBrainComponent() const { return BrainComponent; }
 
 	/** Out of the pool: visible and placed at Transform. The subsystem binds the component afterwards */
 	void OnAcquired(const FTransform& Transform);
@@ -40,6 +42,10 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Minion")
 	TObjectPtr<UGSTN_MinionCombatComponent> MinionComponent;
+
+	/** Designer handle of the brain (G8): which tree, start and stop. No tick; the brain subsystem runs the tree */
+	UPROPERTY(VisibleAnywhere, Category = "Minion")
+	TObjectPtr<UGSTN_MinionBrainComponent> BrainComponent;
 
 	bool bPooled = false;
 };

@@ -2,6 +2,7 @@
 
 #include "Runtime/GSTN_MinionActor.h"
 
+#include "Brain/GSTN_MinionBrainComponent.h"
 #include "Components/SceneComponent.h"
 #include "Runtime/GSTN_MinionCombatComponent.h"
 
@@ -15,6 +16,7 @@ AGSTN_MinionActor::AGSTN_MinionActor()
 	SetRootComponent(Root);
 
 	MinionComponent = CreateDefaultSubobject<UGSTN_MinionCombatComponent>(TEXT("MinionCombat"));
+	BrainComponent = CreateDefaultSubobject<UGSTN_MinionBrainComponent>(TEXT("MinionBrain"));
 }
 
 void AGSTN_MinionActor::OnAcquired(const FTransform& Transform)

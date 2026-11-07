@@ -2,6 +2,8 @@
 
 #include "Debug/GSTN_MinionBench.h"
 
+#include "Brain/GSTN_MinionBrainSubsystem.h"
+#include "Brain/GSTN_MinionStateTree.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/GSTN_MinionDefinition.h"
@@ -114,7 +116,7 @@ namespace
 
 	FAutoConsoleCommandWithWorldAndArgs BenchSpawnCommand(
 		TEXT("gstn.Minion.Bench.Spawn"),
-		TEXT("gstn.Minion.Bench.Spawn <N> <Idle|Chase|Massacre>: spawns N bench minions in a ring around the first player (or the origin)."),
+		TEXT("gstn.Minion.Bench.Spawn <N> <Idle|Chase|Massacre|Brain>: spawns N bench minions in a ring around the first player (or the origin)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World);
@@ -133,12 +135,16 @@ namespace
 			{
 				Scenario = EGSTN_MinionBenchScenario::Massacre;
 			}
+			else if (Args.Num() > 1 && Args[1].Equals(TEXT("Brain"), ESearchCase::IgnoreCase))
+			{
+				Scenario = EGSTN_MinionBenchScenario::Brain;
+			}
 			Bench->SpawnBench(Count, Scenario);
 		}));
 
 	FAutoConsoleCommandWithWorldAndArgs BenchAttackCommand(
 		TEXT("gstn.Minion.Bench.Attack"),
-		TEXT("gstn.Minion.Bench.Attack <N=1> <FighterIndex=0>: spawns N attackers around the FighterIndex-th registered fighter (ascending entity id); they walk up and swing at it in a loop. Logs the target actor."),
+		TEXT("gstn.Minion.Bench.Attack <N=1> <FighterIndex=0> [Brain]: spawns N attackers around the FighterIndex-th registered fighter (ascending entity id); they walk up and swing at it in a loop. Logs the target actor."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World);
@@ -147,7 +153,19 @@ namespace
 				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.Attack: no bench in this world"));
 				return;
 			}
-			Bench->SpawnAttackers(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 1, Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 0);
+			Bench->SpawnAttackers(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 1, Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 0, Args.Num() > 2 && Args[2].Equals(TEXT("Brain"), ESearchCase::IgnoreCase));
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs BenchPokeCommand(
+		TEXT("gstn.Minion.Bench.Poke"),
+		TEXT("gstn.Minion.Bench.Poke <BenchIndex=0>: posts one synthetic 1 damage hit on that bench minion through PostToEntityInbox (wakes a Far or Dormant minion at the next batch). Logs: Bench: poke index=.. id=.. tier=.. posted=.. frame=.."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World);
+			if (!Bench || !Bench->Poke(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 0))
+			{
+				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.Poke: no bench or no such bench minion"));
+			}
 		}));
 
 	FAutoConsoleCommandWithWorld BenchClearCommand(
@@ -374,19 +392,24 @@ int32 UGSTN_MinionBenchSubsystem::SpawnBench(int32 Count, EGSTN_MinionBenchScena
 			++Queued;
 		}
 	}
+	if (Scenario == EGSTN_MinionBenchScenario::Brain)
+	{
+		// The test tree when the editor module built one; otherwise (or with gstn.Minion.Brain.Native 1) the subsystem runs the native brain
+		StartBenchBrains(World);
+	}
 	Minions->ResetBenchTotals();
 	ResetCounters(Minions->GetStore().Capacity());
 	LaunchStream.Initialize(CVarBenchSeed.GetValueOnGameThread());
 	BindMovementHook(Minions);
 
 	const TCHAR* ScenarioName = Scenario == EGSTN_MinionBenchScenario::Massacre ? TEXT("Massacre")
-		: (Scenario == EGSTN_MinionBenchScenario::Chase ? TEXT("Chase") : TEXT("Idle"));
+		: (Scenario == EGSTN_MinionBenchScenario::Chase ? TEXT("Chase") : (Scenario == EGSTN_MinionBenchScenario::Brain ? TEXT("Brain") : TEXT("Idle")));
 	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: %d minions queued (%s), ring radius %.0f%s, %d ring points skipped (inside geometry)"), Queued,
 		ScenarioName, RingRadius, bOnCourse ? TEXT(", on the course") : TEXT(""), Skipped);
 	return Queued;
 }
 
-int32 UGSTN_MinionBenchSubsystem::SpawnAttackers(int32 Count, int32 TargetIndex)
+int32 UGSTN_MinionBenchSubsystem::SpawnAttackers(int32 Count, int32 TargetIndex, bool bBrain)
 {
 	UWorld* World = GetWorld();
 	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
@@ -444,6 +467,7 @@ int32 UGSTN_MinionBenchSubsystem::SpawnAttackers(int32 Count, int32 TargetIndex)
 	Scenario = EGSTN_MinionBenchScenario::Attack;
 	BenchSeconds = 0.f;
 	AttackTargetId = Fighters[TargetIndex];
+	bAttackBrain = bBrain;
 	MaxHoldersSeen = 0;
 	Center = TargetActor->GetActorLocation();
 	bCenterResolved = true;
@@ -462,15 +486,91 @@ int32 UGSTN_MinionBenchSubsystem::SpawnAttackers(int32 Count, int32 TargetIndex)
 			++Queued;
 		}
 	}
+	if (bBrain)
+	{
+		// The brain, not the scripted swing loop, drives the attackers. Its target is pinned to the fighter being attacked so the token
+		// numbers mean the same as in the scripted run (the nearest-fighter rule would pick the other pawn if it stood closer)
+		if (UGSTN_MinionBrainSubsystem* Brain = UGSTN_MinionBrainSubsystem::Get(World))
+		{
+			const int32 PinnedId = AttackTargetId;
+			TWeakObjectPtr<const UGSTN_CombatWorldSubsystem> WeakCombat(Combat);
+			Brain->SetTargetProvider([PinnedId, WeakCombat](TArray<FGSTN_MinionBrainTarget>& Out)
+			{
+				if (const AActor* Actor = WeakCombat.IsValid() ? WeakCombat->FindOwnerActor(PinnedId) : nullptr)
+				{
+					FGSTN_MinionBrainTarget& Target = Out.AddDefaulted_GetRef();
+					Target.Id = PinnedId;
+					Target.Position = Actor->GetActorLocation();
+				}
+			});
+		}
+		StartBenchBrains(World);
+	}
 	Minions->ResetBenchTotals();
 	ResetCounters(Minions->GetStore().Capacity());
 	BindMovementHook(Minions);
-	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: attack %d minions queued on fighter entity %d actor %s at %s"), Queued, AttackTargetId, *TargetActor->GetName(), *Center.ToCompactString());
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: attack %d minions queued on fighter entity %d actor %s at %s%s"), Queued, AttackTargetId, *TargetActor->GetName(), *Center.ToCompactString(), bBrain ? TEXT(" brain") : TEXT(""));
 	return Queued;
+}
+
+void UGSTN_MinionBenchSubsystem::StartBenchBrains(UWorld* World)
+{
+	UGSTN_MinionBrainSubsystem* Brain = UGSTN_MinionBrainSubsystem::Get(World);
+	if (!Brain)
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: no brain subsystem (client world?); the minions will not think"));
+		return;
+	}
+	// A new run starts from a clean report: the spike numbers are per run
+	Brain->ResetStats();
+	UObject* Tree = GSTNMinion::GetTestBrainTreeFactory().IsBound() ? GSTNMinion::GetTestBrainTreeFactory().Execute() : nullptr;
+	int32 Started = 0;
+	for (const FGSTN_MinionHandle& Handle : Handles)
+	{
+		if (!Brain->HasBrain(Handle))
+		{
+			Started += Brain->StartBrain(Handle, Tree) ? 1 : 0;
+		}
+	}
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: %d brains started (%s)"), Started, Tree ? TEXT("StateTree chase and swing") : TEXT("native, no test tree"));
+}
+
+bool UGSTN_MinionBenchSubsystem::Poke(int32 BenchIndex)
+{
+	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(GetWorld());
+	if (!Minions || !Handles.IsValidIndex(BenchIndex) || !Minions->IsValidHandle(Handles[BenchIndex]))
+	{
+		return false;
+	}
+	const FGSTN_MinionStore& Store = Minions->GetStore();
+	const FGSTN_MinionHandle Handle = Handles[BenchIndex];
+	const int32 Frame = FMath::Max(Minions->GetLastBatchFrame(), 0);
+	FGSTN_HitInboxEntry Hit;
+	Hit.Frame = Frame;
+	// The neutral attacker of the cleave: an id no fighter uses, no team, no relationship index
+	Hit.AttackerId = 0x3FFFFFF0;
+	Hit.AttackerTeam = 255;
+	Hit.Relationship = 255;
+	Hit.Hit.Damage = 1.f;
+	Hit.HitLocation = FVector(Store.Position[Handle.Index]);
+	const int32 EntityId = GSTNEntityKinds::MakeMinionEntityId(Handle.Index);
+	const bool bPosted = Minions->PostToEntityInbox(EntityId, Handle.Generation, Hit.ToInboxEntry());
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: poke index=%d id=%d tier=%d posted=%d frame=%d"), BenchIndex, EntityId, static_cast<int32>(Store.LODTier[Handle.Index]), bPosted ? 1 : 0, Frame);
+	return bPosted;
 }
 
 void UGSTN_MinionBenchSubsystem::Clear()
 {
+	if (UGSTN_MinionBrainSubsystem* Brain = UGSTN_MinionBrainSubsystem::Get(GetWorld()))
+	{
+		for (const FGSTN_MinionHandle& Handle : Handles)
+		{
+			Brain->StopBrain(Handle);
+		}
+		// Back to the default target source (the registered fighters)
+		Brain->SetTargetProvider(nullptr);
+	}
+	bAttackBrain = false;
 	for (const FGSTN_MinionHandle& Handle : Handles)
 	{
 		UGSTN_MinionSpawner::Despawn(GetWorld(), Handle);
@@ -830,9 +930,18 @@ void UGSTN_MinionBenchSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
+	// The brains write the intents of the Brain scenario (UGSTN_MinionBrainSubsystem); the bench only reports
+	if (Scenario == EGSTN_MinionBenchScenario::Brain)
+	{
+		return;
+	}
 	UWorld* World = GetWorld();
 	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
 	if (!Minions)
+	{
+		return;
+	}
+	if (Scenario == EGSTN_MinionBenchScenario::Attack && bAttackBrain)
 	{
 		return;
 	}

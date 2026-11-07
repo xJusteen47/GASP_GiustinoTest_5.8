@@ -250,3 +250,29 @@
   GSTN_MinionTests_Present.cpp.
 - PERF-DEBT (also in perf-debt.md): none new in runtime; harness scenarios still wait fixed times (no event waits).
 - Cost: ~$7 (one session, ~75 tool calls, 2 builds + gate on/off, 6 headless harness runs incl. 2 diagnostic).
+
+## G8 (laptop, 2026-11-07): AI hook DONE, gate green, spike 6 PASS; 7/8 scenarios green at 0 %, 6/6 at 2 %; minion_lod red (harness side)
+
+- Branch `claude/project-thread-kbrsme` from `claude/project-thread-xm9w8k` (85e74b0). Sonnet writer (`Saved/M8G8/writer-brief.md`, report `writer-report.md`).
+- Done (only `Plugins/GSTNMinion` + `minion_scenarios.py`): `UGSTN_MinionBrainSubsystem` runs one `FStateTreeExecutionContext` per brained slot, budgeted by tier
+  (T0 every frame, T1 1/4, T2 1/16, Dormant none, round robin), commits one intent per tick; `UGSTN_MinionBrainComponent` is a handle only (no tick);
+  schema `UGSTN_MinionStateTreeSchema` (context = `FGSTN_MinionBrainContext` external data), tasks MoveToTarget / FaceTarget / RequestAttack, conditions
+  TargetInRange / IsLODAtLeast; `UGSTN_MinionSteeringUtils` (seek, arrive, separation; nav path <= 2 Hz when a navmesh exists, else direct seek);
+  native fallback brain (`gstn.Minion.Brain.Native 1`, or a slot with no tree); test tree "chase and swing" built and compiled in code in GSTNMinionEditor
+  and handed to Runtime through a factory; LOD wake (inbox hit or launch on Far/Dormant -> Combat, brain ticks that frame, `OnMinionWoken`).
+  Bench: `Spawn <N> Brain`, `Attack <N> <Fighter> Brain`, `Poke <BenchIndex>`; `gstn.Minion.Brain.Report|Dump`, `gstn.Minion.LOD.Log 1`. Definition: soft `Brain`.
+- Deviations: brain is not a ticking `UStateTreeComponent` per actor (perf rule, announced at start); tier rates are CVars, not the LOD batch intervals;
+  StateTree plugin added to GSTNMinion.uplugin (.uproject untouched); FaceTarget got an empty instance struct (5.8 compiler rejects a task without one).
+- Gate: on 1374/0 (1363 + 11 `GSTNMinion.*.Brain.*`), off 1307/0, 0 ensures.
+- Spike 6 (headless test, 40 minions forced T0, 120 frames): StateTree 4.96 us per minion tick (0.005 ms, threshold 0.02 ms: PASS; one 4.1 ms first-tick
+  outlier = tree init), native 0.49 us. StateTree kept; native stays as fallback.
+- Harness (dedicated + 2 clients): 0 % tokens_brain, hits_player, tokens, replicate, late_join PASS; reaction_tiers FAIL once ("still items 0") then PASS
+  on rerun with no code change in its path (flaky, watch it). 2 %: tokens_brain, hits_player, tokens, replicate, late_join, reaction_tiers all PASS.
+  minion_lod FAIL (2 fix attempts used): the "no pop" checks pass, but the tiers never change because the third server pawn `BP_GASNPP_TestCharacter_C_2`
+  stays at -800,0 after `server_teleport_exact` (logged in the dump steps), so a controller pawn stays 190 cm from the minions. Next: in `teleport()`
+  fall back to `set_actor_location(..., teleport=True)` for any pawn not moved after 0.3 s (or teleport every controller pawn), then rerun lod at 0 % and 2 %.
+  lod not run at 2 %. Brain.Dump fixed to one line (leaf state) with action/move/intent/nearestPawn diagnostics.
+- Not in scope, still red: player_hits_minion, lagcomp (desktop queue).
+- PERF-DEBT (also in perf-debt.md): execution context built per ticked slot; neighbours by store walk (O(N) per minion); target pick scans fighters per slot
+  at 2 Hz; tree LoadSynchronous on first spawn; instance-data arrays sized to capacity; Brain.Dump nearest-pawn scan (debug only).
+- Cost: ~$12 (Sonnet writer ~350k tokens / 85 tool calls; my context ~90k; 3 builds + gate on/off, 4 harness runs).

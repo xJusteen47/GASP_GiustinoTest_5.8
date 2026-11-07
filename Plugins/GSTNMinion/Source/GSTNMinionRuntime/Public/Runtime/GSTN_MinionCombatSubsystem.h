@@ -347,6 +347,20 @@ public:
 	DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnMinionMovementStepped, int32 /*Frame*/, TConstArrayView<int32> /*Slots*/, TConstArrayView<FVector3f> /*PreviousPositionBySlot*/);
 	FOnMinionMovementStepped OnMovementStepped;
 
+	/**
+	 * C++ hook (G8): a slot became active (its spawn was drained and its actor acquired). The brain subsystem starts the type's brain
+	 * from it. Fires inside the batch: a listener may write intents but must not spawn or despawn
+	 */
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnMinionActivated, const FGSTN_MinionHandle& /*Minion*/);
+	FOnMinionActivated OnMinionActivated;
+
+	/**
+	 * C++ hook (G8): a minion went from Far or Dormant to Combat (a hit, a launch, a forced wake), bypassing hysteresis and dwell.
+	 * The brain subsystem ticks that brain on the same world tick. Fires inside the batch (or from LaunchMinion)
+	 */
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnMinionWoken, const FGSTN_MinionHandle& /*Minion*/);
+	FOnMinionWoken OnMinionWoken;
+
 	/** Debug and test: every slot is put in this tier, no hysteresis (INDEX_NONE restores the distance rule) */
 	void SetForcedLODTier(int32 Tier) { ForcedLODTier = Tier; }
 
@@ -361,6 +375,9 @@ public:
 
 	/** The actor of a live, activated slot; null otherwise */
 	AGSTN_MinionActor* GetActorOfSlot(int32 SlotIndex) const;
+
+	/** True for a live slot whose queued spawn has been activated (a pending slot is claimed but not in the world yet) */
+	bool IsSlotActive(int32 SlotIndex) const { return Store.IsSlotAlive(SlotIndex) && !PendingActivation[SlotIndex]; }
 
 	/** The registered definition of a store TypeIndex, null when out of range */
 	const UGSTN_MinionDefinition* GetDefinition(int32 TypeIndex) const;
@@ -675,6 +692,8 @@ private:
 	int32 ForcedLODTier = INDEX_NONE;
 	float FixedStepSeconds = 1.f / 62.5f;
 	int32 LastBatchFrame = INDEX_NONE;
+	/** Frame of the batch being run (equals LastBatchFrame between batches): the frame LOD log lines carry */
+	int32 CurrentBatchFrame = INDEX_NONE;
 
 	// Replication (G6), see GSTN_MinionCombatSubsystem_Net.cpp
 	struct FViewerRelevancy

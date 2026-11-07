@@ -15,7 +15,7 @@ import gasnpp_test as g
 import defence_scenarios as ds
 
 SUITE_MINION = ['minion_hits_player', 'minion_tokens', 'minion_replicate', 'minion_late_join', 'minion_player_hits_minion',
-                'minion_reaction_tiers', 'minion_lagcomp']
+                'minion_reaction_tiers', 'minion_lagcomp', 'minion_lod', 'minion_tokens_brain']
 # M8 G6: replication scenarios (packs, relevancy grants, registry check); run_batch(SUITE_MINION_NET)
 SUITE_MINION_NET = ['minion_late_join', 'minion_replicate']
 MINION_BIT = 0x40000000
@@ -525,6 +525,236 @@ def scenario_minion_lagcomp(client=1):
         (10.0, run.at('the client predicted and confirmed a flash on the puppet it aimed at', confirmed_flash)),
         (10.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
         (11.0, run.finish()),
+    ]
+    run.run(steps)
+
+
+# ---- M8 G8: the brain (StateTree "chase and swing", or the native fallback). Log formats come from the G8 writer report:
+#   MinionLOD id=<entity id> from=<tier> to=<tier> frame=<batch frame>          (gstn.Minion.LOD.Log 1, server)
+#   MinionBrain slot=.. id=.. tier=.. state=.. target=.. ticks=.. lastTick=.. now=..   (gstn.Minion.Brain.Dump, server)
+#   MinionBrain mode=<StateTree|Native> brained=.. ticksLastSec=.. usPerTick=.. maxUsPerTick=.. wakes=..   (gstn.Minion.Brain.Report)
+#   Bench: poke index=.. id=.. tier=.. posted=.. frame=..                         (gstn.Minion.Bench.Poke <BenchIndex>)
+_LOD_LINE = re.compile(r'MinionLOD id=(\d+) from=(\w+) to=(\w+) frame=(-?\d+)')
+_BRAIN_DUMP = re.compile(r'MinionBrain slot=(\d+) id=(\d+) tier=(\w+) state=(.*?) target=(-?\d+) ticks=(\d+) lastTick=(-?\d+) now=(\d+)')
+_BRAIN_REPORT = re.compile(r'MinionBrain mode=(\w+) brained=(\d+) ticksLastSec=(\d+) usPerTick=([\d.]+) maxUsPerTick=([\d.]+) wakes=(\d+)')
+_POKE_LINE = re.compile(r'Bench: poke index=(\d+) id=(\d+) tier=(-?\d+) posted=(\d) frame=(-?\d+)')
+LOD_CHAIN = [('Combat', 'Near'), ('Near', 'Far'), ('Far', 'Dormant')]
+
+
+def _lod_transitions(mark=None):
+    """MinionLOD lines after the mark as [(id, from, to, frame)] in log order"""
+    text = g._read_log_since(mark if mark is not None else _marks['log'])
+    return [(int(m.group(1)), m.group(2), m.group(3), int(m.group(4))) for m in map(_LOD_LINE.search, text.splitlines()) if m]
+
+
+def _brain_dump_state(mark):
+    """Brain.Dump lines after the mark: {id: dict(tier, state, target, ticks, lastTick, now)}"""
+    out = {}
+    for ln in g._read_log_since(mark).splitlines():
+        m = _BRAIN_DUMP.search(ln)
+        if m:
+            out[int(m.group(2))] = dict(slot=int(m.group(1)), tier=m.group(3), state=m.group(4), target=int(m.group(5)), ticks=int(m.group(6)),
+                                        lastTick=int(m.group(7)), now=int(m.group(8)))
+    return out
+
+
+def _snapshot(st, label):
+    """Server net items and client puppets from the dumps after the mark (call a few hundred ms after _net_dump + _present_dump)"""
+    server, clients, grants, summaries = _net_state()
+    puppets, psum = _present_state()
+    st.setdefault('snap', {})[label] = dict(server=server, clients=clients, puppets=puppets)
+    return f'{label}: server items {len(server)} puppets {len(puppets)}'
+
+
+def _no_pop(st, before, after):
+    """Each puppet shown in both snapshots moved at most what the server moved its minion (+ 30 cm): a tier change must not snap the display"""
+    a, b = st['snap'][before], st['snap'][after]
+    n, worst, bad = 0, -1e9, []
+    for player, items in b['clients'].items():
+        for k in items:
+            if k not in a['server'] or k not in b['server']:
+                continue
+            pa, pb = _puppet_of(a['puppets'], player, *k), _puppet_of(b['puppets'], player, *k)
+            if pa is None or pb is None:
+                continue
+            moved_client = _dist(pa['pos'], pb['pos'])
+            moved_server = _dist(a['server'][k][1], b['server'][k][1])
+            n += 1
+            worst = max(worst, moved_client - moved_server)
+            if moved_client > moved_server + 30.0:
+                bad.append((player, k, round(moved_client, 1), round(moved_server, 1)))
+    st.setdefault('pop', []).append((n, worst))
+    return not bad, f'{before}->{after}: {n} puppets compared, worst excess {worst:.1f} cm, bad {bad[:3]}'
+
+
+def scenario_minion_lod(client=1):
+    """M8 G8. 12 Brain minions around the players. Both pawns are teleported away in steps (beyond Near, beyond Far, beyond Dormant): the tiers
+    change in order Combat -> Near -> Far -> Dormant for most minions and none jumps Combat -> Dormant; the client display never moves more than
+    the server moved the minion (+ 30 cm, 'no pop'); a Poke (a synthetic hit through the inbox) on a dormant minion puts it in Combat within 2
+    frames and its brain ticks (Brain.Dump ticks went up)"""
+    run = g._Run('minion_lod', client, judge_reconciles=False, sample=False)
+    st = {'base': {}}
+    NUM = 12
+
+    def setup():
+        _marks['log'] = g.mark_log()
+        _cmd('gstn.Minion.LOD.Log 1')
+        for key, comp in g.comps(g.worlds()[0]).items():
+            v = comp.get_owner().get_actor_location()
+            st['base'][key] = (v.x, v.y, v.z)
+        return f"LOD log on, pawns {sorted(st['base'])}"
+
+    def teleport(dx):
+        def f():
+            for key, comp in g.comps(g.worlds()[0]).items():
+                b = st['base'][key]
+                comp.server_teleport_exact(unreal.Vector(b[0] + dx, b[1], b[2]))
+            return f'both pawns {dx:.0f} cm away'
+        return f
+
+    def dump_both():
+        _net_dump()
+        _present_dump()
+        # Where every server pawn really is (the LOD stage reads the controllers' pawns): a pawn that fell or was not moved shows here
+        pawns = []
+        for a in unreal.GameplayStatics.get_all_actors_of_class(g.worlds()[0], unreal.Pawn):
+            v = a.get_actor_location()
+            pawns.append(f'{a.get_name()}@{v.x:.0f},{v.y:.0f},{v.z:.0f}')
+        return 'net + present dumped; pawns ' + ' '.join(pawns)
+
+    def chain_ok():
+        pre = [t for t in _lod_transitions() if t[3] <= st['poke_frame']]
+        ids = {t[0] for t in pre}
+        direct = [t for t in pre if (t[1], t[2]) == ('Combat', 'Dormant')]
+        full = 0
+        for i in ids:
+            seq = [(t[1], t[2]) for t in pre if t[0] == i]
+            pos = -1
+            for hop in LOD_CHAIN:
+                pos = next((j for j in range(pos + 1, len(seq)) if seq[j] == hop), None)
+                if pos is None:
+                    break
+            full += pos is not None
+        return (not direct and len(ids) >= NUM * 0.75 and full >= NUM * 0.75), f'{full}/{len(ids)} minions walked the whole chain, direct Combat->Dormant jumps {len(direct)}'
+
+    def poke():
+        _marks['pre_brain'] = g.mark_log()
+        _cmd('gstn.Minion.Brain.Dump')
+        return 'brain dump before the poke'
+
+    def do_poke():
+        st['before'] = _brain_dump_state(_marks['pre_brain'])
+        _marks['poke'] = g.mark_log()
+        _cmd('gstn.Minion.Bench.Poke 0')
+        return 'poked bench minion 0'
+
+    def poke_parsed():
+        m = _POKE_LINE.search(g._read_log_since(_marks['poke']))
+        if m:
+            st['poke_id'], st['poke_frame'] = int(m.group(2)), int(m.group(5))
+        return m is not None
+
+    def wake_ok():
+        if not poke_parsed():
+            return False, 'poke line not found'
+        wake = [t for t in _lod_transitions(_marks['poke']) if t[0] == st['poke_id'] and t[1] == 'Dormant' and t[2] == 'Combat']
+        late = wake[0][3] - st['poke_frame'] if wake else None
+        return (wake != [] and late <= 2), f"poked id {st['poke_id']} at frame {st['poke_frame']}: Dormant->Combat {wake[:1]} ({late} frames later)"
+
+    def was_dormant():
+        b = st['before'].get(st.get('poke_id', -1))
+        return (b is not None and b['tier'] == 'Dormant'), f"brain dump before the poke: {b}"
+
+    def brain_ticked():
+        a = _brain_dump_state(_marks['post_brain']).get(st.get('poke_id', -1))
+        b = st['before'].get(st.get('poke_id', -1))
+        return (a is not None and b is not None and a['ticks'] > b['ticks']), f'before {b} after {a}'
+
+    def post_dump():
+        _marks['post_brain'] = g.mark_log()
+        _cmd('gstn.Minion.Brain.Dump')
+        return 'brain dump after the poke'
+
+    def snap_checks():
+        res = []
+        for before, after in (('A', 'B'), ('B', 'C'), ('C', 'D')):
+            res.append(_no_pop(st, before, after))
+        n = sum(p[0] for p in st['pop'])
+        return all(r[0] for r in res) and n > 0, '; '.join(r[1] for r in res)
+
+    # poke_frame is needed by chain_ok before the poke step runs, so it is read from the poke line at check time
+    def chain_checked():
+        poke_parsed()
+        return chain_ok()
+
+    steps = [
+        (0.0, lambda: ('setup', setup())),
+        (0.5, lambda: ('spawn', _cmd(f'gstn.Minion.Bench.Spawn {NUM} Brain'))),
+        (4.0, lambda: ('dump A', dump_both())),
+        (4.6, lambda: ('snapshot A', _snapshot(st, 'A'))),
+        (4.7, lambda: ('teleport 1', teleport(2800.0)())),
+        (7.0, lambda: ('dump B', dump_both())),
+        (7.6, lambda: ('snapshot B', _snapshot(st, 'B'))),
+        (7.7, lambda: ('teleport 2', teleport(5600.0)())),
+        (10.0, lambda: ('dump C', dump_both())),
+        (10.6, lambda: ('snapshot C', _snapshot(st, 'C'))),
+        (10.7, lambda: ('teleport 3', teleport(10500.0)())),
+        (13.0, lambda: ('dump D', dump_both())),
+        (13.6, lambda: ('snapshot D', _snapshot(st, 'D'))),
+        (13.7, lambda: ('brain dump', poke())),
+        (14.2, lambda: ('poke', do_poke())),
+        (14.45, lambda: ('brain dump after', post_dump())),
+        (15.0, run.at('the tiers walk Combat -> Near -> Far -> Dormant, no direct Combat -> Dormant jump', chain_checked)),
+        (15.0, run.at('no pop: the client display moves no more than the server moved the minion (+ 30 cm)', snap_checks)),
+        (15.0, run.at('the poked minion was Dormant', was_dormant)),
+        (15.0, run.at('a hit on a dormant minion puts it in Combat within 2 frames', wake_ok)),
+        (15.0, run.at('the woken minion brain ticked (Brain.Dump ticks went up)', brain_ticked)),
+        (15.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (15.2, lambda: ('LOD log off', _cmd('gstn.Minion.LOD.Log 0'))),
+        (16.0, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_minion_tokens_brain(client=1):
+    """M8 G8. The checks of scenario_minion_tokens with the brain driving the attackers (gstn.Minion.Bench.Attack 8 0 Brain): at most 4 hold a
+    token on any fixed frame, the cap is reached, refused starts happened, swings overlap for at most 4 distinct attackers, the waiting minions
+    take over, the victim agrees on every world afterwards; and the brain ran for all 8 (Brain.Report brained=8, ticksLastSec > 0)"""
+    run = g._Run('minion_tokens_brain', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def window_max(rows):
+        best = 0
+        for r in rows:
+            best = max(best, len({x[1] for x in rows if r[0] <= x[0] < r[0] + 8}))
+        return best
+
+    def brain_line():
+        rows = [ln for ln in g._read_log_since(_marks['log']).splitlines() if _BRAIN_REPORT.search(ln)]
+        m = _BRAIN_REPORT.search(rows[-1]) if rows else None
+        return m, (rows[-1][-140:] if rows else '')
+
+    def brain_ran():
+        m, text = brain_line()
+        return (m is not None and int(m.group(2)) == 8 and int(m.group(3)) > 0), text
+
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Attack 8 0 Brain'))),
+        (9.0, lambda: ('capture', st.update(key=_victim_key()))),
+        (9.05, lambda: ('brain report', _cmd('gstn.Minion.Brain.Report'))),
+        (9.1, lambda: ('report', _cmd('gstn.Minion.Bench.Report'))),
+        (9.5, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (12.5, run.at('attackers landed hits on one victim', lambda: (st.get('key') is not None and len(_minion_rows(0, st['key'])) >= 4, f"victim {st.get('key')} rows {len(_minion_rows(0, st['key'])) if st.get('key') else 0}"))),
+        (12.5, run.at('the brain ran for all 8 attackers (brained=8, ticksLastSec > 0)', brain_ran)),
+        (12.5, run.at('the token cap held on every fixed frame (maxHolders <= 4)', lambda: (
+            (_num(_report_line('MinionBench attack'), 'maxHolders') or 99) <= 4, _report_line('MinionBench attack')[-120:]))),
+        (12.5, run.at('the cap was reached (maxHolders == 4)', lambda: ((_num(_report_line('MinionBench attack'), 'maxHolders') or 0) == 4, _report_line('MinionBench attack')[-120:]))),
+        (12.5, run.at('starts were refused for taken tokens (tokensDenied > 0)', lambda: ((_num(_report_line('MinionBench attack'), 'tokensDenied') or 0) > 0, _report_line('MinionBench attack')[-120:]))),
+        (12.5, run.at('at most 4 distinct attackers hit inside one swing window', lambda: (window_max(_minion_rows(0, st['key'])) <= 4, f"max {window_max(_minion_rows(0, st['key']))}"))),
+        (12.5, run.at('waiting minions take over (> 4 distinct attackers over the run)', lambda: (len({r[1] for r in _minion_rows(0, st['key'])}) > 4, f"attackers {len({r[1] for r in _minion_rows(0, st['key'])})}"))),
+        (12.5, run.at('damage percent equal on the server and both clients', lambda: _converged(st['key']))),
+        (12.5, run.finish()),
     ]
     run.run(steps)
 

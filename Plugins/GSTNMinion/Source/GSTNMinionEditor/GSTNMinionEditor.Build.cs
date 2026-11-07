@@ -16,6 +16,14 @@ public class GSTNMinionEditor : ModuleRules
 			"GSTNMinionRuntime"
 		});
 
-		PrivateDependencyModuleNames.Add("UnrealEd");
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"UnrealEd",
+			// G8: builds the test brain tree in code and compiles it
+			"StateTreeModule",
+			"StateTreeEditorModule",
+			"PropertyBindingUtils",
+			"GameplayTags"
+		});
 	}
 }

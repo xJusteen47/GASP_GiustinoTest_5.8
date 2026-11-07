@@ -60,6 +60,10 @@ DECLARE_DWORD_COUNTER_STAT(TEXT("Attack tokens denied"), STAT_GSTN_MinionTokensD
 
 namespace
 {
+	TAutoConsoleVariable<int32> CVarLODLog(
+		TEXT("gstn.Minion.LOD.Log"), 0,
+		TEXT("1 logs every LOD tier change as: MinionLOD id=<entity id> from=<tier> to=<tier> frame=<batch frame>. The harness reads it; off by default."));
+
 	TAutoConsoleVariable<int32> CVarSpawnsPerFrame(
 		TEXT("gstn.Minion.SpawnsPerFrame"), 4,
 		TEXT("Most queued minion spawns the batch activates per frame (FIFO). Spreads a wave over frames instead of one hitch."));
@@ -374,6 +378,15 @@ bool UGSTN_MinionCombatSubsystem::LaunchMinion(const FGSTN_MinionHandle& Handle,
 	}
 	const int32 Slot = Handle.Index;
 	MoveColumns.PendingLaunch[Slot] = FVector3f(Velocity);
+	// A launch wakes a far or dormant minion at once (G8): it is about to fly, and the next scheduled LOD step of a dormant one is
+	// up to DormantInterval frames away. Same effect as a hit in the inbox drain: Combat now, no hysteresis, no dwell
+	if (Store.LODTier[Slot] != static_cast<uint8>(EGSTN_MinionLODTier::Combat))
+	{
+		const uint8 OldTier = Store.LODTier[Slot];
+		Store.LODTier[Slot] = static_cast<uint8>(EGSTN_MinionLODTier::Combat);
+		Store.FramesInTier[Slot] = 0;
+		QueueLODChange(Slot, OldTier, Store.LODTier[Slot]);
+	}
 	MoveColumns.KnockbackMode[Slot] = static_cast<uint8>(bPushBack ? EGSTN_MinionKnockbackMode::PushedBack : EGSTN_MinionKnockbackMode::Launched);
 	if (!IsDyingOrDead(Store.ActionState[Slot]))
 	{
@@ -716,6 +729,7 @@ void UGSTN_MinionCombatSubsystem::TickBatch(int32 Frame, bool bResimulating)
 
 	LastBatch = FGSTN_MinionBatchStats();
 	LastBatch.Frame = Frame;
+	CurrentBatchFrame = Frame;
 
 	StageSpawnDrain(Frame);
 	BuildSchedule(Frame);
@@ -800,6 +814,7 @@ void UGSTN_MinionCombatSubsystem::StageSpawnDrain(int32 Frame)
 		ResetHitColumns(Slot);
 
 		AcquireActor(Slot, Queued.Transform);
+		OnMinionActivated.Broadcast(Queued.Handle);
 		if (Queued.Params.bPlaySpawnTimeline && ResolvedTypes[Queued.TypeIndex].SpawnTimeline)
 		{
 			StartTimeline(Slot, GSTNMinion::ReactionMoveIds::Spawn, Frame);
@@ -2252,6 +2267,25 @@ void UGSTN_MinionCombatSubsystem::GatherRewoundCandidates(const FBox& Bounds, fl
 
 void UGSTN_MinionCombatSubsystem::QueueLODChange(int32 Slot, uint8 OldTier, uint8 NewTier)
 {
+	if (CVarLODLog.GetValueOnGameThread() != 0)
+	{
+		const auto TierName = [](uint8 Tier) -> const TCHAR*
+		{
+			switch (static_cast<EGSTN_MinionLODTier>(Tier))
+			{
+			case EGSTN_MinionLODTier::Combat: return TEXT("Combat");
+			case EGSTN_MinionLODTier::Near: return TEXT("Near");
+			case EGSTN_MinionLODTier::Far: return TEXT("Far");
+			default: return TEXT("Dormant");
+			}
+		};
+		UE_LOG(LogGSTNMinion, Log, TEXT("MinionLOD id=%d from=%s to=%s frame=%d"), GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot)), TierName(OldTier), TierName(NewTier), CurrentBatchFrame);
+	}
+	// Far or Dormant straight to Combat is a wake (a hit, a launch, a forced state): the brain must think this frame
+	if (NewTier == static_cast<uint8>(EGSTN_MinionLODTier::Combat) && OldTier >= static_cast<uint8>(EGSTN_MinionLODTier::Far))
+	{
+		OnMinionWoken.Broadcast(Store.HandleOfSlot(Slot));
+	}
 	FQueuedEvent& Event = QueuedEvents.AddDefaulted_GetRef();
 	Event.Kind = FQueuedEvent::EKind::LODChanged;
 	Event.Handle = Store.HandleOfSlot(Slot);
