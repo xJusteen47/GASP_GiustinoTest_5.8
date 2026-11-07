@@ -51,3 +51,32 @@ the sequence was not done yet). The rows below do not touch M7 files.
 - **Measured** (scratch automation test `GSTNSpike.FixedTickHook.TimeFrameMap`, drives `FFixedTickState` as the world manager does; step 33/16/17 ms,
   Offset 0/7/-3/120, 3600 frames; not committed): hook frame vs stamp **0** frames; "now" during tick vs newest stamp **0**; after tick **1**
   (always); round trip of arbitrary client times **0.471** frame max. Error ≤ 1 frame: pass. Log `Saved/SD17/headless-spike.log`.
+
+## G0b spike 1, AI fighters baseline (laptop, 2026-11-07), HEAD 977eb20
+
+Run on the **laptop** (the low-end profile of the brief), not the desktop: editor PIE in one process, `L_Test_Hub`, listen host that renders
++ 2 clients, 60 ms / 15 ms jitter. Scratch command `gstn.Spike.Brawl` (untracked `Source/.../ScratchSpike/GSTN_SpikeBrawl.cpp`, delete by hand):
+spawns `BP_GASNPP_TestCharacter` bots with `UGSTN_AIInputSource` on the host, settle 5 s, measure 15 s. Per-world time = `OnWorldTickStart`→
+`OnWorldTickEnd` (dispatch, NP fixed ticks, actors, anim, net flush). The hub already has ~10 dummies + 3 players in every row.
+CSV `Saved/Logs/m8-g0/brawl-laptop.csv` (run 1 with a driver bug: `brawl-laptop-run1.csv`, same trend).
+
+| N bots | loss | frame ms | host world ms | each client world ms | host out KB/s per client |
+|---|---|---|---|---|---|
+| 0 | 0 % | 83 | 35 | 14 | 19.5 |
+| 10 | 0 % | 160 | 85 | 23 | 10.2 |
+| 20 | 0 % | 317 | 203 | 34-36 | 5.1 |
+| 40 | 0 % | 514 | 382 | 37-39 | 3.2 |
+| 40 | 2 % | 510 | 379 | 37-38 | 3.2 |
+
+- **Host: ~5-9 ms per bot per rendered frame** (slope 0→10 = 5 ms, 10→20 = 12 ms, 20→40 = 9 ms). The frame passes 16 ms long before N=10, so
+  NP runs several fixed steps per frame (catch-up spiral) and the per-frame slope overstates the per-step cost: per fixed step it is still
+  **≈ 0.5 ms per bot** (50 ms / 10 bots / ~10 steps per frame at N=10), more than 10x the 0.04 ms target of M8 §2 row 1. Clients pay
+  ~1 ms per bot (sim proxies: anim + interpolation). KB/s per client falls with N only because the frame rate collapses (fewer flushes).
+- Limits of this run: bots did **not chase** (`AddMovementInput` is not read by the BP Mover input on an AI pawn; `inputReady` false) and no
+  attack landed in the window (60-90 frame interval vs ~30 frames measured): the numbers are idle AI fighters, so a lower bound of Brawl.
+  One process (client worlds tick on the same thread); editor, not cooked; laptop GPU/CPU. Loss 2 % changes nothing at this frame rate.
+- **Verdict**: AI fighters are far from fitting N = 40 (no stop condition, and the owner removed it anyway): M8 proceeds with the minion store.
+  The desktop repeat of the brief (Insights scopes, cooked, 20/40/60) is optional now; it would only refine the slope.
+- Proposed budget for the low-end profile (laptop ≈ Switch-class target): host frame 33 ms (30 fps), sim share ≤ 8 ms per fixed step for
+  4 players + 40 minions ⇒ **≤ 0.1 ms per awake minion per step** and ≤ 0.05 ms per far (LOD) minion; clients ≤ 0.05 ms per minion
+  puppet; net ≤ 4 KB/s per client at 40 awake (M8 §11 column unchanged). To confirm in G3 (bench) and G11.

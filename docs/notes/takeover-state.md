@@ -935,3 +935,4 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 - Animation pipeline: docs/notes/handovers/anim-pipeline.md.
 - Remaining M3/M4b/M5/T gates (plan resto-m3-m4b-m5-t.md): R3 in docs/notes/handovers/m3-suite.md; traversal leftovers in
   docs/notes/handovers/traversal-rest.md (T2 closed, T6 done 2026-11-06; T7 next, after M8 G1/G5); M5 leftovers in docs/notes/handovers/m5-rest.md (E15, E16 done 2026-11-06).
+- M8 minions: docs/notes/handovers/m8-minion.md (G0a 2026-11-06, G0b laptop 2026-11-07 on claude/project-thread-q54iwa; G1 next, brief there).
