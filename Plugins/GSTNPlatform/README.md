@@ -18,15 +18,15 @@ platform-minion proxy and no minion seams (combat-m8-minions.md §4d.5 stays for
 
 | Module | State | What it is |
 |---|---|---|
-| `GSTNPlatformCore` | exists (Runtime) | Pure data and math, no world, no Mover: `FGSTN_PlatformSpec`, `FGSTN_PlatformShape` (geometry, `FGSTN_SurfaceBehaviour`, `PartName`, activation and occupant overrides), `FGSTN_OccupantResponse`, `EGSTN_PlatformShapeState`, `EGSTN_PlatformActionState`, `FGSTN_PlatformShapeStates` (per-shape timelines by frame), `GSTNPlatformCollision` (behaviour → collision rules), `FGSTN_PoseHistory`, `FGSTN_PlatformPoseContext`, `FGSTN_PlatformScriptedPath`, validation (`CollectFindings`), the `Platform.*` tags. Covered by `GSTNPlatform.Core.*`. |
+| `GSTNPlatformCore` | exists (Runtime) | Pure data and math, no world, no Mover: `FGSTN_PlatformSpec`, `FGSTN_PlatformShape` (geometry, `FGSTN_SurfaceBehaviour`, `PartName`, activation and occupant overrides), `FGSTN_OccupantResponse`, `EGSTN_PlatformShapeState`, `EGSTN_PlatformActionState`, `FGSTN_PlatformShapeStates` (per-shape timelines by frame), `GSTNPlatformCollision` (behaviour → collision rules), `FGSTN_PoseHistory` (lives in `GSTNCore` since M8 G2; `GSTN_PoseHistory.h` here is a redirect), `FGSTN_PlatformPoseContext`, `FGSTN_PlatformScriptedPath`, validation (`CollectFindings`), the `Platform.*` tags. Covered by `GSTNPlatform.Core.*`. |
 | `GSTNPlatformRuntime` | exists (Runtime) | `UGSTN_PlatformSettings`, `UGSTN_PlatformDefinition` (data asset), `UGSTN_EnemyPlatformComponent`, the colliders `UGSTN_Platform{Box,Sphere,Capsule}Collider` (surface providers), `UGSTN_PlatformSubsystem` (the pose point), `UGSTN_ScriptedPlatformComponent` (enemy on rails), `AGSTN_PlatformTestFighter` (test content), console commands. Covered by `GSTNPlatform.Runtime.*` and `GSTNPlatform.Shapes.*`. |
 
 ## Dependencies
 
-- Plugins: `GSTNSurface`, `Mover` (plan T3 acceptance: builds with `GSTNSurfaceCore` and Mover only). No GAS and no Network
+- Plugins: `GSTNCore` (pose history, M8 Q7), `GSTNSurface`, `Mover` (plan T3 acceptance: builds with `GSTNSurfaceCore` and Mover only). No GAS and no Network
   Prediction code of its own; Mover brings Network Prediction with it.
-- `GSTNPlatformCore`: Core, CoreUObject, Engine, GameplayTags, GSTNSurfaceCore.
-- `GSTNPlatformRuntime`: the above plus DeveloperSettings, PhysicsCore, Mover, GSTNPlatformCore; private NetCore.
+- `GSTNPlatformCore`: Core, CoreUObject, Engine, GameplayTags, GSTNCore, GSTNSurfaceCore.
+- `GSTNPlatformRuntime`: the above (GSTNCore listed again: the platform component holds a pose history) plus DeveloperSettings, PhysicsCore, Mover, GSTNPlatformCore; private NetCore.
 - Never `GASP_Giustino2`, `GSTNCombat*`, `GSTNParts`, `GSTNMinion`. The combat lag-compensation time of modularity §3.5 is not
   needed before T7.
 

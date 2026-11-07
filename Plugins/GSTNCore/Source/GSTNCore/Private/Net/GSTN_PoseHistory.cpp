@@ -1,6 +1,6 @@
-// Pure platform data and math (no Mover, no Network Prediction, no GAS).
+// Shared net primitive (GSTNCore, Net/): pure data and math, no world, no Mover, no Network Prediction, no GAS.
 
-#include "GSTN_PoseHistory.h"
+#include "Net/GSTN_PoseHistory.h"
 
 void FGSTN_PoseHistory::Record(int32 Frame, const FTransform& Pose, double StepSeconds)
 {

@@ -9,7 +9,8 @@ Checks:
      --allow-uproject skips the .uproject, for a local build that lists the plugin enabled (never commit that).
   2. Plugins/GSTNPiggyback/Source has no "/Game/" path and no ConstructorHelpers: the plugin is usable alone.
   3. Module edges (Build.cs): GSTNPiggybackCore lists no GAS, NP, Mover, Editor or sibling GAS/NP module; GSTNLink* never lists a
-     GSTNDefence module and GSTNDefence* never a GSTNLink module; the two GSTNExtensionTest modules never list each other.
+     GSTNDefence module and GSTNDefence* never a GSTNLink module; the two GSTNExtensionTest modules never list each other;
+     GSTNCore (shared L2 helpers, M8 Q7) lists no GSTN module and no GAS, NP, Mover, Editor or project module.
 
 Usage: python Tools/Modules/check_modules.py [--root <project dir>] [--allow-uproject]
 """
@@ -26,6 +27,10 @@ PIGGYBACK_DIR = os.path.join("Plugins", "GSTNPiggyback")
 
 # Build.cs file name -> module names it must not list
 FORBIDDEN_EDGES = {
+    # GSTNCore is the shared L2 helper (M8 Q7): engine modules only, so any GSTN plugin may depend on it without a cycle
+    "GSTNCore.Build.cs": [
+        "GameplayAbilities", "AbilitySystemSimulation", "NetworkPrediction", "Mover", "UnrealEd", "GASP_Giustino2",
+    ],
     "GSTNPiggybackCore.Build.cs": [
         "GameplayAbilities", "AbilitySystemSimulation", "NetworkPrediction", "Mover", "UnrealEd",
         "GSTNCombatGAS", "GSTNCombatNP", "GSTNLinkGAS", "GSTNLinkNP", "GSTNInputNP", "GSTNPiggybackRuntime",
@@ -39,6 +44,7 @@ FORBIDDEN_EDGES = {
 FORBIDDEN_PREFIX_EDGES = {
     "GSTNLink": "GSTNDefence",
     "GSTNDefence": "GSTNLink",
+    "GSTNCore": "GSTN",
 }
 
 

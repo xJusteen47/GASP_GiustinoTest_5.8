@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "GSTN Platform",
-	"Description": "Enemies as solid platforms and traversal surfaces: kinematic, unattached colliders (shapes) authored in an enemy's frame, posed at one defined point per simulation step from a function of the simulation frame, with per-shape traversal behaviours (GSTNSurface) and per-shape activation. Fighters only in this version (no minion proxy). Depends on GSTNSurface (Core) and Mover; needs no GAS and no direct Network Prediction code.",
+	"Description": "Enemies as solid platforms and traversal surfaces: kinematic, unattached colliders (shapes) authored in an enemy's frame, posed at one defined point per simulation step from a function of the simulation frame, with per-shape traversal behaviours (GSTNSurface) and per-shape activation. Fighters only in this version (no minion proxy). Depends on GSTNCore (pose history), GSTNSurface (Core) and Mover; needs no GAS and no direct Network Prediction code.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",
@@ -28,6 +28,10 @@
 		}
 	],
 	"Plugins": [
+		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
 		{
 			"Name": "GSTNSurface",
 			"Enabled": true

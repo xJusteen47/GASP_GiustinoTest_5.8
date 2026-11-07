@@ -21,6 +21,7 @@ Network Prediction, so the Core can be reused in a project without the GAS-NPP f
 
 | Plugin | Layer | Module | What it is | Needs the GAS-NPP fork |
 |---|---|---|---|---|
+| [GSTNCore](GSTNCore/README.md) | Shared helpers (L2) | `GSTNCore` | Helpers that two or more GSTN plugins need, pure and depending on no GSTN plugin. `Net/`: `FGSTN_PoseHistory` (pose ring by simulation frame, velocities from two frames), shared by GSTNPlatform and GSTNMinion (M8 Q7). On by default. | No |
 | [GSTNInput](GSTNInput/README.md) | Core | `GSTNInputCore` | Input commands, buffer, priority, locks, contexts and native input tags. | No |
 | [GSTNInputNP](GSTNInputNP/README.md) | NP adapter | `GSTNInputNP` | The input simulation embeddable in an NP model, ability bindings, the Mover sim-state tracker. | Yes |
 | [GSTNCombat](GSTNCombat/README.md) | Core | `GSTNCombatCore` | Default combat command set, combat tags and settings, timelines, loadout data and rules, sync fragment format. | No |
