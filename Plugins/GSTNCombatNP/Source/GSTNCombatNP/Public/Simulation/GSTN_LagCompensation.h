@@ -47,6 +47,24 @@ namespace GSTNLagComp
 }
 
 /**
+ * One server frame <-> the rewind time of the fork's lag-comp history (M8 X8, spike 2). Frame F of the fixed tick ends at F * FixedStepMS, the
+ * stamp CaptureStateAndAddToHistory writes and RewindActors reads, so a batch simulation that records its own history at OnPostFixedTick can
+ * be rewound with the same time as the actors. Inverse rounds to the nearest frame: an interpolation time between two stamps is at most half
+ * a frame from the frame it maps to. Pure integer math, identical on every machine.
+ */
+struct FGSTN_LagCompTime
+{
+	/** The history stamp of the end of server frame Frame */
+	static constexpr int32 TimeOfFrame(int32 Frame, int32 FixedStepMS) { return Frame * FixedStepMS; }
+
+	/** The server frame whose end stamp is nearest TimeMS; INDEX_NONE for a step of 0 */
+	static int32 FrameOfTime(float TimeMS, int32 FixedStepMS)
+	{
+		return FixedStepMS > 0 ? FMath::RoundToInt32(TimeMS / static_cast<float>(FixedStepMS)) : INDEX_NONE;
+	}
+};
+
+/**
  * Brackets a RewindActors / UnwindActors pair, so an early return cannot leave the pawns of other players in the past. Nothing outside the
  * scope sees a rewound actor: it exists to copy the poses into the overlay.
  */

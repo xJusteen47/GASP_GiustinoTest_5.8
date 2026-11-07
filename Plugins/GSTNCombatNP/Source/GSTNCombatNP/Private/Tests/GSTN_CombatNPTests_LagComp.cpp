@@ -162,7 +162,32 @@ bool FGSTN_LagCompHostNeverRewindsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LagCompCapAtMaxRewindTest, "GSTNCombat.NP.Hits.LagComp.CapAtMaxRewind", GSTN_NP_TEST_FLAGS)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LagCompTimeRoundTripTest, "GSTNCombat.NP.Hits.LagComp.TimeRoundTrip", GSTN_NP_TEST_FLAGS)
+bool FGSTN_LagCompTimeRoundTripTest::RunTest(const FString& Parameters)
+{
+	// The steps the spike measured (33, 16, 17 ms): every frame maps to its stamp and back, and a time anywhere between two stamps
+	// maps to a frame at most half a step away
+	for (const int32 StepMs : { 33, 16, 17 })
+	{
+		int32 Mismatch = 0;
+		float WorstFrames = 0.f;
+		for (int32 Frame = 0; Frame < 3600; ++Frame)
+		{
+			const int32 Stamp = FGSTN_LagCompTime::TimeOfFrame(Frame, StepMs);
+			Mismatch += FGSTN_LagCompTime::FrameOfTime(static_cast<float>(Stamp), StepMs) != Frame ? 1 : 0;
+			const float Between = static_cast<float>(Stamp) + 0.37f * static_cast<float>(StepMs);
+			const int32 Mapped = FGSTN_LagCompTime::FrameOfTime(Between, StepMs);
+			WorstFrames = FMath::Max(WorstFrames, FMath::Abs(Between - static_cast<float>(FGSTN_LagCompTime::TimeOfFrame(Mapped, StepMs))) / static_cast<float>(StepMs));
+		}
+		TestEqual(*FString::Printf(TEXT("step %d: every frame round trips"), StepMs), Mismatch, 0);
+		TestTrue(*FString::Printf(TEXT("step %d: a time between stamps is within half a frame"), StepMs), WorstFrames <= 0.5f);
+	}
+	TestEqual(TEXT("frame 30 of a 33 ms step ends at 990 ms"), FGSTN_LagCompTime::TimeOfFrame(30, 33), 990);
+	TestEqual(TEXT("a step of 0 maps to no frame"), FGSTN_LagCompTime::FrameOfTime(990.f, 0), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LagCompCapAtMaxRewindTest,"GSTNCombat.NP.Hits.LagComp.CapAtMaxRewind", GSTN_NP_TEST_FLAGS)
 bool FGSTN_LagCompCapAtMaxRewindTest::RunTest(const FString& Parameters)
 {
 	TestEqual(TEXT("inside the window the request stands"), GSTNLagComp::ClampRewindTime(1000.f, 900.f, 400), 900.f);
