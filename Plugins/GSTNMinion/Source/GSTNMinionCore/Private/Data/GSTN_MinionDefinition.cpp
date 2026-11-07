@@ -24,6 +24,37 @@ int32 UGSTN_MinionDefinition::FindMoveIndex(const FGameplayTag& Command) const
 	return Moves.IndexOfByPredicate([&Command](const FGSTN_MinionMove& Move) { return Move.Command == Command; });
 }
 
+void UGSTN_MinionDefinition::GetSoftDependencies(TArray<FSoftObjectPath>& Out, bool bIncludeServerOnly) const
+{
+	const auto Add = [&Out](const FSoftObjectPath& Path)
+	{
+		if (!Path.IsNull())
+		{
+			Out.AddUnique(Path);
+		}
+	};
+	Add(HurtboxSet.ToSoftObjectPath());
+	for (const FGSTN_MinionMove& Move : Moves)
+	{
+		Add(Move.Timeline.ToSoftObjectPath());
+	}
+	Add(Reactions.Spawn.ToSoftObjectPath());
+	Add(Reactions.Hitstun.ToSoftObjectPath());
+	Add(Reactions.PushBack.ToSoftObjectPath());
+	Add(Reactions.Launched.ToSoftObjectPath());
+	Add(Reactions.Knockdown.ToSoftObjectPath());
+	Add(Reactions.GetUp.ToSoftObjectPath());
+	Add(Reactions.Death.ToSoftObjectPath());
+	Add(PuppetClass.ToSoftObjectPath());
+	Add(PuppetMesh.ToSoftObjectPath());
+	Add(PuppetAnimClass.ToSoftObjectPath());
+	Add(PromotionFighterClass.ToSoftObjectPath());
+	if (bIncludeServerOnly)
+	{
+		Add(Brain.ToSoftObjectPath());
+	}
+}
+
 #if WITH_EDITOR
 
 namespace

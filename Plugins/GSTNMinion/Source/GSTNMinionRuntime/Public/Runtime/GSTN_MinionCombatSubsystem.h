@@ -22,6 +22,7 @@
 #include "World/GSTN_StepSnapshot.h"
 #include "GSTN_MinionCombatSubsystem.generated.h"
 
+class AActor;
 class AGSTN_MinionActor;
 class AGSTN_MinionNetManager;
 class AGSTN_MinionPack;
@@ -251,8 +252,34 @@ public:
 	/** Frees a minion now (or cancels its queued spawn). Not to be called from inside a stage: the stages free through the despawn list */
 	bool Despawn(const FGSTN_MinionHandle& Handle);
 
+	/**
+	 * Promotion to a fighter, server core (UGSTN_MinionSpawner::Promote; combat-m8-minions.md 10). Spawns the fighter class at the minion's
+	 * transform (lifted by the minion's capsule half height: the store holds the feet, a pawn's origin is its centre), adds a replicated
+	 * UGSTN_MinionPromotedComponent, sets the team through IGenericTeamAgentInterface when the fighter has it, broadcasts OnMinionPromoted
+	 * and frees the minion through the same path as Despawn. Null (and nothing changes) when refused: inactive, called from inside a batch
+	 * stage, a stale handle, a minion that is Spawning, Dying or Dead (or still queued), no fighter class, or
+	 * gstn.Minion.MaxFightersFromMinions promoted fighters are alive. Health on the fighter is the kit's job (G9b)
+	 */
+	AActor* PromoteToFighter(const FGSTN_MinionHandle& Handle, const FGSTN_MinionPromotionParams& Params);
+
+	/** Promoted fighters still alive (the cap counts these) */
+	int32 GetNumPromotedFighters();
+
+	/**
+	 * C++ hook: a minion was promoted. Fires after the fighter is complete and before the minion is freed, so a listener can still read the
+	 * store through the handle. Outside the batch stages (Promote refuses inside them)
+	 */
+	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnMinionPromoted, const FGSTN_MinionHandle& /*Minion*/, AActor* /*Fighter*/);
+	FOnMinionPromoted OnMinionPromoted;
+
 	/** True for a live or queued minion */
 	bool IsValidHandle(const FGSTN_MinionHandle& Handle) const { return Store.IsValid(Handle); }
+
+	/** True for a valid handle that is not Dying or Dead (a queued spawn and a Spawning minion are alive): what a wave counts */
+	bool IsAlive(const FGSTN_MinionHandle& Handle) const;
+
+	/** Frame at which a corpse is freed, INDEX_NONE when the slot is not a waiting corpse. For tests and debug */
+	int32 GetCorpseEndFrame(int32 Slot) const { return CorpseEndFrame.IsValidIndex(Slot) ? CorpseEndFrame[Slot] : INDEX_NONE; }
 
 	/** Writes the intent of a live minion, stamped with the current server frame. False for a stale handle */
 	bool SetIntent(const FGSTN_MinionHandle& Handle, const FGSTN_MinionIntent& Intent);
@@ -584,6 +611,8 @@ private:
 	void AcquireActor(int32 Slot, const FTransform& Transform);
 	void ReleaseActor(int32 Slot);
 	void FreeSlot(int32 Slot);
+	/** Frees the corpses whose time is up (end of the batch, after the events) */
+	void FreeDueCorpses(int32 Frame);
 
 	const FGSTN_MinionLODParams& LODParamsOf(int32 Slot) const;
 	int32 IntervalOf(int32 Slot) const;
@@ -675,6 +704,17 @@ private:
 	TArray<FQueuedEvent> QueuedEvents;
 	/** Slots whose death ended this frame, freed after the events are broadcast */
 	TArray<int32> DespawnList;
+
+	/**
+	 * Corpses (G9a): the batch frame at which a Dead slot is freed, INDEX_NONE for any other slot. Frames, not seconds, so the free frame
+	 * is deterministic. Authority only, never on the wire (the item keeps publishing Dead until the slot frees and the item is removed)
+	 */
+	TArray<int32> CorpseEndFrame;
+	/** The waiting corpses' slots, so the sweep walks only them (not the whole store) */
+	TArray<int32> Corpses;
+
+	/** Fighters made by PromoteToFighter, for the cap. Weak: the game destroys them whenever it likes */
+	TArray<TWeakObjectPtr<AActor>> PromotedFighters;
 
 	// Per-batch scratch (kept to avoid allocation)
 	TArray<int32> Scheduled;

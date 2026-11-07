@@ -9,8 +9,10 @@
 #include "GSTN_MinionBench.generated.h"
 
 class AActor;
+class AGSTN_MinionSpawnerActor;
 class UGSTN_MinionCombatSubsystem;
 class UGSTN_MinionDefinition;
+class UGSTN_MinionWaveDefinition;
 class UPrimitiveComponent;
 
 /** What the bench minions do (gstn.Minion.Bench.Spawn <N> <Scenario>) */
@@ -45,6 +47,8 @@ enum class EGSTN_MinionBenchScenario : uint8
  * trivial brain, so `stat GSTNMinion` and gstn.Minion.Bench.Report measure the batch alone. Console commands:
  *   gstn.Minion.Bench.Spawn <N> <Idle|Chase|Massacre|Brain>   gstn.Minion.Bench.Clear   gstn.Minion.Bench.Report
  *   gstn.Minion.Bench.Attack <N> <FighterIndex> [Brain]   gstn.Minion.Bench.Poke <BenchIndex>
+ *   gstn.Minion.Bench.Wave <N> <CorpseSeconds=1>   gstn.Minion.Bench.Kill   (G9a: a transient spawner plays a wave of N bench grunts at
+ *   the first player; Kill sends a lethal hit to every live bench and wave minion so they play the death timeline and the corpse time)
  *   gstn.Minion.Bench.Course <1|0>   builds (or removes) the hostile test course of spike 3 around the bench centre, in code:
  *   engine cube actors (no /Game asset) for a floor, stairs (30 cm steps), a 40 degree ramp onto a 300 cm ledge, a thin wall
  *   (10 cm) and a 90 degree corner.
@@ -83,6 +87,19 @@ public:
 	 * hit would arrive. It is the only way to hit a Dormant minion (the hit grid holds no Far or Dormant minion). Returns false for a bad index
 	 */
 	bool Poke(int32 BenchIndex);
+
+	/**
+	 * G9a: spawns a transient AGSTN_MinionSpawnerActor at the first player with a transient wave of Count bench grunts (the bench
+	 * definition, whose CorpseSeconds is set to the argument) and starts it. The previous bench spawner is destroyed first. Logs
+	 * `Bench: wave cleared frame=..` when the wave clears. Returns the number of minions the wave will spawn (0 when it did not start)
+	 */
+	int32 SpawnWave(int32 Count, float CorpseSeconds);
+
+	/**
+	 * G9a: posts a lethal synthetic hit (neutral attacker) on every live bench and wave minion, as Poke does for one, so they die through
+	 * the normal damage path. Returns how many were posted
+	 */
+	int32 Kill();
 
 	/** Despawns every bench minion */
 	void Clear();
@@ -123,6 +140,12 @@ private:
 	bool bAttackBrain = false;
 	/** Highest number of tokens held against the target on any fixed frame since the spawn */
 	int32 MaxHoldersSeen = 0;
+
+	/** G9a: the transient spawner of gstn.Minion.Bench.Wave and its wave */
+	UPROPERTY(Transient)
+	TObjectPtr<AGSTN_MinionSpawnerActor> WaveSpawner;
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_MinionWaveDefinition> WaveDefinition;
 
 	TArray<FGSTN_MinionHandle> Handles;
 	EGSTN_MinionBenchScenario Scenario = EGSTN_MinionBenchScenario::Idle;

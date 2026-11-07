@@ -32,3 +32,15 @@ bool UGSTN_MinionSpawner::IsMinionValid(const UObject* WorldContextObject, FGSTN
 	const UGSTN_MinionCombatSubsystem* Subsystem = ActiveSubsystemOf(WorldContextObject);
 	return Subsystem && Subsystem->IsValidHandle(Handle);
 }
+
+AActor* UGSTN_MinionSpawner::Promote(const UObject* WorldContextObject, FGSTN_MinionHandle Handle, const FGSTN_MinionPromotionParams& Params)
+{
+	UGSTN_MinionCombatSubsystem* Subsystem = ActiveSubsystemOf(WorldContextObject);
+	return Subsystem ? Subsystem->PromoteToFighter(Handle, Params) : nullptr;
+}
+
+bool UGSTN_MinionSpawner::IsMinionAlive(const UObject* WorldContextObject, FGSTN_MinionHandle Handle)
+{
+	const UGSTN_MinionCombatSubsystem* Subsystem = ActiveSubsystemOf(WorldContextObject);
+	return Subsystem && Subsystem->IsAlive(Handle);
+}

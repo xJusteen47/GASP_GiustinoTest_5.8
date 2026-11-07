@@ -236,6 +236,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Brain", meta = (AllowedClasses = "/Script/StateTreeModule.StateTree"))
 	TSoftObjectPtr<UObject> Brain;
 
+	/**
+	 * Seconds the body stays after the Death timeline ends (the slot is Dead, not moved, not brained, not hittable, holds no token, and
+	 * the net item keeps publishing Dead so clients keep the body). Converted to whole fixed frames, rounded up, when the death ends, so
+	 * the free frame is deterministic. 0 = freed on the frame the death ends
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Death", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float CorpseSeconds = 2.f;
+
 	/** Fighter class the minion becomes when a script promotes it. Empty = the type cannot be promoted */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Promotion")
 	TSoftClassPtr<AActor> PromotionFighterClass;
@@ -245,6 +253,13 @@ public:
 	{
 		return bOverrideLOD ? LODOverride : Defaults;
 	}
+
+	/**
+	 * Appends every soft reference this type needs loaded to play (hurtbox set, move and reaction timelines, puppet class, mesh and anim
+	 * class, promotion fighter class), skipping empty ones and paths already in Out. Brain is added only with bIncludeServerOnly (a client
+	 * never loads the tree). A wave preloads with it so no puppet or timeline loads synchronously on the first spawn
+	 */
+	void GetSoftDependencies(TArray<FSoftObjectPath>& Out, bool bIncludeServerOnly = true) const;
 
 	/** The index in Moves of the move for a command, INDEX_NONE if none. MoveId on the wire is this + 1 */
 	int32 FindMoveIndex(const FGameplayTag& Command) const;

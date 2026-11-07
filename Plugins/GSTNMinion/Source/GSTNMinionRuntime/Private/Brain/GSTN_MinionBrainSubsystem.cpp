@@ -533,6 +533,12 @@ void UGSTN_MinionBrainSubsystem::TickBrains(float DeltaSeconds)
 		{
 			continue;
 		}
+		// A corpse (G9a) waits for its slot to free and thinks no more: its brain is dropped at once
+		if (Store.ActionState[Slot] == static_cast<uint8>(EGSTN_MinionActionState::Dead))
+		{
+			DropScratch.Add(Slot);
+			continue;
+		}
 		Stats.StateTreeSlots += IsSlotUsingStateTree(Slot) ? 1 : 0;
 		const EGSTN_MinionLODTier Tier = static_cast<EGSTN_MinionLODTier>(Store.LODTier[Slot]);
 		const bool bWoken = Woken[Slot];

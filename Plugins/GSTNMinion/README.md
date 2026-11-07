@@ -32,6 +32,23 @@ changes nothing until a level spawns minions; nothing in the other plugins knows
   archive, frame-stamp reconstruction for 8 and 10 bits. Quantize helpers live here until a second plugin needs them in `GSTNCore`.
 - `Data/GSTN_MinionDefinition.h`: `UGSTN_MinionDefinition` (primary asset type `GSTN_MinionDefinition`) and its `IsDataValid`.
 
+## Waves, corpses, promotion (G9a)
+
+- **Corpses**: `UGSTN_MinionDefinition::CorpseSeconds` (default 2 s). When the Death timeline ends the slot goes `Dead` but is kept for
+  that long (whole fixed frames, rounded up, stamped when the death ends): not moved, not brained, not hittable, no token, and the net
+  item keeps publishing `Dead` so clients keep the body until the item is removed. 0 s frees on the frame the death ends. `Despawn` and the
+  bench `Clear` still free at once. A type without a Death timeline still waits `gstn.Minion.CorpseFrames` first, then the corpse time.
+- **Waves**: `UGSTN_MinionWaveDefinition` (entries: definition, count 1..64, spawn point actor tag, delay in frames, ring radius; at most
+  128 in total) is played by a level-placed `AGSTN_MinionSpawnerActor`: `bStartOnBeginPlay`, a trigger box (a pawn enters, authority, once)
+  or `StartWave()`. Every machine preloads the wave's assets asynchronously at begin play (`bPreloadOnClients`), the authority spawns by
+  the batch frame, `GetAliveCount()` and `OnWaveCleared` (death, despawn and promotion all count; a dying minion is already gone).
+- **Promotion (server core)**: `UGSTN_MinionSpawner::Promote(World, Handle, {FighterClassOverride, bKeepHealthFraction})` spawns the
+  fighter class at the minion, adds a replicated `UGSTN_MinionPromotedComponent` (item id, pack id, type tag, health fraction, team),
+  sets the team and frees the minion; null when refused (not alive, Spawning/Dying/Dead, no class, or `gstn.Minion.MaxFightersFromMinions`
+  = 4 promoted fighters alive). The client cross-fade and the wire flag are G9b.
+- Bench: `gstn.Minion.Bench.Wave <N> <CorpseSeconds=1>`, `gstn.Minion.Bench.Kill`. Tests: `GSTNMinion.Core.Wave.*`,
+  `GSTNMinion.Runtime.{Corpse,Wave,Promote}.*`; harness `minion_wave`.
+
 ## Gameplay tags
 
 Native: see `GSTN_MinionTags.h`. Designer vocabulary (ini only) is in `Config/Tags/GSTNMinion.ini` (`Minion.Type.Grunt`,
@@ -46,5 +63,5 @@ Native: see `GSTN_MinionTags.h`. Designer vocabulary (ini only) is in `Config/Ta
 
 ## Tests
 
-`GSTNMinion.Core.*`, no world: `Store.*`, `Schedule.*`, `Tokens.*`, `LOD.*`, `Net.*`, `Tags.*`, `Definition.*`. Run headless:
+`GSTNMinion.Core.*`, no world: `Store.*`, `Schedule.*`, `Tokens.*`, `LOD.*`, `Net.*`, `Tags.*`, `Definition.*`, `Wave.*`. Run headless:
 `UnrealEditor-Cmd GASP_Giustino2.uproject -ExecCmds="Automation RunTests GSTNMinion.Core; Quit" -abslog=<file>` and read the counts from the log.

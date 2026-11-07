@@ -31,3 +31,9 @@ what, where, cheaper alternative.
 - G8 the type's StateTree loads synchronously at the first spawn of a type: async preload with the definition (with the G9 wave preload).
 - G8 per-slot StateTree instance data arrays sized to store capacity (128): sparse storage for brained slots only.
 - G8 spike 6: native brain is 10x cheaper than the StateTree (0.49 vs 4.96 us per tick): for the low-end target, consider native for T1/T2 or for grunts.
+- G9a corpses (`FreeDueCorpses`): a list walk each batch (only the waiting corpses, order-preserving RemoveAt): fine up to a few dozen; a heap by end frame if waves of 100+ die at once.
+- G9a a corpse stays in the schedule, the LOD update, the publish pass and the hash rebuild like a live minion: skip Dead slots in the schedule and in the candidate hash (it is not hittable).
+- G9a `AGSTN_MinionSpawnerActor`: spawn point actors are gathered with GetAllActorsWithTag once per wave start (a world actor scan); cache per tag on a world subsystem if waves start often.
+- G9a wave preload skips assets already in memory (nothing holds them): a streamable handle for the whole wave would keep them resident, at the price of memory on the low-end target.
+- G9a Promote loads the fighter class synchronously when nothing preloaded it (a lone promotion, not from a wave): preload PromotionFighterClass with the definition.
+- G9a `PromotedFighters` weak list is pruned on every Promote call (linear in at most the cap): trivial, noted for completeness.

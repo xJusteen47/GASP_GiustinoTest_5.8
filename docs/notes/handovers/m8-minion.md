@@ -276,3 +276,28 @@
 - PERF-DEBT (also in perf-debt.md): execution context built per ticked slot; neighbours by store walk (O(N) per minion); target pick scans fighters per slot
   at 2 Hz; tree LoadSynchronous on first spawn; instance-data arrays sized to capacity; Brain.Dump nearest-pawn scan (debug only).
 - Cost: ~$12 (Sonnet writer ~350k tokens / 85 tool calls; my context ~90k; 3 builds + gate on/off, 4 harness runs).
+
+## G9a (laptop, 2026-11-07): waves, corpses, promotion server core DONE, gate green; G9b (desktop) NOT started
+
+- Branch `claude/m8-g9-laptop` from `claude/project-thread-kbrsme` (31ed1dc). Split approved: G9a here, G9b deferred. Sonnet writer (`Saved/M8G9/writer-brief.md`, `writer-report.md`).
+- Step 0 (harness only): `scenario_minion_lod` records every controlled server pawn and moves any the exact teleport left behind with
+  `set_actor_location` 0.3 s later; the no-pop check now measures from snapshot A. Tier chain now PASS (12/12, no Combat->Dormant jump), poke/wake PASS.
+  Still red on "no pop" at 0 % and 2 % (1 attempt used): the client puppet overshoots the server path by 1-2 m at Far/Dormant (e.g. client 1039 cm vs
+  server 882 cm from A). Presentation side (interpolator extrapolating on rare Far updates), not harness: next thread, clamp extrapolation by tier interval.
+- Done (only `Plugins/GSTNMinion`, `minion_scenarios.py`, docs): `CorpseSeconds` on the definition (frame stamp `CorpseEndFrame`, corpse not moved, not brained,
+  no hits, freed in the flush); `UGSTN_MinionWaveDefinition` (entries: soft definition, count, spawn point tag, delay frames, ring radius; IsDataValid;
+  `GetAssetsToPreload`); `AGSTN_MinionSpawnerActor` (plan name was U-, it is an actor; trigger box, async 2-step preload on server and clients, StartWave,
+  GetAliveCount, `OnWaveCleared`, ticks only while a wave runs); `UGSTN_MinionSpawner::Promote` + `IsMinionAlive`: refuses queued/Spawning/Dying/Dead,
+  cap `gstn.Minion.MaxFightersFromMinions` 4, spawns the fighter class at feet + half height with a replicated `UGSTN_MinionPromotedComponent`
+  (minion item id, pack id, type tag, health fraction, team), sets team via IGenericTeamAgentInterface, frees the minion, native `OnMinionPromoted`.
+  Bench `gstn.Minion.Bench.Wave <N> <CorpseSeconds>`, `gstn.Minion.Bench.Kill`; `scenario_minion_wave` in SUITE_MINION.
+- Deviations: no GAS attribute write on the fighter (health fraction is on the component, the kit applies it in G9b); `Event_MinionPromoted` is only logged
+  (no Event_Minion* is published anywhere yet); acceptance item 3 (type + wave as assets without C++) deferred: no editor asset script run (cost).
+- Gate: on 1379/0 (+5 Wave/Corpse/Promote), off 1307/0, 0 ensures. Two test fixes (array self-reference in the preload test; promote test hit a still-queued spawn).
+- Harness (dedicated + 2 clients, 60/15): 0 % hits_player, tokens, replicate, late_join, tokens_brain, wave PASS; reaction_tiers FAIL once ("still items 0")
+  then PASS on the allowed rerun (flaky, same as G8); lod FAIL (no pop, above). 2 %: all PASS except lod (no pop). player_hits_minion, lagcomp not run (desktop queue).
+- G9b (desktop): Promoting flag on the wire + client cross-fade from the component's ids, health fraction applied by the fighter kit (check X4 first),
+  `scenario_minion_promote` (no pop > 15 cm, first control <= 500 ms), spike 8 numbers, acceptance item 3 assets, Event_Minion* publishing.
+- PERF-DEBT (also in perf-debt.md): corpse list walk per batch; corpses still scheduled/LOD/published/hashed (skip Dead in schedule and hash); spawn points
+  by GetAllActorsWithTag per wave start; wave preload not held resident; Promote sync-loads the fighter class when not preloaded; weak fighter list prune.
+- Cost: ~$9 (writer ~316k tokens / 65 tool calls; my context ~95k; 5 builds incl. off, 3 gate test runs, 6 harness runs).

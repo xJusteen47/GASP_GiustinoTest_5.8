@@ -7,6 +7,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/GSTN_MinionDefinition.h"
+#include "Data/GSTN_MinionWaveDefinition.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/Engine.h"
 #include "Engine/StaticMesh.h"
@@ -25,6 +26,7 @@
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "Spawn/GSTN_MinionSpawner.h"
+#include "Spawn/GSTN_MinionSpawnerActor.h"
 
 namespace
 {
@@ -165,6 +167,29 @@ namespace
 			if (!Bench || !Bench->Poke(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 0))
 			{
 				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.Poke: no bench or no such bench minion"));
+			}
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs BenchWaveCommand(
+		TEXT("gstn.Minion.Bench.Wave"),
+		TEXT("gstn.Minion.Bench.Wave <N=8> <CorpseSeconds=1>: a spawner plays a wave of N bench grunts around the first player; the bodies stay CorpseSeconds after they die. Logs: Bench: wave of .. started, Bench: wave cleared frame=.."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World);
+			if (!Bench || Bench->SpawnWave(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 8, Args.Num() > 1 ? FCString::Atof(*Args[1]) : 1.f) == 0)
+			{
+				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.Wave: no bench or the wave did not start (client world?)"));
+			}
+		}));
+
+	FAutoConsoleCommandWithWorld BenchKillCommand(
+		TEXT("gstn.Minion.Bench.Kill"),
+		TEXT("Posts a lethal hit on every live bench and wave minion: they play the death timeline, then wait CorpseSeconds as bodies. Logs: Bench: kill posted=.. frame=.."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			if (UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World))
+			{
+				Bench->Kill();
 			}
 		}));
 
@@ -559,6 +584,99 @@ bool UGSTN_MinionBenchSubsystem::Poke(int32 BenchIndex)
 	return bPosted;
 }
 
+int32 UGSTN_MinionBenchSubsystem::SpawnWave(int32 Count, float CorpseSeconds)
+{
+	UWorld* World = GetWorld();
+	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
+	if (!World || !Minions)
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: the minion subsystem is not active here (client world?)"));
+		return 0;
+	}
+	Count = FMath::Clamp(Count, 1, GSTNMinion::MaxWaveTotal);
+	UGSTN_MinionDefinition* Definition = ResolveDefinition();
+	Definition->CorpseSeconds = FMath::Max(CorpseSeconds, 0.f);
+
+	if (WaveSpawner)
+	{
+		WaveSpawner->Destroy();
+		WaveSpawner = nullptr;
+	}
+	// Entries hold at most 64 minions each; a bigger wave is several entries on the same frame
+	WaveDefinition = NewObject<UGSTN_MinionWaveDefinition>(this, NAME_None, RF_Transient);
+	const double Ring = FMath::Max(300.0, Count * 150.0 / UE_TWO_PI);
+	for (int32 Left = Count; Left > 0; Left -= GSTNMinion::MaxWaveEntryCount)
+	{
+		FGSTN_MinionWaveEntry& Entry = WaveDefinition->Entries.AddDefaulted_GetRef();
+		Entry.Definition = Definition;
+		Entry.Count = FMath::Min(Left, GSTNMinion::MaxWaveEntryCount);
+		Entry.RingRadius = static_cast<float>(Ring);
+	}
+
+	bCenterResolved = false;
+	const FVector Where = ResolveCenter();
+	// Deferred so the wave and the flags are set before BeginPlay: no trigger, started by hand below
+	WaveSpawner = World->SpawnActorDeferred<AGSTN_MinionSpawnerActor>(AGSTN_MinionSpawnerActor::StaticClass(), FTransform(Where), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!WaveSpawner)
+	{
+		return 0;
+	}
+	WaveSpawner->Wave = WaveDefinition;
+	WaveSpawner->bUseTrigger = false;
+	WaveSpawner->bStartOnBeginPlay = false;
+	WaveSpawner->FinishSpawning(FTransform(Where));
+	WaveSpawner->OnWaveClearedNative.AddLambda([](int32 Frame)
+	{
+		UE_LOG(LogGSTNMinion, Log, TEXT("Bench: wave cleared frame=%d"), Frame);
+	});
+	Minions->ResetBenchTotals();
+	if (!WaveSpawner->StartWave())
+	{
+		return 0;
+	}
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: wave of %d started, corpse %.2f s, ring %.0f, frame=%d"), Count, Definition->CorpseSeconds, Ring, Minions->GetLastBatchFrame());
+	return Count;
+}
+
+int32 UGSTN_MinionBenchSubsystem::Kill()
+{
+	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(GetWorld());
+	if (!Minions)
+	{
+		return 0;
+	}
+	TArray<FGSTN_MinionHandle> Targets;
+	for (const FGSTN_MinionHandle& Handle : Handles)
+	{
+		if (Minions->IsAlive(Handle))
+		{
+			Targets.Add(Handle);
+		}
+	}
+	if (WaveSpawner)
+	{
+		WaveSpawner->GetAliveHandles(Targets);
+	}
+
+	const FGSTN_MinionStore& Store = Minions->GetStore();
+	const int32 Frame = FMath::Max(Minions->GetLastBatchFrame(), 0);
+	int32 Posted = 0;
+	for (const FGSTN_MinionHandle& Handle : Targets)
+	{
+		FGSTN_HitInboxEntry Hit;
+		Hit.Frame = Frame;
+		// The neutral attacker of the cleave and the poke; the damage is far above any health, whatever the rules' damage mode
+		Hit.AttackerId = 0x3FFFFFF0;
+		Hit.AttackerTeam = 255;
+		Hit.Relationship = 255;
+		Hit.Hit.Damage = 100000.f;
+		Hit.HitLocation = FVector(Store.Position[Handle.Index]);
+		Posted += Minions->PostToEntityInbox(GSTNEntityKinds::MakeMinionEntityId(Handle.Index), Handle.Generation, Hit.ToInboxEntry()) ? 1 : 0;
+	}
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: kill posted=%d frame=%d"), Posted, Frame);
+	return Posted;
+}
+
 void UGSTN_MinionBenchSubsystem::Clear()
 {
 	if (UGSTN_MinionBrainSubsystem* Brain = UGSTN_MinionBrainSubsystem::Get(GetWorld()))
@@ -574,6 +692,18 @@ void UGSTN_MinionBenchSubsystem::Clear()
 	for (const FGSTN_MinionHandle& Handle : Handles)
 	{
 		UGSTN_MinionSpawner::Despawn(GetWorld(), Handle);
+	}
+	if (WaveSpawner)
+	{
+		// The wave's own minions: free them at once (corpses included) and drop the spawner
+		TArray<FGSTN_MinionHandle> WaveHandles;
+		WaveSpawner->GetSpawnedHandles(WaveHandles);
+		for (const FGSTN_MinionHandle& Handle : WaveHandles)
+		{
+			UGSTN_MinionSpawner::Despawn(GetWorld(), Handle);
+		}
+		WaveSpawner->Destroy();
+		WaveSpawner = nullptr;
 	}
 	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: %d minions cleared"), Handles.Num());
 	Handles.Reset();

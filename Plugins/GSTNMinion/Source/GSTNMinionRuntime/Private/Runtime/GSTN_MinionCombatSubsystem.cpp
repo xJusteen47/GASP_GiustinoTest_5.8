@@ -22,8 +22,10 @@
 #include "NetworkPredictionWorldManager.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Rules/GSTN_CombatRules.h"
+#include "GenericTeamAgentInterface.h"
 #include "Runtime/GSTN_MinionActor.h"
 #include "Runtime/GSTN_MinionCombatComponent.h"
+#include "Runtime/GSTN_MinionPromotedComponent.h"
 #include "Schedule/GSTN_MinionSchedule.h"
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatVictim.h"
@@ -71,6 +73,10 @@ namespace
 	TAutoConsoleVariable<int32> CVarCorpseFrames(
 		TEXT("gstn.Minion.CorpseFrames"), 60,
 		TEXT("Frames a dying minion stays before it is freed when its type has no Death timeline."));
+
+	TAutoConsoleVariable<int32> CVarMaxFightersFromMinions(
+		TEXT("gstn.Minion.MaxFightersFromMinions"), 4,
+		TEXT("Most fighters made by promoting minions that may be alive at once: each is a full Network Prediction entity (spike 1 numbers). A promotion above the cap is refused."));
 
 	TAutoConsoleVariable<int32> CVarMaxAttackersPerPlayer(
 		TEXT("gstn.Minion.MaxAttackersPerPlayer"), FGSTN_MinionAttackTokens::DefaultMaxPerTarget,
@@ -174,6 +180,9 @@ void UGSTN_MinionCombatSubsystem::Activate()
 	NextMoveFrame.Init(0, Capacity * GSTNMinion::MaxMoves);
 	MoveColumns.Reset(Capacity);
 	SlotActors.Init(nullptr, Capacity);
+	CorpseEndFrame.Init(INDEX_NONE, Capacity);
+	Corpses.Reset();
+	PromotedFighters.Reset();
 	Scheduled.Reserve(Capacity);
 
 	KnockbackPercent.Init(0.f, Capacity);
@@ -251,6 +260,9 @@ void UGSTN_MinionCombatSubsystem::Deinitialize()
 	CombatWorld.Reset();
 	QueuedEvents.Reset();
 	DespawnList.Reset();
+	CorpseEndFrame.Reset();
+	Corpses.Reset();
+	PromotedFighters.Reset();
 	SlotActors.Reset();
 	FreeActors.Reset();
 	Super::Deinitialize();
@@ -343,6 +355,108 @@ bool UGSTN_MinionCombatSubsystem::Despawn(const FGSTN_MinionHandle& Handle)
 	}
 	FreeSlot(Handle.Index);
 	return true;
+}
+
+bool UGSTN_MinionCombatSubsystem::IsAlive(const FGSTN_MinionHandle& Handle) const
+{
+	if (!bActive || !Store.IsValid(Handle))
+	{
+		return false;
+	}
+	// A queued spawn is alive (its wave must not count as cleared before it activates)
+	return PendingActivation[Handle.Index] || !IsDyingOrDead(Store.ActionState[Handle.Index]);
+}
+
+int32 UGSTN_MinionCombatSubsystem::GetNumPromotedFighters()
+{
+	// A fighter being destroyed no longer counts (Destroy marks it before the object is collected)
+	PromotedFighters.RemoveAll([](const TWeakObjectPtr<AActor>& Fighter) { return !Fighter.IsValid() || Fighter->IsActorBeingDestroyed(); });
+	return PromotedFighters.Num();
+}
+
+AActor* UGSTN_MinionCombatSubsystem::PromoteToFighter(const FGSTN_MinionHandle& Handle, const FGSTN_MinionPromotionParams& Params)
+{
+	// The stages walk the columns this frees. LastBatchFrame is set after the last stage, so the post-batch events (the flush) are outside
+	const bool bInsideStage = CurrentBatchFrame != LastBatchFrame;
+	if (!ensureMsgf(!bInsideStage, TEXT("Minion Promote called from inside a batch stage")))
+	{
+		return nullptr;
+	}
+	if (!bActive || !Store.IsValid(Handle))
+	{
+		UE_LOG(LogGSTNMinion, Verbose, TEXT("Promote refused: %s is not a live minion"), *Handle.ToString());
+		return nullptr;
+	}
+	const int32 Slot = Handle.Index;
+	const EGSTN_MinionActionState State = static_cast<EGSTN_MinionActionState>(Store.ActionState[Slot]);
+	if (PendingActivation[Slot] || State == EGSTN_MinionActionState::Spawning || State == EGSTN_MinionActionState::Dying || State == EGSTN_MinionActionState::Dead)
+	{
+		UE_LOG(LogGSTNMinion, Verbose, TEXT("Promote refused: %s is queued, spawning, dying or dead"), *Handle.ToString());
+		return nullptr;
+	}
+	const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]);
+	UWorld* World = GetWorld();
+	if (!Definition || !World)
+	{
+		return nullptr;
+	}
+
+	UClass* FighterClass = Params.FighterClassOverride.Get();
+	if (!FighterClass)
+	{
+		FighterClass = Definition->PromotionFighterClass.Get();
+		if (!FighterClass && !Definition->PromotionFighterClass.IsNull())
+		{
+			// Perf-debt: a synchronous load of a pawn class inside gameplay; a wave preloads it (GetAssetsToPreload), a lone promotion does not
+			FighterClass = Definition->PromotionFighterClass.LoadSynchronous();
+		}
+	}
+	if (!FighterClass)
+	{
+		UE_LOG(LogGSTNMinion, Verbose, TEXT("Promote refused: %s has no fighter class"), *GetNameSafe(Definition));
+		return nullptr;
+	}
+	const int32 Cap = FMath::Max(CVarMaxFightersFromMinions.GetValueOnGameThread(), 0);
+	if (GetNumPromotedFighters() >= Cap)
+	{
+		UE_LOG(LogGSTNMinion, Verbose, TEXT("Promote refused: %d fighters from minions are alive (gstn.Minion.MaxFightersFromMinions %d)"), PromotedFighters.Num(), Cap);
+		return nullptr;
+	}
+
+	// The store holds the feet; a pawn's origin is its capsule centre
+	const FVector Feet(Store.Position[Slot]);
+	const FTransform Transform(FRotator(0.0, Store.YawDegrees[Slot], 0.0), Feet + FVector(0.0, 0.0, Definition->Stats.CapsuleHalfHeight));
+	AActor* Fighter = World->SpawnActorDeferred<AActor>(FighterClass, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+	if (!Fighter)
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Promote failed: %s did not spawn"), *GetNameSafe(FighterClass));
+		return nullptr;
+	}
+
+	UGSTN_MinionPromotedComponent* Promoted = NewObject<UGSTN_MinionPromotedComponent>(Fighter, TEXT("MinionPromoted"));
+	Promoted->PromotedFromMinionId = SlotItemId.IsValidIndex(Slot) ? SlotItemId[Slot] : INDEX_NONE;
+	Promoted->PromotedFromPackId = SlotPackId.IsValidIndex(Slot) ? SlotPackId[Slot] : INDEX_NONE;
+	Promoted->SourceTypeTag = Definition->TypeTag;
+	Promoted->HealthFraction = Params.bKeepHealthFraction && Store.MaxHealth[Slot] > 0.f ? FMath::Clamp(Store.Health[Slot] / Store.MaxHealth[Slot], 0.f, 1.f) : 1.f;
+	Promoted->Team = Definition->TeamId;
+	Fighter->AddInstanceComponent(Promoted);
+	Promoted->RegisterComponent();
+
+	if (IGenericTeamAgentInterface* TeamAgent = Cast<IGenericTeamAgentInterface>(Fighter))
+	{
+		TeamAgent->SetGenericTeamId(FGenericTeamId(Definition->TeamId));
+	}
+	Fighter->FinishSpawning(Transform);
+
+	PromotedFighters.Add(Fighter);
+	UE_LOG(LogGSTNMinion, Verbose, TEXT("Minion %s promoted to %s (health fraction %.2f, tag %s)"), *Handle.ToString(), *GetNameSafe(Fighter), Promoted->HealthFraction,
+		*GSTNMinionTags::Event_MinionPromoted.GetTag().ToString());
+	// G9b: publish Event.MinionPromoted on the authority event bus (the spawn and despawn events are not published yet either)
+	OnMinionPromoted.Broadcast(Handle, Fighter);
+
+	// Same path as Despawn: the actor returns to the pool, the item leaves its pack, the generation is bumped. The brain drops with the slot
+	FreeSlot(Slot);
+	return Fighter;
 }
 
 bool UGSTN_MinionCombatSubsystem::SetIntent(const FGSTN_MinionHandle& Handle, const FGSTN_MinionIntent& Intent)
@@ -1399,7 +1513,21 @@ void UGSTN_MinionCombatSubsystem::EndTimeline(int32 Slot, int32 Frame)
 	else if (MoveId == GSTNMinion::ReactionMoveIds::Death)
 	{
 		Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Dead);
-		DespawnList.Add(Slot);
+		// The body stays CorpseSeconds (G9a), counted in whole fixed frames rounded up (the small bias keeps 2 s at exactly 125 frames
+		// despite the float step). 0 s frees on this frame as before. A corpse keeps no token (the death already released it)
+		AttackTokens.ReleaseSlot(Slot);
+		const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]);
+		const float CorpseSeconds = Definition ? FMath::Max(Definition->CorpseSeconds, 0.f) : 0.f;
+		const int32 CorpseFrames = FMath::CeilToInt(CorpseSeconds / FixedStepSeconds - 1.0e-3f);
+		if (CorpseFrames <= 0)
+		{
+			DespawnList.Add(Slot);
+		}
+		else
+		{
+			CorpseEndFrame[Slot] = Frame + CorpseFrames;
+			Corpses.AddUnique(Slot);
+		}
 	}
 	Store.MoveId[Slot] = 0;
 	TimelinePrevFrame[Slot] = INDEX_NONE;
@@ -1942,6 +2070,12 @@ void UGSTN_MinionCombatSubsystem::StageMovement(int32 Frame)
 		}
 		TraceStage(EStage::Movement, Slot);
 
+		// A corpse (G9a) stays where its death left it: no gravity, no collision, no steering
+		if (Store.ActionState[Slot] == static_cast<uint8>(EGSTN_MinionActionState::Dead))
+		{
+			Store.Speed[Slot] = 0.f;
+			continue;
+		}
 		// Dormant minions are frozen where they are (spec 7): no gravity, no collision
 		if (Store.LODTier[Slot] == static_cast<uint8>(EGSTN_MinionLODTier::Dormant))
 		{
@@ -2132,6 +2266,32 @@ void UGSTN_MinionCombatSubsystem::FlushEventsAndDespawns()
 			FreeSlot(Slot);
 		}
 	}
+	FreeDueCorpses(CurrentBatchFrame);
+}
+
+void UGSTN_MinionCombatSubsystem::FreeDueCorpses(int32 Frame)
+{
+	// Insertion order is the order the deaths ended in (ascending slot within a frame), so the frees are deterministic. The list is the
+	// corpses only: a handful, never a walk of the store
+	for (int32 Index = 0; Index < Corpses.Num();)
+	{
+		const int32 Slot = Corpses[Index];
+		const int32 EndFrame = CorpseEndFrame.IsValidIndex(Slot) ? CorpseEndFrame[Slot] : INDEX_NONE;
+		if (EndFrame == INDEX_NONE || !Store.IsSlotAlive(Slot))
+		{
+			// Freed by something else (Despawn, the bench, a fall out of the world) since it died
+			Corpses.RemoveAt(Index);
+		}
+		else if (Frame >= EndFrame)
+		{
+			Corpses.RemoveAt(Index);
+			FreeSlot(Slot);
+		}
+		else
+		{
+			++Index;
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -2197,6 +2357,7 @@ void UGSTN_MinionCombatSubsystem::FreeSlot(int32 Slot)
 	}
 	ReleaseActor(Slot);
 	NetReleaseSlot(Slot);
+	CorpseEndFrame[Slot] = INDEX_NONE;
 	// Pending hits of this occupant are dropped by the generation check of the drain
 	Store.Free(Handle);
 	TimelinePrevFrame[Slot] = INDEX_NONE;

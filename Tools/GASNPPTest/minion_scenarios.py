@@ -15,7 +15,7 @@ import gasnpp_test as g
 import defence_scenarios as ds
 
 SUITE_MINION = ['minion_hits_player', 'minion_tokens', 'minion_replicate', 'minion_late_join', 'minion_player_hits_minion',
-                'minion_reaction_tiers', 'minion_lagcomp', 'minion_lod', 'minion_tokens_brain']
+                'minion_reaction_tiers', 'minion_lagcomp', 'minion_lod', 'minion_tokens_brain', 'minion_wave']
 # M8 G6: replication scenarios (packs, relevancy grants, registry check); run_batch(SUITE_MINION_NET)
 SUITE_MINION_NET = ['minion_late_join', 'minion_replicate']
 MINION_BIT = 0x40000000
@@ -602,7 +602,13 @@ def scenario_minion_lod(client=1):
         for key, comp in g.comps(g.worlds()[0]).items():
             v = comp.get_owner().get_actor_location()
             st['base'][key] = (v.x, v.y, v.z)
-        return f"LOD log on, pawns {sorted(st['base'])}"
+        # Every controlled server pawn, not only the harness comps: a third pawn (the listen/extra player) left behind keeps the minions in Combat
+        st['pawns'] = {}
+        for a in unreal.GameplayStatics.get_all_actors_of_class(g.worlds()[0], unreal.Pawn):
+            if a.get_controller() is not None:
+                v = a.get_actor_location()
+                st['pawns'][a.get_name()] = (a, (v.x, v.y, v.z))
+        return f"LOD log on, pawns {sorted(st['base'])}, controlled {sorted(st['pawns'])}"
 
     def teleport(dx):
         def f():
@@ -610,6 +616,18 @@ def scenario_minion_lod(client=1):
                 b = st['base'][key]
                 comp.server_teleport_exact(unreal.Vector(b[0] + dx, b[1], b[2]))
             return f'both pawns {dx:.0f} cm away'
+        return f
+
+    def teleport_fallback(dx):
+        # Runs a step after teleport(dx): any controlled pawn the exact teleport did not move goes there by a plain actor teleport
+        def f():
+            moved = []
+            for name, (a, b) in st['pawns'].items():
+                v = a.get_actor_location()
+                if abs(v.x - (b[0] + dx)) > 50.0:
+                    a.set_actor_location(unreal.Vector(b[0] + dx, b[1], b[2]), False, True)
+                    moved.append(name)
+            return f'fallback moved {moved}'
         return f
 
     def dump_both():
@@ -677,7 +695,9 @@ def scenario_minion_lod(client=1):
 
     def snap_checks():
         res = []
-        for before, after in (('A', 'B'), ('B', 'C'), ('C', 'D')):
+        # Measured from A, not window by window: at Far/Dormant the server item is published rarely, so a puppet still catching up on the last
+        # window moves more than the server did inside this one; a pop is the display overshooting the server's whole path
+        for before, after in (('A', 'B'), ('A', 'C'), ('A', 'D')):
             res.append(_no_pop(st, before, after))
         n = sum(p[0] for p in st['pop'])
         return all(r[0] for r in res) and n > 0, '; '.join(r[1] for r in res)
@@ -693,12 +713,15 @@ def scenario_minion_lod(client=1):
         (4.0, lambda: ('dump A', dump_both())),
         (4.6, lambda: ('snapshot A', _snapshot(st, 'A'))),
         (4.7, lambda: ('teleport 1', teleport(2800.0)())),
+        (5.0, lambda: ('teleport 1 fallback', teleport_fallback(2800.0)())),
         (7.0, lambda: ('dump B', dump_both())),
         (7.6, lambda: ('snapshot B', _snapshot(st, 'B'))),
         (7.7, lambda: ('teleport 2', teleport(5600.0)())),
+        (8.0, lambda: ('teleport 2 fallback', teleport_fallback(5600.0)())),
         (10.0, lambda: ('dump C', dump_both())),
         (10.6, lambda: ('snapshot C', _snapshot(st, 'C'))),
         (10.7, lambda: ('teleport 3', teleport(10500.0)())),
+        (11.0, lambda: ('teleport 3 fallback', teleport_fallback(10500.0)())),
         (13.0, lambda: ('dump D', dump_both())),
         (13.6, lambda: ('snapshot D', _snapshot(st, 'D'))),
         (13.7, lambda: ('brain dump', poke())),
@@ -755,6 +778,48 @@ def scenario_minion_tokens_brain(client=1):
         (12.5, run.at('waiting minions take over (> 4 distinct attackers over the run)', lambda: (len({r[1] for r in _minion_rows(0, st['key'])}) > 4, f"attackers {len({r[1] for r in _minion_rows(0, st['key'])})}"))),
         (12.5, run.at('damage percent equal on the server and both clients', lambda: _converged(st['key']))),
         (12.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_minion_wave(client=1):
+    """M8 G9a. A spawner plays a wave of 8 bench grunts (gstn.Minion.Bench.Wave 8 1: bodies stay 1 s). The server and both clients hold 8 net items
+    after the spawn; gstn.Minion.Bench.Kill sends a lethal hit to each: the items stay while the minions die and while the bodies wait (Dead,
+    CorpseSeconds), then disappear on the server and on both clients; 'Bench: wave cleared' is logged exactly once. The grunts have no Death
+    timeline, so they die for gstn.Minion.CorpseFrames (60 frames, about 1 s) before the body time starts. Fixed waits, like the other scenarios"""
+    run = g._Run('minion_wave', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def dump():
+        # One dump per phase, read by the check that follows it (_net_state reads the log since the mark, so the mark moves with each dump)
+        _marks['log'] = g.mark_log()
+        return _net_dump()
+
+    def counts(want):
+        server, clients, grants, summaries = _net_state()
+        per_client = {p: len(clients.get(p, {})) for p in summaries}
+        ok = len(server) == want and bool(per_client) and all(n == want for n in per_client.values())
+        return ok, f'want {want}: server items {len(server)} clients {per_client}'
+
+    def cleared_once():
+        n = len(re.findall(r'Bench: wave cleared frame=\d+', g._read_log_since(st['t0'])))
+        return n == 1, f'wave cleared lines {n}'
+
+    steps = [
+        (0.0, lambda: ('setup', st.update(t0=g.mark_log()) or 'log mark')),
+        (0.5, lambda: ('wave', _cmd('gstn.Minion.Bench.Wave 8 1'))),
+        (3.0, lambda: ('dump A (spawned)', dump())),
+        (4.0, run.at('8 items on the server and on both clients after the spawn', lambda: counts(8))),
+        (4.1, lambda: ('kill', _cmd('gstn.Minion.Bench.Kill'))),
+        (4.6, lambda: ('dump B (dying)', dump())),
+        (5.4, run.at('the items stay while the minions die', lambda: counts(8))),
+        (5.6, lambda: ('dump C (bodies)', dump())),
+        (6.3, run.at('the bodies stay during the corpse time', lambda: counts(8))),
+        (8.0, lambda: ('dump D (after the corpse time)', dump())),
+        (9.0, run.at('the bodies are gone on the server and on both clients', lambda: counts(0))),
+        (9.0, run.at('the wave cleared exactly once', cleared_once)),
+        (9.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (9.5, run.finish()),
     ]
     run.run(steps)
 
