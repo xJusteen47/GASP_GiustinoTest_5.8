@@ -138,7 +138,7 @@ G12 and for every build/test subtask; Haiku for log reading and docs.
 - `Plugins/GSTNMinion` with the modules of section 2 (Runtime/Editor/Tests empty shells), README, tags (`Combat.Entity.Minion`,
   `Combat.Event.MinionSpawned/Despawned/Promoted`, `Minion.State.*`, `Minion.LOD.*`, `Minion.Type`; ini leaves `Minion.Type.*`,
   `Command.Minion.*` in `Config/Tags/GSTNMinion.ini`), grep gate extended.
-- Core: store (struct of arrays, free list, generation, capacity `gstn.Minion.Max` = 128), handles, intent, LOD tiers with hysteresis
+- Core: store (struct of arrays, free list, generation, capacity `gstn.Minion.Max` = 128, 160 since G12a), handles, intent, LOD tiers with hysteresis
   and dwell, phase scheduler, attack tokens, net item codec (M8 §8.2 layout) on the shared quantizer, definition + `IsDataValid`.
 - Shared net primitives: new plugin `GSTNCore` (Q7 decided): `FGSTN_PoseHistory` and the quantizer moved out of
   `GSTNPlatformCore` with a redirect; `GSTNPlatform` tests must stay green).

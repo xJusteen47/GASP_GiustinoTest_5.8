@@ -105,6 +105,17 @@ public:
 	/** Pipeline id of the slot's current target, INDEX_NONE for none */
 	int32 GetSlotTarget(int32 Slot) const { return TargetIds.IsValidIndex(Slot) ? TargetIds[Slot] : INDEX_NONE; }
 
+	/** The path waypoint the slot steers to, false when it has none (debug draw, G12) */
+	bool GetSlotWaypoint(int32 Slot, FVector& OutWaypoint) const
+	{
+		if (!HasWaypoint.IsValidIndex(Slot) || !HasWaypoint[Slot] || !Waypoint.IsValidIndex(Slot))
+		{
+			return false;
+		}
+		OutWaypoint = Waypoint[Slot];
+		return true;
+	}
+
 	/** The state name the dump prints: the active StateTree state, or the native phase; "NotStarted" before the first tick */
 	FString GetSlotStateName(int32 Slot);
 

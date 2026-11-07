@@ -8,7 +8,7 @@ namespace
 {
 	TAutoConsoleVariable<int32> CVarMinionMax(
 		TEXT("gstn.Minion.Max"),
-		128,
+		GSTNMinion::DefaultCapacity,
 		TEXT("Slots of the minion store (the most minions alive at once). Read when a store is reset, clamped to [1, 65536]."),
 		ECVF_Default);
 

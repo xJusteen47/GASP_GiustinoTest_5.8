@@ -348,3 +348,36 @@
 - PERF-DEBT (also in perf-debt.md): deferred candidate events + O(over x candidates) selection; HoldsAny linear walk; T0 counted from scheduled slots only;
   silent re-demotion churn after the Near dwell (hold-by-cap bit); bytes scenario fixed waits; G10 platform-flag line fixed only partly.
 - Cost: ~$7 (writer ~205k tokens / 56 tool calls; my context ~75k; 4 builds incl. off, 3 gate test runs, 2 harness runs).
+
+## G12a (laptop, 2026-11-07): capacity 160, editor validators, debug cvars, forced-reconcile scenario, docs DONE, gate green; G12b (desktop) NOT started
+
+- Branch `claude/m8-g12-laptop` from `claude/m8-g11-laptop` (77a37e2). Split (told the coordinator). Sonnet writer (`Saved/M8G12/writer-brief.md`, `writer-report.md`).
+- Capacity: `gstn.Minion.Max` was already a cvar (columns sized by capacity, per-frame walks over alive/scheduled lists = flat CPU): default 128 -> 160
+  (`GSTNMinion::DefaultCapacity`). Memory ~2.4 KB per slot, +32 slots ~78 KB (history ring ~70 %). 150-population now spawns 150 (awake 60, dormant 90).
+  `MaxWaveTotal` stays 128 per wave.
+- Validators: pure Core checks `GSTN_MinionValidation` (registry: null/duplicate/duplicate TypeTag/over 256; definition refs; wave cross-asset incl. over
+  capacity) + Editor DataValidation validators for definition and wave (`DataValidation` added to the uplugin and Build.cs). No registry asset exists (the
+  table fills in first-spawn order), so the registry rule runs over a wave's distinct definitions.
+- Debug: `gstn.Minion.Debug.{Capsules,Hitboxes,LOD,History,Intent}` (`GSTN_MinionDebugDraw`, not in Shipping, ticks only while one is on).
+  Deviation: `.Hitboxes` draws the playing move's reach sphere, not the timeline shapes. `GetSlotWaypoint` added on the brain subsystem.
+- Harness: `scenario_minion_forced_reconcile` in SUITE_MINION. One fix: the "forced" log count is not required (client ForceReconcile lines do not reach
+  this log in dedicated + 2; the rollback check proves the forces), bounds unexplained 0 / mismatches 40 / burst 20 kept.
+- Gate: all on 1398/0 (+4 `*.G12.*`), GSTNMinion off 1307/0, GSTNPlatform+Parts off 1376/0, 0 ensures. SUITE_DEFAULT not rerun (no NP or combat code touched).
+- Harness (dedicated + 2 clients, 60/15): 0 % and 2 %: hits_player, tokens, replicate, late_join, reaction_tiers, tokens_brain, wave, forced_reconcile
+  (0 % after the fix, on a rerun of that scenario only), horde, bytes PASS; lod FAIL "no pop" only (known).
+- Docs: README "How to extend"; testing.md minion suites; new `docs/notes/m8-doc-deltas.md` (G0-G12a deltas + combat.md folds for G12b).
+- PERF-DEBT (also in perf-debt.md): debug pass cost while a cvar is on; history ring ~70 % of slot memory even for slots that never write it (allocate
+  per awake slot); sync loads in the validators (editor only).
+- Cost: ~$7 (writer ~214k tokens / 68 tool calls; my context ~+40k; 4 builds incl. 2 off configs, 3 gate test runs, 3 harness runs).
+
+### M8 laptop status (2026-11-07): G0-G12a done on the laptop; desktop items left
+1. G6b / G7b: performance numbers on the desktop as listen host that renders (replication and puppets).
+2. G9b: Promoting flag on the wire, client cross-fade, fighter health from the component, `scenario_minion_promote`, spike 8, acceptance item 3 assets, Event_Minion*.
+3. G11b: rendered host frame, max N, R4/R5, §8.3/§11 re-based, moving-horde wire bytes with 3 clients, §4d.1 fallbacks if needed.
+4. G12b: listen + dedicated sweep of every §12 scenario; SUITE_PARTS/DEFENCE/LINK in three configs; byte/CPU tables; combat.md folds (m8-doc-deltas.md); §13 checklist; TM3 brief.
+5. `scenario_minion_lod` "no pop": client puppet overshoots at Far/Dormant (clamp interpolator extrapolation by tier interval).
+6. `scenario_minion_player_hits_minion` and `scenario_minion_lagcomp`: red since G7a, desktop queue.
+7. X4: lag-comp rewind iterates all minions (GatherRewoundCandidates not wired into GSTNCombatNP): needs an owner OK to touch GSTNCombatNP.
+8. `scenario_minion_dormancy_flush` (§12) not written yet.
+9. Perf-debt review of docs/notes/perf-debt.md at the end of M8 (many G6-G12 lines), with the low-end target.
+10. Merge path: laptop branches g9 -> g10 -> g11 -> g12 are stacked; nothing pushed to feature.

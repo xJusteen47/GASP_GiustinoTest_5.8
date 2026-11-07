@@ -20,7 +20,7 @@ changes nothing until a level spawns minions; nothing in the other plugins knows
 - `GSTN_MinionTags.h`: native tags `Combat.Entity.Minion`, `Combat.Event.MinionSpawned/Despawned/Promoted`, `Minion.State.*` (the 12
   action states), `Minion.LOD.*` (the 4 tiers), `Minion.Type` (root only); `GetDeclaredTags()`. Defined in a Runtime module so a cooked game has them.
 - `Store/GSTN_MinionStore.h`: `FGSTN_MinionStore` (struct of arrays, lowest-free-index allocation, 16-bit generation per slot,
-  capacity from `gstn.Minion.Max`, default 128, clamped to the index range), `FGSTN_MinionHandle`, conversions to the pipeline id
+  capacity from `gstn.Minion.Max`, default 160, clamped to the index range), `FGSTN_MinionHandle`, conversions to the pipeline id
   (`GSTNEntityKinds::MakeMinionEntityId`) and to `FGSTN_EntityRef{Minion, Index, Generation & 0xFF}`, `EGSTN_MinionActionState` (the 4-bit wire enum).
 - `Intent/GSTN_MinionIntent.h`: what a brain asks (move, face, command, target); stale after 30 frames.
 - `LOD/GSTN_MinionLOD.h`: `EGSTN_MinionLODTier`, `FGSTN_MinionLODParams` (borders, hysteresis 10 %, dwell 30 frames, intervals),
@@ -80,6 +80,24 @@ Two cvars cap what the host pays when many minions fight (M8 4d.1). Applied in t
 `gstn.Minion.Bench.Population <N=150> <NearCount=60> <FarRadius=12000>` places the 150 population case. Harness: `scenario_minion_horde`,
 `scenario_minion_bytes` (SUITE_MINION_BENCH). Numbers from a laptop with -nullrhi are provisional.
 
+## How to extend
+
+- **A new minion type, no C++.** Make a `UGSTN_MinionDefinition` asset: a type tag (a leaf under `Minion.Type`, add it to your project's tag ini), stats and capsule,
+  a hurtbox set, up to 31 moves (a command tag, a timeline, a range window, a cooldown), the Hitstun and Death timelines, optionally the puppet class or mesh, a brain
+  and a LOD override. `Tools/GAS/setup_minion_assets.py` writes a grunt and a heavy under `/GSTNMinion/Test` as a worked example. The registry is filled in
+  first-spawn order and the clients check its hash, so nothing is listed anywhere: spawning the type registers it (at most 256 types).
+- **A new wave.** A `UGSTN_MinionWaveDefinition` asset (entries: definition, count 1..64, spawn point actor tag, delay in frames; 128 in total) played by a level-placed
+  `AGSTN_MinionSpawnerActor`. The editor validators check the total against `gstn.Minion.Max` (default 160) and that every definition path loads.
+- **A brain.** A StateTree on the schema `UGSTN_MinionStateTreeSchema` (tasks MoveToTarget, FaceTarget, RequestAttack; conditions TargetInRange, IsLODAtLeast) set as the
+  definition's `Brain`; a definition with none gets the native chase and swing brain. The tree writes an intent only; add a task by subclassing, never touch the store.
+- **Bridge seams (G10).** Platforms and parts plug in from outside through `SetPlatformActor`, `IGSTN_MinionPublishObserver`, `SetMaxLODTier` and `bHasNetExt`
+  (see above). GSTNMinion never depends on those plugins.
+- **Host budgets (G11).** `gstn.Minion.MaxActiveT0` and `gstn.Minion.T0RateHz` (see Host budgets); measure with `gstn.Minion.Bench.Population` and `gstn.Minion.Bench.Report`.
+- **Debug draw (G12, not in Shipping, host world only, nothing is drawn or ticked while all are 0).** `gstn.Minion.Debug.Capsules` (capsule per minion, colour by tier),
+  `.Hitboxes` (the reach sphere of the move being played), `.LOD` (tier text), `.History <N>` (last N lag compensation poses as points), `.Intent` (intent arrow, brain waypoint line).
+- **Validators (G12, editor).** `UGSTN_MinionDefinitionValidator` and `UGSTN_MinionWaveValidator` run under Data Validation (save, on demand, `-run=DataValidation`) over the
+  rules in `GSTNMinionValidation::` (Core), which the `GSTNMinion.Core.G12.*` tests run headless.
+
 ## Gameplay tags
 
 Native: see `GSTN_MinionTags.h`. Designer vocabulary (ini only) is in `Config/Tags/GSTNMinion.ini` (`Minion.Type.Grunt`,
@@ -96,3 +114,4 @@ Native: see `GSTN_MinionTags.h`. Designer vocabulary (ini only) is in `Config/Ta
 
 `GSTNMinion.Core.*`, no world: `Store.*`, `Schedule.*`, `Tokens.*`, `LOD.*`, `Net.*`, `Tags.*`, `Definition.*`, `Wave.*`. Run headless:
 `UnrealEditor-Cmd GASP_Giustino2.uproject -ExecCmds="Automation RunTests GSTNMinion.Core; Quit" -abslog=<file>` and read the counts from the log.
+`GSTNMinion.Core.G12.*` (capacity default 160, registry and wave cross-asset rules), `GSTNMinion.Runtime.G12.*` (debug draw off does no work).

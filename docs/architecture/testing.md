@@ -163,3 +163,19 @@ Run `ds.defence_batch(ms.SUITE_MOUNT, module=ms, report=...)` after `ms.prepare_
   pawn whose player state had not replicated was keyed by its actor name and a scenario's rig missed it (a setup flake of long batches).
   A scenario that still fails at setup passes when rerun alone.
 - **Not covered.** Dedicated server, a run of the mount suite at 2 % loss after G9, `rider_attack`.
+
+### Minion scenarios (M8: `SUITE_MINION`, `SUITE_MINION_NET`, `SUITE_MINION_BENCH`, `Tools/GASNPPTest/minion_scenarios.py`)
+
+Dedicated server + 2 clients (`PlayNetMode=PIE_Client`, 2 clients), `-nullrhi` on the laptop, with the `GSTNMinion` plugin enabled. The minions come from the bench
+(`gstn.Minion.Bench.*`, no content needed: transient definitions). Run `ms.run_batch(names=None, lag=60, jitter=15, loss=0, report='<file>')` (each scenario in a
+fresh PIE) and poll `ds.defence_batch_report()`; `names` defaults to `SUITE_MINION`.
+
+- **`SUITE_MINION`** (11): `minion_hits_player`, `minion_tokens`, `minion_replicate`, `minion_late_join`, `minion_player_hits_minion`, `minion_reaction_tiers`,
+  `minion_lagcomp`, `minion_lod`, `minion_tokens_brain`, `minion_wave` and `minion_forced_reconcile` (forced reconciles on client 1 while a minion hits a fighter: forced ones
+  expected, no unexplained reconcile, corrections bounded by `GSTN_FR_MISMATCH_MAX` / `GSTN_FR_BURST_MAX`, the damage percent equal in every world afterwards).
+- **`SUITE_MINION_NET`** (2): `minion_late_join` and `minion_replicate` (packs, relevancy grants, registry check).
+- **`SUITE_MINION_BENCH`** (2, about a minute each): `minion_horde` (host budget under a fight, the T0 cap) and `minion_bytes` (bytes per second per client over a window).
+  Environment variables: `GSTN_HORDE_SECONDS` (length of the horde fight, default 60, 20 on the laptop) and `GSTN_BENCH_WINDOW` (byte measuring window in seconds,
+  default 10). Numbers from a laptop with `-nullrhi` are provisional, not the M8 section 11 measurement.
+- **Headless tests** (no PIE): `GSTNMinion.Core.*` (pure, run with `Automation RunTests GSTNMinion.Core`), `GSTNMinion.Runtime.*` and the other runtime families in the
+  `GSTNMinionTests` module. Several scenarios read their verdict from the log after fixed waits; a flaky one is re-run once in a fresh PIE before it counts as red.

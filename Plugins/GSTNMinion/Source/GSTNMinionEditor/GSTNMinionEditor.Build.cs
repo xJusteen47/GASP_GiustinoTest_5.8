@@ -1,6 +1,6 @@
 using UnrealBuildTool;
 
-// Minion editor tooling (definition and registry validators, wave details: M8 G12). Empty shell in G2.
+// Minion editor tooling: the test brain tree (G8) and the Data Validation validators of definitions and waves (G12).
 public class GSTNMinionEditor : ModuleRules
 {
 	public GSTNMinionEditor(ReadOnlyTargetRules Target) : base(Target)
@@ -23,7 +23,9 @@ public class GSTNMinionEditor : ModuleRules
 			"StateTreeModule",
 			"StateTreeEditorModule",
 			"PropertyBindingUtils",
-			"GameplayTags"
+			"GameplayTags",
+			// G12: UEditorValidatorBase, the validators of definitions and waves
+			"DataValidation"
 		});
 	}
 }

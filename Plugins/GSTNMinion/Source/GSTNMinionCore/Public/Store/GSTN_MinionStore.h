@@ -93,7 +93,13 @@ namespace GSTNMinion
 	/** Default of the MaxLODTier column: the farthest tier, i.e. no ceiling */
 	constexpr uint8 NoLODCeiling = static_cast<uint8>(EGSTN_MinionLODTier::Dormant);
 
-	/** Slot count a store gets from the console variable gstn.Minion.Max (default 128), clamped to [1, GSTNEntityKinds::MaxMinionIndex + 1] */
+	/**
+	 * Default of gstn.Minion.Max. 160 since G12a: the 150 population case (about 60 awake) did not fit in 128 (G11a found 128 spawned of 150).
+	 * A single wave stays capped at MaxWaveTotal (128), so the fighters and a second wave always have room
+	 */
+	constexpr int32 DefaultCapacity = 160;
+
+	/** Slot count a store gets from the console variable gstn.Minion.Max (default DefaultCapacity), clamped to [1, GSTNEntityKinds::MaxMinionIndex + 1] */
 	GSTNMINIONCORE_API int32 GetConfiguredCapacity();
 }
 

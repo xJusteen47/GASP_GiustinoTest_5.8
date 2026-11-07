@@ -14,7 +14,7 @@ namespace GSTNMinion
 	/** Most minions one entry may spawn */
 	constexpr int32 MaxWaveEntryCount = 64;
 
-	/** Most minions one wave may spawn in total (the store holds 128 by default and the fighters need room) */
+	/** Most minions one wave may spawn in total (a single wave stays at 128 although the store holds 160 by default: the fighters and a second wave need room) */
 	constexpr int32 MaxWaveTotal = 128;
 }
 
