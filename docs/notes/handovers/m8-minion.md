@@ -109,3 +109,26 @@
   Docs (combat.md, plugin index row) not updated.
 - Pitfall: `-ExecCmds` separates commands with commas, not semicolons (only the first ran).
 - Cost: G3 ~ $10-13 (Opus writer ~245k tokens, my context ~75k; 4 builds, 2 headless runs, 2 bench runs, ~1 h machine).
+
+## G4 (laptop, 2026-11-07): code DONE, spike 3 decided (B), robustness NOT at 0 failures (2 fix attempts used)
+
+- Branch `claude/project-thread-pk0j51`, commit 34c4e96 after G3. Opus writer from `Saved/M8G3/writer-brief-g4.md`; report with
+  choices, stubs and doubts: `Saved/M8G3/writer-report-g4.md` (not versioned).
+- `IGSTN_MinionMovementBackend::StepBatch`, backend B `FGSTN_MinionMovement_Lightweight` (sweep + slide, step up 45 cm, ~45° walkable,
+  ground snap, ledges, Falling/Launched with the gravity vector at the position, PushedBack grounded, depenetration one shape per pass,
+  separation by spatial hash in slot order, KillZ). Subsystem: `LaunchMinion`, `SetGravitySource`, `OnMovementStepped`. Definition
+  `StepHeight` 35 -> 45. No `GSTN_MinionBlock` channel (would need project ini): WorldStatic+WorldDynamic object query.
+- Bench: `Massacre`, `gstn.Minion.Bench.Course 1` (course from /Engine cubes: stairs, 40° ramp, 10 cm wall, corner, 300 cm ledge),
+  spawns dropped onto geometry, counters fell/trapped(stuck=)/blocked/tunnelled. Chase walks to the bench centre without a player
+  (not comparable with G3 Chase numbers).
+- Tests: `GSTNMinion.Runtime.Movement.*` 10 (incl. FallingAgainstWallLands). GSTNMinion 29/0; full GSTN 1335/0, 0 ensures measured before
+  the two fixes (minion-only changes after; expected 1336). Plugin-off: no file outside GSTNMinion changed, so = G3's 1307/0 (not rebuilt).
+- Spike 3 (headless `-game -nullrhi`, laptop, not the desktop render host): cB = 0.0056 ms (Chase, 60 s) / 0.0065 ms (Massacre, 10 min)
+  per minion-frame. A not built. Decision rule: cost passes rule 2, robustness does not -> rule 3: ship B, record honestly.
+  Massacre 10 min N=60: fell 0, tunnelled 0, trapped 5, blocked 18, 0 ensures. Chase 60 s: trapped 1 (Falling hover at
+  (-1014,664,91), unchanged by fix 2), blocked 7.
+- OPEN (next movement thread): trapped "in penetration after its step" at the stair block side face (~(1030,430,91), stairs are Y ±200),
+  and the Falling hover above. Log lines in `Saved/M8G3/bench-*.log`. Suspect: side-face contact of a capsule against box edges in the
+  step-up/snap path. Not fixed (2 attempts used).
+- Not done: L_MinionCourse as an asset (course is built in code instead), Mover backend A, docs.
+- Cost: G4 ~ $9-12 (Opus writer ~290k tokens over 3 rounds, my context ~95k; 4 builds, 2 test runs, 3 bench runs incl. the 10-min soak).
