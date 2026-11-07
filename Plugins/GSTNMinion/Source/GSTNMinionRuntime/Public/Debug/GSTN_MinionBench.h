@@ -76,8 +76,12 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 
-	/** Spawns Count minions (queued: they activate over the next frames) and sets the scenario. Returns how many were queued */
-	int32 SpawnBench(int32 Count, EGSTN_MinionBenchScenario InScenario);
+	/**
+	 * Spawns Count minions (queued: they activate over the next frames) and sets the scenario. Returns how many were queued.
+	 * G11 population case: with NearCount set, only the first NearCount go in the usual ring around the players and the rest are placed
+	 * on a second ring of FarRadius cm (beyond the Far border, so they settle Dormant): a 150 population of which about 60 are awake
+	 */
+	int32 SpawnBench(int32 Count, EGSTN_MinionBenchScenario InScenario, int32 NearCount = INDEX_NONE, double FarRadius = 12000.0);
 
 	/** G5 gate: Count attackers in a ring (150 cm) around the TargetIndex-th registered fighter (ascending id), attacking it. Returns how many were queued */
 	int32 SpawnAttackers(int32 Count, int32 TargetIndex, bool bBrain = false);

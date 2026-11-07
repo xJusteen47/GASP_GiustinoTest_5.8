@@ -40,6 +40,9 @@ public:
 	/** True when the slot holds a token for the target (granted by Resolve, not merely requested) */
 	bool Holds(int32 TargetId, int32 SlotIndex) const;
 
+	/** True when the slot holds a granted token for any target (the G11 T0 cap never demotes an attacker). Linear in the entries, which are few */
+	bool HoldsAny(int32 SlotIndex) const;
+
 	/** True when the slot asked for the target and has not been granted yet */
 	bool IsWaiting(int32 TargetId, int32 SlotIndex) const;
 

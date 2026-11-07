@@ -323,3 +323,28 @@
 - PERF-DEBT (also in perf-debt.md): observer pose copy per flagged slot per step; process-wide ext-type table read per item NetSerialize (cache per pack);
   NetPublish tests the platform flag on every activated slot each frame (fold into the dirty pass in G11); SamplePose FindOldest scan (rare).
 - Cost: ~$6 (writer ~221k tokens / 43 tool calls; my context ~+40k; 5 builds incl. 2 off configs, 3 gate test runs, 2 harness runs).
+
+## G11a (laptop, 2026-11-07): host budgets DONE (MaxActiveT0 cap, T0 rate fallback, horde/bytes scenarios), gate green; G11b (desktop) NOT started
+
+- Branch `claude/m8-g11-laptop` from `claude/m8-g10-laptop` (e742a53). Split (told the coordinator): G11a here, G11b needs the desktop as host that renders.
+  Sonnet writer (`Saved/M8G11/writer-brief.md`, `writer-report.md`). Only `Plugins/GSTNMinion`, `minion_scenarios.py`, docs.
+- Cap: cvar `gstn.Minion.MaxActiveT0` (48, 0 = off), one `ApplyT0Cap` pass after the StageLODUpdate loop: farthest non-attacker Combat slots -> Near,
+  bounded selection, tie by slot; spared: attackers by state, token holders (`HoldsAny`, only when over the cap), `IsExemptFromCombatCap`, a ceiling
+  at Combat. Candidates' tier events are emitted after the loop (Near->Combat->Near = no event). `GetActiveT0Count`, `GetT0DemotedCount` (cumulative).
+- Fallback 2: cvar `gstn.Minion.T0RateHz` (15, clamp 5..15) pushed from NetPublish to Core `SetCombatRateHz`; default = same bytes. Fallback 3 (puppet cap) not touched.
+- Bench: Report prints a parseable `MinionBench budget ...` line; new `gstn.Minion.Bench.Population N Near FarRadius [Idle|Chase|Brain]`.
+- Deviations: per-definition `FGSTN_MinionLODParams::MaxActiveCombat` left unused (the cvar is the host cap); the token-holder case has no unit test
+  (the batch re-resolves tokens each frame), it is exercised by minion_horde; G9a perf-debt "skip Dead in hash" not done (hash feeds observers/lag-comp).
+- Gate: all on 1394/0 (+8 `*.Budget.*`), GSTNMinion off 1307/0, 0 ensures. One fix round: demoted count made cumulative, exempt test re-timed.
+- Harness (dedicated + 2 clients, 60/15, `GSTN_HORDE_SECONDS=20`): 0 % and 2 %: hits_player, tokens, replicate, late_join, reaction_tiers, tokens_brain,
+  wave, horde, bytes PASS (no rerun); lod FAIL on "no pop" only (known). `SUITE_MINION_BENCH` = horde, bytes (not in SUITE_MINION).
+- Provisional laptop numbers (-nullrhi, NOT the §11 measurement): horde 60 minions, active T0 capped at 48, batch avg 0.52 ms / max 3.4 ms.
+  Bytes (planning: client item updates x 20 B): N=40 ~0.1 KB/s per client, N=80 ~1.6-2.0 KB/s (t0 48 / t1 32). The N=40 figure is for minions
+  standing at their targets (updates follow motion): G11b must measure a moving horde and wire bytes (`stat net`), 3 headless clients.
+- FINDING: the 150-population case spawned only 128 (store capacity 128): awake 60, dormant 68. A 150 population needs capacity >= 150
+  (one store setting + the column sizes); decide in G11b/G12, not changed here.
+- G11b (desktop): listen host that renders (Development, `stat unit`, Insights `GSTN_MinionBatch`), max N honestly, R4/R5 recorded, §8.3/§11 re-based,
+  moving-horde wire bytes with 3 clients, fallbacks of §4d.1 in order if the frame does not fit, capacity for 150.
+- PERF-DEBT (also in perf-debt.md): deferred candidate events + O(over x candidates) selection; HoldsAny linear walk; T0 counted from scheduled slots only;
+  silent re-demotion churn after the Near dwell (hold-by-cap bit); bytes scenario fixed waits; G10 platform-flag line fixed only partly.
+- Cost: ~$7 (writer ~205k tokens / 56 tool calls; my context ~75k; 4 builds incl. off, 3 gate test runs, 2 harness runs).

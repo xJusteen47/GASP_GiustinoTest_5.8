@@ -17,6 +17,10 @@
 
 namespace
 {
+	TAutoConsoleVariable<int32> CVarT0RateHz(
+		TEXT("gstn.Minion.T0RateHz"), GSTNMinionNetRate::DefaultCombatRateHz,
+		TEXT("Host budget fallback 2 (M8 4d.1): replication rate of T0 Combat items in Hz, clamped to 5..15. 15 is the table (unchanged bytes); 10 trades smoothness for upload."));
+
 	TAutoConsoleVariable<int32> CVarHostUploadBudgetKBps(
 		TEXT("gstn.Minion.HostUploadBudgetKBps"), 40,
 		TEXT("Upload the minion packs may plan to use on this host, KB/s (1 KB = 1000 B), split evenly over the remote connections. A pack is\n")
@@ -354,7 +358,14 @@ void UGSTN_MinionCombatSubsystem::NetPublish(int32 Frame)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_MinionNetPublish);
 
+	// Host fallback 2 (G11): the T0 rate is read once per publish and handed to Core, which reads no cvar. The limiters apply the current
+	// rate's period at every check, so a change takes effect on the next send without resetting anything
+	GSTNMinionNetRate::SetCombatRateHz(CVarT0RateHz.GetValueOnGameThread());
+
 	// Packs for the minions the spawn drain activated this frame (ascending slot order, so pack membership is deterministic)
+	// FIXED G11: the platform flag byte is read only while a platform is flagged (NumPlatformFlagged is kept in step by SetExtFlag), so
+	// the common case is the activation test alone
+	const bool bAnyPlatform = NumPlatformFlagged > 0;
 	for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE; Slot = Store.NextAliveSlot(Slot + 1))
 	{
 		if (PendingActivation[Slot])
@@ -363,7 +374,7 @@ void UGSTN_MinionCombatSubsystem::NetPublish(int32 Frame)
 		}
 		// Platform seam (G10): a flagged slot has no item. One that already has one loses it exactly like a despawn does (NetReleaseSlot:
 		// the id is freed, an emptied pack is destroyed); clearing the flag finds SlotPackId empty and re-adds it with a Teleport sample
-		if (Store.ExtFlags[Slot] & GSTNMinion::ExtFlag::PlatformActor)
+		if (bAnyPlatform && (Store.ExtFlags[Slot] & GSTNMinion::ExtFlag::PlatformActor))
 		{
 			if (SlotPackId[Slot] != INDEX_NONE)
 			{

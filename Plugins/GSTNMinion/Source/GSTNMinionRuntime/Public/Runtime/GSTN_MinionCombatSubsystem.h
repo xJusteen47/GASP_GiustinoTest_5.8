@@ -445,6 +445,23 @@ public:
 	void ResetBenchTotals() { BenchTotals = FGSTN_MinionBenchTotals(); }
 	int32 GetLastBatchFrame() const { return LastBatchFrame; }
 
+	/** Host budget (G11): Combat (T0) slots of the last LOD step, after the gstn.Minion.MaxActiveT0 demotion */
+	int32 GetActiveT0Count() const { return ActiveT0Count; }
+	/** Host budget (G11): demotions the cap made since the subsystem started (cumulative; a demoted slot then dwells in Near) */
+	int32 GetT0DemotedCount() const { return T0DemotedCount; }
+	/** Tier changes queued since activation (every QueueLODChange): lets a test prove a demoted slot does not flip back and forth */
+	int64 GetLODChangeCount() const { return LODChangeCount; }
+
+	/**
+	 * Test and bench: replaces the player pawn positions the LOD distance reads (ground plane), so a headless world with no pawns can
+	 * place minions at chosen distances. Server-only input like the pawns themselves. Cleared by ClearTestPlayerPositions
+	 */
+	void SetTestPlayerPositions(TConstArrayView<FVector2D> Positions) { TestPlayerPositions.Reset(); TestPlayerPositions.Append(Positions.GetData(), Positions.Num()); bUseTestPlayerPositions = true; }
+	void ClearTestPlayerPositions() { TestPlayerPositions.Reset(); bUseTestPlayerPositions = false; }
+
+	/** Tests only: the attack tokens with write access, to hold a token without running a full attack */
+	FGSTN_MinionAttackTokens& GetAttackTokensForTests() { return AttackTokens; }
+
 	/** The actor of a live, activated slot; null otherwise */
 	AGSTN_MinionActor* GetActorOfSlot(int32 SlotIndex) const;
 
@@ -674,6 +691,8 @@ private:
 	const FGSTN_MinionLODParams& LODParamsOf(int32 Slot) const;
 	int32 IntervalOf(int32 Slot) const;
 	void QueueLODChange(int32 Slot, uint8 OldTier, uint8 NewTier);
+	/** The one pass of the host T0 cap after the per-slot LOD loop (G11). Cap 0 = off. Emits the deferred tier changes of CapScratch */
+	void ApplyT0Cap(int32 Cap, int32 CombatCount);
 	void TraceStage(EStage Stage, int32 Slot);
 
 	bool bActive = false;
@@ -783,6 +802,13 @@ private:
 	// Per-batch scratch (kept to avoid allocation)
 	TArray<int32> Scheduled;
 	TArray<FVector2D> PlayerPositions;
+	TArray<FVector2D> TestPlayerPositions;
+	bool bUseTestPlayerPositions = false;
+	/** T0 slots the host cap may demote this LOD step (G11): filled by the per-slot loop, consumed by the one cap pass after it */
+	TArray<FGSTN_MinionCapCandidate> CapScratch;
+	int32 ActiveT0Count = 0;
+	int32 T0DemotedCount = 0;
+	int64 LODChangeCount = 0;
 	TArray<FPendingHit> DrainScratch;
 	FGSTN_TimelineOutput TimelineOutput;
 	/** Hit side of a timeline evaluation (attack queries); the snapshot's hurt states use their own, the provider is const */

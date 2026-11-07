@@ -64,6 +64,22 @@ neither). All are inert while nothing is bound: no publish byte, LOD decision or
   wire format on both sides from the definition; `SetExtByte(Handle, byte)` on the authority, `UGSTN_MinionClientRegistry::GetExtByte(GlobalId)` on a client.
 - Tests: `GSTNMinion.Core.Seams.*`, `GSTNMinion.Runtime.Seams.*`.
 
+## Host budgets (G11)
+
+Two cvars cap what the host pays when many minions fight (M8 4d.1). Applied in this order if the host frame does not fit:
+
+1. `gstn.Minion.MaxActiveT0` (default 48, 0 = no cap): after the LOD step, the farthest T0 minions beyond the cap are demoted to T1. Never demoted: a minion
+   that holds an attack token, one in a timeline or reaction (the forced-Combat test), one exempt through `SetExemptFromCombatCap`, one whose bridge ceiling is
+   Combat. Ties break by slot (higher slot first). A demoted slot restarts its dwell and, when the stepper pulls it back, is sent back with no tier event.
+   `GetActiveT0Count()` and `GetT0DemotedCount()` expose the last step.
+2. `gstn.Minion.T0RateHz` (default 15, clamped 5..15): the T0 replication rate; 15 sends the same bytes as before. Core keeps no cvar, the Runtime hands the
+   value to `GSTNMinionNetRate::SetCombatRateHz` in `NetPublish`.
+3. Then (not in this plugin yet): the puppet cap `MaxVisiblePuppets` and puppet LOD (M8 8.4); record the max N honestly.
+
+`gstn.Minion.Bench.Report` prints a parseable `MinionBench budget activeT0=.. demoted=.. awake=.. dormant=.. t0=.. t1=.. t2=.. t3=..` line;
+`gstn.Minion.Bench.Population <N=150> <NearCount=60> <FarRadius=12000>` places the 150 population case. Harness: `scenario_minion_horde`,
+`scenario_minion_bytes` (SUITE_MINION_BENCH). Numbers from a laptop with -nullrhi are provisional.
+
 ## Gameplay tags
 
 Native: see `GSTN_MinionTags.h`. Designer vocabulary (ini only) is in `Config/Tags/GSTNMinion.ini` (`Minion.Type.Grunt`,

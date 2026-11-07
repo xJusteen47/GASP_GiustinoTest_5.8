@@ -7,6 +7,7 @@
 # Judged on the server's copy of the victim (inbox log, damage) and on every world's copy of it afterwards (the NP state must agree once the
 # minions are gone). At 2 % loss a few Sync/Aux reconciles are expected (testing.md), so no scenario judges unexplained reconciles.
 import json
+import os
 import re
 import time
 
@@ -18,6 +19,9 @@ SUITE_MINION = ['minion_hits_player', 'minion_tokens', 'minion_replicate', 'mini
                 'minion_reaction_tiers', 'minion_lagcomp', 'minion_lod', 'minion_tokens_brain', 'minion_wave']
 # M8 G6: replication scenarios (packs, relevancy grants, registry check); run_batch(SUITE_MINION_NET)
 SUITE_MINION_NET = ['minion_late_join', 'minion_replicate']
+# M8 G11: host budget scenarios, a minute each so not in SUITE_MINION: run_batch(SUITE_MINION_BENCH). Laptop numbers are provisional (-nullrhi).
+# GSTN_HORDE_SECONDS shortens the horde fight (default 60, 20 on the laptop); GSTN_BENCH_WINDOW is the byte measuring window in seconds (default 10).
+SUITE_MINION_BENCH = ['minion_horde', 'minion_bytes']
 MINION_BIT = 0x40000000
 _marks = {}
 
@@ -820,6 +824,184 @@ def scenario_minion_wave(client=1):
         (9.0, run.at('the wave cleared exactly once', cleared_once)),
         (9.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
         (9.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+# ---- M8 G11: host budgets (MaxActiveT0, T0 rate, awake population). Numbers on a laptop with -nullrhi are provisional ----
+_BUDGET = re.compile(r'MinionBench budget activeT0=(\d+) demoted=(\d+) awake=(\d+) dormant=(\d+) t0=(\d+) t1=(\d+) t2=(\d+) t3=(\d+) alive=(\d+) t0RateHz=(\d+) maxBatchUs=([\d.]+) avgBatchUs=([\d.]+)')
+_PLANNING_BYTES_PER_ITEM = 20   # GSTNMinionNetRate::PlanningBytesPerItem: planned size of one item update (R1 measures the real one)
+
+
+def _env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except ValueError:
+        return float(default)
+
+
+def _budget_rows(since):
+    """Every 'MinionBench budget' line after the mark as dicts"""
+    rows = []
+    for ln in g._read_log_since(since).splitlines():
+        m = _BUDGET.search(ln)
+        if m:
+            v = m.groups()
+            rows.append(dict(activeT0=int(v[0]), demoted=int(v[1]), awake=int(v[2]), dormant=int(v[3]), t0=int(v[4]), t1=int(v[5]), t2=int(v[6]),
+                             t3=int(v[7]), alive=int(v[8]), t0Hz=int(v[9]), maxBatchUs=float(v[10]), avgBatchUs=float(v[11])))
+    return rows
+
+
+def _cap():
+    try:
+        return int(unreal.SystemLibrary.get_console_variable_int_value('gstn.Minion.MaxActiveT0'))
+    except Exception:
+        return 48
+
+
+def scenario_minion_horde(client=1):
+    """M8 G11. 60 chasing attackers (30 per client pawn, gstn.Minion.Bench.Attack) while both clients swing at them for GSTN_HORDE_SECONDS (60, or 20 on
+    the laptop). Judged: the server's active T0 never exceeded gstn.Minion.MaxActiveT0 (budget lines every 5 s), the fight happened (the
+    server drained hits, minions started attacks), no ensure in the log, the clients' registry check passed with no mismatch, and the number of
+    reconciles is recorded (judged by the other scenarios; the pawns here are hit on purpose). Result detail: active T0, demoted, avg/max batch,
+    reconciles. Provisional numbers (laptop, -nullrhi)"""
+    run = g._Run('minion_horde', client, judge_reconciles=False, sample=False)
+    duration = _env_float('GSTN_HORDE_SECONDS', 60.0)
+    st = {}
+    clients = list(range(1, len(g.worlds())))
+
+    def setup():
+        _setup()
+        _cmd('gstn.Minion.Bench.HurtboxSet /Game/GASNPPTest/Combat/HBS_Test_Pawn.HBS_Test_Pawn')
+        g.set_hurtbox(infinite=True)
+        for c in clients:
+            g._apply_loadout(g.key_of_player(c), g.HIT_KIT)
+        st['t0'] = g.mark_log()
+        st['rb0'] = g._total_rollbacks()
+        return 'rules + hit log + kit + no stagger'
+
+    def sample():
+        _cmd('gstn.Minion.Bench.Report')
+        return 'report'
+
+    def final_dump():
+        _marks['log'] = g.mark_log()
+        _net_dump()
+        _cmd('gstn.Minion.Bench.Report')
+        return 'dumped'
+
+    def judged_cap():
+        rows = _budget_rows(st['t0'])
+        cap = _cap()
+        top = max((r['activeT0'] for r in rows), default=-1)
+        last = rows[-1] if rows else {}
+        return (bool(rows) and (cap <= 0 or top <= cap)), (f"cap {cap} max activeT0 {top} over {len(rows)} reports; last demoted {last.get('demoted')} "
+                                                           f"awake {last.get('awake')} avgBatchUs {last.get('avgBatchUs')} maxBatchUs {last.get('maxBatchUs')} (provisional, laptop)")
+
+    def no_ensure():
+        text = g._read_log_since(st['t0'])
+        bad = [ln for ln in text.splitlines() if 'Ensure condition failed' in ln or 'Assertion failed' in ln]
+        return not bad, f'{len(bad)} ensure/assert lines {bad[:1]}'
+
+    def fought():
+        att = _report_line('MinionBench attack')
+        spike = _report_line('MinionBench spike5')
+        started, drained = _num(att, 'started') or 0, _num(spike, 'drainedHits') or 0
+        return started > 0 and drained > 0, f'attacks started {started} drained hits {drained}'
+
+    def registry_ok():
+        summaries = _net_state()[3]
+        return (len(summaries) >= 1 and all(x['ok'] == 1 and x['mismatches'] == 0 for x in summaries.values())), f'summaries {summaries}'
+
+    def reconciles():
+        gained = g._total_rollbacks() - st['rb0']
+        run.note(f'reconciles during the horde: +{gained} rollbacks on the clients')
+        return True, f'+{gained} rollbacks (recorded, not judged)'
+
+    steps = [(0.0, lambda: ('setup', setup())),
+             (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Attack 30 0'))),
+             (0.6, lambda: ('spawn', _cmd('gstn.Minion.Bench.Attack 30 1')))]
+    for c in clients:
+        steps += _swing_steps(3.0, duration, 0.5, c)
+    t = 5.0
+    while t < duration:
+        steps.append((t, lambda: ('sample', sample())))
+        t += 5.0
+    end = duration + 0.5
+    steps += [
+        (end, lambda: ('final', final_dump())),
+        (end + 1.0, run.at('active T0 never above gstn.Minion.MaxActiveT0 (numbers: active T0, demoted, batch us)', judged_cap)),
+        (end + 1.0, run.at('the horde fought (attacks started, hits drained on the server)', fought)),
+        (end + 1.0, run.at('no ensure or assert in the log', no_ensure)),
+        (end + 1.0, run.at('registry check ok on every client, no mismatch', registry_ok)),
+        (end + 1.0, run.at('reconciles recorded', reconciles)),
+        (end + 1.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (end + 2.0, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_minion_bytes(client=1, clients=2):
+    """M8 G11. Per-client minion upload with N = 40 and N = 80 awake chasing minions (gstn.Minion.Bench.Spawn N Chase), measured over a window of
+    GSTN_BENCH_WINDOW seconds (10): the item updates each client received (client summary updates) x 20 B planning size (PlanningBytesPerItem)
+    per second, with the per-tier counts of the server. Then the 150 population case (gstn.Minion.Bench.Population 150 60): awake (T0..T2) <= 62.
+    `clients` is the number of remote clients the host serves (2 on the laptop, 3 on the desktop): the host upload is per-client x clients and
+    is printed that way; the windows read every client that reports. Numbers are planning bytes, not wire bytes, and provisional (laptop,
+    -nullrhi); the 5.8 KB/s per client of M8 4d.1 for 40 typical minions is only noted, not judged."""
+    run = g._Run('minion_bytes', client, judge_reconciles=False, sample=False)
+    window = _env_float('GSTN_BENCH_WINDOW', 10.0)
+    st = {}
+
+    def snap(label):
+        _marks['log'] = g.mark_log()
+        st[label + '_mark'] = _marks['log']
+        st[label + '_time'] = time.time()
+        _net_dump()
+        _cmd('gstn.Minion.Bench.Report')
+        return 'snap ' + label
+
+    def read(label):
+        st[label + '_updates'] = {p: x['updates'] for p, x in _net_state()[3].items()}
+        rows = _budget_rows(st[label + '_mark'])
+        st[label + '_budget'] = rows[-1] if rows else {}
+        return f"{label}: updates {st[label + '_updates']} budget {st[label + '_budget']}"
+
+    def rate(a, b, n):
+        dt = max(st[b + '_time'] - st[a + '_time'], 0.001)
+        per = {p: (st[b + '_updates'].get(p, 0) - u) / dt * _PLANNING_BYTES_PER_ITEM for p, u in st[a + '_updates'].items()}
+        top = max(per.values(), default=0.0)
+        bud = st[b + '_budget']
+        detail = (f"N={n}: per-client planning bytes/s {', '.join(f'{p}:{v:.0f}' for p, v in per.items())}; host upload for {clients} clients ~{top * clients:.0f} B/s; "
+                  f"tiers t0={bud.get('t0')} t1={bud.get('t1')} t2={bud.get('t2')} t3={bud.get('t3')} activeT0={bud.get('activeT0')} demoted={bud.get('demoted')} "
+                  f"t0Hz={bud.get('t0Hz')} (provisional, laptop, planning size 20 B)")
+        if n == 40:
+            run.note(f'M8 4d.1 planning value for 40 typical minions: 5.8 KB/s per client; measured {top / 1000.0:.1f} KB/s (chasing, so all T0)')
+        return (top > 0.0), detail
+
+    def population():
+        bud = st['pop_budget']
+        awake = bud.get('awake', 999)
+        return awake <= 62 and bud.get('alive', 0) >= 100, (f"alive {bud.get('alive')} awake {awake} dormant {bud.get('dormant')} t0={bud.get('t0')} t1={bud.get('t1')} "
+                                                           f"t2={bud.get('t2')} t3={bud.get('t3')} activeT0={bud.get('activeT0')} (provisional, laptop)")
+
+    w = window
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('spawn 40', _cmd('gstn.Minion.Bench.Spawn 40 Chase'))),
+        (4.0, lambda: snap('a0')), (4.8, lambda: ('read', read('a0'))),
+        (4.0 + w, lambda: snap('a1')), (4.8 + w, lambda: ('read', read('a1'))),
+        (5.0 + w, run.at('N=40 bytes per client', lambda: rate('a0', 'a1', 40))),
+        (5.1 + w, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (6.5 + w, lambda: ('spawn 80', _cmd('gstn.Minion.Bench.Spawn 80 Chase'))),
+        (10.5 + w, lambda: snap('b0')), (11.3 + w, lambda: ('read', read('b0'))),
+        (10.5 + 2 * w, lambda: snap('b1')), (11.3 + 2 * w, lambda: ('read', read('b1'))),
+        (11.5 + 2 * w, run.at('N=80 bytes per client', lambda: rate('b0', 'b1', 80))),
+        (11.6 + 2 * w, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (13.0 + 2 * w, lambda: ('population', _cmd('gstn.Minion.Bench.Population 150 60 12000 Idle'))),
+        (21.0 + 2 * w, lambda: snap('pop')), (21.8 + 2 * w, lambda: ('read', read('pop'))),
+        (22.0 + 2 * w, run.at('150 population: awake (T0..T2) <= 62, the rest dormant', population)),
+        (22.1 + 2 * w, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (23.0 + 2 * w, run.finish()),
     ]
     run.run(steps)
 

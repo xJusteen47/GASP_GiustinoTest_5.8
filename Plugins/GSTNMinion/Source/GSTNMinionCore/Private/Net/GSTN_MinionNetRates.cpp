@@ -6,12 +6,27 @@
 
 namespace GSTNMinionNetRate
 {
+	namespace
+	{
+		int32 CombatRateHz = DefaultCombatRateHz;
+	}
+
+	void SetCombatRateHz(int32 Hz)
+	{
+		CombatRateHz = FMath::Clamp(Hz, 5, DefaultCombatRateHz);
+	}
+
+	int32 GetCombatRateHz()
+	{
+		return CombatRateHz;
+	}
+
 	int32 RateHz(EGSTN_MinionLODTier Tier)
 	{
 		switch (Tier)
 		{
 		case EGSTN_MinionLODTier::Combat:
-			return 15;
+			return CombatRateHz;
 		case EGSTN_MinionLODTier::Near:
 			return 5;
 		case EGSTN_MinionLODTier::Far:

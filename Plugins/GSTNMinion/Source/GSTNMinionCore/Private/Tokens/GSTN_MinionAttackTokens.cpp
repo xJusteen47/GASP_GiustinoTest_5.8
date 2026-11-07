@@ -75,6 +75,18 @@ bool FGSTN_MinionAttackTokens::Holds(int32 TargetId, int32 SlotIndex) const
 	return Index != INDEX_NONE && Entries[Index].bGranted;
 }
 
+bool FGSTN_MinionAttackTokens::HoldsAny(int32 SlotIndex) const
+{
+	for (const FEntry& Entry : Entries)
+	{
+		if (Entry.bGranted && Entry.SlotIndex == SlotIndex)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 bool FGSTN_MinionAttackTokens::IsWaiting(int32 TargetId, int32 SlotIndex) const
 {
 	const int32 Index = FindEntry(TargetId, SlotIndex);

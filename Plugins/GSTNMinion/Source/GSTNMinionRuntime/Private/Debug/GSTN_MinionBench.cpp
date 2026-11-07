@@ -18,6 +18,7 @@
 #include "GSTNMinionCoreModule.h"
 #include "HAL/IConsoleManager.h"
 #include "NetworkPredictionWorldManager.h"
+#include "Net/GSTN_MinionNetRates.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
 #include "Simulation/GSTN_HitInbox.h"
 #include "Simulation/GSTN_LagCompensation.h"
@@ -142,6 +143,29 @@ namespace
 				Scenario = EGSTN_MinionBenchScenario::Brain;
 			}
 			Bench->SpawnBench(Count, Scenario);
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs BenchPopulationCommand(
+		TEXT("gstn.Minion.Bench.Population"),
+		TEXT("gstn.Minion.Bench.Population <N=150> <NearCount=60> <FarRadius=12000> [Idle|Chase|Brain]: N minions of which NearCount stand in a ring around the first player and the rest on a far ring (they go Dormant). G11 population case: read the awake count in gstn.Minion.Bench.Report."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World);
+			if (!Bench)
+			{
+				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.Population: no bench in this world"));
+				return;
+			}
+			EGSTN_MinionBenchScenario Scenario = EGSTN_MinionBenchScenario::Idle;
+			if (Args.Num() > 3 && Args[3].Equals(TEXT("Chase"), ESearchCase::IgnoreCase))
+			{
+				Scenario = EGSTN_MinionBenchScenario::Chase;
+			}
+			else if (Args.Num() > 3 && Args[3].Equals(TEXT("Brain"), ESearchCase::IgnoreCase))
+			{
+				Scenario = EGSTN_MinionBenchScenario::Brain;
+			}
+			Bench->SpawnBench(Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 150, Scenario, Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 60, Args.Num() > 2 ? FCString::Atod(*Args[2]) : 12000.0);
 		}));
 
 	FAutoConsoleCommandWithWorldAndArgs BenchAttackCommand(
@@ -354,7 +378,7 @@ FVector UGSTN_MinionBenchSubsystem::ResolveCenter()
 	return Center;
 }
 
-int32 UGSTN_MinionBenchSubsystem::SpawnBench(int32 Count, EGSTN_MinionBenchScenario InScenario)
+int32 UGSTN_MinionBenchSubsystem::SpawnBench(int32 Count, EGSTN_MinionBenchScenario InScenario, int32 NearCount, double FarRadius)
 {
 	UWorld* World = GetWorld();
 	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
@@ -375,8 +399,10 @@ int32 UGSTN_MinionBenchSubsystem::SpawnBench(int32 Count, EGSTN_MinionBenchScena
 	}
 	const FVector RingCenter = ResolveCenter() + (bOnCourse ? FVector(0.0, 0.0, 5.0) : FVector::ZeroVector);
 	Count = FMath::Max(Count, 0);
+	const int32 NumNear = NearCount == INDEX_NONE ? Count : FMath::Clamp(NearCount, 0, Count);
+	const int32 NumFar = Count - NumNear;
 	// Ring: about 150 cm between neighbours, at least 600 cm out
-	RingRadius = FMath::Max(600.0, Count * 150.0 / UE_TWO_PI);
+	RingRadius = FMath::Max(600.0, NumNear * 150.0 / UE_TWO_PI);
 
 	// Spawns are placed by a capsule sweep down from 600 cm above the ring point, so none starts inside geometry (the ring crosses
 	// the course's stairs); a point whose sweep starts in penetration is skipped
@@ -394,8 +420,10 @@ int32 UGSTN_MinionBenchSubsystem::SpawnBench(int32 Count, EGSTN_MinionBenchScena
 	int32 Skipped = 0;
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
-		const double Angle = UE_TWO_PI * Index / FMath::Max(Count, 1);
-		FVector Location = RingCenter + FVector(FMath::Cos(Angle) * RingRadius, FMath::Sin(Angle) * RingRadius, 0.0);
+		const bool bFar = Index >= NumNear;
+		const double Angle = bFar ? UE_TWO_PI * (Index - NumNear) / FMath::Max(NumFar, 1) : UE_TWO_PI * Index / FMath::Max(NumNear, 1);
+		const double Radius = bFar ? FMath::Max(FarRadius, RingRadius) : RingRadius;
+		FVector Location = RingCenter + FVector(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, 0.0);
 		const FVector SweepStart = Location + FVector(0.0, 0.0, DropHeight + HalfHeight);
 		const FVector SweepEnd = Location + FVector(0.0, 0.0, HalfHeight - DropHeight);
 		FHitResult Hit;
@@ -723,6 +751,16 @@ void UGSTN_MinionBenchSubsystem::Report() const
 	UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench alive=%d frames=%d avgBatchUs=%.1f maxBatchUs=%.1f moveUsPerMinionFrame=%.2f fell=%d stuck=%d blocked=%d tunnelled=%d"),
 		Minions->GetLastBatchStats().Alive, Totals.Batches, AvgUs, Totals.MaxBatchSeconds * 1.0e6, MoveUs,
 		Totals.FellOut + FellBelowCourse, Stuck, Blocked, Tunnelled);
+	// G11 host budget, one parseable key=value line: T0 after the cap, how many the cap held back, awake = T0..T2, dormant = T3, per tier
+	int32 PerTier[4] = {};
+	const FGSTN_MinionStore& Store = Minions->GetStore();
+	for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE; Slot = Store.NextAliveSlot(Slot + 1))
+	{
+		++PerTier[FMath::Min<int32>(Store.LODTier[Slot], 3)];
+	}
+	UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench budget activeT0=%d demoted=%d awake=%d dormant=%d t0=%d t1=%d t2=%d t3=%d alive=%d t0RateHz=%d maxBatchUs=%.1f avgBatchUs=%.1f"),
+		Minions->GetActiveT0Count(), Minions->GetT0DemotedCount(), PerTier[0] + PerTier[1] + PerTier[2], PerTier[3], PerTier[0], PerTier[1], PerTier[2], PerTier[3],
+		Minions->GetLastBatchStats().Alive, GSTNMinionNetRate::GetCombatRateHz(), Totals.MaxBatchSeconds * 1.0e6, AvgUs);
 	// Spike 5: the drain cost per hit (a 12-minion cleave costs 12 of them) and the rewound candidate query
 	const double DrainUsPerHit = Totals.DrainedHits > 0 ? Totals.DrainSeconds * 1.0e6 / static_cast<double>(Totals.DrainedHits) : 0.0;
 	const double LagCompUsPerQuery = Totals.LagCompQueries > 0 ? Totals.LagCompSeconds * 1.0e6 / static_cast<double>(Totals.LagCompQueries) : 0.0;

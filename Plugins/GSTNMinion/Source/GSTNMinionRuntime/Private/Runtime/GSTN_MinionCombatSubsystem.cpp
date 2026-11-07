@@ -82,6 +82,10 @@ namespace
 		TEXT("gstn.Minion.MaxAttackersPerPlayer"), FGSTN_MinionAttackTokens::DefaultMaxPerTarget,
 		TEXT("Most minions that may start an attack against one fighter at a time (attack tokens). Read when the minion subsystem activates."));
 
+	TAutoConsoleVariable<int32> CVarMaxActiveT0(
+		TEXT("gstn.Minion.MaxActiveT0"), 48,
+		TEXT("Host budget (M8 4d.1): most minions kept in T0 Combat at once; the farthest non-attackers are demoted to T1 Near. 0 = no cap. Attackers (attack token holders, minions in a timeline or reaction) and minions exempt from the cap are never demoted."));
+
 	TAutoConsoleVariable<float> CVarLagCompMaxSpeed(
 		TEXT("gstn.Minion.LagComp.MaxSpeed"), 700.f,
 		TEXT("Fastest a minion moves (cm/s): a rewound query inflates its search by this times the rewind age (spec 9.2: 700 x 0.25 s = 175 cm)."));
@@ -955,7 +959,11 @@ void UGSTN_MinionCombatSubsystem::BuildSchedule(int32 Frame)
 
 	// Nearest-player distance input, read once per batch. Server-only input: it is not part of any rollback
 	PlayerPositions.Reset();
-	if (const UWorld* World = GetWorld())
+	if (bUseTestPlayerPositions)
+	{
+		PlayerPositions.Append(TestPlayerPositions);
+	}
+	else if (const UWorld* World = GetWorld())
 	{
 		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 		{
@@ -984,6 +992,13 @@ int32 UGSTN_MinionCombatSubsystem::IntervalOf(int32 Slot) const
 void UGSTN_MinionCombatSubsystem::StageLODUpdate(int32 Frame)
 {
 	SCOPE_CYCLE_COUNTER(STAT_GSTN_MinionLOD);
+	// Host T0 cap (G11). T0 runs every frame (CombatInterval 1 by default), so every Combat slot is in Scheduled and the count below is the
+	// whole T0 population; a slot just woken into Combat by the inbox from a farther tier is counted from its next step on (its
+	// forced-Combat state makes it an attacker, which the cap never demotes anyway). A definition with a CombatInterval above 1 would be
+	// counted only on its frames, so the cap is exact for the default interval and a lower bound otherwise
+	const int32 Cap = FMath::Max(CVarMaxActiveT0.GetValueOnGameThread(), 0);
+	int32 CombatCount = 0;
+	CapScratch.Reset();
 	for (const int32 Slot : Scheduled)
 	{
 		TraceStage(EStage::LODUpdate, Slot);
@@ -1004,6 +1019,8 @@ void UGSTN_MinionCombatSubsystem::StageLODUpdate(int32 Frame)
 			{
 				Store.FramesInTier[Slot] += DeltaFrames;
 			}
+			// The test override is not a distance rule: no demotion either
+			CombatCount += Store.LODTier[Slot] == static_cast<uint8>(EGSTN_MinionLODTier::Combat) ? 1 : 0;
 			continue;
 		}
 
@@ -1034,13 +1051,77 @@ void UGSTN_MinionCombatSubsystem::StageLODUpdate(int32 Frame)
 			Store.LODTier[Slot] = Ceiling;
 			Store.FramesInTier[Slot] = Ceiling == OldTier ? OldFramesInTier + DeltaFrames : 0;
 		}
+		if (Store.LODTier[Slot] == static_cast<uint8>(EGSTN_MinionLODTier::Combat))
+		{
+			++CombatCount;
+			// A candidate for the cap: not an attacker by state (the tests below), not exempt (G10 seam: a platform a player stands on), and
+			// free to sit in Near (a bridge ceiling at Combat keeps it in T0). Its tier change is held back until the cap pass has decided,
+			// so a slot pulled back to Combat and demoted again in the same frame (Near -> Combat -> Near) emits no event at all
+			if (Cap > 0 && !bForceCombat && !IsExemptFromCombatCap(Slot) && Store.MaxLODTier[Slot] >= static_cast<uint8>(EGSTN_MinionLODTier::Near))
+			{
+				FGSTN_MinionCapCandidate& Candidate = CapScratch.AddDefaulted_GetRef();
+				Candidate.Slot = Slot;
+				Candidate.Distance = Distance;
+				Candidate.OldTier = OldTier;
+				continue;
+			}
+		}
 		if (Store.LODTier[Slot] != OldTier)
 		{
 			QueueLODChange(Slot, OldTier, Store.LODTier[Slot]);
 		}
-		// G11: MaxActiveCombat demotion of the farthest non-attacking T0 minions. It MUST skip a slot with IsExemptFromCombatCap(Slot)
-		// (G10 seam: a platform a player stands on)
 	}
+	ApplyT0Cap(Cap, CombatCount);
+}
+
+void UGSTN_MinionCombatSubsystem::ApplyT0Cap(int32 Cap, int32 CombatCount)
+{
+	constexpr uint8 Combat = static_cast<uint8>(EGSTN_MinionLODTier::Combat);
+	constexpr uint8 Near = static_cast<uint8>(EGSTN_MinionLODTier::Near);
+	ActiveT0Count = CombatCount;
+	if (CapScratch.IsEmpty())
+	{
+		return;
+	}
+
+	int32 Over = CombatCount - Cap;
+	if (Over > 0)
+	{
+		// Only now, over the cap: a token holder is an attacker even while it still walks to its target, so it leaves the candidates
+		for (int32 Index = CapScratch.Num() - 1; Index >= 0; --Index)
+		{
+			const FGSTN_MinionCapCandidate& Candidate = CapScratch[Index];
+			if (AttackTokens.HoldsAny(Candidate.Slot))
+			{
+				if (Candidate.OldTier != Combat)
+				{
+					QueueLODChange(Candidate.Slot, Candidate.OldTier, Combat);
+				}
+				CapScratch.RemoveAtSwap(Index, 1, EAllowShrinking::No);
+			}
+		}
+	}
+
+	const int32 Demote = Over > 0 ? GSTNMinionLODCap::SelectFarthest(CapScratch, Over) : 0;
+	for (int32 Index = 0; Index < CapScratch.Num(); ++Index)
+	{
+		const FGSTN_MinionCapCandidate& Candidate = CapScratch[Index];
+		const uint8 Final = Index < Demote ? Near : Combat;
+		if (Final == Near)
+		{
+			// The dwell restarts: the stepper keeps it in Near for MinDwellFrames, then pulls it back and this pass sends it back again
+			// with no event (OldTier is Near), so a minion over the cap does not churn
+			Store.LODTier[Candidate.Slot] = Near;
+			Store.FramesInTier[Candidate.Slot] = 0;
+		}
+		if (Final != Candidate.OldTier)
+		{
+			QueueLODChange(Candidate.Slot, Candidate.OldTier, Final);
+		}
+	}
+	// Cumulative: a demoted slot then dwells in Near and is not a candidate again, so a per-pass count would read 0 a frame later
+	T0DemotedCount += Demote;
+	ActiveT0Count = CombatCount - Demote;
 }
 
 void UGSTN_MinionCombatSubsystem::StageInboxDrain(int32 Frame)
@@ -2591,6 +2672,7 @@ uint8 UGSTN_MinionCombatSubsystem::GetExtByte(const FGSTN_MinionHandle& Handle) 
 
 void UGSTN_MinionCombatSubsystem::QueueLODChange(int32 Slot, uint8 OldTier, uint8 NewTier)
 {
+	++LODChangeCount;
 	if (CVarLODLog.GetValueOnGameThread() != 0)
 	{
 		const auto TierName = [](uint8 Tier) -> const TCHAR*

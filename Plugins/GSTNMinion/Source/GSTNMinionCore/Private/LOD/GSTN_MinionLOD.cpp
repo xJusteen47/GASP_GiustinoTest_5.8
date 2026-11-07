@@ -122,3 +122,25 @@ bool FGSTN_MinionLODMath::Step(const FGSTN_MinionLODParams& Params, FGSTN_Minion
 	State.FramesInTier = 0;
 	return true;
 }
+
+int32 GSTNMinionLODCap::SelectFarthest(TArrayView<FGSTN_MinionCapCandidate> Candidates, int32 Count)
+{
+	const int32 Num = Candidates.Num();
+	const int32 Take = FMath::Clamp(Count, 0, Num);
+	for (int32 Pick = 0; Pick < Take; ++Pick)
+	{
+		int32 Best = Pick;
+		for (int32 Index = Pick + 1; Index < Num; ++Index)
+		{
+			if (IsFartherThan(Candidates[Index], Candidates[Best]))
+			{
+				Best = Index;
+			}
+		}
+		if (Best != Pick)
+		{
+			Swap(Candidates[Pick], Candidates[Best]);
+		}
+	}
+	return Take;
+}

@@ -29,8 +29,17 @@ namespace GSTNMinionNetRate
 	/** Bytes one item update is planned at (8.2 "planning size") for every byte budget, until R1 measures it */
 	constexpr int32 PlanningBytesPerItem = 20;
 
-	/** Nominal rate of a tier in Hz (T0 15, T1 5, T2 1, T3 0) */
+	/** Nominal rate of a tier in Hz (T0 15, T1 5, T2 1, T3 0); the T0 value is the one set by SetCombatRateHz (G11 fallback 2) */
 	GSTNMINIONCORE_API int32 RateHz(EGSTN_MinionLODTier Tier);
+
+	constexpr int32 DefaultCombatRateHz = 15;
+
+	/**
+	 * Host fallback 2 of 4d.1: the T0 send rate, clamped to 5..15 (15 = the table). Process-wide, set by the Runtime from the
+	 * gstn.Minion.T0RateHz cvar (Core reads no cvar); the default leaves every byte as it was. Game thread only
+	 */
+	GSTNMINIONCORE_API void SetCombatRateHz(int32 Hz);
+	GSTNMINIONCORE_API int32 GetCombatRateHz();
 
 	/** Period of a rate in thousandths of a frame, rounded up so the rate is never exceeded; MAX_int32 for a rate of 0 */
 	GSTNMINIONCORE_API int32 PeriodMilliFrames(int32 RateHz);
