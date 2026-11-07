@@ -164,6 +164,12 @@ class Driver:
             names = sorted(c.get_name() for c in f.get_components_by_class(unreal.PrimitiveComponent))
             _log(f'world {i}: fighter {f.get_name()} at {f.get_actor_location()} colliders {names}')
 
+        if 'part' in o['phases']:
+            # T6: the flank becomes part "Flank" of a one-part set, with a parts bridge, on every machine (GSTNPlatformParts)
+            self.cmd('gstn.PlatformParts.AttachTest Flank 0')
+            self.cmd('gstn.PlatformParts.SetBrokenMask 0')
+            yield 0.5
+
         pids = {i: self.player_id(i) for i in range(len(self.worlds()))}
         for i, pid in pids.items():
             self.cmd(f'gstn.Wall.Teleport {PARK[i][0]} {PARK[i][1]} {PARK[i][2]} 0 {pid}')
@@ -177,6 +183,8 @@ class Driver:
                     yield from self.wall_phase(i, pids[i], r)
                 if 'stand' in o['phases']:
                     yield from self.stand_phase(i, pids[i], r)
+                if 'part' in o['phases']:
+                    yield from self.part_phase(i, pids[i], r)
                 self.cmd(f'gstn.Wall.Teleport {PARK[i][0]} {PARK[i][1]} {PARK[i][2]} 0 {pids[i]}')
                 yield 1.0
                 _log('result ' + json.dumps(r))
@@ -282,6 +290,76 @@ class Driver:
         r['stand_mode_after_jump'] = self.mode_of(self.pawn_of(i)[1])
         r['stand_recon_jump'] = _recon(t, mark_jump)
 
+    def shape_state(self, i, shape_id=0):
+        f = self.fighter(i)
+        p = f.get_component_by_class(unreal.GSTN_EnemyPlatformComponent) if f else None
+        return re.sub(r'[^A-Z]', '', str(p.get_shape_state(shape_id)).split('.')[-1].split(':')[0].upper()) if p else '?'
+
+    def launch_at_flank(self, i, pid, timeout=3.0):
+        """Teleport 3 m off the flank, launch at it holding the stick into it; returns (wall mode or None, seconds)."""
+        origin_y = FIGHTER_AT[1]
+        face_x = FIGHTER_AT[0] + FLANK_FACE_DX
+        import gasnpp_test as t
+        t._set_yaw(i, 0.0)
+        self.cmd('gstn.Wall.DebugInput ""')
+        self.cmd(f'gstn.Wall.Teleport {face_x - 300.0} {origin_y} 120 0 {pid}')
+        yield 1.5
+        self.cmd('gstn.Wall.DebugInput "stick 0 1"')
+        self.cmd(f'gstn.Wall.Teleport {face_x - 300.0} {origin_y} 400 0 {pid}')
+        self.cmd(f'gstn.Wall.Launch 300 0 520 0 {pid}')
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            yield 0.0
+            mode = self.mode_of(self.pawn_of(i)[1])
+            if mode in WALL_MODES:
+                self.last_grab = (mode, round(time.time() - t0, 2))
+                return
+            if mode == 'Walking' and time.time() - t0 > 1.0:
+                break
+        self.last_grab = (None, round(time.time() - t0, 2))
+
+    def part_phase(self, i, pid, r):
+        """scenario_surface_part_break (T6, TS.5): slide on the flank, the flank's part breaks on every machine (the bridge's mask input; the
+        harness fighter has no combat state, so the confirmed mask is given by gstn.PlatformParts.SetBrokenMask): Breaking telegraph, the
+        slider falls, <= 1 unexplained reconcile; the part is restored and the flank can be grabbed again."""
+        import gasnpp_test as t
+        self.cmd('gstn.PlatformParts.SetBrokenMask 0')
+        mark_launch = t.mark_log()
+        yield from self.launch_at_flank(i, pid)
+        r['part_grab'] = self.last_grab[0]
+        if not self.last_grab[0]:
+            r['part_recon_launch'] = _recon(t, mark_launch)
+            self.cmd('gstn.Wall.DebugInput ""')
+            return
+        yield 0.35
+        mark_break = t.mark_log()
+        self.cmd('gstn.PlatformParts.SetBrokenMask 1')
+        t0 = time.time()
+        breaking, fell = False, None
+        while time.time() - t0 < 2.0:
+            yield 0.0
+            if self.shape_state(i) == 'BREAKING':
+                breaking = True
+            if self.mode_of(self.pawn_of(i)[1]) not in WALL_MODES:
+                fell = round(time.time() - t0, 2)
+                break
+        r['part_breaking_seen'] = breaking
+        r['part_fell_s'] = fell
+        r['part_state_after'] = self.shape_state(i)
+        r['part_state_after_server'] = self.shape_state(0)
+        yield 1.5
+        r['part_mode_after'] = self.mode_of(self.pawn_of(i)[1])
+        r['part_recon_break'] = _recon(t, mark_break)
+        self.cmd('gstn.Wall.DebugInput ""')
+        # Restore: the flank is back at once; the slider can grab it again
+        self.cmd('gstn.PlatformParts.SetBrokenMask 0')
+        yield 0.3
+        r['part_state_restored'] = self.shape_state(i)
+        yield from self.launch_at_flank(i, pid)
+        r['part_regrab'] = self.last_grab[0]
+        self.cmd('gstn.Wall.DebugInput ""')
+        yield 1.0
+
     # -- plumbing (as wall_ab)
     def tick(self, _dt):
         if self.done or time.time() < self.wake:
@@ -323,21 +401,30 @@ class Driver:
 
 def verdict(r):
     """scenario_surface_wallslide_enemy pass rule for one run."""
-    ok = r.get('wall_mode') in WALL_MODES and r.get('stand_landed')
-    if r['subject'] == 'client':
-        ok = ok and r.get('wall_recon_on', [1, 1])[1] == 0 and r.get('stand_recon_on', [1, 1])[1] == 0 and r.get('wall_recon_launch_to_grab', [9, 9])[1] <= 1
-    return ok
+    client = r['subject'] == 'client'
+    ok = True
+    if 'wall_mode' in r:
+        ok = ok and r.get('wall_mode') in WALL_MODES and (not client or (r.get('wall_recon_on', [1, 1])[1] == 0 and r.get('wall_recon_launch_to_grab', [9, 9])[1] <= 1))
+    if 'stand_landed' in r:
+        ok = ok and r.get('stand_landed') and (not client or r.get('stand_recon_on', [1, 1])[1] == 0)
+    if 'part_grab' in r:
+        # scenario_surface_part_break: telegraph seen, the slider fell, the flank came back and was grabbed again, <= 1 correction around the fall
+        ok = ok and bool(r.get('part_grab')) and r.get('part_breaking_seen') and r.get('part_fell_s') is not None and r.get('part_state_restored') == 'ACTIVE' \
+            and bool(r.get('part_regrab')) and (not client or r.get('part_recon_break', [9, 9])[1] <= 1)
+    return bool(ok)
 
 
 def write_summary(results, opts, error):
     os.makedirs(METRICS_DIR, exist_ok=True)
     cols = ['subject', 'rep', 'wall_mode', 'wall_grab_s', 'wall_recon_launch_to_grab', 'wall_recon_on', 'wall_rel_y_drift', 'wall_mode_after_jump', 'wall_recon_jump',
-            'stand_landed', 'stand_recon_landing', 'stand_base', 'stand_base_server', 'stand_recon_on', 'stand_rel_y_drift', 'stand_travel_y', 'stand_z', 'stand_mode_after_jump', 'stand_recon_jump']
+            'stand_landed', 'stand_recon_landing', 'stand_base', 'stand_base_server', 'stand_recon_on', 'stand_rel_y_drift', 'stand_travel_y', 'stand_z', 'stand_mode_after_jump', 'stand_recon_jump',
+            'part_grab', 'part_breaking_seen', 'part_fell_s', 'part_state_after', 'part_state_after_server', 'part_mode_after', 'part_recon_break', 'part_state_restored', 'part_regrab']
     lines = [f"# scenario_surface_wallslide_enemy ({datetime.datetime.now().strftime('%Y-%m-%d %H:%M')})", '',
              f"{opts['lag']} ms lag, {opts['var']} ms jitter, {opts['loss']} % loss, listen host + 1 client, map {MAP}, fighter at {FIGHTER_AT} (300 cm/s, +-300 cm along Y), "
              f"wall memory {'reset before each grab' if opts.get('reset_memory') else 'kept'}", '']
     if error:
         lines += ['**Error:** ' + error.splitlines()[0], '']
+    cols = [c for c in cols if any(c in r for r in results) or c in ('subject', 'rep')]
     lines.append('| pass | ' + ' | '.join(cols) + ' |')
     lines.append('|' + '---|' * (len(cols) + 1))
     for r in results:
@@ -345,7 +432,7 @@ def write_summary(results, opts, error):
     lines += ['', 'Reconcile counts are [mismatches, unexplained] in the log (np.PrintReconciles) within each window, unexplained = not on the frame of an input '
               'offset change (NP re-sizing the client input buffer to the jitter); the pass rule uses unexplained. Windows: launch_to_grab = from the harness teleport and launch '
               'to 0.35 s after the grab (includes the harness\'s own teleport correction, wall-slide-v2.md 6.12); on = 0.35..0.70 s after the grab; landing = '
-              'teleport above the top to 1 s after the landing (teleport artefact); stand on = the next 1.5 s riding. The host never reconciles.']
+              'teleport above the top to 1 s after the landing (teleport artefact); stand on = the next 1.5 s riding; part_recon_break = from the break to 1.5 s after the fall (T6). The host never reconciles.']
     open(SUMMARY, 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
     _log('summary: ' + SUMMARY)
 
@@ -423,7 +510,7 @@ if __name__ == '__main__':
         p.add_argument('--loss', type=int, default=0)
         p.add_argument('--subjects', choices=('both', 'client', 'host'), default='both')
         p.add_argument('--repeats', type=int, default=2)
-        p.add_argument('--phases', nargs='+', default=['wall', 'stand'], choices=('wall', 'stand'))
+        p.add_argument('--phases', nargs='+', default=['wall', 'stand'], choices=('wall', 'stand', 'part'))
         p.add_argument('--no-jumps', action='store_true', help='leave the flank by sliding to the floor and the top by staying on it (no jump input)')
         p.add_argument('--reset-memory', action='store_true', help='reset the wall memory before each grab (the T3 workaround, for comparison runs)')
         p.add_argument('--log', type=int, default=0, help='gstn.Wall.Log level for the run (2 prints every refused entry)')

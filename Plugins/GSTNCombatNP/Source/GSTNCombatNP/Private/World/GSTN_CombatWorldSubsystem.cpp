@@ -193,19 +193,64 @@ bool UGSTN_CombatWorldSubsystem::PostHit(int32 EntityId, const FGSTN_HitInboxEnt
 	return PostToInbox(EntityId, Entry.ToInboxEntry());
 }
 
-bool UGSTN_CombatWorldSubsystem::PostToInbox(int32 EntityId, const FGSTN_InboxEntry& Entry)
+FGSTN_FoundEntity UGSTN_CombatWorldSubsystem::FindEntity(int32 EntityId) const
 {
+	FGSTN_FoundEntity Found;
+	const uint8 Kind = GSTNEntityKinds::KindOfEntityId(EntityId);
+	if (Kind == GSTNEntityKinds::Minion)
+	{
+		for (IGSTN_HittableProvider* Provider : Providers)
+		{
+			if (Provider->GetEntityKind() == GSTNEntityKinds::Minion)
+			{
+				Found.Kind = Kind;
+				Found.Provider = Provider;
+				break;
+			}
+		}
+		return Found;
+	}
+	if (Kind != GSTNEntityKinds::Fighter)
+	{
+		return Found;
+	}
 	const int32 Index = Algo::LowerBoundBy(Registry, EntityId, &FRegistryEntry::EntityId);
 	if (!Registry.IsValidIndex(Index) || Registry[Index].EntityId != EntityId)
 	{
-		return false;
+		return Found;
 	}
 	const FRegistryEntry& Registered = Registry[Index];
-	if (Registered.bHasOwner && !Registered.Owner.IsValid())
+	if ((Registered.bHasOwner && !Registered.Owner.IsValid()) || !Registered.Source)
 	{
-		return false;
+		return Found;
 	}
-	return Registered.Source && Registered.Source->PostToInbox(Entry);
+	Found.Kind = Kind;
+	Found.Source = Registered.Source;
+	return Found;
+}
+
+bool UGSTN_CombatWorldSubsystem::PostToInbox(int32 EntityId, const FGSTN_InboxEntry& Entry)
+{
+	uint16 Generation = 0;
+	if (GSTNEntityKinds::IsMinionEntityId(EntityId))
+	{
+		// The sender acted on the held snapshot: its entry carries the slot generation the hit was aimed at
+		if (const FGSTN_SnapshotEntry* Held = Snapshot.Find(EntityId))
+		{
+			Generation = Held->Generation;
+		}
+	}
+	return PostToInbox(EntityId, Generation, Entry);
+}
+
+bool UGSTN_CombatWorldSubsystem::PostToInbox(int32 EntityId, uint16 Generation, const FGSTN_InboxEntry& Entry)
+{
+	const FGSTN_FoundEntity Found = FindEntity(EntityId);
+	if (Found.Source)
+	{
+		return Found.Source->PostToInbox(Entry);
+	}
+	return Found.Provider && Found.Provider->PostToEntityInbox(EntityId, Generation, Entry);
 }
 
 void UGSTN_CombatWorldSubsystem::InvalidateSnapshot()

@@ -9,7 +9,12 @@ Checks:
      --allow-uproject skips the .uproject, for a local build that lists the plugin enabled (never commit that).
   2. Plugins/GSTNPiggyback/Source has no "/Game/" path and no ConstructorHelpers: the plugin is usable alone.
   3. Module edges (Build.cs): GSTNPiggybackCore lists no GAS, NP, Mover, Editor or sibling GAS/NP module; GSTNLink* never lists a
-     GSTNDefence module and GSTNDefence* never a GSTNLink module; the two GSTNExtensionTest modules never list each other.
+     GSTNDefence module and GSTNDefence* never a GSTNLink module; the two GSTNExtensionTest modules never list each other;
+     GSTNCore (shared L2 helpers, M8 Q7) lists no GSTN module and no GAS, NP, Mover, Editor or project module;
+     GSTNMinionCore lists no GAS, NP, Mover, Editor, project or sibling minion module.
+  4. Nothing is built on GSTNMinion (M8 plan section 0): no module of GSTNCombat*, GSTNInput*, GSTNLink*, GSTNDefence*,
+     GSTNParts* or GSTNPlatform* lists a GSTNMinion module or #includes a header whose path names Minion; and
+     Plugins/GSTNMinion/Source has no "/Game/" path and no ConstructorHelpers.
 
 Usage: python Tools/Modules/check_modules.py [--root <project dir>] [--allow-uproject]
 """
@@ -23,9 +28,23 @@ TEXT_EXTENSIONS = {".h", ".hpp", ".cpp", ".inl", ".cs", ".uplugin", ".ini", ".up
 SKIPPED_DIRS = {"Binaries", "Intermediate", "Saved", "DerivedDataCache", ".git", "__pycache__"}
 
 PIGGYBACK_DIR = os.path.join("Plugins", "GSTNPiggyback")
+MINION_DIR = os.path.join("Plugins", "GSTNMinion")
+
+# Plugins that must not know GSTNMinion (M8 plan section 0, grep gate): module name prefix of their Build.cs files / folder names
+MINION_BLIND_PREFIXES = ["GSTNCombat", "GSTNInput", "GSTNLink", "GSTNDefence", "GSTNParts", "GSTNPlatform"]
+MINION_MODULE_PREFIX = "GSTNMinion"
 
 # Build.cs file name -> module names it must not list
 FORBIDDEN_EDGES = {
+    # GSTNCore is the shared L2 helper (M8 Q7): engine modules only, so any GSTN plugin may depend on it without a cycle
+    "GSTNCore.Build.cs": [
+        "GameplayAbilities", "AbilitySystemSimulation", "NetworkPrediction", "Mover", "UnrealEd", "GASP_Giustino2",
+    ],
+    # GSTNMinionCore is the pure part of the minion plugin: engine modules, GSTNCombatCore and GSTNCore only
+    "GSTNMinionCore.Build.cs": [
+        "GameplayAbilities", "AbilitySystemSimulation", "NetworkPrediction", "Mover", "UnrealEd", "GASP_Giustino2",
+        "GSTNCombatGAS", "GSTNCombatNP", "GSTNMinionRuntime", "GSTNMinionEditor", "GSTNMinionTests",
+    ],
     "GSTNPiggybackCore.Build.cs": [
         "GameplayAbilities", "AbilitySystemSimulation", "NetworkPrediction", "Mover", "UnrealEd",
         "GSTNCombatGAS", "GSTNCombatNP", "GSTNLinkGAS", "GSTNLinkNP", "GSTNInputNP", "GSTNPiggybackRuntime",
@@ -39,6 +58,7 @@ FORBIDDEN_EDGES = {
 FORBIDDEN_PREFIX_EDGES = {
     "GSTNLink": "GSTNDefence",
     "GSTNDefence": "GSTNLink",
+    "GSTNCore": "GSTN",
 }
 
 
@@ -83,14 +103,15 @@ def check(root, allow_uproject):
             if name.endswith(".uproject") and "GSTNPiggyback" in read(os.path.join(root, name)):
                 problems.append("the .uproject lists GSTNPiggyback (keep it out of the committed file): " + name)
 
-    # 2. The plugin is usable alone
-    piggyback_source = os.path.join(root, PIGGYBACK_DIR, "Source")
-    if os.path.isdir(piggyback_source):
-        for path in iter_text_files(piggyback_source):
-            text = read(path)
-            for needle in ("/Game/", "ConstructorHelpers"):
-                if needle in text:
-                    problems.append("%s in %s" % (needle, os.path.relpath(path, root)))
+    # 2. The plugins are usable alone
+    for plugin_dir in (PIGGYBACK_DIR, MINION_DIR):
+        plugin_source = os.path.join(root, plugin_dir, "Source")
+        if os.path.isdir(plugin_source):
+            for path in iter_text_files(plugin_source):
+                text = read(path)
+                for needle in ("/Game/", "ConstructorHelpers"):
+                    if needle in text:
+                        problems.append("%s in %s" % (needle, os.path.relpath(path, root)))
 
     # 3. Module edges
     plugins = os.path.join(root, "Plugins")
@@ -108,6 +129,21 @@ def check(root, allow_uproject):
                 for module in sorted(modules):
                     if module.startswith(forbidden_prefix):
                         problems.append("%s lists %s" % (os.path.relpath(path, root), module))
+        # 4a. The older plugins never list a minion module
+        if any(own.startswith(prefix) for prefix in MINION_BLIND_PREFIXES):
+            for module in sorted(modules):
+                if module.startswith(MINION_MODULE_PREFIX):
+                    problems.append("%s lists %s (nothing may depend on GSTNMinion)" % (os.path.relpath(path, root), module))
+
+    # 4b. ...and never include a minion header (comments may still name GSTNMinion)
+    include_minion = re.compile(r'^\s*#\s*include\s*[<"][^>"]*Minion[^>"]*[>"]', re.M)
+    if os.path.isdir(plugins):
+        for entry in sorted(os.listdir(plugins)):
+            if not any(entry.startswith(prefix) for prefix in MINION_BLIND_PREFIXES):
+                continue
+            for path in iter_text_files(os.path.join(plugins, entry)):
+                if os.path.splitext(path)[1].lower() in (".h", ".hpp", ".cpp", ".inl") and include_minion.search(read(path)):
+                    problems.append("includes a minion header: " + os.path.relpath(path, root))
     return problems
 
 

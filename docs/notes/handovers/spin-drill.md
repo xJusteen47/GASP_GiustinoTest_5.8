@@ -406,3 +406,8 @@ after one checkpoint.
 - Gates: editor build Succeeded. Headless RunTests and plugin-off build NOT run (change = 3 field assignments on the tip); run both before any push.
 - Not pushed; local commit 3866040 (5 commits ahead of origin).
 - Cost: one Sonnet thread, ~30 tool calls, 1 build, 6 editor runs; small-medium.
+
+## SD-16 gate (laptop, 2026-11-06, run by the M8-G0a thread at 3312333): GREEN
+
+- Headless on (Input+Combat+SpinDrill+Piggyback+Defence+Link+Parts): 980 success, 0 fail, 0 ensure. Plugin-off build (SpinDrill+Piggyback off): Succeeded;
+  off suites 933/0/0. Rebuild with plugins on: Succeeded. Logs Saved/SD17 (gate.txt, headless-on.log, headless-off.log). SD-17 not needed for the gate.

@@ -110,6 +110,13 @@ struct GSTNSURFACECORE_API FGSTN_SurfaceLaunchParams
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface|Launch")
 	bool bAddSurfaceVelocity = true;
 
+	/**
+	 * Launch speed multiplied by this when the combatant holds the jump button as it lands on the face (hold jump = higher bounce).
+	 * 1 = holding changes nothing. Only the launch part grows, not the kept tangential or surface velocity
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface|Launch", meta = (ClampMin = "1", ClampMax = "4"))
+	float HeldJumpSpeedScale = 1.4f;
+
 	/** Optional tag a kit or ability can react to when this surface launches its owner. Never stored in a sync state */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface|Launch")
 	FGameplayTag LaunchTag;

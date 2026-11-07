@@ -4,6 +4,7 @@
 
 #include "Engine/CollisionProfile.h"
 #include "GSTNPlatformCoreModule.h"
+#include "Modules/ModuleManager.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_PlatformSettings)
 
@@ -50,7 +51,8 @@ FGSTN_PlatformValidationContext UGSTN_PlatformSettings::MakeValidationContext() 
 	Context.MinWallSurfaceAngle = MinWallSurfaceAngle;
 	Context.MaxWallSurfaceAngle = MaxWallSurfaceAngle;
 	Context.MaxStandAngle = MaxStandAngle;
-	Context.bPartNamesResolved = false;
+	// The parts bridge (GSTNPlatformParts, an optional plugin) owns the part names when it is loaded: unknown names are its errors
+	Context.bPartNamesResolved = FModuleManager::Get().IsModuleLoaded(TEXT("GSTNPlatformParts"));
 	return Context;
 }
 

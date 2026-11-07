@@ -9,6 +9,11 @@
 #include "Sources/GSTN_CombatInputSource.h"
 #include "Sources/GSTN_InputSourceRegistry.h"
 
+#if WITH_GAMEPLAY_DEBUGGER_MENU
+#include "GameplayDebugger.h"
+#include "GameplayDebugger/GSTN_GameplayDebuggerCategory_Combat.h"
+#endif
+
 DEFINE_LOG_CATEGORY(LogGSTNCombatDebug);
 
 #define LOCTEXT_NAMESPACE "GSTNCombatDebug"
@@ -47,8 +52,7 @@ namespace
  * The debug module of the combat plugin. What the input display shows of a combat character is this module's only input job now: the
  * display itself lives in GSTNInputDebug, and this module teaches it to read the combat component (a finder in its source registry),
  * gives it the combat buttons and the standard command set as its default profile, and keeps the old console variable name alive. The
- * Gameplay Debugger category, the debug draw variables and the trace sink arrive with E15 to E17, each registered here and removed in
- * ShutdownModule.
+ * Gameplay Debugger category (E15) is registered here and removed in ShutdownModule; the trace sink (E17) will follow the same path.
  */
 class FGSTN_CombatDebugModule : public IGSTN_CombatDebugModule
 {
@@ -65,11 +69,27 @@ public:
 		{
 			OldVariable->SetOnChangedCallback(FConsoleVariableDelegate::CreateStatic(&ForwardInputDisplayVariable));
 		}
+#if WITH_GAMEPLAY_DEBUGGER_MENU
+		// E15: the combat category, enabled in game and simulate at slot 6; the debugger reads its slot and state from the ini when set there
+		IGameplayDebugger& Debugger = IGameplayDebugger::Get();
+		Debugger.RegisterCategory(FGSTN_GameplayDebuggerCategory_Combat::CategoryName,
+			IGameplayDebugger::FOnGetCategory::CreateStatic(&FGSTN_GameplayDebuggerCategory_Combat::MakeInstance),
+			EGameplayDebuggerCategoryState::EnabledInGameAndSimulate, FGSTN_GameplayDebuggerCategory_Combat::DefaultSlot);
+		Debugger.NotifyCategoriesChanged();
+#endif
 		UE_LOG(LogGSTNCombatDebug, Verbose, TEXT("GSTN Combat Debug module started"));
 	}
 
 	virtual void ShutdownModule() override
 	{
+#if WITH_GAMEPLAY_DEBUGGER_MENU
+		if (IGameplayDebugger::IsAvailable())
+		{
+			IGameplayDebugger& Debugger = IGameplayDebugger::Get();
+			Debugger.UnregisterCategory(FGSTN_GameplayDebuggerCategory_Combat::CategoryName);
+			Debugger.NotifyCategoriesChanged();
+		}
+#endif
 		if (OldVariable)
 		{
 			IConsoleManager::Get().UnregisterConsoleObject(OldVariable, false);

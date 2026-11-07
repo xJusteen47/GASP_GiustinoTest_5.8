@@ -15,6 +15,14 @@
 
 class UGSTN_PlatformDefinition;
 class UPrimitiveComponent;
+class UGSTN_EnemyPlatformComponent;
+
+/**
+ * Just before the platform takes a pose for a frame it has not simulated yet (a forward frame of the pose point, or the
+ * presentation fallback, Frame INDEX_NONE); never for a re-simulated frame. The place where a bridge feeds the activation inputs
+ * from confirmed state (T6 parts bridge): a SetShapeMask made here takes effect in the frame being posed.
+ */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FGSTN_OnPlatformPrePose, UGSTN_EnemyPlatformComponent& /*Platform*/, const FGSTN_PlatformPoseContext& /*Context*/);
 
 /**
  * Makes its owner (a fighter) a platform and gives its body traversal surfaces (many-enemies-replication.md 4.2-4.5,
@@ -75,6 +83,9 @@ public:
 	/** Poses the colliders from the game tick (no frame, no history): what the component does when no simulation runs */
 	void ApplyPresentationPose();
 
+	/** Fired before a forward or presentation pose (not on a re-simulated frame): the bridges' input point */
+	FGSTN_OnPlatformPrePose OnPrePose;
+
 	// ---- Activation inputs (outside the simulation: confirmed state, presentation, AI)
 
 	/**
@@ -84,6 +95,14 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Platform")
 	void SetShapeMask(uint8 EnabledShapes, EGSTN_PlatformShapeState DisableAs = EGSTN_PlatformShapeState::Breaking);
+
+	/**
+	 * SetShapeMask stamped with the frame the authority took the change at (a bridge that replicates it; INDEX_NONE = the next frame).
+	 * A client is ahead of that frame: the change rewrites the frames it already simulated, so a replay finds the authority's collision.
+	 * A shape going off with a telegraph is still solid as Breaking for those frames, so if the change arrives within the grace no
+	 * frame the client simulated was wrong and nothing reconciles
+	 */
+	void SetShapeMaskAtFrame(uint8 EnabledShapes, EGSTN_PlatformShapeState DisableAs, int32 Frame);
 
 	/** The enemy's action state: shapes not active in it go away with their telegraph (many-enemies-replication.md 4.6; wired in T7) */
 	UFUNCTION(BlueprintCallable, Category = "Platform")
@@ -174,8 +193,8 @@ protected:
 	/** Shapes the two inputs allow */
 	uint8 ComputeDesiredMask() const;
 
-	/** Feeds the inputs to the shape timelines, stamped with the next frame the pose point will simulate */
-	void RequestShapeStates(EGSTN_PlatformShapeState DisableAs);
+	/** Feeds the inputs to the shape timelines, stamped with AtFrame, or the next frame the pose point will simulate when INDEX_NONE */
+	void RequestShapeStates(EGSTN_PlatformShapeState DisableAs, int32 AtFrame = INDEX_NONE);
 
 	void CreateColliders();
 	void DestroyColliders();

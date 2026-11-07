@@ -449,3 +449,14 @@ One line each: where, what differs from the spec, why. Checkpoints in `docs/arch
 - Not verified by hand (needs a rendering editor, nothing of this ran on screen): the gizmo appears and follows the shape, W/E/R, handle hit-testing, Local/World, the drag feel and the scale factor, clicking lines and
   volumes, Shift offset, Escape, undo as one step, the auto-key status line, the hurtbox editor's gizmo. The list is in the commit message of E7.
 - Harness gate: not needed (editor-only checkpoint; no Core change).
+
+## E15 Gameplay Debugger category, E16 BakeCheck (2026-11-06)
+
+- 10.2: no new accessor on `UGSTN_CombatSimComponent` was needed; the category reads `GetSyncState`, `GetDebugString`, `GetFacingYaw`,
+  `GetGateClosedFrames`. Category name `GSTNCombat`, slot 6, `bShowOnlyWithDebugActor`. The hit ring lives in `UGSTN_CombatDebugHitRecorder`
+  (world subsystem, `ListenNative` on `Combat.Event.HitLanded`/`HitReceived`), so GSTNCombatDebug now depends on GSTNCombatGAS for the tags.
+  Not in v1 of the category: buffered command and resolve reason, open windows, lock tags, adoption pending.
+- 10.2b: the ring records by default (`gstn.Combat.Debug.HitRing 1`): one insert per hit on the authority, negligible; the drawing variables stay off.
+- 10.3: hitbox and hurtbox draw stay in `GSTNCombatNP/Private/Debug` (they read private attacker shapes and the snapshot); only BakeCheck is
+  in the debug module. Its root is the actor transform (unscaled), which equals the attacker step's Mover pose on a simulating machine at
+  the end of the frame; a contributor-placed entity (parked link role) is not special-cased.

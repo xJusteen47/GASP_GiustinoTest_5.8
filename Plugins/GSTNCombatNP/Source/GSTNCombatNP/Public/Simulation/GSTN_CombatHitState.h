@@ -80,7 +80,8 @@ struct FGSTN_MoveOrigin
  */
 struct GSTNCOMBATNP_API FGSTN_HitSyncState
 {
-	static constexpr int32 MaxHitTargets = 8;
+	/** 16 so a crowd cleave can hold its victims (M8 X6); only the live targets go on the wire, as Count - 1 in 4 bits */
+	static constexpr int32 MaxHitTargets = 16;
 
 	/** Written by the attacker side when a move starts; live while a timeline runs */
 	FGSTN_MoveOrigin MoveOrigin;

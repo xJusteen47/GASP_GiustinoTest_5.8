@@ -65,6 +65,11 @@ bool FGSTN_LaunchFromSurfaceParamsTest::RunTest(const FString& Parameters)
 		FGSTN_SurfaceLaunch::ComposeVelocity(Params, Flat, FVector::UpVector, Falling, FVector::ZeroVector).Equals(FVector(0.0, 0.0, 1800.0), 1.e-3));
 	TestTrue(TEXT("A combatant standing on the face arrives at zero and gets the minimum"),
 		FGSTN_SurfaceLaunch::ComposeVelocity(Params, Flat, FVector::UpVector, FVector::ZeroVector, FVector::ZeroVector).Equals(FVector(0.0, 0.0, 1000.0), 1.e-3));
+	Params.HeldJumpSpeedScale = 1.5f;
+	TestTrue(TEXT("Holding jump scales the launch speed (1800 x 1.5 = 2700)"),
+		FGSTN_SurfaceLaunch::ComposeVelocity(Params, Flat, FVector::UpVector, Falling, FVector::ZeroVector, true).Equals(FVector(0.0, 0.0, 2700.0), 1.e-3));
+	TestTrue(TEXT("Not holding jump ignores the scale"),
+		FGSTN_SurfaceLaunch::ComposeVelocity(Params, Flat, FVector::UpVector, Falling, FVector::ZeroVector, false).Equals(FVector(0.0, 0.0, 1800.0), 1.e-3));
 
 	// The move rides the wire with its flags and the velocity
 	FGSTN_LayeredMove_Launch Move;

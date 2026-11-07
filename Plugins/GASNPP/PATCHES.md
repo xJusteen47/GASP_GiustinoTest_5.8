@@ -37,6 +37,7 @@ Re-applying the owned-tag patch on a fork update: in `UNpAbilitySystemComponent:
 | Patch | Why | Where |
 |---|---|---|
 | `UNpAbilitySystemComponent::OnSimulationPreTick` (`d6039e2`) | The ASC sync state is closed and its tick is not virtual. The delegate fires at the start of every (re)simulated tick, after the time step is cached and before input events and abilities, so an earlier-sorted simulation (the combat model, priority 47) can issue its frame's activations, cancels and montage changes inside the ASC tick. | `ASC/Public/Abilities/NpAbilitySystemComponent.h`, `ASC/Private/Abilities/NpAbilitySystemComponent.cpp` |
+| `UNetworkPredictionWorldManager::OnPostFixedTick(ServerFrame, EndTimeMS, bResimulating)` (M8 G1) | No delegate fires per fixed sim frame (`FixedFinalize` runs once per engine frame). A batch simulation outside NP (M8 minions, platform poses) needs a point after every model ticked frame F and the lag-comp history captured it, in the forward loop and for every re-simulated frame. `EndTimeMS = F * FixedStepMS`, the stamp `RewindActors` reads. Inert when unbound. Spike: `docs/notes/m8-spike-report.md` (spike 2). | `NP/Public/NetworkPredictionWorldManager.h`, `NP/Private/NetworkPredictionWorldManager.cpp` |
 
 ## 4. Spike S-FP: forward prediction of simulated proxies (inert)
 

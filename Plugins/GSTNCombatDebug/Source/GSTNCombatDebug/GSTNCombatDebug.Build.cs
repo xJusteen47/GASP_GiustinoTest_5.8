@@ -6,7 +6,7 @@ using UnrealBuildTool;
 // shipping code.
 //
 // Allowed edges: engine modules, GSTNInputDebug (the display and its registry), GSTNCombatCore, GSTNInputCore, GSTNCombatNP (const
-// accessors only) and, from E15, GameplayDebugger. The input display itself moved to GSTNInputDebug: this module registers a finder
+// accessors only), GSTNCombatGAS (event tags) and, from E15, GameplayDebugger. The input display itself moved to GSTNInputDebug: this module registers a finder
 // for the combat component and the combat buttons and standard command set as the display's default profile, so it needs the input
 // debug module's public registry and nothing of Slate. No GSTNCombat* or GSTNInput* runtime module may depend on this module.
 public class GSTNCombatDebug : ModuleRules
@@ -32,7 +32,12 @@ public class GSTNCombatDebug : ModuleRules
 			"GSTNInputNP",
 			"GSTNInputDebug",
 			"GSTNCombatCore",
+			"GSTNCombatGAS",
 			"GSTNCombatNP"
 		});
+
+		// E15: the Gameplay Debugger category (WITH_GAMEPLAY_DEBUGGER_MENU, off where the engine has no debugger). GSTNCombatGAS above
+		// is for the native hit event tags the category's hit ring listens to
+		SetupGameplayDebuggerSupport(Target);
 	}
 }

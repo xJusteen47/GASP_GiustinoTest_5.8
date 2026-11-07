@@ -644,6 +644,7 @@ bool FGSTN_VictimKOByZoneTest::RunTest(const FString& Parameters)
 	FGSTN_SimEventOutbox Outbox;
 	FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause::Zone, 10, nullptr, nullptr, Outbox);
 	TestTrue(TEXT("one KO event with the Zone reason"), Outbox.Events.Num() == 1 && Outbox.Events[0].EventType == GSTNCombatTags::Event_KO && Outbox.Events[0].Tags.HasTagExact(GSTNCombatTags::KOReason_Zone));
+	TestTrue(TEXT("tagged as a fighter's (M8 X11)"), Outbox.Events.Num() == 1 && Outbox.Events[0].Tags.HasTagExact(GSTNCombatTags::Entity_Fighter));
 	return true;
 }
 
@@ -671,6 +672,8 @@ bool FGSTN_VictimOutboxOncePerHitOnHostTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("with the reaction tier"), Landed.Tags.HasTagExact(GSTNCombatNPTags::EventHit_Reaction_Launch) || Landed.Tags.HasTagExact(GSTNCombatNPTags::EventHit_Reaction_PushBack));
 	TestEqual(TEXT("and the damage"), Landed.Magnitude, 10.f);
 	TestTrue(TEXT("the second is the victim's HitReceived"), Outbox.Events[1].EventType == GSTNCombatTags::Event_HitReceived && Outbox.Events[2].EventType == GSTNCombatTags::Event_HitLanded);
+	TestTrue(TEXT("every hit event is tagged as a fighter's (M8 X11)"), Outbox.Events[0].Tags.HasTagExact(GSTNCombatTags::Entity_Fighter)
+		&& Outbox.Events[1].Tags.HasTagExact(GSTNCombatTags::Entity_Fighter) && Outbox.Events[2].Tags.HasTagExact(GSTNCombatTags::Entity_Fighter));
 
 	// The host publishes each once; the second flush has nothing
 	int32 Published = 0;

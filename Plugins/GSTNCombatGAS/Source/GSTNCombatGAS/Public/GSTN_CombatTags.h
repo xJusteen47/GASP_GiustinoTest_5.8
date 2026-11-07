@@ -70,6 +70,12 @@ namespace GSTNCombatTags
 	/** A combatant was knocked out; the KOReason tag says why. Published once by the combat tick on the authority. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_KO);
 
+	/**
+	 * The event's subject is a fighter (a combat component with a pawn), not a minion or an object: set on HitLanded, HitReceived and KO by
+	 * the fighter's combat tick (M8 X11), so a listener can tell entity kinds apart without a cast. Never granted to an actor.
+	 */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Entity_Fighter);
+
 	/** Gameplay event sent to the victim's abilities when it is hit (payload: FGSTN_HitEventPayload in the event's context). Not an outbox event. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Hit_Received);
 

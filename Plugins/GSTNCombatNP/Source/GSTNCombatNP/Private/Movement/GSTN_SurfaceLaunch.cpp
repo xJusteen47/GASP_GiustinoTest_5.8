@@ -9,12 +9,13 @@
 #include "MoverTypes.h"
 
 FVector FGSTN_SurfaceLaunch::ComposeVelocity(const FGSTN_SurfaceLaunchParams& Params, const FTransform& SurfaceTransform, const FVector& ContactNormal,
-	const FVector& CurrentVelocity, const FVector& SurfaceVelocity)
+	const FVector& CurrentVelocity, const FVector& SurfaceVelocity, bool bJumpHeld)
 {
 	const FVector Normal = ContactNormal.GetSafeNormal(UE_SMALL_NUMBER, SurfaceTransform.GetRotation().GetUpVector());
 	const FVector Direction = UGSTN_SurfaceUtils::ComputeLaunchDirection(Params, SurfaceTransform, Normal);
 	const double Incoming = FMath::Max(0.0, -CurrentVelocity.Dot(Normal));
-	FVector Out = Direction * UGSTN_SurfaceUtils::ComputeLaunchSpeed(Params, static_cast<float>(Incoming));
+	const double HeldScale = bJumpHeld ? FMath::Max(1.0, static_cast<double>(Params.HeldJumpSpeedScale)) : 1.0;
+	FVector Out = Direction * (UGSTN_SurfaceUtils::ComputeLaunchSpeed(Params, static_cast<float>(Incoming)) * HeldScale);
 	if (Params.bKeepTangentialVelocity)
 	{
 		// The part along the face the combatant touched; the part into the face is what the launch replaces
@@ -27,7 +28,7 @@ FVector FGSTN_SurfaceLaunch::ComposeVelocity(const FGSTN_SurfaceLaunchParams& Pa
 	return Out;
 }
 
-bool FGSTN_SurfaceLaunch::Probe(const FMoverSyncState& SyncState, const UMoverComponent& Mover, const FVector& Up, double StepSeconds, FGSTN_SurfaceLaunchDecision& Out)
+bool FGSTN_SurfaceLaunch::Probe(const FMoverSyncState& SyncState, const UMoverComponent& Mover, const FVector& Up, double StepSeconds, FGSTN_SurfaceLaunchDecision& Out, bool bJumpHeld)
 {
 	const FMoverDefaultSyncState* Sync = SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
 	UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Mover.GetUpdatedComponent());
@@ -74,7 +75,7 @@ bool FGSTN_SurfaceLaunch::Probe(const FMoverSyncState& SyncState, const UMoverCo
 	const UPrimitiveComponent* Collider = Hit.GetComponent();
 	const FTransform SurfaceTransform = Collider ? Collider->GetComponentTransform() : FTransform::Identity;
 	Out.bLaunch = true;
-	Out.Velocity = ComposeVelocity(View.Launch, SurfaceTransform, Normal, Velocity, View.SurfaceVelocity);
+	Out.Velocity = ComposeVelocity(View.Launch, SurfaceTransform, Normal, Velocity, View.SurfaceVelocity, bJumpHeld);
 	Out.bResetAirJumps = View.Launch.bResetAirJumps;
 	Out.bResetCoyote = View.Launch.bResetCoyote;
 	Out.LaunchTag = View.Launch.LaunchTag;

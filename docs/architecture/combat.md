@@ -1089,6 +1089,13 @@ forward prediction for pair partners is a separate milestone after M8.
 
 Parts (P9): a part's damage is `Damage x (1 - Thickness) + DeepDamage x Thickness` once the penetration band lets the hit through (`DeepDamage` defaults to the hit's `Damage`, `Thickness` to 0), so hardness decides whether a hit gets in and thickness how deep it goes.
 
+### 17e. M8 spike results
+
+`docs/notes/m8-spike-report.md`. G0a (2026-11-06, 3312333): S0 found no seam worse than the plan's audit. Spike 2: the post-fixed-tick
+point is inside the fork's fixed-tick loop after the lag-comp capture (and after `StepRollback` in the rollback loop); no delegate exists,
+so G1 adds `OnPostFixedTick(ServerFrame, EndTimeMS, bResimulating)` (inert patch). Frame F ends at `F * FixedStepMS`, the stamp
+`RewindActors` reads; after the tick the authority's `GetCurrentLagCompensationTimeMS` is one frame behind it, so listeners use `EndTimeMS`.
+
 ## 18. Roadmap
 
 Each milestone ends with a build, its tests and the harness run clean (testing.md), and with this document updated

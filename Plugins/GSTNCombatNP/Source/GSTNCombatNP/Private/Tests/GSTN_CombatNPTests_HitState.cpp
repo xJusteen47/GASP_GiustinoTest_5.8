@@ -200,30 +200,30 @@ bool FGSTN_HitStateRingWrapTest::RunTest(const FString& Parameters)
 {
 	FGSTN_CombatSyncState State = MakeAttackerWithHit();
 	State.Core.Hit = FGSTN_HitSyncState();
-	for (int32 Id = 1; Id <= 10; ++Id)
+	for (int32 Id = 1; Id <= 18; ++Id)
 	{
 		const bool bReplaced = State.Core.Hit.AddHitTarget(Id, HitTimelineStart, static_cast<uint8>(Id));
 		TestEqual(*FString::Printf(TEXT("target %d replaces the oldest only once the ring is full"), Id), bReplaced, Id > FGSTN_HitSyncState::MaxHitTargets);
 	}
-	TestEqual(TEXT("the ring holds eight"), State.Core.Hit.NumHitTargets(), 8);
+	TestEqual(TEXT("the ring holds sixteen"), State.Core.Hit.NumHitTargets(), 16);
 	TestEqual(TEXT("the oldest is the third added"), State.Core.Hit.GetHitTarget(0).EntityId, 3);
-	TestEqual(TEXT("the newest is the tenth"), State.Core.Hit.GetHitTarget(7).EntityId, 10);
+	TestEqual(TEXT("the newest is the eighteenth"), State.Core.Hit.GetHitTarget(15).EntityId, 18);
 	TestFalse(TEXT("the first target was replaced"), State.Core.Hit.HasHitTarget(1, HitTimelineStart, 1));
-	TestTrue(TEXT("the last target is there"), State.Core.Hit.HasHitTarget(10, HitTimelineStart, 10));
+	TestTrue(TEXT("the last target is there"), State.Core.Hit.HasHitTarget(18, HitTimelineStart, 18));
 
 	// The slot layout of the ring is not state: the wire packs it oldest first and the loaded ring is equal
 	bool bError = false;
 	FGSTN_CombatSyncState Loaded = HitStateReadBack(State, bError);
 	TestFalse(TEXT("no error"), bError);
 	TestTrue(TEXT("equal after the wire although the head moved"), HitStateSame(State, Loaded));
-	for (int32 Age = 0; Age < 8; ++Age)
+	for (int32 Age = 0; Age < 16; ++Age)
 	{
 		TestEqual(*FString::Printf(TEXT("target %d keeps its age"), Age), Loaded.Core.Hit.GetHitTarget(Age).EntityId, 3 + Age);
 	}
 
 	// A write after the wrap on both sides stays equal: the loaded head continues where the logical order ends
-	State.Core.Hit.AddHitTarget(11, HitTimelineStart, 11);
-	Loaded.Core.Hit.AddHitTarget(11, HitTimelineStart, 11);
+	State.Core.Hit.AddHitTarget(19, HitTimelineStart, 19);
+	Loaded.Core.Hit.AddHitTarget(19, HitTimelineStart, 19);
 	TestTrue(TEXT("equal after one more write"), HitStateSame(State, Loaded));
 	TestEqual(TEXT("the oldest moved on"), Loaded.Core.Hit.GetHitTarget(0).EntityId, 4);
 	return true;

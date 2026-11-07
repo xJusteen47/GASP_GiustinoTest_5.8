@@ -51,10 +51,10 @@ struct GSTNCOMBATNP_API FGSTN_SurfaceLaunch
 	/**
 	 * The velocity a launch gives. Direction from the surface's own frame (ComputeLaunchDirection), speed from the arrival speed into the
 	 * touched face, plus the velocity along the face when bKeepTangentialVelocity and the surface's own velocity when bAddSurfaceVelocity.
-	 * Pure: no world access
+	 * bJumpHeld scales the launch speed by Params.HeldJumpSpeedScale. Pure: no world access
 	 */
 	static FVector ComposeVelocity(const FGSTN_SurfaceLaunchParams& Params, const FTransform& SurfaceTransform, const FVector& ContactNormal,
-		const FVector& CurrentVelocity, const FVector& SurfaceVelocity);
+		const FVector& CurrentVelocity, const FVector& SurfaceVelocity, bool bJumpHeld = false);
 
 	/**
 	 * The reset rules of the jump state for one launch: the kit's rules with the launch's own flags laid over them. bResetAirJumps refills the air jumps
@@ -63,6 +63,6 @@ struct GSTNCOMBATNP_API FGSTN_SurfaceLaunch
 	 */
 	static FGSTN_JumpResetRules ResetRulesFor(const FGSTN_JumpResetRules& Kit, bool bResetAirJumps, bool bResetCoyote);
 
-	/** The probe: sweeps the combatant's collision from its tracked pose and decides. False when nothing launches this frame */
-	static bool Probe(const FMoverSyncState& SyncState, const UMoverComponent& Mover, const FVector& Up, double StepSeconds, FGSTN_SurfaceLaunchDecision& Out);
+	/** The probe: sweeps the combatant's collision from its tracked pose and decides. False when nothing launches this frame. bJumpHeld: the jump button is down this frame (from the sync input) */
+	static bool Probe(const FMoverSyncState& SyncState, const UMoverComponent& Mover, const FVector& Up, double StepSeconds, FGSTN_SurfaceLaunchDecision& Out, bool bJumpHeld = false);
 };
