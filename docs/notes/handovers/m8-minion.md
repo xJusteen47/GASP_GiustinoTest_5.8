@@ -52,3 +52,23 @@
   `check_modules.py` reports one old problem not mine: the committed .uproject on q54iwa lists GSTNPiggyback.
 - Next for G2 (laptop, after G1): plugin `GSTNMinion` skeleton + Core store/LOD/tokens/codec; skip the pose history move.
 - Cost: ~70k context, 2 builds + 1 test run (~5 min machine), ~$4-5.
+
+## G1 (laptop, 2026-11-07): DONE, gate green except a pre-existing SUITE_DEFAULT flake
+
+- Branch `claude/project-thread-qeaif9` from q54iwa (2a0c80e). Commits a291d30 (a), 397d9f3 (b), 7fed994 (c), 33356bb (d), 53ea28b (e);
+  then merge 3e5e503 of k72g89 (GSTNCore). Owner told of the fork patch before it landed (thread, 02:3xZ).
+- (a) `GSTNEntityKinds::MinionEntityBase` + `MakeMinionEntityId/MinionIndexOf/KindOfEntityId`; `FindEntity` returns `FGSTN_FoundEntity`
+  (registry source or the provider whose `GetEntityKind()==Minion`); `FGSTN_SnapshotEntry::Generation`; `PostToInbox(Id, Generation, Entry)`
+  calls the new `IGSTN_HittableProvider::PostToEntityInbox` (the 2-arg form takes the generation from the held snapshot). Inert with no provider.
+- (b) `MaxHitTargets` 16; wire sends Count-1 in the same 4 bits (no size change); `MaxTargetsPerGroup` ClampMax 16, default still 8.
+- (c) `UNetworkPredictionWorldManager::OnPostFixedTick(ServerFrame, EndTimeMS, bResimulating)`, two broadcasts, PATCHES.md row.
+- (d) `FGSTN_LagCompTime::TimeOfFrame/FrameOfTime` in `GSTN_LagCompensation.h`. (e) native `Combat.Entity.Fighter` on HitLanded/HitReceived/KO.
+- Tests: headless GSTN 1302 -> 1306/0, 0 ensures (G1); 1307/0 after the GSTNCore merge. New: `GSTNCombat.NP.EntityKind.{IdRange,Dispatch}`,
+  `...Attacker.CrowdCleaveTwelve`, `...LagComp.TimeRoundTrip`; ring/overflow tests moved to 16.
+- Harness (listen + 2, 60/15 ms, `Saved/M8G1/driver_suites.py`, reports `Saved/Logs/m8-g1/`): PARTS 10/10, DEFENCE 13/13, LINK 19/19
+  at 0 % and 2 %. DEFAULT must run on `L_Test_Combat` (first overnight run used DefaultLevel: void for hit/trampoline). On L_Test_Combat
+  the rest passes; hit_basic, di, dodge_blocked_in_hitstun, trampoline, hit_host (+ flips of stagger_threshold, friendly_fire,
+  tilted_gravity_jump) fail on G1 AND on the pre-G1 baseline 2a0c80e built the same way: a stray hit on pawn 3, group 3, ~frame 400
+  (`(392, 3, 3, 0, 1, 0, 6)`). Pre-existing on this laptop state, not caused by G1; worth its own look (open).
+- Not done: dedicated-server runs, plugin-off build (nothing in G1 is optional), docs (combat.md X5-X11 rows) beyond PATCHES.md.
+- Cost: G1 ~ $9-11 (one Opus thread; 4 builds, ~4 h machine harness incl. the baseline).
