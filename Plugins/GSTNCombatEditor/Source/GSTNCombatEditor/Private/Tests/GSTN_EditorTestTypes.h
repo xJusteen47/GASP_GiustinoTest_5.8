@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Hits/GSTN_HitData.h"
+#include "Hits/GSTN_HitExtensions.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "Timeline/GSTN_KeyedTrackAccess.h"
@@ -164,4 +165,24 @@ public:
 private:
 	static FGSTN_TestKeyedTrack& Cast(FGSTN_TimelineTrack& Track) { return static_cast<FGSTN_TestKeyedTrack&>(Track); }
 	static const FGSTN_TestKeyedTrack& Cast(const FGSTN_TimelineTrack& Track) { return static_cast<const FGSTN_TestKeyedTrack&>(Track); }
+};
+
+/** The data of a fake optional plugin attached to a hit, for the external client test (GSTNCombat.Editor.Hooks.*): hidden, never picked by a designer */
+USTRUCT(meta = (Hidden))
+struct FGSTN_TestExternalHitExtension : public FGSTN_HitExtension
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	float Strength = 1.f;
+};
+
+/** A track an external plugin would add, for the same test */
+USTRUCT(meta = (Hidden))
+struct FGSTN_TestExternalTrack : public FGSTN_TimelineTrack
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 Level = 0;
 };

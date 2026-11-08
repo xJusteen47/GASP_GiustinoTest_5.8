@@ -331,6 +331,22 @@ skeleton works, a person or a turret: no bone name is assumed.
 - Gizmos on the selected shape came with E7 (below; the details panel still edits the same numbers). Not in this checkpoint: a Physics Asset picker (the mesh's own Physics Asset is used), attachments in the set editor's own toolbar (the subject picker is the timeline editor's).
 - Tests: `GSTNCombat.Editor.Hurtbox.*` (18) and the snapshot `GSTN.Visual.Hurtbox.Panel`.
 
+## How to extend (E19)
+
+Procedure for a new track kind, no widget code touched: (1) the runtime struct (`FMyTrack : FGSTN_TimelineTrack`) in a runtime module;
+(2) an editor module that depends on `GSTNCombatEditor` and registers one `IGSTN_TrackEditor` at startup, unregisters it at shutdown
+(see Adding a track editor); (3) the track's own findings in `IGSTN_TrackEditor::Validate` under a code with your plugin prefix: they
+reach the panel, the Message Log and Data Validation with no further wiring; (4) a registry test like
+`GSTNCombat.Editor.Registry.RegisteredTrackListed` (listed, defaults applied by `AddTrack`). Nothing else.
+
+Hooks an external editor plugin (the parts editor is the planned one) can use **today**, all public and free of parts names:
+`FGSTN_TrackEditorRegistry` and `IGSTN_TrackEditor` (rows, Add Track, `Validate`), `FGSTN_ValidationReport` (findings), the edit
+context registry, and for the hit data row the engine's property type customization of your own `FGSTN_HitExtension` struct.
+`GSTNCombat.Editor.Hooks.ExternalClientCompiles` is a client that uses only those. **Not published yet** (private headers of this
+module): the preview scene, the shape drawing, the hurtbox toolkit and generator, and `FGSTN_TimelineEditorModel::OnKeySelected`;
+a plugin that needs them asks for the header to move to `Public/` with the export macro, in its own commit, before it depends on it.
+No file of this plugin names the parts plugin.
+
 ## Validation (E10)
 
 One set of rules, three readers: the **Data Validation** validators (on save, on demand, `-run=DataValidation` in CI), the **Validate**
