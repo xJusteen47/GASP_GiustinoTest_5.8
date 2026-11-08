@@ -62,6 +62,11 @@ neither). All are inert while nothing is bound: no publish byte, LOD decision or
 - **Pose samples**: `SamplePose(Handle, Frame, Position, Yaw, bClamped)` reads the lag compensation history (nearest record, clamped outside the ring).
 - **ExtByte**: `UGSTN_MinionDefinition::bHasNetExt` adds the 8-bit extension byte to the net item of that type (0 bits otherwise), built into the
   wire format on both sides from the definition; `SetExtByte(Handle, byte)` on the authority, `UGSTN_MinionClientRegistry::GetExtByte(GlobalId)` on a client.
+- **Hit flow seams (G10b, for GSTNPartsMinion, M4b P16)**: `SetExtraVictimStep` (a step class run right before ComputeKnockback for minion victims),
+  `VictimViewExtension` (single delegate, called at the end of every minion victim view: a bridge points the view's snapshot extension at its own
+  data), `ApplyOutcomeExtensions` (single delegate, called once per applied hit before the death test with the resolved context: a bridge writes
+  its own columns and returns true to kill through the normal death path, Health set to 0) and `OnOutcomeApplied` (multicast, after the store write).
+  Unbound, each costs one test and changes nothing.
 - Tests: `GSTNMinion.Core.Seams.*`, `GSTNMinion.Runtime.Seams.*`.
 
 ## Host budgets (G11)
