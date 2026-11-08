@@ -33,6 +33,8 @@ so after M8 G1/G5 merge; not while M8 G10 edits GSTNPlatform). Not started here.
 
 ## SLIDE (brief, 2026-11-08, waiting for the owner's OK before any code)
 
+**Annullato 2026-11-08**: il movimento verrà rifatto come movement mode separata (come la corsa); lo slide non è previsto. Il brief resta come storia.
+
 Source: `docs/notes/handovers/movimento.md` (MOV-1, last item), m3-doc-deltas.md "Slide + jump" (C14/C15: no desync found with GASP's slide).
 - **Today**: the slide is GASP's Mover transition `BP_MovementTransition_ToSlide` on the Walking mode of the component inherited from
   SandboxCharacter_Mover: crouch while sprinting starts it, the character stands up at the end. Not an ability: kits, tags, the combat

@@ -35,6 +35,25 @@ def load(p):
     return json.loads(p.read_text(encoding="utf-8-sig"))
 
 
+def write_code_stub(out):
+    """An empty runtime module and its two targets, so the canary is a code project (see the comment at the call)."""
+    src = out / "Source"
+    (src / "Canary").mkdir(parents=True, exist_ok=True)
+    (src / "Canary" / "Canary.Build.cs").write_text(
+        "using UnrealBuildTool;\npublic class Canary : ModuleRules\n{\n\tpublic Canary(ReadOnlyTargetRules Target) : base(Target)\n\t{\n"
+        "\t\tPCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;\n\t\tPublicDependencyModuleNames.AddRange(new string[] { \"Core\", \"CoreUObject\", \"Engine\" });\n\t}\n}\n",
+        encoding="utf-8")
+    (src / "Canary" / "Canary.cpp").write_text(
+        "#include \"Modules/ModuleManager.h\"\nIMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, Canary, \"Canary\");\n", encoding="utf-8")
+    for name, kind in (("Canary", "Game"), ("CanaryEditor", "Editor")):
+        (src / f"{name}.Target.cs").write_text(
+            "using UnrealBuildTool;\n"
+            f"public class {name}Target : TargetRules\n{{\n\tpublic {name}Target(TargetInfo Target) : base(Target)\n\t{{\n"
+            f"\t\tType = TargetType.{kind};\n\t\tDefaultBuildSettings = BuildSettingsVersion.Latest;\n"
+            "\t\tIncludeOrderVersion = EngineIncludeOrderVersion.Latest;\n\t\tExtraModuleNames.Add(\"Canary\");\n\t}\n}\n",
+            encoding="utf-8")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("plugin")
@@ -85,8 +104,14 @@ def main():
         shutil.copytree(src, out / "Plugins" / n, ignore=shutil.ignore_patterns(*SKIP_DIRS))
     uproject = out / "Canary.uproject"
     enabled = [{"Name": n, "Enabled": True} for n in project_deps + engine_deps]
+    # A code project with one empty module: UBT then builds a CanaryEditor target with the enabled plugins only. A code-less
+    # project builds the engine's UnrealEditor target, which validates every engine plugin, and engine plugins may not reference
+    # a project copy of a plugin they depend on (the GASNPP forks and the Mover override replace GameplayAbilities, Mover, NP)
+    write_code_stub(out)
     uproject.write_text(json.dumps({"FileVersion": 3, "EngineAssociation": "5.8", "Category": "",
-                                    "Description": "GSTN canary", "Plugins": enabled}, indent="\t"), encoding="utf-8")
+                                    "Description": "GSTN canary",
+                                    "Modules": [{"Name": "Canary", "Type": "Runtime", "LoadingPhase": "Default"}],
+                                    "Plugins": enabled}, indent="\t"), encoding="utf-8")
 
     summary = {"plugin": a.plugin,
                "deps": "project: " + (", ".join(n for n in project_deps if n != a.plugin) or "-")
@@ -94,7 +119,7 @@ def main():
     res_build = "skipped"
     if not a.no_build:
         with open(out / "build.out", "w", encoding="utf-8", errors="replace") as f:
-            subprocess.run([str(ENGINE / "Build" / "BatchFiles" / "Build.bat"), "UnrealEditor", "Win64", "Development",
+            subprocess.run([str(ENGINE / "Build" / "BatchFiles" / "Build.bat"), "CanaryEditor", "Win64", "Development",
                             f"-Project={uproject}", "-WaitMutex"], stdout=f, stderr=subprocess.STDOUT)
         text = (out / "build.out").read_text(encoding="utf-8", errors="replace")
         m = re.findall(r"Result: (Succeeded|Failed)", text)

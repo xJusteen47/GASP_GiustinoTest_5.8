@@ -26,3 +26,10 @@ Next for R3-1 (cheap): decide with the owner if the three leftover diagnostics a
 - Untested: plugins that depend on Mover or the GASNPP forks (a fork plugin with the same name as an engine plugin may clash in the canary).
   Next: run it per plugin before each milestone closes; start with GSTNInput, GSTNSurface, GSTNCombat.
 - Cost: ~$1.5 (Sonnet).
+- Canary on all 23 GSTN plugins (2026-11-08): first pass 9/23; the 14 red failed for one reason: a code-less canary builds the engine's
+  UnrealEditor target, and engine plugins may not reference the project copies of GameplayAbilities / Mover / NetworkPrediction (forks
+  and overrides). Fix: the canary is generated as a tiny code project (`CanaryEditor` target, empty `Canary` module). After it: **23/23 build**.
+  Tests: Core 1, Input 108, Surface 18, Animation 3, Camera 48, DepthMarker 65, Interact 31, Combat 152, Platform 17, PlatformParts 5,
+  LevelObjects 5, Parts 136, Defence 76, Link 118, Piggyback 29, SpinDrill 32, Minion 92, all 0 fail / 0 ensure. CombatGAS, InputNP,
+  CombatNP, CombatDebug, CombatEditor, ExtensionTest report 0 because their tests are named `GSTNCombat.*` / `GSTNExtTest.*`, not after the
+  plugin: a `--tests <prefix>` option is the next small step. Results: `Saved/Canary/all.txt`, `retry.txt`. Cost of the full run ~$1.
