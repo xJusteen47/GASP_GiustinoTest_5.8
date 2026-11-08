@@ -32,6 +32,12 @@ namespace
 		TEXT("presentation state and stay hittable, without a puppet."),
 		ECVF_Default);
 
+	TAutoConsoleVariable<int32> CVarMinionPresentLogFlash(
+		TEXT("gstn.Minion.Present.LogFlash"), 0,
+		TEXT("1 logs one 'MinionFlash' line per predicted hit and per cancelled prediction on a minion (victim, move start, hit group, the ")
+		TEXT("minion's displayed health and flash state). Diagnostics for the harness; off by default."),
+		ECVF_Default);
+
 	TAutoConsoleVariable<int32> CVarMinionPresentEnable(
 		TEXT("gstn.Minion.Present.Enable"), 1,
 		TEXT("0 stops the minion presentation tick (puppets stay where they are). For A/B measurements of spike 7."),
@@ -452,28 +458,88 @@ void UGSTN_MinionPresentationSubsystem::UpdatePredictedHits(double NowSeconds)
 	const APawn* Pawn = Controller && Controller->IsLocalController() ? Controller->GetPawn() : nullptr;
 	const UGSTN_CombatSimComponent* Combat = Pawn ? Pawn->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
 	const FGSTN_CombatSyncState* Sync = Combat ? Combat->GetSyncState() : nullptr;
+	const bool bLogFlash = CVarMinionPresentLogFlash.GetValueOnGameThread() != 0;
+	auto LogFlash = [&](const TCHAR* Event, const FGSTN_HitPresentationKey& Key)
+	{
+		const FGSTN_MinionPresentRecord* Record = FindRecordBySlot(GSTNEntityKinds::MinionIndexOf(Key.VictimId));
+		UE_LOG(LogGSTNMinion, Log, TEXT("MinionFlash %s world=%s victim=%d start=%d group=%d now=%.3f health=%.2f shattered=%d flash=%s"),
+			Event, *GetNameSafe(World), Key.VictimId, Key.TimelineStartFrame, Key.HitGroup, NowSeconds,
+			Record ? Record->HealthFraction : -1.f, Record && Record->bShattered ? 1 : 0,
+			Record ? FGSTN_MinionHitFlash::StateName(Record->Flash.GetState()) : TEXT("norecord"));
+	};
+
+	// Vanished keys whose grace ran out are real cancels; old keys are forgotten
+	for (int32 Index = PredictedMinionHits.Num() - 1; Index >= 0; --Index)
+	{
+		const FPredictedMinionHit& Hit = PredictedMinionHits[Index];
+		if (Hit.CancelAtSeconds >= 0.0 && NowSeconds >= Hit.CancelAtSeconds)
+		{
+			if (bLogFlash)
+			{
+				LogFlash(TEXT("cancel"), Hit.Key);
+			}
+			OnPredictionCancelled(Hit.Key.VictimId, NowSeconds);
+			PredictedMinionHits.RemoveAtSwap(Index);
+		}
+		else if (Hit.CancelAtSeconds < 0.0 && NowSeconds - Hit.SeenSeconds > PredictedHitMemorySeconds)
+		{
+			PredictedMinionHits.RemoveAtSwap(Index);
+		}
+	}
+
 	if (!Sync)
 	{
 		HitTracker.Reset();
 		return;
 	}
 	// The same reading of the target ring as UGSTN_HitPresentationComponent::OnAttackerFrame: new entries are predicted hits, entries
-	// that vanish while the same move runs are corrections
+	// that vanish while the same move runs are corrections (a cancel only after the grace, see PredictedMinionHits)
 	const FGSTN_CombatSyncCore& Core = Sync->Core;
 	const bool bRunLive = Core.ActionState == EGSTN_ActionState::InTimeline && Core.TimelineStartFrame != INDEX_NONE;
 	FGSTN_HitPresentationTracker::FDelta Delta;
 	HitTracker.Update(Core.Hit, bRunLive, Core.TimelineStartFrame, Delta);
+	auto FindPredicted = [this](const FGSTN_HitPresentationKey& Key)
+	{
+		return PredictedMinionHits.IndexOfByPredicate([&Key](const FPredictedMinionHit& Hit) { return Hit.Key == Key; });
+	};
 	for (const FGSTN_HitPresentationKey& Key : Delta.Cancelled)
 	{
 		if (GSTNEntityKinds::IsMinionEntityId(Key.VictimId))
 		{
-			OnPredictionCancelled(Key.VictimId, NowSeconds);
+			const int32 Index = FindPredicted(Key);
+			if (Index != INDEX_NONE && PredictedMinionHits[Index].CancelAtSeconds < 0.0)
+			{
+				if (bLogFlash)
+				{
+					LogFlash(TEXT("vanish"), Key);
+				}
+				PredictedMinionHits[Index].CancelAtSeconds = NowSeconds + HitCancelGraceSeconds;
+			}
 		}
 	}
 	for (const FGSTN_HitPresentationKey& Key : Delta.Started)
 	{
 		if (GSTNEntityKinds::IsMinionEntityId(Key.VictimId))
 		{
+			const int32 Index = FindPredicted(Key);
+			if (Index != INDEX_NONE)
+			{
+				// The same hit came back after a correction (or after the tracker reset): not a new prediction
+				if (bLogFlash)
+				{
+					LogFlash(TEXT("return"), Key);
+				}
+				PredictedMinionHits[Index].CancelAtSeconds = -1.0;
+				PredictedMinionHits[Index].SeenSeconds = NowSeconds;
+				continue;
+			}
+			FPredictedMinionHit& Hit = PredictedMinionHits.AddDefaulted_GetRef();
+			Hit.Key = Key;
+			Hit.SeenSeconds = NowSeconds;
+			if (bLogFlash)
+			{
+				LogFlash(TEXT("predict"), Key);
+			}
 			OnPredictedHit(Key.VictimId, NowSeconds);
 		}
 	}

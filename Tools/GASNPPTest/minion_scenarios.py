@@ -393,10 +393,17 @@ def scenario_minion_replicate(client=1):
 
 
 def _swing_steps(start, stop, every, client):
-    """Attack taps from the client's pawn every `every` seconds in [start, stop)"""
+    """Attack presses from the client's pawn every `every` seconds in [start, stop). G7b: a press is held for GSTN_SWING_HOLD seconds (default
+    0.1 = 6 frames at 60 Hz) and then cleared, not tapped for one frame: at 2 % loss the one-frame scripted tap never produced a swing on the
+    server. 0 restores the one-frame tap"""
+    hold = float(os.environ.get('GSTN_SWING_HOLD', '0.1'))
     out, t = [], start
     while t < stop:
-        out.append((t, lambda: ('attack tap', g.combat_tap(client, g.button_mask('Attack')))))
+        if hold > 0.0:
+            out.append((t, lambda: ('attack hold', g.combat_hold(client, g.button_mask('Attack')))))
+            out.append((t + hold, lambda: ('attack release', g.combat_clear(client))))
+        else:
+            out.append((t, lambda: ('attack tap', g.combat_tap(client, g.button_mask('Attack')))))
         t += every
     return out
 
@@ -1061,6 +1068,147 @@ def scenario_minion_bytes(client=1, clients=2):
     ]
     run.run(steps)
 
+
+# ---- M8 G6b: dormancy flush (R2 of the plan: the wake/flush/mutate order of MutatePack seen from the clients) ----
+_NET_FULL_SERVER = re.compile(r'MinionNet server pack=(\d+) id=(\d+) type=(\d+) pos=(\d+),(\d+),(\d+) yaw=(\d+) state=(-?\d+) ceiling=(\d+) dormant=(\d)')
+_NET_FULL_CLIENT = re.compile(r'MinionNet client player=(-?\d+) world=\S+ pack=(\d+) id=(\d+) type=(\d+) pos=(\d+),(\d+),(\d+) yaw=(\d+) state=(-?\d+) updates=(\d+)')
+_NET_SERVER_SUMMARY = re.compile(r'MinionNet server summary items=(\d+) packs=(\d+) dormant=(\d+) adds=(\d+) updates=(\d+) removes=(\d+) packSends=(\d+) wakes=(\d+) flushes=(\d+) sleeps=(\d+)')
+
+
+def _net_full(mark):
+    """Parses every dump after `mark` with the full item state: server {(pack, id): (type, pos, yaw, state)}, clients {player: {...}},
+    grants, client summaries and the server summary (last one wins in each map, so one dump per mark)"""
+    text = g._read_log_since(mark)
+    server, clients, srv = {}, {}, {}
+    for ln in text.splitlines():
+        m = _NET_FULL_SERVER.search(ln)
+        if m:
+            v = [int(x) for x in m.groups()]
+            server[(v[0], v[1])] = (v[2], (v[3], v[4], v[5]), v[6], v[7])
+            continue
+        m = _NET_FULL_CLIENT.search(ln)
+        if m:
+            v = [int(x) for x in m.groups()]
+            clients.setdefault(v[0], {})[(v[1], v[2])] = (v[3], (v[4], v[5], v[6]), v[7], v[8])
+            continue
+        m = _NET_SERVER_SUMMARY.search(ln)
+        if m:
+            srv = dict(zip(('items', 'packs', 'dormant', 'adds', 'updates', 'removes', 'packSends', 'wakes', 'flushes', 'sleeps'), (int(x) for x in m.groups())))
+    return server, clients, srv
+
+
+def _full_diff(snap):
+    """Differences between the server's items and each client's copy of its granted packs -> list of strings (empty = equal). A server with no
+    item at all (everything died and was removed) equals clients with no item"""
+    bad = []
+    if not snap['summaries']:
+        return ['no client summary']
+    for player in snap['summaries']:
+        granted = snap['grants'].get(player, set())
+        want = {k: v for k, v in snap['server'].items() if k[0] in granted}
+        got = snap['clients'].get(player, {})
+        diff = [k for k in want if got.get(k) != want[k]]
+        if diff or set(got) - set(want):
+            k = diff[0] if diff else None
+            bad.append(f"player {player}: {len(diff)} items differ, extra {sorted(set(got) - set(want))[:3]}" + (f" e.g. {k} server {want[k]} client {got.get(k)}" if k else ''))
+    return bad
+
+
+def scenario_minion_dormancy_flush(client=1):
+    """M8 G6b (plan G6, R2). GSTN_DORMANCY_SECONDS (default 600) split in cycles of ~60 s. A cycle: 60 idle minions on a ring beyond the Far tier
+    border (gstn.Minion.Bench.Population 60 0 9000, relevancy distance raised to 20000 so the clients are granted the packs they cannot see);
+    the packs go DormantAll. Quiet window: a dormant pack sends nothing for 15 s (client and server update counters flat). Then every minion is
+    killed (gstn.Minion.Bench.Kill, a lethal hit through the inbox): the packs are mutated while dormant and the clients must receive the
+    mutation after the flush (negative control: a client still showing the pre-kill state fails). A 1 damage poke changes nothing on the wire,
+    which is why the mutation is the kill. Judged per cycle: all packs dormant and clients equal to the server before, quiet window flat, the
+    server's items changed by the kill and every client's copy equal to the server's within 9 s; overall the server woke or flushed a dormant pack for every cycle,
+    registry check ok with no mismatch, no ensure"""
+    seconds = _env_float('GSTN_DORMANCY_SECONDS', 600.0)
+    run = g._Run('minion_dormancy_flush', client, judge_reconciles=False, sample=False)
+    count = 60
+    cycles = int(max(2, min(10, seconds // 60)))
+    period = max(48.0, seconds / cycles)
+    st = {'snaps': {}}
+
+    def snap(label):
+        mark = g.mark_log()
+        _marks['log'] = mark
+        st['snaps'][label] = {'mark': mark}
+        _net_dump()
+        return 'dump ' + label
+
+    def read(label):
+        s = st['snaps'][label]
+        s['server'], s['clients'], s['srv'] = _net_full(s['mark'])
+        _, _, s['grants'], s['summaries'] = _net_state()
+        return label
+
+    def setup():
+        st['dist'] = unreal.SystemLibrary.get_console_variable_float_value('gstn.Minion.Net.RelevantDistance')
+        _cmd('gstn.Minion.Net.RelevantDistance 20000')
+        st['log'] = g.mark_log()
+        _marks['log'] = st['log']
+        return f"relevant distance {st['dist']} -> 20000"
+
+    def teardown():
+        _cmd(f"gstn.Minion.Net.RelevantDistance {int(st.get('dist', 8000))}")
+        return 'relevant distance restored'
+
+    def before_ok(i):
+        a, b = st['snaps'][f'c{i}q0'], st['snaps'][f'c{i}q1']
+        bad = _full_diff(a)
+        ok = len(a['server']) == count and a['srv'].get('packs', 0) >= 2 and a['srv'].get('dormant') == a['srv'].get('packs') and not bad
+        quiet = {p: b['summaries'][p]['updates'] - a['summaries'][p]['updates'] for p in a['summaries'] if p in b['summaries']}
+        sdelta = b['srv'].get('updates', 0) - a['srv'].get('updates', 0)
+        flat = b['srv'].get('dormant') == b['srv'].get('packs') and sdelta == 0 and all(v == 0 for v in quiet.values()) and bool(quiet)
+        return ok and flat, (f"items {len(a['server'])} packs {a['srv'].get('packs')} dormant {a['srv'].get('dormant')}/{b['srv'].get('dormant')} diff {bad[:1]}; "
+                             f"15 s quiet: client updates {quiet} server updates {sdelta}")
+
+    def after_ok(i):
+        pre = st['snaps'][f'c{i}q1']
+        posts = [st['snaps'][f'c{i}p{k}'] for k in range(3)]
+        changed = sum(1 for k, v in pre['server'].items() if any(p['server'].get(k) != v for p in posts))
+        diffs = [_full_diff(p) for p in posts]
+        # the final dump must agree too: a client that caught up and fell behind again is not a flush
+        ok = changed > 0 and not diffs[2] and any(not d for d in diffs)
+        return ok, (f"server items changed by the kill {changed}/{len(pre['server'])}; server items per dump {[len(p['server']) for p in posts]} "
+                    f"client diffs {[len(d) for d in diffs]} {diffs[0][:1] if diffs[0] else ''}")
+
+    def counters():
+        s = st['snaps'][f'c{cycles - 1}p2']['srv']
+        # a killed minion has a ceiling above 0, so MutatePack takes the wake path; the flush path (a mutation that leaves the pack all-T3) is only counted
+        return s.get('wakes', 0) + s.get('flushes', 0) >= cycles, f"wakes {s.get('wakes')} flushes {s.get('flushes')} sleeps {s.get('sleeps')} (cycles {cycles})"
+
+    def registry():
+        sm = st['snaps'][f'c{cycles - 1}q1']['summaries']
+        return bool(sm) and all(x['ok'] == 1 and x['mismatches'] == 0 for x in sm.values()), f'summaries {sm}'
+
+    def no_ensure():
+        bad = [ln for ln in g._read_log_since(st['log']).splitlines() if 'Ensure condition failed' in ln or 'Assertion failed' in ln]
+        return not bad, f'{len(bad)} ensure/assert lines {bad[:1]}'
+
+    steps = [(0.0, lambda: ('setup', setup()))]
+    for i in range(cycles):
+        t0 = 0.5 + i * period
+        steps += [(t0, lambda: ('spawn', _cmd('gstn.Minion.Bench.Population 60 0 9000 Idle'))),
+                  (t0 + 10.0, lambda i=i: ('q0', snap(f'c{i}q0'))), (t0 + 10.6, lambda i=i: ('q0 read', read(f'c{i}q0'))),
+                  (t0 + 25.0, lambda i=i: ('q1', snap(f'c{i}q1'))), (t0 + 25.6, lambda i=i: ('q1 read', read(f'c{i}q1'))),
+                  (t0 + 26.0, lambda: ('kill', _cmd('gstn.Minion.Bench.Kill')))]
+        for k, dt in enumerate((29.0, 32.0, 35.0)):
+            steps += [(t0 + dt, lambda i=i, k=k: ('post', snap(f'c{i}p{k}'))), (t0 + dt + 0.6, lambda i=i, k=k: ('post read', read(f'c{i}p{k}')))]
+        steps.append((t0 + 37.0, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))))
+    end = 0.5 + (cycles - 1) * period + 38.0
+    for i in range(cycles):
+        steps.append((end, run.at(f'cycle {i}: dormant and equal before, flat for 15 s', lambda i=i: before_ok(i))))
+        steps.append((end, run.at(f'cycle {i}: the pack mutated while dormant reached every client after the flush', lambda i=i: after_ok(i))))
+    steps += [
+        (end, run.at('the server woke (or flushed) a dormant pack for every cycle', counters)),
+        (end, run.at('registry check ok on every client, no mismatch', registry)),
+        (end, run.at('no ensure or assert in the log', no_ensure)),
+        (end + 0.2, lambda: ('teardown', teardown())),
+        (end + 1.0, run.finish()),
+    ]
+    run.run(steps)
 
 def run_batch(names=None, lag=60, jitter=15, loss=0, report=None):
     """Each scenario in a fresh PIE (dedicated server + 2 clients as the editor's play settings say); poll ds.defence_batch_report()"""

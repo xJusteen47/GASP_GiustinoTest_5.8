@@ -231,6 +231,24 @@ private:
 	/** The local attacker's HitTargets ring, followed for predicted hits on minions */
 	FGSTN_HitPresentationTracker HitTracker;
 
+	/**
+	 * Minion hits this machine already predicted, by key (victim, move start, hit group). An NP correction can resimulate the move and drop a hit
+	 * group from the ring for a frame or two before the resim adds it back with the same key (G7b: 6 victims of one group cancelled and
+	 * re-predicted 40 ms later). A vanished key is only a cancel once it stayed away for HitCancelGraceSeconds; a key that comes back is the
+	 * same hit (no cancel, no second prediction). Presentation only, never read by the simulation.
+	 */
+	struct FPredictedMinionHit
+	{
+		FGSTN_HitPresentationKey Key;
+		double SeenSeconds = 0.0;
+		/** >= 0: the key vanished from the ring and is cancelled at this time unless it comes back */
+		double CancelAtSeconds = -1.0;
+	};
+	TArray<FPredictedMinionHit> PredictedMinionHits;
+	static constexpr double HitCancelGraceSeconds = 0.25;
+	/** A key not seen for this long is forgotten (its move is long over) */
+	static constexpr double PredictedHitMemorySeconds = 2.0;
+
 	FGSTN_MinionPresentStats Stats;
 
 	// Scratch of the visible cut

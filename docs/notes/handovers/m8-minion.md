@@ -411,3 +411,70 @@
 - The other trap of that soak, "in penetration" at (1806.6,5424,327.7), is on Landscape_0 with MTD 0: most likely a bench false positive
   (heightfield overlap with the shrunk capsule).
 - Gate with the logging: all GSTN tests 1404/0 except the left-out test. Cost: ~$2.
+
+## G6b (desktop, 2026-11-08): DONE, gate green except the known reds
+
+- Branch `claude/m8-desktop-g6b-g7b` from origin/feature/gas-npp-5.8 (b4149a8), worktree GASP_Giustino2_m7. Scripts and raw logs in `Saved/M8G6b/` (not versioned),
+  reports in `Saved/Logs/m8g6b/`. Sonnet subagent for steps 0-4, closing by the thread (the night run stopped: see "Pitfalls").
+- `Config/DefaultEngine.ini`: `[SystemSettings] net.IsPushModelEnabled=1` (owner approved). Headless GSTN 1398/0/0 before and after.
+- R1 = push model on vs off (the lean-actor variant was not built; deviation from plan §G6, coordinator's wording). Dedicated + 2, -nullrhi, 60/15, 0 %:
+
+  | run | batch avg (mean/max) us | maxBatch us | bytes/client N=40 | N=80 | editor frame avg / p95 ms |
+  |---|---|---|---|---|---|
+  | R1 push on | 230 / 362 | 720 | 118 B/s | 1686-1974 B/s | 9.98 / 14.1 |
+  | R1 push off | 217 / 345 | 633 | 120 B/s | 1585-1903 B/s | 9.76 / 13.5 |
+  | R2 push on, rendering | 295 / 473 | 1261 | 112-118 B/s | 1273-1433 B/s | 13.3 / 21.0 |
+
+  Push on/off is a wash at this N (within run noise); kept on. Bytes are the planning figure (updates x 20 B): `stat net` does not reach the log and
+  the stat replicator is not readable from Python, so real wire bytes are still unmeasured (G11b). Frame numbers are the whole PIE process (server + 2 clients).
+- `scenario_minion_dormancy_flush` (SUITE_MINION_NET, `GSTN_DORMANCY_SECONDS`, default 600): Population 60 Idle, cycles of spawn -> dormant -> quiet 15 s ->
+  Bench.Kill while dormant -> client items must match the server. 600 s run: 22/23 checks, the one FAIL was a harness typo (a `return` inside a comment);
+  fixed and rechecked at 120 s: PASS 7. A kill takes MutatePack's wake path, so the check counts wakes + flushes per cycle.
+- 3 clients (dedicated + 3, play settings via `Saved/M8G6b/pie.ps1 -Clients 3`): late_join PASS 5 and replicate PASS 4 at 0 % and 2 %. Not a true late connect
+  (the harness has none): clients join the pack channels at the first grant after the spawn, as in G6a.
+- Gate: build OK; headless 1398/0/0; SUITE_MINION 0 % dedicated + 2: 9/11 PASS (lagcomp now PASS at 0 %); FAIL only the known player_hits_minion (flash cancels)
+  and lod (no pop, worst excess A->C 22.6 cm plus others). 2 % SUITE_MINION not rerun (only the ini changed).
+- Pitfalls: `setup_editor(True, mode, N)` cannot set the play settings from Python ("LevelEditorPlaySettings not available"): edit the saved ini with pie.ps1 while the
+  editor is closed. An f-string with nested single quotes is a SyntaxError on this Python: the night 600 s run idled an hour with no driver.
+- PERF-DEBT: rendering adds ~30 % to the batch avg and doubles maxBatch (1.26 ms) at the same N (contention with the render thread, measure in Insights in G11b);
+  no wire-byte measurement path in the harness yet (needs a C++ stat dump of the net driver).
+- Cost: ~$6 (Sonnet subagent ~170k tokens / 55 tool calls; thread ~50k; 2 builds, 2 headless runs, 9 editor runs incl. a 10-min soak).
+
+## G7b part 1 (desktop, 2026-11-08): bench puppet mesh, spike 7 PASS, owner video command ready
+
+- Branch `claude/m8-desktop-g6b-g7b` (ae06201 + this change, uncommitted). Scripts and logs in `Saved/M8G7b/` (not versioned): `spike7.py`, `run7.ps1`, `csvgt.py`, `s7b.log`, `spike7-gt-b.txt`, `spike7-breakdown.txt`.
+- Task 1: CVars `gstn.Minion.Bench.PuppetMesh` / `PuppetAnimClass` (soft paths, empty = null mesh / none), read when either transient bench definition is built (same timing rule as `HurtboxSet`). Only `GSTN_MinionBench.cpp`. Mesh: `/Game/Characters/UE5_Mannequins/Meshes/SKM_Manny.SKM_Manny` (the GASP Manny). No anim class: Content has no simple anim BP for the Manny skeleton (only `ABP_*_PostProcess`, which the mesh already carries), so the grunt stands in its default pose.
+- Task 2, spike 7: Development editor (renders), PIE listen host + 1 client, one process, bench `Spawn N Massacre` (LaunchSpeed 800, minions move all the time), batch alternating `Present.MaxVisible` 0 (no puppets) and 60, two repeats each, 25 s per segment after an 8 s settle, CSV profiler (`csvprofile`) per segment. The CSV `GameThreadTime` column equals the capped FrameTime, so the cost is the frame delta and the delta of the `Exclusive/GameThread/*` categories.
+  Both PIE worlds (host from the store, client from the registry) present N puppets each, so the process pays 2N puppets (conservative: the gate is per world).
+
+  | N | puppets in process | frame off -> on | delta | game-thread categories (top) | per world (half) |
+  |---|---|---|---|---|---|
+  | 60 | 120 | 13.55 -> 15.26 ms | +1.72 ms | Animation +0.82, EndOfFrameUpdates +0.35, TickActors +0.18 | ~0.85 ms |
+  | 40 | 80 | 13.50 -> 14.90 ms | +1.40 ms | Animation +0.68, EndOfFrameUpdates +0.28, TickActors +0.16 | ~0.70 ms |
+
+  Verdict PASS (exit: <= 3 ms at 60, <= 2 ms at 40), even counting both worlds in full; no §4d.1 fallback needed. Caveats: no anim blueprint (the Manny post process still runs), minions not hit during the run, one camera spot, so animation cost with a real ABP and hit effects is not covered (re-measure in G11b with Insights). The whole frame (13.5 ms) is the editor with server + client + two viewports.
+- Task 3: `Saved/M8G7b/video-command.md` (+ `video_start.py`, `video_prep.py`, `pie.ps1 -Clients 2`): dry-run checked, 40 grunts with mesh spawned on the host and the client, host pawn has the hit kit. Not recorded.
+- Gate: build OK; headless GSTN 1398/0/0 (no test added: console variables only), 0 ensures.
+- Deviations: GameThreadTime column unusable (see above); play settings of the saved editor ini restored to `pie-orig.bak` (pre-G6b) after the runs.
+- PERF-DEBT (also in perf-debt.md): puppet cost not split per world; puppet anim cost without a real ABP unmeasured.
+- Not done here: the three failing scenarios and 2 % runs (other parts of G7b).
+- Cost: ~$2-3 (one Sonnet subagent, ~60 tool calls, 1 build, 1 headless run, 3 rendering editor runs of 2-6 min).
+
+## G7b part 2 (desktop, 2026-11-08): player_hits_minion and lagcomp green at 0 % and 2 %
+
+- Branch `claude/m8-desktop-g6b-g7b` (07d4a84 + this change, uncommitted). Scripts, logs and notes in `Saved/M8G7b2/` (not versioned). Play settings were listen + 3: set to dedicated + 2 (`pie-before.bak` = what was there).
+- Diagnosis (gated log `gstn.Minion.Present.LogFlash 1`, one `MinionFlash` line per predict/vanish/return/cancel): a "cancel" is not a missed confirm (that is "expired") nor a dying minion
+  (victims at health 0.42-0.71). All 6 minions of one hit group (same move start, group 3) vanished from the pawn's hit ring 16 ms after the prediction and came back with the
+  same key 40 ms later, then again after a tracker reset: NP correction flicker of the ring during a resim, not a miss. At 2 % the one-frame scripted Attack tap gave no swing.
+- Fix (GSTNMinion only, GSTNCombatNP untouched): `UGSTN_MinionPresentationSubsystem::UpdatePredictedHits` remembers predicted minion hits by key; a vanished key is a cancel only
+  after 0.25 s away, a key that comes back is the same hit (no cancel, no second prediction), keys forgotten after 2 s. Harness: `_swing_steps` holds Attack 0.1 s
+  (`combat_hold` + `combat_clear`; `GSTN_SWING_HOLD=0` restores the tap).
+- Results (dedicated + 2, 60/15): 0 % player_hits PASS 4 (pred 51 / conf 48 / canc 0 / exp 3), lagcomp PASS 3 (34/34/0/0); 2 % player_hits PASS 4 (36/36/0/0),
+  lagcomp PASS 3 (27/16/0, expired 11 + remote 11).
+- Gate: build OK; headless GSTN 1398/0/0, 0 ensures. No unit test added (the grace lives in the world subsystem; covered by the two scenarios). 1 fix attempt used.
+- Open: at 2 % lagcomp 11 of 27 confirms land after the 500 ms window (expired then counted remote): consider a longer `ConfirmWindowSeconds` under loss. The same ring
+  flicker likely reaches `UGSTN_HitPresentationComponent` (GSTNCombatNP, pawn victims): owner OK needed to apply the same grace there. Rest of SUITE_MINION not rerun.
+- Cost: ~$3 (one Opus subagent, ~60 tool calls, 2 builds + 1 failed on a typo, 1 headless, 4 editor runs of ~2 min).
+- Full SUITE_MINION 0 % after part 2 (dedicated + 2, `Saved/Logs/m8g7b2/gate-suite0.log`): 9/11 PASS. player_hits_minion still FAIL in the suite run on
+  "none cancelled" with 1 cancel of 47 predicted (40 confirmed, 6 expired; was 6 of 36): flicker longer than 0.25 s, or a different cause. Not fixed (machine
+  window over). lod "no pop" unchanged. Play settings restored to the pre-G6b file (`Saved/M8G6b/pie-orig.bak`).

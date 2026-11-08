@@ -52,3 +52,11 @@ what, where, cheaper alternative.
 - FP G1 the predicted partner presentation adds a second tick function to every `UGSTN_LinkPresentationComponent` (registered off a dedicated server): on a client pawn that is not locally controlled it ends after the cvar read and one cast; on the locally controlled pawn it also looks the link fragment up in the combat sync state each frame (a linear walk of the small fragment list). Gate it by enabling the tick function only while a link is shown if it ever shows up in a profile.
 - FP G1 `BeginPredictedWindow` runs `FindOrAdd` on the partner and requests the partner montage asynchronously on every partner move; the streamable request is cheap when the montage is resident, but a cold montage means the first move of a match shows no montage (the reaction is still published): preload the partner timeline montages with the kit's anim sets.
 - E17 combat trace: with `gstn.Combat.Debug.Trace 1` every entity-frame builds a `FGSTN_CombatTraceFrame` and calls a virtual sink even when the Insights channel is off (the emit is then a no-op after the channel check); fine for a debug cvar. If it is left on in a profile, check `UE_TRACE_CHANNELEXPR_IS_ENABLED(GSTNCombatChannel)` in the sink before building the record.
+
+
+## G6b (desktop, 2026-11-08)
+- Rendering host: minion batch avg +30 %, maxBatch 1.26 ms vs 0.72 ms nullrhi at the same N (render thread contention?): check in Insights (G11b).
+- Harness has no real wire-byte measurement (stat net not in the log, stat replicator not readable from Python): add a C++ net-driver byte dump for the bench.
+
+## G7b part 1 (desktop, 2026-11-08)
+- Spike 7 measured the puppet cost of host + client together (2N puppets, +1.7 ms at N=60, +1.4 ms at N=40): split per world and re-measure with a real puppet ABP and hit effects (Insights, G11b). The CSV `GameThreadTime` column is the capped frame time in the editor: use the `Exclusive/GameThread/*` categories.
