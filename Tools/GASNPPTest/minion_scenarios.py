@@ -393,10 +393,17 @@ def scenario_minion_replicate(client=1):
 
 
 def _swing_steps(start, stop, every, client):
-    """Attack taps from the client's pawn every `every` seconds in [start, stop)"""
+    """Attack presses from the client's pawn every `every` seconds in [start, stop). G7b: a press is held for GSTN_SWING_HOLD seconds (default
+    0.1 = 6 frames at 60 Hz) and then cleared, not tapped for one frame: at 2 % loss the one-frame scripted tap never produced a swing on the
+    server. 0 restores the one-frame tap"""
+    hold = float(os.environ.get('GSTN_SWING_HOLD', '0.1'))
     out, t = [], start
     while t < stop:
-        out.append((t, lambda: ('attack tap', g.combat_tap(client, g.button_mask('Attack')))))
+        if hold > 0.0:
+            out.append((t, lambda: ('attack hold', g.combat_hold(client, g.button_mask('Attack')))))
+            out.append((t + hold, lambda: ('attack release', g.combat_clear(client))))
+        else:
+            out.append((t, lambda: ('attack tap', g.combat_tap(client, g.button_mask('Attack')))))
         t += every
     return out
 

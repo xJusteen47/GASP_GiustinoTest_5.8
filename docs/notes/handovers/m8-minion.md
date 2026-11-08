@@ -429,3 +429,22 @@
 - PERF-DEBT (also in perf-debt.md): puppet cost not split per world; puppet anim cost without a real ABP unmeasured.
 - Not done here: the three failing scenarios and 2 % runs (other parts of G7b).
 - Cost: ~$2-3 (one Sonnet subagent, ~60 tool calls, 1 build, 1 headless run, 3 rendering editor runs of 2-6 min).
+
+## G7b part 2 (desktop, 2026-11-08): player_hits_minion and lagcomp green at 0 % and 2 %
+
+- Branch `claude/m8-desktop-g6b-g7b` (07d4a84 + this change, uncommitted). Scripts, logs and notes in `Saved/M8G7b2/` (not versioned). Play settings were listen + 3: set to dedicated + 2 (`pie-before.bak` = what was there).
+- Diagnosis (gated log `gstn.Minion.Present.LogFlash 1`, one `MinionFlash` line per predict/vanish/return/cancel): a "cancel" is not a missed confirm (that is "expired") nor a dying minion
+  (victims at health 0.42-0.71). All 6 minions of one hit group (same move start, group 3) vanished from the pawn's hit ring 16 ms after the prediction and came back with the
+  same key 40 ms later, then again after a tracker reset: NP correction flicker of the ring during a resim, not a miss. At 2 % the one-frame scripted Attack tap gave no swing.
+- Fix (GSTNMinion only, GSTNCombatNP untouched): `UGSTN_MinionPresentationSubsystem::UpdatePredictedHits` remembers predicted minion hits by key; a vanished key is a cancel only
+  after 0.25 s away, a key that comes back is the same hit (no cancel, no second prediction), keys forgotten after 2 s. Harness: `_swing_steps` holds Attack 0.1 s
+  (`combat_hold` + `combat_clear`; `GSTN_SWING_HOLD=0` restores the tap).
+- Results (dedicated + 2, 60/15): 0 % player_hits PASS 4 (pred 51 / conf 48 / canc 0 / exp 3), lagcomp PASS 3 (34/34/0/0); 2 % player_hits PASS 4 (36/36/0/0),
+  lagcomp PASS 3 (27/16/0, expired 11 + remote 11).
+- Gate: build OK; headless GSTN 1398/0/0, 0 ensures. No unit test added (the grace lives in the world subsystem; covered by the two scenarios). 1 fix attempt used.
+- Open: at 2 % lagcomp 11 of 27 confirms land after the 500 ms window (expired then counted remote): consider a longer `ConfirmWindowSeconds` under loss. The same ring
+  flicker likely reaches `UGSTN_HitPresentationComponent` (GSTNCombatNP, pawn victims): owner OK needed to apply the same grace there. Rest of SUITE_MINION not rerun.
+- Cost: ~$3 (one Opus subagent, ~60 tool calls, 2 builds + 1 failed on a typo, 1 headless, 4 editor runs of ~2 min).
+- Full SUITE_MINION 0 % after part 2 (dedicated + 2, `Saved/Logs/m8g7b2/gate-suite0.log`): 9/11 PASS. player_hits_minion still FAIL in the suite run on
+  "none cancelled" with 1 cancel of 47 predicted (40 confirmed, 6 expired; was 6 of 36): flicker longer than 0.25 s, or a different cause. Not fixed (machine
+  window over). lod "no pop" unchanged. Play settings restored to the pre-G6b file (`Saved/M8G6b/pie-orig.bak`).
