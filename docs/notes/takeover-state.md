@@ -949,3 +949,4 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 - Merge to feature 2026-11-08g: branch claude/merge-feature-2026-11-08g (= merge f f0c528ab + P19 screws). Gate 1443/1341/1421, SUITE_DEFAULT 50/50, SUITE_MINION 9/11 at 0 and 2 % (known reds). Handover parts-rest.md "P19".
 - Merge to feature 2026-11-08h: branch claude/merge-feature-2026-11-08h (= merge g 2151cf9b + held plate breakable by damage 61b896c7 + minion part-step cache/timers 50d68183; perf target not met, split recorded). Gate 1443/1341/1421, SUITE_DEFAULT 50/50, SUITE_MINION 9/11 at 0 and 2 %. Handover parts-rest.md.
 - Merge to feature 2026-11-08i: branch claude/merge-feature-2026-11-08i (= merge h 5b7e7fc5 + E19 hooks test, T9 platform validation tests). Handover m5-rest.md "Leftovers pass".
+- Merge to feature 2026-11-08j: branch claude/merge-feature-2026-11-08j (= merge i 441845c6 + minion part step 1.88 us). Handover parts-rest.md last section.
