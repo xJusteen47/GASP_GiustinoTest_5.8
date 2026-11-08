@@ -49,3 +49,7 @@ what, where, cheaper alternative.
 - G12a debug draw (`GSTN_MinionDebugDraw.cpp`): with a cvar on, one pass iterates all alive slots and issues per-minion DrawDebug* calls (and an FString per minion for `.LOD`, up to N points per minion for `.History`); debug only, zero cost off (tick gated by one flag). Alternative if it is ever left on in a profile: draw only the Near-and-closer tiers, cache the tier strings, and use a line batch for the history points.
 - G12a store capacity 160: history ring (32 x 52 B) is about 70 % of the per-slot memory, allocated for every slot though Dormant and Far slots never write it. Alternative: a ring only for T0/T1 slots (compacted index) or a depth cut by the lag comp window actually used.
 - G12a `GSTNMinionValidation::CheckWaveCrossAsset` and `CheckDefinitionReferences` load soft references synchronously (editor, on save only); fine for validation, do not call from a tick.
+
+## G6b (desktop, 2026-11-08)
+- Rendering host: minion batch avg +30 %, maxBatch 1.26 ms vs 0.72 ms nullrhi at the same N (render thread contention?): check in Insights (G11b).
+- Harness has no real wire-byte measurement (stat net not in the log, stat replicator not readable from Python): add a C++ net-driver byte dump for the bench.

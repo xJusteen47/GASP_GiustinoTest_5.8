@@ -381,3 +381,31 @@
 8. `scenario_minion_dormancy_flush` (§12) not written yet.
 9. Perf-debt review of docs/notes/perf-debt.md at the end of M8 (many G6-G12 lines), with the low-end target.
 10. Merge path: laptop branches g9 -> g10 -> g11 -> g12 are stacked; nothing pushed to feature.
+
+## G6b (desktop, 2026-11-08): DONE, gate green except the known reds
+
+- Branch `claude/m8-desktop-g6b-g7b` from origin/feature/gas-npp-5.8 (b4149a8), worktree GASP_Giustino2_m7. Scripts and raw logs in `Saved/M8G6b/` (not versioned),
+  reports in `Saved/Logs/m8g6b/`. Sonnet subagent for steps 0-4, closing by the thread (the night run stopped: see "Pitfalls").
+- `Config/DefaultEngine.ini`: `[SystemSettings] net.IsPushModelEnabled=1` (owner approved). Headless GSTN 1398/0/0 before and after.
+- R1 = push model on vs off (the lean-actor variant was not built; deviation from plan §G6, coordinator's wording). Dedicated + 2, -nullrhi, 60/15, 0 %:
+
+  | run | batch avg (mean/max) us | maxBatch us | bytes/client N=40 | N=80 | editor frame avg / p95 ms |
+  |---|---|---|---|---|---|
+  | R1 push on | 230 / 362 | 720 | 118 B/s | 1686-1974 B/s | 9.98 / 14.1 |
+  | R1 push off | 217 / 345 | 633 | 120 B/s | 1585-1903 B/s | 9.76 / 13.5 |
+  | R2 push on, rendering | 295 / 473 | 1261 | 112-118 B/s | 1273-1433 B/s | 13.3 / 21.0 |
+
+  Push on/off is a wash at this N (within run noise); kept on. Bytes are the planning figure (updates x 20 B): `stat net` does not reach the log and
+  the stat replicator is not readable from Python, so real wire bytes are still unmeasured (G11b). Frame numbers are the whole PIE process (server + 2 clients).
+- `scenario_minion_dormancy_flush` (SUITE_MINION_NET, `GSTN_DORMANCY_SECONDS`, default 600): Population 60 Idle, cycles of spawn -> dormant -> quiet 15 s ->
+  Bench.Kill while dormant -> client items must match the server. 600 s run: 22/23 checks, the one FAIL was a harness typo (a `return` inside a comment);
+  fixed and rechecked at 120 s: PASS 7. A kill takes MutatePack's wake path, so the check counts wakes + flushes per cycle.
+- 3 clients (dedicated + 3, play settings via `Saved/M8G6b/pie.ps1 -Clients 3`): late_join PASS 5 and replicate PASS 4 at 0 % and 2 %. Not a true late connect
+  (the harness has none): clients join the pack channels at the first grant after the spawn, as in G6a.
+- Gate: build OK; headless 1398/0/0; SUITE_MINION 0 % dedicated + 2: 9/11 PASS (lagcomp now PASS at 0 %); FAIL only the known player_hits_minion (flash cancels)
+  and lod (no pop, worst excess A->C 22.6 cm plus others). 2 % SUITE_MINION not rerun (only the ini changed).
+- Pitfalls: `setup_editor(True, mode, N)` cannot set the play settings from Python ("LevelEditorPlaySettings not available"): edit the saved ini with pie.ps1 while the
+  editor is closed. An f-string with nested single quotes is a SyntaxError on this Python: the night 600 s run idled an hour with no driver.
+- PERF-DEBT: rendering adds ~30 % to the batch avg and doubles maxBatch (1.26 ms) at the same N (contention with the render thread, measure in Insights in G11b);
+  no wire-byte measurement path in the harness yet (needs a C++ stat dump of the net driver).
+- Cost: ~$6 (Sonnet subagent ~170k tokens / 55 tool calls; thread ~50k; 2 builds, 2 headless runs, 9 editor runs incl. a 10-min soak).
