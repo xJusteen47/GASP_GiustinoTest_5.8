@@ -55,3 +55,11 @@ what, where, cheaper alternative.
 - P18 hurtbox openings (`GSTN_CombatTick_Attacker.cpp`): one bool per touching hurtbox without an opening; with one, a size test then a mouth overlap (up to MaxSweepSubsteps + 1 shape tests when the hitbox sweeps). The per-hurtbox hardness override costs one emptiness test per part hit, a TMap find only on parts that have overrides. Alternative if openings get common: cache the hitbox's pass radius once per hitbox-victim pair instead of per hurtbox.
 - P15 minion parts (estimate, not measured): at 160 minions the store columns are 9 B x 160 = 1.4 KB (only part-bearing types need slots, but a per-slot array is 160 x 9); the wire is 1 ext byte (G10 `ExtByte`, `bHasNetExt`) per part-bearing item, sent only when the broken mask changes; the per-hit step cost is the same as a fighter's (one table lookup, a few integer ops, no allocation), budget <= 2 us, to measure in P16 in the M8 bench. `FromMinionStore` copies 8 bytes into a 32 B struct per hit: negligible.
 
+
+
+## G6b (desktop, 2026-11-08)
+- Rendering host: minion batch avg +30 %, maxBatch 1.26 ms vs 0.72 ms nullrhi at the same N (render thread contention?): check in Insights (G11b).
+- Harness has no real wire-byte measurement (stat net not in the log, stat replicator not readable from Python): add a C++ net-driver byte dump for the bench.
+
+## G7b part 1 (desktop, 2026-11-08)
+- Spike 7 measured the puppet cost of host + client together (2N puppets, +1.7 ms at N=60, +1.4 ms at N=40): split per world and re-measure with a real puppet ABP and hit effects (Insights, G11b). The CSV `GameThreadTime` column is the capped frame time in the editor: use the `Exclusive/GameThread/*` categories.
