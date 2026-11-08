@@ -17,3 +17,12 @@ Recipe: copy it to a path without spaces (TEMP), run `UnrealEditor.exe <uproject
 (setup_editor); I restored PlayNetMode=PIE_ListenServer, PlayNumberOfClients=3.
 Not done: no map saved, nothing pushed to feature. Cost: about 1.5 build + 4 editor runs, token cost est. ~$1.5 (well under budget).
 Next for R3-1 (cheap): decide with the owner if the three leftover diagnostics are worth a thread; else mark the gate met.
+
+## R3-2 canary build (laptop, 2026-11-08): script DONE, run once on GSTNCore
+- `Tools/Canary/make_canary.py <Plugin> [--out] [--no-build] [--no-tests]` (stdlib Python): blank .uproject in `Saved/Canary/<Plugin>/` enabling the
+  plugin and its .uplugin deps (project plugins copied, engine plugins enabled by name), builds UnrealEditor, runs `Automation RunTests <Plugin>`,
+  writes `summary.txt` (modularity-and-tags.md §3.7 rule 7). How to run: Plugins/README.md "Canary build".
+- GSTNCore: no deps, build Succeeded (~56 s), tests 1/0, 0 ensures.
+- Untested: plugins that depend on Mover or the GASNPP forks (a fork plugin with the same name as an engine plugin may clash in the canary).
+  Next: run it per plugin before each milestone closes; start with GSTNInput, GSTNSurface, GSTNCombat.
+- Cost: ~$1.5 (Sonnet).

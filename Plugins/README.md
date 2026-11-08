@@ -152,3 +152,11 @@ above and extend the dependency overview and the tag table.
 
 The same branch adds the `Combat.Hurtbox.{Head,Torso,Arm,Leg,Hand,Foot}` tags to `GSTNCombatGAS` and a few const accessors to
 `UGSTN_CombatSimComponent`. Nothing in the runtime plugins depends on `GSTNCombatEditor` or `GSTNCombatDebug`.
+
+## Canary build
+
+`python Tools/Canary/make_canary.py <PluginName> [--out <dir>] [--no-build] [--no-tests]` checks reuse in an independent project
+(modularity-and-tags.md 3.7, rule 7). It resolves the plugin and the plugins its `.uplugin` lists (project plugins are copied,
+engine plugins are only enabled), creates a blank code-less `.uproject` in `Saved/Canary/<PluginName>/` (or `--out`), builds the
+`UnrealEditor` target, runs `Automation RunTests <PluginName>` headless and writes `summary.txt` (build result, tests
+success/fail/ensure). It reads the repo and writes only inside the output folder. Run one canary per plugin before a milestone is closed.
