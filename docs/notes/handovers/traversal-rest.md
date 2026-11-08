@@ -30,3 +30,27 @@ pass (Saved/T6/summary-all-loss2.md). Limit: the scenario breaks the part with `
 fighter has no combat state); hit-driven break and the healer restore (P7b) need a combat fighter with a flank: T9 content.
 Next: T7 (M, plan $6-10, realistic $10-15: needs a combat fighter carrying a player and may touch the lag comp history in GSTNCombatNP,
 so after M8 G1/G5 merge; not while M8 G10 edits GSTNPlatform). Not started here. Cost of this thread: ~$7-10 (Opus, ~120k context, 3 builds, 3 PIE runs).
+
+## SLIDE (brief, 2026-11-08, waiting for the owner's OK before any code)
+
+Source: `docs/notes/handovers/movimento.md` (MOV-1, last item), m3-doc-deltas.md "Slide + jump" (C14/C15: no desync found with GASP's slide).
+- **Today**: the slide is GASP's Mover transition `BP_MovementTransition_ToSlide` on the Walking mode of the component inherited from
+  SandboxCharacter_Mover: crouch while sprinting starts it, the character stands up at the end. Not an ability: kits, tags, the combat
+  command table and cancel rules cannot see it. MOV-1 could not remove it from `BP_GASNPP_TestCharacter` by script (inherited component override lost).
+- **Goal**: `UGSTN_GA_Slide` (derives `UGSTN_GameplayAbility`, NP-simulated) that moves the character through a Mover layered move
+  (rules 1-2 of CLAUDE.md: deterministic, no direct state writes), owns `State.Movement.Sliding` (native tag in `GSTN_AbilityTags.h`), ends
+  crouched (not standing), and is cancelable by jump (slide-jump keeps the slide's horizontal speed) and by the combat cancel rules.
+- **Input (proposal)**: RB / C (`IA_Crouch`, already bound) while the ground speed is above a threshold (default 450 cm/s) starts the slide;
+  the same button while slow is a plain crouch. Alternative to decide: a dedicated button. Held = longer slide up to a cap; release = early end.
+- **Tuning** (`USTRUCT FGSTN_SlideParams`, `Category = "Slide|..."`): entry speed boost, friction/decel curve, max duration frames, min exit
+  speed, slope gain/loss along gravity, jump carry factor, cooldown frames.
+- **Interactions**: jump during the slide = GA jump with the slide's velocity carried; wall-slide entry from a slide allowed (the wall entry
+  transition reads tags only); a hit cancels it (hit reaction wins); minions and links: none.
+- **The GASP transition**: the owner removes `ToSlide` from `BP_GASNPP_TestCharacter` by hand (30 s, MOV-1 steps), otherwise both slides
+  fire. Code cannot do it without a Blueprint edit; the owner's OK covers that step only if they do it.
+- **Acceptance**: `GSTNCombat.NP.Slide.*` unit tests (entry threshold, duration cap, jump carry, determinism of the layered move);
+  harness `scenario_slide` (sprint, crouch, slide distance within 5 % on server and both clients, no unexplained reconciles) and
+  `scenario_slide_jump_ability` (jump mid-slide keeps speed), dedicated + 2 at 0 % and 2 %; SUITE_DEFAULT on DefaultLevel unchanged.
+- **Machine / model / cost**: laptop; Opus for the layered move and the prediction path, Sonnet for tests and harness; ~$5-8.
+- **Owner decisions**: (1) RB/C while running, or a dedicated button? (2) the slide ends crouched, or stands up like GASP's?
+  (3) OK to remove GASP's ToSlide from the test character by hand?

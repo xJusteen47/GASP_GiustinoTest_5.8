@@ -873,6 +873,13 @@ void UGSTN_MinionBenchSubsystem::HandleMovementStepped(int32 Frame, TConstArrayV
 		const bool bWantsToMove = !Intent.IsStale(Frame) && Intent.DesiredSpeed > 0.f && !Intent.MoveDir.IsNearlyZero();
 		const TCHAR* ModeName = Mode == static_cast<uint8>(EGSTN_MinionKnockbackMode::Launched) ? TEXT("Launched")
 			: (Mode == static_cast<uint8>(EGSTN_MinionKnockbackMode::PushedBack) ? TEXT("PushedBack") : (bGrounded ? TEXT("Walking") : TEXT("Falling")));
+		if (bAirOrKnockback && StuckFrames[Slot] >= StuckFrameLimit - 20 && CVarBenchVerbosePenetration.GetValueOnGameThread() > 0)
+		{
+			// M8 trap diagnosis: the 20 frames before an airborne "no displacement" is counted, one line per frame
+			UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: AIRTRACE slot %d frame %d feet %s prev %s vel %s grounded %d knock %d action %d"),
+				Slot, Frame, *Now.ToCompactString(), *Previous.ToCompactString(), *FVector(Columns.Velocity[Slot]).ToCompactString(),
+				bGrounded ? 1 : 0, static_cast<int32>(Mode), static_cast<int32>(Store.ActionState[Slot]));
+		}
 		if (!(bWantsToMove || bAirOrKnockback) || FVector::Dist(Now, FVector(StuckAnchor[Slot])) >= StuckDistance)
 		{
 			StuckAnchor[Slot] = FVector3f(Now);
@@ -885,6 +892,37 @@ void UGSTN_MinionBenchSubsystem::HandleMovementStepped(int32 Frame, TConstArrayV
 			{
 				SlotFlags[Slot] |= StuckCounted;
 				CountTrapped(Slot, Now, ModeName, TEXT("no displacement for 2 s"), Frame);
+				if (CVarBenchVerbosePenetration.GetValueOnGameThread() > 0)
+				{
+					// M8 trap diagnosis: what holds an airborne / knocked-back minion in place (same query as the backend's)
+					const UGSTN_MinionDefinition* AirDefinition = Minions->GetDefinition(Store.TypeIndex[Slot]);
+					if (AirDefinition)
+					{
+						const float AirRadius = AirDefinition->Stats.CapsuleRadius;
+						const float AirHalfHeight = FMath::Max(AirDefinition->Stats.CapsuleHalfHeight, AirRadius);
+						const FVector AirCentre = Now + FVector(0.0, 0.0, AirHalfHeight);
+						const FCollisionShape AirCapsule = FCollisionShape::MakeCapsule(AirRadius, AirHalfHeight);
+						const FVector AirVelocity(Columns.Velocity[Slot]);
+						UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: AIR slot %d frame %d feet %s vel %s gravityZ %.1f grounded %d knock %d action %d moveId %d"),
+							Slot, Frame, *Now.ToCompactString(), *AirVelocity.ToCompactString(), World->GetGravityZ(), bGrounded ? 1 : 0, static_cast<int32>(Mode),
+							static_cast<int32>(Store.ActionState[Slot]), static_cast<int32>(Store.MoveId[Slot]));
+						const FVector Probes[] = { FVector(0.0, 0.0, -5.0), FVector(0.0, 0.0, -50.0), AirVelocity.GetSafeNormal() * 5.0 };
+						for (const FVector& Probe : Probes)
+						{
+							FHitResult Hit;
+							World->SweepSingleByObjectType(Hit, AirCentre, AirCentre + Probe, FQuat::Identity, ObjectQuery, AirCapsule);
+							UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: AIR   sweep %s: block %d startPen %d time %.3f comp %s owner %s normal %s impactNormal %s loc %s"),
+								*Probe.ToCompactString(), Hit.bBlockingHit ? 1 : 0, Hit.bStartPenetrating ? 1 : 0, Hit.Time, *GetNameSafe(Hit.GetComponent()),
+								*GetNameSafe(Hit.GetActor()), *Hit.Normal.ToCompactString(), *Hit.ImpactNormal.ToCompactString(), *Hit.Location.ToCompactString());
+						}
+						TArray<FOverlapResult> AirOverlaps;
+						World->OverlapMultiByObjectType(AirOverlaps, AirCentre, FQuat::Identity, ObjectQuery, AirCapsule);
+						for (const FOverlapResult& Overlap : AirOverlaps)
+						{
+							UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: AIR   overlap comp %s owner %s"), *GetNameSafe(Overlap.GetComponent()), *GetNameSafe(Overlap.GetActor()));
+						}
+					}
+				}
 			}
 			else if (!bAirOrKnockback && !(SlotFlags[Slot] & BlockedCounted))
 			{

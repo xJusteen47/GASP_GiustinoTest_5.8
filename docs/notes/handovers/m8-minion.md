@@ -398,3 +398,16 @@
   lod "no pop".
 - PERF-DEBT: one extra overlap query in the floor probe's side-contact branch (rare); the bench verbose cvar is off by default.
 - Cost: ~$3 (Sonnet ~250k tokens / 22 tool calls; 2 builds, 1 test run, 2 bench runs incl. a 10-min soak, 2 harness runs).
+
+## Launched hover (laptop, 2026-11-08): NOT fixed (budget used), evidence recorded
+
+- Same branch, after 16c1b36. Bench logging only (`gstn.Minion.Bench.VerbosePenetration`): `AIR` lines when an airborne minion stalls, `AIRTRACE`
+  lines for the 20 frames before it. 10-min soak: 1 Launched stall at (165.6,-845.1,91.1), ~1 cm above the floor (StaticMeshActor_0), pressed on
+  the rolled cylinder StaticMeshActor_6 (contact normal (0.89,-0.46,-0.04)). The velocity in the log was a fresh Massacre relaunch, not a stuck
+  value; the backend's Launched path integrates gravity and projects the wall part. Cause still unknown: the AIRTRACE lines (built, not yet run
+  in a soak) are the next step.
+- A test (`LaunchedAtObliqueWallLands`) was written and failed only because its floor was too small (the minion flew to Z -2484): left out of
+  the commit, kept as `Saved/M8Trap/launched-test.patch` (needs a bigger floor before it means anything).
+- The other trap of that soak, "in penetration" at (1806.6,5424,327.7), is on Landscape_0 with MTD 0: most likely a bench false positive
+  (heightfield overlap with the shrunk capsule).
+- Gate with the logging: all GSTN tests 1404/0 except the left-out test. Cost: ~$2.
