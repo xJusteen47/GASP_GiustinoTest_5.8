@@ -35,6 +35,17 @@ def load(p):
     return json.loads(p.read_text(encoding="utf-8-sig"))
 
 
+# Plugins whose tests are not named after the plugin (a canary of these ran 0 tests with the plugin name as filter)
+TEST_PREFIX = {
+    "GSTNCombatGAS": "GSTNCombat.GAS",
+    "GSTNCombatNP": "GSTNCombat.NP",
+    "GSTNCombatDebug": "GSTNCombat.Debug",
+    "GSTNCombatEditor": "GSTNCombat.Editor",
+    "GSTNInputNP": "GSTNInput.NP",
+    "GSTNExtensionTest": "GSTNExtTest",
+}
+
+
 def write_code_stub(out):
     """An empty runtime module and its two targets, so the canary is a code project (see the comment at the call)."""
     src = out / "Source"
@@ -60,6 +71,7 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--no-build", action="store_true")
     ap.add_argument("--no-tests", action="store_true")
+    ap.add_argument("--tests", help="Automation test filter (default: the plugin name, or its known test prefix)")
     a = ap.parse_args()
 
     out = Path(a.out).resolve() if a.out else ROOT / "Saved" / "Canary" / a.plugin
@@ -132,7 +144,7 @@ def main():
         log = out / "tests.log"
         with open(out / "editor.out", "w", encoding="utf-8", errors="replace") as f:
             subprocess.run([str(ENGINE / "Binaries" / "Win64" / "UnrealEditor-Cmd.exe"), str(uproject),
-                            f"-ExecCmds=Automation RunTests {a.plugin};Quit", "-unattended", "-nullrhi", "-nopause",
+                            f"-ExecCmds=Automation RunTests {a.tests or TEST_PREFIX.get(a.plugin, a.plugin)};Quit", "-unattended", "-nullrhi", "-nopause",
                             f"-abslog={log}"], stdout=f, stderr=subprocess.STDOUT)
         t = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
         ok = len(re.findall(r"Test Completed\. Result=\{Success\}", t))

@@ -33,3 +33,7 @@ Next for R3-1 (cheap): decide with the owner if the three leftover diagnostics a
   LevelObjects 5, Parts 136, Defence 76, Link 118, Piggyback 29, SpinDrill 32, Minion 92, all 0 fail / 0 ensure. CombatGAS, InputNP,
   CombatNP, CombatDebug, CombatEditor, ExtensionTest report 0 because their tests are named `GSTNCombat.*` / `GSTNExtTest.*`, not after the
   plugin: a `--tests <prefix>` option is the next small step. Results: `Saved/Canary/all.txt`, `retry.txt`. Cost of the full run ~$1.
+- Canary `--tests <filter>` (2026-11-08): default = the plugin name, or a known prefix for the six plugins whose tests are named otherwise
+  (CombatGAS -> GSTNCombat.GAS, CombatNP -> GSTNCombat.NP, CombatDebug -> GSTNCombat.Debug, CombatEditor -> GSTNCombat.Editor, InputNP ->
+  GSTNInput.NP, ExtensionTest -> GSTNExtTest). Checked on GSTNCombatDebug alone: build ok, 17/0 (the main project runs 34 GSTNCombat.Debug
+  tests: the rest need plugins the canary does not enable, which is the point of the canary). No PERF-DEBT. Cost ~$0.5.
