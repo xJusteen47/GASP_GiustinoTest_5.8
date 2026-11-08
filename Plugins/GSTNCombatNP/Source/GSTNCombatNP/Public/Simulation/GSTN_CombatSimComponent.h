@@ -674,6 +674,11 @@ private:
 	TWeakObjectPtr<UGSTN_CombatWorldSubsystem> WorldSubsystem;
 	int32 RegisteredEntityId = INDEX_NONE;
 
+#if !UE_BUILD_SHIPPING
+	/** E17, trace only (never read by the simulation): the last frame this component simulated, so a restore can report the range it throws away */
+	int32 TraceLastFrame = INDEX_NONE;
+#endif
+
 	UPROPERTY(Transient)
 	TObjectPtr<UGSTN_HurtboxSetDefinition> ActiveHurtboxSet;
 

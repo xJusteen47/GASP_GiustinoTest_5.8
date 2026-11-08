@@ -49,6 +49,8 @@
 #include "Rules/GSTN_CombatRules.h"
 #include "Debug/GSTN_CombatDebugDraw.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
+#include "Simulation/GSTN_CombatTraceBuild.h"
+#include "Trace/GSTN_CombatTrace.h"
 #include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_LoadoutSwapLogic.h"
 #include "Loadout/GSTN_EntrySourceMask.h"
@@ -752,6 +754,27 @@ bool UGSTN_CombatSimComponent::IsCommandButtonHeld(int32 Button) const
 	return Sync && FGSTN_InputHostUtils::IsButtonHeld(Sync->Core.Input, Button);
 }
 
+#if !UE_BUILD_SHIPPING
+namespace
+{
+	/** E17: one combat event to the trace sink, if one is installed. Reads nothing of the simulation; the arguments are values the tick already holds */
+	FORCEINLINE void TraceCombatEvent(EGSTN_CombatTraceEventKind Kind, int32 EntityId, const FNetSimTimeStep& TimeStep, int32 A, int32 B)
+	{
+		if (IGSTN_CombatTraceSink* Sink = GSTNCombatTrace::GetSink())
+		{
+			FGSTN_CombatTraceEvent Event;
+			Event.EntityId = EntityId;
+			Event.Frame = TimeStep.Frame;
+			Event.Kind = Kind;
+			Event.bResimulated = TimeStep.IsResimulating;
+			Event.A = A;
+			Event.B = B;
+			Sink->OnCombatEvent(Event);
+		}
+	}
+}
+#endif
+
 void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_CombatStateTypes>& Input,
 	const TNetSimOutput<FGSTN_CombatStateTypes>& Output)
 {
@@ -867,6 +890,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 			}
 		}
 		const int32 Adopted = FGSTN_CombatTimelineLogic::Adopt(OutSync.Core, Frame, Awaiting);
+#if !UE_BUILD_SHIPPING
+		if (Adopted != INDEX_NONE)
+		{
+			TraceCombatEvent(EGSTN_CombatTraceEventKind::Adoption, RegisteredEntityId, TimeStep, Adopted, 0);
+		}
+#endif
 		if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(FrameSet, Adopted))
 		{
 			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Adopted], TimelineOutput, &HookEnvironment);
@@ -909,6 +938,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	if (!bHitstopFrame && !bFrameGateClosed)
 	{
 		RunAttackerStep(TimeStep, OutSync.Core, StepSnapshot, HookContext.HitGroupMask);
+#if !UE_BUILD_SHIPPING
+		for (const FGSTN_AttackerHit& Landed : AttackerHits)
+		{
+			TraceCombatEvent(EGSTN_CombatTraceEventKind::Hit, RegisteredEntityId, TimeStep, Landed.VictimId, Landed.HitGroup);
+		}
+#endif
 		// The hits of this frame, for the extensions' AfterExecute point (the scratch array lives on the component until the next attacker step)
 		HookContext.AttackerHits = AttackerHits;
 	}
@@ -951,11 +986,25 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		ApplyJumpRequest(Frame, Result.BindingIndex, OutSync.Core);
 	}
 
+#if !UE_BUILD_SHIPPING
+	if (Result.HasRequest())
+	{
+		TraceCombatEvent(EGSTN_CombatTraceEventKind::CommandExecuted, RegisteredEntityId, TimeStep, Result.BindingIndex,
+			FrameSet.BindingTimeline.IsValidIndex(Result.BindingIndex) ? FrameSet.BindingTimeline[Result.BindingIndex] : INDEX_NONE);
+	}
+#endif
+
 	// Step 8: a command that started a timeline ability replaces the running timeline (if any) and begins its own. The ability
 	// itself is activated by the input request of this frame, from the ability system's pre-tick
 	if (Result.HasRequest() && FrameSet.BindingTimeline.IsValidIndex(Result.BindingIndex) && FrameSet.BindingTimeline[Result.BindingIndex] == INDEX_NONE)
 	{
 		// A plain ability (a stance, a jump) that the gate let through ends the running timeline: its turn is over
+#if !UE_BUILD_SHIPPING
+		if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline)
+		{
+			TraceCombatEvent(EGSTN_CombatTraceEventKind::Cancel, RegisteredEntityId, TimeStep, OutSync.Core.ActiveTimeline, 0);
+		}
+#endif
 		FGSTN_CombatTimelineLogic::CancelForOtherCommand(OutSync.Core, Frame);
 	}
 	else if (Result.HasRequest() && FrameSet.BindingTimeline.IsValidIndex(Result.BindingIndex) && FrameSet.BindingTimeline[Result.BindingIndex] != INDEX_NONE)
@@ -1029,6 +1078,14 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
 	ProjectTimelineTags(InSync.Core, OutSync.Core, Frame);
+#if !UE_BUILD_SHIPPING
+	// E17: the one trace call of the frame, at the end of the tick; const reads of the state just written
+	if (IGSTN_CombatTraceSink* Sink = GSTNCombatTrace::GetSink())
+	{
+		Sink->OnCombatFrame(GSTNCombatTraceNP::MakeFrame(RegisteredEntityId, Frame, TimeStep.IsResimulating, OutSync.Core));
+		TraceLastFrame = Frame;
+	}
+#endif
 	ServiceSync = nullptr;
 	ServiceFrame = INDEX_NONE;
 	ServiceHookEnvironment = nullptr;
@@ -1252,6 +1309,19 @@ void UGSTN_CombatSimComponent::RestoreFrame(const FGSTN_CombatSyncState* Sync, c
 	}
 	// The restored state is the end of its latest frame; the re-simulation starts on the next one
 	Inbox.TrimFrom(Sync->Core.Input.History.GetLatestFrame() + 1);
+#if !UE_BUILD_SHIPPING
+	if (IGSTN_CombatTraceSink* Sink = GSTNCombatTrace::GetSink())
+	{
+		FGSTN_CombatTraceEvent Event;
+		Event.EntityId = RegisteredEntityId;
+		Event.Frame = Sync->Core.Input.History.GetLatestFrame();
+		Event.Kind = EGSTN_CombatTraceEventKind::Rollback;
+		Event.bResimulated = true;
+		Event.A = Sync->Core.Input.History.GetLatestFrame() + 1;
+		Event.B = TraceLastFrame;
+		Sink->OnCombatEvent(Event);
+	}
+#endif
 }
 
 bool UGSTN_CombatSimComponent::TicksOnThisMachine() const
