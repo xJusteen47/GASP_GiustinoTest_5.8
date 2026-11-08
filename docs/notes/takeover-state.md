@@ -939,3 +939,4 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 - M8 minions: G0-G12a done on the laptop (status block at the end of the G12a section of handovers/m8-minion.md); desktop items G6b/G7b/G9b/G11b/G12b left.
 - Merge to feature 2026-11-07: docs/notes/handovers/merge-feature-2026-11-07.md (section "M8 merge": branch claude/m8-merge-feature, owner pushes the tip).
 - Merge to feature 2026-11-08: docs/notes/handovers/merge-feature-2026-11-08.md (fast-forward branch claude/merge-feature-2026-11-08: FP plan/G0-G1, 50 ms buffer, trapped-minion fix, canary, E17).
+- Merge to feature 2026-11-08c: branch claude/merge-feature-2026-11-08c (fast-forward of feature 3e65cc8): P18 hurtbox openings, P15 GSTNPartsMinion interface, hit presentation grace + confirm window; handovers parts-rest.md, m8-minion.md (last section). Gate: all on 1423/0, SUITE_DEFAULT 50/50.
