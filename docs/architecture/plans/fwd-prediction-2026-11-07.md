@@ -171,3 +171,25 @@ before the server releases is the carrier's input path plus the throw timeline's
   server. FP removes hop 2's interpolation and alignment (~30-60 ms), not hop 1 (~180-220 ms, the client lead). Expected partner gap:
   ~250-300 ms -> **~200-260 ms**, about "one round trip" (decision 2). It never reaches 150 ms on the partner's screen. The bigger lever is
   hop 1 (the server input buffer, `FixedTickInputSendCount` / desired buffered input), which is not FP and is not measured yet.
+
+## G1 results (laptop, 2026-11-08): initiator target met
+
+Built on `claude/fp-g1-laptop`: `FGSTN_LinkPartnerWindow` (`GSTNLinkNP/Sim`, pure builder from the initiator's fragment, shared with G4) and the
+predicted partner presentation in `UGSTN_LinkPresentationComponent` (early TG_PrePhysics tick: the fork's montage finalize runs at
+OnWorldPreActorTick, before the mesh animates; cvar `gstn.Link.PredictPartnerPresentation`, `GetPredictedPartnerMove`,
+`OnPredictedPartnerMove`). No change to `GSTNCombatNP` or the fork. Dedicated + 2, 60/15, buffer 50 ms; ms after the initiator's tap:
+
+| Move (initiator) | Loss | Partner reaction shown on the initiator's screen (G1) | Initiator's own event | Before G1: partner shown on the initiator's screen | Partner's own screen |
+|---|---|---|---|---|---|
+| Boost (rider) | 0 % | 68 | rider leaves 141 | carrier braces 333 | 413 |
+| Boost (rider) | 2 % | 38 | rider leaves 143 | carrier braces 377 | 414 |
+| Throw (carrier) | 0 % | 246 | (server release 463) | rider released 553 | 554 |
+| Throw (carrier) | 2 % | 239 | (server release 499) | rider released 590 | 652 |
+
+- **Initiator target met**: the partner's reaction now starts on the initiator's screen with its own action (boost: 73-105 ms before
+  the rider leaves, as the move is authored; before G1 it came ~190-235 ms after). Throw: the rider's reaction shows ~310-350 ms earlier on
+  the carrier's screen. `scenario_link_pair_move_delay` and `_throw` PASS at 0 % and 2 %. The partner's own screen is unchanged (G3-G5 scope).
+- **Measured on the presentation API**, not on pixels: the test pair moves may carry no montage (only loaded ones are led). The G2 video
+  review (rule 10) must confirm the visual, including that the late synced montage does not replay the move.
+- Not covered: `scenario_link_pair_move_refused` (no cheap refusal path without editing content); a refusal decided on the partner's side
+  (its requirements fail on the server) is invisible to the initiator's fragment, so the predicted reaction plays to its end there.

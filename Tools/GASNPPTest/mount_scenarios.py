@@ -55,11 +55,13 @@ GRAB_TARGET = 'Interact.Target.Grab'
 FIRST_PLUGIN_REASON = 16
 PAIRINGS = {'client_rides_client': (1, 2), 'client_rides_host': (1, 0), 'host_rides_client': (0, 1)}
 SUITE_MOUNT = ['mount_basic', 'mount_refused', 'mount_heavy_refused', 'dismount_drop', 'mount_interact_priority', 'dismount_predicted',
-               'mounted_hit', 'throw_rider', 'boost_jump', 'mount_forced_reconcile']   # rider_attack waits for a Role.Rider attack binding: no kit has one yet (M7-06)
+               'mounted_hit', 'throw_rider', 'boost_jump', 'mount_forced_reconcile',
+               'link_pair_move_delay', 'link_pair_move_delay_throw']   # rider_attack waits for a Role.Rider attack binding: no kit has one yet (M7-06)
 PAIR_SET = 'PMS_Test_Mount'
 PAIR_MOVES = (('PM_ThrowRider', 'Combat.PairMove.ThrowRider'), ('PM_BoostJump', 'Combat.PairMove.BoostJump'))
 LOCK_MOVEMENT = 'Combat.Lock.Movement'
 SPIKE4_MS = 150.0
+PREDICT_MS = 150.0   # FP G1: the initiator sees the partner react at most this long after its own action
 _last = {'rig': None}
 
 
@@ -118,6 +120,23 @@ def restore_editor():
 
 
 # ---- rig ---------------------------------------------------------------------------------------------------------------------------------
+def predicted_move(comp):
+    """FP G1: (active, move id, timeline frame) of the predicted partner move a presentation component shows (UGSTN_LinkPresentationComponent)"""
+    r = comp.get_predicted_partner_move()
+    if isinstance(r, tuple):
+        return bool(r[0]), (int(r[1]) if len(r) > 1 else 0), (int(r[2]) if len(r) > 2 else 0)
+    return bool(r), 0, 0
+
+
+def predicted_events(wi, key):
+    """FP G1: (started, ended, dropped) counts of the predicted partner move events on pawn `key`'s presentation component of world wi"""
+    comp = ls.actor(wi, key).get_component_by_class(unreal.GSTN_LinkPresentationComponent)
+    if comp is None:
+        return (0, 0, 0)
+    ev = unreal.GSTN_LinkPredictedPartnerEvent
+    return tuple(int(comp.get_predicted_partner_event_count(e)) for e in (ev.STARTED, ev.ENDED, ev.DROPPED))
+
+
 class _MountRig:
     """Rider (world ir's player), carrier (world ic's player) and the third pawn (the other player). Samples, every editor tick, the rider's shown
     position on its own world (its parked presentation while it shows one, else its actor) and both pawns' Body link on every world"""
@@ -131,6 +150,7 @@ class _MountRig:
         self.run.at = lambda label, fn: at(label, lambda: (lambda r: (r[0], str(r[1])))(fn()))
         self.marks, self.shown, self.seen = {}, [], {wi: set() for wi in range(len(g.worlds()))}
         self.watch_from, self.first = None, {}   # spike 4: (event, world) -> first time seen after watch_from
+        self.partner_key = None   # FP G1: the pawn whose presentation component shows the predicted partner reaction (set by the scenario)
         self.kits = None
         self.handle = unreal.register_slate_post_tick_callback(self._tick)
         _last['rig'] = self
@@ -147,6 +167,10 @@ class _MountRig:
                     now = self.run.now()
                     if ('unparked', wi) not in self.first and ls.mover_mode(wi, self.rkey) != ls.LINKED_MODE:
                         self.first[('unparked', wi)] = now
+                    if self.partner_key is not None and wi > 0 and ('predicted', wi) not in self.first:
+                        comp = ls.actor(wi, self.partner_key).get_component_by_class(unreal.GSTN_LinkPresentationComponent)
+                        if comp is not None and predicted_move(comp)[0]:
+                            self.first[('predicted', wi)] = now
                     locked = ls.has_tag(wi, self.ckey, LOCK_MOVEMENT)
                     if ('braced', wi) not in self.first and locked:
                         self.first[('braced', wi)] = now
@@ -646,6 +670,102 @@ def scenario_boost_jump(pairing='client_rides_client'):
                                           f"carrier client {rig.rb_delta('pre_boost', 'boosted', rig.ic)}"))]
     steps += rig.end(t + 2.3)
     run.run(steps)
+
+
+def _pair_move_delay(name, pairing, move):
+    """FP G1: the initiator's screen against its own action, with the predicted partner presentation on (gstn.Link.PredictPartnerPresentation 1).
+    move 'boost': the rider (initiator) boost-jumps; its own event is the rider leaving on its own world, the partner is the carrier.
+    move 'throw': the carrier (initiator) throws; its own events are its tap and the rider's release on its world, the partner is the rider.
+    PASS: the predicted reaction is shown on the initiator's world no later than PREDICT_MS after its own event, and the move still completes.
+    The partner-screen numbers of spike 4 are measured as before (not gated)."""
+    rig = _MountRig(name, pairing)
+    run = rig.run
+    st = {}
+    boost = move == 'boost'
+    ini, par = (rig.ir, rig.ckey) if boost else (rig.ic, rig.rkey)
+    other = rig.ic if boost else rig.ir   # the partner's own world
+    rig.partner_key = par
+
+    def act():
+        st['z0'] = g.snap(g.worlds()[rig.ir])[rig.rkey]['location'][2]
+        st['start'] = {k: tuple(g.snap(g.worlds()[0])[k]['location']) for k in (rig.rkey, rig.ckey)}
+        rig.first.clear()
+        rig.watch_from = run.now()
+        if boost:
+            return 'rider boosts', g.combat_tap(rig.ir, g.button_mask('Jump'))
+        return 'carrier throws', g.combat_tap(rig.ic, g.button_mask('Special'))
+
+    def cvar_on():
+        unreal.SystemLibrary.execute_console_command(g.worlds()[ini], 'gstn.Link.PredictPartnerPresentation 1')
+        return 'cvar', 'gstn.Link.PredictPartnerPresentation 1'
+
+    def seen():
+        if ini == 0:
+            run.note('the initiator is the host (authority): the predicted presentation is client-only, nothing to gate')
+            return True, 'host initiator'
+        return rig.first.get(('predicted', ini)) is not None, f'{rig.first}'
+
+    def delay():
+        a, tap = rig.first.get(('predicted', ini)), rig.watch_from
+        own = rig.first.get(('unparked', ini))
+        if ini == 0:
+            return True, 'host initiator'
+        if a is None:
+            return False, f'{rig.first}'
+        run.note(f"{name}: the initiator's world showed the predicted partner reaction {(a - tap) * 1000.0:.0f} ms after its tap"
+                 + (f", {(a - own) * 1000.0:.0f} ms after its own unpark event" if own is not None else ', its own unpark event not seen'))
+        if own is None:
+            return False, f'{rig.first}'
+        d = (a - own) * 1000.0
+        # Boost: the rider's own action is the unpark (predicted, ~130 ms after the tap). Throw: the unpark is the server-given release, the
+        # prediction shows at the throw's PartnerMove key, which is not later than it
+        return d <= PREDICT_MS, f'{d:.0f} ms (threshold {PREDICT_MS:.0f} ms)'
+
+    def events():
+        s, e, d = predicted_events(ini, par)
+        run.note(f'{name}: predicted partner events on the initiator world (started, ended, dropped) = {(s, e, d)}')
+        return (ini == 0 or (s >= 1 and d == 0)), f'{(s, e, d)}'
+
+    def completed():
+        if boost:
+            zs = [p[2] for t, p, _ in rig.shown if t >= rig.watch_from]
+            top = max(zs, default=st['z0']) - st['z0']
+            run.note(f'{name}: the rider rose {top:.1f} cm above its parked height on its own screen')
+            return top >= 100.0, f'{top:.1f} cm'
+        r, c = g.snap(g.worlds()[0])[rig.rkey]['location'], st['start'][rig.ckey]
+        dist = math.dist(r[:2], c[:2])
+        return dist >= 250.0 and ls.mover_mode(0, rig.rkey) != ls.LINKED_MODE, f'rider {dist:.1f} cm from where the carrier threw (server)'
+
+    def clean():
+        held = [wi for wi in range(len(g.worlds())) if ls.has_tag(wi, rig.ckey, LOCK_MOVEMENT)]
+        return not held, f'brace lock still on {held}'
+
+    steps = [(0.2, rig.setup()), (0.3, cvar_on), (1.1, rig.clear_other())]
+    mount, t = rig.mount_steps(1.2)
+    steps += mount
+    steps += [(t + 0.3, rig.mark('pre_move')), (t + 0.35, act), (t + 1.2, rig.gone('the move ended the link on every world')),
+              (t + 1.2, run.at('the move completed (the partner part is not stuck or cut)', completed)),
+              (t + 1.2, run.at('the predicted partner reaction was shown on the initiator world', seen)),
+              (t + 1.2, run.at(f'the initiator saw the partner react within {PREDICT_MS:.0f} ms of its own action', delay)),
+              (t + 1.2, run.at('the predicted move started on the initiator world and was not dropped', events)),
+              (t + 1.2, _spike4(rig, 'unparked', ini, other, f'{move} (unparked, initiator vs partner screen)', gate=False)),
+              (t + 1.2, _spike4(rig, 'braced', 0, rig.ic, f'{move} (carrier braced, server vs carrier screen)', gate=False)),
+              (t + 2.2, rig.mark('moved')),
+              (t + 2.2, run.at('no brace lock is left on any world', clean)),
+              (t + 2.25, lambda: run.note(f"{name}: rollbacks rider client {rig.rb_delta('pre_move', 'moved', rig.ir)}, "
+                                          f"carrier client {rig.rb_delta('pre_move', 'moved', rig.ic)}"))]
+    steps += rig.end(t + 2.3)
+    run.run(steps)
+
+
+def scenario_link_pair_move_delay(pairing='client_rides_client'):
+    """FP G1, boost jump: the rider (initiator) sees the carrier brace within 150 ms of its own action (predicted partner presentation)"""
+    return _pair_move_delay('link_pair_move_delay', pairing, 'boost')
+
+
+def scenario_link_pair_move_delay_throw(pairing='client_rides_client'):
+    """FP G1, throw: the carrier (initiator) sees the rider react within 150 ms of its own release event; the wind-up before it is design time"""
+    return _pair_move_delay('link_pair_move_delay_throw', pairing, 'throw')
 
 
 def scenario_mount_forced_reconcile(pairing='client_rides_client'):

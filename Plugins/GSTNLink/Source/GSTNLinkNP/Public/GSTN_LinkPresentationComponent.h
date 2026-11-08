@@ -4,10 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Engine/EngineBaseTypes.h"
 #include "GameplayTagContainer.h"
+#include "Sim/GSTN_LinkPartnerWindow.h"
 #include "GSTN_LinkPresentationComponent.generated.h"
 
 class UAnimInstance;
+class UAnimMontage;
+class UGSTN_CombatSimComponent;
 class USceneComponent;
 struct FStreamableHandle;
 class USkeletalMeshComponent;
@@ -37,10 +41,50 @@ struct FGSTN_LinkFragment;
  *  - It also holds the collision side of a link for its owner (F15): SetCollisionIgnoredPartner, called by the link tick extension every
  *    simulated frame from the simulated link fragment (FGSTN_LinkExitCollision), never from what this machine shows. Until F15 this tick
  *    set and restored the pair's collision from the shown state, so a client restored it later than the authority (HANDOVER 61 OPEN 2).
+ *
+ * FP G1, predicted partner presentation: on the machine of the INITIATOR of a partner move (its owner is locally controlled, a client), the
+ * partner's authored reaction is shown from the initiator's own predicted fragment instead of one network round trip later (G0b: ~350 ms after
+ * the action). A second, early tick (TG_PrePhysics) builds the FGSTN_LinkPartnerWindow of the initiator's active move every frame the fragment
+ * records one, publishes the reaction on the PARTNER actor's presentation component (GetPredictedPartnerMove, OnPredictedPartnerMove) and, when the
+ * partner's timeline names a montage that is already loaded, plays it on the partner's mesh ahead of the synced copy (the "presentation lead":
+ * the instance shows the later of its position and the predicted one). Presentation only: it writes no simulation state and a misprediction
+ * snaps to the animation frame the synced state shows (accepted). cvar gstn.Link.PredictPartnerPresentation (default 1) turns it off.
  * Camera and aim consumers read GetLinkedTransform() (the project camera change approved in plan section 6 is the consumer's code; this
  * plugin exposes the transform and the bIsLinkedParked flag only).
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnShownLinkRoleChanged, FGameplayTag, OldRoleTag, FGameplayTag, NewRoleTag);
+
+/** What happened to a predicted partner move on this machine (FP G1) */
+UENUM(BlueprintType)
+enum class EGSTN_LinkPredictedPartnerEvent : uint8
+{
+	/** The partner's part began (its start frame was reached on the initiator's clock) */
+	Started,
+	/** The predicted part ran to its authored end */
+	Ended,
+	/** The initiator's record of the move vanished before the partner's part began, or an abort was seen: the presentation stopped at once */
+	Dropped
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnPredictedPartnerMove, EGSTN_LinkPredictedPartnerEvent, Event, int32, MoveId);
+
+class UGSTN_LinkPresentationComponent;
+
+/** The early tick of the predicted partner presentation: it runs after the Network Prediction finalize and before the partner's mesh animates (see TickPredictedPartner) */
+struct FGSTN_LinkPredictTickFunction : public FTickFunction
+{
+	UGSTN_LinkPresentationComponent* Target = nullptr;
+
+	virtual void ExecuteTick(float DeltaTime, ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent) override;
+	virtual FString DiagnosticMessage() override;
+	virtual FName DiagnosticContext(bool bDetailed) override;
+};
+
+template <>
+struct TStructOpsTypeTraits<FGSTN_LinkPredictTickFunction> : public TStructOpsTypeTraitsBase2<FGSTN_LinkPredictTickFunction>
+{
+	enum { WithCopy = false };
+};
 
 UCLASS(ClassGroup = (GSTN), meta = (BlueprintSpawnableComponent))
 class GSTNLINKNP_API UGSTN_LinkPresentationComponent : public UActorComponent
@@ -98,15 +142,94 @@ public:
 	/** The actor the owner's capsule ignores because of a link, or null */
 	AActor* GetCollisionIgnoredPartner() const { return IgnoredPartner.Get(); }
 
+	/**
+	 * FP G1: the predicted reaction the INITIATOR's machine publishes on this (the partner's) component, while it lasts. True from the frame the
+	 * partner's part begins on the initiator's clock; MoveId is the action provider's id, TimelineFrame the frame of the partner's timeline
+	 * (0 at its start). False when nothing is predicted for the owner on this machine
+	 */
+	UFUNCTION(BlueprintPure, Category = "Link|Presentation")
+	bool GetPredictedPartnerMove(int32& OutMoveId, int32& OutTimelineFrame) const;
+
+	/** Started, Ended and Dropped of the predicted partner move; broadcast on the partner's component and on the initiator's own */
+	UPROPERTY(BlueprintAssignable, Category = "Link|Presentation")
+	FGSTN_OnPredictedPartnerMove OnPredictedPartnerMove;
+
+	/** How many times each event fired on this component (the network test harness reads them; they never reset) */
+	UFUNCTION(BlueprintPure, Category = "Link|Presentation")
+	int32 GetPredictedPartnerEventCount(EGSTN_LinkPredictedPartnerEvent Event) const { return PredictedEventCounts[static_cast<int32>(Event)]; }
+
 	/** The component of an actor, created and registered when missing (FGSTN_LinkAttach does it on every machine) */
 	static UGSTN_LinkPresentationComponent* FindOrAdd(AActor* Owner);
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	/** The early tick function's body (FGSTN_LinkPredictTickFunction) */
+	void TickPredictedPartner(float DeltaTime);
+
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void RegisterComponentTickFunctions(bool bRegister) override;
 
 private:
+	// ---- FP G1: predicted partner presentation ----
+	enum class EPredictPhase : uint8
+	{
+		/** Nothing predicted: the one cheap test of the early tick */
+		Idle,
+		/** A window is live: the partner's part is published and its montage led */
+		Playing,
+		/** The predicted part ended: the synced copy of the montage is kept stopped until the partner's shown state is past it */
+		Suppressing
+	};
+
+	/** Starts the window of the fragment's initiator move; false (the move remembered as rejected) when it cannot be predicted */
+	bool BeginPredictedWindow(const FGSTN_LinkFragment& Fragment, UGSTN_CombatSimComponent& Combat);
+	void TickPlaying(const FGSTN_LinkFragment* Fragment, int32 LocalFrame);
+	void TickSuppressing(int32 LocalFrame);
+	/** Ends the predicted presentation of the window: Dropped stops the montage at once and goes Idle; Ended blends it out and suppresses the synced copy */
+	void FinishPredicted(EGSTN_LinkPredictedPartnerEvent Event, int32 LocalFrame);
+	/** Leads the partner's montage instance to the position of TimelineFrame (starts it once, when loaded); stops it at the montage's end */
+	void DrivePartnerMontage(int32 TimelineFrame);
+	void StopPartnerMontage(float BlendOut);
+	void ResetPredicted();
+	UAnimInstance* GetPartnerAnimInstance() const;
+	void PublishPredicted(bool bActive, int32 MoveId, int32 TimelineFrame);
+	void NotifyPredicted(EGSTN_LinkPredictedPartnerEvent Event, int32 MoveId);
+	void RemovePartnerTickPrerequisite();
+
+	FGSTN_LinkPredictTickFunction PredictTick;
+	EPredictPhase PredictPhase = EPredictPhase::Idle;
+	FGSTN_LinkPartnerWindow Window;
+	/** The move the window builder or the partner lookup refused, so the same record is not retried every tick */
+	int16 RejectedMoveId = 0;
+	int32 RejectedFrame = 0;
+	TWeakObjectPtr<UGSTN_CombatSimComponent> CachedCombat;
+	TWeakObjectPtr<AActor> PredictedPartner;
+	TWeakObjectPtr<UGSTN_LinkPresentationComponent> PredictedPartnerComp;
+	TWeakObjectPtr<USkeletalMeshComponent> PredictedPartnerMesh;
+	float PredictStepSeconds = 0.016f;
+	bool bPredictStarted = false;
+	bool bAbortSeen = false;
+	bool bPartnerSeenPlaying = false;
+	int32 PredictEndedFrame = 0;
+	/** The partner's montage: loaded asynchronously at the window start, used from the first tick it is in memory (never a synchronous load) */
+	TSoftObjectPtr<UAnimMontage> PredictMontagePath;
+	TSharedPtr<FStreamableHandle> PredictMontageHandle;
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> PredictMontage;
+	FName PredictSection = NAME_None;
+	float PredictPlayRate = 1.f;
+	float PredictSectionStart = 0.f;
+	float PredictMontageEnd = 0.f;
+	bool bMontageStarted = false;
+	bool bMontageStopped = false;
+
+	/** What this (the partner's) component shows for the predicted move */
+	bool bPredictedActive = false;
+	int32 PredictedMoveId = 0;
+	int32 PredictedTimelineFrame = 0;
+	int32 PredictedEventCounts[3] = { 0, 0, 0 };
+
 	/** Recomputes the linked transform from the shown state; true while parked. OutRoleTag = the shown role (any role, parked or not) */
 	bool UpdateLinkedTransform(FGameplayTag& OutRoleTag);
 	void AttachMesh(AActor* NewPartner);

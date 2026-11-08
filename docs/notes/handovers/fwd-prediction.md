@@ -46,3 +46,21 @@
 - Tooling (not versioned): `Saved/FPG0/hops.ps1`, driver hook `_spike4_hops`, `FP_NAMES` env.
 - PERF-DEBT: none new (the plan's §7 lists the expected debt; 50 ms buffer stalls to recheck on the desktop).
 - Cost: ~$2 (6 harness runs, my context ~+20k). FP total so far ~$9.
+
+## FP G1 (laptop, 2026-11-08): predicted partner presentation DONE, initiator target met, gate green
+
+- Branch `claude/fp-g1-laptop` from ba0330b. Sonnet writer (`Saved/FPG1/writer-brief.md`, `writer-report.md`); window design mine (Opus).
+- New: `FGSTN_LinkPartnerWindow` + `BuildFromInitiator` (pure, for G4) and `FGSTN_LinkPartnerPlayback` rules; the presentation component
+  publishes the predicted reaction on the partner (`GetPredictedPartnerMove`, `OnPredictedPartnerMove` Started/Ended/Dropped), leads the
+  partner's synced montage (max position, stopped at its end until the shown state passes the window), snaps on Dropped.
+  Tick finding: the montage finalize runs at OnWorldPreActorTick, so the driver ticks in TG_PrePhysics before the partner mesh.
+- Gate: all on 1403/0 (+5 `GSTNLink.NP.PartnerWindow.*`), GSTNMinion off 1312/0, GSTNPlatform+Parts off 1381/0, 0 ensures.
+- SUITE_MOUNT (with the new `link_pair_move_delay`, `_throw`): 0 % 12/12. 2 %: 9/12 first run (dismount_drop, dismount_predicted,
+  throw_rider red); rerun of those three at 2 %: all PASS with the presentation on, and dismount_predicted FAIL with it off, so this is the known
+  2 % mount flakiness, not G1. SUITE_LINK (link_scenarios) not run: G1 touches only the presentation component (no simulation path).
+- Results in the plan, "G1 results": the partner reaction now shows on the initiator's screen with its own action (boost 38-68 ms after the tap, before 333-377).
+- Open: no `scenario_link_pair_move_refused` (no cheap refusal path); partner-side refusals are invisible to the initiator (the predicted
+  montage plays out); the visual (montage lead and suppression) needs the G2 video, since the test moves may carry no montage.
+- PERF-DEBT (also in perf-debt.md): a second tick function per presentation component (an early-out bool when no move is active); the window
+  is rebuilt each tick while a move is active (a registry lookup), so caching it per move id is the cheaper alternative.
+- Cost: ~$8 (writer ~240k tokens / 70 tool calls; my context ~+35k; 4 builds incl. 2 off configs, 3 gate runs, 4 harness runs).

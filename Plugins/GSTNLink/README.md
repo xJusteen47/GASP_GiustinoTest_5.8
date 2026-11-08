@@ -204,9 +204,15 @@ fragment, the inbox kinds, the watchdog), which stays C++.
 | `LinkTypeDirectories` | Content folders, besides the plugin's own, scanned for link type definitions (empty). Read when the asset manager is created. |
 | `CommandTiers` | Command tiers this plugin adds to the input settings at startup (source `GSTNLink`, removed at shutdown): `Command.Link` = 360, above the attack and strong tiers. |
 
+## Predicted partner presentation (FP G1)
+
+On the machine of the INITIATOR of a partner move (a client whose owner is locally controlled), the partner's authored reaction is shown from the initiator's own predicted fragment, about one network round trip earlier than the synced copy. `FGSTN_LinkPartnerWindow::BuildFromInitiator` (`Sim/GSTN_LinkPartnerWindow.h`, pure, deterministic) derives the window from the fragment's active move: start = S + max(PartnerStartOffsetFrames, 1), end = start + the partner timeline's TotalFrames (else MaxDurationFrames). G4 reuses the same window to promote the partner to forward prediction. The presentation component ticks an early function (TG_PrePhysics, after the Network Prediction finalize) that publishes the reaction on the partner's component (`GetPredictedPartnerMove`, `OnPredictedPartnerMove` Started / Ended / Dropped) and, when the partner timeline's montage is already loaded, leads it on the partner's mesh (the instance shows the later of its position and the predicted one; at the montage's end it is stopped and the late synced copy is kept off until the partner's shown state is past the move). A vanished initiator record before the partner's start, or an abort, drops it at once (a snap). Presentation only, no simulation state. cvar `gstn.Link.PredictPartnerPresentation` (default 1); never on a dedicated server, on the partner's own machine or on a listen host. Harness: `scenario_link_pair_move_delay` and `scenario_link_pair_move_delay_throw` in `Tools/GASNPPTest/mount_scenarios.py` (in `SUITE_MOUNT`).
+
 ## Tests
 
 `GSTNLink.Core.*`: `Tags.*`, `Data.*` (F5a); `State.*`, `Mash.*`, `Break.*`, `Placer.*`, `Rule.Grab.*`, `Rule.Latch.*`, `FakeHost.*` (F5b). They run with only this plugin and `GSTNCombatCore` loaded: no GAS, no NP, no world.
+
+`GSTNLink.NP.PartnerWindow.*` (FP G1): the window builder on fake fragments and an action table, and the pure playback rules.
 
 `GSTNLink.GAS.*` (F9): `Registry.{IndicesStableAcrossLoadOrder, UnknownTagSkipped, ReasonTableAppend}`,
 `Interact.{ProviderFiltersUngrabbable, OneTargetTagPerFrame}`, `Anim.LayerByRole`. No world: registries are fresh objects, definitions
