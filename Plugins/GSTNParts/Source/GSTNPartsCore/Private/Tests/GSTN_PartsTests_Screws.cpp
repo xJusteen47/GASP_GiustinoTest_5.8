@@ -296,19 +296,12 @@ bool FGSTN_PartsScrewHeldIgnoresTest::RunTest(const FString& Parameters)
 	Apply(Parts, State, TurnHit(ScrewB, -1, 1));
 	TestTrue(TEXT("the screws take the plate off whatever its hardness and cap"), State.IsBroken(Plate));
 
-	// A held plate with a cap cannot be broken by damage while a screw is in: its byte stops one below the cap
+	// Owner decision (2026-11-08): a held plate with a cap still breaks from damage, screws in or not (whichever comes first)
 	Parts = MakeParts(EGSTN_HeldByRule::AllBroken, 10.f);
 	FGSTN_PartsState Capped;
 	const FGSTN_PartHitResult Hit = Apply(Parts, Capped, GSTNPartsTest::Hit(100000.f, Plate, 15));
-	TestFalse(TEXT("damage does not break a held plate"), Capped.IsBroken(Plate) || Hit.NewlyBrokenMask != 0);
-	TestEqual(TEXT("its byte waits one below the cap"), static_cast<int32>(Capped.PartDamage[Plate]), 254);
-
-	// Once the holders are out it takes damage like any part
-	Capped.PartDamage[ScrewA] = 255;
-	Capped.PartDamage[ScrewB] = 255;
-	Capped.BrokenMask = static_cast<uint16>((1u << ScrewA) | (1u << ScrewB));
-	Apply(Parts, Capped, GSTNPartsTest::Hit(100000.f, Plate, 15));
-	TestTrue(TEXT("with the screws out a hit breaks it"), Capped.IsBroken(Plate));
+	TestTrue(TEXT("damage breaks a held plate with a cap"), Capped.IsBroken(Plate) && (Hit.NewlyBrokenMask & (1u << Plate)) != 0);
+	TestFalse(TEXT("the screws stay in"), Capped.IsBroken(ScrewA) || Capped.IsBroken(ScrewB));
 	return true;
 }
 

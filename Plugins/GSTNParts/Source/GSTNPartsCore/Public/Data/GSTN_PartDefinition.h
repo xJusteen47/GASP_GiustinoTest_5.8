@@ -250,9 +250,10 @@ struct GSTNPARTSCORE_API FGSTN_PartDefinition
 	FGSTN_PartScrewRule Screw;
 
 	/**
-	 * Names of the parts that hold this one (screws, a latch). While HeldByRule is not met the part cannot break from damage (its byte stops
-	 * one below the cap); the moment it is met, in the same pass that breaks children, the part breaks whatever its Hardness and even with a
-	 * PartCap of 0 or less (an unbreakable plate), running its own OnBreak. Empty = held by nothing. ParentIndex stays the part's own parent
+	 * Names of the parts that hold this one (screws, a latch). The part comes off when HeldByRule is met OR when its own damage breaks it,
+	 * whichever comes first (owner, 2026-11-08: make an indestructible plate with its data, Hardness / PartCap <= 0). When the rule is met, in
+	 * the same pass that breaks children, the part breaks whatever its Hardness and even with a PartCap of 0 or less, running its own OnBreak.
+	 * Empty = held by nothing. ParentIndex stays the part's own parent
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Screw")
 	TArray<FName> HeldBy;

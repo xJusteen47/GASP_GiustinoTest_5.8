@@ -126,8 +126,8 @@ so the attacker's ricochet prediction stays exact. The minion attacker path (`GS
 1..255, `bOppositeTightens`) and the plate it holds lists it in `HeldBy` with `HeldByRule` `AllBroken` or `AnyBroken`. A hit turns a screw only through
 `FGSTN_HitData::TurnSense` / `TurnSteps` (`Hit|Screw`, default 0 = turns nothing): the sense equal to `LoosenSense` adds `ceil(255 x steps / TurnsToRelease)` to the
 screw's existing damage byte, the opposite sense subtracts it (floor 0) when it tightens, and at 255 the screw breaks like any part. Turning ignores hardness,
-the cap and the damage scales; the screw's `Hardness` still decides ricochets, and ordinary damage never moves its byte. A held part cannot break from damage
-while its rule is unmet (its byte stops at 254); the moment it is met, in the same hit and the same pass that breaks children (`UGSTN_PartMath::ApplyHit`, in waves,
+the cap and the damage scales; the screw's `Hardness` still decides ricochets, and ordinary damage never moves its byte. A held part comes off when its rule is met
+OR when its own damage breaks it, whichever comes first (an indestructible plate is made with its data: top hardness, `PartCap <= 0`); the moment the rule is met, in the same hit and the same pass that breaks children (`UGSTN_PartMath::ApplyHit`, in waves,
 bounded by the part count), it breaks whatever its hardness and even with `PartCap <= 0`, running its own `OnBreak`. No new fragment bytes, and the minion step
 (`UGSTN_HitStep_PartResolveMinion`) runs the same math on the minion row's 8 damage bytes, so minion sets may carry screws (`TurnsToRelease = 1` is a one-hit
 screw). The validator rejects a loosen sense other than -1/+1, `TurnsToRelease` outside 1..255, an unknown, empty or self `HeldBy` name and a cycle through

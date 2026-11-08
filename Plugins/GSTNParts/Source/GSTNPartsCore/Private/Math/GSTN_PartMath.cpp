@@ -255,11 +255,8 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 			PartDelta = ((Damage * PartScale) * NonNegative(Hit.PartDamageScale)) * NonNegative(Part.PartDamageScale);
 			After = AddDamage(Before, PartDelta, Part.PartCap);
 		}
-		if (After >= DamageAtCap && Before < DamageAtCap && !Part.HeldBy.IsEmpty() && !HeldByReleased(Parts, Num, State.BrokenMask, Part))
-		{
-			// Held by other parts: the byte stops one below the cap, only the holders (or a broken parent) take it off
-			After = static_cast<uint8>(DamageAtCap - 1);
-		}
+		// Held by other parts (owner, 2026-11-08): the part comes off when its holders are out OR when its own damage reaches the cap, whichever
+		// comes first. A plate that must survive any damage is made so by its data (hardness band, PartCap <= 0), not by the hold
 		if (After != Before)
 		{
 			State.PartDamage[PartIndex] = After;
