@@ -3,7 +3,7 @@
 Minions for the GSTN combat: 40+ awake enemies on one host, simulated as data in a store instead of one actor each
 ([combat-m8-minions.md](../../docs/architecture/combat-m8-minions.md), [plan](../../docs/architecture/plans/m8-minion.md)).
 
-Status: **experimental (0.1)**, `EnabledByDefault: false`. Built by M8 checkpoint **G2** (skeleton and pure Core). Enabling it
+Status: **experimental (0.1)**, `EnabledByDefault: false`. Built through M8 checkpoint **G12a**; the desktop items G6b, G7b, G9b and G11b are open (see Known limits). Enabling it
 changes nothing until a level spawns minions; nothing in the other plugins knows it (`Tools/Modules/check_modules.py` enforces it).
 
 ## Modules
@@ -11,9 +11,9 @@ changes nothing until a level spawns minions; nothing in the other plugins knows
 | Module | Type | State | What it is |
 |---|---|---|---|
 | `GSTNMinionCore` | Runtime | **G2** | Pure: no world, no actors, no GAS, no Network Prediction. Tags, store and handles, intent, LOD logic, phase scheduler, attack tokens, net item codec, definition asset. |
-| `GSTNMinionRuntime` | Runtime | empty shell | Batch subsystem, actors, presentation, spawner, brain hook (G3 and later). |
-| `GSTNMinionEditor` | Editor | empty shell | Definition and registry validators, wave details (G12). |
-| `GSTNMinionTests` | Developer | empty shell | Tests that need a world and harness helpers (`GSTNMinion.Runtime.*`, G3 and later). |
+| `GSTNMinionRuntime` | Runtime | **G3 to G12a** | Batch subsystem, pooled actors, presentation, spawner, brain subsystem, bridge seams. |
+| `GSTNMinionEditor` | Editor | **G12a** | Definition and registry validators, wave validator (Data Validation). |
+| `GSTNMinionTests` | Developer | **G12a** | Tests that need a world and harness helpers (`GSTNMinion.Runtime.*`). |
 
 ## What G2 contains (`GSTNMinionCore`)
 
@@ -114,9 +114,31 @@ Native: see `GSTN_MinionTags.h`. Designer vocabulary (ini only) is in `Config/Ta
 
 ## Dependencies
 
-- Plugins: `GSTNCombat` (`GSTNCombatCore`: entity ids, hurtbox set and timeline assets), `GSTNCombatNP`, `GSTNCore`.
+- Plugins: `GSTNCombat` (`GSTNCombatCore`: entity ids, hurtbox set and timeline assets), `GSTNCombatNP`, `GSTNCore`, and `StateTree` (the brain).
 - `GSTNMinionCore` lists engine modules, `GSTNCombatCore` and `GSTNCore` only; never GAS, NP, Mover, an Editor module or a sibling minion module.
+- Fork patch: the post-fixed-tick hook is a GAS-NPP fork change, `OnPostFixedTick(ServerFrame, EndTimeMS, bResimulating)`. It is inert while nothing is bound; `PostToInbox` takes a generation and `FindEntity` returns `FGSTN_FoundEntity`.
 - Nothing requires `GSTNMinion`. No `/Game/` path and no `ConstructorHelpers` anywhere in `Source`.
+
+## Behaviour notes
+
+- **Batch (G3).** The batch runs its stages in order: 0 spawn queue (`gstn.Minion.SpawnsPerFrame`, default 4), 1 LOD, 2 drain, 3 timeline, 4 movement, 5 publish. Actors come from a pool (`AGSTN_MinionActor`). The subsystem activates only when NetMode is not Client.
+- **Net item (G2, G6a).** The minimal item is 119 bits (the spec estimated about 121). The item type is sent on every update (9 bits), not only on add, because a type on add needs a per-connection baseline. Generation 0 is the null handle; generations wrap from 65535 to 1.
+- **Attack tokens.** "Token holder" is approximated as "a member running a move".
+- **Hit flow (X4).** A minion victim is rewound from the world subsystem's history ring through the provider snapshot; the fighters use the same ring, there is no second one.
+- **Brain (G8).** Each brained slot runs one `FStateTreeExecutionContext`, driven by `UGSTN_MinionBrainSubsystem`; there is no `UStateTreeComponent` per actor. The brain's tier rates are cvars, not the LOD batch intervals.
+- **Promotion (G9a).** The promoted fighter gets no GAS attribute write: its health fraction sits on `UGSTN_MinionPromotedComponent` and the kit applies it (G9b). `Event_MinionPromoted` is only logged.
+- **Host cap (G11a).** `gstn.Minion.MaxActiveT0` (default 48) replaces the per-definition `MaxActiveCombat`, which nothing reads now.
+- **Store (G12a).** The default capacity is 160; a single wave stays capped at 128. There is no registry asset: the type table is filled in first-spawn order and checked by hash, so the registry rule is a function run over a wave's types.
+
+## Known limits
+
+- **Movement.** Spike 3 picked backend B (lightweight sweep and slide). No Mover backend is built, and the course is built in code, not as `L_MinionCourse`. A minion can still get trapped at the side face of the stair block (open; robustness is not at zero failures).
+- **Rewind cost.** A cheap candidate query exists but is not wired into GSTNCombatNP, so the rewind cost still grows with N. Meter gain on minion victims is skipped.
+- **Net rate.** `MaxRelevantPerClient` is a cvar. The push-model ini and the bake-off (G6b) are not done.
+- **Presentation (G7a).** The Animation Budget Allocator is skipped (plugin not enabled). `UGSTN_HitPresentationComponent` cannot present minion victims, so the attacker's hit pause and local cue do not play on minion hits; that needs a GSTNCombatNP hook, which X4 forbids. The player-to-minion bench scenarios need `gstn.Minion.Bench.HurtboxSet` and a swinger kit. Client puppets overshoot the server path at Far and Dormant (interpolator extrapolation; open).
+- **Host budget.** A demoted T0 slot is pulled back by the stepper: perf debt, not measured.
+- **Net format (G10).** `FGSTN_MinionNetFormat::ExtTypes` is filled process-wide, so a pack decoded before the registry fills it uses the wrong table. Open for P16 (see GSTNPartsMinion).
+- **Desktop items open:** G6b, G7b, G9b, G11b; the horde and bytes numbers are laptop numbers (`-nullrhi`), provisional.
 
 ## Tests
 

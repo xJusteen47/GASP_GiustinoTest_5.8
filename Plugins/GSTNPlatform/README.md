@@ -157,6 +157,14 @@ PIE network scenario `scenario_surface_wallslide_enemy`: `python Tools/GASNPPTes
 host + 1 client, map `L_WallSlideAB`, the fighter spawned by the driver; `--loss 2`, `--subjects client|host`, `--repeats N`). Table in
 `Saved/Metrics/surface-scenarios-summary.md`.
 
+## Behaviour notes
+
+- **Mask for a past frame.** `SetShapeMaskAtFrame(EnabledShapes, DisableAs, Frame)` applies a mask to a frame the pose history still
+  holds. The parts bridge uses it, so a break that the host replicated for frame F lands on F, not on the frame it arrived.
+- **Shape fields (spec deviation, T3).** `FGSTN_PlatformShape` has no `bIgnoreBaseRotation` or `bImpartVelocityOnLeave`: they are not in
+  the spec, and the pawn modes own those settings. `MaxSpeedWhileOccupied` and `BraceTimelineOnMount` are on `FGSTN_OccupantResponse`
+  (data only).
+
 ## Known limits (v0.1)
 
 - **Leaving a shape gives no base velocity yet.** The colliders are teleported, so `GetPhysicsLinearVelocityAtPoint` is zero:
@@ -169,8 +177,10 @@ host + 1 client, map `L_WallSlideAB`, the fighter spawned by the driver; `--loss
   (traversal-surfaces.md §7). Only approach C (scripted) is exact on clients.
 - Convex shapes are not supported (Stand needs a Box). Occupancy (`OnOccupantChanged`, the AI limiter, the brace) is data only.
 - The wall entry's same-wall policy compares world heights, meaningless on a moving base: re-grabbing the same shape can be refused
-  on one machine and not on the other (the scenario resets the wall memory before each grab). T2's `UGSTN_SurfaceWallEntryTransition`
-  fixes it.
+  on one machine and not on the other (the scenario resets the wall memory before each grab). The fix is in the wall movement, not in
+  this plugin: the surface-driven transitions set `bInferModeChangeLostToRollback` and `bBaseRelativeHeightCap`, and a memory without a
+  wall frame on a moving wall falls back to cooldown only. Two or more lost mode changes inside one rollback window are not recovered.
+- The presentation component (traversal-surfaces.md §8) is not built.
 
 ## Changelog
 

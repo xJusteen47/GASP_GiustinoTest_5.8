@@ -223,6 +223,10 @@
 		{
 			"Name": "GSTNMinion",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNPartsMinion",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

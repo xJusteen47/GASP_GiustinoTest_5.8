@@ -1,5 +1,7 @@
 # Traversal surfaces: doc deltas found while implementing (to fold into the specs at T9)
 
+Folded into the plugin READMEs on 2026-11-08; this note is kept as history.
+
 Collected per the plan's rule (one docs commit at T9). Each line: where, what changed against the spec, why.
 
 ## T1 `GSTNSurfaceCore` (2026-10-23, desktop branch `claude/project-thread-v1plhd`)

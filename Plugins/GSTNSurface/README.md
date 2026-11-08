@@ -8,7 +8,7 @@ impacts and the platforms read surfaces without knowing what they hit.
 Status: **experimental (0.1)**, `EnabledByDefault: false`. This is checkpoint T1 of
 [traversal-surfaces-plan.md](../../docs/architecture/plans/traversal-surfaces-plan.md); the design is
 [traversal-surfaces.md](../../docs/architecture/traversal-surfaces.md) (§2 data model, §3 plugin placement). The wall-surface filter
-(T5) is built: the project's wall movement reads this plugin. The other consumers (platform shapes T3, launch T4, H11 impacts) are not built yet. Enabling the plugin changes nothing
+(T5) is built: the project's wall movement reads this plugin. The platform shapes (T3, `GSTNPlatform`) and the trampoline (`GSTNLevelObjects`) read it too; the T4 launch work is not built yet. Enabling the plugin changes nothing
 until a designer marks a surface: unmarked geometry resolves to the settings' default, which offers everything the wall and
 walking modes did before.
 
@@ -28,8 +28,9 @@ changes; in the running game the type indices are frozen by that first bake (see
 - Plugins: none.
 - `GSTNSurfaceCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags, PhysicsCore, DeveloperSettings; private
   Projects (to find the plugin's own folder), NetCore (the join check closes a connection).
-- Planned dependents (traversal-surfaces.md §3, each edge Core -> Core): `GSTNCombatCore` (H11/H11b impacts and launch params),
-  the wall movement (T5 surface filter, private; built: the project module depends on it today), `GSTNPlatformCore` (T3 shapes), `GSTNLevelObjects` (H11b trampoline).
+- Dependents (traversal-surfaces.md §3, each edge Core -> Core): `GSTNCombatCore` (H11/H11b impacts and launch params, planned),
+  the wall movement (T5 surface filter, private; built: the project module depends on it today), `GSTNPlatformCore` (T3 shapes, built),
+  `GSTNLevelObjects` (H11b trampoline, built).
 
 ## Gameplay tags
 
@@ -78,7 +79,9 @@ the option). A listen server's own player and a standalone game have no connecti
 
 An empty `SurfaceType` falls back to the material table's type, then the default's. `SurfaceVelocity` comes from the provider
 whenever there is one (it is a fact of the pose, not configuration); without a provider it is zero, because the resolution never
-reads a live component's velocity. `bMoving` is the collider's mobility.
+reads a live component's velocity. `bMoving` is the collider's mobility. `FGSTN_SurfaceView::Source` (`EGSTN_SurfaceSource`: Component,
+Provider, PhysicalMaterial, Default) names the step that answered. `ResolveComponent(Component, BoneName)` takes the bone or body name
+used to find the physical material.
 
 Rollback: everything read is static configuration or what a provider answers from replicated state, so a resimulated frame
 resolves the same surface. Providers must answer from static data or confirmed state only, and write nothing. `GetTable()` never
@@ -113,8 +116,36 @@ its own leaves in its own `Config/Tags` ini and its own table entries in its `De
 `ResolveOrderComponentBeforeProviderBeforeMaterial`, `DefaultPassesEverything`, `PerComponentOverride`,
 `TypeFallbackAndProviderVelocity`, `LaunchParamsValidated`, `LaunchDirectionAndSpeedModes`, `MaterialTableBaked`,
 `NoRuntimeWriteInBlueprint`, `TypeTableChecksum`, `FrozenTypeTableKeepsIndices`, `GetTableNeverLoadsAssets` (reports a warning when it finds no unloaded engine asset to prove the point, instead of passing silently), `EmptyTypeTableIsNeverFrozen`, `JoinCheckComparesChecksums`, `SeveralSurfaceComponentsPickLowestName`. The wall filter built on
-this plugin is tested in the project module (`GSTNMovement.Wall.Filter.*`). The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is not run yet: the
-canary script does not exist.
+this plugin is tested in the project module (`GSTNMovement.Wall.Filter.*`). Test worlds that call a `BlueprintNativeEvent` on an actor
+provider must initialise the actors first (`UWorld::InitializeActorsForPlay`): `ProcessEvent` ignores the call before that. The canary
+build (plugin alone in a blank project, modularity §3.7 rule 7) is `Tools/Canary/make_canary.py`; no run is recorded yet.
+
+## Behaviour notes
+
+- **Launch defaults** (`FGSTN_SurfaceLaunchParams`, tunable proposal values): Speed 1500, Restitution 1, MinSpeed 800, MaxSpeed 3000,
+  `bKeepTangentialVelocity` and `bResetAirJumps` on, `bResetCoyote` off, `bAddSurfaceVelocity` on. Tilt is spherical about the surface's
+  local up: `TiltPitch` leans away from it, `TiltYaw` turns from local +X towards local +Y.
+- **Wall filter (T5).** `SurfaceFilter` sits on the wall modes ("Wall|Surface Detection") and on the entry transition ("Wall Entry|Detection").
+  Both are empty by default and must be set in both places. An empty query passes before anything is resolved. A surface with
+  `Source == Default` answers `bUnknownSurfacesPass`. The filter runs after the hit's own angle test and before the edge-contact trace;
+  the entry transition also applies it to the capsule-height confirmation trace, so a forbidden surface under the capsule centre does
+  not re-grab every tick. Corner, lookahead and wrap checks go through the same check (`IsHitOnValidWall`).
+- **Filter cost.** Nothing is cached. One resolve runs per probe hit that passes the angle test, and only for modes with a non-empty query.
+  Measure with the Slate profiler before adding a per-call memo.
+- **Filter Blueprint step.** Setting `RequiredBehaviours` on the slide and climb modes and their Falling transitions in the shared
+  `SandboxCharacter_Mover` is a separate Blueprint step. Until those rows are set, the filter changes nothing in play.
+- **Entry transition tests.** `SweepForWall` is protected and needs a tick context, so the transition is covered by the shared check and
+  the PIE scenario `scenario_surface_nowallslide`, not by a unit test.
+- **Packaging.** Staging of a plugin's `Config/Tags` in a packaged build is not verified.
+
+## Known limits
+
+- `bUnknownSurfacesPass = false` has no effect while the filter query is empty, and it bypasses a customised `UGSTN_SurfaceSettings::Default`.
+- `Resolve` also computes velocity and launch for a yes/no filter question. Measure before adding a `ResolveBehaviours`.
+- The project module links `GSTNSurfaceCore`, so the project does not build without this plugin. The spec's "builds without GSTNSurface"
+  criterion (§9) is not met yet; the filter would have to sit behind an interface or in an optional module.
+- The join check is not wired in this project. The game must send the option before `bRequireJoinChecksum` is turned on.
+- The warning that a `Stand` surface must sit on a walkable face is not implemented in `IsDataValid`.
 
 ## Changelog
 

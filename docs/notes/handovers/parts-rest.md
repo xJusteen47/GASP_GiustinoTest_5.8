@@ -87,3 +87,15 @@
 - Not done: SUITE_MINION 2 % x3 with the plugin on (pointless while (1) fails). To reach 2 us: precompute per-hurtbox part index + band in the
   cache so the step is array reads, and/or skip GetDamageProgress for minions (estimate ~0.5-0.8 us); codec presence bit for bytes.
 - Cost: ~$5 (writer ~200k tokens; 2 trial builds, 1 test run, 2 bench runs).
+
+## P16-C close (laptop, 2026-11-08): GSTNPartsMinion ENABLED in the .uproject
+
+- Coordinator decision: 2.75 us per part hit accepted for now (owner's rule: prototype first). PERF-DEBT kept: per-hurtbox part index + band
+  precomputed in the cache (~0.5-0.8 us); 1-bit presence flag in the minion codec (bytes floor +6.7 %).
+- SUITE_MINION 2 % x3 with the plugin on (dedicated + 2, 60/15): run 1 9/11 (lagcomp: no swing, lod known), run 2 10/11, run 3 10/11 (lod
+  known only). Plugin-off reference today: 9/11. Never worse -> enabled.
+- Headless all on with the plugin enabled: 1432/0, 0 ensures. Off-config gates not rerun (only the .uproject entry and docs changed since the
+  P16-C gate).
+- Docs: m8-doc-deltas.md and traversal-doc-deltas.md folded into the READMEs of GSTNMinion, GSTNPartsMinion, GSTNSurface, GSTNPlatform,
+  GSTNPlatformParts (Haiku; the notes are kept as history with a header line).
+- Cost: ~$3 (3 SUITE_MINION runs, 1 test run, doc fold).
