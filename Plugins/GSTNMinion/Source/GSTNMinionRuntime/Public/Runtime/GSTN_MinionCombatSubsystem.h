@@ -332,6 +332,24 @@ public:
 	DECLARE_MULTICAST_DELEGATE_FourParams(FOnMinionOutcomeApplied, const FGSTN_MinionHandle& /*Minion*/, const FGSTN_HitInboxEntry& /*Hit*/, const FGSTN_HitContextView& /*Resolved*/, int32 /*Frame*/);
 	FOnMinionOutcomeApplied OnOutcomeApplied;
 
+	/**
+	 * Victim view seam (G10b, M4b P16): called at the end of every minion victim view (the drain's ApplyHit and BuildVictimView) so a
+	 * bridge can point the view's snapshot extension slots at data of its own (the parts bridge: an FGSTN_PartsSnapshotExt built from its
+	 * store columns, read by the extra victim step). The pointed data must stay valid until the next view of that slot. Called from const
+	 * code inside stage 2: the listener writes the view and its own data only. Unbound (the default): the view is unchanged
+	 */
+	DECLARE_DELEGATE_TwoParams(FMinionVictimViewExtension, int32 /*Slot*/, FGSTN_HitVictimView& /*View*/);
+	FMinionVictimViewExtension VictimViewExtension;
+
+	/**
+	 * Outcome seam (G10b, M4b P16): called once per applied hit, after the store took the damage and before the death test, with the
+	 * resolved context (no copy). The bridge applies the outcome extensions to its own per-minion data (the parts row) and returns true when
+	 * the outcome must kill the minion whatever its health (a lethal part broke): the normal death path then runs with Health set to 0.
+	 * Called inside stage 2: the listener reads the context and writes its own data only. Unbound (the default): never kills, costs one test
+	 */
+	DECLARE_DELEGATE_RetVal_ThreeParams(bool, FMinionApplyOutcomeExtensions, const FGSTN_MinionHandle& /*Minion*/, const FGSTN_HitResolutionContext& /*Context*/, int32 /*Frame*/);
+	FMinionApplyOutcomeExtensions ApplyOutcomeExtensions;
+
 	/** The victim view the pipeline reads for a live minion at Frame (the store as it is now): kind tag, health fraction, weight, hurt state */
 	bool BuildVictimView(const FGSTN_MinionHandle& Handle, int32 Frame, FGSTN_HitVictimView& OutView) const;
 

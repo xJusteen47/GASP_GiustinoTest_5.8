@@ -1,4 +1,4 @@
-// Bridge between parts and minions (plan P15: interface only).
+// Bridge between parts and minions (plan P15 interface, P16 hit flow).
 
 #pragma once
 

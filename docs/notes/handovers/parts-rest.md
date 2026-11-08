@@ -33,3 +33,18 @@
 - PERF-DEBT (also in perf-debt.md): at 160 minions the part state is 9 B x 160 = 1.4 KB of store; wire = the G10 ext byte only for
   part-bearing types and only on change; per-hit step cost to measure in P16 against the 2 us budget.
 - Cost: ~$4 (writer ~153k tokens / 23 tool calls; 3 builds, 3 test runs, 1 canary).
+
+## P16 sub-gate A (laptop, 2026-11-08): minion part state + hit flow DONE, gate green; B (wire, promotion, scenario) next
+
+- Branch `claude/p16-parts-minion-laptop` from ceeed86c. Opus writer (medium), brief `Saved/P16/brief-a.md`, report `Saved/P16/report-a.md`.
+- Bridge `GSTNPartsMinion` (still disabled in the .uproject): `UGSTN_PartsMinionSubsystem` (9 B row per slot + type byte + generation; columns
+  sized at the first part-bearing activation, slot reset on activate, freed slots guarded by generation), `UGSTN_HitStep_PartResolveMinion`
+  (in the minion rules' extra victim step slot; runs the fighter part math on the store row, no GE, no fragment), `UGSTN_PartsMinionSettings`
+  (type tag -> extension) and `RegisterDefinition` at run time. A broken part kills only if it is in LethalParts (head loss keeps fighting).
+- GSTNMinion: 2 additive seams, inert unbound: `VictimViewExtension` (end of MakeMinionView) and `ApplyOutcomeExtensions` (bool delegate before
+  the death test; true = health 0 + normal death path).
+- Gate main project: all on 1423/0, GSTNMinion off 1330/0, GSTNPlatform+Parts off 1401/0, 0 ensures. Canary `GSTNPartsMinion --tests GSTNParts`:
+  builds alone, 153/0 incl. `GSTNParts.Minion.{StoreOutcomeNoGE, HeadLossKeepsFighting, LethalPartKills, NoExtensionNoCost, ResetOnFree}`.
+- Doubts (report): HealthWeight is re-run to divide its scale out; the bridge takes the single extra step slot; Launch/Stagger part effects left to B.
+- PERF-DEBT (in the bridge README): 160 minions x (9 + 1 + 4) B columns ~2.2 KB; per hit: one row read/write + the fighter part step (to measure in B).
+- Cost: ~$7 (Opus writer ~238k tokens / 74 tool calls; 3 main builds incl. 2 off configs, 3 test runs, 1 canary).

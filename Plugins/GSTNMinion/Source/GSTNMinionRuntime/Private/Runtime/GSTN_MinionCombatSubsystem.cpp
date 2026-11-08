@@ -715,7 +715,7 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 	Flags |= Out.bInHitstop ? GSTNVictimReactionFlags::InHitstop : 0;
 	const double WeightScale = FGSTN_CombatVictim::ComputeWeightScale(CombatRules, Set, KnockbackPercent[Slot], Out.HealthFraction);
 	Out.Reaction = FGSTN_VictimReactionState::Make(KnockbackPercent[Slot], WeightScale, Flags, Threshold);
-	// No snapshot contributor runs for minions (no fragments, no parts code here): the parts bridge (M4b P16) uses the step slot and the store hook
+	// No snapshot contributor runs for minions (no fragments, no parts code here): the parts bridge (M4b P16) uses the step slot, the victim view seam and the outcome seam
 	return true;
 }
 
@@ -740,6 +740,8 @@ FGSTN_HitVictimView UGSTN_MinionCombatSubsystem::MakeMinionView(int32 Slot, cons
 	{
 		View.StateTags.AddTag(StateTag);
 	}
+	// Bridge seam (G10b): a bridge's snapshot extension (the parts row of GSTNPartsMinion); inert while unbound
+	VictimViewExtension.ExecuteIfBound(Slot, View);
 	return View;
 }
 
@@ -1308,6 +1310,13 @@ void UGSTN_MinionCombatSubsystem::ApplyHit(int32 Slot, int32 Frame, const FGSTN_
 			Reaction = EGSTN_MinionPendingReaction::StaggerInPlace;
 			break;
 		}
+	}
+
+	// Bridge seam (G10b): the bridge applies the outcome extensions to its own columns and may ask for death (a lethal part broke). The
+	// death then takes the same path as a health kill below; inert while unbound
+	if (ApplyOutcomeExtensions.IsBound() && ApplyOutcomeExtensions.Execute(Handle, Context, Frame))
+	{
+		Store.Health[Slot] = 0.f;
 	}
 
 	const bool bDies = Store.Health[Slot] <= 0.f;
