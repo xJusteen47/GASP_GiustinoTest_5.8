@@ -217,7 +217,45 @@ bool FGSTN_PartsOpeningsNoOpeningTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsOpeningsOverrideTest, "GSTNParts.Core.Openings.OverrideWinsOverPartHardness", GSTNPartsTest::Flags)
+// P18b: the minion attacker's overlap loop (GSTN_MinionCombatSubsystem.cpp, the step that builds Overlapped against a fighter's hurtboxes) is
+// inline in a world-bound subsystem, so this runs its exact body (swept when the move sweeps, then the opening rule) on a leg, headless
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsOpeningsMinionAttackerTest, "GSTNParts.Core.Openings.MinionAttackerRespectsOpening", GSTNPartsTest::Flags)
+bool FGSTN_PartsOpeningsMinionAttackerTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPartsOpeningsTest;
+	auto MinionPick = [](TConstArrayView<FGSTN_Hurtbox> Leg, const FGSTN_HitShape& HitShape, const FTransform& PreviousCarrier, const FTransform& Carrier, bool bSweep)
+	{
+		TArray<int32, TInlineAllocator<4>> Overlapped;
+		for (int32 HurtIndex = 0; HurtIndex < Leg.Num(); ++HurtIndex)
+		{
+			const bool bTouches = bSweep
+				? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Leg[HurtIndex].Shape, FTransform::Identity)
+				: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Leg[HurtIndex].Shape, FTransform::Identity);
+			if (bTouches && (!Leg[HurtIndex].Opening.bEnabled || UGSTN_HitShapeUtils::PassesOpening(Leg[HurtIndex].Opening, HitShape, PreviousCarrier, Carrier, bSweep, FTransform::Identity)))
+			{
+				Overlapped.Add(HurtIndex);
+			}
+		}
+		return UGSTN_HitShapeUtils::PickHurtboxIndex(Overlapped, Leg);
+	};
+
+	const TArray<FGSTN_Hurtbox> Leg = MakeLeg(true);
+	const TArray<FGSTN_Hurtbox> Plain = MakeLeg(false);
+	const FGSTN_HitShape Stab = MakeSphere(2.0, FVector::ZeroVector);
+	const FTransform Outside(FVector(40.0, 0.0, 0.0));
+	const FTransform Mouth(FVector(10.0, 0.0, 0.0));
+	const FTransform ClosedSide(FVector(-9.0, 0.0, 0.0));
+
+	TestEqual(TEXT("a stab at the mouth reaches the cavity"), MinionPick(Leg, Stab, Mouth, Mouth, false), CavityBox);
+	TestEqual(TEXT("a swept stab that enters through the mouth reaches the cavity"), MinionPick(Leg, Stab, Outside, Mouth, true), CavityBox);
+	TestEqual(TEXT("a stab on the closed side falls to the armour"), MinionPick(Leg, Stab, ClosedSide, ClosedSide, false), ShellBox);
+	TestEqual(TEXT("a swept stab on the closed side falls to the armour"), MinionPick(Leg, Stab, FTransform(FVector(-40.0, 0.0, 0.0)), ClosedSide, true), ShellBox);
+	TestEqual(TEXT("a bulky swing at the mouth falls to the armour"), MinionPick(Leg, MakeSphere(15.0, FVector::ZeroVector), Mouth, Mouth, false), ShellBox);
+	TestEqual(TEXT("without an opening the closed side picks the cavity by priority"), MinionPick(Plain, Stab, ClosedSide, ClosedSide, false), CavityBox);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsOpeningsOverrideTest,"GSTNParts.Core.Openings.OverrideWinsOverPartHardness", GSTNPartsTest::Flags)
 bool FGSTN_PartsOpeningsOverrideTest::RunTest(const FString& Parameters)
 {
 	FAbdomenFixture Fixture;

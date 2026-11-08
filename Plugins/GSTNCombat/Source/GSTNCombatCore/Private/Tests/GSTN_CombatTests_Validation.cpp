@@ -67,7 +67,78 @@ bool FGSTN_ValidationHurtboxSetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ValidationSetMatrixTest, "GSTNCombat.Core.Validation.HurtboxSetMatrix", GSTN_CORE_TEST_FLAGS)
+// P18b: the opening rule of ValidateHurtboxSet. The validator lives in Core, so these are GSTNCombat.Core (the editor validator calls the same function)
+namespace GSTNValidationTest
+{
+	FGSTN_Hurtbox MakeOpenedHurtbox(double MouthRadius, const FVector& MouthAt, float MaxPassRadius)
+	{
+		FGSTN_Hurtbox Box = MakeHurtbox(TEXT("cavity"), 30.0);
+		Box.Opening.bEnabled = true;
+		Box.Opening.Mouth.Type = EGSTN_ShapeType::Sphere;
+		Box.Opening.Mouth.Extent = FVector(MouthRadius);
+		Box.Opening.Mouth.Local = FTransform(MouthAt);
+		Box.Opening.MaxPassRadiusCm = MaxPassRadius;
+		return Box;
+	}
+
+	int32 OpeningErrors(const FGSTN_Hurtbox& Box, FString* OutText = nullptr)
+	{
+		TArray<FGSTN_ReactionMessage> Messages;
+		FGSTN_CombatRulesValidation::ValidateHurtboxOpening(Box, 0, Messages);
+		if (OutText && Messages.Num() > 0)
+		{
+			*OutText = Messages[0].Text;
+		}
+		return CountMessages(Messages, true);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ValidationOpeningOutsideTest, "GSTNCombat.Core.Hurtbox.OpeningOutsideBoundsRejected", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ValidationOpeningOutsideTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNValidationTest;
+	FString Text;
+	TestEqual(TEXT("a mouth far from the hurtbox is an error"), OpeningErrors(MakeOpenedHurtbox(4.0, FVector(200.0, 0.0, 0.0), 5.f), &Text), 1);
+	TestTrue(TEXT("the finding names the hurtbox"), Text.Contains(TEXT("cavity")));
+	TestEqual(TEXT("a mouth just past the surface, inside the tolerance, is accepted"), OpeningErrors(MakeOpenedHurtbox(4.0, FVector(33.0, 0.0, 0.0), 5.f)), 0);
+
+	// Through the set validator too, so IsDataValid and the editor validator see it
+	const TStrongObjectPtr<UGSTN_HurtboxSetDefinition> Set(NewObject<UGSTN_HurtboxSetDefinition>(GetTransientPackage()));
+	Set->Hurtboxes = { MakeOpenedHurtbox(4.0, FVector(200.0, 0.0, 0.0), 5.f) };
+	TArray<FGSTN_ReactionMessage> Messages;
+	FGSTN_CombatRulesValidation::ValidateHurtboxSet(*Set, Messages);
+	TestEqual(TEXT("the set validator reports it"), CountMessages(Messages, true), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ValidationOpeningZeroSizeTest, "GSTNCombat.Core.Hurtbox.OpeningZeroSizeRejected", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ValidationOpeningZeroSizeTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNValidationTest;
+	TestTrue(TEXT("a mouth with no volume is an error"), OpeningErrors(MakeOpenedHurtbox(0.0, FVector(20.0, 0.0, 0.0), 5.f)) >= 1);
+	TestTrue(TEXT("MaxPassRadiusCm of 0 is an error"), OpeningErrors(MakeOpenedHurtbox(4.0, FVector(20.0, 0.0, 0.0), 0.f)) >= 1);
+	TestTrue(TEXT("a negative MaxPassRadiusCm is an error"), OpeningErrors(MakeOpenedHurtbox(4.0, FVector(20.0, 0.0, 0.0), -1.f)) >= 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ValidationOpeningValidTest, "GSTNCombat.Core.Hurtbox.ValidOpeningAccepted", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ValidationOpeningValidTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNValidationTest;
+	TestEqual(TEXT("a mouth on the surface is accepted"), OpeningErrors(MakeOpenedHurtbox(4.0, FVector(28.0, 0.0, 0.0), 5.f)), 0);
+	FGSTN_Hurtbox Off = MakeOpenedHurtbox(0.0, FVector(900.0, 0.0, 0.0), 0.f);
+	Off.Opening.bEnabled = false;
+	TestEqual(TEXT("a disabled opening is not checked"), OpeningErrors(Off), 0);
+
+	const TStrongObjectPtr<UGSTN_HurtboxSetDefinition> Set(NewObject<UGSTN_HurtboxSetDefinition>(GetTransientPackage()));
+	Set->Hurtboxes = { MakeOpenedHurtbox(4.0, FVector(28.0, 0.0, 0.0), 5.f) };
+	TArray<FGSTN_ReactionMessage> Messages;
+	FGSTN_CombatRulesValidation::ValidateHurtboxSet(*Set, Messages);
+	TestEqual(TEXT("a set with a valid opening has no finding"), Messages.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ValidationSetMatrixTest,"GSTNCombat.Core.Validation.HurtboxSetMatrix", GSTN_CORE_TEST_FLAGS)
 
 bool FGSTN_ValidationSetMatrixTest::RunTest(const FString& Parameters)
 {

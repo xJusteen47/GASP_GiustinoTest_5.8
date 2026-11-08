@@ -99,3 +99,20 @@
 - Docs: m8-doc-deltas.md and traversal-doc-deltas.md folded into the READMEs of GSTNMinion, GSTNPartsMinion, GSTNSurface, GSTNPlatform,
   GSTNPlatformParts (Haiku; the notes are kept as history with a header line).
 - Cost: ~$3 (3 SUITE_MINION runs, 1 test run, doc fold).
+
+## P18b (laptop, 2026-11-08): openings on the minion attacker path + opening validator DONE, gate green
+
+- Branch `claude/p18b-openings-laptop` from ad449ee9. Sonnet writer (`Saved/P18/brief-b.md`).
+- Minion -> fighter overlap loop (`GSTN_MinionCombatSubsystem.cpp` ~line 1985) applies `UGSTN_HitShapeUtils::PassesOpening` like the pawn tick
+  (one bool when no opening). Player -> minion already goes through the pawn attacker tick (no separate minion-victim overlap list).
+- Validator: `FGSTN_CombatRulesValidation::ValidateHurtboxOpening` (GSTNCombatCore), called from `ValidateHurtboxSet` (so IsDataValid and the
+  editor rules validator report it): errors for MaxPassRadiusCm <= 0, a mouth with no volume, a mouth not overlapping its hurtbox grown by 2 cm.
+- Tests: `GSTNCombat.Core.Hurtbox.{OpeningOutsideBoundsRejected, OpeningZeroSizeRejected, ValidOpeningAccepted}`,
+  `GSTNParts.Core.Openings.MinionAttackerRespectsOpening` (runs a copy of the loop body: the real loop is inline in the subsystem).
+- Gate: all on 1436/0 (+4), GSTNMinion+GSTNPartsMinion off 1334/0, GSTNPlatform+Parts off 1414/0, 0 ensures. SUITE_DEFAULT 50/50.
+- SUITE_MINION 0 %: 9/11 (player_hits no swing = flaky input, lod known). 2 %: 7/11, rerun of the 3 flaky: player_hits PASS, lagcomp no swing,
+  **reaction_tiers FAIL twice** ("still items 0, read T1/T2 0": client tier inference; known flaky since G8, but two in a row here: watch it;
+  P18b cannot reach it while no hurtbox has an opening). lod known.
+- Not checked: how `GSTN_CombatValidators.cpp` maps the new messages to its `Hurtbox.*` codes.
+- PERF-DEBT: none new (one bool per touched hurtbox on the minion path; validation is editor/load time).
+- Cost: ~$4 (writer ~117k tokens; 4 builds incl. 2 off configs, 3 test runs, SUITE_DEFAULT, 3 SUITE_MINION runs).

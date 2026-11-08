@@ -1985,7 +1985,8 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 				const bool bTouches = Spec.bSweepBetweenFrames
 					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform)
 					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform);
-				if (bTouches)
+				// Same opening rule as the pawn attacker (P18): a hurtbox with an opening counts only through its mouth. No opening: one bool
+				if (bTouches && (!Hurtboxes[HurtIndex].Opening.bEnabled || UGSTN_HitShapeUtils::PassesOpening(Hurtboxes[HurtIndex].Opening, HitShape, PreviousCarrier, Carrier, Spec.bSweepBetweenFrames, Victim.Transform)))
 				{
 					Overlapped.Add(HurtIndex);
 				}

@@ -10,6 +10,7 @@
 
 class UGSTN_CombatRules;
 class UGSTN_HurtboxSetDefinition;
+struct FGSTN_Hurtbox;
 
 /** A victim row of the reaction matrix: the dials that decide which hits stagger it and how far */
 struct FGSTN_ReactionMatrixVictim
@@ -87,4 +88,14 @@ struct GSTNCOMBATCORE_API FGSTN_CombatRulesValidation
 	 *  - the pending "hurtbox + part" rule needs the part type of GSTNParts, which this branch does not have; the hook is this function
 	 */
 	static void ValidateHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, TArray<FGSTN_ReactionMessage>& OutMessages);
+
+	/** How far (cm) a mouth may sit off its hurtbox and still count as on it: authored by hand at the armour's surface, it grazes the bounds */
+	static constexpr double OpeningBoundsToleranceCm = 2.0;
+
+	/**
+	 * The opening of one hurtbox (P18b), called by ValidateHurtboxSet and pure so a test can run it on a struct. A disabled opening has no
+	 * finding. Errors, each naming the hurtbox: MaxPassRadiusCm <= 0 (nothing fits), a mouth shape with no volume (nothing overlaps it),
+	 * a mouth that does not touch the hurtbox's own shape even with OpeningBoundsToleranceCm of slack (it would open onto nothing).
+	 */
+	static void ValidateHurtboxOpening(const FGSTN_Hurtbox& Hurtbox, int32 Index, TArray<FGSTN_ReactionMessage>& OutMessages);
 };

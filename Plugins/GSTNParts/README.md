@@ -120,7 +120,7 @@ radius, a box's smallest half-size) is at most `MaxPassRadiusCm`, otherwise the 
 (`UGSTN_HitShapeUtils::PassesOpening`, called in the attacker tick where the hurtbox is chosen, so this step still only reads `HurtboxIndex`). One part
 with several hardnesses (the charger's abdomen) uses `FGSTN_PartDefinition::HurtboxHardnessOverride` (hurtbox name to 0..15): this step passes the
 chosen hurtbox's value to the band lookup; the pool, the cap and the break stay the part's, so either side breaks the whole part. Both are static data,
-so the attacker's ricochet prediction stays exact. The minion attacker path (`GSTNMinion`) does not apply openings yet.
+so the attacker's ricochet prediction stays exact. The minion attacker path (`GSTNMinion`, `GSTN_MinionCombatSubsystem.cpp`) applies the same rule (P18b), and `FGSTN_CombatRulesValidation::ValidateHurtboxOpening` rejects an enabled opening with a zero-size mouth, `MaxPassRadiusCm <= 0`, or a mouth outside the hurtbox.
 
 ## Gameplay tags
 

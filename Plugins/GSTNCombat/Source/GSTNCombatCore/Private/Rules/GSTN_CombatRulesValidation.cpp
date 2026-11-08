@@ -2,6 +2,7 @@
 
 #include "Rules/GSTN_CombatRulesValidation.h"
 
+#include "Hits/GSTN_HitShapeUtils.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_KnockbackModel.h"
 #include "Rules/GSTN_CombatRules.h"
@@ -246,6 +247,38 @@ FString FGSTN_CombatRulesValidation::PrintHurtboxSetMatrix(const UGSTN_HurtboxSe
 	return PrintReactionMatrix(Rules, Victims, MakeStandardMatrixHits());
 }
 
+void FGSTN_CombatRulesValidation::ValidateHurtboxOpening(const FGSTN_Hurtbox& Hurtbox, int32 Index, TArray<FGSTN_ReactionMessage>& OutMessages)
+{
+	if (!Hurtbox.Opening.bEnabled)
+	{
+		return;
+	}
+	const FGSTN_HitShape& Mouth = Hurtbox.Opening.Mouth;
+	if (Hurtbox.Opening.MaxPassRadiusCm <= 0.f)
+	{
+		Add(OutMessages, true, FString::Printf(TEXT("Hurtbox %d (%s): the opening's MaxPassRadiusCm is not positive, no hitbox could pass"), Index, *Hurtbox.Name.ToString()));
+	}
+	bool bMouthVolume = false;
+	switch (Mouth.Type)
+	{
+	case EGSTN_ShapeType::Sphere: bMouthVolume = Mouth.Extent.X > 0.0; break;
+	case EGSTN_ShapeType::Capsule: bMouthVolume = Mouth.Extent.X > 0.0 && Mouth.Extent.Z >= Mouth.Extent.X; break;
+	case EGSTN_ShapeType::Box: bMouthVolume = Mouth.Extent.X > 0.0 && Mouth.Extent.Y > 0.0 && Mouth.Extent.Z > 0.0; break;
+	}
+	if (!bMouthVolume)
+	{
+		Add(OutMessages, true, FString::Printf(TEXT("Hurtbox %d (%s): the opening's mouth has no volume, no hitbox could overlap it"), Index, *Hurtbox.Name.ToString()));
+		return;
+	}
+	// Both shapes are root-relative, so they are compared with identity carriers. The hurtbox is grown by the tolerance on every axis
+	FGSTN_HitShape Bounds = Hurtbox.Shape;
+	Bounds.Extent += FVector(OpeningBoundsToleranceCm);
+	if (!UGSTN_HitShapeUtils::Overlap(Mouth, FTransform::Identity, Bounds, FTransform::Identity))
+	{
+		Add(OutMessages, true, FString::Printf(TEXT("Hurtbox %d (%s): the opening's mouth lies outside the hurtbox's bounds, it opens onto nothing"), Index, *Hurtbox.Name.ToString()));
+	}
+}
+
 void FGSTN_CombatRulesValidation::ValidateHurtboxSet(const UGSTN_HurtboxSetDefinition& Set, TArray<FGSTN_ReactionMessage>& OutMessages)
 {
 	if (Set.Hurtboxes.IsEmpty())
@@ -292,6 +325,7 @@ void FGSTN_CombatRulesValidation::ValidateHurtboxSet(const UGSTN_HurtboxSetDefin
 		{
 			Add(OutMessages, true, FString::Printf(TEXT("Hurtbox %d (%s): a reaction scale is negative"), Index, *Hurtbox.Name.ToString()));
 		}
+		ValidateHurtboxOpening(Hurtbox, Index, OutMessages);
 	}
 
 	if (Set.WeightCurve.Samples.Num() != 0 && !Set.WeightCurve.IsAuthored())
