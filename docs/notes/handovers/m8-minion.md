@@ -409,3 +409,23 @@
 - PERF-DEBT: rendering adds ~30 % to the batch avg and doubles maxBatch (1.26 ms) at the same N (contention with the render thread, measure in Insights in G11b);
   no wire-byte measurement path in the harness yet (needs a C++ stat dump of the net driver).
 - Cost: ~$6 (Sonnet subagent ~170k tokens / 55 tool calls; thread ~50k; 2 builds, 2 headless runs, 9 editor runs incl. a 10-min soak).
+
+## G7b part 1 (desktop, 2026-11-08): bench puppet mesh, spike 7 PASS, owner video command ready
+
+- Branch `claude/m8-desktop-g6b-g7b` (ae06201 + this change, uncommitted). Scripts and logs in `Saved/M8G7b/` (not versioned): `spike7.py`, `run7.ps1`, `csvgt.py`, `s7b.log`, `spike7-gt-b.txt`, `spike7-breakdown.txt`.
+- Task 1: CVars `gstn.Minion.Bench.PuppetMesh` / `PuppetAnimClass` (soft paths, empty = null mesh / none), read when either transient bench definition is built (same timing rule as `HurtboxSet`). Only `GSTN_MinionBench.cpp`. Mesh: `/Game/Characters/UE5_Mannequins/Meshes/SKM_Manny.SKM_Manny` (the GASP Manny). No anim class: Content has no simple anim BP for the Manny skeleton (only `ABP_*_PostProcess`, which the mesh already carries), so the grunt stands in its default pose.
+- Task 2, spike 7: Development editor (renders), PIE listen host + 1 client, one process, bench `Spawn N Massacre` (LaunchSpeed 800, minions move all the time), batch alternating `Present.MaxVisible` 0 (no puppets) and 60, two repeats each, 25 s per segment after an 8 s settle, CSV profiler (`csvprofile`) per segment. The CSV `GameThreadTime` column equals the capped FrameTime, so the cost is the frame delta and the delta of the `Exclusive/GameThread/*` categories.
+  Both PIE worlds (host from the store, client from the registry) present N puppets each, so the process pays 2N puppets (conservative: the gate is per world).
+
+  | N | puppets in process | frame off -> on | delta | game-thread categories (top) | per world (half) |
+  |---|---|---|---|---|---|
+  | 60 | 120 | 13.55 -> 15.26 ms | +1.72 ms | Animation +0.82, EndOfFrameUpdates +0.35, TickActors +0.18 | ~0.85 ms |
+  | 40 | 80 | 13.50 -> 14.90 ms | +1.40 ms | Animation +0.68, EndOfFrameUpdates +0.28, TickActors +0.16 | ~0.70 ms |
+
+  Verdict PASS (exit: <= 3 ms at 60, <= 2 ms at 40), even counting both worlds in full; no §4d.1 fallback needed. Caveats: no anim blueprint (the Manny post process still runs), minions not hit during the run, one camera spot, so animation cost with a real ABP and hit effects is not covered (re-measure in G11b with Insights). The whole frame (13.5 ms) is the editor with server + client + two viewports.
+- Task 3: `Saved/M8G7b/video-command.md` (+ `video_start.py`, `video_prep.py`, `pie.ps1 -Clients 2`): dry-run checked, 40 grunts with mesh spawned on the host and the client, host pawn has the hit kit. Not recorded.
+- Gate: build OK; headless GSTN 1398/0/0 (no test added: console variables only), 0 ensures.
+- Deviations: GameThreadTime column unusable (see above); play settings of the saved editor ini restored to `pie-orig.bak` (pre-G6b) after the runs.
+- PERF-DEBT (also in perf-debt.md): puppet cost not split per world; puppet anim cost without a real ABP unmeasured.
+- Not done here: the three failing scenarios and 2 % runs (other parts of G7b).
+- Cost: ~$2-3 (one Sonnet subagent, ~60 tool calls, 1 build, 1 headless run, 3 rendering editor runs of 2-6 min).

@@ -53,3 +53,6 @@ what, where, cheaper alternative.
 ## G6b (desktop, 2026-11-08)
 - Rendering host: minion batch avg +30 %, maxBatch 1.26 ms vs 0.72 ms nullrhi at the same N (render thread contention?): check in Insights (G11b).
 - Harness has no real wire-byte measurement (stat net not in the log, stat replicator not readable from Python): add a C++ net-driver byte dump for the bench.
+
+## G7b part 1 (desktop, 2026-11-08)
+- Spike 7 measured the puppet cost of host + client together (2N puppets, +1.7 ms at N=60, +1.4 ms at N=40): split per world and re-measure with a real puppet ABP and hit effects (Insights, G11b). The CSV `GameThreadTime` column is the capped frame time in the editor: use the `Exclusive/GameThread/*` categories.

@@ -10,6 +10,8 @@
 #include "Data/GSTN_MinionWaveDefinition.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/Engine.h"
+#include "Animation/AnimInstance.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -51,6 +53,32 @@ namespace
 	}
 
 	// Timed headless runs (gate of G3/G11): ExecCmds cannot wait, so the bench reports, and optionally quits, by itself
+	// G7b: the transient grunts get a real puppet mesh (and optionally an anim class) without any asset being created. Same timing rule
+	TAutoConsoleVariable<FString> CVarBenchPuppetMesh(
+		TEXT("gstn.Minion.Bench.PuppetMesh"), TEXT(""),
+		TEXT("Object path of the USkeletalMesh the transient bench grunts' puppets use (empty = the null mesh)."));
+	TAutoConsoleVariable<FString> CVarBenchPuppetAnimClass(
+		TEXT("gstn.Minion.Bench.PuppetAnimClass"), TEXT(""),
+		TEXT("Class path (..._C) of the UAnimInstance the bench puppets use (empty = none)."));
+
+	void ApplyBenchPuppet(UGSTN_MinionDefinition* Definition)
+	{
+		if (!Definition)
+		{
+			return;
+		}
+		const FString MeshPath = CVarBenchPuppetMesh.GetValueOnGameThread();
+		if (!MeshPath.IsEmpty())
+		{
+			Definition->PuppetMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(MeshPath));
+		}
+		const FString AnimPath = CVarBenchPuppetAnimClass.GetValueOnGameThread();
+		if (!AnimPath.IsEmpty())
+		{
+			Definition->PuppetAnimClass = TSoftClassPtr<UAnimInstance>(FSoftObjectPath(AnimPath));
+		}
+	}
+
 	TAutoConsoleVariable<float> CVarBenchAutoReportSeconds(
 		TEXT("gstn.Minion.Bench.AutoReportSeconds"), 0.f,
 		TEXT("Seconds after a bench spawn at which the bench logs its report once (0 = off)."));
@@ -363,6 +391,7 @@ UGSTN_MinionDefinition* UGSTN_MinionBenchSubsystem::ResolveDefinition()
 		TransientDefinition->TypeTag = FGameplayTag::RequestGameplayTag(TEXT("Minion.Type.Grunt"), false);
 		TransientDefinition->Stats.MaxHealth = 40.f;
 		ApplyBenchHurtboxSet(TransientDefinition);
+		ApplyBenchPuppet(TransientDefinition);
 	}
 	return TransientDefinition;
 }
@@ -510,6 +539,7 @@ int32 UGSTN_MinionBenchSubsystem::SpawnAttackers(int32 Count, int32 TargetIndex,
 		AttackDefinition->TypeTag = FGameplayTag::RequestGameplayTag(TEXT("Minion.Type.Grunt"), false);
 		AttackDefinition->Stats.MaxHealth = 40.f;
 		ApplyBenchHurtboxSet(AttackDefinition);
+		ApplyBenchPuppet(AttackDefinition);
 		FGSTN_MinionMove& Move = AttackDefinition->Moves.AddDefaulted_GetRef();
 		const FGameplayTag Swing = FGameplayTag::RequestGameplayTag(TEXT("Command.Minion.Attack.Swing"), false);
 		Move.Command = Swing.IsValid() ? Swing : FGameplayTag(GSTNMinionTags::Type);
