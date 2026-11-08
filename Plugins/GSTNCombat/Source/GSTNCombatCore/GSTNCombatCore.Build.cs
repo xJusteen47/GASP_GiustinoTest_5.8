@@ -22,5 +22,7 @@ public class GSTNCombatCore : ModuleRules
 
 		// The module registers the plugin's tag ini folder at startup
 		PrivateDependencyModuleNames.Add("Projects");
+		// E17: the GSTNCombat trace channel and events (UE_TRACE_*) live in this module
+		PrivateDependencyModuleNames.Add("TraceLog");
 	}
 }

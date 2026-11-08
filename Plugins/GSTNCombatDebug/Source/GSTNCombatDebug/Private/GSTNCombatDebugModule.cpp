@@ -8,6 +8,7 @@
 #include "Modules/ModuleManager.h"
 #include "Sources/GSTN_CombatInputSource.h"
 #include "Sources/GSTN_InputSourceRegistry.h"
+#include "Trace/GSTN_CombatTraceSink.h"
 
 #if WITH_GAMEPLAY_DEBUGGER_MENU
 #include "GameplayDebugger.h"
@@ -52,7 +53,7 @@ namespace
  * The debug module of the combat plugin. What the input display shows of a combat character is this module's only input job now: the
  * display itself lives in GSTNInputDebug, and this module teaches it to read the combat component (a finder in its source registry),
  * gives it the combat buttons and the standard command set as its default profile, and keeps the old console variable name alive. The
- * Gameplay Debugger category (E15) is registered here and removed in ShutdownModule; the trace sink (E17) will follow the same path.
+ * Gameplay Debugger category (E15) is registered here and removed in ShutdownModule; the trace sink (E17, gstn.Combat.Debug.Trace) is installed and removed the same way.
  */
 class FGSTN_CombatDebugModule : public IGSTN_CombatDebugModule
 {
@@ -77,11 +78,14 @@ public:
 			EGameplayDebuggerCategoryState::EnabledInGameAndSimulate, FGSTN_GameplayDebuggerCategory_Combat::DefaultSlot);
 		Debugger.NotifyCategoriesChanged();
 #endif
+		// E17: gstn.Combat.Debug.Trace installs the trace sink while it is 1
+		FGSTN_CombatTraceController::Startup();
 		UE_LOG(LogGSTNCombatDebug, Verbose, TEXT("GSTN Combat Debug module started"));
 	}
 
 	virtual void ShutdownModule() override
 	{
+		FGSTN_CombatTraceController::Shutdown();
 #if WITH_GAMEPLAY_DEBUGGER_MENU
 		if (IGameplayDebugger::IsAvailable())
 		{

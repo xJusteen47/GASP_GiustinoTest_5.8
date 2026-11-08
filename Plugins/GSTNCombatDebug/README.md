@@ -64,6 +64,16 @@ transform, cyan) next to the live mesh socket of the same name (magenta), a line
 draw already existed in `GSTNCombatNP` (`gstn.Combat.Debug.Hitboxes`, `.Hurtboxes`, drawn from the snapshot on the simulating machine) and
 were not moved.
 
+## Trace (E17)
+
+`gstn.Combat.Debug.Trace 1` (default 0; set it in the console or on the command line, it installs or removes the sink when it changes) makes the debug
+module the sink of the combat trace: every simulated frame of every combat entity writes a `CombatFrame` event (entity, frame, re-simulated flag,
+action state, timeline index and frame, hitstop and hitstun frames still to come, input history head) and the combat events write `CombatEvent`
+(command executed, hit landed, adoption, cancel, rollback with the re-simulated frame range, plus a bookmark for rollbacks) on the Unreal Insights
+channel `GSTNCombat`. Start the session with `-trace=default,GSTNCombat` (or `Trace.Enable GSTNCombat` in the console) and open the trace in Insights.
+With the variable at 0 no sink is installed and the simulation pays one pointer load and a branch per entity per frame. The call sites are in
+`GSTNCombatNP` and compile out of Shipping.
+
 ## Dependencies
 
 - Plugins: `GSTNCombat`, `GSTNCombatGAS` (the hit event tags), `GSTNInput` (the display lives in its `GSTNInputDebug` module), `GSTNInputNP`, `GSTNCombatNP` (the component; it needs the GAS-NPP fork).
@@ -93,6 +103,7 @@ buttons while moving the stick; open *Window > GSTN Input > Input Display*, clic
 
 ## Changelog
 
+- 0.5 (E17): combat trace sink and `gstn.Combat.Debug.Trace`; tests `GSTNCombat.Debug.Trace.*` (5).
 - 0.4 (2026-11-06, E15, E16): Gameplay Debugger category `GSTNCombat` with the hit ring recorder; `gstn.Combat.Debug.BakeCheck`; tests
   `GSTNCombat.Debug.GameplayDebugger.*` (4) and `GSTNCombat.Debug.BakeCheck.*` (2).
 - 0.3 (2026-10-23, input display rework): the display, overlay, tab, layout and script player moved to `GSTNInputDebug` (plugin GSTNInput); this module keeps the combat adapter (finder, default profile) and the old console variable name as an alias.
