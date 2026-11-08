@@ -151,7 +151,9 @@ tag search path.
 PoseHistory.SampleExactFrame, PoseHistory.VelocityFromTwoFrames}`, `Runtime.{Smoke, ChannelResolvedByName,
 CollidersUnattachedNamedAddressable, PosePointFollowsOwner}`, `Shapes.{MaskDisablesShapes, CollisionDerivedFromBehaviour,
 PartNameWarningWithoutParts, BreakingGraceThenOff, PoseAppliedOncePerStep, ValidatorRejectsBoneAndCapsule,
-ScriptedPathIsAFunctionOfTime}`.
+ScriptedPathIsAFunctionOfTime}`, `Core.Validation.{WallAngleRange, ShapeData}`.
+
+Validation (T9) is `FGSTN_PlatformSpec::CollectFindings`, pure and headless: shape count and ids, degenerate extents, bones, Stand on a non-box, the wall angle range (warning when no face of a WallSlide/WallClimb box is inside `MinWallSurfaceAngle..MaxWallSurfaceAngle` in the upright pose), the behaviour fields (`FGSTN_SurfaceBehaviour::Validate`) and part names (a warning without the part bridge; the bridge validates names itself). "Shape far from mesh" is not checked: it needs the mesh, and the data alone cannot say.
 
 PIE network scenario `scenario_surface_wallslide_enemy`: `python Tools/GASNPPTest/surface_scenarios.py` (headless editor, listen
 host + 1 client, map `L_WallSlideAB`, the fighter spawned by the driver; `--loss 2`, `--subjects client|host`, `--repeats N`). Table in
