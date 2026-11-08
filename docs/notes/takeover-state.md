@@ -940,3 +940,4 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 - Merge to feature 2026-11-07: docs/notes/handovers/merge-feature-2026-11-07.md (section "M8 merge": branch claude/m8-merge-feature, owner pushes the tip).
 - Merge to feature 2026-11-08: docs/notes/handovers/merge-feature-2026-11-08.md (fast-forward branch claude/merge-feature-2026-11-08: FP plan/G0-G1, 50 ms buffer, trapped-minion fix, canary, E17).
 - Merge to feature 2026-11-08c: branch claude/merge-feature-2026-11-08c (fast-forward of feature 3e65cc8): P18 hurtbox openings, P15 GSTNPartsMinion interface, hit presentation grace + confirm window; handovers parts-rest.md, m8-minion.md (last section). Gate: all on 1423/0, SUITE_DEFAULT 50/50.
+- SUITE_MINION 0% on laptop (2026-11-08, hitpres build): lagcomp 1 cancel = G7b open case, player_hits flaky input (PASS on rerun: 31 predicted / 30 confirmed / 1 cancelled / 0 expired).
