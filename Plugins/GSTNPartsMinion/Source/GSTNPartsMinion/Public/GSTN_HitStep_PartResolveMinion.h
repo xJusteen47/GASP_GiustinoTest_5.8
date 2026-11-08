@@ -27,7 +27,16 @@ struct FGSTN_PartsMinionStepTiming
  *
  * It does nothing (one pointer test) for a victim without a parts extension, i.e. every minion type without a part set, and nothing
  * when the rules already list PartResolve (that step ran earlier, on the same view). Pure and const like every step: the view in, the
- * result out; the pipeline scan is a handful of class tests per hit, no allocation of its own.
+ * result out.
+ *
+ * Cost (plan P16-C): the first version ran the parent's whole step and then HealthWeight again into a second full step result, and
+ * scanned the rules' pipeline with class tests on every hit (4.7 us per part hit on the bench laptop). The step now keeps a small cache
+ * per (part set, rules) pair, filled at the first hit and dropped by InvalidateStepCache (every registration of the bridge calls it): the
+ * pipeline flags, the resolved penetration bands (the soft pointers are chased once) and the minimum weight scale. The hit itself runs
+ * the same part math on that cache (ResolveCached), takes back ApplyDamage's share by arithmetic instead of running HealthWeight into a
+ * scratch result, and writes no request: the minion batch never reads Requests (see ResolveCached). ResolveUncached is the first version,
+ * kept as the reference the GSTNParts.Minion.CachedStepSameOutput test compares against, and as the fallback when the rules or the cache
+ * switch (gstn.PartsMinion.StepCache 0) say so. Game thread only: the cache is process-wide static data, like the timing counters.
  */
 UCLASS(meta = (DisplayName = "Part Resolve (Minion)"))
 class GSTNPARTSMINION_API UGSTN_HitStep_PartResolveMinion : public UGSTN_HitStep_PartResolve
@@ -36,6 +45,16 @@ class GSTNPARTSMINION_API UGSTN_HitStep_PartResolveMinion : public UGSTN_HitStep
 
 public:
 	virtual EGSTN_StepResult Resolve_Implementation(const FGSTN_HitContextView& View, FGSTN_StepResult& Out) const override;
+
+	/** The first version (parent step + compensation, no cache). Same result as Resolve_Implementation except Out.Requests, which the cached path leaves empty */
+	EGSTN_StepResult ResolveUncached(const FGSTN_HitContextView& View, FGSTN_StepResult& Out) const;
+
+	/** Drops every cached (part set, rules) entry: call after changing a part set's table or parts, the rules' pipeline or the settings at run time */
+	static void InvalidateStepCache();
+
+	/** Switch of the cached path (also gstn.PartsMinion.StepCache). Tests flip it to compare both paths */
+	static void SetStepCacheEnabled(bool bEnabled);
+	static bool IsStepCacheEnabled();
 
 	/** Time spent in this step for part-bearing victims since the process started (gstn.PartsMinion.Bench.Report) */
 	static FGSTN_PartsMinionStepTiming& GetTiming();

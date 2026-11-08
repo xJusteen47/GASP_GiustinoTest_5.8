@@ -72,3 +72,18 @@
 - Cost: B ~$9 (Opus writer ~323k tokens / 109 tool calls; 4 builds incl. trial, 3 test runs, canary, 4 harness runs). P16 total ~$16.
 - Next: (1) cut the part step cost (cache) to <= 2 us; (2) a bench puppet with a head bone (or a test mesh) for the visual; (3) clean 2 % runs
   of the two flaky scenarios, then enable GSTNPartsMinion in the .uproject.
+
+## P16-C (laptop, 2026-11-08): step cost 5.06 -> 2.75 us, puppet bones fixed; target 2 us NOT met in 2 attempts -> plugin stays DISABLED
+
+- Branch `claude/p16c-parts-enable-laptop` from c529525f. Sonnet writer (`Saved/P16/brief-c.md`).
+- Cost: per (part set, rules) step cache (pipeline flags, bands, min weight scale; dropped on register/initialize), HealthWeight inline, no
+  request written; attempt 2 builds the outcome in place. Bench (40 minions, 0 %, plugin on in a local trial): hitUs 5.06 -> 2.85 -> **2.75 us**
+  (view 0.21, step 2.25, outcome 0.29). `gstn.PartsMinion.StepCache 0` = old path; test `GSTNParts.Minion.CachedStepSameOutput`.
+- Bytes: the G10 codec writes the 8-bit ext byte in EVERY item of a part-bearing type (not only on change): +8/119 bits = **+6.7 % per update
+  floor**; measured +9.9 % (updates x1.03). Cheaper alternative (PERF-DEBT): a 1-bit presence flag so intact minions pay 1 bit (GSTNMinion codec change).
+- Puppets: bench puppets had no mesh at all (the bench mesh cvar never reached them); the bridge's puppet subsystem now gives a mesh-less
+  part-bearing puppet `gstn.PartsMinion.Bench.PuppetMesh` (SKM_Manny, has `head`): **missingBones 0**, broken heads hidden (headless check).
+- Gate with the plugin on (trial): all on 1432/0. Committed state (plugin off) unchanged from c529525f except the bridge and the scenario.
+- Not done: SUITE_MINION 2 % x3 with the plugin on (pointless while (1) fails). To reach 2 us: precompute per-hurtbox part index + band in the
+  cache so the step is array reads, and/or skip GetDamageProgress for minions (estimate ~0.5-0.8 us); codec presence bit for bytes.
+- Cost: ~$5 (writer ~200k tokens; 2 trial builds, 1 test run, 2 bench runs).

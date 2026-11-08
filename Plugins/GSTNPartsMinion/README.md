@@ -56,18 +56,34 @@ plugin; enable it locally to run `GSTNParts.Minion.*` and `scenario_minion_parts
   global id, ext bytes per client, per hit cost of view + step + outcome). Harness: `minion_parts_base` then `minion_parts` in
   `SUITE_MINION_BENCH` (Tools/GASNPPTest/minion_scenarios.py); `minion_parts` PASSes with "bridge not enabled" when this plugin is off.
 - **GSTNMinion seams added for B** (inert unbound): `UGSTN_MinionCombatSubsystem::OnDefinitionRegistering`, `UGSTN_MinionClientRegistry::OnDefinitionResolving`.
-- Tests: `GSTNParts.Minion.{ExtByteOnlyOnTypesWithParts, DirtyOnlyOnMaskChange, PromotionCopiesToFragment}`.
+- Tests: `GSTNParts.Minion.{ExtByteOnlyOnTypesWithParts, DirtyOnlyOnMaskChange, PromotionCopiesToFragment, CachedStepSameOutput}`
+  (the last one: the cached step equals the first path on a sample of rows, boxes and damages; `Requests` is the one documented difference).
+- **Bench puppets.** `missingBones 23` in P16-B was not a bone name problem: `gstn.Minion.Bench.PuppetMesh` was never set, so the bench puppets
+  had the null mesh (no bones at all). The `minion_parts*` scenarios now set it to the GASP Manny (`SKM_Manny`, which has `head`, `foot_l`,
+  `foot_r`, the bones of the bench part set); `GSTN_PARTS_PUPPET_MESH` overrides it (empty = old behaviour, the visual is then not judged) and the
+  scenario checks `missingBones 0` with at least one hidden part.
 
 ## PERF-DEBT
 
 At 160 minions, all of a part-bearing type (sub-gate B):
-- Wire: 8 bits more in every item update of a part-bearing type (the byte is always in that type's format), +5 % of the 20 B planning size;
-  a mask change makes the item dirty once (one update per break per item, never per dent). 160 minions losing one part each is 160 extra
-  updates over the fight. Types without parts: 0 bits.
+- Wire: 8 bits more in EVERY item update of a part-bearing type (the G10 codec writes the byte whenever the type's format has it, not only
+  when it changed), i.e. +8 of the 119 fixed bits of an item = +6.7 % per update (the P16-B "+5 %" used the 20 B planning size and "only on
+  change", both wrong). A mask change also makes the item dirty once (one update per break per item, never per dent). Types without parts:
+  0 bits. The floor is the codec (GSTNMinion, not changed here). Cheaper alternative, for a later G-gate: one presence bit per item in the
+  codec's flag field that says "ExtByte follows" (set only while the byte is non-zero or has not been acknowledged): an intact minion pays
+  1 bit instead of 8 (-5.9 points), a broken one 9 bits. `minion_parts` reports the split: codec share and the update-count ratio against
+  `minion_parts_base` (the same bench timeline in both runs, so the ratio is what the parts add: broken minions reacting and the mask sends).
 - Client hide: two map lookups and a byte read per visible puppet per frame (at most `gstn.Minion.Present.MaxVisible`, 60), bone hide calls
   only on a change. The part set is resolved once per type per machine (a synchronous load the first time; preload with the wave).
 - Server per part hit: measured by the bench (`hitUs` = view build + `UGSTN_HitStep_PartResolveMinion` + outcome write, `minion_parts`);
-  budget 2 us. The step's pipeline scan and `HealthWeight` re-run are the bulk.
+  budget 2 us. Before P16-C: view 0.19 + step 4.72 + outcome 0.15 = 5.06 us (laptop, 40 minions). What the step did per hit: ran the parent's
+  step (soft pointer reads for the bands, the rules extension scan, a 56 B request with a soft class copy, the extra effects copied), scanned
+  the resolved pipeline with three `IsChildOf` per entry, and re-ran HealthWeight into a second full `FGSTN_StepResult` (about a dozen
+  members, 4 arrays, a tag) only to read one float. After: `ResolveCached` keeps per (part set, rules) the pipeline flags, the resolved
+  bands and the minimum weight scale (`FStepCacheEntry`, filled at the first hit, dropped by every bridge registration and world start),
+  evaluates HealthWeight's curve inline and writes no request. What stays per hit: the part math, one `FInstancedStruct` outcome (one
+  heap allocation), `GetDamageProgress`. `gstn.PartsMinion.StepCache 0` runs the first path for an A/B on the bench. The after number is
+  measured by the next `minion_parts` run (the writer could not run the editor): see the handover.
 - Memory: the A columns plus `LastBreakFrame` (4 B per slot, bench only, ~640 B) and per machine a set pointer per type; the puppet map holds
   one small entry per puppet ever used (pooled, so at most the pool size).
 

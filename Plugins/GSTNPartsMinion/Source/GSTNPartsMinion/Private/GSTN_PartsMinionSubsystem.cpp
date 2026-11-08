@@ -112,6 +112,8 @@ void UGSTN_PartsMinionSubsystem::Initialize(FSubsystemCollectionBase& Collection
 
 	TagExtensions = UGSTN_PartsMinionSettings::Get().TypeExtensions;
 	TypeToResolved.Init(TypeUnresolved, 256);
+	// The hit step's per (set, rules) cache is process-wide: a new world starts it clean
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
 
 	// Bound at once, active or not: the hooks only fire from the authority's batch, and a client's inactive subsystem never drains a hit
 	Bind(Minions);
@@ -127,6 +129,7 @@ void UGSTN_PartsMinionSubsystem::Initialize(FSubsystemCollectionBase& Collection
 void UGSTN_PartsMinionSubsystem::Deinitialize()
 {
 	Unbind();
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
 	Super::Deinitialize();
 }
 
@@ -182,6 +185,7 @@ void UGSTN_PartsMinionSubsystem::RegisterDefinition(const UGSTN_MinionDefinition
 		return;
 	}
 	DefinitionExtensions.Add(Definition, Extension);
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
 	// Re-resolve every type at its next activation; ResolvedTypes is append-only, so live slots keep valid indices
 	TypeToResolved.Init(TypeUnresolved, 256);
 	PresentationSets.Reset();
@@ -277,6 +281,7 @@ void UGSTN_PartsMinionSubsystem::RegisterTypeTag(const FGameplayTag& TypeTag, co
 		return;
 	}
 	TagExtensions.Add(TypeTag, Extension);
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
 	TypeToResolved.Init(TypeUnresolved, 256);
 	PresentationSets.Reset();
 }

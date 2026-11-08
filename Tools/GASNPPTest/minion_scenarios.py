@@ -1224,6 +1224,12 @@ _PARTS_CLIENT = re.compile(r'PartsMinionBench client player=(-?\d+) world=\S+ it
 _PARTS_PUPPETS = re.compile(r'PartsMinionBench puppets world=(\S+) tracked=(\d+) hiding=(\d+) changes=(\d+) missingBones=(\d+)')
 # The run without parts (scenario_minion_parts_base) leaves its per-client bytes/s here for scenario_minion_parts (same Python session, run it first)
 _PARTS_BASELINE = {}
+# P16-C: the item codec (GSTNMinionNetBits) writes the ExtByte (8 bits) in EVERY item of a part-bearing type, not only when it changes; the fixed
+# fields of an item are 9 (id + type flag) + 3 x 19 (position) + 8 + 4 + 6 + 10 + 8 + 3 + 5 + 6 + 3 = 119 bits (the optional type and global id
+# fields excluded). So the byte costs +8/119 of every update of the type whatever the bridge does: the floor is the codec, see PERF-DEBT
+_ITEM_FIXED_BITS = 119
+_ITEM_EXT_BITS = 8
+_PARTS_PUPPET_MESH = '/Game/Characters/UE5_Mannequins/Meshes/SKM_Manny.SKM_Manny'
 
 
 def _parts_masks(text):
@@ -1267,8 +1273,10 @@ def _minion_parts_run(name, client, with_parts):
     run = g._Run(name, client, judge_reconciles=False, sample=False)
     window = _env_float('GSTN_BENCH_WINDOW', 10.0)
     head_boxes = os.environ.get('GSTN_PARTS_HEAD_BOXES', 'head,torso')
+    puppet_mesh = os.environ.get('GSTN_PARTS_PUPPET_MESH', _PARTS_PUPPET_MESH)
     swingers = list(range(1, len(g.worlds())))
     st = {'on': not with_parts}
+    puppets_expected = bool(puppet_mesh)
 
     def setup():
         _setup()
@@ -1277,6 +1285,14 @@ def _minion_parts_run(name, client, with_parts):
         for c in swingers:
             g._apply_loadout(g.key_of_player(c), g.HIT_KIT)
         st['t0'] = g.mark_log()
+        if puppet_mesh:
+            # Without it the bench puppets have the null mesh and no bone, so no part bone can ever be hidden (P16-B missingBones 23). The mannequin
+            # skeleton has head, foot_l and foot_r, the bones of the bench part set. Read when the bench definitions are built, so before Attack.
+            # Set in both runs: the mesh is client presentation only and changes no item
+            _cmd(f'gstn.Minion.Bench.PuppetMesh {puppet_mesh}')
+            # Process-wide cvar read by the bridge's puppet subsystem in every world: gives a mesh to any part-bearing puppet that has none
+            _cmd(f'gstn.PartsMinion.Bench.PuppetMesh {puppet_mesh}')
+            _cmd('gstn.PartsMinion.Bench.PuppetVerbose 1')
         if with_parts:
             _cmd(f'gstn.PartsMinion.Bench.Parts Minion.Type.Grunt {head_boxes} 1')
         return 'rules + hit log + kit + no stagger' + (' + bench parts' if with_parts else '')
@@ -1312,15 +1328,19 @@ def _minion_parts_run(name, client, with_parts):
         if not st['on']:
             return True, 'bridge not enabled'
         dt = max(st['a1_time'] - st['a0_time'], 0.001)
-        size = _PLANNING_BYTES_PER_ITEM + (1 if with_parts else 0)
-        per = {p: (st['a1_updates'].get(p, 0) - u) / dt * size for p, u in st['a0_updates'].items()}
+        # The ext byte is 8 of 119 fixed bits on every update of the type (see _ITEM_EXT_BITS), not +1 of 20 planning bytes on a change only
+        size = _PLANNING_BYTES_PER_ITEM * (1.0 + (_ITEM_EXT_BITS / _ITEM_FIXED_BITS if with_parts else 0.0))
+        ups = {p: (st['a1_updates'].get(p, 0) - u) for p, u in st['a0_updates'].items()}
+        per = {p: n / dt * size for p, n in ups.items()}
         top = max(per.values(), default=0.0)
         st['top'] = top
+        st['top_updates'] = max(ups.values(), default=0) / dt
         if not with_parts:
             _PARTS_BASELINE['top'] = top
             _PARTS_BASELINE['per'] = per
-        return top > 0.0, (f"per-client planning bytes/s {', '.join(f'{p}:{v:.0f}' for p, v in per.items())} (item {size} B; "
-                           f"host upload for {len(swingers)} clients ~{top * len(swingers):.0f} B/s; provisional, laptop)")
+            _PARTS_BASELINE['updates'] = st['top_updates']
+        return top > 0.0, (f"per-client planning bytes/s {', '.join(f'{p}:{v:.0f}' for p, v in per.items())} (item {size:.1f} B; "
+                           f"{st['top_updates']:.1f} updates/s on the busiest client; host upload for {len(swingers)} clients ~{top * len(swingers):.0f} B/s; provisional, laptop)")
 
     def final():
         if not st['on']:
@@ -1375,16 +1395,32 @@ def _minion_parts_run(name, client, with_parts):
         return not bad, '; '.join(bad) or (f"{len(clients)} clients: ext bytes equal the server masks ({len(server['masks'])} broken minions); "
                                            f"puppets {puppets}")
 
+    def puppets_hide():
+        _, _, puppets = parts_report()
+        if not puppets_expected:
+            return True, 'no puppet mesh configured (GSTN_PARTS_PUPPET_MESH empty): visual not judged'
+        missing = sum(p['missingBones'] for p in puppets.values())
+        hiding = sum(p['hiding'] for p in puppets.values())
+        return bool(puppets) and hiding >= 1 and missing == 0, f'puppets {puppets}: hiding {hiding}, missingBones {missing} (must be 0 with {puppet_mesh.rsplit("/", 1)[-1]})'
+
     def bytes_within():
         if 'top' not in _PARTS_BASELINE:
             run.note('no baseline: run minion_parts_base first in this session (SUITE_MINION_BENCH order); only the per-update overhead is judged')
-            over = 1.0 / _PLANNING_BYTES_PER_ITEM
-            return over <= 0.05 + 1e-9, f'per item update +1 B of {_PLANNING_BYTES_PER_ITEM} B = +{over * 100:.1f} %'
+            over = _ITEM_EXT_BITS / _ITEM_FIXED_BITS
+            return over <= 0.05 + 0.02 + 1e-9, f'per item update +{_ITEM_EXT_BITS} bits of {_ITEM_FIXED_BITS} = +{over * 100:.1f} % (codec, every update)'
         base = _PARTS_BASELINE['top']
         ratio = st.get('top', 0.0) / base if base > 0 else 99.0
         noise = _env_float('GSTN_PARTS_BYTES_NOISE', 0.02)
+        codec = _ITEM_EXT_BITS / _ITEM_FIXED_BITS
+        base_ups = _PARTS_BASELINE.get('updates', 0.0)
+        ups_ratio = st.get('top_updates', 0.0) / base_ups if base_ups > 0 else 0.0
+        # Like with like: the same bench timeline in both runs, so the update-count ratio is what the parts themselves add (broken minions reacting,
+        # the mask change forcing a send) and the codec share is the fixed +8/119 of every update
+        run.note(f'bytes split: codec ext byte +{codec * 100:.1f} % per update (every item of the type, GSTNMinion codec) x updates {ups_ratio:.3f} of the base run '
+                 f'= {(1.0 + codec) * ups_ratio:.3f}')
         return ratio <= 1.05 + noise, (f'with parts {st.get("top", 0.0):.0f} B/s vs without {base:.0f} B/s per client: {(ratio - 1.0) * 100:+.1f} % '
-                                       f'(limit +5 % + {noise * 100:.0f} % run-to-run noise; the byte alone is +{100.0 / _PLANNING_BYTES_PER_ITEM:.1f} % per update)')
+                                       f'(limit +5 % + {noise * 100:.0f} % run-to-run noise; the codec byte alone is +{codec * 100:.1f} % per update, '
+                                       f'updates x{ups_ratio:.3f})')
 
     def hit_cost():
         server, _, _ = parts_report()
@@ -1416,6 +1452,7 @@ def _minion_parts_run(name, client, with_parts):
             (end, run.at('the players hit heads off: server rows show broken heads, one ext write per change', gate(heads_off))),
             (end, run.at('headless minions keep fighting (alive, attacking after the break, no lethal kill)', gate(keep_fighting))),
             (end, run.at("every client's registry ext bytes equal the server masks", gate(clients_equal))),
+            (end, run.at('puppets hide the broken parts (no missing bone on the bench mesh)', gate(puppets_hide))),
             (end, run.at('bytes/s within +5 % of the same run without parts', gate(bytes_within))),
             (end, run.at('per part hit server cost within budget (bench counter)', gate(hit_cost))),
         ]

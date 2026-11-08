@@ -14,7 +14,10 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GSTN_PartsMinionSubsystem.h"
+#include "GSTN_HitStep_PartResolveMinion.h"
 #include "Hits/GSTN_HitData.h"
+#include "Hits/GSTN_HitRunner.h"
+#include "Pipeline/GSTN_PartHitOutcome.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_KnockbackModel.h"
 #include "Misc/AutomationTest.h"
@@ -568,6 +571,113 @@ bool FGSTN_PartsMinionPromotionTest::RunTest(const FString& Parameters)
 	{
 		Clean->Destroy();
 	}
+	return true;
+}
+
+namespace
+{
+	const FGSTN_PartHitOutcome* FindPartOutcome(const FGSTN_StepResult& Result)
+	{
+		for (const FInstancedStruct& Entry : Result.OutcomeExtensions)
+		{
+			if (const FGSTN_PartHitOutcome* Found = Entry.GetPtr<FGSTN_PartHitOutcome>())
+			{
+				return Found;
+			}
+		}
+		return nullptr;
+	}
+}
+
+// P16-C: the cached step path (per (set, rules) cache, no scratch HealthWeight result, no request) gives the same result as the first path on a sample of
+// rows, hurtboxes and damages, for rules with ApplyDamage + HealthWeight (the usual case), with neither, and for a ricochet. Requests are the one
+// documented difference (the minion batch never reads them)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsMinionCachedStepTest, "GSTNParts.Minion.CachedStepSameOutput", GSTN_PARTS_MINION_TEST_FLAGS)
+bool FGSTN_PartsMinionCachedStepTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGSTN_PartSetDefinition> Set = MakePartSet();
+	// A third, hard part (hardness above the weapon's penetration: a ricochet) on a box of its own
+	Set->Parts.Add(MakePart(TEXT("Plate"), TEXT("PlateBox"), 20.f));
+	Set->Parts.Last().Hardness = 6;
+	Set->Parts.Last().Reaction.JuggleFactor = 0.5f;
+	Set->Parts[1].LostMassFraction = 0.2f;
+	Set->RebakeWeightCurve();
+	TStrongObjectPtr<UGSTN_HurtboxSetDefinition> Hurtboxes = MakeHurtboxes();
+	Hurtboxes->Hurtboxes.AddDefaulted_GetRef().Name = FName(TEXT("PlateBox"));
+
+	TStrongObjectPtr<UGSTN_CombatRules> Standard = MakeRules();
+	TStrongObjectPtr<UGSTN_CombatRules> Bare(NewObject<UGSTN_CombatRules>(GetTransientPackage(), NAME_None, RF_Transient));
+	Bare->ResolveHitPipeline();
+	const TStrongObjectPtr<UGSTN_CombatRules> RulesList[2] = { Standard, Bare };
+
+	struct FRow { uint8 Mask; uint8 Damage[GSTN_PartsLimits::MaxMinionParts]; };
+	const FRow Rows[3] = { { 0, {} }, { 0, { 120, 60, 0, 0, 0, 0, 0, 0 } }, { 0b10, { 0, 255, 90, 0, 0, 0, 0, 0 } } };
+	const float Damages[3] = { 0.f, 10.f, 25.f };
+
+	const bool bWasEnabled = UGSTN_HitStep_PartResolveMinion::IsStepCacheEnabled();
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
+	const UGSTN_HitStep_PartResolveMinion* Step = GetDefault<UGSTN_HitStep_PartResolveMinion>();
+	int32 Compared = 0;
+	for (int32 RulesIndex = 0; RulesIndex < 2; ++RulesIndex)
+	{
+		for (const FRow& Row : Rows)
+		{
+			const FGSTN_PartsSnapshotExt Ext = FGSTN_PartsSnapshotExt::FromMinionStore(Set.Get(), Row.Mask, Row.Damage);
+			for (int32 Box = 0; Box < Hurtboxes->Hurtboxes.Num(); ++Box)
+			{
+				for (const float Damage : Damages)
+				{
+					FGSTN_StepResult Results[2];
+					EGSTN_StepResult Verdicts[2] = { EGSTN_StepResult::Continue, EGSTN_StepResult::Continue };
+					for (int32 Cached = 0; Cached < 2; ++Cached)
+					{
+						FGSTN_HitResolutionContext Context;
+						Context.Incoming.Hit.Damage = Damage;
+						Context.Incoming.Hit.BaseKnockback = 300.f;
+						FGSTN_PartHitData PartHit;
+						PartHit.Penetration = 2;
+						Context.Incoming.Hit.ExtensionData.Add(FInstancedStruct::Make(PartHit));
+						Context.Victim.Weight = 100.f;
+						Context.Victim.SnapshotExtension = &Ext;
+						Context.HurtboxSet = Hurtboxes.Get();
+						Context.HurtboxIndex = static_cast<uint8>(Box);
+						FGSTN_HitContextView View;
+						FGSTN_HitPipelineRunner::MakeView(RulesList[RulesIndex].Get(), Context, View);
+						UGSTN_HitStep_PartResolveMinion::SetStepCacheEnabled(Cached != 0);
+						Verdicts[Cached] = Step->Resolve(View, Results[Cached]);
+					}
+					const FString Label = FString::Printf(TEXT("rules %d mask %d box %d damage %.0f"), RulesIndex, Row.Mask, Box, Damage);
+					TestEqual(*(Label + TEXT(": verdict")), static_cast<int32>(Verdicts[1]), static_cast<int32>(Verdicts[0]));
+					TestEqual(*(Label + TEXT(": damage add")), Results[1].DamageAdd, Results[0].DamageAdd);
+					TestEqual(*(Label + TEXT(": weight scale")), Results[1].WeightScale, Results[0].WeightScale);
+					TestEqual(*(Label + TEXT(": knockback scale")), Results[1].KnockbackScale, Results[0].KnockbackScale);
+					TestEqual(*(Label + TEXT(": hitstop scale")), Results[1].HitstopScale, Results[0].HitstopScale);
+					TestEqual(*(Label + TEXT(": stagger scale")), Results[1].StaggerScale, Results[0].StaggerScale);
+					TestEqual(*(Label + TEXT(": stagger threshold")), Results[1].StaggerThreshold.Value, Results[0].StaggerThreshold.Value);
+					TestEqual(*(Label + TEXT(": max reaction")), static_cast<int32>(Results[1].MaxReaction), static_cast<int32>(Results[0].MaxReaction));
+					TestEqual(*(Label + TEXT(": effects")), Results[1].Effects.Num(), Results[0].Effects.Num());
+					const FGSTN_PartHitOutcome* A = FindPartOutcome(Results[0]);
+					const FGSTN_PartHitOutcome* B = FindPartOutcome(Results[1]);
+					if (A && B)
+					{
+						TestEqual(*(Label + TEXT(": mask")), B->ResultBrokenMask, A->ResultBrokenMask);
+						TestTrue(*(Label + TEXT(": damage bytes")), FMemory::Memcmp(A->ResultPartDamage, B->ResultPartDamage, sizeof(A->ResultPartDamage)) == 0);
+						TestEqual(*(Label + TEXT(": main delta")), B->MainDelta, A->MainDelta);
+						TestEqual(*(Label + TEXT(": flags")), B->Flags, A->Flags);
+						TestEqual(*(Label + TEXT(": part index")), B->PartIndex, A->PartIndex);
+					}
+					else
+					{
+						TestEqual(*(Label + TEXT(": both or neither carry an outcome")), B == nullptr, A == nullptr);
+					}
+					++Compared;
+				}
+			}
+		}
+	}
+	UGSTN_HitStep_PartResolveMinion::SetStepCacheEnabled(bWasEnabled);
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
+	TestTrue(TEXT("a sample was compared"), Compared > 0);
 	return true;
 }
 

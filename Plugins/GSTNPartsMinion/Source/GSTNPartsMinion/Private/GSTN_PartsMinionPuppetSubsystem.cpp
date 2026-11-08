@@ -5,11 +5,26 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/GSTN_PartDefinition.h"
 #include "Data/GSTN_PartSetDefinition.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
 #include "GSTN_PartsMinionSubsystem.h"
 #include "Net/GSTN_MinionClientRegistry.h"
 #include "Present/GSTN_MinionPresentationSubsystem.h"
 #include "Present/GSTN_MinionPuppet.h"
+
+namespace
+{
+	// Bench only: the mesh a part-bearing puppet gets when its definition gave it none. The bench definitions are transient objects of the
+	// server's world and a client may resolve another instance (or none of the PuppetMesh the bench cvar set), so the scenario cannot rely on
+	// gstn.Minion.Bench.PuppetMesh reaching every world's puppets before they spawn. Empty = off (a real definition's mesh is never replaced)
+	TAutoConsoleVariable<FString> CVarBenchPuppetMesh(
+		TEXT("gstn.PartsMinion.Bench.PuppetMesh"), TEXT(""),
+		TEXT("Object path of a USkeletalMesh given to part-bearing puppets that have no mesh (bench: the null-mesh puppets have no bone to hide)."));
+	TAutoConsoleVariable<bool> CVarBenchPuppetVerbose(
+		TEXT("gstn.PartsMinion.Bench.PuppetVerbose"), false,
+		TEXT("Log, once per puppet, the skeletal mesh a part-bearing puppet uses."));
+}
 
 bool UGSTN_PartsMinionPuppetSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
@@ -113,6 +128,25 @@ void UGSTN_PartsMinionPuppetSubsystem::ApplyToPuppets()
 		if (Previous && Previous->Key == Record.Key && Previous->Generation == Record.Generation && Previous->Mask == Mask && Previous->Set.Get() == Set)
 		{
 			continue;
+		}
+
+		if (Set)
+		{
+			// Bench only (cvar empty otherwise): a puppet with no mesh gets the configured one before its bones are looked up
+			USkeletalMeshComponent* PuppetMesh = Puppet->GetMesh();
+			const FString BenchMesh = PuppetMesh ? CVarBenchPuppetMesh.GetValueOnGameThread() : FString();
+			if (PuppetMesh && !BenchMesh.IsEmpty() && !PuppetMesh->GetSkeletalMeshAsset())
+			{
+				if (USkeletalMesh* Loaded = LoadObject<USkeletalMesh>(nullptr, *BenchMesh))
+				{
+					PuppetMesh->SetSkeletalMeshAsset(Loaded);
+				}
+			}
+			if (!Previous && CVarBenchPuppetVerbose.GetValueOnGameThread() && PuppetMesh)
+			{
+				UE_LOG(LogTemp, Log, TEXT("PartsMinionBench puppet %s mesh=%s head=%d"), *Puppet->GetName(),
+					*GetNameSafe(PuppetMesh->GetSkeletalMeshAsset()), PuppetMesh->GetBoneIndex(FName(TEXT("head"))) != INDEX_NONE);
+			}
 		}
 
 		// Show the previous minion's parts again first (a pooled puppet reused, or a restore), then hide the current mask. Snap, no blend
