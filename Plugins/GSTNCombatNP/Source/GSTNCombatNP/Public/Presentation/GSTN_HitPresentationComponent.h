@@ -23,7 +23,8 @@ struct FGSTN_CombatSyncCore;
  *  - pauses the attacker's mesh for its hitstop and the victim's for the victim's hitstop (the animation rate, never the simulation);
  *  - for a victim that is an interpolated proxy here, extrapolates its reaction (the launch or push back direction, without the victim's
  *    DI) as a short offset of its mesh, fading out as the authoritative motion arrives.
- * When the entry disappears while the same move still runs (the authority did not confirm the hit and the state was corrected), every
+ * When the entry disappears while the same move still runs (the authority did not confirm the hit and the state was corrected) and stays away
+ * for CancelGraceSeconds (a resimulation can drop it for a frame or two and add it back: the same hit, nothing cancelled), every
  * effect of the hit is cancelled: the mesh resumes, the flash and the offset go, the cue's record is forgotten. A cue already played cannot be
  * recalled; it is one shot.
  *
@@ -67,6 +68,17 @@ public:
 	/** The most the mesh is moved off the actor by the extrapolation */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit Presentation|Reaction", meta = (ClampMin = "0.0", ForceUnits = "cm"))
 	float MaxReactionOffset = 60.f;
+
+	/**
+	 * A predicted hit whose key vanishes from the attacker's ring (an NP correction resimulating the move) is cancelled only after staying away
+	 * this long; a key that returns sooner is the same hit (no cancel, no second prediction). Same rule and value as the minion presentation
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit Presentation|Cancel", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float CancelGraceSeconds = FGSTN_HitPredictionGrace::DefaultCancelGraceSeconds;
+
+	/** A predicted key not seen for this long is forgotten (its move is long over) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit Presentation|Cancel", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float PredictedHitMemorySeconds = FGSTN_HitPredictionGrace::DefaultMemorySeconds;
 
 	/**
 	 * Called by the combat component of this pawn from its FinalizeFrame, once per presented frame, with the attacker's latest state and the
@@ -130,6 +142,8 @@ private:
 	void UpdateTickEnabled();
 
 	FGSTN_HitPresentationTracker Tracker;
+	/** Predicted keys, to tell a corrected-away hit from a ring that flickered during a resimulation */
+	FGSTN_HitPredictionGrace Grace;
 	FGSTN_HitCueDedup Dedup;
 	TArray<FEffect> Effects;
 	TMap<TWeakObjectPtr<USkeletalMeshComponent>, FPauseState> PausedMeshes;

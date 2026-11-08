@@ -252,7 +252,52 @@ bool FGSTN_LagCompPresentationCancelledTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LagCompCueDedupTest, "GSTNCombat.NP.Hits.LagComp.CueDedupByHitId", GSTN_NP_TEST_FLAGS)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HitPredictionGraceTest, "GSTNCombat.NP.Hits.LagComp.PredictionGrace", GSTN_NP_TEST_FLAGS)
+bool FGSTN_HitPredictionGraceTest::RunTest(const FString& Parameters)
+{
+	constexpr double Grace = FGSTN_HitPredictionGrace::DefaultCancelGraceSeconds;
+	constexpr double Memory = FGSTN_HitPredictionGrace::DefaultMemorySeconds;
+	FGSTN_HitPresentationKey Key;
+	Key.VictimId = VictimId;
+	Key.TimelineStartFrame = 10;
+	Key.HitGroup = 0;
+	TArray<FGSTN_HitPresentationKey> Cancelled;
+
+	FGSTN_HitPredictionGrace Rule;
+	TestTrue(TEXT("a new key is a new prediction"), Rule.NoteStarted(Key, 1.0) == FGSTN_HitPredictionGrace::EStart::New);
+	TestFalse(TEXT("an unknown key has no grace to start"), Rule.NoteVanished(FGSTN_HitPresentationKey(), 1.0, Grace));
+
+	// Vanishes for less than the grace and returns: the same hit
+	TestTrue(TEXT("a vanish starts the grace"), Rule.NoteVanished(Key, 2.0, Grace));
+	TestFalse(TEXT("a second vanish does not restart it"), Rule.NoteVanished(Key, 2.1, Grace));
+	Rule.Update(2.0 + Grace * 0.5, Memory, Cancelled);
+	TestEqual(TEXT("inside the grace: no cancel"), Cancelled.Num(), 0);
+	TestTrue(TEXT("a key that returns is the same hit"), Rule.NoteStarted(Key, 2.1) == FGSTN_HitPredictionGrace::EStart::Returned);
+	Rule.Update(2.0 + Grace * 2.0, Memory, Cancelled);
+	TestEqual(TEXT("and the returned key is never cancelled by the old vanish"), Cancelled.Num(), 0);
+	TestTrue(TEXT("still known"), Rule.IsKnown(Key));
+
+	// Vanishes and stays away longer than the grace: a cancel, once
+	TestTrue(TEXT("vanishes again"), Rule.NoteVanished(Key, 3.0, Grace));
+	Rule.Update(3.0 + Grace + 0.01, Memory, Cancelled);
+	TestEqual(TEXT("after the grace: one cancel"), Cancelled.Num(), 1);
+	TestFalse(TEXT("the cancelled key is forgotten"), Rule.IsKnown(Key));
+	Rule.Update(3.0 + Grace + 0.1, Memory, Cancelled);
+	TestEqual(TEXT("cancelled once"), Cancelled.Num(), 1);
+	TestTrue(TEXT("a key back after its cancel is a new prediction"), Rule.NoteStarted(Key, 4.0) == FGSTN_HitPredictionGrace::EStart::New);
+
+	// Keys not seen for the memory time are forgotten, not cancelled
+	Cancelled.Reset();
+	Rule.Update(4.0 + Memory - 0.01, Memory, Cancelled);
+	TestTrue(TEXT("inside the memory: kept"), Rule.IsKnown(Key));
+	Rule.Update(4.0 + Memory + 0.01, Memory, Cancelled);
+	TestFalse(TEXT("after the memory: forgotten"), Rule.IsKnown(Key));
+	TestEqual(TEXT("forgetting is not a cancel"), Cancelled.Num(), 0);
+	TestEqual(TEXT("nothing left"), Rule.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LagCompCueDedupTest,"GSTNCombat.NP.Hits.LagComp.CueDedupByHitId", GSTN_NP_TEST_FLAGS)
 bool FGSTN_LagCompCueDedupTest::RunTest(const FString& Parameters)
 {
 	const uint32 Id = GSTNHitPresentation::MakeHitId(100, 200, 3, 1);

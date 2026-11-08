@@ -72,6 +72,54 @@ private:
 };
 
 /**
+ * The grace rule for a predicted hit whose key vanishes from the attacker's target ring. An NP correction can resimulate the move and drop a
+ * key for a frame or two before the resim adds it back with the same key (G7b: it vanished 16 ms after the prediction and returned 40 ms
+ * later), which is not a missed hit. So a vanished key is a cancel only after it stayed away for the grace; a key that comes back is the
+ * same hit (no cancel, no second prediction); keys not seen for the memory time are forgotten (their move is long over).
+ * Shared by the pawn component and the minion presentation subsystem. Pure; the caller passes the times. Presentation only.
+ */
+class GSTNCOMBATNP_API FGSTN_HitPredictionGrace
+{
+public:
+	static constexpr double DefaultCancelGraceSeconds = 0.25;
+	static constexpr double DefaultMemorySeconds = 2.0;
+
+	enum class EStart : uint8
+	{
+		/** Not predicted before: show the hit */
+		New,
+		/** Already predicted and kept (its key came back): no second prediction */
+		Returned
+	};
+
+	/** A key appeared in the ring. A key pending its cancel is rescued */
+	EStart NoteStarted(const FGSTN_HitPresentationKey& Key, double NowSeconds);
+
+	/** A key vanished from the ring. True when a grace started now (false for an unknown key or one already vanished) */
+	bool NoteVanished(const FGSTN_HitPresentationKey& Key, double NowSeconds, double GraceSeconds);
+
+	/** Call every presented frame, before reading the ring: appends the keys whose grace ran out (real cancels, forgotten here) to OutCancelled */
+	void Update(double NowSeconds, double MemorySeconds, TArray<FGSTN_HitPresentationKey>& OutCancelled);
+
+	bool IsKnown(const FGSTN_HitPresentationKey& Key) const { return Find(Key) != INDEX_NONE; }
+	int32 Num() const { return Entries.Num(); }
+	void Reset() { Entries.Reset(); }
+
+private:
+	struct FEntry
+	{
+		FGSTN_HitPresentationKey Key;
+		double SeenSeconds = 0.0;
+		/** >= 0: the key vanished and is cancelled at this time unless it comes back */
+		double CancelAtSeconds = -1.0;
+	};
+
+	int32 Find(const FGSTN_HitPresentationKey& Key) const;
+
+	TArray<FEntry> Entries;
+};
+
+/**
  * Remembers the cues the attacker's machine played for a predicted hit, so the real cue of the same hit (executed by the authority, or by
  * the simulation of the victim) is played once, not twice. Keyed by the hit id; entries are forgotten after MaxAgeFrames.
  */

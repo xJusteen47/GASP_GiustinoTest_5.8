@@ -55,6 +55,54 @@ void FGSTN_HitPresentationTracker::Reset()
 	RunStart = INDEX_NONE;
 }
 
+int32 FGSTN_HitPredictionGrace::Find(const FGSTN_HitPresentationKey& Key) const
+{
+	return Entries.IndexOfByPredicate([&Key](const FEntry& Entry) { return Entry.Key == Key; });
+}
+
+FGSTN_HitPredictionGrace::EStart FGSTN_HitPredictionGrace::NoteStarted(const FGSTN_HitPresentationKey& Key, double NowSeconds)
+{
+	const int32 Index = Find(Key);
+	if (Index != INDEX_NONE)
+	{
+		Entries[Index].CancelAtSeconds = -1.0;
+		Entries[Index].SeenSeconds = NowSeconds;
+		return EStart::Returned;
+	}
+	FEntry& Entry = Entries.AddDefaulted_GetRef();
+	Entry.Key = Key;
+	Entry.SeenSeconds = NowSeconds;
+	return EStart::New;
+}
+
+bool FGSTN_HitPredictionGrace::NoteVanished(const FGSTN_HitPresentationKey& Key, double NowSeconds, double GraceSeconds)
+{
+	const int32 Index = Find(Key);
+	if (Index == INDEX_NONE || Entries[Index].CancelAtSeconds >= 0.0)
+	{
+		return false;
+	}
+	Entries[Index].CancelAtSeconds = NowSeconds + GraceSeconds;
+	return true;
+}
+
+void FGSTN_HitPredictionGrace::Update(double NowSeconds, double MemorySeconds, TArray<FGSTN_HitPresentationKey>& OutCancelled)
+{
+	for (int32 Index = Entries.Num() - 1; Index >= 0; --Index)
+	{
+		const FEntry& Entry = Entries[Index];
+		if (Entry.CancelAtSeconds >= 0.0 && NowSeconds >= Entry.CancelAtSeconds)
+		{
+			OutCancelled.Add(Entry.Key);
+			Entries.RemoveAtSwap(Index);
+		}
+		else if (Entry.CancelAtSeconds < 0.0 && NowSeconds - Entry.SeenSeconds > MemorySeconds)
+		{
+			Entries.RemoveAtSwap(Index);
+		}
+	}
+}
+
 void FGSTN_HitCueDedup::NoteLocal(uint32 HitId, int32 Frame)
 {
 	Prune(Frame);

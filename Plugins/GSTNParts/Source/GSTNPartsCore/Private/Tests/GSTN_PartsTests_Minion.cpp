@@ -45,7 +45,7 @@ namespace
 		return Report;
 	}
 
-	const FGSTN_PartHitOutcome* FindOutcome(const FGSTN_StepResult& Result)
+	const FGSTN_PartHitOutcome* FindMinionOutcome(const FGSTN_StepResult& Result)
 	{
 		for (const FInstancedStruct& Entry : Result.OutcomeExtensions)
 		{
@@ -105,8 +105,8 @@ bool FGSTN_PartsMinionStepTest::RunTest(const FString& Parameters)
 			FGSTN_HitPipelineRunner::MakeView(Rules.Get(), Context, View);
 			GetDefault<UGSTN_HitStep_PartResolve>()->Resolve(View, Results[Which]);
 		}
-		const FGSTN_PartHitOutcome* A = FindOutcome(Results[0]);
-		const FGSTN_PartHitOutcome* B = FindOutcome(Results[1]);
+		const FGSTN_PartHitOutcome* A = FindMinionOutcome(Results[0]);
+		const FGSTN_PartHitOutcome* B = FindMinionOutcome(Results[1]);
 		if (!TestTrue(*FString::Printf(TEXT("box %d: both produce an outcome"), Box), A && B))
 		{
 			continue;

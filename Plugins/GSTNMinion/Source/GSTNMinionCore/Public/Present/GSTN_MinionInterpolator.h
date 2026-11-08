@@ -208,6 +208,36 @@ struct GSTNMINIONCORE_API FGSTN_MinionFlashParams
 	/** A predicted hit with no HitCounter change within this time ends (8.4: 500 ms) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Presentation", meta = (ClampMin = "0.0", ForceUnits = "s"))
 	float ConfirmWindowSeconds = 0.5f;
+
+	/**
+	 * Adaptive window on a client (G7b part 2: at 2 % loss 11 of 27 lagcomp confirms landed after the 500 ms window and counted expired, then
+	 * remote). The confirm rides the host's next snapshot, so under loss it is late by about a round trip plus a retransmitted snapshot, and
+	 * no loss figure reaches presentation code: a client with a measured ping (> 0) waits max(ConfirmWindowSeconds, RemoteConfirmFloorSeconds,
+	 * RttFactor x RTT + JitterMarginSeconds), capped at MaxConfirmWindowSeconds. No ping (the host, tests, no player state) keeps
+	 * ConfirmWindowSeconds, and a confirm inside 500 ms never depended on the window, so the 0 % behaviour is unchanged.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Presentation", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float RemoteConfirmFloorSeconds = 0.75f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Presentation", meta = (ClampMin = "0.0"))
+	float RttFactor = 4.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Presentation", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float JitterMarginSeconds = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Presentation", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float MaxConfirmWindowSeconds = 1.5f;
+
+	/** The window to use for a prediction made now; RttSeconds <= 0 means unknown */
+	float ResolveConfirmWindow(float RttSeconds) const
+	{
+		if (RttSeconds <= 0.f)
+		{
+			return ConfirmWindowSeconds;
+		}
+		const float Window = FMath::Max3(ConfirmWindowSeconds, RemoteConfirmFloorSeconds, RttFactor * RttSeconds + JitterMarginSeconds);
+		return FMath::Max(ConfirmWindowSeconds, FMath::Min(Window, MaxConfirmWindowSeconds));
+	}
 };
 
 /**

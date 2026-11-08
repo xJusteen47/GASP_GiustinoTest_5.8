@@ -8,8 +8,18 @@
 #include "GameFramework/Pawn.h"
 #include "GameplayCueManager.h"
 #include "GSTN_HitEffectContext.h"
+#include "HAL/IConsoleManager.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
+
+namespace
+{
+	TAutoConsoleVariable<int32> CVarHitPresentationLogFlash(
+		TEXT("gstn.Combat.HitPresentation.LogFlash"), 0,
+		TEXT("1 logs one 'PawnFlash' line per predicted hit on a pawn victim and per vanish, return and cancel of its key (victim, move start, hit group). ")
+		TEXT("Diagnostics for the harness; off by default."),
+		ECVF_Default);
+}
 
 UGSTN_HitPresentationComponent::UGSTN_HitPresentationComponent()
 {
@@ -102,15 +112,48 @@ void UGSTN_HitPresentationComponent::OnAttackerFrame(const FGSTN_CombatSyncCore&
 		return;
 	}
 	const bool bRunLive = Core.ActionState == EGSTN_ActionState::InTimeline && Core.TimelineStartFrame != INDEX_NONE;
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	const bool bLogFlash = CVarHitPresentationLogFlash.GetValueOnGameThread() != 0;
+	auto LogFlash = [&](const TCHAR* Event, const FGSTN_HitPresentationKey& Key)
+	{
+		UE_LOG(LogTemp, Log, TEXT("PawnFlash %s owner=%s victim=%d start=%d group=%d now=%.3f"),
+			Event, *GetNameSafe(GetOwner()), Key.VictimId, Key.TimelineStartFrame, Key.HitGroup, Now);
+	};
+
+	// Vanished keys whose grace ran out are real cancels; old keys are forgotten (the same rule as the minion presentation)
+	TArray<FGSTN_HitPresentationKey> Expired;
+	Grace.Update(Now, PredictedHitMemorySeconds, Expired);
+	for (const FGSTN_HitPresentationKey& Key : Expired)
+	{
+		if (bLogFlash)
+		{
+			LogFlash(TEXT("cancel"), Key);
+		}
+		CancelEffect(Key);
+	}
+
 	FGSTN_HitPresentationTracker::FDelta Delta;
 	Tracker.Update(Core.Hit, bRunLive, Core.TimelineStartFrame, Delta);
 
 	for (const FGSTN_HitPresentationKey& Key : Delta.Cancelled)
 	{
-		CancelEffect(Key);
+		if (Grace.NoteVanished(Key, Now, CancelGraceSeconds) && bLogFlash)
+		{
+			LogFlash(TEXT("vanish"), Key);
+		}
 	}
 	for (const FGSTN_HitPresentationKey& Key : Delta.Started)
 	{
+		if (Grace.IsKnown(Key))
+		{
+			// The same hit came back after a correction: its effects went on, not a new prediction
+			Grace.NoteStarted(Key, Now);
+			if (bLogFlash)
+			{
+				LogFlash(TEXT("return"), Key);
+			}
+			continue;
+		}
 		// The latest prediction for this victim and group inside the running move (a re-simulation replaces earlier ones)
 		const FGSTN_PredictedHitView* Found = nullptr;
 		for (const FGSTN_PredictedHitView& View : Views)
@@ -122,6 +165,11 @@ void UGSTN_HitPresentationComponent::OnAttackerFrame(const FGSTN_CombatSyncCore&
 		}
 		if (Found)
 		{
+			Grace.NoteStarted(Key, Now);
+			if (bLogFlash)
+			{
+				LogFlash(TEXT("predict"), Key);
+			}
 			StartEffect(Key, *Found, Frame, AttackerId, StepMs);
 		}
 	}

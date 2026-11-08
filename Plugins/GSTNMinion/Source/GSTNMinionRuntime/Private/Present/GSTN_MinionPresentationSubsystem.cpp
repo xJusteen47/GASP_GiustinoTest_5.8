@@ -469,22 +469,15 @@ void UGSTN_MinionPresentationSubsystem::UpdatePredictedHits(double NowSeconds)
 	};
 
 	// Vanished keys whose grace ran out are real cancels; old keys are forgotten
-	for (int32 Index = PredictedMinionHits.Num() - 1; Index >= 0; --Index)
+	TArray<FGSTN_HitPresentationKey> Expired;
+	PredictedMinionHits.Update(NowSeconds, PredictedHitMemorySeconds, Expired);
+	for (const FGSTN_HitPresentationKey& Key : Expired)
 	{
-		const FPredictedMinionHit& Hit = PredictedMinionHits[Index];
-		if (Hit.CancelAtSeconds >= 0.0 && NowSeconds >= Hit.CancelAtSeconds)
+		if (bLogFlash)
 		{
-			if (bLogFlash)
-			{
-				LogFlash(TEXT("cancel"), Hit.Key);
-			}
-			OnPredictionCancelled(Hit.Key.VictimId, NowSeconds);
-			PredictedMinionHits.RemoveAtSwap(Index);
+			LogFlash(TEXT("cancel"), Key);
 		}
-		else if (Hit.CancelAtSeconds < 0.0 && NowSeconds - Hit.SeenSeconds > PredictedHitMemorySeconds)
-		{
-			PredictedMinionHits.RemoveAtSwap(Index);
-		}
+		OnPredictionCancelled(Key.VictimId, NowSeconds);
 	}
 
 	if (!Sync)
@@ -498,44 +491,26 @@ void UGSTN_MinionPresentationSubsystem::UpdatePredictedHits(double NowSeconds)
 	const bool bRunLive = Core.ActionState == EGSTN_ActionState::InTimeline && Core.TimelineStartFrame != INDEX_NONE;
 	FGSTN_HitPresentationTracker::FDelta Delta;
 	HitTracker.Update(Core.Hit, bRunLive, Core.TimelineStartFrame, Delta);
-	auto FindPredicted = [this](const FGSTN_HitPresentationKey& Key)
-	{
-		return PredictedMinionHits.IndexOfByPredicate([&Key](const FPredictedMinionHit& Hit) { return Hit.Key == Key; });
-	};
 	for (const FGSTN_HitPresentationKey& Key : Delta.Cancelled)
 	{
-		if (GSTNEntityKinds::IsMinionEntityId(Key.VictimId))
+		if (GSTNEntityKinds::IsMinionEntityId(Key.VictimId) && PredictedMinionHits.NoteVanished(Key, NowSeconds, HitCancelGraceSeconds) && bLogFlash)
 		{
-			const int32 Index = FindPredicted(Key);
-			if (Index != INDEX_NONE && PredictedMinionHits[Index].CancelAtSeconds < 0.0)
-			{
-				if (bLogFlash)
-				{
-					LogFlash(TEXT("vanish"), Key);
-				}
-				PredictedMinionHits[Index].CancelAtSeconds = NowSeconds + HitCancelGraceSeconds;
-			}
+			LogFlash(TEXT("vanish"), Key);
 		}
 	}
 	for (const FGSTN_HitPresentationKey& Key : Delta.Started)
 	{
 		if (GSTNEntityKinds::IsMinionEntityId(Key.VictimId))
 		{
-			const int32 Index = FindPredicted(Key);
-			if (Index != INDEX_NONE)
+			if (PredictedMinionHits.NoteStarted(Key, NowSeconds) == FGSTN_HitPredictionGrace::EStart::Returned)
 			{
 				// The same hit came back after a correction (or after the tracker reset): not a new prediction
 				if (bLogFlash)
 				{
 					LogFlash(TEXT("return"), Key);
 				}
-				PredictedMinionHits[Index].CancelAtSeconds = -1.0;
-				PredictedMinionHits[Index].SeenSeconds = NowSeconds;
 				continue;
 			}
-			FPredictedMinionHit& Hit = PredictedMinionHits.AddDefaulted_GetRef();
-			Hit.Key = Key;
-			Hit.SeenSeconds = NowSeconds;
 			if (bLogFlash)
 			{
 				LogFlash(TEXT("predict"), Key);
@@ -549,7 +524,14 @@ void UGSTN_MinionPresentationSubsystem::OnPredictedHit(int32 EntityId, double No
 {
 	if (FGSTN_MinionPresentRecord* Record = FindRecordBySlot(GSTNEntityKinds::MinionIndexOf(EntityId)))
 	{
-		Record->Flash.OnPredictedHit(NowSeconds, FlashParams);
+		// The confirm window follows the local ping (0 on the host or before a player state exists: the base window)
+		const UWorld* World = GetWorld();
+		const APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
+		const APlayerState* PlayerState = Controller && Controller->IsLocalController() ? Controller->PlayerState.Get() : nullptr;
+		const float RttSeconds = PlayerState ? PlayerState->GetPingInMilliseconds() * 0.001f : 0.f;
+		FGSTN_MinionFlashParams Params = FlashParams;
+		Params.ConfirmWindowSeconds = FlashParams.ResolveConfirmWindow(RttSeconds);
+		Record->Flash.OnPredictedHit(NowSeconds, Params);
 		++Stats.PredictedHits;
 	}
 }

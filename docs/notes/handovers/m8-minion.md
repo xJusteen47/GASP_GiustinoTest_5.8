@@ -478,3 +478,20 @@
 - Full SUITE_MINION 0 % after part 2 (dedicated + 2, `Saved/Logs/m8g7b2/gate-suite0.log`): 9/11 PASS. player_hits_minion still FAIL in the suite run on
   "none cancelled" with 1 cancel of 47 predicted (40 confirmed, 6 expired; was 6 of 36): flicker longer than 0.25 s, or a different cause. Not fixed (machine
   window over). lod "no pop" unchanged. Play settings restored to the pre-G6b file (`Saved/M8G6b/pie-orig.bak`).
+
+## Hit presentation grace + confirm window (laptop, 2026-11-08): DONE (owner OK 16:34Z)
+
+- Branch `claude/hitpres-laptop` = P15 tip d4172a6e + feature 3e65cc8 merged (perf-debt.md conflict: both sides kept). Sonnet writer
+  (`Saved/HitPres/brief.md`).
+- (a) Pawn victims: the G7b grace now also in `UGSTN_HitPresentationComponent` (GSTNCombatNP, presentation only): shared pure helper
+  `FGSTN_HitPredictionGrace` (GSTNCombatNP `GSTN_HitPresentation.h`), used by the pawn component and by the minion presentation subsystem
+  (its own copy replaced, same behaviour and logs). `CancelGraceSeconds` 0.25, `PredictedHitMemorySeconds` 2; log `gstn.Combat.HitPresentation.LogFlash`.
+- (b) Minion confirm window: `ResolveConfirmWindow` = 0.5 s with no ping (host, tests); with a ping, min(1.5, max(0.75, 4 x RTT + 0.25)) s
+  (ping from PlayerState). Confirms within 0.5 s unchanged. Pawns have no confirm window.
+- Build: 1 fix (unity-build clash, `FindOutcome` in the P15 minion parts test renamed). All on 1423/0 (+2), 0 ensures. SUITE_DEFAULT 50/50.
+- SUITE_MINION (dedicated + 2, 60/15): 0 %: 8/11; red: lod "no pop" (known); player_hits_minion and lagcomp "the kit swing came out
+  on the server" = no swing at all on the laptop at 0 % (input, not presentation; both pass the swing check at 2 %). 2 %: 9/11;
+  player_hits_minion PASS; lagcomp 31 predicted / 29 confirmed / **1 expired (was 11)** / 1 cancelled -> still red on "none cancelled"
+  (the open G7b case: one cancel that is not the ring flicker); lod known.
+- PERF-DEBT: none new (one small map per presentation component, entries only while a predicted hit lives).
+- Cost: ~$4 (writer ~133k tokens / 48 tool calls; 2 builds, 1 test run, 2 SUITE_MINION runs, 1 SUITE_DEFAULT).

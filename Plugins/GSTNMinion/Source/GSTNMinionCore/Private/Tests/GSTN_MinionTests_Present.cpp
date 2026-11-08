@@ -154,7 +154,40 @@ bool FGSTN_MinionPresentTierTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionPresentFlashTest, "GSTNMinion.Core.Present.FlashConfirmAndCancelByHitCounter", GSTNMinionTest::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionPresentConfirmWindowTest, "GSTNMinion.Core.Present.ConfirmWindowFollowsPing", GSTNMinionTest::Flags)
+bool FGSTN_MinionPresentConfirmWindowTest::RunTest(const FString& Parameters)
+{
+	const FGSTN_MinionFlashParams Params;
+	TestEqual(TEXT("no ping (host, no player state): the base 500 ms window"), Params.ResolveConfirmWindow(0.f), 0.5f);
+	TestEqual(TEXT("a low ping still gets the 750 ms floor"), Params.ResolveConfirmWindow(0.05f), 0.75f);
+	TestEqual(TEXT("a high ping widens it: 4 x 0.2 + 0.25"), Params.ResolveConfirmWindow(0.2f), 1.05f);
+	TestEqual(TEXT("and it is capped"), Params.ResolveConfirmWindow(2.f), Params.MaxConfirmWindowSeconds);
+
+	// A confirm inside 500 ms is the same under either window; a late one (600 ms) is only caught by the wide window
+	FGSTN_MinionFlashParams Wide = Params;
+	Wide.ConfirmWindowSeconds = Params.ResolveConfirmWindow(0.06f);
+	FGSTN_MinionHitFlash Narrow;
+	FGSTN_MinionHitFlash Wider;
+	for (FGSTN_MinionHitFlash* Flash : { &Narrow, &Wider })
+	{
+		Flash->ObserveCounter(0, 0.0, Params);
+	}
+	Narrow.OnPredictedHit(1.0, Params);
+	Wider.OnPredictedHit(1.0, Wide);
+	Narrow.ObserveCounter(1, 1.6, Params);
+	Wider.ObserveCounter(1, 1.6, Wide);
+	TestTrue(TEXT("500 ms window: a 600 ms confirm expired, then counted remote"), Narrow.NumExpired == 1 && Narrow.NumRemote == 1 && Narrow.NumConfirmed == 0);
+	TestTrue(TEXT("adaptive window: the same confirm lands in the window"), Wider.NumConfirmed == 1 && Wider.NumExpired == 0 && Wider.NumRemote == 0);
+
+	FGSTN_MinionHitFlash Early;
+	Early.ObserveCounter(0, 0.0, Params);
+	Early.OnPredictedHit(1.0, Wide);
+	Early.ObserveCounter(1, 1.3, Wide);
+	TestTrue(TEXT("a confirm inside 500 ms never depended on the window"), Early.NumConfirmed == 1 && Early.NumExpired == 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionPresentFlashTest,"GSTNMinion.Core.Present.FlashConfirmAndCancelByHitCounter", GSTNMinionTest::Flags)
 bool FGSTN_MinionPresentFlashTest::RunTest(const FString& Parameters)
 {
 	const FGSTN_MinionFlashParams Params; // 0.12 s flash, 0.1 s pause, 0.5 s window
