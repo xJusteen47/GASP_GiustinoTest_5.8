@@ -48,3 +48,27 @@
 - Doubts (report): HealthWeight is re-run to divide its scale out; the bridge takes the single extra step slot; Launch/Stagger part effects left to B.
 - PERF-DEBT (in the bridge README): 160 minions x (9 + 1 + 4) B columns ~2.2 KB; per hit: one row read/write + the fighter part step (to measure in B).
 - Cost: ~$7 (Opus writer ~238k tokens / 74 tool calls; 3 main builds incl. 2 off configs, 3 test runs, 1 canary).
+
+## P16 sub-gate B (laptop, 2026-11-08): wire, puppets, promotion DONE; plugin left DISABLED (2 % numbers not clean)
+
+- Commit 42a93304 on `claude/p16-parts-minion-laptop`. Opus writer (medium), brief `Saved/P16/brief-b.md` (report in the lead's notes).
+- Wire: part-bearing types get `bHasNetExt`; BrokenMask goes out through the G10 `SetExtByte` only on change. Puppets
+  (`UGSTN_PartsMinionPuppetSubsystem`) hide broken part bones (host from the server row, clients from `GetExtByte`). Promotion: the bridge seeds
+  the fighter's parts through new `FGSTN_PartsAttach::SetPendingSeed/ConsumePendingSeed` (GSTNPartsNP, consumed once at AfterClocks).
+  GSTNMinion: 2 more inert seams `OnDefinitionRegistering`, `UGSTN_MinionClientRegistry::OnDefinitionResolving` (bHasNetExt fixed before the wire format).
+  Bench: `gstn.PartsMinion.Bench.Parts <TypeTag> <hurtboxes> <cap>`, `gstn.PartsMinion.Bench.Report`; scenarios `minion_parts_base` + `minion_parts`
+  (SUITE_MINION_BENCH; PASS "bridge not enabled" when off).
+- Gate (plugin off, committed state): all on 1423/0, GSTNMinion off 1330/0, Platform+Parts off 1401/0, 0 ensures; canary bridge alone 156/0.
+- Trial with the plugin ON (not committed): build ok, all on 1431/0 (+8). SUITE_MINION 0 %: 9/11, same as today (lagcomp 1 cancel, lod known).
+  `minion_parts` 0 %: works (23/40 heads broken, 23/23 headless alive and attacking, client ext bytes = server masks) but FAILS two budgets:
+  bytes +11.9 % per client (target +5 % + 2 % noise) and 5.06 us per part hit (target 2 us: view 0.19, **step 4.72**, outcome 0.15).
+  Puppets: 23 hiding but `missingBones` 23 (the bench puppet mesh has no `head` bone: the visual is NOT verified).
+  SUITE_MINION 2 %: 8/11, then rerun of the two: player_hits 1 cancel (G7b case), lagcomp no swing (flaky input). Not "today's numbers" -> kept OFF.
+- Not done: Launch/Stagger part effects (needs a GSTNMinion merge seam with the drain's knockback), part events via the outbox, demotion copy.
+- Doubt: `bHasNetExt` is set at runtime on the definition object (stays set after PIE in the editor; would be saved if someone saves that asset).
+- PERF-DEBT @160 minions: memory 160 x 14 B ~2.2 KB; wire 1 B per item per mask change (+5 % of a 20 B update only on that update); server
+  ~5 us per part hit, the part step 4.7 us of it (fighter math reused: cache the part set lookup and skip the full snapshot for minions);
+  puppet bone hide per change only. With 160 minions and ~10 part hits per frame at peak: ~0.05 ms/frame.
+- Cost: B ~$9 (Opus writer ~323k tokens / 109 tool calls; 4 builds incl. trial, 3 test runs, canary, 4 harness runs). P16 total ~$16.
+- Next: (1) cut the part step cost (cache) to <= 2 us; (2) a bench puppet with a head bone (or a test mesh) for the visual; (3) clean 2 % runs
+  of the two flaky scenarios, then enable GSTNPartsMinion in the .uproject.
