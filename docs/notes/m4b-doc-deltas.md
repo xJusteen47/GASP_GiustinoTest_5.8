@@ -290,3 +290,15 @@ One line each: where, what differs, why. Collected per checkpoint; folded into `
 - **Editor.** The hurtbox set editor draws an enabled mouth in magenta, outside the hit proxy.
 - **Tests** (`GSTNPartsCore`, `GSTNParts.Core.Openings.*`): `CavityReachedOnlyThroughMouth`, `BulkyHitboxFallsToArmour`, `ProjectileRadiusFits`, `NoOpeningKeepsPriorityRule` (the helper plus `PickHurtboxIndex`, mirroring the attacker loop; no NP world test), `OverrideWinsOverPartHardness`, `EitherSideBreaksTheWholePart`, `RicochetPredictionUsesOverride` (the step's Stop verdict and Ricochet flag, which the attacker outcome seam reads).
 - **Not done:** TM3 station 5 leg content (map work), wounds (out of scope).
+
+## P15 GSTNPartsMinion interface (laptop, 2026-11-08)
+
+- **Owner decision:** minions can lose parts (Helldivers style); this gate is the interface and the pure pieces only, the full path is P16.
+- **New plugin** `Plugins/GSTNPartsMinion/` (deps `GSTNParts`, `GSTNMinion`, disabled, not in the `.uproject`): one empty Runtime module, `GSTNPartsMinion`, with public deps `GSTNPartsCore` and `GSTNMinionCore`. `GSTNMinion` is unchanged.
+- **Minion flag.** `bForMinions` (default false) on `UGSTN_PartSetDefinition`. The 8-part rule is `FGSTN_PartsValidation::ValidateForMinions` (a separate function, so `ValidateParts` keeps its signature); the asset's `IsDataValid` and the editor validator call it when the flag is set. This resolves the note in `GSTN_PartSetValidator.h` that the minion limit "waits for P15".
+- **Conversion rule: Stats is rejected**, not converted (a minion stats struct would be a second stat model). `FGSTN_PartsMinionRules::CanMinionRunBreakEffect`.
+- **`FGSTN_PartsMinionExtension { PartSet, LethalParts (names) }`.** The lethal mask is resolved by name (`ResolveLethalMask`, bit per part index); empty by default, so losing the head keeps the minion fighting. The Kill flag of a MainDamage break effect is ignored for minions (a validation warning says so): lethality is the list only.
+- **Store builder.** `FGSTN_PartsSnapshotExt::FromMinionStore(Set, uint8 Mask, const uint8* Damage8)` (serial 0) and the reverse `ToMinionStore` (false if a part past the eighth is set).
+- **Tests:** `GSTNParts.Core.Minion.{StepSameOutputAsFighter, MaskOver8Rejected, StatsEffectRejectedOrConverted, SnapshotExtFromStore, KeepsFightingAfterHeadLoss}`. Written, not built or run in this gate.
+- **Not done (P16):** store columns, `ExtByte`, hit-flow glue, promotion copy, events, harness scenario, `UGSTN_MinionDefinition` field.
+

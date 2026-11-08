@@ -10,8 +10,8 @@
  * prefixes every message with the asset path, so a finding in a list of hundreds of assets names its asset. The engine also
  * calls the asset's own IsDataValid, so the unprefixed message appears there as well.
  *
- * The minion limit of 8 parts (GSTN_PartsLimits::MaxMinionParts) is not checked here: the part set carries no minion flag yet, so
- * the rule belongs to the minion bridge (plan P15), which calls FGSTN_PartsValidation with its own limit.
+ * A set flagged bForMinions also gets the minion rules (plan P15, FGSTN_PartsValidation::ValidateForMinions): at most 8 parts and no
+ * Stats break effect.
  */
 UCLASS()
 class GSTNPARTSEDITOR_API UGSTN_PartSetValidator : public UEditorValidatorBase

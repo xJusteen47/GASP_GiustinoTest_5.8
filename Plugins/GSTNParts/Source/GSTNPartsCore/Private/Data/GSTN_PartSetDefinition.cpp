@@ -127,6 +127,10 @@ EDataValidationResult UGSTN_PartSetDefinition::IsDataValid(FDataValidationContex
 	FGSTN_PartsValidationReport Report;
 	FGSTN_PartsValidation::ValidateParts(Parts, GrabGate, BodyReaction, bHaveBones ? &Bones : nullptr,
 		GSTN_PartsLimits::MaxParts, Report);
+	if (bForMinions)
+	{
+		FGSTN_PartsValidation::ValidateForMinions(Parts, Report);
+	}
 	for (const FGSTN_PartsIssue& Issue : Report.Issues)
 	{
 		if (Issue.bError)

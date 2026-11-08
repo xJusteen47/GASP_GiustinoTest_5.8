@@ -21,6 +21,30 @@ void FGSTN_PartsSnapshotExt::SetState(const FGSTN_PartsState& State)
 	BreakSerial = State.BreakSerial;
 }
 
+FGSTN_PartsSnapshotExt FGSTN_PartsSnapshotExt::FromMinionStore(const UGSTN_PartSetDefinition* InPartSet, uint8 InBrokenMask, const uint8* Damage)
+{
+	FGSTN_PartsSnapshotExt Ext;
+	Ext.PartSet = InPartSet;
+	Ext.BrokenMask = InBrokenMask;
+	if (Damage)
+	{
+		FMemory::Memcpy(Ext.PartDamage, Damage, GSTN_PartsLimits::MaxMinionParts);
+	}
+	return Ext;
+}
+
+bool FGSTN_PartsSnapshotExt::ToMinionStore(const FGSTN_PartsState& State, uint8& OutBrokenMask, uint8 (&OutDamage)[GSTN_PartsLimits::MaxMinionParts])
+{
+	bool bFits = (State.BrokenMask >> GSTN_PartsLimits::MaxMinionParts) == 0;
+	for (int32 Index = GSTN_PartsLimits::MaxMinionParts; Index < GSTN_PartsLimits::MaxParts; ++Index)
+	{
+		bFits = bFits && State.PartDamage[Index] == 0;
+	}
+	OutBrokenMask = static_cast<uint8>(State.BrokenMask & 0xFFu);
+	FMemory::Memcpy(OutDamage, State.PartDamage, GSTN_PartsLimits::MaxMinionParts);
+	return bFits;
+}
+
 const FGSTN_PartsSnapshotExt* FGSTN_PartsSnapshotExt::FromView(const FGSTN_HitVictimView& Victim)
 {
 	const FGSTN_PartsSnapshotExt* Ext = static_cast<const FGSTN_PartsSnapshotExt*>(Victim.SnapshotExtension);

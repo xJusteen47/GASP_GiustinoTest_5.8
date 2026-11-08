@@ -34,6 +34,10 @@ EDataValidationResult UGSTN_PartSetValidator::ValidateAsset(const UObject* Asset
 	{
 		FGSTN_PartsValidationReport Report;
 		FGSTN_PartsValidation::ValidateParts(Set->Parts, Set->GrabGate, Set->BodyReaction, KnownBones, GSTN_PartsLimits::MaxParts, Report);
+		if (Set->bForMinions)
+		{
+			FGSTN_PartsValidation::ValidateForMinions(Set->Parts, Report);
+		}
 		for (const FGSTN_PartsIssue& Issue : Report.Issues)
 		{
 			if (Issue.bError)

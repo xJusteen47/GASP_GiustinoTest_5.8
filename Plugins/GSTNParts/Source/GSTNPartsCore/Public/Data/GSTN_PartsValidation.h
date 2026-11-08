@@ -44,6 +44,13 @@ struct GSTNPARTSCORE_API FGSTN_PartsValidation
 		const FGSTN_PartReaction& BodyReaction, const TSet<FName>* KnownBones, int32 MaxPartsAllowed,
 		FGSTN_PartsValidationReport& Report);
 
+	/**
+	 * The extra rules of a part set flagged for minions (combat-parts.md §5.5, plan P15), on top of ValidateParts: more than
+	 * GSTN_PartsLimits::MaxMinionParts parts is an error (MinionMaskOver8: the store keeps a uint8 mask and 8 damage bytes), and so is
+	 * a Stats break effect (a minion has no gameplay effects; the conversion rule is "rejected", see FGSTN_PartsMinionRules)
+	 */
+	static void ValidateForMinions(TConstArrayView<FGSTN_PartDefinition> Parts, FGSTN_PartsValidationReport& Report);
+
 	/** Checks the bands of one penetration table as authored (before Normalize): empty, unsorted, duplicate MinDelta, scales, gaps */
 	static void ValidateBands(TConstArrayView<FGSTN_PenetrationBand> Bands, FGSTN_PartsValidationReport& Report);
 };

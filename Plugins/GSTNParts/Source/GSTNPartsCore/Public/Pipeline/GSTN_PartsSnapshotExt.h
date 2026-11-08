@@ -50,6 +50,17 @@ struct GSTNPARTSCORE_API FGSTN_PartsSnapshotExt
 	/** Fills the state fields from a part state */
 	void SetState(const FGSTN_PartsState& State);
 
+	/**
+	 * The extension of a minion, built from the minion store's columns (plan P15): one broken-mask byte and eight damage bytes, 9 B per
+	 * part-bearing minion, no actor and no fragment. Damage may be null (all zero). The set must have bForMinions (at most 8 parts),
+	 * so the upper 8 mask bits and damage bytes of the result are zero. BreakSerial is 0: a minion keeps none, its events are
+	 * deduplicated by the store's own generation (plan P16)
+	 */
+	static FGSTN_PartsSnapshotExt FromMinionStore(const UGSTN_PartSetDefinition* PartSet, uint8 BrokenMask, const uint8* Damage);
+
+	/** The reverse for the minion store: the low byte of a state's mask and its first 8 damage bytes. False when a part at index 8 or above is broken or damaged (the state does not fit a minion) */
+	static bool ToMinionStore(const FGSTN_PartsState& State, uint8& OutBrokenMask, uint8 (&OutDamage)[GSTN_PartsLimits::MaxMinionParts]);
+
 	/** The extension a victim view carries, or null when it has none or the pointer is not a parts extension */
 	static const FGSTN_PartsSnapshotExt* FromView(const FGSTN_HitVictimView& Victim);
 };

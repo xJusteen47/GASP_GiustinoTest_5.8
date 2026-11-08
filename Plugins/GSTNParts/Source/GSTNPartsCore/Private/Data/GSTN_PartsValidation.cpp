@@ -4,6 +4,7 @@
 
 #include "Data/GSTN_PartBreakEffects.h"
 #include "Data/GSTN_PartsLimits.h"
+#include "Data/GSTN_PartsMinionExtension.h"
 #include "Math/GSTN_PartMath.h"
 
 void FGSTN_PartsValidationReport::AddError(const FString& Message)
@@ -322,6 +323,24 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 	if (GrabGate.bAnyOf && bAnyRequiredInRange && !bAnyRequiredReachable)
 	{
 		Report.AddError(TEXT("The grab gate needs any of its required parts, but none of them can ever break: the entity could never be grabbed."));
+	}
+}
+
+void FGSTN_PartsValidation::ValidateForMinions(TConstArrayView<FGSTN_PartDefinition> Parts, FGSTN_PartsValidationReport& Report)
+{
+	if (Parts.Num() > GSTN_PartsLimits::MaxMinionParts)
+	{
+		Report.AddError(FString::Printf(TEXT("A minion part set has %d parts; the limit is %d (the minion store keeps a uint8 broken mask and 8 damage bytes)."), Parts.Num(), GSTN_PartsLimits::MaxMinionParts));
+	}
+	for (int32 Index = 0; Index < Parts.Num(); ++Index)
+	{
+		for (int32 EffectIndex = 0; EffectIndex < Parts[Index].OnBreak.Num(); ++EffectIndex)
+		{
+			if (!FGSTN_PartsMinionRules::CanMinionRunBreakEffect(Parts[Index].OnBreak[EffectIndex]))
+			{
+				Report.AddError(FString::Printf(TEXT("%s: break effect %d is a Stats effect, which a minion cannot run (no ability system); use a MainDamage, Launch or Stagger effect, or a derived one."), *PartLabel(Index, Parts[Index]), EffectIndex));
+			}
+		}
 	}
 }
 

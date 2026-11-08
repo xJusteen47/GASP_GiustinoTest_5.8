@@ -47,6 +47,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parts")
 	FGSTN_GrabGate GrabGate;
 
+	/**
+	 * This set is for minions (GSTNPartsMinion, plan P15): validation then enforces the minion rules, at most
+	 * GSTN_PartsLimits::MaxMinionParts parts (the store keeps a uint8 mask and 8 damage bytes) and no Stats break effect (a minion has
+	 * no gameplay effects). A fighter's set leaves it false.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parts|Minion")
+	bool bForMinions = false;
+
 	/** Use WeightCurve instead of the default (linear from 1 to the settings' scale at the cap) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weight")
 	bool bOverrideWeightCurve = false;
