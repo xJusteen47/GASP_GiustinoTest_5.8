@@ -635,6 +635,9 @@ bool FGSTN_PartsMinionCachedStepTest::RunTest(const FString& Parameters)
 	const float Damages[3] = { 0.f, 10.f, 25.f };
 
 	const bool bWasEnabled = UGSTN_HitStep_PartResolveMinion::IsStepCacheEnabled();
+	// This test reads the outcome from the result's array: no scratch users meanwhile (a bridge of a live world may have registered one)
+	const int32 ScratchUsers = UGSTN_HitStep_PartResolveMinion::GetOutcomeScratchUsers();
+	UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(-ScratchUsers);
 	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
 	const UGSTN_HitStep_PartResolveMinion* Step = GetDefault<UGSTN_HitStep_PartResolveMinion>();
 	int32 Compared = 0;
@@ -700,8 +703,149 @@ bool FGSTN_PartsMinionCachedStepTest::RunTest(const FString& Parameters)
 		}
 	}
 	UGSTN_HitStep_PartResolveMinion::SetStepCacheEnabled(bWasEnabled);
+	UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(ScratchUsers);
 	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
 	TestTrue(TEXT("a sample was compared"), Compared > 0);
+	return true;
+}
+
+namespace
+{
+	/** One damaging hit of the given part set on hurtbox Box through the step, cached or not; the outcome is read from the array or the scratch */
+	struct FStepRun
+	{
+		EGSTN_StepResult Verdict = EGSTN_StepResult::Continue;
+		FGSTN_StepResult Result;
+		bool bHasOutcome = false;
+		FGSTN_PartHitOutcome Outcome;
+	};
+
+	FStepRun RunStep(const UGSTN_PartSetDefinition* Set, const UGSTN_CombatRules* Rules, const UGSTN_HurtboxSetDefinition* Hurtboxes, int32 Box, uint8 Mask,
+		const uint8* Damage, float HitDamage, int32 Penetration, bool bCached)
+	{
+		FStepRun Run;
+		const FGSTN_PartsSnapshotExt Ext = FGSTN_PartsSnapshotExt::FromMinionStore(Set, Mask, Damage);
+		FGSTN_HitResolutionContext Context;
+		Context.Incoming.Hit.Damage = HitDamage;
+		Context.Incoming.Hit.BaseKnockback = 300.f;
+		FGSTN_PartHitData PartHit;
+		PartHit.Penetration = static_cast<uint8>(Penetration);
+		Context.Incoming.Hit.ExtensionData.Add(FInstancedStruct::Make(PartHit));
+		Context.Victim.Weight = 100.f;
+		Context.Victim.SnapshotExtension = &Ext;
+		Context.HurtboxSet = Hurtboxes;
+		Context.HurtboxIndex = static_cast<uint8>(Box);
+		FGSTN_HitContextView View;
+		FGSTN_HitPipelineRunner::MakeView(Rules, Context, View);
+		UGSTN_HitStep_PartResolveMinion::SetStepCacheEnabled(bCached);
+		Run.Verdict = GetDefault<UGSTN_HitStep_PartResolveMinion>()->Resolve(View, Run.Result);
+		if (const FGSTN_PartHitOutcome* FromArray = FindPartOutcome(Run.Result))
+		{
+			Run.bHasOutcome = true;
+			Run.Outcome = *FromArray;
+		}
+		else if (const FGSTN_PartHitOutcome* FromScratch = UGSTN_HitStep_PartResolveMinion::ConsumeScratchOutcome())
+		{
+			Run.bHasOutcome = true;
+			Run.Outcome = *FromScratch;
+		}
+		return Run;
+	}
+
+	void CompareRuns(FAutomationTestBase& Test, const FString& Label, const FStepRun& A, const FStepRun& B)
+	{
+		Test.TestEqual(*(Label + TEXT(": verdict")), static_cast<int32>(B.Verdict), static_cast<int32>(A.Verdict));
+		Test.TestEqual(*(Label + TEXT(": damage add")), B.Result.DamageAdd, A.Result.DamageAdd);
+		Test.TestEqual(*(Label + TEXT(": weight scale")), B.Result.WeightScale, A.Result.WeightScale);
+		Test.TestEqual(*(Label + TEXT(": has outcome")), B.bHasOutcome, A.bHasOutcome);
+		if (A.bHasOutcome && B.bHasOutcome)
+		{
+			Test.TestEqual(*(Label + TEXT(": mask")), B.Outcome.ResultBrokenMask, A.Outcome.ResultBrokenMask);
+			Test.TestTrue(*(Label + TEXT(": damage bytes")), FMemory::Memcmp(A.Outcome.ResultPartDamage, B.Outcome.ResultPartDamage, sizeof(A.Outcome.ResultPartDamage)) == 0);
+			Test.TestEqual(*(Label + TEXT(": main delta")), B.Outcome.MainDelta, A.Outcome.MainDelta);
+			Test.TestEqual(*(Label + TEXT(": flags")), B.Outcome.Flags, A.Outcome.Flags);
+			Test.TestEqual(*(Label + TEXT(": part index")), B.Outcome.PartIndex, A.Outcome.PartIndex);
+			Test.TestEqual(*(Label + TEXT(": band")), B.Outcome.BandIndex, A.Outcome.BandIndex);
+		}
+	}
+}
+
+// P16-E: the cache is per (part set, rules): two different minion types (two part sets, one rules asset and one hurtbox set) alternated hit by hit
+// give the uncached result each time, so a type never reads the other's cached bands, parts or weight factors
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsMinionCachedTwoTypesTest, "GSTNParts.Minion.CachedStepTwoTypesBackToBack", GSTN_PARTS_MINION_TEST_FLAGS)
+bool FGSTN_PartsMinionCachedTwoTypesTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGSTN_PartSetDefinition> SetA = MakePartSet();
+	TStrongObjectPtr<UGSTN_PartSetDefinition> SetB = MakePartSet();
+	SetB->Parts[0].Hardness = 4;
+	SetB->Parts[1].LostMassFraction = 0.3f;
+	SetB->Parts[1].Reaction.JuggleFactor = 0.5f;
+	SetB->RebakeWeightCurve();
+	TStrongObjectPtr<UGSTN_HurtboxSetDefinition> Hurtboxes = MakeHurtboxes();
+	TStrongObjectPtr<UGSTN_CombatRules> Rules = MakeRules();
+
+	const bool bWasEnabled = UGSTN_HitStep_PartResolveMinion::IsStepCacheEnabled();
+	const int32 ScratchUsers = UGSTN_HitStep_PartResolveMinion::GetOutcomeScratchUsers();
+	UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(-ScratchUsers);
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
+
+	const UGSTN_PartSetDefinition* Sets[2] = { SetA.Get(), SetB.Get() };
+	const uint8 Damage[GSTN_PartsLimits::MaxMinionParts] = { 30, 20, 0, 0, 0, 0, 0, 0 };
+	int32 Compared = 0;
+	for (int32 Round = 0; Round < 3; ++Round)
+	{
+		for (int32 Which = 0; Which < 2; ++Which)
+		{
+			for (int32 Box = 0; Box < 2; ++Box)
+			{
+				for (const int32 Penetration : { 2, 5 })
+				{
+					const FStepRun Cached = RunStep(Sets[Which], Rules.Get(), Hurtboxes.Get(), Box, 0, Damage, 15.f, Penetration, true);
+					const FStepRun Reference = RunStep(Sets[Which], Rules.Get(), Hurtboxes.Get(), Box, 0, Damage, 15.f, Penetration, false);
+					CompareRuns(*this, FString::Printf(TEXT("round %d type %d box %d pen %d"), Round, Which, Box, Penetration), Reference, Cached);
+					++Compared;
+				}
+			}
+		}
+	}
+	UGSTN_HitStep_PartResolveMinion::SetStepCacheEnabled(bWasEnabled);
+	UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(ScratchUsers);
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
+	TestTrue(TEXT("a sample was compared"), Compared > 0);
+	return true;
+}
+
+// P16-E: with a scratch user registered the cached step leaves OutcomeExtensions empty and the scratch carries the same outcome the array path
+// gives; the scratch is taken once (a second take is null, so a later hit never reads it)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsMinionScratchOutcomeTest, "GSTNParts.Minion.ScratchOutcomeSameAsArray", GSTN_PARTS_MINION_TEST_FLAGS)
+bool FGSTN_PartsMinionScratchOutcomeTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGSTN_PartSetDefinition> Set = MakePartSet();
+	TStrongObjectPtr<UGSTN_HurtboxSetDefinition> Hurtboxes = MakeHurtboxes();
+	TStrongObjectPtr<UGSTN_CombatRules> Rules = MakeRules();
+
+	const bool bWasEnabled = UGSTN_HitStep_PartResolveMinion::IsStepCacheEnabled();
+	const int32 ScratchUsers = UGSTN_HitStep_PartResolveMinion::GetOutcomeScratchUsers();
+	UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(-ScratchUsers);
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
+
+	const uint8 Damage[GSTN_PartsLimits::MaxMinionParts] = { 100, 60, 0, 0, 0, 0, 0, 0 };
+	for (int32 Box = 0; Box < 2; ++Box)
+	{
+		const FStepRun Array = RunStep(Set.Get(), Rules.Get(), Hurtboxes.Get(), Box, 0, Damage, 25.f, 5, true);
+		TestTrue(TEXT("without a scratch user the outcome is in the array"), FindPartOutcome(Array.Result) != nullptr);
+
+		UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(1);
+		const FStepRun Scratch = RunStep(Set.Get(), Rules.Get(), Hurtboxes.Get(), Box, 0, Damage, 25.f, 5, true);
+		UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(-1);
+		TestTrue(TEXT("with a scratch user the array carries no outcome"), FindPartOutcome(Scratch.Result) == nullptr);
+		TestTrue(TEXT("the scratch carried it"), Scratch.bHasOutcome);
+		TestTrue(TEXT("RunStep took it, a second take is empty"), UGSTN_HitStep_PartResolveMinion::ConsumeScratchOutcome() == nullptr);
+		CompareRuns(*this, FString::Printf(TEXT("box %d"), Box), Array, Scratch);
+	}
+	UGSTN_HitStep_PartResolveMinion::SetStepCacheEnabled(bWasEnabled);
+	UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(ScratchUsers);
+	UGSTN_HitStep_PartResolveMinion::InvalidateStepCache();
 	return true;
 }
 

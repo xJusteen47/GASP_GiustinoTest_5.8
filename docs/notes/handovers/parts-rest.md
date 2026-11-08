@@ -151,3 +151,18 @@
   (UBT relink + headless tests) 127 s; no full clean build was made.
 - PERF-DEBT: updated in perf-debt.md (the cache item with the measured split and the two next levers).
 - Cost: ~$4 (writer ~270k tokens over 2 attempts; 6 builds incl. 2 off configs, 4 test runs, 4 bench runs, SUITE_DEFAULT, 2 SUITE_MINION).
+
+## Minion part step, second perf pass (laptop, 2026-11-09): 2.50 -> 1.88 us; target 1.8 not quite met (2 attempts), stopped
+
+- Branch `claude/parts-perf-2-laptop` from 441845c6. Sonnet writer (`Saved/P16/brief-perf2.md`). Only GSTNPartsMinion changed.
+- Attempt 1: the cached step writes the part outcome into a static scratch the bridge's ApplyOutcome consumes first (no FInstancedStruct
+  allocation per hit; OutcomeExtensions stays the fallback for the uncached path); cache keyed by raw pointers with a one-entry last-key check,
+  dropped after every GC. 2.50 -> 2.21 us. Attempt 2: the 7 split timers run only with `gstn.PartsMinion.Bench.StepSplit 1`: **1.88 us**
+  (view 0.18, step 1.60, outcome 0.10). The static scratch is safe because the minion batch runs only on the authority world.
+- Tests: `GSTNParts.Minion.{CachedStepTwoTypesBackToBack, ScratchOutcomeSameAsArray}`; CachedStepSameOutput still passes.
+- Gate: all on 1448/0 (+2), GSTNMinion+GSTNPartsMinion off 1344/0, GSTNPlatform+Parts off 1424/0, 0 ensures. SUITE_DEFAULT 49/50 then `di`
+  PASS on its single rerun (known flaky, as at E17). SUITE_MINION 0 % 8/11, 2 % 8/11: only known flaky reds (no swing in player_hits/lagcomp,
+  reaction_tiers "still items 0", lod no pop).
+- Build times (laptop): bridge-only incremental 15 s; build + headless tests 152 s.
+- PERF-DEBT: updated (1.88 us; what is left per hit: ApplyHit 0.61, cache lookup 0.24, outcome 0.25, weight 0.16).
+- Cost: ~$3.

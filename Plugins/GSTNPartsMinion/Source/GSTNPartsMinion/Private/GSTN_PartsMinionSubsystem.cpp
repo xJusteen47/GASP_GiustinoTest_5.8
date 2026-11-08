@@ -139,6 +139,11 @@ void UGSTN_PartsMinionSubsystem::Bind(UGSTN_MinionCombatSubsystem* Minions)
 	{
 		return;
 	}
+	if (!ActivatedHandle.IsValid())
+	{
+		// While a bridge is bound the step hands it the outcome through a scratch instead of an allocated struct
+		UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(1);
+	}
 	BoundMinions = Minions;
 	ActivatedHandle = Minions->OnMinionActivated.AddUObject(this, &UGSTN_PartsMinionSubsystem::HandleMinionActivated);
 	RegisteringHandle = Minions->OnDefinitionRegistering.AddUObject(this, &UGSTN_PartsMinionSubsystem::HandleDefinitionNet);
@@ -151,6 +156,10 @@ void UGSTN_PartsMinionSubsystem::Bind(UGSTN_MinionCombatSubsystem* Minions)
 
 void UGSTN_PartsMinionSubsystem::Unbind()
 {
+	if (ActivatedHandle.IsValid())
+	{
+		UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(-1);
+	}
 	if (UGSTN_MinionCombatSubsystem* Minions = BoundMinions.Get())
 	{
 		Minions->OnMinionActivated.Remove(ActivatedHandle);
@@ -408,18 +417,23 @@ void UGSTN_PartsMinionSubsystem::ExtendVictimView(int32 Slot, FGSTN_HitVictimVie
 
 bool UGSTN_PartsMinionSubsystem::ApplyOutcome(const FGSTN_MinionHandle& Handle, const FGSTN_HitResolutionContext& Context, int32 Frame)
 {
+	// The step's scratch first (taken before any early out, so it never leaks to the next hit), then the context's entries: parts-aware
+	// rules and the uncached path still put the outcome there
+	const FGSTN_PartHitOutcome* Outcome = UGSTN_HitStep_PartResolveMinion::ConsumeScratchOutcome();
 	const int32 TypeIndex = GetSlotType(Handle.Index, Handle.Generation);
 	if (TypeIndex == INDEX_NONE)
 	{
 		return false;
 	}
-	const FGSTN_PartHitOutcome* Outcome = nullptr;
-	for (const FInstancedStruct& Entry : Context.OutcomeExtensions)
+	if (!Outcome)
 	{
-		if (const FGSTN_PartHitOutcome* Found = Entry.GetPtr<FGSTN_PartHitOutcome>())
+		for (const FInstancedStruct& Entry : Context.OutcomeExtensions)
 		{
-			// One part step per minion pipeline, so one entry; the last wins should a rules asset ever add a second
-			Outcome = Found;
+			if (const FGSTN_PartHitOutcome* Found = Entry.GetPtr<FGSTN_PartHitOutcome>())
+			{
+				// One part step per minion pipeline, so one entry; the last wins should a rules asset ever add a second
+				Outcome = Found;
+			}
 		}
 	}
 	if (!Outcome)

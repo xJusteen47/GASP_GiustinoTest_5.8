@@ -89,7 +89,10 @@ At 160 minions, all of a part-bearing type (sub-gate B):
   (handed to `ApplyHit` through `FGSTN_PartHitInput::PreparedBandIndex`; the fighter path leaves it unset and looks the band up as before),
   plus the per-part lost-mass factors and the clamped minimum weight scale, so the weight is a product over the broken parts only. Still
   per hit: the `ExtensionData` scan for `FGSTN_PartHitData`, `ApplyHit` (screw/held-by/cap flags are read from the part there, one cache line),
-  `GetDamageProgress`, the outcome allocation. A tier above 15 or an ignore-hardness hit on a row still resolves exactly (the latter takes band 0).
+  `GetDamageProgress`. A tier above 15 or an ignore-hardness hit on a row still resolves exactly (the latter takes band 0).
+  P16-E (not yet measured, `1.88 us per part hit (from 2.50)` us per hit, was 2.49, target <= 1.8): the outcome goes through a scratch the bound bridge consumes (no
+  `FInstancedStruct`, no copy in the runner's merge; `AddOutcomeScratchUser`, off when no bridge is bound), and the cache is keyed by raw
+  pointers and dropped after every GC (module post-GC hook), so no `TObjectKey` per hit. Tests: `CachedStepTwoTypesBackToBack`, `ScratchOutcomeSameAsArray`.
 - Memory: the A columns plus `LastBreakFrame` (4 B per slot, bench only, ~640 B) and per machine a set pointer per type; the puppet map holds
   one small entry per puppet ever used (pooled, so at most the pool size).
 

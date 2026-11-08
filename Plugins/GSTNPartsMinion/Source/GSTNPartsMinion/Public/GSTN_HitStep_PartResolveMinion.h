@@ -6,6 +6,8 @@
 #include "Pipeline/GSTN_HitStep_PartResolve.h"
 #include "GSTN_HitStep_PartResolveMinion.generated.h"
 
+struct FGSTN_PartHitOutcome;
+
 /** Bench counters of the step (sub-gate B per hit cost): process-wide, game thread only, debug numbers and never read by the simulation */
 struct FGSTN_PartsMinionStepTiming
 {
@@ -46,6 +48,10 @@ struct FGSTN_PartsMinionStepTiming
  * scratch result, and writes no request: the minion batch never reads Requests (see ResolveCached). ResolveUncached is the first version,
  * kept as the reference the GSTNParts.Minion.CachedStepSameOutput test compares against, and as the fallback when the rules or the cache
  * switch (gstn.PartsMinion.StepCache 0) say so. Game thread only: the cache is process-wide static data, like the timing counters.
+ *
+ * P16-E: the cache entries are keyed by raw pointers (a TObjectKey per hit cost more than the rest of the lookup) and the whole cache is
+ * dropped after every garbage collection (the module's post-GC hook), the only moment an object is freed; and the part outcome can
+ * travel through an outcome scratch instead of an allocated FInstancedStruct (see AddOutcomeScratchUser).
  */
 UCLASS(meta = (DisplayName = "Part Resolve (Minion)"))
 class GSTNPARTSMINION_API UGSTN_HitStep_PartResolveMinion : public UGSTN_HitStep_PartResolve
@@ -64,6 +70,16 @@ public:
 	/** Switch of the cached path (also gstn.PartsMinion.StepCache). Tests flip it to compare both paths */
 	static void SetStepCacheEnabled(bool bEnabled);
 	static bool IsStepCacheEnabled();
+
+	/**
+	 * Outcome scratch (P16-E): while at least one user is registered (every bound UGSTN_PartsMinionSubsystem is one), the cached path writes
+	 * the part outcome into a process-wide scratch instead of an FInstancedStruct in Out.OutcomeExtensions, and the bridge's ApplyOutcome
+	 * takes it with ConsumeScratchOutcome right after the pipeline (null when this hit wrote none: read OutcomeExtensions then, as the
+	 * parts-aware rules and the uncached path still do). With no user the step behaves as before. Game thread only
+	 */
+	static void AddOutcomeScratchUser(int32 Delta);
+	static int32 GetOutcomeScratchUsers();
+	static const FGSTN_PartHitOutcome* ConsumeScratchOutcome();
 
 	/** Time spent in this step for part-bearing victims since the process started (gstn.PartsMinion.Bench.Report) */
 	static FGSTN_PartsMinionStepTiming& GetTiming();

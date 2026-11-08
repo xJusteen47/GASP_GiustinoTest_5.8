@@ -20,11 +20,6 @@
 namespace
 {
 	/**
-	 * What one (part set, rules) pair gives every hit and never changes during a run: the pipeline flags the compensation reads, the bands
-	 * the parent resolves through soft pointers on each hit, and the minimum weight scale. Keys are TObjectKey (index + serial), so a freed
-	 * set whose address is reused never matches a stale entry
-	 */
-	/**
 	 * What a hit on one hurtbox of one hurtbox set always resolves to (plan P16-D): the part (FindPartByHurtbox is a name search over the
 	 * parts, done once) and the penetration band for each penetration tier 0..15 against the hurtbox's effective hardness (the part's
 	 * Hardness with its per-hurtbox override applied, P18). A tier above 15 or an ignore-hardness hit is not in the table
@@ -38,17 +33,19 @@ namespace
 
 	struct FHurtboxTable
 	{
-		TObjectKey<UGSTN_HurtboxSetDefinition> HurtboxSet;
+		/** Raw pointer: the whole cache is dropped after every garbage collection (module hook), so an address is never reused under an entry */
+		const UGSTN_HurtboxSetDefinition* HurtboxSet = nullptr;
 		TArray<FHurtboxRow> Rows;
 	};
 
 	struct FStepCacheEntry
 	{
-		TObjectKey<UGSTN_PartSetDefinition> Set;
-		TObjectKey<UGSTN_CombatRules> Rules;
+		const UGSTN_PartSetDefinition* Set = nullptr;
+		const UGSTN_CombatRules* Rules = nullptr;
 		TArray<FGSTN_PenetrationBand> Bands;
 		/** One table per hurtbox set seen with this (part set, rules) pair, in practice one */
 		TArray<FHurtboxTable> Tables;
+		int32 LastTable = 0;
 		/** Per part: 1 - clamped LostMassFraction, the factor EffectiveWeightScale multiplies in for a broken part (same expression, same order) */
 		TArray<float> LostMassFactor;
 		/** The settings' minimum weight scale after EffectiveWeightScale's own clamp */
@@ -59,7 +56,22 @@ namespace
 		bool bHasHealthWeight = false;
 	};
 
+	/**
+	 * What one (part set, rules) pair gives every hit and never changes during a run: the pipeline flags the compensation reads, the bands
+	 * the parent resolves through soft pointers on each hit, and the minimum weight scale. Keys are raw pointers (P16-E: a TObjectKey per
+	 * hit cost more than the rest of the lookup): the cache is dropped after every garbage collection (module hook, InvalidateStepCache),
+	 * and objects are only freed by a collection, so a freed set whose address is reused never meets a stale entry
+	 */
 	TArray<FStepCacheEntry> GStepCache;
+
+	/**
+	 * The part outcome of the last cached hit, read by the bridge's ApplyOutcome right after the pipeline (P16-E). Used only while a bridge
+	 * is bound (GScratchUsers > 0), so the outcome needs no FInstancedStruct (an allocation here, a second one and a reflected copy in
+	 * the runner's Merge). GScratchPending says the scratch belongs to the hit in flight: the step clears it on entry, the consumer on take
+	 */
+	FGSTN_PartHitOutcome GScratchOutcome;
+	bool GScratchPending = false;
+	int32 GScratchUsers = 0;
 	int32 GStepCacheLast = 0;
 	bool GStepCacheEnabled = true;
 
@@ -111,16 +123,21 @@ namespace
 
 	const FHurtboxTable& FindOrBuildTable(FStepCacheEntry& Entry, const UGSTN_PartSetDefinition& Set, const UGSTN_HurtboxSetDefinition& HurtboxSet)
 	{
-		const TObjectKey<UGSTN_HurtboxSetDefinition> Key(&HurtboxSet);
-		for (const FHurtboxTable& Table : Entry.Tables)
+		if (Entry.Tables.IsValidIndex(Entry.LastTable) && Entry.Tables[Entry.LastTable].HurtboxSet == &HurtboxSet)
 		{
-			if (Table.HurtboxSet == Key)
+			return Entry.Tables[Entry.LastTable];
+		}
+		for (int32 TableIndex = 0; TableIndex < Entry.Tables.Num(); ++TableIndex)
+		{
+			if (Entry.Tables[TableIndex].HurtboxSet == &HurtboxSet)
 			{
-				return Table;
+				Entry.LastTable = TableIndex;
+				return Entry.Tables[TableIndex];
 			}
 		}
+		Entry.LastTable = Entry.Tables.Num();
 		FHurtboxTable& Table = Entry.Tables.AddDefaulted_GetRef();
-		Table.HurtboxSet = Key;
+		Table.HurtboxSet = &HurtboxSet;
 		const TConstArrayView<FGSTN_PartDefinition> Parts = Set.GetParts();
 		Table.Rows.SetNum(HurtboxSet.Hurtboxes.Num());
 		for (int32 Index = 0; Index < Table.Rows.Num(); ++Index)
@@ -147,15 +164,13 @@ namespace
 
 	FStepCacheEntry& FindOrBuildEntry(const UGSTN_PartSetDefinition& Set, const UGSTN_CombatRules& Rules)
 	{
-		const TObjectKey<UGSTN_PartSetDefinition> SetKey(&Set);
-		const TObjectKey<UGSTN_CombatRules> RulesKey(&Rules);
-		if (GStepCache.IsValidIndex(GStepCacheLast) && GStepCache[GStepCacheLast].Set == SetKey && GStepCache[GStepCacheLast].Rules == RulesKey)
+		if (GStepCache.IsValidIndex(GStepCacheLast) && GStepCache[GStepCacheLast].Set == &Set && GStepCache[GStepCacheLast].Rules == &Rules)
 		{
 			return GStepCache[GStepCacheLast];
 		}
 		for (int32 Index = 0; Index < GStepCache.Num(); ++Index)
 		{
-			if (GStepCache[Index].Set == SetKey && GStepCache[Index].Rules == RulesKey)
+			if (GStepCache[Index].Set == &Set && GStepCache[Index].Rules == &Rules)
 			{
 				GStepCacheLast = Index;
 				return GStepCache[Index];
@@ -163,8 +178,8 @@ namespace
 		}
 
 		FStepCacheEntry& Entry = GStepCache.AddDefaulted_GetRef();
-		Entry.Set = SetKey;
-		Entry.Rules = RulesKey;
+		Entry.Set = &Set;
+		Entry.Rules = &Rules;
 		const FGSTN_PartsRulesExtension* RulesExtension = FindRulesExtension(&Rules);
 		ResolveBands(Set, RulesExtension, Entry.Bands);
 		Entry.MinWeightScale = RulesExtension && RulesExtension->MinWeightScale >= 0.f ? RulesExtension->MinWeightScale : UGSTN_PartsSettings::Get().MinWeightScale;
@@ -214,11 +229,21 @@ namespace
 	 * evaluated for its number instead of into a second full step result. Every float operation is the same, in the same order
 	 */
 	/** Bench sub-timer: adds the cycles since the last Lap to a counter (debug numbers, never read by the simulation) */
+	bool GStepSplit = false;
+	FAutoConsoleVariableRef CVarStepSplit(
+		TEXT("gstn.PartsMinion.Bench.StepSplit"), GStepSplit,
+		TEXT("1: the cached minion part step takes its sub-timers (split report); 0 (default): no timer calls per hit, so hitUs is not inflated by them."));
+
 	struct FLap
 	{
-		uint64 Last = FPlatformTime::Cycles64();
+		const bool bOn = GStepSplit;
+		uint64 Last = bOn ? FPlatformTime::Cycles64() : 0;
 		void Take(uint64& Counter)
 		{
+			if (!bOn)
+			{
+				return;
+			}
 			const uint64 Now = FPlatformTime::Cycles64();
 			Counter += Now - Last;
 			Last = Now;
@@ -288,10 +313,22 @@ namespace
 		const FGSTN_PartHitResult Result = UGSTN_PartMath::ApplyHit(Parts, Cache.Bands, After, Input);
 		Lap.Take(Timing.ApplyCycles);
 
-		// Built in place in the result's slot: Make(Outcome) would construct a local, then copy it through the reflected struct
-		FInstancedStruct& OutcomeSlot = Out.OutcomeExtensions.AddDefaulted_GetRef();
-		OutcomeSlot.InitializeAs<FGSTN_PartHitOutcome>();
-		FGSTN_PartHitOutcome& Outcome = OutcomeSlot.GetMutable<FGSTN_PartHitOutcome>();
+		FGSTN_PartHitOutcome* OutcomePtr;
+		if (GScratchUsers > 0)
+		{
+			// The bound bridge reads it from the scratch (ConsumeScratchOutcome): no allocation, no copy through the runner's Merge
+			GScratchOutcome = FGSTN_PartHitOutcome();
+			GScratchPending = true;
+			OutcomePtr = &GScratchOutcome;
+		}
+		else
+		{
+			// Built in place in the result's slot: Make(Outcome) would construct a local, then copy it through the reflected struct
+			FInstancedStruct& OutcomeSlot = Out.OutcomeExtensions.AddDefaulted_GetRef();
+			OutcomeSlot.InitializeAs<FGSTN_PartHitOutcome>();
+			OutcomePtr = &OutcomeSlot.GetMutable<FGSTN_PartHitOutcome>();
+		}
+		FGSTN_PartHitOutcome& Outcome = *OutcomePtr;
 		Outcome.PartIndex = Result.PartIndex;
 		Outcome.BandIndex = Result.BandIndex;
 		Outcome.NewPartDamage = Result.NewPartDamage;
@@ -385,6 +422,24 @@ void UGSTN_HitStep_PartResolveMinion::InvalidateStepCache()
 	GStepCacheLast = 0;
 }
 
+void UGSTN_HitStep_PartResolveMinion::AddOutcomeScratchUser(int32 Delta)
+{
+	GScratchUsers = FMath::Max(0, GScratchUsers + Delta);
+	GScratchPending = false;
+}
+
+int32 UGSTN_HitStep_PartResolveMinion::GetOutcomeScratchUsers()
+{
+	return GScratchUsers;
+}
+
+const FGSTN_PartHitOutcome* UGSTN_HitStep_PartResolveMinion::ConsumeScratchOutcome()
+{
+	const bool bPending = GScratchPending;
+	GScratchPending = false;
+	return bPending ? &GScratchOutcome : nullptr;
+}
+
 void UGSTN_HitStep_PartResolveMinion::SetStepCacheEnabled(bool bEnabled)
 {
 	GStepCacheEnabled = bEnabled;
@@ -409,6 +464,8 @@ EGSTN_StepResult UGSTN_HitStep_PartResolveMinion::Resolve_Implementation(const F
 	{
 		return EGSTN_StepResult::Continue;
 	}
+	// A scratch outcome left by an earlier hit never belongs to this one
+	GScratchPending = false;
 	// Bench timing of the whole step for a part-bearing victim (debug counter, not state)
 	const uint64 Start = FPlatformTime::Cycles64();
 	ON_SCOPE_EXIT
