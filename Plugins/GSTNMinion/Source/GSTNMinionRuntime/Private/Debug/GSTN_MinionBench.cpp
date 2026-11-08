@@ -8,7 +8,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Data/GSTN_MinionDefinition.h"
 #include "Data/GSTN_MinionWaveDefinition.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/Engine.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
@@ -71,6 +73,12 @@ namespace
 	TAutoConsoleVariable<int32> CVarBenchSeed(
 		TEXT("gstn.Minion.Bench.Seed"), 1234,
 		TEXT("Massacre: seed of the launch stream, reset at every bench spawn."));
+
+	// M8 trap diagnosis: while a minion's capsule overlaps geometry after its step, log its state and every overlapped shape's MTD
+	TAutoConsoleVariable<int32> CVarBenchVerbosePenetration(
+		TEXT("gstn.Minion.Bench.VerbosePenetration"), 0,
+		TEXT("Bench diagnosis: max log lines (per run) describing a minion that overlaps geometry after its step: position, step delta, velocity, overlapped component and MTD. 0 = off."));
+	int32 VerbosePenetrationLinesLogged = 0;
 
 	/** Robustness thresholds of spike 3 (combat-m8-minions.md 6) */
 	constexpr int32 StuckFrameLimit = 125;
@@ -895,6 +903,28 @@ void UGSTN_MinionBenchSubsystem::HandleMovementStepped(int32 Frame, TConstArrayV
 			const float HalfHeight = FMath::Max(SlotDefinition->Stats.CapsuleHalfHeight, Radius);
 			const bool bInside = World->OverlapAnyTestByObjectType(Now + FVector(0.0, 0.0, HalfHeight), FQuat::Identity, ObjectQuery,
 				FCollisionShape::MakeCapsule(Radius - 0.5f, HalfHeight - 0.5f), FCollisionQueryParams(SCENE_QUERY_STAT(GSTN_MinionBenchTrapped), false));
+			if (bInside && CVarBenchVerbosePenetration.GetValueOnGameThread() > VerbosePenetrationLinesLogged)
+			{
+				const FVector CapsuleCentre = Now + FVector(0.0, 0.0, HalfHeight);
+				const FCollisionShape Capsule = FCollisionShape::MakeCapsule(Radius, HalfHeight);
+				TArray<FOverlapResult> Overlaps;
+				World->OverlapMultiByObjectType(Overlaps, CapsuleCentre, FQuat::Identity, ObjectQuery, Capsule);
+				const FVector Velocity(Columns.Velocity[Slot]);
+				UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: PEN slot %d frame %d feet %s prev %s delta %s vel %s grounded %d knock %d action %d overlaps %d"),
+					Slot, Frame, *Now.ToCompactString(), *Previous.ToCompactString(), *(Now - Previous).ToCompactString(), *Velocity.ToCompactString(),
+					bGrounded ? 1 : 0, static_cast<int32>(Mode), static_cast<int32>(Store.ActionState[Slot]), Overlaps.Num());
+				for (const FOverlapResult& Overlap : Overlaps)
+				{
+					UPrimitiveComponent* Component = Overlap.GetComponent();
+					FMTDResult MTD;
+					const bool bPen = Component && Component->ComputePenetration(MTD, Capsule, CapsuleCentre, FQuat::Identity);
+					UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: PEN   comp %s owner %s bounds %s ext %s mtd %d dir %s dist %.3f"),
+						*GetNameSafe(Component), *GetNameSafe(Component ? Component->GetOwner() : nullptr),
+						Component ? *Component->Bounds.Origin.ToCompactString() : TEXT("-"), Component ? *Component->Bounds.BoxExtent.ToCompactString() : TEXT("-"),
+						bPen ? 1 : 0, *MTD.Direction.ToCompactString(), MTD.Distance);
+				}
+				++VerbosePenetrationLinesLogged;
+			}
 			if (bInside && !(SlotFlags[Slot] & PenetrationCounted))
 			{
 				SlotFlags[Slot] |= PenetrationCounted;

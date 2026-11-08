@@ -381,3 +381,20 @@
 8. `scenario_minion_dormancy_flush` (§12) not written yet.
 9. Perf-debt review of docs/notes/perf-debt.md at the end of M8 (many G6-G12 lines), with the low-end target.
 10. Merge path: laptop branches g9 -> g10 -> g11 -> g12 are stacked; nothing pushed to feature.
+
+## Trapped minions (laptop, 2026-11-08): G4's "trapped at the stairs" FIXED (1 attempt); one Launched hover left
+
+- Branch `claude/m8-minion-trapped-laptop` from cc6caee. Sonnet diagnosis (`Saved/M8Trap/report.md`, `diagnosis.md`, `bench.ps1`).
+- Not the stairs: the traps were next to `NewBlueprint_C_1` in DefaultLevel, a cylinder pitched 20 degrees (centre (890,710,240)). Repro (3 min Massacre,
+  course on, new `gstn.Minion.Bench.VerbosePenetration`): 2 traps, each a walking minion ~11-21 cm up on the cylinder's slanted underside that ended
+  at floor Z=91 overlapping it (MTD 0.7 / 1.6 cm).
+- Cause: `FindFloor`'s side-contact branch reported the half-radius probe's floor height, lower than the full capsule can reach under an overhang;
+  the caller snapped the full capsule there. Fix (`GSTN_MinionMovement_Lightweight.cpp`): in that branch only, depenetrate the full capsule at the
+  probe height along the MTD and report that height (one extra overlap query on a rare path). Test `GSTNMinion.Runtime.Movement.OverhangStepDownNoPenetration`.
+- After: 10 min Massacre 0 penetration traps (before: 2 in 3 min); 1 "Launched: no displacement for 2 s" at (165,-845,91), the G4 hover kind,
+  not diagnosed (no repro detail yet; next: the verbose log for Launched/Falling, then 1 attempt).
+- Note: since G11 most bench minions sit Dormant without players (51/60), so the soak exercises fewer walkers than G4's.
+- Gate: all on 1404/0 (+1), 0 ensures; GSTNMinion-off not rerun (only GSTNMinion files changed). SUITE_MINION 0 % and 2 %: all PASS except the known
+  lod "no pop".
+- PERF-DEBT: one extra overlap query in the floor probe's side-contact branch (rare); the bench verbose cvar is off by default.
+- Cost: ~$3 (Sonnet ~250k tokens / 22 tool calls; 2 builds, 1 test run, 2 bench runs incl. a 10-min soak, 2 harness runs).

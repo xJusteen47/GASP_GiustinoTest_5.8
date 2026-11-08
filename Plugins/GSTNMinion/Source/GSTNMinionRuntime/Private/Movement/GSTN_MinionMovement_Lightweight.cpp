@@ -646,6 +646,15 @@ bool FGSTN_MinionMovement_Lightweight::FindFloor(const FGSTN_MinionMoveContext& 
 	if ((OutHit.Normal | State.Up) < SideContactUpDot)
 	{
 		OutHit = Inner;
+		// The thin probe falls further than the full capsule can: at an overhang or a leaning face (the underside of a tilted
+		// cylinder in the bench level) the full capsule at the probe's height overlaps the surface that held it, and the caller
+		// snaps to this height. Push it out along the MTD here, and report the resulting height as the floor (M8 trap fix)
+		FStepState AtProbe = State;
+		AtProbe.Centre = Inner.Location;
+		if (Depenetrate(Ctx, AtProbe))
+		{
+			OutHit.Location = AtProbe.Centre;
+		}
 	}
 	return true;
 }

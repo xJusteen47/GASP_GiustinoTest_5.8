@@ -259,6 +259,48 @@ bool FGSTN_MinionMovementFallingAgainstWallTest::RunTest(const FString& Paramete
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionMovementOverhangTest, "GSTNMinion.Runtime.Movement.OverhangStepDownNoPenetration", GSTN_MINION_MOVEMENT_TEST_FLAGS)
+bool FGSTN_MinionMovementOverhangTest::RunTest(const FString& Parameters)
+{
+	// M8 trap: walking off a low platform onto a floor under a leaning solid (the tilted cylinder of the bench level) snapped the
+	// capsule to a height where it overlapped the surface. Pitched boxes at several heights and angles, walked into from the platform;
+	// after every frame the capsule (shrunk 0.5 cm, as the bench counts) must not overlap anything
+	const double Pitches[] = { -20.0, 20.0, -35.0, 35.0 };
+	const double Lows[] = { 30.0, 60.0, 90.0 };
+	for (const double Pitch : Pitches)
+	{
+		for (const double Low : Lows)
+		{
+			FMovementRig Rig;
+			if (!TestNotNull(TEXT("the minion subsystem exists in a game world"), Rig.Minions))
+			{
+				return false;
+			}
+			Rig.AddFloor();
+			Rig.AddBox(FVector(-500.0, 0.0, 12.0), FVector(500.0, 500.0, 12.0));
+			Rig.AddBox(FVector(120.0, 0.0, Low + 150.0), FVector(80.0, 300.0, 150.0), FRotator(Pitch, 0.0, 0.0));
+			const double Radius = Rig.Definition->Stats.CapsuleRadius;
+			const double HalfHeight = FMath::Max<double>(Rig.Definition->Stats.CapsuleHalfHeight, Radius);
+			const FGSTN_MinionHandle Minion = Rig.Spawn(FVector(-100.0, 0.0, 24.5));
+			FCollisionObjectQueryParams Query;
+			Query.AddObjectTypesToQuery(ECC_WorldStatic);
+			int32 PenetratingFrames = 0;
+			for (int32 Frame = 0; Frame < 300; ++Frame)
+			{
+				Rig.Step(1, Minion, FVector2D(1.0, 0.0), 200.f);
+				const FVector Feet = Rig.Feet(Minion);
+				if (Rig.World->OverlapAnyTestByObjectType(Feet + FVector(0.0, 0.0, HalfHeight), FQuat::Identity, Query,
+					FCollisionShape::MakeCapsule(Radius - 0.5, HalfHeight - 0.5)))
+				{
+					++PenetratingFrames;
+				}
+			}
+			TestEqual(*FString::Printf(TEXT("never in penetration (pitch %.0f, low edge %.0f)"), Pitch, Low), PenetratingFrames, 0);
+		}
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionMovementNoTunnelTest, "GSTNMinion.Runtime.Movement.NoTunnelAt3000", GSTN_MINION_MOVEMENT_TEST_FLAGS)
 bool FGSTN_MinionMovementNoTunnelTest::RunTest(const FString& Parameters)
 {
