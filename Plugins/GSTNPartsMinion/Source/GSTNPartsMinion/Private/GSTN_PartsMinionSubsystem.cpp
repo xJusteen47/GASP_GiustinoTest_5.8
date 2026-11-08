@@ -578,6 +578,12 @@ void UGSTN_PartsMinionSubsystem::ReportBench() const
 			TEXT("netExtFlagged=%d promotionSeeds=%d viewUs=%.3f stepUs=%.3f outcomeUs=%.3f hitUs=%.3f masks=%s"),
 			*WorldName, RowsAlive, Broken, BrokenAlive, AttackedAfterBreak, Stats.PartHits, Stats.LethalKills, Stats.ExtByteWrites, Stats.NetExtFlagged,
 			Stats.PromotionSeeds, ViewUs, StepUs, OutcomeUs, ViewUs + StepUs + OutcomeUs, *MaskList);
+		UE_LOG(LogGSTNPartsMinion, Log, TEXT("PartsMinionBench step parts cached=%d stepLookupUs=%.3f stepScanUs=%.3f stepApplyUs=%.3f stepOutcomeUs=%.3f ")
+			TEXT("stepProgressUs=%.3f stepWeightUs=%.3f stepTailUs=%.3f"),
+			Step.CachedCount, CyclesToMicroseconds(Step.LookupCycles, Step.CachedCount), CyclesToMicroseconds(Step.ScanCycles, Step.CachedCount),
+			CyclesToMicroseconds(Step.ApplyCycles, Step.CachedCount), CyclesToMicroseconds(Step.OutcomeCycles, Step.CachedCount),
+			CyclesToMicroseconds(Step.ProgressCycles, Step.CachedCount), CyclesToMicroseconds(Step.WeightCycles, Step.CachedCount),
+			CyclesToMicroseconds(Step.TailCycles, Step.CachedCount));
 		return;
 	}
 

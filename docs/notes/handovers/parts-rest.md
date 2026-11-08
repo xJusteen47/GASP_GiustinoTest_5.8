@@ -134,3 +134,20 @@
 - Not done: spin/drill hitboxes authoring TurnSense (GSTNSpinDrill), TM3 plate content, turning-screw presentation, balance report, HitDataOverride fields.
 - PERF-DEBT (also in perf-debt.md): screw/held-by passes only on parts that have a rule (one check per part hit otherwise).
 - Cost: ~$5 (writer ~194k tokens; 5 builds incl. 2 off configs, 4 test runs, SUITE_DEFAULT, 2 SUITE_MINION).
+
+## Held plate breaks from damage + minion part-step cache (laptop, 2026-11-08): plate DONE; perf target NOT met (2 attempts), stopped
+
+- Branch `claude/parts-perf-cache-laptop` from 2151cf9b. Commit 61b896c7 (owner decision): a plate held by screws comes off when its holders
+  are out OR when its own damage breaks it, whichever first (the 254 cap is gone; indestructible = data: hardness, PartCap <= 0). Test updated.
+- Perf (Sonnet, 2 attempts): per-hurtbox table in the minion step cache (part index, effective hardness with the P18 override, band per
+  penetration tier; `PreparedBandIndex` on the shared input, fighter path unchanged) + bench sub-timers. Bench (40 minions, 0 %): 2.50 -> 2.49 us
+  per part hit: the band lookup was not the cost. Split of the step (~2.0 us): cache lookup 0.38, extension scan 0.16, ApplyHit 0.63, **outcome
+  write 0.56** (FInstancedStruct allocation per hit), damage progress 0.03, health weight 0.19, tail 0.08. Next cheap levers (~0.9 us): a pooled /
+  in-place outcome without allocation, and the cache entry pointer stored per minion type instead of a TMap lookup per hit.
+- 2 compile fixes on the way: `FindOutcome` in the P19 screw tests renamed `FindScrewOutcome` (unity build clash), a cast in the scan.
+- Gate: all on 1443/0, GSTNMinion+GSTNPartsMinion off 1341/0, GSTNPlatform+Parts off 1421/0, 0 ensures; SUITE_DEFAULT 50/50;
+  SUITE_MINION 0 % 9/11, 2 % 9/11 (player_hits no swing, lod: known).
+- Build times (laptop): incremental after a .cpp/.h change in GSTNParts 43 s, GSTNPartsMinion only 16-26 s; a plugins-off config switch
+  (UBT relink + headless tests) 127 s; no full clean build was made.
+- PERF-DEBT: updated in perf-debt.md (the cache item with the measured split and the two next levers).
+- Cost: ~$4 (writer ~270k tokens over 2 attempts; 6 builds incl. 2 off configs, 4 test runs, 4 bench runs, SUITE_DEFAULT, 2 SUITE_MINION).

@@ -604,6 +604,23 @@ bool FGSTN_PartsMinionCachedStepTest::RunTest(const FString& Parameters)
 	Set->RebakeWeightCurve();
 	TStrongObjectPtr<UGSTN_HurtboxSetDefinition> Hurtboxes = MakeHurtboxes();
 	Hurtboxes->Hurtboxes.AddDefaulted_GetRef().Name = FName(TEXT("PlateBox"));
+	// P16-D: a screw (index 3), and a cover (index 4) held by it with two hurtboxes, the second with its own hardness (the per-hurtbox
+	// override and the held-by pass go through the cached table too). An unmapped box (index 7) is the body
+	Set->Parts.Add(MakePart(TEXT("Screw"), TEXT("ScrewBox"), 20.f));
+	Set->Parts.Last().Screw.bEnabled = true;
+	Set->Parts.Last().Screw.LoosenSense = 1;
+	Set->Parts.Last().Screw.TurnsToRelease = 2;
+	Set->Parts.Add(MakePart(TEXT("Cover"), TEXT("CoverBox"), 10.f));
+	Set->Parts.Last().Hurtboxes.Add(FName(TEXT("CoverBox2")));
+	Set->Parts.Last().Hardness = 1;
+	Set->Parts.Last().HurtboxHardnessOverride.Add(FName(TEXT("CoverBox2")), 4);
+	Set->Parts.Last().HeldBy = { FName(TEXT("Screw")) };
+	Set->Parts.Last().LostMassFraction = 0.1f;
+	Set->RebakeWeightCurve();
+	for (const TCHAR* Name : { TEXT("ScrewBox"), TEXT("CoverBox"), TEXT("CoverBox2"), TEXT("BodyBox") })
+	{
+		Hurtboxes->Hurtboxes.AddDefaulted_GetRef().Name = FName(Name);
+	}
 
 	TStrongObjectPtr<UGSTN_CombatRules> Standard = MakeRules();
 	TStrongObjectPtr<UGSTN_CombatRules> Bare(NewObject<UGSTN_CombatRules>(GetTransientPackage(), NAME_None, RF_Transient));
@@ -611,7 +628,10 @@ bool FGSTN_PartsMinionCachedStepTest::RunTest(const FString& Parameters)
 	const TStrongObjectPtr<UGSTN_CombatRules> RulesList[2] = { Standard, Bare };
 
 	struct FRow { uint8 Mask; uint8 Damage[GSTN_PartsLimits::MaxMinionParts]; };
-	const FRow Rows[3] = { { 0, {} }, { 0, { 120, 60, 0, 0, 0, 0, 0, 0 } }, { 0b10, { 0, 255, 90, 0, 0, 0, 0, 0 } } };
+	const FRow Rows[5] = { { 0, {} }, { 0, { 120, 60, 0, 0, 0, 0, 0, 0 } }, { 0b10, { 0, 255, 90, 0, 0, 0, 0, 0 } },
+		{ 0, { 0, 0, 0, 200, 250, 0, 0, 0 } }, { 0b1000, { 0, 0, 0, 255, 250, 0, 0, 0 } } };
+	const int32 Penetrations[3] = { 2, 5, 20 };
+	const int32 TurnSenses[2] = { 0, 1 };
 	const float Damages[3] = { 0.f, 10.f, 25.f };
 
 	const bool bWasEnabled = UGSTN_HitStep_PartResolveMinion::IsStepCacheEnabled();
@@ -626,6 +646,8 @@ bool FGSTN_PartsMinionCachedStepTest::RunTest(const FString& Parameters)
 			for (int32 Box = 0; Box < Hurtboxes->Hurtboxes.Num(); ++Box)
 			{
 				for (const float Damage : Damages)
+				for (const int32 Penetration : Penetrations)
+				for (const int32 TurnSense : TurnSenses)
 				{
 					FGSTN_StepResult Results[2];
 					EGSTN_StepResult Verdicts[2] = { EGSTN_StepResult::Continue, EGSTN_StepResult::Continue };
@@ -635,8 +657,10 @@ bool FGSTN_PartsMinionCachedStepTest::RunTest(const FString& Parameters)
 						Context.Incoming.Hit.Damage = Damage;
 						Context.Incoming.Hit.BaseKnockback = 300.f;
 						FGSTN_PartHitData PartHit;
-						PartHit.Penetration = 2;
+						PartHit.Penetration = static_cast<uint8>(Penetration);
 						Context.Incoming.Hit.ExtensionData.Add(FInstancedStruct::Make(PartHit));
+						Context.Incoming.Hit.TurnSense = TurnSense;
+						Context.Incoming.Hit.TurnSteps = 1;
 						Context.Victim.Weight = 100.f;
 						Context.Victim.SnapshotExtension = &Ext;
 						Context.HurtboxSet = Hurtboxes.Get();
@@ -646,7 +670,7 @@ bool FGSTN_PartsMinionCachedStepTest::RunTest(const FString& Parameters)
 						UGSTN_HitStep_PartResolveMinion::SetStepCacheEnabled(Cached != 0);
 						Verdicts[Cached] = Step->Resolve(View, Results[Cached]);
 					}
-					const FString Label = FString::Printf(TEXT("rules %d mask %d box %d damage %.0f"), RulesIndex, Row.Mask, Box, Damage);
+					const FString Label = FString::Printf(TEXT("rules %d mask %d box %d damage %.0f pen %d turn %d"), RulesIndex, Row.Mask, Box, Damage, Penetration, TurnSense);
 					TestEqual(*(Label + TEXT(": verdict")), static_cast<int32>(Verdicts[1]), static_cast<int32>(Verdicts[0]));
 					TestEqual(*(Label + TEXT(": damage add")), Results[1].DamageAdd, Results[0].DamageAdd);
 					TestEqual(*(Label + TEXT(": weight scale")), Results[1].WeightScale, Results[0].WeightScale);

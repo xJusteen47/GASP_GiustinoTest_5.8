@@ -24,11 +24,35 @@ namespace
 	 * the parent resolves through soft pointers on each hit, and the minimum weight scale. Keys are TObjectKey (index + serial), so a freed
 	 * set whose address is reused never matches a stale entry
 	 */
+	/**
+	 * What a hit on one hurtbox of one hurtbox set always resolves to (plan P16-D): the part (FindPartByHurtbox is a name search over the
+	 * parts, done once) and the penetration band for each penetration tier 0..15 against the hurtbox's effective hardness (the part's
+	 * Hardness with its per-hurtbox override applied, P18). A tier above 15 or an ignore-hardness hit is not in the table
+	 */
+	struct FHurtboxRow
+	{
+		int32 PartIndex = INDEX_NONE;
+		int32 Hardness = 0;
+		int16 BandByPenetration[16] = {};
+	};
+
+	struct FHurtboxTable
+	{
+		TObjectKey<UGSTN_HurtboxSetDefinition> HurtboxSet;
+		TArray<FHurtboxRow> Rows;
+	};
+
 	struct FStepCacheEntry
 	{
 		TObjectKey<UGSTN_PartSetDefinition> Set;
 		TObjectKey<UGSTN_CombatRules> Rules;
 		TArray<FGSTN_PenetrationBand> Bands;
+		/** One table per hurtbox set seen with this (part set, rules) pair, in practice one */
+		TArray<FHurtboxTable> Tables;
+		/** Per part: 1 - clamped LostMassFraction, the factor EffectiveWeightScale multiplies in for a broken part (same expression, same order) */
+		TArray<float> LostMassFactor;
+		/** The settings' minimum weight scale after EffectiveWeightScale's own clamp */
+		float MinWeightClamped = 0.f;
 		float MinWeightScale = 0.f;
 		bool bHasPartResolve = false;
 		bool bHasApplyDamage = false;
@@ -80,7 +104,48 @@ namespace
 		OutBands = UGSTN_PenetrationTable::MakeDefaultBands();
 	}
 
-	const FStepCacheEntry& FindOrBuildEntry(const UGSTN_PartSetDefinition& Set, const UGSTN_CombatRules& Rules)
+	float NonNegativeFloat(float Value)
+	{
+		return (Value >= 0.f && FMath::IsFinite(Value)) ? Value : 0.f;
+	}
+
+	const FHurtboxTable& FindOrBuildTable(FStepCacheEntry& Entry, const UGSTN_PartSetDefinition& Set, const UGSTN_HurtboxSetDefinition& HurtboxSet)
+	{
+		const TObjectKey<UGSTN_HurtboxSetDefinition> Key(&HurtboxSet);
+		for (const FHurtboxTable& Table : Entry.Tables)
+		{
+			if (Table.HurtboxSet == Key)
+			{
+				return Table;
+			}
+		}
+		FHurtboxTable& Table = Entry.Tables.AddDefaulted_GetRef();
+		Table.HurtboxSet = Key;
+		const TConstArrayView<FGSTN_PartDefinition> Parts = Set.GetParts();
+		Table.Rows.SetNum(HurtboxSet.Hurtboxes.Num());
+		for (int32 Index = 0; Index < Table.Rows.Num(); ++Index)
+		{
+			FHurtboxRow& Row = Table.Rows[Index];
+			const FName HurtboxName = HurtboxSet.Hurtboxes[Index].Name;
+			Row.PartIndex = Set.FindPartByHurtbox(HurtboxName);
+			if (!Parts.IsValidIndex(Row.PartIndex))
+			{
+				continue;
+			}
+			const FGSTN_PartDefinition& Part = Parts[Row.PartIndex];
+			// Same two steps as the step did per hit: the override only when the part has any, and ApplyHit falls back to the part's
+			// own hardness for a negative one
+			const int32 Override = Part.HurtboxHardnessOverride.IsEmpty() ? -1 : Part.GetHardnessFor(HurtboxName);
+			Row.Hardness = Override >= 0 ? Override : Part.Hardness;
+			for (int32 Penetration = 0; Penetration < 16; ++Penetration)
+			{
+				Row.BandByPenetration[Penetration] = static_cast<int16>(UGSTN_PartMath::LookupBand(Entry.Bands, Penetration, Row.Hardness, false));
+			}
+		}
+		return Table;
+	}
+
+	FStepCacheEntry& FindOrBuildEntry(const UGSTN_PartSetDefinition& Set, const UGSTN_CombatRules& Rules)
 	{
 		const TObjectKey<UGSTN_PartSetDefinition> SetKey(&Set);
 		const TObjectKey<UGSTN_CombatRules> RulesKey(&Rules);
@@ -103,6 +168,11 @@ namespace
 		const FGSTN_PartsRulesExtension* RulesExtension = FindRulesExtension(&Rules);
 		ResolveBands(Set, RulesExtension, Entry.Bands);
 		Entry.MinWeightScale = RulesExtension && RulesExtension->MinWeightScale >= 0.f ? RulesExtension->MinWeightScale : UGSTN_PartsSettings::Get().MinWeightScale;
+		Entry.MinWeightClamped = FMath::Clamp(NonNegativeFloat(Entry.MinWeightScale), 0.f, 1.f);
+		for (const FGSTN_PartDefinition& Part : Set.GetParts())
+		{
+			Entry.LostMassFactor.Add(1.f - FMath::Clamp(NonNegativeFloat(Part.LostMassFraction), 0.f, 1.f));
+		}
 		for (const TSubclassOf<UGSTN_HitResolutionStep>& StepClass : Rules.GetResolvedHitPipeline())
 		{
 			if (!StepClass || StepClass->IsChildOf(UGSTN_HitStep_PartResolveMinion::StaticClass()))
@@ -143,48 +213,80 @@ namespace
 	 * left one next to ApplyDamage's), no ExtraEffects are copied only to be dropped again when ApplyDamage is listed, and HealthWeight is
 	 * evaluated for its number instead of into a second full step result. Every float operation is the same, in the same order
 	 */
+	/** Bench sub-timer: adds the cycles since the last Lap to a counter (debug numbers, never read by the simulation) */
+	struct FLap
+	{
+		uint64 Last = FPlatformTime::Cycles64();
+		void Take(uint64& Counter)
+		{
+			const uint64 Now = FPlatformTime::Cycles64();
+			Counter += Now - Last;
+			Last = Now;
+		}
+	};
+
 	EGSTN_StepResult ResolveCached(const FGSTN_HitContextView& View, FGSTN_StepResult& Out, const FGSTN_PartsSnapshotExt& Ext, const UGSTN_PartSetDefinition& Set,
-		const FStepCacheEntry& Cache)
+		FStepCacheEntry& Cache)
 	{
 		if (!View.Outcome.bHit || View.bNoDamage || View.Outcome.bBlocked || View.Outcome.bParried)
 		{
 			return EGSTN_StepResult::Continue;
 		}
 
+		FGSTN_PartsMinionStepTiming& Timing = UGSTN_HitStep_PartResolveMinion::GetTiming();
+		++Timing.CachedCount;
+		FLap Lap;
 		const FGSTN_HitData& Hit = View.Incoming.Hit;
 		const TConstArrayView<FGSTN_PartDefinition> Parts = Set.GetParts();
+		// Per-hurtbox table (built at the first hit on this hurtbox set): the part, its effective hardness and the band per penetration tier
 		int32 PartIndex = INDEX_NONE;
-		FName HurtboxName = NAME_None;
+		const FHurtboxRow* Row = nullptr;
 		if (View.HurtboxSet && View.HurtboxSet->Hurtboxes.IsValidIndex(View.HurtboxIndex))
 		{
-			HurtboxName = View.HurtboxSet->Hurtboxes[View.HurtboxIndex].Name;
-			PartIndex = Set.FindPartByHurtbox(HurtboxName);
+			const FHurtboxTable& Table = FindOrBuildTable(Cache, Set, *View.HurtboxSet);
+			Row = &Table.Rows[View.HurtboxIndex];
+			PartIndex = Row->PartIndex;
 		}
 
+		Lap.Take(Timing.LookupCycles);
 		const FGSTN_PartHitData* PartHit = nullptr;
+		const UScriptStruct* PartHitStruct = FGSTN_PartHitData::StaticStruct();
 		for (const FInstancedStruct& Entry : Hit.ExtensionData)
 		{
+			// Exact type first (a pointer compare); GetPtr walks the struct's parent chain, kept for a derived struct
+			if (Entry.GetScriptStruct() == PartHitStruct)
+			{
+				PartHit = reinterpret_cast<const FGSTN_PartHitData*>(Entry.GetMemory());
+				break;
+			}
 			if (const FGSTN_PartHitData* Found = Entry.GetPtr<FGSTN_PartHitData>())
 			{
 				PartHit = Found;
 				break;
 			}
 		}
+		Lap.Take(Timing.ScanCycles);
 
 		const FGSTN_PartsState Before = Ext.ToState();
 		FGSTN_PartsState After = Before;
 		FGSTN_PartHitInput Input = FGSTN_PartHitInput::Make(Hit.Damage, PartIndex, PartHit);
 		Input.TurnSense = FMath::Clamp(Hit.TurnSense, -1, 1);
 		Input.TurnSteps = FMath::Clamp(Hit.TurnSteps, 0, 255);
-		if (Parts.IsValidIndex(PartIndex))
+		if (Row && Parts.IsValidIndex(PartIndex))
 		{
-			const FGSTN_PartDefinition& Part = Parts[PartIndex];
-			if (!Part.HurtboxHardnessOverride.IsEmpty())
+			// Row.Hardness is the part's hardness with the hurtbox override applied, so ApplyHit's own fallback gives the same number
+			Input.HardnessOverride = Row->Hardness;
+			if (Input.bIgnoreHardness)
 			{
-				Input.HardnessOverride = Part.GetHardnessFor(HurtboxName);
+				Input.PreparedBandIndex = Cache.Bands.IsEmpty() ? INDEX_NONE : 0;
+			}
+			else if (Input.Penetration >= 0 && Input.Penetration < 16)
+			{
+				Input.PreparedBandIndex = Row->BandByPenetration[Input.Penetration];
 			}
 		}
 		const FGSTN_PartHitResult Result = UGSTN_PartMath::ApplyHit(Parts, Cache.Bands, After, Input);
+		Lap.Take(Timing.ApplyCycles);
 
 		// Built in place in the result's slot: Make(Outcome) would construct a local, then copy it through the reflected struct
 		FInstancedStruct& OutcomeSlot = Out.OutcomeExtensions.AddDefaulted_GetRef();
@@ -205,6 +307,7 @@ namespace
 			| (Result.bAllBrokenReached ? GSTNPartOutcomeFlags::AllBroken : 0)
 			| (Result.bPassedToBody ? GSTNPartOutcomeFlags::PassedToBody : 0);
 
+		Lap.Take(Timing.OutcomeCycles);
 		if (Result.bRicochet)
 		{
 			return EGSTN_StepResult::Stop;
@@ -214,12 +317,21 @@ namespace
 		const FGSTN_PartReaction* PartReaction = Parts.IsValidIndex(Result.PartIndex) ? &Parts[Result.PartIndex].Reaction : nullptr;
 		const float Progress = View.Rules->GetDamageProgress(View.Victim);
 
-		float Weight = UGSTN_PartMath::EffectiveWeightScale(Parts, Set.GetWeightCurve(), Progress, Before.BrokenMask, Cache.MinWeightScale) * Body.JuggleFactor;
+		Lap.Take(Timing.ProgressCycles);
+		// EffectiveWeightScale on the cached per-part factors: the same products in ascending part index, only broken parts visited
+		float WeightScale = Set.GetWeightCurve().Sample(Progress);
+		const int32 NumParts = FMath::Min(Parts.Num(), Cache.LostMassFactor.Num());
+		for (uint32 Broken = static_cast<uint32>(Before.BrokenMask) & ((1u << NumParts) - 1u); Broken != 0; Broken &= Broken - 1u)
+		{
+			WeightScale *= Cache.LostMassFactor[FMath::CountTrailingZeros(Broken)];
+		}
+		float Weight = FMath::Max(WeightScale, Cache.MinWeightClamped) * Body.JuggleFactor;
 		if (PartReaction)
 		{
 			Weight *= PartReaction->JuggleFactor;
 		}
 		Out.WeightScale = Weight;
+		Lap.Take(Timing.WeightCycles);
 
 		const FGSTN_PartReaction& Hitting = PartReaction ? *PartReaction : Body;
 		Out.KnockbackScale = Hitting.KnockbackScale;
@@ -262,6 +374,7 @@ namespace
 				Out.WeightScale /= HealthWeight;
 			}
 		}
+		Lap.Take(Timing.TailCycles);
 		return EGSTN_StepResult::Continue;
 	}
 }
@@ -308,7 +421,7 @@ EGSTN_StepResult UGSTN_HitStep_PartResolveMinion::Resolve_Implementation(const F
 	const UGSTN_PartSetDefinition* Set = Ext->PartSet;
 	if (GStepCacheEnabled && View.Rules && Set && !Set->Parts.IsEmpty())
 	{
-		const FStepCacheEntry& Cache = FindOrBuildEntry(*Set, *View.Rules);
+		FStepCacheEntry& Cache = FindOrBuildEntry(*Set, *View.Rules);
 		if (Cache.bHasPartResolve)
 		{
 			// Parts-aware rules: their PartResolve (validated before ComputeKnockback) already resolved the part on this same view

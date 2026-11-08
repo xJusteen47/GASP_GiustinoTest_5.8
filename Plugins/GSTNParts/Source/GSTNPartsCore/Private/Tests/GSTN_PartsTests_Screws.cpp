@@ -67,7 +67,7 @@ namespace GSTNPartsScrewsTest
 		return UGSTN_PartMath::ApplyHit(Parts, UGSTN_PenetrationTable::MakeDefaultBands(), State, Input);
 	}
 
-	const FGSTN_PartHitOutcome* FindOutcome(const FGSTN_StepResult& Result)
+	const FGSTN_PartHitOutcome* FindScrewOutcome(const FGSTN_StepResult& Result)
 	{
 		for (const FInstancedStruct& Entry : Result.OutcomeExtensions)
 		{
@@ -320,22 +320,22 @@ bool FGSTN_PartsScrewRewoundTest::RunTest(const FString& Parameters)
 	Late.PartDamage[ScrewA] = 192;
 
 	const FGSTN_StepResult EarlyResult = Fixture.RunStep(Early, ScrewABox, -1, 1);
-	const FGSTN_PartHitOutcome* FromEarly = FindOutcome(EarlyResult);
+	const FGSTN_PartHitOutcome* FromEarly = FindScrewOutcome(EarlyResult);
 	TestTrue(TEXT("the early frame's turn lands on the screw"), FromEarly && FromEarly->PartIndex == ScrewA);
 	TestEqual(TEXT("it adds one step to the byte of its frame"), FromEarly ? static_cast<int32>(FromEarly->ResultPartDamage[ScrewA]) : -1, 128);
 
 	const FGSTN_StepResult LateResult = Fixture.RunStep(Late, ScrewABox, -1, 1);
-	const FGSTN_PartHitOutcome* FromLate = FindOutcome(LateResult);
+	const FGSTN_PartHitOutcome* FromLate = FindScrewOutcome(LateResult);
 	TestTrue(TEXT("the late frame's turn breaks the screw"), FromLate && (FromLate->NewlyBrokenMask & (1u << ScrewA)) != 0 && FromLate->ResultPartDamage[ScrewA] == 255);
 
 	// Resolving the early frame again after the late one gives the early answer: the step keeps nothing between hits
 	const FGSTN_StepResult AgainResult = Fixture.RunStep(Early, ScrewABox, -1, 1);
-	const FGSTN_PartHitOutcome* Again = FindOutcome(AgainResult);
+	const FGSTN_PartHitOutcome* Again = FindScrewOutcome(AgainResult);
 	TestEqual(TEXT("same frame state, same result"), Again ? static_cast<int32>(Again->ResultPartDamage[ScrewA]) : -1, 128);
 
 	// The hitbox's sense decides: no sense, no turn through the step either
 	const FGSTN_StepResult NoSense = Fixture.RunStep(Early, ScrewABox, 0, 1);
-	const FGSTN_PartHitOutcome* NoSenseOutcome = FindOutcome(NoSense);
+	const FGSTN_PartHitOutcome* NoSenseOutcome = FindScrewOutcome(NoSense);
 	TestEqual(TEXT("a hitbox without TurnSense leaves the byte of its frame"), NoSenseOutcome ? static_cast<int32>(NoSenseOutcome->ResultPartDamage[ScrewA]) : -1, 64);
 	return true;
 }

@@ -54,6 +54,14 @@ struct GSTNPARTSCORE_API FGSTN_PartHitInput
 	int32 TurnSense = 0;
 	int32 TurnSteps = 0;
 
+	/**
+	 * Band the caller already looked up for (Penetration, the part's effective hardness, bIgnoreHardness), as LookupBand would return it
+	 * (INDEX_NONE for an empty table). BandNotPrepared (the default, what every fighter path leaves) = ApplyHit looks it up. The minion step
+	 * fills it from its per-hurtbox cache; a wrong value would change the result, so only a caller that built it with LookupBand may set it
+	 */
+	static constexpr int32 BandNotPrepared = -2;
+	int32 PreparedBandIndex = BandNotPrepared;
+
 	/** From the hit's damage, the part index and its authored part data (null = penetration 0, scales of 1) */
 	static FGSTN_PartHitInput Make(float InDamage, int32 InPartIndex, const FGSTN_PartHitData* Data);
 };

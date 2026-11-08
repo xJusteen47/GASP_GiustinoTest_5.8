@@ -204,7 +204,9 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 	Result.bHitBrokenPart = bWasBroken;
 
 	const int32 Hardness = Hit.HardnessOverride >= 0 ? Hit.HardnessOverride : Part.Hardness;
-	const int32 BandIndex = LookupBand(SortedBands, Hit.Penetration, Hardness, Hit.bIgnoreHardness);
+	const int32 BandIndex = Hit.PreparedBandIndex != FGSTN_PartHitInput::BandNotPrepared
+		? Hit.PreparedBandIndex
+		: LookupBand(SortedBands, Hit.Penetration, Hardness, Hit.bIgnoreHardness);
 	const FGSTN_PenetrationBand* Band = (BandIndex != INDEX_NONE) ? &SortedBands[BandIndex] : nullptr;
 	Result.BandIndex = BandIndex;
 

@@ -11,6 +11,15 @@ struct FGSTN_PartsMinionStepTiming
 {
 	uint64 Cycles = 0;
 	int32 Count = 0;
+	/** Sub-timers of the cached path (P16-D, bench only): cache lookup, hit data scan, ApplyHit, outcome write, damage progress, weight, tail */
+	uint64 LookupCycles = 0;
+	uint64 ScanCycles = 0;
+	uint64 ApplyCycles = 0;
+	uint64 OutcomeCycles = 0;
+	uint64 ProgressCycles = 0;
+	uint64 WeightCycles = 0;
+	uint64 TailCycles = 0;
+	int32 CachedCount = 0;
 };
 
 /**
