@@ -1,5 +1,7 @@
 # M8 doc deltas (G0-G12a)
 
+Folded into the plugin READMEs on 2026-11-08; this note is kept as history.
+
 What the build did differently from `docs/architecture/combat-m8-minions.md`, and the folds into `docs/architecture/combat.md` still to do in G12b.
 Source: the G sections of `docs/notes/handovers/m8-minion.md` only. One bullet each.
 

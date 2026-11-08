@@ -95,6 +95,10 @@ At 160 minions, all of a part-bearing type (sub-gate B):
   has activated. The view scratch could shrink to one entry per drain if the 5 KB ever matters.
 - The part set loads synchronously the first time its type activates (once per type per world); sub-gate B should preload the sets with the wave.
 
+## Known limits
+
+- **Net format (open risk for P16).** `FGSTN_MinionNetFormat::ExtTypes` is filled process-wide. A pack that is decoded before the registry is filled is read with the wrong table. Not yet guarded against.
+
 ## How to extend
 
 Make a minion type lose parts: build a `UGSTN_PartSetDefinition` with `bForMinions` on, at most 8 parts, only MainDamage, Launch, Stagger and derived break effects; list the parts whose loss kills in `FGSTN_PartsMinionExtension::LethalParts` (leave it empty to keep fighting after any loss); map the minion's type tag to that extension in `UGSTN_PartsMinionSettings::TypeExtensions`. Add a new bridge behaviour in this module, never in `GSTNMinion` or `GSTNParts`.

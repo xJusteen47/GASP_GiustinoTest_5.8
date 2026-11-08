@@ -22,14 +22,23 @@ time (`UGSTN_EnemyPlatformComponent::OnPrePose`, never on a re-simulated frame),
 ```
 set = FGSTN_PartsAttach::FindSet(owner)                   // re-resolve when the attached set changes (kit swap)
 gates[shape] = bit(part named by shape) | bits(its ancestors)   // FGSTN_PlatformPartGates (GSTNPlatformCore), 0 = body
-broken = owner combat sync state -> FGSTN_PartsFragment.BrokenMask   // confirmed: host end of frame, client replicated state
+broken = host: owner combat sync state -> FGSTN_PartsFragment.BrokenMask (end of frame)
+         client: the host's {BrokenMask, Frame} from the bridge          // confirmed values only
 mask = shapes whose gate has no broken bit
-if mask changed: platform.SetShapeMask(mask, bTelegraphBreak ? Breaking : Inactive)
+if mask changed: platform.SetShapeMaskAtFrame(mask, bTelegraphBreak ? Breaking : Inactive, Frame)
 ```
 
 The platform stamps the change on the frame being posed and keeps it as a timeline, so a replayed frame finds the collision it had.
-A broken part's shape stays solid as `Breaking` for its `DropGraceFrames`, then goes; a restore (`Combat.Event.Part.Restored`)
-clears the bit and the shape is `Active` at once. Before a set is attached, and for a name the set lacks, a shape is body.
+A broken part's shape stays solid as `Breaking` for its `DropGraceFrames`, then goes; a restore clears the bit and the shape is `Active`
+at once. Before a set is attached, and for a name the set lacks, a shape is body.
+
+## Behaviour notes
+
+- **Mask source (T6).** A client does not read its own copy of the break. The host reads the fragment at its pose point and replicates
+  `{BrokenMask, Frame}` on the bridge; each client applies it to that frame with `SetShapeMaskAtFrame`. A mask that arrives within the
+  shape's `DropGraceFrames` costs no correction, because the Breaking telegraph keeps the past frames solid.
+- **Restore.** The bridge does not listen to `Combat.Event.Part.Restored`. It follows the broken mask, and the cleared bit makes the shape `Active`.
+- **Seams used from GSTNPlatform:** `OnPrePose`, `SetShapeMaskAtFrame` and `FGSTN_PlatformPartGates`.
 
 ## Using it
 
