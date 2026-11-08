@@ -75,3 +75,10 @@
 - Not done: `FixedTickInputSendCount` (redundancy, not latency) and the starvation hold (a fork behaviour, no setting) were not swept.
 - PERF-DEBT: none (test knob).
 - Cost: ~$2 (1 build, 8 harness runs, my context ~+15k). FP total so far ~$19.
+
+## FP closed on the laptop (2026-11-08)
+- Done here: plan + owner decisions, G0 (buffer 50 ms), G0b (hops), G1 (predicted partner presentation, 9da51f0), G0c (input buffer, no change).
+- Owner doc in Italian: docs/notes/networking-spiegato.md (what is predicted, the cycle, values, lag compensation, the ~170-190 ms floor).
+- Left: G2 video review on the desktop; G3-G5 + G3b paused until a PvP playtest; no refused-move scenario yet.
+- Branches to merge in order: claude/fp-g1-laptop (contains plan, G0, G0b) then claude/fp-g0c-laptop (G0c + this doc).
+- Cost: FP total ~$21 (plan $3, G0 $7, G0b $2, G1 $8, G0c $2, doc ~$1); no PERF-DEBT added by G0c or the doc.
