@@ -174,6 +174,8 @@ namespace
 		const FGSTN_PartsState Before = Ext.ToState();
 		FGSTN_PartsState After = Before;
 		FGSTN_PartHitInput Input = FGSTN_PartHitInput::Make(Hit.Damage, PartIndex, PartHit);
+		Input.TurnSense = FMath::Clamp(Hit.TurnSense, -1, 1);
+		Input.TurnSteps = FMath::Clamp(Hit.TurnSteps, 0, 255);
 		if (Parts.IsValidIndex(PartIndex))
 		{
 			const FGSTN_PartDefinition& Part = Parts[PartIndex];

@@ -116,3 +116,21 @@
 - Not checked: how `GSTN_CombatValidators.cpp` maps the new messages to its `Hurtbox.*` codes.
 - PERF-DEBT: none new (one bool per touched hurtbox on the minion path; validation is editor/load time).
 - Cost: ~$4 (writer ~117k tokens; 4 builds incl. 2 off configs, 3 test runs, SUITE_DEFAULT, 3 SUITE_MINION runs).
+
+## P19 screws (laptop, 2026-11-08): DONE, gate green
+
+- Branch `claude/p19-screws-laptop` from merge f f0c528ab. Sonnet writer (`Saved/P19/brief.md`, `report.md`).
+- `TurnSense` / `TurnSteps` on `FGSTN_HitData` (default 0: no hit turns anything; shown in the hit data editor under "Screw");
+  `FGSTN_PartScrewRule`, `HeldBy` / `HeldByRule` on `FGSTN_PartDefinition`. Turn counter = the screw's existing damage byte (+ceil(255*steps/
+  TurnsToRelease) in the loosen sense, minus with floor 0 the other way): no new bytes. Turn rule and held-by in `UGSTN_PartMath::ApplyHit`
+  (a ricochet band still returns first; a released plate breaks in the same hit). Deviation to confirm: a held part's damage byte is capped
+  at 254 while its rule is unmet, so damage alone cannot break it (the spec text only defines the release).
+- Minions: screws allowed (the 9 B row holds the byte; the minion step calls the same ApplyHit; its cache reads no new data).
+- Validation: bad sense, TurnsToRelease outside 1..255, unknown/empty/self HeldBy, cycles through HeldBy and ParentIndex.
+- Tests: `GSTNParts.Core.Screws.*` 6 (spec §8.1) + `ValidationRejectsBadScrewAndHeldBy`. 1 lead fix: the hit data editor customization lists
+  its properties (test `ExtensionDataNotHiddenByCustomization` failed until TurnSense/TurnSteps were laid out).
+- Gate: all on 1443/0 (+7), GSTNMinion+GSTNPartsMinion off 1341/0, GSTNPlatform+Parts off 1421/0, 0 ensures. SUITE_DEFAULT 50/50.
+  SUITE_MINION 0 % 9/11 (lagcomp 1 cancel, lod), 2 % 9/11 (lagcomp no swing, lod): known reds only.
+- Not done: spin/drill hitboxes authoring TurnSense (GSTNSpinDrill), TM3 plate content, turning-screw presentation, balance report, HitDataOverride fields.
+- PERF-DEBT (also in perf-debt.md): screw/held-by passes only on parts that have a rule (one check per part hit otherwise).
+- Cost: ~$5 (writer ~194k tokens; 5 builds incl. 2 off configs, 4 test runs, SUITE_DEFAULT, 2 SUITE_MINION).

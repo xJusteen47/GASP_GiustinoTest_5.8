@@ -121,6 +121,9 @@ EGSTN_StepResult UGSTN_HitStep_PartResolve::Resolve_Implementation(const FGSTN_H
 	const FGSTN_PartsState Before = Ext->ToState();
 	FGSTN_PartsState After = Before;
 	FGSTN_PartHitInput Input = FGSTN_PartHitInput::Make(Hit.Damage, PartIndex, PartHit);
+	// Screws (combat-parts.md 3.4): the hit's turn, read by a part with an enabled Screw rule only. Plain integers of the hit, no allocation
+	Input.TurnSense = FMath::Clamp(Hit.TurnSense, -1, 1);
+	Input.TurnSteps = FMath::Clamp(Hit.TurnSteps, 0, 255);
 	// One part, several hardnesses (combat-parts.md §3.4): the hurtbox the attacker chose may carry its own. Static data only, so the
 	// attacker running this same step predicts the ricochet exactly; the pool and the break stay the part's
 	if (Parts.IsValidIndex(PartIndex))

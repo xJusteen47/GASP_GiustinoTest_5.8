@@ -47,6 +47,13 @@ struct GSTNPARTSCORE_API FGSTN_PartHitInput
 	 */
 	int32 HardnessOverride = -1;
 
+	/**
+	 * Screw turn of the hit (combat-parts.md 3.4), from FGSTN_HitData::TurnSense / TurnSteps: the sign of the sense (0 = the hit turns nothing)
+	 * and the steps. Read only by a part whose Screw rule is enabled; the step sets them, Make does not (they live on the hit, not on the part data)
+	 */
+	int32 TurnSense = 0;
+	int32 TurnSteps = 0;
+
 	/** From the hit's damage, the part index and its authored part data (null = penetration 0, scales of 1) */
 	static FGSTN_PartHitInput Make(float InDamage, int32 InPartIndex, const FGSTN_PartHitData* Data);
 };

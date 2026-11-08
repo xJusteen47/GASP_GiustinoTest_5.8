@@ -31,6 +31,56 @@ namespace
 	{
 		return static_cast<uint16>(1u << Index);
 	}
+
+	/**
+	 * Whether the holders of Part are broken enough to release it. False for a part held by nothing, and an unknown holder name never counts
+	 * as broken (validation rejects it). A name search over at most 16 parts, run only for a part with HeldBy on a hit that damages it or
+	 * breaks something, so the common hit never pays it
+	 */
+	bool HeldByReleased(TConstArrayView<FGSTN_PartDefinition> Parts, int32 Num, uint16 BrokenMask, const FGSTN_PartDefinition& Part)
+	{
+		if (Part.HeldBy.IsEmpty())
+		{
+			return false;
+		}
+		const bool bAll = Part.HeldByRule == EGSTN_HeldByRule::AllBroken;
+		bool bAnyBroken = false;
+		bool bAllBroken = true;
+		for (const FName& Holder : Part.HeldBy)
+		{
+			bool bBroken = false;
+			for (int32 Index = 0; Index < Num; ++Index)
+			{
+				if (Parts[Index].Name == Holder)
+				{
+					bBroken = (BrokenMask & BitOf(Index)) != 0;
+					break;
+				}
+			}
+			bAnyBroken |= bBroken;
+			bAllBroken &= bBroken;
+		}
+		return bAll ? bAllBroken : bAnyBroken;
+	}
+
+	/** The byte after one turning hit on a screw: up by the steps in the loosening sense, down (floor 0) in the opposite one when it tightens, else unchanged */
+	uint8 TurnScrew(const FGSTN_PartScrewRule& Rule, uint8 Current, int32 Sense, int32 Steps)
+	{
+		if (Sense == 0 || Steps <= 0)
+		{
+			return Current;
+		}
+		const int32 Bytes = Rule.StepBytes(Steps);
+		if (Sense == Rule.LoosenSense)
+		{
+			return static_cast<uint8>(FMath::Min(static_cast<int32>(Current) + Bytes, DamageAtCap));
+		}
+		if (Sense == -Rule.LoosenSense && Rule.bOppositeTightens)
+		{
+			return static_cast<uint8>(FMath::Max(static_cast<int32>(Current) - Bytes, 0));
+		}
+		return Current;
+	}
 }
 
 FGSTN_PartHitInput FGSTN_PartHitInput::Make(float InDamage, int32 InPartIndex, const FGSTN_PartHitData* Data)
@@ -188,11 +238,28 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 	Result.HitMainDelta = (Damage * MainScale) * Transfer;
 
 	uint16 NewlyBroken = 0;
-	if (!bWasBroken && Part.IsBreakable() && !Hit.bMainOnly)
+	const bool bScrew = Part.Screw.bEnabled;
+	if (!bWasBroken && (bScrew || Part.IsBreakable()) && !Hit.bMainOnly)
 	{
-		const float PartDelta = ((Damage * PartScale) * NonNegative(Hit.PartDamageScale)) * NonNegative(Part.PartDamageScale);
+		// A screw's byte is its turning progress, moved by TurnSense only (hardness, cap and damage scales do not apply; the ricochet band
+		// above already refused the hit if the screw's hardness says so). Any other part takes damage as before
 		const uint8 Before = State.PartDamage[PartIndex];
-		const uint8 After = AddDamage(Before, PartDelta, Part.PartCap);
+		float PartDelta = 0.f;
+		uint8 After;
+		if (bScrew)
+		{
+			After = TurnScrew(Part.Screw, Before, Hit.TurnSense, Hit.TurnSteps);
+		}
+		else
+		{
+			PartDelta = ((Damage * PartScale) * NonNegative(Hit.PartDamageScale)) * NonNegative(Part.PartDamageScale);
+			After = AddDamage(Before, PartDelta, Part.PartCap);
+		}
+		if (After >= DamageAtCap && Before < DamageAtCap && !Part.HeldBy.IsEmpty() && !HeldByReleased(Parts, Num, State.BrokenMask, Part))
+		{
+			// Held by other parts: the byte stops one below the cap, only the holders (or a broken parent) take it off
+			After = static_cast<uint8>(DamageAtCap - 1);
+		}
 		if (After != Before)
 		{
 			State.PartDamage[PartIndex] = After;
@@ -215,8 +282,25 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 		// The cascade starts from the part that just broke, not from the whole mask: a state is never expected to hold a child
 		// intact under a broken parent (RestoreParts forbids it), but if one does, an unrelated break must not break it again
 		// and pay its bonus a second time
-		NewlyBroken = ComputeCascade(Parts, NewlyBroken) & static_cast<uint16>(~State.BrokenMask);
-		State.BrokenMask |= NewlyBroken;
+		// Parts held by what just broke come off in waves (a plate whose last screw is out, then a cover held by that plate), each wave with its
+		// own children, until nothing new breaks: at most one wave per part, so it terminates on any data. The effects below still run once per
+		// part in index order over the whole set, so the order does not depend on the wave a part broke in
+		uint16 Seed = NewlyBroken;
+		NewlyBroken = 0;
+		for (int32 Wave = 0; Wave <= Num && Seed != 0; ++Wave)
+		{
+			const uint16 WaveBroken = ComputeCascade(Parts, Seed) & static_cast<uint16>(~State.BrokenMask);
+			State.BrokenMask |= WaveBroken;
+			NewlyBroken |= WaveBroken;
+			Seed = 0;
+			for (int32 Index = 0; Index < Num; ++Index)
+			{
+				if ((State.BrokenMask & BitOf(Index)) == 0 && HeldByReleased(Parts, Num, State.BrokenMask, Parts[Index]))
+				{
+					Seed |= BitOf(Index);
+				}
+			}
+		}
 		for (int32 Index = 0; Index < Num; ++Index)
 		{
 			if ((NewlyBroken & BitOf(Index)) == 0)

@@ -98,6 +98,52 @@ struct GSTNPARTSCORE_API FGSTN_GrabGate
 	bool IsEmpty() const { return MinBrokenParts <= 0 && RequiredParts.IsEmpty(); }
 };
 
+/** When a part held by other parts (FGSTN_PartDefinition::HeldBy) comes off (combat-parts.md 3.4) */
+UENUM(BlueprintType)
+enum class EGSTN_HeldByRule : uint8
+{
+	/** The part comes off when every holder is broken (a plate on four screws) */
+	AllBroken,
+	/** The part comes off when any one holder is broken (a cover on a latch or a hinge) */
+	AnyBroken
+};
+
+/**
+ * A screw or bolt (combat-parts.md 3.4): a part that hits turn out instead of damaging. The progress is the part's own damage byte
+ * (0 in, 255 out), so the rule adds no state. A hit whose TurnSense equals LoosenSense moves the byte up by StepBytes(TurnSteps), the
+ * opposite sense moves it down (never below 0) when bOppositeTightens; a hit without a sense, or any other damage, leaves the byte
+ * alone. Turning ignores hardness (the screw's Hardness still decides ricochets), the PartCap and the part's damage scale: the byte at
+ * 255 breaks the part like any part, with its own OnBreak. Minions can carry screws too (their row has the same byte).
+ */
+USTRUCT(BlueprintType)
+struct GSTNPARTSCORE_API FGSTN_PartScrewRule
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Screw")
+	bool bEnabled = false;
+
+	/** The turn sense that loosens the screw: -1 counter-clockwise, +1 clockwise (seen from above, like FGSTN_HitData::TurnSense). 0 is not a sense: validation rejects it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Screw", meta = (EditCondition = "bEnabled", ClampMin = "-1", ClampMax = "1"))
+	int32 LoosenSense = -1;
+
+	/** Steps (hit TurnSteps) that take the screw from fully in to out, 1..255. A minion screw is a one-hit screw with 1 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Screw", meta = (EditCondition = "bEnabled", ClampMin = "1", ClampMax = "255"))
+	int32 TurnsToRelease = 8;
+
+	/** A hit turning the other way screws it back in (never below fully in) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Screw", meta = (EditCondition = "bEnabled"))
+	bool bOppositeTightens = true;
+
+	/** The damage bytes of Steps steps: ceil(255 x Steps / TurnsToRelease), integers only. At least 1 for a positive step count, so a turn always moves the byte */
+	int32 StepBytes(int32 Steps) const
+	{
+		const int32 Turns = FMath::Max(TurnsToRelease, 1);
+		const int32 Clamped = FMath::Clamp(Steps, 0, 255);
+		return (255 * Clamped + Turns - 1) / Turns;
+	}
+};
+
 /**
  * One destructible part of an entity (combat-parts.md §3.1). It maps hurtboxes to a health of its own and a share of each hit
  * to the entity's main pool. Fixed bounds are in GSTN_PartsLimits.h. Identity (Name) is unique and stable: other plugins key
@@ -198,6 +244,21 @@ struct GSTNPARTSCORE_API FGSTN_PartDefinition
 	/** Hitstun condition, reaction cap, juggle, hitstop and knockback scale of a hit on this part */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction")
 	FGSTN_PartReaction Reaction;
+
+	/** Screw or bolt behaviour: hits with the right TurnSense unscrew this part (combat-parts.md 3.4). Off by default */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Screw")
+	FGSTN_PartScrewRule Screw;
+
+	/**
+	 * Names of the parts that hold this one (screws, a latch). While HeldByRule is not met the part cannot break from damage (its byte stops
+	 * one below the cap); the moment it is met, in the same pass that breaks children, the part breaks whatever its Hardness and even with a
+	 * PartCap of 0 or less (an unbreakable plate), running its own OnBreak. Empty = held by nothing. ParentIndex stays the part's own parent
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Screw")
+	TArray<FName> HeldBy;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Screw", meta = (EditCondition = "!HeldBy.IsEmpty()"))
+	EGSTN_HeldByRule HeldByRule = EGSTN_HeldByRule::AllBroken;
 
 	/** Fraction of the entity's base weight lost when this part breaks (a lighter, mutilated enemy flies further) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction", meta = (ClampMin = 0, ClampMax = 1))

@@ -56,6 +56,43 @@ namespace
 		return FMath::IsFinite(Value) && Value >= 0.f;
 	}
 
+	/** Parts reachable from Start along "breaks only after" edges: the parent, and with bHeld the holders. Bit i = part i (at most 32 parts looked at) */
+	uint32 ReachAfter(TConstArrayView<FGSTN_PartDefinition> Parts, int32 Start, bool bHeld)
+	{
+		const int32 Num = FMath::Min(Parts.Num(), 32);
+		uint32 Seen = 0;
+		uint32 Frontier = 1u << Start;
+		while (Frontier != 0)
+		{
+			const int32 Current = FMath::CountTrailingZeros(Frontier);
+			Frontier &= Frontier - 1;
+			auto Visit = [&](int32 Next)
+			{
+				if (Next >= 0 && Next < Num && (Seen & (1u << Next)) == 0)
+				{
+					Seen |= 1u << Next;
+					Frontier |= 1u << Next;
+				}
+			};
+			Visit(Parts[Current].ParentIndex);
+			if (bHeld)
+			{
+				for (const FName& Holder : Parts[Current].HeldBy)
+				{
+					for (int32 Index = 0; Index < Num; ++Index)
+					{
+						if (Parts[Index].Name == Holder)
+						{
+							Visit(Index);
+							break;
+						}
+					}
+				}
+			}
+		}
+		return Seen;
+	}
+
 	void ValidateReaction(const FString& Label, const FGSTN_PartReaction& Reaction, FGSTN_PartsValidationReport& Report)
 	{
 		if (!FMath::IsFinite(Reaction.StaggerThreshold))
@@ -185,6 +222,45 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 		{
 			Report.AddWarning(FString::Printf(TEXT("%s: the Replace policy needs a hit shape, which is not declared yet; it behaves as Keep for damage."), *Label));
 		}
+		if (Part.Screw.bEnabled)
+		{
+			if (Part.Screw.LoosenSense != -1 && Part.Screw.LoosenSense != 1)
+			{
+				Report.AddError(FString::Printf(TEXT("%s: the screw's loosen sense is %d; it must be -1 or 1 (0 is not a turn sense, so no hit could ever loosen it)."), *Label, Part.Screw.LoosenSense));
+			}
+			if (Part.Screw.TurnsToRelease < 1 || Part.Screw.TurnsToRelease > 255)
+			{
+				Report.AddError(FString::Printf(TEXT("%s: the screw's turns to release is %d; it must be 1..255 (a step is whole bytes of the 255 that stand for fully out)."), *Label, Part.Screw.TurnsToRelease));
+			}
+		}
+		for (int32 HolderIndex = 0; HolderIndex < Part.HeldBy.Num(); ++HolderIndex)
+		{
+			const FName Holder = Part.HeldBy[HolderIndex];
+			if (Holder.IsNone())
+			{
+				Report.AddError(FString::Printf(TEXT("%s: HeldBy entry %d is an empty name."), *Label, HolderIndex));
+			}
+			else if (Holder == Part.Name)
+			{
+				Report.AddError(FString::Printf(TEXT("%s: the part is held by itself."), *Label));
+			}
+			else if (Part.HeldBy.Find(Holder) != HolderIndex)
+			{
+				Report.AddWarning(FString::Printf(TEXT("%s: %s is listed twice in HeldBy."), *Label, *Holder.ToString()));
+			}
+			else
+			{
+				bool bKnown = false;
+				for (const FGSTN_PartDefinition& Other : Parts)
+				{
+					bKnown |= Other.Name == Holder;
+				}
+				if (!bKnown)
+				{
+					Report.AddError(FString::Printf(TEXT("%s: HeldBy names %s, which is not a part of the set, so the part could never be released."), *Label, *Holder.ToString()));
+				}
+			}
+		}
 		ValidateReaction(Label, Part.Reaction, Report);
 
 		for (int32 EffectIndex = 0; EffectIndex < Part.OnBreak.Num(); ++EffectIndex)
@@ -260,7 +336,7 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 					Report.AddError(FString::Printf(TEXT("%s: break effect %d lists an empty hurtbox name."), *Label, EffectIndex));
 				}
 			}
-			if (!Part.IsBreakable())
+			if (!Part.IsBreakable() && !Part.Screw.bEnabled && Part.HeldBy.IsEmpty())
 			{
 				Report.AddWarning(FString::Printf(TEXT("%s is unbreakable (part cap 0 or less), so its break effect %d never fires unless a broken parent cascades onto it."), *Label, EffectIndex));
 			}
@@ -289,9 +365,44 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 		}
 	}
 
+	// Cycles through HeldBy and ParentIndex together: a part that can break only after something that can break only after it. Pure parent cycles
+	// are reported above, so a part is reported here only when its cycle needs a HeldBy edge. One report per cycle, at its lowest index
+	for (int32 Start = 0; Start < FMath::Min(Num, 32); ++Start)
+	{
+		if (Parts[Start].HeldBy.IsEmpty() && Parts[Start].ParentIndex == INDEX_NONE)
+		{
+			continue;
+		}
+		const uint32 StartBit = 1u << Start;
+		const uint32 Full = ReachAfter(Parts, Start, true);
+		if ((Full & StartBit) == 0 || (ReachAfter(Parts, Start, false) & StartBit) != 0)
+		{
+			continue;
+		}
+		bool bLowest = true;
+		for (int32 Other = 0; Other < Start && bLowest; ++Other)
+		{
+			// Part Other is in the same cycle when each reaches the other
+			bLowest = !((Full & (1u << Other)) != 0 && (ReachAfter(Parts, Other, true) & StartBit) != 0);
+		}
+		if (bLowest)
+		{
+			Report.AddError(FString::Printf(TEXT("%s is in a cycle through HeldBy and ParentIndex; it could never be released."), *PartLabel(Start, Parts[Start])));
+		}
+	}
+
 	// A part can break by damage only when it is breakable, or by cascade when an ancestor does: the others never appear in the
 	// broken mask, so a gate that waits for them would lock the entity for good
-	const uint16 Reachable = UGSTN_PartMath::ComputeCascade(Parts, UGSTN_PartMath::GetBreakableMask(Parts));
+	// A screw breaks by turning, and a held part by its holders, whatever their caps
+	uint16 BreakableOrReleased = UGSTN_PartMath::GetBreakableMask(Parts);
+	for (int32 Index = 0; Index < FMath::Min(Num, GSTN_PartsLimits::MaxParts); ++Index)
+	{
+		if (Parts[Index].Screw.bEnabled || !Parts[Index].HeldBy.IsEmpty())
+		{
+			BreakableOrReleased |= static_cast<uint16>(1u << Index);
+		}
+	}
+	const uint16 Reachable = UGSTN_PartMath::ComputeCascade(Parts, BreakableOrReleased);
 	const int32 NumReachable = FMath::CountBits(static_cast<uint32>(Reachable));
 
 	if (GrabGate.MinBrokenParts > Num)

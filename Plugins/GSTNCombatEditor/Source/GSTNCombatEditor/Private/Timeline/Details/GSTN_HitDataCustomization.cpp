@@ -61,7 +61,8 @@ TArray<FName> FGSTN_HitDataCustomization::GetLaidOutProperties()
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, CueTag), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, CustomData),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, bParryable), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, bDisableDI),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, LinkFilter), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, LinkType),
-		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, Impact), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, ExtensionData) };
+		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, Impact), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, TurnSense), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, TurnSteps),
+		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, ExtensionData) };
 }
 
 TSharedPtr<IPropertyHandle> FGSTN_HitDataCustomization::Child(FName Name) const
@@ -344,6 +345,10 @@ void FGSTN_HitDataCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> P
 
 	IDetailGroup& Impact = ChildBuilder.AddGroup(TEXT("Impact"), LOCTEXT("GroupImpact", "Impact"));
 	AddRows(Impact, { GET_MEMBER_NAME_CHECKED(FGSTN_HitData, Impact) });
+
+	// P19: which way a hit turns a screw and by how many steps (0 = the hit turns nothing)
+	IDetailGroup& Screw = ChildBuilder.AddGroup(TEXT("Screw"), LOCTEXT("GroupScrew", "Screw"));
+	AddRows(Screw, { GET_MEMBER_NAME_CHECKED(FGSTN_HitData, TurnSense), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, TurnSteps) });
 
 	// The entries are structs of other plugins (the parts' hit data...): the standard editor of the array lets each customization of its own show inside it
 	IDetailGroup& Extensions = ChildBuilder.AddGroup(TEXT("Extensions"), LOCTEXT("GroupExtensions", "Extensions"));

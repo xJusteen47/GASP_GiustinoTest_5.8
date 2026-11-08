@@ -145,6 +145,19 @@ struct GSTNCOMBATCORE_API FGSTN_HitData
 	/** The link type (Combat.Link.Type.*) this hit forms or requires. Invalid = none. Carried for the link plugin */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Link", meta = (Categories = "Combat.Link.Type"))
 	FGameplayTag LinkType;
+
+	/**
+	 * Which way this hit turns a screw it lands on, seen from above along the attacker's up axis (the same convention as the activation
+	 * triggers): -1 counter-clockwise, +1 clockwise, 0 = the hit turns nothing (the default, so no existing hit changes). Carried for the
+	 * parts plugin (combat-parts.md 3.4), which compares it with the screw part's LoosenSense; the combat core never reads it. A spin or a
+	 * drill hitbox authors it; the hitbox is the "attacker", so a mirrored move needs its own value
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Screw", meta = (ClampMin = "-1", ClampMax = "1"))
+	int32 TurnSense = 0;
+
+	/** How many screw steps one hit of this hitbox turns (a screw needs TurnsToRelease of them to come out). Read only when TurnSense is not 0 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Screw", meta = (EditCondition = "TurnSense != 0", ClampMin = "1", ClampMax = "255"))
+	int32 TurnSteps = 1;
 	/**
 	 * Gameplay effect classes applied to the victim, kept as soft UObject classes because Core has no GameplayAbilities
 	 * dependency: the GAS layer resolves them and rejects anything that is not a gameplay effect.
