@@ -25,6 +25,8 @@ namespace NetworkPredictionCVars
 	// FP G0 test knob: the settings struct cannot be overridden per run (Python cannot write it, the -ini struct override is split by its
 	// commas), so a measurement sweep sets this before PIE starts. Read once per world at Initialize. -1 = off (project setting used)
 	NETSIM_DEVCVAR_SHIPCONST_INT(FixedTickInterpolationBufferedMSOverride, -1, "np.FixedTickInterpolationBufferedMSOverride", "Test knob (FP G0). >= 0: worlds initialized after this is set use this FixedTickInterpolationBufferedMS instead of the project setting. -1: off.");
+	// FP G0c test knob, same reason: the server's input buffer depth per run. -1 = off (project setting used)
+	NETSIM_DEVCVAR_SHIPCONST_INT(FixedTickDesiredBufferedInputCountOverride, -1, "np.FixedTickDesiredBufferedInputCountOverride", "Test knob (FP G0c). >= 0: worlds initialized after this is set use this FixedTickDesiredBufferedInputCount instead of the project setting. -1: off.");
 	NETSIM_DEVCVAR_SHIPCONST_INT(SpikeLogInputSend, 0, "np.Spike.LogInputSend", "Diagnostics of the fixed tick input stream. 1: a client logs every engine frame whose input send is not the steady one (3+ fixed ticks in the frame, a backlog sent without redundant copies, frames held back by a connection that is not net ready); the server logs every fixed tick it is starved of a client's input. 0: off.");
 }
 
@@ -83,6 +85,12 @@ void UNetworkPredictionWorldManager::SyncNetworkPredictionSettings(const UNetwor
 	{
 		this->Settings.FixedTickInterpolationBufferedMS = BufferOverride;
 		UE_LOG(LogNetworkPrediction, Log, TEXT("FixedTickInterpolationBufferedMS overridden to %d ms by np.FixedTickInterpolationBufferedMSOverride"), BufferOverride);
+	}
+	const int32 InputOverride = NetworkPredictionCVars::FixedTickDesiredBufferedInputCountOverride();
+	if (InputOverride >= 0)
+	{
+		this->Settings.FixedTickDesiredBufferedInputCount = InputOverride;
+		UE_LOG(LogNetworkPrediction, Log, TEXT("FixedTickDesiredBufferedInputCount overridden to %d by np.FixedTickDesiredBufferedInputCountOverride"), InputOverride);
 	}
 }
 

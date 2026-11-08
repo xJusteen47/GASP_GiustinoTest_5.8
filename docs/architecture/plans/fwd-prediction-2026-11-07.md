@@ -193,3 +193,30 @@ OnWorldPreActorTick, before the mesh animates; cvar `gstn.Link.PredictPartnerPre
   review (rule 10) must confirm the visual, including that the late synced montage does not replay the move.
 - Not covered: `scenario_link_pair_move_refused` (no cheap refusal path without editing content); a refusal decided on the partner's side
   (its requirements fail on the server) is invisible to the initiator's fragment, so the predicted reaction plays to its end there.
+
+## G0c results (laptop, 2026-11-08): server input buffer vs hop 1
+
+`scenario_boost_jump`, dedicated + 2, 60/15 (NetEmulation PktLag 60 on every driver = ~60 ms each way), buffer 50 ms, one run per cell.
+Server input buffer depth set with the inert knob `np.FixedTickDesiredBufferedInputCountOverride` (PATCHES.md §4; project default 4 frames
+= 64 ms), applied on every world (log). Starved = server ticks that held the last input (`np.Spike.LogInputSend`, whole run incl. setup).
+Raw: `Saved/FPG0c/` (not versioned).
+
+| Input buffer (frames) | Loss | Rider screen | Server: rider leaves | Carrier screen | Hop 1 (server - rider) | Partner gap (carrier - rider) | Starved ticks | Boost |
+|---|---|---|---|---|---|---|---|---|
+| 4 (default) | 0 % | 150 | 342 | 428 | 192 | 278 | 7 | PASS |
+| 4 | 2 % | 133 | 313 | 385 | 180 | 252 | 6 | PASS |
+| 2 | 0 % | 146 | 302 | 421 | 156 | 275 | 15 | PASS |
+| 2 | 2 % | 130 | 318 | 445 | 188 | 315 | 14 | PASS |
+| 1 | 0 % | 132 | 294 | 377 | 162 | 245 | 18 | PASS |
+| 1 | 2 % | 138 | 327 | 454 | 189 | 316 | 18 | PASS |
+| 0 | 0 % | 131 | 280 | 363 | 149 | 232 | 25 | PASS |
+| 0 | 2 % | 133 | 287 | 398 | 154 | 265 | 24 | PASS |
+
+- **Hop 1 split (estimate, default 4)**: ~60 ms one-way lag + ~7 ms mean jitter + 64 ms server input buffer + ~16-32 ms send and frame
+  alignment = ~150-165 ms, against ~180-190 ms measured; the rest (~20-30 ms) is the client lead's slack (the offset adapts in steps).
+- **What the buffer buys**: 4 -> 0 frames cuts hop 1 by ~25-40 ms (inside run noise at 2 %), and the starved ticks grow 3-4x (7 -> 25). Each starved
+  tick repeats the last input on the server, a likely correction on the player's own client. One run per cell: the 1- and 2-frame cells are noise.
+- **Cheapest setting that cuts hop 1 without more faults at 2 %**: none clearly. Depth 2 is the only candidate (starvation doubles, the gain is not
+  visible above the noise). No input faults in any cell beyond the 2 start-up gap lines.
+- **Partner-screen estimate** (boost, partner gap after the initiator's own action): today ~250-280 ms; with input depth 2 ~240-270 ms; with
+  G3-G5 ~200-240 ms; with both ~190-230 ms. The floor is about two one-way trips plus the frames (~170-190 ms): never 150 ms on the partner's screen.

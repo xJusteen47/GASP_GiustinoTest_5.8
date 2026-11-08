@@ -50,6 +50,7 @@ spike measured that forward prediction is not worth enabling yet; the report is 
 | `np.Spike.SPPredictActivation` | A forward-predicted proxy may activate abilities / apply effects to itself, only inside its own simulation tick. | `ASC/Private/Abilities/NpAbilitySystemComponent.cpp`, `NpGameplayAbility.cpp` |
 | `np.Spike.SPSendAttributeBase` | Also send attribute base values to simulated proxies. **Changes the wire format** (same value needed on both ends); a production version would make it unconditional. | `ASC/Private/DataTypes/EffectsDataTypes.cpp` |
 | `np.FixedTickInterpolationBufferedMSOverride` (default -1 = off) | FP G0 test knob: worlds initialized after it is set use this interpolation buffer instead of the project setting (a sweep cannot override the settings struct per run otherwise). A measurement tool, not a design change: it does not pre-empt the owner's FP decisions. | `NP/Private/NetworkPredictionWorldManager.cpp` (`SyncNetworkPredictionSettings`) |
+| `np.FixedTickDesiredBufferedInputCountOverride` (default -1 = off) | FP G0c test knob: the server input buffer depth per run, for the hop-1 sweep. Measurement only, same rule as the line above. | `NP/Private/NetworkPredictionWorldManager.cpp` (`SyncNetworkPredictionSettings`) |
 | `np.Spike.LogResimCost` | On clients, log re-simulation wall time and frame count every 5 s. | `NP/Private/NetworkPredictionWorldManager.cpp` |
 
 ## 5. Engine overrides that go with the fork

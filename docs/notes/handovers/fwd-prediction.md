@@ -64,3 +64,14 @@
 - PERF-DEBT (also in perf-debt.md): a second tick function per presentation component (an early-out bool when no move is active); the window
   is rebuilt each tick while a move is active (a registry lookup), so caching it per move id is the cheaper alternative.
 - Cost: ~$8 (writer ~240k tokens / 70 tool calls; my context ~+35k; 4 builds incl. 2 off configs, 3 gate runs, 4 harness runs).
+
+## FP G0c (laptop, 2026-11-08): server input buffer vs hop 1, measured; no project change
+
+- Branch `claude/fp-g0c-laptop` from 9da51f0. Inert knob `np.FixedTickDesiredBufferedInputCountOverride` (-1 = off, PATCHES.md §4), built.
+- Sweep depth 4/2/1/0 x 0/2 % (boost, one run each, server starvation logged): hop 1 192/180 ms at 4 -> 149/154 ms at 0; starved ticks 7 -> 25.
+  Boost PASS everywhere; no input faults beyond the 2 start-up gap lines. Table, split and estimates in the plan, "G0c results".
+- Verdict: no input-buffer setting is a clear win (the gain is inside the noise at 2 %, starvation doubles at depth 2). The partner screen
+  floor is ~170-190 ms whatever we do; G3-G5 would take it from ~250-280 to ~200-240 ms.
+- Not done: `FixedTickInputSendCount` (redundancy, not latency) and the starvation hold (a fork behaviour, no setting) were not swept.
+- PERF-DEBT: none (test knob).
+- Cost: ~$2 (1 build, 8 harness runs, my context ~+15k). FP total so far ~$19.
