@@ -59,6 +59,14 @@ public:
 	 */
 	uint8 GetExtByte(int32 GlobalId) const;
 
+	/**
+	 * C++ hook (G10 ExtByte, for GSTNPartsMinion P16): ApplyRegistryInfo resolved a definition and is about to read its bHasNetExt for the
+	 * item codec. A bridge applies the same config rule the server applied in UGSTN_MinionCombatSubsystem::OnDefinitionRegistering, so a
+	 * client in its own process builds the same wire format. Unbound, nothing changes
+	 */
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnMinionDefinitionResolving, UGSTN_MinionDefinition* /*Definition*/);
+	FOnMinionDefinitionResolving OnDefinitionResolving;
+
 	/** Position origin of the items, from the server (zero until the manager arrived) */
 	const FVector3f& GetWorldOrigin() const { return WorldOrigin; }
 

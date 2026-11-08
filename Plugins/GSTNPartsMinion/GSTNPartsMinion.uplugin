@@ -1,9 +1,9 @@
 {
 	"FileVersion": 3,
-	"Version": 2,
-	"VersionName": "0.2",
+	"Version": 3,
+	"VersionName": "0.3",
 	"FriendlyName": "GSTN Parts Minion",
-	"Description": "Bridge between GSTNParts and GSTNMinion (plan P15 to P16): destructible parts for minions, so hundreds of small enemies can lose a head and keep fighting. P16 sub-gate A: per-minion part rows (9 B) for part-bearing types, the hit flow glue (the same PartResolve step on a view built from the row, the outcome written back with no GE and no fragment, lethal parts kill through the normal minion death path); the wire byte and promotion copy come in sub-gate B. The pure pieces (8 part limit, FGSTN_PartsMinionExtension, the store to snapshot builder) live in GSTNPartsCore. Enabling it changes nothing for minion types without a registered extension.",
+	"Description": "Bridge between GSTNParts and GSTNMinion (plan P15 to P16): destructible parts for minions, so hundreds of small enemies can lose a head and keep fighting. P16 sub-gate A: per-minion part rows (9 B) for part-bearing types, the hit flow glue (the same PartResolve step on a view built from the row, the outcome written back with no GE and no fragment, lethal parts kill through the normal minion death path); sub-gate B: the broken mask in the minion net extension byte (only on part-bearing types, only on change), broken parts hidden on the puppets, the promotion copy into the fighter's parts fragment and the bench. The pure pieces (8 part limit, FGSTN_PartsMinionExtension, the store to snapshot builder) live in GSTNPartsCore. Enabling it changes nothing for minion types without a registered extension.",
 	"Category": "Gameplay",
 	"CreatedBy": "xJusteen47",
 	"CreatedByURL": "",

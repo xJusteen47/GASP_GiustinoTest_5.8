@@ -426,6 +426,15 @@ public:
 	void SetExtByte(const FGSTN_MinionHandle& Handle, uint8 ExtByte);
 	uint8 GetExtByte(const FGSTN_MinionHandle& Handle) const;
 
+	/**
+	 * C++ hook (G10 ExtByte, for GSTNPartsMinion P16): a definition is being registered (its first spawn in this world), before the type
+	 * table goes to the clients and the item codec. The only moment a bridge may set UGSTN_MinionDefinition::bHasNetExt from its own
+	 * config: after it, the wire format of the type is fixed for the world. Unbound, nothing changes. The client twin is
+	 * UGSTN_MinionClientRegistry::OnDefinitionResolving
+	 */
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnMinionDefinitionRegistering, UGSTN_MinionDefinition* /*Definition*/);
+	FOnMinionDefinitionRegistering OnDefinitionRegistering;
+
 	FGSTN_MinionMovementSettings& GetMovementSettings() { return MovementSettings; }
 	const FGSTN_MinionMovementColumns& GetMovementColumns() const { return MoveColumns; }
 

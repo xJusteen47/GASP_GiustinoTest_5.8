@@ -21,7 +21,9 @@ SUITE_MINION = ['minion_hits_player', 'minion_tokens', 'minion_replicate', 'mini
 SUITE_MINION_NET = ['minion_late_join', 'minion_replicate']
 # M8 G11: host budget scenarios, a minute each so not in SUITE_MINION: run_batch(SUITE_MINION_BENCH). Laptop numbers are provisional (-nullrhi).
 # GSTN_HORDE_SECONDS shortens the horde fight (default 60, 20 on the laptop); GSTN_BENCH_WINDOW is the byte measuring window in seconds (default 10).
-SUITE_MINION_BENCH = ['minion_horde', 'minion_bytes']
+# M4b P16 sub-gate B: minion_parts_base must run before minion_parts (it leaves the bytes/s baseline); minion_parts PASSes with 'bridge not enabled'
+# when GSTNPartsMinion is off, so this suite stays green without it.
+SUITE_MINION_BENCH = ['minion_horde', 'minion_bytes', 'minion_parts_base', 'minion_parts']
 MINION_BIT = 0x40000000
 _marks = {}
 
@@ -1209,6 +1211,236 @@ def scenario_minion_dormancy_flush(client=1):
         (end + 1.0, run.finish()),
     ]
     run.run(steps)
+
+# ---- M4b P16 sub-gate B: minion parts on the wire (GSTNPartsMinion; skips cleanly when that plugin is not enabled) ----
+# Bridge bench lines (gstn.PartsMinion.Bench.Report, GSTNPartsMinion):
+#   PartsMinionBench server world=.. rows=.. broken=.. brokenAlive=.. attackedAfterBreak=.. partHits=.. lethal=.. extWrites=.. netExtFlagged=..
+#       promotionSeeds=.. viewUs=.. stepUs=.. outcomeUs=.. hitUs=.. masks=<gid>:<mask>;...
+#   PartsMinionBench client player=.. world=.. items=.. extItems=.. netExtFlagged=.. ext=<gid>:<mask>;...   (nonzero bytes only)
+#   PartsMinionBench puppets world=.. tracked=.. hiding=.. changes=.. missingBones=..
+_PARTS_SERVER = re.compile(r'PartsMinionBench server world=\S+ rows=(\d+) broken=(\d+) brokenAlive=(\d+) attackedAfterBreak=(\d+) partHits=(\d+) lethal=(\d+) '
+                           r'extWrites=(\d+) netExtFlagged=(\d+) promotionSeeds=(\d+) viewUs=([\d.]+) stepUs=([\d.]+) outcomeUs=([\d.]+) hitUs=([\d.]+) masks=(\S+)')
+_PARTS_CLIENT = re.compile(r'PartsMinionBench client player=(-?\d+) world=\S+ items=(\d+) extItems=(\d+) netExtFlagged=(\d+) ext=(\S+)')
+_PARTS_PUPPETS = re.compile(r'PartsMinionBench puppets world=(\S+) tracked=(\d+) hiding=(\d+) changes=(\d+) missingBones=(\d+)')
+# The run without parts (scenario_minion_parts_base) leaves its per-client bytes/s here for scenario_minion_parts (same Python session, run it first)
+_PARTS_BASELINE = {}
+
+
+def _parts_masks(text):
+    """'12:1;13:1' -> {12: 1, 13: 1}; '-' -> {}"""
+    out = {}
+    for pair in (text or '-').split(';'):
+        if ':' in pair:
+            k, v = pair.split(':', 1)
+            out[int(k)] = int(v)
+    return out
+
+
+def _parts_report(mark):
+    """Last bridge lines after the mark: server dict (or None), clients {player: dict}, puppets {world: dict}"""
+    text = g._read_log_since(mark)
+    server, clients, puppets = None, {}, {}
+    for ln in text.splitlines():
+        m = _PARTS_SERVER.search(ln)
+        if m:
+            keys = ('rows', 'broken', 'brokenAlive', 'attackedAfterBreak', 'partHits', 'lethal', 'extWrites', 'netExtFlagged', 'promotionSeeds')
+            server = {k: int(m.group(i + 1)) for i, k in enumerate(keys)}
+            server.update(viewUs=float(m.group(10)), stepUs=float(m.group(11)), outcomeUs=float(m.group(12)), hitUs=float(m.group(13)),
+                          masks=_parts_masks(m.group(14)))
+            continue
+        m = _PARTS_CLIENT.search(ln)
+        if m:
+            clients[int(m.group(1))] = {'items': int(m.group(2)), 'extItems': int(m.group(3)), 'flagged': int(m.group(4)), 'ext': _parts_masks(m.group(5))}
+            continue
+        m = _PARTS_PUPPETS.search(ln)
+        if m:
+            puppets[m.group(1)] = {'tracked': int(m.group(2)), 'hiding': int(m.group(3)), 'changes': int(m.group(4)), 'missingBones': int(m.group(5))}
+    return server, clients, puppets
+
+
+def _minion_parts_run(name, client, with_parts):
+    """Shared timeline of minion_parts and minion_parts_base: 40 bench attackers (20 per client pawn, the bench grunt type), the clients swing at
+    them, and the per-client item bytes/s are measured over GSTN_BENCH_WINDOW seconds (planning size 20 B per item update, plus the extension
+    byte for a part-bearing type). with_parts: the bench grunt type gets a transient part set before its first spawn
+    (gstn.PartsMinion.Bench.Parts <tag> <head hurtboxes> <head cap>: Head on GSTN_PARTS_HEAD_BOXES, default 'head,torso' so a body-height swing
+    counts, cap 1 so any hit through breaks it, not lethal)."""
+    run = g._Run(name, client, judge_reconciles=False, sample=False)
+    window = _env_float('GSTN_BENCH_WINDOW', 10.0)
+    head_boxes = os.environ.get('GSTN_PARTS_HEAD_BOXES', 'head,torso')
+    swingers = list(range(1, len(g.worlds())))
+    st = {'on': not with_parts}
+
+    def setup():
+        _setup()
+        _cmd('gstn.Minion.Bench.HurtboxSet /Game/GASNPPTest/Combat/HBS_Test_Pawn.HBS_Test_Pawn')   # bench grunts are unhittable without one
+        g.set_hurtbox(infinite=True)
+        for c in swingers:
+            g._apply_loadout(g.key_of_player(c), g.HIT_KIT)
+        st['t0'] = g.mark_log()
+        if with_parts:
+            _cmd(f'gstn.PartsMinion.Bench.Parts Minion.Type.Grunt {head_boxes} 1')
+        return 'rules + hit log + kit + no stagger' + (' + bench parts' if with_parts else '')
+
+    def check_bridge():
+        if with_parts:
+            st['on'] = 'PartsMinionBench: parts registered' in g._read_log_since(st['t0'])
+            if not st['on']:
+                run.note('GSTNPartsMinion bridge not enabled (no gstn.PartsMinion.Bench.Parts): skipped')
+        return 'bridge on' if st['on'] else 'bridge not enabled'
+
+    def gated(cmd):
+        return lambda: ('cmd', _cmd(cmd) if st['on'] else 'skipped')
+
+    def snap(label):
+        if not st['on']:
+            return 'skipped'
+        _marks['log'] = g.mark_log()
+        st[label + '_mark'] = _marks['log']
+        st[label + '_time'] = time.time()
+        _net_dump()
+        if with_parts:
+            _cmd('gstn.PartsMinion.Bench.Report')
+        return 'snap ' + label
+
+    def read(label):
+        if not st['on']:
+            return 'skipped'
+        st[label + '_updates'] = {p: x['updates'] for p, x in _net_state()[3].items()}
+        return f"{label}: updates {st[label + '_updates']}"
+
+    def rate():
+        if not st['on']:
+            return True, 'bridge not enabled'
+        dt = max(st['a1_time'] - st['a0_time'], 0.001)
+        size = _PLANNING_BYTES_PER_ITEM + (1 if with_parts else 0)
+        per = {p: (st['a1_updates'].get(p, 0) - u) / dt * size for p, u in st['a0_updates'].items()}
+        top = max(per.values(), default=0.0)
+        st['top'] = top
+        if not with_parts:
+            _PARTS_BASELINE['top'] = top
+            _PARTS_BASELINE['per'] = per
+        return top > 0.0, (f"per-client planning bytes/s {', '.join(f'{p}:{v:.0f}' for p, v in per.items())} (item {size} B; "
+                           f"host upload for {len(swingers)} clients ~{top * len(swingers):.0f} B/s; provisional, laptop)")
+
+    def final():
+        if not st['on']:
+            return 'skipped'
+        st['final'] = g.mark_log()
+        _marks['log'] = st['final']
+        _net_dump()
+        _cmd('gstn.Minion.Bench.Report')
+        _cmd('gstn.PartsMinion.Bench.Report')
+        return 'final dump'
+
+    def parts_report():
+        return _parts_report(st['final'])
+
+    def gate(fn):
+        def wrapped():
+            if not st['on']:
+                return True, 'bridge not enabled'
+            return fn()
+        return wrapped
+
+    def flagged():
+        server, clients, _ = parts_report()
+        return (server is not None and server['netExtFlagged'] >= 1 and server['rows'] >= 30), f'server {server and {k: server[k] for k in ("rows", "netExtFlagged", "partHits")}}'
+
+    def heads_off():
+        server, _, _ = parts_report()
+        need = int(_env_float('GSTN_PARTS_MIN_BROKEN', 1))
+        return (server is not None and server['broken'] >= need and server['extWrites'] >= server['broken']), (
+            f"broken heads {server and server['broken']} (>= {need}) of {server and server['rows']} rows, partHits {server and server['partHits']}, "
+            f"extWrites {server and server['extWrites']}")
+
+    def keep_fighting():
+        server, _, _ = parts_report()
+        fought = _num(_report_line('MinionBench attack'), 'started') or 0
+        return (server is not None and server['lethal'] == 0 and server['brokenAlive'] == server['broken'] and server['attackedAfterBreak'] >= 1
+                and fought > 0), (f"lethal {server and server['lethal']} brokenAlive {server and server['brokenAlive']}/{server and server['broken']} "
+                                  f"attacked after the break {server and server['attackedAfterBreak']}, bench attacks started {fought}")
+
+    def clients_equal():
+        server, clients, puppets = parts_report()
+        items = _net_state()[1]
+        if server is None or not clients:
+            return False, f'server line {server is not None}, client lines {len(clients)}'
+        bad = []
+        for player, c in clients.items():
+            have = {pack << 4 | iid for (pack, iid) in items.get(player, {})}
+            want = {gid: m for gid, m in server['masks'].items() if gid in have}
+            if c['ext'] != want:
+                diff = sorted(set(c['ext'].items()) ^ set(want.items()))[:4]
+                bad.append(f'player {player}: {len(c["ext"])} ext vs {len(want)} server masks, diff {diff}')
+        return not bad, '; '.join(bad) or (f"{len(clients)} clients: ext bytes equal the server masks ({len(server['masks'])} broken minions); "
+                                           f"puppets {puppets}")
+
+    def bytes_within():
+        if 'top' not in _PARTS_BASELINE:
+            run.note('no baseline: run minion_parts_base first in this session (SUITE_MINION_BENCH order); only the per-update overhead is judged')
+            over = 1.0 / _PLANNING_BYTES_PER_ITEM
+            return over <= 0.05 + 1e-9, f'per item update +1 B of {_PLANNING_BYTES_PER_ITEM} B = +{over * 100:.1f} %'
+        base = _PARTS_BASELINE['top']
+        ratio = st.get('top', 0.0) / base if base > 0 else 99.0
+        noise = _env_float('GSTN_PARTS_BYTES_NOISE', 0.02)
+        return ratio <= 1.05 + noise, (f'with parts {st.get("top", 0.0):.0f} B/s vs without {base:.0f} B/s per client: {(ratio - 1.0) * 100:+.1f} % '
+                                       f'(limit +5 % + {noise * 100:.0f} % run-to-run noise; the byte alone is +{100.0 / _PLANNING_BYTES_PER_ITEM:.1f} % per update)')
+
+    def hit_cost():
+        server, _, _ = parts_report()
+        budget = _env_float('GSTN_PARTS_HIT_US', 2.0)
+        if server is None:
+            return False, 'no server line'
+        run.note(f"P16 per part hit on the server: view {server['viewUs']:.3f} us + step {server['stepUs']:.3f} us + outcome {server['outcomeUs']:.3f} us "
+                 f"= {server['hitUs']:.3f} us (budget {budget} us; provisional, laptop)")
+        return server['hitUs'] <= budget, f"hitUs {server['hitUs']:.3f} (view {server['viewUs']:.3f} step {server['stepUs']:.3f} outcome {server['outcomeUs']:.3f})"
+
+    steps = [(0.0, lambda: ('setup', setup())),
+             (0.7, lambda: ('bridge', check_bridge())),
+             (1.0, gated('gstn.Minion.Bench.Attack 20 0')),
+             (1.1, gated('gstn.Minion.Bench.Attack 20 1'))]
+    stop = 5.0 + window
+    for c in swingers:
+        steps += [(t, (lambda f=f: f() if st['on'] else ('swing', 'skipped'))) for t, f in _swing_steps(3.0, stop, 0.5, c)]
+    steps += [
+        (4.0, lambda: ('snap', snap('a0'))), (4.8, lambda: ('read', read('a0'))),
+        (4.0 + window, lambda: ('snap', snap('a1'))), (4.8 + window, lambda: ('read', read('a1'))),
+        (5.0 + window, run.at('item bytes per client measured (N=40 attackers)', rate)),
+        # The swings stop at `stop`; 2 s later every mask change has reached the clients
+        (stop + 2.0, lambda: ('final', final())),
+    ]
+    end = stop + 3.0
+    if with_parts:
+        steps += [
+            (end, run.at('the bench type carries the ext byte (flagged at registration), 40 rows', gate(flagged))),
+            (end, run.at('the players hit heads off: server rows show broken heads, one ext write per change', gate(heads_off))),
+            (end, run.at('headless minions keep fighting (alive, attacking after the break, no lethal kill)', gate(keep_fighting))),
+            (end, run.at("every client's registry ext bytes equal the server masks", gate(clients_equal))),
+            (end, run.at('bytes/s within +5 % of the same run without parts', gate(bytes_within))),
+            (end, run.at('per part hit server cost within budget (bench counter)', gate(hit_cost))),
+        ]
+    steps += [
+        (end + 0.1, gated('gstn.Minion.Bench.Clear')),
+        (end + 1.0, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_minion_parts_base(client=1):
+    """M4b P16 sub-gate B baseline: minion_parts without the part set (no ext byte, nothing broken). Records the per-client item bytes/s for
+    minion_parts, which must run after it in the same session (SUITE_MINION_BENCH). Runs with or without GSTNPartsMinion"""
+    _minion_parts_run('minion_parts_base', client, with_parts=False)
+
+
+def scenario_minion_parts(client=1):
+    """M4b P16 sub-gate B. 40 bench attackers of a part-bearing type (the bench grunt with a transient part set, gstn.PartsMinion.Bench.Parts, before
+    the type's first spawn; no asset), both clients swing at them. Judged: the type was flagged bHasNetExt at registration; server rows show broken
+    heads; the headless minions stay alive and attack after the break; each client's registry ext bytes equal the server masks for the items it
+    has; per-client bytes/s within +5 % of minion_parts_base (plus GSTN_PARTS_BYTES_NOISE, default 2 %, of run-to-run noise); the bridge's per part
+    hit cost (view + step + outcome) within GSTN_PARTS_HIT_US (2 us). Result line: the numbers. PASS with 'bridge not enabled' when
+    GSTNPartsMinion is off, so the suites stay green without it"""
+    _minion_parts_run('minion_parts', client, with_parts=True)
+
 
 def run_batch(names=None, lag=60, jitter=15, loss=0, report=None):
     """Each scenario in a fresh PIE (dedicated server + 2 clients as the editor's play settings say); poll ds.defence_batch_report()"""

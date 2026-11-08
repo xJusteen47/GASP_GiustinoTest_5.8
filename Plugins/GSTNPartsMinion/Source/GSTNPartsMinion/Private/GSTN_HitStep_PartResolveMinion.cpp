@@ -3,8 +3,15 @@
 #include "GSTN_HitStep_PartResolveMinion.h"
 
 #include "Hits/GSTN_HitSteps.h"
+#include "Misc/ScopeExit.h"
 #include "Pipeline/GSTN_PartsSnapshotExt.h"
 #include "Rules/GSTN_CombatRules.h"
+
+FGSTN_PartsMinionStepTiming& UGSTN_HitStep_PartResolveMinion::GetTiming()
+{
+	static FGSTN_PartsMinionStepTiming Timing;
+	return Timing;
+}
 
 EGSTN_StepResult UGSTN_HitStep_PartResolveMinion::Resolve_Implementation(const FGSTN_HitContextView& View, FGSTN_StepResult& Out) const
 {
@@ -13,6 +20,14 @@ EGSTN_StepResult UGSTN_HitStep_PartResolveMinion::Resolve_Implementation(const F
 	{
 		return EGSTN_StepResult::Continue;
 	}
+	// Bench timing of the whole step for a part-bearing victim (debug counter, not state)
+	const uint64 Start = FPlatformTime::Cycles64();
+	ON_SCOPE_EXIT
+	{
+		FGSTN_PartsMinionStepTiming& Timing = GetTiming();
+		Timing.Cycles += FPlatformTime::Cycles64() - Start;
+		++Timing.Count;
+	};
 
 	bool bRulesHavePartResolve = false;
 	bool bRulesHaveApplyDamage = false;

@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "Engine/EngineTypes.h"
 #include "Rules/GSTN_KitExtension.h"
+#include "Sync/GSTN_SyncFragment.h"
 #include "UObject/ObjectKey.h"
 #include "UObject/StrongObjectPtr.h"
 #include "GSTN_PartsAttach.generated.h"
@@ -55,8 +56,39 @@ public:
 	/** Number of attached entities (tests) */
 	static int32 Num();
 
-	/** Drops every attachment (tests) */
+	/** Drops every attachment and every pending seed (tests) */
 	static void Reset();
+
+	/**
+	 * One part of a seed: by part name, so the receiving entity's set may list its parts in another order (or lack some). Damage is the
+	 * quantised 0..255 of the source part's cap, kept as a fraction of the receiving part's cap
+	 */
+	struct FSeedEntry
+	{
+		FName Part = NAME_None;
+		uint8 Damage = 0;
+		bool bBroken = false;
+	};
+
+	/**
+	 * A one-shot initial part state for Owner (plan P16: a minion promoted to a fighter keeps the parts it lost; GSTNPartsMinion calls it
+	 * from the promotion hook, on the authority, right after the fighter spawned). The parts tick extension merges it into the entity's
+	 * parts fragment at its next AfterClocks (ConsumePendingSeed) and forgets it; from then on the fragment, synced like any part
+	 * state, carries it to the other machines. It is an input, not state: nothing is predicted from it and a merge is idempotent
+	 * (broken bits OR'd, damage the larger of the two), so applying it twice changes nothing. Replaces an earlier seed of the same owner.
+	 * Game thread only
+	 */
+	static void SetPendingSeed(const AActor* Owner, TConstArrayView<FSeedEntry> Entries);
+
+	/** Whether Owner has a seed waiting. One integer test while no seed exists anywhere */
+	static bool HasPendingSeed(const AActor* Owner);
+
+	/**
+	 * Merges Owner's pending seed into the parts fragment of Fragments (added when absent), mapped by part name onto Set, and forgets
+	 * the seed. Names Set does not have are dropped. Does not move the break serial and emits no break event (the parts broke as a
+	 * minion). True when a seed was consumed
+	 */
+	static bool ConsumePendingSeed(const AActor* Owner, const UGSTN_PartSetDefinition& Set, FGSTN_SyncFragmentArray& Fragments);
 };
 
 /**

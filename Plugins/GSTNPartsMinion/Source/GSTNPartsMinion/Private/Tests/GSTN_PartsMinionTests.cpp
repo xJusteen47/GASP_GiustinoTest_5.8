@@ -1,4 +1,5 @@
-// Automation tests of the parts bridge on minions (plan P16 sub-gate A): the hit flow writes the part row with no gameplay effect, a broken
+// Automation tests of the parts bridge on minions (plan P16 sub-gates A and B; B: the ExtByte only on part-bearing types and only on a
+// mask change, the promotion copy into the fighter's parts fragment). Sub-gate A: the hit flow writes the part row with no gameplay effect, a broken
 // head keeps the minion fighting, a lethal part kills through the normal death path, a type without an extension pays nothing and a freed
 // slot's row is never read for its next occupant. A transient game world with the activated minion subsystem (as the GSTNMinion.Runtime
 // tests build it); rules, hurtboxes, the part set and the definitions are made in code (no content). Run headless with
@@ -11,6 +12,7 @@
 #include "Data/GSTN_PartsMinionExtension.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "GSTN_PartsMinionSubsystem.h"
 #include "Hits/GSTN_HitData.h"
 #include "Hits/GSTN_HurtboxTypes.h"
@@ -18,8 +20,10 @@
 #include "Misc/AutomationTest.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
+#include "Sim/GSTN_PartsAttach.h"
 #include "Simulation/GSTN_HitInbox.h"
 #include "Spawn/GSTN_MinionSpawner.h"
+#include "State/GSTN_PartsFragment.h"
 #include "Sync/GSTN_SyncFragment.h"
 #include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
@@ -400,6 +404,170 @@ bool FGSTN_PartsMinionResetOnFreeTest::RunTest(const FString& Parameters)
 	FGSTN_HitVictimView PlainView;
 	Rig.Minions->BuildVictimView(Third, 5, PlainView);
 	TestNull(TEXT("and its view no extension"), PlainView.SnapshotExtension);
+	return true;
+}
+
+// ---- Sub-gate B: the wire byte and the promotion copy ----
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsMinionExtByteTypesTest, "GSTNParts.Minion.ExtByteOnlyOnTypesWithParts", GSTN_PARTS_MINION_TEST_FLAGS)
+bool FGSTN_PartsMinionExtByteTypesTest::RunTest(const FString& Parameters)
+{
+	FPartsMinionFixture Fixture;
+	FPartsMinionRig& Rig = Fixture.Rig;
+	if (!Rig.IsValid(*this))
+	{
+		return false;
+	}
+	TStrongObjectPtr<UGSTN_MinionDefinition> Plain = MakeDefinition(Fixture.Hurtboxes.Get());
+	TestFalse(TEXT("nothing is flagged before the type registers"), Fixture.PartDefinition->bHasNetExt);
+
+	// The first spawn registers the type: the bridge flags it there, before the type table and the codec are built
+	const FGSTN_MinionHandle PartHandle = Rig.Spawn(Fixture.PartDefinition.Get());
+	const FGSTN_MinionHandle PlainHandle = Rig.Spawn(Plain.Get());
+	Rig.Minions->TickBatch(1);
+	TestTrue(TEXT("a part-bearing type carries the extension byte"), Fixture.PartDefinition->bHasNetExt);
+	TestTrue(TEXT("its wire format has the byte"), Fixture.PartDefinition->MakeNetFormat().bTypeHasExt);
+	TestFalse(TEXT("a type without parts keeps 0 extension bits"), Plain->bHasNetExt);
+	TestFalse(TEXT("its wire format has no byte"), Plain->MakeNetFormat().bTypeHasExt);
+	TestEqual(TEXT("one type flagged"), Rig.Bridge->GetStats().NetExtFlagged, 1);
+
+	// A hit on the plain minion never writes a byte
+	Rig.PostHit(PlainHandle, HeadBox, 25.f, 1);
+	Rig.Minions->TickBatch(2);
+	TestEqual(TEXT("the plain minion's byte stays 0"), static_cast<int32>(Rig.Minions->GetExtByte(PlainHandle)), 0);
+	TestEqual(TEXT("no byte write"), Rig.Bridge->GetStats().ExtByteWrites, 0);
+
+	// The tag path (settings) flags at registration too
+	const FGameplayTag GruntTag = FGameplayTag::RequestGameplayTag(TEXT("Minion.Type.Grunt"), false);
+	if (GruntTag.IsValid())
+	{
+		TStrongObjectPtr<UGSTN_MinionDefinition> Tagged = MakeDefinition(Fixture.Hurtboxes.Get());
+		Tagged->TypeTag = GruntTag;
+		Rig.Bridge->RegisterTypeTag(GruntTag, MakeExtension(Fixture.PartSet.Get()));
+		Rig.Spawn(Tagged.Get());
+		Rig.Minions->TickBatch(3);
+		TestTrue(TEXT("a type tagged in the settings carries the byte"), Tagged->bHasNetExt);
+	}
+	else
+	{
+		AddInfo(TEXT("Minion.Type.Grunt is not a tag here: the tag path is not checked"));
+	}
+
+	// A definition given parts after its first spawn keeps its wire format (flipping it then would desync the codec)
+	AddExpectedMessagePlain(TEXT("after its first spawn"), ELogVerbosity::Warning, EAutomationExpectedMessageFlags::Contains, 1);
+	Rig.Bridge->RegisterDefinition(Plain.Get(), MakeExtension(Fixture.PartSet.Get()));
+	Rig.Spawn(Plain.Get());
+	Rig.Minions->TickBatch(4);
+	TestFalse(TEXT("a late registration does not change the wire format"), Plain->bHasNetExt);
+	TestTrue(TEXT("the part-bearing minion still has its row"), Rig.Bridge->HasParts(PartHandle));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsMinionDirtyOnMaskChangeTest, "GSTNParts.Minion.DirtyOnlyOnMaskChange", GSTN_PARTS_MINION_TEST_FLAGS)
+bool FGSTN_PartsMinionDirtyOnMaskChangeTest::RunTest(const FString& Parameters)
+{
+	FPartsMinionFixture Fixture;
+	FPartsMinionRig& Rig = Fixture.Rig;
+	if (!Rig.IsValid(*this))
+	{
+		return false;
+	}
+	const FGSTN_MinionHandle Handle = Rig.Spawn(Fixture.PartDefinition.Get());
+	Rig.Minions->TickBatch(1);
+
+	// A dent: the row's damage byte moves, the wire byte does not
+	Rig.PostHit(Handle, TorsoBox, 10.f, 1);
+	Rig.Minions->TickBatch(2);
+	TestTrue(TEXT("the torso took damage"), Rig.Bridge->GetRow(Handle)->PartDamage[0] > 0);
+	TestEqual(TEXT("a dent writes no byte"), Rig.Bridge->GetStats().ExtByteWrites, 0);
+	TestEqual(TEXT("the byte is still 0"), static_cast<int32>(Rig.Minions->GetExtByte(Handle)), 0);
+
+	// The torso breaks: one write, the byte is the mask
+	Rig.PostHit(Handle, TorsoBox, 15.f, 2);
+	Rig.Minions->TickBatch(3);
+	TestEqual(TEXT("a break writes once"), Rig.Bridge->GetStats().ExtByteWrites, 1);
+	TestEqual(TEXT("the byte is the broken mask"), static_cast<int32>(Rig.Minions->GetExtByte(Handle)), 1);
+	TestTrue(TEXT("the break frame is recorded"), Rig.Bridge->GetLastBreakFrame(Handle) >= 2);
+
+	// Another hit on the broken torso: the mask is the same, no write
+	Rig.PostHit(Handle, TorsoBox, 5.f, 3);
+	Rig.Minions->TickBatch(4);
+	TestEqual(TEXT("a hit on a broken part writes nothing"), Rig.Bridge->GetStats().ExtByteWrites, 1);
+	TestEqual(TEXT("the byte is unchanged"), static_cast<int32>(Rig.Minions->GetExtByte(Handle)), 1);
+
+	// The head breaks: a second write with both bits
+	Rig.PostHit(Handle, HeadBox, 25.f, 4);
+	Rig.Minions->TickBatch(5);
+	TestEqual(TEXT("a new break writes again"), Rig.Bridge->GetStats().ExtByteWrites, 2);
+	TestEqual(TEXT("the byte holds both parts"), static_cast<int32>(Rig.Minions->GetExtByte(Handle)), 3);
+	TestTrue(TEXT("every damaging hit went through the row"), Rig.Bridge->GetStats().PartHits >= 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsMinionPromotionTest, "GSTNParts.Minion.PromotionCopiesToFragment", GSTN_PARTS_MINION_TEST_FLAGS)
+bool FGSTN_PartsMinionPromotionTest::RunTest(const FString& Parameters)
+{
+	FPartsMinionFixture Fixture;
+	FPartsMinionRig& Rig = Fixture.Rig;
+	if (!Rig.IsValid(*this))
+	{
+		return false;
+	}
+	const FGSTN_MinionHandle Handle = Rig.Spawn(Fixture.PartDefinition.Get());
+	Rig.Minions->TickBatch(1);
+	Rig.PostHit(Handle, HeadBox, 25.f, 1);
+	Rig.Minions->TickBatch(2);
+	Rig.PostHit(Handle, TorsoBox, 10.f, 2);
+	Rig.Minions->TickBatch(3);
+	const FGSTN_PartsMinionRow Row = *Rig.Bridge->GetRow(Handle);
+	TestEqual(TEXT("the head broke as a minion"), static_cast<int32>(Row.BrokenMask), 1 << 1);
+	TestTrue(TEXT("the torso is dented"), Row.PartDamage[0] > 0);
+
+	FGSTN_MinionPromotionParams Params;
+	Params.FighterClassOverride = AActor::StaticClass();
+	AActor* Fighter = Rig.Minions->PromoteToFighter(Handle, Params);
+	if (!TestNotNull(TEXT("the minion was promoted"), Fighter))
+	{
+		return false;
+	}
+	TestEqual(TEXT("one seed"), Rig.Bridge->GetStats().PromotionSeeds, 1);
+	TestTrue(TEXT("the fighter has a pending seed"), FGSTN_PartsAttach::HasPendingSeed(Fighter));
+	TestFalse(TEXT("the minion is gone"), Rig.Bridge->HasParts(Handle));
+
+	// The fighter's set lists the same parts in another order: the copy goes by name (Head is index 0 here, 1 on the minion)
+	TStrongObjectPtr<UGSTN_PartSetDefinition> FighterSet(NewObject<UGSTN_PartSetDefinition>(GetTransientPackage(), NAME_None, RF_Transient));
+	FighterSet->Parts.Add(MakePart(TEXT("Head"), TEXT("HeadBox"), 20.f));
+	FighterSet->Parts.Add(MakePart(TEXT("Torso"), TEXT("TorsoBox"), 20.f));
+	FighterSet->RebakeWeightCurve();
+
+	// What the parts tick extension does at the fighter's next AfterClocks
+	FGSTN_SyncFragmentArray Fragments;
+	TestTrue(TEXT("the seed is consumed"), FGSTN_PartsAttach::ConsumePendingSeed(Fighter, *FighterSet, Fragments));
+	const FGSTN_PartsFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_PartsFragment>(Fragments);
+	if (TestNotNull(TEXT("the fighter has a parts fragment"), Fragment))
+	{
+		TestEqual(TEXT("the fighter's head is broken"), static_cast<int32>(Fragment->BrokenMask), 1 << 0);
+		TestEqual(TEXT("the head damage came along"), static_cast<int32>(Fragment->PartDamage[0]), static_cast<int32>(Row.PartDamage[1]));
+		TestEqual(TEXT("the torso dent came along"), static_cast<int32>(Fragment->PartDamage[1]), static_cast<int32>(Row.PartDamage[0]));
+		TestEqual(TEXT("the part count is the fighter set's"), static_cast<int32>(Fragment->PartCount), 2);
+		TestEqual(TEXT("no break event serial for a copy"), static_cast<int32>(Fragment->BreakSerial), 0);
+	}
+	TestFalse(TEXT("the seed is gone"), FGSTN_PartsAttach::HasPendingSeed(Fighter));
+	TestFalse(TEXT("a second consume does nothing"), FGSTN_PartsAttach::ConsumePendingSeed(Fighter, *FighterSet, Fragments));
+
+	// A pristine minion leaves no seed
+	const FGSTN_MinionHandle Pristine = Rig.Spawn(Fixture.PartDefinition.Get());
+	Rig.Minions->TickBatch(4);
+	AActor* Clean = Rig.Minions->PromoteToFighter(Pristine, Params);
+	TestNotNull(TEXT("the pristine minion was promoted"), Clean);
+	TestFalse(TEXT("no seed for a pristine minion"), Clean && FGSTN_PartsAttach::HasPendingSeed(Clean));
+	TestEqual(TEXT("still one seed"), Rig.Bridge->GetStats().PromotionSeeds, 1);
+
+	Fighter->Destroy();
+	if (Clean)
+	{
+		Clean->Destroy();
+	}
 	return true;
 }
 

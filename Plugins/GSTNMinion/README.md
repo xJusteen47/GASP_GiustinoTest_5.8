@@ -67,6 +67,9 @@ neither). All are inert while nothing is bound: no publish byte, LOD decision or
   data), `ApplyOutcomeExtensions` (single delegate, called once per applied hit before the death test with the resolved context: a bridge writes
   its own columns and returns true to kill through the normal death path, Health set to 0) and `OnOutcomeApplied` (multicast, after the store write).
   Unbound, each costs one test and changes nothing.
+- **Net flag seams (for GSTNPartsMinion, M4b P16 B)**: `OnDefinitionRegistering` (multicast, server, in `RegisterDefinition` before the type
+  table is published: the one moment a bridge may set `bHasNetExt`) and `UGSTN_MinionClientRegistry::OnDefinitionResolving` (multicast, client,
+  before the codec table is read), so a client in its own process builds the same format from the same config. Unbound, nothing changes.
 - Tests: `GSTNMinion.Core.Seams.*`, `GSTNMinion.Runtime.Seams.*`.
 
 ## Host budgets (G11)

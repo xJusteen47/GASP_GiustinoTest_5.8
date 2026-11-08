@@ -37,6 +37,9 @@ void FGSTN_PartsTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 
 	if (Point == EGSTN_CombatHookPoint::AfterClocks)
 	{
+		// A promotion seed (FGSTN_PartsAttach::SetPendingSeed) lands before the restores of the frame, so a restore of the same frame can
+		// still repair what the minion lost. One integer test while no seed exists
+		FGSTN_PartsAttach::ConsumePendingSeed(Context.Owner, *Set, Context.Out.Fragments);
 		ConsumeRestores(Context, *Set);
 		return;
 	}

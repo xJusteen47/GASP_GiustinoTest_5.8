@@ -6,6 +6,13 @@
 #include "Pipeline/GSTN_HitStep_PartResolve.h"
 #include "GSTN_HitStep_PartResolveMinion.generated.h"
 
+/** Bench counters of the step (sub-gate B per hit cost): process-wide, game thread only, debug numbers and never read by the simulation */
+struct FGSTN_PartsMinionStepTiming
+{
+	uint64 Cycles = 0;
+	int32 Count = 0;
+};
+
 /**
  * The part resolve step as the minion victim pipeline runs it (combat-parts.md §5.5): the bridge puts this class in the minion
  * subsystem's extra victim step slot, which runs it right before ComputeKnockback, on a view whose snapshot extension the bridge built
@@ -29,4 +36,7 @@ class GSTNPARTSMINION_API UGSTN_HitStep_PartResolveMinion : public UGSTN_HitStep
 
 public:
 	virtual EGSTN_StepResult Resolve_Implementation(const FGSTN_HitContextView& View, FGSTN_StepResult& Out) const override;
+
+	/** Time spent in this step for part-bearing victims since the process started (gstn.PartsMinion.Bench.Report) */
+	static FGSTN_PartsMinionStepTiming& GetTiming();
 };

@@ -304,6 +304,9 @@ int32 UGSTN_MinionCombatSubsystem::RegisterDefinition(UGSTN_MinionDefinition* De
 		return INDEX_NONE;
 	}
 
+	// G10 seam: a bridge sets its type-level net flags before the type table is published (inert when unbound)
+	OnDefinitionRegistering.Broadcast(Definition);
+
 	// Resolved once here so the batch never touches a soft path. A synchronous load on the first spawn of a type can hitch: a wave
 	// (G9) preloads its types before it spawns
 	FGSTN_MinionResolvedType Resolved;

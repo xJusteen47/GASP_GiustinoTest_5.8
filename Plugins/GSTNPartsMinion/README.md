@@ -4,9 +4,9 @@ Bridge between [GSTNParts](../GSTNParts/README.md) and [GSTNMinion](../GSTNMinio
 hundreds of small enemies lose a head and keep fighting). Design: [combat-parts.md](../../docs/architecture/combat-parts.md) §5.5 and
 [combat-m8-minions.md](../../docs/architecture/combat-m8-minions.md) §4d.2.
 
-Status: **P16 sub-gate A** (0.2, `EnabledByDefault: false`, not enabled in the project): part rows and the server hit flow. Sub-gate B
-(the wire byte, promotion copy, `scenario_minion_parts`, the bench numbers) comes after a check-in. Neither parts nor minion lists this
-plugin; enable it locally to run `GSTNParts.Minion.*`.
+Status: **P16 sub-gates A and B** (0.3, `EnabledByDefault: false`, not enabled in the project): part rows and the server hit flow (A),
+the broken mask on the wire, broken parts hidden on the puppets, the promotion copy and the bench (B). Neither parts nor minion lists this
+plugin; enable it locally to run `GSTNParts.Minion.*` and `scenario_minion_parts`.
 
 ## What exists (pure, in GSTNPartsCore, no GSTNMinion include)
 
@@ -34,10 +34,42 @@ plugin; enable it locally to run `GSTNParts.Minion.*`.
 
 ## What sub-gate B adds
 
-`ExtByte = BrokenMask` through `bHasNetExt` and `SetExtByte` (only on change), promotion and demotion copy to and from `FGSTN_PartsFragment`, part
-events through the outbox, the break effects Launch and Stagger as one-shots, `scenario_minion_parts` and the bench numbers.
+- **Wire.** A part-bearing type gets `UGSTN_MinionDefinition::bHasNetExt` from this bridge at the one moment its wire format is decided: the
+  server's `OnDefinitionRegistering` (first spawn of the type in the world) and, on a client, the registry's `OnDefinitionResolving`, with the
+  same rule (`ResolveUsableSet`) and the same config on both. The byte is the row's `BrokenMask`, written with `SetExtByte` only when a hit
+  changed it; a dent writes nothing and the damage bytes never leave the server. A type without parts keeps 0 extension bits. A definition
+  registered after its first spawn keeps its format (warning): flipping the flag then would desync the item codec. The flag is set on the
+  definition object in memory (in the editor it stays set until the editor restarts; it is the same value the config gives every time).
+- **Puppets.** `UGSTN_PartsMinionPuppetSubsystem` (not on a dedicated server) hides the bones (`FGSTN_PartDefinition::Bones`) of the broken
+  parts on each presented puppet, snap: the listen host reads the server row (M8 §4d.1), a remote client its registry's ext byte. Nothing
+  happens until a puppet's (minion, mask) changes; a pooled puppet reused by another minion is shown whole first.
+- **Promotion.** On `OnMinionPromoted` the row goes to the fighter as a `FGSTN_PartsAttach::SetPendingSeed` (by part name, new small API in
+  GSTNPartsNP); the parts tick extension merges it into the fighter's `FGSTN_PartsFragment` at its next AfterClocks (OR of the broken bits,
+  max of the damage, no break serial, no event), and the fragment syncs it like any part state. The fighter needs its own part set (kit or
+  `UGSTN_PartsAttachComponent`). Demotion (fighter back to minion) is not done.
+- **Not done: the Launch and Stagger break effects** on minions. The outcome hook runs inside the drain before the drain writes its own
+  reaction (it calls `LaunchMinion` for the knockback after the victim hitstop), so a launch from the hook would be overwritten or would
+  overwrite the knockback, and there is no public stagger call. They need a seam that merges into the drain's reaction (a GSTNMinion change).
+  Part events through the outbox are not done either (a minion has no outbox entry of its own yet).
+- **Bench.** `gstn.PartsMinion.Bench.Parts [TypeTag] [HeadHurtboxes] [HeadCap]` (a transient part set on a type tag in every game world of the
+  process, before the type's first spawn) and `gstn.PartsMinion.Bench.Report` (`PartsMinionBench server|client|puppets` lines: rows, masks by
+  global id, ext bytes per client, per hit cost of view + step + outcome). Harness: `minion_parts_base` then `minion_parts` in
+  `SUITE_MINION_BENCH` (Tools/GASNPPTest/minion_scenarios.py); `minion_parts` PASSes with "bridge not enabled" when this plugin is off.
+- **GSTNMinion seams added for B** (inert unbound): `UGSTN_MinionCombatSubsystem::OnDefinitionRegistering`, `UGSTN_MinionClientRegistry::OnDefinitionResolving`.
+- Tests: `GSTNParts.Minion.{ExtByteOnlyOnTypesWithParts, DirtyOnlyOnMaskChange, PromotionCopiesToFragment}`.
 
 ## PERF-DEBT
+
+At 160 minions, all of a part-bearing type (sub-gate B):
+- Wire: 8 bits more in every item update of a part-bearing type (the byte is always in that type's format), +5 % of the 20 B planning size;
+  a mask change makes the item dirty once (one update per break per item, never per dent). 160 minions losing one part each is 160 extra
+  updates over the fight. Types without parts: 0 bits.
+- Client hide: two map lookups and a byte read per visible puppet per frame (at most `gstn.Minion.Present.MaxVisible`, 60), bone hide calls
+  only on a change. The part set is resolved once per type per machine (a synchronous load the first time; preload with the wave).
+- Server per part hit: measured by the bench (`hitUs` = view build + `UGSTN_HitStep_PartResolveMinion` + outcome write, `minion_parts`);
+  budget 2 us. The step's pipeline scan and `HealthWeight` re-run are the bulk.
+- Memory: the A columns plus `LastBreakFrame` (4 B per slot, bench only, ~640 B) and per machine a set pointer per type; the puppet map holds
+  one small entry per puppet ever used (pooled, so at most the pool size).
 
 - Per hit on a part-bearing minion (estimate, not measured): view build (a 32 B copy), a scan of the resolved pipeline (about 8 class tests),
   the part math, one `HealthWeight` re-run, one outcome lookup and a 9 B write: about 1 µs on the laptop, inside the 2 µs budget. Not counted:

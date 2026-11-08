@@ -11,6 +11,7 @@
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
+#include "Math/GSTN_PartsState.h"
 #include "State/GSTN_PartsFragment.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNPartsAttach, Log, All);
@@ -21,6 +22,13 @@ namespace
 	TMap<FObjectKey, TStrongObjectPtr<UGSTN_PartSetDefinition>>& Attached()
 	{
 		static TMap<FObjectKey, TStrongObjectPtr<UGSTN_PartSetDefinition>> Map;
+		return Map;
+	}
+
+	/** Pending one-shot seeds by entity (SetPendingSeed). Almost always empty: HasPendingSeed tests the count first */
+	TMap<FObjectKey, TArray<FGSTN_PartsAttach::FSeedEntry, TInlineAllocator<GSTN_PartsLimits::MaxParts>>>& Seeds()
+	{
+		static TMap<FObjectKey, TArray<FGSTN_PartsAttach::FSeedEntry, TInlineAllocator<GSTN_PartsLimits::MaxParts>>> Map;
 		return Map;
 	}
 
@@ -119,6 +127,73 @@ int32 FGSTN_PartsAttach::Num()
 void FGSTN_PartsAttach::Reset()
 {
 	Attached().Reset();
+	Seeds().Reset();
+}
+
+void FGSTN_PartsAttach::SetPendingSeed(const AActor* Owner, TConstArrayView<FSeedEntry> Entries)
+{
+	if (!Owner)
+	{
+		return;
+	}
+	// A seed whose owner is gone is never consumed: drop those before adding (promotions are rare, the map stays tiny)
+	for (auto It = Seeds().CreateIterator(); It; ++It)
+	{
+		if (!It.Key().ResolveObjectPtr())
+		{
+			It.RemoveCurrent();
+		}
+	}
+	auto& Seed = Seeds().FindOrAdd(FObjectKey(Owner));
+	Seed.Reset();
+	for (const FSeedEntry& Entry : Entries.Left(GSTN_PartsLimits::MaxParts))
+	{
+		if (Entry.Part != NAME_None && (Entry.bBroken || Entry.Damage != 0))
+		{
+			Seed.Add(Entry);
+		}
+	}
+	if (Seed.IsEmpty())
+	{
+		Seeds().Remove(FObjectKey(Owner));
+	}
+}
+
+bool FGSTN_PartsAttach::HasPendingSeed(const AActor* Owner)
+{
+	return !Seeds().IsEmpty() && Owner && Seeds().Contains(FObjectKey(Owner));
+}
+
+bool FGSTN_PartsAttach::ConsumePendingSeed(const AActor* Owner, const UGSTN_PartSetDefinition& Set, FGSTN_SyncFragmentArray& Fragments)
+{
+	if (!HasPendingSeed(Owner))
+	{
+		return false;
+	}
+	const auto Seed = Seeds().FindAndRemoveChecked(FObjectKey(Owner));
+	const int32 Count = Set.GetParts().Num();
+	if (Count == 0)
+	{
+		return true;
+	}
+	FGSTN_PartsFragment& Fragment = FGSTN_SyncFragmentList::FindOrAdd<FGSTN_PartsFragment>(Fragments);
+	FGSTN_PartsState State = Fragment.ToState();
+	for (const FSeedEntry& Entry : Seed)
+	{
+		const int32 Index = Set.FindPartByName(Entry.Part);
+		if (Index == INDEX_NONE || Index >= Count)
+		{
+			continue;
+		}
+		// Idempotent merge: a part never gets better from a seed
+		State.PartDamage[Index] = FMath::Max(State.PartDamage[Index], Entry.Damage);
+		if (Entry.bBroken)
+		{
+			State.BrokenMask |= static_cast<uint16>(1u << Index);
+		}
+	}
+	Fragment.SetState(State, Count);
+	return true;
 }
 
 UGSTN_PartsAttachComponent::UGSTN_PartsAttachComponent()

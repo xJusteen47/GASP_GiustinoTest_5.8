@@ -77,6 +77,11 @@ void UGSTN_MinionClientRegistry::ApplyRegistryInfo(const FGSTN_MinionNetRegistry
 		const FSoftObjectPath Path(Info.TypePaths[Index]);
 		UGSTN_MinionDefinition* Definition = Path.IsValid() ? Cast<UGSTN_MinionDefinition>(Path.TryLoad()) : nullptr;
 		Definitions[Index] = Definition;
+		if (Definition)
+		{
+			// G10 seam: a bridge sets the same type-level net flags the server set at registration (inert when unbound)
+			OnDefinitionResolving.Broadcast(Definition);
+		}
 		ExtTypes[Index] = Definition && Definition->bHasNetExt;
 		Resolved.Add(Definition ? Definition->GetPathName() : FString());
 	}

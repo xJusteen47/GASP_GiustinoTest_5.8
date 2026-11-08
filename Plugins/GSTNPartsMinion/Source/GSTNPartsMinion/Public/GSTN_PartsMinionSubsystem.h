@@ -12,6 +12,8 @@
 #include "UObject/ObjectKey.h"
 #include "GSTN_PartsMinionSubsystem.generated.h"
 
+class AActor;
+class UGSTN_MinionClientRegistry;
 class UGSTN_MinionCombatSubsystem;
 class UGSTN_MinionDefinition;
 class UGSTN_PartSetDefinition;
@@ -38,6 +40,17 @@ struct FGSTN_PartsMinionStats
 	int32 LethalKills = 0;
 	/** Activations of part-bearing types (rows reset) */
 	int32 PartActivations = 0;
+	/** SetExtByte calls: one per hit that changed a broken mask, never for a dent (sub-gate B) */
+	int32 ExtByteWrites = 0;
+	/** Promotions of a part-bearing minion whose row went to the fighter as a seed */
+	int32 PromotionSeeds = 0;
+	/** Definitions this machine flagged bHasNetExt (registration on the server, registry resolve on a client) */
+	int32 NetExtFlagged = 0;
+	/** Bench timing of the bridge's own hit work, in cycles: the victim view build and the outcome write (the step times itself) */
+	uint64 ViewCycles = 0;
+	int32 Views = 0;
+	uint64 OutcomeCycles = 0;
+	int32 Outcomes = 0;
 };
 
 /**
@@ -54,6 +67,17 @@ struct FGSTN_PartsMinionStats
  *  - the extra victim step slot: UGSTN_HitStep_PartResolveMinion, the unchanged part math right before ComputeKnockback;
  *  - ApplyOutcomeExtensions: writes the part outcome back into the row (ToMinionStore) and asks for death when a part of the type's
  *    LethalParts broke. No gameplay effect, no fragment: the store's Health took MainDelta through Outcome.Damage like any minion hit.
+ *
+ * Wire (sub-gate B, combat-m8-minions.md §8.2 G10 ExtByte): a part-bearing type gets UGSTN_MinionDefinition::bHasNetExt, set by this bridge
+ * from its own config at the one moment the type's wire format is decided: OnDefinitionRegistering on the server (its first spawn in the
+ * world) and OnDefinitionResolving of the client registry on a client, the same rule on both from the same config, so both build the same
+ * format. The byte is the row's BrokenMask, written with SetExtByte only when a hit changed it (a dent changes nothing on the wire, the damage
+ * bytes never leave the server). A type without parts keeps 0 extension bits. A definition registered here after its first spawn keeps its
+ * format (warning): flipping the flag later would desync the item codec.
+ *
+ * Promotion (sub-gate B, M8 §10): OnMinionPromoted copies the row to the fighter as a seed of FGSTN_PartsAttach (by part name), merged into the
+ * fighter's parts fragment by the parts tick extension at its next frame, so the fighter keeps the parts the minion lost. The fighter needs
+ * its own part set attached (kit or UGSTN_PartsAttachComponent); without one the seed waits and dies with the actor.
  *
  * Determinism: the hooks run inside stage 2 of the batch, in the drain's fixed order (victim slot, attacker, hitbox), on the authority
  * only (the minion subsystem is active nowhere else). Every write is a pure function of the row, the static part set and the hit.
@@ -76,6 +100,18 @@ public:
 	 */
 	void RegisterDefinition(const UGSTN_MinionDefinition* Definition, const FGSTN_PartsMinionExtension& Extension);
 
+	/** The extension that applies to Definition on this machine (exact definition first, then its type tag), null when none */
+	const FGSTN_PartsMinionExtension* FindExtension(const UGSTN_MinionDefinition* Definition) const;
+
+	/**
+	 * The part set of an extension when it can serve a minion (loaded, not empty, bForMinions, at most 8 parts), null otherwise. The one
+	 * rule behind the activation, the server's net flag and the client's net flag, so the three always agree. May load synchronously
+	 */
+	static UGSTN_PartSetDefinition* ResolveUsableSet(const FGSTN_PartsMinionExtension& Extension);
+
+	/** The part set this machine shows for a definition (presentation, a client included): cached per definition, null without parts */
+	const UGSTN_PartSetDefinition* GetPresentationSet(const UGSTN_MinionDefinition* Definition);
+
 	/** Attaches an extension to a type tag (what the settings map does). Same timing as RegisterDefinition */
 	void RegisterTypeTag(const FGameplayTag& TypeTag, const FGSTN_PartsMinionExtension& Extension);
 
@@ -92,6 +128,18 @@ public:
 	const UGSTN_PartSetDefinition* GetPartSet(const FGSTN_MinionHandle& Handle) const;
 
 	const FGSTN_PartsMinionStats& GetStats() const { return Stats; }
+
+	/** Bench: the frame a part of the slot's current occupant last broke, INDEX_NONE before any break (the report's "attacked after the break") */
+	int32 GetLastBreakFrame(const FGSTN_MinionHandle& Handle) const;
+
+	/**
+	 * Bench (gstn.PartsMinion.Bench.Parts): builds a transient minion part set (a Head part on HeadHurtboxes, bone "head", cap HeadCap, not
+	 * lethal, and a Legs part on "feet" that does not break) and attaches it to TypeTag. Returns the set. No asset is created or saved
+	 */
+	UGSTN_PartSetDefinition* RegisterBenchParts(const FGameplayTag& TypeTag, const TArray<FName>& HeadHurtboxes, float HeadCap);
+
+	/** Bench (gstn.PartsMinion.Bench.Report): the server line (rows, masks by global id, timings) and, on a client, its received ext bytes */
+	void ReportBench() const;
 
 	/** Slots the columns are sized to: 0 until the first part-bearing minion activates (a world without one pays no column) */
 	int32 GetColumnCapacity() const { return Rows.Num(); }
@@ -114,6 +162,9 @@ private:
 	void Unbind();
 
 	void HandleMinionActivated(const FGSTN_MinionHandle& Handle);
+	/** Both net seams: sets bHasNetExt on a definition whose extension resolves to a usable set (never clears a designer's flag) */
+	void HandleDefinitionNet(UGSTN_MinionDefinition* Definition);
+	void HandleMinionPromoted(const FGSTN_MinionHandle& Handle, AActor* Fighter);
 	void ExtendVictimView(int32 Slot, FGSTN_HitVictimView& View);
 	bool ApplyOutcome(const FGSTN_MinionHandle& Handle, const FGSTN_HitResolutionContext& Context, int32 Frame);
 
@@ -126,6 +177,17 @@ private:
 
 	TWeakObjectPtr<UGSTN_MinionCombatSubsystem> BoundMinions;
 	FDelegateHandle ActivatedHandle;
+	FDelegateHandle RegisteringHandle;
+	FDelegateHandle PromotedHandle;
+	TWeakObjectPtr<UGSTN_MinionClientRegistry> BoundRegistry;
+	FDelegateHandle ResolvingHandle;
+
+	/** GetPresentationSet cache (keys compared, never dereferenced; a null value = no parts). The sets are kept alive by ResolvedSets */
+	TMap<TObjectKey<UGSTN_MinionDefinition>, const UGSTN_PartSetDefinition*> PresentationSets;
+
+	/** Sets built by RegisterBenchParts, kept alive for the world */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UGSTN_PartSetDefinition>> BenchSets;
 
 	TMap<TObjectKey<UGSTN_MinionDefinition>, FGSTN_PartsMinionExtension> DefinitionExtensions;
 	TMap<FGameplayTag, FGSTN_PartsMinionExtension> TagExtensions;
@@ -144,6 +206,8 @@ private:
 	TArray<uint8> SlotType;
 	TArray<uint16> SlotGeneration;
 	TArray<FGSTN_PartsSnapshotExt> ViewExts;
+	/** Bench only: the batch frame of the last break, by slot (reset on activation) */
+	TArray<int32> LastBreakFrame;
 
 	FGSTN_PartsMinionStats Stats;
 };
