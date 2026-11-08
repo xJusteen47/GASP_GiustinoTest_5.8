@@ -100,9 +100,11 @@ EGSTN_StepResult UGSTN_HitStep_PartResolve::Resolve_Implementation(const FGSTN_H
 	// The part comes from the hurtbox the attacker chose; a hurtbox no part names belongs to the body
 	const TConstArrayView<FGSTN_PartDefinition> Parts = Set->GetParts();
 	int32 PartIndex = INDEX_NONE;
+	FName HurtboxName = NAME_None;
 	if (View.HurtboxSet && View.HurtboxSet->Hurtboxes.IsValidIndex(View.HurtboxIndex))
 	{
-		PartIndex = Set->FindPartByHurtbox(View.HurtboxSet->Hurtboxes[View.HurtboxIndex].Name);
+		HurtboxName = View.HurtboxSet->Hurtboxes[View.HurtboxIndex].Name;
+		PartIndex = Set->FindPartByHurtbox(HurtboxName);
 	}
 
 	const FGSTN_PartHitData* PartHit = nullptr;
@@ -118,7 +120,18 @@ EGSTN_StepResult UGSTN_HitStep_PartResolve::Resolve_Implementation(const FGSTN_H
 	const FGSTN_PartsRulesExtension* RulesExtension = FindRulesExtension(View.Rules);
 	const FGSTN_PartsState Before = Ext->ToState();
 	FGSTN_PartsState After = Before;
-	const FGSTN_PartHitResult Result = UGSTN_PartMath::ApplyHit(Parts, ResolveBands(*Set, RulesExtension), After, FGSTN_PartHitInput::Make(Hit.Damage, PartIndex, PartHit));
+	FGSTN_PartHitInput Input = FGSTN_PartHitInput::Make(Hit.Damage, PartIndex, PartHit);
+	// One part, several hardnesses (combat-parts.md §3.4): the hurtbox the attacker chose may carry its own. Static data only, so the
+	// attacker running this same step predicts the ricochet exactly; the pool and the break stay the part's
+	if (Parts.IsValidIndex(PartIndex))
+	{
+		const FGSTN_PartDefinition& Part = Parts[PartIndex];
+		if (!Part.HurtboxHardnessOverride.IsEmpty())
+		{
+			Input.HardnessOverride = Part.GetHardnessFor(HurtboxName);
+		}
+	}
+	const FGSTN_PartHitResult Result = UGSTN_PartMath::ApplyHit(Parts, ResolveBands(*Set, RulesExtension), After, Input);
 
 	FGSTN_PartHitOutcome Outcome;
 	Outcome.PartIndex = Result.PartIndex;

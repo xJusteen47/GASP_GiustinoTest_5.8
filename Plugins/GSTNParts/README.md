@@ -114,6 +114,14 @@ itself, because `ApplyDamage` requests the hit's own damage and would ignore the
 
 `FGSTN_PartHitData` is a `FGSTN_HitExtension` (an entry of `FGSTN_HitData::ExtensionData`) and `FGSTN_PartsRulesExtension` a `FGSTN_RulesExtension`.
 
+**Openings and per-hurtbox hardness (P18).** A cavity behind armour is a hurtbox with an `FGSTN_HurtboxOpening` (`GSTNCombatCore`, on
+`FGSTN_Hurtbox::Opening`, off by default): it counts as overlapped only when the hitbox also overlaps the `Mouth` and its pass radius (sphere or capsule
+radius, a box's smallest half-size) is at most `MaxPassRadiusCm`, otherwise the attacker's pick falls to the armour by `Priority`
+(`UGSTN_HitShapeUtils::PassesOpening`, called in the attacker tick where the hurtbox is chosen, so this step still only reads `HurtboxIndex`). One part
+with several hardnesses (the charger's abdomen) uses `FGSTN_PartDefinition::HurtboxHardnessOverride` (hurtbox name to 0..15): this step passes the
+chosen hurtbox's value to the band lookup; the pool, the cap and the break stay the part's, so either side breaks the whole part. Both are static data,
+so the attacker's ricochet prediction stays exact. The minion attacker path (`GSTNMinion`) does not apply openings yet.
+
 ## Gameplay tags
 
 | Tags | Source | Declared in |

@@ -41,6 +41,12 @@ struct GSTNPARTSCORE_API FGSTN_PartHitInput
 	/** Damage the main pool only, leave the part alone */
 	bool bMainOnly = false;
 
+	/**
+	 * The hardness of the hurtbox the hit chose when its part overrides it (FGSTN_PartDefinition::GetHardnessFor); negative = the
+	 * part's own Hardness. The damage pool and the break stay the part's whatever hurtbox the hit came through
+	 */
+	int32 HardnessOverride = -1;
+
 	/** From the hit's damage, the part index and its authored part data (null = penetration 0, scales of 1) */
 	static FGSTN_PartHitInput Make(float InDamage, int32 InPartIndex, const FGSTN_PartHitData* Data);
 };

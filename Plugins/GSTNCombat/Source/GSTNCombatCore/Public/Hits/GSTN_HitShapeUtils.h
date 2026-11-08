@@ -65,4 +65,13 @@ public:
 	 * index. An extra that ignores HitType is skipped as if it had not overlapped. With no extras this is the overload above, bit for bit.
 	 */
 	static int32 PickHurtboxIndex(TConstArrayView<int32> Overlapped, TConstArrayView<FGSTN_Hurtbox> Hurtboxes, TConstArrayView<FGSTN_ExtraHurtbox> Extras, const FGameplayTag& HitType);
+
+	/**
+	 * The opening rule (combat-m4-hits 9c B), for a hitbox that already overlaps the hurtbox: true if the hurtbox has no opening, or if
+	 * the hitbox's pass radius (GetSmallestWorldExtent at CurrentWorld) is at most the opening's MaxPassRadiusCm and the hitbox also
+	 * overlaps the Mouth (swept like the hurtbox test when bSwept). A false keeps the hurtbox out of the overlap list, so the pick
+	 * falls to the armour by Priority. The cheap radius test runs before the mouth overlap; a hurtbox without an opening costs one bool.
+	 */
+	static bool PassesOpening(const FGSTN_HurtboxOpening& Opening, const FGSTN_HitShape& HitShape, const FTransform& PreviousWorld, const FTransform& CurrentWorld,
+		bool bSwept, const FTransform& VictimWorld);
 };

@@ -156,6 +156,18 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 		{
 			Report.AddError(FString::Printf(TEXT("%s: hardness %d is outside 0..%d."), *Label, Part.Hardness, GSTN_PartsLimits::MaxHardness));
 		}
+		for (const TPair<FName, int32>& Override : Part.HurtboxHardnessOverride)
+		{
+			if (Override.Value < 0 || Override.Value > GSTN_PartsLimits::MaxHardness)
+			{
+				Report.AddError(FString::Printf(TEXT("%s: the hardness override %d of %s is outside 0..%d."), *Label, Override.Value, *Override.Key.ToString(), GSTN_PartsLimits::MaxHardness));
+			}
+			if (!Part.Hurtboxes.Contains(Override.Key))
+			{
+				// The override is read only for a hit on one of the part's own hurtboxes, so a foreign key never applies
+				Report.AddWarning(FString::Printf(TEXT("%s: the hardness override names %s, which is not one of the part's hurtboxes, so it never applies."), *Label, *Override.Key.ToString()));
+			}
+		}
 		if (!FMath::IsFinite(Part.PartCap))
 		{
 			Report.AddError(FString::Printf(TEXT("%s: the part cap is not a finite number."), *Label));

@@ -365,6 +365,11 @@ void FGSTN_HurtboxSetEditorToolkit::DrawHurtboxes(FPrimitiveDrawInterface* PDI)
 		{
 			PDI->SetHitProxy(nullptr);
 		}
+		// The opening's mouth (combat-m4-hits 9c B), in its own colour and outside the hit proxy, so a click still selects the cavity itself
+		if (const FGSTN_HurtboxOpening& Opening = (*Hurtboxes)[Index].Opening; Opening.bEnabled && !bHitTesting)
+		{
+			GSTNPreviewDrawing::DrawHitShape(PDI, Opening.Mouth, FTransform::Identity, FLinearColor(0.95f, 0.35f, 0.85f), bSelected ? 1.5f : 0.f);
+		}
 	}
 }
 

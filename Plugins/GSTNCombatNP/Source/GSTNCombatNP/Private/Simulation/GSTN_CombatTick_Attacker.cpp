@@ -245,7 +245,9 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 				const bool bTouches = Spec.bSweepBetweenFrames
 					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform)
 					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform);
-				if (bTouches)
+				// A hurtbox with an opening (a cavity behind armour, combat-m4-hits 9c B) counts only through its mouth and for a hitbox that
+				// fits; otherwise it stays out of the list and the pick below falls to the armour by Priority. No opening: one bool
+				if (bTouches && (!Hurtboxes[HurtIndex].Opening.bEnabled || UGSTN_HitShapeUtils::PassesOpening(Hurtboxes[HurtIndex].Opening, HitShape, PreviousCarrier, Carrier, Spec.bSweepBetweenFrames, Victim.Transform)))
 				{
 					Overlapped.Add(HurtIndex);
 				}

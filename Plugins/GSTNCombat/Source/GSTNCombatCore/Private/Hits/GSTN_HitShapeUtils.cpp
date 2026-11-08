@@ -473,3 +473,21 @@ int32 UGSTN_HitShapeUtils::PickHurtboxIndex(TConstArrayView<int32> Overlapped, T
 	}
 	return Best;
 }
+
+bool UGSTN_HitShapeUtils::PassesOpening(const FGSTN_HurtboxOpening& Opening, const FGSTN_HitShape& HitShape, const FTransform& PreviousWorld, const FTransform& CurrentWorld,
+	bool bSwept, const FTransform& VictimWorld)
+{
+	if (!Opening.bEnabled)
+	{
+		return true;
+	}
+	// Size first: it is a few multiplies, the mouth overlap is a full shape test (and up to MaxSweepSubsteps + 1 of them when swept).
+	// A degenerate hitbox (0) fits any hole, the same as the occlusion rule's derived radius
+	if (HitShape.GetSmallestWorldExtent(CurrentWorld) > static_cast<double>(Opening.MaxPassRadiusCm))
+	{
+		return false;
+	}
+	return bSwept
+		? SweptOverlap(HitShape, PreviousWorld, CurrentWorld, Opening.Mouth, VictimWorld)
+		: Overlap(HitShape, CurrentWorld, Opening.Mouth, VictimWorld);
+}

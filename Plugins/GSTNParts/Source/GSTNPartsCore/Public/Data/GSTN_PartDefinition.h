@@ -139,6 +139,26 @@ struct GSTNPARTSCORE_API FGSTN_PartDefinition
 	int32 Hardness = 0;
 
 	/**
+	 * Per-hurtbox hardness inside this one part (combat-parts.md §3.4, the charger's abdomen: medium on top, light underneath), keyed
+	 * by a name in Hurtboxes, 0..15. It wins over Hardness for a hit the attacker landed on that hurtbox; the part keeps one damage
+	 * pool, one PartCap and one break, so breaking it from either side breaks the whole part. Static data, so the attacker's ricochet
+	 * prediction stays exact. Empty (the default) = Hardness for every hurtbox, at the cost of one emptiness test per hit
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Damage")
+	TMap<FName, int32> HurtboxHardnessOverride;
+
+	/** The hardness a hit on HurtboxName meets: its override if any, else Hardness. No allocation (a map lookup only when overrides exist) */
+	int32 GetHardnessFor(FName HurtboxName) const
+	{
+		if (HurtboxHardnessOverride.IsEmpty())
+		{
+			return Hardness;
+		}
+		const int32* Found = HurtboxHardnessOverride.Find(HurtboxName);
+		return Found ? *Found : Hardness;
+	}
+
+	/**
 	 * How deep the part is, 0..1. The damage the part takes is Damage * (1 - Thickness) + DeepDamage * Thickness, where DeepDamage is the hit's own
 	 * (it defaults to Damage). Independent of Hardness: hardness decides whether a hit gets through, thickness what it does once through
 	 */

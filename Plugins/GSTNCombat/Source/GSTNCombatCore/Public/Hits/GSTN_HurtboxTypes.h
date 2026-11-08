@@ -25,6 +25,35 @@ enum class EGSTN_HurtState : uint8
 };
 
 /**
+ * The way into a hurtbox that sits inside another one (combat-m4-hits 9c B, combat-parts 3.4): a hollow medium-hardness cavity inside
+ * a heavy-armour leg. Hit shapes are pure maths with no world query, so a bulky swing that overlaps the leg from outside also overlaps
+ * the cavity inside it and would pick it by Priority, hitting soft material through the armour. With an opening, the cavity counts
+ * as overlapped only when the hitbox also overlaps the Mouth AND its pass radius fits MaxPassRadiusCm; otherwise it is left out of
+ * the overlap list and the pick falls to the next candidate by Priority (the armour around it).
+ *
+ * The hitbox's pass radius is derived from its shape as the world occlusion rule derives it (9c A): a sphere's radius, a capsule's
+ * radius, a box's smallest half-size. Static data on a static set, so the attacker's prediction and the authority agree.
+ * Optional and off by default: a hurtbox without one is tested exactly as before, at the cost of one bool.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_HurtboxOpening
+{
+	GENERATED_BODY()
+
+	/** Off = the hurtbox has no opening and is reached by plain overlap (every set authored before openings) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Opening")
+	bool bEnabled = false;
+
+	/** The hole, root-relative like the hurtbox's own shape; authored at the surface of the armour, where a hitbox enters */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Opening", meta = (EditCondition = "bEnabled"))
+	FGSTN_HitShape Mouth;
+
+	/** The largest hitbox pass radius that fits through the hole: a 2 cm stab or a 1 cm bullet passes a 5 cm hole, a 30 cm hammer does not */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Opening", meta = (EditCondition = "bEnabled", ClampMin = "0.0", ForceUnits = "cm"))
+	float MaxPassRadiusCm = 5.f;
+};
+
+/**
  * One hurtbox of a combatant: where it is and how it reacts. Shape is root-relative, baked from the reference pose, so a
  * hurtbox costs no bone transform at runtime.
  */
@@ -55,6 +84,10 @@ struct GSTNCOMBATCORE_API FGSTN_Hurtbox
 	/** The "where" of a hit: scales, stagger threshold and reaction cap of this hurtbox */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
 	FGSTN_HitReactionModifiers ReactionScale;
+
+	/** Optional way in for a hurtbox enclosed by another (a cavity behind armour). Off by default; see FGSTN_HurtboxOpening */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Opening")
+	FGSTN_HurtboxOpening Opening;
 };
 
 /**
