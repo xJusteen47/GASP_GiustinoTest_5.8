@@ -41,3 +41,20 @@ Cost of this thread (T2 + E15 + E16): ~$8-11 estimated (Opus, ~110k context, 4 b
 - PERF-DEBT (also in perf-debt.md): one pointer test per simulated frame per entity in non-Shipping builds; with the sink on, one trace event per
   entity per frame (resimulated frames included).
 - Cost: ~$4 (writer ~158k tokens / 34 tool calls; my context ~+30k; 5 builds incl. 2 off configs, 3 test runs, SUITE_DEFAULT + 1 rerun).
+
+## Leftovers pass (laptop, 2026-11-09): E19 hooks + T9 validation tests DONE; T4, T7, R3-1 and editor-only parts SKIPPED
+
+- Branch `claude/m3m5-rest-laptop` from 5b7e7fc5. Sonnet writer (`Saved/Rest/brief.md`, `report.md`). Owner rules: no movement, no animation.
+- E19 (7b3b7919): `GSTNCombat.Editor.Hooks.ExternalClientCompiles` (test-only client registers a fake hit-extension customization and a
+  validator through the public API); grep gate clean (no GSTNParts in GSTNCombatEditor; GSTNCombatEditor/GSTNCombatDebug only in comments of
+  runtime Build.cs/uplugin). README "How to extend (E19)". Not done: preview scene, shape drawing, hurtbox toolkit/generator and OnKeySelected
+  stay in Private headers (moving them = refactor); GSTNPartsEditor does not use the hooks yet; the designer scenario and the editor-authored
+  vs hand-built snapshot run need the interactive editor; ThrowawayTrackListed skipped (RegisteredTrackListed covers it).
+- T9 (7e889fba): the platform spec checks already existed (`FGSTN_PlatformSpec::CollectFindings`); added tests
+  `GSTNPlatform.Core.Validation.{WallAngleRange, ShapeData}`. Skipped: "shape far from mesh" (needs the mesh), example content (editor),
+  surface suite wrapper (surface_scenarios.py is already one driver).
+- Skipped items: T4 launch from moving surfaces and T7 lifecycle under a player (movement); R3-1 (jump apex / movement lanes of the M3
+  harness + three long suite runs).
+- Gate: all on 1446/0 (+3), GSTNMinion+GSTNPartsMinion off 1344/0, GSTNPlatform+Parts off 1422/0, 0 ensures. SUITE_DEFAULT / SUITE_MINION not
+  rerun: only tests and docs changed (no runtime code). Build time laptop: incremental build + headless tests 162 s.
+- PERF-DEBT: none. Cost: ~$2.5.
