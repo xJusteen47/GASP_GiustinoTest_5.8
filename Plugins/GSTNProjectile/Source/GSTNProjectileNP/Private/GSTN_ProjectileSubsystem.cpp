@@ -3,6 +3,9 @@
 #include "GSTN_ProjectileSubsystem.h"
 
 #include "Engine/Engine.h"
+#include "Engine/NetConnection.h"
+#include "Engine/NetDriver.h"
+#include "GameFramework/PlayerState.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -30,6 +33,31 @@ namespace
 	TAutoConsoleVariable<int32> CVarProjectileMaxActive(
 		TEXT("gstn.Projectile.MaxActive"), 64,
 		TEXT("Most projectiles alive at once per world (review entita-dinamiche §3: a cap, visuals pooled later). Fire is refused beyond it."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<int32> CVarProjectilePredictGhost(
+		TEXT("gstn.Projectile.PredictGhost"), 1,
+		TEXT("1: the client that fires a projectile ability draws its predicted shot at once as a local ghost, adopted by the host's projectile on arrival. 0: it sees its shot one round trip late."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<float> CVarProjectileGhostToleranceCm(
+		TEXT("gstn.Projectile.GhostToleranceCm"), 50.f,
+		TEXT("Largest distance (cm, at the arrival frame) between a ghost and the host's projectile that is adopted with a blend; beyond it the ghost is dropped and the projectile snaps."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<int32> CVarProjectileGhostMatchFrames(
+		TEXT("gstn.Projectile.GhostMatchFrames"), 3,
+		TEXT("Most start frames apart a ghost and the host's projectile of the same owner may be and still be the same shot."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<int32> CVarProjectileGhostBlendFrames(
+		TEXT("gstn.Projectile.GhostBlendFrames"), 6,
+		TEXT("Frames over which an adopted ghost's offset fades into the host's projectile (0 = jump at once)."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<int32> CVarProjectileGhostTimeoutFrames(
+		TEXT("gstn.Projectile.GhostTimeoutFrames"), 60,
+		TEXT("Frames after its start a ghost waits for the host's projectile before it is dropped (a refused or mispredicted shot)."),
 		ECVF_Default);
 
 	FVector ShapeCenterOf(const FGSTN_HitShape& Shape, const FTransform& Carrier)
@@ -93,6 +121,10 @@ void UGSTN_ProjectileSubsystem::HandlePostFixedTick(int32 ServerFrame, int32 End
 	{
 		StepFrame(ServerFrame);
 	}
+	else if (!HasAuthority())
+	{
+		ExpireGhosts(ServerFrame);
+	}
 }
 
 int32 UGSTN_ProjectileSubsystem::FindEntityIdOf(const AActor* Actor) const
@@ -115,6 +147,11 @@ int32 UGSTN_ProjectileSubsystem::FindEntityIdOf(const AActor* Actor) const
 }
 
 AGSTN_Projectile* UGSTN_ProjectileSubsystem::FireProjectile(const FGSTN_ProjectileParams& InParams)
+{
+	return FireProjectileAtFrame(InParams, INDEX_NONE, nullptr);
+}
+
+AGSTN_Projectile* UGSTN_ProjectileSubsystem::FireProjectileAtFrame(const FGSTN_ProjectileParams& InParams, int32 StartFrame, AActor* OwnerActor)
 {
 	UWorld* World = GetWorld();
 	if (!World || !HasAuthority())
@@ -145,17 +182,30 @@ AGSTN_Projectile* UGSTN_ProjectileSubsystem::FireProjectile(const FGSTN_Projecti
 		}
 	}
 
-	// Starts at the next frame: the first sweep is LastFrame + 1 -> LastFrame + 2, the same frame numbers on every machine
-	const FGSTN_BallisticSegment Segment = FGSTN_BallisticMode::MakeSegment(Params, LastFrame + 1, StepSeconds);
+	if (!OwnerActor && Params.OwnerEntityId != INDEX_NONE)
+	{
+		if (const UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(World))
+		{
+			OwnerActor = Combat->FindOwnerActor(Params.OwnerEntityId);
+		}
+	}
+
+	// Starts at the next frame: the first sweep is LastFrame + 1 -> LastFrame + 2, the same frame numbers on every machine. Quantized
+	// first: the host sweeps exactly the segment the clients decode (FGSTN_BallisticSegment::NetSerialize)
+	const int32 First = StartFrame == INDEX_NONE ? LastFrame + 1 : StartFrame;
+	const FGSTN_BallisticSegment Segment = FGSTN_BallisticMode::Quantize(FGSTN_BallisticMode::MakeSegment(Params, First, StepSeconds));
 	const FTransform SpawnTransform = FGSTN_BallisticMode::CarrierAt(Segment, Segment.StartFrame);
-	AGSTN_Projectile* Actor = World->SpawnActorDeferred<AGSTN_Projectile>(AGSTN_Projectile::StaticClass(), SpawnTransform, nullptr, nullptr,
-		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	// The shooter as Owner: one object reference in the spawn bunch, what the firing client matches its ghost with
+	AGSTN_Projectile* Actor = World->SpawnActorDeferred<AGSTN_Projectile>(AGSTN_Projectile::StaticClass(), SpawnTransform, OwnerActor,
+		Cast<APawn>(OwnerActor), ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Actor)
 	{
 		return nullptr;
 	}
 	Actor->InitProjectile(Segment, Params.LifetimeFrames, static_cast<float>(Params.Shape.Extent.X));
 	Actor->FinishSpawning(SpawnTransform);
+	// Sent in this frame's net tick, not at the actor's next scheduled update
+	Actor->ForceNetUpdate();
 
 	FGSTN_ActiveProjectile& Projectile = Active.AddDefaulted_GetRef();
 	Projectile.Actor = Actor;
@@ -165,6 +215,122 @@ AGSTN_Projectile* UGSTN_ProjectileSubsystem::FireProjectile(const FGSTN_Projecti
 	UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile %u fired by %d at frame %d from %s, v %s, life %d"), Projectile.Serial, Params.OwnerEntityId,
 		Segment.StartFrame, *Segment.Start.ToCompactString(), *Segment.Velocity.ToCompactString(), Params.LifetimeFrames);
 	return Actor;
+}
+
+AGSTN_Projectile* UGSTN_ProjectileSubsystem::SpawnGhost(const FGSTN_ProjectileParams& InParams, AActor* OwnerActor, int32 StartFrame)
+{
+	UWorld* World = GetWorld();
+	if (!World || HasAuthority() || !OwnerActor || LastFrame == INDEX_NONE || CVarProjectilePredictGhost.GetValueOnGameThread() == 0)
+	{
+		return nullptr;
+	}
+	const int32 First = StartFrame == INDEX_NONE ? LastFrame + 1 : StartFrame;
+	// A resimulated activation fires again at the same frame: the ghost of that shot exists already
+	for (const FGSTN_PendingGhost& Ghost : Ghosts)
+	{
+		if (Ghost.StartFrame == First && Ghost.Owner.Get() == OwnerActor && IsValid(Ghost.Actor))
+		{
+			return Ghost.Actor;
+		}
+	}
+
+	FGSTN_ProjectileParams Params = InParams;
+	Params.LifetimeFrames = FMath::Max(Params.LifetimeFrames, 1);
+	const FGSTN_BallisticSegment Segment = FGSTN_BallisticMode::Quantize(FGSTN_BallisticMode::MakeSegment(Params, First, StepSeconds));
+	const FTransform SpawnTransform = FGSTN_BallisticMode::CarrierAt(Segment, Segment.StartFrame);
+	AGSTN_Projectile* Actor = World->SpawnActorDeferred<AGSTN_Projectile>(AGSTN_Projectile::StaticClass(), SpawnTransform, nullptr, nullptr,
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Actor)
+	{
+		return nullptr;
+	}
+	Actor->InitGhost(Segment, Params.LifetimeFrames, static_cast<float>(Params.Shape.Extent.X));
+	Actor->FinishSpawning(SpawnTransform);
+
+	FGSTN_PendingGhost& Ghost = Ghosts.AddDefaulted_GetRef();
+	Ghost.Actor = Actor;
+	Ghost.Owner = OwnerActor;
+	Ghost.StartFrame = First;
+	++GhostStats.Spawned;
+	UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile ghost spawned for %s at frame %d (last frame %d)"), *OwnerActor->GetName(), First, LastFrame);
+	return Actor;
+}
+
+void UGSTN_ProjectileSubsystem::ReconcileGhostFor(AGSTN_Projectile& Authority)
+{
+	const AActor* Owner = Authority.GetOwner();
+	if (!Owner || Ghosts.IsEmpty() || LastFrame == INDEX_NONE)
+	{
+		return;
+	}
+	const int32 MaxFrameDelta = CVarProjectileGhostMatchFrames.GetValueOnGameThread();
+	const double Tolerance = CVarProjectileGhostToleranceCm.GetValueOnGameThread();
+	int32 Best = INDEX_NONE;
+	double BestError = 0.0;
+	FGSTN_ProjectileGhostReconcile::EResult BestResult = FGSTN_ProjectileGhostReconcile::EResult::NoMatch;
+	for (int32 Index = 0; Index < Ghosts.Num(); ++Index)
+	{
+		const FGSTN_PendingGhost& Ghost = Ghosts[Index];
+		if (Ghost.Owner.Get() != Owner || !IsValid(Ghost.Actor))
+		{
+			continue;
+		}
+		double Error = 0.0;
+		const FGSTN_ProjectileGhostReconcile::EResult Result = FGSTN_ProjectileGhostReconcile::Decide(Ghost.Actor->GetSegment(), Authority.GetSegment(),
+			LastFrame, MaxFrameDelta, Tolerance, Error);
+		if (Result != FGSTN_ProjectileGhostReconcile::EResult::NoMatch && (Best == INDEX_NONE || Error < BestError))
+		{
+			Best = Index;
+			BestError = Error;
+			BestResult = Result;
+		}
+	}
+	if (Best == INDEX_NONE)
+	{
+		return;
+	}
+
+	AGSTN_Projectile* Ghost = Ghosts[Best].Actor;
+	const int32 GhostStart = Ghosts[Best].StartFrame;
+	GhostStats.LastErrorCm = BestError;
+	GhostStats.LastArrivalFrames = LastFrame - GhostStart;
+	if (BestResult == FGSTN_ProjectileGhostReconcile::EResult::Adopt)
+	{
+		// Drawn where the ghost was this frame, then fading into its own path: no pop for a good prediction
+		Authority.StartBlend(Ghost->GetDrawnPositionAt(LastFrame) - FGSTN_BallisticMode::PositionAt(Authority.GetSegment(), LastFrame), LastFrame,
+			CVarProjectileGhostBlendFrames.GetValueOnGameThread());
+		++GhostStats.Adopted;
+		GhostStats.MaxAdoptedErrorCm = FMath::Max(GhostStats.MaxAdoptedErrorCm, BestError);
+	}
+	else
+	{
+		++GhostStats.Snapped;
+	}
+	UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile ghost %s for %s: ghost start %d, host start %d, frame %d, error %.2f cm"),
+		BestResult == FGSTN_ProjectileGhostReconcile::EResult::Adopt ? TEXT("adopted") : TEXT("snapped"), *Owner->GetName(), GhostStart,
+		Authority.GetSegment().StartFrame, LastFrame, BestError);
+	Ghost->Destroy();
+	Ghosts.RemoveAt(Best);
+}
+
+void UGSTN_ProjectileSubsystem::ExpireGhosts(int32 Frame)
+{
+	const int32 Timeout = FMath::Max(CVarProjectileGhostTimeoutFrames.GetValueOnGameThread(), 1);
+	for (int32 Index = Ghosts.Num() - 1; Index >= 0; --Index)
+	{
+		const FGSTN_PendingGhost& Ghost = Ghosts[Index];
+		if (IsValid(Ghost.Actor) && Ghost.Owner.IsValid() && Frame <= Ghost.StartFrame + Timeout)
+		{
+			continue;
+		}
+		if (IsValid(Ghost.Actor))
+		{
+			Ghost.Actor->Destroy();
+		}
+		++GhostStats.Expired;
+		UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile ghost expired: start %d, frame %d, no host projectile"), Ghost.StartFrame, Frame);
+		Ghosts.RemoveAt(Index);
+	}
 }
 
 void UGSTN_ProjectileSubsystem::StepFrame(int32 Frame)
@@ -443,4 +609,153 @@ namespace
 		TEXT("gstn.Projectile.Fire"),
 		TEXT("Fires a test projectile from the host's first player pawn along its facing. Args: [Speed=1500 cm/s] [GravityZ=0 cm/s^2] [LifetimeFrames=120] [Damage=8]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&FireFromConsole));
+
+	/** A dev shot from Pawn along its facing raised by PitchDeg, clear of its capsule (the owner is never hit anyway) */
+	FGSTN_ProjectileParams MakeDevShot(const APawn& Pawn, float Speed, double GravityZ, int32 LifetimeFrames, float PitchDeg, float YawOffsetDeg)
+	{
+		FGSTN_ProjectileParams Params;
+		Params.Speed = Speed;
+		Params.GravityAccel = FVector(0.0, 0.0, GravityZ);
+		Params.LifetimeFrames = FMath::Max(LifetimeFrames, 1);
+		Params.Shape.Type = EGSTN_ShapeType::Sphere;
+		Params.Shape.Extent = FVector(15.0);
+		Params.Hit.Damage = 8.f;
+		Params.Hit.BaseKnockback = 30.f;
+		Params.Hit.AngleDeg = 30.f;
+		FRotator Aim = Pawn.GetActorForwardVector().Rotation();
+		Aim.Pitch = FMath::Clamp(Aim.Pitch + PitchDeg, -89.0, 89.0);
+		Aim.Yaw += YawOffsetDeg;
+		Params.Direction = Aim.Vector();
+		Params.Origin = Pawn.GetActorLocation() + Pawn.GetActorForwardVector() * 80.0;
+		return Params;
+	}
+
+	/**
+	 * gstn.Projectile.GhostFire, run in a client world of a one-process PIE: the harness stand-in for a predicted fire ability (a player's
+	 * shot needs a command binding in content). The client draws its ghost at its own next frame, and the server world fires the shot of
+	 * the same pawn starting at that frame, as the host does for a predicted activation (the input of frame F runs at frame F there)
+	 */
+	void GhostFireFromConsole(const TArray<FString>& Args, UWorld* World)
+	{
+		UGSTN_ProjectileSubsystem* Client = UGSTN_ProjectileSubsystem::Get(World);
+		UWorld* ServerWorld = FindAuthorityWorld(nullptr);
+		UGSTN_ProjectileSubsystem* Server = UGSTN_ProjectileSubsystem::Get(ServerWorld);
+		const APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
+		APawn* Pawn = Controller ? Controller->GetPawn() : nullptr;
+		if (!Client || !Server || World == ServerWorld || !Pawn || !Pawn->GetPlayerState())
+		{
+			UE_LOG(LogGSTNProjectile, Warning, TEXT("gstn.Projectile.GhostFire: run it in a client world of a one-process PIE with a pawn"));
+			return;
+		}
+		APawn* ServerPawn = nullptr;
+		for (FConstPlayerControllerIterator It = ServerWorld->GetPlayerControllerIterator(); It; ++It)
+		{
+			const APlayerController* ServerController = It->Get();
+			if (ServerController && ServerController->PlayerState && ServerController->PlayerState->GetPlayerId() == Pawn->GetPlayerState()->GetPlayerId())
+			{
+				ServerPawn = ServerController->GetPawn();
+			}
+		}
+		if (!ServerPawn)
+		{
+			UE_LOG(LogGSTNProjectile, Warning, TEXT("gstn.Projectile.GhostFire: no server pawn for player %d"), Pawn->GetPlayerState()->GetPlayerId());
+			return;
+		}
+		const float Speed = Args.IsValidIndex(0) ? FCString::Atof(*Args[0]) : 1500.f;
+		const double GravityZ = Args.IsValidIndex(1) ? FCString::Atod(*Args[1]) : 0.0;
+		const int32 Lifetime = Args.IsValidIndex(2) ? FCString::Atoi(*Args[2]) : 120;
+		const float Pitch = Args.IsValidIndex(3) ? FCString::Atof(*Args[3]) : 30.f;
+		const int32 StartFrame = Client->GetLastFrame() + 1;
+		const AGSTN_Projectile* Ghost = Client->SpawnGhost(MakeDevShot(*Pawn, Speed, GravityZ, Lifetime, Pitch, 0.f), Pawn, StartFrame);
+		FGSTN_ProjectileParams HostShot = MakeDevShot(*ServerPawn, Speed, GravityZ, Lifetime, Pitch, 0.f);
+		HostShot.OwnerEntityId = Server->FindEntityIdOf(ServerPawn);
+		const AGSTN_Projectile* Fired = Server->FireProjectileAtFrame(HostShot, StartFrame, ServerPawn);
+		UE_LOG(LogGSTNProjectile, Log, TEXT("ProjectileGhostFire player=%d start=%d clientLast=%d serverLast=%d ghost=%d fired=%d"),
+			Pawn->GetPlayerState()->GetPlayerId(), StartFrame, Client->GetLastFrame(), Server->GetLastFrame(), Ghost ? 1 : 0, Fired ? 1 : 0);
+	}
+
+	void GhostReportFromConsole(const TArray<FString>& Args, UWorld* World)
+	{
+		const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(World);
+		if (!Projectiles)
+		{
+			return;
+		}
+		const FGSTN_ProjectileGhostStats& Stats = Projectiles->GetGhostStats();
+		UE_LOG(LogGSTNProjectile, Log, TEXT("ProjectileGhostReport world=%s spawned=%d adopted=%d snapped=%d expired=%d pending=%d lastErrorCm=%.2f maxAdoptedErrorCm=%.2f lastArrivalFrames=%d received=%d"),
+			*World->GetName(), Stats.Spawned, Stats.Adopted, Stats.Snapped, Stats.Expired, Projectiles->GetNumGhosts(), Stats.LastErrorCm,
+			Stats.MaxAdoptedErrorCm, Stats.LastArrivalFrames, Projectiles->GetNumReceivedFromHost());
+	}
+
+	/** gstn.Projectile.Burst [Count=20] [LifetimeFrames=62] [Speed=1500]: a fan of shots raised 75 degrees from the host's first pawn (misses everyone) */
+	void BurstFromConsole(const TArray<FString>& Args, UWorld* InWorld)
+	{
+		UWorld* World = FindAuthorityWorld(InWorld);
+		UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(World);
+		APawn* Pawn = nullptr;
+		if (World)
+		{
+			for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It && !Pawn; ++It)
+			{
+				Pawn = It->Get() ? It->Get()->GetPawn() : nullptr;
+			}
+		}
+		if (!Projectiles || !Pawn)
+		{
+			UE_LOG(LogGSTNProjectile, Warning, TEXT("gstn.Projectile.Burst: no host world with a pawn"));
+			return;
+		}
+		const int32 Count = Args.IsValidIndex(0) ? FMath::Clamp(FCString::Atoi(*Args[0]), 1, 64) : 20;
+		const int32 Lifetime = Args.IsValidIndex(1) ? FCString::Atoi(*Args[1]) : 62;
+		const float Speed = Args.IsValidIndex(2) ? FCString::Atof(*Args[2]) : 1500.f;
+		int32 Fired = 0;
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			FGSTN_ProjectileParams Params = MakeDevShot(*Pawn, Speed, 0.0, Lifetime, 75.f, 360.f * Index / Count);
+			Params.OwnerEntityId = Projectiles->FindEntityIdOf(Pawn);
+			Fired += Projectiles->FireProjectile(Params) ? 1 : 0;
+		}
+		UE_LOG(LogGSTNProjectile, Log, TEXT("ProjectileBurst fired=%d active=%d total=%u"), Fired, Projectiles->GetNumActive(), Projectiles->GetNumFired());
+	}
+
+	/** gstn.Projectile.NetReport [Label]: the host driver's cumulative wire bytes, per client connection, and the projectiles fired so far */
+	void NetReportFromConsole(const TArray<FString>& Args, UWorld* InWorld)
+	{
+		UWorld* World = FindAuthorityWorld(InWorld);
+		const UNetDriver* Driver = World ? World->GetNetDriver() : nullptr;
+		const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(World);
+		if (!Driver || !Projectiles)
+		{
+			UE_LOG(LogGSTNProjectile, Warning, TEXT("gstn.Projectile.NetReport: no host net driver"));
+			return;
+		}
+		FString PerConn;
+		for (const UNetConnection* Conn : Driver->ClientConnections)
+		{
+			PerConn += FString::Printf(TEXT("%s%d/%d"), PerConn.IsEmpty() ? TEXT("") : TEXT(","), Conn->OutTotalBytes, Conn->OutTotalPackets);
+		}
+		UE_LOG(LogGSTNProjectile, Log, TEXT("ProjectileNet label=%s time=%.3f outBytes=%u conns=%d perConn=%s fired=%u active=%d"),
+			Args.IsValidIndex(0) ? *Args[0] : TEXT("-"), FPlatformTime::Seconds(), Driver->OutTotalBytes, Driver->ClientConnections.Num(), *PerConn,
+			Projectiles->GetNumFired(), Projectiles->GetNumActive());
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs GProjectileGhostFireCommand(
+		TEXT("gstn.Projectile.GhostFire"),
+		TEXT("Client world of a one-process PIE: draws a predicted ghost and has the server fire the same pawn's shot at the ghost's frame. Args: [Speed=1500] [GravityZ=0] [LifetimeFrames=120] [PitchDeg=30]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&GhostFireFromConsole));
+
+	FAutoConsoleCommandWithWorldAndArgs GProjectileGhostReportCommand(
+		TEXT("gstn.Projectile.GhostReport"),
+		TEXT("Logs this world's ghost counts (spawned, adopted, snapped, expired) and the last reconcile error."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&GhostReportFromConsole));
+
+	FAutoConsoleCommandWithWorldAndArgs GProjectileBurstCommand(
+		TEXT("gstn.Projectile.Burst"),
+		TEXT("Host: fires a fan of projectiles raised 75 degrees from the first pawn. Args: [Count=20] [LifetimeFrames=62] [Speed=1500]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&BurstFromConsole));
+
+	FAutoConsoleCommandWithWorldAndArgs GProjectileNetReportCommand(
+		TEXT("gstn.Projectile.NetReport"),
+		TEXT("Host: logs the net driver's cumulative out bytes per client connection and the projectiles fired. Args: [Label]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&NetReportFromConsole));
 }

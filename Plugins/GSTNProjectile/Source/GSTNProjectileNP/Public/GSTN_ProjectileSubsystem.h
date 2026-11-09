@@ -37,8 +37,36 @@ struct GSTNPROJECTILENP_API FGSTN_ActiveProjectile
 	TArray<int32> HitTargets;
 };
 
+/** A ghost the firing client draws while the host's projectile is on its way (slice 3) */
+USTRUCT()
+struct GSTNPROJECTILENP_API FGSTN_PendingGhost
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TObjectPtr<AGSTN_Projectile> Actor;
+
+	/** The shooter, matched against the Owner the host's projectile replicates with */
+	TWeakObjectPtr<AActor> Owner;
+
+	int32 StartFrame = INDEX_NONE;
+};
+
+/** What became of this client's ghosts (harness, gstn.Projectile.GhostReport) */
+struct FGSTN_ProjectileGhostStats
+{
+	int32 Spawned = 0;
+	int32 Adopted = 0;
+	int32 Snapped = 0;
+	int32 Expired = 0;
+	double LastErrorCm = 0.0;
+	double MaxAdoptedErrorCm = 0.0;
+	/** Frames from the ghost's start to the host projectile's arrival, last adoption (the round trip the ghost hid) */
+	int32 LastArrivalFrames = 0;
+};
+
 /**
- * The host's projectiles (entita-dinamiche review §3, option C without the ghost yet). FireProjectile spawns the actor once with its
+ * The host's projectiles (entita-dinamiche review §3, option C; the shooter's predicted ghost since slice 3). FireProjectile spawns the actor once with its
  * ballistic segment, starting at the next fixed frame; after the Network Prediction fixed tick of every frame F the host sweeps each
  * projectile from F - 1 to F against the combat step snapshot of F and posts a normal hit entry (AttackerId = the owner) into the
  * victim's inbox through UGSTN_CombatWorldSubsystem::PostHit, the call minion attacks use. The victim drains it at F + 1 and runs the
@@ -47,7 +75,10 @@ struct GSTNPROJECTILENP_API FGSTN_ActiveProjectile
  * Rollback safety: nothing here is simulation state of a Network Prediction model. The host never resimulates, so the step runs only
  * on non-resimulated frames, and positions are a closed form of the frame number. Clients only read GetLastFrame to draw.
  *
- * Out of this slice: the predicted ghost on the shooter, world collision, projectile versus projectile, deflect, lag compensation,
+ * Predicted ghost: the firing client draws its own prediction of the shot at once (SpawnGhost) instead of one round trip late; the host's
+ * projectile adopts it on arrival (ReconcileGhostFor). Pure presentation: the spawn stays once, on the host, and hits stay the host's.
+ *
+ * Out of these slices: world collision, projectile versus projectile, deflect, lag compensation,
  * a timeline track key (a move fires through FireProjectile from its ability on the host for now).
  */
 UCLASS()
@@ -69,6 +100,32 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "GSTN|Projectile")
 	AGSTN_Projectile* FireProjectile(const FGSTN_ProjectileParams& Params);
+
+	/**
+	 * FireProjectile with the start frame given (INDEX_NONE = the next frame) and the shooter actor that the projectile replicates as
+	 * its Owner (null = the owner entity's actor). A start frame other than the next one is for dev commands and the harness only
+	 * (gstn.Projectile.GhostFire stands in for a predicted activation, which fires on the host at the frame the client predicted)
+	 */
+	AGSTN_Projectile* FireProjectileAtFrame(const FGSTN_ProjectileParams& Params, int32 StartFrame, AActor* OwnerActor);
+
+	/**
+	 * Firing client only (gstn.Projectile.PredictGhost): draws the shot it just predicted as a local ghost starting at StartFrame
+	 * (INDEX_NONE = the next frame, the frame the host will start it at). Once per owner and start frame, so a resimulated activation
+	 * does not spawn a second one. The host's projectile adopts or drops it on arrival; unmatched it goes after GhostTimeoutFrames
+	 */
+	AGSTN_Projectile* SpawnGhost(const FGSTN_ProjectileParams& Params, AActor* OwnerActor, int32 StartFrame = INDEX_NONE);
+
+	/** Client: the host's projectile arrived (its BeginPlay); adopt or drop the matching ghost of its owner, if any */
+	void ReconcileGhostFor(AGSTN_Projectile& Authority);
+
+	const FGSTN_ProjectileGhostStats& GetGhostStats() const { return GhostStats; }
+	int32 GetNumGhosts() const { return Ghosts.Num(); }
+	/** Client: one more host projectile arrived (its BeginPlay); counts spawns received, the "once per projectile" check */
+	void NoteReceivedFromHost() { ++NumReceivedFromHost; }
+	int32 GetNumReceivedFromHost() const { return NumReceivedFromHost; }
+
+	/** Projectiles fired on this host since the world started */
+	uint32 GetNumFired() const { return NextSerial - 1; }
 
 	/** Whether FireProjectile can spawn here now: the host, with a fixed tick seen. The ability's quiet check (a client skips its fire) */
 	bool CanFire() const { return HasAuthority() && LastFrame != INDEX_NONE; }
@@ -100,8 +157,17 @@ private:
 
 	bool HasAuthority() const;
 
+	/** Client: removes ghosts whose host projectile never came (refused or mispredicted shot) */
+	void ExpireGhosts(int32 Frame);
+
 	UPROPERTY()
 	TArray<FGSTN_ActiveProjectile> Active;
+
+	UPROPERTY()
+	TArray<FGSTN_PendingGhost> Ghosts;
+
+	FGSTN_ProjectileGhostStats GhostStats;
+	int32 NumReceivedFromHost = 0;
 
 	uint32 NextSerial = 1;
 	int32 LastFrame = INDEX_NONE;

@@ -3,6 +3,8 @@
 
 #include "Movement/GSTN_BallisticMode.h"
 #include "Misc/AutomationTest.h"
+#include "Serialization/BitReader.h"
+#include "Serialization/BitWriter.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -132,6 +134,70 @@ bool FGSTNProjectileArcAimTest::RunTest(const FString& Parameters)
 	FVector Straight;
 	TestTrue(TEXT("zero gravity aims straight"), FGSTN_BallisticMode::SolveLaunchDirection(FVector::ZeroVector, FVector(3.0, 4.0, 0.0), 1000.0, FVector::ZeroVector, true, Straight)
 		&& Straight.Equals(FVector(0.6, 0.8, 0.0), 1e-12));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNProjectileGhostReconcileTest, "GSTNProjectile.Core.GhostReconcile",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FGSTNProjectileGhostReconcileTest::RunTest(const FString& Parameters)
+{
+	// A shot of 1500 cm/s along a skewed direction with gravity, from an off-grid origin: every component needs rounding
+	FGSTN_ProjectileParams Params;
+	Params.Origin = FVector(1234.5678, -987.6543, 210.0101);
+	Params.Direction = FVector(0.8, 0.5, 0.33);
+	Params.Speed = 1500.f;
+	Params.GravityAccel = FVector(0.0, 0.0, -980.0);
+	const FGSTN_BallisticSegment Raw = FGSTN_BallisticMode::MakeSegment(Params, 1000, 0.016);
+	const FGSTN_BallisticSegment Host = FGSTN_BallisticMode::Quantize(Raw);
+
+	// Wire: what a client decodes is the host's quantized segment, bit for bit, in a few dozen bytes; quantizing again changes nothing
+	FBitWriter Writer(0, true);
+	FGSTN_BallisticSegment Sent = Host;
+	bool bOk = false;
+	Sent.NetSerialize(Writer, nullptr, bOk);
+	TestTrue(TEXT("serialize ok"), bOk);
+	TestTrue(TEXT("spawn payload under 40 bytes"), Writer.GetNumBytes() < 40);
+	AddInfo(FString::Printf(TEXT("segment payload %lld bytes (raw doubles 84)"), Writer.GetNumBytes()));
+	FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+	FGSTN_BallisticSegment Received;
+	Received.NetSerialize(Reader, nullptr, bOk);
+	TestEqual(TEXT("frame"), Received.StartFrame, Host.StartFrame);
+	TestTrue(TEXT("same bits on the client"), Received.Start == Host.Start && Received.Velocity == Host.Velocity
+		&& Received.GravityAccel == Host.GravityAccel && Received.StepSeconds == Host.StepSeconds);
+	const FGSTN_BallisticSegment Again = FGSTN_BallisticMode::Quantize(Host);
+	TestTrue(TEXT("quantize is idempotent"), Again.Start == Host.Start && Again.Velocity == Host.Velocity && Again.GravityAccel == Host.GravityAccel);
+	TestTrue(TEXT("position at frame 1060 identical host/client"), FGSTN_BallisticMode::PositionAt(Received, 1060) == FGSTN_BallisticMode::PositionAt(Host, 1060));
+	TestTrue(TEXT("rounding error under 0.01 cm"), FVector::Dist(Host.Start, Raw.Start) < 0.01);
+
+	// The ghost is the client's prediction of the same shot; reconcile at frame 1015, where the host's projectile arrives
+	double Error = 0.0;
+	TestTrue(TEXT("exact prediction adopts with zero error"),
+		FGSTN_ProjectileGhostReconcile::Decide(Host, Received, 1015, 3, 50.0, Error) == FGSTN_ProjectileGhostReconcile::EResult::Adopt && Error == 0.0);
+
+	FGSTN_ProjectileParams Off = Params;
+	Off.Origin.X += 3.0;
+	const FGSTN_BallisticSegment Near = FGSTN_BallisticMode::Quantize(FGSTN_BallisticMode::MakeSegment(Off, 1000, 0.016));
+	TestTrue(TEXT("3 cm off adopts"), FGSTN_ProjectileGhostReconcile::Decide(Near, Host, 1015, 3, 50.0, Error) == FGSTN_ProjectileGhostReconcile::EResult::Adopt);
+	TestTrue(TEXT("3 cm off: error 3 cm"), FMath::IsNearlyEqual(Error, 3.0, 0.02));
+
+	// One frame late at 1500 cm/s: 24 cm along the path (plus the gravity term), still the same shot within tolerance
+	const FGSTN_BallisticSegment Late = FGSTN_BallisticMode::Quantize(FGSTN_BallisticMode::MakeSegment(Params, 1001, 0.016));
+	TestTrue(TEXT("one frame late adopts"), FGSTN_ProjectileGhostReconcile::Decide(Host, Late, 1015, 3, 50.0, Error) == FGSTN_ProjectileGhostReconcile::EResult::Adopt);
+	TestTrue(TEXT("one frame late: ~24 cm"), Error > 20.0 && Error < 30.0);
+
+	Off.Origin.X += 117.0;
+	const FGSTN_BallisticSegment Far = FGSTN_BallisticMode::Quantize(FGSTN_BallisticMode::MakeSegment(Off, 1000, 0.016));
+	TestTrue(TEXT("120 cm off snaps"), FGSTN_ProjectileGhostReconcile::Decide(Far, Host, 1015, 3, 50.0, Error) == FGSTN_ProjectileGhostReconcile::EResult::Snap);
+	const FGSTN_BallisticSegment Other = FGSTN_BallisticMode::Quantize(FGSTN_BallisticMode::MakeSegment(Params, 1010, 0.016));
+	TestTrue(TEXT("10 frames apart is another shot"), FGSTN_ProjectileGhostReconcile::Decide(Host, Other, 1015, 3, 50.0, Error) == FGSTN_ProjectileGhostReconcile::EResult::NoMatch);
+
+	// Blend: the full offset at adoption, half at 3 of 6 frames, none from frame 6 on
+	const FVector Offset(10.0, -4.0, 2.0);
+	TestTrue(TEXT("blend start"), FGSTN_ProjectileGhostReconcile::BlendOffset(Offset, 1015, 6, 1015) == Offset);
+	TestTrue(TEXT("blend half"), FGSTN_ProjectileGhostReconcile::BlendOffset(Offset, 1015, 6, 1018).Equals(Offset * 0.5, 1e-9));
+	TestTrue(TEXT("blend done"), FGSTN_ProjectileGhostReconcile::BlendOffset(Offset, 1015, 6, 1021).IsZero());
+	TestTrue(TEXT("no blend frames"), FGSTN_ProjectileGhostReconcile::BlendOffset(Offset, 1015, 0, 1015).IsZero());
 	return true;
 }
 

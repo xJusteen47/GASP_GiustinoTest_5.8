@@ -68,13 +68,16 @@ void UGSTN_GA_FireProjectile::FinishFire()
 bool UGSTN_GA_FireProjectile::Fire()
 {
 	UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
-	// A client (and a world without a fixed tick yet) skips the fire: the host's spawn is the only one, and it reaches the client once
-	if (!Projectiles || !Projectiles->CanFire())
+	AActor* Avatar = GetAvatarActorFromActorInfo();
+	if (!Projectiles || !Avatar || Projectiles->GetLastFrame() == INDEX_NONE)
 	{
 		return false;
 	}
-	const AActor* Avatar = GetAvatarActorFromActorInfo();
-	if (!Avatar)
+	// A client never spawns the projectile: the host's spawn is the only one, and it reaches the client once. The client that predicts
+	// its own shot draws the same shot as a ghost instead (once per frame, so a resimulation does not add one), adopted on arrival
+	const bool bHost = Projectiles->CanFire();
+	const FGameplayAbilityActorInfo* Info = GetCurrentActorInfo();
+	if (!bHost && !(Info && Info->IsLocallyControlled()))
 	{
 		return false;
 	}
@@ -119,5 +122,10 @@ bool UGSTN_GA_FireProjectile::Fire()
 		Direction = Launch.Vector();
 	}
 	Params.Direction = Direction;
-	return Projectiles->FireProjectile(Params) != nullptr;
+	if (!bHost)
+	{
+		Projectiles->SpawnGhost(Params, Avatar);
+		return false;
+	}
+	return Projectiles->FireProjectileAtFrame(Params, INDEX_NONE, Avatar) != nullptr;
 }

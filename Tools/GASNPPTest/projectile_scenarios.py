@@ -13,7 +13,9 @@ import unreal
 import gasnpp_test as g
 import defence_scenarios as ds
 
-SUITE_PROJECTILE = ['projectile_ability_hits']
+SUITE_PROJECTILE = ['projectile_ability_hits', 'projectile_ghost_adopt']
+# Measurement, run on its own (listen + 2): wire bytes with ~20 projectiles alive, recorded not judged
+SUITE_PROJECTILE_BYTES = ['projectile_bytes']
 _marks = {}
 
 # (speed cm/s, gravity Z cm/s^2, high arc, lifetime frames): straight, flat arc, lob (a near lob at 1200 cm/s flies ~2.5 s, past 120 frames)
@@ -112,6 +114,116 @@ def scenario_projectile_ability_hits(client=1):
             f"per world {[round(g.damage_of(wi, st['key']), 2) for wi in range(len(g.worlds()))] if st.get('key') else None}"))),
         (10.0, run.finish()),
     ]
+    run.run(steps)
+
+
+_GHOST_REPORT = re.compile(r'ProjectileGhostReport world=(\S+) spawned=(\d+) adopted=(\d+) snapped=(\d+) expired=(\d+) pending=(\d+) '
+                           r'lastErrorCm=([\d.]+) maxAdoptedErrorCm=([\d.]+) lastArrivalFrames=(-?\d+) received=(\d+)')
+_GHOST_ROW = re.compile(r'Projectile ghost (adopted|snapped) for \S+: ghost start (-?\d+), host start (-?\d+), frame (-?\d+), error ([\d.]+) cm')
+
+
+def scenario_projectile_ghost_adopt(client=1):
+    """Slice 3, predicted ghost: the client fires three shots through gstn.Projectile.GhostFire (its ghost at its next frame, the server
+    fires the same pawn's shot starting at that frame, as for a predicted activation). On that client each ghost is adopted by the host's
+    projectile when it arrives (same start frame, error under 1 cm, none snapped or expired), after a positive number of frames (the round
+    trip the ghost hid). With gstn.Projectile.PredictGhost 0 a fourth shot draws no ghost"""
+    run = g._Run('projectile_ghost_adopt', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def report():
+        _cmd('gstn.Projectile.GhostReport', client)
+        rows = _GHOST_REPORT.findall(_log())
+        st['report'] = rows[-1] if rows else None
+        st['rows'] = _GHOST_ROW.findall(_log())
+        return f"report {st['report']}"
+
+    def cvar_off_shot():
+        _cmd('gstn.Projectile.PredictGhost 0', client)
+        _cmd('gstn.Projectile.GhostFire 1500 0 90 30', client)
+        _cmd('gstn.Projectile.PredictGhost 1', client)
+        return 'shot with the ghost off'
+
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('straight', _cmd('gstn.Projectile.GhostFire 1500 0 90 30', client))),
+        (2.0, lambda: ('arc', _cmd('gstn.Projectile.GhostFire 1200 -980 90 40', client))),
+        (3.5, lambda: ('fast', _cmd('gstn.Projectile.GhostFire 3000 0 60 20', client))),
+        (5.0, lambda: ('report', report())),
+        (5.5, lambda: ('ghost off', cvar_off_shot())),
+        (7.0, lambda: ('report', report())),
+        (7.5, run.at('three ghost fires, each fired on the server', lambda: (
+            len(f := re.findall(r'ProjectileGhostFire player=\S+ start=(-?\d+) .* ghost=(\d) fired=(\d)', _log())) == 4
+            and all(x[2] == '1' for x in f) and [x[1] for x in f] == ['1', '1', '1', '0'], f'{f}'))),
+        (7.5, run.at('each ghost adopted by the host projectile, same start frame, error < 1 cm', lambda: (
+            len(st['rows']) == 3 and all(r[0] == 'adopted' and r[1] == r[2] and float(r[4]) < 1.0 for r in st['rows']), f"{st['rows']}"))),
+        (7.5, run.at('client ghost counts: 3 spawned, 3 adopted, 0 snapped, 0 expired, 0 pending; arrival > 0 frames', lambda: (
+            st['report'] is not None and st['report'][1:6] == ('3', '3', '0', '0', '0') and int(st['report'][8]) > 0, f"{st['report']}"))),
+        (7.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+_NET_ROW = re.compile(r'ProjectileNet label=(\S+) time=([\d.]+) outBytes=(\d+) conns=(\d+) perConn=(\S*) fired=(\d+) active=(\d+)')
+
+
+def scenario_projectile_bytes(client=1):
+    """Slice 3, replication at scale (recorded, not judged): wire bytes of the host per client connection over three 10 s windows, idle,
+    then ~20 projectiles alive as 20 shots per second living 62 frames, then ~20 alive as 10 shots per second living 124 frames. If the
+    spawn is the only payload, the extra bytes follow the spawn rate, not the number alive: window C costs about half of window B"""
+    run = g._Run('projectile_bytes', client, judge_reconciles=False, sample=False)
+    st = {'active': []}
+
+    def snap(label):
+        _cmd(f'gstn.Projectile.NetReport {label}')
+        return label
+
+    def burst(count, life):
+        _cmd(f'gstn.Projectile.Burst {count} {life}')
+        m = re.findall(r'ProjectileBurst fired=(\d+) active=(\d+)', _log())
+        if m:
+            st['active'].append(int(m[-1][1]))
+        return f'burst {count} {life}'
+
+    def windows():
+        rows = {r[0]: r for r in _NET_ROW.findall(_log())}
+        out = {}
+        for name, a, b in (('idle', 'a0', 'a1'), ('20x62', 'b0', 'b1'), ('10x124', 'c0', 'c1')):
+            if a in rows and b in rows:
+                dt = float(rows[b][1]) - float(rows[a][1])
+                ca = [int(x.split('/')[0]) for x in rows[a][4].split(',') if x]
+                cb = [int(x.split('/')[0]) for x in rows[b][4].split(',') if x]
+                per = [(y - x) / dt / 1000.0 for x, y in zip(ca, cb)]
+                out[name] = (round(dt, 2), [round(v, 2) for v in per], int(rows[b][5]) - int(rows[a][5]))
+        st['w'] = out
+        return out
+
+    def judge():
+        w = windows()
+        if not all(k in w for k in ('idle', '20x62', '10x124')):
+            return False, f'windows {w}'
+        idle = w['idle'][1]
+        for name in ('20x62', '10x124'):
+            extra = [b - a for a, b in zip(idle, w[name][1])]
+            fired = w[name][2]
+            per_shot = [round(e * 1000.0 * w[name][0] / fired, 1) for e in extra] if fired else []
+            msg = f'{name}: {w[name][1]} KB/s per client (idle {idle}), extra {[round(e, 2) for e in extra]} KB/s, fired {fired}, ~{per_shot} B per projectile per client'
+            run.note(msg)
+            unreal.log(f'ProjectileBytes {msg}')
+        for wi in range(1, len(g.worlds())):
+            _cmd('gstn.Projectile.GhostReport', wi)
+        received = [int(r[9]) for r in _GHOST_REPORT.findall(_log())[-(len(g.worlds()) - 1):]]
+        fired_total = int({r[0]: r for r in _NET_ROW.findall(_log())}['c1'][5])
+        unreal.log(f"ProjectileBytes alive at each burst {st['active']}; fired {fired_total}, received per client {received}")
+        return (w['20x62'][2] >= 190 and w['10x124'][2] >= 95 and received and all(n == fired_total for n in received),
+                f'windows {w} fired {fired_total} received {received}')
+
+    steps = [(0.0, lambda: ('setup', _setup())), (1.0, lambda: ('snap', snap('a0'))), (11.0, lambda: ('snap', snap('a1'))), (11.05, lambda: ('snap', snap('b0')))]
+    for k in range(10):
+        steps.append((11.1 + k, lambda: ('burst', burst(20, 62))))
+    steps += [(21.05, lambda: ('snap', snap('b1'))), (21.1, lambda: ('snap', snap('c0')))]
+    for k in range(10):
+        steps.append((21.15 + k, lambda: ('burst', burst(10, 124))))
+    steps += [(31.1, lambda: ('snap', snap('c1'))), (31.5, run.at('all bursts fired, every client received each projectile once (bytes in the log)', judge)), (31.6, run.finish())]
     run.run(steps)
 
 

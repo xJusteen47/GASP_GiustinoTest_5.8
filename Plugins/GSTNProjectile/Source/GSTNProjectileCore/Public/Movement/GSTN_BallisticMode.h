@@ -85,6 +85,19 @@ struct GSTNPROJECTILECORE_API FGSTN_BallisticSegment
 	/** Seconds per fixed-tick frame (0.016 at 62.5 Hz) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
 	double StepSeconds = 0.016;
+
+	/**
+	 * The spawn's only wire payload (slice 3): the frame packed, each vector component as a packed integer of 1/100 cm (or cm/s,
+	 * cm/s^2), the step as whole milliseconds. Exactly the values FGSTN_BallisticMode::Quantize keeps, so a host that quantizes its
+	 * own segment first sweeps the very bits every client replays. About 20-35 bytes against 84 for the raw doubles
+	 */
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FGSTN_BallisticSegment> : public TStructOpsTypeTraitsBase2<FGSTN_BallisticSegment>
+{
+	enum { WithNetSerializer = true };
 };
 
 /**
@@ -122,6 +135,40 @@ struct GSTNPROJECTILECORE_API FGSTN_BallisticMode
 	 */
 	static bool SolveLaunchDirection(const FVector& Origin, const FVector& Target, double Speed, const FVector& GravityAccel, bool bHighArc, FVector& OutDirection);
 
+	/**
+	 * The segment as it crosses the wire: vector components rounded to 1/100 (cm, cm/s, cm/s^2), the step to whole milliseconds.
+	 * Idempotent. The host spawns with the quantized segment, so host and clients compute the same positions bit for bit
+	 */
+	static FGSTN_BallisticSegment Quantize(const FGSTN_BallisticSegment& Segment);
+
 	/** The first frame in (StartFrame, LastFrame] whose SweepStep touches Target, INDEX_NONE when none does. For tests and tools */
 	static int32 FindFirstContactFrame(const FGSTN_BallisticSegment& Segment, const FGSTN_HitShape& Shape, const FGSTN_HitShape& Target, const FTransform& TargetWorld, int32 LastFrame);
+};
+
+/**
+ * The predicted ghost's reconcile rule (slice 3), pure so it is tested headless. The firing client draws a ghost from its own prediction
+ * of the shot at once; when the host's projectile from the same owner arrives one round trip later, both are drawn at the same frame
+ * number, so their distance there is the whole misprediction. Within the tolerance the host's projectile adopts the ghost: it takes over
+ * drawn at the ghost's place and the offset fades to zero over a few frames (no pop). Beyond it the ghost is dropped and the host's
+ * projectile shows where it truly is (a snap). Presentation only: hits are the host's alone.
+ */
+struct GSTNPROJECTILECORE_API FGSTN_ProjectileGhostReconcile
+{
+	enum class EResult : uint8
+	{
+		/** Not this ghost's shot: different start frame beyond MaxFrameDelta */
+		NoMatch,
+		/** Same shot, within the tolerance: adopt and blend */
+		Adopt,
+		/** Same shot, mispredicted beyond the tolerance: drop the ghost, show the host's projectile where it is */
+		Snap
+	};
+
+	/** Distance between the two drawn positions at Frame */
+	static double PositionError(const FGSTN_BallisticSegment& Ghost, const FGSTN_BallisticSegment& Authority, int32 Frame);
+
+	static EResult Decide(const FGSTN_BallisticSegment& Ghost, const FGSTN_BallisticSegment& Authority, int32 Frame, int32 MaxFrameDelta, double ToleranceCm, double& OutErrorCm);
+
+	/** The offset drawn on the adopting projectile: InitialOffset at AdoptFrame, linearly to zero at AdoptFrame + BlendFrames */
+	static FVector BlendOffset(const FVector& InitialOffset, int32 AdoptFrame, int32 BlendFrames, int32 Frame);
 };

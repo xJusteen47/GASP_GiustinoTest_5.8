@@ -30,8 +30,9 @@ enum class EGSTN_ProjectileAim : uint8
  * Determinism and spawn-once: the ability runs predicted like every combat ability (the wait is a sync variable of UGSTN_GA_Base), but
  * the fire itself is a host side effect: on a client the call is skipped (CanFire is false), on the host it runs once because the host
  * never resimulates. The shot starts from the owner's combat snapshot transform (the pose hits are judged against), not from a Mover
- * query. The projectile's own frames are a closed form, so nothing of it becomes ability state. The predicted ghost on the shooter is a
- * later slice: until then a client sees its own shot one round trip late.
+ * query. The projectile's own frames are a closed form, so nothing of it becomes ability state. On the client that predicts the ability
+ * the same shot is built from its own snapshot and drawn at once as a ghost (UGSTN_ProjectileSubsystem::SpawnGhost, slice 3), so the
+ * shooter does not see the shot one round trip late; the host's projectile adopts the ghost when it arrives.
  *
  * Blueprint children set the template, the delay and the aim; a timeline track key will replace FireDelayFrames for moves later.
  */
@@ -76,7 +77,7 @@ public:
 protected:
 	virtual void OnCombatFramesElapsed() override;
 
-	/** Builds the shot and hands it to the host. Returns whether a projectile was spawned (always false on a client) */
+	/** Builds the shot and hands it to the host, or to the ghost on the predicting client. Whether a projectile was spawned (false on a client) */
 	bool Fire();
 
 	/** Fired or skipped: the ability is done */
