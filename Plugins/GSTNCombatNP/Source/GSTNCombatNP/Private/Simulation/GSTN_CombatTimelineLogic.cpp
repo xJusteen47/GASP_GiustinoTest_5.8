@@ -36,6 +36,7 @@ namespace
 		Core.TimelineStartFrame = Frame;
 		Core.TimelinePausedFrames = 0;
 		Core.RecoilStartFrame = INDEX_NONE;
+		Core.HardContact = FGSTN_HardContactState();
 		// The hits of the previous run do not count for this one; the caller writes the move origin
 		Core.Hit.ResetRun();
 	}
@@ -78,6 +79,7 @@ void FGSTN_CombatTimelineLogic::ClearTimeline(FGSTN_CombatSyncCore& Core)
 	Core.TimelineStartFrame = INDEX_NONE;
 	Core.TimelinePausedFrames = 0;
 	Core.RecoilStartFrame = INDEX_NONE;
+	Core.HardContact = FGSTN_HardContactState();
 }
 
 bool FGSTN_CombatTimelineLogic::StartRecoil(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback)
@@ -158,6 +160,18 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	// The previous evaluation was the frame before this one (the start frame was evaluated by EvaluateStart)
 	// (the pause count as of that frame, so before this frame's own pause is added)
 	const int32 Previous = Frame - 1 - Core.TimelineStartFrame - Core.TimelinePausedFrames;
+
+	// FinishThenRecoil (plan precisione-weakpoint 2): the swing that met a hard face has played its active frames, the recoil replaces the
+	// recovery from here. A hitstop frame keeps the timeline where it is, so the check waits for a frame that advances
+	if (Core.HardContact.bRecoilPending && !bHitstopFrame && Previous + 1 >= Data->GetActiveEndFrame())
+	{
+		Core.HardContact.bRecoilPending = false;
+		if (ResolveRicochet(Data, RicochetFallback))
+		{
+			Core.RecoilStartFrame = Frame;
+			return AdvanceClock(Core, Frame, Data, DefaultOverrideFrames, bAbilityActive, Output, false, RicochetFallback, HookEnvironment);
+		}
+	}
 
 	// The track hooks of the plugins (a hold stalls the timeline, a parry track stamps a window): asked before the pause is counted, with the frame the timeline is on.
 	// A stall is a pause like the hitstop's, but it does not touch PausedFramesTotal, so the combat clock and the buffers keep running

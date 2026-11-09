@@ -69,3 +69,16 @@ EDataValidationResult UGSTN_CombatTimeline::IsDataValid(FDataValidationContext& 
 	return Result;
 }
 #endif
+
+int32 FGSTN_CombatTimelineData::GetActiveEndFrame() const
+{
+	int32 End = 0;
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Tracks)
+	{
+		if (const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>(); HitboxTrack && !HitboxTrack->Hitboxes.IsEmpty())
+		{
+			End = FMath::Max(End, HitboxTrack->EndFrame);
+		}
+	}
+	return End;
+}

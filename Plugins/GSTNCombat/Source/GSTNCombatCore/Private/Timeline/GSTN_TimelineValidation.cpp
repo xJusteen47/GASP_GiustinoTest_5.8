@@ -265,4 +265,23 @@ void FGSTN_TimelineValidation::Validate(const FGSTN_CombatTimelineData& Data, co
 			}
 		}
 	}
+
+	// Plan precisione-weakpoint 2: a stab with long active frames (an aerial thrust) usually wants to finish its swing on a hard part
+	if (Data.StrikeKind == EGSTN_StrikeKind::Stab && Data.ResolveHardSurfaceBehaviour() == EGSTN_HardSurfaceBehaviour::ImmediateRecoil)
+	{
+		constexpr int32 LongStabActiveFrames = 12;
+		int32 FirstActive = MAX_int32;
+		for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
+		{
+			if (const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>(); HitboxTrack && !HitboxTrack->Hitboxes.IsEmpty())
+			{
+				FirstActive = FMath::Min(FirstActive, HitboxTrack->StartFrame);
+			}
+		}
+		const int32 ActiveFrames = FirstActive == MAX_int32 ? 0 : Data.GetActiveEndFrame() - FirstActive;
+		if (ActiveFrames > LongStabActiveFrames)
+		{
+			Add(OutMessages, false, FString::Printf(TEXT("A stab with %d active frames recoils at once on a hard part; long active stabs usually use FinishThenRecoil."), ActiveFrames));
+		}
+	}
 }

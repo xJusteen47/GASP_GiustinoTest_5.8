@@ -88,6 +88,17 @@ struct GSTNCOMBATCORE_API FGSTN_Hurtbox
 	/** Optional way in for a hurtbox enclosed by another (a cavity behind armour). Off by default; see FGSTN_HurtboxOpening */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Opening")
 	FGSTN_HurtboxOpening Opening;
+
+	/**
+	 * A deep weak point (plan precisione-weakpoint 3): only a Stab timeline whose hitbox travels within StabMaxAngleDeg of the way in (against
+	 * the face normal at the entry point) touches it; anything else passes as if it were not there. Author it a few cm outside the hard shell
+	 * so a precise strike meets it before the shell
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Stab")
+	bool bStabOnly = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Stab", meta = (EditCondition = "bStabOnly", ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
+	float StabMaxAngleDeg = 30.f;
 };
 
 /**
@@ -118,6 +129,13 @@ struct GSTNCOMBATCORE_API FGSTN_ExtraHurtbox
 	/** Who contributed it: the contributor's feature id (GSTNFeatureIds), so a step can tell a bubble from another extra without a tag */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
 	uint8 Source = 0;
+
+	/** As FGSTN_Hurtbox::bStabOnly */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Stab")
+	bool bStabOnly = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Stab", meta = (EditCondition = "bStabOnly", ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
+	float StabMaxAngleDeg = 30.f;
 };
 
 /** The extras of one entity in a snapshot or a history record: inline, because there are at most MaxExtraHurtboxes and most frames none */

@@ -383,6 +383,47 @@ bool UGSTN_HitShapeUtils::SweptOverlap(const FGSTN_HitShape& A, const FTransform
 	return false;
 }
 
+FVector UGSTN_HitShapeUtils::OutwardNormal(const FGSTN_HitShape& Shape, const FTransform& World, const FVector& Point, const FVector& Fallback)
+{
+	const FWorldShape Resolved = Resolve(Shape, World);
+	switch (Resolved.Type)
+	{
+	case EGSTN_ShapeType::Sphere:
+		return (Point - Resolved.Center).GetSafeNormal(UE_KINDA_SMALL_NUMBER, Fallback);
+	case EGSTN_ShapeType::Capsule:
+	{
+		const FVector A = Resolved.CapsuleP0();
+		const FVector AB = Resolved.CapsuleP1() - A;
+		const double LengthSq = AB | AB;
+		const double T = LengthSq > 0.0 ? FMath::Clamp(((Point - A) | AB) / LengthSq, 0.0, 1.0) : 0.0;
+		return (Point - (A + AB * T)).GetSafeNormal(UE_KINDA_SMALL_NUMBER, Fallback);
+	}
+	case EGSTN_ShapeType::Box:
+	{
+		const FVector Local = Resolved.Rotation.UnrotateVector(Point - Resolved.Center);
+		int32 Axis = INDEX_NONE;
+		double Best = 0.0;
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			const double Ratio = Resolved.Half[Index] > UE_SMALL_NUMBER ? FMath::Abs(Local[Index]) / Resolved.Half[Index] : 0.0;
+			if (Ratio > Best)
+			{
+				Best = Ratio;
+				Axis = Index;
+			}
+		}
+		if (Axis == INDEX_NONE)
+		{
+			return Fallback;
+		}
+		FVector Normal = FVector::ZeroVector;
+		Normal[Axis] = Local[Axis] >= 0.0 ? 1.0 : -1.0;
+		return Resolved.Rotation.RotateVector(Normal);
+	}
+	}
+	return Fallback;
+}
+
 FGSTN_HitShape UGSTN_HitShapeUtils::ScaleShape(const FGSTN_HitShape& Shape, float Scale)
 {
 	FGSTN_HitShape Result = Shape;

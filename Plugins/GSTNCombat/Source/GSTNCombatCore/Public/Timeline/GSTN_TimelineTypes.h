@@ -32,6 +32,55 @@ enum class EGSTN_AimPolicy : uint8
 };
 
 /**
+ * The shape of the strike (plan precisione-weakpoint 2): what the hard-surface default and the stab-only hurtboxes read. Unspecified is every
+ * timeline authored before the classification; it keeps the old hard-surface behaviour (immediate recoil) until the author picks a kind.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_StrikeKind : uint8
+{
+	Unspecified,
+	/** A cut: the blade travels sideways. Default hard-surface behaviour FinishThenRecoil */
+	Swing,
+	/** A thrust along the blade. Default ImmediateRecoil; the only kind that reaches stab-only hurtboxes */
+	Stab
+};
+
+/** What an attack does when it lands on a part too hard for it (a ricochet; plan precisione-weakpoint 2) */
+UENUM(BlueprintType)
+enum class EGSTN_HardSurfaceBehaviour : uint8
+{
+	/** From the strike kind: Swing finishes then recoils, Stab and Unspecified recoil at once */
+	Auto,
+	/** The swing completes its active frames (sliding along the surface when the timeline's deflection is on), then the recoil replaces the recovery */
+	FinishThenRecoil,
+	/** The recoil starts on the frame after the contact (the M4 H12 behaviour) */
+	ImmediateRecoil
+};
+
+/**
+ * How a swing slides along a hard surface after a ricochet (plan precisione-weakpoint 1). The slide is recomputed every tick from the timeline,
+ * the contact frame and the quantised contact normal of the sync state (FGSTN_HardContactState), so every machine sweeps the same bent path.
+ * Only Root and BakedSocket hitboxes slide; WorldAtMoveStart hitboxes keep their authored path.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_SweepDeflection
+{
+	GENERATED_BODY()
+
+	/** Off = the swing keeps its authored path through the hard part (which it no longer hits) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Deflection")
+	bool bEnabled = true;
+
+	/** The largest bend of one frame's motion the slide accepts; a steeper hit stops the blade (its hitboxes close for the rest of the swing) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Deflection", meta = (EditCondition = "bEnabled", ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
+	float MaxDeflectAngleDeg = 60.f;
+
+	/** Frames after the contact during which the path bends; after them the offset reached so far is kept and the path follows the authored motion */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Deflection", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "Frames"))
+	int32 MaxDeflectFrames = 8;
+};
+
+/**
  * Condition of a cancel window. OnHit/OnBlock are false until hits exist (M4); OnWhiff is "not hit yet". OnParry is the value of the
  * defence plugin (M6): it is data only here, false in every state this module writes, so a plugin that raises the parry confirm gives it a meaning.
  */
@@ -518,6 +567,31 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet", meta = (EditCondition = "bHasRicochetResponse"))
 	FGSTN_RicochetResponse RicochetResponse;
+
+	/** Cut or thrust: the default of HardSurfaceBehaviour and the key to stab-only hurtboxes */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet")
+	EGSTN_StrikeKind StrikeKind = EGSTN_StrikeKind::Unspecified;
+
+	/** Auto follows StrikeKind; an aerial stab with long active frames is the usual reason to pick FinishThenRecoil by hand */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet")
+	EGSTN_HardSurfaceBehaviour HardSurfaceBehaviour = EGSTN_HardSurfaceBehaviour::Auto;
+
+	/** The slide along the hard surface while FinishThenRecoil completes the swing */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet")
+	FGSTN_SweepDeflection SweepDeflection;
+
+	/** HardSurfaceBehaviour with Auto resolved: never Auto */
+	EGSTN_HardSurfaceBehaviour ResolveHardSurfaceBehaviour() const
+	{
+		if (HardSurfaceBehaviour != EGSTN_HardSurfaceBehaviour::Auto)
+		{
+			return HardSurfaceBehaviour;
+		}
+		return StrikeKind == EGSTN_StrikeKind::Swing ? EGSTN_HardSurfaceBehaviour::FinishThenRecoil : EGSTN_HardSurfaceBehaviour::ImmediateRecoil;
+	}
+
+	/** One past the last frame any hitbox track is open (0 with none): where a FinishThenRecoil recoil begins */
+	int32 GetActiveEndFrame() const;
 
 	/** The ricochet response of this timeline, null if none is authored */
 	const FGSTN_RicochetResponse* GetRicochetResponse() const

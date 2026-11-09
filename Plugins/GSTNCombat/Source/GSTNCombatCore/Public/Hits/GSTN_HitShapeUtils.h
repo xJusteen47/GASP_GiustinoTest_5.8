@@ -43,6 +43,13 @@ public:
 	static FGSTN_HitShape ScaleShape(const FGSTN_HitShape& Shape, float Scale);
 
 	/**
+	 * The outward unit normal of Shape (placed by World) at the surface point closest to Point: from the centre (sphere), the core segment
+	 * (capsule) or the face whose slab Point is furthest out of, relative to the half size (box). Fallback when nothing defines one (Point
+	 * on the centre). Used for the hit-face normal of the ricochet slide and of stab-only hurtboxes
+	 */
+	static FVector OutwardNormal(const FGSTN_HitShape& Shape, const FTransform& World, const FVector& Point, const FVector& Fallback);
+
+	/**
 	 * The transform of a hitbox's path at Frame (frames since the start of its track): linear between the two keys around it,
 	 * slerp for the rotation, the nearest key outside the keyed range. Keys must be sorted by Frame. No keys = identity.
 	 */

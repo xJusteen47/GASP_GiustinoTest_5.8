@@ -132,14 +132,18 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 			}
 		}
 	}
-	// A ricochet ends the timeline into its recoil (M4 H12). No hitstop, confirm or meter were given to the attacker (the tick wrote none)
-	for (const FGSTN_AttackerHit& Hit : AttackerHits)
+	// A ricochet ends the timeline into its recoil (M4 H12). No hitstop, confirm or meter were given to the attacker (the tick wrote none).
+	// A FinishThenRecoil timeline keeps swinging: the tick wrote the hard contact and AdvanceClock starts the recoil after the active frames
+	if (In.Timeline->ResolveHardSurfaceBehaviour() == EGSTN_HardSurfaceBehaviour::ImmediateRecoil)
 	{
-		if (Hit.bRicochet)
+		for (const FGSTN_AttackerHit& Hit : AttackerHits)
 		{
-			const UGSTN_CombatTableSet& Set = Tables();
-			FGSTN_CombatTimelineLogic::StartRecoil(Core, Frame, GetRegistryTimeline(Set, Core.ActiveTimeline), Set.GetRicochetFallback(Core.ActiveWeaponIndex));
-			break;
+			if (Hit.bRicochet)
+			{
+				const UGSTN_CombatTableSet& Set = Tables();
+				FGSTN_CombatTimelineLogic::StartRecoil(Core, Frame, GetRegistryTimeline(Set, Core.ActiveTimeline), Set.GetRicochetFallback(Core.ActiveWeaponIndex));
+				break;
+			}
 		}
 	}
 	for (const FGSTN_AttackerHit& Hit : AttackerHits)

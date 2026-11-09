@@ -3,6 +3,7 @@
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatVictim.h"
 
+#include "HAL/IConsoleManager.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitRunner.h"
 #include "Hits/GSTN_HitShapeUtils.h"
@@ -64,6 +65,10 @@ namespace
 		FVector HitLocation = FVector::ZeroVector;
 		FVector HitboxCenter = FVector::ZeroVector;
 		FVector HitboxVelocity = FVector::ZeroVector;
+		FVector PreviousHitboxCenter = FVector::ZeroVector;
+
+		/** The shape's local Z in the world (a blade's length), for the case of a hard contact */
+		FVector BladeAxis = FVector::UpVector;
 
 		/** What the target ring stores for this hit: the group, plus the re-hit interval's index for a hitbox that has one (S1) */
 		uint8 TargetKey = 0;
@@ -103,6 +108,90 @@ namespace
 	FVector ShapeCenter(const FGSTN_HitShape& Shape, const FTransform& Carrier)
 	{
 		return (Shape.Local * Carrier).GetLocation();
+	}
+
+	/** Case A / case B threshold of the hard-surface slide (plan precisione-weakpoint 1). Read by the simulation: set it the same on every machine */
+	TAutoConsoleVariable<float> CVarDeflectFlatAngleDeg(TEXT("gstn.Combat.DeflectFlatAngleDeg"), 35.f,
+		TEXT("Angle (deg) between the hit face normal and the blade flat's normal at or below which a ricochet slides along the flat (no recoil); above it the face opposes the blade (recoil after the swing). Useful 30-40."));
+
+	/**
+	 * Bends a hitbox carrier along the hard contact face (plan precisione-weakpoint 1). The authored motion of the shape centre, frame by frame
+	 * in root space from the contact on, loses its component into the face; the sum of what was removed is the offset of this frame. A frame
+	 * whose motion would bend more than MaxDeflectAngleDeg stops the blade: true = the hitbox is closed for the rest of the swing. Pure
+	 * function of the timeline, the frame and the quantised contact, so it gives the same path on every machine and in a resimulation
+	 */
+	bool ApplyDeflection(const FGSTN_HitboxSpec& Spec, const FGSTN_CombatTimelineData& Timeline, const FGSTN_CombatSyncCore& Core, const FTransform& Root,
+		int32 TimelineFrame, int32 TrackFrame, FTransform& InOutCarrier)
+	{
+		const FGSTN_HardContactState& Contact = Core.HardContact;
+		const FGSTN_SweepDeflection& Deflection = Timeline.SweepDeflection;
+		if (!Contact.IsSet() || !Deflection.bEnabled || TimelineFrame <= Contact.TimelineFrame
+			|| (Spec.Space != EGSTN_HitboxSpace::Root && Spec.Space != EGSTN_HitboxSpace::BakedSocket))
+		{
+			return false;
+		}
+		const FVector Normal = Contact.GetNormal();
+		const double MinCos = FMath::Cos(FMath::DegreesToRadians(static_cast<double>(FMath::Clamp(Deflection.MaxDeflectAngleDeg, 0.f, 90.f))));
+		const int32 LastFrame = FMath::Min(TimelineFrame, Contact.TimelineFrame + FMath::Max(Deflection.MaxDeflectFrames, 0));
+		auto LocalCenter = [&](int32 Frame, FVector& OutCenter)
+		{
+			FTransform Local;
+			if (!BuildCarrier(Spec, Timeline, Core, FTransform::Identity, Frame, FMath::Max(TrackFrame - (TimelineFrame - Frame), 0), Local))
+			{
+				return false;
+			}
+			OutCenter = ShapeCenter(Spec.Shape, Local);
+			return true;
+		};
+
+		FVector Offset = FVector::ZeroVector;
+		FVector Previous;
+		if (!LocalCenter(Contact.TimelineFrame, Previous))
+		{
+			return false;
+		}
+		for (int32 Frame = Contact.TimelineFrame + 1; Frame <= LastFrame; ++Frame)
+		{
+			FVector Current;
+			if (!LocalCenter(Frame, Current))
+			{
+				return false;
+			}
+			const FVector Step = Current - Previous;
+			Previous = Current;
+			const double Into = Step | Normal;
+			if (Into >= 0.0)
+			{
+				continue;
+			}
+			const double Length = Step.Size();
+			const FVector Slide = Step - Normal * Into;
+			if (Length > UE_KINDA_SMALL_NUMBER && Slide.Size() / Length < MinCos)
+			{
+				// Too steep to slide: the blade stops against the face
+				return true;
+			}
+			Offset -= Normal * Into;
+		}
+		InOutCarrier.AddToTranslation(Root.TransformVectorNoScale(Offset));
+		return false;
+	}
+
+	/** Stab-only hurtboxes (plan precisione-weakpoint 3): a Stab timeline whose hitbox travels into the face within the hurtbox's angle */
+	bool PassesStabOnly(bool bStabOnly, float StabMaxAngleDeg, const FGSTN_CombatTimelineData& Timeline, const FGSTN_HitShape& HurtShape, const FTransform& VictimTransform,
+		const FVector& PreviousCenter, const FVector& Center)
+	{
+		if (!bStabOnly)
+		{
+			return true;
+		}
+		const FVector Travel = (Center - PreviousCenter).GetSafeNormal();
+		if (Timeline.StrikeKind != EGSTN_StrikeKind::Stab || Travel.IsZero())
+		{
+			return false;
+		}
+		const FVector Normal = UGSTN_HitShapeUtils::OutwardNormal(HurtShape, VictimTransform, PreviousCenter, -Travel);
+		return (Travel | -Normal) >= FMath::Cos(FMath::DegreesToRadians(static_cast<double>(FMath::Clamp(StabMaxAngleDeg, 0.f, 90.f)))) - UE_KINDA_SMALL_NUMBER;
 	}
 
 	int32 CountTargetsOfGroup(const FGSTN_HitSyncState& Hit, int32 TimelineStartFrame, uint8 HitGroup)
@@ -161,6 +250,12 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		{
 			PreviousCarrier = Carrier;
 		}
+		// The slide along a hard face; a blade the face stopped has no hitbox left
+		if (ApplyDeflection(Spec, *In.Timeline, Core, In.Root, In.TimelineFrame, Active.TrackFrame, Carrier))
+		{
+			continue;
+		}
+		ApplyDeflection(Spec, *In.Timeline, Core, In.Root, FMath::Max(In.TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier);
 
 		if (In.DebugShapes)
 		{
@@ -235,10 +330,17 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			// 4: overlap against the hurtboxes the victim's modifiers leave hittable
 			const FGSTN_HitShape HitShape = Variant && !FMath::IsNearlyEqual(Variant->ShapeScale, 1.f) ? UGSTN_HitShapeUtils::ScaleShape(Spec.Shape, Variant->ShapeScale) : Spec.Shape;
 			const TArray<FGSTN_Hurtbox>& Hurtboxes = Victim.Hurtboxes->Hurtboxes;
+			// The hard hurtbox this swing already met is behind the blade: it slides on it, it does not hit it again
+			const int32 HardHurtbox = Core.HardContact.IsSet() && Core.HardContact.VictimId == Victim.EntityId ? Core.HardContact.Hurtbox : INDEX_NONE;
+			const FVector PreviousCenter = ShapeCenter(Spec.Shape, PreviousCarrier);
 			Overlapped.Reset();
 			for (int32 HurtIndex = 0; HurtIndex < Hurtboxes.Num(); ++HurtIndex)
 			{
-				if (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible)
+				if (HurtIndex == HardHurtbox || (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible))
+				{
+					continue;
+				}
+				if (!PassesStabOnly(Hurtboxes[HurtIndex].bStabOnly, Hurtboxes[HurtIndex].StabMaxAngleDeg, *In.Timeline, Hurtboxes[HurtIndex].Shape, Victim.Transform, PreviousCenter, HitboxCenter))
 				{
 					continue;
 				}
@@ -255,7 +357,13 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			// The extras of the snapshot (a shield bubble) are tested like the body; they have no hurt state, so nothing makes them intangible
 			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
 			{
-				const FGSTN_HitShape& ExtraShape = Victim.ExtraHurtboxes[ExtraPosition].Shape;
+				const FGSTN_ExtraHurtbox& Extra = Victim.ExtraHurtboxes[ExtraPosition];
+				const FGSTN_HitShape& ExtraShape = Extra.Shape;
+				if (GSTNHurtboxIndex::FromExtraPosition(ExtraPosition) == HardHurtbox
+					|| !PassesStabOnly(Extra.bStabOnly, Extra.StabMaxAngleDeg, *In.Timeline, ExtraShape, Victim.Transform, PreviousCenter, HitboxCenter))
+				{
+					continue;
+				}
 				const bool bTouches = Spec.bSweepBetweenFrames
 					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, ExtraShape, Victim.Transform)
 					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, ExtraShape, Victim.Transform);
@@ -289,6 +397,8 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			Candidate.HitboxCenter = HitboxCenter;
 			Candidate.HitLocation = (HitboxCenter + ShapeCenter(*PickedShape, Victim.Transform)) * 0.5;
 			Candidate.HitboxVelocity = HitboxVelocity;
+			Candidate.PreviousHitboxCenter = PreviousCenter;
+			Candidate.BladeAxis = (Spec.Shape.Local * Carrier).GetRotation().GetAxisZ();
 			Candidate.TargetKey = TargetKey;
 
 			bool bReplaced = false;
@@ -382,11 +492,36 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		Hit.Knockback = Context.Outcome.Knockback;
 		Hit.CueTag = Candidate.Hit.CueTag;
 		Hit.HitLocation = Candidate.HitLocation;
-		Hit.bReplacedTarget = Core.Hit.AddHitTarget(Victim.EntityId, StartFrame, Candidate.TargetKey);
 
 		FGSTN_HitContextView ContextView;
 		FGSTN_HitPipelineRunner::MakeView(In.Rules, Context, ContextView);
 		Hit.bRicochet = FGSTN_AttackerOutcomeRegistry::Get().Evaluate(In.Rules, ContextView) == EGSTN_AttackerHitOutcome::Ricochet;
+
+		// FinishThenRecoil (plan precisione-weakpoint 1-2): the first hard contact of the swing is remembered instead of ending it. The victim
+		// stays out of the target ring so a soft hurtbox or weak point of it met during the slide is still a normal hit
+		bool bStartsHardContact = false;
+		if (Hit.bRicochet && !Core.HardContact.IsSet() && In.Timeline->ResolveHardSurfaceBehaviour() == EGSTN_HardSurfaceBehaviour::FinishThenRecoil)
+		{
+			bStartsHardContact = true;
+			const FVector Travel = Candidate.HitboxVelocity.GetSafeNormal(UE_SMALL_NUMBER, AttackerFacing);
+			const FVector WorldNormal = VictimShape ? UGSTN_HitShapeUtils::OutwardNormal(*VictimShape, Victim.Transform, Candidate.PreviousHitboxCenter, -Travel) : -Travel;
+			FGSTN_HardContactState& Contact = Core.HardContact;
+			Contact.VictimId = Victim.EntityId;
+			Contact.TimelineFrame = In.TimelineFrame;
+			Contact.Hurtbox = static_cast<uint8>(Candidate.HurtboxIndex);
+			Contact.SetNormal(In.Root.InverseTransformVectorNoScale(WorldNormal));
+			// The case from the quantised normal, which every later tick uses too. The flat's normal is blade x travel; none (a blade moving
+			// along itself) is a face that opposes it
+			const FVector FlatNormal = (Candidate.BladeAxis ^ Travel).GetSafeNormal();
+			const FVector QuantisedNormal = In.Root.TransformVectorNoScale(Contact.GetNormal());
+			const double CosThreshold = FMath::Cos(FMath::DegreesToRadians(static_cast<double>(FMath::Clamp(CVarDeflectFlatAngleDeg.GetValueOnAnyThread(), 0.f, 90.f))));
+			Contact.bOpposed = FlatNormal.IsZero() || FMath::Abs(QuantisedNormal | FlatNormal) < CosThreshold;
+			Contact.bRecoilPending = Contact.bOpposed;
+		}
+		if (!bStartsHardContact)
+		{
+			Hit.bReplacedTarget = Core.Hit.AddHitTarget(Victim.EntityId, StartFrame, Candidate.TargetKey);
+		}
 
 		if (!Hit.bRicochet)
 		{

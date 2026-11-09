@@ -14,6 +14,86 @@
 #include "Misc/StringBuilder.h"
 
 /**
+ * The first hard contact of the running timeline (plan precisione-weakpoint 1-2), written by the attacker side on a ricochet of a timeline that
+ * finishes its swing (EGSTN_HardSurfaceBehaviour::FinishThenRecoil). It keeps that hurtbox out of the rest of the swing, bends the hitbox path along
+ * the contact face (FGSTN_SweepDeflection, recomputed every tick from these bytes) and holds the recoil until the active frames are over. Part of
+ * the core because the recoil it delays is (RecoilStartFrame); cleared with the timeline. One bit on the wire while unset.
+ */
+struct FGSTN_HardContactState
+{
+	/** The victim whose hurtbox was too hard, INDEX_NONE while there is no contact */
+	int32 VictimId = INDEX_NONE;
+
+	/** Timeline frame of the contact (the frame the attacker tick evaluated) */
+	int32 TimelineFrame = 0;
+
+	/** The hard hurtbox (set index or extra index) */
+	uint8 Hurtbox = 0;
+
+	/** Outward face normal in the attacker's root space, quantised to 1/127: the only form any machine uses */
+	int8 Normal[3] = { 0, 0, 0 };
+
+	/** Case A (the face opposes the blade flat): the recoil follows the swing. Case B (along the flat) slides without a recoil */
+	bool bOpposed = false;
+
+	/** The recoil starts once the timeline frame reaches the active end (FGSTN_CombatTimelineLogic::AdvanceClock) */
+	bool bRecoilPending = false;
+
+	bool IsSet() const { return VictimId != INDEX_NONE; }
+
+	void SetNormal(const FVector& RootSpaceNormal)
+	{
+		const FVector Unit = RootSpaceNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::XAxisVector);
+		for (int32 Axis = 0; Axis < 3; ++Axis)
+		{
+			Normal[Axis] = static_cast<int8>(FMath::Clamp(FMath::RoundToInt(Unit[Axis] * 127.0), -127, 127));
+		}
+	}
+
+	FVector GetNormal() const
+	{
+		return FVector(Normal[0], Normal[1], Normal[2]).GetSafeNormal(UE_SMALL_NUMBER, FVector::XAxisVector);
+	}
+
+	bool operator==(const FGSTN_HardContactState& Other) const
+	{
+		return VictimId == Other.VictimId && (!IsSet() || (TimelineFrame == Other.TimelineFrame && Hurtbox == Other.Hurtbox && Normal[0] == Other.Normal[0]
+			&& Normal[1] == Other.Normal[1] && Normal[2] == Other.Normal[2] && bOpposed == Other.bOpposed && bRecoilPending == Other.bRecoilPending));
+	}
+
+	void NetSerialize(FArchive& Ar)
+	{
+		uint8 bSet = IsSet() ? 1 : 0;
+		Ar.SerializeBits(&bSet, 1);
+		if (!bSet)
+		{
+			if (Ar.IsLoading())
+			{
+				*this = FGSTN_HardContactState();
+			}
+			return;
+		}
+		uint32 Victim = static_cast<uint32>(FMath::Max(VictimId, 0));
+		Ar.SerializeIntPacked(Victim);
+		uint32 Frame = static_cast<uint32>(FMath::Max(TimelineFrame, 0));
+		Ar.SerializeIntPacked(Frame);
+		Ar << Hurtbox;
+		Ar << Normal[0];
+		Ar << Normal[1];
+		Ar << Normal[2];
+		uint8 Flags = (bOpposed ? 1 : 0) | (bRecoilPending ? 2 : 0);
+		Ar.SerializeBits(&Flags, 2);
+		if (Ar.IsLoading())
+		{
+			VictimId = static_cast<int32>(Victim);
+			TimelineFrame = static_cast<int32>(Frame);
+			bOpposed = (Flags & 1) != 0;
+			bRecoilPending = (Flags & 2) != 0;
+		}
+	}
+};
+
+/**
  * The fixed part of the combat sync state, present on every combat entity: the embedded input simulation state plus the
  * debug hitstop window (the hitstop frames are Network Prediction frames, like the input state's). What a feature adds on top
  * of it goes in a sync fragment, not here.
@@ -68,6 +148,9 @@ struct FGSTN_CombatSyncCore
 	 */
 	int32 RecoilStartFrame = INDEX_NONE;
 
+	/** The swing's first hard contact and its pending recoil (FinishThenRecoil); unset outside one */
+	FGSTN_HardContactState HardContact;
+
 	/** 0 = the primary weapon, 1.. = the additional weapons in loadout order */
 	uint8 ActiveWeaponIndex = 0;
 
@@ -105,7 +188,7 @@ struct FGSTN_CombatSyncCore
 	bool IsActionPartDefault() const
 	{
 		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
-			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && ActiveWeaponIndex == 0
+			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && !HardContact.IsSet() && ActiveWeaponIndex == 0
 			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty() && Hit.IsDefault(GetHitContext());
 	}
 
@@ -149,6 +232,7 @@ struct FGSTN_CombatSyncCore
 		Ar.SerializeIntPacked(PausedTotal);
 		uint32 RecoilPlusOne = static_cast<uint32>(FMath::Max(RecoilStartFrame + 1, 0));
 		Ar.SerializeIntPacked(RecoilPlusOne);
+		HardContact.NetSerialize(Ar);
 		Ar << ActiveWeaponIndex;
 		Ar << LoadoutRevision;
 		Ar << TableRevision;
@@ -184,6 +268,7 @@ struct FGSTN_CombatSyncCore
 		TimelinePausedFrames = 0;
 		PausedFramesTotal = 0;
 		RecoilStartFrame = INDEX_NONE;
+		HardContact = FGSTN_HardContactState();
 		ActiveWeaponIndex = 0;
 		LoadoutRevision = 0;
 		TableRevision = 0;
@@ -208,6 +293,7 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(TimelinePausedFrames != AuthorityState.TimelinePausedFrames, "TimelinePausedFrames:");
 		UE_NP_TRACE_RECONCILE(PausedFramesTotal != AuthorityState.PausedFramesTotal, "PausedFramesTotal:");
 		UE_NP_TRACE_RECONCILE(RecoilStartFrame != AuthorityState.RecoilStartFrame, "RecoilStartFrame:");
+		UE_NP_TRACE_RECONCILE(!(HardContact == AuthorityState.HardContact), "HardContact:");
 		UE_NP_TRACE_RECONCILE(ActiveWeaponIndex != AuthorityState.ActiveWeaponIndex, "ActiveWeaponIndex:");
 		UE_NP_TRACE_RECONCILE(LoadoutRevision != AuthorityState.LoadoutRevision, "LoadoutRevision:");
 		UE_NP_TRACE_RECONCILE(TableRevision != AuthorityState.TableRevision, "TableRevision:");
@@ -227,7 +313,8 @@ struct FGSTN_CombatSyncCore
 		}
 		if (!IsActionPartDefault())
 		{
-			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Recoil: %d Weapon: %d Loadout: %d Table: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, RecoilStartFrame, static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision), static_cast<int32>(TableRevision));
+			Out.Appendf(" Action: %d Timeline: %d@%d+%d Source: %d Paused: %d Recoil: %d Hard: %d@%d%s Weapon: %d Loadout: %d Table: %d", static_cast<int32>(ActionState), static_cast<int32>(ActiveTimeline), TimelineStartFrame, TimelinePausedFrames, static_cast<int32>(ActiveSource), PausedFramesTotal, RecoilStartFrame,
+				HardContact.VictimId, HardContact.TimelineFrame, HardContact.bRecoilPending ? "+R" : "", static_cast<int32>(ActiveWeaponIndex), static_cast<int32>(LoadoutRevision), static_cast<int32>(TableRevision));
 			Requests.ToString(Out);
 			Hit.Canonical(GetHitContext()).ToString(Out);
 		}
