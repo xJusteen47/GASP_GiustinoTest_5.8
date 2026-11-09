@@ -545,7 +545,8 @@ bool FGSTN_MinionWaveAssetsTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	TStrongObjectPtr<UGSTN_CombatRules> Rules(MakeRules());
+	// Qualified: the unity build also sees the hit tests' anonymous MakeRules
+	TStrongObjectPtr<UGSTN_CombatRules> Rules(GSTNMinionWaveTestHelpers::MakeRules());
 	Rig.Minions->SetCombatRules(Rules.Get());
 	AGSTN_MinionSpawnerActor* Spawner = Rig.World->SpawnActor<AGSTN_MinionSpawnerActor>();
 	if (!TestNotNull(TEXT("the spawner exists"), Spawner))

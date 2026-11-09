@@ -533,3 +533,21 @@
 - §8.3 re-based: N=40 all-T0 moving 8.1-8.4 KB/s per client at 15 Hz, 4.9 at 10 Hz; N=80 9.3-10.7 / 7.6-7.7. §11 re-based: host batch mean 0.25 / 0.37 / 0.38 ms at 40 / 60 / 80 (max 0.6-0.9 ms); host-alone GT work +1.1 ms at 40, +1.6 at 60, +2.1 at 150 over N=0 (batch + replication + puppets, cap 60 visible).
 - Gate: build OK (2 builds: base up to date, bench change incremental 12 s); headless GSTN 1448/0/0 before and after (no test added), 0 ensures; minion_horde PASS 5 and minion_bytes PASS 4 at 0 % and 2 % (also Massacre and Massacre + 10 Hz at 0 %/2 %). Play settings restored.
 - PERF-DEBT (also in perf-debt.md): see "## G11b". Cost: ~$5 (one thread, 3 rendering runs of 5-6 min, 6 short runs).
+
+## G9b item 3 (laptop, 2026-11-09): minion type + wave as data assets, code side DONE; asset creation left to the desktop
+
+- Branch `claude/laptop-g9b3` from merge j 6e18c636, rebased on c04d9c57 (desktop G11b). Sonnet writer (`Saved/G9b3/brief.md`, `report.md`).
+- Already asset-driven before this pass: `UGSTN_MinionDefinition`, `UGSTN_MinionWaveDefinition`, the spawner, `gstn.Minion.Bench.Definition`.
+  Missing piece was the bench wave: new `gstn.Minion.Bench.WaveAsset` (soft path; unfound = warning + today's code-built wave).
+- `Tools/GAS/setup_minion_assets.py` (from G3) gains `setup_wave` -> `/GSTNMinion/Test/DA_MinionWave_Test` (6 grunts, then 2 heavies at +125
+  frames) and a 5-line summary; `Brain` is left empty (the test StateTree is transient, no asset) and printed. NOT run on the laptop.
+- Test `GSTNMinion.Runtime.Wave.TestAssetsSpawn`: with the assets, validate them and spawn the wave through a spawner; without, it logs
+  "assets not created yet" and passes. README "Content without C++ (acceptance 3)".
+- **Desktop to do**: run setup_minion_assets.py in the editor, save the assets, rerun `Automation RunTests GSTNMinion.Runtime.Wave`; author a
+  StateTree asset for Brain if acceptance 3 must include the brain.
+- Fixes on the way: rebase conflict in perf-debt.md (both kept); unity-build clash `MakeRules` (qualified with GSTNMinionWaveTestHelpers).
+- Gate (pre-rebase): all on 1456/0 (+1), GSTNMinion+GSTNPartsMinion off 1351/0, GSTNPlatform+Parts off 1432/0, 0 ensures. After the rebase on
+  G11b: 1456/0. SUITE_MINION (12): 0 % **12/12**, 2 % 11/12 (player_hits no swing: flaky input).
+- Build times (laptop): build + headless tests 174 s (pre-rebase), 144 s (after the rebase).
+- PERF-DEBT (also in perf-debt.md): the bench wave asset is loaded synchronously on first use (test tooling only).
+- Cost: ~$3.
