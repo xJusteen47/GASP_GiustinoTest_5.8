@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "SmoothWalkingState.h"
+#include "Engine/NetSerialization.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(SmoothWalkingState)
 
@@ -36,12 +37,19 @@ bool FSmoothWalkingState::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOu
 {
 	bool bSuccess = Super::NetSerialize(Ar, Map, bOutSuccess);
 
-	// Could be quantized to save bandwidth
-	Ar << SpringVelocity;
-	Ar << SpringAcceleration;
-	Ar << IntermediateVelocity;
-	Ar << IntermediateFacing;
-	Ar << IntermediateAngularVelocity;
+	// GSTN fork (netcode lever 1, 2026-11-09): quantized, was 5 full-precision vectors/quat = 128 B per update, ~28 % of the players'
+	// NP traffic. 0.1 cm/s (0.1 deg/s) and 360/65536 deg are far below the reconcile tolerances above (50 cm/s, 500 cm/s^2, 10 deg/s,
+	// 10 deg), so a client never reconciles because of the quantization. 24 bits per component keep launch-sized values unclamped.
+	SerializePackedVector<10, 24>(SpringVelocity, Ar);
+	SerializePackedVector<10, 24>(SpringAcceleration, Ar);
+	SerializePackedVector<10, 24>(IntermediateVelocity, Ar);
+	FRotator Facing = Ar.IsSaving() ? IntermediateFacing.Rotator() : FRotator::ZeroRotator;
+	Facing.SerializeCompressedShort(Ar);
+	if (Ar.IsLoading())
+	{
+		IntermediateFacing = Facing.Quaternion();
+	}
+	SerializePackedVector<10, 24>(IntermediateAngularVelocity, Ar);
 
 	return bSuccess;
 }

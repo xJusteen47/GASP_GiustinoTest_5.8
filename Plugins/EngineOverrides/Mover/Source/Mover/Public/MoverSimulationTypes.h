@@ -48,6 +48,17 @@ namespace CommonBlackboard
 /**
  * Filled out by a MovementMode during simulation tick to indicate its ending state, allowing for a residual time step and switching modes mid-tick
  */
+// GSTN: np.Debug.NetBytes wrappers (defined in MoverTypes.cpp) so modules that include this header need not link NetworkPrediction
+namespace UE::Mover::NetBytes
+{
+	MOVER_API bool IsEnabled();
+	MOVER_API int64 Bits(FArchive& Ar);
+	MOVER_API void Add(const TCHAR* Model, const TCHAR* Target, const TCHAR* Part, int64 Bits);
+	MOVER_API const TCHAR* SetContext(const TCHAR* Context);	// returns the previous one
+	// Whether two writes produce the same wire bits (temporary FNetBitWriters on Map): the delta test of NetSerializeDelta
+	MOVER_API bool SameNetBits(UPackageMap* Map, TFunctionRef<void(FArchive&)> WriteA, TFunctionRef<void(FArchive&)> WriteB);
+}
+
 USTRUCT(BlueprintType)
 struct FMovementModeTickEndState
 {
@@ -201,7 +212,11 @@ struct FMoverInputCmdContext
 	void NetSerialize(const FNetSerializeParams& P)
 	{
 		bool bIgnoredResult(false);
+		const TCHAR* PrevContext = UE::Mover::NetBytes::SetContext((UE::Mover::NetBytes::IsEnabled() && P.Ar.IsSaving()) ? TEXT("MoverInput") : nullptr);
+		// GSTN: no delta for the input. The client keeps an acked frame's input only for SP updates (AP acked frames have none), so
+		// after a role change (mount: AP <-> SP) the server's base input and the client's differ and a delta would decode garbage.
 		InputCollection.NetSerialize(P.Ar, P.Map, bIgnoredResult);
+		UE::Mover::NetBytes::SetContext(PrevContext);
 	}
 
 	void ToString(FAnsiStringBuilderBase& Out) const
@@ -274,13 +289,64 @@ public:
 
 	void NetSerialize(const FNetSerializeParams& P)
 	{
-		P.Ar << MovementMode;
+		// GSTN: np.Debug.NetBytes splits the Mover sync bytes per field and per collection struct (debug only, wire unchanged)
+		namespace NB = UE::Mover::NetBytes;
+		const bool bCount = NB::IsEnabled() && P.Ar.IsSaving();
+		int64 B0 = bCount ? NB::Bits(P.Ar) : 0;
+		auto Count = [&](const TCHAR* Part) { if (bCount) { const int64 B1 = NB::Bits(P.Ar); NB::Add(TEXT("MoverSync"), TEXT("Fields"), Part, B1 - B0); B0 = B1; } };
+
+		// GSTN fork (netcode lever 1): against the NP delta base (the acked frame, present on both sides or neither), the mode name
+		// and the modifiers cost 1 bit while unchanged, and so does every collection element (NetSerializeDelta). The FName went
+		// out as a string every update.
+		const FMoverSyncState* Base = P.GetBaseDeltaState<FMoverSyncState>();
+		bool bSameMode = false;
+		if (Base)
+		{
+			bSameMode = P.Ar.IsSaving() && MovementMode == Base->MovementMode;
+			P.Ar.SerializeBits(&bSameMode, 1);
+		}
+		if (bSameMode)
+		{
+			MovementMode = Base->MovementMode;
+		}
+		else
+		{
+			P.Ar << MovementMode;
+		}
+		Count(TEXT("MovementMode"));
 		LayeredMoves.NetSerialize(P.Ar);
+		Count(TEXT("LayeredMoves"));
 		LayeredMoveInstances.NetSerialize(P.Ar);
-		MovementModifiers.NetSerialize(P.Ar);
+		Count(TEXT("LayeredMoveInstances"));
+		bool bSameModifiers = false;
+		if (Base)
+		{
+			if (P.Ar.IsSaving())
+			{
+				FMovementModifierGroup* Cur = &MovementModifiers;
+				FMovementModifierGroup* BaseMods = const_cast<FMovementModifierGroup*>(&Base->MovementModifiers);	// saving does not mutate
+				bSameModifiers = UE::Mover::NetBytes::SameNetBits(P.Map, [Cur](FArchive& W) { Cur->NetSerialize(W); }, [BaseMods](FArchive& W) { BaseMods->NetSerialize(W); });
+			}
+			P.Ar.SerializeBits(&bSameModifiers, 1);
+		}
+		if (bSameModifiers)
+		{
+			if (P.Ar.IsLoading())
+			{
+				MovementModifiers = Base->MovementModifiers;
+			}
+		}
+		else
+		{
+			MovementModifiers.NetSerialize(P.Ar);
+		}
+		Count(TEXT("MovementModifiers"));
 
 		bool bIgnoredResult(false);
-		SyncStateCollection.NetSerialize(P.Ar, P.Map, bIgnoredResult);
+		const TCHAR* PrevContext = NB::SetContext(bCount ? TEXT("MoverSync") : nullptr);
+		SyncStateCollection.NetSerializeDelta(P.Ar, P.Map, Base ? &Base->SyncStateCollection : nullptr, bIgnoredResult);
+		NB::SetContext(PrevContext);
+		Count(TEXT("SyncStateCollection"));
 	}
 
 	void ToString(FAnsiStringBuilderBase& Out) const

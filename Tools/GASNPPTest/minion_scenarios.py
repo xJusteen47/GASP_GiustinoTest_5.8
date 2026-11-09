@@ -1137,6 +1137,7 @@ def scenario_minion_bytes(client=1, clients=2):
         st[label + '_time'] = time.time()
         _net_dump()
         _cmd('gstn.Minion.Bench.Report')
+        _cmd(f'np.Debug.NetBytes.Dump {label}')   # netcode lever 1: NP send bytes per model/part since the last snap (only with np.Debug.NetBytes 1)
         return 'snap ' + label
 
     def wire(label):

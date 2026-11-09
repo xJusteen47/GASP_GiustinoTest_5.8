@@ -2,6 +2,8 @@
 
 
 #include "MoverTypes.h"
+#include "MoverSimulationTypes.h"
+#include "NetworkPredictionNetBytes.h"
 #include "Blueprint/BlueprintExceptionInfo.h"
 #include "MoverLog.h"
 #include "MoverModule.h"
@@ -93,6 +95,41 @@ const UScriptStruct* FMoverDataStructBase::GetDataScriptStruct() const
 
 FMoverDataCollection::FMoverDataCollection()
 {
+}
+
+namespace UE::Mover::NetBytes
+{
+	bool IsEnabled() { return UE::NetworkPrediction::NetBytes::GEnabled != 0; }
+	int64 Bits(FArchive& Ar) { return UE::NetworkPrediction::NetBytes::Bits(Ar); }
+	void Add(const TCHAR* Model, const TCHAR* Target, const TCHAR* Part, int64 InBits) { UE::NetworkPrediction::NetBytes::Add(Model, Target, Part, InBits); }
+	const TCHAR* SetContext(const TCHAR* Context) { const TCHAR* Prev = UE::NetworkPrediction::NetBytes::GContext; UE::NetworkPrediction::NetBytes::GContext = Context; return Prev; }
+}
+
+bool FMoverDataCollection::NetSerializeDelta(FArchive& Ar, UPackageMap* Map, const FMoverDataCollection* Base, bool& bOutSuccess)
+{
+	NetSerializeDataArray(Ar, Map, DataArray, Base ? &Base->DataArray : nullptr);
+	bOutSuccess = !Ar.IsError();
+	return bOutSuccess;
+}
+
+bool UE::Mover::NetBytes::SameNetBits(UPackageMap* Map, TFunctionRef<void(FArchive&)> WriteA, TFunctionRef<void(FArchive&)> WriteB)
+{
+	FNetBitWriter A(Map, 1024);
+	FNetBitWriter B(Map, 1024);
+	WriteA(A);
+	WriteB(B);
+	const int64 NumBits = A.GetNumBits();
+	if (A.IsError() || B.IsError() || NumBits != B.GetNumBits())
+	{
+		return false;
+	}
+	const int64 FullBytes = NumBits / 8;
+	if (FullBytes > 0 && FMemory::Memcmp(A.GetData(), B.GetData(), FullBytes) != 0)
+	{
+		return false;
+	}
+	const int64 RestBits = NumBits % 8;
+	return RestBits == 0 || ((A.GetData()[FullBytes] ^ B.GetData()[FullBytes]) & ((1 << RestBits) - 1)) == 0;
 }
 
 bool FMoverDataCollection::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
@@ -516,7 +553,7 @@ bool FMoverDataCollection::RemoveDataByType(const UScriptStruct* DataStructType)
 }
 
 /*static*/
-void FMoverDataCollection::NetSerializeDataArray(FArchive& Ar, UPackageMap* Map, TArray<TSharedPtr<FMoverDataStructBase>>& DataArray)
+void FMoverDataCollection::NetSerializeDataArray(FArchive& Ar, UPackageMap* Map, TArray<TSharedPtr<FMoverDataStructBase>>& DataArray, const TArray<TSharedPtr<FMoverDataStructBase>>* BaseArray)
 {
 	uint8 NumDataStructsToSerialize;
 	if (Ar.IsSaving())
@@ -533,10 +570,52 @@ void FMoverDataCollection::NetSerializeDataArray(FArchive& Ar, UPackageMap* Map,
 
 	for (int32 i = 0; i < NumDataStructsToSerialize && !Ar.IsError(); ++i)
 	{
+		// GSTN fork (netcode lever 1): with a delta base, 1 bit says "same wire bits as the base element at this index"
+		if (BaseArray)
+		{
+			const FMoverDataStructBase* BaseElement = BaseArray->IsValidIndex(i) ? (*BaseArray)[i].Get() : nullptr;
+			bool bSameAsBase = false;
+			if (Ar.IsSaving() && BaseElement && DataArray[i].IsValid() && BaseElement->GetScriptStruct() == DataArray[i]->GetScriptStruct())
+			{
+				FMoverDataStructBase* Current = DataArray[i].Get();
+				FMoverDataStructBase* BaseMutable = const_cast<FMoverDataStructBase*>(BaseElement);	// NetSerialize is non-const; saving does not mutate
+				bSameAsBase = UE::Mover::NetBytes::SameNetBits(Map,
+					[Current, Map](FArchive& W) { bool bOk = false; Current->NetSerialize(W, Map, bOk); },
+					[BaseMutable, Map](FArchive& W) { bool bOk = false; BaseMutable->NetSerialize(W, Map, bOk); });
+			}
+			Ar.SerializeBits(&bSameAsBase, 1);
+			if (bSameAsBase)
+			{
+				if (Ar.IsLoading())
+				{
+					if (!BaseElement)
+					{
+						UE_LOGF(LogMover, Error, "FMoverDataCollection::NetSerialize: delta element %d has no base element.", i);
+						Ar.SetError();
+						break;
+					}
+					DataArray[i] = TSharedPtr<FMoverDataStructBase>(BaseElement->Clone());
+				}
+				continue;
+			}
+		}
+
 		TCheckedObjPtr<UScriptStruct> ScriptStruct = DataArray[i].IsValid() ? DataArray[i]->GetScriptStruct() : nullptr;
 		UScriptStruct* ScriptStructLocal = ScriptStruct.Get();
 
+		// GSTN: np.Debug.NetBytes split per collection struct, only inside a labelled caller (debug only, wire unchanged)
+		const TCHAR* NetBytesContext = (Ar.IsSaving() && UE::NetworkPrediction::NetBytes::GEnabled) ? UE::NetworkPrediction::NetBytes::GContext : nullptr;
+		const FString NetBytesStruct = NetBytesContext && ScriptStructLocal ? ScriptStructLocal->GetName() : FString();
+		int64 NetBytesB0 = NetBytesContext ? UE::NetworkPrediction::NetBytes::Bits(Ar) : 0;
+
 		Ar << ScriptStruct;
+
+		if (NetBytesContext)
+		{
+			const int64 B1 = UE::NetworkPrediction::NetBytes::Bits(Ar);
+			UE::NetworkPrediction::NetBytes::Add(NetBytesContext, *NetBytesStruct, TEXT("StructRef"), B1 - NetBytesB0);
+			NetBytesB0 = B1;
+		}
 
 		if (ScriptStruct.IsValid())
 		{
@@ -580,6 +659,10 @@ void FMoverDataCollection::NetSerializeDataArray(FArchive& Ar, UPackageMap* Map,
 
 				bool bArrayElementSuccess = false;
 				DataArray[i]->NetSerialize(Ar, Map, bArrayElementSuccess);
+				if (NetBytesContext)
+				{
+					UE::NetworkPrediction::NetBytes::Add(NetBytesContext, *NetBytesStruct, TEXT("Data"), UE::NetworkPrediction::NetBytes::Bits(Ar) - NetBytesB0);
+				}
 
 				if (!bArrayElementSuccess)
 				{

@@ -66,6 +66,7 @@ touch, is in [Mover's README](../EngineOverrides/Mover/README.md).
 | Smooth walking spring tolerances and `ToString` (`84e4893`) | Tolerances in line with the default sync state; `ToString` passed a `TCHAR*` to an ANSI builder. | `Mover/Private/DefaultMovementSet/Modes/SmoothWalkingState.cpp` |
 | `FLayeredMoveFinishVelocitySettings::NetSerialize` writes its settings (`84e4893`) | The flag was never written when saving, so replicated moves ended with ClampVelocity/SetVelocity on the server only. | `Mover/Private/LayeredMove.cpp` |
 | Re-simulation flag forwarded to Mover (`53c8716`) | Mover's own queries need to know they run inside a re-simulation. | `Mover/Private/Backends/MoverNetworkPredictionLiaison.cpp` |
+| NP send byte counter (netcode lever 1, 2026-11-09) | To see which model and part fill the players' traffic. `np.Debug.NetBytes 1` counts every server AP/SP send per Model\|Target\|Part (input, sync, aux, cues, total); `np.Debug.NetBytes.Dump <label>` appends the window to `Saved/Logs/NPNetBytes.txt`. Off by default, wire unchanged. | `NetworkPredictionNetBytes.h/.cpp`, `TCommonReplicator_AP/SP::NetSend` and the fixed AP/SP `NetSend` in `NetworkPredictionSerialization.h` |
 
 ## Verifying a change to the fork
 
