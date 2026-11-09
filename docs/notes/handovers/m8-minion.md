@@ -551,3 +551,14 @@
 - Build times (laptop): build + headless tests 174 s (pre-rebase), 144 s (after the rebase).
 - PERF-DEBT (also in perf-debt.md): the bench wave asset is loaded synchronously on first use (test tooling only).
 - Cost: ~$3.
+
+## Attacker hitstop/cue on minion hits (laptop, 2026-11-09): diagnosed, NOT fixed (needs GSTNCombatNP, forbidden in this brief)
+- The simulated attacker hitstop on a minion hit already works: Freeze request and hitstop window come from the minion's snapshot entry like for
+  fighters (`GSTN_CombatTick_Attacker.cpp` ~358-438).
+- Missing is the presentation: `UGSTN_HitPresentationComponent::StartEffect` (`GSTN_HitPresentationComponent.cpp` ~184-188) returns early when
+  `World->FindOwnerActor(victim id)` is null, which is always the case for minions (no actor in the registry, `GSTN_CombatWorldSubsystem.cpp`
+  ~414-428): no attacker mesh pause, no hit cue, no flash from that path.
+- Required change (GSTNCombatNP, owner/coordinator OK needed): in StartEffect do not return for minion victim ids; guard the null-victim uses
+  (MakeHitId ~l.194, SetFlash ~l.223), run the cue on the attacker, keep the attacker pause block. Then add
+  `GSTNMinion...AttackerHitstopOnMinionHit` in GSTN_MinionHitTests.cpp. Estimated ~$2-3.
+- Cost of the diagnosis: ~$1 (Sonnet, read-only). No build.
