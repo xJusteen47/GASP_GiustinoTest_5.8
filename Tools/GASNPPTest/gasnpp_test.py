@@ -1602,7 +1602,10 @@ def scenario_combat_main_inputs(client=1, camera_yaw=0.0):
                   (t + 1.1, check(name, t + 0.3, t + 1.1)),
                   (t + 1.15, lambda tilt=tilt: teardown(tilt))]
         t = round(t + 1.2, 2)
-    steps += [(t, run.at('four distinct bindings, same for every camera yaw', distinct)), (t + 0.1, run.finish())]
+    # Restore the control rotation: the yaw stays on the client's controller after the scenario and would leak into the next one
+    # as CameraYaw 64 (= 90 deg) in its commands (O-CameraYaw: the 0 vs 64 seen in reconcile dumps)
+    steps += [(t, run.at('four distinct bindings, same for every camera yaw', distinct)), (t + 0.05, lambda: ('restore camera yaw 0', _set_yaw(client, 0.0))),
+              (t + 0.1, run.finish())]
     run.run(steps)
 
 
