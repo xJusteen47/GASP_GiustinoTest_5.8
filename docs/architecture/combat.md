@@ -1013,8 +1013,8 @@ Details, cvars and extension points: [Plugins/GSTNMinion/README.md](../../Plugin
   for 0.1 s, then the puppet is pooled. Health passes through `IGSTN_StartingHealthSource`, applied by the loadout component.
 - **Brain.** One StateTree execution context per brained slot, run by `UGSTN_MinionBrainSubsystem`, rates per tier.
 - **X4 limits (owner OK needed to lift them; they touch `GSTNCombatNP`).** The rewind gathers every minion, not the cheap candidate query (cost
-  grows with N); meter gain on minion victims is skipped; `UGSTN_HitPresentationComponent` cannot present minion victims, so the attacker's
-  hit pause and local cue do not play on minion hits.
+  grows with N; wiring plan in the G12b handover, deferred to before PvP); meter gain on minion victims is skipped. The attacker's hit pause
+  and local cue on minion hits were added on 2026-11-09 (presentation only).
 - **Tests.** `GSTNMinion.Core.*` (no world) and `GSTNMinion.Runtime.*`; harness suites `SUITE_MINION`, `SUITE_MINION_NET`, `SUITE_MINION_BENCH`
   in `Tools/GASNPPTest/minion_scenarios.py` ([testing.md](testing.md)).
 - **Measured (desktop, G11b).** Listen host that renders, Development: N = 150 requested (124 alive on average) is p95 10.5 ms, batch mean
@@ -1158,6 +1158,6 @@ where the implementation differs. Milestones are sequential: each spec assumes t
 | M5 | Editor | Timeline editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M6 | Defence and links | Shield, parry, tech, SDI; link system spike, links, grabs/throws. `Plugins/GSTNDefence`, `Plugins/GSTNLink` (Core, GAS, NP; optional), test content, harness suites, and a test-only extension plugin. **Status: done (F0-F14, HANDOVER 61); open items listed there.** | [combat-m5-m9.md](combat-m5-m9.md), the plugin READMEs, `docs/notes/m6-doc-deltas.md` |
 | M7 | Piggyback and pair moves | Mount link, riding mode, role-only bindings, carry load, pair moves. `Plugins/GSTNPiggyback` (Core, Runtime, Editor, Tests; optional). **Status: done except carry load and the rider attack binding (G12, acceptance status in the spec §13).** | [combat-m7-piggyback.md](combat-m7-piggyback.md), the plugin README, `docs/notes/m7-doc-deltas.md` |
-| M8 | Minions | Server subsystem, LOD, compact replication. `Plugins/GSTNMinion` (Core, Runtime, Editor, Tests) and `Plugins/GSTNCore`. **Status: G0-G12 done (desktop numbers G6b-G12b); open: the X4 limits of section 13 (owner OK), the T0 rate (owner), acceptance item 3 (type and wave made as assets), the Launched hover.** | [combat-m8-minions.md](combat-m8-minions.md), [plans/m8-minion.md](plans/m8-minion.md), the plugin README, `docs/notes/m8-doc-deltas.md` |
+| M8 | Minions | Server subsystem, LOD, compact replication. `Plugins/GSTNMinion` (Core, Runtime, Editor, Tests) and `Plugins/GSTNCore`. **Status: G0-G12 done (desktop numbers G6b-G12b); T0 at 10 Hz (ini); open: the X4 rewind and meter gain of section 13 (before PvP), acceptance item 3 assets saved on the desktop, the Launched hover.** | [combat-m8-minions.md](combat-m8-minions.md), [plans/m8-minion.md](plans/m8-minion.md), the plugin README, `docs/notes/m8-doc-deltas.md` |
 | M9 | Stock GAS adapter | Optional. | [combat-m5-m9.md](combat-m5-m9.md) |
 
