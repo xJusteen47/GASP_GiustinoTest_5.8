@@ -23,6 +23,7 @@
 import json
 import os
 import time
+import traceback
 
 import unreal
 import gasnpp_test as g
@@ -1048,6 +1049,8 @@ def defence_batch(names=None, lag=60, jitter=15, loss=0, settle=3.0, ready_timeo
                     _batch['results'].append((st['cur'], 'TIMEOUT', []))
                     st.update(phase='end', t=time.time(), ending=False)
         except Exception as e:
+            # The traceback goes to the log: the report line alone does not say where a scenario broke
+            unreal.log_warning(f"defence_batch {st.get('cur')}: {traceback.format_exc()}")
             _batch['results'].append((st.get('cur'), f'EXCEPTION {e!r}', []))
             st.update(phase='end', t=time.time(), ending=False)
 

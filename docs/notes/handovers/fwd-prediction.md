@@ -91,3 +91,13 @@
   `prepare_editor()`, kits and pair moves loaded fine). PIE starts 3 worlds; the windows close ~4 s later, so nothing was recorded.
 - Needed: run the same scenario in the -nullrhi harness on this desktop (G1 ran it on the laptop) to see if the error is rendering-only, then
   print the traceback (`defence_batch` swallows it: log `traceback.format_exc()` in its except). ~$2. Cost of G2 so far ~$2.
+
+## FP G2 retry (desktop, 2026-11-09): scenario fixed, capture still broken; FP G2 CLOSED as blocked
+- IndexError fixed by the play settings, not code: `_MountRig` needs a third player (`self.io`), so the pair-move scenarios run listen host + 2 clients
+  (the editor's saved default), not dedicated + 2. With that, rendering editor: boost and throw PASS with the presentation on, FAIL with it off (by design).
+  `defence_batch` now logs the traceback of a scenario exception (committed).
+- Capture (2 tries): ffmpeg gdigrab of the PIE client windows. Try 1: one client window over the other, ~18 fps effective (time base wrong). Try 2
+  (windows placed side by side and topmost, 30 fps wall-clock timestamps in mkv): most files empty or a still frame. gdigrab is not a usable chain here.
+- Needed for a next attempt: capture inside the engine (per-frame `HighResShot` of the initiator's viewport under `t.MaxFPS`, or Take Recorder /
+  Movie Render Graph on a replay), aligned on the `[FP] tap` log line. Tools in `Saved/FPG2/` (driver, run.ps1, grids.py with epoch alignment). ~$3-5.
+- Cost of the retry ~$2.
